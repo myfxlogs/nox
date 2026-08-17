@@ -1,0 +1,2987 @@
+syntax = "proto3";
+package mt5grpc;
+option go_package = "arb/internal/adapter/gen/mtapi/mt5;mt5";
+import "google/protobuf/timestamp.proto";
+
+service Connection {
+// Connect to account with user, password, host, port.
+// [Example] 
+// { 
+//  "user": "21455", 
+//  "password": "1nJeS+Ae", 
+//  "host": "95.217.147.61", 
+//  "port": "443" 
+// }
+  rpc Connect (ConnectRequest) returns (ConnectReply);
+// [Example] 
+// { 
+//  "user": "213827411", 
+//  "password": "_rVx1tMn", 
+//  "server": "OctaFX-Demo", 
+// }
+  rpc ConnectEx (ConnectExRequest) returns (ConnectExReply);
+
+// Connect to account with user, password, host, port.
+// [Example] 
+// { 
+//  "user": "21455", 
+//  "password": "1nJeS+Ae", 
+//  "host": "95.217.147.61", 
+//  "port": "443", 
+//  "proxyUser": "ProxyUser123", 
+//  "proxyPassword": "qwerty123", 
+//  "proxyHost": "65.108.126.217", 
+//  "proxyPort": "1080", 
+//  "proxyType": "Socks5" 
+// }
+  rpc ConnectProxy (ConnectProxyRequest) returns (ConnectProxyReply);
+// Check connection state and reconnect if connection lost
+// [Example] 
+// { 
+//  "id": "demo-token-mt5" 
+// }
+  rpc CheckConnect (CheckConnectRequest) returns (CheckConnectReply);
+// Disconnect from account
+// [Example] 
+// { 
+//  "id": "" 
+// }
+  rpc Disconnect (DisconnectRequest) returns (DisconnectReply);
+}
+
+service MT5 {
+// Accound details
+// [Example] 
+// { 
+//  "id": "demo-token-mt5" 
+// }
+  rpc Account (AccountRequest) returns (AccountReply);
+// Balance, Equity, Currency, FreeMargin, Margin, MarginLevel, Profit, Leverage, Credit
+// [Example] 
+// { 
+//  "id": "demo-token-mt5" 
+// }
+  rpc AccountSummary (AccountSummaryRequest) returns (AccountSummaryReply);
+// List of opened orders
+// [Example] 
+// { 
+//  "id": "", 
+//  "sort": "OpenTime", 
+//  "ascending": "True" 
+// }
+  rpc OpenedOrders (OpenedOrdersRequest) returns (OpenedOrdersReply);
+// List of opened orders
+// [Example] 
+// { 
+//  "id": "", 
+//  "ticket": "" 
+// }
+  rpc OpenedOrder (OpenedOrderRequest) returns (OpenedOrderReply);
+// Just tickets of opened orders
+// [Example] 
+// { 
+//  "id": "demo-token-mt4" 
+// }
+  rpc OpenedOrdersTickets (OpenedOrdersTicketsRequest) returns (OpenedOrdersTicketsReply);
+// Order history
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "from": "2022-01-01T00:00:00", 
+//  "to": "2022-09-01T00:00:00", 
+//  "sort": "OpenTime", 
+//  "ascending": "True" 
+// }
+  rpc OrderHistory (OrderHistoryRequest) returns (OrderHistoryReply);
+// Pending order history
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "from": "2023-09-01T00:00:00", 
+//  "to": "2023-10-01T00:00:00", 
+//  "ascending": "True" 
+// }
+  rpc PendingOrderHistory (PendingOrderHistoryRequest) returns (PendingOrderHistoryReply);
+// Order history
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "from": "2022-01-01T00:00:00", 
+//  "to": "2022-09-01T00:00:00", 
+//  "ordersPerPage": "10", 
+//  "pageNumber": "0", 
+//  "requestAgain": "False", 
+//  "sort": "OpenTime", 
+//  "ascending": "True", 
+//  "ignoreDepositWithdraw": "False" 
+// }
+  rpc OrderHistoryPagination (OrderHistoryPaginationRequest) returns (OrderHistoryPaginationReply);
+// List of avaliable symbols with parameters
+// [Example] 
+// { 
+//  "id": "" 
+// }
+  rpc Symbols (SymbolsRequest) returns (SymbolsReply);
+// List of avaliable symbols
+// [Example] 
+// { 
+//  "id": "" 
+// }
+  rpc SymbolList (SymbolListRequest) returns (SymbolListReply);
+// Lot of informationabout about acocount. Can stuck swagger because of long json. You can use filter to reduce data.
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "symbol": "EURUSD", 
+//  "msNotOlder": "0" 
+// }
+  rpc GetQuote (GetQuoteRequest) returns (GetQuoteReply);
+// Latest quote for the specified symbol
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "msNotOlder": "0" 
+// }
+  rpc GetQuoteMany (GetQuoteManyRequest) returns (GetQuoteManyReply);
+// Market Watch for the specified symbols
+// [Example] 
+// { 
+//  "id": "demo-token-mt5" 
+// }
+  rpc MarketWatchMany (MarketWatchManyRequest) returns (MarketWatchManyReply);
+// Full infromation about symbol and his group
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "symbol": "EURUSD" 
+// }
+  rpc SymbolParams (SymbolParamsRequest) returns (SymbolParamsReply);
+// Full infromation about symbol and his group for several symbols
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "limit": "10000" 
+// }
+  rpc SymbolParamsMany (SymbolParamsManyRequest) returns (SymbolParamsManyReply);
+// Quote and trade sessions(open and close time) for the symbol. Returns 2 arrays. One for quotes and one for trades. Each array contains 7 elements for each day of weeks starting from Sunday.
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "symbol": "EURUSD" 
+// }
+rpc SymbolSessionsEx (SymbolSessionsExRequest) returns (SymbolSessionsExReply);
+// Quote and trade sessions(open and close time) for the symbol. Returns 2 arrays. One for quotes and one for trades. Each array contains 7 elements for each day of weeks starting from Sunday.
+// <br> [Example] <br>
+// { <br>
+//  "id": "demo-token-mt5" <br>
+// }
+rpc SymbolSessionsExMany (SymbolSessionsExManyRequest) returns (SymbolSessionsExManyReply);
+// Server timezone.
+// [Example] 
+// { 
+//  "id": "" 
+// }
+  rpc ServerTimezone (ServerTimezoneRequest) returns (ServerTimezoneReply);
+// Check market open or not for specified symbol.
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "symbol": "EURUSD" 
+// }
+  rpc IsTradeSession (IsTradeSessionRequest) returns (IsTradeSessionReply);
+// Check market open or not for specified symbol.
+// [Example] 
+// { 
+//  "id": "demo-token-mt5" 
+// }
+  rpc IsTradeSessionMany (IsTradeSessionManyRequest) returns (IsTradeSessionManyReply);
+// Check market open or not for specified symbol.
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "symbol": "EURUSD" 
+// }
+  rpc IsQuoteSession (IsQuoteSessionRequest) returns (IsQuoteSessionReply);
+// Check market open or not for specified symbol.
+// [Example] 
+// { 
+//  "id": "demo-token-mt5" 
+// }
+  rpc IsQuoteSessionMany (IsQuoteSessionManyRequest) returns (IsQuoteSessionManyReply);
+// Tick value.
+// [Example] 
+// { 
+//  "id": "demo-token-mt5" 
+// }
+  rpc GetTickValueMany (GetTickValueManyRequest) returns (GetTickValueManyReply);
+// Tick value with size.
+// [Example] 
+// { 
+//  "id": "demo-token-mt5" 
+// }
+rpc TickValueWithSize (TickValueWithSizeRequest) returns (TickValueWithSizeReply);
+
+// Cluster servers details
+// [Example] 
+// { 
+//  "id": "demo-token-mt5" 
+// }
+//  rpc ClusterDetails (ClusterDetailsRequest) returns (ClusterDetailsReply);
+
+  rpc ChangePassword (ChangePasswordRequest) returns (ChangePasswordReply);
+// Mail inbox
+// [Example] 
+// { 
+//  "id": "demo-token-mt5" 
+// }
+  rpc Mails (MailsRequest) returns (MailsReply);
+// Required margin
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "symbol": "EURUSD", 
+//  "lots": "1", 
+//  "type": "DealBuy", 
+//  "price": "0" 
+// }
+  rpc RequiredMargin (RequiredMarginRequest) returns (RequiredMarginReply);
+}
+
+service QuoteHistory {
+// Price history for 30 days
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "symbol": "EURUSD", 
+//  "year": "2022", 
+//  "month": "6", 
+//  "day": "1", 
+//  "timeFrame": "240" 
+// }
+  rpc PriceHistoryMonth (PriceHistoryMonthRequest) returns (PriceHistoryMonthReply);
+// OHLC for 30 days for several symbols
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "year": "2022", 
+//  "month": "6", 
+//  "day": "1", 
+//  "timeFrame": "240" 
+// }
+rpc PriceHistoryMonthMany (PriceHistoryMonthManyRequest) returns (PriceHistoryMonthManyReply);
+
+
+// Price history for today
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "symbol": "EURUSD", 
+//  "timeFrame": "240" 
+// }
+  rpc PriceHistoryToday (PriceHistoryTodayRequest) returns (PriceHistoryTodayReply);
+// Price history for today for several symbols
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "timeFrame": "240" 
+// }
+rpc PriceHistoryTodayMany (PriceHistoryTodayManyRequest) returns (PriceHistoryTodayManyReply);
+
+// Price history for 30 days
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "symbol": "EURUSD", 
+//  "from": "2022-01-01T00:00:00", 
+//  "to": "2022-03-01T00:00:00", 
+//  "timeFrame": "240" 
+// }
+  rpc PriceHistory (PriceHistoryRequest) returns (PriceHistoryReply);
+  // Price history for several symbols
+// <br> [Example] <br>
+// { <br>
+//  "id": "demo-token-mt5", <br>
+//  "from": "2024-01-01T00:00:00", <br>
+//  "to": "2024-03-01T00:00:00", <br>
+//  "timeFrame": "240" <br>
+// }
+  rpc PriceHistoryMany (PriceHistoryManyRequest) returns (PriceHistoryManyReply);
+// Price history for range
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "symbol": "EURUSD", 
+//  "from": "2022-11-01T00:00:00", 
+//  "to": "2022-11-02T00:00:00", 
+//  "timeFrame": "60" 
+// }
+  rpc PriceHistoryHighLow (PriceHistoryHighLowRequest) returns (PriceHistoryHighLowReply);
+  // Request quote history from specified date for several bars back to the past
+// <br> [Example] <br>
+// { <br>
+//  "id": "demo-token-mt5", <br>
+//  "symbol": "EURUSD", <br>
+//  "to": "2022-03-01T00:00:00", <br>
+//  "numBars": "10", <br>
+//  "timeFrame": "240" <br>
+// }
+  rpc PriceHistoryEx (PriceHistoryExRequest) returns (PriceHistoryExReply);
+// Request quote history from specified date for several bars back to the past
+// <br> [Example] <br>
+// { <br>
+//  "id": "demo-token-mt5", <br>
+//  "to": "2022-03-01T00:00:00", <br>
+//  "numBars": "10", <br>
+//  "timeFrame": "240" <br>
+// }
+  rpc PriceHistoryExMany (PriceHistoryExManyRequest) returns (PriceHistoryExManyReply);
+}
+
+service Service {
+// Simple test without parameters
+  rpc Ping (PingRequest) returns (PingReply);
+  rpc Health (HealthRequest) returns (HealthReply);
+// Simple test without parameters
+// [Example] 
+// { 
+//  "host": "", 
+//  "port": "443" 
+// }
+  rpc PingHost (PingHostRequest) returns (PingHostReply);
+// Simple test without parameters
+// [Example] 
+// { 
+//  "host": "", 
+//  "port": "" 
+// }
+  rpc PingHostMany (PingHostManyRequest) returns (PingHostManyReply);
+// Memory snapshot
+  rpc MemorySnapshot (MemorySnapshotRequest) returns (MemorySnapshotReply);
+// Broker search by company name
+// [Example] 
+// { 
+//  "company": "" 
+// }
+  rpc Search (SearchRequest) returns (SearchReply);
+// Return all active with connection state
+  rpc GetClients (GetClientsRequest) returns (GetClientsReply);
+// Create demo account
+// [Example] 
+// { 
+//  "host": "", 
+//  "port": "" 
+// }
+  rpc GetDemo (GetDemoRequest) returns (GetDemoReply);
+  // API version
+  rpc Version (VersionRequest) returns (VersionReply);
+}
+
+service Subscriptions {
+// Subscribe symbol for real time quotes and get results via /events socket connection
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "symbol": "EURUSD", 
+//  "interval": "0" 
+// }
+  rpc Subscribe (SubscribeRequest) returns (SubscribeReply);
+// Subscribe symbosl for real time quotes and get results via /events socket connection
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "interval": "0" 
+// }
+  rpc SubscribeMany (SubscribeManyRequest) returns (SubscribeManyReply);
+// Unsubscribe symbol for real time quotes and get results via /events socket connection
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "symbol": "EURUSD" 
+// }
+  rpc UnSubscribe (UnSubscribeRequest) returns (UnSubscribeReply);
+// UnSubscribe symbosls for real time quotes and get results via /events socket connection
+// [Example] 
+// { 
+//  "id": "demo-token-mt5" 
+// }
+  rpc UnSubscribeMany (UnSubscribeManyRequest) returns (UnSubscribeManyReply);
+// Subscribe for order profit updates and get results via /events socket connection
+// [Example] 
+// { 
+//  "id": "demo-token-mt5" 
+// }
+  rpc SubscribeOrderProfit (SubscribeOrderProfitRequest) returns (SubscribeOrderProfitReply);
+// Subscribe symbol for tick value updates
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "symbol": "EURUSD", 
+//  "interval": "0" 
+// }
+  rpc SubscribeTickValue (SubscribeTickValueRequest) returns (SubscribeTickValueReply);
+// Subscribe symbol for tick value updates
+// [Example] 
+// { 
+//  "id": "demo-token-mt5" 
+// }
+  rpc SubscribeOrderUpdate (SubscribeOrderUpdateRequest) returns (SubscribeOrderUpdateReply);
+// Subscribe market watch updates for /Events socket
+// [Example] 
+// { 
+//  "id": "demo-token-mt5" 
+// }
+  rpc SubscribeMarketWatch (SubscribeMarketWatchRequest) returns (SubscribeMarketWatchReply);
+// Subscribe symbol for tick value updates
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "interval": "1000" 
+// }
+  rpc SubscribeOpenedOrdersTickets (SubscribeOpenedOrdersTicketsRequest) returns (SubscribeOpenedOrdersTicketsReply);
+}
+
+service TickHistory {
+// Request tick history from specified time to present time. Please get result with OnTickHistory websocket.
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "symbol": "EURUSD", 
+//  "startYear": "2023", 
+//  "startMonth": "11", 
+//  "startDay": "5" 
+// }
+  rpc TickHistoryRequest (TickHistoryRequestRequest) returns (TickHistoryRequestReply);
+// Stop tick history request for some symbol
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "symbol": "EURUSD" 
+// }
+  rpc TickHistoryStop (TickHistoryStopRequest) returns (TickHistoryStopReply);
+
+  rpc OnTickHistory (OnTickHistoryRequest) returns (stream OnTickHistoryReply);
+}
+
+service Trading {
+// Send market or pending order
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "symbol": "EURUSD", 
+//  "operation": "Buy", 
+//  "volume": "0,1", 
+//  "price": "0", 
+//  "slippage": "0", 
+//  "stoploss": "0", 
+//  "takeprofit": "0", 
+//  "expertID": "0", 
+//  "stopLimitPrice": "0", 
+//  "expirationType": "Specified", 
+//  "placedType": "Manually" 
+// }
+  rpc OrderSend (OrderSendRequest) returns (OrderSendReply);
+// Modify market or pending order
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "ticket": "0", 
+//  "stoploss": "0", 
+//  "takeprofit": "0", 
+//  "price": "0", 
+//  "expirationType": "Specified" 
+// }
+  rpc OrderModify (OrderModifyRequest) returns (OrderModifyReply);
+// Close market or pending order
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "ticket": "0", 
+//  "lots": "0", 
+//  "price": "0", 
+//  "slippage": "0" 
+// }
+  rpc OrderClose (OrderCloseRequest) returns (OrderCloseReply);
+}
+
+service Streams {
+// Use this endpoint to get all events(OnQuote, OnOrderUpdate, etc..) via one web socket cobnnection.
+// [Example] 
+// { 
+//  "id": "demo-token-mt5" 
+// }
+  rpc Events (EventsRequest) returns (stream EventsReply);
+// All trading activity on accont.
+// [Example] 
+// { 
+//  "id": "demo-token-mt5" 
+// }
+  rpc OnOrderUpdate (OnOrderUpdateRequest) returns (stream OnOrderUpdateReply);
+// Real time quotes.
+// [Example] 
+// { 
+//  "id": "demo-token-mt5" 
+// }
+  rpc OnQuote (OnQuoteRequest) returns (stream OnQuoteReply);
+// Real time quotes.
+// [Example] 
+// { 
+//  "id": "demo-token-mt5" 
+// }
+  rpc OnTickValue (OnTickValueRequest) returns (stream OnTickValueReply);
+// Orders profits updates.
+// [Example] 
+// { 
+//  "id": "demo-token-mt5" 
+// }
+  rpc OnOrderProfit (OnOrderProfitRequest) returns (stream OnOrderProfitReply);
+// Market watch updates.
+// [Example] 
+// { 
+//  "id": "demo-token-mt5" 
+// }
+  rpc OnMarketWatch (OnMarketWatchRequest) returns (stream OnMarketWatchReply);
+// Tick history.
+// [Example] 
+// { 
+//  "id": "demo-token-mt5" 
+// }
+  rpc OnTickHistory (OnTickHistoryRequest) returns (stream OnTickHistoryReply);
+// Tick history.
+// [Example] 
+// { 
+//  "id": "demo-token-mt5" 
+// }
+  rpc OnMail (OnMailRequest) returns (stream OnMailReply);
+// Sends opened order tickets each 'interval' milliseconds
+// [Example] 
+// { 
+//  "id": "demo-token-mt5", 
+//  "interval": "1000" 
+// }
+  rpc OnOpenedOrdersTickets (OnOpenedOrdersTicketsRequest) returns (stream OnOpenedOrdersTicketsReply);
+}
+
+
+message Error
+{
+  ErrorCode code = 1;
+  string message = 2;
+  string stackTrace = 3;
+}
+
+// [Example]
+// {
+//  "user": "21455",
+//  "password": "1nJeS+Ae",
+//  "host": "95.217.147.61",
+//  "port": "443"
+// }
+message ConnectRequest {
+  // Account number. [Required]
+   uint64 user = 1;
+  // Password. [Required]
+   string password = 2;
+  // Host - ip adddress or dns name. [Required]
+   string host = 3;
+  // Port. [Required]
+   int32 port = 4;
+  // Token returned by 'Connect' method
+   optional string id = 5;
+   // Optional connect timeout in seconds. Default is 30 seconds.
+   optional int32 connectTimeoutSeconds = 6;
+}
+
+message ConnectReply {
+  string result = 1;
+  Error error = 2;
+}
+
+// [Example] 
+// { 
+//  "user": "213827411", 
+//  "password": "_rVx1tMn", 
+//  "server": "OctaFX-Demo", 
+// }
+message ConnectExRequest {
+  // Account number. [Required]
+   uint64 user = 1;
+  // Password. [Required]
+   string password = 2;
+  // MT5 server name from MT5 Terminal. [Required]
+   string server = 3;
+  // Token returned by 'Connect' method
+   optional string id = 5;
+   // Optional connect timeout in seconds. Default is 30 seconds.
+   optional int32 connectTimeoutSeconds = 6;
+}
+
+message ConnectExReply {
+  string result = 1;
+  Error error = 2;
+}
+
+message VersionRequest {
+}
+
+message VersionReply {
+  string result = 1;
+  Error error = 2;
+}
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "symbol": "EURUSD",
+//  "to": "2022-03-01T00:00:00",
+//  "numBars": "10",
+//  "timeFrame": "240"
+// }
+message PriceHistoryExRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbol [Required]
+   string symbol = 2;
+  // 'To date' in format: yyyy-MM-ddTHH:mm:ss [Required]
+   string from = 3;
+   int32 numBars = 4;
+   int32 timeFrame = 5;
+}
+
+message PriceHistoryExReply {
+  repeated Bar result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "to": "2022-03-01T00:00:00",
+//  "numBars": "10",
+//  "timeFrame": "240"
+// }
+message PriceHistoryExManyRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbol [Required]
+  repeated string symbol = 2;
+  // 'To date' in format: yyyy-MM-ddTHH:mm:ss [Required]
+   string from = 3;
+   int32 numBars = 4;
+   int32 timeFrame = 5;
+}
+
+message PriceHistoryExManyReply {
+  repeated BarsForSymbol result = 1;
+  Error error = 2;
+}
+
+message PriceHistoryMonthManyReply {
+  repeated QuoteHistoryEventArgs result = 1;
+  Error error = 2;
+}
+
+
+// Quote history event args.
+message QuoteHistoryEventArgs {
+// Instrument.
+  string Symbol = 1;
+// History bars.
+  repeated Bar Bars = 2;
+}
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "from": "2024-01-01T00:00:00",
+//  "to": "2024-03-01T00:00:00",
+//  "timeFrame": "240"
+// }
+message PriceHistoryManyRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbol [Required]
+  repeated string symbol = 2;
+  // 'From date' in format: yyyy-MM-ddTHH:mm:ss [Required]
+   string from = 3;
+  // 'To date' in format: yyyy-MM-ddTHH:mm:ss [Required]
+   string to = 4;
+   int32 timeFrame = 5;
+}
+
+message BarsForSymbol {
+  string Symbol = 1;
+  repeated Bar Bars = 2;
+  string Exception = 3;
+}
+
+message PriceHistoryManyReply {
+  repeated BarsForSymbol result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": ""
+// }
+message SymbolListRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+}
+
+message SymbolListReply {
+  repeated string result = 1;
+  Error error = 2;
+}
+
+
+// Specifies the type of proxy servers that an instance of the ProxySocket class can use.
+enum ProxyTypes {
+// No proxy server; the ProxySocket object behaves exactly like an ordinary Socket object.
+  ProxyTypes_None = 0;
+// A HTTPS (CONNECT) proxy server.
+  ProxyTypes_Https = 1;
+// A SOCKS4[A] proxy server.
+  ProxyTypes_Socks4 = 2;
+// A SOCKS5 proxy server.
+  ProxyTypes_Socks5 = 3;
+}
+
+// [Example]
+// {
+//  "user": "21455",
+//  "password": "1nJeS+Ae",
+//  "host": "95.217.147.61",
+//  "port": "443",
+//  "proxyUser": "ProxyUser123",
+//  "proxyPassword": "qwerty123",
+//  "proxyHost": "65.108.126.217",
+//  "proxyPort": "1080",
+//  "proxyType": "Socks5"
+// }
+message ConnectProxyRequest {
+  // Account number. [Required]
+   uint64 user = 1;
+  // Password. [Required]
+   string password = 2;
+  // Host - ip adddress or dns name. [Required]
+   string host = 3;
+  // Port. [Required]
+   int32 port = 4;
+  // Proxy user [Required]
+   string proxyUser = 5;
+  // Proxy password [Required]
+   string proxyPassword = 6;
+  // Proxy server ip adddress [Required]
+   string proxyHost = 7;
+  // Proxy port [Required]
+   int32 proxyPort = 8;
+  // Proxy type. Put 'Socks5' for default parameters [Required]
+   ProxyTypes proxyType = 9;
+  // Token returned by 'Connect' method
+   optional string id = 10;
+}
+
+message ConnectProxyReply {
+  string result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5"
+// }
+message CheckConnectRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+}
+
+message CheckConnectReply {
+  string result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": ""
+// }
+message DisconnectRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+}
+
+message DisconnectReply {
+  string result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5"
+// }
+message AccountRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+}
+
+// Account details
+message AccountRec {
+  uint64 Login = 1;
+  string Type = 2;
+  string UserName = 3;
+  int32 TradeFlags = 4;
+  string Country = 5;
+  string City = 6;
+  string State = 7;
+  string ZipCode = 8;
+  string UserAddress = 9;
+  string Phone = 10;
+  string Email = 11;
+  double Balance = 12;
+  double Credit = 13;
+  double Blocked = 14;
+  int32 Leverage = 15;
+}
+
+message AccountReply {
+  AccountRec result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5"
+// }
+message AccountSummaryRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+}
+
+// Account summary trading information
+message AccountSummary {
+// Balance
+  double Balance = 1;
+// Credit
+  double Credit = 2;
+// Profit
+  double Profit = 3;
+// Equity
+  double Equity = 4;
+// Used margin
+  double Margin = 5;
+// Free margin
+  double FreeMargin = 6;
+// Margin percent
+  double MarginLevel = 7;
+// Leverage
+  double Leverage = 8;
+// Currency
+  string Currency = 9;
+// Netting or hedging.
+  AccMethod Method = 10;
+  // Demo or real
+  string Type = 11;
+  // Investor mode (without trading)
+  bool IsInvestor = 12;
+}
+
+// Netting or Hedging
+enum AccMethod {
+  AccMethod_Default = 0;
+  AccMethod_Netting = 1;
+  AccMethod_Hedging = 2;
+}
+
+message AccountSummaryReply {
+  AccountSummary result = 1;
+  Error error = 2;
+}
+
+
+enum OrderSort {
+  OrderSort_OpenTime = 0;
+  OrderSort_CloseTime = 1;
+}
+
+// [Example]
+// {
+//  "id": "",
+//  "sort": "OpenTime",
+//  "ascending": "True"
+// }
+message OpenedOrdersRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Sort by open time or close time
+   optional OrderSort sort = 2;
+  // Ascending sort
+   optional bool ascending = 3;
+}
+
+// Pending, market or history order
+message Order {
+  uint64 CloseVolume = 1;
+  uint64 Volume = 2;
+  ExpirationType ExpirationType = 3;
+  google.protobuf.Timestamp ExpirationTime = 4;
+  FillPolicy FillPolicy = 5;
+  int64 OpenTimestampUTC = 6;
+  int64 CloseTimestampUTC = 7;
+  int64 Ticket = 8;
+  double Profit = 9;
+  double Swap = 10;
+  double Commission = 11;
+  double Fee = 12;
+  double ClosePrice = 13;
+  google.protobuf.Timestamp CloseTime = 14;
+  double CloseLots = 15;
+  string CloseComment = 16;
+  double OpenPrice = 17;
+  google.protobuf.Timestamp OpenTime = 18;
+  double Lots = 19;
+  double ContractSize = 20;
+  int64 ExpertId = 21;
+  PlacedType PlacedType = 22;
+  OrderType OrderType = 23;
+  DealType DealType = 24;
+  string Symbol = 25;
+  string Comment = 26;
+  OrderState State = 27;
+  double StopLoss = 28;
+  double TakeProfit = 29;
+  int32 RequestId = 30;
+  int32 Digits = 31;
+  double ProfitRate = 32;
+  double StopLimitPrice = 33;
+  DealInternal DealInternalIn = 34;
+  DealInternal DealInternalOut = 35;
+  OrderInternal OrderInternal = 36;
+  repeated DealInternal PartialCloseDeals = 37;
+}
+
+// Expiration type
+enum ExpirationType {
+  ExpirationType_GTC = 0;
+  ExpirationType_Today = 1;
+  ExpirationType_Specified = 2;
+  ExpirationType_SpecifiedDay = 3;
+}
+
+// Fill policy
+enum FillPolicy {
+  FillPolicy_FillOrKill = 0;
+  FillPolicy_ImmediateOrCancel = 1;
+  FillPolicy_FlashFill = 2;
+  FillPolicy_Any = 3;
+}
+
+// Placed manually or ByExpert
+enum PlacedType {
+  PlacedType_Manually = 0;
+  PlacedType_Mobile = 16;
+  PlacedType_Web = 17;
+  PlacedType_ByExpert = 1;
+  PlacedType_OnSL = 3;
+  PlacedType_OnTP = 4;
+  PlacedType_OnStopOut = 5;
+  PlacedType_OnRollover = 6;
+  PlacedType_OnVmargin = 8;
+  PlacedType_OnSplit = 18;
+  PlacedType_ByDealer = 2;
+  PlacedType_Gateway = 9;
+  PlacedType_Signal = 10;
+  PlacedType_Settlement = 11;
+  PlacedType_Transfer = 12;
+  PlacedType_Sync = 13;
+  PlacedType_ExternalService = 14;
+  PlacedType_Migration = 15;
+  PlacedType_Default = 20;
+}
+
+// Order type
+enum OrderType {
+  OrderType_Buy = 0;
+  OrderType_Sell = 1;
+  OrderType_BuyLimit = 2;
+  OrderType_SellLimit = 3;
+  OrderType_BuyStop = 4;
+  OrderType_SellStop = 5;
+  OrderType_BuyStopLimit = 6;
+  OrderType_SellStopLimit = 7;
+  OrderType_CloseBy = 8;
+  OrderType_Balance = 100;
+  OrderType_Credit = 101;
+}
+
+// Deal type
+enum DealType {
+  DealType_DealBuy = 0;
+  DealType_DealSell = 1;
+  DealType_Balance = 2;
+  DealType_Credit = 3;
+  DealType_Charge = 4;
+  DealType_Correction = 5;
+  DealType_Bonus = 6;
+  DealType_Commission = 7;
+  DealType_DailyCommission = 8;
+  DealType_MonthlyCommission = 9;
+  DealType_DailyAgentCommission = 10;
+  DealType_MonthlyAgentCommission = 11;
+  DealType_InterestRate = 12;
+  DealType_CanceledBuy = 13;
+  DealType_CanceledSell = 14;
+}
+
+// Order state
+enum OrderState {
+  OrderState_Started = 0;
+  OrderState_Placed = 1;
+  OrderState_Cancelled = 2;
+  OrderState_Partial = 3;
+  OrderState_Filled = 4;
+  OrderState_Rejected = 5;
+  OrderState_Expired = 6;
+  OrderState_RequestAdding = 7;
+  OrderState_RequestModifying = 8;
+  OrderState_RequestCancelling = 9;
+}
+
+// Internal details for the deal
+message DealInternal {
+// Open time
+  google.protobuf.Timestamp OpenTimeAsDateTime = 1;
+// Lots
+  double Lots = 2;
+// Deal ticket
+  int64 TicketNumber = 3;
+// Text id
+  string Id = 4;
+// Account login
+  uint64 Login = 5;
+// History time (as FileTime format)
+  int64 HistoryTime = 6;
+// Order ticket
+  int64 OrderTicket = 7;
+// Open time
+  int64 OpenTime = 8;
+// Symbol currency
+  string Symbol = 9;
+// Deal type
+  DealType Type = 10;
+// Deal direction
+  Direction Direction = 11;
+// Open price
+  double OpenPrice = 12;
+// Price
+  double Price = 13;
+// Stop loss
+  double StopLoss = 14;
+// Take profit
+  double TakeProfit = 15;
+// Volume
+  uint64 Volume = 16;
+// Profit (money digits)
+  double Profit = 17;
+// Profit rate
+  double ProfitRate = 18;
+// Volume rate
+  double VolumeRate = 19;
+// Commission (money digits)
+  double Commission = 20;
+  double Fee = 21;
+// Swap
+  double Swap = 22;
+// Expert id
+  int64 ExpertId = 23;
+// Position ticket
+  int64 PositionTicket = 24;
+// Text comment
+  string Comment = 25;
+// Lots
+  double ContractSize = 26;
+// Significant digits
+  int32 Digits = 27;
+// Money significant digits
+  int32 MoneyDigits = 28;
+// Free profit
+  double FreeProfit = 29;
+// Trail rounder
+  double TrailRounder = 30;
+// Open time (ms)
+  int64 OpenTimeMs = 31;
+// Placed type
+  PlacedType PlacedType = 32;
+}
+
+// Direction of the deal
+enum Direction {
+  Direction_In = 0;
+  Direction_Out = 1;
+  Direction_InOut = 2;
+  Direction_OutBy = 3;
+}
+
+// Internal information for the order(pending)
+message OrderInternal {
+// Ticket number
+  int64 Ticket = 1;
+  google.protobuf.Timestamp ExecutionTimeAsDateTime = 2;
+// Lots
+  double Lots = 3;
+// Request lots
+  double RequestLots = 4;
+  google.protobuf.Timestamp OpenTimeMsAsDateTime = 5;
+// Ticket number
+  int64 TicketNumber = 6;
+// Text id
+  string Id = 7;
+// Account login
+  uint64 Login = 8;
+// Symbol currency
+  string Symbol = 9;
+// History time	(as FileTime format)
+  int64 HistoryTime = 10;
+// Open time
+  int64 OpenTime = 11;
+// Expiration time
+  int64 ExpirationTime = 12;
+// Execution time
+  int64 ExecutionTime = 13;
+// Order type
+  OrderType Type = 14;
+// Fill policy
+  FillPolicy FillPolicy = 15;
+// Expiration type
+  ExpirationType ExpirationType = 16;
+// Placed type
+  PlacedType PlacedType = 17;
+// Open price
+  double OpenPrice = 18;
+// StopLimit price
+  double StopLimitPrice = 19;
+// Price
+  double Price = 20;
+// Stop loss
+  double StopLoss = 21;
+// Take profit
+  double TakeProfit = 22;
+// Cover volume
+  uint64 Volume = 23;
+// Request volume
+  uint64 RequestVolume = 24;
+// Order state
+  OrderState State = 25;
+// Expert id
+  int64 ExpertId = 26;
+// Associative deal ticket
+  int64 DealTicket = 27;
+// Comment text
+  string Comment = 28;
+// Lots
+  double ContractSize = 29;
+// Significant digits
+  int32 Digits = 30;
+// Symbols base significant digits
+  int32 BaseDigits = 31;
+// Profit rate
+  double ProfitRate = 32;
+// Open time (ms)
+  int64 OpenTimeMs = 33;
+}
+
+message OpenedOrdersReply {
+  repeated Order result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "",
+//  "ticket": ""
+// }
+message OpenedOrderRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Ticket number
+   optional int64 ticket = 2;
+}
+
+message OpenedOrderReply {
+  Order result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt4"
+// }
+message OpenedOrdersTicketsRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+}
+
+message OpenedOrdersTicketsReply {
+  repeated int64 result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "from": "2022-01-01T00:00:00",
+//  "to": "2022-09-01T00:00:00",
+//  "sort": "OpenTime",
+//  "ascending": "True"
+// }
+message OrderHistoryRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // 'From date' in format: yyyy-MM-ddTHH:mm:ss [Required]
+   string from = 2;
+  // 'To date' in format: yyyy-MM-ddTHH:mm:ss [Required]
+   string to = 3;
+  // Sort by open time or close time
+   optional OrderSort sort = 4;
+  // Ascending sort
+   optional bool ascending = 5;
+  // Fields that need to return
+  optional string filter = 6;
+}
+
+message OrderHistoryReply {
+  repeated Order result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "from": "2023-09-01T00:00:00",
+//  "to": "2023-10-01T00:00:00",
+//  "ascending": "True"
+// }
+message PendingOrderHistoryRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // 'From date' in format: yyyy-MM-ddTHH:mm:ss [Required]
+   string from = 2;
+  // 'To date' in format: yyyy-MM-ddTHH:mm:ss [Required]
+   string to = 3;
+  // Ascending sort
+   optional bool ascending = 4;
+}
+
+message PendingOrderHistoryReply {
+  repeated OrderInternal result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "from": "2022-01-01T00:00:00",
+//  "to": "2022-09-01T00:00:00",
+//  "ordersPerPage": "10",
+//  "pageNumber": "0",
+//  "requestAgain": "False",
+//  "sort": "OpenTime",
+//  "ascending": "True",
+//  "ignoreDepositWithdraw": "False"
+// }
+message OrderHistoryPaginationRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // 'From date' in format: yyyy-MM-ddTHH:mm:ss [Required]
+   string from = 2;
+  // 'To date' in format: yyyy-MM-ddTHH:mm:ss [Required]
+   string to = 3;
+  // Orders per page [Required]
+   int32 ordersPerPage = 4;
+  // Page number [Required]
+   int32 pageNumber = 5;
+  // If need to force refresh orders from mt5 server
+   optional bool requestAgain = 6;
+  // Sort by open time or close time
+   optional OrderSort sort = 7;
+  // Ascending sort
+   optional bool ascending = 8;
+  // List of tickets that need to return. If not specified - returns all tickets.
+  repeated int64 tickets = 9;
+  // Do not return deposit and withdraw operations
+   optional bool ignoreDepositWithdraw = 10;
+}
+
+// OrderHistoryPagination
+message PaginationReply {
+// Total pages count
+  int32 PagesCount = 1;
+// Current page
+  int32 PageNumber = 2;
+// Orders
+  repeated Order Orders = 3;
+}
+
+message OrderHistoryPaginationReply {
+  PaginationReply result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": ""
+// }
+message SymbolsRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+}
+
+
+// Symbol details
+message SymbolInfo {
+// Update time
+  int64 UpdateTime = 1;
+// Symbol currency
+  string Currency = 2;
+// Symbol ISIN
+  string ISIN = 3;
+// Description
+  string Description = 4;
+  string Basis = 5;
+// Reference to site
+  string RefToSite = 6;
+  int32 Custom = 7;
+// Currency for profit
+  string ProfitCurrency = 8;
+// Currency for margin
+  string MarginCurrency = 9;
+  int32 Precision = 10;
+// Background color
+  int32 BkgndColor = 11;
+// Significant digits
+  int32 Digits = 12;
+// Symbol points
+  double Points = 13;
+// Symbol limit points
+  double LimitPoints = 14;
+// Symbol id
+  int32 Id = 15;
+// Depth of market
+  int32 DepthOfMarket = 16;
+// Spread
+  int32 Spread = 17;
+// Tick value
+  double TickValue = 18;
+// Tick size
+  double TickSize = 19;
+// Contract size
+  double ContractSize = 20;
+// Good till canceled mode
+  GTCMode GTCMode = 21;
+// Calculation mode
+  CalculationMode CalcMode = 22;
+// Settlement price
+  double SettlementPrice = 23;
+// Lower limit
+  double LowerLimit = 24;
+// Upper limit
+  double UpperLimit = 25;
+// Face value
+  double FaceValue = 26;
+// Accuired interest
+  double AccruedInterest = 27;
+// First trade time
+  int64 FirstTradeTime = 28;
+// Last trade time
+  int64 LastTradeTime = 29;
+}
+
+// GTC mode
+enum GTCMode {
+  GTCMode_Cancelled = 0;
+  GTCMode_TodayIncludeSL_TP = 1;
+  GTCMode_TodayExcludeSL_TP = 2;
+}
+
+// Profit calculation mode
+enum CalculationMode {
+  CalculationMode_Forex = 0;
+  CalculationMode_Futures = 1;
+  CalculationMode_CFD = 2;
+  CalculationMode_CFDIndex = 3;
+  CalculationMode_CFDLeverage = 4;
+  CalculationMode_CalcMode5 = 5;
+  CalculationMode_ExchangeStocks = 32;
+  CalculationMode_ExchangeFutures = 33;
+  CalculationMode_FORTSFutures = 34;
+  CalculationMode_ExchangeOption = 35;
+  CalculationMode_ExchangeMarginOption = 36;
+  CalculationMode_ExchangeBounds = 37;
+  CalculationMode_Collateral = 64;
+}
+
+message SymbolsReply {
+  repeated SymbolInfo result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "symbol": "EURUSD",
+//  "msNotOlder": "0"
+// }
+message GetQuoteRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbol [Required]
+   string symbol = 2;
+  // If last quote arrived less than msOlderMs milliseconds ago function returns last quote, overwise - wait for new quote. If zero - always returns last quote.
+   optional int32 msNotOlder = 3;
+}
+
+// New quote event arguments.
+message Quote {
+// Trading instrument.
+  string Symbol = 1;
+// Bid.
+  double Bid = 2;
+// Ask.
+  double Ask = 3;
+// Server time.
+  google.protobuf.Timestamp Time = 4;
+// Last deal price.
+  double Last = 5;
+// Volume
+  uint64 Volume = 6;
+}
+
+message GetQuoteReply {
+  Quote result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "msNotOlder": "0"
+// }
+message GetQuoteManyRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbols [Required]
+  repeated string symbols = 2;
+  // If last quote arrived less than msOlderMs milliseconds ago function returns last quote, overwise - wait for new quote. If zero - always returns last quote.
+   optional int32 msNotOlder = 3;
+}
+
+message GetQuoteManyReply {
+  repeated Quote result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5"
+// }
+message MarketWatchManyRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbols [Required]
+  repeated string symbols = 2;
+}
+
+message MarketWatch {
+  string Symbol = 1;
+  double High = 2;
+  double Low = 3;
+  double OpenPrice = 4;
+  double ClosePrice = 5;
+  double DailyChange = 6;
+  double Bid = 7;
+  double Ask = 8;
+  int32 Spread = 9;
+  uint64 Volume = 10;
+}
+
+message MarketWatchManyReply {
+  repeated MarketWatch result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "symbol": "EURUSD"
+// }
+message SymbolParamsRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbol [Required]
+   string symbol = 2;
+}
+
+// Information about symbol and his group.
+message SymbolParams {
+// Symbol name
+  string Symbol = 1;
+// Symbol parameters
+  SymbolInfo SymbolInfo = 2;
+// Symbol group
+  SymGroup SymbolGroup = 3;
+}
+
+// Symbol group information
+message SymGroup {
+  double MinLots = 1;
+  double MaxLots = 2;
+  double LotsStep = 3;
+  string GroupName = 4;
+  int32 DeviationRate = 5;
+  int32 RoundRate = 6;
+  TradeMode TradeMode = 7;
+  int32 SL = 8;
+  int32 TP = 9;
+  ExecutionType TradeType = 10;
+  FillingFlags FillPolicy = 11;
+  ExpirationFlags Expiration = 12;
+  int32 OrderFlags = 13;
+  int32 PriceTimeout = 14;
+  int32 RequoteTimeout = 15;
+  uint32 RequestLots = 16;
+  int32 tmp1 = 17;
+  uint64 MinVolume = 18;
+  uint64 MaxVolume = 19;
+  int64 VolumeStep = 20;
+  double InitialMargin = 21;
+  double MaintenanceMargin = 22;
+  repeated double InitMarginRate = 23;
+  repeated double MntnMarginRate = 24;
+  SwapType SwapType = 25;
+  double SwapLong = 26;
+  double SwapShort = 27;
+  V3DaysSwap ThreeDaysSwap = 28;
+}
+
+// Trade mode
+enum TradeMode {
+  TradeMode_Disabled = 0;
+  TradeMode_LongOnly = 1;
+  TradeMode_ShortOnly = 2;
+  TradeMode_CloseOnly = 3;
+  TradeMode_FullAccess = 4;
+}
+
+// Execution type
+enum ExecutionType {
+  ExecutionType_Request = 0;
+  ExecutionType_Instant = 1;
+  ExecutionType_Market = 2;
+  ExecutionType_Exchange = 3;
+}
+
+enum FillingFlags {
+  FillingFlags_NONE = 0;
+  FillingFlags_FOK = 1;
+  FillingFlags_IOC = 2;
+  FillingFlags_BOC = 4;
+}
+
+enum ExpirationFlags {
+  ExpirationFlags_NONE = 0;
+  ExpirationFlags_GTC = 1;
+  ExpirationFlags_DAY = 2;
+  ExpirationFlags_SPECIFIED = 4;
+  ExpirationFlags_SPECIFIED_DAY = 8;
+  ExpirationFlags_ALL = 15;
+}
+
+// Swap type
+enum SwapType {
+  SwapType_SwapNone = 0;
+  SwapType_InPoints = 1;
+  SwapType_SymInfo_s408 = 2;
+  SwapType_MarginCurrency = 3;
+  SwapType_Currency = 4;
+  SwapType_PercCurPrice = 5;
+  SwapType_PercOpenPrice = 6;
+  SwapType_PointClosePrice = 7;
+  SwapType_PointBidPrice = 8;
+}
+
+// Swap day
+enum V3DaysSwap {
+  V3DaysSwap_Sunday = 0;
+  V3DaysSwap_Monday = 1;
+  V3DaysSwap_Tuesday = 2;
+  V3DaysSwap_Wednesday = 3;
+  V3DaysSwap_Thursday = 4;
+  V3DaysSwap_Friday = 5;
+  V3DaysSwap_Saturday = 6;
+}
+
+message SymbolParamsReply {
+  SymbolParams result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "limit": "10000"
+// }
+message SymbolParamsManyRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbol
+  repeated string symbol = 2;
+  // If server has more than 'limit' symbols functon throws an exception
+   optional int32 limit = 3;
+}
+
+message SymbolParamsManyReply {
+  repeated SymbolParams result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "symbol": "EURUSD"
+// }
+message SymbolSessionsExRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbol [Required]
+   string symbol = 2;
+}
+
+// Quote and trade sessions for each day of week starting from Sunday
+message SymbolSessionsEx {
+// Symbol name
+  string Symbol = 1;
+// Quote sessions for each day of week starting from Sunday
+  repeated SessionsForDay Quotes = 2;
+// Trade sessions for each day of week starting from Sunday
+  repeated SessionsForDay Trades = 3;
+}
+
+// List of sessions for one day
+message SessionsForDay {
+// List of sessions
+  repeated Session Sessions = 1;
+}
+
+// Trade or quote session details
+message Session {
+// Start time (in minites)
+  int32 StartTime = 1;
+// End time (in minutes)
+  int32 EndTime = 2;
+}
+
+message SymbolSessionsExReply {
+  SymbolSessionsEx result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5"
+// }
+message SymbolSessionsExManyRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbol [Required]
+  repeated string symbol = 2;
+}
+
+message SymbolSessionsExManyReply {
+  repeated SymbolSessionsEx result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": ""
+// }
+message ServerTimezoneRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+}
+
+message ServerTimezoneReply {
+  double result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "symbol": "EURUSD"
+// }
+message IsTradeSessionRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbol [Required]
+   string symbol = 2;
+}
+
+message IsTradeSessionReply {
+  bool result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5"
+// }
+message IsTradeSessionManyRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbols
+  repeated string symbols = 2;
+}
+
+// True or false for current symbol for now
+message SessionState {
+// Symbol
+  string Symbol = 1;
+// Active or not
+  bool Active = 2;
+}
+
+message IsTradeSessionManyReply {
+  repeated SessionState result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "symbol": "EURUSD"
+// }
+message IsQuoteSessionRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbol [Required]
+   string symbol = 2;
+}
+
+message IsQuoteSessionReply {
+  bool result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5"
+// }
+message IsQuoteSessionManyRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbols
+  repeated string symbols = 2;
+}
+
+message IsQuoteSessionManyReply {
+  repeated SessionState result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5"
+// }
+message GetTickValueManyRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbol
+  repeated string symbol = 2;
+}
+
+message GetTickValueManyReply {
+  repeated double result = 1;
+  Error error = 2;
+}
+
+// [Example]
+// {
+//  "id": "demo-token-mt5"
+// }
+message TickValueWithSizeRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbol
+  repeated string symbol = 2;
+}
+
+// Tick value with tick size
+message TickValueWithSize {
+// Tick value
+  double TickValue = 1;
+// Tick size
+  double TickSize = 2;
+// Symbol
+  string Symbol = 3;
+}
+
+message TickValueWithSizeReply {
+  repeated TickValueWithSize result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5"
+// }
+message ClusterDetailsRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+}
+
+//message ClusterDetails {
+//  ServerRec General = 1;
+//  map<string, repeated AddressRec> Servers = 2;
+//}
+
+// Server details from servers.dat
+message ServerRec {
+  string ServerName = 1;
+  string CompanyName = 2;
+  int32 DST = 3;
+  int32 TimeZone = 4;
+}
+
+//message ClusterDetailsReply {
+//  ClusterDetails result = 1;
+//  Error error = 2;
+//}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "password": "",
+//  "isInvestor": "False"
+// }
+message ChangePasswordRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Password.
+   optional string password = 2;
+  // True - if need to change investor password, False - if master password
+   optional bool isInvestor = 3;
+}
+
+message ChangePasswordReply {
+  string result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5"
+// }
+message MailsRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+}
+
+message MailMessage {
+  int64 Id = 1;
+  google.protobuf.Timestamp Time = 2;
+  string From = 3;
+  string To = 4;
+  string Subject = 5;
+  string Body = 6;
+}
+
+message MailsReply {
+  repeated MailMessage result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "symbol": "EURUSD",
+//  "lots": "1",
+//  "type": "DealBuy",
+//  "price": "0"
+// }
+message RequiredMarginRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbol [Required]
+   string symbol = 2;
+  // Lots [Required]
+   double lots = 3;
+  // Buy or Sell
+   optional DealType type = 4;
+  // Price
+   optional double price = 5;
+}
+
+message RequiredMarginReply {
+  double result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "symbol": "EURUSD",
+//  "year": "2022",
+//  "month": "6",
+//  "day": "1",
+//  "timeFrame": "240"
+// }
+message PriceHistoryMonthRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbol [Required]
+   string symbol = 2;
+   int32 year = 3;
+   int32 month = 4;
+   int32 day = 5;
+   int32 timeFrame = 6;
+}
+
+// OHLC
+message Bar {
+  google.protobuf.Timestamp Time = 1;
+  double OpenPrice = 2;
+  double HighPrice = 3;
+  double LowPrice = 4;
+  double ClosePrice = 5;
+  uint64 TickVolume = 6;
+  int32 Spread = 7;
+  uint64 Volume = 8;
+}
+
+message PriceHistoryMonthReply {
+  repeated Bar result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "year": "2022",
+//  "month": "6",
+//  "day": "1",
+//  "timeFrame": "240"
+// }
+message PriceHistoryMonthManyRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbols [Required]
+  repeated string symbols = 2;
+   int32 year = 3;
+   int32 month = 4;
+   int32 day = 5;
+   int32 timeFrame = 6;
+}
+
+
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "symbol": "EURUSD",
+//  "timeFrame": "240"
+// }
+message PriceHistoryTodayRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbol [Required]
+   string symbol = 2;
+   int32 timeFrame = 3;
+}
+
+message PriceHistoryTodayReply {
+  repeated Bar result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "timeFrame": "240"
+// }
+message PriceHistoryTodayManyRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbols [Required]
+  repeated string symbols = 2;
+   int32 timeFrame = 3;
+}
+
+message PriceHistoryTodayManyReply {
+  repeated QuoteHistoryEventArgs result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "symbol": "EURUSD",
+//  "from": "2022-01-01T00:00:00",
+//  "to": "2022-03-01T00:00:00",
+//  "timeFrame": "240"
+// }
+message PriceHistoryRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbol [Required]
+   string symbol = 2;
+  // 'From date' in format: yyyy-MM-ddTHH:mm:ss [Required]
+   string from = 3;
+  // 'To date' in format: yyyy-MM-ddTHH:mm:ss [Required]
+   string to = 4;
+   int32 timeFrame = 5;
+}
+
+message PriceHistoryReply {
+  repeated Bar result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "symbol": "EURUSD",
+//  "from": "2022-11-01T00:00:00",
+//  "to": "2022-11-02T00:00:00",
+//  "timeFrame": "60"
+// }
+message PriceHistoryHighLowRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbol [Required]
+   string symbol = 2;
+  // 'From date' in format: yyyy-MM-ddTHH:mm:ss [Required]
+   string from = 3;
+  // 'To date' in format: yyyy-MM-ddTHH:mm:ss [Required]
+   string to = 4;
+   int32 timeFrame = 5;
+}
+
+message PriceHistoryHighLowReply {
+  Bar result = 1;
+  Error error = 2;
+}
+
+
+message PingRequest {
+}
+
+message PingReply {
+  string result = 1;
+  Error error = 2;
+}
+
+
+message HealthRequest {
+}
+
+message HealthReply {
+  string result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "host": "",
+//  "port": "443"
+// }
+message PingHostRequest {
+  // Host - ip adddress or dns name. [Required]
+   string host = 1;
+  // Port.
+   optional int32 port = 2;
+}
+
+message PingHostReply {
+  int32 result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "host": "",
+//  "port": ""
+// }
+message PingHostManyRequest {
+  // Host - ip adddress or dns name. [Required]
+  repeated string host = 1;
+  // Port. [Required]
+  repeated int32 port = 2;
+}
+
+message PingHostManyReply {
+  repeated int32 result = 1;
+  Error error = 2;
+}
+
+
+message MemorySnapshotRequest {
+}
+
+message MemorySnapshotReply {
+  string result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "company": ""
+// }
+message SearchRequest {
+  // Company name [Required]
+   string company = 1;
+}
+
+message Company {
+  string CompanyName = 1;
+  repeated Result Results = 2;
+}
+
+message Result {
+  string Name = 1;
+  repeated string Access = 2;
+}
+
+message SearchReply {
+  repeated Company result = 1;
+  Error error = 2;
+}
+
+
+message GetClientsRequest {
+}
+
+// Client ID with connection status
+message ClientStatus {
+// Token
+  string Id = 1;
+// Connection status
+  bool Connected = 2;
+// User
+  uint64 User = 3;
+// Host
+  string Host = 4;
+// Port
+  int32 Port = 5;
+// Connect time
+  google.protobuf.Timestamp ConnectTime = 6;
+}
+
+message GetClientsReply {
+  repeated ClientStatus result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "host": "",
+//  "port": ""
+// }
+message GetDemoRequest {
+  // Host - ip adddress or dns name. [Required]
+   string host = 1;
+  // Port. [Required]
+   int32 port = 2;
+}
+
+message AccountAnswer {
+  uint64 Login = 1;
+  string Password = 2;
+  string Investor = 3;
+}
+
+message GetDemoReply {
+  AccountAnswer result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "symbol": "EURUSD",
+//  "interval": "0"
+// }
+message SubscribeRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbol [Required]
+   string symbol = 2;
+  // Minimum interval between events in milliseconds
+   optional int32 interval = 3;
+}
+
+message SubscribeReply {
+  string result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "interval": "0"
+// }
+message SubscribeManyRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbols [Required]
+  repeated string symbols = 2;
+  // Minimum interval between events in milliseconds
+   optional int32 interval = 3;
+}
+
+message SubscribeManyReply {
+  string result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "symbol": "EURUSD"
+// }
+message UnSubscribeRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbol [Required]
+   string symbol = 2;
+}
+
+message UnSubscribeReply {
+  string result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5"
+// }
+message UnSubscribeManyRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbols [Required]
+  repeated string symbols = 2;
+}
+
+message UnSubscribeManyReply {
+  string result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5"
+// }
+message SubscribeOrderProfitRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+}
+
+message SubscribeOrderProfitReply {
+  repeated Order result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "symbol": "EURUSD",
+//  "interval": "0"
+// }
+message SubscribeTickValueRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbol [Required]
+   string symbol = 2;
+  // Minimum interval between events in milliseconds
+   optional int32 interval = 3;
+}
+
+message SubscribeTickValueReply {
+  string result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5"
+// }
+message SubscribeOrderUpdateRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+}
+
+message SubscribeOrderUpdateReply {
+  repeated Order result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5"
+// }
+message SubscribeMarketWatchRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+}
+
+message SubscribeMarketWatchReply {
+  string result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "interval": "1000"
+// }
+message SubscribeOpenedOrdersTicketsRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Minimum interval between events in milliseconds
+   optional int32 interval = 2;
+}
+
+message SubscribeOpenedOrdersTicketsReply {
+  string result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "symbol": "EURUSD",
+//  "startYear": "2023",
+//  "startMonth": "11",
+//  "startDay": "5"
+// }
+message TickHistoryRequestRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbol [Required]
+   string symbol = 2;
+   int32 startYear = 3;
+   int32 startMonth = 4;
+   int32 startDay = 5;
+}
+
+message TickHistoryRequestReply {
+  string result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "symbol": "EURUSD"
+// }
+message TickHistoryStopRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbol [Required]
+   string symbol = 2;
+}
+
+message TickHistoryStopReply {
+  string result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "symbol": "EURUSD",
+//  "operation": "Buy",
+//  "volume": "0,1",
+//  "price": "0",
+//  "slippage": "0",
+//  "stoploss": "0",
+//  "takeprofit": "0",
+//  "expertID": "0",
+//  "stopLimitPrice": "0",
+//  "expirationType": "Specified",
+//  "placedType": "Manually"
+// }
+message OrderSendRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Symbol [Required]
+   string symbol = 2;
+  // Buy, Sell, BuyLimit, SellLimit, BuyStop, SellStop [Required]
+   OrderType operation = 3;
+  // Lots [Required]
+   double volume = 4;
+  // Price
+   optional double price = 5;
+  // Slippage. Optional.
+   optional uint64 slippage = 6;
+  // StopLoss. Optional.
+   optional double stoploss = 7;
+  // TakeProfit. Optional.
+   optional double takeprofit = 8;
+  // Comment. Optional.
+   optional string comment = 9;
+  // Custom user field. You can specify any value up to your needs. In MT4 this parameter called 'magic number.'
+   optional int64 expertID = 10;
+  // For the StopLimit order. Optional.
+   optional double stopLimitPrice = 11;
+  // Expiration time in yyyy-MM-ddTHH:mm:ss format
+   optional google.protobuf.Timestamp expiration = 12;
+  // Expiration type
+   optional ExpirationType expirationType = 13;
+  // Who placed the order
+   optional PlacedType placedType = 14;
+}
+
+message OrderSendReply {
+  Order result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "ticket": "0",
+//  "stoploss": "0",
+//  "takeprofit": "0",
+//  "price": "0",
+//  "expirationType": "Specified"
+// }
+message OrderModifyRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Ticket number [Required]
+   int64 ticket = 2;
+  // StopLoss. Optional. [Required]
+   double stoploss = 3;
+  // TakeProfit. Optional. [Required]
+   double takeprofit = 4;
+  // Price
+   optional double price = 5;
+  // Expiration time in yyyy-MM-ddTHH:mm:ss format
+   optional google.protobuf.Timestamp expiration = 6;
+  // Expiration type
+   optional ExpirationType expirationType = 7;
+}
+
+message OrderModifyReply {
+  Order result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "ticket": "0",
+//  "lots": "0",
+//  "price": "0",
+//  "slippage": "0"
+// }
+message OrderCloseRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Ticket number [Required]
+   int64 ticket = 2;
+  // Lots
+   optional double lots = 3;
+  // Price
+   optional double price = 4;
+  // Slippage. Optional.
+   optional uint64 slippage = 5;
+}
+
+message OrderCloseReply {
+  Order result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5"
+// }
+message EventsRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+}
+
+message EventsReply {
+  string result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5"
+// }
+message OnOrderUpdateRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+}
+
+// Order update event details
+message OrderUpdateSummary {
+// Order and update action
+  OrderUpdate Update = 1;
+// Balance
+  double Balance = 2;
+// Equity
+  double Equity = 3;
+// Used margin
+  double Margin = 4;
+// Free margin
+  double FreeMargin = 5;
+// Account profit
+  double Profit = 6;
+// Margin level
+  double MarginLevel = 7;
+// Account number
+  uint64 User = 8;
+// Opened orders
+  repeated Order OpenedOrders = 9;
+}
+
+// Details of order update
+message OrderUpdate {
+  TransactionInfo Trans = 1;
+  OrderInternal OrderInternal = 2;
+  DealInternal Deal = 3;
+  DealInternal OppositeDeal = 4;
+  Order Order = 5;
+  UpdateType Type = 6;
+  int32 CloseByTicket = 7;
+}
+
+// Transaction information
+message TransactionInfo {
+// Transaction ticket
+  int32 UpdateId = 1;
+// Transaction action
+  int32 Action = 2;
+// Deal ticket
+  int64 TicketNumber = 3;
+  string Currency = 4;
+// Symbol currency
+  int32 Id = 5;
+// Transaction id
+  OrderType s58 = 6;
+// Order type
+  OrderState OrderState = 7;
+// Order state
+  ExpirationType ExpirationType = 8;
+// Order placed type
+  int64 ExpirationTime = 9;
+// Deal type
+  double OpenPrice = 10;
+// Deal placed type
+  double OrderPrice = 11;
+// Expiration type
+  double StopLoss = 12;
+// Expiration time
+  double TakeProfit = 13;
+// Open price
+  uint64 Volume = 14;
+}
+
+enum UpdateType {
+  UpdateType_Unknown = 0;
+  UpdateType_PendingClose = 1;
+  UpdateType_MarketOpen = 2;
+  UpdateType_PendingOpen = 3;
+  UpdateType_MarketClose = 4;
+  UpdateType_PartialClose = 5;
+  UpdateType_Started = 6;
+  UpdateType_Filled = 7;
+  UpdateType_Cancelling = 8;
+  UpdateType_MarketModify = 9;
+  UpdateType_PendingModify = 10;
+  UpdateType_OnStopLoss = 11;
+  UpdateType_OnTakeProfit = 12;
+  UpdateType_OnStopOut = 13;
+  UpdateType_Balance = 14;
+  UpdateType_Expired = 15;
+  UpdateType_Rejected = 16;
+  UpdateType_MarketCloseBy = 17;
+}
+
+message OnOrderUpdateReply {
+  OrderUpdateSummary result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5"
+// }
+message OnQuoteRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+}
+
+message OnQuoteReply {
+  Quote result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5"
+// }
+message OnTickValueRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+}
+
+// Tick value update
+message SymbolTickValue {
+// Symbol
+  string Symbol = 1;
+// Tick value
+  double TickValue = 2;
+}
+
+message OnTickValueReply {
+  SymbolTickValue result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5"
+// }
+message OnOrderProfitRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+}
+
+// Profit update message
+message ProfitUpdate {
+// Balace
+  double Balance = 1;
+// Equity
+  double Equity = 2;
+// User margin
+  double Margin = 3;
+// Free margin
+  double FreeMargin = 4;
+// Account profit
+  double Profit = 5;
+// Opened orders
+  repeated Order Orders = 6;
+// Maring level
+  double MarginLevel = 7;
+// Account number
+  uint64 User = 8;
+}
+
+message OnOrderProfitReply {
+  ProfitUpdate result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5"
+// }
+message OnMarketWatchRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+}
+
+message OnMarketWatchReply {
+  MarketWatch result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5"
+// }
+message OnTickHistoryRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+}
+
+message TickHistoryEventArgs {
+  string Symbol = 1;
+  repeated TickBar Bars = 2;
+}
+
+message TickBar {
+  google.protobuf.Timestamp Time = 1;
+  double Bid = 2;
+  double Ask = 3;
+  double Last = 4;
+  uint64 Volume = 5;
+}
+
+message OnTickHistoryReply {
+  TickHistoryEventArgs result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5"
+// }
+message OnMailRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+}
+
+message OnMailReply {
+  MailMessage result = 1;
+  Error error = 2;
+}
+
+
+// [Example]
+// {
+//  "id": "demo-token-mt5",
+//  "interval": "1000"
+// }
+message OnOpenedOrdersTicketsRequest {
+  // Token returned by 'Connect' method [Required]
+   string id = 1;
+  // Minimum interval between events in milliseconds
+   optional int32 interval = 2;
+}
+
+message OnOpenedOrdersTicketsReply {
+  MailMessage result = 1;
+  Error error = 2;
+}
+
+
+
+enum ErrorCode
+{
+    DONE = 0;
+    OK = 1;
+    COMMON_ERROR = 2;
+    INVALID_PARAM = 3;
+    INVALID_DATA = 4;
+    DISK_ERROR = 5;
+    MEMORY_ERROR = 6;
+    NETWORK_ERROR = 7;
+    NOT_PERMISSION = 8;
+    OPERATION_TIMEOUT = 9;
+    NO_CONNECTION = 10;
+    SERVICE_NOT_AVAILABLE = 11;
+    TOO_FREQUENT_REQUEST = 12;
+    NOT_FOUND = 13;
+    SERVER_SHUTDOWN = 0xF;
+    OPERATION_CANCELED = 0x10;
+    DUPLICATE_ATTEMPT = 17;
+    INVALID_TERMINAL = 1000;
+    INVALID_ACCOUNT = 1001;
+    ACCOUNT_DISABLED = 1002;
+    ADVANCED_AUTHORIZATION = 1003;
+    CERTIFICATE_REQUIRED = 1004;
+    INVALID_CERTIFICATE = 1005;
+    CERTIFICATE_NOT_CONFIRM = 1006;
+    ATTEMPT_CONNECT_NON_ACCESS_SERVER = 1007;
+    INVALID_SERVER = 1008;
+    ONLY_UPDATES_AVAILABLE = 1009;
+    OLD_VERSION = 1010;
+    ACCOUNT_NOT_MANAGER_CONFIG = 1011;
+    UNALLOWED_IP_ADDRESS = 1012;
+    GROUP_NOT_INITIALIZED = 1013;
+    CERTIFICATE_GENERATION_DISABLED = 1014;
+    INVALID_SERVER_ID = 1015;
+    UNALLOWED_ADDRESS = 1016;
+    INVALID_SERVER_TYPE = 1017;
+    SERVER_BUSY = 1018;
+    INVALID_SERVER_CERTIFICATE = 1019;
+    UNKNOWN_ACCOUNT = 1020;
+    OLD_SERVER = 1021;
+    SERVER_LICENSE_LIMITATION = 1022;
+    MOBILE_TERMINAL_NOT_ALLOWED = 0x3FF;
+    CONNECTION_NOT_PERMITTED = 0x400;
+    DEMO_DISABLED = 1025;
+    PASSWORD_MUST_CHANGED = 1026;
+    INVALID_ONETIME_PASSWORD = 1027;
+    SECRET_KEY_REQUIRED = 1028;
+    MT4_MIGRATION_PASSWORD = 1029;
+    MT5_MIGRATION_PASSWORD = 1030;
+    LAST_CONFIG_CANT_DELETE = 2000;
+    LAST_GROUP_CANT_DELETE = 2001;
+    ACCOUNTS_IN_GROUP = 2003;
+    INVALID_ACCOUNT_OR_TRADE_RANGES = 2004;
+    ACCOUNT_NOT_GROUP = 2005;
+    PROTECTED_CONFIG = 2006;
+    CONFIG_DUPLICATE = 2007;
+    CONFIG_LIMIT_REACHED = 2008;
+    INVALID_NETWORK_CONFIG = 2009;
+    DIALER_ID_ALREADY_EXISTS = 2010;
+    ADDRESS_ALREADY_EXISTS = 2011;
+    ATTEMPT_DELETE_WORKING_SERVER = 2012;
+    GATEWAY_NAME_ALREADY_EXISTS = 2013;
+    SERWER_SWITCHED_TO_BACKUP = 2014;
+    BACKUP_MODULE_ABSENT = 2015;
+    TRADE_MODULE_ABSENT = 2016;
+    HISTORY_MODULE_ABSENT = 2017;
+    ANOTHER_PROCESS_IN_PROGRESS = 2018;
+    LAST_ACCOUNT_CANT_DELETE = 3001;
+    LOGIN_RANGE_EXHAUSTED = 3002;
+    LOGIN_RESERVED = 3003;
+    ACCOUNT_ALREADY_EXISTS = 3004;
+    ATTEMPT_SELF_DELETION = 3005;
+    INVALID_PASSWORD = 3006;
+    USERS_LIMIT_REACHED = 3007;
+    ACCOUNT_HAS_OPEN_TRADES = 3008;
+    ATTEMPT_TO_MORE_ACCOUNT = 3009;
+    ATTEMPT_TO_MORE_GROUP = 3010;
+    ACCOUNT_BALANCE_ERROR = 3011;
+    ACCOUNT_HAS_INVALID_GROUP = 3012;
+    ONETRADE_ACCOUNT_ALREADY_EXISTS = 3013;
+    ACCOUNT_TRADE_DATA_IMPORT_ERROR = 3014;
+    ACCOUNT_TRADE_POSITION_IMPORT_ERROR = 3015;
+    ACCOUNT_OPEN_ORDERS_IMPORT_ERROR = 3016;
+    ACCOUNT_DEALS_HISTORY_IMPORT_ERROR = 3017;
+    ACCOUNT_ORDERS_HISTORY_IMPORT_ERROR = 3018;
+    ORDER_LIMIT_REACHED = 4001;
+    ORDER_ALREADY_EXISTS = 4002;
+    ORDER_RANGE_EXHAUSTED = 4003;
+    DEAL_RANGE_EXHAUSTED = 4004;
+    MONEY_LIMIT_REACHED = 4005;
+    DEAL_ALREADY_EXISTS = 4006;
+    ORDER_TICKET_RESERVED = 4007;
+    DEAL_TICKET_RESERVED = 4008;
+    BASE_SNAPSHOT_ERROR = 5001;
+    METHOD_NOT_SUPPORTED = 5002;
+    NO_DATA_REPORT = 5003;
+    BAD_TEMPLATE = 5004;
+    END_OF_TEMPLATE = 5005;
+    INVALID_ROW_SIZE = 5006;
+    REPEAT_LIMIT_REACHED = 5007;
+    REPORT_SIZE_LIMIT_REACHED = 5008;
+    SYMBOL_NOT_FOUND = 6001;
+    REQUEST_ON_WAY = 10001;
+    REQUEST_ACCEPTED = 10002;
+    REQUEST_PROCESSED = 10003;
+    REQUOTE = 10004;
+    PRICES = 10005;
+    REQUEST_REJECTED = 10006;
+    REQUEST_CANCELLED = 10007;
+    ORDER_PLACED = 10008;
+    REQUEST_EXECUTED = 10009;
+    REQUEST_EXECUTED_PARTIALLY = 10010;
+    REQUEST_ERROR = 10011;
+    REQUEST_TIMEOUT = 10012;
+    INVALID_REQUEST = 10013;
+    INVALID_VOLUME = 10014;
+    INVALID_PRICE = 10015;
+    INVALID_STOPS = 10016;
+    TRADE_DISABLED = 10017;
+    MARKET_CLOSED = 10018;
+    NO_MONEY = 10019;
+    PRICE_CHANGED = 10020;
+    NO_PRICES = 10021;
+    INVALID_EXPIRATION = 10022;
+    ORDER_ALREADY_CHANGED = 10023;
+    TOO_MANY_TRADE_REQUESTS = 10024;
+    NO_CHANGES = 10025;
+    AUTOTRADE_DISABLE_SERVER = 10026;
+    AUTOTRADE_DISABLE_CLIENT = 10027;
+    MODIFICATION_FAILED = 10029;
+    UNSUPPORTED_FILLING_MODE = 10030;
+    REQUEST_REJECTED_TO_ABSENCE_CONNECT = 10031;
+    ALLOWED_REAL_ACCOUNTS_ONLY = 10032;
+    ORDER_LIMIT_REACHED_EX = 10033;
+    VOLUME_LIMIT_REACHED = 10034;
+    INVALID_ORDER = 10035;
+    POSITION_NOT_EXISTS = 10036;
+    EXECUTION_NOT_BELONG_SERVER = 10037;
+    VOLUME_CLOSE_EXCEEDS_POSITION = 10038;
+    ORDER_CLOSE_ALREADY_EXISTS = 10039;
+    POSITION_LIMIT_REACHED = 10040;
+    ORDER_CANCELLED = 10041;
+    ONLY_LONG_POSITION = 10042;
+    ONLY_SHORT_POSITION = 10043;
+    ONLY_CLOSE_POSITION = 10044;
+    FIFO_CLOSE = 10045;
+    HEDGE_PROHIBITED = 10046;
+    REQUEST_RETURNED_IN_QUEUE = 11000;
+    REQUEST_EXECUTED_PARTIALLY_EX = 11001;
+    REQUOTE_EX = 11002;
+
+    // Custom error codes
+    INVALID_TOKEN = 0x10000;
+    INVALID_SYMBOL = 0x10001;
+    INVALID_TICKET = 0x10002;
+    SAME_PARAMS = 0x10003;
+    CONNECT_ERROR = 0x10004;
+    TIMEOUT = 0x10005;
+    SOCKET_ERROR = 0x10006;
+    DOUBLE_REQUEST = 0x10007;
+    SERVER_BLACKLISTED = 0x10008;
+    NETWORK_PROBLEM = 0x7fffffff;
+}

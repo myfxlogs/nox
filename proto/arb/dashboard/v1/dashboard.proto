@@ -2,6 +2,13 @@ syntax = "proto3";
 
 package arb.dashboard.v1;
 
+import "google/protobuf/timestamp.proto";
+
+option go_package = "arb/internal/dashboard/gen/arb/dashboard/v1;dashboardv1";
+
+// DashboardService — Web 仪表盘 ConnectRPC 服务（架构设计 §8.2）。
+// 写 RPC 仅限：告警确认/台账/经验复核/执行确认；无策略管理、无自动开仓入口。
+// 全部 RPC 经认证 interceptor（§13.5）；执行类 RPC 额外校验风控上限。
 service DashboardService {
   // 快照类
   rpc ListLatestQuotes(ListQuotesRequest) returns (ListQuotesResponse);
@@ -38,62 +45,330 @@ service DashboardService {
   rpc Health(HealthRequest) returns (HealthResponse);
 }
 
-message ListQuotesRequest {}
-message ListQuotesResponse {}
+// === Quote（§1.1）===
 
-message ListLatestFactsRequest {}
-message ListLatestFactsResponse {}
+message Quote {
+  string symbol = 1;       // canonical symbol（EURUSD / BTCUSDT）
+  string venue = 2;        // 场所标识（icmarkets / binance / okx）
+  double bid = 3;
+  double ask = 4;
+  google.protobuf.Timestamp time = 5;  // 报价时刻
+  string venue_symbol = 6; // 原始符号
+  string venue_type = 7;   // mt4 / mt5 / spot / perp（D-028）
+}
 
-message ListOpportunitiesRequest {}
-message ListOpportunitiesResponse {}
+message ListQuotesRequest {
+  string symbol = 1;  // 空 = 全部 canonical
+}
 
-message ListAlertsRequest {}
-message ListAlertsResponse {}
+message ListQuotesResponse {
+  repeated Quote quotes = 1;
+}
 
-message ListTriggerStatesRequest {}
-message ListTriggerStatesResponse {}
+// === Fact（§1.2）===
 
-message ListSourceHealthRequest {}
-message ListSourceHealthResponse {}
+message Fact {
+  string kind = 1;    // funding / defi_rate / fx / swap_long / swap_short
+  string venue = 2;
+  string symbol = 3;
+  double value = 4;
+  string unit = 5;    // pct_annualized / price / bps_daily
+  google.protobuf.Timestamp ts = 6;
+  string src = 7;
+}
 
-message ListFactsRequest {}
-message ListFactsResponse {}
+message ListLatestFactsRequest {
+  string kind = 1;    // 空 = 全部
+  string venue = 2;
+  string symbol = 3;
+}
 
-message AckAlertRequest {}
+message ListLatestFactsResponse {
+  repeated Fact facts = 1;
+}
+
+message ListFactsRequest {
+  string kind = 1;
+  string venue = 2;
+  string symbol = 3;
+  int32 limit = 4;   // ≤0 = 默认 100
+  int32 offset = 5;
+}
+
+message ListFactsResponse {
+  repeated Fact facts = 1;
+}
+
+// === Opportunity（§2.6）===
+
+message Opportunity {
+  string id = 1;              // "{type}:{canonical}:{venue_a}:{venue_b}:{首次检测 unix 毫秒}"
+  string type = 2;            // CROSS_VENUE / CARRY / FUNDING_HEDGE
+  string venue_buy = 3;       // "{venue}:{venue_type}"
+  string venue_sell = 4;
+  double price_buy = 5;
+  double price_sell = 6;
+  double gross_bps = 7;
+  double spread_cost = 8;
+  double commission_cost = 9;
+  double slippage_cost = 10;
+  double swap_cost = 11;
+  double net_bps = 12;        // 价差型=一次性 bps；息差型=年化 bps（D-029/D-031）
+  optional double breakeven_days = 13;  // 息差型；价差型缺省
+  google.protobuf.Timestamp quote_time = 14;
+  google.protobuf.Timestamp expires_at = 15;
+  google.protobuf.Timestamp created_at = 16;
+  google.protobuf.Timestamp updated_at = 17;
+}
+
+message ListOpportunitiesRequest {
+  string type = 1;    // 空 = 全部
+  int32 limit = 2;    // ≤0 = 默认 50
+  int32 offset = 3;
+}
+
+message ListOpportunitiesResponse {
+  repeated Opportunity opportunities = 1;
+}
+
+// === Alert（§2.5）===
+
+message Alert {
+  int64 id = 1;
+  optional int64 rule_id = 2;  // NULL = 系统级告警（D-027）
+  string rule_name = 3;        // rule_id 非空时填
+  google.protobuf.Timestamp ts = 4;
+  string level = 5;            // info / warn / critical
+  string message = 6;
+  bool acked = 7;
+}
+
+message ListAlertsRequest {
+  int32 limit = 1;   // ≤0 = 默认 100
+  int32 offset = 2;
+}
+
+message ListAlertsResponse {
+  repeated Alert alerts = 1;
+}
+
+message AckAlertRequest {
+  int64 id = 1;
+}
+
 message AckAlertResponse {}
 
 message AckAllRequest {}
+
 message AckAllResponse {}
 
 message ListUnackedRequest {}
-message ListUnackedResponse {}
 
-message AddLedgerEntryRequest {}
-message AddLedgerEntryResponse {}
+message ListUnackedResponse {
+  repeated Alert alerts = 1;
+  int32 count = 2;
+}
 
-message ListLedgerEntriesRequest {}
-message ListLedgerEntriesResponse {}
+// === TriggerState（§2.4）===
+
+message TriggerState {
+  string rule_name = 1;
+  string state = 2;                     // armed / active / resolved
+  google.protobuf.Timestamp since = 3;
+  optional double last_value = 4;
+}
+
+message ListTriggerStatesRequest {}
+
+message ListTriggerStatesResponse {
+  repeated TriggerState states = 1;
+}
+
+// === SourceHealth（§1.2 源健康）===
+
+message SourceHealth {
+  string venue = 1;          // {venue}:{venue_type}
+  string state = 2;          // up / idle / down
+  google.protobuf.Timestamp last_event_at = 3;
+}
+
+message ListSourceHealthRequest {}
+
+message ListSourceHealthResponse {
+  repeated SourceHealth sources = 1;
+}
+
+// === Ledger（§2.8）===
+
+message LedgerEntry {
+  int64 id = 1;
+  google.protobuf.Timestamp date = 2;
+  string channel = 3;
+  string currency = 4;
+  double amount = 5;         // 正 = 入金，负 = 出金
+  double fee_rate = 6;
+  string tier = 7;
+  string note = 8;
+}
+
+message AddLedgerEntryRequest {
+  google.protobuf.Timestamp date = 1;
+  string channel = 2;
+  string currency = 3;
+  double amount = 4;
+  double fee_rate = 5;
+  string tier = 6;
+  string note = 7;
+}
+
+message AddLedgerEntryResponse {
+  int64 id = 1;
+}
+
+message ListLedgerEntriesRequest {
+  int32 limit = 1;   // ≤0 = 默认 100
+  int32 offset = 2;
+}
+
+message ListLedgerEntriesResponse {
+  repeated LedgerEntry entries = 1;
+}
 
 message LedgerSummaryRequest {}
-message LedgerSummaryResponse {}
+
+message TierSummary {
+  string tier = 1;
+  double inflow = 2;
+  double outflow = 3;
+  double net = 4;
+  int32 entry_count = 5;
+}
+
+message LedgerSummaryResponse {
+  repeated TierSummary items = 1;
+}
+
+// === KnowledgeEntry（§2.9）===
+
+message KnowledgeEntry {
+  int64 id = 1;
+  google.protobuf.Timestamp ts = 2;
+  string signature = 3;
+  string venue = 4;
+  string symbol = 5;
+  string verdict = 6;
+  string rationale = 7;
+  string source = 8;
+  string status = 9;                    // active / superseded / retracted
+  google.protobuf.Timestamp validated_at = 10;
+  string validation_note = 11;
+}
 
 message ListKnowledgeEntriesRequest {}
-message ListKnowledgeEntriesResponse {}
 
-message ReviewKnowledgeEntryRequest {}
+message ListKnowledgeEntriesResponse {
+  repeated KnowledgeEntry entries = 1;
+}
+
+message ReviewKnowledgeEntryRequest {
+  string signature = 1;
+  string status = 2;           // active / superseded / retracted
+  string verdict = 3;          // 留空 = 保留原判定
+  string validation_note = 4;
+}
+
 message ReviewKnowledgeEntryResponse {}
 
-message ExecuteOpportunityRequest {}
-message ExecuteOpportunityResponse {}
+// === Position（§2.11 + §13）===
 
-message ClosePositionRequest {}
-message ClosePositionResponse {}
+message PositionLeg {
+  int64 id = 1;
+  int64 position_id = 2;
+  int32 leg_no = 3;
+  string phase = 4;            // OPEN / CLOSE
+  string venue = 5;            // {venue}:{venue_type}
+  string account = 6;
+  string symbol = 7;
+  string side = 8;             // BUY / SELL
+  double qty = 9;
+  double price_expected = 10;
+  optional double price_actual = 11;
+  string order_id = 12;
+  string status = 13;          // PENDING / SUBMITTED / FILLED / FAILED / UNKNOWN
+  google.protobuf.Timestamp ts = 14;
+}
 
-message ListPositionsRequest {}
-message ListPositionsResponse {}
+message Position {
+  int64 id = 1;
+  string opportunity_id = 2;
+  string type = 3;             // CROSS_VENUE / CARRY / FUNDING_HEDGE
+  string status = 4;           // OPENING / OPEN / LEGGED / CLOSING / CLOSED / FAILED
+  double expected_net_bps = 5;
+  optional double realized_pnl = 6;
+  google.protobuf.Timestamp opened_at = 7;
+  google.protobuf.Timestamp closed_at = 8;
+  string note = 9;
+  repeated PositionLeg legs = 10;
+}
+
+message ExecuteOpportunityRequest {
+  string opportunity_id = 1;
+  string request_id = 2;       // 客户端生成，幂等
+  string venue_buy_account = 3;   // 买腿账户名
+  string venue_sell_account = 4;  // 卖腿账户名
+  double qty = 5;              // 买腿数量（卖腿服务端反算，D-028）
+}
+
+message ExecuteOpportunityResponse {
+  int64 position_id = 1;
+  string status = 2;           // OPENING / FAILED
+  string message = 3;          // 失败原因（风控拒绝/劣化超阈等）
+}
+
+message ClosePositionRequest {
+  int64 position_id = 1;
+}
+
+message ClosePositionResponse {
+  string status = 1;           // CLOSING / FAILED
+  string message = 2;
+}
+
+message ListPositionsRequest {
+  string status = 1;  // 空 = 全部；OPEN/OPENING/LEGGED 等
+  int32 limit = 2;    // ≤0 = 默认 50
+  int32 offset = 3;
+}
+
+message ListPositionsResponse {
+  repeated Position positions = 1;
+}
+
+// === StreamUpdates（D-026，server streaming）===
 
 message StreamUpdatesRequest {}
-message StreamUpdatesResponse {}
+
+message StreamUpdatesResponse {
+  oneof update {
+    Quote quote = 1;
+    Opportunity opportunity = 2;
+    Alert alert = 3;
+    Position position = 4;
+    SourceHealth source_health = 5;
+    Keepalive keepalive = 6;     // 30s 心跳（Cloudflare Tunnel 存活，D-027）
+  }
+}
+
+message Keepalive {
+  google.protobuf.Timestamp ts = 1;
+}
+
+// === Health ===
 
 message HealthRequest {}
-message HealthResponse {}
+
+message HealthResponse {
+  bool ok = 1;
+  bool db_ok = 2;
+  string version = 3;
+}
