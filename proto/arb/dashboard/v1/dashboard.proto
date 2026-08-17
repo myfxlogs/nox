@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+package arb.dashboard.v1;
+
+service DashboardService {
+  // 快照类
+  rpc ListLatestQuotes(ListQuotesRequest) returns (ListQuotesResponse);
+  rpc ListLatestFacts(ListLatestFactsRequest) returns (ListLatestFactsResponse);
+  rpc ListOpportunities(ListOpportunitiesRequest) returns (ListOpportunitiesResponse);
+  rpc ListAlerts(ListAlertsRequest) returns (ListAlertsResponse);
+  rpc ListTriggerStates(ListTriggerStatesRequest) returns (ListTriggerStatesResponse);
+  rpc ListSourceHealth(ListSourceHealthRequest) returns (ListSourceHealthResponse);
+  rpc ListFacts(ListFactsRequest) returns (ListFactsResponse);
+
+  // 告警确认
+  rpc AckAlert(AckAlertRequest) returns (AckAlertResponse);
+  rpc AckAll(AckAllRequest) returns (AckAllResponse);
+  rpc ListUnacked(ListUnackedRequest) returns (ListUnackedResponse);
+
+  // 台账
+  rpc AddLedgerEntry(AddLedgerEntryRequest) returns (AddLedgerEntryResponse);
+  rpc ListLedgerEntries(ListLedgerEntriesRequest) returns (ListLedgerEntriesResponse);
+  rpc LedgerSummary(LedgerSummaryRequest) returns (LedgerSummaryResponse);
+
+  // 经验库
+  rpc ListKnowledgeEntries(ListKnowledgeEntriesRequest) returns (ListKnowledgeEntriesResponse);
+  rpc ReviewKnowledgeEntry(ReviewKnowledgeEntryRequest) returns (ReviewKnowledgeEntryResponse);
+
+  // 执行（认证后，§13）
+  rpc ExecuteOpportunity(ExecuteOpportunityRequest) returns (ExecuteOpportunityResponse);
+  rpc ClosePosition(ClosePositionRequest) returns (ClosePositionResponse);
+  rpc ListPositions(ListPositionsRequest) returns (ListPositionsResponse);
+
+  // 实时推送（server streaming，D-026）
+  rpc StreamUpdates(StreamUpdatesRequest) returns (stream StreamUpdatesResponse);
+
+  // 健康
+  rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+message ListQuotesRequest {}
+message ListQuotesResponse {}
+
+message ListLatestFactsRequest {}
+message ListLatestFactsResponse {}
+
+message ListOpportunitiesRequest {}
+message ListOpportunitiesResponse {}
+
+message ListAlertsRequest {}
+message ListAlertsResponse {}
+
+message ListTriggerStatesRequest {}
+message ListTriggerStatesResponse {}
+
+message ListSourceHealthRequest {}
+message ListSourceHealthResponse {}
+
+message ListFactsRequest {}
+message ListFactsResponse {}
+
+message AckAlertRequest {}
+message AckAlertResponse {}
+
+message AckAllRequest {}
+message AckAllResponse {}
+
+message ListUnackedRequest {}
+message ListUnackedResponse {}
+
+message AddLedgerEntryRequest {}
+message AddLedgerEntryResponse {}
+
+message ListLedgerEntriesRequest {}
+message ListLedgerEntriesResponse {}
+
+message LedgerSummaryRequest {}
+message LedgerSummaryResponse {}
+
+message ListKnowledgeEntriesRequest {}
+message ListKnowledgeEntriesResponse {}
+
+message ReviewKnowledgeEntryRequest {}
+message ReviewKnowledgeEntryResponse {}
+
+message ExecuteOpportunityRequest {}
+message ExecuteOpportunityResponse {}
+
+message ClosePositionRequest {}
+message ClosePositionResponse {}
+
+message ListPositionsRequest {}
+message ListPositionsResponse {}
+
+message StreamUpdatesRequest {}
+message StreamUpdatesResponse {}
+
+message HealthRequest {}
+message HealthResponse {}
