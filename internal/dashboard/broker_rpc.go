@@ -35,7 +35,6 @@ func (s *Service) AddBroker(ctx context.Context, req *connect.Request[v1.AddBrok
 		User:     req.Msg.GetUser(),
 		Password: req.Msg.GetPassword(),
 		Server:   req.Msg.GetServer(),
-		Company:  req.Msg.GetCompany(),
 	}
 	if err := s.bm.AddBroker(ctx, acct); err != nil {
 		return nil, connect.NewError(connect.CodeUnavailable, err)
@@ -66,7 +65,6 @@ func (s *Service) ListBrokerAccounts(ctx context.Context, req *connect.Request[v
 			Port:      int32(a.Port),
 			User:      a.User,
 			Server:    a.Server,
-			Company:   a.Company,
 			Alias:     a.Alias,
 			Status:    a.Status,
 			CreatedAt: timestamppb.New(a.CreatedAt),
@@ -148,6 +146,21 @@ func (s *Service) SetBrokerAccountAlias(ctx context.Context, req *connect.Reques
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(&v1.SetBrokerAccountAliasResponse{}), nil
+}
+
+// SetBrokerDisabled 停用/启用账号（D-033）：停用停适配器保留凭据，启用重新连接。
+func (s *Service) SetBrokerDisabled(ctx context.Context, req *connect.Request[v1.SetBrokerDisabledRequest]) (*connect.Response[v1.SetBrokerDisabledResponse], error) {
+	venue := req.Msg.GetVenue()
+	var err error
+	if req.Msg.GetDisabled() {
+		err = s.bm.DisableBroker(ctx, venue)
+	} else {
+		err = s.bm.EnableBroker(ctx, venue)
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&v1.SetBrokerDisabledResponse{}), nil
 }
 
 // --- Symbol 映射 ---

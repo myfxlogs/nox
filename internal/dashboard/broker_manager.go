@@ -109,8 +109,8 @@ func (m *BrokerManager) AddBroker(ctx context.Context, a *pgstore.BrokerAccount)
 	return nil
 }
 
-// RemoveBroker 停止适配器并删除 DB 记录与符号映射。
-func (m *BrokerManager) RemoveBroker(ctx context.Context, venue string) error {
+// stopAdapter 停止运行中适配器并注销执行器/querier（不删 DB 记录，RemoveBroker/DisableBroker 复用）。
+func (m *BrokerManager) stopAdapter(venue string) {
 	m.mu.Lock()
 	r := m.running[venue]
 	delete(m.running, venue)
@@ -122,6 +122,11 @@ func (m *BrokerManager) RemoveBroker(ctx context.Context, venue string) error {
 		m.reg.Unregister(venue + ":mt5")
 		m.syncQueriers()
 	}
+}
+
+// RemoveBroker 停止适配器并删除 DB 记录与符号映射。
+func (m *BrokerManager) RemoveBroker(ctx context.Context, venue string) error {
+	m.stopAdapter(venue)
 	if err := m.store.DeleteVenueSymbolMappings(ctx, venue); err != nil {
 		return fmt.Errorf("delete symbol mappings: %w", err)
 	}
@@ -129,6 +134,33 @@ func (m *BrokerManager) RemoveBroker(ctx context.Context, venue string) error {
 		return fmt.Errorf("delete broker account: %w", err)
 	}
 	log.Printf("[broker] removed %s", venue)
+	return nil
+}
+
+// DisableBroker 停用账号（D-033）：停止适配器 + status=stopped，保留 DB 行与符号映射（启用可恢复）。
+func (m *BrokerManager) DisableBroker(ctx context.Context, venue string) error {
+	m.stopAdapter(venue)
+	if err := m.store.SetBrokerAccountStatus(ctx, venue, "stopped"); err != nil {
+		return fmt.Errorf("disable broker: %w", err)
+	}
+	log.Printf("[broker] disabled %s", venue)
+	return nil
+}
+
+// EnableBroker 启用账号：读取凭据重新启动适配器，status=connected（失败回写 failed）。
+func (m *BrokerManager) EnableBroker(ctx context.Context, venue string) error {
+	a, err := m.store.GetBrokerAccount(ctx, venue)
+	if err != nil {
+		return fmt.Errorf("get broker %s: %w", venue, err)
+	}
+	if err := m.startAdapter(ctx, a); err != nil {
+		_ = m.store.SetBrokerAccountStatus(ctx, venue, "failed")
+		return err
+	}
+	if err := m.store.SetBrokerAccountStatus(ctx, venue, "connected"); err != nil {
+		return fmt.Errorf("enable broker: %w", err)
+	}
+	log.Printf("[broker] enabled %s", venue)
 	return nil
 }
 
