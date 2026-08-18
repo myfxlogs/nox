@@ -53,6 +53,8 @@ service DashboardService {
   rpc ListSymbolMappings(ListSymbolMappingsRequest) returns (ListSymbolMappingsResponse);
   rpc SaveSymbolMapping(SaveSymbolMappingRequest) returns (SaveSymbolMappingResponse);
   rpc DeleteSymbolMapping(DeleteSymbolMappingRequest) returns (DeleteSymbolMappingResponse);
+  rpc ListMappingSuggestions(ListMappingSuggestionsRequest) returns (ListMappingSuggestionsResponse);
+  rpc ListCanonicals(ListCanonicalsRequest) returns (ListCanonicalsResponse);
 
   // 实时推送（server streaming，D-026）
   rpc StreamUpdates(StreamUpdatesRequest) returns (stream StreamUpdatesResponse);
@@ -473,6 +475,7 @@ message BrokerSymbolsRequest {
 message SymbolEntry {
   string symbol = 1;    // 服务器真实符号
   string group = 2;     // broker 分组（MT5 SymGroup.GroupName 顶层段，如 Forex；MT4 降级空串）
+  double contract_size = 3; // 服务器真实合约规格（MT5 SymbolInfo.ContractSize；MT4/未知 = 0）
 }
 
 message BrokerSymbolsResponse {
@@ -506,6 +509,7 @@ message SymbolMapping {
   string venue = 1;
   string broker_symbol = 2;
   string canonical = 3;
+  optional double contract_size = 4; // 该 broker 符号真实合约规格；缺省 = 未知
 }
 
 message ListSymbolMappingsRequest {
@@ -516,10 +520,12 @@ message ListSymbolMappingsResponse {
   repeated SymbolMapping mappings = 1;
 }
 
+// 合约规格由后端自 broker 权威获取（零信任，前端不可传值）；override 仅人工确认时置真。
 message SaveSymbolMappingRequest {
   string venue = 1;
   string broker_symbol = 2;
   string canonical = 3;
+  optional bool override = 5;        // 合约规格不符时仍强制保存（人工确认；默认拒绝，防假映射）
 }
 
 message SaveSymbolMappingResponse {}
@@ -530,3 +536,32 @@ message DeleteSymbolMappingRequest {
 }
 
 message DeleteSymbolMappingResponse {}
+
+// ListMappingSuggestions — 名字匹配既有 canonical 但合约规格不符（或尚可采纳）的建议映射。
+// canonical 数量用户自定（从 broker 真实符号策展），新 broker 自动映射名字+合约匹配者；
+// 这里返回名字匹配但未入库的候选：status=auto（合约一致，一键采纳）/
+// conflict（合约不符，待确认，采纳需 override）。D-042。
+message ListMappingSuggestionsRequest {
+  string venue = 1;     // 已连接适配器的 venue
+}
+
+message SymbolMappingSuggestion {
+  string broker_symbol = 1;
+  string group = 2;
+  double contract_size = 3;   // 0 = 未知
+  string canonical = 4;       // 建议映射到的既有 canonical
+  string status = 5;          // auto / conflict
+  string reason = 6;          // conflict 时说明不符原因；auto 可为空
+}
+
+message ListMappingSuggestionsResponse {
+  repeated SymbolMappingSuggestion suggestions = 1;
+}
+
+// ListCanonicals — 既有 canonical 全集（默认种子 ∪ 全部已映射 canonical，去重排序），
+// 供前端 canonical 下拉选项。选项由后端计算（零信任，前端仅渲染）。
+message ListCanonicalsRequest {}
+
+message ListCanonicalsResponse {
+  repeated string canonicals = 1;
+}

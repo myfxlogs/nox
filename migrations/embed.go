@@ -13,3 +13,6 @@ var BrokerAccountsShortenSQL string
 
 //go:embed 0004_broker_commission.sql
 var BrokerCommissionSQL string
+
+//go:embed 0005_broker_symbol_map_contract.sql
+var BrokerSymbolMapContractSQL string

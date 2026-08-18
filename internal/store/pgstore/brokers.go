@@ -3,7 +3,11 @@ package pgstore
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // BrokerAccount broker_accounts 行。
@@ -24,10 +28,13 @@ type BrokerAccount struct {
 }
 
 // SymbolMapping broker_symbol_map 行。
+// ContractSize 该 broker 符号真实合约规格（MT5 SymbolInfo.ContractSize，D-042）；
+// nil = 未知（MT4 / 历史映射），校验跳过。
 type SymbolMapping struct {
 	Venue        string
 	BrokerSymbol string
 	Canonical    string
+	ContractSize *float64
 }
 
 // InsertBrokerAccount 插入账号；venue 冲突返回错误（UNIQUE 约束）。
@@ -100,13 +107,14 @@ func (s *Store) SetBrokerAccountStatus(ctx context.Context, venue, status string
 	return err
 }
 
-// UpsertSymbolMapping 写入映射（venue+broker_symbol 冲突时更新 canonical）。
+// UpsertSymbolMapping 写入映射（venue+broker_symbol 冲突时更新 canonical + contract_size）。
+// ContractSize nil 写 NULL（未知）。
 func (s *Store) UpsertSymbolMapping(ctx context.Context, m *SymbolMapping) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO broker_symbol_map (venue, broker_symbol, canonical)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (venue, broker_symbol) DO UPDATE SET canonical = EXCLUDED.canonical
-	`, m.Venue, m.BrokerSymbol, m.Canonical)
+		INSERT INTO broker_symbol_map (venue, broker_symbol, canonical, contract_size)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (venue, broker_symbol) DO UPDATE SET canonical = EXCLUDED.canonical, contract_size = EXCLUDED.contract_size
+	`, m.Venue, m.BrokerSymbol, m.Canonical, m.ContractSize)
 	return err
 }
 
@@ -126,7 +134,7 @@ func (s *Store) DeleteVenueSymbolMappings(ctx context.Context, venue string) err
 // ListSymbolMappings 映射列表；venue 空 = 全部。
 func (s *Store) ListSymbolMappings(ctx context.Context, venue string) ([]SymbolMapping, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT venue, broker_symbol, canonical FROM broker_symbol_map
+		SELECT venue, broker_symbol, canonical, contract_size FROM broker_symbol_map
 		WHERE ($1 = '' OR venue = $1)
 		ORDER BY venue, broker_symbol
 	`, venue)
@@ -137,10 +145,47 @@ func (s *Store) ListSymbolMappings(ctx context.Context, venue string) ([]SymbolM
 	var out []SymbolMapping
 	for rows.Next() {
 		var m SymbolMapping
-		if err := rows.Scan(&m.Venue, &m.BrokerSymbol, &m.Canonical); err != nil {
+		if err := rows.Scan(&m.Venue, &m.BrokerSymbol, &m.Canonical, &m.ContractSize); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
 	}
 	return out, rows.Err()
+}
+
+// CanonicalContractProfile 返回 canonical 的期望合约规格（跨全部 venue 该 canonical
+// 已映射符号合约的众数；D-042）。ok=false = 无已知合约（首次映射/全 NULL），调用方跳过校验。
+// 校验强制同标的跨 broker 合约一致，故正常数据众数唯一；多值异常取频次最高者防阻塞。
+func (s *Store) CanonicalContractProfile(ctx context.Context, canonical string) (float64, bool, error) {
+	var (
+		val float64
+		n   int
+	)
+	err := s.pool.QueryRow(ctx, `
+		SELECT contract_size, COUNT(*) FROM broker_symbol_map
+		WHERE canonical = $1 AND contract_size IS NOT NULL
+		GROUP BY contract_size ORDER BY COUNT(*) DESC, contract_size LIMIT 1
+	`, canonical).Scan(&val, &n)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, false, nil
+		}
+		return 0, false, err
+	}
+	return val, true, nil
+}
+
+// BackfillSymbolContracts 为 venue 下 contract_size 为 NULL 的既有映射补写权威合约
+//（broker 自取，D-042 后启动时回填；历史映射先于合约采集功能存在，NULL 使规格画像为空 →
+// 校验形同虚设）。未命中符号保持 NULL（合约未知，跳过校验，合法）。
+func (s *Store) BackfillSymbolContracts(ctx context.Context, venue string, contracts map[string]float64) error {
+	for sym, cs := range contracts {
+		if _, err := s.pool.Exec(ctx, `
+			UPDATE broker_symbol_map SET contract_size = $1
+			WHERE venue = $2 AND broker_symbol = $3 AND contract_size IS NULL
+		`, cs, venue, sym); err != nil {
+			return fmt.Errorf("backfill %s.%s: %w", venue, sym, err)
+		}
+	}
+	return nil
 }

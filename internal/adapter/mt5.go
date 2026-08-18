@@ -190,6 +190,22 @@ func (a *MT5Adapter) Subscribe(symbols []string) (<-chan bus.Quote, func()) {
 	return ch, cancel
 }
 
+// Resubscribe 运行时补订阅新符号（D-042：保存映射后立即生效，无需重启/重开流）。
+// 仅注册会话订阅（mtapi 幂等），不开新 OnQuote 流——会话按当前订阅集投递，已开流自动接上。
+// D-047 缺陷③：映射了不重订阅 = 没报价流。
+func (a *MT5Adapter) Resubscribe(symbols []string) {
+	if a.token == "" {
+		return
+	}
+	sctx := a.withSessionMD(a.stopCtx)
+	for _, sym := range symbols {
+		_, err := a.subs.Subscribe(sctx, &mt5pb.SubscribeRequest{Id: a.token, Symbol: sym})
+		if err != nil {
+			log.Printf("[mt5:%s] resubscribe %s: %v", a.venue, sym, err)
+		}
+	}
+}
+
 // Stop 停止适配器。
 func (a *MT5Adapter) Stop() {
 	a.stopCancel()
