@@ -23,13 +23,20 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// SymbolGroup 服务器符号 + broker 分组（MT5 GroupName 顶层段；MT4 降级空组）。
+type SymbolGroup struct {
+	Symbol string
+	Group  string
+}
+
 // running 一个运行中适配器的可停止资源。
 type running struct {
-	stop      func() // 停止报价订阅 + 适配器连接
-	querier   reconcile.VenueQuerier
-	symbols   func(ctx context.Context) ([]string, error) // 拉取服务器符号表
-	setSymMap func(map[string]string)                     // 运行时刷新 brokerSymbol → canonical
-	swap      func(ctx context.Context) ([]fact.Fact, error) // 轮询 swap facts（§3.6，D-036）
+	stop         func()                               // 停止报价订阅 + 适配器连接
+	querier      reconcile.VenueQuerier
+	symbols      func(ctx context.Context) ([]string, error)      // 拉取服务器符号表
+	symbolGroups func(ctx context.Context) ([]SymbolGroup, error) // 符号表 + 分组（仅服务 BrokerSymbols 展示，按需拉一次）
+	setSymMap    func(map[string]string)                          // 运行时刷新 brokerSymbol → canonical
+	swap         func(ctx context.Context) ([]fact.Fact, error)   // 轮询 swap facts（§3.6，D-036）
 }
 
 // staticQuerier 环境变量适配器的 querier（不被动态管理，boot 时与 DB venue 去重）。
@@ -319,15 +326,27 @@ func (m *BrokerManager) ReloadSymbolMap(ctx context.Context, venue string) {
 	log.Printf("[broker] %s symbol map refreshed (%d)", venue, len(sm))
 }
 
-// BrokerSymbols 从运行中适配器拉取服务器符号表。
-func (m *BrokerManager) BrokerSymbols(ctx context.Context, venue string) ([]string, error) {
+// BrokerSymbols 从运行中适配器拉取服务器符号表（附 broker 分组，辅助补映射搜索）。
+// MT5 走 symbolGroups（SymbolParamsMany 取 GroupName 顶层段）；MT4/降级回退 symbols（group 空）。
+func (m *BrokerManager) BrokerSymbols(ctx context.Context, venue string) ([]SymbolGroup, error) {
 	m.mu.Lock()
 	r := m.running[venue]
 	m.mu.Unlock()
 	if r == nil || r.symbols == nil {
 		return nil, fmt.Errorf("venue %s 未连接", venue)
 	}
-	return r.symbols(ctx)
+	if r.symbolGroups != nil {
+		return r.symbolGroups(ctx)
+	}
+	names, err := r.symbols(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]SymbolGroup, 0, len(names))
+	for _, s := range names {
+		out = append(out, SymbolGroup{Symbol: s})
+	}
+	return out, nil
 }
 
 // startAdapter 平台分发：构造适配器 → 连接 → 订阅 → 注册执行器/querier。
@@ -355,6 +374,18 @@ func (m *BrokerManager) startMT4(ctx context.Context, a *pgstore.BrokerAccount) 
 		}
 		return resp.GetResult(), nil
 	}
+	// MT4 无 GroupName，降级 group 为空（前端仅模糊搜索，无分组 chips）。
+	fetchSymbolGroups := func(ctx context.Context) ([]SymbolGroup, error) {
+		names, err := fetchSymbols(ctx)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]SymbolGroup, 0, len(names))
+		for _, s := range names {
+			out = append(out, SymbolGroup{Symbol: s})
+		}
+		return out, nil
+	}
 	symMap, symbols, err := m.symbolPlan(ctx, a.Venue, defaultSymbols, fetchSymbols)
 	if err != nil || len(symMap) == 0 {
 		log.Printf("[broker] %s symbol plan: %v", a.Venue, err)
@@ -372,11 +403,12 @@ func (m *BrokerManager) startMT4(ctx context.Context, a *pgstore.BrokerAccount) 
 	q := reconcile.NewMT4Querier(a.Venue, ad.Token(), ad.MT4Client())
 
 	r := &running{
-		stop:      func() { cancel(); ad.Stop() },
-		querier:   q,
-		symbols:   fetchSymbols,
-		setSymMap: ad.SetSymbolMap,
-		swap:      func(ctx context.Context) ([]fact.Fact, error) { return ad.SwapFacts(ctx, m.qbus) },
+		stop:         func() { cancel(); ad.Stop() },
+		querier:      q,
+		symbols:      fetchSymbols,
+		symbolGroups: fetchSymbolGroups,
+		setSymMap:    ad.SetSymbolMap,
+		swap:         func(ctx context.Context) ([]fact.Fact, error) { return ad.SwapFacts(ctx, m.qbus) },
 	}
 	m.attach(a.Venue, r)
 	log.Printf("[broker] %s (MT4) ready", a.Venue)
@@ -399,6 +431,33 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 		}
 		return resp.GetResult(), nil
 	}
+	// 符号表 + 分组：SymbolParamsMany 批量取 SymGroup.GroupName，取反斜杠路径顶层段为分组
+	// （Forex\Major\EURUSD→Forex）。Limit 不设——服务端默认 cap，设小 limit 反而在符号超限时抛异常
+	// （归档 ListingsMany 经验，D-040）。
+	fetchSymbolGroups := func(ctx context.Context) ([]SymbolGroup, error) {
+		names, err := fetchSymbols(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(names) == 0 {
+			return nil, nil
+		}
+		resp, err := ad.MT5Client().SymbolParamsMany(tokenCtx(ctx, ad.Token()), &mt5pb.SymbolParamsManyRequest{Id: ad.Token(), Symbol: names})
+		if err != nil {
+			return nil, err
+		}
+		if e := resp.GetError(); e != nil {
+			return nil, fmt.Errorf("mt5 symbolParamsMany: %s", e.GetMessage())
+		}
+		out := make([]SymbolGroup, 0, len(resp.GetResult()))
+		for _, sp := range resp.GetResult() {
+			if sp == nil {
+				continue
+			}
+			out = append(out, SymbolGroup{Symbol: sp.GetSymbol(), Group: topGroup(sp.GetSymbolGroup().GetGroupName())})
+		}
+		return out, nil
+	}
 	symMap, symbols, err := m.symbolPlan(ctx, a.Venue, defaultSymbols, fetchSymbols)
 	if err != nil || len(symMap) == 0 {
 		log.Printf("[broker] %s symbol plan: %v", a.Venue, err)
@@ -416,11 +475,12 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 	q := reconcile.NewMT5Querier(a.Venue, ad.Token(), ad.MT5Client())
 
 	r := &running{
-		stop:      func() { cancel(); ad.Stop() },
-		querier:   q,
-		symbols:   fetchSymbols,
-		setSymMap: ad.SetSymbolMap,
-		swap:      func(ctx context.Context) ([]fact.Fact, error) { return ad.SwapFacts(ctx, m.qbus) },
+		stop:         func() { cancel(); ad.Stop() },
+		querier:      q,
+		symbols:      fetchSymbols,
+		symbolGroups: fetchSymbolGroups,
+		setSymMap:    ad.SetSymbolMap,
+		swap:         func(ctx context.Context) ([]fact.Fact, error) { return ad.SwapFacts(ctx, m.qbus) },
 	}
 	m.attach(a.Venue, r)
 	log.Printf("[broker] %s (MT5) ready", a.Venue)
@@ -454,6 +514,15 @@ func (m *BrokerManager) syncQueriers() {
 
 // defaultSymbols 无映射时默认订阅（与 cmd/core brokerSymbols 默认一致）。
 var defaultSymbols = []string{"EURUSD", "GBPUSD", "XAUUSD", "BTCUSD", "ETHUSD"}
+
+// topGroup 取 SymGroup.GroupName 反斜杠路径的顶层段（Forex\Major\EURUSD → Forex）。
+// 无分隔符原样返回。MT5 服务器品种分组数据源（归档 symbol_map_handlers.go topGroup 同法）。
+func topGroup(name string) string {
+	if i := strings.IndexByte(name, '\\'); i >= 0 {
+		return name[:i]
+	}
+	return name
+}
 
 // symbolPlan 决定订阅符号与映射：DB 有人工映射用 DB；否则按服务器实际符号解析默认表并落库
 // （兼容 MT5/MT4 cent 账号 EURUSDm 后缀，首次添加即开箱订阅）。

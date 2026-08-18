@@ -139,13 +139,17 @@ func verifyMT5(ctx context.Context, host, server string, port int32, user int64,
 	return r.GetBalance(), r.GetEquity(), r.GetCurrency(), int32(r.GetLeverage()), nil
 }
 
-// BrokerSymbols 返回运行中适配器的服务器符号表（填 Symbol 映射用）。
+// BrokerSymbols 返回运行中适配器的服务器符号表（附 broker 分组，补映射搜索用）。
 func (s *Service) BrokerSymbols(ctx context.Context, req *connect.Request[v1.BrokerSymbolsRequest]) (*connect.Response[v1.BrokerSymbolsResponse], error) {
 	symbols, err := s.bm.BrokerSymbols(ctx, req.Msg.GetVenue())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnavailable, err)
 	}
-	return connect.NewResponse(&v1.BrokerSymbolsResponse{Symbols: symbols}), nil
+	entries := make([]*v1.SymbolEntry, 0, len(symbols))
+	for _, sg := range symbols {
+		entries = append(entries, &v1.SymbolEntry{Symbol: sg.Symbol, Group: sg.Group})
+	}
+	return connect.NewResponse(&v1.BrokerSymbolsResponse{Symbols: entries}), nil
 }
 
 // SetBrokerAccountAlias 设置账号别名；空串 = 清除。
