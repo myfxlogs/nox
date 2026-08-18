@@ -14,8 +14,17 @@ func TestLoadDefaults(t *testing.T) {
 	if c.FundingMinNetAnnualized != 4.0 {
 		t.Errorf("FundingMinNetAnnualized = %v, want 4.0", c.FundingMinNetAnnualized)
 	}
-	if c.CarryMinNetBps != 8.0 {
-		t.Errorf("CarryMinNetBps = %v, want 8.0", c.CarryMinNetBps)
+	if c.CarryMinNetAnnualized != 4.0 {
+		t.Errorf("CarryMinNetAnnualized = %v, want 4.0", c.CarryMinNetAnnualized)
+	}
+	if c.GrabMinNetAnnualized != 4.5 {
+		t.Errorf("GrabMinNetAnnualized = %v, want 4.5", c.GrabMinNetAnnualized)
+	}
+	if c.SwapRefresh != time.Hour {
+		t.Errorf("SwapRefresh = %v, want 1h", c.SwapRefresh)
+	}
+	if c.ScanThrottle != 30*time.Second {
+		t.Errorf("ScanThrottle = %v, want 30s", c.ScanThrottle)
 	}
 	if c.SlippageBps != 1.0 {
 		t.Errorf("SlippageBps = %v, want 1.0", c.SlippageBps)
@@ -56,8 +65,26 @@ func TestLoadEnvOverride(t *testing.T) {
 		t.Errorf("DetectorFreshnessTTL = %v, want 90s", c.DetectorFreshnessTTL)
 	}
 	// 未设置的字段仍用默认
-	if c.CarryMinNetBps != 8.0 {
-		t.Errorf("CarryMinNetBps = %v, want default 8.0", c.CarryMinNetBps)
+	if c.CarryMinNetAnnualized != 4.0 {
+		t.Errorf("CarryMinNetAnnualized = %v, want default 4.0", c.CarryMinNetAnnualized)
+	}
+	if c.CommissionTaker["binance"] != 10.0 {
+		t.Errorf("CommissionTaker[binance] = %v, want 10.0", c.CommissionTaker["binance"])
+	}
+}
+
+// TestLoadTakerEnvOverride 逐交易所 taker env 覆盖。
+func TestLoadTakerEnvOverride(t *testing.T) {
+	t.Setenv("ARB_COMMISSION_TAKER_GATE", "5.0")
+	c := Load()
+	if c.CommissionTaker["gate"] != 5.0 {
+		t.Errorf("CommissionTaker[gate] = %v, want 5.0", c.CommissionTaker["gate"])
+	}
+	if c.CommissionTaker["okx"] != 10.0 {
+		t.Errorf("CommissionTaker[okx] = %v, want default 10.0", c.CommissionTaker["okx"])
+	}
+	if c.CommissionCEXTakerBps != 10.0 {
+		t.Errorf("CommissionCEXTakerBps = %v, want default 10.0", c.CommissionCEXTakerBps)
 	}
 }
 

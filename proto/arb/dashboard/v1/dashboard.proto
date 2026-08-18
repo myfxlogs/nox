@@ -47,6 +47,7 @@ service DashboardService {
   rpc BrokerSymbols(BrokerSymbolsRequest) returns (BrokerSymbolsResponse);
   rpc SetBrokerAccountAlias(SetBrokerAccountAliasRequest) returns (SetBrokerAccountAliasResponse);
   rpc SetBrokerDisabled(SetBrokerDisabledRequest) returns (SetBrokerDisabledResponse);
+  rpc SetBrokerCommission(SetBrokerCommissionRequest) returns (SetBrokerCommissionResponse);
 
   // Symbol 映射（brokerSymbol -> canonical）
   rpc ListSymbolMappings(ListSymbolMappingsRequest) returns (ListSymbolMappingsResponse);
@@ -418,6 +419,7 @@ message AddBrokerRequest {
   string password = 6;  // 明文存储（个人使用）
   string server = 7;    // 服务器名称
   reserved 8;           // 曾为 company（D-033 移除）
+  optional double commission_bps = 9; // 账号类型真实佣金（bps/腿，D-036）；缺省 = 回退 config 默认
 }
 
 message AddBrokerResponse {}
@@ -439,6 +441,7 @@ message BrokerAccount {
   string alias = 8;     // 别名；空 = 未设置
   string status = 9;    // connected / failed / stopped
   google.protobuf.Timestamp created_at = 10;
+  optional double commission_bps = 11; // 账号真实佣金（bps/腿，D-036）；未设置 = 回退默认
 }
 
 message ListBrokerAccountsRequest {}
@@ -484,6 +487,13 @@ message SetBrokerDisabledRequest {
 }
 
 message SetBrokerDisabledResponse {}
+
+message SetBrokerCommissionRequest {
+  string venue = 1;
+  optional double commission_bps = 2; // 新佣金（bps/腿）；不传/null = 清除回退默认；显式 0 = 免佣金账号
+}
+
+message SetBrokerCommissionResponse {}
 
 // === Symbol 映射 ===
 

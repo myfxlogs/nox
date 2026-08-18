@@ -27,3 +27,18 @@ type Collector interface {
 	Kind() string
 	Poll(ctx context.Context) ([]fact.Fact, error)
 }
+
+// MTSwapCollector 聚合 BrokerManager 的 MT swap facts 轮询源（§3.6，D-036）。
+// Fetch 由 main 注入（BrokerManager.SwapFacts），动态适配器增删天然覆盖。
+type MTSwapCollector struct {
+	Fetch func(ctx context.Context) ([]fact.Fact, error)
+}
+
+func (c *MTSwapCollector) Kind() string { return "mt_swap" }
+
+func (c *MTSwapCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
+	if c.Fetch == nil {
+		return nil, nil
+	}
+	return c.Fetch(ctx)
+}
