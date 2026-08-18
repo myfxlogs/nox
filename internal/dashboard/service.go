@@ -38,17 +38,21 @@ func (s *Service) ListLatestQuotes(ctx context.Context, req *connect.Request[v1.
 		if symbol != "" && q.Symbol != symbol {
 			continue
 		}
-		quotes = append(quotes, &v1.Quote{
-			Symbol:      q.Symbol,
-			Venue:       q.Venue,
-			Bid:         q.Bid,
-			Ask:         q.Ask,
-			Time:        timestamppb.New(q.Time),
-			VenueSymbol: q.VenueSymbol,
-			VenueType:   q.VenueType,
-		})
+		quotes = append(quotes, quoteToProto(q))
 	}
 	return connect.NewResponse(&v1.ListQuotesResponse{Quotes: quotes}), nil
+}
+
+func quoteToProto(q bus.Quote) *v1.Quote {
+	return &v1.Quote{
+		Symbol:      q.Symbol,
+		Venue:       q.Venue,
+		Bid:         q.Bid,
+		Ask:         q.Ask,
+		Time:        timestamppb.New(q.Time),
+		VenueSymbol: q.VenueSymbol,
+		VenueType:   q.VenueType,
+	}
 }
 
 func (s *Service) ListLatestFacts(ctx context.Context, req *connect.Request[v1.ListLatestFactsRequest]) (*connect.Response[v1.ListLatestFactsResponse], error) {
@@ -260,6 +264,10 @@ func (s *Service) ListPositions(ctx context.Context, req *connect.Request[v1.Lis
 // --- 实时推送（§8.2 D-026） ---
 
 func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.StreamUpdatesRequest], stream *connect.ServerStream[v1.StreamUpdatesResponse]) error {
+	// 实时推送报价：订阅 QuoteBus 全量（wildcard ""），亚秒级行情走推流。
+	// 机会/告警/持仓由引擎 30s 节流产生、无独立事件总线 → 前端以 30s 低频快照补齐。
+	ch, cancel := s.qbus.Subscribe("")
+	defer cancel()
 	// keepalive 每 30s（§8.2 D-027）
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -267,6 +275,17 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 		select {
 		case <-ctx.Done():
 			return nil
+		case q, ok := <-ch:
+			if !ok {
+				return nil
+			}
+			if err := stream.Send(&v1.StreamUpdatesResponse{
+				Update: &v1.StreamUpdatesResponse_Quote{
+					Quote: quoteToProto(q),
+				},
+			}); err != nil {
+				return err
+			}
 		case <-ticker.C:
 			if err := stream.Send(&v1.StreamUpdatesResponse{
 				Update: &v1.StreamUpdatesResponse_Keepalive{
