@@ -34,6 +34,8 @@ type MT5Adapter struct {
 	mt5     mt5pb.MT5Client
 	subs    mt5pb.SubscriptionsClient
 	streams mt5pb.StreamsClient
+	trading mt5pb.TradingClient
+	token   string
 
 	symMap atomic.Pointer[map[string]string] // brokerSymbol → canonical
 
@@ -99,6 +101,7 @@ func (a *MT5Adapter) Connect(ctx context.Context) error {
 	a.mt5 = mt5pb.NewMT5Client(conn)
 	a.subs = mt5pb.NewSubscriptionsClient(conn)
 	a.streams = mt5pb.NewStreamsClient(conn)
+	a.trading = mt5pb.NewTradingClient(conn)
 
 	resp, err := a.connMgr.Connect(ctx, &mt5pb.ConnectRequest{
 		Host:     a.host,
@@ -110,6 +113,7 @@ func (a *MT5Adapter) Connect(ctx context.Context) error {
 		return fmt.Errorf("mt5 connect: %w", err)
 	}
 	token := resp.GetResult()
+	a.token = token
 	log.Printf("[mt5:%s] connected, token=%s", a.venue, maskToken(token))
 
 	a.stopCtx = metadata.AppendToOutgoingContext(a.stopCtx, "token", token)
@@ -188,4 +192,12 @@ func (a *MT5Adapter) Venue() string { return a.venue }
 // AccountID 返回全栈唯一账号身份。
 func (a *MT5Adapter) AccountID() string {
 	return a.venue + ":" + strconv.FormatInt(a.user, 10)
+}
+
+func (a *MT5Adapter) TradingClient() mt5pb.TradingClient { return a.trading }
+func (a *MT5Adapter) MT5Client() mt5pb.MT5Client         { return a.mt5 }
+func (a *MT5Adapter) Token() string {
+a.mu.Lock()
+defer a.mu.Unlock()
+return a.token
 }

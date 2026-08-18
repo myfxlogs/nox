@@ -35,6 +35,8 @@ type MT4Adapter struct {
 	mt4     mt4pb.MT4Client
 	subs    mt4pb.SubscriptionsClient
 	streams mt4pb.StreamsClient
+	trading mt4pb.TradingClient
+	token   string
 
 	symMap atomic.Pointer[map[string]string] // brokerSymbol → canonical
 
@@ -100,6 +102,7 @@ func (a *MT4Adapter) Connect(ctx context.Context) error {
 	a.mt4 = mt4pb.NewMT4Client(conn)
 	a.subs = mt4pb.NewSubscriptionsClient(conn)
 	a.streams = mt4pb.NewStreamsClient(conn)
+	a.trading = mt4pb.NewTradingClient(conn)
 
 	// Connect
 	resp, err := a.connMgr.Connect(ctx, &mt4pb.ConnectRequest{
@@ -112,6 +115,7 @@ func (a *MT4Adapter) Connect(ctx context.Context) error {
 		return fmt.Errorf("mt4 connect: %w", err)
 	}
 	token := resp.GetResult()
+	a.token = token
 	log.Printf("[mt4:%s] connected, token=%s", a.venue, maskToken(token))
 
 	// 认证 metadata
@@ -201,4 +205,12 @@ func (a *MT4Adapter) Venue() string { return a.venue }
 // AccountID 返回全栈唯一账号身份。
 func (a *MT4Adapter) AccountID() string {
 	return a.venue + ":" + strconv.FormatInt(a.user, 10)
+}
+
+func (a *MT4Adapter) TradingClient() mt4pb.TradingClient { return a.trading }
+func (a *MT4Adapter) MT4Client() mt4pb.MT4Client         { return a.mt4 }
+func (a *MT4Adapter) Token() string {
+a.mu.Lock()
+defer a.mu.Unlock()
+return a.token
 }
