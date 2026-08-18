@@ -36,6 +36,11 @@ func (s *Service) AddBroker(ctx context.Context, req *connect.Request[v1.AddBrok
 		Password: req.Msg.GetPassword(),
 		Server:   req.Msg.GetServer(),
 	}
+	// 账号类型真实佣金（bps/腿，D-036）；缺省 = 回退 config 默认
+	if req.Msg.CommissionBps != nil {
+		v := req.Msg.GetCommissionBps()
+		acct.CommissionBps = &v
+	}
 	if err := s.bm.AddBroker(ctx, acct); err != nil {
 		return nil, connect.NewError(connect.CodeUnavailable, err)
 	}
@@ -56,9 +61,9 @@ func (s *Service) ListBrokerAccounts(ctx context.Context, req *connect.Request[v
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	pb := make([]*v1.BrokerAccount, 0, len(accounts))
+	out := make([]*v1.BrokerAccount, 0, len(accounts))
 	for _, a := range accounts {
-		pb = append(pb, &v1.BrokerAccount{
+		acct := &v1.BrokerAccount{
 			Venue:     a.Venue,
 			Platform:  int32(a.Platform),
 			Host:      a.Host,
@@ -68,9 +73,12 @@ func (s *Service) ListBrokerAccounts(ctx context.Context, req *connect.Request[v
 			Alias:     a.Alias,
 			Status:    a.Status,
 			CreatedAt: timestamppb.New(a.CreatedAt),
-		})
+		}
+		// 账号真实佣金（bps/腿，D-036）；nil = 未设置回退默认
+		acct.CommissionBps = a.CommissionBps
+		out = append(out, acct)
 	}
-	return connect.NewResponse(&v1.ListBrokerAccountsResponse{Accounts: pb}), nil
+	return connect.NewResponse(&v1.ListBrokerAccountsResponse{Accounts: out}), nil
 }
 
 // VerifyAccount 临时连接并读账户摘要，验证凭据有效性。
@@ -146,6 +154,25 @@ func (s *Service) SetBrokerAccountAlias(ctx context.Context, req *connect.Reques
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(&v1.SetBrokerAccountAliasResponse{}), nil
+}
+
+// SetBrokerCommission 更新账号真实佣金（bps/腿，D-036）：持久化 + 运行时热生效。
+// nil = 清除（回退 config 默认）；显式传值（含 0 = 免佣金账号）精确生效。
+func (s *Service) SetBrokerCommission(ctx context.Context, req *connect.Request[v1.SetBrokerCommissionRequest]) (*connect.Response[v1.SetBrokerCommissionResponse], error) {
+	venue := strings.TrimSpace(req.Msg.GetVenue())
+	if venue == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("venue 不能为空"))
+	}
+	var bps *float64
+	if req.Msg.CommissionBps != nil {
+		v := req.Msg.GetCommissionBps()
+		bps = &v
+	}
+	if err := s.store.SetBrokerCommission(ctx, venue, bps); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	s.bm.SetCommission(venue, bps)
+	return connect.NewResponse(&v1.SetBrokerCommissionResponse{}), nil
 }
 
 // SetBrokerDisabled 停用/启用账号（D-033）：停用停适配器保留凭据，启用重新连接。

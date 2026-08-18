@@ -4,13 +4,17 @@ package dashboard
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
+	"time"
 
 	"arb/internal/adapter"
 	"arb/internal/bus"
 	"arb/internal/exec"
+	"arb/internal/fact"
 	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
 
@@ -25,12 +29,14 @@ type running struct {
 	querier   reconcile.VenueQuerier
 	symbols   func(ctx context.Context) ([]string, error) // 拉取服务器符号表
 	setSymMap func(map[string]string)                     // 运行时刷新 brokerSymbol → canonical
+	swap      func(ctx context.Context) ([]fact.Fact, error) // 轮询 swap facts（§3.6，D-036）
 }
 
 // staticQuerier 环境变量适配器的 querier（不被动态管理，boot 时与 DB venue 去重）。
 type staticQuerier struct {
 	venue string
 	q     reconcile.VenueQuerier
+	swap  func(ctx context.Context) ([]fact.Fact, error) // nil = 无 swap 源
 }
 
 // BrokerManager 管理 DB 中 broker_accounts 的动态适配器。
@@ -43,15 +49,23 @@ type BrokerManager struct {
 	running map[string]*running // venue → running
 	static  []staticQuerier
 	onQ     func([]reconcile.VenueQuerier) // querier 集合变更回调
+
+	commMu     sync.Mutex
+	commission map[string]float64 // venue → 账号真实佣金（bps/腿，D-036）；缺省回退 config 默认
+
+	// 冷启动退避（m.mu 保护）：任一 venue 映射符号缺报价 → 重试直到全部流入；
+	// 超过 coldStartBound 仍缺 → 降级接受部分（防病态 symbol 永久阻塞整轮轮询）。
+	coldStartSince time.Time
 }
 
 // NewBrokerManager 创建管理器。
 func NewBrokerManager(store *pgstore.Store, qbus *bus.QuoteBus, reg *exec.Registry) *BrokerManager {
 	return &BrokerManager{
-		store:   store,
-		qbus:    qbus,
-		reg:     reg,
-		running: make(map[string]*running),
+		store:      store,
+		qbus:       qbus,
+		reg:        reg,
+		running:    make(map[string]*running),
+		commission: make(map[string]float64),
 	}
 }
 
@@ -62,8 +76,17 @@ func (m *BrokerManager) SetQuerierHook(f func([]reconcile.VenueQuerier)) {
 
 // AddStaticQuerier 登记环境变量适配器的 querier。
 func (m *BrokerManager) AddStaticQuerier(venue string, q reconcile.VenueQuerier) {
+	m.addStatic(venue, q, nil)
+}
+
+// AddStaticSwapSource 为环境变量适配器登记 swap 采集（§3.6，不留静默缺口）。
+func (m *BrokerManager) AddStaticSwapSource(venue string, swap func(ctx context.Context) ([]fact.Fact, error)) {
+	m.addStatic(venue, nil, swap)
+}
+
+func (m *BrokerManager) addStatic(venue string, q reconcile.VenueQuerier, swap func(ctx context.Context) ([]fact.Fact, error)) {
 	m.mu.Lock()
-	m.static = append(m.static, staticQuerier{venue: venue, q: q})
+	m.static = append(m.static, staticQuerier{venue: venue, q: q, swap: swap})
 	m.mu.Unlock()
 	m.syncQueriers()
 }
@@ -120,8 +143,119 @@ func (m *BrokerManager) stopAdapter(venue string) {
 		r.stop()
 		m.reg.Unregister(venue + ":mt4")
 		m.reg.Unregister(venue + ":mt5")
+		m.commMu.Lock()
+		delete(m.commission, venue)
+		m.commMu.Unlock()
 		m.syncQueriers()
 	}
+}
+
+// setCommission 登记账号真实佣金（nil 清除 → 回退 config 默认）。
+func (m *BrokerManager) setCommission(venue string, bps *float64) {
+	m.commMu.Lock()
+	defer m.commMu.Unlock()
+	if bps == nil {
+		delete(m.commission, venue)
+		return
+	}
+	m.commission[venue] = *bps
+}
+
+// SetCommission 运行时热更新账号佣金（D-036 SetBrokerCommission RPC 用）；nil 清除回退默认。
+func (m *BrokerManager) SetCommission(venue string, bps *float64) {
+	m.setCommission(venue, bps)
+}
+
+// CommissionBps 返回 venue 账号真实佣金（bps/腿）；ok=false 表示未配置，调用方回退 config 默认。
+func (m *BrokerManager) CommissionBps(venue string) (float64, bool) {
+	m.commMu.Lock()
+	defer m.commMu.Unlock()
+	bps, ok := m.commission[venue]
+	return bps, ok
+}
+
+// SwapFacts 聚合全部运行中/静态适配器的 swap facts（§3.6）。
+// 一个都拿不到时：DB 中还有应运行的账号（status=connected）→ 返回错误（Scheduler 退避重试直到适配器连上，
+// 覆盖启动竞态：scheduler 首轮早于适配器连上，§7.4）；无 CFD 部署 / 全部移除·停用 → 返回空，按周期等待不制造噪声。
+func (m *BrokerManager) SwapFacts(ctx context.Context) ([]fact.Fact, error) {
+	m.mu.Lock()
+	var sources int
+	swapFns := make([]func(context.Context) ([]fact.Fact, error), 0, len(m.running)+len(m.static))
+	for _, r := range m.running {
+		if r.swap != nil {
+			sources++
+			swapFns = append(swapFns, r.swap)
+		}
+	}
+	for _, s := range m.static {
+		if s.swap != nil {
+			sources++
+			swapFns = append(swapFns, s.swap)
+		}
+	}
+	m.mu.Unlock()
+
+	if sources == 0 {
+		if m.hasStartableAccounts(ctx) {
+			return nil, fmt.Errorf("no swap sources (adapters connecting?)")
+		}
+		return nil, nil
+	}
+
+	var facts []fact.Fact
+	var errs []string
+	hasCold := false
+	for _, fn := range swapFns {
+		fs, err := fn(ctx)
+		if err != nil {
+			if errors.Is(err, adapter.ErrSwapColdStart) {
+				hasCold = true
+			}
+			errs = append(errs, err.Error())
+			continue
+		}
+		facts = append(facts, fs...)
+	}
+	m.mu.Lock()
+	retryCold := false
+	if hasCold {
+		if m.coldStartSince.IsZero() {
+			m.coldStartSince = time.Now()
+		}
+		retryCold = time.Since(m.coldStartSince) < coldStartBound
+	} else {
+		m.coldStartSince = time.Time{}
+	}
+	m.mu.Unlock()
+	if hasCold && retryCold {
+		return nil, fmt.Errorf("swap cold start: %s", strings.Join(errs, "; "))
+	}
+	if len(facts) == 0 && len(errs) > 0 {
+		return nil, fmt.Errorf("swap aggregate: %s", strings.Join(errs, "; "))
+	}
+	for _, e := range errs {
+		log.Printf("[broker] swap source: %v", e)
+	}
+	return facts, nil
+}
+
+// coldStartBound 冷启动退避窗口：期间任一 venue 缺报价即整轮重试；超窗接受部分，等下一轮补全。
+const coldStartBound = 60 * time.Second
+
+// hasStartableAccounts 是否还有应运行的 CFD 账号（status=connected，StartAll 的启动谓词）。
+// 查询失败保守视为有——启动竞态（scheduler 首轮早于适配器连上）宁可退避重试，不可静默吞掉。
+func (m *BrokerManager) hasStartableAccounts(ctx context.Context) bool {
+	accounts, err := m.store.ListBrokerAccounts(ctx)
+	if err != nil {
+		log.Printf("[broker] hasStartableAccounts: %v", err)
+		return true
+	}
+	for _, a := range accounts {
+		if a.Status == "connected" {
+			return true
+		}
+	}
+	return false
 }
 
 // RemoveBroker 停止适配器并删除 DB 记录与符号映射。
@@ -198,6 +332,7 @@ func (m *BrokerManager) BrokerSymbols(ctx context.Context, venue string) ([]stri
 
 // startAdapter 平台分发：构造适配器 → 连接 → 订阅 → 注册执行器/querier。
 func (m *BrokerManager) startAdapter(ctx context.Context, a *pgstore.BrokerAccount) error {
+	m.setCommission(a.Venue, a.CommissionBps)
 	if a.Platform == 0 {
 		return m.startMT4(ctx, a)
 	}
@@ -241,6 +376,7 @@ func (m *BrokerManager) startMT4(ctx context.Context, a *pgstore.BrokerAccount) 
 		querier:   q,
 		symbols:   fetchSymbols,
 		setSymMap: ad.SetSymbolMap,
+		swap:      func(ctx context.Context) ([]fact.Fact, error) { return ad.SwapFacts(ctx, m.qbus) },
 	}
 	m.attach(a.Venue, r)
 	log.Printf("[broker] %s (MT4) ready", a.Venue)
@@ -284,6 +420,7 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 		querier:   q,
 		symbols:   fetchSymbols,
 		setSymMap: ad.SetSymbolMap,
+		swap:      func(ctx context.Context) ([]fact.Fact, error) { return ad.SwapFacts(ctx, m.qbus) },
 	}
 	m.attach(a.Venue, r)
 	log.Printf("[broker] %s (MT5) ready", a.Venue)
