@@ -171,12 +171,10 @@ func (a *MT5Adapter) Subscribe(symbols []string) (<-chan bus.Quote, func()) {
 				continue
 			}
 			brokerSym := q.GetSymbol()
-			var ts time.Time
-			if t := q.GetTime(); t != nil {
-				ts = t.AsTime()
-			} else {
-				ts = time.Now()
-			}
+			// 实时报价流统一用本地接收时间——mtapi 网关按经纪商服务器时区编码
+			// time（FxPro UTC+3 等），各经纪商偏移各异无法通用补偿；本机时钟相对
+			// freshness TTL（60s）毫秒级误差可忽略。
+			ts := time.Now()
 			ch <- bus.Quote{
 				Symbol:      a.canonical(brokerSym),
 				Venue:       a.venue,

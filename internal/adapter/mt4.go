@@ -180,12 +180,8 @@ func (a *MT4Adapter) Subscribe(symbols []string) (<-chan bus.Quote, func()) {
 				continue
 			}
 			brokerSym := q.GetSymbol()
-			var ts time.Time
-			if t := q.GetTime(); t != nil {
-				ts = t.AsTime()
-			} else {
-				ts = time.Now()
-			}
+			// 同 mt5.go：实时报价流统一用本地接收时间，规避经纪商服务器时区偏移。
+			ts := time.Now()
 			ch <- bus.Quote{
 				Symbol:      a.canonical(brokerSym),
 				Venue:       a.venue,
