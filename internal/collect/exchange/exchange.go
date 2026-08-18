@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"arb/internal/bus"
@@ -17,26 +18,104 @@ import (
 
 // Venue 常量。
 const (
-	VenueGate = "gate"
-	VenueOKX  = "okx"
+	VenueBinance = "binance"
+	VenueGate    = "gate"
+	VenueOKX     = "okx"
 )
 
 // Config CEX 采集配置。
 type Config struct {
-	Symbols    []string // 基础币种 BTC/ETH/TRX
-	GateBaseURL string
-	OKXBaseURL  string
-	Client      *http.Client
+	Symbols      []string // 基础币种 BTC/ETH/TRX
+	BinanceBaseURL string   // Binance fapi base，可指向 CF Worker 代理
+	GateBaseURL    string
+	OKXBaseURL     string
+	Client         *http.Client
 }
 
 // DefaultConfig 返回默认配置。
 func DefaultConfig(symbols []string) Config {
 	return Config{
-		Symbols:     symbols,
-		GateBaseURL: "https://api.gateio.ws",
-		OKXBaseURL:  "https://www.okx.com",
-		Client:      &http.Client{Timeout: 10 * time.Second},
+		Symbols:        symbols,
+		BinanceBaseURL: "https://fapi.binance.com",
+		GateBaseURL:    "https://api.gateio.ws",
+		OKXBaseURL:     "https://www.okx.com",
+		Client:         &http.Client{Timeout: 10 * time.Second},
 	}
+}
+
+// BinanceFunding 采集 Binance funding rate（REST 轮询，§3.3）。
+// BinanceBaseURL 可指向 Cloudflare Worker 代理以绕过 451 地区限制。
+type BinanceFunding struct{ cfg Config }
+
+func NewBinanceFunding(cfg Config) *BinanceFunding { return &BinanceFunding{cfg: cfg} }
+
+func (b *BinanceFunding) Kind() string { return fact.KindFunding }
+
+func (b *BinanceFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
+var out []fact.Fact
+for _, sym := range b.cfg.Symbols {
+pair := sym + "USDT"
+url := fmt.Sprintf("%s/fapi/v1/premiumIndex?symbol=%s", b.cfg.BinanceBaseURL, pair)
+body, err := getJSON(ctx, b.cfg.Client, url)
+if err != nil {
+return nil, fmt.Errorf("binance funding %s: %w", pair, err)
+}
+rate, ok := body["lastFundingRate"].(string)
+if !ok {
+continue
+}
+var f float64
+fmt.Sscanf(rate, "%f", &f)
+annualized := f * 3 * 365 * 100
+out = append(out, fact.Fact{
+Kind:   fact.KindFunding,
+Venue:  VenueBinance,
+Symbol: pair,
+Value:  annualized,
+Unit:   fact.UnitPctAnnualized,
+Ts:     time.Now(),
+Src:    "binance_fapi",
+})
+}
+return out, nil
+}
+
+// BinanceTicker 采集 Binance best bid/ask（REST 轮询，§3.3）。
+type BinanceTicker struct{ cfg Config }
+
+func NewBinanceTicker(cfg Config) *BinanceTicker { return &BinanceTicker{cfg: cfg} }
+
+func (b *BinanceTicker) PollQuotes(ctx context.Context) ([]bus.Quote, error) {
+var out []bus.Quote
+spotBase := strings.Replace(b.cfg.BinanceBaseURL, "fapi", "api", 1)
+for _, sym := range b.cfg.Symbols {
+pair := sym + "USDT"
+spotURL := fmt.Sprintf("%s/api/v3/ticker/bookTicker?symbol=%s", spotBase, pair)
+if q, err := fetchBinanceBookTicker(ctx, b.cfg.Client, spotURL, pair, VenueBinance, "spot"); err == nil {
+out = append(out, q)
+}
+perpURL := fmt.Sprintf("%s/fapi/v1/ticker/bookTicker?symbol=%s", b.cfg.BinanceBaseURL, pair)
+if q, err := fetchBinanceBookTicker(ctx, b.cfg.Client, perpURL, pair, VenueBinance, "perp"); err == nil {
+out = append(out, q)
+}
+}
+return out, nil
+}
+
+func fetchBinanceBookTicker(ctx context.Context, client *http.Client, url, symbol, venue, venueType string) (bus.Quote, error) {
+body, err := getJSON(ctx, client, url)
+if err != nil {
+return bus.Quote{}, err
+}
+bid, _ := body["bidPrice"].(string)
+ask, _ := body["askPrice"].(string)
+var bidF, askF float64
+fmt.Sscanf(bid, "%f", &bidF)
+fmt.Sscanf(ask, "%f", &askF)
+return bus.Quote{
+Symbol: symbol, Venue: venue, VenueType: venueType,
+Bid: bidF, Ask: askF, Time: time.Now(),
+}, nil
 }
 
 // GateFunding 采集 Gate.io funding rate（REST 轮询，§3.3）。
