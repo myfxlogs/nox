@@ -122,10 +122,10 @@ func (e *Engine) Run(ctx context.Context) {
 
 // onQuote 处理单条报价事件：节流 → 快照 → 检测 → 评估 → 存储。
 func (e *Engine) onQuote(ctx context.Context, q bus.Quote) {
-	// 节流：每 canonical 100ms（D-026）
+	// 节流：每 canonical 30s（funding 5min 更新，30s 足够避免重复噪音）
 	e.mu.Lock()
 	last := e.lastScan[q.Symbol]
-	if time.Since(last) < 100*time.Millisecond {
+	if time.Since(last) < 30*time.Second {
 		e.mu.Unlock()
 		return
 	}
