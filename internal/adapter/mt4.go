@@ -12,8 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"arb/internal/bus"
 	mt4pb "arb/internal/adapter/gen/mtapi/mt4"
+	"arb/internal/bus"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -23,12 +23,12 @@ import (
 
 // MT4Adapter 通过 mtapi.io gRPC 网关连接 MT4 经纪商（§3.2）。
 type MT4Adapter struct {
-	venue   string
-	host    string
-	port    int32
-	user    int64
-	pass    string
-	server  string
+	venue  string
+	host   string
+	port   int32
+	user   int64
+	pass   string
+	server string
 
 	conn    *grpc.ClientConn
 	connMgr mt4pb.ConnectionClient
@@ -104,23 +104,39 @@ func (a *MT4Adapter) Connect(ctx context.Context) error {
 	a.streams = mt4pb.NewStreamsClient(conn)
 	a.trading = mt4pb.NewTradingClient(conn)
 
-	// Connect
-	resp, err := a.connMgr.Connect(ctx, &mt4pb.ConnectRequest{
+	// mtapi 网关按 id header 路由（归档实现一致）；Connect 用临时会话 id。
+	sid := sessionID(a.user)
+	loginCtx := metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{"id": sid}))
+	resp, err := a.connMgr.Connect(loginCtx, &mt4pb.ConnectRequest{
 		Host:     a.host,
 		Port:     a.port,
 		User:     int32(a.user),
 		Password: a.pass,
+		Id:       &sid,
 	})
 	if err != nil {
 		return fmt.Errorf("mt4 connect: %w", err)
 	}
+	if e := resp.GetError(); e != nil {
+		return fmt.Errorf("mt4 connect: %s", e.GetMessage())
+	}
 	token := resp.GetResult()
+	if token == "" {
+		return fmt.Errorf("mt4 connect: empty token")
+	}
 	a.token = token
 	log.Printf("[mt4:%s] connected, token=%s", a.venue, maskToken(token))
-
-	// 认证 metadata
-	a.stopCtx = metadata.AppendToOutgoingContext(a.stopCtx, "token", token)
 	return nil
+}
+
+// withSessionMD 给 mtapi 调用附加会话 id header（网关按 id 路由）。
+func (a *MT4Adapter) withSessionMD(ctx context.Context) context.Context {
+	return metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{"id": a.token}))
+}
+
+// sessionID Connect 阶段的临时会话标识。
+func sessionID(user int64) string {
+	return "mdgw-" + strconv.FormatInt(user, 10)
 }
 
 // Subscribe 实现 collect.QuoteSource（§3.2）。
@@ -128,11 +144,12 @@ func (a *MT4Adapter) Connect(ctx context.Context) error {
 func (a *MT4Adapter) Subscribe(symbols []string) (<-chan bus.Quote, func()) {
 	ch := make(chan bus.Quote, 16)
 
-	// 订阅
+	// 订阅（mtapi 按 id header + Id body 路由）
 	ctx, cancel := context.WithCancel(a.stopCtx)
+	sctx := a.withSessionMD(ctx)
 	for _, sym := range symbols {
-		_, err := a.subs.Subscribe(ctx, &mt4pb.SubscribeRequest{
-			Id:     a.venue,
+		_, err := a.subs.Subscribe(sctx, &mt4pb.SubscribeRequest{
+			Id:     a.token,
 			Symbol: sym,
 		})
 		if err != nil {
@@ -143,8 +160,8 @@ func (a *MT4Adapter) Subscribe(symbols []string) (<-chan bus.Quote, func()) {
 	// 开启 OnQuote 流
 	go func() {
 		defer close(ch)
-		stream, err := a.streams.OnQuote(ctx, &mt4pb.OnQuoteRequest{
-			Id: a.venue,
+		stream, err := a.streams.OnQuote(sctx, &mt4pb.OnQuoteRequest{
+			Id: a.token,
 		})
 		if err != nil {
 			log.Printf("[mt4:%s] onquote stream: %v", a.venue, err)
@@ -210,7 +227,7 @@ func (a *MT4Adapter) AccountID() string {
 func (a *MT4Adapter) TradingClient() mt4pb.TradingClient { return a.trading }
 func (a *MT4Adapter) MT4Client() mt4pb.MT4Client         { return a.mt4 }
 func (a *MT4Adapter) Token() string {
-a.mu.Lock()
-defer a.mu.Unlock()
-return a.token
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.token
 }

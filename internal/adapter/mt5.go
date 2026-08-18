@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"arb/internal/bus"
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
+	"arb/internal/bus"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -22,12 +22,12 @@ import (
 // MT5Adapter 通过 mtapi.io gRPC 网关连接 MT5 经纪商（§3.2）。
 // 与 MT4 严格隔离（独立 proto、独立生成代码、独立类）。
 type MT5Adapter struct {
-	venue   string
-	host    string
-	port    int32
-	user    int64
-	pass    string
-	server  string
+	venue  string
+	host   string
+	port   int32
+	user   int64
+	pass   string
+	server string
 
 	conn    *grpc.ClientConn
 	connMgr mt5pb.ConnectionClient
@@ -103,21 +103,34 @@ func (a *MT5Adapter) Connect(ctx context.Context) error {
 	a.streams = mt5pb.NewStreamsClient(conn)
 	a.trading = mt5pb.NewTradingClient(conn)
 
-	resp, err := a.connMgr.Connect(ctx, &mt5pb.ConnectRequest{
+	// mtapi 网关按 id header 路由（归档实现一致）；Connect 用临时会话 id。
+	sid := sessionID(a.user)
+	loginCtx := metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{"id": sid}))
+	resp, err := a.connMgr.Connect(loginCtx, &mt5pb.ConnectRequest{
 		Host:     a.host,
 		Port:     a.port,
 		User:     uint64(a.user),
 		Password: a.pass,
+		Id:       &sid,
 	})
 	if err != nil {
 		return fmt.Errorf("mt5 connect: %w", err)
 	}
+	if e := resp.GetError(); e != nil {
+		return fmt.Errorf("mt5 connect: %s", e.GetMessage())
+	}
 	token := resp.GetResult()
+	if token == "" {
+		return fmt.Errorf("mt5 connect: empty token")
+	}
 	a.token = token
 	log.Printf("[mt5:%s] connected, token=%s", a.venue, maskToken(token))
-
-	a.stopCtx = metadata.AppendToOutgoingContext(a.stopCtx, "token", token)
 	return nil
+}
+
+// withSessionMD 给 mtapi 调用附加会话 id header（网关按 id 路由）。
+func (a *MT5Adapter) withSessionMD(ctx context.Context) context.Context {
+	return metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{"id": a.token}))
 }
 
 // Subscribe 实现 collect.QuoteSource。
@@ -125,9 +138,10 @@ func (a *MT5Adapter) Subscribe(symbols []string) (<-chan bus.Quote, func()) {
 	ch := make(chan bus.Quote, 16)
 
 	ctx, cancel := context.WithCancel(a.stopCtx)
+	sctx := a.withSessionMD(ctx)
 	for _, sym := range symbols {
-		_, err := a.subs.Subscribe(ctx, &mt5pb.SubscribeRequest{
-			Id:     a.venue,
+		_, err := a.subs.Subscribe(sctx, &mt5pb.SubscribeRequest{
+			Id:     a.token,
 			Symbol: sym,
 		})
 		if err != nil {
@@ -137,8 +151,8 @@ func (a *MT5Adapter) Subscribe(symbols []string) (<-chan bus.Quote, func()) {
 
 	go func() {
 		defer close(ch)
-		stream, err := a.streams.OnQuote(ctx, &mt5pb.OnQuoteRequest{
-			Id: a.venue,
+		stream, err := a.streams.OnQuote(sctx, &mt5pb.OnQuoteRequest{
+			Id: a.token,
 		})
 		if err != nil {
 			log.Printf("[mt5:%s] onquote stream: %v", a.venue, err)
@@ -197,7 +211,7 @@ func (a *MT5Adapter) AccountID() string {
 func (a *MT5Adapter) TradingClient() mt5pb.TradingClient { return a.trading }
 func (a *MT5Adapter) MT5Client() mt5pb.MT5Client         { return a.mt5 }
 func (a *MT5Adapter) Token() string {
-a.mu.Lock()
-defer a.mu.Unlock()
-return a.token
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.token
 }

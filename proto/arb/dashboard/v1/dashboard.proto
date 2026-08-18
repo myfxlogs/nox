@@ -38,6 +38,20 @@ service DashboardService {
   rpc ClosePosition(ClosePositionRequest) returns (ClosePositionResponse);
   rpc ListPositions(ListPositionsRequest) returns (ListPositionsResponse);
 
+  // Broker 管理（认证后，运行时 MT4/MT5 连接管理）
+  rpc SearchBroker(SearchBrokerRequest) returns (SearchBrokerResponse);
+  rpc AddBroker(AddBrokerRequest) returns (AddBrokerResponse);
+  rpc RemoveBroker(RemoveBrokerRequest) returns (RemoveBrokerResponse);
+  rpc ListBrokerAccounts(ListBrokerAccountsRequest) returns (ListBrokerAccountsResponse);
+  rpc VerifyAccount(VerifyAccountRequest) returns (VerifyAccountResponse);
+  rpc BrokerSymbols(BrokerSymbolsRequest) returns (BrokerSymbolsResponse);
+  rpc SetBrokerAccountAlias(SetBrokerAccountAliasRequest) returns (SetBrokerAccountAliasResponse);
+
+  // Symbol 映射（brokerSymbol -> canonical）
+  rpc ListSymbolMappings(ListSymbolMappingsRequest) returns (ListSymbolMappingsResponse);
+  rpc SaveSymbolMapping(SaveSymbolMappingRequest) returns (SaveSymbolMappingResponse);
+  rpc DeleteSymbolMapping(DeleteSymbolMappingRequest) returns (DeleteSymbolMappingResponse);
+
   // 实时推送（server streaming，D-026）
   rpc StreamUpdates(StreamUpdatesRequest) returns (stream StreamUpdatesResponse);
 
@@ -372,3 +386,124 @@ message HealthResponse {
   bool db_ok = 2;
   string version = 3;
 }
+
+// === Broker 管理（docs/broker管理器实现方案.md）===
+
+message SearchBrokerRequest {
+  string company = 1;   // 经纪商关键词（如 "OctaFX", "RoboForex"）
+  int32 platform = 2;   // 0=MT4, 1=MT5
+}
+
+message BrokerServer {
+  string name = 1;      // 服务器名称（如 "RoboForex-Demo"）
+  string access = 2;    // host:port（如 "78.140.180.198:443"，可能逗号分隔多个端点）
+}
+
+message BrokerCompany {
+  string company_name = 1;
+  repeated BrokerServer servers = 2;
+}
+
+message SearchBrokerResponse {
+  repeated BrokerCompany companies = 1;
+}
+
+message AddBrokerRequest {
+  string venue = 1;     // 适配器标识（Quote.Venue / 执行器路由键，全局唯一）
+  int32 platform = 2;   // 0=MT4, 1=MT5
+  string host = 3;
+  int32 port = 4;
+  int64 user = 5;
+  string password = 6;  // 明文存储（个人使用）
+  string server = 7;    // 服务器名称
+  string company = 8;
+}
+
+message AddBrokerResponse {}
+
+message RemoveBrokerRequest {
+  string venue = 1;
+}
+
+message RemoveBrokerResponse {}
+
+message BrokerAccount {
+  string venue = 1;
+  int32 platform = 2;   // 0=MT4, 1=MT5
+  string host = 3;
+  int32 port = 4;
+  int64 user = 5;
+  string server = 6;
+  string company = 7;
+  string alias = 8;     // 别名；空 = 未设置
+  string status = 9;    // connected / failed / stopped
+  google.protobuf.Timestamp created_at = 10;
+}
+
+message ListBrokerAccountsRequest {}
+
+message ListBrokerAccountsResponse {
+  repeated BrokerAccount accounts = 1;
+}
+
+message VerifyAccountRequest {
+  int32 platform = 1;   // 0=MT4, 1=MT5
+  string host = 2;
+  int32 port = 3;
+  int64 user = 4;
+  string password = 5;
+  string server = 6;
+}
+
+message VerifyAccountResponse {
+  double balance = 1;
+  double equity = 2;
+  string currency = 3;
+  int32 leverage = 4;
+}
+
+message BrokerSymbolsRequest {
+  string venue = 1;     // 已连接适配器的 venue
+}
+
+message BrokerSymbolsResponse {
+  repeated string symbols = 1;
+}
+
+message SetBrokerAccountAliasRequest {
+  string venue = 1;
+  string alias = 2;     // 新别名；空串 = 清除
+}
+
+message SetBrokerAccountAliasResponse {}
+
+// === Symbol 映射 ===
+
+message SymbolMapping {
+  string venue = 1;
+  string broker_symbol = 2;
+  string canonical = 3;
+}
+
+message ListSymbolMappingsRequest {
+  string venue = 1;     // 空 = 全部
+}
+
+message ListSymbolMappingsResponse {
+  repeated SymbolMapping mappings = 1;
+}
+
+message SaveSymbolMappingRequest {
+  string venue = 1;
+  string broker_symbol = 2;
+  string canonical = 3;
+}
+
+message SaveSymbolMappingResponse {}
+
+message DeleteSymbolMappingRequest {
+  string venue = 1;
+  string broker_symbol = 2;
+}
+
+message DeleteSymbolMappingResponse {}
