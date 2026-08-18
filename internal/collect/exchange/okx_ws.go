@@ -119,6 +119,7 @@ func (o *OKXWebSocket) handleMessage(data []byte, publish func(bus.Quote)) {
 	if instID == "" {
 		return
 	}
+	venueSymbol := instID
 	isPerp := strings.HasSuffix(instID, "-SWAP")
 	venueType := "spot"
 	if isPerp {
@@ -147,7 +148,7 @@ func (o *OKXWebSocket) handleMessage(data []byte, publish func(bus.Quote)) {
 	publish(bus.Quote{
 		Symbol:      canonical,
 		Venue:       VenueOKX,
-		VenueSymbol: msg.Arg.InstID.(string),
+		VenueSymbol: venueSymbol,
 		Bid:         bid,
 		Ask:         ask,
 		Time:        ts,
