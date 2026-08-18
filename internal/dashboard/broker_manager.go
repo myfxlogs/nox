@@ -175,12 +175,26 @@ func (m *BrokerManager) startAdapter(ctx context.Context, a *pgstore.BrokerAccou
 // startMT4 启动 MT4 适配器并接入 QuoteBus / 执行器 / 对账。
 func (m *BrokerManager) startMT4(ctx context.Context, a *pgstore.BrokerAccount) error {
 	ad := adapter.NewMT4Adapter(a.Venue, a.Host, a.Server, int32(a.Port), a.User, a.Password)
-	symMap, symbols := m.loadSymbolMap(ctx, a.Venue, defaultSymbols)
-	ad.SetSymbolMap(symMap)
-
 	if err := ad.Connect(ctx); err != nil {
 		return fmt.Errorf("mt4 connect: %w", err)
 	}
+	fetchSymbols := func(ctx context.Context) ([]string, error) {
+		resp, err := ad.MT4Client().Symbols(tokenCtx(ctx, ad.Token()), &mt4pb.SymbolsRequest{Id: ad.Token()})
+		if err != nil {
+			return nil, err
+		}
+		if e := resp.GetError(); e != nil {
+			return nil, fmt.Errorf("mt4 symbols: %s", e.GetMessage())
+		}
+		return resp.GetResult(), nil
+	}
+	symMap, symbols, err := m.symbolPlan(ctx, a.Venue, defaultSymbols, fetchSymbols)
+	if err != nil || len(symMap) == 0 {
+		log.Printf("[broker] %s symbol plan: %v", a.Venue, err)
+		symMap, symbols = identityMap(defaultSymbols)
+	}
+	ad.SetSymbolMap(symMap)
+
 	ch, cancel := ad.Subscribe(symbols)
 	go func() {
 		for q := range ch {
@@ -191,18 +205,9 @@ func (m *BrokerManager) startMT4(ctx context.Context, a *pgstore.BrokerAccount) 
 	q := reconcile.NewMT4Querier(a.Venue, ad.Token(), ad.MT4Client())
 
 	r := &running{
-		stop:    func() { cancel(); ad.Stop() },
-		querier: q,
-		symbols: func(ctx context.Context) ([]string, error) {
-			resp, err := ad.MT4Client().Symbols(tokenCtx(ctx, ad.Token()), &mt4pb.SymbolsRequest{Id: ad.Token()})
-			if err != nil {
-				return nil, err
-			}
-			if e := resp.GetError(); e != nil {
-				return nil, fmt.Errorf("mt4 symbols: %s", e.GetMessage())
-			}
-			return resp.GetResult(), nil
-		},
+		stop:      func() { cancel(); ad.Stop() },
+		querier:   q,
+		symbols:   fetchSymbols,
 		setSymMap: ad.SetSymbolMap,
 	}
 	m.attach(a.Venue, r)
@@ -213,12 +218,26 @@ func (m *BrokerManager) startMT4(ctx context.Context, a *pgstore.BrokerAccount) 
 // startMT5 启动 MT5 适配器。
 func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) error {
 	ad := adapter.NewMT5Adapter(a.Venue, a.Host, a.Server, int32(a.Port), a.User, a.Password)
-	symMap, symbols := m.loadSymbolMap(ctx, a.Venue, defaultSymbols)
-	ad.SetSymbolMap(symMap)
-
 	if err := ad.Connect(ctx); err != nil {
 		return fmt.Errorf("mt5 connect: %w", err)
 	}
+	fetchSymbols := func(ctx context.Context) ([]string, error) {
+		resp, err := ad.MT5Client().SymbolList(tokenCtx(ctx, ad.Token()), &mt5pb.SymbolListRequest{Id: ad.Token()})
+		if err != nil {
+			return nil, err
+		}
+		if e := resp.GetError(); e != nil {
+			return nil, fmt.Errorf("mt5 symbols: %s", e.GetMessage())
+		}
+		return resp.GetResult(), nil
+	}
+	symMap, symbols, err := m.symbolPlan(ctx, a.Venue, defaultSymbols, fetchSymbols)
+	if err != nil || len(symMap) == 0 {
+		log.Printf("[broker] %s symbol plan: %v", a.Venue, err)
+		symMap, symbols = identityMap(defaultSymbols)
+	}
+	ad.SetSymbolMap(symMap)
+
 	ch, cancel := ad.Subscribe(symbols)
 	go func() {
 		for q := range ch {
@@ -229,18 +248,9 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 	q := reconcile.NewMT5Querier(a.Venue, ad.Token(), ad.MT5Client())
 
 	r := &running{
-		stop:    func() { cancel(); ad.Stop() },
-		querier: q,
-		symbols: func(ctx context.Context) ([]string, error) {
-			resp, err := ad.MT5Client().SymbolList(tokenCtx(ctx, ad.Token()), &mt5pb.SymbolListRequest{Id: ad.Token()})
-			if err != nil {
-				return nil, err
-			}
-			if e := resp.GetError(); e != nil {
-				return nil, fmt.Errorf("mt5 symbols: %s", e.GetMessage())
-			}
-			return resp.GetResult(), nil
-		},
+		stop:      func() { cancel(); ad.Stop() },
+		querier:   q,
+		symbols:   fetchSymbols,
 		setSymMap: ad.SetSymbolMap,
 	}
 	m.attach(a.Venue, r)
@@ -276,27 +286,78 @@ func (m *BrokerManager) syncQueriers() {
 // defaultSymbols 无映射时默认订阅（与 cmd/core brokerSymbols 默认一致）。
 var defaultSymbols = []string{"EURUSD", "GBPUSD", "XAUUSD", "BTCUSD", "ETHUSD"}
 
-// loadSymbolMap 读取 venue 符号映射；空则写回 identity 默认表。
-func (m *BrokerManager) loadSymbolMap(ctx context.Context, venue string, defaults []string) (map[string]string, []string) {
+// symbolPlan 决定订阅符号与映射：DB 有人工映射用 DB；否则按服务器实际符号解析默认表并落库
+// （兼容 MT5/MT4 cent 账号 EURUSDm 后缀，首次添加即开箱订阅）。
+func (m *BrokerManager) symbolPlan(ctx context.Context, venue string, defaults []string, fetchServer func(context.Context) ([]string, error)) (map[string]string, []string, error) {
 	mappings, err := m.store.ListSymbolMappings(ctx, venue)
 	if err != nil {
-		log.Printf("[broker] %s list mappings: %v", venue, err)
+		return nil, nil, err
 	}
-	if len(mappings) == 0 {
-		sm := make(map[string]string, len(defaults))
-		for _, s := range defaults {
-			sm[s] = s
-			_ = m.store.UpsertSymbolMapping(ctx, &pgstore.SymbolMapping{Venue: venue, BrokerSymbol: s, Canonical: s})
+	if len(mappings) > 0 {
+		// 校验映射有效性：brokerSymbol 必须存在于服务器符号表，否则失效（如旧版 identity 默认表
+		// 未匹配 cent 后缀）。失效项删除，全部失效则落到默认解析。
+		server, err := fetchServer(ctx)
+		if err != nil {
+			return nil, nil, err
 		}
-		return sm, defaults
+		set := make(map[string]bool, len(server))
+		for _, s := range server {
+			set[s] = true
+		}
+		sm := make(map[string]string)
+		keys := make([]string, 0, len(mappings))
+		for _, mp := range mappings {
+			if !set[mp.BrokerSymbol] {
+				_ = m.store.DeleteSymbolMapping(ctx, mp.Venue, mp.BrokerSymbol)
+				continue
+			}
+			sm[mp.BrokerSymbol] = mp.Canonical
+			keys = append(keys, mp.BrokerSymbol)
+		}
+		if len(sm) > 0 {
+			return sm, keys, nil
+		}
 	}
-	sm := make(map[string]string, len(mappings))
-	keys := make([]string, 0, len(mappings))
-	for _, mp := range mappings {
-		sm[mp.BrokerSymbol] = mp.Canonical
-		keys = append(keys, mp.BrokerSymbol)
+	server, err := fetchServer(ctx)
+	if err != nil {
+		return nil, nil, err
 	}
-	return sm, keys
+	sm, syms := resolveDefaults(defaults, server)
+	for k, v := range sm {
+		_ = m.store.UpsertSymbolMapping(ctx, &pgstore.SymbolMapping{Venue: venue, BrokerSymbol: k, Canonical: v})
+	}
+	return sm, syms, nil
+}
+
+// resolveDefaults 在服务器符号里解析默认交易对：精确匹配优先，否则试 cent 后缀（EURUSDm）。
+// 只订阅匹配到的；一个都对不上返回空映射。
+func resolveDefaults(defaults, serverSymbols []string) (map[string]string, []string) {
+	set := make(map[string]bool, len(serverSymbols))
+	for _, s := range serverSymbols {
+		set[s] = true
+	}
+	sm := make(map[string]string)
+	var syms []string
+	for _, c := range defaults {
+		switch {
+		case set[c]:
+			sm[c] = c
+			syms = append(syms, c)
+		case set[c+"m"]:
+			sm[c+"m"] = c
+			syms = append(syms, c+"m")
+		}
+	}
+	return sm, syms
+}
+
+// identityMap 保底 identity 映射（服务器符号解析失败时用，原样订阅默认符号）。
+func identityMap(defaults []string) (map[string]string, []string) {
+	sm := make(map[string]string, len(defaults))
+	for _, s := range defaults {
+		sm[s] = s
+	}
+	return sm, defaults
 }
 
 // tokenCtx 给 mtapi 调用附加会话 id header（网关按 id 路由）。

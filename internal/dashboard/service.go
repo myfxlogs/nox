@@ -32,23 +32,21 @@ func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *
 
 func (s *Service) ListLatestQuotes(ctx context.Context, req *connect.Request[v1.ListQuotesRequest]) (*connect.Response[v1.ListQuotesResponse], error) {
 	symbol := req.Msg.GetSymbol()
-	snap := s.qbus.Snapshot(nil, nil) // 全量
+	latest := s.qbus.AllLatest() // 全量（Snapshot(nil) 会返回空——Snap 按 symbols 过滤，nil = 空集）
 	var quotes []*v1.Quote
-	for canonical, venues := range snap {
-		if symbol != "" && canonical != symbol {
+	for _, q := range latest {
+		if symbol != "" && q.Symbol != symbol {
 			continue
 		}
-		for _, q := range venues {
-			quotes = append(quotes, &v1.Quote{
-				Symbol:      q.Symbol,
-				Venue:       q.Venue,
-				Bid:         q.Bid,
-				Ask:         q.Ask,
-				Time:        timestamppb.New(q.Time),
-				VenueSymbol: q.VenueSymbol,
-				VenueType:   q.VenueType,
-			})
-		}
+		quotes = append(quotes, &v1.Quote{
+			Symbol:      q.Symbol,
+			Venue:       q.Venue,
+			Bid:         q.Bid,
+			Ask:         q.Ask,
+			Time:        timestamppb.New(q.Time),
+			VenueSymbol: q.VenueSymbol,
+			VenueType:   q.VenueType,
+		})
 	}
 	return connect.NewResponse(&v1.ListQuotesResponse{Quotes: quotes}), nil
 }
