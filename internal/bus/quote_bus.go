@@ -58,7 +58,7 @@ func (b *QuoteBus) Publish(q Quote) {
 	b.latestMu.Unlock()
 
 	b.mu.RLock()
-	chs := b.subscribers[q.Symbol]
+	chs := append(b.subscribers[q.Symbol], b.subscribers[""]...)
 	b.mu.RUnlock()
 	for _, ch := range chs {
 		select {
