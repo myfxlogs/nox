@@ -122,6 +122,12 @@ const (
 	// DashboardServiceDeleteSymbolMappingProcedure is the fully-qualified name of the
 	// DashboardService's DeleteSymbolMapping RPC.
 	DashboardServiceDeleteSymbolMappingProcedure = "/arb.dashboard.v1.DashboardService/DeleteSymbolMapping"
+	// DashboardServiceListMappingSuggestionsProcedure is the fully-qualified name of the
+	// DashboardService's ListMappingSuggestions RPC.
+	DashboardServiceListMappingSuggestionsProcedure = "/arb.dashboard.v1.DashboardService/ListMappingSuggestions"
+	// DashboardServiceListCanonicalsProcedure is the fully-qualified name of the DashboardService's
+	// ListCanonicals RPC.
+	DashboardServiceListCanonicalsProcedure = "/arb.dashboard.v1.DashboardService/ListCanonicals"
 	// DashboardServiceStreamUpdatesProcedure is the fully-qualified name of the DashboardService's
 	// StreamUpdates RPC.
 	DashboardServiceStreamUpdatesProcedure = "/arb.dashboard.v1.DashboardService/StreamUpdates"
@@ -168,6 +174,8 @@ type DashboardServiceClient interface {
 	ListSymbolMappings(context.Context, *connect.Request[v1.ListSymbolMappingsRequest]) (*connect.Response[v1.ListSymbolMappingsResponse], error)
 	SaveSymbolMapping(context.Context, *connect.Request[v1.SaveSymbolMappingRequest]) (*connect.Response[v1.SaveSymbolMappingResponse], error)
 	DeleteSymbolMapping(context.Context, *connect.Request[v1.DeleteSymbolMappingRequest]) (*connect.Response[v1.DeleteSymbolMappingResponse], error)
+	ListMappingSuggestions(context.Context, *connect.Request[v1.ListMappingSuggestionsRequest]) (*connect.Response[v1.ListMappingSuggestionsResponse], error)
+	ListCanonicals(context.Context, *connect.Request[v1.ListCanonicalsRequest]) (*connect.Response[v1.ListCanonicalsResponse], error)
 	// 实时推送（server streaming，D-026）
 	StreamUpdates(context.Context, *connect.Request[v1.StreamUpdatesRequest]) (*connect.ServerStreamForClient[v1.StreamUpdatesResponse], error)
 	// 健康
@@ -365,6 +373,18 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("DeleteSymbolMapping")),
 			connect.WithClientOptions(opts...),
 		),
+		listMappingSuggestions: connect.NewClient[v1.ListMappingSuggestionsRequest, v1.ListMappingSuggestionsResponse](
+			httpClient,
+			baseURL+DashboardServiceListMappingSuggestionsProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListMappingSuggestions")),
+			connect.WithClientOptions(opts...),
+		),
+		listCanonicals: connect.NewClient[v1.ListCanonicalsRequest, v1.ListCanonicalsResponse](
+			httpClient,
+			baseURL+DashboardServiceListCanonicalsProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListCanonicals")),
+			connect.WithClientOptions(opts...),
+		),
 		streamUpdates: connect.NewClient[v1.StreamUpdatesRequest, v1.StreamUpdatesResponse](
 			httpClient,
 			baseURL+DashboardServiceStreamUpdatesProcedure,
@@ -382,38 +402,40 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 
 // dashboardServiceClient implements DashboardServiceClient.
 type dashboardServiceClient struct {
-	listLatestQuotes      *connect.Client[v1.ListQuotesRequest, v1.ListQuotesResponse]
-	listLatestFacts       *connect.Client[v1.ListLatestFactsRequest, v1.ListLatestFactsResponse]
-	listOpportunities     *connect.Client[v1.ListOpportunitiesRequest, v1.ListOpportunitiesResponse]
-	listAlerts            *connect.Client[v1.ListAlertsRequest, v1.ListAlertsResponse]
-	listTriggerStates     *connect.Client[v1.ListTriggerStatesRequest, v1.ListTriggerStatesResponse]
-	listSourceHealth      *connect.Client[v1.ListSourceHealthRequest, v1.ListSourceHealthResponse]
-	listFacts             *connect.Client[v1.ListFactsRequest, v1.ListFactsResponse]
-	ackAlert              *connect.Client[v1.AckAlertRequest, v1.AckAlertResponse]
-	ackAll                *connect.Client[v1.AckAllRequest, v1.AckAllResponse]
-	listUnacked           *connect.Client[v1.ListUnackedRequest, v1.ListUnackedResponse]
-	addLedgerEntry        *connect.Client[v1.AddLedgerEntryRequest, v1.AddLedgerEntryResponse]
-	listLedgerEntries     *connect.Client[v1.ListLedgerEntriesRequest, v1.ListLedgerEntriesResponse]
-	ledgerSummary         *connect.Client[v1.LedgerSummaryRequest, v1.LedgerSummaryResponse]
-	listKnowledgeEntries  *connect.Client[v1.ListKnowledgeEntriesRequest, v1.ListKnowledgeEntriesResponse]
-	reviewKnowledgeEntry  *connect.Client[v1.ReviewKnowledgeEntryRequest, v1.ReviewKnowledgeEntryResponse]
-	executeOpportunity    *connect.Client[v1.ExecuteOpportunityRequest, v1.ExecuteOpportunityResponse]
-	closePosition         *connect.Client[v1.ClosePositionRequest, v1.ClosePositionResponse]
-	listPositions         *connect.Client[v1.ListPositionsRequest, v1.ListPositionsResponse]
-	searchBroker          *connect.Client[v1.SearchBrokerRequest, v1.SearchBrokerResponse]
-	addBroker             *connect.Client[v1.AddBrokerRequest, v1.AddBrokerResponse]
-	removeBroker          *connect.Client[v1.RemoveBrokerRequest, v1.RemoveBrokerResponse]
-	listBrokerAccounts    *connect.Client[v1.ListBrokerAccountsRequest, v1.ListBrokerAccountsResponse]
-	verifyAccount         *connect.Client[v1.VerifyAccountRequest, v1.VerifyAccountResponse]
-	brokerSymbols         *connect.Client[v1.BrokerSymbolsRequest, v1.BrokerSymbolsResponse]
-	setBrokerAccountAlias *connect.Client[v1.SetBrokerAccountAliasRequest, v1.SetBrokerAccountAliasResponse]
-	setBrokerDisabled     *connect.Client[v1.SetBrokerDisabledRequest, v1.SetBrokerDisabledResponse]
-	setBrokerCommission   *connect.Client[v1.SetBrokerCommissionRequest, v1.SetBrokerCommissionResponse]
-	listSymbolMappings    *connect.Client[v1.ListSymbolMappingsRequest, v1.ListSymbolMappingsResponse]
-	saveSymbolMapping     *connect.Client[v1.SaveSymbolMappingRequest, v1.SaveSymbolMappingResponse]
-	deleteSymbolMapping   *connect.Client[v1.DeleteSymbolMappingRequest, v1.DeleteSymbolMappingResponse]
-	streamUpdates         *connect.Client[v1.StreamUpdatesRequest, v1.StreamUpdatesResponse]
-	health                *connect.Client[v1.HealthRequest, v1.HealthResponse]
+	listLatestQuotes       *connect.Client[v1.ListQuotesRequest, v1.ListQuotesResponse]
+	listLatestFacts        *connect.Client[v1.ListLatestFactsRequest, v1.ListLatestFactsResponse]
+	listOpportunities      *connect.Client[v1.ListOpportunitiesRequest, v1.ListOpportunitiesResponse]
+	listAlerts             *connect.Client[v1.ListAlertsRequest, v1.ListAlertsResponse]
+	listTriggerStates      *connect.Client[v1.ListTriggerStatesRequest, v1.ListTriggerStatesResponse]
+	listSourceHealth       *connect.Client[v1.ListSourceHealthRequest, v1.ListSourceHealthResponse]
+	listFacts              *connect.Client[v1.ListFactsRequest, v1.ListFactsResponse]
+	ackAlert               *connect.Client[v1.AckAlertRequest, v1.AckAlertResponse]
+	ackAll                 *connect.Client[v1.AckAllRequest, v1.AckAllResponse]
+	listUnacked            *connect.Client[v1.ListUnackedRequest, v1.ListUnackedResponse]
+	addLedgerEntry         *connect.Client[v1.AddLedgerEntryRequest, v1.AddLedgerEntryResponse]
+	listLedgerEntries      *connect.Client[v1.ListLedgerEntriesRequest, v1.ListLedgerEntriesResponse]
+	ledgerSummary          *connect.Client[v1.LedgerSummaryRequest, v1.LedgerSummaryResponse]
+	listKnowledgeEntries   *connect.Client[v1.ListKnowledgeEntriesRequest, v1.ListKnowledgeEntriesResponse]
+	reviewKnowledgeEntry   *connect.Client[v1.ReviewKnowledgeEntryRequest, v1.ReviewKnowledgeEntryResponse]
+	executeOpportunity     *connect.Client[v1.ExecuteOpportunityRequest, v1.ExecuteOpportunityResponse]
+	closePosition          *connect.Client[v1.ClosePositionRequest, v1.ClosePositionResponse]
+	listPositions          *connect.Client[v1.ListPositionsRequest, v1.ListPositionsResponse]
+	searchBroker           *connect.Client[v1.SearchBrokerRequest, v1.SearchBrokerResponse]
+	addBroker              *connect.Client[v1.AddBrokerRequest, v1.AddBrokerResponse]
+	removeBroker           *connect.Client[v1.RemoveBrokerRequest, v1.RemoveBrokerResponse]
+	listBrokerAccounts     *connect.Client[v1.ListBrokerAccountsRequest, v1.ListBrokerAccountsResponse]
+	verifyAccount          *connect.Client[v1.VerifyAccountRequest, v1.VerifyAccountResponse]
+	brokerSymbols          *connect.Client[v1.BrokerSymbolsRequest, v1.BrokerSymbolsResponse]
+	setBrokerAccountAlias  *connect.Client[v1.SetBrokerAccountAliasRequest, v1.SetBrokerAccountAliasResponse]
+	setBrokerDisabled      *connect.Client[v1.SetBrokerDisabledRequest, v1.SetBrokerDisabledResponse]
+	setBrokerCommission    *connect.Client[v1.SetBrokerCommissionRequest, v1.SetBrokerCommissionResponse]
+	listSymbolMappings     *connect.Client[v1.ListSymbolMappingsRequest, v1.ListSymbolMappingsResponse]
+	saveSymbolMapping      *connect.Client[v1.SaveSymbolMappingRequest, v1.SaveSymbolMappingResponse]
+	deleteSymbolMapping    *connect.Client[v1.DeleteSymbolMappingRequest, v1.DeleteSymbolMappingResponse]
+	listMappingSuggestions *connect.Client[v1.ListMappingSuggestionsRequest, v1.ListMappingSuggestionsResponse]
+	listCanonicals         *connect.Client[v1.ListCanonicalsRequest, v1.ListCanonicalsResponse]
+	streamUpdates          *connect.Client[v1.StreamUpdatesRequest, v1.StreamUpdatesResponse]
+	health                 *connect.Client[v1.HealthRequest, v1.HealthResponse]
 }
 
 // ListLatestQuotes calls arb.dashboard.v1.DashboardService.ListLatestQuotes.
@@ -566,6 +588,16 @@ func (c *dashboardServiceClient) DeleteSymbolMapping(ctx context.Context, req *c
 	return c.deleteSymbolMapping.CallUnary(ctx, req)
 }
 
+// ListMappingSuggestions calls arb.dashboard.v1.DashboardService.ListMappingSuggestions.
+func (c *dashboardServiceClient) ListMappingSuggestions(ctx context.Context, req *connect.Request[v1.ListMappingSuggestionsRequest]) (*connect.Response[v1.ListMappingSuggestionsResponse], error) {
+	return c.listMappingSuggestions.CallUnary(ctx, req)
+}
+
+// ListCanonicals calls arb.dashboard.v1.DashboardService.ListCanonicals.
+func (c *dashboardServiceClient) ListCanonicals(ctx context.Context, req *connect.Request[v1.ListCanonicalsRequest]) (*connect.Response[v1.ListCanonicalsResponse], error) {
+	return c.listCanonicals.CallUnary(ctx, req)
+}
+
 // StreamUpdates calls arb.dashboard.v1.DashboardService.StreamUpdates.
 func (c *dashboardServiceClient) StreamUpdates(ctx context.Context, req *connect.Request[v1.StreamUpdatesRequest]) (*connect.ServerStreamForClient[v1.StreamUpdatesResponse], error) {
 	return c.streamUpdates.CallServerStream(ctx, req)
@@ -615,6 +647,8 @@ type DashboardServiceHandler interface {
 	ListSymbolMappings(context.Context, *connect.Request[v1.ListSymbolMappingsRequest]) (*connect.Response[v1.ListSymbolMappingsResponse], error)
 	SaveSymbolMapping(context.Context, *connect.Request[v1.SaveSymbolMappingRequest]) (*connect.Response[v1.SaveSymbolMappingResponse], error)
 	DeleteSymbolMapping(context.Context, *connect.Request[v1.DeleteSymbolMappingRequest]) (*connect.Response[v1.DeleteSymbolMappingResponse], error)
+	ListMappingSuggestions(context.Context, *connect.Request[v1.ListMappingSuggestionsRequest]) (*connect.Response[v1.ListMappingSuggestionsResponse], error)
+	ListCanonicals(context.Context, *connect.Request[v1.ListCanonicalsRequest]) (*connect.Response[v1.ListCanonicalsResponse], error)
 	// 实时推送（server streaming，D-026）
 	StreamUpdates(context.Context, *connect.Request[v1.StreamUpdatesRequest], *connect.ServerStream[v1.StreamUpdatesResponse]) error
 	// 健康
@@ -808,6 +842,18 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("DeleteSymbolMapping")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceListMappingSuggestionsHandler := connect.NewUnaryHandler(
+		DashboardServiceListMappingSuggestionsProcedure,
+		svc.ListMappingSuggestions,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListMappingSuggestions")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceListCanonicalsHandler := connect.NewUnaryHandler(
+		DashboardServiceListCanonicalsProcedure,
+		svc.ListCanonicals,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListCanonicals")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceStreamUpdatesHandler := connect.NewServerStreamHandler(
 		DashboardServiceStreamUpdatesProcedure,
 		svc.StreamUpdates,
@@ -882,6 +928,10 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceSaveSymbolMappingHandler.ServeHTTP(w, r)
 		case DashboardServiceDeleteSymbolMappingProcedure:
 			dashboardServiceDeleteSymbolMappingHandler.ServeHTTP(w, r)
+		case DashboardServiceListMappingSuggestionsProcedure:
+			dashboardServiceListMappingSuggestionsHandler.ServeHTTP(w, r)
+		case DashboardServiceListCanonicalsProcedure:
+			dashboardServiceListCanonicalsHandler.ServeHTTP(w, r)
 		case DashboardServiceStreamUpdatesProcedure:
 			dashboardServiceStreamUpdatesHandler.ServeHTTP(w, r)
 		case DashboardServiceHealthProcedure:
@@ -1013,6 +1063,14 @@ func (UnimplementedDashboardServiceHandler) SaveSymbolMapping(context.Context, *
 
 func (UnimplementedDashboardServiceHandler) DeleteSymbolMapping(context.Context, *connect.Request[v1.DeleteSymbolMappingRequest]) (*connect.Response[v1.DeleteSymbolMappingResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.DeleteSymbolMapping is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListMappingSuggestions(context.Context, *connect.Request[v1.ListMappingSuggestionsRequest]) (*connect.Response[v1.ListMappingSuggestionsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListMappingSuggestions is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListCanonicals(context.Context, *connect.Request[v1.ListCanonicalsRequest]) (*connect.Response[v1.ListCanonicalsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListCanonicals is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) StreamUpdates(context.Context, *connect.Request[v1.StreamUpdatesRequest], *connect.ServerStream[v1.StreamUpdatesResponse]) error {

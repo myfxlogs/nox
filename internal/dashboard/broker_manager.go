@@ -23,10 +23,11 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// SymbolGroup 服务器符号 + broker 分组（MT5 GroupName 顶层段；MT4 降级空组）。
+// SymbolGroup 服务器符号 + broker 分组 + 合约规格（MT5 GroupName 顶层段；MT4 降级空组/合约 0）。
 type SymbolGroup struct {
-	Symbol string
-	Group  string
+	Symbol       string
+	Group        string
+	ContractSize float64 // 0 = 未知（MT4 / MT5 未返回）
 }
 
 // running 一个运行中适配器的可停止资源。
@@ -35,7 +36,11 @@ type running struct {
 	querier      reconcile.VenueQuerier
 	symbols      func(ctx context.Context) ([]string, error)      // 拉取服务器符号表
 	symbolGroups func(ctx context.Context) ([]SymbolGroup, error) // 符号表 + 分组（仅服务 BrokerSymbols 展示，按需拉一次）
+	// symbolParams 单符号权威合约规格（MT5 SymbolParams；MT4/未运行 = nil）。零信任：
+	// 保存映射的合约校验数据只信 broker 自取，不信前端传值（D-042）。
+	symbolParams func(ctx context.Context, symbol string) (float64, bool, error)
 	setSymMap    func(map[string]string)                          // 运行时刷新 brokerSymbol → canonical
+	resubscribe  func([]string)                                   // 运行时补订阅新符号（保存映射后生效，D-047 缺陷③）
 	swap         func(ctx context.Context) ([]fact.Fact, error)   // 轮询 swap facts（§3.6，D-036）
 }
 
@@ -349,6 +354,50 @@ func (m *BrokerManager) BrokerSymbols(ctx context.Context, venue string) ([]Symb
 	return out, nil
 }
 
+// Resubscribe 运行时补订阅该 venue 的新符号（保存映射后调用）。
+// D-047 缺陷③：映射了不重订阅 = 没报价流；mtapi 会话订阅幂等，已开报价流自动接上新符号。
+func (m *BrokerManager) Resubscribe(venue string, symbols []string) {
+	m.mu.Lock()
+	r := m.running[venue]
+	m.mu.Unlock()
+	if r == nil || r.resubscribe == nil || len(symbols) == 0 {
+		return
+	}
+	r.resubscribe(symbols)
+}
+
+// BrokerContractSize 返回该 venue 服务器符号的权威合约规格（D-042 零信任：校验数据只信 broker，
+// 不信任前端传值）。MT4 / 未运行 / 查询失败 → known=false（合约未知，调用方跳过规格校验）。
+func (m *BrokerManager) BrokerContractSize(ctx context.Context, venue, symbol string) (float64, bool, error) {
+	m.mu.Lock()
+	r := m.running[venue]
+	m.mu.Unlock()
+	if r == nil || r.symbolParams == nil {
+		return 0, false, nil
+	}
+	return r.symbolParams(ctx, symbol)
+}
+
+// backfillContracts 补写 venue 既有映射的 NULL 合约（数据源 = broker 权威分组信息）。
+// D-042 前写入的历史映射 contract_size=NULL → 规格画像为空，合约校验形同虚设；
+// 启动时回填恢复画像基线。未命中符号（如 MT4/停用）保持 NULL = 合约未知，合法跳过校验。
+func (m *BrokerManager) backfillContracts(ctx context.Context, venue string, groups []SymbolGroup) {
+	bySym := make(map[string]float64, len(groups))
+	for _, g := range groups {
+		if g.ContractSize > 0 {
+			bySym[g.Symbol] = g.ContractSize
+		}
+	}
+	if len(bySym) == 0 {
+		return
+	}
+	if err := m.store.BackfillSymbolContracts(ctx, venue, bySym); err != nil {
+		log.Printf("[broker] %s backfill contracts: %v", venue, err)
+		return
+	}
+	log.Printf("[broker] %s contracts backfilled (%d symbols)", venue, len(bySym))
+}
+
 // startAdapter 平台分发：构造适配器 → 连接 → 订阅 → 注册执行器/querier。
 func (m *BrokerManager) startAdapter(ctx context.Context, a *pgstore.BrokerAccount) error {
 	m.setCommission(a.Venue, a.CommissionBps)
@@ -374,7 +423,8 @@ func (m *BrokerManager) startMT4(ctx context.Context, a *pgstore.BrokerAccount) 
 		}
 		return resp.GetResult(), nil
 	}
-	// MT4 无 GroupName，降级 group 为空（前端仅模糊搜索，无分组 chips）。
+	// MT4 无 GroupName，降级 group 为空（前端仅模糊搜索，无分组 chips）；也无合约规格 → symbolParams=nil
+	//（零信任：MT4 未知合约跳过校验，不做无依据的判断）。
 	fetchSymbolGroups := func(ctx context.Context) ([]SymbolGroup, error) {
 		names, err := fetchSymbols(ctx)
 		if err != nil {
@@ -386,7 +436,7 @@ func (m *BrokerManager) startMT4(ctx context.Context, a *pgstore.BrokerAccount) 
 		}
 		return out, nil
 	}
-	symMap, symbols, err := m.symbolPlan(ctx, a.Venue, defaultSymbols, fetchSymbols)
+	symMap, symbols, err := m.symbolPlan(ctx, a.Venue, fetchSymbolGroups)
 	if err != nil || len(symMap) == 0 {
 		log.Printf("[broker] %s symbol plan: %v", a.Venue, err)
 		symMap, symbols = identityMap(defaultSymbols)
@@ -408,6 +458,7 @@ func (m *BrokerManager) startMT4(ctx context.Context, a *pgstore.BrokerAccount) 
 		symbols:      fetchSymbols,
 		symbolGroups: fetchSymbolGroups,
 		setSymMap:    ad.SetSymbolMap,
+		resubscribe:  ad.Resubscribe,
 		swap:         func(ctx context.Context) ([]fact.Fact, error) { return ad.SwapFacts(ctx, m.qbus) },
 	}
 	m.attach(a.Venue, r)
@@ -454,16 +505,42 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 			if sp == nil {
 				continue
 			}
-			out = append(out, SymbolGroup{Symbol: sp.GetSymbol(), Group: topGroup(sp.GetSymbolGroup().GetGroupName())})
+			// ContractSize 同批返回（D-042 合约规格校验数据源），0 = 未知。
+			out = append(out, SymbolGroup{
+				Symbol:       sp.GetSymbol(),
+				Group:        topGroup(sp.GetSymbolGroup().GetGroupName()),
+				ContractSize: sp.GetSymbolInfo().GetContractSize(),
+			})
 		}
 		return out, nil
 	}
-	symMap, symbols, err := m.symbolPlan(ctx, a.Venue, defaultSymbols, fetchSymbols)
+	// 单符号权威合约规格（SymbolParams，零信任：保存映射时后端自取校验，不信前端传值）。
+	// known=false = 合约未知（查询失败/无结果），调用方跳过规格校验。D-042。
+	fetchContract := func(ctx context.Context, symbol string) (float64, bool, error) {
+		resp, err := ad.MT5Client().SymbolParams(tokenCtx(ctx, ad.Token()), &mt5pb.SymbolParamsRequest{Id: ad.Token(), Symbol: symbol})
+		if err != nil {
+			return 0, false, err
+		}
+		if e := resp.GetError(); e != nil {
+			return 0, false, fmt.Errorf("mt5 symbolParams %s: %s", symbol, e.GetMessage())
+		}
+		sp := resp.GetResult()
+		if sp == nil || sp.GetSymbolInfo() == nil {
+			return 0, false, nil
+		}
+		cs := sp.GetSymbolInfo().GetContractSize()
+		return cs, cs > 0, nil
+	}
+	symMap, symbols, err := m.symbolPlan(ctx, a.Venue, fetchSymbolGroups)
 	if err != nil || len(symMap) == 0 {
 		log.Printf("[broker] %s symbol plan: %v", a.Venue, err)
 		symMap, symbols = identityMap(defaultSymbols)
 	}
 	ad.SetSymbolMap(symMap)
+	// 历史映射（D-042 前）无合约 → 启动时回填，恢复规格画像（零信任校验基线）。
+	if gs, gerr := fetchSymbolGroups(ctx); gerr == nil {
+		m.backfillContracts(ctx, a.Venue, gs)
+	}
 
 	ch, cancel := ad.Subscribe(symbols)
 	go func() {
@@ -479,7 +556,9 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 		querier:      q,
 		symbols:      fetchSymbols,
 		symbolGroups: fetchSymbolGroups,
+		symbolParams: fetchContract,
 		setSymMap:    ad.SetSymbolMap,
+		resubscribe:  ad.Resubscribe,
 		swap:         func(ctx context.Context) ([]fact.Fact, error) { return ad.SwapFacts(ctx, m.qbus) },
 	}
 	m.attach(a.Venue, r)
@@ -524,23 +603,26 @@ func topGroup(name string) string {
 	return name
 }
 
-// symbolPlan 决定订阅符号与映射：DB 有人工映射用 DB；否则按服务器实际符号解析默认表并落库
-// （兼容 MT5/MT4 cent 账号 EURUSDm 后缀，首次添加即开箱订阅）。
-func (m *BrokerManager) symbolPlan(ctx context.Context, venue string, defaults []string, fetchServer func(context.Context) ([]string, error)) (map[string]string, []string, error) {
+// symbolPlan 决定订阅符号与映射（D-042 用户策展模型，canonical 数量用户自定）：
+// 1. DB 已有该 venue 人工映射 → 校验 brokerSymbol 存在于服务器，失效项删除，返回。
+// 2. 无映射 → 自动映射：既有 canonical（跨全部 venue 已映射）∪ 默认种子，名字+合约匹配者
+//    落库并订阅（默认种子 = 首 broker 开箱 bootstrap；合约未知任一侧不阻塞）。
+// 3. 全部不中 → identityMap 保底（原样订阅默认符号，个别不存在由订阅容错）。
+func (m *BrokerManager) symbolPlan(ctx context.Context, venue string, fetchGroups func(context.Context) ([]SymbolGroup, error)) (map[string]string, []string, error) {
+	groups, err := fetchGroups(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
 	mappings, err := m.store.ListSymbolMappings(ctx, venue)
 	if err != nil {
 		return nil, nil, err
 	}
 	if len(mappings) > 0 {
 		// 校验映射有效性：brokerSymbol 必须存在于服务器符号表，否则失效（如旧版 identity 默认表
-		// 未匹配 cent 后缀）。失效项删除，全部失效则落到默认解析。
-		server, err := fetchServer(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-		set := make(map[string]bool, len(server))
-		for _, s := range server {
-			set[s] = true
+		// 未匹配 cent 后缀）。失效项删除，全部失效则落到自动映射。
+		set := make(map[string]bool, len(groups))
+		for _, g := range groups {
+			set[g.Symbol] = true
 		}
 		sm := make(map[string]string)
 		keys := make([]string, 0, len(mappings))
@@ -556,37 +638,127 @@ func (m *BrokerManager) symbolPlan(ctx context.Context, venue string, defaults [
 			return sm, keys, nil
 		}
 	}
-	server, err := fetchServer(ctx)
+	all, err := m.store.ListSymbolMappings(ctx, "")
 	if err != nil {
 		return nil, nil, err
 	}
-	sm, syms := resolveDefaults(defaults, server)
-	for k, v := range sm {
-		_ = m.store.UpsertSymbolMapping(ctx, &pgstore.SymbolMapping{Venue: venue, BrokerSymbol: k, Canonical: v})
+	idx := buildCanonicalIdx(all, defaultSymbols)
+	sm := make(map[string]string)
+	var syms []string
+	for _, sug := range classifySymbols(groups, idx) {
+		if sug.Status != StatusAuto {
+			continue
+		}
+		sm[sug.BrokerSymbol] = sug.Canonical
+		syms = append(syms, sug.BrokerSymbol)
+		var cs *float64
+		if sug.ContractSize > 0 {
+			v := sug.ContractSize
+			cs = &v
+		}
+		_ = m.store.UpsertSymbolMapping(ctx, &pgstore.SymbolMapping{
+			Venue: venue, BrokerSymbol: sug.BrokerSymbol, Canonical: sug.Canonical, ContractSize: cs,
+		})
 	}
+	if len(sm) > 0 {
+		return sm, syms, nil
+	}
+	sm, syms = identityMap(defaultSymbols)
 	return sm, syms, nil
 }
 
-// resolveDefaults 在服务器符号里解析默认交易对：精确匹配优先，否则试 cent 后缀（EURUSDm）。
-// 只订阅匹配到的；一个都对不上返回空映射。
-func resolveDefaults(defaults, serverSymbols []string) (map[string]string, []string) {
-	set := make(map[string]bool, len(serverSymbols))
-	for _, s := range serverSymbols {
-		set[s] = true
+// mappingStatus 建议映射分类（D-042 自动映射 + 建议共用判据）。
+type mappingStatus string
+
+const (
+	StatusAuto     mappingStatus = "auto"     // 名字+合约匹配（或任一侧未知无法证伪）→ 自动落库 / 一键采纳
+	StatusConflict mappingStatus = "conflict" // 名字匹配但合约不符——真实错配（ETF/股票撞原油）→ 待人工确认
+)
+
+// Suggestion 名字匹配既有 canonical 的候选映射。
+type Suggestion struct {
+	BrokerSymbol string
+	Group        string
+	ContractSize float64
+	Canonical    string
+	Status       mappingStatus
+	Reason       string
+}
+
+// canonicalIdx canonical 索引：别名（canonical 名 ∪ 已映射 brokerSymbol）→ canonical；
+// 期望合约 = 该 canonical 既有映射合约共识（无已知 = 0，无法校验）。
+type canonicalIdx struct {
+	aliases  map[string]string
+	contract map[string]float64
+}
+
+// buildCanonicalIdx 从全部映射 + 默认种子构建索引。种子 canonical 自身名即别名（首 broker bootstrap）。
+// 同一别名映射到不同 canonical 的异常数据：首见优先（校验后正常数据不出现）。
+func buildCanonicalIdx(all []pgstore.SymbolMapping, seeds []string) canonicalIdx {
+	idx := canonicalIdx{
+		aliases:  make(map[string]string),
+		contract: make(map[string]float64),
 	}
-	sm := make(map[string]string)
-	var syms []string
-	for _, c := range defaults {
-		switch {
-		case set[c]:
-			sm[c] = c
-			syms = append(syms, c)
-		case set[c+"m"]:
-			sm[c+"m"] = c
-			syms = append(syms, c+"m")
+	for _, c := range seeds {
+		idx.aliases[c] = c
+	}
+	counts := make(map[string]map[float64]int)
+	for _, m := range all {
+		if _, dup := idx.aliases[m.BrokerSymbol]; !dup {
+			idx.aliases[m.BrokerSymbol] = m.Canonical
+		}
+		if m.ContractSize != nil {
+			if counts[m.Canonical] == nil {
+				counts[m.Canonical] = make(map[float64]int)
+			}
+			counts[m.Canonical][*m.ContractSize]++
 		}
 	}
-	return sm, syms
+	for c, m := range counts {
+		best, n := 0.0, 0
+		for v, k := range m {
+			if k > n {
+				best, n = v, k
+			}
+		}
+		idx.contract[c] = best
+	}
+	return idx
+}
+
+// classifySymbols 把服务器符号对照 canonical 索引分类。名字匹配（精确优先，否则 cent 后缀
+// EURUSDm→EURUSD）；合约双方已知且不符 = conflict（真错配），其余（匹配或任一侧未知）= auto。
+func classifySymbols(groups []SymbolGroup, idx canonicalIdx) []Suggestion {
+	var out []Suggestion
+	for _, g := range groups {
+		canon, ok := idx.aliases[g.Symbol]
+		if !ok {
+			if c, found := idx.aliases[trimCentSuffix(g.Symbol)]; found {
+				canon, ok = c, true
+			}
+		}
+		if !ok {
+			continue
+		}
+		sug := Suggestion{
+			BrokerSymbol: g.Symbol, Group: g.Group, ContractSize: g.ContractSize,
+			Canonical: canon, Status: StatusAuto,
+		}
+		if exp := idx.contract[canon]; exp > 0 && g.ContractSize > 0 && exp != g.ContractSize {
+			sug.Status = StatusConflict
+			sug.Reason = fmt.Sprintf("合约规格 %v 与 %s 期望 %v 不符，套利对比不可靠", g.ContractSize, canon, exp)
+		}
+		out = append(out, sug)
+	}
+	return out
+}
+
+// trimCentSuffix 去 MT5 cent 账号符号后缀（EURUSDm → EURUSD）。
+func trimCentSuffix(s string) string {
+	if strings.HasSuffix(s, "m") {
+		return s[:len(s)-1]
+	}
+	return s
 }
 
 // identityMap 保底 identity 映射（服务器符号解析失败时用，原样订阅默认符号）。
