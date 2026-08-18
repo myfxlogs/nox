@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+// OrderComment 是 ARB 订单写入 broker 的 comment 标记（单一真相源）。
+// MT4/MT5 下单统一携带，供对账器（internal/reconcile）判别订单是否为 ARB 源：
+// `arb` 前缀 → ARB 源订单；其余（遗留 ca_/cx_/tri_+hex 格式、手工 UUID、空）→ 系统外单不追踪。
+const OrderComment = "arb"
+
 // Order 是下单请求（市价单）。
 type Order struct {
 	Symbol    string  // venue 原始符号

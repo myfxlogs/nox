@@ -41,7 +41,7 @@ func (e *MT4Executor) PlaceOrder(ctx context.Context, o Order) (Fill, error) {
 		Symbol:    o.Symbol,
 		Operation: op,
 		Volume:    o.Qty,
-		Comment:   "arb",
+		Comment:   OrderComment,
 	})
 	if err != nil {
 		return Fill{}, fmt.Errorf("mt4 ordersend: %w", err)

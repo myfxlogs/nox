@@ -37,11 +37,15 @@ func (e *MT5Executor) PlaceOrder(ctx context.Context, o Order) (Fill, error) {
 	if o.Side == "SELL" {
 		op = mt5pb.OrderType_OrderType_Sell
 	}
+	// MT5 Comment 是 oneof 指针字段，取本地副本地址传入。
+	// 与 MT4 统一携带 OrderComment 标记（D-032：对账判别 ARB 源订单）。
+	comment := OrderComment
 	resp, err := e.trading.OrderSend(ctx, &mt5pb.OrderSendRequest{
 		Id:        e.token,
 		Symbol:    o.Symbol,
 		Operation: op,
 		Volume:    o.Qty,
+		Comment:   &comment,
 	})
 	if err != nil {
 		return Fill{}, fmt.Errorf("mt5 ordersend: %w", err)

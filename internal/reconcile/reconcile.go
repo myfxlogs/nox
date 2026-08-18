@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"arb/internal/adapter/gen/mtapi/mt4"
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
+	"arb/internal/exec"
 	"arb/internal/store/pgstore"
 	"google.golang.org/grpc/metadata"
 )
@@ -22,6 +24,7 @@ type VenueQuerier interface {
 }
 
 // VenueOrder venue 侧的持仓记录。
+// Comment 用于判别订单归属：ARB 源订单（exec.OrderComment 前缀）vs 系统外单。
 type VenueOrder struct {
 	Ticket    string
 	Symbol    string
@@ -29,6 +32,14 @@ type VenueOrder struct {
 	Volume    float64
 	OpenPrice float64
 	Venue     string
+	Comment   string
+}
+
+// isARBOrder 判断 broker 订单是否为当前 ARB 系统开出。
+// 当前 exec 下单 comment 统一为 exec.OrderComment（"arb"）→ 前缀匹配即 ARB 源。
+// 其余一律系统外单：遗留 ca_/cx_/tri_+hex 格式（旧系统 D-033）、手工单 UUID、空 comment。
+func isARBOrder(comment string) bool {
+	return strings.HasPrefix(comment, exec.OrderComment)
 }
 
 // MT4Querier 通过 MT4 gRPC 查询持仓。
@@ -64,6 +75,7 @@ func (q *MT4Querier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error
 			Volume:    ord.GetLots(),
 			OpenPrice: ord.GetOpenPrice(),
 			Venue:     q.venue,
+			Comment:   ord.GetComment(),
 		})
 	}
 	return out, nil
@@ -102,6 +114,7 @@ func (q *MT5Querier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error
 			Volume:    ord.GetLots(),
 			OpenPrice: ord.GetOpenPrice(),
 			Venue:     q.venue,
+			Comment:   ord.GetComment(),
 		})
 	}
 	return out, nil
@@ -183,11 +196,16 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 		}
 	}
 
-	// venue 有、本地无 → 可能未记录的持仓
+	// venue 有、本地无 → 可能未记录的持仓（D-032：仅 ARB 源订单视为失联；系统外单不追踪）
 	for ticket, vo := range venueOrders {
 		if _, ok := localLegs[ticket]; !ok {
+			if !isARBOrder(vo.Comment) {
+				log.Printf("[reconcile] venue %s 持仓 ticket=%s symbol=%s comment=%q 为系统外单，不追踪",
+					vo.Venue, ticket, vo.Symbol, vo.Comment)
+				continue
+			}
 			mismatches++
-			msg := fmt.Sprintf("对账不一致：venue %s 持仓 ticket=%s symbol=%s side=%s vol=%f 本地未记录",
+			msg := fmt.Sprintf("对账不一致：venue %s 持仓 ticket=%s symbol=%s side=%s vol=%f 本地未记录（ARB 源订单失联）",
 				vo.Venue, ticket, vo.Symbol, vo.Side, vo.Volume)
 			if err := r.store.InsertAlert(ctx, nil, "critical", msg); err != nil {
 				log.Printf("[reconcile] alert: %v", err)
