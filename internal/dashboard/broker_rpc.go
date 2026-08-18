@@ -207,7 +207,12 @@ func (s *Service) ListSymbolMappings(ctx context.Context, req *connect.Request[v
 	}
 	pb := make([]*v1.SymbolMapping, 0, len(mappings))
 	for _, mp := range mappings {
-		pb = append(pb, &v1.SymbolMapping{Venue: mp.Venue, BrokerSymbol: mp.BrokerSymbol, Canonical: mp.Canonical})
+		pb = append(pb, &v1.SymbolMapping{
+			Venue:        mp.Venue,
+			BrokerSymbol: mp.BrokerSymbol,
+			Canonical:    mp.Canonical,
+			ContractSize: mp.ContractSize,
+		})
 	}
 	return connect.NewResponse(&v1.ListSymbolMappingsResponse{Mappings: pb}), nil
 }
