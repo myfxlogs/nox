@@ -470,8 +470,13 @@ message BrokerSymbolsRequest {
   string venue = 1;     // 已连接适配器的 venue
 }
 
+message SymbolEntry {
+  string symbol = 1;    // 服务器真实符号
+  string group = 2;     // broker 分组（MT5 SymGroup.GroupName 顶层段，如 Forex；MT4 降级空串）
+}
+
 message BrokerSymbolsResponse {
-  repeated string symbols = 1;
+  repeated SymbolEntry symbols = 1;
 }
 
 message SetBrokerAccountAliasRequest {
