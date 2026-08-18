@@ -10,23 +10,23 @@ import (
 
 // Opportunity 对应 opportunities 表（§2.6）。
 type Opportunity struct {
-	ID              string
-	Type            string
-	VenueBuy        string
-	VenueSell       string
-	PriceBuy        float64
-	PriceSell       float64
-	GrossBps        float64
-	SpreadCost      float64
-	CommissionCost  float64
-	SlippageCost    float64
-	SwapCost        float64
-	NetBps          float64
-	BreakevenDays   *float64
-	QuoteTime       time.Time
-	ExpiresAt       time.Time
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID             string
+	Type           string
+	VenueBuy       string
+	VenueSell      string
+	PriceBuy       float64
+	PriceSell      float64
+	GrossBps       float64
+	SpreadCost     float64
+	CommissionCost float64
+	SlippageCost   float64
+	SwapCost       float64
+	NetBps         float64
+	BreakevenDays  *float64
+	QuoteTime      time.Time
+	ExpiresAt      time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 // UpsertOpportunity 插入或刷新机会（§5.0 去重：同键未过期 → 刷新数值）。
@@ -76,13 +76,13 @@ func (s *Store) ListOpportunities(ctx context.Context, typ string, limit, offset
 
 // Alert 对应 alerts 表（§2.5）。
 type Alert struct {
-	ID        int64
-	RuleID    *int64
-	RuleName  string
-	Ts        time.Time
-	Level     string
-	Message   string
-	Acked     bool
+	ID       int64
+	RuleID   *int64
+	RuleName string
+	Ts       time.Time
+	Level    string
+	Message  string
+	Acked    bool
 }
 
 // InsertAlert 写入告警（§2.5）。

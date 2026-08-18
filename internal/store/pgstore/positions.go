@@ -123,12 +123,42 @@ func (s *Store) ListPositions(ctx context.Context, status string, limit, offset 
 	return out, rows.Err()
 }
 
+// Cashflow position_cashflows 行。
+type Cashflow struct {
+	ID         int64
+	PositionID int64
+	Kind       string
+	Venue      string
+	AmountUSD  float64
+	Ts         time.Time
+}
+
 // InsertCashflow 写入现金流。
 func (s *Store) InsertCashflow(ctx context.Context, posID int64, kind, venue string, amount float64, ts time.Time) error {
 	q := `INSERT INTO position_cashflows (position_id, kind, venue, amount_usd, ts)
 		VALUES ($1, $2, $3, $4, $5)`
 	_, err := s.pool.Exec(ctx, q, posID, kind, venue, amount, ts)
 	return err
+}
+
+// ListCashflows 返回指定持仓的现金流（§13.7 复盘合算：realized_pnl + Σcashflows）。
+func (s *Store) ListCashflows(ctx context.Context, posID int64) ([]Cashflow, error) {
+	q := `SELECT id, position_id, kind, venue, amount_usd, ts
+		FROM position_cashflows WHERE position_id = $1 ORDER BY ts`
+	rows, err := s.pool.Query(ctx, q, posID)
+	if err != nil {
+		return nil, fmt.Errorf("list cashflows: %w", err)
+	}
+	defer rows.Close()
+	var out []Cashflow
+	for rows.Next() {
+		var c Cashflow
+		if err := rows.Scan(&c.ID, &c.PositionID, &c.Kind, &c.Venue, &c.AmountUSD, &c.Ts); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
 }
 
 // CountOpenPositions 返回 OPEN+OPENING+LEGGED 持仓数（风控用）。

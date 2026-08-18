@@ -34,6 +34,11 @@ type Config struct {
 
 	// === MT swap 采集（§3.6）===
 	SwapRefresh time.Duration // swap 轮询间隔（默认 1h，swap 变化慢）
+
+	// === 复盘闭环（§13.6，D-034）===
+	ReviewMinSamples         int     // 聚合出调参建议的最小样本数（防单笔噪声）
+	ReviewCrossBiasBps       float64 // 价差型平均偏差超此值才发建议（bps）
+	ReviewCarryBiasAnnualPct float64 // 息差型平均偏差超此值才发建议（年化百分点）
 }
 
 // Load 从环境变量加载配置，未设置用默认值。
@@ -56,7 +61,10 @@ func Load() *Config {
 			"okx":     envFloat("ARB_COMMISSION_TAKER_OKX", 10.0),
 			"gate":    envFloat("ARB_COMMISSION_TAKER_GATE", 10.0),
 		},
-		SwapRefresh: envDur("ARB_SWAP_REFRESH", time.Hour),
+		SwapRefresh:              envDur("ARB_SWAP_REFRESH", time.Hour),
+		ReviewMinSamples:         envInt("ARB_REVIEW_MIN_SAMPLES", 3),
+		ReviewCrossBiasBps:       envFloat("ARB_REVIEW_CROSS_BIAS_BPS", 1.0),
+		ReviewCarryBiasAnnualPct: envFloat("ARB_REVIEW_CARRY_BIAS_ANNUAL_PCT", 1.0),
 	}
 }
 
@@ -73,6 +81,15 @@ func envDur(key string, def time.Duration) time.Duration {
 	if v, ok := os.LookupEnv(key); ok {
 		if d, err := time.ParseDuration(v); err == nil {
 			return d
+		}
+	}
+	return def
+}
+
+func envInt(key string, def int) int {
+	if v, ok := os.LookupEnv(key); ok {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
 		}
 	}
 	return def
