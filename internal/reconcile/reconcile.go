@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"sync"
 	"time"
 
 	"arb/internal/adapter/gen/mtapi/mt4"
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
 	"arb/internal/store/pgstore"
+	"google.golang.org/grpc/metadata"
 )
 
 // VenueQuerier 查询 venue 实际持仓的统一接口。
@@ -21,19 +23,19 @@ type VenueQuerier interface {
 
 // VenueOrder venue 侧的持仓记录。
 type VenueOrder struct {
-	Ticket   string
-	Symbol   string
-	Side     string // BUY / SELL
-	Volume   float64
+	Ticket    string
+	Symbol    string
+	Side      string // BUY / SELL
+	Volume    float64
 	OpenPrice float64
-	Venue    string
+	Venue     string
 }
 
 // MT4Querier 通过 MT4 gRPC 查询持仓。
 type MT4Querier struct {
-	token   string
-	mt4     mt4.MT4Client
-	venue   string
+	token string
+	mt4   mt4.MT4Client
+	venue string
 }
 
 func NewMT4Querier(venue, token string, mt4Client mt4.MT4Client) *MT4Querier {
@@ -41,6 +43,7 @@ func NewMT4Querier(venue, token string, mt4Client mt4.MT4Client) *MT4Querier {
 }
 
 func (q *MT4Querier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error) {
+	ctx = metadata.AppendToOutgoingContext(ctx, "id", q.token)
 	resp, err := q.mt4.OpenedOrders(ctx, &mt4.OpenedOrdersRequest{Id: q.token})
 	if err != nil {
 		return nil, fmt.Errorf("mt4 opened orders: %w", err)
@@ -78,6 +81,7 @@ func NewMT5Querier(venue, token string, mt5Client mt5pb.MT5Client) *MT5Querier {
 }
 
 func (q *MT5Querier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error) {
+	ctx = metadata.AppendToOutgoingContext(ctx, "id", q.token)
 	resp, err := q.mt5.OpenedOrders(ctx, &mt5pb.OpenedOrdersRequest{Id: q.token})
 	if err != nil {
 		return nil, fmt.Errorf("mt5 opened orders: %w", err)
@@ -106,12 +110,27 @@ func (q *MT5Querier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error
 // Reconciler 对账器：比对本地 OPEN legs 与 venue 实际持仓。
 type Reconciler struct {
 	store    *pgstore.Store
+	mu       sync.RWMutex
 	queriers []VenueQuerier
 }
 
 // New 创建对账器。
 func New(store *pgstore.Store, queriers ...VenueQuerier) *Reconciler {
 	return &Reconciler{store: store, queriers: queriers}
+}
+
+// SetQueriers 整体替换 querier 集合（Broker 管理器启停适配器时调用）。
+func (r *Reconciler) SetQueriers(qs ...VenueQuerier) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.queriers = append([]VenueQuerier(nil), qs...)
+}
+
+// snapshot 返回 querier 集合的快照（Run 期间避免对集合的并发读写）。
+func (r *Reconciler) snapshot() []VenueQuerier {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.queriers
 }
 
 // Run 执行一次对账。返回不一致数量。
@@ -137,7 +156,7 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 
 	// 2. 查 venue 实际持仓
 	venueOrders := make(map[string]VenueOrder) // ticket → order
-	for _, q := range r.queriers {
+	for _, q := range r.snapshot() {
 		orders, err := q.QueryOpenedOrders(ctx)
 		if err != nil {
 			log.Printf("[reconcile] query venue: %v", err)

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
+	"google.golang.org/grpc/metadata"
 )
 
 // MT5Executor 复用 MT5Adapter 的 gRPC 连接执行交易（§13.2）。
@@ -31,6 +32,7 @@ func NewMT5Executor(venue, token string, trading mt5pb.TradingClient) *MT5Execut
 func (e *MT5Executor) Key() string { return e.venueKey }
 
 func (e *MT5Executor) PlaceOrder(ctx context.Context, o Order) (Fill, error) {
+	ctx = metadata.AppendToOutgoingContext(ctx, "id", e.token)
 	op := mt5pb.OrderType_OrderType_Buy
 	if o.Side == "SELL" {
 		op = mt5pb.OrderType_OrderType_Sell
@@ -62,6 +64,7 @@ func (e *MT5Executor) PlaceOrder(ctx context.Context, o Order) (Fill, error) {
 }
 
 func (e *MT5Executor) CloseOrder(ctx context.Context, ref OrderRef) (Fill, error) {
+	ctx = metadata.AppendToOutgoingContext(ctx, "id", e.token)
 	ticket, err := strconv.ParseInt(ref.OrderID, 10, 64)
 	if err != nil {
 		return Fill{}, fmt.Errorf("mt5 close: bad ticket %q: %w", ref.OrderID, err)

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	mt4pb "arb/internal/adapter/gen/mtapi/mt4"
+	"google.golang.org/grpc/metadata"
 )
 
 // MT4Executor 复用 MT4Adapter 的 gRPC 连接执行交易（§13.2）。
@@ -30,6 +31,7 @@ func NewMT4Executor(venue, token string, trading mt4pb.TradingClient) *MT4Execut
 func (e *MT4Executor) Key() string { return e.venueKey }
 
 func (e *MT4Executor) PlaceOrder(ctx context.Context, o Order) (Fill, error) {
+	ctx = metadata.AppendToOutgoingContext(ctx, "id", e.token)
 	op := mt4pb.Op_Op_Buy
 	if o.Side == "SELL" {
 		op = mt4pb.Op_Op_Sell
@@ -62,6 +64,7 @@ func (e *MT4Executor) PlaceOrder(ctx context.Context, o Order) (Fill, error) {
 }
 
 func (e *MT4Executor) CloseOrder(ctx context.Context, ref OrderRef) (Fill, error) {
+	ctx = metadata.AppendToOutgoingContext(ctx, "id", e.token)
 	ticket, err := strconv.ParseInt(ref.OrderID, 10, 32)
 	if err != nil {
 		return Fill{}, fmt.Errorf("mt4 close: bad ticket %q: %w", ref.OrderID, err)
