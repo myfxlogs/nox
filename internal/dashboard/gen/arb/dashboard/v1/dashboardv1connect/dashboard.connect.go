@@ -86,6 +86,36 @@ const (
 	// DashboardServiceListPositionsProcedure is the fully-qualified name of the DashboardService's
 	// ListPositions RPC.
 	DashboardServiceListPositionsProcedure = "/arb.dashboard.v1.DashboardService/ListPositions"
+	// DashboardServiceSearchBrokerProcedure is the fully-qualified name of the DashboardService's
+	// SearchBroker RPC.
+	DashboardServiceSearchBrokerProcedure = "/arb.dashboard.v1.DashboardService/SearchBroker"
+	// DashboardServiceAddBrokerProcedure is the fully-qualified name of the DashboardService's
+	// AddBroker RPC.
+	DashboardServiceAddBrokerProcedure = "/arb.dashboard.v1.DashboardService/AddBroker"
+	// DashboardServiceRemoveBrokerProcedure is the fully-qualified name of the DashboardService's
+	// RemoveBroker RPC.
+	DashboardServiceRemoveBrokerProcedure = "/arb.dashboard.v1.DashboardService/RemoveBroker"
+	// DashboardServiceListBrokerAccountsProcedure is the fully-qualified name of the DashboardService's
+	// ListBrokerAccounts RPC.
+	DashboardServiceListBrokerAccountsProcedure = "/arb.dashboard.v1.DashboardService/ListBrokerAccounts"
+	// DashboardServiceVerifyAccountProcedure is the fully-qualified name of the DashboardService's
+	// VerifyAccount RPC.
+	DashboardServiceVerifyAccountProcedure = "/arb.dashboard.v1.DashboardService/VerifyAccount"
+	// DashboardServiceBrokerSymbolsProcedure is the fully-qualified name of the DashboardService's
+	// BrokerSymbols RPC.
+	DashboardServiceBrokerSymbolsProcedure = "/arb.dashboard.v1.DashboardService/BrokerSymbols"
+	// DashboardServiceSetBrokerAccountAliasProcedure is the fully-qualified name of the
+	// DashboardService's SetBrokerAccountAlias RPC.
+	DashboardServiceSetBrokerAccountAliasProcedure = "/arb.dashboard.v1.DashboardService/SetBrokerAccountAlias"
+	// DashboardServiceListSymbolMappingsProcedure is the fully-qualified name of the DashboardService's
+	// ListSymbolMappings RPC.
+	DashboardServiceListSymbolMappingsProcedure = "/arb.dashboard.v1.DashboardService/ListSymbolMappings"
+	// DashboardServiceSaveSymbolMappingProcedure is the fully-qualified name of the DashboardService's
+	// SaveSymbolMapping RPC.
+	DashboardServiceSaveSymbolMappingProcedure = "/arb.dashboard.v1.DashboardService/SaveSymbolMapping"
+	// DashboardServiceDeleteSymbolMappingProcedure is the fully-qualified name of the
+	// DashboardService's DeleteSymbolMapping RPC.
+	DashboardServiceDeleteSymbolMappingProcedure = "/arb.dashboard.v1.DashboardService/DeleteSymbolMapping"
 	// DashboardServiceStreamUpdatesProcedure is the fully-qualified name of the DashboardService's
 	// StreamUpdates RPC.
 	DashboardServiceStreamUpdatesProcedure = "/arb.dashboard.v1.DashboardService/StreamUpdates"
@@ -118,6 +148,18 @@ type DashboardServiceClient interface {
 	ExecuteOpportunity(context.Context, *connect.Request[v1.ExecuteOpportunityRequest]) (*connect.Response[v1.ExecuteOpportunityResponse], error)
 	ClosePosition(context.Context, *connect.Request[v1.ClosePositionRequest]) (*connect.Response[v1.ClosePositionResponse], error)
 	ListPositions(context.Context, *connect.Request[v1.ListPositionsRequest]) (*connect.Response[v1.ListPositionsResponse], error)
+	// Broker 管理（认证后，运行时 MT4/MT5 连接管理）
+	SearchBroker(context.Context, *connect.Request[v1.SearchBrokerRequest]) (*connect.Response[v1.SearchBrokerResponse], error)
+	AddBroker(context.Context, *connect.Request[v1.AddBrokerRequest]) (*connect.Response[v1.AddBrokerResponse], error)
+	RemoveBroker(context.Context, *connect.Request[v1.RemoveBrokerRequest]) (*connect.Response[v1.RemoveBrokerResponse], error)
+	ListBrokerAccounts(context.Context, *connect.Request[v1.ListBrokerAccountsRequest]) (*connect.Response[v1.ListBrokerAccountsResponse], error)
+	VerifyAccount(context.Context, *connect.Request[v1.VerifyAccountRequest]) (*connect.Response[v1.VerifyAccountResponse], error)
+	BrokerSymbols(context.Context, *connect.Request[v1.BrokerSymbolsRequest]) (*connect.Response[v1.BrokerSymbolsResponse], error)
+	SetBrokerAccountAlias(context.Context, *connect.Request[v1.SetBrokerAccountAliasRequest]) (*connect.Response[v1.SetBrokerAccountAliasResponse], error)
+	// Symbol 映射（brokerSymbol -> canonical）
+	ListSymbolMappings(context.Context, *connect.Request[v1.ListSymbolMappingsRequest]) (*connect.Response[v1.ListSymbolMappingsResponse], error)
+	SaveSymbolMapping(context.Context, *connect.Request[v1.SaveSymbolMappingRequest]) (*connect.Response[v1.SaveSymbolMappingResponse], error)
+	DeleteSymbolMapping(context.Context, *connect.Request[v1.DeleteSymbolMappingRequest]) (*connect.Response[v1.DeleteSymbolMappingResponse], error)
 	// 实时推送（server streaming，D-026）
 	StreamUpdates(context.Context, *connect.Request[v1.StreamUpdatesRequest]) (*connect.ServerStreamForClient[v1.StreamUpdatesResponse], error)
 	// 健康
@@ -243,6 +285,66 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("ListPositions")),
 			connect.WithClientOptions(opts...),
 		),
+		searchBroker: connect.NewClient[v1.SearchBrokerRequest, v1.SearchBrokerResponse](
+			httpClient,
+			baseURL+DashboardServiceSearchBrokerProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("SearchBroker")),
+			connect.WithClientOptions(opts...),
+		),
+		addBroker: connect.NewClient[v1.AddBrokerRequest, v1.AddBrokerResponse](
+			httpClient,
+			baseURL+DashboardServiceAddBrokerProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("AddBroker")),
+			connect.WithClientOptions(opts...),
+		),
+		removeBroker: connect.NewClient[v1.RemoveBrokerRequest, v1.RemoveBrokerResponse](
+			httpClient,
+			baseURL+DashboardServiceRemoveBrokerProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("RemoveBroker")),
+			connect.WithClientOptions(opts...),
+		),
+		listBrokerAccounts: connect.NewClient[v1.ListBrokerAccountsRequest, v1.ListBrokerAccountsResponse](
+			httpClient,
+			baseURL+DashboardServiceListBrokerAccountsProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListBrokerAccounts")),
+			connect.WithClientOptions(opts...),
+		),
+		verifyAccount: connect.NewClient[v1.VerifyAccountRequest, v1.VerifyAccountResponse](
+			httpClient,
+			baseURL+DashboardServiceVerifyAccountProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("VerifyAccount")),
+			connect.WithClientOptions(opts...),
+		),
+		brokerSymbols: connect.NewClient[v1.BrokerSymbolsRequest, v1.BrokerSymbolsResponse](
+			httpClient,
+			baseURL+DashboardServiceBrokerSymbolsProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("BrokerSymbols")),
+			connect.WithClientOptions(opts...),
+		),
+		setBrokerAccountAlias: connect.NewClient[v1.SetBrokerAccountAliasRequest, v1.SetBrokerAccountAliasResponse](
+			httpClient,
+			baseURL+DashboardServiceSetBrokerAccountAliasProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("SetBrokerAccountAlias")),
+			connect.WithClientOptions(opts...),
+		),
+		listSymbolMappings: connect.NewClient[v1.ListSymbolMappingsRequest, v1.ListSymbolMappingsResponse](
+			httpClient,
+			baseURL+DashboardServiceListSymbolMappingsProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListSymbolMappings")),
+			connect.WithClientOptions(opts...),
+		),
+		saveSymbolMapping: connect.NewClient[v1.SaveSymbolMappingRequest, v1.SaveSymbolMappingResponse](
+			httpClient,
+			baseURL+DashboardServiceSaveSymbolMappingProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("SaveSymbolMapping")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteSymbolMapping: connect.NewClient[v1.DeleteSymbolMappingRequest, v1.DeleteSymbolMappingResponse](
+			httpClient,
+			baseURL+DashboardServiceDeleteSymbolMappingProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("DeleteSymbolMapping")),
+			connect.WithClientOptions(opts...),
+		),
 		streamUpdates: connect.NewClient[v1.StreamUpdatesRequest, v1.StreamUpdatesResponse](
 			httpClient,
 			baseURL+DashboardServiceStreamUpdatesProcedure,
@@ -260,26 +362,36 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 
 // dashboardServiceClient implements DashboardServiceClient.
 type dashboardServiceClient struct {
-	listLatestQuotes     *connect.Client[v1.ListQuotesRequest, v1.ListQuotesResponse]
-	listLatestFacts      *connect.Client[v1.ListLatestFactsRequest, v1.ListLatestFactsResponse]
-	listOpportunities    *connect.Client[v1.ListOpportunitiesRequest, v1.ListOpportunitiesResponse]
-	listAlerts           *connect.Client[v1.ListAlertsRequest, v1.ListAlertsResponse]
-	listTriggerStates    *connect.Client[v1.ListTriggerStatesRequest, v1.ListTriggerStatesResponse]
-	listSourceHealth     *connect.Client[v1.ListSourceHealthRequest, v1.ListSourceHealthResponse]
-	listFacts            *connect.Client[v1.ListFactsRequest, v1.ListFactsResponse]
-	ackAlert             *connect.Client[v1.AckAlertRequest, v1.AckAlertResponse]
-	ackAll               *connect.Client[v1.AckAllRequest, v1.AckAllResponse]
-	listUnacked          *connect.Client[v1.ListUnackedRequest, v1.ListUnackedResponse]
-	addLedgerEntry       *connect.Client[v1.AddLedgerEntryRequest, v1.AddLedgerEntryResponse]
-	listLedgerEntries    *connect.Client[v1.ListLedgerEntriesRequest, v1.ListLedgerEntriesResponse]
-	ledgerSummary        *connect.Client[v1.LedgerSummaryRequest, v1.LedgerSummaryResponse]
-	listKnowledgeEntries *connect.Client[v1.ListKnowledgeEntriesRequest, v1.ListKnowledgeEntriesResponse]
-	reviewKnowledgeEntry *connect.Client[v1.ReviewKnowledgeEntryRequest, v1.ReviewKnowledgeEntryResponse]
-	executeOpportunity   *connect.Client[v1.ExecuteOpportunityRequest, v1.ExecuteOpportunityResponse]
-	closePosition        *connect.Client[v1.ClosePositionRequest, v1.ClosePositionResponse]
-	listPositions        *connect.Client[v1.ListPositionsRequest, v1.ListPositionsResponse]
-	streamUpdates        *connect.Client[v1.StreamUpdatesRequest, v1.StreamUpdatesResponse]
-	health               *connect.Client[v1.HealthRequest, v1.HealthResponse]
+	listLatestQuotes      *connect.Client[v1.ListQuotesRequest, v1.ListQuotesResponse]
+	listLatestFacts       *connect.Client[v1.ListLatestFactsRequest, v1.ListLatestFactsResponse]
+	listOpportunities     *connect.Client[v1.ListOpportunitiesRequest, v1.ListOpportunitiesResponse]
+	listAlerts            *connect.Client[v1.ListAlertsRequest, v1.ListAlertsResponse]
+	listTriggerStates     *connect.Client[v1.ListTriggerStatesRequest, v1.ListTriggerStatesResponse]
+	listSourceHealth      *connect.Client[v1.ListSourceHealthRequest, v1.ListSourceHealthResponse]
+	listFacts             *connect.Client[v1.ListFactsRequest, v1.ListFactsResponse]
+	ackAlert              *connect.Client[v1.AckAlertRequest, v1.AckAlertResponse]
+	ackAll                *connect.Client[v1.AckAllRequest, v1.AckAllResponse]
+	listUnacked           *connect.Client[v1.ListUnackedRequest, v1.ListUnackedResponse]
+	addLedgerEntry        *connect.Client[v1.AddLedgerEntryRequest, v1.AddLedgerEntryResponse]
+	listLedgerEntries     *connect.Client[v1.ListLedgerEntriesRequest, v1.ListLedgerEntriesResponse]
+	ledgerSummary         *connect.Client[v1.LedgerSummaryRequest, v1.LedgerSummaryResponse]
+	listKnowledgeEntries  *connect.Client[v1.ListKnowledgeEntriesRequest, v1.ListKnowledgeEntriesResponse]
+	reviewKnowledgeEntry  *connect.Client[v1.ReviewKnowledgeEntryRequest, v1.ReviewKnowledgeEntryResponse]
+	executeOpportunity    *connect.Client[v1.ExecuteOpportunityRequest, v1.ExecuteOpportunityResponse]
+	closePosition         *connect.Client[v1.ClosePositionRequest, v1.ClosePositionResponse]
+	listPositions         *connect.Client[v1.ListPositionsRequest, v1.ListPositionsResponse]
+	searchBroker          *connect.Client[v1.SearchBrokerRequest, v1.SearchBrokerResponse]
+	addBroker             *connect.Client[v1.AddBrokerRequest, v1.AddBrokerResponse]
+	removeBroker          *connect.Client[v1.RemoveBrokerRequest, v1.RemoveBrokerResponse]
+	listBrokerAccounts    *connect.Client[v1.ListBrokerAccountsRequest, v1.ListBrokerAccountsResponse]
+	verifyAccount         *connect.Client[v1.VerifyAccountRequest, v1.VerifyAccountResponse]
+	brokerSymbols         *connect.Client[v1.BrokerSymbolsRequest, v1.BrokerSymbolsResponse]
+	setBrokerAccountAlias *connect.Client[v1.SetBrokerAccountAliasRequest, v1.SetBrokerAccountAliasResponse]
+	listSymbolMappings    *connect.Client[v1.ListSymbolMappingsRequest, v1.ListSymbolMappingsResponse]
+	saveSymbolMapping     *connect.Client[v1.SaveSymbolMappingRequest, v1.SaveSymbolMappingResponse]
+	deleteSymbolMapping   *connect.Client[v1.DeleteSymbolMappingRequest, v1.DeleteSymbolMappingResponse]
+	streamUpdates         *connect.Client[v1.StreamUpdatesRequest, v1.StreamUpdatesResponse]
+	health                *connect.Client[v1.HealthRequest, v1.HealthResponse]
 }
 
 // ListLatestQuotes calls arb.dashboard.v1.DashboardService.ListLatestQuotes.
@@ -372,6 +484,56 @@ func (c *dashboardServiceClient) ListPositions(ctx context.Context, req *connect
 	return c.listPositions.CallUnary(ctx, req)
 }
 
+// SearchBroker calls arb.dashboard.v1.DashboardService.SearchBroker.
+func (c *dashboardServiceClient) SearchBroker(ctx context.Context, req *connect.Request[v1.SearchBrokerRequest]) (*connect.Response[v1.SearchBrokerResponse], error) {
+	return c.searchBroker.CallUnary(ctx, req)
+}
+
+// AddBroker calls arb.dashboard.v1.DashboardService.AddBroker.
+func (c *dashboardServiceClient) AddBroker(ctx context.Context, req *connect.Request[v1.AddBrokerRequest]) (*connect.Response[v1.AddBrokerResponse], error) {
+	return c.addBroker.CallUnary(ctx, req)
+}
+
+// RemoveBroker calls arb.dashboard.v1.DashboardService.RemoveBroker.
+func (c *dashboardServiceClient) RemoveBroker(ctx context.Context, req *connect.Request[v1.RemoveBrokerRequest]) (*connect.Response[v1.RemoveBrokerResponse], error) {
+	return c.removeBroker.CallUnary(ctx, req)
+}
+
+// ListBrokerAccounts calls arb.dashboard.v1.DashboardService.ListBrokerAccounts.
+func (c *dashboardServiceClient) ListBrokerAccounts(ctx context.Context, req *connect.Request[v1.ListBrokerAccountsRequest]) (*connect.Response[v1.ListBrokerAccountsResponse], error) {
+	return c.listBrokerAccounts.CallUnary(ctx, req)
+}
+
+// VerifyAccount calls arb.dashboard.v1.DashboardService.VerifyAccount.
+func (c *dashboardServiceClient) VerifyAccount(ctx context.Context, req *connect.Request[v1.VerifyAccountRequest]) (*connect.Response[v1.VerifyAccountResponse], error) {
+	return c.verifyAccount.CallUnary(ctx, req)
+}
+
+// BrokerSymbols calls arb.dashboard.v1.DashboardService.BrokerSymbols.
+func (c *dashboardServiceClient) BrokerSymbols(ctx context.Context, req *connect.Request[v1.BrokerSymbolsRequest]) (*connect.Response[v1.BrokerSymbolsResponse], error) {
+	return c.brokerSymbols.CallUnary(ctx, req)
+}
+
+// SetBrokerAccountAlias calls arb.dashboard.v1.DashboardService.SetBrokerAccountAlias.
+func (c *dashboardServiceClient) SetBrokerAccountAlias(ctx context.Context, req *connect.Request[v1.SetBrokerAccountAliasRequest]) (*connect.Response[v1.SetBrokerAccountAliasResponse], error) {
+	return c.setBrokerAccountAlias.CallUnary(ctx, req)
+}
+
+// ListSymbolMappings calls arb.dashboard.v1.DashboardService.ListSymbolMappings.
+func (c *dashboardServiceClient) ListSymbolMappings(ctx context.Context, req *connect.Request[v1.ListSymbolMappingsRequest]) (*connect.Response[v1.ListSymbolMappingsResponse], error) {
+	return c.listSymbolMappings.CallUnary(ctx, req)
+}
+
+// SaveSymbolMapping calls arb.dashboard.v1.DashboardService.SaveSymbolMapping.
+func (c *dashboardServiceClient) SaveSymbolMapping(ctx context.Context, req *connect.Request[v1.SaveSymbolMappingRequest]) (*connect.Response[v1.SaveSymbolMappingResponse], error) {
+	return c.saveSymbolMapping.CallUnary(ctx, req)
+}
+
+// DeleteSymbolMapping calls arb.dashboard.v1.DashboardService.DeleteSymbolMapping.
+func (c *dashboardServiceClient) DeleteSymbolMapping(ctx context.Context, req *connect.Request[v1.DeleteSymbolMappingRequest]) (*connect.Response[v1.DeleteSymbolMappingResponse], error) {
+	return c.deleteSymbolMapping.CallUnary(ctx, req)
+}
+
 // StreamUpdates calls arb.dashboard.v1.DashboardService.StreamUpdates.
 func (c *dashboardServiceClient) StreamUpdates(ctx context.Context, req *connect.Request[v1.StreamUpdatesRequest]) (*connect.ServerStreamForClient[v1.StreamUpdatesResponse], error) {
 	return c.streamUpdates.CallServerStream(ctx, req)
@@ -407,6 +569,18 @@ type DashboardServiceHandler interface {
 	ExecuteOpportunity(context.Context, *connect.Request[v1.ExecuteOpportunityRequest]) (*connect.Response[v1.ExecuteOpportunityResponse], error)
 	ClosePosition(context.Context, *connect.Request[v1.ClosePositionRequest]) (*connect.Response[v1.ClosePositionResponse], error)
 	ListPositions(context.Context, *connect.Request[v1.ListPositionsRequest]) (*connect.Response[v1.ListPositionsResponse], error)
+	// Broker 管理（认证后，运行时 MT4/MT5 连接管理）
+	SearchBroker(context.Context, *connect.Request[v1.SearchBrokerRequest]) (*connect.Response[v1.SearchBrokerResponse], error)
+	AddBroker(context.Context, *connect.Request[v1.AddBrokerRequest]) (*connect.Response[v1.AddBrokerResponse], error)
+	RemoveBroker(context.Context, *connect.Request[v1.RemoveBrokerRequest]) (*connect.Response[v1.RemoveBrokerResponse], error)
+	ListBrokerAccounts(context.Context, *connect.Request[v1.ListBrokerAccountsRequest]) (*connect.Response[v1.ListBrokerAccountsResponse], error)
+	VerifyAccount(context.Context, *connect.Request[v1.VerifyAccountRequest]) (*connect.Response[v1.VerifyAccountResponse], error)
+	BrokerSymbols(context.Context, *connect.Request[v1.BrokerSymbolsRequest]) (*connect.Response[v1.BrokerSymbolsResponse], error)
+	SetBrokerAccountAlias(context.Context, *connect.Request[v1.SetBrokerAccountAliasRequest]) (*connect.Response[v1.SetBrokerAccountAliasResponse], error)
+	// Symbol 映射（brokerSymbol -> canonical）
+	ListSymbolMappings(context.Context, *connect.Request[v1.ListSymbolMappingsRequest]) (*connect.Response[v1.ListSymbolMappingsResponse], error)
+	SaveSymbolMapping(context.Context, *connect.Request[v1.SaveSymbolMappingRequest]) (*connect.Response[v1.SaveSymbolMappingResponse], error)
+	DeleteSymbolMapping(context.Context, *connect.Request[v1.DeleteSymbolMappingRequest]) (*connect.Response[v1.DeleteSymbolMappingResponse], error)
 	// 实时推送（server streaming，D-026）
 	StreamUpdates(context.Context, *connect.Request[v1.StreamUpdatesRequest], *connect.ServerStream[v1.StreamUpdatesResponse]) error
 	// 健康
@@ -528,6 +702,66 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("ListPositions")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceSearchBrokerHandler := connect.NewUnaryHandler(
+		DashboardServiceSearchBrokerProcedure,
+		svc.SearchBroker,
+		connect.WithSchema(dashboardServiceMethods.ByName("SearchBroker")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceAddBrokerHandler := connect.NewUnaryHandler(
+		DashboardServiceAddBrokerProcedure,
+		svc.AddBroker,
+		connect.WithSchema(dashboardServiceMethods.ByName("AddBroker")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceRemoveBrokerHandler := connect.NewUnaryHandler(
+		DashboardServiceRemoveBrokerProcedure,
+		svc.RemoveBroker,
+		connect.WithSchema(dashboardServiceMethods.ByName("RemoveBroker")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceListBrokerAccountsHandler := connect.NewUnaryHandler(
+		DashboardServiceListBrokerAccountsProcedure,
+		svc.ListBrokerAccounts,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListBrokerAccounts")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceVerifyAccountHandler := connect.NewUnaryHandler(
+		DashboardServiceVerifyAccountProcedure,
+		svc.VerifyAccount,
+		connect.WithSchema(dashboardServiceMethods.ByName("VerifyAccount")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceBrokerSymbolsHandler := connect.NewUnaryHandler(
+		DashboardServiceBrokerSymbolsProcedure,
+		svc.BrokerSymbols,
+		connect.WithSchema(dashboardServiceMethods.ByName("BrokerSymbols")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceSetBrokerAccountAliasHandler := connect.NewUnaryHandler(
+		DashboardServiceSetBrokerAccountAliasProcedure,
+		svc.SetBrokerAccountAlias,
+		connect.WithSchema(dashboardServiceMethods.ByName("SetBrokerAccountAlias")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceListSymbolMappingsHandler := connect.NewUnaryHandler(
+		DashboardServiceListSymbolMappingsProcedure,
+		svc.ListSymbolMappings,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListSymbolMappings")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceSaveSymbolMappingHandler := connect.NewUnaryHandler(
+		DashboardServiceSaveSymbolMappingProcedure,
+		svc.SaveSymbolMapping,
+		connect.WithSchema(dashboardServiceMethods.ByName("SaveSymbolMapping")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceDeleteSymbolMappingHandler := connect.NewUnaryHandler(
+		DashboardServiceDeleteSymbolMappingProcedure,
+		svc.DeleteSymbolMapping,
+		connect.WithSchema(dashboardServiceMethods.ByName("DeleteSymbolMapping")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceStreamUpdatesHandler := connect.NewServerStreamHandler(
 		DashboardServiceStreamUpdatesProcedure,
 		svc.StreamUpdates,
@@ -578,6 +812,26 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceClosePositionHandler.ServeHTTP(w, r)
 		case DashboardServiceListPositionsProcedure:
 			dashboardServiceListPositionsHandler.ServeHTTP(w, r)
+		case DashboardServiceSearchBrokerProcedure:
+			dashboardServiceSearchBrokerHandler.ServeHTTP(w, r)
+		case DashboardServiceAddBrokerProcedure:
+			dashboardServiceAddBrokerHandler.ServeHTTP(w, r)
+		case DashboardServiceRemoveBrokerProcedure:
+			dashboardServiceRemoveBrokerHandler.ServeHTTP(w, r)
+		case DashboardServiceListBrokerAccountsProcedure:
+			dashboardServiceListBrokerAccountsHandler.ServeHTTP(w, r)
+		case DashboardServiceVerifyAccountProcedure:
+			dashboardServiceVerifyAccountHandler.ServeHTTP(w, r)
+		case DashboardServiceBrokerSymbolsProcedure:
+			dashboardServiceBrokerSymbolsHandler.ServeHTTP(w, r)
+		case DashboardServiceSetBrokerAccountAliasProcedure:
+			dashboardServiceSetBrokerAccountAliasHandler.ServeHTTP(w, r)
+		case DashboardServiceListSymbolMappingsProcedure:
+			dashboardServiceListSymbolMappingsHandler.ServeHTTP(w, r)
+		case DashboardServiceSaveSymbolMappingProcedure:
+			dashboardServiceSaveSymbolMappingHandler.ServeHTTP(w, r)
+		case DashboardServiceDeleteSymbolMappingProcedure:
+			dashboardServiceDeleteSymbolMappingHandler.ServeHTTP(w, r)
 		case DashboardServiceStreamUpdatesProcedure:
 			dashboardServiceStreamUpdatesHandler.ServeHTTP(w, r)
 		case DashboardServiceHealthProcedure:
@@ -661,6 +915,46 @@ func (UnimplementedDashboardServiceHandler) ClosePosition(context.Context, *conn
 
 func (UnimplementedDashboardServiceHandler) ListPositions(context.Context, *connect.Request[v1.ListPositionsRequest]) (*connect.Response[v1.ListPositionsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListPositions is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) SearchBroker(context.Context, *connect.Request[v1.SearchBrokerRequest]) (*connect.Response[v1.SearchBrokerResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SearchBroker is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) AddBroker(context.Context, *connect.Request[v1.AddBrokerRequest]) (*connect.Response[v1.AddBrokerResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AddBroker is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) RemoveBroker(context.Context, *connect.Request[v1.RemoveBrokerRequest]) (*connect.Response[v1.RemoveBrokerResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.RemoveBroker is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListBrokerAccounts(context.Context, *connect.Request[v1.ListBrokerAccountsRequest]) (*connect.Response[v1.ListBrokerAccountsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListBrokerAccounts is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) VerifyAccount(context.Context, *connect.Request[v1.VerifyAccountRequest]) (*connect.Response[v1.VerifyAccountResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.VerifyAccount is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) BrokerSymbols(context.Context, *connect.Request[v1.BrokerSymbolsRequest]) (*connect.Response[v1.BrokerSymbolsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.BrokerSymbols is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) SetBrokerAccountAlias(context.Context, *connect.Request[v1.SetBrokerAccountAliasRequest]) (*connect.Response[v1.SetBrokerAccountAliasResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetBrokerAccountAlias is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListSymbolMappings(context.Context, *connect.Request[v1.ListSymbolMappingsRequest]) (*connect.Response[v1.ListSymbolMappingsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListSymbolMappings is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) SaveSymbolMapping(context.Context, *connect.Request[v1.SaveSymbolMappingRequest]) (*connect.Response[v1.SaveSymbolMappingResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SaveSymbolMapping is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) DeleteSymbolMapping(context.Context, *connect.Request[v1.DeleteSymbolMappingRequest]) (*connect.Response[v1.DeleteSymbolMappingResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.DeleteSymbolMapping is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) StreamUpdates(context.Context, *connect.Request[v1.StreamUpdatesRequest], *connect.ServerStream[v1.StreamUpdatesResponse]) error {

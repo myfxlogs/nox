@@ -17,14 +17,15 @@ import (
 
 // Service 实现 DashboardServiceHandler 接口。
 type Service struct {
-	store   *pgstore.Store
-	qbus    *bus.QuoteBus
+	store    *pgstore.Store
+	qbus     *bus.QuoteBus
 	pipeline *exec.Pipeline
+	bm       *BrokerManager
 }
 
 // New 创建 dashboard 服务。
-func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline) *Service {
-	return &Service{store: store, qbus: qbus, pipeline: pipeline}
+func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager) *Service {
+	return &Service{store: store, qbus: qbus, pipeline: pipeline, bm: bm}
 }
 
 // --- 快照类 ---
