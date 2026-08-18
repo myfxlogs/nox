@@ -596,9 +596,23 @@ var defaultSymbols = []string{"EURUSD", "GBPUSD", "XAUUSD", "BTCUSD", "ETHUSD"}
 
 // topGroup 取 SymGroup.GroupName 反斜杠路径的顶层段（Forex\Major\EURUSD → Forex）。
 // 无分隔符原样返回。MT5 服务器品种分组数据源（归档 symbol_map_handlers.go topGroup 同法）。
+// accountTypeGroupPrefix：部分 broker 把账号类型作为分组路径第一段（Exness 实测
+// `Standard\Forex\EURUSDm` 全 356 符号第一段均 Standard），市场分组在第二段；
+// 这些 token 一律跳过取下一段，否则分组被账号类型拍平（浏览器只剩一个"Standard"）。
+var accountTypeGroupPrefix = map[string]bool{
+	"standard": true, "cent": true, "micro": true, "demo": true, "real": true,
+	"ecn": true, "fixed": true, "pro": true, "netting": true, "hedging": true, "instant": true,
+}
+
+// topGroup 取分组路径的"市场分组"段：跳过账号类型前缀（Standard/Cent/Micro…），
+// 返回第一个非账号类型段；无分隔/全为账号类型 → 原样返回。
 func topGroup(name string) string {
-	if i := strings.IndexByte(name, '\\'); i >= 0 {
-		return name[:i]
+	parts := strings.Split(name, "\\")
+	for _, p := range parts {
+		if p == "" || accountTypeGroupPrefix[strings.ToLower(p)] {
+			continue
+		}
+		return p
 	}
 	return name
 }
