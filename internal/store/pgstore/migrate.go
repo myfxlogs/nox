@@ -21,6 +21,13 @@ func (s *Store) Migrate(ctx context.Context) error {
 		return fmt.Errorf("create schema_migrations: %w", err)
 	}
 
+	// 检查是否已应用 migration 1
+	var applied int
+	err = s.pool.QueryRow(ctx, `SELECT 1 FROM schema_migrations WHERE version = 1`).Scan(&applied)
+	if err == nil {
+		return nil // 已应用，跳过
+	}
+
 	sqlText := migrations.InitSQL
 	statements := splitStatements(sqlText)
 	for _, stmt := range statements {
@@ -31,6 +38,11 @@ func (s *Store) Migrate(ctx context.Context) error {
 		if _, err := s.pool.Exec(ctx, stmt); err != nil {
 			return fmt.Errorf("migrate: %w\nstatement: %s", err, truncate(stmt, 200))
 		}
+	}
+
+	_, err = s.pool.Exec(ctx, `INSERT INTO schema_migrations (version) VALUES (1) ON CONFLICT DO NOTHING`)
+	if err != nil {
+		return fmt.Errorf("record migration: %w", err)
 	}
 	return nil
 }
