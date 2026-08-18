@@ -21,11 +21,13 @@ type Service struct {
 	qbus     *bus.QuoteBus
 	pipeline *exec.Pipeline
 	bm       *BrokerManager
+	// reviewer 复盘触发（§13.6，D-034）。nil = 未接线（RPC 仍可用，仅触发不跑）。
+	reviewer func()
 }
 
-// New 创建 dashboard 服务。
-func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager) *Service {
-	return &Service{store: store, qbus: qbus, pipeline: pipeline, bm: bm}
+// New 创建 dashboard 服务。reviewer 为复盘触发闭包（nil 则平仓后不触发）。
+func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func()) *Service {
+	return &Service{store: store, qbus: qbus, pipeline: pipeline, bm: bm, reviewer: reviewer}
 }
 
 // --- 快照类 ---
@@ -215,13 +217,43 @@ func (s *Service) LedgerSummary(ctx context.Context, req *connect.Request[v1.Led
 	return connect.NewResponse(&v1.LedgerSummaryResponse{Items: pb}), nil
 }
 
-// --- 经验库 ---
+// --- 经验库（§2.9/§13.6） ---
 
 func (s *Service) ListKnowledgeEntries(ctx context.Context, req *connect.Request[v1.ListKnowledgeEntriesRequest]) (*connect.Response[v1.ListKnowledgeEntriesResponse], error) {
-	return connect.NewResponse(&v1.ListKnowledgeEntriesResponse{}), nil
+	entries, err := s.store.ListKnowledgeEntries(ctx, "", 200, 0)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	var pb []*v1.KnowledgeEntry
+	for i := range entries {
+		e := &entries[i]
+		pe := &v1.KnowledgeEntry{
+			Id:             e.ID,
+			Signature:      e.Signature,
+			Venue:          e.Venue,
+			Symbol:         e.Symbol,
+			Verdict:        e.Verdict,
+			Rationale:      e.Rationale,
+			Source:         e.Source,
+			Status:         e.Status,
+			ValidationNote: e.ValidationNote,
+		}
+		if !e.Ts.IsZero() {
+			pe.Ts = timestamppb.New(e.Ts)
+		}
+		if e.ValidatedAt != nil {
+			pe.ValidatedAt = timestamppb.New(*e.ValidatedAt)
+		}
+		pb = append(pb, pe)
+	}
+	return connect.NewResponse(&v1.ListKnowledgeEntriesResponse{Entries: pb}), nil
 }
 
 func (s *Service) ReviewKnowledgeEntry(ctx context.Context, req *connect.Request[v1.ReviewKnowledgeEntryRequest]) (*connect.Response[v1.ReviewKnowledgeEntryResponse], error) {
+	m := req.Msg
+	if err := s.store.UpdateKnowledgeEntryReview(ctx, m.Signature, m.Status, m.Verdict, m.ValidationNote); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
 	return connect.NewResponse(&v1.ReviewKnowledgeEntryResponse{}), nil
 }
 
@@ -288,6 +320,10 @@ func (s *Service) ClosePosition(ctx context.Context, req *connect.Request[v1.Clo
 			Status:  "FAILED",
 			Message: err.Error(),
 		}), nil
+	}
+	// 平仓成功 → 触发统计复盘（§13.6，D-034；fire-and-forget，不阻塞 RPC）
+	if s.reviewer != nil {
+		go s.reviewer()
 	}
 	return connect.NewResponse(&v1.ClosePositionResponse{
 		Status: "CLOSED",
