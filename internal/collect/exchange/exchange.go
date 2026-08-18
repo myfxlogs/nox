@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"arb/internal/bus"
@@ -18,48 +17,48 @@ import (
 
 // Venue 常量。
 const (
-	VenueBinance = "binance"
-	VenueOKX     = "okx"
+	VenueGate = "gate"
+	VenueOKX  = "okx"
 )
 
 // Config CEX 采集配置。
 type Config struct {
-	Symbols        []string // 基础币种 BTC/ETH/TRX
-	BinanceBaseURL string
-	OKXBaseURL     string
-	Client         *http.Client
+	Symbols    []string // 基础币种 BTC/ETH/TRX
+	GateBaseURL string
+	OKXBaseURL  string
+	Client      *http.Client
 }
 
 // DefaultConfig 返回默认配置。
 func DefaultConfig(symbols []string) Config {
 	return Config{
-		Symbols:        symbols,
-		BinanceBaseURL: "https://fapi.binance.com",
-		OKXBaseURL:     "https://www.okx.com",
-		Client:         &http.Client{Timeout: 10 * time.Second},
+		Symbols:     symbols,
+		GateBaseURL: "https://api.gateio.ws",
+		OKXBaseURL:  "https://www.okx.com",
+		Client:      &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
-// BinanceFunding 采集 Binance funding rate（REST 轮询，§3.3）。
-type BinanceFunding struct {
+// GateFunding 采集 Gate.io funding rate（REST 轮询，§3.3）。
+type GateFunding struct {
 	cfg Config
 }
 
-// NewBinanceFunding 创建 Binance funding 采集器。
-func NewBinanceFunding(cfg Config) *BinanceFunding { return &BinanceFunding{cfg: cfg} }
+// NewGateFunding 创建 Gate.io funding 采集器。
+func NewGateFunding(cfg Config) *GateFunding { return &GateFunding{cfg: cfg} }
 
-func (b *BinanceFunding) Kind() string { return fact.KindFunding }
+func (g *GateFunding) Kind() string { return fact.KindFunding }
 
-func (b *BinanceFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
+func (g *GateFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
 	var out []fact.Fact
-	for _, sym := range b.cfg.Symbols {
-		pair := sym + "USDT"
-		url := fmt.Sprintf("%s/fapi/v1/premiumIndex?symbol=%s", b.cfg.BinanceBaseURL, pair)
-		body, err := getJSON(ctx, b.cfg.Client, url)
+	for _, sym := range g.cfg.Symbols {
+		contract := sym + "_USDT"
+		url := fmt.Sprintf("%s/api/v4/futures/usdt/contracts/%s", g.cfg.GateBaseURL, contract)
+		body, err := getJSON(ctx, g.cfg.Client, url)
 		if err != nil {
-			return nil, fmt.Errorf("binance funding %s: %w", pair, err)
+			return nil, fmt.Errorf("gate funding %s: %w", contract, err)
 		}
-		rate, ok := body["lastFundingRate"].(string)
+		rate, ok := body["funding_rate"].(string)
 		if !ok {
 			continue
 		}
@@ -69,12 +68,12 @@ func (b *BinanceFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
 		annualized := f * 3 * 365 * 100
 		out = append(out, fact.Fact{
 			Kind:   fact.KindFunding,
-			Venue:  VenueBinance,
-			Symbol: pair,
+			Venue:  VenueGate,
+			Symbol: sym + "USDT",
 			Value:  annualized,
 			Unit:   fact.UnitPctAnnualized,
 			Ts:     time.Now(),
-			Src:    "binance_fapi",
+			Src:    "gate_v4",
 		})
 	}
 	return out, nil
@@ -127,39 +126,43 @@ func (o *OKXFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
 	return out, nil
 }
 
-// BinanceTicker 采集 Binance best bid/ask（REST 轮询，§3.3）。
-type BinanceTicker struct {
+// GateTicker 采集 Gate.io best bid/ask（REST 轮询，§3.3）。
+type GateTicker struct {
 	cfg Config
 }
 
-func NewBinanceTicker(cfg Config) *BinanceTicker { return &BinanceTicker{cfg: cfg} }
+func NewGateTicker(cfg Config) *GateTicker { return &GateTicker{cfg: cfg} }
 
-// PollQuotes 采集报价（QuoteSource 轮询模式）。
-func (b *BinanceTicker) PollQuotes(ctx context.Context) ([]bus.Quote, error) {
+// PollQuotes 采集报价（spot + perp）。
+func (g *GateTicker) PollQuotes(ctx context.Context) ([]bus.Quote, error) {
 	var out []bus.Quote
-	for _, sym := range b.cfg.Symbols {
-		pair := sym + "USDT"
+	for _, sym := range g.cfg.Symbols {
+		pair := sym + "_USDT"
 		// spot
-		spotURL := fmt.Sprintf("%s/api/v3/ticker/bookTicker?symbol=%s", strings.Replace(b.cfg.BinanceBaseURL, "fapi", "api", 1), pair)
-		if q, err := fetchBinanceBookTicker(ctx, b.cfg.Client, spotURL, pair, VenueBinance, "spot"); err == nil {
+		spotURL := fmt.Sprintf("%s/api/v4/spot/tickers?currency_pair=%s", g.cfg.GateBaseURL, pair)
+		if q, err := fetchGateSpotTicker(ctx, g.cfg.Client, spotURL, sym+"USDT", VenueGate, "spot"); err == nil {
 			out = append(out, q)
 		}
 		// perp
-		perpURL := fmt.Sprintf("%s/fapi/v1/ticker/bookTicker?symbol=%s", b.cfg.BinanceBaseURL, pair)
-		if q, err := fetchBinanceBookTicker(ctx, b.cfg.Client, perpURL, pair, VenueBinance, "perp"); err == nil {
+		perpURL := fmt.Sprintf("%s/api/v4/futures/usdt/tickers?contract=%s", g.cfg.GateBaseURL, pair)
+		if q, err := fetchGatePerpTicker(ctx, g.cfg.Client, perpURL, sym+"USDT", VenueGate, "perp"); err == nil {
 			out = append(out, q)
 		}
 	}
 	return out, nil
 }
 
-func fetchBinanceBookTicker(ctx context.Context, client *http.Client, url, symbol, venue, venueType string) (bus.Quote, error) {
-	body, err := getJSON(ctx, client, url)
-	if err != nil {
-		return bus.Quote{}, err
+func fetchGateSpotTicker(ctx context.Context, client *http.Client, url, symbol, venue, venueType string) (bus.Quote, error) {
+	body, err := getJSONArray(ctx, client, url)
+	if err != nil || len(body) == 0 {
+		return bus.Quote{}, fmt.Errorf("gate spot: %w", err)
 	}
-	bid, _ := body["bidPrice"].(string)
-	ask, _ := body["askPrice"].(string)
+	item, ok := body[0].(map[string]any)
+	if !ok {
+		return bus.Quote{}, fmt.Errorf("gate spot: bad response")
+	}
+	bid, _ := item["highest_bid"].(string)
+	ask, _ := item["lowest_ask"].(string)
 	var bidF, askF float64
 	fmt.Sscanf(bid, "%f", &bidF)
 	fmt.Sscanf(ask, "%f", &askF)
@@ -169,6 +172,35 @@ func fetchBinanceBookTicker(ctx context.Context, client *http.Client, url, symbo
 		VenueType: venueType,
 		Bid:       bidF,
 		Ask:       askF,
+		Time:      time.Now(),
+	}, nil
+}
+
+func fetchGatePerpTicker(ctx context.Context, client *http.Client, url, symbol, venue, venueType string) (bus.Quote, error) {
+	body, err := getJSONArray(ctx, client, url)
+	if err != nil || len(body) == 0 {
+		return bus.Quote{}, fmt.Errorf("gate perp: %w", err)
+	}
+	item, ok := body[0].(map[string]any)
+	if !ok {
+		return bus.Quote{}, fmt.Errorf("gate perp: bad response")
+	}
+	last, _ := item["last"].(string)
+	var mid float64
+	fmt.Sscanf(last, "%f", &mid)
+	// Gate perp ticker 只有 last price，用 mark_price 做 bid/ask 近似
+	mark, _ := item["mark_price"].(string)
+	var markF float64
+	fmt.Sscanf(mark, "%f", &markF)
+	if markF == 0 {
+		markF = mid
+	}
+	return bus.Quote{
+		Symbol:    symbol,
+		Venue:     venue,
+		VenueType: venueType,
+		Bid:       markF,
+		Ask:       markF,
 		Time:      time.Now(),
 	}, nil
 }
@@ -195,4 +227,28 @@ func getJSON(ctx context.Context, client *http.Client, url string) (map[string]a
 		return nil, err
 	}
 	return m, nil
+}
+
+func getJSONArray(ctx context.Context, client *http.Client, url string) ([]any, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("http %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	var arr []any
+	if err := json.Unmarshal(data, &arr); err != nil {
+		return nil, err
+	}
+	return arr, nil
 }
