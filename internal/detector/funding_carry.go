@@ -62,8 +62,8 @@ func (d *FundingHedgeDetector) Scan(_ context.Context, snapshot map[string]map[s
 
 // CarryDetector 检测不同 venue 的 swap rate 息差（§5.3）。
 type CarryDetector struct {
-	MinNetBps     float64 // 年化净息差 bps 阈值
-	FreshnessTTL  time.Duration
+	MinNetAnnualized float64 // 年化净息差门槛（百分点，5.0=5%，D-036 与 funding 对齐）
+	FreshnessTTL     time.Duration
 }
 
 func (d *CarryDetector) Type() OppType { return TypeCarry }
@@ -97,9 +97,10 @@ func (d *CarryDetector) Scan(_ context.Context, snapshot map[string]map[string]b
 					continue
 				}
 				// 买 A（swap_long A）+ 卖 B（swap_short B）：日净息差 = swap_long_A + swap_short_B
-				dailyNet := swapsA[0] + swapsB[1] // [0]=long, [1]=short
-				annualNet := dailyNet * 365
-				if annualNet < d.MinNetBps {
+				dailyNet := swapsA[0] + swapsB[1] // [0]=long, [1]=short（bps_daily，正=收）
+				// D-036 单位统一：息差型 Candidate.GrossBps 承载年化百分点（与 funding 同口径，D-031 约定）
+				annualPct := dailyNet * 365 / 100
+				if annualPct < d.MinNetAnnualized {
 					continue
 				}
 				qt := a.Time
@@ -113,7 +114,7 @@ func (d *CarryDetector) Scan(_ context.Context, snapshot map[string]map[string]b
 					VenueSell: b.VenueKey(),
 					PriceBuy:  a.Ask,
 					PriceSell: b.Bid,
-					GrossBps:  annualNet,
+					GrossBps:  annualPct,
 					QuoteTime: qt.UnixMilli(),
 				})
 			}

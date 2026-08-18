@@ -24,6 +24,7 @@ type Config struct {
 	MarginRateAnnual    float64 // 百分点（D-031）
 	DetectorFreshnessTTL time.Duration
 	OpportunityTTL      time.Duration
+	GrabMinNetAnnualized float64 // grab 档门槛（百分点，D-036，替代硬编码 4.5）
 }
 
 // Result 评估结果，对应 opportunities 表（§2.6）。
@@ -49,9 +50,12 @@ type Result struct {
 // Evaluate 评估单个 Candidate（§6.1）。
 // spreadBuy/spreadSell 为买/卖腿的 half-spread（(ask-bid)/2）。
 // commissionBps 为双腿总佣金 bps。
-// swapBps 为息差型年化 bps（价差型传 0）。
 // avg30dBps 为 30 日均值（三档判定用，无数据传 0）。
-func Evaluate(c detector.Candidate, cfg Config, spreadBuy, spreadSell, commissionBps, swapBps, avg30dBps float64) *Result {
+//
+// D-036 单位约定：息差型（carry/funding）的 gross/net 为年化百分点（5.0=5%，D-031），
+// 一次性成本（点差/佣金/滑点）为 bps，只进 breakeven_days。价差型（cross）的 gross 为
+// 一次性 bps 且已含双边点差（检测器用可执行价计算）→ 净收益不再扣 spread（D-035 双重计算修正）。
+func Evaluate(c detector.Candidate, cfg Config, spreadBuy, spreadSell, commissionBps, avg30dBps float64) *Result {
 	spreadCost := spreadBuy + spreadSell
 	slippageCost := cfg.SlippageBps * 2 // 两腿各 1 bps
 	grossBps := c.GrossBps
@@ -62,29 +66,21 @@ func Evaluate(c detector.Candidate, cfg Config, spreadBuy, spreadSell, commissio
 
 	switch c.Type {
 	case detector.TypeCrossVenue:
-		// 价差型：一次性 bps
-		netBps = grossBps - spreadCost - commissionBps - slippageCost
-	case detector.TypeFundingHedge:
-		// 息差型：净年化 = funding - margin_rate（D-029）
+		// 价差型：一次性 bps，gross 已含双边点差 → 不再扣 spread（D-035）
+		netBps = grossBps - commissionBps - slippageCost
+	case detector.TypeFundingHedge, detector.TypeCarry:
+		// 息差型：净年化（百分点）= gross − 资金机会成本（D-029/D-036）
 		netBps = grossBps - cfg.MarginRateAnnual
-		// 一次性摩擦只进 breakeven_days（D-029）
+		// 一次性摩擦只进 breakeven_days：按净年化推日息差（bps_daily = pct/100×10⁴/365）
 		oneTimeCost := spreadCost + commissionBps + slippageCost
-		if swapBps != 0 {
-			bd := oneTimeCost / (swapBps / 365 * 100) // 日息差 bps
-			breakevenDays = &bd
-		}
-	case detector.TypeCarry:
-		// 息差型：净年化 bps（gross 已是年化）
-		netBps = grossBps
-		oneTimeCost := spreadCost + commissionBps + slippageCost
-		dailyNet := grossBps / 365
-		if dailyNet > 0 {
-			bd := oneTimeCost / dailyNet
+		dailyNetBps := netBps / 100 * 10000 / 365
+		if dailyNetBps > 0 {
+			bd := oneTimeCost / dailyNetBps
 			breakevenDays = &bd
 		}
 	}
 
-	rating := classify(c.Type, netBps, c.GrossBps, avg30dBps)
+	rating := classify(c.Type, netBps, c.GrossBps, avg30dBps, cfg.GrabMinNetAnnualized)
 
 	now := time.Now()
 	qt := time.UnixMilli(c.QuoteTime)
@@ -99,7 +95,7 @@ func Evaluate(c detector.Candidate, cfg Config, spreadBuy, spreadSell, commissio
 		SpreadCost:     spreadCost,
 		CommissionCost: commissionBps,
 		SlippageCost:   slippageCost,
-		SwapCost:       swapBps,
+		SwapCost:       0,
 		NetBps:         netBps,
 		BreakevenDays:  breakevenDays,
 		QuoteTime:      qt,
@@ -109,26 +105,21 @@ func Evaluate(c detector.Candidate, cfg Config, spreadBuy, spreadSell, commissio
 }
 
 // classify 三档判定（§6.3）。
-func classify(typ detector.OppType, netBps, instantBps, avg30dBps float64) Rating {
+// grabThr 为息差型 grab 档门槛（百分点，D-036 入参化）。net ≤ 0 恒为 trap（不进任何视图）。
+func classify(typ detector.OppType, netBps, instantBps, avg30dBps, grabThr float64) Rating {
 	if netBps <= 0 {
 		return RatingTrap
 	}
-	// 价差型用一次性 bps 判定；息差型用年化 bps 判定
+	// 价差型用一次性 bps 判定；息差型用年化百分点判定
 	switch typ {
 	case detector.TypeCrossVenue:
-		if netBps > 0 {
-			return RatingGrab
-		}
-		return RatingTrap
+		return RatingGrab
 	default:
-		// 息差型：net_annualized > 4.5% 且瞬时 > 30日均值×2 → grab
-		if netBps > 4.5 && (avg30dBps == 0 || instantBps > avg30dBps*2) {
+		// 息差型：net_annualized > grabThr 且瞬时 > 30日均值×2 → grab
+		if netBps > grabThr && (avg30dBps == 0 || instantBps > avg30dBps*2) {
 			return RatingGrab
 		}
-		if netBps > 0 {
-			return RatingBreakeven
-		}
-		return RatingTrap
+		return RatingBreakeven
 	}
 }
 

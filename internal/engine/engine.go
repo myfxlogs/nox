@@ -4,7 +4,6 @@ package engine
 import (
 	"context"
 	"log"
-	"strings"
 	"sync"
 	"time"
 
@@ -81,35 +80,38 @@ func (fc *FactCache) SwapFacts() map[string]map[string][2]float64 {
 }
 
 // Engine 事件驱动管线：QuoteBus 报价事件 → 检测 → 评估 → 存储。
-// Commission 各交易形态单腿佣金（bps/腿）。D-035：真实定价待 per-venue 配置化
-// （CFD 按账号类型、CEX 按交易所标准），当前为 config 统一默认值。
-type Commission struct {
-	CFDBps      float64 // MT4/MT5 单腿
-	CEXTakerBps float64 // CEX taker 单腿（binance/okx/gate 统一）
-}
-
+// commissionFor 按 venueKey（"{venue}:{venue_type}"）解析单腿佣金（bps/腿），D-036 per-venue 真实定价，
+// 由 main 注入：CFD → broker_accounts.commission_bps（NULL 回退 config 默认），CEX → 逐所 taker 回退默认。
 type Engine struct {
-	bus       *bus.QuoteBus
-	detectors []detector.Detector
-	evalCfg   evaluator.Config
-	store     *pgstore.Store
-	facts     *FactCache
-	comm      Commission
+	bus           *bus.QuoteBus
+	detectors     []detector.Detector
+	evalCfg       evaluator.Config
+	store         *pgstore.Store
+	facts         *FactCache
+	commissionFor func(venueKey string) float64
+	scanThrottle  time.Duration
 
 	mu       sync.Mutex
 	lastScan map[string]time.Time // canonical → 上次扫描时间（节流）
 }
 
-// New 创建引擎。
-func New(b *bus.QuoteBus, detectors []detector.Detector, cfg evaluator.Config, store *pgstore.Store, fc *FactCache, comm Commission) *Engine {
+// New 创建引擎。commissionFor 必填（成本正确性依赖真实佣金，D-036），nil = 装配错误直接 panic。
+func New(b *bus.QuoteBus, detectors []detector.Detector, cfg evaluator.Config, store *pgstore.Store, fc *FactCache, commissionFor func(venueKey string) float64, scanThrottle time.Duration) *Engine {
+	if commissionFor == nil {
+		panic("engine: commissionFor resolver required (D-036 per-venue 佣金)")
+	}
+	if scanThrottle <= 0 {
+		scanThrottle = 30 * time.Second
+	}
 	return &Engine{
-		bus:       b,
-		detectors: detectors,
-		evalCfg:   cfg,
-		store:     store,
-		facts:     fc,
-		comm:      comm,
-		lastScan:  make(map[string]time.Time),
+		bus:           b,
+		detectors:     detectors,
+		evalCfg:       cfg,
+		store:         store,
+		facts:         fc,
+		commissionFor: commissionFor,
+		scanThrottle:  scanThrottle,
+		lastScan:      make(map[string]time.Time),
 	}
 }
 
@@ -132,10 +134,10 @@ func (e *Engine) Run(ctx context.Context) {
 
 // onQuote 处理单条报价事件：节流 → 快照 → 检测 → 评估 → 存储。
 func (e *Engine) onQuote(ctx context.Context, q bus.Quote) {
-	// 节流：每 canonical 30s（funding 5min 更新，30s 足够避免重复噪音）
+	// 节流：每 canonical 一个扫描周期（config ARB_SCAN_THROTTLE，D-036 去硬编码）
 	e.mu.Lock()
 	last := e.lastScan[q.Symbol]
-	if time.Since(last) < 30*time.Second {
+	if time.Since(last) < e.scanThrottle {
 		e.mu.Unlock()
 		return
 	}
@@ -175,16 +177,11 @@ func (e *Engine) evaluate(ctx context.Context, c detector.Candidate, snapshot ma
 	spreadBuy := (buyQ.Ask - buyQ.Bid) / 2
 	spreadSell := (sellQ.Ask - sellQ.Bid) / 2
 
-	// 佣金（bps/腿，config 配置；D-035 禁硬编码）
+	// 佣金（bps/腿，D-036 per-venue 解析：CFD 账号真实值/CEX 逐所 taker，均回退 config 默认）
 	commissionBps := e.commissionFor(c.VenueBuy) + e.commissionFor(c.VenueSell)
 
-	// swap bps（息差型从 FactCache 取）
-	var swapBps float64
-	if c.Type == detector.TypeCarry || c.Type == detector.TypeFundingHedge {
-		swapBps = e.facts.SwapFacts()[c.Canonical][c.VenueBuy][0] // long leg swap
-	}
-
-	return evaluator.Evaluate(c, e.evalCfg, spreadBuy, spreadSell, commissionBps, swapBps, 0)
+	// 息差型日息差由评估器从净年化推导，无需再取 swap Fact（D-036 简化死参数）
+	return evaluator.Evaluate(c, e.evalCfg, spreadBuy, spreadSell, commissionBps, 0)
 }
 
 func findQuote(snapshot map[string]map[string]bus.Quote, canonical, venueKey string) *bus.Quote {
@@ -199,16 +196,6 @@ func findQuote(snapshot map[string]map[string]bus.Quote, canonical, venueKey str
 		}
 	}
 	return nil
-}
-
-// commissionFor 按 venueKey（"{venue}:{venueType}"）判定佣金档位。
-// MT4/MT5 → CFD 档；其余（CEX spot/perp：binance/okx/gate）→ CEX taker 档。
-// 按 venueType 判定而非 venue 名，避免漏配（旧实现只匹配 binance/okx，gate 落到 0.3）。
-func (e *Engine) commissionFor(venueKey string) float64 {
-	if strings.Contains(venueKey, ":mt4") || strings.Contains(venueKey, ":mt5") {
-		return e.comm.CFDBps
-	}
-	return e.comm.CEXTakerBps
 }
 
 func resultToOpp(r *evaluator.Result) *pgstore.Opportunity {

@@ -64,3 +64,61 @@ func TestDedup(t *testing.T) {
 		t.Fatalf("GrossBps = %v, want 12 (keep best)", out[0].GrossBps)
 	}
 }
+
+// fakeFP 测试用 FactProvider：只提供 swap facts。
+type fakeFP struct {
+	swap map[string]map[string][2]float64
+}
+
+func (f fakeFP) FundingFacts() map[string]map[string]float64 { return nil }
+func (f fakeFP) SwapFacts() map[string]map[string][2]float64 { return f.swap }
+
+// TestCarryScan 正息差产候选（年化百分点口径，D-036）、负息差/缺 Fact 不产。
+func TestCarryScan(t *testing.T) {
+	now := time.Now()
+	snap := map[string]map[string]bus.Quote{
+		"EURUSD": {
+			"a:mt5": {Symbol: "EURUSD", Venue: "a", VenueType: "mt5", Bid: 1.1, Ask: 1.1, Time: now},
+			"b:mt5": {Symbol: "EURUSD", Venue: "b", VenueType: "mt5", Bid: 1.1, Ask: 1.1, Time: now},
+		},
+	}
+	fp := fakeFP{swap: map[string]map[string][2]float64{
+		"EURUSD": {"a": {10, -5}, "b": {2, -8}}, // [0]=long, [1]=short（bps_daily）
+	}}
+	d := &CarryDetector{MinNetAnnualized: 4.0, FreshnessTTL: 60 * time.Second}
+	cands := d.Scan(context.Background(), snap, fp)
+	if len(cands) != 1 {
+		t.Fatalf("expected 1 candidate, got %d", len(cands))
+	}
+	c := cands[0]
+	// 买 a(long=10) 卖 b(short=-8)：日净 = 2 bps → 年化 = 2×365/100 = 7.3 百分点
+	if c.VenueBuy != "a:mt5" || c.VenueSell != "b:mt5" {
+		t.Fatalf("pair = %s→%s, want a:mt5→b:mt5", c.VenueBuy, c.VenueSell)
+	}
+	if c.GrossBps < 7.2 || c.GrossBps > 7.4 {
+		t.Fatalf("GrossBps = %v, want ~7.3（年化百分点）", c.GrossBps)
+	}
+}
+
+func TestCarryScanNegativeAndMissing(t *testing.T) {
+	now := time.Now()
+	snap := map[string]map[string]bus.Quote{
+		"EURUSD": {
+			"a:mt5": {Symbol: "EURUSD", Venue: "a", VenueType: "mt5", Bid: 1.1, Ask: 1.1, Time: now},
+			"b:mt5": {Symbol: "EURUSD", Venue: "b", VenueType: "mt5", Bid: 1.1, Ask: 1.1, Time: now},
+		},
+		"GBPUSD": { // 只给 a 的 Fact → b 缺 → 不产
+			"a:mt5": {Symbol: "GBPUSD", Venue: "a", VenueType: "mt5", Bid: 1.3, Ask: 1.3, Time: now},
+			"b:mt5": {Symbol: "GBPUSD", Venue: "b", VenueType: "mt5", Bid: 1.3, Ask: 1.3, Time: now},
+		},
+	}
+	fp := fakeFP{swap: map[string]map[string][2]float64{
+		"EURUSD": {"a": {10, -5}, "b": {2, -30}}, // b short 太负 → 双向日净均 < 0
+		"GBPUSD": {"a": {10, -5}},                // b 缺 Fact
+	}}
+	d := &CarryDetector{MinNetAnnualized: 4.0, FreshnessTTL: 60 * time.Second}
+	cands := d.Scan(context.Background(), snap, fp)
+	if len(cands) != 0 {
+		t.Fatalf("expected 0 candidates（负息差+缺 Fact），got %d", len(cands))
+	}
+}
