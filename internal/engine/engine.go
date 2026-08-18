@@ -4,6 +4,7 @@ package engine
 import (
 	"context"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -80,25 +81,34 @@ func (fc *FactCache) SwapFacts() map[string]map[string][2]float64 {
 }
 
 // Engine 事件驱动管线：QuoteBus 报价事件 → 检测 → 评估 → 存储。
+// Commission 各交易形态单腿佣金（bps/腿）。D-035：真实定价待 per-venue 配置化
+// （CFD 按账号类型、CEX 按交易所标准），当前为 config 统一默认值。
+type Commission struct {
+	CFDBps      float64 // MT4/MT5 单腿
+	CEXTakerBps float64 // CEX taker 单腿（binance/okx/gate 统一）
+}
+
 type Engine struct {
 	bus       *bus.QuoteBus
 	detectors []detector.Detector
 	evalCfg   evaluator.Config
 	store     *pgstore.Store
 	facts     *FactCache
+	comm      Commission
 
 	mu       sync.Mutex
 	lastScan map[string]time.Time // canonical → 上次扫描时间（节流）
 }
 
 // New 创建引擎。
-func New(b *bus.QuoteBus, detectors []detector.Detector, cfg evaluator.Config, store *pgstore.Store, fc *FactCache) *Engine {
+func New(b *bus.QuoteBus, detectors []detector.Detector, cfg evaluator.Config, store *pgstore.Store, fc *FactCache, comm Commission) *Engine {
 	return &Engine{
 		bus:       b,
 		detectors: detectors,
 		evalCfg:   cfg,
 		store:     store,
 		facts:     fc,
+		comm:      comm,
 		lastScan:  make(map[string]time.Time),
 	}
 }
@@ -165,8 +175,8 @@ func (e *Engine) evaluate(ctx context.Context, c detector.Candidate, snapshot ma
 	spreadBuy := (buyQ.Ask - buyQ.Bid) / 2
 	spreadSell := (sellQ.Ask - sellQ.Bid) / 2
 
-	// 佣金：CFD ~0.3 bps/腿，CEX taker 0.1%/腿 = 10 bps/腿
-	commissionBps := commissionFor(c.VenueBuy) + commissionFor(c.VenueSell)
+	// 佣金（bps/腿，config 配置；D-035 禁硬编码）
+	commissionBps := e.commissionFor(c.VenueBuy) + e.commissionFor(c.VenueSell)
 
 	// swap bps（息差型从 FactCache 取）
 	var swapBps float64
@@ -191,25 +201,14 @@ func findQuote(snapshot map[string]map[string]bus.Quote, canonical, venueKey str
 	return nil
 }
 
-func commissionFor(venueKey string) float64 {
-	// 简化：CEX taker 10 bps/腿，CFD 0.3 bps/腿
-	if contains(venueKey, "binance") || contains(venueKey, "okx") {
-		return 10.0
+// commissionFor 按 venueKey（"{venue}:{venueType}"）判定佣金档位。
+// MT4/MT5 → CFD 档；其余（CEX spot/perp：binance/okx/gate）→ CEX taker 档。
+// 按 venueType 判定而非 venue 名，避免漏配（旧实现只匹配 binance/okx，gate 落到 0.3）。
+func (e *Engine) commissionFor(venueKey string) float64 {
+	if strings.Contains(venueKey, ":mt4") || strings.Contains(venueKey, ":mt5") {
+		return e.comm.CFDBps
 	}
-	return 0.3
-}
-
-func contains(s, sub string) bool {
-	return len(s) >= len(sub) && (s == sub || containsStr(s, sub))
-}
-
-func containsStr(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
+	return e.comm.CEXTakerBps
 }
 
 func resultToOpp(r *evaluator.Result) *pgstore.Opportunity {
