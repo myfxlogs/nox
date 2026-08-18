@@ -151,18 +151,68 @@ func (s *Service) ListUnacked(ctx context.Context, req *connect.Request[v1.ListU
 	return connect.NewResponse(&v1.ListUnackedResponse{Alerts: pbAlerts}), nil
 }
 
-// --- 台账 ---
+// --- 台账（§2.8） ---
 
 func (s *Service) AddLedgerEntry(ctx context.Context, req *connect.Request[v1.AddLedgerEntryRequest]) (*connect.Response[v1.AddLedgerEntryResponse], error) {
-	return connect.NewResponse(&v1.AddLedgerEntryResponse{}), nil
+	m := req.Msg
+	date := time.Now()
+	if m.Date != nil {
+		date = m.Date.AsTime()
+	}
+	id, err := s.store.AddLedgerEntry(ctx, &pgstore.LedgerEntry{
+		Date:     date,
+		Channel:  m.Channel,
+		Currency: m.Currency,
+		Amount:   m.Amount,
+		FeeRate:  m.FeeRate,
+		Tier:     m.Tier,
+		Note:     m.Note,
+	})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&v1.AddLedgerEntryResponse{Id: id}), nil
 }
 
 func (s *Service) ListLedgerEntries(ctx context.Context, req *connect.Request[v1.ListLedgerEntriesRequest]) (*connect.Response[v1.ListLedgerEntriesResponse], error) {
-	return connect.NewResponse(&v1.ListLedgerEntriesResponse{}), nil
+	entries, err := s.store.ListLedgerEntries(ctx, int(req.Msg.GetLimit()), int(req.Msg.GetOffset()))
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	var pb []*v1.LedgerEntry
+	for i := range entries {
+		e := &entries[i]
+		pb = append(pb, &v1.LedgerEntry{
+			Id:       e.ID,
+			Date:     timestamppb.New(e.Date),
+			Channel:  e.Channel,
+			Currency: e.Currency,
+			Amount:   e.Amount,
+			FeeRate:  e.FeeRate,
+			Tier:     e.Tier,
+			Note:     e.Note,
+		})
+	}
+	return connect.NewResponse(&v1.ListLedgerEntriesResponse{Entries: pb}), nil
 }
 
 func (s *Service) LedgerSummary(ctx context.Context, req *connect.Request[v1.LedgerSummaryRequest]) (*connect.Response[v1.LedgerSummaryResponse], error) {
-	return connect.NewResponse(&v1.LedgerSummaryResponse{}), nil
+	summaries, err := s.store.LedgerSummary(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	var pb []*v1.TierSummary
+	for i := range summaries {
+		t := &summaries[i]
+		pb = append(pb, &v1.TierSummary{
+			Tier:       t.Tier,
+			Inflow:     t.Inflow,
+			Outflow:    t.Outflow,
+			Net:        t.Net,
+			EntryCount: int32(t.EntryCount),
+		})
+	}
+	return connect.NewResponse(&v1.LedgerSummaryResponse{Items: pb}), nil
 }
 
 // --- 经验库 ---
