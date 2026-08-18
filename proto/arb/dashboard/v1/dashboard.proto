@@ -46,6 +46,7 @@ service DashboardService {
   rpc VerifyAccount(VerifyAccountRequest) returns (VerifyAccountResponse);
   rpc BrokerSymbols(BrokerSymbolsRequest) returns (BrokerSymbolsResponse);
   rpc SetBrokerAccountAlias(SetBrokerAccountAliasRequest) returns (SetBrokerAccountAliasResponse);
+  rpc SetBrokerDisabled(SetBrokerDisabledRequest) returns (SetBrokerDisabledResponse);
 
   // Symbol 映射（brokerSymbol -> canonical）
   rpc ListSymbolMappings(ListSymbolMappingsRequest) returns (ListSymbolMappingsResponse);
@@ -409,14 +410,14 @@ message SearchBrokerResponse {
 }
 
 message AddBrokerRequest {
-  string venue = 1;     // 适配器标识（Quote.Venue / 执行器路由键，全局唯一）
+  string venue = 1;     // 适配器标识（Quote.Venue / 执行器路由键，全局唯一）——CFD 侧为登录账号号（D-033）
   int32 platform = 2;   // 0=MT4, 1=MT5
   string host = 3;
   int32 port = 4;
   int64 user = 5;
   string password = 6;  // 明文存储（个人使用）
   string server = 7;    // 服务器名称
-  string company = 8;
+  reserved 8;           // 曾为 company（D-033 移除）
 }
 
 message AddBrokerResponse {}
@@ -428,13 +429,13 @@ message RemoveBrokerRequest {
 message RemoveBrokerResponse {}
 
 message BrokerAccount {
-  string venue = 1;
+  string venue = 1;     // CFD：登录账号号（D-033）
   int32 platform = 2;   // 0=MT4, 1=MT5
   string host = 3;
   int32 port = 4;
   int64 user = 5;
-  string server = 6;
-  string company = 7;
+  string server = 6;    // 服务器名称
+  reserved 7;           // 曾为 company（D-033 移除）
   string alias = 8;     // 别名；空 = 未设置
   string status = 9;    // connected / failed / stopped
   google.protobuf.Timestamp created_at = 10;
@@ -476,6 +477,13 @@ message SetBrokerAccountAliasRequest {
 }
 
 message SetBrokerAccountAliasResponse {}
+
+message SetBrokerDisabledRequest {
+  string venue = 1;
+  bool disabled = 2;    // true=停用（停适配器+status=stopped），false=启用（重连+status=connected）
+}
+
+message SetBrokerDisabledResponse {}
 
 // === Symbol 映射 ===
 

@@ -17,6 +17,7 @@ var migrationFiles = []struct {
 }{
 	{1, migrations.InitSQL},
 	{2, migrations.BrokerAccountsSQL},
+	{3, migrations.BrokerAccountsShortenSQL},
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
