@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	"arb/internal/store/pgstore"
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -26,40 +27,26 @@ type matrixAcctInfo struct {
 	contractSize float64
 }
 
-func (s *Service) ListMatrixUniverse(ctx context.Context, req *connect.Request[v1.ListMatrixUniverseRequest]) (*connect.Response[v1.ListMatrixUniverseResponse], error) {
-	accounts, err := s.store.ListBrokerAccounts(ctx)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+// buildMatrixUniverse 把聚合数据装配为 MatrixUniverse（纯函数，便于单测 D-045 §8.1）。
+func buildMatrixUniverse(
+	accounts []*v1.BrokerAccount,
+	allGroups map[string][]SymbolGroup,
+	mappings []pgstore.SymbolMapping,
+	canonicals []string,
+) *v1.MatrixUniverse {
+	type mapKey struct{ venue, symbol string }
+	mapIdx := make(map[mapKey]string, len(mappings))
+	for _, mp := range mappings {
+		mapIdx[mapKey{mp.Venue, mp.BrokerSymbol}] = mp.Canonical
 	}
-	var connected []string
-	acctPB := make([]*v1.BrokerAccount, 0, len(accounts))
+
+	connected := make([]string, 0, len(accounts))
 	for _, a := range accounts {
-		ac := &v1.BrokerAccount{
-			Venue: a.Venue, Platform: int32(a.Platform), Host: a.Host, Port: int32(a.Port),
-			User: a.User, Server: a.Server, Alias: a.Alias, Status: a.Status,
-			CreatedAt: timestamppb.New(a.CreatedAt),
-		}
-		if a.CommissionBps != nil {
-			ac.CommissionBps = a.CommissionBps
-		}
-		acctPB = append(acctPB, ac)
 		if a.Status == "connected" {
 			connected = append(connected, a.Venue)
 		}
 	}
-	allGroups, err := s.bm.AllSymbolGroups(ctx)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	allMappings, err := s.store.ListSymbolMappings(ctx, "")
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	type mapKey struct{ venue, symbol string }
-	mapIdx := make(map[mapKey]string, len(allMappings))
-	for _, mp := range allMappings {
-		mapIdx[mapKey{mp.Venue, mp.BrokerSymbol}] = mp.Canonical
-	}
+
 	type rowKey struct{ symbol, group string }
 	rowMap := make(map[rowKey]*matrixRowBuilder)
 	rowOrder := make([]rowKey, 0)
@@ -94,6 +81,7 @@ func (s *Service) ListMatrixUniverse(ctx context.Context, req *connect.Request[v
 			})
 		}
 	}
+
 	groupOrder := make([]string, 0)
 	groupSeen := make(map[string]bool)
 	for _, key := range rowOrder {
@@ -107,6 +95,7 @@ func (s *Service) ListMatrixUniverse(ctx context.Context, req *connect.Request[v
 	for _, g := range groupOrder {
 		groupStats[g] = &v1.MatrixGroupStat{Group: g}
 	}
+
 	symbolRows := make([]*v1.MatrixSymbolRow, 0, len(rowOrder))
 	for _, key := range rowOrder {
 		row := rowMap[key]
@@ -130,11 +119,11 @@ func (s *Service) ListMatrixUniverse(ctx context.Context, req *connect.Request[v
 			sort.Float64s(sorted)
 			cMin, cMax = sorted[0], sorted[len(sorted)-1]
 		}
-		canonicals := make([]string, 0, len(row.canonicals))
+		mappedCanonicals := make([]string, 0, len(row.canonicals))
 		for c := range row.canonicals {
-			canonicals = append(canonicals, c)
+			mappedCanonicals = append(mappedCanonicals, c)
 		}
-		sort.Strings(canonicals)
+		sort.Strings(mappedCanonicals)
 		acctsPB := make([]*v1.MatrixSymbolAccount, 0, len(row.accounts))
 		for _, ai := range row.accounts {
 			ma := &v1.MatrixSymbolAccount{Venue: ai.venue, ContractSize: ai.contractSize}
@@ -156,26 +145,53 @@ func (s *Service) ListMatrixUniverse(ctx context.Context, req *connect.Request[v
 			Symbol: row.symbol, Group: row.group,
 			CoverageTotal: int32(total), CoverageMapped: int32(mapped), State: state,
 			ContractMin: cMin, ContractMax: cMax,
-			MappedCanonicals: canonicals, Accounts: acctsPB,
+			MappedCanonicals: mappedCanonicals, Accounts: acctsPB,
 		})
 	}
 	groupStatList := make([]*v1.MatrixGroupStat, 0, len(groupOrder))
 	for _, g := range groupOrder {
 		groupStatList = append(groupStatList, groupStats[g])
 	}
+	return &v1.MatrixUniverse{
+		Groups:     groupOrder,
+		GroupStats: groupStatList,
+		Symbols:    symbolRows,
+		Accounts:   accounts,
+		Canonicals: canonicals,
+	}
+}
+
+func (s *Service) ListMatrixUniverse(ctx context.Context, req *connect.Request[v1.ListMatrixUniverseRequest]) (*connect.Response[v1.ListMatrixUniverseResponse], error) {
+	accounts, err := s.store.ListBrokerAccounts(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	acctPB := make([]*v1.BrokerAccount, 0, len(accounts))
+	for _, a := range accounts {
+		ac := &v1.BrokerAccount{
+			Venue: a.Venue, Platform: int32(a.Platform), Host: a.Host, Port: int32(a.Port),
+			User: a.User, Server: a.Server, Alias: a.Alias, Status: a.Status,
+			CreatedAt: timestamppb.New(a.CreatedAt),
+		}
+		if a.CommissionBps != nil {
+			ac.CommissionBps = a.CommissionBps
+		}
+		acctPB = append(acctPB, ac)
+	}
+	allGroups, err := s.bm.AllSymbolGroups(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	allMappings, err := s.store.ListSymbolMappings(ctx, "")
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
 	canonicals, err := s.canonicals(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	return connect.NewResponse(&v1.ListMatrixUniverseResponse{
-		Universe: &v1.MatrixUniverse{
-			Groups:     groupOrder,
-			GroupStats: groupStatList,
-			Symbols:    symbolRows,
-			Accounts:   acctPB,
-			Canonicals: canonicals,
-		},
-	}), nil
+	universe := buildMatrixUniverse(acctPB, allGroups, allMappings, canonicals)
+	return connect.NewResponse(&v1.ListMatrixUniverseResponse{Universe: universe}), nil
 }
 
 // canonicals 复用 ListCanonicals 的派生逻辑：默认种子 ∪ 全部已映射 canonical，去重排序。

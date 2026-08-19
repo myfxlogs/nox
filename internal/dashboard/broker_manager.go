@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -76,19 +75,19 @@ type BrokerManager struct {
 	// 超过 coldStartBound 仍缺 → 降级接受部分（防病态 symbol 永久阻塞整轮轮询）。
 	coldStartSince time.Time
 
-	// symbolGroups TTL（D-045 §3.2.1）：默认 5min，ARB_SYMBOLS_TTL env 覆盖。
+	// symbolGroups TTL（D-045 §3.2.1）：由 config.SymbolsTTL 注入。
 	symbolGroupsTTL time.Duration
 }
 
-// NewBrokerManager 创建管理器。
-func NewBrokerManager(store *pgstore.Store, qbus *bus.QuoteBus, reg *exec.Registry) *BrokerManager {
+// NewBrokerManager 创建管理器。symbolsTTL 由调用方从 config.SymbolsTTL 注入。
+func NewBrokerManager(store *pgstore.Store, qbus *bus.QuoteBus, reg *exec.Registry, symbolsTTL time.Duration) *BrokerManager {
 	return &BrokerManager{
 		store:           store,
 		qbus:            qbus,
 		reg:             reg,
 		running:         make(map[string]*running),
 		commission:      make(map[string]float64),
-		symbolGroupsTTL: envDur("ARB_SYMBOLS_TTL", 5*time.Minute),
+		symbolGroupsTTL: symbolsTTL,
 	}
 }
 
@@ -827,16 +826,6 @@ func identityMap(defaults []string) (map[string]string, []string) {
 // tokenCtx 给 mtapi 调用附加会话 id header（网关按 id 路由）。
 func tokenCtx(ctx context.Context, token string) context.Context {
 	return metadata.AppendToOutgoingContext(ctx, "id", token)
-}
-
-// envDur 读环境变量 duration，未设置或非法回退默认值（D-045 §3.2.1 ARB_SYMBOLS_TTL）。
-func envDur(key string, def time.Duration) time.Duration {
-	if v, ok := os.LookupEnv(key); ok {
-		if d, err := time.ParseDuration(v); err == nil {
-			return d
-		}
-	}
-	return def
 }
 
 // cachedSymbolGroups 带 per-venue TTL 缓存的 symbolGroups（D-045 §3.2.1）。
