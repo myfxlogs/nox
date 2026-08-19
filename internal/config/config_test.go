@@ -47,6 +47,9 @@ func TestLoadDefaults(t *testing.T) {
 	if c.OpportunityTTL != 30*time.Second {
 		t.Errorf("OpportunityTTL = %v, want 30s", c.OpportunityTTL)
 	}
+	if c.SymbolsTTL != 5*time.Minute {
+		t.Errorf("SymbolsTTL = %v, want 5m", c.SymbolsTTL)
+	}
 }
 
 // TestLoadEnvOverride env 覆盖须生效。

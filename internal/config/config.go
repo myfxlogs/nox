@@ -39,6 +39,9 @@ type Config struct {
 	ReviewMinSamples         int     // 聚合出调参建议的最小样本数（防单笔噪声）
 	ReviewCrossBiasBps       float64 // 价差型平均偏差超此值才发建议（bps）
 	ReviewCarryBiasAnnualPct float64 // 息差型平均偏差超此值才发建议（年化百分点）
+
+	// === Broker 符号表缓存（D-045 §3.2.1）===
+	SymbolsTTL time.Duration // symbolGroups per-venue 缓存 TTL
 }
 
 // Load 从环境变量加载配置，未设置用默认值。
@@ -65,6 +68,7 @@ func Load() *Config {
 		ReviewMinSamples:         envInt("ARB_REVIEW_MIN_SAMPLES", 3),
 		ReviewCrossBiasBps:       envFloat("ARB_REVIEW_CROSS_BIAS_BPS", 1.0),
 		ReviewCarryBiasAnnualPct: envFloat("ARB_REVIEW_CARRY_BIAS_ANNUAL_PCT", 1.0),
+		SymbolsTTL:               envDur("ARB_SYMBOLS_TTL", 5*time.Minute),
 	}
 }
 
