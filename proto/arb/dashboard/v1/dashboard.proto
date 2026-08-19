@@ -29,6 +29,10 @@ service DashboardService {
   rpc ListLedgerEntries(ListLedgerEntriesRequest) returns (ListLedgerEntriesResponse);
   rpc LedgerSummary(LedgerSummaryRequest) returns (LedgerSummaryResponse);
 
+  // 记账（财务线工作项 2：结构化投资记录，决定/教训/观察）
+  rpc AddInvestmentRecord(AddInvestmentRecordRequest) returns (AddInvestmentRecordResponse);
+  rpc ListInvestmentRecords(ListInvestmentRecordsRequest) returns (ListInvestmentRecordsResponse);
+
   // 经验库
   rpc ListKnowledgeEntries(ListKnowledgeEntriesRequest) returns (ListKnowledgeEntriesResponse);
   rpc ReviewKnowledgeEntry(ReviewKnowledgeEntryRequest) returns (ReviewKnowledgeEntryResponse);
@@ -271,6 +275,34 @@ message TierSummary {
 message LedgerSummaryResponse {
   repeated TierSummary items = 1;
 }
+
+// === InvestmentRecord（记账，财务线工作项 2）===
+
+message InvestmentRecord {
+  int64 id = 1;
+  string kind = 2;        // decision | lesson | observation
+  string asset = 3;
+  string content = 4;
+  google.protobuf.Timestamp ts = 5;
+}
+
+message AddInvestmentRecordRequest {
+  string kind = 1;
+  string asset = 2;
+  string content = 3;
+}
+
+message AddInvestmentRecordResponse { int64 id = 1; }
+
+message ListInvestmentRecordsRequest {
+  string kind = 1;     // 空 = 全部
+  string asset = 2;    // 子串匹配（ILIKE）
+  string q = 3;        // 内容搜索（ILIKE），空 = 不筛
+  int32  limit = 4;    // ≤0 默认 200
+  int32  offset = 5;
+}
+
+message ListInvestmentRecordsResponse { repeated InvestmentRecord items = 1; }
 
 // === KnowledgeEntry（§2.9）===
 

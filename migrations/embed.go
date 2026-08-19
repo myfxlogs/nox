@@ -19,3 +19,6 @@ var BrokerSymbolMapContractSQL string
 
 //go:embed 0006_personal_positions.sql
 var PersonalPositionsSQL string
+
+//go:embed 0007_investment_records.sql
+var InvestmentRecordsSQL string

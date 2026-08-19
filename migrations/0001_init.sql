@@ -179,7 +179,7 @@ CREATE INDEX positions_status_idx ON positions (status, opened_at DESC);
 CREATE INDEX position_legs_position_idx ON position_legs (position_id);
 
 -- schema_migrations（core 启动时自跑）
-CREATE TABLE schema_migrations (
+CREATE TABLE IF NOT EXISTS schema_migrations (
     version  INTEGER PRIMARY KEY,
     applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
