@@ -8,6 +8,7 @@ import (
 	"arb/internal/bus"
 	"arb/internal/exec"
 	"arb/internal/fact"
+	"arb/internal/position"
 	"arb/internal/store/pgstore"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
@@ -23,11 +24,14 @@ type Service struct {
 	bm       *BrokerManager
 	// reviewer 复盘触发（§13.6，D-034）。nil = 未接线（RPC 仍可用，仅触发不跑）。
 	reviewer func()
+	// freshTTL 报价陈旧 TTL（复用 config.DetectorFreshnessTTL，G3）——个人持仓快照展示路径拒绝陈旧帧。
+	freshTTL time.Duration
 }
 
-// New 创建 dashboard 服务。reviewer 为复盘触发闭包（nil 则平仓后不触发）。
-func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func()) *Service {
-	return &Service{store: store, qbus: qbus, pipeline: pipeline, bm: bm, reviewer: reviewer}
+// New 创建 dashboard 服务。reviewer 为复盘触发闭包（nil 则平仓后不触发）；
+// freshTTL 为报价陈旧阈值（个人持仓展示用，传 config.DetectorFreshnessTTL）。
+func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration) *Service {
+	return &Service{store: store, qbus: qbus, pipeline: pipeline, bm: bm, reviewer: reviewer, freshTTL: freshTTL}
 }
 
 // --- 快照类 ---
@@ -345,6 +349,67 @@ func (s *Service) ListPositions(ctx context.Context, req *connect.Request[v1.Lis
 		pbPositions = append(pbPositions, positionToProto(&p))
 	}
 	return connect.NewResponse(&v1.ListPositionsResponse{Positions: pbPositions}), nil
+}
+
+// --- 个人持仓（财务线 TRX 持仓接入，D-046） ---
+
+// ListPersonalPositions 返回 OPEN 个人持仓 + 后端计算当前价/告警态（D-043 零信任：前端只渲染）。
+func (s *Service) ListPersonalPositions(ctx context.Context, req *connect.Request[v1.ListPersonalPositionsRequest]) (*connect.Response[v1.ListPersonalPositionsResponse], error) {
+	positions, err := s.store.ListPersonalPositions(ctx, "OPEN", 200, 0)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	var symbols []string
+	for _, p := range positions {
+		symbols = append(symbols, p.PriceSymbol)
+	}
+	snap := s.qbus.Snapshot(ctx, symbols)
+	now := time.Now()
+	items := make([]*v1.PersonalPosition, 0, len(positions))
+	for i := range positions {
+		items = append(items, personalPositionToProto(&positions[i], snap[positions[i].PriceSymbol], s.freshTTL, now))
+	}
+	return connect.NewResponse(&v1.ListPersonalPositionsResponse{Items: items}), nil
+}
+
+// personalPositionToProto 组装单个个人持仓响应：取该 symbol 最新（Time 最新）且未超陈旧 TTL 的一帧 mid 为当前价，
+// 复用 position.PersonalLevel 算告警态。无报价或全陈旧 → price 保持 0、level 空（诚实空态，G3）。
+func personalPositionToProto(p *pgstore.PersonalPosition, venues map[string]bus.Quote, freshTTL time.Duration, now time.Time) *v1.PersonalPosition {
+	pb := &v1.PersonalPosition{
+		Id:          p.ID,
+		Asset:       p.Asset,
+		Kind:        p.Kind,
+		PriceSymbol: p.PriceSymbol,
+		Note:        p.Note,
+		Status:      p.Status,
+	}
+	if p.WarnHigh != nil {
+		pb.WarnHigh = *p.WarnHigh
+	}
+	if p.CritHigh != nil {
+		pb.CritHigh = *p.CritHigh
+	}
+	if q, ok := latestQuote(venues, freshTTL, now); ok {
+		pb.Price = q.Mid()
+		pb.Level = position.PersonalLevel(q.Mid(), p.WarnHigh, p.CritHigh)
+	}
+	return pb
+}
+
+// latestQuote 返回 venues 中 Time 最新且未超陈旧 TTL 的一帧（G3，拒绝陈旧帧冒充现价）。
+func latestQuote(venues map[string]bus.Quote, freshTTL time.Duration, now time.Time) (bus.Quote, bool) {
+	var best bus.Quote
+	found := false
+	for _, q := range venues {
+		if now.Sub(q.Time) > freshTTL {
+			continue // 陈旧帧丢弃
+		}
+		if !found || q.Time.After(best.Time) {
+			best = q
+			found = true
+		}
+	}
+	return best, found
 }
 
 // --- 实时推送（§8.2 D-026） ---
