@@ -32,21 +32,21 @@ type SymbolGroup struct {
 
 // running 一个运行中适配器的可停止资源。
 type running struct {
-	stop         func()                               // 停止报价订阅 + 适配器连接
+	stop         func() // 停止报价订阅 + 适配器连接
 	querier      reconcile.VenueQuerier
 	symbols      func(ctx context.Context) ([]string, error)      // 拉取服务器符号表
 	symbolGroups func(ctx context.Context) ([]SymbolGroup, error) // 符号表 + 分组（仅服务 BrokerSymbols 展示，按需拉一次）
 	// symbolParams 单符号权威合约规格（MT5 SymbolParams；MT4/未运行 = nil）。零信任：
 	// 保存映射的合约校验数据只信 broker 自取，不信前端传值（D-042）。
 	symbolParams func(ctx context.Context, symbol string) (float64, bool, error)
-	setSymMap    func(map[string]string)                          // 运行时刷新 brokerSymbol → canonical
-	resubscribe  func([]string)                                   // 运行时补订阅新符号（保存映射后生效，D-047 缺陷③）
-	swap         func(ctx context.Context) ([]fact.Fact, error)   // 轮询 swap facts（§3.6，D-036）
+	setSymMap    func(map[string]string)                        // 运行时刷新 brokerSymbol → canonical
+	resubscribe  func([]string)                                 // 运行时补订阅新符号（保存映射后生效，D-047 缺陷③）
+	swap         func(ctx context.Context) ([]fact.Fact, error) // 轮询 swap facts（§3.6，D-036）
 
 	// per-venue symbolGroups TTL 缓存（D-045 §3.2.1）：避免矩阵页全量拉取时 N 账号 × SymbolList+SymbolParamsMany
 	// 直连 mtapi；缓存失效回退直连，失败不下发脏数据。
-	sgMu     sync.Mutex
-	sgCache  []SymbolGroup
+	sgMu      sync.Mutex
+	sgCache   []SymbolGroup
 	sgCacheAt time.Time
 }
 
@@ -613,9 +613,10 @@ func (m *BrokerManager) attach(venue string, r *running) {
 	m.syncQueriers()
 }
 
-// syncQueriers 汇总 static + running querier 并触发回调（reconciler 刷新）。
-func (m *BrokerManager) syncQueriers() {
+// queriers 汇总 static + running querier（D-051 WP3：syncQueriers 与 VenueOrders 共用的单一取法）。
+func (m *BrokerManager) queriers() []reconcile.VenueQuerier {
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	qs := make([]reconcile.VenueQuerier, 0, len(m.static)+len(m.running))
 	for _, s := range m.static {
 		qs = append(qs, s.q)
@@ -623,11 +624,60 @@ func (m *BrokerManager) syncQueriers() {
 	for _, r := range m.running {
 		qs = append(qs, r.querier)
 	}
+	return qs
+}
+
+// syncQueriers 汇总 querier 并触发回调（reconciler 刷新）。
+func (m *BrokerManager) syncQueriers() {
+	qs := m.queriers()
+	m.mu.Lock()
 	onQ := m.onQ
 	m.mu.Unlock()
 	if onQ != nil {
 		onQ(qs)
 	}
+}
+
+// VenueOrders 查全部 venue 实际持仓（OpenedOrders 实时）。D-051 WP3。
+// venue 查询失败静默跳过（该 venue 不影响其他），失败在日志可见；nil querier（swap-only 静态源）跳过。
+func (m *BrokerManager) VenueOrders(ctx context.Context) []reconcile.VenueOrder {
+	var out []reconcile.VenueOrder
+	for _, q := range m.queriers() {
+		if q == nil {
+			continue
+		}
+		orders, err := q.QueryOpenedOrders(ctx)
+		if err != nil {
+			log.Printf("[broker] query venue orders: %v", err)
+			continue
+		}
+		out = append(out, orders...)
+	}
+	return out
+}
+
+// CloseOrder 经注册执行器平仓一条 venue 持仓。D-051 WP3。
+func (m *BrokerManager) CloseOrder(ctx context.Context, venueKey, ticket string) (exec.Fill, error) {
+	e, ok := m.reg.Get(venueKey)
+	if !ok {
+		return exec.Fill{}, fmt.Errorf("executor not found for %s", venueKey)
+	}
+	return e.CloseOrder(ctx, exec.OrderRef{OrderID: ticket, Venue: venueKey})
+}
+
+// BrokerSymbolMap venue broker 原生符号 → canonical（store broker_symbol_map）。D-051 WP3。
+// 查询错误/无映射 → 空 map（诚实，调用方留 canonical=""）。
+func (m *BrokerManager) BrokerSymbolMap(ctx context.Context, venue string) map[string]string {
+	mappings, err := m.store.ListSymbolMappings(ctx, venue)
+	if err != nil {
+		log.Printf("[broker] %s list symbol mappings: %v", venue, err)
+		return map[string]string{}
+	}
+	sm := make(map[string]string, len(mappings))
+	for _, mp := range mappings {
+		sm[mp.BrokerSymbol] = mp.Canonical
+	}
+	return sm
 }
 
 // defaultSymbols 无映射时默认订阅（与 cmd/core brokerSymbols 默认一致）。
@@ -657,10 +707,10 @@ func topGroup(name string) string {
 }
 
 // symbolPlan 决定订阅符号与映射（D-042 用户策展模型，canonical 数量用户自定）：
-// 1. DB 已有该 venue 人工映射 → 校验 brokerSymbol 存在于服务器，失效项删除，返回。
-// 2. 无映射 → 自动映射：既有 canonical（跨全部 venue 已映射）∪ 默认种子，名字+合约匹配者
-//    落库并订阅（默认种子 = 首 broker 开箱 bootstrap；合约未知任一侧不阻塞）。
-// 3. 全部不中 → identityMap 保底（原样订阅默认符号，个别不存在由订阅容错）。
+//  1. DB 已有该 venue 人工映射 → 校验 brokerSymbol 存在于服务器，失效项删除，返回。
+//  2. 无映射 → 自动映射：既有 canonical（跨全部 venue 已映射）∪ 默认种子，名字+合约匹配者
+//     落库并订阅（默认种子 = 首 broker 开箱 bootstrap；合约未知任一侧不阻塞）。
+//  3. 全部不中 → identityMap 保底（原样订阅默认符号，个别不存在由订阅容错）。
 func (m *BrokerManager) symbolPlan(ctx context.Context, venue string, fetchGroups func(context.Context) ([]SymbolGroup, error)) (map[string]string, []string, error) {
 	groups, err := fetchGroups(ctx)
 	if err != nil {

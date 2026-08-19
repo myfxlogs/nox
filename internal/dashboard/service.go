@@ -3,6 +3,7 @@ package dashboard
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"arb/internal/exec"
 	"arb/internal/fact"
 	"arb/internal/position"
+	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
@@ -333,6 +335,14 @@ func (s *Service) ExecuteOpportunity(ctx context.Context, req *connect.Request[v
 			Message: "executor not wired",
 		}), nil
 	}
+	// qty 服务端校验（D-043 零信任：前端只传值，后端兜底）。
+	qty := req.Msg.GetQty()
+	if qty <= 0 {
+		return connect.NewResponse(&v1.ExecuteOpportunityResponse{
+			Status:  "FAILED",
+			Message: "invalid quantity",
+		}), nil
+	}
 	// 查机会记录获取 leg 规格
 	oppID := req.Msg.GetOpportunityId()
 	opps, err := s.store.ListOpportunities(ctx, "", 200, 0)
@@ -352,18 +362,20 @@ func (s *Service) ExecuteOpportunity(ctx context.Context, req *connect.Request[v
 			Message: "opportunity not found or expired",
 		}), nil
 	}
-	// 复核：报价新鲜度 + 净收益劣化
-	if !s.pipeline.Revalidate(found.VenueBuy, found.VenueBuy, found.VenueSell, found.NetBps) {
+	// 复核：报价新鲜度 + 毛收益劣化（D-051 修①/③：canonical 用列、毛口径比较）。
+	if !s.pipeline.Revalidate(found.Canonical, found.VenueBuy, found.VenueSell, found.GrossBps) {
 		return connect.NewResponse(&v1.ExecuteOpportunityResponse{
 			Status:  "FAILED",
 			Message: "quote stale or net benefit degraded beyond threshold",
 		}), nil
 	}
-	// 构造双腿（简化：qty 从请求传入，卖腿服务端反算）
-	qty := req.Msg.GetQty()
-	legs := []exec.LegSpec{
-		{VenueKey: found.VenueBuy, VenueSymbol: found.VenueBuy, Side: "BUY", Qty: qty},
-		{VenueKey: found.VenueSell, VenueSymbol: found.VenueSell, Side: "SELL", Qty: qty},
+	// 构造双腿：VenueSymbol 从 qbus 取 broker 原生符号（D-051 修②，杜绝 venueKey 当符号）。
+	legs, err := s.resolveLegs(found, qty)
+	if err != nil {
+		return connect.NewResponse(&v1.ExecuteOpportunityResponse{
+			Status:  "FAILED",
+			Message: err.Error(),
+		}), nil
 	}
 	result, err := s.pipeline.Execute(ctx, oppID, req.Msg.GetRequestId(), legs)
 	if err != nil {
@@ -373,6 +385,20 @@ func (s *Service) ExecuteOpportunity(ctx context.Context, req *connect.Request[v
 		PositionId: result.PositionID,
 		Status:     result.Status,
 	}), nil
+}
+
+// resolveLegs 从 qbus 取双腿 broker 原生符号构造下单规格（D-051 修②）。
+// canonical 用机会列（非 ID 解析）；缺任一腿报价 → 返回错误（执行方 FAILED 透传）。
+func (s *Service) resolveLegs(found *pgstore.Opportunity, qty float64) ([]exec.LegSpec, error) {
+	qbuy, okBuy := s.qbus.Latest(found.Canonical, found.VenueBuy)
+	qsell, okSell := s.qbus.Latest(found.Canonical, found.VenueSell)
+	if !okBuy || !okSell {
+		return nil, errors.New("buy/sell leg quote unavailable")
+	}
+	return []exec.LegSpec{
+		{VenueKey: found.VenueBuy, VenueSymbol: qbuy.VenueSymbol, Side: "BUY", Qty: qty},
+		{VenueKey: found.VenueSell, VenueSymbol: qsell.VenueSymbol, Side: "SELL", Qty: qty},
+	}, nil
 }
 
 func (s *Service) ClosePosition(ctx context.Context, req *connect.Request[v1.ClosePositionRequest]) (*connect.Response[v1.ClosePositionResponse], error) {
@@ -395,6 +421,75 @@ func (s *Service) ClosePosition(ctx context.Context, req *connect.Request[v1.Clo
 	return connect.NewResponse(&v1.ClosePositionResponse{
 		Status: "CLOSED",
 	}), nil
+}
+
+// --- Broker 实持仓（D-051 WP3：MT5/MT4 实际持仓统一视图，实时查不落库） ---
+
+// ListBrokerPositions 实时查全部 venue 实际持仓（OpenedOrders）。
+// canonical 解析 + 现价计算均在后端（D-043 零信任：前端只渲染）；venue 查询失败静默跳过（不影响其他）。
+func (s *Service) ListBrokerPositions(ctx context.Context, req *connect.Request[v1.ListBrokerPositionsRequest]) (*connect.Response[v1.ListBrokerPositionsResponse], error) {
+	orders := s.bm.VenueOrders(ctx)
+	symMaps := map[string]map[string]string{} // venue → broker→canonical（懒加载 BrokerSymbolMap）
+	now := time.Now()
+	out := make([]*v1.BrokerPosition, 0, len(orders))
+	for _, o := range orders {
+		canonical := ""
+		if cm, ok := symMaps[o.Venue]; ok {
+			canonical = cm[o.Symbol]
+		} else {
+			cm := s.bm.BrokerSymbolMap(ctx, o.Venue)
+			symMaps[o.Venue] = cm
+			canonical = cm[o.Symbol]
+		}
+		var price bus.Quote
+		hasPrice := false
+		if canonical != "" {
+			if q, ok := s.qbus.Latest(canonical, o.VenueKey); ok {
+				price = q
+				hasPrice = true
+			}
+		}
+		out = append(out, brokerPositionToProto(o, canonical, price, hasPrice, s.freshTTL, now))
+	}
+	return connect.NewResponse(&v1.ListBrokerPositionsResponse{Positions: out}), nil
+}
+
+// CloseBrokerPosition 经注册执行器平仓一条 venue 持仓（人工确认后，§1）。
+func (s *Service) CloseBrokerPosition(ctx context.Context, req *connect.Request[v1.CloseBrokerPositionRequest]) (*connect.Response[v1.CloseBrokerPositionResponse], error) {
+	if _, err := s.bm.CloseOrder(ctx, req.Msg.GetVenueKey(), req.Msg.GetTicket()); err != nil {
+		return connect.NewResponse(&v1.CloseBrokerPositionResponse{Status: "FAILED", Message: err.Error()}), nil
+	}
+	return connect.NewResponse(&v1.CloseBrokerPositionResponse{Status: "CLOSED"}), nil
+}
+
+// brokerPositionToProto 组装单个 venue 持仓响应。
+// current_price：canonical 已解析且报价帧新鲜（now.Sub ≤ freshTTL）→ mid，fresh=true；否则 0/false（诚实空态）。
+// is_arb：comment 前缀 = exec.OrderComment（复用 reconcile.isARBOrder 语义，D-032）。
+// pnl 为 venue 权威浮盈（Order.Profit）透传，前端不自算（D-043）。
+func brokerPositionToProto(o reconcile.VenueOrder, canonical string, price bus.Quote, hasPrice bool, freshTTL time.Duration, now time.Time) *v1.BrokerPosition {
+	pb := &v1.BrokerPosition{
+		Venue:      o.Venue,
+		VenueKey:   o.VenueKey,
+		Ticket:     o.Ticket,
+		Symbol:     o.Symbol,
+		Canonical:  canonical,
+		Side:       o.Side,
+		Volume:     o.Volume,
+		OpenPrice:  o.OpenPrice,
+		Pnl:        o.Profit,
+		Swap:       o.Swap,
+		Commission: o.Commission,
+		Comment:    o.Comment,
+		IsArb:      strings.HasPrefix(o.Comment, exec.OrderComment),
+	}
+	if hasPrice && now.Sub(price.Time) <= freshTTL {
+		pb.CurrentPrice = (price.Bid + price.Ask) / 2
+		pb.Fresh = true
+	}
+	if !o.OpenedAt.IsZero() {
+		pb.OpenedAt = timestamppb.New(o.OpenedAt)
+	}
+	return pb
 }
 
 func (s *Service) ListPositions(ctx context.Context, req *connect.Request[v1.ListPositionsRequest]) (*connect.Response[v1.ListPositionsResponse], error) {
