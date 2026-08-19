@@ -3529,6 +3529,7 @@ type PositionDailyIncome struct {
 	PnlUsd        float64                `protobuf:"fixed64,7,opt,name=pnl_usd,json=pnlUsd,proto3" json:"pnl_usd,omitempty"`                // 记录时空单浮动盈亏（后端自动算；0 = 无报价/无 entry）
 	Note          string                 `protobuf:"bytes,8,opt,name=note,proto3" json:"note,omitempty"`
 	IncomeUsd     float64                `protobuf:"fixed64,9,opt,name=income_usd,json=incomeUsd,proto3" json:"income_usd,omitempty"` // 后端算 = energy×price + voting×price + interest（price 无值按 0）
+	Warning       string                 `protobuf:"bytes,10,opt,name=warning,proto3" json:"warning,omitempty"`                       // 后端算：资金费翻负/急降预警；空 = 正常（D-043）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3626,6 +3627,13 @@ func (x *PositionDailyIncome) GetIncomeUsd() float64 {
 	return 0
 }
 
+func (x *PositionDailyIncome) GetWarning() string {
+	if x != nil {
+		return x.Warning
+	}
+	return ""
+}
+
 type AddDailyIncomeRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Day           string                 `protobuf:"bytes,1,opt,name=day,proto3" json:"day,omitempty"` // YYYY-MM-DD（非法拒绝；同 day = upsert 覆盖，支持纠错）
@@ -3705,6 +3713,7 @@ func (x *AddDailyIncomeRequest) GetNote() string {
 type AddDailyIncomeResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Warning       string                 `protobuf:"bytes,2,opt,name=warning,proto3" json:"warning,omitempty"` // 本次提交即时预警（同 §11.1 规则）；空 = 正常
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3744,6 +3753,13 @@ func (x *AddDailyIncomeResponse) GetId() int64 {
 		return x.Id
 	}
 	return 0
+}
+
+func (x *AddDailyIncomeResponse) GetWarning() string {
+	if x != nil {
+		return x.Warning
+	}
+	return ""
 }
 
 type ListDailyIncomeRequest struct {
@@ -6647,7 +6663,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x14accrued_interest_usd\x18\x12 \x01(\x01R\x12accruedInterestUsd\"\x1e\n" +
 	"\x1cListPersonalPositionsRequest\"Y\n" +
 	"\x1dListPersonalPositionsResponse\x128\n" +
-	"\x05items\x18\x01 \x03(\v2\".arb.dashboard.v1.PersonalPositionR\x05items\"\xfa\x01\n" +
+	"\x05items\x18\x01 \x03(\v2\".arb.dashboard.v1.PersonalPositionR\x05items\"\x94\x02\n" +
 	"\x13PositionDailyIncome\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x10\n" +
 	"\x03day\x18\x02 \x01(\tR\x03day\x12\x1d\n" +
@@ -6660,7 +6676,9 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\apnl_usd\x18\a \x01(\x01R\x06pnlUsd\x12\x12\n" +
 	"\x04note\x18\b \x01(\tR\x04note\x12\x1d\n" +
 	"\n" +
-	"income_usd\x18\t \x01(\x01R\tincomeUsd\"\x9e\x01\n" +
+	"income_usd\x18\t \x01(\x01R\tincomeUsd\x12\x18\n" +
+	"\awarning\x18\n" +
+	" \x01(\tR\awarning\"\x9e\x01\n" +
 	"\x15AddDailyIncomeRequest\x12\x10\n" +
 	"\x03day\x18\x01 \x01(\tR\x03day\x12\x1d\n" +
 	"\n" +
@@ -6668,9 +6686,10 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\n" +
 	"voting_trx\x18\x03 \x01(\x01R\tvotingTrx\x12!\n" +
 	"\finterest_usd\x18\x04 \x01(\x01R\vinterestUsd\x12\x12\n" +
-	"\x04note\x18\x05 \x01(\tR\x04note\"(\n" +
+	"\x04note\x18\x05 \x01(\tR\x04note\"B\n" +
 	"\x16AddDailyIncomeResponse\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x03R\x02id\"j\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x18\n" +
+	"\awarning\x18\x02 \x01(\tR\awarning\"j\n" +
 	"\x16ListDailyIncomeRequest\x12\x12\n" +
 	"\x04from\x18\x01 \x01(\tR\x04from\x12\x0e\n" +
 	"\x02to\x18\x02 \x01(\tR\x02to\x12\x14\n" +

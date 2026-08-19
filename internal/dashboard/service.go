@@ -30,13 +30,16 @@ type Service struct {
 	freshTTL time.Duration
 	// liqMMR 理论强平维持保证金率（config.ARB_LIQ_MMR，缺省 0.005）——个人持仓强平价理论值计算用。
 	liqMMR float64
+	// fundingDropRatio 资金费急降预警比例（config.ARB_FUNDING_DROP_RATIO，缺省 0.5）——§11 翻负/急降预警用。
+	fundingDropRatio float64
 }
 
 // New 创建 dashboard 服务。reviewer 为复盘触发闭包（nil 则平仓后不触发）；
 // freshTTL 为报价陈旧阈值（个人持仓展示用，传 config.DetectorFreshnessTTL）；
-// liqMMR 为个人持仓理论强平维持保证金率（传 config.LiqMMR）。
-func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64) *Service {
-	return &Service{store: store, qbus: qbus, pipeline: pipeline, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR}
+// liqMMR 为个人持仓理论强平维持保证金率（传 config.LiqMMR）；
+// fundingDropRatio 为资金费急降预警比例（传 config.FundingDropRatio）。
+func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64, fundingDropRatio float64) *Service {
+	return &Service{store: store, qbus: qbus, pipeline: pipeline, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio}
 }
 
 // --- 快照类 ---
@@ -545,7 +548,16 @@ func (s *Service) AddDailyIncome(ctx context.Context, req *connect.Request[v1.Ad
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	return connect.NewResponse(&v1.AddDailyIncomeResponse{Id: id}), nil
+	// §11 即时预警：查前日（to=day−1，limit 1 取最近前日）→ fundingWarning(本次, 前日)。
+	// 前日查询失败按无前日降级（prev=nil 只走 R1）；预警是提示不是门禁，不阻塞提交。
+	cur := m.GetInterestUsd()
+	var prevPtr *float64
+	prevDay := day.AddDate(0, 0, -1)
+	if prevRows, err := s.store.ListDailyIncome(ctx, nil, &prevDay, 1, 0); err == nil && len(prevRows) > 0 {
+		v := prevRows[0].InterestUSD
+		prevPtr = &v
+	}
+	return connect.NewResponse(&v1.AddDailyIncomeResponse{Id: id, Warning: fundingWarning(&cur, prevPtr, s.fundingDropRatio)}), nil
 }
 
 // ListDailyIncome 按 day 倒序返回每日收益；from/to 可选区间；income_usd 后端算（D-043）。
@@ -572,7 +584,16 @@ func (s *Service) ListDailyIncome(ctx context.Context, req *connect.Request[v1.L
 	}
 	items := make([]*v1.PositionDailyIncome, 0, len(rows))
 	for i := range rows {
-		items = append(items, dailyIncomeToProto(&rows[i]))
+		item := dailyIncomeToProto(&rows[i])
+		// §11 每行预警：day 倒序相邻对算（rows[i] 的 prev = rows[i+1]，更旧行）。
+		// 边界：返回集最旧一行（i=len-1）的 prev 在集外 → best-effort（prev=nil，只可能 R1）。
+		var prevPtr *float64
+		if i+1 < len(rows) {
+			v := rows[i+1].InterestUSD
+			prevPtr = &v
+		}
+		item.Warning = fundingWarning(&rows[i].InterestUSD, prevPtr, s.fundingDropRatio)
+		items = append(items, item)
 	}
 	return connect.NewResponse(&v1.ListDailyIncomeResponse{Items: items}), nil
 }

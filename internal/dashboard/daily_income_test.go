@@ -3,6 +3,7 @@ package dashboard
 import (
 	"context"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -197,5 +198,129 @@ func TestListDailyIncome_InvalidRange(t *testing.T) {
 		if _, err := svc.ListDailyIncome(ctx, connect.NewRequest(req)); connect.CodeOf(err) != connect.CodeInvalidArgument {
 			t.Errorf("req %+v want CodeInvalidArgument, got %v", req, err)
 		}
+	}
+}
+
+// TestAddDailyIncome_WarningNegative：提交 interest < 0 → resp.warning 非空（§11 R1 翻负）。
+// 照本文件既有写法自建前日行；中性通用值（D-047）。
+func TestAddDailyIncome_WarningNegative(t *testing.T) {
+	s := testServiceStore(t)
+	ctx := context.Background()
+	svc := &Service{store: s, qbus: bus.New(), freshTTL: time.Minute, liqMMR: 0.005, fundingDropRatio: 0.5}
+
+	prevDay := time.Date(2026, 8, 18, 0, 0, 0, 0, time.UTC)
+	if _, err := s.AddDailyIncome(ctx, prevDay, 0, 0, 1.00, nil, nil, ""); err != nil {
+		t.Fatalf("seed prev day: %v", err)
+	}
+
+	resp, err := svc.AddDailyIncome(ctx, connect.NewRequest(&v1.AddDailyIncomeRequest{
+		Day: "2026-08-19", InterestUsd: -0.10,
+	}))
+	if err != nil {
+		t.Fatalf("AddDailyIncome: %v", err)
+	}
+	if resp.Msg.Warning == "" {
+		t.Errorf("negative interest want non-empty warning, got empty")
+	}
+	if !strings.Contains(resp.Msg.Warning, "翻负") {
+		t.Errorf("want 翻负 warning, got %q", resp.Msg.Warning)
+	}
+}
+
+// TestAddDailyIncome_WarningDrop：前日 1.00 → 今日 0.30 → 急降；今日 1.00（无降）→ 空（§11 R2）。
+func TestAddDailyIncome_WarningDrop(t *testing.T) {
+	s := testServiceStore(t)
+	ctx := context.Background()
+	svc := &Service{store: s, qbus: bus.New(), freshTTL: time.Minute, liqMMR: 0.005, fundingDropRatio: 0.5}
+
+	prevDay := time.Date(2026, 8, 18, 0, 0, 0, 0, time.UTC)
+	if _, err := s.AddDailyIncome(ctx, prevDay, 0, 0, 1.00, nil, nil, ""); err != nil {
+		t.Fatalf("seed prev day: %v", err)
+	}
+
+	respDrop, err := svc.AddDailyIncome(ctx, connect.NewRequest(&v1.AddDailyIncomeRequest{
+		Day: "2026-08-19", InterestUsd: 0.30,
+	}))
+	if err != nil {
+		t.Fatalf("AddDailyIncome drop: %v", err)
+	}
+	if !strings.Contains(respDrop.Msg.Warning, "急降") {
+		t.Errorf("0.30 vs prev 1.00 want 急降 warning, got %q", respDrop.Msg.Warning)
+	}
+
+	// 同 day upsert 覆盖为 1.00 → 无降 → 空。
+	respFlat, err := svc.AddDailyIncome(ctx, connect.NewRequest(&v1.AddDailyIncomeRequest{
+		Day: "2026-08-19", InterestUsd: 1.00,
+	}))
+	if err != nil {
+		t.Fatalf("AddDailyIncome flat: %v", err)
+	}
+	if respFlat.Msg.Warning != "" {
+		t.Errorf("1.00 vs prev 1.00 want empty warning, got %q", respFlat.Msg.Warning)
+	}
+}
+
+// TestListDailyIncome_WarningPerRow：day 倒序相邻对算——1.00 → 0.30 急降；1.00 → −0.10 翻负；最旧行无 prev 只可能 R1。
+func TestListDailyIncome_WarningPerRow(t *testing.T) {
+	s := testServiceStore(t)
+	ctx := context.Background()
+	svc := &Service{store: s, qbus: bus.New(), freshTTL: time.Minute, liqMMR: 0.005, fundingDropRatio: 0.5}
+
+	// 倒序期望：08-17(-0.10) → 08-16(0.30) → 08-15(1.00)
+	days := map[string]float64{
+		"2026-08-15": 1.00,
+		"2026-08-16": 0.30,
+		"2026-08-17": -0.10,
+	}
+	for d, interest := range days {
+		day, err := parseDay(d)
+		if err != nil {
+			t.Fatalf("parse %s: %v", d, err)
+		}
+		if _, err := s.AddDailyIncome(ctx, day, 0, 0, interest, nil, nil, ""); err != nil {
+			t.Fatalf("seed %s: %v", d, err)
+		}
+	}
+
+	resp, err := svc.ListDailyIncome(ctx, connect.NewRequest(&v1.ListDailyIncomeRequest{}))
+	if err != nil {
+		t.Fatalf("ListDailyIncome: %v", err)
+	}
+	if len(resp.Msg.Items) != 3 {
+		t.Fatalf("want 3 items, got %d", len(resp.Msg.Items))
+	}
+	// 08-17（最旧行 prev 在集外）
+	if resp.Msg.Items[0].Day != "2026-08-17" || !strings.Contains(resp.Msg.Items[0].Warning, "翻负") {
+		t.Errorf("item[0] want 08-17 翻负, got %s %q", resp.Msg.Items[0].Day, resp.Msg.Items[0].Warning)
+	}
+	// 08-16：0.30 < 0.5×1.00 → 急降
+	if resp.Msg.Items[1].Day != "2026-08-16" || !strings.Contains(resp.Msg.Items[1].Warning, "急降") {
+		t.Errorf("item[1] want 08-16 急降, got %s %q", resp.Msg.Items[1].Day, resp.Msg.Items[1].Warning)
+	}
+	// 08-15（最旧行，prev=nil 只可能 R1）：当前 ≥0 → 空
+	if resp.Msg.Items[2].Day != "2026-08-15" || resp.Msg.Items[2].Warning != "" {
+		t.Errorf("item[2] want 08-15 empty warning, got %s %q", resp.Msg.Items[2].Day, resp.Msg.Items[2].Warning)
+	}
+}
+
+// TestListDailyIncome_WarningSingleRow：只有一行（无 prev）→ 无急降预警；负值仍走 R1。
+func TestListDailyIncome_WarningSingleRow(t *testing.T) {
+	s := testServiceStore(t)
+	ctx := context.Background()
+	svc := &Service{store: s, qbus: bus.New(), freshTTL: time.Minute, liqMMR: 0.005, fundingDropRatio: 0.5}
+
+	day, _ := parseDay("2026-08-17")
+	if _, err := s.AddDailyIncome(ctx, day, 0, 0, 0.30, nil, nil, ""); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	resp, err := svc.ListDailyIncome(ctx, connect.NewRequest(&v1.ListDailyIncomeRequest{}))
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(resp.Msg.Items) != 1 {
+		t.Fatalf("want 1 item, got %d", len(resp.Msg.Items))
+	}
+	if resp.Msg.Items[0].Warning != "" {
+		t.Errorf("single positive row want empty warning, got %q", resp.Msg.Items[0].Warning)
 	}
 }
