@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -42,6 +43,12 @@ type running struct {
 	setSymMap    func(map[string]string)                          // 运行时刷新 brokerSymbol → canonical
 	resubscribe  func([]string)                                   // 运行时补订阅新符号（保存映射后生效，D-047 缺陷③）
 	swap         func(ctx context.Context) ([]fact.Fact, error)   // 轮询 swap facts（§3.6，D-036）
+
+	// per-venue symbolGroups TTL 缓存（D-045 §3.2.1）：避免矩阵页全量拉取时 N 账号 × SymbolList+SymbolParamsMany
+	// 直连 mtapi；缓存失效回退直连，失败不下发脏数据。
+	sgMu     sync.Mutex
+	sgCache  []SymbolGroup
+	sgCacheAt time.Time
 }
 
 // staticQuerier 环境变量适配器的 querier（不被动态管理，boot 时与 DB venue 去重）。
@@ -68,16 +75,20 @@ type BrokerManager struct {
 	// 冷启动退避（m.mu 保护）：任一 venue 映射符号缺报价 → 重试直到全部流入；
 	// 超过 coldStartBound 仍缺 → 降级接受部分（防病态 symbol 永久阻塞整轮轮询）。
 	coldStartSince time.Time
+
+	// symbolGroups TTL（D-045 §3.2.1）：默认 5min，ARB_SYMBOLS_TTL env 覆盖。
+	symbolGroupsTTL time.Duration
 }
 
 // NewBrokerManager 创建管理器。
 func NewBrokerManager(store *pgstore.Store, qbus *bus.QuoteBus, reg *exec.Registry) *BrokerManager {
 	return &BrokerManager{
-		store:      store,
-		qbus:       qbus,
-		reg:        reg,
-		running:    make(map[string]*running),
-		commission: make(map[string]float64),
+		store:           store,
+		qbus:            qbus,
+		reg:             reg,
+		running:         make(map[string]*running),
+		commission:      make(map[string]float64),
+		symbolGroupsTTL: envDur("ARB_SYMBOLS_TTL", 5*time.Minute),
 	}
 }
 
@@ -341,7 +352,7 @@ func (m *BrokerManager) BrokerSymbols(ctx context.Context, venue string) ([]Symb
 		return nil, fmt.Errorf("venue %s 未连接", venue)
 	}
 	if r.symbolGroups != nil {
-		return r.symbolGroups(ctx)
+		return m.cachedSymbolGroups(ctx, venue, r)
 	}
 	names, err := r.symbols(ctx)
 	if err != nil {
@@ -364,6 +375,35 @@ func (m *BrokerManager) Resubscribe(venue string, symbols []string) {
 		return
 	}
 	r.resubscribe(symbols)
+}
+
+// AllSymbolGroups 返回全部 connected 账号的 symbolGroups（D-045 §3.2 装配用）。
+// venue → SymbolGroup 列表；拉取失败的 venue 不出现在结果中（调用方通过 accounts 差集识别）。
+func (m *BrokerManager) AllSymbolGroups(ctx context.Context) (map[string][]SymbolGroup, error) {
+	m.mu.Lock()
+	venues := make([]string, 0, len(m.running))
+	for v, r := range m.running {
+		if r.symbolGroups != nil {
+			venues = append(venues, v)
+		}
+	}
+	runningCopy := make(map[string]*running, len(m.running))
+	for k, v := range m.running {
+		runningCopy[k] = v
+	}
+	m.mu.Unlock()
+
+	out := make(map[string][]SymbolGroup, len(venues))
+	for _, v := range venues {
+		r := runningCopy[v]
+		groups, err := m.cachedSymbolGroups(ctx, v, r)
+		if err != nil {
+			log.Printf("[broker] %s symbolGroups for universe: %v", v, err)
+			continue
+		}
+		out[v] = groups
+	}
+	return out, nil
 }
 
 // BrokerContractSize 返回该 venue 服务器符号的权威合约规格（D-042 零信任：校验数据只信 broker，
@@ -787,4 +827,40 @@ func identityMap(defaults []string) (map[string]string, []string) {
 // tokenCtx 给 mtapi 调用附加会话 id header（网关按 id 路由）。
 func tokenCtx(ctx context.Context, token string) context.Context {
 	return metadata.AppendToOutgoingContext(ctx, "id", token)
+}
+
+// envDur 读环境变量 duration，未设置或非法回退默认值（D-045 §3.2.1 ARB_SYMBOLS_TTL）。
+func envDur(key string, def time.Duration) time.Duration {
+	if v, ok := os.LookupEnv(key); ok {
+		if d, err := time.ParseDuration(v); err == nil {
+			return d
+		}
+	}
+	return def
+}
+
+// cachedSymbolGroups 带 per-venue TTL 缓存的 symbolGroups（D-045 §3.2.1）。
+// 缓存命中直接返回；过期回退直连，成功更新缓存，失败不下发脏数据（返回 error）。
+func (m *BrokerManager) cachedSymbolGroups(ctx context.Context, venue string, r *running) ([]SymbolGroup, error) {
+	ttl := m.symbolGroupsTTL
+	if ttl <= 0 {
+		return r.symbolGroups(ctx)
+	}
+	r.sgMu.Lock()
+	if len(r.sgCache) > 0 && time.Since(r.sgCacheAt) < ttl {
+		out := r.sgCache
+		r.sgMu.Unlock()
+		return out, nil
+	}
+	r.sgMu.Unlock()
+
+	groups, err := r.symbolGroups(ctx)
+	if err != nil {
+		return nil, err
+	}
+	r.sgMu.Lock()
+	r.sgCache = groups
+	r.sgCacheAt = time.Now()
+	r.sgMu.Unlock()
+	return groups, nil
 }
