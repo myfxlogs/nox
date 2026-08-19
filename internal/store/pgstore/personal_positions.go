@@ -10,6 +10,7 @@ import (
 
 // PersonalPosition 对应 personal_positions 表（设计文档 §3.2）。
 // WarnHigh/CritHigh 为 nil = 该级别不设（此持仓仅展示不报警）。
+// Qty/EntryPrice/Leverage/OpenedAt 为 nil = 未填（staking 只填 Qty，short_hedge 填全）。
 type PersonalPosition struct {
 	ID          int64
 	Asset       string
@@ -19,6 +20,10 @@ type PersonalPosition struct {
 	CritHigh    *float64
 	Note        string
 	Status      string
+	Qty         *float64
+	EntryPrice  *float64
+	Leverage    *int
+	OpenedAt    *time.Time
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	ClosedAt    *time.Time
@@ -29,7 +34,8 @@ func (s *Store) ListPersonalPositions(ctx context.Context, status string, limit,
 	if limit <= 0 {
 		limit = 50
 	}
-	q := `SELECT id, asset, kind, price_symbol, warn_high, crit_high, note, status, created_at, updated_at, closed_at
+	q := `SELECT id, asset, kind, price_symbol, warn_high, crit_high, note, status,
+	             qty, entry_price, leverage, opened_at, created_at, updated_at, closed_at
 		FROM personal_positions
 		WHERE ($1 = '' OR status = $1)
 		ORDER BY id ASC LIMIT $2 OFFSET $3`
@@ -42,7 +48,8 @@ func (s *Store) ListPersonalPositions(ctx context.Context, status string, limit,
 	for rows.Next() {
 		var p PersonalPosition
 		if err := rows.Scan(&p.ID, &p.Asset, &p.Kind, &p.PriceSymbol, &p.WarnHigh, &p.CritHigh,
-			&p.Note, &p.Status, &p.CreatedAt, &p.UpdatedAt, &p.ClosedAt); err != nil {
+			&p.Note, &p.Status, &p.Qty, &p.EntryPrice, &p.Leverage, &p.OpenedAt,
+			&p.CreatedAt, &p.UpdatedAt, &p.ClosedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, p)

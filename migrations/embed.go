@@ -22,3 +22,6 @@ var PersonalPositionsSQL string
 
 //go:embed 0007_investment_records.sql
 var InvestmentRecordsSQL string
+
+//go:embed 0008_personal_ledger.sql
+var PersonalLedgerSQL string

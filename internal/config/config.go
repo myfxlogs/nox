@@ -42,6 +42,9 @@ type Config struct {
 
 	// === Broker 符号表缓存（D-045 §3.2.1）===
 	SymbolsTTL time.Duration // symbolGroups per-venue 缓存 TTL
+
+	// === 个人持仓实账（财务线工作项 3）===
+	LiqMMR float64 // 理论强平维持保证金率（强平价 = entry × (1 + 1/leverage − MMR)；缺省 0.5%）
 }
 
 // Load 从环境变量加载配置，未设置用默认值。
@@ -69,6 +72,7 @@ func Load() *Config {
 		ReviewCrossBiasBps:       envFloat("ARB_REVIEW_CROSS_BIAS_BPS", 1.0),
 		ReviewCarryBiasAnnualPct: envFloat("ARB_REVIEW_CARRY_BIAS_ANNUAL_PCT", 1.0),
 		SymbolsTTL:               envDur("ARB_SYMBOLS_TTL", 5*time.Minute),
+		LiqMMR:                   envFloat("ARB_LIQ_MMR", 0.005),
 	}
 }
 

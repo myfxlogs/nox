@@ -50,6 +50,9 @@ func TestLoadDefaults(t *testing.T) {
 	if c.SymbolsTTL != 5*time.Minute {
 		t.Errorf("SymbolsTTL = %v, want 5m", c.SymbolsTTL)
 	}
+	if c.LiqMMR != 0.005 {
+		t.Errorf("LiqMMR = %v, want 0.005", c.LiqMMR)
+	}
 }
 
 // TestLoadEnvOverride env 覆盖须生效。
@@ -57,6 +60,7 @@ func TestLoadEnvOverride(t *testing.T) {
 	t.Setenv("ARB_CROSS_MIN_GROSS_BPS", "0.5")
 	t.Setenv("ARB_COMMISSION_CFD_BPS", "0.6")
 	t.Setenv("ARB_DETECTOR_FRESHNESS_TTL", "90s")
+	t.Setenv("ARB_LIQ_MMR", "0.01")
 	c := Load()
 	if c.CrossVenueMinGrossBps != 0.5 {
 		t.Errorf("CrossVenueMinGrossBps = %v, want 0.5", c.CrossVenueMinGrossBps)
@@ -66,6 +70,9 @@ func TestLoadEnvOverride(t *testing.T) {
 	}
 	if c.DetectorFreshnessTTL != 90*time.Second {
 		t.Errorf("DetectorFreshnessTTL = %v, want 90s", c.DetectorFreshnessTTL)
+	}
+	if c.LiqMMR != 0.01 {
+		t.Errorf("LiqMMR = %v, want 0.01", c.LiqMMR)
 	}
 	// 未设置的字段仍用默认
 	if c.CarryMinNetAnnualized != 4.0 {

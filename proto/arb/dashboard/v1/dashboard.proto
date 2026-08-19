@@ -42,8 +42,10 @@ service DashboardService {
   rpc ClosePosition(ClosePositionRequest) returns (ClosePositionResponse);
   rpc ListPositions(ListPositionsRequest) returns (ListPositionsResponse);
 
-  // 个人持仓（财务线 TRX 持仓接入，D-046）
+  // 个人持仓（财务线 TRX 持仓接入，D-046）+ 实账化（财务线工作项 3）
   rpc ListPersonalPositions(ListPersonalPositionsRequest) returns (ListPersonalPositionsResponse);
+  rpc AddDailyIncome(AddDailyIncomeRequest) returns (AddDailyIncomeResponse);
+  rpc ListDailyIncome(ListDailyIncomeRequest) returns (ListDailyIncomeResponse);
 
   // Broker 管理（认证后，运行时 MT4/MT5 连接管理）
   rpc SearchBroker(SearchBrokerRequest) returns (SearchBrokerResponse);
@@ -409,10 +411,18 @@ message PersonalPosition {
   string price_symbol = 4;     // 监控价格源 canonical（'TRXUSDT'）
   double price = 5;            // 当前 mid（后端算；0 = 无报价）
   double warn_high = 6;        // 0 = 未设
-  double crit_high = 7;        // 0 = 未设
+  double crit_high = 7;        // 0 = 未设（semantic = 强平价，权威值待业主回填）
   string level = 8;            // 'ok'|'warn'|'crit'（后端算；空 = 无报价）
   string note = 9;
   string status = 10;          // OPEN / CLOSED
+  double qty = 11;             // 持仓数量；0 = 未填
+  double entry_price = 12;     // 开仓价；0 = 未填
+  int32 leverage = 13;         // 杠杆倍数；0 = 未填
+  google.protobuf.Timestamp opened_at = 14;  // 开仓时间；null = 未填
+  double pnl_usd = 15;         // 浮动盈亏（空单腿，后端算）；0 = 非空单腿/无报价
+  double liq_price = 16;       // 强平价：crit_high 优先，否则理论值；0 = 算不出
+  double dist_to_liq_pct = 17; // 距强平 % = (liq−现价)/现价；负数 = 已破线；算不出 = 0
+  double accrued_interest_usd = 18;  // 累计利息 = SUM(position_daily_income.interest_usd)，后端算
 }
 
 message ListPersonalPositionsRequest {}
@@ -420,6 +430,39 @@ message ListPersonalPositionsRequest {}
 message ListPersonalPositionsResponse {
   repeated PersonalPosition items = 1;
 }
+
+// === 每日收益（财务线工作项 3：个人持仓实账化）===
+
+message PositionDailyIncome {
+  int64 id = 1;
+  string day = 2;              // YYYY-MM-DD（一日一条，全组合计）
+  double energy_trx = 3;       // 能量收益（手动）
+  double voting_trx = 4;       // 投票收益（手动）
+  double interest_usd = 5;     // 资金费/利息（手动）
+  double price = 6;            // 记录时 TRX 现价（后端自动快照；0 = 无报价）
+  double pnl_usd = 7;          // 记录时空单浮动盈亏（后端自动算；0 = 无报价/无 entry）
+  string note = 8;
+  double income_usd = 9;       // 后端算 = energy×price + voting×price + interest（price 无值按 0）
+}
+
+message AddDailyIncomeRequest {
+  string day = 1;             // YYYY-MM-DD（非法拒绝；同 day = upsert 覆盖，支持纠错）
+  double energy_trx = 2;
+  double voting_trx = 3;
+  double interest_usd = 4;
+  string note = 5;
+}
+
+message AddDailyIncomeResponse { int64 id = 1; }
+
+message ListDailyIncomeRequest {
+  string from = 1;   // 可选起始日 YYYY-MM-DD；空 = 不设界
+  string to = 2;     // 可选截止日 YYYY-MM-DD；空 = 不设界
+  int32 limit = 3;   // ≤0 默认 200
+  int32 offset = 4;
+}
+
+message ListDailyIncomeResponse { repeated PositionDailyIncome items = 1; }
 
 // === StreamUpdates（D-026，server streaming）===
 

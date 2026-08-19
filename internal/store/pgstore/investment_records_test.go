@@ -35,8 +35,8 @@ func testStore(t *testing.T) *Store {
 	if err := s.Migrate(ctx); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	if _, err := s.pool.Exec(ctx, "TRUNCATE investment_records CASCADE"); err != nil {
-		t.Fatalf("TRUNCATE investment_records: %v", err)
+	if _, err := s.pool.Exec(ctx, "TRUNCATE investment_records, position_daily_income CASCADE"); err != nil {
+		t.Fatalf("TRUNCATE investment_records, position_daily_income: %v", err)
 	}
 	return s
 }
