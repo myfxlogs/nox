@@ -28,12 +28,15 @@ type Service struct {
 	reviewer func()
 	// freshTTL 报价陈旧 TTL（复用 config.DetectorFreshnessTTL，G3）——个人持仓快照展示路径拒绝陈旧帧。
 	freshTTL time.Duration
+	// liqMMR 理论强平维持保证金率（config.ARB_LIQ_MMR，缺省 0.005）——个人持仓强平价理论值计算用。
+	liqMMR float64
 }
 
 // New 创建 dashboard 服务。reviewer 为复盘触发闭包（nil 则平仓后不触发）；
-// freshTTL 为报价陈旧阈值（个人持仓展示用，传 config.DetectorFreshnessTTL）。
-func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration) *Service {
-	return &Service{store: store, qbus: qbus, pipeline: pipeline, bm: bm, reviewer: reviewer, freshTTL: freshTTL}
+// freshTTL 为报价陈旧阈值（个人持仓展示用，传 config.DetectorFreshnessTTL）；
+// liqMMR 为个人持仓理论强平维持保证金率（传 config.LiqMMR）。
+func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64) *Service {
+	return &Service{store: store, qbus: qbus, pipeline: pipeline, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR}
 }
 
 // --- 快照类 ---
@@ -402,11 +405,16 @@ func (s *Service) ListPositions(ctx context.Context, req *connect.Request[v1.Lis
 	return connect.NewResponse(&v1.ListPositionsResponse{Positions: pbPositions}), nil
 }
 
-// --- 个人持仓（财务线 TRX 持仓接入，D-046） ---
+// --- 个人持仓（财务线 TRX 持仓接入，D-046 + 实账化工作项 3） ---
 
-// ListPersonalPositions 返回 OPEN 个人持仓 + 后端计算当前价/告警态（D-043 零信任：前端只渲染）。
+// ListPersonalPositions 返回 OPEN 个人持仓 + 后端计算当前价/告警态/实账（D-043 零信任：前端只渲染）。
 func (s *Service) ListPersonalPositions(ctx context.Context, req *connect.Request[v1.ListPersonalPositionsRequest]) (*connect.Response[v1.ListPersonalPositionsResponse], error) {
 	positions, err := s.store.ListPersonalPositions(ctx, "OPEN", 200, 0)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	// 累计利息全量一次 SUM（当前组合仅空单一处利息源，设计 §4）。
+	accrued, err := s.store.SumDailyIncomeInterest(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -418,21 +426,23 @@ func (s *Service) ListPersonalPositions(ctx context.Context, req *connect.Reques
 	now := time.Now()
 	items := make([]*v1.PersonalPosition, 0, len(positions))
 	for i := range positions {
-		items = append(items, personalPositionToProto(&positions[i], snap[positions[i].PriceSymbol], s.freshTTL, now))
+		items = append(items, personalPositionToProto(&positions[i], snap[positions[i].PriceSymbol], s.freshTTL, now, accrued, s.liqMMR))
 	}
 	return connect.NewResponse(&v1.ListPersonalPositionsResponse{Items: items}), nil
 }
 
 // personalPositionToProto 组装单个个人持仓响应：取该 symbol 最新（Time 最新）且未超陈旧 TTL 的一帧 mid 为当前价，
 // 复用 position.PersonalLevel 算告警态。无报价或全陈旧 → price 保持 0、level 空（诚实空态，G3）。
-func personalPositionToProto(p *pgstore.PersonalPosition, venues map[string]bus.Quote, freshTTL time.Duration, now time.Time) *v1.PersonalPosition {
+// 实账计算（D-043，全后端）：pnl/liq_price/距强平%/累计利息。
+func personalPositionToProto(p *pgstore.PersonalPosition, venues map[string]bus.Quote, freshTTL time.Duration, now time.Time, accruedInterest float64, liqMMR float64) *v1.PersonalPosition {
 	pb := &v1.PersonalPosition{
-		Id:          p.ID,
-		Asset:       p.Asset,
-		Kind:        p.Kind,
-		PriceSymbol: p.PriceSymbol,
-		Note:        p.Note,
-		Status:      p.Status,
+		Id:                 p.ID,
+		Asset:              p.Asset,
+		Kind:               p.Kind,
+		PriceSymbol:        p.PriceSymbol,
+		Note:               p.Note,
+		Status:             p.Status,
+		AccruedInterestUsd: accruedInterest,
 	}
 	if p.WarnHigh != nil {
 		pb.WarnHigh = *p.WarnHigh
@@ -440,9 +450,44 @@ func personalPositionToProto(p *pgstore.PersonalPosition, venues map[string]bus.
 	if p.CritHigh != nil {
 		pb.CritHigh = *p.CritHigh
 	}
+	if p.Qty != nil {
+		pb.Qty = *p.Qty
+	}
+	if p.EntryPrice != nil {
+		pb.EntryPrice = *p.EntryPrice
+	}
+	if p.Leverage != nil {
+		pb.Leverage = int32(*p.Leverage)
+	}
+	if p.OpenedAt != nil {
+		pb.OpenedAt = timestamppb.New(*p.OpenedAt)
+	}
+
+	// 现价：最新未陈旧帧 mid（无报价/全陈旧 → price 0，实账按无值处理）。
+	price := 0.0
+	hasPrice := false
 	if q, ok := latestQuote(venues, freshTTL, now); ok {
-		pb.Price = q.Mid()
-		pb.Level = position.PersonalLevel(q.Mid(), p.WarnHigh, p.CritHigh)
+		price = q.Mid()
+		hasPrice = true
+		pb.Price = price
+		pb.Level = position.PersonalLevel(price, p.WarnHigh, p.CritHigh)
+	}
+
+	// 浮动盈亏：仅空单腿且 entry 非空，且现价可用（无价不算，防 (entry−0)×qty 假盈亏）。
+	if hasPrice && p.Kind == "short_hedge" && p.EntryPrice != nil && p.Qty != nil {
+		pb.PnlUsd = (*p.EntryPrice - price) * *p.Qty
+	}
+	// 强平价：crit_high（手动权威值，非 0）> 理论 = entry × (1 + 1/leverage − MMR)。
+	liq := 0.0
+	if p.CritHigh != nil && *p.CritHigh != 0 {
+		liq = *p.CritHigh
+	} else if p.EntryPrice != nil && p.Leverage != nil && *p.Leverage > 0 {
+		liq = *p.EntryPrice * (1 + 1/float64(*p.Leverage) - liqMMR)
+	}
+	pb.LiqPrice = liq
+	// 距强平 % = (liq − 现价) / 现价；负数 = 已破线。liq 或现价不可用 → 0。
+	if liq != 0 && hasPrice && price != 0 {
+		pb.DistToLiqPct = (liq - price) / price
 	}
 	return pb
 }
@@ -461,6 +506,110 @@ func latestQuote(venues map[string]bus.Quote, freshTTL time.Duration, now time.T
 		}
 	}
 	return best, found
+}
+
+// --- 每日收益（财务线工作项 3：个人持仓实账化） ---
+
+// AddDailyIncome 录入一条每日收益记录。前端只传 day/energy/voting/interest/note；
+// price/pnl_usd 后端自动取价与计算（D-043，前端不传价防伪造）；同 day 重复 → upsert 覆盖（支持纠错）。
+func (s *Service) AddDailyIncome(ctx context.Context, req *connect.Request[v1.AddDailyIncomeRequest]) (*connect.Response[v1.AddDailyIncomeResponse], error) {
+	m := req.Msg
+	day, err := parseDay(m.GetDay())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid day %q: %w", m.GetDay(), err))
+	}
+	// 后端取实时价：TRXUSDT 最新未陈旧帧（复用陈旧守卫 G3）；无报价 → price/pnl 写 NULL（诚实空态）。
+	var price *float64
+	snap := s.qbus.Snapshot(ctx, []string{"TRXUSDT"})
+	if q, ok := latestQuote(snap["TRXUSDT"], s.freshTTL, time.Now()); ok {
+		p := q.Mid()
+		price = &p
+	}
+	// pnl_usd = (entry − 现价) × qty：从 OPEN 的 short_hedge 行算（设计 §4；无报价不算）。
+	var pnl *float64
+	if price != nil {
+		positions, err := s.store.ListPersonalPositions(ctx, "OPEN", 200, 0)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		for i := range positions {
+			p := &positions[i]
+			if p.Kind == "short_hedge" && p.EntryPrice != nil && p.Qty != nil {
+				v := (*p.EntryPrice - *price) * *p.Qty
+				pnl = &v
+				break
+			}
+		}
+	}
+	id, err := s.store.AddDailyIncome(ctx, day, m.GetEnergyTrx(), m.GetVotingTrx(), m.GetInterestUsd(), price, pnl, m.GetNote())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&v1.AddDailyIncomeResponse{Id: id}), nil
+}
+
+// ListDailyIncome 按 day 倒序返回每日收益；from/to 可选区间；income_usd 后端算（D-043）。
+func (s *Service) ListDailyIncome(ctx context.Context, req *connect.Request[v1.ListDailyIncomeRequest]) (*connect.Response[v1.ListDailyIncomeResponse], error) {
+	m := req.Msg
+	var from, to *time.Time
+	if m.GetFrom() != "" {
+		t, err := parseDay(m.GetFrom())
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid from %q: %w", m.GetFrom(), err))
+		}
+		from = &t
+	}
+	if m.GetTo() != "" {
+		t, err := parseDay(m.GetTo())
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid to %q: %w", m.GetTo(), err))
+		}
+		to = &t
+	}
+	rows, err := s.store.ListDailyIncome(ctx, from, to, int(m.GetLimit()), int(m.GetOffset()))
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	items := make([]*v1.PositionDailyIncome, 0, len(rows))
+	for i := range rows {
+		items = append(items, dailyIncomeToProto(&rows[i]))
+	}
+	return connect.NewResponse(&v1.ListDailyIncomeResponse{Items: items}), nil
+}
+
+// dailyIncomeToProto 组装单条每日收益：income_usd = energy×price + voting×price + interest（price 无值按 0）。
+func dailyIncomeToProto(d *pgstore.DailyIncome) *v1.PositionDailyIncome {
+	pb := &v1.PositionDailyIncome{
+		Id:          d.ID,
+		Day:         d.Day.Format("2006-01-02"),
+		EnergyTrx:   d.EnergyTrx,
+		VotingTrx:   d.VotingTrx,
+		InterestUsd: d.InterestUSD,
+		Note:        d.Note,
+	}
+	price := 0.0
+	if d.Price != nil {
+		pb.Price = *d.Price
+		price = *d.Price
+	}
+	if d.PnlUSD != nil {
+		pb.PnlUsd = *d.PnlUSD
+	}
+	pb.IncomeUsd = d.EnergyTrx*price + d.VotingTrx*price + d.InterestUSD
+	return pb
+}
+
+// parseDay 严格解析 YYYY-MM-DD。Go time.Parse 对 "01" 占位宽松（接受 2026-8-19），
+// 这里 round-trip 校验拒绝非常规格式。
+func parseDay(s string) (time.Time, error) {
+	t, err := time.Parse("2006-01-02", s)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if t.Format("2006-01-02") != s {
+		return time.Time{}, fmt.Errorf("day must be YYYY-MM-DD")
+	}
+	return t, nil
 }
 
 // --- 实时推送（§8.2 D-026） ---

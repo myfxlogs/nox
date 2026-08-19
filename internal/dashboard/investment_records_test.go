@@ -34,7 +34,7 @@ func testServiceStore(t *testing.T) *pgstore.Store {
 		t.Fatalf("pgstore.New: %v", err)
 	}
 	t.Cleanup(s.Close)
-	// 新鲜测试库与生产库同态：base schema（v1..6）预标记已应用，Migrate 只跑被测的 v7。
+	// 新鲜测试库与生产库同态：base schema（v1..7）预标记已应用，Migrate 只跑被测的 v8。
 	// 原因同 pgstore 包测试的 ensureBaseApplied：0001_init.sql 内部建 schema_migrations（无 IF NOT EXISTS），
 	// 与 migrate.go 外层创建冲突（存量问题，生产库 base 已应用不触发）。
 	if _, err := s.Pool().Exec(ctx, `
@@ -45,7 +45,7 @@ func testServiceStore(t *testing.T) *pgstore.Store {
 	`); err != nil {
 		t.Fatalf("create schema_migrations: %v", err)
 	}
-	for v := 1; v <= 6; v++ {
+	for v := 1; v <= 7; v++ {
 		if _, err := s.Pool().Exec(ctx,
 			`INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING`, v,
 		); err != nil {
@@ -55,8 +55,8 @@ func testServiceStore(t *testing.T) *pgstore.Store {
 	if err := s.Migrate(ctx); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	if _, err := s.Pool().Exec(ctx, "TRUNCATE investment_records CASCADE"); err != nil {
-		t.Fatalf("TRUNCATE investment_records: %v", err)
+	if _, err := s.Pool().Exec(ctx, "TRUNCATE investment_records, position_daily_income CASCADE"); err != nil {
+		t.Fatalf("TRUNCATE investment_records, position_daily_income: %v", err)
 	}
 	return s
 }

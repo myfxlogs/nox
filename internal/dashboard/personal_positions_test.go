@@ -21,7 +21,7 @@ func TestPersonalPositionToProto_MidAndLevel(t *testing.T) {
 		"binance:spot": {Symbol: "TRXUSDT", Venue: "binance", VenueType: "spot", Bid: 0.361, Ask: 0.363, Time: base},
 		"okx:perp":     {Symbol: "TRXUSDT", Venue: "okx", VenueType: "perp", Bid: 0.370, Ask: 0.372, Time: base.Add(time.Second)},
 	}
-	pb := personalPositionToProto(p, venues, time.Minute, base.Add(2*time.Second))
+	pb := personalPositionToProto(p, venues, time.Minute, base.Add(2*time.Second), 0, 0.005)
 	if pb.Price != 0.371 {
 		t.Errorf("price want latest frame mid 0.371, got %v", pb.Price)
 	}
@@ -46,7 +46,7 @@ func TestPersonalPositionToProto_WarnLevel(t *testing.T) {
 	venues := map[string]bus.Quote{
 		"binance:spot": {Symbol: "TRXUSDT", Bid: 0.3605, Ask: 0.3615, Time: time.Unix(1000, 0)},
 	}
-	pb := personalPositionToProto(p, venues, time.Minute, time.Unix(1001, 0))
+	pb := personalPositionToProto(p, venues, time.Minute, time.Unix(1001, 0), 0, 0.005)
 	if pb.Price != 0.361 {
 		t.Errorf("price want 0.361, got %v", pb.Price)
 	}
@@ -70,7 +70,7 @@ func TestPersonalPositionToProto_StaleFrame(t *testing.T) {
 	allStale := map[string]bus.Quote{
 		"binance:spot": {Symbol: "TRXUSDT", Bid: 0.361, Ask: 0.361, Time: now.Add(-2 * ttl)},
 	}
-	pb := personalPositionToProto(p, allStale, ttl, now)
+	pb := personalPositionToProto(p, allStale, ttl, now, 0, 0.005)
 	if pb.Price != 0 || pb.Level != "" {
 		t.Errorf("all-stale want price=0/level='', got %v/%q", pb.Price, pb.Level)
 	}
@@ -80,7 +80,7 @@ func TestPersonalPositionToProto_StaleFrame(t *testing.T) {
 		"binance:spot": {Symbol: "TRXUSDT", Bid: 0.361, Ask: 0.361, Time: now.Add(-2 * ttl)},
 		"okx:perp":     {Symbol: "TRXUSDT", Bid: 0.365, Ask: 0.365, Time: now.Add(-time.Second)},
 	}
-	pb = personalPositionToProto(p, mixed, ttl, now)
+	pb = personalPositionToProto(p, mixed, ttl, now, 0, 0.005)
 	if pb.Price != 0.365 {
 		t.Errorf("mixed want fresh frame mid 0.365, got %v", pb.Price)
 	}
@@ -94,7 +94,7 @@ func TestPersonalPositionToProto_NoQuote(t *testing.T) {
 		ID: 2, Asset: "TRX", Kind: "staking", PriceSymbol: "TRXUSDT", Status: "OPEN",
 	}
 	// 无报价 → price 保持 0、level 空（诚实空态，前端渲染 "—"）
-	pb := personalPositionToProto(p, nil, time.Minute, time.Now())
+	pb := personalPositionToProto(p, nil, time.Minute, time.Now(), 0, 0.005)
 	if pb.Price != 0 {
 		t.Errorf("no quote price want 0, got %v", pb.Price)
 	}
