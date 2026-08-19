@@ -443,6 +443,7 @@ message PositionDailyIncome {
   double pnl_usd = 7;          // 记录时空单浮动盈亏（后端自动算；0 = 无报价/无 entry）
   string note = 8;
   double income_usd = 9;       // 后端算 = energy×price + voting×price + interest（price 无值按 0）
+  string warning = 10;         // 后端算：资金费翻负/急降预警；空 = 正常（D-043）
 }
 
 message AddDailyIncomeRequest {
@@ -453,7 +454,10 @@ message AddDailyIncomeRequest {
   string note = 5;
 }
 
-message AddDailyIncomeResponse { int64 id = 1; }
+message AddDailyIncomeResponse {
+  int64 id = 1;
+  string warning = 2;          // 本次提交即时预警（同 §11.1 规则）；空 = 正常
+}
 
 message ListDailyIncomeRequest {
   string from = 1;   // 可选起始日 YYYY-MM-DD；空 = 不设界

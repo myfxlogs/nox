@@ -45,6 +45,8 @@ type Config struct {
 
 	// === 个人持仓实账（财务线工作项 3）===
 	LiqMMR float64 // 理论强平维持保证金率（强平价 = entry × (1 + 1/leverage − MMR)；缺省 0.5%）
+	// FundingDropRatio 资金费急降预警比例（今日 < 比例×前日 触发；缺省 0.5）——§11 收益侧方向证伪。
+	FundingDropRatio float64
 }
 
 // Load 从环境变量加载配置，未设置用默认值。
@@ -73,6 +75,7 @@ func Load() *Config {
 		ReviewCarryBiasAnnualPct: envFloat("ARB_REVIEW_CARRY_BIAS_ANNUAL_PCT", 1.0),
 		SymbolsTTL:               envDur("ARB_SYMBOLS_TTL", 5*time.Minute),
 		LiqMMR:                   envFloat("ARB_LIQ_MMR", 0.005),
+		FundingDropRatio:         envFloat("ARB_FUNDING_DROP_RATIO", 0.5),
 	}
 }
 
