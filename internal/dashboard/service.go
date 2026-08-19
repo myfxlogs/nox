@@ -34,15 +34,18 @@ type Service struct {
 	fundingDropRatio float64
 	// priceTopic 实时现价广播（D-049）：PersonalMonitor 经 onPrice 发布 → StreamUpdates 扇出 case 7。nil = 未接线（测试直接构造 Service）。
 	priceTopic *bus.Topic[position.PositionPrice]
+	// oppTopic 新机会推送广播（D-050）：engine 新插入发布 → StreamUpdates 扇出 case 2。nil = 未接线（测试直接构造 Service）。
+	oppTopic *bus.Topic[pgstore.Opportunity]
 }
 
 // New 创建 dashboard 服务。reviewer 为复盘触发闭包（nil 则平仓后不触发）；
 // freshTTL 为报价陈旧阈值（个人持仓展示用，传 config.DetectorFreshnessTTL）；
 // liqMMR 为个人持仓理论强平维持保证金率（传 config.LiqMMR）；
 // fundingDropRatio 为资金费急降预警比例（传 config.FundingDropRatio）；
-// priceTopic 为实时现价广播 topic（D-049，传 main 创建的 priceTopic）。
-func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64, fundingDropRatio float64, priceTopic *bus.Topic[position.PositionPrice]) *Service {
-	return &Service{store: store, qbus: qbus, pipeline: pipeline, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, priceTopic: priceTopic}
+// priceTopic 为实时现价广播 topic（D-049，传 main 创建的 priceTopic）；
+// oppTopic 为新机会站内推送 topic（D-050，传 main 创建的 oppTopic）。
+func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64, fundingDropRatio float64, priceTopic *bus.Topic[position.PositionPrice], oppTopic *bus.Topic[pgstore.Opportunity]) *Service {
+	return &Service{store: store, qbus: qbus, pipeline: pipeline, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, priceTopic: priceTopic, oppTopic: oppTopic}
 }
 
 // --- 快照类 ---
@@ -617,7 +620,8 @@ func parseDay(s string) (time.Time, error) {
 
 func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.StreamUpdatesRequest], stream *connect.ServerStream[v1.StreamUpdatesResponse]) error {
 	// 实时推送报价：订阅 QuoteBus 全量（wildcard ""），亚秒级行情走推流。
-	// 机会/告警/持仓由引擎 30s 节流产生、无独立事件总线 → 前端以 30s 低频快照补齐。
+	// 机会（D-050）/告警/持仓由引擎 30s 节流产生：新机会经 oppTopic 实时推 case 2；
+	// 告警/持仓仍由前端 30s 低频快照补齐。
 	ch, cancel := s.qbus.Subscribe("")
 	defer cancel()
 	// 实时个人持仓现价（D-049）：PersonalMonitor 广播 → 逐仓推 case 7（与 quote 流并存，独立 Topic 扇出）。
@@ -627,6 +631,14 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 		var ppCancel func()
 		ppCh, ppCancel = s.priceTopic.Subscribe()
 		defer ppCancel()
+	}
+	// 实时新机会推送（D-050）：engine 新插入发布 → 逐条推 case 2（与 quote/现价流并存，独立 Topic 扇出）。
+	// oppTopic 可能为 nil（测试直接构造 Service 未接线）→ 不订阅该分支。
+	var oppCh <-chan pgstore.Opportunity
+	if s.oppTopic != nil {
+		var oppCancel func()
+		oppCh, oppCancel = s.oppTopic.Subscribe()
+		defer oppCancel()
 	}
 	// keepalive 每 30s（§8.2 D-027）
 	ticker := time.NewTicker(30 * time.Second)
@@ -653,6 +665,17 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 			if err := stream.Send(&v1.StreamUpdatesResponse{
 				Update: &v1.StreamUpdatesResponse_PersonalPositionPrice{
 					PersonalPositionPrice: positionPriceToProto(v),
+				},
+			}); err != nil {
+				return err
+			}
+		case v, ok := <-oppCh:
+			if !ok {
+				return nil
+			}
+			if err := stream.Send(&v1.StreamUpdatesResponse{
+				Update: &v1.StreamUpdatesResponse_Opportunity{
+					Opportunity: oppToProto(&v),
 				},
 			}); err != nil {
 				return err
