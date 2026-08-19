@@ -14,7 +14,7 @@ func TestAddDailyIncome_Upsert(t *testing.T) {
 
 	price := 0.33
 	pnl := 31.0
-	id1, err := s.AddDailyIncome(ctx, day, 5, 1, 0, &price, &pnl, "first")
+	id1, err := s.AddDailyIncome(ctx, day, 5, 1, 1.00, &price, &pnl, "first")
 	if err != nil {
 		t.Fatalf("AddDailyIncome first: %v", err)
 	}

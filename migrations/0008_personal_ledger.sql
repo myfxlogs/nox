@@ -1,8 +1,8 @@
 -- 0008_personal_ledger.sql: 个人持仓实账化（财务线工作项 3，SSOT 财务线-个人持仓实账化方案.md）
 -- 1) personal_positions 加 4 列（均 NULL；staking 只填 qty，short_hedge 填全）
 ALTER TABLE personal_positions
-    ADD COLUMN qty         DOUBLE PRECISION,   -- 持仓数量（0）
-    ADD COLUMN entry_price DOUBLE PRECISION,   -- 开仓价（仅 short_hedge）
+    ADD COLUMN qty         DOUBLE PRECISION,   -- 持仓数量（中性化：真实值由本地脚本注入 /opt/fin/arb-personal-seed.sql，D-047 数据不进 git）
+    ADD COLUMN entry_price DOUBLE PRECISION,   -- 开仓价（仅 short_hedge；中性化同上）
     ADD COLUMN leverage    INTEGER,            -- 杠杆倍数（仅 short_hedge）
     ADD COLUMN opened_at   TIMESTAMPTZ;        -- 开仓时间
 
@@ -21,13 +21,14 @@ CREATE TABLE position_daily_income (
 );
 
 -- 3) 初始数据回填：按 (asset,kind) 定位（不依赖 id，防 id 漂移）；note 简化（0.36/0.3695 已入结构化列 warn_high/crit_high）。
+--    数值中性化（qty/entry 置 0、leverage/opened_at 置 NULL）：真实持仓值由本地脚本注入（/opt/fin/arb-personal-seed.sql，D-047 金额/数量不进 git）。
 UPDATE personal_positions SET qty = 0
  WHERE asset = 'TRX' AND kind = 'staking';
 
 UPDATE personal_positions
    SET qty = 0,
        entry_price = 0,
-       leverage = 10,
-       opened_at = '2026-08-17T00:00:00Z',
+       leverage = NULL,
+       opened_at = NULL,
        note = '对冲空单（杠杆，保值腿）'
  WHERE asset = 'TRX' AND kind = 'short_hedge';
