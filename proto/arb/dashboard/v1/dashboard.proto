@@ -56,6 +56,9 @@ service DashboardService {
   rpc ListMappingSuggestions(ListMappingSuggestionsRequest) returns (ListMappingSuggestionsResponse);
   rpc ListCanonicals(ListCanonicalsRequest) returns (ListCanonicalsResponse);
 
+  // Matrix 全景（D-045：全符号跨全账号映射/报价巡检）
+  rpc ListMatrixUniverse(ListMatrixUniverseRequest) returns (ListMatrixUniverseResponse);
+
   // 实时推送（server streaming，D-026）
   rpc StreamUpdates(StreamUpdatesRequest) returns (stream StreamUpdatesResponse);
 
@@ -564,4 +567,53 @@ message ListCanonicalsRequest {}
 
 message ListCanonicalsResponse {
   repeated string canonicals = 1;
+}
+
+// === Matrix 全景（D-045）===
+
+message ListMatrixUniverseRequest {}
+
+enum MatrixState {
+  MATRIX_STATE_UNSPECIFIED = 0;
+  MATRIX_STATE_COMPLETE = 1;   // 应配齐集全配
+  MATRIX_STATE_PARTIAL = 2;    // ≥1 缺
+  MATRIX_STATE_MISSING = 3;    // 0 映射
+}
+
+message MatrixSymbolAccount {          // 单账号对该符号的存在与映射（后端 join）
+  string venue = 1;                   // 登录账号号（D-033）
+  optional string canonical = 2;      // 该账号已映射 canonical；null = 缺
+  double contract_size = 3;           // 该账号权威合约规格；0 = 未知（MT4）
+}
+
+message MatrixSymbolRow {              // 跨账号去重后的符号行
+  string symbol = 1;                  // broker 原生符号（去重键之一）
+  string group = 2;                   // broker 分组；"" = 未分组（MT4）
+  int32 coverage_total = 3;           // 应配齐集大小 = connected 账号中存在 (symbol,group) 者
+  int32 coverage_mapped = 4;          // 其中已映射数量
+  MatrixState state = 5;              // 后端按 coverage 计算
+  double contract_min = 6;            // 跨账号合约区间（0=全未知）
+  double contract_max = 7;
+  repeated string mapped_canonicals = 8;  // 去重映射到的 canonical（通常 1 个；>1 = 冲突信号）
+  repeated MatrixSymbolAccount accounts = 9; // 逐账号详情（详情面板直读，前端零聚合）
+}
+
+message MatrixGroupStat {
+  string group = 1;
+  int32 total = 2;
+  int32 complete = 3;
+  int32 partial = 4;
+  int32 missing = 5;
+}
+
+message MatrixUniverse {
+  repeated string groups = 1;         // 分组并集（稳定序：账号序首现；含 ""→前端渲染「未分组」）
+  repeated MatrixGroupStat group_stats = 2;
+  repeated MatrixSymbolRow symbols = 3;   // 去重符号行全集
+  repeated BrokerAccount accounts = 4;    // 复用 BrokerAccount（含 status/alias/server）
+  repeated string canonicals = 5;     // 既有 canonical 全集（补映射下拉，复用 ListCanonicals 逻辑）
+}
+
+message ListMatrixUniverseResponse {
+  MatrixUniverse universe = 1;
 }
