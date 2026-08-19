@@ -25,16 +25,26 @@ func TestAddDailyIncome_InvalidDay(t *testing.T) {
 }
 
 // TestAddDailyIncome_AutoFill：合法写入 → 后端自动取价写 price、算 pnl_usd；List 读回 income_usd 后端算。
+// 中性化（D-047）：自建通用 short_hedge 行（qty=1000 / entry=0.30000），断言对齐通用值，不携带真实持仓。
 func TestAddDailyIncome_AutoFill(t *testing.T) {
 	s := testServiceStore(t)
 	ctx := context.Background()
+
+	// 自建 short_hedge 行供 pnl_usd 后端算（(entry−现价)×qty）
+	if _, err := s.Pool().Exec(ctx, `
+		INSERT INTO personal_positions (asset, kind, price_symbol, note, qty, entry_price, leverage) VALUES
+			('TRX','short_hedge','TRXUSDT','对冲空单（中性化测试数据）',1000,0.30000,10)
+	`); err != nil {
+		t.Fatalf("seed short_hedge: %v", err)
+	}
+
 	qbus := bus.New()
 	now := time.Now()
 	qbus.Publish(bus.Quote{Symbol: "TRXUSDT", Venue: "binance", VenueType: "spot", Bid: 0.33, Ask: 0.33, Time: now})
 	svc := &Service{store: s, qbus: qbus, freshTTL: time.Minute, liqMMR: 0.005}
 
 	resp, err := svc.AddDailyIncome(ctx, connect.NewRequest(&v1.AddDailyIncomeRequest{
-		Day: "2026-08-17", EnergyTrx: 5, VotingTrx: 1, InterestUsd: 0, Note: "能量+投票",
+		Day: "2026-08-17", EnergyTrx: 5, VotingTrx: 1, InterestUsd: 1.00, Note: "能量+投票",
 	}))
 	if err != nil {
 		t.Fatalf("AddDailyIncome: %v", err)
@@ -57,11 +67,11 @@ func TestAddDailyIncome_AutoFill(t *testing.T) {
 	if it.Price != 0.33 {
 		t.Errorf("price want auto-filled 0.33, got %v", it.Price)
 	}
-	wantPnl := (0 - 0.33) * 0
+	wantPnl := (0.30000 - 0.33) * 1000
 	if math.Abs(it.PnlUsd-wantPnl) > 1e-9 {
 		t.Errorf("pnl want %v, got %v", wantPnl, it.PnlUsd)
 	}
-	wantIncome := 5*0.33 + 1*0.33 + 0
+	wantIncome := 5*0.33 + 1*0.33 + 1.00
 	if math.Abs(it.IncomeUsd-wantIncome) > 1e-9 {
 		t.Errorf("income_usd want %v, got %v", wantIncome, it.IncomeUsd)
 	}
@@ -76,7 +86,7 @@ func TestAddDailyIncome_SameDayUpsert(t *testing.T) {
 	ctx := context.Background()
 	svc := &Service{store: s, qbus: bus.New(), freshTTL: time.Minute, liqMMR: 0.005}
 
-	r1, err := svc.AddDailyIncome(ctx, connect.NewRequest(&v1.AddDailyIncomeRequest{Day: "2026-08-17", EnergyTrx: 5, VotingTrx: 1, InterestUsd: 0}))
+	r1, err := svc.AddDailyIncome(ctx, connect.NewRequest(&v1.AddDailyIncomeRequest{Day: "2026-08-17", EnergyTrx: 5, VotingTrx: 1, InterestUsd: 1.00}))
 	if err != nil {
 		t.Fatalf("first Add: %v", err)
 	}

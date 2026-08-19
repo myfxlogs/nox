@@ -55,8 +55,8 @@ func testServiceStore(t *testing.T) *pgstore.Store {
 	if err := s.Migrate(ctx); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	if _, err := s.Pool().Exec(ctx, "TRUNCATE investment_records, position_daily_income CASCADE"); err != nil {
-		t.Fatalf("TRUNCATE investment_records, position_daily_income: %v", err)
+	if _, err := s.Pool().Exec(ctx, "TRUNCATE investment_records, position_daily_income, personal_positions CASCADE"); err != nil {
+		t.Fatalf("TRUNCATE investment_records, position_daily_income, personal_positions: %v", err)
 	}
 	return s
 }
