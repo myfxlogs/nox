@@ -472,6 +472,16 @@ message ListDailyIncomeResponse { repeated PositionDailyIncome items = 1; }
 
 message StreamUpdatesRequest {}
 
+// 实时现价推送（D-049）：后端按最新未陈旧报价算价格派生字段，前端仅按 id 合并渲染。
+message PersonalPositionPrice {
+  int64 position_id = 1;
+  double price = 2;            // 当前 mid（0 = 无报价）
+  string level = 3;            // 'ok'|'warn'|'crit'（空 = 无报价）
+  double pnl_usd = 4;
+  double liq_price = 5;
+  double dist_to_liq_pct = 6;
+}
+
 message StreamUpdatesResponse {
   oneof update {
     Quote quote = 1;
@@ -480,6 +490,7 @@ message StreamUpdatesResponse {
     Position position = 4;
     SourceHealth source_health = 5;
     Keepalive keepalive = 6;     // 30s 心跳（Cloudflare Tunnel 存活，D-027）
+    PersonalPositionPrice personal_position_price = 7;  // 实时个人持仓现价（D-049）
   }
 }
 
