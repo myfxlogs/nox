@@ -20,8 +20,10 @@ import (
 )
 
 // VenueQuerier 查询 venue 实际持仓的统一接口。
+// VenueKey 提供查询器身份（"{venue}:{type}"）：离线跟踪需要 0 持仓成功时也知道 venue（D-052）。
 type VenueQuerier interface {
 	QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error)
+	VenueKey() string // "{venue}:{venueType}"
 }
 
 // VenueOrder venue 侧的持仓记录。
@@ -41,6 +43,7 @@ type VenueOrder struct {
 	Swap       float64
 	Commission float64
 	OpenedAt   time.Time // 开仓时间（零值 = venue 未返回）
+	Magic      int64     // MT5 ExpertId / MT4 MagicNumber（0 = 无，D-052）
 }
 
 // isARBOrder 判断 broker 订单是否为当前 ARB 系统开出。
@@ -68,6 +71,8 @@ type MT4Querier struct {
 func NewMT4Querier(venue, token string, mt4Client mt4.MT4Client) *MT4Querier {
 	return &MT4Querier{venue: venue, token: token, mt4: mt4Client}
 }
+
+func (q *MT4Querier) VenueKey() string { return q.venue + ":mt4" }
 
 func (q *MT4Querier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error) {
 	ctx = metadata.AppendToOutgoingContext(ctx, "id", q.token)
@@ -97,6 +102,7 @@ func (q *MT4Querier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error
 			Swap:       ord.GetSwap(),
 			Commission: ord.GetCommission(),
 			OpenedAt:   tsToTime(ord.GetOpenTime()),
+			Magic:      int64(ord.GetMagicNumber()),
 		})
 	}
 	return out, nil
@@ -112,6 +118,8 @@ type MT5Querier struct {
 func NewMT5Querier(venue, token string, mt5Client mt5pb.MT5Client) *MT5Querier {
 	return &MT5Querier{venue: venue, token: token, mt5: mt5Client}
 }
+
+func (q *MT5Querier) VenueKey() string { return q.venue + ":mt5" }
 
 func (q *MT5Querier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error) {
 	ctx = metadata.AppendToOutgoingContext(ctx, "id", q.token)
@@ -141,6 +149,7 @@ func (q *MT5Querier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error
 			Swap:       ord.GetSwap(),
 			Commission: ord.GetCommission(),
 			OpenedAt:   tsToTime(ord.GetOpenTime()),
+			Magic:      ord.GetExpertId(),
 		})
 	}
 	return out, nil
