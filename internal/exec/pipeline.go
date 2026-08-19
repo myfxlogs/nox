@@ -17,9 +17,9 @@ import (
 
 // RiskLimits 风控上限（§12 executor 配置）。
 type RiskLimits struct {
-	MaxNotionalUSD       float64
-	MaxOpenPositions     int
-	MaxLegImbalancePct   float64
+	MaxNotionalUSD     float64
+	MaxOpenPositions   int
+	MaxLegImbalancePct float64
 }
 
 // Pipeline 是执行管线（§13.1）。
@@ -37,10 +37,10 @@ func NewPipeline(reg *Registry, store *pgstore.Store, qbus *bus.QuoteBus, limits
 
 // LegSpec 是单腿下单规格。
 type LegSpec struct {
-	VenueKey   string // "venue:venueType"
+	VenueKey    string // "venue:venueType"
 	VenueSymbol string // venue 原始符号
-	Side       string // BUY / SELL
-	Qty        float64
+	Side        string // BUY / SELL
+	Qty         float64
 }
 
 // ExecuteResult 是执行结果。
@@ -145,10 +145,10 @@ func (p *Pipeline) executeLeg(ctx context.Context, leg LegSpec) LegResult {
 		return LegResult{VenueKey: leg.VenueKey, Status: "FAILED"}
 	}
 	fill, err := exe.PlaceOrder(ctx, Order{
-		Symbol:    leg.VenueSymbol,
-		Side:      leg.Side,
-		Qty:       leg.Qty,
-		Venue:     leg.VenueKey,
+		Symbol: leg.VenueSymbol,
+		Side:   leg.Side,
+		Qty:    leg.Qty,
+		Venue:  leg.VenueKey,
 	})
 	if err != nil {
 		log.Printf("[exec] leg %s %s %s: %v", leg.VenueKey, leg.Side, leg.VenueSymbol, err)
@@ -216,15 +216,16 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 	return nil
 }
 
-// Revalidate 用 QuoteBus 最新报价重算净收益劣化（§13.1 双阈值）。
-// 返回 true 表示通过复核，false 表示劣化超阈值应拒绝。
-func (p *Pipeline) Revalidate(canonical, venueBuy, venueSell string, originalNetBps float64) bool {
+// Revalidate 用 QuoteBus 最新报价重算毛收益劣化（§13.1 双阈值；D-051 修③：毛口径比较）。
+// 成本侧（佣金/滑点）执行前后不变，净收益劣化完全由毛位移驱动 → 用 originalGrossBps 与重算
+// currentGrossBps（spread/mid×10000）同口径比较才正确。返回 true 通过复核，false 劣化超阈值应拒绝。
+func (p *Pipeline) Revalidate(canonical, venueBuy, venueSell string, originalGrossBps float64) bool {
 	qbuy, ok1 := p.qbus.Latest(canonical, venueBuy)
 	qsell, ok2 := p.qbus.Latest(canonical, venueSell)
 	if !ok1 || !ok2 {
 		return false
 	}
-	// 重算瞬时 spread
+	// 重算瞬时毛 spread
 	spread := qsell.Bid - qbuy.Ask
 	mid := qbuy.Mid()
 	if mid <= 0 {
@@ -233,8 +234,8 @@ func (p *Pipeline) Revalidate(canonical, venueBuy, venueSell string, originalNet
 	currentBps := spread / mid * 10000
 	// 双阈值：max(2bps 绝对, 20% 相对)
 	absThreshold := 2.0
-	relThreshold := math.Abs(originalNetBps) * 0.2
+	relThreshold := math.Abs(originalGrossBps) * 0.2
 	threshold := math.Max(absThreshold, relThreshold)
-	degradation := originalNetBps - currentBps
+	degradation := originalGrossBps - currentBps
 	return degradation <= threshold
 }

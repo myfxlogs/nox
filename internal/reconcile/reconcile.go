@@ -16,6 +16,7 @@ import (
 	"arb/internal/exec"
 	"arb/internal/store/pgstore"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // VenueQuerier 查询 venue 实际持仓的统一接口。
@@ -33,6 +34,13 @@ type VenueOrder struct {
 	OpenPrice float64
 	Venue     string
 	Comment   string
+
+	// WP3（D-051）加性扩展：对外视图（ListBrokerPositions）需要的权威字段，对账器原有逻辑不动。
+	VenueKey   string  // "{venue}:{venueType}"（query 时已知类型）
+	Profit     float64 // venue 权威浮盈（Order.Profit）
+	Swap       float64
+	Commission float64
+	OpenedAt   time.Time // 开仓时间（零值 = venue 未返回）
 }
 
 // isARBOrder 判断 broker 订单是否为当前 ARB 系统开出。
@@ -40,6 +48,14 @@ type VenueOrder struct {
 // 其余一律系统外单：遗留 ca_/cx_/tri_+hex 格式（旧系统 D-033）、手工单 UUID、空 comment。
 func isARBOrder(comment string) bool {
 	return strings.HasPrefix(comment, exec.OrderComment)
+}
+
+// tsToTime nil-safe 转换：nil Timestamp → time.Time{}（开仓时间零值 = venue 未返回）。
+func tsToTime(ts *timestamppb.Timestamp) time.Time {
+	if ts == nil {
+		return time.Time{}
+	}
+	return ts.AsTime()
 }
 
 // MT4Querier 通过 MT4 gRPC 查询持仓。
@@ -69,13 +85,18 @@ func (q *MT4Querier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error
 			side = "SELL"
 		}
 		out = append(out, VenueOrder{
-			Ticket:    strconv.FormatInt(int64(ord.GetTicket()), 10),
-			Symbol:    ord.GetSymbol(),
-			Side:      side,
-			Volume:    ord.GetLots(),
-			OpenPrice: ord.GetOpenPrice(),
-			Venue:     q.venue,
-			Comment:   ord.GetComment(),
+			Ticket:     strconv.FormatInt(int64(ord.GetTicket()), 10),
+			Symbol:     ord.GetSymbol(),
+			Side:       side,
+			Volume:     ord.GetLots(),
+			OpenPrice:  ord.GetOpenPrice(),
+			Venue:      q.venue,
+			Comment:    ord.GetComment(),
+			VenueKey:   q.venue + ":mt4",
+			Profit:     ord.GetProfit(),
+			Swap:       ord.GetSwap(),
+			Commission: ord.GetCommission(),
+			OpenedAt:   tsToTime(ord.GetOpenTime()),
 		})
 	}
 	return out, nil
@@ -108,13 +129,18 @@ func (q *MT5Querier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error
 			side = "SELL"
 		}
 		out = append(out, VenueOrder{
-			Ticket:    strconv.FormatInt(ord.GetTicket(), 10),
-			Symbol:    ord.GetSymbol(),
-			Side:      side,
-			Volume:    ord.GetLots(),
-			OpenPrice: ord.GetOpenPrice(),
-			Venue:     q.venue,
-			Comment:   ord.GetComment(),
+			Ticket:     strconv.FormatInt(ord.GetTicket(), 10),
+			Symbol:     ord.GetSymbol(),
+			Side:       side,
+			Volume:     ord.GetLots(),
+			OpenPrice:  ord.GetOpenPrice(),
+			Venue:      q.venue,
+			Comment:    ord.GetComment(),
+			VenueKey:   q.venue + ":mt5",
+			Profit:     ord.GetProfit(),
+			Swap:       ord.GetSwap(),
+			Commission: ord.GetCommission(),
+			OpenedAt:   tsToTime(ord.GetOpenTime()),
 		})
 	}
 	return out, nil

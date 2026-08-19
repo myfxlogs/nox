@@ -9,8 +9,9 @@ import (
 
 // CrossVenueDetector 检测同一 canonical 在不同 venue 的 bid/ask 价差（§5.1）。
 type CrossVenueDetector struct {
-	MinGrossBps         float64
-	FreshnessTTL        time.Duration // §5.0 陈旧报价排除
+	CexMinGrossBps float64       // CEX(spot/perp) 跨所 gross 门槛（bps）
+	CfdMinGrossBps float64       // CFD(mt4/mt5) 跨所 gross 观察门槛（bps）
+	FreshnessTTL   time.Duration // §5.0 陈旧报价排除
 }
 
 func (d *CrossVenueDetector) Type() OppType { return TypeCrossVenue }
@@ -23,18 +24,19 @@ func (d *CrossVenueDetector) Scan(_ context.Context, snapshot map[string]map[str
 			continue
 		}
 		vkeys := sortedKeys(venues)
-		for i := 0; i < len(vkeys); i++ {
+		for i := range len(vkeys) {
 			for j := i + 1; j < len(vkeys); j++ {
 				a, b := venues[vkeys[i]], venues[vkeys[j]]
 				if stale(a, now, d.FreshnessTTL) || stale(b, now, d.FreshnessTTL) {
 					continue
 				}
+				minBps := crossMinBpsFor([]string{a.VenueType, b.VenueType}, d.CexMinGrossBps, d.CfdMinGrossBps)
 				// 买 A（按 A.ask）卖 B（按 B.bid）：利润 = B.bid - A.ask（D-030 修正符号）
-				if c := tryCross(canonical, &a, &b, d.MinGrossBps, now); c != nil {
+				if c := tryCross(canonical, &a, &b, minBps); c != nil {
 					out = append(out, *c)
 				}
 				// 反向：买 B 卖 A
-				if c := tryCross(canonical, &b, &a, d.MinGrossBps, now); c != nil {
+				if c := tryCross(canonical, &b, &a, minBps); c != nil {
 					out = append(out, *c)
 				}
 			}
@@ -43,7 +45,7 @@ func (d *CrossVenueDetector) Scan(_ context.Context, snapshot map[string]map[str
 	return out
 }
 
-func tryCross(canonical string, buy, sell *bus.Quote, minBps float64, now time.Time) *Candidate {
+func tryCross(canonical string, buy, sell *bus.Quote, minBps float64) *Candidate {
 	spread := sell.Bid - buy.Ask
 	if spread <= 0 {
 		return nil
@@ -69,6 +71,31 @@ func tryCross(canonical string, buy, sell *bus.Quote, minBps float64, now time.T
 		PriceSell: sell.Bid,
 		GrossBps:  grossBps,
 		QuoteTime: qt.UnixMilli(),
+	}
+}
+
+// crossMinBpsFor 按双腿 venue 类型取 cross 毛门槛：双腿均 CEX(spot/perp)→cex；均 CFD(mt4/mt5)→cfd；混合→max(保守)。
+// D-051 WP1：CFD 门槛 2.0 匹配市场量级，CEX 保持 10.0；展示仍靠评估器 net>0（trap 抑制）。
+func crossMinBpsFor(venueTypes []string, cex, cfd float64) float64 {
+	var hasCEX, hasCFD bool
+	for _, vt := range venueTypes {
+		switch vt {
+		case "spot", "perp":
+			hasCEX = true
+		case "mt4", "mt5":
+			hasCFD = true
+		}
+	}
+	switch {
+	case hasCFD && !hasCEX:
+		return cfd
+	case hasCEX && !hasCFD:
+		return cex
+	default: // 两者都有 / 都无 / 未知类型 → max（保守）
+		if cex > cfd {
+			return cex
+		}
+		return cfd
 	}
 }
 

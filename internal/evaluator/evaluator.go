@@ -20,31 +20,32 @@ const (
 
 // Config 评估器配置（§12）。
 type Config struct {
-	SlippageBps         float64
-	MarginRateAnnual    float64 // 百分点（D-031）
+	SlippageBps          float64
+	MarginRateAnnual     float64 // 百分点（D-031）
 	DetectorFreshnessTTL time.Duration
-	OpportunityTTL      time.Duration
+	OpportunityTTL       time.Duration
 	GrabMinNetAnnualized float64 // grab 档门槛（百分点，D-036，替代硬编码 4.5）
 }
 
 // Result 评估结果，对应 opportunities 表（§2.6）。
 type Result struct {
-	ID              string
-	Type            string
-	VenueBuy        string
-	VenueSell       string
-	PriceBuy        float64
-	PriceSell       float64
-	GrossBps        float64
-	SpreadCost      float64
-	CommissionCost  float64
-	SlippageCost    float64
-	SwapCost        float64
-	NetBps          float64
-	BreakevenDays   *float64
-	QuoteTime       time.Time
-	ExpiresAt       time.Time
-	Rating          Rating
+	ID             string
+	Type           string
+	Canonical      string
+	VenueBuy       string
+	VenueSell      string
+	PriceBuy       float64
+	PriceSell      float64
+	GrossBps       float64
+	SpreadCost     float64
+	CommissionCost float64
+	SlippageCost   float64
+	SwapCost       float64
+	NetBps         float64
+	BreakevenDays  *float64
+	QuoteTime      time.Time
+	ExpiresAt      time.Time
+	Rating         Rating
 }
 
 // Evaluate 评估单个 Candidate（§6.1）。
@@ -87,6 +88,7 @@ func Evaluate(c detector.Candidate, cfg Config, spreadBuy, spreadSell, commissio
 	return &Result{
 		ID:             genID(c, qt),
 		Type:           string(c.Type),
+		Canonical:      c.Canonical,
 		VenueBuy:       c.VenueBuy,
 		VenueSell:      c.VenueSell,
 		PriceBuy:       c.PriceBuy,

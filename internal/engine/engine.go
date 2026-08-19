@@ -22,8 +22,8 @@ type opportunityStore interface {
 // FactCache 实现 detector.FactProvider，从内存缓存提供 funding/swap Fact。
 type FactCache struct {
 	mu      sync.RWMutex
-	funding map[string]map[string]float64          // canonical → venue → 年化
-	swap    map[string]map[string][2]float64        // canonical → venue → [long, short]
+	funding map[string]map[string]float64    // canonical → venue → 年化
+	swap    map[string]map[string][2]float64 // canonical → venue → [long, short]
 }
 
 func NewFactCache() *FactCache {
@@ -221,6 +221,7 @@ func resultToOpp(r *evaluator.Result) *pgstore.Opportunity {
 	return &pgstore.Opportunity{
 		ID:             r.ID,
 		Type:           r.Type,
+		Canonical:      r.Canonical,
 		VenueBuy:       r.VenueBuy,
 		VenueSell:      r.VenueSell,
 		PriceBuy:       r.PriceBuy,

@@ -10,7 +10,7 @@ import (
 
 func TestCrossVenueScan(t *testing.T) {
 	now := time.Now()
-	d := &CrossVenueDetector{MinGrossBps: 5.0, FreshnessTTL: 60 * time.Second}
+	d := &CrossVenueDetector{CexMinGrossBps: 5.0, CfdMinGrossBps: 5.0, FreshnessTTL: 60 * time.Second}
 	snap := map[string]map[string]bus.Quote{
 		"EURUSD": {
 			"icmarkets:mt4": {Symbol: "EURUSD", Venue: "icmarkets", VenueType: "mt4", Bid: 1.1000, Ask: 1.1001, Time: now},
@@ -36,9 +36,58 @@ func TestCrossVenueScan(t *testing.T) {
 	}
 }
 
+// TestCrossMinBpsFor crossMinBpsFor 三态：全 CFD→cfd；全 CEX→cex；混合/未知→max（保守）。
+func TestCrossMinBpsFor(t *testing.T) {
+	const cex, cfd = 10.0, 2.0
+	cases := []struct {
+		name       string
+		venueTypes []string
+		want       float64
+	}{
+		{name: "all CFD", venueTypes: []string{"mt4", "mt5"}, want: cfd},
+		{name: "all CEX", venueTypes: []string{"spot", "perp"}, want: cex},
+		{name: "mixed", venueTypes: []string{"mt5", "spot"}, want: cex}, // max(10, 2) = 10
+		{name: "unknown", venueTypes: []string{""}, want: cex},          // 未知类型归 max(10, 2) = 10
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := crossMinBpsFor(tc.venueTypes, cex, cfd); got != tc.want {
+				t.Fatalf("crossMinBpsFor(%v) = %v, want %v", tc.venueTypes, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestCrossVenueScanDualThreshold 同量级 gross≈8.18bps：CEX 门槛 10 → 不产候选；CFD 门槛 2 → 产候选。
+func TestCrossVenueScanDualThreshold(t *testing.T) {
+	now := time.Now()
+	d := &CrossVenueDetector{CexMinGrossBps: 10.0, CfdMinGrossBps: 2.0, FreshnessTTL: 60 * time.Second}
+
+	cexSnap := map[string]map[string]bus.Quote{
+		"BTC": {
+			"binance:spot": {Symbol: "BTCUSDT", Venue: "binance", VenueType: "spot", Bid: 1.1000, Ask: 1.1001, Time: now},
+			"okx:spot":     {Symbol: "BTCUSDT", Venue: "okx", VenueType: "spot", Bid: 1.1010, Ask: 1.1011, Time: now},
+		},
+	}
+	// spread = 1.1010-1.1001 = 0.0009, mid ≈ 1.10005, gross ≈ 8.18 bps
+	if cands := d.Scan(context.Background(), cexSnap, nil); len(cands) != 0 {
+		t.Fatalf("CEX legs: expected 0 candidates (gross 8.18 < 10), got %d", len(cands))
+	}
+
+	cfdSnap := map[string]map[string]bus.Quote{
+		"EURUSD": {
+			"icmarkets:mt4": {Symbol: "EURUSD", Venue: "icmarkets", VenueType: "mt4", Bid: 1.1000, Ask: 1.1001, Time: now},
+			"exness:mt4":    {Symbol: "EURUSD", Venue: "exness", VenueType: "mt4", Bid: 1.1010, Ask: 1.1011, Time: now},
+		},
+	}
+	if cands := d.Scan(context.Background(), cfdSnap, nil); len(cands) == 0 {
+		t.Fatal("CFD legs: expected candidates (gross 8.18 > 2), got 0")
+	}
+}
+
 func TestCrossVenueStaleExcluded(t *testing.T) {
 	now := time.Now().Add(-2 * time.Minute) // 过期
-	d := &CrossVenueDetector{MinGrossBps: 1.0, FreshnessTTL: 60 * time.Second}
+	d := &CrossVenueDetector{CexMinGrossBps: 1.0, CfdMinGrossBps: 1.0, FreshnessTTL: 60 * time.Second}
 	snap := map[string]map[string]bus.Quote{
 		"EURUSD": {
 			"a:mt4": {Symbol: "EURUSD", Venue: "a", VenueType: "mt4", Bid: 1.0, Ask: 1.0, Time: now},
