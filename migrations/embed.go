@@ -16,3 +16,6 @@ var BrokerCommissionSQL string
 
 //go:embed 0005_broker_symbol_map_contract.sql
 var BrokerSymbolMapContractSQL string
+
+//go:embed 0006_personal_positions.sql
+var PersonalPositionsSQL string

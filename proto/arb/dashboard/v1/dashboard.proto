@@ -38,6 +38,9 @@ service DashboardService {
   rpc ClosePosition(ClosePositionRequest) returns (ClosePositionResponse);
   rpc ListPositions(ListPositionsRequest) returns (ListPositionsResponse);
 
+  // 个人持仓（财务线 TRX 持仓接入，D-046）
+  rpc ListPersonalPositions(ListPersonalPositionsRequest) returns (ListPersonalPositionsResponse);
+
   // Broker 管理（认证后，运行时 MT4/MT5 连接管理）
   rpc SearchBroker(SearchBrokerRequest) returns (SearchBrokerResponse);
   rpc AddBroker(AddBrokerRequest) returns (AddBrokerResponse);
@@ -363,6 +366,27 @@ message ListPositionsRequest {
 
 message ListPositionsResponse {
   repeated Position positions = 1;
+}
+
+// === PersonalPosition（财务线 TRX 持仓接入，D-046）===
+
+message PersonalPosition {
+  int64 id = 1;
+  string asset = 2;
+  string kind = 3;             // staking / short_hedge / other
+  string price_symbol = 4;     // 监控价格源 canonical（'TRXUSDT'）
+  double price = 5;            // 当前 mid（后端算；0 = 无报价）
+  double warn_high = 6;        // 0 = 未设
+  double crit_high = 7;        // 0 = 未设
+  string level = 8;            // 'ok'|'warn'|'crit'（后端算；空 = 无报价）
+  string note = 9;
+  string status = 10;          // OPEN / CLOSED
+}
+
+message ListPersonalPositionsRequest {}
+
+message ListPersonalPositionsResponse {
+  repeated PersonalPosition items = 1;
 }
 
 // === StreamUpdates（D-026，server streaming）===
