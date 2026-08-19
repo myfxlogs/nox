@@ -613,7 +613,7 @@ func (m *BrokerManager) attach(venue string, r *running) {
 	m.syncQueriers()
 }
 
-// queriers 汇总 static + running querier（D-051 WP3：syncQueriers 与 VenueOrders 共用的单一取法）。
+// queriers 汇总 static + running querier（D-051 WP3：syncQueriers 与 venueOrderResults 共用的单一取法）。
 func (m *BrokerManager) queriers() []reconcile.VenueQuerier {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -638,20 +638,27 @@ func (m *BrokerManager) syncQueriers() {
 	}
 }
 
-// VenueOrders 查全部 venue 实际持仓（OpenedOrders 实时）。D-051 WP3。
-// venue 查询失败静默跳过（该 venue 不影响其他），失败在日志可见；nil querier（swap-only 静态源）跳过。
-func (m *BrokerManager) VenueOrders(ctx context.Context) []reconcile.VenueOrder {
-	var out []reconcile.VenueOrder
+// VenueOrderResult 逐 venue 查询结果（D-052）：venue 身份 + 持仓 + 失败详情，
+// 供 BrokerPositionMonitor 跟踪在线状态（0 持仓成功也知 venue 在线）。
+type VenueOrderResult struct {
+	VenueKey string                 // "{venue}:{type}"
+	Orders   []reconcile.VenueOrder // 查询失败时为 nil
+	Err      error                  // nil = 在线
+}
+
+// venueOrderResults 逐 venue 查询实际持仓（含失败详情，替代 VenueOrders 的吞错版）。D-052。
+func (m *BrokerManager) venueOrderResults(ctx context.Context) []VenueOrderResult {
+	var out []VenueOrderResult
 	for _, q := range m.queriers() {
 		if q == nil {
 			continue
 		}
+		vk := q.VenueKey()
 		orders, err := q.QueryOpenedOrders(ctx)
 		if err != nil {
-			log.Printf("[broker] query venue orders: %v", err)
-			continue
+			log.Printf("[broker] query venue orders %s: %v", vk, err)
 		}
-		out = append(out, orders...)
+		out = append(out, VenueOrderResult{VenueKey: vk, Orders: orders, Err: err})
 	}
 	return out
 }
@@ -668,6 +675,9 @@ func (m *BrokerManager) CloseOrder(ctx context.Context, venueKey, ticket string)
 // BrokerSymbolMap venue broker 原生符号 → canonical（store broker_symbol_map）。D-051 WP3。
 // 查询错误/无映射 → 空 map（诚实，调用方留 canonical=""）。
 func (m *BrokerManager) BrokerSymbolMap(ctx context.Context, venue string) map[string]string {
+	if m.store == nil {
+		return map[string]string{}
+	}
 	mappings, err := m.store.ListSymbolMappings(ctx, venue)
 	if err != nil {
 		log.Printf("[broker] %s list symbol mappings: %v", venue, err)

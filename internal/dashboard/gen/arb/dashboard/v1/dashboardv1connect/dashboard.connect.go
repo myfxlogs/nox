@@ -98,6 +98,9 @@ const (
 	// DashboardServiceCloseBrokerPositionProcedure is the fully-qualified name of the
 	// DashboardService's CloseBrokerPosition RPC.
 	DashboardServiceCloseBrokerPositionProcedure = "/arb.dashboard.v1.DashboardService/CloseBrokerPosition"
+	// DashboardServiceCloseBrokerPositionsProcedure is the fully-qualified name of the
+	// DashboardService's CloseBrokerPositions RPC.
+	DashboardServiceCloseBrokerPositionsProcedure = "/arb.dashboard.v1.DashboardService/CloseBrokerPositions"
 	// DashboardServiceListPersonalPositionsProcedure is the fully-qualified name of the
 	// DashboardService's ListPersonalPositions RPC.
 	DashboardServiceListPersonalPositionsProcedure = "/arb.dashboard.v1.DashboardService/ListPersonalPositions"
@@ -190,6 +193,7 @@ type DashboardServiceClient interface {
 	// Broker 实持仓（D-051 WP3：MT5/MT4 实际持仓统一视图，实时查不落库）
 	ListBrokerPositions(context.Context, *connect.Request[v1.ListBrokerPositionsRequest]) (*connect.Response[v1.ListBrokerPositionsResponse], error)
 	CloseBrokerPosition(context.Context, *connect.Request[v1.CloseBrokerPositionRequest]) (*connect.Response[v1.CloseBrokerPositionResponse], error)
+	CloseBrokerPositions(context.Context, *connect.Request[v1.CloseBrokerPositionsRequest]) (*connect.Response[v1.CloseBrokerPositionsResponse], error)
 	// 个人持仓（财务线 TRX 持仓接入，D-046）+ 实账化（财务线工作项 3）
 	ListPersonalPositions(context.Context, *connect.Request[v1.ListPersonalPositionsRequest]) (*connect.Response[v1.ListPersonalPositionsResponse], error)
 	AddDailyIncome(context.Context, *connect.Request[v1.AddDailyIncomeRequest]) (*connect.Response[v1.AddDailyIncomeResponse], error)
@@ -361,6 +365,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("CloseBrokerPosition")),
 			connect.WithClientOptions(opts...),
 		),
+		closeBrokerPositions: connect.NewClient[v1.CloseBrokerPositionsRequest, v1.CloseBrokerPositionsResponse](
+			httpClient,
+			baseURL+DashboardServiceCloseBrokerPositionsProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("CloseBrokerPositions")),
+			connect.WithClientOptions(opts...),
+		),
 		listPersonalPositions: connect.NewClient[v1.ListPersonalPositionsRequest, v1.ListPersonalPositionsResponse](
 			httpClient,
 			baseURL+DashboardServiceListPersonalPositionsProcedure,
@@ -508,6 +518,7 @@ type dashboardServiceClient struct {
 	listPositions          *connect.Client[v1.ListPositionsRequest, v1.ListPositionsResponse]
 	listBrokerPositions    *connect.Client[v1.ListBrokerPositionsRequest, v1.ListBrokerPositionsResponse]
 	closeBrokerPosition    *connect.Client[v1.CloseBrokerPositionRequest, v1.CloseBrokerPositionResponse]
+	closeBrokerPositions   *connect.Client[v1.CloseBrokerPositionsRequest, v1.CloseBrokerPositionsResponse]
 	listPersonalPositions  *connect.Client[v1.ListPersonalPositionsRequest, v1.ListPersonalPositionsResponse]
 	addDailyIncome         *connect.Client[v1.AddDailyIncomeRequest, v1.AddDailyIncomeResponse]
 	listDailyIncome        *connect.Client[v1.ListDailyIncomeRequest, v1.ListDailyIncomeResponse]
@@ -638,6 +649,11 @@ func (c *dashboardServiceClient) ListBrokerPositions(ctx context.Context, req *c
 // CloseBrokerPosition calls arb.dashboard.v1.DashboardService.CloseBrokerPosition.
 func (c *dashboardServiceClient) CloseBrokerPosition(ctx context.Context, req *connect.Request[v1.CloseBrokerPositionRequest]) (*connect.Response[v1.CloseBrokerPositionResponse], error) {
 	return c.closeBrokerPosition.CallUnary(ctx, req)
+}
+
+// CloseBrokerPositions calls arb.dashboard.v1.DashboardService.CloseBrokerPositions.
+func (c *dashboardServiceClient) CloseBrokerPositions(ctx context.Context, req *connect.Request[v1.CloseBrokerPositionsRequest]) (*connect.Response[v1.CloseBrokerPositionsResponse], error) {
+	return c.closeBrokerPositions.CallUnary(ctx, req)
 }
 
 // ListPersonalPositions calls arb.dashboard.v1.DashboardService.ListPersonalPositions.
@@ -771,6 +787,7 @@ type DashboardServiceHandler interface {
 	// Broker 实持仓（D-051 WP3：MT5/MT4 实际持仓统一视图，实时查不落库）
 	ListBrokerPositions(context.Context, *connect.Request[v1.ListBrokerPositionsRequest]) (*connect.Response[v1.ListBrokerPositionsResponse], error)
 	CloseBrokerPosition(context.Context, *connect.Request[v1.CloseBrokerPositionRequest]) (*connect.Response[v1.CloseBrokerPositionResponse], error)
+	CloseBrokerPositions(context.Context, *connect.Request[v1.CloseBrokerPositionsRequest]) (*connect.Response[v1.CloseBrokerPositionsResponse], error)
 	// 个人持仓（财务线 TRX 持仓接入，D-046）+ 实账化（财务线工作项 3）
 	ListPersonalPositions(context.Context, *connect.Request[v1.ListPersonalPositionsRequest]) (*connect.Response[v1.ListPersonalPositionsResponse], error)
 	AddDailyIncome(context.Context, *connect.Request[v1.AddDailyIncomeRequest]) (*connect.Response[v1.AddDailyIncomeResponse], error)
@@ -936,6 +953,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		DashboardServiceCloseBrokerPositionProcedure,
 		svc.CloseBrokerPosition,
 		connect.WithSchema(dashboardServiceMethods.ByName("CloseBrokerPosition")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceCloseBrokerPositionsHandler := connect.NewUnaryHandler(
+		DashboardServiceCloseBrokerPositionsProcedure,
+		svc.CloseBrokerPositions,
+		connect.WithSchema(dashboardServiceMethods.ByName("CloseBrokerPositions")),
 		connect.WithHandlerOptions(opts...),
 	)
 	dashboardServiceListPersonalPositionsHandler := connect.NewUnaryHandler(
@@ -1104,6 +1127,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceListBrokerPositionsHandler.ServeHTTP(w, r)
 		case DashboardServiceCloseBrokerPositionProcedure:
 			dashboardServiceCloseBrokerPositionHandler.ServeHTTP(w, r)
+		case DashboardServiceCloseBrokerPositionsProcedure:
+			dashboardServiceCloseBrokerPositionsHandler.ServeHTTP(w, r)
 		case DashboardServiceListPersonalPositionsProcedure:
 			dashboardServiceListPersonalPositionsHandler.ServeHTTP(w, r)
 		case DashboardServiceAddDailyIncomeProcedure:
@@ -1239,6 +1264,10 @@ func (UnimplementedDashboardServiceHandler) ListBrokerPositions(context.Context,
 
 func (UnimplementedDashboardServiceHandler) CloseBrokerPosition(context.Context, *connect.Request[v1.CloseBrokerPositionRequest]) (*connect.Response[v1.CloseBrokerPositionResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.CloseBrokerPosition is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) CloseBrokerPositions(context.Context, *connect.Request[v1.CloseBrokerPositionsRequest]) (*connect.Response[v1.CloseBrokerPositionsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.CloseBrokerPositions is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListPersonalPositions(context.Context, *connect.Request[v1.ListPersonalPositionsRequest]) (*connect.Response[v1.ListPersonalPositionsResponse], error) {

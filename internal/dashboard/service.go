@@ -38,6 +38,8 @@ type Service struct {
 	priceTopic *bus.Topic[position.PositionPrice]
 	// oppTopic 新机会推送广播（D-050）：engine 新插入发布 → StreamUpdates 扇出 case 2。nil = 未接线（测试直接构造 Service）。
 	oppTopic *bus.Topic[pgstore.Opportunity]
+	// bpm Broker 实持仓 monitor（D-052）：ListBrokerPositions 拉 + StreamUpdates case 8 推同源。nil = 未接线（测试直接构造 Service）。
+	bpm *BrokerPositionMonitor
 }
 
 // New 创建 dashboard 服务。reviewer 为复盘触发闭包（nil 则平仓后不触发）；
@@ -45,9 +47,10 @@ type Service struct {
 // liqMMR 为个人持仓理论强平维持保证金率（传 config.LiqMMR）；
 // fundingDropRatio 为资金费急降预警比例（传 config.FundingDropRatio）；
 // priceTopic 为实时现价广播 topic（D-049，传 main 创建的 priceTopic）；
-// oppTopic 为新机会站内推送 topic（D-050，传 main 创建的 oppTopic）。
-func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64, fundingDropRatio float64, priceTopic *bus.Topic[position.PositionPrice], oppTopic *bus.Topic[pgstore.Opportunity]) *Service {
-	return &Service{store: store, qbus: qbus, pipeline: pipeline, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, priceTopic: priceTopic, oppTopic: oppTopic}
+// oppTopic 为新机会站内推送 topic（D-050，传 main 创建的 oppTopic）；
+// bpm 为 Broker 实持仓 monitor（D-052，传 main 创建的 bpm）。
+func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64, fundingDropRatio float64, priceTopic *bus.Topic[position.PositionPrice], oppTopic *bus.Topic[pgstore.Opportunity], bpm *BrokerPositionMonitor) *Service {
+	return &Service{store: store, qbus: qbus, pipeline: pipeline, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, priceTopic: priceTopic, oppTopic: oppTopic, bpm: bpm}
 }
 
 // --- 快照类 ---
@@ -425,31 +428,18 @@ func (s *Service) ClosePosition(ctx context.Context, req *connect.Request[v1.Clo
 
 // --- Broker 实持仓（D-051 WP3：MT5/MT4 实际持仓统一视图，实时查不落库） ---
 
-// ListBrokerPositions 实时查全部 venue 实际持仓（OpenedOrders）。
-// canonical 解析 + 现价计算均在后端（D-043 零信任：前端只渲染）；venue 查询失败静默跳过（不影响其他）。
+// ListBrokerPositions 返回 Broker 实持仓视图（D-052 monitor 单一真相源）。
+// refresh=true 强制触发一次 venue 轮询后返回（前端「刷新」/平仓后立即刷新）；否则返回最近缓存（≤ 轮询周期）。
+// canonical 解析 + 现价计算均在后端（D-043 零信任：前端只渲染）；离线 venue 保留最近快照并 venue_online=false。
 func (s *Service) ListBrokerPositions(ctx context.Context, req *connect.Request[v1.ListBrokerPositionsRequest]) (*connect.Response[v1.ListBrokerPositionsResponse], error) {
-	orders := s.bm.VenueOrders(ctx)
-	symMaps := map[string]map[string]string{} // venue → broker→canonical（懒加载 BrokerSymbolMap）
-	now := time.Now()
-	out := make([]*v1.BrokerPosition, 0, len(orders))
-	for _, o := range orders {
-		canonical := ""
-		if cm, ok := symMaps[o.Venue]; ok {
-			canonical = cm[o.Symbol]
-		} else {
-			cm := s.bm.BrokerSymbolMap(ctx, o.Venue)
-			symMaps[o.Venue] = cm
-			canonical = cm[o.Symbol]
-		}
-		var price bus.Quote
-		hasPrice := false
-		if canonical != "" {
-			if q, ok := s.qbus.Latest(canonical, o.VenueKey); ok {
-				price = q
-				hasPrice = true
-			}
-		}
-		out = append(out, brokerPositionToProto(o, canonical, price, hasPrice, s.freshTTL, now))
+	if s.bpm == nil {
+		return connect.NewResponse(&v1.ListBrokerPositionsResponse{}), nil
+	}
+	var out []*v1.BrokerPosition
+	if req.Msg.GetRefresh() {
+		out = s.bpm.Refresh(ctx)
+	} else {
+		out = s.bpm.Snapshot()
 	}
 	return connect.NewResponse(&v1.ListBrokerPositionsResponse{Positions: out}), nil
 }
@@ -462,25 +452,43 @@ func (s *Service) CloseBrokerPosition(ctx context.Context, req *connect.Request[
 	return connect.NewResponse(&v1.CloseBrokerPositionResponse{Status: "CLOSED"}), nil
 }
 
+// CloseBrokerPositions 批量平仓（D-052 全平选中）：逐条执行，单条失败不阻断后续。
+// 前端二次点击确认后调用；每项独立返回 CLOSED/FAILED。
+func (s *Service) CloseBrokerPositions(ctx context.Context, req *connect.Request[v1.CloseBrokerPositionsRequest]) (*connect.Response[v1.CloseBrokerPositionsResponse], error) {
+	items := req.Msg.GetItems()
+	results := make([]*v1.CloseBrokerPositionResponse, 0, len(items))
+	for _, it := range items {
+		if _, err := s.bm.CloseOrder(ctx, it.GetVenueKey(), it.GetTicket()); err != nil {
+			results = append(results, &v1.CloseBrokerPositionResponse{Status: "FAILED", Message: err.Error()})
+			continue
+		}
+		results = append(results, &v1.CloseBrokerPositionResponse{Status: "CLOSED"})
+	}
+	return connect.NewResponse(&v1.CloseBrokerPositionsResponse{Results: results}), nil
+}
+
 // brokerPositionToProto 组装单个 venue 持仓响应。
 // current_price：canonical 已解析且报价帧新鲜（now.Sub ≤ freshTTL）→ mid，fresh=true；否则 0/false（诚实空态）。
 // is_arb：comment 前缀 = exec.OrderComment（复用 reconcile.isARBOrder 语义，D-032）。
 // pnl 为 venue 权威浮盈（Order.Profit）透传，前端不自算（D-043）。
-func brokerPositionToProto(o reconcile.VenueOrder, canonical string, price bus.Quote, hasPrice bool, freshTTL time.Duration, now time.Time) *v1.BrokerPosition {
+// venueOnline=false = 离线 venue 的最近快照（非实时，诚实标注，D-052）。
+func brokerPositionToProto(o reconcile.VenueOrder, canonical string, price bus.Quote, hasPrice bool, venueOnline bool, freshTTL time.Duration, now time.Time) *v1.BrokerPosition {
 	pb := &v1.BrokerPosition{
-		Venue:      o.Venue,
-		VenueKey:   o.VenueKey,
-		Ticket:     o.Ticket,
-		Symbol:     o.Symbol,
-		Canonical:  canonical,
-		Side:       o.Side,
-		Volume:     o.Volume,
-		OpenPrice:  o.OpenPrice,
-		Pnl:        o.Profit,
-		Swap:       o.Swap,
-		Commission: o.Commission,
-		Comment:    o.Comment,
-		IsArb:      strings.HasPrefix(o.Comment, exec.OrderComment),
+		Venue:       o.Venue,
+		VenueKey:    o.VenueKey,
+		Ticket:      o.Ticket,
+		Symbol:      o.Symbol,
+		Canonical:   canonical,
+		Side:        o.Side,
+		Volume:      o.Volume,
+		OpenPrice:   o.OpenPrice,
+		Pnl:         o.Profit,
+		Swap:        o.Swap,
+		Commission:  o.Commission,
+		Comment:     o.Comment,
+		IsArb:       strings.HasPrefix(o.Comment, exec.OrderComment),
+		Magic:       o.Magic,
+		VenueOnline: venueOnline,
 	}
 	if hasPrice && now.Sub(price.Time) <= freshTTL {
 		pb.CurrentPrice = (price.Bid + price.Ask) / 2
@@ -735,6 +743,13 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 		oppCh, oppCancel = s.oppTopic.Subscribe()
 		defer oppCancel()
 	}
+	// Broker 实持仓推送（D-052）：monitor 变更广播全量快照 → case 8。bpm 为 nil（测试未接线）→ 不订阅。
+	var bpCh <-chan *v1.BrokerPositionSnapshot
+	if s.bpm != nil && s.bpm.topic != nil {
+		var bpCancel func()
+		bpCh, bpCancel = s.bpm.topic.Subscribe()
+		defer bpCancel()
+	}
 	// keepalive 每 30s（§8.2 D-027）
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -771,6 +786,17 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 			if err := stream.Send(&v1.StreamUpdatesResponse{
 				Update: &v1.StreamUpdatesResponse_Opportunity{
 					Opportunity: oppToProto(&v),
+				},
+			}); err != nil {
+				return err
+			}
+		case v, ok := <-bpCh:
+			if !ok {
+				return nil
+			}
+			if err := stream.Send(&v1.StreamUpdatesResponse{
+				Update: &v1.StreamUpdatesResponse_BrokerPositions{
+					BrokerPositions: v,
 				},
 			}); err != nil {
 				return err
