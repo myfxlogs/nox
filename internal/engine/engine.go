@@ -14,6 +14,11 @@ import (
 	"arb/internal/store/pgstore"
 )
 
+// opportunityStore 引擎所需的机会存储接口（D-050 测试注入：生产为 pgstore.Store，测试用 fake 判定 inserted）。
+type opportunityStore interface {
+	UpsertOpportunity(ctx context.Context, o *pgstore.Opportunity) (bool, error)
+}
+
 // FactCache 实现 detector.FactProvider，从内存缓存提供 funding/swap Fact。
 type FactCache struct {
 	mu      sync.RWMutex
@@ -86,17 +91,22 @@ type Engine struct {
 	bus           *bus.QuoteBus
 	detectors     []detector.Detector
 	evalCfg       evaluator.Config
-	store         *pgstore.Store
+	store         opportunityStore
 	facts         *FactCache
 	commissionFor func(venueKey string) float64
 	scanThrottle  time.Duration
+	// oppTopic 新机会站内推送总线（D-050）：仅新插入且净收益 ≥ 门槛时发布。nil = 未接线（测试可不接）。
+	oppTopic *bus.Topic[pgstore.Opportunity]
+	// minNotifyNetBps 机会推送提醒门槛（bps）；0 = 全部新机会都提醒（config.ARB_NOTIFY_MIN_NET_BPS）。
+	minNotifyNetBps float64
 
 	mu       sync.Mutex
 	lastScan map[string]time.Time // canonical → 上次扫描时间（节流）
 }
 
 // New 创建引擎。commissionFor 必填（成本正确性依赖真实佣金，D-036），nil = 装配错误直接 panic。
-func New(b *bus.QuoteBus, detectors []detector.Detector, cfg evaluator.Config, store *pgstore.Store, fc *FactCache, commissionFor func(venueKey string) float64, scanThrottle time.Duration) *Engine {
+// oppTopic 允许 nil（测试不接推送）；minNotifyNetBps 为提醒门槛（缺省 0 = 所有新机会都推）。
+func New(b *bus.QuoteBus, detectors []detector.Detector, cfg evaluator.Config, store opportunityStore, fc *FactCache, commissionFor func(venueKey string) float64, scanThrottle time.Duration, oppTopic *bus.Topic[pgstore.Opportunity], minNotifyNetBps float64) *Engine {
 	if commissionFor == nil {
 		panic("engine: commissionFor resolver required (D-036 per-venue 佣金)")
 	}
@@ -104,14 +114,16 @@ func New(b *bus.QuoteBus, detectors []detector.Detector, cfg evaluator.Config, s
 		scanThrottle = 30 * time.Second
 	}
 	return &Engine{
-		bus:           b,
-		detectors:     detectors,
-		evalCfg:       cfg,
-		store:         store,
-		facts:         fc,
-		commissionFor: commissionFor,
-		scanThrottle:  scanThrottle,
-		lastScan:      make(map[string]time.Time),
+		bus:             b,
+		detectors:       detectors,
+		evalCfg:         cfg,
+		store:           store,
+		facts:           fc,
+		commissionFor:   commissionFor,
+		scanThrottle:    scanThrottle,
+		oppTopic:        oppTopic,
+		minNotifyNetBps: minNotifyNetBps,
+		lastScan:        make(map[string]time.Time),
 	}
 }
 
@@ -160,8 +172,15 @@ func (e *Engine) onQuote(ctx context.Context, q bus.Quote) {
 		if result.Rating == evaluator.RatingTrap {
 			continue
 		}
-		if err := e.store.UpsertOpportunity(ctx, resultToOpp(result)); err != nil {
+		o := resultToOpp(result)
+		inserted, err := e.store.UpsertOpportunity(ctx, o)
+		if err != nil {
 			log.Printf("[engine] upsert opportunity %s: %v", result.ID, err)
+			continue
+		}
+		// D-050 站内推送：仅新插入且净收益 ≥ 提醒门槛时发布；刷新/低净值不推（30s 快照兜底）。
+		if e.oppTopic != nil && inserted && o.NetBps >= e.minNotifyNetBps {
+			e.oppTopic.Publish(*o)
 		}
 	}
 }
