@@ -5104,6 +5104,8 @@ type MatrixSymbolAccount struct {
 	Venue         string                 `protobuf:"bytes,1,opt,name=venue,proto3" json:"venue,omitempty"`                                     // 登录账号号（D-033）
 	Canonical     *string                `protobuf:"bytes,2,opt,name=canonical,proto3,oneof" json:"canonical,omitempty"`                       // 该账号已映射 canonical；null = 缺
 	ContractSize  float64                `protobuf:"fixed64,3,opt,name=contract_size,json=contractSize,proto3" json:"contract_size,omitempty"` // 该账号权威合约规格；0 = 未知（MT4）
+	RawSymbol     string                 `protobuf:"bytes,4,opt,name=raw_symbol,json=rawSymbol,proto3" json:"raw_symbol,omitempty"`            // 该账号映射前的原始 broker 符号（归并行逐账号不同）
+	Group         string                 `protobuf:"bytes,5,opt,name=group,proto3" json:"group,omitempty"`                                     // 该账号原生符号所属 broker 分组（归并行逐账号原生分组，如 Forex/Metals）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5159,10 +5161,24 @@ func (x *MatrixSymbolAccount) GetContractSize() float64 {
 	return 0
 }
 
+func (x *MatrixSymbolAccount) GetRawSymbol() string {
+	if x != nil {
+		return x.RawSymbol
+	}
+	return ""
+}
+
+func (x *MatrixSymbolAccount) GetGroup() string {
+	if x != nil {
+		return x.Group
+	}
+	return ""
+}
+
 type MatrixSymbolRow struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
-	Symbol           string                 `protobuf:"bytes,1,opt,name=symbol,proto3" json:"symbol,omitempty"`                                        // broker 原生符号（去重键之一）
-	Group            string                 `protobuf:"bytes,2,opt,name=group,proto3" json:"group,omitempty"`                                          // broker 分组；"" = 未分组（MT4）
+	Symbol           string                 `protobuf:"bytes,1,opt,name=symbol,proto3" json:"symbol,omitempty"`                                        // 展示名：已配齐 canonical 归并行为 canonical，其余为 broker 原生符号
+	Group            string                 `protobuf:"bytes,2,opt,name=group,proto3" json:"group,omitempty"`                                          // broker 分组；"" = 未分组（MT4）；归并行 = 跨组商品
 	CoverageTotal    int32                  `protobuf:"varint,3,opt,name=coverage_total,json=coverageTotal,proto3" json:"coverage_total,omitempty"`    // 应配齐集大小 = connected 账号中存在 (symbol,group) 者
 	CoverageMapped   int32                  `protobuf:"varint,4,opt,name=coverage_mapped,json=coverageMapped,proto3" json:"coverage_mapped,omitempty"` // 其中已映射数量
 	State            MatrixState            `protobuf:"varint,5,opt,name=state,proto3,enum=arb.dashboard.v1.MatrixState" json:"state,omitempty"`       // 后端按 coverage 计算
@@ -5816,11 +5832,14 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\n" +
 	"canonicals\x18\x01 \x03(\tR\n" +
 	"canonicals\"\x1b\n" +
-	"\x19ListMatrixUniverseRequest\"\x81\x01\n" +
+	"\x19ListMatrixUniverseRequest\"\xb6\x01\n" +
 	"\x13MatrixSymbolAccount\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12!\n" +
 	"\tcanonical\x18\x02 \x01(\tH\x00R\tcanonical\x88\x01\x01\x12#\n" +
-	"\rcontract_size\x18\x03 \x01(\x01R\fcontractSizeB\f\n" +
+	"\rcontract_size\x18\x03 \x01(\x01R\fcontractSize\x12\x1d\n" +
+	"\n" +
+	"raw_symbol\x18\x04 \x01(\tR\trawSymbol\x12\x14\n" +
+	"\x05group\x18\x05 \x01(\tR\x05groupB\f\n" +
 	"\n" +
 	"_canonical\"\xfa\x02\n" +
 	"\x0fMatrixSymbolRow\x12\x16\n" +

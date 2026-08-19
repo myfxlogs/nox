@@ -113,6 +113,93 @@ func TestBuildMatrixUniverse_Conflict(t *testing.T) {
 	}
 }
 
+func TestBuildMatrixUniverse_CanonicalMerge(t *testing.T) {
+	// 同商品跨 broker 原生符号不同：XAUUSDm(Exness) + GOLD(FxPro) → 归并成一行 XAUUSD
+	accounts := []*v1.BrokerAccount{
+		{Venue: "v1", Status: "connected"},
+		{Venue: "v2", Status: "connected"},
+	}
+	groups := map[string][]SymbolGroup{
+		"v1": {{Symbol: "XAUUSDm", Group: "Forex", ContractSize: 100}},
+		"v2": {{Symbol: "GOLD", Group: "Metals", ContractSize: 100}},
+	}
+	mappings := []pgstore.SymbolMapping{
+		{Venue: "v1", BrokerSymbol: "XAUUSDm", Canonical: "XAUUSD"},
+		{Venue: "v2", BrokerSymbol: "GOLD", Canonical: "XAUUSD"},
+	}
+	u := buildMatrixUniverse(accounts, groups, mappings, nil)
+	if len(u.Symbols) != 1 {
+		t.Fatalf("want 1 merged row, got %d", len(u.Symbols))
+	}
+	row := u.Symbols[0]
+	if row.Symbol != "XAUUSD" {
+		t.Errorf("merged symbol want XAUUSD, got %s", row.Symbol)
+	}
+	if row.Group != "" {
+		t.Errorf("merged group want \"\" (跨组), got %q", row.Group)
+	}
+	if row.CoverageTotal != 2 || row.CoverageMapped != 2 {
+		t.Errorf("merged coverage want 2/2, got %d/%d", row.CoverageMapped, row.CoverageTotal)
+	}
+	if row.State != v1.MatrixState_MATRIX_STATE_COMPLETE {
+		t.Errorf("merged state want COMPLETE, got %v", row.State)
+	}
+	if len(row.Accounts) != 2 {
+		t.Fatalf("merged accounts want 2, got %d", len(row.Accounts))
+	}
+	rawByVenue := map[string]string{}
+	groupByVenue := map[string]string{}
+	for _, a := range row.Accounts {
+		if a.Canonical == nil || *a.Canonical != "XAUUSD" {
+			t.Errorf("account %s canonical want XAUUSD, got %v", a.Venue, a.Canonical)
+		}
+		if a.RawSymbol == "" {
+			t.Errorf("account %s rawSymbol empty", a.Venue)
+		}
+		rawByVenue[a.Venue] = a.RawSymbol
+		groupByVenue[a.Venue] = a.Group
+	}
+	if rawByVenue["v1"] != "XAUUSDm" || rawByVenue["v2"] != "GOLD" {
+		t.Errorf("per-venue raw symbols want v1=XAUUSDm v2=GOLD, got %v", rawByVenue)
+	}
+	if groupByVenue["v1"] != "Forex" || groupByVenue["v2"] != "Metals" {
+		t.Errorf("per-venue native groups want v1=Forex v2=Metals, got %v", groupByVenue)
+	}
+	if rawByVenue["v1"] != "XAUUSDm" || rawByVenue["v2"] != "GOLD" {
+		t.Errorf("per-venue raw symbols want v1=XAUUSDm v2=GOLD, got %v", rawByVenue)
+	}
+}
+
+func TestBuildMatrixUniverse_CanonicalSingleMemberKeepsGroup(t *testing.T) {
+	// 唯一已配齐行：展示名改 canonical，但分组保留（EURUSD 仍属 Forex）
+	accounts := []*v1.BrokerAccount{
+		{Venue: "v1", Status: "connected"},
+	}
+	groups := map[string][]SymbolGroup{
+		"v1": {{Symbol: "EURUSD", Group: "Forex", ContractSize: 100000}},
+	}
+	mappings := []pgstore.SymbolMapping{
+		{Venue: "v1", BrokerSymbol: "EURUSD", Canonical: "EURUSD"},
+	}
+	u := buildMatrixUniverse(accounts, groups, mappings, nil)
+	if len(u.Symbols) != 1 {
+		t.Fatalf("want 1 row, got %d", len(u.Symbols))
+	}
+	row := u.Symbols[0]
+	if row.Symbol != "EURUSD" {
+		t.Errorf("symbol want EURUSD, got %s", row.Symbol)
+	}
+	if row.Group != "Forex" {
+		t.Errorf("group want Forex, got %q", row.Group)
+	}
+	if row.State != v1.MatrixState_MATRIX_STATE_COMPLETE {
+		t.Errorf("state want COMPLETE, got %v", row.State)
+	}
+	if len(row.Accounts) != 1 || row.Accounts[0].RawSymbol != "EURUSD" {
+		t.Errorf("account rawSymbol want EURUSD, got %v", row.Accounts)
+	}
+}
+
 func TestBuildMatrixUniverse_StoppedExcluded(t *testing.T) {
 	accounts := []*v1.BrokerAccount{
 		{Venue: "v1", Status: "connected"},

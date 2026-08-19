@@ -22,9 +22,11 @@ type matrixRowBuilder struct {
 
 type matrixAcctInfo struct {
 	venue        string
+	rawSymbol    string
 	canonical    string
 	hasMapping   bool
 	contractSize float64
+	group        string // 该账号原生符号所属 broker 分组（归并行逐账号保留原生分组）
 }
 
 // buildMatrixUniverse 把聚合数据装配为 MatrixUniverse（纯函数，便于单测 D-045 §8.1）。
@@ -77,18 +79,118 @@ func buildMatrixUniverse(
 				row.mappedCount++
 			}
 			row.accounts = append(row.accounts, matrixAcctInfo{
-				venue: venue, canonical: canon, hasMapping: mapped, contractSize: sg.ContractSize,
+				venue: venue, rawSymbol: sg.Symbol, canonical: canon, hasMapping: mapped, contractSize: sg.ContractSize, group: sg.Group,
 			})
 		}
 	}
 
+	// 已配齐（COMPLETE 且唯一 canonical）行按 canonical 归并：
+	// 同商品跨 broker 原生符号不同（XAUUSDm + GOLD → XAUUSD）合并为一行；唯一已配齐行展示名改 canonical、分组保留。
+	// 缺 / 部分缺 / 跨 canonical 冲突行保持原生符号行（仍要补映射/修正，D-046）。
+	type canonGroup struct {
+		canonical string
+		rows      []*matrixRowBuilder
+	}
+	canonByCanonical := make(map[string]*canonGroup)
+	canonOrder := make([]string, 0)
+	for _, key := range rowOrder {
+		row := rowMap[key]
+		if row.mappedCount == 0 || row.mappedCount != len(row.venuesSeen) || len(row.canonicals) != 1 {
+			continue
+		}
+		canon := ""
+		for c := range row.canonicals {
+			canon = c
+		}
+		g, ok := canonByCanonical[canon]
+		if !ok {
+			g = &canonGroup{canonical: canon}
+			canonByCanonical[canon] = g
+			canonOrder = append(canonOrder, canon)
+		}
+		g.rows = append(g.rows, row)
+	}
+
+	// 输出行：原生行（缺/部分缺/冲突） + 唯一已配齐 relabel 行 + canonical 归并行。
+	type outRow struct {
+		symbol      string
+		group       string
+		accounts    []matrixAcctInfo
+		mapped      int
+		total       int
+		contracts   map[float64]bool
+		canonicals []string // 该行映射到的 canonical 集（原生冲突行可能 >1）
+	}
+	out := make([]outRow, 0, len(rowOrder)+len(canonOrder))
+	mergedCanon := make(map[string]bool)
+	for _, key := range rowOrder {
+		row := rowMap[key]
+		isCanonRow := row.mappedCount > 0 && row.mappedCount == len(row.venuesSeen) && len(row.canonicals) == 1
+		if isCanonRow {
+			canon := ""
+			for c := range row.canonicals {
+				canon = c
+			}
+			g := canonByCanonical[canon]
+			if len(g.rows) >= 2 {
+				if mergedCanon[canon] {
+					continue // 该 canonical 已在首现位置归并，跳过成员原生行
+				}
+				mergedCanon[canon] = true
+				venueSet := make(map[string]bool)
+				contracts := make(map[float64]bool)
+				for _, r := range g.rows {
+					for v := range r.venuesSeen {
+						venueSet[v] = true
+					}
+					for cs := range r.contracts {
+						contracts[cs] = true
+					}
+				}
+				mappedAccts := make([]matrixAcctInfo, 0)
+				seenVenue := make(map[string]bool)
+				for _, r := range g.rows {
+					for _, ai := range r.accounts {
+						if seenVenue[ai.venue] {
+							continue
+						}
+						seenVenue[ai.venue] = true
+						mappedAccts = append(mappedAccts, ai)
+					}
+				}
+				out = append(out, outRow{
+					symbol: canon, group: "", accounts: mappedAccts,
+					mapped: len(venueSet), total: len(venueSet), contracts: contracts,
+					canonicals: []string{canon},
+				})
+				continue
+			}
+			// 唯一已配齐行：展示名 = canonical，分组保留（如 EURUSD 仍属 Forex）
+			out = append(out, outRow{
+				symbol: canon, group: row.group, accounts: row.accounts,
+				mapped: row.mappedCount, total: len(row.venuesSeen), contracts: row.contracts,
+				canonicals: []string{canon},
+			})
+			continue
+		}
+		mappedCanonicals := make([]string, 0, len(row.canonicals))
+		for c := range row.canonicals {
+			mappedCanonicals = append(mappedCanonicals, c)
+		}
+		sort.Strings(mappedCanonicals)
+		out = append(out, outRow{
+			symbol: row.symbol, group: row.group, accounts: row.accounts,
+			mapped: row.mappedCount, total: len(row.venuesSeen), contracts: row.contracts,
+			canonicals: mappedCanonicals,
+		})
+	}
+
 	groupOrder := make([]string, 0)
 	groupSeen := make(map[string]bool)
-	for _, key := range rowOrder {
-		g := key.group
-		if !groupSeen[g] {
-			groupSeen[g] = true
-			groupOrder = append(groupOrder, g)
+	for _, or := range out {
+		if !groupSeen[or.group] {
+			groupSeen[or.group] = true
+			groupOrder = append(groupOrder, or.group)
 		}
 	}
 	groupStats := make(map[string]*v1.MatrixGroupStat, len(groupOrder))
@@ -96,56 +198,48 @@ func buildMatrixUniverse(
 		groupStats[g] = &v1.MatrixGroupStat{Group: g}
 	}
 
-	symbolRows := make([]*v1.MatrixSymbolRow, 0, len(rowOrder))
-	for _, key := range rowOrder {
-		row := rowMap[key]
-		total := len(row.venuesSeen)
-		mapped := row.mappedCount
+	symbolRows := make([]*v1.MatrixSymbolRow, 0, len(out))
+	for _, or := range out {
 		var state v1.MatrixState
 		switch {
-		case total == 0 || mapped == total:
+		case or.total == 0 || or.mapped == or.total:
 			state = v1.MatrixState_MATRIX_STATE_COMPLETE
-		case mapped == 0:
+		case or.mapped == 0:
 			state = v1.MatrixState_MATRIX_STATE_MISSING
 		default:
 			state = v1.MatrixState_MATRIX_STATE_PARTIAL
 		}
 		cMin, cMax := 0.0, 0.0
-		if len(row.contracts) > 0 {
-			sorted := make([]float64, 0, len(row.contracts))
-			for cs := range row.contracts {
+		if len(or.contracts) > 0 {
+			sorted := make([]float64, 0, len(or.contracts))
+			for cs := range or.contracts {
 				sorted = append(sorted, cs)
 			}
 			sort.Float64s(sorted)
 			cMin, cMax = sorted[0], sorted[len(sorted)-1]
 		}
-		mappedCanonicals := make([]string, 0, len(row.canonicals))
-		for c := range row.canonicals {
-			mappedCanonicals = append(mappedCanonicals, c)
-		}
-		sort.Strings(mappedCanonicals)
-		acctsPB := make([]*v1.MatrixSymbolAccount, 0, len(row.accounts))
-		for _, ai := range row.accounts {
-			ma := &v1.MatrixSymbolAccount{Venue: ai.venue, ContractSize: ai.contractSize}
+		acctsPB := make([]*v1.MatrixSymbolAccount, 0, len(or.accounts))
+		for _, ai := range or.accounts {
+			ma := &v1.MatrixSymbolAccount{Venue: ai.venue, RawSymbol: ai.rawSymbol, ContractSize: ai.contractSize, Group: ai.group}
 			if ai.hasMapping {
 				ma.Canonical = &ai.canonical
 			}
 			acctsPB = append(acctsPB, ma)
 		}
-		groupStats[key.group].Total++
+		groupStats[or.group].Total++
 		switch state {
 		case v1.MatrixState_MATRIX_STATE_COMPLETE:
-			groupStats[key.group].Complete++
+			groupStats[or.group].Complete++
 		case v1.MatrixState_MATRIX_STATE_PARTIAL:
-			groupStats[key.group].Partial++
+			groupStats[or.group].Partial++
 		case v1.MatrixState_MATRIX_STATE_MISSING:
-			groupStats[key.group].Missing++
+			groupStats[or.group].Missing++
 		}
 		symbolRows = append(symbolRows, &v1.MatrixSymbolRow{
-			Symbol: row.symbol, Group: row.group,
-			CoverageTotal: int32(total), CoverageMapped: int32(mapped), State: state,
+			Symbol: or.symbol, Group: or.group,
+			CoverageTotal: int32(or.total), CoverageMapped: int32(or.mapped), State: state,
 			ContractMin: cMin, ContractMax: cMax,
-			MappedCanonicals: mappedCanonicals, Accounts: acctsPB,
+			MappedCanonicals: or.canonicals, Accounts: acctsPB,
 		})
 	}
 	groupStatList := make([]*v1.MatrixGroupStat, 0, len(groupOrder))
