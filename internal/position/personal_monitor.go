@@ -24,15 +24,23 @@ type PersonalMonitor struct {
 	throttle  time.Duration
 	// alertFn 告警写入通道（默认 store.InsertAlert rule_id=NULL 系统级）；测试注入。
 	alertFn func(ctx context.Context, level, message string) error
-	// now 可注入时钟（测试节流）。
+	// now 可注入时钟（测试节流 + 报价陈旧判定）。
 	now func() time.Time
+
+	// D-049 实时现价广播：与告警正交（不走 5s 节流）。
+	freshTTL  time.Duration       // 报价陈旧 TTL（复用 config.DetectorFreshnessTTL，G3）
+	liqMMR    float64             // 理论强平维持保证金率（config.ARB_LIQ_MMR）
+	onPrice   func(PositionPrice) // 现价视图回调（nil 安全；main 接 priceTopic.Publish）
+	lastPrice map[int64]float64   // id → 上次广播价（同价去重，防同值连发）
 }
 
-// NewPersonalMonitor 创建个人持仓监控器。
-func NewPersonalMonitor(b *bus.QuoteBus, store *pgstore.Store) *PersonalMonitor {
-	return &PersonalMonitor{
+// NewPersonalMonitor 创建个人持仓监控器。onPrice 允许 nil（不广播，仅告警）。
+func NewPersonalMonitor(b *bus.QuoteBus, store *pgstore.Store, freshTTL time.Duration, liqMMR float64, onPrice func(PositionPrice)) *PersonalMonitor {
+	m := &PersonalMonitor{
 		bus:       b,
 		store:     store,
+		freshTTL:  freshTTL,
+		liqMMR:    liqMMR,
 		positions: make(map[int64]*pgstore.PersonalPosition),
 		level:     make(map[int64]string),
 		lastAlert: make(map[int64]time.Time),
@@ -42,6 +50,11 @@ func NewPersonalMonitor(b *bus.QuoteBus, store *pgstore.Store) *PersonalMonitor 
 		},
 		now: time.Now,
 	}
+	if onPrice != nil {
+		m.onPrice = onPrice
+		m.lastPrice = make(map[int64]float64)
+	}
+	return m
 }
 
 // Run 启动监控。阻塞至 ctx 取消。
@@ -85,6 +98,7 @@ func (m *PersonalMonitor) loadPositions(ctx context.Context) error {
 			delete(m.positions, id)
 			delete(m.level, id)
 			delete(m.lastAlert, id)
+			delete(m.lastPrice, id) // D-049：广播价缓存随仓清理（closed 行不留残；nil map delete 安全）
 		}
 	}
 	log.Printf("[personal-monitor] loaded %d open personal positions", len(m.positions))
@@ -126,6 +140,31 @@ func (m *PersonalMonitor) onQuote(ctx context.Context, q bus.Quote) {
 			m.lastAlert[p.ID] = m.now()
 		}
 		m.level[p.ID] = newLevel
+	}
+
+	// 实时现价广播（D-049）：与告警正交、不走 5s 节流。用 bus.Snapshot + LatestQuote 同选帧
+	// （多 venue 同符号与快照路径取同一最新未陈旧帧，实时价 = 快照价，30s 对账边界不跳变）。
+	if m.onPrice != nil && m.bus != nil {
+		syms := make([]string, 0, 1)
+		for _, p := range m.positions {
+			if p.PriceSymbol == q.Symbol {
+				syms = append(syms, p.PriceSymbol)
+				break
+			}
+		}
+		if len(syms) > 0 {
+			venues := m.bus.Snapshot(ctx, syms)
+			for _, p := range m.positions {
+				if p.PriceSymbol != q.Symbol {
+					continue
+				}
+				view := ComputePositionPrice(p, venues[p.PriceSymbol], m.freshTTL, m.now(), m.liqMMR)
+				if view.Price != m.lastPrice[p.ID] {
+					m.lastPrice[p.ID] = view.Price
+					m.onPrice(view)
+				}
+			}
+		}
 	}
 }
 

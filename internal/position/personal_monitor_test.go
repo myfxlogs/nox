@@ -2,6 +2,7 @@ package position
 
 import (
 	"context"
+	"math"
 	"sync"
 	"testing"
 	"time"
@@ -63,6 +64,98 @@ func testMonitor(now *time.Time) (*PersonalMonitor, *[]struct{ level, msg string
 
 func quote(mid float64) bus.Quote {
 	return bus.Quote{Symbol: "TRXUSDT", Bid: mid, Ask: mid}
+}
+
+// freshQuote 带报价时刻（供广播测试：ComputePositionPrice 按 now−Time ≤ freshTTL 判新鲜）。
+func freshQuote(mid float64, ts time.Time) bus.Quote {
+	return bus.Quote{Symbol: "TRXUSDT", Venue: "binance", VenueType: "spot", Bid: mid, Ask: mid, Time: ts}
+}
+
+// TestPersonalMonitorBroadcastPrice 实时现价广播（D-049）：真实 bus + onPrice 收集器——
+// 首条价 → 视图 price/level/pnl/liq/dist 正确；同价再发不再广播（去重）；换价再广播。
+func TestPersonalMonitorBroadcastPrice(t *testing.T) {
+	b := bus.New()
+	now := time.Unix(1000, 0)
+	qty := 1000.0
+	entry := 0.30000
+	lev := 10
+	warnHigh := 0.36
+	critHigh := 0.3695
+
+	var mu sync.Mutex
+	var got []PositionPrice
+	m := &PersonalMonitor{
+		bus:      b,
+		store:    nil,
+		throttle: 5 * time.Second,
+		positions: map[int64]*pgstore.PersonalPosition{
+			1: {ID: 1, Asset: "TRX", Kind: "short_hedge", PriceSymbol: "TRXUSDT",
+				Qty: &qty, EntryPrice: &entry, Leverage: &lev,
+				WarnHigh: &warnHigh, CritHigh: &critHigh},
+		},
+		level:     map[int64]string{},
+		lastAlert: map[int64]time.Time{},
+		freshTTL:  time.Minute,
+		liqMMR:    0.005,
+		lastPrice: map[int64]float64{},
+		now:       func() time.Time { return now },
+		alertFn:   func(context.Context, string, string) error { return nil },
+		onPrice: func(v PositionPrice) {
+			mu.Lock()
+			got = append(got, v)
+			mu.Unlock()
+		},
+	}
+	ctx := context.Background()
+	q := freshQuote(0.29, now)
+
+	// 首条价 → 广播一次，视图正确
+	b.Publish(q)
+	m.onQuote(ctx, q)
+	if len(got) != 1 {
+		t.Fatalf("first price want 1 broadcast, got %d: %+v", len(got), got)
+	}
+	v := got[0]
+	if v.ID != 1 || v.Price != 0.29 {
+		t.Errorf("view id/price want 1/0.29, got %d/%v", v.ID, v.Price)
+	}
+	if v.Level != "ok" { // 0.29 < warn 0.36
+		t.Errorf("level want ok, got %q", v.Level)
+	}
+	wantPnl := (0.30000 - 0.29) * 1000
+	if math.Abs(v.PnlUsd-wantPnl) > 1e-9 {
+		t.Errorf("pnl want %v, got %v", wantPnl, v.PnlUsd)
+	}
+	if v.LiqPrice != 0.3695 { // crit_high 优先
+		t.Errorf("liq want crit_high 0.3695, got %v", v.LiqPrice)
+	}
+	wantDist := (0.3695 - 0.29) / 0.29
+	if math.Abs(v.DistToLiqPct-wantDist) > 1e-9 {
+		t.Errorf("dist want %v, got %v", wantDist, v.DistToLiqPct)
+	}
+
+	// 同价再发 → 不再广播（lastPrice 去重）
+	b.Publish(q)
+	m.onQuote(ctx, q)
+	if len(got) != 1 {
+		t.Fatalf("same price want no new broadcast, got %d: %+v", len(got), got)
+	}
+
+	// 换价 → 再广播（0.37 越过 crit → level=crit）
+	q2 := freshQuote(0.37, now)
+	b.Publish(q2)
+	m.onQuote(ctx, q2)
+	if len(got) != 2 {
+		t.Fatalf("new price want 1 new broadcast, got %d: %+v", len(got), got)
+	}
+	v2 := got[1]
+	if v2.Price != 0.37 || v2.Level != "crit" {
+		t.Errorf("new price want 0.37/crit, got %v/%q", v2.Price, v2.Level)
+	}
+	wantPnl2 := (0.30000 - 0.37) * 1000
+	if math.Abs(v2.PnlUsd-wantPnl2) > 1e-9 {
+		t.Errorf("new price pnl want %v, got %v", wantPnl2, v2.PnlUsd)
+	}
 }
 
 // TestPersonalMonitorEdgeTrigger 边缘触发状态机：ok→warn 发一次、warn→crit 升级、
