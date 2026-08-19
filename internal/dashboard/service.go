@@ -3,6 +3,8 @@ package dashboard
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"arb/internal/bus"
@@ -219,6 +221,55 @@ func (s *Service) LedgerSummary(ctx context.Context, req *connect.Request[v1.Led
 		})
 	}
 	return connect.NewResponse(&v1.LedgerSummaryResponse{Items: pb}), nil
+}
+
+// --- 记账（财务线工作项 2：结构化投资记录，决定/教训/观察） ---
+
+// AddInvestmentRecord 新增一条投资记录。kind 非法 / content 空 → 拒绝（后端校验，D-043 前端只传值）。
+func (s *Service) AddInvestmentRecord(ctx context.Context, req *connect.Request[v1.AddInvestmentRecordRequest]) (*connect.Response[v1.AddInvestmentRecordResponse], error) {
+	m := req.Msg
+	kind := m.GetKind()
+	if !validRecordKind(kind) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid kind %q: must be decision/lesson/observation", kind))
+	}
+	if strings.TrimSpace(m.GetContent()) == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("content required"))
+	}
+	id, err := s.store.AddInvestmentRecord(ctx, kind, m.GetAsset(), m.GetContent())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&v1.AddInvestmentRecordResponse{Id: id}), nil
+}
+
+// ListInvestmentRecords 按 kind/asset/内容子串筛选返回（D-043：筛选/搜索全部后端算）。
+func (s *Service) ListInvestmentRecords(ctx context.Context, req *connect.Request[v1.ListInvestmentRecordsRequest]) (*connect.Response[v1.ListInvestmentRecordsResponse], error) {
+	m := req.Msg
+	records, err := s.store.ListInvestmentRecords(ctx, m.GetKind(), m.GetAsset(), m.GetQ(), int(m.GetLimit()), int(m.GetOffset()))
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	var pb []*v1.InvestmentRecord
+	for i := range records {
+		r := &records[i]
+		pb = append(pb, &v1.InvestmentRecord{
+			Id:      r.ID,
+			Kind:    r.Kind,
+			Asset:   r.Asset,
+			Content: r.Content,
+			Ts:      timestamppb.New(r.Ts),
+		})
+	}
+	return connect.NewResponse(&v1.ListInvestmentRecordsResponse{Items: pb}), nil
+}
+
+// validRecordKind 判断 kind 是否合法三态之一。
+func validRecordKind(kind string) bool {
+	switch kind {
+	case "decision", "lesson", "observation":
+		return true
+	}
+	return false
 }
 
 // --- 经验库（§2.9/§13.6） ---
