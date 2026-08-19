@@ -8,8 +8,11 @@ import (
 // TestLoadDefaults 默认值须与 D-035 参数清单一致（禁止散落硬编码后，这里是唯一出处）。
 func TestLoadDefaults(t *testing.T) {
 	c := Load()
-	if c.CrossVenueMinGrossBps != 10.0 {
-		t.Errorf("CrossVenueMinGrossBps = %v, want 10.0", c.CrossVenueMinGrossBps)
+	if c.CrossVenueMinGrossBpsCEX != 10.0 {
+		t.Errorf("CrossVenueMinGrossBpsCEX = %v, want 10.0", c.CrossVenueMinGrossBpsCEX)
+	}
+	if c.CrossVenueMinGrossBpsCFD != 2.0 {
+		t.Errorf("CrossVenueMinGrossBpsCFD = %v, want 2.0", c.CrossVenueMinGrossBpsCFD)
 	}
 	if c.FundingMinNetAnnualized != 4.0 {
 		t.Errorf("FundingMinNetAnnualized = %v, want 4.0", c.FundingMinNetAnnualized)
@@ -60,13 +63,17 @@ func TestLoadDefaults(t *testing.T) {
 
 // TestLoadEnvOverride env 覆盖须生效。
 func TestLoadEnvOverride(t *testing.T) {
-	t.Setenv("ARB_CROSS_MIN_GROSS_BPS", "0.5")
+	t.Setenv("ARB_CROSS_MIN_GROSS_BPS_CEX", "0.5")
+	t.Setenv("ARB_CROSS_MIN_GROSS_BPS_CFD", "1.5")
 	t.Setenv("ARB_COMMISSION_CFD_BPS", "0.6")
 	t.Setenv("ARB_DETECTOR_FRESHNESS_TTL", "90s")
 	t.Setenv("ARB_LIQ_MMR", "0.01")
 	c := Load()
-	if c.CrossVenueMinGrossBps != 0.5 {
-		t.Errorf("CrossVenueMinGrossBps = %v, want 0.5", c.CrossVenueMinGrossBps)
+	if c.CrossVenueMinGrossBpsCEX != 0.5 {
+		t.Errorf("CrossVenueMinGrossBpsCEX = %v, want 0.5", c.CrossVenueMinGrossBpsCEX)
+	}
+	if c.CrossVenueMinGrossBpsCFD != 1.5 {
+		t.Errorf("CrossVenueMinGrossBpsCFD = %v, want 1.5", c.CrossVenueMinGrossBpsCFD)
 	}
 	if c.CommissionCFDBps != 0.6 {
 		t.Errorf("CommissionCFDBps = %v, want 0.6", c.CommissionCFDBps)

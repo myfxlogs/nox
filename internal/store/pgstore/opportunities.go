@@ -12,6 +12,7 @@ import (
 type Opportunity struct {
 	ID             string
 	Type           string
+	Canonical      string
 	VenueBuy       string
 	VenueSell      string
 	PriceBuy       float64
@@ -35,11 +36,12 @@ type Opportunity struct {
 // 触发 ON CONFLICT DO UPDATE（刷新既有行）时 xmax≠0。
 func (s *Store) UpsertOpportunity(ctx context.Context, o *Opportunity) (bool, error) {
 	q := `INSERT INTO opportunities (
-			id, type, venue_buy, venue_sell, price_buy, price_sell,
+			id, type, canonical, venue_buy, venue_sell, price_buy, price_sell,
 			gross_bps, spread_cost, commission_cost, slippage_cost, swap_cost,
 			net_bps, breakeven_days, quote_time, expires_at, created_at, updated_at
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,now(),now())
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,now(),now())
 		ON CONFLICT (id) DO UPDATE SET
+			canonical=EXCLUDED.canonical,
 			price_buy=EXCLUDED.price_buy, price_sell=EXCLUDED.price_sell,
 			gross_bps=EXCLUDED.gross_bps, spread_cost=EXCLUDED.spread_cost,
 			commission_cost=EXCLUDED.commission_cost, slippage_cost=EXCLUDED.slippage_cost,
@@ -49,7 +51,7 @@ func (s *Store) UpsertOpportunity(ctx context.Context, o *Opportunity) (bool, er
 		RETURNING (xmax = 0) AS inserted`
 	var inserted bool
 	if err := s.pool.QueryRow(ctx, q,
-		o.ID, o.Type, o.VenueBuy, o.VenueSell, o.PriceBuy, o.PriceSell,
+		o.ID, o.Type, o.Canonical, o.VenueBuy, o.VenueSell, o.PriceBuy, o.PriceSell,
 		o.GrossBps, o.SpreadCost, o.CommissionCost, o.SlippageCost, o.SwapCost,
 		o.NetBps, o.BreakevenDays, o.QuoteTime, o.ExpiresAt).Scan(&inserted); err != nil {
 		return false, fmt.Errorf("upsert opportunity: %w", err)
@@ -62,7 +64,7 @@ func (s *Store) ListOpportunities(ctx context.Context, typ string, limit, offset
 	if limit <= 0 {
 		limit = 50
 	}
-	q := `SELECT id, type, venue_buy, venue_sell, price_buy, price_sell,
+	q := `SELECT id, type, canonical, venue_buy, venue_sell, price_buy, price_sell,
 			gross_bps, spread_cost, commission_cost, slippage_cost, swap_cost,
 			net_bps, breakeven_days, quote_time, expires_at, created_at, updated_at
 		FROM opportunities
@@ -164,7 +166,7 @@ func scanOpportunities(rows pgx.Rows) ([]Opportunity, error) {
 	for rows.Next() {
 		var o Opportunity
 		if err := rows.Scan(
-			&o.ID, &o.Type, &o.VenueBuy, &o.VenueSell, &o.PriceBuy, &o.PriceSell,
+			&o.ID, &o.Type, &o.Canonical, &o.VenueBuy, &o.VenueSell, &o.PriceBuy, &o.PriceSell,
 			&o.GrossBps, &o.SpreadCost, &o.CommissionCost, &o.SlippageCost, &o.SwapCost,
 			&o.NetBps, &o.BreakevenDays, &o.QuoteTime, &o.ExpiresAt, &o.CreatedAt, &o.UpdatedAt,
 		); err != nil {

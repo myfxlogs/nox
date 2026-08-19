@@ -23,6 +23,7 @@ var migrationFiles = []struct {
 	{6, migrations.PersonalPositionsSQL},
 	{7, migrations.InvestmentRecordsSQL},
 	{8, migrations.PersonalLedgerSQL},
+	{9, migrations.OpportunitiesCanonicalSQL},
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

@@ -25,3 +25,6 @@ var InvestmentRecordsSQL string
 
 //go:embed 0008_personal_ledger.sql
 var PersonalLedgerSQL string
+
+//go:embed 0009_opportunities_canonical.sql
+var OpportunitiesCanonicalSQL string

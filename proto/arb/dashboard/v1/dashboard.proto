@@ -42,6 +42,10 @@ service DashboardService {
   rpc ClosePosition(ClosePositionRequest) returns (ClosePositionResponse);
   rpc ListPositions(ListPositionsRequest) returns (ListPositionsResponse);
 
+  // Broker 实持仓（D-051 WP3：MT5/MT4 实际持仓统一视图，实时查不落库）
+  rpc ListBrokerPositions(ListBrokerPositionsRequest) returns (ListBrokerPositionsResponse);
+  rpc CloseBrokerPosition(CloseBrokerPositionRequest) returns (CloseBrokerPositionResponse);
+
   // 个人持仓（财务线 TRX 持仓接入，D-046）+ 实账化（财务线工作项 3）
   rpc ListPersonalPositions(ListPersonalPositionsRequest) returns (ListPersonalPositionsResponse);
   rpc AddDailyIncome(AddDailyIncomeRequest) returns (AddDailyIncomeResponse);
@@ -400,6 +404,43 @@ message ListPositionsRequest {
 
 message ListPositionsResponse {
   repeated Position positions = 1;
+}
+
+// === Broker 持仓（MT5/MT4 实际持仓统一视图，D-051 WP3）===
+
+message BrokerPosition {
+  string venue = 1;            // 裸 venue 名
+  string venue_key = 2;        // "{venue}:{venueType}"
+  string ticket = 3;           // venue 订单号（字符串，可能超 JS 安全整数）
+  string symbol = 4;           // venue 原生符号
+  string canonical = 5;        // 解析后的 canonical；未映射 → ""（诚实空态）
+  string side = 6;             // BUY / SELL
+  double volume = 7;
+  double open_price = 8;
+  double current_price = 9;    // 0 + fresh=false = 无报价（诚实空态）
+  bool fresh = 10;
+  double pnl = 11;             // venue 权威浮盈（Order.Profit，后端透传，前端不自算 D-043）
+  double swap = 12;
+  double commission = 13;
+  string comment = 14;
+  bool is_arb = 15;            // comment 前缀 = exec.OrderComment("arb") → ARB 源订单
+  google.protobuf.Timestamp opened_at = 16;
+}
+
+message ListBrokerPositionsRequest {}
+
+message ListBrokerPositionsResponse {
+  repeated BrokerPosition positions = 1;
+}
+
+message CloseBrokerPositionRequest {
+  string venue_key = 1;
+  string ticket = 2;
+}
+
+message CloseBrokerPositionResponse {
+  string status = 1;   // CLOSED / FAILED
+  string message = 2;
 }
 
 // === PersonalPosition（财务线 TRX 持仓接入，D-046）===
