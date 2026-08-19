@@ -32,14 +32,17 @@ type Service struct {
 	liqMMR float64
 	// fundingDropRatio 资金费急降预警比例（config.ARB_FUNDING_DROP_RATIO，缺省 0.5）——§11 翻负/急降预警用。
 	fundingDropRatio float64
+	// priceTopic 实时现价广播（D-049）：PersonalMonitor 经 onPrice 发布 → StreamUpdates 扇出 case 7。nil = 未接线（测试直接构造 Service）。
+	priceTopic *bus.Topic[position.PositionPrice]
 }
 
 // New 创建 dashboard 服务。reviewer 为复盘触发闭包（nil 则平仓后不触发）；
 // freshTTL 为报价陈旧阈值（个人持仓展示用，传 config.DetectorFreshnessTTL）；
 // liqMMR 为个人持仓理论强平维持保证金率（传 config.LiqMMR）；
-// fundingDropRatio 为资金费急降预警比例（传 config.FundingDropRatio）。
-func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64, fundingDropRatio float64) *Service {
-	return &Service{store: store, qbus: qbus, pipeline: pipeline, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio}
+// fundingDropRatio 为资金费急降预警比例（传 config.FundingDropRatio）；
+// priceTopic 为实时现价广播 topic（D-049，传 main 创建的 priceTopic）。
+func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64, fundingDropRatio float64, priceTopic *bus.Topic[position.PositionPrice]) *Service {
+	return &Service{store: store, qbus: qbus, pipeline: pipeline, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, priceTopic: priceTopic}
 }
 
 // --- 快照类 ---
@@ -466,49 +469,26 @@ func personalPositionToProto(p *pgstore.PersonalPosition, venues map[string]bus.
 		pb.OpenedAt = timestamppb.New(*p.OpenedAt)
 	}
 
-	// 现价：最新未陈旧帧 mid（无报价/全陈旧 → price 0，实账按无值处理）。
-	price := 0.0
-	hasPrice := false
-	if q, ok := latestQuote(venues, freshTTL, now); ok {
-		price = q.Mid()
-		hasPrice = true
-		pb.Price = price
-		pb.Level = position.PersonalLevel(price, p.WarnHigh, p.CritHigh)
-	}
-
-	// 浮动盈亏：仅空单腿且 entry 非空，且现价可用（无价不算，防 (entry−0)×qty 假盈亏）。
-	if hasPrice && p.Kind == "short_hedge" && p.EntryPrice != nil && p.Qty != nil {
-		pb.PnlUsd = (*p.EntryPrice - price) * *p.Qty
-	}
-	// 强平价：crit_high（手动权威值，非 0）> 理论 = entry × (1 + 1/leverage − MMR)。
-	liq := 0.0
-	if p.CritHigh != nil && *p.CritHigh != 0 {
-		liq = *p.CritHigh
-	} else if p.EntryPrice != nil && p.Leverage != nil && *p.Leverage > 0 {
-		liq = *p.EntryPrice * (1 + 1/float64(*p.Leverage) - liqMMR)
-	}
-	pb.LiqPrice = liq
-	// 距强平 % = (liq − 现价) / 现价；负数 = 已破线。liq 或现价不可用 → 0。
-	if liq != 0 && hasPrice && price != 0 {
-		pb.DistToLiqPct = (liq - price) / price
-	}
+	// 价格派生字段：单点计算（D-049，P3：快照路径与实时推送共用同一 ComputePositionPrice）。
+	v := position.ComputePositionPrice(p, venues, freshTTL, now, liqMMR)
+	pb.Price = v.Price
+	pb.Level = v.Level
+	pb.PnlUsd = v.PnlUsd
+	pb.LiqPrice = v.LiqPrice
+	pb.DistToLiqPct = v.DistToLiqPct
 	return pb
 }
 
-// latestQuote 返回 venues 中 Time 最新且未超陈旧 TTL 的一帧（G3，拒绝陈旧帧冒充现价）。
-func latestQuote(venues map[string]bus.Quote, freshTTL time.Duration, now time.Time) (bus.Quote, bool) {
-	var best bus.Quote
-	found := false
-	for _, q := range venues {
-		if now.Sub(q.Time) > freshTTL {
-			continue // 陈旧帧丢弃
-		}
-		if !found || q.Time.After(best.Time) {
-			best = q
-			found = true
-		}
+// positionPriceToProto 实时现价推送消息（D-049）：前端仅按 id 合并渲染，不计算。
+func positionPriceToProto(v position.PositionPrice) *v1.PersonalPositionPrice {
+	return &v1.PersonalPositionPrice{
+		PositionId:   v.ID,
+		Price:        v.Price,
+		Level:        v.Level,
+		PnlUsd:       v.PnlUsd,
+		LiqPrice:     v.LiqPrice,
+		DistToLiqPct: v.DistToLiqPct,
 	}
-	return best, found
 }
 
 // --- 每日收益（财务线工作项 3：个人持仓实账化） ---
@@ -524,7 +504,7 @@ func (s *Service) AddDailyIncome(ctx context.Context, req *connect.Request[v1.Ad
 	// 后端取实时价：TRXUSDT 最新未陈旧帧（复用陈旧守卫 G3）；无报价 → price/pnl 写 NULL（诚实空态）。
 	var price *float64
 	snap := s.qbus.Snapshot(ctx, []string{"TRXUSDT"})
-	if q, ok := latestQuote(snap["TRXUSDT"], s.freshTTL, time.Now()); ok {
+	if q, ok := bus.LatestQuote(snap["TRXUSDT"], s.freshTTL, time.Now()); ok {
 		p := q.Mid()
 		price = &p
 	}
@@ -640,6 +620,14 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 	// 机会/告警/持仓由引擎 30s 节流产生、无独立事件总线 → 前端以 30s 低频快照补齐。
 	ch, cancel := s.qbus.Subscribe("")
 	defer cancel()
+	// 实时个人持仓现价（D-049）：PersonalMonitor 广播 → 逐仓推 case 7（与 quote 流并存，独立 Topic 扇出）。
+	// priceTopic 可能为 nil（测试直接构造 Service 未接线）→ 不订阅该分支。
+	var ppCh <-chan position.PositionPrice
+	if s.priceTopic != nil {
+		var ppCancel func()
+		ppCh, ppCancel = s.priceTopic.Subscribe()
+		defer ppCancel()
+	}
 	// keepalive 每 30s（§8.2 D-027）
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -654,6 +642,17 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 			if err := stream.Send(&v1.StreamUpdatesResponse{
 				Update: &v1.StreamUpdatesResponse_Quote{
 					Quote: quoteToProto(q),
+				},
+			}); err != nil {
+				return err
+			}
+		case v, ok := <-ppCh:
+			if !ok {
+				return nil
+			}
+			if err := stream.Send(&v1.StreamUpdatesResponse{
+				Update: &v1.StreamUpdatesResponse_PersonalPositionPrice{
+					PersonalPositionPrice: positionPriceToProto(v),
 				},
 			}); err != nil {
 				return err

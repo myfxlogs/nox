@@ -3910,6 +3910,91 @@ func (*StreamUpdatesRequest) Descriptor() ([]byte, []int) {
 	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{60}
 }
 
+// 实时现价推送（D-049）：后端按最新未陈旧报价算价格派生字段，前端仅按 id 合并渲染。
+type PersonalPositionPrice struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PositionId    int64                  `protobuf:"varint,1,opt,name=position_id,json=positionId,proto3" json:"position_id,omitempty"`
+	Price         float64                `protobuf:"fixed64,2,opt,name=price,proto3" json:"price,omitempty"` // 当前 mid（0 = 无报价）
+	Level         string                 `protobuf:"bytes,3,opt,name=level,proto3" json:"level,omitempty"`   // 'ok'|'warn'|'crit'（空 = 无报价）
+	PnlUsd        float64                `protobuf:"fixed64,4,opt,name=pnl_usd,json=pnlUsd,proto3" json:"pnl_usd,omitempty"`
+	LiqPrice      float64                `protobuf:"fixed64,5,opt,name=liq_price,json=liqPrice,proto3" json:"liq_price,omitempty"`
+	DistToLiqPct  float64                `protobuf:"fixed64,6,opt,name=dist_to_liq_pct,json=distToLiqPct,proto3" json:"dist_to_liq_pct,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PersonalPositionPrice) Reset() {
+	*x = PersonalPositionPrice{}
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[61]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PersonalPositionPrice) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PersonalPositionPrice) ProtoMessage() {}
+
+func (x *PersonalPositionPrice) ProtoReflect() protoreflect.Message {
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[61]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PersonalPositionPrice.ProtoReflect.Descriptor instead.
+func (*PersonalPositionPrice) Descriptor() ([]byte, []int) {
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{61}
+}
+
+func (x *PersonalPositionPrice) GetPositionId() int64 {
+	if x != nil {
+		return x.PositionId
+	}
+	return 0
+}
+
+func (x *PersonalPositionPrice) GetPrice() float64 {
+	if x != nil {
+		return x.Price
+	}
+	return 0
+}
+
+func (x *PersonalPositionPrice) GetLevel() string {
+	if x != nil {
+		return x.Level
+	}
+	return ""
+}
+
+func (x *PersonalPositionPrice) GetPnlUsd() float64 {
+	if x != nil {
+		return x.PnlUsd
+	}
+	return 0
+}
+
+func (x *PersonalPositionPrice) GetLiqPrice() float64 {
+	if x != nil {
+		return x.LiqPrice
+	}
+	return 0
+}
+
+func (x *PersonalPositionPrice) GetDistToLiqPct() float64 {
+	if x != nil {
+		return x.DistToLiqPct
+	}
+	return 0
+}
+
 type StreamUpdatesResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Update:
@@ -3920,6 +4005,7 @@ type StreamUpdatesResponse struct {
 	//	*StreamUpdatesResponse_Position
 	//	*StreamUpdatesResponse_SourceHealth
 	//	*StreamUpdatesResponse_Keepalive
+	//	*StreamUpdatesResponse_PersonalPositionPrice
 	Update        isStreamUpdatesResponse_Update `protobuf_oneof:"update"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -3927,7 +4013,7 @@ type StreamUpdatesResponse struct {
 
 func (x *StreamUpdatesResponse) Reset() {
 	*x = StreamUpdatesResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[61]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3939,7 +4025,7 @@ func (x *StreamUpdatesResponse) String() string {
 func (*StreamUpdatesResponse) ProtoMessage() {}
 
 func (x *StreamUpdatesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[61]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3952,7 +4038,7 @@ func (x *StreamUpdatesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamUpdatesResponse.ProtoReflect.Descriptor instead.
 func (*StreamUpdatesResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{61}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *StreamUpdatesResponse) GetUpdate() isStreamUpdatesResponse_Update {
@@ -4016,6 +4102,15 @@ func (x *StreamUpdatesResponse) GetKeepalive() *Keepalive {
 	return nil
 }
 
+func (x *StreamUpdatesResponse) GetPersonalPositionPrice() *PersonalPositionPrice {
+	if x != nil {
+		if x, ok := x.Update.(*StreamUpdatesResponse_PersonalPositionPrice); ok {
+			return x.PersonalPositionPrice
+		}
+	}
+	return nil
+}
+
 type isStreamUpdatesResponse_Update interface {
 	isStreamUpdatesResponse_Update()
 }
@@ -4044,6 +4139,10 @@ type StreamUpdatesResponse_Keepalive struct {
 	Keepalive *Keepalive `protobuf:"bytes,6,opt,name=keepalive,proto3,oneof"` // 30s 心跳（Cloudflare Tunnel 存活，D-027）
 }
 
+type StreamUpdatesResponse_PersonalPositionPrice struct {
+	PersonalPositionPrice *PersonalPositionPrice `protobuf:"bytes,7,opt,name=personal_position_price,json=personalPositionPrice,proto3,oneof"` // 实时个人持仓现价（D-049）
+}
+
 func (*StreamUpdatesResponse_Quote) isStreamUpdatesResponse_Update() {}
 
 func (*StreamUpdatesResponse_Opportunity) isStreamUpdatesResponse_Update() {}
@@ -4056,6 +4155,8 @@ func (*StreamUpdatesResponse_SourceHealth) isStreamUpdatesResponse_Update() {}
 
 func (*StreamUpdatesResponse_Keepalive) isStreamUpdatesResponse_Update() {}
 
+func (*StreamUpdatesResponse_PersonalPositionPrice) isStreamUpdatesResponse_Update() {}
+
 type Keepalive struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Ts            *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=ts,proto3" json:"ts,omitempty"`
@@ -4065,7 +4166,7 @@ type Keepalive struct {
 
 func (x *Keepalive) Reset() {
 	*x = Keepalive{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[62]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4077,7 +4178,7 @@ func (x *Keepalive) String() string {
 func (*Keepalive) ProtoMessage() {}
 
 func (x *Keepalive) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[62]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4090,7 +4191,7 @@ func (x *Keepalive) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Keepalive.ProtoReflect.Descriptor instead.
 func (*Keepalive) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{62}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *Keepalive) GetTs() *timestamppb.Timestamp {
@@ -4108,7 +4209,7 @@ type HealthRequest struct {
 
 func (x *HealthRequest) Reset() {
 	*x = HealthRequest{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[63]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4120,7 +4221,7 @@ func (x *HealthRequest) String() string {
 func (*HealthRequest) ProtoMessage() {}
 
 func (x *HealthRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[63]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4133,7 +4234,7 @@ func (x *HealthRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthRequest.ProtoReflect.Descriptor instead.
 func (*HealthRequest) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{63}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{64}
 }
 
 type HealthResponse struct {
@@ -4147,7 +4248,7 @@ type HealthResponse struct {
 
 func (x *HealthResponse) Reset() {
 	*x = HealthResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[64]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4159,7 +4260,7 @@ func (x *HealthResponse) String() string {
 func (*HealthResponse) ProtoMessage() {}
 
 func (x *HealthResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[64]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4172,7 +4273,7 @@ func (x *HealthResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthResponse.ProtoReflect.Descriptor instead.
 func (*HealthResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{64}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *HealthResponse) GetOk() bool {
@@ -4206,7 +4307,7 @@ type SearchBrokerRequest struct {
 
 func (x *SearchBrokerRequest) Reset() {
 	*x = SearchBrokerRequest{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[65]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4218,7 +4319,7 @@ func (x *SearchBrokerRequest) String() string {
 func (*SearchBrokerRequest) ProtoMessage() {}
 
 func (x *SearchBrokerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[65]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4231,7 +4332,7 @@ func (x *SearchBrokerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchBrokerRequest.ProtoReflect.Descriptor instead.
 func (*SearchBrokerRequest) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{65}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *SearchBrokerRequest) GetCompany() string {
@@ -4258,7 +4359,7 @@ type BrokerServer struct {
 
 func (x *BrokerServer) Reset() {
 	*x = BrokerServer{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[66]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4270,7 +4371,7 @@ func (x *BrokerServer) String() string {
 func (*BrokerServer) ProtoMessage() {}
 
 func (x *BrokerServer) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[66]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4283,7 +4384,7 @@ func (x *BrokerServer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BrokerServer.ProtoReflect.Descriptor instead.
 func (*BrokerServer) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{66}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *BrokerServer) GetName() string {
@@ -4310,7 +4411,7 @@ type BrokerCompany struct {
 
 func (x *BrokerCompany) Reset() {
 	*x = BrokerCompany{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[67]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4322,7 +4423,7 @@ func (x *BrokerCompany) String() string {
 func (*BrokerCompany) ProtoMessage() {}
 
 func (x *BrokerCompany) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[67]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4335,7 +4436,7 @@ func (x *BrokerCompany) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BrokerCompany.ProtoReflect.Descriptor instead.
 func (*BrokerCompany) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{67}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *BrokerCompany) GetCompanyName() string {
@@ -4361,7 +4462,7 @@ type SearchBrokerResponse struct {
 
 func (x *SearchBrokerResponse) Reset() {
 	*x = SearchBrokerResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[68]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4373,7 +4474,7 @@ func (x *SearchBrokerResponse) String() string {
 func (*SearchBrokerResponse) ProtoMessage() {}
 
 func (x *SearchBrokerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[68]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4386,7 +4487,7 @@ func (x *SearchBrokerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchBrokerResponse.ProtoReflect.Descriptor instead.
 func (*SearchBrokerResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{68}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *SearchBrokerResponse) GetCompanies() []*BrokerCompany {
@@ -4412,7 +4513,7 @@ type AddBrokerRequest struct {
 
 func (x *AddBrokerRequest) Reset() {
 	*x = AddBrokerRequest{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[69]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4424,7 +4525,7 @@ func (x *AddBrokerRequest) String() string {
 func (*AddBrokerRequest) ProtoMessage() {}
 
 func (x *AddBrokerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[69]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4437,7 +4538,7 @@ func (x *AddBrokerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddBrokerRequest.ProtoReflect.Descriptor instead.
 func (*AddBrokerRequest) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{69}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *AddBrokerRequest) GetVenue() string {
@@ -4504,7 +4605,7 @@ type AddBrokerResponse struct {
 
 func (x *AddBrokerResponse) Reset() {
 	*x = AddBrokerResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[70]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4516,7 +4617,7 @@ func (x *AddBrokerResponse) String() string {
 func (*AddBrokerResponse) ProtoMessage() {}
 
 func (x *AddBrokerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[70]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4529,7 +4630,7 @@ func (x *AddBrokerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddBrokerResponse.ProtoReflect.Descriptor instead.
 func (*AddBrokerResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{70}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{71}
 }
 
 type RemoveBrokerRequest struct {
@@ -4541,7 +4642,7 @@ type RemoveBrokerRequest struct {
 
 func (x *RemoveBrokerRequest) Reset() {
 	*x = RemoveBrokerRequest{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[71]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4553,7 +4654,7 @@ func (x *RemoveBrokerRequest) String() string {
 func (*RemoveBrokerRequest) ProtoMessage() {}
 
 func (x *RemoveBrokerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[71]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4566,7 +4667,7 @@ func (x *RemoveBrokerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveBrokerRequest.ProtoReflect.Descriptor instead.
 func (*RemoveBrokerRequest) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{71}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *RemoveBrokerRequest) GetVenue() string {
@@ -4584,7 +4685,7 @@ type RemoveBrokerResponse struct {
 
 func (x *RemoveBrokerResponse) Reset() {
 	*x = RemoveBrokerResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[72]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4596,7 +4697,7 @@ func (x *RemoveBrokerResponse) String() string {
 func (*RemoveBrokerResponse) ProtoMessage() {}
 
 func (x *RemoveBrokerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[72]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4609,7 +4710,7 @@ func (x *RemoveBrokerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveBrokerResponse.ProtoReflect.Descriptor instead.
 func (*RemoveBrokerResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{72}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{73}
 }
 
 type BrokerAccount struct {
@@ -4630,7 +4731,7 @@ type BrokerAccount struct {
 
 func (x *BrokerAccount) Reset() {
 	*x = BrokerAccount{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[73]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4642,7 +4743,7 @@ func (x *BrokerAccount) String() string {
 func (*BrokerAccount) ProtoMessage() {}
 
 func (x *BrokerAccount) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[73]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4655,7 +4756,7 @@ func (x *BrokerAccount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BrokerAccount.ProtoReflect.Descriptor instead.
 func (*BrokerAccount) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{73}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *BrokerAccount) GetVenue() string {
@@ -4736,7 +4837,7 @@ type ListBrokerAccountsRequest struct {
 
 func (x *ListBrokerAccountsRequest) Reset() {
 	*x = ListBrokerAccountsRequest{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[74]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4748,7 +4849,7 @@ func (x *ListBrokerAccountsRequest) String() string {
 func (*ListBrokerAccountsRequest) ProtoMessage() {}
 
 func (x *ListBrokerAccountsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[74]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4761,7 +4862,7 @@ func (x *ListBrokerAccountsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBrokerAccountsRequest.ProtoReflect.Descriptor instead.
 func (*ListBrokerAccountsRequest) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{74}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{75}
 }
 
 type ListBrokerAccountsResponse struct {
@@ -4773,7 +4874,7 @@ type ListBrokerAccountsResponse struct {
 
 func (x *ListBrokerAccountsResponse) Reset() {
 	*x = ListBrokerAccountsResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[75]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4785,7 +4886,7 @@ func (x *ListBrokerAccountsResponse) String() string {
 func (*ListBrokerAccountsResponse) ProtoMessage() {}
 
 func (x *ListBrokerAccountsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[75]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4798,7 +4899,7 @@ func (x *ListBrokerAccountsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBrokerAccountsResponse.ProtoReflect.Descriptor instead.
 func (*ListBrokerAccountsResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{75}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *ListBrokerAccountsResponse) GetAccounts() []*BrokerAccount {
@@ -4822,7 +4923,7 @@ type VerifyAccountRequest struct {
 
 func (x *VerifyAccountRequest) Reset() {
 	*x = VerifyAccountRequest{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[76]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4834,7 +4935,7 @@ func (x *VerifyAccountRequest) String() string {
 func (*VerifyAccountRequest) ProtoMessage() {}
 
 func (x *VerifyAccountRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[76]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4847,7 +4948,7 @@ func (x *VerifyAccountRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifyAccountRequest.ProtoReflect.Descriptor instead.
 func (*VerifyAccountRequest) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{76}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *VerifyAccountRequest) GetPlatform() int32 {
@@ -4904,7 +5005,7 @@ type VerifyAccountResponse struct {
 
 func (x *VerifyAccountResponse) Reset() {
 	*x = VerifyAccountResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[77]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4916,7 +5017,7 @@ func (x *VerifyAccountResponse) String() string {
 func (*VerifyAccountResponse) ProtoMessage() {}
 
 func (x *VerifyAccountResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[77]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4929,7 +5030,7 @@ func (x *VerifyAccountResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifyAccountResponse.ProtoReflect.Descriptor instead.
 func (*VerifyAccountResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{77}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *VerifyAccountResponse) GetBalance() float64 {
@@ -4969,7 +5070,7 @@ type BrokerSymbolsRequest struct {
 
 func (x *BrokerSymbolsRequest) Reset() {
 	*x = BrokerSymbolsRequest{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[78]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4981,7 +5082,7 @@ func (x *BrokerSymbolsRequest) String() string {
 func (*BrokerSymbolsRequest) ProtoMessage() {}
 
 func (x *BrokerSymbolsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[78]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4994,7 +5095,7 @@ func (x *BrokerSymbolsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BrokerSymbolsRequest.ProtoReflect.Descriptor instead.
 func (*BrokerSymbolsRequest) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{78}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *BrokerSymbolsRequest) GetVenue() string {
@@ -5015,7 +5116,7 @@ type SymbolEntry struct {
 
 func (x *SymbolEntry) Reset() {
 	*x = SymbolEntry{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[79]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5027,7 +5128,7 @@ func (x *SymbolEntry) String() string {
 func (*SymbolEntry) ProtoMessage() {}
 
 func (x *SymbolEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[79]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5040,7 +5141,7 @@ func (x *SymbolEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SymbolEntry.ProtoReflect.Descriptor instead.
 func (*SymbolEntry) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{79}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *SymbolEntry) GetSymbol() string {
@@ -5073,7 +5174,7 @@ type BrokerSymbolsResponse struct {
 
 func (x *BrokerSymbolsResponse) Reset() {
 	*x = BrokerSymbolsResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[80]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5085,7 +5186,7 @@ func (x *BrokerSymbolsResponse) String() string {
 func (*BrokerSymbolsResponse) ProtoMessage() {}
 
 func (x *BrokerSymbolsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[80]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5098,7 +5199,7 @@ func (x *BrokerSymbolsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BrokerSymbolsResponse.ProtoReflect.Descriptor instead.
 func (*BrokerSymbolsResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{80}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *BrokerSymbolsResponse) GetSymbols() []*SymbolEntry {
@@ -5118,7 +5219,7 @@ type SetBrokerAccountAliasRequest struct {
 
 func (x *SetBrokerAccountAliasRequest) Reset() {
 	*x = SetBrokerAccountAliasRequest{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[81]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5130,7 +5231,7 @@ func (x *SetBrokerAccountAliasRequest) String() string {
 func (*SetBrokerAccountAliasRequest) ProtoMessage() {}
 
 func (x *SetBrokerAccountAliasRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[81]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5143,7 +5244,7 @@ func (x *SetBrokerAccountAliasRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetBrokerAccountAliasRequest.ProtoReflect.Descriptor instead.
 func (*SetBrokerAccountAliasRequest) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{81}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *SetBrokerAccountAliasRequest) GetVenue() string {
@@ -5168,7 +5269,7 @@ type SetBrokerAccountAliasResponse struct {
 
 func (x *SetBrokerAccountAliasResponse) Reset() {
 	*x = SetBrokerAccountAliasResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[82]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5180,7 +5281,7 @@ func (x *SetBrokerAccountAliasResponse) String() string {
 func (*SetBrokerAccountAliasResponse) ProtoMessage() {}
 
 func (x *SetBrokerAccountAliasResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[82]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5193,7 +5294,7 @@ func (x *SetBrokerAccountAliasResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetBrokerAccountAliasResponse.ProtoReflect.Descriptor instead.
 func (*SetBrokerAccountAliasResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{82}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{83}
 }
 
 type SetBrokerDisabledRequest struct {
@@ -5206,7 +5307,7 @@ type SetBrokerDisabledRequest struct {
 
 func (x *SetBrokerDisabledRequest) Reset() {
 	*x = SetBrokerDisabledRequest{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[83]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5218,7 +5319,7 @@ func (x *SetBrokerDisabledRequest) String() string {
 func (*SetBrokerDisabledRequest) ProtoMessage() {}
 
 func (x *SetBrokerDisabledRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[83]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5231,7 +5332,7 @@ func (x *SetBrokerDisabledRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetBrokerDisabledRequest.ProtoReflect.Descriptor instead.
 func (*SetBrokerDisabledRequest) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{83}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *SetBrokerDisabledRequest) GetVenue() string {
@@ -5256,7 +5357,7 @@ type SetBrokerDisabledResponse struct {
 
 func (x *SetBrokerDisabledResponse) Reset() {
 	*x = SetBrokerDisabledResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[84]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5268,7 +5369,7 @@ func (x *SetBrokerDisabledResponse) String() string {
 func (*SetBrokerDisabledResponse) ProtoMessage() {}
 
 func (x *SetBrokerDisabledResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[84]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5281,7 +5382,7 @@ func (x *SetBrokerDisabledResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetBrokerDisabledResponse.ProtoReflect.Descriptor instead.
 func (*SetBrokerDisabledResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{84}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{85}
 }
 
 type SetBrokerCommissionRequest struct {
@@ -5294,7 +5395,7 @@ type SetBrokerCommissionRequest struct {
 
 func (x *SetBrokerCommissionRequest) Reset() {
 	*x = SetBrokerCommissionRequest{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[85]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5306,7 +5407,7 @@ func (x *SetBrokerCommissionRequest) String() string {
 func (*SetBrokerCommissionRequest) ProtoMessage() {}
 
 func (x *SetBrokerCommissionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[85]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5319,7 +5420,7 @@ func (x *SetBrokerCommissionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetBrokerCommissionRequest.ProtoReflect.Descriptor instead.
 func (*SetBrokerCommissionRequest) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{85}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *SetBrokerCommissionRequest) GetVenue() string {
@@ -5344,7 +5445,7 @@ type SetBrokerCommissionResponse struct {
 
 func (x *SetBrokerCommissionResponse) Reset() {
 	*x = SetBrokerCommissionResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[86]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5356,7 +5457,7 @@ func (x *SetBrokerCommissionResponse) String() string {
 func (*SetBrokerCommissionResponse) ProtoMessage() {}
 
 func (x *SetBrokerCommissionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[86]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5369,7 +5470,7 @@ func (x *SetBrokerCommissionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetBrokerCommissionResponse.ProtoReflect.Descriptor instead.
 func (*SetBrokerCommissionResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{86}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{87}
 }
 
 type SymbolMapping struct {
@@ -5384,7 +5485,7 @@ type SymbolMapping struct {
 
 func (x *SymbolMapping) Reset() {
 	*x = SymbolMapping{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[87]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5396,7 +5497,7 @@ func (x *SymbolMapping) String() string {
 func (*SymbolMapping) ProtoMessage() {}
 
 func (x *SymbolMapping) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[87]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5409,7 +5510,7 @@ func (x *SymbolMapping) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SymbolMapping.ProtoReflect.Descriptor instead.
 func (*SymbolMapping) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{87}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *SymbolMapping) GetVenue() string {
@@ -5449,7 +5550,7 @@ type ListSymbolMappingsRequest struct {
 
 func (x *ListSymbolMappingsRequest) Reset() {
 	*x = ListSymbolMappingsRequest{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[88]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5461,7 +5562,7 @@ func (x *ListSymbolMappingsRequest) String() string {
 func (*ListSymbolMappingsRequest) ProtoMessage() {}
 
 func (x *ListSymbolMappingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[88]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5474,7 +5575,7 @@ func (x *ListSymbolMappingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSymbolMappingsRequest.ProtoReflect.Descriptor instead.
 func (*ListSymbolMappingsRequest) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{88}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *ListSymbolMappingsRequest) GetVenue() string {
@@ -5493,7 +5594,7 @@ type ListSymbolMappingsResponse struct {
 
 func (x *ListSymbolMappingsResponse) Reset() {
 	*x = ListSymbolMappingsResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[89]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5505,7 +5606,7 @@ func (x *ListSymbolMappingsResponse) String() string {
 func (*ListSymbolMappingsResponse) ProtoMessage() {}
 
 func (x *ListSymbolMappingsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[89]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5518,7 +5619,7 @@ func (x *ListSymbolMappingsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSymbolMappingsResponse.ProtoReflect.Descriptor instead.
 func (*ListSymbolMappingsResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{89}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *ListSymbolMappingsResponse) GetMappings() []*SymbolMapping {
@@ -5541,7 +5642,7 @@ type SaveSymbolMappingRequest struct {
 
 func (x *SaveSymbolMappingRequest) Reset() {
 	*x = SaveSymbolMappingRequest{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[90]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5553,7 +5654,7 @@ func (x *SaveSymbolMappingRequest) String() string {
 func (*SaveSymbolMappingRequest) ProtoMessage() {}
 
 func (x *SaveSymbolMappingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[90]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5566,7 +5667,7 @@ func (x *SaveSymbolMappingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SaveSymbolMappingRequest.ProtoReflect.Descriptor instead.
 func (*SaveSymbolMappingRequest) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{90}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *SaveSymbolMappingRequest) GetVenue() string {
@@ -5605,7 +5706,7 @@ type SaveSymbolMappingResponse struct {
 
 func (x *SaveSymbolMappingResponse) Reset() {
 	*x = SaveSymbolMappingResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[91]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5617,7 +5718,7 @@ func (x *SaveSymbolMappingResponse) String() string {
 func (*SaveSymbolMappingResponse) ProtoMessage() {}
 
 func (x *SaveSymbolMappingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[91]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5630,7 +5731,7 @@ func (x *SaveSymbolMappingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SaveSymbolMappingResponse.ProtoReflect.Descriptor instead.
 func (*SaveSymbolMappingResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{91}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{92}
 }
 
 type DeleteSymbolMappingRequest struct {
@@ -5643,7 +5744,7 @@ type DeleteSymbolMappingRequest struct {
 
 func (x *DeleteSymbolMappingRequest) Reset() {
 	*x = DeleteSymbolMappingRequest{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[92]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[93]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5655,7 +5756,7 @@ func (x *DeleteSymbolMappingRequest) String() string {
 func (*DeleteSymbolMappingRequest) ProtoMessage() {}
 
 func (x *DeleteSymbolMappingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[92]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[93]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5668,7 +5769,7 @@ func (x *DeleteSymbolMappingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteSymbolMappingRequest.ProtoReflect.Descriptor instead.
 func (*DeleteSymbolMappingRequest) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{92}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{93}
 }
 
 func (x *DeleteSymbolMappingRequest) GetVenue() string {
@@ -5693,7 +5794,7 @@ type DeleteSymbolMappingResponse struct {
 
 func (x *DeleteSymbolMappingResponse) Reset() {
 	*x = DeleteSymbolMappingResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[93]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5705,7 +5806,7 @@ func (x *DeleteSymbolMappingResponse) String() string {
 func (*DeleteSymbolMappingResponse) ProtoMessage() {}
 
 func (x *DeleteSymbolMappingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[93]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5718,7 +5819,7 @@ func (x *DeleteSymbolMappingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteSymbolMappingResponse.ProtoReflect.Descriptor instead.
 func (*DeleteSymbolMappingResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{93}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{94}
 }
 
 // ListMappingSuggestions — 名字匹配既有 canonical 但合约规格不符（或尚可采纳）的建议映射。
@@ -5734,7 +5835,7 @@ type ListMappingSuggestionsRequest struct {
 
 func (x *ListMappingSuggestionsRequest) Reset() {
 	*x = ListMappingSuggestionsRequest{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[94]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[95]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5746,7 +5847,7 @@ func (x *ListMappingSuggestionsRequest) String() string {
 func (*ListMappingSuggestionsRequest) ProtoMessage() {}
 
 func (x *ListMappingSuggestionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[94]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[95]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5759,7 +5860,7 @@ func (x *ListMappingSuggestionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMappingSuggestionsRequest.ProtoReflect.Descriptor instead.
 func (*ListMappingSuggestionsRequest) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{94}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{95}
 }
 
 func (x *ListMappingSuggestionsRequest) GetVenue() string {
@@ -5783,7 +5884,7 @@ type SymbolMappingSuggestion struct {
 
 func (x *SymbolMappingSuggestion) Reset() {
 	*x = SymbolMappingSuggestion{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[95]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[96]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5795,7 +5896,7 @@ func (x *SymbolMappingSuggestion) String() string {
 func (*SymbolMappingSuggestion) ProtoMessage() {}
 
 func (x *SymbolMappingSuggestion) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[95]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[96]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5808,7 +5909,7 @@ func (x *SymbolMappingSuggestion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SymbolMappingSuggestion.ProtoReflect.Descriptor instead.
 func (*SymbolMappingSuggestion) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{95}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{96}
 }
 
 func (x *SymbolMappingSuggestion) GetBrokerSymbol() string {
@@ -5862,7 +5963,7 @@ type ListMappingSuggestionsResponse struct {
 
 func (x *ListMappingSuggestionsResponse) Reset() {
 	*x = ListMappingSuggestionsResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[96]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[97]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5874,7 +5975,7 @@ func (x *ListMappingSuggestionsResponse) String() string {
 func (*ListMappingSuggestionsResponse) ProtoMessage() {}
 
 func (x *ListMappingSuggestionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[96]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[97]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5887,7 +5988,7 @@ func (x *ListMappingSuggestionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMappingSuggestionsResponse.ProtoReflect.Descriptor instead.
 func (*ListMappingSuggestionsResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{96}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{97}
 }
 
 func (x *ListMappingSuggestionsResponse) GetSuggestions() []*SymbolMappingSuggestion {
@@ -5907,7 +6008,7 @@ type ListCanonicalsRequest struct {
 
 func (x *ListCanonicalsRequest) Reset() {
 	*x = ListCanonicalsRequest{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[97]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5919,7 +6020,7 @@ func (x *ListCanonicalsRequest) String() string {
 func (*ListCanonicalsRequest) ProtoMessage() {}
 
 func (x *ListCanonicalsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[97]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5932,7 +6033,7 @@ func (x *ListCanonicalsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCanonicalsRequest.ProtoReflect.Descriptor instead.
 func (*ListCanonicalsRequest) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{97}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{98}
 }
 
 type ListCanonicalsResponse struct {
@@ -5944,7 +6045,7 @@ type ListCanonicalsResponse struct {
 
 func (x *ListCanonicalsResponse) Reset() {
 	*x = ListCanonicalsResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[98]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5956,7 +6057,7 @@ func (x *ListCanonicalsResponse) String() string {
 func (*ListCanonicalsResponse) ProtoMessage() {}
 
 func (x *ListCanonicalsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[98]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5969,7 +6070,7 @@ func (x *ListCanonicalsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCanonicalsResponse.ProtoReflect.Descriptor instead.
 func (*ListCanonicalsResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{98}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{99}
 }
 
 func (x *ListCanonicalsResponse) GetCanonicals() []string {
@@ -5987,7 +6088,7 @@ type ListMatrixUniverseRequest struct {
 
 func (x *ListMatrixUniverseRequest) Reset() {
 	*x = ListMatrixUniverseRequest{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[99]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5999,7 +6100,7 @@ func (x *ListMatrixUniverseRequest) String() string {
 func (*ListMatrixUniverseRequest) ProtoMessage() {}
 
 func (x *ListMatrixUniverseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[99]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6012,7 +6113,7 @@ func (x *ListMatrixUniverseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMatrixUniverseRequest.ProtoReflect.Descriptor instead.
 func (*ListMatrixUniverseRequest) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{99}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{100}
 }
 
 type MatrixSymbolAccount struct {
@@ -6028,7 +6129,7 @@ type MatrixSymbolAccount struct {
 
 func (x *MatrixSymbolAccount) Reset() {
 	*x = MatrixSymbolAccount{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[100]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[101]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6040,7 +6141,7 @@ func (x *MatrixSymbolAccount) String() string {
 func (*MatrixSymbolAccount) ProtoMessage() {}
 
 func (x *MatrixSymbolAccount) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[100]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[101]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6053,7 +6154,7 @@ func (x *MatrixSymbolAccount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatrixSymbolAccount.ProtoReflect.Descriptor instead.
 func (*MatrixSymbolAccount) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{100}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{101}
 }
 
 func (x *MatrixSymbolAccount) GetVenue() string {
@@ -6108,7 +6209,7 @@ type MatrixSymbolRow struct {
 
 func (x *MatrixSymbolRow) Reset() {
 	*x = MatrixSymbolRow{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[101]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[102]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6120,7 +6221,7 @@ func (x *MatrixSymbolRow) String() string {
 func (*MatrixSymbolRow) ProtoMessage() {}
 
 func (x *MatrixSymbolRow) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[101]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[102]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6133,7 +6234,7 @@ func (x *MatrixSymbolRow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatrixSymbolRow.ProtoReflect.Descriptor instead.
 func (*MatrixSymbolRow) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{101}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{102}
 }
 
 func (x *MatrixSymbolRow) GetSymbol() string {
@@ -6212,7 +6313,7 @@ type MatrixGroupStat struct {
 
 func (x *MatrixGroupStat) Reset() {
 	*x = MatrixGroupStat{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[102]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6224,7 +6325,7 @@ func (x *MatrixGroupStat) String() string {
 func (*MatrixGroupStat) ProtoMessage() {}
 
 func (x *MatrixGroupStat) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[102]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6237,7 +6338,7 @@ func (x *MatrixGroupStat) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatrixGroupStat.ProtoReflect.Descriptor instead.
 func (*MatrixGroupStat) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{102}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{103}
 }
 
 func (x *MatrixGroupStat) GetGroup() string {
@@ -6288,7 +6389,7 @@ type MatrixUniverse struct {
 
 func (x *MatrixUniverse) Reset() {
 	*x = MatrixUniverse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[103]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[104]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6300,7 +6401,7 @@ func (x *MatrixUniverse) String() string {
 func (*MatrixUniverse) ProtoMessage() {}
 
 func (x *MatrixUniverse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[103]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[104]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6313,7 +6414,7 @@ func (x *MatrixUniverse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatrixUniverse.ProtoReflect.Descriptor instead.
 func (*MatrixUniverse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{103}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{104}
 }
 
 func (x *MatrixUniverse) GetGroups() []string {
@@ -6360,7 +6461,7 @@ type ListMatrixUniverseResponse struct {
 
 func (x *ListMatrixUniverseResponse) Reset() {
 	*x = ListMatrixUniverseResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[104]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[105]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6372,7 +6473,7 @@ func (x *ListMatrixUniverseResponse) String() string {
 func (*ListMatrixUniverseResponse) ProtoMessage() {}
 
 func (x *ListMatrixUniverseResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[104]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[105]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6385,7 +6486,7 @@ func (x *ListMatrixUniverseResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMatrixUniverseResponse.ProtoReflect.Descriptor instead.
 func (*ListMatrixUniverseResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{104}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{105}
 }
 
 func (x *ListMatrixUniverseResponse) GetUniverse() *MatrixUniverse {
@@ -6697,14 +6798,23 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x06offset\x18\x04 \x01(\x05R\x06offset\"V\n" +
 	"\x17ListDailyIncomeResponse\x12;\n" +
 	"\x05items\x18\x01 \x03(\v2%.arb.dashboard.v1.PositionDailyIncomeR\x05items\"\x16\n" +
-	"\x14StreamUpdatesRequest\"\x84\x03\n" +
+	"\x14StreamUpdatesRequest\"\xc1\x01\n" +
+	"\x15PersonalPositionPrice\x12\x1f\n" +
+	"\vposition_id\x18\x01 \x01(\x03R\n" +
+	"positionId\x12\x14\n" +
+	"\x05price\x18\x02 \x01(\x01R\x05price\x12\x14\n" +
+	"\x05level\x18\x03 \x01(\tR\x05level\x12\x17\n" +
+	"\apnl_usd\x18\x04 \x01(\x01R\x06pnlUsd\x12\x1b\n" +
+	"\tliq_price\x18\x05 \x01(\x01R\bliqPrice\x12%\n" +
+	"\x0fdist_to_liq_pct\x18\x06 \x01(\x01R\fdistToLiqPct\"\xe7\x03\n" +
 	"\x15StreamUpdatesResponse\x12/\n" +
 	"\x05quote\x18\x01 \x01(\v2\x17.arb.dashboard.v1.QuoteH\x00R\x05quote\x12A\n" +
 	"\vopportunity\x18\x02 \x01(\v2\x1d.arb.dashboard.v1.OpportunityH\x00R\vopportunity\x12/\n" +
 	"\x05alert\x18\x03 \x01(\v2\x17.arb.dashboard.v1.AlertH\x00R\x05alert\x128\n" +
 	"\bposition\x18\x04 \x01(\v2\x1a.arb.dashboard.v1.PositionH\x00R\bposition\x12E\n" +
 	"\rsource_health\x18\x05 \x01(\v2\x1e.arb.dashboard.v1.SourceHealthH\x00R\fsourceHealth\x12;\n" +
-	"\tkeepalive\x18\x06 \x01(\v2\x1b.arb.dashboard.v1.KeepaliveH\x00R\tkeepaliveB\b\n" +
+	"\tkeepalive\x18\x06 \x01(\v2\x1b.arb.dashboard.v1.KeepaliveH\x00R\tkeepalive\x12a\n" +
+	"\x17personal_position_price\x18\a \x01(\v2'.arb.dashboard.v1.PersonalPositionPriceH\x00R\x15personalPositionPriceB\b\n" +
 	"\x06update\"7\n" +
 	"\tKeepalive\x12*\n" +
 	"\x02ts\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\"\x0f\n" +
@@ -6923,7 +7033,7 @@ func file_arb_dashboard_v1_dashboard_proto_rawDescGZIP() []byte {
 }
 
 var file_arb_dashboard_v1_dashboard_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_arb_dashboard_v1_dashboard_proto_msgTypes = make([]protoimpl.MessageInfo, 105)
+var file_arb_dashboard_v1_dashboard_proto_msgTypes = make([]protoimpl.MessageInfo, 106)
 var file_arb_dashboard_v1_dashboard_proto_goTypes = []any{
 	(MatrixState)(0),                       // 0: arb.dashboard.v1.MatrixState
 	(*Quote)(nil),                          // 1: arb.dashboard.v1.Quote
@@ -6987,85 +7097,86 @@ var file_arb_dashboard_v1_dashboard_proto_goTypes = []any{
 	(*ListDailyIncomeRequest)(nil),         // 59: arb.dashboard.v1.ListDailyIncomeRequest
 	(*ListDailyIncomeResponse)(nil),        // 60: arb.dashboard.v1.ListDailyIncomeResponse
 	(*StreamUpdatesRequest)(nil),           // 61: arb.dashboard.v1.StreamUpdatesRequest
-	(*StreamUpdatesResponse)(nil),          // 62: arb.dashboard.v1.StreamUpdatesResponse
-	(*Keepalive)(nil),                      // 63: arb.dashboard.v1.Keepalive
-	(*HealthRequest)(nil),                  // 64: arb.dashboard.v1.HealthRequest
-	(*HealthResponse)(nil),                 // 65: arb.dashboard.v1.HealthResponse
-	(*SearchBrokerRequest)(nil),            // 66: arb.dashboard.v1.SearchBrokerRequest
-	(*BrokerServer)(nil),                   // 67: arb.dashboard.v1.BrokerServer
-	(*BrokerCompany)(nil),                  // 68: arb.dashboard.v1.BrokerCompany
-	(*SearchBrokerResponse)(nil),           // 69: arb.dashboard.v1.SearchBrokerResponse
-	(*AddBrokerRequest)(nil),               // 70: arb.dashboard.v1.AddBrokerRequest
-	(*AddBrokerResponse)(nil),              // 71: arb.dashboard.v1.AddBrokerResponse
-	(*RemoveBrokerRequest)(nil),            // 72: arb.dashboard.v1.RemoveBrokerRequest
-	(*RemoveBrokerResponse)(nil),           // 73: arb.dashboard.v1.RemoveBrokerResponse
-	(*BrokerAccount)(nil),                  // 74: arb.dashboard.v1.BrokerAccount
-	(*ListBrokerAccountsRequest)(nil),      // 75: arb.dashboard.v1.ListBrokerAccountsRequest
-	(*ListBrokerAccountsResponse)(nil),     // 76: arb.dashboard.v1.ListBrokerAccountsResponse
-	(*VerifyAccountRequest)(nil),           // 77: arb.dashboard.v1.VerifyAccountRequest
-	(*VerifyAccountResponse)(nil),          // 78: arb.dashboard.v1.VerifyAccountResponse
-	(*BrokerSymbolsRequest)(nil),           // 79: arb.dashboard.v1.BrokerSymbolsRequest
-	(*SymbolEntry)(nil),                    // 80: arb.dashboard.v1.SymbolEntry
-	(*BrokerSymbolsResponse)(nil),          // 81: arb.dashboard.v1.BrokerSymbolsResponse
-	(*SetBrokerAccountAliasRequest)(nil),   // 82: arb.dashboard.v1.SetBrokerAccountAliasRequest
-	(*SetBrokerAccountAliasResponse)(nil),  // 83: arb.dashboard.v1.SetBrokerAccountAliasResponse
-	(*SetBrokerDisabledRequest)(nil),       // 84: arb.dashboard.v1.SetBrokerDisabledRequest
-	(*SetBrokerDisabledResponse)(nil),      // 85: arb.dashboard.v1.SetBrokerDisabledResponse
-	(*SetBrokerCommissionRequest)(nil),     // 86: arb.dashboard.v1.SetBrokerCommissionRequest
-	(*SetBrokerCommissionResponse)(nil),    // 87: arb.dashboard.v1.SetBrokerCommissionResponse
-	(*SymbolMapping)(nil),                  // 88: arb.dashboard.v1.SymbolMapping
-	(*ListSymbolMappingsRequest)(nil),      // 89: arb.dashboard.v1.ListSymbolMappingsRequest
-	(*ListSymbolMappingsResponse)(nil),     // 90: arb.dashboard.v1.ListSymbolMappingsResponse
-	(*SaveSymbolMappingRequest)(nil),       // 91: arb.dashboard.v1.SaveSymbolMappingRequest
-	(*SaveSymbolMappingResponse)(nil),      // 92: arb.dashboard.v1.SaveSymbolMappingResponse
-	(*DeleteSymbolMappingRequest)(nil),     // 93: arb.dashboard.v1.DeleteSymbolMappingRequest
-	(*DeleteSymbolMappingResponse)(nil),    // 94: arb.dashboard.v1.DeleteSymbolMappingResponse
-	(*ListMappingSuggestionsRequest)(nil),  // 95: arb.dashboard.v1.ListMappingSuggestionsRequest
-	(*SymbolMappingSuggestion)(nil),        // 96: arb.dashboard.v1.SymbolMappingSuggestion
-	(*ListMappingSuggestionsResponse)(nil), // 97: arb.dashboard.v1.ListMappingSuggestionsResponse
-	(*ListCanonicalsRequest)(nil),          // 98: arb.dashboard.v1.ListCanonicalsRequest
-	(*ListCanonicalsResponse)(nil),         // 99: arb.dashboard.v1.ListCanonicalsResponse
-	(*ListMatrixUniverseRequest)(nil),      // 100: arb.dashboard.v1.ListMatrixUniverseRequest
-	(*MatrixSymbolAccount)(nil),            // 101: arb.dashboard.v1.MatrixSymbolAccount
-	(*MatrixSymbolRow)(nil),                // 102: arb.dashboard.v1.MatrixSymbolRow
-	(*MatrixGroupStat)(nil),                // 103: arb.dashboard.v1.MatrixGroupStat
-	(*MatrixUniverse)(nil),                 // 104: arb.dashboard.v1.MatrixUniverse
-	(*ListMatrixUniverseResponse)(nil),     // 105: arb.dashboard.v1.ListMatrixUniverseResponse
-	(*timestamppb.Timestamp)(nil),          // 106: google.protobuf.Timestamp
+	(*PersonalPositionPrice)(nil),          // 62: arb.dashboard.v1.PersonalPositionPrice
+	(*StreamUpdatesResponse)(nil),          // 63: arb.dashboard.v1.StreamUpdatesResponse
+	(*Keepalive)(nil),                      // 64: arb.dashboard.v1.Keepalive
+	(*HealthRequest)(nil),                  // 65: arb.dashboard.v1.HealthRequest
+	(*HealthResponse)(nil),                 // 66: arb.dashboard.v1.HealthResponse
+	(*SearchBrokerRequest)(nil),            // 67: arb.dashboard.v1.SearchBrokerRequest
+	(*BrokerServer)(nil),                   // 68: arb.dashboard.v1.BrokerServer
+	(*BrokerCompany)(nil),                  // 69: arb.dashboard.v1.BrokerCompany
+	(*SearchBrokerResponse)(nil),           // 70: arb.dashboard.v1.SearchBrokerResponse
+	(*AddBrokerRequest)(nil),               // 71: arb.dashboard.v1.AddBrokerRequest
+	(*AddBrokerResponse)(nil),              // 72: arb.dashboard.v1.AddBrokerResponse
+	(*RemoveBrokerRequest)(nil),            // 73: arb.dashboard.v1.RemoveBrokerRequest
+	(*RemoveBrokerResponse)(nil),           // 74: arb.dashboard.v1.RemoveBrokerResponse
+	(*BrokerAccount)(nil),                  // 75: arb.dashboard.v1.BrokerAccount
+	(*ListBrokerAccountsRequest)(nil),      // 76: arb.dashboard.v1.ListBrokerAccountsRequest
+	(*ListBrokerAccountsResponse)(nil),     // 77: arb.dashboard.v1.ListBrokerAccountsResponse
+	(*VerifyAccountRequest)(nil),           // 78: arb.dashboard.v1.VerifyAccountRequest
+	(*VerifyAccountResponse)(nil),          // 79: arb.dashboard.v1.VerifyAccountResponse
+	(*BrokerSymbolsRequest)(nil),           // 80: arb.dashboard.v1.BrokerSymbolsRequest
+	(*SymbolEntry)(nil),                    // 81: arb.dashboard.v1.SymbolEntry
+	(*BrokerSymbolsResponse)(nil),          // 82: arb.dashboard.v1.BrokerSymbolsResponse
+	(*SetBrokerAccountAliasRequest)(nil),   // 83: arb.dashboard.v1.SetBrokerAccountAliasRequest
+	(*SetBrokerAccountAliasResponse)(nil),  // 84: arb.dashboard.v1.SetBrokerAccountAliasResponse
+	(*SetBrokerDisabledRequest)(nil),       // 85: arb.dashboard.v1.SetBrokerDisabledRequest
+	(*SetBrokerDisabledResponse)(nil),      // 86: arb.dashboard.v1.SetBrokerDisabledResponse
+	(*SetBrokerCommissionRequest)(nil),     // 87: arb.dashboard.v1.SetBrokerCommissionRequest
+	(*SetBrokerCommissionResponse)(nil),    // 88: arb.dashboard.v1.SetBrokerCommissionResponse
+	(*SymbolMapping)(nil),                  // 89: arb.dashboard.v1.SymbolMapping
+	(*ListSymbolMappingsRequest)(nil),      // 90: arb.dashboard.v1.ListSymbolMappingsRequest
+	(*ListSymbolMappingsResponse)(nil),     // 91: arb.dashboard.v1.ListSymbolMappingsResponse
+	(*SaveSymbolMappingRequest)(nil),       // 92: arb.dashboard.v1.SaveSymbolMappingRequest
+	(*SaveSymbolMappingResponse)(nil),      // 93: arb.dashboard.v1.SaveSymbolMappingResponse
+	(*DeleteSymbolMappingRequest)(nil),     // 94: arb.dashboard.v1.DeleteSymbolMappingRequest
+	(*DeleteSymbolMappingResponse)(nil),    // 95: arb.dashboard.v1.DeleteSymbolMappingResponse
+	(*ListMappingSuggestionsRequest)(nil),  // 96: arb.dashboard.v1.ListMappingSuggestionsRequest
+	(*SymbolMappingSuggestion)(nil),        // 97: arb.dashboard.v1.SymbolMappingSuggestion
+	(*ListMappingSuggestionsResponse)(nil), // 98: arb.dashboard.v1.ListMappingSuggestionsResponse
+	(*ListCanonicalsRequest)(nil),          // 99: arb.dashboard.v1.ListCanonicalsRequest
+	(*ListCanonicalsResponse)(nil),         // 100: arb.dashboard.v1.ListCanonicalsResponse
+	(*ListMatrixUniverseRequest)(nil),      // 101: arb.dashboard.v1.ListMatrixUniverseRequest
+	(*MatrixSymbolAccount)(nil),            // 102: arb.dashboard.v1.MatrixSymbolAccount
+	(*MatrixSymbolRow)(nil),                // 103: arb.dashboard.v1.MatrixSymbolRow
+	(*MatrixGroupStat)(nil),                // 104: arb.dashboard.v1.MatrixGroupStat
+	(*MatrixUniverse)(nil),                 // 105: arb.dashboard.v1.MatrixUniverse
+	(*ListMatrixUniverseResponse)(nil),     // 106: arb.dashboard.v1.ListMatrixUniverseResponse
+	(*timestamppb.Timestamp)(nil),          // 107: google.protobuf.Timestamp
 }
 var file_arb_dashboard_v1_dashboard_proto_depIdxs = []int32{
-	106, // 0: arb.dashboard.v1.Quote.time:type_name -> google.protobuf.Timestamp
+	107, // 0: arb.dashboard.v1.Quote.time:type_name -> google.protobuf.Timestamp
 	1,   // 1: arb.dashboard.v1.ListQuotesResponse.quotes:type_name -> arb.dashboard.v1.Quote
-	106, // 2: arb.dashboard.v1.Fact.ts:type_name -> google.protobuf.Timestamp
+	107, // 2: arb.dashboard.v1.Fact.ts:type_name -> google.protobuf.Timestamp
 	4,   // 3: arb.dashboard.v1.ListLatestFactsResponse.facts:type_name -> arb.dashboard.v1.Fact
 	4,   // 4: arb.dashboard.v1.ListFactsResponse.facts:type_name -> arb.dashboard.v1.Fact
-	106, // 5: arb.dashboard.v1.Opportunity.quote_time:type_name -> google.protobuf.Timestamp
-	106, // 6: arb.dashboard.v1.Opportunity.expires_at:type_name -> google.protobuf.Timestamp
-	106, // 7: arb.dashboard.v1.Opportunity.created_at:type_name -> google.protobuf.Timestamp
-	106, // 8: arb.dashboard.v1.Opportunity.updated_at:type_name -> google.protobuf.Timestamp
+	107, // 5: arb.dashboard.v1.Opportunity.quote_time:type_name -> google.protobuf.Timestamp
+	107, // 6: arb.dashboard.v1.Opportunity.expires_at:type_name -> google.protobuf.Timestamp
+	107, // 7: arb.dashboard.v1.Opportunity.created_at:type_name -> google.protobuf.Timestamp
+	107, // 8: arb.dashboard.v1.Opportunity.updated_at:type_name -> google.protobuf.Timestamp
 	9,   // 9: arb.dashboard.v1.ListOpportunitiesResponse.opportunities:type_name -> arb.dashboard.v1.Opportunity
-	106, // 10: arb.dashboard.v1.Alert.ts:type_name -> google.protobuf.Timestamp
+	107, // 10: arb.dashboard.v1.Alert.ts:type_name -> google.protobuf.Timestamp
 	12,  // 11: arb.dashboard.v1.ListAlertsResponse.alerts:type_name -> arb.dashboard.v1.Alert
 	12,  // 12: arb.dashboard.v1.ListUnackedResponse.alerts:type_name -> arb.dashboard.v1.Alert
-	106, // 13: arb.dashboard.v1.TriggerState.since:type_name -> google.protobuf.Timestamp
+	107, // 13: arb.dashboard.v1.TriggerState.since:type_name -> google.protobuf.Timestamp
 	21,  // 14: arb.dashboard.v1.ListTriggerStatesResponse.states:type_name -> arb.dashboard.v1.TriggerState
-	106, // 15: arb.dashboard.v1.SourceHealth.last_event_at:type_name -> google.protobuf.Timestamp
+	107, // 15: arb.dashboard.v1.SourceHealth.last_event_at:type_name -> google.protobuf.Timestamp
 	24,  // 16: arb.dashboard.v1.ListSourceHealthResponse.sources:type_name -> arb.dashboard.v1.SourceHealth
-	106, // 17: arb.dashboard.v1.LedgerEntry.date:type_name -> google.protobuf.Timestamp
-	106, // 18: arb.dashboard.v1.AddLedgerEntryRequest.date:type_name -> google.protobuf.Timestamp
+	107, // 17: arb.dashboard.v1.LedgerEntry.date:type_name -> google.protobuf.Timestamp
+	107, // 18: arb.dashboard.v1.AddLedgerEntryRequest.date:type_name -> google.protobuf.Timestamp
 	27,  // 19: arb.dashboard.v1.ListLedgerEntriesResponse.entries:type_name -> arb.dashboard.v1.LedgerEntry
 	33,  // 20: arb.dashboard.v1.LedgerSummaryResponse.items:type_name -> arb.dashboard.v1.TierSummary
-	106, // 21: arb.dashboard.v1.InvestmentRecord.ts:type_name -> google.protobuf.Timestamp
+	107, // 21: arb.dashboard.v1.InvestmentRecord.ts:type_name -> google.protobuf.Timestamp
 	35,  // 22: arb.dashboard.v1.ListInvestmentRecordsResponse.items:type_name -> arb.dashboard.v1.InvestmentRecord
-	106, // 23: arb.dashboard.v1.KnowledgeEntry.ts:type_name -> google.protobuf.Timestamp
-	106, // 24: arb.dashboard.v1.KnowledgeEntry.validated_at:type_name -> google.protobuf.Timestamp
+	107, // 23: arb.dashboard.v1.KnowledgeEntry.ts:type_name -> google.protobuf.Timestamp
+	107, // 24: arb.dashboard.v1.KnowledgeEntry.validated_at:type_name -> google.protobuf.Timestamp
 	40,  // 25: arb.dashboard.v1.ListKnowledgeEntriesResponse.entries:type_name -> arb.dashboard.v1.KnowledgeEntry
-	106, // 26: arb.dashboard.v1.PositionLeg.ts:type_name -> google.protobuf.Timestamp
-	106, // 27: arb.dashboard.v1.Position.opened_at:type_name -> google.protobuf.Timestamp
-	106, // 28: arb.dashboard.v1.Position.closed_at:type_name -> google.protobuf.Timestamp
+	107, // 26: arb.dashboard.v1.PositionLeg.ts:type_name -> google.protobuf.Timestamp
+	107, // 27: arb.dashboard.v1.Position.opened_at:type_name -> google.protobuf.Timestamp
+	107, // 28: arb.dashboard.v1.Position.closed_at:type_name -> google.protobuf.Timestamp
 	45,  // 29: arb.dashboard.v1.Position.legs:type_name -> arb.dashboard.v1.PositionLeg
 	46,  // 30: arb.dashboard.v1.ListPositionsResponse.positions:type_name -> arb.dashboard.v1.Position
-	106, // 31: arb.dashboard.v1.PersonalPosition.opened_at:type_name -> google.protobuf.Timestamp
+	107, // 31: arb.dashboard.v1.PersonalPosition.opened_at:type_name -> google.protobuf.Timestamp
 	53,  // 32: arb.dashboard.v1.ListPersonalPositionsResponse.items:type_name -> arb.dashboard.v1.PersonalPosition
 	56,  // 33: arb.dashboard.v1.ListDailyIncomeResponse.items:type_name -> arb.dashboard.v1.PositionDailyIncome
 	1,   // 34: arb.dashboard.v1.StreamUpdatesResponse.quote:type_name -> arb.dashboard.v1.Quote
@@ -7073,106 +7184,107 @@ var file_arb_dashboard_v1_dashboard_proto_depIdxs = []int32{
 	12,  // 36: arb.dashboard.v1.StreamUpdatesResponse.alert:type_name -> arb.dashboard.v1.Alert
 	46,  // 37: arb.dashboard.v1.StreamUpdatesResponse.position:type_name -> arb.dashboard.v1.Position
 	24,  // 38: arb.dashboard.v1.StreamUpdatesResponse.source_health:type_name -> arb.dashboard.v1.SourceHealth
-	63,  // 39: arb.dashboard.v1.StreamUpdatesResponse.keepalive:type_name -> arb.dashboard.v1.Keepalive
-	106, // 40: arb.dashboard.v1.Keepalive.ts:type_name -> google.protobuf.Timestamp
-	67,  // 41: arb.dashboard.v1.BrokerCompany.servers:type_name -> arb.dashboard.v1.BrokerServer
-	68,  // 42: arb.dashboard.v1.SearchBrokerResponse.companies:type_name -> arb.dashboard.v1.BrokerCompany
-	106, // 43: arb.dashboard.v1.BrokerAccount.created_at:type_name -> google.protobuf.Timestamp
-	74,  // 44: arb.dashboard.v1.ListBrokerAccountsResponse.accounts:type_name -> arb.dashboard.v1.BrokerAccount
-	80,  // 45: arb.dashboard.v1.BrokerSymbolsResponse.symbols:type_name -> arb.dashboard.v1.SymbolEntry
-	88,  // 46: arb.dashboard.v1.ListSymbolMappingsResponse.mappings:type_name -> arb.dashboard.v1.SymbolMapping
-	96,  // 47: arb.dashboard.v1.ListMappingSuggestionsResponse.suggestions:type_name -> arb.dashboard.v1.SymbolMappingSuggestion
-	0,   // 48: arb.dashboard.v1.MatrixSymbolRow.state:type_name -> arb.dashboard.v1.MatrixState
-	101, // 49: arb.dashboard.v1.MatrixSymbolRow.accounts:type_name -> arb.dashboard.v1.MatrixSymbolAccount
-	103, // 50: arb.dashboard.v1.MatrixUniverse.group_stats:type_name -> arb.dashboard.v1.MatrixGroupStat
-	102, // 51: arb.dashboard.v1.MatrixUniverse.symbols:type_name -> arb.dashboard.v1.MatrixSymbolRow
-	74,  // 52: arb.dashboard.v1.MatrixUniverse.accounts:type_name -> arb.dashboard.v1.BrokerAccount
-	104, // 53: arb.dashboard.v1.ListMatrixUniverseResponse.universe:type_name -> arb.dashboard.v1.MatrixUniverse
-	2,   // 54: arb.dashboard.v1.DashboardService.ListLatestQuotes:input_type -> arb.dashboard.v1.ListQuotesRequest
-	5,   // 55: arb.dashboard.v1.DashboardService.ListLatestFacts:input_type -> arb.dashboard.v1.ListLatestFactsRequest
-	10,  // 56: arb.dashboard.v1.DashboardService.ListOpportunities:input_type -> arb.dashboard.v1.ListOpportunitiesRequest
-	13,  // 57: arb.dashboard.v1.DashboardService.ListAlerts:input_type -> arb.dashboard.v1.ListAlertsRequest
-	22,  // 58: arb.dashboard.v1.DashboardService.ListTriggerStates:input_type -> arb.dashboard.v1.ListTriggerStatesRequest
-	25,  // 59: arb.dashboard.v1.DashboardService.ListSourceHealth:input_type -> arb.dashboard.v1.ListSourceHealthRequest
-	7,   // 60: arb.dashboard.v1.DashboardService.ListFacts:input_type -> arb.dashboard.v1.ListFactsRequest
-	15,  // 61: arb.dashboard.v1.DashboardService.AckAlert:input_type -> arb.dashboard.v1.AckAlertRequest
-	17,  // 62: arb.dashboard.v1.DashboardService.AckAll:input_type -> arb.dashboard.v1.AckAllRequest
-	19,  // 63: arb.dashboard.v1.DashboardService.ListUnacked:input_type -> arb.dashboard.v1.ListUnackedRequest
-	28,  // 64: arb.dashboard.v1.DashboardService.AddLedgerEntry:input_type -> arb.dashboard.v1.AddLedgerEntryRequest
-	30,  // 65: arb.dashboard.v1.DashboardService.ListLedgerEntries:input_type -> arb.dashboard.v1.ListLedgerEntriesRequest
-	32,  // 66: arb.dashboard.v1.DashboardService.LedgerSummary:input_type -> arb.dashboard.v1.LedgerSummaryRequest
-	36,  // 67: arb.dashboard.v1.DashboardService.AddInvestmentRecord:input_type -> arb.dashboard.v1.AddInvestmentRecordRequest
-	38,  // 68: arb.dashboard.v1.DashboardService.ListInvestmentRecords:input_type -> arb.dashboard.v1.ListInvestmentRecordsRequest
-	41,  // 69: arb.dashboard.v1.DashboardService.ListKnowledgeEntries:input_type -> arb.dashboard.v1.ListKnowledgeEntriesRequest
-	43,  // 70: arb.dashboard.v1.DashboardService.ReviewKnowledgeEntry:input_type -> arb.dashboard.v1.ReviewKnowledgeEntryRequest
-	47,  // 71: arb.dashboard.v1.DashboardService.ExecuteOpportunity:input_type -> arb.dashboard.v1.ExecuteOpportunityRequest
-	49,  // 72: arb.dashboard.v1.DashboardService.ClosePosition:input_type -> arb.dashboard.v1.ClosePositionRequest
-	51,  // 73: arb.dashboard.v1.DashboardService.ListPositions:input_type -> arb.dashboard.v1.ListPositionsRequest
-	54,  // 74: arb.dashboard.v1.DashboardService.ListPersonalPositions:input_type -> arb.dashboard.v1.ListPersonalPositionsRequest
-	57,  // 75: arb.dashboard.v1.DashboardService.AddDailyIncome:input_type -> arb.dashboard.v1.AddDailyIncomeRequest
-	59,  // 76: arb.dashboard.v1.DashboardService.ListDailyIncome:input_type -> arb.dashboard.v1.ListDailyIncomeRequest
-	66,  // 77: arb.dashboard.v1.DashboardService.SearchBroker:input_type -> arb.dashboard.v1.SearchBrokerRequest
-	70,  // 78: arb.dashboard.v1.DashboardService.AddBroker:input_type -> arb.dashboard.v1.AddBrokerRequest
-	72,  // 79: arb.dashboard.v1.DashboardService.RemoveBroker:input_type -> arb.dashboard.v1.RemoveBrokerRequest
-	75,  // 80: arb.dashboard.v1.DashboardService.ListBrokerAccounts:input_type -> arb.dashboard.v1.ListBrokerAccountsRequest
-	77,  // 81: arb.dashboard.v1.DashboardService.VerifyAccount:input_type -> arb.dashboard.v1.VerifyAccountRequest
-	79,  // 82: arb.dashboard.v1.DashboardService.BrokerSymbols:input_type -> arb.dashboard.v1.BrokerSymbolsRequest
-	82,  // 83: arb.dashboard.v1.DashboardService.SetBrokerAccountAlias:input_type -> arb.dashboard.v1.SetBrokerAccountAliasRequest
-	84,  // 84: arb.dashboard.v1.DashboardService.SetBrokerDisabled:input_type -> arb.dashboard.v1.SetBrokerDisabledRequest
-	86,  // 85: arb.dashboard.v1.DashboardService.SetBrokerCommission:input_type -> arb.dashboard.v1.SetBrokerCommissionRequest
-	89,  // 86: arb.dashboard.v1.DashboardService.ListSymbolMappings:input_type -> arb.dashboard.v1.ListSymbolMappingsRequest
-	91,  // 87: arb.dashboard.v1.DashboardService.SaveSymbolMapping:input_type -> arb.dashboard.v1.SaveSymbolMappingRequest
-	93,  // 88: arb.dashboard.v1.DashboardService.DeleteSymbolMapping:input_type -> arb.dashboard.v1.DeleteSymbolMappingRequest
-	95,  // 89: arb.dashboard.v1.DashboardService.ListMappingSuggestions:input_type -> arb.dashboard.v1.ListMappingSuggestionsRequest
-	98,  // 90: arb.dashboard.v1.DashboardService.ListCanonicals:input_type -> arb.dashboard.v1.ListCanonicalsRequest
-	100, // 91: arb.dashboard.v1.DashboardService.ListMatrixUniverse:input_type -> arb.dashboard.v1.ListMatrixUniverseRequest
-	61,  // 92: arb.dashboard.v1.DashboardService.StreamUpdates:input_type -> arb.dashboard.v1.StreamUpdatesRequest
-	64,  // 93: arb.dashboard.v1.DashboardService.Health:input_type -> arb.dashboard.v1.HealthRequest
-	3,   // 94: arb.dashboard.v1.DashboardService.ListLatestQuotes:output_type -> arb.dashboard.v1.ListQuotesResponse
-	6,   // 95: arb.dashboard.v1.DashboardService.ListLatestFacts:output_type -> arb.dashboard.v1.ListLatestFactsResponse
-	11,  // 96: arb.dashboard.v1.DashboardService.ListOpportunities:output_type -> arb.dashboard.v1.ListOpportunitiesResponse
-	14,  // 97: arb.dashboard.v1.DashboardService.ListAlerts:output_type -> arb.dashboard.v1.ListAlertsResponse
-	23,  // 98: arb.dashboard.v1.DashboardService.ListTriggerStates:output_type -> arb.dashboard.v1.ListTriggerStatesResponse
-	26,  // 99: arb.dashboard.v1.DashboardService.ListSourceHealth:output_type -> arb.dashboard.v1.ListSourceHealthResponse
-	8,   // 100: arb.dashboard.v1.DashboardService.ListFacts:output_type -> arb.dashboard.v1.ListFactsResponse
-	16,  // 101: arb.dashboard.v1.DashboardService.AckAlert:output_type -> arb.dashboard.v1.AckAlertResponse
-	18,  // 102: arb.dashboard.v1.DashboardService.AckAll:output_type -> arb.dashboard.v1.AckAllResponse
-	20,  // 103: arb.dashboard.v1.DashboardService.ListUnacked:output_type -> arb.dashboard.v1.ListUnackedResponse
-	29,  // 104: arb.dashboard.v1.DashboardService.AddLedgerEntry:output_type -> arb.dashboard.v1.AddLedgerEntryResponse
-	31,  // 105: arb.dashboard.v1.DashboardService.ListLedgerEntries:output_type -> arb.dashboard.v1.ListLedgerEntriesResponse
-	34,  // 106: arb.dashboard.v1.DashboardService.LedgerSummary:output_type -> arb.dashboard.v1.LedgerSummaryResponse
-	37,  // 107: arb.dashboard.v1.DashboardService.AddInvestmentRecord:output_type -> arb.dashboard.v1.AddInvestmentRecordResponse
-	39,  // 108: arb.dashboard.v1.DashboardService.ListInvestmentRecords:output_type -> arb.dashboard.v1.ListInvestmentRecordsResponse
-	42,  // 109: arb.dashboard.v1.DashboardService.ListKnowledgeEntries:output_type -> arb.dashboard.v1.ListKnowledgeEntriesResponse
-	44,  // 110: arb.dashboard.v1.DashboardService.ReviewKnowledgeEntry:output_type -> arb.dashboard.v1.ReviewKnowledgeEntryResponse
-	48,  // 111: arb.dashboard.v1.DashboardService.ExecuteOpportunity:output_type -> arb.dashboard.v1.ExecuteOpportunityResponse
-	50,  // 112: arb.dashboard.v1.DashboardService.ClosePosition:output_type -> arb.dashboard.v1.ClosePositionResponse
-	52,  // 113: arb.dashboard.v1.DashboardService.ListPositions:output_type -> arb.dashboard.v1.ListPositionsResponse
-	55,  // 114: arb.dashboard.v1.DashboardService.ListPersonalPositions:output_type -> arb.dashboard.v1.ListPersonalPositionsResponse
-	58,  // 115: arb.dashboard.v1.DashboardService.AddDailyIncome:output_type -> arb.dashboard.v1.AddDailyIncomeResponse
-	60,  // 116: arb.dashboard.v1.DashboardService.ListDailyIncome:output_type -> arb.dashboard.v1.ListDailyIncomeResponse
-	69,  // 117: arb.dashboard.v1.DashboardService.SearchBroker:output_type -> arb.dashboard.v1.SearchBrokerResponse
-	71,  // 118: arb.dashboard.v1.DashboardService.AddBroker:output_type -> arb.dashboard.v1.AddBrokerResponse
-	73,  // 119: arb.dashboard.v1.DashboardService.RemoveBroker:output_type -> arb.dashboard.v1.RemoveBrokerResponse
-	76,  // 120: arb.dashboard.v1.DashboardService.ListBrokerAccounts:output_type -> arb.dashboard.v1.ListBrokerAccountsResponse
-	78,  // 121: arb.dashboard.v1.DashboardService.VerifyAccount:output_type -> arb.dashboard.v1.VerifyAccountResponse
-	81,  // 122: arb.dashboard.v1.DashboardService.BrokerSymbols:output_type -> arb.dashboard.v1.BrokerSymbolsResponse
-	83,  // 123: arb.dashboard.v1.DashboardService.SetBrokerAccountAlias:output_type -> arb.dashboard.v1.SetBrokerAccountAliasResponse
-	85,  // 124: arb.dashboard.v1.DashboardService.SetBrokerDisabled:output_type -> arb.dashboard.v1.SetBrokerDisabledResponse
-	87,  // 125: arb.dashboard.v1.DashboardService.SetBrokerCommission:output_type -> arb.dashboard.v1.SetBrokerCommissionResponse
-	90,  // 126: arb.dashboard.v1.DashboardService.ListSymbolMappings:output_type -> arb.dashboard.v1.ListSymbolMappingsResponse
-	92,  // 127: arb.dashboard.v1.DashboardService.SaveSymbolMapping:output_type -> arb.dashboard.v1.SaveSymbolMappingResponse
-	94,  // 128: arb.dashboard.v1.DashboardService.DeleteSymbolMapping:output_type -> arb.dashboard.v1.DeleteSymbolMappingResponse
-	97,  // 129: arb.dashboard.v1.DashboardService.ListMappingSuggestions:output_type -> arb.dashboard.v1.ListMappingSuggestionsResponse
-	99,  // 130: arb.dashboard.v1.DashboardService.ListCanonicals:output_type -> arb.dashboard.v1.ListCanonicalsResponse
-	105, // 131: arb.dashboard.v1.DashboardService.ListMatrixUniverse:output_type -> arb.dashboard.v1.ListMatrixUniverseResponse
-	62,  // 132: arb.dashboard.v1.DashboardService.StreamUpdates:output_type -> arb.dashboard.v1.StreamUpdatesResponse
-	65,  // 133: arb.dashboard.v1.DashboardService.Health:output_type -> arb.dashboard.v1.HealthResponse
-	94,  // [94:134] is the sub-list for method output_type
-	54,  // [54:94] is the sub-list for method input_type
-	54,  // [54:54] is the sub-list for extension type_name
-	54,  // [54:54] is the sub-list for extension extendee
-	0,   // [0:54] is the sub-list for field type_name
+	64,  // 39: arb.dashboard.v1.StreamUpdatesResponse.keepalive:type_name -> arb.dashboard.v1.Keepalive
+	62,  // 40: arb.dashboard.v1.StreamUpdatesResponse.personal_position_price:type_name -> arb.dashboard.v1.PersonalPositionPrice
+	107, // 41: arb.dashboard.v1.Keepalive.ts:type_name -> google.protobuf.Timestamp
+	68,  // 42: arb.dashboard.v1.BrokerCompany.servers:type_name -> arb.dashboard.v1.BrokerServer
+	69,  // 43: arb.dashboard.v1.SearchBrokerResponse.companies:type_name -> arb.dashboard.v1.BrokerCompany
+	107, // 44: arb.dashboard.v1.BrokerAccount.created_at:type_name -> google.protobuf.Timestamp
+	75,  // 45: arb.dashboard.v1.ListBrokerAccountsResponse.accounts:type_name -> arb.dashboard.v1.BrokerAccount
+	81,  // 46: arb.dashboard.v1.BrokerSymbolsResponse.symbols:type_name -> arb.dashboard.v1.SymbolEntry
+	89,  // 47: arb.dashboard.v1.ListSymbolMappingsResponse.mappings:type_name -> arb.dashboard.v1.SymbolMapping
+	97,  // 48: arb.dashboard.v1.ListMappingSuggestionsResponse.suggestions:type_name -> arb.dashboard.v1.SymbolMappingSuggestion
+	0,   // 49: arb.dashboard.v1.MatrixSymbolRow.state:type_name -> arb.dashboard.v1.MatrixState
+	102, // 50: arb.dashboard.v1.MatrixSymbolRow.accounts:type_name -> arb.dashboard.v1.MatrixSymbolAccount
+	104, // 51: arb.dashboard.v1.MatrixUniverse.group_stats:type_name -> arb.dashboard.v1.MatrixGroupStat
+	103, // 52: arb.dashboard.v1.MatrixUniverse.symbols:type_name -> arb.dashboard.v1.MatrixSymbolRow
+	75,  // 53: arb.dashboard.v1.MatrixUniverse.accounts:type_name -> arb.dashboard.v1.BrokerAccount
+	105, // 54: arb.dashboard.v1.ListMatrixUniverseResponse.universe:type_name -> arb.dashboard.v1.MatrixUniverse
+	2,   // 55: arb.dashboard.v1.DashboardService.ListLatestQuotes:input_type -> arb.dashboard.v1.ListQuotesRequest
+	5,   // 56: arb.dashboard.v1.DashboardService.ListLatestFacts:input_type -> arb.dashboard.v1.ListLatestFactsRequest
+	10,  // 57: arb.dashboard.v1.DashboardService.ListOpportunities:input_type -> arb.dashboard.v1.ListOpportunitiesRequest
+	13,  // 58: arb.dashboard.v1.DashboardService.ListAlerts:input_type -> arb.dashboard.v1.ListAlertsRequest
+	22,  // 59: arb.dashboard.v1.DashboardService.ListTriggerStates:input_type -> arb.dashboard.v1.ListTriggerStatesRequest
+	25,  // 60: arb.dashboard.v1.DashboardService.ListSourceHealth:input_type -> arb.dashboard.v1.ListSourceHealthRequest
+	7,   // 61: arb.dashboard.v1.DashboardService.ListFacts:input_type -> arb.dashboard.v1.ListFactsRequest
+	15,  // 62: arb.dashboard.v1.DashboardService.AckAlert:input_type -> arb.dashboard.v1.AckAlertRequest
+	17,  // 63: arb.dashboard.v1.DashboardService.AckAll:input_type -> arb.dashboard.v1.AckAllRequest
+	19,  // 64: arb.dashboard.v1.DashboardService.ListUnacked:input_type -> arb.dashboard.v1.ListUnackedRequest
+	28,  // 65: arb.dashboard.v1.DashboardService.AddLedgerEntry:input_type -> arb.dashboard.v1.AddLedgerEntryRequest
+	30,  // 66: arb.dashboard.v1.DashboardService.ListLedgerEntries:input_type -> arb.dashboard.v1.ListLedgerEntriesRequest
+	32,  // 67: arb.dashboard.v1.DashboardService.LedgerSummary:input_type -> arb.dashboard.v1.LedgerSummaryRequest
+	36,  // 68: arb.dashboard.v1.DashboardService.AddInvestmentRecord:input_type -> arb.dashboard.v1.AddInvestmentRecordRequest
+	38,  // 69: arb.dashboard.v1.DashboardService.ListInvestmentRecords:input_type -> arb.dashboard.v1.ListInvestmentRecordsRequest
+	41,  // 70: arb.dashboard.v1.DashboardService.ListKnowledgeEntries:input_type -> arb.dashboard.v1.ListKnowledgeEntriesRequest
+	43,  // 71: arb.dashboard.v1.DashboardService.ReviewKnowledgeEntry:input_type -> arb.dashboard.v1.ReviewKnowledgeEntryRequest
+	47,  // 72: arb.dashboard.v1.DashboardService.ExecuteOpportunity:input_type -> arb.dashboard.v1.ExecuteOpportunityRequest
+	49,  // 73: arb.dashboard.v1.DashboardService.ClosePosition:input_type -> arb.dashboard.v1.ClosePositionRequest
+	51,  // 74: arb.dashboard.v1.DashboardService.ListPositions:input_type -> arb.dashboard.v1.ListPositionsRequest
+	54,  // 75: arb.dashboard.v1.DashboardService.ListPersonalPositions:input_type -> arb.dashboard.v1.ListPersonalPositionsRequest
+	57,  // 76: arb.dashboard.v1.DashboardService.AddDailyIncome:input_type -> arb.dashboard.v1.AddDailyIncomeRequest
+	59,  // 77: arb.dashboard.v1.DashboardService.ListDailyIncome:input_type -> arb.dashboard.v1.ListDailyIncomeRequest
+	67,  // 78: arb.dashboard.v1.DashboardService.SearchBroker:input_type -> arb.dashboard.v1.SearchBrokerRequest
+	71,  // 79: arb.dashboard.v1.DashboardService.AddBroker:input_type -> arb.dashboard.v1.AddBrokerRequest
+	73,  // 80: arb.dashboard.v1.DashboardService.RemoveBroker:input_type -> arb.dashboard.v1.RemoveBrokerRequest
+	76,  // 81: arb.dashboard.v1.DashboardService.ListBrokerAccounts:input_type -> arb.dashboard.v1.ListBrokerAccountsRequest
+	78,  // 82: arb.dashboard.v1.DashboardService.VerifyAccount:input_type -> arb.dashboard.v1.VerifyAccountRequest
+	80,  // 83: arb.dashboard.v1.DashboardService.BrokerSymbols:input_type -> arb.dashboard.v1.BrokerSymbolsRequest
+	83,  // 84: arb.dashboard.v1.DashboardService.SetBrokerAccountAlias:input_type -> arb.dashboard.v1.SetBrokerAccountAliasRequest
+	85,  // 85: arb.dashboard.v1.DashboardService.SetBrokerDisabled:input_type -> arb.dashboard.v1.SetBrokerDisabledRequest
+	87,  // 86: arb.dashboard.v1.DashboardService.SetBrokerCommission:input_type -> arb.dashboard.v1.SetBrokerCommissionRequest
+	90,  // 87: arb.dashboard.v1.DashboardService.ListSymbolMappings:input_type -> arb.dashboard.v1.ListSymbolMappingsRequest
+	92,  // 88: arb.dashboard.v1.DashboardService.SaveSymbolMapping:input_type -> arb.dashboard.v1.SaveSymbolMappingRequest
+	94,  // 89: arb.dashboard.v1.DashboardService.DeleteSymbolMapping:input_type -> arb.dashboard.v1.DeleteSymbolMappingRequest
+	96,  // 90: arb.dashboard.v1.DashboardService.ListMappingSuggestions:input_type -> arb.dashboard.v1.ListMappingSuggestionsRequest
+	99,  // 91: arb.dashboard.v1.DashboardService.ListCanonicals:input_type -> arb.dashboard.v1.ListCanonicalsRequest
+	101, // 92: arb.dashboard.v1.DashboardService.ListMatrixUniverse:input_type -> arb.dashboard.v1.ListMatrixUniverseRequest
+	61,  // 93: arb.dashboard.v1.DashboardService.StreamUpdates:input_type -> arb.dashboard.v1.StreamUpdatesRequest
+	65,  // 94: arb.dashboard.v1.DashboardService.Health:input_type -> arb.dashboard.v1.HealthRequest
+	3,   // 95: arb.dashboard.v1.DashboardService.ListLatestQuotes:output_type -> arb.dashboard.v1.ListQuotesResponse
+	6,   // 96: arb.dashboard.v1.DashboardService.ListLatestFacts:output_type -> arb.dashboard.v1.ListLatestFactsResponse
+	11,  // 97: arb.dashboard.v1.DashboardService.ListOpportunities:output_type -> arb.dashboard.v1.ListOpportunitiesResponse
+	14,  // 98: arb.dashboard.v1.DashboardService.ListAlerts:output_type -> arb.dashboard.v1.ListAlertsResponse
+	23,  // 99: arb.dashboard.v1.DashboardService.ListTriggerStates:output_type -> arb.dashboard.v1.ListTriggerStatesResponse
+	26,  // 100: arb.dashboard.v1.DashboardService.ListSourceHealth:output_type -> arb.dashboard.v1.ListSourceHealthResponse
+	8,   // 101: arb.dashboard.v1.DashboardService.ListFacts:output_type -> arb.dashboard.v1.ListFactsResponse
+	16,  // 102: arb.dashboard.v1.DashboardService.AckAlert:output_type -> arb.dashboard.v1.AckAlertResponse
+	18,  // 103: arb.dashboard.v1.DashboardService.AckAll:output_type -> arb.dashboard.v1.AckAllResponse
+	20,  // 104: arb.dashboard.v1.DashboardService.ListUnacked:output_type -> arb.dashboard.v1.ListUnackedResponse
+	29,  // 105: arb.dashboard.v1.DashboardService.AddLedgerEntry:output_type -> arb.dashboard.v1.AddLedgerEntryResponse
+	31,  // 106: arb.dashboard.v1.DashboardService.ListLedgerEntries:output_type -> arb.dashboard.v1.ListLedgerEntriesResponse
+	34,  // 107: arb.dashboard.v1.DashboardService.LedgerSummary:output_type -> arb.dashboard.v1.LedgerSummaryResponse
+	37,  // 108: arb.dashboard.v1.DashboardService.AddInvestmentRecord:output_type -> arb.dashboard.v1.AddInvestmentRecordResponse
+	39,  // 109: arb.dashboard.v1.DashboardService.ListInvestmentRecords:output_type -> arb.dashboard.v1.ListInvestmentRecordsResponse
+	42,  // 110: arb.dashboard.v1.DashboardService.ListKnowledgeEntries:output_type -> arb.dashboard.v1.ListKnowledgeEntriesResponse
+	44,  // 111: arb.dashboard.v1.DashboardService.ReviewKnowledgeEntry:output_type -> arb.dashboard.v1.ReviewKnowledgeEntryResponse
+	48,  // 112: arb.dashboard.v1.DashboardService.ExecuteOpportunity:output_type -> arb.dashboard.v1.ExecuteOpportunityResponse
+	50,  // 113: arb.dashboard.v1.DashboardService.ClosePosition:output_type -> arb.dashboard.v1.ClosePositionResponse
+	52,  // 114: arb.dashboard.v1.DashboardService.ListPositions:output_type -> arb.dashboard.v1.ListPositionsResponse
+	55,  // 115: arb.dashboard.v1.DashboardService.ListPersonalPositions:output_type -> arb.dashboard.v1.ListPersonalPositionsResponse
+	58,  // 116: arb.dashboard.v1.DashboardService.AddDailyIncome:output_type -> arb.dashboard.v1.AddDailyIncomeResponse
+	60,  // 117: arb.dashboard.v1.DashboardService.ListDailyIncome:output_type -> arb.dashboard.v1.ListDailyIncomeResponse
+	70,  // 118: arb.dashboard.v1.DashboardService.SearchBroker:output_type -> arb.dashboard.v1.SearchBrokerResponse
+	72,  // 119: arb.dashboard.v1.DashboardService.AddBroker:output_type -> arb.dashboard.v1.AddBrokerResponse
+	74,  // 120: arb.dashboard.v1.DashboardService.RemoveBroker:output_type -> arb.dashboard.v1.RemoveBrokerResponse
+	77,  // 121: arb.dashboard.v1.DashboardService.ListBrokerAccounts:output_type -> arb.dashboard.v1.ListBrokerAccountsResponse
+	79,  // 122: arb.dashboard.v1.DashboardService.VerifyAccount:output_type -> arb.dashboard.v1.VerifyAccountResponse
+	82,  // 123: arb.dashboard.v1.DashboardService.BrokerSymbols:output_type -> arb.dashboard.v1.BrokerSymbolsResponse
+	84,  // 124: arb.dashboard.v1.DashboardService.SetBrokerAccountAlias:output_type -> arb.dashboard.v1.SetBrokerAccountAliasResponse
+	86,  // 125: arb.dashboard.v1.DashboardService.SetBrokerDisabled:output_type -> arb.dashboard.v1.SetBrokerDisabledResponse
+	88,  // 126: arb.dashboard.v1.DashboardService.SetBrokerCommission:output_type -> arb.dashboard.v1.SetBrokerCommissionResponse
+	91,  // 127: arb.dashboard.v1.DashboardService.ListSymbolMappings:output_type -> arb.dashboard.v1.ListSymbolMappingsResponse
+	93,  // 128: arb.dashboard.v1.DashboardService.SaveSymbolMapping:output_type -> arb.dashboard.v1.SaveSymbolMappingResponse
+	95,  // 129: arb.dashboard.v1.DashboardService.DeleteSymbolMapping:output_type -> arb.dashboard.v1.DeleteSymbolMappingResponse
+	98,  // 130: arb.dashboard.v1.DashboardService.ListMappingSuggestions:output_type -> arb.dashboard.v1.ListMappingSuggestionsResponse
+	100, // 131: arb.dashboard.v1.DashboardService.ListCanonicals:output_type -> arb.dashboard.v1.ListCanonicalsResponse
+	106, // 132: arb.dashboard.v1.DashboardService.ListMatrixUniverse:output_type -> arb.dashboard.v1.ListMatrixUniverseResponse
+	63,  // 133: arb.dashboard.v1.DashboardService.StreamUpdates:output_type -> arb.dashboard.v1.StreamUpdatesResponse
+	66,  // 134: arb.dashboard.v1.DashboardService.Health:output_type -> arb.dashboard.v1.HealthResponse
+	95,  // [95:135] is the sub-list for method output_type
+	55,  // [55:95] is the sub-list for method input_type
+	55,  // [55:55] is the sub-list for extension type_name
+	55,  // [55:55] is the sub-list for extension extendee
+	0,   // [0:55] is the sub-list for field type_name
 }
 
 func init() { file_arb_dashboard_v1_dashboard_proto_init() }
@@ -7185,27 +7297,28 @@ func file_arb_dashboard_v1_dashboard_proto_init() {
 	file_arb_dashboard_v1_dashboard_proto_msgTypes[20].OneofWrappers = []any{}
 	file_arb_dashboard_v1_dashboard_proto_msgTypes[44].OneofWrappers = []any{}
 	file_arb_dashboard_v1_dashboard_proto_msgTypes[45].OneofWrappers = []any{}
-	file_arb_dashboard_v1_dashboard_proto_msgTypes[61].OneofWrappers = []any{
+	file_arb_dashboard_v1_dashboard_proto_msgTypes[62].OneofWrappers = []any{
 		(*StreamUpdatesResponse_Quote)(nil),
 		(*StreamUpdatesResponse_Opportunity)(nil),
 		(*StreamUpdatesResponse_Alert)(nil),
 		(*StreamUpdatesResponse_Position)(nil),
 		(*StreamUpdatesResponse_SourceHealth)(nil),
 		(*StreamUpdatesResponse_Keepalive)(nil),
+		(*StreamUpdatesResponse_PersonalPositionPrice)(nil),
 	}
-	file_arb_dashboard_v1_dashboard_proto_msgTypes[69].OneofWrappers = []any{}
-	file_arb_dashboard_v1_dashboard_proto_msgTypes[73].OneofWrappers = []any{}
-	file_arb_dashboard_v1_dashboard_proto_msgTypes[85].OneofWrappers = []any{}
-	file_arb_dashboard_v1_dashboard_proto_msgTypes[87].OneofWrappers = []any{}
-	file_arb_dashboard_v1_dashboard_proto_msgTypes[90].OneofWrappers = []any{}
-	file_arb_dashboard_v1_dashboard_proto_msgTypes[100].OneofWrappers = []any{}
+	file_arb_dashboard_v1_dashboard_proto_msgTypes[70].OneofWrappers = []any{}
+	file_arb_dashboard_v1_dashboard_proto_msgTypes[74].OneofWrappers = []any{}
+	file_arb_dashboard_v1_dashboard_proto_msgTypes[86].OneofWrappers = []any{}
+	file_arb_dashboard_v1_dashboard_proto_msgTypes[88].OneofWrappers = []any{}
+	file_arb_dashboard_v1_dashboard_proto_msgTypes[91].OneofWrappers = []any{}
+	file_arb_dashboard_v1_dashboard_proto_msgTypes[101].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arb_dashboard_v1_dashboard_proto_rawDesc), len(file_arb_dashboard_v1_dashboard_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   105,
+			NumMessages:   106,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
