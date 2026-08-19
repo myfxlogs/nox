@@ -45,6 +45,7 @@ service DashboardService {
   // Broker 实持仓（D-051 WP3：MT5/MT4 实际持仓统一视图，实时查不落库）
   rpc ListBrokerPositions(ListBrokerPositionsRequest) returns (ListBrokerPositionsResponse);
   rpc CloseBrokerPosition(CloseBrokerPositionRequest) returns (CloseBrokerPositionResponse);
+  rpc CloseBrokerPositions(CloseBrokerPositionsRequest) returns (CloseBrokerPositionsResponse);
 
   // 个人持仓（财务线 TRX 持仓接入，D-046）+ 实账化（财务线工作项 3）
   rpc ListPersonalPositions(ListPersonalPositionsRequest) returns (ListPersonalPositionsResponse);
@@ -425,9 +426,13 @@ message BrokerPosition {
   string comment = 14;
   bool is_arb = 15;            // comment 前缀 = exec.OrderComment("arb") → ARB 源订单
   google.protobuf.Timestamp opened_at = 16;
+  int64 magic = 17;            // MT5 ExpertId / MT4 MagicNumber；0 = 无（手动单）
+  bool venue_online = 18;      // venue 在线状态；false = 最近快照（离线，非实时）
 }
 
-message ListBrokerPositionsRequest {}
+message ListBrokerPositionsRequest {
+  bool refresh = 1;   // true = 强制触发一次 venue 轮询后返回（前端「刷新」/平仓后立即刷新）
+}
 
 message ListBrokerPositionsResponse {
   repeated BrokerPosition positions = 1;
@@ -441,6 +446,14 @@ message CloseBrokerPositionRequest {
 message CloseBrokerPositionResponse {
   string status = 1;   // CLOSED / FAILED
   string message = 2;
+}
+
+message CloseBrokerPositionsRequest {
+  repeated CloseBrokerPositionRequest items = 1;
+}
+
+message CloseBrokerPositionsResponse {
+  repeated CloseBrokerPositionResponse results = 1;   // 逐条 CLOSED/FAILED（单条失败不阻断后续）
 }
 
 // === PersonalPosition（财务线 TRX 持仓接入，D-046）===
@@ -532,7 +545,13 @@ message StreamUpdatesResponse {
     SourceHealth source_health = 5;
     Keepalive keepalive = 6;     // 30s 心跳（Cloudflare Tunnel 存活，D-027）
     PersonalPositionPrice personal_position_price = 7;  // 实时个人持仓现价（D-049）
+    BrokerPositionSnapshot broker_positions = 8;        // Broker 实持仓实时推送（全量快照）
   }
+}
+
+// Broker 实持仓全量快照（D-052）：monitor 变更时广播，含离线 venue 的最近快照；前端全量替换。
+message BrokerPositionSnapshot {
+  repeated BrokerPosition positions = 1;
 }
 
 message Keepalive {

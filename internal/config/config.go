@@ -52,6 +52,10 @@ type Config struct {
 	// === 机会站内推送（D-050）===
 	// NotifyMinNetBps 机会推送提醒门槛（bps）；0 = 全部新机会都提醒（ARB_NOTIFY_MIN_NET_BPS）。
 	NotifyMinNetBps float64
+
+	// === Broker 实持仓轮询（D-052）===
+	// BrokerPosPollInterval Broker 实持仓视图轮询周期（ARB_BROKER_POS_POLL_MS，缺省 5s）。
+	BrokerPosPollInterval time.Duration
 }
 
 // Load 从环境变量加载配置，未设置用默认值。
@@ -83,6 +87,7 @@ func Load() *Config {
 		LiqMMR:                   envFloat("ARB_LIQ_MMR", 0.005),
 		FundingDropRatio:         envFloat("ARB_FUNDING_DROP_RATIO", 0.5),
 		NotifyMinNetBps:          envFloat("ARB_NOTIFY_MIN_NET_BPS", 0),
+		BrokerPosPollInterval:    envDur("ARB_BROKER_POS_POLL_MS", 5*time.Second),
 	}
 }
 
