@@ -584,11 +584,13 @@ message MatrixSymbolAccount {          // 单账号对该符号的存在与映�
   string venue = 1;                   // 登录账号号（D-033）
   optional string canonical = 2;      // 该账号已映射 canonical；null = 缺
   double contract_size = 3;           // 该账号权威合约规格；0 = 未知（MT4）
+  string raw_symbol = 4;              // 该账号映射前的原始 broker 符号（归并行逐账号不同）
+  string group = 5;                   // 该账号原生符号所属 broker 分组（归并行逐账号原生分组，如 Forex/Metals）
 }
 
 message MatrixSymbolRow {              // 跨账号去重后的符号行
-  string symbol = 1;                  // broker 原生符号（去重键之一）
-  string group = 2;                   // broker 分组；"" = 未分组（MT4）
+  string symbol = 1;                  // 展示名：已配齐 canonical 归并行为 canonical，其余为 broker 原生符号
+  string group = 2;                   // broker 分组；"" = 未分组（MT4）；归并行 = 跨组商品
   int32 coverage_total = 3;           // 应配齐集大小 = connected 账号中存在 (symbol,group) 者
   int32 coverage_mapped = 4;          // 其中已映射数量
   MatrixState state = 5;              // 后端按 coverage 计算
