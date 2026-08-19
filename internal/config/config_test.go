@@ -53,6 +53,9 @@ func TestLoadDefaults(t *testing.T) {
 	if c.LiqMMR != 0.005 {
 		t.Errorf("LiqMMR = %v, want 0.005", c.LiqMMR)
 	}
+	if c.NotifyMinNetBps != 0 {
+		t.Errorf("NotifyMinNetBps = %v, want 0", c.NotifyMinNetBps)
+	}
 }
 
 // TestLoadEnvOverride env 覆盖须生效。
