@@ -3,6 +3,7 @@ package dashboard
 import (
 	"context"
 	"sort"
+	"strings"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 	"arb/internal/store/pgstore"
@@ -30,6 +31,8 @@ type matrixAcctInfo struct {
 }
 
 // buildMatrixUniverse 把聚合数据装配为 MatrixUniverse（纯函数，便于单测 D-045 §8.1）。
+// D-065 裁剪：只保留有映射 + canonical 候选名匹配的 symbol（7260 Stock CFD 等不匹配的裁掉，
+// 矩阵页用途=补映射待办，不匹配 canonical 的 symbol 对补映射无用；浏览全部用 BrokerSymbols RPC）。
 func buildMatrixUniverse(
 	accounts []*v1.BrokerAccount,
 	allGroups map[string][]SymbolGroup,
@@ -40,6 +43,18 @@ func buildMatrixUniverse(
 	mapIdx := make(map[mapKey]string, len(mappings))
 	for _, mp := range mappings {
 		mapIdx[mapKey{mp.Venue, mp.BrokerSymbol}] = mp.Canonical
+	}
+
+	// D-065 canonical 别名集合：canonical 名 + 已映射 brokerSymbol + cent 后缀变体。
+	// symbol 匹配该集合或有映射 → 保留；否则裁掉。
+	canonAliases := make(map[string]bool, len(canonicals)*2+len(mappings)*2)
+	for _, c := range canonicals {
+		canonAliases[strings.ToUpper(c)] = true
+		canonAliases[strings.ToUpper(trimCentSuffix(c))] = true
+	}
+	for _, mp := range mappings {
+		canonAliases[strings.ToUpper(mp.BrokerSymbol)] = true
+		canonAliases[strings.ToUpper(trimCentSuffix(mp.BrokerSymbol))] = true
 	}
 
 	connected := make([]string, 0, len(accounts))
@@ -58,6 +73,18 @@ func buildMatrixUniverse(
 			continue
 		}
 		for _, sg := range groups {
+			// D-065 裁剪：无映射且不匹配 canonical 别名 → 跳过（Stock CFD 等不相关品种）。
+			// canonAliases 为空（无 canonicals + 无 mappings）时保留原行为（不裁剪，向后兼容测试）。
+			if len(canonAliases) > 0 {
+				_, mapped := mapIdx[mapKey{venue, sg.Symbol}]
+				if !mapped {
+					up := strings.ToUpper(sg.Symbol)
+					upTrim := strings.ToUpper(trimCentSuffix(sg.Symbol))
+					if !canonAliases[up] && !canonAliases[upTrim] {
+						continue
+					}
+				}
+			}
 			key := rowKey{sg.Symbol, sg.Group}
 			row, exists := rowMap[key]
 			if !exists {

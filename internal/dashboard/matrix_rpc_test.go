@@ -263,3 +263,28 @@ func TestBuildMatrixUniverse_AccountsPBPassThrough(t *testing.T) {
 		t.Errorf("accounts PB passthrough failed: %v", u.Accounts)
 	}
 }
+
+// D-065 裁剪：有 canonicals 时，不匹配的 symbol（如 Stock CFD）被裁掉。
+func TestBuildMatrixUniverse_PruneUnmatched(t *testing.T) {
+	accounts := []*v1.BrokerAccount{
+		{Venue: "v1", Status: "connected"},
+	}
+	groups := map[string][]SymbolGroup{
+		"v1": {
+			{Symbol: "EURUSD", Group: "Forex", ContractSize: 100000},
+			{Symbol: "EURUSDm", Group: "Forex", ContractSize: 100000},
+			{Symbol: "JPMm", Group: "Stock CFD's", ContractSize: 1},
+			{Symbol: "AAPL", Group: "Stock CFD's", ContractSize: 1},
+		},
+	}
+	// canonicals 含 EURUSD → EURUSD/EURUSDm 保留，JPMm/AAPL 裁掉
+	u := buildMatrixUniverse(accounts, groups, nil, []string{"EURUSD"})
+	if len(u.Symbols) != 2 {
+		t.Fatalf("prune want 2 rows (EURUSD+EURUSDm), got %d", len(u.Symbols))
+	}
+	for _, s := range u.Symbols {
+		if s.Symbol == "JPMm" || s.Symbol == "AAPL" {
+			t.Errorf("Stock CFD %s should be pruned", s.Symbol)
+		}
+	}
+}
