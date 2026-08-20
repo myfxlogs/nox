@@ -26,15 +26,16 @@ type CEXAccountQuerier struct {
 	apiSecret  string
 	passphrase string // OKX 必填；Binance 空
 	baseURL    string // spot base（binance 走代理；okx www.okx.com）
+	simulated  bool   // OKX 模拟盘：请求带 x-simulated-trading:1（demo key 必开，D-054）
 	client     *http.Client
 }
 
 // NewCEXAccountQuerier 创建 CEX 账户查询器。
 // baseURL 为 spot base（Binance 需先做 fapi→api 替换，与采集一致）。
-func NewCEXAccountQuerier(venue, venueType, apiKey, apiSecret, passphrase, baseURL string) *CEXAccountQuerier {
+func NewCEXAccountQuerier(venue, venueType, apiKey, apiSecret, passphrase, baseURL string, simulated bool) *CEXAccountQuerier {
 	return &CEXAccountQuerier{
 		venue: venue, venueType: venueType, apiKey: apiKey, apiSecret: apiSecret,
-		passphrase: passphrase, baseURL: baseURL, client: &http.Client{Timeout: 15 * time.Second},
+		passphrase: passphrase, baseURL: baseURL, simulated: simulated, client: &http.Client{Timeout: 15 * time.Second},
 	}
 }
 
@@ -133,6 +134,10 @@ func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error
 		"OK-ACCESS-TIMESTAMP":  {ts},
 		"OK-ACCESS-PASSPHRASE": {q.passphrase},
 		"Content-Type":         {"application/json"},
+	}
+	// 模拟盘：OKX demo key 必须对实盘域名带 x-simulated-trading:1（独立 demo 域名不存在，D-054）。
+	if q.simulated {
+		headers.Set("x-simulated-trading", "1")
 	}
 	body, err := q.get(ctx, q.baseURL+path, headers)
 	if err != nil {

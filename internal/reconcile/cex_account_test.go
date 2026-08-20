@@ -33,7 +33,7 @@ func TestCEXAccount_Binance(t *testing.T) {
 	defer srv.Close()
 
 	// srv.URL 是 http://host:port；Binance 走 https，直接用 srv.URL 作 base（httptest 忽略签名校验）。
-	q := NewCEXAccountQuerier("binance", "spot", "key", "secret", "", srv.URL)
+	q := NewCEXAccountQuerier("binance", "spot", "key", "secret", "", srv.URL, false)
 	acct, err := q.Account(context.Background())
 	if err != nil {
 		t.Fatalf("binance account: %v", err)
@@ -60,7 +60,7 @@ func TestCEXAccount_OKX(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	q := NewCEXAccountQuerier("okx", "spot", "key", "secret", "pass", srv.URL)
+	q := NewCEXAccountQuerier("okx", "spot", "key", "secret", "pass", srv.URL, false)
 	acct, err := q.Account(context.Background())
 	if err != nil {
 		t.Fatalf("okx account: %v", err)
@@ -72,5 +72,30 @@ func TestCEXAccount_OKX(t *testing.T) {
 		if gotHeaders.Get(h) == "" {
 			t.Errorf("missing header %s", h)
 		}
+	}
+	if gotHeaders.Get("x-simulated-trading") != "" {
+		t.Errorf("实盘请求不应带 x-simulated-trading")
+	}
+}
+
+// TestCEXAccount_OKXSimulated：OKX 模拟盘请求必须带 x-simulated-trading:1（demo key 环境匹配，D-054）。
+func TestCEXAccount_OKXSimulated(t *testing.T) {
+	var gotSimulated string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v5/account/balance" {
+			http.NotFound(w, r)
+			return
+		}
+		gotSimulated = r.Header.Get("x-simulated-trading")
+		fmt.Fprint(w, `{"code":"0","msg":"","data":[{"totalEq":"99.00","details":[{"ccy":"USDT","eq":"99"}]}]}`)
+	}))
+	defer srv.Close()
+
+	q := NewCEXAccountQuerier("okx", "spot", "key", "secret", "pass", srv.URL, true)
+	if _, err := q.Account(context.Background()); err != nil {
+		t.Fatalf("okx simulated account: %v", err)
+	}
+	if gotSimulated != "1" {
+		t.Errorf("simulated 请求应带 x-simulated-trading:1，got %q", gotSimulated)
 	}
 }
