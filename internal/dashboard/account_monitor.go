@@ -99,6 +99,30 @@ func (m *AccountMonitor) Snapshot() []*v1.AccountInfo {
 	return m.cache
 }
 
+// resolveExchangeBaseURL 推导 CEX 交易所 base（D-059 抽公共，账户查询与执行器共用）。
+// 行为与原 queriers() 内联一致：base_url 显式 → 用之；空 → binance 默认 BINANCE_PROXY_URL
+// （无则 fapi 直连，451 由部署负责）、okx 默认 www.okx.com；binance 代理 base 是 fapi 风格，
+// 无 /api/ 段则 fapi→api 得 spot base（与采集一致）。
+func resolveExchangeBaseURL(c pgstore.ExchangeConfig) string {
+	base := c.BaseURL
+	if base == "" {
+		switch c.Venue {
+		case "binance":
+			base = os.Getenv("BINANCE_PROXY_URL")
+			if base == "" {
+				base = "https://fapi.binance.com" // 无代理直连；451 由部署负责
+			}
+		case "okx":
+			base = "https://www.okx.com" // 实盘域名；模拟盘走 x-simulated-trading:1（D-054）
+		}
+	}
+	if c.Venue == "binance" && !strings.Contains(base, "/api/") {
+		// 与采集一致：fapi→api 得 spot base（代理 base 是 fapi 风格）
+		base = strings.Replace(base, "fapi", "api", 1)
+	}
+	return base
+}
+
 // queriers 汇总查询器：CFD（brokerMgr 每轮重取）+ CEX（DB 每轮重取，D-054）+ statics（测试注入）。
 func (m *AccountMonitor) queriers(ctx context.Context) []reconcile.AccountQuerier {
 	qs := m.bm.AccountQueriers()
@@ -112,22 +136,7 @@ func (m *AccountMonitor) queriers(ctx context.Context) []reconcile.AccountQuerie
 		} else {
 			for i := range cfgs {
 				c := &cfgs[i]
-				base := c.BaseURL
-				if base == "" {
-					switch c.Venue {
-					case "binance":
-						base = os.Getenv("BINANCE_PROXY_URL")
-						if base == "" {
-							base = "https://fapi.binance.com" // 无代理直连；451 由部署负责
-						}
-					case "okx":
-						base = "https://www.okx.com" // 实盘；模拟盘在 base_url 填 demo-trading.okx.com
-					}
-				}
-				if c.Venue == "binance" && !strings.Contains(base, "/api/") {
-					// 与采集一致：fapi→api 得 spot base（代理 base 是 fapi 风格）
-					base = strings.Replace(base, "fapi", "api", 1)
-				}
+				base := resolveExchangeBaseURL(*c)
 				qs = append(qs, reconcile.NewCEXAccountQuerier(c.Venue, c.VenueType, c.APIKey, c.APISecret, c.Passphrase, base, c.Simulated))
 				log.Printf("[account] cex querier: %s:%s", c.Venue, c.VenueType)
 			}
