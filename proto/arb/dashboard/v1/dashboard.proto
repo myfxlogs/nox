@@ -46,6 +46,7 @@ service DashboardService {
   rpc ListBrokerPositions(ListBrokerPositionsRequest) returns (ListBrokerPositionsResponse);
   rpc CloseBrokerPosition(CloseBrokerPositionRequest) returns (CloseBrokerPositionResponse);
   rpc CloseBrokerPositions(CloseBrokerPositionsRequest) returns (CloseBrokerPositionsResponse);
+  rpc ListAccounts(ListAccountsRequest) returns (ListAccountsResponse);
 
   // 个人持仓（财务线 TRX 持仓接入，D-046）+ 实账化（财务线工作项 3）
   rpc ListPersonalPositions(ListPersonalPositionsRequest) returns (ListPersonalPositionsResponse);
@@ -150,6 +151,8 @@ message Opportunity {
   double swap_cost = 11;
   double net_bps = 12;        // 价差型=一次性 bps；息差型=年化 bps（D-029/D-031）
   optional double breakeven_days = 13;  // 息差型；价差型缺省
+  double net_usd = 18;        // 与 net_bps 同语义：价差型=一次性 USD（net_bps/10000×notional）；息差型=年化 USD/年（net_bps/100×notional，D-053）
+  double notional_usd = 19;   // 本次 net_usd 换算使用的单笔名义（前端「按单笔 $X 估算」标注，D-053）
   google.protobuf.Timestamp quote_time = 14;
   google.protobuf.Timestamp expires_at = 15;
   google.protobuf.Timestamp created_at = 16;
@@ -546,12 +549,45 @@ message StreamUpdatesResponse {
     Keepalive keepalive = 6;     // 30s 心跳（Cloudflare Tunnel 存活，D-027）
     PersonalPositionPrice personal_position_price = 7;  // 实时个人持仓现价（D-049）
     BrokerPositionSnapshot broker_positions = 8;        // Broker 实持仓实时推送（全量快照）
+    AccountSnapshot accounts = 9;                       // 账户资产实时推送（全量快照，D-053）
   }
 }
 
 // Broker 实持仓全量快照（D-052）：monitor 变更时广播，含离线 venue 的最近快照；前端全量替换。
 message BrokerPositionSnapshot {
   repeated BrokerPosition positions = 1;
+}
+
+// === 账户资产（D-053）===
+
+// 单个账户资金视图（CFD AccountSummary / CEX 签名余额查询）。
+// CEX 行的 margin/free_margin/credit/profit = 0（无对应概念，前端按 asset_type 置「—」）。
+message AccountInfo {
+  string venue_key = 1;    // "{venue}:{venueType}"（277842155:mt5 / binance:spot）
+  string venue = 2;        // 展示名（账号号 / binance / okx）
+  string venue_type = 3;   // mt5 / mt4 / spot
+  string asset_type = 4;   // cfd / cex
+  double balance = 5;      // 余额（CEX = 币种计价总权益，USDT 估算/权威 totalEq）
+  double equity = 6;       // 净值
+  double margin = 7;       // 占用保证金（CFD；CEX 0）
+  double free_margin = 8;  // 可用保证金（CFD；CEX 0）
+  double credit = 9;       // 信用（CFD；CEX 0）
+  double profit = 10;      // 浮动盈亏（CFD；CEX 0）
+  double leverage = 11;
+  string currency = 12;    // USD / USDT / EUR…
+  bool online = 13;        // false = 最近成功快照（离线）
+  google.protobuf.Timestamp updated_at = 14;
+}
+
+// 账户资产全量快照（D-053）：monitor 变更时广播，含离线 venue 的最近快照；前端全量替换。
+message AccountSnapshot {
+  repeated AccountInfo accounts = 1;
+}
+
+message ListAccountsRequest {}
+
+message ListAccountsResponse {
+  repeated AccountInfo accounts = 1;
 }
 
 message Keepalive {
