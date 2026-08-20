@@ -26,24 +26,8 @@ import (
 	"arb/internal/store/pgstore"
 )
 
-// seedAliases canonical → 候选名 ∪ 变体（全部大写比较；方案 §4 F8 候选表）。
-// Exness cent 后缀（USDJPYm）经 trimCentSuffix 变体命中，不单列。
-var seedAliases = map[string][]string{
-	"USDJPY": {"USDJPY"},
-	"EURJPY": {"EURJPY"},
-	"GBPJPY": {"GBPJPY"},
-	"AUDUSD": {"AUDUSD"},
-	"USDCAD": {"USDCAD"},
-	"USDCHF": {"USDCHF"},
-	"NZDUSD": {"NZDUSD"},
-	"EURGBP": {"EURGBP"},
-	"US30":   {"US30", "DJ30"},
-	"NAS100": {"NAS100", "US100", "USATECH", "NDX100"},
-	"SPX500": {"SPX500", "US500", "USA500", "SP500"},
-	"GER40":  {"GER40"},
-	"BRENT":  {"BRENT", "UKOIL", "XBRUSD"},
-	"WTI":    {"WTI", "XTIUSD"}, // 另补：ICMarkets XTIUSD → 既有 WTI canonical 补第三 venue
-}
+// seedAliases 已移至生产代码 canonicalAliases（alias_table.go，D-066 整合）。
+// 本 test 直接引用 canonicalAliases（单一真相源，P3）。
 
 func TestSymbolSeed(t *testing.T) {
 	if os.Getenv("ARB_SYMBOL_SEED") != "1" {
@@ -98,7 +82,7 @@ func TestSymbolSeed(t *testing.T) {
 		for _, g := range groups {
 			bySym[g.Symbol] = g
 		}
-		for canon, aliases := range seedAliases {
+		for canon, aliases := range canonicalAliases {
 			if mappedCanon[canon] {
 				continue // 该 venue 此 canonical 已有映射
 			}

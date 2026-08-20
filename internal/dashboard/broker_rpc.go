@@ -262,16 +262,16 @@ func (s *Service) SaveSymbolMapping(ctx context.Context, req *connect.Request[v1
 	return connect.NewResponse(&v1.SaveSymbolMappingResponse{}), nil
 }
 
-// ListCanonicals 返回既有 canonical 全集（默认种子 ∪ 全部已映射 canonical，去重排序），
-// 供前端 canonical 下拉选项。选项由后端计算（零信任，前端仅渲染，不自派）。D-042。
+// ListCanonicals 返回既有 canonical 全集（生产 alias 表 ∪ 全部已映射 canonical，去重排序），
+// 供前端 canonical 下拉选项。选项由后端计算（零信任，前端仅渲染，不自派）。D-042/D-066。
 func (s *Service) ListCanonicals(ctx context.Context, req *connect.Request[v1.ListCanonicalsRequest]) (*connect.Response[v1.ListCanonicalsResponse], error) {
 	all, err := s.store.ListSymbolMappings(ctx, "")
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	set := make(map[string]struct{}, len(all)+len(defaultSymbols))
-	for _, c := range defaultSymbols {
-		set[Canonicalize(c)] = struct{}{}
+	set := make(map[string]struct{}, len(all)+len(canonicalAliases))
+	for _, c := range allCanonicals() {
+		set[c] = struct{}{}
 	}
 	for _, mp := range all {
 		set[mp.Canonical] = struct{}{}
@@ -329,4 +329,141 @@ func (s *Service) ListMappingSuggestions(ctx context.Context, req *connect.Reque
 		})
 	}
 	return connect.NewResponse(&v1.ListMappingSuggestionsResponse{Suggestions: out}), nil
+}
+
+// AutoMapBroker 一键自动映射（D-066）。
+// 用生产 alias 表 + 合约众数门禁自动识别+映射 broker symbol。
+// 只自动应用 auto 状态（名字+合约匹配）；conflict/multi_hit/trade_disabled/no_match 不自动应用。
+// 幂等：已有映射的 symbol 标 already_mapped 跳过。
+func (s *Service) AutoMapBroker(ctx context.Context, req *connect.Request[v1.AutoMapBrokerRequest]) (*connect.Response[v1.AutoMapBrokerResponse], error) {
+	venue := strings.TrimSpace(req.Msg.GetVenue())
+	if venue == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("venue 不能为空"))
+	}
+	groups, err := s.bm.BrokerSymbols(ctx, venue)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("拉取 %s 符号表失败: %w", venue, err))
+	}
+	all, err := s.store.ListSymbolMappings(ctx, "")
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	// 已有映射集合（本 venue）
+	venueMapped := make(map[string]bool)
+	for _, m := range all {
+		if m.Venue == venue {
+			venueMapped[m.BrokerSymbol] = true
+		}
+	}
+	// 合约众数画像
+	contractProfile := make(map[string]float64) // canonical → 期望合约众数
+	{
+		counts := make(map[string]map[float64]int)
+		for _, m := range all {
+			if m.ContractSize != nil {
+				if counts[m.Canonical] == nil {
+					counts[m.Canonical] = make(map[float64]int)
+				}
+				counts[m.Canonical][*m.ContractSize]++
+			}
+		}
+		for c, m := range counts {
+			best, n := 0.0, 0
+			for v, k := range m {
+				if k > n {
+					best, n = v, k
+				}
+			}
+			contractProfile[c] = best
+		}
+	}
+
+	var results []*v1.AutoMapBrokerResult
+	applied, skipped := 0, 0
+	var newSyms []string // 待补订阅的符号
+
+	for _, g := range groups {
+		brokerSym := g.Symbol
+		result := &v1.AutoMapBrokerResult{
+			BrokerSymbol: brokerSym,
+			Group:        g.Group,
+			ContractSize: g.ContractSize,
+		}
+
+		// 幂等：已有映射跳过
+		if venueMapped[brokerSym] {
+			result.Status = "already_mapped"
+			results = append(results, result)
+			skipped++
+			continue
+		}
+
+		// TradeMode 预检（D-060 F7）
+		if g.TradeMode == 0 {
+			result.Status = "trade_disabled"
+			result.Reason = "TradeMode=0 禁交易"
+			results = append(results, result)
+			skipped++
+			continue
+		}
+
+		// alias 表匹配
+		canon, hits := matchCanonicalDistinct(brokerSym)
+		if hits == 0 {
+			result.Status = "no_match"
+			results = append(results, result)
+			skipped++
+			continue
+		}
+		if hits > 1 {
+			result.Status = "multi_hit"
+			result.Canonical = canon // 首命中
+			result.Reason = fmt.Sprintf("匹配多个 canonical（%d），需人工定夺", hits)
+			results = append(results, result)
+			skipped++
+			continue
+		}
+
+		// 唯一命中 → 合约校验
+		result.Canonical = canon
+		if exp, ok := contractProfile[canon]; ok && g.ContractSize > 0 && g.ContractSize != exp {
+			result.Status = "conflict"
+			result.Reason = fmt.Sprintf("合约 %v ≠ 桶期望 %v，需人工 override", g.ContractSize, exp)
+			results = append(results, result)
+			skipped++
+			continue
+		}
+
+		// auto：写入映射
+		var cp *float64
+		if g.ContractSize > 0 {
+			v := g.ContractSize
+			cp = &v
+		}
+		if err := s.store.UpsertSymbolMapping(ctx, &pgstore.SymbolMapping{
+			Venue: venue, BrokerSymbol: brokerSym, Canonical: canon, ContractSize: cp,
+		}); err != nil {
+			result.Status = "no_match"
+			result.Reason = "写入失败: " + err.Error()
+			results = append(results, result)
+			skipped++
+			continue
+		}
+		result.Status = "auto"
+		results = append(results, result)
+		applied++
+		newSyms = append(newSyms, brokerSym)
+	}
+
+	// 运行时生效：重推映射 + 补订阅 + swap 补轮
+	if len(newSyms) > 0 {
+		s.bm.ReloadSymbolMap(ctx, venue)
+		s.bm.Resubscribe(venue, newSyms)
+		if fs, err := s.bm.SwapFacts(ctx); err == nil {
+			log.Printf("[auto-map] %s: %d facts 补轮", venue, len(fs))
+		}
+	}
+
+	log.Printf("[auto-map] %s: applied=%d skipped=%d", venue, applied, skipped)
+	return connect.NewResponse(&v1.AutoMapBrokerResponse{Results: results, Applied: int32(applied), Skipped: int32(skipped)}), nil
 }

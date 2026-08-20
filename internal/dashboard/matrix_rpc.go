@@ -315,15 +315,15 @@ func (s *Service) ListMatrixUniverse(ctx context.Context, req *connect.Request[v
 	return connect.NewResponse(&v1.ListMatrixUniverseResponse{Universe: universe}), nil
 }
 
-// canonicals 复用 ListCanonicals 的派生逻辑：默认种子 ∪ 全部已映射 canonical，去重排序。
+// canonicals 复用 ListCanonicals 的派生逻辑：生产 alias 表 ∪ 全部已映射 canonical，去重排序（D-066）。
 func (s *Service) canonicals(ctx context.Context) ([]string, error) {
 	mappings, err := s.store.ListSymbolMappings(ctx, "")
 	if err != nil {
 		return nil, err
 	}
 	seen := make(map[string]bool)
-	for _, c := range defaultSymbols {
-		seen[Canonicalize(c)] = true
+	for _, c := range allCanonicals() {
+		seen[c] = true
 	}
 	for _, mp := range mappings {
 		seen[mp.Canonical] = true

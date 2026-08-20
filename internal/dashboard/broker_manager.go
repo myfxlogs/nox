@@ -866,15 +866,27 @@ type canonicalIdx struct {
 	contract map[string]float64
 }
 
-// buildCanonicalIdx 从全部映射 + 默认种子构建索引。种子 canonical 自身名即别名（首 broker bootstrap）。
+// buildCanonicalIdx 从全部映射 + 默认种子 + 生产 alias 表构建索引（D-066 整合）。
+// 种子 canonical 自身名即别名（首 broker bootstrap）；canonicalAliases 表全覆盖（D-066）。
 // 同一别名映射到不同 canonical 的异常数据：首见优先（校验后正常数据不出现）。
 func buildCanonicalIdx(all []pgstore.SymbolMapping, seeds []string) canonicalIdx {
 	idx := canonicalIdx{
 		aliases:  make(map[string]string),
 		contract: make(map[string]float64),
 	}
+	// D-066：生产 alias 表先注入（canonical → aliases 全覆盖）
+	for canon, aliases := range canonicalAliases {
+		c := Canonicalize(canon)
+		for _, al := range aliases {
+			if _, dup := idx.aliases[al]; !dup {
+				idx.aliases[al] = c
+			}
+		}
+	}
 	for _, c := range seeds {
-		idx.aliases[c] = Canonicalize(c)
+		if _, dup := idx.aliases[c]; !dup {
+			idx.aliases[c] = Canonicalize(c)
+		}
 	}
 	counts := make(map[string]map[float64]int)
 	for _, m := range all {
