@@ -939,10 +939,14 @@ func classifySymbols(groups []SymbolGroup, idx canonicalIdx) []Suggestion {
 	return out
 }
 
-// trimCentSuffix 去 MT5 cent 账号符号后缀（EURUSDm → EURUSD）。
+// trimCentSuffix 去 MT5 cent 账号符号后缀（EURUSDm → EURUSD）+ Pepperstone spot 指数 '#' 前缀（#UK100 → UK100）。
+// 只处理安全后缀/前缀（不改变品种身份）；'365'/'EURO' 等改变品种身份的不处理（合约门禁拦截）。
 func trimCentSuffix(s string) string {
 	if strings.HasSuffix(s, "m") {
-		return s[:len(s)-1]
+		s = s[:len(s)-1]
+	}
+	if strings.HasPrefix(s, "#") {
+		s = s[1:]
 	}
 	return s
 }
