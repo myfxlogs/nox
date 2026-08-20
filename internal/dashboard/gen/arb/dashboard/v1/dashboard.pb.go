@@ -587,12 +587,17 @@ type Opportunity struct {
 	BreakevenDays  *float64               `protobuf:"fixed64,13,opt,name=breakeven_days,json=breakevenDays,proto3,oneof" json:"breakeven_days,omitempty"` // 息差型；价差型缺省
 	NetUsd         float64                `protobuf:"fixed64,18,opt,name=net_usd,json=netUsd,proto3" json:"net_usd,omitempty"`                            // 与 net_bps 同语义：价差型=一次性 USD（net_bps/10000×notional）；息差型=年化 USD/年（net_bps/100×notional，D-053）
 	NotionalUsd    float64                `protobuf:"fixed64,19,opt,name=notional_usd,json=notionalUsd,proto3" json:"notional_usd,omitempty"`             // 本次 net_usd 换算使用的单笔名义（前端「按单笔 $X 估算」标注，D-053）
-	QuoteTime      *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=quote_time,json=quoteTime,proto3" json:"quote_time,omitempty"`
-	ExpiresAt      *timestamppb.Timestamp `protobuf:"bytes,15,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
-	CreatedAt      *timestamppb.Timestamp `protobuf:"bytes,16,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt      *timestamppb.Timestamp `protobuf:"bytes,17,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// D-062 显示层 USD 单位化（存储不动，API 派生；CS 缺失 → 全 0，前端回退 bps）：
+	GapUsdPerUnit   float64                `protobuf:"fixed64,20,opt,name=gap_usd_per_unit,json=gapUsdPerUnit,proto3" json:"gap_usd_per_unit,omitempty"`         // price_sell − price_buy（$/桶、$/盎司、$/币；入场基差展示口径）
+	NetUsdPerLot    float64                `protobuf:"fixed64,21,opt,name=net_usd_per_lot,json=netUsdPerLot,proto3" json:"net_usd_per_lot,omitempty"`            // 价差型一次性 USD/手 = net_bps/1e4 × CS × price_buy；息差型不填
+	NetUsdPerLotDay float64                `protobuf:"fixed64,22,opt,name=net_usd_per_lot_day,json=netUsdPerLotDay,proto3" json:"net_usd_per_lot_day,omitempty"` // 息差型 USD/日/手 = net_bps/100 × CS × price_buy / 365；价差型不填
+	CostUsdPerLot   float64                `protobuf:"fixed64,23,opt,name=cost_usd_per_lot,json=costUsdPerLot,proto3" json:"cost_usd_per_lot,omitempty"`         // 一次性摩擦 USD/手 = Σcosts/1e4 × CS × price_buy
+	QuoteTime       *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=quote_time,json=quoteTime,proto3" json:"quote_time,omitempty"`
+	ExpiresAt       *timestamppb.Timestamp `protobuf:"bytes,15,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	CreatedAt       *timestamppb.Timestamp `protobuf:"bytes,16,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt       *timestamppb.Timestamp `protobuf:"bytes,17,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Opportunity) Reset() {
@@ -726,6 +731,34 @@ func (x *Opportunity) GetNetUsd() float64 {
 func (x *Opportunity) GetNotionalUsd() float64 {
 	if x != nil {
 		return x.NotionalUsd
+	}
+	return 0
+}
+
+func (x *Opportunity) GetGapUsdPerUnit() float64 {
+	if x != nil {
+		return x.GapUsdPerUnit
+	}
+	return 0
+}
+
+func (x *Opportunity) GetNetUsdPerLot() float64 {
+	if x != nil {
+		return x.NetUsdPerLot
+	}
+	return 0
+}
+
+func (x *Opportunity) GetNetUsdPerLotDay() float64 {
+	if x != nil {
+		return x.NetUsdPerLotDay
+	}
+	return 0
+}
+
+func (x *Opportunity) GetCostUsdPerLot() float64 {
+	if x != nil {
+		return x.CostUsdPerLot
 	}
 	return 0
 }
@@ -7768,7 +7801,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x05limit\x18\x04 \x01(\x05R\x05limit\x12\x16\n" +
 	"\x06offset\x18\x05 \x01(\x05R\x06offset\"A\n" +
 	"\x11ListFactsResponse\x12,\n" +
-	"\x05facts\x18\x01 \x03(\v2\x16.arb.dashboard.v1.FactR\x05facts\"\xd2\x05\n" +
+	"\x05facts\x18\x01 \x03(\v2\x16.arb.dashboard.v1.FactR\x05facts\"\xf9\x06\n" +
 	"\vOpportunity\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x1b\n" +
@@ -7788,7 +7821,11 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\anet_bps\x18\f \x01(\x01R\x06netBps\x12*\n" +
 	"\x0ebreakeven_days\x18\r \x01(\x01H\x00R\rbreakevenDays\x88\x01\x01\x12\x17\n" +
 	"\anet_usd\x18\x12 \x01(\x01R\x06netUsd\x12!\n" +
-	"\fnotional_usd\x18\x13 \x01(\x01R\vnotionalUsd\x129\n" +
+	"\fnotional_usd\x18\x13 \x01(\x01R\vnotionalUsd\x12'\n" +
+	"\x10gap_usd_per_unit\x18\x14 \x01(\x01R\rgapUsdPerUnit\x12%\n" +
+	"\x0fnet_usd_per_lot\x18\x15 \x01(\x01R\fnetUsdPerLot\x12,\n" +
+	"\x13net_usd_per_lot_day\x18\x16 \x01(\x01R\x0fnetUsdPerLotDay\x12'\n" +
+	"\x10cost_usd_per_lot\x18\x17 \x01(\x01R\rcostUsdPerLot\x129\n" +
 	"\n" +
 	"quote_time\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tquoteTime\x129\n" +
 	"\n" +

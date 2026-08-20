@@ -17,6 +17,7 @@ import (
 	"arb/internal/store/pgstore"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -56,6 +57,9 @@ type Service struct {
 	// legMinLots MT 腿最小手数查询（D-061 量规格预检）：venueKey+venueSymbol → min lots。
 	// nil/未知 = 放行（venue 服务端拒单兜底；position #3 实证：qty 0.1 < IC XBRUSD min 1.0 → LEGGED）。
 	legMinLots func(venueKey, venueSymbol string) (float64, bool)
+	// oppContractSize 机会卡 USD 派生用合约规格查询（D-062）：canonical+venueKey → CS。
+	// nil = 未接线（测试直接构造 Service）→ USD 字段全 0，前端回退 bps。main 接 store.ContractSizeByCanonical。
+	oppContractSize func(canonical, venueKey string) (float64, bool)
 }
 
 // New 创建 dashboard 服务。reviewer 为复盘触发闭包（nil 则平仓后不触发）；
@@ -87,6 +91,11 @@ func (s *Service) SetMaxLegImbalancePct(p float64) { s.maxLegImbalance = p }
 // SetLegMinLots 注入 MT 腿最小手数查询（D-061）。nil/未知 = 放行。
 func (s *Service) SetLegMinLots(f func(venueKey, venueSymbol string) (float64, bool)) {
 	s.legMinLots = f
+}
+
+// SetOppContractSize 注入机会卡 USD 派生用合约规格查询（D-062）。nil = 未接线 → USD 字段全 0（前端回退 bps）。
+func (s *Service) SetOppContractSize(f func(canonical, venueKey string) (float64, bool)) {
+	s.oppContractSize = f
 }
 
 // --- 快照类 ---
@@ -1040,6 +1049,22 @@ func (s *Service) oppToProto(o *pgstore.Opportunity) *v1.Opportunity {
 		NetUsd:         netUSD(o.NetBps, o.Type, s.notionalUSD),
 		NotionalUsd:    s.notionalUSD,
 	}
+	// D-062 显示层 USD 派生（存储不动）。gap_usd_per_unit 无 CS 依赖恒填；
+	// per-lot 字段依赖 venue_buy 侧 CS（D-061 对称桶保证跨 venue 一致），缺失/≤0 → 全 0（前端回退 bps）。
+	pb.GapUsdPerUnit = o.PriceSell - o.PriceBuy
+	if s.oppContractSize != nil {
+		if cs, ok := s.oppContractSize(o.Canonical, o.VenueBuy); ok && cs > 0 && o.PriceBuy > 0 {
+			totalCost := o.SpreadCost + o.CommissionCost + o.SlippageCost + o.SwapCost
+			pb.CostUsdPerLot = totalCost / 1e4 * cs * o.PriceBuy
+			if isCarryType(o.Type) {
+				// 息差型：net_bps 为年化百分点 → USD/日/手 = net_bps/100 × CS × price / 365。
+				pb.NetUsdPerLotDay = o.NetBps / 100 * cs * o.PriceBuy / 365
+			} else {
+				// 价差型：net_bps 为一次性 bps → USD/手 = net_bps/1e4 × CS × price。
+				pb.NetUsdPerLot = o.NetBps / 1e4 * cs * o.PriceBuy
+			}
+		}
+	}
 	if o.BreakevenDays != nil {
 		pb.BreakevenDays = o.BreakevenDays
 	}
@@ -1056,6 +1081,11 @@ func (s *Service) oppToProto(o *pgstore.Opportunity) *v1.Opportunity {
 		pb.UpdatedAt = timestamppb.New(o.UpdatedAt)
 	}
 	return pb
+}
+
+// isCarryType 息差型判定（CARRY / FUNDING_HEDGE），与 netUSD 的 CROSS_VENUE 分支互补（D-062）。
+func isCarryType(typ string) bool {
+	return strings.HasPrefix(typ, "CARRY") || strings.HasPrefix(typ, "FUNDING_HEDGE")
 }
 
 func alertToProto(a *pgstore.Alert) *v1.Alert {

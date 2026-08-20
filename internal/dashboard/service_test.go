@@ -198,7 +198,12 @@ func TestResolveLegsVolumePreflight(t *testing.T) {
 	cs := map[string]float64{"UKOILm": 1000, "BRENT": 1000}
 	s := &Service{qbus: b,
 		legContractSize: func(_, sym string) (float64, bool) { v, ok := cs[sym]; return v, ok },
-		legMinLots:      func(_, sym string) (float64, bool) { if sym == "BRENT" { return 1.0, true }; return 0.01, true },
+		legMinLots: func(_, sym string) (float64, bool) {
+			if sym == "BRENT" {
+				return 1.0, true
+			}
+			return 0.01, true
+		},
 	}
 	// qty 0.05：卖腿 BRENT min=1.0 → 拒。
 	if _, err := s.resolveLegs(found, 0.05); err == nil || !strings.Contains(err.Error(), "below venue min lot") {
@@ -212,5 +217,75 @@ func TestResolveLegsVolumePreflight(t *testing.T) {
 	s.legMinLots = func(_, _ string) (float64, bool) { return 0, false }
 	if _, err := s.resolveLegs(found, 0.05); err != nil {
 		t.Errorf("unknown min want pass, got %v", err)
+	}
+}
+
+// TestOppToProtoUSDDerivation D-062 显示层 USD 派生：
+//   - 价差型（CROSS_VENUE）：gap/net/cost per-lot 公式值正确；
+//   - 息差型（CARRY）：net_usd_per_lot_day 公式值正确，net_usd_per_lot 不填；
+//   - CS 缺失 → 全部 USD per-lot 字段 0（前端回退 bps）；gap_usd_per_unit 始终填。
+func TestOppToProtoUSDDerivation(t *testing.T) {
+	const eps = 1e-6
+	cs := 1000.0 // 桶/手
+	resolver := func(canonical, venueKey string) (float64, bool) { return cs, true }
+
+	// 价差型：BRENT buy 92.00 / sell 95.00，net 300 bps，cost 50 bps。
+	//   gap = 3.00 $/桶；net/手 = 300/1e4 × 1000 × 92 = 2760；cost/手 = 50/1e4 × 1000 × 92 = 460。
+	cross := &pgstore.Opportunity{
+		Type: "CROSS_VENUE", Canonical: "BRENT", VenueBuy: "ic:mt5", VenueSell: "pxbt:mt5",
+		PriceBuy: 92.0, PriceSell: 95.0, NetBps: 300,
+		SpreadCost: 20, CommissionCost: 10, SlippageCost: 10, SwapCost: 10, // total 50
+	}
+	s := &Service{oppContractSize: resolver}
+	pb := s.oppToProto(cross)
+	if math.Abs(pb.GapUsdPerUnit-3.0) > eps {
+		t.Errorf("cross gap_usd_per_unit want 3.0, got %v", pb.GapUsdPerUnit)
+	}
+	if math.Abs(pb.NetUsdPerLot-2760.0) > eps {
+		t.Errorf("cross net_usd_per_lot want 2760, got %v", pb.NetUsdPerLot)
+	}
+	if math.Abs(pb.CostUsdPerLot-460.0) > eps {
+		t.Errorf("cross cost_usd_per_lot want 460, got %v", pb.CostUsdPerLot)
+	}
+	if pb.NetUsdPerLotDay != 0 {
+		t.Errorf("cross net_usd_per_lot_day want 0, got %v", pb.NetUsdPerLotDay)
+	}
+
+	// 息差型：TRX funding net 1095 bps（年化百分点），buy 0.10。
+	//   net/日/手 = 1095/100 × 1000 × 0.10 / 365 = 3.0；cost/手 = 50/1e4 × 1000 × 0.10 = 0.5。
+	carry := &pgstore.Opportunity{
+		Type: "CARRY", Canonical: "TRXUSDT", VenueBuy: "binance:spot", VenueSell: "okx:perp",
+		PriceBuy: 0.10, PriceSell: 0.1001, NetBps: 1095,
+		SpreadCost: 20, CommissionCost: 10, SlippageCost: 10, SwapCost: 10,
+	}
+	pb2 := s.oppToProto(carry)
+	if math.Abs(pb2.GapUsdPerUnit-0.0001) > eps {
+		t.Errorf("carry gap_usd_per_unit want 0.0001, got %v", pb2.GapUsdPerUnit)
+	}
+	if math.Abs(pb2.NetUsdPerLotDay-3.0) > eps {
+		t.Errorf("carry net_usd_per_lot_day want 3.0, got %v", pb2.NetUsdPerLotDay)
+	}
+	if pb2.NetUsdPerLot != 0 {
+		t.Errorf("carry net_usd_per_lot want 0, got %v", pb2.NetUsdPerLot)
+	}
+	if math.Abs(pb2.CostUsdPerLot-0.5) > eps {
+		t.Errorf("carry cost_usd_per_lot want 0.5, got %v", pb2.CostUsdPerLot)
+	}
+
+	// CS 缺失 → per-lot 全 0，gap 仍填。
+	noCS := &Service{oppContractSize: func(_, _ string) (float64, bool) { return 0, false }}
+	pb3 := noCS.oppToProto(cross)
+	if math.Abs(pb3.GapUsdPerUnit-3.0) > eps {
+		t.Errorf("no-CS gap_usd_per_unit want 3.0, got %v", pb3.GapUsdPerUnit)
+	}
+	if pb3.NetUsdPerLot != 0 || pb3.NetUsdPerLotDay != 0 || pb3.CostUsdPerLot != 0 {
+		t.Errorf("no-CS per-lot want all 0, got net=%v day=%v cost=%v", pb3.NetUsdPerLot, pb3.NetUsdPerLotDay, pb3.CostUsdPerLot)
+	}
+
+	// 未接线（nil）→ 同 CS 缺失语义。
+	bare := &Service{}
+	pb4 := bare.oppToProto(cross)
+	if pb4.NetUsdPerLot != 0 || pb4.CostUsdPerLot != 0 {
+		t.Errorf("unwired per-lot want 0, got net=%v cost=%v", pb4.NetUsdPerLot, pb4.CostUsdPerLot)
 	}
 }
