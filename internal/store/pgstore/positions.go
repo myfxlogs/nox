@@ -2,8 +2,11 @@ package pgstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // Position 对应 positions 表（§2.11）。
@@ -167,4 +170,20 @@ func (s *Store) CountOpenPositions(ctx context.Context) (int, error) {
 	var n int
 	err := s.pool.QueryRow(ctx, q).Scan(&n)
 	return n, err
+}
+
+// HasOpenPositionByOpportunity 返回该机会是否已有未平仓持仓（D-058 幂等防重复执行）。
+// CLOSED/FAILED 不在列 → 已闭合/已失败的机会可重入（再执行是新的执行意图，非重复提交）。
+func (s *Store) HasOpenPositionByOpportunity(ctx context.Context, opportunityID string) (bool, error) {
+	var one int
+	err := s.pool.QueryRow(ctx,
+		`SELECT 1 FROM positions WHERE opportunity_id = $1 AND status IN ('OPEN','OPENING','LEGGED') LIMIT 1`,
+		opportunityID).Scan(&one)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return false, fmt.Errorf("check open position by opportunity: %w", err)
 }
