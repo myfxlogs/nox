@@ -28,6 +28,7 @@ type SymbolGroup struct {
 	Symbol       string
 	Group        string
 	ContractSize float64 // 0 = 未知（MT4 / MT5 未返回）
+	TradeMode    int32   // MT5 ENUM_SYMBOL_TRADE_MODE 透传（D-060 F7 seed 判据；MT4=0 无此字段）
 }
 
 // running 一个运行中适配器的可停止资源。
@@ -77,6 +78,11 @@ type BrokerManager struct {
 
 	// symbolGroups TTL（D-045 §3.2.1）：由 config.SymbolsTTL 注入。
 	symbolGroupsTTL time.Duration
+
+	// SwapKick swap 轮询唤醒（D-060 F2 boot 竞态修复）：新 venue attach / 映射增删后立即补一轮，
+	// 消灭「attach 晚于首轮 → 最长 Interval 无 swap 数据」盲窗。nil = 未接线（测试直接构造）。main 注入
+	// func() { scheduler.Kick("mt_swap") }。
+	SwapKick func()
 }
 
 // NewBrokerManager 创建管理器。symbolsTTL 由调用方从 config.SymbolsTTL 注入。
@@ -339,6 +345,7 @@ func (m *BrokerManager) ReloadSymbolMap(ctx context.Context, venue string) {
 	}
 	r.setSymMap(sm)
 	log.Printf("[broker] %s symbol map refreshed (%d)", venue, len(sm))
+	m.kickSwap() // 映射增删后立即补一轮 swap（D-060 F2，新符号缺价自然走冷启动退避自愈）
 }
 
 // BrokerSymbols 从运行中适配器拉取服务器符号表（附 broker 分组，辅助补映射搜索）。
@@ -544,11 +551,13 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 			if sp == nil {
 				continue
 			}
-			// ContractSize 同批返回（D-042 合约规格校验数据源），0 = 未知。
+			// ContractSize 同批返回（D-042 合约规格校验数据源），0 = 未知；
+			// TradeMode 同批透传（D-060 F7 seed 判据：禁交易符号不映射）。
 			out = append(out, SymbolGroup{
 				Symbol:       sp.GetSymbol(),
 				Group:        topGroup(sp.GetSymbolGroup().GetGroupName()),
 				ContractSize: sp.GetSymbolInfo().GetContractSize(),
+				TradeMode:    int32(sp.GetSymbolGroup().GetTradeMode()),
 			})
 		}
 		return out, nil
@@ -605,12 +614,21 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 	return nil
 }
 
-// attach 记录 running 并刷新 querier 集合。
+// attach 记录 running 并刷新 querier 集合；随后 kick swap 轮询（D-060 F2：attach 即补一轮，
+// 覆盖启动竞态——ICMarkets 首轮晚 attach 导致整小时零 swap 数据的实锤形态）。
 func (m *BrokerManager) attach(venue string, r *running) {
 	m.mu.Lock()
 	m.running[venue] = r
 	m.mu.Unlock()
 	m.syncQueriers()
+	m.kickSwap()
+}
+
+// kickSwap 触发 swap 补轮（nil 安全：未接线直接返回）。
+func (m *BrokerManager) kickSwap() {
+	if m.SwapKick != nil {
+		m.SwapKick()
+	}
 }
 
 // queriers 汇总 static + running querier（D-051 WP3：syncQueriers 与 venueOrderResults 共用的单一取法）。

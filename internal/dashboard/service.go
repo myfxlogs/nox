@@ -44,6 +44,9 @@ type Service struct {
 	notionalUSD float64
 	// acctMon 账户资产 monitor（D-053）：ListAccounts 拉 + StreamUpdates case 9 推同源。nil = 未接线（测试直接构造 Service）。
 	acctMon *AccountMonitor
+	// tradeModes 单腿 trade_mode 查询（D-060 F5 执行预检，防裸腿）：canonical+venueKey → mode。
+	// nil = 未接线（测试直接构造 Service，预检放行）。main 注入 factCache.TradeMode（不引入 exec→engine 依赖）。
+	tradeModes func(canonical, venueKey string) (int64, bool)
 }
 
 // New 创建 dashboard 服务。reviewer 为复盘触发闭包（nil 则平仓后不触发）；
@@ -57,6 +60,11 @@ type Service struct {
 // acctMon 为账户资产 monitor（D-053，传 main 创建的 acctMon）。
 func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64, fundingDropRatio float64, priceTopic *bus.Topic[position.PositionPrice], oppTopic *bus.Topic[pgstore.Opportunity], bpm *BrokerPositionMonitor, notionalUSD float64, acctMon *AccountMonitor) *Service {
 	return &Service{store: store, qbus: qbus, pipeline: pipeline, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, priceTopic: priceTopic, oppTopic: oppTopic, bpm: bpm, notionalUSD: notionalUSD, acctMon: acctMon}
+}
+
+// SetTradeModes 注入单腿 trade_mode 查询（D-060 F5）。main 在 factCache 处装配；nil = 预检放行。
+func (s *Service) SetTradeModes(f func(canonical, venueKey string) (int64, bool)) {
+	s.tradeModes = f
 }
 
 // --- 快照类 ---
@@ -378,6 +386,14 @@ func (s *Service) ExecuteOpportunity(ctx context.Context, req *connect.Request[v
 			Message: "quote stale or net benefit degraded beyond threshold",
 		}), nil
 	}
+	// F5 可交易性预检（D-060，防裸腿——positions #1 买腿成交卖腿被拒的实锤形态）：
+	// MT 腿查 trade_mode，不兼容方向拒绝执行（不建 position 不发单）；未知放行。
+	if err := s.checkTradability(found); err != nil {
+		return connect.NewResponse(&v1.ExecuteOpportunityResponse{
+			Status:  "FAILED",
+			Message: err.Error(),
+		}), nil
+	}
 	// 构造双腿：VenueSymbol 从 qbus 取 broker 原生符号（D-051 修②，杜绝 venueKey 当符号）。
 	legs, err := s.resolveLegs(found, qty)
 	if err != nil {
@@ -401,6 +417,34 @@ func (s *Service) ExecuteOpportunity(ctx context.Context, req *connect.Request[v
 		PositionId: result.PositionID,
 		Status:     result.Status,
 	}), nil
+}
+
+// checkTradability F5 执行预检：MT 腿（venueKey 后缀 :mt5/:mt4）查 trade_mode，
+// 买腿 mode∉{LongOnly,Full} / 卖腿 mode∉{ShortOnly,Full} → 返回错误（含 venue+符号+mode），
+// 调用方拒绝执行不建 position；CEX 腿跳过；未知（无 Fact/TTL 过期）放行（venue 服务端拒单是最终权威）。
+func (s *Service) checkTradability(found *pgstore.Opportunity) error {
+	if s.tradeModes == nil {
+		return nil
+	}
+	for _, leg := range []struct {
+		venueKey string
+		buy      bool
+	}{{found.VenueBuy, true}, {found.VenueSell, false}} {
+		if !strings.HasSuffix(leg.venueKey, ":mt5") && !strings.HasSuffix(leg.venueKey, ":mt4") {
+			continue // CEX 腿：trade_mode 仅 MT 语义
+		}
+		mode, ok := s.tradeModes(found.Canonical, leg.venueKey)
+		if !ok {
+			continue
+		}
+		if leg.buy && mode != fact.TradeModeLongOnly && mode != fact.TradeModeFull {
+			return fmt.Errorf("buy leg %s %s not tradable (trade mode %d)", leg.venueKey, found.Canonical, mode)
+		}
+		if !leg.buy && mode != fact.TradeModeShortOnly && mode != fact.TradeModeFull {
+			return fmt.Errorf("sell leg %s %s not tradable (trade mode %d)", leg.venueKey, found.Canonical, mode)
+		}
+	}
+	return nil
 }
 
 // resolveLegs 从 qbus 取双腿 broker 原生符号构造下单规格（D-051 修②）。
