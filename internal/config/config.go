@@ -16,6 +16,7 @@ type Config struct {
 	CrossVenueMinGrossBpsCFD float64       // CFD(mt4/mt5) 跨所 gross 观察门槛（bps）。低于保本 2.6，展示仍靠评估器 net>0（D-051 WP1）
 	FundingMinNetAnnualized  float64       // funding hedge 净年化门槛（%）
 	CarryMinNetAnnualized    float64       // carry 净年化门槛（%）——D-036 由 bps 改百分点，与 funding 对齐
+	PerpFundingMinNetAnnualized float64   // perp×perp funding 差净年化门槛（%）——D-064
 	GrabMinNetAnnualized     float64       // grab 档门槛（%），替代 classify 硬编码 4.5（D-036）
 	DetectorFreshnessTTL     time.Duration // 报价陈旧排除 TTL
 
@@ -74,6 +75,7 @@ func Load() *Config {
 		CrossVenueMinGrossBpsCFD: envFloat("ARB_CROSS_MIN_GROSS_BPS_CFD", 2.0),
 		FundingMinNetAnnualized:  envFloat("ARB_FUNDING_MIN_NET_ANNUALIZED", 4.0),
 		CarryMinNetAnnualized:    envFloat("ARB_CARRY_MIN_NET_ANNUALIZED", 4.0),
+		PerpFundingMinNetAnnualized: envFloat("ARB_PERP_FUNDING_MIN_NET_ANNUALIZED", 2.0),
 		GrabMinNetAnnualized:     envFloat("ARB_GRAB_MIN_NET_ANNUALIZED", 4.5),
 		DetectorFreshnessTTL:     envDur("ARB_DETECTOR_FRESHNESS_TTL", 60*time.Second),
 		SlippageBps:              envFloat("ARB_SLIPPAGE_BPS", 1.0),
