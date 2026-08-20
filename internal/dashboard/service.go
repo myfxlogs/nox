@@ -411,7 +411,7 @@ func (s *Service) ExecuteOpportunity(ctx context.Context, req *connect.Request[v
 		}), nil
 	}
 	// 复核：报价新鲜度 + 毛收益劣化（D-051 修①/③：canonical 用列、毛口径比较）。
-	if !s.pipeline.Revalidate(found.Canonical, found.VenueBuy, found.VenueSell, found.GrossBps) {
+	if !s.pipeline.Revalidate(found.Canonical, found.VenueBuy, found.VenueSell, found.Type, found.GrossBps) {
 		return connect.NewResponse(&v1.ExecuteOpportunityResponse{
 			Status:  "FAILED",
 			Message: "quote stale or net benefit degraded beyond threshold",
