@@ -34,3 +34,6 @@ var ExchangeConfigsSQL string
 
 //go:embed 0011_exchange_simulated.sql
 var ExchangeSimulatedSQL string
+
+//go:embed 0012_canonical_usdt.sql
+var CanonicalUsdtSQL string
