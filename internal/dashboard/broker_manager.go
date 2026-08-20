@@ -646,6 +646,18 @@ type VenueOrderResult struct {
 	Err      error                  // nil = 在线
 }
 
+// AccountQueriers 汇总 static + running 中实现了 AccountQuerier 的 querier（D-053）。
+// AccountMonitor 每轮重取 → venue 启停（AddBroker/RemoveBroker）自动跟随。
+func (m *BrokerManager) AccountQueriers() []reconcile.AccountQuerier {
+	var out []reconcile.AccountQuerier
+	for _, q := range m.queriers() {
+		if aq, ok := q.(reconcile.AccountQuerier); ok && aq != nil {
+			out = append(out, aq)
+		}
+	}
+	return out
+}
+
 // venueOrderResults 逐 venue 查询实际持仓（含失败详情，替代 VenueOrders 的吞错版）。D-052。
 func (m *BrokerManager) venueOrderResults(ctx context.Context) []VenueOrderResult {
 	var out []VenueOrderResult

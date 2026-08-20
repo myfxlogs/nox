@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -54,5 +55,30 @@ func TestResolveLegsNoQuote(t *testing.T) {
 
 	if _, err := s.resolveLegs(found, 0.1); err == nil {
 		t.Fatal("missing sell leg want error, got nil")
+	}
+}
+
+// TestNetUSD：净收益 bps → USD（D-053）。
+// 价差型=一次性 USD（bps/10000×notional）；息差型=年化 USD/年（pct/100×notional）；notional≤0 不换算。
+func TestNetUSD(t *testing.T) {
+	cases := []struct {
+		name     string
+		netBps   float64
+		typ      string
+		notional float64
+		want     float64
+	}{
+		{"cross one-shot", 48.2, "CROSS_VENUE", 1000, 4.82},
+		{"cross zero bps", 0, "CROSS_VENUE", 1000, 0},
+		{"carry annualized", 5.2, "CARRY", 1000, 52.0},
+		{"funding annualized", 12.0, "FUNDING_HEDGE", 1000, 120.0},
+		{"no notional", 48.2, "CROSS_VENUE", 0, 0},
+		{"negative bps", -2, "CROSS_VENUE", 1000, -0.2},
+	}
+	for _, c := range cases {
+		got := netUSD(c.netBps, c.typ, c.notional)
+		if math.Abs(got-c.want) > 1e-9 {
+			t.Errorf("%s: netUSD(%v,%q,%v) want %v, got %v", c.name, c.netBps, c.typ, c.notional, c.want, got)
+		}
 	}
 }

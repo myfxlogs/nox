@@ -40,6 +40,10 @@ type Service struct {
 	oppTopic *bus.Topic[pgstore.Opportunity]
 	// bpm Broker 实持仓 monitor（D-052）：ListBrokerPositions 拉 + StreamUpdates case 8 推同源。nil = 未接线（测试直接构造 Service）。
 	bpm *BrokerPositionMonitor
+	// notionalUSD net_usd 换算的单笔名义（config.OpportunityNotionalUSD，D-053）。0 = 未接线（测试），net_usd=0。
+	notionalUSD float64
+	// acctMon 账户资产 monitor（D-053）：ListAccounts 拉 + StreamUpdates case 9 推同源。nil = 未接线（测试直接构造 Service）。
+	acctMon *AccountMonitor
 }
 
 // New 创建 dashboard 服务。reviewer 为复盘触发闭包（nil 则平仓后不触发）；
@@ -48,9 +52,11 @@ type Service struct {
 // fundingDropRatio 为资金费急降预警比例（传 config.FundingDropRatio）；
 // priceTopic 为实时现价广播 topic（D-049，传 main 创建的 priceTopic）；
 // oppTopic 为新机会站内推送 topic（D-050，传 main 创建的 oppTopic）；
-// bpm 为 Broker 实持仓 monitor（D-052，传 main 创建的 bpm）。
-func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64, fundingDropRatio float64, priceTopic *bus.Topic[position.PositionPrice], oppTopic *bus.Topic[pgstore.Opportunity], bpm *BrokerPositionMonitor) *Service {
-	return &Service{store: store, qbus: qbus, pipeline: pipeline, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, priceTopic: priceTopic, oppTopic: oppTopic, bpm: bpm}
+// bpm 为 Broker 实持仓 monitor（D-052，传 main 创建的 bpm）；
+// notionalUSD 为 net_usd 换算的单笔名义（D-053，传 config.OpportunityNotionalUSD）；
+// acctMon 为账户资产 monitor（D-053，传 main 创建的 acctMon）。
+func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64, fundingDropRatio float64, priceTopic *bus.Topic[position.PositionPrice], oppTopic *bus.Topic[pgstore.Opportunity], bpm *BrokerPositionMonitor, notionalUSD float64, acctMon *AccountMonitor) *Service {
+	return &Service{store: store, qbus: qbus, pipeline: pipeline, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, priceTopic: priceTopic, oppTopic: oppTopic, bpm: bpm, notionalUSD: notionalUSD, acctMon: acctMon}
 }
 
 // --- 快照类 ---
@@ -101,7 +107,7 @@ func (s *Service) ListOpportunities(ctx context.Context, req *connect.Request[v1
 	}
 	var pbOpps []*v1.Opportunity
 	for _, o := range opps {
-		pbOpps = append(pbOpps, oppToProto(&o))
+		pbOpps = append(pbOpps, s.oppToProto(&o))
 	}
 	return connect.NewResponse(&v1.ListOpportunitiesResponse{Opportunities: pbOpps}), nil
 }
@@ -467,6 +473,16 @@ func (s *Service) CloseBrokerPositions(ctx context.Context, req *connect.Request
 	return connect.NewResponse(&v1.CloseBrokerPositionsResponse{Results: results}), nil
 }
 
+// --- 账户资产（D-053） ---
+
+// ListAccounts 返回账户资产快照（acctMon 单一真相源；≤ 轮询周期的缓存，无需强制刷新）。
+func (s *Service) ListAccounts(ctx context.Context, req *connect.Request[v1.ListAccountsRequest]) (*connect.Response[v1.ListAccountsResponse], error) {
+	if s.acctMon == nil {
+		return connect.NewResponse(&v1.ListAccountsResponse{}), nil
+	}
+	return connect.NewResponse(&v1.ListAccountsResponse{Accounts: s.acctMon.Snapshot()}), nil
+}
+
 // brokerPositionToProto 组装单个 venue 持仓响应。
 // current_price：canonical 已解析且报价帧新鲜（now.Sub ≤ freshTTL）→ mid，fresh=true；否则 0/false（诚实空态）。
 // is_arb：comment 前缀 = exec.OrderComment（复用 reconcile.isARBOrder 语义，D-032）。
@@ -750,6 +766,13 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 		bpCh, bpCancel = s.bpm.topic.Subscribe()
 		defer bpCancel()
 	}
+	// 账户资产推送（D-053）：monitor 变更广播全量快照 → case 9。acctMon 为 nil（测试未接线）→ 不订阅。
+	var accCh <-chan *v1.AccountSnapshot
+	if s.acctMon != nil && s.acctMon.topic != nil {
+		var accCancel func()
+		accCh, accCancel = s.acctMon.topic.Subscribe()
+		defer accCancel()
+	}
 	// keepalive 每 30s（§8.2 D-027）
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -785,7 +808,7 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 			}
 			if err := stream.Send(&v1.StreamUpdatesResponse{
 				Update: &v1.StreamUpdatesResponse_Opportunity{
-					Opportunity: oppToProto(&v),
+					Opportunity: s.oppToProto(&v),
 				},
 			}); err != nil {
 				return err
@@ -797,6 +820,17 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 			if err := stream.Send(&v1.StreamUpdatesResponse{
 				Update: &v1.StreamUpdatesResponse_BrokerPositions{
 					BrokerPositions: v,
+				},
+			}); err != nil {
+				return err
+			}
+		case v, ok := <-accCh:
+			if !ok {
+				return nil
+			}
+			if err := stream.Send(&v1.StreamUpdatesResponse{
+				Update: &v1.StreamUpdatesResponse_Accounts{
+					Accounts: v,
 				},
 			}); err != nil {
 				return err
@@ -837,7 +871,19 @@ func factToProto(f *fact.Fact) *v1.Fact {
 	}
 }
 
-func oppToProto(o *pgstore.Opportunity) *v1.Opportunity {
+// netUSD 净收益 bps → USD（D-053）。与 net_bps 同语义：价差型=一次性（/10000×notional），
+// 息差型=年化 USD/年（/100×notional，net_bps 为年化百分点，D-036）。notional≤0 时不换算（0）。
+func netUSD(netBps float64, typ string, notional float64) float64 {
+	if notional <= 0 {
+		return 0
+	}
+	if strings.HasPrefix(typ, "CROSS_VENUE") {
+		return netBps / 10000 * notional
+	}
+	return netBps / 100 * notional
+}
+
+func (s *Service) oppToProto(o *pgstore.Opportunity) *v1.Opportunity {
 	pb := &v1.Opportunity{
 		Id:             o.ID,
 		Type:           o.Type,
@@ -851,6 +897,8 @@ func oppToProto(o *pgstore.Opportunity) *v1.Opportunity {
 		SlippageCost:   o.SlippageCost,
 		SwapCost:       o.SwapCost,
 		NetBps:         o.NetBps,
+		NetUsd:         netUSD(o.NetBps, o.Type, s.notionalUSD),
+		NotionalUsd:    s.notionalUSD,
 	}
 	if o.BreakevenDays != nil {
 		pb.BreakevenDays = o.BreakevenDays
