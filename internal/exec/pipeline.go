@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -196,6 +197,8 @@ func (p *Pipeline) executeLeg(ctx context.Context, leg LegSpec) LegResult {
 }
 
 // ClosePosition 平仓（§13.3）。
+// D-068 修复：MT5 hedging 模式下 PlaceOrder 反向下单 = 开新仓不是平仓。
+// MT5/MT4 腿用 CloseOrder（OrderClose 按 ticket 平仓）；CEX 腿用 PlaceOrder 反向减仓（D-059）。
 func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 	legs, err := p.store.ListPositionLegs(ctx, posID)
 	if err != nil {
@@ -213,32 +216,38 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 		if !ok {
 			continue
 		}
-		// 反向平仓
-		closeSide := "SELL"
-		if leg.Side == "SELL" {
-			closeSide = "BUY"
+		// D-068 修复：MT5/MT4 用 CloseOrder（按 ticket 平仓）；CEX 用 PlaceOrder 反向减仓。
+		var fill Fill
+		var closeErr error
+		if strings.HasPrefix(leg.Venue, "mt5:") || strings.HasSuffix(leg.Venue, ":mt5") ||
+			strings.HasPrefix(leg.Venue, "mt4:") || strings.HasSuffix(leg.Venue, ":mt4") {
+			fill, closeErr = exe.CloseOrder(ctx, OrderRef{OrderID: leg.OrderID, Venue: leg.Venue})
+		} else {
+			// CEX 反向减仓（D-059 posSide 修正）
+			closeSide := "SELL"
+			if leg.Side == "SELL" {
+				closeSide = "BUY"
+			}
+			var positionSide string
+			switch leg.Side {
+			case "BUY":
+				positionSide = "long"
+			case "SELL":
+				positionSide = "short"
+			}
+			fill, closeErr = exe.PlaceOrder(ctx, Order{
+				Symbol:       leg.Symbol,
+				Side:         closeSide,
+				Qty:          leg.Qty,
+				Venue:        leg.Venue,
+				PositionSide: positionSide,
+			})
 		}
-		// OKX perp long_short_mode：平仓必须带 posSide=原持仓侧（减仓），否则反向单会新开
-		// 反向仓位（D-059 实施修正② 实测双双持仓）。BUY 开 long → SELL+posSide=long 减 long。
-		var positionSide string
-		switch leg.Side {
-		case "BUY":
-			positionSide = "long"
-		case "SELL":
-			positionSide = "short"
-		}
-		fill, err := exe.PlaceOrder(ctx, Order{
-			Symbol:       leg.Symbol,
-			Side:         closeSide,
-			Qty:          leg.Qty,
-			Venue:        leg.Venue,
-			PositionSide: positionSide,
-		})
-		if err != nil {
-			log.Printf("[exec] close leg %d: %v", leg.ID, err)
+		if closeErr != nil {
+			log.Printf("[exec] close leg %d (ticket=%s venue=%s): %v", leg.ID, leg.OrderID, leg.Venue, closeErr)
 			continue
 		}
-		// 简化 PnL：(openPrice - closePrice) * qty * direction
+		// 简化 PnL：(closePrice - openPrice) * qty * direction
 		dir := 1.0
 		if leg.Side == "SELL" {
 			dir = -1.0
@@ -258,14 +267,20 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 
 // Revalidate 用 QuoteBus 最新报价重算毛收益劣化（§13.1 双阈值；D-051 修③：毛口径比较）。
 // 成本侧（佣金/滑点）执行前后不变，净收益劣化完全由毛位移驱动 → 用 originalGrossBps 与重算
-// currentGrossBps（spread/mid×10000）同口径比较才正确。返回 true 通过复核，false 劣化超阈值应拒绝。
-func (p *Pipeline) Revalidate(canonical, venueBuy, venueSell string, originalGrossBps float64) bool {
+// currentBps（spread/mid×10000）同口径比较才正确。返回 true 通过复核，false 劣化超阈值应拒绝。
+// D-068 修复：FUNDING_HEDGE 收益来自 funding rate 差不是价格差，价格差近 0 是正常的，
+// 用价格差复核会误拒 → FUNDING_HEDGE 只检查报价新鲜度（QuoteBus 有报价即可），跳过价差劣化。
+func (p *Pipeline) Revalidate(canonical, venueBuy, venueSell, oppType string, originalGrossBps float64) bool {
 	qbuy, ok1 := p.qbus.Latest(canonical, venueBuy)
 	qsell, ok2 := p.qbus.Latest(canonical, venueSell)
 	if !ok1 || !ok2 {
-		return false
+		return false // 报价缺失 = 不通过
 	}
-	// 重算瞬时毛 spread
+	// FUNDING_HEDGE：只检查报价新鲜度，跳过价格差劣化（funding rate 秒级不变）
+	if oppType == "FUNDING_HEDGE" {
+		return true
+	}
+	// CROSS_VENUE：重算瞬时毛 spread
 	spread := qsell.Bid - qbuy.Ask
 	mid := qbuy.Mid()
 	if mid <= 0 {
