@@ -388,6 +388,13 @@ func (s *Service) ExecuteOpportunity(ctx context.Context, req *connect.Request[v
 	}
 	result, err := s.pipeline.Execute(ctx, oppID, req.Msg.GetRequestId(), legs)
 	if err != nil {
+		// 风控拒单是业务拒绝（D-058）：FAILED+message 展示给前端，非 CodeInternal 内部错误。
+		if errors.Is(err, exec.ErrMaxOpenPositions) || errors.Is(err, exec.ErrDuplicateExecution) {
+			return connect.NewResponse(&v1.ExecuteOpportunityResponse{
+				Status:  "FAILED",
+				Message: err.Error(),
+			}), nil
+		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(&v1.ExecuteOpportunityResponse{
