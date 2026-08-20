@@ -197,13 +197,58 @@ func TestCEXExecutor_OKXPerpTdMode(t *testing.T) {
 		if body["instId"] != "TRX-USDT-SWAP" {
 			t.Errorf("perp instId = %q, want TRX-USDT-SWAP", body["instId"])
 		}
-		_, _ = io.WriteString(w, `{"code":"0","msg":"","data":[{"ordId":"1","sCode":"0"}]}`)
+		// accFillSz/avgPx 带上：避免触发成交轮询（否则 mock 收到意外的 GET）。
+		_, _ = io.WriteString(w, `{"code":"0","msg":"","data":[{"ordId":"1","sCode":"0","accFillSz":"10","avgPx":"0.3342"}]}`)
 	}))
 	defer srv.Close()
 
 	e := NewCEXExecutor("okx", "perp", "k", "s", "p", srv.URL, true)
 	if _, err := e.PlaceOrder(context.Background(), Order{Symbol: "TRX-USDT-SWAP", Side: "SELL", Qty: 10}); err != nil {
 		t.Fatalf("PlaceOrder: %v", err)
+	}
+}
+
+// TestCEXExecutor_OKXPerpPosSideOverride 验证 perp 平仓显式 posSide 覆盖派生：
+// SELL 平 long 须带 posSide=long（减仓），而非派生 short 新开空仓（D-059 实施修正② 实测）。
+func TestCEXExecutor_OKXPerpPosSideOverride(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]string
+		_ = json.Unmarshal(raw, &body)
+		if body["side"] != "sell" || body["posSide"] != "long" {
+			t.Errorf("平 long: side=%q posSide=%q, want sell/long", body["side"], body["posSide"])
+		}
+		_, _ = io.WriteString(w, `{"code":"0","msg":"","data":[{"ordId":"88","sCode":"0","accFillSz":"0.01","avgPx":"71904.8"}]}`)
+	}))
+	defer srv.Close()
+
+	e := NewCEXExecutor("okx", "perp", "k", "s", "p", srv.URL, true)
+	// 平 long：SELL + PositionSide=long（原持仓侧），不能派生为 short。
+	if _, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTC-USDT-SWAP", Side: "SELL", Qty: 0.01, PositionSide: "long"}); err != nil {
+		t.Fatalf("PlaceOrder: %v", err)
+	}
+}
+
+// TestCEXExecutor_OKXOrderPollTerminalCanceled 验证轮询发现订单被取消（未成交）时报错，
+// 而非静默返回 qty=0 假成交（D-059 实测：spot SELL 被模拟盘取消，旧逻辑致测试假绿）。
+func TestCEXExecutor_OKXOrderPollTerminalCanceled(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost:
+			_, _ = io.WriteString(w, `{"code":"0","msg":"","data":[{"ordId":"999","sCode":"0"}]}`) // 无成交 → 轮询
+		case r.Method == http.MethodGet:
+			_, _ = io.WriteString(w, `{"code":"0","msg":"","data":[{"ordId":"999","accFillSz":"","avgPx":"","state":"canceled"}]}`)
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	e := NewCEXExecutor("okx", "spot", "k", "s", "p", srv.URL, true)
+	if _, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTC-USDT", Side: "SELL", Qty: 0.001}); err == nil {
+		t.Fatal("want error on canceled order, got nil")
+	} else if !strings.Contains(err.Error(), "canceled") {
+		t.Errorf("error should mention canceled, got %v", err)
 	}
 }
 
@@ -219,6 +264,40 @@ func TestCEXExecutor_OKXOrderError(t *testing.T) {
 		t.Fatal("want error on code!=0, got nil")
 	} else if !strings.Contains(err.Error(), "51000") {
 		t.Errorf("error should carry code 51000, got %v", err)
+	}
+}
+
+// TestCEXExecutor_OKXOrderPollsFill 验证 POST 响应无成交数据时轮询订单拿真实成交
+// （OKX 市价单 POST 可能先于撮合返回，accFillSz=0/avgPx 空，D-059 实施修正② 实测）。
+func TestCEXExecutor_OKXOrderPollsFill(t *testing.T) {
+	var gotPOST, gotGET bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v5/trade/order":
+			gotPOST = true
+			_, _ = io.WriteString(w, `{"code":"0","msg":"","data":[{"ordId":"777","sCode":"0"}]}`) // 无成交 → 触发轮询
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/trade/order" && r.URL.Query().Get("ordId") == "777":
+			gotGET = true
+			_, _ = io.WriteString(w, `{"code":"0","msg":"","data":[{"ordId":"777","accFillSz":"0.001","avgPx":"70811.6","state":"filled"}]}`)
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	e := NewCEXExecutor("okx", "spot", "k", "s", "p", srv.URL, true)
+	fill, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTC-USDT", Side: "BUY", Qty: 0.001})
+	if err != nil {
+		t.Fatalf("PlaceOrder: %v", err)
+	}
+	if !gotPOST {
+		t.Error("want POST order placement")
+	}
+	if !gotGET {
+		t.Error("want GET order-status poll")
+	}
+	if fill.OrderID != "777" || fill.Qty != 0.001 || fill.Price != 70811.6 {
+		t.Errorf("fill = %+v, want OrderID 777 Qty 0.001 Price 70811.6", fill)
 	}
 }
 

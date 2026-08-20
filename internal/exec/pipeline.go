@@ -217,11 +217,21 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 		if leg.Side == "SELL" {
 			closeSide = "BUY"
 		}
+		// OKX perp long_short_mode：平仓必须带 posSide=原持仓侧（减仓），否则反向单会新开
+		// 反向仓位（D-059 实施修正② 实测双双持仓）。BUY 开 long → SELL+posSide=long 减 long。
+		var positionSide string
+		switch leg.Side {
+		case "BUY":
+			positionSide = "long"
+		case "SELL":
+			positionSide = "short"
+		}
 		fill, err := exe.PlaceOrder(ctx, Order{
-			Symbol: leg.Symbol,
-			Side:   closeSide,
-			Qty:    leg.Qty,
-			Venue:  leg.Venue,
+			Symbol:       leg.Symbol,
+			Side:         closeSide,
+			Qty:          leg.Qty,
+			Venue:        leg.Venue,
+			PositionSide: positionSide,
 		})
 		if err != nil {
 			log.Printf("[exec] close leg %d: %v", leg.ID, err)

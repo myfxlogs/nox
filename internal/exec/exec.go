@@ -20,6 +20,11 @@ type Order struct {
 	Qty       float64 // MT: lots; CEX: base qty
 	Venue     string
 	VenueType string
+	// PositionSide 仅 OKX perp（long_short_mode 双向持仓）减仓时需要：显式指定减哪个
+	// 仓位侧。开仓传空 → 按方向派生（buy→long / sell→short，D-059 实施修正② 实测）；
+	// 平仓必须传原持仓侧（BUY 开的 long 用 SELL 平 → posSide=long 才减 long，否则
+	// SELL+posSide=short 会新开空仓——真实生产 bug，实测双双持仓）。其他 venue/类型忽略。
+	PositionSide string
 }
 
 // Fill 是成交回执。
