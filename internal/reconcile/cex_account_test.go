@@ -1,0 +1,76 @@
+package reconcile
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+// TestCEXAccount_Binance：签名余额查询 → 权益 = Σ 持币×USDT 价（USDT 价=1，其余走公开 ticker/price）。
+// 用 httptest 模拟 /api/v3/account 与 /api/v3/ticker/price（无签名验证——本地假服务只看响应解析）。
+func TestCEXAccount_Binance(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v3/account":
+			fmt.Fprint(w, `{"balances":[
+				{"asset":"USDT","free":"500","locked":"0"},
+				{"asset":"BTC","free":"0.01","locked":"0"},
+				{"asset":"TRX","free":"1000","locked":"0"}
+			]}`)
+		case "/api/v3/ticker/price":
+			if r.URL.Query().Get("symbol") == "BTCUSDT" {
+				fmt.Fprint(w, `{"symbol":"BTCUSDT","price":"60000"}`)
+				return
+			}
+			// TRXUSDT 无 USDT 对 → 404，该币跳过（诚实估算）
+			http.Error(w, "invalid symbol", http.StatusBadRequest)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	// srv.URL 是 http://host:port；Binance 走 https，直接用 srv.URL 作 base（httptest 忽略签名校验）。
+	q := NewCEXAccountQuerier("binance", "spot", "key", "secret", "", srv.URL)
+	acct, err := q.Account(context.Background())
+	if err != nil {
+		t.Fatalf("binance account: %v", err)
+	}
+	want := 500 + 0.01*60000 // USDT + BTC×价；TRX 无价跳过
+	if acct.Equity != want {
+		t.Errorf("equity want %v, got %v", want, acct.Equity)
+	}
+	if acct.VenueKey != "binance:spot" || acct.AssetType != "cex" || acct.Currency != "USDT" {
+		t.Errorf("meta mismatch: %+v", acct)
+	}
+}
+
+// TestCEXAccount_OKX：totalEq 权威 USD 总权益 + 签名头存在（base64 HMAC）。
+func TestCEXAccount_OKX(t *testing.T) {
+	var gotHeaders http.Header
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v5/account/balance" {
+			http.NotFound(w, r)
+			return
+		}
+		gotHeaders = r.Header
+		fmt.Fprint(w, `{"code":"0","msg":"","data":[{"totalEq":"1234.56","details":[{"ccy":"USDT","eq":"1234.56"}]}]}`)
+	}))
+	defer srv.Close()
+
+	q := NewCEXAccountQuerier("okx", "spot", "key", "secret", "pass", srv.URL)
+	acct, err := q.Account(context.Background())
+	if err != nil {
+		t.Fatalf("okx account: %v", err)
+	}
+	if acct.Equity != 1234.56 {
+		t.Errorf("equity want 1234.56, got %v", acct.Equity)
+	}
+	for _, h := range []string{"OK-ACCESS-KEY", "OK-ACCESS-SIGN", "OK-ACCESS-TIMESTAMP", "OK-ACCESS-PASSPHRASE"} {
+		if gotHeaders.Get(h) == "" {
+			t.Errorf("missing header %s", h)
+		}
+	}
+}

@@ -46,6 +46,66 @@ type VenueOrder struct {
 	Magic      int64     // MT5 ExpertId / MT4 MagicNumber（0 = 无，D-052）
 }
 
+// AccountInfo 一个账户的资金视图（D-053）。CFD 来自 MT AccountSummary；CEX 来自签名余额查询。
+// CEX 的 Margin/FreeMargin/Credit/Profit = 0（无对应概念，前端按 AssetType=cex 置「—」）。
+type AccountInfo struct {
+	VenueKey   string // "{venue}:{venueType}"
+	Venue      string
+	VenueType  string // mt5 / mt4 / spot
+	AssetType  string // cfd / cex
+	Balance    float64
+	Equity     float64
+	Margin     float64
+	FreeMargin float64
+	Credit     float64
+	Profit     float64
+	Leverage   float64
+	Currency   string
+}
+
+// AccountQuerier 查询单个账户资金的统一接口（D-053）。与 VenueQuerier 并列，同用 VenueKey 身份。
+// 查询失败 → online=false（monitor 保留最近快照，复用 D-052 离线语义）。
+type AccountQuerier interface {
+	Account(ctx context.Context) (*AccountInfo, error)
+	VenueKey() string
+}
+
+// accountSummaryToInfo 从 MT5 AccountSummary 映射账户视图（D-053）。
+func accountSummaryToInfoMT5(venue, venueType string, sum *mt5pb.AccountSummary) *AccountInfo {
+	return &AccountInfo{
+		VenueKey:   venue + ":" + venueType,
+		Venue:      venue,
+		VenueType:  venueType,
+		AssetType:  "cfd",
+		Balance:    sum.GetBalance(),
+		Credit:     sum.GetCredit(),
+		Profit:     sum.GetProfit(),
+		Equity:     sum.GetEquity(),
+		Margin:     sum.GetMargin(),
+		FreeMargin: sum.GetFreeMargin(),
+		Leverage:   sum.GetLeverage(),
+		Currency:   sum.GetCurrency(),
+	}
+}
+
+// accountSummaryToInfoMT4 从 MT4 AccountSummary 映射账户视图（字段与 MT5 同形，生成类型不同）。
+func accountSummaryToInfoMT4(venue, venueType string, sum *mt4.AccountSummary) *AccountInfo {
+	return &AccountInfo{
+		VenueKey:   venue + ":" + venueType,
+		Venue:      venue,
+		VenueType:  venueType,
+		AssetType:  "cfd",
+		Balance:    sum.GetBalance(),
+		Credit:     sum.GetCredit(),
+		Profit:     sum.GetProfit(),
+		Equity:     sum.GetEquity(),
+		Margin:     sum.GetMargin(),
+		FreeMargin: sum.GetFreeMargin(),
+		Leverage:   sum.GetLeverage(),
+		Currency:   sum.GetCurrency(),
+	}
+}
+
 // isARBOrder 判断 broker 订单是否为当前 ARB 系统开出。
 // 当前 exec 下单 comment 统一为 exec.OrderComment（"arb"）→ 前缀匹配即 ARB 源。
 // 其余一律系统外单：遗留 ca_/cx_/tri_+hex 格式（旧系统 D-033）、手工单 UUID、空 comment。
@@ -73,6 +133,19 @@ func NewMT4Querier(venue, token string, mt4Client mt4.MT4Client) *MT4Querier {
 }
 
 func (q *MT4Querier) VenueKey() string { return q.venue + ":mt4" }
+
+// Account 查 MT4 账户资金（AccountSummary，D-053）。
+func (q *MT4Querier) Account(ctx context.Context) (*AccountInfo, error) {
+	ctx = metadata.AppendToOutgoingContext(ctx, "id", q.token)
+	resp, err := q.mt4.AccountSummary(ctx, &mt4.AccountSummaryRequest{Id: q.token})
+	if err != nil {
+		return nil, fmt.Errorf("mt4 account summary: %w", err)
+	}
+	if e := resp.GetError(); e != nil {
+		return nil, fmt.Errorf("mt4 account summary: %s", e.GetMessage())
+	}
+	return accountSummaryToInfoMT4(q.venue, "mt4", resp.GetResult()), nil
+}
 
 func (q *MT4Querier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error) {
 	ctx = metadata.AppendToOutgoingContext(ctx, "id", q.token)
@@ -120,6 +193,19 @@ func NewMT5Querier(venue, token string, mt5Client mt5pb.MT5Client) *MT5Querier {
 }
 
 func (q *MT5Querier) VenueKey() string { return q.venue + ":mt5" }
+
+// Account 查 MT5 账户资金（AccountSummary，D-053）。
+func (q *MT5Querier) Account(ctx context.Context) (*AccountInfo, error) {
+	ctx = metadata.AppendToOutgoingContext(ctx, "id", q.token)
+	resp, err := q.mt5.AccountSummary(ctx, &mt5pb.AccountSummaryRequest{Id: q.token})
+	if err != nil {
+		return nil, fmt.Errorf("mt5 account summary: %w", err)
+	}
+	if e := resp.GetError(); e != nil {
+		return nil, fmt.Errorf("mt5 account summary: %s", e.GetMessage())
+	}
+	return accountSummaryToInfoMT5(q.venue, "mt5", resp.GetResult()), nil
+}
 
 func (q *MT5Querier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error) {
 	ctx = metadata.AppendToOutgoingContext(ctx, "id", q.token)
