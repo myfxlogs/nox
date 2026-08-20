@@ -149,6 +149,49 @@ func TestCarryScan(t *testing.T) {
 	}
 }
 
+// TestCrossVenueScanMixedLegs D-056：同 canonical BTCUSDT 下 mt5(CFD)+okx(CEX) 双腿 →
+// 混合门槛 max(cex=10, cfd=2)=10bps；gross>10 触发候选，gross<10 不触发。
+// 验证 canonical 统一映射解除 CFD-CEX cross 结构性盲区（D-035 遗留）。
+func TestCrossVenueScanMixedLegs(t *testing.T) {
+	now := time.Now()
+	d := &CrossVenueDetector{CexMinGrossBps: 10.0, CfdMinGrossBps: 2.0, FreshnessTTL: 60 * time.Second}
+
+	// gross ≈ 12.72 bps > 混合门槛 10 → 触发
+	hot := map[string]map[string]bus.Quote{
+		"BTCUSDT": {
+			"mt5:mt5":  {Symbol: "BTCUSDT", Venue: "mt5", VenueType: "mt5", Bid: 1.1000, Ask: 1.1001, Time: now},
+			"okx:spot": {Symbol: "BTCUSDT", Venue: "okx", VenueType: "spot", Bid: 1.1015, Ask: 1.1016, Time: now},
+		},
+	}
+	cands := d.Scan(context.Background(), hot, nil)
+	if len(cands) == 0 {
+		t.Fatal("mixed legs gross≈12.72 > 10: expected candidates, got 0")
+	}
+	found := false
+	for _, c := range cands {
+		if c.VenueBuy == "mt5:mt5" && c.VenueSell == "okx:spot" {
+			if c.GrossBps <= 10.0 {
+				t.Fatalf("GrossBps = %v, want > 10.0", c.GrossBps)
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("expected mt5→okx mixed-leg candidate")
+	}
+
+	// gross ≈ 8.18 bps < 混合门槛 10 → 不触发（诚实抑制，非缺陷）
+	cold := map[string]map[string]bus.Quote{
+		"BTCUSDT": {
+			"mt5:mt5":  {Symbol: "BTCUSDT", Venue: "mt5", VenueType: "mt5", Bid: 1.1000, Ask: 1.1001, Time: now},
+			"okx:spot": {Symbol: "BTCUSDT", Venue: "okx", VenueType: "spot", Bid: 1.1010, Ask: 1.1011, Time: now},
+		},
+	}
+	if cands := d.Scan(context.Background(), cold, nil); len(cands) != 0 {
+		t.Fatalf("mixed legs gross≈8.18 < 10: expected 0 candidates, got %d", len(cands))
+	}
+}
+
 func TestCarryScanNegativeAndMissing(t *testing.T) {
 	now := time.Now()
 	snap := map[string]map[string]bus.Quote{
