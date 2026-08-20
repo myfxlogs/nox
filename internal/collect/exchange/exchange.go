@@ -113,7 +113,7 @@ var bidF, askF float64
 fmt.Sscanf(bid, "%f", &bidF)
 fmt.Sscanf(ask, "%f", &askF)
 return bus.Quote{
-Symbol: symbol, Venue: venue, VenueType: venueType,
+Symbol: symbol, Venue: venue, VenueType: venueType, VenueSymbol: symbol,
 Bid: bidF, Ask: askF, Time: time.Now(),
 }, nil
 }

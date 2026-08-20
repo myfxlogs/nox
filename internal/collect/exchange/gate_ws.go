@@ -172,9 +172,10 @@ func (g *GateWebSocket) handleSpot(data []byte, publish func(bus.Quote)) {
 		return
 	}
 	publish(bus.Quote{
-		Symbol:    canonicalFromGate(pair),
-		Venue:     VenueGate,
-		VenueType: "spot",
+		Symbol:      canonicalFromGate(pair),
+		Venue:       VenueGate,
+		VenueType:   "spot",
+		VenueSymbol: pair,
 		Bid:       bid,
 		Ask:       ask,
 		Time:      time.Now(),
@@ -211,12 +212,13 @@ func (g *GateWebSocket) handleFutures(data []byte, publish func(bus.Quote)) {
 			ts = time.UnixMilli(item.T)
 		}
 		publish(bus.Quote{
-			Symbol:    canonicalFromGate(item.Contract),
-			Venue:     VenueGate,
-			VenueType: "perp",
-			Bid:       mark,
-			Ask:       mark,
-			Time:      ts,
+			Symbol:      canonicalFromGate(item.Contract),
+			Venue:       VenueGate,
+			VenueType:   "perp",
+			VenueSymbol: item.Contract,
+			Bid:         mark,
+			Ask:         mark,
+			Time:        ts,
 		})
 	}
 }
