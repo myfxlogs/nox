@@ -54,7 +54,9 @@ func (s *Store) CreatePosition(ctx context.Context, p *Position) (int64, error) 
 
 // UpdatePositionStatus 更新持仓状态。
 func (s *Store) UpdatePositionStatus(ctx context.Context, id int64, status string) error {
-	q := `UPDATE positions SET status = $1, updated_at = now() WHERE id = $2`
+	// D-060 实施修正②：去掉 updated_at——positions 表无此列，原 SQL 恒报错且被调用方
+	// `_ =` 吞掉 → 所有 position 状态转换静默失败（position #2 卡 OPENING 实证）。
+	q := `UPDATE positions SET status = $1 WHERE id = $2`
 	_, err := s.pool.Exec(ctx, q, status, id)
 	return err
 }
