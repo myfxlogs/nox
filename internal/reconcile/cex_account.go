@@ -4,8 +4,6 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -13,10 +11,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"arb/internal/httpx"
 )
 
 // CEXAccountQuerier 查 CEX 账户资金（D-053）。只读余额，不执行。
@@ -38,44 +37,8 @@ type CEXAccountQuerier struct {
 func NewCEXAccountQuerier(venue, venueType, apiKey, apiSecret, passphrase, baseURL string, simulated bool) *CEXAccountQuerier {
 	return &CEXAccountQuerier{
 		venue: venue, venueType: venueType, apiKey: apiKey, apiSecret: apiSecret,
-		passphrase: passphrase, baseURL: baseURL, simulated: simulated, client: newCEXClient(),
+		passphrase: passphrase, baseURL: baseURL, simulated: simulated, client: httpx.Client(),
 	}
-}
-
-// newCEXClient 构造 CEX 查询客户端。若配置了静态 Binance 代理 CA（ARB_BINANCE_PROXY_CA，
-// D-055 自签证书），把该 CA 加入信任池，客户端才能通过代理的 TLS 校验。
-func newCEXClient() *http.Client {
-	c := &http.Client{Timeout: 15 * time.Second}
-	caPath := os.Getenv("ARB_BINANCE_PROXY_CA")
-	if caPath == "" {
-		return c
-	}
-	pemData, err := os.ReadFile(caPath)
-	if err != nil {
-		return c
-	}
-	pool := x509.NewCertPool()
-	if !pool.AppendCertsFromPEM(pemData) {
-		return c
-	}
-	tr, ok := http.DefaultTransport.(*http.Transport)
-	if !ok {
-		return c
-	}
-	tr = tr.Clone()
-	tr.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
-	c.Transport = tr
-	return c
-}
-
-// proxyHeaders 若配置了静态代理令牌（ARB_BINANCE_PROXY_TOKEN），给 Binance 请求补
-// X-Proxy-Token 头（代理防开放中继鉴权，D-055）。
-func proxyHeaders() http.Header {
-	h := http.Header{}
-	if tok := os.Getenv("ARB_BINANCE_PROXY_TOKEN"); tok != "" {
-		h.Set("X-Proxy-Token", tok)
-	}
-	return h
 }
 
 // VenueKey 账户身份（"{venue}:{venueType}"，与持仓视图同 key 空间）。
@@ -104,8 +67,8 @@ func (q *CEXAccountQuerier) accountBinance(ctx context.Context) (*AccountInfo, e
 	sig := binanceSign(q.apiSecret, params.Encode())
 	params.Set("signature", sig)
 
-	h := proxyHeaders()
-	h.Set("X-MBX-APIKEY", q.apiKey)
+	h := http.Header{}
+	h.Set("X-MBX-APIKEY", q.apiKey) // 令牌由 httpx 传输层自动注入
 	body, err := q.get(ctx, spotBase+"/api/v3/account?"+params.Encode(), h)
 	if err != nil {
 		return nil, fmt.Errorf("binance account: %w", err)
@@ -148,7 +111,7 @@ func (q *CEXAccountQuerier) accountBinance(ctx context.Context) (*AccountInfo, e
 
 // binanceUsdtPrice 取资产 USDT 价（公开接口，无需签名）。
 func (q *CEXAccountQuerier) binanceUsdtPrice(ctx context.Context, spotBase, asset string) (float64, error) {
-	body, err := q.get(ctx, spotBase+"/api/v3/ticker/price?symbol="+asset+"USDT", proxyHeaders())
+	body, err := q.get(ctx, spotBase+"/api/v3/ticker/price?symbol="+asset+"USDT", nil) // 令牌由 httpx 注入
 	if err != nil {
 		return 0, err
 	}

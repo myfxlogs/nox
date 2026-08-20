@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"arb/internal/httpx"
 )
 
 // TestCEXAccount_Binance：签名余额查询 → 权益 = Σ 持币×USDT 价（USDT 价=1，其余走公开 ticker/price）。
@@ -137,9 +139,9 @@ func TestCEXAccount_BinanceProxyToken(t *testing.T) {
 	}
 }
 
-// TestNewCEXClientTrustsProxyCA：默认客户端不信任自签代理证书（握手失败）；加载
+// TestHttpxClientTrustsProxyCA：默认客户端不信任自签代理证书（握手失败）；加载
 // ARB_BINANCE_PROXY_CA 后握手成功——静态 Binance 代理 TLS 链路能建立的关键（D-055）。
-func TestNewCEXClientTrustsProxyCA(t *testing.T) {
+func TestHttpxClientTrustsProxyCA(t *testing.T) {
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, "pong")
 	}))
@@ -156,7 +158,7 @@ func TestNewCEXClientTrustsProxyCA(t *testing.T) {
 	}
 	t.Setenv("ARB_BINANCE_PROXY_CA", caFile)
 
-	resp, err := newCEXClient().Get(ts.URL)
+	resp, err := httpx.Client().Get(ts.URL)
 	if err != nil {
 		t.Fatalf("加载 CA 后应能握手: %v", err)
 	}
