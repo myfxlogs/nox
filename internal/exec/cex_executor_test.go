@@ -88,6 +88,55 @@ func TestCEXExecutor_BinancePerpEndpoint(t *testing.T) {
 	}
 }
 
+// TestCEXExecutor_BinancePerpPollsAsyncFill：demo-fapi 市价单 POST 先于撮合返回
+// （status=NEW/executedQty=0，D-059 实施修正② 复核实测恒如此）→ 执行器轮询订单状态
+// 拿真实成交，防生产记 0 qty 持仓（OKX 同款教训，Binance perp 复现）。
+func TestCEXExecutor_BinancePerpPollsAsyncFill(t *testing.T) {
+	polled := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/fapi/v1/order" && r.Method == http.MethodGet:
+			polled++
+			_, _ = io.WriteString(w, `{"symbol":"BTCUSDT","orderId":99,"status":"FILLED","executedQty":"0.0010","avgPrice":"71862.8"}`)
+		default:
+			_, _ = io.WriteString(w, `{"symbol":"BTCUSDT","orderId":99,"status":"NEW","executedQty":"0.0000","avgPrice":"0"}`)
+		}
+	}))
+	defer srv.Close()
+
+	e := NewCEXExecutor("binance", "perp", "k", "s", "", srv.URL, false)
+	fill, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTCUSDT", Side: "BUY", Qty: 0.001})
+	if err != nil {
+		t.Fatalf("PlaceOrder: %v", err)
+	}
+	if fill.Qty != 0.001 {
+		t.Errorf("Qty = %v, want 0.001（轮询应取真实成交）", fill.Qty)
+	}
+	if polled == 0 {
+		t.Error("应轮询订单状态，未轮询")
+	}
+}
+
+// TestCEXExecutor_BinanceOrderTerminalCanceled：轮询发现订单被取消/拒绝 → 如实报错。
+func TestCEXExecutor_BinanceOrderTerminalCanceled(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/fapi/v1/order" && r.Method == http.MethodGet:
+			_, _ = io.WriteString(w, `{"orderId":100,"status":"EXPIRED","executedQty":"0.0000","avgPrice":"0"}`)
+		default:
+			_, _ = io.WriteString(w, `{"orderId":100,"status":"NEW","executedQty":"0.0000"}`)
+		}
+	}))
+	defer srv.Close()
+
+	e := NewCEXExecutor("binance", "perp", "k", "s", "", srv.URL, false)
+	if _, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTCUSDT", Side: "SELL", Qty: 0.001}); err == nil {
+		t.Error("订单被取消应报错，got nil")
+	} else if !strings.Contains(err.Error(), "EXPIRED") {
+		t.Errorf("错误应含 EXPIRED 状态, got %v", err)
+	}
+}
+
 // TestCEXExecutor_OKXOrder 验证 OKX 下单：body/四头/签名/模拟盘头。
 func TestCEXExecutor_OKXOrder(t *testing.T) {
 	const (

@@ -54,6 +54,32 @@ func TestCEXAccount_Binance(t *testing.T) {
 	}
 }
 
+// TestCEXAccount_BinancePerp：合约账户权益 = /fapi/v2/account 的 totalWalletBalance（权威 USDT 权益）。
+// D-059 实施修正② 复核实测：demo key 对 demo-fapi.binance.com USDT-M 合约同 key 有效（-1109 已解），
+// perp 走 /fapi/v2/account 而非 spot 的 /api/v3/account。
+func TestCEXAccount_BinancePerp(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/fapi/v2/account" {
+			http.NotFound(w, r)
+			return
+		}
+		fmt.Fprint(w, `{"totalWalletBalance":"5000.00000000","totalUnrealizedProfit":"0.00000000","canTrade":true}`)
+	}))
+	defer srv.Close()
+
+	q := NewCEXAccountQuerier("binance", "perp", "key", "secret", "", srv.URL, false)
+	acct, err := q.Account(context.Background())
+	if err != nil {
+		t.Fatalf("binance perp account: %v", err)
+	}
+	if acct.Equity != 5000 {
+		t.Errorf("equity want 5000, got %v", acct.Equity)
+	}
+	if acct.VenueKey != "binance:perp" {
+		t.Errorf("venuekey want binance:perp, got %q", acct.VenueKey)
+	}
+}
+
 // TestCEXAccount_OKX：totalEq 权威 USD 总权益 + 签名头存在（base64 HMAC）。
 func TestCEXAccount_OKX(t *testing.T) {
 	var gotHeaders http.Header
