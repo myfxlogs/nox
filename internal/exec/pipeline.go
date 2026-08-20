@@ -5,6 +5,7 @@ package exec
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -21,6 +22,14 @@ type RiskLimits struct {
 	MaxOpenPositions   int
 	MaxLegImbalancePct float64
 }
+
+// 风控拒单 sentinel error（D-058）。ExecuteOpportunity RPC 据此映射 FAILED+message，非 CodeInternal。
+var (
+	// ErrMaxOpenPositions 持仓数达上限，拒绝新开仓。
+	ErrMaxOpenPositions = errors.New("max open positions reached")
+	// ErrDuplicateExecution 该机会已有未平仓持仓，拒绝重复执行（幂等防重）。
+	ErrDuplicateExecution = errors.New("opportunity already has an open position")
+)
 
 // Pipeline 是执行管线（§13.1）。
 type Pipeline struct {
@@ -64,8 +73,28 @@ type LegResult struct {
 // Execute 执行机会（§13.1）。
 // opportunityID + requestID 幂等：重复提交返回已有 position。
 func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID string, legs []LegSpec) (*ExecuteResult, error) {
-	// 风控：持仓上限
-	// TODO: 查 OPEN+OPENING+LEGGED 计数 vs MaxOpenPositions（需要 store 查询方法）
+	// 风控①：持仓上限（D-058）。MaxOpenPositions>0 才启用；OPEN+OPENING+LEGGED 计数超限拒单。
+	// check-then-act 无 DB 级原子性——当前单用户人工确认，接受窗口竞态（全自动才需约束）。
+	if p.limits.MaxOpenPositions > 0 {
+		n, err := p.store.CountOpenPositions(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("count open positions: %w", err)
+		}
+		if n >= p.limits.MaxOpenPositions {
+			return nil, ErrMaxOpenPositions
+		}
+	}
+
+	// 风控②：幂等防重（D-058）。同机会已有未平仓持仓（OPEN/OPENING/LEGGED）拒绝重复执行，
+	// 防双击/重试重复建仓；CLOSED/FAILED 可重入（新的执行意图）。requestID 级幂等需新列，暂以
+	// opportunityID 级覆盖重复提交的主要危害，留待未来。
+	dup, err := p.store.HasOpenPositionByOpportunity(ctx, opportunityID)
+	if err != nil {
+		return nil, fmt.Errorf("check existing position: %w", err)
+	}
+	if dup {
+		return nil, ErrDuplicateExecution
+	}
 
 	// 建 position(OPENING)
 	posID, err := p.store.CreatePosition(ctx, &pgstore.Position{
