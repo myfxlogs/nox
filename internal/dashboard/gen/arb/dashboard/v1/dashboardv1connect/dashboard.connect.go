@@ -128,6 +128,15 @@ const (
 	// DashboardServiceVerifyAccountProcedure is the fully-qualified name of the DashboardService's
 	// VerifyAccount RPC.
 	DashboardServiceVerifyAccountProcedure = "/arb.dashboard.v1.DashboardService/VerifyAccount"
+	// DashboardServiceListExchangesProcedure is the fully-qualified name of the DashboardService's
+	// ListExchanges RPC.
+	DashboardServiceListExchangesProcedure = "/arb.dashboard.v1.DashboardService/ListExchanges"
+	// DashboardServiceAddExchangeProcedure is the fully-qualified name of the DashboardService's
+	// AddExchange RPC.
+	DashboardServiceAddExchangeProcedure = "/arb.dashboard.v1.DashboardService/AddExchange"
+	// DashboardServiceRemoveExchangeProcedure is the fully-qualified name of the DashboardService's
+	// RemoveExchange RPC.
+	DashboardServiceRemoveExchangeProcedure = "/arb.dashboard.v1.DashboardService/RemoveExchange"
 	// DashboardServiceBrokerSymbolsProcedure is the fully-qualified name of the DashboardService's
 	// BrokerSymbols RPC.
 	DashboardServiceBrokerSymbolsProcedure = "/arb.dashboard.v1.DashboardService/BrokerSymbols"
@@ -208,6 +217,10 @@ type DashboardServiceClient interface {
 	RemoveBroker(context.Context, *connect.Request[v1.RemoveBrokerRequest]) (*connect.Response[v1.RemoveBrokerResponse], error)
 	ListBrokerAccounts(context.Context, *connect.Request[v1.ListBrokerAccountsRequest]) (*connect.Response[v1.ListBrokerAccountsResponse], error)
 	VerifyAccount(context.Context, *connect.Request[v1.VerifyAccountRequest]) (*connect.Response[v1.VerifyAccountResponse], error)
+	// CEX 交易所管理（D-054：后台增删，运行时生效，对齐 broker 账户管理）
+	ListExchanges(context.Context, *connect.Request[v1.ListExchangesRequest]) (*connect.Response[v1.ListExchangesResponse], error)
+	AddExchange(context.Context, *connect.Request[v1.AddExchangeRequest]) (*connect.Response[v1.AddExchangeResponse], error)
+	RemoveExchange(context.Context, *connect.Request[v1.RemoveExchangeRequest]) (*connect.Response[v1.RemoveExchangeResponse], error)
 	BrokerSymbols(context.Context, *connect.Request[v1.BrokerSymbolsRequest]) (*connect.Response[v1.BrokerSymbolsResponse], error)
 	SetBrokerAccountAlias(context.Context, *connect.Request[v1.SetBrokerAccountAliasRequest]) (*connect.Response[v1.SetBrokerAccountAliasResponse], error)
 	SetBrokerDisabled(context.Context, *connect.Request[v1.SetBrokerDisabledRequest]) (*connect.Response[v1.SetBrokerDisabledResponse], error)
@@ -429,6 +442,24 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("VerifyAccount")),
 			connect.WithClientOptions(opts...),
 		),
+		listExchanges: connect.NewClient[v1.ListExchangesRequest, v1.ListExchangesResponse](
+			httpClient,
+			baseURL+DashboardServiceListExchangesProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListExchanges")),
+			connect.WithClientOptions(opts...),
+		),
+		addExchange: connect.NewClient[v1.AddExchangeRequest, v1.AddExchangeResponse](
+			httpClient,
+			baseURL+DashboardServiceAddExchangeProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("AddExchange")),
+			connect.WithClientOptions(opts...),
+		),
+		removeExchange: connect.NewClient[v1.RemoveExchangeRequest, v1.RemoveExchangeResponse](
+			httpClient,
+			baseURL+DashboardServiceRemoveExchangeProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("RemoveExchange")),
+			connect.WithClientOptions(opts...),
+		),
 		brokerSymbols: connect.NewClient[v1.BrokerSymbolsRequest, v1.BrokerSymbolsResponse](
 			httpClient,
 			baseURL+DashboardServiceBrokerSymbolsProcedure,
@@ -538,6 +569,9 @@ type dashboardServiceClient struct {
 	removeBroker           *connect.Client[v1.RemoveBrokerRequest, v1.RemoveBrokerResponse]
 	listBrokerAccounts     *connect.Client[v1.ListBrokerAccountsRequest, v1.ListBrokerAccountsResponse]
 	verifyAccount          *connect.Client[v1.VerifyAccountRequest, v1.VerifyAccountResponse]
+	listExchanges          *connect.Client[v1.ListExchangesRequest, v1.ListExchangesResponse]
+	addExchange            *connect.Client[v1.AddExchangeRequest, v1.AddExchangeResponse]
+	removeExchange         *connect.Client[v1.RemoveExchangeRequest, v1.RemoveExchangeResponse]
 	brokerSymbols          *connect.Client[v1.BrokerSymbolsRequest, v1.BrokerSymbolsResponse]
 	setBrokerAccountAlias  *connect.Client[v1.SetBrokerAccountAliasRequest, v1.SetBrokerAccountAliasResponse]
 	setBrokerDisabled      *connect.Client[v1.SetBrokerDisabledRequest, v1.SetBrokerDisabledResponse]
@@ -712,6 +746,21 @@ func (c *dashboardServiceClient) VerifyAccount(ctx context.Context, req *connect
 	return c.verifyAccount.CallUnary(ctx, req)
 }
 
+// ListExchanges calls arb.dashboard.v1.DashboardService.ListExchanges.
+func (c *dashboardServiceClient) ListExchanges(ctx context.Context, req *connect.Request[v1.ListExchangesRequest]) (*connect.Response[v1.ListExchangesResponse], error) {
+	return c.listExchanges.CallUnary(ctx, req)
+}
+
+// AddExchange calls arb.dashboard.v1.DashboardService.AddExchange.
+func (c *dashboardServiceClient) AddExchange(ctx context.Context, req *connect.Request[v1.AddExchangeRequest]) (*connect.Response[v1.AddExchangeResponse], error) {
+	return c.addExchange.CallUnary(ctx, req)
+}
+
+// RemoveExchange calls arb.dashboard.v1.DashboardService.RemoveExchange.
+func (c *dashboardServiceClient) RemoveExchange(ctx context.Context, req *connect.Request[v1.RemoveExchangeRequest]) (*connect.Response[v1.RemoveExchangeResponse], error) {
+	return c.removeExchange.CallUnary(ctx, req)
+}
+
 // BrokerSymbols calls arb.dashboard.v1.DashboardService.BrokerSymbols.
 func (c *dashboardServiceClient) BrokerSymbols(ctx context.Context, req *connect.Request[v1.BrokerSymbolsRequest]) (*connect.Response[v1.BrokerSymbolsResponse], error) {
 	return c.brokerSymbols.CallUnary(ctx, req)
@@ -815,6 +864,10 @@ type DashboardServiceHandler interface {
 	RemoveBroker(context.Context, *connect.Request[v1.RemoveBrokerRequest]) (*connect.Response[v1.RemoveBrokerResponse], error)
 	ListBrokerAccounts(context.Context, *connect.Request[v1.ListBrokerAccountsRequest]) (*connect.Response[v1.ListBrokerAccountsResponse], error)
 	VerifyAccount(context.Context, *connect.Request[v1.VerifyAccountRequest]) (*connect.Response[v1.VerifyAccountResponse], error)
+	// CEX 交易所管理（D-054：后台增删，运行时生效，对齐 broker 账户管理）
+	ListExchanges(context.Context, *connect.Request[v1.ListExchangesRequest]) (*connect.Response[v1.ListExchangesResponse], error)
+	AddExchange(context.Context, *connect.Request[v1.AddExchangeRequest]) (*connect.Response[v1.AddExchangeResponse], error)
+	RemoveExchange(context.Context, *connect.Request[v1.RemoveExchangeRequest]) (*connect.Response[v1.RemoveExchangeResponse], error)
 	BrokerSymbols(context.Context, *connect.Request[v1.BrokerSymbolsRequest]) (*connect.Response[v1.BrokerSymbolsResponse], error)
 	SetBrokerAccountAlias(context.Context, *connect.Request[v1.SetBrokerAccountAliasRequest]) (*connect.Response[v1.SetBrokerAccountAliasResponse], error)
 	SetBrokerDisabled(context.Context, *connect.Request[v1.SetBrokerDisabledRequest]) (*connect.Response[v1.SetBrokerDisabledResponse], error)
@@ -1032,6 +1085,24 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("VerifyAccount")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceListExchangesHandler := connect.NewUnaryHandler(
+		DashboardServiceListExchangesProcedure,
+		svc.ListExchanges,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListExchanges")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceAddExchangeHandler := connect.NewUnaryHandler(
+		DashboardServiceAddExchangeProcedure,
+		svc.AddExchange,
+		connect.WithSchema(dashboardServiceMethods.ByName("AddExchange")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceRemoveExchangeHandler := connect.NewUnaryHandler(
+		DashboardServiceRemoveExchangeProcedure,
+		svc.RemoveExchange,
+		connect.WithSchema(dashboardServiceMethods.ByName("RemoveExchange")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceBrokerSymbolsHandler := connect.NewUnaryHandler(
 		DashboardServiceBrokerSymbolsProcedure,
 		svc.BrokerSymbols,
@@ -1170,6 +1241,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceListBrokerAccountsHandler.ServeHTTP(w, r)
 		case DashboardServiceVerifyAccountProcedure:
 			dashboardServiceVerifyAccountHandler.ServeHTTP(w, r)
+		case DashboardServiceListExchangesProcedure:
+			dashboardServiceListExchangesHandler.ServeHTTP(w, r)
+		case DashboardServiceAddExchangeProcedure:
+			dashboardServiceAddExchangeHandler.ServeHTTP(w, r)
+		case DashboardServiceRemoveExchangeProcedure:
+			dashboardServiceRemoveExchangeHandler.ServeHTTP(w, r)
 		case DashboardServiceBrokerSymbolsProcedure:
 			dashboardServiceBrokerSymbolsHandler.ServeHTTP(w, r)
 		case DashboardServiceSetBrokerAccountAliasProcedure:
@@ -1329,6 +1406,18 @@ func (UnimplementedDashboardServiceHandler) ListBrokerAccounts(context.Context, 
 
 func (UnimplementedDashboardServiceHandler) VerifyAccount(context.Context, *connect.Request[v1.VerifyAccountRequest]) (*connect.Response[v1.VerifyAccountResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.VerifyAccount is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListExchanges(context.Context, *connect.Request[v1.ListExchangesRequest]) (*connect.Response[v1.ListExchangesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListExchanges is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) AddExchange(context.Context, *connect.Request[v1.AddExchangeRequest]) (*connect.Response[v1.AddExchangeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AddExchange is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) RemoveExchange(context.Context, *connect.Request[v1.RemoveExchangeRequest]) (*connect.Response[v1.RemoveExchangeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.RemoveExchange is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) BrokerSymbols(context.Context, *connect.Request[v1.BrokerSymbolsRequest]) (*connect.Response[v1.BrokerSymbolsResponse], error) {

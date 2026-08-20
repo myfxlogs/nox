@@ -7,6 +7,7 @@ import (
 	"context"
 	"log"
 	"maps"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,6 +16,7 @@ import (
 
 	"arb/internal/bus"
 	"arb/internal/reconcile"
+	"arb/internal/store/pgstore"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
@@ -29,7 +31,8 @@ type acctVenueState struct {
 // AccountMonitor 跟踪全部账户（CFD + CEX）资金并广播变更。
 type AccountMonitor struct {
 	bm       *BrokerManager // CFD 账户查询器来源（每轮重取，venue 启停自动跟随）
-	statics  []reconcile.AccountQuerier // CEX 等静态查询器（boot 时 AddStatic 注册）
+	exchs    ExchangeStore  // CEX 交易所配置来源（D-054：每轮重取，后台增删即时生效）
+	statics  []reconcile.AccountQuerier // 附加查询器（测试注入 fake 用；生产为空）
 	interval time.Duration
 	topic    *bus.Topic[*v1.AccountSnapshot]
 
@@ -37,6 +40,11 @@ type AccountMonitor struct {
 	states map[string]acctVenueState // venueKey → 状态
 	cache  []*v1.AccountInfo         // 最近构建的视图（含离线快照）
 	lastFP string                    // 上次广播指纹（变更检测）
+}
+
+// ExchangeStore 提供 CEX 交易所配置（pgstore.Store 满足）。
+type ExchangeStore interface {
+	ListExchangeConfigs(ctx context.Context) ([]pgstore.ExchangeConfig, error)
 }
 
 // NewAccountMonitor 创建 monitor。interval 复用 ARB_BROKER_POS_POLL_MS（D-053 不新增 knob）。
@@ -49,7 +57,14 @@ func NewAccountMonitor(bm *BrokerManager, interval time.Duration, topic *bus.Top
 	}
 }
 
-// AddStatic 注册静态账户查询器（CEX；boot 时调用，先于 Run）。
+// SetExchangeStore 注入 CEX 交易所配置源（D-054，boot 时调用；此后 querier 随 DB 增删自动变化）。
+func (m *AccountMonitor) SetExchangeStore(s ExchangeStore) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.exchs = s
+}
+
+// AddStatic 注册附加账户查询器（测试注入 fake 用；生产 CEX 走 SetExchangeStore）。
 func (m *AccountMonitor) AddStatic(q reconcile.AccountQuerier) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -84,9 +99,40 @@ func (m *AccountMonitor) Snapshot() []*v1.AccountInfo {
 	return m.cache
 }
 
-// queriers 汇总查询器：CFD（brokerMgr 每轮重取）+ 静态 CEX。
-func (m *AccountMonitor) queriers() []reconcile.AccountQuerier {
+// queriers 汇总查询器：CFD（brokerMgr 每轮重取）+ CEX（DB 每轮重取，D-054）+ statics（测试注入）。
+func (m *AccountMonitor) queriers(ctx context.Context) []reconcile.AccountQuerier {
 	qs := m.bm.AccountQueriers()
+	m.mu.RLock()
+	exchs := m.exchs
+	m.mu.RUnlock()
+	if exchs != nil {
+		cfgs, err := exchs.ListExchangeConfigs(ctx)
+		if err != nil {
+			log.Printf("[account-mon] list exchanges: %v", err)
+		} else {
+			for i := range cfgs {
+				c := &cfgs[i]
+				base := c.BaseURL
+				if base == "" {
+					switch c.Venue {
+					case "binance":
+						base = os.Getenv("BINANCE_PROXY_URL")
+						if base == "" {
+							base = "https://fapi.binance.com" // 无代理直连；451 由部署负责
+						}
+					case "okx":
+						base = "https://www.okx.com" // 实盘；模拟盘在 base_url 填 demo-trading.okx.com
+					}
+				}
+				if c.Venue == "binance" && !strings.Contains(base, "/api/") {
+					// 与采集一致：fapi→api 得 spot base（代理 base 是 fapi 风格）
+					base = strings.Replace(base, "fapi", "api", 1)
+				}
+				qs = append(qs, reconcile.NewCEXAccountQuerier(c.Venue, c.VenueType, c.APIKey, c.APISecret, c.Passphrase, base, c.Simulated))
+				log.Printf("[account] cex querier: %s:%s", c.Venue, c.VenueType)
+			}
+		}
+	}
 	m.mu.RLock()
 	qs = append(qs, m.statics...)
 	m.mu.RUnlock()
@@ -96,7 +142,7 @@ func (m *AccountMonitor) queriers() []reconcile.AccountQuerier {
 // poll 一次轮询：逐查询器 → 更新状态 → 构建视图 → 变更则广播。
 func (m *AccountMonitor) poll(ctx context.Context) {
 	// queriers() 内部取 m.mu.RLock——必须先于写锁获取（RWMutex 非重入，持写锁再读锁会自锁）。
-	qs := m.queriers()
+	qs := m.queriers(ctx)
 	m.mu.Lock()
 	for _, q := range qs {
 		if q == nil {
@@ -108,6 +154,8 @@ func (m *AccountMonitor) poll(ctx context.Context) {
 		if err != nil {
 			// 离线：保留最近成功快照（D-052 业主决策），不覆盖 acct。
 			if !st.online {
+				// 从未在线：也记录一次（CEX 首次配置失败曾静默无日志，难排障）
+				log.Printf("[account-mon] %s first-poll error: %v", vk, err)
 				continue
 			}
 			st.online = false
