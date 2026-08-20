@@ -9,6 +9,7 @@ import (
 	"arb/internal/bus"
 	"arb/internal/exec"
 	"arb/internal/reconcile"
+	"arb/internal/store/pgstore"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 )
@@ -119,5 +120,32 @@ func TestAccountMonitor_BroadcastOnChangeOnly(t *testing.T) {
 	m.Refresh(ctx)
 	if n := drain(); n != 1 {
 		t.Fatalf("equity-change poll want 1 broadcast, got %d", n)
+	}
+}
+
+// TestResolveExchangeBaseURL_VenueTypeAware：binance base 推导按 venue_type 分流——spot 从
+// fapi 风格 base 推导 spot base；perp 保留 demofapi 前缀不动（naive replace fapi→api 会把
+// demofapi 错改成 demoapi，D-059 实施修正② 复核实测：模拟盘合约在独立子域 demo-fapi.binance.com）。
+func TestResolveExchangeBaseURL_VenueTypeAware(t *testing.T) {
+	t.Setenv("BINANCE_PROXY_URL", "") // 空默认 → 无代理直连 fapi
+	spot := resolveExchangeBaseURL(pgstore.ExchangeConfig{Venue: "binance", VenueType: "spot", BaseURL: "https://192.229.85.35:8443/demo"})
+	if spot != "https://192.229.85.35:8443/demo" {
+		t.Errorf("spot demo base want unchanged, got %q", spot)
+	}
+	perp := resolveExchangeBaseURL(pgstore.ExchangeConfig{Venue: "binance", VenueType: "perp", BaseURL: "https://192.229.85.35:8443/demofapi"})
+	if perp != "https://192.229.85.35:8443/demofapi" {
+		t.Errorf("perp demofapi base want unchanged (勿 fapi→api 错改), got %q", perp)
+	}
+	perpEmpty := resolveExchangeBaseURL(pgstore.ExchangeConfig{Venue: "binance", VenueType: "perp"})
+	if perpEmpty != "https://fapi.binance.com" {
+		t.Errorf("perp empty base want fapi.binance.com default, got %q", perpEmpty)
+	}
+	spotEmpty := resolveExchangeBaseURL(pgstore.ExchangeConfig{Venue: "binance", VenueType: "spot"})
+	if spotEmpty != "https://api.binance.com" {
+		t.Errorf("spot empty base want api.binance.com (fapi→api 推导), got %q", spotEmpty)
+	}
+	okx := resolveExchangeBaseURL(pgstore.ExchangeConfig{Venue: "okx", VenueType: "spot"})
+	if okx != "https://www.okx.com" {
+		t.Errorf("okx want www.okx.com, got %q", okx)
 	}
 }

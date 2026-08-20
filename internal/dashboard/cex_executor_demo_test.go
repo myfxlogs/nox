@@ -141,9 +141,13 @@ func TestDemoRealOrder(t *testing.T) {
 // demoSymQty 返回 venue+type 的 demo 符号与下单 qty（已按真实最小单/精度实测校准）。
 func demoSymQty(venue, venueType string) (string, float64) {
 	switch {
+	case venue == "binance" && venueType == "perp":
+		// 合约市价单最小单 0.001 BTC（futures lotSize，实测）。USDT-M 走独立子域
+		// demo-fapi.binance.com，同 demo key 有效——D-059 实施修正② 复核实测，
+		// 非「需单独 futures testnet key」（那结论探错域得出）。
+		return "BTCUSDT", 0.001
 	case venue == "binance":
-		// spot LOT_SIZE stepSize 0.00001，0.0001（≈$7）足够；perp 需 Binance 单独 futures
-		// testnet key（demo-api 不服务 /fapi，D-059 实施修正②），本函数不覆盖。
+		// spot LOT_SIZE stepSize 0.00001，0.0001（≈$7）足够。
 		return "BTCUSDT", 0.0001
 	case venue == "okx" && venueType == "perp":
 		// OKX swap sz=合约数：BTC-USDT-SWAP ctVal=0.01 BTC、minSz=lotSz=0.01（实测校准）。

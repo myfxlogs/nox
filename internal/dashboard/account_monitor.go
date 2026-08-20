@@ -116,8 +116,11 @@ func resolveExchangeBaseURL(c pgstore.ExchangeConfig) string {
 			base = "https://www.okx.com" // 实盘域名；模拟盘走 x-simulated-trading:1（D-054）
 		}
 	}
-	if c.Venue == "binance" && !strings.Contains(base, "/api/") {
-		// 与采集一致：fapi→api 得 spot base（代理 base 是 fapi 风格）
+	if c.Venue == "binance" && c.VenueType == "spot" && !strings.Contains(base, "/api/") {
+		// 与采集一致：仅 spot 需从 fapi 风格代理 base 推导 spot base。
+		// binance:perp 不能 replace——其 base_url 形如 …/demofapi，含 "fapi" 子串，
+		// naive replace 会错改成 demoapi（D-059 实施修正② 复核实测：模拟盘合约在
+		// 独立子域 demo-fapi.binance.com，同 key 有效）。
 		base = strings.Replace(base, "fapi", "api", 1)
 	}
 	return base
