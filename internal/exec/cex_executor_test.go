@@ -1,0 +1,262 @@
+package exec
+
+import (
+	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+// TestCEXExecutor_BinanceOrder 验证 Binance 下单：endpoint/签名/X-MBX-APIKEY 头。
+func TestCEXExecutor_BinanceOrder(t *testing.T) {
+	const (
+		key    = "test-key-907"
+		secret = "test-secret-xyz"
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// endpoint
+		if r.URL.Path != "/api/v3/order" {
+			t.Errorf("want path /api/v3/order, got %s", r.URL.Path)
+		}
+		// X-MBX-APIKEY 头
+		if got := r.Header.Get("X-MBX-APIKEY"); got != key {
+			t.Errorf("X-MBX-APIKEY = %q, want %q", got, key)
+		}
+		// 签名字段存在且正确（Binance 签名 = HMAC-SHA256(secret, 其余参数 encode)）
+		q := r.URL.Query()
+		sig := q.Get("signature")
+		if sig == "" {
+			t.Fatal("missing signature")
+		}
+		q.Del("signature")
+		want := binanceSign(secret, q.Encode())
+		if sig != want {
+			t.Errorf("signature = %q, want %q", sig, want)
+		}
+		// 下单参数
+		for k, wantV := range map[string]string{
+			"symbol":    "BTCUSDT",
+			"side":      "BUY",
+			"type":      "MARKET",
+			"quantity":  "0.0001",
+			"recvWindow": "5000",
+		} {
+			if got := q.Get(k); got != wantV {
+				t.Errorf("param %s = %q, want %q", k, got, wantV)
+			}
+		}
+		if q.Get("timestamp") == "" {
+			t.Error("missing timestamp")
+		}
+		_, _ = io.WriteString(w, `{"symbol":"BTCUSDT","orderId":912384,"executedQty":"0.00010000","avgPrice":"61500.5","status":"FILLED"}`)
+	}))
+	defer srv.Close()
+
+	e := NewCEXExecutor("binance", "spot", key, secret, "", srv.URL, false)
+	fill, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTCUSDT", Side: "BUY", Qty: 0.0001})
+	if err != nil {
+		t.Fatalf("PlaceOrder: %v", err)
+	}
+	if fill.OrderID != "912384" {
+		t.Errorf("OrderID = %q, want 912384", fill.OrderID)
+	}
+	if fill.Qty != 0.0001 {
+		t.Errorf("Qty = %v, want 0.0001", fill.Qty)
+	}
+}
+
+// TestCEXExecutor_BinancePerpEndpoint 验证 perp 走 /fapi/v1/order。
+func TestCEXExecutor_BinancePerpEndpoint(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/fapi/v1/order" {
+			t.Errorf("want /fapi/v1/order, got %s", r.URL.Path)
+		}
+		_, _ = io.WriteString(w, `{"orderId":77,"executedQty":"1.0","avgPrice":"0.3342"}`)
+	}))
+	defer srv.Close()
+
+	e := NewCEXExecutor("binance", "perp", "k", "s", "", srv.URL, false)
+	if _, err := e.PlaceOrder(context.Background(), Order{Symbol: "TRXUSDT", Side: "SELL", Qty: 1}); err != nil {
+		t.Fatalf("PlaceOrder: %v", err)
+	}
+}
+
+// TestCEXExecutor_OKXOrder 验证 OKX 下单：body/四头/签名/模拟盘头。
+func TestCEXExecutor_OKXOrder(t *testing.T) {
+	const (
+		key      = "okx-key-4095"
+		secret   = "okx-secret-abc"
+		pass     = "okx-pass-phrase"
+	)
+	cases := []struct {
+		name      string
+		simulated bool
+		wantSimH  string // x-simulated-trading 期望值（"" = 不应存在）
+	}{
+		{"demo", true, "1"},
+		{"live", false, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/v5/trade/order" {
+					t.Errorf("want /api/v5/trade/order, got %s", r.URL.Path)
+				}
+				if r.Method != http.MethodPost {
+					t.Errorf("want POST, got %s", r.Method)
+				}
+				// 四头
+				for _, h := range []string{"OK-ACCESS-KEY", "OK-ACCESS-SIGN", "OK-ACCESS-TIMESTAMP", "OK-ACCESS-PASSPHRASE"} {
+					if r.Header.Get(h) == "" {
+						t.Errorf("missing header %s", h)
+					}
+				}
+				if r.Header.Get("OK-ACCESS-KEY") != key {
+					t.Errorf("OK-ACCESS-KEY = %q", r.Header.Get("OK-ACCESS-KEY"))
+				}
+				if r.Header.Get("OK-ACCESS-PASSPHRASE") != pass {
+					t.Errorf("OK-ACCESS-PASSPHRASE = %q", r.Header.Get("OK-ACCESS-PASSPHRASE"))
+				}
+				// 模拟盘头（仅 simulated）
+				gotSim := r.Header.Get("x-simulated-trading")
+				if tc.wantSimH == "" {
+					if gotSim != "" {
+						t.Errorf("live request should not have x-simulated-trading, got %q", gotSim)
+					}
+				} else if gotSim != tc.wantSimH {
+					t.Errorf("x-simulated-trading = %q, want %q", gotSim, tc.wantSimH)
+				}
+				// body 字段
+				var body struct {
+					InstID  string `json:"instId"`
+					TdMode  string `json:"tdMode"`
+					Side    string `json:"side"`
+					OrdType string `json:"ordType"`
+					Sz      string `json:"sz"`
+				}
+				raw, _ := io.ReadAll(r.Body)
+				if err := json.Unmarshal(raw, &body); err != nil {
+					t.Fatalf("body json: %v (%s)", err, string(raw))
+				}
+				if body.InstID != "ETH-USDT" {
+					t.Errorf("instId = %q, want ETH-USDT", body.InstID)
+				}
+				if body.TdMode != "cash" {
+					t.Errorf("tdMode = %q, want cash (spot)", body.TdMode)
+				}
+				if body.Side != "buy" {
+					t.Errorf("side = %q, want buy", body.Side)
+				}
+				if body.OrdType != "market" {
+					t.Errorf("ordType = %q, want market", body.OrdType)
+				}
+				if body.Sz != "0.1" {
+					t.Errorf("sz = %q, want 0.1", body.Sz)
+				}
+				// 签名 prehash 正确：base64(HMAC-SHA256(secret, ts+POST+path+body))
+				ts := r.Header.Get("OK-ACCESS-TIMESTAMP")
+				wantSign := okxSign(secret, ts+"POST"+r.URL.Path+string(raw))
+				if got := r.Header.Get("OK-ACCESS-SIGN"); got != wantSign {
+					t.Errorf("OK-ACCESS-SIGN mismatch")
+				}
+				_, _ = io.WriteString(w, `{"code":"0","msg":"","data":[{"ordId":"312269865356374016","sCode":"0","sMsg":"","avgPx":"3610.5","accFillSz":"0.1"}]}`)
+			}))
+			defer srv.Close()
+
+			e := NewCEXExecutor("okx", "spot", key, secret, pass, srv.URL, tc.simulated)
+			fill, err := e.PlaceOrder(context.Background(), Order{Symbol: "ETH-USDT", Side: "BUY", Qty: 0.1})
+			if err != nil {
+				t.Fatalf("PlaceOrder: %v", err)
+			}
+			if fill.OrderID != "312269865356374016" {
+				t.Errorf("OrderID = %q", fill.OrderID)
+			}
+			if fill.Qty != 0.1 || fill.Price != 3610.5 {
+				t.Errorf("fill = %+v, want qty 0.1 price 3610.5", fill)
+			}
+		})
+	}
+}
+
+// TestCEXExecutor_OKXPerpTdMode 验证 OKX perp：tdMode=cross + instId 补 -SWAP。
+func TestCEXExecutor_OKXPerpTdMode(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]string
+		_ = json.Unmarshal(raw, &body)
+		if body["tdMode"] != "cross" {
+			t.Errorf("perp tdMode = %q, want cross", body["tdMode"])
+		}
+		if body["instId"] != "TRX-USDT-SWAP" {
+			t.Errorf("perp instId = %q, want TRX-USDT-SWAP", body["instId"])
+		}
+		_, _ = io.WriteString(w, `{"code":"0","msg":"","data":[{"ordId":"1","sCode":"0"}]}`)
+	}))
+	defer srv.Close()
+
+	e := NewCEXExecutor("okx", "perp", "k", "s", "p", srv.URL, true)
+	if _, err := e.PlaceOrder(context.Background(), Order{Symbol: "TRX-USDT-SWAP", Side: "SELL", Qty: 10}); err != nil {
+		t.Fatalf("PlaceOrder: %v", err)
+	}
+}
+
+// TestCEXExecutor_OKXOrderError 验证 OKX 业务拒绝（code != 0）映射错误。
+func TestCEXExecutor_OKXOrderError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `{"code":"51000","msg":"Parameter 'sz' error.","data":[]}`)
+	}))
+	defer srv.Close()
+
+	e := NewCEXExecutor("okx", "spot", "k", "s", "p", srv.URL, true)
+	if _, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTC-USDT", Side: "BUY", Qty: 99999}); err == nil {
+		t.Fatal("want error on code!=0, got nil")
+	} else if !strings.Contains(err.Error(), "51000") {
+		t.Errorf("error should carry code 51000, got %v", err)
+	}
+}
+
+// TestCEXExecutor_UnsupportedVenue 验证未知 venue 拒绝。
+func TestCEXExecutor_UnsupportedVenue(t *testing.T) {
+	e := NewCEXExecutor("gate", "spot", "k", "s", "", "http://x", false)
+	if _, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTCUSDT", Side: "BUY", Qty: 1}); err == nil {
+		t.Fatal("want error on unsupported venue, got nil")
+	}
+}
+
+// TestBinanceSignKnownVector 固定向量验证 binanceSign（HMAC-SHA256 hex）。
+func TestBinanceSignKnownVector(t *testing.T) {
+	got := binanceSign("secret", "symbol=BTCUSDT")
+	// 手工计算预期（固定输入/密钥 → 固定输出）。
+	want := hmacHex("secret", "symbol=BTCUSDT")
+	if got != want {
+		t.Errorf("binanceSign = %q, want %q", got, want)
+	}
+}
+
+// TestOKXSignKnownVector 固定向量验证 okxSign（base64 HMAC）。
+func TestOKXSignKnownVector(t *testing.T) {
+	got := okxSign("secret", "2026-08-20T00:00:00.000ZPOST/api/v5/trade/order{}")
+	want := base64.StdEncoding.EncodeToString(hmacSHA256("secret", "2026-08-20T00:00:00.000ZPOST/api/v5/trade/order{}"))
+	if got != want {
+		t.Errorf("okxSign = %q, want %q", got, want)
+	}
+}
+
+func hmacHex(secret, msg string) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(msg))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func hmacSHA256(secret, msg string) []byte {
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(msg))
+	return mac.Sum(nil)
+}
