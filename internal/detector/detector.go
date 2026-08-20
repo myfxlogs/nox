@@ -18,6 +18,7 @@ const (
 	TypeCrossVenue    OppType = "CROSS_VENUE"
 	TypeFundingHedge  OppType = "FUNDING_HEDGE"
 	TypeCarry         OppType = "CARRY"
+	TypePerpFunding   OppType = "PERP_FUNDING" // D-064 跨所 perp funding 价差
 )
 
 // Candidate 是检测器产出的原始候选（评估器消费）。

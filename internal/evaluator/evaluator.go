@@ -69,7 +69,7 @@ func Evaluate(c detector.Candidate, cfg Config, spreadBuy, spreadSell, commissio
 	case detector.TypeCrossVenue:
 		// 价差型：一次性 bps，gross 已含双边点差 → 不再扣 spread（D-035）
 		netBps = grossBps - commissionBps - slippageCost
-	case detector.TypeFundingHedge, detector.TypeCarry:
+	case detector.TypeFundingHedge, detector.TypeCarry, detector.TypePerpFunding:
 		// 息差型：净年化（百分点）= gross − 资金机会成本（D-029/D-036）
 		netBps = grossBps - cfg.MarginRateAnnual
 		// 一次性摩擦只进 breakeven_days：按净年化推日息差（bps_daily = pct/100×10⁴/365）
