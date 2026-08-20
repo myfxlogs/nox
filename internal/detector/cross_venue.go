@@ -16,9 +16,13 @@ type CrossVenueDetector struct {
 
 func (d *CrossVenueDetector) Type() OppType { return TypeCrossVenue }
 
-func (d *CrossVenueDetector) Scan(_ context.Context, snapshot map[string]map[string]bus.Quote, _ FactProvider) []Candidate {
+func (d *CrossVenueDetector) Scan(_ context.Context, snapshot map[string]map[string]bus.Quote, fp FactProvider) []Candidate {
 	var out []Candidate
 	now := time.Now()
+	var modes map[string]map[string]int64
+	if fp != nil {
+		modes = fp.TradeModes()
+	}
 	for canonical, venues := range snapshot {
 		if len(venues) < 2 {
 			continue
@@ -31,11 +35,18 @@ func (d *CrossVenueDetector) Scan(_ context.Context, snapshot map[string]map[str
 					continue
 				}
 				minBps := crossMinBpsFor([]string{a.VenueType, b.VenueType}, d.CexMinGrossBps, d.CfdMinGrossBps)
+				// 可交易性腿过滤（D-060 F4）：买腿须可开多、卖腿须可开空；未知放行。
+				if !legTradable(modes, canonical, a.VenueKey(), true) || !legTradable(modes, canonical, b.VenueKey(), false) {
+					continue
+				}
 				// 买 A（按 A.ask）卖 B（按 B.bid）：利润 = B.bid - A.ask（D-030 修正符号）
 				if c := tryCross(canonical, &a, &b, minBps); c != nil {
 					out = append(out, *c)
 				}
 				// 反向：买 B 卖 A
+				if !legTradable(modes, canonical, b.VenueKey(), true) || !legTradable(modes, canonical, a.VenueKey(), false) {
+					continue
+				}
 				if c := tryCross(canonical, &b, &a, minBps); c != nil {
 					out = append(out, *c)
 				}

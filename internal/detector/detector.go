@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"arb/internal/bus"
+	"arb/internal/fact"
 )
 
 // OppType 机会类型（§2.6）。
@@ -35,6 +36,25 @@ type Candidate struct {
 type FactProvider interface {
 	FundingFacts() map[string]map[string]float64 // canonical → venue → 年化
 	SwapFacts() map[string]map[string][2]float64 // canonical → venue → [long, short]
+	TradeModes() map[string]map[string]int64     // canonical → venueKey → mode（TTL 过滤后；D-060 F4）
+}
+
+// legTradable F4 可交易性腿过滤：买腿（开多）要求 LongOnly/FullAccess，卖腿（开空）要求
+// ShortOnly/FullAccess；无 Fact（未知/TTL 过期）放行——venue 服务端拒单是最终权威（F5），
+// 冷启动期不空白化矩阵。已知不兼容 → false（不产候选）。
+func legTradable(modes map[string]map[string]int64, canonical, venueKey string, buy bool) bool {
+	vm, ok := modes[canonical]
+	if !ok {
+		return true
+	}
+	mode, ok := vm[venueKey]
+	if !ok {
+		return true
+	}
+	if buy {
+		return mode == fact.TradeModeLongOnly || mode == fact.TradeModeFull
+	}
+	return mode == fact.TradeModeShortOnly || mode == fact.TradeModeFull
 }
 
 // Detector 是检测器接口（§5）。

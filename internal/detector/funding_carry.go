@@ -74,8 +74,10 @@ func (d *CarryDetector) Scan(_ context.Context, snapshot map[string]map[string]b
 	var out []Candidate
 	now := time.Now()
 	var swapFacts map[string]map[string][2]float64
+	var modes map[string]map[string]int64
 	if fp != nil {
 		swapFacts = fp.SwapFacts()
+		modes = fp.TradeModes()
 	}
 	for canonical, venues := range snapshot {
 		if len(venues) < 2 {
@@ -89,6 +91,10 @@ func (d *CarryDetector) Scan(_ context.Context, snapshot map[string]map[string]b
 				}
 				a, b := venues[vkeys[i]], venues[vkeys[j]]
 				if stale(a, now, d.FreshnessTTL) || stale(b, now, d.FreshnessTTL) {
+					continue
+				}
+				// 可交易性腿过滤（D-060 F4，仅 Carry）：买腿须可开多、卖腿须可开空；未知放行。
+				if !legTradable(modes, canonical, a.VenueKey(), true) || !legTradable(modes, canonical, b.VenueKey(), false) {
 					continue
 				}
 				swapsA, okA := lookupSwap(swapFacts, canonical, a.Venue)
