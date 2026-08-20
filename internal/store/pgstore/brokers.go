@@ -175,8 +175,27 @@ func (s *Store) CanonicalContractProfile(ctx context.Context, canonical string) 
 	return val, true, nil
 }
 
+// ContractSizeByCanonical 返回 venue 侧该 canonical 映射的合约规格（D-062 显示层 USD 派生）。
+// 取该 venue+canonical 行的 contract_size（D-061 对称桶保证同 canonical 跨 venue CS 一致，
+// 故 venue_buy 侧即代表）。ok=false = 未映射/CS 未知（NULL），调用方回退 0。
+func (s *Store) ContractSizeByCanonical(ctx context.Context, venue, canonical string) (float64, bool, error) {
+	var val float64
+	err := s.pool.QueryRow(ctx, `
+		SELECT contract_size FROM broker_symbol_map
+		WHERE venue = $1 AND canonical = $2 AND contract_size IS NOT NULL
+		LIMIT 1
+	`, venue, canonical).Scan(&val)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, false, nil
+		}
+		return 0, false, err
+	}
+	return val, true, nil
+}
+
 // BackfillSymbolContracts 为 venue 下 contract_size 为 NULL 的既有映射补写权威合约
-//（broker 自取，D-042 后启动时回填；历史映射先于合约采集功能存在，NULL 使规格画像为空 →
+// （broker 自取，D-042 后启动时回填；历史映射先于合约采集功能存在，NULL 使规格画像为空 →
 // 校验形同虚设）。未命中符号保持 NULL（合约未知，跳过校验，合法）。
 func (s *Store) BackfillSymbolContracts(ctx context.Context, venue string, contracts map[string]float64) error {
 	for sym, cs := range contracts {

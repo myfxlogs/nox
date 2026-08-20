@@ -158,6 +158,11 @@ message Opportunity {
   optional double breakeven_days = 13;  // 息差型；价差型缺省
   double net_usd = 18;        // 与 net_bps 同语义：价差型=一次性 USD（net_bps/10000×notional）；息差型=年化 USD/年（net_bps/100×notional，D-053）
   double notional_usd = 19;   // 本次 net_usd 换算使用的单笔名义（前端「按单笔 $X 估算」标注，D-053）
+  // D-062 显示层 USD 单位化（存储不动，API 派生；CS 缺失 → 全 0，前端回退 bps）：
+  double gap_usd_per_unit = 20;     // price_sell − price_buy（$/桶、$/盎司、$/币；入场基差展示口径）
+  double net_usd_per_lot = 21;      // 价差型一次性 USD/手 = net_bps/1e4 × CS × price_buy；息差型不填
+  double net_usd_per_lot_day = 22;  // 息差型 USD/日/手 = net_bps/100 × CS × price_buy / 365；价差型不填
+  double cost_usd_per_lot = 23;     // 一次性摩擦 USD/手 = Σcosts/1e4 × CS × price_buy
   google.protobuf.Timestamp quote_time = 14;
   google.protobuf.Timestamp expires_at = 15;
   google.protobuf.Timestamp created_at = 16;
