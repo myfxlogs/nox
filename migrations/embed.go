@@ -28,3 +28,9 @@ var PersonalLedgerSQL string
 
 //go:embed 0009_opportunities_canonical.sql
 var OpportunitiesCanonicalSQL string
+
+//go:embed 0010_exchange_configs.sql
+var ExchangeConfigsSQL string
+
+//go:embed 0011_exchange_simulated.sql
+var ExchangeSimulatedSQL string

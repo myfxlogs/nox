@@ -61,21 +61,6 @@ type Config struct {
 	// OpportunityNotionalUSD net_usd 换算的单笔名义金额（ARB_OPP_NOTIONAL_USD，缺省 1000）。
 	// bps 无量纲 → USD 必须有单笔名义假设；标注「按单笔 $X 估算」。
 	OpportunityNotionalUSD float64
-
-	// === CEX 账户（D-053）===
-	// CexAccounts 有 key 的交易所账户（余额/净值查询源）；只读调用，不执行。缺 key 不建 querier。
-	CexAccounts []CexKey
-}
-
-// CexKey 一个 CEX 交易所的签名账户凭据（D-053）。
-// 密钥只来自 env（.env gitignore），不进 git；OKX 需 passphrase，Binance 留空。
-type CexKey struct {
-	Venue      string // binance / okx
-	VenueType  string // spot
-	APIKey     string
-	APISecret  string
-	Passphrase string // OKX 必填；Binance 空
-	BaseURL    string // spot base（Binance 走代理；OKX www.okx.com）
 }
 
 // Load 从环境变量加载配置，未设置用默认值。
@@ -109,30 +94,7 @@ func Load() *Config {
 		NotifyMinNetBps:          envFloat("ARB_NOTIFY_MIN_NET_BPS", 0),
 		BrokerPosPollInterval:    envDur("ARB_BROKER_POS_POLL_MS", 5*time.Second),
 		OpportunityNotionalUSD:   envFloat("ARB_OPP_NOTIONAL_USD", 1000),
-		CexAccounts:             loadCexKeys(),
 	}
-}
-
-// loadCexKeys 从 env 读 CEX 交易所密钥；无 key 的交易所不建 querier（D-053 缺省优雅降级）。
-func loadCexKeys() []CexKey {
-	var out []CexKey
-	// Binance spot（经 BINANCE_PROXY_URL 代理 base，与采集共用）
-	if k, s := os.Getenv("ARB_CEX_BINANCE_API_KEY"), os.Getenv("ARB_CEX_BINANCE_API_SECRET"); k != "" && s != "" {
-		base := os.Getenv("BINANCE_PROXY_URL")
-		if base == "" {
-			base = "https://fapi.binance.com" // 无代理直接连；451 由部署负责
-		}
-		out = append(out, CexKey{Venue: "binance", VenueType: "spot", APIKey: k, APISecret: s, BaseURL: base})
-	}
-	// OKX spot
-	if k, s := os.Getenv("ARB_CEX_OKX_API_KEY"), os.Getenv("ARB_CEX_OKX_API_SECRET"); k != "" && s != "" {
-		out = append(out, CexKey{
-			Venue: "okx", VenueType: "spot", APIKey: k, APISecret: s,
-			Passphrase: os.Getenv("ARB_CEX_OKX_API_PASSPHRASE"),
-			BaseURL:    "https://www.okx.com",
-		})
-	}
-	return out
 }
 
 func envFloat(key string, def float64) float64 {

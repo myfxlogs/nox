@@ -59,6 +59,11 @@ service DashboardService {
   rpc RemoveBroker(RemoveBrokerRequest) returns (RemoveBrokerResponse);
   rpc ListBrokerAccounts(ListBrokerAccountsRequest) returns (ListBrokerAccountsResponse);
   rpc VerifyAccount(VerifyAccountRequest) returns (VerifyAccountResponse);
+
+  // CEX 交易所管理（D-054：后台增删，运行时生效，对齐 broker 账户管理）
+  rpc ListExchanges(ListExchangesRequest) returns (ListExchangesResponse);
+  rpc AddExchange(AddExchangeRequest) returns (AddExchangeResponse);
+  rpc RemoveExchange(RemoveExchangeRequest) returns (RemoveExchangeResponse);
   rpc BrokerSymbols(BrokerSymbolsRequest) returns (BrokerSymbolsResponse);
   rpc SetBrokerAccountAlias(SetBrokerAccountAliasRequest) returns (SetBrokerAccountAliasResponse);
   rpc SetBrokerDisabled(SetBrokerDisabledRequest) returns (SetBrokerDisabledResponse);
@@ -664,6 +669,45 @@ message ListBrokerAccountsRequest {}
 message ListBrokerAccountsResponse {
   repeated BrokerAccount accounts = 1;
 }
+
+// CEX 交易所配置（D-054）。secret 永不回传（列表只掩码 api_key）。
+message ExchangeConfig {
+  string id = 1;
+  string venue = 2;        // binance / okx / 未来其他
+  string venue_type = 3;   // spot 等
+  string label = 4;        // 别名；空 = 未设置
+  string api_key = 5;      // 列表掩码（前 4 + ***）
+  string base_url = 6;     // 空 = venue 默认（binance=代理、okx=实盘）
+  google.protobuf.Timestamp created_at = 7;
+  bool simulated = 8;      // OKX 模拟盘：实盘域名 + 请求头 x-simulated-trading:1（demo key 必开，D-054）
+}
+
+message ListExchangesRequest {}
+
+message ListExchangesResponse {
+  repeated ExchangeConfig exchanges = 1;
+}
+
+message AddExchangeRequest {
+  string venue = 1;        // binance / okx
+  string venue_type = 2;   // spot（默认）
+  string label = 3;        // 别名；可选
+  string api_key = 4;
+  string api_secret = 5;   // 明文提交，仅存后端（D-043 前端零信任）
+  string passphrase = 6;   // OKX；其他交易所留空
+  string base_url = 7;     // 可选；空 = venue 默认
+  bool simulated = 8;      // OKX 模拟盘（x-simulated-trading:1）；demo key 必开
+}
+
+message AddExchangeResponse {
+  ExchangeConfig exchange = 1;
+}
+
+message RemoveExchangeRequest {
+  string id = 1;
+}
+
+message RemoveExchangeResponse {}
 
 message VerifyAccountRequest {
   int32 platform = 1;   // 0=MT4, 1=MT5

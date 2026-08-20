@@ -2,8 +2,10 @@ package pgstore
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -31,36 +33,43 @@ func testStore(t *testing.T) *Store {
 		t.Fatalf("pgstore.New: %v", err)
 	}
 	t.Cleanup(s.Close)
-	ensureBaseApplied(t, ctx, s)
-	if err := s.Migrate(ctx); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
+	prepareTestSchema(t, s)
 	if _, err := s.pool.Exec(ctx, "TRUNCATE investment_records, position_daily_income CASCADE"); err != nil {
 		t.Fatalf("TRUNCATE investment_records, position_daily_income: %v", err)
 	}
 	return s
 }
 
-// ensureBaseApplied 使新鲜测试库与生产库同态：base schema（v1..N-1）标记已应用，Migrate 只跑被测的最后一个版本（v7）。
-// 背景：0001_init.sql 内部也会建 schema_migrations（无 IF NOT EXISTS），与 migrate.go 外层创建冲突（存量问题，
-// 生产库因 base 已应用而从不重跑 0001、不触发）；测试库为新鲜库，须先预标记 base 版本才能走通 Migrate。
-func ensureBaseApplied(t *testing.T, ctx context.Context, s *Store) {
+// rebuildTestSchemaOnce 每个测试进程只重建一次测试库 schema（prepareTestSchema）。
+var rebuildTestSchemaOnce sync.Once
+
+// prepareTestSchema 将测试库重建为与生产完全同态的最新 schema（v1..N 全量真执行）。
+// 背景（D-054 修）：旧 ensureBaseApplied 只把 v1..N-1 预标记为「已应用」、不执行其 SQL，
+// 导致「最后一个迁移」每次前移时，前序版本的建表/改列（如 0009 opportunities ADD canonical）从不真跑
+// ——测试库 schema 随迁移数漂移，每新增一个迁移就把边界前移一位 = 回归。且旧注释称 0001_init.sql 会建
+// schema_migrations 实为过时（0001 并不建，migrate.go 的 IF NOT EXISTS 已兜底）。
+// 改为每次测试进程 DROP schema + 全量 Migrate：schema 恒等于生产、确定性重建；安全闸 = testStore 的
+// dbname 必须含 "test"（测试库可销毁数据，仅 pgstore 测试进程访问，无跨包并行冲突）。
+func prepareTestSchema(t *testing.T, s *Store) {
 	t.Helper()
-	if _, err := s.pool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS schema_migrations (
-			version     INTEGER PRIMARY KEY,
-			applied_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-		)
-	`); err != nil {
-		t.Fatalf("create schema_migrations: %v", err)
-	}
-	// 迁移是追加式（v1..N）；预标记除最后一个（被测迁移）外全部版本。
-	for _, m := range migrationFiles[:len(migrationFiles)-1] {
-		if _, err := s.pool.Exec(ctx,
-			`INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING`, m.version,
-		); err != nil {
-			t.Fatalf("mark migration v%d applied: %v", m.version, err)
+	ctx := context.Background()
+	var rebuildErr error
+	rebuildTestSchemaOnce.Do(func() {
+		if _, err := s.pool.Exec(ctx, `DROP SCHEMA public CASCADE`); err != nil {
+			rebuildErr = fmt.Errorf("drop schema: %w", err)
+			return
 		}
+		if _, err := s.pool.Exec(ctx, `CREATE SCHEMA public`); err != nil {
+			rebuildErr = fmt.Errorf("create schema: %w", err)
+			return
+		}
+		if err := s.Migrate(ctx); err != nil {
+			rebuildErr = fmt.Errorf("migrate: %w", err)
+			return
+		}
+	})
+	if rebuildErr != nil {
+		t.Fatalf("测试库重建失败: %v", rebuildErr)
 	}
 }
 
