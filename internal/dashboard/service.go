@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -47,6 +48,11 @@ type Service struct {
 	// tradeModes 单腿 trade_mode 查询（D-060 F5 执行预检，防裸腿）：canonical+venueKey → mode。
 	// nil = 未接线（测试直接构造 Service，预检放行）。main 注入 factCache.TradeMode（不引入 exec→engine 依赖）。
 	tradeModes func(canonical, venueKey string) (int64, bool)
+	// legContractSize MT 腿合约规格查询（D-060 实施修正② 卖腿等名义反算）：venueKey+venueSymbol → CS。
+	// nil = 未接线 → resolveLegs 报错（fail-safe）。main 接 broker_symbol_map.contract_size。
+	legContractSize func(venueKey, venueSymbol string) (float64, bool)
+	// maxLegImbalance 卖腿名义不平衡上限（百分比，默认 2，D-028/D-060 实施修正②）。
+	maxLegImbalance float64
 }
 
 // New 创建 dashboard 服务。reviewer 为复盘触发闭包（nil 则平仓后不触发）；
@@ -66,6 +72,14 @@ func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *
 func (s *Service) SetTradeModes(f func(canonical, venueKey string) (int64, bool)) {
 	s.tradeModes = f
 }
+
+// SetLegContractSize 注入 MT 腿合约规格查询（D-060 实施修正②）。nil = 未接线（resolveLegs 报错）。
+func (s *Service) SetLegContractSize(f func(venueKey, venueSymbol string) (float64, bool)) {
+	s.legContractSize = f
+}
+
+// SetMaxLegImbalancePct 注入卖腿名义不平衡上限（百分比；≤0 回退默认 2）。
+func (s *Service) SetMaxLegImbalancePct(p float64) { s.maxLegImbalance = p }
 
 // --- 快照类 ---
 
@@ -449,16 +463,56 @@ func (s *Service) checkTradability(found *pgstore.Opportunity) error {
 
 // resolveLegs 从 qbus 取双腿 broker 原生符号构造下单规格（D-051 修②）。
 // canonical 用机会列（非 ID 解析）；缺任一腿报价 → 返回错误（执行方 FAILED 透传）。
+// D-060 实施修正②（D-028 补课）：卖腿等名义反算 sellQty = qty×CS_buy/CS_sell（0.01 取整）
+// + 名义不平衡拒绝 + PriceExpected 落腿。实证：position #2 油 1000:100 桶/手同 qty 0.1
+// 发卖腿被 IC 拒「Invalid volume」→ LEGGED（等名义反算 D-028 设计了但从未实现）。
 func (s *Service) resolveLegs(found *pgstore.Opportunity, qty float64) ([]exec.LegSpec, error) {
 	qbuy, okBuy := s.qbus.Latest(found.Canonical, found.VenueBuy)
 	qsell, okSell := s.qbus.Latest(found.Canonical, found.VenueSell)
 	if !okBuy || !okSell {
 		return nil, errors.New("buy/sell leg quote unavailable")
 	}
+	csBuy, err := s.legContractSizeOf(found.VenueBuy, qbuy.VenueSymbol)
+	if err != nil {
+		return nil, err
+	}
+	csSell, err := s.legContractSizeOf(found.VenueSell, qsell.VenueSymbol)
+	if err != nil {
+		return nil, err
+	}
+	sellQty := math.Round(qty*csBuy/csSell*100) / 100
+	notionalBuy := qty * csBuy * qbuy.Ask
+	notionalSell := sellQty * csSell * qsell.Bid
+	maxImb := s.maxLegImbalance
+	if maxImb <= 0 {
+		maxImb = 2.0
+	}
+	imb := math.Abs(notionalSell-notionalBuy) / notionalBuy
+	if notionalBuy <= 0 || imb > maxImb/100 {
+		return nil, fmt.Errorf("leg notional imbalance: buy $%.2f vs sell $%.2f (%.2f%% > %.1f%%)",
+			notionalBuy, notionalSell, imb*100, maxImb)
+	}
 	return []exec.LegSpec{
-		{VenueKey: found.VenueBuy, VenueSymbol: qbuy.VenueSymbol, Side: "BUY", Qty: qty},
-		{VenueKey: found.VenueSell, VenueSymbol: qsell.VenueSymbol, Side: "SELL", Qty: qty},
+		{VenueKey: found.VenueBuy, VenueSymbol: qbuy.VenueSymbol, Side: "BUY", Qty: qty, PriceExpected: qbuy.Ask},
+		{VenueKey: found.VenueSell, VenueSymbol: qsell.VenueSymbol, Side: "SELL", Qty: sellQty, PriceExpected: qsell.Bid},
 	}, nil
+}
+
+// legContractSizeOf 单腿合约规格：CEX 腿 CS=1（qty 即基础币数）；MT 腿经 legContractSize
+// 注入查询（main 接 broker_symbol_map.contract_size，D-042 backfilled）。缺失/未接线 →
+// 报错拒不猜（fail-safe，防 position #2 形态复发）。
+func (s *Service) legContractSizeOf(venueKey, venueSymbol string) (float64, error) {
+	if !strings.HasSuffix(venueKey, ":mt5") && !strings.HasSuffix(venueKey, ":mt4") {
+		return 1.0, nil
+	}
+	if s.legContractSize == nil {
+		return 0, errors.New("leg contract size resolver not wired")
+	}
+	cs, ok := s.legContractSize(venueKey, venueSymbol)
+	if !ok || cs <= 0 {
+		return 0, fmt.Errorf("contract size unknown for %s %s (reject: notional derivation unavailable)", venueKey, venueSymbol)
+	}
+	return cs, nil
 }
 
 func (s *Service) ClosePosition(ctx context.Context, req *connect.Request[v1.ClosePositionRequest]) (*connect.Response[v1.ClosePositionResponse], error) {

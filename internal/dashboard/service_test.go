@@ -19,7 +19,7 @@ func TestResolveLegs(t *testing.T) {
 	b.Publish(bus.Quote{Symbol: "EURUSD", Venue: "b", VenueType: "mt5", Bid: 1.0, Ask: 1.0001, Time: now, VenueSymbol: "EURUSDm"})
 	b.Publish(bus.Quote{Symbol: "EURUSD", Venue: "s", VenueType: "mt5", Bid: 1.0002, Ask: 1.0003, Time: now, VenueSymbol: "EURUSDm"})
 
-	s := &Service{qbus: b}
+	s := &Service{qbus: b, legContractSize: func(_, sym string) (float64, bool) { return 100000, true }}
 	found := &pgstore.Opportunity{Canonical: "EURUSD", VenueBuy: "b:mt5", VenueSell: "s:mt5"}
 
 	legs, err := s.resolveLegs(found, 0.1)
@@ -42,6 +42,53 @@ func TestResolveLegs(t *testing.T) {
 	}
 	if buy.Qty != 0.1 || sell.Qty != 0.1 {
 		t.Errorf("Qty want 0.1 / 0.1, got %v / %v", buy.Qty, sell.Qty)
+	}
+	if buy.PriceExpected != 1.0001 || sell.PriceExpected != 1.0002 {
+		t.Errorf("PriceExpected want 1.0001 / 1.0002, got %v / %v", buy.PriceExpected, sell.PriceExpected)
+	}
+}
+
+// TestResolveLegsNotionalScaling D-060 实施修正②：不等 CS（油 1000:100 桶/手）卖腿等名义反算
+// 10×；CS 缺失拒；未接线拒；取整致不平衡超限拒。
+func TestResolveLegsNotionalScaling(t *testing.T) {
+	b := bus.New()
+	now := time.Now()
+	b.Publish(bus.Quote{Symbol: "BRENT", Venue: "b", VenueType: "mt5", Bid: 93.8, Ask: 93.8, Time: now, VenueSymbol: "UKOILm"})
+	b.Publish(bus.Quote{Symbol: "BRENT", Venue: "s", VenueType: "mt5", Bid: 93.8, Ask: 93.8, Time: now, VenueSymbol: "XBRUSD"})
+	found := &pgstore.Opportunity{Canonical: "BRENT", VenueBuy: "b:mt5", VenueSell: "s:mt5"}
+
+	cs := map[string]float64{"UKOILm": 1000, "XBRUSD": 100}
+	s := &Service{qbus: b, legContractSize: func(_, sym string) (float64, bool) { v, ok := cs[sym]; return v, ok }}
+
+	legs, err := s.resolveLegs(found, 0.1)
+	if err != nil {
+		t.Fatalf("oil pair: %v", err)
+	}
+	if legs[1].Qty != 1.0 {
+		t.Errorf("sell qty want 1.0 (0.1×1000/100), got %v", legs[1].Qty)
+	}
+
+	// CS 缺失 → 拒。
+	s.legContractSize = func(_, _ string) (float64, bool) { return 0, false }
+	if _, err := s.resolveLegs(found, 0.1); err == nil || !strings.Contains(err.Error(), "contract size unknown") {
+		t.Errorf("missing CS want reject, got %v", err)
+	}
+
+	// 未接线 → 拒。
+	s.legContractSize = nil
+	if _, err := s.resolveLegs(found, 0.1); err == nil || !strings.Contains(err.Error(), "not wired") {
+		t.Errorf("not wired want reject, got %v", err)
+	}
+
+	// 取整致不平衡 >2% → 拒（CS 1:6，qty 0.1 → sell 0.02，名义差 20%）。
+	b2 := bus.New()
+	b2.Publish(bus.Quote{Symbol: "X", Venue: "b", VenueType: "mt5", Bid: 100, Ask: 100, Time: now, VenueSymbol: "A"})
+	b2.Publish(bus.Quote{Symbol: "X", Venue: "s", VenueType: "mt5", Bid: 100, Ask: 100, Time: now, VenueSymbol: "B"})
+	cs2 := map[string]float64{"A": 1, "B": 6}
+	s2 := &Service{qbus: b2, legContractSize: func(_, sym string) (float64, bool) { v, ok := cs2[sym]; return v, ok }}
+	f2 := &pgstore.Opportunity{Canonical: "X", VenueBuy: "b:mt5", VenueSell: "s:mt5"}
+	if _, err := s2.resolveLegs(f2, 0.1); err == nil || !strings.Contains(err.Error(), "imbalance") {
+		t.Errorf("imbalance want reject, got %v", err)
 	}
 }
 
