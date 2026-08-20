@@ -825,7 +825,7 @@ func buildCanonicalIdx(all []pgstore.SymbolMapping, seeds []string) canonicalIdx
 		contract: make(map[string]float64),
 	}
 	for _, c := range seeds {
-		idx.aliases[c] = c
+		idx.aliases[c] = Canonicalize(c)
 	}
 	counts := make(map[string]map[float64]int)
 	for _, m := range all {
