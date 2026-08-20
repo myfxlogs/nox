@@ -2,8 +2,10 @@ package dashboard
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
@@ -15,6 +17,7 @@ import (
 
 // testServiceStore 连接 ARB_TEST_PG_SERVICE_DSN 指定的专用测试库（与 pgstore 包测试库隔离，避免并行 TRUNCATE 竞态）。
 // 未设置时跳过；dbname 必须含 "test"（安全闸）。
+// schema 用 D-054 根治模式：每测试进程 DROP schema + 全量 Migrate（v1..N 真执行），与生产完全同态。
 func testServiceStore(t *testing.T) *pgstore.Store {
 	t.Helper()
 	dsn := os.Getenv("ARB_TEST_PG_SERVICE_DSN")
@@ -34,31 +37,42 @@ func testServiceStore(t *testing.T) *pgstore.Store {
 		t.Fatalf("pgstore.New: %v", err)
 	}
 	t.Cleanup(s.Close)
-	// 新鲜测试库与生产库同态：base schema（v1..7）预标记已应用，Migrate 只跑被测的 v8。
-	// 原因同 pgstore 包测试的 ensureBaseApplied：0001_init.sql 内部建 schema_migrations（无 IF NOT EXISTS），
-	// 与 migrate.go 外层创建冲突（存量问题，生产库 base 已应用不触发）。
-	if _, err := s.Pool().Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS schema_migrations (
-			version     INTEGER PRIMARY KEY,
-			applied_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-		)
-	`); err != nil {
-		t.Fatalf("create schema_migrations: %v", err)
-	}
-	for v := 1; v <= 7; v++ {
-		if _, err := s.Pool().Exec(ctx,
-			`INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING`, v,
-		); err != nil {
-			t.Fatalf("mark migration v%d applied: %v", v, err)
-		}
-	}
-	if err := s.Migrate(ctx); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
+	rebuildServiceTestSchema(t, s)
+	// 每测试函数清财务线表（数据隔离；schema 重建每进程仅一次）。
 	if _, err := s.Pool().Exec(ctx, "TRUNCATE investment_records, position_daily_income, personal_positions CASCADE"); err != nil {
 		t.Fatalf("TRUNCATE investment_records, position_daily_income, personal_positions: %v", err)
 	}
 	return s
+}
+
+// rebuildServiceTestSchemaOnce 每个测试进程只重建一次服务测试库 schema。
+var rebuildServiceTestSchemaOnce sync.Once
+
+// rebuildServiceTestSchema DROP schema + 全量 Migrate，使服务测试库 schema 恒等于生产最新
+// （同 pgstore.prepareTestSchema，D-054 根治）。旧实现把 v1..7 预标记「已应用」而不物理执行其
+// SQL → 每新增一个迁移边界就要前移一位，前序表（如 0012 canonical 引用的 broker_symbol_map）
+// 在测试库物理缺失 → 全量 go test 崩（KB: backfill-update-test-seed-rows，复发 3 次）。
+func rebuildServiceTestSchema(t *testing.T, s *pgstore.Store) {
+	t.Helper()
+	ctx := context.Background()
+	var rebuildErr error
+	rebuildServiceTestSchemaOnce.Do(func() {
+		if _, err := s.Pool().Exec(ctx, `DROP SCHEMA public CASCADE`); err != nil {
+			rebuildErr = fmt.Errorf("drop schema: %w", err)
+			return
+		}
+		if _, err := s.Pool().Exec(ctx, `CREATE SCHEMA public`); err != nil {
+			rebuildErr = fmt.Errorf("create schema: %w", err)
+			return
+		}
+		if err := s.Migrate(ctx); err != nil {
+			rebuildErr = fmt.Errorf("migrate: %w", err)
+			return
+		}
+	})
+	if rebuildErr != nil {
+		t.Fatalf("服务测试库重建失败: %v", rebuildErr)
+	}
 }
 
 // TestAddInvestmentRecord_InvalidKind：kind 非法 → connect CodeInvalidArgument（store 为空也能拦住，后端校验在前）。
