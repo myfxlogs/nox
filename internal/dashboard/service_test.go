@@ -184,3 +184,32 @@ func TestNetUSD(t *testing.T) {
 		}
 	}
 }
+
+// TestResolveLegsVolumePreflight D-061 量规格预检：qty 低于 venue 最小手数 → 拒（买/卖腿同检）；
+// 未知（ok=false）放行；CEX 腿跳过。
+func TestResolveLegsVolumePreflight(t *testing.T) {
+	b := bus.New()
+	now := time.Now()
+	b.Publish(bus.Quote{Symbol: "BRENT", Venue: "b", VenueType: "mt5", Bid: 95, Ask: 95, Time: now, VenueSymbol: "UKOILm"})
+	b.Publish(bus.Quote{Symbol: "BRENT", Venue: "s", VenueType: "mt5", Bid: 95, Ask: 95, Time: now, VenueSymbol: "BRENT"})
+	found := &pgstore.Opportunity{Canonical: "BRENT", VenueBuy: "b:mt5", VenueSell: "s:mt5"}
+
+	cs := map[string]float64{"UKOILm": 1000, "BRENT": 1000}
+	s := &Service{qbus: b,
+		legContractSize: func(_, sym string) (float64, bool) { v, ok := cs[sym]; return v, ok },
+		legMinLots:      func(_, sym string) (float64, bool) { if sym == "BRENT" { return 1.0, true }; return 0.01, true },
+	}
+	// qty 0.05：卖腿 BRENT min=1.0 → 拒。
+	if _, err := s.resolveLegs(found, 0.05); err == nil || !strings.Contains(err.Error(), "below venue min lot") {
+		t.Errorf("sell below min want reject, got %v", err)
+	}
+	// qty 1.0：双腿合法 → 过。
+	if _, err := s.resolveLegs(found, 1.0); err != nil {
+		t.Errorf("qty 1.0 want pass, got %v", err)
+	}
+	// 未知（ok=false）→ 放行。
+	s.legMinLots = func(_, _ string) (float64, bool) { return 0, false }
+	if _, err := s.resolveLegs(found, 0.05); err != nil {
+		t.Errorf("unknown min want pass, got %v", err)
+	}
+}

@@ -125,6 +125,12 @@ func TestSymbolSeed(t *testing.T) {
 				t.Logf("%s: %s→%s TradeMode=0 禁交易，不映射", a.Venue, sym, canon)
 				continue
 			}
+			// D-061 映射门禁（补旁路）：与 SaveSymbolMapping RPC 同真相源（CanonicalContractProfile
+			// 众数，D-042）——CS 不一致跳过不配对。IC 油（100 桶/手）混入 1000 桶/手桶即本旁路实证。
+			if exp, ok, err := st.CanonicalContractProfile(ctx, canon); err == nil && ok && g.ContractSize > 0 && g.ContractSize != exp {
+				t.Logf("GATE %s: %s→%s 合约 %.0f ≠ 桶期望 %.0f（不对称合约不配对，D-061）", a.Venue, sym, canon, g.ContractSize, exp)
+				continue
+			}
 			if _, dup := existing[sym]; dup {
 				continue // 幂等：天然键已存在
 			}

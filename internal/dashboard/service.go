@@ -53,6 +53,9 @@ type Service struct {
 	legContractSize func(venueKey, venueSymbol string) (float64, bool)
 	// maxLegImbalance 卖腿名义不平衡上限（百分比，默认 2，D-028/D-060 实施修正②）。
 	maxLegImbalance float64
+	// legMinLots MT 腿最小手数查询（D-061 量规格预检）：venueKey+venueSymbol → min lots。
+	// nil/未知 = 放行（venue 服务端拒单兜底；position #3 实证：qty 0.1 < IC XBRUSD min 1.0 → LEGGED）。
+	legMinLots func(venueKey, venueSymbol string) (float64, bool)
 }
 
 // New 创建 dashboard 服务。reviewer 为复盘触发闭包（nil 则平仓后不触发）；
@@ -80,6 +83,11 @@ func (s *Service) SetLegContractSize(f func(venueKey, venueSymbol string) (float
 
 // SetMaxLegImbalancePct 注入卖腿名义不平衡上限（百分比；≤0 回退默认 2）。
 func (s *Service) SetMaxLegImbalancePct(p float64) { s.maxLegImbalance = p }
+
+// SetLegMinLots 注入 MT 腿最小手数查询（D-061）。nil/未知 = 放行。
+func (s *Service) SetLegMinLots(f func(venueKey, venueSymbol string) (float64, bool)) {
+	s.legMinLots = f
+}
 
 // --- 快照类 ---
 
@@ -492,10 +500,33 @@ func (s *Service) resolveLegs(found *pgstore.Opportunity, qty float64) ([]exec.L
 		return nil, fmt.Errorf("leg notional imbalance: buy $%.2f vs sell $%.2f (%.2f%% > %.1f%%)",
 			notionalBuy, notionalSell, imb*100, maxImb)
 	}
+	// 量规格预检（D-061）：双腿 qty 不得低于 venue 最小手数（position #3 实证形态）。
+	if err := s.checkLegVolume(found.VenueBuy, qbuy.VenueSymbol, qty); err != nil {
+		return nil, err
+	}
+	if err := s.checkLegVolume(found.VenueSell, qsell.VenueSymbol, sellQty); err != nil {
+		return nil, err
+	}
 	return []exec.LegSpec{
 		{VenueKey: found.VenueBuy, VenueSymbol: qbuy.VenueSymbol, Side: "BUY", Qty: qty, PriceExpected: qbuy.Ask},
 		{VenueKey: found.VenueSell, VenueSymbol: qsell.VenueSymbol, Side: "SELL", Qty: sellQty, PriceExpected: qsell.Bid},
 	}, nil
+}
+
+// checkLegVolume D-061 量规格预检：qty < venue 最小手数 → 拒（下单前，防单腿被拒 LEGGED）。
+// CEX 腿跳过；解析器未接线/未知 → 放行（服务端拒单兜底）。
+func (s *Service) checkLegVolume(venueKey, venueSymbol string, qty float64) error {
+	if !strings.HasSuffix(venueKey, ":mt5") && !strings.HasSuffix(venueKey, ":mt4") {
+		return nil
+	}
+	if s.legMinLots == nil {
+		return nil
+	}
+	min, ok := s.legMinLots(venueKey, venueSymbol)
+	if !ok || min <= 0 || qty >= min {
+		return nil
+	}
+	return fmt.Errorf("qty %v below venue min lot %.2f for %s %s", qty, min, venueKey, venueSymbol)
 }
 
 // legContractSizeOf 单腿合约规格：CEX 腿 CS=1（qty 即基础币数）；MT 腿经 legContractSize

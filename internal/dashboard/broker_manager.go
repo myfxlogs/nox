@@ -37,6 +37,9 @@ type running struct {
 	querier      reconcile.VenueQuerier
 	symbols      func(ctx context.Context) ([]string, error)      // 拉取服务器符号表
 	symbolGroups func(ctx context.Context) ([]SymbolGroup, error) // 符号表 + 分组（仅服务 BrokerSymbols 展示，按需拉一次）
+	// volumeSpec 单符号最小手数（MT5 SymbolParams SymGroup.MinLots；MT4/未运行 = nil）。
+	// D-061 量规格预检用；known=false = 未知，调用方放行（venue 服务端拒单兜底）。
+	volumeSpec func(ctx context.Context, symbol string) (float64, bool, error)
 	// symbolParams 单符号权威合约规格（MT5 SymbolParams；MT4/未运行 = nil）。零信任：
 	// 保存映射的合约校验数据只信 broker 自取，不信前端传值（D-042）。
 	symbolParams func(ctx context.Context, symbol string) (float64, bool, error)
@@ -414,6 +417,17 @@ func (m *BrokerManager) AllSymbolGroups(ctx context.Context) (map[string][]Symbo
 
 // BrokerContractSize 返回该 venue 服务器符号的权威合约规格（D-042 零信任：校验数据只信 broker，
 // 不信任前端传值）。MT4 / 未运行 / 查询失败 → known=false（合约未知，调用方跳过规格校验）。
+// BrokerMinLots 单符号最小手数（D-061 量规格预检）。known=false = 未知（MT4/未运行），调用方放行。
+func (m *BrokerManager) BrokerMinLots(ctx context.Context, venue, symbol string) (float64, bool, error) {
+	m.mu.Lock()
+	r := m.running[venue]
+	m.mu.Unlock()
+	if r == nil || r.volumeSpec == nil {
+		return 0, false, nil
+	}
+	return r.volumeSpec(ctx, symbol)
+}
+
 func (m *BrokerManager) BrokerContractSize(ctx context.Context, venue, symbol string) (float64, bool, error) {
 	m.mu.Lock()
 	r := m.running[venue]
@@ -528,6 +542,22 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 		}
 		return resp.GetResult(), nil
 	}
+	// 最小手数（D-061 量规格预检）：SymbolParams 单符号取 SymGroup.MinLots。
+	fetchMinLots := func(ctx context.Context, symbol string) (float64, bool, error) {
+		resp, err := ad.MT5Client().SymbolParams(tokenCtx(ctx, ad.Token()), &mt5pb.SymbolParamsRequest{Id: ad.Token(), Symbol: symbol})
+		if err != nil {
+			return 0, false, err
+		}
+		if e := resp.GetError(); e != nil {
+			return 0, false, fmt.Errorf("mt5 symbolParams %s: %s", symbol, e.GetMessage())
+		}
+		sp := resp.GetResult()
+		if sp == nil || sp.GetSymbolGroup() == nil {
+			return 0, false, nil
+		}
+		min := sp.GetSymbolGroup().GetMinLots()
+		return min, min > 0, nil
+	}
 	// 符号表 + 分组：SymbolParamsMany 批量取 SymGroup.GroupName，取反斜杠路径顶层段为分组
 	// （Forex\Major\EURUSD→Forex）。Limit 不设——服务端默认 cap，设小 limit 反而在符号超限时抛异常
 	// （归档 ListingsMany 经验，D-040）。
@@ -605,6 +635,7 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 		symbols:      fetchSymbols,
 		symbolGroups: fetchSymbolGroups,
 		symbolParams: fetchContract,
+		volumeSpec:   fetchMinLots,
 		setSymMap:    ad.SetSymbolMap,
 		resubscribe:  ad.Resubscribe,
 		swap:         func(ctx context.Context) ([]fact.Fact, error) { return ad.SwapFacts(ctx, m.qbus) },
