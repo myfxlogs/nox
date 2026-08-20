@@ -271,7 +271,7 @@ func (s *Service) ListCanonicals(ctx context.Context, req *connect.Request[v1.Li
 	}
 	set := make(map[string]struct{}, len(all)+len(defaultSymbols))
 	for _, c := range defaultSymbols {
-		set[c] = struct{}{}
+		set[Canonicalize(c)] = struct{}{}
 	}
 	for _, mp := range all {
 		set[mp.Canonical] = struct{}{}

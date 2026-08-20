@@ -296,7 +296,7 @@ func (s *Service) canonicals(ctx context.Context) ([]string, error) {
 	}
 	seen := make(map[string]bool)
 	for _, c := range defaultSymbols {
-		seen[c] = true
+		seen[Canonicalize(c)] = true
 	}
 	for _, mp := range mappings {
 		seen[mp.Canonical] = true
