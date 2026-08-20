@@ -75,6 +75,7 @@ service DashboardService {
   rpc DeleteSymbolMapping(DeleteSymbolMappingRequest) returns (DeleteSymbolMappingResponse);
   rpc ListMappingSuggestions(ListMappingSuggestionsRequest) returns (ListMappingSuggestionsResponse);
   rpc ListCanonicals(ListCanonicalsRequest) returns (ListCanonicalsResponse);
+  rpc AutoMapBroker(AutoMapBrokerRequest) returns (AutoMapBrokerResponse);
 
   // Matrix 全景（D-045：全符号跨全账号映射/报价巡检）
   rpc ListMatrixUniverse(ListMatrixUniverseRequest) returns (ListMatrixUniverseResponse);
@@ -877,4 +878,26 @@ message MatrixUniverse {
 
 message ListMatrixUniverseResponse {
   MatrixUniverse universe = 1;
+}
+
+// AutoMapBroker — 一键自动映射（D-066）。
+// 用生产 alias 表 + 合约众数门禁自动识别+映射 broker symbol。
+// 只自动应用 auto 状态（名字+合约匹配）；conflict/multi_hit/trade_disabled 不自动应用。
+message AutoMapBrokerRequest {
+  string venue = 1;
+}
+
+message AutoMapBrokerResult {
+  string broker_symbol = 1;
+  string canonical = 2;      // 匹配到的 canonical（no_match 时为空）
+  string group = 3;
+  double contract_size = 4;
+  string status = 5;         // auto / conflict / multi_hit / trade_disabled / no_match / already_mapped
+  string reason = 6;         // 跳过原因
+}
+
+message AutoMapBrokerResponse {
+  repeated AutoMapBrokerResult results = 1;
+  int32 applied = 2;         // auto 状态已写入数
+  int32 skipped = 3;         // 跳过数
 }
