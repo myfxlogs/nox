@@ -6,7 +6,8 @@ package adapter
 //   - mode 0 真停用发 0 值 Fact（零息 venue 是 carry 最佳对手，必须可配对）；
 //   - mode 0 却带非零 rates = 矛盾 broker 数据（PXB 事故实证）→ 跳过，宁丢机会不交易不可信经济性；
 //   - mode 2/7/8/超界未标定 → 跳过。
-// 产出的 Fact：kind=swap_long/swap_short，unit=bps_daily（正=收，负=付），src=mt5/mt4。
+// 产出的 Fact：kind=swap_long/swap_short，unit=bps_daily（正=收，负=付），src=mt5/mt4；
+// 以及 kind=trade_mode（unit=mode，MT5 ENUM 透传，D-060 F3——与 swap 标定无关，跳过符号也发）。
 
 import (
 	"context"
@@ -131,9 +132,11 @@ func (a *MT4Adapter) SymbolMap() map[string]string {
 	return nil
 }
 
-// SwapFacts 轮询全部已映射符号的 SymbolParams，归一为 swap_long/swap_short bps_daily Fact（§3.6）。
+// SwapFacts 轮询全部已映射符号的 SymbolParams，归一为 swap_long/swap_short bps_daily Fact（§3.6），
+// 并对每个有 SymbolGroup 的符号顺带产出 trade_mode Fact（D-060 F3，零额外 RPC）。
 // price 取本 venue 最新报价（缺失回退任一 venue 中价，bps 精度下价格差异可忽略）。
 // 单符号失败只记日志；全失败才返回错误（Scheduler 退避重试）。
+// 每轮每 venue 一行汇总日志（D-060 F1 跳过可观测）：emit/emit0 按符号计，skip 附原因。
 func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fact, error) {
 	sm := a.SymbolMap()
 	if len(sm) == 0 {
@@ -142,6 +145,8 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 	snap := q.Snapshot(ctx, symbolSet(sm))
 	var facts []fact.Fact
 	var errs []string
+	var skips []string
+	emit, emit0 := 0, 0
 	missingPrice := 0
 	for brokerSym, canon := range sm {
 		resp, err := a.mt5.SymbolParams(a.withSessionMD(ctx), &mt5pb.SymbolParamsRequest{Id: a.token, Symbol: brokerSym})
@@ -155,15 +160,20 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 		}
 		r := resp.GetResult()
 		if r == nil {
+			skips = append(skips, brokerSym+": result nil")
 			continue
 		}
 		sg := r.GetSymbolGroup()
 		si := r.GetSymbolInfo()
 		if sg == nil {
+			skips = append(skips, brokerSym+": symbolGroup nil")
 			continue
 		}
+		// trade_mode 不依赖 swap 标定（D-060 F3）：emit/emit0/标定 skip 的符号都发。
+		facts = append(facts, tradeModeFact(a.venue, canon, sg.GetTradeMode(), "mt5"))
 		mode := mt5SwapMode(sg.GetSwapType(), sg.GetSwapLong(), sg.GetSwapShort())
 		if mode == SwapModeUncalibrated {
+			skips = append(skips, mt5SkipReason(brokerSym, sg))
 			continue
 		}
 		point, cs := 0.0, 0.0
@@ -175,13 +185,25 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 			missingPrice++
 			continue
 		}
+		n := 0
 		if l, ok := normalizeSwapBpsDaily(mode, sg.GetSwapLong(), price, point, cs); ok {
 			facts = append(facts, swapFact(fact.KindSwapLong, a.venue, canon, l, "mt5"))
+			n++
 		}
 		if s, ok := normalizeSwapBpsDaily(mode, sg.GetSwapShort(), price, point, cs); ok {
 			facts = append(facts, swapFact(fact.KindSwapShort, a.venue, canon, s, "mt5"))
+			n++
+		}
+		switch {
+		case n == 0:
+			skips = append(skips, brokerSym+": normalize failed (no contract size?)")
+		case mode == SwapModeNone:
+			emit0++ // 真停用发零值对（零息 venue 是 carry 最佳对手）
+		default:
+			emit++
 		}
 	}
+	swapPollSummary("mt5", a.venue, emit, emit0, skips)
 	if missingPrice > 0 {
 		return nil, fmt.Errorf("%w: %d symbol(s) lack venue quote", ErrSwapColdStart, missingPrice)
 	}
@@ -189,6 +211,7 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 }
 
 // SwapFacts MT4 版。swap 语义字段在 SymbolInfo.Ex（SymbolInfoEx）。
+// MT4 proto 无 TradeMode 字段 → 不产出 trade_mode Fact（下游未知放行，D-060 F3 边界）。
 func (a *MT4Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fact, error) {
 	sm := a.SymbolMap()
 	if len(sm) == 0 {
@@ -197,6 +220,8 @@ func (a *MT4Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 	snap := q.Snapshot(ctx, symbolSet(sm))
 	var facts []fact.Fact
 	var errs []string
+	var skips []string
+	emit, emit0 := 0, 0
 	missingPrice := 0
 	for brokerSym, canon := range sm {
 		resp, err := a.mt4.SymbolParams(a.withSessionMD(ctx), &mt4pb.SymbolParamsRequest{Id: a.token, Symbol: brokerSym})
@@ -210,6 +235,7 @@ func (a *MT4Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 		}
 		r := resp.GetResult()
 		if r == nil {
+			skips = append(skips, brokerSym+": result nil")
 			continue
 		}
 		si := r.GetSymbol()
@@ -220,6 +246,11 @@ func (a *MT4Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 		ex := si.GetEx()
 		mode := mt4SwapMode(ex.GetSwapType(), ex.GetSwapEnable(), ex.GetSwapLong(), ex.GetSwapShort())
 		if mode == SwapModeUncalibrated {
+			if ex.GetSwapEnable() == 0 {
+				skips = append(skips, brokerSym+": swap disabled with nonzero rates")
+			} else {
+				skips = append(skips, fmt.Sprintf("%s: uncalibrated mode %d", brokerSym, ex.GetSwapType()))
+			}
 			continue
 		}
 		point, cs := ex.GetPoint(), ex.GetContractSize()
@@ -228,17 +259,59 @@ func (a *MT4Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 			missingPrice++
 			continue
 		}
+		n := 0
 		if l, ok := normalizeSwapBpsDaily(mode, ex.GetSwapLong(), price, point, cs); ok {
 			facts = append(facts, swapFact(fact.KindSwapLong, a.venue, canon, l, "mt4"))
+			n++
 		}
 		if s, ok := normalizeSwapBpsDaily(mode, ex.GetSwapShort(), price, point, cs); ok {
 			facts = append(facts, swapFact(fact.KindSwapShort, a.venue, canon, s, "mt4"))
+			n++
+		}
+		switch {
+		case n == 0:
+			skips = append(skips, brokerSym+": normalize failed (no contract size?)")
+		case mode == SwapModeNone:
+			emit0++
+		default:
+			emit++
 		}
 	}
+	swapPollSummary("mt4", a.venue, emit, emit0, skips)
 	if missingPrice > 0 {
 		return nil, fmt.Errorf("%w: %d symbol(s) lack venue quote", ErrSwapColdStart, missingPrice)
 	}
 	return swapResult(a.venue, facts, errs)
+}
+
+// mt5SkipReason 标定跳过原因（F1）：None+非零=矛盾数据，其余=未标定模式。
+func mt5SkipReason(brokerSym string, sg *mt5pb.SymGroup) string {
+	if sg.GetSwapType() == mt5pb.SwapType_SwapType_SwapNone {
+		return brokerSym + ": swap none with nonzero rates"
+	}
+	return fmt.Sprintf("%s: uncalibrated mode %d", brokerSym, sg.GetSwapType())
+}
+
+// swapPollSummary 每轮每 venue 一行汇总（D-060 F1）：skip 路径零日志=探测面隐形收缩（P4）。
+func swapPollSummary(src, venue string, emit, emit0 int, skips []string) {
+	if len(skips) == 0 {
+		log.Printf("[%s:%s] swap poll: emit=%d emit0=%d skip=0", src, venue, emit, emit0)
+		return
+	}
+	log.Printf("[%s:%s] swap poll: emit=%d emit0=%d skip=%d [%s]", src, venue, emit, emit0, len(skips), strings.Join(skips, ", "))
+}
+
+// tradeModeFact 构造 trade_mode Fact（D-060 F3）：value=MT5 ENUM_SYMBOL_TRADE_MODE 枚举透传。
+func tradeModeFact(venue, canon string, mode mt5pb.TradeMode, src string) fact.Fact {
+	return fact.Fact{
+		Kind:   fact.KindTradeMode,
+		Venue:  venue,
+		Symbol: canon,
+		Value:  float64(mode),
+		Unit:   fact.UnitMode,
+		Ts:     time.Now(),
+		Src:    src,
+	}
 }
 
 // swapFact 构造 swap Fact（符号 canon 为 canonical；Ts 用本地接收时间，与报价流一致）。

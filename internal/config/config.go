@@ -35,6 +35,9 @@ type Config struct {
 
 	// === MT swap 采集（§3.6）===
 	SwapRefresh time.Duration // swap 轮询间隔（默认 1h，swap 变化慢）
+	// TradeModeTTL trade_mode Fact 新鲜度（D-060 F4/F5 共用）：超期视为未知放行
+	//（broker 周末置 Disabled 不跨周末误杀周一；venue 服务端拒单是最终权威）。
+	TradeModeTTL time.Duration
 
 	// === 复盘闭环（§13.6，D-034）===
 	ReviewMinSamples         int     // 聚合出调参建议的最小样本数（防单笔噪声）
@@ -85,6 +88,7 @@ func Load() *Config {
 			"gate":    envFloat("ARB_COMMISSION_TAKER_GATE", 10.0),
 		},
 		SwapRefresh:              envDur("ARB_SWAP_REFRESH", time.Hour),
+		TradeModeTTL:             envDur("ARB_TRADEMODE_TTL", 24*time.Hour),
 		ReviewMinSamples:         envInt("ARB_REVIEW_MIN_SAMPLES", 3),
 		ReviewCrossBiasBps:       envFloat("ARB_REVIEW_CROSS_BIAS_BPS", 1.0),
 		ReviewCarryBiasAnnualPct: envFloat("ARB_REVIEW_CARRY_BIAS_ANNUAL_PCT", 1.0),

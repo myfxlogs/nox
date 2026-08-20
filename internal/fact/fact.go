@@ -15,6 +15,7 @@ const (
 	KindFX         = "fx"          // 汇率 USDCNH（UnitPrice）
 	KindSwapLong   = "swap_long"   // MT 多单 swap（UnitBpsDaily，D-028 归一）
 	KindSwapShort  = "swap_short"  // MT 空单 swap（UnitBpsDaily，D-028 归一）
+	KindTradeMode  = "trade_mode"  // MT5 符号可交易性（UnitMode，D-060 F3）
 )
 
 // Unit 常量表（§1.2）。
@@ -22,6 +23,17 @@ const (
 	UnitPctAnnualized = "pct_annualized" // 年化百分点（5.0 = 5%，D-031）
 	UnitPrice         = "price"          // 价格（如 USDCNH 7.25）
 	UnitBpsDaily      = "bps_daily"      // 日 bps（swap 归一，D-028）
+	UnitMode          = "mode"           // trade_mode 值域（D-060 F3）
+)
+
+// TradeMode 值域（MT5 ENUM_SYMBOL_TRADE_MODE 透传，D-060 F4/F5 消费；
+// MT4 无此字段不发 Fact → 下游未知放行）。
+const (
+	TradeModeDisabled  = 0 // 禁交易
+	TradeModeLongOnly  = 1 // 只可开多
+	TradeModeShortOnly = 2 // 只可开空
+	TradeModeCloseOnly = 3 // 只可平仓
+	TradeModeFull      = 4 // 双向可开
 )
 
 // Fact 是采集 → 归一 → 规则/检测的唯一数据载体（§1.2）。
@@ -41,6 +53,7 @@ var validKinds = map[string]bool{
 	KindFX:        true,
 	KindSwapLong:  true,
 	KindSwapShort: true,
+	KindTradeMode: true,
 }
 
 // ValidKind 报告 k 是否为已知 Kind。
