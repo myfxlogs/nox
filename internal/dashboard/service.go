@@ -489,8 +489,12 @@ func (s *Service) resolveLegs(found *pgstore.Opportunity, qty float64) ([]exec.L
 		return nil, err
 	}
 	sellQty := math.Round(qty*csBuy/csSell*100) / 100
-	notionalBuy := qty * csBuy * qbuy.Ask
-	notionalSell := sellQty * csSell * qsell.Bid
+	// 不平衡口径修正：按买腿参考价统一计两腿名义——D-028 防的是「取整导致的数量差」，
+	// 不是两腿各自可执行价的差（那是套利缺口本身：等量对冲腿在不同 venue 价格下名义额必然不同，
+	// 3.3% 价差曾把正确订单误拒为 imbalance）。
+	ref := qbuy.Ask
+	notionalBuy := qty * csBuy * ref
+	notionalSell := sellQty * csSell * ref
 	maxImb := s.maxLegImbalance
 	if maxImb <= 0 {
 		maxImb = 2.0

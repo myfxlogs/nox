@@ -53,16 +53,17 @@ func TestResolveLegs(t *testing.T) {
 func TestResolveLegsNotionalScaling(t *testing.T) {
 	b := bus.New()
 	now := time.Now()
-	b.Publish(bus.Quote{Symbol: "BRENT", Venue: "b", VenueType: "mt5", Bid: 93.8, Ask: 93.8, Time: now, VenueSymbol: "UKOILm"})
-	b.Publish(bus.Quote{Symbol: "BRENT", Venue: "s", VenueType: "mt5", Bid: 93.8, Ask: 93.8, Time: now, VenueSymbol: "XBRUSD"})
+	b.Publish(bus.Quote{Symbol: "BRENT", Venue: "b", VenueType: "mt5", Bid: 92.0, Ask: 92.1, Time: now, VenueSymbol: "UKOILm"})
+	b.Publish(bus.Quote{Symbol: "BRENT", Venue: "s", VenueType: "mt5", Bid: 95.1, Ask: 95.2, Time: now, VenueSymbol: "XBRUSD"})
 	found := &pgstore.Opportunity{Canonical: "BRENT", VenueBuy: "b:mt5", VenueSell: "s:mt5"}
 
 	cs := map[string]float64{"UKOILm": 1000, "XBRUSD": 100}
 	s := &Service{qbus: b, legContractSize: func(_, sym string) (float64, bool) { v, ok := cs[sym]; return v, ok }}
 
+	// 3.3% 跨 venue 价差（套利缺口）不得误判为不平衡（共同参考价口径修正）。
 	legs, err := s.resolveLegs(found, 0.1)
 	if err != nil {
-		t.Fatalf("oil pair: %v", err)
+		t.Fatalf("oil pair with 3.3%% venue gap: %v", err)
 	}
 	if legs[1].Qty != 1.0 {
 		t.Errorf("sell qty want 1.0 (0.1×1000/100), got %v", legs[1].Qty)
