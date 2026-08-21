@@ -133,8 +133,8 @@ func TestBudgetExceed(t *testing.T) {
 	var entries []*Entry
 	for i := 0; i < 250; i++ {
 		entries = append(entries, &Entry{
-			ID:      "entry-" + string(rune('a'+i%26)) + string(rune('a'+i/26)),
-			Kind:    "pitfall", Risk: "low", Status: "verified",
+			ID:   "entry-" + string(rune('a'+i%26)) + string(rune('a'+i/26)),
+			Kind: "pitfall", Risk: "low", Status: "verified",
 			Keywords: []string{"k"}, Summary: "s",
 		})
 	}

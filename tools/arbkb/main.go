@@ -15,8 +15,8 @@ import (
 
 // 路径基准（定死，禁路径探测逻辑）
 var (
-	entriesDir  = "../../docs/经验库/条目"
-	indexFile   = "../../docs/经验库/索引.md"
+	entriesDir = "../../docs/经验库/条目"
+	indexFile  = "../../docs/经验库/索引.md"
 )
 
 const (
@@ -27,18 +27,18 @@ const (
 
 // Entry 对应条目 frontmatter（设计 §4.2 Schema v2）。
 type Entry struct {
-	ID           string   `yaml:"id"`
-	Kind         string   `yaml:"kind"`
-	Risk         string   `yaml:"risk"`
-	Status       string   `yaml:"status"`
-	Keywords     []string `yaml:"keywords"`
-	Scope        []string `yaml:"scope"`
-	Summary      string   `yaml:"summary"`
-	SchemaVersion int     `yaml:"schema_version"`
-	FirstSeen    string   `yaml:"first_seen"`
-	LastVerified string   `yaml:"last_verified"`
-	Skills       []string `yaml:"skills"`
-	EvidenceRefs []map[string]interface{} `yaml:"evidence_refs"`
+	ID            string                   `yaml:"id"`
+	Kind          string                   `yaml:"kind"`
+	Risk          string                   `yaml:"risk"`
+	Status        string                   `yaml:"status"`
+	Keywords      []string                 `yaml:"keywords"`
+	Scope         []string                 `yaml:"scope"`
+	Summary       string                   `yaml:"summary"`
+	SchemaVersion int                      `yaml:"schema_version"`
+	FirstSeen     string                   `yaml:"first_seen"`
+	LastVerified  string                   `yaml:"last_verified"`
+	Skills        []string                 `yaml:"skills"`
+	EvidenceRefs  []map[string]interface{} `yaml:"evidence_refs"`
 }
 
 // header 是索引文件的固定头部（标题 + 说明 + 表头 + 分隔行）。
