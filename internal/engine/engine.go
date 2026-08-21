@@ -159,6 +159,10 @@ type Engine struct {
 	oppTopic *bus.Topic[pgstore.Opportunity]
 	// minNotifyNetBps 机会推送提醒门槛（bps）；0 = 全部新机会都提醒（config.ARB_NOTIFY_MIN_NET_BPS）。
 	minNotifyNetBps float64
+	// excludeCanonicals 检测产出排除集合（D-072 资金提醒弹窗提示词 B1：复用 ARB_AUTOTRADE_EXCLUDE_CANONICALS
+	// 双用途——执行层排除 + 检测层排除，P3 单一真相）。nil/空 = 不排除（测试默认）。
+	// 命中时机会不入库（TTL 自然过期不适用——根本不产），从源头消除 BRENT/WTI 假机会（1314615 报价偏高 $3，D-068 实证）。
+	excludeCanonicals map[string]bool
 
 	mu       sync.Mutex
 	lastScan map[string]time.Time // canonical → 上次扫描时间（节流）
@@ -185,6 +189,13 @@ func New(b *bus.QuoteBus, detectors []detector.Detector, cfg evaluator.Config, s
 		minNotifyNetBps: minNotifyNetBps,
 		lastScan:        make(map[string]time.Time),
 	}
+}
+
+// SetExcludeCanonicals 注入检测产出排除集合（D-072 资金提醒弹窗提示词 B1）。
+// 复用 ARB_AUTOTRADE_EXCLUDE_CANONICALS（执行层+检测层双用途，P3 单一真相）；nil/空 = 不排除。
+// main 在 config 加载后注入；命中 canonical 的机会不入库（从源头消除假机会）。
+func (e *Engine) SetExcludeCanonicals(set map[string]bool) {
+	e.excludeCanonicals = set
 }
 
 // Run 订阅 QuoteBus 并驱动检测→评估→存储循环。阻塞至 ctx 取消。
@@ -233,6 +244,11 @@ func (e *Engine) onQuote(ctx context.Context, q bus.Quote) {
 			continue
 		}
 		o := resultToOpp(result)
+		// D-072 资金提醒弹窗提示词 B1：检测层排除 BRENT/WTI 等假机会（复用 ARB_AUTOTRADE_EXCLUDE_CANONICALS，
+		// 执行层+检测层双用途，P3 单一真相）。命中 → 不入库（从源头消除，TTL 自然过期不适用）。
+		if len(e.excludeCanonicals) > 0 && e.excludeCanonicals[o.Canonical] {
+			continue
+		}
 		inserted, err := e.store.UpsertOpportunity(ctx, o)
 		if err != nil {
 			log.Printf("[engine] upsert opportunity %s: %v", result.ID, err)
