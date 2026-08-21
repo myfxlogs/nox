@@ -149,6 +149,9 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity)
 	e.mu.Unlock()
 
 	if status == "FAILED" {
+		if msg == "" {
+			msg = "execute failed (pipeline returned FAILED)"
+		}
 		e.logTrade(ctx, &opp, 0, qty, "FAILED", msg)
 		log.Printf("[autotrade] FAILED opp=%s type=%s qty=%.4f: %s", opp.ID, opp.Type, qty, msg)
 	} else {
