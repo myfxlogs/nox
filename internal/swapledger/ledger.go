@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"arb/internal/decimalutil"
 	"arb/internal/fact"
 	"arb/internal/store/pgstore"
 )
@@ -266,12 +267,12 @@ func (l *Ledger) legSwapAmount(canonical string, leg pgstore.PositionLeg, day ti
 		return 0, false
 	}
 
-	// 3. 算金额
+	// 3. 算金额（D-077 修复⑩ G5：decimalutil 精度守卫，经 strconv 字符串中介避免 float64 漂移）
 	if isFunding {
 		// D-077 修复⑪A M2：funding 记账删三倍虚乘。
 		// 采集层 Fact 已是年化口径 → 日金额 = rate/100/DaysPerYear × notional（含 8h×3 周期合计）。
 		// 旧公式 × PeriodsPerDay(3) = 3 倍虚乘（现记 9f 实收 3f）→ 删除。
-		return rate / 100 / DaysPerYear * notional, true
+		return decimalAmount(rate, 100, DaysPerYear, notional, 1), true
 	}
 
 	// swap：日 bps → 日金额 = rate/10000 × notional × settleMultiplier
@@ -280,7 +281,7 @@ func (l *Ledger) legSwapAmount(canonical string, leg pgstore.PositionLeg, day ti
 		// D-077 修复⑪A M4：fail-closed（三倍日未知）→ 跳过该腿记账，不记 0 cashflow
 		return 0, false
 	}
-	return rate / 10000 * notional * multiplier, true
+	return decimalAmount(rate, 10000, 1, notional, multiplier), true
 }
 
 // settleMultiplier 返回当日结算乘数（D-077 V2→修复⑪A M3+M4）。
@@ -334,4 +335,22 @@ func isFundingType(posType string) bool {
 		}
 	}
 	return false
+}
+
+// decimalAmount 经 decimalutil 精度守卫计算 swap/funding 金额（D-077 修复⑩ G5）。
+// 公式：rate / divRate / divPeriod × notional × multiplier
+// 经 strconv 字符串中介避免 float64 漂移，返回 float64 供 InsertCashflow。
+func decimalAmount(rate float64, divRate, divPeriod int, notional float64, multiplier float64) float64 {
+	dRate, _ := decimalutil.FromFloat64(rate)
+	dNotional, _ := decimalutil.FromFloat64(notional)
+	dMult, _ := decimalutil.FromFloat64(multiplier)
+	result := dRate.Mul(dNotional).Mul(dMult)
+	if divRate > 0 {
+		result = result.Div(decimalutil.MustFromFloat64(float64(divRate)))
+	}
+	if divPeriod > 0 {
+		result = result.Div(decimalutil.MustFromFloat64(float64(divPeriod)))
+	}
+	f, _ := result.Float64()
+	return f
 }
