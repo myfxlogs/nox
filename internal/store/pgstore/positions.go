@@ -61,10 +61,16 @@ func (s *Store) UpdatePositionStatus(ctx context.Context, id int64, status strin
 	return err
 }
 
+// UpdatePositionMeta 回填持仓元数据（D-070：pipeline.Execute 创建时未填 type/expected_net_bps）。
+func (s *Store) UpdatePositionMeta(ctx context.Context, id int64, posType string, expectedNetBps float64) error {
+	_, err := s.pool.Exec(ctx, `UPDATE positions SET type = $1, expected_net_bps = $2 WHERE id = $3`, posType, expectedNetBps, id)
+	return err
+}
+
 // ClosePosition 平仓回填。
 func (s *Store) ClosePosition(ctx context.Context, id int64, realizedPnl float64) error {
-	q := `UPDATE positions SET status = 'CLOSED', realized_pnl = $1, closed_at = now(), updated_at = now()
-		WHERE id = $2`
+	// D-070 修复：positions 表无 updated_at 列（D-060 同类 bug），去掉 updated_at = now()
+	q := `UPDATE positions SET status = 'CLOSED', realized_pnl = $1, closed_at = now() WHERE id = $2`
 	_, err := s.pool.Exec(ctx, q, realizedPnl, id)
 	return err
 }
