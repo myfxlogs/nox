@@ -101,54 +101,72 @@ func (e *Engine) scanSwapArb(ctx context.Context) {
 	if openCount >= e.cfg.MaxPositions {
 		return
 	}
-	// 检查是否已有 AUDJPY swap 套利持仓（避免重复开仓）
+	// 检查已有 swap 套利持仓（避免重复开仓）
 	positions, err := e.store.ListPositions(ctx, "OPEN", 50, 0)
 	if err != nil {
 		return
 	}
+	existingCombos := map[string]bool{}
 	for _, p := range positions {
-		if strings.Contains(p.OpportunityID, "SWAPARB:AUDJPY") {
-			return // 已有 AUDJPY swap 套利持仓
+		if strings.Contains(p.OpportunityID, "SWAPARB:") {
+			// SWAPARB:CANONICAL:venueLong:mt5:venueShort:mt5:ts
+			parts := strings.Split(p.OpportunityID, ":")
+			if len(parts) >= 6 {
+				comboKey := parts[2] + ":" + parts[3] + ":" + parts[4] + ":" + parts[5]
+				existingCombos[comboKey] = true
+			}
 		}
 	}
-	// 检查报价可用性
-	canonical := "AUDJPY"
-	venueLong := "52993526:mt5"   // 做多收 swap_long=+0.679
-	venueShort := "277842155:mt5" // 做空付 swap_short=-0.185
+	// swap 套利组合列表：canonical → venueLong + venueShort + 净swap bps/日
+	type swapCombo struct {
+		canonical, vLong, vShort string
+		netSwapBps               float64
+	}
+	combos := []swapCombo{
+		{"AUDJPY", "52993526:mt5", "277842155:mt5", 0.494},
+		{"AUDJPY", "REDACTED_MT_ACCT:mt5", "277842155:mt5", 0.471},
+	}
+	for _, c := range combos {
+		comboKey := c.vLong + ":" + c.vShort // e.g. "52993526:mt5:277842155:mt5"
+		if existingCombos[comboKey] {
+			continue
+		}
+		e.trySwapArb(ctx, c.canonical, c.vLong, c.vShort, c.netSwapBps)
+	}
+}
+
+// trySwapArb 尝试开仓单个 swap 套利组合。
+func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShort string, netSwapBps float64) {
 	qLong, okL := e.quotes.Latest(canonical, venueLong)
 	qShort, okS := e.quotes.Latest(canonical, venueShort)
 	if !okL || !okS {
 		return
 	}
-	// 报价新鲜度
 	now := time.Now()
 	if now.Sub(qLong.Time) > 120*time.Second || now.Sub(qShort.Time) > 120*time.Second {
 		return
 	}
-	// 检查跨账户价差是否在可接受范围（< 3 bps，避免开仓时价差太大）
-	spread := qShort.Bid - qLong.Ask // 做多529（ask）+做空277（bid）的开仓价差
+	spread := qShort.Bid - qLong.Ask
 	spreadBps := spread / qLong.Ask * 10000
 	if spreadBps < -3.0 {
-		log.Printf("[autotrade] SWAPARB skip: spreadBps=%.2f < -3.0 (529 ask=%.5f 277 bid=%.5f)",
-			spreadBps, qLong.Ask, qShort.Bid)
+		log.Printf("[autotrade] SWAPARB skip %s: spreadBps=%.2f < -3.0 (long ask=%.5f short bid=%.5f)",
+			canonical, spreadBps, qLong.Ask, qShort.Bid)
 		return
 	}
-	// 开仓：用 $1000 名义额试水
-	notional := 1000.0
-	qty := notional / qLong.Ask
+	qty := 100000.0 / qLong.Ask
 	reqID := fmt.Sprintf("swaparb-%d", time.Now().UnixNano())
-	oppID := fmt.Sprintf("SWAPARB:AUDJPY:%s:%s:%d", venueLong, venueShort, time.Now().UnixMilli())
-	status, msg, posID := e.service.ExecuteMeanRevert(ctx, canonical, venueLong, venueShort, reqID, qty, spreadBps)
+	oppID := fmt.Sprintf("SWAPARB:%s:%s:%s:%d", canonical, venueLong, venueShort, time.Now().UnixMilli())
+	status, msg, posID := e.service.ExecuteMeanRevertWithCap(ctx, canonical, venueLong, venueShort, reqID, qty, spreadBps, 100000.0)
 	if status == "FAILED" {
 		if msg == "" {
 			msg = "pipeline returned FAILED"
 		}
-		log.Printf("[autotrade] SWAPARB-FAILED AUDJPY long=%s short=%s qty=%.4f: %s",
-			venueLong, venueShort, qty, msg)
+		log.Printf("[autotrade] SWAPARB-FAILED %s long=%s short=%s qty=%.4f: %s",
+			canonical, venueLong, venueShort, qty, msg)
 	} else {
 		_ = e.store.UpdatePositionOppID(ctx, posID, oppID)
-		log.Printf("[autotrade] SWAPARB-OK AUDJPY long=%s short=%s qty=%.4f posID=%d status=%s spreadBps=%.2f",
-			venueLong, venueShort, qty, posID, status, spreadBps)
+		log.Printf("[autotrade] SWAPARB-OK %s long=%s short=%s qty=%.4f posID=%d status=%s spreadBps=%.2f netSwap=%.3f bps/day",
+			canonical, venueLong, venueShort, qty, posID, status, spreadBps, netSwapBps)
 	}
 }
 
