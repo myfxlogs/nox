@@ -23,22 +23,19 @@ const (
 	VenueOKX     = "okx"
 )
 
-// fundingPeriodsPerDay 根据 nextFundingTime 与上次结算时刻差值计算每日结算次数（D-077 修复⑪B N1）。
-// 4h=6, 1h=24, 8h=3。取不到 nextFundingTime → 回退 3 并计数日志（禁静默）。
-// nextFundingMs = 0 表示未取到 → 回退。
-func fundingPeriodsPerDay(nextFundingMs float64) int {
-	if nextFundingMs <= 0 {
+// fundingPeriodsPerDay 根据结算间隔（ms）计算每日结算次数。
+// 4h=6, 1h=24, 8h=3。intervalMs ≤ 0 → 回退 3（8h，禁静默，调用方计数日志）。
+//
+// D-079 修复：旧版用「nextFunding - now」（剩余时间）当间隔 → 结算前 1h 内剩余极短
+// → periodsPerDay 爆炸到 26 → 年化虚高 8.7 倍（94.9% vs 真实 10.95%）。
+// 正确做法：用「nextFunding - prevFunding」（结算间隔），与当前时刻无关。
+func fundingPeriodsPerDay(intervalMs float64) int {
+	if intervalMs <= 0 {
 		return 3 // 回退 8h×3（禁静默，调用方计数日志）
 	}
-	// nextFundingTime 是下一次结算时刻，与当前时间差值 ≈ 结算周期
-	nowMs := float64(time.Now().UnixMilli())
-	periodMs := nextFundingMs - nowMs
-	if periodMs <= 0 {
-		return 3 // 已过期或异常 → 回退
-	}
-	periodsPerDay := 24 * 3600 * 1000 / periodMs
+	periodsPerDay := float64(24*3600*1000) / intervalMs
 	if periodsPerDay < 1 {
-		periodsPerDay = 3
+		return 3
 	}
 	return int(periodsPerDay)
 }
@@ -92,15 +89,9 @@ func (b *BinanceFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
 		}
 		var f float64
 		fmt.Sscanf(rate, "%f", &f)
-		// D-077 修复⑪B N1：读 nextFundingTime 计算实际结算频率（4h=6, 8h=3）
-		var nextFundingMs float64
-		if nft, ok := body["nextFundingTime"].(float64); ok {
-			nextFundingMs = nft
-		}
-		periodsPerDay := fundingPeriodsPerDay(nextFundingMs)
-		if nextFundingMs == 0 {
-			fmt.Printf("[exchange:binance] %s nextFundingTime missing, fallback 3/day\n", pair)
-		}
+		// D-079：Binance premiumIndex 不返回 prevFundingTime → 无法算间隔 → 固定 3/天（8h）。
+		// 旧版用 nextFundingTime-now（剩余时间）当间隔 → 结算前年化爆炸（94.9% vs 真实 10.95%）。
+		periodsPerDay := fundingPeriodsPerDay(0) // 固定回退 3/天
 		annualized := annualizeFunding(f, periodsPerDay)
 		out = append(out, fact.Fact{
 			Kind:   fact.KindFunding,
@@ -178,15 +169,8 @@ func (g *GateFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
 		}
 		var f float64
 		fmt.Sscanf(rate, "%f", &f)
-		// D-077 修复⑪B N1：读 next_settle_time 计算实际结算频率（Gate 返回秒级时间戳）
-		var nextFundingMs float64
-		if nst, ok := body["next_settle_time"].(float64); ok {
-			nextFundingMs = nst * 1000 // 秒 → 毫秒
-		}
-		periodsPerDay := fundingPeriodsPerDay(nextFundingMs)
-		if nextFundingMs == 0 {
-			fmt.Printf("[exchange:gate] %s next_settle_time missing, fallback 3/day\n", sym+"USDT")
-		}
+		// D-079：Gate contracts 接口不返回上次结算时刻 → 无法算间隔 → 固定 3/天（8h）。
+		periodsPerDay := fundingPeriodsPerDay(0) // 固定回退 3/天
 		annualized := annualizeFunding(f, periodsPerDay)
 		out = append(out, fact.Fact{
 			Kind:   fact.KindFunding,
@@ -233,15 +217,20 @@ func (o *OKXFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
 		}
 		var f float64
 		fmt.Sscanf(rate, "%f", &f)
-		// D-077 修复⑪B N1：读 fundingTime 计算实际结算频率（OKX 返回毫秒级时间戳）
-		var nextFundingMs float64
+		// D-079：OKX 返回 fundingTime（当前结算）+ nextFundingTime（下次结算）→ 间隔 = 差值。
+		// 旧版只用 fundingTime-now（剩余时间）当间隔 → 结算前年化爆炸（94.9% vs 真实 10.95%）。
+		var fundingMs, nextFundingMs float64
 		if ft, ok := item["fundingTime"].(string); ok {
-			fmt.Sscanf(ft, "%f", &nextFundingMs)
+			fmt.Sscanf(ft, "%f", &fundingMs)
 		}
-		periodsPerDay := fundingPeriodsPerDay(nextFundingMs)
-		if nextFundingMs == 0 {
-			fmt.Printf("[exchange:okx] %s fundingTime missing, fallback 3/day\n", sym+"USDT")
+		if nft, ok := item["nextFundingTime"].(string); ok {
+			fmt.Sscanf(nft, "%f", &nextFundingMs)
 		}
+		intervalMs := nextFundingMs - fundingMs
+		if intervalMs <= 0 {
+			fmt.Printf("[exchange:okx] %s funding interval missing (ft=%v nft=%v), fallback 3/day\n", sym+"USDT", fundingMs, nextFundingMs)
+		}
+		periodsPerDay := fundingPeriodsPerDay(intervalMs)
 		annualized := annualizeFunding(f, periodsPerDay)
 		out = append(out, fact.Fact{
 			Kind:   fact.KindFunding,
