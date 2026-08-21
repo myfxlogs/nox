@@ -476,11 +476,11 @@ func (q *blockingHistoryQuerier) QueryOrderHistory(ctx context.Context, ticket s
 }
 
 // TestIsOPENINGZombie OPENING 僵尸判定边界。
-// 补充条件：无 opened_at 且无任何腿的 phase=OPENING = 僵尸（#254 执行中断无时间戳）。
+// 补充条件：无 opened_at 且无任何 legs = 僵尸（#254 执行中断无时间戳）；有腿=执行中不判。
 func TestIsOPENINGZombie(t *testing.T) {
 	now := time.Now()
 	openingLegs := []pgstore.PositionLeg{{Phase: "OPENING"}, {Phase: "OPEN"}}
-	noOpeningLegs := []pgstore.PositionLeg{{Phase: "OPEN"}, {Phase: "CLOSE"}}
+	anyLegs := []pgstore.PositionLeg{{Phase: "OPEN"}, {Phase: "CLOSE"}}
 	emptyLegs := []pgstore.PositionLeg{}
 	cases := []struct {
 		name string
@@ -492,10 +492,10 @@ func TestIsOPENINGZombie(t *testing.T) {
 		{"OPENING 刚好 24h", pgstore.Position{Status: "OPENING", OpenedAt: ptrTime(now.Add(-24 * time.Hour))}, openingLegs, false},
 		{"OPENING 未超", pgstore.Position{Status: "OPENING", OpenedAt: ptrTime(now.Add(-23 * time.Hour))}, openingLegs, false},
 		{"OPEN 不判", pgstore.Position{Status: "OPEN", OpenedAt: ptrTime(now.Add(-48 * time.Hour))}, openingLegs, false},
-		// 补充条件：无 opened_at + 无 OPENING 腿 = 僵尸（#254 这种执行中断）
-		{"OPENING 无 opened_at 无 OPENING 腿=僵尸", pgstore.Position{Status: "OPENING", OpenedAt: nil}, noOpeningLegs, true},
+		// 补充条件：无 opened_at + 无任何 legs = 僵尸（#254 执行中断无进展）
 		{"OPENING 无 opened_at 空腿=僵尸", pgstore.Position{Status: "OPENING", OpenedAt: nil}, emptyLegs, true},
-		// 无 opened_at 但有 OPENING 腿 = 仍在执行中，不判僵尸
+		// 无 opened_at 但有腿（任意 phase）= 执行中，不判僵尸（防新建仓窗口误杀）
+		{"OPENING 无 opened_at 有腿不判", pgstore.Position{Status: "OPENING", OpenedAt: nil}, anyLegs, false},
 		{"OPENING 无 opened_at 有 OPENING 腿不判", pgstore.Position{Status: "OPENING", OpenedAt: nil}, openingLegs, false},
 	}
 	for _, c := range cases {
