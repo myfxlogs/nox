@@ -5,6 +5,7 @@ package reconcile
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -159,7 +160,7 @@ func (r *Reconciler) autoFailOPENINGZombie(
 	sub, cancel = r.withTimeout(ctx)
 	err = r.store.UpdatePositionStatus(sub, posID, "FAILED")
 	cancel()
-	if err != nil {
+	if err != nil && !errors.Is(err, pgstore.ErrTerminalState) {
 		return fmt.Errorf("update status FAILED: %w", err)
 	}
 	msg := fmt.Sprintf("OPENING 僵尸自动归档 position #%d（超 24h 未完成开仓，转 FAILED）", posID)

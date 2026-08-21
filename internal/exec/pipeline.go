@@ -170,7 +170,13 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID string,
 	}
 
 	// 更新 position 状态
-	_ = p.store.UpdatePositionStatus(ctx, posID, status)
+	if err := p.store.UpdatePositionStatus(ctx, posID, status); err != nil {
+		if errors.Is(err, pgstore.ErrTerminalState) {
+			log.Printf("[exec] position %d already terminal, skip status=%s (G4)", posID, status)
+		} else {
+			log.Printf("[exec] position %d status update: %v", posID, err)
+		}
+	}
 
 	if status == "LEGGED" {
 		// critical 告警
@@ -220,7 +226,13 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 		return fmt.Errorf("list legs: %w", err)
 	}
 
-	_ = p.store.UpdatePositionStatus(ctx, posID, "CLOSING")
+	if err := p.store.UpdatePositionStatus(ctx, posID, "CLOSING"); err != nil {
+		if errors.Is(err, pgstore.ErrTerminalState) {
+			log.Printf("[exec] position %d already terminal, skip CLOSING (G4)", posID)
+			return err
+		}
+		log.Printf("[exec] position %d CLOSING update: %v", posID, err)
+	}
 
 	var totalPnL float64
 	for _, leg := range legs {
