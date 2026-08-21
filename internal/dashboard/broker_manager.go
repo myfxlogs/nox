@@ -588,7 +588,11 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 		if step <= 0 {
 			return 0, false, nil
 		}
-		return float64(step) / 1000000.0, true, nil // MT5 VolumeStep int64 微手（1手=1000000）
+		lots := float64(step) / 1000000.0
+		if symbol == "AUDJPY" || symbol == "AUDJPYm" {
+			log.Printf("[broker] %s %s VolumeStep raw=%d → lots=%.6f", ad.Venue(), symbol, step, lots)
+		}
+		return lots, true, nil // MT5 VolumeStep int64 微手（1手=1000000）
 	}
 	// 符号表 + 分组：SymbolParamsMany 批量取 SymGroup.GroupName，取反斜杠路径顶层段为分组
 	// （Forex\Major\EURUSD→Forex）。Limit 不设——服务端默认 cap，设小 limit 反而在符号超限时抛异常

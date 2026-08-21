@@ -455,6 +455,83 @@ func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, request
 	return result.Status, "", result.PositionID
 }
 
+// ExecuteMeanRevert D-070 均值回归直接执行（绕过 detector，autotrade engine 专用）。
+// 直接接收 canonical + venueBuy + venueSell + qty，构造 LegSpec 并执行。
+// 返回 status、message、positionID。
+func (s *Service) ExecuteMeanRevert(ctx context.Context, canonical, venueBuy, venueSell, requestID string, qty float64, openBps float64) (status, message string, positionID int64) {
+	if s.pipeline == nil {
+		return "FAILED", "executor not wired", 0
+	}
+	if qty <= 0 {
+		return "FAILED", "invalid quantity", 0
+	}
+	qbuy, okBuy := s.qbus.Latest(canonical, venueBuy)
+	qsell, okSell := s.qbus.Latest(canonical, venueSell)
+	if !okBuy || !okSell {
+		return "FAILED", "buy/sell leg quote unavailable", 0
+	}
+	csBuy, err := s.legContractSizeOf(venueBuy, qbuy.VenueSymbol)
+	if err != nil {
+		return "FAILED", fmt.Sprintf("buy CS: %v", err), 0
+	}
+	csSell, err := s.legContractSizeOf(venueSell, qsell.VenueSymbol)
+	if err != nil {
+		return "FAILED", fmt.Sprintf("sell CS: %v", err), 0
+	}
+	sellQty := math.Round(qty*csBuy/csSell*100) / 100
+	qty = s.floorToStepQty(venueBuy, qbuy.VenueSymbol, qty)
+	sellQty = s.floorToStepQty(venueSell, qsell.VenueSymbol, sellQty)
+	// CFD notional cap
+	maxNotional := 10000.0
+	if isMTVenue(venueBuy) {
+		notional := qty * csBuy * qbuy.Ask
+		if notional > maxNotional {
+			qty = s.floorToStepQtyMin(venueBuy, qbuy.VenueSymbol)
+		}
+	}
+	if isMTVenue(venueSell) {
+		notional := sellQty * csSell * qsell.Bid
+		if notional > maxNotional {
+			sellQty = s.floorToStepQtyMin(venueSell, qsell.VenueSymbol)
+		}
+	}
+	// imbalance 检查
+	ref := qbuy.Ask
+	notionalBuy := qty * csBuy * ref
+	notionalSell := sellQty * csSell * ref
+	maxImb := s.maxLegImbalance
+	if maxImb <= 0 {
+		maxImb = 2.0
+	}
+	imb := math.Abs(notionalSell-notionalBuy) / notionalBuy
+	if notionalBuy <= 0 || imb > maxImb/100 {
+		return "FAILED", fmt.Sprintf("leg notional imbalance: buy $%.2f vs sell $%.2f (%.2f%% > %.1f%%)",
+			notionalBuy, notionalSell, imb*100, maxImb), 0
+	}
+	if err := s.checkLegVolume(venueBuy, qbuy.VenueSymbol, qty); err != nil {
+		return "FAILED", err.Error(), 0
+	}
+	if err := s.checkLegVolume(venueSell, qsell.VenueSymbol, sellQty); err != nil {
+		return "FAILED", err.Error(), 0
+	}
+	oppID := fmt.Sprintf("MEANREVERT:%s:%s:%s:%d", canonical, venueBuy, venueSell, time.Now().UnixMilli())
+	legs := []exec.LegSpec{
+		{VenueKey: venueBuy, VenueSymbol: qbuy.VenueSymbol, Side: "BUY", Qty: qty, PriceExpected: qbuy.Ask},
+		{VenueKey: venueSell, VenueSymbol: qsell.VenueSymbol, Side: "SELL", Qty: sellQty, PriceExpected: qsell.Bid},
+	}
+	result, err := s.pipeline.Execute(ctx, oppID, requestID, legs)
+	if err != nil {
+		if errors.Is(err, exec.ErrMaxOpenPositions) || errors.Is(err, exec.ErrDuplicateExecution) {
+			return "FAILED", err.Error(), 0
+		}
+		return "FAILED", fmt.Sprintf("execute: %v", err), 0
+	}
+	if result.PositionID > 0 {
+		_ = s.store.UpdatePositionMeta(ctx, result.PositionID, "CROSS_VENUE", openBps)
+	}
+	return result.Status, "", result.PositionID
+}
+
 // checkTradability F5 执行预检：MT 腿（venueKey 后缀 :mt5/:mt4）查 trade_mode，
 // 买腿 mode∉{LongOnly,Full} / 卖腿 mode∉{ShortOnly,Full} → 返回错误（含 venue+符号+mode），
 // 调用方拒绝执行不建 position；CEX 腿跳过；未知（无 Fact/TTL 过期）放行（venue 服务端拒单是最终权威）。
