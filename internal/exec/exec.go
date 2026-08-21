@@ -66,6 +66,29 @@ type PositionVerifier interface {
 	QueryOpenedOrders(ctx context.Context, venueKey string) ([]OpenedOrder, error)
 }
 
+// ContractSizeResolver 查询单腿合约规格（D-077 修复⑪A M1 平仓 PnL 权威化）。
+// MT 腿：broker_symbol_map.contract_size（服务器 SymbolInfo）；CEX 腿：CS=1（qty 即基础币）。
+// nil = 未接线（测试，CS 回退 1.0——仅 CEX 场景正确，MT 场景 PnL 会有量级误差）。
+type ContractSizeResolver interface {
+	// ContractSize 返回 venueKey+venueSymbol 的合约规格。ok=false = 未知。
+	ContractSize(venueKey, venueSymbol string) (float64, bool)
+}
+
+// HistoryPnL 历史单权威 PnL 查证结果（D-077 修复⑪A M1 回读校准）。
+type HistoryPnL struct {
+	Profit     float64 // 服务器计算的已实现盈亏（权威）
+	Swap       float64
+	Commission float64
+	ClosePrice float64
+}
+
+// PnLCalibrator 按 ticket 回读历史单权威 PnL（D-077 修复⑪A M1 回读校准）。
+// 实现者：reconcile.OrderHistoryQuerier 适配器（main 注入）。nil = 未接线（用同步路径公式）。
+type PnLCalibrator interface {
+	// QueryHistoryPnL 按 ticket 查近 fromDays 天历史单 PnL。返回 nil = 未找到。
+	QueryHistoryPnL(ctx context.Context, venueKey, ticket string, fromDays int) (*HistoryPnL, error)
+}
+
 // Registry 按 Key 路由执行器。动态启停（Broker 管理器）后并发读写，须加锁。
 type Registry struct {
 	mu        sync.RWMutex

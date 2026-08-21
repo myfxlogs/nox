@@ -40,6 +40,10 @@ type Pipeline struct {
 	limits   RiskLimits
 	// verifier 平仓后 ticket 回读（D-077 修复⑩ G1）。nil = 未接线（测试，跳过回读）。
 	verifier PositionVerifier
+	// csResolver 合约规格查询（D-077 修复⑪A M1 平仓 PnL 权威化）。nil = CS 回退 1.0。
+	csResolver ContractSizeResolver
+	// pnlCalibrator 历史单权威 PnL 回读（D-077 修复⑪A M1 回读校准）。nil = 用同步公式。
+	pnlCalibrator PnLCalibrator
 }
 
 // NewPipeline 创建执行管线。
@@ -49,6 +53,12 @@ func NewPipeline(reg *Registry, store *pgstore.Store, qbus *bus.QuoteBus, limits
 
 // SetPositionVerifier 注入平仓后回读器（D-077 修复⑩ G1）。main 装配后调。
 func (p *Pipeline) SetPositionVerifier(v PositionVerifier) { p.verifier = v }
+
+// SetContractSizeResolver 注入合约规格查询器（D-077 修复⑪A M1）。main 装配后调。
+func (p *Pipeline) SetContractSizeResolver(r ContractSizeResolver) { p.csResolver = r }
+
+// SetPnLCalibrator 注入历史单权威 PnL 回读器（D-077 修复⑪A M1）。main 装配后调。
+func (p *Pipeline) SetPnLCalibrator(c PnLCalibrator) { p.pnlCalibrator = c }
 
 // LegSpec 是单腿下单规格。
 type LegSpec struct {
@@ -272,14 +282,11 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 			OrderID:       fill.OrderID,
 			Status:        "FILLED",
 		})
-		// 简化 PnL：(closePrice - openPrice) * qty * direction
-		dir := 1.0
-		if leg.Side == "SELL" {
-			dir = -1.0
-		}
-		if leg.PriceActual != nil {
-			totalPnL += (fill.Price - *leg.PriceActual) * leg.Qty * dir
-		}
+		// D-077 修复⑪A M1：平仓 PnL 权威化——删简化公式，改双路。
+		// 同步路径（即刻）：(Fill.Price − 开仓价) × qty × CS × 方向 + Fill.Swap − Fill.Commission
+		// CS 经服务器规格换算（修掉漏 CS 的 100 倍错误）；CEX 腿 CS=1（qty 即基础币）。
+		legPnL := p.calcLegPnL(leg, fill)
+		totalPnL += legPnL
 		// swap 入 cashflows
 		if fill.Swap != 0 {
 			_ = p.store.InsertCashflow(ctx, posID, "swap", leg.Venue, fill.Swap, time.Now())
@@ -300,6 +307,13 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 			// 不置 CLOSED，留 OPEN 状态等对账自动收尾兜底
 			return fmt.Errorf("residual legs after close: %s", strings.Join(residual, ", "))
 		}
+	}
+
+	// D-077 修复⑪A M1 回读校准：历史单权威 PnL 覆盖同步路径公式。
+	// 命中 → 用权威值（Profit+Swap−Commission，与 auto_close.go:99 统一）；未命中 → 用同步公式。
+	if authPnL, ok := p.calibratePnL(ctx, legs); ok {
+		log.Printf("[exec] position %d PnL calibrated: sync=%.2f → auth=%.2f", posID, totalPnL, authPnL)
+		totalPnL = authPnL
 	}
 
 	if err := p.store.ClosePosition(ctx, posID, totalPnL); err != nil {
@@ -348,6 +362,57 @@ func (p *Pipeline) checkResidualLegs(ctx context.Context, legs []pgstore.Positio
 		}
 	}
 	return residual
+}
+
+// calcLegPnL 同步路径计算单腿平仓 PnL（D-077 修复⑪A M1）。
+// 公式：(Fill.Price − 开仓价) × qty × CS × 方向 + Fill.Swap − Fill.Commission
+// CS：MT 腿经 csResolver 查服务器规格（修掉漏 CS 的 100 倍错误）；CEX 腿 CS=1。
+// 开仓价缺失 → PnL=0（不猜，留对账纠偏）。
+func (p *Pipeline) calcLegPnL(leg pgstore.PositionLeg, fill Fill) float64 {
+	if leg.PriceActual == nil {
+		return 0
+	}
+	cs := 1.0
+	if p.csResolver != nil {
+		if v, ok := p.csResolver.ContractSize(leg.Venue, leg.Symbol); ok && v > 0 {
+			cs = v
+		}
+	}
+	dir := 1.0
+	if leg.Side == "SELL" {
+		dir = -1.0
+	}
+	priceDiff := (fill.Price - *leg.PriceActual) * leg.Qty * cs * dir
+	return priceDiff + fill.Swap - fill.Commission
+}
+
+// calibratePnL 回读校准：按 ticket 查历史单权威 PnL（D-077 修复⑪A M1 回读校准）。
+// 命中 HistoryOrder.Profit 时以其为权威覆盖同步路径公式结果。
+// calibrator 未接线/未找到 → 返回 ok=false（用同步路径公式结果）。
+func (p *Pipeline) calibratePnL(ctx context.Context, legs []pgstore.PositionLeg) (float64, bool) {
+	if p.pnlCalibrator == nil {
+		return 0, false
+	}
+	var totalPnL float64
+	calibrated := 0
+	for _, leg := range legs {
+		if leg.Phase != "OPEN" || leg.Status != "FILLED" || leg.OrderID == "" {
+			continue
+		}
+		vctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		hp, err := p.pnlCalibrator.QueryHistoryPnL(vctx, leg.Venue, leg.OrderID, 3)
+		cancel()
+		if err != nil || hp == nil {
+			continue
+		}
+		// 权威 PnL = Profit + Swap − Commission（与 auto_close.go:99 真值路径统一，P3）
+		totalPnL += hp.Profit + hp.Swap - hp.Commission
+		calibrated++
+	}
+	if calibrated == 0 {
+		return 0, false
+	}
+	return totalPnL, true
 }
 
 // Revalidate 用 QuoteBus 最新报价重算毛收益劣化（§13.1 双阈值；D-051 修③：毛口径比较）。
