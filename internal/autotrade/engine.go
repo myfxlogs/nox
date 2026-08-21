@@ -87,6 +87,10 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity)
 	if strings.Contains(opp.VenueBuy, "okx") || strings.Contains(opp.VenueSell, "okx") {
 		return
 	}
+	// D-070：gate 未配置交易所凭据，跳过含 gate 的机会
+	if strings.Contains(opp.VenueBuy, "gate") || strings.Contains(opp.VenueSell, "gate") {
+		return
+	}
 	// 门槛：净收益
 	if opp.NetBps < e.cfg.MinNetBps {
 		return
