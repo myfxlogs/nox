@@ -562,7 +562,19 @@ message StreamUpdatesResponse {
     PersonalPositionPrice personal_position_price = 7;  // 实时个人持仓现价（D-049）
     BrokerPositionSnapshot broker_positions = 8;        // Broker 实持仓实时推送（全量快照）
     AccountSnapshot accounts = 9;                       // 账户资产实时推送（全量快照，D-053）
+    FundingNeedNotice funding_need = 10;                // 资金注入提醒弹窗（D-072，余额不足实时推）
   }
+}
+
+// 资金注入提醒（D-072）：swap 套利余额不足时实时弹窗（不入 alerts 表，断线不回放）。
+// NeedUSD = minNotional − min(equityLong, equityShort)（差额，正数）。
+message FundingNeedNotice {
+  string canonical = 1;
+  string venue_long = 2;
+  string venue_short = 3;
+  string reason = 4;           // SwapArbNotional 返回的 reason（含具体数值）
+  double need_usd = 5;         // 需注入资金（USD）；0 = 仅 venue 离线/币种不符等非余额原因
+  google.protobuf.Timestamp ts = 6;
 }
 
 // Broker 实持仓全量快照（D-052）：monitor 变更时广播，含离线 venue 的最近快照；前端全量替换。
