@@ -184,6 +184,9 @@ const (
 	DashboardServiceStreamUpdatesProcedure = "/arb.dashboard.v1.DashboardService/StreamUpdates"
 	// DashboardServiceHealthProcedure is the fully-qualified name of the DashboardService's Health RPC.
 	DashboardServiceHealthProcedure = "/arb.dashboard.v1.DashboardService/Health"
+	// DashboardServiceGetFrontConfigProcedure is the fully-qualified name of the DashboardService's
+	// GetFrontConfig RPC.
+	DashboardServiceGetFrontConfigProcedure = "/arb.dashboard.v1.DashboardService/GetFrontConfig"
 )
 
 // DashboardServiceClient is a client for the arb.dashboard.v1.DashboardService service.
@@ -255,6 +258,8 @@ type DashboardServiceClient interface {
 	StreamUpdates(context.Context, *connect.Request[v1.StreamUpdatesRequest]) (*connect.ServerStreamForClient[v1.StreamUpdatesResponse], error)
 	// 健康
 	Health(context.Context, *connect.Request[v1.HealthRequest]) (*connect.Response[v1.HealthResponse], error)
+	// 前端配置同源（D-077 修复⑪B N7）：返回后端 config 阈值供前端展示。
+	GetFrontConfig(context.Context, *connect.Request[v1.GetFrontConfigRequest]) (*connect.Response[v1.GetFrontConfigResponse], error)
 }
 
 // NewDashboardServiceClient constructs a client for the arb.dashboard.v1.DashboardService service.
@@ -574,6 +579,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("Health")),
 			connect.WithClientOptions(opts...),
 		),
+		getFrontConfig: connect.NewClient[v1.GetFrontConfigRequest, v1.GetFrontConfigResponse](
+			httpClient,
+			baseURL+DashboardServiceGetFrontConfigProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("GetFrontConfig")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -630,6 +641,7 @@ type dashboardServiceClient struct {
 	listMatrixUniverse     *connect.Client[v1.ListMatrixUniverseRequest, v1.ListMatrixUniverseResponse]
 	streamUpdates          *connect.Client[v1.StreamUpdatesRequest, v1.StreamUpdatesResponse]
 	health                 *connect.Client[v1.HealthRequest, v1.HealthResponse]
+	getFrontConfig         *connect.Client[v1.GetFrontConfigRequest, v1.GetFrontConfigResponse]
 }
 
 // ListLatestQuotes calls arb.dashboard.v1.DashboardService.ListLatestQuotes.
@@ -887,6 +899,11 @@ func (c *dashboardServiceClient) Health(ctx context.Context, req *connect.Reques
 	return c.health.CallUnary(ctx, req)
 }
 
+// GetFrontConfig calls arb.dashboard.v1.DashboardService.GetFrontConfig.
+func (c *dashboardServiceClient) GetFrontConfig(ctx context.Context, req *connect.Request[v1.GetFrontConfigRequest]) (*connect.Response[v1.GetFrontConfigResponse], error) {
+	return c.getFrontConfig.CallUnary(ctx, req)
+}
+
 // DashboardServiceHandler is an implementation of the arb.dashboard.v1.DashboardService service.
 type DashboardServiceHandler interface {
 	// 快照类
@@ -956,6 +973,8 @@ type DashboardServiceHandler interface {
 	StreamUpdates(context.Context, *connect.Request[v1.StreamUpdatesRequest], *connect.ServerStream[v1.StreamUpdatesResponse]) error
 	// 健康
 	Health(context.Context, *connect.Request[v1.HealthRequest]) (*connect.Response[v1.HealthResponse], error)
+	// 前端配置同源（D-077 修复⑪B N7）：返回后端 config 阈值供前端展示。
+	GetFrontConfig(context.Context, *connect.Request[v1.GetFrontConfigRequest]) (*connect.Response[v1.GetFrontConfigResponse], error)
 }
 
 // NewDashboardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1271,6 +1290,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("Health")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceGetFrontConfigHandler := connect.NewUnaryHandler(
+		DashboardServiceGetFrontConfigProcedure,
+		svc.GetFrontConfig,
+		connect.WithSchema(dashboardServiceMethods.ByName("GetFrontConfig")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/arb.dashboard.v1.DashboardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DashboardServiceListLatestQuotesProcedure:
@@ -1375,6 +1400,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceStreamUpdatesHandler.ServeHTTP(w, r)
 		case DashboardServiceHealthProcedure:
 			dashboardServiceHealthHandler.ServeHTTP(w, r)
+		case DashboardServiceGetFrontConfigProcedure:
+			dashboardServiceGetFrontConfigHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1586,4 +1613,8 @@ func (UnimplementedDashboardServiceHandler) StreamUpdates(context.Context, *conn
 
 func (UnimplementedDashboardServiceHandler) Health(context.Context, *connect.Request[v1.HealthRequest]) (*connect.Response[v1.HealthResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.Health is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) GetFrontConfig(context.Context, *connect.Request[v1.GetFrontConfigRequest]) (*connect.Response[v1.GetFrontConfigResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetFrontConfig is not implemented"))
 }

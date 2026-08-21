@@ -71,6 +71,18 @@ type Service struct {
 	oppContractSize func(canonical, venueKey string) (float64, bool)
 	// P5 修复⑧：告警 TTL 节流——上次 purge 时间（内存节流，按日一次；ListAlerts 顺带触发）。
 	lastAlertPurge time.Time
+	// frontCfg 前端展示阈值同源（D-077 修复⑪B N7 GetFrontConfig RPC）。
+	frontCfg FrontConfig
+}
+
+// FrontConfig 前端展示阈值（D-077 修复⑪B N7，后端 config 单一真相）。
+type FrontConfig struct {
+	NotifyMinNetBps   float64
+	FreshnessTTLSec   int
+	EntrySpreadMinBps float64
+	MinNetSwapBps     float64
+	RevalidateAbsBps  float64
+	RevalidateRelPct  float64
 }
 
 // New 创建 dashboard 服务。reviewer 为复盘触发闭包（nil 则平仓后不触发）；
@@ -1327,6 +1339,21 @@ func (s *Service) Health(ctx context.Context, req *connect.Request[v1.HealthRequ
 		Ok:      true,
 		DbOk:    s.store != nil,
 		Version: "0.1.0",
+	}), nil
+}
+
+// SetFrontConfig 注入前端展示阈值（D-077 修复⑪B N7，main 装配后调）。
+func (s *Service) SetFrontConfig(cfg FrontConfig) { s.frontCfg = cfg }
+
+// GetFrontConfig 返回后端 config 阈值供前端展示同源（D-077 修复⑪B N7）。
+func (s *Service) GetFrontConfig(ctx context.Context, req *connect.Request[v1.GetFrontConfigRequest]) (*connect.Response[v1.GetFrontConfigResponse], error) {
+	return connect.NewResponse(&v1.GetFrontConfigResponse{
+		NotifyMinNetBps:   s.frontCfg.NotifyMinNetBps,
+		FreshnessTtlSec:   int32(s.frontCfg.FreshnessTTLSec),
+		EntrySpreadMinBps: s.frontCfg.EntrySpreadMinBps,
+		MinNetSwapBps:     s.frontCfg.MinNetSwapBps,
+		RevalidateAbsBps:  s.frontCfg.RevalidateAbsBps,
+		RevalidateRelPct:  s.frontCfg.RevalidateRelPct,
 	}), nil
 }
 
