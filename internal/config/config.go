@@ -12,13 +12,13 @@ import (
 // Config 全链路经济参数。
 type Config struct {
 	// === 检测器阈值（§5，息差型统一为年化百分点，D-036）===
-	CrossVenueMinGrossBpsCEX float64       // CEX(spot/perp) 跨所 gross 门槛（bps）。D-035：cross 降级，仅报价错位捕获
-	CrossVenueMinGrossBpsCFD float64       // CFD(mt4/mt5) 跨所 gross 观察门槛（bps）。低于保本 2.6，展示仍靠评估器 net>0（D-051 WP1）
-	FundingMinNetAnnualized  float64       // funding hedge 净年化门槛（%）
-	CarryMinNetAnnualized    float64       // carry 净年化门槛（%）——D-036 由 bps 改百分点，与 funding 对齐
-	PerpFundingMinNetAnnualized float64   // perp×perp funding 差净年化门槛（%）——D-064
-	GrabMinNetAnnualized     float64       // grab 档门槛（%），替代 classify 硬编码 4.5（D-036）
-	DetectorFreshnessTTL     time.Duration // 报价陈旧排除 TTL
+	CrossVenueMinGrossBpsCEX    float64       // CEX(spot/perp) 跨所 gross 门槛（bps）。D-035：cross 降级，仅报价错位捕获
+	CrossVenueMinGrossBpsCFD    float64       // CFD(mt4/mt5) 跨所 gross 观察门槛（bps）。低于保本 2.6，展示仍靠评估器 net>0（D-051 WP1）
+	FundingMinNetAnnualized     float64       // funding hedge 净年化门槛（%）
+	CarryMinNetAnnualized       float64       // carry 净年化门槛（%）——D-036 由 bps 改百分点，与 funding 对齐
+	PerpFundingMinNetAnnualized float64       // perp×perp funding 差净年化门槛（%）——D-064
+	GrabMinNetAnnualized        float64       // grab 档门槛（%），替代 classify 硬编码 4.5（D-036）
+	DetectorFreshnessTTL        time.Duration // 报价陈旧排除 TTL
 
 	// === 评估器成本（§6）===
 	SlippageBps      float64       // 单腿滑点（bps）
@@ -38,7 +38,7 @@ type Config struct {
 	SwapRefresh time.Duration // swap 轮询间隔（默认 1h，swap 变化慢）
 	// TradeModeTTL trade_mode Fact 新鲜度（D-060 F4/F5 共用）：超期视为未知放行
 	//（broker 周末置 Disabled 不跨周末误杀周一；venue 服务端拒单是最终权威）。
-	TradeModeTTL time.Duration
+	TradeModeTTL       time.Duration
 	MaxLegImbalancePct float64 // 卖腿名义不平衡上限（百分比，D-028/D-060 实施修正②）
 
 	// === 复盘闭环（§13.6，D-034）===
@@ -76,20 +76,20 @@ type Config struct {
 // Load 从环境变量加载配置，未设置用默认值。
 func Load() *Config {
 	return &Config{
-		CrossVenueMinGrossBpsCEX: envFloat("ARB_CROSS_MIN_GROSS_BPS_CEX", 10.0),
-		CrossVenueMinGrossBpsCFD: envFloat("ARB_CROSS_MIN_GROSS_BPS_CFD", 2.0),
-		FundingMinNetAnnualized:  envFloat("ARB_FUNDING_MIN_NET_ANNUALIZED", 4.0),
-		CarryMinNetAnnualized:    envFloat("ARB_CARRY_MIN_NET_ANNUALIZED", 4.0),
+		CrossVenueMinGrossBpsCEX:    envFloat("ARB_CROSS_MIN_GROSS_BPS_CEX", 10.0),
+		CrossVenueMinGrossBpsCFD:    envFloat("ARB_CROSS_MIN_GROSS_BPS_CFD", 2.0),
+		FundingMinNetAnnualized:     envFloat("ARB_FUNDING_MIN_NET_ANNUALIZED", 4.0),
+		CarryMinNetAnnualized:       envFloat("ARB_CARRY_MIN_NET_ANNUALIZED", 4.0),
 		PerpFundingMinNetAnnualized: envFloat("ARB_PERP_FUNDING_MIN_NET_ANNUALIZED", 2.0),
-		GrabMinNetAnnualized:     envFloat("ARB_GRAB_MIN_NET_ANNUALIZED", 4.5),
-		DetectorFreshnessTTL:     envDur("ARB_DETECTOR_FRESHNESS_TTL", 60*time.Second),
-		SlippageBps:              envFloat("ARB_SLIPPAGE_BPS", 1.0),
-		MarginRateAnnual:         envFloat("ARB_MARGIN_RATE_ANNUAL", 4.5),
-		OpportunityTTL:           envDur("ARB_OPPORTUNITY_TTL", 30*time.Second),
-		ScanThrottle:             envDur("ARB_SCAN_THROTTLE", 30*time.Second),
-		CloseBpsThr:              envFloat("ARB_CLOSE_BPS_THR", 2.0),
-		CommissionCFDBps:         envFloat("ARB_COMMISSION_CFD_BPS", 0.3),
-		CommissionCEXTakerBps:    envFloat("ARB_COMMISSION_CEX_TAKER_BPS", 10.0),
+		GrabMinNetAnnualized:        envFloat("ARB_GRAB_MIN_NET_ANNUALIZED", 4.5),
+		DetectorFreshnessTTL:        envDur("ARB_DETECTOR_FRESHNESS_TTL", 60*time.Second),
+		SlippageBps:                 envFloat("ARB_SLIPPAGE_BPS", 1.0),
+		MarginRateAnnual:            envFloat("ARB_MARGIN_RATE_ANNUAL", 4.5),
+		OpportunityTTL:              envDur("ARB_OPPORTUNITY_TTL", 30*time.Second),
+		ScanThrottle:                envDur("ARB_SCAN_THROTTLE", 30*time.Second),
+		CloseBpsThr:                 envFloat("ARB_CLOSE_BPS_THR", 2.0),
+		CommissionCFDBps:            envFloat("ARB_COMMISSION_CFD_BPS", 0.3),
+		CommissionCEXTakerBps:       envFloat("ARB_COMMISSION_CEX_TAKER_BPS", 10.0),
 		CommissionTaker: map[string]float64{
 			"binance": envFloat("ARB_COMMISSION_TAKER_BINANCE", 10.0),
 			"okx":     envFloat("ARB_COMMISSION_TAKER_OKX", 10.0),
@@ -97,7 +97,7 @@ func Load() *Config {
 		},
 		SwapRefresh:              envDur("ARB_SWAP_REFRESH", time.Hour),
 		TradeModeTTL:             envDur("ARB_TRADEMODE_TTL", 24*time.Hour),
-		MaxLegImbalancePct:  envFloat("ARB_MAX_LEG_IMBALANCE_PCT", 2.0),
+		MaxLegImbalancePct:       envFloat("ARB_MAX_LEG_IMBALANCE_PCT", 2.0),
 		ReviewMinSamples:         envInt("ARB_REVIEW_MIN_SAMPLES", 3),
 		ReviewCrossBiasBps:       envFloat("ARB_REVIEW_CROSS_BIAS_BPS", 1.0),
 		ReviewCarryBiasAnnualPct: envFloat("ARB_REVIEW_CARRY_BIAS_ANNUAL_PCT", 1.0),
