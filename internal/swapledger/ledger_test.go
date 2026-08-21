@@ -8,14 +8,24 @@ import (
 	"arb/internal/store/pgstore"
 )
 
-// stubTripleDay 测试用 TripleDayResolver。
+// stubTripleDay 测试用 TripleDayResolver（D-077 修复⑪A M3：per-venue + per-symbol）。
 type stubTripleDay struct {
-	days map[string]time.Weekday
+	venueDays  map[string]time.Weekday // key = venue
+	symbolDays map[string]time.Weekday // key = "venue:canonical"
 }
 
-func (s stubTripleDay) TripleSwapDay(venue string) (time.Weekday, bool) {
-	d, ok := s.days[venue]
-	return d, ok
+func (s stubTripleDay) TripleSwapDay(venue, canonical string) (time.Weekday, bool) {
+	// 优先 symbol 级
+	if s.symbolDays != nil {
+		if d, ok := s.symbolDays[venue+":"+canonical]; ok {
+			return d, true
+		}
+	}
+	// 回退 venue 级
+	if d, ok := s.venueDays[venue]; ok {
+		return d, true
+	}
+	return 0, false
 }
 
 // stubNotional 测试用 NotionalResolver。
@@ -30,10 +40,10 @@ func (s stubNotional) USDPerLotForLeg(canonical, venueKey, side string) (float64
 
 // TestSettleMultiplier_NormalDay 非三倍日 → 1。
 func TestSettleMultiplier_NormalDay(t *testing.T) {
-	r := stubTripleDay{days: map[string]time.Weekday{"vA": time.Wednesday}}
+	r := stubTripleDay{venueDays: map[string]time.Weekday{"vA": time.Wednesday}}
 	// Monday = 非三倍日
 	monday := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC) // 2026-08-24 is Monday
-	got := settleMultiplier("vA:mt5", monday, r)
+	got := settleMultiplier("vA:mt5", "AUDJPY", monday, r)
 	if got != 1 {
 		t.Errorf("normal day multiplier want 1, got %v", got)
 	}
@@ -41,43 +51,43 @@ func TestSettleMultiplier_NormalDay(t *testing.T) {
 
 // TestSettleMultiplier_TripleDay 三倍日 → 3。
 func TestSettleMultiplier_TripleDay(t *testing.T) {
-	r := stubTripleDay{days: map[string]time.Weekday{"vA": time.Wednesday}}
+	r := stubTripleDay{venueDays: map[string]time.Weekday{"vA": time.Wednesday}}
 	// Wednesday = 三倍日
 	wed := time.Date(2026, 8, 26, 0, 0, 0, 0, time.UTC) // 2026-08-26 is Wednesday
-	got := settleMultiplier("vA:mt5", wed, r)
+	got := settleMultiplier("vA:mt5", "AUDJPY", wed, r)
 	if got != 3 {
 		t.Errorf("triple day multiplier want 3, got %v", got)
 	}
 }
 
-// TestSettleMultiplier_UnknownVenueFallback venue 未知 → 回退周三假设。
-func TestSettleMultiplier_UnknownVenueFallback(t *testing.T) {
-	r := stubTripleDay{days: map[string]time.Weekday{}} // 空 = 全未知
-	wed := time.Date(2026, 8, 26, 0, 0, 0, 0, time.UTC) // Wednesday
-	got := settleMultiplier("vX:mt5", wed, r)
-	if got != 3 {
-		t.Errorf("unknown venue fallback Wednesday multiplier want 3, got %v", got)
+// TestSettleMultiplier_UnknownVenueFailClosed venue 未知 → fail-closed 返回 0（D-077 修复⑪A M4：删周三回退）。
+func TestSettleMultiplier_UnknownVenueFailClosed(t *testing.T) {
+	r := stubTripleDay{venueDays: map[string]time.Weekday{}} // 空 = 全未知
+	wed := time.Date(2026, 8, 26, 0, 0, 0, 0, time.UTC)      // Wednesday
+	got := settleMultiplier("vX:mt5", "AUDJPY", wed, r)
+	if got != 0 {
+		t.Errorf("unknown venue fail-closed want 0 (no Wednesday fallback), got %v", got)
 	}
 	mon := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC) // Monday
-	got = settleMultiplier("vX:mt5", mon, r)
-	if got != 1 {
-		t.Errorf("unknown venue fallback non-Wednesday multiplier want 1, got %v", got)
+	got = settleMultiplier("vX:mt5", "AUDJPY", mon, r)
+	if got != 0 {
+		t.Errorf("unknown venue fail-closed non-Wednesday want 0, got %v", got)
 	}
 }
 
 // TestSettleMultiplier_PerVenueDiff 各 venue 三倍日不同（archive 实证：4 家不全周三）。
 func TestSettleMultiplier_PerVenueDiff(t *testing.T) {
-	r := stubTripleDay{days: map[string]time.Weekday{
+	r := stubTripleDay{venueDays: map[string]time.Weekday{
 		"vA": time.Wednesday,
 		"vB": time.Tuesday,
 	}}
 	tue := time.Date(2026, 8, 25, 0, 0, 0, 0, time.UTC) // Tuesday
 	// vA 三倍日=周三 → 周二=1
-	if got := settleMultiplier("vA:mt5", tue, r); got != 1 {
+	if got := settleMultiplier("vA:mt5", "AUDJPY", tue, r); got != 1 {
 		t.Errorf("vA Tuesday multiplier want 1, got %v", got)
 	}
 	// vB 三倍日=周二 → 周二=3
-	if got := settleMultiplier("vB:mt5", tue, r); got != 3 {
+	if got := settleMultiplier("vB:mt5", "AUDJPY", tue, r); got != 3 {
 		t.Errorf("vB Tuesday multiplier want 3, got %v", got)
 	}
 }
@@ -88,7 +98,7 @@ func TestLegSwapAmount_BuyLegSwapLong(t *testing.T) {
 	shortMap := map[factKey]float64{}
 	fundMap := map[factKey]float64{}
 	notional := stubNotional{vals: map[string]float64{"AUDJPY:vA:mt5:ask": 100000}} // 1 手=10万 USD
-	r := stubTripleDay{days: map[string]time.Weekday{"vA": time.Wednesday}}
+	r := stubTripleDay{venueDays: map[string]time.Weekday{"vA": time.Wednesday}}
 	l := &Ledger{notional: notional, tripleDay: r}
 
 	leg := pgstore.PositionLeg{Venue: "vA:mt5", Side: "BUY", Qty: 2.0}
@@ -110,7 +120,7 @@ func TestLegSwapAmount_SellLegSwapShort(t *testing.T) {
 	shortMap := map[factKey]float64{factKey{"AUDJPY", "vB"}: -3.0} // -3 bps/日（付 swap）
 	fundMap := map[factKey]float64{}
 	notional := stubNotional{vals: map[string]float64{"AUDJPY:vB:mt5:bid": 100000}}
-	r := stubTripleDay{days: map[string]time.Weekday{"vB": time.Wednesday}}
+	r := stubTripleDay{venueDays: map[string]time.Weekday{"vB": time.Wednesday}}
 	l := &Ledger{notional: notional, tripleDay: r}
 
 	leg := pgstore.PositionLeg{Venue: "vB:mt5", Side: "SELL", Qty: 1.0}
@@ -126,7 +136,7 @@ func TestLegSwapAmount_SellLegSwapShort(t *testing.T) {
 	}
 }
 
-// TestLegSwapAmount_FundingType funding 类用年化百分点 + 8h×3 周期。
+// TestLegSwapAmount_FundingType funding 类用年化百分点（D-077 修复⑪A M2：删三倍虚乘）。
 func TestLegSwapAmount_FundingType(t *testing.T) {
 	longMap := map[factKey]float64{}
 	shortMap := map[factKey]float64{}
@@ -141,10 +151,11 @@ func TestLegSwapAmount_FundingType(t *testing.T) {
 	if !ok {
 		t.Fatal("want ok=true, got false")
 	}
-	// amount = 10.95/100/365 × 50000 × 3 = 45 USD（日 funding，3 周期/日）
-	want := 10.95 / 100 / DaysPerYear * 50000 * PeriodsPerDay
+	// D-077 修复⑪A M2：amount = 10.95/100/365 × 50000 = 15 USD（日 funding，含 8h×3 周期合计）
+	// 旧公式 × 3 = 45 USD（3 倍虚乘）→ 删除
+	want := 10.95 / 100 / DaysPerYear * 50000
 	if math.Abs(got-want) > 0.01 {
-		t.Errorf("funding amount want %.2f, got %.2f", want, got)
+		t.Errorf("funding amount want %.2f (no triple multiply), got %.2f", want, got)
 	}
 }
 
@@ -181,7 +192,7 @@ func TestLegSwapAmount_NotionalNotFound(t *testing.T) {
 func TestLegSwapAmount_ZeroRate(t *testing.T) {
 	longMap := map[factKey]float64{factKey{"AUDJPY", "vA"}: 0.0} // 零息
 	notional := stubNotional{vals: map[string]float64{"AUDJPY:vA:mt5:ask": 100000}}
-	r := stubTripleDay{days: map[string]time.Weekday{"vA": time.Wednesday}}
+	r := stubTripleDay{venueDays: map[string]time.Weekday{"vA": time.Wednesday}}
 	l := &Ledger{notional: notional, tripleDay: r}
 
 	leg := pgstore.PositionLeg{Venue: "vA:mt5", Side: "BUY", Qty: 1.0}

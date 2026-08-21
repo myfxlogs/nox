@@ -72,3 +72,24 @@ func TestTripleSwapDayDiff(t *testing.T) {
 		t.Errorf("expected 2 Wednesday venues, got %d", wedCount)
 	}
 }
+
+// TestSettleMultiplier_PerSymbolPriority symbol 级 Fact 优先于 venue 级（D-077 修复⑪A M3）。
+func TestSettleMultiplier_PerSymbolPriority(t *testing.T) {
+	r := stubTripleDay{
+		venueDays:  map[string]time.Weekday{"vA": time.Wednesday},
+		symbolDays: map[string]time.Weekday{"vA:XAUUSD": time.Friday}, // symbol 级=Friday 覆盖 venue 级=Wednesday
+	}
+	fri := time.Date(2026, 8, 28, 0, 0, 0, 0, time.UTC) // Friday
+	wed := time.Date(2026, 8, 26, 0, 0, 0, 0, time.UTC) // Wednesday
+	// XAUUSD 用 symbol 级 Friday → Friday=3, Wednesday=1
+	if got := settleMultiplier("vA:mt5", "XAUUSD", fri, r); got != 3 {
+		t.Errorf("per-symbol Friday want 3, got %v", got)
+	}
+	if got := settleMultiplier("vA:mt5", "XAUUSD", wed, r); got != 1 {
+		t.Errorf("per-symbol Wednesday (not Friday) want 1, got %v", got)
+	}
+	// AUDJPY 无 symbol 级 → 回退 venue 级 Wednesday → Wednesday=3
+	if got := settleMultiplier("vA:mt5", "AUDJPY", wed, r); got != 3 {
+		t.Errorf("venue-level Wednesday want 3, got %v", got)
+	}
+}

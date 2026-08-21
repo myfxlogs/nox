@@ -6,6 +6,11 @@
 //
 // V1 主路径=公式记账+日对账（proto BrokerPosition 无 swap 字段实证，broker 差分降为未来触发条件）。
 // V2 三倍日校准：swap 采集轮顺带读 SymbolParams.ThreeDaysSwap → per-venue 三倍日（facts 表，勿新表）。
+//
+// D-077 修复⑪A M5 周末结算模型标注：
+// 周末结算模型未标定（无数据支撑=会造新假设）——保留现模型（每日按采集到的 swap_rate 记账，
+// 不区分工作日/结算日）+ 依赖 M3 per-symbol 三倍日数据与既有日对账告警纠偏：
+// 日对账偏差 >5% 告警已会抓周末多记/少记；per-venue 结算日历待对账数据积累后建模（不做无数据假设）。
 package swapledger
 
 import (
@@ -19,10 +24,9 @@ import (
 	"arb/internal/store/pgstore"
 )
 
-// 资金费率周期具名常量（抄 arbcn settle.go，funding 类 8h×3/日）。
+// 资金费率换算常量。
 const (
-	PeriodsPerDay = 3
-	DaysPerYear   = 365
+	DaysPerYear = 365
 )
 
 // SwapPositionTypes 需要逐日 swap 记账的持仓类型。
@@ -47,10 +51,10 @@ type NotionalResolver interface {
 	USDPerLotForLeg(canonical, venueKey, side string) (float64, bool)
 }
 
-// TripleDayResolver per-venue 三倍 swap 日查询（D-077 V2）。
-// venue → time.Weekday（0=Sunday...6=Saturday）；ok=false 表示未知（回退周三假设）。
+// TripleDayResolver per-venue/per-symbol 三倍 swap 日查询（D-077 V2→修复⑪A M3）。
+// 优先级：symbol 级 Fact > venue 级 Fact > fail-closed（M4：删周三回退）。
 type TripleDayResolver interface {
-	TripleSwapDay(venue string) (time.Weekday, bool)
+	TripleSwapDay(venue, canonical string) (time.Weekday, bool)
 }
 
 // Ledger swap 逐日记账器（D-077 V1）。
@@ -264,24 +268,31 @@ func (l *Ledger) legSwapAmount(canonical string, leg pgstore.PositionLeg, day ti
 
 	// 3. 算金额
 	if isFunding {
-		// funding：年化百分点 → 日金额 = rate/100/DaysPerYear × notional × PeriodsPerDay
-		// = rate/100/365 × notional × 3（8h×3 周期/日，arbcn PeriodsPerDay 具名常量）
-		return rate / 100 / DaysPerYear * notional * PeriodsPerDay, true
+		// D-077 修复⑪A M2：funding 记账删三倍虚乘。
+		// 采集层 Fact 已是年化口径 → 日金额 = rate/100/DaysPerYear × notional（含 8h×3 周期合计）。
+		// 旧公式 × PeriodsPerDay(3) = 3 倍虚乘（现记 9f 实收 3f）→ 删除。
+		return rate / 100 / DaysPerYear * notional, true
 	}
 
 	// swap：日 bps → 日金额 = rate/10000 × notional × settleMultiplier
-	multiplier := settleMultiplier(leg.Venue, day, l.tripleDay)
+	multiplier := settleMultiplier(leg.Venue, canonical, day, l.tripleDay)
+	if multiplier == 0 {
+		// D-077 修复⑪A M4：fail-closed（三倍日未知）→ 跳过该腿记账，不记 0 cashflow
+		return 0, false
+	}
 	return rate / 10000 * notional * multiplier, true
 }
 
-// settleMultiplier 返回当日结算乘数（D-077 V2：三倍日→3 否则 1）。
-// 纯函数：venueKey 当日=该 venue 三倍 swap 日→3 否则 1。
-// TripleDayResolver 未知（ok=false）→ 回退周三假设（archive 经验，待 V2 实测修正）。
-func settleMultiplier(venueKey string, day time.Time, r TripleDayResolver) float64 {
+// settleMultiplier 返回当日结算乘数（D-077 V2→修复⑪A M3+M4）。
+// 优先级：symbol 级 Fact > venue 级 Fact > fail-closed（跳过+warn，禁止回退已知错误值）。
+// 三倍日→3 否则 1。TripleDayResolver 未知（ok=false）→ 返回 0（调用方跳过该腿记账）。
+func settleMultiplier(venueKey, canonical string, day time.Time, r TripleDayResolver) float64 {
 	venueName := venueFromKey(venueKey)
-	tripleDay, ok := r.TripleSwapDay(venueName)
+	tripleDay, ok := r.TripleSwapDay(venueName, canonical)
 	if !ok {
-		tripleDay = time.Wednesday // 回退周三假设（archive 经验，待 V2 实测修正）
+		// D-077 修复⑪A M4：删周三回退 → fail-closed（漏记由既有日对账偏差告警兜底，漏记比错记可检出）
+		log.Printf("[swapledger] triple swap day unknown for %s/%s, skip leg (fail-closed, no Wednesday fallback)", venueKey, canonical)
+		return 0
 	}
 	if day.Weekday() == tripleDay {
 		return 3
