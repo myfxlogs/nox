@@ -11,6 +11,7 @@ import (
 	"arb/internal/bus"
 	"arb/internal/dashboard"
 	"arb/internal/fact"
+	"arb/internal/position"
 	"arb/internal/store/pgstore"
 )
 
@@ -440,11 +441,11 @@ func (e *Engine) scanAndClose(ctx context.Context) {
 }
 
 // checkExitCondition 按 type 分派退出条件（D-072 §4.2）。
+// 息差型判定走 position.IsCarryType 共用 helper（P3 单一真相：monitor.go 跳过收敛告警 + 此处退出分派同源）。
 // 返回 (shouldClose, reason)。
 func (e *Engine) checkExitCondition(ctx context.Context, p *pgstore.Position) (bool, string) {
-	switch p.Type {
-	case "CROSS_VENUE", "MEANREVERT":
-		// 收敛型：currentNetBps ≤ CloseBpsThr
+	if !position.IsCarryType(p.Type) {
+		// 收敛型（CROSS_VENUE/MEANREVERT 及未知类型）：currentNetBps ≤ CloseBpsThr
 		currentBps, ok := e.currentNetBps(p)
 		if !ok {
 			return false, ""
@@ -453,17 +454,9 @@ func (e *Engine) checkExitCondition(ctx context.Context, p *pgstore.Position) (b
 			return true, fmt.Sprintf("converged currentBps=%.2f <= %.1f", currentBps, e.cfg.CloseBpsThr)
 		}
 		return false, ""
-	case "SWAPARB", "CARRY":
-		// 净 swap ≤ SwapArbExitBps（默认 0）→ 平仓
-		netSwap, ok := e.recalcNetSwap(ctx, p)
-		if !ok {
-			return false, ""
-		}
-		if netSwap <= e.cfg.SwapArbExitBps {
-			return true, fmt.Sprintf("net swap %.3f bps/day <= %.1f", netSwap, e.cfg.SwapArbExitBps)
-		}
-		return false, ""
-	case "FUNDING_HEDGE", "PERP_FUNDING":
+	}
+	// 息差型：按 swap/funding 子分派（IsCarryType 已判定为 4 类之一，此处只区分 swap vs funding）
+	if p.Type == "FUNDING_HEDGE" || p.Type == "PERP_FUNDING" {
 		// 净 funding 年化 ≤ FundingExitPct（默认 0）→ 平仓
 		netFunding, ok := e.recalcNetFunding(ctx, p)
 		if !ok {
@@ -473,6 +466,14 @@ func (e *Engine) checkExitCondition(ctx context.Context, p *pgstore.Position) (b
 			return true, fmt.Sprintf("net funding %.2f%% <= %.1f%%", netFunding, e.cfg.FundingExitPct)
 		}
 		return false, ""
+	}
+	// SWAPARB/CARRY：净 swap ≤ SwapArbExitBps（默认 0）→ 平仓
+	netSwap, ok := e.recalcNetSwap(ctx, p)
+	if !ok {
+		return false, ""
+	}
+	if netSwap <= e.cfg.SwapArbExitBps {
+		return true, fmt.Sprintf("net swap %.3f bps/day <= %.1f", netSwap, e.cfg.SwapArbExitBps)
 	}
 	return false, ""
 }
