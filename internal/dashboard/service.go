@@ -460,11 +460,12 @@ func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, request
 // maxNotional: CFD 名义额上限（0=用默认$10K）。
 // 返回 status、message、positionID。
 func (s *Service) ExecuteMeanRevert(ctx context.Context, canonical, venueBuy, venueSell, requestID string, qty float64, openBps float64) (status, message string, positionID int64) {
-	return s.ExecuteMeanRevertWithCap(ctx, canonical, venueBuy, venueSell, requestID, qty, openBps, 10000.0)
+	return s.ExecuteMeanRevertWithCap(ctx, canonical, venueBuy, venueSell, requestID, qty, openBps, 10000.0, "MEANREVERT")
 }
 
 // ExecuteMeanRevertWithCap 带 notional cap 参数的均值回归执行（swap 套利可用更大 cap）。
-func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venueBuy, venueSell, requestID string, qty float64, openBps float64, maxNotional float64) (status, message string, positionID int64) {
+// strategyType: 写入 positions.type（D-072 §4.1，SWAPARB/MEANREVERT）。
+func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venueBuy, venueSell, requestID string, qty float64, openBps float64, maxNotional float64, strategyType string) (status, message string, positionID int64) {
 	if s.pipeline == nil {
 		return "FAILED", "executor not wired", 0
 	}
@@ -535,7 +536,7 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 		return "FAILED", fmt.Sprintf("execute: %v", err), 0
 	}
 	if result.PositionID > 0 {
-		_ = s.store.UpdatePositionMeta(ctx, result.PositionID, "CROSS_VENUE", openBps)
+		_ = s.store.UpdatePositionMeta(ctx, result.PositionID, strategyType, openBps)
 	}
 	return result.Status, "", result.PositionID
 }
