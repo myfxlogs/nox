@@ -29,6 +29,7 @@ var migrationFiles = []struct {
 	{12, migrations.CanonicalUsdtSQL},
 	{32, migrations.PerpFundingTypeSQL},
 	{33, migrations.AutotradeSQL},
+	{34, migrations.AutotradeStateSQL},
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
@@ -83,9 +84,31 @@ func (s *Store) isApplied(ctx context.Context, version int) (bool, error) {
 	return false, fmt.Errorf("check migration v%d: %w", version, err)
 }
 
-// splitStatements 简单按分号分割 SQL 语句（migration 文件无函数体，够用）。
+// splitStatements 按分号分割 SQL 语句，但跳过 $$ ... $$ 引号块内的分号
+// （D-072 migration 0034 使用 DO $$ ... $$; 块，简单 Split 会破坏函数体）。
 func splitStatements(sql string) []string {
-	return strings.Split(sql, ";")
+	var stmts []string
+	var buf strings.Builder
+	inDollar := false
+	for i := 0; i < len(sql); i++ {
+		if i+1 < len(sql) && sql[i] == '$' && sql[i+1] == '$' {
+			inDollar = !inDollar
+			buf.WriteByte('$')
+			buf.WriteByte('$')
+			i++
+			continue
+		}
+		if sql[i] == ';' && !inDollar {
+			stmts = append(stmts, buf.String())
+			buf.Reset()
+			continue
+		}
+		buf.WriteByte(sql[i])
+	}
+	if buf.Len() > 0 {
+		stmts = append(stmts, buf.String())
+	}
+	return stmts
 }
 
 func truncate(s string, n int) string {

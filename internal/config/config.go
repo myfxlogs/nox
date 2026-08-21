@@ -6,6 +6,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -71,13 +72,24 @@ type Config struct {
 	// AlertPaused 暂停全部告警写入（ARB_ALERT_PAUSED=true，缺省 false）。
 	AlertPaused bool
 
-	// === 自动交易（D-070）===
+	// === 自动交易（D-070/D-072）===
 	AutoTradeEnabled      bool          // 总开关（ARB_AUTOTRADE_ENABLED，缺省 false）
 	AutoTradeMaxNotional  float64       // 单笔最大名义额 USD（缺省 1000）
 	AutoTradeMaxPositions int           // 最大同时持仓数（缺省 5）
 	AutoTradeMaxDailyLoss float64       // 单日最大亏损 USD（缺省 100）
 	AutoTradeMinNetBps    float64       // 最低净收益门槛 bps（缺省 5.0）
 	AutoTradePollInterval time.Duration // OPEN 持仓扫描间隔（缺省 10s）
+
+	// D-072 §3.4 硬编码外部化（默认值=现行为，零迁移）
+	AutoTradeAllowVenues       map[string]bool    // ARB_AUTOTRADE_ALLOW_VENUES（默认 277842155:mt5,REDACTED_MT_ACCT:mt5）
+	AutoTradeAllowCanonicals   map[string]bool    // ARB_AUTOTRADE_ALLOW_CANONICALS（默认 NAS100,ETHUSDT,XAUUSD,BTCUSDT）
+	AutoTradeExcludeCanonicals map[string]bool    // ARB_AUTOTRADE_EXCLUDE_CANONICALS（默认 BRENT,WTI）
+	MeanRevertThresholds       map[string]float64 // ARB_MEANREVERT_THRESHOLDS（默认 NAS100:1.5,ETHUSDT:0.5,XAUUSD:0.5）
+
+	// D-072 §3.3/§4.2 swap/funding 退出参数
+	AutoTradeMinNetSwapBps float64 // ARB_AUTOTRADE_MIN_NET_SWAP_BPS（默认 0.2）
+	SwapArbExitNetBps      float64 // ARB_SWAPARB_EXIT_NET_BPS（默认 0）
+	FundingExitNetPct      float64 // ARB_FUNDING_EXIT_NET_PCT（默认 0）
 }
 
 // Load 从环境变量加载配置，未设置用默认值。
@@ -90,7 +102,7 @@ func Load() *Config {
 		PerpFundingMinNetAnnualized: envFloat("ARB_PERP_FUNDING_MIN_NET_ANNUALIZED", 2.0),
 		GrabMinNetAnnualized:        envFloat("ARB_GRAB_MIN_NET_ANNUALIZED", 4.5),
 		DetectorFreshnessTTL:        envDur("ARB_DETECTOR_FRESHNESS_TTL", 120*time.Second), // D-070 均值回归：放宽 freshness 让低频报价 venue 配对
-		SlippageBps:                 envFloat("ARB_SLIPPAGE_BPS", 0.3), // D-070 均值回归：降低滑点假设（CFD 限价单）
+		SlippageBps:                 envFloat("ARB_SLIPPAGE_BPS", 0.3),                     // D-070 均值回归：降低滑点假设（CFD 限价单）
 		MarginRateAnnual:            envFloat("ARB_MARGIN_RATE_ANNUAL", 4.5),
 		OpportunityTTL:              envDur("ARB_OPPORTUNITY_TTL", 30*time.Second),
 		ScanThrottle:                envDur("ARB_SCAN_THROTTLE", 30*time.Second),
@@ -102,26 +114,74 @@ func Load() *Config {
 			"okx":     envFloat("ARB_COMMISSION_TAKER_OKX", 10.0),
 			"gate":    envFloat("ARB_COMMISSION_TAKER_GATE", 10.0),
 		},
-		SwapRefresh:              envDur("ARB_SWAP_REFRESH", time.Hour),
-		TradeModeTTL:             envDur("ARB_TRADEMODE_TTL", 24*time.Hour),
-		MaxLegImbalancePct:       envFloat("ARB_MAX_LEG_IMBALANCE_PCT", 2.0),
-		ReviewMinSamples:         envInt("ARB_REVIEW_MIN_SAMPLES", 3),
-		ReviewCrossBiasBps:       envFloat("ARB_REVIEW_CROSS_BIAS_BPS", 1.0),
-		ReviewCarryBiasAnnualPct: envFloat("ARB_REVIEW_CARRY_BIAS_ANNUAL_PCT", 1.0),
-		SymbolsTTL:               envDur("ARB_SYMBOLS_TTL", 5*time.Minute),
-		LiqMMR:                   envFloat("ARB_LIQ_MMR", 0.005),
-		FundingDropRatio:         envFloat("ARB_FUNDING_DROP_RATIO", 0.5),
-		NotifyMinNetBps:          envFloat("ARB_NOTIFY_MIN_NET_BPS", 0),
-		BrokerPosPollInterval:    envDur("ARB_BROKER_POS_POLL_MS", 5*time.Second),
-		OpportunityNotionalUSD:   envFloat("ARB_OPP_NOTIONAL_USD", 1000),
-		AlertPaused:              envBool("ARB_ALERT_PAUSED", false),
-		AutoTradeEnabled:         envBool("ARB_AUTOTRADE_ENABLED", false),
-		AutoTradeMaxNotional:     envFloat("ARB_AUTOTRADE_MAX_NOTIONAL", 1000),
-		AutoTradeMaxPositions:    envInt("ARB_AUTOTRADE_MAX_POSITIONS", 5),
-		AutoTradeMaxDailyLoss:    envFloat("ARB_AUTOTRADE_MAX_DAILY_LOSS", 100),
-		AutoTradeMinNetBps:       envFloat("ARB_AUTOTRADE_MIN_NET_BPS", 1.0), // D-070 均值回归：降低门槛让 277+591 波动价差通过
-		AutoTradePollInterval:    envDur("ARB_AUTOTRADE_POLL_INTERVAL", 10*time.Second),
+		SwapRefresh:                envDur("ARB_SWAP_REFRESH", time.Hour),
+		TradeModeTTL:               envDur("ARB_TRADEMODE_TTL", 24*time.Hour),
+		MaxLegImbalancePct:         envFloat("ARB_MAX_LEG_IMBALANCE_PCT", 2.0),
+		ReviewMinSamples:           envInt("ARB_REVIEW_MIN_SAMPLES", 3),
+		ReviewCrossBiasBps:         envFloat("ARB_REVIEW_CROSS_BIAS_BPS", 1.0),
+		ReviewCarryBiasAnnualPct:   envFloat("ARB_REVIEW_CARRY_BIAS_ANNUAL_PCT", 1.0),
+		SymbolsTTL:                 envDur("ARB_SYMBOLS_TTL", 5*time.Minute),
+		LiqMMR:                     envFloat("ARB_LIQ_MMR", 0.005),
+		FundingDropRatio:           envFloat("ARB_FUNDING_DROP_RATIO", 0.5),
+		NotifyMinNetBps:            envFloat("ARB_NOTIFY_MIN_NET_BPS", 0),
+		BrokerPosPollInterval:      envDur("ARB_BROKER_POS_POLL_MS", 5*time.Second),
+		OpportunityNotionalUSD:     envFloat("ARB_OPP_NOTIONAL_USD", 1000),
+		AlertPaused:                envBool("ARB_ALERT_PAUSED", false),
+		AutoTradeEnabled:           envBool("ARB_AUTOTRADE_ENABLED", false),
+		AutoTradeMaxNotional:       envFloat("ARB_AUTOTRADE_MAX_NOTIONAL", 1000),
+		AutoTradeMaxPositions:      envInt("ARB_AUTOTRADE_MAX_POSITIONS", 5),
+		AutoTradeMaxDailyLoss:      envFloat("ARB_AUTOTRADE_MAX_DAILY_LOSS", 100),
+		AutoTradeMinNetBps:         envFloat("ARB_AUTOTRADE_MIN_NET_BPS", 1.0), // D-070 均值回归：降低门槛让 277+591 波动价差通过
+		AutoTradePollInterval:      envDur("ARB_AUTOTRADE_POLL_INTERVAL", 10*time.Second),
+		AutoTradeAllowVenues:       envStringSet("ARB_AUTOTRADE_ALLOW_VENUES", "277842155:mt5,REDACTED_MT_ACCT:mt5"),
+		AutoTradeAllowCanonicals:   envStringSet("ARB_AUTOTRADE_ALLOW_CANONICALS", "NAS100,ETHUSDT,XAUUSD,BTCUSDT"),
+		AutoTradeExcludeCanonicals: envStringSet("ARB_AUTOTRADE_EXCLUDE_CANONICALS", "BRENT,WTI"),
+		MeanRevertThresholds:       envFloatMap("ARB_MEANREVERT_THRESHOLDS", "NAS100:1.5,ETHUSDT:0.5,XAUUSD:0.5"),
+		AutoTradeMinNetSwapBps:     envFloat("ARB_AUTOTRADE_MIN_NET_SWAP_BPS", 0.2),
+		SwapArbExitNetBps:          envFloat("ARB_SWAPARB_EXIT_NET_BPS", 0),
+		FundingExitNetPct:          envFloat("ARB_FUNDING_EXIT_NET_PCT", 0),
 	}
+}
+
+// envStringSet 解析逗号分隔字符串为 set（D-072）。
+func envStringSet(key, def string) map[string]bool {
+	v := def
+	if s, ok := os.LookupEnv(key); ok && s != "" {
+		v = s
+	}
+	out := map[string]bool{}
+	for _, p := range strings.Split(v, ",") {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out[p] = true
+		}
+	}
+	return out
+}
+
+// envFloatMap 解析 key:val,key:val 为 map（D-072）。
+func envFloatMap(key, def string) map[string]float64 {
+	v := def
+	if s, ok := os.LookupEnv(key); ok && s != "" {
+		v = s
+	}
+	out := map[string]float64{}
+	for _, pair := range strings.Split(v, ",") {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		kv := strings.SplitN(pair, ":", 2)
+		if len(kv) != 2 {
+			continue
+		}
+		f, err := strconv.ParseFloat(strings.TrimSpace(kv[1]), 64)
+		if err != nil {
+			continue
+		}
+		out[strings.TrimSpace(kv[0])] = f
+	}
+	return out
 }
 
 func envFloat(key string, def float64) float64 {

@@ -11,8 +11,8 @@ func TestLoadDefaults(t *testing.T) {
 	if c.CrossVenueMinGrossBpsCEX != 10.0 {
 		t.Errorf("CrossVenueMinGrossBpsCEX = %v, want 10.0", c.CrossVenueMinGrossBpsCEX)
 	}
-	if c.CrossVenueMinGrossBpsCFD != 2.0 {
-		t.Errorf("CrossVenueMinGrossBpsCFD = %v, want 2.0", c.CrossVenueMinGrossBpsCFD)
+	if c.CrossVenueMinGrossBpsCFD != 0.1 {
+		t.Errorf("CrossVenueMinGrossBpsCFD = %v, want 0.1 (D-070)", c.CrossVenueMinGrossBpsCFD)
 	}
 	if c.FundingMinNetAnnualized != 4.0 {
 		t.Errorf("FundingMinNetAnnualized = %v, want 4.0", c.FundingMinNetAnnualized)
@@ -29,14 +29,14 @@ func TestLoadDefaults(t *testing.T) {
 	if c.ScanThrottle != 30*time.Second {
 		t.Errorf("ScanThrottle = %v, want 30s", c.ScanThrottle)
 	}
-	if c.SlippageBps != 1.0 {
-		t.Errorf("SlippageBps = %v, want 1.0", c.SlippageBps)
+	if c.SlippageBps != 0.3 {
+		t.Errorf("SlippageBps = %v, want 0.3 (D-070)", c.SlippageBps)
 	}
 	if c.MarginRateAnnual != 4.5 {
 		t.Errorf("MarginRateAnnual = %v, want 4.5", c.MarginRateAnnual)
 	}
-	if c.CloseBpsThr != 2.0 {
-		t.Errorf("CloseBpsThr = %v, want 2.0", c.CloseBpsThr)
+	if c.CloseBpsThr != 0.5 {
+		t.Errorf("CloseBpsThr = %v, want 0.5 (D-070)", c.CloseBpsThr)
 	}
 	if c.CommissionCFDBps != 0.3 {
 		t.Errorf("CommissionCFDBps = %v, want 0.3", c.CommissionCFDBps)
@@ -44,8 +44,8 @@ func TestLoadDefaults(t *testing.T) {
 	if c.CommissionCEXTakerBps != 10.0 {
 		t.Errorf("CommissionCEXTakerBps = %v, want 10.0", c.CommissionCEXTakerBps)
 	}
-	if c.DetectorFreshnessTTL != 60*time.Second {
-		t.Errorf("DetectorFreshnessTTL = %v, want 60s", c.DetectorFreshnessTTL)
+	if c.DetectorFreshnessTTL != 120*time.Second {
+		t.Errorf("DetectorFreshnessTTL = %v, want 120s (D-070)", c.DetectorFreshnessTTL)
 	}
 	if c.OpportunityTTL != 30*time.Second {
 		t.Errorf("OpportunityTTL = %v, want 30s", c.OpportunityTTL)
@@ -113,8 +113,8 @@ func TestLoadEnvInvalid(t *testing.T) {
 	t.Setenv("ARB_SLIPPAGE_BPS", "not-a-number")
 	t.Setenv("ARB_OPPORTUNITY_TTL", "xyz")
 	c := Load()
-	if c.SlippageBps != 1.0 {
-		t.Errorf("SlippageBps = %v, want default 1.0", c.SlippageBps)
+	if c.SlippageBps != 0.3 {
+		t.Errorf("SlippageBps = %v, want default 0.3 (D-070)", c.SlippageBps)
 	}
 	if c.OpportunityTTL != 30*time.Second {
 		t.Errorf("OpportunityTTL = %v, want default 30s", c.OpportunityTTL)

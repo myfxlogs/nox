@@ -43,3 +43,6 @@ var PerpFundingTypeSQL string
 
 //go:embed 0033_autotrade.sql
 var AutotradeSQL string
+
+//go:embed 0034_autotrade_state.sql
+var AutotradeStateSQL string
