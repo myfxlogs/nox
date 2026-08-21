@@ -28,7 +28,8 @@ type Config struct {
 	ScanThrottle     time.Duration // 引擎扫描节流（替代硬编码 30s，D-036）
 
 	// === 持仓监控（§13.4）===
-	CloseBpsThr float64 // 建议平仓：预期净收益 ≤ 该值（bps）
+	CloseBpsThr         float64       // 建议平仓：预期净收益 ≤ 该值（bps）
+	AlertResendInterval time.Duration // 同持仓同类告警冷却（ARB_ALERT_RESEND_INTERVAL，默认 10m，D-072 铃铛治理）
 
 	// === 佣金（bps/腿）——per-venue 真实定价（D-036）===
 	CommissionCFDBps      float64            // MT4/MT5 单腿回退默认（账号 commission_bps NULL 时用）
@@ -106,7 +107,8 @@ func Load() *Config {
 		MarginRateAnnual:            envFloat("ARB_MARGIN_RATE_ANNUAL", 4.5),
 		OpportunityTTL:              envDur("ARB_OPPORTUNITY_TTL", 30*time.Second),
 		ScanThrottle:                envDur("ARB_SCAN_THROTTLE", 30*time.Second),
-		CloseBpsThr:                 envFloat("ARB_CLOSE_BPS_THR", 0.5), // D-070 均值回归：价差回归到 0.5bps 内平仓
+		CloseBpsThr:                 envFloat("ARB_CLOSE_BPS_THR", 0.5),                  // D-070 均值回归：价差回归到 0.5bps 内平仓
+		AlertResendInterval:         envDur("ARB_ALERT_RESEND_INTERVAL", 10*time.Minute), // D-072 铃铛治理：同 key 告警冷却
 		CommissionCFDBps:            envFloat("ARB_COMMISSION_CFD_BPS", 0.3),
 		CommissionCEXTakerBps:       envFloat("ARB_COMMISSION_CEX_TAKER_BPS", 10.0),
 		CommissionTaker: map[string]float64{
