@@ -30,8 +30,8 @@ type acctVenueState struct {
 
 // AccountMonitor 跟踪全部账户（CFD + CEX）资金并广播变更。
 type AccountMonitor struct {
-	bm       *BrokerManager // CFD 账户查询器来源（每轮重取，venue 启停自动跟随）
-	exchs    ExchangeStore  // CEX 交易所配置来源（D-054：每轮重取，后台增删即时生效）
+	bm       *BrokerManager             // CFD 账户查询器来源（每轮重取，venue 启停自动跟随）
+	exchs    ExchangeStore              // CEX 交易所配置来源（D-054：每轮重取，后台增删即时生效）
 	statics  []reconcile.AccountQuerier // 附加查询器（测试注入 fake 用；生产为空）
 	interval time.Duration
 	topic    *bus.Topic[*v1.AccountSnapshot]
@@ -40,6 +40,8 @@ type AccountMonitor struct {
 	states map[string]acctVenueState // venueKey → 状态
 	cache  []*v1.AccountInfo         // 最近构建的视图（含离线快照）
 	lastFP string                    // 上次广播指纹（变更检测）
+	// cooldown 账号 RPC 冷却（D-077 修复⑩ G2：连续超时 ≥2 → 10s 冷却跳过）。
+	cooldown *Cooldown
 }
 
 // ExchangeStore 提供 CEX 交易所配置（pgstore.Store 满足）。
@@ -54,6 +56,7 @@ func NewAccountMonitor(bm *BrokerManager, interval time.Duration, topic *bus.Top
 		interval: interval,
 		topic:    topic,
 		states:   make(map[string]acctVenueState),
+		cooldown: NewCooldown(2, 10*time.Second), // D-077 修复⑩ G2
 	}
 }
 
@@ -161,7 +164,12 @@ func (m *AccountMonitor) poll(ctx context.Context) {
 			continue
 		}
 		vk := q.VenueKey()
+		// D-077 修复⑩ G2：RPC 冷却——连续超时 ≥2 → 10s 冷却跳过（archive #22 事故防御）。
+		if m.cooldown.Skip(vk) {
+			continue
+		}
 		acct, err := q.Account(ctx)
+		m.cooldown.Record(vk, err)
 		st := m.states[vk]
 		if err != nil {
 			// 离线：保留最近成功快照（D-052 业主决策），不覆盖 acct。
