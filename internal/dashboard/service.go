@@ -69,6 +69,8 @@ type Service struct {
 	// oppContractSize 机会卡 USD 派生用合约规格查询（D-062）：canonical+venueKey → CS。
 	// nil = 未接线（测试直接构造 Service）→ USD 字段全 0，前端回退 bps。main 接 store.ContractSizeByCanonical。
 	oppContractSize func(canonical, venueKey string) (float64, bool)
+	// P5 修复⑧：告警 TTL 节流——上次 purge 时间（内存节流，按日一次；ListAlerts 顺带触发）。
+	lastAlertPurge time.Time
 }
 
 // New 创建 dashboard 服务。reviewer 为复盘触发闭包（nil 则平仓后不触发）；
@@ -175,6 +177,8 @@ func (s *Service) ListOpportunities(ctx context.Context, req *connect.Request[v1
 }
 
 func (s *Service) ListAlerts(ctx context.Context, req *connect.Request[v1.ListAlertsRequest]) (*connect.Response[v1.ListAlertsResponse], error) {
+	// P5 修复⑧：告警 TTL 清理（按日节流，幂等；删除 acked+超 7 天，未 acked 不删）。
+	s.maybePurgeAckedAlerts(ctx)
 	limit := int(req.Msg.GetLimit())
 	offset := int(req.Msg.GetOffset())
 	if limit <= 0 {
@@ -189,6 +193,25 @@ func (s *Service) ListAlerts(ctx context.Context, req *connect.Request[v1.ListAl
 		pbAlerts = append(pbAlerts, alertToProto(&a))
 	}
 	return connect.NewResponse(&v1.ListAlertsResponse{Alerts: pbAlerts}), nil
+}
+
+// maybePurgeAckedAlerts 内存节流（按日一次）触发告警 TTL 清理（P5 修复⑧）。
+// 幂等：超 24h 或从未执行过 → 调 PurgeAckedAlerts 删除 acked+超 7 天行；失败静默（不阻断 ListAlerts）。
+func (s *Service) maybePurgeAckedAlerts(ctx context.Context) {
+	if time.Since(s.lastAlertPurge) < 24*time.Hour {
+		return
+	}
+	s.lastAlertPurge = time.Now()
+	go func() {
+		n, err := s.store.PurgeAckedAlerts(context.Background(), 7*24*time.Hour)
+		if err != nil {
+			log.Printf("[alerts] purge acked failed: %v", err)
+			return
+		}
+		if n > 0 {
+			log.Printf("[alerts] purged %d acked alerts older than 7d", n)
+		}
+	}()
 }
 
 func (s *Service) ListTriggerStates(ctx context.Context, req *connect.Request[v1.ListTriggerStatesRequest]) (*connect.Response[v1.ListTriggerStatesResponse], error) {
