@@ -589,9 +589,6 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 			return 0, false, nil
 		}
 		lots := float64(step) / 1000000.0
-		if symbol == "AUDJPY" || symbol == "AUDJPYm" {
-			log.Printf("[broker] %s %s VolumeStep raw=%d → lots=%.6f", ad.Venue(), symbol, step, lots)
-		}
 		return lots, true, nil // MT5 VolumeStep int64 微手（1手=1000000）
 	}
 	// 符号表 + 分组：SymbolParamsMany 批量取 SymGroup.GroupName，取反斜杠路径顶层段为分组
