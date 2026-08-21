@@ -58,11 +58,189 @@ func (e *Engine) Run(ctx context.Context) {
 	log.Printf("[autotrade] enabled: maxNotional=$%.0f maxPos=%d maxDailyLoss=$%.0f minNetBps=%.1f poll=%s",
 		e.cfg.MaxNotional, e.cfg.MaxPositions, e.cfg.MaxDailyLoss, e.cfg.MinNetBps, e.cfg.PollInterval)
 
-	// 1. 机会订阅循环
+	// 1. 机会订阅循环（detector 产生的 CROSS_VENUE 机会）
 	go e.oppLoop(ctx)
 
-	// 2. 持仓扫描循环（自动平仓）
+	// 2. 均值回归扫描循环（D-070：绕过 detector，直接监控 277+591 价差）
+	go e.meanRevertLoop(ctx)
+
+	// 3. swap 套利循环（D-070：AUDJPY 529做多+277做空，持有赚swap）
+	go e.swapArbLoop(ctx)
+
+	// 4. 持仓扫描循环（自动平仓）
 	e.positionLoop(ctx)
+}
+
+// swapArbLoop D-070 swap 套利：AUDJPY 52993526做多（swap_long=+0.679）+ 277842155做空（swap_short=-0.185）。
+// 净swap = 0.494 bps/日，周三3倍，一周7倍日swap = 3.46 bps/周。
+// 开仓+平仓点差成本 ~4.2 bps，回本 ~9天，之后每周纯赚 3.46 bps。
+// 不依赖价差收敛——价格对冲，持有赚swap。
+func (e *Engine) swapArbLoop(ctx context.Context) {
+	if e.quotes == nil {
+		return
+	}
+	ticker := time.NewTicker(60 * time.Second) // 60 秒检查一次
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			e.scanSwapArb(ctx)
+		}
+	}
+}
+
+// scanSwapArb 检查是否需要开仓 swap 套利。
+func (e *Engine) scanSwapArb(ctx context.Context) {
+	// 风控：持仓数
+	openCount, err := e.store.CountOpenPositions(ctx)
+	if err != nil {
+		return
+	}
+	if openCount >= e.cfg.MaxPositions {
+		return
+	}
+	// 检查是否已有 AUDJPY swap 套利持仓（避免重复开仓）
+	positions, err := e.store.ListPositions(ctx, "OPEN", 50, 0)
+	if err != nil {
+		return
+	}
+	for _, p := range positions {
+		if strings.Contains(p.OpportunityID, "SWAPARB:AUDJPY") {
+			return // 已有 AUDJPY swap 套利持仓
+		}
+	}
+	// 检查报价可用性
+	canonical := "AUDJPY"
+	venueLong := "52993526:mt5"   // 做多收 swap_long=+0.679
+	venueShort := "277842155:mt5" // 做空付 swap_short=-0.185
+	qLong, okL := e.quotes.Latest(canonical, venueLong)
+	qShort, okS := e.quotes.Latest(canonical, venueShort)
+	if !okL || !okS {
+		return
+	}
+	// 报价新鲜度
+	now := time.Now()
+	if now.Sub(qLong.Time) > 120*time.Second || now.Sub(qShort.Time) > 120*time.Second {
+		return
+	}
+	// 检查跨账户价差是否在可接受范围（< 3 bps，避免开仓时价差太大）
+	spread := qShort.Bid - qLong.Ask // 做多529（ask）+做空277（bid）的开仓价差
+	spreadBps := spread / qLong.Ask * 10000
+	if spreadBps < -3.0 {
+		log.Printf("[autotrade] SWAPARB skip: spreadBps=%.2f < -3.0 (529 ask=%.5f 277 bid=%.5f)",
+			spreadBps, qLong.Ask, qShort.Bid)
+		return
+	}
+	// 开仓：用 $1000 名义额试水
+	notional := 1000.0
+	qty := notional / qLong.Ask
+	reqID := fmt.Sprintf("swaparb-%d", time.Now().UnixNano())
+	oppID := fmt.Sprintf("SWAPARB:AUDJPY:%s:%s:%d", venueLong, venueShort, time.Now().UnixMilli())
+	status, msg, posID := e.service.ExecuteMeanRevert(ctx, canonical, venueLong, venueShort, reqID, qty, spreadBps)
+	if status == "FAILED" {
+		if msg == "" {
+			msg = "pipeline returned FAILED"
+		}
+		log.Printf("[autotrade] SWAPARB-FAILED AUDJPY long=%s short=%s qty=%.4f: %s",
+			venueLong, venueShort, qty, msg)
+	} else {
+		_ = e.store.UpdatePositionOppID(ctx, posID, oppID)
+		log.Printf("[autotrade] SWAPARB-OK AUDJPY long=%s short=%s qty=%.4f posID=%d status=%s spreadBps=%.2f",
+			venueLong, venueShort, qty, posID, status, spreadBps)
+	}
+}
+
+// meanRevertLoop D-070 均值回归扫描：直接监控 277+591 的实时价差，
+// 当价差 > openThreshold 时开仓，不依赖 detector 产生机会。
+func (e *Engine) meanRevertLoop(ctx context.Context) {
+	if e.quotes == nil {
+		return
+	}
+	// 均值回归配置：277842155 + REDACTED_MT_ACCT
+	venueA := "277842155:mt5"
+	venueB := "REDACTED_MT_ACCT:mt5"
+	// 品种列表 + 开仓阈值（美元，超过点差成本+安全边际）
+	// MT5 报价频率 ~30-50s，阈值不能太高否则触发不到
+	symbols := map[string]float64{
+		"NAS100":  1.5, // 点差 1.12+1.50=2.62，但报价不同步时价差可能虚高
+		"ETHUSDT": 0.5, // 点差较小
+		"XAUUSD":  0.5, // 点差最小
+	}
+	ticker := time.NewTicker(5 * time.Second) // 5 秒扫描一次
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			e.scanMeanRevert(ctx, symbols, venueA, venueB)
+		}
+	}
+}
+
+// scanMeanRevert 扫描所有品种的 277+591 价差，超阈值则开仓。
+func (e *Engine) scanMeanRevert(ctx context.Context, symbols map[string]float64, venueA, venueB string) {
+	// 风控：检查持仓数、日亏
+	openCount, err := e.store.CountOpenPositions(ctx)
+	if err != nil {
+		return
+	}
+	if openCount >= e.cfg.MaxPositions {
+		return
+	}
+	for canonical, threshold := range symbols {
+		qA, okA := e.quotes.Latest(canonical, venueA)
+		qB, okB := e.quotes.Latest(canonical, venueB)
+		if !okA || !okB {
+			continue
+		}
+		// 报价新鲜度检查（120s）
+		now := time.Now()
+		if now.Sub(qA.Time) > 120*time.Second || now.Sub(qB.Time) > 120*time.Second {
+			continue
+		}
+		// 双向价差：A买B卖 和 B买A卖
+		spreadAB := qB.Bid - qA.Ask // 买A卖B的价差
+		spreadBA := qA.Bid - qB.Ask // 买B卖A卖
+		// 调试日志（每 ~30 秒打印一次价差状态）
+		if time.Now().UnixMilli()%30000 < 5000 {
+			log.Printf("[autotrade] MR-scan %s spreadAB=%.2f spreadBA=%.2f threshold=%.2f aBid=%.2f aAsk=%.2f bBid=%.2f bAsk=%.2f",
+				canonical, spreadAB, spreadBA, threshold, qA.Bid, qA.Ask, qB.Bid, qB.Ask)
+		}
+		if spreadAB > threshold {
+			// 买A卖B：A价格低，B价格高
+			bps := spreadAB / qA.Ask * 10000
+			e.executeMeanRevert(ctx, canonical, venueA, venueB, bps, e.cfg.NotionalUSD)
+		} else if spreadBA > threshold {
+			// 买B卖A：B价格低，A价格高
+			bps := spreadBA / qB.Ask * 10000
+			e.executeMeanRevert(ctx, canonical, venueB, venueA, bps, e.cfg.NotionalUSD)
+		}
+	}
+}
+
+// executeMeanRevert 执行均值回归开仓。
+func (e *Engine) executeMeanRevert(ctx context.Context, canonical, venueBuy, venueSell string, openBps, notionalUSD float64) {
+	// 计算 qty：notionalUSD / buyPrice
+	qbuy, ok := e.quotes.Latest(canonical, venueBuy)
+	if !ok {
+		return
+	}
+	qty := notionalUSD / qbuy.Ask
+	reqID := fmt.Sprintf("mr-%d", time.Now().UnixNano())
+	status, msg, posID := e.service.ExecuteMeanRevert(ctx, canonical, venueBuy, venueSell, reqID, qty, openBps)
+	if status == "FAILED" {
+		if msg == "" {
+			msg = "pipeline returned FAILED"
+		}
+		log.Printf("[autotrade] MR-FAILED canonical=%s buy=%s sell=%s openBps=%.2f qty=%.4f: %s",
+			canonical, venueBuy, venueSell, openBps, qty, msg)
+	} else {
+		log.Printf("[autotrade] MR-OK canonical=%s buy=%s sell=%s openBps=%.2f qty=%.4f posID=%d status=%s",
+			canonical, venueBuy, venueSell, openBps, qty, posID, status)
+	}
 }
 
 // oppLoop 订阅机会事件 → 风控 → 执行。
@@ -234,6 +412,10 @@ func (e *Engine) scanAndClose(ctx context.Context) {
 	for _, p := range positions {
 		// 息差型不主动平仓（持有赚 funding/swap）
 		if p.Type == "FUNDING_HEDGE" || p.Type == "CARRY" {
+			continue
+		}
+		// D-070 swap 套利持仓不主动平仓（持有赚 swap，长期持有）
+		if strings.Contains(p.OpportunityID, "SWAPARB:") {
 			continue
 		}
 		// D-070 均值回归：实时计算当前 netBps
