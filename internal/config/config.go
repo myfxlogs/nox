@@ -56,6 +56,12 @@ type Config struct {
 	// FundingDropRatio 资金费急降预警比例（今日 < 比例×前日 触发；缺省 0.5）——§11 收益侧方向证伪。
 	FundingDropRatio float64
 
+	// === Swap 套利风控（S6）===
+	// SwapArbEquityUseRatio swap 套利名义额资金使用率系数（ARB_SWAPARB_EQUITY_USE_RATIO，缺省 0.5）。
+	// notional = min(equityLong, equityShort) × ratio；保留抗单余地（单腿裸露承受力）。
+	// ratio=1 等价旧行为（100% 资金使用率）；不限额=无绝对上限，ratio=单组合资金使用率。
+	SwapArbEquityUseRatio float64
+
 	// === 机会站内推送（D-050）===
 	// NotifyMinNetBps 机会推送提醒门槛（bps）；0 = 全部新机会都提醒（ARB_NOTIFY_MIN_NET_BPS）。
 	NotifyMinNetBps float64
@@ -125,6 +131,7 @@ func Load() *Config {
 		SymbolsTTL:                 envDur("ARB_SYMBOLS_TTL", 5*time.Minute),
 		LiqMMR:                     envFloat("ARB_LIQ_MMR", 0.005),
 		FundingDropRatio:           envFloat("ARB_FUNDING_DROP_RATIO", 0.5),
+		SwapArbEquityUseRatio:      envFloat("ARB_SWAPARB_EQUITY_USE_RATIO", 0.5),
 		NotifyMinNetBps:            envFloat("ARB_NOTIFY_MIN_NET_BPS", 0),
 		BrokerPosPollInterval:      envDur("ARB_BROKER_POS_POLL_MS", 5*time.Second),
 		OpportunityNotionalUSD:     envFloat("ARB_OPP_NOTIONAL_USD", 1000),
