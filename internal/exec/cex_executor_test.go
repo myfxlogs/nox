@@ -42,10 +42,10 @@ func TestCEXExecutor_BinanceOrder(t *testing.T) {
 		}
 		// 下单参数
 		for k, wantV := range map[string]string{
-			"symbol":    "BTCUSDT",
-			"side":      "BUY",
-			"type":      "MARKET",
-			"quantity":  "0.0001",
+			"symbol":     "BTCUSDT",
+			"side":       "BUY",
+			"type":       "MARKET",
+			"quantity":   "0.0001",
 			"recvWindow": "5000",
 		} {
 			if got := q.Get(k); got != wantV {
@@ -140,9 +140,9 @@ func TestCEXExecutor_BinanceOrderTerminalCanceled(t *testing.T) {
 // TestCEXExecutor_OKXOrder 验证 OKX 下单：body/四头/签名/模拟盘头。
 func TestCEXExecutor_OKXOrder(t *testing.T) {
 	const (
-		key      = "okx-key-4095"
-		secret   = "okx-secret-abc"
-		pass     = "okx-pass-phrase"
+		key    = "okx-key-4095"
+		secret = "okx-secret-abc"
+		pass   = "okx-pass-phrase"
 	)
 	cases := []struct {
 		name      string

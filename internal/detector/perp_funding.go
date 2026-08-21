@@ -75,7 +75,7 @@ func (d *PerpFundingDetector) Scan(_ context.Context, snapshot map[string]map[st
 				}
 				out = append(out, Candidate{
 					Type:      TypePerpFunding,
-					Canonical:  canonical,
+					Canonical: canonical,
 					VenueBuy:  buyLeg.VenueKey(),
 					VenueSell: sellLeg.VenueKey(),
 					PriceBuy:  buyLeg.Ask,

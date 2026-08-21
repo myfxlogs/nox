@@ -15,22 +15,22 @@ import (
 type OppType string
 
 const (
-	TypeCrossVenue    OppType = "CROSS_VENUE"
-	TypeFundingHedge  OppType = "FUNDING_HEDGE"
-	TypeCarry         OppType = "CARRY"
-	TypePerpFunding   OppType = "PERP_FUNDING" // D-064 跨所 perp funding 价差
+	TypeCrossVenue   OppType = "CROSS_VENUE"
+	TypeFundingHedge OppType = "FUNDING_HEDGE"
+	TypeCarry        OppType = "CARRY"
+	TypePerpFunding  OppType = "PERP_FUNDING" // D-064 跨所 perp funding 价差
 )
 
 // Candidate 是检测器产出的原始候选（评估器消费）。
 type Candidate struct {
-	Type       OppType
-	Canonical  string
-	VenueBuy   string // "{venue}:{venue_type}"
-	VenueSell  string
-	PriceBuy   float64
-	PriceSell  float64
-	GrossBps   float64
-	QuoteTime  int64 // unix milli
+	Type      OppType
+	Canonical string
+	VenueBuy  string // "{venue}:{venue_type}"
+	VenueSell string
+	PriceBuy  float64
+	PriceSell float64
+	GrossBps  float64
+	QuoteTime int64 // unix milli
 }
 
 // FactProvider 提供 Fact 数据给检测器（§5.2/§5.3）。
