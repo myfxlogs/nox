@@ -593,27 +593,6 @@ func (s *Service) resolveLegs(found *pgstore.Opportunity, qty float64) ([]exec.L
 	// MT5 取整后为 0 会回退到 1 step（最小可交易量），不会返回 0
 	qty = s.floorToStepQty(found.VenueBuy, qbuy.VenueSymbol, qty)
 	sellQty = s.floorToStepQty(found.VenueSell, qsell.VenueSymbol, sellQty)
-	// D-070 CFD 保证金保护：MT5 品种 CS 可能很大（BRENT=1000），
-	// 取整后名义额 = qty * CS * price 可能远超账户余额。
-	// 若买腿名义 > MaxNotional × 10（套利两腿对冲，保证金只需名义的一小部分），
-	// 降到 1 个 volume step（最小可交易量）。
-	maxNotional := 10000.0 // $10K 名义上限（CFD 保证金通常 1-5%，两腿对冲后更低）
-	if isMTVenue(found.VenueBuy) {
-		notional := qty * csBuy * qbuy.Ask
-		if notional > maxNotional {
-			qty = s.floorToStepQtyMin(found.VenueBuy, qbuy.VenueSymbol)
-			log.Printf("[exec] CFD notional cap: buy %s qty %.4f→%.4f (notional $%.0f > $%.0f)",
-				found.VenueBuy, qty, qty, notional, maxNotional)
-		}
-	}
-	if isMTVenue(found.VenueSell) {
-		notional := sellQty * csSell * qsell.Bid
-		if notional > maxNotional {
-			sellQty = s.floorToStepQtyMin(found.VenueSell, qsell.VenueSymbol)
-			log.Printf("[exec] CFD notional cap: sell %s qty %.4f→%.4f (notional $%.0f > $%.0f)",
-				found.VenueSell, sellQty, sellQty, notional, maxNotional)
-		}
-	}
 	// 不平衡口径修正：按买腿参考价统一计两腿名义——D-028 防的是「取整导致的数量差」，
 	// 不是两腿各自可执行价的差（那是套利缺口本身：等量对冲腿在不同 venue 价格下名义额必然不同，
 	// 3.3% 价差曾把正确订单误拒为 imbalance）。
