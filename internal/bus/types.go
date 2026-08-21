@@ -5,8 +5,8 @@ import "time"
 // Quote 是 CFD 和加密行情的公共抽象（§1.1）。
 // 热路径用 float64，无 decimal 分配。
 type Quote struct {
-	Symbol      string    // canonical symbol（EURUSD / BTCUSDT）
-	Venue       string    // 场所标识（icmarkets / binance / okx）
+	Symbol      string // canonical symbol（EURUSD / BTCUSDT）
+	Venue       string // 场所标识（icmarkets / binance / okx）
 	Bid         float64
 	Ask         float64
 	Time        time.Time // 报价时刻

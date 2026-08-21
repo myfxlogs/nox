@@ -176,9 +176,9 @@ func (g *GateWebSocket) handleSpot(data []byte, publish func(bus.Quote)) {
 		Venue:       VenueGate,
 		VenueType:   "spot",
 		VenueSymbol: pair,
-		Bid:       bid,
-		Ask:       ask,
-		Time:      time.Now(),
+		Bid:         bid,
+		Ask:         ask,
+		Time:        time.Now(),
 	})
 }
 

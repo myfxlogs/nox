@@ -64,8 +64,14 @@ func (b *QuoteBus) Publish(q Quote) {
 		select {
 		case ch <- q:
 		default:
-			select { case <-ch: default: }
-			select { case ch <- q: default: }
+			select {
+			case <-ch:
+			default:
+			}
+			select {
+			case ch <- q:
+			default:
+			}
 		}
 	}
 }
