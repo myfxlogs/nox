@@ -212,3 +212,49 @@ func (s *Store) HasOpenPositionByOpportunity(ctx context.Context, opportunityID 
 	}
 	return false, fmt.Errorf("check open position by opportunity: %w", err)
 }
+
+// ListOpenPositionsByType 返回指定类型且状态为 OPEN 的持仓（D-077 swap 逐日记账用）。
+// 仅 OPEN（不含 OPENING/LEGGED——未完全成交的腿无 swap 记账语义）。
+func (s *Store) ListOpenPositionsByType(ctx context.Context, types []string) ([]Position, error) {
+	if len(types) == 0 {
+		return nil, nil
+	}
+	q := `SELECT id, opportunity_id, type, status, expected_net_bps, realized_pnl, opened_at, closed_at, note
+		FROM positions
+		WHERE status = 'OPEN' AND type = ANY($1)
+		ORDER BY id`
+	rows, err := s.pool.Query(ctx, q, types)
+	if err != nil {
+		return nil, fmt.Errorf("list open positions by type: %w", err)
+	}
+	defer rows.Close()
+	var out []Position
+	for rows.Next() {
+		var p Position
+		if err := rows.Scan(&p.ID, &p.OpportunityID, &p.Type, &p.Status, &p.ExpectedNetBps,
+			&p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// HasCashflowForDay 检查指定持仓在某日是否已有某 kind 的现金流行（D-077 幂等：当日已记跳过）。
+// day 为 UTC 日期（0 时），匹配该日 00:00~23:59:59.999 的行。
+func (s *Store) HasCashflowForDay(ctx context.Context, posID int64, kind string, day time.Time) (bool, error) {
+	start := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, time.UTC)
+	end := start.AddDate(0, 0, 1)
+	var one int
+	err := s.pool.QueryRow(ctx,
+		`SELECT 1 FROM position_cashflows
+		 WHERE position_id = $1 AND kind = $2 AND ts >= $3 AND ts < $4 LIMIT 1`,
+		posID, kind, start, end).Scan(&one)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return false, fmt.Errorf("check cashflow for day: %w", err)
+}

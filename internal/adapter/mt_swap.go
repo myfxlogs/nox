@@ -222,10 +222,33 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 	}
 	swapPollSummary("mt5", a.venue, emit, emit0, skips)
 	swapUncoveredSummary("mt5", a.venue, uncovered)
+	// D-077 V2：per-venue 三倍 swap 日（首个符号的 SymGroup.ThreeDaysSwap 即代表该 venue）。
+	// 同 venue 所有符号共享同一三倍日 → 只取首个有效值，发一行 triple_swap_day Fact。
+	if td, ok := mt5FirstTripleSwapDay(sm, a); ok {
+		facts = append(facts, tripleSwapDayFact(a.venue, td, "mt5"))
+		logTripleSwapDay("mt5", a.venue, td)
+	}
 	if missingPrice > 0 {
 		return nil, fmt.Errorf("%w: %d symbol(s) lack venue quote", ErrSwapColdStart, missingPrice)
 	}
 	return swapResult(a.venue, facts, errs)
+}
+
+// mt5FirstTripleSwapDay 从首个可查 SymbolParams 的 SymGroup 取 ThreeDaysSwap（D-077 V2）。
+// 同 venue 共享 → 首个即可；全失败 → ok=false（下游回退周三假设）。
+func mt5FirstTripleSwapDay(sm map[string]string, a *MT5Adapter) (float64, bool) {
+	for brokerSym := range sm {
+		resp, err := a.mt5.SymbolParams(a.withSessionMD(context.Background()), &mt5pb.SymbolParamsRequest{Id: a.token, Symbol: brokerSym})
+		if err != nil || resp.GetError() != nil || resp.GetResult() == nil {
+			continue
+		}
+		sg := resp.GetResult().GetSymbolGroup()
+		if sg == nil {
+			continue
+		}
+		return mt5TripleSwapDay(sg.GetThreeDaysSwap()), true
+	}
+	return 0, false
 }
 
 // SwapFacts MT4 版。swap 语义字段在 SymbolInfo.Ex（SymbolInfoEx）。
@@ -299,10 +322,31 @@ func (a *MT4Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 	}
 	swapPollSummary("mt4", a.venue, emit, emit0, skips)
 	swapUncoveredSummary("mt4", a.venue, uncovered)
+	// D-077 V2：per-venue 三倍 swap 日（首个符号的 SymbolInfoEx.SwapRollover3Days 即代表该 venue）。
+	if td, ok := mt4FirstTripleSwapDay(sm, a); ok {
+		facts = append(facts, tripleSwapDayFact(a.venue, td, "mt4"))
+		logTripleSwapDay("mt4", a.venue, td)
+	}
 	if missingPrice > 0 {
 		return nil, fmt.Errorf("%w: %d symbol(s) lack venue quote", ErrSwapColdStart, missingPrice)
 	}
 	return swapResult(a.venue, facts, errs)
+}
+
+// mt4FirstTripleSwapDay 从首个可查 SymbolParams 的 SymbolInfoEx 取 SwapRollover3Days（D-077 V2）。
+func mt4FirstTripleSwapDay(sm map[string]string, a *MT4Adapter) (float64, bool) {
+	for brokerSym := range sm {
+		resp, err := a.mt4.SymbolParams(a.withSessionMD(context.Background()), &mt4pb.SymbolParamsRequest{Id: a.token, Symbol: brokerSym})
+		if err != nil || resp.GetError() != nil || resp.GetResult() == nil {
+			continue
+		}
+		si := resp.GetResult().GetSymbol()
+		if si == nil || si.GetEx() == nil {
+			continue
+		}
+		return mt4TripleSwapDay(si.GetEx().GetSwapRollover3Days()), true
+	}
+	return 0, false
 }
 
 // mt5SkipReason 标定跳过原因（F1）：None+非零=矛盾数据，其余=未标定模式。
@@ -344,6 +388,23 @@ func swapUncoveredSummary(src, venue string, uncovered map[int32]int) {
 	}
 }
 
+// weekdayNames Go time.Weekday → 中文名（日志可读，D-077 V2）。
+var weekdayNames = []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
+
+// logTripleSwapDay 日志列出各 venue 实际三倍日 vs「周三」差异（D-077 V2：以本系统实测为准）。
+// 差异写入 STATE 已知限制（8-26 预期按实测修正）。每轮 swap 采集顺带输出。
+func logTripleSwapDay(src, venue string, weekday float64) {
+	name := "Unknown"
+	if int(weekday) >= 0 && int(weekday) < len(weekdayNames) {
+		name = weekdayNames[int(weekday)]
+	}
+	if name != "Wednesday" {
+		log.Printf("[%s:%s] [swap] triple swap day=%s (≠Wednesday, archive 实证 4 家不全周三)", src, venue, name)
+	} else {
+		log.Printf("[%s:%s] [swap] triple swap day=Wednesday (与假设一致)", src, venue)
+	}
+}
+
 // tradeModeFact 构造 trade_mode Fact（D-060 F3）：value=MT5 ENUM_SYMBOL_TRADE_MODE 枚举透传。
 func tradeModeFact(venue, canon string, mode mt5pb.TradeMode, src string) fact.Fact {
 	return fact.Fact{
@@ -368,6 +429,32 @@ func swapFact(kind, venue, canon string, bps float64, src string) fact.Fact {
 		Ts:     time.Now(),
 		Src:    src,
 	}
+}
+
+// tripleSwapDayFact 构造三倍 swap 日 Fact（D-077 V2：per-venue 三倍日，对齐 Go time.Weekday）。
+// weekday 为 Go time.Weekday（0=Sunday...6=Saturday）。每 venue 只发一行（symbol=venue 名自身）。
+func tripleSwapDayFact(venue string, weekday float64, src string) fact.Fact {
+	return fact.Fact{
+		Kind:   fact.KindTripleSwapDay,
+		Venue:  venue,
+		Symbol: venue, // per-venue 而非 per-symbol（同 venue 所有符号共享三倍日）
+		Value:  weekday,
+		Unit:   fact.UnitWeekday,
+		Ts:     time.Now(),
+		Src:    src,
+	}
+}
+
+// mt5TripleSwapDay MT5 V3DaysSwap → Go time.Weekday（0=Sunday...6=Saturday，proto 与 Go 同序）。
+func mt5TripleSwapDay(v mt5pb.V3DaysSwap) float64 {
+	return float64(v)
+}
+
+// mt4TripleSwapDay MT4 SwapRollover3Days → Go time.Weekday。
+// MT4 proto: 0=Monday...4=Friday（无周末）；Go: 0=Sunday...6=Saturday。
+// 映射：MT4 0(Mon)→1, 1(Tue)→2, 2(Wed)→3, 3(Thu)→4, 4(Fri)→5（+1 偏移）。
+func mt4TripleSwapDay(v int32) float64 {
+	return float64(v + 1)
 }
 
 // swapResult 汇总：全失败返回错误（Scheduler 退避重试），部分失败只记日志。

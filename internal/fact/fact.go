@@ -10,12 +10,13 @@ import (
 
 // Kind 常量表（§1.2）。
 const (
-	KindFunding    = "funding"     // 永续资金费率（UnitPctAnnualized）
-	KindDefiRate   = "defi_rate"   // 链上/DeFi 收益利率（UnitPctAnnualized）
-	KindFX         = "fx"          // 汇率 USDCNH（UnitPrice）
-	KindSwapLong   = "swap_long"   // MT 多单 swap（UnitBpsDaily，D-028 归一）
-	KindSwapShort  = "swap_short"  // MT 空单 swap（UnitBpsDaily，D-028 归一）
-	KindTradeMode  = "trade_mode"  // MT5 符号可交易性（UnitMode，D-060 F3）
+	KindFunding       = "funding"         // 永续资金费率（UnitPctAnnualized）
+	KindDefiRate      = "defi_rate"       // 链上/DeFi 收益利率（UnitPctAnnualized）
+	KindFX            = "fx"              // 汇率 USDCNH（UnitPrice）
+	KindSwapLong      = "swap_long"       // MT 多单 swap（UnitBpsDaily，D-028 归一）
+	KindSwapShort     = "swap_short"      // MT 空单 swap（UnitBpsDaily，D-028 归一）
+	KindTradeMode     = "trade_mode"      // MT5 符号可交易性（UnitMode，D-060 F3）
+	KindTripleSwapDay = "triple_swap_day" // MT 三倍 swap 日（UnitWeekday，D-077 V2）
 )
 
 // Unit 常量表（§1.2）。
@@ -24,6 +25,7 @@ const (
 	UnitPrice         = "price"          // 价格（如 USDCNH 7.25）
 	UnitBpsDaily      = "bps_daily"      // 日 bps（swap 归一，D-028）
 	UnitMode          = "mode"           // trade_mode 值域（D-060 F3）
+	UnitWeekday       = "weekday"        // 星期几（0=Sunday...6=Saturday，对齐 Go time.Weekday，D-077 V2）
 )
 
 // TradeMode 值域（MT5 ENUM_SYMBOL_TRADE_MODE 透传，D-060 F4/F5 消费；
@@ -48,12 +50,13 @@ type Fact struct {
 }
 
 var validKinds = map[string]bool{
-	KindFunding:   true,
-	KindDefiRate:  true,
-	KindFX:        true,
-	KindSwapLong:  true,
-	KindSwapShort: true,
-	KindTradeMode: true,
+	KindFunding:       true,
+	KindDefiRate:      true,
+	KindFX:            true,
+	KindSwapLong:      true,
+	KindSwapShort:     true,
+	KindTradeMode:     true,
+	KindTripleSwapDay: true,
 }
 
 // ValidKind 报告 k 是否为已知 Kind。
