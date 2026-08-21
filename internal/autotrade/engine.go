@@ -6,15 +6,15 @@ import (
 	"log"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"arb/internal/bus"
 	"arb/internal/dashboard"
+	"arb/internal/fact"
 	"arb/internal/store/pgstore"
 )
 
-// Config 自动交易引擎配置（D-070）。
+// Config 自动交易引擎配置（D-070/D-072）。
 type Config struct {
 	Enabled      bool
 	MaxNotional  float64
@@ -24,18 +24,29 @@ type Config struct {
 	CloseBpsThr  float64       // 收敛型平仓阈值（expected_net_bps <= 此值则平仓）
 	PollInterval time.Duration // OPEN 持仓扫描间隔
 	NotionalUSD  float64       // 单笔名义额（用于算 qty）
+
+	// D-072 §3.4 硬编码外部化（默认值=现行为，零迁移）
+	AllowVenues       map[string]bool    // handleOpportunity venue 白名单 + MR venueA/B
+	AllowCanonicals   map[string]bool    // handleOpportunity symbol 白名单
+	ExcludeCanonicals map[string]bool    // BRENT/WTI 排除
+	MeanRevertThresh  map[string]float64 // MR 阈值 map
+
+	// D-072 §3.3/§4.2 swap/funding 退出参数
+	MinNetSwapBps  float64 // discoverSwapCombos 最低净 swap（ARB_AUTOTRADE_MIN_NET_SWAP_BPS，默认 0.2）
+	SwapArbExitBps float64 // SWAPARB/CARRY 退出净 swap bps（ARB_SWAPARB_EXIT_NET_BPS，默认 0）
+	FundingExitPct float64 // FUNDING_HEDGE/PERP_FUNDING 退出净年化（ARB_FUNDING_EXIT_NET_PCT，默认 0）
 }
 
-// Engine 自动交易引擎：订阅机会 → 风控 → 执行 → 自动平仓 → 策略淘汰（D-070）。
+// Engine 自动交易引擎：三 loop → gate → 执行 → 自动平仓 → 策略淘汰（D-070/D-072）。
 type Engine struct {
 	cfg      Config
 	store    *pgstore.Store
 	service  *dashboard.Service
 	oppTopic *bus.Topic[pgstore.Opportunity]
 	quotes   *bus.QuoteBus // 实时报价（D-070 均值回归平仓用）
+	gate     *Gate         // 统一开仓门禁（D-072）
 
-	mu       sync.Mutex
-	executed map[string]bool // 会话内已执行的机会 ID（防短时间内重复）
+	firstTickDone bool // 启动首跑淘汰标记
 }
 
 // New 创建自动交易引擎。
@@ -46,7 +57,15 @@ func New(cfg Config, store *pgstore.Store, service *dashboard.Service, oppTopic 
 		service:  service,
 		oppTopic: oppTopic,
 		quotes:   quotes,
-		executed: make(map[string]bool),
+		gate:     NewGate(store, cfg),
+	}
+}
+
+// ValidateStartup 启动 fail-fast 校验（D-072 实施修正②）。
+// OpportunityNotionalUSD > AutoTradeMaxNotional → log.Fatal（SWAPARB 不参与）。
+func (e *Engine) ValidateStartup() {
+	if e.cfg.NotionalUSD > e.cfg.MaxNotional && e.cfg.MaxNotional > 0 {
+		log.Fatalf("[autotrade] config fail-fast: OpportunityNotionalUSD $%.0f > AutoTradeMaxNotional $%.0f (fix env or lower ARB_OPP_NOTIONAL_USD)", e.cfg.NotionalUSD, e.cfg.MaxNotional)
 	}
 }
 
@@ -56,31 +75,29 @@ func (e *Engine) Run(ctx context.Context) {
 		log.Println("[autotrade] disabled (ARB_AUTOTRADE_ENABLED=false)")
 		return
 	}
+	e.ValidateStartup()
 	log.Printf("[autotrade] enabled: maxNotional=$%.0f maxPos=%d maxDailyLoss=$%.0f minNetBps=%.1f poll=%s",
 		e.cfg.MaxNotional, e.cfg.MaxPositions, e.cfg.MaxDailyLoss, e.cfg.MinNetBps, e.cfg.PollInterval)
 
 	// 1. 机会订阅循环（detector 产生的 CROSS_VENUE 机会）
 	go e.oppLoop(ctx)
 
-	// 2. 均值回归扫描循环（D-070：绕过 detector，直接监控 277+591 价差）
+	// 2. 均值回归扫描循环（D-070：绕过 detector，直接监控价差）
 	go e.meanRevertLoop(ctx)
 
-	// 3. swap 套利循环（D-070：AUDJPY 529做多+277做空，持有赚swap）
+	// 3. swap 套利循环（D-070：持有赚 swap）
 	go e.swapArbLoop(ctx)
 
-	// 4. 持仓扫描循环（自动平仓）
+	// 4. 持仓扫描循环（自动平仓 + 状态机 tick）
 	e.positionLoop(ctx)
 }
 
-// swapArbLoop D-070 swap 套利：AUDJPY 52993526做多（swap_long=+0.679）+ 277842155做空（swap_short=-0.185）。
-// 净swap = 0.494 bps/日，周三3倍，一周7倍日swap = 3.46 bps/周。
-// 开仓+平仓点差成本 ~4.2 bps，回本 ~9天，之后每周纯赚 3.46 bps。
-// 不依赖价差收敛——价格对冲，持有赚swap。
+// swapArbLoop D-072 swap 套利：自动发现跨账户 swap 组合，名义额=broker 余额驱动。
 func (e *Engine) swapArbLoop(ctx context.Context) {
 	if e.quotes == nil {
 		return
 	}
-	ticker := time.NewTicker(60 * time.Second) // 60 秒检查一次
+	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
@@ -93,43 +110,13 @@ func (e *Engine) swapArbLoop(ctx context.Context) {
 }
 
 // scanSwapArb 自动扫描所有跨账户 swap 组合，找净 swap 最优的组合开仓。
-// D-070：从 facts 表自动查询 swap_long/swap_short，不依赖硬编码组合。
-// 新 broker 接入后无需改代码——系统自动发现新组合。
+// D-072：风控由 gate 统一处理，本函数只产 TradeIntent。
 func (e *Engine) scanSwapArb(ctx context.Context) {
-	// 风控：持仓数
-	openCount, err := e.store.CountOpenPositions(ctx)
-	if err != nil {
-		return
-	}
-	if openCount >= e.cfg.MaxPositions {
-		return
-	}
-	// 检查已有 swap 套利持仓（避免重复开仓）
-	positions, err := e.store.ListPositions(ctx, "OPEN", 50, 0)
-	if err != nil {
-		return
-	}
-	existingCombos := map[string]bool{}
-	for _, p := range positions {
-		if strings.Contains(p.OpportunityID, "SWAPARB:") {
-			// SWAPARB:CANONICAL:venueLong:mt5:venueShort:mt5:ts
-			parts := strings.Split(p.OpportunityID, ":")
-			if len(parts) >= 6 {
-				comboKey := parts[2] + ":" + parts[3] + ":" + parts[4] + ":" + parts[5]
-				existingCombos[comboKey] = true
-			}
-		}
-	}
-	// 自动扫描：从 facts 表查所有 swap_long/swap_short
 	combos := e.discoverSwapCombos(ctx)
 	if len(combos) == 0 {
 		return
 	}
 	for _, c := range combos {
-		comboKey := c.vLong + ":" + c.vShort
-		if existingCombos[comboKey] {
-			continue
-		}
 		e.trySwapArb(ctx, c.canonical, c.vLong, c.vShort, c.netSwapBps)
 	}
 }
@@ -141,59 +128,56 @@ type swapComboCandidate struct {
 }
 
 // discoverSwapCombos 从 facts 表自动扫描所有跨账户 swap 组合。
-// 逻辑：对每个 canonical × 每对 venue，计算 swap_long_A + swap_short_B，
-// 返回净 swap > minNetSwapBps 的组合，按净 swap 降序排列。
+// D-072：minNetSwapBps 从 env 读取（ARB_AUTOTRADE_MIN_NET_SWAP_BPS，默认 0.2）。
 func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
-	// 查所有 swap_long facts
-	longFacts, err := e.store.LatestFacts(ctx, "swap_long", "", "")
+	longFacts, err := e.store.LatestFacts(ctx, fact.KindSwapLong, "", "")
 	if err != nil || len(longFacts) == 0 {
 		return nil
 	}
-	// 查所有 swap_short facts
-	shortFacts, err := e.store.LatestFacts(ctx, "swap_short", "", "")
+	shortFacts, err := e.store.LatestFacts(ctx, fact.KindSwapShort, "", "")
 	if err != nil || len(shortFacts) == 0 {
 		return nil
 	}
-	// 构建 swap_short 索引：canonical → venue → value
 	type swapKey struct{ canonical, venue string }
 	shortMap := make(map[swapKey]float64)
 	for _, f := range shortFacts {
 		shortMap[swapKey{f.Symbol, f.Venue}] = f.Value
 	}
-	// 遍历所有 swap_long，找配对的 swap_short（同 canonical 不同 venue）
 	var combos []swapComboCandidate
-	minNetSwapBps := 0.2 // 最低净 swap 阈值（bps/日）
+	minNetSwapBps := e.cfg.MinNetSwapBps
+	if minNetSwapBps == 0 {
+		minNetSwapBps = 0.2
+	}
 	for _, lf := range longFacts {
 		if lf.Value <= 0 {
-			continue // 只看正 swap_long（做多收 swap）
+			continue
 		}
 		for sfKey, sfVal := range shortMap {
 			if sfKey.canonical != lf.Symbol {
-				continue // 必须同 canonical
+				continue
 			}
 			if sfKey.venue == lf.Venue {
-				continue // 必须不同 venue
+				continue
 			}
-			netSwap := lf.Value + sfVal // swap_long_A + swap_short_B
+			netSwap := lf.Value + sfVal
 			if netSwap < minNetSwapBps {
 				continue
 			}
 			combos = append(combos, swapComboCandidate{
-				canonical:   lf.Symbol,
-				vLong:       lf.Venue + ":mt5",
-				vShort:      sfKey.venue + ":mt5",
-				netSwapBps:  netSwap,
+				canonical:  lf.Symbol,
+				vLong:      lf.Venue + ":mt5",
+				vShort:     sfKey.venue + ":mt5",
+				netSwapBps: netSwap,
 			})
 		}
 	}
-	// 按净 swap 降序排列
 	sort.Slice(combos, func(i, j int) bool {
 		return combos[i].netSwapBps > combos[j].netSwapBps
 	})
 	return combos
 }
 
-// trySwapArb 尝试开仓单个 swap 套利组合。
+// trySwapArb 尝试开仓单个 swap 套利组合（D-072：名义额=broker 余额驱动，经 gate）。
 func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShort string, netSwapBps float64) {
 	qLong, okL := e.quotes.Latest(canonical, venueLong)
 	qShort, okS := e.quotes.Latest(canonical, venueShort)
@@ -207,114 +191,125 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 	spread := qShort.Bid - qLong.Ask
 	spreadBps := spread / qLong.Ask * 10000
 	if spreadBps < -3.0 {
-		log.Printf("[autotrade] SWAPARB skip %s: spreadBps=%.2f < -3.0 (long ask=%.5f short bid=%.5f)",
-			canonical, spreadBps, qLong.Ask, qShort.Bid)
+		log.Printf("[autotrade] SWAPARB skip %s: spreadBps=%.2f < -3.0", canonical, spreadBps)
 		return
 	}
-	qty := 100000.0 / qLong.Ask
-	reqID := fmt.Sprintf("swaparb-%d", time.Now().UnixNano())
-	oppID := fmt.Sprintf("SWAPARB:%s:%s:%s:%d", canonical, venueLong, venueShort, time.Now().UnixMilli())
-	status, msg, posID := e.service.ExecuteMeanRevertWithCap(ctx, canonical, venueLong, venueShort, reqID, qty, spreadBps, 100000.0)
-	if status == "FAILED" {
-		if msg == "" {
-			msg = "pipeline returned FAILED"
+	// D-072 §3.3：名义额 = broker 余额驱动（fail-closed 三条件）
+	notional, ok, reason := e.service.SwapArbNotional(canonical, venueLong, venueShort)
+	if !ok {
+		// 余额不足时 InsertAlert 提醒（同 DedupKey 每日至多 1 条——gate 幂等会拦截重复）
+		if strings.Contains(reason, "balance") {
+			_ = e.store.InsertAlert(ctx, nil, "warn", fmt.Sprintf("swap 套利余额不足 %s: %s", canonical, reason))
 		}
-		log.Printf("[autotrade] SWAPARB-FAILED %s long=%s short=%s qty=%.4f: %s",
-			canonical, venueLong, venueShort, qty, msg)
-	} else {
-		_ = e.store.UpdatePositionOppID(ctx, posID, oppID)
-		log.Printf("[autotrade] SWAPARB-OK %s long=%s short=%s qty=%.4f posID=%d status=%s spreadBps=%.2f netSwap=%.3f bps/day",
-			canonical, venueLong, venueShort, qty, posID, status, spreadBps, netSwapBps)
+		log.Printf("[autotrade] SWAPARB skip %s %s/%s: %s", canonical, venueLong, venueShort, reason)
+		return
 	}
+	qty := notional / qLong.Ask
+	dedupKey := fmt.Sprintf("SWAPARB:%s:%s:%s", canonical, venueLong, venueShort)
+	intent := TradeIntent{
+		Strategy:    "SWAPARB",
+		Canonical:   canonical,
+		VenueBuy:    venueLong,
+		VenueSell:   venueShort,
+		Qty:         qty,
+		NotionalUSD: notional,
+		DedupKey:    dedupKey,
+		NetBps:      spreadBps,
+		Execute: func(ctx context.Context) (string, string, int64) {
+			reqID := fmt.Sprintf("swaparb-%d", time.Now().UnixNano())
+			status, msg, posID := e.service.ExecuteMeanRevertWithCap(ctx, canonical, venueLong, venueShort, reqID, qty, spreadBps, notional, "SWAPARB")
+			if status != "FAILED" && posID > 0 {
+				oppID := fmt.Sprintf("SWAPARB:%s:%s:%s:%d", canonical, venueLong, venueShort, time.Now().UnixMilli())
+				_ = e.store.UpdatePositionOppID(ctx, posID, oppID)
+			}
+			return status, msg, posID
+		},
+	}
+	e.gate.Submit(ctx, intent)
 }
 
-// meanRevertLoop D-070 均值回归扫描：直接监控 277+591 的实时价差，
-// 当价差 > openThreshold 时开仓，不依赖 detector 产生机会。
+// meanRevertLoop D-072 均值回归扫描：venue 对与阈值从 env 读取（§3.4 外部化）。
 func (e *Engine) meanRevertLoop(ctx context.Context) {
 	if e.quotes == nil {
 		return
 	}
-	// 均值回归配置：277842155 + REDACTED_MT_ACCT
-	venueA := "277842155:mt5"
-	venueB := "REDACTED_MT_ACCT:mt5"
-	// 品种列表 + 开仓阈值（美元，超过点差成本+安全边际）
-	// MT5 报价频率 ~30-50s，阈值不能太高否则触发不到
-	symbols := map[string]float64{
-		"NAS100":  1.5, // 点差 1.12+1.50=2.62，但报价不同步时价差可能虚高
-		"ETHUSDT": 0.5, // 点差较小
-		"XAUUSD":  0.5, // 点差最小
+	if len(e.cfg.MeanRevertThresh) == 0 {
+		log.Println("[autotrade] meanRevertLoop: no thresholds configured (ARB_MEANREVERT_THRESHOLDS empty)")
+		return
 	}
-	ticker := time.NewTicker(5 * time.Second) // 5 秒扫描一次
+	// venue 对从 AllowVenues 提取（前两个）
+	venues := make([]string, 0, len(e.cfg.AllowVenues))
+	for v := range e.cfg.AllowVenues {
+		venues = append(venues, v)
+	}
+	sort.Strings(venues)
+	if len(venues) < 2 {
+		log.Println("[autotrade] meanRevertLoop: need >=2 allow venues (ARB_AUTOTRADE_ALLOW_VENUES)")
+		return
+	}
+	venueA, venueB := venues[0], venues[1]
+	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			e.scanMeanRevert(ctx, symbols, venueA, venueB)
+			e.scanMeanRevert(ctx, e.cfg.MeanRevertThresh, venueA, venueB)
 		}
 	}
 }
 
-// scanMeanRevert 扫描所有品种的 277+591 价差，超阈值则开仓。
+// scanMeanRevert 扫描价差，超阈值则产 intent 走 gate（D-072：风控由 gate 统一）。
 func (e *Engine) scanMeanRevert(ctx context.Context, symbols map[string]float64, venueA, venueB string) {
-	// 风控：检查持仓数、日亏
-	openCount, err := e.store.CountOpenPositions(ctx)
-	if err != nil {
-		return
-	}
-	if openCount >= e.cfg.MaxPositions {
-		return
-	}
 	for canonical, threshold := range symbols {
 		qA, okA := e.quotes.Latest(canonical, venueA)
 		qB, okB := e.quotes.Latest(canonical, venueB)
 		if !okA || !okB {
 			continue
 		}
-		// 报价新鲜度检查（120s）
 		now := time.Now()
 		if now.Sub(qA.Time) > 120*time.Second || now.Sub(qB.Time) > 120*time.Second {
 			continue
 		}
-		// 双向价差：A买B卖 和 B买A卖
-		spreadAB := qB.Bid - qA.Ask // 买A卖B的价差
-		spreadBA := qA.Bid - qB.Ask // 买B卖A的价差
+		spreadAB := qB.Bid - qA.Ask
+		spreadBA := qA.Bid - qB.Ask
 		if spreadAB > threshold {
-			// 买A卖B：A价格低，B价格高
 			bps := spreadAB / qA.Ask * 10000
-			e.executeMeanRevert(ctx, canonical, venueA, venueB, bps, e.cfg.NotionalUSD)
+			e.executeMeanRevert(ctx, canonical, venueA, venueB, bps)
 		} else if spreadBA > threshold {
-			// 买B卖A：B价格低，A价格高
 			bps := spreadBA / qB.Ask * 10000
-			e.executeMeanRevert(ctx, canonical, venueB, venueA, bps, e.cfg.NotionalUSD)
+			e.executeMeanRevert(ctx, canonical, venueB, venueA, bps)
 		}
 	}
 }
 
-// executeMeanRevert 执行均值回归开仓。
-func (e *Engine) executeMeanRevert(ctx context.Context, canonical, venueBuy, venueSell string, openBps, notionalUSD float64) {
-	// 计算 qty：notionalUSD / buyPrice
+// executeMeanRevert 产 TradeIntent 走 gate（D-072：不直连执行）。
+func (e *Engine) executeMeanRevert(ctx context.Context, canonical, venueBuy, venueSell string, openBps float64) {
 	qbuy, ok := e.quotes.Latest(canonical, venueBuy)
 	if !ok {
 		return
 	}
-	qty := notionalUSD / qbuy.Ask
-	reqID := fmt.Sprintf("mr-%d", time.Now().UnixNano())
-	status, msg, posID := e.service.ExecuteMeanRevert(ctx, canonical, venueBuy, venueSell, reqID, qty, openBps)
-	if status == "FAILED" {
-		if msg == "" {
-			msg = "pipeline returned FAILED"
-		}
-		log.Printf("[autotrade] MR-FAILED canonical=%s buy=%s sell=%s openBps=%.2f qty=%.4f: %s",
-			canonical, venueBuy, venueSell, openBps, qty, msg)
-	} else {
-		log.Printf("[autotrade] MR-OK canonical=%s buy=%s sell=%s openBps=%.2f qty=%.4f posID=%d status=%s",
-			canonical, venueBuy, venueSell, openBps, qty, posID, status)
+	qty := e.cfg.NotionalUSD / qbuy.Ask
+	dedupKey := fmt.Sprintf("MEANREVERT:%s:%s:%s", canonical, venueBuy, venueSell)
+	intent := TradeIntent{
+		Strategy:    "MEANREVERT",
+		Canonical:   canonical,
+		VenueBuy:    venueBuy,
+		VenueSell:   venueSell,
+		Qty:         qty,
+		NotionalUSD: e.cfg.NotionalUSD,
+		DedupKey:    dedupKey,
+		NetBps:      openBps,
+		Execute: func(ctx context.Context) (string, string, int64) {
+			reqID := fmt.Sprintf("mr-%d", time.Now().UnixNano())
+			return e.service.ExecuteMeanRevert(ctx, canonical, venueBuy, venueSell, reqID, qty, openBps)
+		},
 	}
+	e.gate.Submit(ctx, intent)
 }
 
-// oppLoop 订阅机会事件 → 风控 → 执行。
+// oppLoop 订阅机会事件 → 过滤 → 产 intent 走 gate（D-072：风控由 gate 统一）。
 func (e *Engine) oppLoop(ctx context.Context) {
 	ch, unsub := e.oppTopic.Subscribe()
 	defer unsub()
@@ -332,41 +327,27 @@ func (e *Engine) oppLoop(ctx context.Context) {
 	}
 }
 
-// isCEXVenue 判断 venue 是否为 CEX（binance/gate/okx/任何非 MT5/MT4 的 venue）。
-// D-070：业主指令「放弃 CEX，全功 CFD」。
+// isCEXVenue 判断 venue 是否为 CEX（D-070：业主指令「放弃 CEX，全功 CFD」）。
 func isCEXVenue(venue string) bool {
 	return !strings.Contains(venue, ":mt5") && !strings.Contains(venue, ":mt4")
 }
 
-// handleOpportunity 处理一个机会事件：风控检查 → 执行 → 记录。
+// handleOpportunity 过滤机会 → 产 intent 走 gate（D-072：风控由 gate 统一）。
 func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity) {
-	// D-070：业主指令「放弃 CEX，全功 CFD」——跳过所有 CEX venue
+	// D-070：业主指令「放弃 CEX，全功 CFD」
 	if isCEXVenue(opp.VenueBuy) || isCEXVenue(opp.VenueSell) {
 		return
 	}
-	// D-070：BRENT 排除——1314615 报价系统性偏高 $3（符号映射/合约规格差异），
-	// 311 bps 价差是虚假的，平仓必然亏损
-	if opp.Canonical == "BRENT" || opp.Canonical == "WTI" {
+	// D-072 §3.4：排除品种从 env 读取
+	if e.cfg.ExcludeCanonicals[opp.Canonical] {
 		return
 	}
-	// D-070 均值回归：只交易 277842155+REDACTED_MT_ACCT（同标的、价格接近、价差波动收敛）
-	// 排除 1314615（NAS100 系统性偏低 $20）和 52993526（volume step=10手 imbalance）
-	allowedVenues := map[string]bool{
-		"277842155:mt5": true,
-		"REDACTED_MT_ACCT:mt5": true,
-	}
-	if !allowedVenues[opp.VenueBuy] || !allowedVenues[opp.VenueSell] {
+	// D-072 §3.4：venue 白名单从 env 读取
+	if !e.cfg.AllowVenues[opp.VenueBuy] || !e.cfg.AllowVenues[opp.VenueSell] {
 		return
 	}
-	// D-070 均值回归：只交易价差波动收敛的品种（avg≈0, std 大）
-	// 排除结构性偏移品种（SPX500/US30/AUS200/UK100：avg≠0，价差不回归）
-	allowedSymbols := map[string]bool{
-		"NAS100":  true, // avg=-0.11, std=4.20
-		"ETHUSDT": true, // avg=0.42, std=1.91
-		"XAUUSD":  true, // avg=0.25, std=0.81
-		"BTCUSDT": true, // avg=-0.09, std=74.09
-	}
-	if !allowedSymbols[opp.Canonical] {
+	// D-072 §3.4：symbol 白名单从 env 读取
+	if len(e.cfg.AllowCanonicals) > 0 && !e.cfg.AllowCanonicals[opp.Canonical] {
 		return
 	}
 	// 门槛：净收益
@@ -374,90 +355,29 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity)
 		return
 	}
 	log.Printf("[autotrade] pass filter opp=%s type=%s netBps=%.2f", opp.ID, opp.Type, opp.NetBps)
-	// 会话内防重
-	e.mu.Lock()
-	if e.executed[opp.ID] {
-		e.mu.Unlock()
-		return
-	}
-	e.mu.Unlock()
 
-	// 风控1：策略是否被淘汰
-	disabled, err := e.store.IsStrategyDisabled(ctx, opp.Type)
-	if err != nil {
-		log.Printf("[autotrade] check strategy disabled: %v", err)
-	} else if disabled {
-		log.Printf("[autotrade] skip disabled strategy %s", opp.Type)
-		return
-	}
-
-	// 风控2：持仓数上限
-	openCount, err := e.store.CountOpenPositions(ctx)
-	if err != nil {
-		log.Printf("[autotrade] count open positions: %v", err)
-		return
-	}
-	if openCount >= e.cfg.MaxPositions {
-		e.logTrade(ctx, &opp, 0, 0, "REJECTED", fmt.Sprintf("max positions reached (%d)", openCount))
-		log.Printf("[autotrade] REJECTED max positions %d >= %d", openCount, e.cfg.MaxPositions)
-		return
-	}
-
-	// 风控3：当日亏损上限
-	dailyPnl, err := e.store.DailyRealizedPnl(ctx)
-	if err != nil {
-		log.Printf("[autotrade] daily pnl: %v", err)
-		return
-	}
-	if dailyPnl <= -e.cfg.MaxDailyLoss {
-		e.logTrade(ctx, &opp, 0, 0, "REJECTED", fmt.Sprintf("daily loss limit hit ($%.2f)", dailyPnl))
-		log.Printf("[autotrade] REJECTED daily loss $%.2f", dailyPnl)
-		return
-	}
-
-	// 风控4：幂等防重（DB 级）
-	has, err := e.store.HasOpenPositionByOpportunity(ctx, opp.ID)
-	if err != nil {
-		log.Printf("[autotrade] check duplicate: %v", err)
-		return
-	}
-	if has {
-		log.Printf("[autotrade] skip duplicate opp=%s", opp.ID)
-		return
-	}
-
-	log.Printf("[autotrade] pass risk opp=%s type=%s openCount=%d dailyPnl=$%.2f", opp.ID, opp.Type, openCount, dailyPnl)
-
-	// 计算 qty：按单笔名义额 / 买腿参考价
-	// D-070 CFD 适配：MT5 volume step 可能 ≥1手，固定名义额算出的 qty 取整后可能为 0。
-	// 策略：先用名义额算 qty，取整后若为 0 则回退到 1 个 volume step（最小可交易量）。
 	qty := e.cfg.NotionalUSD / opp.PriceBuy
 	if qty <= 0 {
 		return
 	}
-
-	// 执行
-	reqID := fmt.Sprintf("autotrade-%d-%s", time.Now().UnixMilli(), opp.ID)
-	status, msg, posID := e.service.ExecuteOpportunityInternal(ctx, opp.ID, reqID, qty)
-
-	// 记录
-	e.mu.Lock()
-	e.executed[opp.ID] = true
-	e.mu.Unlock()
-
-	if status == "FAILED" {
-		if msg == "" {
-			msg = "execute failed (pipeline returned FAILED)"
-		}
-		e.logTrade(ctx, &opp, 0, qty, "FAILED", msg)
-		log.Printf("[autotrade] FAILED opp=%s type=%s qty=%.4f: %s", opp.ID, opp.Type, qty, msg)
-	} else {
-		e.logTrade(ctx, &opp, posID, qty, "EXECUTED", "")
-		log.Printf("[autotrade] EXECUTED opp=%s type=%s qty=%.4f posID=%d status=%s", opp.ID, opp.Type, qty, posID, status)
+	intent := TradeIntent{
+		Strategy:    opp.Type,
+		Canonical:   opp.Canonical,
+		VenueBuy:    opp.VenueBuy,
+		VenueSell:   opp.VenueSell,
+		Qty:         qty,
+		NotionalUSD: e.cfg.NotionalUSD,
+		DedupKey:    opp.ID,
+		NetBps:      opp.NetBps,
+		Execute: func(ctx context.Context) (string, string, int64) {
+			reqID := fmt.Sprintf("autotrade-%d-%s", time.Now().UnixMilli(), opp.ID)
+			return e.service.ExecuteOpportunityInternal(ctx, opp.ID, reqID, qty)
+		},
 	}
+	e.gate.Submit(ctx, intent)
 }
 
-// positionLoop 定期扫描 OPEN 持仓 → 收敛型自动平仓。
+// positionLoop 定期扫描 OPEN 持仓 → 按 type 分派退出 + 状态机 tick（D-072）。
 func (e *Engine) positionLoop(ctx context.Context) {
 	ticker := time.NewTicker(e.cfg.PollInterval)
 	defer ticker.Stop()
@@ -467,13 +387,12 @@ func (e *Engine) positionLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			e.scanAndClose(ctx)
+			e.stateMachineTick(ctx)
 		}
 	}
 }
 
-// scanAndClose 扫描 OPEN 持仓，实时计算当前价差，收敛型达标则自动平仓。
-// D-070 均值回归：查询持仓两腿的实时报价，计算当前 netBps，
-// 若 <= CloseBpsThr 则平仓（价差回归到阈值内）。
+// scanAndClose 扫描 OPEN 持仓，按 type 分派退出条件（D-072 §4.2）。
 func (e *Engine) scanAndClose(ctx context.Context) {
 	positions, err := e.store.ListPositions(ctx, "OPEN", 50, 0)
 	if err != nil {
@@ -481,45 +400,236 @@ func (e *Engine) scanAndClose(ctx context.Context) {
 		return
 	}
 	for _, p := range positions {
-		// 息差型不主动平仓（持有赚 funding/swap）
-		if p.Type == "FUNDING_HEDGE" || p.Type == "CARRY" {
+		shouldClose, reason := e.checkExitCondition(ctx, &p)
+		if !shouldClose {
 			continue
 		}
-		// D-070 swap 套利持仓不主动平仓（持有赚 swap，长期持有）
-		if strings.Contains(p.OpportunityID, "SWAPARB:") {
+		log.Printf("[autotrade] auto-close pos=%d type=%s: %s", p.ID, p.Type, reason)
+		if err := e.service.AutoClosePosition(ctx, p.ID); err != nil {
+			log.Printf("[autotrade] auto-close pos=%d failed: %v", p.ID, err)
 			continue
 		}
-		// D-070 均值回归：实时计算当前 netBps
-		currentBps, ok := e.currentNetBps(&p)
+		e.updateStrategyStat(ctx, &p)
+	}
+}
+
+// checkExitCondition 按 type 分派退出条件（D-072 §4.2）。
+// 返回 (shouldClose, reason)。
+func (e *Engine) checkExitCondition(ctx context.Context, p *pgstore.Position) (bool, string) {
+	switch p.Type {
+	case "CROSS_VENUE", "MEANREVERT":
+		// 收敛型：currentNetBps ≤ CloseBpsThr
+		currentBps, ok := e.currentNetBps(p)
 		if !ok {
-			continue // 报价不可用，跳过
+			return false, ""
 		}
 		if currentBps <= e.cfg.CloseBpsThr {
-			log.Printf("[autotrade] auto-close pos=%d type=%s currentBps=%.2f <= %.1f (openBps=%.2f)",
-				p.ID, p.Type, currentBps, e.cfg.CloseBpsThr, p.ExpectedNetBps)
-			if err := e.service.AutoClosePosition(ctx, p.ID); err != nil {
-				log.Printf("[autotrade] auto-close pos=%d failed: %v", p.ID, err)
-				continue
+			return true, fmt.Sprintf("converged currentBps=%.2f <= %.1f", currentBps, e.cfg.CloseBpsThr)
+		}
+		return false, ""
+	case "SWAPARB", "CARRY":
+		// 净 swap ≤ SwapArbExitBps（默认 0）→ 平仓
+		netSwap, ok := e.recalcNetSwap(ctx, p)
+		if !ok {
+			return false, ""
+		}
+		if netSwap <= e.cfg.SwapArbExitBps {
+			return true, fmt.Sprintf("net swap %.3f bps/day <= %.1f", netSwap, e.cfg.SwapArbExitBps)
+		}
+		return false, ""
+	case "FUNDING_HEDGE", "PERP_FUNDING":
+		// 净 funding 年化 ≤ FundingExitPct（默认 0）→ 平仓
+		netFunding, ok := e.recalcNetFunding(ctx, p)
+		if !ok {
+			return false, ""
+		}
+		if netFunding <= e.cfg.FundingExitPct {
+			return true, fmt.Sprintf("net funding %.2f%% <= %.1f%%", netFunding, e.cfg.FundingExitPct)
+		}
+		return false, ""
+	}
+	return false, ""
+}
+
+// recalcNetSwap 重算净 swap（D-072 §4.2，facts 驱动 + 48h 新鲜度守卫）。
+func (e *Engine) recalcNetSwap(ctx context.Context, p *pgstore.Position) (float64, bool) {
+	canonical := canonicalFromOppID(p.OpportunityID)
+	if canonical == "" {
+		return 0, false
+	}
+	longFacts, err := e.store.LatestFacts(ctx, fact.KindSwapLong, "", canonical)
+	if err != nil || len(longFacts) == 0 {
+		return 0, false
+	}
+	shortFacts, err := e.store.LatestFacts(ctx, fact.KindSwapShort, "", canonical)
+	if err != nil || len(shortFacts) == 0 {
+		return 0, false
+	}
+	// 48h 新鲜度守卫
+	if time.Since(longFacts[0].Ts) > 48*time.Hour || time.Since(shortFacts[0].Ts) > 48*time.Hour {
+		log.Printf("[autotrade] skip exit pos=%d: swap facts stale >48h", p.ID)
+		return 0, false
+	}
+	// 解析 legs 取 venue
+	legs, err := e.store.ListPositionLegs(ctx, p.ID)
+	if err != nil {
+		return 0, false
+	}
+	var buyVenue, sellVenue string
+	for i := range legs {
+		if legs[i].Phase == "OPEN" {
+			if legs[i].Side == "BUY" {
+				buyVenue = legs[i].Venue
+			} else {
+				sellVenue = legs[i].Venue
 			}
-			// 平仓后更新策略统计
-			e.updateStrategyStat(ctx, &p)
+		}
+	}
+	if buyVenue == "" || sellVenue == "" {
+		return 0, false
+	}
+	var swapLong, swapShort float64
+	for _, f := range longFacts {
+		if f.Venue == strings.Split(buyVenue, ":")[0] {
+			swapLong = f.Value
+		}
+	}
+	for _, f := range shortFacts {
+		if f.Venue == strings.Split(sellVenue, ":")[0] {
+			swapShort = f.Value
+		}
+	}
+	return swapLong + swapShort, true
+}
+
+// recalcNetFunding 重算净 funding 年化（D-072 §4.2，facts 驱动 + 48h 新鲜度守卫）。
+func (e *Engine) recalcNetFunding(ctx context.Context, p *pgstore.Position) (float64, bool) {
+	canonical := canonicalFromOppID(p.OpportunityID)
+	if canonical == "" {
+		return 0, false
+	}
+	fundingFacts, err := e.store.LatestFacts(ctx, fact.KindFunding, "", canonical)
+	if err != nil || len(fundingFacts) == 0 {
+		return 0, false
+	}
+	if time.Since(fundingFacts[0].Ts) > 48*time.Hour {
+		log.Printf("[autotrade] skip exit pos=%d: funding facts stale >48h", p.ID)
+		return 0, false
+	}
+	legs, err := e.store.ListPositionLegs(ctx, p.ID)
+	if err != nil {
+		return 0, false
+	}
+	var buyVenue, sellVenue string
+	for i := range legs {
+		if legs[i].Phase == "OPEN" {
+			if legs[i].Side == "BUY" {
+				buyVenue = legs[i].Venue
+			} else {
+				sellVenue = legs[i].Venue
+			}
+		}
+	}
+	if buyVenue == "" || sellVenue == "" {
+		return 0, false
+	}
+	var longFunding, shortFunding float64
+	for _, f := range fundingFacts {
+		if f.Venue == strings.Split(buyVenue, ":")[0] {
+			longFunding = f.Value
+		}
+		if f.Venue == strings.Split(sellVenue, ":")[0] {
+			shortFunding = f.Value
+		}
+	}
+	return longFunding - shortFunding, true
+}
+
+// canonicalFromOppID 从 opportunity_id 解析 canonical（格式 PREFIX:SYMBOL:...）。
+func canonicalFromOppID(oppID string) string {
+	parts := strings.Split(oppID, ":")
+	if len(parts) < 2 {
+		return ""
+	}
+	return parts[1]
+}
+
+// stateMachineTick 状态机每 tick 检查（D-072 §3.2 + §4.3 首跑淘汰）。
+func (e *Engine) stateMachineTick(ctx context.Context) {
+	// 首跑淘汰：回填后立即对所有策略跑一次淘汰判定
+	if !e.firstTickDone {
+		e.firstTickDone = true
+		e.runStartupElimination(ctx)
+	}
+
+	// 读取当前状态
+	stateRow, err := e.store.GetAutotradeState(ctx)
+	if err != nil {
+		return
+	}
+
+	// 跨日恢复 + 全策略禁用检查
+	dailyPnl, _ := e.store.DailyRealizedPnl(ctx)
+	allDisabled := e.checkAllStrategiesDisabled(ctx)
+	utcNow := time.Now().UTC().Truncate(24 * time.Hour)
+
+	next, reason := nextState(stateRow.State, dailyPnl, e.cfg.MaxDailyLoss, allDisabled, utcNow, stateRow.HaltedOn)
+	if next != stateRow.State {
+		var haltedOn *time.Time
+		if next == StateDailyLossHalt {
+			t := utcNow
+			haltedOn = &t
+		}
+		_ = e.store.SetAutotradeState(ctx, next, reason, haltedOn)
+		log.Printf("[autotrade] state %s → %s: %s", stateRow.State, next, reason)
+	}
+}
+
+// checkAllStrategiesDisabled 检查全部策略是否被禁用。
+func (e *Engine) checkAllStrategiesDisabled(ctx context.Context) bool {
+	strategies := []string{"CROSS_VENUE", "MEANREVERT", "SWAPARB", "CARRY", "FUNDING_HEDGE", "PERP_FUNDING"}
+	for _, s := range strategies {
+		disabled, err := e.store.IsStrategyDisabled(ctx, s)
+		if err == nil && !disabled {
+			return false
+		}
+	}
+	return true
+}
+
+// runStartupElimination 启动首跑淘汰判定（D-072 §4.3，回填后立即生效）。
+func (e *Engine) runStartupElimination(ctx context.Context) {
+	strategies := []string{"CROSS_VENUE", "MEANREVERT", "SWAPARB", "CARRY", "FUNDING_HEDGE", "PERP_FUNDING"}
+	for _, s := range strategies {
+		stat, err := e.store.GetStrategyStat(ctx, s)
+		if err != nil {
+			continue
+		}
+		disable, reason := evaluateElimination(EliminationInput{
+			TotalTrades: stat.TotalTrades,
+			WinRate:     stat.WinRate,
+			AvgPnl:      stat.AvgPnl,
+			Disabled:    stat.Disabled,
+		})
+		if disable {
+			if err := e.store.DisableStrategy(ctx, s, reason); err != nil {
+				log.Printf("[autotrade] startup elimination disable %s: %v", s, err)
+			} else {
+				log.Printf("[autotrade] STARTUP ELIMINATION: %s disabled: %s", s, reason)
+			}
 		}
 	}
 }
 
-// currentNetBps 实时计算持仓的当前净 bps（D-070 均值回归平仓用）。
-// 查询两腿 venue 的实时报价，按平仓方向（买回卖腿、卖回买腿）计算当前价差 bps。
+// currentNetBps 实时计算持仓的当前净 bps（收敛型平仓用）。
 func (e *Engine) currentNetBps(p *pgstore.Position) (float64, bool) {
 	if e.quotes == nil {
-		return p.ExpectedNetBps, true // fallback 到开仓时 bps
-	}
-	// 从 opportunity_id 解析 canonical（格式 CROSS_VENUE:SYMBOL:venue1:venue2:ts）
-	parts := strings.Split(p.OpportunityID, ":")
-	if len(parts) < 2 {
 		return p.ExpectedNetBps, true
 	}
-	canonical := parts[1]
-	// 持仓 legs：OPEN phase 的 BUY/SELL
+	canonical := canonicalFromOppID(p.OpportunityID)
+	if canonical == "" {
+		return p.ExpectedNetBps, true
+	}
 	legs, err := e.store.ListPositionLegs(context.Background(), p.ID)
 	if err != nil {
 		return 0, false
@@ -537,18 +647,15 @@ func (e *Engine) currentNetBps(p *pgstore.Position) (float64, bool) {
 	if buyLeg == nil || sellLeg == nil {
 		return 0, false
 	}
-	// 平仓：卖回买腿（bid）、买回卖腿（ask）
 	buyClose, ok1 := e.quotes.Latest(canonical, buyLeg.Venue)
 	sellClose, ok2 := e.quotes.Latest(canonical, sellLeg.Venue)
 	if !ok1 || !ok2 {
 		return 0, false
 	}
-	// 平仓价差 = 卖回买腿的 bid - 买回卖腿的 ask
 	spread := buyClose.Bid - sellClose.Ask
 	if spread <= 0 {
-		return 0, true // 价差已反转，平仓
+		return 0, true
 	}
-	// 转 bps：spread / 开仓买腿价 * 10000
 	refPrice := buyClose.Ask
 	if buyLeg.PriceActual != nil && *buyLeg.PriceActual > 0 {
 		refPrice = *buyLeg.PriceActual
@@ -556,7 +663,7 @@ func (e *Engine) currentNetBps(p *pgstore.Position) (float64, bool) {
 	return spread / refPrice * 10000, true
 }
 
-// updateStrategyStat 平仓后更新策略统计 + 检查淘汰。
+// updateStrategyStat 平仓后更新策略统计 + 检查淘汰（D-072：全 type，含息差型）。
 func (e *Engine) updateStrategyStat(ctx context.Context, p *pgstore.Position) {
 	if p.RealizedPnl == nil {
 		return
@@ -566,43 +673,22 @@ func (e *Engine) updateStrategyStat(ctx context.Context, p *pgstore.Position) {
 		log.Printf("[autotrade] update strategy stat type=%s: %v", p.Type, err)
 		return
 	}
-	// 检查淘汰规则：累计≥5笔 且 (胜率<30% 或 avg_pnl<0)
 	stat, err := e.store.GetStrategyStat(ctx, p.Type)
 	if err != nil {
 		log.Printf("[autotrade] get strategy stat: %v", err)
 		return
 	}
-	if stat.TotalTrades >= 5 && !stat.Disabled {
-		if stat.WinRate < 0.3 || stat.AvgPnl < 0 {
-			reason := fmt.Sprintf("auto-disabled: %d trades, winRate=%.0f%%, avgPnl=$%.2f", stat.TotalTrades, stat.WinRate*100, stat.AvgPnl)
-			if err := e.store.DisableStrategy(ctx, p.Type, reason); err != nil {
-				log.Printf("[autotrade] disable strategy: %v", err)
-			} else {
-				log.Printf("[autotrade] STRATEGY DISABLED type=%s: %s", p.Type, reason)
-			}
-		}
-	}
-}
-
-// logTrade 记录交易日志到 DB。
-func (e *Engine) logTrade(ctx context.Context, opp *pgstore.Opportunity, posID int64, qty float64, status, reason string) {
-	var posIDPtr *int64
-	if posID > 0 {
-		posIDPtr = &posID
-	}
-	err := e.store.InsertAutotradeLog(ctx, &pgstore.AutotradeLog{
-		OpportunityID: opp.ID,
-		PositionID:    posIDPtr,
-		Strategy:      opp.Type,
-		Canonical:     opp.Canonical,
-		VenueBuy:      opp.VenueBuy,
-		VenueSell:     opp.VenueSell,
-		Qty:           qty,
-		Status:        status,
-		Reason:        reason,
-		NetBps:        opp.NetBps,
+	disable, reason := evaluateElimination(EliminationInput{
+		TotalTrades: stat.TotalTrades,
+		WinRate:     stat.WinRate,
+		AvgPnl:      stat.AvgPnl,
+		Disabled:    stat.Disabled,
 	})
-	if err != nil {
-		log.Printf("[autotrade] insert log: %v", err)
+	if disable {
+		if err := e.store.DisableStrategy(ctx, p.Type, reason); err != nil {
+			log.Printf("[autotrade] disable strategy: %v", err)
+		} else {
+			log.Printf("[autotrade] STRATEGY DISABLED type=%s: %s", p.Type, reason)
+		}
 	}
 }

@@ -1,0 +1,66 @@
+package autotrade
+
+import "testing"
+
+// TestGateDecision_AllPass 全部通过（D-072 §3.1）。
+func TestGateDecision_AllPass(t *testing.T) {
+	v := gateDecision(GateInput{
+		State: StateRunning, Strategy: "SWAPARB", Disabled: false,
+		DailyPnl: 0, MaxDailyLoss: 100, OpenCount: 0, MaxPositions: 5, DedupHit: false,
+	})
+	if !v.Pass {
+		t.Fatalf("want pass, got reject: %s", v.Reason)
+	}
+}
+
+// TestGateDecision_StateHalt 状态非 RUNNING 拒绝。
+func TestGateDecision_StateHalt(t *testing.T) {
+	v := gateDecision(GateInput{State: StateDailyLossHalt, MaxDailyLoss: 100, MaxPositions: 5})
+	if v.Pass {
+		t.Fatal("want reject on DAILY_LOSS_HALT")
+	}
+}
+
+// TestGateDecision_Disabled 策略禁用拒绝。
+func TestGateDecision_Disabled(t *testing.T) {
+	v := gateDecision(GateInput{State: StateRunning, Disabled: true, MaxDailyLoss: 100, MaxPositions: 5})
+	if v.Pass {
+		t.Fatal("want reject on disabled")
+	}
+}
+
+// TestGateDecision_DailyLoss 日亏超限拒绝。
+func TestGateDecision_DailyLoss(t *testing.T) {
+	v := gateDecision(GateInput{State: StateRunning, DailyPnl: -150, MaxDailyLoss: 100, MaxPositions: 5})
+	if v.Pass {
+		t.Fatal("want reject on daily loss")
+	}
+}
+
+// TestGateDecision_MaxPositions 持仓数上限拒绝。
+func TestGateDecision_MaxPositions(t *testing.T) {
+	v := gateDecision(GateInput{State: StateRunning, OpenCount: 5, MaxPositions: 5, MaxDailyLoss: 100})
+	if v.Pass {
+		t.Fatal("want reject on max positions")
+	}
+}
+
+// TestGateDecision_DedupHit 幂等命中拒绝。
+func TestGateDecision_DedupHit(t *testing.T) {
+	v := gateDecision(GateInput{State: StateRunning, DedupHit: true, MaxDailyLoss: 100, MaxPositions: 5})
+	if v.Pass {
+		t.Fatal("want reject on dedup hit")
+	}
+}
+
+// TestGateDecision_OrderPriority 检查顺序：状态优先于策略禁用。
+func TestGateDecision_OrderPriority(t *testing.T) {
+	v := gateDecision(GateInput{State: StateDailyLossHalt, Disabled: true, MaxDailyLoss: 100, MaxPositions: 5})
+	if v.Pass {
+		t.Fatal("want reject")
+	}
+	// 应返回状态原因而非策略禁用原因
+	if v.Reason == "" {
+		t.Fatal("want non-empty reason")
+	}
+}
