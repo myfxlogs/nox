@@ -119,10 +119,35 @@ func (e *Engine) swapArbLoop(ctx context.Context) {
 	}
 }
 
+// maxPositionsReached H4.1 满仓短路：CountOpenPositions >= MaxPositions → true（整轮跳过扫描）。
+// 查询失败 → false（fail-open，让 gate 兜底拒绝，不阻断扫描——gate 是最终防线）。
+// MaxPositions <= 0 → false（未配置上限，不短路）。
+func (e *Engine) maxPositionsReached(ctx context.Context) bool {
+	if e.cfg.MaxPositions <= 0 {
+		return false
+	}
+	n, err := e.store.CountOpenPositions(ctx)
+	if err != nil {
+		// fail-open：查询失败不阻断扫描，gate 兜底（gate 已 fail-closed 拒绝）
+		return false
+	}
+	return maxPositionsReachedDecision(n, e.cfg.MaxPositions)
+}
+
+// maxPositionsReachedDecision H4.1 纯函数：openCount >= maxPositions → true（满仓短路）。
+// 抽出供单测（满仓时零 intent 的判定逻辑，无 IO）。
+func maxPositionsReachedDecision(openCount, maxPositions int) bool {
+	return openCount >= maxPositions
+}
+
 // scanSwapArb 自动扫描所有跨账户 swap 组合，找净 swap 最优的组合开仓。
 // D-072：风控由 gate 统一处理，本函数只产 TradeIntent。
 // B：组合平仓后重入冷却——该 ComboKey 存在 CLOSED 持仓且 closed_at > now() − N 天 → 跳过。
+// H4.1：满仓短路——CountOpenPositions >= MaxPositions 整轮跳过（省逐组合产 intent 撞 gate 的日志噪音）。
 func (e *Engine) scanSwapArb(ctx context.Context) {
+	if e.maxPositionsReached(ctx) {
+		return
+	}
 	combos := e.discoverSwapCombos(ctx)
 	if len(combos) == 0 {
 		return
@@ -270,6 +295,12 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 		return
 	}
 	qty := notional / usdPerLotLong
+	// H4.2：qty 低于买腿最小步 → debug 跳过（品种适配事实，不产 intent 不落 REJECTED）
+	if e.service.QtyBelowMinStep(venueLong, qLong.VenueSymbol, qty) {
+		log.Printf("[autotrade] SWAPARB skip %s: qty %.6f below min step (notional $%.0f too small for %s)",
+			canonical, qty, notional, qLong.VenueSymbol)
+		return
+	}
 	dedupKey := combo.Key("SWAPARB", canonical, venueLong, venueShort)
 	intent := TradeIntent{
 		Strategy:    "SWAPARB",
@@ -346,7 +377,11 @@ func (e *Engine) meanRevertLoop(ctx context.Context) {
 }
 
 // scanMeanRevert 扫描价差，超阈值则产 intent 走 gate（D-072：风控由 gate 统一）。
+// H4.1：满仓短路——CountOpenPositions >= MaxPositions 整轮跳过（省逐组合产 intent 撞 gate 的日志噪音）。
 func (e *Engine) scanMeanRevert(ctx context.Context, symbols map[string]float64, venueA, venueB string) {
+	if e.maxPositionsReached(ctx) {
+		return
+	}
 	for canonical, threshold := range symbols {
 		qA, okA := e.quotes.Latest(canonical, venueA)
 		qB, okB := e.quotes.Latest(canonical, venueB)
@@ -376,6 +411,12 @@ func (e *Engine) executeMeanRevert(ctx context.Context, canonical, venueBuy, ven
 		return
 	}
 	qty := e.cfg.NotionalUSD / qbuy.Ask
+	// H4.2：qty 低于买腿最小步 → debug 跳过（品种适配事实，不产 intent 不落 REJECTED）
+	if e.service.QtyBelowMinStep(venueBuy, qbuy.VenueSymbol, qty) {
+		log.Printf("[autotrade] MEANREVERT skip %s: qty %.6f below min step (notional $%.0f too small for %s)",
+			canonical, qty, e.cfg.NotionalUSD, qbuy.VenueSymbol)
+		return
+	}
 	dedupKey := combo.Key("MEANREVERT", canonical, venueBuy, venueSell)
 	intent := TradeIntent{
 		Strategy:    "MEANREVERT",
@@ -444,6 +485,15 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity)
 	qty := e.cfg.NotionalUSD / opp.PriceBuy
 	if qty <= 0 {
 		return
+	}
+	// H4.2：qty 低于买腿最小步 → debug 跳过（品种适配事实，不产 intent 不落 REJECTED）
+	// venueSymbol 从 qbus 取（handleOpportunity 无直接 quote，用 opp.VenueBuy 查）
+	if qbuy, ok := e.quotes.Latest(opp.Canonical, opp.VenueBuy); ok {
+		if e.service.QtyBelowMinStep(opp.VenueBuy, qbuy.VenueSymbol, qty) {
+			log.Printf("[autotrade] skip opp=%s: qty %.6f below min step (notional $%.0f too small for %s)",
+				opp.ID, qty, e.cfg.NotionalUSD, qbuy.VenueSymbol)
+			return
+		}
 	}
 	intent := TradeIntent{
 		Strategy:    opp.Type,
