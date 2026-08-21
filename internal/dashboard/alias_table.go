@@ -81,7 +81,7 @@ var canonicalAliases = map[string][]string{
 	"US30":    {"US30", "DJ30", "WALLST30"},
 	"NAS100":  {"NAS100", "US100", "USATECH", "NDX100", "NASDAQ100", "USTEC", "USNDAQ100"},
 	"SPX500":  {"SPX500", "US500", "USA500", "SP500", "USSPX500"},
-	"GER40":   {"GER40", "DAX", "DE40", "GDAX", "GER30", "GERMANY40"},
+	"GER40":   {"GER40", "DAX", "DAX40", "DE40", "DE30", "GDAX", "GER30", "GERMANY40", "GERMANY30", "FDAX"},
 	"UK100":   {"UK100"},
 	"JP225":   {"JP225", "JAPAN", "JAPAN225"},
 	"AUS200":  {"AUS200"},
@@ -90,7 +90,6 @@ var canonicalAliases = map[string][]string{
 	"ES35":    {"ES35", "SPAIN", "SPAIN35"},
 	"STOXX50": {"STOXX50", "EURO50"},
 	"US2000":  {"US2000"},
-	"DE30":    {"DE30"},
 }
 
 // allCanonicals 返回 alias 表中全部 canonical（排序），供 ListCanonicals 等消费。

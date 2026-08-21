@@ -42,12 +42,17 @@ func TestMatchCanonical(t *testing.T) {
 		// D-067 指数
 		{"UK100", "UK100", 1},
 		{"JP225", "JP225", 1},
-		{"JAPAN", "JP225", 1}, // IC 别名
-		{"HK-HSI", "HK50", 1}, // IC 别名
-		{"FRANCE", "FR40", 1}, // IC 别名
-		{"SPAIN", "ES35", 1},  // IC 别名
+		{"JAPAN", "JP225", 1},  // IC 别名
+		{"HK-HSI", "HK50", 1},  // IC 别名
+		{"FRANCE", "FR40", 1},  // IC 别名
+		{"SPAIN", "ES35", 1},   // IC 别名
 		{"USTEC", "NAS100", 1}, // NAS100 别名
-		{"GER30", "GER40", 1}, // GER40 旧名
+		{"GER30", "GER40", 1},  // GER40 旧名
+		// WP3 GER40 家族变体补种
+		{"DAX40", "GER40", 1},     // DAX 40 现名
+		{"DE30", "GER40", 1},      // DAX 30 旧名（合并入 GER40 家族）
+		{"FDAX", "GER40", 1},      // 期货 DAX 变体
+		{"GERMANY30", "GER40", 1}, // Germany 30 全名变体
 		// D-067 Pepperstone # 前缀经 trimCentSuffix 剥离
 		{"#UK100", "UK100", 1},
 		{"#Japan225", "JP225", 1},
@@ -108,7 +113,7 @@ func TestCanonicalAliasesCoverage(t *testing.T) {
 		// 指数
 		"US30", "NAS100", "SPX500", "GER40",
 		"UK100", "JP225", "AUS200", "HK50", "FR40", "ES35",
-		"STOXX50", "US2000", "DE30",
+		"STOXX50", "US2000",
 	}
 	for _, c := range required {
 		if _, ok := canonicalAliases[c]; !ok {
@@ -133,13 +138,13 @@ func TestTrimCentSuffix(t *testing.T) {
 	tests := []struct {
 		in, out string
 	}{
-		{"EURUSDm", "EURUSD"},    // MT5 cent 后缀
-		{"BTCUSDm", "BTCUSD"},    // 加密 cent
-		{"#UK100", "UK100"},      // Pepperstone spot 指数 # 前缀
+		{"EURUSDm", "EURUSD"},     // MT5 cent 后缀
+		{"BTCUSDm", "BTCUSD"},     // 加密 cent
+		{"#UK100", "UK100"},       // Pepperstone spot 指数 # 前缀
 		{"#Japan225", "Japan225"}, // Pepperstone spot 指数
-		{"EURUSD", "EURUSD"},     // 无后缀/前缀
-		{"GOLD365", "GOLD365"},   // 365 不处理（改变品种身份）
-		{"GOLDEURO", "GOLDEURO"}, // EURO 不处理
+		{"EURUSD", "EURUSD"},      // 无后缀/前缀
+		{"GOLD365", "GOLD365"},    // 365 不处理（改变品种身份）
+		{"GOLDEURO", "GOLDEURO"},  // EURO 不处理
 	}
 	for _, tt := range tests {
 		got := trimCentSuffix(tt.in)
