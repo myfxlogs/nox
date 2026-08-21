@@ -3266,6 +3266,7 @@ func (x *ListPositionsRequest) GetOffset() int32 {
 type ListPositionsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Positions     []*Position            `protobuf:"bytes,1,rep,name=positions,proto3" json:"positions,omitempty"`
+	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"` // D-069：符合筛选条件的总数（分页控件用）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3305,6 +3306,13 @@ func (x *ListPositionsResponse) GetPositions() []*Position {
 		return x.Positions
 	}
 	return nil
+}
+
+func (x *ListPositionsResponse) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
 }
 
 type BrokerPosition struct {
@@ -8201,9 +8209,10 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x14ListPositionsRequest\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
-	"\x06offset\x18\x03 \x01(\x05R\x06offset\"Q\n" +
+	"\x06offset\x18\x03 \x01(\x05R\x06offset\"g\n" +
 	"\x15ListPositionsResponse\x128\n" +
-	"\tpositions\x18\x01 \x03(\v2\x1a.arb.dashboard.v1.PositionR\tpositions\"\x80\x04\n" +
+	"\tpositions\x18\x01 \x03(\v2\x1a.arb.dashboard.v1.PositionR\tpositions\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\"\x80\x04\n" +
 	"\x0eBrokerPosition\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x1b\n" +
 	"\tvenue_key\x18\x02 \x01(\tR\bvenueKey\x12\x16\n" +

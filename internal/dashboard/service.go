@@ -675,11 +675,25 @@ func (s *Service) ListPositions(ctx context.Context, req *connect.Request[v1.Lis
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+	// D-069：total 用于前端分页控件
+	total, err := s.store.CountPositions(ctx, req.Msg.GetStatus())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
 	var pbPositions []*v1.Position
 	for _, p := range positions {
-		pbPositions = append(pbPositions, positionToProto(&p))
+		pb := positionToProto(&p)
+		// D-069：填充 legs（成交历史，OPEN + CLOSE phase）
+		legs, err := s.store.ListPositionLegs(ctx, p.ID)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list legs for position %d: %w", p.ID, err))
+		}
+		for _, l := range legs {
+			pb.Legs = append(pb.Legs, positionLegToProto(&l))
+		}
+		pbPositions = append(pbPositions, pb)
 	}
-	return connect.NewResponse(&v1.ListPositionsResponse{Positions: pbPositions}), nil
+	return connect.NewResponse(&v1.ListPositionsResponse{Positions: pbPositions, Total: int32(total)}), nil
 }
 
 // --- 个人持仓（财务线 TRX 持仓接入，D-046 + 实账化工作项 3） ---
@@ -1122,6 +1136,29 @@ func positionToProto(p *pgstore.Position) *v1.Position {
 	}
 	if p.ClosedAt != nil {
 		pb.ClosedAt = timestamppb.New(*p.ClosedAt)
+	}
+	return pb
+}
+
+// positionLegToProto 将 position_legs 行转为 proto（D-069 成交历史）。
+func positionLegToProto(l *pgstore.PositionLeg) *v1.PositionLeg {
+	pb := &v1.PositionLeg{
+		Id:           l.ID,
+		PositionId:   l.PositionID,
+		LegNo:        int32(l.LegNo),
+		Phase:        l.Phase,
+		Venue:        l.Venue,
+		Account:      l.Account,
+		Symbol:       l.Symbol,
+		Side:         l.Side,
+		Qty:          l.Qty,
+		PriceExpected: l.PriceExpected,
+		OrderId:      l.OrderID,
+		Status:       l.Status,
+		Ts:           timestamppb.New(l.Ts),
+	}
+	if l.PriceActual != nil {
+		pb.PriceActual = l.PriceActual
 	}
 	return pb
 }
