@@ -37,6 +37,9 @@ type Config struct {
 	MinNetSwapBps  float64 // discoverSwapCombos 最低净 swap（ARB_AUTOTRADE_MIN_NET_SWAP_BPS，默认 0.2）
 	SwapArbExitBps float64 // SWAPARB/CARRY 退出净 swap bps（ARB_SWAPARB_EXIT_NET_BPS，默认 0）
 	FundingExitPct float64 // FUNDING_HEDGE/PERP_FUNDING 退出净年化（ARB_FUNDING_EXIT_NET_PCT，默认 0）
+
+	// B：组合平仓后重入冷却（ARB_SWAPARB_REENTRY_COOLDOWN_DAYS，默认 7）
+	ReentryCooldownDays int
 }
 
 // Engine 自动交易引擎：三 loop → gate → 执行 → 自动平仓 → 策略淘汰（D-070/D-072）。
@@ -118,14 +121,61 @@ func (e *Engine) swapArbLoop(ctx context.Context) {
 
 // scanSwapArb 自动扫描所有跨账户 swap 组合，找净 swap 最优的组合开仓。
 // D-072：风控由 gate 统一处理，本函数只产 TradeIntent。
+// B：组合平仓后重入冷却——该 ComboKey 存在 CLOSED 持仓且 closed_at > now() − N 天 → 跳过。
 func (e *Engine) scanSwapArb(ctx context.Context) {
 	combos := e.discoverSwapCombos(ctx)
 	if len(combos) == 0 {
 		return
 	}
+	// B：拉 CLOSED 持仓构建冷却集合（ComboKey → 最近 closed_at）
+	cooldownSet := e.swapArbCooldownSet(ctx)
 	for _, c := range combos {
+		ck := combo.Key("SWAPARB", c.canonical, c.vLong, c.vShort)
+		if closedAt, blocked := cooldownSet[ck]; blocked {
+			log.Printf("[autotrade] SWAPARB skip %s: reentry cooldown (closed %s ago)", ck, time.Since(closedAt).Round(time.Hour))
+			continue
+		}
 		e.trySwapArb(ctx, c.canonical, c.vLong, c.vShort, c.netSwapBps)
 	}
+}
+
+// swapArbCooldownSet 返回当前处于重入冷却期的 ComboKey 集合（B 修复）。
+// 判定：CLOSED 持仓的 combo.FromOppID(oppID) ∈ 冷却期（closed_at > now() − ReentryCooldownDays 天）。
+// ReentryCooldownDays=0 → 关闭冷却（返回空集）；查询失败 → 空集（fail-open，不阻断扫描）。
+func (e *Engine) swapArbCooldownSet(ctx context.Context) map[string]time.Time {
+	if e.cfg.ReentryCooldownDays <= 0 {
+		return nil
+	}
+	closed, err := e.store.ListPositions(ctx, "CLOSED", 200, 0)
+	if err != nil {
+		log.Printf("[autotrade] swapArbCooldownSet: list closed positions: %v (fail-open)", err)
+		return nil
+	}
+	return buildCooldownSet(closed, e.cfg.ReentryCooldownDays, time.Now())
+}
+
+// buildCooldownSet 纯函数：从 CLOSED 持仓列表构建冷却 ComboKey 集合（B 修复，可单测）。
+// cutoff = now − cooldownDays 天；closed_at > cutoff 的持仓按 combo.FromOppID(oppID) 入集。
+func buildCooldownSet(closed []pgstore.Position, cooldownDays int, now time.Time) map[string]time.Time {
+	if cooldownDays <= 0 {
+		return nil
+	}
+	cutoff := now.AddDate(0, 0, -cooldownDays)
+	out := make(map[string]time.Time)
+	for _, p := range closed {
+		if p.ClosedAt == nil || p.OpportunityID == "" {
+			continue
+		}
+		if p.ClosedAt.Before(cutoff) {
+			continue // 冷却过期，放行
+		}
+		ck := combo.FromOppID(p.OpportunityID)
+		// 同 ComboKey 多次平仓取最近 closed_at
+		if prev, ok := out[ck]; !ok || p.ClosedAt.After(prev) {
+			out[ck] = *p.ClosedAt
+		}
+	}
+	return out
 }
 
 // swapComboCandidate 自动扫描发现的 swap 套利候选组合。
@@ -212,7 +262,14 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 		log.Printf("[autotrade] SWAPARB skip %s %s/%s: %s", canonical, venueLong, venueShort, reason)
 		return
 	}
-	qty := notional / qLong.Ask
+	// A 修复：qty 定尺寸用 usdPerLot（买腿 ask 价）——原 notional/ask 是 USD÷JPY 币种混算。
+	// qty = notional(USD) ÷ usdPerLot(买腿) = USD ÷ (CS×price÷USDJPY) → 手数按计价币正确换算。
+	usdPerLotLong, ok := e.service.USDPerLotForLeg(canonical, venueLong, "ask")
+	if !ok || usdPerLotLong <= 0 {
+		log.Printf("[autotrade] SWAPARB skip %s: usdPerLot buy leg unavailable (fx/quote missing)", canonical)
+		return
+	}
+	qty := notional / usdPerLotLong
 	dedupKey := combo.Key("SWAPARB", canonical, venueLong, venueShort)
 	intent := TradeIntent{
 		Strategy:    "SWAPARB",
