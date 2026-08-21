@@ -23,9 +23,35 @@ const (
 	VenueOKX     = "okx"
 )
 
+// fundingPeriodsPerDay 根据 nextFundingTime 与上次结算时刻差值计算每日结算次数（D-077 修复⑪B N1）。
+// 4h=6, 1h=24, 8h=3。取不到 nextFundingTime → 回退 3 并计数日志（禁静默）。
+// nextFundingMs = 0 表示未取到 → 回退。
+func fundingPeriodsPerDay(nextFundingMs float64) int {
+	if nextFundingMs <= 0 {
+		return 3 // 回退 8h×3（禁静默，调用方计数日志）
+	}
+	// nextFundingTime 是下一次结算时刻，与当前时间差值 ≈ 结算周期
+	nowMs := float64(time.Now().UnixMilli())
+	periodMs := nextFundingMs - nowMs
+	if periodMs <= 0 {
+		return 3 // 已过期或异常 → 回退
+	}
+	periodsPerDay := 24 * 3600 * 1000 / periodMs
+	if periodsPerDay < 1 {
+		periodsPerDay = 3
+	}
+	return int(periodsPerDay)
+}
+
+// annualizeFunding 将单次 funding rate 转为年化百分比（D-077 修复⑪B N1）。
+// 公式：rate × periodsPerDay × 365 × 100
+func annualizeFunding(rate float64, periodsPerDay int) float64 {
+	return rate * float64(periodsPerDay) * 365 * 100
+}
+
 // Config CEX 采集配置。
 type Config struct {
-	Symbols      []string // 基础币种 BTC/ETH/TRX
+	Symbols        []string // 基础币种 BTC/ETH/TRX
 	BinanceBaseURL string   // Binance fapi base，可指向 CF Worker 代理
 	GateBaseURL    string
 	OKXBaseURL     string
@@ -52,32 +78,41 @@ func NewBinanceFunding(cfg Config) *BinanceFunding { return &BinanceFunding{cfg:
 func (b *BinanceFunding) Kind() string { return fact.KindFunding }
 
 func (b *BinanceFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
-var out []fact.Fact
-for _, sym := range b.cfg.Symbols {
-pair := sym + "USDT"
-url := fmt.Sprintf("%s/fapi/v1/premiumIndex?symbol=%s", b.cfg.BinanceBaseURL, pair)
-body, err := getJSON(ctx, b.cfg.Client, url)
-if err != nil {
-return nil, fmt.Errorf("binance funding %s: %w", pair, err)
-}
-rate, ok := body["lastFundingRate"].(string)
-if !ok {
-continue
-}
-var f float64
-fmt.Sscanf(rate, "%f", &f)
-annualized := f * 3 * 365 * 100
-out = append(out, fact.Fact{
-Kind:   fact.KindFunding,
-Venue:  VenueBinance,
-Symbol: pair,
-Value:  annualized,
-Unit:   fact.UnitPctAnnualized,
-Ts:     time.Now(),
-Src:    "binance_fapi",
-})
-}
-return out, nil
+	var out []fact.Fact
+	for _, sym := range b.cfg.Symbols {
+		pair := sym + "USDT"
+		url := fmt.Sprintf("%s/fapi/v1/premiumIndex?symbol=%s", b.cfg.BinanceBaseURL, pair)
+		body, err := getJSON(ctx, b.cfg.Client, url)
+		if err != nil {
+			return nil, fmt.Errorf("binance funding %s: %w", pair, err)
+		}
+		rate, ok := body["lastFundingRate"].(string)
+		if !ok {
+			continue
+		}
+		var f float64
+		fmt.Sscanf(rate, "%f", &f)
+		// D-077 修复⑪B N1：读 nextFundingTime 计算实际结算频率（4h=6, 8h=3）
+		var nextFundingMs float64
+		if nft, ok := body["nextFundingTime"].(float64); ok {
+			nextFundingMs = nft
+		}
+		periodsPerDay := fundingPeriodsPerDay(nextFundingMs)
+		if nextFundingMs == 0 {
+			fmt.Printf("[exchange:binance] %s nextFundingTime missing, fallback 3/day\n", pair)
+		}
+		annualized := annualizeFunding(f, periodsPerDay)
+		out = append(out, fact.Fact{
+			Kind:   fact.KindFunding,
+			Venue:  VenueBinance,
+			Symbol: pair,
+			Value:  annualized,
+			Unit:   fact.UnitPctAnnualized,
+			Ts:     time.Now(),
+			Src:    "binance_fapi",
+		})
+	}
+	return out, nil
 }
 
 // BinanceTicker 采集 Binance best bid/ask（REST 轮询，§3.3）。
@@ -86,36 +121,36 @@ type BinanceTicker struct{ cfg Config }
 func NewBinanceTicker(cfg Config) *BinanceTicker { return &BinanceTicker{cfg: cfg} }
 
 func (b *BinanceTicker) PollQuotes(ctx context.Context) ([]bus.Quote, error) {
-var out []bus.Quote
-spotBase := strings.Replace(b.cfg.BinanceBaseURL, "fapi", "api", 1)
-for _, sym := range b.cfg.Symbols {
-pair := sym + "USDT"
-spotURL := fmt.Sprintf("%s/api/v3/ticker/bookTicker?symbol=%s", spotBase, pair)
-if q, err := fetchBinanceBookTicker(ctx, b.cfg.Client, spotURL, pair, VenueBinance, "spot"); err == nil {
-out = append(out, q)
-}
-perpURL := fmt.Sprintf("%s/fapi/v1/ticker/bookTicker?symbol=%s", b.cfg.BinanceBaseURL, pair)
-if q, err := fetchBinanceBookTicker(ctx, b.cfg.Client, perpURL, pair, VenueBinance, "perp"); err == nil {
-out = append(out, q)
-}
-}
-return out, nil
+	var out []bus.Quote
+	spotBase := strings.Replace(b.cfg.BinanceBaseURL, "fapi", "api", 1)
+	for _, sym := range b.cfg.Symbols {
+		pair := sym + "USDT"
+		spotURL := fmt.Sprintf("%s/api/v3/ticker/bookTicker?symbol=%s", spotBase, pair)
+		if q, err := fetchBinanceBookTicker(ctx, b.cfg.Client, spotURL, pair, VenueBinance, "spot"); err == nil {
+			out = append(out, q)
+		}
+		perpURL := fmt.Sprintf("%s/fapi/v1/ticker/bookTicker?symbol=%s", b.cfg.BinanceBaseURL, pair)
+		if q, err := fetchBinanceBookTicker(ctx, b.cfg.Client, perpURL, pair, VenueBinance, "perp"); err == nil {
+			out = append(out, q)
+		}
+	}
+	return out, nil
 }
 
 func fetchBinanceBookTicker(ctx context.Context, client *http.Client, url, symbol, venue, venueType string) (bus.Quote, error) {
-body, err := getJSON(ctx, client, url)
-if err != nil {
-return bus.Quote{}, err
-}
-bid, _ := body["bidPrice"].(string)
-ask, _ := body["askPrice"].(string)
-var bidF, askF float64
-fmt.Sscanf(bid, "%f", &bidF)
-fmt.Sscanf(ask, "%f", &askF)
-return bus.Quote{
-Symbol: symbol, Venue: venue, VenueType: venueType, VenueSymbol: symbol,
-Bid: bidF, Ask: askF, Time: time.Now(),
-}, nil
+	body, err := getJSON(ctx, client, url)
+	if err != nil {
+		return bus.Quote{}, err
+	}
+	bid, _ := body["bidPrice"].(string)
+	ask, _ := body["askPrice"].(string)
+	var bidF, askF float64
+	fmt.Sscanf(bid, "%f", &bidF)
+	fmt.Sscanf(ask, "%f", &askF)
+	return bus.Quote{
+		Symbol: symbol, Venue: venue, VenueType: venueType, VenueSymbol: symbol,
+		Bid: bidF, Ask: askF, Time: time.Now(),
+	}, nil
 }
 
 // GateFunding 采集 Gate.io funding rate（REST 轮询，§3.3）。
@@ -143,8 +178,16 @@ func (g *GateFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
 		}
 		var f float64
 		fmt.Sscanf(rate, "%f", &f)
-		// 年化 = funding_rate * 3 * 365 / 100（8h 结算 = 3次/天，转百分比）
-		annualized := f * 3 * 365 * 100
+		// D-077 修复⑪B N1：读 next_settle_time 计算实际结算频率（Gate 返回秒级时间戳）
+		var nextFundingMs float64
+		if nst, ok := body["next_settle_time"].(float64); ok {
+			nextFundingMs = nst * 1000 // 秒 → 毫秒
+		}
+		periodsPerDay := fundingPeriodsPerDay(nextFundingMs)
+		if nextFundingMs == 0 {
+			fmt.Printf("[exchange:gate] %s next_settle_time missing, fallback 3/day\n", sym+"USDT")
+		}
+		annualized := annualizeFunding(f, periodsPerDay)
 		out = append(out, fact.Fact{
 			Kind:   fact.KindFunding,
 			Venue:  VenueGate,
@@ -190,8 +233,16 @@ func (o *OKXFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
 		}
 		var f float64
 		fmt.Sscanf(rate, "%f", &f)
-		// 年化 = funding_rate * 3 * 365 / 100（8h 结算）
-		annualized := f * 3 * 365 * 100
+		// D-077 修复⑪B N1：读 fundingTime 计算实际结算频率（OKX 返回毫秒级时间戳）
+		var nextFundingMs float64
+		if ft, ok := item["fundingTime"].(string); ok {
+			fmt.Sscanf(ft, "%f", &nextFundingMs)
+		}
+		periodsPerDay := fundingPeriodsPerDay(nextFundingMs)
+		if nextFundingMs == 0 {
+			fmt.Printf("[exchange:okx] %s fundingTime missing, fallback 3/day\n", sym+"USDT")
+		}
+		annualized := annualizeFunding(f, periodsPerDay)
 		out = append(out, fact.Fact{
 			Kind:   fact.KindFunding,
 			Venue:  VenueOKX,
@@ -228,4 +279,3 @@ func getJSON(ctx context.Context, client *http.Client, url string) (map[string]a
 	}
 	return m, nil
 }
-

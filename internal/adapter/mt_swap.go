@@ -453,8 +453,10 @@ func mt5TripleSwapDay(v mt5pb.V3DaysSwap) float64 {
 }
 
 // mt4TripleSwapDay MT4 SwapRollover3Days → Go time.Weekday。
-// MT4 proto: 0=Monday...4=Friday（无周末）；Go: 0=Sunday...6=Saturday。
-// 映射：MT4 0(Mon)→1, 1(Tue)→2, 2(Wed)→3, 3(Thu)→4, 4(Fri)→5（+1 偏移）。
+// **无现网实证**：MT4/MT5 同族枚举语义可能不同（MT5 0=Sunday）。
+// 假设 MT4 proto: 0=Monday...4=Friday（无周末）；Go: 0=Sunday...6=Saturday。
+// 映射假设：MT4 0(Mon)→1, 1(Tue)→2, 2(Wed)→3, 3(Thu)→4, 4(Fri)→5（+1 偏移）。
+// **首个 MT4 账户接入时必须实测对拍后核验**（比照 mt4SwapMode 标注风格）。
 func mt4TripleSwapDay(v int32) float64 {
 	return float64(v + 1)
 }

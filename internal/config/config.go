@@ -88,7 +88,7 @@ type Config struct {
 	AutoTradeMaxNotional  float64       // 单笔最大名义额 USD（缺省 1000）
 	AutoTradeMaxPositions int           // 最大同时持仓数（缺省 5）
 	AutoTradeMaxDailyLoss float64       // 单日最大亏损 USD（缺省 100）
-	AutoTradeMinNetBps    float64       // 最低净收益门槛 bps（缺省 5.0）
+	AutoTradeMinNetBps    float64       // 最低净收益门槛 bps（缺省 1.0，D-070 均值回归降低门槛）
 	AutoTradePollInterval time.Duration // OPEN 持仓扫描间隔（缺省 10s）
 
 	// D-072 §3.4 硬编码外部化（默认值=现行为，零迁移）
@@ -101,6 +101,13 @@ type Config struct {
 	AutoTradeMinNetSwapBps float64 // ARB_AUTOTRADE_MIN_NET_SWAP_BPS（默认 0.2）
 	SwapArbExitNetBps      float64 // ARB_SWAPARB_EXIT_NET_BPS（默认 0）
 	FundingExitNetPct      float64 // ARB_FUNDING_EXIT_NET_PCT（默认 0）
+
+	// === 复核劣化双阈值（D-077 修复⑪B N4）===
+	RevalidateAbsBps float64 // ARB_REVALIDATE_ABS_BPS（默认 2.0）
+	RevalidateRelPct float64 // ARB_REVALIDATE_REL_PCT（默认 20）
+
+	// === Swap 套利入场成本容忍（D-077 修复⑪B N6）===
+	SwapArbEntrySpreadMinBps float64 // ARB_SWAPARB_ENTRY_SPREAD_MIN_BPS（默认 -3）
 }
 
 // Load 从环境变量加载配置，未设置用默认值。
@@ -154,6 +161,9 @@ func Load() *Config {
 		AutoTradeMinNetSwapBps:     envFloat("ARB_AUTOTRADE_MIN_NET_SWAP_BPS", 0.2),
 		SwapArbExitNetBps:          envFloat("ARB_SWAPARB_EXIT_NET_BPS", 0),
 		FundingExitNetPct:          envFloat("ARB_FUNDING_EXIT_NET_PCT", 0),
+		RevalidateAbsBps:           envFloat("ARB_REVALIDATE_ABS_BPS", 2.0),            // D-077 修复⑪B N4
+		RevalidateRelPct:           envFloat("ARB_REVALIDATE_REL_PCT", 20.0),           // D-077 修复⑪B N4
+		SwapArbEntrySpreadMinBps:   envFloat("ARB_SWAPARB_ENTRY_SPREAD_MIN_BPS", -3.0), // D-077 修复⑪B N6
 	}
 }
 
