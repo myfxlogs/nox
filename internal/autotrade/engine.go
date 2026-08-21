@@ -81,14 +81,21 @@ func (e *Engine) oppLoop(ctx context.Context) {
 	}
 }
 
+// isCEXVenue 判断 venue 是否为 CEX（binance/gate/okx/任何非 MT5/MT4 的 venue）。
+// D-070：业主指令「放弃 CEX，全功 CFD」。
+func isCEXVenue(venue string) bool {
+	return !strings.Contains(venue, ":mt5") && !strings.Contains(venue, ":mt4")
+}
+
 // handleOpportunity 处理一个机会事件：风控检查 → 执行 → 记录。
 func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity) {
-	// D-070：OKX 出局（demo 余额不足 + 单边簿，业主指令暂停）
-	if strings.Contains(opp.VenueBuy, "okx") || strings.Contains(opp.VenueSell, "okx") {
+	// D-070：业主指令「放弃 CEX，全功 CFD」——跳过所有 CEX venue
+	if isCEXVenue(opp.VenueBuy) || isCEXVenue(opp.VenueSell) {
 		return
 	}
-	// D-070：gate 未配置交易所凭据，跳过含 gate 的机会
-	if strings.Contains(opp.VenueBuy, "gate") || strings.Contains(opp.VenueSell, "gate") {
+	// D-070：BRENT 排除——1314615 报价系统性偏高 $3（符号映射/合约规格差异），
+	// 311 bps 价差是虚假的，平仓必然亏损
+	if opp.Canonical == "BRENT" || opp.Canonical == "WTI" {
 		return
 	}
 	// 门槛：净收益
@@ -151,6 +158,8 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity)
 	log.Printf("[autotrade] pass risk opp=%s type=%s openCount=%d dailyPnl=$%.2f", opp.ID, opp.Type, openCount, dailyPnl)
 
 	// 计算 qty：按单笔名义额 / 买腿参考价
+	// D-070 CFD 适配：MT5 volume step 可能 ≥1手，固定名义额算出的 qty 取整后可能为 0。
+	// 策略：先用名义额算 qty，取整后若为 0 则回退到 1 个 volume step（最小可交易量）。
 	qty := e.cfg.NotionalUSD / opp.PriceBuy
 	if qty <= 0 {
 		return
