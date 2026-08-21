@@ -44,11 +44,28 @@ type Pipeline struct {
 	csResolver ContractSizeResolver
 	// pnlCalibrator 历史单权威 PnL 回读（D-077 修复⑪A M1 回读校准）。nil = 用同步公式。
 	pnlCalibrator PnLCalibrator
+	// revalidateAbsBps 复核劣化绝对阈值 bps（D-077 修复⑪B N4，ARB_REVALIDATE_ABS_BPS 默认 2.0）。
+	revalidateAbsBps float64
+	// revalidateRelPct 复核劣化相对阈值 %（D-077 修复⑪B N4，ARB_REVALIDATE_REL_PCT 默认 20）。
+	revalidateRelPct float64
 }
 
 // NewPipeline 创建执行管线。
 func NewPipeline(reg *Registry, store *pgstore.Store, qbus *bus.QuoteBus, limits RiskLimits) *Pipeline {
-	return &Pipeline{registry: reg, store: store, qbus: qbus, limits: limits}
+	return &Pipeline{
+		registry:         reg,
+		store:            store,
+		qbus:             qbus,
+		limits:           limits,
+		revalidateAbsBps: 2.0, // D-077 修复⑪B N4 默认值（SetRevalidateThresholds 可覆盖）
+		revalidateRelPct: 20.0,
+	}
+}
+
+// SetRevalidateThresholds 设置复核劣化双阈值（D-077 修复⑪B N4，env 化）。
+func (p *Pipeline) SetRevalidateThresholds(absBps, relPct float64) {
+	p.revalidateAbsBps = absBps
+	p.revalidateRelPct = relPct
 }
 
 // SetPositionVerifier 注入平仓后回读器（D-077 修复⑩ G1）。main 装配后调。
@@ -449,9 +466,9 @@ func (p *Pipeline) Revalidate(canonical, venueBuy, venueSell, oppType string, or
 		return false
 	}
 	currentBps := spread / mid * 10000
-	// 双阈值：max(2bps 绝对, 20% 相对)
-	absThreshold := 2.0
-	relThreshold := math.Abs(originalGrossBps) * 0.2
+	// 双阈值：max(absBps 绝对, relPct% 相对)（D-077 修复⑪B N4：env 化 ARB_REVALIDATE_ABS_BPS/ARB_REVALIDATE_REL_PCT）
+	absThreshold := p.revalidateAbsBps
+	relThreshold := math.Abs(originalGrossBps) * p.revalidateRelPct / 100.0
 	threshold := math.Max(absThreshold, relThreshold)
 	degradation := originalGrossBps - currentBps
 	return degradation <= threshold

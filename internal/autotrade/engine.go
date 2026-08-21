@@ -38,6 +38,10 @@ type Config struct {
 	SwapArbExitBps float64 // SWAPARB/CARRY 退出净 swap bps（ARB_SWAPARB_EXIT_NET_BPS，默认 0）
 	FundingExitPct float64 // FUNDING_HEDGE/PERP_FUNDING 退出净年化（ARB_FUNDING_EXIT_NET_PCT，默认 0）
 
+	// D-077 修复⑪B N6：入场成本容忍+陈旧度 env 化
+	EntrySpreadMinBps float64       // SWAPARB 入场 spreadBps 下限（ARB_SWAPARB_ENTRY_SPREAD_MIN_BPS，默认 -3）
+	FreshnessTTL      time.Duration // 报价陈旧排除（复用 ARB_DETECTOR_FRESHNESS_TTL，默认 120s）
+
 	// B：组合平仓后重入冷却（ARB_SWAPARB_REENTRY_COOLDOWN_DAYS，默认 7）
 	ReentryCooldownDays int
 }
@@ -114,6 +118,10 @@ func (e *Engine) swapArbLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			// D-077 修复⑪B N9：判死策略停扫（消除 3 万条/日 REJECTED 日志污染）
+			if disabled, _ := e.store.IsStrategyDisabled(ctx, "SWAPARB"); disabled {
+				continue // debug 日志省略（每 60s 一次静默跳过）
+			}
 			e.scanSwapArb(ctx)
 		}
 	}
@@ -221,34 +229,38 @@ func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 		return nil
 	}
 	type swapKey struct{ canonical, venue string }
-	shortMap := make(map[swapKey]float64)
+	type swapEntry struct {
+		value float64
+		src   string // "mt5" / "mt4" / etc（D-077 修复⑪B N2）
+	}
+	shortMap := make(map[swapKey]swapEntry)
 	for _, f := range shortFacts {
-		shortMap[swapKey{f.Symbol, f.Venue}] = f.Value
+		shortMap[swapKey{f.Symbol, f.Venue}] = swapEntry{value: f.Value, src: f.Src}
 	}
 	var combos []swapComboCandidate
 	minNetSwapBps := e.cfg.MinNetSwapBps
-	if minNetSwapBps == 0 {
-		minNetSwapBps = 0.2
-	}
+	// D-077 修复⑪B N5：删除 ==0 → 0.2 二次默认（config 已有 env 默认 0.2）。
+	// 显式 0 = 全扫语义恢复（用户可通过 ARB_AUTOTRADE_MIN_NET_SWAP_BPS=0 关闭门槛）。
 	for _, lf := range longFacts {
 		if lf.Value <= 0 {
 			continue
 		}
-		for sfKey, sfVal := range shortMap {
+		for sfKey, sfEntry := range shortMap {
 			if sfKey.canonical != lf.Symbol {
 				continue
 			}
 			if sfKey.venue == lf.Venue {
 				continue
 			}
-			netSwap := lf.Value + sfVal
+			netSwap := lf.Value + sfEntry.value
 			if netSwap < minNetSwapBps {
 				continue
 			}
+			// D-077 修复⑪B N2：用 fact.Src 拼 venueKey（mt4 账户也能进 swap 套利）
 			combos = append(combos, swapComboCandidate{
 				canonical:  lf.Symbol,
-				vLong:      lf.Venue + ":mt5",
-				vShort:     sfKey.venue + ":mt5",
+				vLong:      lf.Venue + ":" + lf.Src,
+				vShort:     sfKey.venue + ":" + sfEntry.src,
 				netSwapBps: netSwap,
 			})
 		}
@@ -267,13 +279,17 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 		return
 	}
 	now := time.Now()
-	if now.Sub(qLong.Time) > 120*time.Second || now.Sub(qShort.Time) > 120*time.Second {
-		return
+	// D-077 修复⑪B N6：陈旧度复用 DetectorFreshnessTTL（env 化）
+	if e.cfg.FreshnessTTL > 0 {
+		if now.Sub(qLong.Time) > e.cfg.FreshnessTTL || now.Sub(qShort.Time) > e.cfg.FreshnessTTL {
+			return
+		}
 	}
 	spread := qShort.Bid - qLong.Ask
 	spreadBps := spread / qLong.Ask * 10000
-	if spreadBps < -3.0 {
-		log.Printf("[autotrade] SWAPARB skip %s: spreadBps=%.2f < -3.0", canonical, spreadBps)
+	// D-077 修复⑪B N6：入场成本容忍 env 化（ARB_SWAPARB_ENTRY_SPREAD_MIN_BPS，默认 -3）
+	if spreadBps < e.cfg.EntrySpreadMinBps {
+		log.Printf("[autotrade] SWAPARB skip %s: spreadBps=%.2f < %.2f", canonical, spreadBps, e.cfg.EntrySpreadMinBps)
 		return
 	}
 	// D-072 §3.3：名义额 = broker 余额驱动（fail-closed 三条件）
@@ -371,6 +387,10 @@ func (e *Engine) meanRevertLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			// D-077 修复⑪B N9：判死策略停扫（消除 REJECTED 日志污染）
+			if disabled, _ := e.store.IsStrategyDisabled(ctx, "MEANREVERT"); disabled {
+				continue
+			}
 			e.scanMeanRevert(ctx, e.cfg.MeanRevertThresh, venueA, venueB)
 		}
 	}
@@ -389,8 +409,11 @@ func (e *Engine) scanMeanRevert(ctx context.Context, symbols map[string]float64,
 			continue
 		}
 		now := time.Now()
-		if now.Sub(qA.Time) > 120*time.Second || now.Sub(qB.Time) > 120*time.Second {
-			continue
+		// D-077 修复⑪B N6：陈旧度复用 DetectorFreshnessTTL（env 化）
+		if e.cfg.FreshnessTTL > 0 {
+			if now.Sub(qA.Time) > e.cfg.FreshnessTTL || now.Sub(qB.Time) > e.cfg.FreshnessTTL {
+				continue
+			}
 		}
 		spreadAB := qB.Bid - qA.Ask
 		spreadBA := qA.Bid - qB.Ask
