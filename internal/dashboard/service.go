@@ -504,12 +504,29 @@ func (s *Service) resolveLegs(found *pgstore.Opportunity, qty float64) ([]exec.L
 	}
 	sellQty := math.Round(qty*csBuy/csSell*100) / 100
 	// D-070：qty 精度对齐（Binance -1111 / MT5 Invalid volume 修复）
+	// MT5 取整后为 0 会回退到 1 step（最小可交易量），不会返回 0
 	qty = s.floorToStepQty(found.VenueBuy, qbuy.VenueSymbol, qty)
 	sellQty = s.floorToStepQty(found.VenueSell, qsell.VenueSymbol, sellQty)
-	// D-070：取整后 qty 为 0（step > qty）→ 拒绝（防 NaN imbalance + 无效下单）
-	if qty <= 0 || sellQty <= 0 {
-		return nil, fmt.Errorf("qty below volume step: buy %.6f sell %.6f (step too large for notional $%.0f)",
-			qty, sellQty, qty*csBuy*qbuy.Ask)
+	// D-070 CFD 保证金保护：MT5 品种 CS 可能很大（BRENT=1000），
+	// 取整后名义额 = qty * CS * price 可能远超账户余额。
+	// 若买腿名义 > MaxNotional × 10（套利两腿对冲，保证金只需名义的一小部分），
+	// 降到 1 个 volume step（最小可交易量）。
+	maxNotional := 10000.0 // $10K 名义上限（CFD 保证金通常 1-5%，两腿对冲后更低）
+	if isMTVenue(found.VenueBuy) {
+		notional := qty * csBuy * qbuy.Ask
+		if notional > maxNotional {
+			qty = s.floorToStepQtyMin(found.VenueBuy, qbuy.VenueSymbol)
+			log.Printf("[exec] CFD notional cap: buy %s qty %.4f→%.4f (notional $%.0f > $%.0f)",
+				found.VenueBuy, qty, qty, notional, maxNotional)
+		}
+	}
+	if isMTVenue(found.VenueSell) {
+		notional := sellQty * csSell * qsell.Bid
+		if notional > maxNotional {
+			sellQty = s.floorToStepQtyMin(found.VenueSell, qsell.VenueSymbol)
+			log.Printf("[exec] CFD notional cap: sell %s qty %.4f→%.4f (notional $%.0f > $%.0f)",
+				found.VenueSell, sellQty, sellQty, notional, maxNotional)
+		}
 	}
 	// 不平衡口径修正：按买腿参考价统一计两腿名义——D-028 防的是「取整导致的数量差」，
 	// 不是两腿各自可执行价的差（那是套利缺口本身：等量对冲腿在不同 venue 价格下名义额必然不同，
@@ -572,8 +589,24 @@ func (s *Service) legContractSizeOf(venueKey, venueSymbol string) (float64, erro
 	return cs, nil
 }
 
+// isMTVenue 判断是否为 MT5/MT4 venue。
+func isMTVenue(venue string) bool {
+	return strings.HasSuffix(venue, ":mt5") || strings.HasSuffix(venue, ":mt4")
+}
+
+// floorToStepQtyMin 返回 MT5 品种的最小可交易量（1 个 volume step）。
+func (s *Service) floorToStepQtyMin(venueKey, symbol string) float64 {
+	if s.legVolumeStep != nil {
+		if vs, ok := s.legVolumeStep(venueKey, symbol); ok && vs > 0 {
+			return vs
+		}
+	}
+	return 0.01
+}
+
 // floorToStepQty 按品种精度向下取整 qty（D-070 修复 Binance -1111 / MT5 Invalid volume）。
 // MT 腿：查 legVolumeStep（SymbolParams VolumeStep），未接线/未知用默认 0.01。
+// D-070 CFD 适配：取整后为 0 则回退到 1 个 step（最小可交易量），防 qty=0 无法交易。
 // CEX 腿：按品种 stepSize 取整；未知品种默认 0.01。
 func (s *Service) floorToStepQty(venueKey, symbol string, qty float64) float64 {
 	if strings.HasSuffix(venueKey, ":mt5") || strings.HasSuffix(venueKey, ":mt4") {
@@ -584,6 +617,9 @@ func (s *Service) floorToStepQty(venueKey, symbol string, qty float64) float64 {
 			}
 		}
 		result := math.Floor(qty/step) * step
+		if result <= 0 {
+			result = step // 回退到最小可交易量 1 step
+		}
 		log.Printf("[exec] floorToStepQty mt %s %s qty=%.6f step=%.4f → %.6f", venueKey, symbol, qty, step, result)
 		return result
 	}
