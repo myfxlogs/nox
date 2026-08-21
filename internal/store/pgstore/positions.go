@@ -9,6 +9,9 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// ErrTerminalState 持仓已是终态（CLOSED/FAILED），不可回退（D-077 修复⑩ G4）。
+var ErrTerminalState = errors.New("position is in terminal state (CLOSED/FAILED), cannot update")
+
 // Position 对应 positions 表（§2.11）。
 type Position struct {
 	ID             int64
@@ -53,12 +56,20 @@ func (s *Store) CreatePosition(ctx context.Context, p *Position) (int64, error) 
 }
 
 // UpdatePositionStatus 更新持仓状态。
+// D-077 修复⑩ G4：终态不可逆守卫——CLOSED/FAILED 不可回退（WHERE NOT IN）。
+// 返回 ErrTerminalState 表示 0 行受影响（已是终态，晚写拦截）。
 func (s *Store) UpdatePositionStatus(ctx context.Context, id int64, status string) error {
 	// D-060 实施修正②：去掉 updated_at——positions 表无此列，原 SQL 恒报错且被调用方
 	// `_ =` 吞掉 → 所有 position 状态转换静默失败（position #2 卡 OPENING 实证）。
-	q := `UPDATE positions SET status = $1 WHERE id = $2`
-	_, err := s.pool.Exec(ctx, q, status, id)
-	return err
+	q := `UPDATE positions SET status = $1 WHERE id = $2 AND status NOT IN ('CLOSED','FAILED')`
+	ct, err := s.pool.Exec(ctx, q, status, id)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrTerminalState
+	}
+	return nil
 }
 
 // UpdatePositionMeta 回填持仓元数据（D-070：pipeline.Execute 创建时未填 type/expected_net_bps）。
