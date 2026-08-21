@@ -46,3 +46,6 @@ var AutotradeSQL string
 
 //go:embed 0034_autotrade_state.sql
 var AutotradeStateSQL string
+
+//go:embed 0035_stats_anchor.sql
+var StatsAnchorSQL string

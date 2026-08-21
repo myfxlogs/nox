@@ -53,6 +53,14 @@ service DashboardService {
   rpc AddDailyIncome(AddDailyIncomeRequest) returns (AddDailyIncomeResponse);
   rpc ListDailyIncome(ListDailyIncomeRequest) returns (ListDailyIncomeResponse);
 
+  // 盈亏统计起点（F4：anchor 重置，业主选 A「不删历史」）
+  rpc GetPnlAnchor(GetPnlAnchorRequest) returns (GetPnlAnchorResponse);
+  rpc ResetPnlAnchor(ResetPnlAnchorRequest) returns (ResetPnlAnchorResponse);
+
+  // 经验库只读浏览（F8：读 docs/经验库/索引.md + 条目全文）
+  rpc ListKBEntries(ListKBEntriesRequest) returns (ListKBEntriesResponse);
+  rpc GetKBEntry(GetKBEntryRequest) returns (GetKBEntryResponse);
+
   // Broker 管理（认证后，运行时 MT4/MT5 连接管理）
   rpc SearchBroker(SearchBrokerRequest) returns (SearchBrokerResponse);
   rpc AddBroker(AddBrokerRequest) returns (AddBrokerResponse);
@@ -527,6 +535,38 @@ message AddDailyIncomeRequest {
 message AddDailyIncomeResponse {
   int64 id = 1;
   string warning = 2;          // 本次提交即时预警（同 §11.1 规则）；空 = 正常
+}
+
+// F4 盈亏统计起点（stats_anchor 单行表）
+message GetPnlAnchorRequest {}
+message GetPnlAnchorResponse {
+  google.protobuf.Timestamp anchor = 1;  // 累计已实现口径起点（closed_at >= anchor）
+  double realized_since_anchor = 2;      // SUM(realized_pnl) WHERE closed_at >= anchor（后端口径）
+}
+message ResetPnlAnchorRequest {}
+message ResetPnlAnchorResponse {
+  google.protobuf.Timestamp anchor = 1;  // 重置后的 anchor（= now()）
+}
+
+// F8 经验库只读浏览
+message KBEntry {
+  string id = 1;
+  string kind = 2;        // pitfall / invariant / pattern
+  string keywords = 3;
+  string summary = 4;
+  string status = 5;      // verified / draft
+  string risk = 6;        // high / medium / low
+}
+message ListKBEntriesRequest {}
+message ListKBEntriesResponse {
+  repeated KBEntry entries = 1;
+}
+message GetKBEntryRequest {
+  string id = 1;
+}
+message GetKBEntryResponse {
+  string id = 1;
+  string content = 2;     // 条目 markdown 全文（含 frontmatter）
 }
 
 message ListDailyIncomeRequest {

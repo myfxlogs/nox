@@ -128,3 +128,45 @@ func (s *Store) DailyRealizedPnl(ctx context.Context) (float64, error) {
 	}
 	return *sum, nil
 }
+
+// GetPnlAnchor 返回盈亏统计起点（F4，stats_anchor 单行表）。
+// 累计已实现口径 = SUM(realized_pnl) WHERE closed_at >= anchor。
+func (s *Store) GetPnlAnchor(ctx context.Context) (time.Time, error) {
+	var anchor time.Time
+	err := s.pool.QueryRow(ctx, `SELECT anchor FROM stats_anchor WHERE id = 1`).Scan(&anchor)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("get pnl anchor: %w", err)
+	}
+	return anchor, nil
+}
+
+// RealizedPnlSinceAnchor 返回 closed_at >= anchor 的累计已实现盈亏（F4 后端口径）。
+func (s *Store) RealizedPnlSinceAnchor(ctx context.Context) (float64, error) {
+	anchor, err := s.GetPnlAnchor(ctx)
+	if err != nil {
+		return 0, err
+	}
+	var sum *float64
+	err = s.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(realized_pnl), 0) FROM positions
+		WHERE status = 'CLOSED' AND closed_at >= $1`, anchor).Scan(&sum)
+	if err != nil {
+		return 0, fmt.Errorf("realized pnl since anchor: %w", err)
+	}
+	if sum == nil {
+		return 0, nil
+	}
+	return *sum, nil
+}
+
+// ResetPnlAnchor 重置盈亏统计起点为 now()（F4，业主点「清零」→ anchor=now()）。
+// 返回重置后的 anchor。历史 CLOSED 持仓不删除（业主选 A「不删历史」）。
+func (s *Store) ResetPnlAnchor(ctx context.Context) (time.Time, error) {
+	var anchor time.Time
+	err := s.pool.QueryRow(ctx, `
+		UPDATE stats_anchor SET anchor = now() WHERE id = 1 RETURNING anchor`).Scan(&anchor)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("reset pnl anchor: %w", err)
+	}
+	return anchor, nil
+}
