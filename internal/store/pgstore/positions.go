@@ -67,6 +67,12 @@ func (s *Store) UpdatePositionMeta(ctx context.Context, id int64, posType string
 	return err
 }
 
+// UpdatePositionOppID 更新持仓的 opportunity_id（D-070 swap 套利用）。
+func (s *Store) UpdatePositionOppID(ctx context.Context, id int64, oppID string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE positions SET opportunity_id = $1 WHERE id = $2`, oppID, id)
+	return err
+}
+
 // ClosePosition 平仓回填。
 func (s *Store) ClosePosition(ctx context.Context, id int64, realizedPnl float64) error {
 	// D-070 修复：positions 表无 updated_at 列（D-060 同类 bug），去掉 updated_at = now()
