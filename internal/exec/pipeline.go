@@ -247,6 +247,26 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 			log.Printf("[exec] close leg %d (ticket=%s venue=%s): %v", leg.ID, leg.OrderID, leg.Venue, closeErr)
 			continue
 		}
+		// D-069：记录 CLOSE phase leg（平仓价/订单ID/方向持久化，供成交历史复盘）
+		closeSide := "SELL"
+		if leg.Side == "SELL" {
+			closeSide = "BUY"
+		}
+		closePrice := fill.Price
+		_ = p.store.CreatePositionLeg(ctx, &pgstore.PositionLeg{
+			PositionID:    posID,
+			LegNo:         leg.LegNo,
+			Phase:         "CLOSE",
+			Venue:         leg.Venue,
+			Account:       leg.Account,
+			Symbol:        leg.Symbol,
+			Side:          closeSide,
+			Qty:           leg.Qty,
+			PriceExpected: leg.PriceExpected,
+			PriceActual:   &closePrice,
+			OrderID:       fill.OrderID,
+			Status:        "FILLED",
+		})
 		// 简化 PnL：(closePrice - openPrice) * qty * direction
 		dir := 1.0
 		if leg.Side == "SELL" {
@@ -258,6 +278,10 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 		// swap 入 cashflows
 		if fill.Swap != 0 {
 			_ = p.store.InsertCashflow(ctx, posID, "swap", leg.Venue, fill.Swap, time.Now())
+		}
+		// D-069：commission 入 cashflows（负号=成本）
+		if fill.Commission != 0 {
+			_ = p.store.InsertCashflow(ctx, posID, "commission", leg.Venue, -fill.Commission, time.Now())
 		}
 	}
 
