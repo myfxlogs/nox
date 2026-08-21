@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -74,6 +75,7 @@ func (e *Engine) oppLoop(ctx context.Context) {
 			if !ok {
 				return
 			}
+			log.Printf("[autotrade] recv opp=%s type=%s netBps=%.2f buy=%s sell=%s", opp.ID, opp.Type, opp.NetBps, opp.VenueBuy, opp.VenueSell)
 			e.handleOpportunity(ctx, opp)
 		}
 	}
@@ -81,10 +83,15 @@ func (e *Engine) oppLoop(ctx context.Context) {
 
 // handleOpportunity 处理一个机会事件：风控检查 → 执行 → 记录。
 func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity) {
+	// D-070：OKX 出局（demo 余额不足 + 单边簿，业主指令暂停）
+	if strings.Contains(opp.VenueBuy, "okx") || strings.Contains(opp.VenueSell, "okx") {
+		return
+	}
 	// 门槛：净收益
 	if opp.NetBps < e.cfg.MinNetBps {
 		return
 	}
+	log.Printf("[autotrade] pass filter opp=%s type=%s netBps=%.2f", opp.ID, opp.Type, opp.NetBps)
 	// 会话内防重
 	e.mu.Lock()
 	if e.executed[opp.ID] {
@@ -98,6 +105,7 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity)
 	if err != nil {
 		log.Printf("[autotrade] check strategy disabled: %v", err)
 	} else if disabled {
+		log.Printf("[autotrade] skip disabled strategy %s", opp.Type)
 		return
 	}
 
@@ -109,6 +117,7 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity)
 	}
 	if openCount >= e.cfg.MaxPositions {
 		e.logTrade(ctx, &opp, 0, 0, "REJECTED", fmt.Sprintf("max positions reached (%d)", openCount))
+		log.Printf("[autotrade] REJECTED max positions %d >= %d", openCount, e.cfg.MaxPositions)
 		return
 	}
 
@@ -120,6 +129,7 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity)
 	}
 	if dailyPnl <= -e.cfg.MaxDailyLoss {
 		e.logTrade(ctx, &opp, 0, 0, "REJECTED", fmt.Sprintf("daily loss limit hit ($%.2f)", dailyPnl))
+		log.Printf("[autotrade] REJECTED daily loss $%.2f", dailyPnl)
 		return
 	}
 
@@ -130,8 +140,11 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity)
 		return
 	}
 	if has {
+		log.Printf("[autotrade] skip duplicate opp=%s", opp.ID)
 		return
 	}
+
+	log.Printf("[autotrade] pass risk opp=%s type=%s openCount=%d dailyPnl=$%.2f", opp.ID, opp.Type, openCount, dailyPnl)
 
 	// 计算 qty：按单笔名义额 / 买腿参考价
 	qty := e.cfg.NotionalUSD / opp.PriceBuy

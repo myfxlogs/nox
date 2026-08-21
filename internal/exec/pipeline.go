@@ -285,7 +285,9 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 		}
 	}
 
-	_ = p.store.ClosePosition(ctx, posID, totalPnL)
+	if err := p.store.ClosePosition(ctx, posID, totalPnL); err != nil {
+		log.Printf("[exec] close position %d store update: %v", posID, err)
+	}
 	return nil
 }
 
