@@ -41,6 +41,8 @@ type Service struct {
 	priceTopic *bus.Topic[position.PositionPrice]
 	// oppTopic 新机会推送广播（D-050）：engine 新插入发布 → StreamUpdates 扇出 case 2。nil = 未接线（测试直接构造 Service）。
 	oppTopic *bus.Topic[pgstore.Opportunity]
+	// fundingNeedTopic 资金注入提醒广播（D-072）：engine 余额不足发布 → StreamUpdates 扇出 case 10。nil = 未接线（测试直接构造 Service）。
+	fundingNeedTopic *bus.Topic[FundingNeedNotice]
 	// bpm Broker 实持仓 monitor（D-052）：ListBrokerPositions 拉 + StreamUpdates case 8 推同源。nil = 未接线（测试直接构造 Service）。
 	bpm *BrokerPositionMonitor
 	// notionalUSD net_usd 换算的单笔名义（config.OpportunityNotionalUSD，D-053）。0 = 未接线（测试），net_usd=0。
@@ -1112,6 +1114,13 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 		accCh, accCancel = s.acctMon.topic.Subscribe()
 		defer accCancel()
 	}
+	// 资金注入提醒推送（D-072）：engine 余额不足发布 → 逐条推 case 10。fundingNeedTopic 为 nil（测试未接线）→ 不订阅。
+	var fnCh <-chan FundingNeedNotice
+	if s.fundingNeedTopic != nil {
+		var fnCancel func()
+		fnCh, fnCancel = s.fundingNeedTopic.Subscribe()
+		defer fnCancel()
+	}
 	// keepalive 每 30s（§8.2 D-027）
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -1170,6 +1179,17 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 			if err := stream.Send(&v1.StreamUpdatesResponse{
 				Update: &v1.StreamUpdatesResponse_Accounts{
 					Accounts: v,
+				},
+			}); err != nil {
+				return err
+			}
+		case v, ok := <-fnCh:
+			if !ok {
+				return nil
+			}
+			if err := stream.Send(&v1.StreamUpdatesResponse{
+				Update: &v1.StreamUpdatesResponse_FundingNeed{
+					FundingNeed: fundingNeedToProto(v),
 				},
 			}); err != nil {
 				return err
