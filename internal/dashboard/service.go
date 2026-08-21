@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"strings"
 	"time"
@@ -57,6 +58,9 @@ type Service struct {
 	// legMinLots MT 腿最小手数查询（D-061 量规格预检）：venueKey+venueSymbol → min lots。
 	// nil/未知 = 放行（venue 服务端拒单兜底；position #3 实证：qty 0.1 < IC XBRUSD min 1.0 → LEGGED）。
 	legMinLots func(venueKey, venueSymbol string) (float64, bool)
+	// legVolumeStep MT 腿 volume step 查询（D-070 qty 精度取整）：venueKey+venueSymbol → step。
+	// nil/未知 = 用默认 0.01（MT5 手数步长）。
+	legVolumeStep func(venueKey, venueSymbol string) (float64, bool)
 	// oppContractSize 机会卡 USD 派生用合约规格查询（D-062）：canonical+venueKey → CS。
 	// nil = 未接线（测试直接构造 Service）→ USD 字段全 0，前端回退 bps。main 接 store.ContractSizeByCanonical。
 	oppContractSize func(canonical, venueKey string) (float64, bool)
@@ -99,6 +103,11 @@ func (s *Service) SetMaxLegImbalancePct(p float64) { s.maxLegImbalance = p }
 // SetLegMinLots 注入 MT 腿最小手数查询（D-061）。nil/未知 = 放行。
 func (s *Service) SetLegMinLots(f func(venueKey, venueSymbol string) (float64, bool)) {
 	s.legMinLots = f
+}
+
+// SetLegVolumeStep 注入 MT 腿 volume step 查询（D-070 qty 精度取整）。nil/未知 = 用默认 0.01。
+func (s *Service) SetLegVolumeStep(f func(venueKey, venueSymbol string) (float64, bool)) {
+	s.legVolumeStep = f
 }
 
 // SetOppContractSize 注入机会卡 USD 派生用合约规格查询（D-062）。nil = 未接线 → USD 字段全 0（前端回退 bps）。
@@ -439,6 +448,10 @@ func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, request
 		}
 		return "FAILED", fmt.Sprintf("execute: %v", err), 0
 	}
+	// D-070：回填 position 元数据（pipeline.Execute 创建时未填 type/expected_net_bps）
+	if result.PositionID > 0 {
+		_ = s.store.UpdatePositionMeta(ctx, result.PositionID, found.Type, found.NetBps)
+	}
 	return result.Status, "", result.PositionID
 }
 
@@ -490,6 +503,14 @@ func (s *Service) resolveLegs(found *pgstore.Opportunity, qty float64) ([]exec.L
 		return nil, err
 	}
 	sellQty := math.Round(qty*csBuy/csSell*100) / 100
+	// D-070：qty 精度对齐（Binance -1111 / MT5 Invalid volume 修复）
+	qty = s.floorToStepQty(found.VenueBuy, qbuy.VenueSymbol, qty)
+	sellQty = s.floorToStepQty(found.VenueSell, qsell.VenueSymbol, sellQty)
+	// D-070：取整后 qty 为 0（step > qty）→ 拒绝（防 NaN imbalance + 无效下单）
+	if qty <= 0 || sellQty <= 0 {
+		return nil, fmt.Errorf("qty below volume step: buy %.6f sell %.6f (step too large for notional $%.0f)",
+			qty, sellQty, qty*csBuy*qbuy.Ask)
+	}
 	// 不平衡口径修正：按买腿参考价统一计两腿名义——D-028 防的是「取整导致的数量差」，
 	// 不是两腿各自可执行价的差（那是套利缺口本身：等量对冲腿在不同 venue 价格下名义额必然不同，
 	// 3.3% 价差曾把正确订单误拒为 imbalance）。
@@ -549,6 +570,68 @@ func (s *Service) legContractSizeOf(venueKey, venueSymbol string) (float64, erro
 		return 0, fmt.Errorf("contract size unknown for %s %s (reject: notional derivation unavailable)", venueKey, venueSymbol)
 	}
 	return cs, nil
+}
+
+// floorToStepQty 按品种精度向下取整 qty（D-070 修复 Binance -1111 / MT5 Invalid volume）。
+// MT 腿：查 legVolumeStep（SymbolParams VolumeStep），未接线/未知用默认 0.01。
+// CEX 腿：按品种 stepSize 取整；未知品种默认 0.01。
+func (s *Service) floorToStepQty(venueKey, symbol string, qty float64) float64 {
+	if strings.HasSuffix(venueKey, ":mt5") || strings.HasSuffix(venueKey, ":mt4") {
+		step := 0.01 // 默认 MT5 手数步长
+		if s.legVolumeStep != nil {
+			if vs, ok := s.legVolumeStep(venueKey, symbol); ok && vs > 0 {
+				step = vs
+			}
+		}
+		result := math.Floor(qty/step) * step
+		log.Printf("[exec] floorToStepQty mt %s %s qty=%.6f step=%.4f → %.6f", venueKey, symbol, qty, step, result)
+		return result
+	}
+	// CEX：按品种 stepSize
+	step := cexStepSize(symbol)
+	result := math.Floor(qty/step) * step
+	log.Printf("[exec] floorToStepQty cex %s %s qty=%.6f step=%.6f → %.6f", venueKey, symbol, qty, step, result)
+	return result
+}
+
+// cexStepSize 返回 CEX 品种的 stepSize（向下取整单位）。
+// 已知品种用实测值；未知品种默认 0.01（2位小数，多数山寨币）。
+func cexStepSize(symbol string) float64 {
+	// 提取基础币种（去 USDT/USD 后缀）
+	base := symbol
+	for _, suf := range []string{"USDT", "USD", "-USDT", "-USD", "-SWAP"} {
+		base = strings.TrimSuffix(base, suf)
+	}
+	switch base {
+	case "BTC":
+		return 0.001 // binance spot 0.00001, perp 0.001；取保守 0.001
+	case "ETH":
+		return 0.001 // binance spot 0.0001, perp 0.001
+	case "TRX":
+		return 1 // binance spot 1, perp 1
+	case "SOL":
+		return 0.01
+	case "BNB":
+		return 0.01
+	case "XRP":
+		return 1
+	case "DOGE":
+		return 1
+	case "ADA":
+		return 1
+	case "MATIC":
+		return 1
+	case "DOT":
+		return 0.01
+	case "LINK":
+		return 0.01
+	case "LTC":
+		return 0.001
+	case "AVAX":
+		return 0.01
+	default:
+		return 0.01 // 未知品种保守 2 位小数
+	}
 }
 
 func (s *Service) ClosePosition(ctx context.Context, req *connect.Request[v1.ClosePositionRequest]) (*connect.Response[v1.ClosePositionResponse], error) {
