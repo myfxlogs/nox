@@ -35,7 +35,6 @@ service DashboardService {
 
   // 经验库
   rpc ListKnowledgeEntries(ListKnowledgeEntriesRequest) returns (ListKnowledgeEntriesResponse);
-  rpc ReviewKnowledgeEntry(ReviewKnowledgeEntryRequest) returns (ReviewKnowledgeEntryResponse);
 
   // 执行（认证后，§13）
   rpc ExecuteOpportunity(ExecuteOpportunityRequest) returns (ExecuteOpportunityResponse);
@@ -354,15 +353,6 @@ message ListKnowledgeEntriesRequest {}
 message ListKnowledgeEntriesResponse {
   repeated KnowledgeEntry entries = 1;
 }
-
-message ReviewKnowledgeEntryRequest {
-  string signature = 1;
-  string status = 2;           // active / superseded / retracted
-  string verdict = 3;          // 留空 = 保留原判定
-  string validation_note = 4;
-}
-
-message ReviewKnowledgeEntryResponse {}
 
 // === Position（§2.11 + §13）===
 

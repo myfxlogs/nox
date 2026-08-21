@@ -71,25 +71,3 @@ func (s *Store) UpsertKnowledgeEntry(ctx context.Context, e *KnowledgeEntry) (in
 	}
 	return id, nil
 }
-
-// UpdateKnowledgeEntryReview 人工复核（§13.6：统计复盘产出 → 人工确认）。
-// 按 signature 唯一键定位（proto ReviewKnowledgeEntryRequest.signature，§8.2）。
-// status 取值 active/superseded/retracted；verdict 留空 = 保留原判定。
-func (s *Store) UpdateKnowledgeEntryReview(ctx context.Context, signature, status, verdict, validationNote string) error {
-	q := `
-		UPDATE knowledge_entries
-		SET status = $1,
-			validation_note = $2,
-			validated_at = now(),
-			verdict = CASE WHEN $3 = '' THEN verdict ELSE $3 END
-		WHERE signature = $4
-	`
-	tag, err := s.pool.Exec(ctx, q, status, validationNote, verdict, signature)
-	if err != nil {
-		return fmt.Errorf("update knowledge review: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("update knowledge review: signature %q not found", signature)
-	}
-	return nil
-}

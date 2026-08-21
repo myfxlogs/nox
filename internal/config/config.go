@@ -56,11 +56,15 @@ type Config struct {
 	// FundingDropRatio 资金费急降预警比例（今日 < 比例×前日 触发；缺省 0.5）——§11 收益侧方向证伪。
 	FundingDropRatio float64
 
-	// === Swap 套利风控（S6）===
+	// === Swap 套利风控（S6/B）===
 	// SwapArbEquityUseRatio swap 套利名义额资金使用率系数（ARB_SWAPARB_EQUITY_USE_RATIO，缺省 0.5）。
 	// notional = min(equityLong, equityShort) × ratio；保留抗单余地（单腿裸露承受力）。
 	// ratio=1 等价旧行为（100% 资金使用率）；不限额=无绝对上限，ratio=单组合资金使用率。
 	SwapArbEquityUseRatio float64
+	// SwapArbReentryCooldownDays 组合平仓后重入冷却天数（ARB_SWAPARB_REENTRY_COOLDOWN_DAYS，缺省 7）。
+	// 该 ComboKey 存在 CLOSED 持仓且 closed_at > now() − N 天 → 跳过（不尝试/不弹窗/不落 REJECTED 噪音）。
+	// 冷却外或无 CLOSED 记录 → 放行；0 = 关闭冷却（始终放行）。
+	SwapArbReentryCooldownDays int
 
 	// === 机会站内推送（D-050）===
 	// NotifyMinNetBps 机会推送提醒门槛（bps）；0 = 全部新机会都提醒（ARB_NOTIFY_MIN_NET_BPS）。
@@ -132,6 +136,7 @@ func Load() *Config {
 		LiqMMR:                     envFloat("ARB_LIQ_MMR", 0.005),
 		FundingDropRatio:           envFloat("ARB_FUNDING_DROP_RATIO", 0.5),
 		SwapArbEquityUseRatio:      envFloat("ARB_SWAPARB_EQUITY_USE_RATIO", 0.5),
+		SwapArbReentryCooldownDays: envInt("ARB_SWAPARB_REENTRY_COOLDOWN_DAYS", 7),
 		NotifyMinNetBps:            envFloat("ARB_NOTIFY_MIN_NET_BPS", 0),
 		BrokerPosPollInterval:      envDur("ARB_BROKER_POS_POLL_MS", 5*time.Second),
 		OpportunityNotionalUSD:     envFloat("ARB_OPP_NOTIONAL_USD", 1000),
