@@ -457,13 +457,22 @@ func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, request
 
 // ExecuteMeanRevert D-070 均值回归直接执行（绕过 detector，autotrade engine 专用）。
 // 直接接收 canonical + venueBuy + venueSell + qty，构造 LegSpec 并执行。
+// maxNotional: CFD 名义额上限（0=用默认$10K）。
 // 返回 status、message、positionID。
 func (s *Service) ExecuteMeanRevert(ctx context.Context, canonical, venueBuy, venueSell, requestID string, qty float64, openBps float64) (status, message string, positionID int64) {
+	return s.ExecuteMeanRevertWithCap(ctx, canonical, venueBuy, venueSell, requestID, qty, openBps, 10000.0)
+}
+
+// ExecuteMeanRevertWithCap 带 notional cap 参数的均值回归执行（swap 套利可用更大 cap）。
+func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venueBuy, venueSell, requestID string, qty float64, openBps float64, maxNotional float64) (status, message string, positionID int64) {
 	if s.pipeline == nil {
 		return "FAILED", "executor not wired", 0
 	}
 	if qty <= 0 {
 		return "FAILED", "invalid quantity", 0
+	}
+	if maxNotional <= 0 {
+		maxNotional = 10000.0
 	}
 	qbuy, okBuy := s.qbus.Latest(canonical, venueBuy)
 	qsell, okSell := s.qbus.Latest(canonical, venueSell)
@@ -482,7 +491,6 @@ func (s *Service) ExecuteMeanRevert(ctx context.Context, canonical, venueBuy, ve
 	qty = s.floorToStepQty(venueBuy, qbuy.VenueSymbol, qty)
 	sellQty = s.floorToStepQty(venueSell, qsell.VenueSymbol, sellQty)
 	// CFD notional cap
-	maxNotional := 10000.0
 	if isMTVenue(venueBuy) {
 		notional := qty * csBuy * qbuy.Ask
 		if notional > maxNotional {
