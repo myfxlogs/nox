@@ -92,7 +92,11 @@ type Alert struct {
 }
 
 // InsertAlert 写入告警（§2.5）。
+// D-069：alertPaused=true 时静默丢弃（demo 阶段避免刷屏）。
 func (s *Store) InsertAlert(ctx context.Context, ruleID *int64, level, message string) error {
+	if s.alertPaused {
+		return nil
+	}
 	q := `INSERT INTO alerts (rule_id, level, message) VALUES ($1, $2, $3)`
 	_, err := s.pool.Exec(ctx, q, ruleID, level, message)
 	if err != nil {

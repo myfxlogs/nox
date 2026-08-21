@@ -128,6 +128,17 @@ func (s *Store) ListPositions(ctx context.Context, status string, limit, offset 
 	return out, rows.Err()
 }
 
+// CountPositions 返回符合筛选条件的持仓总数（D-069 分页控件用）。
+func (s *Store) CountPositions(ctx context.Context, status string) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM positions WHERE ($1 = '' OR status = $1)`, status).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("count positions: %w", err)
+	}
+	return n, nil
+}
+
 // Cashflow position_cashflows 行。
 type Cashflow struct {
 	ID         int64

@@ -66,6 +66,11 @@ type Config struct {
 	// OpportunityNotionalUSD net_usd 换算的单笔名义金额（ARB_OPP_NOTIONAL_USD，缺省 1000）。
 	// bps 无量纲 → USD 必须有单笔名义假设；标注「按单笔 $X 估算」。
 	OpportunityNotionalUSD float64
+
+	// === 告警暂停（D-069）===
+	// AlertPaused 暂停全部告警写入（ARB_ALERT_PAUSED=true，缺省 false）。
+	// demo 自动执行阶段避免 LEGGED/对账不一致告警刷屏；生产环境恢复后置 false。
+	AlertPaused bool
 }
 
 // Load 从环境变量加载配置，未设置用默认值。
@@ -102,6 +107,7 @@ func Load() *Config {
 		NotifyMinNetBps:          envFloat("ARB_NOTIFY_MIN_NET_BPS", 0),
 		BrokerPosPollInterval:    envDur("ARB_BROKER_POS_POLL_MS", 5*time.Second),
 		OpportunityNotionalUSD:   envFloat("ARB_OPP_NOTIONAL_USD", 1000),
+		AlertPaused:              envBool("ARB_ALERT_PAUSED", false),
 	}
 }
 
@@ -127,6 +133,15 @@ func envInt(key string, def int) int {
 	if v, ok := os.LookupEnv(key); ok {
 		if n, err := strconv.Atoi(v); err == nil {
 			return n
+		}
+	}
+	return def
+}
+
+func envBool(key string, def bool) bool {
+	if v, ok := os.LookupEnv(key); ok {
+		if b, err := strconv.ParseBool(v); err == nil {
+			return b
 		}
 	}
 	return def

@@ -11,7 +11,13 @@ import (
 
 // Store 封装 pgx 连接池，所有数据库操作共享同一池。
 type Store struct {
-	pool *pgxpool.Pool
+	pool        *pgxpool.Pool
+	alertPaused bool // D-069：暂停全部告警写入（demo 阶段避免刷屏）
+}
+
+// SetAlertPaused 暂停/恢复告警写入（D-069）。
+func (s *Store) SetAlertPaused(paused bool) {
+	s.alertPaused = paused
 }
 
 // New 创建带连接池的 Store。

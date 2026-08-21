@@ -419,6 +419,7 @@ message ListPositionsRequest {
 
 message ListPositionsResponse {
   repeated Position positions = 1;
+  int32 total = 2;  // D-069：符合筛选条件的总数（分页控件用）
 }
 
 // === Broker 持仓（MT5/MT4 实际持仓统一视图，D-051 WP3）===
