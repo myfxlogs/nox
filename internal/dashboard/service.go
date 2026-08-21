@@ -1143,19 +1143,19 @@ func positionToProto(p *pgstore.Position) *v1.Position {
 // positionLegToProto 将 position_legs 行转为 proto（D-069 成交历史）。
 func positionLegToProto(l *pgstore.PositionLeg) *v1.PositionLeg {
 	pb := &v1.PositionLeg{
-		Id:           l.ID,
-		PositionId:   l.PositionID,
-		LegNo:        int32(l.LegNo),
-		Phase:        l.Phase,
-		Venue:        l.Venue,
-		Account:      l.Account,
-		Symbol:       l.Symbol,
-		Side:         l.Side,
-		Qty:          l.Qty,
+		Id:            l.ID,
+		PositionId:    l.PositionID,
+		LegNo:         int32(l.LegNo),
+		Phase:         l.Phase,
+		Venue:         l.Venue,
+		Account:       l.Account,
+		Symbol:        l.Symbol,
+		Side:          l.Side,
+		Qty:           l.Qty,
 		PriceExpected: l.PriceExpected,
-		OrderId:      l.OrderID,
-		Status:       l.Status,
-		Ts:           timestamppb.New(l.Ts),
+		OrderId:       l.OrderID,
+		Status:        l.Status,
+		Ts:            timestamppb.New(l.Ts),
 	}
 	if l.PriceActual != nil {
 		pb.PriceActual = l.PriceActual
