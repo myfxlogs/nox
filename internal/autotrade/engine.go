@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -91,7 +92,9 @@ func (e *Engine) swapArbLoop(ctx context.Context) {
 	}
 }
 
-// scanSwapArb 检查是否需要开仓 swap 套利。
+// scanSwapArb 自动扫描所有跨账户 swap 组合，找净 swap 最优的组合开仓。
+// D-070：从 facts 表自动查询 swap_long/swap_short，不依赖硬编码组合。
+// 新 broker 接入后无需改代码——系统自动发现新组合。
 func (e *Engine) scanSwapArb(ctx context.Context) {
 	// 风控：持仓数
 	openCount, err := e.store.CountOpenPositions(ctx)
@@ -117,22 +120,77 @@ func (e *Engine) scanSwapArb(ctx context.Context) {
 			}
 		}
 	}
-	// swap 套利组合列表：canonical → venueLong + venueShort + 净swap bps/日
-	type swapCombo struct {
-		canonical, vLong, vShort string
-		netSwapBps               float64
-	}
-	combos := []swapCombo{
-		{"AUDJPY", "52993526:mt5", "277842155:mt5", 0.494},
-		{"AUDJPY", "REDACTED_MT_ACCT:mt5", "277842155:mt5", 0.471},
+	// 自动扫描：从 facts 表查所有 swap_long/swap_short
+	combos := e.discoverSwapCombos(ctx)
+	if len(combos) == 0 {
+		return
 	}
 	for _, c := range combos {
-		comboKey := c.vLong + ":" + c.vShort // e.g. "52993526:mt5:277842155:mt5"
+		comboKey := c.vLong + ":" + c.vShort
 		if existingCombos[comboKey] {
 			continue
 		}
 		e.trySwapArb(ctx, c.canonical, c.vLong, c.vShort, c.netSwapBps)
 	}
+}
+
+// swapComboCandidate 自动扫描发现的 swap 套利候选组合。
+type swapComboCandidate struct {
+	canonical, vLong, vShort string
+	netSwapBps               float64
+}
+
+// discoverSwapCombos 从 facts 表自动扫描所有跨账户 swap 组合。
+// 逻辑：对每个 canonical × 每对 venue，计算 swap_long_A + swap_short_B，
+// 返回净 swap > minNetSwapBps 的组合，按净 swap 降序排列。
+func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
+	// 查所有 swap_long facts
+	longFacts, err := e.store.LatestFacts(ctx, "swap_long", "", "")
+	if err != nil || len(longFacts) == 0 {
+		return nil
+	}
+	// 查所有 swap_short facts
+	shortFacts, err := e.store.LatestFacts(ctx, "swap_short", "", "")
+	if err != nil || len(shortFacts) == 0 {
+		return nil
+	}
+	// 构建 swap_short 索引：canonical → venue → value
+	type swapKey struct{ canonical, venue string }
+	shortMap := make(map[swapKey]float64)
+	for _, f := range shortFacts {
+		shortMap[swapKey{f.Symbol, f.Venue}] = f.Value
+	}
+	// 遍历所有 swap_long，找配对的 swap_short（同 canonical 不同 venue）
+	var combos []swapComboCandidate
+	minNetSwapBps := 0.2 // 最低净 swap 阈值（bps/日）
+	for _, lf := range longFacts {
+		if lf.Value <= 0 {
+			continue // 只看正 swap_long（做多收 swap）
+		}
+		for sfKey, sfVal := range shortMap {
+			if sfKey.canonical != lf.Symbol {
+				continue // 必须同 canonical
+			}
+			if sfKey.venue == lf.Venue {
+				continue // 必须不同 venue
+			}
+			netSwap := lf.Value + sfVal // swap_long_A + swap_short_B
+			if netSwap < minNetSwapBps {
+				continue
+			}
+			combos = append(combos, swapComboCandidate{
+				canonical:   lf.Symbol,
+				vLong:       lf.Venue + ":mt5",
+				vShort:      sfKey.venue + ":mt5",
+				netSwapBps:  netSwap,
+			})
+		}
+	}
+	// 按净 swap 降序排列
+	sort.Slice(combos, func(i, j int) bool {
+		return combos[i].netSwapBps > combos[j].netSwapBps
+	})
+	return combos
 }
 
 // trySwapArb 尝试开仓单个 swap 套利组合。
