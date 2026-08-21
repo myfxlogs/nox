@@ -31,18 +31,20 @@ type Engine struct {
 	store    *pgstore.Store
 	service  *dashboard.Service
 	oppTopic *bus.Topic[pgstore.Opportunity]
+	quotes   *bus.QuoteBus // 实时报价（D-070 均值回归平仓用）
 
 	mu       sync.Mutex
 	executed map[string]bool // 会话内已执行的机会 ID（防短时间内重复）
 }
 
 // New 创建自动交易引擎。
-func New(cfg Config, store *pgstore.Store, service *dashboard.Service, oppTopic *bus.Topic[pgstore.Opportunity]) *Engine {
+func New(cfg Config, store *pgstore.Store, service *dashboard.Service, oppTopic *bus.Topic[pgstore.Opportunity], quotes *bus.QuoteBus) *Engine {
 	return &Engine{
 		cfg:      cfg,
 		store:    store,
 		service:  service,
 		oppTopic: oppTopic,
+		quotes:   quotes,
 		executed: make(map[string]bool),
 	}
 }
@@ -96,6 +98,26 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity)
 	// D-070：BRENT 排除——1314615 报价系统性偏高 $3（符号映射/合约规格差异），
 	// 311 bps 价差是虚假的，平仓必然亏损
 	if opp.Canonical == "BRENT" || opp.Canonical == "WTI" {
+		return
+	}
+	// D-070 均值回归：只交易 277842155+REDACTED_MT_ACCT（同标的、价格接近、价差波动收敛）
+	// 排除 1314615（NAS100 系统性偏低 $20）和 52993526（volume step=10手 imbalance）
+	allowedVenues := map[string]bool{
+		"277842155:mt5": true,
+		"REDACTED_MT_ACCT:mt5": true,
+	}
+	if !allowedVenues[opp.VenueBuy] || !allowedVenues[opp.VenueSell] {
+		return
+	}
+	// D-070 均值回归：只交易价差波动收敛的品种（avg≈0, std 大）
+	// 排除结构性偏移品种（SPX500/US30/AUS200/UK100：avg≠0，价差不回归）
+	allowedSymbols := map[string]bool{
+		"NAS100":  true, // avg=-0.11, std=4.20
+		"ETHUSDT": true, // avg=0.42, std=1.91
+		"XAUUSD":  true, // avg=0.25, std=0.81
+		"BTCUSDT": true, // avg=-0.09, std=74.09
+	}
+	if !allowedSymbols[opp.Canonical] {
 		return
 	}
 	// 门槛：净收益
@@ -200,7 +222,9 @@ func (e *Engine) positionLoop(ctx context.Context) {
 	}
 }
 
-// scanAndClose 扫描 OPEN 持仓，收敛型达标则自动平仓。
+// scanAndClose 扫描 OPEN 持仓，实时计算当前价差，收敛型达标则自动平仓。
+// D-070 均值回归：查询持仓两腿的实时报价，计算当前 netBps，
+// 若 <= CloseBpsThr 则平仓（价差回归到阈值内）。
 func (e *Engine) scanAndClose(ctx context.Context) {
 	positions, err := e.store.ListPositions(ctx, "OPEN", 50, 0)
 	if err != nil {
@@ -212,9 +236,14 @@ func (e *Engine) scanAndClose(ctx context.Context) {
 		if p.Type == "FUNDING_HEDGE" || p.Type == "CARRY" {
 			continue
 		}
-		// 收敛型：expected_net_bps <= closeBpsThr 则平仓
-		if p.ExpectedNetBps <= e.cfg.CloseBpsThr {
-			log.Printf("[autotrade] auto-close pos=%d type=%s netBps=%.2f <= %.1f", p.ID, p.Type, p.ExpectedNetBps, e.cfg.CloseBpsThr)
+		// D-070 均值回归：实时计算当前 netBps
+		currentBps, ok := e.currentNetBps(&p)
+		if !ok {
+			continue // 报价不可用，跳过
+		}
+		if currentBps <= e.cfg.CloseBpsThr {
+			log.Printf("[autotrade] auto-close pos=%d type=%s currentBps=%.2f <= %.1f (openBps=%.2f)",
+				p.ID, p.Type, currentBps, e.cfg.CloseBpsThr, p.ExpectedNetBps)
 			if err := e.service.AutoClosePosition(ctx, p.ID); err != nil {
 				log.Printf("[autotrade] auto-close pos=%d failed: %v", p.ID, err)
 				continue
@@ -223,6 +252,55 @@ func (e *Engine) scanAndClose(ctx context.Context) {
 			e.updateStrategyStat(ctx, &p)
 		}
 	}
+}
+
+// currentNetBps 实时计算持仓的当前净 bps（D-070 均值回归平仓用）。
+// 查询两腿 venue 的实时报价，按平仓方向（买回卖腿、卖回买腿）计算当前价差 bps。
+func (e *Engine) currentNetBps(p *pgstore.Position) (float64, bool) {
+	if e.quotes == nil {
+		return p.ExpectedNetBps, true // fallback 到开仓时 bps
+	}
+	// 从 opportunity_id 解析 canonical（格式 CROSS_VENUE:SYMBOL:venue1:venue2:ts）
+	parts := strings.Split(p.OpportunityID, ":")
+	if len(parts) < 2 {
+		return p.ExpectedNetBps, true
+	}
+	canonical := parts[1]
+	// 持仓 legs：OPEN phase 的 BUY/SELL
+	legs, err := e.store.ListPositionLegs(context.Background(), p.ID)
+	if err != nil {
+		return 0, false
+	}
+	var buyLeg, sellLeg *pgstore.PositionLeg
+	for i := range legs {
+		if legs[i].Phase == "OPEN" {
+			if legs[i].Side == "BUY" {
+				buyLeg = &legs[i]
+			} else {
+				sellLeg = &legs[i]
+			}
+		}
+	}
+	if buyLeg == nil || sellLeg == nil {
+		return 0, false
+	}
+	// 平仓：卖回买腿（bid）、买回卖腿（ask）
+	buyClose, ok1 := e.quotes.Latest(canonical, buyLeg.Venue)
+	sellClose, ok2 := e.quotes.Latest(canonical, sellLeg.Venue)
+	if !ok1 || !ok2 {
+		return 0, false
+	}
+	// 平仓价差 = 卖回买腿的 bid - 买回卖腿的 ask
+	spread := buyClose.Bid - sellClose.Ask
+	if spread <= 0 {
+		return 0, true // 价差已反转，平仓
+	}
+	// 转 bps：spread / 开仓买腿价 * 10000
+	refPrice := buyClose.Ask
+	if buyLeg.PriceActual != nil && *buyLeg.PriceActual > 0 {
+		refPrice = *buyLeg.PriceActual
+	}
+	return spread / refPrice * 10000, true
 }
 
 // updateStrategyStat 平仓后更新策略统计 + 检查淘汰。
