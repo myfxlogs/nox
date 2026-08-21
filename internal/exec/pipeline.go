@@ -47,11 +47,11 @@ func NewPipeline(reg *Registry, store *pgstore.Store, qbus *bus.QuoteBus, limits
 
 // LegSpec 是单腿下单规格。
 type LegSpec struct {
-	VenueKey       string // "venue:venueType"
-	VenueSymbol    string // venue 原生符号
-	Side           string // BUY / SELL
-	Qty            float64
-	PriceExpected  float64 // 下单时本腿可执行价（买=ask 卖=bid，D-060 实施修正②：复盘 deviation 口径需要）
+	VenueKey      string // "venue:venueType"
+	VenueSymbol   string // venue 原生符号
+	Side          string // BUY / SELL
+	Qty           float64
+	PriceExpected float64 // 下单时本腿可执行价（买=ask 卖=bid，D-060 实施修正②：复盘 deviation 口径需要）
 }
 
 // ExecuteResult 是执行结果。
