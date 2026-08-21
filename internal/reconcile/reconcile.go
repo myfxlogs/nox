@@ -26,6 +26,17 @@ type VenueQuerier interface {
 	VenueKey() string // "{venue}:{venueType}"
 }
 
+// Store 对账器所需的 store 方法子集（D-073+ 接口化，便于单测 fakeStore）。
+// pgstore.Store 实现该接口（结构性 typing，无需显式声明）。
+type Store interface {
+	ListPositions(ctx context.Context, status string, limit, offset int) ([]pgstore.Position, error)
+	ListPositionLegs(ctx context.Context, posID int64) ([]pgstore.PositionLeg, error)
+	CreatePositionLeg(ctx context.Context, leg *pgstore.PositionLeg) error
+	ClosePosition(ctx context.Context, id int64, realizedPnl float64) error
+	UpdatePositionStatus(ctx context.Context, id int64, status string) error
+	InsertAlert(ctx context.Context, posID *int64, level, msg string) error
+}
+
 // VenueOrder venue 侧的持仓记录。
 // Comment 用于判别订单归属：ARB 源订单（exec.OrderComment 前缀）vs 系统外单。
 type VenueOrder struct {
@@ -243,14 +254,30 @@ func (q *MT5Querier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error
 
 // Reconciler 对账器：比对本地 OPEN legs 与 venue 实际持仓。
 type Reconciler struct {
-	store    *pgstore.Store
-	mu       sync.RWMutex
-	queriers []VenueQuerier
+	store           Store
+	mu              sync.RWMutex
+	queriers        []VenueQuerier
+	historyQueriers []OrderHistoryQuerier
+	closer          Closer
+	statUpdater     StatUpdater
 }
 
 // New 创建对账器。
-func New(store *pgstore.Store, queriers ...VenueQuerier) *Reconciler {
+func New(store Store, queriers ...VenueQuerier) *Reconciler {
 	return &Reconciler{store: store, queriers: queriers}
+}
+
+// SetCloser 注入平仓器（对账自动收尾用，D-073+）。main 装配 service 后调。
+func (r *Reconciler) SetCloser(c Closer) { r.closer = c }
+
+// SetStatUpdater 注入策略统计更新器（收尾后调，淘汰统计不断链）。
+func (r *Reconciler) SetStatUpdater(s StatUpdater) { r.statUpdater = s }
+
+// SetOrderHistoryQueriers 设置历史单查证器集合（与 VenueQuerier 同 venueKey 身份）。
+func (r *Reconciler) SetOrderHistoryQueriers(qs ...OrderHistoryQuerier) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.historyQueriers = append([]OrderHistoryQuerier(nil), qs...)
 }
 
 // SetQueriers 整体替换 querier 集合（Broker 管理器启停适配器时调用）。
@@ -267,23 +294,51 @@ func (r *Reconciler) snapshot() []VenueQuerier {
 	return r.queriers
 }
 
+// historySnapshot 返回历史单查证器集合快照。
+func (r *Reconciler) historySnapshot() []OrderHistoryQuerier {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.historyQueriers
+}
+
+// findHistoryQuerier 按 venueKey 找历史单查证器（venueKey = "{venue}:{type}"，与 leg.Venue 同源）。
+func (r *Reconciler) findHistoryQuerier(venueKey string) OrderHistoryQuerier {
+	for _, q := range r.historySnapshot() {
+		if q.VenueKey() == venueKey {
+			return q
+		}
+	}
+	return nil
+}
+
 // Run 执行一次对账。返回不一致数量。
 func (r *Reconciler) Run(ctx context.Context) (int, error) {
-	// 1. 查本地所有 OPEN legs
-	positions, err := r.store.ListPositions(ctx, "OPEN", 200, 0)
+	// 1. 查本地 OPEN + OPENING 持仓（OPENING 僵尸收编，D-073+）
+	openPositions, err := r.store.ListPositions(ctx, "OPEN", 200, 0)
 	if err != nil {
 		return 0, fmt.Errorf("list open positions: %w", err)
 	}
-	localLegs := make(map[string]pgstore.PositionLeg) // orderID → leg
-	for _, p := range positions {
+	openingPositions, err := r.store.ListPositions(ctx, "OPENING", 50, 0)
+	if err != nil {
+		log.Printf("[reconcile] list opening positions: %v", err)
+	}
+	now := time.Now()
+
+	// localLegs: ticket → (leg, position)，收尾需要 position 引用
+	type legWithPos struct {
+		leg pgstore.PositionLeg
+		pos pgstore.Position
+	}
+	localLegs := make(map[string]legWithPos)
+	for _, p := range openPositions {
 		legs, err := r.store.ListPositionLegs(ctx, p.ID)
 		if err != nil {
 			log.Printf("[reconcile] list legs pos %d: %v", p.ID, err)
 			continue
 		}
 		for _, leg := range legs {
-			if leg.OrderID != "" {
-				localLegs[leg.OrderID] = leg
+			if leg.OrderID != "" && leg.Phase == "OPEN" {
+				localLegs[leg.OrderID] = legWithPos{leg: leg, pos: p}
 			}
 		}
 	}
@@ -304,12 +359,69 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 	// 3. 比对
 	mismatches := 0
 
-	// 本地有、venue 无 → 可能已平仓但本地未同步
-	for ticket, leg := range localLegs {
-		if _, ok := venueOrders[ticket]; !ok {
+	// 本地有、venue 无 → 查证 OrderHistory → 命中收尾 / 未命中 critical（D-073+）
+	for ticket, lp := range localLegs {
+		if _, ok := venueOrders[ticket]; ok {
+			continue // venue 有，正常
+		}
+		// 查证：调该 venue OrderHistory(ticket)
+		hq := r.findHistoryQuerier(lp.leg.Venue)
+		if hq == nil {
+			// 无查证器（CEX 或未注入）→ 维持原 critical 语义
 			mismatches++
-			msg := fmt.Sprintf("对账不一致：本地 leg ticket=%s venue=%s symbol=%s 在 venue 侧未找到（可能已平仓）",
-				ticket, leg.Venue, leg.Symbol)
+			msg := fmt.Sprintf("对账不一致：本地 leg ticket=%s venue=%s symbol=%s 在 venue 侧未找到（无历史单查证器，人工处置）",
+				ticket, lp.leg.Venue, lp.leg.Symbol)
+			if err := r.store.InsertAlert(ctx, nil, "critical", msg); err != nil {
+				log.Printf("[reconcile] alert: %v", err)
+			}
+			log.Printf("[reconcile] %s", msg)
+			continue
+		}
+		hist, err := hq.QueryOrderHistory(ctx, ticket, 7) // 查近 7 天
+		if err != nil {
+			// 查证失败 = fail-closed（不动仓位 + critical 带错误）
+			mismatches++
+			msg := fmt.Sprintf("对账查证失败 position #%d ticket=%s venue=%s: %v（人工处置）", lp.pos.ID, ticket, lp.leg.Venue, err)
+			if err := r.store.InsertAlert(ctx, nil, "critical", msg); err != nil {
+				log.Printf("[reconcile] alert: %v", err)
+			}
+			log.Printf("[reconcile] %s", msg)
+			continue
+		}
+		if hist == nil {
+			// 未命中（历史也无）→ 维持 critical（真失联）
+			mismatches++
+			msg := fmt.Sprintf("对账不一致：本地 leg ticket=%s venue=%s symbol=%s 在 venue 侧未找到（历史单也无，真失联）",
+				ticket, lp.leg.Venue, lp.leg.Symbol)
+			if err := r.store.InsertAlert(ctx, nil, "critical", msg); err != nil {
+				log.Printf("[reconcile] alert: %v", err)
+			}
+			log.Printf("[reconcile] %s", msg)
+			continue
+		}
+		// 命中（已平仓）→ 自动收尾流水
+		if err := r.autoClose(ctx, &lp.pos, lp.leg, hist); err != nil {
+			// 收尾失败 = fail-closed（critical 带原因，下轮重试）
+			mismatches++
+			msg := fmt.Sprintf("对账自动收尾失败 position #%d ticket=%s: %v（下轮重试）", lp.pos.ID, ticket, err)
+			if err := r.store.InsertAlert(ctx, nil, "critical", msg); err != nil {
+				log.Printf("[reconcile] alert: %v", err)
+			}
+			log.Printf("[reconcile] %s", msg)
+			continue
+		}
+		// 收尾成功（warn 已在 autoClose 内插，不计 mismatches）
+		log.Printf("[reconcile] auto-close completed pos=%d ticket=%s", lp.pos.ID, ticket)
+	}
+
+	// 3b. OPENING 僵尸收编（超 24h，D-073+）
+	for _, p := range openingPositions {
+		if !isOPENINGZombie(&p, now) {
+			continue
+		}
+		if err := r.autoFailOPENINGZombie(ctx, &p, venueOrders); err != nil {
+			mismatches++
+			msg := fmt.Sprintf("OPENING 僵尸归档失败 position #%d: %v", p.ID, err)
 			if err := r.store.InsertAlert(ctx, nil, "critical", msg); err != nil {
 				log.Printf("[reconcile] alert: %v", err)
 			}
@@ -319,20 +431,21 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 
 	// venue 有、本地无 → 可能未记录的持仓（D-032：仅 ARB 源订单视为失联；系统外单不追踪）
 	for ticket, vo := range venueOrders {
-		if _, ok := localLegs[ticket]; !ok {
-			if !isARBOrder(vo.Comment) {
-				log.Printf("[reconcile] venue %s 持仓 ticket=%s symbol=%s comment=%q 为系统外单，不追踪",
-					vo.Venue, ticket, vo.Symbol, vo.Comment)
-				continue
-			}
-			mismatches++
-			msg := fmt.Sprintf("对账不一致：venue %s 持仓 ticket=%s symbol=%s side=%s vol=%f 本地未记录（ARB 源订单失联）",
-				vo.Venue, ticket, vo.Symbol, vo.Side, vo.Volume)
-			if err := r.store.InsertAlert(ctx, nil, "critical", msg); err != nil {
-				log.Printf("[reconcile] alert: %v", err)
-			}
-			log.Printf("[reconcile] %s", msg)
+		if _, ok := localLegs[ticket]; ok {
+			continue // 本地有，正常
 		}
+		if !isARBOrder(vo.Comment) {
+			log.Printf("[reconcile] venue %s 持仓 ticket=%s symbol=%s comment=%q 为系统外单，不追踪",
+				vo.Venue, ticket, vo.Symbol, vo.Comment)
+			continue
+		}
+		mismatches++
+		msg := fmt.Sprintf("对账不一致：venue %s 持仓 ticket=%s symbol=%s side=%s vol=%f 本地未记录（ARB 源订单失联）",
+			vo.Venue, ticket, vo.Symbol, vo.Side, vo.Volume)
+		if err := r.store.InsertAlert(ctx, nil, "critical", msg); err != nil {
+			log.Printf("[reconcile] alert: %v", err)
+		}
+		log.Printf("[reconcile] %s", msg)
 	}
 
 	if mismatches == 0 {
