@@ -37,3 +37,9 @@ var ExchangeSimulatedSQL string
 
 //go:embed 0012_canonical_usdt.sql
 var CanonicalUsdtSQL string
+
+//go:embed 0032_perp_funding_type.sql
+var PerpFundingTypeSQL string
+
+//go:embed 0033_autotrade.sql
+var AutotradeSQL string

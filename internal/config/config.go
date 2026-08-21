@@ -69,8 +69,15 @@ type Config struct {
 
 	// === 告警暂停（D-069）===
 	// AlertPaused 暂停全部告警写入（ARB_ALERT_PAUSED=true，缺省 false）。
-	// demo 自动执行阶段避免 LEGGED/对账不一致告警刷屏；生产环境恢复后置 false。
 	AlertPaused bool
+
+	// === 自动交易（D-070）===
+	AutoTradeEnabled      bool          // 总开关（ARB_AUTOTRADE_ENABLED，缺省 false）
+	AutoTradeMaxNotional  float64       // 单笔最大名义额 USD（缺省 1000）
+	AutoTradeMaxPositions int           // 最大同时持仓数（缺省 5）
+	AutoTradeMaxDailyLoss float64       // 单日最大亏损 USD（缺省 100）
+	AutoTradeMinNetBps    float64       // 最低净收益门槛 bps（缺省 5.0）
+	AutoTradePollInterval time.Duration // OPEN 持仓扫描间隔（缺省 10s）
 }
 
 // Load 从环境变量加载配置，未设置用默认值。
@@ -108,6 +115,12 @@ func Load() *Config {
 		BrokerPosPollInterval:    envDur("ARB_BROKER_POS_POLL_MS", 5*time.Second),
 		OpportunityNotionalUSD:   envFloat("ARB_OPP_NOTIONAL_USD", 1000),
 		AlertPaused:              envBool("ARB_ALERT_PAUSED", false),
+		AutoTradeEnabled:         envBool("ARB_AUTOTRADE_ENABLED", false),
+		AutoTradeMaxNotional:     envFloat("ARB_AUTOTRADE_MAX_NOTIONAL", 1000),
+		AutoTradeMaxPositions:    envInt("ARB_AUTOTRADE_MAX_POSITIONS", 5),
+		AutoTradeMaxDailyLoss:    envFloat("ARB_AUTOTRADE_MAX_DAILY_LOSS", 100),
+		AutoTradeMinNetBps:       envFloat("ARB_AUTOTRADE_MIN_NET_BPS", 5.0),
+		AutoTradePollInterval:    envDur("ARB_AUTOTRADE_POLL_INTERVAL", 10*time.Second),
 	}
 }
 

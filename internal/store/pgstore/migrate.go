@@ -27,6 +27,8 @@ var migrationFiles = []struct {
 	{10, migrations.ExchangeConfigsSQL},
 	{11, migrations.ExchangeSimulatedSQL},
 	{12, migrations.CanonicalUsdtSQL},
+	{32, migrations.PerpFundingTypeSQL},
+	{33, migrations.AutotradeSQL},
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
