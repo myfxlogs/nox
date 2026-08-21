@@ -84,17 +84,17 @@ type Config struct {
 func Load() *Config {
 	return &Config{
 		CrossVenueMinGrossBpsCEX:    envFloat("ARB_CROSS_MIN_GROSS_BPS_CEX", 10.0),
-		CrossVenueMinGrossBpsCFD:    envFloat("ARB_CROSS_MIN_GROSS_BPS_CFD", 2.0),
+		CrossVenueMinGrossBpsCFD:    envFloat("ARB_CROSS_MIN_GROSS_BPS_CFD", 0.1), // D-070 均值回归：极低门槛让 277+591 小价差被检测
 		FundingMinNetAnnualized:     envFloat("ARB_FUNDING_MIN_NET_ANNUALIZED", 4.0),
 		CarryMinNetAnnualized:       envFloat("ARB_CARRY_MIN_NET_ANNUALIZED", 4.0),
 		PerpFundingMinNetAnnualized: envFloat("ARB_PERP_FUNDING_MIN_NET_ANNUALIZED", 2.0),
 		GrabMinNetAnnualized:        envFloat("ARB_GRAB_MIN_NET_ANNUALIZED", 4.5),
-		DetectorFreshnessTTL:        envDur("ARB_DETECTOR_FRESHNESS_TTL", 60*time.Second),
-		SlippageBps:                 envFloat("ARB_SLIPPAGE_BPS", 1.0),
+		DetectorFreshnessTTL:        envDur("ARB_DETECTOR_FRESHNESS_TTL", 120*time.Second), // D-070 均值回归：放宽 freshness 让低频报价 venue 配对
+		SlippageBps:                 envFloat("ARB_SLIPPAGE_BPS", 0.3), // D-070 均值回归：降低滑点假设（CFD 限价单）
 		MarginRateAnnual:            envFloat("ARB_MARGIN_RATE_ANNUAL", 4.5),
 		OpportunityTTL:              envDur("ARB_OPPORTUNITY_TTL", 30*time.Second),
 		ScanThrottle:                envDur("ARB_SCAN_THROTTLE", 30*time.Second),
-		CloseBpsThr:                 envFloat("ARB_CLOSE_BPS_THR", 2.0),
+		CloseBpsThr:                 envFloat("ARB_CLOSE_BPS_THR", 0.5), // D-070 均值回归：价差回归到 0.5bps 内平仓
 		CommissionCFDBps:            envFloat("ARB_COMMISSION_CFD_BPS", 0.3),
 		CommissionCEXTakerBps:       envFloat("ARB_COMMISSION_CEX_TAKER_BPS", 10.0),
 		CommissionTaker: map[string]float64{
@@ -119,7 +119,7 @@ func Load() *Config {
 		AutoTradeMaxNotional:     envFloat("ARB_AUTOTRADE_MAX_NOTIONAL", 1000),
 		AutoTradeMaxPositions:    envInt("ARB_AUTOTRADE_MAX_POSITIONS", 5),
 		AutoTradeMaxDailyLoss:    envFloat("ARB_AUTOTRADE_MAX_DAILY_LOSS", 100),
-		AutoTradeMinNetBps:       envFloat("ARB_AUTOTRADE_MIN_NET_BPS", 5.0),
+		AutoTradeMinNetBps:       envFloat("ARB_AUTOTRADE_MIN_NET_BPS", 1.0), // D-070 均值回归：降低门槛让 277+591 波动价差通过
 		AutoTradePollInterval:    envDur("ARB_AUTOTRADE_POLL_INTERVAL", 10*time.Second),
 	}
 }
