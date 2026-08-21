@@ -221,12 +221,7 @@ func (e *Engine) scanMeanRevert(ctx context.Context, symbols map[string]float64,
 		}
 		// 双向价差：A买B卖 和 B买A卖
 		spreadAB := qB.Bid - qA.Ask // 买A卖B的价差
-		spreadBA := qA.Bid - qB.Ask // 买B卖A卖
-		// 调试日志（每 ~30 秒打印一次价差状态）
-		if time.Now().UnixMilli()%30000 < 5000 {
-			log.Printf("[autotrade] MR-scan %s spreadAB=%.2f spreadBA=%.2f threshold=%.2f aBid=%.2f aAsk=%.2f bBid=%.2f bAsk=%.2f",
-				canonical, spreadAB, spreadBA, threshold, qA.Bid, qA.Ask, qB.Bid, qB.Ask)
-		}
+		spreadBA := qA.Bid - qB.Ask // 买B卖A的价差
 		if spreadAB > threshold {
 			// 买A卖B：A价格低，B价格高
 			bps := spreadAB / qA.Ask * 10000
