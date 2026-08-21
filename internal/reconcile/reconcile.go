@@ -318,6 +318,27 @@ func (r *Reconciler) findHistoryQuerier(venueKey string) OrderHistoryQuerier {
 	return nil
 }
 
+// OpenedByVenueKey 按 venueKey 查该 venue 在仓订单（修复⑫：exec G1 回读门面）。
+// 未注册该 venue（含 CEX）→ error（调用方 fail-open 跳过）。锁语义对齐 snapshot()。
+func (r *Reconciler) OpenedByVenueKey(ctx context.Context, venueKey string) ([]VenueOrder, error) {
+	for _, q := range r.snapshot() {
+		if q.VenueKey() == venueKey {
+			return q.QueryOpenedOrders(ctx)
+		}
+	}
+	return nil, fmt.Errorf("reconcile: no querier for venueKey %s", venueKey)
+}
+
+// HistoryByVenueKey 按 venueKey+ticket 查历史单（修复⑫：exec M1 回读校准门面）。
+// 未注册该 venue（含 CEX）或未命中 → (*HistoryOrder=nil, nil)；error 仅查询失败。
+func (r *Reconciler) HistoryByVenueKey(ctx context.Context, venueKey, ticket string, fromDays int) (*HistoryOrder, error) {
+	q := r.findHistoryQuerier(venueKey)
+	if q == nil {
+		return nil, nil
+	}
+	return q.QueryOrderHistory(ctx, ticket, fromDays)
+}
+
 // withTimeout 派生带超时的 ctx（缺陷1修复：所有外部调用一律包超时，防离线 venue 阻塞 loop）。
 func (r *Reconciler) withTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(ctx, r.runTimeout)
