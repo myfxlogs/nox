@@ -406,8 +406,8 @@ func TestRun_HistoryQueryError_Critical(t *testing.T) {
 	}
 }
 
-// TestRun_NoHistoryQuerier_Critical 无查证器→维持原 critical 语义。
-func TestRun_NoHistoryQuerier_Critical(t *testing.T) {
+// TestRun_NoHistoryQuerier_NoAlert 缺陷2修复：无查证器（CEX / adapter 未连）→ 不告警不计数，下轮复查。
+func TestRun_NoHistoryQuerier_NoAlert(t *testing.T) {
 	fs := newFakeStore()
 	opened := time.Now().Add(-1 * time.Hour)
 	fs.positions[800] = mkPosition(800, "OPEN", "CROSS_VENUE", opened)
@@ -418,12 +418,61 @@ func TestRun_NoHistoryQuerier_Critical(t *testing.T) {
 	r := &Reconciler{store: fs} // 未注入 historyQueriers
 
 	mismatches, _ := r.Run(context.Background())
-	if mismatches != 1 {
-		t.Errorf("无查证器 mismatches=%d，期望 1", mismatches)
+	if mismatches != 0 {
+		t.Errorf("无查证器 mismatches=%d，期望 0（不计数）", mismatches)
 	}
-	if !hasAlert(fs, "critical", "无历史单查证器") {
-		t.Errorf("缺少 critical「无历史单查证器」告警，alerts=%v", fs.alerts)
+	if len(fs.alerts) != 0 {
+		t.Errorf("无查证器不应告警，alerts=%v", fs.alerts)
 	}
+}
+
+// TestRun_VenueQuerierTimeout_NoBlock 缺陷1修复：venue querier 阻塞 >超时，Run 返回且不 panic。
+func TestRun_VenueQuerierTimeout_NoBlock(t *testing.T) {
+	fs := newFakeStore()
+	opened := time.Now().Add(-1 * time.Hour)
+	fs.positions[900] = mkPosition(900, "OPEN", "CROSS_VENUE", opened)
+	fs.legs[900] = []*pgstore.PositionLeg{
+		mkOpenLeg(900, 0, "52993526:mt5", "T", "BUY", "EURUSD", 1.0),
+	}
+
+	// 阻塞 querier：QueryOpenedOrders 永不返回（模拟离线 venue）
+	blockQ := &blockingQuerier{venueKey: "52993526:mt5"}
+	// 阻塞查证器：QueryOrderHistory 永不返回
+	blockHq := &blockingHistoryQuerier{venueKey: "52993526:mt5"}
+
+	r := &Reconciler{store: fs, runTimeout: 100 * time.Millisecond, initialDelay: 0}
+	r.SetQueriers(blockQ) // 阻塞 venue querier
+	r.SetOrderHistoryQueriers(blockHq)
+
+	done := make(chan struct{})
+	go func() {
+		r.Run(context.Background())
+		close(done)
+	}()
+	select {
+	case <-done:
+		// Run 返回（超时生效），不 panic = pass
+	case <-time.After(3 * time.Second):
+		t.Fatal("Run 阻塞 >3s，超时未生效")
+	}
+}
+
+// blockingQuerier 模拟离线 venue：QueryOpenedOrders 永不返回。
+type blockingQuerier struct{ venueKey string }
+
+func (q *blockingQuerier) VenueKey() string { return q.venueKey }
+func (q *blockingQuerier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error) {
+	<-ctx.Done() // 等 ctx 超时
+	return nil, ctx.Err()
+}
+
+// blockingHistoryQuerier 模拟离线 venue 历史查证：QueryOrderHistory 永不返回。
+type blockingHistoryQuerier struct{ venueKey string }
+
+func (q *blockingHistoryQuerier) VenueKey() string { return q.venueKey }
+func (q *blockingHistoryQuerier) QueryOrderHistory(ctx context.Context, ticket string, fromDays int) (*HistoryOrder, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
 }
 
 // TestIsOPENINGZombie OPENING 僵尸判定边界。

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/combo"
 	"arb/internal/dashboard"
 	"arb/internal/fact"
 	"arb/internal/position"
@@ -212,7 +213,7 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 		return
 	}
 	qty := notional / qLong.Ask
-	dedupKey := fmt.Sprintf("SWAPARB:%s:%s:%s", canonical, venueLong, venueShort)
+	dedupKey := combo.Key("SWAPARB", canonical, venueLong, venueShort)
 	intent := TradeIntent{
 		Strategy:    "SWAPARB",
 		Canonical:   canonical,
@@ -318,7 +319,7 @@ func (e *Engine) executeMeanRevert(ctx context.Context, canonical, venueBuy, ven
 		return
 	}
 	qty := e.cfg.NotionalUSD / qbuy.Ask
-	dedupKey := fmt.Sprintf("MEANREVERT:%s:%s:%s", canonical, venueBuy, venueSell)
+	dedupKey := combo.Key("MEANREVERT", canonical, venueBuy, venueSell)
 	intent := TradeIntent{
 		Strategy:    "MEANREVERT",
 		Canonical:   canonical,

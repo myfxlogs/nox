@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"arb/internal/combo"
 	"arb/internal/store/pgstore"
 )
 
@@ -189,12 +190,11 @@ func (g *Gate) Submit(ctx context.Context, intent TradeIntent) GateResult {
 	// 检查 6: 幂等（会话内 + DB 级）
 	dedupHit := g.executed[intent.DedupKey]
 	if !dedupHit {
-		// DB 级幂等：detector 用 HasOpenPositionByOpportunity，MR/SWAPARB 用 LIKE 前缀
+		// DB 级幂等：detector 用 HasOpenPositionByOpportunity，MR/SWAPARB 用 ComboKey 前缀匹配
 		if intent.Strategy == "SWAPARB" || intent.Strategy == "MEANREVERT" {
 			positions, _ := g.store.ListPositions(ctx, "OPEN", 200, 0)
-			prefix := intent.DedupKey
 			for _, p := range positions {
-				if len(p.OpportunityID) >= len(prefix) && p.OpportunityID[:len(prefix)] == prefix {
+				if combo.MatchOppID(p.OpportunityID, intent.DedupKey) {
 					dedupHit = true
 					break
 				}

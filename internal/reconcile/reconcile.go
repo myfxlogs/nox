@@ -260,11 +260,18 @@ type Reconciler struct {
 	historyQueriers []OrderHistoryQuerier
 	closer          Closer
 	statUpdater     StatUpdater
+	runTimeout      time.Duration // 单次外部调用超时（缺陷1修复：默认 10s，防离线 venue 阻塞 loop）
+	initialDelay    time.Duration // 首轮延迟（缺陷2修复：默认 60s，等 adapter 就绪）
 }
 
 // New 创建对账器。
 func New(store Store, queriers ...VenueQuerier) *Reconciler {
-	return &Reconciler{store: store, queriers: queriers}
+	return &Reconciler{
+		store:        store,
+		queriers:     queriers,
+		runTimeout:   10 * time.Second,
+		initialDelay: 60 * time.Second,
+	}
 }
 
 // SetCloser 注入平仓器（对账自动收尾用，D-073+）。main 装配 service 后调。
@@ -311,14 +318,35 @@ func (r *Reconciler) findHistoryQuerier(venueKey string) OrderHistoryQuerier {
 	return nil
 }
 
+// withTimeout 派生带超时的 ctx（缺陷1修复：所有外部调用一律包超时，防离线 venue 阻塞 loop）。
+func (r *Reconciler) withTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(ctx, r.runTimeout)
+}
+
+// insertAlertCtx 带超时插告警（缺陷1修复：InsertAlert 也包超时）。
+func (r *Reconciler) insertAlertCtx(ctx context.Context, level, msg string) {
+	sub, cancel := r.withTimeout(ctx)
+	defer cancel()
+	if err := r.store.InsertAlert(sub, nil, level, msg); err != nil {
+		log.Printf("[reconcile] alert: %v", err)
+	}
+}
+
 // Run 执行一次对账。返回不一致数量。
+// 缺陷1修复：所有外部调用（venue querier / OrderHistory / InsertAlert / store 写）一律包 runTimeout 超时，
+// 单个 venue 超时不炸整个 Run（该 venue 本轮跳过 + 计数日志）。
+// 缺陷2修复：findHistoryQuerier 返回 nil 时不告警不计数（查证器未就绪，下轮复查），仅 debug 日志。
 func (r *Reconciler) Run(ctx context.Context) (int, error) {
 	// 1. 查本地 OPEN + OPENING 持仓（OPENING 僵尸收编，D-073+）
-	openPositions, err := r.store.ListPositions(ctx, "OPEN", 200, 0)
+	listCtx, listCancel := r.withTimeout(ctx)
+	openPositions, err := r.store.ListPositions(listCtx, "OPEN", 200, 0)
+	listCancel()
 	if err != nil {
 		return 0, fmt.Errorf("list open positions: %w", err)
 	}
-	openingPositions, err := r.store.ListPositions(ctx, "OPENING", 50, 0)
+	listCtx, listCancel = r.withTimeout(ctx)
+	openingPositions, err := r.store.ListPositions(listCtx, "OPENING", 50, 0)
+	listCancel()
 	if err != nil {
 		log.Printf("[reconcile] list opening positions: %v", err)
 	}
@@ -331,7 +359,9 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 	}
 	localLegs := make(map[string]legWithPos)
 	for _, p := range openPositions {
-		legs, err := r.store.ListPositionLegs(ctx, p.ID)
+		sub, cancel := r.withTimeout(ctx)
+		legs, err := r.store.ListPositionLegs(sub, p.ID)
+		cancel()
 		if err != nil {
 			log.Printf("[reconcile] list legs pos %d: %v", p.ID, err)
 			continue
@@ -343,12 +373,14 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 		}
 	}
 
-	// 2. 查 venue 实际持仓
+	// 2. 查 venue 实际持仓（每个 querier 独立超时，单个失败不阻断其余）
 	venueOrders := make(map[string]VenueOrder) // ticket → order
 	for _, q := range r.snapshot() {
-		orders, err := q.QueryOpenedOrders(ctx)
+		sub, cancel := r.withTimeout(ctx)
+		orders, err := q.QueryOpenedOrders(sub)
+		cancel()
 		if err != nil {
-			log.Printf("[reconcile] query venue: %v", err)
+			log.Printf("[reconcile] query venue %s: %v（本轮跳过）", q.VenueKey(), err)
 			continue
 		}
 		for _, o := range orders {
@@ -367,24 +399,18 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 		// 查证：调该 venue OrderHistory(ticket)
 		hq := r.findHistoryQuerier(lp.leg.Venue)
 		if hq == nil {
-			// 无查证器（CEX 或未注入）→ 维持原 critical 语义
-			mismatches++
-			msg := fmt.Sprintf("对账不一致：本地 leg ticket=%s venue=%s symbol=%s 在 venue 侧未找到（无历史单查证器，人工处置）",
-				ticket, lp.leg.Venue, lp.leg.Symbol)
-			if err := r.store.InsertAlert(ctx, nil, "critical", msg); err != nil {
-				log.Printf("[reconcile] alert: %v", err)
-			}
-			log.Printf("[reconcile] %s", msg)
+			// 缺陷2修复：查证器未就绪（CEX 无查证器 / adapter 未连）→ 不告警不计数，下轮复查
+			log.Printf("[reconcile] 查证器未就绪 ticket=%s venue=%s，下轮复查", ticket, lp.leg.Venue)
 			continue
 		}
-		hist, err := hq.QueryOrderHistory(ctx, ticket, 7) // 查近 7 天
+		sub, cancel := r.withTimeout(ctx)
+		hist, err := hq.QueryOrderHistory(sub, ticket, 7) // 查近 7 天
+		cancel()
 		if err != nil {
 			// 查证失败 = fail-closed（不动仓位 + critical 带错误）
 			mismatches++
 			msg := fmt.Sprintf("对账查证失败 position #%d ticket=%s venue=%s: %v（人工处置）", lp.pos.ID, ticket, lp.leg.Venue, err)
-			if err := r.store.InsertAlert(ctx, nil, "critical", msg); err != nil {
-				log.Printf("[reconcile] alert: %v", err)
-			}
+			r.insertAlertCtx(ctx, "critical", msg)
 			log.Printf("[reconcile] %s", msg)
 			continue
 		}
@@ -393,9 +419,7 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 			mismatches++
 			msg := fmt.Sprintf("对账不一致：本地 leg ticket=%s venue=%s symbol=%s 在 venue 侧未找到（历史单也无，真失联）",
 				ticket, lp.leg.Venue, lp.leg.Symbol)
-			if err := r.store.InsertAlert(ctx, nil, "critical", msg); err != nil {
-				log.Printf("[reconcile] alert: %v", err)
-			}
+			r.insertAlertCtx(ctx, "critical", msg)
 			log.Printf("[reconcile] %s", msg)
 			continue
 		}
@@ -404,9 +428,7 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 			// 收尾失败 = fail-closed（critical 带原因，下轮重试）
 			mismatches++
 			msg := fmt.Sprintf("对账自动收尾失败 position #%d ticket=%s: %v（下轮重试）", lp.pos.ID, ticket, err)
-			if err := r.store.InsertAlert(ctx, nil, "critical", msg); err != nil {
-				log.Printf("[reconcile] alert: %v", err)
-			}
+			r.insertAlertCtx(ctx, "critical", msg)
 			log.Printf("[reconcile] %s", msg)
 			continue
 		}
@@ -422,9 +444,7 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 		if err := r.autoFailOPENINGZombie(ctx, &p, venueOrders); err != nil {
 			mismatches++
 			msg := fmt.Sprintf("OPENING 僵尸归档失败 position #%d: %v", p.ID, err)
-			if err := r.store.InsertAlert(ctx, nil, "critical", msg); err != nil {
-				log.Printf("[reconcile] alert: %v", err)
-			}
+			r.insertAlertCtx(ctx, "critical", msg)
 			log.Printf("[reconcile] %s", msg)
 		}
 	}
@@ -442,9 +462,7 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 		mismatches++
 		msg := fmt.Sprintf("对账不一致：venue %s 持仓 ticket=%s symbol=%s side=%s vol=%f 本地未记录（ARB 源订单失联）",
 			vo.Venue, ticket, vo.Symbol, vo.Side, vo.Volume)
-		if err := r.store.InsertAlert(ctx, nil, "critical", msg); err != nil {
-			log.Printf("[reconcile] alert: %v", err)
-		}
+		r.insertAlertCtx(ctx, "critical", msg)
 		log.Printf("[reconcile] %s", msg)
 	}
 
@@ -456,14 +474,23 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 }
 
 // StartLoop 定期对账。阻塞至 ctx 取消。
+// 缺陷1修复：initial Run 放独立 goroutine（受 runTimeout 保护，不阻塞 loop）。
+// 缺陷2修复：initial 延迟 initialDelay（默认 60s，等 MT4/MT5 adapter 就绪，避免空查证器误报）。
 func (r *Reconciler) StartLoop(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	// 启动时立即对账一次
-	if _, err := r.Run(ctx); err != nil {
-		log.Printf("[reconcile] initial: %v", err)
-	}
+	// 首轮延迟（等 adapter 就绪），独立 goroutine 跑（不阻塞 ticker loop）
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(r.initialDelay):
+		}
+		if _, err := r.Run(ctx); err != nil {
+			log.Printf("[reconcile] initial: %v", err)
+		}
+	}()
 
 	for {
 		select {
