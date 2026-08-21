@@ -47,17 +47,22 @@ type Engine struct {
 	gate     *Gate         // 统一开仓门禁（D-072）
 
 	firstTickDone bool // 启动首跑淘汰标记
+
+	// fundingNeedSent 资金注入提醒节流（D-072）：key=SWAPARB:canonical:venueLong:venueShort → YYYY-MM-DD。
+	// 每日每组合至多 1 条（内存，重启重置——实时弹窗语义，不持久化）。
+	fundingNeedSent map[string]string
 }
 
 // New 创建自动交易引擎。
 func New(cfg Config, store *pgstore.Store, service *dashboard.Service, oppTopic *bus.Topic[pgstore.Opportunity], quotes *bus.QuoteBus) *Engine {
 	return &Engine{
-		cfg:      cfg,
-		store:    store,
-		service:  service,
-		oppTopic: oppTopic,
-		quotes:   quotes,
-		gate:     NewGate(store, cfg),
+		cfg:             cfg,
+		store:           store,
+		service:         service,
+		oppTopic:        oppTopic,
+		quotes:          quotes,
+		gate:            NewGate(store, cfg),
+		fundingNeedSent: make(map[string]string),
 	}
 }
 
@@ -197,9 +202,10 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 	// D-072 §3.3：名义额 = broker 余额驱动（fail-closed 三条件）
 	notional, ok, reason := e.service.SwapArbNotional(canonical, venueLong, venueShort)
 	if !ok {
-		// 余额不足时 InsertAlert 提醒（同 DedupKey 每日至多 1 条——gate 幂等会拦截重复）
+		// D-072 资金注入提醒：余额不足 → 发布 FundingNeedNotice 到 topic → 前端弹窗（不入 alerts 表）。
+		// 每日每组合至多 1 条（内存节流）；非余额原因（venue 离线/币种不符）仅 log 不弹窗。
 		if strings.Contains(reason, "balance") {
-			_ = e.store.InsertAlert(ctx, nil, "warn", fmt.Sprintf("swap 套利余额不足 %s: %s", canonical, reason))
+			e.maybePublishFundingNeed(canonical, venueLong, venueShort, reason)
 		}
 		log.Printf("[autotrade] SWAPARB skip %s %s/%s: %s", canonical, venueLong, venueShort, reason)
 		return
@@ -226,6 +232,26 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 		},
 	}
 	e.gate.Submit(ctx, intent)
+}
+
+// maybePublishFundingNeed 发布资金注入提醒（D-072）：每日每组合至多 1 条（内存节流）。
+// NeedUSD 由 SwapArbFundingNeedUSD 侧算（不改 SwapArbNotional 签名）；topic 未接线时 Service.PublishFundingNeed 静默丢弃。
+func (e *Engine) maybePublishFundingNeed(canonical, venueLong, venueShort, reason string) {
+	key := fmt.Sprintf("SWAPARB:%s:%s:%s", canonical, venueLong, venueShort)
+	today := time.Now().Format("2006-01-02")
+	if e.fundingNeedSent[key] == today {
+		return
+	}
+	needUSD, _ := e.service.SwapArbFundingNeedUSD(canonical, venueLong, venueShort)
+	e.service.PublishFundingNeed(dashboard.FundingNeedNotice{
+		Canonical:  canonical,
+		VenueLong:  venueLong,
+		VenueShort: venueShort,
+		Reason:     reason,
+		NeedUSD:    needUSD,
+		Ts:         time.Now(),
+	})
+	e.fundingNeedSent[key] = today
 }
 
 // meanRevertLoop D-072 均值回归扫描：venue 对与阈值从 env 读取（§3.4 外部化）。
