@@ -2,7 +2,81 @@ package dashboard
 
 import (
 	"fmt"
+	"strings"
+
+	"arb/internal/bus"
 )
+
+// usdPerLot 返回 1 手合约的 USD 名义额（A 修复：swap 定尺寸币种换算 bug）。
+//
+// 报价计价币由 canonical 后缀判定：
+//   - USD 计价（canonical 以 USDT/USD 结尾）→ CS × price（直接美元名义）；
+//   - JPY 计价（canonical 以 JPY 结尾）→ CS × price ÷ USDJPY（日元名义换算美元，USDJPY 取 qbus 最新任一 venue 价）；
+//   - 其他计价币（GBP/EUR 等未来扩展）→ 走对应 fx 对，未支持 → ok=false 跳过 + 日志（勿猜）。
+//
+// price 为该腿报价（bid/ask 由调用方决定）；qbus 用于查 fx 对（USDJPY 等）。
+// ok=false 表示 fx 报价不可用 → fail-closed 跳过该组合（禁止用旧值/硬编码汇率）。
+func usdPerLot(canonical string, price, contractSize float64, qbus *bus.QuoteBus) (float64, bool) {
+	if contractSize <= 0 || price <= 0 {
+		return 0, false
+	}
+	switch {
+	case strings.HasSuffix(canonical, "USDT"), strings.HasSuffix(canonical, "USD"):
+		// USD 计价：CS × price 直接美元名义
+		return contractSize * price, true
+	case strings.HasSuffix(canonical, "JPY"):
+		// JPY 计价：CS × price ÷ USDJPY（日元名义换算美元）
+		fx, ok := latestAnyVenue(qbus, "USDJPY")
+		if !ok || fx <= 0 {
+			return 0, false
+		}
+		return contractSize * price / fx, true
+	default:
+		// 其他计价币未支持 → fail-closed（勿猜）
+		return 0, false
+	}
+}
+
+// latestAnyVenue 从 qbus 取指定 canonical 的最新任一 venue 报价（mid 价）。
+// 用于 fx 对换算（USDJPY 等，不限定 venue）。
+func latestAnyVenue(qbus *bus.QuoteBus, canonical string) (float64, bool) {
+	if qbus == nil {
+		return 0, false
+	}
+	var best bus.Quote
+	found := false
+	for _, q := range qbus.AllLatest() {
+		if q.Symbol == canonical {
+			if !found || q.Time.After(best.Time) {
+				best = q
+				found = true
+			}
+		}
+	}
+	if !found {
+		return 0, false
+	}
+	return (best.Bid + best.Ask) / 2, true
+}
+
+// USDPerLotForLeg 返回指定腿（canonical + venueKey + price side）1 手的 USD 名义额。
+// A 修复：供 autotrade.trySwapArb qty 定尺寸用（原 notional/ask 是 USD÷JPY 币种混算）。
+// side="ask" 用买腿 ask 价，side="bid" 用卖腿 bid 价；fx 缺失 → ok=false fail-closed。
+func (s *Service) USDPerLotForLeg(canonical, venueKey, side string) (float64, bool) {
+	q, ok := s.qbus.Latest(canonical, venueKey)
+	if !ok {
+		return 0, false
+	}
+	cs, err := s.legContractSizeOf(venueKey, q.VenueSymbol)
+	if err != nil {
+		return 0, false
+	}
+	price := q.Ask
+	if side == "bid" {
+		price = q.Bid
+	}
+	return usdPerLot(canonical, price, cs, s.qbus)
+}
 
 // AccountEquityUSD 从 AccountMonitor 取指定 venue 的 Equity + Currency（D-072 §3.3）。
 // 返回 ok=false 表示 venue 离线或未找到。调用方据此决定是否跳过组合。
@@ -18,9 +92,10 @@ func (s *Service) AccountEquityUSD(venueKey string) (value float64, currency str
 	return 0, "", false
 }
 
-// SwapMinNotionalUSD 计算 swap 套利组合的最小可交易名义额（D-072 §3.3）。
-// = max(双腿 floorToStepQtyMin × CS × price)——双腿中要求更大名义额的那条决定下限。
-// 返回 ok=false 表示报价不可用或合约规格未知。
+// SwapMinNotionalUSD 计算 swap 套利组合的最小可交易名义额（D-072 §3.3，A 修复币种换算）。
+// = max(双腿 floorToStepQtyMin × usdPerLot)——双腿中要求更大 USD 名义额的那条决定下限。
+// usdPerLot 按计价币换算（JPY 对 ÷ USDJPY，USD 对直接乘）；fx 缺失 → ok=false fail-closed。
+// 返回 ok=false 表示报价/合约规格/fx 不可用。
 func (s *Service) SwapMinNotionalUSD(canonical, venueLong, venueShort string) (float64, bool) {
 	qLong, okL := s.qbus.Latest(canonical, venueLong)
 	qShort, okS := s.qbus.Latest(canonical, venueShort)
@@ -37,8 +112,17 @@ func (s *Service) SwapMinNotionalUSD(canonical, venueLong, venueShort string) (f
 	}
 	minQtyLong := s.floorToStepQtyMin(venueLong, qLong.VenueSymbol)
 	minQtyShort := s.floorToStepQtyMin(venueShort, qShort.VenueSymbol)
-	notionalLong := minQtyLong * csLong * qLong.Ask
-	notionalShort := minQtyShort * csShort * qShort.Bid
+	// A 修复：usdPerLot 按计价币换算（原 CS×price 是币种混算，JPY 对高估 ~150 倍）
+	notionalLong, ok := usdPerLot(canonical, qLong.Ask, csLong, s.qbus)
+	if !ok {
+		return 0, false
+	}
+	notionalShort, ok := usdPerLot(canonical, qShort.Bid, csShort, s.qbus)
+	if !ok {
+		return 0, false
+	}
+	notionalLong *= minQtyLong
+	notionalShort *= minQtyShort
 	if notionalLong > notionalShort {
 		return notionalLong, true
 	}

@@ -80,9 +80,6 @@ const (
 	// DashboardServiceListKnowledgeEntriesProcedure is the fully-qualified name of the
 	// DashboardService's ListKnowledgeEntries RPC.
 	DashboardServiceListKnowledgeEntriesProcedure = "/arb.dashboard.v1.DashboardService/ListKnowledgeEntries"
-	// DashboardServiceReviewKnowledgeEntryProcedure is the fully-qualified name of the
-	// DashboardService's ReviewKnowledgeEntry RPC.
-	DashboardServiceReviewKnowledgeEntryProcedure = "/arb.dashboard.v1.DashboardService/ReviewKnowledgeEntry"
 	// DashboardServiceExecuteOpportunityProcedure is the fully-qualified name of the DashboardService's
 	// ExecuteOpportunity RPC.
 	DashboardServiceExecuteOpportunityProcedure = "/arb.dashboard.v1.DashboardService/ExecuteOpportunity"
@@ -212,7 +209,6 @@ type DashboardServiceClient interface {
 	ListInvestmentRecords(context.Context, *connect.Request[v1.ListInvestmentRecordsRequest]) (*connect.Response[v1.ListInvestmentRecordsResponse], error)
 	// 经验库
 	ListKnowledgeEntries(context.Context, *connect.Request[v1.ListKnowledgeEntriesRequest]) (*connect.Response[v1.ListKnowledgeEntriesResponse], error)
-	ReviewKnowledgeEntry(context.Context, *connect.Request[v1.ReviewKnowledgeEntryRequest]) (*connect.Response[v1.ReviewKnowledgeEntryResponse], error)
 	// 执行（认证后，§13）
 	ExecuteOpportunity(context.Context, *connect.Request[v1.ExecuteOpportunityRequest]) (*connect.Response[v1.ExecuteOpportunityResponse], error)
 	ClosePosition(context.Context, *connect.Request[v1.ClosePositionRequest]) (*connect.Response[v1.ClosePositionResponse], error)
@@ -366,12 +362,6 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			httpClient,
 			baseURL+DashboardServiceListKnowledgeEntriesProcedure,
 			connect.WithSchema(dashboardServiceMethods.ByName("ListKnowledgeEntries")),
-			connect.WithClientOptions(opts...),
-		),
-		reviewKnowledgeEntry: connect.NewClient[v1.ReviewKnowledgeEntryRequest, v1.ReviewKnowledgeEntryResponse](
-			httpClient,
-			baseURL+DashboardServiceReviewKnowledgeEntryProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("ReviewKnowledgeEntry")),
 			connect.WithClientOptions(opts...),
 		),
 		executeOpportunity: connect.NewClient[v1.ExecuteOpportunityRequest, v1.ExecuteOpportunityResponse](
@@ -605,7 +595,6 @@ type dashboardServiceClient struct {
 	addInvestmentRecord    *connect.Client[v1.AddInvestmentRecordRequest, v1.AddInvestmentRecordResponse]
 	listInvestmentRecords  *connect.Client[v1.ListInvestmentRecordsRequest, v1.ListInvestmentRecordsResponse]
 	listKnowledgeEntries   *connect.Client[v1.ListKnowledgeEntriesRequest, v1.ListKnowledgeEntriesResponse]
-	reviewKnowledgeEntry   *connect.Client[v1.ReviewKnowledgeEntryRequest, v1.ReviewKnowledgeEntryResponse]
 	executeOpportunity     *connect.Client[v1.ExecuteOpportunityRequest, v1.ExecuteOpportunityResponse]
 	closePosition          *connect.Client[v1.ClosePositionRequest, v1.ClosePositionResponse]
 	listPositions          *connect.Client[v1.ListPositionsRequest, v1.ListPositionsResponse]
@@ -721,11 +710,6 @@ func (c *dashboardServiceClient) ListInvestmentRecords(ctx context.Context, req 
 // ListKnowledgeEntries calls arb.dashboard.v1.DashboardService.ListKnowledgeEntries.
 func (c *dashboardServiceClient) ListKnowledgeEntries(ctx context.Context, req *connect.Request[v1.ListKnowledgeEntriesRequest]) (*connect.Response[v1.ListKnowledgeEntriesResponse], error) {
 	return c.listKnowledgeEntries.CallUnary(ctx, req)
-}
-
-// ReviewKnowledgeEntry calls arb.dashboard.v1.DashboardService.ReviewKnowledgeEntry.
-func (c *dashboardServiceClient) ReviewKnowledgeEntry(ctx context.Context, req *connect.Request[v1.ReviewKnowledgeEntryRequest]) (*connect.Response[v1.ReviewKnowledgeEntryResponse], error) {
-	return c.reviewKnowledgeEntry.CallUnary(ctx, req)
 }
 
 // ExecuteOpportunity calls arb.dashboard.v1.DashboardService.ExecuteOpportunity.
@@ -926,7 +910,6 @@ type DashboardServiceHandler interface {
 	ListInvestmentRecords(context.Context, *connect.Request[v1.ListInvestmentRecordsRequest]) (*connect.Response[v1.ListInvestmentRecordsResponse], error)
 	// 经验库
 	ListKnowledgeEntries(context.Context, *connect.Request[v1.ListKnowledgeEntriesRequest]) (*connect.Response[v1.ListKnowledgeEntriesResponse], error)
-	ReviewKnowledgeEntry(context.Context, *connect.Request[v1.ReviewKnowledgeEntryRequest]) (*connect.Response[v1.ReviewKnowledgeEntryResponse], error)
 	// 执行（认证后，§13）
 	ExecuteOpportunity(context.Context, *connect.Request[v1.ExecuteOpportunityRequest]) (*connect.Response[v1.ExecuteOpportunityResponse], error)
 	ClosePosition(context.Context, *connect.Request[v1.ClosePositionRequest]) (*connect.Response[v1.ClosePositionResponse], error)
@@ -1076,12 +1059,6 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		DashboardServiceListKnowledgeEntriesProcedure,
 		svc.ListKnowledgeEntries,
 		connect.WithSchema(dashboardServiceMethods.ByName("ListKnowledgeEntries")),
-		connect.WithHandlerOptions(opts...),
-	)
-	dashboardServiceReviewKnowledgeEntryHandler := connect.NewUnaryHandler(
-		DashboardServiceReviewKnowledgeEntryProcedure,
-		svc.ReviewKnowledgeEntry,
-		connect.WithSchema(dashboardServiceMethods.ByName("ReviewKnowledgeEntry")),
 		connect.WithHandlerOptions(opts...),
 	)
 	dashboardServiceExecuteOpportunityHandler := connect.NewUnaryHandler(
@@ -1328,8 +1305,6 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceListInvestmentRecordsHandler.ServeHTTP(w, r)
 		case DashboardServiceListKnowledgeEntriesProcedure:
 			dashboardServiceListKnowledgeEntriesHandler.ServeHTTP(w, r)
-		case DashboardServiceReviewKnowledgeEntryProcedure:
-			dashboardServiceReviewKnowledgeEntryHandler.ServeHTTP(w, r)
 		case DashboardServiceExecuteOpportunityProcedure:
 			dashboardServiceExecuteOpportunityHandler.ServeHTTP(w, r)
 		case DashboardServiceClosePositionProcedure:
@@ -1471,10 +1446,6 @@ func (UnimplementedDashboardServiceHandler) ListInvestmentRecords(context.Contex
 
 func (UnimplementedDashboardServiceHandler) ListKnowledgeEntries(context.Context, *connect.Request[v1.ListKnowledgeEntriesRequest]) (*connect.Response[v1.ListKnowledgeEntriesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListKnowledgeEntries is not implemented"))
-}
-
-func (UnimplementedDashboardServiceHandler) ReviewKnowledgeEntry(context.Context, *connect.Request[v1.ReviewKnowledgeEntryRequest]) (*connect.Response[v1.ReviewKnowledgeEntryResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ReviewKnowledgeEntry is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ExecuteOpportunity(context.Context, *connect.Request[v1.ExecuteOpportunityRequest]) (*connect.Response[v1.ExecuteOpportunityResponse], error) {

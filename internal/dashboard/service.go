@@ -389,14 +389,6 @@ func (s *Service) ListKnowledgeEntries(ctx context.Context, req *connect.Request
 	return connect.NewResponse(&v1.ListKnowledgeEntriesResponse{Entries: pb}), nil
 }
 
-func (s *Service) ReviewKnowledgeEntry(ctx context.Context, req *connect.Request[v1.ReviewKnowledgeEntryRequest]) (*connect.Response[v1.ReviewKnowledgeEntryResponse], error) {
-	m := req.Msg
-	if err := s.store.UpdateKnowledgeEntryReview(ctx, m.Signature, m.Status, m.Verdict, m.ValidationNote); err != nil {
-		return nil, connect.NewError(connect.CodeInvalidArgument, err)
-	}
-	return connect.NewResponse(&v1.ReviewKnowledgeEntryResponse{}), nil
-}
-
 // --- 执行（§13） ---
 
 func (s *Service) ExecuteOpportunity(ctx context.Context, req *connect.Request[v1.ExecuteOpportunityRequest]) (*connect.Response[v1.ExecuteOpportunityResponse], error) {
