@@ -11,8 +11,8 @@ func TestLoadDefaults(t *testing.T) {
 	if c.CrossVenueMinGrossBpsCEX != 10.0 {
 		t.Errorf("CrossVenueMinGrossBpsCEX = %v, want 10.0", c.CrossVenueMinGrossBpsCEX)
 	}
-	if c.CrossVenueMinGrossBpsCFD != 0.1 {
-		t.Errorf("CrossVenueMinGrossBpsCFD = %v, want 0.1 (D-070)", c.CrossVenueMinGrossBpsCFD)
+	if c.CrossVenueMinGrossBpsCFD != 20.0 {
+		t.Errorf("CrossVenueMinGrossBpsCFD = %v, want 20.0 (D-078 round-trip)", c.CrossVenueMinGrossBpsCFD)
 	}
 	if c.FundingMinNetAnnualized != 4.0 {
 		t.Errorf("FundingMinNetAnnualized = %v, want 4.0", c.FundingMinNetAnnualized)
@@ -58,6 +58,9 @@ func TestLoadDefaults(t *testing.T) {
 	}
 	if c.NotifyMinNetBps != 0 {
 		t.Errorf("NotifyMinNetBps = %v, want 0", c.NotifyMinNetBps)
+	}
+	if c.StoreMinNetBps != 5.0 {
+		t.Errorf("StoreMinNetBps = %v, want 5.0 (D-078)", c.StoreMinNetBps)
 	}
 }
 

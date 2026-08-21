@@ -70,6 +70,11 @@ type Config struct {
 	// NotifyMinNetBps 机会推送提醒门槛（bps）；0 = 全部新机会都提醒（ARB_NOTIFY_MIN_NET_BPS）。
 	NotifyMinNetBps float64
 
+	// === 机会入库门槛（D-078 round-trip 成本修正）===
+	// StoreMinNetBps CROSS_VENUE 入库最低净收益（bps）；低于此值不入库（从源头消除垃圾机会）。
+	// 仅适用于价差型（net 为一次性 bps）；息差型 net 为年化百分点，由检测器 MinNetAnnualized 门槛过滤。
+	StoreMinNetBps float64
+
 	// === Broker 实持仓轮询（D-052）===
 	// BrokerPosPollInterval Broker 实持仓视图轮询周期（ARB_BROKER_POS_POLL_MS，缺省 5s）。
 	BrokerPosPollInterval time.Duration
@@ -114,7 +119,7 @@ type Config struct {
 func Load() *Config {
 	return &Config{
 		CrossVenueMinGrossBpsCEX:    envFloat("ARB_CROSS_MIN_GROSS_BPS_CEX", 10.0),
-		CrossVenueMinGrossBpsCFD:    envFloat("ARB_CROSS_MIN_GROSS_BPS_CFD", 0.1), // D-070 均值回归：极低门槛让 277+591 小价差被检测
+		CrossVenueMinGrossBpsCFD:    envFloat("ARB_CROSS_MIN_GROSS_BPS_CFD", 20.0), // D-078 round-trip 实证：CFD round-trip ~7.5bps+基差~5bps → gross≥20 才可能盈利
 		FundingMinNetAnnualized:     envFloat("ARB_FUNDING_MIN_NET_ANNUALIZED", 4.0),
 		CarryMinNetAnnualized:       envFloat("ARB_CARRY_MIN_NET_ANNUALIZED", 4.0),
 		PerpFundingMinNetAnnualized: envFloat("ARB_PERP_FUNDING_MIN_NET_ANNUALIZED", 2.0),
@@ -145,6 +150,7 @@ func Load() *Config {
 		SwapArbEquityUseRatio:      envFloat("ARB_SWAPARB_EQUITY_USE_RATIO", 0.5),
 		SwapArbReentryCooldownDays: envInt("ARB_SWAPARB_REENTRY_COOLDOWN_DAYS", 7),
 		NotifyMinNetBps:            envFloat("ARB_NOTIFY_MIN_NET_BPS", 0),
+		StoreMinNetBps:             envFloat("ARB_STORE_MIN_NET_BPS", 5.0), // D-078：CROSS_VENUE 入库门槛，round-trip 后 net≥5bps 才入库
 		BrokerPosPollInterval:      envDur("ARB_BROKER_POS_POLL_MS", 5*time.Second),
 		OpportunityNotionalUSD:     envFloat("ARB_OPP_NOTIONAL_USD", 1000),
 		AlertPaused:                envBool("ARB_ALERT_PAUSED", false),
