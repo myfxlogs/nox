@@ -81,8 +81,9 @@ func (s *Service) SwapArbNotional(canonical, venueLong, venueShort string) (noti
 	return minEq * swapArbRatio(s.swapArbEquityUseRatio), true, ""
 }
 
-// swapArbRatio 返回有效 ratio（0 或 >1 钳到 1，等价旧行为）。
+// swapArbRatio 返回有效 ratio（钳位到有效范围 0<x≤1）。
 // 语义：不限额=无绝对上限；ratio=单组合资金使用率，保留抗单余地（单腿裸露承受力）。
+// r≤0（未接线/误配）→ 1（等价旧行为，最保守=全资金）；r>1（误配放大）→ 1（钳上位）。
 func swapArbRatio(r float64) float64 {
 	if r <= 0 || r > 1 {
 		return 1
