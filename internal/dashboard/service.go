@@ -75,6 +75,14 @@ func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *
 	return &Service{store: store, qbus: qbus, pipeline: pipeline, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, priceTopic: priceTopic, oppTopic: oppTopic, bpm: bpm, notionalUSD: notionalUSD, acctMon: acctMon}
 }
 
+// Store 返回底层 store（D-070 autotrade engine 用）。
+func (s *Service) Store() *pgstore.Store { return s.store }
+
+// AutoClosePosition 平仓（D-070 autotrade engine 自动平仓用，区别于 RPC ClosePosition）。
+func (s *Service) AutoClosePosition(ctx context.Context, posID int64) error {
+	return s.pipeline.ClosePosition(ctx, posID)
+}
+
 // SetTradeModes 注入单腿 trade_mode 查询（D-060 F5）。main 在 factCache 处装配；nil = 预检放行。
 func (s *Service) SetTradeModes(f func(canonical, venueKey string) (int64, bool)) {
 	s.tradeModes = f
@@ -383,19 +391,26 @@ func (s *Service) ExecuteOpportunity(ctx context.Context, req *connect.Request[v
 			Message: "executor not wired",
 		}), nil
 	}
-	// qty 服务端校验（D-043 零信任：前端只传值，后端兜底）。
-	qty := req.Msg.GetQty()
-	if qty <= 0 {
-		return connect.NewResponse(&v1.ExecuteOpportunityResponse{
-			Status:  "FAILED",
-			Message: "invalid quantity",
-		}), nil
+	status, msg, posID := s.ExecuteOpportunityInternal(ctx, req.Msg.GetOpportunityId(), req.Msg.GetRequestId(), req.Msg.GetQty())
+	return connect.NewResponse(&v1.ExecuteOpportunityResponse{
+		PositionId: posID,
+		Status:     status,
+		Message:    msg,
+	}), nil
+}
+
+// ExecuteOpportunityInternal 执行机会的核心逻辑（D-070 抽取，供 RPC 和 autotrade engine 复用）。
+// 返回 status（EXECUTED/FAILED）、message、positionID（失败时为0）。
+func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, requestID string, qty float64) (status, message string, positionID int64) {
+	if s.pipeline == nil {
+		return "FAILED", "executor not wired", 0
 	}
-	// 查机会记录获取 leg 规格
-	oppID := req.Msg.GetOpportunityId()
+	if qty <= 0 {
+		return "FAILED", "invalid quantity", 0
+	}
 	opps, err := s.store.ListOpportunities(ctx, "", 200, 0)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+		return "FAILED", fmt.Sprintf("list opportunities: %v", err), 0
 	}
 	var found *pgstore.Opportunity
 	for i := range opps {
@@ -405,49 +420,26 @@ func (s *Service) ExecuteOpportunity(ctx context.Context, req *connect.Request[v
 		}
 	}
 	if found == nil {
-		return connect.NewResponse(&v1.ExecuteOpportunityResponse{
-			Status:  "FAILED",
-			Message: "opportunity not found or expired",
-		}), nil
+		return "FAILED", "opportunity not found or expired", 0
 	}
-	// 复核：报价新鲜度 + 毛收益劣化（D-051 修①/③：canonical 用列、毛口径比较）。
 	if !s.pipeline.Revalidate(found.Canonical, found.VenueBuy, found.VenueSell, found.Type, found.GrossBps) {
-		return connect.NewResponse(&v1.ExecuteOpportunityResponse{
-			Status:  "FAILED",
-			Message: "quote stale or net benefit degraded beyond threshold",
-		}), nil
+		return "FAILED", "quote stale or net benefit degraded beyond threshold", 0
 	}
-	// F5 可交易性预检（D-060，防裸腿——positions #1 买腿成交卖腿被拒的实锤形态）：
-	// MT 腿查 trade_mode，不兼容方向拒绝执行（不建 position 不发单）；未知放行。
 	if err := s.checkTradability(found); err != nil {
-		return connect.NewResponse(&v1.ExecuteOpportunityResponse{
-			Status:  "FAILED",
-			Message: err.Error(),
-		}), nil
+		return "FAILED", err.Error(), 0
 	}
-	// 构造双腿：VenueSymbol 从 qbus 取 broker 原生符号（D-051 修②，杜绝 venueKey 当符号）。
 	legs, err := s.resolveLegs(found, qty)
 	if err != nil {
-		return connect.NewResponse(&v1.ExecuteOpportunityResponse{
-			Status:  "FAILED",
-			Message: err.Error(),
-		}), nil
+		return "FAILED", err.Error(), 0
 	}
-	result, err := s.pipeline.Execute(ctx, oppID, req.Msg.GetRequestId(), legs)
+	result, err := s.pipeline.Execute(ctx, oppID, requestID, legs)
 	if err != nil {
-		// 风控拒单是业务拒绝（D-058）：FAILED+message 展示给前端，非 CodeInternal 内部错误。
 		if errors.Is(err, exec.ErrMaxOpenPositions) || errors.Is(err, exec.ErrDuplicateExecution) {
-			return connect.NewResponse(&v1.ExecuteOpportunityResponse{
-				Status:  "FAILED",
-				Message: err.Error(),
-			}), nil
+			return "FAILED", err.Error(), 0
 		}
-		return nil, connect.NewError(connect.CodeInternal, err)
+		return "FAILED", fmt.Sprintf("execute: %v", err), 0
 	}
-	return connect.NewResponse(&v1.ExecuteOpportunityResponse{
-		PositionId: result.PositionID,
-		Status:     result.Status,
-	}), nil
+	return result.Status, "", result.PositionID
 }
 
 // checkTradability F5 执行预检：MT 腿（venueKey 后缀 :mt5/:mt4）查 trade_mode，
