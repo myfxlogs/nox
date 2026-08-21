@@ -59,3 +59,62 @@ func TestUpsertOpportunity_InsertedFlag(t *testing.T) {
 		t.Errorf("new-id upsert want inserted=true, got %v", inserted)
 	}
 }
+
+// TestPurgeAckedAlerts P5 修复⑧：删除 acked+超 7 天告警，未 acked 不删，7 天内 acked 不删。
+func TestPurgeAckedAlerts(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.pool.Exec(ctx, "TRUNCATE alerts CASCADE"); err != nil {
+		t.Fatalf("TRUNCATE alerts: %v", err)
+	}
+
+	// 插入 3 条告警：① acked+超期（应删）② acked+7 天内（不删）③ 未 acked+超期（不删）
+	// ① acked + 8 天前
+	if err := s.InsertAlert(ctx, nil, "info", "old-acked"); err != nil {
+		t.Fatalf("InsertAlert 1: %v", err)
+	}
+	if _, err := s.pool.Exec(ctx, "UPDATE alerts SET acked=true, ts=now()-interval '8 days' WHERE message='old-acked'"); err != nil {
+		t.Fatalf("set old-acked: %v", err)
+	}
+	// ② acked + 1 天前
+	if err := s.InsertAlert(ctx, nil, "info", "recent-acked"); err != nil {
+		t.Fatalf("InsertAlert 2: %v", err)
+	}
+	if _, err := s.pool.Exec(ctx, "UPDATE alerts SET acked=true, ts=now()-interval '1 day' WHERE message='recent-acked'"); err != nil {
+		t.Fatalf("set recent-acked: %v", err)
+	}
+	// ③ 未 acked + 8 天前
+	if err := s.InsertAlert(ctx, nil, "info", "old-unacked"); err != nil {
+		t.Fatalf("InsertAlert 3: %v", err)
+	}
+	if _, err := s.pool.Exec(ctx, "UPDATE alerts SET acked=false, ts=now()-interval '8 days' WHERE message='old-unacked'"); err != nil {
+		t.Fatalf("set old-unacked: %v", err)
+	}
+
+	// purge：应只删 ①
+	n, err := s.PurgeAckedAlerts(ctx, 7*24*time.Hour)
+	if err != nil {
+		t.Fatalf("PurgeAckedAlerts: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("purge count want 1, got %d", n)
+	}
+
+	// 验证剩余 2 条（②③）
+	var remaining int
+	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM alerts").Scan(&remaining); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if remaining != 2 {
+		t.Errorf("remaining alerts want 2, got %d", remaining)
+	}
+
+	// 幂等：再 purge 应删 0
+	n, err = s.PurgeAckedAlerts(ctx, 7*24*time.Hour)
+	if err != nil {
+		t.Fatalf("PurgeAckedAlerts 2nd: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("idempotent purge count want 0, got %d", n)
+	}
+}

@@ -141,6 +141,17 @@ func (s *Store) AckAll(ctx context.Context) error {
 	return err
 }
 
+// PurgeAckedAlerts 删除已确认且超期（默认 7 天）的告警（P5 修复⑧ TTL）。
+// 幂等：每次调用执行同一 SQL，删除符合条件的行；未 acked 不删（待办语义）。
+// 返回删除行数（用于日志/验收）。
+func (s *Store) PurgeAckedAlerts(ctx context.Context, maxAge time.Duration) (int64, error) {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM alerts WHERE acked = true AND ts < now() - $1::interval`, maxAge.String())
+	if err != nil {
+		return 0, fmt.Errorf("purge acked alerts: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
 // ListUnacked 返回未读告警 + 计数。
 func (s *Store) ListUnacked(ctx context.Context) ([]Alert, int, error) {
 	q := `SELECT a.id, a.rule_id, COALESCE(r.name, ''), a.ts, a.level, a.message, a.acked
