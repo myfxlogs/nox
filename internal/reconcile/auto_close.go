@@ -168,13 +168,33 @@ func (r *Reconciler) autoFailOPENINGZombie(
 	return nil
 }
 
-// isOPENINGZombie 判断 position 是否为 OPENING 僵尸（超 24h）。
-func isOPENINGZombie(pos *pgstore.Position, now time.Time) bool {
+// isOPENINGZombie 判断 position 是否为 OPENING 僵尸。
+// 判定条件（满足任一即僵尸）：
+//  1. 超 24h（opened_at 存在且 now.Sub > 24h）——原条件；
+//  2. 无 opened_at 且无任何腿的 phase=OPENING——补充条件（#254 这种执行中断连时间戳都没写的仓，
+//     原条件永远跳过；无时间戳+无 OPENING 腿=执行中断无进展，判僵尸归档）。
+//
+// legs 为该 position 的全部腿（调用方查 store.ListPositionLegs 传入）。
+func isOPENINGZombie(pos *pgstore.Position, legs []pgstore.PositionLeg, now time.Time) bool {
 	if pos.Status != "OPENING" {
 		return false
 	}
-	if pos.OpenedAt == nil {
-		return false // 无 opened_at 不判（避免误杀）
+	// 条件1：超 24h
+	if pos.OpenedAt != nil && now.Sub(*pos.OpenedAt) > 24*time.Hour {
+		return true
 	}
-	return now.Sub(*pos.OpenedAt) > 24*time.Hour
+	// 条件2：无 opened_at 且无任何腿的 phase=OPENING（执行中断无进展）
+	if pos.OpenedAt == nil {
+		hasOpeningLeg := false
+		for i := range legs {
+			if legs[i].Phase == "OPENING" {
+				hasOpeningLeg = true
+				break
+			}
+		}
+		if !hasOpeningLeg {
+			return true
+		}
+	}
+	return false
 }

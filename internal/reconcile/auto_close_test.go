@@ -476,21 +476,30 @@ func (q *blockingHistoryQuerier) QueryOrderHistory(ctx context.Context, ticket s
 }
 
 // TestIsOPENINGZombie OPENING 僵尸判定边界。
+// 补充条件：无 opened_at 且无任何腿的 phase=OPENING = 僵尸（#254 执行中断无时间戳）。
 func TestIsOPENINGZombie(t *testing.T) {
 	now := time.Now()
+	openingLegs := []pgstore.PositionLeg{{Phase: "OPENING"}, {Phase: "OPEN"}}
+	noOpeningLegs := []pgstore.PositionLeg{{Phase: "OPEN"}, {Phase: "CLOSE"}}
+	emptyLegs := []pgstore.PositionLeg{}
 	cases := []struct {
 		name string
 		pos  pgstore.Position
+		legs []pgstore.PositionLeg
 		want bool
 	}{
-		{"OPENING 超 24h", pgstore.Position{Status: "OPENING", OpenedAt: ptrTime(now.Add(-25 * time.Hour))}, true},
-		{"OPENING 刚好 24h", pgstore.Position{Status: "OPENING", OpenedAt: ptrTime(now.Add(-24 * time.Hour))}, false},
-		{"OPENING 未超", pgstore.Position{Status: "OPENING", OpenedAt: ptrTime(now.Add(-23 * time.Hour))}, false},
-		{"OPEN 不判", pgstore.Position{Status: "OPEN", OpenedAt: ptrTime(now.Add(-48 * time.Hour))}, false},
-		{"OPENING 无 opened_at 不判", pgstore.Position{Status: "OPENING", OpenedAt: nil}, false},
+		{"OPENING 超 24h", pgstore.Position{Status: "OPENING", OpenedAt: ptrTime(now.Add(-25 * time.Hour))}, openingLegs, true},
+		{"OPENING 刚好 24h", pgstore.Position{Status: "OPENING", OpenedAt: ptrTime(now.Add(-24 * time.Hour))}, openingLegs, false},
+		{"OPENING 未超", pgstore.Position{Status: "OPENING", OpenedAt: ptrTime(now.Add(-23 * time.Hour))}, openingLegs, false},
+		{"OPEN 不判", pgstore.Position{Status: "OPEN", OpenedAt: ptrTime(now.Add(-48 * time.Hour))}, openingLegs, false},
+		// 补充条件：无 opened_at + 无 OPENING 腿 = 僵尸（#254 这种执行中断）
+		{"OPENING 无 opened_at 无 OPENING 腿=僵尸", pgstore.Position{Status: "OPENING", OpenedAt: nil}, noOpeningLegs, true},
+		{"OPENING 无 opened_at 空腿=僵尸", pgstore.Position{Status: "OPENING", OpenedAt: nil}, emptyLegs, true},
+		// 无 opened_at 但有 OPENING 腿 = 仍在执行中，不判僵尸
+		{"OPENING 无 opened_at 有 OPENING 腿不判", pgstore.Position{Status: "OPENING", OpenedAt: nil}, openingLegs, false},
 	}
 	for _, c := range cases {
-		if got := isOPENINGZombie(&c.pos, now); got != c.want {
+		if got := isOPENINGZombie(&c.pos, c.legs, now); got != c.want {
 			t.Errorf("%s: got %v want %v", c.name, got, c.want)
 		}
 	}

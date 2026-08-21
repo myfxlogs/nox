@@ -336,6 +336,10 @@ func (r *Reconciler) insertAlertCtx(ctx context.Context, level, msg string) {
 // 缺陷1修复：所有外部调用（venue querier / OrderHistory / InsertAlert / store 写）一律包 runTimeout 超时，
 // 单个 venue 超时不炸整个 Run（该 venue 本轮跳过 + 计数日志）。
 // 缺陷2修复：findHistoryQuerier 返回 nil 时不告警不计数（查证器未就绪，下轮复查），仅 debug 日志。
+//
+// S5 告警文案 token 格式是前端解析契约（改动须同步 web/src/format.ts parseAlertTarget）：
+//   - 「本地有 venue 无」/收尾类告警：含 #<position_id>（前端 #\d+ 解析 → 跳持仓页）
+//   - 「venue 有 本地无」孤儿单告警：含 ticket=NNN（前端 ticket=\d+ 解析 → 跳 Broker 页）
 func (r *Reconciler) Run(ctx context.Context) (int, error) {
 	// 1. 查本地 OPEN + OPENING 持仓（OPENING 僵尸收编，D-073+）
 	listCtx, listCancel := r.withTimeout(ctx)
@@ -436,9 +440,16 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 		log.Printf("[reconcile] auto-close completed pos=%d ticket=%s", lp.pos.ID, ticket)
 	}
 
-	// 3b. OPENING 僵尸收编（超 24h，D-073+）
+	// 3b. OPENING 僵尸收编（超 24h 或无 opened_at 且无 OPENING 腿，D-073+ 补充条件）
 	for _, p := range openingPositions {
-		if !isOPENINGZombie(&p, now) {
+		legsCtx, legsCancel := r.withTimeout(ctx)
+		legs, err := r.store.ListPositionLegs(legsCtx, p.ID)
+		legsCancel()
+		if err != nil {
+			log.Printf("[reconcile] list legs for OPENING zombie pos=%d failed: %v (skip this round)", p.ID, err)
+			continue
+		}
+		if !isOPENINGZombie(&p, legs, now) {
 			continue
 		}
 		if err := r.autoFailOPENINGZombie(ctx, &p, venueOrders); err != nil {
