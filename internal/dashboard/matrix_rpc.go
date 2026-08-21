@@ -140,12 +140,12 @@ func buildMatrixUniverse(
 
 	// 输出行：原生行（缺/部分缺/冲突） + 唯一已配齐 relabel 行 + canonical 归并行。
 	type outRow struct {
-		symbol      string
-		group       string
-		accounts    []matrixAcctInfo
-		mapped      int
-		total       int
-		contracts   map[float64]bool
+		symbol     string
+		group      string
+		accounts   []matrixAcctInfo
+		mapped     int
+		total      int
+		contracts  map[float64]bool
 		canonicals []string // 该行映射到的 canonical 集（原生冲突行可能 >1）
 	}
 	out := make([]outRow, 0, len(rowOrder)+len(canonOrder))

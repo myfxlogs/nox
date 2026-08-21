@@ -13,8 +13,8 @@ func TestTopGroup(t *testing.T) {
 		{`Standard\Crypto\BTCUSDm`, "Crypto"},
 		{`Standard\Stocks\AAPLm`, "Stocks"},
 		{`Standard\Forex_Indicator\USDRUBm`, "Forex_Indicator"},
-		{`Cent\Crypto\ETHUSDm`, "Crypto"},     // cent 账号同构
-		{`Micro\Metals\XAUUSD`, "Metals"},      // micro 账号同构
+		{`Cent\Crypto\ETHUSDm`, "Crypto"}, // cent 账号同构
+		{`Micro\Metals\XAUUSD`, "Metals"}, // micro 账号同构
 		// FxPro 等：第一段即市场分组
 		{`Forex\Major\EURUSD`, "Forex"},
 		{`Metals\Gold\GOLD`, "Metals"},
@@ -23,8 +23,8 @@ func TestTopGroup(t *testing.T) {
 		{`Spot\Indices\Major\#US30`, "Spot"},
 		// 边界
 		{"", ""},
-		{"FLAT", "FLAT"},          // 无分隔符
-		{`Standard`, "Standard"},  // 全为账号类型 → 原样（不产生空组）
+		{"FLAT", "FLAT"},         // 无分隔符
+		{`Standard`, "Standard"}, // 全为账号类型 → 原样（不产生空组）
 	}
 	for _, c := range cases {
 		if got := topGroup(c.in); got != c.want {

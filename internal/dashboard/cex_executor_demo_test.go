@@ -167,6 +167,7 @@ func demoSymQty(venue, venueType string) (string, float64) {
 //     cancelSourceReason「slipped beyond the best bid ... by at least 5%」；
 //   - 而 ≤ bid 深度的量（0.00004）又低于最小订单金额（51020 minimum order amount）；
 //   - 因此任何可行量都不存在 → SELL 结构性无法成交，与执行器实现无关。
+//
 // 仅当错误精确匹配上述两种签名才判为环境限制；其余错误如实 fail（防掩盖真实回归）。
 func isOKXSimSpotSellImpossible(err error) bool {
 	s := err.Error()

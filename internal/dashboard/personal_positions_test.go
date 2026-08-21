@@ -55,7 +55,7 @@ func TestPersonalPositionToProto_WarnLevel(t *testing.T) {
 	}
 }
 
-// TestPersonalPositionToProto_StaleFrame（G3）：帧超陈旧 TTL → 视为无报价（price=0/level=''）；
+// TestPersonalPositionToProto_StaleFrame（G3）：帧超陈旧 TTL → 视为无报价（price=0/level=”）；
 // 混陈旧 + 新帧 → 取新帧（陈旧帧不冒充现价）。
 func TestPersonalPositionToProto_StaleFrame(t *testing.T) {
 	warnHigh := 0.36
