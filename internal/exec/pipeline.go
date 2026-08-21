@@ -38,12 +38,17 @@ type Pipeline struct {
 	store    *pgstore.Store
 	qbus     *bus.QuoteBus
 	limits   RiskLimits
+	// verifier 平仓后 ticket 回读（D-077 修复⑩ G1）。nil = 未接线（测试，跳过回读）。
+	verifier PositionVerifier
 }
 
 // NewPipeline 创建执行管线。
 func NewPipeline(reg *Registry, store *pgstore.Store, qbus *bus.QuoteBus, limits RiskLimits) *Pipeline {
 	return &Pipeline{registry: reg, store: store, qbus: qbus, limits: limits}
 }
+
+// SetPositionVerifier 注入平仓后回读器（D-077 修复⑩ G1）。main 装配后调。
+func (p *Pipeline) SetPositionVerifier(v PositionVerifier) { p.verifier = v }
 
 // LegSpec 是单腿下单规格。
 type LegSpec struct {
@@ -285,10 +290,64 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 		}
 	}
 
+	// D-077 修复⑩ G1：平仓后 ticket 回读——按 ticket 回读各 venue 在仓订单，
+	// ticket 仍在 → 不置 CLOSED + critical「broker 残留腿」（防 DB 假 CLOSED 留孤儿）。
+	if p.verifier != nil {
+		if residual := p.checkResidualLegs(ctx, legs); len(residual) > 0 {
+			msg := fmt.Sprintf("broker 残留腿 position=%d: %s", posID, strings.Join(residual, ", "))
+			log.Printf("[exec] %s", msg)
+			_ = p.store.InsertAlert(ctx, &posID, "critical", msg)
+			// 不置 CLOSED，留 OPEN 状态等对账自动收尾兜底
+			return fmt.Errorf("residual legs after close: %s", strings.Join(residual, ", "))
+		}
+	}
+
 	if err := p.store.ClosePosition(ctx, posID, totalPnL); err != nil {
 		log.Printf("[exec] close position %d store update: %v", posID, err)
 	}
 	return nil
+}
+
+// checkResidualLegs 平仓后按 ticket 回读各 venue 在仓订单，返回残留腿描述（D-077 修复⑩ G1）。
+// 只检查 FILLED 的 OPEN phase 腿（CLOSE phase 是刚写的平仓腿，不查）。
+// verifier 不可用/超时 → 返回空（fail-open：不阻断平仓流程，对账自动收尾兜底）。
+func (p *Pipeline) checkResidualLegs(ctx context.Context, legs []pgstore.PositionLeg) []string {
+	if p.verifier == nil {
+		return nil // 未接线 → 跳过回读
+	}
+	// 按 venue 分组待查 ticket
+	venueTickets := map[string][]string{} // venueKey → []ticket
+	for _, leg := range legs {
+		if leg.Phase != "OPEN" || leg.Status != "FILLED" || leg.OrderID == "" {
+			continue
+		}
+		venueTickets[leg.Venue] = append(venueTickets[leg.Venue], leg.OrderID)
+	}
+	if len(venueTickets) == 0 {
+		return nil
+	}
+
+	var residual []string
+	for venueKey, tickets := range venueTickets {
+		vctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		orders, err := p.verifier.QueryOpenedOrders(vctx, venueKey)
+		cancel()
+		if err != nil {
+			log.Printf("[exec] verify residual %s: %v (fail-open, skip)", venueKey, err)
+			continue
+		}
+		// 构建 ticket → 在仓 集合
+		opened := make(map[string]bool, len(orders))
+		for _, o := range orders {
+			opened[o.Ticket] = true
+		}
+		for _, ticket := range tickets {
+			if opened[ticket] {
+				residual = append(residual, fmt.Sprintf("%s ticket=%s", venueKey, ticket))
+			}
+		}
+	}
+	return residual
 }
 
 // Revalidate 用 QuoteBus 最新报价重算毛收益劣化（§13.1 双阈值；D-051 修③：毛口径比较）。

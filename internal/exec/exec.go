@@ -51,6 +51,21 @@ type Executor interface {
 	CloseOrder(ctx context.Context, ref OrderRef) (Fill, error)
 }
 
+// OpenedOrder venue 侧在仓订单（D-077 修复⑩ G1 平仓后回读用）。
+type OpenedOrder struct {
+	Ticket string
+	Symbol string
+	Side   string // BUY / SELL
+	Volume float64
+}
+
+// PositionVerifier 按 ticket 回读 venue 在仓订单（D-077 修复⑩ G1）。
+// 实现者：reconcile.VenueQuerier 适配器（main 注入）。nil = 未接线（测试，跳过回读）。
+type PositionVerifier interface {
+	// QueryOpenedOrders 返回该 venue 的在仓订单列表（按 ticket 匹配残留腿）。
+	QueryOpenedOrders(ctx context.Context, venueKey string) ([]OpenedOrder, error)
+}
+
 // Registry 按 Key 路由执行器。动态启停（Broker 管理器）后并发读写，须加锁。
 type Registry struct {
 	mu        sync.RWMutex

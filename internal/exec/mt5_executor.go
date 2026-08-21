@@ -51,7 +51,8 @@ func (e *MT5Executor) PlaceOrder(ctx context.Context, o Order) (Fill, error) {
 		return Fill{}, fmt.Errorf("mt5 ordersend: %w", err)
 	}
 	if err := resp.GetError(); err != nil {
-		return Fill{}, fmt.Errorf("mt5 ordersend: %s", err.GetMessage())
+		// D-077 修复⑩ G3：错误码写入 message 供 errclass.Classify 解析（[code=XXX] 前缀）。
+		return Fill{}, fmt.Errorf("mt5 ordersend: [code=%s] %s", err.GetCode().String(), err.GetMessage())
 	}
 	ord := resp.GetResult()
 	if ord == nil {
@@ -81,7 +82,7 @@ func (e *MT5Executor) CloseOrder(ctx context.Context, ref OrderRef) (Fill, error
 		return Fill{}, fmt.Errorf("mt5 orderclose: %w", err)
 	}
 	if err := resp.GetError(); err != nil {
-		return Fill{}, fmt.Errorf("mt5 orderclose: %s", err.GetMessage())
+		return Fill{}, fmt.Errorf("mt5 orderclose: [code=%s] %s", err.GetCode().String(), err.GetMessage())
 	}
 	ord := resp.GetResult()
 	if ord == nil {

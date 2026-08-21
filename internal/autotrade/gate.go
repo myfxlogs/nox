@@ -2,12 +2,14 @@ package autotrade
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
 	"time"
 
 	"arb/internal/combo"
+	"arb/internal/errclass"
 	"arb/internal/store/pgstore"
 )
 
@@ -248,14 +250,58 @@ func (g *Gate) Submit(ctx context.Context, intent TradeIntent) GateResult {
 	}
 	logEntry.Status = status
 	logEntry.Reason = msg
+	// D-077 修复⑩ G3：执行失败按 errclass 分类落库（reason 前缀 Retry:/RetryFresh:/Abort:/Halt:）。
+	// Halt 类（MARKET_CLOSED/TRADE_DISABLED）→ DisableStrategy + critical 告警。
+	// Abort 类计数日志。Retry/RetryFresh v1 不做自动重试（留触发条件）。
+	if status == "FAILED" {
+		action := g.classifyFailure(intent, msg)
+		logEntry.Reason = action.String() + ": " + errclass.TruncateNote(msg, 120)
+		if action == errclass.Halt {
+			g.haltStrategy(ctx, intent, logEntry.Reason)
+		} else if action == errclass.Abort {
+			log.Printf("[autotrade] gate Abort %s: %s", intent.DedupKey, msg)
+		}
+	}
 	_ = g.store.InsertAutotradeLog(ctx, logEntry)
 
 	if status == "FAILED" {
-		log.Printf("[autotrade] gate FAILED %s: %s", intent.DedupKey, msg)
+		log.Printf("[autotrade] gate FAILED %s: %s", intent.DedupKey, logEntry.Reason)
 	} else {
 		log.Printf("[autotrade] gate EXECUTED %s posID=%d", intent.DedupKey, posID)
 	}
-	return GateResult{Status: status, Reason: msg, PosID: posID}
+	return GateResult{Status: status, Reason: logEntry.Reason, PosID: posID}
+}
+
+// classifyFailure 按双腿 venue 分类执行失败（D-077 修复⑩ G3）。
+// 取两腿中更严重的 Action（Halt > RetryFresh > Retry > Abort）。
+func (g *Gate) classifyFailure(intent TradeIntent, msg string) errclass.Action {
+	a1 := errclass.ClassifyErr(intent.VenueBuy, errors.New(msg))
+	a2 := errclass.ClassifyErr(intent.VenueSell, errors.New(msg))
+	return worseAction(a1, a2)
+}
+
+// worseAction 返回更严重的 Action（Halt > RetryFresh > Retry > Abort）。
+func worseAction(a, b errclass.Action) errclass.Action {
+	severity := map[errclass.Action]int{
+		errclass.Abort:      0,
+		errclass.Retry:      1,
+		errclass.RetryFresh: 2,
+		errclass.Halt:       3,
+	}
+	if severity[a] >= severity[b] {
+		return a
+	}
+	return b
+}
+
+// haltStrategy Halt 类失败 → DisableStrategy + critical 告警（D-077 修复⑩ G3）。
+func (g *Gate) haltStrategy(ctx context.Context, intent TradeIntent, reason string) {
+	if err := g.store.DisableStrategy(ctx, intent.Strategy, reason); err != nil {
+		log.Printf("[autotrade] halt DisableStrategy %s: %v", intent.Strategy, err)
+	}
+	alertMsg := fmt.Sprintf("strategy %s HALTED: %s", intent.Strategy, reason)
+	_ = g.store.InsertAlert(ctx, nil, "critical", alertMsg)
+	log.Printf("[autotrade] HALT %s: %s", intent.Strategy, reason)
 }
 
 // rejectLog 拒绝路径统一落库 + 日志（fail-closed 检查失败与规则拒绝共用）。

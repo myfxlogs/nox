@@ -1,6 +1,10 @@
 package autotrade
 
-import "testing"
+import (
+	"testing"
+
+	"arb/internal/errclass"
+)
 
 // TestGateDecision_AllPass 全部通过（D-072 §3.1）。
 func TestGateDecision_AllPass(t *testing.T) {
@@ -82,5 +86,25 @@ func TestMaxPositionsReachedDecision_NotFull(t *testing.T) {
 	}
 	if maxPositionsReachedDecision(0, 5) {
 		t.Error("openCount=0 should NOT be reached")
+	}
+}
+
+// TestWorseAction 返回更严重的 Action（Halt > RetryFresh > Retry > Abort，D-077 修复⑩ G3）。
+func TestWorseAction(t *testing.T) {
+	tests := []struct {
+		a, b errclass.Action
+		want errclass.Action
+	}{
+		{errclass.Halt, errclass.Abort, errclass.Halt},
+		{errclass.Abort, errclass.Halt, errclass.Halt},
+		{errclass.RetryFresh, errclass.Retry, errclass.RetryFresh},
+		{errclass.Retry, errclass.Abort, errclass.Retry},
+		{errclass.Abort, errclass.Abort, errclass.Abort},
+	}
+	for _, tt := range tests {
+		got := worseAction(tt.a, tt.b)
+		if got != tt.want {
+			t.Errorf("worseAction(%v,%v) want %v, got %v", tt.a, tt.b, tt.want, got)
+		}
 	}
 }
