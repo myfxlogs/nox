@@ -5,7 +5,8 @@ package adapter
 //   - 百分比模式为年化% → 每日 bps 与价格无关（S/100/365×10⁴）；
 //   - mode 0 真停用发 0 值 Fact（零息 venue 是 carry 最佳对手，必须可配对）；
 //   - mode 0 却带非零 rates = 矛盾 broker 数据（PXB 事故实证）→ 跳过，宁丢机会不交易不可信经济性；
-//   - mode 2/7/8/超界未标定 → 跳过。
+//   - mode 2 SymInfo_s408 = 标的货币额（WP1 补齐，同 3/4 口径 S/(price×CS)×1e4）；
+//   - mode 7/8/超界(9+) 未标定 → 跳过 + 计数日志（WP1 禁静默）。
 // 产出的 Fact：kind=swap_long/swap_short，unit=bps_daily（正=收，负=付），src=mt5/mt4；
 // 以及 kind=trade_mode（unit=mode，MT5 ENUM 透传，D-060 F3——与 swap 标定无关，跳过符号也发）。
 
@@ -32,11 +33,11 @@ var ErrSwapColdStart = errors.New("swap cold start: no venue quote")
 type SwapMode int
 
 const (
-	SwapModeNone             SwapMode = iota // 真停用：发 0 值 Fact
-	SwapModeInPoints                         // 点数：S × Points / price
-	SwapModePerLotCurrency                   // 每手货币额：S / (price × ContractSize)
-	SwapModeAnnualPct                        // 年化百分比：S% / 365
-	SwapModeUncalibrated                     // 未标定 / 矛盾数据：跳过
+	SwapModeNone           SwapMode = iota // 真停用：发 0 值 Fact
+	SwapModeInPoints                       // 点数：S × Points / price
+	SwapModePerLotCurrency                 // 每手货币额：S / (price × ContractSize)（mode 2/3/4）
+	SwapModeAnnualPct                      // 年化百分比：S% / 365（mode 5/6）
+	SwapModeUncalibrated                   // 未标定 / 矛盾数据：跳过 + 计数日志（mode 7/8/9+）
 )
 
 // normalizeSwapBpsDaily 归一单方向 swap 原始值为日 bps（正=收，负=付）。
@@ -69,6 +70,18 @@ func swapNeedsPrice(mode SwapMode) bool {
 }
 
 // mt5SwapMode 映射 MT5 ENUM_SYMBOL_SWAP_MODE（proto 透传原始值，D-058 实证数值对齐）。
+// 完整映射表（proto 枚举 0~8 + FxPro 实证超界值 9）：
+//
+//	0 SwapNone         → SwapModeNone（真停用发 0 值 Fact；非零 rates=矛盾→Uncalibrated）
+//	1 InPoints         → SwapModeInPoints（S × Points / price × 1e4）
+//	2 SymInfo_s408     → SwapModePerLotCurrency（标的货币额，S / (price × CS) × 1e4；同 3/4 口径）
+//	3 MarginCurrency   → SwapModePerLotCurrency（保证金货币额，同上）
+//	4 Currency         → SwapModePerLotCurrency（入金/利润货币额，同上）
+//	5 PercCurPrice     → SwapModeAnnualPct（S% / 365 × 1e2）
+//	6 PercOpenPrice    → SwapModeAnnualPct（同 5，用开仓价≈现价）
+//	7 PointClosePrice  → SwapModeUncalibrated（重开仓模式，点数±收盘价，非线性无法归一）
+//	8 PointBidPrice    → SwapModeUncalibrated（重开仓模式，点数±买价，同上）
+//	9+ 超界            → SwapModeUncalibrated（FxPro WTI 实证=9，proto 未定义；计数日志禁静默）
 func mt5SwapMode(t mt5pb.SwapType, long, short float64) SwapMode {
 	switch t {
 	case mt5pb.SwapType_SwapType_SwapNone:
@@ -78,11 +91,11 @@ func mt5SwapMode(t mt5pb.SwapType, long, short float64) SwapMode {
 		return SwapModeNone
 	case mt5pb.SwapType_SwapType_InPoints:
 		return SwapModeInPoints
-	case mt5pb.SwapType_SwapType_MarginCurrency, mt5pb.SwapType_SwapType_Currency:
+	case mt5pb.SwapType_SwapType_SymInfo_s408, mt5pb.SwapType_SwapType_MarginCurrency, mt5pb.SwapType_SwapType_Currency:
 		return SwapModePerLotCurrency
 	case mt5pb.SwapType_SwapType_PercCurPrice, mt5pb.SwapType_SwapType_PercOpenPrice:
 		return SwapModeAnnualPct
-	default: // SymInfo_s408(2) / PointClosePrice(7) / PointBidPrice(8) / 超界
+	default: // PointClosePrice(7) / PointBidPrice(8) / 超界(9+)
 		return SwapModeUncalibrated
 	}
 }
@@ -137,6 +150,7 @@ func (a *MT4Adapter) SymbolMap() map[string]string {
 // price 取本 venue 最新报价（缺失回退任一 venue 中价，bps 精度下价格差异可忽略）。
 // 单符号失败只记日志；全失败才返回错误（Scheduler 退避重试）。
 // 每轮每 venue 一行汇总日志（D-060 F1 跳过可观测）：emit/emit0 按符号计，skip 附原因。
+// WP1：未覆盖 SwapType 计数（7/8/9+）单独汇总日志，禁静默（探测面隐形收缩 P4）。
 func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fact, error) {
 	sm := a.SymbolMap()
 	if len(sm) == 0 {
@@ -148,6 +162,7 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 	var skips []string
 	emit, emit0 := 0, 0
 	missingPrice := 0
+	uncovered := map[int32]int{} // SwapType 原始值 → 命中符号数（WP1 计数日志）
 	for brokerSym, canon := range sm {
 		resp, err := a.mt5.SymbolParams(a.withSessionMD(ctx), &mt5pb.SymbolParamsRequest{Id: a.token, Symbol: brokerSym})
 		if err != nil {
@@ -173,6 +188,8 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 		facts = append(facts, tradeModeFact(a.venue, canon, sg.GetTradeMode(), "mt5"))
 		mode := mt5SwapMode(sg.GetSwapType(), sg.GetSwapLong(), sg.GetSwapShort())
 		if mode == SwapModeUncalibrated {
+			raw := int32(sg.GetSwapType())
+			uncovered[raw]++
 			skips = append(skips, mt5SkipReason(brokerSym, sg))
 			continue
 		}
@@ -204,6 +221,7 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 		}
 	}
 	swapPollSummary("mt5", a.venue, emit, emit0, skips)
+	swapUncoveredSummary("mt5", a.venue, uncovered)
 	if missingPrice > 0 {
 		return nil, fmt.Errorf("%w: %d symbol(s) lack venue quote", ErrSwapColdStart, missingPrice)
 	}
@@ -223,6 +241,7 @@ func (a *MT4Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 	var skips []string
 	emit, emit0 := 0, 0
 	missingPrice := 0
+	uncovered := map[int32]int{} // swap_type 原始值 → 命中符号数（WP1 计数日志）
 	for brokerSym, canon := range sm {
 		resp, err := a.mt4.SymbolParams(a.withSessionMD(ctx), &mt4pb.SymbolParamsRequest{Id: a.token, Symbol: brokerSym})
 		if err != nil {
@@ -246,6 +265,7 @@ func (a *MT4Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 		ex := si.GetEx()
 		mode := mt4SwapMode(ex.GetSwapType(), ex.GetSwapEnable(), ex.GetSwapLong(), ex.GetSwapShort())
 		if mode == SwapModeUncalibrated {
+			uncovered[ex.GetSwapType()]++
 			if ex.GetSwapEnable() == 0 {
 				skips = append(skips, brokerSym+": swap disabled with nonzero rates")
 			} else {
@@ -278,6 +298,7 @@ func (a *MT4Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 		}
 	}
 	swapPollSummary("mt4", a.venue, emit, emit0, skips)
+	swapUncoveredSummary("mt4", a.venue, uncovered)
 	if missingPrice > 0 {
 		return nil, fmt.Errorf("%w: %d symbol(s) lack venue quote", ErrSwapColdStart, missingPrice)
 	}
@@ -299,6 +320,28 @@ func swapPollSummary(src, venue string, emit, emit0 int, skips []string) {
 		return
 	}
 	log.Printf("[%s:%s] swap poll: emit=%d emit0=%d skip=%d [%s]", src, venue, emit, emit0, len(skips), strings.Join(skips, ", "))
+}
+
+// swapUncoveredSummary WP1 未覆盖 SwapType 计数汇总（禁静默）：
+// 有未覆盖类型时逐类型打印 `[swap] uncovered SwapType=%d count=%d`（对拍 aggregator-skip 计数纪律）。
+// 无未覆盖类型时零日志（探测面全覆盖=无事可报）。
+func swapUncoveredSummary(src, venue string, uncovered map[int32]int) {
+	if len(uncovered) == 0 {
+		return
+	}
+	// 排序输出（稳定日志序）
+	keys := make([]int32, 0, len(uncovered))
+	for k := range uncovered {
+		keys = append(keys, k)
+	}
+	for i := 1; i < len(keys); i++ {
+		for j := i; j > 0 && keys[j-1] > keys[j]; j-- {
+			keys[j-1], keys[j] = keys[j], keys[j-1]
+		}
+	}
+	for _, k := range keys {
+		log.Printf("[%s:%s] [swap] uncovered SwapType=%d count=%d", src, venue, k, uncovered[k])
+	}
 }
 
 // tradeModeFact 构造 trade_mode Fact（D-060 F3）：value=MT5 ENUM_SYMBOL_TRADE_MODE 枚举透传。

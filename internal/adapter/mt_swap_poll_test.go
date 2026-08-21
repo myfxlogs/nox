@@ -67,8 +67,9 @@ func countFacts(fs []fact.Fact, kind string) int {
 
 func TestMT5SwapFactsSkipObservability(t *testing.T) {
 	q := bus.New()
-	// EURUSD InPoints 归一需报价：预发一条本 venue 报价。
+	// EURUSD InPoints + XAUUSD SymInfo_s408（WP1 补齐=PerLotCurrency）归一均需报价。
 	q.Publish(bus.Quote{Symbol: "EURUSD", Venue: "v5", VenueType: "mt5", Bid: 1.1, Ask: 1.1001, Time: time.Now()})
+	q.Publish(bus.Quote{Symbol: "XAUUSD", Venue: "v5", VenueType: "mt5", Bid: 2000, Ask: 2000.1, Time: time.Now()})
 	a := &MT5Adapter{venue: "v5", mt5: &fakeMT5Client{params: map[string]*mt5pb.SymbolParamsReply{
 		// emit：正常 InPoints
 		"EURUSD": {Result: &mt5pb.SymbolParams{SymbolGroup: &mt5pb.SymGroup{
@@ -78,10 +79,10 @@ func TestMT5SwapFactsSkipObservability(t *testing.T) {
 		"BTCUSD": {Result: &mt5pb.SymbolParams{SymbolGroup: &mt5pb.SymGroup{
 			SwapType: mt5pb.SwapType_SwapType_SwapNone, TradeMode: mt5pb.TradeMode_TradeMode_Disabled,
 		}}},
-		// skip：SymInfo_s408 未标定（FxPro GOLD 实证形态）
+		// emit：SymInfo_s408 WP1 补齐=PerLotCurrency（标的货币额，FxPro GOLD 实证形态）
 		"XAUUSD": {Result: &mt5pb.SymbolParams{SymbolGroup: &mt5pb.SymGroup{
 			SwapType: mt5pb.SwapType_SwapType_SymInfo_s408, SwapLong: -67.9, SwapShort: 27, TradeMode: mt5pb.TradeMode_TradeMode_FullAccess,
-		}}},
+		}, SymbolInfo: &mt5pb.SymbolInfo{ContractSize: 100}}},
 		// skip：None+非零矛盾（PXBT 实证形态）
 		"ETHUSD": {Result: &mt5pb.SymbolParams{SymbolGroup: &mt5pb.SymGroup{
 			SwapType: mt5pb.SwapType_SwapType_SwapNone, SwapLong: 0.1, TradeMode: mt5pb.TradeMode_TradeMode_LongOnly,
@@ -105,10 +106,10 @@ func TestMT5SwapFactsSkipObservability(t *testing.T) {
 		t.Fatalf("SwapFacts: %v", err)
 	}
 
-	// 汇总行：emit=1 emit0=1 skip=4 + 原因列表（F1）。
+	// 汇总行：emit=2 emit0=1 skip=3 + 原因列表（F1）。
+	// WP1：XAUUSD SymInfo_s408 从 skip→emit（mode 2 补齐=PerLotCurrency）。
 	for _, want := range []string{
-		"[mt5:v5] swap poll: emit=1 emit0=1 skip=4",
-		"XAUUSD: uncalibrated mode 2",
+		"[mt5:v5] swap poll: emit=2 emit0=1 skip=3",
 		"ETHUSD: swap none with nonzero rates",
 		"NILUSD: result nil",
 		"NOGUSD: symbolGroup nil",
@@ -117,10 +118,15 @@ func TestMT5SwapFactsSkipObservability(t *testing.T) {
 			t.Errorf("summary log missing %q; got:\n%s", want, logOut)
 		}
 	}
+	// WP1：未覆盖计数日志——ETHUSD 是 None+非零矛盾（SwapType=0，矛盾数据=Uncalibrated），
+	// 计入 uncovered SwapType=0 count=1。
+	if !strings.Contains(logOut, "[mt5:v5] [swap] uncovered SwapType=0 count=1") {
+		t.Errorf("应有 uncovered SwapType=0 count=1 日志（ETHUSD 矛盾数据）；got:\n%s", logOut)
+	}
 
-	// swap Fact：emit 2 条 + emit0 2 条（零值对）。
-	if n := countFacts(fs, fact.KindSwapLong); n != 2 {
-		t.Errorf("swap_long facts = %d, want 2（emit+emit0）", n)
+	// swap Fact：emit 3 条（EURUSD+XAUUSD）+ emit0 1 条（BTCUSD 零值 long）。
+	if n := countFacts(fs, fact.KindSwapLong); n != 3 {
+		t.Errorf("swap_long facts = %d, want 3（emit×2+emit0×1）", n)
 	}
 	// trade_mode：emit/emit0/标定 skip 的符号都发；result=nil/symbolGroup=nil 无数据不发（F3）。
 	if n := countFacts(fs, fact.KindTradeMode); n != 4 {
@@ -170,6 +176,9 @@ func TestMT4SwapFactsSkipObservability(t *testing.T) {
 		"WTI: uncalibrated mode 9",
 		"ETHUSD: swap disabled with nonzero rates",
 		"NILUSD: result nil",
+		// WP1：未覆盖 SwapType 计数日志（WTI=9 + ETHUSD swap_type=2 disabled+非零矛盾）
+		"[mt4:v4] [swap] uncovered SwapType=2 count=1",
+		"[mt4:v4] [swap] uncovered SwapType=9 count=1",
 	} {
 		if !strings.Contains(logOut, want) {
 			t.Errorf("summary log missing %q; got:\n%s", want, logOut)
