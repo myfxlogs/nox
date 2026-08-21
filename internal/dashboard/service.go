@@ -667,6 +667,20 @@ func (s *Service) floorToStepQtyMin(venueKey, symbol string) float64 {
 	return 0.01
 }
 
+// QtyBelowMinStep H4.2：qty 低于 venue 最小可交易量（1 个 volume step）→ true。
+// 供 autotrade 扫描入口静默跳过用（不产 intent 不落 REJECTED——品种适配事实非风控事件）。
+// CEX 腿无 volume step 概念 → 返回 false（不跳过，由 floorToStepQty 兜底取整）。
+// qty <= 0 → true（无效量跳过）。
+func (s *Service) QtyBelowMinStep(venueKey, venueSymbol string, qty float64) bool {
+	if qty <= 0 {
+		return true
+	}
+	if !isMTVenue(venueKey) {
+		return false // CEX 腿无 volume step 概念
+	}
+	return qty < s.floorToStepQtyMin(venueKey, venueSymbol)
+}
+
 // floorToStepQty 按品种精度向下取整 qty（D-070 修复 Binance -1111 / MT5 Invalid volume）。
 // MT 腿：查 legVolumeStep（SymbolParams VolumeStep），未接线/未知用默认 0.01。
 // D-070 CFD 适配：取整后为 0 则回退到 1 个 step（最小可交易量），防 qty=0 无法交易。

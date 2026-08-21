@@ -289,3 +289,60 @@ func TestOppToProtoUSDDerivation(t *testing.T) {
 		t.Errorf("unwired per-lot want 0, got net=%v cost=%v", pb4.NetUsdPerLot, pb4.CostUsdPerLot)
 	}
 }
+
+// --- H4.2 QtyBelowMinStep 单测 ---
+
+// TestQtyBelowMinStep_MT5BelowStep MT5 qty 低于 volume step → true（静默跳过）。
+func TestQtyBelowMinStep_MT5BelowStep(t *testing.T) {
+	s := &Service{
+		legVolumeStep: func(_, _ string) (float64, bool) { return 0.01, true },
+	}
+	if !s.QtyBelowMinStep("529:mt5", "AUDJPYm", 0.005) {
+		t.Error("qty 0.005 < step 0.01 should be below min step")
+	}
+}
+
+// TestQtyBelowMinStep_MT5AtOrAboveStep MT5 qty >= volume step → false（不跳过）。
+func TestQtyBelowMinStep_MT5AtOrAboveStep(t *testing.T) {
+	s := &Service{
+		legVolumeStep: func(_, _ string) (float64, bool) { return 0.01, true },
+	}
+	if s.QtyBelowMinStep("529:mt5", "AUDJPYm", 0.01) {
+		t.Error("qty 0.01 == step 0.01 should NOT be below min step")
+	}
+	if s.QtyBelowMinStep("529:mt5", "AUDJPYm", 1.0) {
+		t.Error("qty 1.0 > step 0.01 should NOT be below min step")
+	}
+}
+
+// TestQtyBelowMinStep_MT5UnknownStep MT5 未接线 volume step → 默认 0.01。
+func TestQtyBelowMinStep_MT5UnknownStep(t *testing.T) {
+	s := &Service{} // legVolumeStep=nil
+	if !s.QtyBelowMinStep("529:mt5", "AUDJPYm", 0.005) {
+		t.Error("qty 0.005 < default step 0.01 should be below min step (unknown → default)")
+	}
+	if s.QtyBelowMinStep("529:mt5", "AUDJPYm", 0.02) {
+		t.Error("qty 0.02 > default step 0.01 should NOT be below min step (unknown → default)")
+	}
+}
+
+// TestQtyBelowMinStep_CEXNotApplicable CEX 腿无 volume step 概念 → false（不跳过）。
+func TestQtyBelowMinStep_CEXNotApplicable(t *testing.T) {
+	s := &Service{
+		legVolumeStep: func(_, _ string) (float64, bool) { return 0.01, true },
+	}
+	if s.QtyBelowMinStep("binance:spot", "BTCUSDT", 0.0001) {
+		t.Error("CEX leg should NOT be subject to MT volume step check")
+	}
+}
+
+// TestQtyBelowMinStep_ZeroOrNegative qty <= 0 → true（无效量跳过）。
+func TestQtyBelowMinStep_ZeroOrNegative(t *testing.T) {
+	s := &Service{}
+	if !s.QtyBelowMinStep("529:mt5", "AUDJPYm", 0) {
+		t.Error("qty=0 should be below min step (invalid)")
+	}
+	if !s.QtyBelowMinStep("529:mt5", "AUDJPYm", -1) {
+		t.Error("qty<0 should be below min step (invalid)")
+	}
+}
