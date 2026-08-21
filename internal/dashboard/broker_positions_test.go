@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -8,7 +9,8 @@ import (
 	"arb/internal/reconcile"
 )
 
-// TestBrokerPositionToProto_FreshFrame：新鲜帧 → current_price=mid、fresh=true、pnl 透传、is_arb 判别（D-051 WP3）。
+// TestBrokerPositionToProto_FreshFrame：新鲜帧 → current_price=mid、fresh=true、
+// F5：pnl 实时重算（qty×(mid−open)×dir 覆盖 venue 透传）、is_arb 判别（D-051 WP3）。
 func TestBrokerPositionToProto_FreshFrame(t *testing.T) {
 	o := reconcile.VenueOrder{
 		Venue: "277842155", VenueKey: "277842155:mt5", Ticket: "1001",
@@ -28,8 +30,10 @@ func TestBrokerPositionToProto_FreshFrame(t *testing.T) {
 	if !pb.Fresh {
 		t.Errorf("fresh frame fresh want true, got false")
 	}
-	if pb.Pnl != 12.34 {
-		t.Errorf("pnl passthrough want 12.34, got %v", pb.Pnl)
+	// F5：新鲜报价 → pnl 实时重算 = volume×(mid−open)×dir = 0.1×(1.1011−1.1000)×1 ≈ 0.00011
+	wantPnl := 0.1 * (1.1011 - 1.1000) * 1.0
+	if math.Abs(pb.Pnl-wantPnl) > 1e-9 {
+		t.Errorf("F5 pnl realtime want %v, got %v", wantPnl, pb.Pnl)
 	}
 	if pb.Swap != -0.5 || pb.Commission != 0.6 {
 		t.Errorf("swap/commission passthrough want -0.5/0.6, got %v/%v", pb.Swap, pb.Commission)

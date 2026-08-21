@@ -113,6 +113,18 @@ const (
 	// DashboardServiceListDailyIncomeProcedure is the fully-qualified name of the DashboardService's
 	// ListDailyIncome RPC.
 	DashboardServiceListDailyIncomeProcedure = "/arb.dashboard.v1.DashboardService/ListDailyIncome"
+	// DashboardServiceGetPnlAnchorProcedure is the fully-qualified name of the DashboardService's
+	// GetPnlAnchor RPC.
+	DashboardServiceGetPnlAnchorProcedure = "/arb.dashboard.v1.DashboardService/GetPnlAnchor"
+	// DashboardServiceResetPnlAnchorProcedure is the fully-qualified name of the DashboardService's
+	// ResetPnlAnchor RPC.
+	DashboardServiceResetPnlAnchorProcedure = "/arb.dashboard.v1.DashboardService/ResetPnlAnchor"
+	// DashboardServiceListKBEntriesProcedure is the fully-qualified name of the DashboardService's
+	// ListKBEntries RPC.
+	DashboardServiceListKBEntriesProcedure = "/arb.dashboard.v1.DashboardService/ListKBEntries"
+	// DashboardServiceGetKBEntryProcedure is the fully-qualified name of the DashboardService's
+	// GetKBEntry RPC.
+	DashboardServiceGetKBEntryProcedure = "/arb.dashboard.v1.DashboardService/GetKBEntry"
 	// DashboardServiceSearchBrokerProcedure is the fully-qualified name of the DashboardService's
 	// SearchBroker RPC.
 	DashboardServiceSearchBrokerProcedure = "/arb.dashboard.v1.DashboardService/SearchBroker"
@@ -214,6 +226,12 @@ type DashboardServiceClient interface {
 	ListPersonalPositions(context.Context, *connect.Request[v1.ListPersonalPositionsRequest]) (*connect.Response[v1.ListPersonalPositionsResponse], error)
 	AddDailyIncome(context.Context, *connect.Request[v1.AddDailyIncomeRequest]) (*connect.Response[v1.AddDailyIncomeResponse], error)
 	ListDailyIncome(context.Context, *connect.Request[v1.ListDailyIncomeRequest]) (*connect.Response[v1.ListDailyIncomeResponse], error)
+	// 盈亏统计起点（F4：anchor 重置，业主选 A「不删历史」）
+	GetPnlAnchor(context.Context, *connect.Request[v1.GetPnlAnchorRequest]) (*connect.Response[v1.GetPnlAnchorResponse], error)
+	ResetPnlAnchor(context.Context, *connect.Request[v1.ResetPnlAnchorRequest]) (*connect.Response[v1.ResetPnlAnchorResponse], error)
+	// 经验库只读浏览（F8：读 docs/经验库/索引.md + 条目全文）
+	ListKBEntries(context.Context, *connect.Request[v1.ListKBEntriesRequest]) (*connect.Response[v1.ListKBEntriesResponse], error)
+	GetKBEntry(context.Context, *connect.Request[v1.GetKBEntryRequest]) (*connect.Response[v1.GetKBEntryResponse], error)
 	// Broker 管理（认证后，运行时 MT4/MT5 连接管理）
 	SearchBroker(context.Context, *connect.Request[v1.SearchBrokerRequest]) (*connect.Response[v1.SearchBrokerResponse], error)
 	AddBroker(context.Context, *connect.Request[v1.AddBrokerRequest]) (*connect.Response[v1.AddBrokerResponse], error)
@@ -416,6 +434,30 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("ListDailyIncome")),
 			connect.WithClientOptions(opts...),
 		),
+		getPnlAnchor: connect.NewClient[v1.GetPnlAnchorRequest, v1.GetPnlAnchorResponse](
+			httpClient,
+			baseURL+DashboardServiceGetPnlAnchorProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("GetPnlAnchor")),
+			connect.WithClientOptions(opts...),
+		),
+		resetPnlAnchor: connect.NewClient[v1.ResetPnlAnchorRequest, v1.ResetPnlAnchorResponse](
+			httpClient,
+			baseURL+DashboardServiceResetPnlAnchorProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ResetPnlAnchor")),
+			connect.WithClientOptions(opts...),
+		),
+		listKBEntries: connect.NewClient[v1.ListKBEntriesRequest, v1.ListKBEntriesResponse](
+			httpClient,
+			baseURL+DashboardServiceListKBEntriesProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListKBEntries")),
+			connect.WithClientOptions(opts...),
+		),
+		getKBEntry: connect.NewClient[v1.GetKBEntryRequest, v1.GetKBEntryResponse](
+			httpClient,
+			baseURL+DashboardServiceGetKBEntryProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("GetKBEntry")),
+			connect.WithClientOptions(opts...),
+		),
 		searchBroker: connect.NewClient[v1.SearchBrokerRequest, v1.SearchBrokerResponse](
 			httpClient,
 			baseURL+DashboardServiceSearchBrokerProcedure,
@@ -574,6 +616,10 @@ type dashboardServiceClient struct {
 	listPersonalPositions  *connect.Client[v1.ListPersonalPositionsRequest, v1.ListPersonalPositionsResponse]
 	addDailyIncome         *connect.Client[v1.AddDailyIncomeRequest, v1.AddDailyIncomeResponse]
 	listDailyIncome        *connect.Client[v1.ListDailyIncomeRequest, v1.ListDailyIncomeResponse]
+	getPnlAnchor           *connect.Client[v1.GetPnlAnchorRequest, v1.GetPnlAnchorResponse]
+	resetPnlAnchor         *connect.Client[v1.ResetPnlAnchorRequest, v1.ResetPnlAnchorResponse]
+	listKBEntries          *connect.Client[v1.ListKBEntriesRequest, v1.ListKBEntriesResponse]
+	getKBEntry             *connect.Client[v1.GetKBEntryRequest, v1.GetKBEntryResponse]
 	searchBroker           *connect.Client[v1.SearchBrokerRequest, v1.SearchBrokerResponse]
 	addBroker              *connect.Client[v1.AddBrokerRequest, v1.AddBrokerResponse]
 	removeBroker           *connect.Client[v1.RemoveBrokerRequest, v1.RemoveBrokerResponse]
@@ -732,6 +778,26 @@ func (c *dashboardServiceClient) ListDailyIncome(ctx context.Context, req *conne
 	return c.listDailyIncome.CallUnary(ctx, req)
 }
 
+// GetPnlAnchor calls arb.dashboard.v1.DashboardService.GetPnlAnchor.
+func (c *dashboardServiceClient) GetPnlAnchor(ctx context.Context, req *connect.Request[v1.GetPnlAnchorRequest]) (*connect.Response[v1.GetPnlAnchorResponse], error) {
+	return c.getPnlAnchor.CallUnary(ctx, req)
+}
+
+// ResetPnlAnchor calls arb.dashboard.v1.DashboardService.ResetPnlAnchor.
+func (c *dashboardServiceClient) ResetPnlAnchor(ctx context.Context, req *connect.Request[v1.ResetPnlAnchorRequest]) (*connect.Response[v1.ResetPnlAnchorResponse], error) {
+	return c.resetPnlAnchor.CallUnary(ctx, req)
+}
+
+// ListKBEntries calls arb.dashboard.v1.DashboardService.ListKBEntries.
+func (c *dashboardServiceClient) ListKBEntries(ctx context.Context, req *connect.Request[v1.ListKBEntriesRequest]) (*connect.Response[v1.ListKBEntriesResponse], error) {
+	return c.listKBEntries.CallUnary(ctx, req)
+}
+
+// GetKBEntry calls arb.dashboard.v1.DashboardService.GetKBEntry.
+func (c *dashboardServiceClient) GetKBEntry(ctx context.Context, req *connect.Request[v1.GetKBEntryRequest]) (*connect.Response[v1.GetKBEntryResponse], error) {
+	return c.getKBEntry.CallUnary(ctx, req)
+}
+
 // SearchBroker calls arb.dashboard.v1.DashboardService.SearchBroker.
 func (c *dashboardServiceClient) SearchBroker(ctx context.Context, req *connect.Request[v1.SearchBrokerRequest]) (*connect.Response[v1.SearchBrokerResponse], error) {
 	return c.searchBroker.CallUnary(ctx, req)
@@ -874,6 +940,12 @@ type DashboardServiceHandler interface {
 	ListPersonalPositions(context.Context, *connect.Request[v1.ListPersonalPositionsRequest]) (*connect.Response[v1.ListPersonalPositionsResponse], error)
 	AddDailyIncome(context.Context, *connect.Request[v1.AddDailyIncomeRequest]) (*connect.Response[v1.AddDailyIncomeResponse], error)
 	ListDailyIncome(context.Context, *connect.Request[v1.ListDailyIncomeRequest]) (*connect.Response[v1.ListDailyIncomeResponse], error)
+	// 盈亏统计起点（F4：anchor 重置，业主选 A「不删历史」）
+	GetPnlAnchor(context.Context, *connect.Request[v1.GetPnlAnchorRequest]) (*connect.Response[v1.GetPnlAnchorResponse], error)
+	ResetPnlAnchor(context.Context, *connect.Request[v1.ResetPnlAnchorRequest]) (*connect.Response[v1.ResetPnlAnchorResponse], error)
+	// 经验库只读浏览（F8：读 docs/经验库/索引.md + 条目全文）
+	ListKBEntries(context.Context, *connect.Request[v1.ListKBEntriesRequest]) (*connect.Response[v1.ListKBEntriesResponse], error)
+	GetKBEntry(context.Context, *connect.Request[v1.GetKBEntryRequest]) (*connect.Response[v1.GetKBEntryResponse], error)
 	// Broker 管理（认证后，运行时 MT4/MT5 连接管理）
 	SearchBroker(context.Context, *connect.Request[v1.SearchBrokerRequest]) (*connect.Response[v1.SearchBrokerResponse], error)
 	AddBroker(context.Context, *connect.Request[v1.AddBrokerRequest]) (*connect.Response[v1.AddBrokerResponse], error)
@@ -1072,6 +1144,30 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("ListDailyIncome")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceGetPnlAnchorHandler := connect.NewUnaryHandler(
+		DashboardServiceGetPnlAnchorProcedure,
+		svc.GetPnlAnchor,
+		connect.WithSchema(dashboardServiceMethods.ByName("GetPnlAnchor")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceResetPnlAnchorHandler := connect.NewUnaryHandler(
+		DashboardServiceResetPnlAnchorProcedure,
+		svc.ResetPnlAnchor,
+		connect.WithSchema(dashboardServiceMethods.ByName("ResetPnlAnchor")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceListKBEntriesHandler := connect.NewUnaryHandler(
+		DashboardServiceListKBEntriesProcedure,
+		svc.ListKBEntries,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListKBEntries")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceGetKBEntryHandler := connect.NewUnaryHandler(
+		DashboardServiceGetKBEntryProcedure,
+		svc.GetKBEntry,
+		connect.WithSchema(dashboardServiceMethods.ByName("GetKBEntry")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceSearchBrokerHandler := connect.NewUnaryHandler(
 		DashboardServiceSearchBrokerProcedure,
 		svc.SearchBroker,
@@ -1254,6 +1350,14 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceAddDailyIncomeHandler.ServeHTTP(w, r)
 		case DashboardServiceListDailyIncomeProcedure:
 			dashboardServiceListDailyIncomeHandler.ServeHTTP(w, r)
+		case DashboardServiceGetPnlAnchorProcedure:
+			dashboardServiceGetPnlAnchorHandler.ServeHTTP(w, r)
+		case DashboardServiceResetPnlAnchorProcedure:
+			dashboardServiceResetPnlAnchorHandler.ServeHTTP(w, r)
+		case DashboardServiceListKBEntriesProcedure:
+			dashboardServiceListKBEntriesHandler.ServeHTTP(w, r)
+		case DashboardServiceGetKBEntryProcedure:
+			dashboardServiceGetKBEntryHandler.ServeHTTP(w, r)
 		case DashboardServiceSearchBrokerProcedure:
 			dashboardServiceSearchBrokerHandler.ServeHTTP(w, r)
 		case DashboardServiceAddBrokerProcedure:
@@ -1411,6 +1515,22 @@ func (UnimplementedDashboardServiceHandler) AddDailyIncome(context.Context, *con
 
 func (UnimplementedDashboardServiceHandler) ListDailyIncome(context.Context, *connect.Request[v1.ListDailyIncomeRequest]) (*connect.Response[v1.ListDailyIncomeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListDailyIncome is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) GetPnlAnchor(context.Context, *connect.Request[v1.GetPnlAnchorRequest]) (*connect.Response[v1.GetPnlAnchorResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetPnlAnchor is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ResetPnlAnchor(context.Context, *connect.Request[v1.ResetPnlAnchorRequest]) (*connect.Response[v1.ResetPnlAnchorResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ResetPnlAnchor is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListKBEntries(context.Context, *connect.Request[v1.ListKBEntriesRequest]) (*connect.Response[v1.ListKBEntriesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListKBEntries is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) GetKBEntry(context.Context, *connect.Request[v1.GetKBEntryRequest]) (*connect.Response[v1.GetKBEntryResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetKBEntry is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) SearchBroker(context.Context, *connect.Request[v1.SearchBrokerRequest]) (*connect.Response[v1.SearchBrokerResponse], error) {

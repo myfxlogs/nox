@@ -37,31 +37,44 @@ type BrokerPositionMonitor struct {
 	venues map[string]venueState // venueKey → 状态
 	cache  []*v1.BrokerPosition  // 最近构建的视图（含离线快照）
 	lastFP string                // 上次广播指纹（变更检测）
+
+	// F5：quote ticker 节流间隔（浮盈实时重算，不查 venue）。
+	quoteTick time.Duration
 }
 
 // NewBrokerPositionMonitor 创建 monitor。interval 为轮询周期（ARB_BROKER_POS_POLL_MS）。
-func NewBrokerPositionMonitor(bm *BrokerManager, qbus *bus.QuoteBus, freshTTL, interval time.Duration, topic *bus.Topic[*v1.BrokerPositionSnapshot]) *BrokerPositionMonitor {
+// F5：quoteTick 为浮盈实时重算节流间隔（默认 1s，不查 venue 只重算浮盈）。
+func NewBrokerPositionMonitor(bm *BrokerManager, qbus *bus.QuoteBus, freshTTL, interval, quoteTick time.Duration, topic *bus.Topic[*v1.BrokerPositionSnapshot]) *BrokerPositionMonitor {
+	if quoteTick <= 0 {
+		quoteTick = time.Second
+	}
 	return &BrokerPositionMonitor{
-		bm:       bm,
-		qbus:     qbus,
-		freshTTL: freshTTL,
-		interval: interval,
-		topic:    topic,
-		venues:   make(map[string]venueState),
+		bm:        bm,
+		qbus:      qbus,
+		freshTTL:  freshTTL,
+		interval:  interval,
+		topic:     topic,
+		venues:    make(map[string]venueState),
+		quoteTick: quoteTick,
 	}
 }
 
 // Run 轮询直至 ctx 取消。启动即轮询一次（首个快照立即可用）。
+// F5：双循环——poll ticker（仓位增减/开平仓，不缩间隔）+ quote ticker（浮盈实时重算，节流 1s）。
 func (m *BrokerPositionMonitor) Run(ctx context.Context) {
 	m.poll(ctx)
-	ticker := time.NewTicker(m.interval)
-	defer ticker.Stop()
+	pollTicker := time.NewTicker(m.interval)
+	quoteTicker := time.NewTicker(m.quoteTick) // F5：浮盈节流
+	defer pollTicker.Stop()
+	defer quoteTicker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-pollTicker.C:
 			m.poll(ctx)
+		case <-quoteTicker.C:
+			m.requote(ctx) // F5：只重算浮盈不查 venue
 		}
 	}
 }
@@ -115,6 +128,33 @@ func (m *BrokerPositionMonitor) poll(ctx context.Context) {
 			m.topic.Publish(&v1.BrokerPositionSnapshot{Positions: view})
 		}
 		log.Printf("[broker-mon] snapshot changed: %d positions", len(view))
+	}
+}
+
+// requote F5：quote ticker 节流回调——只重算浮盈（用最新 qbus 报价）不查 venue。
+// 仓位增减/开平仓仍走 poll（不缩间隔）；此处仅价格与浮盈跳动。
+// 无持仓或无新鲜报价 → 静默跳过（不空广播）。
+func (m *BrokerPositionMonitor) requote(ctx context.Context) {
+	m.mu.RLock()
+	if len(m.venues) == 0 {
+		m.mu.RUnlock()
+		return
+	}
+	m.mu.RUnlock()
+
+	view := m.build(ctx)
+	fp := fingerprint(view)
+
+	m.mu.Lock()
+	m.cache = view
+	changed := fp != m.lastFP
+	if changed {
+		m.lastFP = fp
+	}
+	m.mu.Unlock()
+
+	if changed && m.topic != nil {
+		m.topic.Publish(&v1.BrokerPositionSnapshot{Positions: view})
 	}
 }
 

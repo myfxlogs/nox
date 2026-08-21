@@ -20,7 +20,7 @@ type fakeVenueQuerier struct {
 	err    error
 }
 
-func (f *fakeVenueQuerier) VenueKey() string                          { return f.key }
+func (f *fakeVenueQuerier) VenueKey() string { return f.key }
 func (f *fakeVenueQuerier) QueryOpenedOrders(context.Context) ([]reconcile.VenueOrder, error) {
 	return f.orders, f.err
 }
@@ -33,7 +33,7 @@ func newMonTest(t *testing.T, q *fakeVenueQuerier) (*BrokerPositionMonitor, *bus
 	bm.AddStaticQuerier("testvenue", q)
 	topic := bus.NewTopic[*v1.BrokerPositionSnapshot]()
 	ch, _ := topic.Subscribe()
-	m := NewBrokerPositionMonitor(bm, qbus, time.Minute, time.Millisecond, topic)
+	m := NewBrokerPositionMonitor(bm, qbus, time.Minute, time.Millisecond, time.Second, topic)
 	return m, topic, ch
 }
 

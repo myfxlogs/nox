@@ -854,7 +854,10 @@ func (s *Service) ListAccounts(ctx context.Context, req *connect.Request[v1.List
 // brokerPositionToProto 组装单个 venue 持仓响应。
 // current_price：canonical 已解析且报价帧新鲜（now.Sub ≤ freshTTL）→ mid，fresh=true；否则 0/false（诚实空态）。
 // is_arb：comment 前缀 = exec.OrderComment（复用 reconcile.isARBOrder 语义，D-032）。
-// pnl 为 venue 权威浮盈（Order.Profit）透传，前端不自算（D-043）。
+// pnl：F5 实时化——有新鲜报价时用 qbus 重算（qty × (现价 − 开仓价) × 方向系数）覆盖 venue 透传值；
+//
+//	无报价/陈旧 → 保持 venue 权威浮盈（Order.Profit 透传，D-043）+ fresh=false 诚实降级。
+//
 // venueOnline=false = 离线 venue 的最近快照（非实时，诚实标注，D-052）。
 func brokerPositionToProto(o reconcile.VenueOrder, canonical string, price bus.Quote, hasPrice bool, venueOnline bool, freshTTL time.Duration, now time.Time) *v1.BrokerPosition {
 	pb := &v1.BrokerPosition{
@@ -866,7 +869,7 @@ func brokerPositionToProto(o reconcile.VenueOrder, canonical string, price bus.Q
 		Side:        o.Side,
 		Volume:      o.Volume,
 		OpenPrice:   o.OpenPrice,
-		Pnl:         o.Profit,
+		Pnl:         o.Profit, // 默认 venue 透传，新鲜报价时下方覆盖
 		Swap:        o.Swap,
 		Commission:  o.Commission,
 		Comment:     o.Comment,
@@ -875,8 +878,15 @@ func brokerPositionToProto(o reconcile.VenueOrder, canonical string, price bus.Q
 		VenueOnline: venueOnline,
 	}
 	if hasPrice && now.Sub(price.Time) <= freshTTL {
-		pb.CurrentPrice = (price.Bid + price.Ask) / 2
+		mid := (price.Bid + price.Ask) / 2
+		pb.CurrentPrice = mid
 		pb.Fresh = true
+		// F5：新鲜报价 → 实时重算浮盈（BUY: +qty×(mid−open)；SELL: +qty×(open−mid)）
+		dir := 1.0
+		if o.Side == "SELL" {
+			dir = -1.0
+		}
+		pb.Pnl = o.Volume * (mid - o.OpenPrice) * dir
 	}
 	if !o.OpenedAt.IsZero() {
 		pb.OpenedAt = timestamppb.New(o.OpenedAt)
@@ -1080,6 +1090,38 @@ func (s *Service) ListDailyIncome(ctx context.Context, req *connect.Request[v1.L
 		items = append(items, item)
 	}
 	return connect.NewResponse(&v1.ListDailyIncomeResponse{Items: items}), nil
+}
+
+// --- 盈亏统计起点（F4：anchor 重置，业主选 A「不删历史」） ---
+
+// GetPnlAnchor 返回盈亏统计起点 + 累计已实现（closed_at >= anchor 后端口径）。
+// 前端「累计已实现」改用此后端口径（替代前端全量聚合，支持 anchor 重置）。
+// 「今日已实现」不受 anchor 影响（当日口径，前端聚合不变）。
+func (s *Service) GetPnlAnchor(ctx context.Context, req *connect.Request[v1.GetPnlAnchorRequest]) (*connect.Response[v1.GetPnlAnchorResponse], error) {
+	anchor, err := s.store.GetPnlAnchor(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	realized, err := s.store.RealizedPnlSinceAnchor(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&v1.GetPnlAnchorResponse{
+		Anchor:              timestamppb.New(anchor),
+		RealizedSinceAnchor: realized,
+	}), nil
+}
+
+// ResetPnlAnchor 重置盈亏统计起点为 now()（业主点「清零」→ anchor=now()）。
+// 历史 CLOSED 持仓不删除（业主选 A「不删历史」）；今日口径与停机状态不变。
+func (s *Service) ResetPnlAnchor(ctx context.Context, req *connect.Request[v1.ResetPnlAnchorRequest]) (*connect.Response[v1.ResetPnlAnchorResponse], error) {
+	anchor, err := s.store.ResetPnlAnchor(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&v1.ResetPnlAnchorResponse{
+		Anchor: timestamppb.New(anchor),
+	}), nil
 }
 
 // dailyIncomeToProto 组装单条每日收益：income_usd = energy×price + voting×price + interest（price 无值按 0）。
