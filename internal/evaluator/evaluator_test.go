@@ -36,9 +36,9 @@ func TestEvaluateCrossVenue(t *testing.T) {
 	if r.Rating != RatingGrab {
 		t.Fatalf("Rating = %s, want grab", r.Rating)
 	}
-	// net = 8.18 - 0.6(佣金) - 1.0*2(滑点) = 5.58（不再减 0.5+0.5 点差）
-	if r.NetBps < 5.5 || r.NetBps > 5.7 {
-		t.Fatalf("NetBps = %v, want ~5.58", r.NetBps)
+	// D-078 round-trip：net = 8.18 - (0.6+2.0)*2 = 8.18 - 5.2 = 2.98（开仓+平仓各付佣金+滑点）
+	if r.NetBps < 2.8 || r.NetBps > 3.2 {
+		t.Fatalf("NetBps = %v, want ~2.98 (round-trip cost)", r.NetBps)
 	}
 	if r.BreakevenDays != nil {
 		t.Fatal("CrossVenue should not have breakeven_days")
@@ -68,9 +68,9 @@ func TestEvaluateCarry(t *testing.T) {
 	if r.BreakevenDays == nil {
 		t.Fatal("Carry should have breakeven_days")
 	}
-	// dailyNetBps = 5.5/100×10⁴/365 ≈ 1.507; oneTime = 1.0(点差)+0.6(佣金)+2.0(滑点) = 3.6; bd ≈ 2.39
-	if *r.BreakevenDays < 2.3 || *r.BreakevenDays > 2.5 {
-		t.Fatalf("BreakevenDays = %v, want ~2.39", *r.BreakevenDays)
+	// D-078 round-trip: dailyNetBps = 5.5/100×10⁴/365 ≈ 1.507; oneTime = (1.0+0.6+2.0)*2 = 7.2; bd ≈ 4.78
+	if *r.BreakevenDays < 4.6 || *r.BreakevenDays > 5.0 {
+		t.Fatalf("BreakevenDays = %v, want ~4.78 (round-trip cost)", *r.BreakevenDays)
 	}
 }
 
@@ -103,11 +103,37 @@ func TestEvaluateTrap(t *testing.T) {
 		Canonical: "X",
 		VenueBuy:  "a:mt4",
 		VenueSell: "b:mt4",
-		GrossBps:  1.0, // 1.0 - 0.6 - 2.0 < 0
+		GrossBps:  1.0, // 1.0 - (0.6+2.0)*2 < 0
 		QuoteTime: time.Now().UnixMilli(),
 	}
 	r := Evaluate(c, baseCfg(), 0.5, 0.5, 0.6, 0)
 	if r.Rating != RatingTrap {
 		t.Fatalf("Rating = %s, want trap (net <= 0)", r.Rating)
+	}
+}
+
+// TestEvaluateCrossVenueRoundTrip D-078：round-trip 成本验证——低 gross 机会被正确判 trap。
+// 旧模型 gross=5 只扣 2.6 → net=2.4（grab）；round-trip 后扣 5.2 → net=-0.2（trap）。
+func TestEvaluateCrossVenueRoundTrip(t *testing.T) {
+	c := detector.Candidate{
+		Type:      detector.TypeCrossVenue,
+		Canonical: "EURUSD",
+		VenueBuy:  "a:mt4",
+		VenueSell: "b:mt4",
+		GrossBps:  5.0, // 5.0 - (0.6+2.0)*2 = -0.2 → trap
+		QuoteTime: time.Now().UnixMilli(),
+	}
+	r := Evaluate(c, baseCfg(), 0.5, 0.5, 0.6, 0)
+	if r.Rating != RatingTrap {
+		t.Fatalf("Rating = %s, want trap (gross 5bps < round-trip cost 5.2bps)", r.Rating)
+	}
+	// gross=10 → net = 10 - 5.2 = 4.8 → grab（round-trip 后仍盈利）
+	c.GrossBps = 10.0
+	r2 := Evaluate(c, baseCfg(), 0.5, 0.5, 0.6, 0)
+	if r2.Rating != RatingGrab {
+		t.Fatalf("Rating = %s, want grab (gross 10bps > round-trip cost 5.2bps)", r2.Rating)
+	}
+	if r2.NetBps < 4.7 || r2.NetBps > 4.9 {
+		t.Fatalf("NetBps = %v, want ~4.8", r2.NetBps)
 	}
 }

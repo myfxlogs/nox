@@ -56,6 +56,9 @@ type Result struct {
 // D-036 单位约定：息差型（carry/funding）的 gross/net 为年化百分点（5.0=5%，D-031），
 // 一次性成本（点差/佣金/滑点）为 bps，只进 breakeven_days。价差型（cross）的 gross 为
 // 一次性 bps 且已含双边点差（检测器用可执行价计算）→ 净收益不再扣 spread（D-035 双重计算修正）。
+//
+// D-078 round-trip 成本修正：开仓+平仓各付一轮 commission+slippage（+spread for 息差型），
+// 旧模型只算开仓成本导致净收益虚高——实证 31 笔 CROSS_VENUE avg gross 46bps 但 avg realized -$1.19。
 func Evaluate(c detector.Candidate, cfg Config, spreadBuy, spreadSell, commissionBps, avg30dBps float64) *Result {
 	spreadCost := spreadBuy + spreadSell
 	slippageCost := cfg.SlippageBps * 2 // 两腿各 1 bps
@@ -68,12 +71,14 @@ func Evaluate(c detector.Candidate, cfg Config, spreadBuy, spreadSell, commissio
 	switch c.Type {
 	case detector.TypeCrossVenue:
 		// 价差型：一次性 bps，gross 已含双边点差 → 不再扣 spread（D-035）
-		netBps = grossBps - commissionBps - slippageCost
+		// D-078 round-trip：开仓+平仓各付 commission+slippage
+		netBps = grossBps - (commissionBps+slippageCost)*2
 	case detector.TypeFundingHedge, detector.TypeCarry, detector.TypePerpFunding:
 		// 息差型：净年化（百分点）= gross − 资金机会成本（D-029/D-036）
 		netBps = grossBps - cfg.MarginRateAnnual
 		// 一次性摩擦只进 breakeven_days：按净年化推日息差（bps_daily = pct/100×10⁴/365）
-		oneTimeCost := spreadCost + commissionBps + slippageCost
+		// D-078 round-trip：开仓+平仓各付 spread+commission+slippage
+		oneTimeCost := (spreadCost + commissionBps + slippageCost) * 2
 		dailyNetBps := netBps / 100 * 10000 / 365
 		if dailyNetBps > 0 {
 			bd := oneTimeCost / dailyNetBps

@@ -52,5 +52,5 @@ func TestNewRequiresResolver(t *testing.T) {
 			t.Fatal("expected panic on nil commission resolver")
 		}
 	}()
-	New(nil, nil, evaluator.Config{}, nil, nil, nil, time.Second, nil, 0)
+	New(nil, nil, evaluator.Config{}, nil, nil, nil, time.Second, nil, 0, 0)
 }
