@@ -764,6 +764,7 @@ func (s *Service) ClosePosition(ctx context.Context, req *connect.Request[v1.Clo
 // ListBrokerPositions 返回 Broker 实持仓视图（D-052 monitor 单一真相源）。
 // refresh=true 强制触发一次 venue 轮询后返回（前端「刷新」/平仓后立即刷新）；否则返回最近缓存（≤ 轮询周期）。
 // canonical 解析 + 现价计算均在后端（D-043 零信任：前端只渲染）；离线 venue 保留最近快照并 venue_online=false。
+// S4（D-073+）：返回前用 OPEN legs 的 (venueKey, order_id)→position_id 索引标注 position_id（0=未关联孤儿订单）。
 func (s *Service) ListBrokerPositions(ctx context.Context, req *connect.Request[v1.ListBrokerPositionsRequest]) (*connect.Response[v1.ListBrokerPositionsResponse], error) {
 	if s.bpm == nil {
 		return connect.NewResponse(&v1.ListBrokerPositionsResponse{}), nil
@@ -774,7 +775,43 @@ func (s *Service) ListBrokerPositions(ctx context.Context, req *connect.Request[
 	} else {
 		out = s.bpm.Snapshot()
 	}
+	// S4：标注 position_id（OPEN legs venue+order_id → position_id 索引）
+	annotatePositionID(ctx, s.store, out)
 	return connect.NewResponse(&v1.ListBrokerPositionsResponse{Positions: out}), nil
+}
+
+// annotatePositionID 用 OPEN position legs 构造 (venueKey, ticket)→position_id 索引，标注 broker 持仓。
+// 匹配口径唯一在此（P3）：leg.Venue == bp.VenueKey && leg.OrderID == bp.Ticket。
+// 查询失败不阻断（position_id 全 0，前端显示「未关联」）——fail-open，视图可用优先。
+func annotatePositionID(ctx context.Context, store *pgstore.Store, bps []*v1.BrokerPosition) {
+	if len(bps) == 0 || store == nil {
+		return
+	}
+	openPositions, err := store.ListPositions(ctx, "OPEN", 200, 0)
+	if err != nil {
+		return
+	}
+	// (venueKey, ticket) → position_id
+	idx := make(map[string]int64, len(openPositions)*2)
+	for _, p := range openPositions {
+		legs, err := store.ListPositionLegs(ctx, p.ID)
+		if err != nil {
+			continue
+		}
+		for _, l := range legs {
+			if l.Phase == "OPEN" && l.OrderID != "" {
+				idx[l.Venue+"\x00"+l.OrderID] = p.ID
+			}
+		}
+	}
+	annotateWithIndex(bps, idx)
+}
+
+// annotateWithIndex 纯函数：用预建索引标注 broker 持仓 position_id（可单测，无 DB 依赖）。
+func annotateWithIndex(bps []*v1.BrokerPosition, idx map[string]int64) {
+	for _, bp := range bps {
+		bp.PositionId = idx[bp.VenueKey+"\x00"+bp.Ticket]
+	}
 }
 
 // CloseBrokerPosition 经注册执行器平仓一条 venue 持仓（人工确认后，§1）。
@@ -1165,6 +1202,8 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 			if !ok {
 				return nil
 			}
+			// S4：流推送也标注 position_id（与拉路径同源）
+			annotatePositionID(ctx, s.store, v.Positions)
 			if err := stream.Send(&v1.StreamUpdatesResponse{
 				Update: &v1.StreamUpdatesResponse_BrokerPositions{
 					BrokerPositions: v,

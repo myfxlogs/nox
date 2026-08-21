@@ -3335,6 +3335,7 @@ type BrokerPosition struct {
 	OpenedAt      *timestamppb.Timestamp `protobuf:"bytes,16,opt,name=opened_at,json=openedAt,proto3" json:"opened_at,omitempty"`
 	Magic         int64                  `protobuf:"varint,17,opt,name=magic,proto3" json:"magic,omitempty"`                                // MT5 ExpertId / MT4 MagicNumber；0 = 无（手动单）
 	VenueOnline   bool                   `protobuf:"varint,18,opt,name=venue_online,json=venueOnline,proto3" json:"venue_online,omitempty"` // venue 在线状态；false = 最近快照（离线，非实时）
+	PositionId    int64                  `protobuf:"varint,19,opt,name=position_id,json=positionId,proto3" json:"position_id,omitempty"`    // S4：关联持仓组合 ID；0 = 未关联（孤儿订单）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3493,6 +3494,13 @@ func (x *BrokerPosition) GetVenueOnline() bool {
 		return x.VenueOnline
 	}
 	return false
+}
+
+func (x *BrokerPosition) GetPositionId() int64 {
+	if x != nil {
+		return x.PositionId
+	}
+	return 0
 }
 
 type ListBrokerPositionsRequest struct {
@@ -8314,7 +8322,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x06offset\x18\x03 \x01(\x05R\x06offset\"g\n" +
 	"\x15ListPositionsResponse\x128\n" +
 	"\tpositions\x18\x01 \x03(\v2\x1a.arb.dashboard.v1.PositionR\tpositions\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x05R\x05total\"\x80\x04\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\"\xa1\x04\n" +
 	"\x0eBrokerPosition\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x1b\n" +
 	"\tvenue_key\x18\x02 \x01(\tR\bvenueKey\x12\x16\n" +
@@ -8337,7 +8345,9 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x06is_arb\x18\x0f \x01(\bR\x05isArb\x127\n" +
 	"\topened_at\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\bopenedAt\x12\x14\n" +
 	"\x05magic\x18\x11 \x01(\x03R\x05magic\x12!\n" +
-	"\fvenue_online\x18\x12 \x01(\bR\vvenueOnline\"6\n" +
+	"\fvenue_online\x18\x12 \x01(\bR\vvenueOnline\x12\x1f\n" +
+	"\vposition_id\x18\x13 \x01(\x03R\n" +
+	"positionId\"6\n" +
 	"\x1aListBrokerPositionsRequest\x12\x18\n" +
 	"\arefresh\x18\x01 \x01(\bR\arefresh\"]\n" +
 	"\x1bListBrokerPositionsResponse\x12>\n" +
