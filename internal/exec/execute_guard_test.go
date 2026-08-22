@@ -68,7 +68,7 @@ func TestExecute_GuardMaxOpenPositions(t *testing.T) {
 
 	// 播种 1 条 OPEN 持仓，上限设 1 → 计数 1 ≥ 1 → 拒单。
 	if _, err := conn.Exec(ctx,
-		`INSERT INTO positions (opportunity_id, type, status, expected_net_bps) VALUES ('opp-seed','CROSS_EXCHANGE','OPEN',0)`); err != nil {
+		`INSERT INTO positions (opportunity_id, type, status, expected_net_bps) VALUES ('opp-seed','CROSS_VENUE','OPEN',0)`); err != nil {
 		t.Fatalf("seed position: %v", err)
 	}
 	p := &Pipeline{store: s, limits: RiskLimits{MaxOpenPositions: 1}}
@@ -98,7 +98,7 @@ func TestExecute_GuardDuplicate(t *testing.T) {
 
 	// 同机会已有 OPEN 持仓 → 拒重（守卫在任何 legs 触达前返回）。
 	if _, err := conn.Exec(ctx,
-		`INSERT INTO positions (opportunity_id, type, status, expected_net_bps) VALUES ('opp-x','CROSS_EXCHANGE','OPEN',0)`); err != nil {
+		`INSERT INTO positions (opportunity_id, type, status, expected_net_bps) VALUES ('opp-x','CROSS_VENUE','OPEN',0)`); err != nil {
 		t.Fatalf("seed position: %v", err)
 	}
 	p := &Pipeline{store: s, limits: RiskLimits{MaxOpenPositions: 10}}
@@ -110,7 +110,7 @@ func TestExecute_GuardDuplicate(t *testing.T) {
 	// 同机会 FAILED（可重入）→ 放行到建仓，不返回 ErrDuplicateExecution。
 	// legs=nil 不触达 registry，走 FAILED 收尾。
 	if _, err := conn.Exec(ctx,
-		`INSERT INTO positions (opportunity_id, type, status, expected_net_bps) VALUES ('opp-failed','CROSS_EXCHANGE','FAILED',0)`); err != nil {
+		`INSERT INTO positions (opportunity_id, type, status, expected_net_bps) VALUES ('opp-failed','CROSS_VENUE','FAILED',0)`); err != nil {
 		t.Fatalf("seed failed position: %v", err)
 	}
 	_, err = p.Execute(ctx, "opp-failed", "req-3", nil)

@@ -137,52 +137,20 @@ func evaluateElimination(in EliminationInput) (disable bool, reason string) {
 }
 
 // Gate 统一开仓门禁（D-072 §3.1）。三 goroutine 串行化。
-// D-080：combo→OPEN 防重集替代旧 tick 级 executed map（同组合在持仓期间不可重复开仓）。
+// D-080 R1：防重改 DB 实时派生——删内存 openCombos 集，每次 Submit 实时查 ListActivePositions
+// 派生组合键匹配。治手动路径旁路（service.go 直接调 pipeline.Execute 不经 gate 的开仓也能被防重）。
 type Gate struct {
-	mu         sync.Mutex
-	store      *pgstore.Store
-	cfg        Config
-	openCombos map[string]bool // combo key → 已有 OPEN/CLOSING 持仓
+	mu    sync.Mutex
+	store *pgstore.Store
+	cfg   Config
 }
 
 // NewGate 创建门禁。
 func NewGate(store *pgstore.Store, cfg Config) *Gate {
 	return &Gate{
-		store:      store,
-		cfg:        cfg,
-		openCombos: make(map[string]bool),
+		store: store,
+		cfg:   cfg,
 	}
-}
-
-// LoadOpenCombos 启动时从 DB 装载防重集（D-080 S1）。
-// 装载 OPENING/OPEN/LEGGED/CLOSING 四态持仓经 combo.FromOppID 派生组合键。
-// gate 串行（D-072）→ 调用后 Submit 前无并发竞态。
-func (g *Gate) LoadOpenCombos(ctx context.Context) {
-	for _, status := range []string{"OPENING", "OPEN", "LEGGED", "CLOSING"} {
-		positions, err := g.store.ListPositions(ctx, status, 500, 0)
-		if err != nil {
-			log.Printf("[autotrade] gate load open combos status=%s: %v (fail-open: 防重集可能不完整)", status, err)
-			continue
-		}
-		for _, p := range positions {
-			if p.OpportunityID == "" {
-				continue
-			}
-			g.openCombos[combo.FromOppID(p.OpportunityID)] = true
-		}
-	}
-	log.Printf("[autotrade] gate loaded %d open combos for dedup", len(g.openCombos))
-}
-
-// MarkComboClosed 平仓/失败后从防重集移除组合键（D-080 S1）。
-// 由 engine positionLoop 在成功平仓后调用。
-func (g *Gate) MarkComboClosed(oppID string) {
-	if oppID == "" {
-		return
-	}
-	g.mu.Lock()
-	delete(g.openCombos, combo.FromOppID(oppID))
-	g.mu.Unlock()
 }
 
 // Submit 统一开仓入口。全程持锁串行化（设计 §3.1）。
@@ -214,15 +182,25 @@ func (g *Gate) Submit(ctx context.Context, intent TradeIntent) GateResult {
 		return GateResult{Status: "REJECTED", Reason: "daily pnl check failed"}
 	}
 
-	// 检查 4: 持仓数（fail-closed：查询失败 = 拒绝）
-	openCount, err := g.store.CountOpenPositions(ctx)
+	// 检查 4+6: 活跃持仓数 + 同组合防重（D-080 R1：DB 实时派生，一条 SQL 替代 CountOpenPositions + 内存 openCombos）
+	// fail-closed：查询失败 = 拒绝（对齐检查 2-3 风格）
+	activePositions, err := g.store.ListActivePositions(ctx)
 	if err != nil {
-		g.rejectLog(ctx, intent, fmt.Sprintf("count open positions: %v", err))
-		return GateResult{Status: "REJECTED", Reason: "open positions check failed"}
+		g.rejectLog(ctx, intent, fmt.Sprintf("list active positions: %v", err))
+		return GateResult{Status: "REJECTED", Reason: "active positions check failed"}
 	}
-
-	// 检查 6: 同组合防重（D-080 S1：combo→OPEN 防重集替代旧 tick 级 executed map）
-	comboAlreadyOpen := g.openCombos[combo.FromOppID(intent.DedupKey)]
+	openCount := len(activePositions)
+	intentCombo := combo.FromOppID(intent.DedupKey)
+	comboAlreadyOpen := false
+	for _, p := range activePositions {
+		if p.OpportunityID == "" {
+			continue
+		}
+		if combo.MatchOppID(p.OpportunityID, intentCombo) {
+			comboAlreadyOpen = true
+			break
+		}
+	}
 
 	verdict := gateDecision(GateInput{
 		State:        state,
@@ -262,10 +240,6 @@ func (g *Gate) Submit(ctx context.Context, intent TradeIntent) GateResult {
 
 	// 执行
 	status, msg, posID := intent.Execute(ctx)
-	// D-080 S1：开仓成功（持仓已创建）→ 加入防重集；失败且无持仓 → 不加（允许重试）
-	if posID > 0 {
-		g.openCombos[combo.FromOppID(intent.DedupKey)] = true
-	}
 
 	logEntry.PositionID = nil
 	if posID > 0 {
