@@ -56,9 +56,7 @@ func TestLoadDefaults(t *testing.T) {
 	if c.LiqMMR != 0.005 {
 		t.Errorf("LiqMMR = %v, want 0.005", c.LiqMMR)
 	}
-	if c.NotifyMinNetBps != 0 {
-		t.Errorf("NotifyMinNetBps = %v, want 0", c.NotifyMinNetBps)
-	}
+	// 修复⑭ S3：NotifyMinNetBps 字段已退役（oppTopic 全量事件流），不再断言。
 	if c.StoreMinNetBps != 5.0 {
 		t.Errorf("StoreMinNetBps = %v, want 5.0 (D-078)", c.StoreMinNetBps)
 	}

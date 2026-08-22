@@ -66,9 +66,8 @@ type Config struct {
 	// 冷却外或无 CLOSED 记录 → 放行；0 = 关闭冷却（始终放行）。
 	SwapArbReentryCooldownDays int
 
-	// === 机会站内推送（D-050）===
-	// NotifyMinNetBps 机会推送提醒门槛（bps）；0 = 全部新机会都提醒（ARB_NOTIFY_MIN_NET_BPS）。
-	NotifyMinNetBps float64
+	// === 机会站内推送（D-050；修复⑭ S3 退役 minNotifyNetBps 发布门槛 → oppTopic 全量事件流）===
+	// 发布门槛已退役，前端显示过滤常量 5 语义自立（useFrontConfig 默认值）。
 
 	// === 机会入库门槛（D-078 round-trip 成本修正）===
 	// StoreMinNetBps CROSS_VENUE 入库最低净收益（bps）；低于此值不入库（从源头消除垃圾机会）。
@@ -149,7 +148,6 @@ func Load() *Config {
 		FundingDropRatio:           envFloat("ARB_FUNDING_DROP_RATIO", 0.5),
 		SwapArbEquityUseRatio:      envFloat("ARB_SWAPARB_EQUITY_USE_RATIO", 0.5),
 		SwapArbReentryCooldownDays: envInt("ARB_SWAPARB_REENTRY_COOLDOWN_DAYS", 7),
-		NotifyMinNetBps:            envFloat("ARB_NOTIFY_MIN_NET_BPS", 0),
 		StoreMinNetBps:             envFloat("ARB_STORE_MIN_NET_BPS", 5.0), // D-078：CROSS_VENUE 入库门槛，round-trip 后 net≥5bps 才入库
 		BrokerPosPollInterval:      envDur("ARB_BROKER_POS_POLL_MS", 5*time.Second),
 		OpportunityNotionalUSD:     envFloat("ARB_OPP_NOTIONAL_USD", 1000),
