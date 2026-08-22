@@ -475,14 +475,15 @@ func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, request
 	if err != nil {
 		return "FAILED", err.Error(), 0
 	}
-	result, err := s.pipeline.Execute(ctx, oppID, requestID, legs)
+	result, err := s.pipeline.Execute(ctx, oppID, requestID, found.Type, legs)
 	if err != nil {
-		if errors.Is(err, exec.ErrMaxOpenPositions) || errors.Is(err, exec.ErrDuplicateExecution) {
+		if errors.Is(err, exec.ErrMaxOpenPositions) || errors.Is(err, exec.ErrDuplicateExecution) ||
+			errors.Is(err, exec.ErrEmptyPositionType) || errors.Is(err, exec.ErrEmptyLegs) {
 			return "FAILED", err.Error(), 0
 		}
 		return "FAILED", fmt.Sprintf("execute: %v", err), 0
 	}
-	// D-070：回填 position 元数据（pipeline.Execute 创建时未填 type/expected_net_bps）
+	// D-070：回填 position 元数据（expected_net_bps/expected_annual_pct；type 已在创建时写入，修复⑭ S4）
 	if result.PositionID > 0 {
 		_ = s.store.UpdatePositionMeta(ctx, result.PositionID, found.Type, found.NetBps)
 	}
@@ -562,9 +563,10 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 		{VenueKey: venueBuy, VenueSymbol: qbuy.VenueSymbol, Side: "BUY", Qty: qty, PriceExpected: qbuy.Ask},
 		{VenueKey: venueSell, VenueSymbol: qsell.VenueSymbol, Side: "SELL", Qty: sellQty, PriceExpected: qsell.Bid},
 	}
-	result, err := s.pipeline.Execute(ctx, oppID, requestID, legs)
+	result, err := s.pipeline.Execute(ctx, oppID, requestID, strategyType, legs)
 	if err != nil {
-		if errors.Is(err, exec.ErrMaxOpenPositions) || errors.Is(err, exec.ErrDuplicateExecution) {
+		if errors.Is(err, exec.ErrMaxOpenPositions) || errors.Is(err, exec.ErrDuplicateExecution) ||
+			errors.Is(err, exec.ErrEmptyPositionType) || errors.Is(err, exec.ErrEmptyLegs) {
 			return "FAILED", err.Error(), 0
 		}
 		return "FAILED", fmt.Sprintf("execute: %v", err), 0
