@@ -93,6 +93,9 @@ func (e *Engine) Run(ctx context.Context) {
 	log.Printf("[autotrade] enabled: maxNotional=$%.0f maxPos=%d maxDailyLoss=$%.0f minNetBps=%.1f poll=%s",
 		e.cfg.MaxNotional, e.cfg.MaxPositions, e.cfg.MaxDailyLoss, e.cfg.MinNetBps, e.cfg.PollInterval)
 
+	// D-080 S1：启动时装载 combo→OPEN 防重集
+	e.gate.LoadOpenCombos(ctx)
+
 	// 1. 机会订阅循环（detector 产生的 CROSS_VENUE 机会）
 	go e.oppLoop(ctx)
 
@@ -331,8 +334,8 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 			reqID := fmt.Sprintf("swaparb-%d", time.Now().UnixNano())
 			status, msg, posID := e.service.ExecuteMeanRevertWithCap(ctx, canonical, venueLong, venueShort, reqID, qty, spreadBps, notional, "SWAPARB")
 			if status != "FAILED" && posID > 0 {
-				oppID := fmt.Sprintf("SWAPARB:%s:%s:%s:%d", canonical, venueLong, venueShort, time.Now().UnixMilli())
-				_ = e.store.UpdatePositionOppID(ctx, posID, oppID)
+				// D-080 S1：新持仓直接写组合键（无时间戳），与 opportunities.id 贯通
+				_ = e.store.UpdatePositionOppID(ctx, posID, dedupKey)
 			}
 			return status, msg, posID
 		},
@@ -567,6 +570,8 @@ func (e *Engine) scanAndClose(ctx context.Context) {
 			log.Printf("[autotrade] auto-close pos=%d failed: %v", p.ID, err)
 			continue
 		}
+		// D-080 S1：平仓成功 → 从防重集移除组合键（冷却由 swapArbCooldownSet 独立管理）
+		e.gate.MarkComboClosed(p.OpportunityID)
 		e.updateStrategyStat(ctx, &p)
 	}
 }

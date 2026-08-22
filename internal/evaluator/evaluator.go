@@ -130,11 +130,12 @@ func classify(typ detector.OppType, netBps, instantBps, avg30dBps, grabThr float
 	}
 }
 
-// genID 生成机会 ID（§2.6）。
+// genID 生成机会 ID = 组合键（D-080 S2：TYPE:canonical:venueBuy:venueSell，无时间戳）。
+// venue 排序保证同组合不同 tick 产同键（opportunities 表 PK=组合键，Upsert 刷新同行）。
 func genID(c detector.Candidate, qt time.Time) string {
 	a, b := c.VenueBuy, c.VenueSell
 	if a > b {
 		a, b = b, a
 	}
-	return fmt.Sprintf("%s:%s:%s:%s:%d", c.Type, c.Canonical, a, b, qt.UnixMilli())
+	return fmt.Sprintf("%s:%s:%s:%s", c.Type, c.Canonical, a, b)
 }
