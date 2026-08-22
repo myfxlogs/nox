@@ -14,15 +14,16 @@ var ErrTerminalState = errors.New("position is in terminal state (CLOSED/FAILED)
 
 // Position 对应 positions 表（§2.11）。
 type Position struct {
-	ID             int64
-	OpportunityID  string
-	Type           string
-	Status         string
-	ExpectedNetBps float64
-	RealizedPnl    *float64
-	OpenedAt       *time.Time
-	ClosedAt       *time.Time
-	Note           string
+	ID                int64
+	OpportunityID     string
+	Type              string
+	Status            string
+	ExpectedNetBps    float64
+	ExpectedAnnualPct *float64 // D-080 S3：承诺年化%（funding 直存 / SWAPARB·CARRY=net_bps×365/100 / 收敛型 NULL）
+	RealizedPnl       *float64
+	OpenedAt          *time.Time
+	ClosedAt          *time.Time
+	Note              string
 }
 
 // PositionLeg 对应 position_legs 表（§2.11）。
@@ -73,8 +74,21 @@ func (s *Store) UpdatePositionStatus(ctx context.Context, id int64, status strin
 }
 
 // UpdatePositionMeta 回填持仓元数据（D-070：pipeline.Execute 创建时未填 type/expected_net_bps）。
+// D-080 S3：同步写 expected_annual_pct（按型换算：funding 直存 net_bps / SWAPARB·CARRY=net_bps×365/100 / 收敛型 NULL）。
 func (s *Store) UpdatePositionMeta(ctx context.Context, id int64, posType string, expectedNetBps float64) error {
-	_, err := s.pool.Exec(ctx, `UPDATE positions SET type = $1, expected_net_bps = $2 WHERE id = $3`, posType, expectedNetBps, id)
+	var annualPct any
+	switch posType {
+	case "FUNDING_HEDGE", "PERP_FUNDING":
+		annualPct = expectedNetBps
+	case "SWAPARB", "CARRY":
+		v := expectedNetBps * 365 / 100
+		annualPct = v
+	default:
+		annualPct = nil // 收敛型不适用年化
+	}
+	_, err := s.pool.Exec(ctx,
+		`UPDATE positions SET type = $1, expected_net_bps = $2, expected_annual_pct = $3 WHERE id = $4`,
+		posType, expectedNetBps, annualPct, id)
 	return err
 }
 
@@ -130,7 +144,7 @@ func (s *Store) ListPositions(ctx context.Context, status string, limit, offset 
 	if limit <= 0 {
 		limit = 50
 	}
-	q := `SELECT id, opportunity_id, type, status, expected_net_bps, realized_pnl, opened_at, closed_at, note
+	q := `SELECT id, opportunity_id, type, status, expected_net_bps, expected_annual_pct, realized_pnl, opened_at, closed_at, note
 		FROM positions
 		WHERE ($1 = '' OR status = $1)
 		ORDER BY id DESC LIMIT $2 OFFSET $3`
@@ -143,7 +157,7 @@ func (s *Store) ListPositions(ctx context.Context, status string, limit, offset 
 	for rows.Next() {
 		var p Position
 		if err := rows.Scan(&p.ID, &p.OpportunityID, &p.Type, &p.Status, &p.ExpectedNetBps,
-			&p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note); err != nil {
+			&p.ExpectedAnnualPct, &p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -230,7 +244,7 @@ func (s *Store) ListOpenPositionsByType(ctx context.Context, types []string) ([]
 	if len(types) == 0 {
 		return nil, nil
 	}
-	q := `SELECT id, opportunity_id, type, status, expected_net_bps, realized_pnl, opened_at, closed_at, note
+	q := `SELECT id, opportunity_id, type, status, expected_net_bps, expected_annual_pct, realized_pnl, opened_at, closed_at, note
 		FROM positions
 		WHERE status = 'OPEN' AND type = ANY($1)
 		ORDER BY id`
@@ -243,7 +257,7 @@ func (s *Store) ListOpenPositionsByType(ctx context.Context, types []string) ([]
 	for rows.Next() {
 		var p Position
 		if err := rows.Scan(&p.ID, &p.OpportunityID, &p.Type, &p.Status, &p.ExpectedNetBps,
-			&p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note); err != nil {
+			&p.ExpectedAnnualPct, &p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note); err != nil {
 			return nil, err
 		}
 		out = append(out, p)

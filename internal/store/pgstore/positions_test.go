@@ -120,3 +120,64 @@ func TestUpdatePositionStatus_TerminalGuard(t *testing.T) {
 		t.Errorf("FAILED→OPEN want ErrTerminalState, got %v", err)
 	}
 }
+
+// TestUpdatePositionMeta_ExpectedAnnualPct D-080 S3：三型换算各一例。
+// FUNDING_HEDGE → 直存 net_bps / SWAPARB → net_bps×365/100 / CROSS_VENUE → NULL。
+func TestUpdatePositionMeta_ExpectedAnnualPct(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.pool.Exec(ctx, `TRUNCATE positions CASCADE`); err != nil {
+		t.Fatalf("truncate positions: %v", err)
+	}
+	tests := []struct {
+		name     string
+		posType  string
+		netBps   float64
+		wantPct  *float64 // nil = 期望 NULL
+	}{
+		{"FUNDING_HEDGE 直存", "FUNDING_HEDGE", 10.95, floatPtr(10.95)},
+		{"SWAPARB 换算", "SWAPARB", 0.5, floatPtr(0.5 * 365 / 100)},
+		{"CROSS_VENUE NULL", "CROSS_VENUE", 15.0, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			oppID := "test-" + tt.posType
+			if _, err := s.pool.Exec(ctx,
+				`INSERT INTO positions (opportunity_id, type, status, expected_net_bps) VALUES ($1, $2, 'OPEN', 0)`,
+				oppID, tt.posType); err != nil {
+				t.Fatalf("insert: %v", err)
+			}
+			var id int64
+			if err := s.pool.QueryRow(ctx, `SELECT id FROM positions WHERE opportunity_id=$1`, oppID).Scan(&id); err != nil {
+				t.Fatalf("query id: %v", err)
+			}
+			if err := s.UpdatePositionMeta(ctx, id, tt.posType, tt.netBps); err != nil {
+				t.Fatalf("UpdatePositionMeta: %v", err)
+			}
+			var gotPct *float64
+			if err := s.pool.QueryRow(ctx, `SELECT expected_annual_pct FROM positions WHERE id=$1`, id).Scan(&gotPct); err != nil {
+				t.Fatalf("select expected_annual_pct: %v", err)
+			}
+			if tt.wantPct == nil {
+				if gotPct != nil {
+					t.Errorf("want NULL, got %v", *gotPct)
+				}
+			} else {
+				if gotPct == nil {
+					t.Errorf("want %v, got NULL", *tt.wantPct)
+				} else if abs(*gotPct-*tt.wantPct) > 0.0001 {
+					t.Errorf("want %v, got %v", *tt.wantPct, *gotPct)
+				}
+			}
+		})
+	}
+}
+
+func floatPtr(v float64) *float64 { return &v }
+
+func abs(v float64) float64 {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
