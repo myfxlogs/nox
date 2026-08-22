@@ -36,8 +36,34 @@ ORDER BY array_to_string((string_to_array(id,':'))[1:6],':'), quote_time DESC;
 -- 5. positions 加 expected_annual_pct（按型换算见方案 §4）
 ALTER TABLE positions ADD COLUMN expected_annual_pct NUMERIC(10,4);
 
--- 6. 历史回填：按型换算（FUNDING 直存 net_bps / SWAPARB·CARRY=net_bps×365/100 / 收敛型 NULL）
---    从 opportunities_tick 取每组合最新 net_bps（DISTINCT ON 组合键）
+-- 6. 历史回填：promised=开仓时点快照（LATERAL join 取 opened_at 前最近 tick 行）
+--    口径：该持仓 opened_at 前最近的 tick 行 net_bps → 按型换算
+--    opened_at IS NULL 的持仓回退组合最新值（DISTINCT ON 组合键 DESC quote_time）
+--    按型换算：FUNDING 直存 net_bps / SWAPARB·CARRY=net_bps×365/100 / 收敛型 NULL
+UPDATE positions p SET expected_annual_pct = sub.annual_pct
+FROM (
+  SELECT
+    p2.id AS pos_id,
+    CASE
+      WHEN t.type IN ('FUNDING_HEDGE','PERP_FUNDING') THEN t.net_bps
+      WHEN t.type IN ('SWAPARB','CARRY') THEN t.net_bps * 365 / 100
+      ELSE NULL
+    END AS annual_pct
+  FROM positions p2
+  LEFT JOIN LATERAL (
+    SELECT type, net_bps
+    FROM opportunities_tick ot
+    WHERE array_to_string((string_to_array(ot.id,':'))[1:6],':')
+        = array_to_string((string_to_array(p2.opportunity_id,':'))[1:6],':')
+      AND ot.quote_time <= p2.opened_at
+    ORDER BY ot.quote_time DESC
+    LIMIT 1
+  ) t ON true
+  WHERE p2.expected_annual_pct IS NULL
+) sub
+WHERE p.id = sub.pos_id;
+
+-- 6b. opened_at IS NULL 的持仓回退组合最新值（DISTINCT ON 组合键 DESC quote_time）
 UPDATE positions p SET expected_annual_pct = sub.annual_pct
 FROM (
   SELECT DISTINCT ON (array_to_string((string_to_array(id,':'))[1:6],':'))
@@ -52,7 +78,8 @@ FROM (
   ORDER BY array_to_string((string_to_array(id,':'))[1:6],':'), quote_time DESC
 ) sub
 WHERE array_to_string((string_to_array(p.opportunity_id,':'))[1:6],':') = sub.combo_key
-  AND p.expected_annual_pct IS NULL;
+  AND p.expected_annual_pct IS NULL
+  AND p.opened_at IS NULL;
 
 -- === S4: combo 日度 rollup ===
 

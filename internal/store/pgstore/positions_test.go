@@ -11,7 +11,7 @@ func insertPosition(t *testing.T, s *Store, oppID, status string) {
 	t.Helper()
 	_, err := s.pool.Exec(context.Background(),
 		`INSERT INTO positions (opportunity_id, type, status, expected_net_bps) VALUES ($1, $2, $3, 0)`,
-		oppID, "CROSS_EXCHANGE", status)
+		oppID, "CROSS_VENUE", status)
 	if err != nil {
 		t.Fatalf("insert position %s/%s: %v", oppID, status, err)
 	}

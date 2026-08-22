@@ -176,6 +176,31 @@ func (s *Store) CountPositions(ctx context.Context, status string) (int, error) 
 	return n, nil
 }
 
+// ListActivePositions 返回所有活跃态持仓（OPENING/OPEN/LEGGED/CLOSING）。
+// D-080 R1：gate 防重改 DB 实时派生——替代内存 openCombos 集，治手动路径旁路。
+// 行数=MaxPositions 量级，成本≈COUNT；返回行供 gate 派生 combo.FromOppID 匹配。
+func (s *Store) ListActivePositions(ctx context.Context) ([]Position, error) {
+	q := `SELECT id, opportunity_id, type, status, expected_net_bps, expected_annual_pct, realized_pnl, opened_at, closed_at, note
+		FROM positions
+		WHERE status IN ('OPENING','OPEN','LEGGED','CLOSING')
+		ORDER BY id`
+	rows, err := s.pool.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("list active positions: %w", err)
+	}
+	defer rows.Close()
+	var out []Position
+	for rows.Next() {
+		var p Position
+		if err := rows.Scan(&p.ID, &p.OpportunityID, &p.Type, &p.Status, &p.ExpectedNetBps,
+			&p.ExpectedAnnualPct, &p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 // Cashflow position_cashflows 行。
 type Cashflow struct {
 	ID         int64
