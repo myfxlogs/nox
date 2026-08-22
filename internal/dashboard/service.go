@@ -1358,6 +1358,37 @@ func (s *Service) GetFrontConfig(ctx context.Context, req *connect.Request[v1.Ge
 	}), nil
 }
 
+// GetStrategyLedger D-080 S5：理论 vs 实际对账——策略聚合卡。
+// 返回每策略的承诺年化（活跃持仓 expected_annual_pct 均值）vs 实际年化（realized_pnl 估算）。
+// actual_annual_pct = realized_pnl / (notional × hold_days) × 365（估算，notional 取配置默认值）。
+func (s *Service) GetStrategyLedger(ctx context.Context, req *connect.Request[v1.GetStrategyLedgerRequest]) (*connect.Response[v1.GetStrategyLedgerResponse], error) {
+	aggs, err := s.store.GetStrategyAgg(ctx, req.Msg.Strategy)
+	if err != nil {
+		return nil, fmt.Errorf("get strategy agg: %w", err)
+	}
+	entries := make([]*v1.StrategyLedgerEntry, 0, len(aggs))
+	for _, a := range aggs {
+		entry := &v1.StrategyLedgerEntry{
+			Strategy:       a.Strategy,
+			TotalPositions: int32(a.TotalPositions),
+			OpenPositions:  int32(a.OpenPositions),
+			RealizedPnlUsd: a.RealizedPnlUsd,
+			AvgHoldDays:    a.AvgHoldDays,
+		}
+		if a.PromisedAnnualPct != nil {
+			entry.PromisedAnnualPct = *a.PromisedAnnualPct
+		}
+		// 实际年化估算：realized_pnl / (notional × hold_days) × 365
+		// notional 取配置默认值（单持仓名义额，估算口径）
+		if a.AvgHoldDays > 0 && s.notionalUSD > 0 && a.TotalPositions > 0 {
+			notionalTotal := s.notionalUSD * float64(a.TotalPositions)
+			entry.ActualAnnualPct = a.RealizedPnlUsd / (notionalTotal * a.AvgHoldDays) * 365 * 100
+		}
+		entries = append(entries, entry)
+	}
+	return connect.NewResponse(&v1.GetStrategyLedgerResponse{Entries: entries}), nil
+}
+
 // --- 转换辅助 ---
 
 func factToProto(f *fact.Fact) *v1.Fact {
@@ -1474,6 +1505,10 @@ func positionToProto(p *pgstore.Position) *v1.Position {
 	}
 	if p.ClosedAt != nil {
 		pb.ClosedAt = timestamppb.New(*p.ClosedAt)
+	}
+	// D-080 S3：承诺年化%（可选，收敛型为 nil）
+	if p.ExpectedAnnualPct != nil {
+		pb.ExpectedAnnualPct = p.ExpectedAnnualPct
 	}
 	return pb
 }

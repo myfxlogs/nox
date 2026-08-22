@@ -187,6 +187,9 @@ const (
 	// DashboardServiceGetFrontConfigProcedure is the fully-qualified name of the DashboardService's
 	// GetFrontConfig RPC.
 	DashboardServiceGetFrontConfigProcedure = "/arb.dashboard.v1.DashboardService/GetFrontConfig"
+	// DashboardServiceGetStrategyLedgerProcedure is the fully-qualified name of the DashboardService's
+	// GetStrategyLedger RPC.
+	DashboardServiceGetStrategyLedgerProcedure = "/arb.dashboard.v1.DashboardService/GetStrategyLedger"
 )
 
 // DashboardServiceClient is a client for the arb.dashboard.v1.DashboardService service.
@@ -260,6 +263,8 @@ type DashboardServiceClient interface {
 	Health(context.Context, *connect.Request[v1.HealthRequest]) (*connect.Response[v1.HealthResponse], error)
 	// 前端配置同源（D-077 修复⑪B N7）：返回后端 config 阈值供前端展示。
 	GetFrontConfig(context.Context, *connect.Request[v1.GetFrontConfigRequest]) (*connect.Response[v1.GetFrontConfigResponse], error)
+	// 理论 vs 实际对账（D-080 S5）：策略聚合卡——承诺年化 vs 实际年化。
+	GetStrategyLedger(context.Context, *connect.Request[v1.GetStrategyLedgerRequest]) (*connect.Response[v1.GetStrategyLedgerResponse], error)
 }
 
 // NewDashboardServiceClient constructs a client for the arb.dashboard.v1.DashboardService service.
@@ -585,6 +590,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("GetFrontConfig")),
 			connect.WithClientOptions(opts...),
 		),
+		getStrategyLedger: connect.NewClient[v1.GetStrategyLedgerRequest, v1.GetStrategyLedgerResponse](
+			httpClient,
+			baseURL+DashboardServiceGetStrategyLedgerProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("GetStrategyLedger")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -642,6 +653,7 @@ type dashboardServiceClient struct {
 	streamUpdates          *connect.Client[v1.StreamUpdatesRequest, v1.StreamUpdatesResponse]
 	health                 *connect.Client[v1.HealthRequest, v1.HealthResponse]
 	getFrontConfig         *connect.Client[v1.GetFrontConfigRequest, v1.GetFrontConfigResponse]
+	getStrategyLedger      *connect.Client[v1.GetStrategyLedgerRequest, v1.GetStrategyLedgerResponse]
 }
 
 // ListLatestQuotes calls arb.dashboard.v1.DashboardService.ListLatestQuotes.
@@ -904,6 +916,11 @@ func (c *dashboardServiceClient) GetFrontConfig(ctx context.Context, req *connec
 	return c.getFrontConfig.CallUnary(ctx, req)
 }
 
+// GetStrategyLedger calls arb.dashboard.v1.DashboardService.GetStrategyLedger.
+func (c *dashboardServiceClient) GetStrategyLedger(ctx context.Context, req *connect.Request[v1.GetStrategyLedgerRequest]) (*connect.Response[v1.GetStrategyLedgerResponse], error) {
+	return c.getStrategyLedger.CallUnary(ctx, req)
+}
+
 // DashboardServiceHandler is an implementation of the arb.dashboard.v1.DashboardService service.
 type DashboardServiceHandler interface {
 	// 快照类
@@ -975,6 +992,8 @@ type DashboardServiceHandler interface {
 	Health(context.Context, *connect.Request[v1.HealthRequest]) (*connect.Response[v1.HealthResponse], error)
 	// 前端配置同源（D-077 修复⑪B N7）：返回后端 config 阈值供前端展示。
 	GetFrontConfig(context.Context, *connect.Request[v1.GetFrontConfigRequest]) (*connect.Response[v1.GetFrontConfigResponse], error)
+	// 理论 vs 实际对账（D-080 S5）：策略聚合卡——承诺年化 vs 实际年化。
+	GetStrategyLedger(context.Context, *connect.Request[v1.GetStrategyLedgerRequest]) (*connect.Response[v1.GetStrategyLedgerResponse], error)
 }
 
 // NewDashboardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1296,6 +1315,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("GetFrontConfig")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceGetStrategyLedgerHandler := connect.NewUnaryHandler(
+		DashboardServiceGetStrategyLedgerProcedure,
+		svc.GetStrategyLedger,
+		connect.WithSchema(dashboardServiceMethods.ByName("GetStrategyLedger")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/arb.dashboard.v1.DashboardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DashboardServiceListLatestQuotesProcedure:
@@ -1402,6 +1427,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceHealthHandler.ServeHTTP(w, r)
 		case DashboardServiceGetFrontConfigProcedure:
 			dashboardServiceGetFrontConfigHandler.ServeHTTP(w, r)
+		case DashboardServiceGetStrategyLedgerProcedure:
+			dashboardServiceGetStrategyLedgerHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1617,4 +1644,8 @@ func (UnimplementedDashboardServiceHandler) Health(context.Context, *connect.Req
 
 func (UnimplementedDashboardServiceHandler) GetFrontConfig(context.Context, *connect.Request[v1.GetFrontConfigRequest]) (*connect.Response[v1.GetFrontConfigResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetFrontConfig is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) GetStrategyLedger(context.Context, *connect.Request[v1.GetStrategyLedgerRequest]) (*connect.Response[v1.GetStrategyLedgerResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetStrategyLedger is not implemented"))
 }
