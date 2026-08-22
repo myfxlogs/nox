@@ -60,6 +60,9 @@ type Engine struct {
 	// fundingNeedSent 资金注入提醒节流（D-072）：key=SWAPARB:canonical:venueLong:venueShort → YYYY-MM-DD。
 	// 每日每组合至多 1 条（内存，重启重置——实时弹窗语义，不持久化）。
 	fundingNeedSent map[string]string
+
+	// D-080 S4：combo 日度 rollup 累积器（write-behind，全组合含低于门槛）
+	accumulator *comboAccumulator
 }
 
 // New 创建自动交易引擎。
@@ -72,6 +75,7 @@ func New(cfg Config, store *pgstore.Store, service *dashboard.Service, oppTopic 
 		quotes:          quotes,
 		gate:            NewGate(store, cfg),
 		fundingNeedSent: make(map[string]string),
+		accumulator:     newComboAccumulator(),
 	}
 }
 
@@ -106,7 +110,30 @@ func (e *Engine) Run(ctx context.Context) {
 	go e.swapArbLoop(ctx)
 
 	// 4. 持仓扫描循环（自动平仓 + 状态机 tick）
+	// D-080 S4：rollup flush 循环（每 5min，UTC 日切自动重置）
+	go e.rollupFlushLoop(ctx)
 	e.positionLoop(ctx)
+}
+
+// rollupFlushLoop D-080 S4：定期 flush combo 日度 rollup 累积器到 DB。
+// 每 5min 一次（write-behind）；UTC 日切由 accumulator.Record 内部重置。
+func (e *Engine) rollupFlushLoop(ctx context.Context) {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			// 退出前最后一次 flush（确保当日数据落库）
+			if err := e.accumulator.Flush(ctx, e.store); err != nil {
+				log.Printf("[autotrade] rollup flush on exit: %v", err)
+			}
+			return
+		case <-ticker.C:
+			if err := e.accumulator.Flush(ctx, e.store); err != nil {
+				log.Printf("[autotrade] rollup flush: %v", err)
+			}
+		}
+	}
 }
 
 // swapArbLoop D-072 swap 套利：自动发现跨账户 swap 组合，名义额=broker 余额驱动。
@@ -121,10 +148,7 @@ func (e *Engine) swapArbLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// D-077 修复⑪B N9：判死策略停扫（消除 3 万条/日 REJECTED 日志污染）
-			if disabled, _ := e.store.IsStrategyDisabled(ctx, "SWAPARB"); disabled {
-				continue // debug 日志省略（每 60s 一次静默跳过）
-			}
+			// D-080 S4 N9 修订：判死策略停扫改为停提交——扫描+评估常开喂 rollup
 			e.scanSwapArb(ctx)
 		}
 	}
@@ -167,6 +191,8 @@ func (e *Engine) scanSwapArb(ctx context.Context) {
 	cooldownSet := e.swapArbCooldownSet(ctx)
 	for _, c := range combos {
 		ck := combo.Key("SWAPARB", c.canonical, c.vLong, c.vShort)
+		// D-080 S4：全组合喂入 rollup 累积器（含冷却中/低于门槛——覆盖度完整）
+		e.accumulator.Record(ck, "SWAPARB", c.netSwapBps, time.Now())
 		if closedAt, blocked := cooldownSet[ck]; blocked {
 			log.Printf("[autotrade] SWAPARB skip %s: reentry cooldown (closed %s ago)", ck, time.Since(closedAt).Round(time.Hour))
 			continue
@@ -276,6 +302,10 @@ func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 
 // trySwapArb 尝试开仓单个 swap 套利组合（D-072：名义额=broker 余额驱动，经 gate）。
 func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShort string, netSwapBps float64) {
+	// D-080 S4 N9 修订：判死策略停提交（扫描+评估常开喂 rollup，禁用只拦提交无 REJECTED 行）
+	if disabled, _ := e.store.IsStrategyDisabled(ctx, "SWAPARB"); disabled {
+		return
+	}
 	qLong, okL := e.quotes.Latest(canonical, venueLong)
 	qShort, okS := e.quotes.Latest(canonical, venueShort)
 	if !okL || !okS {
@@ -390,10 +420,7 @@ func (e *Engine) meanRevertLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// D-077 修复⑪B N9：判死策略停扫（消除 REJECTED 日志污染）
-			if disabled, _ := e.store.IsStrategyDisabled(ctx, "MEANREVERT"); disabled {
-				continue
-			}
+			// D-080 S4 N9 修订：判死策略停扫改为停提交——扫描+评估常开喂 rollup
 			e.scanMeanRevert(ctx, e.cfg.MeanRevertThresh, venueA, venueB)
 		}
 	}
@@ -422,9 +449,12 @@ func (e *Engine) scanMeanRevert(ctx context.Context, symbols map[string]float64,
 		spreadBA := qA.Bid - qB.Ask
 		if spreadAB > threshold {
 			bps := spreadAB / qA.Ask * 10000
+			// D-080 S4：全组合喂入 rollup 累积器（含低于门槛——覆盖度完整）
+			e.accumulator.Record(combo.Key("MEANREVERT", canonical, venueA, venueB), "MEANREVERT", bps, now)
 			e.executeMeanRevert(ctx, canonical, venueA, venueB, bps)
 		} else if spreadBA > threshold {
 			bps := spreadBA / qB.Ask * 10000
+			e.accumulator.Record(combo.Key("MEANREVERT", canonical, venueB, venueA), "MEANREVERT", bps, now)
 			e.executeMeanRevert(ctx, canonical, venueB, venueA, bps)
 		}
 	}
@@ -432,6 +462,10 @@ func (e *Engine) scanMeanRevert(ctx context.Context, symbols map[string]float64,
 
 // executeMeanRevert 产 TradeIntent 走 gate（D-072：不直连执行）。
 func (e *Engine) executeMeanRevert(ctx context.Context, canonical, venueBuy, venueSell string, openBps float64) {
+	// D-080 S4 N9 修订：判死策略停提交（扫描+评估常开喂 rollup，禁用只拦提交无 REJECTED 行）
+	if disabled, _ := e.store.IsStrategyDisabled(ctx, "MEANREVERT"); disabled {
+		return
+	}
 	qbuy, ok := e.quotes.Latest(canonical, venueBuy)
 	if !ok {
 		return
@@ -486,6 +520,9 @@ func isCEXVenue(venue string) bool {
 
 // handleOpportunity 过滤机会 → 产 intent 走 gate（D-072：风控由 gate 统一）。
 func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity) {
+	// D-080 S4：全组合喂入 rollup 累积器（含低于门槛——覆盖度完整，write-behind）
+	e.accumulator.Record(opp.ID, opp.Type, opp.NetBps, time.Now())
+
 	// D-070：业主指令「放弃 CEX，全功 CFD」
 	if isCEXVenue(opp.VenueBuy) || isCEXVenue(opp.VenueSell) {
 		return
