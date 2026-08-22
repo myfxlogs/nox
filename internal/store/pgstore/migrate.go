@@ -31,6 +31,7 @@ var migrationFiles = []struct {
 	{33, migrations.AutotradeSQL},
 	{34, migrations.AutotradeStateSQL},
 	{35, migrations.StatsAnchorSQL},
+	{36, migrations.ComboIdentitySQL},
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

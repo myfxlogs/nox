@@ -60,7 +60,57 @@ func TestUpsertOpportunity_InsertedFlag(t *testing.T) {
 	}
 }
 
-// TestPurgeAckedAlerts P5 修复⑧：删除 acked+超 7 天告警，未 acked 不删，7 天内 acked 不删。
+// TestUpsertOpportunity_ComboKeySingleRow D-080 S2：同组合键两次 upsert → 一行且指标更新；不同组合两行。
+func TestUpsertOpportunity_ComboKeySingleRow(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.pool.Exec(ctx, "TRUNCATE opportunities CASCADE"); err != nil {
+		t.Fatalf("TRUNCATE opportunities: %v", err)
+	}
+	// 同组合键两次 upsert（不同 netBps）
+	o1 := oppTest("CARRY:AAA:venue_a:spot:venue_b:spot", "CARRY")
+	o1.NetBps = 10.0
+	if _, err := s.UpsertOpportunity(ctx, o1); err != nil {
+		t.Fatalf("upsert 1: %v", err)
+	}
+	o2 := oppTest("CARRY:AAA:venue_a:spot:venue_b:spot", "CARRY")
+	o2.NetBps = 25.0
+	if _, err := s.UpsertOpportunity(ctx, o2); err != nil {
+		t.Fatalf("upsert 2: %v", err)
+	}
+	// 不同组合
+	o3 := oppTest("CARRY:BBB:venue_c:spot:venue_d:spot", "CARRY")
+	if _, err := s.UpsertOpportunity(ctx, o3); err != nil {
+		t.Fatalf("upsert 3: %v", err)
+	}
+	// 验证行数=2（同组合合并为一行）
+	var n int
+	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM opportunities").Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 2 {
+		t.Errorf("want 2 rows (1 combo + 1 different), got %d", n)
+	}
+	// 验证同组合指标已更新为最新值
+	var netBps float64
+	if err := s.pool.QueryRow(ctx, "SELECT net_bps FROM opportunities WHERE id=$1",
+		"CARRY:AAA:venue_a:spot:venue_b:spot").Scan(&netBps); err != nil {
+		t.Fatalf("select net_bps: %v", err)
+	}
+	if netBps != 25.0 {
+		t.Errorf("want net_bps=25.0 (updated), got %v", netBps)
+	}
+	// 验证 last_seen 已更新
+	var lastSeenCount int
+	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM opportunities WHERE last_seen IS NOT NULL").Scan(&lastSeenCount); err != nil {
+		t.Fatalf("select last_seen: %v", err)
+	}
+	if lastSeenCount != 2 {
+		t.Errorf("want 2 rows with last_seen, got %d", lastSeenCount)
+	}
+}
+
+
 func TestPurgeAckedAlerts(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

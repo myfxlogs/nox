@@ -49,3 +49,6 @@ var AutotradeStateSQL string
 
 //go:embed 0035_stats_anchor.sql
 var StatsAnchorSQL string
+
+//go:embed 0036_combo_identity.sql
+var ComboIdentitySQL string

@@ -30,10 +30,11 @@ type Opportunity struct {
 	UpdatedAt      time.Time
 }
 
-// UpsertOpportunity 插入或刷新机会（§5.0 去重：同键未过期 → 刷新数值）。
+// UpsertOpportunity 插入或刷新机会（D-080 S2：组合键=PK，同组合刷新同行）。
 // 返回 inserted=true 表示本次是新插入（首次出现），false 表示刷新既有行（D-050 站内推送判定）。
 // PostgreSQL UPSERT 技巧：RETURNING (xmax = 0) —— 本语句实际执行 INSERT（新行）时 xmax=0，
 // 触发 ON CONFLICT DO UPDATE（刷新既有行）时 xmax≠0。
+// D-080：id=组合键（6 段，无时间戳），同组合每 tick 刷新同行（last_seen=now()）。
 func (s *Store) UpsertOpportunity(ctx context.Context, o *Opportunity) (bool, error) {
 	q := `INSERT INTO opportunities (
 			id, type, canonical, venue_buy, venue_sell, price_buy, price_sell,
@@ -47,7 +48,7 @@ func (s *Store) UpsertOpportunity(ctx context.Context, o *Opportunity) (bool, er
 			commission_cost=EXCLUDED.commission_cost, slippage_cost=EXCLUDED.slippage_cost,
 			swap_cost=EXCLUDED.swap_cost, net_bps=EXCLUDED.net_bps,
 			breakeven_days=EXCLUDED.breakeven_days, quote_time=EXCLUDED.quote_time,
-			expires_at=EXCLUDED.expires_at, updated_at=now()
+			expires_at=EXCLUDED.expires_at, updated_at=now(), last_seen=now()
 		RETURNING (xmax = 0) AS inserted`
 	var inserted bool
 	if err := s.pool.QueryRow(ctx, q,
