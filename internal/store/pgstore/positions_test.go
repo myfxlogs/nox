@@ -130,10 +130,10 @@ func TestUpdatePositionMeta_ExpectedAnnualPct(t *testing.T) {
 		t.Fatalf("truncate positions: %v", err)
 	}
 	tests := []struct {
-		name     string
-		posType  string
-		netBps   float64
-		wantPct  *float64 // nil = 期望 NULL
+		name    string
+		posType string
+		netBps  float64
+		wantPct *float64 // nil = 期望 NULL
 	}{
 		{"FUNDING_HEDGE 直存", "FUNDING_HEDGE", 10.95, floatPtr(10.95)},
 		{"SWAPARB 换算", "SWAPARB", 0.5, floatPtr(0.5 * 365 / 100)},

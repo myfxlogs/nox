@@ -110,7 +110,6 @@ func TestUpsertOpportunity_ComboKeySingleRow(t *testing.T) {
 	}
 }
 
-
 func TestPurgeAckedAlerts(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
