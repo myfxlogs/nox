@@ -122,17 +122,17 @@ func TestNotifyNewOpportunity_NewInsertPublishes(t *testing.T) {
 	}
 }
 
-// TestNotifyNewOpportunity_RefreshNotPublishes 同 id 刷新 → 不发布（仅新插入才推，30s 快照兜底）。
-func TestNotifyNewOpportunity_RefreshNotPublishes(t *testing.T) {
+// TestNotifyNewOpportunity_RefreshStillPublishes 同 id 刷新 → 仍发布（实施修正①：事件流常开；30s 快照兜底属 UI 路径）。
+func TestNotifyNewOpportunity_RefreshStillPublishes(t *testing.T) {
 	cand := carryCand(20.0)
 	e, ch, store := newNotifyEngine(t, cand, 10.0)
 	scanCandidate(t, e, cand) // 首次：inserted=true → 发布 1
 	if n := drainTopic(ch); n != 1 {
 		t.Fatalf("first scan publish count want 1, got %d", n)
 	}
-	scanCandidate(t, e, cand) // 同 id 刷新：fake 返回 inserted=false → 不发布
-	if n := drainTopic(ch); n != 0 {
-		t.Errorf("refresh publish count want 0, got %d", n)
+	scanCandidate(t, e, cand) // 同 id 刷新：fake 返回 inserted=false，但实施修正①后仍发布
+	if n := drainTopic(ch); n != 1 {
+		t.Errorf("refresh publish count want 1, got %d", n)
 	}
 	if c := store.count(); c != 1 {
 		t.Errorf("upsert count want 1（同 id 不新增行）, got %d", c)

@@ -15,6 +15,8 @@ import (
 )
 
 // opportunityStore 引擎所需的机会存储接口（D-050 测试注入：生产为 pgstore.Store，测试用 fake 判定 inserted）。
+// 注：生产侧自 D-080 实施修正①起不再消费 inserted（oppTopic 发布条件去 inserted，见下方 upsert 后逻辑），
+// bool 返回值仅保留以维持测试语义（fake 仍按 id 去重判定 inserted）。
 type opportunityStore interface {
 	UpsertOpportunity(ctx context.Context, o *pgstore.Opportunity) (bool, error)
 }
@@ -260,13 +262,15 @@ func (e *Engine) onQuote(ctx context.Context, q bus.Quote) {
 		if o.Type == "CROSS_VENUE" && o.NetBps < e.minStoreNetBps {
 			continue
 		}
-		inserted, err := e.store.UpsertOpportunity(ctx, o)
+		_, err := e.store.UpsertOpportunity(ctx, o)
 		if err != nil {
 			log.Printf("[engine] upsert opportunity %s: %v", result.ID, err)
 			continue
 		}
-		// D-050 站内推送：仅新插入且净收益 ≥ 提醒门槛时发布；刷新/低净值不推（30s 快照兜底）。
-		if e.oppTopic != nil && inserted && o.NetBps >= e.minNotifyNetBps {
+		// D-080 实施修正①：oppTopic 双用途（D-050 站内推送 + autotrade 事件流）。
+		// S2 组合键化后 inserted 对存量组合恒 false → 事件断流、rollup 断供（返修包③）。
+		// 每次成功 upsert 且净收益 ≥ 门槛即发布；UI 刷新另有 30s 快照兜底（service.go:1208）。
+		if e.oppTopic != nil && o.NetBps >= e.minNotifyNetBps {
 			e.oppTopic.Publish(*o)
 		}
 	}
