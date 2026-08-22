@@ -95,6 +95,9 @@ service DashboardService {
 
   // 前端配置同源（D-077 修复⑪B N7）：返回后端 config 阈值供前端展示。
   rpc GetFrontConfig(GetFrontConfigRequest) returns (GetFrontConfigResponse);
+
+  // 理论 vs 实际对账（D-080 S5）：策略聚合卡——承诺年化 vs 实际年化。
+  rpc GetStrategyLedger(GetStrategyLedgerRequest) returns (GetStrategyLedgerResponse);
 }
 
 // === Quote（§1.1）===
@@ -387,6 +390,7 @@ message Position {
   google.protobuf.Timestamp closed_at = 8;
   string note = 9;
   repeated PositionLeg legs = 10;
+  optional double expected_annual_pct = 11;  // D-080 S3：承诺年化%（funding 直存/SWAPARB·CARRY 换算/收敛型缺省）
 }
 
 message ExecuteOpportunityRequest {
@@ -960,4 +964,25 @@ message GetFrontConfigResponse {
   double min_net_swap_bps = 4;      // ARB_AUTOTRADE_MIN_NET_SWAP_BPS（swap 套利最低净 swap bps）
   double revalidate_abs_bps = 5;    // ARB_REVALIDATE_ABS_BPS（复核劣化绝对阈值 bps）
   double revalidate_rel_pct = 6;    // ARB_REVALIDATE_REL_PCT（复核劣化相对阈值 %）
+}
+
+// === StrategyLedger（D-080 S5：理论 vs 实际对账）===
+
+message GetStrategyLedgerRequest {
+  // 筛选：空=全策略；指定=单策略聚合
+  string strategy = 1;
+}
+
+message StrategyLedgerEntry {
+  string strategy = 1;              // SWAPARB / CARRY / FUNDING_HEDGE / PERP_FUNDING / CROSS_VENUE / MEANREVERT
+  int32  total_positions = 2;       // 总持仓数（含已平）
+  int32  open_positions = 3;        // 活跃持仓数
+  double promised_annual_pct = 4;   // 承诺年化%（活跃持仓 expected_annual_pct 均值）
+  double realized_pnl_usd = 5;      // 累计已实现盈亏（CLOSED 持仓 SUM(realized_pnl)）
+  double avg_hold_days = 6;         // 平均持仓天数（CLOSED 持仓 closed_at-opened_at 均值）
+  double actual_annual_pct = 7;     // 实际年化（realized_pnl / notional / hold_days × 365，估算）
+}
+
+message GetStrategyLedgerResponse {
+  repeated StrategyLedgerEntry entries = 1;
 }
