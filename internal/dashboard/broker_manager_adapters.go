@@ -1,0 +1,230 @@
+package dashboard
+
+import (
+	"context"
+	"fmt"
+	"log"
+
+	"arb/internal/adapter"
+	"arb/internal/exec"
+	"arb/internal/fact"
+	"arb/internal/reconcile"
+	"arb/internal/store/pgstore"
+
+	mt4pb "arb/internal/adapter/gen/mtapi/mt4"
+	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
+	"google.golang.org/grpc/metadata"
+)
+
+// startAdapter 平台分发：构造适配器 → 连接 → 订阅 → 注册执行器/querier。
+func (m *BrokerManager) startAdapter(ctx context.Context, a *pgstore.BrokerAccount) error {
+	m.setCommission(a.Venue, a.CommissionBps)
+	if a.Platform == 0 {
+		return m.startMT4(ctx, a)
+	}
+	return m.startMT5(ctx, a)
+}
+
+// startMT4 启动 MT4 适配器并接入 QuoteBus / 执行器 / 对账。
+func (m *BrokerManager) startMT4(ctx context.Context, a *pgstore.BrokerAccount) error {
+	ad := adapter.NewMT4Adapter(a.Venue, a.Host, a.Server, int32(a.Port), a.User, a.Password)
+	if err := ad.Connect(ctx); err != nil {
+		return fmt.Errorf("mt4 connect: %w", err)
+	}
+	fetchSymbols := func(ctx context.Context) ([]string, error) {
+		resp, err := ad.MT4Client().Symbols(tokenCtx(ctx, ad.Token()), &mt4pb.SymbolsRequest{Id: ad.Token()})
+		if err != nil {
+			return nil, err
+		}
+		if e := resp.GetError(); e != nil {
+			return nil, fmt.Errorf("mt4 symbols: %s", e.GetMessage())
+		}
+		return resp.GetResult(), nil
+	}
+	// MT4 无 GroupName，降级 group 为空（前端仅模糊搜索，无分组 chips）；也无合约规格 → symbolParams=nil
+	//（零信任：MT4 未知合约跳过校验，不做无依据的判断）。
+	fetchSymbolGroups := func(ctx context.Context) ([]SymbolGroup, error) {
+		names, err := fetchSymbols(ctx)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]SymbolGroup, 0, len(names))
+		for _, s := range names {
+			out = append(out, SymbolGroup{Symbol: s})
+		}
+		return out, nil
+	}
+	symMap, symbols, err := m.symbolPlan(ctx, a.Venue, fetchSymbolGroups)
+	if err != nil || len(symMap) == 0 {
+		log.Printf("[broker] %s symbol plan: %v", a.Venue, err)
+		symMap, symbols = identityMap(defaultSymbols)
+	}
+	ad.SetSymbolMap(symMap)
+
+	ch, cancel := ad.Subscribe(symbols)
+	go func() {
+		for q := range ch {
+			m.qbus.Publish(q)
+		}
+	}()
+	m.reg.Register(exec.NewMT4Executor(a.Venue, ad.Token(), ad.TradingClient()))
+	q := reconcile.NewMT4Querier(a.Venue, ad.Token(), ad.MT4Client())
+
+	r := &running{
+		stop:         func() { cancel(); ad.Stop() },
+		querier:      q,
+		symbols:      fetchSymbols,
+		symbolGroups: fetchSymbolGroups,
+		setSymMap:    ad.SetSymbolMap,
+		resubscribe:  ad.Resubscribe,
+		swap:         func(ctx context.Context) ([]fact.Fact, error) { return ad.SwapFacts(ctx, m.qbus) },
+	}
+	m.attach(a.Venue, r)
+	log.Printf("[broker] %s (MT4) ready", a.Venue)
+	return nil
+}
+
+// startMT5 启动 MT5 适配器。
+func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) error {
+	ad := adapter.NewMT5Adapter(a.Venue, a.Host, a.Server, int32(a.Port), a.User, a.Password)
+	if err := ad.Connect(ctx); err != nil {
+		return fmt.Errorf("mt5 connect: %w", err)
+	}
+	fetchSymbols := func(ctx context.Context) ([]string, error) {
+		resp, err := ad.MT5Client().SymbolList(tokenCtx(ctx, ad.Token()), &mt5pb.SymbolListRequest{Id: ad.Token()})
+		if err != nil {
+			return nil, err
+		}
+		if e := resp.GetError(); e != nil {
+			return nil, fmt.Errorf("mt5 symbols: %s", e.GetMessage())
+		}
+		return resp.GetResult(), nil
+	}
+	// 最小手数（D-061 量规格预检）：SymbolParams 单符号取 SymGroup.MinLots。
+	fetchMinLots := func(ctx context.Context, symbol string) (float64, bool, error) {
+		resp, err := ad.MT5Client().SymbolParams(tokenCtx(ctx, ad.Token()), &mt5pb.SymbolParamsRequest{Id: ad.Token(), Symbol: symbol})
+		if err != nil {
+			return 0, false, err
+		}
+		if e := resp.GetError(); e != nil {
+			return 0, false, fmt.Errorf("mt5 symbolParams %s: %s", symbol, e.GetMessage())
+		}
+		sp := resp.GetResult()
+		if sp == nil || sp.GetSymbolGroup() == nil {
+			return 0, false, nil
+		}
+		min := sp.GetSymbolGroup().GetMinLots()
+		return min, min > 0, nil
+	}
+	// volume step（D-070 qty 精度取整）：SymbolParams SymGroup.VolumeStep
+	fetchVolumeStep := func(ctx context.Context, symbol string) (float64, bool, error) {
+		resp, err := ad.MT5Client().SymbolParams(tokenCtx(ctx, ad.Token()), &mt5pb.SymbolParamsRequest{Id: ad.Token(), Symbol: symbol})
+		if err != nil {
+			return 0, false, err
+		}
+		if e := resp.GetError(); e != nil {
+			return 0, false, fmt.Errorf("mt5 symbolParams %s: %s", symbol, e.GetMessage())
+		}
+		sp := resp.GetResult()
+		if sp == nil || sp.GetSymbolGroup() == nil {
+			return 0, false, nil
+		}
+		step := sp.GetSymbolGroup().GetVolumeStep()
+		if step <= 0 {
+			return 0, false, nil
+		}
+		lots := float64(step) / 1000000.0
+		return lots, true, nil // MT5 VolumeStep int64 微手（1手=1000000）
+	}
+	// 符号表 + 分组：SymbolParamsMany 批量取 SymGroup.GroupName，取反斜杠路径顶层段为分组
+	// （Forex\Major\EURUSD→Forex）。Limit 不设——服务端默认 cap，设小 limit 反而在符号超限时抛异常
+	// （归档 ListingsMany 经验，D-040）。
+	fetchSymbolGroups := func(ctx context.Context) ([]SymbolGroup, error) {
+		names, err := fetchSymbols(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(names) == 0 {
+			return nil, nil
+		}
+		resp, err := ad.MT5Client().SymbolParamsMany(tokenCtx(ctx, ad.Token()), &mt5pb.SymbolParamsManyRequest{Id: ad.Token(), Symbol: names})
+		if err != nil {
+			return nil, err
+		}
+		if e := resp.GetError(); e != nil {
+			return nil, fmt.Errorf("mt5 symbolParamsMany: %s", e.GetMessage())
+		}
+		out := make([]SymbolGroup, 0, len(resp.GetResult()))
+		for _, sp := range resp.GetResult() {
+			if sp == nil {
+				continue
+			}
+			// ContractSize 同批返回（D-042 合约规格校验数据源），0 = 未知；
+			// TradeMode 同批透传（D-060 F7 seed 判据：禁交易符号不映射）。
+			out = append(out, SymbolGroup{
+				Symbol:       sp.GetSymbol(),
+				Group:        topGroup(sp.GetSymbolGroup().GetGroupName()),
+				ContractSize: sp.GetSymbolInfo().GetContractSize(),
+				TradeMode:    int32(sp.GetSymbolGroup().GetTradeMode()),
+			})
+		}
+		return out, nil
+	}
+	// 单符号权威合约规格（SymbolParams，零信任：保存映射时后端自取校验，不信前端传值）。
+	// known=false = 合约未知（查询失败/无结果），调用方跳过规格校验。D-042。
+	fetchContract := func(ctx context.Context, symbol string) (float64, bool, error) {
+		resp, err := ad.MT5Client().SymbolParams(tokenCtx(ctx, ad.Token()), &mt5pb.SymbolParamsRequest{Id: ad.Token(), Symbol: symbol})
+		if err != nil {
+			return 0, false, err
+		}
+		if e := resp.GetError(); e != nil {
+			return 0, false, fmt.Errorf("mt5 symbolParams %s: %s", symbol, e.GetMessage())
+		}
+		sp := resp.GetResult()
+		if sp == nil || sp.GetSymbolInfo() == nil {
+			return 0, false, nil
+		}
+		cs := sp.GetSymbolInfo().GetContractSize()
+		return cs, cs > 0, nil
+	}
+	symMap, symbols, err := m.symbolPlan(ctx, a.Venue, fetchSymbolGroups)
+	if err != nil || len(symMap) == 0 {
+		log.Printf("[broker] %s symbol plan: %v", a.Venue, err)
+		symMap, symbols = identityMap(defaultSymbols)
+	}
+	ad.SetSymbolMap(symMap)
+	// 历史映射（D-042 前）无合约 → 启动时回填，恢复规格画像（零信任校验基线）。
+	if gs, gerr := fetchSymbolGroups(ctx); gerr == nil {
+		m.backfillContracts(ctx, a.Venue, gs)
+	}
+
+	ch, cancel := ad.Subscribe(symbols)
+	go func() {
+		for q := range ch {
+			m.qbus.Publish(q)
+		}
+	}()
+	m.reg.Register(exec.NewMT5Executor(a.Venue, ad.Token(), ad.TradingClient()))
+	q := reconcile.NewMT5Querier(a.Venue, ad.Token(), ad.MT5Client())
+
+	r := &running{
+		stop:         func() { cancel(); ad.Stop() },
+		querier:      q,
+		symbols:      fetchSymbols,
+		symbolGroups: fetchSymbolGroups,
+		symbolParams: fetchContract,
+		volumeSpec:   fetchMinLots,
+		volumeStep:   fetchVolumeStep,
+		setSymMap:    ad.SetSymbolMap,
+		resubscribe:  ad.Resubscribe,
+		swap:         func(ctx context.Context) ([]fact.Fact, error) { return ad.SwapFacts(ctx, m.qbus) },
+	}
+	m.attach(a.Venue, r)
+	log.Printf("[broker] %s (MT5) ready", a.Venue)
+	return nil
+}
+
+// tokenCtx 给 mtapi 调用附加会话 id header（网关按 id 路由）。
+func tokenCtx(ctx context.Context, token string) context.Context {
+	return metadata.AppendToOutgoingContext(ctx, "id", token)
+}
