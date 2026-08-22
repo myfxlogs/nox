@@ -2,6 +2,7 @@ package autotrade
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -155,24 +156,52 @@ func TestAccumulator_FundingAnnualAvg(t *testing.T) {
 	}
 }
 
-// TestAccumulator_ConcurrentNoRace R2 并发冒烟：多 goroutine 各持独立实例并发 Record+Flush。
-// -race 绿（防共享单例回归）。无需 DB——验证无共享状态竞态。
+// TestAccumulator_ConcurrentNoRace R8.1 DSN 版：多 goroutine 各持独立实例并发 Record+真调 Flush。
+// -race 绿（防共享单例回归）。各 goroutine 用不同 comboKey 避免 DB 行锁竞争；
+// 验证无共享状态竞态 + Flush 真实落库不 panic。
 func TestAccumulator_ConcurrentNoRace(t *testing.T) {
+	s := testAccumStore(t)
+	ctx := context.Background()
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE combo_daily_rollup`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
 	const n = 10
-	done := make(chan struct{}, n)
+	done := make(chan error, n)
+	now := time.Now().UTC()
 	for i := 0; i < n; i++ {
 		go func(seed int) {
 			acc := newComboAccumulator()
+			ck := fmt.Sprintf("SWAPARB:AUDJPY:v%d:mt5:vB:mt5", seed)
 			for j := 0; j < 100; j++ {
-				acc.Record("SWAPARB:AUDJPY:52993526:mt5:277842155:mt5", "SWAPARB", float64(seed+j), time.Now())
+				acc.Record(ck, "SWAPARB", float64(seed+j), now)
 			}
-			// Flush 无 store 时会 panic——用 nil store 跳过（只验证 Record 无竞态）
-			// 改为只验证 entries 无 panic
-			_ = acc.entries
-			done <- struct{}{}
+			done <- acc.Flush(ctx, s)
 		}(i)
 	}
 	for i := 0; i < n; i++ {
-		<-done
+		if err := <-done; err != nil {
+			t.Fatalf("goroutine %d flush: %v", i, err)
+		}
+	}
+	// 验证 n 个组合各落库 1 行（samples=100）
+	rows, err := s.Pool().Query(ctx, `SELECT combo_key, samples FROM combo_daily_rollup WHERE combo_key LIKE 'SWAPARB:AUDJPY:v%:mt5:vB:mt5'`)
+	if err != nil {
+		t.Fatalf("query rollup: %v", err)
+	}
+	defer rows.Close()
+	count := 0
+	for rows.Next() {
+		var ck string
+		var samples int
+		if err := rows.Scan(&ck, &samples); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		if samples != 100 {
+			t.Errorf("combo %s: want samples=100, got %d", ck, samples)
+		}
+		count++
+	}
+	if count != n {
+		t.Errorf("want %d rollup rows, got %d", n, count)
 	}
 }

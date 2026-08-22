@@ -9,7 +9,7 @@ import (
 
 // comboAccumulator 当日 combo 累积器（D-080 S4 write-behind，R2 重构）。
 // 每 loop 独立实例（无共享=无竞态）；当日累计 Σ/count/min/max；flush 写累计值直接覆盖；
-// flush 后清零当日 entries；日切时旧日 entries 进 pending 队列，下次 Flush 先写 pending 再写当前。
+// 日切时旧日 entries 进 pending 队列，下次 Flush 先写 pending 再写当前。
 // 严禁增量合并 avg。
 type comboAccumulator struct {
 	day     time.Time // UTC 日期（截断到日）

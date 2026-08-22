@@ -107,19 +107,20 @@ func (e *Engine) Run(ctx context.Context) {
 }
 
 // swapArbLoop D-072 swap 套利：自动发现跨账户 swap 组合，名义额=broker 余额驱动。
-// D-080 R2：每轮独立 accumulator 实例，轮末 flush（零定时器，无共享竞态）。
+// D-080 R7：每 loop 一个长生命周期 accumulator——当日累计、轮末 flush 覆盖写；
+// 日切由 accumulator 内部 pending 队列处理（零定时器，无共享竞态）。
 func (e *Engine) swapArbLoop(ctx context.Context) {
 	if e.quotes == nil {
 		return
 	}
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
+	acc := newComboAccumulator()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			acc := newComboAccumulator()
 			// D-080 S4 N9 修订：判死策略停扫改为停提交——扫描+评估常开喂 rollup
 			e.scanSwapArb(ctx, acc)
 			if err := acc.Flush(ctx, e.store); err != nil {
@@ -154,7 +155,7 @@ func maxPositionsReachedDecision(openCount, maxPositions int) bool {
 // D-072：风控由 gate 统一处理，本函数只产 TradeIntent。
 // B：组合平仓后重入冷却——该 ComboKey 存在 CLOSED 持仓且 closed_at > now() − N 天 → 跳过。
 // H4.1：满仓短路——CountOpenPositions >= MaxPositions 整轮跳过（省逐组合产 intent 撞 gate 的日志噪音）。
-// D-080 R2：acc 由调用方传入（每 loop 独立实例，轮末 flush）。
+// D-080 R7：acc 由调用方传入（每 loop 一个长生命周期实例，轮末 flush 覆盖写）。
 func (e *Engine) scanSwapArb(ctx context.Context, acc *comboAccumulator) {
 	if e.maxPositionsReached(ctx) {
 		return
@@ -391,14 +392,15 @@ func (e *Engine) meanRevertLoop(ctx context.Context) {
 	venueA, venueB := venues[0], venues[1]
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
+	// D-080 R7：每 loop 一个长生命周期 accumulator——当日累计、轮末 flush 覆盖写；
+	// 日切由 accumulator 内部 pending 队列处理（零定时器，无共享竞态）。
+	acc := newComboAccumulator()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// D-080 R2：每轮独立 accumulator，轮末 flush（零定时器，无共享竞态）
 			// D-080 S4 N9 修订：判死策略停扫改为停提交——扫描+评估常开喂 rollup
-			acc := newComboAccumulator()
 			e.scanMeanRevert(ctx, e.cfg.MeanRevertThresh, venueA, venueB, acc)
 			if err := acc.Flush(ctx, e.store); err != nil {
 				log.Printf("[autotrade] meanRevert rollup flush: %v", err)
@@ -409,7 +411,7 @@ func (e *Engine) meanRevertLoop(ctx context.Context) {
 
 // scanMeanRevert 扫描价差，超阈值则产 intent 走 gate（D-072：风控由 gate 统一）。
 // H4.1：满仓短路——CountOpenPositions >= MaxPositions 整轮跳过（省逐组合产 intent 撞 gate 的日志噪音）。
-// D-080 R2：acc 由调用方传入（每 loop 独立实例，轮末 flush）。
+// D-080 R7：acc 由调用方传入（每 loop 一个长生命周期实例，轮末 flush 覆盖写）。
 func (e *Engine) scanMeanRevert(ctx context.Context, symbols map[string]float64, venueA, venueB string, acc *comboAccumulator) {
 	if e.maxPositionsReached(ctx) {
 		return
@@ -478,9 +480,12 @@ func (e *Engine) executeMeanRevert(ctx context.Context, canonical, venueBuy, ven
 }
 
 // oppLoop 订阅机会事件 → 过滤 → 产 intent 走 gate（D-072：风控由 gate 统一）。
+// D-080 R7：每 loop 一个长生命周期 accumulator——当日累计、轮末 flush 覆盖写；
+// 日切由 accumulator 内部 pending 队列处理（零定时器，无共享竞态）。
 func (e *Engine) oppLoop(ctx context.Context) {
 	ch, unsub := e.oppTopic.Subscribe()
 	defer unsub()
+	acc := newComboAccumulator()
 	for {
 		select {
 		case <-ctx.Done():
@@ -490,8 +495,6 @@ func (e *Engine) oppLoop(ctx context.Context) {
 				return
 			}
 			log.Printf("[autotrade] recv opp=%s type=%s netBps=%.2f buy=%s sell=%s", opp.ID, opp.Type, opp.NetBps, opp.VenueBuy, opp.VenueSell)
-			// D-080 R2：每事件独立 accumulator，处理完 flush（零定时器，无共享竞态）
-			acc := newComboAccumulator()
 			e.handleOpportunity(ctx, opp, acc)
 			if err := acc.Flush(ctx, e.store); err != nil {
 				log.Printf("[autotrade] opp rollup flush: %v", err)
@@ -506,7 +509,7 @@ func isCEXVenue(venue string) bool {
 }
 
 // handleOpportunity 过滤机会 → 产 intent 走 gate（D-072：风控由 gate 统一）。
-// D-080 R2：acc 由调用方传入（每事件独立实例，处理完 flush）。
+// D-080 R7：acc 由调用方传入（每 loop 一个长生命周期实例，处理完 flush 覆盖写）。
 func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity, acc *comboAccumulator) {
 	// D-080 S4：全组合喂入 rollup 累积器（含低于门槛——覆盖度完整，write-behind）
 	acc.Record(opp.ID, opp.Type, opp.NetBps, time.Now())
