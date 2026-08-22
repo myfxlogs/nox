@@ -69,7 +69,8 @@ func carryCand(gross float64) detector.Candidate {
 }
 
 // newNotifyEngine 装配带 oppTopic 的引擎 + 订阅收集器。throttle 取极小值使同 symbol 连续扫描可过。
-func newNotifyEngine(t *testing.T, cand detector.Candidate, minNotify float64) (*Engine, <-chan pgstore.Opportunity, *fakeOppStore) {
+// 修复⑭ S3：退役 minNotifyNetBps 发布门槛 → oppTopic 全量事件流，装配去 minNotify 参。
+func newNotifyEngine(t *testing.T, cand detector.Candidate) (*Engine, <-chan pgstore.Opportunity, *fakeOppStore) {
 	t.Helper()
 	qbus := bus.New()
 	store := newFakeOppStore()
@@ -80,7 +81,7 @@ func newNotifyEngine(t *testing.T, cand detector.Candidate, minNotify float64) (
 		OpportunityTTL:       30 * time.Second,
 	}
 	topic := bus.NewTopic[pgstore.Opportunity]()
-	e := New(qbus, []detector.Detector{&fakeDetector{candidates: []detector.Candidate{cand}}}, cfg, store, NewFactCache(), testCommissionResolver(t, nil, nil), time.Nanosecond, topic, minNotify, 0)
+	e := New(qbus, []detector.Detector{&fakeDetector{candidates: []detector.Candidate{cand}}}, cfg, store, NewFactCache(), testCommissionResolver(t, nil, nil), time.Nanosecond, topic, 0)
 	ch, cancel := topic.Subscribe()
 	t.Cleanup(cancel)
 	return e, ch, store
@@ -110,9 +111,9 @@ func drainTopic(ch <-chan pgstore.Opportunity) int {
 	}
 }
 
-// TestNotifyNewOpportunity_NewInsertPublishes 新插入 net≥门槛 → 发布 1 条。
+// TestNotifyNewOpportunity_NewInsertPublishes 新插入 → 发布 1 条（S3 全量事件流）。
 func TestNotifyNewOpportunity_NewInsertPublishes(t *testing.T) {
-	e, ch, store := newNotifyEngine(t, carryCand(20.0), 10.0) // net 16 ≥ 10
+	e, ch, store := newNotifyEngine(t, carryCand(20.0)) // net 16
 	scanCandidate(t, e, carryCand(20.0))
 	if n := drainTopic(ch); n != 1 {
 		t.Errorf("publish count want 1, got %d", n)
@@ -125,7 +126,7 @@ func TestNotifyNewOpportunity_NewInsertPublishes(t *testing.T) {
 // TestNotifyNewOpportunity_RefreshStillPublishes 同 id 刷新 → 仍发布（实施修正①：事件流常开；30s 快照兜底属 UI 路径）。
 func TestNotifyNewOpportunity_RefreshStillPublishes(t *testing.T) {
 	cand := carryCand(20.0)
-	e, ch, store := newNotifyEngine(t, cand, 10.0)
+	e, ch, store := newNotifyEngine(t, cand)
 	scanCandidate(t, e, cand) // 首次：inserted=true → 发布 1
 	if n := drainTopic(ch); n != 1 {
 		t.Fatalf("first scan publish count want 1, got %d", n)
@@ -139,21 +140,22 @@ func TestNotifyNewOpportunity_RefreshStillPublishes(t *testing.T) {
 	}
 }
 
-// TestNotifyNewOpportunity_BelowThresholdNotPublishes 新插入但 net<门槛 → 不发布（仍写库）。
-func TestNotifyNewOpportunity_BelowThresholdNotPublishes(t *testing.T) {
-	e, ch, store := newNotifyEngine(t, carryCand(5.0), 10.0) // net 1 < 10
+// TestNotifyNewOpportunity_BelowThresholdStillPublishes 低净值仍发布仍写库（修复⑭ S3：
+// 退役 minNotifyNetBps 发布门槛 → oppTopic 全量事件流，低净值组合入库即发布，由前端显示层过滤）。
+func TestNotifyNewOpportunity_BelowThresholdStillPublishes(t *testing.T) {
+	e, ch, store := newNotifyEngine(t, carryCand(5.0)) // net 1（原 < 门槛 10 不发布，S3 后仍发布）
 	scanCandidate(t, e, carryCand(5.0))
-	if n := drainTopic(ch); n != 0 {
-		t.Errorf("publish count want 0, got %d", n)
+	if n := drainTopic(ch); n != 1 {
+		t.Errorf("publish count want 1（S3 全量发布）, got %d", n)
 	}
 	if c := store.count(); c != 1 {
-		t.Errorf("upsert count want 1（低净值仍写库，仅不推送）, got %d", c)
+		t.Errorf("upsert count want 1（低净值仍写库）, got %d", c)
 	}
 }
 
 // TestNotifyNewOpportunity_TrapSkipsStoreAndPublish trap（net≤0）→ 不写库不发布。
 func TestNotifyNewOpportunity_TrapSkipsStoreAndPublish(t *testing.T) {
-	e, ch, store := newNotifyEngine(t, carryCand(3.0), 10.0) // net -1 ≤ 0 → RatingTrap
+	e, ch, store := newNotifyEngine(t, carryCand(3.0)) // net -1 ≤ 0 → RatingTrap
 	scanCandidate(t, e, carryCand(3.0))
 	if n := drainTopic(ch); n != 0 {
 		t.Errorf("publish count want 0, got %d", n)

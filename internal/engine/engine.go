@@ -157,10 +157,10 @@ type Engine struct {
 	facts         *FactCache
 	commissionFor func(venueKey string) float64
 	scanThrottle  time.Duration
-	// oppTopic 新机会站内推送总线（D-050）：仅新插入且净收益 ≥ 门槛时发布。nil = 未接线（测试可不接）。
+	// oppTopic 新机会站内推送总线（D-050；修复⑭ S3 退役发布门槛 → 全量事件流）：
+	// upsert 成功即发布（oppTopic 定性为全量事件流，UI 侧 30s 快照+前端默认 ≥5 显示过滤兜底）。
+	// nil = 未接线（测试可不接）。
 	oppTopic *bus.Topic[pgstore.Opportunity]
-	// minNotifyNetBps 机会推送提醒门槛（bps）；0 = 全部新机会都提醒（config.ARB_NOTIFY_MIN_NET_BPS）。
-	minNotifyNetBps float64
 	// minStoreNetBps CROSS_VENUE 入库最低净收益（bps）；D-078 round-trip 修正：
 	// 低于此值的价差型机会不入库（从源头消除垃圾）。仅适用于 CROSS_VENUE（net 为一次性 bps）；
 	// 息差型 net 为年化百分点，由检测器 MinNetAnnualized 门槛过滤。
@@ -175,9 +175,9 @@ type Engine struct {
 }
 
 // New 创建引擎。commissionFor 必填（成本正确性依赖真实佣金，D-036），nil = 装配错误直接 panic。
-// oppTopic 允许 nil（测试不接推送）；minNotifyNetBps 为提醒门槛（缺省 0 = 所有新机会都推）。
+// oppTopic 允许 nil（测试不接推送）；修复⑭ S3 退役 minNotifyNetBps 发布门槛 → oppTopic 全量事件流。
 // minStoreNetBps 为 CROSS_VENUE 入库门槛（D-078，缺省 0 = 不过滤）。
-func New(b *bus.QuoteBus, detectors []detector.Detector, cfg evaluator.Config, store opportunityStore, fc *FactCache, commissionFor func(venueKey string) float64, scanThrottle time.Duration, oppTopic *bus.Topic[pgstore.Opportunity], minNotifyNetBps, minStoreNetBps float64) *Engine {
+func New(b *bus.QuoteBus, detectors []detector.Detector, cfg evaluator.Config, store opportunityStore, fc *FactCache, commissionFor func(venueKey string) float64, scanThrottle time.Duration, oppTopic *bus.Topic[pgstore.Opportunity], minStoreNetBps float64) *Engine {
 	if commissionFor == nil {
 		panic("engine: commissionFor resolver required (D-036 per-venue 佣金)")
 	}
@@ -185,17 +185,16 @@ func New(b *bus.QuoteBus, detectors []detector.Detector, cfg evaluator.Config, s
 		scanThrottle = 30 * time.Second
 	}
 	return &Engine{
-		bus:             b,
-		detectors:       detectors,
-		evalCfg:         cfg,
-		store:           store,
-		facts:           fc,
-		commissionFor:   commissionFor,
-		scanThrottle:    scanThrottle,
-		oppTopic:        oppTopic,
-		minNotifyNetBps: minNotifyNetBps,
-		minStoreNetBps:  minStoreNetBps,
-		lastScan:        make(map[string]time.Time),
+		bus:            b,
+		detectors:      detectors,
+		evalCfg:        cfg,
+		store:          store,
+		facts:          fc,
+		commissionFor:  commissionFor,
+		scanThrottle:   scanThrottle,
+		oppTopic:       oppTopic,
+		minStoreNetBps: minStoreNetBps,
+		lastScan:       make(map[string]time.Time),
 	}
 }
 
@@ -267,10 +266,11 @@ func (e *Engine) onQuote(ctx context.Context, q bus.Quote) {
 			log.Printf("[engine] upsert opportunity %s: %v", result.ID, err)
 			continue
 		}
-		// D-080 实施修正①：oppTopic 双用途（D-050 站内推送 + autotrade 事件流）。
-		// S2 组合键化后 inserted 对存量组合恒 false → 事件断流、rollup 断供（返修包③）。
-		// 每次成功 upsert 且净收益 ≥ 门槛即发布；UI 刷新另有 30s 快照兜底（service.go:1208）。
-		if e.oppTopic != nil && o.NetBps >= e.minNotifyNetBps {
+		// D-080 实施修正① + 修复⑭ S3：oppTopic 双用途（D-050 站内推送 + autotrade 事件流）。
+		// S3 退役 minNotifyNetBps 发布门槛 → upsert 成功即发布（全量事件流）。
+		// 4~5/2~5 区间息差组合原入库不发布致 rollup 覆盖缺口，现全量发布由前端显示层过滤。
+		// UI 刷新另有 30s 快照兜底（service.go:1208）；前端默认 ≥5bps 显示过滤（常量，语义自立）。
+		if e.oppTopic != nil {
 			e.oppTopic.Publish(*o)
 		}
 	}

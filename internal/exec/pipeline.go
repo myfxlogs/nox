@@ -30,6 +30,11 @@ var (
 	ErrMaxOpenPositions = errors.New("max open positions reached")
 	// ErrDuplicateExecution 该机会已有未平仓持仓，拒绝重复执行（幂等防重）。
 	ErrDuplicateExecution = errors.New("opportunity already has an open position")
+	// ErrEmptyPositionType 持仓类型为空，拒绝建仓（修复⑭ S4：空 type 撞 positions_type_check，
+	// 生产数据完整性隐患——空 type 持仓本不该被创建）。
+	ErrEmptyPositionType = errors.New("position type required (empty type would violate positions_type_check)")
+	// ErrEmptyLegs legs 为空，拒绝建仓（修复⑭ S4：nil legs 无下单意图，不应落库）。
+	ErrEmptyLegs = errors.New("legs required (nil/empty legs has no execution intent)")
 )
 
 // Pipeline 是执行管线（§13.1）。
@@ -106,7 +111,16 @@ type LegResult struct {
 
 // Execute 执行机会（§13.1）。
 // opportunityID + requestID 幂等：重复提交返回已有 position。
-func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID string, legs []LegSpec) (*ExecuteResult, error) {
+func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posType string, legs []LegSpec) (*ExecuteResult, error) {
+	// 风控⓪：fail-fast 入口守卫（修复⑭ S4）。空 type 撞 positions_type_check 约束、nil legs 无
+	// 下单意图——两者均不应落库，在触达任何 DB 写或风控查询前拒绝（生产数据完整性隐患）。
+	if posType == "" {
+		return nil, ErrEmptyPositionType
+	}
+	if len(legs) == 0 {
+		return nil, ErrEmptyLegs
+	}
+
 	// 风控①：持仓上限（D-058）。MaxOpenPositions>0 才启用；OPEN+OPENING+LEGGED 计数超限拒单。
 	// check-then-act 无 DB 级原子性——当前单用户人工确认，接受窗口竞态（全自动才需约束）。
 	if p.limits.MaxOpenPositions > 0 {
@@ -130,9 +144,11 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID string,
 		return nil, ErrDuplicateExecution
 	}
 
-	// 建 position(OPENING)
+	// 建 position(OPENING)——type 在创建时即写入（修复⑭ S4：原创建空 type 撞 positions_type_check，
+	// 靠调用方事后 UpdatePositionMeta 补 type，空窗期约束已拒）。
 	posID, err := p.store.CreatePosition(ctx, &pgstore.Position{
 		OpportunityID: opportunityID,
+		Type:          posType,
 		Status:        "OPENING",
 	})
 	if err != nil {
