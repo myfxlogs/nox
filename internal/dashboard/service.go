@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/combo"
 	"arb/internal/exec"
 	"arb/internal/fact"
 	"arb/internal/position"
@@ -556,7 +557,7 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 	if err := s.checkLegVolume(venueSell, qsell.VenueSymbol, sellQty); err != nil {
 		return "FAILED", err.Error(), 0
 	}
-	oppID := fmt.Sprintf("MEANREVERT:%s:%s:%s:%d", canonical, venueBuy, venueSell, time.Now().UnixMilli())
+	oppID := combo.Key("MEANREVERT", canonical, venueBuy, venueSell)
 	legs := []exec.LegSpec{
 		{VenueKey: venueBuy, VenueSymbol: qbuy.VenueSymbol, Side: "BUY", Qty: qty, PriceExpected: qbuy.Ask},
 		{VenueKey: venueSell, VenueSymbol: qsell.VenueSymbol, Side: "SELL", Qty: sellQty, PriceExpected: qsell.Bid},
