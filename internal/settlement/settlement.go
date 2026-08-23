@@ -33,8 +33,8 @@ type Deps interface {
 	GetStrategyStat(ctx context.Context, strategy string) (*pgstore.StrategyStat, error)
 	// DisableStrategy 禁用策略（淘汰）。
 	DisableStrategy(ctx context.Context, strategy, reason string) error
-	// InsertSettlement 写 position_settlements（幂等 ON CONFLICT DO NOTHING）。
-	InsertSettlement(ctx context.Context, s *pgstore.SettlementRow) error
+	// InsertSettlement 写 position_settlements（幂等 ON CONFLICT DO NOTHING，返修包②返回 won）。
+	InsertSettlement(ctx context.Context, s *pgstore.SettlementRow) (won bool, err error)
 	// HasSettlement 查 position_settlements 是否已有行（幂等短路）。
 	HasSettlement(ctx context.Context, posID int64) (bool, error)
 }
@@ -98,20 +98,29 @@ func Settle(ctx context.Context, deps Deps, posID int64, elim Eliminator) error 
 	}
 
 	// 6. 写 position_settlements（先写防并发，ON CONFLICT DO NOTHING）
+	// 返修包②：InsertSettlement 返回 won——输家（并发对手已写入）直接 return nil，不走步骤 7/8 防双计。
+	// 附带小项：skipped 行 notional_usd 写 NULL（0 是伪造值）。
 	row := &pgstore.SettlementRow{
 		PositionID:    posID,
 		Vkey:          vkey,
 		ExpectedUsd:   expectedUsd,
-		NotionalUsd:   notionalUsd,
 		HoldDays:      holdDays,
 		SkippedReason: skippedReason,
 		SettledAt:     time.Now(),
 	}
+	if skippedReason == "" {
+		row.NotionalUsd = &notionalUsd // 非跳过行写真值
+	} // 跳过行 NotionalUsd=nil → INSERT 写 NULL
 	if p.RealizedPnl != nil {
 		row.RealizedUsd = *p.RealizedPnl
 	}
-	if err := deps.InsertSettlement(ctx, row); err != nil {
+	won, err := deps.InsertSettlement(ctx, row)
+	if err != nil {
 		return fmt.Errorf("settle: insert settlement: %w", err)
+	}
+	if !won {
+		log.Printf("[settlement] pos=%d concurrent loser (settlement already exists), skipping stat update", posID)
+		return nil
 	}
 
 	// 7. 跳过=不入样本不入统计，直接返回
