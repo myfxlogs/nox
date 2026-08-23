@@ -77,8 +77,9 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 	}
 	// D-090 首帧快照：订阅建立后、进 select 前，AllLatest 按 watchlist 过滤逐条 Send
 	// （秒开不等 tick；与 ListLatestQuotes 同源 quoteToProto）。
+	// 返修包① R1：过滤改用 watchlistHitQuote（双维：symbol+venueKey）。
 	for _, q := range s.qbus.AllLatest() {
-		if !s.watchlistHit(q.Symbol) {
+		if !s.watchlistHitQuote(q) {
 			continue
 		}
 		if err := stream.Send(&v1.StreamUpdatesResponse{
@@ -99,8 +100,9 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 			if !ok {
 				return nil
 			}
-			// D-090：RLock 命中检查——未命中丢弃（治吵三刀之一：只推自选）。
-			if !s.watchlistHit(q.Symbol) {
+			// D-090 返修包① R1：RLock 双维命中检查——symbol∈set 且（venues 空 或 venueKey∈venues）。
+			// 未命中丢弃（治吵三刀之一：只推自选）。
+			if !s.watchlistHitQuote(q) {
 				continue
 			}
 			// 蓄压不 Send（复用 VenueKey()，勿手拼），等 flushTicker 周期 flush。

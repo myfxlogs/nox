@@ -66,8 +66,9 @@ type Service struct {
 	frontCfg FrontConfig
 	// D-090 自选报价条：watchlist 内存缓存（Set 全程持锁，case 1 RLock 命中检查）。
 	// watchlistSet nil = 未初始化（首次 GetWatchlist 或 StreamUpdates 进 select 前查库填）。
+	// 返修包① R1：值升级为 per-item venue 集合（空集合=全部源），key=canonical。
 	watchlistMu       sync.RWMutex
-	watchlistSet      map[string]struct{}
+	watchlistSet      map[string]map[string]struct{}
 	watchlistInitOnce bool // true = 已查库初始化过（空表也置 true，避免重复查）
 	// quoteFlushInterval StreamUpdates case 1 蓄压 flush 间隔（默认 1s，测试注 10ms）。
 	quoteFlushInterval time.Duration

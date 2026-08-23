@@ -12,12 +12,42 @@ import (
 	"connectrpc.com/connect"
 )
 
-// TestWatchlistHit_未初始化返回false D-090：缓存未初始化时 watchlistHit 应返回 false
-// （治 App 根流先于任何 GetWatchlist 启动时过滤失效——ensureWatchlistLoaded 先行）。
-func TestWatchlistHit_未初始化返回false(t *testing.T) {
+// TestWatchlistHitQuote_未初始化返回false D-090 返修包① R1：缓存未初始化时 watchlistHitQuote 应返回 false。
+func TestWatchlistHitQuote_未初始化返回false(t *testing.T) {
 	s := &Service{}
-	if s.watchlistHit("AUDJPY") {
-		t.Error("未初始化缓存 watchlistHit 应返回 false，got true")
+	q := bus.Quote{Symbol: "AUDJPY", Venue: "icmarkets", VenueType: "mt5"}
+	if s.watchlistHitQuote(q) {
+		t.Error("未初始化缓存 watchlistHitQuote 应返回 false，got true")
+	}
+}
+
+// TestWatchlistHitQuote_双维过滤 D-090 返修包① R1：venue 过滤命中/不命中/空=全部。
+// 直接构造 watchlistSet（不经 DB），验证 watchlistHitQuote 三态。
+func TestWatchlistHitQuote_双维过滤(t *testing.T) {
+	s := &Service{
+		watchlistSet: map[string]map[string]struct{}{
+			"AUDJPY":  {"icmarkets:mt5": {}, "fxts:mt5": {}}, // 限定两源
+			"BTCUSDT": {},                                    // 空 = 全部源
+		},
+		watchlistInitOnce: true,
+	}
+	tests := []struct {
+		name string
+		q    bus.Quote
+		want bool
+	}{
+		{"symbol 命中 + venue 命中", bus.Quote{Symbol: "AUDJPY", Venue: "icmarkets", VenueType: "mt5"}, true},
+		{"symbol 命中 + venue 不命中", bus.Quote{Symbol: "AUDJPY", Venue: "binance", VenueType: "spot"}, false},
+		{"symbol 命中 + venues 空=全部", bus.Quote{Symbol: "BTCUSDT", Venue: "binance", VenueType: "spot"}, true},
+		{"symbol 命中 + venues 空=全部（另一源）", bus.Quote{Symbol: "BTCUSDT", Venue: "okx", VenueType: "perp"}, true},
+		{"symbol 不命中", bus.Quote{Symbol: "EURUSD", Venue: "icmarkets", VenueType: "mt5"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := s.watchlistHitQuote(tt.q); got != tt.want {
+				t.Errorf("watchlistHitQuote(%+v) = %v, want %v", tt.q, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -39,10 +69,11 @@ func TestPendingQuote_覆盖最新(t *testing.T) {
 	}
 }
 
-// TestSetWatchlist_缓存即时生效_未知拒绝 D-090（DSN-gated，ARB_TEST_PG_SERVICE_DSN）：
+// TestSetWatchlist_缓存即时生效_未知拒绝_双维 D-090 返修包① R1（DSN-gated，ARB_TEST_PG_SERVICE_DSN）：
 // SetWatchlist 全程持锁——校验未知 canonical 整单拒绝（FailedPrecondition）+ 写库 + 同锁内更新缓存。
-// 缓存即时生效：SetWatchlist 后 watchlistHit 立即反映新清单。
-func TestSetWatchlist_缓存即时生效_未知拒绝(t *testing.T) {
+// 缓存即时生效：SetWatchlist 后 watchlistHitQuote 立即反映新清单（含 venue 过滤）。
+// venues 不强校验：存非法 venue 不报错（设计 §9 裁定）。
+func TestSetWatchlist_缓存即时生效_未知拒绝_双维(t *testing.T) {
 	st := testServiceStore(t)
 	s := &Service{store: st}
 	ctx := context.Background()
@@ -57,7 +88,7 @@ func TestSetWatchlist_缓存即时生效_未知拒绝(t *testing.T) {
 
 	// 1. 未知 canonical 整单拒绝（FOOBAR 不在 allCanonicals）
 	_, err := s.SetWatchlist(ctx, connect.NewRequest(&v1.SetWatchlistRequest{
-		Canonical: []string{"AUDJPY", "FOOBAR"},
+		Items: []*v1.WatchlistItem{{Canonical: "AUDJPY"}, {Canonical: "FOOBAR"}},
 	}))
 	if err == nil {
 		t.Fatal("未知 canonical 应整单拒绝, got nil")
@@ -66,36 +97,58 @@ func TestSetWatchlist_缓存即时生效_未知拒绝(t *testing.T) {
 		t.Errorf("应 FailedPrecondition, got %v", err)
 	}
 	// 拒绝后缓存不变（仍空）
-	if s.watchlistHit("AUDJPY") {
+	q := bus.Quote{Symbol: "AUDJPY", Venue: "icmarkets", VenueType: "mt5"}
+	if s.watchlistHitQuote(q) {
 		t.Error("拒绝后缓存不应含 AUDJPY")
 	}
 
-	// 2. 合法清单全量写入 + 缓存即时生效
-	want := []string{"AUDJPY", "USDJPY", "XAUUSD"}
-	resp, err := s.SetWatchlist(ctx, connect.NewRequest(&v1.SetWatchlistRequest{Canonical: want}))
+	// 2. 合法清单全量写入 + 缓存即时生效（含 venue 限定）
+	wantItems := []*v1.WatchlistItem{
+		{Canonical: "AUDJPY", Venues: []string{"icmarkets:mt5"}}, // 限定一源
+		{Canonical: "USDJPY"}, // 全部源
+	}
+	resp, err := s.SetWatchlist(ctx, connect.NewRequest(&v1.SetWatchlistRequest{Items: wantItems}))
 	if err != nil {
 		t.Fatalf("SetWatchlist 合法: %v", err)
 	}
-	got := resp.Msg.GetCanonical()
-	if len(got) != len(want) {
-		t.Errorf("回显长度 %d, want %d", len(got), len(want))
+	got := resp.Msg.GetItems()
+	if len(got) != len(wantItems) {
+		t.Errorf("回显长度 %d, want %d", len(got), len(wantItems))
 	}
-	for _, c := range want {
-		if !s.watchlistHit(c) {
-			t.Errorf("缓存即时生效失败: %s 未命中", c)
-		}
+
+	// AUDJPY 限定 icmarkets:mt5 → 命中；binance:spot → 不命中
+	qHit := bus.Quote{Symbol: "AUDJPY", Venue: "icmarkets", VenueType: "mt5"}
+	if !s.watchlistHitQuote(qHit) {
+		t.Error("AUDJPY icmarkets:mt5 应命中（venue 限定内）")
 	}
-	if s.watchlistHit("EURUSD") {
+	qMiss := bus.Quote{Symbol: "AUDJPY", Venue: "binance", VenueType: "spot"}
+	if s.watchlistHitQuote(qMiss) {
+		t.Error("AUDJPY binance:spot 不应命中（venue 限定外）")
+	}
+	// USDJPY venues 空 = 全部源 → 任意 venue 命中
+	qAny := bus.Quote{Symbol: "USDJPY", Venue: "any", VenueType: "mt5"}
+	if !s.watchlistHitQuote(qAny) {
+		t.Error("USDJPY venues 空=全部源，任意 venue 应命中")
+	}
+	// EURUSD 未选
+	qOut := bus.Quote{Symbol: "EURUSD", Venue: "icmarkets", VenueType: "mt5"}
+	if s.watchlistHitQuote(qOut) {
 		t.Error("EURUSD 未选不应命中")
 	}
 
-	// 3. 空清单=清空（合法）+ 缓存即时清空
-	if _, err := s.SetWatchlist(ctx, connect.NewRequest(&v1.SetWatchlistRequest{Canonical: nil})); err != nil {
+	// 3. venues 不强校验：存非法 venue 不报错（设计 §9 裁定）
+	_, err = s.SetWatchlist(ctx, connect.NewRequest(&v1.SetWatchlistRequest{
+		Items: []*v1.WatchlistItem{{Canonical: "AUDJPY", Venues: []string{"nonexistent:fake"}}},
+	}))
+	if err != nil {
+		t.Errorf("venues 不强校验，非法 venue 不应报错, got %v", err)
+	}
+
+	// 4. 空清单=清空（合法）+ 缓存即时清空
+	if _, err := s.SetWatchlist(ctx, connect.NewRequest(&v1.SetWatchlistRequest{Items: nil})); err != nil {
 		t.Fatalf("SetWatchlist 清空: %v", err)
 	}
-	for _, c := range want {
-		if s.watchlistHit(c) {
-			t.Errorf("清空后缓存不应含 %s", c)
-		}
+	if s.watchlistHitQuote(qHit) {
+		t.Errorf("清空后缓存不应含 AUDJPY")
 	}
 }
