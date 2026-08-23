@@ -1,0 +1,260 @@
+// Package settlement 结算钩子（D-087 §3.2）。
+//
+// 每笔平仓有唯一、幂等、可审计的结算动作：strategy_stats / verification_stats / 淘汰统计同源更新。
+// Settle 是唯一结算入口，三个调用点（手动平仓 RPC / scanAndClose / reconcile auto_close）统一替换。
+package settlement
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"time"
+
+	"arb/internal/notional"
+	"arb/internal/store/pgstore"
+	"arb/internal/verification"
+)
+
+// Deps 结算依赖（注入面，调用方装配）。
+type Deps interface {
+	// GetPosition 读单条持仓（含 typed 字段）。
+	GetPosition(ctx context.Context, id int64) (*pgstore.Position, error)
+	// ListPositionLegs 读持仓腿。
+	ListPositionLegs(ctx context.Context, posID int64) ([]pgstore.PositionLeg, error)
+	// ContractSizeByCanonical 查 CS（已含 VenueAccount 归一）。
+	ContractSizeByCanonical(ctx context.Context, venue, canonical string) (float64, bool, error)
+	// USDPer 查计价币→USD 汇率（FXRateProvider）。
+	USDPer(ctx context.Context, quoteCcy string, at time.Time) (float64, bool)
+	// UpsertVerificationSample 增量验证统计。
+	UpsertVerificationSample(ctx context.Context, vkey string, expectedUsd, realizedUsd float64, closedAt time.Time) error
+	// UpdateStrategyStat 策略统计增量。
+	UpdateStrategyStat(ctx context.Context, strategy string, realizedPnl float64) error
+	// GetStrategyStat 读策略统计（淘汰判定用）。
+	GetStrategyStat(ctx context.Context, strategy string) (*pgstore.StrategyStat, error)
+	// DisableStrategy 禁用策略（淘汰）。
+	DisableStrategy(ctx context.Context, strategy, reason string) error
+	// InsertSettlement 写 position_settlements（幂等 ON CONFLICT DO NOTHING）。
+	InsertSettlement(ctx context.Context, s *pgstore.SettlementRow) error
+	// HasSettlement 查 position_settlements 是否已有行（幂等短路）。
+	HasSettlement(ctx context.Context, posID int64) (bool, error)
+}
+
+// Eliminator 淘汰判定函数类型（从 autotrade.evaluateElimination 抽出，避免环依赖）。
+// 返回 (shouldDisable, reason)。
+type Eliminator func(totalTrades int, winRate, avgPnl float64, disabled bool) (bool, string)
+
+// Settle 唯一结算入口（D-087 §3.2）。
+// 幂等：已有 position_settlements 行 → 直接返回。
+// 跳过规则（写行但不入样本）：realized NULL / expectedUsd≤0 / fx 缺失。
+// 通过 → UpsertVerificationSample + UpdateStrategyStat + 淘汰检查。
+func Settle(ctx context.Context, deps Deps, posID int64, elim Eliminator) error {
+	// 幂等短路
+	has, err := deps.HasSettlement(ctx, posID)
+	if err != nil {
+		return fmt.Errorf("settle: check existing: %w", err)
+	}
+	if has {
+		return nil
+	}
+
+	// 1. 读 position
+	p, err := deps.GetPosition(ctx, posID)
+	if err != nil {
+		return fmt.Errorf("settle: get position %d: %w", posID, err)
+	}
+	if p.Status != "CLOSED" {
+		return fmt.Errorf("settle: position %d not CLOSED (status=%s)", posID, p.Status)
+	}
+
+	// 2. 派生 vkey
+	vkey := verification.VkeyFromOppID(p.OpportunityID)
+
+	// 3. 取腿算 notional + holdDays
+	legs, err := deps.ListPositionLegs(ctx, posID)
+	if err != nil {
+		return fmt.Errorf("settle: list legs: %w", err)
+	}
+	canonical := canonicalFromOppID(p.OpportunityID)
+	notionalUsd, fxSkipped := computeNotionalUSD(ctx, deps, legs, canonical)
+	holdDays := computeHoldDays(p, legs)
+
+	// 4. 算 expectedUsd（D-087 §3.4 typed 新签名：netBps + swapBpsDaily 按字段取值）
+	netBps := p.ExpectedNetBps
+	swapBpsDaily := 0.0
+	if p.ExpectedSwapBpsDaily != nil {
+		swapBpsDaily = *p.ExpectedSwapBpsDaily
+	}
+	expectedUsd := verification.ExpectedUsd(p.Type, netBps, swapBpsDaily, notionalUsd, holdDays)
+
+	// 5. 跳过规则
+	skippedReason := ""
+	switch {
+	case p.RealizedPnl == nil:
+		skippedReason = "realized_pnl is NULL"
+	case fxSkipped:
+		skippedReason = "fx: quote ccy unavailable"
+	case expectedUsd <= 0:
+		skippedReason = "expected_usd <= 0"
+	}
+
+	// 6. 写 position_settlements（先写防并发，ON CONFLICT DO NOTHING）
+	row := &pgstore.SettlementRow{
+		PositionID:    posID,
+		Vkey:          vkey,
+		ExpectedUsd:   expectedUsd,
+		NotionalUsd:   notionalUsd,
+		HoldDays:      holdDays,
+		SkippedReason: skippedReason,
+		SettledAt:     time.Now(),
+	}
+	if p.RealizedPnl != nil {
+		row.RealizedUsd = *p.RealizedPnl
+	}
+	if err := deps.InsertSettlement(ctx, row); err != nil {
+		return fmt.Errorf("settle: insert settlement: %w", err)
+	}
+
+	// 7. 跳过=不入样本不入统计，直接返回
+	if skippedReason != "" {
+		log.Printf("[settlement] pos=%d skipped: %s", posID, skippedReason)
+		return nil
+	}
+
+	// 8. 通过 → UpsertVerificationSample + UpdateStrategyStat + 淘汰
+	closedAt := time.Now()
+	if p.ClosedAt != nil {
+		closedAt = *p.ClosedAt
+	}
+	if err := deps.UpsertVerificationSample(ctx, vkey, expectedUsd, *p.RealizedPnl, closedAt); err != nil {
+		log.Printf("[settlement] upsert verification sample pos=%d: %v", posID, err)
+	}
+	if err := deps.UpdateStrategyStat(ctx, p.Type, *p.RealizedPnl); err != nil {
+		log.Printf("[settlement] update strategy stat pos=%d: %v", posID, err)
+	}
+
+	// 淘汰检查
+	if elim != nil {
+		stat, err := deps.GetStrategyStat(ctx, p.Type)
+		if err != nil {
+			log.Printf("[settlement] get strategy stat: %v", err)
+			return nil
+		}
+		disable, reason := elim(stat.TotalTrades, stat.WinRate, stat.AvgPnl, stat.Disabled)
+		if disable {
+			if err := deps.DisableStrategy(ctx, p.Type, reason); err != nil {
+				log.Printf("[settlement] disable strategy %s: %v", p.Type, err)
+			} else {
+				log.Printf("[settlement] STRATEGY DISABLED type=%s: %s", p.Type, reason)
+			}
+		}
+	}
+	return nil
+}
+
+// computeNotionalUSD Σ OPEN FILLED 腿 LegUSD（CS 经归一 + fx 经 USDPer）。
+// 返回 (notionalUSD, fxSkipped)：任一腿 fx 不可得 → fxSkipped=true（notional 可能部分算）。
+func computeNotionalUSD(ctx context.Context, deps Deps, legs []pgstore.PositionLeg, canonical string) (float64, bool) {
+	quoteCcy := notional.QuoteCcy(canonical)
+	total := 0.0
+	skipped := false
+	for _, l := range legs {
+		if l.Phase != "OPEN" || l.Status != "FILLED" {
+			continue
+		}
+		if l.PriceActual == nil || *l.PriceActual <= 0 || l.Qty <= 0 {
+			continue
+		}
+		cs := 1.0 // CEX 腿 CS=1
+		if c, ok, _ := deps.ContractSizeByCanonical(ctx, l.Venue, canonical); ok && c > 0 {
+			cs = c
+		}
+		fx := 1.0
+		if quoteCcy != "" && quoteCcy != "USD" {
+			rate, ok := deps.USDPer(ctx, quoteCcy, l.Ts)
+			if !ok {
+				skipped = true
+				continue
+			}
+			fx = 1.0 / rate // quoteCcy→USD = 1/(USD per quoteCcy)
+		}
+		total += notional.LegUSD(l.Qty, cs, *l.PriceActual, fx)
+	}
+	return total, skipped
+}
+
+// computeHoldDays (closed_at − opened_at)/24h；opened_at NULL → min(OPEN FILLED 腿 ts)。
+func computeHoldDays(p *pgstore.Position, legs []pgstore.PositionLeg) float64 {
+	if p.ClosedAt == nil {
+		return 0
+	}
+	openedAt := p.OpenedAt
+	if openedAt == nil {
+		var minTs time.Time
+		for _, l := range legs {
+			if l.Phase == "OPEN" && l.Status == "FILLED" {
+				if minTs.IsZero() || l.Ts.Before(minTs) {
+					minTs = l.Ts
+				}
+			}
+		}
+		if !minTs.IsZero() {
+			openedAt = &minTs
+		}
+	}
+	if openedAt == nil {
+		return 0
+	}
+	return p.ClosedAt.Sub(*openedAt).Hours() / 24
+}
+
+// canonicalFromOppID 从 opportunity_id 解析 canonical（格式 PREFIX:SYMBOL:...）。
+// 与 verification/pgstore 同源纯函数，本包不依赖 autotrade（避免环依赖）。
+func canonicalFromOppID(oppID string) string {
+	// 剥离旧 tick 尾时间戳
+	ck := oppID
+	if idx := lastIndexColon(oppID); idx >= 0 {
+		tail := oppID[idx+1:]
+		if isAllDigits(tail) {
+			ck = oppID[:idx]
+		}
+	}
+	parts := splitColon(ck)
+	if len(parts) >= 2 {
+		return parts[1]
+	}
+	return ""
+}
+
+func lastIndexColon(s string) int {
+	for i := len(s) - 1; i >= 0; i-- {
+		if s[i] == ':' {
+			return i
+		}
+	}
+	return -1
+}
+
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func splitColon(s string) []string {
+	var parts []string
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == ':' {
+			parts = append(parts, s[start:i])
+			start = i + 1
+		}
+	}
+	parts = append(parts, s[start:])
+	return parts
+}
