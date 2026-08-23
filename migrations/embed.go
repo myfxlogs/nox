@@ -61,3 +61,6 @@ var SettlementTypedColumnsSQL string
 
 //go:embed 0039_watchlist.sql
 var WatchlistSQL string
+
+//go:embed 0040_watchlist_venues.sql
+var WatchlistVenuesSQL string

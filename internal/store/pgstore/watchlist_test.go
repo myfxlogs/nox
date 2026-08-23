@@ -5,13 +5,13 @@ import (
 	"testing"
 )
 
-// TestWatchlist D-090 S1：建表迁移 / Get 空=空 / Set 全量替换幂等 / 顺序保持。
+// TestWatchlist D-090 S1 + 返修包① R1：建表迁移 / Get 空=空 / Set 全量替换幂等 / 顺序保持 / venues 读写往返 / NULL=全部。
 // DSN-gated：无 ARB_TEST_PG_DSN 跳过（go test ./... 无 PG 环境仍全过）。
 func TestWatchlist(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 
-	// 建表（migrate 已跑 0039，但 testStore 用独立库可能未跑；显式建表幂等）
+	// 建表（migrate 已跑 0039+0040，但 testStore 用独立库可能未跑；显式建表+加列幂等）
 	if _, err := s.pool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS watchlist_symbols (
 			canonical text PRIMARY KEY,
@@ -21,11 +21,14 @@ func TestWatchlist(t *testing.T) {
 	`); err != nil {
 		t.Fatalf("create watchlist_symbols: %v", err)
 	}
+	if _, err := s.pool.Exec(ctx, `ALTER TABLE watchlist_symbols ADD COLUMN IF NOT EXISTS venues text[]`); err != nil {
+		t.Fatalf("alter watchlist_symbols venues: %v", err)
+	}
 	if _, err := s.pool.Exec(ctx, `TRUNCATE watchlist_symbols`); err != nil {
 		t.Fatalf("truncate watchlist: %v", err)
 	}
 
-	// 1. 空表 Get = 空切片（非 nil 切片也接受，但这里期望无行）
+	// 1. 空表 Get = 空切片
 	got, err := s.GetWatchlist(ctx)
 	if err != nil {
 		t.Fatalf("GetWatchlist empty: %v", err)
@@ -34,8 +37,12 @@ func TestWatchlist(t *testing.T) {
 		t.Errorf("空表 GetWatchlist 返回 %d 行, want 0", len(got))
 	}
 
-	// 2. Set 后 Get 顺序一致
-	want := []string{"AUDJPY", "USDJPY", "XAUUSD", "BTCUSDT"}
+	// 2. Set 后 Get 顺序一致 + venues 读写往返（返修包① R1）
+	want := []WatchlistItem{
+		{Canonical: "AUDJPY", Venues: []string{"icmarkets:mt5", "fxts:mt5"}},
+		{Canonical: "USDJPY"}, // venues 空 = 全部源
+		{Canonical: "BTCUSDT", Venues: []string{"binance:spot", "okx:spot"}},
+	}
 	if err := s.SetWatchlist(ctx, want); err != nil {
 		t.Fatalf("SetWatchlist: %v", err)
 	}
@@ -43,12 +50,15 @@ func TestWatchlist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetWatchlist after set: %v", err)
 	}
-	if !sliceEq(got, want) {
-		t.Errorf("Set 后 Get 顺序不一致: got %v, want %v", got, want)
+	if !itemsEq(got, want) {
+		t.Errorf("Set 后 Get 不一致: got %+v, want %+v", got, want)
 	}
 
-	// 3. 二次 Set 全量替换（不同清单）
-	want2 := []string{"EURUSD", "GBPUSD"}
+	// 3. 二次 Set 全量替换（不同清单 + 不同 venues）
+	want2 := []WatchlistItem{
+		{Canonical: "EURUSD", Venues: []string{"icmarkets:mt5"}},
+		{Canonical: "GBPUSD"}, // 全部源
+	}
 	if err := s.SetWatchlist(ctx, want2); err != nil {
 		t.Fatalf("SetWatchlist 2nd: %v", err)
 	}
@@ -56,8 +66,8 @@ func TestWatchlist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetWatchlist after 2nd set: %v", err)
 	}
-	if !sliceEq(got, want2) {
-		t.Errorf("二次 Set 未全量替换: got %v, want %v", got, want2)
+	if !itemsEq(got, want2) {
+		t.Errorf("二次 Set 未全量替换: got %+v, want %+v", got, want2)
 	}
 
 	// 4. 幂等：重复调同入参结果一致
@@ -68,8 +78,8 @@ func TestWatchlist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetWatchlist idempotent: %v", err)
 	}
-	if !sliceEq(got, want2) {
-		t.Errorf("幂等失败: got %v, want %v", got, want2)
+	if !itemsEq(got, want2) {
+		t.Errorf("幂等失败: got %+v, want %+v", got, want2)
 	}
 
 	// 5. 空清单=清空（合法）
@@ -81,8 +91,38 @@ func TestWatchlist(t *testing.T) {
 		t.Fatalf("GetWatchlist after clear: %v", err)
 	}
 	if len(got) != 0 {
-		t.Errorf("清空失败: got %v, want 空", got)
+		t.Errorf("清空失败: got %+v, want 空", got)
 	}
+
+	// 6. NULL venues = 全部源语义（Get 返回 nil Venues）
+	if err := s.SetWatchlist(ctx, []WatchlistItem{{Canonical: "XAUUSD"}}); err != nil {
+		t.Fatalf("SetWatchlist NULL venues: %v", err)
+	}
+	got, err = s.GetWatchlist(ctx)
+	if err != nil {
+		t.Fatalf("GetWatchlist NULL venues: %v", err)
+	}
+	if len(got) != 1 || got[0].Canonical != "XAUUSD" {
+		t.Fatalf("NULL venues: got %+v", got)
+	}
+	if got[0].Venues != nil {
+		t.Errorf("NULL venues 应返回 nil（全部源语义）, got %v", got[0].Venues)
+	}
+}
+
+func itemsEq(a, b []WatchlistItem) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Canonical != b[i].Canonical {
+			return false
+		}
+		if !sliceEq(a[i].Venues, b[i].Venues) {
+			return false
+		}
+	}
+	return true
 }
 
 func sliceEq(a, b []string) bool {

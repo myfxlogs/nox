@@ -1017,16 +1017,23 @@ message GetStrategyLedgerResponse {
 
 // === Watchlist（D-090 自选报价条）===
 
+// WatchlistItem D-090 返修包① R1：自选清单双维项（canonical + venues）。
+// venues 空 = 全部源；非空 = 仅该 venueKey（"{venue}:{venueType}"）集合。
+message WatchlistItem {
+  string canonical = 1;
+  repeated string venues = 2;  // venueKey 集合，空=全部源
+}
+
 message GetWatchlistRequest {}
 
 message GetWatchlistResponse {
-  repeated string canonical = 1;
+  repeated WatchlistItem items = 1;
 }
 
 message SetWatchlistRequest {
-  repeated string canonical = 1;  // 全量替换，顺序即 sort
+  repeated WatchlistItem items = 1;  // 全量替换，顺序即 sort
 }
 
 message SetWatchlistResponse {
-  repeated string canonical = 1;  // 生效清单回显
+  repeated WatchlistItem items = 1;  // 生效清单回显
 }
