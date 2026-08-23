@@ -142,6 +142,10 @@ func positionToProto(p *pgstore.Position) *v1.Position {
 	if p.ExpectedAnnualPct != nil {
 		pb.ExpectedAnnualPct = p.ExpectedAnnualPct
 	}
+	// D-095：SWAPARB 日 swap bps 透传（typed 列 D-087 已建库，enrich 用此算应得）
+	if p.ExpectedSwapBpsDaily != nil {
+		pb.ExpectedSwapBpsDaily = p.ExpectedSwapBpsDaily
+	}
 	return pb
 }
 

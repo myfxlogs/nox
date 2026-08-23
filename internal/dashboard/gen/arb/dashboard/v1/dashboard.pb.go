@@ -2941,20 +2941,27 @@ func (x *PositionLeg) GetTs() *timestamppb.Timestamp {
 }
 
 type Position struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	Id                int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	OpportunityId     string                 `protobuf:"bytes,2,opt,name=opportunity_id,json=opportunityId,proto3" json:"opportunity_id,omitempty"`
-	Type              string                 `protobuf:"bytes,3,opt,name=type,proto3" json:"type,omitempty"`     // CROSS_VENUE / CARRY / FUNDING_HEDGE
-	Status            string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"` // OPENING / OPEN / LEGGED / CLOSING / CLOSED / FAILED
-	ExpectedNetBps    float64                `protobuf:"fixed64,5,opt,name=expected_net_bps,json=expectedNetBps,proto3" json:"expected_net_bps,omitempty"`
-	RealizedPnl       *float64               `protobuf:"fixed64,6,opt,name=realized_pnl,json=realizedPnl,proto3,oneof" json:"realized_pnl,omitempty"`
-	OpenedAt          *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=opened_at,json=openedAt,proto3" json:"opened_at,omitempty"`
-	ClosedAt          *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=closed_at,json=closedAt,proto3" json:"closed_at,omitempty"`
-	Note              string                 `protobuf:"bytes,9,opt,name=note,proto3" json:"note,omitempty"`
-	Legs              []*PositionLeg         `protobuf:"bytes,10,rep,name=legs,proto3" json:"legs,omitempty"`
-	ExpectedAnnualPct *float64               `protobuf:"fixed64,11,opt,name=expected_annual_pct,json=expectedAnnualPct,proto3,oneof" json:"expected_annual_pct,omitempty"` // D-080 S3：承诺年化%（funding 直存/SWAPARB·CARRY 换算/收敛型缺省）
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	Id                    int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	OpportunityId         string                 `protobuf:"bytes,2,opt,name=opportunity_id,json=opportunityId,proto3" json:"opportunity_id,omitempty"`
+	Type                  string                 `protobuf:"bytes,3,opt,name=type,proto3" json:"type,omitempty"`     // CROSS_VENUE / CARRY / FUNDING_HEDGE
+	Status                string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"` // OPENING / OPEN / LEGGED / CLOSING / CLOSED / FAILED
+	ExpectedNetBps        float64                `protobuf:"fixed64,5,opt,name=expected_net_bps,json=expectedNetBps,proto3" json:"expected_net_bps,omitempty"`
+	RealizedPnl           *float64               `protobuf:"fixed64,6,opt,name=realized_pnl,json=realizedPnl,proto3,oneof" json:"realized_pnl,omitempty"`
+	OpenedAt              *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=opened_at,json=openedAt,proto3" json:"opened_at,omitempty"`
+	ClosedAt              *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=closed_at,json=closedAt,proto3" json:"closed_at,omitempty"`
+	Note                  string                 `protobuf:"bytes,9,opt,name=note,proto3" json:"note,omitempty"`
+	Legs                  []*PositionLeg         `protobuf:"bytes,10,rep,name=legs,proto3" json:"legs,omitempty"`
+	ExpectedAnnualPct     *float64               `protobuf:"fixed64,11,opt,name=expected_annual_pct,json=expectedAnnualPct,proto3,oneof" json:"expected_annual_pct,omitempty"`                 // D-080 S3：承诺年化%（funding 直存/SWAPARB·CARRY 换算/收敛型缺省）
+	ExpectedSwapBpsDaily  *float64               `protobuf:"fixed64,12,opt,name=expected_swap_bps_daily,json=expectedSwapBpsDaily,proto3,oneof" json:"expected_swap_bps_daily,omitempty"`      // D-095：SWAPARB 日 swap bps（typed 列透传，D-087 已建库未上 proto）
+	FloatingPnlUsd        *float64               `protobuf:"fixed64,13,opt,name=floating_pnl_usd,json=floatingPnlUsd,proto3,oneof" json:"floating_pnl_usd,omitempty"`                          // D-095：浮动（broker profit 匹配和；未匹配=缺省）
+	SwapAccruedUsd        *float64               `protobuf:"fixed64,14,opt,name=swap_accrued_usd,json=swapAccruedUsd,proto3,oneof" json:"swap_accrued_usd,omitempty"`                          // D-095：已收息差（broker swap 匹配和）
+	NetPnlUsd             *float64               `protobuf:"fixed64,15,opt,name=net_pnl_usd,json=netPnlUsd,proto3,oneof" json:"net_pnl_usd,omitempty"`                                         // D-095：净盈亏=13+14
+	ExpectedSwapUsdToDate *float64               `protobuf:"fixed64,16,opt,name=expected_swap_usd_to_date,json=expectedSwapUsdToDate,proto3,oneof" json:"expected_swap_usd_to_date,omitempty"` // D-095：预期应得（SWAPARB/CARRY）
+	AttainmentPct         *float64               `protobuf:"fixed64,17,opt,name=attainment_pct,json=attainmentPct,proto3,oneof" json:"attainment_pct,omitempty"`                               // D-095：达成率 16 vs 14（息差型）
+	CurrentNetBps         *float64               `protobuf:"fixed64,18,opt,name=current_net_bps,json=currentNetBps,proto3,oneof" json:"current_net_bps,omitempty"`                             // D-095：收敛型当前 bps（rollup 最新）
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *Position) Reset() {
@@ -3060,6 +3067,55 @@ func (x *Position) GetLegs() []*PositionLeg {
 func (x *Position) GetExpectedAnnualPct() float64 {
 	if x != nil && x.ExpectedAnnualPct != nil {
 		return *x.ExpectedAnnualPct
+	}
+	return 0
+}
+
+func (x *Position) GetExpectedSwapBpsDaily() float64 {
+	if x != nil && x.ExpectedSwapBpsDaily != nil {
+		return *x.ExpectedSwapBpsDaily
+	}
+	return 0
+}
+
+func (x *Position) GetFloatingPnlUsd() float64 {
+	if x != nil && x.FloatingPnlUsd != nil {
+		return *x.FloatingPnlUsd
+	}
+	return 0
+}
+
+func (x *Position) GetSwapAccruedUsd() float64 {
+	if x != nil && x.SwapAccruedUsd != nil {
+		return *x.SwapAccruedUsd
+	}
+	return 0
+}
+
+func (x *Position) GetNetPnlUsd() float64 {
+	if x != nil && x.NetPnlUsd != nil {
+		return *x.NetPnlUsd
+	}
+	return 0
+}
+
+func (x *Position) GetExpectedSwapUsdToDate() float64 {
+	if x != nil && x.ExpectedSwapUsdToDate != nil {
+		return *x.ExpectedSwapUsdToDate
+	}
+	return 0
+}
+
+func (x *Position) GetAttainmentPct() float64 {
+	if x != nil && x.AttainmentPct != nil {
+		return *x.AttainmentPct
+	}
+	return 0
+}
+
+func (x *Position) GetCurrentNetBps() float64 {
+	if x != nil && x.CurrentNetBps != nil {
+		return *x.CurrentNetBps
 	}
 	return 0
 }
@@ -9337,7 +9393,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\border_id\x18\f \x01(\tR\aorderId\x12\x16\n" +
 	"\x06status\x18\r \x01(\tR\x06status\x12*\n" +
 	"\x02ts\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\x02tsB\x0f\n" +
-	"\r_price_actual\"\xd6\x03\n" +
+	"\r_price_actual\"\xc8\a\n" +
 	"\bPosition\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12%\n" +
 	"\x0eopportunity_id\x18\x02 \x01(\tR\ropportunityId\x12\x12\n" +
@@ -9350,9 +9406,23 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x04note\x18\t \x01(\tR\x04note\x121\n" +
 	"\x04legs\x18\n" +
 	" \x03(\v2\x1d.arb.dashboard.v1.PositionLegR\x04legs\x123\n" +
-	"\x13expected_annual_pct\x18\v \x01(\x01H\x01R\x11expectedAnnualPct\x88\x01\x01B\x0f\n" +
+	"\x13expected_annual_pct\x18\v \x01(\x01H\x01R\x11expectedAnnualPct\x88\x01\x01\x12:\n" +
+	"\x17expected_swap_bps_daily\x18\f \x01(\x01H\x02R\x14expectedSwapBpsDaily\x88\x01\x01\x12-\n" +
+	"\x10floating_pnl_usd\x18\r \x01(\x01H\x03R\x0efloatingPnlUsd\x88\x01\x01\x12-\n" +
+	"\x10swap_accrued_usd\x18\x0e \x01(\x01H\x04R\x0eswapAccruedUsd\x88\x01\x01\x12#\n" +
+	"\vnet_pnl_usd\x18\x0f \x01(\x01H\x05R\tnetPnlUsd\x88\x01\x01\x12=\n" +
+	"\x19expected_swap_usd_to_date\x18\x10 \x01(\x01H\x06R\x15expectedSwapUsdToDate\x88\x01\x01\x12*\n" +
+	"\x0eattainment_pct\x18\x11 \x01(\x01H\aR\rattainmentPct\x88\x01\x01\x12+\n" +
+	"\x0fcurrent_net_bps\x18\x12 \x01(\x01H\bR\rcurrentNetBps\x88\x01\x01B\x0f\n" +
 	"\r_realized_pnlB\x16\n" +
-	"\x14_expected_annual_pct\"\xcd\x01\n" +
+	"\x14_expected_annual_pctB\x1a\n" +
+	"\x18_expected_swap_bps_dailyB\x13\n" +
+	"\x11_floating_pnl_usdB\x13\n" +
+	"\x11_swap_accrued_usdB\x0e\n" +
+	"\f_net_pnl_usdB\x1c\n" +
+	"\x1a_expected_swap_usd_to_dateB\x11\n" +
+	"\x0f_attainment_pctB\x12\n" +
+	"\x10_current_net_bps\"\xcd\x01\n" +
 	"\x19ExecuteOpportunityRequest\x12%\n" +
 	"\x0eopportunity_id\x18\x01 \x01(\tR\ropportunityId\x12\x1d\n" +
 	"\n" +
