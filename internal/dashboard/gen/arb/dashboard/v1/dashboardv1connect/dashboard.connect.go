@@ -193,6 +193,12 @@ const (
 	// DashboardServiceGetStrategyLedgerProcedure is the fully-qualified name of the DashboardService's
 	// GetStrategyLedger RPC.
 	DashboardServiceGetStrategyLedgerProcedure = "/arb.dashboard.v1.DashboardService/GetStrategyLedger"
+	// DashboardServiceGetWatchlistProcedure is the fully-qualified name of the DashboardService's
+	// GetWatchlist RPC.
+	DashboardServiceGetWatchlistProcedure = "/arb.dashboard.v1.DashboardService/GetWatchlist"
+	// DashboardServiceSetWatchlistProcedure is the fully-qualified name of the DashboardService's
+	// SetWatchlist RPC.
+	DashboardServiceSetWatchlistProcedure = "/arb.dashboard.v1.DashboardService/SetWatchlist"
 )
 
 // DashboardServiceClient is a client for the arb.dashboard.v1.DashboardService service.
@@ -270,6 +276,9 @@ type DashboardServiceClient interface {
 	GetFrontConfig(context.Context, *connect.Request[v1.GetFrontConfigRequest]) (*connect.Response[v1.GetFrontConfigResponse], error)
 	// 理论 vs 实际对账（D-080 S5）：策略聚合卡——承诺年化 vs 实际年化。
 	GetStrategyLedger(context.Context, *connect.Request[v1.GetStrategyLedgerRequest]) (*connect.Response[v1.GetStrategyLedgerResponse], error)
+	// 总览自选报价条（D-090）：业主自选 canonical 清单，服务端按此过滤 StreamUpdates case 1。
+	GetWatchlist(context.Context, *connect.Request[v1.GetWatchlistRequest]) (*connect.Response[v1.GetWatchlistResponse], error)
+	SetWatchlist(context.Context, *connect.Request[v1.SetWatchlistRequest]) (*connect.Response[v1.SetWatchlistResponse], error)
 }
 
 // NewDashboardServiceClient constructs a client for the arb.dashboard.v1.DashboardService service.
@@ -607,6 +616,18 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("GetStrategyLedger")),
 			connect.WithClientOptions(opts...),
 		),
+		getWatchlist: connect.NewClient[v1.GetWatchlistRequest, v1.GetWatchlistResponse](
+			httpClient,
+			baseURL+DashboardServiceGetWatchlistProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("GetWatchlist")),
+			connect.WithClientOptions(opts...),
+		),
+		setWatchlist: connect.NewClient[v1.SetWatchlistRequest, v1.SetWatchlistResponse](
+			httpClient,
+			baseURL+DashboardServiceSetWatchlistProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("SetWatchlist")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -666,6 +687,8 @@ type dashboardServiceClient struct {
 	health                 *connect.Client[v1.HealthRequest, v1.HealthResponse]
 	getFrontConfig         *connect.Client[v1.GetFrontConfigRequest, v1.GetFrontConfigResponse]
 	getStrategyLedger      *connect.Client[v1.GetStrategyLedgerRequest, v1.GetStrategyLedgerResponse]
+	getWatchlist           *connect.Client[v1.GetWatchlistRequest, v1.GetWatchlistResponse]
+	setWatchlist           *connect.Client[v1.SetWatchlistRequest, v1.SetWatchlistResponse]
 }
 
 // ListLatestQuotes calls arb.dashboard.v1.DashboardService.ListLatestQuotes.
@@ -938,6 +961,16 @@ func (c *dashboardServiceClient) GetStrategyLedger(ctx context.Context, req *con
 	return c.getStrategyLedger.CallUnary(ctx, req)
 }
 
+// GetWatchlist calls arb.dashboard.v1.DashboardService.GetWatchlist.
+func (c *dashboardServiceClient) GetWatchlist(ctx context.Context, req *connect.Request[v1.GetWatchlistRequest]) (*connect.Response[v1.GetWatchlistResponse], error) {
+	return c.getWatchlist.CallUnary(ctx, req)
+}
+
+// SetWatchlist calls arb.dashboard.v1.DashboardService.SetWatchlist.
+func (c *dashboardServiceClient) SetWatchlist(ctx context.Context, req *connect.Request[v1.SetWatchlistRequest]) (*connect.Response[v1.SetWatchlistResponse], error) {
+	return c.setWatchlist.CallUnary(ctx, req)
+}
+
 // DashboardServiceHandler is an implementation of the arb.dashboard.v1.DashboardService service.
 type DashboardServiceHandler interface {
 	// 快照类
@@ -1013,6 +1046,9 @@ type DashboardServiceHandler interface {
 	GetFrontConfig(context.Context, *connect.Request[v1.GetFrontConfigRequest]) (*connect.Response[v1.GetFrontConfigResponse], error)
 	// 理论 vs 实际对账（D-080 S5）：策略聚合卡——承诺年化 vs 实际年化。
 	GetStrategyLedger(context.Context, *connect.Request[v1.GetStrategyLedgerRequest]) (*connect.Response[v1.GetStrategyLedgerResponse], error)
+	// 总览自选报价条（D-090）：业主自选 canonical 清单，服务端按此过滤 StreamUpdates case 1。
+	GetWatchlist(context.Context, *connect.Request[v1.GetWatchlistRequest]) (*connect.Response[v1.GetWatchlistResponse], error)
+	SetWatchlist(context.Context, *connect.Request[v1.SetWatchlistRequest]) (*connect.Response[v1.SetWatchlistResponse], error)
 }
 
 // NewDashboardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1346,6 +1382,18 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("GetStrategyLedger")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceGetWatchlistHandler := connect.NewUnaryHandler(
+		DashboardServiceGetWatchlistProcedure,
+		svc.GetWatchlist,
+		connect.WithSchema(dashboardServiceMethods.ByName("GetWatchlist")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceSetWatchlistHandler := connect.NewUnaryHandler(
+		DashboardServiceSetWatchlistProcedure,
+		svc.SetWatchlist,
+		connect.WithSchema(dashboardServiceMethods.ByName("SetWatchlist")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/arb.dashboard.v1.DashboardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DashboardServiceListLatestQuotesProcedure:
@@ -1456,6 +1504,10 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceGetFrontConfigHandler.ServeHTTP(w, r)
 		case DashboardServiceGetStrategyLedgerProcedure:
 			dashboardServiceGetStrategyLedgerHandler.ServeHTTP(w, r)
+		case DashboardServiceGetWatchlistProcedure:
+			dashboardServiceGetWatchlistHandler.ServeHTTP(w, r)
+		case DashboardServiceSetWatchlistProcedure:
+			dashboardServiceSetWatchlistHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1679,4 +1731,12 @@ func (UnimplementedDashboardServiceHandler) GetFrontConfig(context.Context, *con
 
 func (UnimplementedDashboardServiceHandler) GetStrategyLedger(context.Context, *connect.Request[v1.GetStrategyLedgerRequest]) (*connect.Response[v1.GetStrategyLedgerResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetStrategyLedger is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) GetWatchlist(context.Context, *connect.Request[v1.GetWatchlistRequest]) (*connect.Response[v1.GetWatchlistResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetWatchlist is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) SetWatchlist(context.Context, *connect.Request[v1.SetWatchlistRequest]) (*connect.Response[v1.SetWatchlistResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetWatchlist is not implemented"))
 }

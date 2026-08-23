@@ -3,6 +3,7 @@ package dashboard
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"arb/internal/bus"
@@ -63,6 +64,13 @@ type Service struct {
 	lastAlertPurge time.Time
 	// frontCfg 前端展示阈值同源（D-077 修复⑪B N7 GetFrontConfig RPC）。
 	frontCfg FrontConfig
+	// D-090 自选报价条：watchlist 内存缓存（Set 全程持锁，case 1 RLock 命中检查）。
+	// watchlistSet nil = 未初始化（首次 GetWatchlist 或 StreamUpdates 进 select 前查库填）。
+	watchlistMu       sync.RWMutex
+	watchlistSet      map[string]struct{}
+	watchlistInitOnce bool // true = 已查库初始化过（空表也置 true，避免重复查）
+	// quoteFlushInterval StreamUpdates case 1 蓄压 flush 间隔（默认 1s，测试注 10ms）。
+	quoteFlushInterval time.Duration
 }
 
 // FrontConfig 前端展示阈值（D-077 修复⑪B N7，后端 config 单一真相）。

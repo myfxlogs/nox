@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"arb/internal/bus"
 	"arb/internal/position"
 	"arb/internal/store/pgstore"
 
@@ -61,6 +62,35 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 	// keepalive 每 30s（§8.2 D-027）
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
+	// D-090 自选报价条：case 1 蓄压 flush ticker（默认 1s，测试可注 10ms）。
+	// 治吵三刀之一——per (venueKey|symbol) 蓄压只推最新一帧，亚秒裸推 → 1s 节流。
+	flushInterval := s.quoteFlushInterval
+	if flushInterval <= 0 {
+		flushInterval = time.Second
+	}
+	flushTicker := time.NewTicker(flushInterval)
+	defer flushTicker.Stop()
+	// D-090：流启动初始化——缓存未初始化则先查库填缓存（治 App 根流先于任何 GetWatchlist
+	// 启动时快照空+过滤失效；每次连接至多一查）。
+	if err := s.ensureWatchlistLoaded(ctx); err != nil {
+		return fmt.Errorf("stream init watchlist: %w", err)
+	}
+	// D-090 首帧快照：订阅建立后、进 select 前，AllLatest 按 watchlist 过滤逐条 Send
+	// （秒开不等 tick；与 ListLatestQuotes 同源 quoteToProto）。
+	for _, q := range s.qbus.AllLatest() {
+		if !s.watchlistHit(q.Symbol) {
+			continue
+		}
+		if err := stream.Send(&v1.StreamUpdatesResponse{
+			Update: &v1.StreamUpdatesResponse_Quote{
+				Quote: quoteToProto(q),
+			},
+		}); err != nil {
+			return err
+		}
+	}
+	// pending 每连接独立（函数栈上），key=q.VenueKey()+"|"+q.Symbol，覆盖式=自动最新值。
+	pending := make(map[string]bus.Quote)
 	for {
 		select {
 		case <-ctx.Done():
@@ -69,12 +99,23 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 			if !ok {
 				return nil
 			}
-			if err := stream.Send(&v1.StreamUpdatesResponse{
-				Update: &v1.StreamUpdatesResponse_Quote{
-					Quote: quoteToProto(q),
-				},
-			}); err != nil {
-				return err
+			// D-090：RLock 命中检查——未命中丢弃（治吵三刀之一：只推自选）。
+			if !s.watchlistHit(q.Symbol) {
+				continue
+			}
+			// 蓄压不 Send（复用 VenueKey()，勿手拼），等 flushTicker 周期 flush。
+			pending[q.VenueKey()+"|"+q.Symbol] = q
+		case <-flushTicker.C:
+			// D-090：遍历 pending 逐条 Send 后清 map（N 帧只出最新一帧）。
+			for k, q := range pending {
+				if err := stream.Send(&v1.StreamUpdatesResponse{
+					Update: &v1.StreamUpdatesResponse_Quote{
+						Quote: quoteToProto(q),
+					},
+				}); err != nil {
+					return err
+				}
+				delete(pending, k)
 			}
 		case v, ok := <-ppCh:
 			if !ok {
