@@ -151,7 +151,7 @@ func (s *Store) ListPositions(ctx context.Context, status string, limit, offset 
 	if limit <= 0 {
 		limit = 50
 	}
-	q := `SELECT id, opportunity_id, type, status, expected_net_bps, expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note
+	q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note
 		FROM positions
 		WHERE ($1 = '' OR status = $1)
 		ORDER BY id DESC LIMIT $2 OFFSET $3`
@@ -188,7 +188,7 @@ func (s *Store) CountPositions(ctx context.Context, status string) (int, error) 
 // D-080 R1：gate 防重改 DB 实时派生——替代内存 openCombos 集，治手动路径旁路。
 // 行数=MaxPositions 量级，成本≈COUNT；返回行供 gate 派生 combo.FromOppID 匹配。
 func (s *Store) ListActivePositions(ctx context.Context) ([]Position, error) {
-	q := `SELECT id, opportunity_id, type, status, expected_net_bps, expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note
+	q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note
 		FROM positions
 		WHERE status IN ('OPENING','OPEN','LEGGED','CLOSING')
 		ORDER BY id`
@@ -240,7 +240,7 @@ func (s *Store) ListOpenPositionsByType(ctx context.Context, types []string) ([]
 	if len(types) == 0 {
 		return nil, nil
 	}
-	q := `SELECT id, opportunity_id, type, status, expected_net_bps, expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note
+	q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note
 		FROM positions
 		WHERE status = 'OPEN' AND type = ANY($1)
 		ORDER BY id`

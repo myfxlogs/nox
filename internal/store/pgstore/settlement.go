@@ -24,7 +24,7 @@ type SettlementRow struct {
 
 // GetPosition 读单条持仓（D-087 settlement.Settle 用）。不存在→nil, nil。
 func (s *Store) GetPosition(ctx context.Context, id int64) (*Position, error) {
-	q := `SELECT id, opportunity_id, type, status, expected_net_bps, expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note
+	q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note
 		FROM positions WHERE id = $1`
 	var p Position
 	err := s.pool.QueryRow(ctx, q, id).Scan(&p.ID, &p.OpportunityID, &p.Type, &p.Status, &p.ExpectedNetBps,
