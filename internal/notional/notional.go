@@ -17,13 +17,36 @@ func VenueAccount(venueKey string) string {
 	return venueKey
 }
 
-// QuoteCcy 从 canonical 推计价币（D-087 §3.1）：
-//   - FX 六字币对取后三（AUDJPY→JPY；EURUSD→USD）
-//   - 含 USD/USDT 后缀→USD 近似（CS=1 家族既有约定）
-//   - 其余→""（未知=换算不可得，调用方诚实跳过，禁止伪造）
+// knownQuoteCcies 已知计价币集（七直盘 + 交叉盘计价侧）。
+var knownQuoteCcies = map[string]bool{
+	"USD": true, "JPY": true, "GBP": true, "EUR": true,
+	"AUD": true, "NZD": true, "CAD": true, "CHF": true,
+}
+
+// isAlpha 判断字符串是否全字母（A-Z，大写）。
+func isAlpha(s string) bool {
+	for _, r := range s {
+		if r < 'A' || r > 'Z' {
+			return false
+		}
+	}
+	return len(s) > 0
+}
+
+// QuoteCcy 从 canonical 推计价币（D-087 §3.1，返修包②修正）：
+//   - len==6 且前后两段均全字母且后段 ∈ 已知计价币集 → 返回后段
+//     （交叉盘 AUDJPY→JPY、GBPAUD→AUD；直盘 EURUSD→USD）
+//   - 否则 HasSuffix USD/USDT → "USD"（XAUUSD/BTCUSDT）
+//   - 否则 ""（=USD 假定，fx=1；如 NAS100/SPX500/US30/UKOIL/BRENT 等指数/商品 CFD）
+//
+// 已知限制（记注释，不修）：UK100 等非 USD 计价指数在 "" 假定下 notional 不换算——
+// 待未来 broker_symbol_map 加 quote_ccy 列，本次不扩。
 func QuoteCcy(canonical string) string {
 	if len(canonical) == 6 {
-		return canonical[3:] // FX 六字币对取后三
+		base, quote := canonical[:3], canonical[3:]
+		if isAlpha(base) && isAlpha(quote) && knownQuoteCcies[quote] {
+			return quote
+		}
 	}
 	if strings.HasSuffix(canonical, "USD") || strings.HasSuffix(canonical, "USDT") {
 		return "USD"

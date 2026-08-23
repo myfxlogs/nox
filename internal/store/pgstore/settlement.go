@@ -9,13 +9,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// SettlementRow position_settlements 行（D-087 §3.2）。
+// SettlementRow position_settlements 行（D-087 §3.2，返修包② NotionalUsd 改 *float64）。
+// NotionalUsd=nil → INSERT 写 NULL（skipped 行不伪造 0）。
 type SettlementRow struct {
 	PositionID    int64
 	Vkey          string
 	ExpectedUsd   float64
 	RealizedUsd   float64
-	NotionalUsd   float64
+	NotionalUsd   *float64 // nil → NULL（skipped 行不伪造 0）
 	HoldDays      float64
 	SkippedReason string
 	SettledAt     time.Time
@@ -38,17 +39,25 @@ func (s *Store) GetPosition(ctx context.Context, id int64) (*Position, error) {
 	return &p, nil
 }
 
-// InsertSettlement 写 position_settlements 行（D-087 §3.2，幂等 ON CONFLICT DO NOTHING）。
-func (s *Store) InsertSettlement(ctx context.Context, r *SettlementRow) error {
-	_, err := s.pool.Exec(ctx, `
+// InsertSettlement 写 position_settlements 行（D-087 §3.2，返修包②并发安全）。
+// 返回 won=true 表示本次插入成功（赢家）；won=false 表示 ON CONFLICT 命中（输家，已有行）。
+// 调用方（Settle）输家直接 return nil，不再走步骤 7/8，防并发双计 verification 样本+strategy_stats。
+func (s *Store) InsertSettlement(ctx context.Context, r *SettlementRow) (won bool, err error) {
+	var posID int64
+	err = s.pool.QueryRow(ctx, `
 		INSERT INTO position_settlements (position_id, vkey, expected_usd, realized_usd, notional_usd, hold_days, skipped_reason, settled_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (position_id) DO NOTHING
-	`, r.PositionID, r.Vkey, r.ExpectedUsd, r.RealizedUsd, r.NotionalUsd, r.HoldDays, r.SkippedReason, r.SettledAt)
+		RETURNING position_id
+	`, r.PositionID, r.Vkey, r.ExpectedUsd, r.RealizedUsd, r.NotionalUsd, r.HoldDays, r.SkippedReason, r.SettledAt).Scan(&posID)
+	// r.NotionalUsd is *float64: nil → NULL (pgx native), non-nil → value
 	if err != nil {
-		return fmt.Errorf("insert settlement pos=%d: %w", r.PositionID, err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil // ON CONFLICT 命中，输家
+		}
+		return false, fmt.Errorf("insert settlement pos=%d: %w", r.PositionID, err)
 	}
-	return nil
+	return true, nil
 }
 
 // HasSettlement 查 position_settlements 是否已有行（D-087 幂等短路）。

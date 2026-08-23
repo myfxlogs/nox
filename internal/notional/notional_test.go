@@ -26,23 +26,34 @@ func TestVenueAccount(t *testing.T) {
 	}
 }
 
-// TestQuoteCcy 计价币推导（D-087 §3.1）。
-// FX 六字取后三；USD/USDT 后缀→USD；其余→""。
+// TestQuoteCcy 计价币推导（D-087 §3.1，返修包②修正）。
+// len==6 两段全字母+后段∈已知计价币集→后段；USD/USDT 后缀→USD；其余→""（USD 假定）。
 func TestQuoteCcy(t *testing.T) {
 	cases := []struct {
 		canonical, want string
 	}{
-		{"AUDJPY", "JPY"},  // FX 六字取后三
-		{"EURUSD", "USD"},  // FX 六字取后三
-		{"GBPJPY", "JPY"},  // FX 六字取后三
+		// FX 六字两段全字母+后段∈已知集
+		{"AUDJPY", "JPY"}, // 交叉盘
+		{"EURUSD", "USD"}, // 直盘 USD-quote
+		{"GBPJPY", "JPY"}, // 交叉盘
+		{"GBPAUD", "AUD"}, // 交叉盘（返修包②新增）
+		{"USDJPY", "JPY"}, // 直盘 USD-base
+		{"USDCHF", "CHF"}, // 直盘 USD-base
+		// USD/USDT 后缀
 		{"XAUUSD", "USD"},  // 含 USD 后缀
 		{"BTCUSDT", "USD"}, // 含 USDT 后缀
 		{"ETHUSDT", "USD"}, // 含 USDT 后缀
-		{"UKOIL", ""},      // 非 FX 非 USD 后缀=未知
-		{"BRENT", ""},      // 非 FX 非 USD 后缀=未知
-		{"US30", ""},       // 非 FX 非 USD 后缀=未知
-		{"", ""},           // 空串
-		{"AUDJPYX", ""},    // 非 6 字非 USD 后缀
+		// 指数/商品 CFD → ""（USD 假定，fx=1）
+		{"NAS100", ""}, // 返修包②：原误判 "100"
+		{"SPX500", ""}, // 返修包②：原误判 "500"
+		{"US30", ""},
+		{"UKOIL", ""},
+		{"BRENT", ""},
+		// 边界
+		{"", ""},        // 空串
+		{"AUDJPYX", ""}, // 非 6 字非 USD 后缀
+		{"ABC123", ""},  // 6 字但后段非全字母
+		{"ABCXYZ", ""},  // 6 字全字母但后段∉已知集
 	}
 	for _, c := range cases {
 		if got := QuoteCcy(c.canonical); got != c.want {
