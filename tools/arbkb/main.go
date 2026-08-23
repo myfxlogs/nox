@@ -20,8 +20,10 @@ var (
 )
 
 const (
-	maxLines    = 200
-	maxBytes    = 8192
+	maxLines = 200
+	// maxBytes 索引字节硬顶（grep 检索面预算）。2026-08-23 8192→10240：条目增至 25 条后
+	// 结构性触顶（25×~330B），削条目内容迁就顶=削足适履；25% 上浮仍为廉价 grep 面，30 条内免再动。
+	maxBytes    = 10240
 	maxKeywords = 5
 )
 
