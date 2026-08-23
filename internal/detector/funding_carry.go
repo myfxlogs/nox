@@ -40,10 +40,11 @@ func (d *FundingHedgeDetector) Scan(_ context.Context, snapshot map[string]map[s
 			continue
 		}
 		netAnnualized := funding
-		// D-084 基准费率超额口径：同所 spot+perp 收的全是行业基准费率（10.95%/年），
-		// 无 edge 不算机会；同所组合扣 baseline 后过门槛，跨所差分本身已是超额口径不扣。
+		// D-084 修正：spot+perp 结构无差分（收益恒=perp 腿 venue 的 funding），跨所同所统一扣基准；
+		// 跨所版保留发射（库存币顺手套保场景：币在 A 所、B 所尖峰时跨所对冲），但过同一超额尺子。
 		// 入库行 GrossBps 保持原值（显示完整毛收益），扣基准只用于门槛判定（最简，显示层零改动）。
-		if spot.Venue == perp.Venue && d.BaselinePct > 0 {
+		// BaselinePct≤0 关闭扣除（兼容开关）。
+		if d.BaselinePct > 0 {
 			if netAnnualized-d.BaselinePct < d.MinNetAnnualized {
 				continue
 			}
