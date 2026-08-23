@@ -19,22 +19,17 @@ type Closer interface {
 	AutoClosePosition(ctx context.Context, posID int64) error
 }
 
-// StatUpdater 策略统计更新接口（autotrade.Engine.updateStrategyStat 等价，reconcile 收尾后调）。
-// 接口化避免 reconcile → autotrade 包依赖（autotrade 已依赖 position，再加 reconcile 会循环）。
-type StatUpdater interface {
-	UpdateStrategyStat(ctx context.Context, posType string, pnl float64) error
+// Settler 结算接口（D-087 §3.2，settlement.Settle 的注入面）。
+// reconcile 收尾平仓后调 Settle 替换原 StatUpdater + VerificationUpdater 两接口。
+type Settler interface {
+	Settle(ctx context.Context, posID int64) error
 }
 
-// VerificationUpdater 验证统计增量接口（D-086，与 StatUpdater 同调用位点）。
-// pgstore.Store 实现该接口（UpdateVerificationStatForPosition）。接口化避免 reconcile → pgstore 硬依赖。
-type VerificationUpdater interface {
-	UpdateVerificationStatForPosition(ctx context.Context, p *pgstore.Position) error
-}
-
-// autoClose 收尾单个 position：回填已平腿 + 平另一腿 + CLOSED + 统计 + warn。
+// autoClose 收尾单个 position：回填已平腿 + 平另一腿 + CLOSED + 结算 + warn。
 // posID=待收尾持仓, goneLegTicket=venue 侧已平的腿 ticket, goneLeg=该腿 leg 记录, hist=历史单查证结果。
 // fail-closed：任何一步失败 → 返回 error，调用方插 critical 带原因，下轮重试。
 // 缺陷1修复：所有 store/closer 调用包 runTimeout 超时。
+// D-087 §3.2：d/d2 统计块替换为 Settle（statUpdater/verificationUpdater 随之简化）。
 func (r *Reconciler) autoClose(
 	ctx context.Context,
 	pos *pgstore.Position,
@@ -113,27 +108,13 @@ func (r *Reconciler) autoClose(
 		}
 	}
 
-	// d. 统计更新（淘汰统计不断链）
-	if r.statUpdater != nil && pos.Type != "" {
-		pnl := 0.0
-		if hist != nil {
-			pnl = hist.Profit + hist.Swap - hist.Commission
-		}
+	// d. D-087 §3.2：settlement.Settle 替换原 d（StatUpdater）+ d2（VerificationUpdater）两块
+	if r.settler != nil {
 		sub, cancel := r.withTimeout(ctx)
-		err := r.statUpdater.UpdateStrategyStat(sub, pos.Type, pnl)
+		err := r.settler.Settle(sub, posID)
 		cancel()
 		if err != nil {
-			log.Printf("[reconcile] update strategy stat pos=%d: %v", posID, err)
-		}
-	}
-
-	// d2. D-086 验证统计增量（与 StatUpdater 同位点；失败不阻断，仅 log）
-	if r.verificationUpdater != nil {
-		sub, cancel := r.withTimeout(ctx)
-		err := r.verificationUpdater.UpdateVerificationStatForPosition(sub, pos)
-		cancel()
-		if err != nil {
-			log.Printf("[reconcile] update verification stat pos=%d: %v", posID, err)
+			log.Printf("[reconcile] settle pos=%d: %v", posID, err)
 		}
 	}
 

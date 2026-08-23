@@ -106,3 +106,14 @@ func evaluateElimination(in EliminationInput) (disable bool, reason string) {
 	}
 	return false, ""
 }
+
+// EliminatorAdapter 把 evaluateElimination 包装成 settlement.Eliminator（D-087 §3.2）。
+// 供 main 装配时注入 settlement.Settle 的 elim 参数。
+func EliminatorAdapter(totalTrades int, winRate, avgPnl float64, disabled bool) (bool, string) {
+	return evaluateElimination(EliminationInput{
+		TotalTrades: totalTrades,
+		WinRate:     winRate,
+		AvgPnl:      avgPnl,
+		Disabled:    disabled,
+	})
+}

@@ -7,6 +7,7 @@ import (
 
 	"arb/internal/bus"
 	"arb/internal/dashboard"
+	"arb/internal/settlement"
 	"arb/internal/store/pgstore"
 )
 
@@ -54,6 +55,10 @@ type Engine struct {
 	// fundingNeedSent 资金注入提醒节流（D-072）：key=SWAPARB:canonical:venueLong:venueShort → YYYY-MM-DD。
 	// 每日每组合至多 1 条（内存，重启重置——实时弹窗语义，不持久化）。
 	fundingNeedSent map[string]string
+
+	// D-087 §3.2：settlement.Settle 依赖 + 淘汰判定函数（main 装配后调 SetSettleDeps）。
+	settleDeps settlement.Deps
+	eliminator settlement.Eliminator
 }
 
 // New 创建自动交易引擎。
@@ -75,6 +80,12 @@ func (e *Engine) ValidateStartup() {
 	if e.cfg.NotionalUSD > e.cfg.MaxNotional && e.cfg.MaxNotional > 0 {
 		log.Fatalf("[autotrade] config fail-fast: OpportunityNotionalUSD $%.0f > AutoTradeMaxNotional $%.0f (fix env or lower ARB_OPP_NOTIONAL_USD)", e.cfg.NotionalUSD, e.cfg.MaxNotional)
 	}
+}
+
+// SetSettleDeps 注入结算依赖 + 淘汰判定函数（D-087 §3.2，main 装配后调）。
+func (e *Engine) SetSettleDeps(deps settlement.Deps, elim settlement.Eliminator) {
+	e.settleDeps = deps
+	e.eliminator = elim
 }
 
 // Run 启动自动交易引擎（阻塞，ctx 取消时退出）。
@@ -153,6 +164,11 @@ func (e *Engine) scanAndClose(ctx context.Context) {
 			log.Printf("[autotrade] auto-close pos=%d failed: %v", p.ID, err)
 			continue
 		}
-		e.updateStrategyStat(ctx, &p)
+		// D-087 §3.2：settlement.Settle 替换 updateStrategyStat（旧对象 no-op 缺陷根除）
+		if e.settleDeps != nil {
+			if err := settlement.Settle(ctx, e.settleDeps, p.ID, e.eliminator); err != nil {
+				log.Printf("[autotrade] settle pos=%d: %v", p.ID, err)
+			}
+		}
 	}
 }

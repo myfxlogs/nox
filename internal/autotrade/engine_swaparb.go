@@ -230,6 +230,15 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 			if status != "FAILED" && posID > 0 {
 				// D-080 S1：新持仓直接写组合键（无时间戳），与 opportunities.id 贯通
 				_ = e.store.UpdatePositionOppID(ctx, posID, dedupKey)
+				// D-087 §3.4：SWAPARB typed 双字段——entry_spread（入场 spread）+ swap_bps_daily（日 swap）
+				// ExecuteMeanRevertWithCap 内部已写 EntrySpreadBps，此处补 SwapBpsDaily + AnnualPct 覆盖写全
+				swap := netSwapBps
+				annual := netSwapBps * 365 / 100
+				_ = e.store.UpdatePositionMeta(ctx, posID, "SWAPARB", pgstore.PositionMeta{
+					EntrySpreadBps: &spreadBps,
+					SwapBpsDaily:   &swap,
+					AnnualPct:      &annual,
+				})
 			}
 			return status, msg, posID
 		},

@@ -123,19 +123,14 @@ func (q *fakeHistoryQuerier) QueryOrderHistory(ctx context.Context, ticket strin
 	return nil, nil // 未命中
 }
 
-// —— fakeStatUpdater：实现 StatUpdater 接口 ——
+// —— fakeSettler：实现 Settler 接口（D-087 §3.2 替换 fakeStatUpdater） ——
 
-type fakeStatUpdater struct {
-	calls []statCall
+type fakeSettler struct {
+	calls []int64
 }
 
-type statCall struct {
-	posType string
-	pnl     float64
-}
-
-func (s *fakeStatUpdater) UpdateStrategyStat(ctx context.Context, posType string, pnl float64) error {
-	s.calls = append(s.calls, statCall{posType, pnl})
+func (s *fakeSettler) Settle(ctx context.Context, posID int64) error {
+	s.calls = append(s.calls, posID)
 	return nil
 }
 
@@ -204,11 +199,11 @@ func TestAutoClose_HitAndCloseOtherLeg(t *testing.T) {
 	}
 
 	fc := &fakeCloser{}
-	fsu := &fakeStatUpdater{}
+	fsst := &fakeSettler{}
 	r := &Reconciler{
-		store:       fs,
-		closer:      fc,
-		statUpdater: fsu,
+		store:   fs,
+		closer:  fc,
+		settler: fsst,
 	}
 
 	hist := &HistoryOrder{Ticket: "A", ClosePrice: 100.5, Profit: 10.0, Swap: 0.5, Commission: 1.0, Symbol: "AUDJPY"}
@@ -243,9 +238,9 @@ func TestAutoClose_HitAndCloseOtherLeg(t *testing.T) {
 		t.Errorf("缺少 warn 告警，alerts=%v", fs.alerts)
 	}
 
-	// 5. 统计更新
-	if len(fsu.calls) != 1 || fsu.calls[0].posType != "CROSS_VENUE" {
-		t.Errorf("statUpdater 调用=%v，期望 CROSS_VENUE", fsu.calls)
+	// 5. D-087 §3.2：Settle 被调（posID=100）
+	if len(fsst.calls) != 1 || fsst.calls[0] != 100 {
+		t.Errorf("settler 调用=%v，期望 [100]", fsst.calls)
 	}
 }
 
@@ -295,10 +290,10 @@ func TestRun_HistoryHit_AutoClose(t *testing.T) {
 	}
 
 	fc := &fakeCloser{}
-	fsu := &fakeStatUpdater{}
+	fsst := &fakeSettler{}
 	hist := &HistoryOrder{Ticket: "Y", ClosePrice: 1.3, Profit: 5.0, Swap: 0, Commission: 0, Symbol: "GBPUSD"}
 	hq := &fakeHistoryQuerier{venueKey: "52993526:mt5", results: map[string]*HistoryOrder{"Y": hist}}
-	r := &Reconciler{store: fs, closer: fc, statUpdater: fsu}
+	r := &Reconciler{store: fs, closer: fc, settler: fsst}
 	r.SetOrderHistoryQueriers(hq)
 
 	mismatches, err := r.Run(context.Background())

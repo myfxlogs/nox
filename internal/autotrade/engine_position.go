@@ -262,37 +262,5 @@ func (e *Engine) currentNetBps(p *pgstore.Position) (float64, bool) {
 	return spread / refPrice * 10000, true
 }
 
-// updateStrategyStat 平仓后更新策略统计 + 检查淘汰（D-072：全 type，含息差型）。
-// D-086：同步增量 verification_stats（与 UpdateStrategyStat 同位点）。
-func (e *Engine) updateStrategyStat(ctx context.Context, p *pgstore.Position) {
-	if p.RealizedPnl == nil {
-		return
-	}
-	pnl := *p.RealizedPnl
-	if err := e.store.UpdateStrategyStat(ctx, p.Type, pnl); err != nil {
-		log.Printf("[autotrade] update strategy stat type=%s: %v", p.Type, err)
-		return
-	}
-	// D-086 验证统计增量（失败不阻断策略淘汰流程，仅 log）
-	if err := e.store.UpdateVerificationStatForPosition(ctx, p); err != nil {
-		log.Printf("[autotrade] update verification stat pos=%d: %v", p.ID, err)
-	}
-	stat, err := e.store.GetStrategyStat(ctx, p.Type)
-	if err != nil {
-		log.Printf("[autotrade] get strategy stat: %v", err)
-		return
-	}
-	disable, reason := evaluateElimination(EliminationInput{
-		TotalTrades: stat.TotalTrades,
-		WinRate:     stat.WinRate,
-		AvgPnl:      stat.AvgPnl,
-		Disabled:    stat.Disabled,
-	})
-	if disable {
-		if err := e.store.DisableStrategy(ctx, p.Type, reason); err != nil {
-			log.Printf("[autotrade] disable strategy: %v", err)
-		} else {
-			log.Printf("[autotrade] STRATEGY DISABLED type=%s: %s", p.Type, reason)
-		}
-	}
-}
+// updateStrategyStat 已被 settlement.Settle 取代（D-087 §3.2，旧对象 no-op 缺陷根除）。
+// 删除——不留死代码。淘汰判定经 settlement.Eliminator 注入。
