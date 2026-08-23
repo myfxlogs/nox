@@ -294,3 +294,76 @@ func TestSettle_ConcurrentLoser(t *testing.T) {
 		t.Errorf("updateStat=%d, want 1（输家不应双计）", d.updateStat)
 	}
 }
+
+// TestComputeNotionalUSD_AUDJPYAnchor D-087 返修③ 端到端锚点（防双重求逆回归）。
+// AUDJPY 1手/CS100000/¥113.517/USDJPY=158.87 → USDPer(JPY)=1/158.87（USD per JPY）。
+// 单腿 notional = 1×100000×113.517×(1/158.87) = 11,351,700/158.87 ≈ $71,456。
+// 双腿 ≈ $142,891（与 #266 手工真值同口径）。
+// 旧代码 fx=1.0/rate 把 1/158.87 求逆回 158.87 → notional ×159 ≈ $11.4M（#266 湿跑 $3.6B/2腿）。
+func TestComputeNotionalUSD_AUDJPYAnchor(t *testing.T) {
+	const (
+		usdJpy = 158.87
+		cs     = 100000.0
+		price  = 113.517
+	)
+	// USDPer 契约：返回 USD per quoteCcy。JPY → 1/USDJPY = 1/158.87。
+	usdPerJpy := 1.0 / usdJpy
+	d := &fakeDeps{
+		cs:     cs,
+		csOk:   true,
+		fxRate: usdPerJpy,
+		fxOk:   true,
+	}
+	// 单腿
+	single := []pgstore.PositionLeg{
+		{Phase: "OPEN", Status: "FILLED", Venue: "52993526:mt5", Qty: 1.0, PriceActual: ptrFloat(price)},
+	}
+	got, skipped := computeNotionalUSD(context.Background(), d, single, "AUDJPY")
+	if skipped {
+		t.Fatalf("单腿 skipped=true，期望 fx 可得")
+	}
+	const wantSingle = 11351700.0 / usdJpy // ≈ 71455.6
+	if !approx(got, wantSingle, 1.0) {
+		t.Errorf("单腿 notional=%.2f, want ≈%.2f (±1)", got, wantSingle)
+	}
+	t.Logf("单腿 notional=$%.2f (want ≈$71,456)", got)
+
+	// 双腿（对称 SWAPARB 两腿）
+	double := []pgstore.PositionLeg{
+		{Phase: "OPEN", Status: "FILLED", Venue: "52993526:mt5", Qty: 1.0, PriceActual: ptrFloat(price)},
+		{Phase: "OPEN", Status: "FILLED", Venue: "277842155:mt5", Qty: 1.0, PriceActual: ptrFloat(price)},
+	}
+	got2, skipped2 := computeNotionalUSD(context.Background(), d, double, "AUDJPY")
+	if skipped2 {
+		t.Fatalf("双腿 skipped=true，期望 fx 可得")
+	}
+	const wantDouble = 2 * 11351700.0 / usdJpy // ≈ 142891.2
+	if !approx(got2, wantDouble, 2.0) {
+		t.Errorf("双腿 notional=%.2f, want ≈%.2f (±2)", got2, wantDouble)
+	}
+	t.Logf("双腿 notional=$%.2f (want ≈$142,891)", got2)
+
+	// SWAPARB expected = swapBpsDaily/10000 × notionalUSD × holdDays
+	// 0.4713/10000 × 142891 × 1 ≈ $6.74（与 #266 文档真值同口径）
+	const swapBpsDaily = 0.4713
+	expectedUsd := swapBpsDaily / 10000 * got2 * 1.0
+	const wantExpected = 0.4713 / 10000 * 142891.2
+	if !approx(expectedUsd, wantExpected, 0.05) {
+		t.Errorf("SWAPARB expected=%.4f, want ≈%.4f", expectedUsd, wantExpected)
+	}
+	t.Logf("SWAPARB expected=$%.4f (holdDays=1, swapBpsDaily=0.4713)", expectedUsd)
+
+	// 回归断言：旧双重求逆会得到 ≈$11.4M/腿（×158.87），确保现值远小于该值。
+	if got > wantSingle*10 {
+		t.Errorf("单腿 notional=%.2f 远超预期，疑似双重求逆回归（×USDJPY）", got)
+	}
+}
+
+// approx 绝对误差容差。
+func approx(got, want, tol float64) bool {
+	d := got - want
+	if d < 0 {
+		d = -d
+	}
+	return d <= tol
+}

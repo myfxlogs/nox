@@ -184,7 +184,7 @@ func computeNotionalUSD(ctx context.Context, deps Deps, legs []pgstore.PositionL
 				skipped = true
 				continue
 			}
-			fx = 1.0 / rate // quoteCcy→USD = 1/(USD per quoteCcy)
+			fx = rate // USDPer 返回 USD per quoteCcy，直接作 fx（D-087 返修③：删双重求逆）
 		}
 		total += notional.LegUSD(l.Qty, cs, *l.PriceActual, fx)
 	}
