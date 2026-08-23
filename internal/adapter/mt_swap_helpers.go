@@ -3,6 +3,7 @@ package adapter
 import (
 	"fmt"
 	"log"
+	"math"
 	"strings"
 	"time"
 
@@ -73,6 +74,26 @@ func swapUncoveredSummary(src, venue string, uncovered map[int32]int) {
 	for _, k := range keys {
 		log.Printf("[%s:%s] [swap] uncovered SwapType=%d count=%d", src, venue, k, uncovered[k])
 	}
+}
+
+// swapInPointsGuardUSD D-092 护栏阈值：InPoints 模式每手日 swap 美元额上限。
+// WTI/BRENT 现值 $5~94/手/日，阈值取 5~10 倍余量。超限 → warn 日志仍 emit
+// （异常可见不静默，防 FxPro 未来将 mode 9 改语义导致 emit 值失真）。
+const swapInPointsGuardUSD = 500.0
+
+// swapInPointsGuardRail D-092：InPoints emit 后护栏——每手日 swap 美元额
+// |s|×point×CS 超阈值时记 warn（仍 emit）。返回 true=已告警（测试可断言）。
+func swapInPointsGuardRail(src, venue, brokerSym string, s, point, cs float64) bool {
+	if cs <= 0 || point <= 0 {
+		return false
+	}
+	perLot := math.Abs(s) * point * cs
+	if perLot > swapInPointsGuardUSD {
+		log.Printf("[%s:%s] [swap] WARN in-points per-lot USD=%.2f > %.0f (sym=%s s=%.4f point=%.6f cs=%.0f) — emit retained, possible semantic drift",
+			src, venue, perLot, swapInPointsGuardUSD, brokerSym, s, point, cs)
+		return true
+	}
+	return false
 }
 
 // weekdayNames Go time.Weekday → 中文名（日志可读，D-077 V2）。

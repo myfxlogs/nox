@@ -53,7 +53,7 @@ func TestMT5SwapMode(t *testing.T) {
 		{"开仓价百分比", mt5pb.SwapType_SwapType_PercOpenPrice, 1, 1, SwapModeAnnualPct},
 		{"平仓价点未标定", mt5pb.SwapType_SwapType_PointClosePrice, 1, 1, SwapModeUncalibrated},
 		{"买价点未标定", mt5pb.SwapType_SwapType_PointBidPrice, 1, 1, SwapModeUncalibrated},
-		{"超界 9（FxPro WTI 实证）未标定", mt5pb.SwapType(9), 1, 1, SwapModeUncalibrated},
+		{"FxPro 扩展 9=InPoints（D-092 标定）", mt5pb.SwapType(9), 5.5, -51.55, SwapModeInPoints},
 		{"超界 100 未标定", mt5pb.SwapType(100), 1, 1, SwapModeUncalibrated},
 	}
 	for _, c := range cases {
@@ -115,6 +115,62 @@ func TestMT4SwapMode(t *testing.T) {
 	for _, c := range cases {
 		if got := mt4SwapMode(c.t, c.enable, c.long, c.srt); got != c.want {
 			t.Errorf("%s: mode = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// TestMT5SwapMode9_InPointsNormalize D-092：mode 9（FxPro 扩展）标定为 InPoints 后，
+// 用 S1 真值手算断言归一化 bps。证据见 docs/油类SwapType9标定-施工提示词.md S1 表。
+// WTI: L=+5.50 S=-51.55 point=0.001 CS=1000 → point×CS=$1/点/手
+//
+//	WTI price=70: L bps=5.50×0.001/70×1e4=0.786  S bps=-51.55×0.001/70×1e4=-7.364
+//
+// BRENT: L=+12.20 S=-94.15 point=0.001 CS=1000
+//
+//	BRENT price=75: L bps=12.20×0.001/75×1e4=1.627  S bps=-94.15×0.001/75×1e4=-12.553
+func TestMT5SwapMode9_InPointsNormalize(t *testing.T) {
+	cases := []struct {
+		name     string
+		s, price float64
+		wantBps  float64
+	}{
+		{"WTI long", 5.50, 70.0, 0.786},
+		{"WTI short", -51.55, 70.0, -7.364},
+		{"BRENT long", 12.20, 75.0, 1.627},
+		{"BRENT short", -94.15, 75.0, -12.553},
+	}
+	for _, c := range cases {
+		got, ok := normalizeSwapBpsDaily(SwapModeInPoints, c.s, c.price, 0.001, 1000)
+		if !ok {
+			t.Fatalf("%s: normalize should succeed", c.name)
+		}
+		if math.Abs(got-c.wantBps) > 0.001 {
+			t.Errorf("%s: bps = %.4f, want ~%.3f", c.name, got, c.wantBps)
+		}
+	}
+}
+
+// TestSwapInPointsGuardRail D-092：护栏阈值边界——每手日 swap 美元额 |s|×point×CS
+// 超 $500/手/日 → warn（返回 true）；未超 → false。WTI/BRENT 现值 $5~94 不触发。
+func TestSwapInPointsGuardRail(t *testing.T) {
+	cases := []struct {
+		name         string
+		s, point, cs float64
+		want         bool
+	}{
+		{"WTI short 现值 $51.55 不触发", -51.55, 0.001, 1000, false},
+		{"BRENT short 现值 $94.15 不触发", -94.15, 0.001, 1000, false},
+		{"WTI long 现值 $5.50 不触发", 5.50, 0.001, 1000, false},
+		{"边界恰好 500 不触发（>非>=）", 500.0, 1, 1, false},
+		{"边界 500.01 触发", 500.01, 1, 1, true},
+		{"大值 $1000 触发", 1000, 0.001, 1000, true},
+		{"cs=0 安全返回 false", 999, 0.001, 0, false},
+		{"point=0 安全返回 false", 999, 0, 1000, false},
+	}
+	for _, c := range cases {
+		got := swapInPointsGuardRail("mt5", "fxpro", "WTI", c.s, c.point, c.cs)
+		if got != c.want {
+			t.Errorf("%s: guard = %v, want %v", c.name, got, c.want)
 		}
 	}
 }

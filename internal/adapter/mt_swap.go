@@ -6,7 +6,7 @@ package adapter
 //   - mode 0 真停用发 0 值 Fact（零息 venue 是 carry 最佳对手，必须可配对）；
 //   - mode 0 却带非零 rates = 矛盾 broker 数据（PXB 事故实证）→ 跳过，宁丢机会不交易不可信经济性；
 //   - mode 2 SymInfo_s408 = 标的货币额（WP1 补齐，同 3/4 口径 S/(price×CS)×1e4）；
-//   - mode 7/8/超界(9+) 未标定 → 跳过 + 计数日志（WP1 禁静默）。
+//   - mode 7/8 未标定 → 跳过 + 计数日志（WP1 禁静默）；mode 9=FxPro 扩展 InPoints（D-092 标定）。
 // 产出的 Fact：kind=swap_long/swap_short，unit=bps_daily（正=收，负=付），src=mt5/mt4；
 // 以及 kind=trade_mode（unit=mode，MT5 ENUM 透传，D-060 F3——与 swap 标定无关，跳过符号也发）。
 
@@ -18,7 +18,6 @@ import (
 	"arb/internal/bus"
 	"arb/internal/fact"
 
-	mt4pb "arb/internal/adapter/gen/mtapi/mt4"
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
 )
 
@@ -34,7 +33,7 @@ const (
 	SwapModeInPoints                       // 点数：S × Points / price
 	SwapModePerLotCurrency                 // 每手货币额：S / (price × ContractSize)（mode 2/3/4）
 	SwapModeAnnualPct                      // 年化百分比：S% / 365（mode 5/6）
-	SwapModeUncalibrated                   // 未标定 / 矛盾数据：跳过 + 计数日志（mode 7/8/9+）
+	SwapModeUncalibrated                   // 未标定 / 矛盾数据：跳过 + 计数日志（mode 7/8/10+）
 )
 
 // normalizeSwapBpsDaily 归一单方向 swap 原始值为日 bps（正=收，负=付）。
@@ -78,7 +77,10 @@ func swapNeedsPrice(mode SwapMode) bool {
 //	6 PercOpenPrice    → SwapModeAnnualPct（同 5，用开仓价≈现价）
 //	7 PointClosePrice  → SwapModeUncalibrated（重开仓模式，点数±收盘价，非线性无法归一）
 //	8 PointBidPrice    → SwapModeUncalibrated（重开仓模式，点数±买价，同上）
-//	9+ 超界            → SwapModeUncalibrated（FxPro WTI 实证=9，proto 未定义；计数日志禁静默）
+//	9 FxPro 扩展       → SwapModeInPoints（D-092 标定：同 broker 全部其他符号=InPoints 且
+//	                    point/CS 同构；点数解读 ±$5.5~94/手/日 包住 Exness 同符号区间；
+//	                    证据见 docs/油类SwapType9标定-施工提示词.md S1 表，2026-08-24 采集）
+//	10+ 超界           → SwapModeUncalibrated（proto 未定义；计数日志禁静默）
 func mt5SwapMode(t mt5pb.SwapType, long, short float64) SwapMode {
 	switch t {
 	case mt5pb.SwapType_SwapType_SwapNone:
@@ -86,34 +88,13 @@ func mt5SwapMode(t mt5pb.SwapType, long, short float64) SwapMode {
 			return SwapModeUncalibrated // 矛盾数据
 		}
 		return SwapModeNone
-	case mt5pb.SwapType_SwapType_InPoints:
+	case mt5pb.SwapType_SwapType_InPoints, mt5pb.SwapType(9): // 9=FxPro 扩展 InPoints（D-092）
 		return SwapModeInPoints
 	case mt5pb.SwapType_SwapType_SymInfo_s408, mt5pb.SwapType_SwapType_MarginCurrency, mt5pb.SwapType_SwapType_Currency:
 		return SwapModePerLotCurrency
 	case mt5pb.SwapType_SwapType_PercCurPrice, mt5pb.SwapType_SwapType_PercOpenPrice:
 		return SwapModeAnnualPct
-	default: // PointClosePrice(7) / PointBidPrice(8) / 超界(9+)
-		return SwapModeUncalibrated
-	}
-}
-
-// mt4SwapMode 映射 MT4 服务端 swap_type（0=点数 1=基准货币/手 2=年化% 3=保证金货币/手）。
-// MT4 无现网实证，语义按 MT4 服务端惯例，上线后以真实数据核验。
-func mt4SwapMode(t, swapEnable int32, long, short float64) SwapMode {
-	if swapEnable == 0 {
-		if long != 0 || short != 0 {
-			return SwapModeUncalibrated
-		}
-		return SwapModeNone
-	}
-	switch t {
-	case 0:
-		return SwapModeInPoints
-	case 1, 3:
-		return SwapModePerLotCurrency
-	case 2:
-		return SwapModeAnnualPct
-	default:
+	default: // PointClosePrice(7) / PointBidPrice(8) / 超界(10+)
 		return SwapModeUncalibrated
 	}
 }
@@ -195,94 +176,17 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 		default:
 			emit++
 		}
+		// D-092 护栏：InPoints emit 后检查每手日 swap 美元额（防 FxPro mode 9 语义漂移）。
+		if mode == SwapModeInPoints {
+			swapInPointsGuardRail("mt5", a.venue, brokerSym, sg.GetSwapLong(), point, cs)
+			swapInPointsGuardRail("mt5", a.venue, brokerSym, sg.GetSwapShort(), point, cs)
+		}
 	}
 	swapPollSummary("mt5", a.venue, emit, emit0, skips)
 	swapUncoveredSummary("mt5", a.venue, uncovered)
 	// D-077 修复⑪A M3：三倍日 per-symbol 全量收集（删「首个符号代表 venue」）。
 	// 同 venue 值一致 → 发 venue 级 Fact（现行为）；不一致 → 发 per-symbol Fact + warn。
 	facts = append(facts, collectTripleSwapDayFacts("mt5", a.venue, tripleDays)...)
-	if missingPrice > 0 {
-		return nil, fmt.Errorf("%w: %d symbol(s) lack venue quote", ErrSwapColdStart, missingPrice)
-	}
-	return swapResult(a.venue, facts, errs)
-}
-
-// SwapFacts MT4 版。swap 语义字段在 SymbolInfo.Ex（SymbolInfoEx）。
-// MT4 proto 无 TradeMode 字段 → 不产出 trade_mode Fact（下游未知放行，D-060 F3 边界）。
-func (a *MT4Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fact, error) {
-	sm := a.SymbolMap()
-	if len(sm) == 0 {
-		return nil, nil
-	}
-	snap := q.Snapshot(ctx, symbolSet(sm))
-	var facts []fact.Fact
-	var errs []string
-	var skips []string
-	emit, emit0 := 0, 0
-	missingPrice := 0
-	uncovered := map[int32]int{}       // swap_type 原始值 → 命中符号数（WP1 计数日志）
-	tripleDays := map[string]float64{} // D-077 修复⑪A M3：canon → 三倍日（per-symbol 全量收集）
-	for brokerSym, canon := range sm {
-		resp, err := a.mt4.SymbolParams(a.withSessionMD(ctx), &mt4pb.SymbolParamsRequest{Id: a.token, Symbol: brokerSym})
-		if err != nil {
-			errs = append(errs, brokerSym+": "+err.Error())
-			continue
-		}
-		if e := resp.GetError(); e != nil {
-			errs = append(errs, brokerSym+": "+e.GetMessage())
-			continue
-		}
-		r := resp.GetResult()
-		if r == nil {
-			skips = append(skips, brokerSym+": result nil")
-			continue
-		}
-		si := r.GetSymbol()
-		if si == nil || si.GetEx() == nil {
-			errs = append(errs, brokerSym+": no SymbolInfo.Ex (swap 字段缺失)")
-			continue
-		}
-		ex := si.GetEx()
-		// D-077 修复⑪A M3：逐符号收集 SwapRollover3Days（删「首个符号代表 venue」）。
-		tripleDays[canon] = mt4TripleSwapDay(ex.GetSwapRollover3Days())
-		mode := mt4SwapMode(ex.GetSwapType(), ex.GetSwapEnable(), ex.GetSwapLong(), ex.GetSwapShort())
-		if mode == SwapModeUncalibrated {
-			uncovered[ex.GetSwapType()]++
-			if ex.GetSwapEnable() == 0 {
-				skips = append(skips, brokerSym+": swap disabled with nonzero rates")
-			} else {
-				skips = append(skips, fmt.Sprintf("%s: uncalibrated mode %d", brokerSym, ex.GetSwapType()))
-			}
-			continue
-		}
-		point, cs := ex.GetPoint(), ex.GetContractSize()
-		price := venuePrice(snap, canon, a.venue, "mt4")
-		if swapNeedsPrice(mode) && price <= 0 {
-			missingPrice++
-			continue
-		}
-		n := 0
-		if l, ok := normalizeSwapBpsDaily(mode, ex.GetSwapLong(), price, point, cs); ok {
-			facts = append(facts, swapFact(fact.KindSwapLong, a.venue, canon, l, "mt4"))
-			n++
-		}
-		if s, ok := normalizeSwapBpsDaily(mode, ex.GetSwapShort(), price, point, cs); ok {
-			facts = append(facts, swapFact(fact.KindSwapShort, a.venue, canon, s, "mt4"))
-			n++
-		}
-		switch {
-		case n == 0:
-			skips = append(skips, brokerSym+": normalize failed (no contract size?)")
-		case mode == SwapModeNone:
-			emit0++
-		default:
-			emit++
-		}
-	}
-	swapPollSummary("mt4", a.venue, emit, emit0, skips)
-	swapUncoveredSummary("mt4", a.venue, uncovered)
-	// D-077 修复⑪A M3：三倍日 per-symbol 全量收集（删「首个符号代表 venue」）。
-	facts = append(facts, collectTripleSwapDayFacts("mt4", a.venue, tripleDays)...)
 	if missingPrice > 0 {
 		return nil, fmt.Errorf("%w: %d symbol(s) lack venue quote", ErrSwapColdStart, missingPrice)
 	}
