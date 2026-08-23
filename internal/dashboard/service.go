@@ -19,6 +19,8 @@ type Service struct {
 	bm       *BrokerManager
 	// reviewer 复盘触发（§13.6，D-034）。nil = 未接线（RPC 仍可用，仅触发不跑）。
 	reviewer func()
+	// settler 结算触发（D-087 §3.2，手动平仓后调）。nil = 未接线（RPC 仍可用，仅不结算）。
+	settler Settler
 	// freshTTL 报价陈旧 TTL（复用 config.DetectorFreshnessTTL，G3）——个人持仓快照展示路径拒绝陈旧帧。
 	freshTTL time.Duration
 	// liqMMR 理论强平维持保证金率（config.ARB_LIQ_MMR，缺省 0.005）——个人持仓强平价理论值计算用。
@@ -98,6 +100,14 @@ func (s *Service) Store() *pgstore.Store { return s.store }
 func (s *Service) AutoClosePosition(ctx context.Context, posID int64) error {
 	return s.pipeline.ClosePosition(ctx, posID)
 }
+
+// Settler 结算接口（D-087 §3.2，settlement.Settle 的注入面，dashboard 不依赖 settlement 包避免循环）。
+type Settler interface {
+	Settle(ctx context.Context, posID int64) error
+}
+
+// SetSettler 注入结算器（D-087 §3.2，手动平仓后调）。nil = 未接线（RPC 仍可用，仅不结算）。
+func (s *Service) SetSettler(st Settler) { s.settler = st }
 
 // SetTradeModes 注入单腿 trade_mode 查询（D-060 F5）。main 在 factCache 处装配；nil = 预检放行。
 func (s *Service) SetTradeModes(f func(canonical, venueKey string) (int64, bool)) {

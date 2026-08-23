@@ -5,6 +5,7 @@ import (
 
 	"arb/internal/fact"
 	"arb/internal/store/pgstore"
+	"arb/internal/verification"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 
@@ -64,8 +65,14 @@ func (s *Service) oppToProto(o *pgstore.Opportunity) *v1.Opportunity {
 			totalCost := o.SpreadCost + o.CommissionCost + o.SlippageCost + o.SwapCost
 			pb.CostUsdPerLot = totalCost / 1e4 * cs * o.PriceBuy
 			if isCarryType(o.Type) {
-				// 息差型：net_bps 为年化百分点 → USD/日/手 = net_bps/100 × CS × price / 365。
-				pb.NetUsdPerLotDay = o.NetBps / 100 * cs * o.PriceBuy / 365
+				// D-087 §3.4 typed 显示：SWAPARB 日 bps vs CARRY/FUNDING 年化百分点
+				if o.Type == "SWAPARB" {
+					// SWAPARB：net_bps 为日 swap bps → USD/日/手 = net_bps/1e4 × CS × price。
+					pb.NetUsdPerLotDay = o.NetBps / 1e4 * cs * o.PriceBuy
+				} else {
+					// CARRY/FUNDING_HEDGE/PERP_FUNDING：net_bps 为年化百分点 → USD/日/手 = net_bps/100 × CS × price / 365。
+					pb.NetUsdPerLotDay = o.NetBps / 100 * cs * o.PriceBuy / 365
+				}
 			} else {
 				// 价差型：net_bps 为一次性 bps → USD/手 = net_bps/1e4 × CS × price。
 				pb.NetUsdPerLot = o.NetBps / 1e4 * cs * o.PriceBuy
@@ -90,9 +97,10 @@ func (s *Service) oppToProto(o *pgstore.Opportunity) *v1.Opportunity {
 	return pb
 }
 
-// isCarryType 息差型判定（CARRY / FUNDING_HEDGE），与 netUSD 的 CROSS_VENUE 分支互补（D-062）。
+// isCarryType 息差型判定（D-087 §3.4 收敛：委托 verification.IsCarryType SSOT）。
+// 含 SWAPARB/CARRY/FUNDING_HEDGE/PERP_FUNDING，与 netUSD 的 CROSS_VENUE 分支互补。
 func isCarryType(typ string) bool {
-	return strings.HasPrefix(typ, "CARRY") || strings.HasPrefix(typ, "FUNDING_HEDGE")
+	return verification.IsCarryType(typ)
 }
 
 func alertToProto(a *pgstore.Alert) *v1.Alert {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 
 	"arb/internal/combo"
@@ -16,6 +17,24 @@ import (
 )
 
 // --- 执行（§13） ---
+
+// metaForType 按策略型构造 PositionMeta（D-087 §3.4 typed 化）。
+// openBps 语义随型不同：收敛型=一次性 bps / SWAPARB=入场 spread / CARRY=net bps / FUNDING 族=年化百分点。
+// SWAPARB 的 SwapBpsDaily 由调用方（trySwapArb）事后补写——本函数无 netSwap 值，仅写 EntrySpreadBps。
+func metaForType(posType string, openBps float64) pgstore.PositionMeta {
+	v := openBps
+	switch posType {
+	case "SWAPARB":
+		return pgstore.PositionMeta{EntrySpreadBps: &v}
+	case "CARRY":
+		annual := v * 365 / 100
+		return pgstore.PositionMeta{NetBps: &v, AnnualPct: &annual}
+	case "FUNDING_HEDGE", "PERP_FUNDING":
+		return pgstore.PositionMeta{NetBps: &v, AnnualPct: &v}
+	default: // CROSS_VENUE / MEANREVERT / 未知
+		return pgstore.PositionMeta{NetBps: &v}
+	}
+}
 
 func (s *Service) ExecuteOpportunity(ctx context.Context, req *connect.Request[v1.ExecuteOpportunityRequest]) (*connect.Response[v1.ExecuteOpportunityResponse], error) {
 	if s.pipeline == nil {
@@ -74,8 +93,9 @@ func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, request
 		return "FAILED", fmt.Sprintf("execute: %v", err), 0
 	}
 	// D-070：回填 position 元数据（expected_net_bps/expected_annual_pct；type 已在创建时写入，修复⑭ S4）
+	// D-087：typed 化（metaForType 按型构造 PositionMeta）
 	if result.PositionID > 0 {
-		_ = s.store.UpdatePositionMeta(ctx, result.PositionID, found.Type, found.NetBps)
+		_ = s.store.UpdatePositionMeta(ctx, result.PositionID, found.Type, metaForType(found.Type, found.NetBps))
 	}
 	return result.Status, "", result.PositionID
 }
@@ -162,7 +182,7 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 		return "FAILED", fmt.Sprintf("execute: %v", err), 0
 	}
 	if result.PositionID > 0 {
-		_ = s.store.UpdatePositionMeta(ctx, result.PositionID, strategyType, openBps)
+		_ = s.store.UpdatePositionMeta(ctx, result.PositionID, strategyType, metaForType(strategyType, openBps))
 	}
 	return result.Status, "", result.PositionID
 }
@@ -179,6 +199,14 @@ func (s *Service) ClosePosition(ctx context.Context, req *connect.Request[v1.Clo
 			Status:  "FAILED",
 			Message: err.Error(),
 		}), nil
+	}
+	// D-087 §3.2：手动平仓 → settlement.Settle（fire-and-forget，不阻塞 RPC）
+	if s.settler != nil {
+		go func() {
+			if err := s.settler.Settle(context.Background(), req.Msg.GetPositionId()); err != nil {
+				log.Printf("[dashboard] settle pos=%d: %v", req.Msg.GetPositionId(), err)
+			}
+		}()
 	}
 	// 平仓成功 → 触发统计复盘（§13.6，D-034；fire-and-forget，不阻塞 RPC）
 	if s.reviewer != nil {
