@@ -17,6 +17,9 @@ func TestLoadDefaults(t *testing.T) {
 	if c.FundingMinNetAnnualized != 4.0 {
 		t.Errorf("FundingMinNetAnnualized = %v, want 4.0", c.FundingMinNetAnnualized)
 	}
+	if c.FundingBaselinePct != 10.95 {
+		t.Errorf("FundingBaselinePct = %v, want 10.95 (D-084)", c.FundingBaselinePct)
+	}
 	if c.CarryMinNetAnnualized != 4.0 {
 		t.Errorf("CarryMinNetAnnualized = %v, want 4.0", c.CarryMinNetAnnualized)
 	}

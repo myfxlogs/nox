@@ -16,6 +16,7 @@ type Config struct {
 	CrossVenueMinGrossBpsCEX    float64       // CEX(spot/perp) 跨所 gross 门槛（bps）。D-035：cross 降级，仅报价错位捕获
 	CrossVenueMinGrossBpsCFD    float64       // CFD(mt4/mt5) 跨所 gross 观察门槛（bps）。低于保本 2.6，展示仍靠评估器 net>0（D-051 WP1）
 	FundingMinNetAnnualized     float64       // funding hedge 净年化门槛（%）
+	FundingBaselinePct          float64       // 同所 funding 基准费率年化（%，ARB_FUNDING_BASELINE_PCT，缺省 10.95=0.01%/8h×3×365；D-084 基准≠机会，同所扣后过门槛）
 	CarryMinNetAnnualized       float64       // carry 净年化门槛（%）——D-036 由 bps 改百分点，与 funding 对齐
 	PerpFundingMinNetAnnualized float64       // perp×perp funding 差净年化门槛（%）——D-064
 	GrabMinNetAnnualized        float64       // grab 档门槛（%），替代 classify 硬编码 4.5（D-036）
@@ -120,6 +121,7 @@ func Load() *Config {
 		CrossVenueMinGrossBpsCEX:    envFloat("ARB_CROSS_MIN_GROSS_BPS_CEX", 10.0),
 		CrossVenueMinGrossBpsCFD:    envFloat("ARB_CROSS_MIN_GROSS_BPS_CFD", 20.0), // D-078 round-trip 实证：CFD round-trip ~7.5bps+基差~5bps → gross≥20 才可能盈利
 		FundingMinNetAnnualized:     envFloat("ARB_FUNDING_MIN_NET_ANNUALIZED", 4.0),
+		FundingBaselinePct:          envFloat("ARB_FUNDING_BASELINE_PCT", 10.95), // D-084 同所基准费率扣除
 		CarryMinNetAnnualized:       envFloat("ARB_CARRY_MIN_NET_ANNUALIZED", 4.0),
 		PerpFundingMinNetAnnualized: envFloat("ARB_PERP_FUNDING_MIN_NET_ANNUALIZED", 2.0),
 		GrabMinNetAnnualized:        envFloat("ARB_GRAB_MIN_NET_ANNUALIZED", 4.5),
