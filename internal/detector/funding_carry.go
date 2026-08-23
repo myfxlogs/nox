@@ -11,6 +11,7 @@ import (
 // FundingHedgeDetector 检测现货 vs 永续的 funding rate 套利（§5.2）。
 type FundingHedgeDetector struct {
 	MinNetAnnualized float64
+	BaselinePct      float64 // 同所基准费率年化（%，D-084：同所组合扣基准后过门槛；≤0 关闭扣除）
 	FreshnessTTL     time.Duration
 }
 
@@ -39,7 +40,14 @@ func (d *FundingHedgeDetector) Scan(_ context.Context, snapshot map[string]map[s
 			continue
 		}
 		netAnnualized := funding
-		if netAnnualized < d.MinNetAnnualized {
+		// D-084 基准费率超额口径：同所 spot+perp 收的全是行业基准费率（10.95%/年），
+		// 无 edge 不算机会；同所组合扣 baseline 后过门槛，跨所差分本身已是超额口径不扣。
+		// 入库行 GrossBps 保持原值（显示完整毛收益），扣基准只用于门槛判定（最简，显示层零改动）。
+		if spot.Venue == perp.Venue && d.BaselinePct > 0 {
+			if netAnnualized-d.BaselinePct < d.MinNetAnnualized {
+				continue
+			}
+		} else if netAnnualized < d.MinNetAnnualized {
 			continue
 		}
 		qt := spot.Time
