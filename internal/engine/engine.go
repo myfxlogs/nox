@@ -37,8 +37,13 @@ type Engine struct {
 	oppTopic *bus.Topic[pgstore.Opportunity]
 	// minStoreNetBps CROSS_VENUE 入库最低净收益（bps）；D-078 round-trip 修正：
 	// 低于此值的价差型机会不入库（从源头消除垃圾）。仅适用于 CROSS_VENUE（net 为一次性 bps）；
-	// 息差型 net 为年化百分点，由检测器 MinNetAnnualized 门槛过滤。
+	// 息差型 net 为年化百分点，由下方三净门槛过滤（D-085）。
 	minStoreNetBps float64
+	// 息差家族入库净门槛（D-085：门槛作用在 evaluator 扣成本后的 NetBps=年化百分点）。
+	// 检测器门槛保留为前置过滤（双保险无害）；零值=不过滤（测试默认）。
+	fundingHedgeMinNetStore float64
+	perpFundingMinNetStore  float64
+	carryMinNetStore        float64
 	// excludeCanonicals 检测产出排除集合（D-072 资金提醒弹窗提示词 B1：复用 ARB_AUTOTRADE_EXCLUDE_CANONICALS
 	// 双用途——执行层排除 + 检测层排除，P3 单一真相）。nil/空 = 不排除（测试默认）。
 	// 命中时机会不入库（TTL 自然过期不适用——根本不产），从源头消除 BRENT/WTI 假机会（1314615 报价偏高 $3，D-068 实证）。
@@ -51,7 +56,9 @@ type Engine struct {
 // New 创建引擎。commissionFor 必填（成本正确性依赖真实佣金，D-036），nil = 装配错误直接 panic。
 // oppTopic 允许 nil（测试不接推送）；修复⑭ S3 退役 minNotifyNetBps 发布门槛 → oppTopic 全量事件流。
 // minStoreNetBps 为 CROSS_VENUE 入库门槛（D-078，缺省 0 = 不过滤）。
-func New(b *bus.QuoteBus, detectors []detector.Detector, cfg evaluator.Config, store opportunityStore, fc *FactCache, commissionFor func(venueKey string) float64, scanThrottle time.Duration, oppTopic *bus.Topic[pgstore.Opportunity], minStoreNetBps float64) *Engine {
+// fundingHedgeMinNetStore/perpFundingMinNetStore/carryMinNetStore 为息差家族入库净门槛
+// （D-085，作用在 evaluator 扣成本后的 NetBps=年化百分点，缺省 0 = 不过滤）。
+func New(b *bus.QuoteBus, detectors []detector.Detector, cfg evaluator.Config, store opportunityStore, fc *FactCache, commissionFor func(venueKey string) float64, scanThrottle time.Duration, oppTopic *bus.Topic[pgstore.Opportunity], minStoreNetBps, fundingHedgeMinNetStore, perpFundingMinNetStore, carryMinNetStore float64) *Engine {
 	if commissionFor == nil {
 		panic("engine: commissionFor resolver required (D-036 per-venue 佣金)")
 	}
@@ -59,16 +66,19 @@ func New(b *bus.QuoteBus, detectors []detector.Detector, cfg evaluator.Config, s
 		scanThrottle = 30 * time.Second
 	}
 	return &Engine{
-		bus:            b,
-		detectors:      detectors,
-		evalCfg:        cfg,
-		store:          store,
-		facts:          fc,
-		commissionFor:  commissionFor,
-		scanThrottle:   scanThrottle,
-		oppTopic:       oppTopic,
-		minStoreNetBps: minStoreNetBps,
-		lastScan:       make(map[string]time.Time),
+		bus:                     b,
+		detectors:               detectors,
+		evalCfg:                 cfg,
+		store:                   store,
+		facts:                   fc,
+		commissionFor:           commissionFor,
+		scanThrottle:            scanThrottle,
+		oppTopic:                oppTopic,
+		minStoreNetBps:          minStoreNetBps,
+		fundingHedgeMinNetStore: fundingHedgeMinNetStore,
+		perpFundingMinNetStore:  perpFundingMinNetStore,
+		carryMinNetStore:        carryMinNetStore,
+		lastScan:                make(map[string]time.Time),
 	}
 }
 
@@ -131,8 +141,9 @@ func (e *Engine) onQuote(ctx context.Context, q bus.Quote) {
 			continue
 		}
 		// D-078 round-trip 入库门槛：CROSS_VENUE net 为一次性 bps，低于门槛不入库（从源头消除垃圾）。
-		// 息差型 net 为年化百分点，不适用此 bps 门槛（由检测器 MinNetAnnualized 过滤）。
-		if o.Type == "CROSS_VENUE" && o.NetBps < e.minStoreNetBps {
+		// D-085 息差家族净门槛：门槛作用在 evaluator 扣成本后的 NetBps（年化百分点），
+		// 面板亮灯=净口径真过线；检测器门槛保留为前置过滤（双保险无害）。零值=不过滤（测试默认）。
+		if !netStoreGate(o, e) {
 			continue
 		}
 		_, err := e.store.UpsertOpportunity(ctx, o)
@@ -166,6 +177,24 @@ func (e *Engine) evaluate(ctx context.Context, c detector.Candidate, snapshot ma
 
 	// 息差型日息差由评估器从净年化推导，无需再取 swap Fact（D-036 简化死参数）
 	return evaluator.Evaluate(c, e.evalCfg, spreadBuy, spreadSell, commissionBps, 0)
+}
+
+// netStoreGate 按 o.Type 分派入库净门槛（D-078 CROSS_VENUE bps / D-085 息差家族年化百分点）。
+// 零值门槛=不过滤（测试默认放行）；false=不入库（同 trap 处理，从源头消除）。
+// CROSS_VENUE net 为一次性 bps；息差型 net 为年化百分点，勿混用同一把尺子。
+func netStoreGate(o *pgstore.Opportunity, e *Engine) bool {
+	switch o.Type {
+	case "CROSS_VENUE":
+		return !(e.minStoreNetBps > 0 && o.NetBps < e.minStoreNetBps)
+	case "FUNDING_HEDGE":
+		return !(e.fundingHedgeMinNetStore > 0 && o.NetBps < e.fundingHedgeMinNetStore)
+	case "PERP_FUNDING":
+		return !(e.perpFundingMinNetStore > 0 && o.NetBps < e.perpFundingMinNetStore)
+	case "CARRY":
+		return !(e.carryMinNetStore > 0 && o.NetBps < e.carryMinNetStore)
+	default:
+		return true
+	}
 }
 
 func findQuote(snapshot map[string]map[string]bus.Quote, canonical, venueKey string) *bus.Quote {

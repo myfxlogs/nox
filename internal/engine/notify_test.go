@@ -81,7 +81,7 @@ func newNotifyEngine(t *testing.T, cand detector.Candidate) (*Engine, <-chan pgs
 		OpportunityTTL:       30 * time.Second,
 	}
 	topic := bus.NewTopic[pgstore.Opportunity]()
-	e := New(qbus, []detector.Detector{&fakeDetector{candidates: []detector.Candidate{cand}}}, cfg, store, NewFactCache(), testCommissionResolver(t, nil, nil), time.Nanosecond, topic, 0)
+	e := New(qbus, []detector.Detector{&fakeDetector{candidates: []detector.Candidate{cand}}}, cfg, store, NewFactCache(), testCommissionResolver(t, nil, nil), time.Nanosecond, topic, 0, 0, 0, 0)
 	ch, cancel := topic.Subscribe()
 	t.Cleanup(cancel)
 	return e, ch, store
