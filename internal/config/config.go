@@ -81,6 +81,14 @@ type Config struct {
 	PerpFundingMinNetStore  float64 // ARB_PERP_FUNDING_MIN_NET_STORE（默认 2.0）
 	CarryMinNetStore        float64 // ARB_CARRY_MIN_NET_STORE（默认 4.0）
 
+	// === 机会验证阶梯（D-086 V-Ladder）===
+	// VerifyWindowDays 验证样本新鲜窗口（ARB_VERIFY_WINDOW_DAYS，缺省 30 天）。
+	// VerifyMinSamples V1 最低样本数（ARB_VERIFY_MIN_SAMPLES，缺省 2）。
+	// VerifyMinRatio V1 最低 R=Σrealized/Σexpected（ARB_VERIFY_MIN_RATIO，缺省 0.7）。
+	VerifyWindowDays int
+	VerifyMinSamples int
+	VerifyMinRatio   float64
+
 	// === Broker 实持仓轮询（D-052）===
 	// BrokerPosPollInterval Broker 实持仓视图轮询周期（ARB_BROKER_POS_POLL_MS，缺省 5s）。
 	BrokerPosPollInterval time.Duration
@@ -160,6 +168,9 @@ func Load() *Config {
 		FundingHedgeMinNetStore:    envFloat("ARB_FUNDING_HEDGE_MIN_NET_STORE", 14.95), // D-085 息差家族净门槛（含基准 10.95+门槛 4）
 		PerpFundingMinNetStore:     envFloat("ARB_PERP_FUNDING_MIN_NET_STORE", 2.0),    // D-085
 		CarryMinNetStore:           envFloat("ARB_CARRY_MIN_NET_STORE", 4.0),           // D-085
+		VerifyWindowDays:           envInt("ARB_VERIFY_WINDOW_DAYS", 30),               // D-086 验证样本新鲜窗口
+		VerifyMinSamples:           envInt("ARB_VERIFY_MIN_SAMPLES", 2),                // D-086 V1 最低样本数
+		VerifyMinRatio:             envFloat("ARB_VERIFY_MIN_RATIO", 0.7),              // D-086 V1 最低 R
 		BrokerPosPollInterval:      envDur("ARB_BROKER_POS_POLL_MS", 5*time.Second),
 		OpportunityNotionalUSD:     envFloat("ARB_OPP_NOTIONAL_USD", 1000),
 		AlertPaused:                envBool("ARB_ALERT_PAUSED", false),

@@ -72,6 +72,15 @@ func TestLoadDefaults(t *testing.T) {
 	if c.CarryMinNetStore != 4.0 {
 		t.Errorf("CarryMinNetStore = %v, want 4.0 (D-085)", c.CarryMinNetStore)
 	}
+	if c.VerifyWindowDays != 30 {
+		t.Errorf("VerifyWindowDays = %v, want 30 (D-086)", c.VerifyWindowDays)
+	}
+	if c.VerifyMinSamples != 2 {
+		t.Errorf("VerifyMinSamples = %v, want 2 (D-086)", c.VerifyMinSamples)
+	}
+	if c.VerifyMinRatio != 0.7 {
+		t.Errorf("VerifyMinRatio = %v, want 0.7 (D-086)", c.VerifyMinRatio)
+	}
 }
 
 // TestLoadEnvOverride env 覆盖须生效。

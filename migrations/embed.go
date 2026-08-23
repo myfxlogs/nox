@@ -52,3 +52,6 @@ var StatsAnchorSQL string
 
 //go:embed 0036_combo_identity.sql
 var ComboIdentitySQL string
+
+//go:embed 0037_verification_stats.sql
+var VerificationStatsSQL string

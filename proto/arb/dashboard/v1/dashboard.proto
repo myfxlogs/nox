@@ -60,6 +60,9 @@ service DashboardService {
   rpc ListKBEntries(ListKBEntriesRequest) returns (ListKBEntriesResponse);
   rpc GetKBEntry(GetKBEntryRequest) returns (GetKBEntryResponse);
 
+  // 验证统计（D-086 V-Ladder：机会验证阶梯，面板徽章+折叠区）
+  rpc ListVerificationStats(ListVerificationStatsRequest) returns (ListVerificationStatsResponse);
+
   // Broker 管理（认证后，运行时 MT4/MT5 连接管理）
   rpc SearchBroker(SearchBrokerRequest) returns (SearchBrokerResponse);
   rpc AddBroker(AddBrokerRequest) returns (AddBrokerResponse);
@@ -181,6 +184,10 @@ message Opportunity {
   google.protobuf.Timestamp expires_at = 15;
   google.protobuf.Timestamp created_at = 16;
   google.protobuf.Timestamp updated_at = 17;
+  // D-086 验证阶梯：后端按 vkey 聚合填入（D-043 前端零信任只渲染）。
+  int32 verified_level = 24;    // 0=V0 预估 / 1=V1 已验证（V2 预留）
+  double verify_ratio = 25;     // R=Σrealized/Σexpected（不可用=0）
+  int32 verify_samples = 26;    // 验证样本数
 }
 
 message ListOpportunitiesRequest {
@@ -191,6 +198,23 @@ message ListOpportunitiesRequest {
 
 message ListOpportunitiesResponse {
   repeated Opportunity opportunities = 1;
+}
+
+// === 验证统计（D-086 V-Ladder）===
+
+message VerificationStat {
+  string vkey = 1;              // "{type}:{venue_buy}:{venue_sell}"
+  int32 samples = 2;            // 验证样本数
+  double expected_usd = 3;      // Σ 期望收益 USD
+  double realized_usd = 4;      // Σ 实际收益 USD
+  double ratio = 5;             // R=realized/expected（不可用=0）
+  google.protobuf.Timestamp last_sample_at = 6;  // 最近样本时间
+}
+
+message ListVerificationStatsRequest {}
+
+message ListVerificationStatsResponse {
+  repeated VerificationStat stats = 1;
 }
 
 // === Alert（§2.5）===
