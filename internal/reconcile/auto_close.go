@@ -25,6 +25,12 @@ type StatUpdater interface {
 	UpdateStrategyStat(ctx context.Context, posType string, pnl float64) error
 }
 
+// VerificationUpdater 验证统计增量接口（D-086，与 StatUpdater 同调用位点）。
+// pgstore.Store 实现该接口（UpdateVerificationStatForPosition）。接口化避免 reconcile → pgstore 硬依赖。
+type VerificationUpdater interface {
+	UpdateVerificationStatForPosition(ctx context.Context, p *pgstore.Position) error
+}
+
 // autoClose 收尾单个 position：回填已平腿 + 平另一腿 + CLOSED + 统计 + warn。
 // posID=待收尾持仓, goneLegTicket=venue 侧已平的腿 ticket, goneLeg=该腿 leg 记录, hist=历史单查证结果。
 // fail-closed：任何一步失败 → 返回 error，调用方插 critical 带原因，下轮重试。
@@ -118,6 +124,16 @@ func (r *Reconciler) autoClose(
 		cancel()
 		if err != nil {
 			log.Printf("[reconcile] update strategy stat pos=%d: %v", posID, err)
+		}
+	}
+
+	// d2. D-086 验证统计增量（与 StatUpdater 同位点；失败不阻断，仅 log）
+	if r.verificationUpdater != nil {
+		sub, cancel := r.withTimeout(ctx)
+		err := r.verificationUpdater.UpdateVerificationStatForPosition(sub, pos)
+		cancel()
+		if err != nil {
+			log.Printf("[reconcile] update verification stat pos=%d: %v", posID, err)
 		}
 	}
 

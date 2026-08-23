@@ -11,6 +11,7 @@ import (
 	"arb/internal/detector"
 	"arb/internal/evaluator"
 	"arb/internal/store/pgstore"
+	"arb/internal/verification"
 )
 
 // opportunityStore 引擎所需的机会存储接口（D-050 测试注入：生产为 pgstore.Store，测试用 fake 判定 inserted）。
@@ -18,6 +19,12 @@ import (
 // bool 返回值仅保留以维持测试语义（fake 仍按 id 去重判定 inserted）。
 type opportunityStore interface {
 	UpsertOpportunity(ctx context.Context, o *pgstore.Opportunity) (bool, error)
+}
+
+// verificationStore 验证统计查询接口（D-086 发布门用）。pgstore.Store 实现该接口。
+// 接口化便于测试注入 fake；nil = 未接线（全量发布=向后兼容）。
+type verificationStore interface {
+	VerificationFor(ctx context.Context, vkey string, windowDays int) (samples int, ratio float64, fresh bool, err error)
 }
 
 // Engine 事件驱动管线：QuoteBus 报价事件 → 检测 → 评估 → 存储。
@@ -44,6 +51,12 @@ type Engine struct {
 	fundingHedgeMinNetStore float64
 	perpFundingMinNetStore  float64
 	carryMinNetStore        float64
+	// D-086 验证阶梯发布门：V0 入库不推送 / V1+ 入库且推送。
+	// verifyStore nil = 未接线（测试默认，全量发布=向后兼容）；verifyConfig 零值=门槛关闭（仅凭 fresh 判 V1）。
+	verifyStore      verificationStore
+	verifyWindowDays int
+	verifyMinSamples int
+	verifyMinRatio   float64
 	// excludeCanonicals 检测产出排除集合（D-072 资金提醒弹窗提示词 B1：复用 ARB_AUTOTRADE_EXCLUDE_CANONICALS
 	// 双用途——执行层排除 + 检测层排除，P3 单一真相）。nil/空 = 不排除（测试默认）。
 	// 命中时机会不入库（TTL 自然过期不适用——根本不产），从源头消除 BRENT/WTI 假机会（1314615 报价偏高 $3，D-068 实证）。
@@ -87,6 +100,19 @@ func New(b *bus.QuoteBus, detectors []detector.Detector, cfg evaluator.Config, s
 // main 在 config 加载后注入；命中 canonical 的机会不入库（从源头消除假机会）。
 func (e *Engine) SetExcludeCanonicals(set map[string]bool) {
 	e.excludeCanonicals = set
+}
+
+// SetVerifyConfig 注入验证阶梯阈值（D-086）。New 签名不动，用 setter 注入。
+func (e *Engine) SetVerifyConfig(windowDays, minSamples int, minRatio float64) {
+	e.verifyWindowDays = windowDays
+	e.verifyMinSamples = minSamples
+	e.verifyMinRatio = minRatio
+}
+
+// SetVerificationStore 注入验证统计查询 store（D-086 发布门用）。
+// nil = 未接线（测试默认，全量发布=向后兼容）；生产注入 *pgstore.Store。
+func (e *Engine) SetVerificationStore(vs verificationStore) {
+	e.verifyStore = vs
 }
 
 // Run 订阅 QuoteBus 并驱动检测→评估→存储循环。阻塞至 ctx 取消。
@@ -152,11 +178,13 @@ func (e *Engine) onQuote(ctx context.Context, q bus.Quote) {
 			continue
 		}
 		// D-080 实施修正① + 修复⑭ S3：oppTopic 双用途（D-050 站内推送 + autotrade 事件流）。
-		// S3 退役 minNotifyNetBps 发布门槛 → upsert 成功即发布（全量事件流）。
-		// 4~5/2~5 区间息差组合原入库不发布致 rollup 覆盖缺口，现全量发布由前端显示层过滤。
+		// D-086 验证阶梯发布门：V0 入库不推送（灰显=预估，推送是稀缺注意力）/ V1+ 推送（已验证）。
+		// verifyStore nil = 未接线（测试默认，全量发布=向后兼容）；接线后仅 V1+ 发布。
 		// UI 刷新另有 30s 快照兜底（service.go:1208）；前端默认 ≥5bps 显示过滤（常量，语义自立）。
 		if e.oppTopic != nil {
-			e.oppTopic.Publish(*o)
+			if e.shouldPublish(ctx, o) {
+				e.oppTopic.Publish(*o)
+			}
 		}
 	}
 }
@@ -195,6 +223,22 @@ func netStoreGate(o *pgstore.Opportunity, e *Engine) bool {
 	default:
 		return true
 	}
+}
+
+// shouldPublish D-086 验证阶梯发布门：V1+ 推送 / V0 不推送。
+// verifyStore nil = 未接线（测试默认，全量发布=向后兼容）。
+// 查询失败 → V0（fail-safe：宁可少推不推垃圾）。
+func (e *Engine) shouldPublish(ctx context.Context, o *pgstore.Opportunity) bool {
+	if e.verifyStore == nil {
+		return true // 未接线=全量发布（测试向后兼容）
+	}
+	vkey := verification.Vkey(o.Type, o.VenueBuy, o.VenueSell)
+	samples, ratio, fresh, err := e.verifyStore.VerificationFor(ctx, vkey, e.verifyWindowDays)
+	if err != nil {
+		log.Printf("[engine] verification query %s: %v (fail-safe V0 不推送)", vkey, err)
+		return false
+	}
+	return verification.VerifyLevel(samples, e.verifyMinSamples, ratio, e.verifyMinRatio, fresh) >= verification.LevelV1
 }
 
 func findQuote(snapshot map[string]map[string]bus.Quote, canonical, venueKey string) *bus.Quote {

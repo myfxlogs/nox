@@ -14,14 +14,15 @@ import (
 
 // Reconciler 对账器：比对本地 OPEN legs 与 venue 实际持仓。
 type Reconciler struct {
-	store           Store
-	mu              sync.RWMutex
-	queriers        []VenueQuerier
-	historyQueriers []OrderHistoryQuerier
-	closer          Closer
-	statUpdater     StatUpdater
-	runTimeout      time.Duration // 单次外部调用超时（缺陷1修复：默认 10s，防离线 venue 阻塞 loop）
-	initialDelay    time.Duration // 首轮延迟（缺陷2修复：默认 60s，等 adapter 就绪）
+	store               Store
+	mu                  sync.RWMutex
+	queriers            []VenueQuerier
+	historyQueriers     []OrderHistoryQuerier
+	closer              Closer
+	statUpdater         StatUpdater
+	verificationUpdater VerificationUpdater // D-086 验证统计增量（平仓收尾后调）
+	runTimeout          time.Duration       // 单次外部调用超时（缺陷1修复：默认 10s，防离线 venue 阻塞 loop）
+	initialDelay        time.Duration       // 首轮延迟（缺陷2修复：默认 60s，等 adapter 就绪）
 }
 
 // New 创建对账器。
@@ -39,6 +40,9 @@ func (r *Reconciler) SetCloser(c Closer) { r.closer = c }
 
 // SetStatUpdater 注入策略统计更新器（收尾后调，淘汰统计不断链）。
 func (r *Reconciler) SetStatUpdater(s StatUpdater) { r.statUpdater = s }
+
+// SetVerificationUpdater 注入验证统计更新器（D-086，收尾后调，与 StatUpdater 同位点）。
+func (r *Reconciler) SetVerificationUpdater(v VerificationUpdater) { r.verificationUpdater = v }
 
 // SetOrderHistoryQueriers 设置历史单查证器集合（与 VenueQuerier 同 venueKey 身份）。
 func (r *Reconciler) SetOrderHistoryQueriers(qs ...OrderHistoryQuerier) {
