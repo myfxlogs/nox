@@ -63,6 +63,15 @@ func TestLoadDefaults(t *testing.T) {
 	if c.StoreMinNetBps != 5.0 {
 		t.Errorf("StoreMinNetBps = %v, want 5.0 (D-078)", c.StoreMinNetBps)
 	}
+	if c.FundingHedgeMinNetStore != 14.95 {
+		t.Errorf("FundingHedgeMinNetStore = %v, want 14.95 (D-085 含基准)", c.FundingHedgeMinNetStore)
+	}
+	if c.PerpFundingMinNetStore != 2.0 {
+		t.Errorf("PerpFundingMinNetStore = %v, want 2.0 (D-085)", c.PerpFundingMinNetStore)
+	}
+	if c.CarryMinNetStore != 4.0 {
+		t.Errorf("CarryMinNetStore = %v, want 4.0 (D-085)", c.CarryMinNetStore)
+	}
 }
 
 // TestLoadEnvOverride env 覆盖须生效。

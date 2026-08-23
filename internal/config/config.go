@@ -70,10 +70,16 @@ type Config struct {
 	// === 机会站内推送（D-050；修复⑭ S3 退役 minNotifyNetBps 发布门槛 → oppTopic 全量事件流）===
 	// 发布门槛已退役，前端显示过滤常量 5 语义自立（useFrontConfig 默认值）。
 
-	// === 机会入库门槛（D-078 round-trip 成本修正）===
+	// === 机会入库门槛（D-078 round-trip 成本修正 / D-085 息差家族净门槛）===
 	// StoreMinNetBps CROSS_VENUE 入库最低净收益（bps）；低于此值不入库（从源头消除垃圾机会）。
 	// 仅适用于价差型（net 为一次性 bps）；息差型 net 为年化百分点，由检测器 MinNetAnnualized 门槛过滤。
 	StoreMinNetBps float64
+	// 息差家族入库净门槛（D-085：门槛必须作用在卡片显示的净=毛−全部摩擦；FUNDING_HEDGE 再减基准）。
+	// 作用在 evaluator 扣成本后的 NetBps（年化百分点），检测器门槛保留为前置过滤（双保险无害）。
+	// FundingHedgeMinNetStore 默认 14.95=4 门槛+10.95 基准（语义=扣成本后净−基准≥4；基准变化时随配）。
+	FundingHedgeMinNetStore float64 // ARB_FUNDING_HEDGE_MIN_NET_STORE
+	PerpFundingMinNetStore  float64 // ARB_PERP_FUNDING_MIN_NET_STORE（默认 2.0）
+	CarryMinNetStore        float64 // ARB_CARRY_MIN_NET_STORE（默认 4.0）
 
 	// === Broker 实持仓轮询（D-052）===
 	// BrokerPosPollInterval Broker 实持仓视图轮询周期（ARB_BROKER_POS_POLL_MS，缺省 5s）。
@@ -150,7 +156,10 @@ func Load() *Config {
 		FundingDropRatio:           envFloat("ARB_FUNDING_DROP_RATIO", 0.5),
 		SwapArbEquityUseRatio:      envFloat("ARB_SWAPARB_EQUITY_USE_RATIO", 0.5),
 		SwapArbReentryCooldownDays: envInt("ARB_SWAPARB_REENTRY_COOLDOWN_DAYS", 7),
-		StoreMinNetBps:             envFloat("ARB_STORE_MIN_NET_BPS", 5.0), // D-078：CROSS_VENUE 入库门槛，round-trip 后 net≥5bps 才入库
+		StoreMinNetBps:             envFloat("ARB_STORE_MIN_NET_BPS", 5.0),             // D-078：CROSS_VENUE 入库门槛，round-trip 后 net≥5bps 才入库
+		FundingHedgeMinNetStore:    envFloat("ARB_FUNDING_HEDGE_MIN_NET_STORE", 14.95), // D-085 息差家族净门槛（含基准 10.95+门槛 4）
+		PerpFundingMinNetStore:     envFloat("ARB_PERP_FUNDING_MIN_NET_STORE", 2.0),    // D-085
+		CarryMinNetStore:           envFloat("ARB_CARRY_MIN_NET_STORE", 4.0),           // D-085
 		BrokerPosPollInterval:      envDur("ARB_BROKER_POS_POLL_MS", 5*time.Second),
 		OpportunityNotionalUSD:     envFloat("ARB_OPP_NOTIONAL_USD", 1000),
 		AlertPaused:                envBool("ARB_ALERT_PAUSED", false),
