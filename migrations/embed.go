@@ -55,3 +55,6 @@ var ComboIdentitySQL string
 
 //go:embed 0037_verification_stats.sql
 var VerificationStatsSQL string
+
+//go:embed 0038_settlement_typed_columns.sql
+var SettlementTypedColumnsSQL string

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"time"
 
+	"arb/internal/notional"
+
 	"github.com/jackc/pgx/v5"
 )
 
@@ -178,7 +180,10 @@ func (s *Store) CanonicalContractProfile(ctx context.Context, canonical string) 
 // ContractSizeByCanonical 返回 venue 侧该 canonical 映射的合约规格（D-062 显示层 USD 派生）。
 // 取该 venue+canonical 行的 contract_size（D-061 对称桶保证同 canonical 跨 venue CS 一致，
 // 故 venue_buy 侧即代表）。ok=false = 未映射/CS 未知（NULL），调用方回退 0。
+// D-087 §3.1：入口处 notional.VenueAccount 归一 venue 键（"277842155:mt5"→"277842155"），
+// 全部消费方（verification/显示层/pipeline 装配）一次修好。
 func (s *Store) ContractSizeByCanonical(ctx context.Context, venue, canonical string) (float64, bool, error) {
+	venue = notional.VenueAccount(venue)
 	var val float64
 	err := s.pool.QueryRow(ctx, `
 		SELECT contract_size FROM broker_symbol_map
@@ -207,4 +212,28 @@ func (s *Store) BackfillSymbolContracts(ctx context.Context, venue string, contr
 		}
 	}
 	return nil
+}
+
+// USDPer 返回计价币→USD 的汇率（D-087 §3.1 FXRateProvider）。
+//   - "USD" → (1.0, true) 基准
+//   - "JPY" → ticks 表 canonical=USDJPY、ts ≤ at 最近一条（24h 窗口）的 bid
+//   - ""/其他 → (0, false) 诚实缺省（未知=换算不可得，调用方记 skipped 不猜）
+func (s *Store) USDPer(ctx context.Context, quoteCcy string, at time.Time) (float64, bool) {
+	switch quoteCcy {
+	case "USD":
+		return 1.0, true
+	case "JPY":
+		var rate float64
+		err := s.pool.QueryRow(ctx, `
+			SELECT bid FROM ticks
+			WHERE symbol = 'USDJPY' AND ts <= $1 AND ts > $1 - interval '24 hours'
+			ORDER BY ts DESC LIMIT 1
+		`, at).Scan(&rate)
+		if err != nil || rate <= 0 {
+			return 0, false
+		}
+		return rate, true
+	default:
+		return 0, false
+	}
 }

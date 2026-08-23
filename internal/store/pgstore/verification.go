@@ -95,7 +95,13 @@ func (s *Store) UpdateVerificationStatForPosition(ctx context.Context, p *Positi
 		}
 	}
 
-	expectedUsd := verification.ExpectedUsd(p.Type, p.ExpectedNetBps, notional, holdDays)
+	// D-087 §3.4 typed 新签名：netBps + swapBpsDaily 按字段取值
+	netBps := p.ExpectedNetBps
+	swapBpsDaily := 0.0
+	if p.ExpectedSwapBpsDaily != nil {
+		swapBpsDaily = *p.ExpectedSwapBpsDaily
+	}
+	expectedUsd := verification.ExpectedUsd(p.Type, netBps, swapBpsDaily, notional, holdDays)
 	if expectedUsd <= 0 {
 		return nil // 负期望/零期望不入统计
 	}

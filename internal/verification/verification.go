@@ -18,32 +18,44 @@ const (
 	// V2 真金级预留，本包不实现判定（需真金账户标记，后置真金阶段）
 )
 
-// ExpectedUsd 按型折算期望收益 USD（设计 §3 关键换算）。
-//   - CROSS_VENUE/MEANREVERT：expectedNetBps/10000 × notionalUSD（一次性 bps）
-//   - FUNDING_HEDGE/PERP_FUNDING/CARRY：expectedNetBps/100 × notionalUSD × holdDays/365（年化百分点）
-//   - SWAPARB：expectedNetBps/10000 × notionalUSD × holdDays（日 bps）
+// ExpectedUsd 按型折算期望收益 USD（D-087 §3.4 typed 新签名）。
+// 各型按字段语义取值，nil/≤0 视为 0：
+//   - CROSS_VENUE/MEANREVERT：netBps/10000 × notionalUSD（一次性 bps）
+//   - FUNDING_HEDGE/PERP_FUNDING/CARRY：netBps/100 × notionalUSD × holdDays/365（年化百分点）
+//   - SWAPARB：swapBpsDaily/10000 × notionalUSD × holdDays（日 bps，entrySpread 不参与期望收益）
 //
-// notionalUSD=Σ OPEN FILLED 腿 qty×CS×open价；holdDays=（closed_at−开仓时刻）/24h。
+// notionalUSD=Σ OPEN FILLED 腿 qty×CS×open价×fx；holdDays=（closed_at−开仓时刻）/24h。
 // 未知类型返回 0（不纳入统计）。
-func ExpectedUsd(typ string, expectedNetBps, notionalUSD, holdDays float64) float64 {
+func ExpectedUsd(typ string, netBps, swapBpsDaily, notionalUSD, holdDays float64) float64 {
 	if notionalUSD <= 0 {
 		return 0
 	}
 	switch typ {
 	case "CROSS_VENUE", "MEANREVERT":
-		return expectedNetBps / 10000 * notionalUSD
+		return netBps / 10000 * notionalUSD
 	case "FUNDING_HEDGE", "PERP_FUNDING", "CARRY":
-		if holdDays <= 0 {
+		if holdDays <= 0 || netBps <= 0 {
 			return 0
 		}
-		return expectedNetBps / 100 * notionalUSD * holdDays / 365
+		return netBps / 100 * notionalUSD * holdDays / 365
 	case "SWAPARB":
-		if holdDays <= 0 {
+		if holdDays <= 0 || swapBpsDaily <= 0 {
 			return 0
 		}
-		return expectedNetBps / 10000 * notionalUSD * holdDays
+		return swapBpsDaily / 10000 * notionalUSD * holdDays
 	default:
 		return 0
+	}
+}
+
+// IsCarryType 判断是否为息差型策略（D-087 §3.4 收敛——SWAPARB/CARRY/FUNDING_HEDGE/PERP_FUNDING 统一）。
+// 息差型期望收益随持有天数增长；收敛型（CROSS_VENUE/MEANREVERT）为一次性 bps。
+func IsCarryType(typ string) bool {
+	switch typ {
+	case "SWAPARB", "CARRY", "FUNDING_HEDGE", "PERP_FUNDING":
+		return true
+	default:
+		return false
 	}
 }
 

@@ -7,42 +7,64 @@ import (
 
 func TestExpectedUsd(t *testing.T) {
 	cases := []struct {
-		name           string
-		typ            string
-		expectedNetBps float64
-		notionalUSD    float64
-		holdDays       float64
-		want           float64
+		name         string
+		typ          string
+		netBps       float64
+		swapBpsDaily float64
+		notionalUSD  float64
+		holdDays     float64
+		want         float64
 	}{
-		// CROSS_VENUE 一次性 bps：expectedNetBps/10000 × notional
-		{"CROSS_VENUE 正期望", "CROSS_VENUE", 10.0, 1000, 0, 10.0 / 10000 * 1000},
-		{"MEANREVERT 正期望", "MEANREVERT", 20.0, 500, 0, 20.0 / 10000 * 500},
-		{"CROSS_VENUE 负期望（事故）", "CROSS_VENUE", -5.0, 1000, 0, -5.0 / 10000 * 1000},
+		// CROSS_VENUE 一次性 bps：netBps/10000 × notional
+		{"CROSS_VENUE 正期望", "CROSS_VENUE", 10.0, 0, 1000, 0, 10.0 / 10000 * 1000},
+		{"MEANREVERT 正期望", "MEANREVERT", 20.0, 0, 500, 0, 20.0 / 10000 * 500},
+		{"CROSS_VENUE 负期望（事故）", "CROSS_VENUE", -5.0, 0, 1000, 0, -5.0 / 10000 * 1000},
 
 		// FUNDING 族年化%×天数/365
-		{"FUNDING_HEDGE 正期望", "FUNDING_HEDGE", 15.0, 1000, 30, 15.0 / 100 * 1000 * 30 / 365},
-		{"PERP_FUNDING 正期望", "PERP_FUNDING", 5.0, 2000, 10, 5.0 / 100 * 2000 * 10 / 365},
-		{"CARRY 正期望", "CARRY", 8.0, 1000, 365, 8.0 / 100 * 1000 * 365 / 365},
-		{"FUNDING_HEDGE 负期望", "FUNDING_HEDGE", -2.0, 1000, 30, -2.0 / 100 * 1000 * 30 / 365},
-		{"FUNDING_HEDGE holdDays=0", "FUNDING_HEDGE", 15.0, 1000, 0, 0},
+		{"FUNDING_HEDGE 正期望", "FUNDING_HEDGE", 15.0, 0, 1000, 30, 15.0 / 100 * 1000 * 30 / 365},
+		{"PERP_FUNDING 正期望", "PERP_FUNDING", 5.0, 0, 2000, 10, 5.0 / 100 * 2000 * 10 / 365},
+		{"CARRY 正期望", "CARRY", 8.0, 0, 1000, 365, 8.0 / 100 * 1000 * 365 / 365},
+		{"FUNDING_HEDGE 负期望", "FUNDING_HEDGE", -2.0, 0, 1000, 30, 0}, // D-087：netBps≤0 → 0（防负期望入统计）
+		{"FUNDING_HEDGE holdDays=0", "FUNDING_HEDGE", 15.0, 0, 1000, 0, 0},
 
-		// SWAPARB 日 bps×天数
-		{"SWAPARB 正期望", "SWAPARB", 0.5, 1000, 10, 0.5 / 10000 * 1000 * 10},
-		{"SWAPARB 负期望（开仓成本主导）", "SWAPARB", -0.3, 1000, 5, -0.3 / 10000 * 1000 * 5},
-		{"SWAPARB holdDays=0", "SWAPARB", 0.5, 1000, 0, 0},
+		// SWAPARB 日 bps×天数（D-087：用 swapBpsDaily，netBps 不参与）
+		{"SWAPARB 正期望", "SWAPARB", 0, 0.5, 1000, 10, 0.5 / 10000 * 1000 * 10},
+		{"SWAPARB swapBpsDaily=0", "SWAPARB", 0, 0, 1000, 5, 0}, // D-087：swapBpsDaily≤0 → 0
+		{"SWAPARB holdDays=0", "SWAPARB", 0, 0.5, 1000, 0, 0},
 
 		// 边界
-		{"notional=0", "CROSS_VENUE", 10.0, 0, 0, 0},
-		{"notional<0", "CROSS_VENUE", 10.0, -100, 0, 0},
-		{"未知类型", "UNKNOWN", 10.0, 1000, 10, 0},
+		{"notional=0", "CROSS_VENUE", 10.0, 0, 0, 0, 0},
+		{"notional<0", "CROSS_VENUE", 10.0, 0, -100, 0, 0},
+		{"未知类型", "UNKNOWN", 10.0, 0, 1000, 10, 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := ExpectedUsd(tc.typ, tc.expectedNetBps, tc.notionalUSD, tc.holdDays)
+			got := ExpectedUsd(tc.typ, tc.netBps, tc.swapBpsDaily, tc.notionalUSD, tc.holdDays)
 			if math.Abs(got-tc.want) > 1e-9 {
-				t.Errorf("ExpectedUsd(%s, %v, %v, %v) = %v, want %v", tc.typ, tc.expectedNetBps, tc.notionalUSD, tc.holdDays, got, tc.want)
+				t.Errorf("ExpectedUsd(%s, %v, %v, %v, %v) = %v, want %v", tc.typ, tc.netBps, tc.swapBpsDaily, tc.notionalUSD, tc.holdDays, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestIsCarryType(t *testing.T) {
+	cases := []struct {
+		typ  string
+		want bool
+	}{
+		{"SWAPARB", true},
+		{"CARRY", true},
+		{"FUNDING_HEDGE", true},
+		{"PERP_FUNDING", true},
+		{"CROSS_VENUE", false},
+		{"MEANREVERT", false},
+		{"UNKNOWN", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		if got := IsCarryType(tc.typ); got != tc.want {
+			t.Errorf("IsCarryType(%q) = %v, want %v", tc.typ, got, tc.want)
+		}
 	}
 }
 

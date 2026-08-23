@@ -121,9 +121,9 @@ func TestUpdatePositionStatus_TerminalGuard(t *testing.T) {
 	}
 }
 
-// TestUpdatePositionMeta_ExpectedAnnualPct D-080 S3：三型换算各一例。
-// FUNDING_HEDGE → 直存 net_bps / SWAPARB → net_bps×365/100 / CROSS_VENUE → NULL。
-func TestUpdatePositionMeta_ExpectedAnnualPct(t *testing.T) {
+// TestUpdatePositionMeta_Typed D-087 §3.4：typed 化后各型字段语义分离。
+// FUNDING_HEDGE → NetBps=年化百分点 + AnnualPct=同值 / SWAPARB → EntrySpreadBps + SwapBpsDaily + AnnualPct=swap×365/100 / CROSS_VENUE → NetBps only。
+func TestUpdatePositionMeta_Typed(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	if _, err := s.pool.Exec(ctx, `TRUNCATE positions CASCADE`); err != nil {
@@ -132,12 +132,27 @@ func TestUpdatePositionMeta_ExpectedAnnualPct(t *testing.T) {
 	tests := []struct {
 		name    string
 		posType string
-		netBps  float64
+		meta    PositionMeta
 		wantPct *float64 // nil = 期望 NULL
 	}{
-		{"FUNDING_HEDGE 直存", "FUNDING_HEDGE", 10.95, floatPtr(10.95)},
-		{"SWAPARB 换算", "SWAPARB", 0.5, floatPtr(0.5 * 365 / 100)},
-		{"CROSS_VENUE NULL", "CROSS_VENUE", 15.0, nil},
+		{
+			"FUNDING_HEDGE 直存年化",
+			"FUNDING_HEDGE",
+			PositionMeta{NetBps: floatPtr(10.95), AnnualPct: floatPtr(10.95)},
+			floatPtr(10.95),
+		},
+		{
+			"SWAPARB typed 双字段",
+			"SWAPARB",
+			PositionMeta{EntrySpreadBps: floatPtr(-1.0), SwapBpsDaily: floatPtr(0.5), AnnualPct: floatPtr(0.5 * 365 / 100)},
+			floatPtr(0.5 * 365 / 100),
+		},
+		{
+			"CROSS_VENUE 收敛型 NULL annualPct",
+			"CROSS_VENUE",
+			PositionMeta{NetBps: floatPtr(15.0)},
+			nil,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -151,7 +166,7 @@ func TestUpdatePositionMeta_ExpectedAnnualPct(t *testing.T) {
 			if err := s.pool.QueryRow(ctx, `SELECT id FROM positions WHERE opportunity_id=$1`, oppID).Scan(&id); err != nil {
 				t.Fatalf("query id: %v", err)
 			}
-			if err := s.UpdatePositionMeta(ctx, id, tt.posType, tt.netBps); err != nil {
+			if err := s.UpdatePositionMeta(ctx, id, tt.posType, tt.meta); err != nil {
 				t.Fatalf("UpdatePositionMeta: %v", err)
 			}
 			var gotPct *float64

@@ -14,16 +14,18 @@ var ErrTerminalState = errors.New("position is in terminal state (CLOSED/FAILED)
 
 // Position 对应 positions 表（§2.11）。
 type Position struct {
-	ID                int64
-	OpportunityID     string
-	Type              string
-	Status            string
-	ExpectedNetBps    float64
-	ExpectedAnnualPct *float64 // D-080 S3：承诺年化%（funding 直存 / SWAPARB·CARRY=net_bps×365/100 / 收敛型 NULL）
-	RealizedPnl       *float64
-	OpenedAt          *time.Time
-	ClosedAt          *time.Time
-	Note              string
+	ID                     int64
+	OpportunityID          string
+	Type                   string
+	Status                 string
+	ExpectedNetBps         float64  // 收敛型一次性 bps（SWAPARB 已挪至 ExpectedSwapBpsDaily，D-087）
+	ExpectedEntrySpreadBps *float64 // D-087：SWAPARB 入场 spread（原 expected_net_bps 挪列）
+	ExpectedSwapBpsDaily   *float64 // D-087：SWAPARB 日 swap bps
+	ExpectedAnnualPct      *float64 // D-080 S3：承诺年化%（funding 直存 / SWAPARB·CARRY=net_bps×365/100 / 收敛型 NULL）
+	RealizedPnl            *float64
+	OpenedAt               *time.Time
+	ClosedAt               *time.Time
+	Note                   string
 }
 
 // PositionLeg 对应 position_legs 表（§2.11）。
@@ -45,9 +47,10 @@ type PositionLeg struct {
 }
 
 // CreatePosition 建 position 记录，返回 ID。
+// D-087 §3.3：opened_at = now()（holdDays 计算依赖，原 NULL 兜底 min(leg ts) 仍保留作冗余）。
 func (s *Store) CreatePosition(ctx context.Context, p *Position) (int64, error) {
-	q := `INSERT INTO positions (opportunity_id, type, status, expected_net_bps)
-		VALUES ($1, $2, $3, $4) RETURNING id`
+	q := `INSERT INTO positions (opportunity_id, type, status, expected_net_bps, opened_at)
+		VALUES ($1, $2, $3, $4, now()) RETURNING id`
 	var id int64
 	err := s.pool.QueryRow(ctx, q, p.OpportunityID, p.Type, p.Status, p.ExpectedNetBps).Scan(&id)
 	if err != nil {
@@ -73,22 +76,26 @@ func (s *Store) UpdatePositionStatus(ctx context.Context, id int64, status strin
 	return nil
 }
 
-// UpdatePositionMeta 回填持仓元数据（D-070：pipeline.Execute 创建时未填 type/expected_net_bps）。
-// D-080 S3：同步写 expected_annual_pct（按型换算：funding 直存 net_bps / SWAPARB·CARRY=net_bps×365/100 / 收敛型 NULL）。
-func (s *Store) UpdatePositionMeta(ctx context.Context, id int64, posType string, expectedNetBps float64) error {
-	var annualPct any
-	switch posType {
-	case "FUNDING_HEDGE", "PERP_FUNDING":
-		annualPct = expectedNetBps
-	case "SWAPARB", "CARRY":
-		v := expectedNetBps * 365 / 100
-		annualPct = v
-	default:
-		annualPct = nil // 收敛型不适用年化
-	}
+// PositionMeta typed 持仓元数据（D-087 §3.4 字段语义分离）。
+// 各型按语义给值，nil=该列不写（保持 NULL）：
+//   - 收敛型（CROSS_VENUE/MEANREVERT）：NetBps=一次性 bps，其余 nil
+//   - SWAPARB：EntrySpreadBps=入场 spread / SwapBpsDaily=日 swap / NetBps=nil / AnnualPct=SwapBpsDaily×365/100
+//   - CARRY：NetBps=net bps / AnnualPct=NetBps×365/100
+//   - FUNDING_HEDGE/PERP_FUNDING：NetBps=年化百分点 / AnnualPct=NetBps
+type PositionMeta struct {
+	EntrySpreadBps *float64
+	SwapBpsDaily   *float64
+	NetBps         *float64
+	AnnualPct      *float64
+}
+
+// UpdatePositionMeta 回填持仓元数据（D-087 §3.4 typed 化）。
+// 调用方按型构造 PositionMeta，本方法按字段写入（typed 列分离，不再混用 expected_net_bps）。
+func (s *Store) UpdatePositionMeta(ctx context.Context, id int64, posType string, m PositionMeta) error {
 	_, err := s.pool.Exec(ctx,
-		`UPDATE positions SET type = $1, expected_net_bps = $2, expected_annual_pct = $3 WHERE id = $4`,
-		posType, expectedNetBps, annualPct, id)
+		`UPDATE positions SET type = $1, expected_net_bps = $2, expected_entry_spread_bps = $3,
+			expected_swap_bps_daily = $4, expected_annual_pct = $5 WHERE id = $6`,
+		posType, m.NetBps, m.EntrySpreadBps, m.SwapBpsDaily, m.AnnualPct, id)
 	return err
 }
 
@@ -139,12 +146,67 @@ func (s *Store) ListPositionLegs(ctx context.Context, posID int64) ([]PositionLe
 	return out, rows.Err()
 }
 
+// GetPosition 读单条持仓（D-087 settlement.Settle 用）。不存在→nil, nil。
+func (s *Store) GetPosition(ctx context.Context, id int64) (*Position, error) {
+	q := `SELECT id, opportunity_id, type, status, expected_net_bps, expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note
+		FROM positions WHERE id = $1`
+	var p Position
+	err := s.pool.QueryRow(ctx, q, id).Scan(&p.ID, &p.OpportunityID, &p.Type, &p.Status, &p.ExpectedNetBps,
+		&p.ExpectedEntrySpreadBps, &p.ExpectedSwapBpsDaily, &p.ExpectedAnnualPct,
+		&p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get position %d: %w", id, err)
+	}
+	return &p, nil
+}
+
+// InsertSettlement 写 position_settlements 行（D-087 §3.2，幂等 ON CONFLICT DO NOTHING）。
+func (s *Store) InsertSettlement(ctx context.Context, r *SettlementRow) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO position_settlements (position_id, vkey, expected_usd, realized_usd, notional_usd, hold_days, skipped_reason, settled_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		ON CONFLICT (position_id) DO NOTHING
+	`, r.PositionID, r.Vkey, r.ExpectedUsd, r.RealizedUsd, r.NotionalUsd, r.HoldDays, r.SkippedReason, r.SettledAt)
+	if err != nil {
+		return fmt.Errorf("insert settlement pos=%d: %w", r.PositionID, err)
+	}
+	return nil
+}
+
+// HasSettlement 查 position_settlements 是否已有行（D-087 幂等短路）。
+func (s *Store) HasSettlement(ctx context.Context, posID int64) (bool, error) {
+	var one int
+	err := s.pool.QueryRow(ctx, `SELECT 1 FROM position_settlements WHERE position_id = $1`, posID).Scan(&one)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return false, fmt.Errorf("check settlement pos=%d: %w", posID, err)
+}
+
+// SettlementRow position_settlements 行（D-087 §3.2）。
+type SettlementRow struct {
+	PositionID    int64
+	Vkey          string
+	ExpectedUsd   float64
+	RealizedUsd   float64
+	NotionalUsd   float64
+	HoldDays      float64
+	SkippedReason string
+	SettledAt     time.Time
+}
+
 // ListPositions 分页返回持仓。
 func (s *Store) ListPositions(ctx context.Context, status string, limit, offset int) ([]Position, error) {
 	if limit <= 0 {
 		limit = 50
 	}
-	q := `SELECT id, opportunity_id, type, status, expected_net_bps, expected_annual_pct, realized_pnl, opened_at, closed_at, note
+	q := `SELECT id, opportunity_id, type, status, expected_net_bps, expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note
 		FROM positions
 		WHERE ($1 = '' OR status = $1)
 		ORDER BY id DESC LIMIT $2 OFFSET $3`
@@ -157,7 +219,8 @@ func (s *Store) ListPositions(ctx context.Context, status string, limit, offset 
 	for rows.Next() {
 		var p Position
 		if err := rows.Scan(&p.ID, &p.OpportunityID, &p.Type, &p.Status, &p.ExpectedNetBps,
-			&p.ExpectedAnnualPct, &p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note); err != nil {
+			&p.ExpectedEntrySpreadBps, &p.ExpectedSwapBpsDaily, &p.ExpectedAnnualPct,
+			&p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -180,7 +243,7 @@ func (s *Store) CountPositions(ctx context.Context, status string) (int, error) 
 // D-080 R1：gate 防重改 DB 实时派生——替代内存 openCombos 集，治手动路径旁路。
 // 行数=MaxPositions 量级，成本≈COUNT；返回行供 gate 派生 combo.FromOppID 匹配。
 func (s *Store) ListActivePositions(ctx context.Context) ([]Position, error) {
-	q := `SELECT id, opportunity_id, type, status, expected_net_bps, expected_annual_pct, realized_pnl, opened_at, closed_at, note
+	q := `SELECT id, opportunity_id, type, status, expected_net_bps, expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note
 		FROM positions
 		WHERE status IN ('OPENING','OPEN','LEGGED','CLOSING')
 		ORDER BY id`
@@ -193,7 +256,8 @@ func (s *Store) ListActivePositions(ctx context.Context) ([]Position, error) {
 	for rows.Next() {
 		var p Position
 		if err := rows.Scan(&p.ID, &p.OpportunityID, &p.Type, &p.Status, &p.ExpectedNetBps,
-			&p.ExpectedAnnualPct, &p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note); err != nil {
+			&p.ExpectedEntrySpreadBps, &p.ExpectedSwapBpsDaily, &p.ExpectedAnnualPct,
+			&p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -231,7 +295,7 @@ func (s *Store) ListOpenPositionsByType(ctx context.Context, types []string) ([]
 	if len(types) == 0 {
 		return nil, nil
 	}
-	q := `SELECT id, opportunity_id, type, status, expected_net_bps, expected_annual_pct, realized_pnl, opened_at, closed_at, note
+	q := `SELECT id, opportunity_id, type, status, expected_net_bps, expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note
 		FROM positions
 		WHERE status = 'OPEN' AND type = ANY($1)
 		ORDER BY id`
@@ -244,7 +308,8 @@ func (s *Store) ListOpenPositionsByType(ctx context.Context, types []string) ([]
 	for rows.Next() {
 		var p Position
 		if err := rows.Scan(&p.ID, &p.OpportunityID, &p.Type, &p.Status, &p.ExpectedNetBps,
-			&p.ExpectedAnnualPct, &p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note); err != nil {
+			&p.ExpectedEntrySpreadBps, &p.ExpectedSwapBpsDaily, &p.ExpectedAnnualPct,
+			&p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
