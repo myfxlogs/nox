@@ -122,6 +122,9 @@ const (
 	// DashboardServiceGetKBEntryProcedure is the fully-qualified name of the DashboardService's
 	// GetKBEntry RPC.
 	DashboardServiceGetKBEntryProcedure = "/arb.dashboard.v1.DashboardService/GetKBEntry"
+	// DashboardServiceListVerificationStatsProcedure is the fully-qualified name of the
+	// DashboardService's ListVerificationStats RPC.
+	DashboardServiceListVerificationStatsProcedure = "/arb.dashboard.v1.DashboardService/ListVerificationStats"
 	// DashboardServiceSearchBrokerProcedure is the fully-qualified name of the DashboardService's
 	// SearchBroker RPC.
 	DashboardServiceSearchBrokerProcedure = "/arb.dashboard.v1.DashboardService/SearchBroker"
@@ -234,6 +237,8 @@ type DashboardServiceClient interface {
 	// 经验库只读浏览（F8：读 docs/经验库/索引.md + 条目全文）
 	ListKBEntries(context.Context, *connect.Request[v1.ListKBEntriesRequest]) (*connect.Response[v1.ListKBEntriesResponse], error)
 	GetKBEntry(context.Context, *connect.Request[v1.GetKBEntryRequest]) (*connect.Response[v1.GetKBEntryResponse], error)
+	// 验证统计（D-086 V-Ladder：机会验证阶梯，面板徽章+折叠区）
+	ListVerificationStats(context.Context, *connect.Request[v1.ListVerificationStatsRequest]) (*connect.Response[v1.ListVerificationStatsResponse], error)
 	// Broker 管理（认证后，运行时 MT4/MT5 连接管理）
 	SearchBroker(context.Context, *connect.Request[v1.SearchBrokerRequest]) (*connect.Response[v1.SearchBrokerResponse], error)
 	AddBroker(context.Context, *connect.Request[v1.AddBrokerRequest]) (*connect.Response[v1.AddBrokerResponse], error)
@@ -458,6 +463,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("GetKBEntry")),
 			connect.WithClientOptions(opts...),
 		),
+		listVerificationStats: connect.NewClient[v1.ListVerificationStatsRequest, v1.ListVerificationStatsResponse](
+			httpClient,
+			baseURL+DashboardServiceListVerificationStatsProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListVerificationStats")),
+			connect.WithClientOptions(opts...),
+		),
 		searchBroker: connect.NewClient[v1.SearchBrokerRequest, v1.SearchBrokerResponse](
 			httpClient,
 			baseURL+DashboardServiceSearchBrokerProcedure,
@@ -631,6 +642,7 @@ type dashboardServiceClient struct {
 	resetPnlAnchor         *connect.Client[v1.ResetPnlAnchorRequest, v1.ResetPnlAnchorResponse]
 	listKBEntries          *connect.Client[v1.ListKBEntriesRequest, v1.ListKBEntriesResponse]
 	getKBEntry             *connect.Client[v1.GetKBEntryRequest, v1.GetKBEntryResponse]
+	listVerificationStats  *connect.Client[v1.ListVerificationStatsRequest, v1.ListVerificationStatsResponse]
 	searchBroker           *connect.Client[v1.SearchBrokerRequest, v1.SearchBrokerResponse]
 	addBroker              *connect.Client[v1.AddBrokerRequest, v1.AddBrokerResponse]
 	removeBroker           *connect.Client[v1.RemoveBrokerRequest, v1.RemoveBrokerResponse]
@@ -806,6 +818,11 @@ func (c *dashboardServiceClient) GetKBEntry(ctx context.Context, req *connect.Re
 	return c.getKBEntry.CallUnary(ctx, req)
 }
 
+// ListVerificationStats calls arb.dashboard.v1.DashboardService.ListVerificationStats.
+func (c *dashboardServiceClient) ListVerificationStats(ctx context.Context, req *connect.Request[v1.ListVerificationStatsRequest]) (*connect.Response[v1.ListVerificationStatsResponse], error) {
+	return c.listVerificationStats.CallUnary(ctx, req)
+}
+
 // SearchBroker calls arb.dashboard.v1.DashboardService.SearchBroker.
 func (c *dashboardServiceClient) SearchBroker(ctx context.Context, req *connect.Request[v1.SearchBrokerRequest]) (*connect.Response[v1.SearchBrokerResponse], error) {
 	return c.searchBroker.CallUnary(ctx, req)
@@ -963,6 +980,8 @@ type DashboardServiceHandler interface {
 	// 经验库只读浏览（F8：读 docs/经验库/索引.md + 条目全文）
 	ListKBEntries(context.Context, *connect.Request[v1.ListKBEntriesRequest]) (*connect.Response[v1.ListKBEntriesResponse], error)
 	GetKBEntry(context.Context, *connect.Request[v1.GetKBEntryRequest]) (*connect.Response[v1.GetKBEntryResponse], error)
+	// 验证统计（D-086 V-Ladder：机会验证阶梯，面板徽章+折叠区）
+	ListVerificationStats(context.Context, *connect.Request[v1.ListVerificationStatsRequest]) (*connect.Response[v1.ListVerificationStatsResponse], error)
 	// Broker 管理（认证后，运行时 MT4/MT5 连接管理）
 	SearchBroker(context.Context, *connect.Request[v1.SearchBrokerRequest]) (*connect.Response[v1.SearchBrokerResponse], error)
 	AddBroker(context.Context, *connect.Request[v1.AddBrokerRequest]) (*connect.Response[v1.AddBrokerResponse], error)
@@ -1183,6 +1202,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("GetKBEntry")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceListVerificationStatsHandler := connect.NewUnaryHandler(
+		DashboardServiceListVerificationStatsProcedure,
+		svc.ListVerificationStats,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListVerificationStats")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceSearchBrokerHandler := connect.NewUnaryHandler(
 		DashboardServiceSearchBrokerProcedure,
 		svc.SearchBroker,
@@ -1383,6 +1408,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceListKBEntriesHandler.ServeHTTP(w, r)
 		case DashboardServiceGetKBEntryProcedure:
 			dashboardServiceGetKBEntryHandler.ServeHTTP(w, r)
+		case DashboardServiceListVerificationStatsProcedure:
+			dashboardServiceListVerificationStatsHandler.ServeHTTP(w, r)
 		case DashboardServiceSearchBrokerProcedure:
 			dashboardServiceSearchBrokerHandler.ServeHTTP(w, r)
 		case DashboardServiceAddBrokerProcedure:
@@ -1556,6 +1583,10 @@ func (UnimplementedDashboardServiceHandler) ListKBEntries(context.Context, *conn
 
 func (UnimplementedDashboardServiceHandler) GetKBEntry(context.Context, *connect.Request[v1.GetKBEntryRequest]) (*connect.Response[v1.GetKBEntryResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetKBEntry is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListVerificationStats(context.Context, *connect.Request[v1.ListVerificationStatsRequest]) (*connect.Response[v1.ListVerificationStatsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListVerificationStats is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) SearchBroker(context.Context, *connect.Request[v1.SearchBrokerRequest]) (*connect.Response[v1.SearchBrokerResponse], error) {

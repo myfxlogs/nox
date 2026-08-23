@@ -71,6 +71,10 @@ type FrontConfig struct {
 	MinNetSwapBps     float64
 	RevalidateAbsBps  float64
 	RevalidateRelPct  float64
+	// D-086 验证阶梯阈值（oppToProto 填 verified_level 用，与 engine 发布门同源）。
+	VerifyWindowDays int
+	VerifyMinSamples int
+	VerifyMinRatio   float64
 }
 
 // New 创建 dashboard 服务。reviewer 为复盘触发闭包（nil 则平仓后不触发）；
