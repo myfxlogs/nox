@@ -58,3 +58,6 @@ var VerificationStatsSQL string
 
 //go:embed 0038_settlement_typed_columns.sql
 var SettlementTypedColumnsSQL string
+
+//go:embed 0039_watchlist.sql
+var WatchlistSQL string

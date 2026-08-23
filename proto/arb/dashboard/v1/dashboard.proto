@@ -101,6 +101,10 @@ service DashboardService {
 
   // 理论 vs 实际对账（D-080 S5）：策略聚合卡——承诺年化 vs 实际年化。
   rpc GetStrategyLedger(GetStrategyLedgerRequest) returns (GetStrategyLedgerResponse);
+
+  // 总览自选报价条（D-090）：业主自选 canonical 清单，服务端按此过滤 StreamUpdates case 1。
+  rpc GetWatchlist(GetWatchlistRequest) returns (GetWatchlistResponse);
+  rpc SetWatchlist(SetWatchlistRequest) returns (SetWatchlistResponse);
 }
 
 // === Quote（§1.1）===
@@ -1009,4 +1013,20 @@ message StrategyLedgerEntry {
 
 message GetStrategyLedgerResponse {
   repeated StrategyLedgerEntry entries = 1;
+}
+
+// === Watchlist（D-090 自选报价条）===
+
+message GetWatchlistRequest {}
+
+message GetWatchlistResponse {
+  repeated string canonical = 1;
+}
+
+message SetWatchlistRequest {
+  repeated string canonical = 1;  // 全量替换，顺序即 sort
+}
+
+message SetWatchlistResponse {
+  repeated string canonical = 1;  // 生效清单回显
 }
