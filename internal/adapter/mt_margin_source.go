@@ -46,6 +46,23 @@ var marginReconnectBackoff = []time.Duration{
 	30 * time.Second,
 }
 
+// marginPollOnce 封装账户级 margin 取值链路（D-099 事件驱动化，供首采与事件触发共用）。
+// 流程：fetchLeverage（mt_swap_helpers.go，失败在 helpers 内打日志返回 false）→ marginRate=1/lev
+// （lev>=1e6 无限杠杆哨兵→0，SwapModeNone 先例）→ marginFact(KindInitMarginRate, venue, venue, rate, "mt5")。
+// 账户级，Symbol=venue（账户标识非符号）；ok=false 表示本轮取值失败，调用方按场景重试或 skip。
+// 放本文件（margin 专用）而非 mt_swap_helpers.go（swap 专用），内聚更合理（D-099 拆分）。
+func (a *MT5Adapter) marginPollOnce(ctx context.Context) (fact.Fact, bool) {
+	lev, ok := a.fetchLeverage(ctx)
+	if !ok {
+		return fact.Fact{}, false
+	}
+	rate := 1 / lev
+	if lev >= 1e6 { // Exness 无限杠杆哨兵实证（2e9）：零保证金账号发 0 值（SwapModeNone 先例）
+		rate = 0
+	}
+	return marginFact(fact.KindInitMarginRate, a.venue, a.venue, rate, "mt5"), true
+}
+
 // MarginFactSource 事件驱动 margin 采集源（实现 collect.FactSource，D-099）。
 // 每 venue 一个实例，由 MT5Adapter.runMarginSource 启动；MarginSink 由 main 经
 // BrokerManager 注入（SwapKick 同模式）。复用 a.streams / a.subs / a.withSessionMD /
