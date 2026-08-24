@@ -62,6 +62,10 @@ type Config struct {
 	// notional = min(equityLong, equityShort) × ratio；保留抗单余地（单腿裸露承受力）。
 	// ratio=1 等价旧行为（100% 资金使用率）；不限额=无绝对上限，ratio=单组合资金使用率。
 	SwapArbEquityUseRatio float64
+	// SwapArbBareCap swap 套利单腿裸露上限系数（ARB_SWAPARB_BARE_CAP，缺省 1.0）。
+	// D-097 R2：notional = minEq×ratio，若 > minEq×BareCap 则 cap 到 minEq×BareCap（只 cap 不 skip）。
+	// 语义=单腿名义≤BareCap 倍权益，防大权益+高 ratio 放大裸露。1.0=单腿名义≤1 倍权益。
+	SwapArbBareCap float64
 	// SwapArbReentryCooldownDays 组合平仓后重入冷却天数（ARB_SWAPARB_REENTRY_COOLDOWN_DAYS，缺省 7）。
 	// 该 ComboKey 存在 CLOSED 持仓且 closed_at > now() − N 天 → 跳过（不尝试/不弹窗/不落 REJECTED 噪音）。
 	// 冷却外或无 CLOSED 记录 → 放行；0 = 关闭冷却（始终放行）。
@@ -171,6 +175,7 @@ func Load() *Config {
 		LiqMMR:                     envFloat("ARB_LIQ_MMR", 0.005),
 		FundingDropRatio:           envFloat("ARB_FUNDING_DROP_RATIO", 0.5),
 		SwapArbEquityUseRatio:      envFloat("ARB_SWAPARB_EQUITY_USE_RATIO", 0.5),
+		SwapArbBareCap:             envFloat("ARB_SWAPARB_BARE_CAP", 1.0),
 		SwapArbReentryCooldownDays: envInt("ARB_SWAPARB_REENTRY_COOLDOWN_DAYS", 7),
 		StoreMinNetBps:             envFloat("ARB_STORE_MIN_NET_BPS", 5.0),             // D-078：CROSS_VENUE 入库门槛，round-trip 后 net≥5bps 才入库
 		FundingHedgeMinNetStore:    envFloat("ARB_FUNDING_HEDGE_MIN_NET_STORE", 14.95), // D-085 息差家族净门槛（含基准 10.95+门槛 4）
