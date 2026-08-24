@@ -64,3 +64,6 @@ var WatchlistSQL string
 
 //go:embed 0040_watchlist_venues.sql
 var WatchlistVenuesSQL string
+
+//go:embed 0041_analyst_ro_role.sql
+var AnalystRoRoleSQL string

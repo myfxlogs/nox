@@ -72,3 +72,19 @@ func (s *Store) HasSettlement(ctx context.Context, posID int64) (bool, error) {
 	}
 	return false, fmt.Errorf("check settlement pos=%d: %w", posID, err)
 }
+
+// GetSettlementByPos D-091 分析员 get_entity：读单条 position_settlements 行。不存在→nil, nil。
+func (s *Store) GetSettlementByPos(ctx context.Context, posID int64) (*SettlementRow, error) {
+	var r SettlementRow
+	err := s.pool.QueryRow(ctx, `
+		SELECT position_id, vkey, expected_usd, realized_usd, notional_usd, hold_days, skipped_reason, settled_at
+		FROM position_settlements WHERE position_id = $1`, posID).
+		Scan(&r.PositionID, &r.Vkey, &r.ExpectedUsd, &r.RealizedUsd, &r.NotionalUsd, &r.HoldDays, &r.SkippedReason, &r.SettledAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get settlement pos=%d: %w", posID, err)
+	}
+	return &r, nil
+}

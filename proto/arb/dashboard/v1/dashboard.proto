@@ -105,6 +105,10 @@ service DashboardService {
   // 总览自选报价条（D-090）：业主自选 canonical 清单，服务端按此过滤 StreamUpdates case 1。
   rpc GetWatchlist(GetWatchlistRequest) returns (GetWatchlistResponse);
   rpc SetWatchlist(SetWatchlistRequest) returns (SetWatchlistResponse);
+
+  // 分析员（D-091 前端分析员，server streaming + 收件箱 append）
+  rpc AskAnalyst(AskAnalystRequest) returns (stream AskAnalystResponse);
+  rpc AppendAnalystNote(AppendAnalystNoteRequest) returns (AppendAnalystNoteResponse);
 }
 
 // === Quote（§1.1）===
@@ -1044,3 +1048,15 @@ message SetWatchlistRequest {
 message SetWatchlistResponse {
   repeated WatchlistItem items = 1;  // 生效清单回显
 }
+
+// === Analyst（D-091 前端分析员，server streaming）===
+
+message EntityRef { string type = 1; string id = 2; }        // position / opportunity / stat-vkey
+message ChatTurn { bool user = 1; string text = 2; }
+message AskAnalystRequest { string question = 1; repeated EntityRef context = 2; string page = 3; repeated ChatTurn history = 4; }
+message AnalystCitation { string kind = 1; string ref = 2; string excerpt = 3; } // sql / kb / decision / code / entity
+message SuggestedFollowUps { repeated string follow_ups = 1; }
+message AnalystDone { bool grounded = 1; }                    // grounded=false=全程零引用
+message AskAnalystResponse { oneof part { string delta = 1; AnalystCitation citation = 2; SuggestedFollowUps follow_ups = 3; AnalystDone done = 4; } }
+message AppendAnalystNoteRequest { string question = 1; string summary = 2; repeated AnalystCitation citations = 3; }
+message AppendAnalystNoteResponse { bool ok = 1; }

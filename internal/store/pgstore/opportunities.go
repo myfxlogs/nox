@@ -2,6 +2,7 @@ package pgstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -79,6 +80,26 @@ func (s *Store) ListOpportunities(ctx context.Context, typ string, limit, offset
 	}
 	defer rows.Close()
 	return scanOpportunities(rows)
+}
+
+// GetOpportunity D-091 分析员 get_entity：按 ID 读单条机会（含已过期）。不存在→nil, nil。
+func (s *Store) GetOpportunity(ctx context.Context, id string) (*Opportunity, error) {
+	q := `SELECT id, type, canonical, venue_buy, venue_sell, price_buy, price_sell,
+			gross_bps, spread_cost, commission_cost, slippage_cost, swap_cost,
+			net_bps, breakeven_days, quote_time, expires_at, created_at, updated_at
+		FROM opportunities WHERE id = $1`
+	var o Opportunity
+	err := s.pool.QueryRow(ctx, q, id).Scan(
+		&o.ID, &o.Type, &o.Canonical, &o.VenueBuy, &o.VenueSell, &o.PriceBuy, &o.PriceSell,
+		&o.GrossBps, &o.SpreadCost, &o.CommissionCost, &o.SlippageCost, &o.SwapCost,
+		&o.NetBps, &o.BreakevenDays, &o.QuoteTime, &o.ExpiresAt, &o.CreatedAt, &o.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get opportunity %s: %w", id, err)
+	}
+	return &o, nil
 }
 
 // Alert 对应 alerts 表（§2.5）。
