@@ -147,6 +147,8 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 			}
 			// S4：流推送也标注 position_id（与拉路径同源）
 			annotatePositionID(ctx, s.store, v.Positions)
+			// F3：流推送也标注账号别名（与拉路径同源）
+			annotateAccountAlias(ctx, s.store, v.Positions)
 			if err := stream.Send(&v1.StreamUpdatesResponse{
 				Update: &v1.StreamUpdatesResponse_BrokerPositions{
 					BrokerPositions: v,

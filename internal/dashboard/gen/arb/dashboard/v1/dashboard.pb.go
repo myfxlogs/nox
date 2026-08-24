@@ -3482,9 +3482,10 @@ type BrokerPosition struct {
 	Comment       string                 `protobuf:"bytes,14,opt,name=comment,proto3" json:"comment,omitempty"`
 	IsArb         bool                   `protobuf:"varint,15,opt,name=is_arb,json=isArb,proto3" json:"is_arb,omitempty"` // comment 前缀 = exec.OrderComment("arb") → ARB 源订单
 	OpenedAt      *timestamppb.Timestamp `protobuf:"bytes,16,opt,name=opened_at,json=openedAt,proto3" json:"opened_at,omitempty"`
-	Magic         int64                  `protobuf:"varint,17,opt,name=magic,proto3" json:"magic,omitempty"`                                // MT5 ExpertId / MT4 MagicNumber；0 = 无（手动单）
-	VenueOnline   bool                   `protobuf:"varint,18,opt,name=venue_online,json=venueOnline,proto3" json:"venue_online,omitempty"` // venue 在线状态；false = 最近快照（离线，非实时）
-	PositionId    int64                  `protobuf:"varint,19,opt,name=position_id,json=positionId,proto3" json:"position_id,omitempty"`    // S4：关联持仓组合 ID；0 = 未关联（孤儿订单）
+	Magic         int64                  `protobuf:"varint,17,opt,name=magic,proto3" json:"magic,omitempty"`                                  // MT5 ExpertId / MT4 MagicNumber；0 = 无（手动单）
+	VenueOnline   bool                   `protobuf:"varint,18,opt,name=venue_online,json=venueOnline,proto3" json:"venue_online,omitempty"`   // venue 在线状态；false = 最近快照（离线，非实时）
+	PositionId    int64                  `protobuf:"varint,19,opt,name=position_id,json=positionId,proto3" json:"position_id,omitempty"`      // S4：关联持仓组合 ID；0 = 未关联（孤儿订单）
+	AccountAlias  string                 `protobuf:"bytes,20,opt,name=account_alias,json=accountAlias,proto3" json:"account_alias,omitempty"` // F3：账号别名（broker_accounts.alias）；空 = 未设别名，前端回落 venue
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3650,6 +3651,13 @@ func (x *BrokerPosition) GetPositionId() int64 {
 		return x.PositionId
 	}
 	return 0
+}
+
+func (x *BrokerPosition) GetAccountAlias() string {
+	if x != nil {
+		return x.AccountAlias
+	}
+	return ""
 }
 
 type ListBrokerPositionsRequest struct {
@@ -10202,7 +10210,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x06offset\x18\x03 \x01(\x05R\x06offset\"g\n" +
 	"\x15ListPositionsResponse\x128\n" +
 	"\tpositions\x18\x01 \x03(\v2\x1a.arb.dashboard.v1.PositionR\tpositions\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x05R\x05total\"\xa1\x04\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\"\xc6\x04\n" +
 	"\x0eBrokerPosition\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x1b\n" +
 	"\tvenue_key\x18\x02 \x01(\tR\bvenueKey\x12\x16\n" +
@@ -10227,7 +10235,8 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x05magic\x18\x11 \x01(\x03R\x05magic\x12!\n" +
 	"\fvenue_online\x18\x12 \x01(\bR\vvenueOnline\x12\x1f\n" +
 	"\vposition_id\x18\x13 \x01(\x03R\n" +
-	"positionId\"6\n" +
+	"positionId\x12#\n" +
+	"\raccount_alias\x18\x14 \x01(\tR\faccountAlias\"6\n" +
 	"\x1aListBrokerPositionsRequest\x12\x18\n" +
 	"\arefresh\x18\x01 \x01(\bR\arefresh\"]\n" +
 	"\x1bListBrokerPositionsResponse\x12>\n" +

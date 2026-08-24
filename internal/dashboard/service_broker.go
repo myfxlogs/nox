@@ -34,6 +34,8 @@ func (s *Service) ListBrokerPositions(ctx context.Context, req *connect.Request[
 	}
 	// S4：标注 position_id（OPEN legs venue+order_id → position_id 索引）
 	annotatePositionID(ctx, s.store, out)
+	// F3：标注账号别名（venue→alias map，未命中留空前端回落 venue）
+	annotateAccountAlias(ctx, s.store, out)
 	return connect.NewResponse(&v1.ListBrokerPositionsResponse{Positions: out}), nil
 }
 
@@ -68,6 +70,26 @@ func annotatePositionID(ctx context.Context, store *pgstore.Store, bps []*v1.Bro
 func annotateWithIndex(bps []*v1.BrokerPosition, idx map[string]int64) {
 	for _, bp := range bps {
 		bp.PositionId = idx[bp.VenueKey+"\x00"+bp.Ticket]
+	}
+}
+
+// annotateAccountAlias F3：用 venue→alias map 标注 broker 持仓账号别名（未命中留空，前端回落 venue）。
+// 别名更新生效时延=accounts 快照周期，可接受，勿为此加事件。查询失败不阻断（fail-open）。
+func annotateAccountAlias(ctx context.Context, store *pgstore.Store, bps []*v1.BrokerPosition) {
+	if len(bps) == 0 || store == nil {
+		return
+	}
+	m, err := store.ListAccountAliases(ctx)
+	if err != nil {
+		return
+	}
+	annotateAliasWithMap(bps, m)
+}
+
+// annotateAliasWithMap 纯函数：用预建 venue→alias map 标注（可单测，无 DB 依赖）。
+func annotateAliasWithMap(bps []*v1.BrokerPosition, m map[string]string) {
+	for _, bp := range bps {
+		bp.AccountAlias = m[bp.Venue]
 	}
 }
 
