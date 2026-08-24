@@ -14,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"arb/internal/bus"
 	"arb/internal/fact"
@@ -99,12 +100,20 @@ func mt5SwapMode(t mt5pb.SwapType, long, short float64) SwapMode {
 	}
 }
 
+// swapPerCallTimeout 单符号 SymbolParams 调用超时（S5，2026-08-24）。
+// PXBT 实证：261 次 DeadlineExceeded 全部因单 venue 慢 SymbolParams 拖垮整轮 poll
+// （共享 parent ctx 不自带超时 → 全符号超时 facts 空 → swapResult 返回 err）。
+// per-call 3s × 符号数 ≤ 35s 的 venue 完全不受影响；符号数多时部分符号进 errs/skips，
+// facts>0 仍部分成功（swapResult 语义：errs 只打日志），优于全挂。
+const swapPerCallTimeout = 3 * time.Second
+
 // SwapFacts 轮询全部已映射符号的 SymbolParams，归一为 swap_long/swap_short bps_daily Fact（§3.6），
 // 并对每个有 SymbolGroup 的符号顺带产出 trade_mode Fact（D-060 F3，零额外 RPC）。
 // price 取本 venue 最新报价（缺失回退任一 venue 中价，bps 精度下价格差异可忽略）。
 // 单符号失败只记日志；全失败才返回错误（Scheduler 退避重试）。
 // 每轮每 venue 一行汇总日志（D-060 F1 跳过可观测）：emit/emit0 按符号计，skip 附原因。
 // WP1：未覆盖 SwapType 计数（7/8/9+）单独汇总日志，禁静默（探测面隐形收缩 P4）。
+// S5：每符号 SymbolParams 派生 per-call 3s 超时（慢 venue 不拖垮整轮，facts>0 仍部分成功）。
 func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fact, error) {
 	sm := a.SymbolMap()
 	if len(sm) == 0 {
@@ -119,7 +128,10 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 	uncovered := map[int32]int{}       // SwapType 原始值 → 命中符号数（WP1 计数日志）
 	tripleDays := map[string]float64{} // D-077 修复⑪A M3：canon → 三倍日（per-symbol 全量收集）
 	for brokerSym, canon := range sm {
-		resp, err := a.mt5.SymbolParams(a.withSessionMD(ctx), &mt5pb.SymbolParamsRequest{Id: a.token, Symbol: brokerSym})
+		// S5：派生 per-call 超时，慢符号进 errs 不阻塞整体（parent ctx 不变）。
+		pctx, cancel := context.WithTimeout(a.withSessionMD(ctx), swapPerCallTimeout)
+		resp, err := a.mt5.SymbolParams(pctx, &mt5pb.SymbolParamsRequest{Id: a.token, Symbol: brokerSym})
+		cancel()
 		if err != nil {
 			errs = append(errs, brokerSym+": "+err.Error())
 			continue
