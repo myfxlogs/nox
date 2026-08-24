@@ -303,3 +303,66 @@ func parseTs(t *testing.T, s string) int64 {
 	}
 	return n
 }
+
+// TestCEXExecutor_GatePositionsRaw 验证 GatePositionsRaw 返回原始 body + 解析（D-098 返修② 探针形状证据）。
+// 原始 body 必须含 funding 字段（探针一次运行定案字段是否存在）。
+func TestCEXExecutor_GatePositionsRaw(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/futures/usdt/positions/BTC_USDT" {
+			t.Errorf("want /futures/usdt/positions/BTC_USDT, got %s", r.URL.Path)
+		}
+		_, _ = io.WriteString(w, `{"contract":"BTC_USDT","size":2,"entry_price":"60000","mark_price":"60100","funding":"-0.001"}`)
+	}))
+	defer srv.Close()
+
+	e := NewCEXExecutor("gate", "perp", "k", "s", "", srv.URL, true)
+	raw, poss, err := e.GatePositionsRaw(context.Background(), "BTC_USDT")
+	if err != nil {
+		t.Fatalf("GatePositionsRaw: %v", err)
+	}
+	if !strings.Contains(string(raw), `"funding"`) {
+		t.Errorf("原始 body 应含 funding 字段（探针形状证据），got %s", string(raw))
+	}
+	if len(poss) != 1 || poss[0].Funding != -0.001 {
+		t.Errorf("解析错误：poss=%+v", poss)
+	}
+}
+
+// TestCEXExecutor_GateAccountBookFund 验证 account_book?type=fund 签名 GET + 数组解析（D-098 返修② 结算真实性证据）。
+// 对拍：query=type=fund&contract={c} 进签名（GateSign 第三段），URL 含 query，响应=数组。
+func TestCEXExecutor_GateAccountBookFund(t *testing.T) {
+	var gotQuery, gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotQuery = r.URL.RawQuery
+		// 独立验证签名（query 进 sign_string 第三段）
+		ts := parseTs(t, r.Header.Get("Timestamp"))
+		wantSign := GateSign("s", "GET", "/api/v4/futures/usdt/account_book", gotQuery, "", ts)
+		if r.Header.Get("SIGN") != wantSign {
+			t.Errorf("SIGN query 签名不匹配：got %s want %s", r.Header.Get("SIGN"), wantSign)
+		}
+		_, _ = io.WriteString(w, `[{"time":1724476800,"change":"-0.00123","refid":"r1","text":"funding"},{"time":1724480600,"change":"0.00045","refid":"r2","text":"funding"}]`)
+	}))
+	defer srv.Close()
+
+	e := NewCEXExecutor("gate", "perp", "k", "s", "", srv.URL, true)
+	raw, entries, err := e.GateAccountBookFund(context.Background(), "BTC_USDT")
+	if err != nil {
+		t.Fatalf("GateAccountBookFund: %v", err)
+	}
+	if gotPath != "/futures/usdt/account_book" {
+		t.Errorf("path = %s, want /futures/usdt/account_book", gotPath)
+	}
+	if gotQuery != "type=fund&contract=BTC_USDT" {
+		t.Errorf("query = %s, want type=fund&contract=BTC_USDT", gotQuery)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("want 2 entries, got %d", len(entries))
+	}
+	if entries[0].Text != "funding" || entries[0].Change != "-0.00123" || entries[0].Time != 1724476800 {
+		t.Errorf("entry[0] = %+v", entries[0])
+	}
+	if !strings.Contains(string(raw), `"text":"funding"`) {
+		t.Errorf("原始 body 应含 text=funding（结算行证据），got %s", string(raw))
+	}
+}

@@ -196,6 +196,13 @@ type GatePosition struct {
 // 返修包① M3 对拍 gateapi-go：GetPosition 返回**单个 Position 对象**（非数组，ListPositions 才是数组），
 // 旧代码 unmarshal 到 []struct 对真实 API 恒失败。改为单对象；size==0 → 返回空切片不误报。
 func (e *CEXExecutor) GatePositions(ctx context.Context, contract string) ([]GatePosition, error) {
+	_, poss, err := e.GatePositionsRaw(ctx, contract)
+	return poss, err
+}
+
+// GatePositionsRaw 同 GatePositions，额外返回 GET 原始响应 body（D-098 返修② 探针形状证据：
+// 一次运行定案 funding 字段是否真实存在于 positions 响应 JSON，与 account_book 双保险对拍）。
+func (e *CEXExecutor) GatePositionsRaw(ctx context.Context, contract string) ([]byte, []GatePosition, error) {
 	endpoint := "/futures/usdt/positions/" + contract
 	urlPath := "/api/v4" + endpoint
 	ts := time.Now().Unix()
@@ -207,7 +214,7 @@ func (e *CEXExecutor) GatePositions(ctx context.Context, contract string) ([]Gat
 	}
 	body, err := e.get(ctx, e.baseURL+endpoint, headers)
 	if err != nil {
-		return nil, fmt.Errorf("gate positions: %w", err)
+		return nil, nil, fmt.Errorf("gate positions: %w", err)
 	}
 	var p struct {
 		Contract   string `json:"contract"`
@@ -217,16 +224,51 @@ func (e *CEXExecutor) GatePositions(ctx context.Context, contract string) ([]Gat
 		Funding    string `json:"funding"`
 	}
 	if err := json.Unmarshal(body, &p); err != nil {
-		return nil, fmt.Errorf("gate positions json: %w", err)
+		return body, nil, fmt.Errorf("gate positions json: %w", err)
 	}
 	if p.Size == 0 {
-		return nil, nil // 无仓不误报
+		return body, nil, nil // 无仓不误报
 	}
 	ep, _ := strconv.ParseFloat(p.EntryPrice, 64)
 	mp, _ := strconv.ParseFloat(p.MarkPrice, 64)
 	fd, _ := strconv.ParseFloat(p.Funding, 64)
-	return []GatePosition{{
+	return body, []GatePosition{{
 		Contract: p.Contract, Size: p.Size,
 		EntryPrice: ep, MarkPrice: mp, Funding: fd,
 	}}, nil
+}
+
+// GateAccountBookEntry Gate USDT 本位合约资金账本一行（D-098 返修② 探针结算真实性证据）。
+// GET /futures/usdt/account_book?type=fund&contract={c} 返回真实结算行：
+// text="funding"=资金费率结算，change=资金变动（字符串），time=unix 秒，refid=关联 ID。
+// 生产零消费方（仅探针用），不复用 GatePosition.Funding（SDK/文档双证据指向不存在）。
+type GateAccountBookEntry struct {
+	Time   int64  `json:"time"`   // unix 秒
+	Change string `json:"change"` // 资金变动（字符串，负=支付/正=收取）
+	RefID  string `json:"refid"`  // 关联 ID
+	Text   string `json:"text"`   // 业务类型（funding=资金费率结算）
+}
+
+// GateAccountBookFund 查询 Gate 指定 contract 的资金费率结算账本（GET /futures/usdt/account_book?type=fund&contract={c}，签名 GET 带 query）。
+// 返回原始 body（探针形状证据）+ 解析行。query 进签名（GateSign 第三段=原始 query string）。
+func (e *CEXExecutor) GateAccountBookFund(ctx context.Context, contract string) ([]byte, []GateAccountBookEntry, error) {
+	endpoint := "/futures/usdt/account_book"
+	query := "type=fund&contract=" + contract
+	urlPath := "/api/v4" + endpoint
+	ts := time.Now().Unix()
+	sign := GateSign(e.apiSecret, "GET", urlPath, query, "", ts)
+	headers := http.Header{
+		"KEY":       {e.apiKey},
+		"Timestamp": {strconv.FormatInt(ts, 10)},
+		"SIGN":      {sign},
+	}
+	body, err := e.get(ctx, e.baseURL+endpoint+"?"+query, headers)
+	if err != nil {
+		return nil, nil, fmt.Errorf("gate account_book: %w", err)
+	}
+	var entries []GateAccountBookEntry
+	if err := json.Unmarshal(body, &entries); err != nil {
+		return body, nil, fmt.Errorf("gate account_book json: %w", err)
+	}
+	return body, entries, nil
 }
