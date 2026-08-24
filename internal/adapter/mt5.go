@@ -124,7 +124,41 @@ func (a *MT5Adapter) Connect(ctx context.Context) error {
 		return fmt.Errorf("mt5 connect: empty token")
 	}
 	a.token = token
+	// S1：包装 mt5 client 加会话失效自动重连（reconcile.MT5Querier 共享同一 client，自动受益）。
+	a.mt5 = &sessionClient{MT5Client: a.mt5, reconnect: a.reconnectSession}
 	log.Printf("[mt5:%s] connected, token=%s", a.venue, maskToken(token))
+	return nil
+}
+
+// reconnectSession 复用现有 conn 重调 connMgr.Connect 重建 account 会话（S1）。
+// 禁止调用 a.Connect()——它每次 grpc.DialContext 新建 conn（泄漏）且替换 a.mt5（破坏包装器挂接）。
+// 成功仅更新 a.token；sid 由 sessionID(a.user) 确定性生成（网关同 id → 同 token，重连后旧 ctx 仍有效）。
+func (a *MT5Adapter) reconnectSession(ctx context.Context) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	rctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	sid := sessionID(a.user)
+	loginCtx := metadata.NewOutgoingContext(rctx, metadata.New(map[string]string{"id": sid}))
+	resp, err := a.connMgr.Connect(loginCtx, &mt5pb.ConnectRequest{
+		Host:     a.host,
+		Port:     a.port,
+		User:     uint64(a.user),
+		Password: a.pass,
+		Id:       &sid,
+	})
+	if err != nil {
+		return fmt.Errorf("mt5 reconnect: %w", err)
+	}
+	if e := resp.GetError(); e != nil {
+		return fmt.Errorf("mt5 reconnect: %s", e.GetMessage())
+	}
+	token := resp.GetResult()
+	if token == "" {
+		return fmt.Errorf("mt5 reconnect: empty token")
+	}
+	a.token = token
+	log.Printf("[mt5:%s] session reconnected, token=%s", a.venue, maskToken(token))
 	return nil
 }
 
