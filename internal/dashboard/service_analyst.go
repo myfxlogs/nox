@@ -15,32 +15,110 @@ import (
 
 	"arb/internal/analyst"
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	"arb/internal/store/pgstore"
 
 	"connectrpc.com/connect"
 )
 
 // analystDeps 分析员依赖（main 注入；nil = 未配置）。
 type analystDeps struct {
-	client   *analyst.Client
+	client   *analyst.Client // env 回落 client（DB 空时用）
 	tools    *analyst.Tools
 	rateLim  *analyst.RateLimiter
 	knRoot   string // 经验库根（默认 /kn）
 	notePath string // 待归纳文件相对 knRoot 路径
+	// R3 返修②：env 回落值（DB 空或字段空时用）
+	envBaseURL string
+	envModel   string
+	envAPIKey  string
 }
 
 // SetAnalyst 注入分析员依赖（main 装配后调用）。
 func (s *Service) SetAnalyst(client *analyst.Client, tools *analyst.Tools, rateLim *analyst.RateLimiter, knRoot, notePath string) {
-	s.analyst = &analystDeps{client: client, tools: tools, rateLim: rateLim, knRoot: knRoot, notePath: notePath}
+	s.analyst = &analystDeps{
+		client: client, tools: tools, rateLim: rateLim, knRoot: knRoot, notePath: notePath,
+		envBaseURL: client.BaseURL, envModel: client.Model, envAPIKey: client.APIKey,
+	}
 }
 
-// AskAnalyst 流式回答：限流 → 构造 messages（系统提示词 + 上下文 + 历史 + 问题）→ analyst.Run → delta/citation/follow_ups/done 流出。
+// EnrichPositionForAnalyst R2 返修②：返回 position 派生字段回调（复用 enrichOne 同源派生）。
+// 闭包捕获 s（含 bpm/store），analyst.Tools.EnrichPosition 注入后 get_entity position 含派生字段。
+func (s *Service) EnrichPositionForAnalyst() func(ctx context.Context, p *pgstore.Position, legs []pgstore.PositionLeg) map[string]any {
+	return func(ctx context.Context, p *pgstore.Position, legs []pgstore.PositionLeg) map[string]any {
+		if s.bpm == nil {
+			return nil // 未接线 → 诚实缺省
+		}
+		pb := positionToProto(p)
+		enrichOne(ctx, s, pb, legs, s.bpm.Snapshot(), time.Now())
+		derived := map[string]any{}
+		if pb.FloatingPnlUsd != nil {
+			derived["floating_pnl_usd"] = *pb.FloatingPnlUsd
+		}
+		if pb.SwapAccruedUsd != nil {
+			derived["swap_accrued_usd"] = *pb.SwapAccruedUsd
+		}
+		if pb.NetPnlUsd != nil {
+			derived["net_pnl_usd"] = *pb.NetPnlUsd
+		}
+		if pb.ExpectedSwapUsdToDate != nil {
+			derived["expected_swap_usd_to_date"] = *pb.ExpectedSwapUsdToDate
+		}
+		if pb.AttainmentPct != nil {
+			derived["attainment_pct"] = *pb.AttainmentPct
+		}
+		if pb.CurrentNetBps != nil {
+			derived["current_net_bps"] = *pb.CurrentNetBps
+		}
+		return derived
+	}
+}
+
+// resolveAiConfig R3 返修②：每问读库（DB 优先 → env 回落）。
+// DB enabled=false → 拒绝；DB+env api_key 双双空 → failed_precondition。
+// 返回临时 client（按解析出的 baseURL/model/apiKey 构造）。
+func (s *Service) resolveAiConfig(ctx context.Context) (*analyst.Client, error) {
+	deps := s.analyst
+	if deps == nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("分析员未配置"))
+	}
+	baseURL := deps.envBaseURL
+	model := deps.envModel
+	apiKey := deps.envAPIKey
+	// DB 优先（每问读库，镜像 exchange_configs 模式，改完即生效免重启）
+	if s.store != nil {
+		if cfg, err := s.store.GetAiSettings(ctx); err == nil {
+			if !cfg.Enabled {
+				return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("分析员已禁用（DB enabled=false）"))
+			}
+			if cfg.BaseURL != "" {
+				baseURL = cfg.BaseURL
+			}
+			if cfg.Model != "" {
+				model = cfg.Model
+			}
+			if cfg.APIKey != "" {
+				apiKey = cfg.APIKey // DB api_key 覆盖 env（仅存 DB 不打日志）
+			}
+		}
+	}
+	if apiKey == "" {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("分析员未配置（api_key 为空）"))
+	}
+	return analyst.NewClient(baseURL, apiKey, model), nil
+}
+
+// AskAnalyst 流式回答：限流 → 每问读库解析配置 → 构造 messages → analyst.Run → delta/citation/follow_ups/done 流出。
 func (s *Service) AskAnalyst(ctx context.Context, req *connect.Request[v1.AskAnalystRequest], stream *connect.ServerStream[v1.AskAnalystResponse]) error {
 	deps := s.analyst
-	if deps == nil || deps.client == nil || deps.client.APIKey == "" {
-		return connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("分析员未配置（ARB_AI_API_KEY 为空）"))
+	if deps == nil {
+		return connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("分析员未配置"))
 	}
 	if deps.rateLim != nil && !deps.rateLim.Allow() {
 		return connect.NewError(connect.CodeResourceExhausted, fmt.Errorf("已达每小时提问上限"))
+	}
+	client, err := s.resolveAiConfig(ctx)
+	if err != nil {
+		return err
 	}
 	// 构造初始 messages：历史轮次 + 本轮问题（含上下文摘要注入）。
 	msgs := buildAnalystMessages(req.Msg)
@@ -58,12 +136,56 @@ func (s *Service) AskAnalyst(ctx context.Context, req *connect.Request[v1.AskAna
 			_ = stream.Send(&v1.AskAnalystResponse{Part: &v1.AskAnalystResponse_FollowUps{FollowUps: &v1.SuggestedFollowUps{FollowUps: fu}}})
 		},
 	}
-	result, err := analyst.Run(ctx, deps.client, deps.tools, msgs, cb)
+	result, err := analyst.Run(ctx, client, deps.tools, msgs, cb)
 	if err != nil {
 		return fmt.Errorf("analyst run: %w", err)
 	}
 	// 末帧 done（grounded=false → 前端灰显「⚠ 无数据支撑」）。
 	return stream.Send(&v1.AskAnalystResponse{Part: &v1.AskAnalystResponse_Done{Done: &v1.AnalystDone{Grounded: result.Grounded}}})
+}
+
+// GetAiSettings R3 返修②：读 DB 配置（api_key 掩码返回尾 4 位）。
+func (s *Service) GetAiSettings(ctx context.Context, req *connect.Request[v1.GetAiSettingsRequest]) (*connect.Response[v1.GetAiSettingsResponse], error) {
+	if s.store == nil {
+		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("store 未配置"))
+	}
+	cfg, err := s.store.GetAiSettings(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get ai settings: %w", err)
+	}
+	return connect.NewResponse(&v1.GetAiSettingsResponse{
+		BaseUrl:      cfg.BaseURL,
+		Model:        cfg.Model,
+		ApiKeyMasked: maskAPIKey(cfg.APIKey),
+		Enabled:      cfg.Enabled,
+	}), nil
+}
+
+// SetAiSettings R3 返修②：UPSERT DB 配置（空 api_key=不改动）。
+func (s *Service) SetAiSettings(ctx context.Context, req *connect.Request[v1.SetAiSettingsRequest]) (*connect.Response[v1.SetAiSettingsResponse], error) {
+	if s.store == nil {
+		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("store 未配置"))
+	}
+	if err := s.store.SetAiSettings(ctx, req.Msg.BaseUrl, req.Msg.Model, req.Msg.ApiKey, req.Msg.Enabled); err != nil {
+		return nil, fmt.Errorf("set ai settings: %w", err)
+	}
+	return connect.NewResponse(&v1.SetAiSettingsResponse{Ok: true}), nil
+}
+
+// maskAPIKey 尾 4 位掩码（如 "****a1b2"）；空串返回空。
+func maskAPIKey(key string) string {
+	if len(key) <= 4 {
+		return key
+	}
+	return "****" + key[len(key)-4:]
+}
+
+// truncateStr 截断字符串到 max 字符（超长加…）。
+func truncateStr(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "…"
 }
 
 // AppendAnalystNote 追加「记一下」到 docs/经验库/待归纳-分析员.md（并发安全 append）。
@@ -84,12 +206,12 @@ func (s *Service) AppendAnalystNote(ctx context.Context, req *connect.Request[v1
 	if rel, err := filepath.Rel(root, full); err != nil || strings.HasPrefix(rel, "..") {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("笔记路径非法"))
 	}
-	var cites []string
-	for _, c := range req.Msg.Citations {
-		cites = append(cites, fmt.Sprintf("  - [%s] %s: %s", c.Kind, c.Ref, c.Excerpt))
-	}
-	block := fmt.Sprintf("\n## %s\n- 日期: %s\n- 问题: %s\n- 摘要: %s\n- 引用:\n%s\n",
-		"分析员笔记", time.Now().Format("2006-01-02 15:04"), req.Msg.Question, req.Msg.Summary, strings.Join(cites, "\n"))
+	// R5 返修②：落盘格式改表格行（| 日期 | 问题前60字 | 结论前120字 | 引用数 |）
+	block := fmt.Sprintf("| %s | %s | %s | %d |\n",
+		time.Now().Format("2006-01-02 15:04"),
+		truncateStr(req.Msg.Question, 60),
+		truncateStr(req.Msg.Summary, 120),
+		len(req.Msg.Citations))
 	if err := appendNote(full, block); err != nil {
 		return nil, fmt.Errorf("append note: %w", err)
 	}
