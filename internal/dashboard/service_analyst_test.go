@@ -44,8 +44,8 @@ func TestAppendAnalystNoteWrites(t *testing.T) {
 	_ = os.MkdirAll(filepath.Join(dir, "docs", "经验库"), 0755)
 	s := newAnalystService(dir, rel)
 	_, err := s.AppendAnalystNote(context.Background(), connect.NewRequest(&v1.AppendAnalystNoteRequest{
-		Question: "为什么 #264 浮亏？",
-		Summary:  "跨 broker 基差 $32.67",
+		Question:  "为什么 #264 浮亏？",
+		Summary:   "跨 broker 基差 $32.67",
 		Citations: []*v1.AnalystCitation{{Kind: "sql", Ref: "SELECT 1", Excerpt: "1 row"}},
 	}))
 	if err != nil {
