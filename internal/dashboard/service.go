@@ -72,6 +72,8 @@ type Service struct {
 	watchlistInitOnce bool // true = 已查库初始化过（空表也置 true，避免重复查）
 	// quoteFlushInterval StreamUpdates case 1 蓄压 flush 间隔（默认 1s，测试注 10ms）。
 	quoteFlushInterval time.Duration
+	// D-091 前端分析员依赖（main 经 SetAnalyst 注入；nil = 未配置，RPC 返回 failed_precondition）。
+	analyst *analystDeps
 }
 
 // FrontConfig 前端展示阈值（D-077 修复⑪B N7，后端 config 单一真相）。

@@ -199,6 +199,12 @@ const (
 	// DashboardServiceSetWatchlistProcedure is the fully-qualified name of the DashboardService's
 	// SetWatchlist RPC.
 	DashboardServiceSetWatchlistProcedure = "/arb.dashboard.v1.DashboardService/SetWatchlist"
+	// DashboardServiceAskAnalystProcedure is the fully-qualified name of the DashboardService's
+	// AskAnalyst RPC.
+	DashboardServiceAskAnalystProcedure = "/arb.dashboard.v1.DashboardService/AskAnalyst"
+	// DashboardServiceAppendAnalystNoteProcedure is the fully-qualified name of the DashboardService's
+	// AppendAnalystNote RPC.
+	DashboardServiceAppendAnalystNoteProcedure = "/arb.dashboard.v1.DashboardService/AppendAnalystNote"
 )
 
 // DashboardServiceClient is a client for the arb.dashboard.v1.DashboardService service.
@@ -279,6 +285,9 @@ type DashboardServiceClient interface {
 	// 总览自选报价条（D-090）：业主自选 canonical 清单，服务端按此过滤 StreamUpdates case 1。
 	GetWatchlist(context.Context, *connect.Request[v1.GetWatchlistRequest]) (*connect.Response[v1.GetWatchlistResponse], error)
 	SetWatchlist(context.Context, *connect.Request[v1.SetWatchlistRequest]) (*connect.Response[v1.SetWatchlistResponse], error)
+	// 分析员（D-091 前端分析员，server streaming + 收件箱 append）
+	AskAnalyst(context.Context, *connect.Request[v1.AskAnalystRequest]) (*connect.ServerStreamForClient[v1.AskAnalystResponse], error)
+	AppendAnalystNote(context.Context, *connect.Request[v1.AppendAnalystNoteRequest]) (*connect.Response[v1.AppendAnalystNoteResponse], error)
 }
 
 // NewDashboardServiceClient constructs a client for the arb.dashboard.v1.DashboardService service.
@@ -628,6 +637,18 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("SetWatchlist")),
 			connect.WithClientOptions(opts...),
 		),
+		askAnalyst: connect.NewClient[v1.AskAnalystRequest, v1.AskAnalystResponse](
+			httpClient,
+			baseURL+DashboardServiceAskAnalystProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("AskAnalyst")),
+			connect.WithClientOptions(opts...),
+		),
+		appendAnalystNote: connect.NewClient[v1.AppendAnalystNoteRequest, v1.AppendAnalystNoteResponse](
+			httpClient,
+			baseURL+DashboardServiceAppendAnalystNoteProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("AppendAnalystNote")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -689,6 +710,8 @@ type dashboardServiceClient struct {
 	getStrategyLedger      *connect.Client[v1.GetStrategyLedgerRequest, v1.GetStrategyLedgerResponse]
 	getWatchlist           *connect.Client[v1.GetWatchlistRequest, v1.GetWatchlistResponse]
 	setWatchlist           *connect.Client[v1.SetWatchlistRequest, v1.SetWatchlistResponse]
+	askAnalyst             *connect.Client[v1.AskAnalystRequest, v1.AskAnalystResponse]
+	appendAnalystNote      *connect.Client[v1.AppendAnalystNoteRequest, v1.AppendAnalystNoteResponse]
 }
 
 // ListLatestQuotes calls arb.dashboard.v1.DashboardService.ListLatestQuotes.
@@ -971,6 +994,16 @@ func (c *dashboardServiceClient) SetWatchlist(ctx context.Context, req *connect.
 	return c.setWatchlist.CallUnary(ctx, req)
 }
 
+// AskAnalyst calls arb.dashboard.v1.DashboardService.AskAnalyst.
+func (c *dashboardServiceClient) AskAnalyst(ctx context.Context, req *connect.Request[v1.AskAnalystRequest]) (*connect.ServerStreamForClient[v1.AskAnalystResponse], error) {
+	return c.askAnalyst.CallServerStream(ctx, req)
+}
+
+// AppendAnalystNote calls arb.dashboard.v1.DashboardService.AppendAnalystNote.
+func (c *dashboardServiceClient) AppendAnalystNote(ctx context.Context, req *connect.Request[v1.AppendAnalystNoteRequest]) (*connect.Response[v1.AppendAnalystNoteResponse], error) {
+	return c.appendAnalystNote.CallUnary(ctx, req)
+}
+
 // DashboardServiceHandler is an implementation of the arb.dashboard.v1.DashboardService service.
 type DashboardServiceHandler interface {
 	// 快照类
@@ -1049,6 +1082,9 @@ type DashboardServiceHandler interface {
 	// 总览自选报价条（D-090）：业主自选 canonical 清单，服务端按此过滤 StreamUpdates case 1。
 	GetWatchlist(context.Context, *connect.Request[v1.GetWatchlistRequest]) (*connect.Response[v1.GetWatchlistResponse], error)
 	SetWatchlist(context.Context, *connect.Request[v1.SetWatchlistRequest]) (*connect.Response[v1.SetWatchlistResponse], error)
+	// 分析员（D-091 前端分析员，server streaming + 收件箱 append）
+	AskAnalyst(context.Context, *connect.Request[v1.AskAnalystRequest], *connect.ServerStream[v1.AskAnalystResponse]) error
+	AppendAnalystNote(context.Context, *connect.Request[v1.AppendAnalystNoteRequest]) (*connect.Response[v1.AppendAnalystNoteResponse], error)
 }
 
 // NewDashboardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1394,6 +1430,18 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("SetWatchlist")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceAskAnalystHandler := connect.NewServerStreamHandler(
+		DashboardServiceAskAnalystProcedure,
+		svc.AskAnalyst,
+		connect.WithSchema(dashboardServiceMethods.ByName("AskAnalyst")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceAppendAnalystNoteHandler := connect.NewUnaryHandler(
+		DashboardServiceAppendAnalystNoteProcedure,
+		svc.AppendAnalystNote,
+		connect.WithSchema(dashboardServiceMethods.ByName("AppendAnalystNote")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/arb.dashboard.v1.DashboardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DashboardServiceListLatestQuotesProcedure:
@@ -1508,6 +1556,10 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceGetWatchlistHandler.ServeHTTP(w, r)
 		case DashboardServiceSetWatchlistProcedure:
 			dashboardServiceSetWatchlistHandler.ServeHTTP(w, r)
+		case DashboardServiceAskAnalystProcedure:
+			dashboardServiceAskAnalystHandler.ServeHTTP(w, r)
+		case DashboardServiceAppendAnalystNoteProcedure:
+			dashboardServiceAppendAnalystNoteHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1739,4 +1791,12 @@ func (UnimplementedDashboardServiceHandler) GetWatchlist(context.Context, *conne
 
 func (UnimplementedDashboardServiceHandler) SetWatchlist(context.Context, *connect.Request[v1.SetWatchlistRequest]) (*connect.Response[v1.SetWatchlistResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetWatchlist is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) AskAnalyst(context.Context, *connect.Request[v1.AskAnalystRequest], *connect.ServerStream[v1.AskAnalystResponse]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AskAnalyst is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) AppendAnalystNote(context.Context, *connect.Request[v1.AppendAnalystNoteRequest]) (*connect.Response[v1.AppendAnalystNoteResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AppendAnalystNote is not implemented"))
 }
