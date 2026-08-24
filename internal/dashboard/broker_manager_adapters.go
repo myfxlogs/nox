@@ -116,7 +116,11 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 		min := sp.GetSymbolGroup().GetMinLots()
 		return min, min > 0, nil
 	}
-	// volume step（D-070 qty 精度取整）：SymbolParams SymGroup.VolumeStep
+	// volume step（D-070 qty 精度取整）：SymbolParams SymGroup.LotsStep（double，直接=手数步长）。
+	// D-097 R1 取证修复：原用 VolumeStep(int64 f20, 微手单位 1手=1000000) ÷1e6 → 1.0 手，
+	// 实际三家 broker（277/529/591 AUDJPY）LotsStep=0.01 / VolumeStep=1000000。
+	// cmd/probe 三方对拍证据：LotsStep(double f3)=0.01 = MT5 终端步长真值；
+	// VolumeStep(int64 f20)=1000000 是底层微手单位，÷1e6=1.0 手=错。
 	fetchVolumeStep := func(ctx context.Context, symbol string) (float64, bool, error) {
 		resp, err := ad.MT5Client().SymbolParams(tokenCtx(ctx, ad.Token()), &mt5pb.SymbolParamsRequest{Id: ad.Token(), Symbol: symbol})
 		if err != nil {
@@ -129,12 +133,11 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 		if sp == nil || sp.GetSymbolGroup() == nil {
 			return 0, false, nil
 		}
-		step := sp.GetSymbolGroup().GetVolumeStep()
+		step := sp.GetSymbolGroup().GetLotsStep() // D-097: LotsStep(double f3)=手数步长真值
 		if step <= 0 {
 			return 0, false, nil
 		}
-		lots := float64(step) / 1000000.0
-		return lots, true, nil // MT5 VolumeStep int64 微手（1手=1000000）
+		return step, true, nil
 	}
 	// 符号表 + 分组：SymbolParamsMany 批量取 SymGroup.GroupName，取反斜杠路径顶层段为分组
 	// （Forex\Major\EURUSD→Forex）。Limit 不设——服务端默认 cap，设小 limit 反而在符号超限时抛异常

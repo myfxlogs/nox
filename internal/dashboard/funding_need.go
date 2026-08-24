@@ -34,9 +34,10 @@ func (s *Service) PublishFundingNeed(n FundingNeedNotice) {
 	s.fundingNeedTopic.Publish(n)
 }
 
-// SwapArbFundingNeedUSD 计算 swap 套利组合需注入资金（D-072）：minNotional − min(equityLong, equityShort)。
+// SwapArbFundingNeedUSD 计算 swap 套利组合需注入资金（D-072；D-097 R2 sizing 口径同步）。
 // 只读 helper，不改 SwapArbNotional 签名。返回 ok=false 表示 venue 离线/币种不符/报价缺失（非余额原因，NeedUSD 无意义）。
-// 仅当 min(equity) < minNotional（余额不足）时返回 ok=true + 正数 NeedUSD。
+// D-097 R2：口径同步——minEq×ratio < minNotional（sizing 不足）时返回 ok=true + 正数 NeedUSD=minNotional−sizing。
+// 旧口径（minEq < minNotional 全款门）已废——1:100 杠杆下 $1570 权益本可开 0.02 手，旧门误挡。
 func (s *Service) SwapArbFundingNeedUSD(canonical, venueLong, venueShort string) (needUSD float64, ok bool) {
 	eqLong, curLong, onlineLong := s.AccountEquityUSD(venueLong)
 	if !onlineLong {
@@ -57,10 +58,12 @@ func (s *Service) SwapArbFundingNeedUSD(canonical, venueLong, venueShort string)
 	if !okMin {
 		return 0, false
 	}
-	if minEq >= minNotional {
-		return 0, false // 余额充足，无需提醒
+	// D-097 R2：sizing 口径——sizing=minEq×ratio，sizing < minNotional 才需注资。
+	sizing := minEq * swapArbRatio(s.swapArbEquityUseRatio)
+	if sizing >= minNotional {
+		return 0, false // sizing 充足，无需提醒
 	}
-	return minNotional - minEq, true
+	return minNotional - sizing, true
 }
 
 // fundingNeedToProto 内部结构 → proto 信封（StreamUpdates case 10）。

@@ -129,11 +129,13 @@ func (s *Service) SwapMinNotionalUSD(canonical, venueLong, venueShort string) (f
 	return notionalShort, true
 }
 
-// SwapArbNotional 从 broker 余额推导 swap 套利名义额（D-072 §3.3，业主不限额决策；S6 加 ratio 系数）。
+// SwapArbNotional 从 broker 余额推导 swap 套利名义额（D-072 §3.3，业主不限额决策；S6 加 ratio 系数；D-097 R2 sizing 口径）。
 // notional = min(equityLong, equityShort) × ratio（ratio = ARB_SWAPARB_EQUITY_USE_RATIO，缺省 0.5）；
 // 不限额=无绝对上限；ratio=单组合资金使用率，保留抗单余地（单腿裸露承受力）。
 // ratio=0（未接线测试）等价 ratio=1 旧行为；ratio=1 等价旧行为（100% 资金使用率）。
-// fail-closed 三条件：① venue 离线 ② 账户币种非 USD ③ min(equity) < SwapMinNotionalUSD
+// D-097 R2：第三条 fail-closed 改 sizing 口径——minEq×ratio < minNotional → skip（缩放后名义至少够 1 个最小手）。
+// D-097 R2：裸露 cap——notional > minEq×BareCap → cap 到 minEq×BareCap（只 cap 不 skip，防大权益+高 ratio 放大裸露）。
+// fail-closed 三条件：① venue 离线 ② 账户币种非 USD ③ minEq×ratio < SwapMinNotionalUSD（sizing 不足）
 // 返回 notional=0 + ok=false 表示跳过该组合（reason 含具体原因）。
 func (s *Service) SwapArbNotional(canonical, venueLong, venueShort string) (notional float64, ok bool, reason string) {
 	eqLong, curLong, onlineLong := s.AccountEquityUSD(venueLong)
@@ -158,11 +160,40 @@ func (s *Service) SwapArbNotional(canonical, venueLong, venueShort string) (noti
 	if !okMin {
 		return 0, false, "quote/contract size unavailable"
 	}
-	if minEq < minNotional {
-		return 0, false, fmt.Sprintf("balance $%.2f < min notional $%.2f", minEq, minNotional)
+	// D-097 R2：sizing 口径——minEq×ratio < minNotional → skip（缩放后名义至少够 1 个最小手）。
+	ratio := swapArbRatio(s.swapArbEquityUseRatio)
+	notional, okSizing := swapArbNotionalSizing(minEq, minNotional, ratio, s.swapArbBareCap)
+	if !okSizing {
+		return 0, false, fmt.Sprintf("sizing $%.2f < min lot notional $%.2f", minEq*ratio, minNotional)
 	}
-	// S6：ratio 系数（缺省 0.5，保留抗单余地）；0 = 未接线测试等价 ratio=1
-	return minEq * swapArbRatio(s.swapArbEquityUseRatio), true, ""
+	return notional, true, ""
+}
+
+// swapArbNotionalSizing 纯函数：sizing 口径 + 裸露 cap（D-097 R2）。
+// sizing = minEq×ratio；sizing < minNotional → ok=false（skip）；
+// notional > minEq×bareCap → cap 到 minEq×bareCap（只 cap 不 skip）。
+// bareCap≤0 = 不 cap（等价旧行为，无裸露上限）。
+func swapArbNotionalSizing(minEq, minNotional, ratio, bareCap float64) (notional float64, ok bool) {
+	sizing := minEq * ratio
+	if sizing < minNotional {
+		return 0, false
+	}
+	notional = sizing
+	if cap := swapArbBareCapValue(bareCap); cap > 0 {
+		bareLimit := minEq * cap
+		if notional > bareLimit {
+			notional = bareLimit
+		}
+	}
+	return notional, true
+}
+
+// swapArbBareCapValue 返回有效 BareCap 系数。≤0 = 不 cap（等价旧行为，无裸露上限）。
+func swapArbBareCapValue(c float64) float64 {
+	if c <= 0 {
+		return 0
+	}
+	return c
 }
 
 // swapArbRatio 返回有效 ratio（钳位到有效范围 0<x≤1）。
