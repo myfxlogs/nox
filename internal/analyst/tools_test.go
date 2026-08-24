@@ -2,11 +2,13 @@ package analyst
 
 // tools_test.go 安全护栏单测（设计 §6 安全清单）：
 // query_ro 拒 UPDATE/拒多语句/无 DSN 拒；read_doc 路径逃逸拒/白名单外拒；rate 桶满拒。
+// R1 返修②：补 DSN-gated 真连 happy path 单测（此前只覆盖拒绝路径，happy path 零覆盖是驱动未注册 bug 漏网原因）。
 
 import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -100,5 +102,30 @@ func TestRateLimiterUnlimited(t *testing.T) {
 		if !rl.Allow() {
 			t.Fatalf("unlimited limiter rejected at %d", i)
 		}
+	}
+}
+
+// TestQueryRORealConnect DSN-gated 真连 happy path（R1 返修②）。
+// 设 ARB_TEST_PG_DSN 时跑 SELECT 1 全链（验证 pgxpool 驱动注册 + 查询 + 行解析）；
+// 未设时 skip（go test ./... 无 PG 环境仍全过）。
+func TestQueryRORealConnect(t *testing.T) {
+	dsn := os.Getenv("ARB_TEST_PG_DSN")
+	if dsn == "" {
+		t.Skip("ARB_TEST_PG_DSN 未设置，跳过真连测试")
+	}
+	tools := &Tools{ReadOnlyDSN: dsn}
+	res, cites, err := tools.execQueryRO(context.Background(), ToolCall{ID: "c1", Input: `{"sql":"SELECT 1 AS one"}`})
+	if err != nil {
+		t.Fatalf("execQueryRO error: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("unexpected error: %s", res.Content)
+	}
+	if len(cites) == 0 {
+		t.Fatal("expected citation")
+	}
+	// 内容应含 "one" 列 + 值 1（pgx 返回 int32/int64，JSON 序列化后为数字）
+	if !strings.Contains(res.Content, `"one"`) {
+		t.Fatalf("result missing 'one' column: %s", res.Content)
 	}
 }

@@ -67,3 +67,6 @@ var WatchlistVenuesSQL string
 
 //go:embed 0041_analyst_ro_role.sql
 var AnalystRoRoleSQL string
+
+//go:embed 0042_ai_settings.sql
+var AiSettingsSQL string

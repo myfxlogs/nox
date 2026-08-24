@@ -109,6 +109,9 @@ service DashboardService {
   // 分析员（D-091 前端分析员，server streaming + 收件箱 append）
   rpc AskAnalyst(AskAnalystRequest) returns (stream AskAnalystResponse);
   rpc AppendAnalystNote(AppendAnalystNoteRequest) returns (AppendAnalystNoteResponse);
+  // D-091 返修② R3：AI 配置 DB 化（前端可配，Get 掩码/Set 空 key 不覆盖）
+  rpc GetAiSettings(GetAiSettingsRequest) returns (GetAiSettingsResponse);
+  rpc SetAiSettings(SetAiSettingsRequest) returns (SetAiSettingsResponse);
 }
 
 // === Quote（§1.1）===
@@ -1060,3 +1063,19 @@ message AnalystDone { bool grounded = 1; }                    // grounded=false=
 message AskAnalystResponse { oneof part { string delta = 1; AnalystCitation citation = 2; SuggestedFollowUps follow_ups = 3; AnalystDone done = 4; } }
 message AppendAnalystNoteRequest { string question = 1; string summary = 2; repeated AnalystCitation citations = 3; }
 message AppendAnalystNoteResponse { bool ok = 1; }
+
+// D-091 返修② R3：AI 配置 DB 化
+message GetAiSettingsRequest {}
+message GetAiSettingsResponse {
+  string base_url = 1;
+  string model = 2;
+  string api_key_masked = 3;  // 尾 4 位掩码（如 "****a1b2"），空=未设
+  bool enabled = 4;
+}
+message SetAiSettingsRequest {
+  string base_url = 1;
+  string model = 2;
+  string api_key = 3;   // 空=不改动原值
+  bool enabled = 4;
+}
+message SetAiSettingsResponse { bool ok = 1; }

@@ -55,6 +55,12 @@ func (t *Tools) getEntityPosition(ctx context.Context, callID, id string) (ToolR
 	if settle != nil {
 		entity["settlement"] = settle
 	}
+	// R2 返修②：复用 enrichOne 同源派生字段（净盈亏/浮动/swap已收/应得/达成率/当前bps）。
+	if t.EnrichPosition != nil {
+		if derived := t.EnrichPosition(ctx, p, legs); len(derived) > 0 {
+			entity["derived"] = derived
+		}
+	}
 	out, _ := json.Marshal(entity)
 	cite := Citation{Kind: "entity", Ref: "position:" + id, Excerpt: truncate(string(out), 500)}
 	return ToolResult{ToolUseID: callID, Content: string(out)}, []Citation{cite}, nil

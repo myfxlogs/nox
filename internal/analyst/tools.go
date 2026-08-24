@@ -5,7 +5,6 @@ package analyst
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -15,6 +14,8 @@ import (
 	"time"
 
 	"arb/internal/store/pgstore"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // KnRoot 容器内挂载根（设计 §2：./docs:/kn/docs:rw + ./internal:/kn/internal:ro + ...）。
@@ -25,6 +26,9 @@ type Tools struct {
 	ReadOnlyDSN string         // ARB_AI_PG_DSN（arb_ro 角色，query_ro 专用）
 	Store       *pgstore.Store // get_entity 用主 store（已认证连接，只读查询）
 	KnRoot      string         // 文件工具根（默认 /kn，测试可覆盖）
+	// R2 返修②：position 派生字段回调（dashboard.Service 注入，复用 enrichOne 同源派生）。
+	// nil = 未注入（测试/未接线），get_entity position 返回基础字段不含派生。
+	EnrichPosition func(ctx context.Context, p *pgstore.Position, legs []pgstore.PositionLeg) map[string]any
 }
 
 // 工具名常量。
@@ -97,32 +101,35 @@ func (t *Tools) execQueryRO(ctx context.Context, call ToolCall) (ToolResult, []C
 	if t.ReadOnlyDSN == "" {
 		return ToolResult{ToolUseID: call.ID, Content: "query_ro 未配置（ARB_AI_PG_DSN 缺失）", IsError: true}, nil, nil
 	}
-	db, err := sql.Open("pgx", t.ReadOnlyDSN)
+	// R1 返修②：改用 pgxpool（贴仓内惯例，pgxpool.ParseConfig 天然注册驱动，无 database/sql "unknown driver" 坑）。
+	pool, err := pgxpool.New(ctx, t.ReadOnlyDSN)
 	if err != nil {
 		return ToolResult{ToolUseID: call.ID, Content: "连接只读 PG 失败: " + err.Error(), IsError: true}, nil, nil
 	}
-	defer db.Close()
+	defer pool.Close()
 	qctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	rows, err := db.QueryContext(qctx, q)
+	rows, err := pool.Query(qctx, q)
 	if err != nil {
 		return ToolResult{ToolUseID: call.ID, Content: "查询失败: " + err.Error(), IsError: true}, nil, nil
 	}
 	defer rows.Close()
-	cols, _ := rows.Columns()
+	fields := rows.FieldDescriptions()
+	cols := make([]string, len(fields))
+	for i, f := range fields {
+		cols[i] = f.Name
+	}
 	result := []map[string]any{}
 	for rows.Next() {
-		vals := make([]any, len(cols))
-		ptrs := make([]any, len(cols))
-		for i := range vals {
-			ptrs[i] = &vals[i]
-		}
-		if err := rows.Scan(ptrs...); err != nil {
+		vals, err := rows.Values()
+		if err != nil {
 			continue
 		}
 		row := map[string]any{}
 		for i, c := range cols {
-			row[c] = vals[i]
+			if i < len(vals) {
+				row[c] = vals[i]
+			}
 		}
 		result = append(result, row)
 	}
