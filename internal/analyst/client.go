@@ -36,12 +36,12 @@ func NewClient(baseURL, apiKey, model string) *Client {
 
 // MessageRequest messages API 请求体（Anthropic 兼容）。
 type MessageRequest struct {
-	Model     string          `json:"model"`
-	MaxTokens int             `json:"max_tokens"`
-	System    string          `json:"system,omitempty"`
-	Messages  []Message       `json:"messages"`
-	Stream    bool            `json:"stream"`
-	Tools     []ToolSpec      `json:"tools,omitempty"`
+	Model     string     `json:"model"`
+	MaxTokens int        `json:"max_tokens"`
+	System    string     `json:"system,omitempty"`
+	Messages  []Message  `json:"messages"`
+	Stream    bool       `json:"stream"`
+	Tools     []ToolSpec `json:"tools,omitempty"`
 }
 
 // Message 对话消息（user/assistant 角色交替）。
@@ -90,10 +90,10 @@ type SSEEvent struct {
 
 // StreamCallbacks 流式回调（loop.go 注入）。
 type StreamCallbacks struct {
-	OnDelta     func(text string)              // content_block_delta.text_delta
-	OnToolUse   func(call ToolCall)            // content_block_start tool_use + content_block_stop
-	OnComplete  func(stopReason string)        // message_stop / message_delta stop_reason
-	OnError     func(err error)                // 任意错误
+	OnDelta    func(text string)       // content_block_delta.text_delta
+	OnToolUse  func(call ToolCall)     // content_block_start tool_use + content_block_stop
+	OnComplete func(stopReason string) // message_stop / message_delta stop_reason
+	OnError    func(err error)         // 任意错误
 }
 
 // StreamMessages 发起流式 messages 请求，逐 SSE 事件回调。
@@ -144,10 +144,10 @@ func parseSSE(r io.Reader, cb StreamCallbacks) (string, error) {
 			break
 		}
 		var ev struct {
-			Type string          `json:"type"`
-			Delta json.RawMessage `json:"delta"`
+			Type         string          `json:"type"`
+			Delta        json.RawMessage `json:"delta"`
 			ContentBlock json.RawMessage `json:"content_block"`
-			DeltaType string `json:"delta.type"`
+			DeltaType    string          `json:"delta.type"`
 		}
 		if err := json.Unmarshal([]byte(data), &ev); err != nil {
 			continue // 跳过非 JSON 行（keepalive 等）
@@ -165,8 +165,8 @@ func parseSSE(r io.Reader, cb StreamCallbacks) (string, error) {
 			}
 		case "content_block_delta":
 			var d struct {
-				Type string `json:"type"`
-				Text string `json:"text"`
+				Type        string `json:"type"`
+				Text        string `json:"text"`
 				PartialJSON string `json:"partial_json"`
 			}
 			if err := json.Unmarshal(ev.Delta, &d); err == nil {

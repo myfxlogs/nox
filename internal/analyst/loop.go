@@ -128,7 +128,7 @@ func parseFollowUps(msgs []Message) []string {
 			return nil
 		}
 		var fu []string
-		if err := json.Unmarshal([]byte(text[idx+start : idx+end+1]), &fu); err == nil {
+		if err := json.Unmarshal([]byte(text[idx+start:idx+end+1]), &fu); err == nil {
 			return fu
 		}
 		return nil

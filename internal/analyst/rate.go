@@ -10,10 +10,10 @@ import (
 
 // RateLimiter 单用户简单令牌桶（按小时窗口）。
 type RateLimiter struct {
-	mu       sync.Mutex
-	max      int           // 每小时最大请求数
-	window   time.Duration // 窗口大小（time.Hour）
-	tokens   []time.Time   // 窗口内请求时间戳
+	mu     sync.Mutex
+	max    int           // 每小时最大请求数
+	window time.Duration // 窗口大小（time.Hour）
+	tokens []time.Time   // 窗口内请求时间戳
 }
 
 // NewRateLimiter 创建限流器。maxPerHour=0 → 不限流（测试用）。

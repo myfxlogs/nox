@@ -22,9 +22,9 @@ const KnRoot = "/kn"
 
 // Tools 工具执行器（实现 ToolExecutor）。
 type Tools struct {
-	ReadOnlyDSN string          // ARB_AI_PG_DSN（arb_ro 角色，query_ro 专用）
-	Store       *pgstore.Store  // get_entity 用主 store（已认证连接，只读查询）
-	KnRoot      string          // 文件工具根（默认 /kn，测试可覆盖）
+	ReadOnlyDSN string         // ARB_AI_PG_DSN（arb_ro 角色，query_ro 专用）
+	Store       *pgstore.Store // get_entity 用主 store（已认证连接，只读查询）
+	KnRoot      string         // 文件工具根（默认 /kn，测试可覆盖）
 }
 
 // 工具名常量。

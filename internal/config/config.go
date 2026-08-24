@@ -130,11 +130,11 @@ type Config struct {
 
 	// === 前端分析员（D-091）===
 	// AIBaseURL/Key/Model/PGDSN 四 env + RatePerHour 限流；空 Key=未配置（RPC 返回 failed_precondition）。
-	AIBaseURL      string // ARB_AI_BASE_URL（如 https://open.bigmodel.cn/api/paas/v4）
-	AIAPIKey       string // ARB_AI_API_KEY（仅 .env，不进仓）
-	AIModel        string // ARB_AI_MODEL（如 glm-4.6）
-	AIPGDSN        string // ARB_AI_PG_DSN（arb_ro 只读角色 DSN）
-	AnalystRatePerHour int // ARB_ANALYST_RATE_PER_HOUR（默认 20）
+	AIBaseURL          string // ARB_AI_BASE_URL（如 https://open.bigmodel.cn/api/paas/v4）
+	AIAPIKey           string // ARB_AI_API_KEY（仅 .env，不进仓）
+	AIModel            string // ARB_AI_MODEL（如 glm-4.6）
+	AIPGDSN            string // ARB_AI_PG_DSN（arb_ro 只读角色 DSN）
+	AnalystRatePerHour int    // ARB_ANALYST_RATE_PER_HOUR（默认 20）
 }
 
 // Load 从环境变量加载配置，未设置用默认值。
@@ -198,11 +198,11 @@ func Load() *Config {
 		RevalidateAbsBps:           envFloat("ARB_REVALIDATE_ABS_BPS", 2.0),            // D-077 修复⑪B N4
 		RevalidateRelPct:           envFloat("ARB_REVALIDATE_REL_PCT", 20.0),           // D-077 修复⑪B N4
 		SwapArbEntrySpreadMinBps:   envFloat("ARB_SWAPARB_ENTRY_SPREAD_MIN_BPS", -3.0), // D-077 修复⑪B N6
-		AIBaseURL:          envStr("ARB_AI_BASE_URL", ""),
-		AIAPIKey:           envStr("ARB_AI_API_KEY", ""),
-		AIModel:            envStr("ARB_AI_MODEL", "glm-4.6"),
-		AIPGDSN:            envStr("ARB_AI_PG_DSN", ""),
-		AnalystRatePerHour: envInt("ARB_ANALYST_RATE_PER_HOUR", 20),
+		AIBaseURL:                  envStr("ARB_AI_BASE_URL", ""),
+		AIAPIKey:                   envStr("ARB_AI_API_KEY", ""),
+		AIModel:                    envStr("ARB_AI_MODEL", "glm-4.6"),
+		AIPGDSN:                    envStr("ARB_AI_PG_DSN", ""),
+		AnalystRatePerHour:         envInt("ARB_ANALYST_RATE_PER_HOUR", 20),
 	}
 }
 
