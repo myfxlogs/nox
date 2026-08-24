@@ -105,8 +105,8 @@ func TestCEXExecutor_GateOrderFinished(t *testing.T) {
 		if r.Header.Get("SIGN") != wantSign {
 			t.Errorf("SIGN mismatch: got %q, want %q", r.Header.Get("SIGN"), wantSign)
 		}
-		// 全成交响应：status=finished, left=0, fill_price
-		_, _ = io.WriteString(w, `{"id":"123456","status":"finished","size":1,"left":0,"fill_price":"60000.5"}`)
+		// 全成交响应：id=int64(number), status=finished, finish_as=filled, left=0, fill_price（M1/M2 对拍官方 SDK）
+		_, _ = io.WriteString(w, `{"id":123456,"status":"finished","finish_as":"filled","size":1,"left":0,"fill_price":"60000.5"}`)
 	}))
 	defer srv.Close()
 
@@ -142,7 +142,7 @@ func TestCEXExecutor_GateOrderSellSizeNegative(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
 		gotBody = string(raw)
-		_, _ = io.WriteString(w, `{"id":"7","status":"finished","size":-2,"left":0,"fill_price":"60000"}`)
+		_, _ = io.WriteString(w, `{"id":7,"status":"finished","finish_as":"filled","size":-2,"left":0,"fill_price":"60000"}`)
 	}))
 	defer srv.Close()
 
@@ -156,16 +156,16 @@ func TestCEXExecutor_GateOrderSellSizeNegative(t *testing.T) {
 }
 
 // TestCEXExecutor_GateOrderPollsFill status=open（未成交）→ 轮询 GET 拿真实成交
-// （对齐 okx/binance 教训，防记 0 qty）。
+// （对齐 okx/binance 教训，防记 0 qty）。M2：终态按 finish_as 判定。
 func TestCEXExecutor_GateOrderPollsFill(t *testing.T) {
 	var gotGET bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/futures/usdt/orders":
-			_, _ = io.WriteString(w, `{"id":"888","status":"open","size":1,"left":1,"fill_price":"0"}`)
+			_, _ = io.WriteString(w, `{"id":888,"status":"open","size":1,"left":1,"fill_price":"0"}`)
 		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/futures/usdt/orders/888"):
 			gotGET = true
-			_, _ = io.WriteString(w, `{"id":"888","status":"finished","size":1,"left":0,"fill_price":"60123.4"}`)
+			_, _ = io.WriteString(w, `{"id":888,"status":"finished","finish_as":"filled","size":1,"left":0,"fill_price":"60123.4"}`)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -185,49 +185,48 @@ func TestCEXExecutor_GateOrderPollsFill(t *testing.T) {
 	}
 }
 
-// TestCEXExecutor_GateOrderCanceled 轮询发现订单被取消 → 如实报错（非静默返回 0 假成交）。
-func TestCEXExecutor_GateOrderCanceled(t *testing.T) {
+// TestCEXExecutor_GateOrderZeroFillIOC 零成交 IOC（M2 新增 case ①）：POST 即 finished +
+// finish_as=ioc + left=size → 必须 error 非 0-qty 假 Fill（okx 教训复现防护）。
+// gate status 无 canceled/rejected；取消/IOC 未成交原因在 finish_as。
+func TestCEXExecutor_GateOrderZeroFillIOC(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodPost:
-			_, _ = io.WriteString(w, `{"id":"999","status":"open","size":1,"left":1,"fill_price":"0"}`)
-		case r.Method == http.MethodGet:
-			_, _ = io.WriteString(w, `{"id":"999","status":"canceled","size":1,"left":1,"fill_price":"0"}`)
-		}
+		// IOC 市价单无对手盘 → 立即 finished + finish_as=ioc + left=size（零成交）
+		_, _ = io.WriteString(w, `{"id":999,"status":"finished","finish_as":"ioc","size":1,"left":1,"fill_price":"0"}`)
 	}))
 	defer srv.Close()
 
 	e := NewCEXExecutor("gate", "perp", "k", "s", "", srv.URL, true)
-	_, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTC_USDT", Side: "BUY", Qty: 1})
+	fill, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTC_USDT", Side: "BUY", Qty: 1})
 	if err == nil {
-		t.Fatal("订单被取消应报错，got nil")
+		t.Fatalf("零成交 IOC 应报错，got Fill=%+v（okx 教训：防记 0 qty 假成交）", fill)
 	}
-	if !strings.Contains(err.Error(), "canceled") {
-		t.Errorf("错误应含 canceled 状态, got %v", err)
+	if !strings.Contains(err.Error(), "ioc") {
+		t.Errorf("错误应含 finish_as=ioc, got %v", err)
+	}
+	if fill.Qty != 0 {
+		t.Errorf("零成交 Fill.Qty 应 0, got %v", fill.Qty)
 	}
 }
 
-// TestCEXExecutor_GateOrderPartialFill status=finished 且 left>0 → 如实返回已成交部分 qty=|size-left|。
-func TestCEXExecutor_GateOrderPartialFill(t *testing.T) {
+// TestCEXExecutor_GateOrderPartialFillIOC 部分成交 finish_as=ioc qty>0（M2 新增 case ②）：
+// POST finished + finish_as=ioc + left=1（size=5 → 成交 4）→ 部分 Fill qty=4（如实，非 0-qty 假成交）。
+func TestCEXExecutor_GateOrderPartialFillIOC(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 直接 finished + left=1（size=5 → 成交 4），不触发轮询（finished 不轮询除非 left!=0... 实际 left!=0 会轮询）
-		// 此处测 finished+left!=0 路径：会进入轮询，轮询返回同样部分成交 → 取 qty>0 返回
-		switch r.Method {
-		case http.MethodPost:
-			_, _ = io.WriteString(w, `{"id":"55","status":"finished","size":5,"left":1,"fill_price":"60000"}`)
-		case http.MethodGet:
-			_, _ = io.WriteString(w, `{"id":"55","status":"finished","size":5,"left":1,"fill_price":"60000"}`)
-		}
+		// IOC 部分成交：finish_as=ioc，size=5 left=1 → 成交 4
+		_, _ = io.WriteString(w, `{"id":55,"status":"finished","finish_as":"ioc","size":5,"left":1,"fill_price":"60000"}`)
 	}))
 	defer srv.Close()
 
 	e := NewCEXExecutor("gate", "perp", "k", "s", "", srv.URL, true)
 	fill, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTC_USDT", Side: "BUY", Qty: 5})
 	if err != nil {
-		t.Fatalf("PlaceOrder: %v", err)
+		t.Fatalf("部分成交不应报错: %v", err)
 	}
 	if fill.Qty != 4 {
 		t.Errorf("部分成交 Qty = %v, want 4（|size-left|=|5-1|）", fill.Qty)
+	}
+	if fill.Price != 60000 {
+		t.Errorf("部分成交 Price = %v, want 60000", fill.Price)
 	}
 }
 
@@ -239,7 +238,8 @@ func TestCEXExecutor_GateSpotUnsupported(t *testing.T) {
 	}
 }
 
-// TestCEXExecutor_GatePositions 验证 GatePositions 解析（多仓 + funding 字段 + 空仓过滤）。
+// TestCEXExecutor_GatePositions 验证 GatePositions 解析（M3：单对象非数组，对拍 gateapi-go GetPosition）。
+// 多仓 + funding 字段；size!=0 → 返回 1 条。
 func TestCEXExecutor_GatePositions(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/futures/usdt/positions/BTC_USDT" {
@@ -248,9 +248,8 @@ func TestCEXExecutor_GatePositions(t *testing.T) {
 		if r.Header.Get("KEY") == "" || r.Header.Get("SIGN") == "" {
 			t.Error("missing KEY/SIGN header")
 		}
-		// 返回多仓 + funding；size=0 行应被过滤
-		_, _ = io.WriteString(w, `[{"contract":"BTC_USDT","size":3,"entry_price":"60000","mark_price":"60100","funding":"-0.0023"},
-{"contract":"BTC_USDT","size":0,"entry_price":"0","mark_price":"0","funding":"0"}]`)
+		// M3：GetPosition 返回单个 Position 对象（非数组，ListPositions 才是数组）
+		_, _ = io.WriteString(w, `{"contract":"BTC_USDT","size":3,"entry_price":"60000","mark_price":"60100","funding":"-0.0023"}`)
 	}))
 	defer srv.Close()
 
@@ -260,7 +259,7 @@ func TestCEXExecutor_GatePositions(t *testing.T) {
 		t.Fatalf("GatePositions: %v", err)
 	}
 	if len(poss) != 1 {
-		t.Fatalf("want 1 position（size=0 过滤），got %d", len(poss))
+		t.Fatalf("want 1 position，got %d", len(poss))
 	}
 	p := poss[0]
 	if p.Size != 3 {
@@ -274,10 +273,11 @@ func TestCEXExecutor_GatePositions(t *testing.T) {
 	}
 }
 
-// TestCEXExecutor_GatePositionsEmpty 空仓（空数组或全 size=0）→ 返回空切片不误报。
+// TestCEXExecutor_GatePositionsEmpty 空仓（M3：单对象 size=0）→ 返回空切片不误报。
 func TestCEXExecutor_GatePositionsEmpty(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.WriteString(w, `[]`)
+		// 无仓时 gate 返回 size=0 的单对象（非空数组）
+		_, _ = io.WriteString(w, `{"contract":"BTC_USDT","size":0,"entry_price":"0","mark_price":"0","funding":"0"}`)
 	}))
 	defer srv.Close()
 

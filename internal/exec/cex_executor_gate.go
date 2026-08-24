@@ -41,10 +41,14 @@ func hexSHA512(body string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// gateOrderResponse Gate futures 订单响应/状态对象字段（D-098 G1）。
+// gateOrderResponse Gate futures 订单响应/状态对象字段（D-098 G1，返修包① M1/M2 对拍 gateapi-go）。
+// 官方 SDK FuturesOrder：Id=**int64**（JSON number，非 string，unmarshal number→string 必炸）；
+// Status 只 "open"/"finished" 两值；取消/IOC 未成交原因在 FinishAs（filled/cancelled/ioc/stp/
+// liquidated/reduce_only/position_closed/auto_deleveraged/reduce_out）。
 type gateOrderResponse struct {
-	ID        string `json:"id"`         // 订单 ID（字符串）
-	Status    string `json:"status"`     // open / finished / canceled / ...
+	ID        int64  `json:"id"`         // 订单 ID（int64，JSON number——M1 对拍官方 SDK）
+	Status    string `json:"status"`     // open / finished（无 canceled/rejected，M2）
+	FinishAs  string `json:"finish_as"`  // filled / cancelled / ioc / stp / liquidated / ...（M2）
 	Size      int64  `json:"size"`       // 原始委托量（带符号：正=买入/long，负=卖出/short）
 	Left      int64  `json:"left"`       // 剩余未成交量
 	FillPrice string `json:"fill_price"` // 成交均价（字符串）
@@ -56,8 +60,21 @@ type gateOrderResponse struct {
 // size 语义：gate futures size>0=买入(long)、size<0=卖出(short)，单位为合约数。
 // BUY leg → size=+o.Qty；SELL leg → size=-o.Qty。price=0 + tif=ioc = 市价（即时成交或取消）。
 func (e *CEXExecutor) placeGate(ctx context.Context, o Order) (Fill, error) {
+	_, fill, err := e.placeGateRaw(ctx, o)
+	return fill, err
+}
+
+// GatePlaceOrderRaw 下单并返回 POST 原始响应 body（探针形状证据用，D-098 返修包① M4②）。
+// 与 PlaceOrder→placeGate 同路径，额外暴露原始 body 供一次性诊断工具打印真实 API 形状
+// （本次三形状缺陷全因 mock 证明不了真实形状——一次性探针直接打原始响应）。
+func (e *CEXExecutor) GatePlaceOrderRaw(ctx context.Context, o Order) ([]byte, Fill, error) {
+	return e.placeGateRaw(ctx, o)
+}
+
+// placeGateRaw placeGate 的核心实现，额外返回 POST 原始响应 body（M4② 探针形状证据）。
+func (e *CEXExecutor) placeGateRaw(ctx context.Context, o Order) ([]byte, Fill, error) {
 	if e.venueType != "perp" {
-		return Fill{}, fmt.Errorf("gate executor: venueType %q unsupported（G1 仅 perp）", e.venueType)
+		return nil, Fill{}, fmt.Errorf("gate executor: venueType %q unsupported（G1 仅 perp）", e.venueType)
 	}
 	size := int64(o.Qty)
 	if o.Side == "SELL" {
@@ -76,42 +93,64 @@ func (e *CEXExecutor) placeGate(ctx context.Context, o Order) (Fill, error) {
 		"SIGN":         {sign},
 		"Content-Type": {"application/json"},
 	}
-	body, err := e.post(ctx, e.baseURL+endpoint, bodyStr, headers)
+	rawBody, err := e.post(ctx, e.baseURL+endpoint, bodyStr, headers)
 	if err != nil {
-		return Fill{}, fmt.Errorf("gate order: %w", err)
+		return nil, Fill{}, fmt.Errorf("gate order: %w", err)
 	}
 	var ord gateOrderResponse
-	if err := json.Unmarshal(body, &ord); err != nil {
-		return Fill{}, fmt.Errorf("gate order json: %w", err)
+	if err := json.Unmarshal(rawBody, &ord); err != nil {
+		return rawBody, Fill{}, fmt.Errorf("gate order json: %w", err)
 	}
-	// 成交确认（对齐 okx/binance 教训，防记 0 qty）：status=open（部分/未成交）时轮询
-	// GET /futures/usdt/orders/{order_id}，至多 5 次间隔 100ms；status=finished 且 left=0 → 全成交；
-	// left>0 持续 → 如实返回已成交部分 qty=|size-left|；订单被拒/取消 → 如实报错含状态。
-	if ord.Status == "open" || (ord.Status == "finished" && ord.Left != 0) {
+	// 成交确认（对齐 okx/binance 教训，防记 0 qty，M2 重排按 finish_as 判定）：
+	// gate status 只 open/finished；status=open → 轮询 GET /futures/usdt/orders/{order_id} 至终态；
+	// 终态（finished）按 finish_as 判定（gateFinishFill）。订单被拒/取消 = finish_as!=filled 且
+	// qty==0 → gateFinishFill 报错（无 canceled/rejected status，旧判定为死代码已删）。
+	if ord.Status == "open" {
+		var last gateOrderResponse
 		for range 5 {
 			time.Sleep(100 * time.Millisecond)
-			st, perr := e.gateOrderStatus(ctx, ord.ID)
+			st, perr := e.gateOrderStatus(ctx, strconv.FormatInt(ord.ID, 10))
 			if perr != nil {
-				return Fill{}, fmt.Errorf("gate order poll: %w", perr)
-			}
-			if st.Status == "canceled" || st.Status == "rejected" {
-				return Fill{}, fmt.Errorf("gate order %s: status=%s left=%d（未成交，订单被取消/拒绝）",
-					ord.ID, st.Status, st.Left)
+				return rawBody, Fill{}, fmt.Errorf("gate order poll: %w", perr)
 			}
 			if st.Status == "finished" {
-				qty, price := gateFilled(st)
-				if qty > 0 {
-					return Fill{OrderID: ord.ID, Price: price, Qty: qty, Ts: time.Now()}, nil
-				}
+				fill, ferr := gateFinishFill(st)
+				return rawBody, fill, ferr
 			}
+			last = st
 		}
+		// 5 次轮询仍 open → fallthrough 守卫（防 0-qty 假成交，okx 教训，M2）
+		qty, price := gateFilled(last)
+		if qty <= 0 || price <= 0 {
+			return rawBody, Fill{}, fmt.Errorf("gate order %d: 5 次轮询仍 open 且无成交（qty=%v price=%v left=%d）",
+				ord.ID, qty, price, last.Left)
+		}
+		return rawBody, Fill{OrderID: strconv.FormatInt(last.ID, 10), Price: price, Qty: qty, Ts: time.Now()}, nil
 	}
-	if ord.Status == "canceled" || ord.Status == "rejected" {
-		return Fill{}, fmt.Errorf("gate order %s: status=%s left=%d（未成交，订单被取消/拒绝）",
-			ord.ID, ord.Status, ord.Left)
+	// POST 即 finished（IOC 常见：finish_as=ioc/filled/cancelled/stp/...）
+	fill, ferr := gateFinishFill(ord)
+	return rawBody, fill, ferr
+}
+
+// gateFinishFill 按 finish_as 判定终态订单成交（D-098 返修包① M2）：
+//   - finish_as=="filled" → 全成交 Fill（qty=|size-left|，filled 时 left=0 即 |size|）；
+//   - finish_as!="filled"（ioc/cancelled/stp/liquidated/reduce_only/position_closed/...）：
+//     qty=|size-left|>0 → 如实部分成交 Fill；qty==0 → error 含 finish_as（未成交，防 0-qty 假成交）。
+//
+// okx 教训：IOC 零成交（finished+finish_as=ioc+left=size）旧逻辑落入 fallthrough 返
+// Fill{Qty:0,Price:0},nil → executeLeg 记 FILLED 0-qty 腿。本函数守卫 qty==0 → error。
+func gateFinishFill(o gateOrderResponse) (Fill, error) {
+	qty, price := gateFilled(o)
+	id := strconv.FormatInt(o.ID, 10)
+	if o.FinishAs == "filled" {
+		return Fill{OrderID: id, Price: price, Qty: qty, Ts: time.Now()}, nil
 	}
-	qty, price := gateFilled(ord)
-	return Fill{OrderID: ord.ID, Price: price, Qty: qty, Ts: time.Now()}, nil
+	if qty > 0 {
+		return Fill{OrderID: id, Price: price, Qty: qty, Ts: time.Now()}, nil
+	}
+	// qty==0：未成交（IOC 零成交 / cancelled / stp / liquidated / ...）→ 如实报错含 finish_as
+	return Fill{}, fmt.Errorf("gate order %d: finish_as=%s 未成交（size=%d left=%d）",
+		o.ID, o.FinishAs, o.Size, o.Left)
 }
 
 // gateFilled 从订单对象计算已成交 qty（|size-left|）与均价（fill_price）。
@@ -154,7 +193,8 @@ type GatePosition struct {
 }
 
 // GatePositions 查询 Gate 指定 contract 的当前持仓（GET /futures/usdt/positions/{contract}，签名 GET）。
-// 404/空仓时返回空切片（无仓不误报）。
+// 返修包① M3 对拍 gateapi-go：GetPosition 返回**单个 Position 对象**（非数组，ListPositions 才是数组），
+// 旧代码 unmarshal 到 []struct 对真实 API 恒失败。改为单对象；size==0 → 返回空切片不误报。
 func (e *CEXExecutor) GatePositions(ctx context.Context, contract string) ([]GatePosition, error) {
 	endpoint := "/futures/usdt/positions/" + contract
 	urlPath := "/api/v4" + endpoint
@@ -169,28 +209,24 @@ func (e *CEXExecutor) GatePositions(ctx context.Context, contract string) ([]Gat
 	if err != nil {
 		return nil, fmt.Errorf("gate positions: %w", err)
 	}
-	var rows []struct {
+	var p struct {
 		Contract   string `json:"contract"`
 		Size       int64  `json:"size"`
 		EntryPrice string `json:"entry_price"`
 		MarkPrice  string `json:"mark_price"`
 		Funding    string `json:"funding"`
 	}
-	if err := json.Unmarshal(body, &rows); err != nil {
+	if err := json.Unmarshal(body, &p); err != nil {
 		return nil, fmt.Errorf("gate positions json: %w", err)
 	}
-	var out []GatePosition
-	for _, r := range rows {
-		if r.Size == 0 {
-			continue
-		}
-		ep, _ := strconv.ParseFloat(r.EntryPrice, 64)
-		mp, _ := strconv.ParseFloat(r.MarkPrice, 64)
-		fd, _ := strconv.ParseFloat(r.Funding, 64)
-		out = append(out, GatePosition{
-			Contract: r.Contract, Size: r.Size,
-			EntryPrice: ep, MarkPrice: mp, Funding: fd,
-		})
+	if p.Size == 0 {
+		return nil, nil // 无仓不误报
 	}
-	return out, nil
+	ep, _ := strconv.ParseFloat(p.EntryPrice, 64)
+	mp, _ := strconv.ParseFloat(p.MarkPrice, 64)
+	fd, _ := strconv.ParseFloat(p.Funding, 64)
+	return []GatePosition{{
+		Contract: p.Contract, Size: p.Size,
+		EntryPrice: ep, MarkPrice: mp, Funding: fd,
+	}}, nil
 }
