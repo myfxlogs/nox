@@ -103,6 +103,24 @@ func (s *Store) SetBrokerAccountAlias(ctx context.Context, venue, alias string) 
 	return err
 }
 
+// ListAccountAliases 返回 venue→alias 映射（仅 alias 非空行；F3 Broker 实持仓账号列显示别名）。
+func (s *Store) ListAccountAliases(ctx context.Context) (map[string]string, error) {
+	rows, err := s.pool.Query(ctx, `SELECT venue, alias FROM broker_accounts WHERE alias <> ''`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	m := make(map[string]string)
+	for rows.Next() {
+		var venue, alias string
+		if err := rows.Scan(&venue, &alias); err != nil {
+			return nil, err
+		}
+		m[venue] = alias
+	}
+	return m, rows.Err()
+}
+
 // SetBrokerAccountStatus 更新连接状态。
 func (s *Store) SetBrokerAccountStatus(ctx context.Context, venue, status string) error {
 	_, err := s.pool.Exec(ctx, `UPDATE broker_accounts SET status = $1 WHERE venue = $2`, status, venue)

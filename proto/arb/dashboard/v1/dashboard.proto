@@ -491,6 +491,7 @@ message BrokerPosition {
   int64 magic = 17;            // MT5 ExpertId / MT4 MagicNumber；0 = 无（手动单）
   bool venue_online = 18;      // venue 在线状态；false = 最近快照（离线，非实时）
   int64 position_id = 19;      // S4：关联持仓组合 ID；0 = 未关联（孤儿订单）
+  string account_alias = 20;   // F3：账号别名（broker_accounts.alias）；空 = 未设别名，前端回落 venue
 }
 
 message ListBrokerPositionsRequest {
