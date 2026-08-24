@@ -155,6 +155,14 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 		tripleDays[canon] = mt5TripleSwapDay(sg.GetThreeDaysSwap())
 		// trade_mode 不依赖 swap 标定（D-060 F3）：emit/emit0/标定 skip 的符号都发。
 		facts = append(facts, tradeModeFact(a.venue, canon, sg.GetTradeMode(), "mt5"))
+		// S6：保证金预付款率采集（跟随 D-060 tradeModeFact 先例走 facts 通道，零新增 RPC）。
+		// repeated 多档取首档（最低 volume 档费率）；缺字段不发。
+		if r, ok := firstMarginRate(sg.GetInitMarginRate()); ok {
+			facts = append(facts, marginFact(fact.KindInitMarginRate, a.venue, canon, r, "mt5"))
+		}
+		if r, ok := firstMarginRate(sg.GetMntnMarginRate()); ok {
+			facts = append(facts, marginFact(fact.KindMntnMarginRate, a.venue, canon, r, "mt5"))
+		}
 		mode := mt5SwapMode(sg.GetSwapType(), sg.GetSwapLong(), sg.GetSwapShort())
 		if mode == SwapModeUncalibrated {
 			raw := int32(sg.GetSwapType())

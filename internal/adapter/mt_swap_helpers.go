@@ -160,6 +160,31 @@ func tradeModeFact(venue, canon string, mode mt5pb.TradeMode, src string) fact.F
 	}
 }
 
+// marginFact 构造保证金率 Fact（S6）：value=小数比率（0.01=1%）。
+// repeated 多档（按 volume tier）取首档（最低 volume 档费率）；
+// 多档完整语义（档位划分/后续档费率）未对拍官方文档，留待风控消费时再扩展。
+// rates 为空 → 不发（缺字段，调用方判空后不调用）。
+func marginFact(kind, venue, canon string, rate float64, src string) fact.Fact {
+	return fact.Fact{
+		Kind:   kind,
+		Venue:  venue,
+		Symbol: canon,
+		Value:  rate,
+		Unit:   fact.UnitRatio,
+		Ts:     time.Now(),
+		Src:    src,
+	}
+}
+
+// firstMarginRate 取 repeated margin rate 首档（最低 volume 档费率，S6）。
+// 空切片 → ok=false（缺字段不发）。
+func firstMarginRate(rates []float64) (float64, bool) {
+	if len(rates) == 0 {
+		return 0, false
+	}
+	return rates[0], true
+}
+
 // swapFact 构造 swap Fact（符号 canon 为 canonical；Ts 用本地接收时间，与报价流一致）。
 func swapFact(kind, venue, canon string, bps float64, src string) fact.Fact {
 	return fact.Fact{
