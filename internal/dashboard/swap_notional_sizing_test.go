@@ -15,12 +15,12 @@ func TestSwapArbNotionalSizing(t *testing.T) {
 	const minNotional01Lot = 716.0
 
 	cases := []struct {
-		name        string
-		minEq       float64
-		minNotional float64
-		ratio       float64
-		bareCap     float64
-		wantOK      bool
+		name         string
+		minEq        float64
+		minNotional  float64
+		ratio        float64
+		bareCap      float64
+		wantOK       bool
 		wantNotional float64
 	}{
 		{
@@ -45,8 +45,8 @@ func TestSwapArbNotionalSizing(t *testing.T) {
 			name:         "cap_bareCap05_limits_notional",
 			minEq:        10000.0, // 10000×0.5=5000, but bareCap=0.5 → cap to 10000×0.5=5000 (same, no cap)
 			minNotional:  minNotional01Lot,
-			ratio:        1.0,    // ratio=1 → sizing=10000
-			bareCap:      0.5,    // bareLimit=10000×0.5=5000 < 10000 → cap to 5000
+			ratio:        1.0, // ratio=1 → sizing=10000
+			bareCap:      0.5, // bareLimit=10000×0.5=5000 < 10000 → cap to 5000
 			wantOK:       true,
 			wantNotional: 5000.0,
 		},
