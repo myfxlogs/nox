@@ -51,6 +51,8 @@ func (e *CEXExecutor) PlaceOrder(ctx context.Context, o Order) (Fill, error) {
 		return e.placeBinance(ctx, o)
 	case "okx":
 		return e.placeOKX(ctx, o)
+	case "gate":
+		return e.placeGate(ctx, o)
 	default:
 		return Fill{}, fmt.Errorf("cex executor: unsupported venue %q", e.venue)
 	}

@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"arb/internal/exec"
 	"arb/internal/httpx"
 )
 
@@ -51,6 +52,8 @@ func (q *CEXAccountQuerier) Account(ctx context.Context) (*AccountInfo, error) {
 		return q.accountBinance(ctx)
 	case "okx":
 		return q.accountOKX(ctx)
+	case "gate":
+		return q.accountGate(ctx)
 	default:
 		return nil, fmt.Errorf("cex account: unsupported venue %q", q.venue)
 	}
@@ -216,6 +219,43 @@ func okxSign(secret, prehash string) string {
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write([]byte(prehash))
 	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
+}
+
+// === Gate（USDT 本位合约 perp，D-098 G1）===
+
+// accountGate 查询 Gate perp 账户权益：GET /futures/usdt/accounts（签名 GET，GateSign 共享）。
+// 解析 total（USDT 总权益）→ AccountInfo。401/网络错 → error（走既有 offline 快照语义，不 panic）。
+// venueType=spot → 如实返回 unsupported error（G1 只 perp，勿猜 spot 端点）。
+// 根因（D-098 复审补漏）：gate 前端登记落库但 Account() switch 无 gate case → default 返回
+// unsupported venue → gate 账户永不进余额条。本方法补齐 gate perp 账户查询。
+func (q *CEXAccountQuerier) accountGate(ctx context.Context) (*AccountInfo, error) {
+	if q.venueType != "perp" {
+		return nil, fmt.Errorf("gate account: venueType %q unsupported（G1 仅 perp）", q.venueType)
+	}
+	const endpoint = "/futures/usdt/accounts"
+	urlPath := "/api/v4" + endpoint
+	ts := time.Now().Unix()
+	sign := exec.GateSign(q.apiSecret, "GET", urlPath, "", "", ts)
+	headers := http.Header{
+		"KEY":       {q.apiKey},
+		"Timestamp": {strconv.FormatInt(ts, 10)},
+		"SIGN":      {sign},
+	}
+	body, err := q.get(ctx, q.baseURL+endpoint, headers)
+	if err != nil {
+		return nil, fmt.Errorf("gate account: %w", err)
+	}
+	var acc struct {
+		Total string `json:"total"` // USDT 总权益（字符串）
+	}
+	if err := json.Unmarshal(body, &acc); err != nil {
+		return nil, fmt.Errorf("gate account json: %w", err)
+	}
+	eq, _ := strconv.ParseFloat(acc.Total, 64)
+	return &AccountInfo{
+		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
+		Balance: eq, Equity: eq, Currency: "USDT",
+	}, nil
 }
 
 // get 发起 GET 并读回 body（非 200 → 错误带响应体）。

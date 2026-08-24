@@ -165,6 +165,64 @@ func TestCEXAccount_BinanceProxyToken(t *testing.T) {
 	}
 }
 
+// TestCEXAccount_GatePerp：gate perp 账户权益 = /futures/usdt/accounts 的 total（USDT 总权益）。
+// D-098 G1：补齐 gate 账户查询器（此前 Account() switch 无 gate case → 余额条不显示）。
+func TestCEXAccount_GatePerp(t *testing.T) {
+	var gotHeaders http.Header
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/futures/usdt/accounts" {
+			http.NotFound(w, r)
+			return
+		}
+		gotHeaders = r.Header
+		fmt.Fprint(w, `{"total":"5000.123456","unrealized_pnl":"0","available":"5000.123456"}`)
+	}))
+	defer srv.Close()
+
+	q := NewCEXAccountQuerier("gate", "perp", "gate-key", "gate-secret", "", srv.URL, true)
+	acct, err := q.Account(context.Background())
+	if err != nil {
+		t.Fatalf("gate perp account: %v", err)
+	}
+	if acct.Equity != 5000.123456 {
+		t.Errorf("equity want 5000.123456, got %v", acct.Equity)
+	}
+	if acct.VenueKey != "gate:perp" || acct.AssetType != "cex" || acct.Currency != "USDT" {
+		t.Errorf("meta mismatch: %+v", acct)
+	}
+	// 签名三件
+	for _, h := range []string{"KEY", "SIGN", "Timestamp"} {
+		if gotHeaders.Get(h) == "" {
+			t.Errorf("missing header %s", h)
+		}
+	}
+}
+
+// TestCEXAccount_GateSpotUnsupported：gate spot（G1 只 perp）→ 如实返回 unsupported error。
+func TestCEXAccount_GateSpotUnsupported(t *testing.T) {
+	q := NewCEXAccountQuerier("gate", "spot", "k", "s", "", "http://x", true)
+	if _, err := q.Account(context.Background()); err == nil {
+		t.Fatal("gate spot 应报错（G1 仅 perp），got nil")
+	}
+}
+
+// TestCEXAccount_GatePerpEmptyTotal：total 空值/缺失 → 容错返回 0（不 panic）。
+func TestCEXAccount_GatePerpEmptyTotal(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"total":"","unrealized_pnl":""}`)
+	}))
+	defer srv.Close()
+
+	q := NewCEXAccountQuerier("gate", "perp", "k", "s", "", srv.URL, true)
+	acct, err := q.Account(context.Background())
+	if err != nil {
+		t.Fatalf("空 total 应容错不报错: %v", err)
+	}
+	if acct.Equity != 0 {
+		t.Errorf("空 total equity want 0, got %v", acct.Equity)
+	}
+}
+
 // TestHttpxClientTrustsProxyCA：默认客户端不信任自签代理证书（握手失败）；加载
 // ARB_BINANCE_PROXY_CA 后握手成功——静态 Binance 代理 TLS 链路能建立的关键（D-055）。
 func TestHttpxClientTrustsProxyCA(t *testing.T) {

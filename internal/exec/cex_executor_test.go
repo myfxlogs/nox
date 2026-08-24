@@ -352,7 +352,7 @@ func TestCEXExecutor_OKXOrderPollsFill(t *testing.T) {
 
 // TestCEXExecutor_UnsupportedVenue 验证未知 venue 拒绝。
 func TestCEXExecutor_UnsupportedVenue(t *testing.T) {
-	e := NewCEXExecutor("gate", "spot", "k", "s", "", "http://x", false)
+	e := NewCEXExecutor("kraken", "spot", "k", "s", "", "http://x", false)
 	if _, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTCUSDT", Side: "BUY", Qty: 1}); err == nil {
 		t.Fatal("want error on unsupported venue, got nil")
 	}
