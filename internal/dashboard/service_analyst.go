@@ -180,12 +180,22 @@ func maskAPIKey(key string) string {
 	return "****" + key[len(key)-4:]
 }
 
-// truncateStr 截断字符串到 max 字符（超长加…）。
+// truncateStr 截断字符串到 max 个 rune（超长加…，rune 安全防 UTF-8 中文切半出 U+FFFD）。
 func truncateStr(s string, max int) string {
-	if len(s) <= max {
+	r := []rune(s)
+	if len(r) <= max {
 		return s
 	}
-	return s[:max] + "…"
+	return string(r[:max]) + "…"
+}
+
+// cleanNoteField 落盘前清洗表格单元格字段（零信任：服务端清洗，勿信前端）。
+// \r/\n → 空格（防换行撕碎表格行）；| → \|（GFM 表格内标准逃逸，防竖线劈列）。
+func cleanNoteField(s string) string {
+	s = strings.ReplaceAll(s, "\r", " ")
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.ReplaceAll(s, "|", "\\|")
+	return s
 }
 
 // AppendAnalystNote 追加「记一下」到 docs/经验库/待归纳-分析员.md（并发安全 append）。
@@ -207,10 +217,11 @@ func (s *Service) AppendAnalystNote(ctx context.Context, req *connect.Request[v1
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("笔记路径非法"))
 	}
 	// R5 返修②：落盘格式改表格行（| 日期 | 问题前60字 | 结论前120字 | 引用数 |）
+	// R1 返修③：服务端清洗（零信任）——换行→空格、|→\|；truncateStr rune 安全防 UTF-8 切半。
 	block := fmt.Sprintf("| %s | %s | %s | %d |\n",
 		time.Now().Format("2006-01-02 15:04"),
-		truncateStr(req.Msg.Question, 60),
-		truncateStr(req.Msg.Summary, 120),
+		truncateStr(cleanNoteField(req.Msg.Question), 60),
+		truncateStr(cleanNoteField(req.Msg.Summary), 120),
 		len(req.Msg.Citations))
 	if err := appendNote(full, block); err != nil {
 		return nil, fmt.Errorf("append note: %w", err)

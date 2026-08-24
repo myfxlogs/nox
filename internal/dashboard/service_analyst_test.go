@@ -115,6 +115,99 @@ func TestTruncateStr(t *testing.T) {
 	if got := truncateStr("hello world", 5); got != "hello…" {
 		t.Errorf("truncateStr long: got %q", got)
 	}
+	// R1 返修③：rune 安全——中文 60+ 字符截断不切半出 U+FFFD。
+	long := strings.Repeat("中", 80) // 80 汉字 = 240 UTF-8 字节，旧字节截断 60 字节会切半
+	got := truncateStr(long, 60)
+	if strings.Contains(got, "\ufffd") {
+		t.Fatalf("truncateStr produced U+FFFD (byte-cut bug): %q", got)
+	}
+	want := strings.Repeat("中", 60) + "…"
+	if got != want {
+		t.Fatalf("truncateStr rune-safe: got len=%d want len=%d", len([]rune(got)), len([]rune(want)))
+	}
+}
+
+// TestCleanNoteField R1 返修③：换行→空格、|→\|。
+func TestCleanNoteField(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"plain", "plain"},
+		{"line1\nline2", "line1 line2"},
+		{"line1\rline2", "line1 line2"},
+		{"line1\r\nline2", "line1  line2"},
+		{"a|b|c", "a\\|b\\|c"},
+		{"多行\n含|管道", "多行 含\\|管道"},
+	}
+	for _, c := range cases {
+		if got := cleanNoteField(c.in); got != c.want {
+			t.Errorf("cleanNoteField(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// TestAppendAnalystNoteCleansMultiline R1 返修③：多行 summary 落盘后产物单行、管道已转义、无 U+FFFD。
+func TestAppendAnalystNoteCleansMultiline(t *testing.T) {
+	dir := t.TempDir()
+	rel := "docs/经验库/待归纳-分析员.md"
+	_ = os.MkdirAll(filepath.Join(dir, "docs", "经验库"), 0755)
+	s := newAnalystService(dir, rel)
+	_, err := s.AppendAnalystNote(context.Background(), connect.NewRequest(&v1.AppendAnalystNoteRequest{
+		Question: "Q1\nQ2|pipe",
+		Summary:  "S1\nS2|pipe\nS3",
+	}))
+	if err != nil {
+		t.Fatalf("AppendAnalystNote error: %v", err)
+	}
+	data, _ := os.ReadFile(filepath.Join(dir, rel))
+	out := string(data)
+	if strings.Contains(out, "\ufffd") {
+		t.Fatalf("output contains U+FFFD: %q", out)
+	}
+	// 产物应为单行（不含裸 \n——末尾仅一个换行符作为行终止）
+	if cnt := strings.Count(out, "\n"); cnt != 1 {
+		t.Fatalf("expected single line, got %d newlines: %q", cnt, out)
+	}
+	line := strings.TrimRight(out, "\n")
+	// 裸换行已转空格（行内不应含 \n）
+	if strings.Contains(line, "\n") {
+		t.Fatalf("line contains embedded newline: %q", line)
+	}
+	// 管道已转义：单元格内不应含未转义 |（行内 | 仅作列分隔）
+	// 验证：原始 "Q1\nQ2|pipe" → "Q1 Q2\|pipe"，断言 "\|pipe" 出现
+	if !strings.Contains(line, "Q1 Q2\\|pipe") {
+		t.Fatalf("pipe not escaped in question cell: %q", line)
+	}
+	if !strings.Contains(line, "S1 S2\\|pipe S3") {
+		t.Fatalf("pipe not escaped / newline not spaced in summary cell: %q", line)
+	}
+}
+
+// TestAppendAnalystNoteTruncatesChineseSafe R1 返修③：中文 60+ 字符截断无 U+FFFD。
+func TestAppendAnalystNoteTruncatesChineseSafe(t *testing.T) {
+	dir := t.TempDir()
+	rel := "docs/经验库/待归纳-分析员.md"
+	_ = os.MkdirAll(filepath.Join(dir, "docs", "经验库"), 0755)
+	s := newAnalystService(dir, rel)
+	longQ := strings.Repeat("问", 80)  // 80 汉字
+	longS := strings.Repeat("答", 130) // 130 汉字
+	_, err := s.AppendAnalystNote(context.Background(), connect.NewRequest(&v1.AppendAnalystNoteRequest{
+		Question: longQ,
+		Summary:  longS,
+	}))
+	if err != nil {
+		t.Fatalf("AppendAnalystNote error: %v", err)
+	}
+	data, _ := os.ReadFile(filepath.Join(dir, rel))
+	out := string(data)
+	if strings.Contains(out, "\ufffd") {
+		t.Fatalf("truncated chinese produced U+FFFD: %q", out)
+	}
+	// 问题截断到 60 汉字 + …；结论截断到 120 汉字 + …
+	if !strings.Contains(out, strings.Repeat("问", 60)+"…") {
+		t.Fatalf("question not rune-truncated to 60: %q", out)
+	}
+	if !strings.Contains(out, strings.Repeat("答", 120)+"…") {
+		t.Fatalf("summary not rune-truncated to 120: %q", out)
+	}
 }
 
 // TestResolveAiConfigEnvFallback nil store → env 回落（env apiKey 非空 → 成功）。
