@@ -1,8 +1,17 @@
 package dashboard
 
 import (
+	"context"
 	"math"
+	"strings"
 	"testing"
+	"time"
+
+	"arb/internal/bus"
+	"arb/internal/exec"
+	"arb/internal/reconcile"
+
+	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 )
 
 // TestSwapArbNotionalSizing D-097 R2 表驱动四 case：
@@ -90,5 +99,75 @@ func TestSwapArbBareCapValue(t *testing.T) {
 		if got := swapArbBareCapValue(c.in); got != c.want {
 			t.Errorf("swapArbBareCapValue(%v)=%v want %v", c.in, got, c.want)
 		}
+	}
+}
+
+// --- S2 case④ 回归：SwapArbNotional fail-closed 两分支（venue 离线 + 币种非 USD） ---
+// 对拍 docs/SWAPARB小手数放行-施工提示词.md line 21 ④「回归：venue 离线/币种非 USD fail-closed 不变」。
+// 纯函数 swapArbNotionalSizing 不含这两分支（在 Service.SwapArbNotional 中），此处补齐 Service 层断言。
+
+// newSwapArbServiceWithAccts 构造带 acctMon 的 Service（两 fake 查询器注入）。
+func newSwapArbServiceWithAccts(t *testing.T, qs ...*fakeAccountQuerier) *Service {
+	t.Helper()
+	bm := NewBrokerManager(nil, bus.New(), exec.NewRegistry(), time.Minute)
+	topic := bus.NewTopic[*v1.AccountSnapshot]()
+	m := NewAccountMonitor(bm, time.Millisecond, topic)
+	for _, q := range qs {
+		m.AddStatic(q)
+	}
+	m.Refresh(context.Background()) // 首轮 poll 填充 snapshot
+	return &Service{acctMon: m}
+}
+
+// TestSwapArbNotional_FailClosed_VenueOffline case④ 分支①：venue 离线 → ok=false reason 含 "offline"。
+func TestSwapArbNotional_FailClosed_VenueOffline(t *testing.T) {
+	longQ := &fakeAccountQuerier{key: "ic:mt5", acct: &reconcile.AccountInfo{
+		VenueKey: "ic:mt5", Venue: "ic", VenueType: "mt5", AssetType: "cfd",
+		Balance: 5000, Equity: 5000, Currency: "USD",
+	}}
+	shortQ := &fakeAccountQuerier{key: "pxbt:mt5", acct: &reconcile.AccountInfo{
+		VenueKey: "pxbt:mt5", Venue: "pxbt", VenueType: "mt5", AssetType: "cfd",
+		Balance: 5000, Equity: 5000, Currency: "USD",
+	}}
+	s := newSwapArbServiceWithAccts(t, longQ, shortQ)
+
+	// 先确认两 venue 在线（baseline）。
+	_, _, onlineLong := s.AccountEquityUSD("ic:mt5")
+	_, _, onlineShort := s.AccountEquityUSD("pxbt:mt5")
+	if !onlineLong || !onlineShort {
+		t.Fatalf("baseline: both venues should be online, got long=%v short=%v", onlineLong, onlineShort)
+	}
+
+	// short venue 离线 → fail-closed。
+	shortQ.err = context.DeadlineExceeded
+	s.acctMon.Refresh(context.Background())
+
+	_, ok, reason := s.SwapArbNotional("AUDJPY", "ic:mt5", "pxbt:mt5")
+	if ok {
+		t.Errorf("venue offline: want ok=false, got true")
+	}
+	if !strings.Contains(reason, "offline") {
+		t.Errorf("venue offline: reason want contain 'offline', got %q", reason)
+	}
+}
+
+// TestSwapArbNotional_FailClosed_CurrencyNonUSD case④ 分支②：币种非 USD → ok=false reason 含 "not USD"。
+func TestSwapArbNotional_FailClosed_CurrencyNonUSD(t *testing.T) {
+	longQ := &fakeAccountQuerier{key: "ic:mt5", acct: &reconcile.AccountInfo{
+		VenueKey: "ic:mt5", Venue: "ic", VenueType: "mt5", AssetType: "cfd",
+		Balance: 5000, Equity: 5000, Currency: "EUR", // 非 USD
+	}}
+	shortQ := &fakeAccountQuerier{key: "pxbt:mt5", acct: &reconcile.AccountInfo{
+		VenueKey: "pxbt:mt5", Venue: "pxbt", VenueType: "mt5", AssetType: "cfd",
+		Balance: 5000, Equity: 5000, Currency: "USD",
+	}}
+	s := newSwapArbServiceWithAccts(t, longQ, shortQ)
+
+	_, ok, reason := s.SwapArbNotional("AUDJPY", "ic:mt5", "pxbt:mt5")
+	if ok {
+		t.Errorf("currency non-USD: want ok=false, got true")
+	}
+	if !strings.Contains(reason, "not USD") {
+		t.Errorf("currency non-USD: reason want contain 'not USD', got %q", reason)
 	}
 }
