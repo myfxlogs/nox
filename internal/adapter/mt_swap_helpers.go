@@ -204,6 +204,22 @@ func (a *MT5Adapter) fetchLeverage(ctx context.Context) (float64, bool) {
 	return lev, true
 }
 
+// marginPollOnce 封装账户级 margin 取值链路（D-099 事件驱动化，供首采与事件触发共用）。
+// 流程：fetchLeverage（保留不动，失败在 helpers 内打日志返回 false）→ marginRate=1/lev
+// （lev>=1e6 无限杠杆哨兵→0，SwapModeNone 先例）→ marginFact(KindInitMarginRate, venue, venue, rate, "mt5")。
+// 账户级，Symbol=venue（账户标识非符号）；ok=false 表示本轮取值失败，调用方按场景重试或 skip。
+func (a *MT5Adapter) marginPollOnce(ctx context.Context) (fact.Fact, bool) {
+	lev, ok := a.fetchLeverage(ctx)
+	if !ok {
+		return fact.Fact{}, false
+	}
+	rate := 1 / lev
+	if lev >= 1e6 { // Exness 无限杠杆哨兵实证（2e9）：零保证金账号发 0 值（SwapModeNone 先例）
+		rate = 0
+	}
+	return marginFact(fact.KindInitMarginRate, a.venue, a.venue, rate, "mt5"), true
+}
+
 // swapFact 构造 swap Fact（符号 canon 为 canonical；Ts 用本地接收时间，与报价流一致）。
 func swapFact(kind, venue, canon string, bps float64, src string) fact.Fact {
 	return fact.Fact{

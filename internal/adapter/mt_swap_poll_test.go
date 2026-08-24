@@ -21,12 +21,26 @@ import (
 )
 
 // fakeMT5Client 只实现 SwapFacts 用到的 SymbolParams + AccountSummary（S6 返修）。
+// D-099：内嵌 SubscriptionsClient + StreamsClient（nil 接口，仅覆盖需调用的方法），
+// 使其可赋值给 a.subs / a.streams；未覆盖方法调用会 panic（测试不触达）。
+// SubscribeOrderProfit / OnOrderProfit 覆盖见 mt_margin_source_test.go。
 type fakeMT5Client struct {
 	mt5pb.MT5Client
+	mt5pb.SubscriptionsClient
+	mt5pb.StreamsClient
 	params     map[string]*mt5pb.SymbolParamsReply
 	leverage   float64 // S6 返修：AccountSummary.Leverage（0=未设/缺省）
 	summaryErr error   // S6 返修：AccountSummary 强制返回 err（nil=正常）
 	summaryNil bool    // S6 返修：AccountSummary 返回 result=nil
+	// D-099 事件驱动测试控制（mt_margin_source_test.go 用）：
+	summaryCalls int                                                    // AccountSummary 调用计数（断言防抖/重试）
+	summaryFailN int                                                    // 前 N 次 AccountSummary 返回 summaryErr（之后正常返回 leverage）
+	subsOPCalls  int                                                    // SubscribeOrderProfit 调用计数
+	subsOPErr    error                                                  // SubscribeOrderProfit 强制返回 err（nil=OK）
+	onOPCalls    int                                                    // OnOrderProfit 调用计数
+	onOPStreams  []grpc.ServerStreamingClient[mt5pb.OnOrderProfitReply] // 流队列（按调用顺序弹出）
+	onOPIdx      int
+	onOPErr      error // OnOrderProfit 强制返回 err（一次性，优先于队列）
 }
 
 func (f *fakeMT5Client) SymbolParams(_ context.Context, req *mt5pb.SymbolParamsRequest, _ ...grpc.CallOption) (*mt5pb.SymbolParamsReply, error) {
@@ -37,8 +51,13 @@ func (f *fakeMT5Client) SymbolParams(_ context.Context, req *mt5pb.SymbolParamsR
 }
 
 // AccountSummary S6 返修：返回预设 leverage / err / result nil 三态。
+// D-099：summaryCalls 计数 + summaryFailN 前 N 次强制 err（事件驱动首采重试/事件触发测试用）。
 func (f *fakeMT5Client) AccountSummary(_ context.Context, _ *mt5pb.AccountSummaryRequest, _ ...grpc.CallOption) (*mt5pb.AccountSummaryReply, error) {
-	if f.summaryErr != nil {
+	f.summaryCalls++
+	if f.summaryFailN > 0 && f.summaryCalls <= f.summaryFailN {
+		return nil, f.summaryErr
+	}
+	if f.summaryErr != nil && f.summaryFailN == 0 {
 		return nil, f.summaryErr
 	}
 	if f.summaryNil {

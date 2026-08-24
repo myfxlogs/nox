@@ -12,6 +12,7 @@ import (
 
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
 	"arb/internal/bus"
+	"arb/internal/fact"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -38,6 +39,11 @@ type MT5Adapter struct {
 	token   string
 
 	symMap atomic.Pointer[map[string]string] // brokerSymbol → canonical
+
+	// MarginSink margin fact 下沉（D-099 事件驱动化）：由 main 经 BrokerManager 注入
+	// （SwapKick 同模式：wiring/main 注入，brokerMgr 只存字段不依赖 engine 包）。
+	// nil = 未注入（测试/未接线），runMarginSource 安全 no-op。
+	MarginSink func(fact.Fact)
 
 	stopCtx    context.Context
 	stopCancel context.CancelFunc
@@ -127,6 +133,10 @@ func (a *MT5Adapter) Connect(ctx context.Context) error {
 	// S1：包装 mt5 client 加会话失效自动重连（reconcile.MT5Querier 共享同一 client，自动受益）。
 	a.mt5 = &sessionClient{MT5Client: a.mt5, reconnect: a.reconnectSession}
 	log.Printf("[mt5:%s] connected, token=%s", a.venue, maskToken(token))
+	// D-099：attach 完成 → 启动 margin 事件驱动采集（MarginSink==nil 时 no-op）。
+	// stopCtx 取消时 Run 自然退出（Stop 调 stopCancel）。a.mu 仍持有：goroutine 异步启动，
+	// 其 a.mu 操作阻塞至 Connect 返回释放锁，无死锁。
+	go a.runMarginSource(a.stopCtx)
 	return nil
 }
 

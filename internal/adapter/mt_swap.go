@@ -119,18 +119,6 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 	if len(sm) == 0 {
 		return nil, nil
 	}
-	// S6 返修：账户级杠杆 → init_margin_rate（网关不返回符号级 margin 字段，实证见返修提示词③）。
-	// fetchLeverage 失败只打日志（helpers 内）不进 errs——errs 会误伤 swapResult 全失败判定；
-	// 本轮无 margin fact，下轮再试。Leverage<=0 守卫在 fetchLeverage 内（防 1/0=Inf）。
-	var marginRate float64
-	hasMarginRate := false
-	if lev, ok := a.fetchLeverage(ctx); ok {
-		hasMarginRate = true
-		marginRate = 1 / lev
-		if lev >= 1e6 { // Exness 无限杠杆哨兵实证（2e9）：零保证金账号发 0 值（SwapModeNone 先例）
-			marginRate = 0
-		}
-	}
 	snap := q.Snapshot(ctx, symbolSet(sm))
 	var facts []fact.Fact
 	var errs []string
@@ -211,10 +199,6 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 	// D-077 修复⑪A M3：三倍日 per-symbol 全量收集（删「首个符号代表 venue」）。
 	// 同 venue 值一致 → 发 venue 级 Fact（现行为）；不一致 → 发 per-symbol Fact + warn。
 	facts = append(facts, collectTripleSwapDayFacts("mt5", a.venue, tripleDays)...)
-	// S6 返修：账户级 init_margin_rate（Symbol=venue，账户标识非符号）。
-	if hasMarginRate {
-		facts = append(facts, marginFact(fact.KindInitMarginRate, a.venue, a.venue, marginRate, "mt5"))
-	}
 	if missingPrice > 0 {
 		return nil, fmt.Errorf("%w: %d symbol(s) lack venue quote", ErrSwapColdStart, missingPrice)
 	}
