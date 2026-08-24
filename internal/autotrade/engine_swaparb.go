@@ -192,9 +192,10 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 	// D-072 §3.3：名义额 = broker 余额驱动（fail-closed 三条件）
 	notional, ok, reason := e.service.SwapArbNotional(canonical, venueLong, venueShort)
 	if !ok {
-		// D-072 资金注入提醒：余额不足 → 发布 FundingNeedNotice 到 topic → 前端弹窗（不入 alerts 表）。
-		// 每日每组合至多 1 条（内存节流）；非余额原因（venue 离线/币种不符）仅 log 不弹窗。
-		if strings.Contains(reason, "balance") {
+		// D-072 资金注入提醒：sizing 不足 → 发布 FundingNeedNotice 到 topic → 前端弹窗（不入 alerts 表）。
+		// 每日每组合至多 1 条（内存节流）；非 sizing 原因（venue 离线/币种不符）仅 log 不弹窗。
+		// D-097 R2：口径从 "balance" 改 "sizing"（minEq×ratio < minNotional，非旧全款门）。
+		if strings.Contains(reason, "sizing") {
 			e.maybePublishFundingNeed(canonical, venueLong, venueShort, reason)
 		}
 		log.Printf("[autotrade] SWAPARB skip %s %s/%s: %s", canonical, venueLong, venueShort, reason)
