@@ -81,6 +81,10 @@ type BrokerManager struct {
 	// 消灭「attach 晚于首轮 → 最长 Interval 无 swap 数据」盲窗。nil = 未接线（测试直接构造）。main 注入
 	// func() { scheduler.Kick("mt_swap") }。
 	SwapKick func()
+
+	// MarginSink margin fact 下沉注入（D-099 事件驱动化）：同 SwapKick 注入模式，
+	// wiring/main 注入，brokerMgr 不依赖 engine 包；startAdapter 构造 adapter 时透传（nil 安全）。
+	MarginSink func(fact.Fact)
 }
 
 // NewBrokerManager 创建管理器。symbolsTTL 由调用方从 config.SymbolsTTL 注入。

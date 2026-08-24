@@ -87,6 +87,8 @@ func (m *BrokerManager) startMT4(ctx context.Context, a *pgstore.BrokerAccount) 
 // startMT5 启动 MT5 适配器。
 func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) error {
 	ad := adapter.NewMT5Adapter(a.Venue, a.Host, a.Server, int32(a.Port), a.User, a.Password)
+	// D-099：MarginSink 须在 Connect 前注入（Connect 末尾 go runMarginSource 读此字段）。
+	ad.MarginSink = m.MarginSink
 	if err := ad.Connect(ctx); err != nil {
 		return fmt.Errorf("mt5 connect: %w", err)
 	}
