@@ -240,13 +240,14 @@ func (e *CEXExecutor) GatePositionsRaw(ctx context.Context, contract string) ([]
 
 // GateAccountBookEntry Gate USDT 本位合约资金账本一行（D-098 返修② 探针结算真实性证据）。
 // GET /futures/usdt/account_book?type=fund&contract={c} 返回真实结算行：
-// text="funding"=资金费率结算，change=资金变动（字符串），time=unix 秒，refid=关联 ID。
+// type=fund 枚举=资金费率结算，change=资金变动（字符串），time=unix 秒（float64 带小数），
+// trade_id=关联交易 ID（真实响应无 refid 字段，D-098 返修③ C2 对拍官方模型）。
 // 生产零消费方（仅探针用），不复用 GatePosition.Funding（SDK/文档双证据指向不存在）。
 type GateAccountBookEntry struct {
-	Time   int64  `json:"time"`   // unix 秒
-	Change string `json:"change"` // 资金变动（字符串，负=支付/正=收取）
-	RefID  string `json:"refid"`  // 关联 ID
-	Text   string `json:"text"`   // 业务类型（funding=资金费率结算）
+	Time    float64 `json:"time"`     // unix 秒（float64 带小数，对拍官方模型 FuturesAccountBook.Time=float64，真实响应样本 1682294400.123456）
+	Change  string  `json:"change"`   // 资金变动（字符串，负=支付/正=收取）
+	TradeID string  `json:"trade_id"` // 关联交易 ID（对拍官方模型 trade_id，真实响应无 refid 字段）
+	Text    string  `json:"text"`     // 业务类型注释（真实格式 "合约:交易ID"，判定不依赖 text 内容）
 }
 
 // GateAccountBookFund 查询 Gate 指定 contract 的资金费率结算账本（GET /futures/usdt/account_book?type=fund&contract={c}，签名 GET 带 query）。

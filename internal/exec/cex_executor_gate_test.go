@@ -341,7 +341,7 @@ func TestCEXExecutor_GateAccountBookFund(t *testing.T) {
 		if r.Header.Get("SIGN") != wantSign {
 			t.Errorf("SIGN query 签名不匹配：got %s want %s", r.Header.Get("SIGN"), wantSign)
 		}
-		_, _ = io.WriteString(w, `[{"time":1724476800,"change":"-0.00123","refid":"r1","text":"funding"},{"time":1724480600,"change":"0.00045","refid":"r2","text":"funding"}]`)
+		_, _ = io.WriteString(w, `[{"time":1724476800.123,"change":"-0.00123","trade_id":"r1","text":"funding"},{"time":1724480600.456,"change":"0.00045","trade_id":"r2","text":"funding"}]`)
 	}))
 	defer srv.Close()
 
@@ -359,7 +359,7 @@ func TestCEXExecutor_GateAccountBookFund(t *testing.T) {
 	if len(entries) != 2 {
 		t.Fatalf("want 2 entries, got %d", len(entries))
 	}
-	if entries[0].Text != "funding" || entries[0].Change != "-0.00123" || entries[0].Time != 1724476800 {
+	if entries[0].Text != "funding" || entries[0].Change != "-0.00123" || entries[0].Time != 1724476800.123 || entries[0].TradeID != "r1" {
 		t.Errorf("entry[0] = %+v", entries[0])
 	}
 	if !strings.Contains(string(raw), `"text":"funding"`) {
