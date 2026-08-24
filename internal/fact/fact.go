@@ -17,8 +17,7 @@ const (
 	KindSwapShort      = "swap_short"       // MT 空单 swap（UnitBpsDaily，D-028 归一）
 	KindTradeMode      = "trade_mode"       // MT5 符号可交易性（UnitMode，D-060 F3）
 	KindTripleSwapDay  = "triple_swap_day"  // MT 三倍 swap 日（UnitWeekday，D-077 V2）
-	KindInitMarginRate = "init_margin_rate" // MT5 初始保证金率（UnitRatio，S6：首档=最低 volume 档费率，0.01=1%）
-	KindMntnMarginRate = "mntn_margin_rate" // MT5 维持保证金率（UnitRatio，S6：首档=最低 volume 档费率，0.01=1%）
+	KindInitMarginRate = "init_margin_rate" // MT5 初始保证金率（UnitRatio，S6 返修：账户级=1/杠杆，无限杠杆=0）
 )
 
 // Unit 常量表（§1.2）。
@@ -61,7 +60,6 @@ var validKinds = map[string]bool{
 	KindTradeMode:      true,
 	KindTripleSwapDay:  true,
 	KindInitMarginRate: true,
-	KindMntnMarginRate: true,
 }
 
 // ValidKind 报告 k 是否为已知 Kind。

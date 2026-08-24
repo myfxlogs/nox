@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math"
@@ -160,15 +161,14 @@ func tradeModeFact(venue, canon string, mode mt5pb.TradeMode, src string) fact.F
 	}
 }
 
-// marginFact 构造保证金率 Fact（S6）：value=小数比率（0.01=1%）。
-// repeated 多档（按 volume tier）取首档（最低 volume 档费率）；
-// 多档完整语义（档位划分/后续档费率）未对拍官方文档，留待风控消费时再扩展。
-// rates 为空 → 不发（缺字段，调用方判空后不调用）。
-func marginFact(kind, venue, canon string, rate float64, src string) fact.Fact {
+// marginFact 构造保证金率 Fact（S6 返修）：账户级，value=1/杠杆（无限杠杆=0），
+// Symbol=venue（账户标识，非符号）。边界：符号级费率网关不支持，本包不承诺
+// （风控消费如需符号级另行立项，先例=S6 原设计「多档语义留待扩展」同型）。
+func marginFact(kind, venue, symbol string, rate float64, src string) fact.Fact {
 	return fact.Fact{
 		Kind:   kind,
 		Venue:  venue,
-		Symbol: canon,
+		Symbol: symbol,
 		Value:  rate,
 		Unit:   fact.UnitRatio,
 		Ts:     time.Now(),
@@ -176,13 +176,32 @@ func marginFact(kind, venue, canon string, rate float64, src string) fact.Fact {
 	}
 }
 
-// firstMarginRate 取 repeated margin rate 首档（最低 volume 档费率，S6）。
-// 空切片 → ok=false（缺字段不发）。
-func firstMarginRate(rates []float64) (float64, bool) {
-	if len(rates) == 0 {
+// fetchLeverage 取账户级杠杆（S6 返修，对照 swapPerCallTimeout 先例）。
+// 成功返回 (leverage, true)；失败 / result nil / Leverage<=0 → 打日志返回 (0, false)
+// （Leverage<=0 守卫防 1/0=+Inf 写入 facts 表；日志在 helpers 内打，mt_swap.go 无 log import）。
+func (a *MT5Adapter) fetchLeverage(ctx context.Context) (float64, bool) {
+	pctx, cancel := context.WithTimeout(a.withSessionMD(ctx), swapPerCallTimeout)
+	defer cancel()
+	resp, err := a.mt5.AccountSummary(pctx, &mt5pb.AccountSummaryRequest{Id: a.token})
+	if err != nil {
+		log.Printf("margin: leverage fetch failed: %v", err)
 		return 0, false
 	}
-	return rates[0], true
+	if e := resp.GetError(); e != nil {
+		log.Printf("margin: leverage fetch failed: %s", e.GetMessage())
+		return 0, false
+	}
+	r := resp.GetResult()
+	if r == nil {
+		log.Printf("margin: leverage fetch failed: result nil")
+		return 0, false
+	}
+	lev := r.GetLeverage()
+	if lev <= 0 {
+		log.Printf("margin: leverage fetch failed: non-positive leverage %v", lev)
+		return 0, false
+	}
+	return lev, true
 }
 
 // swapFact 构造 swap Fact（符号 canon 为 canonical；Ts 用本地接收时间，与报价流一致）。

@@ -20,10 +20,13 @@ import (
 	"google.golang.org/grpc"
 )
 
-// fakeMT5Client 只实现 SwapFacts 用到的 SymbolParams。
+// fakeMT5Client 只实现 SwapFacts 用到的 SymbolParams + AccountSummary（S6 返修）。
 type fakeMT5Client struct {
 	mt5pb.MT5Client
-	params map[string]*mt5pb.SymbolParamsReply
+	params     map[string]*mt5pb.SymbolParamsReply
+	leverage   float64 // S6 返修：AccountSummary.Leverage（0=未设/缺省）
+	summaryErr error   // S6 返修：AccountSummary 强制返回 err（nil=正常）
+	summaryNil bool    // S6 返修：AccountSummary 返回 result=nil
 }
 
 func (f *fakeMT5Client) SymbolParams(_ context.Context, req *mt5pb.SymbolParamsRequest, _ ...grpc.CallOption) (*mt5pb.SymbolParamsReply, error) {
@@ -31,6 +34,17 @@ func (f *fakeMT5Client) SymbolParams(_ context.Context, req *mt5pb.SymbolParamsR
 		return r, nil
 	}
 	return nil, os.ErrNotExist
+}
+
+// AccountSummary S6 返修：返回预设 leverage / err / result nil 三态。
+func (f *fakeMT5Client) AccountSummary(_ context.Context, _ *mt5pb.AccountSummaryRequest, _ ...grpc.CallOption) (*mt5pb.AccountSummaryReply, error) {
+	if f.summaryErr != nil {
+		return nil, f.summaryErr
+	}
+	if f.summaryNil {
+		return &mt5pb.AccountSummaryReply{}, nil
+	}
+	return &mt5pb.AccountSummaryReply{Result: &mt5pb.AccountSummary{Leverage: f.leverage}}, nil
 }
 
 // fakeMT4Client 只实现 SwapFacts 用到的 SymbolParams。

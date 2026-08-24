@@ -46,11 +46,12 @@ func wrapDeadline(err error) error { return err }
 
 // mockMT5Client 受控 MT5Client：SymbolParams 返回预设 err/resp；调用计数原子。
 type mockMT5Client struct {
-	mt5pb.MT5Client // nil 内嵌：未覆盖方法 panic（测试只调 SymbolParams）
+	mt5pb.MT5Client // nil 内嵌：未覆盖方法 panic（测试只调 SymbolParams；S6 返修补 AccountSummary 防 SwapFacts 复用）
 	mu              sync.Mutex
 	symErr          error
 	symResp         *mt5pb.SymbolParamsReply
 	calls           atomic.Int64
+	leverage        float64
 }
 
 func (m *mockMT5Client) SymbolParams(ctx context.Context, in *mt5pb.SymbolParamsRequest, opts ...grpc.CallOption) (*mt5pb.SymbolParamsReply, error) {
@@ -58,6 +59,12 @@ func (m *mockMT5Client) SymbolParams(ctx context.Context, in *mt5pb.SymbolParams
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.symResp, m.symErr
+}
+
+// AccountSummary S6 返修：补全防 SwapFacts 复用时 nil panic（本测试不调 SwapFacts，
+// 占位返回预设 leverage；sessionClient 包装不覆盖 AccountSummary，透传至此）。
+func (m *mockMT5Client) AccountSummary(_ context.Context, _ *mt5pb.AccountSummaryRequest, _ ...grpc.CallOption) (*mt5pb.AccountSummaryReply, error) {
+	return &mt5pb.AccountSummaryReply{Result: &mt5pb.AccountSummary{Leverage: m.leverage}}, nil
 }
 
 func (m *mockMT5Client) setSymErr(err error) {

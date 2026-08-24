@@ -25,6 +25,7 @@ type slowFakeMT5Client struct {
 	slowSym  string
 	delay    time.Duration
 	gotCalls map[string]int
+	leverage float64 // S6 返修：AccountSummary.Leverage（0=未设→fetchLeverage 守卫不发）
 }
 
 func (f *slowFakeMT5Client) SymbolParams(ctx context.Context, req *mt5pb.SymbolParamsRequest, _ ...grpc.CallOption) (*mt5pb.SymbolParamsReply, error) {
@@ -47,6 +48,12 @@ func (f *slowFakeMT5Client) SymbolParams(ctx context.Context, req *mt5pb.SymbolP
 		return r, nil
 	}
 	return nil, errors.New("not found")
+}
+
+// AccountSummary S6 返修：返回预设 leverage（0→fetchLeverage 守卫不发 margin fact，
+// 不影响慢符号超时测试主线）。
+func (f *slowFakeMT5Client) AccountSummary(_ context.Context, _ *mt5pb.AccountSummaryRequest, _ ...grpc.CallOption) (*mt5pb.AccountSummaryReply, error) {
+	return &mt5pb.AccountSummaryReply{Result: &mt5pb.AccountSummary{Leverage: f.leverage}}, nil
 }
 
 // TestSwapFacts_PerCallTimeout 慢符号超时进 errs、其余符号照常输出、整体不超时、facts>0 不返回 err。
@@ -134,8 +141,9 @@ func TestSwapFacts_PerCallTimeout_AllSlowFails(t *testing.T) {
 // allSlowMT5Client 所有符号都慢（模拟 PXBT 全符号超时场景）。
 type allSlowMT5Client struct {
 	mt5pb.MT5Client
-	params map[string]*mt5pb.SymbolParamsReply
-	delay  time.Duration
+	params   map[string]*mt5pb.SymbolParamsReply
+	delay    time.Duration
+	leverage float64 // S6 返修：AccountSummary.Leverage
 }
 
 func (f *allSlowMT5Client) SymbolParams(ctx context.Context, req *mt5pb.SymbolParamsRequest, _ ...grpc.CallOption) (*mt5pb.SymbolParamsReply, error) {
@@ -148,6 +156,12 @@ func (f *allSlowMT5Client) SymbolParams(ctx context.Context, req *mt5pb.SymbolPa
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+// AccountSummary S6 返修：返回预设 leverage（全符号超时场景下 margin fact 仍可发，
+// 杠杆缺失不拖垮 swap 采集语义验证）。
+func (f *allSlowMT5Client) AccountSummary(_ context.Context, _ *mt5pb.AccountSummaryRequest, _ ...grpc.CallOption) (*mt5pb.AccountSummaryReply, error) {
+	return &mt5pb.AccountSummaryReply{Result: &mt5pb.AccountSummary{Leverage: f.leverage}}, nil
 }
 
 // TestSwapFacts_PerCallTimeout_ParentCtxIntact per-call 超时不影响 parent ctx。
