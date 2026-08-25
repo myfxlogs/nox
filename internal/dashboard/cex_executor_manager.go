@@ -18,17 +18,21 @@ type CexExecutorManager struct {
 	store    ExchangeStore
 	reg      *exec.Registry
 	interval time.Duration
+	// alertFn D-108 P2 T1：平仓被拒时 critical 告警注入（main 传 store.InsertAlert）。
+	alertFn func(posID *int64, level, msg string)
 
 	mu   sync.Mutex
 	keys map[string]bool // 上轮已注册的 venueKey（diff 用）
 }
 
 // NewCexExecutorManager 创建管理器。interval 复用 cfg.BrokerPosPollInterval（D-059 不新增 knob）。
-func NewCexExecutorManager(s ExchangeStore, reg *exec.Registry, interval time.Duration) *CexExecutorManager {
+// alertFn D-108 P2 T1：平仓被拒 critical 告警（main 传 store.InsertAlert；nil=不告警）。
+func NewCexExecutorManager(s ExchangeStore, reg *exec.Registry, interval time.Duration, alertFn func(posID *int64, level, msg string)) *CexExecutorManager {
 	return &CexExecutorManager{
 		store:    s,
 		reg:      reg,
 		interval: interval,
+		alertFn:  alertFn,
 		keys:     make(map[string]bool),
 	}
 }
@@ -65,7 +69,9 @@ func (m *CexExecutorManager) sync(ctx context.Context) {
 		base := resolveExchangeBaseURL(*c)
 		vk := c.Venue + ":" + c.VenueType
 		seen[vk] = true
-		m.reg.Register(exec.NewCEXExecutor(c.Venue, c.VenueType, c.APIKey, c.APISecret, c.Passphrase, base, c.Simulated))
+		exe := exec.NewCEXExecutor(c.Venue, c.VenueType, c.APIKey, c.APISecret, c.Passphrase, base, c.Simulated)
+		exe.AlertFn = m.alertFn // D-108 P2 T1：平仓被拒 critical 告警注入
+		m.reg.Register(exe)
 		if !m.keys[vk] {
 			log.Printf("[cex-exec] register %s (base=%s simulated=%v)", vk, base, c.Simulated)
 		}
