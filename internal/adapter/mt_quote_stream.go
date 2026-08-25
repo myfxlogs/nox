@@ -47,7 +47,7 @@ func (a *MT5Adapter) snapshotSubSet() []string {
 func (a *MT5Adapter) resubscribeAll(sctx context.Context) {
 	for _, sym := range a.snapshotSubSet() {
 		if _, err := a.subs.Subscribe(sctx, &mt5pb.SubscribeRequest{
-			Id:     a.token,
+			Id:     a.getToken(),
 			Symbol: sym,
 		}); err != nil {
 			log.Printf("[mt5:%s] resubscribe %s: %v", a.venue, sym, err)
@@ -65,7 +65,7 @@ func (a *MT5Adapter) runQuoteStream(ctx context.Context, ch chan<- bus.Quote) {
 		}
 		sctx := a.withSessionMD(ctx)
 		a.resubscribeAll(sctx)
-		stream, err := a.streams.OnQuote(sctx, &mt5pb.OnQuoteRequest{Id: a.token})
+		stream, err := a.streams.OnQuote(sctx, &mt5pb.OnQuoteRequest{Id: a.getToken()})
 		if err != nil {
 			if ctx.Err() != nil {
 				return

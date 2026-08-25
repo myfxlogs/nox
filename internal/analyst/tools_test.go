@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"arb/internal/testutil"
 )
 
 func TestQueryRORejectsNonSelect(t *testing.T) {
@@ -109,10 +111,7 @@ func TestRateLimiterUnlimited(t *testing.T) {
 // 设 ARB_TEST_PG_DSN 时跑 SELECT 1 全链（验证 pgxpool 驱动注册 + 查询 + 行解析）；
 // 未设时 skip（go test ./... 无 PG 环境仍全过）。
 func TestQueryRORealConnect(t *testing.T) {
-	dsn := os.Getenv("ARB_TEST_PG_DSN")
-	if dsn == "" {
-		t.Skip("ARB_TEST_PG_DSN 未设置，跳过真连测试")
-	}
+	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
 	tools := &Tools{ReadOnlyDSN: dsn}
 	res, cites, err := tools.execQueryRO(context.Background(), ToolCall{ID: "c1", Input: `{"sql":"SELECT 1 AS one"}`})
 	if err != nil {

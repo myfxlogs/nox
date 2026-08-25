@@ -136,9 +136,16 @@ func (a *MT4Adapter) Connect(ctx context.Context) error {
 	return nil
 }
 
+// getToken 持锁读 token（reconnectSession 持 a.mu 写，无锁读=CI 实抓数据竞争）。
+func (a *MT4Adapter) getToken() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.token
+}
+
 // withSessionMD 给 mtapi 调用附加会话 id header（网关按 id 路由）。
 func (a *MT4Adapter) withSessionMD(ctx context.Context) context.Context {
-	return metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{"id": a.token}))
+	return metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{"id": a.getToken()}))
 }
 
 // reconnectSession 复用现有 conn 重调 connMgr.Connect 重建 account 会话（D-100，同 MT5 S1 模式）。
@@ -193,13 +200,13 @@ func (a *MT4Adapter) Subscribe(symbols []string) (<-chan bus.Quote, func()) {
 // D-047 缺陷③：映射了不重订阅 = 没报价流。
 // D-100：同时增补订阅集镜像，OnQuote 流重连后 resubscribeAll 恢复全集。
 func (a *MT4Adapter) Resubscribe(symbols []string) {
-	if a.token == "" {
+	if a.getToken() == "" {
 		return
 	}
 	a.addSubSet(symbols)
 	sctx := a.withSessionMD(a.stopCtx)
 	for _, sym := range symbols {
-		_, err := a.subs.Subscribe(sctx, &mt4pb.SubscribeRequest{Id: a.token, Symbol: sym})
+		_, err := a.subs.Subscribe(sctx, &mt4pb.SubscribeRequest{Id: a.getToken(), Symbol: sym})
 		if err != nil {
 			log.Printf("[mt4:%s] resubscribe %s: %v", a.venue, sym, err)
 		}
@@ -232,7 +239,5 @@ func (a *MT4Adapter) AccountID() string {
 func (a *MT4Adapter) TradingClient() mt4pb.TradingClient { return a.trading }
 func (a *MT4Adapter) MT4Client() mt4pb.MT4Client         { return a.mt4 }
 func (a *MT4Adapter) Token() string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.token
+	return a.getToken()
 }

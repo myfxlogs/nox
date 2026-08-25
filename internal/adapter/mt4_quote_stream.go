@@ -46,7 +46,7 @@ func (a *MT4Adapter) snapshotSubSet() []string {
 func (a *MT4Adapter) resubscribeAll(sctx context.Context) {
 	for _, sym := range a.snapshotSubSet() {
 		if _, err := a.subs.Subscribe(sctx, &mt4pb.SubscribeRequest{
-			Id:     a.token,
+			Id:     a.getToken(),
 			Symbol: sym,
 		}); err != nil {
 			log.Printf("[mt4:%s] resubscribe %s: %v", a.venue, sym, err)
@@ -63,7 +63,7 @@ func (a *MT4Adapter) runQuoteStream(ctx context.Context, ch chan<- bus.Quote) {
 		}
 		sctx := a.withSessionMD(ctx)
 		a.resubscribeAll(sctx)
-		stream, err := a.streams.OnQuote(sctx, &mt4pb.OnQuoteRequest{Id: a.token})
+		stream, err := a.streams.OnQuote(sctx, &mt4pb.OnQuoteRequest{Id: a.getToken()})
 		if err != nil {
 			if ctx.Err() != nil {
 				return

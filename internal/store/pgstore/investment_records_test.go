@@ -3,30 +3,18 @@ package pgstore
 import (
 	"context"
 	"fmt"
-	"os"
-	"strings"
 	"sync"
 	"testing"
 
-	"github.com/jackc/pgx/v5"
+	"arb/internal/testutil"
 )
 
 // testStore 连接 ARB_TEST_PG_DSN 指定的专用测试库（可销毁数据）。
 // 未设置时跳过：go test ./... 无 PG 环境仍全过。
-// 安全闸（ref/arbcn 同款教训）：测试会对目标表 TRUNCATE，绝不允许指向非测试库——dbname 必须含 "test"。
+// 安全闸（ref/arbcn 同款教训）：测试会对目标表 TRUNCATE，绝不允许指向非测试库——TestDSN fail-closed 门禁。
 func testStore(t *testing.T) *Store {
 	t.Helper()
-	dsn := os.Getenv("ARB_TEST_PG_DSN")
-	if dsn == "" {
-		t.Skip("ARB_TEST_PG_DSN 未设置，跳过需真库的测试")
-	}
-	cfg, err := pgx.ParseConfig(dsn)
-	if err != nil {
-		t.Fatalf("parse ARB_TEST_PG_DSN: %v", err)
-	}
-	if !strings.Contains(cfg.Database, "test") {
-		t.Fatalf("ARB_TEST_PG_DSN 指向非测试库 %q：测试会 TRUNCATE 该库，拒绝执行", cfg.Database)
-	}
+	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
 	ctx := context.Background()
 	s, err := New(ctx, dsn)
 	if err != nil {
