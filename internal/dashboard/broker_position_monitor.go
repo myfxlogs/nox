@@ -40,6 +40,9 @@ type BrokerPositionMonitor struct {
 
 	// F5：quote ticker 节流间隔（浮盈实时重算，不查 venue）。
 	quoteTick time.Duration
+
+	// D-107 P2：orderTopic 事件触发回读（kickCh buffered(1) 非阻塞 send = 合并语义）。
+	kickCh chan struct{}
 }
 
 // NewBrokerPositionMonitor 创建 monitor。interval 为轮询周期（ARB_BROKER_POS_POLL_MS）。
@@ -56,11 +59,22 @@ func NewBrokerPositionMonitor(bm *BrokerManager, qbus *bus.QuoteBus, freshTTL, i
 		topic:     topic,
 		venues:    make(map[string]venueState),
 		quoteTick: quoteTick,
+		kickCh:    make(chan struct{}, 1), // D-107 P2：buffered(1) 非阻塞 send = 事件合并
+	}
+}
+
+// Kick D-107 P2：orderTopic 事件触发回读（非阻塞 send 到 buffered(1) chan——
+// 已有待处理事件即丢=1s 级合并，Run select 消费后触发一次 poll）。
+func (m *BrokerPositionMonitor) Kick() {
+	select {
+	case m.kickCh <- struct{}{}:
+	default: // 已有待处理 kick，合并丢弃
 	}
 }
 
 // Run 轮询直至 ctx 取消。启动即轮询一次（首个快照立即可用）。
 // F5：双循环——poll ticker（仓位增减/开平仓，不缩间隔）+ quote ticker（浮盈实时重算，节流 1s）。
+// D-107 P2：kickCh 事件触发回读（pollTicker/quoteTicker 保留作兜底）。
 func (m *BrokerPositionMonitor) Run(ctx context.Context) {
 	m.poll(ctx)
 	pollTicker := time.NewTicker(m.interval)
@@ -71,6 +85,8 @@ func (m *BrokerPositionMonitor) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
+		case <-m.kickCh:
+			m.poll(ctx) // D-107 P2：事件触发回读
 		case <-pollTicker.C:
 			m.poll(ctx)
 		case <-quoteTicker.C:

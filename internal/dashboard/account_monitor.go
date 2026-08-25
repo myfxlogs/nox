@@ -9,7 +9,6 @@ import (
 	"maps"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -17,7 +16,6 @@ import (
 	"arb/internal/bus"
 	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
-	"google.golang.org/protobuf/types/known/timestamppb"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 )
@@ -42,6 +40,10 @@ type AccountMonitor struct {
 	lastFP string                    // 上次广播指纹（变更检测）
 	// cooldown 账号 RPC 冷却（D-077 修复⑩ G2：连续超时 ≥2 → 10s 冷却跳过）。
 	cooldown *Cooldown
+
+	// D-107 P2：margin 事件触发重采（OnOrderProfit → MarginSink → OrderProfitKick → Kick）。
+	kickCh   chan struct{}
+	lastPoll time.Time // 防抖基准：最近一次 kick 触发 poll 的时间（仅 kick 路径更新，ticker 不更新）
 }
 
 // ExchangeStore 提供 CEX 交易所配置（pgstore.Store 满足）。
@@ -57,6 +59,7 @@ func NewAccountMonitor(bm *BrokerManager, interval time.Duration, topic *bus.Top
 		topic:    topic,
 		states:   make(map[string]acctVenueState),
 		cooldown: NewCooldown(2, 10*time.Second), // D-077 修复⑩ G2
+		kickCh:   make(chan struct{}, 1),         // D-107 P2：buffered(1) 非阻塞 send = 事件合并
 	}
 }
 
@@ -74,15 +77,50 @@ func (m *AccountMonitor) AddStatic(q reconcile.AccountQuerier) {
 	m.statics = append(m.statics, q)
 }
 
+// accountKickDebounce D-107 P2：kick 触发 poll 防抖窗口（D-099 margin 防抖 5min 先例——
+// 静态数据防事件洪峰重复查库；ticker 兜底不受此限）。
+var accountKickDebounce = 5 * time.Minute
+
+// Kick D-107 P2：margin 事件触发重采（非阻塞 send 到 buffered(1) chan——合并语义同 BrokerPositionMonitor）。
+func (m *AccountMonitor) Kick() {
+	select {
+	case m.kickCh <- struct{}{}:
+	default: // 已有待处理 kick，合并丢弃
+	}
+}
+
+// pollIfDue D-107 P2：kick 触发防抖 poll——距上次 kick-poll <5min 直接返回（D-099 先例）；
+// 否则执行 poll 并更新 lastPoll。ticker 路径不受此限（兜底不变）。
+func (m *AccountMonitor) pollIfDue(ctx context.Context) {
+	m.mu.Lock()
+	if time.Since(m.lastPoll) < accountKickDebounce {
+		m.mu.Unlock()
+		return
+	}
+	m.mu.Unlock()
+
+	m.poll(ctx)
+
+	m.mu.Lock()
+	m.lastPoll = time.Now()
+	m.mu.Unlock()
+}
+
 // Run 轮询直至 ctx 取消。启动即轮询一次（首个快照立即可用）。
+// D-107 P2：kickCh 事件触发 pollIfDue（5min 防抖）；ticker 保留作兜底。
 func (m *AccountMonitor) Run(ctx context.Context) {
 	m.poll(ctx)
+	m.mu.Lock()
+	m.lastPoll = time.Now() // D-107 P2：初始 poll 后设防抖基准（防首 kick 绕过防抖）
+	m.mu.Unlock()
 	ticker := time.NewTicker(m.interval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-m.kickCh:
+			m.pollIfDue(ctx) // D-107 P2：事件触发重采（5min 防抖）
 		case <-ticker.C:
 			m.poll(ctx)
 		}
@@ -229,48 +267,4 @@ func (m *AccountMonitor) build() []*v1.AccountInfo {
 	return out
 }
 
-// accountToProto 账户视图 → proto（D-053）。
-func accountToProto(a *reconcile.AccountInfo, online bool, now time.Time) *v1.AccountInfo {
-	pb := &v1.AccountInfo{
-		VenueKey:   a.VenueKey,
-		Venue:      a.Venue,
-		VenueType:  a.VenueType,
-		AssetType:  a.AssetType,
-		Balance:    a.Balance,
-		Equity:     a.Equity,
-		Margin:     a.Margin,
-		FreeMargin: a.FreeMargin,
-		Credit:     a.Credit,
-		Profit:     a.Profit,
-		Leverage:   a.Leverage,
-		Currency:   a.Currency,
-		Online:     online,
-		UpdatedAt:  timestamppb.New(now),
-	}
-	return pb
-}
-
-// accountFingerprint 视图指纹：任一账户的余额/净值/占用/可用/信用/浮盈/在线状态变化即触发广播。
-// 权益实时跳变 → 值变了就推（5s 节奏，全量快照量小，可接受）。
-func accountFingerprint(view []*v1.AccountInfo) string {
-	var sb strings.Builder
-	for _, a := range view {
-		sb.WriteString(a.VenueKey)
-		sb.WriteString("|")
-		sb.WriteString(strconv.FormatFloat(a.Balance, 'g', -1, 64))
-		sb.WriteString("|")
-		sb.WriteString(strconv.FormatFloat(a.Equity, 'g', -1, 64))
-		sb.WriteString("|")
-		sb.WriteString(strconv.FormatFloat(a.Margin, 'g', -1, 64))
-		sb.WriteString("|")
-		sb.WriteString(strconv.FormatFloat(a.FreeMargin, 'g', -1, 64))
-		sb.WriteString("|")
-		sb.WriteString(strconv.FormatFloat(a.Credit, 'g', -1, 64))
-		sb.WriteString("|")
-		sb.WriteString(strconv.FormatFloat(a.Profit, 'g', -1, 64))
-		sb.WriteString("|")
-		sb.WriteString(strconv.FormatBool(a.Online))
-		sb.WriteString(";")
-	}
-	return sb.String()
-}
+// accountToProto + accountFingerprint 已移至 account_monitor_proto.go（D-107 P2 拆分，纯移动零逻辑改）。
