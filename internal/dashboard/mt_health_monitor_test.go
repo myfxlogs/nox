@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -177,7 +178,7 @@ func TestMTHealth_SwapFactStale(t *testing.T) {
 	if alerts[0].level != "critical" {
 		t.Errorf("tick2: want critical, got %s", alerts[0].level)
 	}
-	if !contains(alerts[0].msg, "swap") {
+	if !strings.Contains(alerts[0].msg, "swap") {
 		t.Errorf("tick2: want swap metric, got msg=%s", alerts[0].msg)
 	}
 }
@@ -221,17 +222,4 @@ func TestMTHealth_NoDataCrit(t *testing.T) {
 			t.Errorf("alert[%d]: want critical, got %s", i, a.level)
 		}
 	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsStr(s, substr))
-}
-
-func containsStr(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
