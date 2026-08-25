@@ -139,21 +139,8 @@ type Config struct {
 	AIModel            string // ARB_AI_MODEL（如 glm-4.6）
 	AIPGDSN            string // ARB_AI_PG_DSN（arb_ro 只读角色 DSN）
 	AnalystRatePerHour int    // ARB_ANALYST_RATE_PER_HOUR（默认 20）
-
-	// === MT 数据采集稳定性加固（D-104 P0）===
-	// MTHealthTick 健康监控轮询周期（ARB_MT_HEALTH_TICK，缺省 1m）。
-	MTHealthTick time.Duration
-	// MTHealthQuoteWarn/Crit 报价新鲜度 warn/crit 阈值（流断间接探测）。
-	MTHealthQuoteWarn time.Duration // ARB_MT_HEALTH_QUOTE_WARN（缺省 5m）
-	MTHealthQuoteCrit time.Duration // ARB_MT_HEALTH_QUOTE_CRIT（缺省 30m）
-	// MTHealthFactWarn/Crit swap/margin facts 年龄 warn/crit 阈值（漏轮探测）。
-	MTHealthFactWarn time.Duration // ARB_MT_HEALTH_FACT_WARN（缺省 2h=容忍 1 轮漏采）
-	MTHealthFactCrit time.Duration // ARB_MT_HEALTH_FACT_CRIT（缺省 6h=2 轮以上漏采）
-	// SwapFactMaxAge swap facts 新鲜度门禁（discoverSwapCombos fail-closed，ARB_SWAP_FACT_MAX_AGE，缺省 2h）。
-	SwapFactMaxAge time.Duration
-	// MarginFactMaxAge margin facts 新鲜度门禁（sizing 链 fail-closed，ARB_MARGIN_FACT_MAX_AGE，缺省 2h）。
-	// 注：当前 sizing 链无 margin fact 读取点（D-104 S5 核对无挂点），env 预置待未来读取点接入。
-	MarginFactMaxAge time.Duration
+	// MTData MT 数据采集稳定性加固参数（D-104 P0）。
+	MTData MTDataConfig
 }
 
 // Load 从环境变量加载配置，未设置用默认值。
@@ -223,13 +210,7 @@ func Load() *Config {
 		AIModel:                    envStr("ARB_AI_MODEL", "glm-4.6"),
 		AIPGDSN:                    envStr("ARB_AI_PG_DSN", ""),
 		AnalystRatePerHour:         envInt("ARB_ANALYST_RATE_PER_HOUR", 20),
-		MTHealthTick:               envDur("ARB_MT_HEALTH_TICK", time.Minute),         // D-104 P0
-		MTHealthQuoteWarn:          envDur("ARB_MT_HEALTH_QUOTE_WARN", 5*time.Minute), // 流断 5m 间接探测
-		MTHealthQuoteCrit:          envDur("ARB_MT_HEALTH_QUOTE_CRIT", 30*time.Minute),
-		MTHealthFactWarn:           envDur("ARB_MT_HEALTH_FACT_WARN", 2*time.Hour), // 容忍 1 轮漏采
-		MTHealthFactCrit:           envDur("ARB_MT_HEALTH_FACT_CRIT", 6*time.Hour),
-		SwapFactMaxAge:             envDur("ARB_SWAP_FACT_MAX_AGE", 2*time.Hour),   // fail-closed 门禁
-		MarginFactMaxAge:           envDur("ARB_MARGIN_FACT_MAX_AGE", 2*time.Hour), // 预置（无挂点）
+		MTData:                     loadMTData(),
 	}
 }
 
