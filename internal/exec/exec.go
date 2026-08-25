@@ -25,6 +25,8 @@ type Order struct {
 	// 平仓必须传原持仓侧（BUY 开的 long 用 SELL 平 → posSide=long 才减 long，否则
 	// SELL+posSide=short 会新开空仓——真实生产 bug，实测双双持仓）。其他 venue/类型忽略。
 	PositionSide string
+	// PosID 关联持仓 ID（D-108 P2 T1：平仓被拒时 critical 告警 posID 挂接；0=开仓/无上下文不告警）。
+	PosID int64
 }
 
 // Fill 是成交回执。

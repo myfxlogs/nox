@@ -28,6 +28,12 @@ func (p *Pipeline) executeLeg(ctx context.Context, leg LegSpec) LegResult {
 		log.Printf("[exec] leg %s %s %s: %v", leg.VenueKey, leg.Side, leg.VenueSymbol, err)
 		return LegResult{VenueKey: leg.VenueKey, Status: "FAILED"}
 	}
+	// D-108 P2 T2：零成交/被拒 → 腿标 FAILED（不再假 FILLED 幻影腿）。
+	// MT5 OrderSend 成功但 lots=0/price=0 = 零成交；CEX 已在 PlaceOrder 内报错返回 err。
+	if fill.Qty <= 0 || fill.Price <= 0 {
+		log.Printf("[exec] leg %s %s %s: zero fill (qty=%v price=%v) → FAILED", leg.VenueKey, leg.Side, leg.VenueSymbol, fill.Qty, fill.Price)
+		return LegResult{VenueKey: leg.VenueKey, OrderID: fill.OrderID, Status: "FAILED"}
+	}
 	return LegResult{
 		VenueKey:   leg.VenueKey,
 		OrderID:    fill.OrderID,
@@ -114,6 +120,7 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 				Qty:          leg.Qty,
 				Venue:        leg.Venue,
 				PositionSide: positionSide,
+				PosID:        posID, // D-108 P2 T1：平仓被拒 critical 告警 posID 挂接
 			})
 		}
 		if closeErr != nil {
@@ -126,6 +133,12 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 			closeSide = "BUY"
 		}
 		closePrice := fill.Price
+		// D-108 P2 T2：close leg Qty 改记 fill.Qty（实际成交量，原记 leg.Qty 全额）。
+		// 部分平仓时 fill.Qty < leg.Qty → CLOSE leg 记实际成交量 + A2 残留回读 = 不置 CLOSED 兜底闭环。
+		closeQty := fill.Qty
+		if closeQty <= 0 {
+			closeQty = leg.Qty // fallback：fill 无 qty（MT5 CloseOrder 异常）用原腿 qty 不丢数据
+		}
 		// D-108 A1 fail-closed：CLOSE phase 腿写库失败 → critical 告警 + 返回 error（拒绝置 CLOSED，对账兜底）
 		if err := p.store.CreatePositionLeg(ctx, &pgstore.PositionLeg{
 			PositionID:    posID,
@@ -135,7 +148,7 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 			Account:       leg.Account,
 			Symbol:        leg.Symbol,
 			Side:          closeSide,
-			Qty:           leg.Qty,
+			Qty:           closeQty,
 			PriceExpected: leg.PriceExpected,
 			PriceActual:   &closePrice,
 			OrderID:       fill.OrderID,

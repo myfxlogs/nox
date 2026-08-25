@@ -193,3 +193,57 @@ func isOPENINGZombie(pos *pgstore.Position, legs []pgstore.PositionLeg, now time
 	}
 	return false
 }
+
+// autoFailLeggedZombie LEGGED 僵尸收编（超 24h）：FILLED 腿在 venue 有 → warn 不归档（交人工/下轮）；
+// 无 FILLED 腿在 venue → FAILED 归档 + warn（D-108 P2 T3，模式同 autoFailOPENINGZombie）。
+// LEGGED = 部分成交持仓（一腿 FILLED 一腿 FAILED），超 24h 未恢复 → 需处置。
+func (r *Reconciler) autoFailLeggedZombie(
+	ctx context.Context,
+	pos *pgstore.Position,
+	venueOrders map[string]VenueOrder,
+) error {
+	posID := pos.ID
+	sub, cancel := r.withTimeout(ctx)
+	legs, err := r.store.ListPositionLegs(sub, posID)
+	cancel()
+	if err != nil {
+		return fmt.Errorf("list legs: %w", err)
+	}
+	// 查是否有 FILLED 腿在 venue 存在（LEGGED 至少一腿 FILLED）
+	for _, leg := range legs {
+		if leg.OrderID == "" || leg.Status != "FILLED" {
+			continue
+		}
+		if _, ok := venueOrders[leg.OrderID]; ok {
+			// D-108 P2 T3：FILLED 腿在 venue 有 → 不置 FAILED（venue 真有持仓，误平风险），
+			// 记录告警交人工/下轮对账处置（P1 A3 同语义）。
+			msg := fmt.Sprintf("LEGGED 僵尸 position #%d 腿 ticket=%s 在 venue 有持仓，不归档 FAILED（交人工/对账）", posID, leg.OrderID)
+			r.insertAlertCtx(ctx, "warn", msg)
+			log.Printf("[reconcile] %s", msg)
+			return nil
+		}
+	}
+	// LEGGED 僵尸无 FILLED 腿在 venue → FAILED 归档
+	sub, cancel = r.withTimeout(ctx)
+	err = r.store.UpdatePositionStatus(sub, posID, "FAILED")
+	cancel()
+	if err != nil && !errors.Is(err, pgstore.ErrTerminalState) {
+		return fmt.Errorf("update status FAILED: %w", err)
+	}
+	msg := fmt.Sprintf("LEGGED 僵尸自动归档 position #%d（超 24h 未恢复，转 FAILED）", posID)
+	r.insertAlertCtx(ctx, "warn", msg)
+	log.Printf("[reconcile] %s", msg)
+	return nil
+}
+
+// isLeggedZombie 判断 position 是否为 LEGGED 僵尸（超 24h 未恢复）。
+// LEGGED = 部分成交持仓，超 24h 仍 LEGGED = 僵尸需处置。
+func isLeggedZombie(pos *pgstore.Position, now time.Time) bool {
+	if pos.Status != "LEGGED" {
+		return false
+	}
+	if pos.OpenedAt != nil && now.Sub(*pos.OpenedAt) > 24*time.Hour {
+		return true
+	}
+	return false
+}

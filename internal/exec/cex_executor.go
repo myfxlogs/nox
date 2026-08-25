@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"arb/internal/httpx"
@@ -16,6 +17,7 @@ import (
 // CEXExecutor 是 Binance/OKX REST 签名下单执行器（§13.2）。
 // 每个市场一个实例（spot/perp 是不同实例）。D-059：补 OKX 下单（OK-ACCESS-* 四头 +
 // base64 HMAC + x-simulated-trading:1 模拟盘），venue 分派。
+// D-108 P2 T1：Binance perp 双仓探测缓存（dualSide/dualSideProbed）+ AlertFn 平仓被拒告警。
 type CEXExecutor struct {
 	venue      string
 	venueType  string // spot / perp
@@ -25,6 +27,13 @@ type CEXExecutor struct {
 	baseURL    string // binance: proxy/demo 根；okx: www.okx.com
 	simulated  bool   // OKX 模拟盘：请求带 x-simulated-trading:1（demo key 必开，D-054 同款）
 	client     *http.Client
+
+	// D-108 P2 T1：Binance perp 双仓模式探测缓存（per executor 实例，避免每单探测）。
+	dualSide       bool // true=hedge mode（双仓），false=one-way（单仓）
+	dualSideProbed bool // 是否已探测（探测失败时 false + 保守按 hedge 处理）
+	dualSideMu     sync.Mutex
+	// AlertFn 平仓被拒时 critical 告警（main 注入 store.InsertAlert；nil=不告警，测试用）。
+	AlertFn func(posID *int64, level, msg string)
 }
 
 // NewCEXExecutor 创建 CEX 执行器。
@@ -40,6 +49,14 @@ func NewCEXExecutor(venue, venueType, apiKey, apiSecret, passphrase, baseURL str
 		baseURL:    baseURL,
 		simulated:  simulated,
 		client:     httpx.Client(), // CA 信任 + X-Proxy-Token 注入（D-055）；OKX 公网忽略注入头
+	}
+}
+
+// alertCritical 平仓被拒时 critical 告警（D-108 P2 T1，posID>0 才告警）。
+func (e *CEXExecutor) alertCritical(o Order, msg string) {
+	if e.AlertFn != nil && o.PosID > 0 {
+		pid := o.PosID
+		e.AlertFn(&pid, "critical", msg)
 	}
 }
 
@@ -59,6 +76,7 @@ func (e *CEXExecutor) PlaceOrder(ctx context.Context, o Order) (Fill, error) {
 }
 
 // placeBinance 下单：spot /api/v3/order、perp /fapi/v1/order，HMAC-SHA256 hex 签名 + X-MBX-APIKEY。
+// D-108 P2 T1：perp 平仓补 positionSide（hedge 模式）/ reduceOnly（one-way 模式）。
 func (e *CEXExecutor) placeBinance(ctx context.Context, o Order) (Fill, error) {
 	side := "BUY"
 	if o.Side == "SELL" {
@@ -73,10 +91,35 @@ func (e *CEXExecutor) placeBinance(ctx context.Context, o Order) (Fill, error) {
 	endpoint := "/api/v3/order"
 	if e.venueType == "perp" {
 		endpoint = "/fapi/v1/order"
+		// D-108 P2 T1：perp 平仓补 positionSide/reduceOnly。
+		// hedge 模式 → positionSide=原持仓侧（与 OKX 同机制，调用方传 Order.PositionSide）；
+		// one-way 模式 → reduceOnly=true（market reduce，防开反向敞口）。
+		// 探测失败 → 保守按 hedge 处理（传 positionSide，被拒则 critical 告警）。
+		dual, probed := e.binanceDualSide(ctx)
+		if !probed {
+			// 探测失败：保守 hedge（有 positionSide 就传，无则不传让 venue 报错）
+			if o.PositionSide != "" {
+				params.Set("positionSide", binancePosSide(o.PositionSide))
+			}
+		} else if dual {
+			// hedge 模式：必须带 positionSide
+			ps := o.PositionSide
+			if ps == "" {
+				ps = "long"
+				if side == "SELL" {
+					ps = "short"
+				}
+			}
+			params.Set("positionSide", binancePosSide(ps))
+		} else {
+			// one-way 模式：reduceOnly=true（平仓减仓，防开反向）
+			params.Set("reduceOnly", "true")
+		}
 	}
 
 	body, err := e.signedBinanceRequest(ctx, "POST", endpoint, params)
 	if err != nil {
+		e.alertCritical(o, fmt.Sprintf("binance perp close rejected pos=%d symbol=%s side=%s: %v", o.PosID, o.Symbol, side, err))
 		return Fill{}, fmt.Errorf("cex order: %w", err)
 	}
 
@@ -103,8 +146,10 @@ func (e *CEXExecutor) placeBinance(ctx context.Context, o Order) (Fill, error) {
 			}
 			if st.Status == "CANCELED" || st.Status == "REJECTED" || st.Status == "EXPIRED" {
 				// 未成交即被取消/拒绝 → 平仓失败，如实报错而非返回 qty=0 假装成交。
-				return Fill{}, fmt.Errorf("binance order %s: status=%s executedQty=%s（未成交，订单被取消/拒绝）",
+				msg := fmt.Sprintf("binance order %s: status=%s executedQty=%s（未成交，订单被取消/拒绝）",
 					orderID, st.Status, st.ExecutedQty)
+				e.alertCritical(o, msg)
+				return Fill{}, fmt.Errorf("%s", msg)
 			}
 			if st.Status == "FILLED" || st.Status == "PARTIALLY_FILLED" {
 				q, perr := strconv.ParseFloat(st.ExecutedQty, 64)
@@ -147,6 +192,8 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 		// （account/config 实测）。开仓传空 → buy=long / sell=short 派生；平仓由调用方显式传
 		// PositionSide=原持仓侧（BUY 开 long → SELL 平 + posSide=long 才减 long，D-059 实测
 		// SELL+posSide=short 会新开空仓）。net_mode 账户需改 posSide=net。
+		// D-108 P2 T1：补 reduceOnly=true（long_short 模式下与 posSide 并存无害，OKX 支持，
+		// 双保险防开反向敞口）。
 		posSide := o.PositionSide
 		if posSide == "" {
 			posSide = "long"
@@ -154,7 +201,7 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 				posSide = "short"
 			}
 		}
-		bodyStr = fmt.Sprintf(`{"instId":%q,"tdMode":%q,"side":%q,"ordType":"market","sz":%q,"posSide":%q}`,
+		bodyStr = fmt.Sprintf(`{"instId":%q,"tdMode":%q,"side":%q,"ordType":"market","sz":%q,"posSide":%q,"reduceOnly":true}`,
 			instID, tdMode, side, sz, posSide)
 	} else {
 		// spot 市价单：缺省买方向 sz=报价币金额（0.0001 当 0.0001 USDT → 51020 最小金额，实测）。
@@ -181,6 +228,7 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 
 	body, err := e.post(ctx, e.baseURL+path, bodyStr, headers)
 	if err != nil {
+		e.alertCritical(o, fmt.Sprintf("okx close rejected pos=%d symbol=%s side=%s: %v", o.PosID, o.Symbol, side, err))
 		return Fill{}, fmt.Errorf("okx order: %w", err)
 	}
 	var resp struct {
@@ -203,6 +251,7 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 		if len(resp.Data) > 0 && resp.Data[0].SMsg != "" {
 			detail = fmt.Sprintf("%s (sCode=%s sMsg=%s)", resp.Msg, resp.Data[0].SCode, resp.Data[0].SMsg)
 		}
+		e.alertCritical(o, fmt.Sprintf("okx close rejected pos=%d code=%s: %s", o.PosID, resp.Code, detail))
 		return Fill{}, fmt.Errorf("okx order: code=%s msg=%s", resp.Code, detail)
 	}
 	if len(resp.Data) == 0 {
@@ -217,28 +266,31 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 	if qty <= 0 || avgPx <= 0 {
 		// 市价单 POST 响应可能先于撮合返回（accFillSz=0/avgPx 空，D-059 实施修正② 实测：
 		// 订单实际成交但响应无成交数据）→ 轮询订单状态拿真实成交，防生产记 0 qty 持仓。
+		origOrder := o // 保存原始 Order（循环内 o 被 okxOrderStatus 返回遮蔽）
 		for range 5 {
 			time.Sleep(100 * time.Millisecond)
-			o, err := e.okxOrderStatus(ctx, instID, d.OrdID)
+			st, err := e.okxOrderStatus(ctx, instID, d.OrdID)
 			if err != nil {
 				return Fill{}, err
 			}
-			if o.State == "canceled" || o.State == "rejected" || o.State == "mmp_canceled" {
+			if st.State == "canceled" || st.State == "rejected" || st.State == "mmp_canceled" {
 				// 订单未成交即被取消/拒绝 → 平仓失败，如实报错而非返回 qty=0 假装成交
 				// （D-059 实测：spot SELL 曾因模拟盘撮合取消，旧逻辑静默返回 0 致测试假绿）。
 				// cancelSourceReason 携带取消根因（如「滑超 best bid 5% 保护」），生产排障必读。
-				reason := strings.TrimSpace(o.CancelSourceReason)
+				reason := strings.TrimSpace(st.CancelSourceReason)
 				if reason != "" {
 					reason = ": " + reason
 				}
-				return Fill{}, fmt.Errorf("okx order %s: state=%s accFillSz=%s avgPx=%s（未成交，订单被取消/拒绝%s）",
-					d.OrdID, o.State, o.AccFillSz, o.AvgPx, reason)
+				msg := fmt.Sprintf("okx order %s: state=%s accFillSz=%s avgPx=%s（未成交，订单被取消/拒绝%s）",
+					d.OrdID, st.State, st.AccFillSz, st.AvgPx, reason)
+				e.alertCritical(origOrder, msg)
+				return Fill{}, fmt.Errorf("%s", msg)
 			}
-			if o.AccFillSz != "" && o.AvgPx != "" {
-				if q, err := strconv.ParseFloat(o.AccFillSz, 64); err == nil && q > 0 {
+			if st.AccFillSz != "" && st.AvgPx != "" {
+				if q, err := strconv.ParseFloat(st.AccFillSz, 64); err == nil && q > 0 {
 					qty = q
 				}
-				if p, err := strconv.ParseFloat(o.AvgPx, 64); err == nil && p > 0 {
+				if p, err := strconv.ParseFloat(st.AvgPx, 64); err == nil && p > 0 {
 					avgPx = p
 				}
 				if qty > 0 && avgPx > 0 {

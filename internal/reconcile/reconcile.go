@@ -135,6 +135,13 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 	if err != nil {
 		log.Printf("[reconcile] list opening positions: %v", err)
 	}
+	// D-108 P2 T3：LEGGED 僵尸收编（超 24h 未恢复）
+	listCtx, listCancel = r.withTimeout(ctx)
+	leggedPositions, err := r.store.ListPositions(listCtx, "LEGGED", 50, 0)
+	listCancel()
+	if err != nil {
+		log.Printf("[reconcile] list legged positions: %v", err)
+	}
 	now := time.Now()
 
 	// localLegs: ticket → (leg, position)，收尾需要 position 引用
@@ -236,6 +243,19 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 		if err := r.autoFailOPENINGZombie(ctx, &p, venueOrders); err != nil {
 			mismatches++
 			msg := fmt.Sprintf("OPENING 僵尸归档失败 position #%d: %v", p.ID, err)
+			r.insertAlertCtx(ctx, "critical", msg)
+			log.Printf("[reconcile] %s", msg)
+		}
+	}
+
+	// 3c. LEGGED 僵尸收编（超 24h 未恢复，D-108 P2 T3）
+	for _, p := range leggedPositions {
+		if !isLeggedZombie(&p, now) {
+			continue
+		}
+		if err := r.autoFailLeggedZombie(ctx, &p, venueOrders); err != nil {
+			mismatches++
+			msg := fmt.Sprintf("LEGGED 僵尸归档失败 position #%d: %v", p.ID, err)
 			r.insertAlertCtx(ctx, "critical", msg)
 			log.Printf("[reconcile] %s", msg)
 		}
