@@ -4,7 +4,6 @@ package adapter
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"log"
 	"strconv"
@@ -16,8 +15,6 @@ import (
 	"arb/internal/bus"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -38,7 +35,14 @@ type MT4Adapter struct {
 	trading mt4pb.TradingClient
 	token   string
 
+	// D-104 P2 U1：网关节点启动级 failover（MT4 单节点无 fallback，默认值=现硬编码）。
+	gateway          string
+	gatewayFallbacks []string
+
 	symMap atomic.Pointer[map[string]string] // brokerSymbol → canonical
+
+	// AlertSink 断流分级告警下沉（D-104 P2 U2，同 MT5 三点注入链）。nil = 未注入（no-op）。
+	AlertSink func(level, msg string)
 
 	// D-100：订阅集镜像（同 MT5，OnQuote 流重连后恢复订阅）。
 	subMu  sync.Mutex
@@ -46,6 +50,8 @@ type MT4Adapter struct {
 
 	// D-100：OnQuote 流重连退避档位（复用 marginReconnectBackoff 序列）。
 	quoteReconIdx int
+	// D-104 P2 U2：封顶档 episode 告警去重（成功帧重置，连续封顶只告警一次）。
+	quoteAlerted bool
 
 	stopCtx    context.Context
 	stopCancel context.CancelFunc
@@ -62,9 +68,17 @@ func NewMT4Adapter(venue, host, server string, port int32, user int64, pass stri
 		user:       user,
 		pass:       pass,
 		server:     server,
+		gateway:    "mt4grpc.mtapi.io:443",
 		stopCtx:    ctx,
 		stopCancel: cancel,
 	}
+}
+
+// SetGateway 覆写网关与 fallback 列表（D-104 P2 U1，Connect 前由 brokerMgr 调用）。
+// MT4 单节点无 fallback，fb 参数忽略（同 MT5 签名对称）。
+func (a *MT4Adapter) SetGateway(g string, fb []string) {
+	a.gateway = g
+	_ = fb
 }
 
 // SetSymbolMap 设置 brokerSymbol → canonical 映射（§3.2）。
@@ -90,19 +104,10 @@ func (a *MT4Adapter) Connect(ctx context.Context) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	gateway := "mt4grpc.mtapi.io:443"
-	tlsCfg := &tls.Config{MinVersion: tls.VersionTLS13}
-	conn, err := grpc.DialContext(ctx, gateway,
-		grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)),
-		grpc.WithBlock(),
-		grpc.WithKeepaliveParams(keepalive.ClientParameters{
-			Time:                30 * time.Second,
-			Timeout:             10 * time.Second,
-			PermitWithoutStream: true,
-		}),
-	)
+	targets := append([]string{a.gateway}, a.gatewayFallbacks...)
+	conn, err := dialGateways(ctx, "mt4", a.venue, targets)
 	if err != nil {
-		return fmt.Errorf("mt4 dial: %w", err)
+		return err
 	}
 	a.conn = conn
 	a.connMgr = mt4pb.NewConnectionClient(conn)

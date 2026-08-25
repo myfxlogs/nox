@@ -2,7 +2,6 @@ package adapter
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"log"
 	"strconv"
@@ -15,8 +14,6 @@ import (
 	"arb/internal/fact"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -38,6 +35,10 @@ type MT5Adapter struct {
 	trading mt5pb.TradingClient
 	token   string
 
+	// D-104 P2 U1：网关节点启动级 failover（默认值=现硬编码，SetGateway 覆写）。
+	gateway          string
+	gatewayFallbacks []string
+
 	symMap atomic.Pointer[map[string]string] // brokerSymbol → canonical
 
 	// MarginSink margin fact 下沉（D-099 事件驱动化）：由 main 经 BrokerManager 注入
@@ -49,6 +50,9 @@ type MT5Adapter struct {
 	// （MarginSink 同模式）。nil = 未注入（测试/未接线），runOrderEventSource 安全 no-op。
 	OrderEventSink func(bus.OrderEvent)
 
+	// AlertSink 断流分级告警下沉（D-104 P2 U2，MarginSink 同模式三点注入链）。nil = 未注入（no-op）。
+	AlertSink func(level, msg string)
+
 	// D-100：订阅集镜像（mtapi 会话订阅状态在网关侧，adapter 必须镜像才能 OnQuote 流
 	// 重连后恢复订阅）。subMu 保护并发 Resubscribe 与流重连的 resubscribeAll。
 	subMu  sync.Mutex
@@ -56,6 +60,8 @@ type MT5Adapter struct {
 
 	// D-100：OnQuote 流重连退避档位（成功消费一帧后重置）；复用 marginReconnectBackoff 序列。
 	quoteReconIdx int
+	// D-104 P2 U2：封顶档 episode 告警去重（成功帧重置，连续封顶只告警一次）。
+	quoteAlerted bool
 
 	stopCtx    context.Context
 	stopCancel context.CancelFunc
@@ -66,15 +72,23 @@ type MT5Adapter struct {
 func NewMT5Adapter(venue, host, server string, port int32, user int64, pass string) *MT5Adapter {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &MT5Adapter{
-		venue:      venue,
-		host:       host,
-		port:       port,
-		user:       user,
-		pass:       pass,
-		server:     server,
-		stopCtx:    ctx,
-		stopCancel: cancel,
+		venue:            venue,
+		host:             host,
+		port:             port,
+		user:             user,
+		pass:             pass,
+		server:           server,
+		gateway:          "mt5grpc3.mtapi.io:443",
+		gatewayFallbacks: []string{"mt5grpc1.mtapi.io:443", "mt5grpc4.mtapi.io:443", "mt5grpc2.mtapi.io:443"},
+		stopCtx:          ctx,
+		stopCancel:       cancel,
 	}
+}
+
+// SetGateway 覆写网关与 fallback 列表（D-104 P2 U1，Connect 前由 brokerMgr 调用）。
+func (a *MT5Adapter) SetGateway(g string, fb []string) {
+	a.gateway = g
+	a.gatewayFallbacks = fb
 }
 
 // SetSymbolMap 设置 brokerSymbol → canonical 映射。
@@ -100,19 +114,10 @@ func (a *MT5Adapter) Connect(ctx context.Context) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	gateway := "mt5grpc3.mtapi.io:443"
-	tlsCfg := &tls.Config{MinVersion: tls.VersionTLS13}
-	conn, err := grpc.DialContext(ctx, gateway,
-		grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)),
-		grpc.WithBlock(),
-		grpc.WithKeepaliveParams(keepalive.ClientParameters{
-			Time:                30 * time.Second,
-			Timeout:             10 * time.Second,
-			PermitWithoutStream: true,
-		}),
-	)
+	targets := append([]string{a.gateway}, a.gatewayFallbacks...)
+	conn, err := dialGateways(ctx, "mt5", a.venue, targets)
 	if err != nil {
-		return fmt.Errorf("mt5 dial: %w", err)
+		return err
 	}
 	a.conn = conn
 	a.connMgr = mt5pb.NewConnectionClient(conn)

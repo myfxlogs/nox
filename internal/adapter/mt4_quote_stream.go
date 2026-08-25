@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -115,15 +116,22 @@ func (a *MT4Adapter) consumeQuoteFrames(ctx context.Context, stream mt4pb.Stream
 			Ask:         q.GetAsk(),
 			Time:        ts,
 		}
-		a.quoteReconIdx = 0
+		a.quoteReconIdx = 0    // 成功消费一帧 → 重置重连退避档位
+		a.quoteAlerted = false // D-104 P2 U2：成功帧重置 episode 告警
 	}
 }
 
 // quoteReconnectBackoff OnQuote 流重连退避（复用 marginReconnectBackoff，同 MT5）。
+// D-104 P2 U2：封顶档 episode 告警（去重，成功帧后重置）。
 func (a *MT4Adapter) quoteReconnectBackoff(ctx context.Context) {
 	idx := a.quoteReconIdx
-	if idx >= len(marginReconnectBackoff) {
+	capped := idx >= len(marginReconnectBackoff)
+	if capped {
 		idx = len(marginReconnectBackoff) - 1
+		if !a.quoteAlerted && a.AlertSink != nil {
+			a.quoteAlerted = true
+			a.AlertSink("warn", fmt.Sprintf("mt4:%s quote stream unstable: %d consecutive reconnects", a.venue, a.quoteReconIdx))
+		}
 	}
 	d := marginReconnectBackoff[idx]
 	a.quoteReconIdx++

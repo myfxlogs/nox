@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -121,16 +122,23 @@ func (a *MT5Adapter) consumeQuoteFrames(ctx context.Context, stream mt5pb.Stream
 			Ask:         q.GetAsk(),
 			Time:        ts,
 		}
-		a.quoteReconIdx = 0 // 成功消费一帧 → 重置重连退避档位
+		a.quoteReconIdx = 0    // 成功消费一帧 → 重置重连退避档位
+		a.quoteAlerted = false // D-104 P2 U2：成功帧重置 episode 告警
 	}
 }
 
 // quoteReconnectBackoff OnQuote 流重连退避（复用 marginReconnectBackoff 1s/5s/30s，同因同退避）。
-// 封顶后保持末档；ctx 取消立即返回。
+// 封顶后保持末档；ctx 取消立即返回。D-104 P2 U2：封顶档 episode 告警（去重，成功帧后重置）。
 func (a *MT5Adapter) quoteReconnectBackoff(ctx context.Context) {
 	idx := a.quoteReconIdx
-	if idx >= len(marginReconnectBackoff) {
+	capped := idx >= len(marginReconnectBackoff)
+	if capped {
 		idx = len(marginReconnectBackoff) - 1
+		// D-104 P2 U2：封顶档 episode 告警（连续封顶只告警一次，成功帧后 quoteAlerted 重置可再告）。
+		if !a.quoteAlerted && a.AlertSink != nil {
+			a.quoteAlerted = true
+			a.AlertSink("warn", fmt.Sprintf("mt5:%s quote stream unstable: %d consecutive reconnects", a.venue, a.quoteReconIdx))
+		}
 	}
 	d := marginReconnectBackoff[idx]
 	a.quoteReconIdx++
