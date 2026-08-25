@@ -6,73 +6,15 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
 )
-
-// binanceOrderStatus 查询 Binance 订单成交（perp /fapi/v1/order；spot /api/v3/order，签名 GET）。
-func (e *CEXExecutor) binanceOrderStatus(ctx context.Context, symbol, ordID string) (struct {
-	Status      string `json:"status"`
-	ExecutedQty string `json:"executedQty"`
-	AvgPrice    string `json:"avgPrice"`
-}, error) {
-	endpoint := "/api/v3/order"
-	if e.venueType == "perp" {
-		endpoint = "/fapi/v1/order"
-	}
-	params := url.Values{}
-	params.Set("symbol", symbol)
-	params.Set("orderId", ordID)
-	body, err := e.signedBinanceRequest(ctx, "GET", endpoint, params)
-	if err != nil {
-		return struct {
-			Status      string `json:"status"`
-			ExecutedQty string `json:"executedQty"`
-			AvgPrice    string `json:"avgPrice"`
-		}{}, err
-	}
-	return struct {
-		Status      string `json:"status"`
-		ExecutedQty string `json:"executedQty"`
-		AvgPrice    string `json:"avgPrice"`
-	}{Status: asString(body["status"]), ExecutedQty: asString(body["executedQty"]), AvgPrice: asString(body["avgPrice"])}, nil
-}
-
-// binanceOrderAvgPrice 从 Binance 下单响应计算成交均价（D-059 实测：下单响应无 avgPrice 字段，
-// 只有 fills 数组 + cummulativeQuoteQty；price 字段 MARKET 单恒 0。均价 = Σ(fill.price×qty)/Σqty，
-// 无 fills 时回退 cummulativeQuoteQty/executedQty）。
-func binanceOrderAvgPrice(body map[string]any, qty float64) float64 {
-	if fills, ok := body["fills"].([]any); ok && len(fills) > 0 {
-		var sumQty, sumVal float64
-		for _, f := range fills {
-			m, ok := f.(map[string]any)
-			if !ok {
-				continue
-			}
-			p, _ := strconv.ParseFloat(asString(m["price"]), 64)
-			q, _ := strconv.ParseFloat(asString(m["qty"]), 64)
-			sumVal += p * q
-			sumQty += q
-		}
-		if sumQty > 0 {
-			return sumVal / sumQty
-		}
-	}
-	if cqqStr, ok := body["cummulativeQuoteQty"].(string); ok && qty > 0 {
-		if cqq, err := strconv.ParseFloat(cqqStr, 64); err == nil {
-			return cqq / qty
-		}
-	}
-	return 0
-}
 
 // asString 容错取 string 字段（json.Number / float64 / string 都接受）。
 func asString(v any) string {
@@ -196,40 +138,6 @@ func (e *CEXExecutor) OKXPositions(ctx context.Context, instID string) ([]OKXPos
 	return out, nil
 }
 
-// signedBinanceRequest 发 Binance 签名请求（HMAC hex + X-MBX-APIKEY）。
-func (e *CEXExecutor) signedBinanceRequest(ctx context.Context, method, endpoint string, params url.Values) (map[string]any, error) {
-	params.Set("timestamp", strconv.FormatInt(time.Now().UnixMilli(), 10))
-	params.Set("recvWindow", "5000")
-
-	signature := binanceSign(e.apiSecret, params.Encode())
-	params.Set("signature", signature)
-
-	u := e.baseURL + endpoint + "?" + params.Encode()
-	req, err := http.NewRequestWithContext(ctx, method, u, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("X-MBX-APIKEY", e.apiKey)
-
-	resp, err := e.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("http %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
-	}
-	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
-		return nil, fmt.Errorf("json: %w", err)
-	}
-	return m, nil
-}
-
 // get 发带签名头的 GET 请求并读回 body（非 200 → 错误带响应体）。
 func (e *CEXExecutor) get(ctx context.Context, url string, headers http.Header) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -282,52 +190,9 @@ func (e *CEXExecutor) post(ctx context.Context, url, bodyStr string, headers htt
 	return data, nil
 }
 
-// binanceSign HMAC-SHA256 hex 签名（与 reconcile 同法，各包独立实现——算法非事实，P3 不适用）。
-func binanceSign(secret, query string) string {
-	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write([]byte(query))
-	return hex.EncodeToString(mac.Sum(nil))
-}
-
 // okxSign OKX 签名：base64(HMAC-SHA256(secret, ts+method+path+body))（与 reconcile 同法）。
 func okxSign(secret, prehash string) string {
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write([]byte(prehash))
 	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
-}
-
-// binanceDualSide 探测 Binance perp 账户双仓模式（GET /fapi/v1/positionSide/dual）。
-// 结果缓存于 executor 实例（dualSide/dualSideProbed），避免每单探测。
-// 探测失败 → 返回 (false, false)，调用方保守按 hedge 处理（D-108 P2 T1）。
-// dualSide=true=hedge（双仓），dualSide=false=one-way（单仓）。
-func (e *CEXExecutor) binanceDualSide(ctx context.Context) (dual, probed bool) {
-	e.dualSideMu.Lock()
-	defer e.dualSideMu.Unlock()
-	if e.dualSideProbed {
-		return e.dualSide, true
-	}
-	params := url.Values{}
-	body, err := e.signedBinanceRequest(ctx, "GET", "/fapi/v1/positionSide/dual", params)
-	if err != nil {
-		log.Printf("[cex] binance dualSide probe failed venue=%s: %v（保守按 hedge 处理）", e.venue, err)
-		return false, false // 未探测成功，保守 hedge
-	}
-	dual, _ = body["dualSidePosition"].(bool)
-	e.dualSide = dual
-	e.dualSideProbed = true
-	log.Printf("[cex] binance dualSide probe venue=%s dual=%v", e.venue, dual)
-	return dual, true
-}
-
-// binancePosSide 将内部 PositionSide（long/short 或 BUY/SELL）映射为 Binance positionSide 参数值。
-// Binance hedge 模式 positionSide 仅接受 "LONG"/"SHORT"（大写）。
-func binancePosSide(ps string) string {
-	switch strings.ToLower(ps) {
-	case "long", "buy":
-		return "LONG"
-	case "short", "sell":
-		return "SHORT"
-	default:
-		return strings.ToUpper(ps)
-	}
 }

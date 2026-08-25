@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -73,100 +72,6 @@ func (e *CEXExecutor) PlaceOrder(ctx context.Context, o Order) (Fill, error) {
 	default:
 		return Fill{}, fmt.Errorf("cex executor: unsupported venue %q", e.venue)
 	}
-}
-
-// placeBinance 下单：spot /api/v3/order、perp /fapi/v1/order，HMAC-SHA256 hex 签名 + X-MBX-APIKEY。
-// D-108 P2 T1：perp 平仓补 positionSide（hedge 模式）/ reduceOnly（one-way 模式）。
-func (e *CEXExecutor) placeBinance(ctx context.Context, o Order) (Fill, error) {
-	side := "BUY"
-	if o.Side == "SELL" {
-		side = "SELL"
-	}
-	params := url.Values{}
-	params.Set("symbol", o.Symbol)
-	params.Set("side", side)
-	params.Set("type", "MARKET")
-	params.Set("quantity", strconv.FormatFloat(o.Qty, 'f', -1, 64))
-
-	endpoint := "/api/v3/order"
-	if e.venueType == "perp" {
-		endpoint = "/fapi/v1/order"
-		// D-108 P2 T1：perp 平仓补 positionSide/reduceOnly。
-		// hedge 模式 → positionSide=原持仓侧（与 OKX 同机制，调用方传 Order.PositionSide）；
-		// one-way 模式 → reduceOnly=true（market reduce，防开反向敞口）。
-		// 探测失败 → 保守按 hedge 处理（传 positionSide，被拒则 critical 告警）。
-		dual, probed := e.binanceDualSide(ctx)
-		if !probed {
-			// 探测失败：保守 hedge（有 positionSide 就传，无则不传让 venue 报错）
-			if o.PositionSide != "" {
-				params.Set("positionSide", binancePosSide(o.PositionSide))
-			}
-		} else if dual {
-			// hedge 模式：必须带 positionSide
-			ps := o.PositionSide
-			if ps == "" {
-				ps = "long"
-				if side == "SELL" {
-					ps = "short"
-				}
-			}
-			params.Set("positionSide", binancePosSide(ps))
-		} else {
-			// one-way 模式：reduceOnly=true（平仓减仓，防开反向）
-			params.Set("reduceOnly", "true")
-		}
-	}
-
-	body, err := e.signedBinanceRequest(ctx, "POST", endpoint, params)
-	if err != nil {
-		e.alertCritical(o, fmt.Sprintf("binance perp close rejected pos=%d symbol=%s side=%s: %v", o.PosID, o.Symbol, side, err))
-		return Fill{}, fmt.Errorf("cex order: %w", err)
-	}
-
-	execType, _ := body["executedQty"].(string)
-	orderID, _ := body["orderId"].(json.Number)
-	if orderID == "" {
-		if id, ok := body["orderId"].(float64); ok {
-			orderID = json.Number(strconv.FormatFloat(id, 'f', 0, 64))
-		}
-	}
-
-	qty, _ := strconv.ParseFloat(execType, 64)
-	avgPrice := binanceOrderAvgPrice(body, qty)
-
-	if e.venueType == "perp" && (qty <= 0 || avgPrice <= 0) {
-		// 合约市价单 POST 可能先于撮合返回（status=NEW/executedQty=0，demo-fapi 实测恒如此，
-		// 同 D-059 实施修正② 的 OKX 教训；spot 市价单响应同步成交，无需轮询）→ 轮询订单状态
-		// 拿真实成交，防生产记 0 qty 持仓。
-		for range 5 {
-			time.Sleep(100 * time.Millisecond)
-			st, err := e.binanceOrderStatus(ctx, o.Symbol, string(orderID))
-			if err != nil {
-				return Fill{}, err
-			}
-			if st.Status == "CANCELED" || st.Status == "REJECTED" || st.Status == "EXPIRED" {
-				// 未成交即被取消/拒绝 → 平仓失败，如实报错而非返回 qty=0 假装成交。
-				msg := fmt.Sprintf("binance order %s: status=%s executedQty=%s（未成交，订单被取消/拒绝）",
-					orderID, st.Status, st.ExecutedQty)
-				e.alertCritical(o, msg)
-				return Fill{}, fmt.Errorf("%s", msg)
-			}
-			if st.Status == "FILLED" || st.Status == "PARTIALLY_FILLED" {
-				q, perr := strconv.ParseFloat(st.ExecutedQty, 64)
-				p, aerr := strconv.ParseFloat(st.AvgPrice, 64)
-				if perr == nil && aerr == nil && q > 0 && p > 0 {
-					return Fill{OrderID: string(orderID), Price: p, Qty: q, Ts: time.Now()}, nil
-				}
-			}
-		}
-	}
-	// 超时仍未拿到成交：如实返回已下订单 + 当前已知 qty（可 0），不伪造。
-	return Fill{
-		OrderID: string(orderID),
-		Price:   avgPrice,
-		Qty:     qty,
-		Ts:      time.Now(),
-	}, nil
 }
 
 // placeOKX 下单：POST /api/v5/trade/order（OK-ACCESS-* 四头，SIGN=base64(HMAC-SHA256(secret,

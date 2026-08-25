@@ -75,10 +75,15 @@ func TestCEXExecutor_BinanceOrder(t *testing.T) {
 // TestCEXExecutor_BinancePerpEndpoint 验证 perp 走 /fapi/v1/order。
 func TestCEXExecutor_BinancePerpEndpoint(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// D-108 P2 T1：perp 下单前先探测双仓模式（/fapi/v1/positionSide/dual）
+		if r.URL.Path == "/fapi/v1/positionSide/dual" {
+			_, _ = io.WriteString(w, `{"dualSidePosition":false}`)
+			return
+		}
 		if r.URL.Path != "/fapi/v1/order" {
 			t.Errorf("want /fapi/v1/order, got %s", r.URL.Path)
 		}
-		_, _ = io.WriteString(w, `{"orderId":77,"executedQty":"1.0","avgPrice":"0.3342"}`)
+		_, _ = io.WriteString(w, `{"orderId":77,"executedQty":"1.0","fills":[{"price":"0.3342","qty":"1.0"}]}`)
 	}))
 	defer srv.Close()
 
