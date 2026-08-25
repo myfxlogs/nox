@@ -45,6 +45,11 @@ func (m *BrokerManager) SwapFacts(ctx context.Context) ([]fact.Fact, error) {
 	hasCold := false
 	for _, fn := range swapFns {
 		fs, err := fn(ctx)
+		// D-104 P0 返修③ R-c1：SwapFacts 冷符号时 facts 与 ErrSwapColdStart 同返——
+		// 先 append facts 再 continue，冷符号等下一轮补，其余 facts 立即落地。
+		if fs != nil {
+			facts = append(facts, fs...)
+		}
 		if err != nil {
 			if errors.Is(err, adapter.ErrSwapColdStart) {
 				hasCold = true
@@ -52,7 +57,6 @@ func (m *BrokerManager) SwapFacts(ctx context.Context) ([]fact.Fact, error) {
 			errs = append(errs, err.Error())
 			continue
 		}
-		facts = append(facts, fs...)
 	}
 	m.mu.Lock()
 	retryCold := false

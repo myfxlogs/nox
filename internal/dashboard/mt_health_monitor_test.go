@@ -84,6 +84,7 @@ func TestMTHealth_FirstTickSilent(t *testing.T) {
 }
 
 // TestMTHealth_StateTransitions healthy→warn→crit→recover 各转换恰一次告警/持续同态零重复。
+// 注：swap/margin 无数据=持续 crit，R-c3 后 tick2 首次 crit 告警（!ok → realert），之后窗口内不重发。
 func TestMTHealth_StateTransitions(t *testing.T) {
 	// 抑制日志噪音
 	log.SetOutput(os.NewFile(0, os.DevNull))
@@ -97,50 +98,58 @@ func TestMTHealth_StateTransitions(t *testing.T) {
 
 	now := time.Now()
 
-	// tick1: healthy（首 tick 静默）
+	// tick1: quote healthy（首 tick 静默）；swap/margin 无数据=crit（首 tick 静默）
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now})
 	mon.poll(context.Background())
 	if got := store.alertCount(); got != 0 {
 		t.Fatalf("tick1 (first tick, healthy): want 0 alerts, got %d", got)
 	}
 
-	// tick2: 报价 6m 前 → warn（healthy→warn 转换，1 alert）
+	// tick2: 报价 6m 前 → warn（转换，1 alert）+ swap/margin 持续 crit 首次告警（R-c3 !ok → 2 alerts）
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now.Add(-6 * time.Minute)})
 	mon.poll(context.Background())
-	if got := store.alertCount(); got != 1 {
-		t.Fatalf("tick2 (warn transition): want 1 alert, got %d", got)
+	if got := store.alertCount(); got != 3 {
+		t.Fatalf("tick2 (warn transition + swap/margin crit realert): want 3 alerts, got %d", got)
 	}
 	alerts := store.snapshot()
-	if alerts[0].level != "warn" {
-		t.Errorf("tick2: want warn, got %s", alerts[0].level)
+	// 1 warn (quote) + 2 critical (swap/margin sustained crit realert)
+	levels := map[string]int{}
+	for _, a := range alerts {
+		levels[a.level]++
+	}
+	if levels["warn"] != 1 {
+		t.Errorf("tick2: want 1 warn, got %d", levels["warn"])
+	}
+	if levels["critical"] != 2 {
+		t.Errorf("tick2: want 2 critical (swap+margin realert), got %d", levels["critical"])
 	}
 
-	// tick3: 报价 31m 前 → crit（warn→crit 转换，1 alert）
+	// tick3: 报价 31m 前 → crit（转换，1 alert）；swap/margin 持续 crit 窗口内不重发
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now.Add(-31 * time.Minute)})
 	mon.poll(context.Background())
-	if got := store.alertCount(); got != 2 {
-		t.Fatalf("tick3 (crit transition): want 2 alerts, got %d", got)
+	if got := store.alertCount(); got != 4 {
+		t.Fatalf("tick3 (crit transition): want 4 alerts, got %d", got)
 	}
 	alerts = store.snapshot()
-	if alerts[1].level != "critical" {
-		t.Errorf("tick3: want critical, got %s", alerts[1].level)
+	if alerts[3].level != "critical" {
+		t.Errorf("tick3: want critical, got %s", alerts[3].level)
 	}
 
-	// tick4: 报价仍 31m 前 → crit（持续同态，0 new alerts）
+	// tick4: 报价仍 31m 前 → crit（持续同态，窗口内不重发）；swap/margin 同理
 	mon.poll(context.Background())
-	if got := store.alertCount(); got != 2 {
-		t.Fatalf("tick4 (crit sustained): want 2 alerts (no new), got %d", got)
+	if got := store.alertCount(); got != 4 {
+		t.Fatalf("tick4 (crit sustained): want 4 alerts (no new), got %d", got)
 	}
 
 	// tick5: 报价恢复 fresh → healthy（crit→healthy 转换，1 info alert）
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now})
 	mon.poll(context.Background())
-	if got := store.alertCount(); got != 3 {
-		t.Fatalf("tick5 (recover): want 3 alerts, got %d", got)
+	if got := store.alertCount(); got != 5 {
+		t.Fatalf("tick5 (recover): want 5 alerts, got %d", got)
 	}
 	alerts = store.snapshot()
-	if alerts[2].level != "info" {
-		t.Errorf("tick5: want info recovered, got %s", alerts[2].level)
+	if alerts[4].level != "info" {
+		t.Errorf("tick5: want info recovered, got %s", alerts[4].level)
 	}
 }
 
@@ -180,6 +189,89 @@ func TestMTHealth_SwapFactStale(t *testing.T) {
 	}
 	if !strings.Contains(alerts[0].msg, "swap") {
 		t.Errorf("tick2: want swap metric, got msg=%s", alerts[0].msg)
+	}
+}
+
+// TestMTHealth_CritRealert crit 持续 >30min 重发一条（R-c3 去重窗口）。
+func TestMTHealth_CritRealert(t *testing.T) {
+	log.SetOutput(os.NewFile(0, os.DevNull))
+	defer log.SetOutput(os.Stderr)
+
+	store := newFakeHealthStore()
+	qbus := bus.New()
+	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vA:mt5"}}}
+	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+
+	now := time.Now()
+	// tick1: 全 healthy（首 tick 静默）——报价+swap+margin 都 fresh
+	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now})
+	store.setFacts(fact.KindSwapLong, []fact.Fact{{Kind: fact.KindSwapLong, Venue: "vA", Symbol: "AUDJPY", Value: 5, Ts: now, Src: "mt5"}})
+	store.setFacts(fact.KindSwapShort, []fact.Fact{{Kind: fact.KindSwapShort, Venue: "vA", Symbol: "AUDJPY", Value: -3, Ts: now, Src: "mt5"}})
+	store.setFacts(fact.KindInitMarginRate, []fact.Fact{{Kind: fact.KindInitMarginRate, Venue: "vA", Symbol: "vA", Value: 0.01, Ts: now, Src: "mt5"}})
+	mon.poll(context.Background())
+	if got := store.alertCount(); got != 0 {
+		t.Fatalf("tick1 (first tick): want 0, got %d", got)
+	}
+
+	// tick2: 报价 31m 前 → quote crit（转换，1 alert；swap/margin 仍 healthy）
+	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now.Add(-31 * time.Minute)})
+	mon.poll(context.Background())
+	if got := store.alertCount(); got != 1 {
+		t.Fatalf("tick2 (crit transition): want 1, got %d", got)
+	}
+
+	// tick3: 持续 crit，窗口内（<30min）→ 不重发
+	mon.poll(context.Background())
+	if got := store.alertCount(); got != 1 {
+		t.Fatalf("tick3 (crit sustained <30min): want 1 (no realert), got %d", got)
+	}
+
+	// tick4: 模拟窗口过期——手动回拨 lastCritAlert 到 31min 前
+	key := "vA:quote"
+	mon.mu.Lock()
+	mon.lastCritAlert[key] = time.Now().Add(-31 * time.Minute)
+	mon.mu.Unlock()
+	mon.poll(context.Background())
+	if got := store.alertCount(); got != 2 {
+		t.Fatalf("tick4 (crit sustained >30min): want 2 (realert), got %d", got)
+	}
+	alerts := store.snapshot()
+	if alerts[1].level != "critical" {
+		t.Errorf("tick4: want critical, got %s", alerts[1].level)
+	}
+}
+
+// TestMTHealth_WarnSustainedNoRealert warn 持续同态不重发（R-c3 只对 crit 重告警）。
+func TestMTHealth_WarnSustainedNoRealert(t *testing.T) {
+	log.SetOutput(os.NewFile(0, os.DevNull))
+	defer log.SetOutput(os.Stderr)
+
+	store := newFakeHealthStore()
+	qbus := bus.New()
+	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vA:mt5"}}}
+	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+
+	now := time.Now()
+	// tick1: 全 healthy（首 tick 静默）
+	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now})
+	store.setFacts(fact.KindSwapLong, []fact.Fact{{Kind: fact.KindSwapLong, Venue: "vA", Symbol: "AUDJPY", Value: 5, Ts: now, Src: "mt5"}})
+	store.setFacts(fact.KindSwapShort, []fact.Fact{{Kind: fact.KindSwapShort, Venue: "vA", Symbol: "AUDJPY", Value: -3, Ts: now, Src: "mt5"}})
+	store.setFacts(fact.KindInitMarginRate, []fact.Fact{{Kind: fact.KindInitMarginRate, Venue: "vA", Symbol: "vA", Value: 0.01, Ts: now, Src: "mt5"}})
+	mon.poll(context.Background())
+
+	// tick2: 报价 6m 前 → quote warn（转换，1 alert；swap/margin 仍 healthy）
+	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now.Add(-6 * time.Minute)})
+	mon.poll(context.Background())
+	if got := store.alertCount(); got != 1 {
+		t.Fatalf("tick2 (warn transition): want 1, got %d", got)
+	}
+
+	// tick3: 持续 warn → 仍不重发（warn 不受 R-c3 影响）
+	mon.poll(context.Background())
+	if got := store.alertCount(); got != 1 {
+		t.Fatalf("tick3 (warn sustained): want 1 (no realert for warn), got %d", got)
 	}
 }
 

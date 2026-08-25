@@ -57,25 +57,27 @@ type MTHealthMonitor struct {
 	quoteWarn, quoteCrit time.Duration
 	factWarn, factCrit   time.Duration
 
-	mu        sync.Mutex
-	states    map[string]mtHealthState // venue → 状态
-	firstTick bool                     // 首 tick 只记状态不告警
+	mu            sync.Mutex
+	states        map[string]mtHealthState // venue → 状态
+	firstTick     bool                     // 首 tick 只记状态不告警
+	lastCritAlert map[string]time.Time     // D-104 P0 返修③ R-c3：venue:metric → 上次 crit 告警时间
 }
 
 // NewMTHealthMonitor 创建监控（D-104 P0）。
 func NewMTHealthMonitor(venues HealthVenueSource, qbus *bus.QuoteBus, store HealthFactStore, tick time.Duration,
 	quoteWarn, quoteCrit, factWarn, factCrit time.Duration) *MTHealthMonitor {
 	return &MTHealthMonitor{
-		venues:    venues,
-		qbus:      qbus,
-		store:     store,
-		tick:      tick,
-		quoteWarn: quoteWarn,
-		quoteCrit: quoteCrit,
-		factWarn:  factWarn,
-		factCrit:  factCrit,
-		states:    make(map[string]mtHealthState),
-		firstTick: true,
+		venues:        venues,
+		qbus:          qbus,
+		store:         store,
+		tick:          tick,
+		quoteWarn:     quoteWarn,
+		quoteCrit:     quoteCrit,
+		factWarn:      factWarn,
+		factCrit:      factCrit,
+		states:        make(map[string]mtHealthState),
+		firstTick:     true,
+		lastCritAlert: make(map[string]time.Time),
 	}
 }
 
@@ -234,25 +236,26 @@ func (m *MTHealthMonitor) collectFactAges(ctx context.Context, now time.Time) (s
 	return
 }
 
-// classifyAge 按阈值分类三态。age<=0（无数据）→ crit（从未采集=异常）。
-func classifyAge(age time.Duration, warn, crit time.Duration) mtHealthMetric {
-	if age <= 0 {
-		return metricCrit // 无数据=异常
-	}
-	if age >= crit {
-		return metricCrit
-	}
-	if age >= warn {
-		return metricWarn
-	}
-	return metricHealthy
-}
+// critRealertInterval crit 持续同态重告警去重窗口（D-104 P0 返修③ R-c3）。
+// 持续 crit 每 30min 重发一条（有界，不洪水）；堵 boot 首 tick 静默边角——
+// boot 时真缺失首 tick 静默记 crit，tick2（1min 后）转换式告警触发，之后持续 crit 每 30min 一条。
+const critRealertInterval = 30 * time.Minute
 
 // maybeAlert 状态转换时插告警（healthy→warn/crit 插对应级别；stale→healthy 插 info recovered）。
-// 持续同态不重复插（防洪水）。
+// 持续同态不重复插（防洪水）——但 crit 持续 >30min 重发一条（R-c3，堵首 tick 静默边角）。
 func (m *MTHealthMonitor) maybeAlert(ctx context.Context, venue, metric string, prev, cur mtHealthMetric, age time.Duration) {
 	if prev == cur {
-		return // 无转换
+		// R-c3：持续 crit 超过去重窗口 → 重发一条（warn/healthy 维持纯转换语义不变）。
+		if cur != metricCrit {
+			return
+		}
+		key := venue + ":" + metric
+		m.mu.Lock()
+		last, ok := m.lastCritAlert[key]
+		m.mu.Unlock()
+		if ok && time.Since(last) < critRealertInterval {
+			return // 窗口内不重发
+		}
 	}
 	var level, msg string
 	switch cur {
@@ -266,27 +269,14 @@ func (m *MTHealthMonitor) maybeAlert(ctx context.Context, venue, metric string, 
 		level = "critical"
 		msg = "mt-health " + venue + " " + metric + " critical (age=" + durStr(age) + ")"
 	}
+	if cur == metricCrit {
+		key := venue + ":" + metric
+		m.mu.Lock()
+		m.lastCritAlert[key] = time.Now()
+		m.mu.Unlock()
+	}
 	if err := m.store.InsertAlert(ctx, nil, level, msg); err != nil {
 		log.Printf("[mt-health] alert insert: %v", err)
 	}
 	log.Printf("[mt-health] %s: %s", level, msg)
-}
-
-// venueFromKey 从 "{venue}:{venueType}" 提取 venue 部分。
-func venueFromKey(vk string) string {
-	if i := strings.IndexByte(vk, ':'); i >= 0 {
-		return vk[:i]
-	}
-	return vk
-}
-
-// durStr 时间格式化（<1s 显示秒精度，否则分钟级）。
-func durStr(d time.Duration) string {
-	if d <= 0 {
-		return "n/a"
-	}
-	if d < time.Minute {
-		return d.Round(time.Second).String()
-	}
-	return d.Round(time.Minute).String()
 }
