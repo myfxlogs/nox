@@ -315,3 +315,87 @@ func TestMTHealth_NoDataCrit(t *testing.T) {
 		}
 	}
 }
+
+// TestMTHealth_CEXVenueNoSwapMarginAlerts R-d2：CEX-like venue（有报价、无 AccountQuerier）
+// → 不产生 swap/margin 告警（含 R-c3 重发路径）；quote 告警照常。
+func TestMTHealth_CEXVenueNoSwapMarginAlerts(t *testing.T) {
+	log.SetOutput(os.NewFile(0, os.DevNull))
+	defer log.SetOutput(os.Stderr)
+
+	store := newFakeHealthStore()
+	qbus := bus.New()
+	// CEX venue "binance" 有报价但无 AccountQuerier（不在 mtSet）
+	vs := &fakeVenueSource{queriers: nil}
+	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+
+	now := time.Now()
+	// tick1: fresh（首 tick 静默）
+	qbus.Publish(bus.Quote{Symbol: "BTCUSDT", Venue: "binance", Bid: 100, Ask: 100, Time: now})
+	mon.poll(context.Background())
+	if got := store.alertCount(); got != 0 {
+		t.Fatalf("tick1 (first tick): want 0, got %d", got)
+	}
+
+	// tick2: 报价 31m 前 → quote crit（转换，1 alert）；swap/margin 不适用 CEX → 0 alerts
+	qbus.Publish(bus.Quote{Symbol: "BTCUSDT", Venue: "binance", Bid: 100, Ask: 100, Time: now.Add(-31 * time.Minute)})
+	mon.poll(context.Background())
+	if got := store.alertCount(); got != 1 {
+		t.Fatalf("tick2 (quote crit only): want 1 alert, got %d", got)
+	}
+	alerts := store.snapshot()
+	if alerts[0].level != "critical" || !strings.Contains(alerts[0].msg, "quote") {
+		t.Errorf("tick2: want quote critical, got %s: %s", alerts[0].level, alerts[0].msg)
+	}
+
+	// tick3: 持续 quote crit，回拨 lastCritAlert 31min → quote 重发 1 条；
+	// swap/margin 即使 R-c3 重发路径也不触发（非 MT venue 不进 maybeAlert）
+	mon.mu.Lock()
+	mon.lastCritAlert["binance:quote"] = time.Now().Add(-31 * time.Minute)
+	mon.mu.Unlock()
+	mon.poll(context.Background())
+	if got := store.alertCount(); got != 2 {
+		t.Fatalf("tick3 (quote realert): want 2, got %d", got)
+	}
+	// 确认无 swap/margin 告警
+	for _, a := range store.snapshot() {
+		if strings.Contains(a.msg, "swap") || strings.Contains(a.msg, "margin") {
+			t.Errorf("CEX venue 不应有 swap/margin 告警，got %s", a.msg)
+		}
+	}
+}
+
+// TestMTHealth_MTVenueSwapCritRegress R-d2：MT venue 无 swap facts → swap crit 告警照旧（R-c3 回归，防误伤真信号）。
+func TestMTHealth_MTVenueSwapCritRegress(t *testing.T) {
+	log.SetOutput(os.NewFile(0, os.DevNull))
+	defer log.SetOutput(os.Stderr)
+
+	store := newFakeHealthStore()
+	qbus := bus.New()
+	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vA:mt5"}}}
+	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+
+	now := time.Now()
+	// tick1: quote fresh + swap/margin fresh（首 tick 静默）
+	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now})
+	store.setFacts(fact.KindSwapLong, []fact.Fact{{Kind: fact.KindSwapLong, Venue: "vA", Symbol: "AUDJPY", Value: 5, Ts: now, Src: "mt5"}})
+	store.setFacts(fact.KindSwapShort, []fact.Fact{{Kind: fact.KindSwapShort, Venue: "vA", Symbol: "AUDJPY", Value: -3, Ts: now, Src: "mt5"}})
+	store.setFacts(fact.KindInitMarginRate, []fact.Fact{{Kind: fact.KindInitMarginRate, Venue: "vA", Symbol: "vA", Value: 0.01, Ts: now, Src: "mt5"}})
+	mon.poll(context.Background())
+	if got := store.alertCount(); got != 0 {
+		t.Fatalf("tick1 (first tick): want 0, got %d", got)
+	}
+
+	// tick2: swap facts 7h 前 → swap crit（转换，1 alert）；quote/margin healthy
+	store.setFacts(fact.KindSwapLong, []fact.Fact{{Kind: fact.KindSwapLong, Venue: "vA", Symbol: "AUDJPY", Value: 5, Ts: now.Add(-7 * time.Hour), Src: "mt5"}})
+	store.setFacts(fact.KindSwapShort, []fact.Fact{{Kind: fact.KindSwapShort, Venue: "vA", Symbol: "AUDJPY", Value: -3, Ts: now.Add(-7 * time.Hour), Src: "mt5"}})
+	mon.poll(context.Background())
+	if got := store.alertCount(); got != 1 {
+		t.Fatalf("tick2 (MT swap crit): want 1 alert, got %d", got)
+	}
+	alerts := store.snapshot()
+	if alerts[0].level != "critical" || !strings.Contains(alerts[0].msg, "swap") {
+		t.Errorf("tick2: want MT swap critical, got %s: %s", alerts[0].level, alerts[0].msg)
+	}
+}

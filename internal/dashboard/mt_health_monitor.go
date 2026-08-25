@@ -113,10 +113,14 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 	for v := range marginAges {
 		venueSet[v] = true
 	}
+	// D-104 P0 返修④ R-d1：MT venue 集合——swap/margin 指标仅适用于 MT venue，
+	// CEX venue 无 swap/margin facts（设计如此），永久 n/a → crit → R-c3 30min 假告警洪水。
+	mtSet := make(map[string]bool)
 	for _, q := range m.venues.AccountQueriers() {
 		v := venueFromKey(q.VenueKey())
 		if v != "" {
 			venueSet[v] = true
+			mtSet[v] = true
 		}
 	}
 
@@ -130,25 +134,35 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 	var logParts []string
 	for v := range venueSet {
 		qa := quoteAges[v]
-		sa := swapAges[v]
-		ma := marginAges[v]
+		isMT := mtSet[v]
+		// quote 指标全 venue 不变；swap/margin 仅 MT venue 分类+告警，非 MT 不分类不告警不存状态。
 		newState := mtHealthState{
 			quote:  classifyAge(qa, m.quoteWarn, m.quoteCrit),
-			swap:   classifyAge(sa, m.factWarn, m.factCrit),
-			margin: classifyAge(ma, m.factWarn, m.factCrit),
+			swap:   metricHealthy,
+			margin: metricHealthy,
+		}
+		sLog, mLog := "-", "-"
+		if isMT {
+			sa := swapAges[v]
+			ma := marginAges[v]
+			newState.swap = classifyAge(sa, m.factWarn, m.factCrit)
+			newState.margin = classifyAge(ma, m.factWarn, m.factCrit)
+			sLog, mLog = durStr(sa), durStr(ma)
 		}
 		newStates[v] = newState
 
-		// 日志行组件
-		logParts = append(logParts, v+"=q:"+durStr(qa)+"/s:"+durStr(sa)+"/m:"+durStr(ma))
+		// 日志行组件（非 MT venue 的 s:/m: 显示 "-"）
+		logParts = append(logParts, v+"=q:"+durStr(qa)+"/s:"+sLog+"/m:"+mLog)
 
 		if firstTick {
 			continue // 首 tick 只记状态不告警
 		}
 		prev := prevStates[v]
 		m.maybeAlert(ctx, v, "quote", prev.quote, newState.quote, qa)
-		m.maybeAlert(ctx, v, "swap", prev.swap, newState.swap, sa)
-		m.maybeAlert(ctx, v, "margin", prev.margin, newState.margin, ma)
+		if isMT {
+			m.maybeAlert(ctx, v, "swap", prev.swap, newState.swap, swapAges[v])
+			m.maybeAlert(ctx, v, "margin", prev.margin, newState.margin, marginAges[v])
+		}
 	}
 
 	m.mu.Lock()
