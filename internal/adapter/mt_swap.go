@@ -152,6 +152,9 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 	slots := make([]swapSlot, len(syms))
 	sem := make(chan struct{}, 8)
 	var wg sync.WaitGroup
+	// D-104 P1 R1：循环前捕获 token，goroutine 内用同一 token（消除 8 路并发无锁读 a.token，
+	// 与 reconnectSession 持 a.mu 写的竞态面；getToken 持锁，同一轮采集语义不变）。
+	tok := a.getToken()
 	for i, ent := range syms {
 		wg.Add(1)
 		sem <- struct{}{}
@@ -162,7 +165,7 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 			brokerSym, canon := ent.brokerSym, ent.canon
 			// S5：派生 per-call 超时，慢符号进 errs 不阻塞整体（parent ctx 不变）。
 			pctx, cancel := context.WithTimeout(a.withSessionMD(ctx), swapPerCallTimeout)
-			resp, err := a.mt5.SymbolParams(pctx, &mt5pb.SymbolParamsRequest{Id: a.token, Symbol: brokerSym})
+			resp, err := a.mt5.SymbolParams(pctx, &mt5pb.SymbolParamsRequest{Id: tok, Symbol: brokerSym})
 			cancel()
 			if err != nil {
 				slot.errs = append(slot.errs, brokerSym+": "+err.Error())
