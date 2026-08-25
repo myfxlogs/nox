@@ -59,6 +59,7 @@ func (s *OrderEventSource) consumeStream(ctx context.Context, sink func(bus.Orde
 		s.reconnectBackoff(ctx)
 		return
 	}
+	log.Printf("[mt5:%s] order-events: subscribed", a.venue)
 	stream, err := a.streams.OnOrderUpdate(sctx, &mt5pb.OnOrderUpdateRequest{Id: a.getToken()})
 	if err != nil {
 		if ctx.Err() != nil {
@@ -68,6 +69,8 @@ func (s *OrderEventSource) consumeStream(ctx context.Context, sink func(bus.Orde
 		s.reconnectBackoff(ctx)
 		return
 	}
+	log.Printf("[mt5:%s] order-events: stream opened", a.venue)
+	firstFrame := true
 	for {
 		if ctx.Err() != nil {
 			return
@@ -85,6 +88,11 @@ func (s *OrderEventSource) consumeStream(ctx context.Context, sink func(bus.Orde
 			}
 			s.reconnectBackoff(ctx)
 			return // 外层循环重订阅 + 重开流
+		}
+		// 首帧标记（含 Update==nil 帧——证明流真活，不只开流成功）。每轮流重开重打一次。
+		if firstFrame {
+			log.Printf("[mt5:%s] order-events: first frame", a.venue)
+			firstFrame = false
 		}
 		// 帧解析：Update == nil → skip（非订单事件帧，如纯余额更新）。
 		upd := resp.GetResult().GetUpdate()
