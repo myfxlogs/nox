@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"arb/internal/notional"
 	"arb/internal/store/pgstore"
 )
 
@@ -53,6 +54,30 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 			return err
 		}
 		log.Printf("[exec] position %d CLOSING update: %v", posID, err)
+	}
+
+	// D-105 T2：计价币→USD 换算——查 position 取 canonical → notional.QuoteCcy → fxResolver.USDPer。
+	// quoteCcy=""（未知，指数/商品 CFD）或 "USD" → fx=1（既有约定）；非 USD 且 fx 缺失 → fx=0 + critical alert。
+	pos, err := p.store.GetPosition(ctx, posID)
+	if err != nil {
+		return fmt.Errorf("get position %d: %w", posID, err)
+	}
+	quoteCcy := notional.QuoteCcy(canonicalFromOppID(pos.OpportunityID))
+	fx := 1.0
+	fxMissing := false
+	if quoteCcy != "" && quoteCcy != "USD" {
+		if p.fxResolver != nil {
+			rate, ok := p.fxResolver.USDPer(ctx, quoteCcy, time.Now())
+			if !ok || rate <= 0 {
+				fxMissing = true
+				fx = 0
+			} else {
+				fx = rate
+			}
+		} else {
+			fxMissing = true
+			fx = 0
+		}
 	}
 
 	var totalPnL float64
@@ -118,15 +143,20 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 		// D-077 修复⑪A M1：平仓 PnL 权威化——删简化公式，改双路。
 		// 同步路径（即刻）：(Fill.Price − 开仓价) × qty × CS × 方向 + Fill.Swap − Fill.Commission
 		// CS 经服务器规格换算（修掉漏 CS 的 100 倍错误）；CEX 腿 CS=1（qty 即基础币）。
-		legPnL := p.calcLegPnL(leg, fill)
+		// D-105 T2：整腿 × fx（计价币→USD；fx 缺失 → 0 + critical alert，宁缺勿虚增，对账兜底）。
+		legPnL := p.calcLegPnL(leg, fill, fx)
 		totalPnL += legPnL
-		// swap 入 cashflows
+		if fxMissing {
+			_ = p.store.InsertAlert(ctx, &posID, "critical",
+				fmt.Sprintf("pnl fx missing venue=%s symbol=%s quoteCcy=%s", leg.Venue, leg.Symbol, quoteCcy))
+		}
+		// swap/commission 入 cashflows（D-105 T2：原 quote-ccy 值 × fx 换算 USD，cashflows 语义=USD）
 		if fill.Swap != 0 {
-			_ = p.store.InsertCashflow(ctx, posID, "swap", leg.Venue, fill.Swap, time.Now())
+			_ = p.store.InsertCashflow(ctx, posID, "swap", leg.Venue, fill.Swap*fx, time.Now())
 		}
 		// D-069：commission 入 cashflows（负号=成本）
 		if fill.Commission != 0 {
-			_ = p.store.InsertCashflow(ctx, posID, "commission", leg.Venue, -fill.Commission, time.Now())
+			_ = p.store.InsertCashflow(ctx, posID, "commission", leg.Venue, -fill.Commission*fx, time.Now())
 		}
 	}
 
@@ -144,7 +174,8 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 
 	// D-077 修复⑪A M1 回读校准：历史单权威 PnL 覆盖同步路径公式。
 	// 命中 → 用权威值（Profit+Swap−Commission，与 auto_close.go:99 统一）；未命中 → 用同步公式。
-	if authPnL, ok := p.calibratePnL(ctx, legs); ok {
+	// D-105 T2：权威值同样 × fx（同一 canonical/fxResolver，计价币→USD）。
+	if authPnL, ok := p.calibratePnL(ctx, legs, fx); ok {
 		log.Printf("[exec] position %d PnL calibrated: sync=%.2f → auth=%.2f", posID, totalPnL, authPnL)
 		totalPnL = authPnL
 	}
@@ -195,57 +226,6 @@ func (p *Pipeline) checkResidualLegs(ctx context.Context, legs []pgstore.Positio
 		}
 	}
 	return residual
-}
-
-// calcLegPnL 同步路径计算单腿平仓 PnL（D-077 修复⑪A M1）。
-// 公式：(Fill.Price − 开仓价) × qty × CS × 方向 + Fill.Swap − Fill.Commission
-// CS：MT 腿经 csResolver 查服务器规格（修掉漏 CS 的 100 倍错误）；CEX 腿 CS=1。
-// 开仓价缺失 → PnL=0（不猜，留对账纠偏）。
-func (p *Pipeline) calcLegPnL(leg pgstore.PositionLeg, fill Fill) float64 {
-	if leg.PriceActual == nil {
-		return 0
-	}
-	cs := 1.0
-	if p.csResolver != nil {
-		if v, ok := p.csResolver.ContractSize(leg.Venue, leg.Symbol); ok && v > 0 {
-			cs = v
-		}
-	}
-	dir := 1.0
-	if leg.Side == "SELL" {
-		dir = -1.0
-	}
-	priceDiff := (fill.Price - *leg.PriceActual) * leg.Qty * cs * dir
-	return priceDiff + fill.Swap - fill.Commission
-}
-
-// calibratePnL 回读校准：按 ticket 查历史单权威 PnL（D-077 修复⑪A M1 回读校准）。
-// 命中 HistoryOrder.Profit 时以其为权威覆盖同步路径公式结果。
-// calibrator 未接线/未找到 → 返回 ok=false（用同步路径公式结果）。
-func (p *Pipeline) calibratePnL(ctx context.Context, legs []pgstore.PositionLeg) (float64, bool) {
-	if p.pnlCalibrator == nil {
-		return 0, false
-	}
-	var totalPnL float64
-	calibrated := 0
-	for _, leg := range legs {
-		if leg.Phase != "OPEN" || leg.Status != "FILLED" || leg.OrderID == "" {
-			continue
-		}
-		vctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		hp, err := p.pnlCalibrator.QueryHistoryPnL(vctx, leg.Venue, leg.OrderID, 3)
-		cancel()
-		if err != nil || hp == nil {
-			continue
-		}
-		// 权威 PnL = Profit + Swap − Commission（与 auto_close.go:99 真值路径统一，P3）
-		totalPnL += hp.Profit + hp.Swap - hp.Commission
-		calibrated++
-	}
-	if calibrated == 0 {
-		return 0, false
-	}
-	return totalPnL, true
 }
 
 // Revalidate 用 QuoteBus 最新报价重算毛收益劣化（§13.1 双阈值；D-051 修③：毛口径比较）。

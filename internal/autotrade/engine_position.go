@@ -51,6 +51,9 @@ func (e *Engine) checkExitCondition(ctx context.Context, p *pgstore.Position) (b
 }
 
 // recalcNetSwap 重算净 swap（D-072 §4.2，facts 驱动 + 48h 新鲜度守卫）。
+// D-105 T1：venue 匹配加 found 标志——任一 venue 未匹配 fact → 缺数据不决策平仓（fail-closed，
+// 修复 #264 误平：facts 缺失时静默取 0 → 0≤0 假信号平仓）。新鲜度守卫改为对匹配到的 fact 检查
+// （旧值查 longFacts[0] 列表首元素，非该 venue 的 fact——同修）。
 func (e *Engine) recalcNetSwap(ctx context.Context, p *pgstore.Position) (float64, bool) {
 	canonical := canonicalFromOppID(p.OpportunityID)
 	if canonical == "" {
@@ -62,11 +65,6 @@ func (e *Engine) recalcNetSwap(ctx context.Context, p *pgstore.Position) (float6
 	}
 	shortFacts, err := e.store.LatestFacts(ctx, fact.KindSwapShort, "", canonical)
 	if err != nil || len(shortFacts) == 0 {
-		return 0, false
-	}
-	// 48h 新鲜度守卫
-	if time.Since(longFacts[0].Ts) > 48*time.Hour || time.Since(shortFacts[0].Ts) > 48*time.Hour {
-		log.Printf("[autotrade] skip exit pos=%d: swap facts stale >48h", p.ID)
 		return 0, false
 	}
 	// 解析 legs 取 venue
@@ -87,21 +85,42 @@ func (e *Engine) recalcNetSwap(ctx context.Context, p *pgstore.Position) (float6
 	if buyVenue == "" || sellVenue == "" {
 		return 0, false
 	}
+	buyBare := strings.Split(buyVenue, ":")[0]
+	sellBare := strings.Split(sellVenue, ":")[0]
+	// D-105 T1：venue 匹配加 found 标志，缺数据不决策平仓。
 	var swapLong, swapShort float64
-	for _, f := range longFacts {
-		if f.Venue == strings.Split(buyVenue, ":")[0] {
-			swapLong = f.Value
+	var longFact, shortFact *fact.Fact
+	for i := range longFacts {
+		if longFacts[i].Venue == buyBare {
+			swapLong = longFacts[i].Value
+			longFact = &longFacts[i]
 		}
 	}
-	for _, f := range shortFacts {
-		if f.Venue == strings.Split(sellVenue, ":")[0] {
-			swapShort = f.Value
+	for i := range shortFacts {
+		if shortFacts[i].Venue == sellBare {
+			swapShort = shortFacts[i].Value
+			shortFact = &shortFacts[i]
 		}
+	}
+	if longFact == nil {
+		log.Printf("[autotrade] exit pos=%d: swap fact missing venue=%s", p.ID, buyBare)
+		return 0, false
+	}
+	if shortFact == nil {
+		log.Printf("[autotrade] exit pos=%d: swap fact missing venue=%s", p.ID, sellBare)
+		return 0, false
+	}
+	// 48h 新鲜度守卫：对匹配到的 fact 检查（非列表首元素）。
+	if time.Since(longFact.Ts) > 48*time.Hour || time.Since(shortFact.Ts) > 48*time.Hour {
+		log.Printf("[autotrade] skip exit pos=%d: swap facts stale >48h", p.ID)
+		return 0, false
 	}
 	return swapLong + swapShort, true
 }
 
 // recalcNetFunding 重算净 funding 年化（D-072 §4.2，facts 驱动 + 48h 新鲜度守卫）。
+// D-105 T1：同 recalcNetSwap fail-closed 修复——venue 匹配加 found 标志，任一 venue 未匹配
+// → 缺数据不决策平仓；新鲜度守卫改为对匹配到的 fact 检查（旧值查列表首元素同修）。
 func (e *Engine) recalcNetFunding(ctx context.Context, p *pgstore.Position) (float64, bool) {
 	canonical := canonicalFromOppID(p.OpportunityID)
 	if canonical == "" {
@@ -109,10 +128,6 @@ func (e *Engine) recalcNetFunding(ctx context.Context, p *pgstore.Position) (flo
 	}
 	fundingFacts, err := e.store.LatestFacts(ctx, fact.KindFunding, "", canonical)
 	if err != nil || len(fundingFacts) == 0 {
-		return 0, false
-	}
-	if time.Since(fundingFacts[0].Ts) > 48*time.Hour {
-		log.Printf("[autotrade] skip exit pos=%d: funding facts stale >48h", p.ID)
 		return 0, false
 	}
 	legs, err := e.store.ListPositionLegs(ctx, p.ID)
@@ -132,14 +147,33 @@ func (e *Engine) recalcNetFunding(ctx context.Context, p *pgstore.Position) (flo
 	if buyVenue == "" || sellVenue == "" {
 		return 0, false
 	}
+	buyBare := strings.Split(buyVenue, ":")[0]
+	sellBare := strings.Split(sellVenue, ":")[0]
+	// D-105 T1：venue 匹配加 found 标志，缺数据不决策平仓。
 	var longFunding, shortFunding float64
-	for _, f := range fundingFacts {
-		if f.Venue == strings.Split(buyVenue, ":")[0] {
-			longFunding = f.Value
+	var longFact, shortFact *fact.Fact
+	for i := range fundingFacts {
+		if fundingFacts[i].Venue == buyBare {
+			longFunding = fundingFacts[i].Value
+			longFact = &fundingFacts[i]
 		}
-		if f.Venue == strings.Split(sellVenue, ":")[0] {
-			shortFunding = f.Value
+		if fundingFacts[i].Venue == sellBare {
+			shortFunding = fundingFacts[i].Value
+			shortFact = &fundingFacts[i]
 		}
+	}
+	if longFact == nil {
+		log.Printf("[autotrade] exit pos=%d: funding fact missing venue=%s", p.ID, buyBare)
+		return 0, false
+	}
+	if shortFact == nil {
+		log.Printf("[autotrade] exit pos=%d: funding fact missing venue=%s", p.ID, sellBare)
+		return 0, false
+	}
+	// 48h 新鲜度守卫：对匹配到的 fact 检查（非列表首元素）。
+	if time.Since(longFact.Ts) > 48*time.Hour || time.Since(shortFact.Ts) > 48*time.Hour {
+		log.Printf("[autotrade] skip exit pos=%d: funding facts stale >48h", p.ID)
+		return 0, false
 	}
 	return longFunding - shortFunding, true
 }

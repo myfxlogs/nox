@@ -46,6 +46,8 @@ type Pipeline struct {
 	csResolver ContractSizeResolver
 	// pnlCalibrator 历史单权威 PnL 回读（D-077 修复⑪A M1 回读校准）。nil = 用同步公式。
 	pnlCalibrator PnLCalibrator
+	// fxResolver 计价币→USD 换算（D-105 T2 平仓 PnL 计价币换算）。nil = 非 USD 计价 fx 不可得。
+	fxResolver FxResolver
 	// revalidateAbsBps 复核劣化绝对阈值 bps（D-077 修复⑪B N4，ARB_REVALIDATE_ABS_BPS 默认 2.0）。
 	revalidateAbsBps float64
 	// revalidateRelPct 复核劣化相对阈值 %（D-077 修复⑪B N4，ARB_REVALIDATE_REL_PCT 默认 20）。
@@ -78,6 +80,9 @@ func (p *Pipeline) SetContractSizeResolver(r ContractSizeResolver) { p.csResolve
 
 // SetPnLCalibrator 注入历史单权威 PnL 回读器（D-077 修复⑪A M1）。main 装配后调。
 func (p *Pipeline) SetPnLCalibrator(c PnLCalibrator) { p.pnlCalibrator = c }
+
+// SetFxResolver 注入计价币→USD 换算器（D-105 T2）。main 装配后调；*pgstore.Store 满足接口。
+func (p *Pipeline) SetFxResolver(r FxResolver) { p.fxResolver = r }
 
 // LegSpec 是单腿下单规格。
 type LegSpec struct {
