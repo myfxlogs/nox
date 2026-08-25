@@ -59,6 +59,13 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 		fnCh, fnCancel = s.fundingNeedTopic.Subscribe()
 		defer fnCancel()
 	}
+	// 持仓变更通知推送（D-107 P3）：OnOrderUpdate 事件 → 逐条推 case 11。orderTopic 为 nil（测试未接线）→ 不订阅。
+	var ordCh <-chan bus.OrderEvent
+	if s.orderTopic != nil {
+		var ordCancel func()
+		ordCh, ordCancel = s.orderTopic.Subscribe()
+		defer ordCancel()
+	}
 	// keepalive 每 30s（§8.2 D-027）
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -174,6 +181,21 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 			if err := stream.Send(&v1.StreamUpdatesResponse{
 				Update: &v1.StreamUpdatesResponse_FundingNeed{
 					FundingNeed: fundingNeedToProto(v),
+				},
+			}); err != nil {
+				return err
+			}
+		case v, ok := <-ordCh:
+			if !ok {
+				return nil
+			}
+			// D-107 P3：持仓变更通知——只含 venue+ticket，不含业务数据（前端零信任：收到→调 RPC 重取）。
+			if err := stream.Send(&v1.StreamUpdatesResponse{
+				Update: &v1.StreamUpdatesResponse_PositionChange{
+					PositionChange: &v1.PositionChangeNotice{
+						Venue:  v.Venue,
+						Ticket: v.Ticket,
+					},
 				},
 			}); err != nil {
 				return err

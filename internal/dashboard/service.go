@@ -40,6 +40,8 @@ type Service struct {
 	oppTopic *bus.Topic[pgstore.Opportunity]
 	// fundingNeedTopic 资金注入提醒广播（D-072）：engine 余额不足发布 → StreamUpdates 扇出 case 10。nil = 未接线（测试直接构造 Service）。
 	fundingNeedTopic *bus.Topic[FundingNeedNotice]
+	// orderTopic 持仓变更通知广播（D-107 P3）：OnOrderUpdate 事件 → StreamUpdates 扇出 case 11。nil = 未接线（测试直接构造 Service）。
+	orderTopic *bus.Topic[bus.OrderEvent]
 	// bpm Broker 实持仓 monitor（D-052）：ListBrokerPositions 拉 + StreamUpdates case 8 推同源。nil = 未接线（测试直接构造 Service）。
 	bpm *BrokerPositionMonitor
 	// notionalUSD net_usd 换算的单笔名义（config.OpportunityNotionalUSD，D-053）。0 = 未接线（测试），net_usd=0。
@@ -104,8 +106,9 @@ type FrontConfig struct {
 // bpm 为 Broker 实持仓 monitor（D-052，传 main 创建的 bpm）；
 // notionalUSD 为 net_usd 换算的单笔名义（D-053，传 config.OpportunityNotionalUSD）；
 // acctMon 为账户资产 monitor（D-053，传 main 创建的 acctMon）。
-func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64, fundingDropRatio float64, swapArbEquityUseRatio float64, swapArbBareCap float64, priceTopic *bus.Topic[position.PositionPrice], oppTopic *bus.Topic[pgstore.Opportunity], bpm *BrokerPositionMonitor, notionalUSD float64, acctMon *AccountMonitor) *Service {
-	return &Service{store: store, qbus: qbus, pipeline: pipeline, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, swapArbEquityUseRatio: swapArbEquityUseRatio, swapArbBareCap: swapArbBareCap, priceTopic: priceTopic, oppTopic: oppTopic, bpm: bpm, notionalUSD: notionalUSD, acctMon: acctMon}
+// orderTopic 为持仓变更通知广播（D-107 P3，传 main 创建的 orderTopic）。
+func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64, fundingDropRatio float64, swapArbEquityUseRatio float64, swapArbBareCap float64, priceTopic *bus.Topic[position.PositionPrice], oppTopic *bus.Topic[pgstore.Opportunity], orderTopic *bus.Topic[bus.OrderEvent], bpm *BrokerPositionMonitor, notionalUSD float64, acctMon *AccountMonitor) *Service {
+	return &Service{store: store, qbus: qbus, pipeline: pipeline, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, swapArbEquityUseRatio: swapArbEquityUseRatio, swapArbBareCap: swapArbBareCap, priceTopic: priceTopic, oppTopic: oppTopic, orderTopic: orderTopic, bpm: bpm, notionalUSD: notionalUSD, acctMon: acctMon}
 }
 
 // Store 返回底层 store（D-070 autotrade engine 用）。
