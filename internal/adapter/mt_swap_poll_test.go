@@ -53,6 +53,13 @@ type fakeMT5Client struct {
 	onQuoteStreams    []grpc.ServerStreamingClient[mt5pb.OnQuoteReply] // 流队列（按调用顺序弹出）
 	onQuoteIdx        int
 	onQuoteErr        error // OnQuote 强制返回 err（一次性，优先于队列）
+	// D-107 P1 OnOrderUpdate 流测试控制（mt_order_events_test.go 用）：
+	subsOUCalls int                                                    // SubscribeOrderUpdate 调用计数
+	subsOUErr   error                                                  // SubscribeOrderUpdate 强制返回 err（nil=OK）
+	onOUCalls   int                                                    // OnOrderUpdate 调用计数
+	onOUStreams []grpc.ServerStreamingClient[mt5pb.OnOrderUpdateReply] // 流队列（按调用顺序弹出）
+	onOUIdx     int
+	onOUErr     error // OnOrderUpdate 强制返回 err（一次性，优先于队列）
 }
 
 func (f *fakeMT5Client) SymbolParams(_ context.Context, req *mt5pb.SymbolParamsRequest, _ ...grpc.CallOption) (*mt5pb.SymbolParamsReply, error) {

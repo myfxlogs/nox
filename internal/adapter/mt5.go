@@ -45,6 +45,10 @@ type MT5Adapter struct {
 	// nil = 未注入（测试/未接线），runMarginSource 安全 no-op。
 	MarginSink func(fact.Fact)
 
+	// OrderEventSink 订单事件下沉（D-107 P1 事件驱动二阶段）：由 main 经 BrokerManager 注入
+	// （MarginSink 同模式）。nil = 未注入（测试/未接线），runOrderEventSource 安全 no-op。
+	OrderEventSink func(bus.OrderEvent)
+
 	// D-100：订阅集镜像（mtapi 会话订阅状态在网关侧，adapter 必须镜像才能 OnQuote 流
 	// 重连后恢复订阅）。subMu 保护并发 Resubscribe 与流重连的 resubscribeAll。
 	subMu  sync.Mutex
@@ -145,6 +149,8 @@ func (a *MT5Adapter) Connect(ctx context.Context) error {
 	// stopCtx 取消时 Run 自然退出（Stop 调 stopCancel）。a.mu 仍持有：goroutine 异步启动，
 	// 其 a.mu 操作阻塞至 Connect 返回释放锁，无死锁。
 	go a.runMarginSource(a.stopCtx)
+	// D-107 P1：attach 完成 → 启动订单事件流消费（OrderEventSink==nil 时 no-op）。
+	go a.runOrderEventSource(a.stopCtx)
 	return nil
 }
 
