@@ -28,6 +28,10 @@ func (m *BrokerManager) startAdapter(ctx context.Context, a *pgstore.BrokerAccou
 // startMT4 启动 MT4 适配器并接入 QuoteBus / 执行器 / 对账。
 func (m *BrokerManager) startMT4(ctx context.Context, a *pgstore.BrokerAccount) error {
 	ad := adapter.NewMT4Adapter(a.Venue, a.Host, a.Server, int32(a.Port), a.User, a.Password)
+	// D-104 P2 U1：SetGateway 须在 Connect 前调（Connect dial 按序试 gateway+fallbacks）。
+	ad.SetGateway(m.MT4Gateway, nil)
+	// D-104 P2 U2：AlertSink 须在 Connect 前注入（quoteReconnectBackoff 封顶档读此字段）。
+	ad.AlertSink = m.AlertSink
 	if err := ad.Connect(ctx); err != nil {
 		return fmt.Errorf("mt4 connect: %w", err)
 	}
@@ -87,10 +91,14 @@ func (m *BrokerManager) startMT4(ctx context.Context, a *pgstore.BrokerAccount) 
 // startMT5 启动 MT5 适配器。
 func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) error {
 	ad := adapter.NewMT5Adapter(a.Venue, a.Host, a.Server, int32(a.Port), a.User, a.Password)
+	// D-104 P2 U1：SetGateway 须在 Connect 前调（Connect dial 按序试 gateway+fallbacks）。
+	ad.SetGateway(m.MT5Gateway, m.MT5GatewayFallbacks)
 	// D-099：MarginSink 须在 Connect 前注入（Connect 末尾 go runMarginSource 读此字段）。
 	ad.MarginSink = m.MarginSink
 	// D-107 P1：OrderEventSink 须在 Connect 前注入（Connect 末尾 go runOrderEventSource 读此字段）。
 	ad.OrderEventSink = m.OrderEventSink
+	// D-104 P2 U2：AlertSink 须在 Connect 前注入（quoteReconnectBackoff 封顶档读此字段）。
+	ad.AlertSink = m.AlertSink
 	if err := ad.Connect(ctx); err != nil {
 		return fmt.Errorf("mt5 connect: %w", err)
 	}

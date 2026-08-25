@@ -93,6 +93,15 @@ type BrokerManager struct {
 	// OrderProfitKick D-107 P2：margin 事件触发账户重采（OnOrderProfit → MarginSink closure →
 	// acctMon.Kick）。同 SwapKick 注入模式，main 注入（acctMon 创建后赋值），nil 安全。
 	OrderProfitKick func()
+
+	// D-104 P2 U1：网关节点启动级 failover（main 从 config 注入，attach 时透传 adapter.SetGateway）。
+	MT5Gateway          string
+	MT5GatewayFallbacks []string
+	MT4Gateway          string
+
+	// AlertSink 断流分级告警下沉（D-104 P2 U2，MarginSink 同模式三点注入链）。
+	// main 注入 func(level, msg string) { _ = st.InsertAlert(ctx, nil, level, msg) }，nil 安全。
+	AlertSink func(level, msg string)
 }
 
 // NewBrokerManager 创建管理器。symbolsTTL 由调用方从 config.SymbolsTTL 注入。
