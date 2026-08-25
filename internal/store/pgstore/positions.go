@@ -147,19 +147,39 @@ func (s *Store) ListPositionLegs(ctx context.Context, posID int64) ([]PositionLe
 }
 
 // ListPositions 分页返回持仓。
+// D-106：status="ACTIVE" 特殊值 → WHERE status IN (OPEN/OPENING/LEGGED/CLOSING)（在仓 Tab）；
+// 排序改 ORDER BY COALESCE(closed_at, opened_at) DESC NULLS LAST（历史视图默认序，OPEN 行排前）。
 func (s *Store) ListPositions(ctx context.Context, status string, limit, offset int) ([]Position, error) {
 	if limit <= 0 {
 		limit = 50
 	}
+	if status == "ACTIVE" {
+		// ACTIVE 路径不绑定 $1（IN 子句无参数），limit/offset 用 $1/$2。
+		q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note
+			FROM positions
+			WHERE status IN ('OPEN','OPENING','LEGGED','CLOSING')
+			ORDER BY COALESCE(closed_at, opened_at) DESC NULLS LAST LIMIT $1 OFFSET $2`
+		rows, err := s.pool.Query(ctx, q, limit, offset)
+		if err != nil {
+			return nil, fmt.Errorf("list positions: %w", err)
+		}
+		defer rows.Close()
+		return scanPositions(rows)
+	}
 	q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note
 		FROM positions
 		WHERE ($1 = '' OR status = $1)
-		ORDER BY id DESC LIMIT $2 OFFSET $3`
+		ORDER BY COALESCE(closed_at, opened_at) DESC NULLS LAST LIMIT $2 OFFSET $3`
 	rows, err := s.pool.Query(ctx, q, status, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("list positions: %w", err)
 	}
 	defer rows.Close()
+	return scanPositions(rows)
+}
+
+// scanPositions 公共行扫描（ListPositions 两条路径共用）。
+func scanPositions(rows pgx.Rows) ([]Position, error) {
 	var out []Position
 	for rows.Next() {
 		var p Position
@@ -174,10 +194,17 @@ func (s *Store) ListPositions(ctx context.Context, status string, limit, offset 
 }
 
 // CountPositions 返回符合筛选条件的持仓总数（D-069 分页控件用）。
+// D-106：status="ACTIVE" 同 ListPositions 映射 4 活跃态。
 func (s *Store) CountPositions(ctx context.Context, status string) (int, error) {
 	var n int
-	err := s.pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM positions WHERE ($1 = '' OR status = $1)`, status).Scan(&n)
+	var err error
+	if status == "ACTIVE" {
+		err = s.pool.QueryRow(ctx,
+			`SELECT COUNT(*) FROM positions WHERE status IN ('OPEN','OPENING','LEGGED','CLOSING')`).Scan(&n)
+	} else {
+		err = s.pool.QueryRow(ctx,
+			`SELECT COUNT(*) FROM positions WHERE ($1 = '' OR status = $1)`, status).Scan(&n)
+	}
 	if err != nil {
 		return 0, fmt.Errorf("count positions: %w", err)
 	}

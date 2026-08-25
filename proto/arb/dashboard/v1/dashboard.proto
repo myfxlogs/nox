@@ -433,6 +433,9 @@ message Position {
   optional double expected_swap_usd_to_date = 16; // D-095：预期应得（SWAPARB/CARRY）
   optional double attainment_pct          = 17;  // D-095：达成率 16 vs 14（息差型）
   optional double current_net_bps         = 18;  // D-095：收敛型当前 bps（rollup 最新）
+  optional double settled_realized_usd    = 19;  // D-106：结算口径 realized_usd（position_settlements join；无结算行=缺省）
+  optional double settled_notional_usd    = 20;  // D-106：结算口径 notional_usd（同上）
+  optional double hold_days               = 21;  // D-106：持有天数（结算行 hold_days 优先；否则 closed_at−opened_at）
 }
 
 message ExecuteOpportunityRequest {
@@ -459,7 +462,7 @@ message ClosePositionResponse {
 }
 
 message ListPositionsRequest {
-  string status = 1;  // 空 = 全部；OPEN/OPENING/LEGGED 等
+  string status = 1;  // 空 = 全部；"ACTIVE" = OPEN/OPENING/LEGGED/CLOSING 任一（在仓 Tab，D-106）；其余 = 单一状态
   int32 limit = 2;    // ≤0 = 默认 50
   int32 offset = 3;
 }

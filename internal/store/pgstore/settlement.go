@@ -88,3 +88,27 @@ func (s *Store) GetSettlementByPos(ctx context.Context, posID int64) (*Settlemen
 	}
 	return &r, nil
 }
+
+// ListSettlementsByPosIDs D-106：按 position_id 批量查结算行（ListPositions join 用，单条 SQL IN 防 N+1）。
+// posIDs 空 → 返回空 map（不查库）。返回 map[posID]*SettlementRow；无结算行的 posID 不在 map 中。
+func (s *Store) ListSettlementsByPosIDs(ctx context.Context, posIDs []int64) (map[int64]*SettlementRow, error) {
+	out := make(map[int64]*SettlementRow, len(posIDs))
+	if len(posIDs) == 0 {
+		return out, nil
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT position_id, vkey, expected_usd, realized_usd, notional_usd, hold_days, COALESCE(skipped_reason, ''), settled_at
+		FROM position_settlements WHERE position_id = ANY($1)`, posIDs)
+	if err != nil {
+		return nil, fmt.Errorf("list settlements by pos ids: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var r SettlementRow
+		if err := rows.Scan(&r.PositionID, &r.Vkey, &r.ExpectedUsd, &r.RealizedUsd, &r.NotionalUsd, &r.HoldDays, &r.SkippedReason, &r.SettledAt); err != nil {
+			return nil, err
+		}
+		out[r.PositionID] = &r
+	}
+	return out, rows.Err()
+}
