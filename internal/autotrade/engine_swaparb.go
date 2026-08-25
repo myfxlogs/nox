@@ -112,6 +112,7 @@ type swapComboCandidate struct {
 
 // discoverSwapCombos 从 facts 表自动扫描所有跨账户 swap 组合。
 // D-072：minNetSwapBps 从 env 读取（ARB_AUTOTRADE_MIN_NET_SWAP_BPS，默认 0.2）。
+// D-104 P0：swap facts 新鲜度门禁 fail-closed——now−f.Ts > SwapFactMaxAge → 跳过该 fact + 计数日志。
 func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 	longFacts, err := e.store.LatestFacts(ctx, fact.KindSwapLong, "", "")
 	if err != nil || len(longFacts) == 0 {
@@ -120,6 +121,36 @@ func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 	shortFacts, err := e.store.LatestFacts(ctx, fact.KindSwapShort, "", "")
 	if err != nil || len(shortFacts) == 0 {
 		return nil
+	}
+	now := time.Now()
+	maxAge := e.cfg.SwapFactMaxAge
+	var staleLong, staleShort int
+	if maxAge > 0 {
+		filtered := longFacts[:0]
+		for _, f := range longFacts {
+			if now.Sub(f.Ts) > maxAge {
+				staleLong++
+				continue
+			}
+			filtered = append(filtered, f)
+		}
+		longFacts = filtered
+		filteredS := shortFacts[:0]
+		for _, f := range shortFacts {
+			if now.Sub(f.Ts) > maxAge {
+				staleShort++
+				continue
+			}
+			filteredS = append(filteredS, f)
+		}
+		shortFacts = filteredS
+		if staleLong > 0 || staleShort > 0 {
+			log.Printf("[autotrade] SWAPARB fact freshness gate: skipped %d long + %d short (maxAge=%s)",
+				staleLong, staleShort, maxAge)
+		}
+		if len(longFacts) == 0 || len(shortFacts) == 0 {
+			return nil
+		}
 	}
 	type swapKey struct{ canonical, venue string }
 	type swapEntry struct {

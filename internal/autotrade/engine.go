@@ -37,6 +37,10 @@ type Config struct {
 	EntrySpreadMinBps float64       // SWAPARB 入场 spreadBps 下限（ARB_SWAPARB_ENTRY_SPREAD_MIN_BPS，默认 -3）
 	FreshnessTTL      time.Duration // 报价陈旧排除（复用 ARB_DETECTOR_FRESHNESS_TTL，默认 120s）
 
+	// D-104 P0：swap facts 新鲜度门禁（fail-closed，ARB_SWAP_FACT_MAX_AGE，默认 2h）。
+	// discoverSwapCombos 使用 lf/sf 前查 now−f.Ts > SwapFactMaxAge → 跳过该 fact + 计数日志。
+	SwapFactMaxAge time.Duration
+
 	// B：组合平仓后重入冷却（ARB_SWAPARB_REENTRY_COOLDOWN_DAYS，默认 7）
 	ReentryCooldownDays int
 }
