@@ -12,6 +12,7 @@ package adapter
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -98,15 +99,19 @@ func (s *fakeOrderProfitStream) SendMsg(_ interface{}) error  { return nil }
 func (s *fakeOrderProfitStream) RecvMsg(_ interface{}) error  { return nil }
 
 // fakeConnMgr 模拟 connMgr.Connect（reconnectSession 用，D-099 流重连测试）。
+// D-100：connectCalls 加 mutex 保护（reconnectSession goroutine 与 waitFor 断言并发读）。
 type fakeConnMgr struct {
 	mt5pb.ConnectionClient
+	mu           sync.Mutex
 	connectCalls int
 	connectErr   error
 	token        string
 }
 
 func (f *fakeConnMgr) Connect(_ context.Context, _ *mt5pb.ConnectRequest, _ ...grpc.CallOption) (*mt5pb.ConnectReply, error) {
+	f.mu.Lock()
 	f.connectCalls++
+	f.mu.Unlock()
 	if f.connectErr != nil {
 		return nil, f.connectErr
 	}
@@ -115,6 +120,13 @@ func (f *fakeConnMgr) Connect(_ context.Context, _ *mt5pb.ConnectRequest, _ ...g
 		tok = "reconn-tok"
 	}
 	return &mt5pb.ConnectReply{Result: tok}, nil
+}
+
+// connectCallsLoad 原子读 connectCalls（waitFor 断言用，避免直接读触发 race）。
+func (f *fakeConnMgr) connectCallsLoad() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.connectCalls
 }
 
 // waitFor 轮询条件直到 timeout，返回是否满足（测试同步用，避免固定 sleep 的竞态）。
@@ -322,9 +334,9 @@ func TestMarginSource_StreamReconnect(t *testing.T) {
 	if client.onOPCalls != 2 {
 		t.Errorf("OnOrderProfit calls = %d, want 2 (stream1 err + stream2 ok)", client.onOPCalls)
 	}
-	// reconnectSession 调用 connMgr.Connect 1 次。
-	if connMgr.connectCalls != 1 {
-		t.Errorf("connMgr.Connect calls = %d, want 1 (session lost → reconnect)", connMgr.connectCalls)
+	// reconnectSession 调用 connMgr.Connect 1 次（D-100：用 Load 避免 race）。
+	if connMgr.connectCallsLoad() != 1 {
+		t.Errorf("connMgr.Connect calls = %d, want 1 (session lost → reconnect)", connMgr.connectCallsLoad())
 	}
 	// 首采 4 次失败 + 事件触发 1 次成功 = 5 次 AccountSummary。
 	if client.summaryCalls != 5 {

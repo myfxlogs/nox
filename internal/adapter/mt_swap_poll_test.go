@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -41,6 +42,16 @@ type fakeMT5Client struct {
 	onOPStreams  []grpc.ServerStreamingClient[mt5pb.OnOrderProfitReply] // 流队列（按调用顺序弹出）
 	onOPIdx      int
 	onOPErr      error // OnOrderProfit 强制返回 err（一次性，优先于队列）
+	// D-100 OnQuote 流重连测试控制（mt_quote_stream_test.go 用）：
+	subMu             sync.Mutex                                       // 保护 subscribedSymbols/subCalls 并发读写
+	subscribedSymbols map[string]bool                                  // 被 Subscribe 调用的符号集（resubscribeAll 断言用）
+	subCalls          int                                              // Subscribe 调用计数
+	subErr            error                                            // Subscribe 强制返回 err（nil=OK）
+	onQuoteMu         sync.Mutex                                       // 保护 onQuoteCalls/onQuoteIdx/onQuoteStreams/onQuoteErr
+	onQuoteCalls      int                                              // OnQuote 调用计数
+	onQuoteStreams    []grpc.ServerStreamingClient[mt5pb.OnQuoteReply] // 流队列（按调用顺序弹出）
+	onQuoteIdx        int
+	onQuoteErr        error // OnQuote 强制返回 err（一次性，优先于队列）
 }
 
 func (f *fakeMT5Client) SymbolParams(_ context.Context, req *mt5pb.SymbolParamsRequest, _ ...grpc.CallOption) (*mt5pb.SymbolParamsReply, error) {

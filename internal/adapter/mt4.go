@@ -40,6 +40,13 @@ type MT4Adapter struct {
 
 	symMap atomic.Pointer[map[string]string] // brokerSymbol → canonical
 
+	// D-100：订阅集镜像（同 MT5，OnQuote 流重连后恢复订阅）。
+	subMu  sync.Mutex
+	subSet map[string]bool
+
+	// D-100：OnQuote 流重连退避档位（复用 marginReconnectBackoff 序列）。
+	quoteReconIdx int
+
 	stopCtx    context.Context
 	stopCancel context.CancelFunc
 	mu         sync.Mutex
@@ -134,76 +141,186 @@ func (a *MT4Adapter) withSessionMD(ctx context.Context) context.Context {
 	return metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{"id": a.token}))
 }
 
+// reconnectSession 复用现有 conn 重调 connMgr.Connect 重建 account 会话（D-100，同 MT5 S1 模式）。
+// MT4 proto 差异：User 为 int32（MT5 为 uint64）。
+func (a *MT4Adapter) reconnectSession(ctx context.Context) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	rctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	sid := sessionID(a.user)
+	loginCtx := metadata.NewOutgoingContext(rctx, metadata.New(map[string]string{"id": sid}))
+	resp, err := a.connMgr.Connect(loginCtx, &mt4pb.ConnectRequest{
+		Host:     a.host,
+		Port:     a.port,
+		User:     int32(a.user),
+		Password: a.pass,
+		Id:       &sid,
+	})
+	if err != nil {
+		return fmt.Errorf("mt4 reconnect: %w", err)
+	}
+	if e := resp.GetError(); e != nil {
+		return fmt.Errorf("mt4 reconnect: %s", e.GetMessage())
+	}
+	token := resp.GetResult()
+	if token == "" {
+		return fmt.Errorf("mt4 reconnect: empty token")
+	}
+	a.token = token
+	log.Printf("[mt4:%s] session reconnected, token=%s", a.venue, maskToken(token))
+	return nil
+}
+
 // sessionID Connect 阶段的临时会话标识。
 func sessionID(user int64) string {
 	return "mdgw-" + strconv.FormatInt(user, 10)
 }
 
 // Subscribe 实现 collect.QuoteSource（§3.2）。
-// 返回的 channel 接收 bus.Quote（canonical symbol）。
+// D-100：OnQuote 流加重连（同 MT5 模式）——抽 runQuoteStream/consumeQuoteFrames，
+// 断流后退避重开 + 重订阅（订阅集镜像 subSet）。ch 仅在 ctx 取消时关闭。
 func (a *MT4Adapter) Subscribe(symbols []string) (<-chan bus.Quote, func()) {
 	ch := make(chan bus.Quote, 16)
-
-	// 订阅（mtapi 按 id header + Id body 路由）
 	ctx, cancel := context.WithCancel(a.stopCtx)
-	sctx := a.withSessionMD(ctx)
-	for _, sym := range symbols {
-		_, err := a.subs.Subscribe(sctx, &mt4pb.SubscribeRequest{
+	a.saveSubSet(symbols)
+	go a.runQuoteStream(ctx, ch)
+	return ch, cancel
+}
+
+// saveSubSet 初始化订阅集镜像（同 MT5）。
+func (a *MT4Adapter) saveSubSet(symbols []string) {
+	a.subMu.Lock()
+	defer a.subMu.Unlock()
+	a.subSet = make(map[string]bool, len(symbols))
+	for _, s := range symbols {
+		a.subSet[s] = true
+	}
+}
+
+// addSubSet 增补符号到订阅集（同 MT5）。
+func (a *MT4Adapter) addSubSet(symbols []string) {
+	a.subMu.Lock()
+	defer a.subMu.Unlock()
+	if a.subSet == nil {
+		a.subSet = make(map[string]bool)
+	}
+	for _, s := range symbols {
+		a.subSet[s] = true
+	}
+}
+
+// snapshotSubSet 返回当前订阅集快照（同 MT5）。
+func (a *MT4Adapter) snapshotSubSet() []string {
+	a.subMu.Lock()
+	defer a.subMu.Unlock()
+	out := make([]string, 0, len(a.subSet))
+	for s := range a.subSet {
+		out = append(out, s)
+	}
+	return out
+}
+
+// resubscribeAll 用当前订阅集全量重订阅（同 MT5，mtapi Subscribe 幂等）。
+func (a *MT4Adapter) resubscribeAll(sctx context.Context) {
+	for _, sym := range a.snapshotSubSet() {
+		if _, err := a.subs.Subscribe(sctx, &mt4pb.SubscribeRequest{
 			Id:     a.token,
 			Symbol: sym,
-		})
-		if err != nil {
-			log.Printf("[mt4:%s] subscribe %s: %v", a.venue, sym, err)
+		}); err != nil {
+			log.Printf("[mt4:%s] resubscribe %s: %v", a.venue, sym, err)
 		}
 	}
+}
 
-	// 开启 OnQuote 流
-	go func() {
-		defer close(ch)
-		stream, err := a.streams.OnQuote(sctx, &mt4pb.OnQuoteRequest{
-			Id: a.token,
-		})
-		if err != nil {
-			log.Printf("[mt4:%s] onquote stream: %v", a.venue, err)
+// runQuoteStream OnQuote 流消费外层循环（同 MT5 模式）。
+func (a *MT4Adapter) runQuoteStream(ctx context.Context, ch chan<- bus.Quote) {
+	defer close(ch)
+	for {
+		if ctx.Err() != nil {
 			return
 		}
-		for {
-			resp, err := stream.Recv()
-			if err != nil {
-				if ctx.Err() == nil {
-					log.Printf("[mt4:%s] onquote recv: %v", a.venue, err)
-				}
+		sctx := a.withSessionMD(ctx)
+		a.resubscribeAll(sctx)
+		stream, err := a.streams.OnQuote(sctx, &mt4pb.OnQuoteRequest{Id: a.token})
+		if err != nil {
+			if ctx.Err() != nil {
 				return
 			}
-			q := resp.GetResult()
-			if q == nil {
-				continue
-			}
-			brokerSym := q.GetSymbol()
-			// 同 mt5.go：实时报价流统一用本地接收时间，规避经纪商服务器时区偏移。
-			ts := time.Now()
-			ch <- bus.Quote{
-				Symbol:      a.canonical(brokerSym),
-				Venue:       a.venue,
-				VenueSymbol: brokerSym,
-				VenueType:   "mt4",
-				Bid:         q.GetBid(),
-				Ask:         q.GetAsk(),
-				Time:        ts,
-			}
+			log.Printf("[mt4:%s] onquote stream open: %v", a.venue, err)
+			a.quoteReconnectBackoff(ctx)
+			continue
 		}
-	}()
+		if !a.consumeQuoteFrames(ctx, stream, ch) {
+			return
+		}
+	}
+}
 
-	return ch, cancel
+// consumeQuoteFrames 内层 Recv 循环（同 MT5 模式）。
+func (a *MT4Adapter) consumeQuoteFrames(ctx context.Context, stream mt4pb.Streams_OnQuoteClient, ch chan<- bus.Quote) bool {
+	for {
+		if ctx.Err() != nil {
+			return false
+		}
+		resp, err := stream.Recv()
+		if err != nil {
+			if ctx.Err() != nil {
+				return false
+			}
+			log.Printf("[mt4:%s] onquote recv: %v", a.venue, err)
+			if IsSessionLost(err) {
+				if rerr := a.reconnectSession(ctx); rerr != nil {
+					log.Printf("[mt4:%s] onquote reconnect: %v", a.venue, rerr)
+				}
+			}
+			a.quoteReconnectBackoff(ctx)
+			log.Printf("[mt4:%s] onquote stream reopened", a.venue)
+			return true
+		}
+		q := resp.GetResult()
+		if q == nil {
+			continue
+		}
+		brokerSym := q.GetSymbol()
+		// 同 mt5.go：实时报价流统一用本地接收时间，规避经纪商服务器时区偏移。
+		ts := time.Now()
+		ch <- bus.Quote{
+			Symbol:      a.canonical(brokerSym),
+			Venue:       a.venue,
+			VenueSymbol: brokerSym,
+			VenueType:   "mt4",
+			Bid:         q.GetBid(),
+			Ask:         q.GetAsk(),
+			Time:        ts,
+		}
+		a.quoteReconIdx = 0
+	}
+}
+
+// quoteReconnectBackoff OnQuote 流重连退避（复用 marginReconnectBackoff，同 MT5）。
+func (a *MT4Adapter) quoteReconnectBackoff(ctx context.Context) {
+	idx := a.quoteReconIdx
+	if idx >= len(marginReconnectBackoff) {
+		idx = len(marginReconnectBackoff) - 1
+	}
+	d := marginReconnectBackoff[idx]
+	a.quoteReconIdx++
+	select {
+	case <-time.After(d):
+	case <-ctx.Done():
+	}
 }
 
 // Resubscribe 运行时补订阅新符号（D-042：保存映射后立即生效，无需重启/重开流）。
 // 仅注册会话订阅（mtapi 幂等），不开新 OnQuote 流——会话按当前订阅集投递，已开流自动接上。
 // D-047 缺陷③：映射了不重订阅 = 没报价流。
+// D-100：同时增补订阅集镜像，OnQuote 流重连后 resubscribeAll 恢复全集。
 func (a *MT4Adapter) Resubscribe(symbols []string) {
 	if a.token == "" {
 		return
 	}
+	a.addSubSet(symbols)
 	sctx := a.withSessionMD(a.stopCtx)
 	for _, sym := range symbols {
 		_, err := a.subs.Subscribe(sctx, &mt4pb.SubscribeRequest{Id: a.token, Symbol: sym})

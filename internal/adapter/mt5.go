@@ -45,6 +45,14 @@ type MT5Adapter struct {
 	// nil = 未注入（测试/未接线），runMarginSource 安全 no-op。
 	MarginSink func(fact.Fact)
 
+	// D-100：订阅集镜像（mtapi 会话订阅状态在网关侧，adapter 必须镜像才能 OnQuote 流
+	// 重连后恢复订阅）。subMu 保护并发 Resubscribe 与流重连的 resubscribeAll。
+	subMu  sync.Mutex
+	subSet map[string]bool
+
+	// D-100：OnQuote 流重连退避档位（成功消费一帧后重置）；复用 marginReconnectBackoff 序列。
+	quoteReconIdx int
+
 	stopCtx    context.Context
 	stopCancel context.CancelFunc
 	mu         sync.Mutex
@@ -178,69 +186,156 @@ func (a *MT5Adapter) withSessionMD(ctx context.Context) context.Context {
 }
 
 // Subscribe 实现 collect.QuoteSource。
+// D-100：OnQuote 流加重连——抽 runQuoteStream/consumeQuoteFrames，断流后退避重开 +
+// 重订阅（订阅集镜像 subSet）。ch 仅在 ctx 取消时关闭（重连不关 ch，避免下游断流）。
 func (a *MT5Adapter) Subscribe(symbols []string) (<-chan bus.Quote, func()) {
 	ch := make(chan bus.Quote, 16)
-
 	ctx, cancel := context.WithCancel(a.stopCtx)
-	sctx := a.withSessionMD(ctx)
-	for _, sym := range symbols {
-		_, err := a.subs.Subscribe(sctx, &mt5pb.SubscribeRequest{
+	a.saveSubSet(symbols)
+	go a.runQuoteStream(ctx, ch)
+	return ch, cancel
+}
+
+// saveSubSet 初始化订阅集镜像（Subscribe 时调用，覆盖写）。
+func (a *MT5Adapter) saveSubSet(symbols []string) {
+	a.subMu.Lock()
+	defer a.subMu.Unlock()
+	a.subSet = make(map[string]bool, len(symbols))
+	for _, s := range symbols {
+		a.subSet[s] = true
+	}
+}
+
+// addSubSet 增补符号到订阅集（Resubscribe 时调用，append）。
+func (a *MT5Adapter) addSubSet(symbols []string) {
+	a.subMu.Lock()
+	defer a.subMu.Unlock()
+	if a.subSet == nil {
+		a.subSet = make(map[string]bool)
+	}
+	for _, s := range symbols {
+		a.subSet[s] = true
+	}
+}
+
+// snapshotSubSet 返回当前订阅集快照（流重连 resubscribeAll 用，避免持锁调 RPC）。
+func (a *MT5Adapter) snapshotSubSet() []string {
+	a.subMu.Lock()
+	defer a.subMu.Unlock()
+	out := make([]string, 0, len(a.subSet))
+	for s := range a.subSet {
+		out = append(out, s)
+	}
+	return out
+}
+
+// resubscribeAll 用当前订阅集全量重订阅（OnQuote 流重连后调用，恢复网关侧订阅状态）。
+// mtapi Subscribe 幂等，全量重订阅安全。
+func (a *MT5Adapter) resubscribeAll(sctx context.Context) {
+	for _, sym := range a.snapshotSubSet() {
+		if _, err := a.subs.Subscribe(sctx, &mt5pb.SubscribeRequest{
 			Id:     a.token,
 			Symbol: sym,
-		})
-		if err != nil {
-			log.Printf("[mt5:%s] subscribe %s: %v", a.venue, sym, err)
+		}); err != nil {
+			log.Printf("[mt5:%s] resubscribe %s: %v", a.venue, sym, err)
 		}
 	}
+}
 
-	go func() {
-		defer close(ch)
-		stream, err := a.streams.OnQuote(sctx, &mt5pb.OnQuoteRequest{
-			Id: a.token,
-		})
-		if err != nil {
-			log.Printf("[mt5:%s] onquote stream: %v", a.venue, err)
+// runQuoteStream OnQuote 流消费外层循环：开流 → 消费帧 → 断流退避重开，直到 ctx 取消。
+// ch 仅在此 defer close——重连不关 ch，下游 broker_manager_adapters 的 for-range 持续接收。
+func (a *MT5Adapter) runQuoteStream(ctx context.Context, ch chan<- bus.Quote) {
+	defer close(ch)
+	for {
+		if ctx.Err() != nil {
 			return
 		}
-		for {
-			resp, err := stream.Recv()
-			if err != nil {
-				if ctx.Err() == nil {
-					log.Printf("[mt5:%s] onquote recv: %v", a.venue, err)
-				}
+		sctx := a.withSessionMD(ctx)
+		a.resubscribeAll(sctx)
+		stream, err := a.streams.OnQuote(sctx, &mt5pb.OnQuoteRequest{Id: a.token})
+		if err != nil {
+			if ctx.Err() != nil {
 				return
 			}
-			q := resp.GetResult()
-			if q == nil {
-				continue
-			}
-			brokerSym := q.GetSymbol()
-			// 实时报价流统一用本地接收时间——mtapi 网关按经纪商服务器时区编码
-			// time（FxPro UTC+3 等），各经纪商偏移各异无法通用补偿；本机时钟相对
-			// freshness TTL（60s）毫秒级误差可忽略。
-			ts := time.Now()
-			ch <- bus.Quote{
-				Symbol:      a.canonical(brokerSym),
-				Venue:       a.venue,
-				VenueSymbol: brokerSym,
-				VenueType:   "mt5",
-				Bid:         q.GetBid(),
-				Ask:         q.GetAsk(),
-				Time:        ts,
-			}
+			log.Printf("[mt5:%s] onquote stream open: %v", a.venue, err)
+			a.quoteReconnectBackoff(ctx)
+			continue
 		}
-	}()
+		if !a.consumeQuoteFrames(ctx, stream, ch) {
+			return // ctx 取消
+		}
+		// 流断 → 外层重开
+	}
+}
 
-	return ch, cancel
+// consumeQuoteFrames 内层 Recv 循环。返回 false = ctx 取消（外层退出）；true = 流断需重连。
+// 流断时若 IsSessionLost → 复用 S1 reconnectSession 重建 account 会话（margin 流同模式）。
+func (a *MT5Adapter) consumeQuoteFrames(ctx context.Context, stream mt5pb.Streams_OnQuoteClient, ch chan<- bus.Quote) bool {
+	for {
+		if ctx.Err() != nil {
+			return false
+		}
+		resp, err := stream.Recv()
+		if err != nil {
+			if ctx.Err() != nil {
+				return false
+			}
+			log.Printf("[mt5:%s] onquote recv: %v", a.venue, err)
+			if IsSessionLost(err) {
+				if rerr := a.reconnectSession(ctx); rerr != nil {
+					log.Printf("[mt5:%s] onquote reconnect: %v", a.venue, rerr)
+				}
+			}
+			a.quoteReconnectBackoff(ctx)
+			log.Printf("[mt5:%s] onquote stream reopened", a.venue)
+			return true
+		}
+		q := resp.GetResult()
+		if q == nil {
+			continue
+		}
+		brokerSym := q.GetSymbol()
+		// 实时报价流统一用本地接收时间——mtapi 网关按经纪商服务器时区编码
+		// time（FxPro UTC+3 等），各经纪商偏移各异无法通用补偿；本机时钟相对
+		// freshness TTL（60s）毫秒级误差可忽略。
+		ts := time.Now()
+		ch <- bus.Quote{
+			Symbol:      a.canonical(brokerSym),
+			Venue:       a.venue,
+			VenueSymbol: brokerSym,
+			VenueType:   "mt5",
+			Bid:         q.GetBid(),
+			Ask:         q.GetAsk(),
+			Time:        ts,
+		}
+		a.quoteReconIdx = 0 // 成功消费一帧 → 重置重连退避档位
+	}
+}
+
+// quoteReconnectBackoff OnQuote 流重连退避（复用 marginReconnectBackoff 1s/5s/30s，同因同退避）。
+// 封顶后保持末档；ctx 取消立即返回。
+func (a *MT5Adapter) quoteReconnectBackoff(ctx context.Context) {
+	idx := a.quoteReconIdx
+	if idx >= len(marginReconnectBackoff) {
+		idx = len(marginReconnectBackoff) - 1
+	}
+	d := marginReconnectBackoff[idx]
+	a.quoteReconIdx++
+	select {
+	case <-time.After(d):
+	case <-ctx.Done():
+	}
 }
 
 // Resubscribe 运行时补订阅新符号（D-042：保存映射后立即生效，无需重启/重开流）。
 // 仅注册会话订阅（mtapi 幂等），不开新 OnQuote 流——会话按当前订阅集投递，已开流自动接上。
 // D-047 缺陷③：映射了不重订阅 = 没报价流。
+// D-100：同时增补订阅集镜像，OnQuote 流重连后 resubscribeAll 恢复全集。
 func (a *MT5Adapter) Resubscribe(symbols []string) {
 	if a.token == "" {
 		return
 	}
+	a.addSubSet(symbols)
 	sctx := a.withSessionMD(a.stopCtx)
 	for _, sym := range symbols {
 		_, err := a.subs.Subscribe(sctx, &mt5pb.SubscribeRequest{Id: a.token, Symbol: sym})
