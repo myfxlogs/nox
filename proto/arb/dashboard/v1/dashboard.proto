@@ -647,7 +647,15 @@ message StreamUpdatesResponse {
     BrokerPositionSnapshot broker_positions = 8;        // Broker 实持仓实时推送（全量快照）
     AccountSnapshot accounts = 9;                       // 账户资产实时推送（全量快照，D-053）
     FundingNeedNotice funding_need = 10;                // 资金注入提醒弹窗（D-072，余额不足实时推）
+    PositionChangeNotice position_change = 11;          // 持仓变更通知（D-107 P3，只含通知不含数据）
   }
+}
+
+// 持仓变更通知（D-107 P3）：OnOrderUpdate 事件经 orderTopic → StreamUpdates case 11 推送。
+// 只含通知不含数据——前端零信任：收到通知→调既有 RPC 重取（useSnapshot/usePositionsPage 等）。
+message PositionChangeNotice {
+  string venue = 1;
+  int64 ticket = 2;
 }
 
 // 资金注入提醒（D-072）：swap 套利余额不足时实时弹窗（不入 alerts 表，断线不回放）。
