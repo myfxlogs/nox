@@ -89,6 +89,8 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 	ad := adapter.NewMT5Adapter(a.Venue, a.Host, a.Server, int32(a.Port), a.User, a.Password)
 	// D-099：MarginSink 须在 Connect 前注入（Connect 末尾 go runMarginSource 读此字段）。
 	ad.MarginSink = m.MarginSink
+	// D-107 P1：OrderEventSink 须在 Connect 前注入（Connect 末尾 go runOrderEventSource 读此字段）。
+	ad.OrderEventSink = m.OrderEventSink
 	if err := ad.Connect(ctx); err != nil {
 		return fmt.Errorf("mt5 connect: %w", err)
 	}

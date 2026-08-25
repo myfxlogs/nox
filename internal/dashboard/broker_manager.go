@@ -85,6 +85,10 @@ type BrokerManager struct {
 	// MarginSink margin fact 下沉注入（D-099 事件驱动化）：同 SwapKick 注入模式，
 	// wiring/main 注入，brokerMgr 不依赖 engine 包；startAdapter 构造 adapter 时透传（nil 安全）。
 	MarginSink func(fact.Fact)
+
+	// OrderEventSink 订单事件下沉注入（D-107 P1 事件驱动二阶段）：同 MarginSink 注入模式，
+	// wiring/main 注入（sink = 发布到 orderTopic）；startMT5 透传至 adapter（nil 安全）。
+	OrderEventSink func(bus.OrderEvent)
 }
 
 // NewBrokerManager 创建管理器。symbolsTTL 由调用方从 config.SymbolsTTL 注入。
