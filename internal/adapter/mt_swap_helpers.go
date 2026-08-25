@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/bus"
 	"arb/internal/fact"
 
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
@@ -84,14 +83,19 @@ const swapInPointsGuardUSD = 500.0
 
 // swapInPointsGuardRail D-092：InPoints emit 后护栏——每手日 swap 美元额
 // |s|×point×CS 超阈值时记 warn（仍 emit）。返回 true=已告警（测试可断言）。
-func swapInPointsGuardRail(src, venue, brokerSym string, s, point, cs float64) bool {
+// D-104 P1 T2：加 canon + price 参——canonical 以 "JPY" 结尾时 per-lot 值除以 price
+// （JPY 计价货币额 → USD 换算，防 JPY 对 per-lot 值偏大误报）。
+func swapInPointsGuardRail(src, venue, canon string, s, point, cs, price float64) bool {
 	if cs <= 0 || point <= 0 {
 		return false
 	}
 	perLot := math.Abs(s) * point * cs
+	if strings.HasSuffix(canon, "JPY") && price > 0 {
+		perLot /= price // JPY 计价 → USD 换算
+	}
 	if perLot > swapInPointsGuardUSD {
 		log.Printf("[%s:%s] [swap] WARN in-points per-lot USD=%.2f > %.0f (sym=%s s=%.4f point=%.6f cs=%.0f) — emit retained, possible semantic drift",
-			src, venue, perLot, swapInPointsGuardUSD, brokerSym, s, point, cs)
+			src, venue, perLot, swapInPointsGuardUSD, canon, s, point, cs)
 		return true
 	}
 	return false
@@ -255,42 +259,4 @@ func swapResult(venue string, facts []fact.Fact, errs []string) ([]fact.Fact, er
 		log.Printf("[%s] swap %s", venue, e)
 	}
 	return facts, nil
-}
-
-// summarizeMissingSyms 缺报价符号名单摘要：前 10 个 + 超出计 "…+N"（D-104 P0 返修③ R-c2）。
-func summarizeMissingSyms(syms []string) string {
-	if len(syms) <= 10 {
-		return strings.Join(syms, ",")
-	}
-	return strings.Join(syms[:10], ",") + fmt.Sprintf(",…+%d", len(syms)-10)
-}
-
-// symbolSet 提取映射去重后的 canonical 集合。
-func symbolSet(sm map[string]string) []string {
-	seen := make(map[string]bool, len(sm))
-	out := make([]string, 0, len(sm))
-	for _, c := range sm {
-		if !seen[c] {
-			seen[c] = true
-			out = append(out, c)
-		}
-	}
-	return out
-}
-
-// venuePrice 取 canonical 在本 venue 的最新 bid；缺失回退任一 venue 中价（近似换算，bps 精度足够）。
-func venuePrice(snap map[string]map[string]bus.Quote, canonical, venue, venueType string) float64 {
-	venues, ok := snap[canonical]
-	if !ok {
-		return 0
-	}
-	if v, ok2 := venues[venue+":"+venueType]; ok2 && v.Bid > 0 {
-		return v.Bid
-	}
-	for _, v := range venues {
-		if v.Mid() > 0 {
-			return v.Mid()
-		}
-	}
-	return 0
 }

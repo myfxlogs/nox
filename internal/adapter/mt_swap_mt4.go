@@ -108,9 +108,10 @@ func (a *MT4Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 			emit++
 		}
 		// D-092 护栏：InPoints emit 后检查每手日 swap 美元额（防 FxPro mode 9 语义漂移）。
+		// D-104 P1 T2：传 canon + price（JPY 计价 → USD 换算）。
 		if mode == SwapModeInPoints {
-			swapInPointsGuardRail("mt4", a.venue, brokerSym, ex.GetSwapLong(), point, cs)
-			swapInPointsGuardRail("mt4", a.venue, brokerSym, ex.GetSwapShort(), point, cs)
+			swapInPointsGuardRail("mt4", a.venue, canon, ex.GetSwapLong(), point, cs, price)
+			swapInPointsGuardRail("mt4", a.venue, canon, ex.GetSwapShort(), point, cs, price)
 		}
 	}
 	swapPollSummary("mt4", a.venue, emit, emit0, skips)

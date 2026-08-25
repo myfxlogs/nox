@@ -168,7 +168,7 @@ func TestSwapInPointsGuardRail(t *testing.T) {
 		{"point=0 安全返回 false", 999, 0, 1000, false},
 	}
 	for _, c := range cases {
-		got := swapInPointsGuardRail("mt5", "fxpro", "WTI", c.s, c.point, c.cs)
+		got := swapInPointsGuardRail("mt5", "fxpro", "WTI", c.s, c.point, c.cs, 0)
 		if got != c.want {
 			t.Errorf("%s: guard = %v, want %v", c.name, got, c.want)
 		}

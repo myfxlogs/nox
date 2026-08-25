@@ -14,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"arb/internal/bus"
@@ -100,6 +101,13 @@ func mt5SwapMode(t mt5pb.SwapType, long, short float64) SwapMode {
 	}
 }
 
+// swapTypeZeroAsInPoints D-104 P1 T1：venue 级 override——SwapType==0 + 非零值 → InPoints。
+// PXBT（1314615）实证：SwapType=0 却带非零 rates，实际 InPoints 语义（非矛盾数据）。
+// mt5SwapMode 对 SwapType=0+非零 rates 返回 Uncalibrated（矛盾数据），此处 override 修正。
+var swapTypeZeroAsInPoints = map[string]bool{
+	"1314615": true, // PXBT
+}
+
 // swapPerCallTimeout 单符号 SymbolParams 调用超时（S5，2026-08-24）。
 // PXBT 实证：261 次 DeadlineExceeded 全部因单 venue 慢 SymbolParams 拖垮整轮 poll
 // （共享 parent ctx 不自带超时 → 全符号超时 facts 空 → swapResult 返回 err）。
@@ -114,86 +122,148 @@ const swapPerCallTimeout = 3 * time.Second
 // 每轮每 venue 一行汇总日志（D-060 F1 跳过可观测）：emit/emit0 按符号计，skip 附原因。
 // WP1：未覆盖 SwapType 计数（7/8/9+）单独汇总日志，禁静默（探测面隐形收缩 P4）。
 // S5：每符号 SymbolParams 派生 per-call 3s 超时（慢 venue 不拖垮整轮，facts>0 仍部分成功）。
+// D-104 P1 T1：PXBT override（venue=1314615 + SwapType==0 + 非零值 → InPoints）。
+// D-104 P1 T3：有界并发 8（semaphore + per-index 结果槽，循环后合并）。
 func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fact, error) {
 	sm := a.SymbolMap()
 	if len(sm) == 0 {
 		return nil, nil
 	}
 	snap := q.Snapshot(ctx, symbolSet(sm))
+
+	// D-104 P1 T3：有界并发 8——符号列表 + per-index 结果槽（含全部产出），循环后按序合并。
+	type symEntry struct{ brokerSym, canon string }
+	syms := make([]symEntry, 0, len(sm))
+	for brokerSym, canon := range sm {
+		syms = append(syms, symEntry{brokerSym, canon})
+	}
+	type swapSlot struct {
+		facts        []fact.Fact
+		errs         []string
+		skips        []string
+		emit, emit0  int
+		missingPrice int
+		missingSym   string
+		uncoveredRaw int32
+		hasUncovered bool
+		tripleDay    float64
+		hasTripleDay bool
+	}
+	slots := make([]swapSlot, len(syms))
+	sem := make(chan struct{}, 8)
+	var wg sync.WaitGroup
+	for i, ent := range syms {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(i int, ent symEntry) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			slot := &slots[i]
+			brokerSym, canon := ent.brokerSym, ent.canon
+			// S5：派生 per-call 超时，慢符号进 errs 不阻塞整体（parent ctx 不变）。
+			pctx, cancel := context.WithTimeout(a.withSessionMD(ctx), swapPerCallTimeout)
+			resp, err := a.mt5.SymbolParams(pctx, &mt5pb.SymbolParamsRequest{Id: a.token, Symbol: brokerSym})
+			cancel()
+			if err != nil {
+				slot.errs = append(slot.errs, brokerSym+": "+err.Error())
+				return
+			}
+			if e := resp.GetError(); e != nil {
+				slot.errs = append(slot.errs, brokerSym+": "+e.GetMessage())
+				return
+			}
+			r := resp.GetResult()
+			if r == nil {
+				slot.skips = append(slot.skips, brokerSym+": result nil")
+				return
+			}
+			sg := r.GetSymbolGroup()
+			si := r.GetSymbolInfo()
+			if sg == nil {
+				slot.skips = append(slot.skips, brokerSym+": symbolGroup nil")
+				return
+			}
+			// D-077 修复⑪A M3：逐符号收集 ThreeDaysSwap。
+			slot.tripleDay = mt5TripleSwapDay(sg.GetThreeDaysSwap())
+			slot.hasTripleDay = true
+			// trade_mode 不依赖 swap 标定（D-060 F3）：emit/emit0/标定 skip 的符号都发。
+			slot.facts = append(slot.facts, tradeModeFact(a.venue, canon, sg.GetTradeMode(), "mt5"))
+			// D-104 P1 T1：PXBT override——venue=1314615 + SwapType==0 + 非零值 → InPoints
+			//（mt5SwapMode 对 SwapType=0+非零 rates 返回 Uncalibrated=矛盾数据，PXBT 实证=InPoints）。
+			var mode SwapMode
+			if swapTypeZeroAsInPoints[a.venue] && sg.GetSwapType() == mt5pb.SwapType_SwapType_SwapNone && (sg.GetSwapLong() != 0 || sg.GetSwapShort() != 0) {
+				mode = SwapModeInPoints
+			} else {
+				mode = mt5SwapMode(sg.GetSwapType(), sg.GetSwapLong(), sg.GetSwapShort())
+			}
+			if mode == SwapModeUncalibrated {
+				slot.uncoveredRaw = int32(sg.GetSwapType())
+				slot.hasUncovered = true
+				slot.skips = append(slot.skips, mt5SkipReason(brokerSym, sg))
+				return
+			}
+			point, cs := 0.0, 0.0
+			if si != nil {
+				point, cs = si.GetPoints(), si.GetContractSize()
+			}
+			price := venuePrice(snap, canon, a.venue, "mt5")
+			if swapNeedsPrice(mode) && price <= 0 {
+				slot.missingPrice = 1
+				slot.missingSym = brokerSym
+				return
+			}
+			n := 0
+			if l, ok := normalizeSwapBpsDaily(mode, sg.GetSwapLong(), price, point, cs); ok {
+				slot.facts = append(slot.facts, swapFact(fact.KindSwapLong, a.venue, canon, l, "mt5"))
+				n++
+			}
+			if s, ok := normalizeSwapBpsDaily(mode, sg.GetSwapShort(), price, point, cs); ok {
+				slot.facts = append(slot.facts, swapFact(fact.KindSwapShort, a.venue, canon, s, "mt5"))
+				n++
+			}
+			switch {
+			case n == 0:
+				slot.skips = append(slot.skips, brokerSym+": normalize failed (no contract size?)")
+			case mode == SwapModeNone:
+				slot.emit0++ // 真停用发零值对（零息 venue 是 carry 最佳对手）
+			default:
+				slot.emit++
+			}
+			// D-092 护栏：InPoints emit 后检查每手日 swap 美元额（防 FxPro mode 9 语义漂移）。
+			// D-104 P1 T2：传 canon + price（JPY 计价 → USD 换算）。
+			if mode == SwapModeInPoints {
+				swapInPointsGuardRail("mt5", a.venue, canon, sg.GetSwapLong(), point, cs, price)
+				swapInPointsGuardRail("mt5", a.venue, canon, sg.GetSwapShort(), point, cs, price)
+			}
+		}(i, ent)
+	}
+	wg.Wait()
+
+	// D-104 P1 T3：按序合并 per-index 结果槽。
 	var facts []fact.Fact
 	var errs []string
 	var skips []string
 	emit, emit0 := 0, 0
 	missingPrice := 0
-	missingSyms := make([]string, 0)   // D-104 P0 返修③ R-c2：缺报价符号名单（前 10 进错误消息）
-	uncovered := map[int32]int{}       // SwapType 原始值 → 命中符号数（WP1 计数日志）
-	tripleDays := map[string]float64{} // D-077 修复⑪A M3：canon → 三倍日（per-symbol 全量收集）
-	for brokerSym, canon := range sm {
-		// S5：派生 per-call 超时，慢符号进 errs 不阻塞整体（parent ctx 不变）。
-		pctx, cancel := context.WithTimeout(a.withSessionMD(ctx), swapPerCallTimeout)
-		resp, err := a.mt5.SymbolParams(pctx, &mt5pb.SymbolParamsRequest{Id: a.token, Symbol: brokerSym})
-		cancel()
-		if err != nil {
-			errs = append(errs, brokerSym+": "+err.Error())
-			continue
+	missingSyms := make([]string, 0)
+	uncovered := map[int32]int{}
+	tripleDays := map[string]float64{}
+	for i, ent := range syms {
+		slot := &slots[i]
+		facts = append(facts, slot.facts...)
+		errs = append(errs, slot.errs...)
+		skips = append(skips, slot.skips...)
+		emit += slot.emit
+		emit0 += slot.emit0
+		missingPrice += slot.missingPrice
+		if slot.missingSym != "" {
+			missingSyms = append(missingSyms, slot.missingSym)
 		}
-		if e := resp.GetError(); e != nil {
-			errs = append(errs, brokerSym+": "+e.GetMessage())
-			continue
+		if slot.hasUncovered {
+			uncovered[slot.uncoveredRaw]++
 		}
-		r := resp.GetResult()
-		if r == nil {
-			skips = append(skips, brokerSym+": result nil")
-			continue
-		}
-		sg := r.GetSymbolGroup()
-		si := r.GetSymbolInfo()
-		if sg == nil {
-			skips = append(skips, brokerSym+": symbolGroup nil")
-			continue
-		}
-		// D-077 修复⑪A M3：逐符号收集 ThreeDaysSwap（删「首个符号代表 venue」）。
-		tripleDays[canon] = mt5TripleSwapDay(sg.GetThreeDaysSwap())
-		// trade_mode 不依赖 swap 标定（D-060 F3）：emit/emit0/标定 skip 的符号都发。
-		facts = append(facts, tradeModeFact(a.venue, canon, sg.GetTradeMode(), "mt5"))
-		mode := mt5SwapMode(sg.GetSwapType(), sg.GetSwapLong(), sg.GetSwapShort())
-		if mode == SwapModeUncalibrated {
-			raw := int32(sg.GetSwapType())
-			uncovered[raw]++
-			skips = append(skips, mt5SkipReason(brokerSym, sg))
-			continue
-		}
-		point, cs := 0.0, 0.0
-		if si != nil {
-			point, cs = si.GetPoints(), si.GetContractSize()
-		}
-		price := venuePrice(snap, canon, a.venue, "mt5")
-		if swapNeedsPrice(mode) && price <= 0 {
-			missingPrice++
-			missingSyms = append(missingSyms, brokerSym)
-			continue
-		}
-		n := 0
-		if l, ok := normalizeSwapBpsDaily(mode, sg.GetSwapLong(), price, point, cs); ok {
-			facts = append(facts, swapFact(fact.KindSwapLong, a.venue, canon, l, "mt5"))
-			n++
-		}
-		if s, ok := normalizeSwapBpsDaily(mode, sg.GetSwapShort(), price, point, cs); ok {
-			facts = append(facts, swapFact(fact.KindSwapShort, a.venue, canon, s, "mt5"))
-			n++
-		}
-		switch {
-		case n == 0:
-			skips = append(skips, brokerSym+": normalize failed (no contract size?)")
-		case mode == SwapModeNone:
-			emit0++ // 真停用发零值对（零息 venue 是 carry 最佳对手）
-		default:
-			emit++
-		}
-		// D-092 护栏：InPoints emit 后检查每手日 swap 美元额（防 FxPro mode 9 语义漂移）。
-		if mode == SwapModeInPoints {
-			swapInPointsGuardRail("mt5", a.venue, brokerSym, sg.GetSwapLong(), point, cs)
-			swapInPointsGuardRail("mt5", a.venue, brokerSym, sg.GetSwapShort(), point, cs)
+		if slot.hasTripleDay {
+			tripleDays[ent.canon] = slot.tripleDay
 		}
 	}
 	swapPollSummary("mt5", a.venue, emit, emit0, skips)
