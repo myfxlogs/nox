@@ -43,6 +43,10 @@ type Config struct {
 
 	// B：组合平仓后重入冷却（ARB_SWAPARB_REENTRY_COOLDOWN_DAYS，默认 7）
 	ReentryCooldownDays int
+
+	// D-107 P4：事件触发扫描节流窗口（ARB_SCAN_THROTTLE，默认 30s）。
+	// Kick() 触发 scanIfDue：窗口内丢弃、超窗扫。兜底 10min 保证有界延迟。
+	ScanThrottle time.Duration
 }
 
 // Engine 自动交易引擎：三 loop → gate → 执行 → 自动平仓 → 策略淘汰（D-070/D-072）。
@@ -63,6 +67,11 @@ type Engine struct {
 	// D-087 §3.2：settlement.Settle 依赖 + 淘汰判定函数（main 装配后调 SetSettleDeps）。
 	settleDeps settlement.Deps
 	eliminator settlement.Eliminator
+
+	// D-107 P4：事件触发扫描——kickCh buffered(1) 非阻塞 send（合并语义同 P2 监控）；
+	// lastScan 节流基准（仅 positionLoop goroutine 读写，无锁——quoteReconIdx 单协程先例）。
+	kickCh   chan struct{}
+	lastScan time.Time
 }
 
 // New 创建自动交易引擎。
@@ -75,6 +84,7 @@ func New(cfg Config, store *pgstore.Store, service *dashboard.Service, oppTopic 
 		quotes:          quotes,
 		gate:            NewGate(store, cfg),
 		fundingNeedSent: make(map[string]string),
+		kickCh:          make(chan struct{}, 1), // D-107 P4：buffered(1) 非阻塞 send = 事件合并
 	}
 }
 
@@ -99,8 +109,8 @@ func (e *Engine) Run(ctx context.Context) {
 		return
 	}
 	e.ValidateStartup()
-	log.Printf("[autotrade] enabled: maxNotional=$%.0f maxPos=%d maxDailyLoss=$%.0f minNetBps=%.1f poll=%s",
-		e.cfg.MaxNotional, e.cfg.MaxPositions, e.cfg.MaxDailyLoss, e.cfg.MinNetBps, e.cfg.PollInterval)
+	log.Printf("[autotrade] enabled: maxNotional=$%.0f maxPos=%d maxDailyLoss=$%.0f minNetBps=%.1f scanThrottle=%s fallback=%s",
+		e.cfg.MaxNotional, e.cfg.MaxPositions, e.cfg.MaxDailyLoss, e.cfg.MinNetBps, e.cfg.ScanThrottle, positionFallbackInterval)
 
 	// 1. 机会订阅循环（detector 产生的 CROSS_VENUE 机会）
 	go e.oppLoop(ctx)
@@ -136,17 +146,51 @@ func maxPositionsReachedDecision(openCount, maxPositions int) bool {
 	return openCount >= maxPositions
 }
 
-// positionLoop 定期扫描 OPEN 持仓 → 按 type 分派退出 + 状态机 tick（D-072）。
+// positionFallbackInterval D-107 P4：低频兜底扫描间隔（10min，防网关事件丢失窗口）。
+// 包级 var 测试可覆写（marginReconnectBackoff 先例）。
+var positionFallbackInterval = 10 * time.Minute
+
+// Kick D-107 P4：orderTopic 事件触发重扫（非阻塞 send 到 buffered(1) chan——合并语义同 P2 监控）。
+func (e *Engine) Kick() {
+	select {
+	case e.kickCh <- struct{}{}:
+	default: // 已有待处理 kick，合并丢弃
+	}
+}
+
+// scanIfDue D-107 P4：kick 触发节流扫描——距上次扫描 < ScanThrottle → 丢弃（兜底 10min 保证有界延迟）；
+// 否则执行 scanAndClose + stateMachineTick + 更新 lastScan。
+// lastScan 无锁：仅 positionLoop goroutine 读写（quoteReconIdx 单协程先例）。
+func (e *Engine) scanIfDue(ctx context.Context) {
+	if time.Since(e.lastScan) < e.cfg.ScanThrottle {
+		return // 节流窗口内丢弃
+	}
+	e.scanAndClose(ctx)
+	e.stateMachineTick(ctx)
+	e.lastScan = time.Now()
+}
+
+// positionLoop D-107 P4：启动即扫 → select 三支（kickCh→scanIfDue / fallback→直扫 / ctx.Done）。
+// 事件驱动优先（orderTopic → Kick → scanIfDue 30s 节流），fallback 10min 兜底（防事件丢失窗口）。
 func (e *Engine) positionLoop(ctx context.Context) {
-	ticker := time.NewTicker(e.cfg.PollInterval)
-	defer ticker.Stop()
+	// 启动即扫（首个扫描立即可用 + 设 lastScan 节流基准）。
+	e.scanAndClose(ctx)
+	e.stateMachineTick(ctx)
+	e.lastScan = time.Now()
+
+	fallback := time.NewTicker(positionFallbackInterval)
+	defer fallback.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-e.kickCh:
+			e.scanIfDue(ctx) // D-107 P4：事件触发节流扫描
+		case <-fallback.C:
+			// D-107 P4：兜底直扫（不受节流限制——10min 有界延迟保证）。
 			e.scanAndClose(ctx)
 			e.stateMachineTick(ctx)
+			e.lastScan = time.Now()
 		}
 	}
 }
