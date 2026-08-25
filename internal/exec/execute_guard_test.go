@@ -3,32 +3,21 @@ package exec
 import (
 	"context"
 	"errors"
-	"os"
-	"strings"
 	"testing"
 
 	"arb/internal/store/pgstore"
+	"arb/internal/testutil"
 	"github.com/jackc/pgx/v5"
 )
 
 // testStore 连接 ARB_EXEC_TEST_PG_DSN 指定的**专用测试库**（未设置时跳过）。
-// 安全闸：dbname 必须含 "test"（可销毁数据），否则拒绝。Migrate 幂等建全量 schema。
+// 安全闸：TestDSN fail-closed 门禁（dbname 必须含 "_test"）。Migrate 幂等建全量 schema。
 // 专用库原因（D-058）：pgstore 测试用 arb_test 且其 prepareTestSchema 会 DROP SCHEMA public
 // CASCADE（sync.Once 每进程一次）；go test 默认 -p 并发跑包，exec 若共用 arb_test 会与
 // pgstore 的并发 DDL 竞态（见 23505/no schema 报错）。exec 用自己的库 = 零跨包 DDL 冲突。
 func testStore(t *testing.T) *pgstore.Store {
 	t.Helper()
-	dsn := os.Getenv("ARB_EXEC_TEST_PG_DSN")
-	if dsn == "" {
-		t.Skip("ARB_EXEC_TEST_PG_DSN 未设置，跳过需真库的测试")
-	}
-	cfg, err := pgx.ParseConfig(dsn)
-	if err != nil {
-		t.Fatalf("parse ARB_TEST_PG_DSN: %v", err)
-	}
-	if !strings.Contains(cfg.Database, "test") {
-		t.Fatalf("ARB_TEST_PG_DSN 指向非测试库 %q（测试会 TRUNCATE，拒绝）", cfg.Database)
-	}
+	dsn := testutil.TestDSN(t, "ARB_EXEC_TEST_PG_DSN")
 	ctx := context.Background()
 	s, err := pgstore.New(ctx, dsn)
 	if err != nil {
@@ -58,10 +47,7 @@ func seedConn(t *testing.T, dsn string) *pgx.Conn {
 // TestExecute_GuardMaxOpenPositions 验证 MaxOpenPositions 风控守卫（D-058）：
 // 持仓数 ≥ 上限时 Execute 在创建持仓前拒单，返回 ErrMaxOpenPositions（不触达下单）。
 func TestExecute_GuardMaxOpenPositions(t *testing.T) {
-	dsn := os.Getenv("ARB_EXEC_TEST_PG_DSN")
-	if dsn == "" {
-		t.Skip("ARB_EXEC_TEST_PG_DSN 未设置，跳过")
-	}
+	dsn := testutil.TestDSN(t, "ARB_EXEC_TEST_PG_DSN")
 	s := testStore(t)
 	conn := seedConn(t, dsn)
 	ctx := context.Background()
@@ -100,10 +86,7 @@ func TestExecute_GuardEmptyType(t *testing.T) {
 // TestExecute_GuardDuplicate 验证幂等防重守卫（D-058）：
 // 同机会已有未平仓持仓（OPEN）→ ErrDuplicateExecution；无持仓 → 正常放行。
 func TestExecute_GuardDuplicate(t *testing.T) {
-	dsn := os.Getenv("ARB_EXEC_TEST_PG_DSN")
-	if dsn == "" {
-		t.Skip("ARB_EXEC_TEST_PG_DSN 未设置，跳过")
-	}
+	dsn := testutil.TestDSN(t, "ARB_EXEC_TEST_PG_DSN")
 	s := testStore(t)
 	conn := seedConn(t, dsn)
 	ctx := context.Background()

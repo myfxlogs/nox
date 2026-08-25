@@ -3,11 +3,11 @@ package autotrade
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
 	"arb/internal/store/pgstore"
+	"arb/internal/testutil"
 )
 
 func absFloat(v float64) float64 {
@@ -19,10 +19,7 @@ func absFloat(v float64) float64 {
 
 // testAccumStore D-080 S4 单测专用 store（复用 pgstore testStore 的 DSN 约定）。
 func testAccumStore(t *testing.T) *pgstore.Store {
-	dsn := os.Getenv("ARB_TEST_PG_DSN")
-	if dsn == "" {
-		t.Skip("ARB_TEST_PG_DSN not set")
-	}
+	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
 	s, err := pgstore.New(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)
