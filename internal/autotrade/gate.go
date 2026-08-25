@@ -108,6 +108,12 @@ func (g *Gate) Submit(ctx context.Context, intent TradeIntent) GateResult {
 		MaxDailyLoss: g.cfg.MaxDailyLoss,
 		OpenCount:    openCount,
 		MaxPositions: g.cfg.MaxPositions,
+		NotionalUSD:  intent.NotionalUSD,
+		MaxNotional:  g.cfg.MaxNotional,
+		// SWAPARB 豁免 notional cap：D-096 判定书（净算月~$110=年化1.8%无杠杆，不注资）+
+		// D-097 自管 sizing（SwapArbBareCap 1 手 + minNotional skip；swap 收租需整手，
+		// MaxNotional 单笔风险 cap 语义不适用——整手收租非单笔风险敞口）。
+		SkipNotional: intent.Strategy == "SWAPARB",
 		DedupHit:     comboAlreadyOpen,
 	})
 

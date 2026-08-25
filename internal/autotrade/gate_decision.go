@@ -14,6 +14,9 @@ type GateInput struct {
 	MaxDailyLoss float64 // 日亏上限（正值，如 100）
 	OpenCount    int     // 当前开仓数
 	MaxPositions int     // 最大持仓数
+	NotionalUSD  float64 // 本笔名义价值（USD，D-108 P3 C1）
+	MaxNotional  float64 // 单笔名义上限（USD，>0 启用，≤0 禁用）
+	SkipNotional bool    // 跳过 notional 判定（SWAPARB 自管 sizing 豁免，D-096/D-097）
 	DedupHit     bool    // 幂等命中
 }
 
@@ -24,7 +27,7 @@ type GateVerdict struct {
 }
 
 // gateDecision 检查顺序判定（设计 §3.1，纯函数无 IO）。
-// 检查顺序即优先级：状态→策略禁用→日亏损→持仓数→幂等。
+// 检查顺序即优先级：状态→策略禁用→日亏损→持仓数→名义额度→幂等。
 func gateDecision(in GateInput) GateVerdict {
 	if in.State != "RUNNING" {
 		return GateVerdict{false, fmt.Sprintf("system state=%s (not RUNNING)", in.State)}
@@ -37,6 +40,11 @@ func gateDecision(in GateInput) GateVerdict {
 	}
 	if in.OpenCount >= in.MaxPositions {
 		return GateVerdict{false, fmt.Sprintf("max positions reached (%d >= %d)", in.OpenCount, in.MaxPositions)}
+	}
+	// D-108 P3 C1：单笔名义额度判定（持仓数后、幂等前；SkipNotional 跳过 SWAPARB 自管 sizing；
+	// MaxNotional≤0=禁用语义保留——未配置或显式关）。
+	if !in.SkipNotional && in.MaxNotional > 0 && in.NotionalUSD > in.MaxNotional {
+		return GateVerdict{false, fmt.Sprintf("notional $%.2f > cap $%.2f", in.NotionalUSD, in.MaxNotional)}
 	}
 	if in.DedupHit {
 		return GateVerdict{false, fmt.Sprintf("duplicate dedup key")}
