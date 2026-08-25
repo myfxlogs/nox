@@ -32,6 +32,7 @@ func (s *Service) ListPositions(ctx context.Context, req *connect.Request[v1.Lis
 	}
 	var pbPositions []*v1.Position
 	legsByPos := make(map[int64][]pgstore.PositionLeg, len(positions))
+	posIDs := make([]int64, 0, len(positions))
 	for _, p := range positions {
 		pb := positionToProto(&p)
 		// D-069：填充 legs（成交历史，OPEN + CLOSE phase）
@@ -44,6 +45,11 @@ func (s *Service) ListPositions(ctx context.Context, req *connect.Request[v1.Lis
 			pb.Legs = append(pb.Legs, positionLegToProto(&l))
 		}
 		pbPositions = append(pbPositions, pb)
+		posIDs = append(posIDs, p.ID)
+	}
+	// D-106：批量 join 结算行填充 settled_realized_usd/settled_notional_usd/hold_days（单条 SQL IN，防 N+1）。
+	if err := enrichSettlements(ctx, s.store, pbPositions, posIDs); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	// D-095：活跃行 enrich 7 派生字段（bpm 匹配+notional+应得+达成率+收敛型当前 bps）
 	s.enrichPositions(ctx, pbPositions, legsByPos)

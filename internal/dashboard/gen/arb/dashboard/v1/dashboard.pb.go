@@ -2960,6 +2960,9 @@ type Position struct {
 	ExpectedSwapUsdToDate *float64               `protobuf:"fixed64,16,opt,name=expected_swap_usd_to_date,json=expectedSwapUsdToDate,proto3,oneof" json:"expected_swap_usd_to_date,omitempty"` // D-095：预期应得（SWAPARB/CARRY）
 	AttainmentPct         *float64               `protobuf:"fixed64,17,opt,name=attainment_pct,json=attainmentPct,proto3,oneof" json:"attainment_pct,omitempty"`                               // D-095：达成率 16 vs 14（息差型）
 	CurrentNetBps         *float64               `protobuf:"fixed64,18,opt,name=current_net_bps,json=currentNetBps,proto3,oneof" json:"current_net_bps,omitempty"`                             // D-095：收敛型当前 bps（rollup 最新）
+	SettledRealizedUsd    *float64               `protobuf:"fixed64,19,opt,name=settled_realized_usd,json=settledRealizedUsd,proto3,oneof" json:"settled_realized_usd,omitempty"`              // D-106：结算口径 realized_usd（position_settlements join；无结算行=缺省）
+	SettledNotionalUsd    *float64               `protobuf:"fixed64,20,opt,name=settled_notional_usd,json=settledNotionalUsd,proto3,oneof" json:"settled_notional_usd,omitempty"`              // D-106：结算口径 notional_usd（同上）
+	HoldDays              *float64               `protobuf:"fixed64,21,opt,name=hold_days,json=holdDays,proto3,oneof" json:"hold_days,omitempty"`                                              // D-106：持有天数（结算行 hold_days 优先；否则 closed_at−opened_at）
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -3116,6 +3119,27 @@ func (x *Position) GetAttainmentPct() float64 {
 func (x *Position) GetCurrentNetBps() float64 {
 	if x != nil && x.CurrentNetBps != nil {
 		return *x.CurrentNetBps
+	}
+	return 0
+}
+
+func (x *Position) GetSettledRealizedUsd() float64 {
+	if x != nil && x.SettledRealizedUsd != nil {
+		return *x.SettledRealizedUsd
+	}
+	return 0
+}
+
+func (x *Position) GetSettledNotionalUsd() float64 {
+	if x != nil && x.SettledNotionalUsd != nil {
+		return *x.SettledNotionalUsd
+	}
+	return 0
+}
+
+func (x *Position) GetHoldDays() float64 {
+	if x != nil && x.HoldDays != nil {
+		return *x.HoldDays
 	}
 	return 0
 }
@@ -3354,7 +3378,7 @@ func (x *ClosePositionResponse) GetMessage() string {
 
 type ListPositionsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"` // 空 = 全部；OPEN/OPENING/LEGGED 等
+	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"` // 空 = 全部；"ACTIVE" = OPEN/OPENING/LEGGED/CLOSING 任一（在仓 Tab，D-106）；其余 = 单一状态
 	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`  // ≤0 = 默认 50
 	Offset        int32                  `protobuf:"varint,3,opt,name=offset,proto3" json:"offset,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -10156,7 +10180,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\border_id\x18\f \x01(\tR\aorderId\x12\x16\n" +
 	"\x06status\x18\r \x01(\tR\x06status\x12*\n" +
 	"\x02ts\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\x02tsB\x0f\n" +
-	"\r_price_actual\"\xc8\a\n" +
+	"\r_price_actual\"\x98\t\n" +
 	"\bPosition\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12%\n" +
 	"\x0eopportunity_id\x18\x02 \x01(\tR\ropportunityId\x12\x12\n" +
@@ -10176,7 +10200,11 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\vnet_pnl_usd\x18\x0f \x01(\x01H\x05R\tnetPnlUsd\x88\x01\x01\x12=\n" +
 	"\x19expected_swap_usd_to_date\x18\x10 \x01(\x01H\x06R\x15expectedSwapUsdToDate\x88\x01\x01\x12*\n" +
 	"\x0eattainment_pct\x18\x11 \x01(\x01H\aR\rattainmentPct\x88\x01\x01\x12+\n" +
-	"\x0fcurrent_net_bps\x18\x12 \x01(\x01H\bR\rcurrentNetBps\x88\x01\x01B\x0f\n" +
+	"\x0fcurrent_net_bps\x18\x12 \x01(\x01H\bR\rcurrentNetBps\x88\x01\x01\x125\n" +
+	"\x14settled_realized_usd\x18\x13 \x01(\x01H\tR\x12settledRealizedUsd\x88\x01\x01\x125\n" +
+	"\x14settled_notional_usd\x18\x14 \x01(\x01H\n" +
+	"R\x12settledNotionalUsd\x88\x01\x01\x12 \n" +
+	"\thold_days\x18\x15 \x01(\x01H\vR\bholdDays\x88\x01\x01B\x0f\n" +
 	"\r_realized_pnlB\x16\n" +
 	"\x14_expected_annual_pctB\x1a\n" +
 	"\x18_expected_swap_bps_dailyB\x13\n" +
@@ -10185,7 +10213,11 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\f_net_pnl_usdB\x1c\n" +
 	"\x1a_expected_swap_usd_to_dateB\x11\n" +
 	"\x0f_attainment_pctB\x12\n" +
-	"\x10_current_net_bps\"\xcd\x01\n" +
+	"\x10_current_net_bpsB\x17\n" +
+	"\x15_settled_realized_usdB\x17\n" +
+	"\x15_settled_notional_usdB\f\n" +
+	"\n" +
+	"_hold_days\"\xcd\x01\n" +
 	"\x19ExecuteOpportunityRequest\x12%\n" +
 	"\x0eopportunity_id\x18\x01 \x01(\tR\ropportunityId\x12\x1d\n" +
 	"\n" +
