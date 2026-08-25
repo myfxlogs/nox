@@ -176,7 +176,7 @@ func (m *PersonalMonitor) alert(ctx context.Context, p *pgstore.PersonalPosition
 	var msg string
 	switch level {
 	case "warn":
-		msg = p.Asset + "(" + p.Kind + ") 价格 " + fmtFloat(mid) + " ≥ " + fmtFloat(*p.WarnHigh) + "，建议手动离场"
+		msg = p.Asset + "(" + p.Kind + ") 价格 " + fmtFloat(mid) + " ≥ " + fmtFloat(*p.WarnHigh) + "，主动平仓线"
 	case "crit":
 		msg = p.Asset + "(" + p.Kind + ") 价格 " + fmtFloat(mid) + " ≥ " + fmtFloat(*p.CritHigh) + "，强平底线"
 	default:
