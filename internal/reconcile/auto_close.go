@@ -130,6 +130,8 @@ func (r *Reconciler) autoClose(
 }
 
 // autoFailOPENINGZombie OPENING 僵尸收编（超 24h）：腿在 venue 有则照收尾，无则 FAILED + warn。
+// D-108 A3：venue 命中（腿在 venue 真有持仓）→ 不置 FAILED（记录告警，交人工/下轮）；
+// 未命中才置 FAILED。原死代码 venue 命中后 break → 无条件置 FAILED=误杀真持仓。
 func (r *Reconciler) autoFailOPENINGZombie(
 	ctx context.Context,
 	pos *pgstore.Position,
@@ -148,9 +150,12 @@ func (r *Reconciler) autoFailOPENINGZombie(
 			continue
 		}
 		if _, ok := venueOrders[leg.OrderID]; ok {
-			// 腿在 venue 有 → 照收尾（但 OPENING 通常无 FILLED 腿，走 FAILED 更合理）
-			// 此处置 FAILED（OPENING 无有效持仓，venue 侧残留另案人工处置）
-			break
+			// D-108 A3：腿在 venue 有 → 不置 FAILED（venue 真有持仓，误杀风险），
+			// 记录告警交人工/下轮对账处置。
+			msg := fmt.Sprintf("OPENING 僵尸 position #%d 腿 ticket=%s 在 venue 有持仓，不归档 FAILED（交人工/对账）", posID, leg.OrderID)
+			r.insertAlertCtx(ctx, "warn", msg)
+			log.Printf("[reconcile] %s", msg)
+			return nil
 		}
 	}
 	// OPENING 僵尸无有效持仓 → FAILED

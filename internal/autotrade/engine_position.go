@@ -12,6 +12,10 @@ import (
 	"arb/internal/store/pgstore"
 )
 
+// swapArbBasisExitBps SWAPARB/CARRY 基差止损门槛（D-108 A5，D-102 预设规则代码化）。
+// 包级 var 便于测试覆写（marginReconnectBackoff 先例）。
+var swapArbBasisExitBps = 4.0
+
 // checkExitCondition 按 type 分派退出条件（D-072 §4.2）。
 // 息差型判定走 position.IsCarryType 共用 helper（P3 单一真相：monitor.go 跳过收敛告警 + 此处退出分派同源）。
 // 返回 (shouldClose, reason)。
@@ -46,6 +50,14 @@ func (e *Engine) checkExitCondition(ctx context.Context, p *pgstore.Position) (b
 	}
 	if netSwap <= e.cfg.SwapArbExitBps {
 		return true, fmt.Sprintf("net swap %.3f bps/day <= %.1f", netSwap, e.cfg.SwapArbExitBps)
+	}
+	// D-108 A5：基差止损——重算当前基差（两腿 venue 最新报价 cross-broker spread bps），
+	// basisBps > swapArbBasisExitBps（默认 4）→ 平仓（D-102 预设规则代码化）。
+	// 报价缺失/陈旧 → 不决策 return false（与 D-105 fail-closed 一致）。
+	if basisBps, bok := e.currentBasisBps(p); bok {
+		if basisBps > swapArbBasisExitBps {
+			return true, fmt.Sprintf("basis loss limit %.1f bps > %.1f", basisBps, swapArbBasisExitBps)
+		}
 	}
 	return false, ""
 }
@@ -252,48 +264,6 @@ func (e *Engine) runStartupElimination(ctx context.Context) {
 			}
 		}
 	}
-}
-
-// currentNetBps 实时计算持仓的当前净 bps（收敛型平仓用）。
-func (e *Engine) currentNetBps(p *pgstore.Position) (float64, bool) {
-	if e.quotes == nil {
-		return p.ExpectedNetBps, true
-	}
-	canonical := canonicalFromOppID(p.OpportunityID)
-	if canonical == "" {
-		return p.ExpectedNetBps, true
-	}
-	legs, err := e.store.ListPositionLegs(context.Background(), p.ID)
-	if err != nil {
-		return 0, false
-	}
-	var buyLeg, sellLeg *pgstore.PositionLeg
-	for i := range legs {
-		if legs[i].Phase == "OPEN" {
-			if legs[i].Side == "BUY" {
-				buyLeg = &legs[i]
-			} else {
-				sellLeg = &legs[i]
-			}
-		}
-	}
-	if buyLeg == nil || sellLeg == nil {
-		return 0, false
-	}
-	buyClose, ok1 := e.quotes.Latest(canonical, buyLeg.Venue)
-	sellClose, ok2 := e.quotes.Latest(canonical, sellLeg.Venue)
-	if !ok1 || !ok2 {
-		return 0, false
-	}
-	spread := buyClose.Bid - sellClose.Ask
-	if spread <= 0 {
-		return 0, true
-	}
-	refPrice := buyClose.Ask
-	if buyLeg.PriceActual != nil && *buyLeg.PriceActual > 0 {
-		refPrice = *buyLeg.PriceActual
-	}
-	return spread / refPrice * 10000, true
 }
 
 // updateStrategyStat 已被 settlement.Settle 取代（D-087 §3.2，旧对象 no-op 缺陷根除）。

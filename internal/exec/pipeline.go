@@ -187,9 +187,9 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 		status = "LEGGED"
 	}
 
-	// 回填 legs 到 DB
+	// 回填 legs 到 DB（D-108 A1 fail-closed：腿写库失败 → error+critical 告警，孤儿不可留）
 	for i, r := range results {
-		_ = p.store.CreatePositionLeg(ctx, &pgstore.PositionLeg{
+		if err := p.store.CreatePositionLeg(ctx, &pgstore.PositionLeg{
 			PositionID:    posID,
 			LegNo:         int16(i),
 			Phase:         "OPEN",
@@ -201,7 +201,12 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 			PriceActual:   &r.Price,
 			OrderID:       r.OrderID,
 			Status:        r.Status,
-		})
+		}); err != nil {
+			msg := fmt.Sprintf("leg persist failed position=%d leg=%d venue=%s: %v", posID, i, legs[i].VenueKey, err)
+			log.Printf("[exec] %s", msg)
+			_ = p.store.InsertAlert(ctx, nil, "critical", msg)
+			return &ExecuteResult{PositionID: posID, Status: "FAILED", Legs: results}, fmt.Errorf("leg persist: %w", err)
+		}
 	}
 
 	// 更新 position 状态

@@ -29,7 +29,10 @@ func TestCheckResidualLegs_NoResidual(t *testing.T) {
 		"vB:mt5": {{Ticket: "8888"}}, // 不含 2002
 	}}
 	p := &Pipeline{verifier: v}
-	residual := p.checkResidualLegs(context.Background(), legs)
+	residual, err := p.checkResidualLegs(context.Background(), legs)
+	if err != nil {
+		t.Fatalf("no residual: unexpected err: %v", err)
+	}
 	if len(residual) != 0 {
 		t.Errorf("no residual want 0, got %v", residual)
 	}
@@ -47,7 +50,10 @@ func TestCheckResidualLegs_HasResidual(t *testing.T) {
 		"vB:mt5": {{Ticket: "8888"}},                   // 不含 2002
 	}}
 	p := &Pipeline{verifier: v}
-	residual := p.checkResidualLegs(context.Background(), legs)
+	residual, err := p.checkResidualLegs(context.Background(), legs)
+	if err != nil {
+		t.Fatalf("has residual: unexpected err: %v", err)
+	}
 	if len(residual) != 1 {
 		t.Fatalf("residual want 1, got %d: %v", len(residual), residual)
 	}
@@ -56,16 +62,16 @@ func TestCheckResidualLegs_HasResidual(t *testing.T) {
 	}
 }
 
-// TestCheckResidualLegs_VerifierError verifier 报错 → fail-open 返回空（不阻断平仓）。
+// TestCheckResidualLegs_VerifierError verifier 报错 → fail-closed 返回 error（D-108 A2，拒绝置 CLOSED）。
 func TestCheckResidualLegs_VerifierError(t *testing.T) {
 	legs := []pgstore.PositionLeg{
 		{Phase: "OPEN", Status: "FILLED", Venue: "vA:mt5", OrderID: "1001"},
 	}
 	v := &fakeVerifier{err: context.DeadlineExceeded}
 	p := &Pipeline{verifier: v}
-	residual := p.checkResidualLegs(context.Background(), legs)
-	if len(residual) != 0 {
-		t.Errorf("verifier error fail-open want 0, got %v", residual)
+	_, err := p.checkResidualLegs(context.Background(), legs)
+	if err == nil {
+		t.Errorf("verifier error fail-closed want error, got nil")
 	}
 }
 
@@ -78,20 +84,23 @@ func TestCheckResidualLegs_SkipNonFilledLegs(t *testing.T) {
 	}
 	v := &fakeVerifier{orders: map[string][]OpenedOrder{}}
 	p := &Pipeline{verifier: v}
-	residual := p.checkResidualLegs(context.Background(), legs)
+	residual, err := p.checkResidualLegs(context.Background(), legs)
+	if err != nil {
+		t.Fatalf("skip: unexpected err: %v", err)
+	}
 	if len(residual) != 0 {
 		t.Errorf("skip non-filled/non-open/empty-ticket want 0, got %v", residual)
 	}
 }
 
-// TestCheckResidualLegs_NilVerifier verifier 未接线 → 返回空（跳过回读）。
+// TestCheckResidualLegs_NilVerifier verifier 未接线 → 返回 error（D-108 A2 fail-closed）。
 func TestCheckResidualLegs_NilVerifier(t *testing.T) {
 	legs := []pgstore.PositionLeg{
 		{Phase: "OPEN", Status: "FILLED", Venue: "vA:mt5", OrderID: "1001"},
 	}
 	p := &Pipeline{verifier: nil}
-	residual := p.checkResidualLegs(context.Background(), legs)
-	if len(residual) != 0 {
-		t.Errorf("nil verifier want 0, got %v", residual)
+	_, err := p.checkResidualLegs(context.Background(), legs)
+	if err == nil {
+		t.Errorf("nil verifier fail-closed want error, got nil")
 	}
 }

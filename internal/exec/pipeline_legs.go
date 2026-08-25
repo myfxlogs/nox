@@ -126,7 +126,8 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 			closeSide = "BUY"
 		}
 		closePrice := fill.Price
-		_ = p.store.CreatePositionLeg(ctx, &pgstore.PositionLeg{
+		// D-108 A1 fail-closed：CLOSE phase 腿写库失败 → critical 告警 + 返回 error（拒绝置 CLOSED，对账兜底）
+		if err := p.store.CreatePositionLeg(ctx, &pgstore.PositionLeg{
 			PositionID:    posID,
 			LegNo:         leg.LegNo,
 			Phase:         "CLOSE",
@@ -139,7 +140,12 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 			PriceActual:   &closePrice,
 			OrderID:       fill.OrderID,
 			Status:        "FILLED",
-		})
+		}); err != nil {
+			msg := fmt.Sprintf("close leg persist failed position=%d leg=%d venue=%s: %v", posID, leg.LegNo, leg.Venue, err)
+			log.Printf("[exec] %s", msg)
+			_ = p.store.InsertAlert(ctx, &posID, "critical", msg)
+			return fmt.Errorf("close leg persist: %w", err)
+		}
 		// D-077 修复⑪A M1：平仓 PnL 权威化——删简化公式，改双路。
 		// 同步路径（即刻）：(Fill.Price − 开仓价) × qty × CS × 方向 + Fill.Swap − Fill.Commission
 		// CS 经服务器规格换算（修掉漏 CS 的 100 倍错误）；CEX 腿 CS=1（qty 即基础币）。
@@ -162,14 +168,27 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 
 	// D-077 修复⑩ G1：平仓后 ticket 回读——按 ticket 回读各 venue 在仓订单，
 	// ticket 仍在 → 不置 CLOSED + critical「broker 残留腿」（防 DB 假 CLOSED 留孤儿）。
-	if p.verifier != nil {
-		if residual := p.checkResidualLegs(ctx, legs); len(residual) > 0 {
-			msg := fmt.Sprintf("broker 残留腿 position=%d: %s", posID, strings.Join(residual, ", "))
-			log.Printf("[exec] %s", msg)
-			_ = p.store.InsertAlert(ctx, &posID, "critical", msg)
-			// 不置 CLOSED，留 OPEN 状态等对账自动收尾兜底
-			return fmt.Errorf("residual legs after close: %s", strings.Join(residual, ", "))
-		}
+	// D-108 A2 fail-closed：verifier 为 nil 或查询失败 → 拒绝置 CLOSED + critical 告警 + 返回 error
+	// （下轮重试，对账兜底；原 fail-open 放行=假 CLOSED 风险）。
+	if p.verifier == nil {
+		msg := fmt.Sprintf("verifier not wired, cannot verify close position=%d", posID)
+		log.Printf("[exec] %s", msg)
+		_ = p.store.InsertAlert(ctx, &posID, "critical", msg)
+		return fmt.Errorf("verifier not wired: position %d", posID)
+	}
+	residual, verifyErr := p.checkResidualLegs(ctx, legs)
+	if verifyErr != nil {
+		msg := fmt.Sprintf("verify residual failed position=%d: %v", posID, verifyErr)
+		log.Printf("[exec] %s", msg)
+		_ = p.store.InsertAlert(ctx, &posID, "critical", msg)
+		return fmt.Errorf("verify residual: %w", verifyErr)
+	}
+	if len(residual) > 0 {
+		msg := fmt.Sprintf("broker 残留腿 position=%d: %s", posID, strings.Join(residual, ", "))
+		log.Printf("[exec] %s", msg)
+		_ = p.store.InsertAlert(ctx, &posID, "critical", msg)
+		// 不置 CLOSED，留 OPEN 状态等对账自动收尾兜底
+		return fmt.Errorf("residual legs after close: %s", strings.Join(residual, ", "))
 	}
 
 	// D-077 修复⑪A M1 回读校准：历史单权威 PnL 覆盖同步路径公式。
@@ -188,10 +207,11 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 
 // checkResidualLegs 平仓后按 ticket 回读各 venue 在仓订单，返回残留腿描述（D-077 修复⑩ G1）。
 // 只检查 FILLED 的 OPEN phase 腿（CLOSE phase 是刚写的平仓腿，不查）。
-// verifier 不可用/超时 → 返回空（fail-open：不阻断平仓流程，对账自动收尾兜底）。
-func (p *Pipeline) checkResidualLegs(ctx context.Context, legs []pgstore.PositionLeg) []string {
+// D-108 A2 fail-closed：verifier 为 nil → 返回 error（调用方 ClosePosition 已检查 nil，
+// 此处防御性返回 error 防直接调用 panic）；verifier 查询失败 → 返回 error（拒绝置 CLOSED）。
+func (p *Pipeline) checkResidualLegs(ctx context.Context, legs []pgstore.PositionLeg) ([]string, error) {
 	if p.verifier == nil {
-		return nil // 未接线 → 跳过回读
+		return nil, fmt.Errorf("verifier not wired")
 	}
 	// 按 venue 分组待查 ticket
 	venueTickets := map[string][]string{} // venueKey → []ticket
@@ -202,7 +222,7 @@ func (p *Pipeline) checkResidualLegs(ctx context.Context, legs []pgstore.Positio
 		venueTickets[leg.Venue] = append(venueTickets[leg.Venue], leg.OrderID)
 	}
 	if len(venueTickets) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	var residual []string
@@ -211,8 +231,7 @@ func (p *Pipeline) checkResidualLegs(ctx context.Context, legs []pgstore.Positio
 		orders, err := p.verifier.QueryOpenedOrders(vctx, venueKey)
 		cancel()
 		if err != nil {
-			log.Printf("[exec] verify residual %s: %v (fail-open, skip)", venueKey, err)
-			continue
+			return nil, fmt.Errorf("verify residual %s: %w", venueKey, err)
 		}
 		// 构建 ticket → 在仓 集合
 		opened := make(map[string]bool, len(orders))
@@ -225,7 +244,7 @@ func (p *Pipeline) checkResidualLegs(ctx context.Context, legs []pgstore.Positio
 			}
 		}
 	}
-	return residual
+	return residual, nil
 }
 
 // Revalidate 用 QuoteBus 最新报价重算毛收益劣化（§13.1 双阈值；D-051 修③：毛口径比较）。
