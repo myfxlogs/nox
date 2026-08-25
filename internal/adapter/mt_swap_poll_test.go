@@ -6,6 +6,7 @@ package adapter
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log"
 	"os"
 	"strings"
@@ -234,5 +235,45 @@ func TestMT4SwapFactsSkipObservability(t *testing.T) {
 	}
 	if n := countFacts(fs, fact.KindSwapShort); n != 2 {
 		t.Errorf("swap_short facts = %d, want 2（emit+emit0）", n)
+	}
+}
+
+// TestMT5SwapFactsColdStartReturnsFacts R-c1：missingPrice>0 → facts 与 ErrSwapColdStart 同返。
+// EURUSD 有报价→正常 emit；GBPUSD InPoints 需报价但无报价→missingPrice=1。
+// 期望：返回非 nil facts（EURUSD 的 swap+trade_mode）+ err 含 ErrSwapColdStart + 符号名单。
+func TestMT5SwapFactsColdStartReturnsFacts(t *testing.T) {
+	q := bus.New()
+	// 只发 EURUSD 报价，GBPUSD 缺报价
+	q.Publish(bus.Quote{Symbol: "EURUSD", Venue: "v5", VenueType: "mt5", Bid: 1.1, Ask: 1.1001, Time: time.Now()})
+	a := &MT5Adapter{venue: "v5", mt5: &fakeMT5Client{params: map[string]*mt5pb.SymbolParamsReply{
+		"EURUSD": {Result: &mt5pb.SymbolParams{SymbolGroup: &mt5pb.SymGroup{
+			SwapType: mt5pb.SwapType_SwapType_InPoints, SwapLong: 1, SwapShort: -1, TradeMode: mt5pb.TradeMode_TradeMode_FullAccess,
+		}, SymbolInfo: &mt5pb.SymbolInfo{Points: 0.00001, ContractSize: 100000}}},
+		"GBPUSD": {Result: &mt5pb.SymbolParams{SymbolGroup: &mt5pb.SymGroup{
+			SwapType: mt5pb.SwapType_SwapType_InPoints, SwapLong: 1, SwapShort: -1, TradeMode: mt5pb.TradeMode_TradeMode_FullAccess,
+		}, SymbolInfo: &mt5pb.SymbolInfo{Points: 0.00001, ContractSize: 100000}}},
+	}}}
+	a.SetSymbolMap(map[string]string{"EURUSD": "EURUSD", "GBPUSD": "GBPUSD"})
+
+	var fs []fact.Fact
+	var err error
+	_ = captureLog(t, func() {
+		fs, err = a.SwapFacts(context.Background(), q)
+	})
+	// R-c1：facts 非 nil（EURUSD 的 facts 仍返回）
+	if fs == nil {
+		t.Fatal("cold start 应返回非 nil facts（EURUSD 的 facts），got nil")
+	}
+	// R-c1：err 含 ErrSwapColdStart
+	if err == nil || !errors.Is(err, ErrSwapColdStart) {
+		t.Fatalf("应返回 ErrSwapColdStart，got %v", err)
+	}
+	// R-c2：错误消息含符号名单
+	if !strings.Contains(err.Error(), "GBPUSD") {
+		t.Errorf("错误消息应含缺报价符号 GBPUSD，got %v", err)
+	}
+	// EURUSD 的 swap facts 应在返回中
+	if n := countFacts(fs, fact.KindSwapLong); n < 1 {
+		t.Errorf("应含 EURUSD swap_long fact，got %d swap_long facts", n)
 	}
 }

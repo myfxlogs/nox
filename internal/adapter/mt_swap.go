@@ -125,6 +125,7 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 	var skips []string
 	emit, emit0 := 0, 0
 	missingPrice := 0
+	missingSyms := make([]string, 0)   // D-104 P0 返修③ R-c2：缺报价符号名单（前 10 进错误消息）
 	uncovered := map[int32]int{}       // SwapType 原始值 → 命中符号数（WP1 计数日志）
 	tripleDays := map[string]float64{} // D-077 修复⑪A M3：canon → 三倍日（per-symbol 全量收集）
 	for brokerSym, canon := range sm {
@@ -169,6 +170,7 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 		price := venuePrice(snap, canon, a.venue, "mt5")
 		if swapNeedsPrice(mode) && price <= 0 {
 			missingPrice++
+			missingSyms = append(missingSyms, brokerSym)
 			continue
 		}
 		n := 0
@@ -200,7 +202,10 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 	// 同 venue 值一致 → 发 venue 级 Fact（现行为）；不一致 → 发 per-symbol Fact + warn。
 	facts = append(facts, collectTripleSwapDayFacts("mt5", a.venue, tripleDays)...)
 	if missingPrice > 0 {
-		return nil, fmt.Errorf("%w: %d symbol(s) lack venue quote", ErrSwapColdStart, missingPrice)
+		// D-104 P0 返修③ R-c1：facts 与 ErrSwapColdStart 同返（保留 60s bound 整轮重试信号），
+		// 不再丢弃整 venue facts——冷符号等下一轮补，其余 facts 立即落地。
+		// R-c2：缺报价符号名单进错误消息（前 10 + 超出计 "…+N"），下轮日志可定位。
+		return facts, fmt.Errorf("%w: %d symbol(s) lack venue quote: %s", ErrSwapColdStart, missingPrice, summarizeMissingSyms(missingSyms))
 	}
 	return swapResult(a.venue, facts, errs)
 }

@@ -257,6 +257,14 @@ func swapResult(venue string, facts []fact.Fact, errs []string) ([]fact.Fact, er
 	return facts, nil
 }
 
+// summarizeMissingSyms 缺报价符号名单摘要：前 10 个 + 超出计 "…+N"（D-104 P0 返修③ R-c2）。
+func summarizeMissingSyms(syms []string) string {
+	if len(syms) <= 10 {
+		return strings.Join(syms, ",")
+	}
+	return strings.Join(syms[:10], ",") + fmt.Sprintf(",…+%d", len(syms)-10)
+}
+
 // symbolSet 提取映射去重后的 canonical 集合。
 func symbolSet(sm map[string]string) []string {
 	seen := make(map[string]bool, len(sm))
