@@ -66,6 +66,14 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 		ordCh, ordCancel = s.orderTopic.Subscribe()
 		defer ordCancel()
 	}
+	// D-114：告警实时推送（InsertAlert → store.alertHook → alertTopic → case 3）。
+	// alertTopic 为 nil（测试未接线）→ 不订阅。
+	var alertCh <-chan pgstore.Alert
+	if s.alertTopic != nil {
+		var alertCancel func()
+		alertCh, alertCancel = s.alertTopic.Subscribe()
+		defer alertCancel()
+	}
 	// keepalive 每 30s（§8.2 D-027）
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -196,6 +204,18 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 						Venue:  v.Venue,
 						Ticket: v.Ticket,
 					},
+				},
+			}); err != nil {
+				return err
+			}
+		case a, ok := <-alertCh:
+			if !ok {
+				return nil
+			}
+			// D-114：告警实时推送——全量 Alert 对象，前端按 id 合并（同 opportunity case 2 模式）。
+			if err := stream.Send(&v1.StreamUpdatesResponse{
+				Update: &v1.StreamUpdatesResponse_Alert{
+					Alert: alertToProto(&a),
 				},
 			}); err != nil {
 				return err
