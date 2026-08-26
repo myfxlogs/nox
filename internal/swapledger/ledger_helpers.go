@@ -49,9 +49,10 @@ func isFundingType(posType string) bool {
 	return false
 }
 
-// settleMultiplier 返回当日结算乘数（D-077 V2→修复⑪A M3+M4）。
+// settleMultiplier 返回当日结算乘数（D-077 V2→修复⑪A M3+M4→D-110 周末不开盘修复）。
 // 优先级：symbol 级 Fact > venue 级 Fact > fail-closed（跳过+warn，禁止回退已知错误值）。
 // 三倍日→3 否则 1。TripleDayResolver 未知（ok=false）→ 返回 0（调用方跳过该腿记账）。
+// D-110：tripleDay=Sunday/Saturday 时返回 1（外汇市场周末不开盘，三倍日不生效）。
 func settleMultiplier(venueKey, canonical string, day time.Time, r TripleDayResolver) float64 {
 	venueName := venueFromKey(venueKey)
 	tripleDay, ok := r.TripleSwapDay(venueName, canonical)
@@ -59,6 +60,10 @@ func settleMultiplier(venueKey, canonical string, day time.Time, r TripleDayReso
 		// D-077 修复⑪A M4：删周三回退 → fail-closed（漏记由既有日对账偏差告警兜底，漏记比错记可检出）
 		log.Printf("[swapledger] triple swap day unknown for %s/%s, skip leg (fail-closed, no Wednesday fallback)", venueKey, canonical)
 		return 0
+	}
+	// D-110：周末不开盘，三倍日=Sunday/Saturday 时不收3倍（D-102 实证：IC 结算逐日 1x/周末 0）
+	if tripleDay == time.Sunday || tripleDay == time.Saturday {
+		return 1
 	}
 	if day.Weekday() == tripleDay {
 		return 3

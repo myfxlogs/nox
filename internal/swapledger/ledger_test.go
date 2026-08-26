@@ -271,3 +271,37 @@ func TestIsFundingType(t *testing.T) {
 		t.Error("CARRY want false")
 	}
 }
+
+// TestSettleMultiplier_WeekendNoTriple D-110：tripleDay=Sunday/Saturday 时 multiplier=1（周末不开盘）。
+func TestSettleMultiplier_WeekendNoTriple(t *testing.T) {
+	tests := []struct {
+		name      string
+		tripleDay time.Weekday
+		day       time.Time
+		want      float64
+	}{
+		{"Sunday tripleDay + Sunday → 1（不开盘）", time.Sunday, time.Date(2026, 8, 23, 0, 0, 0, 0, time.UTC), 1},
+		{"Sunday tripleDay + Wednesday → 1（非三倍日）", time.Sunday, time.Date(2026, 8, 26, 0, 0, 0, 0, time.UTC), 1},
+		{"Saturday tripleDay + Saturday → 1（不开盘）", time.Saturday, time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC), 1},
+		{"Wednesday tripleDay + Wednesday → 3（正常三倍日）", time.Wednesday, time.Date(2026, 8, 26, 0, 0, 0, 0, time.UTC), 3},
+		{"Wednesday tripleDay + Monday → 1（非三倍日）", time.Wednesday, time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC), 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := stubTripleDay{venueDays: map[string]time.Weekday{"vA": tt.tripleDay}}
+			got := settleMultiplier("vA:mt5", "AUDJPY", tt.day, r)
+			if got != tt.want {
+				t.Errorf("settleMultiplier want %.0f, got %.0f", tt.want, got)
+			}
+		})
+	}
+}
+
+// TestSettleMultiplier_UnknownFailClosed D-110：未知三倍日仍 fail-closed（返回 0）。
+func TestSettleMultiplier_UnknownFailClosed(t *testing.T) {
+	r := stubTripleDay{} // 无 venueDays → ok=false
+	got := settleMultiplier("vX:mt5", "AUDJPY", time.Date(2026, 8, 26, 0, 0, 0, 0, time.UTC), r)
+	if got != 0 {
+		t.Errorf("unknown triple day want 0 (fail-closed), got %.0f", got)
+	}
+}
