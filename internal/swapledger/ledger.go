@@ -58,21 +58,27 @@ type TripleDayResolver interface {
 
 // Ledger swap 逐日记账器（D-077 V1）。
 type Ledger struct {
-	store        Store
-	notional     NotionalResolver
-	tripleDay    TripleDayResolver
-	runTimeout   time.Duration // 单次外部调用超时（loop-initial-block 铁律：默认 30s）
-	initialDelay time.Duration // 首轮延迟（等 adapter 就绪，默认 90s）
+	store           Store
+	notional        NotionalResolver
+	tripleDay       TripleDayResolver
+	nonSettleVenues map[string]bool // D-112：已知不结算 swap 的 venue 集合（key=PositionLeg.Venue 完整 key）
+	runTimeout      time.Duration   // 单次外部调用超时（loop-initial-block 铁律：默认 30s）
+	initialDelay    time.Duration   // 首轮延迟（等 adapter 就绪，默认 90s）
 }
 
-// New 创建 swap 记账器。
-func New(store Store, notional NotionalResolver, tripleDay TripleDayResolver) *Ledger {
+// New 创建 swap 记账器。nonSettleVenues 为已知不结算 swap 的 venue 列表（D-112）。
+func New(store Store, notional NotionalResolver, tripleDay TripleDayResolver, nonSettleVenues []string) *Ledger {
+	nsv := make(map[string]bool, len(nonSettleVenues))
+	for _, v := range nonSettleVenues {
+		nsv[v] = true
+	}
 	return &Ledger{
-		store:        store,
-		notional:     notional,
-		tripleDay:    tripleDay,
-		runTimeout:   30 * time.Second,
-		initialDelay: 90 * time.Second,
+		store:           store,
+		notional:        notional,
+		tripleDay:       tripleDay,
+		nonSettleVenues: nsv,
+		runTimeout:      30 * time.Second,
+		initialDelay:    90 * time.Second,
 	}
 }
 
@@ -261,18 +267,24 @@ func (l *Ledger) legSwapAmount(canonical string, leg pgstore.PositionLeg, day ti
 	}
 
 	// 3. 算金额（D-077 修复⑩ G5：decimalutil 精度守卫，经 strconv 字符串中介避免 float64 漂移）
+	var amount float64
 	if isFunding {
 		// D-077 修复⑪A M2：funding 记账删三倍虚乘。
 		// 采集层 Fact 已是年化口径 → 日金额 = rate/100/DaysPerYear × notional（含 8h×3 周期合计）。
 		// 旧公式 × PeriodsPerDay(3) = 3 倍虚乘（现记 9f 实收 3f）→ 删除。
-		return decimalAmount(rate, 100, DaysPerYear, notional, 1), true
+		amount = decimalAmount(rate, 100, DaysPerYear, notional, 1)
+	} else {
+		// swap：日 bps → 日金额 = rate/10000 × notional × settleMultiplier
+		multiplier := settleMultiplier(leg.Venue, canonical, day, l.tripleDay)
+		if multiplier == 0 {
+			// D-077 修复⑪A M4：fail-closed（三倍日未知）→ 跳过该腿记账，不记 0 cashflow
+			return 0, false
+		}
+		amount = decimalAmount(rate, 10000, 1, notional, multiplier)
 	}
-
-	// swap：日 bps → 日金额 = rate/10000 × notional × settleMultiplier
-	multiplier := settleMultiplier(leg.Venue, canonical, day, l.tripleDay)
-	if multiplier == 0 {
-		// D-077 修复⑪A M4：fail-closed（三倍日未知）→ 跳过该腿记账，不记 0 cashflow
-		return 0, false
+	// D-112：已知不结算 venue → 记 0（不跳过，与零息 venue 同处理——amount=0 → accountPosition 跳过不写 cashflow）
+	if l.nonSettleVenues[leg.Venue] {
+		return 0, true
 	}
-	return decimalAmount(rate, 10000, 1, notional, multiplier), true
+	return amount, true
 }

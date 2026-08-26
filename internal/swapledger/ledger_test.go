@@ -1,10 +1,12 @@
 package swapledger
 
 import (
+	"context"
 	"math"
 	"testing"
 	"time"
 
+	"arb/internal/fact"
 	"arb/internal/store/pgstore"
 )
 
@@ -303,5 +305,91 @@ func TestSettleMultiplier_UnknownFailClosed(t *testing.T) {
 	got := settleMultiplier("vX:mt5", "AUDJPY", time.Date(2026, 8, 26, 0, 0, 0, 0, time.UTC), r)
 	if got != 0 {
 		t.Errorf("unknown triple day want 0 (fail-closed), got %.0f", got)
+	}
+}
+
+// TestLegSwapAmount_NonSettleVenue D-112：venue 在 nonSettleVenues → 返回 (0, true)。
+// 即使 rate/notional 可用，不结算 venue 仍记 0（amount=0 → accountPosition 跳过不写 cashflow）。
+func TestLegSwapAmount_NonSettleVenue(t *testing.T) {
+	shortMap := map[factKey]float64{factKey{"AUDJPY", "277842155"}: -1.3} // Exness 规格值（SELL 腿用 swap_short）
+	notional := stubNotional{vals: map[string]float64{"AUDJPY:277842155:mt5:bid": 75000}}
+	r := stubTripleDay{venueDays: map[string]time.Weekday{"277842155": time.Wednesday}}
+	l := &Ledger{
+		notional:        notional,
+		tripleDay:       r,
+		nonSettleVenues: map[string]bool{"277842155:mt5": true},
+	}
+
+	leg := pgstore.PositionLeg{Venue: "277842155:mt5", Side: "SELL", Qty: 1.0}
+	monday := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
+	got, ok := l.legSwapAmount("AUDJPY", leg, monday, false, map[factKey]float64{}, shortMap, map[factKey]float64{})
+	if !ok {
+		t.Fatal("non-settle venue want ok=true, got false")
+	}
+	if got != 0 {
+		t.Errorf("non-settle venue amount want 0, got %v", got)
+	}
+}
+
+// nonSettleStubStore TestAccountPosition_NonSettleVenue 用 mock Store（D-112）。
+type nonSettleStubStore struct {
+	legs           []pgstore.PositionLeg
+	hasCashflow    bool
+	insertedVenues []string // 记录 InsertCashflow 被调用的 venue
+}
+
+func (s *nonSettleStubStore) ListOpenPositionsByType(_ context.Context, _ []string) ([]pgstore.Position, error) {
+	return nil, nil
+}
+func (s *nonSettleStubStore) ListPositionLegs(_ context.Context, _ int64) ([]pgstore.PositionLeg, error) {
+	return s.legs, nil
+}
+func (s *nonSettleStubStore) HasCashflowForDay(_ context.Context, _ int64, _ string, _ time.Time) (bool, error) {
+	return s.hasCashflow, nil
+}
+func (s *nonSettleStubStore) InsertCashflow(_ context.Context, _ int64, _, venue string, _ float64, _ time.Time) error {
+	s.insertedVenues = append(s.insertedVenues, venue)
+	return nil
+}
+func (s *nonSettleStubStore) LatestFacts(_ context.Context, _, _, _ string) ([]fact.Fact, error) {
+	return nil, nil
+}
+func (s *nonSettleStubStore) InsertAlert(_ context.Context, _ *int64, _, _ string) error { return nil }
+
+// TestAccountPosition_NonSettleVenue D-112：Exness 腿不写 cashflow（amount=0→跳过），IC 腿正常写。
+func TestAccountPosition_NonSettleVenue(t *testing.T) {
+	longMap := map[factKey]float64{factKey{"AUDJPY", "52993526"}: 0.5}
+	shortMap := map[factKey]float64{factKey{"AUDJPY", "277842155"}: -1.3}
+	notional := stubNotional{vals: map[string]float64{
+		"AUDJPY:52993526:mt5:ask":  75000,
+		"AUDJPY:277842155:mt5:bid": 75000,
+	}}
+	r := stubTripleDay{venueDays: map[string]time.Weekday{"52993526": time.Wednesday, "277842155": time.Wednesday}}
+	store := &nonSettleStubStore{
+		hasCashflow: false,
+		legs: []pgstore.PositionLeg{
+			{LegNo: 1, Phase: "OPEN", Venue: "52993526:mt5", Side: "BUY", Qty: 1.0},
+			{LegNo: 2, Phase: "OPEN", Venue: "277842155:mt5", Side: "SELL", Qty: 1.0},
+		},
+	}
+	l := &Ledger{
+		store:           store,
+		notional:        notional,
+		tripleDay:       r,
+		nonSettleVenues: map[string]bool{"277842155:mt5": true},
+	}
+
+	pos := pgstore.Position{ID: 1, Type: "SWAPARB", OpportunityID: "SWAPARB:AUDJPY:52993526:mt5:277842155:mt5:1"}
+	monday := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
+	n, err := l.accountPosition(context.Background(), pos, monday, longMap, shortMap, map[factKey]float64{})
+	if err != nil {
+		t.Fatalf("accountPosition: %v", err)
+	}
+	// 只 IC 腿写 cashflow（Exness 腿 amount=0 跳过）
+	if n != 1 {
+		t.Errorf("written = %d, want 1 (only IC leg, Exness skipped)", n)
+	}
+	if len(store.insertedVenues) != 1 || store.insertedVenues[0] != "52993526:mt5" {
+		t.Errorf("inserted venues = %v, want [52993526:mt5] (Exness should be skipped)", store.insertedVenues)
 	}
 }
