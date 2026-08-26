@@ -13,12 +13,18 @@ import (
 type Store struct {
 	pool        *pgxpool.Pool
 	alertPaused bool // D-069：暂停全部告警写入（demo 阶段避免刷屏）
+	// D-114：告警写入后回调（main.go 注入 alertTopic.Publish 触发实时推送）。
+	// nil = 未接线（测试直接构造 Store）→ 不回调，InsertAlert 仍正常写 DB。
+	alertHook func(a Alert)
 }
 
 // SetAlertPaused 暂停/恢复告警写入（D-069）。
 func (s *Store) SetAlertPaused(paused bool) {
 	s.alertPaused = paused
 }
+
+// SetAlertHook 注入告警写入后回调（D-114：main.go 注入 alertTopic.Publish）。
+func (s *Store) SetAlertHook(fn func(a Alert)) { s.alertHook = fn }
 
 // New 创建带连接池的 Store。
 func New(ctx context.Context, dsn string) (*Store, error) {

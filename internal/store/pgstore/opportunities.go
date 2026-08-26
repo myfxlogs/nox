@@ -115,14 +115,24 @@ type Alert struct {
 
 // InsertAlert 写入告警（§2.5）。
 // D-069：alertPaused=true 时静默丢弃（demo 阶段避免刷屏）。
+// D-114：写入成功后回调 alertHook（main.go 注入 alertTopic.Publish → StreamUpdates case 3 实时推送）。
+// 用 INSERT...RETURNING 取回完整 Alert 对象（含 id/ts），回调传完整对象。
 func (s *Store) InsertAlert(ctx context.Context, ruleID *int64, level, message string) error {
 	if s.alertPaused {
 		return nil
 	}
-	q := `INSERT INTO alerts (rule_id, level, message) VALUES ($1, $2, $3)`
-	_, err := s.pool.Exec(ctx, q, ruleID, level, message)
+	q := `INSERT INTO alerts (rule_id, level, message) VALUES ($1, $2, $3)
+		RETURNING id, ts, level, message, acked`
+	var a Alert
+	a.RuleID = ruleID
+	err := s.pool.QueryRow(ctx, q, ruleID, level, message).Scan(&a.ID, &a.Ts, &a.Level, &a.Message, &a.Acked)
 	if err != nil {
 		return fmt.Errorf("insert alert: %w", err)
+	}
+	// D-114：写入后回调（main.go 注入 alertTopic.Publish → StreamUpdates case 3 实时推送）。
+	// fire-and-forget：回调失败不影响写入（同 oppTopic 模式）。nil = 未接线（测试）。
+	if s.alertHook != nil {
+		s.alertHook(a)
 	}
 	return nil
 }
