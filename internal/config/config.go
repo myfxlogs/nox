@@ -141,6 +141,9 @@ type Config struct {
 	AnalystRatePerHour int    // ARB_ANALYST_RATE_PER_HOUR（默认 20）
 	// MTData MT 数据采集稳定性加固参数（D-104 P0）。
 	MTData MTDataConfig
+
+	// === Swap 对账告警（D-110 P2）===
+	SwapReconcileDeviationPct float64 // ARB_SWAP_RECONCILE_DEVIATION_PCT（默认 10.0）
 }
 
 // Load 从环境变量加载配置，未设置用默认值。
@@ -211,6 +214,7 @@ func Load() *Config {
 		AIPGDSN:                    envStr("ARB_AI_PG_DSN", ""),
 		AnalystRatePerHour:         envInt("ARB_ANALYST_RATE_PER_HOUR", 20),
 		MTData:                     loadMTData(),
+		SwapReconcileDeviationPct:  envFloat("ARB_SWAP_RECONCILE_DEVIATION_PCT", 10.0), // D-110 P2
 	}
 }
 

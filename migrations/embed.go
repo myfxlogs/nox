@@ -70,3 +70,6 @@ var AnalystRoRoleSQL string
 
 //go:embed 0042_ai_settings.sql
 var AiSettingsSQL string
+
+//go:embed 0043_position_swap_snapshots.sql
+var PositionSwapSnapshotsSQL string

@@ -38,6 +38,7 @@ var migrationFiles = []struct {
 	{40, migrations.WatchlistVenuesSQL},
 	{41, migrations.AnalystRoRoleSQL},
 	{42, migrations.AiSettingsSQL},
+	{43, migrations.PositionSwapSnapshotsSQL},
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
