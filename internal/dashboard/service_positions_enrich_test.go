@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"arb/internal/bus"
 	"arb/internal/store/pgstore"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
@@ -209,3 +210,100 @@ func TestMatchBrokerLegs(t *testing.T) {
 }
 
 func ptrFloat(v float64) *float64 { return &v }
+
+// --- D-111: computeCurrentBps 单测 ---
+
+// crossVenueLegs 构造 CROSS_VENUE 双腿（BUY+SELL）。
+func crossVenueLegs() []pgstore.PositionLeg {
+	return []pgstore.PositionLeg{
+		{Phase: "OPEN", Side: "BUY", Venue: "venueA:mt5"},
+		{Phase: "OPEN", Side: "SELL", Venue: "venueB:mt5"},
+	}
+}
+
+func TestComputeCurrentBps_CrossVenue_Normal(t *testing.T) {
+	qbus := bus.New()
+	// buy.Ask=100, buy.mid=99.5, sell.Bid=101 → spread=1, gross=1/99.5*10000≈100.5025
+	qbus.Publish(bus.Quote{Symbol: "ETHUSDT", Venue: "venueA", VenueType: "mt5", Bid: 99, Ask: 100})
+	qbus.Publish(bus.Quote{Symbol: "ETHUSDT", Venue: "venueB", VenueType: "mt5", Bid: 101, Ask: 102})
+	pb := &v1.Position{OpportunityId: "CV:ETHUSDT:...", Type: "CROSS_VENUE"}
+	commFor := func(venueKey string) float64 { return 0.3 }
+	// gross≈100.5025, commissionBps=0.6, slippageCost=0.6, net=100.5025-(0.6+0.6)*2=98.1025
+	bps, ok := computeCurrentBps(pb, crossVenueLegs(), qbus, commFor, 0.3)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if math.Abs(bps-98.1025) > 0.01 {
+		t.Fatalf("expected net_bps≈98.1025, got %.4f", bps)
+	}
+}
+
+func TestComputeCurrentBps_CrossVenue_SpreadNegative(t *testing.T) {
+	qbus := bus.New()
+	// sell.Bid < buy.Ask → spread<=0
+	qbus.Publish(bus.Quote{Symbol: "ETHUSDT", Venue: "venueA", VenueType: "mt5", Bid: 99, Ask: 105})
+	qbus.Publish(bus.Quote{Symbol: "ETHUSDT", Venue: "venueB", VenueType: "mt5", Bid: 101, Ask: 102})
+	pb := &v1.Position{OpportunityId: "CV:ETHUSDT:...", Type: "CROSS_VENUE"}
+	_, ok := computeCurrentBps(pb, crossVenueLegs(), qbus, nil, 0.3)
+	if ok {
+		t.Fatal("expected ok=false for negative spread")
+	}
+}
+
+func TestComputeCurrentBps_MeanRevert_Normal(t *testing.T) {
+	qbus := bus.New()
+	qbus.Publish(bus.Quote{Symbol: "ETHUSDT", Venue: "venueA", VenueType: "mt5", Bid: 99, Ask: 100})
+	qbus.Publish(bus.Quote{Symbol: "ETHUSDT", Venue: "venueB", VenueType: "mt5", Bid: 101, Ask: 102})
+	pb := &v1.Position{OpportunityId: "MR:ETHUSDT:...", Type: "MEANREVERT"}
+	// spread=1, ask=100 → bps=10000/100=100
+	bps, ok := computeCurrentBps(pb, crossVenueLegs(), qbus, nil, 0.3)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if math.Abs(bps-100) > 0.01 {
+		t.Fatalf("expected gross_bps=100, got %.4f", bps)
+	}
+}
+
+func TestComputeCurrentBps_NoQuote(t *testing.T) {
+	qbus := bus.New()
+	// 不发布报价
+	pb := &v1.Position{OpportunityId: "CV:ETHUSDT:...", Type: "CROSS_VENUE"}
+	_, ok := computeCurrentBps(pb, crossVenueLegs(), qbus, nil, 0.3)
+	if ok {
+		t.Fatal("expected ok=false for no quote")
+	}
+}
+
+func TestComputeCurrentBps_NoLegs(t *testing.T) {
+	qbus := bus.New()
+	qbus.Publish(bus.Quote{Symbol: "ETHUSDT", Venue: "venueA", VenueType: "mt5", Bid: 99, Ask: 100})
+	pb := &v1.Position{OpportunityId: "CV:ETHUSDT:...", Type: "CROSS_VENUE"}
+	_, ok := computeCurrentBps(pb, []pgstore.PositionLeg{{Phase: "OPEN", Side: "BUY", Venue: "venueA:mt5"}}, qbus, nil, 0.3)
+	if ok {
+		t.Fatal("expected ok=false for <2 legs")
+	}
+}
+
+func TestComputeCurrentBps_NilQbus(t *testing.T) {
+	pb := &v1.Position{OpportunityId: "CV:ETHUSDT:...", Type: "CROSS_VENUE"}
+	_, ok := computeCurrentBps(pb, crossVenueLegs(), nil, nil, 0.3)
+	if ok {
+		t.Fatal("expected ok=false for nil qbus")
+	}
+}
+
+func TestComputeCurrentBps_NilCommissionFor(t *testing.T) {
+	qbus := bus.New()
+	qbus.Publish(bus.Quote{Symbol: "ETHUSDT", Venue: "venueA", VenueType: "mt5", Bid: 99, Ask: 100})
+	qbus.Publish(bus.Quote{Symbol: "ETHUSDT", Venue: "venueB", VenueType: "mt5", Bid: 101, Ask: 102})
+	pb := &v1.Position{OpportunityId: "CV:ETHUSDT:...", Type: "CROSS_VENUE"}
+	// commissionFor=nil → commissionBps=0, slippageCost=0.6, net=100.5025-(0+0.6)*2=99.3025
+	bps, ok := computeCurrentBps(pb, crossVenueLegs(), qbus, nil, 0.3)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if math.Abs(bps-99.3025) > 0.01 {
+		t.Fatalf("expected net_bps≈99.3025, got %.4f", bps)
+	}
+}

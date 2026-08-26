@@ -17,6 +17,7 @@ import (
 	"context"
 	"time"
 
+	"arb/internal/bus"
 	"arb/internal/combo"
 	"arb/internal/notional"
 	"arb/internal/store/pgstore"
@@ -85,14 +86,10 @@ func enrichOne(ctx context.Context, s *Service, pb *v1.Position, legs []pgstore.
 		}
 	}
 
-	// 3. 收敛型：当前 net bps（combo rollup 最新）
+	// 3. 收敛型：当前 net bps（实时报价重算，D-111）
 	if convergentTypes[pb.Type] {
-		ck := combo.FromOppID(pb.OpportunityId)
-		if ck != "" && s.store != nil {
-			if rows, err := s.store.ListComboDaily(ctx, ck, 1); err == nil && len(rows) > 0 {
-				bps := rows[0].NetAvg
-				pb.CurrentNetBps = &bps
-			}
+		if bps, ok := computeCurrentBps(pb, openLegs, s.qbus, s.commissionFor, s.slippageBps); ok {
+			pb.CurrentNetBps = &bps
 		}
 	}
 }
@@ -203,4 +200,69 @@ func splitColon(s string) []string {
 	}
 	out = append(out, s[start:])
 	return out
+}
+
+// computeCurrentBps 用实时报价重算收敛型当前 bps（D-111）。
+// CROSS_VENUE: net_bps = (sell.Bid - buy.Ask) / mid * 10000 - (commissionBps + slippageCost) * 2
+// MEANREVERT: bps = spread / ask * 10000（gross，无成本扣除）
+// 报价缺失/异常 → ok=false（fail-closed，不回退 rollup）。
+// 公式与 detector.tryCross / evaluator.Evaluate 同构（P3 单一真相源——公式简单不值得抽取，注释指认）。
+func computeCurrentBps(pb *v1.Position, openLegs []pgstore.PositionLeg, qbus *bus.QuoteBus, commissionFor func(string) float64, slippageBps float64) (float64, bool) {
+	canonical := canonicalFromOppID(pb.OpportunityId)
+	if canonical == "" || qbus == nil || len(openLegs) < 2 {
+		return 0, false
+	}
+	// 找 BUY 腿和 SELL 腿
+	var buyLeg, sellLeg *pgstore.PositionLeg
+	for i := range openLegs {
+		if openLegs[i].Phase != "OPEN" {
+			continue
+		}
+		switch openLegs[i].Side {
+		case "BUY":
+			buyLeg = &openLegs[i]
+		case "SELL":
+			sellLeg = &openLegs[i]
+		}
+	}
+	if buyLeg == nil || sellLeg == nil {
+		return 0, false
+	}
+	// 取当前报价
+	qBuy, okBuy := qbus.Latest(canonical, buyLeg.Venue)
+	qSell, okSell := qbus.Latest(canonical, sellLeg.Venue)
+	if !okBuy || !okSell {
+		return 0, false
+	}
+	switch pb.Type {
+	case "CROSS_VENUE":
+		spread := qSell.Bid - qBuy.Ask
+		if spread <= 0 {
+			return 0, false
+		}
+		mid := qBuy.Mid()
+		if mid <= 0 {
+			return 0, false
+		}
+		grossBps := spread / mid * 10000
+		commissionBps := 0.0
+		if commissionFor != nil {
+			commissionBps = commissionFor(buyLeg.Venue) + commissionFor(sellLeg.Venue)
+		}
+		slippageCost := slippageBps * 2
+		netBps := grossBps - (commissionBps+slippageCost)*2
+		return netBps, true
+	case "MEANREVERT":
+		spread := qSell.Bid - qBuy.Ask
+		if spread <= 0 {
+			return 0, false
+		}
+		if qBuy.Ask <= 0 {
+			return 0, false
+		}
+		bps := spread / qBuy.Ask * 10000
+		return bps, true
+	default:
+		return 0, false
+	}
 }
