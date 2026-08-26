@@ -23,6 +23,9 @@ service DashboardService {
   rpc AckAlert(AckAlertRequest) returns (AckAlertResponse);
   rpc AckAll(AckAllRequest) returns (AckAllResponse);
   rpc ListUnacked(ListUnackedRequest) returns (ListUnackedResponse);
+  // 告警删除
+  rpc DeleteAlerts(DeleteAlertsRequest) returns (DeleteAlertsResponse);
+  rpc ClearAckedAlerts(ClearAckedAlertsRequest) returns (ClearAckedAlertsResponse);
 
   // 台账
   rpc AddLedgerEntry(AddLedgerEntryRequest) returns (AddLedgerEntryResponse);
@@ -264,6 +267,20 @@ message ListUnackedRequest {}
 message ListUnackedResponse {
   repeated Alert alerts = 1;
   int32 count = 2;
+}
+
+message DeleteAlertsRequest {
+  repeated int64 ids = 1;
+}
+
+message DeleteAlertsResponse {
+  int32 deleted = 1;
+}
+
+message ClearAckedAlertsRequest {}
+
+message ClearAckedAlertsResponse {
+  int32 deleted = 1;
 }
 
 // === TriggerState（§2.4）===

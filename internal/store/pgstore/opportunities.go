@@ -174,6 +174,27 @@ func (s *Store) PurgeAckedAlerts(ctx context.Context, maxAge time.Duration) (int
 	return tag.RowsAffected(), nil
 }
 
+// DeleteAlerts 批量删除指定 ID 的告警（不管 acked 状态）。
+func (s *Store) DeleteAlerts(ctx context.Context, ids []int64) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	tag, err := s.pool.Exec(ctx, `DELETE FROM alerts WHERE id = ANY($1)`, ids)
+	if err != nil {
+		return 0, fmt.Errorf("delete alerts: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
+// ClearAckedAlerts 删除所有已确认告警（不管时间）。
+func (s *Store) ClearAckedAlerts(ctx context.Context) (int64, error) {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM alerts WHERE acked = true`)
+	if err != nil {
+		return 0, fmt.Errorf("clear acked alerts: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
 // ListUnacked 返回未读告警 + 计数。
 func (s *Store) ListUnacked(ctx context.Context) ([]Alert, int, error) {
 	q := `SELECT a.id, a.rule_id, COALESCE(r.name, ''), a.ts, a.level, a.message, a.acked
