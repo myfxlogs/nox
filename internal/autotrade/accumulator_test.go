@@ -101,7 +101,7 @@ func TestAccumulator_DayRollover(t *testing.T) {
 	if err := a.Flush(ctx, s); err != nil {
 		t.Fatalf("flush day2: %v", err)
 	}
-	// 验证 DB：2 行（day1 avg=15, day2 avg=30）
+	// 验证 DB：2 行（DESC 排序：day2 在前，day1 在后；D-111 排序修复）
 	rows, err := s.ListComboDaily(ctx, ck, 10)
 	if err != nil {
 		t.Fatalf("ListComboDaily: %v", err)
@@ -109,13 +109,13 @@ func TestAccumulator_DayRollover(t *testing.T) {
 	if len(rows) != 2 {
 		t.Fatalf("want 2 rows (2 days), got %d", len(rows))
 	}
-	// day1
-	if rows[0].Samples != 2 || absFloat(rows[0].NetAvg-15) > 0.0001 {
-		t.Errorf("day1: want samples=2 avg=15, got samples=%d avg=%v", rows[0].Samples, rows[0].NetAvg)
+	// day2（最新，DESC 排在首位）
+	if rows[0].Samples != 1 || absFloat(rows[0].NetAvg-30) > 0.0001 {
+		t.Errorf("day2: want samples=1 avg=30, got samples=%d avg=%v", rows[0].Samples, rows[0].NetAvg)
 	}
-	// day2
-	if rows[1].Samples != 1 || absFloat(rows[1].NetAvg-30) > 0.0001 {
-		t.Errorf("day2: want samples=1 avg=30, got samples=%d avg=%v", rows[1].Samples, rows[1].NetAvg)
+	// day1（较早，DESC 排在第二）
+	if rows[1].Samples != 2 || absFloat(rows[1].NetAvg-15) > 0.0001 {
+		t.Errorf("day1: want samples=2 avg=15, got samples=%d avg=%v", rows[1].Samples, rows[1].NetAvg)
 	}
 }
 
