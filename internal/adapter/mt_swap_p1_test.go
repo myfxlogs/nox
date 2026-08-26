@@ -1,9 +1,8 @@
-// mt_swap_p1_test.go —— D-104 P1 T4：PXBT override / guardrail JPY / 并发等价单测。
+// mt_swap_p1_test.go —— D-104 P1 T4 / D-112：guardrail JPY / 并发等价 / PXBT fail-closed 单测。
 package adapter
 
 import (
 	"context"
-	"math"
 	"strings"
 	"testing"
 	"time"
@@ -14,48 +13,50 @@ import (
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
 )
 
-// TestSwapTypeZeroAsInPoints_PXBTOverride D-104 P1 T1：
-// venue=1314615 + SwapType==0 + 非零值 → InPoints（mt5SwapMode 对此返回 Uncalibrated=矛盾数据）。
-// venue 非 1314615 → 不 override，mt5SwapMode 照常返回 Uncalibrated。
-func TestSwapTypeZeroAsInPoints_PXBTOverride(t *testing.T) {
-	// 1314615 + SwapType=0 + 非零 → override InPoints
-	if !swapTypeZeroAsInPoints["1314615"] {
-		t.Fatal("swapTypeZeroAsInPoints should contain 1314615")
+// TestPXBT_SwapTypeZero_Uncalibrated D-112：SwapType=0+非零值 → mt5SwapMode 返回 Uncalibrated → SwapFacts skip。
+// 删除 D-104 P1 T1 override 后，PXBT（1314615）SwapType=0+非零 rates 恢复为矛盾数据 → fail-closed 不 emit swap facts。
+func TestPXBT_SwapTypeZero_Uncalibrated(t *testing.T) {
+	// mt5SwapMode：SwapType=0+非零 → Uncalibrated
+	mode := mt5SwapMode(mt5pb.SwapType_SwapType_SwapNone, 5.5, -51.55)
+	if mode != SwapModeUncalibrated {
+		t.Fatalf("SwapType=0+非零: mode=%v, want Uncalibrated", mode)
 	}
-	// 模拟 SwapFacts override 逻辑：venue 命中 + SwapType=SwapNone + 非零 → InPoints
-	venue := "1314615"
-	sgType := mt5pb.SwapType_SwapType_SwapNone
-	long, short := 5.5, -51.55
-	var mode SwapMode
-	if swapTypeZeroAsInPoints[venue] && sgType == mt5pb.SwapType_SwapType_SwapNone && (long != 0 || short != 0) {
-		mode = SwapModeInPoints
-	} else {
-		mode = mt5SwapMode(sgType, long, short)
+	// mt5SwapMode：SwapType=0+零值 → None（真停用）
+	mode = mt5SwapMode(mt5pb.SwapType_SwapType_SwapNone, 0, 0)
+	if mode != SwapModeNone {
+		t.Errorf("SwapType=0+零值: mode=%v, want None", mode)
 	}
-	if mode != SwapModeInPoints {
-		t.Errorf("PXBT override: mode=%v, want InPoints", mode)
+	// SwapFacts：venue=1314615 + SwapType=0 + 非零 → skip（不 emit swap_long/swap_short，只 emit trade_mode）
+	q := bus.New()
+	q.Publish(bus.Quote{Symbol: "GBPJPY", Venue: "1314615", VenueType: "mt5", Bid: 190, Ask: 190.01, Time: time.Now()})
+	a := &MT5Adapter{venue: "1314615", mt5: &fakeMT5Client{params: map[string]*mt5pb.SymbolParamsReply{
+		"GBPJPY": {Result: &mt5pb.SymbolParams{SymbolGroup: &mt5pb.SymGroup{
+			SwapType: mt5pb.SwapType_SwapType_SwapNone, SwapLong: 5.5, SwapShort: -6.3508, TradeMode: mt5pb.TradeMode_TradeMode_FullAccess,
+		}, SymbolInfo: &mt5pb.SymbolInfo{Points: 0.001, ContractSize: 100000}}},
+	}}}
+	a.SetSymbolMap(map[string]string{"GBPJPY": "GBPJPY"})
+
+	var fs []fact.Fact
+	var err error
+	logOut := captureLog(t, func() {
+		fs, err = a.SwapFacts(context.Background(), q)
+	})
+	if err != nil {
+		t.Fatalf("SwapFacts: %v", err)
 	}
-	// 非 PXBT venue → mt5SwapMode 照常返回 Uncalibrated（矛盾数据）
-	venue2 := "v5"
-	var mode2 SwapMode
-	if swapTypeZeroAsInPoints[venue2] && sgType == mt5pb.SwapType_SwapType_SwapNone && (long != 0 || short != 0) {
-		mode2 = SwapModeInPoints
-	} else {
-		mode2 = mt5SwapMode(sgType, long, short)
+	if n := countFacts(fs, fact.KindSwapLong); n != 0 {
+		t.Errorf("swap_long facts = %d, want 0 (PXBT Uncalibrated skip)", n)
 	}
-	if mode2 != SwapModeUncalibrated {
-		t.Errorf("non-PXBT venue: mode=%v, want Uncalibrated (矛盾数据)", mode2)
+	if n := countFacts(fs, fact.KindSwapShort); n != 0 {
+		t.Errorf("swap_short facts = %d, want 0 (PXBT Uncalibrated skip)", n)
 	}
-	// PXBT + SwapType=0 + 零值 → 不 override（mt5SwapMode 返回 None=真停用）
-	var mode3 SwapMode
-	long0, short0 := 0.0, 0.0
-	if swapTypeZeroAsInPoints[venue] && sgType == mt5pb.SwapType_SwapType_SwapNone && (long0 != 0 || short0 != 0) {
-		mode3 = SwapModeInPoints
-	} else {
-		mode3 = mt5SwapMode(sgType, long0, short0)
+	// trade_mode 仍 emit（不依赖 swap 标定）
+	if n := countFacts(fs, fact.KindTradeMode); n != 1 {
+		t.Errorf("trade_mode facts = %d, want 1", n)
 	}
-	if mode3 != SwapModeNone {
-		t.Errorf("PXBT + zero rates: mode=%v, want None (真停用)", mode3)
+	// skip 原因含 Uncalibrated/矛盾数据
+	if !strings.Contains(logOut, "GBPJPY") {
+		t.Errorf("log should contain skip reason for GBPJPY, got: %s", logOut)
 	}
 }
 
@@ -89,36 +90,6 @@ func TestSwapInPointsGuardRail_JPY(t *testing.T) {
 	got = swapInPointsGuardRail("mt5", "fxpro", "WTI", 5.5, 0.001, 1000, 70)
 	if got {
 		t.Errorf("WTI per-lot 5.5 < 500 should not warn, got true")
-	}
-}
-
-// TestMT5SwapFacts_PXBTOverrideEmit D-104 P1 T1：
-// venue=1314615 + SwapType=0 + 非零 rates → InPoints emit（非 skip=矛盾数据）。
-// 验证：SwapFacts 返回 swap_long/swap_short facts（emit），非 uncovered skip。
-func TestMT5SwapFacts_PXBTOverrideEmit(t *testing.T) {
-	q := bus.New()
-	q.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "1314615", VenueType: "mt5", Bid: 150, Ask: 150.01, Time: time.Now()})
-	a := &MT5Adapter{venue: "1314615", mt5: &fakeMT5Client{params: map[string]*mt5pb.SymbolParamsReply{
-		"AUDJPY": {Result: &mt5pb.SymbolParams{SymbolGroup: &mt5pb.SymGroup{
-			SwapType: mt5pb.SwapType_SwapType_SwapNone, SwapLong: 5.5, SwapShort: -51.55, TradeMode: mt5pb.TradeMode_TradeMode_FullAccess,
-		}, SymbolInfo: &mt5pb.SymbolInfo{Points: 0.001, ContractSize: 1000}}},
-	}}}
-	a.SetSymbolMap(map[string]string{"AUDJPY": "AUDJPY"})
-
-	var fs []fact.Fact
-	var err error
-	_ = captureLog(t, func() {
-		fs, err = a.SwapFacts(context.Background(), q)
-	})
-	if err != nil {
-		t.Fatalf("SwapFacts: %v", err)
-	}
-	// 应 emit swap_long + swap_short（InPoints override），非 skip
-	if n := countFacts(fs, fact.KindSwapLong); n != 1 {
-		t.Errorf("swap_long facts = %d, want 1 (PXBT override emit)", n)
-	}
-	if n := countFacts(fs, fact.KindSwapShort); n != 1 {
-		t.Errorf("swap_short facts = %d, want 1 (PXBT override emit)", n)
 	}
 }
 
@@ -197,7 +168,3 @@ func TestMT5SwapFacts_ConcurrencyRaceSafety(t *testing.T) {
 		_, _ = a.SwapFacts(context.Background(), q)
 	}
 }
-
-// 确保 math import 被使用（TestSwapInPointsGuardRail_JPY 间接使用 math.Abs via guardRail）。
-var _ = math.Abs
-var _ = strings.HasSuffix

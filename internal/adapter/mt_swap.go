@@ -101,13 +101,6 @@ func mt5SwapMode(t mt5pb.SwapType, long, short float64) SwapMode {
 	}
 }
 
-// swapTypeZeroAsInPoints D-104 P1 T1：venue 级 override——SwapType==0 + 非零值 → InPoints。
-// PXBT（1314615）实证：SwapType=0 却带非零 rates，实际 InPoints 语义（非矛盾数据）。
-// mt5SwapMode 对 SwapType=0+非零 rates 返回 Uncalibrated（矛盾数据），此处 override 修正。
-var swapTypeZeroAsInPoints = map[string]bool{
-	"1314615": true, // PXBT
-}
-
 // swapPerCallTimeout 单符号 SymbolParams 调用超时（S5，2026-08-24）。
 // PXBT 实证：261 次 DeadlineExceeded 全部因单 venue 慢 SymbolParams 拖垮整轮 poll
 // （共享 parent ctx 不自带超时 → 全符号超时 facts 空 → swapResult 返回 err）。
@@ -122,7 +115,6 @@ const swapPerCallTimeout = 3 * time.Second
 // 每轮每 venue 一行汇总日志（D-060 F1 跳过可观测）：emit/emit0 按符号计，skip 附原因。
 // WP1：未覆盖 SwapType 计数（7/8/9+）单独汇总日志，禁静默（探测面隐形收缩 P4）。
 // S5：每符号 SymbolParams 派生 per-call 3s 超时（慢 venue 不拖垮整轮，facts>0 仍部分成功）。
-// D-104 P1 T1：PXBT override（venue=1314615 + SwapType==0 + 非零值 → InPoints）。
 // D-104 P1 T3：有界并发 8（semaphore + per-index 结果槽，循环后合并）。
 func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fact, error) {
 	sm := a.SymbolMap()
@@ -191,14 +183,7 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 			slot.hasTripleDay = true
 			// trade_mode 不依赖 swap 标定（D-060 F3）：emit/emit0/标定 skip 的符号都发。
 			slot.facts = append(slot.facts, tradeModeFact(a.venue, canon, sg.GetTradeMode(), "mt5"))
-			// D-104 P1 T1：PXBT override——venue=1314615 + SwapType==0 + 非零值 → InPoints
-			//（mt5SwapMode 对 SwapType=0+非零 rates 返回 Uncalibrated=矛盾数据，PXBT 实证=InPoints）。
-			var mode SwapMode
-			if swapTypeZeroAsInPoints[a.venue] && sg.GetSwapType() == mt5pb.SwapType_SwapType_SwapNone && (sg.GetSwapLong() != 0 || sg.GetSwapShort() != 0) {
-				mode = SwapModeInPoints
-			} else {
-				mode = mt5SwapMode(sg.GetSwapType(), sg.GetSwapLong(), sg.GetSwapShort())
-			}
+			mode := mt5SwapMode(sg.GetSwapType(), sg.GetSwapLong(), sg.GetSwapShort())
 			if mode == SwapModeUncalibrated {
 				slot.uncoveredRaw = int32(sg.GetSwapType())
 				slot.hasUncovered = true

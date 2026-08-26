@@ -144,6 +144,12 @@ type Config struct {
 
 	// === Swap 对账告警（D-110 P2）===
 	SwapReconcileDeviationPct float64 // ARB_SWAP_RECONCILE_DEVIATION_PCT（默认 10.0）
+
+	// === Swap 不结算 venue（D-112）===
+	// SwapNonSettleVenues 已知不执行 swap 结算的 venue 列表（ARB_SWAP_NON_SETTLE_VENUES，逗号分隔）。
+	// venue 格式含 venueType 后缀（如 "277842155:mt5"），与 PositionLeg.Venue 完整 key 一致。
+	// swapledger 对这些 venue 记 0（不写 cashflow），避免按规格值误记。
+	SwapNonSettleVenues []string
 }
 
 // Load 从环境变量加载配置，未设置用默认值。
@@ -215,7 +221,24 @@ func Load() *Config {
 		AnalystRatePerHour:         envInt("ARB_ANALYST_RATE_PER_HOUR", 20),
 		MTData:                     loadMTData(),
 		SwapReconcileDeviationPct:  envFloat("ARB_SWAP_RECONCILE_DEVIATION_PCT", 10.0), // D-110 P2
+		SwapNonSettleVenues:        envStringSlice("ARB_SWAP_NON_SETTLE_VENUES"),       // D-112
 	}
+}
+
+// envStringSlice 解析逗号分隔字符串为切片（D-112；空字符串→nil）。
+func envStringSlice(key string) []string {
+	s, ok := os.LookupEnv(key)
+	if !ok || s == "" {
+		return nil
+	}
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // envStringSet 解析逗号分隔字符串为 set（D-072）。
