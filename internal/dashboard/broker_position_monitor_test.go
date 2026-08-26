@@ -9,6 +9,7 @@ import (
 	"arb/internal/bus"
 	"arb/internal/exec"
 	"arb/internal/reconcile"
+	"arb/internal/store/pgstore"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 )
@@ -254,4 +255,118 @@ func withShortAccountDebounce(t *testing.T, d time.Duration) func() {
 	orig := accountKickDebounce
 	accountKickDebounce = d
 	return func() { accountKickDebounce = orig }
+}
+
+// --- D-110 P2: swap 快照采集测试 ---
+
+// fakeSwapSnapStore 受控 SwapSnapshotStore（记录 InsertSwapSnapshot 调用）。
+type fakeSwapSnapStore struct {
+	inserts   []fakeSwapInsert
+	positions []pgstore.Position
+	legsByPos map[int64][]pgstore.PositionLeg
+}
+
+type fakeSwapInsert struct {
+	PosID   int64
+	Venue   string
+	SwapUSD float64
+}
+
+func (f *fakeSwapSnapStore) InsertSwapSnapshot(_ context.Context, posID int64, venue string, swapUSD float64, _ time.Time) error {
+	f.inserts = append(f.inserts, fakeSwapInsert{posID, venue, swapUSD})
+	return nil
+}
+func (f *fakeSwapSnapStore) ListPositions(_ context.Context, status string, _, _ int) ([]pgstore.Position, error) {
+	if status != "OPEN" {
+		return nil, nil
+	}
+	return f.positions, nil
+}
+func (f *fakeSwapSnapStore) ListPositionLegs(_ context.Context, posID int64) ([]pgstore.PositionLeg, error) {
+	return f.legsByPos[posID], nil
+}
+
+// TestCollectSwapSnapshots_SwapChangeWrites D-110 P2：swap 值变化 → InsertSwapSnapshot 被调用。
+func TestCollectSwapSnapshots_SwapChangeWrites(t *testing.T) {
+	ctx := context.Background()
+	q := &fakeVenueQuerier{key: "venue:mt5", orders: []reconcile.VenueOrder{
+		{Venue: "venue", VenueKey: "venue:mt5", Ticket: "T1", Symbol: "EURUSD", Side: "BUY", Volume: 0.1, OpenPrice: 1.1, Swap: 5.0},
+	}}
+	m, _, _ := newMonTest(t, q)
+	fake := &fakeSwapSnapStore{
+		positions: []pgstore.Position{{ID: 100, Status: "OPEN"}},
+		legsByPos: map[int64][]pgstore.PositionLeg{
+			100: {{Phase: "OPEN", Venue: "venue:mt5", OrderID: "T1"}},
+		},
+	}
+	m.SetSwapSnapshotStore(fake)
+	m.Refresh(ctx) // 首次 poll → swap=5.0 首次写
+	if len(fake.inserts) != 1 {
+		t.Fatalf("first poll: want 1 insert, got %d", len(fake.inserts))
+	}
+	if fake.inserts[0].SwapUSD != 5.0 {
+		t.Fatalf("want swap=5.0, got %.4f", fake.inserts[0].SwapUSD)
+	}
+	// swap 值不变 → 不写
+	m.Refresh(ctx)
+	if len(fake.inserts) != 1 {
+		t.Fatalf("no-change poll: want 1 insert, got %d", len(fake.inserts))
+	}
+	// swap 值变化 → 写
+	q.orders[0].Swap = 6.0
+	m.Refresh(ctx)
+	if len(fake.inserts) != 2 {
+		t.Fatalf("change poll: want 2 inserts, got %d", len(fake.inserts))
+	}
+	if fake.inserts[1].SwapUSD != 6.0 {
+		t.Fatalf("want swap=6.0, got %.4f", fake.inserts[1].SwapUSD)
+	}
+}
+
+// TestCollectSwapSnapshots_SwapZeroFirstWrite D-110 P2 B2：swap=0 + 首次 → 写入。
+func TestCollectSwapSnapshots_SwapZeroFirstWrite(t *testing.T) {
+	ctx := context.Background()
+	q := &fakeVenueQuerier{key: "venue:mt5", orders: []reconcile.VenueOrder{
+		{Venue: "venue", VenueKey: "venue:mt5", Ticket: "T1", Symbol: "EURUSD", Side: "BUY", Volume: 0.1, OpenPrice: 1.1, Swap: 0},
+	}}
+	m, _, _ := newMonTest(t, q)
+	fake := &fakeSwapSnapStore{
+		positions: []pgstore.Position{{ID: 100, Status: "OPEN"}},
+		legsByPos: map[int64][]pgstore.PositionLeg{
+			100: {{Phase: "OPEN", Venue: "venue:mt5", OrderID: "T1"}},
+		},
+	}
+	m.SetSwapSnapshotStore(fake)
+	m.Refresh(ctx)
+	if len(fake.inserts) != 1 {
+		t.Fatalf("first poll swap=0: want 1 insert, got %d", len(fake.inserts))
+	}
+	if fake.inserts[0].SwapUSD != 0 {
+		t.Fatalf("want swap=0, got %.4f", fake.inserts[0].SwapUSD)
+	}
+	// 再次 poll swap=0 → 去重不写
+	m.Refresh(ctx)
+	if len(fake.inserts) != 1 {
+		t.Fatalf("no-change swap=0: want 1 insert, got %d", len(fake.inserts))
+	}
+}
+
+// TestCollectSwapSnapshots_PositionIDZeroSkips D-110 P2：position_id=0（孤儿单）→ 不写。
+func TestCollectSwapSnapshots_PositionIDZeroSkips(t *testing.T) {
+	ctx := context.Background()
+	q := &fakeVenueQuerier{key: "venue:mt5", orders: []reconcile.VenueOrder{
+		{Venue: "venue", VenueKey: "venue:mt5", Ticket: "ORPHAN", Symbol: "EURUSD", Side: "BUY", Volume: 0.1, OpenPrice: 1.1, Swap: 5.0},
+	}}
+	m, _, _ := newMonTest(t, q)
+	fake := &fakeSwapSnapStore{
+		positions: []pgstore.Position{{ID: 100, Status: "OPEN"}},
+		legsByPos: map[int64][]pgstore.PositionLeg{
+			100: {{Phase: "OPEN", Venue: "venue:mt5", OrderID: "OTHER"}}, // 不匹配 ORPHAN
+		},
+	}
+	m.SetSwapSnapshotStore(fake)
+	m.Refresh(ctx)
+	if len(fake.inserts) != 0 {
+		t.Fatalf("orphan order: want 0 inserts, got %d", len(fake.inserts))
+	}
 }

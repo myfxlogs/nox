@@ -43,6 +43,22 @@ type BrokerPositionMonitor struct {
 
 	// D-107 P2：orderTopic 事件触发回读（kickCh buffered(1) 非阻塞 send = 合并语义）。
 	kickCh chan struct{}
+
+	// D-110 P2：swap 快照采集（poll 后锁外执行）。
+	swapSnapStore    SwapSnapshotStore
+	lastSwapByTicket map[string]float64 // ticket→上次 swap 值（去重，单协程访问无需锁）
+}
+
+// SwapSnapshotStore D-110 P2 swap 快照采集依赖（setter 注入，避免 NewBrokerPositionMonitor 签名变更）。
+type SwapSnapshotStore interface {
+	InsertSwapSnapshot(ctx context.Context, posID int64, venue string, swapUSD float64, ts time.Time) error
+	PositionLegLister
+}
+
+// SetSwapSnapshotStore D-110 P2 注入 swap 快照采集依赖（boot 时调用）。
+func (m *BrokerPositionMonitor) SetSwapSnapshotStore(s SwapSnapshotStore) {
+	m.swapSnapStore = s
+	m.lastSwapByTicket = make(map[string]float64)
 }
 
 // NewBrokerPositionMonitor 创建 monitor。interval 为轮询周期（ARB_BROKER_POS_POLL_MS）。
@@ -144,6 +160,46 @@ func (m *BrokerPositionMonitor) poll(ctx context.Context) {
 			m.topic.Publish(&v1.BrokerPositionSnapshot{Positions: view})
 		}
 		log.Printf("[broker-mon] snapshot changed: %d positions", len(view))
+	}
+
+	// D-110 P2：swap 快照采集（锁外执行，D2 修订）。
+	m.collectSwapSnapshots(ctx)
+}
+
+// collectSwapSnapshots D-110 P2：poll 后采集 swap 快照。
+// 锁外执行：复制 venues 快照 → 释放锁 → 构建 positionID 索引 → 遍历 orders 写快照。
+// 去重：lastSwapByTicket[ticket] == currentSwap → 跳过；变化或首次 → 写入。
+// swap=0 也写（B2 修订）：Exness swap 恒=0，首次写0后不再变化=去重不写新行，但至少有一条基准行。
+func (m *BrokerPositionMonitor) collectSwapSnapshots(ctx context.Context) {
+	if m.swapSnapStore == nil {
+		return
+	}
+	// 复制 venues 快照（锁内复制，锁外处理）
+	m.mu.RLock()
+	venues := maps.Clone(m.venues)
+	m.mu.RUnlock()
+
+	idx := buildPositionIDIndex(ctx, m.swapSnapStore)
+	now := time.Now().UTC()
+	for _, vs := range venues {
+		if !vs.online {
+			continue
+		}
+		for _, o := range vs.orders {
+			posID := idx[o.VenueKey+"\x00"+o.Ticket]
+			if posID == 0 {
+				continue // 孤儿单/未关联
+			}
+			key := o.VenueKey + "\x00" + o.Ticket
+			if prev, ok := m.lastSwapByTicket[key]; ok && prev == o.Swap {
+				continue // 去重：swap 值未变化
+			}
+			if err := m.swapSnapStore.InsertSwapSnapshot(ctx, posID, o.VenueKey, o.Swap, now); err != nil {
+				log.Printf("[broker-mon] swap snapshot insert posID=%d venue=%s: %v", posID, o.VenueKey, err)
+				continue
+			}
+			m.lastSwapByTicket[key] = o.Swap
+		}
 	}
 }
 

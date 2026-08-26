@@ -39,19 +39,25 @@ func (s *Service) ListBrokerPositions(ctx context.Context, req *connect.Request[
 	return connect.NewResponse(&v1.ListBrokerPositionsResponse{Positions: out}), nil
 }
 
-// annotatePositionID 用 OPEN position legs 构造 (venueKey, ticket)→position_id 索引，标注 broker 持仓。
-// 匹配口径唯一在此（P3）：leg.Venue == bp.VenueKey && leg.OrderID == bp.Ticket。
-// 查询失败不阻断（position_id 全 0，前端显示「未关联」）——fail-open，视图可用优先。
-func annotatePositionID(ctx context.Context, store *pgstore.Store, bps []*v1.BrokerPosition) {
-	if len(bps) == 0 || store == nil {
-		return
+// PositionLegLister 查询 OPEN positions + legs 的接口（buildPositionIDIndex 依赖）。
+// pgstore.Store 实现此接口；测试可注入 fake。
+type PositionLegLister interface {
+	ListPositions(ctx context.Context, status string, limit, offset int) ([]pgstore.Position, error)
+	ListPositionLegs(ctx context.Context, posID int64) ([]pgstore.PositionLeg, error)
+}
+
+// buildPositionIDIndex 构造 (venueKey, ticket)→position_id 索引（D-110 P2 A1 抽取）。
+// 查 OPEN positions → 遍历 OPEN legs → leg.Venue+"\x00"+leg.OrderID → posID。
+// 查询失败返回空索引（fail-open，调用方自行处理）。
+func buildPositionIDIndex(ctx context.Context, store PositionLegLister) map[string]int64 {
+	idx := make(map[string]int64)
+	if store == nil {
+		return idx
 	}
 	openPositions, err := store.ListPositions(ctx, "OPEN", 200, 0)
 	if err != nil {
-		return
+		return idx
 	}
-	// (venueKey, ticket) → position_id
-	idx := make(map[string]int64, len(openPositions)*2)
 	for _, p := range openPositions {
 		legs, err := store.ListPositionLegs(ctx, p.ID)
 		if err != nil {
@@ -63,6 +69,17 @@ func annotatePositionID(ctx context.Context, store *pgstore.Store, bps []*v1.Bro
 			}
 		}
 	}
+	return idx
+}
+
+// annotatePositionID 用 OPEN position legs 构造 (venueKey, ticket)→position_id 索引，标注 broker 持仓。
+// 匹配口径唯一在此（P3）：leg.Venue == bp.VenueKey && leg.OrderID == bp.Ticket。
+// 查询失败不阻断（position_id 全 0，前端显示「未关联」）——fail-open，视图可用优先。
+func annotatePositionID(ctx context.Context, store *pgstore.Store, bps []*v1.BrokerPosition) {
+	if len(bps) == 0 || store == nil {
+		return
+	}
+	idx := buildPositionIDIndex(ctx, store)
 	annotateWithIndex(bps, idx)
 }
 
