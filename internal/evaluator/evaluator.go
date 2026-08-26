@@ -55,10 +55,12 @@ type Result struct {
 //
 // D-036 单位约定：息差型（carry/funding）的 gross/net 为年化百分点（5.0=5%，D-031），
 // 一次性成本（点差/佣金/滑点）为 bps，只进 breakeven_days。价差型（cross）的 gross 为
-// 一次性 bps 且已含双边点差（检测器用可执行价计算）→ 净收益不再扣 spread（D-035 双重计算修正）。
+// 一次性 bps 且已含开仓方向双边点差（检测器用可执行价计算），但平仓方向 bid-ask 穿透
+// 仍需扣——D-113 往返 bid-ask 成本 = half-spread × 4 / mid × 10000（开仓+平仓各吃全宽 spread）。
 //
 // D-078 round-trip 成本修正：开仓+平仓各付一轮 commission+slippage（+spread for 息差型），
 // 旧模型只算开仓成本导致净收益虚高——实证 31 笔 CROSS_VENUE avg gross 46bps 但 avg realized -$1.19。
+// D-113 续篇：bid-ask 穿透仍漏算——51 笔只 1 盈累计 -$512，宽 spread venue 组合 net 虚高 21 bps。
 func Evaluate(c detector.Candidate, cfg Config, spreadBuy, spreadSell, commissionBps, avg30dBps float64) *Result {
 	spreadCost := spreadBuy + spreadSell
 	slippageCost := cfg.SlippageBps * 2 // 两腿各 1 bps
@@ -70,9 +72,12 @@ func Evaluate(c detector.Candidate, cfg Config, spreadBuy, spreadSell, commissio
 
 	switch c.Type {
 	case detector.TypeCrossVenue:
-		// 价差型：一次性 bps，gross 已含双边点差 → 不再扣 spread（D-035）
+		// D-113：往返 bid-ask 成本 = 双腿全宽 spread × 2（开仓+平仓各吃一次 bid-ask 穿透）
+		// spreadBuy/spreadSell 是美元 half-spread → ×4 = 往返全宽；转 bps 对齐 gross
+		mid := (c.PriceBuy + c.PriceSell) / 2
+		roundTripSpreadBps := (spreadBuy + spreadSell) / mid * 10000 * 4
 		// D-078 round-trip：开仓+平仓各付 commission+slippage
-		netBps = grossBps - (commissionBps+slippageCost)*2
+		netBps = grossBps - roundTripSpreadBps - (commissionBps+slippageCost)*2
 	case detector.TypeFundingHedge, detector.TypeCarry, detector.TypePerpFunding:
 		// 息差型：净年化（百分点）= gross − 资金机会成本（D-029/D-036）
 		netBps = grossBps - cfg.MarginRateAnnual

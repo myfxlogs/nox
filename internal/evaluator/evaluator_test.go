@@ -17,8 +17,10 @@ func baseCfg() Config {
 	}
 }
 
-// TestEvaluateCrossVenue 价差型：gross 已含双边点差 → 净收益不扣 spread（D-035 双重计算修正）。
-func TestEvaluateCrossVenue(t *testing.T) {
+// TestEvaluateCrossVenueRoundTripSpread D-113：往返 bid-ask 穿透成本验证。
+// spreadBuy/spreadSell = 原始价格单位 half-spread → ×4 = 往返全宽 spread（开仓+平仓各吃一次 bid-ask 穿透）。
+// EURUSD half-spread=0.0001（1 pip 真实值）/ mid 1.1006 × 40000 = 7.27 bps → net = 8.18 - 7.27 - 5.2 = -4.29 → trap。
+func TestEvaluateCrossVenueRoundTripSpread(t *testing.T) {
 	c := detector.Candidate{
 		Type:      detector.TypeCrossVenue,
 		Canonical: "EURUSD",
@@ -26,19 +28,19 @@ func TestEvaluateCrossVenue(t *testing.T) {
 		VenueSell: "b:mt4",
 		PriceBuy:  1.1001,
 		PriceSell: 1.1010,
-		GrossBps:  8.18, // 检测器用可执行价算：spread 已含
+		GrossBps:  8.18, // 检测器用可执行价算：开仓方向 spread 已含
 		QuoteTime: time.Now().UnixMilli(),
 	}
-	r := Evaluate(c, baseCfg(), 0.5, 0.5, 0.6, 0)
+	r := Evaluate(c, baseCfg(), 0.0001, 0.0001, 0.6, 0)
 	if r == nil {
 		t.Fatal("nil result")
 	}
-	if r.Rating != RatingGrab {
-		t.Fatalf("Rating = %s, want grab", r.Rating)
+	// D-113：往返 bid-ask 7.27 bps + round-trip commission+slippage 5.2 bps = 12.47 > gross 8.18 → trap
+	if r.Rating != RatingTrap {
+		t.Fatalf("Rating = %s, want trap (round-trip spread+cost > gross)", r.Rating)
 	}
-	// D-078 round-trip：net = 8.18 - (0.6+2.0)*2 = 8.18 - 5.2 = 2.98（开仓+平仓各付佣金+滑点）
-	if r.NetBps < 2.8 || r.NetBps > 3.2 {
-		t.Fatalf("NetBps = %v, want ~2.98 (round-trip cost)", r.NetBps)
+	if r.NetBps >= 0 {
+		t.Fatalf("NetBps = %v, want < 0 (D-113 往返 bid-ask 穿透成本)", r.NetBps)
 	}
 	if r.BreakevenDays != nil {
 		t.Fatal("CrossVenue should not have breakeven_days")
@@ -97,43 +99,109 @@ func TestEvaluateCarryMarginDeducted(t *testing.T) {
 }
 
 // TestEvaluateTrap 负净收益恒为 trap（不进任何视图）。
+// D-113：gross=1.0 远小于往返 bid-ask 7.27 + round-trip 摩擦 5.2 = 12.47 → net 大幅为负。
 func TestEvaluateTrap(t *testing.T) {
 	c := detector.Candidate{
 		Type:      detector.TypeCrossVenue,
 		Canonical: "X",
 		VenueBuy:  "a:mt4",
 		VenueSell: "b:mt4",
-		GrossBps:  1.0, // 1.0 - (0.6+2.0)*2 < 0
+		PriceBuy:  1.1001,
+		PriceSell: 1.1010,
+		GrossBps:  1.0, // 1.0 - 7.27 - 5.2 < 0
 		QuoteTime: time.Now().UnixMilli(),
 	}
-	r := Evaluate(c, baseCfg(), 0.5, 0.5, 0.6, 0)
+	r := Evaluate(c, baseCfg(), 0.0001, 0.0001, 0.6, 0)
 	if r.Rating != RatingTrap {
 		t.Fatalf("Rating = %s, want trap (net <= 0)", r.Rating)
 	}
 }
 
-// TestEvaluateCrossVenueRoundTrip D-078：round-trip 成本验证——低 gross 机会被正确判 trap。
-// 旧模型 gross=5 只扣 2.6 → net=2.4（grab）；round-trip 后扣 5.2 → net=-0.2（trap）。
+// TestEvaluateCrossVenueRoundTrip D-078+D-113：round-trip 成本（commission+slippage×2 + 往返 bid-ask）验证。
+// spread 0.0001+0.0001 / mid 1.1006 × 40000 = 7.27 bps 往返 bid-ask + (0.6+2.0)*2=5.2 bps round-trip 摩擦 = 12.47 bps 总成本。
+// gross=5 → net=-7.47 trap；gross=10 → net=-2.47 trap；gross=50 → net=37.53 grab（大 gross 仍可盈利）。
 func TestEvaluateCrossVenueRoundTrip(t *testing.T) {
 	c := detector.Candidate{
 		Type:      detector.TypeCrossVenue,
 		Canonical: "EURUSD",
 		VenueBuy:  "a:mt4",
 		VenueSell: "b:mt4",
-		GrossBps:  5.0, // 5.0 - (0.6+2.0)*2 = -0.2 → trap
+		PriceBuy:  1.1001,
+		PriceSell: 1.1010,
+		GrossBps:  5.0, // 5.0 - 7.27 - 5.2 = -7.47 → trap
 		QuoteTime: time.Now().UnixMilli(),
 	}
-	r := Evaluate(c, baseCfg(), 0.5, 0.5, 0.6, 0)
+	r := Evaluate(c, baseCfg(), 0.0001, 0.0001, 0.6, 0)
 	if r.Rating != RatingTrap {
-		t.Fatalf("Rating = %s, want trap (gross 5bps < round-trip cost 5.2bps)", r.Rating)
+		t.Fatalf("Rating = %s, want trap (gross 5bps < round-trip cost 12.47bps)", r.Rating)
 	}
-	// gross=10 → net = 10 - 5.2 = 4.8 → grab（round-trip 后仍盈利）
+	// D-113：gross=10 仍 < 12.47 → trap（旧 D-078 模型只扣 5.2 → grab，bid-ask 穿透漏算）
 	c.GrossBps = 10.0
-	r2 := Evaluate(c, baseCfg(), 0.5, 0.5, 0.6, 0)
-	if r2.Rating != RatingGrab {
-		t.Fatalf("Rating = %s, want grab (gross 10bps > round-trip cost 5.2bps)", r2.Rating)
+	r2 := Evaluate(c, baseCfg(), 0.0001, 0.0001, 0.6, 0)
+	if r2.Rating != RatingTrap {
+		t.Fatalf("Rating = %s, want trap (gross 10bps < round-trip+bid-ask 12.47bps)", r2.Rating)
 	}
-	if r2.NetBps < 4.7 || r2.NetBps > 4.9 {
-		t.Fatalf("NetBps = %v, want ~4.8", r2.NetBps)
+	// gross=50 → net = 50 - 7.27 - 5.2 = 37.53 → grab（大 gross 仍可盈利，验证公式非恒 trap）
+	c.GrossBps = 50.0
+	r3 := Evaluate(c, baseCfg(), 0.0001, 0.0001, 0.6, 0)
+	if r3.Rating != RatingGrab {
+		t.Fatalf("Rating = %s, want grab (gross 50bps > round-trip+bid-ask 12.47bps)", r3.Rating)
+	}
+	if r3.NetBps < 37.0 || r3.NetBps > 38.0 {
+		t.Fatalf("NetBps = %v, want ~37.5", r3.NetBps)
+	}
+}
+
+// TestEvaluateCrossVenueWideSpread D-113：宽 spread venue 组合（XPDUSD 实证场景）。
+// REDACTED_MT_ACCT bid-ask $4.26 极宽 → spreadSell=2.13；39050818 spreadBuy=0.735。
+// mid=1338.2, roundTripSpreadBps = (0.735+2.13)/1338.2*10000*4 ≈ 85.7 bps。
+// net = 23.67 - 85.7 - 3.6 ≈ -65.6 → trap（实证 51 笔只 1 盈累计 -$512 的根因）。
+func TestEvaluateCrossVenueWideSpread(t *testing.T) {
+	c := detector.Candidate{
+		Type:      detector.TypeCrossVenue,
+		Canonical: "XPDUSD",
+		VenueBuy:  "39050818:mt5",
+		VenueSell: "REDACTED_MT_ACCT:mt5",
+		PriceBuy:  1337.42,
+		PriceSell: 1338.98,
+		GrossBps:  23.67,
+		QuoteTime: time.Now().UnixMilli(),
+	}
+	// spreadBuy = (1337.42-1335.95)/2 = 0.735, spreadSell = (1343.24-1338.98)/2 = 2.13
+	r := Evaluate(c, baseCfg(), 0.735, 2.13, 0.6, 0)
+	if r == nil {
+		t.Fatal("nil result")
+	}
+	if r.Rating != RatingTrap {
+		t.Fatalf("Rating = %s, want trap (宽 spread venue 组合 net 大幅为负)", r.Rating)
+	}
+	if r.NetBps >= -60 {
+		t.Fatalf("NetBps = %v, want < -60 (宽 spread 往返 bid-ask 85.7 bps)", r.NetBps)
+	}
+}
+
+// TestEvaluateCrossVenueZeroSpread D-113：spread=0 回退 D-078 行为（无 bid-ask 穿透成本）。
+// spreadBuy=spreadSell=0 → roundTripSpreadBps=0 → net = 8.18 - (0.6+2.0)*2 = 2.98 → grab。
+func TestEvaluateCrossVenueZeroSpread(t *testing.T) {
+	c := detector.Candidate{
+		Type:      detector.TypeCrossVenue,
+		Canonical: "EURUSD",
+		VenueBuy:  "a:mt4",
+		VenueSell: "b:mt4",
+		PriceBuy:  1.1001,
+		PriceSell: 1.1010,
+		GrossBps:  8.18,
+		QuoteTime: time.Now().UnixMilli(),
+	}
+	r := Evaluate(c, baseCfg(), 0, 0, 0.6, 0)
+	if r == nil {
+		t.Fatal("nil result")
+	}
+	if r.Rating != RatingGrab {
+		t.Fatalf("Rating = %s, want grab (spread=0 回退 D-078)", r.Rating)
+	}
+	// net = 8.18 - 0 - (0.6+2.0)*2 = 2.98
+	if r.NetBps < 2.8 || r.NetBps > 3.2 {
+		t.Fatalf("NetBps = %v, want ~2.98 (spread=0 回退 D-078 round-trip)", r.NetBps)
 	}
 }
