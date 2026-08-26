@@ -55,7 +55,7 @@ func (s *Store) UpsertComboDaily(ctx context.Context, rows []ComboDailyRow) erro
 }
 
 // ListComboDaily 查询指定组合键的日度 rollup（D-080 S5 对账报表用）。
-// 按 day ASC 排序，limit=0 时默认 365。
+// 按 day DESC 排序（limit=1 取最新；limit=0=365 全量倒序，对账报表用）。
 func (s *Store) ListComboDaily(ctx context.Context, comboKey string, limit int) ([]ComboDailyRow, error) {
 	if limit <= 0 {
 		limit = 365
@@ -63,7 +63,7 @@ func (s *Store) ListComboDaily(ctx context.Context, comboKey string, limit int) 
 	q := `SELECT combo_key, day, type, samples, net_avg, net_min, net_max, annual_avg, first_at, last_at
 		FROM combo_daily_rollup
 		WHERE combo_key = $1
-		ORDER BY day ASC LIMIT $2`
+		ORDER BY day DESC LIMIT $2`
 	rows, err := s.pool.Query(ctx, q, comboKey, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list combo daily: %w", err)
