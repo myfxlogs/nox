@@ -62,6 +62,12 @@ const (
 	// DashboardServiceListUnackedProcedure is the fully-qualified name of the DashboardService's
 	// ListUnacked RPC.
 	DashboardServiceListUnackedProcedure = "/arb.dashboard.v1.DashboardService/ListUnacked"
+	// DashboardServiceDeleteAlertsProcedure is the fully-qualified name of the DashboardService's
+	// DeleteAlerts RPC.
+	DashboardServiceDeleteAlertsProcedure = "/arb.dashboard.v1.DashboardService/DeleteAlerts"
+	// DashboardServiceClearAckedAlertsProcedure is the fully-qualified name of the DashboardService's
+	// ClearAckedAlerts RPC.
+	DashboardServiceClearAckedAlertsProcedure = "/arb.dashboard.v1.DashboardService/ClearAckedAlerts"
 	// DashboardServiceAddLedgerEntryProcedure is the fully-qualified name of the DashboardService's
 	// AddLedgerEntry RPC.
 	DashboardServiceAddLedgerEntryProcedure = "/arb.dashboard.v1.DashboardService/AddLedgerEntry"
@@ -227,6 +233,9 @@ type DashboardServiceClient interface {
 	AckAlert(context.Context, *connect.Request[v1.AckAlertRequest]) (*connect.Response[v1.AckAlertResponse], error)
 	AckAll(context.Context, *connect.Request[v1.AckAllRequest]) (*connect.Response[v1.AckAllResponse], error)
 	ListUnacked(context.Context, *connect.Request[v1.ListUnackedRequest]) (*connect.Response[v1.ListUnackedResponse], error)
+	// 告警删除
+	DeleteAlerts(context.Context, *connect.Request[v1.DeleteAlertsRequest]) (*connect.Response[v1.DeleteAlertsResponse], error)
+	ClearAckedAlerts(context.Context, *connect.Request[v1.ClearAckedAlertsRequest]) (*connect.Response[v1.ClearAckedAlertsResponse], error)
 	// 台账
 	AddLedgerEntry(context.Context, *connect.Request[v1.AddLedgerEntryRequest]) (*connect.Response[v1.AddLedgerEntryResponse], error)
 	ListLedgerEntries(context.Context, *connect.Request[v1.ListLedgerEntriesRequest]) (*connect.Response[v1.ListLedgerEntriesResponse], error)
@@ -368,6 +377,18 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			httpClient,
 			baseURL+DashboardServiceListUnackedProcedure,
 			connect.WithSchema(dashboardServiceMethods.ByName("ListUnacked")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteAlerts: connect.NewClient[v1.DeleteAlertsRequest, v1.DeleteAlertsResponse](
+			httpClient,
+			baseURL+DashboardServiceDeleteAlertsProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("DeleteAlerts")),
+			connect.WithClientOptions(opts...),
+		),
+		clearAckedAlerts: connect.NewClient[v1.ClearAckedAlertsRequest, v1.ClearAckedAlertsResponse](
+			httpClient,
+			baseURL+DashboardServiceClearAckedAlertsProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ClearAckedAlerts")),
 			connect.WithClientOptions(opts...),
 		),
 		addLedgerEntry: connect.NewClient[v1.AddLedgerEntryRequest, v1.AddLedgerEntryResponse](
@@ -685,6 +706,8 @@ type dashboardServiceClient struct {
 	ackAlert               *connect.Client[v1.AckAlertRequest, v1.AckAlertResponse]
 	ackAll                 *connect.Client[v1.AckAllRequest, v1.AckAllResponse]
 	listUnacked            *connect.Client[v1.ListUnackedRequest, v1.ListUnackedResponse]
+	deleteAlerts           *connect.Client[v1.DeleteAlertsRequest, v1.DeleteAlertsResponse]
+	clearAckedAlerts       *connect.Client[v1.ClearAckedAlertsRequest, v1.ClearAckedAlertsResponse]
 	addLedgerEntry         *connect.Client[v1.AddLedgerEntryRequest, v1.AddLedgerEntryResponse]
 	listLedgerEntries      *connect.Client[v1.ListLedgerEntriesRequest, v1.ListLedgerEntriesResponse]
 	ledgerSummary          *connect.Client[v1.LedgerSummaryRequest, v1.LedgerSummaryResponse]
@@ -785,6 +808,16 @@ func (c *dashboardServiceClient) AckAll(ctx context.Context, req *connect.Reques
 // ListUnacked calls arb.dashboard.v1.DashboardService.ListUnacked.
 func (c *dashboardServiceClient) ListUnacked(ctx context.Context, req *connect.Request[v1.ListUnackedRequest]) (*connect.Response[v1.ListUnackedResponse], error) {
 	return c.listUnacked.CallUnary(ctx, req)
+}
+
+// DeleteAlerts calls arb.dashboard.v1.DashboardService.DeleteAlerts.
+func (c *dashboardServiceClient) DeleteAlerts(ctx context.Context, req *connect.Request[v1.DeleteAlertsRequest]) (*connect.Response[v1.DeleteAlertsResponse], error) {
+	return c.deleteAlerts.CallUnary(ctx, req)
+}
+
+// ClearAckedAlerts calls arb.dashboard.v1.DashboardService.ClearAckedAlerts.
+func (c *dashboardServiceClient) ClearAckedAlerts(ctx context.Context, req *connect.Request[v1.ClearAckedAlertsRequest]) (*connect.Response[v1.ClearAckedAlertsResponse], error) {
+	return c.clearAckedAlerts.CallUnary(ctx, req)
 }
 
 // AddLedgerEntry calls arb.dashboard.v1.DashboardService.AddLedgerEntry.
@@ -1051,6 +1084,9 @@ type DashboardServiceHandler interface {
 	AckAlert(context.Context, *connect.Request[v1.AckAlertRequest]) (*connect.Response[v1.AckAlertResponse], error)
 	AckAll(context.Context, *connect.Request[v1.AckAllRequest]) (*connect.Response[v1.AckAllResponse], error)
 	ListUnacked(context.Context, *connect.Request[v1.ListUnackedRequest]) (*connect.Response[v1.ListUnackedResponse], error)
+	// 告警删除
+	DeleteAlerts(context.Context, *connect.Request[v1.DeleteAlertsRequest]) (*connect.Response[v1.DeleteAlertsResponse], error)
+	ClearAckedAlerts(context.Context, *connect.Request[v1.ClearAckedAlertsRequest]) (*connect.Response[v1.ClearAckedAlertsResponse], error)
 	// 台账
 	AddLedgerEntry(context.Context, *connect.Request[v1.AddLedgerEntryRequest]) (*connect.Response[v1.AddLedgerEntryResponse], error)
 	ListLedgerEntries(context.Context, *connect.Request[v1.ListLedgerEntriesRequest]) (*connect.Response[v1.ListLedgerEntriesResponse], error)
@@ -1188,6 +1224,18 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		DashboardServiceListUnackedProcedure,
 		svc.ListUnacked,
 		connect.WithSchema(dashboardServiceMethods.ByName("ListUnacked")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceDeleteAlertsHandler := connect.NewUnaryHandler(
+		DashboardServiceDeleteAlertsProcedure,
+		svc.DeleteAlerts,
+		connect.WithSchema(dashboardServiceMethods.ByName("DeleteAlerts")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceClearAckedAlertsHandler := connect.NewUnaryHandler(
+		DashboardServiceClearAckedAlertsProcedure,
+		svc.ClearAckedAlerts,
+		connect.WithSchema(dashboardServiceMethods.ByName("ClearAckedAlerts")),
 		connect.WithHandlerOptions(opts...),
 	)
 	dashboardServiceAddLedgerEntryHandler := connect.NewUnaryHandler(
@@ -1512,6 +1560,10 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceAckAllHandler.ServeHTTP(w, r)
 		case DashboardServiceListUnackedProcedure:
 			dashboardServiceListUnackedHandler.ServeHTTP(w, r)
+		case DashboardServiceDeleteAlertsProcedure:
+			dashboardServiceDeleteAlertsHandler.ServeHTTP(w, r)
+		case DashboardServiceClearAckedAlertsProcedure:
+			dashboardServiceClearAckedAlertsHandler.ServeHTTP(w, r)
 		case DashboardServiceAddLedgerEntryProcedure:
 			dashboardServiceAddLedgerEntryHandler.ServeHTTP(w, r)
 		case DashboardServiceListLedgerEntriesProcedure:
@@ -1659,6 +1711,14 @@ func (UnimplementedDashboardServiceHandler) AckAll(context.Context, *connect.Req
 
 func (UnimplementedDashboardServiceHandler) ListUnacked(context.Context, *connect.Request[v1.ListUnackedRequest]) (*connect.Response[v1.ListUnackedResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListUnacked is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) DeleteAlerts(context.Context, *connect.Request[v1.DeleteAlertsRequest]) (*connect.Response[v1.DeleteAlertsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.DeleteAlerts is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ClearAckedAlerts(context.Context, *connect.Request[v1.ClearAckedAlertsRequest]) (*connect.Response[v1.ClearAckedAlertsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ClearAckedAlerts is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) AddLedgerEntry(context.Context, *connect.Request[v1.AddLedgerEntryRequest]) (*connect.Response[v1.AddLedgerEntryResponse], error) {

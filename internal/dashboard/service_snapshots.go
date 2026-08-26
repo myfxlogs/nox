@@ -156,3 +156,21 @@ func (s *Service) ListUnacked(ctx context.Context, req *connect.Request[v1.ListU
 	}
 	return connect.NewResponse(&v1.ListUnackedResponse{Alerts: pbAlerts}), nil
 }
+
+// --- 告警删除 ---
+
+func (s *Service) DeleteAlerts(ctx context.Context, req *connect.Request[v1.DeleteAlertsRequest]) (*connect.Response[v1.DeleteAlertsResponse], error) {
+	n, err := s.store.DeleteAlerts(ctx, req.Msg.GetIds())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&v1.DeleteAlertsResponse{Deleted: int32(n)}), nil
+}
+
+func (s *Service) ClearAckedAlerts(ctx context.Context, req *connect.Request[v1.ClearAckedAlertsRequest]) (*connect.Response[v1.ClearAckedAlertsResponse], error) {
+	n, err := s.store.ClearAckedAlerts(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&v1.ClearAckedAlertsResponse{Deleted: int32(n)}), nil
+}
