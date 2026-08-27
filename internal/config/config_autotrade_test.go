@@ -19,8 +19,8 @@ func TestLoad_AutotradeDefaults(t *testing.T) {
 	if !c.AutoTradeAllowVenues["277842155:mt5"] || !c.AutoTradeAllowVenues["REDACTED_MT_ACCT:mt5"] {
 		t.Errorf("default AllowVenues missing: %v", c.AutoTradeAllowVenues)
 	}
-	if !c.AutoTradeAllowCanonicals["NAS100"] {
-		t.Errorf("default AllowCanonicals missing NAS100: %v", c.AutoTradeAllowCanonicals)
+	if len(c.AutoTradeAllowCanonicals) != 0 {
+		t.Errorf("default AllowCanonicals should be empty (all-allow), got %v", c.AutoTradeAllowCanonicals)
 	}
 	if !c.AutoTradeExcludeCanonicals["BRENT"] || !c.AutoTradeExcludeCanonicals["WTI"] {
 		t.Errorf("default ExcludeCanonicals missing: %v", c.AutoTradeExcludeCanonicals)

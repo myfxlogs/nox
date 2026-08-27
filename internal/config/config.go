@@ -202,7 +202,7 @@ func Load() *Config {
 		AutoTradeMinNetBps:         envFloat("ARB_AUTOTRADE_MIN_NET_BPS", 1.0), // D-070 均值回归：降低门槛让 277+591 波动价差通过
 		AutoTradePollInterval:      envDur("ARB_AUTOTRADE_POLL_INTERVAL", 10*time.Second),
 		AutoTradeAllowVenues:       envStringSet("ARB_AUTOTRADE_ALLOW_VENUES", "277842155:mt5,REDACTED_MT_ACCT:mt5"),
-		AutoTradeAllowCanonicals:   envStringSet("ARB_AUTOTRADE_ALLOW_CANONICALS", "NAS100,ETHUSDT,XAUUSD,BTCUSDT"),
+		AutoTradeAllowCanonicals:   envStringSet("ARB_AUTOTRADE_ALLOW_CANONICALS", ""), // D-122：默认空=全放行（gate 层风控兜底）
 		AutoTradeExcludeCanonicals: envStringSet("ARB_AUTOTRADE_EXCLUDE_CANONICALS", "BRENT,WTI"),
 		MeanRevertThresholds:       envFloatMap("ARB_MEANREVERT_THRESHOLDS", "NAS100:1.5,ETHUSDT:0.5,XAUUSD:0.5"),
 		AutoTradeMinNetSwapBps:     envFloat("ARB_AUTOTRADE_MIN_NET_SWAP_BPS", 0.2),
