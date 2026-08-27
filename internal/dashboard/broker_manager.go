@@ -65,6 +65,7 @@ type BrokerManager struct {
 	mu      sync.Mutex
 	running map[string]*running // venue → running
 	static  []staticQuerier
+	cexQs   []reconcile.VenueQuerier       // D-121：CEX perp 持仓查询器（动态刷新）
 	onQ     func([]reconcile.VenueQuerier) // querier 集合变更回调
 
 	commMu     sync.Mutex

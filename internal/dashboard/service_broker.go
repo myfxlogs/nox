@@ -48,6 +48,7 @@ type PositionLegLister interface {
 
 // buildPositionIDIndex 构造 (venueKey, ticket)→position_id 索引（D-110 P2 A1 抽取）。
 // 查 OPEN positions → 遍历 OPEN legs → leg.Venue+"\x00"+leg.OrderID → posID。
+// D-121：CEX perp 聚合仓位无单一 ticket → 额外按 venueKey+symbol 索引（CEXPositionQuerier Ticket=Symbol）。
 // 查询失败返回空索引（fail-open，调用方自行处理）。
 func buildPositionIDIndex(ctx context.Context, store PositionLegLister) map[string]int64 {
 	idx := make(map[string]int64)
@@ -58,14 +59,23 @@ func buildPositionIDIndex(ctx context.Context, store PositionLegLister) map[stri
 	if err != nil {
 		return idx
 	}
-	for _, p := range openPositions {
+	// D-121：也查 LEGGED（CEX 单腿成交的持仓需要 broker position 匹配浮盈）
+	leggedPositions, _ := store.ListPositions(ctx, "LEGGED", 200, 0)
+	allPositions := append(openPositions, leggedPositions...)
+	for _, p := range allPositions {
 		legs, err := store.ListPositionLegs(ctx, p.ID)
 		if err != nil {
 			continue
 		}
 		for _, l := range legs {
-			if l.Phase == "OPEN" && l.OrderID != "" {
-				idx[l.Venue+"\x00"+l.OrderID] = p.ID
+			if l.Phase == "OPEN" && l.Status == "FILLED" {
+				if l.OrderID != "" {
+					idx[l.Venue+"\x00"+l.OrderID] = p.ID
+				}
+				// D-121：CEX 聚合仓位按 venueKey+symbol 匹配（Ticket=Symbol）
+				if l.Symbol != "" {
+					idx[l.Venue+"\x00"+l.Symbol] = p.ID
+				}
 			}
 		}
 	}

@@ -296,7 +296,7 @@ func TestCollectSwapSnapshots_SwapChangeWrites(t *testing.T) {
 	fake := &fakeSwapSnapStore{
 		positions: []pgstore.Position{{ID: 100, Status: "OPEN"}},
 		legsByPos: map[int64][]pgstore.PositionLeg{
-			100: {{Phase: "OPEN", Venue: "venue:mt5", OrderID: "T1"}},
+			100: {{Phase: "OPEN", Status: "FILLED", Venue: "venue:mt5", OrderID: "T1"}},
 		},
 	}
 	m.SetSwapSnapshotStore(fake)
@@ -333,7 +333,7 @@ func TestCollectSwapSnapshots_SwapZeroFirstWrite(t *testing.T) {
 	fake := &fakeSwapSnapStore{
 		positions: []pgstore.Position{{ID: 100, Status: "OPEN"}},
 		legsByPos: map[int64][]pgstore.PositionLeg{
-			100: {{Phase: "OPEN", Venue: "venue:mt5", OrderID: "T1"}},
+			100: {{Phase: "OPEN", Status: "FILLED", Venue: "venue:mt5", OrderID: "T1"}},
 		},
 	}
 	m.SetSwapSnapshotStore(fake)

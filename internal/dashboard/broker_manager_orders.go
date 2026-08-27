@@ -26,18 +26,28 @@ func (m *BrokerManager) kickSwap() {
 	}
 }
 
-// queriers 汇总 static + running querier（D-051 WP3：syncQueriers 与 venueOrderResults 共用的单一取法）。
+// queriers 汇总 static + running + cex querier（D-121：CEX perp 持仓查询器并入）。
 func (m *BrokerManager) queriers() []reconcile.VenueQuerier {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	qs := make([]reconcile.VenueQuerier, 0, len(m.static)+len(m.running))
+	qs := make([]reconcile.VenueQuerier, 0, len(m.static)+len(m.running)+len(m.cexQs))
 	for _, s := range m.static {
 		qs = append(qs, s.q)
 	}
 	for _, r := range m.running {
 		qs = append(qs, r.querier)
 	}
+	qs = append(qs, m.cexQs...)
 	return qs
+}
+
+// SetCEXQueriers D-121：替换 CEX perp 持仓查询器集合（CexPositionManager 每轮刷新调用）。
+// 触发 syncQueriers → reconcile + BrokerPositionMonitor 刷新。
+func (m *BrokerManager) SetCEXQueriers(qs []reconcile.VenueQuerier) {
+	m.mu.Lock()
+	m.cexQs = qs
+	m.mu.Unlock()
+	m.syncQueriers()
 }
 
 // syncQueriers 汇总 querier 并触发回调（reconciler 刷新）。

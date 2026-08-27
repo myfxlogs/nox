@@ -35,11 +35,11 @@ func TestBuildPositionIDIndex(t *testing.T) {
 		},
 		legsByPos: map[int64][]pgstore.PositionLeg{
 			100: {
-				{Phase: "OPEN", Venue: "venue:mt5", OrderID: "T1"},
-				{Phase: "CLOSE", Venue: "venue:mt5", OrderID: "T2"}, // CLOSE 腿不索引
+				{Phase: "OPEN", Status: "FILLED", Venue: "venue:mt5", OrderID: "T1", Symbol: "AUDJPY"},
+				{Phase: "CLOSE", Status: "FILLED", Venue: "venue:mt5", OrderID: "T2"}, // CLOSE 腿不索引
 			},
 			200: {
-				{Phase: "OPEN", Venue: "other:mt4", OrderID: "T3"},
+				{Phase: "OPEN", Status: "FILLED", Venue: "other:mt4", OrderID: "T3", Symbol: "EURUSD"},
 			},
 		},
 	}
@@ -52,6 +52,42 @@ func TestBuildPositionIDIndex(t *testing.T) {
 	}
 	if _, ok := idx["venue:mt5\x00T2"]; ok {
 		t.Error("CLOSE leg should not be indexed")
+	}
+	// D-121：CEX 聚合仓位按 venueKey+symbol 索引
+	if idx["venue:mt5\x00AUDJPY"] != 100 {
+		t.Errorf("D-121 CEX symbol match: venue:mt5\\x00AUDJPY want 100, got %v", idx["venue:mt5\x00AUDJPY"])
+	}
+	if idx["other:mt4\x00EURUSD"] != 200 {
+		t.Errorf("D-121 CEX symbol match: other:mt4\\x00EURUSD want 200, got %v", idx["other:mt4\x00EURUSD"])
+	}
+}
+
+// TestD121_BuildPositionIDIndex_CEXPerp D-121：CEX perp 聚合仓位按 venueKey+symbol 匹配 positionId。
+// CEXPositionQuerier Ticket=Symbol → buildPositionIDIndex 必须按 symbol 索引才能匹配。
+func TestD121_BuildPositionIDIndex_CEXPerp(t *testing.T) {
+	ctx := context.Background()
+	fake := &fakePositionLegLister{
+		positions: []pgstore.Position{
+			{ID: 360, Status: "OPEN"},
+		},
+		legsByPos: map[int64][]pgstore.PositionLeg{
+			360: {
+				{Phase: "OPEN", Status: "FILLED", Venue: "okx:perp", OrderID: "3869188410747117568", Symbol: "ETH-USDT-SWAP"},
+				{Phase: "OPEN", Status: "FILLED", Venue: "gate:perp", OrderID: "11259000692359022", Symbol: "ETH_USDT"},
+			},
+		},
+	}
+	idx := buildPositionIDIndex(ctx, fake)
+	// 按 OrderID 匹配（MT 模式）
+	if idx["okx:perp\x003869188410747117568"] != 360 {
+		t.Errorf("okx:perp by OrderID want 360, got %v", idx["okx:perp\x003869188410747117568"])
+	}
+	// 按 Symbol 匹配（D-121 CEX 聚合仓位模式）
+	if idx["okx:perp\x00ETH-USDT-SWAP"] != 360 {
+		t.Errorf("okx:perp by Symbol want 360, got %v", idx["okx:perp\x00ETH-USDT-SWAP"])
+	}
+	if idx["gate:perp\x00ETH_USDT"] != 360 {
+		t.Errorf("gate:perp by Symbol want 360, got %v", idx["gate:perp\x00ETH_USDT"])
 	}
 }
 
