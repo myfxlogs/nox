@@ -5,8 +5,10 @@ package reconcile
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -53,9 +55,19 @@ func TestD121_OKXPositions(t *testing.T) {
 	}
 }
 
-// TestD121_GatePositions Gate perp 持仓解析（size 正负表示方向）。
+// TestD121_GatePositions Gate perp 持仓解析（size 正负表示方向，Volume=合约数×quanto 转基础币）。
 func TestD121_GatePositions(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 合约规格查询
+		if strings.HasPrefix(r.URL.Path, "/futures/usdt/contracts/") {
+			contract := strings.TrimPrefix(r.URL.Path, "/futures/usdt/contracts/")
+			quanto := "0.01" // ETH_USDT
+			if contract == "BTC_USDT" {
+				quanto = "0.0001"
+			}
+			_, _ = io.WriteString(w, `{"quanto_multiplier":"`+quanto+`"}`)
+			return
+		}
 		if r.URL.Path != "/futures/usdt/positions" {
 			t.Errorf("want /futures/usdt/positions, got %s", r.URL.Path)
 		}
@@ -76,15 +88,15 @@ func TestD121_GatePositions(t *testing.T) {
 	if len(orders) != 2 {
 		t.Fatalf("want 2 orders, got %d", len(orders))
 	}
-	// ETH long (size > 0)
-	if orders[0].Symbol != "ETH_USDT" || orders[0].Side != "BUY" || orders[0].Volume != 40 {
+	// ETH long (size=40 张 × quanto=0.01 = 0.4 ETH)
+	if orders[0].Symbol != "ETH_USDT" || orders[0].Side != "BUY" || orders[0].Volume != 0.4 {
 		t.Errorf("order[0] mismatch: %+v", orders[0])
 	}
 	if orders[0].OpenPrice != 2537.12 || orders[0].Profit != 1.5 || orders[0].Swap != -0.0023 {
 		t.Errorf("order[0] fields mismatch: %+v", orders[0])
 	}
-	// BTC short (size < 0 → SELL, vol = -size)
-	if orders[1].Symbol != "BTC_USDT" || orders[1].Side != "SELL" || orders[1].Volume != 10 {
+	// BTC short (size=-10 张 × quanto=0.0001 = 0.001 BTC, vol = |-10|*0.0001)
+	if orders[1].Symbol != "BTC_USDT" || orders[1].Side != "SELL" || orders[1].Volume != 0.001 {
 		t.Errorf("order[1] mismatch: %+v", orders[1])
 	}
 }

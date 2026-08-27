@@ -168,6 +168,8 @@ func (q *CEXPositionQuerier) gatePositions(ctx context.Context) ([]VenueOrder, e
 		return nil, fmt.Errorf("gate positions json: %w", err)
 	}
 	var out []VenueOrder
+	// D-121：Gate 持仓 size=合约数，需乘 quanto_multiplier 转基础币（与 OKX/Binance Volume 单位对齐）。
+	quantoCache := make(map[string]float64)
 	for _, p := range positions {
 		if p.Size == 0 {
 			continue
@@ -181,6 +183,13 @@ func (q *CEXPositionQuerier) gatePositions(ctx context.Context) ([]VenueOrder, e
 			side = "SELL"
 			vol = -vol
 		}
+		// 查合约规格转基础币（缓存避免重复请求）
+		quanto, ok := quantoCache[p.Contract]
+		if !ok {
+			quanto = gateQuantoMultiplier(ctx, q.client, q.baseURL, q.apiKey, q.apiSecret, p.Contract)
+			quantoCache[p.Contract] = quanto
+		}
+		vol = vol * quanto // 合约数 × quanto = 基础币数量
 		out = append(out, VenueOrder{
 			Ticket:    p.Contract, // CEX 聚合仓位 → 用 symbol
 			Symbol:    p.Contract,
@@ -194,6 +203,35 @@ func (q *CEXPositionQuerier) gatePositions(ctx context.Context) ([]VenueOrder, e
 		})
 	}
 	return out, nil
+}
+
+// gateQuantoMultiplier D-121：查 Gate 合约规格 quanto_multiplier（每张合约代表的基础币数量）。
+// 失败返回 1.0（兜底，不阻断持仓查询）。
+func gateQuantoMultiplier(ctx context.Context, client *http.Client, baseURL, apiKey, apiSecret, contract string) float64 {
+	endpoint := "/futures/usdt/contracts/" + contract
+	urlPath := "/api/v4" + endpoint
+	ts := time.Now().Unix()
+	sign := exec.GateSign(apiSecret, "GET", urlPath, "", "", ts)
+	headers := http.Header{
+		"KEY":       {apiKey},
+		"Timestamp": {strconv.FormatInt(ts, 10)},
+		"SIGN":      {sign},
+	}
+	body, err := cexGet(ctx, client, baseURL+endpoint, headers)
+	if err != nil {
+		return 1.0 // 兜底
+	}
+	var spec struct {
+		QuantoMultiplier string `json:"quanto_multiplier"`
+	}
+	if err := json.Unmarshal(body, &spec); err != nil {
+		return 1.0
+	}
+	q, err := strconv.ParseFloat(spec.QuantoMultiplier, 64)
+	if err != nil || q <= 0 {
+		return 1.0
+	}
+	return q
 }
 
 // === Binance ===
