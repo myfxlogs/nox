@@ -146,9 +146,10 @@ func (s *Service) ListAccounts(ctx context.Context, req *connect.Request[v1.List
 // brokerPositionToProto 组装单个 venue 持仓响应。
 // current_price：canonical 已解析且报价帧新鲜（now.Sub ≤ freshTTL）→ mid，fresh=true；否则 0/false（诚实空态）。
 // is_arb：comment 前缀 = exec.OrderComment（复用 reconcile.isARBOrder 语义，D-032）。
-// pnl：F5 实时化——有新鲜报价时用 qbus 重算（qty × (现价 − 开仓价) × 方向系数）覆盖 venue 透传值；
+// pnl：venue 权威浮盈（Order.Profit 透传，D-043 零信任）——MT5 已换算账户货币（USD），不重算。
 //
-//	无报价/陈旧 → 保持 venue 权威浮盈（Order.Profit 透传，D-043）+ fresh=false 诚实降级。
+//	~~F5 实时重算~~ 已移除（D-116）：原公式 qty×(mid−open)×dir 缺 ContractSize+fx 换算，
+//	JPY 计价符号差 ~660 倍。venue 每次 poll 拿最新 Profit（已实时），无需重算。
 //
 // venueOnline=false = 离线 venue 的最近快照（非实时，诚实标注，D-052）。
 func brokerPositionToProto(o reconcile.VenueOrder, canonical string, price bus.Quote, hasPrice bool, venueOnline bool, freshTTL time.Duration, now time.Time) *v1.BrokerPosition {
@@ -161,7 +162,7 @@ func brokerPositionToProto(o reconcile.VenueOrder, canonical string, price bus.Q
 		Side:        o.Side,
 		Volume:      o.Volume,
 		OpenPrice:   o.OpenPrice,
-		Pnl:         o.Profit, // 默认 venue 透传，新鲜报价时下方覆盖
+		Pnl:         o.Profit, // venue 权威浮盈（D-043 零信任，不重算）
 		Swap:        o.Swap,
 		Commission:  o.Commission,
 		Comment:     o.Comment,
@@ -170,15 +171,8 @@ func brokerPositionToProto(o reconcile.VenueOrder, canonical string, price bus.Q
 		VenueOnline: venueOnline,
 	}
 	if hasPrice && now.Sub(price.Time) <= freshTTL {
-		mid := (price.Bid + price.Ask) / 2
-		pb.CurrentPrice = mid
+		pb.CurrentPrice = (price.Bid + price.Ask) / 2
 		pb.Fresh = true
-		// F5：新鲜报价 → 实时重算浮盈（BUY: +qty×(mid−open)；SELL: +qty×(open−mid)）
-		dir := 1.0
-		if o.Side == "SELL" {
-			dir = -1.0
-		}
-		pb.Pnl = o.Volume * (mid - o.OpenPrice) * dir
 	}
 	if !o.OpenedAt.IsZero() {
 		pb.OpenedAt = timestamppb.New(o.OpenedAt)
