@@ -103,9 +103,21 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 			fill, closeErr = exe.CloseOrder(ctx, OrderRef{OrderID: leg.OrderID, Venue: leg.Venue})
 		} else {
 			// CEX 反向减仓（D-059 posSide 修正）
+			// D-121：平仓也走 PlaceOrder → 同样需 Precheck（gate 合约不存在则平仓失败→卡 CLOSING）
 			closeSide := "SELL"
 			if leg.Side == "SELL" {
 				closeSide = "BUY"
+			}
+			if pc, ok := exe.(Prechecker); ok {
+				if pcErr := pc.Precheck(ctx, Order{
+					Symbol: leg.Symbol,
+					Side:   closeSide,
+					Qty:    leg.Qty,
+					Venue:  leg.Venue,
+				}); pcErr != nil {
+					log.Printf("[exec] close leg %d precheck fail (venue=%s symbol=%s): %v", leg.ID, leg.Venue, leg.Symbol, pcErr)
+					continue // 合约不存在→跳过此腿（无法平仓，留 CLOSING 等手动处置）
+				}
 			}
 			var positionSide string
 			switch leg.Side {

@@ -53,6 +53,14 @@ type Executor interface {
 	CloseOrder(ctx context.Context, ref OrderRef) (Fill, error)
 }
 
+// Prechecker 可选预检接口（D-121）：pipeline.Execute 下单前对每条腿调 Precheck，
+// 任一腿预检失败 → 不建 position 不下单，直接返回错误（防 LEGGED）。
+// 实现者：CEXExecutor（gate perp 查合约存在性，testnet 部分合约缺失如 TRX_USDT）。
+// 未实现此接口的 executor（MT4/MT5）= 无预检需求，跳过。
+type Prechecker interface {
+	Precheck(ctx context.Context, o Order) error
+}
+
 // OpenedOrder venue 侧在仓订单（D-077 修复⑩ G1 平仓后回读用）。
 type OpenedOrder struct {
 	Ticket string

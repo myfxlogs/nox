@@ -64,6 +64,19 @@ func (e *CEXExecutor) alertCritical(o Order, msg string) {
 
 func (e *CEXExecutor) Key() string { return e.venue + ":" + e.venueType }
 
+// Precheck 下单前预检（D-121）：gate perp 查合约存在性（testnet 部分合约缺失如 TRX_USDT，
+// 不预检则一腿成交一腿失败→LEGGED）。OKX/binance perp 暂无预检（testnet 主流币种覆盖全）。
+// spot 无预检需求。预检失败 → pipeline 不建 position 不下单。
+func (e *CEXExecutor) Precheck(ctx context.Context, o Order) error {
+	if e.venue == "gate" && e.venueType == "perp" {
+		// 复用 gateContractSize 查合约存在性（qty 用 1 避免最小张数误判，只验存在）
+		if _, _, err := e.gateContractSize(ctx, o.Symbol, 1); err != nil {
+			return fmt.Errorf("gate precheck %s: %w", o.Symbol, err)
+		}
+	}
+	return nil
+}
+
 func (e *CEXExecutor) PlaceOrder(ctx context.Context, o Order) (Fill, error) {
 	switch e.venue {
 	case "binance":

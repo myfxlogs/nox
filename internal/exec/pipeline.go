@@ -146,6 +146,26 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 		return nil, ErrDuplicateExecution
 	}
 
+	// 风控③：下单前预检（D-121）：对每条腿调 executor.Precheck（如果实现了 Prechecker），
+	// 任一腿预检失败 → 不建 position 不下单，直接返回错误（防 LEGGED）。
+	// gate testnet 部分合约缺失（如 TRX_USDT）→ 不预检则一腿成交一腿失败→LEGGED。
+	for _, leg := range legs {
+		exe, ok := p.registry.Get(leg.VenueKey)
+		if !ok {
+			return nil, fmt.Errorf("precheck: no executor for venue %s", leg.VenueKey)
+		}
+		if pc, ok := exe.(Prechecker); ok {
+			if err := pc.Precheck(ctx, Order{
+				Symbol: leg.VenueSymbol,
+				Side:   leg.Side,
+				Qty:    leg.Qty,
+				Venue:  leg.VenueKey,
+			}); err != nil {
+				return nil, fmt.Errorf("precheck leg %s: %w", leg.VenueKey, err)
+			}
+		}
+	}
+
 	// 建 position(OPENING)——type 在创建时即写入（修复⑭ S4：原创建空 type 撞 positions_type_check，
 	// 靠调用方事后 UpdatePositionMeta 补 type，空窗期约束已拒）。
 	posID, err := p.store.CreatePosition(ctx, &pgstore.Position{
