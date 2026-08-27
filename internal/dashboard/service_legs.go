@@ -184,8 +184,9 @@ func (s *Service) floorToStepQty(venueKey, symbol string, qty float64) float64 {
 // 已知品种用实测值；未知品种默认 0.01（2位小数，多数山寨币）。
 func cexStepSize(symbol string) float64 {
 	// 提取基础币种（去 USDT/USD 后缀）
+	// OKX perp 格式 XXX-USDT-SWAP：先去 -SWAP，再去 -USDT/USDT
 	base := symbol
-	for _, suf := range []string{"USDT", "USD", "-USDT", "-USD", "-SWAP"} {
+	for _, suf := range []string{"-SWAP", "-USDT", "-USD", "USDT", "USD"} {
 		base = strings.TrimSuffix(base, suf)
 	}
 	switch base {
