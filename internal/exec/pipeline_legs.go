@@ -244,6 +244,12 @@ func (p *Pipeline) checkResidualLegs(ctx context.Context, legs []pgstore.Positio
 		orders, err := p.verifier.QueryOpenedOrders(vctx, venueKey)
 		cancel()
 		if err != nil {
+			// D-120：CEX venue 无 verifier querier（CEX 交易所订单状态权威，
+			// ClosePosition 流程已确认平仓 FILLED=已平仓）。MT venue 仍 fail-closed。
+			if !isMTVenueKey(venueKey) {
+				log.Printf("[exec] verify residual: skip CEX venue %s (no querier, close FILLED=authoritative): %v", venueKey, err)
+				continue
+			}
 			return nil, fmt.Errorf("verify residual %s: %w", venueKey, err)
 		}
 		// 构建 ticket → 在仓 集合
@@ -258,6 +264,11 @@ func (p *Pipeline) checkResidualLegs(ctx context.Context, legs []pgstore.Positio
 		}
 	}
 	return residual, nil
+}
+
+// isMTVenueKey 判断 venueKey 是否为 MT5/MT4 venue（D-120：CEX venue 平仓验证跳过用）。
+func isMTVenueKey(venueKey string) bool {
+	return strings.HasSuffix(venueKey, ":mt5") || strings.HasSuffix(venueKey, ":mt4")
 }
 
 // Revalidate 用 QuoteBus 最新报价重算毛收益劣化（§13.1 双阈值；D-051 修③：毛口径比较）。

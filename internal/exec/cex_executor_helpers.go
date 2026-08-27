@@ -164,7 +164,9 @@ func (e *CEXExecutor) get(ctx context.Context, url string, headers http.Header) 
 	return data, nil
 }
 
-// post 发带签名头的 POST JSON 请求并读回 body（非 200 → 错误带响应体）。
+// post 发带签名头的 POST JSON 请求并读回 body（非 2xx → 错误带响应体）。
+// D-120：gate futures 创建订单返回 201 Created（非 200），HTTP 标准 2xx 都是成功，
+// 业务层错误由各 venue 解析逻辑处理（OKX code!=0 / Binance code<0 / gate finish_as）。
 func (e *CEXExecutor) post(ctx context.Context, url, bodyStr string, headers http.Header) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBufferString(bodyStr))
 	if err != nil {
@@ -184,7 +186,7 @@ func (e *CEXExecutor) post(ctx context.Context, url, bodyStr string, headers htt
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != 200 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("http %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
 	}
 	return data, nil

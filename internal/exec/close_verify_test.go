@@ -2,6 +2,7 @@ package exec
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"arb/internal/store/pgstore"
@@ -102,5 +103,36 @@ func TestCheckResidualLegs_NilVerifier(t *testing.T) {
 	_, err := p.checkResidualLegs(context.Background(), legs)
 	if err == nil {
 		t.Errorf("nil verifier fail-closed want error, got nil")
+	}
+}
+
+// TestD120_CEXVenueSkipVerifier CEX venue verifier 报错 → 跳过不 fail-closed（D-120）。
+// CEX 交易所订单状态权威，ClosePosition 流程已确认平仓 FILLED=已平仓。
+func TestD120_CEXVenueSkipVerifier(t *testing.T) {
+	legs := []pgstore.PositionLeg{
+		{Phase: "OPEN", Status: "FILLED", Venue: "okx:perp", OrderID: "3869140637289013248"},
+		{Phase: "OPEN", Status: "FILLED", Venue: "binance:perp", OrderID: "16774225215"},
+	}
+	v := &fakeVerifier{err: fmt.Errorf("no querier for venue")}
+	p := &Pipeline{verifier: v}
+	residual, err := p.checkResidualLegs(context.Background(), legs)
+	if err != nil {
+		t.Errorf("CEX venue skip: want nil err, got %v", err)
+	}
+	if len(residual) != 0 {
+		t.Errorf("CEX venue skip: want 0 residual, got %v", residual)
+	}
+}
+
+// TestD120_MTVenueStillFailClosed MT venue verifier 报错 → 仍 fail-closed（D-120 回归保护）。
+func TestD120_MTVenueStillFailClosed(t *testing.T) {
+	legs := []pgstore.PositionLeg{
+		{Phase: "OPEN", Status: "FILLED", Venue: "ic52993526:mt5", OrderID: "1001"},
+	}
+	v := &fakeVerifier{err: context.DeadlineExceeded}
+	p := &Pipeline{verifier: v}
+	_, err := p.checkResidualLegs(context.Background(), legs)
+	if err == nil {
+		t.Errorf("MT venue fail-closed: want error, got nil")
 	}
 }
