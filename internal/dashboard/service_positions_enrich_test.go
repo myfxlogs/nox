@@ -198,6 +198,85 @@ func TestHoldDaysToNow(t *testing.T) {
 	}
 }
 
+// TestSettlementDays D-118：结算日历感知——周末排除 + 三倍日计数 + 21:00 UTC 边界。
+func TestSettlementDays(t *testing.T) {
+	// 2026-08-25=Tue, 26=Wed, 27=Thu, 28=Fri, 29=Sat, 30=Sun
+	cases := []struct {
+		name      string
+		openedAt  string // UTC ISO
+		now       string // UTC ISO
+		tripleDay time.Weekday
+		hasTriple bool
+		wantSet   int
+		wantTri   int
+	}{
+		{
+			name: "Tue10→Thu10 无三倍日", openedAt: "2026-08-25T10:00:00Z", now: "2026-08-27T10:00:00Z",
+			tripleDay: time.Wednesday, hasTriple: false, wantSet: 2, wantTri: 0, // Tue+Wed
+		},
+		{
+			name: "Tue10→Thu10 周三三倍", openedAt: "2026-08-25T10:00:00Z", now: "2026-08-27T10:00:00Z",
+			tripleDay: time.Wednesday, hasTriple: true, wantSet: 2, wantTri: 1, // Tue+Wed, Wed=triple
+		},
+		{
+			name: "Fri10→Mon10 跨周末", openedAt: "2026-08-28T10:00:00Z", now: "2026-08-31T10:00:00Z",
+			tripleDay: time.Wednesday, hasTriple: true, wantSet: 1, wantTri: 0, // only Fri (Sat/Sun skip)
+		},
+		{
+			name: "Tue22→Thu10 开仓过21点", openedAt: "2026-08-25T22:00:00Z", now: "2026-08-27T10:00:00Z",
+			tripleDay: time.Wednesday, hasTriple: true, wantSet: 1, wantTri: 1, // Wed (Tue已结算跳过)
+		},
+		{
+			name: "Tue10→Thu22 now过21点", openedAt: "2026-08-25T10:00:00Z", now: "2026-08-27T22:00:00Z",
+			tripleDay: time.Wednesday, hasTriple: true, wantSet: 3, wantTri: 1, // Tue+Wed+Thu
+		},
+		{
+			name: "同日10→20 未到21点", openedAt: "2026-08-25T10:00:00Z", now: "2026-08-25T20:00:00Z",
+			tripleDay: time.Wednesday, hasTriple: false, wantSet: 0, wantTri: 0, // 当天未结算
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			openedAt, _ := time.Parse(time.RFC3339, c.openedAt)
+			now, _ := time.Parse(time.RFC3339, c.now)
+			gotSet, gotTri := settlementDays(openedAt, now, c.tripleDay, c.hasTriple)
+			if gotSet != c.wantSet {
+				t.Errorf("settleDays = %d, want %d", gotSet, c.wantSet)
+			}
+			if gotTri != c.wantTri {
+				t.Errorf("tripleDays = %d, want %d", gotTri, c.wantTri)
+			}
+		})
+	}
+}
+
+// TestEnrichOne_ExpectedSwapNilStoreNoNotional D-118：store=nil → notional=0 → expected 缺省（诚实不猜）。
+// 验证 enrichOne 新签名（+tripleDayByVenue）不 panic + store=nil 路径仍诚实缺省。
+func TestEnrichOne_ExpectedSwapNilStoreNoNotional(t *testing.T) {
+	bpm := fakeBPMWithCache([]*v1.BrokerPosition{
+		{VenueKey: "591:mt5", Symbol: "AUDJPY", Pnl: 0, Swap: 0.19, PositionId: 290},
+	})
+	s := newEnrichService(bpm) // store=nil
+	openedAt, _ := time.Parse(time.RFC3339, "2026-08-25T16:00:00Z")
+	now, _ := time.Parse(time.RFC3339, "2026-08-27T03:00:00Z")
+	pb := &v1.Position{
+		Id: 290, OpportunityId: "SWAPARB:AUDJPY:591:mt5:277:mt5",
+		Type: "SWAPARB", Status: "OPEN",
+		OpenedAt: timestamppb.New(openedAt),
+	}
+	swapBps := 0.469
+	pb.ExpectedSwapBpsDaily = &swapBps
+	legs := []pgstore.PositionLeg{
+		{Phase: "OPEN", Venue: "591:mt5", Symbol: "AUDJPY", Status: "FILLED", Qty: 0.01, PriceActual: ptrFloat(113.5), Ts: openedAt},
+	}
+	tripleDayByVenue := map[string]time.Weekday{"591:mt5": time.Wednesday}
+	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, tripleDayByVenue)
+	// store=nil → notional=0 → expected_swap_usd_to_date 应 nil（诚实缺省）
+	if pb.ExpectedSwapUsdToDate != nil {
+		t.Errorf("store=nil notional=0 → expected_swap_usd_to_date 应 nil, got %v", *pb.ExpectedSwapUsdToDate)
+	}
+}
+
 // TestHoldDaysToNow_NullOpenedAt opened_at nil → min(OPEN FILLED 腿 ts)。
 func TestHoldDaysToNow_NullOpenedAt(t *testing.T) {
 	now := time.Now()
