@@ -453,6 +453,7 @@ message Position {
   optional double settled_realized_usd    = 19;  // D-106：结算口径 realized_usd（position_settlements join；无结算行=缺省）
   optional double settled_notional_usd    = 20;  // D-106：结算口径 notional_usd（同上）
   optional double hold_days               = 21;  // D-106：持有天数（结算行 hold_days 优先；否则 closed_at−opened_at）
+  optional double break_even_days         = 22;  // D-117：回本周期（净值<0÷日均实际swap；≥0=0已回本；日均swap≤0=缺省）
 }
 
 message ExecuteOpportunityRequest {
