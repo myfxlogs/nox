@@ -67,6 +67,7 @@ type BrokerManager struct {
 	static  []staticQuerier
 	cexQs   []reconcile.VenueQuerier       // D-121：CEX perp 持仓查询器（动态刷新）
 	onQ     func([]reconcile.VenueQuerier) // querier 集合变更回调
+	bpm     *BrokerPositionMonitor         // D-121：CEX 平仓需查 bpm 快照获取 side/volume（注入，nil=未接线）
 
 	commMu     sync.Mutex
 	commission map[string]float64 // venue → 账号真实佣金（bps/腿，D-036）；缺省回退 config 默认
@@ -121,6 +122,9 @@ func NewBrokerManager(store *pgstore.Store, qbus *bus.QuoteBus, reg *exec.Regist
 func (m *BrokerManager) SetQuerierHook(f func([]reconcile.VenueQuerier)) {
 	m.onQ = f
 }
+
+// SetBPM D-121：注入 BrokerPositionMonitor（CEX 平仓需查快照获取 side/volume）。
+func (m *BrokerManager) SetBPM(bpm *BrokerPositionMonitor) { m.bpm = bpm }
 
 // AddStaticQuerier 登记环境变量适配器的 querier。
 func (m *BrokerManager) AddStaticQuerier(venue string, q reconcile.VenueQuerier) {

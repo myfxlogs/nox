@@ -7,6 +7,8 @@ import (
 
 	"arb/internal/exec"
 	"arb/internal/reconcile"
+
+	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 )
 
 // attach 记录 running 并刷新 querier 集合；随后 kick swap 轮询（D-060 F2：attach 即补一轮，
@@ -99,10 +101,40 @@ func (m *BrokerManager) venueOrderResults(ctx context.Context) []VenueOrderResul
 }
 
 // CloseOrder 经注册执行器平仓一条 venue 持仓。D-051 WP3。
+// MT venue：按 ticket 调 CloseOrder（OrderClose）。
+// CEX venue：CEX 无 CloseOrder 概念 → 从 bpm 快照查匹配 venueKey+ticket 的持仓
+// （side/volume/symbol）→ PlaceOrder 反向减仓（D-121：聚合仓位 ticket=Symbol）。
 func (m *BrokerManager) CloseOrder(ctx context.Context, venueKey, ticket string) (exec.Fill, error) {
 	e, ok := m.reg.Get(venueKey)
 	if !ok {
 		return exec.Fill{}, fmt.Errorf("executor not found for %s", venueKey)
 	}
-	return e.CloseOrder(ctx, exec.OrderRef{OrderID: ticket, Venue: venueKey})
+	if isMTVenue(venueKey) {
+		return e.CloseOrder(ctx, exec.OrderRef{OrderID: ticket, Venue: venueKey})
+	}
+	// CEX venue：从 bpm 快照查持仓 side/volume/symbol → PlaceOrder 反向
+	bps := m.bpm.Snapshot()
+	var bp *v1.BrokerPosition
+	for _, b := range bps {
+		if b.VenueKey == venueKey && b.Ticket == ticket {
+			bp = b
+			break
+		}
+	}
+	if bp == nil {
+		return exec.Fill{}, fmt.Errorf("cex close %s: position not found in snapshot (ticket=%s)", venueKey, ticket)
+	}
+	if bp.Volume <= 0 {
+		return exec.Fill{}, fmt.Errorf("cex close %s: zero volume (ticket=%s)", venueKey, ticket)
+	}
+	closeSide := "SELL"
+	if bp.Side == "SELL" {
+		closeSide = "BUY"
+	}
+	return e.PlaceOrder(ctx, exec.Order{
+		Symbol: bp.Symbol,
+		Side:   closeSide,
+		Qty:    bp.Volume,
+		Venue:  venueKey,
+	})
 }
