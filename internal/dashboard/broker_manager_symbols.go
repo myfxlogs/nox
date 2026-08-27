@@ -165,6 +165,28 @@ func (m *BrokerManager) BrokerSymbolMap(ctx context.Context, venue string) map[s
 	return sm
 }
 
+// BrokerSymbolMapWithCS 一次查询返回 canonical + contractSize 两个 map（D-124 方案 C 保证金分摊用）。
+// csMap 值 0 = 未知（MT4 / 历史映射 nil）；canonical 空字符串 = 未映射。
+func (m *BrokerManager) BrokerSymbolMapWithCS(ctx context.Context, venue string) (canonicalMap map[string]string, csMap map[string]float64) {
+	canonicalMap = map[string]string{}
+	csMap = map[string]float64{}
+	if m.store == nil {
+		return
+	}
+	mappings, err := m.store.ListSymbolMappings(ctx, venue)
+	if err != nil {
+		log.Printf("[broker] %s list symbol mappings (with cs): %v", venue, err)
+		return
+	}
+	for _, mp := range mappings {
+		canonicalMap[mp.BrokerSymbol] = mp.Canonical
+		if mp.ContractSize != nil && *mp.ContractSize > 0 {
+			csMap[mp.BrokerSymbol] = *mp.ContractSize
+		}
+	}
+	return
+}
+
 // cachedSymbolGroups 带 per-venue TTL 缓存的 symbolGroups（D-045 §3.2.1）。
 // 缓存命中直接返回；过期回退直连，成功更新缓存，失败不下发脏数据（返回 error）。
 func (m *BrokerManager) cachedSymbolGroups(ctx context.Context, venue string, r *running) ([]SymbolGroup, error) {

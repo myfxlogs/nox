@@ -7,7 +7,6 @@ import (
 	"context"
 	"log"
 	"maps"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -47,6 +46,9 @@ type BrokerPositionMonitor struct {
 	// D-110 P2：swap 快照采集（poll 后锁外执行）。
 	swapSnapStore    SwapSnapshotStore
 	lastSwapByTicket map[string]float64 // ticket→上次 swap 值（去重，单协程访问无需锁）
+
+	// D-124：账户保证金分摊（方案 C）。acctMon nil = 未注入（测试/首 poll），margin=0。
+	acctMon *AccountMonitor
 }
 
 // SwapSnapshotStore D-110 P2 swap 快照采集依赖（setter 注入，避免 NewBrokerPositionMonitor 签名变更）。
@@ -59,6 +61,11 @@ type SwapSnapshotStore interface {
 func (m *BrokerPositionMonitor) SetSwapSnapshotStore(s SwapSnapshotStore) {
 	m.swapSnapStore = s
 	m.lastSwapByTicket = make(map[string]float64)
+}
+
+// SetAccountMonitor D-124 注入账户 monitor（方案 C 保证金分摊用）。boot 时调用。
+func (m *BrokerPositionMonitor) SetAccountMonitor(am *AccountMonitor) {
+	m.acctMon = am
 }
 
 // NewBrokerPositionMonitor 创建 monitor。interval 为轮询周期（ARB_BROKER_POS_POLL_MS）。
@@ -228,47 +235,6 @@ func (m *BrokerPositionMonitor) requote(ctx context.Context) {
 	if changed && m.topic != nil {
 		m.topic.Publish(&v1.BrokerPositionSnapshot{Positions: view})
 	}
-}
-
-// build 按 venueKey 排序（确定性）构建全量视图：canonical 解析 + 现价（后端算，D-043）。
-// 离线 venue 的持仓仍显示（最近快照），venue_online=false 诚实标注。
-func (m *BrokerPositionMonitor) build(ctx context.Context) []*v1.BrokerPosition {
-	m.mu.RLock()
-	keys := make([]string, 0, len(m.venues))
-	for k := range m.venues {
-		keys = append(keys, k)
-	}
-	venues := maps.Clone(m.venues)
-	m.mu.RUnlock()
-	sort.Strings(keys)
-
-	out := make([]*v1.BrokerPosition, 0, 16)
-	symMaps := map[string]map[string]string{} // venue → broker→canonical（懒加载，一次轮询内复用）
-	now := time.Now()
-	for _, vk := range keys {
-		vs := venues[vk]
-		for _, o := range vs.orders {
-			venue := o.Venue
-			canonical := ""
-			if cm, ok := symMaps[venue]; ok {
-				canonical = cm[o.Symbol]
-			} else {
-				cm := m.bm.BrokerSymbolMap(ctx, venue)
-				symMaps[venue] = cm
-				canonical = cm[o.Symbol]
-			}
-			var price bus.Quote
-			hasPrice := false
-			if canonical != "" {
-				if q, ok := m.qbus.Latest(canonical, o.VenueKey); ok {
-					price = q
-					hasPrice = true
-				}
-			}
-			out = append(out, brokerPositionToProto(o, canonical, price, hasPrice, vs.online, m.freshTTL, now))
-		}
-	}
-	return out
 }
 
 // fingerprint 视图指纹：任一持仓的 key/方向/量/开仓价/浮盈/magic/在线状态变化即触发广播。

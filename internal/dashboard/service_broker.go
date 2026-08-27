@@ -162,7 +162,7 @@ func (s *Service) ListAccounts(ctx context.Context, req *connect.Request[v1.List
 //	JPY 计价符号差 ~660 倍。venue 每次 poll 拿最新 Profit（已实时），无需重算。
 //
 // venueOnline=false = 离线 venue 的最近快照（非实时，诚实标注，D-052）。
-func brokerPositionToProto(o reconcile.VenueOrder, canonical string, price bus.Quote, hasPrice bool, venueOnline bool, freshTTL time.Duration, now time.Time) *v1.BrokerPosition {
+func brokerPositionToProto(o reconcile.VenueOrder, canonical string, price bus.Quote, hasPrice bool, venueOnline bool, freshTTL time.Duration, now time.Time, margin float64) *v1.BrokerPosition {
 	pb := &v1.BrokerPosition{
 		Venue:       o.Venue,
 		VenueKey:    o.VenueKey,
@@ -179,6 +179,7 @@ func brokerPositionToProto(o reconcile.VenueOrder, canonical string, price bus.Q
 		IsArb:       strings.HasPrefix(o.Comment, exec.OrderComment),
 		Magic:       o.Magic,
 		VenueOnline: venueOnline,
+		Margin:      margin, // D-124：方案 C 分摊保证金（0=未知/CEX/无账户数据）
 	}
 	if hasPrice && now.Sub(price.Time) <= freshTTL {
 		pb.CurrentPrice = (price.Bid + price.Ask) / 2
