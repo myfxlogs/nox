@@ -513,6 +513,7 @@ message BrokerPosition {
   bool venue_online = 18;      // venue 在线状态；false = 最近快照（离线，非实时）
   int64 position_id = 19;      // S4：关联持仓组合 ID；0 = 未关联（孤儿订单）
   string account_alias = 20;   // F3：账号别名（broker_accounts.alias）；空 = 未设别名，前端回落 venue
+  double margin = 21;          // D-124：分摊保证金 USD（方案 C）；0=未知/CEX/无账户数据
 }
 
 message ListBrokerPositionsRequest {
