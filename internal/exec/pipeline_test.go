@@ -64,4 +64,20 @@ func TestRevalidateGrossDegradation(t *testing.T) {
 			t.Errorf("FUNDING_HEDGE missing quote should reject, got pass")
 		}
 	})
+
+	t.Run("perp_funding skips price degradation", func(t *testing.T) {
+		// D-120：PERP_FUNDING 同 FUNDING_HEDGE——收益来自 funding rate 差不是价格差。
+		// gate futures 只有 mark_price（bid=ask），价格差近 0 正常，不应误拒。
+		p := newRevalidatePipeline(revalidateBus(1.0, 1.0001))
+		if !p.Revalidate("EURUSD", "b:mt5", "s:mt5", "PERP_FUNDING", 10) {
+			t.Errorf("PERP_FUNDING should skip price degradation, got reject")
+		}
+	})
+
+	t.Run("perp_funding missing quote still rejected", func(t *testing.T) {
+		p := newRevalidatePipeline(bus.New())
+		if p.Revalidate("EURUSD", "b:mt5", "s:mt5", "PERP_FUNDING", 10) {
+			t.Errorf("PERP_FUNDING missing quote should reject, got pass")
+		}
+	})
 }

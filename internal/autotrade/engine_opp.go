@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"arb/internal/store/pgstore"
@@ -34,21 +33,14 @@ func (e *Engine) oppLoop(ctx context.Context) {
 	}
 }
 
-// isCEXVenue 判断 venue 是否为 CEX（D-070：业主指令「放弃 CEX，全功 CFD」）。
-func isCEXVenue(venue string) bool {
-	return !strings.Contains(venue, ":mt5") && !strings.Contains(venue, ":mt4")
-}
-
 // handleOpportunity 过滤机会 → 产 intent 走 gate（D-072：风控由 gate 统一）。
 // D-080 R7：acc 由调用方传入（每 loop 一个长生命周期实例，处理完 flush 覆盖写）。
+// D-120（2026-08-27）：解除 D-070「放弃 CEX」限制——CFD 机会枯竭（SWAPARB 0 条新），
+// PERP_FUNDING 通道已修复（gate testnet 域名迁移+key 验证通过），恢复 CEX 机会执行。
 func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity, acc *comboAccumulator) {
 	// D-080 S4：全组合喂入 rollup 累积器（含低于门槛——覆盖度完整，write-behind）
 	acc.Record(opp.ID, opp.Type, opp.NetBps, time.Now())
 
-	// D-070：业主指令「放弃 CEX，全功 CFD」
-	if isCEXVenue(opp.VenueBuy) || isCEXVenue(opp.VenueSell) {
-		return
-	}
 	// D-072 §3.4：排除品种从 env 读取
 	if e.cfg.ExcludeCanonicals[opp.Canonical] {
 		return

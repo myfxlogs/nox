@@ -12,6 +12,17 @@ import (
 	"testing"
 )
 
+// gateMockContractSpec D-120：测试 mock server 共享 helper——处理 /futures/usdt/contracts/{contract}
+// 路径，返回 quanto_multiplier=1（1 张=1 基础币，使 size=qty 测试断言不变）。
+// 返回 true=已处理（handler 应 return），false=非 contracts 路径（继续原逻辑）。
+func gateMockContractSpec(w http.ResponseWriter, r *http.Request) bool {
+	if strings.HasPrefix(r.URL.Path, "/futures/usdt/contracts/") {
+		_, _ = io.WriteString(w, `{"quanto_multiplier":"1"}`)
+		return true
+	}
+	return false
+}
+
 // TestGateSignKnownVector 固定向量验证 GateSign（HMAC-SHA512 hex，D-098 G1）。
 // 手算对拍：sign_string = method\nurl\nquery\npayloadHash\ntimestamp，
 // SIGN = hex(HMAC-SHA512(secret, sign_string))。payloadHash = hex(SHA512(body))。
@@ -80,6 +91,9 @@ func TestCEXExecutor_GateOrderFinished(t *testing.T) {
 	)
 	var gotBody string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if gateMockContractSpec(w, r) {
+			return
+		}
 		if r.URL.Path != "/futures/usdt/orders" {
 			t.Errorf("want path /futures/usdt/orders, got %s", r.URL.Path)
 		}
@@ -140,6 +154,9 @@ func TestCEXExecutor_GateOrderFinished(t *testing.T) {
 func TestCEXExecutor_GateOrderSellSizeNegative(t *testing.T) {
 	var gotBody string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if gateMockContractSpec(w, r) {
+			return
+		}
 		raw, _ := io.ReadAll(r.Body)
 		gotBody = string(raw)
 		_, _ = io.WriteString(w, `{"id":7,"status":"finished","finish_as":"filled","size":-2,"left":0,"fill_price":"60000"}`)
@@ -160,6 +177,9 @@ func TestCEXExecutor_GateOrderSellSizeNegative(t *testing.T) {
 func TestCEXExecutor_GateOrderPollsFill(t *testing.T) {
 	var gotGET bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if gateMockContractSpec(w, r) {
+			return
+		}
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/futures/usdt/orders":
 			_, _ = io.WriteString(w, `{"id":888,"status":"open","size":1,"left":1,"fill_price":"0"}`)
@@ -190,6 +210,9 @@ func TestCEXExecutor_GateOrderPollsFill(t *testing.T) {
 // gate status 无 canceled/rejected；取消/IOC 未成交原因在 finish_as。
 func TestCEXExecutor_GateOrderZeroFillIOC(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if gateMockContractSpec(w, r) {
+			return
+		}
 		// IOC 市价单无对手盘 → 立即 finished + finish_as=ioc + left=size（零成交）
 		_, _ = io.WriteString(w, `{"id":999,"status":"finished","finish_as":"ioc","size":1,"left":1,"fill_price":"0"}`)
 	}))
@@ -212,6 +235,9 @@ func TestCEXExecutor_GateOrderZeroFillIOC(t *testing.T) {
 // POST finished + finish_as=ioc + left=1（size=5 → 成交 4）→ 部分 Fill qty=4（如实，非 0-qty 假成交）。
 func TestCEXExecutor_GateOrderPartialFillIOC(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if gateMockContractSpec(w, r) {
+			return
+		}
 		// IOC 部分成交：finish_as=ioc，size=5 left=1 → 成交 4
 		_, _ = io.WriteString(w, `{"id":55,"status":"finished","finish_as":"ioc","size":5,"left":1,"fill_price":"60000"}`)
 	}))
@@ -235,6 +261,35 @@ func TestCEXExecutor_GateSpotUnsupported(t *testing.T) {
 	e := NewCEXExecutor("gate", "spot", "k", "s", "", "http://x", true)
 	if _, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTC_USDT", Side: "BUY", Qty: 1}); err == nil {
 		t.Fatal("gate spot 应报错（G1 仅 perp），got nil")
+	}
+}
+
+// TestD120_GateContractSizeQuanto D-120：quanto_multiplier=0.01 → 0.4 ETH = 40 张合约。
+func TestD120_GateContractSizeQuanto(t *testing.T) {
+	var gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/futures/usdt/contracts/") {
+			_, _ = io.WriteString(w, `{"quanto_multiplier":"0.01"}`)
+			return
+		}
+		raw, _ := io.ReadAll(r.Body)
+		gotBody = string(raw)
+		_, _ = io.WriteString(w, `{"id":100,"status":"finished","finish_as":"filled","size":40,"left":0,"fill_price":"2500"}`)
+	}))
+	defer srv.Close()
+
+	e := NewCEXExecutor("gate", "perp", "k", "s", "", srv.URL, true)
+	fill, err := e.PlaceOrder(context.Background(), Order{Symbol: "ETH_USDT", Side: "BUY", Qty: 0.4})
+	if err != nil {
+		t.Fatalf("PlaceOrder: %v", err)
+	}
+	// size 应为 0.4/0.01=40 张
+	if !strings.Contains(gotBody, `"size":40`) {
+		t.Errorf("body 应 size=40（0.4 ETH / 0.01 quanto）: %s", gotBody)
+	}
+	// fill.Qty 应回填为基础币数量（40 张 × 0.01 = 0.4 ETH）
+	if fill.Qty != 0.4 {
+		t.Errorf("fill.Qty = %v, want 0.4（40 张 × 0.01 quanto 回填基础币）", fill.Qty)
 	}
 }
 

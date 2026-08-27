@@ -33,12 +33,15 @@ func (e *CEXExecutor) placeBinance(ctx context.Context, o Order) (Fill, error) {
 		endpoint = "/fapi/v1/order"
 		// D-108 P2 T1：perp 平仓补 positionSide/reduceOnly。
 		// hedge 模式 → positionSide=原持仓侧（与 OKX 同机制，调用方传 Order.PositionSide）；
-		// one-way 模式 → reduceOnly=true（market reduce，防开反向敞口）。
+		// one-way 模式 → 平仓 reduceOnly=true（market reduce，防开反向敞口）。
 		// 探测失败 → 保守按 hedge 处理（传 positionSide，被拒则 critical 告警）。
+		// D-120 修复：开仓（PositionSide=""）不带 reduceOnly——开仓带 reduceOnly 会被拒
+		// （Binance -2022 ReduceOnly Order is rejected，无持仓不能 reduce）。
+		isClose := o.PositionSide != ""
 		dual, probed := e.binanceDualSide(ctx)
 		if !probed {
 			// 探测失败：保守 hedge（有 positionSide 就传，无则不传让 venue 报错）
-			if o.PositionSide != "" {
+			if isClose {
 				params.Set("positionSide", binancePosSide(o.PositionSide))
 			}
 		} else if dual {
@@ -52,8 +55,10 @@ func (e *CEXExecutor) placeBinance(ctx context.Context, o Order) (Fill, error) {
 			}
 			params.Set("positionSide", binancePosSide(ps))
 		} else {
-			// one-way 模式：reduceOnly=true（平仓减仓，防开反向）
-			params.Set("reduceOnly", "true")
+			// one-way 模式：仅平仓带 reduceOnly（开仓不带，否则 -2022 拒绝）
+			if isClose {
+				params.Set("reduceOnly", "true")
+			}
 		}
 	}
 

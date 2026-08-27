@@ -271,8 +271,10 @@ func (p *Pipeline) Revalidate(canonical, venueBuy, venueSell, oppType string, or
 	if !ok1 || !ok2 {
 		return false // 报价缺失 = 不通过
 	}
-	// FUNDING_HEDGE：只检查报价新鲜度，跳过价格差劣化（funding rate 秒级不变）
-	if oppType == "FUNDING_HEDGE" {
+	// FUNDING_HEDGE / PERP_FUNDING：只检查报价新鲜度，跳过价格差劣化
+	//（funding rate 差是收益来源，价格差近 0 正常，D-068 修复 FUNDING_HEDGE，
+	// D-120 扩展 PERP_FUNDING 同理——gate futures 只有 mark_price 无真实 spread）
+	if oppType == "FUNDING_HEDGE" || oppType == "PERP_FUNDING" {
 		return true
 	}
 	// CROSS_VENUE：重算瞬时毛 spread

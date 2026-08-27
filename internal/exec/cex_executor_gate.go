@@ -76,7 +76,14 @@ func (e *CEXExecutor) placeGateRaw(ctx context.Context, o Order) ([]byte, Fill, 
 	if e.venueType != "perp" {
 		return nil, Fill{}, fmt.Errorf("gate executor: venueType %q unsupported（G1 仅 perp）", e.venueType)
 	}
-	size := int64(o.Qty)
+	// D-120：gate futures size 单位=合约数，o.Qty 是基础币数量 → 查合约规格换算。
+	// quanto_multiplier=每张合约代表的基础币数量（如 ETH_USDT=0.01 → 1 张=0.01 ETH）。
+	// size = round(o.Qty / quanto_multiplier)，最小 1 张。
+	// gateFilled 返回的 qty 是合约数 → 末尾乘 quanto 回填为基础币数量（Fill.Qty 契约=基础币）。
+	size, quanto, err := e.gateContractSize(ctx, o.Symbol, o.Qty)
+	if err != nil {
+		return nil, Fill{}, fmt.Errorf("gate order size: %w", err)
+	}
 	if o.Side == "SELL" {
 		size = -size
 	}
@@ -105,6 +112,8 @@ func (e *CEXExecutor) placeGateRaw(ctx context.Context, o Order) ([]byte, Fill, 
 	// gate status 只 open/finished；status=open → 轮询 GET /futures/usdt/orders/{order_id} 至终态；
 	// 终态（finished）按 finish_as 判定（gateFinishFill）。订单被拒/取消 = finish_as!=filled 且
 	// qty==0 → gateFinishFill 报错（无 canceled/rejected status，旧判定为死代码已删）。
+	// D-120：gateFilled 返回的 qty 是合约数 → 乘 quanto 回填为基础币数量（Fill.Qty 契约=基础币）。
+	toBaseQty := func(fill Fill) Fill { fill.Qty = fill.Qty * quanto; return fill }
 	if ord.Status == "open" {
 		var last gateOrderResponse
 		for range 5 {
@@ -115,7 +124,10 @@ func (e *CEXExecutor) placeGateRaw(ctx context.Context, o Order) ([]byte, Fill, 
 			}
 			if st.Status == "finished" {
 				fill, ferr := gateFinishFill(st)
-				return rawBody, fill, ferr
+				if ferr != nil {
+					return rawBody, fill, ferr
+				}
+				return rawBody, toBaseQty(fill), nil
 			}
 			last = st
 		}
@@ -125,11 +137,14 @@ func (e *CEXExecutor) placeGateRaw(ctx context.Context, o Order) ([]byte, Fill, 
 			return rawBody, Fill{}, fmt.Errorf("gate order %d: 5 次轮询仍 open 且无成交（qty=%v price=%v left=%d）",
 				ord.ID, qty, price, last.Left)
 		}
-		return rawBody, Fill{OrderID: strconv.FormatInt(last.ID, 10), Price: price, Qty: qty, Ts: time.Now()}, nil
+		return rawBody, toBaseQty(Fill{OrderID: strconv.FormatInt(last.ID, 10), Price: price, Qty: qty, Ts: time.Now()}), nil
 	}
 	// POST 即 finished（IOC 常见：finish_as=ioc/filled/cancelled/stp/...）
 	fill, ferr := gateFinishFill(ord)
-	return rawBody, fill, ferr
+	if ferr != nil {
+		return rawBody, fill, ferr
+	}
+	return rawBody, toBaseQty(fill), nil
 }
 
 // gateFinishFill 按 finish_as 判定终态订单成交（D-098 返修包① M2）：
@@ -272,4 +287,56 @@ func (e *CEXExecutor) GateAccountBookFund(ctx context.Context, contract string) 
 		return body, nil, fmt.Errorf("gate account_book json: %w", err)
 	}
 	return body, entries, nil
+}
+
+// gateContractSize 查合约规格换算合约数（D-120）。
+// gate futures size 单位=合约数，o.Qty 是基础币数量 → size=round(qty/quanto_multiplier)。
+// 公开端点 GET /futures/usdt/contracts/{contract} 无需认证，但走签名头无害且复用 e.get。
+// 缓存 per-executor（quanto_multiplier 不变），避免每单查。
+// 返回 (size, quanto_multiplier, error)——quanto 供调用方回填 Fill.Qty 为基础币数量。
+func (e *CEXExecutor) gateContractSize(ctx context.Context, contract string, qty float64) (int64, float64, error) {
+	// 缓存命中
+	if e.gateQuanto != nil {
+		if q, ok := e.gateQuanto[contract]; ok {
+			s := int64(math.Round(qty / q))
+			if s < 1 {
+				return 0, 0, fmt.Errorf("qty %.6f / quanto %.6f = %.0f < 1 张（gate 最小 1 张）", qty, q, math.Round(qty/q))
+			}
+			return s, q, nil
+		}
+	}
+	// 查合约规格
+	endpoint := "/futures/usdt/contracts/" + contract
+	urlPath := "/api/v4" + endpoint
+	ts := time.Now().Unix()
+	sign := GateSign(e.apiSecret, "GET", urlPath, "", "", ts)
+	headers := http.Header{
+		"KEY":       {e.apiKey},
+		"Timestamp": {strconv.FormatInt(ts, 10)},
+		"SIGN":      {sign},
+	}
+	body, err := e.get(ctx, e.baseURL+endpoint, headers)
+	if err != nil {
+		return 0, 0, fmt.Errorf("gate contract spec %s: %w", contract, err)
+	}
+	var spec struct {
+		QuantoMultiplier string `json:"quanto_multiplier"`
+	}
+	if err := json.Unmarshal(body, &spec); err != nil {
+		return 0, 0, fmt.Errorf("gate contract spec json: %w", err)
+	}
+	q, err := strconv.ParseFloat(spec.QuantoMultiplier, 64)
+	if err != nil || q <= 0 {
+		return 0, 0, fmt.Errorf("gate contract %s quanto_multiplier=%q invalid", contract, spec.QuantoMultiplier)
+	}
+	// 写缓存
+	if e.gateQuanto == nil {
+		e.gateQuanto = make(map[string]float64)
+	}
+	e.gateQuanto[contract] = q
+	s := int64(math.Round(qty / q))
+	if s < 1 {
+		return 0, 0, fmt.Errorf("qty %.6f / quanto %.6f = %.0f < 1 张（gate 最小 1 张）", qty, q, math.Round(qty/q))
+	}
+	return s, q, nil
 }

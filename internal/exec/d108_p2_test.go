@@ -45,7 +45,7 @@ func TestD108P2_BinancePerpHedgePosSide(t *testing.T) {
 	}
 }
 
-// TestD108P2_BinancePerpOneWayReduceOnly one-way 模式 → 下单带 reduceOnly=true（无 positionSide）。
+// TestD108P2_BinancePerpOneWayReduceOnly one-way 模式平仓 → 下单带 reduceOnly=true（无 positionSide）。
 func TestD108P2_BinancePerpOneWayReduceOnly(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/fapi/v1/positionSide/dual" {
@@ -57,10 +57,10 @@ func TestD108P2_BinancePerpOneWayReduceOnly(t *testing.T) {
 		}
 		q := r.URL.Query()
 		if ro := q.Get("reduceOnly"); ro != "true" {
-			t.Errorf("one-way mode: reduceOnly = %q, want true", ro)
+			t.Errorf("one-way mode close: reduceOnly = %q, want true", ro)
 		}
 		if ps := q.Get("positionSide"); ps != "" {
-			t.Errorf("one-way mode: positionSide should not be set, got %q", ps)
+			t.Errorf("one-way mode close: positionSide should not be set, got %q", ps)
 		}
 		_, _ = io.WriteString(w, `{"orderId":2,"executedQty":"1.0","fills":[{"price":"50000","qty":"1.0"}]}`)
 	}))
@@ -68,6 +68,31 @@ func TestD108P2_BinancePerpOneWayReduceOnly(t *testing.T) {
 
 	e := NewCEXExecutor("binance", "perp", "k", "s", "", srv.URL, false)
 	_, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTCUSDT", Side: "SELL", Qty: 1, PositionSide: "long"})
+	if err != nil {
+		t.Fatalf("PlaceOrder: %v", err)
+	}
+}
+
+// TestD120_BinancePerpOneWayOpenNoReduceOnly D-120：one-way 模式开仓 → 不带 reduceOnly（否则 -2022 拒绝）。
+func TestD120_BinancePerpOneWayOpenNoReduceOnly(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/fapi/v1/positionSide/dual" {
+			_, _ = io.WriteString(w, `{"dualSidePosition":false}`)
+			return
+		}
+		if r.URL.Path != "/fapi/v1/order" {
+			return
+		}
+		q := r.URL.Query()
+		if ro := q.Get("reduceOnly"); ro != "" {
+			t.Errorf("one-way mode open: reduceOnly should not be set, got %q", ro)
+		}
+		_, _ = io.WriteString(w, `{"orderId":3,"executedQty":"1.0","fills":[{"price":"50000","qty":"1.0"}]}`)
+	}))
+	defer srv.Close()
+
+	e := NewCEXExecutor("binance", "perp", "k", "s", "", srv.URL, false)
+	_, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTCUSDT", Side: "SELL", Qty: 1})
 	if err != nil {
 		t.Fatalf("PlaceOrder: %v", err)
 	}
@@ -131,7 +156,7 @@ func TestD108P2_BinancePerpRejectedCritical(t *testing.T) {
 
 // === T1: OKX perp reduceOnly ===
 
-// TestD108P2_OKXPerpReduceOnly OKX perp body 含 reduceOnly:true。
+// TestD108P2_OKXPerpReduceOnly OKX perp 平仓 body 含 reduceOnly:true。
 func TestD108P2_OKXPerpReduceOnly(t *testing.T) {
 	var capturedBody string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -147,7 +172,27 @@ func TestD108P2_OKXPerpReduceOnly(t *testing.T) {
 		t.Fatalf("PlaceOrder: %v", err)
 	}
 	if !strings.Contains(capturedBody, `"reduceOnly":true`) {
-		t.Errorf("OKX perp body missing reduceOnly:true: %s", capturedBody)
+		t.Errorf("OKX perp close body missing reduceOnly:true: %s", capturedBody)
+	}
+}
+
+// TestD120_OKXPerpOpenNoReduceOnly D-120：OKX perp 开仓 body 含 reduceOnly:false（开仓不能 reduce）。
+func TestD120_OKXPerpOpenNoReduceOnly(t *testing.T) {
+	var capturedBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		capturedBody = string(body)
+		_, _ = io.WriteString(w, `{"code":"0","data":[{"ordId":"456","sCode":"0","avgPx":"50000","accFillSz":"1.0"}]}`)
+	}))
+	defer srv.Close()
+
+	e := NewCEXExecutor("okx", "perp", "k", "s", "p", srv.URL, true)
+	_, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTC-USDT", Side: "SELL", Qty: 1})
+	if err != nil {
+		t.Fatalf("PlaceOrder: %v", err)
+	}
+	if !strings.Contains(capturedBody, `"reduceOnly":false`) {
+		t.Errorf("OKX perp open body missing reduceOnly:false: %s", capturedBody)
 	}
 }
 

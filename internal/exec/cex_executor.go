@@ -30,7 +30,10 @@ type CEXExecutor struct {
 	// D-108 P2 T1：Binance perp 双仓模式探测缓存（per executor 实例，避免每单探测）。
 	dualSide       bool // true=hedge mode（双仓），false=one-way（单仓）
 	dualSideProbed bool // 是否已探测（探测失败时 false + 保守按 hedge 处理）
-	dualSideMu     sync.Mutex
+
+	// D-120：gate futures 合约规格缓存（contract → quanto_multiplier，避免每单查）。
+	gateQuanto map[string]float64
+	dualSideMu sync.Mutex // 保护 dualSide/dualSideProbed 探测
 	// AlertFn 平仓被拒时 critical 告警（main 注入 store.InsertAlert；nil=不告警，测试用）。
 	AlertFn func(posID *int64, level, msg string)
 }
@@ -97,8 +100,9 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 		// （account/config 实测）。开仓传空 → buy=long / sell=short 派生；平仓由调用方显式传
 		// PositionSide=原持仓侧（BUY 开 long → SELL 平 + posSide=long 才减 long，D-059 实测
 		// SELL+posSide=short 会新开空仓）。net_mode 账户需改 posSide=net。
-		// D-108 P2 T1：补 reduceOnly=true（long_short 模式下与 posSide 并存无害，OKX 支持，
-		// 双保险防开反向敞口）。
+		// D-108 P2 T1：平仓补 reduceOnly=true（防开反向敞口）。
+		// D-120 修复：开仓（PositionSide=""）不带 reduceOnly——开仓带 reduceOnly 会被拒
+		// （Binance -2022 ReduceOnly rejected / OKX 资金计算异常 Insufficient margin）。
 		posSide := o.PositionSide
 		if posSide == "" {
 			posSide = "long"
@@ -106,8 +110,9 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 				posSide = "short"
 			}
 		}
-		bodyStr = fmt.Sprintf(`{"instId":%q,"tdMode":%q,"side":%q,"ordType":"market","sz":%q,"posSide":%q,"reduceOnly":true}`,
-			instID, tdMode, side, sz, posSide)
+		isClose := o.PositionSide != ""
+		bodyStr = fmt.Sprintf(`{"instId":%q,"tdMode":%q,"side":%q,"ordType":"market","sz":%q,"posSide":%q,"reduceOnly":%t}`,
+			instID, tdMode, side, sz, posSide, isClose)
 	} else {
 		// spot 市价单：缺省买方向 sz=报价币金额（0.0001 当 0.0001 USDT → 51020 最小金额，实测）。
 		// 显式 tgtCcy=base_ccy 固定 sz=基础币数量，与 exec.Order.Qty 契约一致。
