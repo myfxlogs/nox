@@ -3131,6 +3131,7 @@ type Position struct {
 	SettledRealizedUsd    *float64               `protobuf:"fixed64,19,opt,name=settled_realized_usd,json=settledRealizedUsd,proto3,oneof" json:"settled_realized_usd,omitempty"`              // D-106：结算口径 realized_usd（position_settlements join；无结算行=缺省）
 	SettledNotionalUsd    *float64               `protobuf:"fixed64,20,opt,name=settled_notional_usd,json=settledNotionalUsd,proto3,oneof" json:"settled_notional_usd,omitempty"`              // D-106：结算口径 notional_usd（同上）
 	HoldDays              *float64               `protobuf:"fixed64,21,opt,name=hold_days,json=holdDays,proto3,oneof" json:"hold_days,omitempty"`                                              // D-106：持有天数（结算行 hold_days 优先；否则 closed_at−opened_at）
+	BreakEvenDays         *float64               `protobuf:"fixed64,22,opt,name=break_even_days,json=breakEvenDays,proto3,oneof" json:"break_even_days,omitempty"`                             // D-117：回本周期（净值<0÷日均实际swap；≥0=0已回本；日均swap≤0=缺省）
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -3308,6 +3309,13 @@ func (x *Position) GetSettledNotionalUsd() float64 {
 func (x *Position) GetHoldDays() float64 {
 	if x != nil && x.HoldDays != nil {
 		return *x.HoldDays
+	}
+	return 0
+}
+
+func (x *Position) GetBreakEvenDays() float64 {
+	if x != nil && x.BreakEvenDays != nil {
+		return *x.BreakEvenDays
 	}
 	return 0
 }
@@ -10425,7 +10433,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\border_id\x18\f \x01(\tR\aorderId\x12\x16\n" +
 	"\x06status\x18\r \x01(\tR\x06status\x12*\n" +
 	"\x02ts\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\x02tsB\x0f\n" +
-	"\r_price_actual\"\x98\t\n" +
+	"\r_price_actual\"\xd9\t\n" +
 	"\bPosition\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12%\n" +
 	"\x0eopportunity_id\x18\x02 \x01(\tR\ropportunityId\x12\x12\n" +
@@ -10449,7 +10457,8 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x14settled_realized_usd\x18\x13 \x01(\x01H\tR\x12settledRealizedUsd\x88\x01\x01\x125\n" +
 	"\x14settled_notional_usd\x18\x14 \x01(\x01H\n" +
 	"R\x12settledNotionalUsd\x88\x01\x01\x12 \n" +
-	"\thold_days\x18\x15 \x01(\x01H\vR\bholdDays\x88\x01\x01B\x0f\n" +
+	"\thold_days\x18\x15 \x01(\x01H\vR\bholdDays\x88\x01\x01\x12+\n" +
+	"\x0fbreak_even_days\x18\x16 \x01(\x01H\fR\rbreakEvenDays\x88\x01\x01B\x0f\n" +
 	"\r_realized_pnlB\x16\n" +
 	"\x14_expected_annual_pctB\x1a\n" +
 	"\x18_expected_swap_bps_dailyB\x13\n" +
@@ -10462,7 +10471,8 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x15_settled_realized_usdB\x17\n" +
 	"\x15_settled_notional_usdB\f\n" +
 	"\n" +
-	"_hold_days\"\xcd\x01\n" +
+	"_hold_daysB\x12\n" +
+	"\x10_break_even_days\"\xcd\x01\n" +
 	"\x19ExecuteOpportunityRequest\x12%\n" +
 	"\x0eopportunity_id\x18\x01 \x01(\tR\ropportunityId\x12\x1d\n" +
 	"\n" +

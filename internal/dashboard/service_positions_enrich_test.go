@@ -32,8 +32,8 @@ func fakeBPMWithCache(positions []*v1.BrokerPosition) *BrokerPositionMonitor {
 // TestEnrichPositions_MatchedSum 匹配腿 Σ profit/swap → floating/swap_accrued/net。
 func TestEnrichPositions_MatchedSum(t *testing.T) {
 	bpm := fakeBPMWithCache([]*v1.BrokerPosition{
-		{VenueKey: "52993526:mt5", Symbol: "AUDJPYm", Pnl: -40.0, Swap: 4.99},
-		{VenueKey: "277842155:mt5", Symbol: "AUDJPY.", Pnl: 5.0, Swap: 0},
+		{VenueKey: "52993526:mt5", Symbol: "AUDJPYm", Pnl: -40.0, Swap: 4.99, PositionId: 264},
+		{VenueKey: "277842155:mt5", Symbol: "AUDJPY.", Pnl: 5.0, Swap: 0, PositionId: 264},
 	})
 	s := newEnrichService(bpm)
 	pb := &v1.Position{
@@ -66,12 +66,51 @@ func TestEnrichPositions_MatchedSum(t *testing.T) {
 	if math.Abs(*pb.NetPnlUsd-(-30.01)) > 0.001 {
 		t.Errorf("net = %.4f, want -30.01", *pb.NetPnlUsd)
 	}
+	// D-117：回本周期 = |net| ÷ (swap/holdDays) = 30.01 ÷ (4.99/3) ≈ 18.04
+	if pb.BreakEvenDays == nil {
+		t.Fatal("break_even_days should not be nil (SWAPARB + matched + swap>0)")
+	}
+	wantBE := 30.01 / (4.99 / 3.0)
+	if math.Abs(*pb.BreakEvenDays-wantBE) > 0.01 {
+		t.Errorf("break_even_days = %.4f, want %.4f", *pb.BreakEvenDays, wantBE)
+	}
+}
+
+// TestEnrichPositions_BreakEvenDays_Breakeven D-117：净值≥0 → break_even_days=0（已回本）。
+func TestEnrichPositions_BreakEvenDays_Breakeven(t *testing.T) {
+	bpm := fakeBPMWithCache([]*v1.BrokerPosition{
+		{VenueKey: "529:mt5", Symbol: "AUDJPYm", Pnl: -10, Swap: 15, PositionId: 1}, // net = -10+15+0 = 5 > 0
+	})
+	s := newEnrichService(bpm)
+	pb := &v1.Position{Id: 1, Type: "SWAPARB", Status: "OPEN", OpenedAt: timestamppb.New(time.Now().AddDate(0, 0, -2))}
+	legs := []pgstore.PositionLeg{{Phase: "OPEN", Venue: "529:mt5", Symbol: "AUDJPYm", Status: "FILLED", Qty: 1, PriceActual: ptrFloat(113.5), Ts: time.Now().AddDate(0, 0, -2)}}
+	s.enrichPositions(context.Background(), []*v1.Position{pb}, map[int64][]pgstore.PositionLeg{1: legs})
+	if pb.BreakEvenDays == nil {
+		t.Fatal("break_even_days should not be nil")
+	}
+	if *pb.BreakEvenDays != 0 {
+		t.Errorf("net≥0 break_even_days want 0 (已回本), got %v", *pb.BreakEvenDays)
+	}
+}
+
+// TestEnrichPositions_BreakEvenDays_NoSwap D-117：日均 swap≤0 → 缺省（付息型或不结算）。
+func TestEnrichPositions_BreakEvenDays_NoSwap(t *testing.T) {
+	bpm := fakeBPMWithCache([]*v1.BrokerPosition{
+		{VenueKey: "529:mt5", Symbol: "AUDJPYm", Pnl: -10, Swap: 0, PositionId: 1}, // swap=0 → dailySwap=0 → 缺省
+	})
+	s := newEnrichService(bpm)
+	pb := &v1.Position{Id: 1, Type: "SWAPARB", Status: "OPEN", OpenedAt: timestamppb.New(time.Now().AddDate(0, 0, -2))}
+	legs := []pgstore.PositionLeg{{Phase: "OPEN", Venue: "529:mt5", Symbol: "AUDJPYm", Status: "FILLED", Qty: 1, PriceActual: ptrFloat(113.5), Ts: time.Now().AddDate(0, 0, -2)}}
+	s.enrichPositions(context.Background(), []*v1.Position{pb}, map[int64][]pgstore.PositionLeg{1: legs})
+	if pb.BreakEvenDays != nil {
+		t.Errorf("swap=0 break_even_days want nil (缺省), got %v", *pb.BreakEvenDays)
+	}
 }
 
 // TestEnrichPositions_NoMatchDefault 全部腿未匹配 → 三字段缺省（nil 不冒充 0）。
 func TestEnrichPositions_NoMatchDefault(t *testing.T) {
 	bpm := fakeBPMWithCache([]*v1.BrokerPosition{
-		{VenueKey: "other:mt5", Symbol: "EURUSDm", Pnl: 10, Swap: 1},
+		{VenueKey: "other:mt5", Symbol: "EURUSDm", Pnl: 10, Swap: 1, PositionId: 1}, // venue 不匹配
 	})
 	s := newEnrichService(bpm)
 	pb := &v1.Position{Id: 1, Type: "SWAPARB", Status: "OPEN", OpenedAt: timestamppb.New(time.Now().AddDate(0, 0, -1))}
@@ -192,20 +231,37 @@ func TestCanonicalFromOppID(t *testing.T) {
 	}
 }
 
-// TestMatchBrokerLegs 匹配器：venueKey+symbol 匹配，Σ profit/swap。
+// TestMatchBrokerLegs 匹配器：venueKey+symbol+positionId 匹配，Σ profit/swap/commission。
+// D-117：加 positionId 约束，验证同 venue+symbol 跨 position 不 double-counting。
 func TestMatchBrokerLegs(t *testing.T) {
 	legs := []pgstore.PositionLeg{
 		{Phase: "OPEN", Venue: "529:mt5", Symbol: "AUDJPYm"},
 		{Phase: "OPEN", Venue: "277:mt5", Symbol: "AUDJPY."},
 	}
 	snap := []*v1.BrokerPosition{
-		{VenueKey: "529:mt5", Symbol: "AUDJPYm", Pnl: -40, Swap: 4.99},
-		{VenueKey: "277:mt5", Symbol: "AUDJPY.", Pnl: 5, Swap: 0},
-		{VenueKey: "other:mt5", Symbol: "EURUSD", Pnl: 999, Swap: 999}, // 不匹配
+		{VenueKey: "529:mt5", Symbol: "AUDJPYm", Pnl: -40, Swap: 4.99, Commission: -0.5, PositionId: 100},
+		{VenueKey: "277:mt5", Symbol: "AUDJPY.", Pnl: 5, Swap: 0, Commission: -0.3, PositionId: 100},
+		// 同 venue+symbol 但不同 positionId（D-117 double-counting 防护）
+		{VenueKey: "529:mt5", Symbol: "AUDJPYm", Pnl: -999, Swap: 999, Commission: 0, PositionId: 200},
+		{VenueKey: "other:mt5", Symbol: "EURUSD", Pnl: 999, Swap: 999, PositionId: 100}, // 不匹配 symbol
 	}
-	floating, swap, matched := matchBrokerLegs(legs, snap)
-	if !matched || floating != -35 || swap != 4.99 {
-		t.Errorf("match = (%.2f, %.2f, %v), want (-35, 4.99, true)", floating, swap, matched)
+	floating, swap, commission, matched := matchBrokerLegs(legs, snap, 100)
+	if !matched || floating != -35 || swap != 4.99 || commission != -0.8 {
+		t.Errorf("match = (%.2f, %.2f, %.2f, %v), want (-35, 4.99, -0.8, true)", floating, swap, commission, matched)
+	}
+}
+
+// TestMatchBrokerLegs_OrphanNoMatch D-117：broker position positionId=0（孤儿）不匹配任何 leg。
+func TestMatchBrokerLegs_OrphanNoMatch(t *testing.T) {
+	legs := []pgstore.PositionLeg{
+		{Phase: "OPEN", Venue: "529:mt5", Symbol: "AUDJPYm"},
+	}
+	snap := []*v1.BrokerPosition{
+		{VenueKey: "529:mt5", Symbol: "AUDJPYm", Pnl: -40, Swap: 4.99, PositionId: 0}, // 孤儿
+	}
+	_, _, _, matched := matchBrokerLegs(legs, snap, 100)
+	if matched {
+		t.Errorf("orphan (positionId=0) should not match, got matched=true")
 	}
 }
 

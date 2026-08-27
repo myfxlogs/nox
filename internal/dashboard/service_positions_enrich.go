@@ -42,11 +42,13 @@ var convergentTypes = map[string]bool{
 
 // enrichPositions 对活跃行计算 7 派生字段，原地修改 pb positions。
 // bpm 为 nil（测试未接线）时整组跳过；legs 按 positionID 批量预取。
+// D-117：brokerSnap 需标注 positionId（与 ListBrokerPositions 同源），matchBrokerLegs 按 positionId 唯一匹配。
 func (s *Service) enrichPositions(ctx context.Context, pbPositions []*v1.Position, legsByPos map[int64][]pgstore.PositionLeg) {
 	if s.bpm == nil {
 		return // 测试未接线 → 整组跳过（诚实缺省，不伪造）
 	}
 	brokerSnap := s.bpm.Snapshot()
+	annotatePositionID(ctx, s.store, brokerSnap) // D-117：标注 positionId（与 ListBrokerPositions 同源）
 	now := time.Now()
 	for _, pb := range pbPositions {
 		if !activeStatuses[pb.Status] {
@@ -59,14 +61,33 @@ func (s *Service) enrichPositions(ctx context.Context, pbPositions []*v1.Positio
 
 // enrichOne 单行派生（拆出便于测试）。
 func enrichOne(ctx context.Context, s *Service, pb *v1.Position, legs []pgstore.PositionLeg, brokerSnap []*v1.BrokerPosition, now time.Time) {
-	// 1. 匹配 broker position：OPEN 腿 venueKey+symbol → Σ profit / Σ swap
+	// 1. 匹配 broker position：OPEN 腿 venueKey+symbol+positionId → Σ profit / Σ swap / Σ commission
+	// D-117 修正：加 positionId 约束，避免同 venue+symbol 跨 position double-counting（D-095 遗留 bug）
 	openLegs := filterOpenLegs(legs)
-	floating, swapAccrued, matched := matchBrokerLegs(openLegs, brokerSnap)
+	floating, swapAccrued, commission, matched := matchBrokerLegs(openLegs, brokerSnap, pb.Id)
 	if matched {
 		pb.FloatingPnlUsd = &floating
 		pb.SwapAccruedUsd = &swapAccrued
-		net := floating + swapAccrued
+		net := floating + swapAccrued + commission
 		pb.NetPnlUsd = &net
+
+		// D-117：回本周期（实时计算，非理论值）
+		// 日均 swap = 已收 swap ÷ 持有天数（实际值）；净值<0 → |净值|÷日均 swap；≥0 → 0（已回本）
+		if carryTypes[pb.Type] {
+			holdDays := holdDaysToNow(pb, openLegs, now)
+			if holdDays > 0 {
+				dailySwap := swapAccrued / holdDays
+				if dailySwap > 0 {
+					var breakEven float64
+					if net < 0 {
+						breakEven = -net / dailySwap
+					}
+					// net ≥ 0 → breakEven=0（已回本）；dailySwap>0 保证除法安全
+					pb.BreakEvenDays = &breakEven
+				}
+				// dailySwap ≤ 0 → 缺省（付息型或不结算，不显示回本周期）
+			}
+		}
 	}
 
 	// 2. 息差型：应得 + 达成率
@@ -105,21 +126,28 @@ func filterOpenLegs(legs []pgstore.PositionLeg) []pgstore.PositionLeg {
 	return out
 }
 
-// matchBrokerLegs 按 OPEN 腿 venueKey+symbol 匹配 broker position，求 Σ profit / Σ swap。
-// 返回 (floating, swapAccrued, matched)；matched=false = 全部腿未匹配。
-func matchBrokerLegs(openLegs []pgstore.PositionLeg, brokerSnap []*v1.BrokerPosition) (float64, float64, bool) {
-	var floating, swap float64
+// matchBrokerLegs 按 OPEN 腿 venueKey+symbol+positionId 匹配 broker position，求 Σ profit / Σ swap / Σ commission。
+// 返回 (floating, swapAccrued, commission, matched)；matched=false = 全部腿未匹配。
+// D-117：加 positionId 约束（避免同 venue+symbol 跨 position double-counting，D-095 遗留 bug）；
+//
+//	加 commission 返回值（net = floating + swap + commission，含佣金成本）。
+//
+// broker position 的 positionId 由 annotatePositionID 标注（(venueKey,ticket)→posID 索引）；
+// positionId=0（孤儿订单/未关联）不匹配任何 leg（fail-closed，不冒充）。
+func matchBrokerLegs(openLegs []pgstore.PositionLeg, brokerSnap []*v1.BrokerPosition, posID int64) (float64, float64, float64, bool) {
+	var floating, swap, commission float64
 	matched := false
 	for _, leg := range openLegs {
 		for _, bp := range brokerSnap {
-			if bp.VenueKey == leg.Venue && bp.Symbol == leg.Symbol {
+			if bp.VenueKey == leg.Venue && bp.Symbol == leg.Symbol && bp.PositionId == posID {
 				floating += bp.Pnl
 				swap += bp.Swap
+				commission += bp.Commission
 				matched = true
 			}
 		}
 	}
-	return floating, swap, matched
+	return floating, swap, commission, matched
 }
 
 // computeEntryNotional Σ OPEN FILLED 腿 LegUSD（CS+fx 经 store 查询）。
