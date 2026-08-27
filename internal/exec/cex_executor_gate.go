@@ -87,8 +87,10 @@ func (e *CEXExecutor) placeGateRaw(ctx context.Context, o Order) ([]byte, Fill, 
 	if o.Side == "SELL" {
 		size = -size
 	}
-	bodyStr := fmt.Sprintf(`{"contract":%q,"size":%d,"price":"0","tif":"ioc","text":"t-arb"}`,
-		o.Symbol, size)
+	// D-121：平仓（PositionSide!=""）带 reduce_only=true → gate 不要求保证金（只减仓不新开）。
+	// 开仓（PositionSide=""）不带 → 正常开仓。与 OKX/Binance reduceOnly 逻辑对齐（D-108/D-120）。
+	bodyStr := fmt.Sprintf(`{"contract":%q,"size":%d,"price":"0","tif":"ioc","text":"t-arb","reduce_only":%t}`,
+		o.Symbol, size, o.PositionSide != "")
 
 	const endpoint = "/futures/usdt/orders"
 	urlPath := "/api/v4" + endpoint

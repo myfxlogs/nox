@@ -293,6 +293,52 @@ func TestD120_GateContractSizeQuanto(t *testing.T) {
 	}
 }
 
+// TestD121_GateOpenNoReduceOnly D-121：gate 开仓（PositionSide=""）→ body 不带 reduce_only。
+func TestD121_GateOpenNoReduceOnly(t *testing.T) {
+	var gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if gateMockContractSpec(w, r) {
+			return
+		}
+		raw, _ := io.ReadAll(r.Body)
+		gotBody = string(raw)
+		_, _ = io.WriteString(w, `{"id":1,"status":"finished","finish_as":"filled","size":1,"left":0,"fill_price":"50000"}`)
+	}))
+	defer srv.Close()
+
+	e := NewCEXExecutor("gate", "perp", "k", "s", "", srv.URL, true)
+	_, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTC_USDT", Side: "BUY", Qty: 1})
+	if err != nil {
+		t.Fatalf("PlaceOrder: %v", err)
+	}
+	if strings.Contains(gotBody, `"reduce_only":true`) {
+		t.Errorf("开仓 body 不应含 reduce_only:true: %s", gotBody)
+	}
+}
+
+// TestD121_GateCloseReduceOnly D-121：gate 平仓（PositionSide!=""）→ body 带 reduce_only:true。
+func TestD121_GateCloseReduceOnly(t *testing.T) {
+	var gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if gateMockContractSpec(w, r) {
+			return
+		}
+		raw, _ := io.ReadAll(r.Body)
+		gotBody = string(raw)
+		_, _ = io.WriteString(w, `{"id":2,"status":"finished","finish_as":"filled","size":-1,"left":0,"fill_price":"50000"}`)
+	}))
+	defer srv.Close()
+
+	e := NewCEXExecutor("gate", "perp", "k", "s", "", srv.URL, true)
+	_, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTC_USDT", Side: "SELL", Qty: 1, PositionSide: "long"})
+	if err != nil {
+		t.Fatalf("PlaceOrder: %v", err)
+	}
+	if !strings.Contains(gotBody, `"reduce_only":true`) {
+		t.Errorf("平仓 body 应含 reduce_only:true: %s", gotBody)
+	}
+}
+
 // TestCEXExecutor_GatePositions 验证 GatePositions 解析（M3：单对象非数组，对拍 gateapi-go GetPosition）。
 // 多仓 + funding 字段；size!=0 → 返回 1 条。
 func TestCEXExecutor_GatePositions(t *testing.T) {
