@@ -104,10 +104,35 @@ func swapInPointsGuardRail(src, venue, canon string, s, point, cs, price float64
 // weekdayNames Go time.Weekday → 中文名（日志可读，D-077 V2）。
 var weekdayNames = []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
 
+// tripleSwapDayOverrides D-115：实测 override——MT5 API V3DaysSwap 字段不可信时，
+// 用实测值覆盖（规格≠实际结算，经验库 mt5-spec-vs-settlement-disconnect 同类）。
+// key=venue，value=Go time.Weekday（0=Sunday...6=Saturday）。
+// 新增 venue 需有 position_swap_snapshots 实证（活仓结算跳变倍数对拍）。
+var tripleSwapDayOverrides = map[string]float64{
+	"REDACTED_MT_ACCT": 3, // Wednesday，8-26 实证：#290 0.05→0.19≈3x
+	"39050818":  3, // Wednesday，8-26 实证：#291 0.04→0.16=3x
+}
+
+// applyTripleSwapDayOverride D-115：venue 在 override map 里 → 全符号替换为 override 值。
+// 不在 map 里 → 原样返回（fail-closed，等活仓实证再改）。
+func applyTripleSwapDayOverride(venue string, tripleDays map[string]float64) map[string]float64 {
+	override, ok := tripleSwapDayOverrides[venue]
+	if !ok {
+		return tripleDays
+	}
+	out := make(map[string]float64, len(tripleDays))
+	for canon := range tripleDays {
+		out[canon] = override
+	}
+	return out
+}
+
 // collectTripleSwapDayFacts 三倍日 per-symbol 全量收集（D-077 修复⑪A M3）。
 // 同 venue 值一致 → 发 venue 级 Fact（symbol=venue）；不一致 → 发 per-symbol Fact + warn。
 // 空 map → 不发（全失败，下游 fail-closed 跳过）。
+// D-115：入口应用 tripleSwapDayOverrides（实测值覆盖 API 不可信字段）。
 func collectTripleSwapDayFacts(src, venue string, tripleDays map[string]float64) []fact.Fact {
+	tripleDays = applyTripleSwapDayOverride(venue, tripleDays)
 	if len(tripleDays) == 0 {
 		return nil
 	}
