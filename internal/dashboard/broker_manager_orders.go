@@ -131,10 +131,20 @@ func (m *BrokerManager) CloseOrder(ctx context.Context, venueKey, ticket string)
 	if bp.Side == "SELL" {
 		closeSide = "BUY"
 	}
+	// PositionSide 设原持仓侧 → OKX 减对应仓位 / gate 触发 reduce_only / Binance one-way 触发 reduceOnly。
+	// 与 pipeline_legs.go ClosePosition CEX 路径一致（D-059/D-108/D-120/D-121）。
+	var positionSide string
+	switch bp.Side {
+	case "BUY":
+		positionSide = "long"
+	case "SELL":
+		positionSide = "short"
+	}
 	return e.PlaceOrder(ctx, exec.Order{
-		Symbol: bp.Symbol,
-		Side:   closeSide,
-		Qty:    bp.Volume,
-		Venue:  venueKey,
+		Symbol:       bp.Symbol,
+		Side:         closeSide,
+		Qty:          bp.Volume,
+		Venue:        venueKey,
+		PositionSide: positionSide,
 	})
 }
