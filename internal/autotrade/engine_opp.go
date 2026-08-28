@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"arb/internal/store/pgstore"
@@ -59,7 +60,10 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 	}
 	log.Printf("[autotrade] pass filter opp=%s type=%s netBps=%.2f", opp.ID, opp.Type, opp.NetBps)
 
-	qty := e.cfg.NotionalUSD / opp.PriceBuy
+	qty, skip := computeBuyQty(opp, e.cfg.NotionalUSD, e.service.OppContractSize)
+	if skip {
+		return
+	}
 	if qty <= 0 {
 		return
 	}
@@ -87,4 +91,25 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 		},
 	}
 	e.gate.Submit(ctx, intent)
+}
+
+// isMTVenue 判断 venueKey 是否为 MT5/MT4 venue（D-135 sizing CS fail-closed 用）。
+func isMTVenue(venue string) bool {
+	return strings.HasSuffix(venue, ":mt5") || strings.HasSuffix(venue, ":mt4")
+}
+
+// computeBuyQty 计算买腿 qty（D-135：MT 腿乘 CS fail-closed，CEX 腿 CS=1 不变）。
+// csResolver = e.service.OppContractSize（nil 接线时返回 ok=false → MT 腿 skip，CEX 腿正常）。
+// 返回 skip=true 表示 fail-closed 跳过（MT 腿 CS 未知/未接线），调用方应 return。
+func computeBuyQty(opp pgstore.Opportunity, notionalUSD float64, csResolver func(canonical, venueKey string) (float64, bool)) (qty float64, skip bool) {
+	cs := 1.0
+	if isMTVenue(opp.VenueBuy) { // MT 腿必须查到 CS（fail-closed，D-135）
+		v, ok := csResolver(opp.Canonical, opp.VenueBuy)
+		if !ok || v <= 0 {
+			log.Printf("[autotrade] skip opp=%s: MT buy-leg CS unknown (fail-closed) canonical=%s venue=%s", opp.ID, opp.Canonical, opp.VenueBuy)
+			return 0, true
+		}
+		cs = v
+	}
+	return notionalUSD / (opp.PriceBuy * cs), false
 }
