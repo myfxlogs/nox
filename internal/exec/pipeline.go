@@ -239,9 +239,28 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 	}
 
 	if status == "LEGGED" {
-		// critical 告警
-		_ = p.store.InsertAlert(ctx, nil, "critical",
-			fmt.Sprintf("position %d LEGGED: %d/%d legs filled", posID, filled, len(legs)))
+		// D-127 P3b：纯 CEX 组合 LEGGED 自动收平——对 FILLED 腿立即反向 MARKET 平仓，
+		// 消除裸敞口（#380/#383 人工 35+ 分钟兜底）。含 MT 腿的组合不动（SWAPARB 有独立平仓链路）。
+		if allCEXLegs(legs) {
+			autoFlattenCtx := context.WithoutCancel(ctx) // 收平不随 Execute 超时中断
+			flattened, flattenErr := p.autoFlattenLEGGED(autoFlattenCtx, posID, legs, results)
+			if flattenErr != nil {
+				log.Printf("[exec] position %d LEGGED auto-flatten failed: %v (manual fallback)", posID, flattenErr)
+			}
+			if flattened {
+				_ = p.store.UpdatePositionStatus(ctx, posID, "CLOSED")
+				_ = p.store.InsertAlert(ctx, &posID, "critical",
+					fmt.Sprintf("position %d LEGGED auto-flattened (open legs closed, root cause: partial fill)", posID))
+				status = "CLOSED"
+			} else {
+				_ = p.store.InsertAlert(ctx, &posID, "critical",
+					fmt.Sprintf("position %d LEGGED: %d/%d legs filled, auto-flatten incomplete", posID, filled, len(legs)))
+			}
+		} else {
+			// critical 告警
+			_ = p.store.InsertAlert(ctx, nil, "critical",
+				fmt.Sprintf("position %d LEGGED: %d/%d legs filled", posID, filled, len(legs)))
+		}
 	}
 
 	return &ExecuteResult{
@@ -249,4 +268,59 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 		Status:     status,
 		Legs:       results,
 	}, nil
+}
+
+// allCEXLegs 判断 legs 是否全部为 CEX 腿（无 MT4/MT5）。
+func allCEXLegs(legs []LegSpec) bool {
+	for _, l := range legs {
+		if isMTVenueKey(l.VenueKey) {
+			return false
+		}
+	}
+	return true
+}
+
+// autoFlattenLEGGED 对 LEGGED 仓的 FILLED 腿反向 MARKET 平仓（D-127 P3b）。
+// 全部收平成功 → true；任一失败 → false（维持 LEGGED，人工兜底）。
+// 复用既有 CEX 平仓链路（binance positionSide/reduceOnly D-108 P2、okx posSide D-125）。
+func (p *Pipeline) autoFlattenLEGGED(ctx context.Context, posID int64, legs []LegSpec, results []LegResult) (bool, error) {
+	allFlattened := true
+	for i, r := range results {
+		if r.Status != "FILLED" || r.Qty <= 0 {
+			continue
+		}
+		leg := legs[i]
+		exe, ok := p.registry.Get(leg.VenueKey)
+		if !ok {
+			log.Printf("[exec] auto-flatten pos=%d leg=%d: no executor for %s", posID, i, leg.VenueKey)
+			allFlattened = false
+			continue
+		}
+		closeSide := "SELL"
+		if leg.Side == "SELL" {
+			closeSide = "BUY"
+		}
+		var positionSide string
+		switch leg.Side {
+		case "BUY":
+			positionSide = "long"
+		case "SELL":
+			positionSide = "short"
+		}
+		fill, err := exe.PlaceOrder(ctx, Order{
+			Symbol:       leg.VenueSymbol,
+			Side:         closeSide,
+			Qty:          r.Qty,
+			Venue:        leg.VenueKey,
+			PositionSide: positionSide,
+			PosID:        posID,
+		})
+		if err != nil {
+			log.Printf("[exec] auto-flatten pos=%d leg=%d venue=%s: %v", posID, i, leg.VenueKey, err)
+			allFlattened = false
+			continue
+		}
+		log.Printf("[exec] auto-flatten pos=%d leg=%d venue=%s: closed qty=%v price=%v", posID, i, leg.VenueKey, fill.Qty, fill.Price)
+	}
+	return allFlattened, nil
 }
