@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"strconv"
 	"strings"
 
 	"arb/internal/exec"
@@ -157,66 +158,70 @@ func (s *Service) QtyBelowMinStep(venueKey, venueSymbol string, qty float64) boo
 // floorToStepQty 按品种精度向下取整 qty（D-070 修复 Binance -1111 / MT5 Invalid volume）。
 // MT 腿：查 legVolumeStep（SymbolParams VolumeStep），未接线/未知用默认 0.01。
 // D-070 CFD 适配：取整后为 0 则回退到 1 个 step（最小可交易量），防 qty=0 无法交易。
-// CEX 腿：按品种 stepSize 取整；未知品种默认 0.01。
+// CEX 腿：按品种 stepSize 取整；D-127 P2 起未知品种返回 0（fail-closed，由 P3 预检拒单）。
 func (s *Service) floorToStepQty(venueKey, symbol string, qty float64) float64 {
-	if strings.HasSuffix(venueKey, ":mt5") || strings.HasSuffix(venueKey, ":mt4") {
+	if isMTVenue(venueKey) {
 		step := 0.01 // 默认 MT5 手数步长
 		if s.legVolumeStep != nil {
 			if vs, ok := s.legVolumeStep(venueKey, symbol); ok && vs > 0 {
 				step = vs
 			}
 		}
-		result := math.Floor(qty/step) * step
+		result := floorToStep(qty, step)
 		if result <= 0 {
 			result = step // 回退到最小可交易量 1 step
 		}
 		log.Printf("[exec] floorToStepQty mt %s %s qty=%.6f step=%.4f → %.6f", venueKey, symbol, qty, step, result)
 		return result
 	}
-	// CEX：按品种 stepSize
-	step := cexStepSize(symbol)
-	result := math.Floor(qty/step) * step
+	// CEX：按品种 stepSize（D-127 P2：cexStepSize 返回 0=未知，fail-closed）
+	step := s.cexStepSize(symbol)
+	if step <= 0 {
+		log.Printf("[exec] floorToStepQty cex %s %s qty=%.6f step=0 → 0 (fail-closed, unknown symbol)", venueKey, symbol, qty)
+		return 0
+	}
+	result := floorToStep(qty, step)
 	log.Printf("[exec] floorToStepQty cex %s %s qty=%.6f step=%.6f → %.6f", venueKey, symbol, qty, step, result)
 	return result
 }
 
+// floorToStep 纯函数：向下取整 qty 到 step 的整数倍（D-127 P1）。
+// 修复两个浮点伪影：
+//   - 缺陷①乘法伪影：math.Floor(1.400639/0.01)*0.01 = 1.4000000000000001（17 位序列化 → binance -1111）。
+//     解法：按 step 小数位 round 回正——140*0.01*100=140.000…03 → Round(140.000…03)=140 → 140/100=1.4。
+//   - 缺陷③除法下溢：1137.4/0.01 = 113739.99999999999 → Floor=113739 → qty 静默缩水 0.01。
+//     解法：epsilon 1e-9 加在除法结果上 → 113740.000… → Floor=113740。
+//
+// step<=0 → 返回 0（调用方 fail-closed）。
+func floorToStep(qty, step float64) float64 {
+	if step <= 0 || qty <= 0 {
+		return 0
+	}
+	n := math.Floor(qty/step + 1e-9) // epsilon 防除法下溢
+	dec := stepDecimals(step)        // 0.01→2, 0.1→1, 1→0
+	p := math.Pow10(dec)
+	return float64(math.Round(n*step*p)) / p // round 防乘法伪影
+}
+
+// stepDecimals 解析 step 的小数位数（0.01→2, 0.1→1, 1→0, 0.001→3）。
+// 用 strconv 格式化解析，避免 log10 浮点误差。
+func stepDecimals(step float64) int {
+	s := strconv.FormatFloat(step, 'f', -1, 64)
+	dot := strings.IndexByte(s, '.')
+	if dot < 0 {
+		return 0
+	}
+	return len(s) - dot - 1
+}
+
 // cexStepSize 返回 CEX 品种的 stepSize（向下取整单位）。
-// 已知品种用实测值；未知品种默认 0.01（2位小数，多数山寨币）。
-func cexStepSize(symbol string) float64 {
-	// 提取基础币种（去 USDT/USD 后缀）
-	// OKX perp 格式 XXX-USDT-SWAP：先去 -SWAP，再去 -USDT/USDT
-	base := symbol
-	for _, suf := range []string{"-SWAP", "-USDT", "-USD", "USDT", "USD"} {
-		base = strings.TrimSuffix(base, suf)
+// D-127 P2：查 stepMeta（运行时表 → 硬编码 fallback）→ 未知返回 0（fail-closed）。
+// stepMeta nil = 仅用硬编码 fallback（测试场景）。
+func (s *Service) cexStepSize(symbol string) float64 {
+	if s.stepMeta != nil {
+		if step := s.stepMeta.step(symbol); step > 0 {
+			return step
+		}
 	}
-	switch base {
-	case "BTC":
-		return 0.001 // binance spot 0.00001, perp 0.001；取保守 0.001
-	case "ETH":
-		return 0.001 // binance spot 0.0001, perp 0.001
-	case "TRX":
-		return 1 // binance spot 1, perp 1
-	case "SOL":
-		return 0.01
-	case "BNB":
-		return 0.01
-	case "XRP":
-		return 1
-	case "DOGE":
-		return 1
-	case "ADA":
-		return 1
-	case "MATIC":
-		return 1
-	case "DOT":
-		return 0.01
-	case "LINK":
-		return 0.01
-	case "LTC":
-		return 0.001
-	case "AVAX":
-		return 0.01
-	default:
-		return 0.01 // 未知品种保守 2 位小数
-	}
+	return cexStepSizeFallback(symbol)
 }

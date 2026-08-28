@@ -86,6 +86,8 @@ type Service struct {
 	commissionFor func(venueKey string) float64
 	// D-111：收敛型实时 bps 滑点成本（cfg.SlippageBps，slippageCost = slippageBps * 2）。
 	slippageBps float64
+	// D-127 P2：binance:perp stepSize 权威元数据（运行时 exchangeInfo + fallback）。nil = 仅用 fallback。
+	stepMeta *cexStepMeta
 }
 
 // FrontConfig 前端展示阈值（D-077 修复⑪B N7，后端 config 单一真相）。
@@ -164,3 +166,6 @@ func (s *Service) SetLegVolumeStep(f func(venueKey, venueSymbol string) (float64
 func (s *Service) SetOppContractSize(f func(canonical, venueKey string) (float64, bool)) {
 	s.oppContractSize = f
 }
+
+// SetStepMeta 注入 binance:perp stepSize 权威元数据（D-127 P2）。nil = 仅用硬编码 fallback。
+func (s *Service) SetStepMeta(m *cexStepMeta) { s.stepMeta = m }

@@ -223,14 +223,6 @@ func binanceHMAC(secret, query string) string {
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-// floorToStep 向下取整到 step 的整数倍（对齐 Binance LOT_SIZE 精度）。
-func floorToStep(v, step float64) float64 {
-	if v < 0 {
-		return 0
-	}
-	return math.Floor(v/step+1e-9) * step
-}
-
 // healOKXPerp 自愈关闭 instId 上残留的 perp 持仓（历史 bug 双向仓），使 demo 往返测试幂等。
 // 平仓量 = |pos|，方向/posSide 按原持仓侧（long→SELL、short→BUY），保证减仓而非新开反向仓。
 func healOKXPerp(ctx context.Context, e *exec.CEXExecutor, instID string, t *testing.T) error {

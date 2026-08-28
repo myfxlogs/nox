@@ -18,6 +18,19 @@ import (
 
 // --- 执行（§13） ---
 
+// validateLegQtys D-127 P3a：下单前预检——任一腿 qty<=0 → 拒 combo（fail-closed）。
+// floorToStepQty 返回 0 = 未知品种（step=0）或 qty 过小取整后为 0；
+// 旧路径会发 qty=0 订单被 venue 拒单 → 浪费一次 LEGGED 风险。
+// 此预检在 pipeline.Execute 前拦截，不落 position、不开任何腿。
+func (s *Service) validateLegQtys(legs []exec.LegSpec) error {
+	for _, l := range legs {
+		if l.Qty <= 0 {
+			return fmt.Errorf("reject combo: leg %s %s qty invalid (%.6f≤0)", l.VenueKey, l.VenueSymbol, l.Qty)
+		}
+	}
+	return nil
+}
+
 // metaForType 按策略型构造 PositionMeta（D-087 §3.4 typed 化）。
 // openBps 语义随型不同：收敛型=一次性 bps / SWAPARB=入场 spread / CARRY=net bps / FUNDING 族=年化百分点。
 // SWAPARB 的 SwapBpsDaily 由调用方（trySwapArb）事后补写——本函数无 netSwap 值，仅写 EntrySpreadBps。
@@ -82,6 +95,10 @@ func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, request
 	}
 	legs, err := s.resolveLegs(found, qty)
 	if err != nil {
+		return "FAILED", err.Error(), 0
+	}
+	if err := s.validateLegQtys(legs); err != nil { // D-127 P3a：qty 预检 fail-closed
+		log.Printf("[exec] %v", err)
 		return "FAILED", err.Error(), 0
 	}
 	result, err := s.pipeline.Execute(ctx, oppID, requestID, found.Type, legs)
@@ -172,6 +189,10 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 	legs := []exec.LegSpec{
 		{VenueKey: venueBuy, VenueSymbol: qbuy.VenueSymbol, Side: "BUY", Qty: qty, PriceExpected: qbuy.Ask},
 		{VenueKey: venueSell, VenueSymbol: qsell.VenueSymbol, Side: "SELL", Qty: sellQty, PriceExpected: qsell.Bid},
+	}
+	if err := s.validateLegQtys(legs); err != nil { // D-127 P3a：qty 预检 fail-closed
+		log.Printf("[exec] %v", err)
+		return "FAILED", err.Error(), 0
 	}
 	result, err := s.pipeline.Execute(ctx, oppID, requestID, strategyType, legs)
 	if err != nil {
