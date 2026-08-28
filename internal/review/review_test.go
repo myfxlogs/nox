@@ -2,6 +2,7 @@ package review
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +15,8 @@ type fakeStore struct {
 	legs      map[int64][]pgstore.PositionLeg
 	cashflows map[int64][]pgstore.Cashflow
 	upserts   []*pgstore.KnowledgeEntry
+	// D-126 P2：csByBrokerSymbol[(venue,brokerSymbol)] = contract_size；未配置默认 1。
+	csByBrokerSymbol map[[2]string]float64
 }
 
 func (f *fakeStore) ListPositions(ctx context.Context, status string, limit, offset int) ([]pgstore.Position, error) {
@@ -37,6 +40,16 @@ func (f *fakeStore) ListCashflows(ctx context.Context, posID int64) ([]pgstore.C
 func (f *fakeStore) UpsertKnowledgeEntry(ctx context.Context, e *pgstore.KnowledgeEntry) (int64, error) {
 	f.upserts = append(f.upserts, e)
 	return int64(len(f.upserts)), nil
+}
+
+// D-126 P2：fakeStore 实现 ContractSizeByBrokerSymbol。
+// 未配置 csByBrokerSymbol 时返回 ok=false → notionalFromLegs 回退 cs=1（CEX 语义）。
+func (f *fakeStore) ContractSizeByBrokerSymbol(ctx context.Context, venueKey, brokerSymbol string) (float64, bool, error) {
+	if f.csByBrokerSymbol == nil {
+		return 0, false, nil
+	}
+	cs, ok := f.csByBrokerSymbol[[2]string{venueKey, brokerSymbol}]
+	return cs, ok, nil
 }
 
 func floatPtr(v float64) *float64    { return &v }
@@ -176,5 +189,41 @@ func TestReviewSkipsIncomplete(t *testing.T) {
 	}
 	if len(f.upserts) != 0 {
 		t.Fatalf("缺回填应 0 条，实际 %d", len(f.upserts))
+	}
+}
+
+// D-126 P2：验证 notionalFromLegs 乘 contract_size 后 deviation 正确。
+// 场景：BRENT cs=1000, qty=1, price=80 → notional=80000（非旧 bug 的 80）。
+// expected_net_bps=20（CROSS_VENUE 快照），realized=160USD → 160/80000×1e4=20bps → deviation=0 → spot_on。
+// 旧 bug（不乘 CS）：notional=80 → 160/80×1e4=20000bps → deviation=19980 → better_than_expected（假象）。
+func TestReviewNotionalMultipliesContractSize(t *testing.T) {
+	opened := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	closed := opened.Add(30 * 24 * time.Hour)
+	f := &fakeStore{
+		positions: []pgstore.Position{
+			mkPos(1, "CROSS_VENUE", 20, 160.0, opened, closed),
+		},
+		legs: map[int64][]pgstore.PositionLeg{
+			1: {{Side: "BUY", Symbol: "UKOILm", Venue: "1314615:mt5", Qty: 1, PriceExpected: 80}},
+		},
+		cashflows: map[int64][]pgstore.Cashflow{},
+		csByBrokerSymbol: map[[2]string]float64{
+			{"1314615:mt5", "UKOILm"}: 1000,
+		},
+	}
+	cfg := Config{MinSamples: 3, CrossBiasBps: 1.0, CarryBiasAnnualPct: 1.0}
+	if err := Run(context.Background(), f, cfg); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(f.upserts) != 1 {
+		t.Fatalf("期望 1 条，实际 %d", len(f.upserts))
+	}
+	e := f.upserts[0]
+	if e.Verdict != "spot_on" {
+		t.Errorf("verdict=%q（期望 spot_on，证明 CS 乘法生效），rationale=%q", e.Verdict, e.Rationale)
+	}
+	// 验证 rationale 中 notional=80000（非 80）
+	if !strings.Contains(e.Rationale, "notional=80000.00") {
+		t.Errorf("rationale 未含 notional=80000.00，实际=%q", e.Rationale)
 	}
 }

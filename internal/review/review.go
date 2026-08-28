@@ -25,6 +25,8 @@ type Store interface {
 	ListPositionLegs(ctx context.Context, posID int64) ([]pgstore.PositionLeg, error)
 	ListCashflows(ctx context.Context, posID int64) ([]pgstore.Cashflow, error)
 	UpsertKnowledgeEntry(ctx context.Context, e *pgstore.KnowledgeEntry) (int64, error)
+	// D-126 P2：notionalFromLegs 需按 (venueKey, broker_symbol) 查 contract_size。
+	ContractSizeByBrokerSymbol(ctx context.Context, venueKey, brokerSymbol string) (float64, bool, error)
 }
 
 // Config 复盘阈值（D-035：全部经 config 注入，禁止散落硬编码）。
@@ -71,7 +73,13 @@ func Run(ctx context.Context, st Store, cfg Config) error {
 			return fmt.Errorf("cashflows of pos %d: %w", p.ID, err)
 		}
 
-		notional, buySymbol, buyVenue := notionalFromLegs(legs)
+		notional, buySymbol, buyVenue := notionalFromLegs(legs, func(vk, bs string) float64 {
+			cs, ok, _ := st.ContractSizeByBrokerSymbol(ctx, vk, bs)
+			if !ok {
+				return 0
+			}
+			return cs
+		})
 		if notional <= 0 {
 			continue // 无买腿或 qty=0，无法算名义额
 		}
@@ -147,8 +155,10 @@ func Run(ctx context.Context, st Store, cfg Config) error {
 }
 
 // notionalFromLegs 从买腿计算名义额（positions 无 notional 列，§2.11）。
-// 名义额 = 买腿 qty × price（price_actual 优先，回退 price_expected）。
-func notionalFromLegs(legs []pgstore.PositionLeg) (notional float64, symbol, venue string) {
+// 名义额 = 买腿 qty × price × contract_size（price_actual 优先，回退 price_expected）。
+// D-126 P2：乘 contract_size——旧版漏乘致 review deviation 被放大 1000 倍（BRENT cs=1000）。
+// csFn 按 (venueKey, broker_symbol) 查 CS；未命中回退 1（CEX 无 CS 概念）。
+func notionalFromLegs(legs []pgstore.PositionLeg, csFn func(venueKey, brokerSymbol string) float64) (notional float64, symbol, venue string) {
 	for i := range legs {
 		l := &legs[i]
 		if l.Side != "BUY" {
@@ -158,11 +168,15 @@ func notionalFromLegs(legs []pgstore.PositionLeg) (notional float64, symbol, ven
 		if l.PriceActual != nil {
 			price = *l.PriceActual
 		}
+		cs := csFn(l.Venue, l.Symbol)
+		if cs <= 0 {
+			cs = 1 // 安全回退（CEX 无 CS 概念，或未映射）
+		}
 		if symbol == "" {
 			symbol = l.Symbol
 			venue = l.Venue
 		}
-		notional += l.Qty * price
+		notional += l.Qty * price * cs
 	}
 	return notional, symbol, venue
 }
