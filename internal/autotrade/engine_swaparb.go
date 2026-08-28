@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"arb/internal/combo"
-	"arb/internal/dashboard"
 	"arb/internal/fact"
 	"arb/internal/store/pgstore"
 )
@@ -232,6 +231,11 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 		log.Printf("[autotrade] SWAPARB skip %s %s/%s: %s", canonical, venueLong, venueShort, reason)
 		return
 	}
+	// D-132 T1：venue 级敞口门——两腿 venue SWAPARB 合计裸露 + 新仓 ≤ equity × cap，否则 skip。
+	if !e.service.SwapArbVenueExposureOK(ctx, venueLong, venueShort, notional) {
+		log.Printf("[autotrade] SWAPARB skip %s: venue exposure cap", canonical)
+		return
+	}
 	// A 修复：qty 定尺寸用 usdPerLot（买腿 ask 价）——原 notional/ask 是 USD÷JPY 币种混算。
 	// qty = notional(USD) ÷ usdPerLot(买腿) = USD ÷ (CS×price÷USDJPY) → 手数按计价币正确换算。
 	usdPerLotLong, ok := e.service.USDPerLotForLeg(canonical, venueLong, "ask")
@@ -276,24 +280,4 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 		},
 	}
 	e.gate.Submit(ctx, intent)
-}
-
-// maybePublishFundingNeed 发布资金注入提醒（D-072）：每日每组合至多 1 条（内存节流）。
-// NeedUSD 由 SwapArbFundingNeedUSD 侧算（不改 SwapArbNotional 签名）；topic 未接线时 Service.PublishFundingNeed 静默丢弃。
-func (e *Engine) maybePublishFundingNeed(canonical, venueLong, venueShort, reason string) {
-	key := fmt.Sprintf("SWAPARB:%s:%s:%s", canonical, venueLong, venueShort)
-	today := time.Now().Format("2006-01-02")
-	if e.fundingNeedSent[key] == today {
-		return
-	}
-	needUSD, _ := e.service.SwapArbFundingNeedUSD(canonical, venueLong, venueShort)
-	e.service.PublishFundingNeed(dashboard.FundingNeedNotice{
-		Canonical:  canonical,
-		VenueLong:  venueLong,
-		VenueShort: venueShort,
-		Reason:     reason,
-		NeedUSD:    needUSD,
-		Ts:         time.Now(),
-	})
-	e.fundingNeedSent[key] = today
 }
