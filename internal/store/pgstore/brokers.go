@@ -217,6 +217,26 @@ func (s *Store) ContractSizeByCanonical(ctx context.Context, venue, canonical st
 	return val, true, nil
 }
 
+// ContractSizeByBrokerSymbol 按 (venueKey, broker_symbol) 查 contract_size（D-126 P2）。
+// review.go notionalFromLegs 拿到的是 PositionLeg.Venue（venueKey）和 PositionLeg.Symbol（broker_symbol），
+// 非 canonical——需用 broker_symbol 查。venueKey 经 notional.VenueAccount 归一。
+func (s *Store) ContractSizeByBrokerSymbol(ctx context.Context, venueKey, brokerSymbol string) (float64, bool, error) {
+	venue := notional.VenueAccount(venueKey)
+	var val float64
+	err := s.pool.QueryRow(ctx, `
+		SELECT contract_size FROM broker_symbol_map
+		WHERE venue = $1 AND broker_symbol = $2 AND contract_size IS NOT NULL
+		LIMIT 1
+	`, venue, brokerSymbol).Scan(&val)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, false, nil
+		}
+		return 0, false, err
+	}
+	return val, true, nil
+}
+
 // BackfillSymbolContracts 为 venue 下 contract_size 为 NULL 的既有映射补写权威合约
 // （broker 自取，D-042 后启动时回填；历史映射先于合约采集功能存在，NULL 使规格画像为空 →
 // 校验形同虚设）。未命中符号保持 NULL（合约未知，跳过校验，合法）。
