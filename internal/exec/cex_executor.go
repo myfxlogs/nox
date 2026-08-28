@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -34,6 +35,10 @@ type CEXExecutor struct {
 	// D-120：gate futures 合约规格缓存（contract → quanto_multiplier，避免每单查）。
 	gateQuanto map[string]float64
 	dualSideMu sync.Mutex // 保护 dualSide/dualSideProbed 探测
+	// D-125：okx perp 合约面值缓存（instId → ctVal，避免每单查）。
+	// okx swap sz 单位=张数，o.Qty 是基础币数量 → sz=qty/ctVal。
+	okxCtVal map[string]float64
+	okxLotSz map[string]float64 // instId → lotSz（最小张数，sz 必须是其倍数）
 	// AlertFn 平仓被拒时 critical 告警（main 注入 store.InsertAlert；nil=不告警，测试用）。
 	AlertFn func(posID *int64, level, msg string)
 }
@@ -108,7 +113,26 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 	}
 	sz := strconv.FormatFloat(o.Qty, 'f', -1, 64)
 	var bodyStr string
+	var ctVal float64 // D-125：okx perp 合约面值（perp 分支赋值，Fill 处用）
 	if e.venueType == "perp" {
+		// D-125：okx swap sz 单位=张数，o.Qty 是基础币数量 → sz=qty/ctVal。
+		// 如 TRX-USDT-SWAP ctVal=1000 → 2964 TRX = 2.964 张。不换算则 2964 张=2964000 TRX，
+		// 名义价值~$100万，保证金需求远超账户余额 → 51008 Insufficient margin 拒单 → LEGGED。
+		var lotSz float64
+		var err error
+		ctVal, lotSz, err = e.okxContractVal(ctx, instID)
+		if err != nil {
+			return Fill{}, fmt.Errorf("okx contract spec: %w", err)
+		}
+		szContracts := o.Qty / ctVal
+		// sz 必须是 lotSz 的倍数（okx 51121 Order quantity must be a multiple of the lot size）。
+		// 向下取整到 lotSz 倍数（不开过量仓位），如 2.964/0.01=296.4 → 296×0.01=2.96 张。
+		lots := math.Floor(szContracts / lotSz)
+		szContracts = lots * lotSz
+		if szContracts < lotSz { // 最小 1 个 lot
+			return Fill{}, fmt.Errorf("okx qty %.6f / ctVal %.6f = %.6f 张 < lotSz %.6f（最小张数）", o.Qty, ctVal, o.Qty/ctVal, lotSz)
+		}
+		sz = strconv.FormatFloat(szContracts, 'f', -1, 64)
 		// swap/futures 必须带 posSide（D-059 实施修正② 实测 51000）。本账户 posMode=long_short_mode
 		// （account/config 实测）。开仓传空 → buy=long / sell=short 派生；平仓由调用方显式传
 		// PositionSide=原持仓侧（BUY 开 long → SELL 平 + posSide=long 才减 long，D-059 实测
@@ -186,6 +210,10 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 	}
 	qty, _ := strconv.ParseFloat(d.AccFillSz, 64)
 	avgPx, _ := strconv.ParseFloat(d.AvgPx, 64)
+	// D-125：okx perp accFillSz 是张数，转回基础币数量 = 张数 × ctVal。
+	if e.venueType == "perp" {
+		qty *= ctVal
+	}
 	if qty <= 0 || avgPx <= 0 {
 		// 市价单 POST 响应可能先于撮合返回（accFillSz=0/avgPx 空，D-059 实施修正② 实测：
 		// 订单实际成交但响应无成交数据）→ 轮询订单状态拿真实成交，防生产记 0 qty 持仓。
@@ -212,6 +240,9 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 			if st.AccFillSz != "" && st.AvgPx != "" {
 				if q, err := strconv.ParseFloat(st.AccFillSz, 64); err == nil && q > 0 {
 					qty = q
+					if e.venueType == "perp" { // D-125：轮询拿到的也是张数 → 转基础币
+						qty *= ctVal
+					}
 				}
 				if p, err := strconv.ParseFloat(st.AvgPx, 64); err == nil && p > 0 {
 					avgPx = p

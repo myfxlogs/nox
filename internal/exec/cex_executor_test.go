@@ -239,26 +239,41 @@ func TestCEXExecutor_OKXOrder(t *testing.T) {
 	}
 }
 
-// TestCEXExecutor_OKXPerpTdMode 验证 OKX perp：tdMode=cross + instId 补 -SWAP。
+// TestCEXExecutor_OKXPerpTdMode 验证 OKX perp：tdMode=cross + instId 补 -SWAP + D-125 ctVal 换算。
 func TestCEXExecutor_OKXPerpTdMode(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		raw, _ := io.ReadAll(r.Body)
-		var body map[string]string
-		_ = json.Unmarshal(raw, &body)
-		if body["tdMode"] != "cross" {
-			t.Errorf("perp tdMode = %q, want cross", body["tdMode"])
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/public/instruments":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"1000","lotSz":"0.01"}]}`)
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v5/trade/order":
+			raw, _ := io.ReadAll(r.Body)
+			var body map[string]string
+			_ = json.Unmarshal(raw, &body)
+			if body["tdMode"] != "cross" {
+				t.Errorf("perp tdMode = %q, want cross", body["tdMode"])
+			}
+			if body["instId"] != "TRX-USDT-SWAP" {
+				t.Errorf("perp instId = %q, want TRX-USDT-SWAP", body["instId"])
+			}
+			// D-125：qty=10 TRX / ctVal=1000 = 0.01 张，lotSz=0.01 → 1 lot = 0.01 张
+			if body["sz"] != "0.01" {
+				t.Errorf("perp sz = %q, want 0.01 (10/1000, 1 lot)", body["sz"])
+			}
+			_, _ = io.WriteString(w, `{"code":"0","msg":"","data":[{"ordId":"1","sCode":"0","accFillSz":"0.01","avgPx":"0.3342"}]}`)
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
-		if body["instId"] != "TRX-USDT-SWAP" {
-			t.Errorf("perp instId = %q, want TRX-USDT-SWAP", body["instId"])
-		}
-		// accFillSz/avgPx 带上：避免触发成交轮询（否则 mock 收到意外的 GET）。
-		_, _ = io.WriteString(w, `{"code":"0","msg":"","data":[{"ordId":"1","sCode":"0","accFillSz":"10","avgPx":"0.3342"}]}`)
 	}))
 	defer srv.Close()
 
 	e := NewCEXExecutor("okx", "perp", "k", "s", "p", srv.URL, true)
-	if _, err := e.PlaceOrder(context.Background(), Order{Symbol: "TRX-USDT-SWAP", Side: "SELL", Qty: 10}); err != nil {
+	fill, err := e.PlaceOrder(context.Background(), Order{Symbol: "TRX-USDT-SWAP", Side: "SELL", Qty: 10})
+	if err != nil {
 		t.Fatalf("PlaceOrder: %v", err)
+	}
+	// D-125：Fill.Qty 转回基础币 = 0.01 张 × 1000 = 10 TRX
+	if fill.Qty != 10 {
+		t.Errorf("Fill.Qty = %v, want 10 (0.01 张 × ctVal 1000)", fill.Qty)
 	}
 }
 
@@ -266,13 +281,20 @@ func TestCEXExecutor_OKXPerpTdMode(t *testing.T) {
 // SELL 平 long 须带 posSide=long（减仓），而非派生 short 新开空仓（D-059 实施修正② 实测）。
 func TestCEXExecutor_OKXPerpPosSideOverride(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		raw, _ := io.ReadAll(r.Body)
-		var body map[string]string
-		_ = json.Unmarshal(raw, &body)
-		if body["side"] != "sell" || body["posSide"] != "long" {
-			t.Errorf("平 long: side=%q posSide=%q, want sell/long", body["side"], body["posSide"])
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/public/instruments":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"0.01","lotSz":"0.01"}]}`) // BTC ctVal=0.01 BTC/张
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v5/trade/order":
+			raw, _ := io.ReadAll(r.Body)
+			var body map[string]string
+			_ = json.Unmarshal(raw, &body)
+			if body["side"] != "sell" || body["posSide"] != "long" {
+				t.Errorf("平 long: side=%q posSide=%q, want sell/long", body["side"], body["posSide"])
+			}
+			_, _ = io.WriteString(w, `{"code":"0","msg":"","data":[{"ordId":"88","sCode":"0","accFillSz":"1","avgPx":"71904.8"}]}`)
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
-		_, _ = io.WriteString(w, `{"code":"0","msg":"","data":[{"ordId":"88","sCode":"0","accFillSz":"0.01","avgPx":"71904.8"}]}`)
 	}))
 	defer srv.Close()
 
@@ -379,6 +401,28 @@ func TestOKXSignKnownVector(t *testing.T) {
 	want := base64.StdEncoding.EncodeToString(hmacSHA256("secret", "2026-08-20T00:00:00.000ZPOST/api/v5/trade/order{}"))
 	if got != want {
 		t.Errorf("okxSign = %q, want %q", got, want)
+	}
+}
+
+// TestCEXExecutor_OKXPerpCtValConversion D-125：okx perp qty 换算边界。
+// qty=5 TRX / ctVal=1000 = 0.005 张 < lotSz 0.01 → 拒单（防无效下单）。
+func TestCEXExecutor_OKXPerpCtValConversion(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v5/public/instruments" {
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"1000","lotSz":"0.01"}]}`)
+			return
+		}
+		t.Errorf("unexpected %s %s（qty 过小应拒单，不应下单）", r.Method, r.URL.Path)
+	}))
+	defer srv.Close()
+
+	e := NewCEXExecutor("okx", "perp", "k", "s", "p", srv.URL, true)
+	_, err := e.PlaceOrder(context.Background(), Order{Symbol: "TRX-USDT-SWAP", Side: "SELL", Qty: 5})
+	if err == nil {
+		t.Fatal("want error for qty=5/ctVal=1000=0.005 张 < lotSz 0.01，got nil")
+	}
+	if !strings.Contains(err.Error(), "lotSz") {
+		t.Errorf("error should mention lotSz, got %v", err)
 	}
 }
 

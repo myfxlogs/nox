@@ -160,9 +160,14 @@ func TestD108P2_BinancePerpRejectedCritical(t *testing.T) {
 func TestD108P2_OKXPerpReduceOnly(t *testing.T) {
 	var capturedBody string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		capturedBody = string(body)
-		_, _ = io.WriteString(w, `{"code":"0","data":[{"ordId":"123","sCode":"0","avgPx":"50000","accFillSz":"1.0"}]}`)
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/public/instruments":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"0.01","lotSz":"0.01"}]}`)
+		default:
+			body, _ := io.ReadAll(r.Body)
+			capturedBody = string(body)
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ordId":"123","sCode":"0","avgPx":"50000","accFillSz":"1.0"}]}`)
+		}
 	}))
 	defer srv.Close()
 
@@ -180,9 +185,14 @@ func TestD108P2_OKXPerpReduceOnly(t *testing.T) {
 func TestD120_OKXPerpOpenNoReduceOnly(t *testing.T) {
 	var capturedBody string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		capturedBody = string(body)
-		_, _ = io.WriteString(w, `{"code":"0","data":[{"ordId":"456","sCode":"0","avgPx":"50000","accFillSz":"1.0"}]}`)
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/public/instruments":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"0.01","lotSz":"0.01"}]}`)
+		default:
+			body, _ := io.ReadAll(r.Body)
+			capturedBody = string(body)
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ordId":"456","sCode":"0","avgPx":"50000","accFillSz":"1.0"}]}`)
+		}
 	}))
 	defer srv.Close()
 
@@ -199,7 +209,12 @@ func TestD120_OKXPerpOpenNoReduceOnly(t *testing.T) {
 // TestD108P2_OKXPerpRejectedCritical OKX 被拒 → critical 告警。
 func TestD108P2_OKXPerpRejectedCritical(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.WriteString(w, `{"code":"1","msg":"All operations failed","data":[{"sCode":"51000","sMsg":"Parameter error"}]}`)
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/public/instruments":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"0.01","lotSz":"0.01"}]}`)
+		default:
+			_, _ = io.WriteString(w, `{"code":"1","msg":"All operations failed","data":[{"sCode":"51000","sMsg":"Parameter error"}]}`)
+		}
 	}))
 	defer srv.Close()
 

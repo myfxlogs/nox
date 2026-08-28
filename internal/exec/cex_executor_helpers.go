@@ -198,3 +198,61 @@ func okxSign(secret, prehash string) string {
 	mac.Write([]byte(prehash))
 	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
 }
+
+// okxContractVal 查 okx swap 合约面值 ctVal + 最小张数 lotSz。
+// 公开端点 GET /api/v5/public/instruments?instType=SWAP&instId=XXX 无需签名。
+// 缓存 per-executor（ctVal/lotSz 不变），避免每单查。D-125。
+func (e *CEXExecutor) okxContractVal(ctx context.Context, instID string) (ctVal, lotSz float64, err error) {
+	if e.okxCtVal != nil {
+		if v, ok := e.okxCtVal[instID]; ok {
+			if l, ok2 := e.okxLotSz[instID]; ok2 {
+				return v, l, nil
+			}
+		}
+	}
+	endpoint := "/api/v5/public/instruments?instType=SWAP&instId=" + instID
+	req, err := http.NewRequestWithContext(ctx, "GET", e.baseURL+endpoint, nil)
+	if err != nil {
+		return 0, 0, fmt.Errorf("okx instruments req: %w", err)
+	}
+	resp, err := e.client.Do(req)
+	if err != nil {
+		return 0, 0, fmt.Errorf("okx instruments %s: %w", instID, err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, 0, fmt.Errorf("okx instruments read: %w", err)
+	}
+	if resp.StatusCode != 200 {
+		return 0, 0, fmt.Errorf("okx instruments %s: http %d: %s", instID, resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var out struct {
+		Code string `json:"code"`
+		Data []struct {
+			CtVal  string `json:"ctVal"`
+			LotSz  string `json:"lotSz"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return 0, 0, fmt.Errorf("okx instruments json: %w", err)
+	}
+	if out.Code != "0" || len(out.Data) == 0 {
+		return 0, 0, fmt.Errorf("okx instruments %s: code=%s data_len=%d", instID, out.Code, len(out.Data))
+	}
+	ctVal, err = strconv.ParseFloat(out.Data[0].CtVal, 64)
+	if err != nil || ctVal <= 0 {
+		return 0, 0, fmt.Errorf("okx instruments %s: ctVal=%q invalid", instID, out.Data[0].CtVal)
+	}
+	lotSz, err = strconv.ParseFloat(out.Data[0].LotSz, 64)
+	if err != nil || lotSz <= 0 {
+		return 0, 0, fmt.Errorf("okx instruments %s: lotSz=%q invalid", instID, out.Data[0].LotSz)
+	}
+	if e.okxCtVal == nil {
+		e.okxCtVal = make(map[string]float64)
+		e.okxLotSz = make(map[string]float64)
+	}
+	e.okxCtVal[instID] = ctVal
+	e.okxLotSz[instID] = lotSz
+	return ctVal, lotSz, nil
+}
