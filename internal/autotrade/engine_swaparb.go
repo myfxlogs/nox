@@ -166,9 +166,9 @@ func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 	// D-077 修复⑪B N5：删除 ==0 → 0.2 二次默认（config 已有 env 默认 0.2）。
 	// 显式 0 = 全扫语义恢复（用户可通过 ARB_AUTOTRADE_MIN_NET_SWAP_BPS=0 关闭门槛）。
 	for _, lf := range longFacts {
-		if lf.Value <= 0 {
-			continue
-		}
+		// D-126 P1：删除 lf.Value<=0 单腿正 swap 过滤——套利看净 swap（long+short），
+		// 非单腿。指数/商品/加密 CFD 的 swap_long 通常为负（broker 收过夜费），
+		// 旧过滤挡住了所有非 FX 品种。净 swap 门槛由下方 netSwap < minNetSwapBps 守卫。
 		for sfKey, sfEntry := range shortMap {
 			if sfKey.canonical != lf.Symbol {
 				continue
