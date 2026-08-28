@@ -66,17 +66,18 @@ func (s *Store) HasCashflowForDay(ctx context.Context, posID int64, kind string,
 	return false, fmt.Errorf("check cashflow for day: %w", err)
 }
 
-// SumCashflowsSwap 返回指定持仓 swap 类现金流的 USD 合计（D-127 P4）。
-// settlement.Settle 用此值算 net = realized + swapSum，修正淘汰/复盘口径漏计 swap 的缺陷。
-// 无 swap 行 → 返回 0（不影响 net）。
-func (s *Store) SumCashflowsSwap(ctx context.Context, posID int64) (float64, error) {
+// SumCashflowsNet 返回指定持仓 swap+funding+commission 现金流的 USD 合计（D-127 P4 返修①）。
+// settlement.Settle 用此值算 net = realized + cashflowsNet，修正淘汰/复盘口径漏计息差/手续费的缺陷。
+// commission 写入时已带负号（pipeline_legs.go:190 -fill.Commission），SUM 自动减 → 等价 swap+funding−commission。
+// 无匹配行 → 返回 0（不影响 net）。
+func (s *Store) SumCashflowsNet(ctx context.Context, posID int64) (float64, error) {
 	var sum float64
 	err := s.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(amount_usd), 0) FROM position_cashflows
-		 WHERE position_id = $1 AND kind = 'swap'`,
+		 WHERE position_id = $1 AND kind IN ('swap','funding','commission')`,
 		posID).Scan(&sum)
 	if err != nil {
-		return 0, fmt.Errorf("sum cashflows swap: %w", err)
+		return 0, fmt.Errorf("sum cashflows net: %w", err)
 	}
 	return sum, nil
 }
