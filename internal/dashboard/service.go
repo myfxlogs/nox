@@ -34,6 +34,9 @@ type Service struct {
 	// swapArbBareCap swap 套利单腿裸露上限系数（config.ARB_SWAPARB_BARE_CAP，缺省 1.0）——D-097 R2。
 	// notional 若 > minEq×BareCap 则 cap 到 minEq×BareCap（只 cap 不 skip）。0 或负=不 cap（等价旧行为）。
 	swapArbBareCap float64
+	// swapArbVenueExposureCap 单 venue SWAPARB 合计裸露上限系数（config.ARB_SWAPARB_VENUE_EXPOSURE_CAP，缺省 2.0）——D-132 T1。
+	// 新开仓时若任一腿 venue 现有 SWAPARB 活仓合计名义 + 新仓名义 > venue equity × cap → skip。0 = 不启用。
+	swapArbVenueExposureCap float64
 	// priceTopic 实时现价广播（D-049）：PersonalMonitor 经 onPrice 发布 → StreamUpdates 扇出 case 7。nil = 未接线（测试直接构造 Service）。
 	priceTopic *bus.Topic[position.PositionPrice]
 	// oppTopic 新机会推送广播（D-050）：engine 新插入发布 → StreamUpdates 扇出 case 2。nil = 未接线（测试直接构造 Service）。
@@ -110,6 +113,7 @@ type FrontConfig struct {
 // fundingDropRatio 为资金费急降预警比例（传 config.FundingDropRatio）；
 // swapArbEquityUseRatio 为 swap 套利名义额资金使用率系数（S6，传 config.SwapArbEquityUseRatio）；
 // swapArbBareCap 为 swap 套利单腿裸露上限系数（D-097 R2，传 config.SwapArbBareCap）；
+// swapArbVenueExposureCap 为单 venue SWAPARB 合计裸露上限系数（D-132 T1，传 config.SwapArbVenueExposureCap）；
 // priceTopic 为实时现价广播 topic（D-049，传 main 创建的 priceTopic）；
 // oppTopic 为新机会站内推送 topic（D-050，传 main 创建的 oppTopic）；
 // bpm 为 Broker 实持仓 monitor（D-052，传 main 创建的 bpm）；
@@ -119,8 +123,8 @@ type FrontConfig struct {
 // alertTopic 为告警实时推送广播（D-114，传 main 创建的 alertTopic；InsertAlert → store.alertHook → alertTopic.Publish → case 3）。
 // commissionFor 为 per-venue 佣金解析器（D-111 收敛型实时 bps 成本扣除，nil = commissionBps=0）。
 // slippageBps 为滑点成本（D-111，slippageCost = slippageBps * 2）。
-func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64, fundingDropRatio float64, swapArbEquityUseRatio float64, swapArbBareCap float64, priceTopic *bus.Topic[position.PositionPrice], oppTopic *bus.Topic[pgstore.Opportunity], orderTopic *bus.Topic[bus.OrderEvent], alertTopic *bus.Topic[pgstore.Alert], bpm *BrokerPositionMonitor, notionalUSD float64, acctMon *AccountMonitor, commissionFor func(string) float64, slippageBps float64) *Service {
-	return &Service{store: store, qbus: qbus, pipeline: pipeline, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, swapArbEquityUseRatio: swapArbEquityUseRatio, swapArbBareCap: swapArbBareCap, priceTopic: priceTopic, oppTopic: oppTopic, orderTopic: orderTopic, alertTopic: alertTopic, bpm: bpm, notionalUSD: notionalUSD, acctMon: acctMon, commissionFor: commissionFor, slippageBps: slippageBps}
+func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64, fundingDropRatio float64, swapArbEquityUseRatio float64, swapArbBareCap float64, swapArbVenueExposureCap float64, priceTopic *bus.Topic[position.PositionPrice], oppTopic *bus.Topic[pgstore.Opportunity], orderTopic *bus.Topic[bus.OrderEvent], alertTopic *bus.Topic[pgstore.Alert], bpm *BrokerPositionMonitor, notionalUSD float64, acctMon *AccountMonitor, commissionFor func(string) float64, slippageBps float64) *Service {
+	return &Service{store: store, qbus: qbus, pipeline: pipeline, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, swapArbEquityUseRatio: swapArbEquityUseRatio, swapArbBareCap: swapArbBareCap, swapArbVenueExposureCap: swapArbVenueExposureCap, priceTopic: priceTopic, oppTopic: oppTopic, orderTopic: orderTopic, alertTopic: alertTopic, bpm: bpm, notionalUSD: notionalUSD, acctMon: acctMon, commissionFor: commissionFor, slippageBps: slippageBps}
 }
 
 // Store 返回底层 store（D-070 autotrade engine 用）。

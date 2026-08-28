@@ -1,0 +1,140 @@
+package dashboard
+
+// swap_notional_venue_exposure_test.go — D-132 T1 venue 级敞口门单测（四用例）。
+// 设计 SSOT：docs/SWAPARB扩产方案-D-132-施工提示词.md §3 T1。
+//
+// 用例：
+// ① 3 仓活 + 新仓超 cap → skip（纯函数 swapArbVenueExposureCheck）
+// ② cap 内 → ok（纯函数）
+// ③ venue 离线 → fail-closed（Service.SwapArbVenueExposureOK + acctMon）
+// ④ cap=0 → 不启用（纯函数，等价 bareCap≤0 先例语义）
+
+import (
+	"context"
+	"testing"
+
+	"arb/internal/reconcile"
+	"arb/internal/store/pgstore"
+)
+
+// mockUSDPerLotForLeg 构造 usdPerLotOf 回调：固定 canonical+venue → usdPerLot（ok=true）。
+func mockUSDPerLotForLeg(perLot float64) func(canonical, venue string) (float64, bool) {
+	return func(_, _ string) (float64, bool) { return perLot, true }
+}
+
+// threeSwapArbLegs 构造 3 个 SWAPARB 活仓的 OPEN 腿（每仓 long+short 两腿）。
+// 每腿 qty=0.01，venueLong="529:mt5"，venueShort="277:mt5"。
+func threeSwapArbLegs() []pgstore.PositionLeg {
+	var legs []pgstore.PositionLeg
+	for i := int64(1); i <= 3; i++ {
+		legs = append(legs,
+			pgstore.PositionLeg{PositionID: i, Phase: "OPEN", Venue: "529:mt5", Qty: 0.01},
+			pgstore.PositionLeg{PositionID: i, Phase: "OPEN", Venue: "277:mt5", Qty: 0.01},
+		)
+	}
+	return legs
+}
+
+// canonicalByPosStub 构造 canonicalOf 回调：posID → "AUDJPY"（全命中）。
+func canonicalByPosStub(_ int64) string { return "AUDJPY" }
+
+// TestSwapArbVenueExposureCheck_OverCapSkip ① 3 仓活 + 新仓超 cap → false（skip）。
+// 3 仓 × 0.01 手 × $76000/手 = $2280 现有裸露（venueShort 侧）；equity $1500 × cap 2.0 = $3000 限额。
+// 新仓 $760 → $2280 + $760 = $3040 > $3000 → skip。
+func TestSwapArbVenueExposureCheck_OverCapSkip(t *testing.T) {
+	got := swapArbVenueExposureCheck(
+		threeSwapArbLegs(),
+		canonicalByPosStub,
+		mockUSDPerLotForLeg(76000),
+		"529:mt5", "277:mt5",
+		760,  // newNotional
+		1500, // eqLong
+		1500, // eqShort
+		2.0,  // cap
+	)
+	if got {
+		t.Error("3 仓活 + 新仓 $760 → venueShort $3040 > $3000 cap, want false (skip)")
+	}
+}
+
+// TestSwapArbVenueExposureCheck_WithinCap ② cap 内 → true（ok）。
+// 同 3 仓但 equity $5000 × cap 2.0 = $10000 限额；$2280 + $760 = $3040 ≤ $10000 → ok。
+func TestSwapArbVenueExposureCheck_WithinCap(t *testing.T) {
+	got := swapArbVenueExposureCheck(
+		threeSwapArbLegs(),
+		canonicalByPosStub,
+		mockUSDPerLotForLeg(76000),
+		"529:mt5", "277:mt5",
+		760,  // newNotional
+		5000, // eqLong
+		5000, // eqShort
+		2.0,  // cap
+	)
+	if !got {
+		t.Error("3 仓活 + 新仓 $760 → venueShort $3040 ≤ $10000 cap, want true (ok)")
+	}
+}
+
+// TestSwapArbVenueExposureOK_VenueOffline_FailClosed ③ venue 离线 → false（fail-closed）。
+// Service 仅接 acctMon（store=nil），short venue 离线 → AccountEquityUSD online=false → false。
+func TestSwapArbVenueExposureOK_VenueOffline_FailClosed(t *testing.T) {
+	longQ := &fakeAccountQuerier{key: "529:mt5", acct: &reconcile.AccountInfo{
+		VenueKey: "529:mt5", Venue: "529", VenueType: "mt5", AssetType: "cfd",
+		Balance: 5000, Equity: 5000, Currency: "USD",
+	}}
+	shortQ := &fakeAccountQuerier{key: "277:mt5", acct: &reconcile.AccountInfo{
+		VenueKey: "277:mt5", Venue: "277", VenueType: "mt5", AssetType: "cfd",
+		Balance: 5000, Equity: 5000, Currency: "USD",
+	}}
+	s := newSwapArbServiceWithAccts(t, longQ, shortQ)
+	s.swapArbVenueExposureCap = 2.0
+
+	// baseline：两 venue 在线 → cap=2.0/equity=5000/无 store → 放行 true。
+	if !s.SwapArbVenueExposureOK(context.Background(), "529:mt5", "277:mt5", 760) {
+		t.Fatal("baseline: both online + store=nil → want true, got false")
+	}
+
+	// short venue 离线 → fail-closed false。
+	shortQ.err = context.DeadlineExceeded
+	s.acctMon.Refresh(context.Background())
+	if s.SwapArbVenueExposureOK(context.Background(), "529:mt5", "277:mt5", 760) {
+		t.Error("venue offline: want false (fail-closed), got true")
+	}
+}
+
+// TestSwapArbVenueExposureCheck_CapZero_NotEnabled ④ cap=0 → true（不启用，等价 bareCap≤0 先例）。
+func TestSwapArbVenueExposureCheck_CapZero_NotEnabled(t *testing.T) {
+	got := swapArbVenueExposureCheck(
+		threeSwapArbLegs(),
+		canonicalByPosStub,
+		mockUSDPerLotForLeg(76000),
+		"529:mt5", "277:mt5",
+		760,  // newNotional
+		1500, // eqLong
+		1500, // eqShort
+		0,    // cap=0 → 不启用
+	)
+	if !got {
+		t.Error("cap=0 → 不启用, want true, got false")
+	}
+}
+
+// TestCanonicalFromComboKey 从组合键/opportunity_id 派生 canonical。
+func TestCanonicalFromComboKey(t *testing.T) {
+	cases := []struct {
+		oppID string
+		want  string
+	}{
+		{"SWAPARB:AUDJPY:529:mt5:277:mt5", "AUDJPY"},               // 新格式 6 段
+		{"SWAPARB:AUDJPY:529:mt5:277:mt5:1695000000000", "AUDJPY"}, // 旧 tick 7 段（尾段纯数字）
+		{"SWAPARB:BTCUSDT:okx:perp:binance:perp", "BTCUSDT"},       // CEX perp
+		{"", ""},        // 空串
+		{"SWAPARB", ""}, // 单段无 canonical
+	}
+	for _, c := range cases {
+		got := canonicalFromComboKey(c.oppID)
+		if got != c.want {
+			t.Errorf("canonicalFromComboKey(%q)=%q want %q", c.oppID, got, c.want)
+		}
+	}
+}
