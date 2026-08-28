@@ -33,8 +33,27 @@ func (e *Engine) checkExitCondition(ctx context.Context, p *pgstore.Position) (b
 	}
 	// 息差型：按 swap/funding 子分派（IsCarryType 已判定为 4 类之一，此处只区分 swap vs funding）
 	if p.Type == "FUNDING_HEDGE" || p.Type == "PERP_FUNDING" {
-		// 净 funding 年化 ≤ FundingExitPct（默认 0）→ 平仓
+		// D-133 T1：PERP_FUNDING 走持有下限 + 连续去抖（修复 D-129 瞬时费率判平致命缺陷）；
+		// FUNDING_HEDGE 保持旧语义（单次瞬时读数 ≤ 阈值即平，CFD 无结算窗概念）。
 		netFunding, ok := e.recalcNetFunding(ctx, p)
+		if p.Type == "PERP_FUNDING" {
+			// D-133 T1：held = now − opened_at；opened_at nil（旧数据兜底）→ held=0（floor 未满，最安全）。
+			var held time.Duration
+			if p.OpenedAt != nil {
+				held = time.Since(*p.OpenedAt)
+			}
+			e.fundingMu.Lock()
+			curCount := e.fundingBreach[p.ID]
+			shouldClose, newCount, reason := perpFundingExitDecision(ok, held, netFunding, e.cfg.FundingExitPct, e.cfg.PerpFundMinHold, e.cfg.PerpFundExitDebounce, curCount)
+			if newCount == 0 {
+				delete(e.fundingBreach, p.ID) // 计数清零/平仓 → 删除条目（防泄漏）
+			} else {
+				e.fundingBreach[p.ID] = newCount
+			}
+			e.fundingMu.Unlock()
+			return shouldClose, reason
+		}
+		// FUNDING_HEDGE：旧语义——缺数据 fail-closed；netFunding ≤ 阈值即平。
 		if !ok {
 			return false, ""
 		}

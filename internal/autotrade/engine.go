@@ -3,6 +3,7 @@ package autotrade
 import (
 	"context"
 	"log"
+	"sync"
 	"time"
 
 	"arb/internal/bus"
@@ -32,6 +33,10 @@ type Config struct {
 	MinNetSwapBps  float64 // discoverSwapCombos 最低净 swap（ARB_AUTOTRADE_MIN_NET_SWAP_BPS，默认 0.2）
 	SwapArbExitBps float64 // SWAPARB/CARRY 退出净 swap bps（ARB_SWAPARB_EXIT_NET_BPS，默认 0）
 	FundingExitPct float64 // FUNDING_HEDGE/PERP_FUNDING 退出净年化（ARB_FUNDING_EXIT_NET_PCT，默认 0）
+
+	// D-133 T1：PERP_FUNDING 平仓规则重构——持有下限 + 连续去抖
+	PerpFundMinHold      time.Duration // ARB_PERPFUNDING_MIN_HOLD 默认 8h；0=不限
+	PerpFundExitDebounce int           // ARB_PERPFUNDING_EXIT_DEBOUNCE 默认 3；0/1=单次即平
 
 	// D-077 修复⑪B N6：入场成本容忍+陈旧度 env 化
 	EntrySpreadMinBps float64       // SWAPARB 入场 spreadBps 下限（ARB_SWAPARB_ENTRY_SPREAD_MIN_BPS，默认 -3）
@@ -64,6 +69,12 @@ type Engine struct {
 	// 每日每组合至多 1 条（内存，重启重置——实时弹窗语义，不持久化）。
 	fundingNeedSent map[string]string
 
+	// D-133 T1：PERP_FUNDING 退出连续去抖计数——key=posID → 连续 breach 次数。
+	// 读写都在 auto-close 轮询 goroutine（单写者），mu 为防御性（未来并发扩展兜底）。
+	// 平仓/读数回正/floor 未满 → 删除条目（防泄漏）。重启丢失=重新去抖（无害，10min 轮询）。
+	fundingBreach map[int64]int
+	fundingMu     sync.Mutex
+
 	// D-087 §3.2：settlement.Settle 依赖 + 淘汰判定函数（main 装配后调 SetSettleDeps）。
 	settleDeps settlement.Deps
 	eliminator settlement.Eliminator
@@ -84,6 +95,7 @@ func New(cfg Config, store *pgstore.Store, service *dashboard.Service, oppTopic 
 		quotes:          quotes,
 		gate:            NewGate(store, cfg),
 		fundingNeedSent: make(map[string]string),
+		fundingBreach:   make(map[int64]int),    // D-133 T1：PERP_FUNDING 去抖计数
 		kickCh:          make(chan struct{}, 1), // D-107 P4：buffered(1) 非阻塞 send = 事件合并
 	}
 }

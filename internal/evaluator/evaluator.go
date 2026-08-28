@@ -25,6 +25,10 @@ type Config struct {
 	DetectorFreshnessTTL time.Duration
 	OpportunityTTL       time.Duration
 	GrabMinNetAnnualized float64 // grab 档门槛（百分点，D-036，替代硬编码 4.5）
+	// D-133 T2：息差型回本周期上门（ARB_FUNDING_MAX_BREAKEVEN_DAYS，缺省 1.0）。
+	// breakevenDays > 此值 → NetBps 置负，使下游 funding_min% 过滤自然淘汰（不加新淘汰通道）。
+	// 0 = 不启用（回本门关闭）。
+	FundingMaxBreakevenDays float64
 }
 
 // Result 评估结果，对应 opportunities 表（§2.6）。
@@ -88,6 +92,12 @@ func Evaluate(c detector.Candidate, cfg Config, spreadBuy, spreadSell, commissio
 		if dailyNetBps > 0 {
 			bd := oneTimeCost / dailyNetBps
 			breakevenDays = &bd
+		}
+		// D-133 T2：回本周期上门——breakevenDays > FundingMaxBreakevenDays → NetBps 置负，
+		// 使下游 funding_min% 过滤自然淘汰（评级管道零改动，classify net≤0 恒 trap）。
+		// 0 = 不启用（回本门关闭）。breakevenDays nil（dailyNetBps≤0，本就 trap）跳过。
+		if cfg.FundingMaxBreakevenDays > 0 && breakevenDays != nil && *breakevenDays > cfg.FundingMaxBreakevenDays {
+			netBps = -1
 		}
 	}
 
