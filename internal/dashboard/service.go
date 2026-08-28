@@ -171,5 +171,14 @@ func (s *Service) SetOppContractSize(f func(canonical, venueKey string) (float64
 	s.oppContractSize = f
 }
 
+// OppContractSize 透传机会卡 CS 查询（D-135 autotrade engine sizing 用）。
+// nil 接线 → (0,false)；CEX 腿 CS=1 由 resolver 内部处理（与 D-062 同语义）。
+func (s *Service) OppContractSize(canonical, venueKey string) (float64, bool) {
+	if s.oppContractSize == nil {
+		return 0, false
+	}
+	return s.oppContractSize(canonical, venueKey)
+}
+
 // SetStepMeta 注入 binance:perp stepSize 权威元数据（D-127 P2）。nil = 仅用硬编码 fallback。
 func (s *Service) SetStepMeta(m *cexStepMeta) { s.stepMeta = m }
