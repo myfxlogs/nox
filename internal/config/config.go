@@ -74,6 +74,17 @@ type Config struct {
 	// D-132 T1：新开仓时若任一腿 venue 现有 SWAPARB 活仓合计名义 + 新仓名义 > venue equity × cap → skip。
 	// 语义=单 venue SWAPARB 裸露 ≤ cap 倍权益；注资后各档自动满足，组合数失控时硬顶。0 = 不启用。
 	SwapArbVenueExposureCap float64
+	// PerpFundMinHold PERP_FUNDING 持有下限（ARB_PERPFUNDING_MIN_HOLD，缺省 8h）——D-133 T1。
+	// 退出判定 floor：now − opened_at < MinHold → 不平仓（至少活过一个结算窗，收益源先参与）。
+	// 0 = 不限（近似旧行为但仍有 debounce）。
+	PerpFundMinHold time.Duration
+	// PerpFundExitDebounce PERP_FUNDING 退出连续去抖次数（ARB_PERPFUNDING_EXIT_DEBOUNCE，缺省 3）——D-133 T1。
+	// 净 funding ≤ 阈值需连续 N 次读数成立才平；任一次回正 → 计数清零。0 或 1 = 单次即平（近似旧行为）。
+	PerpFundExitDebounce int
+	// FundingMaxBreakevenDays 息差型回本周期上门（ARB_FUNDING_MAX_BREAKEVEN_DAYS，缺省 1.0）——D-133 T2。
+	// breakevenDays > 此值 → NetBps 置负，使下游 funding_min% 过滤自然淘汰（不加新淘汰通道）。
+	// 0 = 不启用（回本门关闭）。
+	FundingMaxBreakevenDays float64
 
 	// === 机会站内推送（D-050；修复⑭ S3 退役 minNotifyNetBps 发布门槛 → oppTopic 全量事件流）===
 	// 发布门槛已退役，前端显示过滤常量 5 语义自立（useFrontConfig 默认值）。
@@ -194,6 +205,9 @@ func Load() *Config {
 		SwapArbBareCap:             envFloat("ARB_SWAPARB_BARE_CAP", 1.0),
 		SwapArbReentryCooldownDays: envInt("ARB_SWAPARB_REENTRY_COOLDOWN_DAYS", 7),
 		SwapArbVenueExposureCap:    envFloat("ARB_SWAPARB_VENUE_EXPOSURE_CAP", 2.0),    // D-132 T1 venue 级敞口门
+		PerpFundMinHold:            envDur("ARB_PERPFUNDING_MIN_HOLD", 8*time.Hour),    // D-133 T1 持有下限
+		PerpFundExitDebounce:       envInt("ARB_PERPFUNDING_EXIT_DEBOUNCE", 3),         // D-133 T1 连续去抖
+		FundingMaxBreakevenDays:    envFloat("ARB_FUNDING_MAX_BREAKEVEN_DAYS", 1.0),    // D-133 T2 回本周期上门
 		StoreMinNetBps:             envFloat("ARB_STORE_MIN_NET_BPS", 5.0),             // D-078：CROSS_VENUE 入库门槛，round-trip 后 net≥5bps 才入库
 		FundingHedgeMinNetStore:    envFloat("ARB_FUNDING_HEDGE_MIN_NET_STORE", 14.95), // D-085 息差家族净门槛（含基准 10.95+门槛 4）
 		PerpFundingMinNetStore:     envFloat("ARB_PERP_FUNDING_MIN_NET_STORE", 2.0),    // D-085
