@@ -5,6 +5,7 @@ import (
 	"context"
 	"maps"
 	"sort"
+	"strings"
 	"time"
 
 	"arb/internal/bus"
@@ -58,6 +59,12 @@ func (m *BrokerPositionMonitor) build(ctx context.Context) []*v1.BrokerPosition 
 			if cm, ok := canonMaps[o.Venue]; ok {
 				canonical = cm[o.Symbol]
 			}
+			// CEX perp/spot 无 symbol_mappings 记录时，从符号派生 canonical（与采集器同构）：
+			// binance TRXUSDT → TRXUSDT；okx TRX-USDT-SWAP → TRXUSDT（去 -SWAP + 替换 -）。
+			// 无映射则 qbus.Latest 查不到 → 现价显示「—」；派生后可查到实时报价。
+			if canonical == "" && isCEXVenueKey(o.VenueKey) {
+				canonical = cexCanonical(o.Symbol)
+			}
 			var price bus.Quote
 			hasPrice := false
 			if canonical != "" {
@@ -103,4 +110,17 @@ func allocateMargins(orders []reconcile.VenueOrder, accountMargin float64, csMap
 		out[ticket] = accountMargin * n / total
 	}
 	return out
+}
+
+// isCEXVenueKey 判断 venueKey 是否为 CEX（binance/okx/gate 的 spot/perp）。
+// CEX 无 symbol_mappings 记录，需从符号派生 canonical。
+func isCEXVenueKey(vk string) bool {
+	return strings.HasPrefix(vk, "binance:") || strings.HasPrefix(vk, "okx:") || strings.HasPrefix(vk, "gate:")
+}
+
+// cexCanonical 从 CEX 交易所符号派生 canonical（与采集器同构）：
+// binance TRXUSDT → TRXUSDT；okx TRX-USDT-SWAP → TRXUSDT（去 -SWAP + 替换 -）。
+func cexCanonical(symbol string) string {
+	s := strings.TrimSuffix(symbol, "-SWAP")
+	return strings.ReplaceAll(s, "-", "")
 }
