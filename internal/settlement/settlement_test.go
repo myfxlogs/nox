@@ -26,6 +26,8 @@ type fakeDeps struct {
 	updateStat       int
 	getStat          *pgstore.StrategyStat
 	disableStrategy  string
+	swapSum          float64    // D-127 P4：SumCashflowsSwap 返回值
+	lastNetPnl       float64    // D-127 P4：捕获传给 UpdateStrategyStat 的 net 值
 	mu               sync.Mutex // 并发安全计数
 }
 
@@ -59,6 +61,7 @@ func (f *fakeDeps) UpdateStrategyStat(ctx context.Context, strategy string, real
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.updateStat++
+	f.lastNetPnl = realizedPnl // D-127 P4：捕获 net 值供断言
 	return nil
 }
 
@@ -86,6 +89,11 @@ func (f *fakeDeps) InsertSettlement(ctx context.Context, r *pgstore.SettlementRo
 
 func (f *fakeDeps) HasSettlement(ctx context.Context, posID int64) (bool, error) {
 	return f.hasSettlement, nil
+}
+
+// D-127 P4：SumCashflowsSwap 返回预设 swapSum。
+func (f *fakeDeps) SumCashflowsSwap(ctx context.Context, posID int64) (float64, error) {
+	return f.swapSum, nil
 }
 
 // noElim 永不禁用的 Eliminator（测试用）。
@@ -366,4 +374,79 @@ func approx(got, want, tol float64) bool {
 		d = -d
 	}
 	return d <= tol
+}
+
+// D-127 P4：net = realized + swapSum 纳入淘汰/复盘口径。
+// 场景：SWAPARB realized=-1（价差小负）+ swap=+3（息差正收）→ net=+2 → stats 记 win。
+// 旧口径（裸 realized）→ stats 记 loss → 平 5 笔触发 avgPnl<0 自动淘汰误杀金鹅。
+func TestD127_SettleNetIncludesSwap(t *testing.T) {
+	opened := time.Now().AddDate(0, 0, -7) // 持仓 7 天
+	closed := time.Now()
+	rp := -1.0
+	swapBpsDaily := 0.5
+	d := &fakeDeps{
+		position: &pgstore.Position{
+			ID:                   10,
+			OpportunityID:        "SWAPARB:AUDJPY:52993526:mt5:277842155:mt5",
+			Type:                 "SWAPARB",
+			Status:               "CLOSED",
+			ExpectedNetBps:       0.5,
+			ExpectedSwapBpsDaily: &swapBpsDaily,
+			RealizedPnl:          &rp,
+			OpenedAt:             &opened,
+			ClosedAt:             &closed,
+		},
+		legs: []pgstore.PositionLeg{
+			{Phase: "OPEN", Status: "FILLED", Venue: "52993526:mt5", Qty: 1.0, PriceActual: ptrFloat(113.5)},
+		},
+		cs:        100000,
+		csOk:      true,
+		fxRate:    150,
+		fxOk:      true,
+		insertWon: true,
+		swapSum:   3.0, // swap 实收 +$3
+	}
+	if err := Settle(context.Background(), d, 10, noElim); err != nil {
+		t.Fatalf("Settle: %v", err)
+	}
+	// net = -1 + 3 = +2 → UpdateStrategyStat 收到 +2（win）
+	if !approx(d.lastNetPnl, 2.0, 0.001) {
+		t.Errorf("UpdateStrategyStat net=%.4f，期望 +2.0（realized -1 + swap +3）", d.lastNetPnl)
+	}
+	if d.updateStat != 1 {
+		t.Errorf("updateStat=%d，期望 1", d.updateStat)
+	}
+}
+
+// D-127 P4：swapSum=0（无 swap 行）→ net=realized（旧口径兼容）。
+func TestD127_SettleNetNoSwap(t *testing.T) {
+	now := time.Now()
+	rp := 5.0
+	d := &fakeDeps{
+		position: &pgstore.Position{
+			ID:             11,
+			OpportunityID:  "CROSS_VENUE:BTCUSDT:okx:perp:binance:perp",
+			Type:           "CROSS_VENUE",
+			Status:         "CLOSED",
+			ExpectedNetBps: 10.0,
+			RealizedPnl:    &rp,
+			OpenedAt:       &now,
+			ClosedAt:       &now,
+		},
+		legs: []pgstore.PositionLeg{
+			{Phase: "OPEN", Status: "FILLED", Venue: "okx:perp", Qty: 0.1, PriceActual: ptrFloat(100000)},
+		},
+		cs:        1,
+		csOk:      false,
+		fxRate:    1,
+		fxOk:      true,
+		insertWon: true,
+		swapSum:   0, // 无 swap
+	}
+	if err := Settle(context.Background(), d, 11, noElim); err != nil {
+		t.Fatalf("Settle: %v", err)
+	}
+	if !approx(d.lastNetPnl, 5.0, 0.001) {
+		t.Errorf("UpdateStrategyStat net=%.4f，期望 5.0（无 swap，net=realized）", d.lastNetPnl)
+	}
 }
