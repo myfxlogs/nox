@@ -107,7 +107,7 @@ func (m *cexStepMeta) MaybeRefresh(ctx context.Context) {
 // errStepMetaHTTP exchangeInfo 非 200 响应。
 type errStepMetaHTTP struct{ code int }
 
-func (e errStepMetaHTTP) Error() string { return errStepMetaHTTPMsg + string(rune(e.code)) }
+func (e errStepMetaHTTP) Error() string { return errStepMetaHTTPMsg + strconv.Itoa(e.code) }
 
 const errStepMetaHTTPMsg = "step-meta: exchangeInfo HTTP "
 
