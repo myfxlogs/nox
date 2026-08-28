@@ -26,7 +26,7 @@ type fakeDeps struct {
 	updateStat       int
 	getStat          *pgstore.StrategyStat
 	disableStrategy  string
-	swapSum          float64    // D-127 P4：SumCashflowsSwap 返回值
+	cashflowsNet     float64    // D-127 P4 返修①：SumCashflowsNet 返回值
 	lastNetPnl       float64    // D-127 P4：捕获传给 UpdateStrategyStat 的 net 值
 	mu               sync.Mutex // 并发安全计数
 }
@@ -91,9 +91,9 @@ func (f *fakeDeps) HasSettlement(ctx context.Context, posID int64) (bool, error)
 	return f.hasSettlement, nil
 }
 
-// D-127 P4：SumCashflowsSwap 返回预设 swapSum。
-func (f *fakeDeps) SumCashflowsSwap(ctx context.Context, posID int64) (float64, error) {
-	return f.swapSum, nil
+// D-127 P4 返修①：SumCashflowsNet 返回预设 cashflowsNet。
+func (f *fakeDeps) SumCashflowsNet(ctx context.Context, posID int64) (float64, error) {
+	return f.cashflowsNet, nil
 }
 
 // noElim 永不禁用的 Eliminator（测试用）。
@@ -376,8 +376,8 @@ func approx(got, want, tol float64) bool {
 	return d <= tol
 }
 
-// D-127 P4：net = realized + swapSum 纳入淘汰/复盘口径。
-// 场景：SWAPARB realized=-1（价差小负）+ swap=+3（息差正收）→ net=+2 → stats 记 win。
+// D-127 P4 返修①：net = realized + cashflowsNet（swap+funding−commission）纳入淘汰/复盘口径。
+// 场景：SWAPARB realized=-1（价差小负）+ cashflowsNet=+3（息差正收）→ net=+2 → stats 记 win。
 // 旧口径（裸 realized）→ stats 记 loss → 平 5 笔触发 avgPnl<0 自动淘汰误杀金鹅。
 func TestD127_SettleNetIncludesSwap(t *testing.T) {
 	opened := time.Now().AddDate(0, 0, -7) // 持仓 7 天
@@ -399,12 +399,12 @@ func TestD127_SettleNetIncludesSwap(t *testing.T) {
 		legs: []pgstore.PositionLeg{
 			{Phase: "OPEN", Status: "FILLED", Venue: "52993526:mt5", Qty: 1.0, PriceActual: ptrFloat(113.5)},
 		},
-		cs:        100000,
-		csOk:      true,
-		fxRate:    150,
-		fxOk:      true,
-		insertWon: true,
-		swapSum:   3.0, // swap 实收 +$3
+		cs:           100000,
+		csOk:         true,
+		fxRate:       150,
+		fxOk:         true,
+		insertWon:    true,
+		cashflowsNet: 3.0, // swap+funding−commission 实收 +$3
 	}
 	if err := Settle(context.Background(), d, 10, noElim); err != nil {
 		t.Fatalf("Settle: %v", err)
@@ -418,7 +418,7 @@ func TestD127_SettleNetIncludesSwap(t *testing.T) {
 	}
 }
 
-// D-127 P4：swapSum=0（无 swap 行）→ net=realized（旧口径兼容）。
+// D-127 P4 返修①：cashflowsNet=0（无 swap/funding/commission 行）→ net=realized（旧口径兼容）。
 func TestD127_SettleNetNoSwap(t *testing.T) {
 	now := time.Now()
 	rp := 5.0
@@ -436,12 +436,12 @@ func TestD127_SettleNetNoSwap(t *testing.T) {
 		legs: []pgstore.PositionLeg{
 			{Phase: "OPEN", Status: "FILLED", Venue: "okx:perp", Qty: 0.1, PriceActual: ptrFloat(100000)},
 		},
-		cs:        1,
-		csOk:      false,
-		fxRate:    1,
-		fxOk:      true,
-		insertWon: true,
-		swapSum:   0, // 无 swap
+		cs:           1,
+		csOk:         false,
+		fxRate:       1,
+		fxOk:         true,
+		insertWon:    true,
+		cashflowsNet: 0, // 无 swap/funding/commission
 	}
 	if err := Settle(context.Background(), d, 11, noElim); err != nil {
 		t.Fatalf("Settle: %v", err)

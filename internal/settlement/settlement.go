@@ -37,8 +37,8 @@ type Deps interface {
 	InsertSettlement(ctx context.Context, s *pgstore.SettlementRow) (won bool, err error)
 	// HasSettlement 查 position_settlements 是否已有行（幂等短路）。
 	HasSettlement(ctx context.Context, posID int64) (bool, error)
-	// SumCashflowsSwap 返回持仓 swap 类现金流 USD 合计（D-127 P4：net=realized+swap）。
-	SumCashflowsSwap(ctx context.Context, posID int64) (float64, error)
+	// SumCashflowsNet 返回持仓 swap+funding+commission 现金流 USD 合计（D-127 P4 返修①：net=realized+cashflowsNet）。
+	SumCashflowsNet(ctx context.Context, posID int64) (float64, error)
 }
 
 // Eliminator 淘汰判定函数类型（从 autotrade.evaluateElimination 抽出，避免环依赖）。
@@ -132,13 +132,13 @@ func Settle(ctx context.Context, deps Deps, posID int64, elim Eliminator) error 
 	}
 
 	// 8. 通过 → UpsertVerificationSample + UpdateStrategyStat + 淘汰
-	// D-127 P4：net = realized + swapSum（swap 实收纳入淘汰/复盘口径，防套息策略被误杀）。
-	swapSum, err := deps.SumCashflowsSwap(ctx, posID)
+	// D-127 P4 返修①：net = realized + cashflowsNet（swap+funding−commission 实收纳入淘汰/复盘口径，防套息策略被误杀）。
+	cashflowsNet, err := deps.SumCashflowsNet(ctx, posID)
 	if err != nil {
-		log.Printf("[settlement] sum cashflows swap pos=%d: %v (fallback net=realized)", posID, err)
-		swapSum = 0 // 查询失败回退到旧口径（不阻塞结算）
+		log.Printf("[settlement] sum cashflows net pos=%d: %v (fallback net=realized)", posID, err)
+		cashflowsNet = 0 // 查询失败回退到旧口径（不阻塞结算）
 	}
-	netPnl := *p.RealizedPnl + swapSum
+	netPnl := *p.RealizedPnl + cashflowsNet
 	closedAt := time.Now()
 	if p.ClosedAt != nil {
 		closedAt = *p.ClosedAt
