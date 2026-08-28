@@ -248,12 +248,12 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 				log.Printf("[exec] position %d LEGGED auto-flatten failed: %v (manual fallback)", posID, flattenErr)
 			}
 			if flattened {
-				_ = p.store.UpdatePositionStatus(ctx, posID, "CLOSED")
-				_ = p.store.InsertAlert(ctx, &posID, "critical",
+				_ = p.store.UpdatePositionStatus(autoFlattenCtx, posID, "CLOSED")
+				_ = p.store.InsertAlert(autoFlattenCtx, &posID, "critical",
 					fmt.Sprintf("position %d LEGGED auto-flattened (open legs closed, root cause: partial fill)", posID))
 				status = "CLOSED"
 			} else {
-				_ = p.store.InsertAlert(ctx, &posID, "critical",
+				_ = p.store.InsertAlert(autoFlattenCtx, &posID, "critical",
 					fmt.Sprintf("position %d LEGGED: %d/%d legs filled, auto-flatten incomplete", posID, filled, len(legs)))
 			}
 		} else {
