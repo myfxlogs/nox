@@ -49,6 +49,9 @@ type Config struct {
 	// === Broker 符号表缓存（D-045 §3.2.1）===
 	SymbolsTTL time.Duration // symbolGroups per-venue 缓存 TTL
 
+	// === CEX step 元数据（D-127 P2）===
+	BinanceFuturesInfoURL string // binance perp exchangeInfo 直连 URL（默认 testnet；真盘改 fapi.binance.com）
+
 	// === 个人持仓实账（财务线工作项 3）===
 	LiqMMR float64 // 理论强平维持保证金率（强平价 = entry × (1 + 1/leverage − MMR)；缺省 0.5%）
 	// FundingDropRatio 资金费急降预警比例（今日 < 比例×前日 触发；缺省 0.5）——§11 收益侧方向证伪。
@@ -180,6 +183,7 @@ func Load() *Config {
 		ReviewCrossBiasBps:         envFloat("ARB_REVIEW_CROSS_BIAS_BPS", 1.0),
 		ReviewCarryBiasAnnualPct:   envFloat("ARB_REVIEW_CARRY_BIAS_ANNUAL_PCT", 1.0),
 		SymbolsTTL:                 envDur("ARB_SYMBOLS_TTL", 5*time.Minute),
+		BinanceFuturesInfoURL:      envStr("ARB_BINANCE_FUTURES_INFO_URL", "https://testnet.binancefuture.com/fapi/v1/exchangeInfo"), // D-127 P2
 		LiqMMR:                     envFloat("ARB_LIQ_MMR", 0.005),
 		FundingDropRatio:           envFloat("ARB_FUNDING_DROP_RATIO", 0.5),
 		SwapArbEquityUseRatio:      envFloat("ARB_SWAPARB_EQUITY_USE_RATIO", 0.5),
