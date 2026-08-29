@@ -43,7 +43,7 @@ func TestBuildPositionIDIndex(t *testing.T) {
 			},
 		},
 	}
-	idx := buildPositionIDIndex(ctx, fake)
+	idx, orderIdx := buildPositionIDIndex(ctx, fake)
 	if idx["venue:mt5\x00T1"] != 100 {
 		t.Errorf("venue:mt5\\x00T1 want 100, got %v", idx["venue:mt5\x00T1"])
 	}
@@ -59,6 +59,13 @@ func TestBuildPositionIDIndex(t *testing.T) {
 	}
 	if idx["other:mt4\x00EURUSD"] != 200 {
 		t.Errorf("D-121 CEX symbol match: other:mt4\\x00EURUSD want 200, got %v", idx["other:mt4\x00EURUSD"])
+	}
+	// S4（D-146）：order_id 索引——MT 模式 order_id==ticket；CEX 模式按 symbol 索引取真实 orderId
+	if orderIdx["venue:mt5\x00T1"] != "T1" {
+		t.Errorf("orderIdx venue:mt5\\x00T1 want T1, got %q", orderIdx["venue:mt5\x00T1"])
+	}
+	if orderIdx["venue:mt5\x00AUDJPY"] != "T1" {
+		t.Errorf("orderIdx CEX symbol match: venue:mt5\\x00AUDJPY want T1, got %q", orderIdx["venue:mt5\x00AUDJPY"])
 	}
 }
 
@@ -77,7 +84,7 @@ func TestD121_BuildPositionIDIndex_CEXPerp(t *testing.T) {
 			},
 		},
 	}
-	idx := buildPositionIDIndex(ctx, fake)
+	idx, orderIdx := buildPositionIDIndex(ctx, fake)
 	// 按 OrderID 匹配（MT 模式）
 	if idx["okx:perp\x003869188410747117568"] != 360 {
 		t.Errorf("okx:perp by OrderID want 360, got %v", idx["okx:perp\x003869188410747117568"])
@@ -89,29 +96,44 @@ func TestD121_BuildPositionIDIndex_CEXPerp(t *testing.T) {
 	if idx["gate:perp\x00ETH_USDT"] != 360 {
 		t.Errorf("gate:perp by Symbol want 360, got %v", idx["gate:perp\x00ETH_USDT"])
 	}
+	// S4（D-146）：CEX 按 symbol 索引时 order_id 取真实 orderId（≠ ticket=symbol）
+	if orderIdx["okx:perp\x00ETH-USDT-SWAP"] != "3869188410747117568" {
+		t.Errorf("orderIdx okx:perp by Symbol want 3869188410747117568, got %q", orderIdx["okx:perp\x00ETH-USDT-SWAP"])
+	}
+	if orderIdx["gate:perp\x00ETH_USDT"] != "11259000692359022" {
+		t.Errorf("orderIdx gate:perp by Symbol want 11259000692359022, got %q", orderIdx["gate:perp\x00ETH_USDT"])
+	}
 }
 
 // TestBuildPositionIDIndex_NilStore D-110 P2：nil store → 空索引（不 panic）。
 func TestBuildPositionIDIndex_NilStore(t *testing.T) {
 	ctx := context.Background()
-	idx := buildPositionIDIndex(ctx, nil)
+	idx, orderIdx := buildPositionIDIndex(ctx, nil)
 	if len(idx) != 0 {
 		t.Fatalf("nil store: want empty idx, got %d", len(idx))
+	}
+	if len(orderIdx) != 0 {
+		t.Fatalf("nil store: want empty orderIdx, got %d", len(orderIdx))
 	}
 }
 
 // TestAnnotatePositionID_Regression D-110 P2 A1：抽取后 annotateWithIndex 行为不变。
+// S4（D-146）：同时验证 order_id 标注——关联行带出/未关联行空。
 func TestAnnotatePositionID_Regression(t *testing.T) {
-	idx := map[string]int64{
+	posIdx := map[string]int64{
 		"venue:mt5\x00T1": 100,
 		"venue:mt5\x00T2": 200,
+	}
+	orderIdx := map[string]string{
+		"venue:mt5\x00T1": "T1",
+		"venue:mt5\x00T2": "T2",
 	}
 	bps := []*v1.BrokerPosition{
 		{VenueKey: "venue:mt5", Ticket: "T1"},
 		{VenueKey: "venue:mt5", Ticket: "T2"},
 		{VenueKey: "venue:mt5", Ticket: "ORPHAN"}, // 不在索引中
 	}
-	annotateWithIndex(bps, idx)
+	annotateWithIndex(bps, posIdx, orderIdx)
 	if bps[0].PositionId != 100 {
 		t.Errorf("T1 position_id want 100, got %v", bps[0].PositionId)
 	}
@@ -120,5 +142,12 @@ func TestAnnotatePositionID_Regression(t *testing.T) {
 	}
 	if bps[2].PositionId != 0 {
 		t.Errorf("ORPHAN position_id want 0, got %v", bps[2].PositionId)
+	}
+	// S4：关联行带出 order_id / 未关联行空
+	if bps[0].OrderId != "T1" {
+		t.Errorf("T1 order_id want T1, got %q", bps[0].OrderId)
+	}
+	if bps[2].OrderId != "" {
+		t.Errorf("ORPHAN order_id want empty, got %q", bps[2].OrderId)
 	}
 }

@@ -186,7 +186,7 @@ func (m *BrokerPositionMonitor) collectSwapSnapshots(ctx context.Context) {
 	venues := maps.Clone(m.venues)
 	m.mu.RUnlock()
 
-	idx := buildPositionIDIndex(ctx, m.swapSnapStore)
+	idx, _ := buildPositionIDIndex(ctx, m.swapSnapStore)
 	now := time.Now().UTC()
 	for _, vs := range venues {
 		if !vs.online {

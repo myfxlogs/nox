@@ -49,15 +49,18 @@ type PositionLegLister interface {
 // buildPositionIDIndex 构造 (venueKey, ticket)→position_id 索引（D-110 P2 A1 抽取）。
 // 查 OPEN positions → 遍历 OPEN legs → leg.Venue+"\x00"+leg.OrderID → posID。
 // D-121：CEX perp 聚合仓位无单一 ticket → 额外按 venueKey+symbol 索引（CEXPositionQuerier Ticket=Symbol）。
+// S4（D-146）：同时构造 (venueKey, ticket)→order_id 索引——CEX 聚合仓位 Ticket=Symbol，
+// order_id 才是真实 CEX orderId（MT 模式下 order_id==ticket，透出无害）。
 // 查询失败返回空索引（fail-open，调用方自行处理）。
-func buildPositionIDIndex(ctx context.Context, store PositionLegLister) map[string]int64 {
-	idx := make(map[string]int64)
+func buildPositionIDIndex(ctx context.Context, store PositionLegLister) (map[string]int64, map[string]string) {
+	posIdx := make(map[string]int64)
+	orderIdx := make(map[string]string)
 	if store == nil {
-		return idx
+		return posIdx, orderIdx
 	}
 	openPositions, err := store.ListPositions(ctx, "OPEN", 200, 0)
 	if err != nil {
-		return idx
+		return posIdx, orderIdx
 	}
 	// D-121：也查 LEGGED（CEX 单腿成交的持仓需要 broker position 匹配浮盈）
 	leggedPositions, _ := store.ListPositions(ctx, "LEGGED", 200, 0)
@@ -70,33 +73,38 @@ func buildPositionIDIndex(ctx context.Context, store PositionLegLister) map[stri
 		for _, l := range legs {
 			if l.Phase == "OPEN" && l.Status == "FILLED" {
 				if l.OrderID != "" {
-					idx[l.Venue+"\x00"+l.OrderID] = p.ID
+					posIdx[l.Venue+"\x00"+l.OrderID] = p.ID
+					orderIdx[l.Venue+"\x00"+l.OrderID] = l.OrderID
 				}
 				// D-121：CEX 聚合仓位按 venueKey+symbol 匹配（Ticket=Symbol）
 				if l.Symbol != "" {
-					idx[l.Venue+"\x00"+l.Symbol] = p.ID
+					posIdx[l.Venue+"\x00"+l.Symbol] = p.ID
+					orderIdx[l.Venue+"\x00"+l.Symbol] = l.OrderID
 				}
 			}
 		}
 	}
-	return idx
+	return posIdx, orderIdx
 }
 
-// annotatePositionID 用 OPEN position legs 构造 (venueKey, ticket)→position_id 索引，标注 broker 持仓。
+// annotatePositionID 用 OPEN position legs 构造 (venueKey, ticket)→position_id + order_id 索引，标注 broker 持仓。
 // 匹配口径唯一在此（P3）：leg.Venue == bp.VenueKey && leg.OrderID == bp.Ticket。
-// 查询失败不阻断（position_id 全 0，前端显示「未关联」）——fail-open，视图可用优先。
+// S4（D-146）：同时标注 order_id（CEX 聚合仓位 Ticket=Symbol 时 order_id 才是真实 orderId）。
+// 查询失败不阻断（position_id 全 0 / order_id 全空，前端显示「未关联」）——fail-open，视图可用优先。
 func annotatePositionID(ctx context.Context, store *pgstore.Store, bps []*v1.BrokerPosition) {
 	if len(bps) == 0 || store == nil {
 		return
 	}
-	idx := buildPositionIDIndex(ctx, store)
-	annotateWithIndex(bps, idx)
+	posIdx, orderIdx := buildPositionIDIndex(ctx, store)
+	annotateWithIndex(bps, posIdx, orderIdx)
 }
 
-// annotateWithIndex 纯函数：用预建索引标注 broker 持仓 position_id（可单测，无 DB 依赖）。
-func annotateWithIndex(bps []*v1.BrokerPosition, idx map[string]int64) {
+// annotateWithIndex 纯函数：用预建索引标注 broker 持仓 position_id + order_id（可单测，无 DB 依赖）。
+func annotateWithIndex(bps []*v1.BrokerPosition, posIdx map[string]int64, orderIdx map[string]string) {
 	for _, bp := range bps {
-		bp.PositionId = idx[bp.VenueKey+"\x00"+bp.Ticket]
+		key := bp.VenueKey + "\x00" + bp.Ticket
+		bp.PositionId = posIdx[key]
+		bp.OrderId = orderIdx[key]
 	}
 }
 
