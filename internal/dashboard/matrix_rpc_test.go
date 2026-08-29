@@ -264,6 +264,40 @@ func TestBuildMatrixUniverse_AccountsPBPassThrough(t *testing.T) {
 	}
 }
 
+// D-150 ④ 矩阵 RPC 透出 alias/is_real/server_group 三字段（前端行头+分组用）。
+func TestBuildMatrixUniverse_AccountsAliasIsRealServerGroup(t *testing.T) {
+	real := true
+	accounts := []*v1.BrokerAccount{
+		{Venue: "v1", Status: "connected", Alias: "Exness 主号", IsReal: &real, ServerGroup: "Exness"},
+		{Venue: "v2", Status: "connected", Alias: "", IsReal: nil, ServerGroup: "ICMarketsSC"},
+	}
+	u := buildMatrixUniverse(accounts, nil, nil, nil)
+	if len(u.Accounts) != 2 {
+		t.Fatalf("want 2 accounts, got %d", len(u.Accounts))
+	}
+	// alias 透出（含空回落）
+	if u.Accounts[0].Alias != "Exness 主号" {
+		t.Errorf("v1 alias want \"Exness 主号\", got %q", u.Accounts[0].Alias)
+	}
+	if u.Accounts[1].Alias != "" {
+		t.Errorf("v2 alias want \"\"（空回落）, got %q", u.Accounts[1].Alias)
+	}
+	// is_real 透出（三态：true / nil）
+	if u.Accounts[0].IsReal == nil || !*u.Accounts[0].IsReal {
+		t.Errorf("v1 is_real want &true, got %v", u.Accounts[0].IsReal)
+	}
+	if u.Accounts[1].IsReal != nil {
+		t.Errorf("v2 is_real want nil（未知）, got %v", u.Accounts[1].IsReal)
+	}
+	// server_group 透出
+	if u.Accounts[0].ServerGroup != "Exness" {
+		t.Errorf("v1 server_group want Exness, got %q", u.Accounts[0].ServerGroup)
+	}
+	if u.Accounts[1].ServerGroup != "ICMarketsSC" {
+		t.Errorf("v2 server_group want ICMarketsSC, got %q", u.Accounts[1].ServerGroup)
+	}
+}
+
 // D-065 裁剪：有 canonicals 时，不匹配的 symbol（如 Stock CFD）被裁掉。
 func TestBuildMatrixUniverse_PruneUnmatched(t *testing.T) {
 	accounts := []*v1.BrokerAccount{

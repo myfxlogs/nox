@@ -6586,6 +6586,7 @@ type BrokerAccount struct {
 	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	CommissionBps *float64               `protobuf:"fixed64,11,opt,name=commission_bps,json=commissionBps,proto3,oneof" json:"commission_bps,omitempty"` // 账号真实佣金（bps/腿，D-036）；未设置 = 回退默认
 	IsReal        *bool                  `protobuf:"varint,12,opt,name=is_real,json=isReal,proto3,oneof" json:"is_real,omitempty"`                       // D-144 ① 三态：true=实盘, false=demo, 缺省=未知
+	ServerGroup   string                 `protobuf:"bytes,13,opt,name=server_group,json=serverGroup,proto3" json:"server_group,omitempty"`               // D-150 ② 平台分组键=server 首段（首个 '-' 前，后端算好下发）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -6695,6 +6696,13 @@ func (x *BrokerAccount) GetIsReal() bool {
 		return *x.IsReal
 	}
 	return false
+}
+
+func (x *BrokerAccount) GetServerGroup() string {
+	if x != nil {
+		return x.ServerGroup
+	}
+	return ""
 }
 
 type ListBrokerAccountsRequest struct {
@@ -11040,7 +11048,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x11AddBrokerResponse\"+\n" +
 	"\x13RemoveBrokerRequest\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\"\x16\n" +
-	"\x14RemoveBrokerResponse\"\xed\x02\n" +
+	"\x14RemoveBrokerResponse\"\x90\x03\n" +
 	"\rBrokerAccount\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x1a\n" +
 	"\bplatform\x18\x02 \x01(\x05R\bplatform\x12\x12\n" +
@@ -11054,7 +11062,8 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"created_at\x18\n" +
 	" \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12*\n" +
 	"\x0ecommission_bps\x18\v \x01(\x01H\x00R\rcommissionBps\x88\x01\x01\x12\x1c\n" +
-	"\ais_real\x18\f \x01(\bH\x01R\x06isReal\x88\x01\x01B\x11\n" +
+	"\ais_real\x18\f \x01(\bH\x01R\x06isReal\x88\x01\x01\x12!\n" +
+	"\fserver_group\x18\r \x01(\tR\vserverGroupB\x11\n" +
 	"\x0f_commission_bpsB\n" +
 	"\n" +
 	"\b_is_realJ\x04\b\a\x10\b\"\x1b\n" +

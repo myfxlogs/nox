@@ -82,16 +82,17 @@ func (s *Service) ListBrokerAccounts(ctx context.Context, req *connect.Request[v
 	out := make([]*v1.BrokerAccount, 0, len(accounts))
 	for _, a := range accounts {
 		acct := &v1.BrokerAccount{
-			Venue:     a.Venue,
-			Platform:  int32(a.Platform),
-			Host:      a.Host,
-			Port:      int32(a.Port),
-			User:      a.User,
-			Server:    a.Server,
-			Alias:     a.Alias,
-			Status:    a.Status,
-			CreatedAt: timestamppb.New(a.CreatedAt),
-			IsReal:    a.IsReal, // D-144 ① 三态：*bool（nil=未知）
+			Venue:       a.Venue,
+			Platform:    int32(a.Platform),
+			Host:        a.Host,
+			Port:        int32(a.Port),
+			User:        a.User,
+			Server:      a.Server,
+			Alias:       a.Alias,
+			Status:      a.Status,
+			CreatedAt:   timestamppb.New(a.CreatedAt),
+			IsReal:      a.IsReal,              // D-144 ① 三态：*bool（nil=未知）
+			ServerGroup: serverGroup(a.Server), // D-150 ② 平台分组键后端算好下发
 		}
 		// 账号真实佣金（bps/腿，D-036）；nil = 未设置回退默认
 		acct.CommissionBps = a.CommissionBps
