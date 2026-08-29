@@ -7248,8 +7248,9 @@ type VerifyAccountResponse struct {
 	Equity        float64                `protobuf:"fixed64,2,opt,name=equity,proto3" json:"equity,omitempty"`
 	Currency      string                 `protobuf:"bytes,3,opt,name=currency,proto3" json:"currency,omitempty"`
 	Leverage      int32                  `protobuf:"varint,4,opt,name=leverage,proto3" json:"leverage,omitempty"`
-	Host          string                 `protobuf:"bytes,5,opt,name=host,proto3" json:"host,omitempty"`  // D-141 S5：多端点 failover 胜出 host（回传前端展示/落库）
-	Port          int32                  `protobuf:"varint,6,opt,name=port,proto3" json:"port,omitempty"` // D-141 S5：胜出端点端口
+	Host          string                 `protobuf:"bytes,5,opt,name=host,proto3" json:"host,omitempty"`                             // D-141 S5：多端点 failover 胜出 host（回传前端展示/落库）
+	Port          int32                  `protobuf:"varint,6,opt,name=port,proto3" json:"port,omitempty"`                            // D-141 S5：胜出端点端口
+	LatencyMs     int32                  `protobuf:"varint,7,opt,name=latency_ms,json=latencyMs,proto3" json:"latency_ms,omitempty"` // D-142：PingHost 延迟预排序胜出端点延迟（ms，0=未探测/MT4 无 PingHost）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7322,6 +7323,13 @@ func (x *VerifyAccountResponse) GetHost() string {
 func (x *VerifyAccountResponse) GetPort() int32 {
 	if x != nil {
 		return x.Port
+	}
+	return 0
+}
+
+func (x *VerifyAccountResponse) GetLatencyMs() int32 {
+	if x != nil {
+		return x.LatencyMs
 	}
 	return 0
 }
@@ -10947,14 +10955,16 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x04port\x18\x03 \x01(\x05R\x04port\x12\x12\n" +
 	"\x04user\x18\x04 \x01(\x03R\x04user\x12\x1a\n" +
 	"\bpassword\x18\x05 \x01(\tR\bpassword\x12\x16\n" +
-	"\x06server\x18\x06 \x01(\tR\x06server\"\xa9\x01\n" +
+	"\x06server\x18\x06 \x01(\tR\x06server\"\xc8\x01\n" +
 	"\x15VerifyAccountResponse\x12\x18\n" +
 	"\abalance\x18\x01 \x01(\x01R\abalance\x12\x16\n" +
 	"\x06equity\x18\x02 \x01(\x01R\x06equity\x12\x1a\n" +
 	"\bcurrency\x18\x03 \x01(\tR\bcurrency\x12\x1a\n" +
 	"\bleverage\x18\x04 \x01(\x05R\bleverage\x12\x12\n" +
 	"\x04host\x18\x05 \x01(\tR\x04host\x12\x12\n" +
-	"\x04port\x18\x06 \x01(\x05R\x04port\",\n" +
+	"\x04port\x18\x06 \x01(\x05R\x04port\x12\x1d\n" +
+	"\n" +
+	"latency_ms\x18\a \x01(\x05R\tlatencyMs\",\n" +
 	"\x14BrokerSymbolsRequest\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\"`\n" +
 	"\vSymbolEntry\x12\x16\n" +

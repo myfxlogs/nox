@@ -1,19 +1,30 @@
 // D-141 S5：broker 接入多端点 failover + 私网过滤。
+// D-142 ①：PingHost 延迟预排序——failoverVerify 前对公网端点逐个 PingHost，按延迟升序排列。
 // mtapi 目录 access 首端点常为内网脏数据（Pepperstone-Demo=10.20.111.43 实证），
-// 故 VerifyAccount/AddBroker 收到逗号分隔多端点串后：滤 RFC1918+环回 → 依次试连 → 首个成功者胜出。
+// 故 VerifyAccount/AddBroker 收到逗号分隔多端点串后：滤 RFC1918+环回 → PingHost 预排序 → 依次试连 → 首个成功者胜出。
 package dashboard
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"net"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
+
+	mt4pb "arb/internal/adapter/gen/mtapi/mt4"
+	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
+
+	"google.golang.org/grpc"
 )
 
 // endpoint 单个 broker 服务器端点（host:port）。
 type endpoint struct {
-	host string
-	port int32
+	host    string
+	port    int32
+	latency int32 // D-142 ①：PingHost 延迟（ms），0 = 未探测/MT4 无 PingHost
 }
 
 // parsePublicEndpoints 解析逗号分隔的 access 串，滤除 RFC1918 私网与环回地址。
@@ -93,4 +104,111 @@ type failoverResult struct {
 	leverage int32
 	host     string
 	port     int32
+	latency  int32 // D-142 ①：胜出端点 PingHost 延迟（ms），0 = 未探测
+}
+
+// pingSortEndpoints 对端点列表做 PingHost 延迟预排序（D-142 ①，纯函数可单测）。
+// pingFn 对单个端点探测延迟（ms），error = 该端点探测失败。
+// 成功探测的端点按延迟升序排前，失败端点按原序排后；
+// 全部失败或 pingFn=nil → 返回原顺序（探测是优化不是依赖）。
+func pingSortEndpoints(eps []endpoint, pingFn func(endpoint) (int32, error)) []endpoint {
+	if len(eps) <= 1 || pingFn == nil {
+		return eps
+	}
+	type scored struct {
+		ep      endpoint
+		latency int32
+		ok      bool
+		idx     int
+	}
+	scoredEps := make([]scored, len(eps))
+	anyOK := false
+	for i, ep := range eps {
+		lat, err := pingFn(ep)
+		if err == nil && lat >= 0 {
+			scoredEps[i] = scored{ep: ep, latency: lat, ok: true, idx: i}
+			anyOK = true
+		} else {
+			scoredEps[i] = scored{ep: ep, latency: -1, ok: false, idx: i}
+		}
+	}
+	if !anyOK {
+		return eps // 全失败 → 回退原顺序
+	}
+	sort.SliceStable(scoredEps, func(i, j int) bool {
+		if scoredEps[i].ok != scoredEps[j].ok {
+			return scoredEps[i].ok // 成功排前
+		}
+		if !scoredEps[i].ok {
+			return scoredEps[i].idx < scoredEps[j].idx // 失败按原序
+		}
+		return scoredEps[i].latency < scoredEps[j].latency // 成功按延迟升序
+	})
+	out := make([]endpoint, len(scoredEps))
+	for i, s := range scoredEps {
+		s.ep.latency = s.latency
+		out[i] = s.ep
+	}
+	return out
+}
+
+// pingSortViaGateway 通过 mtapi 网关 PingHost 对端点做延迟预排序（D-142 ①）。
+// platform=0 MT4 走 mt4Gateway / 1 MT5 走 mt5Gateway。临时拨号即查即断（同 dialMT 模式）。
+// 网关不可达或全失败 → 返回原顺序（探测是优化不是依赖）。
+func pingSortViaGateway(ctx context.Context, platform int32, eps []endpoint) []endpoint {
+	if len(eps) <= 1 {
+		return eps
+	}
+	gateway := mt5Gateway
+	if platform == 0 {
+		gateway = mt4Gateway
+	}
+	conn, err := dialMT(ctx, gateway)
+	if err != nil {
+		log.Printf("[broker] ping dial %s: %v (skip pre-sort)", gateway, err)
+		return eps
+	}
+	defer conn.Close()
+	pingFn := newPingFn(platform, conn)
+	if pingFn == nil {
+		return eps
+	}
+	return pingSortEndpoints(eps, pingFn)
+}
+
+// newPingFn 构造 PingHost 探测闭包（单端点 3s 超时）。nil = 未知 platform。
+func newPingFn(platform int32, conn *grpc.ClientConn) func(endpoint) (int32, error) {
+	switch platform {
+	case 0:
+		c := mt4pb.NewServiceClient(conn)
+		return func(ep endpoint) (int32, error) {
+			pctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			reply, err := c.PingHost(pctx, &mt4pb.PingHostRequest{Host: ep.host, Port: ep.port})
+			if err != nil {
+				return 0, err
+			}
+			if e := reply.GetError(); e != nil {
+				return 0, fmt.Errorf("ping: %s", e.GetMessage())
+			}
+			return reply.GetResult(), nil
+		}
+	case 1:
+		c := mt5pb.NewServiceClient(conn)
+		return func(ep endpoint) (int32, error) {
+			pctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			port := ep.port
+			reply, err := c.PingHost(pctx, &mt5pb.PingHostRequest{Host: ep.host, Port: &port})
+			if err != nil {
+				return 0, err
+			}
+			if e := reply.GetError(); e != nil {
+				return 0, fmt.Errorf("ping: %s", e.GetMessage())
+			}
+			return reply.GetResult(), nil
+		}
+	default:
+		return nil
+	}
 }

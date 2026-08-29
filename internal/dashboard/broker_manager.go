@@ -105,6 +105,11 @@ type BrokerManager struct {
 	// AlertSink 断流分级告警下沉（D-104 P2 U2，MarginSink 同模式三点注入链）。
 	// main 注入 func(level, msg string) { _ = st.InsertAlert(ctx, nil, level, msg) }，nil 安全。
 	AlertSink func(level, msg string)
+
+	// RuleBackfill D-142 ②：AddBroker 后异步触发规则库补录（免重启）。
+	// symbolPlan 自动映射（名字匹配）在 startAdapter 内已完成；BackfillRuleMappings 补 regex 规则命中
+	// 但名字不匹配的符号（source='rule'）。wiring/main 注入（同 SwapKick 模式），nil=未接线（测试直接构造）。
+	RuleBackfill func(ctx context.Context, venue string)
 }
 
 // NewBrokerManager 创建管理器。symbolsTTL 由调用方从 config.SymbolsTTL 注入。
@@ -173,6 +178,7 @@ func (m *BrokerManager) StartAll(ctx context.Context) {
 }
 
 // AddBroker 持久化账号并启动适配器。连接失败不落库成功状态。
+// D-142 ②：startAdapter 成功后异步触发 BackfillRuleMappings（免重启补 regex 规则映射）。
 func (m *BrokerManager) AddBroker(ctx context.Context, a *pgstore.BrokerAccount) error {
 	a.Status = "connected"
 	if err := m.store.InsertBrokerAccount(ctx, a); err != nil {
@@ -181,6 +187,15 @@ func (m *BrokerManager) AddBroker(ctx context.Context, a *pgstore.BrokerAccount)
 	if err := m.startAdapter(ctx, a); err != nil {
 		_ = m.store.SetBrokerAccountStatus(ctx, a.Venue, "failed")
 		return err
+	}
+	// D-142 ②：异步触发规则库补录（best-effort，失败只 log 不影响添加）。
+	// symbolPlan 已完成名字匹配自动映射（source='manual'）；BackfillRuleMappings 补 regex 命中项（source='rule'）。
+	if m.RuleBackfill != nil {
+		go func() {
+			bctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+			m.RuleBackfill(bctx, a.Venue)
+		}()
 	}
 	return nil
 }
