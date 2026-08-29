@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -36,6 +37,8 @@ func (s *Service) ListBrokerPositions(ctx context.Context, req *connect.Request[
 	annotatePositionID(ctx, s.store, out)
 	// F3：标注账号别名（venue→alias map，未命中留空前端回落 venue）
 	annotateAccountAlias(ctx, s.store, out)
+	// D-152 微件①：CEX 腿按 (position_id, venue) 聚合 cashflows 填 swap（MT 不动）
+	annotateCEXSwap(ctx, s.store, out)
 	return connect.NewResponse(&v1.ListBrokerPositionsResponse{Positions: out}), nil
 }
 
@@ -125,6 +128,44 @@ func annotateAccountAlias(ctx context.Context, store *pgstore.Store, bps []*v1.B
 func annotateAliasWithMap(bps []*v1.BrokerPosition, m map[string]string) {
 	for _, bp := range bps {
 		bp.AccountAlias = m[bp.Venue]
+	}
+}
+
+// annotateCEXSwap D-152 微件①：CEX 腿按 (position_id, venue) 聚合 position_cashflows 填 swap 字段。
+// MT 腿不动（Order.Swap 透传链已完整）。仅在 annotatePositionID 之后调用（需 position_id）。
+// 查询失败不阻断（fail-open，保留原 swap）。无 cashflow 行的 CEX 仓保留原 swap（Gate funding / 0）。
+func annotateCEXSwap(ctx context.Context, store *pgstore.Store, bps []*v1.BrokerPosition) {
+	if len(bps) == 0 || store == nil {
+		return
+	}
+	// 收集 CEX 仓的 position_id（去重）
+	seen := make(map[int64]bool)
+	var posIDs []int64
+	for _, bp := range bps {
+		if bp.PositionId > 0 && isCEXVenueKey(bp.VenueKey) && !seen[bp.PositionId] {
+			seen[bp.PositionId] = true
+			posIDs = append(posIDs, bp.PositionId)
+		}
+	}
+	if len(posIDs) == 0 {
+		return
+	}
+	sums, err := store.SumCashflowsByPosVenue(ctx, posIDs)
+	if err != nil {
+		return // fail-open
+	}
+	annotateCEXSwapWithMap(bps, sums)
+}
+
+// annotateCEXSwapWithMap 纯函数：用预建 (posID\x00venue)→sum map 标注 CEX 仓 swap（可单测）。
+func annotateCEXSwapWithMap(bps []*v1.BrokerPosition, sums map[string]float64) {
+	for _, bp := range bps {
+		if bp.PositionId > 0 && isCEXVenueKey(bp.VenueKey) {
+			key := fmt.Sprintf("%d\x00%s", bp.PositionId, bp.VenueKey)
+			if sum, ok := sums[key]; ok {
+				bp.Swap = sum
+			}
+		}
 	}
 }
 
