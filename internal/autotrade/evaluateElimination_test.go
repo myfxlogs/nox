@@ -18,22 +18,22 @@ func TestEvaluateElimination_AlreadyDisabled(t *testing.T) {
 	}
 }
 
-// TestEvaluateElimination_LowWinRate 胜率<30% 禁用。
+// TestEvaluateElimination_LowWinRate 胜率<30% 禁用（大样本≥30 单条件可信，D-136 判据分级）。
 func TestEvaluateElimination_LowWinRate(t *testing.T) {
-	disable, reason := evaluateElimination(EliminationInput{TotalTrades: 5, WinRate: 0.2, AvgPnl: 1})
+	disable, reason := evaluateElimination(EliminationInput{TotalTrades: 30, WinRate: 0.2, AvgPnl: 1})
 	if !disable {
-		t.Fatal("want disable on winRate<0.3")
+		t.Fatal("want disable on winRate<0.3 (large sample)")
 	}
 	if reason == "" {
 		t.Fatal("want non-empty reason")
 	}
 }
 
-// TestEvaluateElimination_NegativeAvgPnl avg_pnl<0 禁用。
+// TestEvaluateElimination_NegativeAvgPnl avg_pnl<0 禁用（大样本≥30 单条件可信，D-136 判据分级）。
 func TestEvaluateElimination_NegativeAvgPnl(t *testing.T) {
-	disable, _ := evaluateElimination(EliminationInput{TotalTrades: 5, WinRate: 0.5, AvgPnl: -1})
+	disable, _ := evaluateElimination(EliminationInput{TotalTrades: 30, WinRate: 0.5, AvgPnl: -1})
 	if !disable {
-		t.Fatal("want disable on avgPnl<0")
+		t.Fatal("want disable on avgPnl<0 (large sample)")
 	}
 }
 

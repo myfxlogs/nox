@@ -97,8 +97,18 @@ type EliminationInput struct {
 	Disabled    bool
 }
 
-// evaluateElimination 策略淘汰判定（从 updateStrategyStat 抽出，设计 §4.3）。
-// ≥5 笔且 (胜率<30% 或 avg_pnl<0) → 禁用。返回 disable + reason。
+// eliminationSampleFloor 小样本噪音保护门槛（D-136）。
+// 依据：PERP_FUNDING 日频 ~19 笔，30 笔≈1.5 天即再评估，兼顾灵敏度与噪音保护。
+// <此值时单条件（avgPnl<0 或 胜率<30%）易被小样本噪音触发误杀高频微利策略。
+const eliminationSampleFloor = 30
+
+// evaluateElimination 策略淘汰判定（从 updateStrategyStat 抽出，设计 §4.3；D-136 判据分级）。
+// 样本量分级：
+//
+//	<30 笔（小样本噪音保护）：胜率<30% 且 avgPnl<0 → 禁用（双条件防误杀）
+//	≥30 笔（大样本，大数定律）：胜率<30% 或 avgPnl<0 任一 → 禁用（单条件可信）
+//
+// 返回 disable + reason。
 func evaluateElimination(in EliminationInput) (disable bool, reason string) {
 	if in.Disabled {
 		return false, ""
@@ -106,11 +116,17 @@ func evaluateElimination(in EliminationInput) (disable bool, reason string) {
 	if in.TotalTrades < 5 {
 		return false, ""
 	}
-	if in.WinRate < 0.3 {
-		return true, fmt.Sprintf("auto-disabled: %d trades, winRate=%.0f%%, avgPnl=$%.2f", in.TotalTrades, in.WinRate*100, in.AvgPnl)
+	reasonFmt := "auto-disabled: %d trades, winRate=%.0f%%, avgPnl=$%.2f"
+	if in.TotalTrades < eliminationSampleFloor {
+		// 小样本：双条件（噪音保护，D-136 修复①——PERP_FUNDING 7 笔 winRate=60% avg=-$0.05 误杀先例）
+		if in.WinRate < 0.3 && in.AvgPnl < 0 {
+			return true, fmt.Sprintf(reasonFmt, in.TotalTrades, in.WinRate*100, in.AvgPnl)
+		}
+		return false, ""
 	}
-	if in.AvgPnl < 0 {
-		return true, fmt.Sprintf("auto-disabled: %d trades, winRate=%.0f%%, avgPnl=$%.2f", in.TotalTrades, in.WinRate*100, in.AvgPnl)
+	// 大样本：单条件（大数定律，均值/胜率可信）
+	if in.WinRate < 0.3 || in.AvgPnl < 0 {
+		return true, fmt.Sprintf(reasonFmt, in.TotalTrades, in.WinRate*100, in.AvgPnl)
 	}
 	return false, ""
 }
