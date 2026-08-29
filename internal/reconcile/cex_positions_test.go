@@ -14,6 +14,7 @@ import (
 
 // TestD121_OKXPositions OKX perp 持仓解析（long/short 分列，pos=合约数）。
 // D-146 S5 微件③ 返修：保证金优先 imr（初始保证金），margin 回落；mmr 映射 MaintMargin。
+// D-146 微件③ 追加：sim 环境 imr 实证为恒定假值（$1 名义也占 ~$333），demo 不展示（宁缺毋假）。
 func TestD121_OKXPositions(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v5/account/positions" {
@@ -32,6 +33,7 @@ func TestD121_OKXPositions(t *testing.T) {
 	}))
 	defer srv.Close()
 
+	// simulated=true（demo）：imr 假值→initMargin=0（宁缺毋假）
 	q := NewCEXPositionQuerier("okx", "perp", "key", "secret", "pass", srv.URL, true)
 	orders, err := q.QueryOpenedOrders(context.Background())
 	if err != nil {
@@ -50,11 +52,11 @@ func TestD121_OKXPositions(t *testing.T) {
 	if orders[0].Ticket != "ETH-USDT-SWAP" {
 		t.Errorf("order[0] Ticket should = Symbol for CEX aggregate: %s", orders[0].Ticket)
 	}
-	// D-146 S5 微件③ 返修：OKX imr 优先 → InitialMargin
-	if orders[0].InitialMargin != 497.63 {
-		t.Errorf("order[0] InitialMargin = %.4f, want 497.63 (OKX imr 优先)", orders[0].InitialMargin)
+	// D-146 微件③ 追加：sim 环境 imr 假值→initMargin=0（宁缺毋假）
+	if orders[0].InitialMargin != 0 {
+		t.Errorf("order[0] InitialMargin = %.4f, want 0 (sim imr 假值宁缺毋假)", orders[0].InitialMargin)
 	}
-	// D-146 S5 微件③ 返修：OKX mmr → MaintMargin
+	// mmr 仍透传（维持保证金非假值）
 	if orders[0].MaintMargin != 39.81 {
 		t.Errorf("order[0] MaintMargin = %.4f, want 39.81 (OKX mmr)", orders[0].MaintMargin)
 	}
@@ -62,12 +64,40 @@ func TestD121_OKXPositions(t *testing.T) {
 	if orders[1].Symbol != "BTC-USDT-SWAP" || orders[1].Side != "SELL" || orders[1].Volume != 10 {
 		t.Errorf("order[1] mismatch: %+v", orders[1])
 	}
-	if orders[1].InitialMargin != 600.00 || orders[1].MaintMargin != 48.00 {
-		t.Errorf("order[1] margin mismatch: init=%.4f maint=%.4f, want 600.00/48.00 (imr/mmr)", orders[1].InitialMargin, orders[1].MaintMargin)
+	if orders[1].InitialMargin != 0 || orders[1].MaintMargin != 48.00 {
+		t.Errorf("order[1] margin mismatch: init=%.4f maint=%.4f, want 0/48.00 (sim init=0, mmr)", orders[1].InitialMargin, orders[1].MaintMargin)
+	}
+}
+
+// TestD146S5_OKXMarginRealTrue 真金环境（simulated=false）imr 正常透传（D-146 微件③ 追加回归锚）。
+func TestD146S5_OKXMarginRealTrue(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]any{
+			"code": "0",
+			"data": []map[string]any{
+				{"instId": "ETH-USDT-SWAP", "posSide": "long", "pos": "40", "avgPx": "2488.5", "upl": "1.23", "fee": "-0.05", "cTime": "1693526400000", "margin": "497.70", "imr": "497.63", "mmr": "39.81"},
+			},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	// simulated=false（真金）：imr 真值正常透传
+	q := NewCEXPositionQuerier("okx", "perp", "key", "secret", "pass", srv.URL, false)
+	orders, err := q.QueryOpenedOrders(context.Background())
+	if err != nil {
+		t.Fatalf("okx positions: %v", err)
+	}
+	if len(orders) != 1 {
+		t.Fatalf("want 1 order, got %d", len(orders))
+	}
+	if orders[0].InitialMargin != 497.63 {
+		t.Errorf("真金 imr 应透传，InitialMargin = %.4f, want 497.63", orders[0].InitialMargin)
 	}
 }
 
 // TestD146S5_OKXMarginFallback OKX imr 缺失时 margin 回落（D-146 S5 微件③ 返修）。
+// sim 环境 imr 假值置 0 优先于 margin 回落（宁缺毋假）。
 func TestD146S5_OKXMarginFallback(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{
@@ -81,6 +111,7 @@ func TestD146S5_OKXMarginFallback(t *testing.T) {
 	}))
 	defer srv.Close()
 
+	// simulated=true（demo）：imr 缺失→margin 回落=497.70，但 sim 环境置 0（宁缺毋假）
 	q := NewCEXPositionQuerier("okx", "perp", "key", "secret", "pass", srv.URL, true)
 	orders, err := q.QueryOpenedOrders(context.Background())
 	if err != nil {
@@ -89,9 +120,9 @@ func TestD146S5_OKXMarginFallback(t *testing.T) {
 	if len(orders) != 1 {
 		t.Fatalf("want 1 order, got %d", len(orders))
 	}
-	// imr 缺失 → 回落 margin=497.70
-	if orders[0].InitialMargin != 497.70 {
-		t.Errorf("imr 缺失应回落 margin，InitialMargin = %.4f, want 497.70", orders[0].InitialMargin)
+	// sim 环境：margin 回落后仍被 sim 置 0
+	if orders[0].InitialMargin != 0 {
+		t.Errorf("sim 环境 margin 回落后仍置 0，InitialMargin = %.4f, want 0", orders[0].InitialMargin)
 	}
 	// mmr 缺失 → MaintMargin=0
 	if orders[0].MaintMargin != 0 {

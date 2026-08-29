@@ -70,10 +70,8 @@ func (q *CEXPositionQuerier) QueryOpenedOrders(ctx context.Context) ([]VenueOrde
 // === OKX ===
 // GET /api/v5/account/positions?instType=SWAP — 全部 SWAP 持仓。
 // long_short_mode：long/short 分列；pos=合约数（张）；upl=浮盈（USDT）；fee=累计手续费。
-//
-// D-146 S5 微件③ 返修：保证金口径优先 imr（初始保证金，Initial Margin Requirement），
-// margin 回落（imr 是开仓时快照，margin 是当前占用——imr 更贴近"初始保证金"语义）。
-// mmr（维持保证金，Maintenance Margin Requirement）映射 MaintMargin。
+// D-146 S5 微件③ 返修：保证金优先 imr（初始保证金）→margin 回落；mmr→MaintMargin。
+// D-146 微件③ 追加：sim 环境 imr 实证为恒定假值（$1 名义也占 ~$333），demo 置 0（宁缺毋假）。
 func (q *CEXPositionQuerier) okxPositions(ctx context.Context) ([]VenueOrder, error) {
 	const path = "/api/v5/account/positions?instType=SWAP"
 	ts := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
@@ -134,6 +132,11 @@ func (q *CEXPositionQuerier) okxPositions(ctx context.Context) ([]VenueOrder, er
 		initMargin, _ := strconv.ParseFloat(p.Imr, 64)
 		if initMargin == 0 {
 			initMargin, _ = strconv.ParseFloat(p.Margin, 64) // 回落：imr 缺失时用 margin（当前占用）
+		}
+		// D-146 微件③ 追加：sim 环境 imr 实证为恒定假值（$1 名义也占 ~$333，2026-08-29 业主实证
+		// 「okx 保证金都这么高」）——demo 不展示（宁缺毋假），真金（simulated=false）自然恢复真值。
+		if q.simulated {
+			initMargin = 0
 		}
 		maintMargin, _ := strconv.ParseFloat(p.Mmr, 64)
 		out = append(out, VenueOrder{
