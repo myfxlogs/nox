@@ -267,6 +267,8 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 		return
 	}
 	dedupKey := combo.Key("SWAPARB", canonical, venueLong, venueShort)
+	// D-142 ④：组合保证金预算观察版告警（只告警不拦截）+ 杠杆不对称提示。
+	e.observeMarginBudget(canonical, venueLong, venueShort, notional)
 	intent := TradeIntent{
 		Strategy:    "SWAPARB",
 		Canonical:   canonical,

@@ -52,6 +52,11 @@ type Config struct {
 	// D-107 P4：事件触发扫描节流窗口（ARB_SCAN_THROTTLE，默认 30s）。
 	// Kick() 触发 scanIfDue：窗口内丢弃、超窗扫。兜底 10min 保证有界延迟。
 	ScanThrottle time.Duration
+
+	// D-142 ④：组合保证金预算观察版告警（只告警不拦截）。
+	// 双腿合计保证金 / min(equity) > 此值 → warn 告警。0 = 不启用。
+	// 杠杆不对称（两腿 leverage 差异显著）→ info 提示。
+	SwapArbMarginBudgetPct float64
 }
 
 // Engine 自动交易引擎：三 loop → gate → 执行 → 自动平仓 → 策略淘汰（D-070/D-072）。
