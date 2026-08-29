@@ -1,10 +1,10 @@
 package autotrade
 
-// D-144 ① 单测：discoverSwapCombos 同类型配对安全红线。
+// D-144 ① 三态单测：discoverSwapCombos 同类型配对安全红线。
 // 用例①：跨类型组合（实盘×demo）被滤——零跨类型候选。
 // 用例②：同类型组合不受影响（demo×demo / 实盘×实盘 均通过）。
-// 用例③：is_real 默认 false 兼容存量（无 is_real 行 → 全 demo → 全通过）。
-// 用例④：纯函数 isRealPair。
+// 用例③：未知(NULL)不配对——is_real=NULL 的账户不参与组合（保守）。
+// 用例④：纯函数 isRealPair（三态：nil/缺失→不配对）。
 
 import (
 	"context"
@@ -15,8 +15,9 @@ import (
 	"arb/internal/store/pgstore"
 )
 
-// insertIsRealTestFacts 插入 swap facts + 设置 broker_accounts.is_real 标记。
-func insertIsRealTestFacts(t *testing.T, s *pgstore.Store, facts []fact.Fact, realVenues []string) {
+// insertIsRealTestFacts 插入 swap facts + 设置 broker_accounts.is_real 标记（三态）。
+// realVenues → is_real=true; demoVenues → is_real=false; nilVenues → is_real=NULL(未知)。
+func insertIsRealTestFacts(t *testing.T, s *pgstore.Store, facts []fact.Fact, realVenues, demoVenues, nilVenues []string) {
 	t.Helper()
 	ctx := context.Background()
 	if _, err := s.Pool().Exec(ctx, `TRUNCATE facts`); err != nil {
@@ -28,24 +29,22 @@ func insertIsRealTestFacts(t *testing.T, s *pgstore.Store, facts []fact.Fact, re
 	if err := s.InsertFacts(ctx, facts); err != nil {
 		t.Fatalf("insert facts: %v", err)
 	}
-	now := time.Now().UTC()
-	for _, v := range realVenues {
+	insert := func(v string, isReal interface{}) {
 		if _, err := s.Pool().Exec(ctx,
 			`INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, server, status, is_real)
-			 VALUES ($1, 1, 'h', 443, 1, 'p', 's', 'connected', true) ON CONFLICT DO NOTHING`, v); err != nil {
+			 VALUES ($1, 1, 'h', 443, 1, 'p', 's', 'connected', $2) ON CONFLICT DO NOTHING`, v, isReal); err != nil {
 			t.Fatalf("insert broker_account %s: %v", v, err)
 		}
 	}
-	// demo venues（is_real=false 默认）——确保有行存在以测试同类型
-	demoVenues := []string{"vA", "vB", "vC", "vD"}
-	for _, v := range demoVenues {
-		if _, err := s.Pool().Exec(ctx,
-			`INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, server, status, is_real)
-			 VALUES ($1, 1, 'h', 443, 1, 'p', 's', 'connected', false) ON CONFLICT DO NOTHING`, v); err != nil {
-			t.Fatalf("insert demo broker_account %s: %v", v, err)
-		}
+	for _, v := range realVenues {
+		insert(v, true)
 	}
-	_ = now
+	for _, v := range demoVenues {
+		insert(v, false)
+	}
+	for _, v := range nilVenues {
+		insert(v, nil) // NULL=未知
+	}
 }
 
 // 用例①：跨类型组合（实盘×demo）被滤——零跨类型候选。
@@ -56,7 +55,7 @@ func TestDiscoverSwapCombos_CrossTypeFiltered(t *testing.T) {
 	insertIsRealTestFacts(t, s, []fact.Fact{
 		{Kind: fact.KindSwapLong, Venue: "vA", Symbol: "AUDJPY", Value: 5.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},
 		{Kind: fact.KindSwapShort, Venue: "vB", Symbol: "AUDJPY", Value: -3.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},
-	}, []string{"vA"})
+	}, []string{"vA"}, []string{"vB"}, nil)
 	e := &Engine{store: s, cfg: Config{MinNetSwapBps: 0, SwapFactMaxAge: 2 * time.Hour}}
 	combos := e.discoverSwapCombos(context.Background())
 	if len(combos) != 0 {
@@ -75,7 +74,7 @@ func TestDiscoverSwapCombos_SameTypePasses(t *testing.T) {
 		{Kind: fact.KindSwapShort, Venue: "vB", Symbol: "AUDJPY", Value: -3.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},
 		{Kind: fact.KindSwapLong, Venue: "vC", Symbol: "EURUSD", Value: 5.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},
 		{Kind: fact.KindSwapShort, Venue: "vD", Symbol: "EURUSD", Value: -3.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},
-	}, []string{"vC", "vD"})
+	}, []string{"vC", "vD"}, []string{"vA", "vB"}, nil)
 	e := &Engine{store: s, cfg: Config{MinNetSwapBps: 0, SwapFactMaxAge: 2 * time.Hour}}
 	combos := e.discoverSwapCombos(context.Background())
 	if len(combos) != 2 {
@@ -83,35 +82,40 @@ func TestDiscoverSwapCombos_SameTypePasses(t *testing.T) {
 	}
 }
 
-// 用例③：is_real 默认 false 兼容存量（无 is_real=true 行 → 全 demo → 全通过）。
-func TestDiscoverSwapCombos_DefaultFalseCompat(t *testing.T) {
+// 用例③：未知(NULL)不配对——is_real=NULL 的账户不参与组合（保守）。
+func TestDiscoverSwapCombos_UnknownNotPaired(t *testing.T) {
 	s := testAccumStore(t)
 	now := time.Now().UTC()
-	// 无实盘标记 → 全 demo → 同类型 → 通过
+	// vA=未知 long, vB=未知 short → 均未知 → 不配对 → 零组合
 	insertIsRealTestFacts(t, s, []fact.Fact{
 		{Kind: fact.KindSwapLong, Venue: "vA", Symbol: "AUDJPY", Value: 5.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},
 		{Kind: fact.KindSwapShort, Venue: "vB", Symbol: "AUDJPY", Value: -3.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},
-	}, nil) // 无实盘
+	}, nil, nil, []string{"vA", "vB"})
 	e := &Engine{store: s, cfg: Config{MinNetSwapBps: 0, SwapFactMaxAge: 2 * time.Hour}}
 	combos := e.discoverSwapCombos(context.Background())
-	if len(combos) != 1 {
-		t.Errorf("默认全 demo → 同类型 → 应通过，want 1, got %d", len(combos))
+	if len(combos) != 0 {
+		t.Errorf("未知(NULL)账户不应配对，got %d combos: %+v", len(combos), combos)
 	}
 }
 
-// 用例④：纯函数 isRealPair
+// 用例④：纯函数 isRealPair（三态）
 func TestIsRealPair(t *testing.T) {
-	m := map[string]bool{"vA": true, "vB": false}
+	tr := true
+	fl := false
+	m := map[string]*bool{"vA": &tr, "vB": &fl, "vE": nil}
 	tests := []struct {
 		a, b string
 		want bool
 	}{
-		{"vA", "vA", true},  // 同 venue 同类型
+		{"vA", "vA", true},  // 同 venue 同实盘
 		{"vA", "vB", false}, // 实盘×demo → 滤
 		{"vB", "vA", false}, // demo×实盘 → 滤
 		{"vB", "vB", true},  // demo×demo → 通过
-		{"vC", "vD", true},  // 均不在 map → 默认 false → 同类型 → 通过
-		{"vA", "vC", false}, // 实盘×未知(demo) → 滤
+		{"vC", "vD", false}, // 均不在 map → 缺失 → 不配对（三态保守）
+		{"vA", "vC", false}, // 实盘×缺失 → 不配对
+		{"vA", "vE", false}, // 实盘×未知(nil) → 不配对
+		{"vE", "vE", false}, // 未知×未知 → 不配对
+		{"vE", "vB", false}, // 未知×demo → 不配对
 	}
 	for _, tt := range tests {
 		got := isRealPair(m, tt.a, tt.b)

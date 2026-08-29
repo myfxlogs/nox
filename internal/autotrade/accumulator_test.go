@@ -31,6 +31,25 @@ func testAccumStore(t *testing.T) *pgstore.Store {
 	return s
 }
 
+// seedDemoAccounts D-144 ① 三态：清 broker_accounts 后为指定 venues 插入 demo 行（is_real=false）。
+// discoverSwapCombos 同类型配对要求两腿在 broker_accounts 有行且 is_real 非 nil；
+// 旧测试（freshness/scanSwapArb 等）未插行 → 三态保守不配对 → 需此 helper 补行。
+// TRUNCATE 先清表避免其他测试残留行（isreal 测试插 real/demo 混合）干扰。
+func seedDemoAccounts(t *testing.T, s *pgstore.Store, venues ...string) {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE broker_accounts`); err != nil {
+		t.Fatalf("truncate broker_accounts: %v", err)
+	}
+	for _, v := range venues {
+		if _, err := s.Pool().Exec(ctx,
+			`INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, server, status, is_real)
+			 VALUES ($1, 1, 'h', 443, 1, 'p', 's', 'connected', false)`, v); err != nil {
+			t.Fatalf("seedDemoAccounts %s: %v", v, err)
+		}
+	}
+}
+
 // TestAccumulator_CumulativeOverwrite D-080 S4：两次 flush 后 avg 正确（累计覆盖语义）。
 // 同组合喂 3 样本（10/20/30）→ flush → 再喂 2 样本（40/50）→ flush → DB 应为 5 样本 avg=30。
 func TestAccumulator_CumulativeOverwrite(t *testing.T) {

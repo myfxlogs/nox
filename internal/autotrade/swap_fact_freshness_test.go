@@ -15,6 +15,7 @@ func TestDiscoverSwapCombos_FreshnessGate_FreshPass(t *testing.T) {
 	if _, err := s.Pool().Exec(ctx, `TRUNCATE facts`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
+	seedDemoAccounts(t, s, "vA", "vB") // D-144 ① 三态：补 broker_accounts 行（demo）
 	now := time.Now().UTC()
 	if err := s.InsertFacts(ctx, []fact.Fact{
 		{Kind: fact.KindSwapLong, Venue: "vA", Symbol: "AUDJPY", Value: 5.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},
@@ -61,6 +62,7 @@ func TestDiscoverSwapCombos_FreshnessGate_Mixed(t *testing.T) {
 	if _, err := s.Pool().Exec(ctx, `TRUNCATE facts`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
+	seedDemoAccounts(t, s, "vA", "vB", "vC", "vD") // D-144 ① 三态：补 broker_accounts 行（demo）
 	now := time.Now().UTC()
 	staleTs := now.Add(-3 * time.Hour)
 	// vA long fresh, vC long stale; vB short fresh, vD short stale
@@ -90,6 +92,7 @@ func TestDiscoverSwapCombos_FreshnessGate_Disabled(t *testing.T) {
 	if _, err := s.Pool().Exec(ctx, `TRUNCATE facts`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
+	seedDemoAccounts(t, s, "vA", "vB") // D-144 ① 三态：补 broker_accounts 行（demo）
 	now := time.Now().UTC()
 	staleTs := now.Add(-24 * time.Hour)
 	if err := s.InsertFacts(ctx, []fact.Fact{

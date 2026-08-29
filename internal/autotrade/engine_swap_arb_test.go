@@ -19,6 +19,7 @@ func TestScanSwapArb_DisabledStillFeedsRollup(t *testing.T) {
 	if _, err := s.Pool().Exec(ctx, `TRUNCATE facts, autotrade_logs, combo_daily_rollup, strategy_stats`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
+	seedDemoAccounts(t, s, "vA", "vB") // D-144 ① 三态：补 broker_accounts 行（demo）
 	// seed facts：swap_long AUDJPY vA=+5 / swap_short AUDJPY vB=−3 → net=+2 bps
 	now := time.Now().UTC()
 	if err := s.InsertFacts(ctx, []fact.Fact{
