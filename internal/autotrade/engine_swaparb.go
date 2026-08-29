@@ -107,6 +107,7 @@ func buildCooldownSet(closed []pgstore.Position, cooldownDays int, now time.Time
 type swapComboCandidate struct {
 	canonical, vLong, vShort string
 	netSwapBps               float64
+	basisBps                 float64 // D-140 S3：跨 venue 买价-卖价基差 bps（只展示不动排序）
 }
 
 // discoverSwapCombos 从 facts 表自动扫描所有跨账户 swap 组合。
@@ -180,11 +181,26 @@ func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 				continue
 			}
 			// D-077 修复⑪B N2：用 fact.Src 拼 venueKey（mt4 账户也能进 swap 套利）
+			vLong := lf.Venue + ":" + lf.Src
+			vShort := sfKey.venue + ":" + sfEntry.src
+			// D-140 S3：基差 = (卖腿 bid − 买腿 ask) / 买腿 ask × 1e4（只展示不动排序）
+			// e.quotes nil 时 basis=0（测试无 qbus 注入不 panic）
+			basisBps := 0.0
+			if e.quotes != nil {
+				if qL, ok1 := e.quotes.Latest(lf.Symbol, vLong); ok1 {
+					if qS, ok2 := e.quotes.Latest(sfKey.canonical, vShort); ok2 {
+						if qL.Ask > 0 {
+							basisBps = (qS.Bid - qL.Ask) / qL.Ask * 10000
+						}
+					}
+				}
+			}
 			combos = append(combos, swapComboCandidate{
 				canonical:  lf.Symbol,
-				vLong:      lf.Venue + ":" + lf.Src,
-				vShort:     sfKey.venue + ":" + sfEntry.src,
+				vLong:      vLong,
+				vShort:     vShort,
 				netSwapBps: netSwap,
+				basisBps:   basisBps,
 			})
 		}
 	}
