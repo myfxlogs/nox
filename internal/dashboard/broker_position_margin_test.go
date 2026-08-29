@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"context"
 	"math"
 	"testing"
 
@@ -90,5 +91,48 @@ func TestAllocateMargins_EmptyOrders(t *testing.T) {
 	margin := allocateMargins(nil, 1000.0, map[string]float64{"EURUSD": 100000})
 	if len(margin) != 0 {
 		t.Errorf("empty orders: want 0 entries, got %d", len(margin))
+	}
+}
+
+// TestBuild_CEXMarginPriority D-146 S5 微件③：CEX perp VenueOrder.InitialMargin>0 → 优先于 D-124 分摊。
+// 构造 binance:perp venue 带 InitialMargin=600 的订单 → build 后 BrokerPosition.Margin=600（非 0=未知）。
+// MT4/MT5 仓 InitialMargin=0 → 走 D-124 分摊（accountMargin=0 时 margin=0，行为不变）。
+func TestBuild_CEXMarginPriority(t *testing.T) {
+	q := &fakeVenueQuerier{key: "binance:perp", orders: []reconcile.VenueOrder{
+		{Ticket: "BTCUSDT", Symbol: "BTCUSDT", Side: "BUY", Volume: 0.1, OpenPrice: 60000, Venue: "binance", VenueKey: "binance:perp", Profit: 1.5, InitialMargin: 600.0, MaintMargin: 48.0},
+	}}
+	m, _, _ := newMonTest(t, q)
+	// 手动注入 venue 状态（跳过 poll，直接测 build）
+	m.mu.Lock()
+	m.venues["binance:perp"] = venueState{online: true, orders: q.orders}
+	m.mu.Unlock()
+
+	pbs := m.build(context.Background())
+	if len(pbs) != 1 {
+		t.Fatalf("want 1 position, got %d", len(pbs))
+	}
+	// CEX InitialMargin=600 → BrokerPosition.Margin=600（替换 0=未知语义）
+	if math.Abs(pbs[0].Margin-600.0) > 0.01 {
+		t.Errorf("CEX margin = %.4f, want 600.0 (VenueOrder.InitialMargin priority)", pbs[0].Margin)
+	}
+}
+
+// TestBuild_CEXMarginZeroStillDash D-146 S5 微件③：CEX 仓 InitialMargin=0（venue 未返回/0 仓）→ margin=0（诚实「—」）。
+func TestBuild_CEXMarginZeroStillDash(t *testing.T) {
+	q := &fakeVenueQuerier{key: "okx:perp", orders: []reconcile.VenueOrder{
+		{Ticket: "ETH-USDT-SWAP", Symbol: "ETH-USDT-SWAP", Side: "BUY", Volume: 40, OpenPrice: 2488.5, Venue: "okx", VenueKey: "okx:perp", Profit: 1.23, InitialMargin: 0},
+	}}
+	m, _, _ := newMonTest(t, q)
+	m.mu.Lock()
+	m.venues["okx:perp"] = venueState{online: true, orders: q.orders}
+	m.mu.Unlock()
+
+	pbs := m.build(context.Background())
+	if len(pbs) != 1 {
+		t.Fatalf("want 1 position, got %d", len(pbs))
+	}
+	// InitialMargin=0 + accountMargin=0 → margin=0（诚实「—」）
+	if pbs[0].Margin != 0 {
+		t.Errorf("CEX InitialMargin=0 → margin = %.4f, want 0 (honest dash)", pbs[0].Margin)
 	}
 }

@@ -52,7 +52,7 @@ func (m *BrokerPositionMonitor) build(ctx context.Context) []*v1.BrokerPosition 
 				csMaps[venue] = cs
 			}
 		}
-		// D-124：per-venue 保证金分摊（方案 C）
+		// D-124：per-venue 保证金分摊（方案 C）；D-146 S5 微件③：CEX perp 有 VenueOrder.InitialMargin 时优先用之。
 		marginByTicket := allocateMargins(vs.orders, accountMargins[vk], csMaps[venue])
 		for _, o := range vs.orders {
 			canonical := ""
@@ -73,7 +73,13 @@ func (m *BrokerPositionMonitor) build(ctx context.Context) []*v1.BrokerPosition 
 					hasPrice = true
 				}
 			}
-			out = append(out, brokerPositionToProto(o, canonical, price, hasPrice, vs.online, m.freshTTL, now, marginByTicket[o.Ticket]))
+			// D-146 S5 微件③：CEX perp per-position margin 优先（venue 权威，替换 0=未知语义）；
+			// MT4/MT5 走 D-124 账户分摊（VenueOrder.InitialMargin=0）。
+			margin := marginByTicket[o.Ticket]
+			if o.InitialMargin > 0 {
+				margin = o.InitialMargin
+			}
+			out = append(out, brokerPositionToProto(o, canonical, price, hasPrice, vs.online, m.freshTTL, now, margin))
 		}
 	}
 	return out
