@@ -230,8 +230,8 @@ func (e *CEXExecutor) okxContractVal(ctx context.Context, instID string) (ctVal,
 	var out struct {
 		Code string `json:"code"`
 		Data []struct {
-			CtVal  string `json:"ctVal"`
-			LotSz  string `json:"lotSz"`
+			CtVal string `json:"ctVal"`
+			LotSz string `json:"lotSz"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &out); err != nil {
