@@ -18,6 +18,7 @@ import (
 )
 
 // AddBroker 验证并持久化账号，成功后动态启动适配器。
+// D-141 S5：host 支持逗号分隔多端点，failover 解析胜出端点后落库（存单端点，适配器直连）。
 func (s *Service) AddBroker(ctx context.Context, req *connect.Request[v1.AddBrokerRequest]) (*connect.Response[v1.AddBrokerResponse], error) {
 	venue := strings.TrimSpace(req.Msg.GetVenue())
 	if venue == "" {
@@ -27,11 +28,27 @@ func (s *Service) AddBroker(ctx context.Context, req *connect.Request[v1.AddBrok
 	if plat != 0 && plat != 1 {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("platform 必须为 0(MT4) 或 1(MT5)"))
 	}
+	// D-141 S5：多端点 failover——解析胜出 host+port 后落库。
+	winHost, winPort := req.Msg.GetHost(), int32(req.Msg.GetPort())
+	switch plat {
+	case 0:
+		_, _, _, _, wh, wp, err := verifyMT4(ctx, req.Msg.GetHost(), req.Msg.GetServer(), int32(req.Msg.GetPort()), req.Msg.GetUser(), req.Msg.GetPassword())
+		if err != nil {
+			return nil, connect.NewError(connect.CodeUnavailable, err)
+		}
+		winHost, winPort = wh, wp
+	case 1:
+		_, _, _, _, wh, wp, err := verifyMT5(ctx, req.Msg.GetHost(), req.Msg.GetServer(), int32(req.Msg.GetPort()), req.Msg.GetUser(), req.Msg.GetPassword())
+		if err != nil {
+			return nil, connect.NewError(connect.CodeUnavailable, err)
+		}
+		winHost, winPort = wh, wp
+	}
 	acct := &pgstore.BrokerAccount{
 		Venue:    venue,
 		Platform: int(plat),
-		Host:     req.Msg.GetHost(),
-		Port:     int(req.Msg.GetPort()),
+		Host:     winHost,
+		Port:     int(winPort),
 		User:     req.Msg.GetUser(),
 		Password: req.Msg.GetPassword(),
 		Server:   req.Msg.GetServer(),
@@ -82,6 +99,7 @@ func (s *Service) ListBrokerAccounts(ctx context.Context, req *connect.Request[v
 }
 
 // VerifyAccount 临时连接并读账户摘要，验证凭据有效性。
+// D-141 S5：host 支持逗号分隔多端点，滤私网后依次试连，胜出 host 回传。
 func (s *Service) VerifyAccount(ctx context.Context, req *connect.Request[v1.VerifyAccountRequest]) (*connect.Response[v1.VerifyAccountResponse], error) {
 	host := strings.TrimSpace(req.Msg.GetHost())
 	if host == "" || req.Msg.GetUser() == 0 || req.Msg.GetPassword() == "" {
@@ -89,54 +107,93 @@ func (s *Service) VerifyAccount(ctx context.Context, req *connect.Request[v1.Ver
 	}
 	switch req.Msg.GetPlatform() {
 	case 0:
-		bal, eq, cur, lev, err := verifyMT4(ctx, host, req.Msg.GetServer(), int32(req.Msg.GetPort()), req.Msg.GetUser(), req.Msg.GetPassword())
+		bal, eq, cur, lev, winHost, winPort, err := verifyMT4(ctx, host, req.Msg.GetServer(), int32(req.Msg.GetPort()), req.Msg.GetUser(), req.Msg.GetPassword())
 		if err != nil {
 			return nil, connect.NewError(connect.CodeUnavailable, err)
 		}
-		return connect.NewResponse(&v1.VerifyAccountResponse{Balance: bal, Equity: eq, Currency: cur, Leverage: lev}), nil
+		return connect.NewResponse(&v1.VerifyAccountResponse{Balance: bal, Equity: eq, Currency: cur, Leverage: lev, Host: winHost, Port: winPort}), nil
 	case 1:
-		bal, eq, cur, lev, err := verifyMT5(ctx, host, req.Msg.GetServer(), int32(req.Msg.GetPort()), req.Msg.GetUser(), req.Msg.GetPassword())
+		bal, eq, cur, lev, winHost, winPort, err := verifyMT5(ctx, host, req.Msg.GetServer(), int32(req.Msg.GetPort()), req.Msg.GetUser(), req.Msg.GetPassword())
 		if err != nil {
 			return nil, connect.NewError(connect.CodeUnavailable, err)
 		}
-		return connect.NewResponse(&v1.VerifyAccountResponse{Balance: bal, Equity: eq, Currency: cur, Leverage: lev}), nil
+		return connect.NewResponse(&v1.VerifyAccountResponse{Balance: bal, Equity: eq, Currency: cur, Leverage: lev, Host: winHost, Port: winPort}), nil
 	default:
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("platform 必须为 0(MT4) 或 1(MT5)"))
 	}
 }
 
-func verifyMT4(ctx context.Context, host, server string, port int32, user int64, pass string) (float64, float64, string, int32, error) {
-	a := adapter.NewMT4Adapter("", host, server, port, user, pass)
-	if err := a.Connect(ctx); err != nil {
-		return 0, 0, "", 0, fmt.Errorf("MT4 连接失败: %w", err)
-	}
-	defer a.Stop()
-	resp, err := a.MT4Client().AccountSummary(tokenCtx(ctx, a.Token()), &mt4pb.AccountSummaryRequest{Id: a.Token()})
+// verifyMT4 D-141 S5：多端点 failover——解析 host 串，滤私网，依次试连，首个成功者胜出。
+// 返回胜出 host+port 供落库。全失败 → error 含尝试端点数。
+func verifyMT4(ctx context.Context, host, server string, port int32, user int64, pass string) (float64, float64, string, int32, string, int32, error) {
+	eps, err := parsePublicEndpoints(host, port)
 	if err != nil {
-		return 0, 0, "", 0, fmt.Errorf("MT4 账户验证失败: %w", err)
+		return 0, 0, "", 0, "", 0, err
 	}
-	if e := resp.GetError(); e != nil {
-		return 0, 0, "", 0, fmt.Errorf("MT4 账户验证失败: %s", e.GetMessage())
+	r, ferr := failoverVerify(eps, func(ep endpoint) (failoverResult, error) {
+		a := adapter.NewMT4Adapter("", ep.host, server, ep.port, user, pass)
+		if cerr := a.Connect(ctx); cerr != nil {
+			a.Stop()
+			return failoverResult{}, cerr
+		}
+		resp, rerr := a.MT4Client().AccountSummary(tokenCtx(ctx, a.Token()), &mt4pb.AccountSummaryRequest{Id: a.Token()})
+		if rerr != nil {
+			a.Stop()
+			return failoverResult{}, rerr
+		}
+		if e := resp.GetError(); e != nil {
+			a.Stop()
+			return failoverResult{}, fmt.Errorf("MT4 账户验证失败: %s", e.GetMessage())
+		}
+		res := resp.GetResult()
+		out := failoverResult{
+			balance: res.GetBalance(), equity: res.GetEquity(),
+			currency: res.GetCurrency(), leverage: int32(res.GetLeverage()),
+			host: ep.host, port: ep.port,
+		}
+		a.Stop()
+		return out, nil
+	})
+	if ferr != nil {
+		return 0, 0, "", 0, "", 0, fmt.Errorf("MT4 %w", ferr)
 	}
-	r := resp.GetResult()
-	return r.GetBalance(), r.GetEquity(), r.GetCurrency(), int32(r.GetLeverage()), nil
+	return r.balance, r.equity, r.currency, r.leverage, r.host, r.port, nil
 }
 
-func verifyMT5(ctx context.Context, host, server string, port int32, user int64, pass string) (float64, float64, string, int32, error) {
-	a := adapter.NewMT5Adapter("", host, server, port, user, pass)
-	if err := a.Connect(ctx); err != nil {
-		return 0, 0, "", 0, fmt.Errorf("MT5 连接失败: %w", err)
-	}
-	defer a.Stop()
-	resp, err := a.MT5Client().AccountSummary(tokenCtx(ctx, a.Token()), &mt5pb.AccountSummaryRequest{Id: a.Token()})
+// verifyMT5 D-141 S5：多端点 failover——同 verifyMT4。
+func verifyMT5(ctx context.Context, host, server string, port int32, user int64, pass string) (float64, float64, string, int32, string, int32, error) {
+	eps, err := parsePublicEndpoints(host, port)
 	if err != nil {
-		return 0, 0, "", 0, fmt.Errorf("MT5 账户验证失败: %w", err)
+		return 0, 0, "", 0, "", 0, err
 	}
-	if e := resp.GetError(); e != nil {
-		return 0, 0, "", 0, fmt.Errorf("MT5 账户验证失败: %s", e.GetMessage())
+	r, ferr := failoverVerify(eps, func(ep endpoint) (failoverResult, error) {
+		a := adapter.NewMT5Adapter("", ep.host, server, ep.port, user, pass)
+		if cerr := a.Connect(ctx); cerr != nil {
+			a.Stop()
+			return failoverResult{}, cerr
+		}
+		resp, rerr := a.MT5Client().AccountSummary(tokenCtx(ctx, a.Token()), &mt5pb.AccountSummaryRequest{Id: a.Token()})
+		if rerr != nil {
+			a.Stop()
+			return failoverResult{}, rerr
+		}
+		if e := resp.GetError(); e != nil {
+			a.Stop()
+			return failoverResult{}, fmt.Errorf("MT5 账户验证失败: %s", e.GetMessage())
+		}
+		res := resp.GetResult()
+		out := failoverResult{
+			balance: res.GetBalance(), equity: res.GetEquity(),
+			currency: res.GetCurrency(), leverage: int32(res.GetLeverage()),
+			host: ep.host, port: ep.port,
+		}
+		a.Stop()
+		return out, nil
+	})
+	if ferr != nil {
+		return 0, 0, "", 0, "", 0, fmt.Errorf("MT5 %w", ferr)
 	}
-	r := resp.GetResult()
-	return r.GetBalance(), r.GetEquity(), r.GetCurrency(), int32(r.GetLeverage()), nil
+	return r.balance, r.equity, r.currency, r.leverage, r.host, r.port, nil
 }
 
 // BrokerSymbols 返回运行中适配器的服务器符号表（附 broker 分组，补映射搜索用）。
