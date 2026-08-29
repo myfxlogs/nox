@@ -96,3 +96,33 @@ func (s *Store) SumFundingCashflows(ctx context.Context, posID int64) (float64, 
 	}
 	return sum, nil
 }
+
+// SumCashflowsByPosVenue 批量返回 (position_id, venue) → swap+funding 合计（D-152 微件①）。
+// broker_position_build 用：CEX 腿按 (position_id, venue) 聚合 cashflows 填 swap 字段。
+// key 格式 = posID\x00venue；无匹配行 → 该 key 不在 map 中（调用方按 0 处理）。
+func (s *Store) SumCashflowsByPosVenue(ctx context.Context, posIDs []int64) (map[string]float64, error) {
+	out := make(map[string]float64)
+	if len(posIDs) == 0 {
+		return out, nil
+	}
+	rows, err := s.pool.Query(ctx,
+		`SELECT position_id, venue, COALESCE(SUM(amount_usd), 0)
+		 FROM position_cashflows
+		 WHERE position_id = ANY($1) AND kind IN ('swap','funding')
+		 GROUP BY position_id, venue`,
+		posIDs)
+	if err != nil {
+		return nil, fmt.Errorf("sum cashflows by pos venue: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var posID int64
+		var venue string
+		var sum float64
+		if err := rows.Scan(&posID, &venue, &sum); err != nil {
+			return nil, err
+		}
+		out[fmt.Sprintf("%d\x00%s", posID, venue)] = sum
+	}
+	return out, rows.Err()
+}
