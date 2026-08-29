@@ -126,3 +126,15 @@ func (s *Store) EnsureMonthPartition(ctx context.Context, year int, month int) e
 	_, err := s.pool.Exec(ctx, q)
 	return err
 }
+
+// PurgeOptParityFacts 删除超期的 opt_parity_dev facts（D-137 §4 表体积对策，7 天 TTL）。
+// 仅删该 kind（不影响其他 facts）；facts 表无分区/无既有清理策略，此为首个 kind 级 TTL。
+func (s *Store) PurgeOptParityFacts(ctx context.Context, maxAge time.Duration) (int64, error) {
+	cutoff := time.Now().Add(-maxAge)
+	tag, err := s.pool.Exec(ctx,
+		`DELETE FROM facts WHERE kind = 'opt_parity_dev' AND ts < $1`, cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("purge opt_parity_dev facts: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
