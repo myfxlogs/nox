@@ -81,6 +81,9 @@ func TestLoadDefaults(t *testing.T) {
 	if c.VerifyMinRatio != 0.7 {
 		t.Errorf("VerifyMinRatio = %v, want 0.7 (D-086)", c.VerifyMinRatio)
 	}
+	if c.MTDisasterSlPct != 2.0 {
+		t.Errorf("MTDisasterSlPct = %v, want 2.0 (D-146 S1)", c.MTDisasterSlPct)
+	}
 }
 
 // TestLoadEnvOverride env 覆盖须生效。

@@ -165,6 +165,13 @@ type Config struct {
 	// === Swap 对账告警（D-110 P2）===
 	SwapReconcileDeviationPct float64 // ARB_SWAP_RECONCILE_DEVIATION_PCT（默认 10.0）
 
+	// === MT 灾难止损（D-146 S1）===
+	// MTDisasterSlPct broker 端灾难 SL 距离（名义百分比，ARB_MT_DISASTER_SL_PCT 默认 2.0）。
+	// 下单即带 SL（原子，无开仓后补挂窗口）；多腿入场价下方、空腿上方。
+	// ≤0 = 禁用回退现行为（不挂 SL）。与基差止损 A5 分层：A5 引擎主动平仓（连接正常），
+	// 灾难 SL 是 broker 服务器端兜底（断连时才轮到它）——2% >> A5 常规触发距离。
+	MTDisasterSlPct float64
+
 	// === Swap 不结算 venue（D-112）===
 	// SwapNonSettleVenues 已知不执行 swap 结算的 venue 列表（ARB_SWAP_NON_SETTLE_VENUES，逗号分隔）。
 	// venue 格式含 venueType 后缀（如 "277842155:mt5"），与 PositionLeg.Venue 完整 key 一致。
@@ -247,6 +254,7 @@ func Load() *Config {
 		AnalystRatePerHour:         envInt("ARB_ANALYST_RATE_PER_HOUR", 20),
 		MTData:                     loadMTData(),
 		SwapReconcileDeviationPct:  envFloat("ARB_SWAP_RECONCILE_DEVIATION_PCT", 10.0), // D-110 P2
+		MTDisasterSlPct:            envFloat("ARB_MT_DISASTER_SL_PCT", 2.0),            // D-146 S1 broker 端灾难 SL
 		SwapNonSettleVenues:        envStringSlice("ARB_SWAP_NON_SETTLE_VENUES"),       // D-112
 	}
 }
