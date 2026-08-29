@@ -103,11 +103,10 @@ func buildCooldownSet(closed []pgstore.Position, cooldownDays int, now time.Time
 	return out
 }
 
-// swapComboCandidate 自动扫描发现的 swap 套利候选组合。
+// swapComboCandidate 自动扫描发现的 swap 套利候选组合（basisBps 只展示不动排序，D-140 S3）。
 type swapComboCandidate struct {
 	canonical, vLong, vShort string
-	netSwapBps               float64
-	basisBps                 float64 // D-140 S3：跨 venue 买价-卖价基差 bps（只展示不动排序）
+	netSwapBps, basisBps     float64
 }
 
 // discoverSwapCombos 从 facts 表自动扫描所有跨账户 swap 组合。
@@ -267,7 +266,7 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 		return
 	}
 	dedupKey := combo.Key("SWAPARB", canonical, venueLong, venueShort)
-	// D-142 ④：组合保证金预算观察版告警（只告警不拦截）+ 杠杆不对称提示。
+	// D-142 ④：组合保证金预算观察版告警（只告警不拦截）+ 杠杆不对称提示。best-effort 不影响开仓。
 	e.observeMarginBudget(canonical, venueLong, venueShort, notional)
 	intent := TradeIntent{
 		Strategy:    "SWAPARB",
@@ -284,8 +283,8 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 			if status != "FAILED" && posID > 0 {
 				// D-080 S1：新持仓直接写组合键（无时间戳），与 opportunities.id 贯通
 				_ = e.store.UpdatePositionOppID(ctx, posID, dedupKey)
-				// D-087 §3.4：SWAPARB typed 双字段——entry_spread（入场 spread）+ swap_bps_daily（日 swap）
-				// ExecuteMeanRevertWithCap 内部已写 EntrySpreadBps，此处补 SwapBpsDaily + AnnualPct 覆盖写全
+				// D-087 §3.4：SWAPARB typed 双字段——ExecuteMeanRevertWithCap 已写 EntrySpreadBps，
+				// 此处补 SwapBpsDaily + AnnualPct 覆盖写全
 				swap := netSwapBps
 				annual := netSwapBps * 365 / 100
 				_ = e.store.UpdatePositionMeta(ctx, posID, "SWAPARB", pgstore.PositionMeta{
