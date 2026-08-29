@@ -161,6 +161,9 @@ const (
 	// DashboardServiceSetBrokerAccountAliasProcedure is the fully-qualified name of the
 	// DashboardService's SetBrokerAccountAlias RPC.
 	DashboardServiceSetBrokerAccountAliasProcedure = "/arb.dashboard.v1.DashboardService/SetBrokerAccountAlias"
+	// DashboardServiceSetBrokerAccountIsRealProcedure is the fully-qualified name of the
+	// DashboardService's SetBrokerAccountIsReal RPC.
+	DashboardServiceSetBrokerAccountIsRealProcedure = "/arb.dashboard.v1.DashboardService/SetBrokerAccountIsReal"
 	// DashboardServiceSetBrokerDisabledProcedure is the fully-qualified name of the DashboardService's
 	// SetBrokerDisabled RPC.
 	DashboardServiceSetBrokerDisabledProcedure = "/arb.dashboard.v1.DashboardService/SetBrokerDisabled"
@@ -281,6 +284,7 @@ type DashboardServiceClient interface {
 	RemoveExchange(context.Context, *connect.Request[v1.RemoveExchangeRequest]) (*connect.Response[v1.RemoveExchangeResponse], error)
 	BrokerSymbols(context.Context, *connect.Request[v1.BrokerSymbolsRequest]) (*connect.Response[v1.BrokerSymbolsResponse], error)
 	SetBrokerAccountAlias(context.Context, *connect.Request[v1.SetBrokerAccountAliasRequest]) (*connect.Response[v1.SetBrokerAccountAliasResponse], error)
+	SetBrokerAccountIsReal(context.Context, *connect.Request[v1.SetBrokerAccountIsRealRequest]) (*connect.Response[v1.SetBrokerAccountIsRealResponse], error)
 	SetBrokerDisabled(context.Context, *connect.Request[v1.SetBrokerDisabledRequest]) (*connect.Response[v1.SetBrokerDisabledResponse], error)
 	SetBrokerCommission(context.Context, *connect.Request[v1.SetBrokerCommissionRequest]) (*connect.Response[v1.SetBrokerCommissionResponse], error)
 	// Symbol 映射（brokerSymbol -> canonical）
@@ -582,6 +586,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("SetBrokerAccountAlias")),
 			connect.WithClientOptions(opts...),
 		),
+		setBrokerAccountIsReal: connect.NewClient[v1.SetBrokerAccountIsRealRequest, v1.SetBrokerAccountIsRealResponse](
+			httpClient,
+			baseURL+DashboardServiceSetBrokerAccountIsRealProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("SetBrokerAccountIsReal")),
+			connect.WithClientOptions(opts...),
+		),
 		setBrokerDisabled: connect.NewClient[v1.SetBrokerDisabledRequest, v1.SetBrokerDisabledResponse](
 			httpClient,
 			baseURL+DashboardServiceSetBrokerDisabledProcedure,
@@ -750,6 +760,7 @@ type dashboardServiceClient struct {
 	removeExchange         *connect.Client[v1.RemoveExchangeRequest, v1.RemoveExchangeResponse]
 	brokerSymbols          *connect.Client[v1.BrokerSymbolsRequest, v1.BrokerSymbolsResponse]
 	setBrokerAccountAlias  *connect.Client[v1.SetBrokerAccountAliasRequest, v1.SetBrokerAccountAliasResponse]
+	setBrokerAccountIsReal *connect.Client[v1.SetBrokerAccountIsRealRequest, v1.SetBrokerAccountIsRealResponse]
 	setBrokerDisabled      *connect.Client[v1.SetBrokerDisabledRequest, v1.SetBrokerDisabledResponse]
 	setBrokerCommission    *connect.Client[v1.SetBrokerCommissionRequest, v1.SetBrokerCommissionResponse]
 	listSymbolMappings     *connect.Client[v1.ListSymbolMappingsRequest, v1.ListSymbolMappingsResponse]
@@ -987,6 +998,11 @@ func (c *dashboardServiceClient) SetBrokerAccountAlias(ctx context.Context, req 
 	return c.setBrokerAccountAlias.CallUnary(ctx, req)
 }
 
+// SetBrokerAccountIsReal calls arb.dashboard.v1.DashboardService.SetBrokerAccountIsReal.
+func (c *dashboardServiceClient) SetBrokerAccountIsReal(ctx context.Context, req *connect.Request[v1.SetBrokerAccountIsRealRequest]) (*connect.Response[v1.SetBrokerAccountIsRealResponse], error) {
+	return c.setBrokerAccountIsReal.CallUnary(ctx, req)
+}
+
 // SetBrokerDisabled calls arb.dashboard.v1.DashboardService.SetBrokerDisabled.
 func (c *dashboardServiceClient) SetBrokerDisabled(ctx context.Context, req *connect.Request[v1.SetBrokerDisabledRequest]) (*connect.Response[v1.SetBrokerDisabledResponse], error) {
 	return c.setBrokerDisabled.CallUnary(ctx, req)
@@ -1146,6 +1162,7 @@ type DashboardServiceHandler interface {
 	RemoveExchange(context.Context, *connect.Request[v1.RemoveExchangeRequest]) (*connect.Response[v1.RemoveExchangeResponse], error)
 	BrokerSymbols(context.Context, *connect.Request[v1.BrokerSymbolsRequest]) (*connect.Response[v1.BrokerSymbolsResponse], error)
 	SetBrokerAccountAlias(context.Context, *connect.Request[v1.SetBrokerAccountAliasRequest]) (*connect.Response[v1.SetBrokerAccountAliasResponse], error)
+	SetBrokerAccountIsReal(context.Context, *connect.Request[v1.SetBrokerAccountIsRealRequest]) (*connect.Response[v1.SetBrokerAccountIsRealResponse], error)
 	SetBrokerDisabled(context.Context, *connect.Request[v1.SetBrokerDisabledRequest]) (*connect.Response[v1.SetBrokerDisabledResponse], error)
 	SetBrokerCommission(context.Context, *connect.Request[v1.SetBrokerCommissionRequest]) (*connect.Response[v1.SetBrokerCommissionResponse], error)
 	// Symbol 映射（brokerSymbol -> canonical）
@@ -1443,6 +1460,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("SetBrokerAccountAlias")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceSetBrokerAccountIsRealHandler := connect.NewUnaryHandler(
+		DashboardServiceSetBrokerAccountIsRealProcedure,
+		svc.SetBrokerAccountIsReal,
+		connect.WithSchema(dashboardServiceMethods.ByName("SetBrokerAccountIsReal")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceSetBrokerDisabledHandler := connect.NewUnaryHandler(
 		DashboardServiceSetBrokerDisabledProcedure,
 		svc.SetBrokerDisabled,
@@ -1651,6 +1674,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceBrokerSymbolsHandler.ServeHTTP(w, r)
 		case DashboardServiceSetBrokerAccountAliasProcedure:
 			dashboardServiceSetBrokerAccountAliasHandler.ServeHTTP(w, r)
+		case DashboardServiceSetBrokerAccountIsRealProcedure:
+			dashboardServiceSetBrokerAccountIsRealHandler.ServeHTTP(w, r)
 		case DashboardServiceSetBrokerDisabledProcedure:
 			dashboardServiceSetBrokerDisabledHandler.ServeHTTP(w, r)
 		case DashboardServiceSetBrokerCommissionProcedure:
@@ -1870,6 +1895,10 @@ func (UnimplementedDashboardServiceHandler) BrokerSymbols(context.Context, *conn
 
 func (UnimplementedDashboardServiceHandler) SetBrokerAccountAlias(context.Context, *connect.Request[v1.SetBrokerAccountAliasRequest]) (*connect.Response[v1.SetBrokerAccountAliasResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetBrokerAccountAlias is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) SetBrokerAccountIsReal(context.Context, *connect.Request[v1.SetBrokerAccountIsRealRequest]) (*connect.Response[v1.SetBrokerAccountIsRealResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetBrokerAccountIsReal is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) SetBrokerDisabled(context.Context, *connect.Request[v1.SetBrokerDisabledRequest]) (*connect.Response[v1.SetBrokerDisabledResponse], error) {
