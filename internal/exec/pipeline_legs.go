@@ -18,11 +18,18 @@ func (p *Pipeline) executeLeg(ctx context.Context, leg LegSpec) LegResult {
 	if !ok {
 		return LegResult{VenueKey: leg.VenueKey, Status: "FAILED"}
 	}
+	// D-146 S1：MT 腿下单即带 broker 端灾难 SL（原子写入，断连时服务器端兜底）。
+	// CEX 腿不挂（CEX 端有仓位生存期+fail-closed）；仅 :mt4/:mt5 腿且配置 >0 时计算。
+	var sl float64
+	if isMTVenueKey(leg.VenueKey) {
+		sl = disasterSL(leg.Side, leg.PriceExpected, p.mtDisasterSlPct)
+	}
 	fill, err := exe.PlaceOrder(ctx, Order{
-		Symbol: leg.VenueSymbol,
-		Side:   leg.Side,
-		Qty:    leg.Qty,
-		Venue:  leg.VenueKey,
+		Symbol:   leg.VenueSymbol,
+		Side:     leg.Side,
+		Qty:      leg.Qty,
+		Venue:    leg.VenueKey,
+		StopLoss: sl,
 	})
 	if err != nil {
 		log.Printf("[exec] leg %s %s %s: %v", leg.VenueKey, leg.Side, leg.VenueSymbol, err)

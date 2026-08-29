@@ -42,6 +42,7 @@ func (e *MT4Executor) PlaceOrder(ctx context.Context, o Order) (Fill, error) {
 		Operation: op,
 		Volume:    o.Qty,
 		Comment:   OrderComment,
+		Stoploss:  o.StopLoss, // D-146 S1：灾难 SL 原子写入（0=不挂，MT4 Stoploss 是 float64 非 oneof）
 	})
 	if err != nil {
 		return Fill{}, fmt.Errorf("mt4 ordersend: %w", err)

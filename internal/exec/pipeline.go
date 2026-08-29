@@ -52,6 +52,9 @@ type Pipeline struct {
 	revalidateAbsBps float64
 	// revalidateRelPct 复核劣化相对阈值 %（D-077 修复⑪B N4，ARB_REVALIDATE_REL_PCT 默认 20）。
 	revalidateRelPct float64
+	// mtDisasterSlPct MT 灾难 SL 距离百分比（D-146 S1，ARB_MT_DISASTER_SL_PCT 默认 2.0）。
+	// ≤0 = 禁用（不挂 SL）。仅 MT 腿（:mt4/:mt5）下单时用，CEX 腿忽略。
+	mtDisasterSlPct float64
 }
 
 // NewPipeline 创建执行管线。
@@ -71,6 +74,10 @@ func (p *Pipeline) SetRevalidateThresholds(absBps, relPct float64) {
 	p.revalidateAbsBps = absBps
 	p.revalidateRelPct = relPct
 }
+
+// SetMTDisasterSlPct 注入 MT 灾难 SL 距离百分比（D-146 S1，ARB_MT_DISASTER_SL_PCT）。
+// ≤0 = 禁用（MT 腿不挂 SL，回退现行为）。main 装配后调。
+func (p *Pipeline) SetMTDisasterSlPct(pct float64) { p.mtDisasterSlPct = pct }
 
 // SetPositionVerifier 注入平仓后回读器（D-077 修复⑩ G1）。main 装配后调。
 func (p *Pipeline) SetPositionVerifier(v PositionVerifier) { p.verifier = v }

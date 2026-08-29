@@ -27,6 +27,22 @@ type Order struct {
 	PositionSide string
 	// PosID 关联持仓 ID（D-108 P2 T1：平仓被拒时 critical 告警 posID 挂接；0=开仓/无上下文不告警）。
 	PosID int64
+	// StopLoss broker 端止损价（D-146 S1：MT 灾难 SL，下单即带原子写入）。
+	// 0 = 不挂 SL（CEX 腿/禁用配置/平仓单）。MT4/MT5 executor 读取此字段写入 proto Stoploss。
+	StopLoss float64
+}
+
+// disasterSL 计算 MT 灾难止损价（D-146 S1，broker 端 SL，下单即带）。
+// 多腿 SL = entry × (1 - pct)（入场价下方）；空腿 SL = entry × (1 + pct)（入场价上方）。
+// pct ≤ 0 = 禁用返回 0；entry ≤ 0 = 无效返回 0。MT4/MT5 同构（同一公式）。
+func disasterSL(side string, entry, pct float64) float64 {
+	if pct <= 0 || entry <= 0 {
+		return 0
+	}
+	if side == "SELL" {
+		return entry * (1 + pct/100)
+	}
+	return entry * (1 - pct/100)
 }
 
 // Fill 是成交回执。

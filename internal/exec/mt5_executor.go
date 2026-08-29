@@ -40,13 +40,19 @@ func (e *MT5Executor) PlaceOrder(ctx context.Context, o Order) (Fill, error) {
 	// MT5 Comment 是 oneof 指针字段，取本地副本地址传入。
 	// 与 MT4 统一携带 OrderComment 标记（D-032：对账判别 ARB 源订单）。
 	comment := OrderComment
-	resp, err := e.trading.OrderSend(ctx, &mt5pb.OrderSendRequest{
+	req := &mt5pb.OrderSendRequest{
 		Id:        e.token,
 		Symbol:    o.Symbol,
 		Operation: op,
 		Volume:    o.Qty,
 		Comment:   &comment,
-	})
+	}
+	// D-146 S1：灾难 SL 原子写入（Stoploss 是 oneof *float64，非零才挂）。
+	if o.StopLoss > 0 {
+		sl := o.StopLoss
+		req.Stoploss = &sl
+	}
+	resp, err := e.trading.OrderSend(ctx, req)
 	if err != nil {
 		return Fill{}, fmt.Errorf("mt5 ordersend: %w", err)
 	}
