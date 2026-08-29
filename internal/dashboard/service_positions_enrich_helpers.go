@@ -37,6 +37,17 @@ func holdDaysToNow(pb *v1.Position, openLegs []pgstore.PositionLeg, now time.Tim
 	return now.Sub(openedAt).Hours() / 24
 }
 
+// perpFundingExpectedUSD D-146 S5 微件②：PERP_FUNDING 年化 expected_net_bps 按持有天数折算应得 USD。
+// expected_net_bps 为年化百分点（5.0=5%，evaluator.go:85-87）→ expected_usd = (bps/100)×notional×(holdDays/365)。
+// CEX funding 24/7 计息（8h×3/天，含周末）→ 用 calendar holdDays 非 settleDays。
+// 任一因子 ≤0 → 0（诚实缺省，防伪造）。
+func perpFundingExpectedUSD(expectedNetBps, notionalUSD, holdDays float64) float64 {
+	if expectedNetBps <= 0 || notionalUSD <= 0 || holdDays <= 0 {
+		return 0
+	}
+	return expectedNetBps / 100 * notionalUSD * holdDays / 365
+}
+
 // canonicalFromOppID 从 opportunity_id 解析 canonical（格式 PREFIX:SYMBOL:...）。
 // 与 settlement/autotrade 同构纯函数（本包不依赖 autotrade 避免环依赖；combo.FromOppID 已引入）。
 func canonicalFromOppID(oppID string) string {

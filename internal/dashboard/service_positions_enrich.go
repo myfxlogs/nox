@@ -127,7 +127,28 @@ func enrichOne(ctx context.Context, s *Service, pb *v1.Position, legs []pgstore.
 		}
 	}
 
-	// 2. 息差型：应得 + 达成率（D-118 结算日历感知）
+	// 2a. PERP_FUNDING 三列（D-146 S5 微件②）：年化 expected_net_bps 按持有天数折算应得。
+	// CEX funding 24/7 计息（8h×3/天，含周末）→ 用 calendar holdDays 非 settleDays（MT5 swap 日历）。
+	// expected_net_bps 为年化百分点（5.0=5%，evaluator.go:85-87）→ expected_usd = (bps/100)×notional×(holdDays/365)。
+	// 实收复用 swapAccrued（S5 已并 funding 合计）；达成=实收÷应得×100。
+	if pb.Type == "PERP_FUNDING" && pb.ExpectedNetBps > 0 {
+		canonical := canonicalFromOppID(pb.OpportunityId)
+		notionalUSD := computeEntryNotional(ctx, s, openLegs, canonical)
+		if notionalUSD > 0 {
+			holdDays := holdDaysToNow(pb, openLegs, now)
+			expected := perpFundingExpectedUSD(pb.ExpectedNetBps, notionalUSD, holdDays)
+			if expected > 0 {
+				pb.ExpectedSwapUsdToDate = &expected
+				if swapAccrued > 0 {
+					pct := swapAccrued / expected * 100
+					pb.AttainmentPct = &pct
+				}
+			}
+		}
+	}
+
+	// 2b. SWAPARB/CARRY/FUNDING_HEDGE：日 swap bps × 结算天数（D-118 结算日历感知，周末排除+三倍日）。
+	// PERP_FUNDING 不走此路（ExpectedSwapBpsDaily=nil，SWAPARB 专属字段）。
 	if carryTypes[pb.Type] && pb.ExpectedSwapBpsDaily != nil && *pb.ExpectedSwapBpsDaily > 0 {
 		canonical := canonicalFromOppID(pb.OpportunityId)
 		notionalUSD := computeEntryNotional(ctx, s, openLegs, canonical)
