@@ -89,6 +89,8 @@ service DashboardService {
   rpc ListMappingSuggestions(ListMappingSuggestionsRequest) returns (ListMappingSuggestionsResponse);
   rpc ListCanonicals(ListCanonicalsRequest) returns (ListCanonicalsResponse);
   rpc AutoMapBroker(AutoMapBrokerRequest) returns (AutoMapBrokerResponse);
+  // D-140 S3：swap 组合列表（basis_bps 只展示不动排序）
+  rpc ListSwapCombos(ListSwapCombosRequest) returns (ListSwapCombosResponse);
 
   // Matrix 全景（D-045：全符号跨全账号映射/报价巡检）
   rpc ListMatrixUniverse(ListMatrixUniverseRequest) returns (ListMatrixUniverseResponse);
@@ -1024,6 +1026,22 @@ message AutoMapBrokerResponse {
   repeated AutoMapBrokerResult results = 1;
   int32 applied = 2;         // auto 状态已写入数
   int32 skipped = 3;         // 跳过数
+}
+
+// === SwapCombos（D-140 S3：basis_bps 只展示不动排序）===
+
+message ListSwapCombosRequest {}
+
+message SwapCombo {
+  string canonical = 1;
+  string venue_long = 2;     // "{venue}:{src}"
+  string venue_short = 3;
+  double net_swap_bps = 4;   // 净 swap bps（排序键，D-138 观察期不动）
+  double basis_bps = 5;      // 跨 venue 基差 bps（只展示不动排序/门槛/触发）
+}
+
+message ListSwapCombosResponse {
+  repeated SwapCombo combos = 1;
 }
 
 // === FrontConfig（D-077 修复⑪B N7）===
