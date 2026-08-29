@@ -76,3 +76,6 @@ var PositionSwapSnapshotsSQL string
 
 //go:embed 0044_broker_symbol_map_source.sql
 var BrokerSymbolMapSourceSQL string
+
+//go:embed 0045_broker_accounts_is_real.sql
+var BrokerAccountsIsRealSQL string
