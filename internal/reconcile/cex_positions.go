@@ -97,9 +97,10 @@ func (q *CEXPositionQuerier) okxPositions(ctx context.Context) ([]VenueOrder, er
 			PosSide string `json:"posSide"` // long / short / net
 			Pos     string `json:"pos"`     // 合约数（张）
 			AvgPx   string `json:"avgPx"`
-			Upl     string `json:"upl"`   // 浮盈（USDT）
-			Fee     string `json:"fee"`   // 累计手续费（负数）
-			CTime   string `json:"cTime"` // 开仓时间 ms
+			Upl     string `json:"upl"`    // 浮盈（USDT）
+			Fee     string `json:"fee"`    // 累计手续费（负数）
+			CTime   string `json:"cTime"`  // 开仓时间 ms
+			Margin  string `json:"margin"` // D-146 S5 微件③：占用保证金（USDT）
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
@@ -123,17 +124,19 @@ func (q *CEXPositionQuerier) okxPositions(ctx context.Context) ([]VenueOrder, er
 		}
 		ctimeMs, _ := strconv.ParseInt(p.CTime, 10, 64)
 		openedAt := time.UnixMilli(ctimeMs)
+		margin, _ := strconv.ParseFloat(p.Margin, 64) // D-146 S5 微件③
 		out = append(out, VenueOrder{
-			Ticket:     p.InstID, // CEX 聚合仓位无单一 ticket → 用 symbol
-			Symbol:     p.InstID,
-			Side:       side,
-			Volume:     pos,
-			OpenPrice:  avgPx,
-			Venue:      q.venue,
-			VenueKey:   q.VenueKey(),
-			Profit:     upl,
-			Commission: fee, // OKX fee 是累计手续费（负数=成本）
-			OpenedAt:   openedAt,
+			Ticket:        p.InstID, // CEX 聚合仓位无单一 ticket → 用 symbol
+			Symbol:        p.InstID,
+			Side:          side,
+			Volume:        pos,
+			OpenPrice:     avgPx,
+			Venue:         q.venue,
+			VenueKey:      q.VenueKey(),
+			Profit:        upl,
+			Commission:    fee, // OKX fee 是累计手续费（负数=成本）
+			OpenedAt:      openedAt,
+			InitialMargin: margin, // D-146 S5 微件③：OKX margin=占用保证金（无单独 maint 字段）
 		})
 	}
 	return out, nil
@@ -234,7 +237,9 @@ func (q *CEXPositionQuerier) binancePositions(ctx context.Context) ([]VenueOrder
 		PositionAmt      string `json:"positionAmt"`
 		EntryPrice       string `json:"entryPrice"`
 		UnRealizedProfit string `json:"unRealizedProfit"`
-		PositionSide     string `json:"positionSide"` // BOTH / LONG / SHORT (hedge mode)
+		PositionSide     string `json:"positionSide"`  // BOTH / LONG / SHORT (hedge mode)
+		InitialMargin    string `json:"initialMargin"` // D-146 S5 微件③：占用保证金（USDT）
+		MaintMargin      string `json:"maintMargin"`   // D-146 S5 微件③：维持保证金（USDT）
 	}
 	if err := json.Unmarshal(data, &positions); err != nil {
 		return nil, fmt.Errorf("binance positions json: %w", err)
@@ -253,15 +258,19 @@ func (q *CEXPositionQuerier) binancePositions(ctx context.Context) ([]VenueOrder
 			side = "SELL"
 			vol = -vol
 		}
+		initMargin, _ := strconv.ParseFloat(p.InitialMargin, 64) // D-146 S5 微件③
+		maintMargin, _ := strconv.ParseFloat(p.MaintMargin, 64)
 		out = append(out, VenueOrder{
-			Ticket:    p.Symbol, // CEX 聚合仓位 → 用 symbol
-			Symbol:    p.Symbol,
-			Side:      side,
-			Volume:    vol,
-			OpenPrice: entryPx,
-			Venue:     q.venue,
-			VenueKey:  q.VenueKey(),
-			Profit:    upl,
+			Ticket:        p.Symbol, // CEX 聚合仓位 → 用 symbol
+			Symbol:        p.Symbol,
+			Side:          side,
+			Volume:        vol,
+			OpenPrice:     entryPx,
+			Venue:         q.venue,
+			VenueKey:      q.VenueKey(),
+			Profit:        upl,
+			InitialMargin: initMargin, // D-146 S5 微件③
+			MaintMargin:   maintMargin,
 		})
 	}
 	return out, nil

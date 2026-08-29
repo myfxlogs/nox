@@ -51,6 +51,11 @@ type VenueOrder struct {
 	Commission float64
 	OpenedAt   time.Time // 开仓时间（零值 = venue 未返回）
 	Magic      int64     // MT5 ExpertId / MT4 MagicNumber（0 = 无，D-052）
+
+	// D-146 S5 微件③：CEX perp per-position margin（venue 权威，替换 0=未知语义）。
+	// binance positionRisk initialMargin / okx positions margin；MT4/MT5=0（走 D-124 账户分摊）。
+	InitialMargin float64 // 初始保证金（占用保证金，USD/USDT）
+	MaintMargin   float64 // 维持保证金（USD/USDT）
 }
 
 // AccountInfo 一个账户的资金视图（D-053）。CFD 来自 MT AccountSummary；CEX 来自签名余额查询。

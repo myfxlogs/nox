@@ -22,9 +22,9 @@ func TestD121_OKXPositions(t *testing.T) {
 			"code": "0",
 			"msg":  "",
 			"data": []map[string]any{
-				{"instId": "ETH-USDT-SWAP", "posSide": "long", "pos": "40", "avgPx": "2488.5", "upl": "1.23", "fee": "-0.05", "cTime": "1693526400000"},
-				{"instId": "BTC-USDT-SWAP", "posSide": "short", "pos": "10", "avgPx": "60000", "upl": "-2.5", "fee": "-0.03", "cTime": "1693526500000"},
-				{"instId": "ETH-USDT-SWAP", "posSide": "net", "pos": "0", "avgPx": "0", "upl": "0", "fee": "0", "cTime": "0"},
+				{"instId": "ETH-USDT-SWAP", "posSide": "long", "pos": "40", "avgPx": "2488.5", "upl": "1.23", "fee": "-0.05", "cTime": "1693526400000", "margin": "497.70"},
+				{"instId": "BTC-USDT-SWAP", "posSide": "short", "pos": "10", "avgPx": "60000", "upl": "-2.5", "fee": "-0.03", "cTime": "1693526500000", "margin": "600.00"},
+				{"instId": "ETH-USDT-SWAP", "posSide": "net", "pos": "0", "avgPx": "0", "upl": "0", "fee": "0", "cTime": "0", "margin": "0"},
 			},
 		}
 		_ = json.NewEncoder(w).Encode(resp)
@@ -49,9 +49,16 @@ func TestD121_OKXPositions(t *testing.T) {
 	if orders[0].Ticket != "ETH-USDT-SWAP" {
 		t.Errorf("order[0] Ticket should = Symbol for CEX aggregate: %s", orders[0].Ticket)
 	}
+	// D-146 S5 微件③：OKX margin 字段映射到 InitialMargin
+	if orders[0].InitialMargin != 497.70 {
+		t.Errorf("order[0] InitialMargin = %.4f, want 497.70 (OKX margin)", orders[0].InitialMargin)
+	}
 	// BTC short
 	if orders[1].Symbol != "BTC-USDT-SWAP" || orders[1].Side != "SELL" || orders[1].Volume != 10 {
 		t.Errorf("order[1] mismatch: %+v", orders[1])
+	}
+	if orders[1].InitialMargin != 600.00 {
+		t.Errorf("order[1] InitialMargin = %.4f, want 600.00 (OKX margin)", orders[1].InitialMargin)
 	}
 }
 
@@ -108,9 +115,9 @@ func TestD121_BinancePositions(t *testing.T) {
 			t.Errorf("want /fapi/v2/positionRisk, got %s", r.URL.Path)
 		}
 		positions := []map[string]any{
-			{"symbol": "ETHUSDT", "positionAmt": "0.4", "entryPrice": "2488.14", "unRealizedProfit": "0.56", "positionSide": "BOTH"},
-			{"symbol": "BTCUSDT", "positionAmt": "-0.1", "entryPrice": "60000", "unRealizedProfit": "-1.2", "positionSide": "BOTH"},
-			{"symbol": "SOLUSDT", "positionAmt": "0", "entryPrice": "0", "unRealizedProfit": "0", "positionSide": "BOTH"},
+			{"symbol": "ETHUSDT", "positionAmt": "0.4", "entryPrice": "2488.14", "unRealizedProfit": "0.56", "positionSide": "BOTH", "initialMargin": "497.63", "maintMargin": "39.81"},
+			{"symbol": "BTCUSDT", "positionAmt": "-0.1", "entryPrice": "60000", "unRealizedProfit": "-1.2", "positionSide": "BOTH", "initialMargin": "6000.00", "maintMargin": "480.00"},
+			{"symbol": "SOLUSDT", "positionAmt": "0", "entryPrice": "0", "unRealizedProfit": "0", "positionSide": "BOTH", "initialMargin": "0", "maintMargin": "0"},
 		}
 		_ = json.NewEncoder(w).Encode(positions)
 	}))
@@ -130,8 +137,18 @@ func TestD121_BinancePositions(t *testing.T) {
 	if orders[0].OpenPrice != 2488.14 || orders[0].Profit != 0.56 {
 		t.Errorf("order[0] fields mismatch: %+v", orders[0])
 	}
+	// D-146 S5 微件③：Binance initialMargin/maintMargin 字段映射
+	if orders[0].InitialMargin != 497.63 {
+		t.Errorf("order[0] InitialMargin = %.4f, want 497.63 (Binance initialMargin)", orders[0].InitialMargin)
+	}
+	if orders[0].MaintMargin != 39.81 {
+		t.Errorf("order[0] MaintMargin = %.4f, want 39.81 (Binance maintMargin)", orders[0].MaintMargin)
+	}
 	if orders[1].Symbol != "BTCUSDT" || orders[1].Side != "SELL" || orders[1].Volume != 0.1 {
 		t.Errorf("order[1] mismatch: %+v", orders[1])
+	}
+	if orders[1].InitialMargin != 6000.00 || orders[1].MaintMargin != 480.00 {
+		t.Errorf("order[1] margin mismatch: init=%.4f maint=%.4f, want 6000.00/480.00", orders[1].InitialMargin, orders[1].MaintMargin)
 	}
 }
 
