@@ -103,12 +103,6 @@ func buildCooldownSet(closed []pgstore.Position, cooldownDays int, now time.Time
 	return out
 }
 
-// swapComboCandidate 自动扫描发现的 swap 套利候选组合（basisBps 只展示不动排序，D-140 S3）。
-type swapComboCandidate struct {
-	canonical, vLong, vShort string
-	netSwapBps, basisBps     float64
-}
-
 // discoverSwapCombos 从 facts 表自动扫描所有跨账户 swap 组合。
 // D-072：minNetSwapBps 从 env 读取（ARB_AUTOTRADE_MIN_NET_SWAP_BPS，默认 0.2）。
 // D-104 P0：swap facts 新鲜度门禁 fail-closed——now−f.Ts > SwapFactMaxAge → 跳过该 fact + 计数日志。
@@ -160,6 +154,8 @@ func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 	for _, f := range shortFacts {
 		shortMap[swapKey{f.Symbol, f.Venue}] = swapEntry{value: f.Value, src: f.Src}
 	}
+	// D-144 ①：同类型配对安全红线——两腿 is_real 必须相等（杜绝实盘×demo 假对冲）。查询失败 → 空 map（fail-open）。
+	realMap, _ := e.store.ListAccountIsReal(ctx)
 	var combos []swapComboCandidate
 	minNetSwapBps := e.cfg.MinNetSwapBps
 	// D-077 修复⑪B N5：删除 ==0 → 0.2 二次默认（config 已有 env 默认 0.2）。
@@ -173,6 +169,10 @@ func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 				continue
 			}
 			if sfKey.venue == lf.Venue {
+				continue
+			}
+			// D-144 ①：同类型配对——实盘×实盘、demo×demo；跨类型跳过（假对冲事故语义）。
+			if !isRealPair(realMap, lf.Venue, sfKey.venue) {
 				continue
 			}
 			netSwap := lf.Value + sfEntry.value
