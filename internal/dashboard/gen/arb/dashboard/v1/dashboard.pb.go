@@ -9115,6 +9115,8 @@ type SwapCombo struct {
 	VenueShort    string                 `protobuf:"bytes,3,opt,name=venue_short,json=venueShort,proto3" json:"venue_short,omitempty"`
 	NetSwapBps    float64                `protobuf:"fixed64,4,opt,name=net_swap_bps,json=netSwapBps,proto3" json:"net_swap_bps,omitempty"` // 净 swap bps（排序键，D-138 观察期不动）
 	BasisBps      float64                `protobuf:"fixed64,5,opt,name=basis_bps,json=basisBps,proto3" json:"basis_bps,omitempty"`         // 跨 venue 基差 bps（只展示不动排序/门槛/触发）
+	AliasLong     string                 `protobuf:"bytes,6,opt,name=alias_long,json=aliasLong,proto3" json:"alias_long,omitempty"`        // D-144 ③：买腿别名（空=回退 venue_long）
+	AliasShort    string                 `protobuf:"bytes,7,opt,name=alias_short,json=aliasShort,proto3" json:"alias_short,omitempty"`     // D-144 ③：卖腿别名（空=回退 venue_short）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -9182,6 +9184,20 @@ func (x *SwapCombo) GetBasisBps() float64 {
 		return x.BasisBps
 	}
 	return 0
+}
+
+func (x *SwapCombo) GetAliasLong() string {
+	if x != nil {
+		return x.AliasLong
+	}
+	return ""
+}
+
+func (x *SwapCombo) GetAliasShort() string {
+	if x != nil {
+		return x.AliasShort
+	}
+	return ""
 }
 
 type ListSwapCombosResponse struct {
@@ -11193,7 +11209,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\aresults\x18\x01 \x03(\v2%.arb.dashboard.v1.AutoMapBrokerResultR\aresults\x12\x18\n" +
 	"\aapplied\x18\x02 \x01(\x05R\aapplied\x12\x18\n" +
 	"\askipped\x18\x03 \x01(\x05R\askipped\"\x17\n" +
-	"\x15ListSwapCombosRequest\"\xa8\x01\n" +
+	"\x15ListSwapCombosRequest\"\xe8\x01\n" +
 	"\tSwapCombo\x12\x1c\n" +
 	"\tcanonical\x18\x01 \x01(\tR\tcanonical\x12\x1d\n" +
 	"\n" +
@@ -11202,7 +11218,11 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"venueShort\x12 \n" +
 	"\fnet_swap_bps\x18\x04 \x01(\x01R\n" +
 	"netSwapBps\x12\x1b\n" +
-	"\tbasis_bps\x18\x05 \x01(\x01R\bbasisBps\"M\n" +
+	"\tbasis_bps\x18\x05 \x01(\x01R\bbasisBps\x12\x1d\n" +
+	"\n" +
+	"alias_long\x18\x06 \x01(\tR\taliasLong\x12\x1f\n" +
+	"\valias_short\x18\a \x01(\tR\n" +
+	"aliasShort\"M\n" +
 	"\x16ListSwapCombosResponse\x123\n" +
 	"\x06combos\x18\x01 \x03(\v2\x1b.arb.dashboard.v1.SwapComboR\x06combos\"\x17\n" +
 	"\x15GetFrontConfigRequest\"\xa7\x02\n" +

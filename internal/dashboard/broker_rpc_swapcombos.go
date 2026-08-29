@@ -12,12 +12,15 @@ import (
 )
 
 // SwapComboEntry swap 组合条目（D-140 S3，dashboard↔autotrade 适配层无依赖环）。
+// AliasLong/Short D-144 ③：别名（空=回退 venueKey，前端显示用）。
 type SwapComboEntry struct {
 	Canonical  string
 	VenueLong  string
 	VenueShort string
 	NetSwapBps float64
 	BasisBps   float64
+	AliasLong  string // D-144 ③
+	AliasShort string // D-144 ③
 }
 
 // SetSwapComboLister D-140 S3：main 装配 swap 组合列表注入。
@@ -38,6 +41,8 @@ func (s *Service) ListSwapCombos(ctx context.Context, req *connect.Request[v1.Li
 			VenueShort: e.VenueShort,
 			NetSwapBps: e.NetSwapBps,
 			BasisBps:   e.BasisBps,
+			AliasLong:  e.AliasLong,  // D-144 ③
+			AliasShort: e.AliasShort, // D-144 ③
 		})
 	}
 	return connect.NewResponse(&v1.ListSwapCombosResponse{Combos: combos}), nil
