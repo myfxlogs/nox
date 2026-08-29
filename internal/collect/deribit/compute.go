@@ -1,6 +1,8 @@
 package deribit
 
 import (
+	"sort"
+	"strings"
 	"time"
 
 	"arb/internal/fact"
@@ -24,18 +26,25 @@ type ParityOutput struct {
 	OutOfATM int // ATM±10% 外跳过计数
 }
 
+// cpPair 一对 call/put（同 base/expiry/strike）。
+// inst 只挂 put 侧（call/put strike 相同，Canonical 无 C/P 后缀，任一即可）。
+type cpPair struct {
+	call, put optBookSummary
+	inst      optInstrument
+	hasCall   bool
+	hasPut    bool
+}
+
 // computeAllParity 纯函数：从期权+期货快照计算所有 (标的,到期,行权价) 的平价偏离。
 // 流动性过滤：bid=ask=0 跳过；ATM±10% 外跳过（underlying 现算）。
 // F 缺失（无同到期期货）→ 跳过+计数，不 panic。
-// 最近 N 个到期日：按 expiry 字符串排序取前 N（DDMMMYY 字母序≈日历序，Deribit 到期日固定）。
+// 最近 N 个到期日：按 YYYYMMDD 排序取前 N（字典序=日历序；DDMMMYY 字母序不成立——
+// 日份无前导零 + 月份字母序错乱，见 TestExpirySortCalendar）。
 func computeAllParity(in ParityInput, now time.Time) ParityOutput {
 	var out ParityOutput
 	for _, base := range in.Bases {
-		// 1. 收集该标的的期权 instrument + 按到期分组
-		type cpPair struct {
-			call, put optBookSummary
-			inst      optInstrument
-		}
+		// 1. 收集该标的的期权 instrument + 按到期(YYYYMMDD)分组
+		//    分组键用 ExpiryYMD（YYYYMMDD）而非 Expiry（DDMMMYY）——字典序=日历序。
 		pairsByExpiry := map[string][]cpPair{}
 		for _, o := range in.Options {
 			if o.BaseCurrency != base {
@@ -50,44 +59,49 @@ func computeAllParity(in ParityInput, now time.Time) ParityOutput {
 				out.NoMkt++
 				continue
 			}
-			bucket := pairsByExpiry[inst.Expiry]
-			if inst.IsCall {
-				// 查找已有 put
-				found := false
-				for i := range bucket {
-					if bucket[i].inst.Strike == inst.Strike && !bucket[i].inst.IsCall {
+			bucket := pairsByExpiry[inst.ExpiryYMD]
+			// 查找同 strike 的对（call/put strike 相同 → 配对）
+			found := false
+			for i := range bucket {
+				if bucket[i].inst.Strike == inst.Strike {
+					if inst.IsCall && !bucket[i].hasCall {
 						bucket[i].call = o
-						bucket[i].inst = inst
-						bucket[i].inst.IsCall = false // 保持 put 的 inst（strike 相同）
+						bucket[i].hasCall = true
 						found = true
 						break
 					}
-				}
-				if !found {
-					bucket = append(bucket, cpPair{call: o, inst: inst})
-				}
-			} else {
-				found := false
-				for i := range bucket {
-					if bucket[i].inst.Strike == inst.Strike && bucket[i].inst.IsCall && bucket[i].call.InstrumentName != "" {
+					if !inst.IsCall && !bucket[i].hasPut {
 						bucket[i].put = o
+						bucket[i].hasPut = true
+						// inst 只在首次挂腿时设置；strike 相同，Canonical 无 C/P 后缀，无需覆盖。
+						if !bucket[i].hasCall {
+							bucket[i].inst = inst
+						}
 						found = true
 						break
 					}
-				}
-				if !found {
-					bucket = append(bucket, cpPair{put: o, inst: inst})
 				}
 			}
-			pairsByExpiry[inst.Expiry] = bucket
+			if !found {
+				p := cpPair{inst: inst}
+				if inst.IsCall {
+					p.call = o
+					p.hasCall = true
+				} else {
+					p.put = o
+					p.hasPut = true
+				}
+				bucket = append(bucket, p)
+			}
+			pairsByExpiry[inst.ExpiryYMD] = bucket
 		}
 
-		// 2. 取最近 N 个到期日
+		// 2. 取最近 N 个到期日（YYYYMMDD 字典序=日历序）
 		expiries := make([]string, 0, len(pairsByExpiry))
 		for e := range pairsByExpiry {
 			expiries = append(expiries, e)
 		}
-		sortStrings(expiries)
+		sort.Strings(expiries)
 		n := in.ExpiryCount
 		if n <= 0 {
 			n = 2
@@ -96,18 +110,22 @@ func computeAllParity(in ParityInput, now time.Time) ParityOutput {
 			expiries = expiries[:n]
 		}
 
-		// 3. 期货价映射（同到期）
+		// 3. 期货价映射（同到期，键=YYYYMMDD）
 		futureByExpiry := map[string]float64{}
 		for _, f := range in.Futures {
 			if f.BaseCurrency != base {
 				continue
 			}
 			// 期货 instrument 名：BTC-27SEP26（无 strike/-C/-P）
-			parts := splitInstrument(f.InstrumentName)
+			parts := strings.Split(f.InstrumentName, "-")
 			if len(parts) != 2 {
 				continue
 			}
-			futureByExpiry[parts[1]] = f.MarkPrice
+			ymd := parseExpiry(parts[1])
+			if ymd == "" {
+				continue
+			}
+			futureByExpiry[ymd] = f.MarkPrice
 		}
 
 		// 4. 计算每对 call/put
@@ -122,7 +140,7 @@ func computeAllParity(in ParityInput, now time.Time) ParityOutput {
 			// 但 ATM±10% 过滤用期货价即可——精度足够判定是否在带内）。
 			atm := futurePrice
 			for _, p := range pairs {
-				if p.call.InstrumentName == "" || p.put.InstrumentName == "" {
+				if !p.hasCall || !p.hasPut {
 					continue // 只有 call 或只有 put，无法配对
 				}
 				strike := p.inst.Strike
@@ -155,13 +173,4 @@ func computeAllParity(in ParityInput, now time.Time) ParityOutput {
 		}
 	}
 	return out
-}
-
-// sortStrings 简易字符串排序（避免引入 sort 到纯逻辑文件；测试覆盖）。
-func sortStrings(s []string) {
-	for i := 1; i < len(s); i++ {
-		for j := i; j > 0 && s[j-1] > s[j]; j-- {
-			s[j-1], s[j] = s[j], s[j-1]
-		}
-	}
 }

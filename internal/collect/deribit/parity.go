@@ -5,6 +5,8 @@ package deribit
 
 import (
 	"math"
+	"strconv"
+	"strings"
 )
 
 // Venue 常量。
@@ -22,25 +24,31 @@ type optBookSummary struct {
 }
 
 // optInstrument 解析后的期权 instrument 名。
-// 格式：BTC-DDMMMYY-STRIKE-C/P（Deribit 原生）→ 归一 symbol=BTC:20260927:65000:C。
+// 格式：BTC-DDMMMYY-STRIKE-C/P（Deribit 原生）→ 归一 symbol=BTC:20260927:65000（无 C/P，平价是 call-put 对属性）。
 type optInstrument struct {
 	Base      string  // BTC/ETH
 	Expiry    string  // 原生 DDMMMYY（27SEP26）
+	ExpiryYMD string  // YYYYMMDD（20260927，排序/分组键，字典序=日历序）
 	Strike    float64 // 65000
 	IsCall    bool    // true=call, false=put
-	Canonical string  // BTC:20260927:65000:C（归一 symbol，落库用）
+	Canonical string  // BTC:20260927:65000（归一 symbol，落库用，无 C/P 后缀）
 }
 
-// parseExpiry 将 Deribit DDMMMYY（如 27SEP26）解析为 YYYYMMDD（20260927）。
-// Deribit 到期日均为 UTC 08:00；此处只取日期部分用于归一 symbol。
+// parseExpiry 将 Deribit D[D]MMMYY（如 27SEP26 / 4SEP26）解析为 YYYYMMDD（20260927 / 20260904）。
+// Deribit 日份无前导零（4SEP26=6 字符，27SEP26=7 字符）；月份固定 3 字母，年份固定 2 位。
+// 输出 YYYYMMDD 日份补前导零（字典序=日历序的前提）。
+// Deribit 到期日均为 UTC 08:00；此处只取日期部分用于归一 symbol 与排序键。
 // 解析失败返回空串（调用方跳过该 instrument）。
 func parseExpiry(s string) string {
-	if len(s) != 7 {
+	var day, monStr, yr string
+	switch len(s) {
+	case 7: // DDMMMYY
+		day, monStr, yr = s[:2], s[2:5], s[5:]
+	case 6: // DMMMYY（单日份无前导零）
+		day, monStr, yr = s[:1], s[1:4], s[4:]
+	default:
 		return ""
 	}
-	day := s[:2]
-	monStr := s[2:5]
-	yr := s[5:]
 	months := map[string]string{
 		"JAN": "01", "FEB": "02", "MAR": "03", "APR": "04",
 		"MAY": "05", "JUN": "06", "JUL": "07", "AUG": "08",
@@ -50,6 +58,10 @@ func parseExpiry(s string) string {
 	if !ok {
 		return ""
 	}
+	// 日份补前导零（4 → 04）确保字典序=日历序
+	if len(day) == 1 {
+		day = "0" + day
+	}
 	// Deribit 年份 2 位 → 20XX（Deribit 上市合约均在 2000 年代）
 	return "20" + yr + mon + day
 }
@@ -58,16 +70,16 @@ func parseExpiry(s string) string {
 // 格式：BTC-27SEP26-65000-C。strike 可能为非整数（如 65000.5），用 strconv 自由解析。
 func parseInstrument(name string) (optInstrument, bool) {
 	// 分割：base-expiry-strike-type
-	parts := splitInstrument(name)
+	parts := strings.Split(name, "-")
 	if len(parts) != 4 {
 		return optInstrument{}, false
 	}
-	expiry := parseExpiry(parts[1])
-	if expiry == "" {
+	expiryYMD := parseExpiry(parts[1])
+	if expiryYMD == "" {
 		return optInstrument{}, false
 	}
-	strike, ok := parseFloat(parts[2])
-	if !ok {
+	strike, err := strconv.ParseFloat(parts[2], 64)
+	if err != nil {
 		return optInstrument{}, false
 	}
 	isCall := parts[3] == "C"
@@ -77,62 +89,12 @@ func parseInstrument(name string) (optInstrument, bool) {
 	return optInstrument{
 		Base:      parts[0],
 		Expiry:    parts[1],
+		ExpiryYMD: expiryYMD,
 		Strike:    strike,
 		IsCall:    isCall,
-		Canonical: parts[0] + ":" + expiry + ":" + parts[2] + ":" + parts[3],
+		// 归一 symbol 无 C/P 后缀——平价偏离是 call-put 对的属性，非单腿。
+		Canonical: parts[0] + ":" + expiryYMD + ":" + parts[2],
 	}, true
-}
-
-// splitInstrument 按 '-' 分割 instrument 名（不引入 strings 依赖，纯索引）。
-func splitInstrument(name string) []string {
-	var parts []string
-	start := 0
-	for i := 0; i < len(name); i++ {
-		if name[i] == '-' {
-			parts = append(parts, name[start:i])
-			start = i + 1
-		}
-	}
-	parts = append(parts, name[start:])
-	return parts
-}
-
-// parseFloat 简易 float 解析（避免引入 strconv 到纯逻辑文件；测试覆盖）。
-func parseFloat(s string) (float64, bool) {
-	if s == "" {
-		return 0, false
-	}
-	neg := false
-	i := 0
-	if s[0] == '-' {
-		neg = true
-		i = 1
-	} else if s[0] == '+' {
-		i = 1
-	}
-	intPart := 0.0
-	hasInt := false
-	for ; i < len(s) && s[i] >= '0' && s[i] <= '9'; i++ {
-		intPart = intPart*10 + float64(s[i]-'0')
-		hasInt = true
-	}
-	frac := 0.0
-	if i < len(s) && s[i] == '.' {
-		i++
-		div := 10.0
-		for ; i < len(s) && s[i] >= '0' && s[i] <= '9'; i++ {
-			frac += float64(s[i]-'0') / div
-			div *= 10
-		}
-	}
-	if !hasInt && frac == 0 {
-		return 0, false
-	}
-	v := intPart + frac
-	if neg {
-		v = -v
-	}
-	return v, true
 }
 
 // ParityResult 单个 (标的,到期,行权价) 的平价偏离计算结果。

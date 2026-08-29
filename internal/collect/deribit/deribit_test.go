@@ -126,7 +126,7 @@ func TestAlertRule(t *testing.T) {
 	rule.Now = func() time.Time { return fixedNow }
 	rule.RealertInterval = time.Hour
 
-	inst := optInstrument{Base: "BTC", Expiry: "27SEP26", Strike: 78000, IsCall: true, Canonical: "BTC:20260927:78000:C"}
+	inst := optInstrument{Base: "BTC", Expiry: "27SEP26", ExpiryYMD: "20260927", Strike: 78000, IsCall: true, Canonical: "BTC:20260927:78000"}
 	// 构造 |dev_bps|=20（>15）的 result
 	highDev := []ParityResult{{Instrument: inst, DevBps: 20, C: 100, P: 90, F: 78000, K: 78000}}
 	lowDev := []ParityResult{{Instrument: inst, DevBps: 10, C: 100, P: 90, F: 78000, K: 78000}}
@@ -208,12 +208,56 @@ func TestFactSchema(t *testing.T) {
 	if f.Src != "deribit_public" {
 		t.Errorf("Src=%s, want deribit_public", f.Src)
 	}
-	// symbol 格式：BTC:YYYYMMDD:STRIKE:C/P
+	// symbol 格式：BTC:YYYYMMDD:STRIKE（无 C/P 后缀——平价偏离是 call-put 对的属性）
 	if !strings.Contains(f.Symbol, "BTC:") {
-		t.Errorf("Symbol=%s, want BTC:YYYYMMDD:STRIKE:C/P format", f.Symbol)
+		t.Errorf("Symbol=%s, want BTC:YYYYMMDD:STRIKE format", f.Symbol)
+	}
+	if strings.HasSuffix(f.Symbol, ":C") || strings.HasSuffix(f.Symbol, ":P") {
+		t.Errorf("Symbol=%s, must not have C/P suffix (parity is call-put pair attribute)", f.Symbol)
 	}
 	// Validate 不报错（kind 已注册）
 	if err := f.Validate(); err != nil {
 		t.Errorf("Validate: %v", err)
+	}
+}
+
+// 用例⑥（返修①）：到期日排序必须用 YYYYMMDD（字典序=日历序），不能用 DDMMMYY 字母序。
+// DDMMMYY 字母序错乱：日份无前导零（4SEP26 排在 11SEP26 后）+ 月份字母序错（OCT26<SEP26）。
+// 快照含 4 到期 [29AUG26,4SEP26,11SEP26,25SEP26]，ExpiryCount=2 → 正确取 [29AUG26,4SEP26]。
+// 旧代码 DDMMMYY 排序=[11SEP26,25SEP26,29AUG26,4SEP26] → 取前 2=[11SEP26,25SEP26] → 红。
+func TestExpirySortCalendar(t *testing.T) {
+	now := time.Now()
+	// 4 到期日，每个到期 1 个 call+put（strike=78000，ATM 带内）
+	// + 每个到期 1 个期货（确保不因 F 缺失跳过）
+	expiries := []string{"29AUG26", "4SEP26", "11SEP26", "25SEP26"}
+	var futures []optBookSummary
+	var options []optBookSummary
+	for _, e := range expiries {
+		futures = append(futures, optBookSummary{
+			InstrumentName: "BTC-" + e, MarkPrice: 78000, BaseCurrency: "BTC",
+		})
+		options = append(options, optBookSummary{
+			InstrumentName: "BTC-" + e + "-78000-C", MarkPrice: 0.001, UnderlyingPrice: 78000,
+			BidPrice: 0.0009, AskPrice: 0.0011, BaseCurrency: "BTC",
+		})
+		options = append(options, optBookSummary{
+			InstrumentName: "BTC-" + e + "-78000-P", MarkPrice: 0.001, UnderlyingPrice: 78000,
+			BidPrice: 0.0009, AskPrice: 0.0011, BaseCurrency: "BTC",
+		})
+	}
+	out := computeAllParity(ParityInput{
+		Options: options, Futures: futures,
+		Bases: []string{"BTC"}, ExpiryCount: 2,
+	}, now)
+	// 正确：取最近 2 个到期 = 29AUG26(20260829) + 4SEP26(20260904)
+	// 旧代码 DDMMMYY 排序取 [11SEP26,25SEP26] → facts 含 SEP 月份 → 红
+	if len(out.Facts) != 2 {
+		t.Fatalf("want 2 facts (29AUG26+4SEP26), got %d", len(out.Facts))
+	}
+	for _, f := range out.Facts {
+		// 29AUG26 → 20260829；4SEP26 → 20260904
+		if !strings.Contains(f.Symbol, "20260829") && !strings.Contains(f.Symbol, "20260904") {
+			t.Errorf("Symbol=%s, want only 29AUG26(20260829) or 4SEP26(20260904)", f.Symbol)
+		}
 	}
 }
