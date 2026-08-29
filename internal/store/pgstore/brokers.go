@@ -131,31 +131,6 @@ func (s *Store) SetBrokerAccountStatus(ctx context.Context, venue, status string
 	return err
 }
 
-// SetBrokerAccountIsReal D-144 ①：更新账号实盘标记。
-func (s *Store) SetBrokerAccountIsReal(ctx context.Context, venue string, isReal bool) error {
-	_, err := s.pool.Exec(ctx, `UPDATE broker_accounts SET is_real = $1 WHERE venue = $2`, isReal, venue)
-	return err
-}
-
-// ListAccountIsReal D-144 ①：返回 venue→is_real 映射（discoverSwapCombos 同类型配对用）。
-func (s *Store) ListAccountIsReal(ctx context.Context) (map[string]bool, error) {
-	rows, err := s.pool.Query(ctx, `SELECT venue, is_real FROM broker_accounts`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	m := make(map[string]bool)
-	for rows.Next() {
-		var venue string
-		var isReal bool
-		if err := rows.Scan(&venue, &isReal); err != nil {
-			return nil, err
-		}
-		m[venue] = isReal
-	}
-	return m, rows.Err()
-}
-
 // UpsertSymbolMapping 写入映射（venue+broker_symbol 冲突时更新 canonical + contract_size + source）。
 // ContractSize nil 写 NULL（未知）。Source 空=manual（DB DEFAULT 兜底）。
 func (s *Store) UpsertSymbolMapping(ctx context.Context, m *SymbolMapping) error {
