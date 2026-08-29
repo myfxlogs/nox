@@ -47,7 +47,9 @@ func TestBackfillRuleMappings_MockSymbolsSource(t *testing.T) {
 		running: make(map[string]*running),
 	}
 	// mock symbolGroups：返回规则库可命中的符号（EURUSDm → EURUSD via regex）
+	// symbols 设为非 nil 占位（BrokerSymbols guard 要求 r.symbols != nil，即使走 symbolGroups 路径）
 	m.running[venue] = &running{
+		symbols: func(_ context.Context) ([]string, error) { return nil, nil }, // 占位，走 symbolGroups 路径不调
 		symbolGroups: func(_ context.Context) ([]SymbolGroup, error) {
 			return []SymbolGroup{
 				{Symbol: "EURUSDm", Group: "Forex"},
