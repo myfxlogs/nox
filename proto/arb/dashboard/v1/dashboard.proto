@@ -857,6 +857,7 @@ message VerifyAccountResponse {
   int32 leverage = 4;
   string host = 5; // D-141 S5：多端点 failover 胜出 host（回传前端展示/落库）
   int32 port = 6;  // D-141 S5：胜出端点端口
+  int32 latency_ms = 7; // D-142：PingHost 延迟预排序胜出端点延迟（ms，0=未探测/MT4 无 PingHost）
 }
 
 message BrokerSymbolsRequest {
