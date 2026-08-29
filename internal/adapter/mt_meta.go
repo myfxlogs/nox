@@ -1,7 +1,11 @@
 package adapter
 
-// MT5 符号元数据采集（D-140 S2）。
+// MT5 符号元数据采集（D-140 S2 + D-142 ③）。
 // 发 mt_symbol_meta Fact（symbol=broker 原生，value=ContractSize，unit=contract_size）。
+// D-142 ③：同时发 mt_symbol_margin Fact（value=品种级保证金率，unit=ratio）——
+//   SymGroup.InitMarginRate[0]（long order 口径）。网关实拍不返回该字段（经验库
+//   mt5-symgroup-margin-fields-not-served，2026-08-29 二次验证仍 len=0）→ 当前产出
+//   零 margin facts，消费方④回落账户级 1/Leverage。网关升级后自动产出。
 // CS 的自动来源：采集到的 CS 经 main 层 sink upsert 进 broker_symbol_map（仅填 NULL 行）。
 // 复用 SwapFacts 已建立的 SymbolParamsMany 批量拉取路径，独立轮询不耦合 swap 标定。
 
@@ -46,6 +50,7 @@ func (a *MT5Adapter) MetaFacts(ctx context.Context) ([]fact.Fact, error) {
 	results := resp.GetResult()
 	var facts []fact.Fact
 	now := time.Now().UTC()
+	marginCount := 0
 	for _, r := range results {
 		si := r.GetSymbolInfo()
 		sym := r.GetSymbol()
@@ -53,20 +58,37 @@ func (a *MT5Adapter) MetaFacts(ctx context.Context) ([]fact.Fact, error) {
 			continue
 		}
 		cs := si.GetContractSize()
-		if cs <= 0 {
-			continue // 无效 CS 跳过
+		if cs > 0 {
+			facts = append(facts, fact.Fact{
+				Kind:   fact.KindMTSymbolMeta,
+				Venue:  a.venue,
+				Symbol: sym, // broker 原生符号
+				Value:  cs,
+				Unit:   fact.UnitContractSize,
+				Ts:     now,
+				Src:    "mt5",
+			})
 		}
-		facts = append(facts, fact.Fact{
-			Kind:   fact.KindMTSymbolMeta,
-			Venue:  a.venue,
-			Symbol: sym, // broker 原生符号
-			Value:  cs,
-			Unit:   fact.UnitContractSize,
-			Ts:     now,
-			Src:    "mt5",
-		})
+		// D-142 ③：品种级保证金率——SymGroup.InitMarginRate[0]（long order 口径）。
+		// 网关实拍不返回（经验库 mt5-symgroup-margin-fields-not-served），len=0 跳过。
+		sg := r.GetSymbolGroup()
+		if sg != nil {
+			imr := sg.GetInitMarginRate()
+			if len(imr) > 0 && imr[0] > 0 {
+				facts = append(facts, fact.Fact{
+					Kind:   fact.KindMTSymbolMargin,
+					Venue:  a.venue,
+					Symbol: sym,
+					Value:  imr[0],
+					Unit:   fact.UnitRatio,
+					Ts:     now,
+					Src:    "mt5",
+				})
+				marginCount++
+			}
+		}
 	}
-	log.Printf("[mt5-meta] %s: %d meta facts (CS collected)", a.venue, len(facts))
+	log.Printf("[mt5-meta] %s: %d meta facts (CS) + %d margin facts", a.venue, len(facts)-marginCount, marginCount)
 	return facts, nil
 }
 

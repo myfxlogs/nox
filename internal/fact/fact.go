@@ -20,6 +20,7 @@ const (
 	KindInitMarginRate = "init_margin_rate" // MT5 初始保证金率（UnitRatio，S6 返修：账户级=1/杠杆，无限杠杆=0）
 	KindOptParityDev   = "opt_parity_dev"   // 期权平价偏离 bps（UnitBps，D-137 Deribit 采集监控）
 	KindMTSymbolMeta   = "mt_symbol_meta"   // MT5 符号元数据（UnitContractSize，D-140 S2 CS 自动来源）
+	KindMTSymbolMargin = "mt_symbol_margin" // MT5 品种级保证金率（UnitRatio，D-142 ③ 品种级优先账户级回落）
 )
 
 // Unit 常量表（§1.2）。
@@ -66,6 +67,7 @@ var validKinds = map[string]bool{
 	KindInitMarginRate: true,
 	KindOptParityDev:   true,
 	KindMTSymbolMeta:   true,
+	KindMTSymbolMargin: true,
 }
 
 // ValidKind 报告 k 是否为已知 Kind。

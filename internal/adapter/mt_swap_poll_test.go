@@ -31,9 +31,10 @@ type fakeMT5Client struct {
 	mt5pb.SubscriptionsClient
 	mt5pb.StreamsClient
 	params     map[string]*mt5pb.SymbolParamsReply
-	leverage   float64 // S6 返修：AccountSummary.Leverage（0=未设/缺省）
-	summaryErr error   // S6 返修：AccountSummary 强制返回 err（nil=正常）
-	summaryNil bool    // S6 返修：AccountSummary 返回 result=nil
+	paramsMany *mt5pb.SymbolParamsManyReply // D-142 ③：MetaFacts 批量拉取 mock
+	leverage   float64                      // S6 返修：AccountSummary.Leverage（0=未设/缺省）
+	summaryErr error                        // S6 返修：AccountSummary 强制返回 err（nil=正常）
+	summaryNil bool                         // S6 返修：AccountSummary 返回 result=nil
 	// D-099 事件驱动测试控制（mt_margin_source_test.go 用）：
 	summaryCalls int                                                    // AccountSummary 调用计数（断言防抖/重试）
 	summaryFailN int                                                    // 前 N 次 AccountSummary 返回 summaryErr（之后正常返回 leverage）
@@ -67,6 +68,14 @@ func (f *fakeMT5Client) SymbolParams(_ context.Context, req *mt5pb.SymbolParamsR
 		return r, nil
 	}
 	return nil, os.ErrNotExist
+}
+
+// SymbolParamsMany D-142 ③：MetaFacts 批量拉取 mock。paramsMany=nil → 空结果。
+func (f *fakeMT5Client) SymbolParamsMany(_ context.Context, _ *mt5pb.SymbolParamsManyRequest, _ ...grpc.CallOption) (*mt5pb.SymbolParamsManyReply, error) {
+	if f.paramsMany != nil {
+		return f.paramsMany, nil
+	}
+	return &mt5pb.SymbolParamsManyReply{}, nil
 }
 
 // AccountSummary S6 返修：返回预设 leverage / err / result nil 三态。
