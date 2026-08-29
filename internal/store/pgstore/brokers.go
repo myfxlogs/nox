@@ -15,7 +15,7 @@ import (
 // BrokerAccount broker_accounts 行。
 // Venue 为登录账号号（D-033 短化，原 {server}-{user} 复合格式已废弃）。
 // CommissionBps 为账号类型真实佣金（bps/腿，D-036）；nil = 未配置回退 config 默认。
-// IsReal D-144 ①：实盘标记（false=demo 默认，true=实盘）。组合引擎同类型配对用。
+// IsReal D-144 ① 三态：*bool（true=实盘, false=demo, nil=未知）。组合引擎同类型配对用。
 type BrokerAccount struct {
 	Venue         string
 	Platform      int // 0=MT4, 1=MT5
@@ -27,7 +27,7 @@ type BrokerAccount struct {
 	Alias         string
 	Status        string // connected / failed / stopped
 	CommissionBps *float64
-	IsReal        bool // D-144 ①：实盘/demo 标记
+	IsReal        *bool // D-144 ① 三态：nil=未知（不配对）
 	CreatedAt     time.Time
 }
 
@@ -44,6 +44,7 @@ type SymbolMapping struct {
 }
 
 // InsertBrokerAccount 插入账号；venue 冲突返回错误（UNIQUE 约束）。
+// IsReal *bool：nil=未知(NULL), &true=实盘, &false=demo（D-144 ① 三态）。
 func (s *Store) InsertBrokerAccount(ctx context.Context, a *BrokerAccount) error {
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, server, alias, status, commission_bps, is_real)

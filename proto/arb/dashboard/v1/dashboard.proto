@@ -773,7 +773,7 @@ message AddBrokerRequest {
   string server = 7;    // 服务器名称
   reserved 8;           // 曾为 company（D-033 移除）
   optional double commission_bps = 9; // 账号类型真实佣金（bps/腿，D-036）；缺省 = 回退 config 默认
-  bool is_real = 10;    // D-144 ①：实盘标记（默认 false=demo）
+  optional bool is_real = 10;   // D-144 ① 三态：true=实盘, false=demo, 缺省=未知（不配对）
 }
 
 message AddBrokerResponse {}
@@ -796,7 +796,7 @@ message BrokerAccount {
   string status = 9;    // connected / failed / stopped
   google.protobuf.Timestamp created_at = 10;
   optional double commission_bps = 11; // 账号真实佣金（bps/腿，D-036）；未设置 = 回退默认
-  bool is_real = 12;    // D-144 ①：实盘标记（false=demo）
+  optional bool is_real = 12;   // D-144 ① 三态：true=实盘, false=demo, 缺省=未知
 }
 
 message ListBrokerAccountsRequest {}
@@ -851,7 +851,7 @@ message VerifyAccountRequest {
   int64 user = 4;
   string password = 5;
   string server = 6;
-  bool is_real = 7;     // D-144 ①：实盘标记（透传 AddBroker 流程，VerifyAccount 本身不持久化）
+  optional bool is_real = 7;  // D-144 ① 三态：透传 AddBroker 流程，VerifyAccount 本身不持久化
 }
 
 message VerifyAccountResponse {
@@ -885,9 +885,9 @@ message SetBrokerAccountAliasRequest {
 
 message SetBrokerAccountAliasResponse {}
 
-message SetBrokerAccountIsRealRequest {  // D-144 ①
+message SetBrokerAccountIsRealRequest {  // D-144 ① 三态
   string venue = 1;
-  bool is_real = 2;
+  optional bool is_real = 2;  // true=实盘, false=demo, 缺省=清除回未知(NULL)
 }
 
 message SetBrokerAccountIsRealResponse {}
