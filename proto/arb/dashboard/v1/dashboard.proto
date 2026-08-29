@@ -1052,6 +1052,8 @@ message SwapCombo {
   string venue_short = 3;
   double net_swap_bps = 4;   // 净 swap bps（排序键，D-138 观察期不动）
   double basis_bps = 5;      // 跨 venue 基差 bps（只展示不动排序/门槛/触发）
+  string alias_long = 6;     // D-144 ③：买腿别名（空=回退 venue_long）
+  string alias_short = 7;    // D-144 ③：卖腿别名（空=回退 venue_short）
 }
 
 message ListSwapCombosResponse {
