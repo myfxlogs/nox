@@ -2,6 +2,7 @@ package detector
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"arb/internal/bus"
@@ -13,6 +14,16 @@ import (
 type PerpFundingDetector struct {
 	MinNetAnnualized float64 // 年化净 funding 差门槛（百分点，2.0=2%）
 	FreshnessTTL     time.Duration
+}
+
+// D-151 入场白名单：PERP_FUNDING 仅允许 BTC/ETH/TRX 三种 canonical 入场。
+// 依据 D-151 费率持续性判定——顺风期 1-2h≪结算窗，小币种磨损重尾风险高；
+// BTC/ETH 深度极好+TRX 实证可执行（D-120 #358/#359 双腿 FILLED）。
+// 非白名单 canonical 静默跳过（不产候选），首次命中日志注明 D-151。
+var perpFundingWhitelist = map[string]bool{
+	"BTCUSDT": true,
+	"ETHUSDT": true,
+	"TRXUSDT": true,
 }
 
 func (d *PerpFundingDetector) Type() OppType { return TypePerpFunding }
@@ -27,6 +38,11 @@ func (d *PerpFundingDetector) Scan(_ context.Context, snapshot map[string]map[st
 		fundingFacts = fp.FundingFacts()
 	}
 	for canonical, venues := range snapshot {
+		// D-151 入场白名单：非 BTC/ETH/TRX 跳过（不产候选），首次命中日志注明。
+		if !perpFundingWhitelist[canonical] {
+			log.Printf("[perp_funding] D-151 白名单拒绝 canonical=%s（仅 BTC/ETH/TRX 入场）", canonical)
+			continue
+		}
 		// 收集所有 perp venue 的报价 + funding
 		type perpLeg struct {
 			q       bus.Quote

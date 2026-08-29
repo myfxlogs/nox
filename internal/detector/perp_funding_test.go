@@ -120,3 +120,46 @@ func TestPerpFundingDetector(t *testing.T) {
 func TestPerpFundingDetectorImplementsInterface(t *testing.T) {
 	var _ Detector = (*PerpFundingDetector)(nil)
 }
+
+// TestPerpFundingWhitelist D-151：PERP_FUNDING 入场白名单 BTC/ETH/TRX。
+// 非白名单 canonical（如 NEARUSDT/SOLUSDT）即使 funding 差超门槛也不产候选。
+func TestPerpFundingWhitelist(t *testing.T) {
+	now := time.Now()
+	ttl := 30 * time.Second
+
+	// NEARUSDT 非白名单，但 funding 差超门槛（应被白名单拒绝）
+	snapshot := map[string]map[string]bus.Quote{
+		"NEARUSDT": {
+			"okx:perp":  {Symbol: "NEARUSDT", Venue: "okx", VenueType: "perp", Bid: 5.0, Ask: 5.01, Time: now},
+			"gate:perp": {Symbol: "NEARUSDT", Venue: "gate", VenueType: "perp", Bid: 4.99, Ask: 5.0, Time: now},
+		},
+	}
+	funding := map[string]map[string]float64{
+		"NEARUSDT": {
+			"okx":  10.0,
+			"gate": -10.0, // 差 20% 远超门槛 2%
+		},
+	}
+	fp := &fakeFactProvider{funding: funding}
+	d := &PerpFundingDetector{MinNetAnnualized: 2.0, FreshnessTTL: ttl}
+	cands := d.Scan(context.Background(), snapshot, fp)
+	if len(cands) != 0 {
+		t.Fatalf("D-151 白名单应拒绝 NEARUSDT（非 BTC/ETH/TRX），实际产 %d 候选", len(cands))
+	}
+
+	// ETHUSDT 白名单内，funding 差超门槛 → 应产候选
+	ethSnapshot := map[string]map[string]bus.Quote{
+		"ETHUSDT": {
+			"okx:perp":  {Symbol: "ETHUSDT", Venue: "okx", VenueType: "perp", Bid: 3000, Ask: 3001, Time: now},
+			"gate:perp": {Symbol: "ETHUSDT", Venue: "gate", VenueType: "perp", Bid: 2999, Ask: 3000, Time: now},
+		},
+	}
+	ethFunding := map[string]map[string]float64{
+		"ETHUSDT": {"okx": 6.0, "gate": -1.0}, // 差 7% 超门槛
+	}
+	ethFp := &fakeFactProvider{funding: ethFunding}
+	ethCands := d.Scan(context.Background(), ethSnapshot, ethFp)
+	if len(ethCands) == 0 {
+		t.Fatalf("D-151 白名单应放行 ETHUSDT，实际 0 候选")
+	}
+}

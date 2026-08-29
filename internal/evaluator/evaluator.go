@@ -4,6 +4,7 @@ package evaluator
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"arb/internal/detector"
@@ -67,7 +68,10 @@ type Result struct {
 // D-113 续篇：bid-ask 穿透仍漏算——51 笔只 1 盈累计 -$512，宽 spread venue 组合 net 虚高 21 bps。
 func Evaluate(c detector.Candidate, cfg Config, spreadBuy, spreadSell, commissionBps, avg30dBps float64) *Result {
 	spreadCost := spreadBuy + spreadSell
-	slippageCost := cfg.SlippageBps * 2 // 两腿各 1 bps
+	// D-145 §②：滑点 per-leg 计算——MT 腿用 cfg.SlippageBps（0.3 不变，观察期铁证），
+	// CEX 腿用 slipBpsForCEX（品种分级表，与 cfg.SlippageBps 解耦）。
+	// 纯 MT 组合行为与现状完全一致（0.3×2 回归锚）；混合腿 MT×CEX 不再误伤。
+	slippageCost := slipForLeg(c.VenueBuy, c.Canonical, cfg.SlippageBps) + slipForLeg(c.VenueSell, c.Canonical, cfg.SlippageBps)
 	grossBps := c.GrossBps
 
 	// 净收益计算（§6.2）
@@ -153,4 +157,46 @@ func genID(c detector.Candidate, qt time.Time) string {
 		a, b = b, a
 	}
 	return fmt.Sprintf("%s:%s:%s:%s", c.Type, c.Canonical, a, b)
+}
+
+// D-145 §②：CEX 滑点品种分级表（与 cfg.SlippageBps 解耦）。
+// 依据 D-145 基准快照（$1K 名义模拟撮合，okx 侧实测 max bps）：
+// ETH 0.02 / BNB 0.73 / DOT 0.60 / AVAX 2.04 / TRX 3.84 / FIL 1.98 / ATOM 3.36 / NEAR 7.81
+// 分级保守取整（一线深度极好→1.0；二线→3.0；三线小币种→8.0；未知→3.0）。
+// cfg.SlippageBps（0.3）保持 MT 路径专用，改它会穿透 SWAPARB 判定（违反观察期纪律）。
+const cexSlipDefaultBps = 3.0 // 未知 CEX 品种回落值（独立于 cfg.SlippageBps）
+
+var cexSlipBpsByCanonical = map[string]float64{
+	// 一线（深度极好）
+	"ETHUSDT": 1.0,
+	"BNBUSDT": 1.0,
+	"BTCUSDT": 1.0,
+	// 二线
+	"DOTUSDT":  3.0,
+	"AVAXUSDT": 3.0,
+	"FILUSDT":  3.0,
+	"SOLUSDT":  3.0,
+	"XRPUSDT":  3.0,
+	"ADAUSDT":  3.0,
+	// 三线（小币种，okx 侧滑点显著）
+	"TRXUSDT":  8.0,
+	"ATOMUSDT": 8.0,
+	"NEARUSDT": 8.0,
+}
+
+// slipBpsForCEX 返回 CEX 品种的单腿滑点 bps（品种表命中→分级值；未知→cexSlipDefaultBps）。
+func slipBpsForCEX(canonical string) float64 {
+	if v, ok := cexSlipBpsByCanonical[canonical]; ok {
+		return v
+	}
+	return cexSlipDefaultBps
+}
+
+// slipForLeg 按腿 venueKey 后缀判定滑点：MT（:mt4/:mt5）→ cfg.SlippageBps；CEX（:perp/:spot 等）→ slipBpsForCEX。
+// 纯 MT 组合两腿均走 cfg.SlippageBps（0.3×2 回归锚，观察期铁证）。
+func slipForLeg(venueKey, canonical string, mtSlipBps float64) float64 {
+	if strings.HasSuffix(venueKey, ":mt4") || strings.HasSuffix(venueKey, ":mt5") {
+		return mtSlipBps
+	}
+	return slipBpsForCEX(canonical)
 }
