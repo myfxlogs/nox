@@ -185,6 +185,9 @@ const (
 	// DashboardServiceAutoMapBrokerProcedure is the fully-qualified name of the DashboardService's
 	// AutoMapBroker RPC.
 	DashboardServiceAutoMapBrokerProcedure = "/arb.dashboard.v1.DashboardService/AutoMapBroker"
+	// DashboardServiceListSwapCombosProcedure is the fully-qualified name of the DashboardService's
+	// ListSwapCombos RPC.
+	DashboardServiceListSwapCombosProcedure = "/arb.dashboard.v1.DashboardService/ListSwapCombos"
 	// DashboardServiceListMatrixUniverseProcedure is the fully-qualified name of the DashboardService's
 	// ListMatrixUniverse RPC.
 	DashboardServiceListMatrixUniverseProcedure = "/arb.dashboard.v1.DashboardService/ListMatrixUniverse"
@@ -287,6 +290,8 @@ type DashboardServiceClient interface {
 	ListMappingSuggestions(context.Context, *connect.Request[v1.ListMappingSuggestionsRequest]) (*connect.Response[v1.ListMappingSuggestionsResponse], error)
 	ListCanonicals(context.Context, *connect.Request[v1.ListCanonicalsRequest]) (*connect.Response[v1.ListCanonicalsResponse], error)
 	AutoMapBroker(context.Context, *connect.Request[v1.AutoMapBrokerRequest]) (*connect.Response[v1.AutoMapBrokerResponse], error)
+	// D-140 S3：swap 组合列表（basis_bps 只展示不动排序）
+	ListSwapCombos(context.Context, *connect.Request[v1.ListSwapCombosRequest]) (*connect.Response[v1.ListSwapCombosResponse], error)
 	// Matrix 全景（D-045：全符号跨全账号映射/报价巡检）
 	ListMatrixUniverse(context.Context, *connect.Request[v1.ListMatrixUniverseRequest]) (*connect.Response[v1.ListMatrixUniverseResponse], error)
 	// 实时推送（server streaming，D-026）
@@ -625,6 +630,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("AutoMapBroker")),
 			connect.WithClientOptions(opts...),
 		),
+		listSwapCombos: connect.NewClient[v1.ListSwapCombosRequest, v1.ListSwapCombosResponse](
+			httpClient,
+			baseURL+DashboardServiceListSwapCombosProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListSwapCombos")),
+			connect.WithClientOptions(opts...),
+		),
 		listMatrixUniverse: connect.NewClient[v1.ListMatrixUniverseRequest, v1.ListMatrixUniverseResponse](
 			httpClient,
 			baseURL+DashboardServiceListMatrixUniverseProcedure,
@@ -747,6 +758,7 @@ type dashboardServiceClient struct {
 	listMappingSuggestions *connect.Client[v1.ListMappingSuggestionsRequest, v1.ListMappingSuggestionsResponse]
 	listCanonicals         *connect.Client[v1.ListCanonicalsRequest, v1.ListCanonicalsResponse]
 	autoMapBroker          *connect.Client[v1.AutoMapBrokerRequest, v1.AutoMapBrokerResponse]
+	listSwapCombos         *connect.Client[v1.ListSwapCombosRequest, v1.ListSwapCombosResponse]
 	listMatrixUniverse     *connect.Client[v1.ListMatrixUniverseRequest, v1.ListMatrixUniverseResponse]
 	streamUpdates          *connect.Client[v1.StreamUpdatesRequest, v1.StreamUpdatesResponse]
 	health                 *connect.Client[v1.HealthRequest, v1.HealthResponse]
@@ -1015,6 +1027,11 @@ func (c *dashboardServiceClient) AutoMapBroker(ctx context.Context, req *connect
 	return c.autoMapBroker.CallUnary(ctx, req)
 }
 
+// ListSwapCombos calls arb.dashboard.v1.DashboardService.ListSwapCombos.
+func (c *dashboardServiceClient) ListSwapCombos(ctx context.Context, req *connect.Request[v1.ListSwapCombosRequest]) (*connect.Response[v1.ListSwapCombosResponse], error) {
+	return c.listSwapCombos.CallUnary(ctx, req)
+}
+
 // ListMatrixUniverse calls arb.dashboard.v1.DashboardService.ListMatrixUniverse.
 func (c *dashboardServiceClient) ListMatrixUniverse(ctx context.Context, req *connect.Request[v1.ListMatrixUniverseRequest]) (*connect.Response[v1.ListMatrixUniverseResponse], error) {
 	return c.listMatrixUniverse.CallUnary(ctx, req)
@@ -1138,6 +1155,8 @@ type DashboardServiceHandler interface {
 	ListMappingSuggestions(context.Context, *connect.Request[v1.ListMappingSuggestionsRequest]) (*connect.Response[v1.ListMappingSuggestionsResponse], error)
 	ListCanonicals(context.Context, *connect.Request[v1.ListCanonicalsRequest]) (*connect.Response[v1.ListCanonicalsResponse], error)
 	AutoMapBroker(context.Context, *connect.Request[v1.AutoMapBrokerRequest]) (*connect.Response[v1.AutoMapBrokerResponse], error)
+	// D-140 S3：swap 组合列表（basis_bps 只展示不动排序）
+	ListSwapCombos(context.Context, *connect.Request[v1.ListSwapCombosRequest]) (*connect.Response[v1.ListSwapCombosResponse], error)
 	// Matrix 全景（D-045：全符号跨全账号映射/报价巡检）
 	ListMatrixUniverse(context.Context, *connect.Request[v1.ListMatrixUniverseRequest]) (*connect.Response[v1.ListMatrixUniverseResponse], error)
 	// 实时推送（server streaming，D-026）
@@ -1472,6 +1491,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("AutoMapBroker")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceListSwapCombosHandler := connect.NewUnaryHandler(
+		DashboardServiceListSwapCombosProcedure,
+		svc.ListSwapCombos,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListSwapCombos")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceListMatrixUniverseHandler := connect.NewUnaryHandler(
 		DashboardServiceListMatrixUniverseProcedure,
 		svc.ListMatrixUniverse,
@@ -1642,6 +1667,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceListCanonicalsHandler.ServeHTTP(w, r)
 		case DashboardServiceAutoMapBrokerProcedure:
 			dashboardServiceAutoMapBrokerHandler.ServeHTTP(w, r)
+		case DashboardServiceListSwapCombosProcedure:
+			dashboardServiceListSwapCombosHandler.ServeHTTP(w, r)
 		case DashboardServiceListMatrixUniverseProcedure:
 			dashboardServiceListMatrixUniverseHandler.ServeHTTP(w, r)
 		case DashboardServiceStreamUpdatesProcedure:
@@ -1875,6 +1902,10 @@ func (UnimplementedDashboardServiceHandler) ListCanonicals(context.Context, *con
 
 func (UnimplementedDashboardServiceHandler) AutoMapBroker(context.Context, *connect.Request[v1.AutoMapBrokerRequest]) (*connect.Response[v1.AutoMapBrokerResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AutoMapBroker is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListSwapCombos(context.Context, *connect.Request[v1.ListSwapCombosRequest]) (*connect.Response[v1.ListSwapCombosResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListSwapCombos is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListMatrixUniverse(context.Context, *connect.Request[v1.ListMatrixUniverseRequest]) (*connect.Response[v1.ListMatrixUniverseResponse], error) {

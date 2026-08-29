@@ -85,6 +85,10 @@ type Service struct {
 	quoteFlushInterval time.Duration
 	// D-091 前端分析员依赖（main 经 SetAnalyst 注入；nil = 未配置，RPC 返回 failed_precondition）。
 	analyst *analystDeps
+	// D-140 S3：swap 组合列表注入（main 装配 autotrade 引擎的 discoverSwapCombos 适配）。
+	// nil = 未接线（RPC 返回空列表）。避免 dashboard→autotrade 依赖环。
+	swapComboLister func() []SwapComboEntry
+
 	// D-111：收敛型实时 bps 成本扣除（commissionResolver 复用，nil = commissionBps=0）。
 	commissionFor func(venueKey string) float64
 	// D-111：收敛型实时 bps 滑点成本（cfg.SlippageBps，slippageCost = slippageBps * 2）。
