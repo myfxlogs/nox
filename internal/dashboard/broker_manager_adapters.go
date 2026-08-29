@@ -233,6 +233,7 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 		setSymMap:    ad.SetSymbolMap,
 		resubscribe:  ad.Resubscribe,
 		swap:         func(ctx context.Context) ([]fact.Fact, error) { return ad.SwapFacts(ctx, m.qbus) },
+		meta:         func(ctx context.Context) ([]fact.Fact, error) { return ad.MetaFacts(ctx) },
 	}
 	m.attach(a.Venue, r)
 	log.Printf("[broker] %s (MT5) ready", a.Venue)

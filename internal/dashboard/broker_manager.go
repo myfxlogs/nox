@@ -41,6 +41,7 @@ type running struct {
 	setSymMap    func(map[string]string)                        // 运行时刷新 brokerSymbol → canonical
 	resubscribe  func([]string)                                 // 运行时补订阅新符号（保存映射后生效，D-047 缺陷③）
 	swap         func(ctx context.Context) ([]fact.Fact, error) // 轮询 swap facts（§3.6，D-036）
+	meta         func(ctx context.Context) ([]fact.Fact, error) // D-140 S2：MT5 符号元数据 facts（CS 采集）
 
 	// per-venue symbolGroups TTL 缓存（D-045 §3.2.1）：避免矩阵页全量拉取时 N 账号 × SymbolList+SymbolParamsMany
 	// 直连 mtapi；缓存失效回退直连，失败不下发脏数据。

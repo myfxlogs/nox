@@ -84,6 +84,32 @@ func (m *BrokerManager) SwapFacts(ctx context.Context) ([]fact.Fact, error) {
 // coldStartBound 冷启动退避窗口：期间任一 venue 缺报价即整轮重试；超窗接受部分，等下一轮补全。
 const coldStartBound = 60 * time.Second
 
+// MetaFacts 聚合全部运行中适配器的符号元数据 facts（D-140 S2）。
+// best-effort：单 venue 失败跳过不阻塞；无 MT5 源 → 返回空 nil。
+func (m *BrokerManager) MetaFacts(ctx context.Context) ([]fact.Fact, error) {
+	m.mu.Lock()
+	metaFns := make([]func(context.Context) ([]fact.Fact, error), 0, len(m.running))
+	for _, r := range m.running {
+		if r.meta != nil {
+			metaFns = append(metaFns, r.meta)
+		}
+	}
+	m.mu.Unlock()
+	if len(metaFns) == 0 {
+		return nil, nil
+	}
+	var facts []fact.Fact
+	for _, fn := range metaFns {
+		fs, err := fn(ctx)
+		if err != nil {
+			log.Printf("[broker] meta source: %v", err)
+			continue
+		}
+		facts = append(facts, fs...)
+	}
+	return facts, nil
+}
+
 // hasStartableAccounts 是否还有应运行的 CFD 账号（status=connected，StartAll 的启动谓词）。
 // 查询失败保守视为有——启动竞态（scheduler 首轮早于适配器连上）宁可退避重试，不可静默吞掉。
 func (m *BrokerManager) hasStartableAccounts(ctx context.Context) bool {
