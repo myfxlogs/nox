@@ -6,10 +6,33 @@ package autotrade
 // 无限杠杆（2e9 哨兵）→ 保证金≈0，不告警。
 
 import (
+	"context"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 )
+
+// aliasOrKey D-144 ③：venueKey → alias（有别名显示别名，无则回退 venueKey）。
+// 从 store 加载 venue→alias 映射（best-effort，查询失败 → 回退 venueKey）。
+// 告警消息用——observeMarginBudget 已有 1h 去重，加载频率低可接受。
+func (e *Engine) aliasOrKey(venueKey string) string {
+	if e.store == nil {
+		return venueKey
+	}
+	aliasMap, err := e.store.ListAccountAliases(context.Background())
+	if err != nil {
+		return venueKey
+	}
+	venue := venueKey
+	if idx := strings.Index(venueKey, ":"); idx > 0 {
+		venue = venueKey[:idx]
+	}
+	if a, ok := aliasMap[venue]; ok && a != "" {
+		return a
+	}
+	return venueKey
+}
 
 // marginAlertDedupInterval D-144 ②：per-key 去重窗口（1h，同 mt-health critRealertInterval 模式）。
 const marginAlertDedupInterval = time.Hour
@@ -49,7 +72,7 @@ func (e *Engine) observeMarginBudget(canonical, venueLong, venueShort string, no
 			if e.shouldMarginAlert(key) {
 				e.AlertSink("info", fmt.Sprintf(
 					"SWAPARB %s: 杠杆不对称 %s=%.0f vs %s=%.0f (%.1fx 差异，保证金分配不均)",
-					canonical, venueLong, levLong, venueShort, levShort, ratio))
+					canonical, e.aliasOrKey(venueLong), levLong, e.aliasOrKey(venueShort), levShort, ratio))
 			}
 		}
 	}
