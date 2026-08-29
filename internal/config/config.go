@@ -197,7 +197,7 @@ func Load() *Config {
 		CloseBpsThr:                 envFloat("ARB_CLOSE_BPS_THR", 0.5),                  // D-070 均值回归：价差回归到 0.5bps 内平仓
 		AlertResendInterval:         envDur("ARB_ALERT_RESEND_INTERVAL", 10*time.Minute), // D-072 铃铛治理：同 key 告警冷却
 		CommissionCFDBps:            envFloat("ARB_COMMISSION_CFD_BPS", 0.3),
-		CommissionCEXTakerBps:       envFloat("ARB_COMMISSION_CEX_TAKER_BPS", 10.0),
+		CommissionCEXTakerBps:       envFloat("ARB_COMMISSION_CEX_TAKER_BPS", 5.0), // D-145：binance/okx VIP0 taker 实测 0.05%=5bps（账户级真值待真金 key 后 commissionFor 精确化）
 		CommissionTaker: map[string]float64{
 			"binance": envFloat("ARB_COMMISSION_TAKER_BINANCE", 10.0),
 			"okx":     envFloat("ARB_COMMISSION_TAKER_OKX", 10.0),

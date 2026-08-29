@@ -44,8 +44,8 @@ func TestLoadDefaults(t *testing.T) {
 	if c.CommissionCFDBps != 0.3 {
 		t.Errorf("CommissionCFDBps = %v, want 0.3", c.CommissionCFDBps)
 	}
-	if c.CommissionCEXTakerBps != 10.0 {
-		t.Errorf("CommissionCEXTakerBps = %v, want 10.0", c.CommissionCEXTakerBps)
+	if c.CommissionCEXTakerBps != 5.0 {
+		t.Errorf("CommissionCEXTakerBps = %v, want 5.0 (D-145 VIP0 taker 实测)", c.CommissionCEXTakerBps)
 	}
 	if c.DetectorFreshnessTTL != 120*time.Second {
 		t.Errorf("DetectorFreshnessTTL = %v, want 120s (D-070)", c.DetectorFreshnessTTL)
@@ -93,6 +93,7 @@ func TestLoadEnvOverride(t *testing.T) {
 	t.Setenv("ARB_COMMISSION_CFD_BPS", "0.6")
 	t.Setenv("ARB_DETECTOR_FRESHNESS_TTL", "90s")
 	t.Setenv("ARB_LIQ_MMR", "0.01")
+	t.Setenv("ARB_COMMISSION_CEX_TAKER_BPS", "3.0") // D-145：env 覆盖默认 5.0
 	c := Load()
 	if c.CrossVenueMinGrossBpsCEX != 0.5 {
 		t.Errorf("CrossVenueMinGrossBpsCEX = %v, want 0.5", c.CrossVenueMinGrossBpsCEX)
@@ -102,6 +103,9 @@ func TestLoadEnvOverride(t *testing.T) {
 	}
 	if c.CommissionCFDBps != 0.6 {
 		t.Errorf("CommissionCFDBps = %v, want 0.6", c.CommissionCFDBps)
+	}
+	if c.CommissionCEXTakerBps != 3.0 {
+		t.Errorf("CommissionCEXTakerBps = %v, want 3.0 (D-145 env 覆盖)", c.CommissionCEXTakerBps)
 	}
 	if c.DetectorFreshnessTTL != 90*time.Second {
 		t.Errorf("DetectorFreshnessTTL = %v, want 90s", c.DetectorFreshnessTTL)
@@ -128,8 +132,8 @@ func TestLoadTakerEnvOverride(t *testing.T) {
 	if c.CommissionTaker["okx"] != 10.0 {
 		t.Errorf("CommissionTaker[okx] = %v, want default 10.0", c.CommissionTaker["okx"])
 	}
-	if c.CommissionCEXTakerBps != 10.0 {
-		t.Errorf("CommissionCEXTakerBps = %v, want default 10.0", c.CommissionCEXTakerBps)
+	if c.CommissionCEXTakerBps != 5.0 {
+		t.Errorf("CommissionCEXTakerBps = %v, want default 5.0 (D-145)", c.CommissionCEXTakerBps)
 	}
 }
 
