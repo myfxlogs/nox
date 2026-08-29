@@ -798,6 +798,7 @@ message BrokerAccount {
   google.protobuf.Timestamp created_at = 10;
   optional double commission_bps = 11; // 账号真实佣金（bps/腿，D-036）；未设置 = 回退默认
   optional bool is_real = 12;   // D-144 ① 三态：true=实盘, false=demo, 缺省=未知
+  string server_group = 13;    // D-150 ② 平台分组键=server 首段（首个 '-' 前，后端算好下发）
 }
 
 message ListBrokerAccountsRequest {}
