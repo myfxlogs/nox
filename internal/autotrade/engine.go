@@ -94,6 +94,11 @@ type Engine struct {
 	csMissSent   map[string]time.Time // key → 最近一次告警时间（1h 去重）
 	csMissMu     sync.Mutex
 	AlertSink    func(level, msg string) // nil = 未注入（no-op）
+
+	// D-144 ②：保证金告警 per-key 去重（canonical:vl:vs:type → 最近一次告警时间，1h 窗口）。
+	// 同 mt-health lastCritAlert 模式；内存，重启重置（实时告警语义，不持久化）。
+	marginAlertSent map[string]time.Time
+	marginAlertMu   sync.Mutex
 }
 
 // New 创建自动交易引擎。
@@ -109,7 +114,8 @@ func New(cfg Config, store *pgstore.Store, service *dashboard.Service, oppTopic 
 		fundingBreach:   make(map[int64]int),  // D-133 T1：PERP_FUNDING 去抖计数
 		csMissCounts:    make(map[string]int), // D-140 S2：CS-miss 聚合
 		csMissSent:      make(map[string]time.Time),
-		kickCh:          make(chan struct{}, 1), // D-107 P4：buffered(1) 非阻塞 send = 事件合并
+		marginAlertSent: make(map[string]time.Time), // D-144 ②：保证金告警去重
+		kickCh:          make(chan struct{}, 1),     // D-107 P4：buffered(1) 非阻塞 send = 事件合并
 	}
 }
 

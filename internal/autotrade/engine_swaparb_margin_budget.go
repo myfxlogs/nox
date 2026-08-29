@@ -8,11 +8,32 @@ package autotrade
 import (
 	"fmt"
 	"math"
+	"time"
 )
+
+// marginAlertDedupInterval D-144 ②：per-key 去重窗口（1h，同 mt-health critRealertInterval 模式）。
+const marginAlertDedupInterval = time.Hour
+
+// shouldMarginAlert D-144 ②：per-key 去重——key=canonical:vl:vs:type，1h 窗口内不重发。
+// 线程安全（marginAlertMu 保护）。返回 true=允许告警并记录时间，false=窗口内跳过。
+// marginAlertSent nil（测试直接构造 Engine）→ 初始化为空 map（防御性，避免 panic）。
+func (e *Engine) shouldMarginAlert(key string) bool {
+	e.marginAlertMu.Lock()
+	defer e.marginAlertMu.Unlock()
+	if e.marginAlertSent == nil {
+		e.marginAlertSent = make(map[string]time.Time)
+	}
+	if last, ok := e.marginAlertSent[key]; ok && time.Since(last) < marginAlertDedupInterval {
+		return false
+	}
+	e.marginAlertSent[key] = time.Now()
+	return true
+}
 
 // observeMarginBudget D-142 ④：观察版告警（只告警不拦截）。
 // ① 组合保证金预算：双腿合计保证金 / min(equity) > SwapArbMarginBudgetPct → warn 告警。
 // ② 杠杆不对称：两腿 leverage 差异 > 2 倍（且均非无限杠杆）→ info 提示。
+// D-144 ②：per-key 去重（canonical:vl:vs:type，1h 窗口）——防告警洪水。
 // AlertSink nil 或配置 0 → no-op。best-effort：查询失败静默跳过。
 func (e *Engine) observeMarginBudget(canonical, venueLong, venueShort string, notional float64) {
 	if e.AlertSink == nil {
@@ -24,9 +45,12 @@ func (e *Engine) observeMarginBudget(canonical, venueLong, venueShort string, no
 	// ① 杠杆不对称提示（两腿 leverage 均已知且非无限杠杆）
 	if okLong && okShort && isFiniteLeverage(levLong) && isFiniteLeverage(levShort) {
 		if ratio := leverageAsymmetryRatio(levLong, levShort); ratio > 2.0 {
-			e.AlertSink("info", fmt.Sprintf(
-				"SWAPARB %s: 杠杆不对称 %s=%.0f vs %s=%.0f (%.1fx 差异，保证金分配不均)",
-				canonical, venueLong, levLong, venueShort, levShort, ratio))
+			key := fmt.Sprintf("%s:%s:%s:asymmetry", canonical, venueLong, venueShort)
+			if e.shouldMarginAlert(key) {
+				e.AlertSink("info", fmt.Sprintf(
+					"SWAPARB %s: 杠杆不对称 %s=%.0f vs %s=%.0f (%.1fx 差异，保证金分配不均)",
+					canonical, venueLong, levLong, venueShort, levShort, ratio))
+			}
 		}
 	}
 
@@ -51,10 +75,13 @@ func (e *Engine) observeMarginBudget(canonical, venueLong, venueShort string, no
 	}
 	budgetPct := totalMargin / minEq
 	if budgetPct > e.cfg.SwapArbMarginBudgetPct {
-		e.AlertSink("warn", fmt.Sprintf(
-			"SWAPARB %s: 组合保证金预算 %.1f%% > 阈值 %.0f%% (保证金 $%.0f = L$%.0f+S$%.0f, minEq $%.0f)",
-			canonical, budgetPct*100, e.cfg.SwapArbMarginBudgetPct*100,
-			totalMargin, marginLong, marginShort, minEq))
+		key := fmt.Sprintf("%s:%s:%s:budget", canonical, venueLong, venueShort)
+		if e.shouldMarginAlert(key) {
+			e.AlertSink("warn", fmt.Sprintf(
+				"SWAPARB %s: 组合保证金预算 %.1f%% > 阈值 %.0f%% (保证金 $%.0f = L$%.0f+S$%.0f, minEq $%.0f)",
+				canonical, budgetPct*100, e.cfg.SwapArbMarginBudgetPct*100,
+				totalMargin, marginLong, marginShort, minEq))
+		}
 	}
 }
 

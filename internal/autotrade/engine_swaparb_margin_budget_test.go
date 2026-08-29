@@ -46,8 +46,9 @@ func newEngineWithAccts(t *testing.T, accts ...*mockAcctQuerier) *Engine {
 	am.Refresh(context.Background())
 	svc := dashboard.New(nil, bus.New(), nil, bm, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, nil, nil, 0, am, nil, 0)
 	return &Engine{
-		cfg:     Config{SwapArbMarginBudgetPct: 0.8},
-		service: svc,
+		cfg:             Config{SwapArbMarginBudgetPct: 0.8},
+		service:         svc,
+		marginAlertSent: make(map[string]time.Time), // D-144 ②：去重 map
 	}
 }
 
@@ -243,5 +244,155 @@ func TestLeverageAsymmetryRatio(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("leverageAsymmetryRatio(%.0f, %.0f) = %.4f, want %.4f", tt.a, tt.b, got, tt.want)
 		}
+	}
+}
+
+// D-144 ② 单测：保证金告警 per-key 去重（1h 窗口）。
+// 用例⑦：同组合同类型 1h 内第二次调用 → 不重发（budget）
+// 用例⑧：同组合不同类型（budget vs asymmetry）→ 独立去重
+// 用例⑨：不同组合 → 独立去重
+// 用例⑩：窗口过期后 → 重发
+
+// 用例⑦：同组合同类型 1h 内第二次 → 不重发（budget）
+func TestObserveMarginBudget_Dedup_SameKeySuppressed(t *testing.T) {
+	longQ := &mockAcctQuerier{key: "vA:mt5", acct: &reconcile.AccountInfo{
+		VenueKey: "vA:mt5", Equity: 1000, Currency: "USD", Leverage: 100,
+	}}
+	shortQ := &mockAcctQuerier{key: "vB:mt5", acct: &reconcile.AccountInfo{
+		VenueKey: "vB:mt5", Equity: 1000, Currency: "USD", Leverage: 100,
+	}}
+	e := newEngineWithAccts(t, longQ, shortQ)
+	var alerts []string
+	var mu sync.Mutex
+	e.AlertSink = func(level, msg string) {
+		mu.Lock()
+		alerts = append(alerts, level+":"+msg)
+		mu.Unlock()
+	}
+	// 第一次：发 warn budget 告警
+	e.observeMarginBudget("AUDJPY", "vA:mt5", "vB:mt5", 50000)
+	// 第二次：同组合同类型，1h 内 → 去重不重发
+	e.observeMarginBudget("AUDJPY", "vA:mt5", "vB:mt5", 50000)
+	mu.Lock()
+	defer mu.Unlock()
+	count := 0
+	for _, a := range alerts {
+		if strings.Contains(a, "组合保证金预算") {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("同 key 1h 内应去重：want 1 budget alert, got %d (alerts: %v)", count, alerts)
+	}
+}
+
+// 用例⑧：同组合不同类型（budget vs asymmetry）→ 独立去重
+func TestObserveMarginBudget_Dedup_DifferentTypeIndependent(t *testing.T) {
+	longQ := &mockAcctQuerier{key: "vA:mt5", acct: &reconcile.AccountInfo{
+		VenueKey: "vA:mt5", Equity: 500, Currency: "USD", Leverage: 100,
+	}}
+	shortQ := &mockAcctQuerier{key: "vB:mt5", acct: &reconcile.AccountInfo{
+		VenueKey: "vB:mt5", Equity: 500, Currency: "USD", Leverage: 500,
+	}}
+	e := newEngineWithAccts(t, longQ, shortQ)
+	var alerts []string
+	var mu sync.Mutex
+	e.AlertSink = func(level, msg string) {
+		mu.Lock()
+		alerts = append(alerts, level+":"+msg)
+		mu.Unlock()
+	}
+	// 第一次：同时触发 budget warn + asymmetry info（不同 key）
+	e.observeMarginBudget("AUDJPY", "vA:mt5", "vB:mt5", 50000)
+	// 第二次：两个类型各自去重
+	e.observeMarginBudget("AUDJPY", "vA:mt5", "vB:mt5", 50000)
+	mu.Lock()
+	defer mu.Unlock()
+	budgetCount := 0
+	asymCount := 0
+	for _, a := range alerts {
+		if strings.Contains(a, "组合保证金预算") {
+			budgetCount++
+		}
+		if strings.Contains(a, "杠杆不对称") {
+			asymCount++
+		}
+	}
+	if budgetCount != 1 {
+		t.Errorf("budget 应去重：want 1, got %d", budgetCount)
+	}
+	if asymCount != 1 {
+		t.Errorf("asymmetry 应去重：want 1, got %d", asymCount)
+	}
+}
+
+// 用例⑨：不同组合 → 独立去重
+func TestObserveMarginBudget_Dedup_DifferentComboIndependent(t *testing.T) {
+	longQ := &mockAcctQuerier{key: "vA:mt5", acct: &reconcile.AccountInfo{
+		VenueKey: "vA:mt5", Equity: 1000, Currency: "USD", Leverage: 100,
+	}}
+	shortQ := &mockAcctQuerier{key: "vB:mt5", acct: &reconcile.AccountInfo{
+		VenueKey: "vB:mt5", Equity: 1000, Currency: "USD", Leverage: 100,
+	}}
+	e := newEngineWithAccts(t, longQ, shortQ)
+	var alerts []string
+	var mu sync.Mutex
+	e.AlertSink = func(level, msg string) {
+		mu.Lock()
+		alerts = append(alerts, level+":"+msg)
+		mu.Unlock()
+	}
+	// AUDJPY 第一次 → 发
+	e.observeMarginBudget("AUDJPY", "vA:mt5", "vB:mt5", 50000)
+	// EURUSD 第一次 → 也应发（不同 canonical → 不同 key）
+	e.observeMarginBudget("EURUSD", "vA:mt5", "vB:mt5", 50000)
+	mu.Lock()
+	defer mu.Unlock()
+	count := 0
+	for _, a := range alerts {
+		if strings.Contains(a, "组合保证金预算") {
+			count++
+		}
+	}
+	if count != 2 {
+		t.Errorf("不同组合应独立去重：want 2 budget alerts, got %d (alerts: %v)", count, alerts)
+	}
+}
+
+// 用例⑩：窗口过期后 → 重发
+func TestObserveMarginBudget_Dedup_WindowExpiryRealert(t *testing.T) {
+	longQ := &mockAcctQuerier{key: "vA:mt5", acct: &reconcile.AccountInfo{
+		VenueKey: "vA:mt5", Equity: 1000, Currency: "USD", Leverage: 100,
+	}}
+	shortQ := &mockAcctQuerier{key: "vB:mt5", acct: &reconcile.AccountInfo{
+		VenueKey: "vB:mt5", Equity: 1000, Currency: "USD", Leverage: 100,
+	}}
+	e := newEngineWithAccts(t, longQ, shortQ)
+	var alerts []string
+	var mu sync.Mutex
+	e.AlertSink = func(level, msg string) {
+		mu.Lock()
+		alerts = append(alerts, level+":"+msg)
+		mu.Unlock()
+	}
+	// 第一次 → 发
+	e.observeMarginBudget("AUDJPY", "vA:mt5", "vB:mt5", 50000)
+	// 手动回拨 lastSent 到 61min 前（同 mt-health 测试模式）
+	key := "AUDJPY:vA:mt5:vB:mt5:budget"
+	e.marginAlertMu.Lock()
+	e.marginAlertSent[key] = time.Now().Add(-61 * time.Minute)
+	e.marginAlertMu.Unlock()
+	// 第二次 → 窗口过期 → 重发
+	e.observeMarginBudget("AUDJPY", "vA:mt5", "vB:mt5", 50000)
+	mu.Lock()
+	defer mu.Unlock()
+	count := 0
+	for _, a := range alerts {
+		if strings.Contains(a, "组合保证金预算") {
+			count++
+		}
+	}
+	if count != 2 {
+		t.Errorf("窗口过期应重发：want 2 budget alerts, got %d (alerts: %v)", count, alerts)
 	}
 }
