@@ -6351,7 +6351,7 @@ type AddBrokerRequest struct {
 	Password      string                 `protobuf:"bytes,6,opt,name=password,proto3" json:"password,omitempty"`                                        // 明文存储（个人使用）
 	Server        string                 `protobuf:"bytes,7,opt,name=server,proto3" json:"server,omitempty"`                                            // 服务器名称
 	CommissionBps *float64               `protobuf:"fixed64,9,opt,name=commission_bps,json=commissionBps,proto3,oneof" json:"commission_bps,omitempty"` // 账号类型真实佣金（bps/腿，D-036）；缺省 = 回退 config 默认
-	IsReal        bool                   `protobuf:"varint,10,opt,name=is_real,json=isReal,proto3" json:"is_real,omitempty"`                            // D-144 ①：实盘标记（默认 false=demo）
+	IsReal        *bool                  `protobuf:"varint,10,opt,name=is_real,json=isReal,proto3,oneof" json:"is_real,omitempty"`                      // D-144 ① 三态：true=实盘, false=demo, 缺省=未知（不配对）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -6443,8 +6443,8 @@ func (x *AddBrokerRequest) GetCommissionBps() float64 {
 }
 
 func (x *AddBrokerRequest) GetIsReal() bool {
-	if x != nil {
-		return x.IsReal
+	if x != nil && x.IsReal != nil {
+		return *x.IsReal
 	}
 	return false
 }
@@ -6577,7 +6577,7 @@ type BrokerAccount struct {
 	Status        string                 `protobuf:"bytes,9,opt,name=status,proto3" json:"status,omitempty"` // connected / failed / stopped
 	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	CommissionBps *float64               `protobuf:"fixed64,11,opt,name=commission_bps,json=commissionBps,proto3,oneof" json:"commission_bps,omitempty"` // 账号真实佣金（bps/腿，D-036）；未设置 = 回退默认
-	IsReal        bool                   `protobuf:"varint,12,opt,name=is_real,json=isReal,proto3" json:"is_real,omitempty"`                             // D-144 ①：实盘标记（false=demo）
+	IsReal        *bool                  `protobuf:"varint,12,opt,name=is_real,json=isReal,proto3,oneof" json:"is_real,omitempty"`                       // D-144 ① 三态：true=实盘, false=demo, 缺省=未知
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -6683,8 +6683,8 @@ func (x *BrokerAccount) GetCommissionBps() float64 {
 }
 
 func (x *BrokerAccount) GetIsReal() bool {
-	if x != nil {
-		return x.IsReal
+	if x != nil && x.IsReal != nil {
+		return *x.IsReal
 	}
 	return false
 }
@@ -7182,7 +7182,7 @@ type VerifyAccountRequest struct {
 	User          int64                  `protobuf:"varint,4,opt,name=user,proto3" json:"user,omitempty"`
 	Password      string                 `protobuf:"bytes,5,opt,name=password,proto3" json:"password,omitempty"`
 	Server        string                 `protobuf:"bytes,6,opt,name=server,proto3" json:"server,omitempty"`
-	IsReal        bool                   `protobuf:"varint,7,opt,name=is_real,json=isReal,proto3" json:"is_real,omitempty"` // D-144 ①：实盘标记（透传 AddBroker 流程，VerifyAccount 本身不持久化）
+	IsReal        *bool                  `protobuf:"varint,7,opt,name=is_real,json=isReal,proto3,oneof" json:"is_real,omitempty"` // D-144 ① 三态：透传 AddBroker 流程，VerifyAccount 本身不持久化
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7260,8 +7260,8 @@ func (x *VerifyAccountRequest) GetServer() string {
 }
 
 func (x *VerifyAccountRequest) GetIsReal() bool {
-	if x != nil {
-		return x.IsReal
+	if x != nil && x.IsReal != nil {
+		return *x.IsReal
 	}
 	return false
 }
@@ -7597,7 +7597,7 @@ func (*SetBrokerAccountAliasResponse) Descriptor() ([]byte, []int) {
 type SetBrokerAccountIsRealRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Venue         string                 `protobuf:"bytes,1,opt,name=venue,proto3" json:"venue,omitempty"`
-	IsReal        bool                   `protobuf:"varint,2,opt,name=is_real,json=isReal,proto3" json:"is_real,omitempty"`
+	IsReal        *bool                  `protobuf:"varint,2,opt,name=is_real,json=isReal,proto3,oneof" json:"is_real,omitempty"` // true=实盘, false=demo, 缺省=清除回未知(NULL)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7640,8 +7640,8 @@ func (x *SetBrokerAccountIsRealRequest) GetVenue() string {
 }
 
 func (x *SetBrokerAccountIsRealRequest) GetIsReal() bool {
-	if x != nil {
-		return x.IsReal
+	if x != nil && x.IsReal != nil {
+		return *x.IsReal
 	}
 	return false
 }
@@ -11013,7 +11013,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\fcompany_name\x18\x01 \x01(\tR\vcompanyName\x128\n" +
 	"\aservers\x18\x02 \x03(\v2\x1e.arb.dashboard.v1.BrokerServerR\aservers\"U\n" +
 	"\x14SearchBrokerResponse\x12=\n" +
-	"\tcompanies\x18\x01 \x03(\v2\x1f.arb.dashboard.v1.BrokerCompanyR\tcompanies\"\x92\x02\n" +
+	"\tcompanies\x18\x01 \x03(\v2\x1f.arb.dashboard.v1.BrokerCompanyR\tcompanies\"\xa3\x02\n" +
 	"\x10AddBrokerRequest\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x1a\n" +
 	"\bplatform\x18\x02 \x01(\x05R\bplatform\x12\x12\n" +
@@ -11022,14 +11022,16 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x04user\x18\x05 \x01(\x03R\x04user\x12\x1a\n" +
 	"\bpassword\x18\x06 \x01(\tR\bpassword\x12\x16\n" +
 	"\x06server\x18\a \x01(\tR\x06server\x12*\n" +
-	"\x0ecommission_bps\x18\t \x01(\x01H\x00R\rcommissionBps\x88\x01\x01\x12\x17\n" +
+	"\x0ecommission_bps\x18\t \x01(\x01H\x00R\rcommissionBps\x88\x01\x01\x12\x1c\n" +
 	"\ais_real\x18\n" +
-	" \x01(\bR\x06isRealB\x11\n" +
-	"\x0f_commission_bpsJ\x04\b\b\x10\t\"\x13\n" +
+	" \x01(\bH\x01R\x06isReal\x88\x01\x01B\x11\n" +
+	"\x0f_commission_bpsB\n" +
+	"\n" +
+	"\b_is_realJ\x04\b\b\x10\t\"\x13\n" +
 	"\x11AddBrokerResponse\"+\n" +
 	"\x13RemoveBrokerRequest\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\"\x16\n" +
-	"\x14RemoveBrokerResponse\"\xdc\x02\n" +
+	"\x14RemoveBrokerResponse\"\xed\x02\n" +
 	"\rBrokerAccount\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x1a\n" +
 	"\bplatform\x18\x02 \x01(\x05R\bplatform\x12\x12\n" +
@@ -11042,9 +11044,11 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\n" +
 	" \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12*\n" +
-	"\x0ecommission_bps\x18\v \x01(\x01H\x00R\rcommissionBps\x88\x01\x01\x12\x17\n" +
-	"\ais_real\x18\f \x01(\bR\x06isRealB\x11\n" +
-	"\x0f_commission_bpsJ\x04\b\a\x10\b\"\x1b\n" +
+	"\x0ecommission_bps\x18\v \x01(\x01H\x00R\rcommissionBps\x88\x01\x01\x12\x1c\n" +
+	"\ais_real\x18\f \x01(\bH\x01R\x06isReal\x88\x01\x01B\x11\n" +
+	"\x0f_commission_bpsB\n" +
+	"\n" +
+	"\b_is_realJ\x04\b\a\x10\b\"\x1b\n" +
 	"\x19ListBrokerAccountsRequest\"Y\n" +
 	"\x1aListBrokerAccountsResponse\x12;\n" +
 	"\baccounts\x18\x01 \x03(\v2\x1f.arb.dashboard.v1.BrokerAccountR\baccounts\"\xf8\x01\n" +
@@ -11079,15 +11083,17 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\bexchange\x18\x01 \x01(\v2 .arb.dashboard.v1.ExchangeConfigR\bexchange\"'\n" +
 	"\x15RemoveExchangeRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x18\n" +
-	"\x16RemoveExchangeResponse\"\xbb\x01\n" +
+	"\x16RemoveExchangeResponse\"\xcc\x01\n" +
 	"\x14VerifyAccountRequest\x12\x1a\n" +
 	"\bplatform\x18\x01 \x01(\x05R\bplatform\x12\x12\n" +
 	"\x04host\x18\x02 \x01(\tR\x04host\x12\x12\n" +
 	"\x04port\x18\x03 \x01(\x05R\x04port\x12\x12\n" +
 	"\x04user\x18\x04 \x01(\x03R\x04user\x12\x1a\n" +
 	"\bpassword\x18\x05 \x01(\tR\bpassword\x12\x16\n" +
-	"\x06server\x18\x06 \x01(\tR\x06server\x12\x17\n" +
-	"\ais_real\x18\a \x01(\bR\x06isReal\"\xc8\x01\n" +
+	"\x06server\x18\x06 \x01(\tR\x06server\x12\x1c\n" +
+	"\ais_real\x18\a \x01(\bH\x00R\x06isReal\x88\x01\x01B\n" +
+	"\n" +
+	"\b_is_real\"\xc8\x01\n" +
 	"\x15VerifyAccountResponse\x12\x18\n" +
 	"\abalance\x18\x01 \x01(\x01R\abalance\x12\x16\n" +
 	"\x06equity\x18\x02 \x01(\x01R\x06equity\x12\x1a\n" +
@@ -11108,10 +11114,12 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x1cSetBrokerAccountAliasRequest\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x14\n" +
 	"\x05alias\x18\x02 \x01(\tR\x05alias\"\x1f\n" +
-	"\x1dSetBrokerAccountAliasResponse\"N\n" +
+	"\x1dSetBrokerAccountAliasResponse\"_\n" +
 	"\x1dSetBrokerAccountIsRealRequest\x12\x14\n" +
-	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x17\n" +
-	"\ais_real\x18\x02 \x01(\bR\x06isReal\" \n" +
+	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x1c\n" +
+	"\ais_real\x18\x02 \x01(\bH\x00R\x06isReal\x88\x01\x01B\n" +
+	"\n" +
+	"\b_is_real\" \n" +
 	"\x1eSetBrokerAccountIsRealResponse\"L\n" +
 	"\x18SetBrokerDisabledRequest\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x1a\n" +
@@ -11814,6 +11822,8 @@ func file_arb_dashboard_v1_dashboard_proto_init() {
 	}
 	file_arb_dashboard_v1_dashboard_proto_msgTypes[98].OneofWrappers = []any{}
 	file_arb_dashboard_v1_dashboard_proto_msgTypes[102].OneofWrappers = []any{}
+	file_arb_dashboard_v1_dashboard_proto_msgTypes[112].OneofWrappers = []any{}
+	file_arb_dashboard_v1_dashboard_proto_msgTypes[119].OneofWrappers = []any{}
 	file_arb_dashboard_v1_dashboard_proto_msgTypes[123].OneofWrappers = []any{}
 	file_arb_dashboard_v1_dashboard_proto_msgTypes[125].OneofWrappers = []any{}
 	file_arb_dashboard_v1_dashboard_proto_msgTypes[128].OneofWrappers = []any{}

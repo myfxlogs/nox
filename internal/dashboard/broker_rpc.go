@@ -52,7 +52,7 @@ func (s *Service) AddBroker(ctx context.Context, req *connect.Request[v1.AddBrok
 		User:     req.Msg.GetUser(),
 		Password: req.Msg.GetPassword(),
 		Server:   req.Msg.GetServer(),
-		IsReal:   req.Msg.GetIsReal(), // D-144 ①
+		IsReal:   req.Msg.IsReal, // D-144 ① 三态：*bool（nil=未知）
 	}
 	// 账号类型真实佣金（bps/腿，D-036）；缺省 = 回退 config 默认
 	if req.Msg.CommissionBps != nil {
@@ -91,7 +91,7 @@ func (s *Service) ListBrokerAccounts(ctx context.Context, req *connect.Request[v
 			Alias:     a.Alias,
 			Status:    a.Status,
 			CreatedAt: timestamppb.New(a.CreatedAt),
-			IsReal:    a.IsReal, // D-144 ①
+			IsReal:    a.IsReal, // D-144 ① 三态：*bool（nil=未知）
 		}
 		// 账号真实佣金（bps/腿，D-036）；nil = 未设置回退默认
 		acct.CommissionBps = a.CommissionBps
@@ -221,9 +221,9 @@ func (s *Service) SetBrokerAccountAlias(ctx context.Context, req *connect.Reques
 	return connect.NewResponse(&v1.SetBrokerAccountAliasResponse{}), nil
 }
 
-// SetBrokerAccountIsReal D-144 ①：设置账号实盘标记。
+// SetBrokerAccountIsReal D-144 ① 三态：设置账号实盘标记。is_real 缺省=清除回未知(NULL)。
 func (s *Service) SetBrokerAccountIsReal(ctx context.Context, req *connect.Request[v1.SetBrokerAccountIsRealRequest]) (*connect.Response[v1.SetBrokerAccountIsRealResponse], error) {
-	if err := s.store.SetBrokerAccountIsReal(ctx, req.Msg.GetVenue(), req.Msg.GetIsReal()); err != nil {
+	if err := s.store.SetBrokerAccountIsReal(ctx, req.Msg.GetVenue(), req.Msg.IsReal); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(&v1.SetBrokerAccountIsRealResponse{}), nil
