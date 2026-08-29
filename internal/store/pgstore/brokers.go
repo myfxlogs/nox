@@ -32,11 +32,13 @@ type BrokerAccount struct {
 // SymbolMapping broker_symbol_map 行。
 // ContractSize 该 broker 符号真实合约规格（MT5 SymbolInfo.ContractSize，D-042）；
 // nil = 未知（MT4 / 历史映射），校验跳过。
+// Source 映射来源（D-140 S1）：manual=人工录入 / rule=规则库自动补录 / meta=MT5 元数据采集。
 type SymbolMapping struct {
 	Venue        string
 	BrokerSymbol string
 	Canonical    string
 	ContractSize *float64
+	Source       string // D-140 S1：manual/rule/meta，空=manual（DEFAULT 兜底）
 }
 
 // InsertBrokerAccount 插入账号；venue 冲突返回错误（UNIQUE 约束）。
@@ -127,14 +129,14 @@ func (s *Store) SetBrokerAccountStatus(ctx context.Context, venue, status string
 	return err
 }
 
-// UpsertSymbolMapping 写入映射（venue+broker_symbol 冲突时更新 canonical + contract_size）。
-// ContractSize nil 写 NULL（未知）。
+// UpsertSymbolMapping 写入映射（venue+broker_symbol 冲突时更新 canonical + contract_size + source）。
+// ContractSize nil 写 NULL（未知）。Source 空=manual（DB DEFAULT 兜底）。
 func (s *Store) UpsertSymbolMapping(ctx context.Context, m *SymbolMapping) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO broker_symbol_map (venue, broker_symbol, canonical, contract_size)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (venue, broker_symbol) DO UPDATE SET canonical = EXCLUDED.canonical, contract_size = EXCLUDED.contract_size
-	`, m.Venue, m.BrokerSymbol, m.Canonical, m.ContractSize)
+		INSERT INTO broker_symbol_map (venue, broker_symbol, canonical, contract_size, source)
+		VALUES ($1, $2, $3, $4, COALESCE($5, 'manual'))
+		ON CONFLICT (venue, broker_symbol) DO UPDATE SET canonical = EXCLUDED.canonical, contract_size = EXCLUDED.contract_size, source = EXCLUDED.source
+	`, m.Venue, m.BrokerSymbol, m.Canonical, m.ContractSize, m.Source)
 	return err
 }
 
@@ -154,7 +156,7 @@ func (s *Store) DeleteVenueSymbolMappings(ctx context.Context, venue string) err
 // ListSymbolMappings 映射列表；venue 空 = 全部。
 func (s *Store) ListSymbolMappings(ctx context.Context, venue string) ([]SymbolMapping, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT venue, broker_symbol, canonical, contract_size FROM broker_symbol_map
+		SELECT venue, broker_symbol, canonical, contract_size, source FROM broker_symbol_map
 		WHERE ($1 = '' OR venue = $1)
 		ORDER BY venue, broker_symbol
 	`, venue)
@@ -165,7 +167,7 @@ func (s *Store) ListSymbolMappings(ctx context.Context, venue string) ([]SymbolM
 	var out []SymbolMapping
 	for rows.Next() {
 		var m SymbolMapping
-		if err := rows.Scan(&m.Venue, &m.BrokerSymbol, &m.Canonical, &m.ContractSize); err != nil {
+		if err := rows.Scan(&m.Venue, &m.BrokerSymbol, &m.Canonical, &m.ContractSize, &m.Source); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
