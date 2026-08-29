@@ -92,6 +92,20 @@ func (s *Service) AccountEquityUSD(venueKey string) (value float64, currency str
 	return 0, "", false
 }
 
+// AccountLeverage 从 AccountMonitor 取指定 venue 的杠杆（D-142 ④ 杠杆不对称提示）。
+// 返回 ok=false 表示 venue 离线/未找到/杠杆未知（0）。2e9=Exness 无限杠杆哨兵。
+func (s *Service) AccountLeverage(venueKey string) (leverage float64, ok bool) {
+	if s.acctMon == nil {
+		return 0, false
+	}
+	for _, a := range s.acctMon.Snapshot() {
+		if a.VenueKey == venueKey {
+			return a.Leverage, a.Online && a.Leverage > 0
+		}
+	}
+	return 0, false
+}
+
 // SwapMinNotionalUSD 计算 swap 套利组合的最小可交易名义额（D-072 §3.3，A 修复币种换算）。
 // = max(双腿 floorToStepQtyMin × usdPerLot)——双腿中要求更大 USD 名义额的那条决定下限。
 // usdPerLot 按计价币换算（JPY 对 ÷ USDJPY，USD 对直接乘）；fx 缺失 → ok=false fail-closed。
