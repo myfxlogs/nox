@@ -83,6 +83,12 @@ type Engine struct {
 	// lastScan 节流基准（仅 positionLoop goroutine 读写，无锁——quoteReconIdx 单协程先例）。
 	kickCh   chan struct{}
 	lastScan time.Time
+
+	// D-140 S2：CS-miss 聚合告警——按 (venue,canonical) 计数，定期 flush info 告警。
+	csMissCounts map[string]int       // key=venue|canonical → 累计 miss 次数
+	csMissSent   map[string]time.Time // key → 最近一次告警时间（1h 去重）
+	csMissMu     sync.Mutex
+	AlertSink    func(level, msg string) // nil = 未注入（no-op）
 }
 
 // New 创建自动交易引擎。
@@ -95,7 +101,9 @@ func New(cfg Config, store *pgstore.Store, service *dashboard.Service, oppTopic 
 		quotes:          quotes,
 		gate:            NewGate(store, cfg),
 		fundingNeedSent: make(map[string]string),
-		fundingBreach:   make(map[int64]int),    // D-133 T1：PERP_FUNDING 去抖计数
+		fundingBreach:   make(map[int64]int),  // D-133 T1：PERP_FUNDING 去抖计数
+		csMissCounts:    make(map[string]int), // D-140 S2：CS-miss 聚合
+		csMissSent:      make(map[string]time.Time),
 		kickCh:          make(chan struct{}, 1), // D-107 P4：buffered(1) 非阻塞 send = 事件合并
 	}
 }
@@ -192,6 +200,8 @@ func (e *Engine) positionLoop(ctx context.Context) {
 
 	fallback := time.NewTicker(positionFallbackInterval)
 	defer fallback.Stop()
+	csMissTick := time.NewTicker(csMissAlertInterval) // D-140 S2：CS-miss 聚合告警
+	defer csMissTick.Stop()
 	for {
 		select {
 		case <-ctx.Done():
@@ -203,6 +213,8 @@ func (e *Engine) positionLoop(ctx context.Context) {
 			e.scanAndClose(ctx)
 			e.stateMachineTick(ctx)
 			e.lastScan = time.Now()
+		case <-csMissTick.C:
+			e.flushCSMissAlerts() // D-140 S2
 		}
 	}
 }
