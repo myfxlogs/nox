@@ -73,3 +73,6 @@ var AiSettingsSQL string
 
 //go:embed 0043_position_swap_snapshots.sql
 var PositionSwapSnapshotsSQL string
+
+//go:embed 0044_broker_symbol_map_source.sql
+var BrokerSymbolMapSourceSQL string

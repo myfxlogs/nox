@@ -19,6 +19,7 @@ const (
 	KindTripleSwapDay  = "triple_swap_day"  // MT 三倍 swap 日（UnitWeekday，D-077 V2）
 	KindInitMarginRate = "init_margin_rate" // MT5 初始保证金率（UnitRatio，S6 返修：账户级=1/杠杆，无限杠杆=0）
 	KindOptParityDev   = "opt_parity_dev"   // 期权平价偏离 bps（UnitBps，D-137 Deribit 采集监控）
+	KindMTSymbolMeta   = "mt_symbol_meta"   // MT5 符号元数据（UnitContractSize，D-140 S2 CS 自动来源）
 )
 
 // Unit 常量表（§1.2）。
@@ -30,6 +31,7 @@ const (
 	UnitWeekday       = "weekday"        // 星期几（0=Sunday...6=Saturday，对齐 Go time.Weekday，D-077 V2）
 	UnitRatio         = "ratio"          // 小数比率（0.01=1%，S6 保证金率）
 	UnitBps           = "bps"            // 基点（1bp=0.01%，期权平价偏离 D-137）
+	UnitContractSize  = "contract_size"  // 合约规格（D-140 S2，MT5 SymbolInfo.ContractSize）
 )
 
 // TradeMode 值域（MT5 ENUM_SYMBOL_TRADE_MODE 透传，D-060 F4/F5 消费；
@@ -63,6 +65,7 @@ var validKinds = map[string]bool{
 	KindTripleSwapDay:  true,
 	KindInitMarginRate: true,
 	KindOptParityDev:   true,
+	KindMTSymbolMeta:   true,
 }
 
 // ValidKind 报告 k 是否为已知 Kind。
