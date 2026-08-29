@@ -61,6 +61,7 @@ type MTHealthMonitor struct {
 	states        map[string]mtHealthState // venue → 状态
 	firstTick     bool                     // 首 tick 只记状态不告警
 	lastCritAlert map[string]time.Time     // D-104 P0 返修③ R-c3：venue:metric → 上次 crit 告警时间
+	now           func() time.Time         // 可注入时钟（测试用，D-136 修复②），nil→time.Now
 }
 
 // NewMTHealthMonitor 创建监控（D-104 P0）。
@@ -98,7 +99,7 @@ func (m *MTHealthMonitor) Run(ctx context.Context) {
 
 // poll 一次采集 + 状态机转换 + 告警 + 日志。
 func (m *MTHealthMonitor) poll(ctx context.Context) {
-	now := time.Now()
+	now := m.nowTime()
 	quoteAges := m.collectQuoteAges(now)
 	swapAges, marginAges := m.collectFactAges(ctx, now)
 
@@ -255,9 +256,12 @@ func (m *MTHealthMonitor) collectFactAges(ctx context.Context, now time.Time) (s
 // boot 时真缺失首 tick 静默记 crit，tick2（1min 后）转换式告警触发，之后持续 crit 每 30min 一条。
 const critRealertInterval = 30 * time.Minute
 
-// maybeAlert 状态转换时插告警（healthy→warn/crit 插对应级别；stale→healthy 插 info recovered）。
-// 持续同态不重复插（防洪水）——但 crit 持续 >30min 重发一条（R-c3，堵首 tick 静默边角）。
+// maybeAlert 状态转换时插告警（healthy→warn/crit；stale→healthy 插 info recovered）。
+// 持续同态不重复插（防洪水）——crit 持续 >30min 重发一条（R-c3）；D-136 修复②：周末休市静默窗内告警静默，状态机照常运转。
 func (m *MTHealthMonitor) maybeAlert(ctx context.Context, venue, metric string, prev, cur mtHealthMetric, age time.Duration) {
+	if isMTWeekendQuietWindow(m.nowTime()) {
+		return // 周末休市静默窗
+	}
 	if prev == cur {
 		// R-c3：持续 crit 超过去重窗口 → 重发一条（warn/healthy 维持纯转换语义不变）。
 		if cur != metricCrit {
@@ -267,7 +271,7 @@ func (m *MTHealthMonitor) maybeAlert(ctx context.Context, venue, metric string, 
 		m.mu.Lock()
 		last, ok := m.lastCritAlert[key]
 		m.mu.Unlock()
-		if ok && time.Since(last) < critRealertInterval {
+		if ok && m.nowTime().Sub(last) < critRealertInterval {
 			return // 窗口内不重发
 		}
 	}
@@ -286,7 +290,7 @@ func (m *MTHealthMonitor) maybeAlert(ctx context.Context, venue, metric string, 
 	if cur == metricCrit {
 		key := venue + ":" + metric
 		m.mu.Lock()
-		m.lastCritAlert[key] = time.Now()
+		m.lastCritAlert[key] = m.nowTime()
 		m.mu.Unlock()
 	}
 	if err := m.store.InsertAlert(ctx, nil, level, msg); err != nil {

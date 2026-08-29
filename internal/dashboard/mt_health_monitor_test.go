@@ -70,6 +70,9 @@ type fakeVenueSource struct {
 
 func (f *fakeVenueSource) AccountQueriers() []reconcile.AccountQuerier { return f.queriers }
 
+// wedUTC 固定非周末 UTC 时刻（D-136 修复②：mt-health 测试注入时钟，防周末静默窗致告警全静默）。
+var wedUTC = time.Date(2026, 8, 26, 12, 0, 0, 0, time.UTC) // Wednesday
+
 // TestMTHealth_FirstTickSilent 首 tick 只记状态不告警（避免重启动噪音）。
 func TestMTHealth_FirstTickSilent(t *testing.T) {
 	store := newFakeHealthStore()
@@ -77,6 +80,7 @@ func TestMTHealth_FirstTickSilent(t *testing.T) {
 	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vA:mt5"}}}
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
 		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+	mon.now = func() time.Time { return wedUTC.Add(time.Second) } // D-136 修复②：注入非周末时钟防日期依赖
 	mon.poll(context.Background())
 	if got := store.alertCount(); got != 0 {
 		t.Errorf("first tick should not alert, got %d alerts", got)
@@ -96,7 +100,8 @@ func TestMTHealth_StateTransitions(t *testing.T) {
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
 		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
 
-	now := time.Now()
+	now := wedUTC
+	mon.now = func() time.Time { return now.Add(time.Second) } // D-136 修复②：注入非周末时钟
 
 	// tick1: quote healthy（首 tick 静默）；swap/margin 无数据=crit（首 tick 静默）
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now})
@@ -164,7 +169,8 @@ func TestMTHealth_SwapFactStale(t *testing.T) {
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
 		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
 
-	now := time.Now()
+	now := wedUTC
+	mon.now = func() time.Time { return now.Add(time.Second) } // D-136 修复②：注入非周末时钟
 	// tick1: 报价 fresh + swap facts fresh（首 tick 静默）
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now})
 	store.setFacts(fact.KindSwapLong, []fact.Fact{{Kind: fact.KindSwapLong, Venue: "vA", Symbol: "AUDJPY", Value: 5, Ts: now, Src: "mt5"}})
@@ -203,7 +209,8 @@ func TestMTHealth_CritRealert(t *testing.T) {
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
 		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
 
-	now := time.Now()
+	now := wedUTC
+	mon.now = func() time.Time { return now.Add(time.Second) } // D-136 修复②：注入非周末时钟
 	// tick1: 全 healthy（首 tick 静默）——报价+swap+margin 都 fresh
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now})
 	store.setFacts(fact.KindSwapLong, []fact.Fact{{Kind: fact.KindSwapLong, Venue: "vA", Symbol: "AUDJPY", Value: 5, Ts: now, Src: "mt5"}})
@@ -230,7 +237,7 @@ func TestMTHealth_CritRealert(t *testing.T) {
 	// tick4: 模拟窗口过期——手动回拨 lastCritAlert 到 31min 前
 	key := "vA:quote"
 	mon.mu.Lock()
-	mon.lastCritAlert[key] = time.Now().Add(-31 * time.Minute)
+	mon.lastCritAlert[key] = now.Add(-31 * time.Minute)
 	mon.mu.Unlock()
 	mon.poll(context.Background())
 	if got := store.alertCount(); got != 2 {
@@ -253,7 +260,8 @@ func TestMTHealth_WarnSustainedNoRealert(t *testing.T) {
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
 		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
 
-	now := time.Now()
+	now := wedUTC
+	mon.now = func() time.Time { return now.Add(time.Second) } // D-136 修复②：注入非周末时钟
 	// tick1: 全 healthy（首 tick 静默）
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now})
 	store.setFacts(fact.KindSwapLong, []fact.Fact{{Kind: fact.KindSwapLong, Venue: "vA", Symbol: "AUDJPY", Value: 5, Ts: now, Src: "mt5"}})
@@ -287,7 +295,8 @@ func TestMTHealth_NoDataCrit(t *testing.T) {
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
 		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
 
-	now := time.Now()
+	now := wedUTC
+	mon.now = func() time.Time { return now.Add(time.Second) } // D-136 修复②：注入非周末时钟
 	// tick1: 有数据（首 tick 静默，记 healthy 状态）
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now})
 	store.setFacts(fact.KindSwapLong, []fact.Fact{{Kind: fact.KindSwapLong, Venue: "vA", Symbol: "AUDJPY", Value: 5, Ts: now, Src: "mt5"}})
@@ -329,7 +338,8 @@ func TestMTHealth_CEXVenueNoSwapMarginAlerts(t *testing.T) {
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
 		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
 
-	now := time.Now()
+	now := wedUTC
+	mon.now = func() time.Time { return now.Add(time.Second) } // D-136 修复②：注入非周末时钟
 	// tick1: fresh（首 tick 静默）
 	qbus.Publish(bus.Quote{Symbol: "BTCUSDT", Venue: "binance", Bid: 100, Ask: 100, Time: now})
 	mon.poll(context.Background())
@@ -351,7 +361,7 @@ func TestMTHealth_CEXVenueNoSwapMarginAlerts(t *testing.T) {
 	// tick3: 持续 quote crit，回拨 lastCritAlert 31min → quote 重发 1 条；
 	// swap/margin 即使 R-c3 重发路径也不触发（非 MT venue 不进 maybeAlert）
 	mon.mu.Lock()
-	mon.lastCritAlert["binance:quote"] = time.Now().Add(-31 * time.Minute)
+	mon.lastCritAlert["binance:quote"] = now.Add(-31 * time.Minute)
 	mon.mu.Unlock()
 	mon.poll(context.Background())
 	if got := store.alertCount(); got != 2 {
@@ -376,7 +386,8 @@ func TestMTHealth_MTVenueSwapCritRegress(t *testing.T) {
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
 		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
 
-	now := time.Now()
+	now := wedUTC
+	mon.now = func() time.Time { return now.Add(time.Second) } // D-136 修复②：注入非周末时钟
 	// tick1: quote fresh + swap/margin fresh（首 tick 静默）
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now})
 	store.setFacts(fact.KindSwapLong, []fact.Fact{{Kind: fact.KindSwapLong, Venue: "vA", Symbol: "AUDJPY", Value: 5, Ts: now, Src: "mt5"}})
