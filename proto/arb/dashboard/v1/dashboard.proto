@@ -855,6 +855,8 @@ message VerifyAccountResponse {
   double equity = 2;
   string currency = 3;
   int32 leverage = 4;
+  string host = 5; // D-141 S5：多端点 failover 胜出 host（回传前端展示/落库）
+  int32 port = 6;  // D-141 S5：胜出端点端口
 }
 
 message BrokerSymbolsRequest {
