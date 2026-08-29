@@ -70,6 +70,10 @@ func (q *CEXPositionQuerier) QueryOpenedOrders(ctx context.Context) ([]VenueOrde
 // === OKX ===
 // GET /api/v5/account/positions?instType=SWAP — 全部 SWAP 持仓。
 // long_short_mode：long/short 分列；pos=合约数（张）；upl=浮盈（USDT）；fee=累计手续费。
+//
+// D-146 S5 微件③ 返修：保证金口径优先 imr（初始保证金，Initial Margin Requirement），
+// margin 回落（imr 是开仓时快照，margin 是当前占用——imr 更贴近"初始保证金"语义）。
+// mmr（维持保证金，Maintenance Margin Requirement）映射 MaintMargin。
 func (q *CEXPositionQuerier) okxPositions(ctx context.Context) ([]VenueOrder, error) {
 	const path = "/api/v5/account/positions?instType=SWAP"
 	ts := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
@@ -100,7 +104,9 @@ func (q *CEXPositionQuerier) okxPositions(ctx context.Context) ([]VenueOrder, er
 			Upl     string `json:"upl"`    // 浮盈（USDT）
 			Fee     string `json:"fee"`    // 累计手续费（负数）
 			CTime   string `json:"cTime"`  // 开仓时间 ms
-			Margin  string `json:"margin"` // D-146 S5 微件③：占用保证金（USDT）
+			Margin  string `json:"margin"` // 占用保证金（USDT，当前值）
+			Imr     string `json:"imr"`    // D-146 S5 微件③ 返修：初始保证金（开仓快照，优先）
+			Mmr     string `json:"mmr"`    // D-146 S5 微件③ 返修：维持保证金
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
@@ -124,7 +130,12 @@ func (q *CEXPositionQuerier) okxPositions(ctx context.Context) ([]VenueOrder, er
 		}
 		ctimeMs, _ := strconv.ParseInt(p.CTime, 10, 64)
 		openedAt := time.UnixMilli(ctimeMs)
-		margin, _ := strconv.ParseFloat(p.Margin, 64) // D-146 S5 微件③
+		// D-146 S5 微件③ 返修：优先 imr（初始保证金），margin 回落
+		initMargin, _ := strconv.ParseFloat(p.Imr, 64)
+		if initMargin == 0 {
+			initMargin, _ = strconv.ParseFloat(p.Margin, 64) // 回落：imr 缺失时用 margin（当前占用）
+		}
+		maintMargin, _ := strconv.ParseFloat(p.Mmr, 64)
 		out = append(out, VenueOrder{
 			Ticket:        p.InstID, // CEX 聚合仓位无单一 ticket → 用 symbol
 			Symbol:        p.InstID,
@@ -136,7 +147,8 @@ func (q *CEXPositionQuerier) okxPositions(ctx context.Context) ([]VenueOrder, er
 			Profit:        upl,
 			Commission:    fee, // OKX fee 是累计手续费（负数=成本）
 			OpenedAt:      openedAt,
-			InitialMargin: margin, // D-146 S5 微件③：OKX margin=占用保证金（无单独 maint 字段）
+			InitialMargin: initMargin,  // D-146 S5 微件③ 返修：imr 优先，margin 回落
+			MaintMargin:   maintMargin, // D-146 S5 微件③ 返修：mmr
 		})
 	}
 	return out, nil
@@ -211,6 +223,10 @@ func (q *CEXPositionQuerier) gatePositions(ctx context.Context) ([]VenueOrder, e
 // === Binance ===
 // GET /fapi/v2/positionRisk — 全部 USDT-M 合约持仓（含 0 仓位）。
 // positionAmt > 0 多头 / < 0 空头（base currency）；unRealizedProfit=浮盈。
+//
+// D-146 S5 微件③ 返修：positionRisk 不返回 initialMargin/maintMargin（账户级 /fapi/v2/account 字段，
+// 字段想当然错配→保证金恒 0）。per-position 保证金：逐仓→isolatedWallet；全仓→notional/leverage。
+// MaintMargin=0（positionRisk 无此字段，走 D-124 账户分摊，与 MT 一致）。
 func (q *CEXPositionQuerier) binancePositions(ctx context.Context) ([]VenueOrder, error) {
 	params := "timestamp=" + strconv.FormatInt(time.Now().UnixMilli(), 10) + "&recvWindow=5000"
 	sig := binanceSign(q.apiSecret, params)
@@ -237,9 +253,11 @@ func (q *CEXPositionQuerier) binancePositions(ctx context.Context) ([]VenueOrder
 		PositionAmt      string `json:"positionAmt"`
 		EntryPrice       string `json:"entryPrice"`
 		UnRealizedProfit string `json:"unRealizedProfit"`
-		PositionSide     string `json:"positionSide"`  // BOTH / LONG / SHORT (hedge mode)
-		InitialMargin    string `json:"initialMargin"` // D-146 S5 微件③：占用保证金（USDT）
-		MaintMargin      string `json:"maintMargin"`   // D-146 S5 微件③：维持保证金（USDT）
+		PositionSide     string `json:"positionSide"`   // BOTH / LONG / SHORT (hedge mode)
+		MarginType       string `json:"marginType"`     // isolated / cross
+		IsolatedWallet   string `json:"isolatedWallet"` // 逐仓钱包余额（=占用保证金，isolated 时权威）
+		Leverage         string `json:"leverage"`       // 杠杆倍数
+		Notional         string `json:"notional"`       // 名义价值（USDT，全仓保证金=notional/leverage）
 	}
 	if err := json.Unmarshal(data, &positions); err != nil {
 		return nil, fmt.Errorf("binance positions json: %w", err)
@@ -258,19 +276,20 @@ func (q *CEXPositionQuerier) binancePositions(ctx context.Context) ([]VenueOrder
 			side = "SELL"
 			vol = -vol
 		}
-		initMargin, _ := strconv.ParseFloat(p.InitialMargin, 64) // D-146 S5 微件③
-		maintMargin, _ := strconv.ParseFloat(p.MaintMargin, 64)
+		// D-146 S5 微件③ 返修：逐仓→isolatedWallet；全仓→notional/leverage
+		var initMargin float64
+		if p.MarginType == "isolated" {
+			initMargin, _ = strconv.ParseFloat(p.IsolatedWallet, 64)
+		} else {
+			notional, _ := strconv.ParseFloat(p.Notional, 64)
+			if lev, _ := strconv.ParseFloat(p.Leverage, 64); lev > 0 {
+				initMargin = notional / lev
+			}
+		}
 		out = append(out, VenueOrder{
-			Ticket:        p.Symbol, // CEX 聚合仓位 → 用 symbol
-			Symbol:        p.Symbol,
-			Side:          side,
-			Volume:        vol,
-			OpenPrice:     entryPx,
-			Venue:         q.venue,
-			VenueKey:      q.VenueKey(),
-			Profit:        upl,
-			InitialMargin: initMargin, // D-146 S5 微件③
-			MaintMargin:   maintMargin,
+			Ticket: p.Symbol, Symbol: p.Symbol, Side: side, Volume: vol,
+			OpenPrice: entryPx, Venue: q.venue, VenueKey: q.VenueKey(), Profit: upl,
+			InitialMargin: initMargin, // MaintMargin=0：positionRisk 无此字段，走 D-124 账户分摊
 		})
 	}
 	return out, nil
