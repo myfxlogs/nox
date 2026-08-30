@@ -177,6 +177,12 @@ type Config struct {
 	// venue 格式含 venueType 后缀（如 "277842155:mt5"），与 PositionLeg.Venue 完整 key 一致。
 	// swapledger 对这些 venue 记 0（不写 cashflow），避免按规格值误记。
 	SwapNonSettleVenues []string
+
+	// === 交易时段防线（D-155 freeze guard）===
+	// FreezeGuard 冻结腿预检窗口（ARB_FREEZE_GUARD，缺省 10m）。
+	// 开仓前双腿各自校验「该腿报价在窗口内发生过价格值变化」；任一腿冻结 → 整组 abort（LEGGED 零容忍）。
+	// ≤0 = 禁用（全放行）。与 D-104 freshness 分层：freshness=时间戳门禁（采集侧），freeze guard=价格变化门禁（执行侧）。
+	FreezeGuard time.Duration
 }
 
 // Load 从环境变量加载配置，未设置用默认值。
@@ -256,5 +262,6 @@ func Load() *Config {
 		SwapReconcileDeviationPct:  envFloat("ARB_SWAP_RECONCILE_DEVIATION_PCT", 10.0), // D-110 P2
 		MTDisasterSlPct:            envFloat("ARB_MT_DISASTER_SL_PCT", 2.0),            // D-146 S1 broker 端灾难 SL
 		SwapNonSettleVenues:        envStringSlice("ARB_SWAP_NON_SETTLE_VENUES"),       // D-112
+		FreezeGuard:                envDur("ARB_FREEZE_GUARD", 10*time.Minute),         // D-155 freeze guard 冻结腿预检窗口
 	}
 }

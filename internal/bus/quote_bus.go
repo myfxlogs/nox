@@ -5,6 +5,7 @@ package bus
 import (
 	"context"
 	"sync"
+	"time"
 )
 
 // QuoteBus 是报价 pub/sub 中心（§4.1）。
@@ -15,6 +16,10 @@ type QuoteBus struct {
 	subscribers map[string][]chan Quote
 	latestMu    sync.RWMutex
 	latest      map[string]map[string]Quote
+	// D-155 freeze guard：lastChange 记录 (canonical, venueKey) 上次「价格值变化」时刻。
+	// 语义：首见不算变化（无条目=从未变化）；同值心跳不更新；价格值变化才记 time.Now()。
+	// 与 latest 同锁（latestMu），Publish 内原子更新。
+	lastChange map[string]map[string]time.Time
 }
 
 // New 创建 QuoteBus。
@@ -22,6 +27,7 @@ func New() *QuoteBus {
 	return &QuoteBus{
 		subscribers: make(map[string][]chan Quote),
 		latest:      make(map[string]map[string]Quote),
+		lastChange:  make(map[string]map[string]time.Time),
 	}
 }
 
@@ -53,6 +59,14 @@ func (b *QuoteBus) Publish(q Quote) {
 	vk := q.VenueKey()
 	if b.latest[q.Symbol] == nil {
 		b.latest[q.Symbol] = make(map[string]Quote)
+	}
+	// D-155 freeze guard：首见不算变化；仅当存在上一值且 bid/ask 之一变化才记 lastChangeAt。
+	// 心跳报价（时间戳新但价格冻结）不会更新 lastChange → 执行侧预检据此识破骗线。
+	if prev, hasPrev := b.latest[q.Symbol][vk]; hasPrev && (prev.Bid != q.Bid || prev.Ask != q.Ask) {
+		if b.lastChange[q.Symbol] == nil {
+			b.lastChange[q.Symbol] = make(map[string]time.Time)
+		}
+		b.lastChange[q.Symbol][vk] = time.Now()
 	}
 	b.latest[q.Symbol][vk] = q
 	b.latestMu.Unlock()
@@ -119,4 +133,18 @@ func (b *QuoteBus) AllLatest() []Quote {
 		}
 	}
 	return out
+}
+
+// LastChangeAt 返回 (canonical, venueKey) 上次价格值变化的时刻（D-155 freeze guard）。
+// ok=false = 该腿从未发生过价格变化（首见/仅心跳）→ 调用方应判为冻结（fail-closed）。
+// ok=true  = t 为最近一次 bid/ask 变化时刻，调用方按窗口判定 now.Sub(t) 是否超期。
+func (b *QuoteBus) LastChangeAt(symbol, venueKey string) (t time.Time, ok bool) {
+	b.latestMu.RLock()
+	defer b.latestMu.RUnlock()
+	if venues, found := b.lastChange[symbol]; found {
+		if t, ok = venues[venueKey]; ok {
+			return t, true
+		}
+	}
+	return time.Time{}, false
 }
