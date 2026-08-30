@@ -35,6 +35,8 @@ func (s *Store) InsertAutotradeLog(ctx context.Context, l *AutotradeLog) error {
 }
 
 // StrategyStat 对应 strategy_stats 表（D-070）。
+// D-154 起淘汰判定 v2 不读本表累计列（total/wins/avg/win_rate），仅 disabled/disabled_reason（启停载体）。
+// 累计列仍由 UpdateStrategyStat 写，仅供显示层滚动统计——非淘汰真相源（P3）。
 type StrategyStat struct {
 	Strategy       string
 	TotalTrades    int
@@ -46,6 +48,19 @@ type StrategyStat struct {
 	Disabled       bool
 	DisabledReason string
 	UpdatedAt      time.Time
+}
+
+// AggregateStat 淘汰判定 v2 实时聚合结果（D-154 S1）。
+// 替代 strategy_stats 累计列——positions + position_cashflows 实时聚合，覆盖 LEGGED/skip 等不入 stat 的平仓。
+// net 口径 = D-127 P4 SumCashflowsNet 同口径（realized + swap + funding − commission）。
+// realized_pnl IS NOT NULL = 可判定口径（LEGGED 历史清理仓 realized NULL 不计入，避免按 0 稀释）。
+// 0 笔时 Total=0、Median=0（NULL→Scan 0，调用方按 0 处理 → 小样本判据 median<0 永不成立 → 不杀）。
+type AggregateStat struct {
+	Strategy  string
+	Total     int
+	Wins      int
+	AvgPnl    float64
+	MedianPnl float64
 }
 
 // GetStrategyStat 读取策略统计；不存在返回零值结构（disabled=false）。
@@ -64,7 +79,37 @@ func (s *Store) GetStrategyStat(ctx context.Context, strategy string) (*Strategy
 	return &st, nil
 }
 
+// AggregateStrategyStats 实时聚合策略全量平仓净值（D-154 S1 淘汰判定 v2 真相源）。
+// 替代 strategy_stats 累计列——positions + position_cashflows 实时聚合，覆盖 LEGGED/skip 等不入 stat 的平仓。
+// net = realized_pnl + Σ(swap+funding+commission)（D-127 P4 同口径，commission 写入时已带负号）。
+// realized_pnl IS NOT NULL = 可判定口径（LEGGED 历史清理仓 realized NULL 不计入）。
+// 0 笔时 total=0、wins=0、avg=0、median=0（COALESCE 兜底 NULL→0，调用方按 0 处理 → 小样本判据 median<0 永不成立 → 不杀）。
+func (s *Store) AggregateStrategyStats(ctx context.Context, strategy string) (AggregateStat, error) {
+	var st AggregateStat
+	st.Strategy = strategy
+	err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(total, 0), COALESCE(wins, 0), COALESCE(avg_pnl, 0), COALESCE(median_pnl, 0)
+		FROM (
+			SELECT count(*) AS total,
+			       count(*) FILTER (WHERE net > 0) AS wins,
+			       avg(net) AS avg_pnl,
+			       percentile_cont(0.5) WITHIN GROUP (ORDER BY net) AS median_pnl
+			FROM (
+				SELECT p.realized_pnl + COALESCE(cf.net, 0) AS net
+				FROM positions p
+				LEFT JOIN (SELECT position_id, sum(amount_usd) AS net FROM position_cashflows GROUP BY position_id) cf
+					ON cf.position_id = p.id
+				WHERE p.type = $1 AND p.closed_at IS NOT NULL AND p.realized_pnl IS NOT NULL
+			) t
+		) agg`, strategy).Scan(&st.Total, &st.Wins, &st.AvgPnl, &st.MedianPnl)
+	if err != nil {
+		return AggregateStat{}, fmt.Errorf("aggregate strategy stats: %w", err)
+	}
+	return st, nil
+}
+
 // UpdateStrategyStat 平仓后更新策略统计（win=realizedPnl>0）。
+// D-154 起：累计列仅供显示层滚动统计，淘汰判定 v2 不读本表（改 AggregateStrategyStats 实时聚合）。
 func (s *Store) UpdateStrategyStat(ctx context.Context, strategy string, realizedPnl float64) error {
 	win := 0
 	if realizedPnl > 0 {
