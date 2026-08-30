@@ -116,20 +116,21 @@ func TestEvaluatePerLegSlippageCEX(t *testing.T) {
 	}
 }
 
-// TestEvaluatePerLegSlippageMixed D-145 §②：混合腿 MT×CEX 不再误伤。
-// MT 腿用 cfg.SlippageBps（0.3），CEX 腿用品种表——各腿独立判定。
+// TestEvaluatePerLegSlippageMixed D-145 §②：混合腿 MT×CEX 各腿独立判定。
+// D-154 S4：改有区分度——MT 腿用 cfg.SlippageBps（1.0），CEX 腿 NEARUSDT 三线（8.0）→ 9.0。
+// 两个错误方向分别得 2.0（CEX 误用 MT 值 1.0×2）/16.0（MT 误用 CEX 品种表 8.0×2），均可捕获。
 func TestEvaluatePerLegSlippageMixed(t *testing.T) {
 	cfg := baseCfg() // SlippageBps=1.0
 	c := detector.Candidate{
 		Type:      detector.TypeCrossVenue,
-		Canonical: "ETHUSDT",
-		VenueBuy:  "a:mt5",    // MT 腿 → 1.0
-		VenueSell: "okx:perp", // CEX 腿 ETHUSDT → 1.0
+		Canonical: "NEARUSDT",
+		VenueBuy:  "a:mt5",    // MT 腿 → cfg.SlippageBps 1.0
+		VenueSell: "okx:perp", // CEX 腿 NEARUSDT 三线 → 8.0
 		GrossBps:  50.0,
 		QuoteTime: 0,
 	}
 	r := Evaluate(c, cfg, 0, 0, 0.6, 0)
-	if r.SlippageCost != 2.0 {
-		t.Fatalf("混合腿 MT×CEX SlippageCost = %v, want 2.0 (MT 1.0 + CEX ETH 1.0)", r.SlippageCost)
+	if r.SlippageCost != 9.0 {
+		t.Fatalf("混合腿 MT×CEX SlippageCost = %v, want 9.0 (MT 1.0 + CEX NEAR 8.0)", r.SlippageCost)
 	}
 }
