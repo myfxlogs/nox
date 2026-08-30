@@ -690,6 +690,8 @@ message FundingNeedNotice {
   string reason = 4;           // SwapArbNotional 返回的 reason（含具体数值）
   double need_usd = 5;         // 需注入资金（USD）；0 = 仅 venue 离线/币种不符等非余额原因
   google.protobuf.Timestamp ts = 6;
+  string alias_long = 7;       // D-154 返修②：买腿别名（后端 aliasOrKey 填充，空=无别名）
+  string alias_short = 8;      // D-154 返修②：卖腿别名（后端 aliasOrKey 填充，空=无别名）
 }
 
 // Broker 实持仓全量快照（D-052）：monitor 变更时广播，含离线 venue 的最近快照；前端全量替换。
