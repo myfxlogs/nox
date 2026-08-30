@@ -76,6 +76,15 @@ func (s *Store) UpdatePositionStatus(ctx context.Context, id int64, status strin
 	return nil
 }
 
+// SetPositionUncertainty D-159 W1a R2：写 uncertainty_reason（UNKNOWN 过渡语义）。
+// 与 UpdatePositionStatus 同事务语义（终态不可回退），单独方法避免改 UpdatePositionStatus 签名。
+// reason 空 = 清除（恢复确认态时用）。
+func (s *Store) SetPositionUncertainty(ctx context.Context, id int64, reason string) error {
+	q := `UPDATE positions SET uncertainty_reason = $1 WHERE id = $2 AND status NOT IN ('CLOSED','FAILED')`
+	_, err := s.pool.Exec(ctx, q, reason, id)
+	return err
+}
+
 // PositionMeta typed 持仓元数据（D-087 §3.4 字段语义分离）。
 // 各型按语义给值，nil=该列不写（保持 NULL）：
 //   - 收敛型（CROSS_VENUE/MEANREVERT）：NetBps=一次性 bps，其余 nil
@@ -105,23 +114,40 @@ func (s *Store) UpdatePositionOppID(ctx context.Context, id int64, oppID string)
 	return err
 }
 
-// ClosePosition 平仓回填。
+// ClosePosition 平仓回填（D-159 W1a R3-1 原子领取）。
+// WHERE status NOT IN ('CLOSED','FAILED') 守卫：终态不可回退，并发对账+手动平仓重复调用
+// 只第一次生效（RowsAffected=0 返回 ErrTerminalState），防重复 CLOSED + 重复 realized_pnl 覆盖。
 func (s *Store) ClosePosition(ctx context.Context, id int64, realizedPnl float64) error {
 	// D-070 修复：positions 表无 updated_at 列（D-060 同类 bug），去掉 updated_at = now()
-	q := `UPDATE positions SET status = 'CLOSED', realized_pnl = $1, closed_at = now() WHERE id = $2`
-	_, err := s.pool.Exec(ctx, q, realizedPnl, id)
-	return err
+	q := `UPDATE positions SET status = 'CLOSED', realized_pnl = $1, closed_at = now() WHERE id = $2 AND status NOT IN ('CLOSED','FAILED')`
+	ct, err := s.pool.Exec(ctx, q, realizedPnl, id)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrTerminalState
+	}
+	return nil
 }
 
-// CreatePositionLeg 写入单腿记录。
+// CreatePositionLeg 写入单腿记录（D-159 W1a R3-1 原子领取防重）。
+// ON CONFLICT (position_id, leg_no, phase) DO NOTHING：并发对账+手动平仓重复写 CLOSE leg 时
+// 只第一次生效（返回 ErrTerminalState 表示已存在），防重复 CLOSE leg + 重复 cashflow。
 func (s *Store) CreatePositionLeg(ctx context.Context, leg *PositionLeg) error {
 	q := `INSERT INTO position_legs (position_id, leg_no, phase, venue, account, symbol, side, qty,
 		price_expected, price_actual, order_id, status)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`
-	_, err := s.pool.Exec(ctx, q,
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+		ON CONFLICT (position_id, leg_no, phase) DO NOTHING`
+	ct, err := s.pool.Exec(ctx, q,
 		leg.PositionID, leg.LegNo, leg.Phase, leg.Venue, leg.Account, leg.Symbol, leg.Side,
 		leg.Qty, leg.PriceExpected, leg.PriceActual, leg.OrderID, leg.Status)
-	return err
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrTerminalState
+	}
+	return nil
 }
 
 // ListPositionLegs 返回指定持仓的全部腿。
@@ -211,13 +237,14 @@ func (s *Store) CountPositions(ctx context.Context, status string) (int, error) 
 	return n, nil
 }
 
-// ListActivePositions 返回所有活跃态持仓（OPENING/OPEN/LEGGED/CLOSING）。
+// ListActivePositions 返回所有活跃态持仓（OPENING/OPEN/LEGGED/CLOSING/UNKNOWN）。
 // D-080 R1：gate 防重改 DB 实时派生——替代内存 openCombos 集，治手动路径旁路。
+// D-159 W1a R2：UNKNOWN 计入 active（MT 超时不知成交与否，gate 防重+前端展示+对账兜底）。
 // 行数=MaxPositions 量级，成本≈COUNT；返回行供 gate 派生 combo.FromOppID 匹配。
 func (s *Store) ListActivePositions(ctx context.Context) ([]Position, error) {
 	q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note
 		FROM positions
-		WHERE status IN ('OPENING','OPEN','LEGGED','CLOSING')
+		WHERE status IN ('OPENING','OPEN','LEGGED','CLOSING','UNKNOWN')
 		ORDER BY id`
 	rows, err := s.pool.Query(ctx, q)
 	if err != nil {
@@ -247,10 +274,11 @@ func (s *Store) CountOpenPositions(ctx context.Context) (int, error) {
 
 // HasOpenPositionByOpportunity 返回该机会是否已有未平仓持仓（D-058 幂等防重复执行）。
 // CLOSED/FAILED 不在列 → 已闭合/已失败的机会可重入（再执行是新的执行意图，非重复提交）。
+// D-159 W1a R2：UNKNOWN 也计入 active（MT 超时不知成交与否，人工确认前禁止重入防双开仓）。
 func (s *Store) HasOpenPositionByOpportunity(ctx context.Context, opportunityID string) (bool, error) {
 	var one int
 	err := s.pool.QueryRow(ctx,
-		`SELECT 1 FROM positions WHERE opportunity_id = $1 AND status IN ('OPEN','OPENING','LEGGED') LIMIT 1`,
+		`SELECT 1 FROM positions WHERE opportunity_id = $1 AND status IN ('OPEN','OPENING','LEGGED','UNKNOWN') LIMIT 1`,
 		opportunityID).Scan(&one)
 	if err == nil {
 		return true, nil

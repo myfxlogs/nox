@@ -85,3 +85,6 @@ var AccountWebsiteSQL string
 
 //go:embed 0047_arb_ro_revoke_credentials.sql
 var ArbRoRevokeCredentialsSQL string
+
+//go:embed 0048_position_intent_fields.sql
+var PositionIntentFieldsSQL string

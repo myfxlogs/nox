@@ -135,10 +135,15 @@ type Config struct {
 	AutoTradePollInterval time.Duration // OPEN 持仓扫描间隔（缺省 10s）
 
 	// D-072 §3.4 硬编码外部化（默认值=现行为，零迁移）
-	AutoTradeAllowVenues       map[string]bool    // ARB_AUTOTRADE_ALLOW_VENUES（默认 277842155:mt5,REDACTED_MT_ACCT:mt5）
-	AutoTradeAllowCanonicals   map[string]bool    // ARB_AUTOTRADE_ALLOW_CANONICALS（默认 NAS100,ETHUSDT,XAUUSD,BTCUSDT）
-	AutoTradeExcludeCanonicals map[string]bool    // ARB_AUTOTRADE_EXCLUDE_CANONICALS（默认 BRENT,WTI）
-	MeanRevertThresholds       map[string]float64 // ARB_MEANREVERT_THRESHOLDS（默认 NAS100:1.5,ETHUSDT:0.5,XAUUSD:0.5）
+	AutoTradeAllowVenues       map[string]bool // ARB_AUTOTRADE_ALLOW_VENUES（默认 277842155:mt5,REDACTED_MT_ACCT:mt5）
+	AutoTradeAllowCanonicals   map[string]bool // ARB_AUTOTRADE_ALLOW_CANONICALS（默认 NAS100,ETHUSDT,XAUUSD,BTCUSDT）
+	AutoTradeExcludeCanonicals map[string]bool // ARB_AUTOTRADE_EXCLUDE_CANONICALS（默认 BRENT,WTI）
+	// D-159 W1a R1：精确组合门禁（SWAPARB 专用）。
+	// SwapArbAllowCombosRaw 原始字符串（分号分隔记录，每条 canonical|venueLong|venueShort|maxLongQty|maxShortQty|maxGrossExposureUSD）。
+	// 由 autotrade.parseComboAllow 解析。空 = fail-closed（RUNNING 下无组合被允许）。
+	SwapArbAllowCombosRaw  string
+	SwapArbMaxActiveCombos int                // ARB_SWAPARB_MAX_ACTIVE_COMBOS，默认 1（D-138 单组合口径）
+	MeanRevertThresholds   map[string]float64 // ARB_MEANREVERT_THRESHOLDS（默认 NAS100:1.5,ETHUSDT:0.5,XAUUSD:0.5）
 
 	// D-072 §3.3/§4.2 swap/funding 退出参数
 	AutoTradeMinNetSwapBps float64 // ARB_AUTOTRADE_MIN_NET_SWAP_BPS（默认 0.2）
@@ -183,6 +188,12 @@ type Config struct {
 	// 开仓前双腿各自校验「该腿报价在窗口内发生过价格值变化」；任一腿冻结 → 整组 abort（LEGGED 零容忍）。
 	// ≤0 = 禁用（全放行）。与 D-104 freshness 分层：freshness=时间戳门禁（采集侧），freeze guard=价格变化门禁（执行侧）。
 	FreezeGuard time.Duration
+
+	// === D-159 W1a I6：environment/is_real 一致性检查 ===
+	// Environment 执行环境固定值（ARB_ENVIRONMENT，'demo'/'live'，缺省 'demo' fail-safe）。
+	// 开仓前校验 venue 的 broker_accounts.is_real 与此值一致：is_real=true ↔ environment='live'。
+	// is_real=nil（未知）→ fail-closed 拒绝（不允许未知环境开仓）。
+	Environment string
 }
 
 // Load 从环境变量加载配置，未设置用默认值。
@@ -246,6 +257,8 @@ func Load() *Config {
 		AutoTradeAllowVenues:       envStringSet("ARB_AUTOTRADE_ALLOW_VENUES", "277842155:mt5,REDACTED_MT_ACCT:mt5"),
 		AutoTradeAllowCanonicals:   envStringSet("ARB_AUTOTRADE_ALLOW_CANONICALS", ""), // D-122：默认空=全放行（gate 层风控兜底）
 		AutoTradeExcludeCanonicals: envStringSet("ARB_AUTOTRADE_EXCLUDE_CANONICALS", "BRENT,WTI"),
+		SwapArbAllowCombosRaw:      envStr("ARB_SWAPARB_ALLOW_COMBOS", ""),     // D-159 W1a R1：空=fail-closed
+		SwapArbMaxActiveCombos:     envInt("ARB_SWAPARB_MAX_ACTIVE_COMBOS", 1), // D-138 单组合口径
 		MeanRevertThresholds:       envFloatMap("ARB_MEANREVERT_THRESHOLDS", "NAS100:1.5,ETHUSDT:0.5,XAUUSD:0.5"),
 		AutoTradeMinNetSwapBps:     envFloat("ARB_AUTOTRADE_MIN_NET_SWAP_BPS", 0.2),
 		SwapArbExitNetBps:          envFloat("ARB_SWAPARB_EXIT_NET_BPS", 0),
@@ -263,5 +276,6 @@ func Load() *Config {
 		MTDisasterSlPct:            envFloat("ARB_MT_DISASTER_SL_PCT", 2.0),            // D-146 S1 broker 端灾难 SL
 		SwapNonSettleVenues:        envStringSlice("ARB_SWAP_NON_SETTLE_VENUES"),       // D-112
 		FreezeGuard:                envDur("ARB_FREEZE_GUARD", 10*time.Minute),         // D-155 freeze guard 冻结腿预检窗口
+		Environment:                envStr("ARB_ENVIRONMENT", "demo"),                  // D-159 W1a I6：缺省 demo fail-safe
 	}
 }
