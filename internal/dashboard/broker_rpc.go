@@ -224,6 +224,14 @@ func (s *Service) SetBrokerAccountAlias(ctx context.Context, req *connect.Reques
 	return connect.NewResponse(&v1.SetBrokerAccountAliasResponse{}), nil
 }
 
+// SetBrokerWebsite D-157 V3.1：设置 broker 官网；空串 = 清除。
+func (s *Service) SetBrokerWebsite(ctx context.Context, req *connect.Request[v1.SetBrokerWebsiteRequest]) (*connect.Response[v1.SetBrokerWebsiteResponse], error) {
+	if err := s.store.SetBrokerWebsite(ctx, req.Msg.GetVenue(), req.Msg.GetWebsite()); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&v1.SetBrokerWebsiteResponse{}), nil
+}
+
 // SetBrokerAccountIsReal D-144 ① 三态：设置账号实盘标记。is_real 缺省=清除回未知(NULL)。
 func (s *Service) SetBrokerAccountIsReal(ctx context.Context, req *connect.Request[v1.SetBrokerAccountIsRealRequest]) (*connect.Response[v1.SetBrokerAccountIsRealResponse], error) {
 	if err := s.store.SetBrokerAccountIsReal(ctx, req.Msg.GetVenue(), req.Msg.IsReal); err != nil {

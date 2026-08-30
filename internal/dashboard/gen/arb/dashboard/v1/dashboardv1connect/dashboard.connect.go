@@ -158,6 +158,9 @@ const (
 	// DashboardServiceSetExchangeLabelProcedure is the fully-qualified name of the DashboardService's
 	// SetExchangeLabel RPC.
 	DashboardServiceSetExchangeLabelProcedure = "/arb.dashboard.v1.DashboardService/SetExchangeLabel"
+	// DashboardServiceSetExchangeWebsiteProcedure is the fully-qualified name of the DashboardService's
+	// SetExchangeWebsite RPC.
+	DashboardServiceSetExchangeWebsiteProcedure = "/arb.dashboard.v1.DashboardService/SetExchangeWebsite"
 	// DashboardServiceBrokerSymbolsProcedure is the fully-qualified name of the DashboardService's
 	// BrokerSymbols RPC.
 	DashboardServiceBrokerSymbolsProcedure = "/arb.dashboard.v1.DashboardService/BrokerSymbols"
@@ -173,6 +176,9 @@ const (
 	// DashboardServiceSetBrokerCommissionProcedure is the fully-qualified name of the
 	// DashboardService's SetBrokerCommission RPC.
 	DashboardServiceSetBrokerCommissionProcedure = "/arb.dashboard.v1.DashboardService/SetBrokerCommission"
+	// DashboardServiceSetBrokerWebsiteProcedure is the fully-qualified name of the DashboardService's
+	// SetBrokerWebsite RPC.
+	DashboardServiceSetBrokerWebsiteProcedure = "/arb.dashboard.v1.DashboardService/SetBrokerWebsite"
 	// DashboardServiceListSymbolMappingsProcedure is the fully-qualified name of the DashboardService's
 	// ListSymbolMappings RPC.
 	DashboardServiceListSymbolMappingsProcedure = "/arb.dashboard.v1.DashboardService/ListSymbolMappings"
@@ -286,11 +292,13 @@ type DashboardServiceClient interface {
 	AddExchange(context.Context, *connect.Request[v1.AddExchangeRequest]) (*connect.Response[v1.AddExchangeResponse], error)
 	RemoveExchange(context.Context, *connect.Request[v1.RemoveExchangeRequest]) (*connect.Response[v1.RemoveExchangeResponse], error)
 	SetExchangeLabel(context.Context, *connect.Request[v1.SetExchangeLabelRequest]) (*connect.Response[v1.SetExchangeLabelResponse], error)
+	SetExchangeWebsite(context.Context, *connect.Request[v1.SetExchangeWebsiteRequest]) (*connect.Response[v1.SetExchangeWebsiteResponse], error)
 	BrokerSymbols(context.Context, *connect.Request[v1.BrokerSymbolsRequest]) (*connect.Response[v1.BrokerSymbolsResponse], error)
 	SetBrokerAccountAlias(context.Context, *connect.Request[v1.SetBrokerAccountAliasRequest]) (*connect.Response[v1.SetBrokerAccountAliasResponse], error)
 	SetBrokerAccountIsReal(context.Context, *connect.Request[v1.SetBrokerAccountIsRealRequest]) (*connect.Response[v1.SetBrokerAccountIsRealResponse], error)
 	SetBrokerDisabled(context.Context, *connect.Request[v1.SetBrokerDisabledRequest]) (*connect.Response[v1.SetBrokerDisabledResponse], error)
 	SetBrokerCommission(context.Context, *connect.Request[v1.SetBrokerCommissionRequest]) (*connect.Response[v1.SetBrokerCommissionResponse], error)
+	SetBrokerWebsite(context.Context, *connect.Request[v1.SetBrokerWebsiteRequest]) (*connect.Response[v1.SetBrokerWebsiteResponse], error)
 	// Symbol 映射（brokerSymbol -> canonical）
 	ListSymbolMappings(context.Context, *connect.Request[v1.ListSymbolMappingsRequest]) (*connect.Response[v1.ListSymbolMappingsResponse], error)
 	SaveSymbolMapping(context.Context, *connect.Request[v1.SaveSymbolMappingRequest]) (*connect.Response[v1.SaveSymbolMappingResponse], error)
@@ -584,6 +592,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("SetExchangeLabel")),
 			connect.WithClientOptions(opts...),
 		),
+		setExchangeWebsite: connect.NewClient[v1.SetExchangeWebsiteRequest, v1.SetExchangeWebsiteResponse](
+			httpClient,
+			baseURL+DashboardServiceSetExchangeWebsiteProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("SetExchangeWebsite")),
+			connect.WithClientOptions(opts...),
+		),
 		brokerSymbols: connect.NewClient[v1.BrokerSymbolsRequest, v1.BrokerSymbolsResponse](
 			httpClient,
 			baseURL+DashboardServiceBrokerSymbolsProcedure,
@@ -612,6 +626,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			httpClient,
 			baseURL+DashboardServiceSetBrokerCommissionProcedure,
 			connect.WithSchema(dashboardServiceMethods.ByName("SetBrokerCommission")),
+			connect.WithClientOptions(opts...),
+		),
+		setBrokerWebsite: connect.NewClient[v1.SetBrokerWebsiteRequest, v1.SetBrokerWebsiteResponse](
+			httpClient,
+			baseURL+DashboardServiceSetBrokerWebsiteProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("SetBrokerWebsite")),
 			connect.WithClientOptions(opts...),
 		),
 		listSymbolMappings: connect.NewClient[v1.ListSymbolMappingsRequest, v1.ListSymbolMappingsResponse](
@@ -769,11 +789,13 @@ type dashboardServiceClient struct {
 	addExchange            *connect.Client[v1.AddExchangeRequest, v1.AddExchangeResponse]
 	removeExchange         *connect.Client[v1.RemoveExchangeRequest, v1.RemoveExchangeResponse]
 	setExchangeLabel       *connect.Client[v1.SetExchangeLabelRequest, v1.SetExchangeLabelResponse]
+	setExchangeWebsite     *connect.Client[v1.SetExchangeWebsiteRequest, v1.SetExchangeWebsiteResponse]
 	brokerSymbols          *connect.Client[v1.BrokerSymbolsRequest, v1.BrokerSymbolsResponse]
 	setBrokerAccountAlias  *connect.Client[v1.SetBrokerAccountAliasRequest, v1.SetBrokerAccountAliasResponse]
 	setBrokerAccountIsReal *connect.Client[v1.SetBrokerAccountIsRealRequest, v1.SetBrokerAccountIsRealResponse]
 	setBrokerDisabled      *connect.Client[v1.SetBrokerDisabledRequest, v1.SetBrokerDisabledResponse]
 	setBrokerCommission    *connect.Client[v1.SetBrokerCommissionRequest, v1.SetBrokerCommissionResponse]
+	setBrokerWebsite       *connect.Client[v1.SetBrokerWebsiteRequest, v1.SetBrokerWebsiteResponse]
 	listSymbolMappings     *connect.Client[v1.ListSymbolMappingsRequest, v1.ListSymbolMappingsResponse]
 	saveSymbolMapping      *connect.Client[v1.SaveSymbolMappingRequest, v1.SaveSymbolMappingResponse]
 	deleteSymbolMapping    *connect.Client[v1.DeleteSymbolMappingRequest, v1.DeleteSymbolMappingResponse]
@@ -1004,6 +1026,11 @@ func (c *dashboardServiceClient) SetExchangeLabel(ctx context.Context, req *conn
 	return c.setExchangeLabel.CallUnary(ctx, req)
 }
 
+// SetExchangeWebsite calls arb.dashboard.v1.DashboardService.SetExchangeWebsite.
+func (c *dashboardServiceClient) SetExchangeWebsite(ctx context.Context, req *connect.Request[v1.SetExchangeWebsiteRequest]) (*connect.Response[v1.SetExchangeWebsiteResponse], error) {
+	return c.setExchangeWebsite.CallUnary(ctx, req)
+}
+
 // BrokerSymbols calls arb.dashboard.v1.DashboardService.BrokerSymbols.
 func (c *dashboardServiceClient) BrokerSymbols(ctx context.Context, req *connect.Request[v1.BrokerSymbolsRequest]) (*connect.Response[v1.BrokerSymbolsResponse], error) {
 	return c.brokerSymbols.CallUnary(ctx, req)
@@ -1027,6 +1054,11 @@ func (c *dashboardServiceClient) SetBrokerDisabled(ctx context.Context, req *con
 // SetBrokerCommission calls arb.dashboard.v1.DashboardService.SetBrokerCommission.
 func (c *dashboardServiceClient) SetBrokerCommission(ctx context.Context, req *connect.Request[v1.SetBrokerCommissionRequest]) (*connect.Response[v1.SetBrokerCommissionResponse], error) {
 	return c.setBrokerCommission.CallUnary(ctx, req)
+}
+
+// SetBrokerWebsite calls arb.dashboard.v1.DashboardService.SetBrokerWebsite.
+func (c *dashboardServiceClient) SetBrokerWebsite(ctx context.Context, req *connect.Request[v1.SetBrokerWebsiteRequest]) (*connect.Response[v1.SetBrokerWebsiteResponse], error) {
+	return c.setBrokerWebsite.CallUnary(ctx, req)
 }
 
 // ListSymbolMappings calls arb.dashboard.v1.DashboardService.ListSymbolMappings.
@@ -1177,11 +1209,13 @@ type DashboardServiceHandler interface {
 	AddExchange(context.Context, *connect.Request[v1.AddExchangeRequest]) (*connect.Response[v1.AddExchangeResponse], error)
 	RemoveExchange(context.Context, *connect.Request[v1.RemoveExchangeRequest]) (*connect.Response[v1.RemoveExchangeResponse], error)
 	SetExchangeLabel(context.Context, *connect.Request[v1.SetExchangeLabelRequest]) (*connect.Response[v1.SetExchangeLabelResponse], error)
+	SetExchangeWebsite(context.Context, *connect.Request[v1.SetExchangeWebsiteRequest]) (*connect.Response[v1.SetExchangeWebsiteResponse], error)
 	BrokerSymbols(context.Context, *connect.Request[v1.BrokerSymbolsRequest]) (*connect.Response[v1.BrokerSymbolsResponse], error)
 	SetBrokerAccountAlias(context.Context, *connect.Request[v1.SetBrokerAccountAliasRequest]) (*connect.Response[v1.SetBrokerAccountAliasResponse], error)
 	SetBrokerAccountIsReal(context.Context, *connect.Request[v1.SetBrokerAccountIsRealRequest]) (*connect.Response[v1.SetBrokerAccountIsRealResponse], error)
 	SetBrokerDisabled(context.Context, *connect.Request[v1.SetBrokerDisabledRequest]) (*connect.Response[v1.SetBrokerDisabledResponse], error)
 	SetBrokerCommission(context.Context, *connect.Request[v1.SetBrokerCommissionRequest]) (*connect.Response[v1.SetBrokerCommissionResponse], error)
+	SetBrokerWebsite(context.Context, *connect.Request[v1.SetBrokerWebsiteRequest]) (*connect.Response[v1.SetBrokerWebsiteResponse], error)
 	// Symbol 映射（brokerSymbol -> canonical）
 	ListSymbolMappings(context.Context, *connect.Request[v1.ListSymbolMappingsRequest]) (*connect.Response[v1.ListSymbolMappingsResponse], error)
 	SaveSymbolMapping(context.Context, *connect.Request[v1.SaveSymbolMappingRequest]) (*connect.Response[v1.SaveSymbolMappingResponse], error)
@@ -1471,6 +1505,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("SetExchangeLabel")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceSetExchangeWebsiteHandler := connect.NewUnaryHandler(
+		DashboardServiceSetExchangeWebsiteProcedure,
+		svc.SetExchangeWebsite,
+		connect.WithSchema(dashboardServiceMethods.ByName("SetExchangeWebsite")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceBrokerSymbolsHandler := connect.NewUnaryHandler(
 		DashboardServiceBrokerSymbolsProcedure,
 		svc.BrokerSymbols,
@@ -1499,6 +1539,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		DashboardServiceSetBrokerCommissionProcedure,
 		svc.SetBrokerCommission,
 		connect.WithSchema(dashboardServiceMethods.ByName("SetBrokerCommission")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceSetBrokerWebsiteHandler := connect.NewUnaryHandler(
+		DashboardServiceSetBrokerWebsiteProcedure,
+		svc.SetBrokerWebsite,
+		connect.WithSchema(dashboardServiceMethods.ByName("SetBrokerWebsite")),
 		connect.WithHandlerOptions(opts...),
 	)
 	dashboardServiceListSymbolMappingsHandler := connect.NewUnaryHandler(
@@ -1695,6 +1741,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceRemoveExchangeHandler.ServeHTTP(w, r)
 		case DashboardServiceSetExchangeLabelProcedure:
 			dashboardServiceSetExchangeLabelHandler.ServeHTTP(w, r)
+		case DashboardServiceSetExchangeWebsiteProcedure:
+			dashboardServiceSetExchangeWebsiteHandler.ServeHTTP(w, r)
 		case DashboardServiceBrokerSymbolsProcedure:
 			dashboardServiceBrokerSymbolsHandler.ServeHTTP(w, r)
 		case DashboardServiceSetBrokerAccountAliasProcedure:
@@ -1705,6 +1753,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceSetBrokerDisabledHandler.ServeHTTP(w, r)
 		case DashboardServiceSetBrokerCommissionProcedure:
 			dashboardServiceSetBrokerCommissionHandler.ServeHTTP(w, r)
+		case DashboardServiceSetBrokerWebsiteProcedure:
+			dashboardServiceSetBrokerWebsiteHandler.ServeHTTP(w, r)
 		case DashboardServiceListSymbolMappingsProcedure:
 			dashboardServiceListSymbolMappingsHandler.ServeHTTP(w, r)
 		case DashboardServiceSaveSymbolMappingProcedure:
@@ -1918,6 +1968,10 @@ func (UnimplementedDashboardServiceHandler) SetExchangeLabel(context.Context, *c
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetExchangeLabel is not implemented"))
 }
 
+func (UnimplementedDashboardServiceHandler) SetExchangeWebsite(context.Context, *connect.Request[v1.SetExchangeWebsiteRequest]) (*connect.Response[v1.SetExchangeWebsiteResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetExchangeWebsite is not implemented"))
+}
+
 func (UnimplementedDashboardServiceHandler) BrokerSymbols(context.Context, *connect.Request[v1.BrokerSymbolsRequest]) (*connect.Response[v1.BrokerSymbolsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.BrokerSymbols is not implemented"))
 }
@@ -1936,6 +1990,10 @@ func (UnimplementedDashboardServiceHandler) SetBrokerDisabled(context.Context, *
 
 func (UnimplementedDashboardServiceHandler) SetBrokerCommission(context.Context, *connect.Request[v1.SetBrokerCommissionRequest]) (*connect.Response[v1.SetBrokerCommissionResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetBrokerCommission is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) SetBrokerWebsite(context.Context, *connect.Request[v1.SetBrokerWebsiteRequest]) (*connect.Response[v1.SetBrokerWebsiteResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetBrokerWebsite is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListSymbolMappings(context.Context, *connect.Request[v1.ListSymbolMappingsRequest]) (*connect.Response[v1.ListSymbolMappingsResponse], error) {

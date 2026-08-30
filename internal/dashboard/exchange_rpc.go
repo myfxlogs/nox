@@ -106,3 +106,15 @@ func (s *Service) SetExchangeLabel(ctx context.Context, req *connect.Request[v1.
 	}
 	return connect.NewResponse(&v1.SetExchangeLabelResponse{}), nil
 }
+
+// SetExchangeWebsite D-157 V3.1：设置交易所官网；空串 = 清除。
+func (s *Service) SetExchangeWebsite(ctx context.Context, req *connect.Request[v1.SetExchangeWebsiteRequest]) (*connect.Response[v1.SetExchangeWebsiteResponse], error) {
+	id, err := strconv.ParseInt(req.Msg.GetId(), 10, 64)
+	if err != nil || id <= 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("id 非法"))
+	}
+	if err := s.store.SetExchangeWebsite(ctx, id, req.Msg.GetWebsite()); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&v1.SetExchangeWebsiteResponse{}), nil
+}
