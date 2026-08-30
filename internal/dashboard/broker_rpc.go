@@ -52,7 +52,7 @@ func (s *Service) AddBroker(ctx context.Context, req *connect.Request[v1.AddBrok
 		User:     req.Msg.GetUser(),
 		Password: req.Msg.GetPassword(),
 		Server:   req.Msg.GetServer(),
-		IsReal:   req.Msg.IsReal, // D-144 ① 三态：*bool（nil=未知）
+		IsReal:   req.Msg.IsReal,       // D-144 ① 三态：*bool（nil=未知）
 		Website:  req.Msg.GetWebsite(), // D-157 V3：broker 官网
 	}
 	// 账号类型真实佣金（bps/腿，D-036）；缺省 = 回退 config 默认

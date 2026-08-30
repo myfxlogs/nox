@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"connectrpc.com/connect"
@@ -78,3 +79,108 @@ func TestInterceptor_WrapUnaryEmptyToken(t *testing.T) {
 		t.Error("next handler not called（空 token 应放行到 next）")
 	}
 }
+
+// TestValidateStartupToken D-159 W0 P0-6：启动 token 校验行为矩阵。
+func TestValidateStartupToken(t *testing.T) {
+	cases := []struct {
+		name       string
+		token      string
+		allowEmpty string
+		wantErr    bool
+	}{
+		{"空 token 无逃生门 → 拒绝", "", "", true},
+		{"空 token 逃生门非 true → 拒绝", "", "false", true},
+		{"空 token 逃生门 true → 放行", "", "true", false},
+		{"非空 token 无逃生门 → 放行", "secret", "", false},
+		{"非空 token 有逃生门 → 放行", "secret", "true", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := ValidateStartupToken(c.token, c.allowEmpty)
+			if c.wantErr && err == nil {
+				t.Error("ValidateStartupToken err = nil, want error")
+			}
+			if !c.wantErr && err != nil {
+				t.Errorf("ValidateStartupToken err = %v, want nil", err)
+			}
+		})
+	}
+}
+
+// TestInterceptor_StreamingHandler D-159 W0：streaming handler 拦截测试矩阵。
+func TestInterceptor_StreamingHandler(t *testing.T) {
+	t.Run("非空 token 缺 header → 401", func(t *testing.T) {
+		i := NewInterceptor("secret-token")
+		fn := i.WrapStreamingHandler(func(ctx context.Context, w connect.StreamingHandlerConn) error {
+			t.Error("next handler called, want blocked")
+			return nil
+		})
+		_ = fn(context.Background(), &fakeStreamingConn{header: http.Header{}})
+	})
+
+	t.Run("非空 token 正确 token → 放行", func(t *testing.T) {
+		i := NewInterceptor("secret-token")
+		called := false
+		fn := i.WrapStreamingHandler(func(ctx context.Context, w connect.StreamingHandlerConn) error {
+			called = true
+			return nil
+		})
+		h := http.Header{}
+		h.Set("Authorization", "Bearer secret-token")
+		_ = fn(context.Background(), &fakeStreamingConn{header: h})
+		if !called {
+			t.Error("next handler not called（正确 token 应放行）")
+		}
+	})
+
+	t.Run("空 token → 放行", func(t *testing.T) {
+		i := NewInterceptor("")
+		called := false
+		fn := i.WrapStreamingHandler(func(ctx context.Context, w connect.StreamingHandlerConn) error {
+			called = true
+			return nil
+		})
+		_ = fn(context.Background(), &fakeStreamingConn{header: http.Header{}})
+		if !called {
+			t.Error("next handler not called（空 token 应放行）")
+		}
+	})
+}
+
+// TestInterceptor_CheckNoTokenLeak D-159 W0：错误路径不泄露 token 值。
+func TestInterceptor_CheckNoTokenLeak(t *testing.T) {
+	secret := "super-secret-token-do-not-leak"
+	i := NewInterceptor(secret)
+	// 缺失 header
+	err := i.check(http.Header{})
+	if err != nil && strings.Contains(err.Error(), secret) {
+		t.Errorf("error message leaks token: %s", err.Error())
+	}
+	// 错误 scheme
+	h := http.Header{}
+	h.Set("Authorization", "Basic "+secret)
+	err = i.check(h)
+	if err != nil && strings.Contains(err.Error(), secret) {
+		t.Errorf("error message leaks token: %s", err.Error())
+	}
+	// 错误 token
+	h2 := http.Header{}
+	h2.Set("Authorization", "Bearer wrong")
+	err = i.check(h2)
+	if err != nil && strings.Contains(err.Error(), secret) {
+		t.Errorf("error message leaks token: %s", err.Error())
+	}
+}
+
+// fakeStreamingConn 实现 connect.StreamingHandlerConn 接口用于测试。
+type fakeStreamingConn struct {
+	header http.Header
+}
+
+func (f *fakeStreamingConn) RequestHeader() http.Header   { return f.header }
+func (f *fakeStreamingConn) Send(any) error               { return nil }
+func (f *fakeStreamingConn) Receive(any) error            { return nil }
+func (f *fakeStreamingConn) ResponseHeader() http.Header  { return http.Header{} }
+func (f *fakeStreamingConn) ResponseTrailer() http.Header { return http.Header{} }
+func (f *fakeStreamingConn) Spec() connect.Spec           { return connect.Spec{} }
+func (f *fakeStreamingConn) Peer() connect.Peer           { return connect.Peer{} }

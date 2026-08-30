@@ -9,11 +9,27 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 
 	"connectrpc.com/connect"
 )
+
+// ValidateStartupToken 启动时校验 auth token 配置（D-159 W0 P0-6 fail-fast 过渡补丁）。
+// token 为空且未显式允许逃生门（allowEmpty != "true"）→ 返回错误（调用方 log.Fatal）。
+// token 为空且允许逃生门 → 大声警告（本地调试唯一合法路径）。
+// token 非空 → 正常放行。
+func ValidateStartupToken(token, allowEmpty string) error {
+	if token != "" {
+		return nil
+	}
+	if allowEmpty == "true" {
+		log.Printf("[auth] WARNING: ARB_ALLOW_EMPTY_AUTH=true — auth disabled (local debug only, DO NOT use in production)")
+		return nil
+	}
+	return errors.New("ARB_AUTH_TOKEN is empty and ARB_ALLOW_EMPTY_AUTH is not 'true' — refusing to start (set ARB_AUTH_TOKEN or explicitly allow empty auth for local debug)")
+}
 
 // Interceptor 校验 Authorization: Bearer $token（§13.5）。
 type Interceptor struct {
