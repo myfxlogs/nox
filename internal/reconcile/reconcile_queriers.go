@@ -56,6 +56,9 @@ type VenueOrder struct {
 	// binance positionRisk initialMargin / okx positions margin；MT4/MT5=0（走 D-124 账户分摊）。
 	InitialMargin float64 // 初始保证金（占用保证金，USD/USDT）
 	MaintMargin   float64 // 维持保证金（USD/USDT）
+	// D-155：broker 端止损 SL 值（MT5 Order.StopLoss / MT4 Order.StopLoss；CEX=0 无概念）。
+	// 透出到 BrokerPosition.sl 供 D-146 S1 灾难 SL 生产验证闭环。
+	StopLoss float64
 }
 
 // AccountInfo 一个账户的资金视图（D-053）。CFD 来自 MT AccountSummary；CEX 来自签名余额查询。
@@ -188,6 +191,7 @@ func (q *MT4Querier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error
 			Commission: ord.GetCommission(),
 			OpenedAt:   tsToTime(ord.GetOpenTime()),
 			Magic:      int64(ord.GetMagicNumber()),
+			StopLoss:   ord.GetStopLoss(), // D-155：MT4 Order.StopLoss 透传
 		})
 	}
 	return out, nil
@@ -248,6 +252,7 @@ func (q *MT5Querier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error
 			Commission: ord.GetCommission(),
 			OpenedAt:   tsToTime(ord.GetOpenTime()),
 			Magic:      ord.GetExpertId(),
+			StopLoss:   ord.GetStopLoss(), // D-155：MT5 Order.StopLoss 透传
 		})
 	}
 	return out, nil
