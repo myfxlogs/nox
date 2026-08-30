@@ -228,7 +228,8 @@ func brokerPositionToProto(o reconcile.VenueOrder, canonical string, price bus.Q
 		IsArb:       strings.HasPrefix(o.Comment, exec.OrderComment),
 		Magic:       o.Magic,
 		VenueOnline: venueOnline,
-		Margin:      margin, // D-124：方案 C 分摊保证金（0=未知/CEX/无账户数据）
+		Margin:      margin,     // D-124：方案 C 分摊保证金（0=未知/CEX/无账户数据）
+		Sl:          o.StopLoss, // D-155：broker 端 SL 透传（MT5/MT4 Order.StopLoss；0=未设/CEX）
 	}
 	if hasPrice && now.Sub(price.Time) <= freshTTL {
 		pb.CurrentPrice = (price.Bid + price.Ask) / 2

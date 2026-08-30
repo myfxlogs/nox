@@ -3688,6 +3688,7 @@ type BrokerPosition struct {
 	AccountAlias  string                 `protobuf:"bytes,20,opt,name=account_alias,json=accountAlias,proto3" json:"account_alias,omitempty"` // F3：账号别名（broker_accounts.alias）；空 = 未设别名，前端回落 venue
 	Margin        float64                `protobuf:"fixed64,21,opt,name=margin,proto3" json:"margin,omitempty"`                               // D-124：分摊保证金 USD（方案 C）；0=未知/CEX/无账户数据
 	OrderId       string                 `protobuf:"bytes,22,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`                // S4：关联持仓 OPEN 腿的 order_id（position_legs.order_id 透出）；空=未关联/孤儿
+	Sl            float64                `protobuf:"fixed64,23,opt,name=sl,proto3" json:"sl,omitempty"`                                       // D-155：broker 端止损 SL 值透传（MT5 Order.StopLoss / MT4 Order.StopLoss；0=未设/CEX 无概念）；D-146 S1 灾难 SL 生产验证闭环基础设施
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3874,6 +3875,13 @@ func (x *BrokerPosition) GetOrderId() string {
 		return x.OrderId
 	}
 	return ""
+}
+
+func (x *BrokerPosition) GetSl() float64 {
+	if x != nil {
+		return x.Sl
+	}
+	return 0
 }
 
 type ListBrokerPositionsRequest struct {
@@ -10845,7 +10853,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x06offset\x18\x03 \x01(\x05R\x06offset\"g\n" +
 	"\x15ListPositionsResponse\x128\n" +
 	"\tpositions\x18\x01 \x03(\v2\x1a.arb.dashboard.v1.PositionR\tpositions\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x05R\x05total\"\xf9\x04\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\"\x89\x05\n" +
 	"\x0eBrokerPosition\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x1b\n" +
 	"\tvenue_key\x18\x02 \x01(\tR\bvenueKey\x12\x16\n" +
@@ -10873,7 +10881,8 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"positionId\x12#\n" +
 	"\raccount_alias\x18\x14 \x01(\tR\faccountAlias\x12\x16\n" +
 	"\x06margin\x18\x15 \x01(\x01R\x06margin\x12\x19\n" +
-	"\border_id\x18\x16 \x01(\tR\aorderId\"6\n" +
+	"\border_id\x18\x16 \x01(\tR\aorderId\x12\x0e\n" +
+	"\x02sl\x18\x17 \x01(\x01R\x02sl\"6\n" +
 	"\x1aListBrokerPositionsRequest\x12\x18\n" +
 	"\arefresh\x18\x01 \x01(\bR\arefresh\"]\n" +
 	"\x1bListBrokerPositionsResponse\x12>\n" +
