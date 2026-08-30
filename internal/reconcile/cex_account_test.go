@@ -40,7 +40,7 @@ func TestCEXAccount_Binance(t *testing.T) {
 	defer srv.Close()
 
 	// srv.URL 是 http://host:port；Binance 走 https，直接用 srv.URL 作 base（httptest 忽略签名校验）。
-	q := NewCEXAccountQuerier("binance", "spot", "key", "secret", "", srv.URL, false)
+	q := NewCEXAccountQuerier("binance", "spot", "key", "secret", "", srv.URL, "", false)
 	acct, err := q.Account(context.Background())
 	if err != nil {
 		t.Fatalf("binance account: %v", err)
@@ -67,7 +67,7 @@ func TestCEXAccount_BinancePerp(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	q := NewCEXAccountQuerier("binance", "perp", "key", "secret", "", srv.URL, false)
+	q := NewCEXAccountQuerier("binance", "perp", "key", "secret", "", srv.URL, "", false)
 	acct, err := q.Account(context.Background())
 	if err != nil {
 		t.Fatalf("binance perp account: %v", err)
@@ -93,7 +93,7 @@ func TestCEXAccount_OKX(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	q := NewCEXAccountQuerier("okx", "spot", "key", "secret", "pass", srv.URL, false)
+	q := NewCEXAccountQuerier("okx", "spot", "key", "secret", "pass", srv.URL, "", false)
 	acct, err := q.Account(context.Background())
 	if err != nil {
 		t.Fatalf("okx account: %v", err)
@@ -124,7 +124,7 @@ func TestCEXAccount_OKXSimulated(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	q := NewCEXAccountQuerier("okx", "spot", "key", "secret", "pass", srv.URL, true)
+	q := NewCEXAccountQuerier("okx", "spot", "key", "secret", "pass", srv.URL, "", true)
 	if _, err := q.Account(context.Background()); err != nil {
 		t.Fatalf("okx simulated account: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestCEXAccount_BinanceProxyToken(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	q := NewCEXAccountQuerier("binance", "spot", "key", "secret", "", srv.URL, false)
+	q := NewCEXAccountQuerier("binance", "spot", "key", "secret", "", srv.URL, "", false)
 	if _, err := q.Account(context.Background()); err != nil {
 		t.Fatalf("binance account: %v", err)
 	}
@@ -179,7 +179,7 @@ func TestCEXAccount_GatePerp(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	q := NewCEXAccountQuerier("gate", "perp", "gate-key", "gate-secret", "", srv.URL, true)
+	q := NewCEXAccountQuerier("gate", "perp", "gate-key", "gate-secret", "", srv.URL, "", true)
 	acct, err := q.Account(context.Background())
 	if err != nil {
 		t.Fatalf("gate perp account: %v", err)
@@ -200,7 +200,7 @@ func TestCEXAccount_GatePerp(t *testing.T) {
 
 // TestCEXAccount_GateSpotUnsupported：gate spot（G1 只 perp）→ 如实返回 unsupported error。
 func TestCEXAccount_GateSpotUnsupported(t *testing.T) {
-	q := NewCEXAccountQuerier("gate", "spot", "k", "s", "", "http://x", true)
+	q := NewCEXAccountQuerier("gate", "spot", "k", "s", "", "http://x", "", true)
 	if _, err := q.Account(context.Background()); err == nil {
 		t.Fatal("gate spot 应报错（G1 仅 perp），got nil")
 	}
@@ -213,7 +213,7 @@ func TestCEXAccount_GatePerpEmptyTotal(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	q := NewCEXAccountQuerier("gate", "perp", "k", "s", "", srv.URL, true)
+	q := NewCEXAccountQuerier("gate", "perp", "k", "s", "", srv.URL, "", true)
 	acct, err := q.Account(context.Background())
 	if err != nil {
 		t.Fatalf("空 total 应容错不报错: %v", err)

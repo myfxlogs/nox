@@ -30,15 +30,16 @@ type CEXAccountQuerier struct {
 	passphrase string // OKX 必填；Binance 空
 	baseURL    string // spot base（binance 走代理；okx www.okx.com）
 	simulated  bool   // OKX 模拟盘：请求带 x-simulated-trading:1（demo key 必开，D-054）
+	website    string // D-157 V3：交易所官网（从 ExchangeConfig.website 透传）
 	client     *http.Client
 }
 
 // NewCEXAccountQuerier 创建 CEX 账户查询器。
 // baseURL 为 spot base（Binance 需先做 fapi→api 替换，与采集一致）。
-func NewCEXAccountQuerier(venue, venueType, apiKey, apiSecret, passphrase, baseURL string, simulated bool) *CEXAccountQuerier {
+func NewCEXAccountQuerier(venue, venueType, apiKey, apiSecret, passphrase, baseURL, website string, simulated bool) *CEXAccountQuerier {
 	return &CEXAccountQuerier{
 		venue: venue, venueType: venueType, apiKey: apiKey, apiSecret: apiSecret,
-		passphrase: passphrase, baseURL: baseURL, simulated: simulated, client: httpx.Client(),
+		passphrase: passphrase, baseURL: baseURL, website: website, simulated: simulated, client: httpx.Client(),
 	}
 }
 
@@ -112,7 +113,7 @@ func (q *CEXAccountQuerier) accountBinance(ctx context.Context) (*AccountInfo, e
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
 		Balance: total, Equity: total, Currency: "USDT",
-		Simulated: q.simulated,
+		Simulated: q.simulated, Website: q.website,
 	}, nil
 }
 
@@ -142,7 +143,7 @@ func (q *CEXAccountQuerier) accountBinancePerp(ctx context.Context) (*AccountInf
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
 		Balance: eq, Equity: eq, Currency: "USDT",
-		Simulated: q.simulated,
+		Simulated: q.simulated, Website: q.website,
 	}, nil
 }
 
@@ -204,7 +205,7 @@ func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
 		Balance: eq, Equity: eq, Currency: "USDT",
-		Simulated: q.simulated,
+		Simulated: q.simulated, Website: q.website,
 	}, nil
 }
 
@@ -258,7 +259,7 @@ func (q *CEXAccountQuerier) accountGate(ctx context.Context) (*AccountInfo, erro
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
 		Balance: eq, Equity: eq, Currency: "USDT",
-		Simulated: q.simulated,
+		Simulated: q.simulated, Website: q.website,
 	}, nil
 }
 
