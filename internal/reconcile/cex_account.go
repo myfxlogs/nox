@@ -112,6 +112,7 @@ func (q *CEXAccountQuerier) accountBinance(ctx context.Context) (*AccountInfo, e
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
 		Balance: total, Equity: total, Currency: "USDT",
+		Simulated: q.simulated,
 	}, nil
 }
 
@@ -141,6 +142,7 @@ func (q *CEXAccountQuerier) accountBinancePerp(ctx context.Context) (*AccountInf
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
 		Balance: eq, Equity: eq, Currency: "USDT",
+		Simulated: q.simulated,
 	}, nil
 }
 
@@ -202,6 +204,7 @@ func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
 		Balance: eq, Equity: eq, Currency: "USDT",
+		Simulated: q.simulated,
 	}, nil
 }
 
@@ -255,6 +258,7 @@ func (q *CEXAccountQuerier) accountGate(ctx context.Context) (*AccountInfo, erro
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
 		Balance: eq, Equity: eq, Currency: "USDT",
+		Simulated: q.simulated,
 	}, nil
 }
 

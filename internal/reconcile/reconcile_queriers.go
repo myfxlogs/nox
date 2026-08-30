@@ -76,6 +76,7 @@ type AccountInfo struct {
 	Profit     float64
 	Leverage   float64
 	Currency   string
+	Simulated  bool // CEX 模拟盘标记（D-156 V2：CEXAccountQuerier 填充 q.simulated；CFD 零值 false）
 }
 
 // AccountQuerier 查询单个账户资金的统一接口（D-053）。与 VenueQuerier 并列，同用 VenueKey 身份。
