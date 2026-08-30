@@ -518,6 +518,7 @@ message BrokerPosition {
   string account_alias = 20;   // F3：账号别名（broker_accounts.alias）；空 = 未设别名，前端回落 venue
   double margin = 21;          // D-124：分摊保证金 USD（方案 C）；0=未知/CEX/无账户数据
   string order_id = 22;        // S4：关联持仓 OPEN 腿的 order_id（position_legs.order_id 透出）；空=未关联/孤儿
+  double sl = 23;              // D-155：broker 端止损 SL 值透传（MT5 Order.StopLoss / MT4 Order.StopLoss；0=未设/CEX 无概念）；D-146 S1 灾难 SL 生产验证闭环基础设施
 }
 
 message ListBrokerPositionsRequest {
