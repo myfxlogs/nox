@@ -25,6 +25,7 @@ type fakeDeps struct {
 	upsertVSample    int
 	updateStat       int
 	getStat          *pgstore.StrategyStat
+	aggStat          pgstore.AggregateStat // D-154 S1：AggregateStrategyStats 返回值
 	disableStrategy  string
 	cashflowsNet     float64    // D-127 P4 返修①：SumCashflowsNet 返回值
 	lastNetPnl       float64    // D-127 P4：捕获传给 UpdateStrategyStat 的 net 值
@@ -72,6 +73,13 @@ func (f *fakeDeps) GetStrategyStat(ctx context.Context, strategy string) (*pgsto
 	return f.getStat, nil
 }
 
+// D-154 S1：AggregateStrategyStats 返回预设 aggStat（Strategy 填入参）。
+func (f *fakeDeps) AggregateStrategyStats(ctx context.Context, strategy string) (pgstore.AggregateStat, error) {
+	st := f.aggStat
+	st.Strategy = strategy
+	return st, nil
+}
+
 func (f *fakeDeps) DisableStrategy(ctx context.Context, strategy, reason string) error {
 	f.disableStrategy = strategy
 	return nil
@@ -97,7 +105,7 @@ func (f *fakeDeps) SumCashflowsNet(ctx context.Context, posID int64) (float64, e
 }
 
 // noElim 永不禁用的 Eliminator（测试用）。
-func noElim(int, float64, float64, bool) (bool, string) { return false, "" }
+func noElim(int, float64, float64, float64, bool) (bool, string) { return false, "" }
 
 // TestSettle_Idempotent 已有 position_settlements 行 → 短路，不重复结算。
 func TestSettle_Idempotent(t *testing.T) {
@@ -242,7 +250,7 @@ func TestSettle_EliminatorTriggered(t *testing.T) {
 		insertWon: true, // 返修包②：模拟赢家
 		getStat:   &pgstore.StrategyStat{Strategy: "CROSS_VENUE", TotalTrades: 10, WinRate: 0.1, AvgPnl: -10},
 	}
-	alwaysElim := func(int, float64, float64, bool) (bool, string) { return true, "test elimination" }
+	alwaysElim := func(int, float64, float64, float64, bool) (bool, string) { return true, "test elimination" }
 	if err := Settle(context.Background(), d, 4, alwaysElim); err != nil {
 		t.Fatalf("Settle: %v", err)
 	}

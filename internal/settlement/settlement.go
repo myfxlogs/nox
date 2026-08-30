@@ -29,8 +29,10 @@ type Deps interface {
 	UpsertVerificationSample(ctx context.Context, vkey string, expectedUsd, realizedUsd float64, closedAt time.Time) error
 	// UpdateStrategyStat 策略统计增量。
 	UpdateStrategyStat(ctx context.Context, strategy string, realizedPnl float64) error
-	// GetStrategyStat 读策略统计（淘汰判定用）。
+	// GetStrategyStat 读策略统计（D-154 起仅查 disabled/disabled_reason；累计列不再用于淘汰判定）。
 	GetStrategyStat(ctx context.Context, strategy string) (*pgstore.StrategyStat, error)
+	// AggregateStrategyStats 实时聚合策略全量平仓净值（D-154 S1 淘汰判定 v2 真相源）。
+	AggregateStrategyStats(ctx context.Context, strategy string) (pgstore.AggregateStat, error)
 	// DisableStrategy 禁用策略（淘汰）。
 	DisableStrategy(ctx context.Context, strategy, reason string) error
 	// InsertSettlement 写 position_settlements（幂等 ON CONFLICT DO NOTHING，返修包②返回 won）。
@@ -42,8 +44,9 @@ type Deps interface {
 }
 
 // Eliminator 淘汰判定函数类型（从 autotrade.evaluateElimination 抽出，避免环依赖）。
+// D-154 S2 加 medianPnl 入参（小样本判据 median<0 AND avg<0）。
 // 返回 (shouldDisable, reason)。
-type Eliminator func(totalTrades int, winRate, avgPnl float64, disabled bool) (bool, string)
+type Eliminator func(totalTrades int, winRate, avgPnl, medianPnl float64, disabled bool) (bool, string)
 
 // Settle 唯一结算入口（D-087 §3.2）。
 // 幂等：已有 position_settlements 行 → 直接返回。
@@ -150,14 +153,24 @@ func Settle(ctx context.Context, deps Deps, posID int64, elim Eliminator) error 
 		log.Printf("[settlement] update strategy stat pos=%d: %v", posID, err)
 	}
 
-	// 淘汰检查
+	// 淘汰检查（D-154 S1：输入源从 strategy_stats 累计列改为 AggregateStrategyStats 实时聚合；
+	// disabled flag 仍查 strategy_stats——启停载体不变。两调用点同源 P3。）
 	if elim != nil {
 		stat, err := deps.GetStrategyStat(ctx, p.Type)
 		if err != nil {
 			log.Printf("[settlement] get strategy stat: %v", err)
 			return nil
 		}
-		disable, reason := elim(stat.TotalTrades, stat.WinRate, stat.AvgPnl, stat.Disabled)
+		agg, err := deps.AggregateStrategyStats(ctx, p.Type)
+		if err != nil {
+			log.Printf("[settlement] aggregate strategy stats: %v", err)
+			return nil
+		}
+		winRate := 0.0
+		if agg.Total > 0 {
+			winRate = float64(agg.Wins) / float64(agg.Total)
+		}
+		disable, reason := elim(agg.Total, winRate, agg.AvgPnl, agg.MedianPnl, stat.Disabled)
 		if disable {
 			if err := deps.DisableStrategy(ctx, p.Type, reason); err != nil {
 				log.Printf("[settlement] disable strategy %s: %v", p.Type, err)
