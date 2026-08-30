@@ -80,7 +80,8 @@ func aggApprox(got, want, tol float64) bool {
 // nets = [-3, -3, -1.5, +2.5, +1.5] → total=5, wins=2
 // avg = (-3-3-1.5+2.5+1.5)/5 = -3.5/5 = -0.7
 // median（PG percentile_cont(0.5)，5 个奇数样本）= 排序后第 3 个 = -1.5
-//   排序：[-3, -3, -1.5, 1.5, 2.5] → 中位 = -1.5
+//
+//	排序：[-3, -3, -1.5, 1.5, 2.5] → 中位 = -1.5
 func TestAggregateStrategyStats_5Positions(t *testing.T) {
 	s := testAggregateStore(t)
 	ctx := context.Background()
