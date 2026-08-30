@@ -61,3 +61,52 @@ func TestEvaluateElimination_D136_BelowMinTrades(t *testing.T) {
 		t.Fatal("want no disable: <5 trades")
 	}
 }
+
+// D-154 S5：evaluateElimination v2 补充用例。
+// 小样本 median+avg 双负杀 / median 正 avg 负不杀（误杀保护锚）。
+
+// TestEvaluateElimination_D154_MedianNegAvgNegKill 7 笔 median=-0.5 avg=-0.3（双负）→ 杀。
+// PERP_FUNDING 实证形态：多数仓净负，median 暴露收益结构真相。
+func TestEvaluateElimination_D154_MedianNegAvgNegKill(t *testing.T) {
+	disable, reason := evaluateElimination(EliminationInput{TotalTrades: 7, WinRate: 0.33, AvgPnl: -0.3, MedianPnl: -0.5})
+	if !disable {
+		t.Fatal("want disable: 7 trades <30, median=-0.5<0 且 avg=-0.3<0 → D-154 S2 双条件满足")
+	}
+	if reason == "" {
+		t.Fatal("want non-empty reason")
+	}
+}
+
+// TestEvaluateElimination_D154_MedianPosAvgNegNoKill 7 笔 median=+0.1 avg=-0.05（median 正 avg 负）→ 不杀。
+// D-136 误杀保护锚：多数仓净正（median>0），少数极端负拉低 avg → 不杀。
+// 旧 winRate 双条件（winRate=0.6>=0.3）也不杀，但 S2 后 winRate 移出——median 正才是新判据的保护点。
+func TestEvaluateElimination_D154_MedianPosAvgNegNoKill(t *testing.T) {
+	disable, _ := evaluateElimination(EliminationInput{TotalTrades: 7, WinRate: 0.6, AvgPnl: -0.05, MedianPnl: 0.1})
+	if disable {
+		t.Fatal("want no disable: 7 trades <30, median=+0.1 不<0 → D-154 S2 双条件不满足（误杀保护）")
+	}
+}
+
+// TestEvaluateElimination_D154_LargeSampleWinRateKill 40 笔 winRate=0.2 avg=+1（大样本 winRate 单条件）→ 杀。
+func TestEvaluateElimination_D154_LargeSampleWinRateKill(t *testing.T) {
+	disable, _ := evaluateElimination(EliminationInput{TotalTrades: 40, WinRate: 0.2, AvgPnl: 1.0, MedianPnl: 0.5})
+	if !disable {
+		t.Fatal("want disable: 40 trades >=30, winRate=0.2<0.3 → 大样本 winRate 单条件杀")
+	}
+}
+
+// TestEvaluateElimination_D154_LargeSampleAvgKill 40 笔 winRate=0.6 avg=-0.5（大样本 avg 单条件）→ 杀。
+func TestEvaluateElimination_D154_LargeSampleAvgKill(t *testing.T) {
+	disable, _ := evaluateElimination(EliminationInput{TotalTrades: 40, WinRate: 0.6, AvgPnl: -0.5, MedianPnl: 0.1})
+	if !disable {
+		t.Fatal("want disable: 40 trades >=30, avg=-0.5<0 → 大样本 avg 单条件杀")
+	}
+}
+
+// TestEvaluateElimination_D154_ZeroTrades 0 笔 → 不杀（<5 零副作用）。
+func TestEvaluateElimination_D154_ZeroTrades(t *testing.T) {
+	disable, _ := evaluateElimination(EliminationInput{TotalTrades: 0, WinRate: 0, AvgPnl: 0, MedianPnl: 0})
+	if disable {
+		t.Fatal("want no disable: 0 trades <5 零副作用")
+	}
+}

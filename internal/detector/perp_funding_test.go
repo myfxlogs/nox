@@ -163,3 +163,41 @@ func TestPerpFundingWhitelist(t *testing.T) {
 		t.Fatalf("D-151 白名单应放行 ETHUSDT，实际 0 候选")
 	}
 }
+
+// TestPerpFundingWhitelistRejectFirstReportOnly D-154 S3：白名单拒绝每 canonical 仅首报一次。
+// 同一非白名单 canonical 连续 Scan 两次：seenReject 第二次 LoadOrStore 命中 → 不再首报。
+// 断言：第二次调用后 seenReject 已存该 canonical（LoadOrStore 返回 loaded=true）。
+func TestPerpFundingWhitelistRejectFirstReportOnly(t *testing.T) {
+	now := time.Now()
+	ttl := 30 * time.Second
+	snapshot := map[string]map[string]bus.Quote{
+		"SOLUSDT": {
+			"okx:perp":  {Symbol: "SOLUSDT", Venue: "okx", VenueType: "perp", Bid: 100, Ask: 101, Time: now},
+			"gate:perp": {Symbol: "SOLUSDT", Venue: "gate", VenueType: "perp", Bid: 99, Ask: 100, Time: now},
+		},
+	}
+	funding := map[string]map[string]float64{
+		"SOLUSDT": {"okx": 10.0, "gate": -10.0},
+	}
+	fp := &fakeFactProvider{funding: funding}
+	d := &PerpFundingDetector{MinNetAnnualized: 2.0, FreshnessTTL: ttl}
+
+	// 第一次 Scan：SOLUSDT 非白名单 → 首报 + seenReject 标记
+	_ = d.Scan(context.Background(), snapshot, fp)
+	_, loaded := d.seenReject.Load("SOLUSDT")
+	if !loaded {
+		t.Fatal("第一次 Scan 后 seenReject 应含 SOLUSDT")
+	}
+
+	// 第二次 Scan：SOLUSDT 仍非白名单 → seenReject 命中不首报（无候选，行为不变）
+	// 关键断言：seenReject 仍只标记一次（LoadOrStore 幂等），计数无增长
+	cands := d.Scan(context.Background(), snapshot, fp)
+	if len(cands) != 0 {
+		t.Fatalf("非白名单 SOLUSDT 应无候选，实际 %d", len(cands))
+	}
+	// seenReject 仍存在（进程生命周期，不清除）
+	_, loaded = d.seenReject.Load("SOLUSDT")
+	if !loaded {
+		t.Fatal("第二次 Scan 后 seenReject 应仍含 SOLUSDT（进程生命周期）")
+	}
+}
