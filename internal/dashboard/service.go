@@ -98,6 +98,16 @@ type Service struct {
 	// D-155 freeze guard：冻结腿预检窗口（config.FreezeGuard）。
 	// 开仓前双腿各自校验「报价在窗口内发生过价格值变化」；≤0 = 禁用（全放行）。
 	freezeGuard time.Duration
+
+	// D-159 W1a R1：SWAPARB 精确组合门禁（手动入口同源）。
+	// swapArbComboAllow 为 nil = 未接线（gate 层 fail-closed 兜底，手动入口不重复检查）。
+	// 非 nil 时 ExecuteOpportunityInternal/ExecuteMeanRevertWithCap(SWAPARB) 在 pipeline.Execute 前检查。
+	// ComboAllowSpec 定义在 exec 包（最底层无依赖，dashboard/autotrade 复用）。
+	swapArbComboAllow []exec.ComboAllowSpec
+
+	// D-159 W1a I6：environment/is_real 一致性检查（手动入口同源）。
+	// environment 空 = 未配置（不检查，回退旧行为）。
+	environment string
 }
 
 // FrontConfig 前端展示阈值（D-077 修复⑪B N7，后端 config 单一真相）。
@@ -192,3 +202,11 @@ func (s *Service) SetFreezeGuard(d time.Duration) { s.freezeGuard = d }
 
 // SetStepMeta 注入 binance:perp stepSize 权威元数据（D-127 P2）。nil = 仅用硬编码 fallback。
 func (s *Service) SetStepMeta(m *cexStepMeta) { s.stepMeta = m }
+
+// SetSwapArbComboAllow 注入 SWAPARB 精确组合门禁 allowlist（D-159 W1a R1，手动入口同源）。
+// nil/空 = 未接线（gate 层 fail-closed 兜底，手动入口不重复检查）。
+func (s *Service) SetSwapArbComboAllow(allow []exec.ComboAllowSpec) { s.swapArbComboAllow = allow }
+
+// SetEnvironment 注入执行环境固定值（D-159 W1a I6，手动入口同源）。
+// 空 = 未配置（不检查，回退旧行为）。
+func (s *Service) SetEnvironment(env string) { s.environment = env }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"strings"
 	"time"
 
 	"arb/internal/combo"
@@ -130,6 +131,19 @@ func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, request
 		log.Printf("[exec] %v", err)
 		return "FAILED", err.Error(), 0
 	}
+	// D-159 W1a R1：SWAPARB 精确组合门禁（手动入口同源，pipeline.Execute 前拦截）。
+	// swapArbComboAllow 非 nil 时检查；nil = 未接线（gate 层兜底）。
+	if found.Type == "SWAPARB" && len(s.swapArbComboAllow) > 0 {
+		if exec.MatchComboAllow(s.swapArbComboAllow, found.Canonical, found.VenueBuy, found.VenueSell) == nil {
+			return "FAILED", fmt.Sprintf("combo not in allowlist: %s %s×%s", found.Canonical, found.VenueBuy, found.VenueSell), 0
+		}
+	}
+	// D-159 W1a I6：environment/is_real 一致性检查（手动入口同源，pipeline.Execute 前拦截）。
+	if s.environment != "" {
+		if msg := s.checkEnvironmentIsReal(ctx, found.VenueBuy, found.VenueSell); msg != "" {
+			return "FAILED", msg, 0
+		}
+	}
 	result, err := s.pipeline.Execute(ctx, oppID, requestID, found.Type, legs)
 	if err != nil {
 		if errors.Is(err, exec.ErrMaxOpenPositions) || errors.Is(err, exec.ErrDuplicateExecution) ||
@@ -227,6 +241,18 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 		log.Printf("[exec] %v", err)
 		return "FAILED", err.Error(), 0
 	}
+	// D-159 W1a R1：SWAPARB 精确组合门禁（手动入口同源，pipeline.Execute 前拦截）。
+	if strategyType == "SWAPARB" && len(s.swapArbComboAllow) > 0 {
+		if exec.MatchComboAllow(s.swapArbComboAllow, canonical, venueBuy, venueSell) == nil {
+			return "FAILED", fmt.Sprintf("combo not in allowlist: %s %s×%s", canonical, venueBuy, venueSell), 0
+		}
+	}
+	// D-159 W1a I6：environment/is_real 一致性检查（手动入口同源，pipeline.Execute 前拦截）。
+	if s.environment != "" {
+		if msg := s.checkEnvironmentIsReal(ctx, venueBuy, venueSell); msg != "" {
+			return "FAILED", msg, 0
+		}
+	}
 	result, err := s.pipeline.Execute(ctx, oppID, requestID, strategyType, legs)
 	if err != nil {
 		if errors.Is(err, exec.ErrMaxOpenPositions) || errors.Is(err, exec.ErrDuplicateExecution) ||
@@ -269,4 +295,32 @@ func (s *Service) ClosePosition(ctx context.Context, req *connect.Request[v1.Clo
 	return connect.NewResponse(&v1.ClosePositionResponse{
 		Status: "CLOSED",
 	}), nil
+}
+
+// checkEnvironmentIsReal D-159 W1a I6：environment/is_real 一致性检查（手动入口同源）。
+// 返回非空字符串 = 拒绝原因；空 = 通过。
+// 校验逻辑与 autotrade.Gate.environmentIsRealCheck 同源：
+//   - is_real=true ↔ environment='live' / is_real=false ↔ environment='demo'
+//   - is_real=nil（未知）→ fail-closed 拒绝
+//   - venue 不存在 → fail-closed 拒绝
+func (s *Service) checkEnvironmentIsReal(ctx context.Context, venueBuy, venueSell string) string {
+	wantLive := s.environment == "live"
+	for _, venueKey := range []string{venueBuy, venueSell} {
+		venue, _, _ := strings.Cut(venueKey, ":")
+		if venue == "" {
+			return fmt.Sprintf("environment check: empty venue in %s", venueKey)
+		}
+		acct, err := s.store.GetBrokerAccount(ctx, venue)
+		if err != nil {
+			return fmt.Sprintf("environment check: venue %s not found (%v)", venue, err)
+		}
+		if acct.IsReal == nil {
+			return fmt.Sprintf("environment check: venue %s is_real unknown (null)", venue)
+		}
+		isLive := *acct.IsReal
+		if isLive != wantLive {
+			return fmt.Sprintf("environment check: venue %s is_real=%v != environment=%s", venue, isLive, s.environment)
+		}
+	}
+	return ""
 }
