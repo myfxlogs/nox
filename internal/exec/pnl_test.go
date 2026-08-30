@@ -108,10 +108,11 @@ func TestCalcLegPnL_SwapCommission(t *testing.T) {
 	cs := &fakeCSResolver{sizes: map[string]float64{"vA:mt5:XAUUSDm": 100.0}}
 	p := &Pipeline{csResolver: cs}
 	got := p.calcLegPnL(leg, fill, 1.0)
-	// priceDiff = 1.0×0.01×100×1 = $1.0; +swap 0.5 -commission 0.1 = $1.4
-	want := 1.4
+	// D-159 W3a R4：双计拆除——calcLegPnL 只算价格差 PnL，swap/commission 走 cashflows。
+	// priceDiff = 1.0×0.01×100×1 = $1.0（旧公式 +swap 0.5 -commission 0.1 = $1.4 双计）
+	want := 1.0
 	if got != want {
-		t.Errorf("PnL with swap+commission want $%.2f, got $%.2f", want, got)
+		t.Errorf("PnL with swap+commission want $%.2f (price diff only, swap/commission via cashflows), got $%.2f", want, got)
 	}
 }
 
@@ -166,10 +167,11 @@ func TestCalibratePnL_Authoritative(t *testing.T) {
 	if !ok {
 		t.Fatal("want ok=true (calibrated)")
 	}
-	// leg1: 10+0.5-0.1=10.4; leg2: -5+0.3-0.05=-4.75; total=5.65
-	want := 5.65
+	// D-159 W3a R4：权威值只用价格 PnL（Profit），Swap/Commission 走 cashflows。
+	// leg1: 10; leg2: -5; total=5.0（旧公式 10.4+(-4.75)=5.65 双计）
+	want := 5.0
 	if got != want {
-		t.Errorf("authoritative PnL want %.2f, got %.2f", want, got)
+		t.Errorf("authoritative PnL want %.2f (Profit only, swap/commission via cashflows), got %.2f", want, got)
 	}
 }
 
@@ -198,7 +200,7 @@ func TestCalibratePnL_NilCalibrator(t *testing.T) {
 	}
 }
 
-// TestCalibratePnL_PartialHit 部分腿命中 → 用命中的腿（calibrated>0 即 ok）。
+// TestCalibratePnL_PartialHit D-159 W3a R4：部分腿命中 → ok=false（部分成功不覆盖整仓，用同步公式）。
 func TestCalibratePnL_PartialHit(t *testing.T) {
 	legs := []pgstore.PositionLeg{
 		{Phase: "OPEN", Status: "FILLED", Venue: "vA:mt5", OrderID: "1001"},
@@ -209,12 +211,9 @@ func TestCalibratePnL_PartialHit(t *testing.T) {
 		// vB:2002 未找到
 	}}
 	p := &Pipeline{pnlCalibrator: cal}
-	got, ok := p.calibratePnL(context.Background(), legs, 1.0)
-	if !ok {
-		t.Fatal("partial hit want ok=true")
-	}
-	if got != 10.0 {
-		t.Errorf("partial hit PnL want 10.0 (only leg1), got %.2f", got)
+	_, ok := p.calibratePnL(context.Background(), legs, 1.0)
+	if ok {
+		t.Fatal("partial hit want ok=false (partial calibration does not override, R4)")
 	}
 }
 
@@ -267,22 +266,22 @@ func TestCalcLegPnL_FxMissingZero(t *testing.T) {
 }
 
 // TestCalibratePnL_FxConversion D-105 T2：权威值 ×fx 换算 USD。
-// 双腿权威 PnL=5.65（JPY 量级）× fx=0.5 → 2.825。
+// D-159 W3a R4：权威值只用 Profit → 双腿 10+(-5)=5.0 × fx=0.5 → 2.5。
 func TestCalibratePnL_FxConversion(t *testing.T) {
 	legs := []pgstore.PositionLeg{
 		{Phase: "OPEN", Status: "FILLED", Venue: "vA:mt5", OrderID: "1001"},
 		{Phase: "OPEN", Status: "FILLED", Venue: "vB:mt5", OrderID: "2002"},
 	}
 	cal := &fakePnLCalibrator{results: map[string]*HistoryPnL{
-		"vA:mt5:1001": {Profit: 10.0, Swap: 0.5, Commission: 0.1},  // 10.4
-		"vB:mt5:2002": {Profit: -5.0, Swap: 0.3, Commission: 0.05}, // -4.75 → total 5.65
+		"vA:mt5:1001": {Profit: 10.0, Swap: 0.5, Commission: 0.1},
+		"vB:mt5:2002": {Profit: -5.0, Swap: 0.3, Commission: 0.05},
 	}}
 	p := &Pipeline{pnlCalibrator: cal}
 	got, ok := p.calibratePnL(context.Background(), legs, 0.5)
 	if !ok {
 		t.Fatal("want ok=true (calibrated)")
 	}
-	want := 5.65 * 0.5 // 2.825
+	want := 5.0 * 0.5 // 2.5（Profit only: 10+(-5)=5, ×0.5）
 	if math.Abs(got-want) > 1e-9 {
 		t.Errorf("calibrate ×fx want %.4f, got %.4f", want, got)
 	}

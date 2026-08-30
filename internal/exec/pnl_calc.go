@@ -38,15 +38,30 @@ func (p *Pipeline) calcLegPnL(leg pgstore.PositionLeg, fill Fill, fx float64) fl
 		dir = -1.0
 	}
 	priceDiff := (fill.Price - *leg.PriceActual) * leg.Qty * cs * dir
-	return (priceDiff + fill.Swap - fill.Commission) * fx
+	// D-159 W3a R4：双计拆除——calcLegPnL 只算价格差 PnL，swap/commission 走 cashflows
+	//（pipeline_legs.go 平仓写入）。settlement netPnl = realized_pnl（价格差）+ cashflowsNet（组件）
+	// = 净值一次合成（原 realized 含 swap/commission 再加 cashflowsNet = 双计）。
+	return priceDiff * fx
 }
 
 // calibratePnL 回读校准：按 ticket 查历史单权威 PnL（D-077 修复⑪A M1 回读校准）。
 // 命中 HistoryOrder.Profit 时以其为权威覆盖同步路径公式结果。
+// D-159 W3a R4：权威值只用价格 PnL（Profit），Swap/Commission 走 cashflows（与 calcLegPnL 双计拆除对齐）。
 // D-105 T2：权威值 × fx（同一 canonical/fxResolver，计价币→USD）。
-// calibrator 未接线/未找到 → 返回 ok=false（用同步路径公式结果）。
+// D-159 W3a R4 校准规则：应校准腿总数 = OPEN+FILLED+有 OrderID 的腿；
+// 所有应校准腿全部成功才返回 ok=true（部分成功不覆盖整仓，R4）。
+// calibrator 未接线/未全部命中 → 返回 ok=false（用同步路径公式结果）。
 func (p *Pipeline) calibratePnL(ctx context.Context, legs []pgstore.PositionLeg, fx float64) (float64, bool) {
 	if p.pnlCalibrator == nil {
+		return 0, false
+	}
+	shouldCalibrate := 0
+	for _, leg := range legs {
+		if leg.Phase == "OPEN" && leg.Status == "FILLED" && leg.OrderID != "" {
+			shouldCalibrate++
+		}
+	}
+	if shouldCalibrate == 0 {
 		return 0, false
 	}
 	var totalPnL float64
@@ -61,11 +76,12 @@ func (p *Pipeline) calibratePnL(ctx context.Context, legs []pgstore.PositionLeg,
 		if err != nil || hp == nil {
 			continue
 		}
-		// 权威 PnL = Profit + Swap − Commission（与 auto_close.go:99 真值路径统一，P3）
-		totalPnL += hp.Profit + hp.Swap - hp.Commission
+		// D-159 W3a R4：权威值只用价格 PnL（Profit）；Swap/Commission 由 cashflows 组件承载。
+		totalPnL += hp.Profit
 		calibrated++
 	}
-	if calibrated == 0 {
+	// D-159 W3a R4：全部应校准腿成功才返回 true（部分成功不覆盖整仓）。
+	if calibrated != shouldCalibrate {
 		return 0, false
 	}
 	return totalPnL * fx, true

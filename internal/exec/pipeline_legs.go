@@ -238,12 +238,13 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 				fmt.Sprintf("pnl fx missing venue=%s symbol=%s quoteCcy=%s", leg.Venue, leg.Symbol, quoteCcy))
 		}
 		// swap/commission 入 cashflows（D-105 T2：原 quote-ccy 值 × fx 换算 USD，cashflows 语义=USD）
+		// D-159 W3a R5：cashflows 写入带 legNo（per-leg 幂等键前置，S2 双计拆解后此二者是 swap/commission 唯一载体）。
 		if fill.Swap != 0 {
-			_ = p.store.InsertCashflow(ctx, posID, "swap", leg.Venue, fill.Swap*fx, time.Now())
+			_ = p.store.InsertCashflow(ctx, posID, leg.LegNo, "swap", leg.Venue, fill.Swap*fx, time.Now())
 		}
 		// D-069：commission 入 cashflows（负号=成本）
 		if fill.Commission != 0 {
-			_ = p.store.InsertCashflow(ctx, posID, "commission", leg.Venue, -fill.Commission*fx, time.Now())
+			_ = p.store.InsertCashflow(ctx, posID, leg.LegNo, "commission", leg.Venue, -fill.Commission*fx, time.Now())
 		}
 	}
 
@@ -273,11 +274,17 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 	}
 
 	// D-077 修复⑪A M1 回读校准：历史单权威 PnL 覆盖同步路径公式。
-	// 命中 → 用权威值（Profit+Swap−Commission，与 auto_close.go:99 统一）；未命中 → 用同步公式。
-	// D-105 T2：权威值同样 × fx（同一 canonical/fxResolver，计价币→USD）。
-	if authPnL, ok := p.calibratePnL(ctx, legs, fx); ok {
-		log.Printf("[exec] position %d PnL calibrated: sync=%.2f → auth=%.2f", posID, totalPnL, authPnL)
-		totalPnL = authPnL
+	// D-159 W3a R4：calibrator 未接线（nil）→ 用同步公式，不标记 estimated（合法配置）。
+	// calibrator 接线但部分校准失败（calibratePnL 要求全部应校准腿成功）→ 标记 estimated
+	//（settlement 跳过不入正式统计，R4「无法完成校准不进正式策略统计」）。
+	if p.pnlCalibrator != nil {
+		if authPnL, ok := p.calibratePnL(ctx, legs, fx); ok {
+			log.Printf("[exec] position %d PnL calibrated: sync=%.2f → auth=%.2f", posID, totalPnL, authPnL)
+			totalPnL = authPnL
+		} else {
+			// D-159 W3a R4：calibrator 接线但校准失败 → 标记 estimated。
+			_ = p.store.SetPositionNote(ctx, posID, "pnl_estimated: partial or no calibration")
+		}
 	}
 
 	// D-159 W2a R3-10：所有腿实际成交+残量归零才写 CLOSED。

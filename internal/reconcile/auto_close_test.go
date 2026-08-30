@@ -23,6 +23,7 @@ type fakeStore struct {
 	failedIDs   []int64
 	closeCalls  int
 	statusCalls map[int64]string
+	cashflows   []fakeCashflow // D-159 W3a R4：兜底分支补写记录
 }
 
 type fakeAlert struct {
@@ -93,6 +94,21 @@ func (f *fakeStore) SetPositionNote(ctx context.Context, id int64, note string) 
 	if p, ok := f.positions[id]; ok {
 		p.Note = note
 	}
+	return nil
+}
+
+// D-159 W3a R4：auto_close 兜底分支补写 swap/commission cashflows（fakeStore 适配 Store 接口新增方法，
+// 记录调用供 A4 锚断言）。
+type fakeCashflow struct {
+	posID  int64
+	legNo  int16
+	kind   string
+	venue  string
+	amount float64
+}
+
+func (f *fakeStore) InsertCashflow(ctx context.Context, posID int64, legNo int16, kind, venue string, amount float64, ts time.Time) error {
+	f.cashflows = append(f.cashflows, fakeCashflow{posID: posID, legNo: legNo, kind: kind, venue: venue, amount: amount})
 	return nil
 }
 
@@ -512,6 +528,76 @@ func TestIsOPENINGZombie(t *testing.T) {
 	for _, c := range cases {
 		if got := isOPENINGZombie(&c.pos, c.legs, now); got != c.want {
 			t.Errorf("%s: got %v want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// TestAutoClose_ClaimFailedFallback D-159 W3a R4 A4：ClaimFailed 兜底分支只用 Profit + 补写 cashflows。
+// 场景：单腿 position（otherOpen=false），closer 返回 ErrClaimFailed（position 已被并发领取为 CLOSING），
+// hist 有 Profit/Swap/Commission → 走兜底分支 store.ClosePosition(pnl=hist.Profit) + 补写 swap/commission cashflows。
+// 断言：ClosePosition 的 realizedPnl=hist.Profit（不含 swap/commission）+ cashflows 含 swap+commission 两行。
+func TestAutoClose_ClaimFailedFallback(t *testing.T) {
+	fs := newFakeStore()
+	opened := time.Now().Add(-2 * time.Hour)
+	fs.positions[100] = mkPosition(100, "OPEN", "CROSS_VENUE", opened)
+	// 单腿 → otherOpen=false → 走 ClaimFailed 兜底分支
+	fs.legs[100] = []*pgstore.PositionLeg{
+		mkOpenLeg(100, 0, "52993526:mt5", "A", "BUY", "AUDJPY", 1.0),
+	}
+
+	fc := &fakeCloser{claimFailed: true} // AutoClosePosition 返回 ErrClaimFailed
+	fsst := &fakeSettler{}
+	r := &Reconciler{store: fs, closer: fc, settler: fsst}
+
+	hist := &HistoryOrder{
+		Ticket: "A", ClosePrice: 100.5,
+		Profit: 10.0, Swap: 0.5, Commission: 1.0, Symbol: "AUDJPY",
+	}
+	goneLeg := *mkOpenLeg(100, 0, "52993526:mt5", "A", "BUY", "AUDJPY", 1.0)
+
+	if err := r.autoClose(context.Background(), fs.positions[100], goneLeg, hist); err != nil {
+		t.Fatalf("autoClose: %v", err)
+	}
+
+	// A4 断言①：ClosePosition 的 realizedPnl = hist.Profit（只用价格 PnL，不含 swap/commission）
+	if fs.closeCalls != 1 {
+		t.Fatalf("ClosePosition calls=%d, want 1", fs.closeCalls)
+	}
+	got := *fs.positions[100].RealizedPnl
+	want := 10.0 // hist.Profit only（旧公式 10+0.5-1.0=9.5 双计）
+	if got != want {
+		t.Errorf("ClosePosition realizedPnl=%.4f, want %.4f (Profit only, swap/commission via cashflows)", got, want)
+	}
+
+	// A4 断言②：补写 swap + commission cashflows（带 legNo）
+	var swapCF, commCF *fakeCashflow
+	for i := range fs.cashflows {
+		c := &fs.cashflows[i]
+		if c.kind == "swap" {
+			swapCF = c
+		}
+		if c.kind == "commission" {
+			commCF = c
+		}
+	}
+	if swapCF == nil {
+		t.Error("missing swap cashflow (兜底分支应补写 swap)")
+	} else {
+		if swapCF.amount != 0.5 {
+			t.Errorf("swap cashflow amount=%.4f, want 0.5 (hist.Swap)", swapCF.amount)
+		}
+		if swapCF.legNo != 0 {
+			t.Errorf("swap cashflow legNo=%d, want 0 (goneLeg.LegNo)", swapCF.legNo)
+		}
+	}
+	if commCF == nil {
+		t.Error("missing commission cashflow (兜底分支应补写 commission)")
+	} else {
+		if commCF.amount != -1.0 {
+			t.Errorf("commission cashflow amount=%.4f, want -1.0 (-hist.Commission)", commCF.amount)
+		}
+		if commCF.legNo != 0 {
+			t.Errorf("commission cashflow legNo=%d, want 0 (goneLeg.LegNo)", commCF.legNo)
 		}
 	}
 }
