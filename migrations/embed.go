@@ -82,3 +82,6 @@ var BrokerAccountsIsRealSQL string
 
 //go:embed 0046_account_website.sql
 var AccountWebsiteSQL string
+
+//go:embed 0047_arb_ro_revoke_credentials.sql
+var ArbRoRevokeCredentialsSQL string

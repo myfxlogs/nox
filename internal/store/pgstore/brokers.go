@@ -21,7 +21,7 @@ type BrokerAccount struct {
 	Alias         string
 	Status        string // connected / failed / stopped
 	CommissionBps *float64
-	IsReal        *bool // D-144 ① 三态：nil=未知（不配对）
+	IsReal        *bool  // D-144 ① 三态：nil=未知（不配对）
 	Website       string // D-157 V3：broker 官网（DB 存储，业主自助管理；空 = 未设置）
 	CreatedAt     time.Time
 }
