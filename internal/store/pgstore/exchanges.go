@@ -21,23 +21,24 @@ type ExchangeConfig struct {
 	Passphrase string
 	BaseURL    string
 	Simulated  bool // OKX 模拟盘：实盘域名 + x-simulated-trading:1（demo key 必开，D-054）
+	Website    string // D-157 V3：交易所官网（DB 存储；空 = 未设置）
 	CreatedAt  time.Time
 }
 
 // InsertExchangeConfig 插入交易所配置并回填 id、created_at；venue+venue_type 冲突返回错误（UNIQUE 约束）。
 func (s *Store) InsertExchangeConfig(ctx context.Context, c *ExchangeConfig) error {
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO exchange_configs (venue, venue_type, label, api_key, api_secret, passphrase, base_url, simulated)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO exchange_configs (venue, venue_type, label, api_key, api_secret, passphrase, base_url, simulated, website)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id, created_at
-	`, c.Venue, c.VenueType, c.Label, c.APIKey, c.APISecret, c.Passphrase, c.BaseURL, c.Simulated).Scan(&c.ID, &c.CreatedAt)
+	`, c.Venue, c.VenueType, c.Label, c.APIKey, c.APISecret, c.Passphrase, c.BaseURL, c.Simulated, c.Website).Scan(&c.ID, &c.CreatedAt)
 	return err
 }
 
 // ListExchangeConfigs 全量交易所配置（按创建时间序）。
 func (s *Store) ListExchangeConfigs(ctx context.Context) ([]ExchangeConfig, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, venue, venue_type, label, api_key, api_secret, passphrase, base_url, simulated, created_at
+		SELECT id, venue, venue_type, label, api_key, api_secret, passphrase, base_url, simulated, created_at, website
 		FROM exchange_configs ORDER BY created_at
 	`)
 	if err != nil {
@@ -48,7 +49,7 @@ func (s *Store) ListExchangeConfigs(ctx context.Context) ([]ExchangeConfig, erro
 	for rows.Next() {
 		var c ExchangeConfig
 		if err := rows.Scan(&c.ID, &c.Venue, &c.VenueType, &c.Label,
-			&c.APIKey, &c.APISecret, &c.Passphrase, &c.BaseURL, &c.Simulated, &c.CreatedAt); err != nil {
+			&c.APIKey, &c.APISecret, &c.Passphrase, &c.BaseURL, &c.Simulated, &c.CreatedAt, &c.Website); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -66,4 +67,10 @@ func (s *Store) DeleteExchangeConfig(ctx context.Context, id int64) error {
 func ErrExchangeConflict(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+// SetExchangeLabel 设置交易所别名；空串 = 清除（D-157 V3）。
+func (s *Store) SetExchangeLabel(ctx context.Context, id int64, label string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE exchange_configs SET label = $1 WHERE id = $2`, label, id)
+	return err
 }

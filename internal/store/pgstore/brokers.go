@@ -28,6 +28,7 @@ type BrokerAccount struct {
 	Status        string // connected / failed / stopped
 	CommissionBps *float64
 	IsReal        *bool // D-144 ① 三态：nil=未知（不配对）
+	Website       string // D-157 V3：broker 官网（DB 存储，业主自助管理；空 = 未设置）
 	CreatedAt     time.Time
 }
 
@@ -47,16 +48,16 @@ type SymbolMapping struct {
 // IsReal *bool：nil=未知(NULL), &true=实盘, &false=demo（D-144 ① 三态）。
 func (s *Store) InsertBrokerAccount(ctx context.Context, a *BrokerAccount) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, server, alias, status, commission_bps, is_real)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, '', $8, $9, $10)
-	`, a.Venue, a.Platform, a.Host, a.Port, a.User, a.Password, a.Server, a.Status, a.CommissionBps, a.IsReal)
+		INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, server, alias, status, commission_bps, is_real, website)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, '', $8, $9, $10, $11)
+	`, a.Venue, a.Platform, a.Host, a.Port, a.User, a.Password, a.Server, a.Status, a.CommissionBps, a.IsReal, a.Website)
 	return err
 }
 
 // ListBrokerAccounts 全量账号列表。
 func (s *Store) ListBrokerAccounts(ctx context.Context) ([]BrokerAccount, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT venue, platform, host, port, user_id, password, server, alias, status, commission_bps, is_real, created_at
+		SELECT venue, platform, host, port, user_id, password, server, alias, status, commission_bps, is_real, created_at, website
 		FROM broker_accounts ORDER BY created_at
 	`)
 	if err != nil {
@@ -67,7 +68,7 @@ func (s *Store) ListBrokerAccounts(ctx context.Context) ([]BrokerAccount, error)
 	for rows.Next() {
 		var a BrokerAccount
 		if err := rows.Scan(&a.Venue, &a.Platform, &a.Host, &a.Port, &a.User, &a.Password,
-			&a.Server, &a.Alias, &a.Status, &a.CommissionBps, &a.IsReal, &a.CreatedAt); err != nil {
+			&a.Server, &a.Alias, &a.Status, &a.CommissionBps, &a.IsReal, &a.CreatedAt, &a.Website); err != nil {
 			return nil, err
 		}
 		out = append(out, a)
@@ -79,10 +80,10 @@ func (s *Store) ListBrokerAccounts(ctx context.Context) ([]BrokerAccount, error)
 func (s *Store) GetBrokerAccount(ctx context.Context, venue string) (*BrokerAccount, error) {
 	var a BrokerAccount
 	err := s.pool.QueryRow(ctx, `
-		SELECT venue, platform, host, port, user_id, password, server, alias, status, commission_bps, is_real, created_at
+		SELECT venue, platform, host, port, user_id, password, server, alias, status, commission_bps, is_real, created_at, website
 		FROM broker_accounts WHERE venue = $1
 	`, venue).Scan(&a.Venue, &a.Platform, &a.Host, &a.Port, &a.User, &a.Password,
-		&a.Server, &a.Alias, &a.Status, &a.CommissionBps, &a.IsReal, &a.CreatedAt)
+		&a.Server, &a.Alias, &a.Status, &a.CommissionBps, &a.IsReal, &a.CreatedAt, &a.Website)
 	if err != nil {
 		return nil, err
 	}

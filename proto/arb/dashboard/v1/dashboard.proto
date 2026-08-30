@@ -77,6 +77,7 @@ service DashboardService {
   rpc ListExchanges(ListExchangesRequest) returns (ListExchangesResponse);
   rpc AddExchange(AddExchangeRequest) returns (AddExchangeResponse);
   rpc RemoveExchange(RemoveExchangeRequest) returns (RemoveExchangeResponse);
+  rpc SetExchangeLabel(SetExchangeLabelRequest) returns (SetExchangeLabelResponse); // D-157 V3：交易所别名编辑
   rpc BrokerSymbols(BrokerSymbolsRequest) returns (BrokerSymbolsResponse);
   rpc SetBrokerAccountAlias(SetBrokerAccountAliasRequest) returns (SetBrokerAccountAliasResponse);
   rpc SetBrokerAccountIsReal(SetBrokerAccountIsRealRequest) returns (SetBrokerAccountIsRealResponse); // D-144 ①
@@ -720,6 +721,7 @@ message AccountInfo {
   bool online = 13;        // false = 最近成功快照（离线）
   google.protobuf.Timestamp updated_at = 14;
   bool simulated = 15;     // CEX 模拟盘标记（OKX demo=true/binance 实盘=false；CFD 零值 false 无意义——CFD 实盘/模拟由 BrokerAccount.isReal 管）
+  string website = 16;     // 官网（D-157 V3：CEX 从 ExchangeConfig.website 透传；CFD 从 BrokerAccount.website 透传；空 = 未设置）
 }
 
 // 账户资产全量快照（D-053）：monitor 变更时广播，含离线 venue 的最近快照；前端全量替换。
@@ -779,6 +781,7 @@ message AddBrokerRequest {
   reserved 8;           // 曾为 company（D-033 移除）
   optional double commission_bps = 9; // 账号类型真实佣金（bps/腿，D-036）；缺省 = 回退 config 默认
   optional bool is_real = 10;   // D-144 ① 三态：true=实盘, false=demo, 缺省=未知（不配对）
+  string website = 11;    // broker 官网（D-157 V3：CFD 添加表单传；空 = 不设置）
 }
 
 message AddBrokerResponse {}
@@ -803,6 +806,7 @@ message BrokerAccount {
   optional double commission_bps = 11; // 账号真实佣金（bps/腿，D-036）；未设置 = 回退默认
   optional bool is_real = 12;   // D-144 ① 三态：true=实盘, false=demo, 缺省=未知
   string server_group = 13;    // D-150 ② 平台分组键=server 首段（首个 '-' 前，后端算好下发）
+  string website = 14;    // broker 官网（D-157 V3：DB 存储，业主自助管理；空 = 未设置）
 }
 
 message ListBrokerAccountsRequest {}
@@ -821,6 +825,7 @@ message ExchangeConfig {
   string base_url = 6;     // 空 = venue 默认（binance=代理、okx=实盘）
   google.protobuf.Timestamp created_at = 7;
   bool simulated = 8;      // OKX 模拟盘：实盘域名 + 请求头 x-simulated-trading:1（demo key 必开，D-054）
+  string website = 9;     // 交易所官网（D-157 V3：DB 存储；空 = 未设置）
 }
 
 message ListExchangesRequest {}
@@ -838,6 +843,7 @@ message AddExchangeRequest {
   string passphrase = 6;   // OKX；其他交易所留空
   string base_url = 7;     // 可选；空 = venue 默认
   bool simulated = 8;      // OKX 模拟盘（x-simulated-trading:1）；demo key 必开
+  string website = 9;     // 交易所官网（D-157 V3：CEX 添加表单传；空 = 不设置）
 }
 
 message AddExchangeResponse {
@@ -849,6 +855,13 @@ message RemoveExchangeRequest {
 }
 
 message RemoveExchangeResponse {}
+
+message SetExchangeLabelRequest {  // D-157 V3：交易所别名编辑
+  string id = 1;       // ExchangeConfig.id
+  string label = 2;    // 新别名；空串 = 清除
+}
+
+message SetExchangeLabelResponse {}
 
 message VerifyAccountRequest {
   int32 platform = 1;   // 0=MT4, 1=MT5
