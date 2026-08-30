@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"time"
 
 	"arb/internal/combo"
 	"arb/internal/exec"
@@ -17,6 +18,30 @@ import (
 )
 
 // --- 执行（§13） ---
+
+// checkFreezeGuard D-155 交易时段防线：开仓前双腿各自校验「该腿报价在窗口内发生过价格值变化」。
+// 任一腿冻结（从未变化 / 超窗口未变）→ 拒绝整组（LEGGED 零容忍，单腿不降级）。
+// freezeGuard≤0 = 禁用（全放行）。预检在 pipeline.Execute 前拦截，不落 position、不开任何腿。
+// 与 D-104 freshness 分层：freshness=采集侧时间戳门禁（心跳报价骗得过），freeze guard=执行侧价格变化门禁（骗不过）。
+func (s *Service) checkFreezeGuard(canonical string, legs []exec.LegSpec) error {
+	if s.freezeGuard <= 0 {
+		return nil
+	}
+	now := time.Now()
+	for _, l := range legs {
+		t, ok := s.qbus.LastChangeAt(canonical, l.VenueKey)
+		if !ok {
+			// 从未发生过价格变化（首见 / 仅心跳）→ 冻结
+			log.Printf("[exec] freeze guard: leg %s %s price frozen (lastChange=%v)", canonical, l.VenueKey, t)
+			return fmt.Errorf("reject combo: leg %s %s price frozen (no price change observed)", l.VenueKey, l.VenueSymbol)
+		}
+		if age := now.Sub(t); age > s.freezeGuard {
+			log.Printf("[exec] freeze guard: leg %s %s price frozen (lastChange=%v)", canonical, l.VenueKey, t)
+			return fmt.Errorf("reject combo: leg %s %s price frozen (last change %v ago > %v)", l.VenueKey, l.VenueSymbol, age, s.freezeGuard)
+		}
+	}
+	return nil
+}
 
 // validateLegQtys D-127 P3a：下单前预检——任一腿 qty<=0 → 拒 combo（fail-closed）。
 // floorToStepQty 返回 0 = 未知品种（step=0）或 qty 过小取整后为 0；
@@ -98,6 +123,10 @@ func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, request
 		return "FAILED", err.Error(), 0
 	}
 	if err := s.validateLegQtys(legs); err != nil { // D-127 P3a：qty 预检 fail-closed
+		log.Printf("[exec] %v", err)
+		return "FAILED", err.Error(), 0
+	}
+	if err := s.checkFreezeGuard(found.Canonical, legs); err != nil { // D-155：冻结腿预检 fail-closed
 		log.Printf("[exec] %v", err)
 		return "FAILED", err.Error(), 0
 	}
@@ -191,6 +220,10 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 		{VenueKey: venueSell, VenueSymbol: qsell.VenueSymbol, Side: "SELL", Qty: sellQty, PriceExpected: qsell.Bid},
 	}
 	if err := s.validateLegQtys(legs); err != nil { // D-127 P3a：qty 预检 fail-closed
+		log.Printf("[exec] %v", err)
+		return "FAILED", err.Error(), 0
+	}
+	if err := s.checkFreezeGuard(canonical, legs); err != nil { // D-155：冻结腿预检 fail-closed
 		log.Printf("[exec] %v", err)
 		return "FAILED", err.Error(), 0
 	}

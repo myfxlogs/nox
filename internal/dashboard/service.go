@@ -95,6 +95,9 @@ type Service struct {
 	slippageBps float64
 	// D-127 P2：binance:perp stepSize 权威元数据（运行时 exchangeInfo + fallback）。nil = 仅用 fallback。
 	stepMeta *cexStepMeta
+	// D-155 freeze guard：冻结腿预检窗口（config.FreezeGuard）。
+	// 开仓前双腿各自校验「报价在窗口内发生过价格值变化」；≤0 = 禁用（全放行）。
+	freezeGuard time.Duration
 }
 
 // FrontConfig 前端展示阈值（D-077 修复⑪B N7，后端 config 单一真相）。
@@ -183,6 +186,9 @@ func (s *Service) OppContractSize(canonical, venueKey string) (float64, bool) {
 	}
 	return s.oppContractSize(canonical, venueKey)
 }
+
+// SetFreezeGuard 注入冻结腿预检窗口（D-155）。≤0 = 禁用（全放行）。
+func (s *Service) SetFreezeGuard(d time.Duration) { s.freezeGuard = d }
 
 // SetStepMeta 注入 binance:perp stepSize 权威元数据（D-127 P2）。nil = 仅用硬编码 fallback。
 func (s *Service) SetStepMeta(m *cexStepMeta) { s.stepMeta = m }
