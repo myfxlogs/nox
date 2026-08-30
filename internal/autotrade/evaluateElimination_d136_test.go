@@ -3,16 +3,18 @@ package autotrade
 import "testing"
 
 // D-136 修复①：evaluateElimination 判据分级（样本量分级）。
-// <30 笔（小样本噪音保护）：胜率<30% 且 avgPnl<0 → 禁用
+// D-154 S2 修订：小样本判据 winRate→median（median<0 AND avg<0 才杀，winRate 移出）。
+// <30 笔（小样本噪音保护）：medianPnl<0 且 avgPnl<0 → 禁用
 // ≥30 笔（大样本，大数定律）：胜率<30% 或 avgPnl<0 任一 → 禁用
 // 先红后绿：用例①在旧代码（avgPnl<0 单条件即杀）上=红。
 
-// TestEvaluateElimination_D136_PerfFundingForm 7 笔 winRate=0.43 avg=-0.196（PERP_FUNDING 形态）
-// → 不禁（小样本+胜率达标，avg 微负=噪音）。旧代码禁=红。
+// TestEvaluateElimination_D136_PerfFundingForm 7 笔 winRate=0.43 avg=-0.196 median=0（PERP_FUNDING 形态）
+// → 不禁（小样本，median=0 不<0 → D-154 S2 双条件不满足）。旧代码禁=红。
+// D-154 S2：winRate 移出小样本判据，median 占位 0 = 不杀（与裁决①语义一致）。
 func TestEvaluateElimination_D136_PerfFundingForm(t *testing.T) {
-	disable, _ := evaluateElimination(EliminationInput{TotalTrades: 7, WinRate: 0.43, AvgPnl: -0.196})
+	disable, _ := evaluateElimination(EliminationInput{TotalTrades: 7, WinRate: 0.43, AvgPnl: -0.196, MedianPnl: 0})
 	if disable {
-		t.Fatal("want no disable: 7 trades <30 floor, winRate=0.43>=0.3 → 小样本噪音保护")
+		t.Fatal("want no disable: 7 trades <30 floor, median=0 不<0 → D-154 S2 双条件不满足")
 	}
 }
 
@@ -35,11 +37,12 @@ func TestEvaluateElimination_D136_LargeSampleNegAvg(t *testing.T) {
 	}
 }
 
-// TestEvaluateElimination_D136_SmallSampleExtreme 5 笔 winRate=0.0 avg<0（小样本极端）→ 禁。
+// TestEvaluateElimination_D136_SmallSampleExtreme 5 笔 winRate=0.0 avg=-1.0 median=-1.0（小样本极端双负）→ 禁。
+// D-154 S2：小样本判据改 median+avg 双负（winRate 移出），加 median=-1.0 保持「极端负杀」原意。
 func TestEvaluateElimination_D136_SmallSampleExtreme(t *testing.T) {
-	disable, _ := evaluateElimination(EliminationInput{TotalTrades: 5, WinRate: 0.0, AvgPnl: -1.0})
+	disable, _ := evaluateElimination(EliminationInput{TotalTrades: 5, WinRate: 0.0, AvgPnl: -1.0, MedianPnl: -1.0})
 	if !disable {
-		t.Fatal("want disable: 5 trades <30, winRate=0.0<0.3 且 avgPnl<0 → 双条件满足")
+		t.Fatal("want disable: 5 trades <30, median=-1.0<0 且 avgPnl=-1.0<0 → D-154 S2 双条件满足")
 	}
 }
 
