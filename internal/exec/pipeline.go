@@ -8,9 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 
 	"arb/internal/bus"
+	"arb/internal/combo"
 	"arb/internal/store/pgstore"
 )
 
@@ -32,6 +34,10 @@ var (
 	ErrEmptyPositionType = errors.New("position type required (empty type would violate positions_type_check)")
 	// ErrEmptyLegs legs 为空，拒绝建仓（修复⑭ S4：nil legs 无下单意图，不应落库）。
 	ErrEmptyLegs = errors.New("legs required (nil/empty legs has no execution intent)")
+	// D-159 W1a R1 S2.3：SWAPARB 精确组合门禁错误。
+	ErrComboNotAllowed      = errors.New("swaparb combo not in allowlist")
+	ErrQtyExceedsLimit      = errors.New("swaparb leg qty exceeds allowlist limit")
+	ErrGrossExposureExceeds = errors.New("swaparb gross exposure exceeds allowlist limit")
 )
 
 // Pipeline 是执行管线（§13.1）。
@@ -55,6 +61,16 @@ type Pipeline struct {
 	// mtDisasterSlPct MT 灾难 SL 距离百分比（D-146 S1，ARB_MT_DISASTER_SL_PCT 默认 2.0）。
 	// ≤0 = 禁用（不挂 SL）。仅 MT 腿（:mt4/:mt5）下单时用，CEX 腿忽略。
 	mtDisasterSlPct float64
+
+	// D-159 W1a R1 S2.3：SWAPARB 精确组合门禁——真实名义额检查。
+	// swapArbComboAllow 非 nil 且 posType=SWAPARB 时，建 position 前校验：
+	//   1. (canonical, venueBuy, venueSell) 在 allowlist
+	//   2. 双腿名义额 ≤ spec.MaxLongQty/MaxShortQty（>0 才校验）
+	//   3. 双腿名义额合计 USD ≤ spec.MaxGrossExposureUSD（>0 才校验）
+	// notionalUSD 用于 qty→USD 换算（config.OpportunityNotionalUSD）。
+	// nil = 未接线（gate 层 + dashboard 手动入口兜底，pipeline 不重复检查）。
+	swapArbComboAllow []ComboAllowSpec
+	notionalUSD       float64
 }
 
 // NewPipeline 创建执行管线。
@@ -90,6 +106,13 @@ func (p *Pipeline) SetPnLCalibrator(c PnLCalibrator) { p.pnlCalibrator = c }
 
 // SetFxResolver 注入计价币→USD 换算器（D-105 T2）。main 装配后调；*pgstore.Store 满足接口。
 func (p *Pipeline) SetFxResolver(r FxResolver) { p.fxResolver = r }
+
+// SetSwapArbComboAllow 注入 SWAPARB 精确组合门禁 allowlist + notionalUSD（D-159 W1a R1 S2.3）。
+// nil/空 = 未接线（gate 层 + dashboard 手动入口兜底，pipeline 不重复检查）。
+func (p *Pipeline) SetSwapArbComboAllow(allow []ComboAllowSpec, notionalUSD float64) {
+	p.swapArbComboAllow = allow
+	p.notionalUSD = notionalUSD
+}
 
 // LegSpec 是单腿下单规格。
 type LegSpec struct {
@@ -173,6 +196,18 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 		}
 	}
 
+	// 风控④：D-159 W1a R1 S2.3 SWAPARB 精确组合门禁——真实名义额检查。
+	// swapArbComboAllow 非 nil 且 posType=SWAPARB 时，建 position 前校验：
+	//   1. (canonical, venueBuy, venueSell) 在 allowlist
+	//   2. 双腿名义额 ≤ spec.MaxLongQty/MaxShortQty（>0 才校验）
+	//   3. 双腿名义额合计 USD ≤ spec.MaxGrossExposureUSD（>0 才校验）
+	// nil/空 = 未接线（gate 层 + dashboard 手动入口兜底）。
+	if posType == "SWAPARB" && len(p.swapArbComboAllow) > 0 {
+		if err := p.checkSwapArbComboAllow(opportunityID, legs); err != nil {
+			return nil, err
+		}
+	}
+
 	// 建 position(OPENING)——type 在创建时即写入（修复⑭ S4：原创建空 type 撞 positions_type_check，
 	// 靠调用方事后 UpdatePositionMeta 补 type，空窗期约束已拒）。
 	posID, err := p.store.CreatePosition(ctx, &pgstore.Position{
@@ -198,17 +233,25 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 
 	// 判定最终状态
 	filled := 0
+	unknown := 0
 	for _, r := range results {
 		if r.Status == "FILLED" {
 			filled++
 		}
+		if r.Status == "UNKNOWN" {
+			unknown++
+		}
 	}
 
 	var status string
-	switch filled {
-	case len(legs):
+	switch {
+	case unknown > 0:
+		// D-159 W1a R2：任一腿 UNKNOWN（MT 超时）→ position UNKNOWN（不知成交与否，待人工/对账确认）。
+		// 不平仓不假 FAILED——可能已成交，假 FAILED 会触发平仓=反向开新仓。
+		status = "UNKNOWN"
+	case filled == len(legs):
 		status = "OPEN"
-	case 0:
+	case filled == 0:
 		status = "FAILED"
 	default:
 		status = "LEGGED"
@@ -244,6 +287,21 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 			log.Printf("[exec] position %d status update: %v", posID, err)
 		}
 	}
+	// D-159 W1a R2：UNKNOWN 状态写 uncertainty_reason（MT 超时过渡语义，供前端/对账识别）。
+	if status == "UNKNOWN" {
+		var unknownLegs []string
+		for i, r := range results {
+			if r.Status == "UNKNOWN" {
+				unknownLegs = append(unknownLegs, fmt.Sprintf("leg%d(%s)", i, legs[i].VenueKey))
+			}
+		}
+		reason := fmt.Sprintf("MT OrderSend timeout: %s", strings.Join(unknownLegs, ", "))
+		if err := p.store.SetPositionUncertainty(ctx, posID, reason); err != nil {
+			log.Printf("[exec] position %d uncertainty write: %v", posID, err)
+		}
+		_ = p.store.InsertAlert(ctx, &posID, "critical",
+			fmt.Sprintf("position %d UNKNOWN: %s (manual verify required)", posID, reason))
+	}
 
 	if status == "LEGGED" {
 		// D-127 P3b：纯 CEX 组合 LEGGED 自动收平——对 FILLED 腿立即反向 MARKET 平仓，
@@ -275,4 +333,42 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 		Status:     status,
 		Legs:       results,
 	}, nil
+}
+
+// checkSwapArbComboAllow D-159 W1a R1 S2.3：SWAPARB 精确组合门禁——真实名义额检查。
+// 从 opportunityID 解析 (canonical, venueBuy, venueSell)，匹配 allowlist 后校验 qty/gross。
+// qty→USD 换算用 p.notionalUSD（config.OpportunityNotionalUSD，单笔名义额）。
+// legs 中 BUY 腿=venueLong，SELL 腿=venueShort；qty 即 LegSpec.Qty。
+func (p *Pipeline) checkSwapArbComboAllow(opportunityID string, legs []LegSpec) error {
+	comboKey := combo.FromOppID(opportunityID)
+	parts := strings.SplitN(comboKey, ":", 4)
+	if len(parts) < 4 {
+		return fmt.Errorf("%w: cannot parse combo key %q", ErrComboNotAllowed, comboKey)
+	}
+	canonical, venueBuy, venueSell := parts[1], parts[2], parts[3]
+	spec := MatchComboAllow(p.swapArbComboAllow, canonical, venueBuy, venueSell)
+	if spec == nil {
+		return fmt.Errorf("%w: %s %s×%s", ErrComboNotAllowed, canonical, venueBuy, venueSell)
+	}
+	var longQty, shortQty float64
+	for _, leg := range legs {
+		if leg.Side == "BUY" {
+			longQty = leg.Qty
+		} else if leg.Side == "SELL" {
+			shortQty = leg.Qty
+		}
+	}
+	if spec.MaxLongQty > 0 && longQty > spec.MaxLongQty {
+		return fmt.Errorf("%w: long %.4f > %.4f", ErrQtyExceedsLimit, longQty, spec.MaxLongQty)
+	}
+	if spec.MaxShortQty > 0 && shortQty > spec.MaxShortQty {
+		return fmt.Errorf("%w: short %.4f > %.4f", ErrQtyExceedsLimit, shortQty, spec.MaxShortQty)
+	}
+	if spec.MaxGrossExposureUSD > 0 && p.notionalUSD > 0 {
+		grossUSD := (longQty + shortQty) * p.notionalUSD
+		if grossUSD > spec.MaxGrossExposureUSD {
+			return fmt.Errorf("%w: gross $%.2f > $%.2f", ErrGrossExposureExceeds, grossUSD, spec.MaxGrossExposureUSD)
+		}
+	}
+	return nil
 }

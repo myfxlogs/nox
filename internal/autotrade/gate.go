@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -122,6 +123,28 @@ func (g *Gate) Submit(ctx context.Context, intent TradeIntent) GateResult {
 		DedupHit:     comboAlreadyOpen,
 	})
 
+	// D-159 W1a R1：精确组合门禁（SWAPARB 专用，gateDecision 后、Execute 前拦截）。
+	// gateDecision 已过（state=RUNNING、未禁用、未超仓、未超 notional、未 dedup）才进入此检查。
+	// 非 RUNNING 状态（CLOSE_ONLY 等）已在 gateDecision 拒绝，不会到此。
+	if intent.Strategy == "SWAPARB" {
+		if cv := comboAllowVerdict(g.cfg.SwapArbAllowCombos, g.cfg.MaxActiveCombos, intent, activePositions); !cv.Pass {
+			g.rejectLog(ctx, intent, cv.Reason, false)
+			return GateResult{Status: "REJECTED", Reason: cv.Reason}
+		}
+	}
+
+	// D-159 W1a I6：environment/is_real 一致性检查（所有策略，gateDecision 后）。
+	// 校验 venue 的 broker_accounts.is_real 与 g.cfg.Environment 一致：
+	//   is_real=true ↔ environment='live' / is_real=false ↔ environment='demo'
+	//   is_real=nil（未知）→ fail-closed 拒绝（不允许未知环境开仓）。
+	// Environment 空 = 未配置（不检查，回退旧行为）。
+	if g.cfg.Environment != "" {
+		if rv := g.environmentIsRealCheck(ctx, intent); !rv.Pass {
+			g.rejectLog(ctx, intent, rv.Reason, false)
+			return GateResult{Status: "REJECTED", Reason: rv.Reason}
+		}
+	}
+
 	// 构造日志条目（三路径统一审计）
 	logEntry := &pgstore.AutotradeLog{
 		OpportunityID: intent.DedupKey,
@@ -237,4 +260,34 @@ func (g *Gate) rejectLog(ctx context.Context, intent TradeIntent, reason string,
 		g.lastDisabledLogMu.Unlock()
 	}
 	log.Printf("[autotrade] gate REJECT %s: %s", intent.DedupKey, reason)
+}
+
+// environmentIsRealCheck D-159 W1a I6：environment/is_real 一致性检查。
+// 校验 intent 双腿 venue 的 broker_accounts.is_real 与 g.cfg.Environment 一致：
+//   - is_real=true ↔ environment='live'
+//   - is_real=false ↔ environment='demo'
+//   - is_real=nil（未知）→ fail-closed 拒绝
+//   - venue 不存在 → fail-closed 拒绝
+//
+// venueKey 格式 "account:mt5"，venue=account（broker_accounts.venue）。
+func (g *Gate) environmentIsRealCheck(ctx context.Context, intent TradeIntent) GateVerdict {
+	wantLive := g.cfg.Environment == "live"
+	for _, venueKey := range []string{intent.VenueBuy, intent.VenueSell} {
+		venue, _, _ := strings.Cut(venueKey, ":")
+		if venue == "" {
+			return GateVerdict{false, fmt.Sprintf("environment check: empty venue in %s", venueKey)}
+		}
+		acct, err := g.store.GetBrokerAccount(ctx, venue)
+		if err != nil {
+			return GateVerdict{false, fmt.Sprintf("environment check: venue %s not found (%v)", venue, err)}
+		}
+		if acct.IsReal == nil {
+			return GateVerdict{false, fmt.Sprintf("environment check: venue %s is_real unknown (null)", venue)}
+		}
+		isLive := *acct.IsReal
+		if isLive != wantLive {
+			return GateVerdict{false, fmt.Sprintf("environment check: venue %s is_real=%v != environment=%s", venue, isLive, g.cfg.Environment)}
+		}
+	}
+	return GateVerdict{Pass: true}
 }

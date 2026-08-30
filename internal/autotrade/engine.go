@@ -8,6 +8,7 @@ import (
 
 	"arb/internal/bus"
 	"arb/internal/dashboard"
+	"arb/internal/exec"
 	"arb/internal/settlement"
 	"arb/internal/store/pgstore"
 )
@@ -28,6 +29,18 @@ type Config struct {
 	AllowCanonicals   map[string]bool    // handleOpportunity symbol 白名单
 	ExcludeCanonicals map[string]bool    // BRENT/WTI 排除
 	MeanRevertThresh  map[string]float64 // MR 阈值 map
+
+	// D-159 W1a R1：精确组合门禁（SWAPARB 专用）。
+	// SwapArbAllowCombos 空切片 = RUNNING 下 fail-closed（无组合被允许，拒绝开仓）。
+	// MaxActiveCombos 同组合最大并发数，默认 1（D-138 单组合口径）。
+	// ComboAllowSpec 定义在 exec 包（最底层无依赖，dashboard/autotrade 复用）。
+	SwapArbAllowCombos []exec.ComboAllowSpec
+	MaxActiveCombos    int
+
+	// D-159 W1a I6：environment/is_real 一致性检查。
+	// Environment 执行环境固定值（'demo'/'live'）。开仓前校验 venue 的 is_real 与此值一致。
+	// 空 = 未配置（不检查，回退旧行为）。
+	Environment string
 
 	// D-072 §3.3/§4.2 swap/funding 退出参数
 	MinNetSwapBps  float64 // discoverSwapCombos 最低净 swap（ARB_AUTOTRADE_MIN_NET_SWAP_BPS，默认 0.2）

@@ -63,7 +63,8 @@ func (r *Reconciler) autoClose(
 		Status:        "FILLED",
 	})
 	cancel()
-	if err != nil {
+	// D-159 W1a R3-1：ErrTerminalState=该 CLOSE leg 已被并发平仓写入，幂等跳过（不报错继续后续步骤）。
+	if err != nil && !errors.Is(err, pgstore.ErrTerminalState) {
 		return fmt.Errorf("回填 CLOSE leg: %w", err)
 	}
 
@@ -95,6 +96,7 @@ func (r *Reconciler) autoClose(
 
 	// c. position 置 CLOSED + realized_pnl 汇总
 	// AutoClosePosition 内部已调 ClosePosition（置 CLOSED + pnl）；若未调（otherOpen=false）则手动置
+	// D-159 W1a R3-1：ClosePosition 原子领取，ErrTerminalState=已 CLOSED（幂等成功，不报错）。
 	if !otherOpen {
 		pnl := 0.0
 		if hist != nil {
@@ -103,7 +105,7 @@ func (r *Reconciler) autoClose(
 		sub, cancel := r.withTimeout(ctx)
 		err := r.store.ClosePosition(sub, posID, pnl)
 		cancel()
-		if err != nil {
+		if err != nil && !errors.Is(err, pgstore.ErrTerminalState) {
 			return fmt.Errorf("close position store: %w", err)
 		}
 	}

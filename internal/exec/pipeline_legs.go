@@ -13,6 +13,20 @@ import (
 	"arb/internal/store/pgstore"
 )
 
+// isContextTimeoutErr D-159 W1a R2：判断 err 是否为 context 超时/取消（MT OrderSend 超时→UNKNOWN 用）。
+// 包含 context.DeadlineExceeded、context.Canceled 及 gRPC 层包装的 deadline exceeded。
+func isContextTimeoutErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return true
+	}
+	// gRPC DEADLINE_EXCEEDED 常以字符串包装（rpc error: code = DeadlineExceeded）。
+	s := err.Error()
+	return strings.Contains(s, "DeadlineExceeded") || strings.Contains(s, "context deadline exceeded")
+}
+
 func (p *Pipeline) executeLeg(ctx context.Context, leg LegSpec) LegResult {
 	exe, ok := p.registry.Get(leg.VenueKey)
 	if !ok {
@@ -32,6 +46,13 @@ func (p *Pipeline) executeLeg(ctx context.Context, leg LegSpec) LegResult {
 		StopLoss: sl,
 	})
 	if err != nil {
+		// D-159 W1a R2：MT 腿 OrderSend 超时/响应丢失 → UNKNOWN（不知成交与否，不能假 FAILED 平仓）。
+		// context.DeadlineExceeded/Canceled = 网络超时/取消，订单可能已成交 → 标 UNKNOWN 待人工/对账确认。
+		// 其他错误（合约不存在/被拒/零成交）= 确定未成交 → FAILED。
+		if isMTVenueKey(leg.VenueKey) && isContextTimeoutErr(err) {
+			log.Printf("[exec] leg %s %s %s: MT timeout → UNKNOWN (order may have filled): %v", leg.VenueKey, leg.Side, leg.VenueSymbol, err)
+			return LegResult{VenueKey: leg.VenueKey, Status: "UNKNOWN"}
+		}
 		log.Printf("[exec] leg %s %s %s: %v", leg.VenueKey, leg.Side, leg.VenueSymbol, err)
 		return LegResult{VenueKey: leg.VenueKey, Status: "FAILED"}
 	}
@@ -159,6 +180,7 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 			closeQty = leg.Qty // fallback：fill 无 qty（MT5 CloseOrder 异常）用原腿 qty 不丢数据
 		}
 		// D-108 A1 fail-closed：CLOSE phase 腿写库失败 → critical 告警 + 返回 error（拒绝置 CLOSED，对账兜底）
+		// D-159 W1a R3-1：ErrTerminalState=该 CLOSE leg 已被对账收尾写入（并发），幂等跳过该腿不报错。
 		if err := p.store.CreatePositionLeg(ctx, &pgstore.PositionLeg{
 			PositionID:    posID,
 			LegNo:         leg.LegNo,
@@ -173,6 +195,10 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 			OrderID:       fill.OrderID,
 			Status:        "FILLED",
 		}); err != nil {
+			if errors.Is(err, pgstore.ErrTerminalState) {
+				log.Printf("[exec] close leg %d already persisted (concurrent reconcile), skip", leg.ID)
+				continue
+			}
 			msg := fmt.Sprintf("close leg persist failed position=%d leg=%d venue=%s: %v", posID, leg.LegNo, leg.Venue, err)
 			log.Printf("[exec] %s", msg)
 			_ = p.store.InsertAlert(ctx, &posID, "critical", msg)
@@ -232,7 +258,12 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 	}
 
 	if err := p.store.ClosePosition(ctx, posID, totalPnL); err != nil {
-		log.Printf("[exec] close position %d store update: %v", posID, err)
+		// D-159 W1a R3-1：ErrTerminalState=已 CLOSED（并发对账先收尾），幂等成功不报错。
+		if errors.Is(err, pgstore.ErrTerminalState) {
+			log.Printf("[exec] position %d already CLOSED (concurrent reconcile claimed close)", posID)
+		} else {
+			log.Printf("[exec] close position %d store update: %v", posID, err)
+		}
 	}
 	return nil
 }

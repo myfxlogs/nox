@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"arb/internal/exec"
 	"arb/internal/store/pgstore"
 )
 
@@ -53,6 +54,13 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 	// D-072 §3.4：symbol 白名单从 env 读取
 	if len(e.cfg.AllowCanonicals) > 0 && !e.cfg.AllowCanonicals[opp.Canonical] {
 		return
+	}
+	// D-159 W1a R1：SWAPARB 精确组合门禁——发现层静默过滤（allowlist 外的组合不产 intent 不落 REJECTED）。
+	// 空 allowlist 不在此过滤（gate 层 fail-closed 拒绝并落 REJECTED 日志，审计完整性）。
+	if opp.Type == "SWAPARB" && len(e.cfg.SwapArbAllowCombos) > 0 {
+		if exec.MatchComboAllow(e.cfg.SwapArbAllowCombos, opp.Canonical, opp.VenueBuy, opp.VenueSell) == nil {
+			return
+		}
 	}
 	// 门槛：净收益
 	if opp.NetBps < e.cfg.MinNetBps {
