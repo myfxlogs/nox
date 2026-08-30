@@ -90,10 +90,12 @@ func nextState(cur string, dailyPnl, maxDailyLoss float64, allDisabled bool, utc
 }
 
 // EliminationInput evaluateElimination 纯函数入参。
+// D-154 S2 加 MedianPnl（小样本判据 median<0 AND avg<0，防 funding 垫正虚高）。
 type EliminationInput struct {
 	TotalTrades int
 	WinRate     float64
 	AvgPnl      float64
+	MedianPnl   float64
 	Disabled    bool
 }
 
@@ -133,11 +135,13 @@ func evaluateElimination(in EliminationInput) (disable bool, reason string) {
 
 // EliminatorAdapter 把 evaluateElimination 包装成 settlement.Eliminator（D-087 §3.2）。
 // 供 main 装配时注入 settlement.Settle 的 elim 参数。
-func EliminatorAdapter(totalTrades int, winRate, avgPnl float64, disabled bool) (bool, string) {
+// D-154 S2：签名同步扩展 medianPnl 入参（settlement.Eliminator 类型已改）。
+func EliminatorAdapter(totalTrades int, winRate, avgPnl, medianPnl float64, disabled bool) (bool, string) {
 	return evaluateElimination(EliminationInput{
 		TotalTrades: totalTrades,
 		WinRate:     winRate,
 		AvgPnl:      avgPnl,
+		MedianPnl:   medianPnl,
 		Disabled:    disabled,
 	})
 }

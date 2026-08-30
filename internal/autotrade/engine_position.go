@@ -262,6 +262,7 @@ func (e *Engine) checkAllStrategiesDisabled(ctx context.Context) bool {
 }
 
 // runStartupElimination 启动首跑淘汰判定（D-072 §4.3，回填后立即生效）。
+// D-154 S1 裁决①：输入源改 AggregateStrategyStats 实时聚合（与 settlement.go 同源 P3）；disabled 仍查 strategy_stats。
 func (e *Engine) runStartupElimination(ctx context.Context) {
 	strategies := []string{"CROSS_VENUE", "MEANREVERT", "SWAPARB", "CARRY", "FUNDING_HEDGE", "PERP_FUNDING"}
 	for _, s := range strategies {
@@ -269,10 +270,20 @@ func (e *Engine) runStartupElimination(ctx context.Context) {
 		if err != nil {
 			continue
 		}
+		agg, err := e.store.AggregateStrategyStats(ctx, s)
+		if err != nil {
+			log.Printf("[autotrade] startup elimination aggregate %s: %v", s, err)
+			continue
+		}
+		winRate := 0.0
+		if agg.Total > 0 {
+			winRate = float64(agg.Wins) / float64(agg.Total)
+		}
 		disable, reason := evaluateElimination(EliminationInput{
-			TotalTrades: stat.TotalTrades,
-			WinRate:     stat.WinRate,
-			AvgPnl:      stat.AvgPnl,
+			TotalTrades: agg.Total,
+			WinRate:     winRate,
+			AvgPnl:      agg.AvgPnl,
+			MedianPnl:   agg.MedianPnl,
 			Disabled:    stat.Disabled,
 		})
 		if disable {
