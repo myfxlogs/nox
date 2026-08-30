@@ -109,6 +109,12 @@ func (s *Store) SetBrokerAccountAlias(ctx context.Context, venue, alias string) 
 	return err
 }
 
+// SetBrokerWebsite 设置 broker 官网；空串 = 清除（D-157 V3.1）。
+func (s *Store) SetBrokerWebsite(ctx context.Context, venue, website string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE broker_accounts SET website = $1 WHERE venue = $2`, website, venue)
+	return err
+}
+
 // ListAccountAliases 返回 venue→alias 映射（仅 alias 非空行；F3 Broker 实持仓账号列显示别名）。
 func (s *Store) ListAccountAliases(ctx context.Context) (map[string]string, error) {
 	rows, err := s.pool.Query(ctx, `SELECT venue, alias FROM broker_accounts WHERE alias <> ''`)

@@ -74,3 +74,9 @@ func (s *Store) SetExchangeLabel(ctx context.Context, id int64, label string) er
 	_, err := s.pool.Exec(ctx, `UPDATE exchange_configs SET label = $1 WHERE id = $2`, label, id)
 	return err
 }
+
+// SetExchangeWebsite 设置交易所官网；空串 = 清除（D-157 V3.1）。
+func (s *Store) SetExchangeWebsite(ctx context.Context, id int64, website string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE exchange_configs SET website = $1 WHERE id = $2`, website, id)
+	return err
+}

@@ -78,11 +78,13 @@ service DashboardService {
   rpc AddExchange(AddExchangeRequest) returns (AddExchangeResponse);
   rpc RemoveExchange(RemoveExchangeRequest) returns (RemoveExchangeResponse);
   rpc SetExchangeLabel(SetExchangeLabelRequest) returns (SetExchangeLabelResponse); // D-157 V3：交易所别名编辑
+  rpc SetExchangeWebsite(SetExchangeWebsiteRequest) returns (SetExchangeWebsiteResponse); // D-157 V3.1：交易所官网编辑
   rpc BrokerSymbols(BrokerSymbolsRequest) returns (BrokerSymbolsResponse);
   rpc SetBrokerAccountAlias(SetBrokerAccountAliasRequest) returns (SetBrokerAccountAliasResponse);
   rpc SetBrokerAccountIsReal(SetBrokerAccountIsRealRequest) returns (SetBrokerAccountIsRealResponse); // D-144 ①
   rpc SetBrokerDisabled(SetBrokerDisabledRequest) returns (SetBrokerDisabledResponse);
   rpc SetBrokerCommission(SetBrokerCommissionRequest) returns (SetBrokerCommissionResponse);
+  rpc SetBrokerWebsite(SetBrokerWebsiteRequest) returns (SetBrokerWebsiteResponse); // D-157 V3.1：broker 官网编辑
 
   // Symbol 映射（brokerSymbol -> canonical）
   rpc ListSymbolMappings(ListSymbolMappingsRequest) returns (ListSymbolMappingsResponse);
@@ -863,6 +865,13 @@ message SetExchangeLabelRequest {  // D-157 V3：交易所别名编辑
 
 message SetExchangeLabelResponse {}
 
+message SetExchangeWebsiteRequest {  // D-157 V3.1：交易所官网编辑
+  string id = 1;       // ExchangeConfig.id
+  string website = 2;  // 新官网；空串 = 清除
+}
+
+message SetExchangeWebsiteResponse {}
+
 message VerifyAccountRequest {
   int32 platform = 1;   // 0=MT4, 1=MT5
   string host = 2;
@@ -924,6 +933,13 @@ message SetBrokerCommissionRequest {
 }
 
 message SetBrokerCommissionResponse {}
+
+message SetBrokerWebsiteRequest {  // D-157 V3.1：broker 官网编辑
+  string venue = 1;
+  string website = 2;  // 新官网；空串 = 清除
+}
+
+message SetBrokerWebsiteResponse {}
 
 // === Symbol 映射 ===
 
