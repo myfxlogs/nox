@@ -96,9 +96,10 @@ func TestSettleMultiplier_PerVenueDiff(t *testing.T) {
 
 // TestLegSwapAmount_BuyLegSwapLong BUY 腿用 swap_long rate。
 func TestLegSwapAmount_BuyLegSwapLong(t *testing.T) {
-	longMap := map[factKey]float64{factKey{"AUDJPY", "vA"}: 5.0} // 5 bps/日
-	shortMap := map[factKey]float64{}
-	fundMap := map[factKey]float64{}
+	// D-159 W3a R5：legSwapAmount 接收 map[factKey]fact.Fact（含 Ts 供 TTL 检查）。
+	longMap := map[factKey]fact.Fact{factKey{"AUDJPY", "vA"}: {Value: 5.0, Ts: time.Now()}} // 5 bps/日
+	shortMap := map[factKey]fact.Fact{}
+	fundMap := map[factKey]fact.Fact{}
 	notional := stubNotional{vals: map[string]float64{"AUDJPY:vA:mt5:ask": 100000}} // 1 手=10万 USD
 	r := stubTripleDay{venueDays: map[string]time.Weekday{"vA": time.Wednesday}}
 	l := &Ledger{notional: notional, tripleDay: r}
@@ -118,9 +119,9 @@ func TestLegSwapAmount_BuyLegSwapLong(t *testing.T) {
 
 // TestLegSwapAmount_SellLegSwapShort SELL 腿用 swap_short rate。
 func TestLegSwapAmount_SellLegSwapShort(t *testing.T) {
-	longMap := map[factKey]float64{}
-	shortMap := map[factKey]float64{factKey{"AUDJPY", "vB"}: -3.0} // -3 bps/日（付 swap）
-	fundMap := map[factKey]float64{}
+	longMap := map[factKey]fact.Fact{}
+	shortMap := map[factKey]fact.Fact{factKey{"AUDJPY", "vB"}: {Value: -3.0, Ts: time.Now()}} // -3 bps/日（付 swap）
+	fundMap := map[factKey]fact.Fact{}
 	notional := stubNotional{vals: map[string]float64{"AUDJPY:vB:mt5:bid": 100000}}
 	r := stubTripleDay{venueDays: map[string]time.Weekday{"vB": time.Wednesday}}
 	l := &Ledger{notional: notional, tripleDay: r}
@@ -140,9 +141,9 @@ func TestLegSwapAmount_SellLegSwapShort(t *testing.T) {
 
 // TestLegSwapAmount_FundingType funding 类用年化百分点（D-077 修复⑪A M2：删三倍虚乘）。
 func TestLegSwapAmount_FundingType(t *testing.T) {
-	longMap := map[factKey]float64{}
-	shortMap := map[factKey]float64{}
-	fundMap := map[factKey]float64{factKey{"BTCUSDT", "binance"}: 10.95} // 10.95% 年化
+	longMap := map[factKey]fact.Fact{}
+	shortMap := map[factKey]fact.Fact{}
+	fundMap := map[factKey]fact.Fact{factKey{"BTCUSDT", "binance"}: {Value: 10.95, Ts: time.Now()}} // 10.95% 年化
 	notional := stubNotional{vals: map[string]float64{"BTCUSDT:binance:spot:ask": 50000}}
 	r := stubTripleDay{}
 	l := &Ledger{notional: notional, tripleDay: r}
@@ -169,7 +170,7 @@ func TestLegSwapAmount_RateNotFound(t *testing.T) {
 
 	leg := pgstore.PositionLeg{Venue: "vA:mt5", Side: "BUY", Qty: 1.0}
 	monday := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
-	_, ok := l.legSwapAmount("AUDJPY", leg, monday, false, map[factKey]float64{}, map[factKey]float64{}, map[factKey]float64{})
+	_, ok := l.legSwapAmount("AUDJPY", leg, monday, false, map[factKey]fact.Fact{}, map[factKey]fact.Fact{}, map[factKey]fact.Fact{})
 	if ok {
 		t.Error("rate not found want ok=false, got true")
 	}
@@ -177,14 +178,14 @@ func TestLegSwapAmount_RateNotFound(t *testing.T) {
 
 // TestLegSwapAmount_NotionalNotFound notional 缺失 → fail-closed ok=false。
 func TestLegSwapAmount_NotionalNotFound(t *testing.T) {
-	longMap := map[factKey]float64{factKey{"AUDJPY", "vA"}: 5.0}
+	longMap := map[factKey]fact.Fact{factKey{"AUDJPY", "vA"}: {Value: 5.0, Ts: time.Now()}}
 	notional := stubNotional{vals: map[string]float64{}} // 空 = notional 不可用
 	r := stubTripleDay{}
 	l := &Ledger{notional: notional, tripleDay: r}
 
 	leg := pgstore.PositionLeg{Venue: "vA:mt5", Side: "BUY", Qty: 1.0}
 	monday := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
-	_, ok := l.legSwapAmount("AUDJPY", leg, monday, false, longMap, map[factKey]float64{}, map[factKey]float64{})
+	_, ok := l.legSwapAmount("AUDJPY", leg, monday, false, longMap, map[factKey]fact.Fact{}, map[factKey]fact.Fact{})
 	if ok {
 		t.Error("notional not found want ok=false, got true")
 	}
@@ -192,14 +193,14 @@ func TestLegSwapAmount_NotionalNotFound(t *testing.T) {
 
 // TestLegSwapAmount_ZeroRate 零息 venue（rate=0）→ amount=0（不写 cashflow）。
 func TestLegSwapAmount_ZeroRate(t *testing.T) {
-	longMap := map[factKey]float64{factKey{"AUDJPY", "vA"}: 0.0} // 零息
+	longMap := map[factKey]fact.Fact{factKey{"AUDJPY", "vA"}: {Value: 0.0, Ts: time.Now()}} // 零息
 	notional := stubNotional{vals: map[string]float64{"AUDJPY:vA:mt5:ask": 100000}}
 	r := stubTripleDay{venueDays: map[string]time.Weekday{"vA": time.Wednesday}}
 	l := &Ledger{notional: notional, tripleDay: r}
 
 	leg := pgstore.PositionLeg{Venue: "vA:mt5", Side: "BUY", Qty: 1.0}
 	monday := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
-	got, ok := l.legSwapAmount("AUDJPY", leg, monday, false, longMap, map[factKey]float64{}, map[factKey]float64{})
+	got, ok := l.legSwapAmount("AUDJPY", leg, monday, false, longMap, map[factKey]fact.Fact{}, map[factKey]fact.Fact{})
 	if !ok {
 		t.Fatal("zero rate want ok=true, got false")
 	}
@@ -311,7 +312,7 @@ func TestSettleMultiplier_UnknownFailClosed(t *testing.T) {
 // TestLegSwapAmount_NonSettleVenue D-112：venue 在 nonSettleVenues → 返回 (0, true)。
 // 即使 rate/notional 可用，不结算 venue 仍记 0（amount=0 → accountPosition 跳过不写 cashflow）。
 func TestLegSwapAmount_NonSettleVenue(t *testing.T) {
-	shortMap := map[factKey]float64{factKey{"AUDJPY", "277842155"}: -1.3} // Exness 规格值（SELL 腿用 swap_short）
+	shortMap := map[factKey]fact.Fact{factKey{"AUDJPY", "277842155"}: {Value: -1.3, Ts: time.Now()}} // Exness 规格值（SELL 腿用 swap_short）
 	notional := stubNotional{vals: map[string]float64{"AUDJPY:277842155:mt5:bid": 75000}}
 	r := stubTripleDay{venueDays: map[string]time.Weekday{"277842155": time.Wednesday}}
 	l := &Ledger{
@@ -322,7 +323,7 @@ func TestLegSwapAmount_NonSettleVenue(t *testing.T) {
 
 	leg := pgstore.PositionLeg{Venue: "277842155:mt5", Side: "SELL", Qty: 1.0}
 	monday := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
-	got, ok := l.legSwapAmount("AUDJPY", leg, monday, false, map[factKey]float64{}, shortMap, map[factKey]float64{})
+	got, ok := l.legSwapAmount("AUDJPY", leg, monday, false, map[factKey]fact.Fact{}, shortMap, map[factKey]fact.Fact{})
 	if !ok {
 		t.Fatal("non-settle venue want ok=true, got false")
 	}
@@ -332,10 +333,11 @@ func TestLegSwapAmount_NonSettleVenue(t *testing.T) {
 }
 
 // nonSettleStubStore TestAccountPosition_NonSettleVenue 用 mock Store（D-112）。
+// D-159 W3a R5：per-leg 幂等——HasCashflowForLegDay 替代 HasCashflowForDay，InsertCashflow 带 legNo。
 type nonSettleStubStore struct {
-	legs           []pgstore.PositionLeg
-	hasCashflow    bool
-	insertedVenues []string // 记录 InsertCashflow 被调用的 venue
+	legs            []pgstore.PositionLeg
+	hasCashflowLegs map[int16]bool // legNo → 当日已记（per-leg 幂等模拟）
+	insertedVenues  []string       // 记录 InsertCashflow 被调用的 venue
 }
 
 func (s *nonSettleStubStore) ListOpenPositionsByType(_ context.Context, _ []string) ([]pgstore.Position, error) {
@@ -344,10 +346,14 @@ func (s *nonSettleStubStore) ListOpenPositionsByType(_ context.Context, _ []stri
 func (s *nonSettleStubStore) ListPositionLegs(_ context.Context, _ int64) ([]pgstore.PositionLeg, error) {
 	return s.legs, nil
 }
-func (s *nonSettleStubStore) HasCashflowForDay(_ context.Context, _ int64, _ string, _ time.Time) (bool, error) {
-	return s.hasCashflow, nil
+func (s *nonSettleStubStore) HasCashflowForLegDay(_ context.Context, _ int64, legNo int16, _ string, _ time.Time) (bool, error) {
+	return s.hasCashflowLegs[legNo], nil
 }
-func (s *nonSettleStubStore) InsertCashflow(_ context.Context, _ int64, _, venue string, _ float64, _ time.Time) error {
+func (s *nonSettleStubStore) InsertCashflow(_ context.Context, _ int64, legNo int16, _, venue string, _ float64, _ time.Time) error {
+	if s.hasCashflowLegs == nil {
+		s.hasCashflowLegs = map[int16]bool{}
+	}
+	s.hasCashflowLegs[legNo] = true
 	s.insertedVenues = append(s.insertedVenues, venue)
 	return nil
 }
@@ -358,15 +364,16 @@ func (s *nonSettleStubStore) InsertAlert(_ context.Context, _ *int64, _, _ strin
 
 // TestAccountPosition_NonSettleVenue D-112：Exness 腿不写 cashflow（amount=0→跳过），IC 腿正常写。
 func TestAccountPosition_NonSettleVenue(t *testing.T) {
-	longMap := map[factKey]float64{factKey{"AUDJPY", "52993526"}: 0.5}
-	shortMap := map[factKey]float64{factKey{"AUDJPY", "277842155"}: -1.3}
+	// D-159 W3a R5：map 类型改为 map[factKey]fact.Fact（含 Ts）。
+	longMap := map[factKey]fact.Fact{factKey{"AUDJPY", "52993526"}: {Value: 0.5, Ts: time.Now()}}
+	shortMap := map[factKey]fact.Fact{factKey{"AUDJPY", "277842155"}: {Value: -1.3, Ts: time.Now()}}
 	notional := stubNotional{vals: map[string]float64{
 		"AUDJPY:52993526:mt5:ask":  75000,
 		"AUDJPY:277842155:mt5:bid": 75000,
 	}}
 	r := stubTripleDay{venueDays: map[string]time.Weekday{"52993526": time.Wednesday, "277842155": time.Wednesday}}
 	store := &nonSettleStubStore{
-		hasCashflow: false,
+		hasCashflowLegs: map[int16]bool{}, // 全部未记
 		legs: []pgstore.PositionLeg{
 			{LegNo: 1, Phase: "OPEN", Venue: "52993526:mt5", Side: "BUY", Qty: 1.0},
 			{LegNo: 2, Phase: "OPEN", Venue: "277842155:mt5", Side: "SELL", Qty: 1.0},
@@ -381,7 +388,7 @@ func TestAccountPosition_NonSettleVenue(t *testing.T) {
 
 	pos := pgstore.Position{ID: 1, Type: "SWAPARB", OpportunityID: "SWAPARB:AUDJPY:52993526:mt5:277842155:mt5:1"}
 	monday := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
-	n, err := l.accountPosition(context.Background(), pos, monday, longMap, shortMap, map[factKey]float64{})
+	n, err := l.accountPosition(context.Background(), pos, monday, longMap, shortMap, map[factKey]fact.Fact{})
 	if err != nil {
 		t.Fatalf("accountPosition: %v", err)
 	}
@@ -391,5 +398,63 @@ func TestAccountPosition_NonSettleVenue(t *testing.T) {
 	}
 	if len(store.insertedVenues) != 1 || store.insertedVenues[0] != "52993526:mt5" {
 		t.Errorf("inserted venues = %v, want [52993526:mt5] (Exness should be skipped)", store.insertedVenues)
+	}
+}
+
+// TestPerLegIdempotent D-159 W3a R5 A7：per-leg 幂等——leg0 当日已记→跳过 leg0，leg1 未记→补写 leg1。
+// 旧 position 级 HasCashflowForDay 会让整笔跳过（一腿已记→整仓跳过→失败腿永久漏记）。
+// 新 per-leg HasCashflowForLegDay 只跳过已记腿，未记腿下一轮补写。
+func TestPerLegIdempotent(t *testing.T) {
+	longMap := map[factKey]fact.Fact{factKey{"AUDJPY", "vA"}: {Value: 5.0, Ts: time.Now()}}
+	shortMap := map[factKey]fact.Fact{factKey{"AUDJPY", "vB"}: {Value: -3.0, Ts: time.Now()}}
+	notional := stubNotional{vals: map[string]float64{
+		"AUDJPY:vA:mt5:ask": 100000,
+		"AUDJPY:vB:mt5:bid": 100000,
+	}}
+	r := stubTripleDay{venueDays: map[string]time.Weekday{"vA": time.Wednesday, "vB": time.Wednesday}}
+	// leg0 当日已记（hasCashflowLegs[0]=true），leg1 未记
+	store := &nonSettleStubStore{
+		hasCashflowLegs: map[int16]bool{0: true},
+		legs: []pgstore.PositionLeg{
+			{LegNo: 0, Phase: "OPEN", Venue: "vA:mt5", Side: "BUY", Qty: 1.0},
+			{LegNo: 1, Phase: "OPEN", Venue: "vB:mt5", Side: "SELL", Qty: 1.0},
+		},
+	}
+	l := &Ledger{store: store, notional: notional, tripleDay: r}
+
+	pos := pgstore.Position{ID: 1, Type: "SWAPARB", OpportunityID: "SWAPARB:AUDJPY:vA:mt5:vB:mt5:1"}
+	monday := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
+	n, err := l.accountPosition(context.Background(), pos, monday, longMap, shortMap, map[factKey]fact.Fact{})
+	if err != nil {
+		t.Fatalf("accountPosition: %v", err)
+	}
+	// 只补写 leg1（leg0 已记跳过），written=1
+	if n != 1 {
+		t.Errorf("written=%d, want 1 (leg0 skipped, leg1 written)", n)
+	}
+	// 只 leg1 的 venue 被插入
+	if len(store.insertedVenues) != 1 || store.insertedVenues[0] != "vB:mt5" {
+		t.Errorf("inserted venues=%v, want [vB:mt5] (leg0 skipped, only leg1 written)", store.insertedVenues)
+	}
+}
+
+// TestFactExpired D-159 W3a R5 A9：Fact.Ts 超 TTL（24h）→ legSwapAmount fail-closed 返回 (0, false)。
+// 防 swap/funding Fact 过期仍写估算为实际（用 Fact.Ts，无 UpdatedAt 字段）。
+func TestFactExpired(t *testing.T) {
+	// Fact.Ts 超 24h（25h 前）
+	expiredTs := time.Now().Add(-25 * time.Hour)
+	longMap := map[factKey]fact.Fact{factKey{"AUDJPY", "vA"}: {Value: 5.0, Ts: expiredTs}}
+	notional := stubNotional{vals: map[string]float64{"AUDJPY:vA:mt5:ask": 100000}}
+	r := stubTripleDay{venueDays: map[string]time.Weekday{"vA": time.Wednesday}}
+	l := &Ledger{notional: notional, tripleDay: r}
+
+	leg := pgstore.PositionLeg{Venue: "vA:mt5", Side: "BUY", Qty: 1.0}
+	monday := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
+	got, ok := l.legSwapAmount("AUDJPY", leg, monday, false, longMap, map[factKey]fact.Fact{}, map[factKey]fact.Fact{})
+	if ok {
+		t.Errorf("expired fact want ok=false (fail-closed), got ok=true amount=%.2f", got)
+	}
+	if got != 0 {
+		t.Errorf("expired fact want amount=0, got %.2f", got)
 	}
 }

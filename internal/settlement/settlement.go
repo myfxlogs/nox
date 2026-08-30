@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"arb/internal/notional"
@@ -100,6 +101,8 @@ func Settle(ctx context.Context, deps Deps, posID int64, elim Eliminator) error 
 		skippedReason = "fx: quote ccy unavailable"
 	case expectedUsd <= 0:
 		skippedReason = "expected_usd <= 0"
+	case strings.Contains(p.Note, "pnl_estimated"): // D-159 W3a R4：estimated 不入正式统计
+		skippedReason = "pnl_estimated: partial or no calibration"
 	}
 
 	// 6. 写 position_settlements（先写防并发，ON CONFLICT DO NOTHING）
@@ -136,12 +139,19 @@ func Settle(ctx context.Context, deps Deps, posID int64, elim Eliminator) error 
 
 	// 8. 通过 → UpsertVerificationSample + UpdateStrategyStat + 淘汰
 	// D-127 P4 返修①：net = realized + cashflowsNet（swap+funding−commission 实收纳入淘汰/复盘口径，防套息策略被误杀）。
+	// D-159 W3a R4 双计拆除后语义：realized_pnl = 纯价格差 PnL（calcLegPnL/calibratePnL 已去 swap/commission），
+	// cashflowsNet = swap+funding+commission 组件 → netPnl = 净值一次合成，无双计。
 	cashflowsNet, err := deps.SumCashflowsNet(ctx, posID)
 	if err != nil {
 		log.Printf("[settlement] sum cashflows net pos=%d: %v (fallback net=realized)", posID, err)
 		cashflowsNet = 0 // 查询失败回退到旧口径（不阻塞结算）
 	}
 	netPnl := *p.RealizedPnl + cashflowsNet
+	// D-159 W3a R4 影子对拍框架：S2 后 realized_pnl 是新口径（纯价格差），
+	// netPnl = realized_pnl + cashflowsNet = 净值一次合成。
+	// 旧口径（双计）独立计算待对拍期补（决策方另发指令），本包只标记框架就绪。
+	log.Printf("[settlement] SHADOW pos=%d netPnl=%.2f realized=%.2f cashflowsNet=%.2f (shadow framework ready, legacy calc pending)",
+		posID, netPnl, *p.RealizedPnl, cashflowsNet)
 	closedAt := time.Now()
 	if p.ClosedAt != nil {
 		closedAt = *p.ClosedAt

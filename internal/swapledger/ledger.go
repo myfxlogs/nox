@@ -38,8 +38,10 @@ var FundingPositionTypes = []string{"FUNDING_HEDGE", "PERP_FUNDING"}
 type Store interface {
 	ListOpenPositionsByType(ctx context.Context, types []string) ([]pgstore.Position, error)
 	ListPositionLegs(ctx context.Context, posID int64) ([]pgstore.PositionLeg, error)
-	HasCashflowForDay(ctx context.Context, posID int64, kind string, day time.Time) (bool, error)
-	InsertCashflow(ctx context.Context, posID int64, kind, venue string, amount float64, ts time.Time) error
+	// D-159 W3a R5：per-leg 幂等（HasCashflowForLegDay 替代 position 级 HasCashflowForDay——
+	// position 级短路会让失败腿永久漏记，R5：一腿失败下一轮只补失败腿）。
+	HasCashflowForLegDay(ctx context.Context, posID int64, legNo int16, kind string, day time.Time) (bool, error)
+	InsertCashflow(ctx context.Context, posID int64, legNo int16, kind, venue string, amount float64, ts time.Time) error
 	LatestFacts(ctx context.Context, kind, venue, symbol string) ([]fact.Fact, error)
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
 }
@@ -151,7 +153,9 @@ func (l *Ledger) Run(ctx context.Context) (int, error) {
 	return written, nil
 }
 
-func (l *Ledger) loadFacts(ctx context.Context) (map[factKey]float64, map[factKey]float64, map[factKey]float64, error) {
+// D-159 W3a R5：loadFacts 返回 map[factKey]fact.Fact（保留完整 Fact，含 Ts 供 TTL 检查；
+// 原实现只存 float64 丢 Ts → 过期 Fact 无法识别）。
+func (l *Ledger) loadFacts(ctx context.Context) (map[factKey]fact.Fact, map[factKey]fact.Fact, map[factKey]fact.Fact, error) {
 	longFacts, err := l.store.LatestFacts(ctx, fact.KindSwapLong, "", "")
 	if err != nil {
 		return nil, nil, nil, err
@@ -164,34 +168,26 @@ func (l *Ledger) loadFacts(ctx context.Context) (map[factKey]float64, map[factKe
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	longMap := make(map[factKey]float64, len(longFacts))
+	longMap := make(map[factKey]fact.Fact, len(longFacts))
 	for _, f := range longFacts {
-		longMap[factKey{f.Symbol, f.Venue}] = f.Value
+		longMap[factKey{f.Symbol, f.Venue}] = f
 	}
-	shortMap := make(map[factKey]float64, len(shortFacts))
+	shortMap := make(map[factKey]fact.Fact, len(shortFacts))
 	for _, f := range shortFacts {
-		shortMap[factKey{f.Symbol, f.Venue}] = f.Value
+		shortMap[factKey{f.Symbol, f.Venue}] = f
 	}
-	fundMap := make(map[factKey]float64, len(fundingFacts))
+	fundMap := make(map[factKey]fact.Fact, len(fundingFacts))
 	for _, f := range fundingFacts {
-		fundMap[factKey{f.Symbol, f.Venue}] = f.Value
+		fundMap[factKey{f.Symbol, f.Venue}] = f
 	}
 	return longMap, shortMap, fundMap, nil
 }
 
-// accountPosition 对单个持仓逐腿记 swap/funding cashflow（幂等：当日已记跳过）。
+// accountPosition 对单个持仓逐腿记 swap/funding cashflow。
+// D-159 W3a R5：per-leg 幂等——每腿独立检查（position+leg+kind+day），一腿失败下一轮只补失败腿，
+// 已有 cashflow 的腿跳过但不再短路整笔 position（旧 position 级 HasCashflowForDay 会让失败腿永久漏记）。
 func (l *Ledger) accountPosition(ctx context.Context, pos pgstore.Position, day time.Time,
-	longMap, shortMap, fundMap map[factKey]float64) (int, error) {
-	// 幂等检查：当日已记 swap/funding → 跳过
-	kind := cashflowKind(pos.Type)
-	has, err := l.store.HasCashflowForDay(ctx, pos.ID, kind, day)
-	if err != nil {
-		return 0, fmt.Errorf("check existing cashflow: %w", err)
-	}
-	if has {
-		return 0, nil
-	}
-
+	longMap, shortMap, fundMap map[factKey]fact.Fact) (int, error) {
 	legs, err := l.store.ListPositionLegs(ctx, pos.ID)
 	if err != nil {
 		return 0, fmt.Errorf("list legs: %w", err)
@@ -206,10 +202,19 @@ func (l *Ledger) accountPosition(ctx context.Context, pos pgstore.Position, day 
 	}
 
 	isFunding := isFundingType(pos.Type)
+	kind := cashflowKind(pos.Type)
 	written := 0
 	for _, leg := range legs {
 		// 只记 OPEN phase 的腿（CLOSE phase 是平仓腿，无 swap 记账）
 		if leg.Phase != "OPEN" {
+			continue
+		}
+		// D-159 W3a R5：per-leg 幂等检查（该腿当日已记→跳过该腿，不短路整笔）。
+		has, err := l.store.HasCashflowForLegDay(ctx, pos.ID, leg.LegNo, kind, day)
+		if err != nil {
+			return written, fmt.Errorf("check existing cashflow leg %d: %w", leg.LegNo, err)
+		}
+		if has {
 			continue
 		}
 		amount, ok := l.legSwapAmount(canonical, leg, day, isFunding, longMap, shortMap, fundMap)
@@ -219,7 +224,7 @@ func (l *Ledger) accountPosition(ctx context.Context, pos pgstore.Position, day 
 		if amount == 0 {
 			continue // 零息 venue → 不写 cashflow（避免无意义行）
 		}
-		if err := l.store.InsertCashflow(ctx, pos.ID, kind, leg.Venue, amount, day); err != nil {
+		if err := l.store.InsertCashflow(ctx, pos.ID, leg.LegNo, kind, leg.Venue, amount, day); err != nil {
 			return written, fmt.Errorf("insert cashflow leg %d: %w", leg.LegNo, err)
 		}
 		written++
@@ -227,30 +232,41 @@ func (l *Ledger) accountPosition(ctx context.Context, pos pgstore.Position, day 
 	return written, nil
 }
 
+// swapFactTTL D-159 W3a R5：swap/funding Fact 过期阈值（待 W4a Fact TTL 契约定稿后统一）。
+const swapFactTTL = 24 * time.Hour
+
 // legSwapAmount 计算单腿当日 swap/funding USD 金额（纯函数，可单测）。
-// 返回 (amount, ok)；ok=false 表示 rate/notional 不可用 → fail-closed 跳过。
+// D-159 W3a R5：接收 map[factKey]fact.Fact（含 Ts 供 TTL 检查）。
+// 返回 (amount, ok)；ok=false 表示 rate/notional 不可用或 Fact 过期 → fail-closed 跳过。
 // amount 正=收 swap，负=付 swap。
 func (l *Ledger) legSwapAmount(canonical string, leg pgstore.PositionLeg, day time.Time,
-	isFunding bool, longMap, shortMap, fundMap map[factKey]float64) (float64, bool) {
+	isFunding bool, longMap, shortMap, fundMap map[factKey]fact.Fact) (float64, bool) {
 	venueName := venueFromKey(leg.Venue)
 	fk := factKey{canonical, venueName}
 
 	// 1. 取 swap/funding rate
-	var rate float64
+	var f fact.Fact
 	var rateFound bool
 	if isFunding {
-		rate, rateFound = fundMap[fk]
+		f, rateFound = fundMap[fk]
 	} else {
 		// BUY(long) 腿用 swap_long，SELL(short) 腿用 swap_short
 		if leg.Side == "BUY" {
-			rate, rateFound = longMap[fk]
+			f, rateFound = longMap[fk]
 		} else {
-			rate, rateFound = shortMap[fk]
+			f, rateFound = shortMap[fk]
 		}
 	}
 	if !rateFound {
 		return 0, false
 	}
+	// D-159 W3a R5：Fact 过期防护——Fact.Ts 超 TTL → fail-closed 不写估算为实际（用 Fact.Ts，无 UpdatedAt 字段）。
+	if time.Since(f.Ts) > swapFactTTL {
+		log.Printf("[swapledger] leg=%d swap fact expired (kind=%s venue=%s ts=%s, ttl=%v), skip",
+			leg.LegNo, f.Kind, f.Venue, f.Ts.Format(time.RFC3339), swapFactTTL)
+		return 0, false
+	}
+	rate := f.Value
 
 	// 2. 取 notional（usdPerLot × qty）
 	side := "ask"

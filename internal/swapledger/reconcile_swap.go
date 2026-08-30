@@ -1,7 +1,7 @@
 // D-110 P2：swap 对账告警——日频 ticker，swapledger 公式值 vs MT5 实际增量偏差>阈值告警。
 //
 // 时序（A2+D1 修订）：initialDelay=2h（晚于 swapledger 90s，确保当日已记账）；
-// 对账前检查当日 cashflows 是否已写（HasCashflowForDay）——未写跳过（不误告警）；
+// 对账前 per-leg 检查当日 cashflows 是否已写（HasCashflowForLegDay）——该腿未写跳过（不误告警）；
 // 今日末条快照 ts <= 昨日末条 → 今日 MT5 未结算→跳过（D1）。
 package swapledger
 
@@ -19,7 +19,8 @@ import (
 type SwapReconcileStore interface {
 	ListOpenPositionsByType(ctx context.Context, types []string) ([]pgstore.Position, error)
 	ListPositionLegs(ctx context.Context, posID int64) ([]pgstore.PositionLeg, error)
-	HasCashflowForDay(ctx context.Context, posID int64, kind string, day time.Time) (bool, error)
+	// D-159 W3a R5：per-leg 幂等检查（pgstore HasCashflowForDay 已被 HasCashflowForLegDay 替代）。
+	HasCashflowForLegDay(ctx context.Context, posID int64, legNo int16, kind string, day time.Time) (bool, error)
 	SumCashflowsForDay(ctx context.Context, posID int64, kind, venue string, day time.Time) (float64, error)
 	LatestSwapSnapshot(ctx context.Context, posID int64, venue string) (pgstore.SwapSnapshot, error)
 	LatestSwapSnapshotBefore(ctx context.Context, posID int64, venue string, before time.Time) (pgstore.SwapSnapshot, error)
@@ -106,15 +107,9 @@ func (r *SwapReconciler) Run(ctx context.Context) (int, error) {
 }
 
 // reconcilePosition 对单个持仓逐腿对账。
+// D-159 W3a R5：原 position 级「当日未记→整笔跳过」改为 per-leg——该腿当日未记→跳过该腿
+// （不误告警语义不变），已记腿继续对账；不再让单腿缺失短路整仓对账。
 func (r *SwapReconciler) reconcilePosition(ctx context.Context, pos pgstore.Position, day time.Time) (int, error) {
-	has, err := r.store.HasCashflowForDay(ctx, pos.ID, "swap", day)
-	if err != nil {
-		return 0, fmt.Errorf("check cashflow: %w", err)
-	}
-	if !has {
-		return 0, nil // swapledger 未记账 → 跳过（不误告警）
-	}
-
 	legs, err := r.store.ListPositionLegs(ctx, pos.ID)
 	if err != nil {
 		return 0, fmt.Errorf("list legs: %w", err)
@@ -123,6 +118,14 @@ func (r *SwapReconciler) reconcilePosition(ctx context.Context, pos pgstore.Posi
 	alerts := 0
 	for _, leg := range legs {
 		if leg.Phase != "OPEN" {
+			continue
+		}
+		// per-leg 预检查：该腿当日未记 swap → 跳过该腿（swapledger 未记，不误告警）
+		has, err := r.store.HasCashflowForLegDay(ctx, pos.ID, leg.LegNo, "swap", day)
+		if err != nil {
+			return 0, fmt.Errorf("check cashflow: %w", err)
+		}
+		if !has {
 			continue
 		}
 		alerted, err := r.reconcileLegWithStore(ctx, pos.ID, leg.Venue, day)

@@ -458,3 +458,85 @@ func TestD127_SettleNetNoSwap(t *testing.T) {
 		t.Errorf("UpdateStrategyStat net=%.4f，期望 5.0（无 swap，net=realized）", d.lastNetPnl)
 	}
 }
+
+// TestSettle_NoDoubleCount D-159 W3a R4 A5：双计拆除后 netPnl = 净值一次合成（无双计）。
+// S2 后 realized_pnl = 纯价格差 PnL（不含 swap/commission），cashflowsNet = swap+commission 组件。
+// 场景：realized_pnl=100（价格差）+ cashflowsNet=3（swap 5 + commission -2）→ netPnl=103（非 106 双计）。
+// 旧双计口径：realized_pnl=103（含 swap/commission）+ cashflowsNet=3 → 106（swap/commission 各计两次）。
+func TestSettle_NoDoubleCount(t *testing.T) {
+	opened := time.Now().AddDate(0, 0, -7) // 持仓 7 天（确保 expectedUsd>0）
+	closed := time.Now()
+	rp := 100.0
+	swapBpsDaily := 0.5
+	d := &fakeDeps{
+		position: &pgstore.Position{
+			ID:                   20,
+			OpportunityID:        "SWAPARB:AUDJPY:52993526:mt5:277842155:mt5",
+			Type:                 "SWAPARB",
+			Status:               "CLOSED",
+			ExpectedNetBps:       15.0,
+			ExpectedSwapBpsDaily: &swapBpsDaily,
+			RealizedPnl:          &rp, // 100 = 纯价格差（S2 后 calcLegPnL 不含 swap/commission）
+			OpenedAt:             &opened,
+			ClosedAt:             &closed,
+		},
+		legs: []pgstore.PositionLeg{
+			{Phase: "OPEN", Status: "FILLED", Venue: "52993526:mt5", Qty: 1.0, PriceActual: ptrFloat(113.5)},
+		},
+		cs:           100000,
+		csOk:         true,
+		fxRate:       150,
+		fxOk:         true,
+		insertWon:    true,
+		cashflowsNet: 3.0, // swap 5 + commission -2 = 3（cashflows 组件，不再在 realized_pnl 中）
+	}
+	if err := Settle(context.Background(), d, 20, noElim); err != nil {
+		t.Fatalf("Settle: %v", err)
+	}
+	// netPnl = 100 + 3 = 103（净值一次合成）。旧双计 = 103 + 3 = 106。
+	if !approx(d.lastNetPnl, 103.0, 0.001) {
+		t.Errorf("netPnl=%.4f, want 103.0 (realized 100 + cashflowsNet 3, no double count)", d.lastNetPnl)
+	}
+}
+
+// TestSettle_EstimatedSkip D-159 W3a R4 A10：note 含 "pnl_estimated" → skippedReason 非空，不入正式统计。
+// 场景：position note="pnl_estimated: partial or no calibration"（calibrator 接线但部分校准失败标记）。
+// expectedUsd>0（多日持仓）确保跳过由 pnl_estimated 触发，非 expected_usd<=0。
+func TestSettle_EstimatedSkip(t *testing.T) {
+	opened := time.Now().AddDate(0, 0, -7) // 持仓 7 天（确保 expectedUsd>0）
+	closed := time.Now()
+	rp := 10.0
+	swapBpsDaily := 0.5
+	d := &fakeDeps{
+		position: &pgstore.Position{
+			ID:                   21,
+			OpportunityID:        "SWAPARB:AUDJPY:52993526:mt5:277842155:mt5",
+			Type:                 "SWAPARB",
+			Status:               "CLOSED",
+			ExpectedNetBps:       15.0,
+			ExpectedSwapBpsDaily: &swapBpsDaily,
+			RealizedPnl:          &rp,
+			Note:                 "pnl_estimated: partial or no calibration",
+			OpenedAt:             &opened,
+			ClosedAt:             &closed,
+		},
+		legs: []pgstore.PositionLeg{
+			{Phase: "OPEN", Status: "FILLED", Venue: "52993526:mt5", Qty: 1.0, PriceActual: ptrFloat(113.5)},
+		},
+		cs:        100000,
+		csOk:      true,
+		fxRate:    150,
+		fxOk:      true,
+		insertWon: true,
+	}
+	if err := Settle(context.Background(), d, 21, noElim); err != nil {
+		t.Fatalf("Settle: %v", err)
+	}
+	// estimated position 跳过：不入样本/统计（由 pnl_estimated 触发，非 expected_usd<=0）
+	if d.upsertVSample != 0 {
+		t.Errorf("estimated position upsertVSample=%d, want 0 (skipped by pnl_estimated, not in formal stats)", d.upsertVSample)
+	}
+	if d.updateStat != 0 {
+		t.Errorf("estimated position updateStat=%d, want 0 (skipped by pnl_estimated, not in formal stats)", d.updateStat)
+	}
+}
