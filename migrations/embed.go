@@ -79,3 +79,6 @@ var BrokerSymbolMapSourceSQL string
 
 //go:embed 0045_broker_accounts_is_real.sql
 var BrokerAccountsIsRealSQL string
+
+//go:embed 0046_account_website.sql
+var AccountWebsiteSQL string
