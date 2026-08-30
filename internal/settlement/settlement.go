@@ -147,10 +147,11 @@ func Settle(ctx context.Context, deps Deps, posID int64, elim Eliminator) error 
 		closedAt = *p.ClosedAt
 	}
 	if err := deps.UpsertVerificationSample(ctx, vkey, expectedUsd, netPnl, closedAt); err != nil {
-		log.Printf("[settlement] upsert verification sample pos=%d: %v", posID, err)
+		// D-159 W2a R3-9：settlement 失败必须进入可重试状态（不只打日志后宣告完成）。
+		return fmt.Errorf("settle: upsert verification pos=%d: %w", posID, err)
 	}
 	if err := deps.UpdateStrategyStat(ctx, p.Type, netPnl); err != nil {
-		log.Printf("[settlement] update strategy stat pos=%d: %v", posID, err)
+		return fmt.Errorf("settle: update strategy stat pos=%d: %w", posID, err)
 	}
 
 	// 淘汰检查（D-154 S1：输入源从 strategy_stats 累计列改为 AggregateStrategyStats 实时聚合；
