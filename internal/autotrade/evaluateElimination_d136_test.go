@@ -110,3 +110,16 @@ func TestEvaluateElimination_D154_ZeroTrades(t *testing.T) {
 		t.Fatal("want no disable: 0 trades <5 零副作用")
 	}
 }
+
+// TestEvaluateElimination_D154_DisabledNoop D-154 返修②②：已禁用零副作用。
+// Disabled=true + 极端负样本（100 笔 winRate=0 avg=-100 median=-100）→ 首行短路，
+// disable=false 且 reason=""（禁用态零副作用，不重复禁用/不产 reason 噪音）。
+func TestEvaluateElimination_D154_DisabledNoop(t *testing.T) {
+	disable, reason := evaluateElimination(EliminationInput{Disabled: true, TotalTrades: 100, WinRate: 0, AvgPnl: -100, MedianPnl: -100})
+	if disable {
+		t.Fatal("want no disable: Disabled=true 首行短路，极端负样本也不杀")
+	}
+	if reason != "" {
+		t.Errorf("reason=%q, want \"\"（禁用态零副作用，不产 reason 噪音）", reason)
+	}
+}

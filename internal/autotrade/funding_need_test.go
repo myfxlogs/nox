@@ -31,6 +31,10 @@ func TestMaybePublishFundingNeed_DailyThrottle(t *testing.T) {
 		if got.NeedUSD != 0 {
 			t.Fatalf("want needUSD=0 (no acctMon), got %v", got.NeedUSD)
 		}
+		// D-154 返修②：aliasOrKey 填充断言——e.store==nil 时 aliasOrKey 回落 venueKey（best-effort）。
+		if got.AliasLong != "529:mt5" || got.AliasShort != "277:mt5" {
+			t.Fatalf("alias mismatch (store nil → 回落 venueKey): got long=%q short=%q", got.AliasLong, got.AliasShort)
+		}
 	case <-time.After(time.Second):
 		t.Fatal("timeout waiting for first notice")
 	}
