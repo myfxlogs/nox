@@ -191,6 +191,36 @@ func (s *Store) ListPositionLegs(ctx context.Context, posID int64) ([]PositionLe
 	return out, rows.Err()
 }
 
+// ListPositionLegsByPhase D-159 W2a：按 phase 过滤查腿（残量校验用，只查 CLOSE phase 腿）。
+// 复用 ListPositionLegs 的 SELECT 列，加 WHERE phase = $2 过滤。
+func (s *Store) ListPositionLegsByPhase(ctx context.Context, posID int64, phase string) ([]PositionLeg, error) {
+	q := `SELECT id, position_id, leg_no, phase, venue, account, symbol, side, qty,
+		price_expected, price_actual, order_id, status, ts
+		FROM position_legs WHERE position_id = $1 AND phase = $2 ORDER BY leg_no`
+	rows, err := s.pool.Query(ctx, q, posID, phase)
+	if err != nil {
+		return nil, fmt.Errorf("list legs by phase: %w", err)
+	}
+	defer rows.Close()
+	var out []PositionLeg
+	for rows.Next() {
+		var l PositionLeg
+		if err := rows.Scan(&l.ID, &l.PositionID, &l.LegNo, &l.Phase, &l.Venue, &l.Account,
+			&l.Symbol, &l.Side, &l.Qty, &l.PriceExpected, &l.PriceActual, &l.OrderID, &l.Status, &l.Ts); err != nil {
+			return nil, err
+		}
+		out = append(out, l)
+	}
+	return out, rows.Err()
+}
+
+// SetPositionNote D-159 W2a：更新 position.note 字段（settlement 失败标记 settle_failed 用）。
+// note 字段已存在（无 schema 变更），用于标记可重试状态供下轮 retry。
+func (s *Store) SetPositionNote(ctx context.Context, id int64, note string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE positions SET note = $1 WHERE id = $2`, note, id)
+	return err
+}
+
 // ListPositions 分页返回持仓。
 // D-106：status="ACTIVE" 特殊值 → WHERE status IN (OPEN/OPENING/LEGGED/CLOSING)（在仓 Tab）；
 // 排序改 ORDER BY COALESCE(closed_at, opened_at) DESC NULLS LAST（历史视图默认序，OPEN 行排前）。
