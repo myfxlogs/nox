@@ -281,10 +281,13 @@ func (s *Service) ClosePosition(ctx context.Context, req *connect.Request[v1.Clo
 		}), nil
 	}
 	// D-087 §3.2：手动平仓 → settlement.Settle（fire-and-forget，不阻塞 RPC）
+	// D-159 W2a R3-9：settlement 失败 → 标记 settle_failed 到 position.note（可重试状态）。
 	if s.settler != nil {
 		go func() {
-			if err := s.settler.Settle(context.Background(), req.Msg.GetPositionId()); err != nil {
-				log.Printf("[dashboard] settle pos=%d: %v", req.Msg.GetPositionId(), err)
+			posID := req.Msg.GetPositionId()
+			if err := s.settler.Settle(context.Background(), posID); err != nil {
+				log.Printf("[dashboard] settle pos=%d failed (retry next round): %v", posID, err)
+				_ = s.store.SetPositionNote(context.Background(), posID, "settle_failed: "+err.Error())
 			}
 		}()
 	}
