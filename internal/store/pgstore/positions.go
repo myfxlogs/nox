@@ -12,6 +12,10 @@ import (
 // ErrTerminalState 持仓已是终态（CLOSED/FAILED），不可回退（D-077 修复⑩ G4）。
 var ErrTerminalState = errors.New("position is in terminal state (CLOSED/FAILED), cannot update")
 
+// ErrClaimFailed 原子领取平仓权失败（position 非 OPEN/LEGGED 态，已被领取或非可平）。
+// D-159 W1a R3-1：ClaimClose 只允许 OPEN/LEGGED→CLOSING，其他状态（OPENING/CLOSING/CLOSED/FAILED）→ ErrClaimFailed。
+var ErrClaimFailed = errors.New("position not in claimable state (OPEN/LEGGED), close claim failed")
+
 // Position 对应 positions 表（§2.11）。
 type Position struct {
 	ID                     int64
@@ -72,6 +76,21 @@ func (s *Store) UpdatePositionStatus(ctx context.Context, id int64, status strin
 	}
 	if ct.RowsAffected() == 0 {
 		return ErrTerminalState
+	}
+	return nil
+}
+
+// ClaimClose D-159 W1a R3-1：原子领取平仓权。
+// 只有 OPEN/LEGGED → CLOSING 成功（RowsAffected=1）；其他状态（OPENING/CLOSING/CLOSED/FAILED）→ ErrClaimFailed。
+// 防并发对账+手动平仓重复领取：CLOSING→CLOSING 被拒（只允许从 OPEN/LEGGED 进入 CLOSING）。
+func (s *Store) ClaimClose(ctx context.Context, id int64) error {
+	q := `UPDATE positions SET status = 'CLOSING' WHERE id = $1 AND status IN ('OPEN','LEGGED')`
+	ct, err := s.pool.Exec(ctx, q, id)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrClaimFailed
 	}
 	return nil
 }
@@ -237,14 +256,14 @@ func (s *Store) CountPositions(ctx context.Context, status string) (int, error) 
 	return n, nil
 }
 
-// ListActivePositions 返回所有活跃态持仓（OPENING/OPEN/LEGGED/CLOSING/UNKNOWN）。
+// ListActivePositions 返回所有活跃态持仓（OPENING/OPEN/LEGGED/CLOSING）。
 // D-080 R1：gate 防重改 DB 实时派生——替代内存 openCombos 集，治手动路径旁路。
-// D-159 W1a R2：UNKNOWN 计入 active（MT 超时不知成交与否，gate 防重+前端展示+对账兜底）。
+// D-159 W1a R2：UNKNOWN position 用 CLOSING+uncertainty_reason 识别（不新增 DB 枚举），CLOSING 已在列。
 // 行数=MaxPositions 量级，成本≈COUNT；返回行供 gate 派生 combo.FromOppID 匹配。
 func (s *Store) ListActivePositions(ctx context.Context) ([]Position, error) {
 	q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note
 		FROM positions
-		WHERE status IN ('OPENING','OPEN','LEGGED','CLOSING','UNKNOWN')
+		WHERE status IN ('OPENING','OPEN','LEGGED','CLOSING')
 		ORDER BY id`
 	rows, err := s.pool.Query(ctx, q)
 	if err != nil {
@@ -274,11 +293,15 @@ func (s *Store) CountOpenPositions(ctx context.Context) (int, error) {
 
 // HasOpenPositionByOpportunity 返回该机会是否已有未平仓持仓（D-058 幂等防重复执行）。
 // CLOSED/FAILED 不在列 → 已闭合/已失败的机会可重入（再执行是新的执行意图，非重复提交）。
-// D-159 W1a R2：UNKNOWN 也计入 active（MT 超时不知成交与否，人工确认前禁止重入防双开仓）。
+// D-159 W1a R2：UNKNOWN position（CLOSING+uncertainty_reason）计入防重——人工确认前禁止重入防双开仓；
+// 正常 CLOSING（uncertainty_reason IS NULL）不计入（平仓中可重开是既有行为，不破坏现有流程）。
 func (s *Store) HasOpenPositionByOpportunity(ctx context.Context, opportunityID string) (bool, error) {
 	var one int
 	err := s.pool.QueryRow(ctx,
-		`SELECT 1 FROM positions WHERE opportunity_id = $1 AND status IN ('OPEN','OPENING','LEGGED','UNKNOWN') LIMIT 1`,
+		`SELECT 1 FROM positions WHERE opportunity_id = $1 AND (
+			status IN ('OPEN','OPENING','LEGGED')
+			OR (status = 'CLOSING' AND uncertainty_reason IS NOT NULL)
+		) LIMIT 1`,
 		opportunityID).Scan(&one)
 	if err == nil {
 		return true, nil

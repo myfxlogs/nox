@@ -2,6 +2,7 @@ package pgstore
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
@@ -110,5 +111,63 @@ func TestPositionIntentFields_Migration0048(t *testing.T) {
 		if err != nil {
 			t.Errorf("insert with NULL request_id #%d should be allowed: %v", i, err)
 		}
+	}
+}
+
+// TestClaimClose D-159 W1a R3-1：原子领取平仓权 E2E。
+// OPEN/LEGGED → CLOSING 成功；OPENING/CLOSING/CLOSED/FAILED → ErrClaimFailed。
+// DSN-gated：无 ARB_TEST_PG_DSN 跳过。
+func TestClaimClose(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.pool.Exec(ctx, `TRUNCATE positions CASCADE`); err != nil {
+		t.Fatalf("truncate positions: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = s.pool.Exec(context.Background(), `TRUNCATE positions CASCADE`)
+	})
+
+	// 插入 6 种状态各 1 行，记录 id。
+	statuses := []string{"OPEN", "LEGGED", "OPENING", "CLOSING", "CLOSED", "FAILED"}
+	ids := make(map[string]int64)
+	for _, st := range statuses {
+		var id int64
+		if err := s.pool.QueryRow(ctx,
+			`INSERT INTO positions (opportunity_id, type, status, expected_net_bps, closed_at)
+			 VALUES ($1, 'SWAPARB', $2, 0, CASE WHEN $2 IN ('CLOSED') THEN now() ELSE NULL END)
+			 RETURNING id`,
+			"CLAIMTEST:"+st, st).Scan(&id); err != nil {
+			t.Fatalf("insert %s: %v", st, err)
+		}
+		ids[st] = id
+	}
+
+	// case 1: OPEN → CLOSING 成功
+	if err := s.ClaimClose(ctx, ids["OPEN"]); err != nil {
+		t.Errorf("ClaimClose OPEN: want nil, got %v", err)
+	}
+	// case 2: LEGGED → CLOSING 成功
+	if err := s.ClaimClose(ctx, ids["LEGGED"]); err != nil {
+		t.Errorf("ClaimClose LEGGED: want nil, got %v", err)
+	}
+	// case 3: OPENING → 失败（ErrClaimFailed）
+	if err := s.ClaimClose(ctx, ids["OPENING"]); !errors.Is(err, ErrClaimFailed) {
+		t.Errorf("ClaimClose OPENING: want ErrClaimFailed, got %v", err)
+	}
+	// case 4: CLOSING → 失败（ErrClaimFailed，防重复领取）
+	if err := s.ClaimClose(ctx, ids["CLOSING"]); !errors.Is(err, ErrClaimFailed) {
+		t.Errorf("ClaimClose CLOSING: want ErrClaimFailed (防重复领取), got %v", err)
+	}
+	// case 5: CLOSED → 失败
+	if err := s.ClaimClose(ctx, ids["CLOSED"]); !errors.Is(err, ErrClaimFailed) {
+		t.Errorf("ClaimClose CLOSED: want ErrClaimFailed, got %v", err)
+	}
+	// case 6: FAILED → 失败
+	if err := s.ClaimClose(ctx, ids["FAILED"]); !errors.Is(err, ErrClaimFailed) {
+		t.Errorf("ClaimClose FAILED: want ErrClaimFailed, got %v", err)
+	}
+	// case 7: 已领取的 OPEN（现在是 CLOSING）再次领取 → 失败（原子性验证）
+	if err := s.ClaimClose(ctx, ids["OPEN"]); !errors.Is(err, ErrClaimFailed) {
+		t.Errorf("ClaimClose already-claimed OPEN (now CLOSING): want ErrClaimFailed, got %v", err)
 	}
 }
