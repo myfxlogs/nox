@@ -88,15 +88,27 @@ func (f *fakeStore) InsertAlert(ctx context.Context, posID *int64, level, msg st
 	return nil
 }
 
+// D-159 W2a R3-9：settlement 失败标记 settle_failed（fakeStore 适配 Store 接口新增方法）。
+func (f *fakeStore) SetPositionNote(ctx context.Context, id int64, note string) error {
+	if p, ok := f.positions[id]; ok {
+		p.Note = note
+	}
+	return nil
+}
+
 // —— fakeCloser：实现 Closer 接口 ——
 
 type fakeCloser struct {
-	calls     []int64
-	failOnPos int64 // >0 时该 posID 返回 error
+	calls       []int64
+	failOnPos   int64 // >0 时该 posID 返回 error
+	claimFailed bool  // D-159 W2a：返回 ErrClaimFailed 模拟 position 已是 CLOSING
 }
 
 func (c *fakeCloser) AutoClosePosition(ctx context.Context, posID int64) error {
 	c.calls = append(c.calls, posID)
+	if c.claimFailed {
+		return pgstore.ErrClaimFailed
+	}
 	if c.failOnPos == posID {
 		return fmt.Errorf("模拟平仓失败")
 	}
@@ -127,10 +139,14 @@ func (q *fakeHistoryQuerier) QueryOrderHistory(ctx context.Context, ticket strin
 
 type fakeSettler struct {
 	calls []int64
+	fail  bool // D-159 W2a：返回 error 模拟 settlement 失败
 }
 
 func (s *fakeSettler) Settle(ctx context.Context, posID int64) error {
 	s.calls = append(s.calls, posID)
+	if s.fail {
+		return fmt.Errorf("模拟 settlement 失败")
+	}
 	return nil
 }
 
@@ -307,9 +323,9 @@ func TestRun_HistoryHit_AutoClose(t *testing.T) {
 	if !hasAlert(fs, "warn", "已自动对账收尾 position #300") {
 		t.Errorf("缺少 warn 告警，alerts=%v", fs.alerts)
 	}
-	// 单腿无另一 OPEN 腿 → 手动调 ClosePosition
-	if fs.closeCalls != 1 {
-		t.Errorf("ClosePosition 调用次数=%d，期望 1", fs.closeCalls)
+	// D-159 W2a S6：单腿无另一 OPEN 腿 → 走 close coordinator（AutoClosePosition），不再手动调 store.ClosePosition
+	if len(fc.calls) != 1 || fc.calls[0] != 300 {
+		t.Errorf("closer AutoClosePosition 调用=%v，期望 [300]", fc.calls)
 	}
 }
 

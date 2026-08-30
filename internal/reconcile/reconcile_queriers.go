@@ -31,6 +31,8 @@ type Store interface {
 	ClosePosition(ctx context.Context, id int64, realizedPnl float64) error
 	UpdatePositionStatus(ctx context.Context, id int64, status string) error
 	InsertAlert(ctx context.Context, posID *int64, level, msg string) error
+	// D-159 W2a R3-9：settlement 失败标记 settle_failed 到 position.note（可重试状态）。
+	SetPositionNote(ctx context.Context, id int64, note string) error
 }
 
 // VenueOrder venue 侧的持仓记录。

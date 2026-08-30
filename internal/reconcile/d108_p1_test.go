@@ -21,7 +21,8 @@ func TestD108_AutoFailZombie_VenueHit(t *testing.T) {
 	fs.legs[200] = []*pgstore.PositionLeg{
 		{PositionID: 200, LegNo: 0, Phase: "OPEN", Venue: "vA:mt5", OrderID: "T100", Side: "BUY", Qty: 1.0, Status: "FILLED"},
 	}
-	venueOrders := map[string]VenueOrder{"T100": {Ticket: "T100", Symbol: "AUDJPY", Side: "BUY", Volume: 1.0}}
+	// D-159 W2a R3-7：复合 key（venue_key+":"+ticket）
+	venueOrders := map[string]VenueOrder{"vA:mt5:T100": {Ticket: "T100", VenueKey: "vA:mt5", Symbol: "AUDJPY", Side: "BUY", Volume: 1.0}}
 
 	r := &Reconciler{store: fs, runTimeout: 5 * time.Second}
 	if err := r.autoFailOPENINGZombie(context.Background(), pos, venueOrders); err != nil {

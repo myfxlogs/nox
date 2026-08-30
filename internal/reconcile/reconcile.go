@@ -144,7 +144,8 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 	}
 	now := time.Now()
 
-	// localLegs: ticket → (leg, position)，收尾需要 position 引用
+	// localLegs: venue_key+":"+ticket → (leg, position)，收尾需要 position 引用
+	// D-159 W2a R3-7：venue 残量按 venue_key+ticket 复合 key 确认（ticket 非全局唯一，跨账户会串仓）。
 	type legWithPos struct {
 		leg pgstore.PositionLeg
 		pos pgstore.Position
@@ -160,13 +161,15 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 		}
 		for _, leg := range legs {
 			if leg.OrderID != "" && leg.Phase == "OPEN" {
-				localLegs[leg.OrderID] = legWithPos{leg: leg, pos: p}
+				key := leg.Venue + ":" + leg.OrderID
+				localLegs[key] = legWithPos{leg: leg, pos: p}
 			}
 		}
 	}
 
 	// 2. 查 venue 实际持仓（每个 querier 独立超时，单个失败不阻断其余）
-	venueOrders := make(map[string]VenueOrder) // ticket → order
+	// D-159 W2a R3-7：venueOrders 也用 venue_key+":"+ticket 复合 key（与 localLegs 对齐）。
+	venueOrders := make(map[string]VenueOrder) // venue_key+":"+ticket → order
 	for _, q := range r.snapshot() {
 		sub, cancel := r.withTimeout(ctx)
 		orders, err := q.QueryOpenedOrders(sub)
@@ -176,7 +179,8 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 			continue
 		}
 		for _, o := range orders {
-			venueOrders[o.Ticket] = o
+			key := o.VenueKey + ":" + o.Ticket
+			venueOrders[key] = o
 		}
 	}
 
@@ -184,10 +188,12 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 	mismatches := 0
 
 	// 本地有、venue 无 → 查证 OrderHistory → 命中收尾 / 未命中 critical（D-073+）
-	for ticket, lp := range localLegs {
-		if _, ok := venueOrders[ticket]; ok {
+	for key, lp := range localLegs {
+		if _, ok := venueOrders[key]; ok {
 			continue // venue 有，正常
 		}
+		// 查证用原 ticket（hq.QueryOrderHistory 按 ticket 查，venue 由 hq 隐含）
+		ticket := lp.leg.OrderID
 		// 查证：调该 venue OrderHistory(ticket)
 		hq := r.findHistoryQuerier(lp.leg.Venue)
 		if hq == nil {
@@ -261,19 +267,37 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 		}
 	}
 
+	// 3d. D-159 W2a R3-6：CLOSING 持仓扫描（所有 active 状态都进入对账，不只扫描 OPEN）。
+	// CLOSING 卡住=平仓 I/O 失败或残量未归零，只告警不自动处置（需人工确认 venue 侧状态）。
+	listCtx, listCancel = r.withTimeout(ctx)
+	closingPositions, err := r.store.ListPositions(listCtx, "CLOSING", 50, 0)
+	listCancel()
+	if err != nil {
+		log.Printf("[reconcile] list CLOSING: %v (skip)", err)
+	} else {
+		for _, p := range closingPositions {
+			if isClosingStuck(&p, now) {
+				msg := fmt.Sprintf("CLOSING 持仓 position #%d 超 %v 未完成（平仓失败或残量未归零，人工处置）", p.ID, closingStuckTimeout)
+				r.insertAlertCtx(ctx, "critical", msg)
+				log.Printf("[reconcile] %s", msg)
+			}
+		}
+	}
+
 	// venue 有、本地无 → 可能未记录的持仓（D-032：仅 ARB 源订单视为失联；系统外单不追踪）
-	for ticket, vo := range venueOrders {
-		if _, ok := localLegs[ticket]; ok {
+	// D-159 W2a R3-7：用复合 key 查 localLegs（venue_key+":"+ticket）。
+	for key, vo := range venueOrders {
+		if _, ok := localLegs[key]; ok {
 			continue // 本地有，正常
 		}
 		if !isARBOrder(vo.Comment) {
 			log.Printf("[reconcile] venue %s 持仓 ticket=%s symbol=%s comment=%q 为系统外单，不追踪",
-				vo.Venue, ticket, vo.Symbol, vo.Comment)
+				vo.Venue, vo.Ticket, vo.Symbol, vo.Comment)
 			continue
 		}
 		mismatches++
 		msg := fmt.Sprintf("对账不一致：venue %s 持仓 ticket=%s symbol=%s side=%s vol=%f 本地未记录（ARB 源订单失联）",
-			vo.Venue, ticket, vo.Symbol, vo.Side, vo.Volume)
+			vo.Venue, vo.Ticket, vo.Symbol, vo.Side, vo.Volume)
 		r.insertAlertCtx(ctx, "critical", msg)
 		log.Printf("[reconcile] %s", msg)
 	}
@@ -283,4 +307,20 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 	}
 
 	return mismatches, nil
+}
+
+// closingStuckTimeout D-159 W2a R3-6：CLOSING 超 30min 未完成=卡住（平仓 I/O 失败或残量未归零）。
+const closingStuckTimeout = 30 * time.Minute
+
+// isClosingStuck D-159 W2a R3-6：判断 CLOSING 持仓是否卡住（超时未完成）。
+// CLOSING 无 closed_at，用 opened_at 判断（CLOSING 是从 OPEN/LEGGED 转入，opened_at 仍是开仓时间）。
+// 无 opened_at = 异常（直接判卡住）。
+func isClosingStuck(pos *pgstore.Position, now time.Time) bool {
+	if pos.Status != "CLOSING" {
+		return false
+	}
+	if pos.OpenedAt == nil {
+		return true // 无时间戳=异常
+	}
+	return now.Sub(*pos.OpenedAt) > closingStuckTimeout
 }

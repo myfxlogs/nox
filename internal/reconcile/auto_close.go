@@ -95,28 +95,44 @@ func (r *Reconciler) autoClose(
 	}
 
 	// c. position 置 CLOSED + realized_pnl 汇总
-	// AutoClosePosition 内部已调 ClosePosition（置 CLOSED + pnl）；若未调（otherOpen=false）则手动置
-	// D-159 W1a R3-1：ClosePosition 原子领取，ErrTerminalState=已 CLOSED（幂等成功，不报错）。
+	// D-159 W2a R3-L174：统一走 close coordinator（不独立置 CLOSED）。
+	// auto_close 已回填 CLOSE leg（step a），另一腿无 OPEN（otherOpen=false），
+	// 走 ClosePosition 做残量校验 + PnL 汇总 + CLOSED（ClaimClose 从 OPEN/LEGGED 领取，
+	// 但此处 position 可能已是 CLOSING——ClaimClose 会 ErrClaimFailed，需兜底）。
 	if !otherOpen {
-		pnl := 0.0
-		if hist != nil {
-			pnl = hist.Profit + hist.Swap - hist.Commission
-		}
 		sub, cancel := r.withTimeout(ctx)
-		err := r.store.ClosePosition(sub, posID, pnl)
+		err := r.closer.AutoClosePosition(sub, posID)
 		cancel()
-		if err != nil && !errors.Is(err, pgstore.ErrTerminalState) {
-			return fmt.Errorf("close position store: %w", err)
+		if err != nil && !errors.Is(err, pgstore.ErrClaimFailed) && !errors.Is(err, pgstore.ErrTerminalState) {
+			return fmt.Errorf("close coordinator: %w", err)
+		}
+		// ClaimFailed=已是 CLOSING（auto_close step a 已回填 CLOSE leg，position 可能已被并发领取），
+		// 用 store.ClosePosition 兜底（残量校验在 ClosePosition 内做，此处只回填 PnL）
+		if errors.Is(err, pgstore.ErrClaimFailed) {
+			pnl := 0.0
+			if hist != nil {
+				pnl = hist.Profit + hist.Swap - hist.Commission
+			}
+			sub, cancel := r.withTimeout(ctx)
+			err := r.store.ClosePosition(sub, posID, pnl)
+			cancel()
+			if err != nil && !errors.Is(err, pgstore.ErrTerminalState) {
+				return fmt.Errorf("close position store (claim failed fallback): %w", err)
+			}
 		}
 	}
 
 	// d. D-087 §3.2：settlement.Settle 替换原 d（StatUpdater）+ d2（VerificationUpdater）两块
+	// D-159 W2a R3-9：settlement 失败 → 标记 settle_failed 到 position.note（可重试状态，不只打日志）。
 	if r.settler != nil {
 		sub, cancel := r.withTimeout(ctx)
 		err := r.settler.Settle(sub, posID)
 		cancel()
 		if err != nil {
 			log.Printf("[reconcile] settle pos=%d: %v", posID, err)
+			noteSub, noteCancel := r.withTimeout(ctx)
+			_ = r.store.SetPositionNote(noteSub, posID, "settle_failed: "+err.Error())
+			noteCancel()
 		}
 	}
 
@@ -151,7 +167,8 @@ func (r *Reconciler) autoFailOPENINGZombie(
 		if leg.OrderID == "" {
 			continue
 		}
-		if _, ok := venueOrders[leg.OrderID]; ok {
+		// D-159 W2a R3-7：复合 key（venue_key+":"+ticket）查 venueOrders。
+		if _, ok := venueOrders[leg.Venue+":"+leg.OrderID]; ok {
 			// D-108 A3：腿在 venue 有 → 不置 FAILED（venue 真有持仓，误杀风险），
 			// 记录告警交人工/下轮对账处置。
 			msg := fmt.Sprintf("OPENING 僵尸 position #%d 腿 ticket=%s 在 venue 有持仓，不归档 FAILED（交人工/对账）", posID, leg.OrderID)
@@ -216,7 +233,8 @@ func (r *Reconciler) autoFailLeggedZombie(
 		if leg.OrderID == "" || leg.Status != "FILLED" {
 			continue
 		}
-		if _, ok := venueOrders[leg.OrderID]; ok {
+		// D-159 W2a R3-7：复合 key（venue_key+":"+ticket）查 venueOrders。
+		if _, ok := venueOrders[leg.Venue+":"+leg.OrderID]; ok {
 			// D-108 P2 T3：FILLED 腿在 venue 有 → 不置 FAILED（venue 真有持仓，误平风险），
 			// 记录告警交人工/下轮对账处置（P1 A3 同语义）。
 			msg := fmt.Sprintf("LEGGED 僵尸 position #%d 腿 ticket=%s 在 venue 有持仓，不归档 FAILED（交人工/对账）", posID, leg.OrderID)

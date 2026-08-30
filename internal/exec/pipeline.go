@@ -313,16 +313,24 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 		// D-127 P3b：纯 CEX 组合 LEGGED 自动收平——对 FILLED 腿立即反向 MARKET 平仓，
 		// 消除裸敞口（#380/#383 人工 35+ 分钟兜底）。含 MT 腿的组合不动（SWAPARB 有独立平仓链路）。
 		if allCEXLegs(legs) {
+			// D-159 W2a R3-L174：autoFlatten 走 close coordinator（不绕过 ClosePosition）。
+			// autoFlattenLEGGED 只负责反向平仓 I/O，CLOSED 由 ClosePosition 统一处理。
 			autoFlattenCtx := context.WithoutCancel(ctx) // 收平不随 Execute 超时中断
 			flattened, flattenErr := p.autoFlattenLEGGED(autoFlattenCtx, posID, legs, results)
 			if flattenErr != nil {
 				log.Printf("[exec] position %d LEGGED auto-flatten failed: %v (manual fallback)", posID, flattenErr)
 			}
 			if flattened {
-				_ = p.store.UpdatePositionStatus(autoFlattenCtx, posID, "CLOSED")
-				_ = p.store.InsertAlert(autoFlattenCtx, &posID, "critical",
-					fmt.Sprintf("position %d LEGGED auto-flattened (open legs closed, root cause: partial fill)", posID))
-				status = "CLOSED"
+				// 走 close coordinator：ClaimClose + 写 CLOSE leg + 残量校验 + CLOSED
+				if err := p.ClosePosition(autoFlattenCtx, posID); err != nil {
+					log.Printf("[exec] position %d auto-flatten ClosePosition: %v", posID, err)
+					_ = p.store.InsertAlert(autoFlattenCtx, &posID, "critical",
+						fmt.Sprintf("position %d LEGGED auto-flatten close coordinator failed: %v", posID, err))
+				} else {
+					_ = p.store.InsertAlert(autoFlattenCtx, &posID, "critical",
+						fmt.Sprintf("position %d LEGGED auto-flattened (open legs closed, root cause: partial fill)", posID))
+					status = "CLOSED"
+				}
 			} else {
 				_ = p.store.InsertAlert(autoFlattenCtx, &posID, "critical",
 					fmt.Sprintf("position %d LEGGED: %d/%d legs filled, auto-flatten incomplete", posID, filled, len(legs)))

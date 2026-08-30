@@ -116,9 +116,23 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 		}
 	}
 
+	// D-159 W2a R3-3：已存在 CLOSE leg 的腿不再发平仓单（防重复发单）。
+	closedTickets := make(map[string]bool)
+	for _, l := range legs {
+		if l.Phase == "CLOSE" && l.Status == "FILLED" {
+			closedTickets[l.OrderID] = true
+		}
+	}
+
 	var totalPnL float64
 	for _, leg := range legs {
-		if leg.Status != "FILLED" {
+		// D-159 W2a R3-2：只对 Phase=OPEN AND Status=FILLED 的开仓腿发平仓单。
+		if leg.Phase != "OPEN" || leg.Status != "FILLED" {
+			continue
+		}
+		// D-159 W2a R3-3：已存在 CLOSE leg 的腿跳过（防重复发单）。
+		if closedTickets[leg.OrderID] {
+			log.Printf("[exec] close leg %d ticket=%s already has CLOSE leg, skip", leg.ID, leg.OrderID)
 			continue
 		}
 		exe, ok := p.registry.Get(leg.Venue)
@@ -173,6 +187,13 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 		closeSide := "SELL"
 		if leg.Side == "SELL" {
 			closeSide = "BUY"
+		}
+		// D-159 W2a R3-4：平仓 fill 状态/数量/价格必须有效，禁零价格/零数量伪造成交。
+		if fill.Qty <= 0 || fill.Price <= 0 {
+			msg := fmt.Sprintf("close leg %d invalid fill: qty=%.4f price=%.4f (skip, not faked)", leg.ID, fill.Qty, fill.Price)
+			_ = p.store.InsertAlert(ctx, &posID, "critical", msg)
+			log.Printf("[exec] %s", msg)
+			continue // 跳过此腿，不伪造成交
 		}
 		closePrice := fill.Price
 		// D-108 P2 T2：close leg Qty 改记 fill.Qty（实际成交量，原记 leg.Qty 全额）。
@@ -259,13 +280,41 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 		totalPnL = authPnL
 	}
 
+	// D-159 W2a R3-10：所有腿实际成交+残量归零才写 CLOSED。
+	// 校验：每个 FILLED OPEN 腿必须有对应 CLOSE leg（phase=CLOSE, status=FILLED）。
+	// 残量未归零 → 保持 CLOSING + critical 告警，不置 CLOSED。
+	closeLegs, err := p.store.ListPositionLegsByPhase(ctx, posID, "CLOSE")
+	if err != nil {
+		return fmt.Errorf("list close legs: %w", err)
+	}
+	openFilled := 0
+	closeFilled := 0
+	for _, l := range legs {
+		if l.Phase == "OPEN" && l.Status == "FILLED" {
+			openFilled++
+		}
+	}
+	for _, l := range closeLegs {
+		if l.Status == "FILLED" {
+			closeFilled++
+		}
+	}
+	if openFilled > closeFilled {
+		msg := fmt.Sprintf("position %d residual: %d OPEN FILLED legs but only %d CLOSE FILLED legs (not closing)", posID, openFilled, closeFilled)
+		_ = p.store.InsertAlert(ctx, &posID, "critical", msg)
+		log.Printf("[exec] %s", msg)
+		return fmt.Errorf("position %d residual legs not closed (%d/%d)", posID, closeFilled, openFilled)
+	}
+
 	if err := p.store.ClosePosition(ctx, posID, totalPnL); err != nil {
 		// D-159 W1a R3-1：ErrTerminalState=已 CLOSED（并发对账先收尾），幂等成功不报错。
 		if errors.Is(err, pgstore.ErrTerminalState) {
 			log.Printf("[exec] position %d already CLOSED (concurrent reconcile claimed close)", posID)
-		} else {
-			log.Printf("[exec] close position %d store update: %v", posID, err)
+			return nil // 幂等成功
 		}
+		// D-159 W2a R3-8：store.ClosePosition 失败必须向调用方返回失败（不吞咽）。
+		log.Printf("[exec] close position %d store update: %v", posID, err)
+		return fmt.Errorf("close position %d store: %w", posID, err)
 	}
 	return nil
 }

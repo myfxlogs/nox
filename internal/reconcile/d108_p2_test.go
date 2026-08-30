@@ -21,7 +21,8 @@ func TestD108P2_LeggedZombie_VenueHit(t *testing.T) {
 		{PositionID: 300, LegNo: 0, Phase: "OPEN", Venue: "vA:mt5", OrderID: "T300", Side: "BUY", Qty: 1.0, Status: "FILLED"},
 		{PositionID: 300, LegNo: 1, Phase: "OPEN", Venue: "vB:mt5", OrderID: "", Side: "SELL", Qty: 1.0, Status: "FAILED"},
 	}
-	venueOrders := map[string]VenueOrder{"T300": {Ticket: "T300", Symbol: "AUDJPY", Side: "BUY", Volume: 1.0}}
+	// D-159 W2a R3-7：复合 key（venue_key+":"+ticket）
+	venueOrders := map[string]VenueOrder{"vA:mt5:T300": {Ticket: "T300", VenueKey: "vA:mt5", Symbol: "AUDJPY", Side: "BUY", Volume: 1.0}}
 
 	r := &Reconciler{store: fs, runTimeout: 5 * time.Second}
 	if err := r.autoFailLeggedZombie(context.Background(), pos, venueOrders); err != nil {

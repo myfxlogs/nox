@@ -4,7 +4,10 @@ package exec
 
 import (
 	"context"
+	"errors"
 	"log"
+
+	"arb/internal/store/pgstore"
 )
 
 // allCEXLegs 判断 legs 是否全部为 CEX 腿（无 MT4/MT5）。
@@ -20,7 +23,21 @@ func allCEXLegs(legs []LegSpec) bool {
 // autoFlattenLEGGED 对 LEGGED 仓的 FILLED 腿反向 MARKET 平仓（D-127 P3b）。
 // 全部收平成功 → true；任一失败 → false（维持 LEGGED，人工兜底）。
 // 复用既有 CEX 平仓链路（binance positionSide/reduceOnly D-108 P2、okx posSide D-125）。
+// D-159 W2a S4：收平成功后写 CLOSE leg 到 DB，供 ClosePosition 的 closedTickets 检查跳过重复发单。
 func (p *Pipeline) autoFlattenLEGGED(ctx context.Context, posID int64, legs []LegSpec, results []LegResult) (bool, error) {
+	// D-159 W2a S4：查 DB OPEN legs 获取完整 leg 信息（LegNo/Account 等），供写 CLOSE leg 用。
+	dbLegs, err := p.store.ListPositionLegs(ctx, posID)
+	if err != nil {
+		log.Printf("[exec] auto-flatten pos=%d list legs: %v", posID, err)
+		return false, err
+	}
+	legByNo := make(map[int16]pgstore.PositionLeg)
+	for _, l := range dbLegs {
+		if l.Phase == "OPEN" {
+			legByNo[l.LegNo] = l
+		}
+	}
+
 	allFlattened := true
 	for i, r := range results {
 		if r.Status != "FILLED" || r.Qty <= 0 {
@@ -58,6 +75,36 @@ func (p *Pipeline) autoFlattenLEGGED(ctx context.Context, posID int64, legs []Le
 			continue
 		}
 		log.Printf("[exec] auto-flatten pos=%d leg=%d venue=%s: closed qty=%v price=%v", posID, i, leg.VenueKey, fill.Qty, fill.Price)
+
+		// D-159 W2a S4：写 CLOSE leg 到 DB（供 ClosePosition closedTickets 检查跳过重复发单）。
+		dbLeg, ok := legByNo[int16(i)]
+		if !ok {
+			log.Printf("[exec] auto-flatten pos=%d leg=%d: DB leg not found, skip CLOSE leg write", posID, i)
+			continue
+		}
+		closePrice := fill.Price
+		closeQty := fill.Qty
+		if closeQty <= 0 {
+			closeQty = r.Qty
+		}
+		if err := p.store.CreatePositionLeg(ctx, &pgstore.PositionLeg{
+			PositionID:    posID,
+			LegNo:         dbLeg.LegNo,
+			Phase:         "CLOSE",
+			Venue:         dbLeg.Venue,
+			Account:       dbLeg.Account,
+			Symbol:        dbLeg.Symbol,
+			Side:          closeSide,
+			Qty:           closeQty,
+			PriceExpected: dbLeg.PriceExpected,
+			PriceActual:   &closePrice,
+			OrderID:       fill.OrderID,
+			Status:        "FILLED",
+		}); err != nil && !errors.Is(err, pgstore.ErrTerminalState) {
+			log.Printf("[exec] auto-flatten pos=%d leg=%d write CLOSE leg: %v", posID, i, err)
+			allFlattened = false
+			continue
+		}
 	}
 	return allFlattened, nil
 }
