@@ -41,13 +41,18 @@ type Gate struct {
 	mu    sync.Mutex
 	store *pgstore.Store
 	cfg   Config
+	// D-154 S3：disabled 拒绝 stdout 1h 去重（复用 D-144 ② per-key 1h 模式）。
+	// DB 落库保留全量（审计完整性不动），只压 stdout。内存，重启重置。
+	lastDisabledLog   map[string]time.Time
+	lastDisabledLogMu sync.Mutex
 }
 
 // NewGate 创建门禁。
 func NewGate(store *pgstore.Store, cfg Config) *Gate {
 	return &Gate{
-		store: store,
-		cfg:   cfg,
+		store:           store,
+		cfg:             cfg,
+		lastDisabledLog: make(map[string]time.Time),
 	}
 }
 
@@ -61,7 +66,7 @@ func (g *Gate) Submit(ctx context.Context, intent TradeIntent) GateResult {
 	stateRow, err := g.store.GetAutotradeState(ctx)
 	if err != nil {
 		// fail-closed（D-072 复审修正）：状态不可知 = 拒绝开仓，禁止默认 RUNNING 放行
-		g.rejectLog(ctx, intent, fmt.Sprintf("get state: %v", err))
+		g.rejectLog(ctx, intent, fmt.Sprintf("get state: %v", err), false)
 		return GateResult{Status: "REJECTED", Reason: "get autotrade state failed"}
 	}
 	state := stateRow.State
@@ -69,14 +74,14 @@ func (g *Gate) Submit(ctx context.Context, intent TradeIntent) GateResult {
 	// 检查 2: 策略禁用（fail-closed：查询失败 = 拒绝）
 	disabled, err := g.store.IsStrategyDisabled(ctx, intent.Strategy)
 	if err != nil {
-		g.rejectLog(ctx, intent, fmt.Sprintf("check strategy disabled: %v", err))
+		g.rejectLog(ctx, intent, fmt.Sprintf("check strategy disabled: %v", err), false)
 		return GateResult{Status: "REJECTED", Reason: "strategy disabled check failed"}
 	}
 
 	// 检查 3: 日亏损（fail-closed：查询失败 = 拒绝）
 	dailyPnl, err := g.store.DailyRealizedPnl(ctx)
 	if err != nil {
-		g.rejectLog(ctx, intent, fmt.Sprintf("daily pnl: %v", err))
+		g.rejectLog(ctx, intent, fmt.Sprintf("daily pnl: %v", err), false)
 		return GateResult{Status: "REJECTED", Reason: "daily pnl check failed"}
 	}
 
@@ -84,7 +89,7 @@ func (g *Gate) Submit(ctx context.Context, intent TradeIntent) GateResult {
 	// fail-closed：查询失败 = 拒绝（对齐检查 2-3 风格）
 	activePositions, err := g.store.ListActivePositions(ctx)
 	if err != nil {
-		g.rejectLog(ctx, intent, fmt.Sprintf("list active positions: %v", err))
+		g.rejectLog(ctx, intent, fmt.Sprintf("list active positions: %v", err), false)
 		return GateResult{Status: "REJECTED", Reason: "active positions check failed"}
 	}
 	openCount := len(activePositions)
@@ -138,7 +143,8 @@ func (g *Gate) Submit(ctx context.Context, intent TradeIntent) GateResult {
 		if comboAlreadyOpen {
 			verdict.Reason = "combo already open"
 		}
-		g.rejectLog(ctx, intent, verdict.Reason)
+		// D-154 S3：disabled 触发的拒绝 stdout 1h 去重（combo 覆盖 reason 时不去重）。
+		g.rejectLog(ctx, intent, verdict.Reason, disabled && !comboAlreadyOpen)
 		return GateResult{Status: "REJECTED", Reason: verdict.Reason}
 	}
 
@@ -206,7 +212,8 @@ func (g *Gate) haltStrategy(ctx context.Context, intent TradeIntent, reason stri
 }
 
 // rejectLog 拒绝路径统一落库 + 日志（fail-closed 检查失败与规则拒绝共用）。
-func (g *Gate) rejectLog(ctx context.Context, intent TradeIntent, reason string) {
+// D-154 S3：disabled=true 时 stdout 1h 去重（per-strategy），DB 落库保留全量（审计完整性不动）。
+func (g *Gate) rejectLog(ctx context.Context, intent TradeIntent, reason string, disabled bool) {
 	_ = g.store.InsertAutotradeLog(ctx, &pgstore.AutotradeLog{
 		OpportunityID: intent.DedupKey,
 		Strategy:      intent.Strategy,
@@ -218,5 +225,16 @@ func (g *Gate) rejectLog(ctx context.Context, intent TradeIntent, reason string)
 		Reason:        reason,
 		NetBps:        intent.NetBps,
 	})
+	if disabled {
+		// stdout 1h 去重（per-strategy）；DB 已全量落库
+		g.lastDisabledLogMu.Lock()
+		last, ok := g.lastDisabledLog[intent.Strategy]
+		if ok && time.Since(last) < time.Hour {
+			g.lastDisabledLogMu.Unlock()
+			return
+		}
+		g.lastDisabledLog[intent.Strategy] = time.Now()
+		g.lastDisabledLogMu.Unlock()
+	}
 	log.Printf("[autotrade] gate REJECT %s: %s", intent.DedupKey, reason)
 }
