@@ -719,6 +719,7 @@ message AccountInfo {
   string currency = 12;    // USD / USDT / EUR…
   bool online = 13;        // false = 最近成功快照（离线）
   google.protobuf.Timestamp updated_at = 14;
+  bool simulated = 15;     // CEX 模拟盘标记（OKX demo=true/binance 实盘=false；CFD 零值 false 无意义——CFD 实盘/模拟由 BrokerAccount.isReal 管）
 }
 
 // 账户资产全量快照（D-053）：monitor 变更时广播，含离线 venue 的最近快照；前端全量替换。
