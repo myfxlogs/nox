@@ -76,7 +76,7 @@ type AccountInfo struct {
 	Profit     float64
 	Leverage   float64
 	Currency   string
-	Simulated  bool // CEX 模拟盘标记（D-156 V2：CEXAccountQuerier 填充 q.simulated；CFD 零值 false）
+	Simulated  bool   // CEX 模拟盘标记（D-156 V2：CEXAccountQuerier 填充 q.simulated；CFD 零值 false）
 	Website    string // D-157 V3：官网（CEX 从 ExchangeConfig.website 透传；CFD 从 BrokerAccount.website 透传）
 }
 
