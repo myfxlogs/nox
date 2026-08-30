@@ -143,7 +143,10 @@ func TestClosePosition_StoreCloseFails_Idempotent(t *testing.T) {
 	}
 }
 
-// TestClosePosition_ResidualCheck_Fails A3 残量：verifier 发现残留腿 → 不置 CLOSED + 返回 error。
+// TestClosePosition_ResidualCheck_Fails A3 残量：1 腿平仓成功 + 1 腿平仓失败 → 残量校验触发。
+// F1 返修：binance failOnSide="BUY" 只命中平仓反向侧（开仓 SELL 不受影响）→ 真实残量场景
+// （openFilled=2 > closeFilled=1 → return error + 保持 CLOSING）。原版 verifier 残留腿构造
+// 不影响残量校验且 fake 平仓全成功 → 残量校验永远通过 = 假绿（复审缺陷 #1）。
 func TestClosePosition_ResidualCheck_Fails(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
@@ -151,9 +154,14 @@ func TestClosePosition_ResidualCheck_Fails(t *testing.T) {
 		t.Fatalf("truncate: %v", err)
 	}
 	reg := NewRegistry()
-	reg.Register(&fakeFlattenExecutor{venue: "okx:perp"})
-	reg.Register(&fakeFlattenExecutor{venue: "binance:perp"})
+	reg.Register(&fakeFlattenExecutor{venue: "okx:perp"})                        // okx 平仓成功（写 CLOSE leg）
+	reg.Register(&fakeFlattenExecutor{venue: "binance:perp", failOnSide: "BUY"}) // binance 平仓 BUY 失败（无 CLOSE leg）
 	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50})
+	// verifier 两 venue 均无残留（fail-closed 需非 nil；残量由 leg 计数校验捕获，非 verifier）
+	p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{
+		"okx:perp":     {},
+		"binance:perp": {},
+	}}
 
 	res, err := p.Execute(ctx,
 		"PERP:BTCUSDT:okx:perp:binance:perp:4", "req-d159-a3", "PERP_FUNDING",
@@ -168,12 +176,7 @@ func TestClosePosition_ResidualCheck_Fails(t *testing.T) {
 		t.Fatalf("期望 OPEN，实际 %s", res.Status)
 	}
 
-	// verifier 返回残留腿（okx ticket 仍在仓）
-	p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{
-		"okx:perp":     {{Ticket: "fill-BUY", Symbol: "BTC-USDT-SWAP", Side: "BUY", Volume: 0.001}},
-		"binance:perp": {},
-	}}
-
+	// ClosePosition：okx 平仓成功（1 CLOSE leg），binance 平仓失败（0 CLOSE leg）→ 残量
 	err = p.ClosePosition(ctx, res.PositionID)
 	if err == nil {
 		t.Fatal("ClosePosition 应返回 error（残量未归零），但返回 nil")
@@ -182,7 +185,7 @@ func TestClosePosition_ResidualCheck_Fails(t *testing.T) {
 		t.Errorf("error 应含 'residual'，实际: %v", err)
 	}
 
-	// position 不应是 CLOSED
+	// position 不应是 CLOSED（残量未归零保持 CLOSING）
 	pos, _ := s.GetPosition(ctx, res.PositionID)
 	if pos.Status == "CLOSED" {
 		t.Error("残量未归零不应置 CLOSED")
@@ -216,7 +219,8 @@ func TestAutoFlattenGoesThroughClosePosition(t *testing.T) {
 		t.Fatalf("truncate: %v", err)
 	}
 	reg := NewRegistry()
-	reg.Register(&fakeFlattenExecutor{venue: "okx:perp"})
+	var okxCount int32
+	reg.Register(&fakeFlattenExecutor{venue: "okx:perp", placeCount: &okxCount})
 	reg.Register(&fakeFlattenExecutor{venue: "binance:perp", failOnSide: "SELL"})
 	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50})
 	p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{
@@ -235,6 +239,12 @@ func TestAutoFlattenGoesThroughClosePosition(t *testing.T) {
 	}
 	if res.Status != "CLOSED" {
 		t.Fatalf("期望 CLOSED（autoFlatten → ClosePosition），实际 %s", res.Status)
+	}
+	// F2 反证锚：closedTickets 跳过已收平腿——okx PlaceOrder 恰 2 次（开仓 BUY + autoFlatten 平仓 SELL）。
+	// CLOSE leg OrderID 若用 fill.OrderID（平价新单号）而非 dbLeg.OrderID（原 ticket），
+	// closedTickets 查不到 → ClosePosition 重复发单 → 变 3 次。
+	if okxCount != 2 {
+		t.Errorf("okx PlaceOrder 调用次数=%d，期望 2（开仓+收平，closedTickets 应跳过已收平腿）", okxCount)
 	}
 
 	// 验证有 CLOSE phase legs（由 autoFlattenLEGGED 写入）
