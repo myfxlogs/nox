@@ -5613,6 +5613,8 @@ type FundingNeedNotice struct {
 	Reason        string                 `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`                    // SwapArbNotional 返回的 reason（含具体数值）
 	NeedUsd       float64                `protobuf:"fixed64,5,opt,name=need_usd,json=needUsd,proto3" json:"need_usd,omitempty"` // 需注入资金（USD）；0 = 仅 venue 离线/币种不符等非余额原因
 	Ts            *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=ts,proto3" json:"ts,omitempty"`
+	AliasLong     string                 `protobuf:"bytes,7,opt,name=alias_long,json=aliasLong,proto3" json:"alias_long,omitempty"`    // D-154 返修②：买腿别名（后端 aliasOrKey 填充，空=无别名）
+	AliasShort    string                 `protobuf:"bytes,8,opt,name=alias_short,json=aliasShort,proto3" json:"alias_short,omitempty"` // D-154 返修②：卖腿别名（后端 aliasOrKey 填充，空=无别名）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5687,6 +5689,20 @@ func (x *FundingNeedNotice) GetTs() *timestamppb.Timestamp {
 		return x.Ts
 	}
 	return nil
+}
+
+func (x *FundingNeedNotice) GetAliasLong() string {
+	if x != nil {
+		return x.AliasLong
+	}
+	return ""
+}
+
+func (x *FundingNeedNotice) GetAliasShort() string {
+	if x != nil {
+		return x.AliasShort
+	}
+	return ""
 }
 
 // Broker 实持仓全量快照（D-052）：monitor 变更时广播，含离线 venue 的最近快照；前端全量替换。
@@ -10976,7 +10992,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x06update\"D\n" +
 	"\x14PositionChangeNotice\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x16\n" +
-	"\x06ticket\x18\x02 \x01(\x03R\x06ticket\"\xd0\x01\n" +
+	"\x06ticket\x18\x02 \x01(\x03R\x06ticket\"\x90\x02\n" +
 	"\x11FundingNeedNotice\x12\x1c\n" +
 	"\tcanonical\x18\x01 \x01(\tR\tcanonical\x12\x1d\n" +
 	"\n" +
@@ -10985,7 +11001,11 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"venueShort\x12\x16\n" +
 	"\x06reason\x18\x04 \x01(\tR\x06reason\x12\x19\n" +
 	"\bneed_usd\x18\x05 \x01(\x01R\aneedUsd\x12*\n" +
-	"\x02ts\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\"X\n" +
+	"\x02ts\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12\x1d\n" +
+	"\n" +
+	"alias_long\x18\a \x01(\tR\taliasLong\x12\x1f\n" +
+	"\valias_short\x18\b \x01(\tR\n" +
+	"aliasShort\"X\n" +
 	"\x16BrokerPositionSnapshot\x12>\n" +
 	"\tpositions\x18\x01 \x03(\v2 .arb.dashboard.v1.BrokerPositionR\tpositions\"\xa4\x03\n" +
 	"\vAccountInfo\x12\x1b\n" +

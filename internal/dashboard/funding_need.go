@@ -12,6 +12,7 @@ import (
 
 // FundingNeedNotice 资金注入提醒事件（D-072）：swap 套利余额不足时发布 → StreamUpdates case 10 → 前端弹窗。
 // 不入 alerts 表、不走 alertPaused；断线错过不回放（实时弹窗语义）。
+// D-154 返修②：AliasLong/AliasShort 由 engine aliasOrKey 填充（后端权威直给，前端零拼 map）。
 type FundingNeedNotice struct {
 	Canonical  string
 	VenueLong  string
@@ -19,6 +20,8 @@ type FundingNeedNotice struct {
 	Reason     string  // SwapArbNotional 返回的 reason（含具体数值）
 	NeedUSD    float64 // minNotional − min(equity)；非余额原因（venue 离线/币种不符）= 0
 	Ts         time.Time
+	AliasLong  string // 买腿别名（aliasOrKey 填充，空=无别名）
+	AliasShort string // 卖腿别名（aliasOrKey 填充，空=无别名）
 }
 
 // SetFundingNeedTopic 注入资金注入提醒广播 topic（D-072）。main 创建后注入；nil = 未接线（测试直接构造 Service）。
@@ -75,5 +78,7 @@ func fundingNeedToProto(n FundingNeedNotice) *v1.FundingNeedNotice {
 		Reason:     n.Reason,
 		NeedUsd:    n.NeedUSD,
 		Ts:         timestamppb.New(n.Ts),
+		AliasLong:  n.AliasLong,
+		AliasShort: n.AliasShort,
 	}
 }

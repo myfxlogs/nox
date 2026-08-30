@@ -8,6 +8,7 @@ import (
 )
 
 // TestFundingNeedToProto 验证 FundingNeedNotice → proto 信封字段映射（D-072 case 10）。
+// D-154 返修②：含 AliasLong/AliasShort 透传断言 + 空 alias 子例（回落逻辑在前端，proto 仅透传空串）。
 func TestFundingNeedToProto(t *testing.T) {
 	n := FundingNeedNotice{
 		Canonical:  "AUDJPY",
@@ -16,6 +17,8 @@ func TestFundingNeedToProto(t *testing.T) {
 		Reason:     "balance $100.00 < min notional $500.00",
 		NeedUSD:    400.0,
 		Ts:         time.Unix(1700000000, 0),
+		AliasLong:  "ICMarkets-Live10",
+		AliasShort: "FxPro-MT5 Demo",
 	}
 	p := fundingNeedToProto(n)
 	if p.Canonical != "AUDJPY" || p.VenueLong != "529:mt5" || p.VenueShort != "277:mt5" {
@@ -29,6 +32,14 @@ func TestFundingNeedToProto(t *testing.T) {
 	}
 	if p.Ts == nil || p.Ts.Seconds != 1700000000 {
 		t.Fatalf("ts mismatch: %+v", p.Ts)
+	}
+	if p.AliasLong != "ICMarkets-Live10" || p.AliasShort != "FxPro-MT5 Demo" {
+		t.Fatalf("alias mismatch: got long=%q short=%q", p.AliasLong, p.AliasShort)
+	}
+	// 空 alias 子例：proto 透传空串（前端 venueLabel 回落 splitVenue name）。
+	pEmpty := fundingNeedToProto(FundingNeedNotice{Canonical: "X", VenueLong: "529:mt5", VenueShort: "277:mt5"})
+	if pEmpty.AliasLong != "" || pEmpty.AliasShort != "" {
+		t.Fatalf("empty alias should pass through as \"\", got long=%q short=%q", pEmpty.AliasLong, pEmpty.AliasShort)
 	}
 }
 
