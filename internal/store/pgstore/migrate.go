@@ -44,6 +44,7 @@ var migrationFiles = []struct {
 	{46, migrations.AccountWebsiteSQL},
 	{47, migrations.ArbRoRevokeCredentialsSQL},
 	{48, migrations.PositionIntentFieldsSQL},
+	{49, migrations.CashflowsLegNoSQL},
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

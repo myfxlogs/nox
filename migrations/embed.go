@@ -88,3 +88,6 @@ var ArbRoRevokeCredentialsSQL string
 
 //go:embed 0048_position_intent_fields.sql
 var PositionIntentFieldsSQL string
+
+//go:embed 0049_cashflows_leg_no.sql
+var CashflowsLegNoSQL string

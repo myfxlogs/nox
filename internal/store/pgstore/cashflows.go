@@ -20,10 +20,12 @@ type Cashflow struct {
 }
 
 // InsertCashflow 写入现金流。
-func (s *Store) InsertCashflow(ctx context.Context, posID int64, kind, venue string, amount float64, ts time.Time) error {
-	q := `INSERT INTO position_cashflows (position_id, kind, venue, amount_usd, ts)
-		VALUES ($1, $2, $3, $4, $5)`
-	_, err := s.pool.Exec(ctx, q, posID, kind, venue, amount, ts)
+// D-159 W3a R5：加 legNo 参数（per-leg 幂等键前置）。
+// legNo 是 position_legs.leg_no（int16，从 0 开始，0 是有效第一腿，写 0 不是 NULL）。
+func (s *Store) InsertCashflow(ctx context.Context, posID int64, legNo int16, kind, venue string, amount float64, ts time.Time) error {
+	q := `INSERT INTO position_cashflows (position_id, leg_no, kind, venue, amount_usd, ts)
+		VALUES ($1, $2, $3, $4, $5, $6)`
+	_, err := s.pool.Exec(ctx, q, posID, legNo, kind, venue, amount, ts)
 	return err
 }
 
@@ -47,23 +49,24 @@ func (s *Store) ListCashflows(ctx context.Context, posID int64) ([]Cashflow, err
 	return out, rows.Err()
 }
 
-// HasCashflowForDay 检查指定持仓在某日是否已有某 kind 的现金流行（D-077 幂等：当日已记跳过）。
-// day 为 UTC 日期（0 时），匹配该日 00:00~23:59:999 的行。
-func (s *Store) HasCashflowForDay(ctx context.Context, posID int64, kind string, day time.Time) (bool, error) {
+// HasCashflowForLegDay 检查指定持仓某腿在某日是否已有某 kind 的现金流行（D-159 W3a R5 per-leg 幂等）。
+// day 为 UTC 日期（0 时），匹配该日 00:00~23:59:999 的行；替代 position 级 HasCashflowForDay
+// （position 级短路会让失败腿永久漏记，R5：一腿失败下一轮只补失败腿）。
+func (s *Store) HasCashflowForLegDay(ctx context.Context, posID int64, legNo int16, kind string, day time.Time) (bool, error) {
 	start := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, time.UTC)
 	end := start.AddDate(0, 0, 1)
 	var one int
 	err := s.pool.QueryRow(ctx,
 		`SELECT 1 FROM position_cashflows
-		 WHERE position_id = $1 AND kind = $2 AND ts >= $3 AND ts < $4 LIMIT 1`,
-		posID, kind, start, end).Scan(&one)
+		 WHERE position_id = $1 AND leg_no = $2 AND kind = $3 AND ts >= $4 AND ts < $5 LIMIT 1`,
+		posID, legNo, kind, start, end).Scan(&one)
 	if err == nil {
 		return true, nil
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
-	return false, fmt.Errorf("check cashflow for day: %w", err)
+	return false, fmt.Errorf("check cashflow for leg day: %w", err)
 }
 
 // SumCashflowsNet 返回指定持仓 swap+funding+commission 现金流的 USD 合计（D-127 P4 返修①）。

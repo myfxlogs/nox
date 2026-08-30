@@ -88,7 +88,7 @@ func (s *Store) DailySwapAccrued(ctx context.Context, posID int64, venue string,
 }
 
 // SumCashflowsForDay SUM(amount_usd) WHERE kind+posID+venue+day 范围（D-110 P2 对账用）。
-// day 范围同 HasCashflowForDay：start=time.Date(year,month,day,0,0,0,0,UTC) / end=start.AddDate(0,0,1)。
+// day 范围同 HasCashflowForLegDay（D-159 W3a R5 更名）：start=time.Date(year,month,day,0,0,0,0,UTC) / end=start.AddDate(0,0,1)。
 func (s *Store) SumCashflowsForDay(ctx context.Context, posID int64, kind, venue string, day time.Time) (float64, error) {
 	start := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, time.UTC)
 	end := start.AddDate(0, 0, 1)
