@@ -5776,6 +5776,7 @@ type AccountInfo struct {
 	Currency      string                 `protobuf:"bytes,12,opt,name=currency,proto3" json:"currency,omitempty"` // USD / USDT / EUR…
 	Online        bool                   `protobuf:"varint,13,opt,name=online,proto3" json:"online,omitempty"`    // false = 最近成功快照（离线）
 	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Simulated     bool                   `protobuf:"varint,15,opt,name=simulated,proto3" json:"simulated,omitempty"` // CEX 模拟盘标记（OKX demo=true/binance 实盘=false；CFD 零值 false 无意义——CFD 实盘/模拟由 BrokerAccount.isReal 管）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5906,6 +5907,13 @@ func (x *AccountInfo) GetUpdatedAt() *timestamppb.Timestamp {
 		return x.UpdatedAt
 	}
 	return nil
+}
+
+func (x *AccountInfo) GetSimulated() bool {
+	if x != nil {
+		return x.Simulated
+	}
+	return false
 }
 
 // 账户资产全量快照（D-053）：monitor 变更时广播，含离线 venue 的最近快照；前端全量替换。
@@ -11016,7 +11024,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\valias_short\x18\b \x01(\tR\n" +
 	"aliasShort\"X\n" +
 	"\x16BrokerPositionSnapshot\x12>\n" +
-	"\tpositions\x18\x01 \x03(\v2 .arb.dashboard.v1.BrokerPositionR\tpositions\"\xa4\x03\n" +
+	"\tpositions\x18\x01 \x03(\v2 .arb.dashboard.v1.BrokerPositionR\tpositions\"\xc2\x03\n" +
 	"\vAccountInfo\x12\x1b\n" +
 	"\tvenue_key\x18\x01 \x01(\tR\bvenueKey\x12\x14\n" +
 	"\x05venue\x18\x02 \x01(\tR\x05venue\x12\x1d\n" +
@@ -11036,7 +11044,8 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\bcurrency\x18\f \x01(\tR\bcurrency\x12\x16\n" +
 	"\x06online\x18\r \x01(\bR\x06online\x129\n" +
 	"\n" +
-	"updated_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"L\n" +
+	"updated_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x1c\n" +
+	"\tsimulated\x18\x0f \x01(\bR\tsimulated\"L\n" +
 	"\x0fAccountSnapshot\x129\n" +
 	"\baccounts\x18\x01 \x03(\v2\x1d.arb.dashboard.v1.AccountInfoR\baccounts\"\x15\n" +
 	"\x13ListAccountsRequest\"Q\n" +

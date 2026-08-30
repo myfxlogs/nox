@@ -28,6 +28,7 @@ func accountToProto(a *reconcile.AccountInfo, online bool, now time.Time) *v1.Ac
 		Leverage:   a.Leverage,
 		Currency:   a.Currency,
 		Online:     online,
+		Simulated:  a.Simulated,
 		UpdatedAt:  timestamppb.New(now),
 	}
 	return pb
