@@ -53,6 +53,7 @@ func (s *Service) AddBroker(ctx context.Context, req *connect.Request[v1.AddBrok
 		Password: req.Msg.GetPassword(),
 		Server:   req.Msg.GetServer(),
 		IsReal:   req.Msg.IsReal, // D-144 ① 三态：*bool（nil=未知）
+		Website:  req.Msg.GetWebsite(), // D-157 V3：broker 官网
 	}
 	// 账号类型真实佣金（bps/腿，D-036）；缺省 = 回退 config 默认
 	if req.Msg.CommissionBps != nil {
@@ -93,6 +94,7 @@ func (s *Service) ListBrokerAccounts(ctx context.Context, req *connect.Request[v
 			CreatedAt:   timestamppb.New(a.CreatedAt),
 			IsReal:      a.IsReal,              // D-144 ① 三态：*bool（nil=未知）
 			ServerGroup: serverGroup(a.Server), // D-150 ② 平台分组键后端算好下发
+			Website:     a.Website,             // D-157 V3：broker 官网
 		}
 		// 账号真实佣金（bps/腿，D-036）；nil = 未设置回退默认
 		acct.CommissionBps = a.CommissionBps

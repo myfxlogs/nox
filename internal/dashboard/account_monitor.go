@@ -181,7 +181,7 @@ func (m *AccountMonitor) queriers(ctx context.Context) []reconcile.AccountQuerie
 			for i := range cfgs {
 				c := &cfgs[i]
 				base := resolveExchangeBaseURL(*c)
-				qs = append(qs, reconcile.NewCEXAccountQuerier(c.Venue, c.VenueType, c.APIKey, c.APISecret, c.Passphrase, base, c.Simulated))
+				qs = append(qs, reconcile.NewCEXAccountQuerier(c.Venue, c.VenueType, c.APIKey, c.APISecret, c.Passphrase, base, c.Website, c.Simulated))
 				log.Printf("[account] cex querier: %s:%s", c.Venue, c.VenueType)
 			}
 		}

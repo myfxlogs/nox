@@ -32,6 +32,7 @@ func exchangeToProto(c *pgstore.ExchangeConfig) *v1.ExchangeConfig {
 		ApiKey:    maskKey(c.APIKey),
 		BaseUrl:   c.BaseURL,
 		Simulated: c.Simulated,
+		Website:   c.Website, // D-157 V3：交易所官网
 		CreatedAt: timestamppb.New(c.CreatedAt),
 	}
 }
@@ -71,6 +72,7 @@ func (s *Service) AddExchange(ctx context.Context, req *connect.Request[v1.AddEx
 		Passphrase: strings.TrimSpace(req.Msg.GetPassphrase()),
 		BaseURL:    strings.TrimSpace(req.Msg.GetBaseUrl()),
 		Simulated:  req.Msg.GetSimulated(),
+		Website:    strings.TrimSpace(req.Msg.GetWebsite()), // D-157 V3：交易所官网
 	}
 	if err := s.store.InsertExchangeConfig(ctx, c); err != nil {
 		if pgstore.ErrExchangeConflict(err) {
@@ -91,4 +93,16 @@ func (s *Service) RemoveExchange(ctx context.Context, req *connect.Request[v1.Re
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(&v1.RemoveExchangeResponse{}), nil
+}
+
+// SetExchangeLabel 设置交易所别名；空串 = 清除（D-157 V3）。
+func (s *Service) SetExchangeLabel(ctx context.Context, req *connect.Request[v1.SetExchangeLabelRequest]) (*connect.Response[v1.SetExchangeLabelResponse], error) {
+	id, err := strconv.ParseInt(req.Msg.GetId(), 10, 64)
+	if err != nil || id <= 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("id 非法"))
+	}
+	if err := s.store.SetExchangeLabel(ctx, id, req.Msg.GetLabel()); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&v1.SetExchangeLabelResponse{}), nil
 }
