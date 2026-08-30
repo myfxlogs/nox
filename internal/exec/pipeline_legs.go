@@ -82,12 +82,14 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 		return fmt.Errorf("list legs: %w", err)
 	}
 
-	if err := p.store.UpdatePositionStatus(ctx, posID, "CLOSING"); err != nil {
-		if errors.Is(err, pgstore.ErrTerminalState) {
-			log.Printf("[exec] position %d already terminal, skip CLOSING (G4)", posID)
+	// D-159 W1a R3-1：原子领取平仓权（只允许 OPEN/LEGGED→CLOSING，防并发重复领取）。
+	if err := p.store.ClaimClose(ctx, posID); err != nil {
+		if errors.Is(err, pgstore.ErrClaimFailed) {
+			log.Printf("[exec] position %d close claim failed (not OPEN/LEGGED, concurrent claim?): %v", posID, err)
 			return err
 		}
-		log.Printf("[exec] position %d CLOSING update: %v", posID, err)
+		log.Printf("[exec] position %d ClaimClose: %v", posID, err)
+		return err
 	}
 
 	// D-105 T2：计价币→USD 换算——查 position 取 canonical → notional.QuoteCcy → fxResolver.USDPer。

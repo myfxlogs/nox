@@ -10,9 +10,11 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"time"
 
 	"arb/internal/bus"
 	"arb/internal/combo"
+	"arb/internal/notional"
 	"arb/internal/store/pgstore"
 )
 
@@ -203,7 +205,7 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 	//   3. 双腿名义额合计 USD ≤ spec.MaxGrossExposureUSD（>0 才校验）
 	// nil/空 = 未接线（gate 层 + dashboard 手动入口兜底）。
 	if posType == "SWAPARB" && len(p.swapArbComboAllow) > 0 {
-		if err := p.checkSwapArbComboAllow(opportunityID, legs); err != nil {
+		if err := p.checkSwapArbComboAllow(ctx, opportunityID, legs); err != nil {
 			return nil, err
 		}
 	}
@@ -244,11 +246,13 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 	}
 
 	var status string
+	var isUnknown bool
 	switch {
 	case unknown > 0:
-		// D-159 W1a R2：任一腿 UNKNOWN（MT 超时）→ position UNKNOWN（不知成交与否，待人工/对账确认）。
+		// D-159 W1a R2：MT 超时→CLOSING+uncertainty_reason 过渡（SSOT I1，不新增 DB 枚举）。
 		// 不平仓不假 FAILED——可能已成交，假 FAILED 会触发平仓=反向开新仓。
-		status = "UNKNOWN"
+		status = "CLOSING"
+		isUnknown = true
 	case filled == len(legs):
 		status = "OPEN"
 	case filled == 0:
@@ -287,8 +291,10 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 			log.Printf("[exec] position %d status update: %v", posID, err)
 		}
 	}
-	// D-159 W1a R2：UNKNOWN 状态写 uncertainty_reason（MT 超时过渡语义，供前端/对账识别）。
-	if status == "UNKNOWN" {
+	// D-159 W1a R2：UNKNOWN 过渡写 uncertainty_reason（status=CLOSING，供前端/对账识别）。
+	// 识别 UNKNOWN position：status='CLOSING' AND uncertainty_reason IS NOT NULL
+	// 前端/对账用此条件区分正常平仓中 vs UNKNOWN 待确认
+	if isUnknown {
 		var unknownLegs []string
 		for i, r := range results {
 			if r.Status == "UNKNOWN" {
@@ -337,15 +343,19 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 
 // checkSwapArbComboAllow D-159 W1a R1 S2.3：SWAPARB 精确组合门禁——真实名义额检查。
 // 从 opportunityID 解析 (canonical, venueBuy, venueSell)，匹配 allowlist 后校验 qty/gross。
-// qty→USD 换算用 p.notionalUSD（config.OpportunityNotionalUSD，单笔名义额）。
-// legs 中 BUY 腿=venueLong，SELL 腿=venueShort；qty 即 LegSpec.Qty。
-func (p *Pipeline) checkSwapArbComboAllow(opportunityID string, legs []LegSpec) error {
+// grossUSD = Σ(qty × CS × price × fx)（SSOT 要求真实名义额，非 notionalUSD 近似）。
+// CS/FX 缺失 → fail-closed 拒绝（不回退 1.0）；legs 中 BUY 腿=venueLong，SELL 腿=venueShort。
+func (p *Pipeline) checkSwapArbComboAllow(ctx context.Context, opportunityID string, legs []LegSpec) error {
 	comboKey := combo.FromOppID(opportunityID)
-	parts := strings.SplitN(comboKey, ":", 4)
-	if len(parts) < 4 {
-		return fmt.Errorf("%w: cannot parse combo key %q", ErrComboNotAllowed, comboKey)
+	// comboKey 格式 "STRATEGY:canonical:venueLong:venueShort"，venueKey 含 ":"（如 "acct:mt5"）。
+	// SplitN(":",4) 会把 venueLong 截断 → 用全切分重组：strategy|canonical|acct|plat|acct|plat（6 段）。
+	allParts := strings.Split(comboKey, ":")
+	if len(allParts) < 6 {
+		return fmt.Errorf("%w: cannot parse combo key %q (want 6+ parts, got %d)", ErrComboNotAllowed, comboKey, len(allParts))
 	}
-	canonical, venueBuy, venueSell := parts[1], parts[2], parts[3]
+	canonical := allParts[1]
+	venueBuy := allParts[2] + ":" + allParts[3]
+	venueSell := allParts[4] + ":" + allParts[5]
 	spec := MatchComboAllow(p.swapArbComboAllow, canonical, venueBuy, venueSell)
 	if spec == nil {
 		return fmt.Errorf("%w: %s %s×%s", ErrComboNotAllowed, canonical, venueBuy, venueSell)
@@ -364,8 +374,36 @@ func (p *Pipeline) checkSwapArbComboAllow(opportunityID string, legs []LegSpec) 
 	if spec.MaxShortQty > 0 && shortQty > spec.MaxShortQty {
 		return fmt.Errorf("%w: short %.4f > %.4f", ErrQtyExceedsLimit, shortQty, spec.MaxShortQty)
 	}
-	if spec.MaxGrossExposureUSD > 0 && p.notionalUSD > 0 {
-		grossUSD := (longQty + shortQty) * p.notionalUSD
+	// D-159 W1a R1 S2.3 返修：真实名义额 = qty × CS × price × fx（SSOT 要求，非 notionalUSD 近似）。
+	// CS/FX 缺失 → fail-closed 拒绝（不回退 1.0）。
+	if spec.MaxGrossExposureUSD > 0 {
+		quoteCcy := notional.QuoteCcy(canonical)
+		var grossUSD float64
+		for _, leg := range legs {
+			cs := 1.0
+			if p.csResolver != nil {
+				v, ok := p.csResolver.ContractSize(leg.VenueKey, leg.VenueSymbol)
+				if !ok || v <= 0 {
+					return fmt.Errorf("%w: CS missing for %s %s (fail-closed)", ErrComboNotAllowed, leg.VenueKey, leg.VenueSymbol)
+				}
+				cs = v
+			} else {
+				return fmt.Errorf("%w: csResolver not wired (fail-closed)", ErrComboNotAllowed)
+			}
+			fx := 1.0
+			if quoteCcy != "" && quoteCcy != "USD" {
+				if p.fxResolver != nil {
+					rate, ok := p.fxResolver.USDPer(ctx, quoteCcy, time.Now())
+					if !ok || rate <= 0 {
+						return fmt.Errorf("%w: fx missing for %s (fail-closed)", ErrComboNotAllowed, quoteCcy)
+					}
+					fx = rate
+				} else {
+					return fmt.Errorf("%w: fxResolver not wired for non-USD quote ccy %s (fail-closed)", ErrComboNotAllowed, quoteCcy)
+				}
+			}
+			grossUSD += leg.Qty * cs * leg.PriceExpected * fx
+		}
 		if grossUSD > spec.MaxGrossExposureUSD {
 			return fmt.Errorf("%w: gross $%.2f > $%.2f", ErrGrossExposureExceeds, grossUSD, spec.MaxGrossExposureUSD)
 		}
