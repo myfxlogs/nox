@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 	"arb/internal/store/pgstore"
@@ -31,7 +32,9 @@ func testServiceStore(t *testing.T) *pgstore.Store {
 	if !strings.Contains(cfg.Database, "test") {
 		t.Fatalf("ARB_TEST_PG_SERVICE_DSN 指向非测试库 %q：测试会 TRUNCATE 该库，拒绝执行", cfg.Database)
 	}
-	ctx := context.Background()
+	// D-177 CI 修复：加 30s 超时防止 pgstore.New 在 fd 压力下无限挂起（CI 实测 15s 后 EBADF）。
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	s, err := pgstore.New(ctx, dsn)
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)
