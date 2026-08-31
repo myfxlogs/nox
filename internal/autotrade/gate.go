@@ -407,6 +407,15 @@ func (g *Gate) swapDeviationGateCheck(ctx context.Context, intent TradeIntent, a
 			if leg.PriceActual != nil {
 				notional *= *leg.PriceActual
 			}
+			// D-165.1：补 ContractSize 乘法（MT 腿 CS≠1 时 notional 少算 CS 倍）。
+			// resolver 未注入（nil）→ 用 CS=1（回退，CEX 腿正确）；注入但 ok=false → 跳过该腿。
+			if g.cfg.LegContractSizeResolver != nil {
+				cs, ok := g.cfg.LegContractSizeResolver(leg.Venue, leg.Symbol)
+				if !ok || cs <= 0 {
+					continue // 无法算 notional→跳过（走 S3）
+				}
+				notional *= cs
+			}
 			if notional <= 0 {
 				continue // 无法算 notional→跳过
 			}

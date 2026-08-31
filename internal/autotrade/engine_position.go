@@ -183,6 +183,15 @@ func (e *Engine) brokerActualNetSwapBps(ctx context.Context, p *pgstore.Position
 		if leg.PriceActual != nil {
 			notional *= *leg.PriceActual
 		}
+		// D-165.1：补 ContractSize 乘法（MT 腿 CS≠1 时 notional 少算 CS 倍）。
+		// resolver 未注入/失败 → 用 CS=1（回退 facts，不阻塞退出决策）。
+		if e.service != nil {
+			if resolver := e.service.LegContractSize(); resolver != nil {
+				if cs, ok := resolver(leg.Venue, leg.Symbol); ok && cs > 0 {
+					notional *= cs
+				}
+			}
+		}
 		if leg.Side == "BUY" && legBare == buyBare {
 			usd, ok, err := e.store.DailySwapAccrued(ctx, p.ID, buyBare, now)
 			if err != nil || !ok {

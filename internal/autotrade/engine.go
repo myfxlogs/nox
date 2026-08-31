@@ -51,6 +51,9 @@ type Config struct {
 	SwapDeviationExitPct float64
 	// D-165 S3：swap facts 零值校验开关（默认 true）。facts=0 但 broker 有非零 swap 历史→拒绝。
 	SwapFactsZeroCheckEnabled bool
+	// D-165.1 S1：leg contract size resolver（MT 腿 CS≠1 时 notional 换算用）。
+	// nil = 未注入（回退 CS=1，CEX 腿正确，MT 腿 notional 少算但不阻塞）。
+	LegContractSizeResolver func(venueKey, venueSymbol string) (float64, bool)
 
 	// D-072 §3.3/§4.2 swap/funding 退出参数
 	MinNetSwapBps  float64 // discoverSwapCombos 最低净 swap（ARB_AUTOTRADE_MIN_NET_SWAP_BPS，默认 0.2）
