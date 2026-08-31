@@ -89,11 +89,12 @@ func sortCombosByNetSwap(combos []swapComboCandidate) {
 // 用例④：SwapComboPublic 转换保留 basisBps
 func TestSwapComboPublicConversion(t *testing.T) {
 	c := swapComboCandidate{
-		canonical:  "AUDJPY",
-		vLong:      "ic:mt5",
-		vShort:     "pxb:mt5",
-		netSwapBps: 2.5,
-		basisBps:   3.0,
+		canonical:      "AUDJPY",
+		vLong:          "ic:mt5",
+		vShort:         "pxb:mt5",
+		netSwapBps:     2.5,
+		basisBps:       3.0,
+		basisAvailable: true,
 	}
 	p := SwapComboPublic{
 		Canonical:  c.canonical,

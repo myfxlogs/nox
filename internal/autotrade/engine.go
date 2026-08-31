@@ -75,6 +75,10 @@ type Config struct {
 	// D-159 W4a R7：单腿 bid-ask spread 宽度上限（bps），>0 才校验，0=不校验（ARB_SWAPARB_MAX_LEG_SPREAD_BPS，默认 50）。
 	SwapArbMaxLegSpreadBps float64 // 任一腿 spread 过宽=流动性异常/报价不一致 → skip
 
+	// D-169 P0：入场价差/基差上限（bps），>0 才校验，0=不校验。
+	EntrySpreadMaxBps float64 // ARB_SWAPARB_ENTRY_SPREAD_MAX_BPS（默认 30）
+	EntryBasisMaxBps  float64 // ARB_SWAPARB_ENTRY_BASIS_MAX_BPS（默认 30）
+
 	// D-104 P0：swap facts 新鲜度门禁（fail-closed，ARB_SWAP_FACT_MAX_AGE，默认 2h）。
 	// discoverSwapCombos 使用 lf/sf 前查 now−f.Ts > SwapFactMaxAge → 跳过该 fact + 计数日志。
 	SwapFactMaxAge time.Duration
