@@ -10,17 +10,19 @@ import (
 
 // Kind 常量表（§1.2）。
 const (
-	KindFunding        = "funding"          // 永续资金费率（UnitPctAnnualized）
-	KindDefiRate       = "defi_rate"        // 链上/DeFi 收益利率（UnitPctAnnualized）
-	KindFX             = "fx"               // 汇率 USDCNH（UnitPrice）
-	KindSwapLong       = "swap_long"        // MT 多单 swap（UnitBpsDaily，D-028 归一）
-	KindSwapShort      = "swap_short"       // MT 空单 swap（UnitBpsDaily，D-028 归一）
-	KindTradeMode      = "trade_mode"       // MT5 符号可交易性（UnitMode，D-060 F3）
-	KindTripleSwapDay  = "triple_swap_day"  // MT 三倍 swap 日（UnitWeekday，D-077 V2）
-	KindInitMarginRate = "init_margin_rate" // MT5 初始保证金率（UnitRatio，S6 返修：账户级=1/杠杆，无限杠杆=0）
-	KindOptParityDev   = "opt_parity_dev"   // 期权平价偏离 bps（UnitBps，D-137 Deribit 采集监控）
-	KindMTSymbolMeta   = "mt_symbol_meta"   // MT5 符号元数据（UnitContractSize，D-140 S2 CS 自动来源）
-	KindMTSymbolMargin = "mt_symbol_margin" // MT5 品种级保证金率（UnitRatio，D-142 ③ 品种级优先账户级回落）
+	KindFunding         = "funding"           // 永续资金费率（UnitPctAnnualized）
+	KindFundingHistory  = "funding_history"   // 永续 funding 结算历史（UnitPctAnnualized，D-172 S1 结算费率非轮询预测值）
+	KindDefiRate        = "defi_rate"         // 链上/DeFi 收益利率（UnitPctAnnualized）
+	KindFX              = "fx"                // 汇率 USDCNH（UnitPrice）
+	KindSwapLong        = "swap_long"         // MT 多单 swap（UnitBpsDaily，D-028 归一）
+	KindSwapShort       = "swap_short"        // MT 空单 swap（UnitBpsDaily，D-028 归一）
+	KindTradeMode       = "trade_mode"        // MT5 符号可交易性（UnitMode，D-060 F3）
+	KindTripleSwapDay   = "triple_swap_day"   // MT 三倍 swap 日（UnitWeekday，D-077 V2）
+	KindInitMarginRate  = "init_margin_rate"  // MT5 初始保证金率（UnitRatio，S6 返修：账户级=1/杠杆，无限杠杆=0）
+	KindOptParityDev    = "opt_parity_dev"    // 期权平价偏离 bps（UnitBps，D-137 Deribit 采集监控）
+	KindMTSymbolMeta    = "mt_symbol_meta"    // MT5 符号元数据（UnitContractSize，D-140 S2 CS 自动来源）
+	KindMTSymbolMargin  = "mt_symbol_margin"  // MT5 品种级保证金率（UnitRatio，D-142 ③ 品种级优先账户级回落）
+	KindMTSymbolProduct = "mt_symbol_product" // MT5 CalcMode 产品类型（UnitCalcMode，D-173 product_group 反哺）
 )
 
 // Unit 常量表（§1.2）。
@@ -33,6 +35,7 @@ const (
 	UnitRatio         = "ratio"          // 小数比率（0.01=1%，S6 保证金率）
 	UnitBps           = "bps"            // 基点（1bp=0.01%，期权平价偏离 D-137）
 	UnitContractSize  = "contract_size"  // 合约规格（D-140 S2，MT5 SymbolInfo.ContractSize）
+	UnitCalcMode      = "calc_mode"      // CalcMode enum 数值（D-173，MT5 产品类型）
 )
 
 // TradeMode 值域（MT5 ENUM_SYMBOL_TRADE_MODE 透传，D-060 F4/F5 消费；
@@ -57,17 +60,19 @@ type Fact struct {
 }
 
 var validKinds = map[string]bool{
-	KindFunding:        true,
-	KindDefiRate:       true,
-	KindFX:             true,
-	KindSwapLong:       true,
-	KindSwapShort:      true,
-	KindTradeMode:      true,
-	KindTripleSwapDay:  true,
-	KindInitMarginRate: true,
-	KindOptParityDev:   true,
-	KindMTSymbolMeta:   true,
-	KindMTSymbolMargin: true,
+	KindFunding:         true,
+	KindFundingHistory:  true,
+	KindDefiRate:        true,
+	KindFX:              true,
+	KindSwapLong:        true,
+	KindSwapShort:       true,
+	KindTradeMode:       true,
+	KindTripleSwapDay:   true,
+	KindInitMarginRate:  true,
+	KindOptParityDev:    true,
+	KindMTSymbolMeta:    true,
+	KindMTSymbolMargin:  true,
+	KindMTSymbolProduct: true,
 }
 
 // ValidKind 报告 k 是否为已知 Kind。
@@ -79,4 +84,25 @@ func (f Fact) Validate() error {
 		return fmt.Errorf("fact: unknown kind %q", f.Kind)
 	}
 	return nil
+}
+
+// CalcModeToProductGroup D-173：MT5 CalcMode → product_group 映射。
+// CFD(2) 现货与 CFDLeverage(4) 杠杆分属不同 product_group（470 事故根因：报价基准差 ~270bps）。
+// 未知 CalcMode → ""（空，配对时放行）。
+// 放 fact 包导出：autotrade（单测）与 cmd/core（meta-sink 反哺）共用，P3 单一真相源。
+func CalcModeToProductGroup(calcMode int32) string {
+	switch calcMode {
+	case 0:
+		return "fx"
+	case 1, 33, 34:
+		return "fut"
+	case 2:
+		return "cfd_spot"
+	case 3:
+		return "cfd_index"
+	case 4:
+		return "cfd_leverage"
+	default:
+		return ""
+	}
 }
