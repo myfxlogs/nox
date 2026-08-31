@@ -196,6 +196,9 @@ type Config struct {
 	// 开仓前校验 venue 的 broker_accounts.is_real 与此值一致：is_real=true ↔ environment='live'。
 	// is_real=nil（未知）→ fail-closed 拒绝（不允许未知环境开仓）。
 	Environment string
+	// D-159 W6a S2：LIVE 人工开关（ARB_LIVE_TRADE，默认 false）。
+	// is_real=true 账户 + LiveTrade=false → 拒绝开仓。demo 不受限制。
+	LiveTrade bool
 }
 
 // Load 从环境变量加载配置，未设置用默认值。
@@ -282,5 +285,6 @@ func Load() *Config {
 		SwapNonSettleVenues:        envStringSlice("ARB_SWAP_NON_SETTLE_VENUES"),       // D-112
 		FreezeGuard:                envDur("ARB_FREEZE_GUARD", 10*time.Minute),         // D-155 freeze guard 冻结腿预检窗口
 		Environment:                envStr("ARB_ENVIRONMENT", "demo"),                  // D-159 W1a I6：缺省 demo fail-safe
+		LiveTrade:                  envBool("ARB_LIVE_TRADE", false),                   // D-159 W6a S2：LIVE 人工开关默认 false
 	}
 }
