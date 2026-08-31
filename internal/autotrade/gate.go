@@ -171,6 +171,16 @@ func (g *Gate) Submit(ctx context.Context, intent TradeIntent) GateResult {
 		return GateResult{Status: "REJECTED", Reason: verdict.Reason}
 	}
 
+	// D-159 W6a S2：LIVE 人工开关——verdict.Pass=true 后才检查（disabled/dedup/daily_loss 拒绝时不查）。
+	// is_real=true 账户 + LiveTrade=false → 拒绝开仓。demo（is_real=false）不受限制。
+	// fail-closed：is_real 查询失败 → 拒绝。
+	if !g.cfg.LiveTrade {
+		if rv := g.liveGateCheck(ctx, intent); !rv.Pass {
+			g.rejectLog(ctx, intent, rv.Reason, false)
+			return GateResult{Status: "REJECTED", Reason: rv.Reason}
+		}
+	}
+
 	// 执行
 	status, msg, posID := intent.Execute(ctx)
 
@@ -287,6 +297,30 @@ func (g *Gate) environmentIsRealCheck(ctx context.Context, intent TradeIntent) G
 		isLive := *acct.IsReal
 		if isLive != wantLive {
 			return GateVerdict{false, fmt.Sprintf("environment check: venue %s is_real=%v != environment=%s", venue, isLive, g.cfg.Environment)}
+		}
+	}
+	return GateVerdict{Pass: true}
+}
+
+// liveGateCheck D-159 W6a S2：LIVE 人工开关检查。
+// LiveTrade=false 时，任一腿 is_real=true → 拒绝（实盘账户不允许开仓）。
+// is_real=false（demo）→ 放行。is_real=nil（未知）→ fail-closed 拒绝。
+// venue 不存在 → fail-closed 拒绝。
+func (g *Gate) liveGateCheck(ctx context.Context, intent TradeIntent) GateVerdict {
+	for _, venueKey := range []string{intent.VenueBuy, intent.VenueSell} {
+		venue, _, _ := strings.Cut(venueKey, ":")
+		if venue == "" {
+			return GateVerdict{false, fmt.Sprintf("live gate: empty venue in %s", venueKey)}
+		}
+		acct, err := g.store.GetBrokerAccount(ctx, venue)
+		if err != nil {
+			return GateVerdict{false, fmt.Sprintf("live gate: venue %s not found (%v)", venue, err)}
+		}
+		if acct.IsReal == nil {
+			return GateVerdict{false, fmt.Sprintf("live gate: venue %s is_real unknown (null)", venue)}
+		}
+		if *acct.IsReal {
+			return GateVerdict{false, fmt.Sprintf("live trade disabled (ARB_LIVE_TRADE=false, venue=%s is_real=true)", venue)}
 		}
 	}
 	return GateVerdict{Pass: true}

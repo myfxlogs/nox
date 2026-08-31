@@ -41,6 +41,10 @@ type Config struct {
 	// Environment 执行环境固定值（'demo'/'live'）。开仓前校验 venue 的 is_real 与此值一致。
 	// 空 = 未配置（不检查，回退旧行为）。
 	Environment string
+	// D-159 W6a S2：LIVE 人工开关（ARB_LIVE_TRADE，默认 false）。
+	// is_real=true 账户 + LiveTrade=false → 拒绝开仓（Gate.Submit + 手动 RPC 同源）。
+	// is_real=false（demo）不受限制。切换=改 env+重启+审计日志（无 RPC）。
+	LiveTrade bool
 
 	// D-072 §3.3/§4.2 swap/funding 退出参数
 	MinNetSwapBps  float64 // discoverSwapCombos 最低净 swap（ARB_AUTOTRADE_MIN_NET_SWAP_BPS，默认 0.2）
