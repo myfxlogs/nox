@@ -156,9 +156,9 @@ func (o *OKXFundingHistory) Poll(ctx context.Context) ([]fact.Fact, error) {
 }
 
 // GateFundingHistory 采集 Gate funding 结算历史。
-// 端点 GET /api/v4/futures/usdt/funding_rate?contract=&from=&to=&limit=2000
+// 端点 GET /api/v4/futures/usdt/funding_rate?contract=&from=&to=&limit=1000
 // 响应（实测 2026-08-31）：[{"r":"rate(string)","t":sec}]——t 是秒非毫秒（紧凑格式）。
-// limit 2000 覆盖 30 天。
+// limit 1000（Gate API 上限，实测 limit=2000 返回 HTTP 400）；30 天 8h=90 条，1h 结算最坏 720 条，1000 够。
 type GateFundingHistory struct {
 	cfg     Config
 	resolve HistoryStartResolver
@@ -179,7 +179,7 @@ func (g *GateFundingHistory) Poll(ctx context.Context) ([]fact.Fact, error) {
 			return nil, fmt.Errorf("gate funding_history %s: %w", pair, err)
 		}
 		contract := sym + "_USDT"
-		url := fmt.Sprintf("%s/api/v4/futures/usdt/funding_rate?contract=%s&from=%d&to=%d&limit=2000",
+		url := fmt.Sprintf("%s/api/v4/futures/usdt/funding_rate?contract=%s&from=%d&to=%d&limit=1000",
 			g.cfg.GateBaseURL, contract, start.Unix(), time.Now().Unix())
 		arr, err := getJSONArray(ctx, g.cfg.Client, url)
 		if err != nil {
