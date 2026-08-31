@@ -165,6 +165,11 @@ type Config struct {
 	SwapArbEntrySpreadMinBps float64 // ARB_SWAPARB_ENTRY_SPREAD_MIN_BPS（默认 -3）
 	// D-159 W4a R7：单腿 bid-ask spread 宽度上限（bps），>0 才校验，0=不校验。
 	SwapArbMaxLegSpreadBps float64 // ARB_SWAPARB_MAX_LEG_SPREAD_BPS（默认 50.0，保守阈值：SWAPARB 跨账户 FX 品种 bid-ask spread 通常 <10 bps，50 bps 是 5 倍保守）
+	// D-169 P0：入场价差上限（bps），>0 才校验，0=不校验。
+	// "太好的价差"=虚假价差（跨合约/不同标的），290 bps 的 BRENT 跨 broker 价差直接挡住。
+	SwapArbEntrySpreadMaxBps float64 // ARB_SWAPARB_ENTRY_SPREAD_MAX_BPS（默认 30）
+	// D-169 P0：入场基差上限（bps），>0 才校验，0=不校验。正负双向拦截。
+	SwapArbEntryBasisMaxBps float64 // ARB_SWAPARB_ENTRY_BASIS_MAX_BPS（默认 30）
 
 	// === 前端分析员（D-091）===
 	// AIBaseURL/Key/Model/PGDSN 四 env + RatePerHour 限流；空 Key=未配置（RPC 返回 failed_precondition）。
@@ -293,6 +298,8 @@ func Load() *Config {
 		RevalidateRelPct:           envFloat("ARB_REVALIDATE_REL_PCT", 20.0),           // D-077 修复⑪B N4
 		SwapArbEntrySpreadMinBps:   envFloat("ARB_SWAPARB_ENTRY_SPREAD_MIN_BPS", -3.0), // D-077 修复⑪B N6
 		SwapArbMaxLegSpreadBps:     envFloat("ARB_SWAPARB_MAX_LEG_SPREAD_BPS", 50.0),   // D-159 W4a R7
+		SwapArbEntrySpreadMaxBps:   envFloat("ARB_SWAPARB_ENTRY_SPREAD_MAX_BPS", 30.0), // D-169 P0
+		SwapArbEntryBasisMaxBps:    envFloat("ARB_SWAPARB_ENTRY_BASIS_MAX_BPS", 30.0),  // D-169 P0
 		AIBaseURL:                  envStr("ARB_AI_BASE_URL", ""),
 		AIAPIKey:                   envStr("ARB_AI_API_KEY", ""),
 		AIModel:                    envStr("ARB_AI_MODEL", "glm-4.6"),
