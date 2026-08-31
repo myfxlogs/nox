@@ -32,17 +32,20 @@ func testServiceStore(t *testing.T) *pgstore.Store {
 	if !strings.Contains(cfg.Database, "test") {
 		t.Fatalf("ARB_TEST_PG_SERVICE_DSN 指向非测试库 %q：测试会 TRUNCATE 该库，拒绝执行", cfg.Database)
 	}
-	// D-177 CI 修复：加 30s 超时防止 pgstore.New 在 fd 压力下无限挂起（CI 实测 15s 后 EBADF）。
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	s, err := pgstore.New(ctx, dsn)
+	// D-177 CI 修复：pgstore.New 用 30s 超时（防 fd 压力下挂起），
+	// 但 TRUNCATE 用独立 context（schema 重建可能消耗大部分时间）。
+	newCtx, newCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer newCancel()
+	s, err := pgstore.New(newCtx, dsn)
 	if err != nil {
 		t.Fatalf("pgstore.New: %v", err)
 	}
 	t.Cleanup(s.Close)
 	rebuildServiceTestSchema(t, s)
 	// 每测试函数清财务线表（数据隔离；schema 重建每进程仅一次）。
-	if _, err := s.Pool().Exec(ctx, "TRUNCATE investment_records, position_daily_income, personal_positions CASCADE"); err != nil {
+	truncCtx, truncCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer truncCancel()
+	if _, err := s.Pool().Exec(truncCtx, "TRUNCATE investment_records, position_daily_income, personal_positions CASCADE"); err != nil {
 		t.Fatalf("TRUNCATE investment_records, position_daily_income, personal_positions: %v", err)
 	}
 	return s
