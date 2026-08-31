@@ -55,10 +55,17 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 	if len(e.cfg.AllowCanonicals) > 0 && !e.cfg.AllowCanonicals[opp.Canonical] {
 		return
 	}
-	// D-159 W1a R1：SWAPARB 精确组合门禁——发现层静默过滤（allowlist 外的组合不产 intent 不落 REJECTED）。
-	// 空 allowlist 不在此过滤（gate 层 fail-closed 拒绝并落 REJECTED 日志，审计完整性）。
-	if opp.Type == "SWAPARB" && len(e.cfg.SwapArbAllowCombos) > 0 {
+	// D-159 W1a R1 + D-168 自动准入：SWAPARB 发现层组合过滤。
+	// autoAllow=true：跳过白名单过滤，所有组合产 intent 到 gate 层（由门禁栈兜底）。
+	// autoAllow=false：白名单外组合静默过滤（不产 intent 不落 REJECTED），空 allowlist 不过滤（gate 层 fail-closed）。
+	if opp.Type == "SWAPARB" && !e.cfg.SwapArbAutoAllow && len(e.cfg.SwapArbAllowCombos) > 0 {
 		if exec.MatchComboAllow(e.cfg.SwapArbAllowCombos, opp.Canonical, opp.VenueBuy, opp.VenueSell) == nil {
+			return
+		}
+	}
+	// D-168 黑名单：发现层静默过滤（deny 组合不产 intent）
+	if opp.Type == "SWAPARB" && len(e.cfg.SwapArbDenyCombos) > 0 {
+		if exec.MatchComboAllow(e.cfg.SwapArbDenyCombos, opp.Canonical, opp.VenueBuy, opp.VenueSell) != nil {
 			return
 		}
 	}

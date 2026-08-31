@@ -129,7 +129,7 @@ func (g *Gate) Submit(ctx context.Context, intent TradeIntent) GateResult {
 	// gateDecision 已过（state=RUNNING、未禁用、未超仓、未超 notional、未 dedup）才进入此检查。
 	// 非 RUNNING 状态（CLOSE_ONLY 等）已在 gateDecision 拒绝，不会到此。
 	if intent.Strategy == "SWAPARB" {
-		if cv := comboAllowVerdict(g.cfg.SwapArbAllowCombos, g.cfg.MaxActiveCombos, intent, activePositions); !cv.Pass {
+		if cv := comboAllowVerdict(g.cfg.SwapArbAllowCombos, g.cfg.SwapArbDenyCombos, g.cfg.SwapArbAutoAllow, g.cfg.MaxActiveCombos, g.cfg.SwapArbMaxGrossExposure, intent, activePositions); !cv.Pass {
 			g.rejectLog(ctx, intent, cv.Reason, false)
 			return GateResult{Status: "REJECTED", Reason: cv.Reason}
 		}

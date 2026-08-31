@@ -30,12 +30,17 @@ type Config struct {
 	ExcludeCanonicals map[string]bool    // BRENT/WTI 排除
 	MeanRevertThresh  map[string]float64 // MR 阈值 map
 
-	// D-159 W1a R1：精确组合门禁（SWAPARB 专用）。
-	// SwapArbAllowCombos 空切片 = RUNNING 下 fail-closed（无组合被允许，拒绝开仓）。
+	// D-159 W1a R1 + D-168 自动准入：SWAPARB 组合门禁。
+	// SwapArbAllowCombos 空切片 = RUNNING 下 fail-closed（autoAllow=false 时）。
+	// autoAllow=true 时空白名单=自动放行所有通过门禁栈的组合。
+	// SwapArbDenyCombos 黑名单（D-168）：显式禁止已知问题组合，优先级最高。
+	// SwapArbMaxGrossExposure 全局活跃组合名义合计上限（>0 才校验）。
 	// MaxActiveCombos 同组合最大并发数，默认 1（D-138 单组合口径）。
-	// ComboAllowSpec 定义在 exec 包（最底层无依赖，dashboard/autotrade 复用）。
-	SwapArbAllowCombos []exec.ComboAllowSpec
-	MaxActiveCombos    int
+	SwapArbAllowCombos      []exec.ComboAllowSpec
+	SwapArbDenyCombos       []exec.ComboAllowSpec
+	SwapArbAutoAllow        bool
+	SwapArbMaxGrossExposure float64
+	MaxActiveCombos         int
 
 	// D-159 W1a I6：environment/is_real 一致性检查。
 	// Environment 执行环境固定值（'demo'/'live'）。开仓前校验 venue 的 is_real 与此值一致。
