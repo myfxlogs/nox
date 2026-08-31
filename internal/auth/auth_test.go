@@ -9,18 +9,18 @@ import (
 	"connectrpc.com/connect"
 )
 
-// TestInterceptor_EmptyTokenPassthrough D-073 demo 豁免：token == "" 时放行全部请求（不校验）。
-// 任意 Authorization 头（含缺失/错误）都应通过——demo 阶段无真实资金，公网匿名可达。
-func TestInterceptor_EmptyTokenPassthrough(t *testing.T) {
+// TestInterceptor_EmptyTokenFailClosed D-159 W6a S1：token == "" 时 fail-closed（移除逃生门后）。
+// 任意 Authorization 头（含缺失/错误）都应返回 error——生产 token 必须非空（ValidateStartupToken 保证启动时非空）。
+func TestInterceptor_EmptyTokenFailClosed(t *testing.T) {
 	i := NewInterceptor("")
 	cases := []struct {
 		name string
 		auth string
 	}{
-		{"无 Authorization 头", ""},
-		{"错误 scheme", "Basic abc"},
-		{"错误 token", "Bearer wrong"},
-		{"正确格式但空 token 放行", "Bearer "},
+		{"无 Authorization 头 → Unauthenticated", ""},
+		{"错误 scheme → Unauthenticated", "Basic abc"},
+		{"错误 token → Unauthenticated", "Bearer wrong"},
+		{"正确格式但空 token → Unauthenticated", "Bearer "},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -28,8 +28,8 @@ func TestInterceptor_EmptyTokenPassthrough(t *testing.T) {
 			if c.auth != "" {
 				h.Set("Authorization", c.auth)
 			}
-			if err := i.check(h); err != nil {
-				t.Errorf("empty token check() err = %v, want nil（demo 豁免放行）", err)
+			if err := i.check(h); err == nil {
+				t.Errorf("empty token check() err = nil, want error（fail-closed，W6a S1 移除逃生门）")
 			}
 		})
 	}
@@ -62,7 +62,7 @@ func TestInterceptor_NonEmptyTokenStillValidates(t *testing.T) {
 	}
 }
 
-// TestInterceptor_WrapUnaryEmptyToken D-073：空 token 时 WrapUnary 放行（不返回 Unauthenticated）。
+// TestInterceptor_WrapUnaryEmptyToken D-159 W6a S1：空 token 时 WrapUnary fail-closed（返回 Unauthenticated）。
 func TestInterceptor_WrapUnaryEmptyToken(t *testing.T) {
 	i := NewInterceptor("")
 	called := false
@@ -72,11 +72,11 @@ func TestInterceptor_WrapUnaryEmptyToken(t *testing.T) {
 	})
 	req := connect.NewRequest[any](nil)
 	_, err := fn(context.Background(), req)
-	if err != nil {
-		t.Fatalf("WrapUnary err = %v, want nil（空 token 放行）", err)
+	if err == nil {
+		t.Fatal("WrapUnary err = nil, want Unauthenticated（空 token fail-closed，W6a S1）")
 	}
-	if !called {
-		t.Error("next handler not called（空 token 应放行到 next）")
+	if called {
+		t.Error("next handler called（空 token 应被拦截，不调用 next）")
 	}
 }
 
@@ -133,16 +133,19 @@ func TestInterceptor_StreamingHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("空 token → 放行", func(t *testing.T) {
+	t.Run("空 token → fail-closed（W6a S1）", func(t *testing.T) {
 		i := NewInterceptor("")
 		called := false
 		fn := i.WrapStreamingHandler(func(ctx context.Context, w connect.StreamingHandlerConn) error {
 			called = true
 			return nil
 		})
-		_ = fn(context.Background(), &fakeStreamingConn{header: http.Header{}})
-		if !called {
-			t.Error("next handler not called（空 token 应放行）")
+		err := fn(context.Background(), &fakeStreamingConn{header: http.Header{}})
+		if err == nil {
+			t.Error("streaming handler err = nil, want Unauthenticated（空 token fail-closed）")
+		}
+		if called {
+			t.Error("next handler called（空 token 应被拦截）")
 		}
 	})
 }

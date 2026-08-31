@@ -67,8 +67,10 @@ func (i *Interceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) co
 }
 
 func (i *Interceptor) check(h http.Header) error {
+	// D-159 W6a S1：移除 token=="" 逃生门（生产 token 必须非空，ValidateStartupToken 已保证启动时非空或显式 allowEmpty）。
+	// 空 token 配置=未配置认证 → fail-closed 拒绝所有请求（不再放行）。
 	if i.token == "" {
-		return nil
+		return errors.New("auth token not configured (ARB_AUTH_TOKEN empty)")
 	}
 	auth := h.Get("Authorization")
 	if auth == "" {

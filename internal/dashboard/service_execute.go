@@ -113,6 +113,14 @@ func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, request
 	if found == nil {
 		return "FAILED", "opportunity not found or expired", 0
 	}
+	// D-159 W6a S5：手动 RPC 不绕 CLOSE_ONLY——非 RUNNING 拒绝开仓（fail-closed）。
+	state, err := s.checkAutotradeState(ctx)
+	if err != nil {
+		return "FAILED", fmt.Sprintf("autotrade state: %v (fail-closed)", err), 0
+	}
+	if state != "RUNNING" {
+		return "FAILED", fmt.Sprintf("autotrade not RUNNING (state=%s), open rejected", state), 0
+	}
 	if !s.pipeline.Revalidate(found.Canonical, found.VenueBuy, found.VenueSell, found.Type, found.GrossBps) {
 		return "FAILED", "quote stale or net benefit degraded beyond threshold", 0
 	}
@@ -141,6 +149,12 @@ func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, request
 	// D-159 W1a I6：environment/is_real 一致性检查（手动入口同源，pipeline.Execute 前拦截）。
 	if s.environment != "" {
 		if msg := s.checkEnvironmentIsReal(ctx, found.VenueBuy, found.VenueSell); msg != "" {
+			return "FAILED", msg, 0
+		}
+	}
+	// D-159 W6a S2：LIVE 人工开关（手动入口同源，pipeline.Execute 前拦截）。
+	if !s.liveTrade {
+		if msg := s.checkLiveGate(ctx, found.VenueBuy, found.VenueSell); msg != "" {
 			return "FAILED", msg, 0
 		}
 	}
@@ -176,6 +190,14 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 	}
 	if qty <= 0 {
 		return "FAILED", "invalid quantity", 0
+	}
+	// D-159 W6a S5：手动 RPC 不绕 CLOSE_ONLY——非 RUNNING 拒绝开仓（fail-closed）。
+	state, err := s.checkAutotradeState(ctx)
+	if err != nil {
+		return "FAILED", fmt.Sprintf("autotrade state: %v (fail-closed)", err), 0
+	}
+	if state != "RUNNING" {
+		return "FAILED", fmt.Sprintf("autotrade not RUNNING (state=%s), open rejected", state), 0
 	}
 	if maxNotional <= 0 {
 		maxNotional = 10000.0
@@ -253,6 +275,12 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 			return "FAILED", msg, 0
 		}
 	}
+	// D-159 W6a S2：LIVE 人工开关（手动入口同源，pipeline.Execute 前拦截）。
+	if !s.liveTrade {
+		if msg := s.checkLiveGate(ctx, venueBuy, venueSell); msg != "" {
+			return "FAILED", msg, 0
+		}
+	}
 	result, err := s.pipeline.Execute(ctx, oppID, requestID, strategyType, legs)
 	if err != nil {
 		if errors.Is(err, exec.ErrMaxOpenPositions) || errors.Is(err, exec.ErrDuplicateExecution) ||
@@ -326,4 +354,38 @@ func (s *Service) checkEnvironmentIsReal(ctx context.Context, venueBuy, venueSel
 		}
 	}
 	return ""
+}
+
+// checkLiveGate D-159 W6a S2：LIVE 人工开关检查（手动入口同源）。
+// LiveTrade=false 时，任一腿 is_real=true → 返回拒绝原因；demo 放行。
+// 校验逻辑与 autotrade.Gate.liveGateCheck 同源。
+func (s *Service) checkLiveGate(ctx context.Context, venueBuy, venueSell string) string {
+	for _, venueKey := range []string{venueBuy, venueSell} {
+		venue, _, _ := strings.Cut(venueKey, ":")
+		if venue == "" {
+			return fmt.Sprintf("live gate: empty venue in %s", venueKey)
+		}
+		acct, err := s.store.GetBrokerAccount(ctx, venue)
+		if err != nil {
+			return fmt.Sprintf("live gate: venue %s not found (%v)", venue, err)
+		}
+		if acct.IsReal == nil {
+			return fmt.Sprintf("live gate: venue %s is_real unknown (null)", venue)
+		}
+		if *acct.IsReal {
+			return fmt.Sprintf("live trade disabled (ARB_LIVE_TRADE=false, venue=%s is_real=true)", venue)
+		}
+	}
+	return ""
+}
+
+// checkAutotradeState D-159 W6a S5：手动 RPC 开仓前 autotrade state 检查（不绕 CLOSE_ONLY）。
+// 返回 (state, error)：error != nil（含表空）→ fail-closed 拒绝开仓。
+// state != "RUNNING" → 调用方拒绝开仓（CLOSE_ONLY 等状态不开仓）。
+func (s *Service) checkAutotradeState(ctx context.Context) (string, error) {
+	st, err := s.store.GetAutotradeState(ctx)
+	if err != nil {
+		return "", fmt.Errorf("get autotrade state: %w", err)
+	}
+	return st.State, nil
 }

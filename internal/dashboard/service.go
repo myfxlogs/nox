@@ -108,6 +108,9 @@ type Service struct {
 	// D-159 W1a I6：environment/is_real 一致性检查（手动入口同源）。
 	// environment 空 = 未配置（不检查，回退旧行为）。
 	environment string
+	// D-159 W6a S2：LIVE 人工开关（手动入口同源）。
+	// LiveTrade=false 时 is_real=true 账户拒绝开仓。
+	liveTrade bool
 }
 
 // FrontConfig 前端展示阈值（D-077 修复⑪B N7，后端 config 单一真相）。
@@ -210,3 +213,6 @@ func (s *Service) SetSwapArbComboAllow(allow []exec.ComboAllowSpec) { s.swapArbC
 // SetEnvironment 注入执行环境固定值（D-159 W1a I6，手动入口同源）。
 // 空 = 未配置（不检查，回退旧行为）。
 func (s *Service) SetEnvironment(env string) { s.environment = env }
+
+// SetLiveTrade 注入 LIVE 人工开关（D-159 W6a S2，手动入口同源）。
+func (s *Service) SetLiveTrade(live bool) { s.liveTrade = live }
