@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"arb/internal/fact"
+	"arb/internal/store/pgstore"
 )
 
 // discoverSwapCombos 从 facts 表自动扫描所有跨账户 swap 组合。
@@ -21,6 +22,9 @@ func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 	if err != nil || len(shortFacts) == 0 {
 		return nil
 	}
+	// D-173：批量预取 product_group 映射（venue+canonical → product_group）。
+	// fail-open：查询失败=空 map，配对放行（sameProductGroup 空值放行语义）。
+	productGroupMap, _ := e.store.ListProductGroups(ctx)
 	now := time.Now()
 	maxAge := e.cfg.SwapFactMaxAge
 	var staleLong, staleShort int
@@ -72,6 +76,15 @@ func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 		// 旧过滤挡住了所有非 FX 品种。净 swap 门槛由下方 netSwap < minNetSwapBps 守卫。
 		for sfKey, sfEntry := range shortMap {
 			if sfKey.canonical != lf.Symbol {
+				continue
+			}
+			// D-173：产品维度校验——同 canonical 但不同 product_group 不配对
+			// （470 根因：FxPro BRENT cfd_spot × PXBT BRENT cfd_leverage）。
+			longPG := productGroupMap[pgstore.VenueCanonKey{Venue: lf.Venue, Canonical: lf.Symbol}]
+			shortPG := productGroupMap[pgstore.VenueCanonKey{Venue: sfKey.venue, Canonical: sfKey.canonical}]
+			if !sameProductGroup(longPG, shortPG) {
+				log.Printf("[autotrade] SWAPARB skip %s: product group mismatch (long=%s/%s, short=%s/%s)",
+					lf.Symbol, lf.Venue, longPG, sfKey.venue, shortPG)
 				continue
 			}
 			if sfKey.venue == lf.Venue {
