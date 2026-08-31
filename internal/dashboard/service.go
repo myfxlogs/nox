@@ -118,9 +118,6 @@ type FrontConfig struct {
 	NotifyMinNetBps   float64
 	FreshnessTTLSec   int
 	EntrySpreadMinBps float64
-	// D-169 P0：入场报价合理性门禁阈值（同源展示）。
-	EntrySpreadMaxBps float64
-	EntryBasisMaxBps  float64
 	MinNetSwapBps     float64
 	RevalidateAbsBps  float64
 	RevalidateRelPct  float64
