@@ -144,6 +144,13 @@ type Config struct {
 	SwapArbAllowCombosRaw  string
 	SwapArbMaxActiveCombos int                // ARB_SWAPARB_MAX_ACTIVE_COMBOS，默认 1（D-138 单组合口径）
 	MeanRevertThresholds   map[string]float64 // ARB_MEANREVERT_THRESHOLDS（默认 NAS100:1.5,ETHUSDT:0.5,XAUUSD:0.5）
+	// D-168 SWAPARB 自动准入（去白名单化）：AUTO_ALLOW=true 时空白名单=自动放行所有通过门禁栈的组合。
+	// 门禁栈（trade_mode/CS/sizing/基差/imbalance/environment）兜底拒绝不适用的组合。
+	// DENY_COMBOS 黑名单显式禁止已知问题组合（格式同 ALLOW_COMBOS）。
+	// MAX_GROSS_EXPOSURE 全局活跃组合名义合计上限（>0 才校验）。
+	SwapArbAutoAllow        bool    // ARB_SWAPARB_AUTO_ALLOW（默认 false，向后兼容）
+	SwapArbDenyCombosRaw    string  // ARB_SWAPARB_DENY_COMBOS
+	SwapArbMaxGrossExposure float64 // ARB_SWAPARB_MAX_GROSS_EXPOSURE（默认 0=不校验）
 
 	// D-072 §3.3/§4.2 swap/funding 退出参数
 	AutoTradeMinNetSwapBps float64 // ARB_AUTOTRADE_MIN_NET_SWAP_BPS（默认 0.2）
@@ -273,8 +280,11 @@ func Load() *Config {
 		AutoTradeAllowVenues:       envStringSet("ARB_AUTOTRADE_ALLOW_VENUES", "277842155:mt5,REDACTED_MT_ACCT:mt5"),
 		AutoTradeAllowCanonicals:   envStringSet("ARB_AUTOTRADE_ALLOW_CANONICALS", ""), // D-122：默认空=全放行（gate 层风控兜底）
 		AutoTradeExcludeCanonicals: envStringSet("ARB_AUTOTRADE_EXCLUDE_CANONICALS", "BRENT,WTI"),
-		SwapArbAllowCombosRaw:      envStr("ARB_SWAPARB_ALLOW_COMBOS", ""),     // D-159 W1a R1：空=fail-closed
-		SwapArbMaxActiveCombos:     envInt("ARB_SWAPARB_MAX_ACTIVE_COMBOS", 1), // D-138 单组合口径
+		SwapArbAllowCombosRaw:      envStr("ARB_SWAPARB_ALLOW_COMBOS", ""),        // D-159 W1a R1：空=fail-closed
+		SwapArbMaxActiveCombos:     envInt("ARB_SWAPARB_MAX_ACTIVE_COMBOS", 1),    // D-138 单组合口径
+		SwapArbAutoAllow:           envBool("ARB_SWAPARB_AUTO_ALLOW", false),      // D-168 自动准入
+		SwapArbDenyCombosRaw:       envStr("ARB_SWAPARB_DENY_COMBOS", ""),         // D-168 黑名单
+		SwapArbMaxGrossExposure:    envFloat("ARB_SWAPARB_MAX_GROSS_EXPOSURE", 0), // D-168 全局额度（0=不校验）
 		MeanRevertThresholds:       envFloatMap("ARB_MEANREVERT_THRESHOLDS", "NAS100:1.5,ETHUSDT:0.5,XAUUSD:0.5"),
 		AutoTradeMinNetSwapBps:     envFloat("ARB_AUTOTRADE_MIN_NET_SWAP_BPS", 0.2),
 		SwapArbExitNetBps:          envFloat("ARB_SWAPARB_EXIT_NET_BPS", 0),
