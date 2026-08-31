@@ -87,6 +87,19 @@ func (s *Store) DailySwapAccrued(ctx context.Context, posID int64, venue string,
 	return today.SwapUSD - yesterday.SwapUSD, true, nil
 }
 
+// HasNonZeroSwapHistory D-165 S3：查该 venue 是否有 swap_usd != 0 的历史记录（不限 posID）。
+// 用于 swap facts 零值校验：facts=0 但 broker 实际收 swap → 规格声明与实际不一致 → fail-closed。
+func (s *Store) HasNonZeroSwapHistory(ctx context.Context, venue string) (bool, error) {
+	var has bool
+	err := s.pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM position_swap_snapshots WHERE venue = $1 AND swap_usd != 0)`,
+		venue).Scan(&has)
+	if err != nil {
+		return false, fmt.Errorf("has non-zero swap history: %w", err)
+	}
+	return has, nil
+}
+
 // SumCashflowsForDay SUM(amount_usd) WHERE kind+posID+venue+day 范围（D-110 P2 对账用）。
 // day 范围同 HasCashflowForLegDay（D-159 W3a R5 更名）：start=time.Date(year,month,day,0,0,0,0,UTC) / end=start.AddDate(0,0,1)。
 func (s *Store) SumCashflowsForDay(ctx context.Context, posID int64, kind, venue string, day time.Time) (float64, error) {
