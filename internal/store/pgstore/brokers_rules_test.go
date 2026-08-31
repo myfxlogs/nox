@@ -3,6 +3,8 @@ package pgstore
 import (
 	"context"
 	"testing"
+
+	"arb/internal/normalize"
 )
 
 // D-140 S2 单测：UpsertSymbolMappingCSOnly 仅填 NULL + 覆盖率四态。
@@ -112,5 +114,34 @@ func TestSymbolCoverageFourStates(t *testing.T) {
 	}
 	if statuses["unmapped"] != 1 {
 		t.Errorf("unmapped: got %d, want 1 (server sym D has no mapping)", statuses["unmapped"])
+	}
+}
+
+// TestBackfillRuleMappings_RejectStockSymbols D-176：反污染护栏拒绝含 . 的 broker_symbol（股票代码格式）。
+// 传入 ["CLNE.NAS", "EURUSD"]，验证 CLNE.NAS 不入库 + EURUSD 入库。
+func TestBackfillRuleMappings_RejectStockSymbols(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.pool.Exec(ctx, `TRUNCATE broker_symbol_map RESTART IDENTITY`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	eng := normalize.NewRuleEngine()
+	inserted, err := s.BackfillRuleMappings(ctx, "test", []string{"CLNE.NAS", "EURUSD"}, eng)
+	if err != nil {
+		t.Fatalf("backfill: %v", err)
+	}
+	if inserted != 1 {
+		t.Errorf("inserted: got %d, want 1 (EURUSD only; CLNE.NAS rejected by guard)", inserted)
+	}
+	maps, _ := s.ListSymbolMappings(ctx, "test")
+	gotSyms := map[string]bool{}
+	for _, m := range maps {
+		gotSyms[m.BrokerSymbol] = true
+	}
+	if gotSyms["CLNE.NAS"] {
+		t.Error("CLNE.NAS should be rejected (contains '.'), but was inserted")
+	}
+	if !gotSyms["EURUSD"] {
+		t.Error("EURUSD should be inserted (no '.', matches FX rule)")
 	}
 }

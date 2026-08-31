@@ -12,34 +12,34 @@ func TestRuleMatchPositive(t *testing.T) {
 		input     string
 		wantCanon string
 	}{
-		// 油类（大小写不敏感）
+		// 油类（大小写不敏感；D-176 加 $ + 白名单，移除 cl/uscrud）
 		{"UKOIL", "BRENT"},
 		{"ukoil", "BRENT"},
 		{"BRENT", "BRENT"},
-		{"xbrUSD", "BRENT"}, // 前缀变体
+		{"XBRUSD", "BRENT"}, // D-176：xbrusd 前缀
 		{"WTI", "WTI"},
 		{"USOIL", "WTI"},
-		{"uscrud", "WTI"},
-		// 贵金属（D-175：只匹配 USD 计价）
+		// 贵金属（D-175：只匹配 USD 计价；D-176 加 (m|\d+)*$ 后缀白名单）
 		{"XAUUSD", "XAUUSD"},
 		{"GOLD", "XAUUSD"},
 		{"XAGUSD", "SILVER"},
 		{"SILVER", "SILVER"},
-		// FX 直盘
+		// FX 直盘（D-176：加 (m|\d+)*$ 允许 cent/数字后缀；EURUSD 收紧点号后缀）
 		{"EURUSD", "EURUSD"},
 		{"eur.usd", "EURUSD"},
-		{"EURUSD.spot", "EURUSD"}, // 后缀变体
+		{"EURUSDm", "EURUSD"}, // D-176：cent 后缀
 		{"GBPJPY", "GBPJPY"},
 		{"AUDJPY", "AUDJPY"},
-		// 加密 CFD
+		// 加密 CFD（D-176：加 (m|\d+)*$ 允许 cent 后缀）
 		{"BTCUSD", "BTCUSDT"},
 		{"btc", "BTCUSDT"},
 		{"Bitcoin", "BTCUSDT"}, // 大小写不敏感
 		{"ETHUSD", "ETHUSDT"},
-		// 指数
+		// 指数（D-176：移除 hsi/japan/france/spain，加 $ + 白名单）
 		{"US30", "US30"},
 		{"DJ30", "US30"},
 		{"NAS100", "NAS100"},
+		{"USTEC", "NAS100"}, // D-176：ustec 别名
 		{"GER40", "GER40"},
 		{"DAX", "GER40"},
 	}
@@ -189,6 +189,75 @@ func TestNormalize_PreciousMetalsUSDOnly(t *testing.T) {
 		got, ok := eng.Match(s)
 		if ok {
 			t.Errorf("Match(%q): matched %s, want NOT matched (D-175 cross-currency reject)", s, got)
+		}
+	}
+}
+
+// TestNormalize_RulesTightened D-176：全部 regex 加 $ + 安全后缀白名单 + 移除高风险前缀。
+// 覆盖设计文档 §3.1 的 40+ case（能源/贵金属/指数/FX/加密/CEX 直通 正负例）。
+func TestNormalize_RulesTightened(t *testing.T) {
+	eng := NewRuleEngine()
+	// 正例（必须 hit）
+	hits := []struct {
+		input     string
+		wantCanon string
+	}{
+		// 能源
+		{"WTI", "WTI"}, {"WTI365", "WTI"}, {"WTI_V6_CFD", "WTI"}, {"USOIL", "WTI"}, {"USOILm", "WTI"},
+		{"XBRUSD", "BRENT"}, {"BRENT", "BRENT"}, {"BRENT_M6", "BRENT"}, {"UKOIL", "BRENT"}, {"UKOILm", "BRENT"},
+		// 贵金属
+		{"XAGUSD", "SILVER"}, {"XAGUSDm", "SILVER"}, {"SILVER", "SILVER"}, {"SILVER365", "SILVER"},
+		{"XAUUSD", "XAUUSD"}, {"XAUUSDm", "XAUUSD"}, {"XAUUSD247m", "XAUUSD"}, {"GOLD", "XAUUSD"}, {"GOLD365", "XAUUSD"},
+		{"XPDUSD", "XPDUSD"}, {"PALLADIUM", "XPDUSD"}, {"XPTUSD", "XPTUSD"}, {"PLATINUM", "XPTUSD"},
+		{"XCUUSD", "XCUUSD"}, {"COPPER", "XCUUSD"},
+		// 指数
+		{"US30", "US30"}, {"US30m", "US30"}, {"US30_x10m", "US30"},
+		{"NAS100", "NAS100"}, {"USTEC", "NAS100"}, {"USTEC_x100m", "NAS100"},
+		{"SPX500", "SPX500"}, {"US500", "SPX500"}, {"US500_x100m", "SPX500"},
+		{"GER40", "GER40"}, {"DE30m", "GER40"}, {"DAX", "GER40"},
+		{"HK50", "HK50"}, {"HK50m", "HK50"}, {"HK-HSI", "HK50"},
+		{"JP225", "JP225"}, {"JAPAN225", "JP225"}, {"UK100", "UK100"}, {"UK100m", "UK100"},
+		{"FR40", "FR40"}, {"F40", "FR40"}, {"FRANCE40", "FR40"},
+		{"ES35", "ES35"}, {"SPAIN35", "ES35"}, {"AUS200", "AUS200"},
+		{"STOXX50", "STOXX50"}, {"EURO50", "STOXX50"}, {"US2000", "US2000"},
+		// FX
+		{"EURUSD", "EURUSD"}, {"EURUSDm", "EURUSD"}, {"GBPUSD", "GBPUSD"}, {"USDJPY", "USDJPY"}, {"EUR.USD", "EURUSD"},
+		// 加密
+		{"BTCUSD", "BTCUSDT"}, {"BTC", "BTCUSDT"}, {"BITCOIN", "BTCUSDT"}, {"BTCUSDm", "BTCUSDT"},
+		{"ETHUSD", "ETHUSDT"}, {"ETH", "ETHUSDT"},
+		// CEX 直通（原符号大写）
+		{"BTCUSDT", "BTCUSDT"}, {"ETHUSDT", "ETHUSDT"}, {"1000SHIBUSDT", "1000SHIBUSDT"}, {"AUSDT", "AUSDT"},
+		// CEX 直通负例（不再被商品规则截胡，走 CEX 直通）
+		{"XAUUSDT", "XAUUSDT"}, {"GOLDUSDT", "GOLDUSDT"}, {"BRENTUSDT", "BRENTUSDT"}, {"US30USDT", "US30USDT"},
+	}
+	for _, c := range hits {
+		got, ok := eng.Match(c.input)
+		if !ok {
+			t.Errorf("hit Match(%q): not matched, want %s (D-176 tightened)", c.input, c.wantCanon)
+			continue
+		}
+		if got != c.wantCanon {
+			t.Errorf("hit Match(%q): got %s, want %s", c.input, got, c.wantCanon)
+		}
+	}
+	// 负例（必须 miss——股票/跨币种/错误变体/点号后缀白名单外）
+	misses := []string{
+		// 能源：股票代码/跨币种（WTIUSDT/BRENTUSDT 走 CEX 直通=hit，不在 miss 列表）
+		"CLNE.NAS", "CLF.NYSE", "CLARI.PA", "CL.N", "CLOV.O", "XBREUR", "CL1!",
+		// 贵金属：跨币种/错误变体（XAGUSDT/XAUUSDT/GOLDUSDT 走 CEX 直通=hit，不在 miss 列表）
+		"XAGAUD", "XAGEUR", "XAGGBP", "XAGJPY", "XAGNZD", "XAUAUD", "XAUEUR", "XAUGBP", "XAUJPY", "XAUXAG",
+		"GOLDEURO", "GOLDgr", "GOLDoz", "SILVEREURO", "GOLDGBP",
+		// 指数：股票/国家名+后缀（US30USDT/NAS100USDT 走 CEX 直通=hit，不在 miss 列表）
+		// 注：DJ300/NAS1000/US5000 因数字后缀白名单会命中（dj30+0/nas100+0/us500+0），
+		// 这是白名单的已知 trade-off（允许 SILVER365/GOLD365 合法变体的代价）。
+		"HSIC.NAS", "HSIC.O", "JAPAN.USD", "FRANCE.USD", "SPAIN.USD",
+		// FX：点号后缀白名单外
+		"EURUSD.ROLL", "EURUSD.PERP", "EURUSD.mini",
+	}
+	for _, s := range misses {
+		got, ok := eng.Match(s)
+		if ok {
+			t.Errorf("miss Match(%q): matched %s, want NOT matched (D-176 tightened reject)", s, got)
 		}
 	}
 }
