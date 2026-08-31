@@ -6,6 +6,8 @@ package adapter
 //   SymGroup.InitMarginRate[0]（long order 口径）。网关实拍不返回该字段（经验库
 //   mt5-symgroup-margin-fields-not-served，2026-08-29 二次验证仍 len=0）→ 当前产出
 //   零 margin facts，消费方④回落账户级 1/Leverage。网关升级后自动产出。
+// D-173：同时发 mt_symbol_product Fact（Symbol=canonical 同 swap facts 口径，
+//   value=CalcMode enum 数值，unit=calc_mode）→ main 层 sink 反哺 broker_symbol_map.product_group。
 // CS 的自动来源：采集到的 CS 经 main 层 sink upsert 进 broker_symbol_map（仅填 NULL 行）。
 // 复用 SwapFacts 已建立的 SymbolParamsMany 批量拉取路径，独立轮询不耦合 swap 标定。
 
@@ -65,6 +67,20 @@ func (a *MT5Adapter) MetaFacts(ctx context.Context) ([]fact.Fact, error) {
 				Symbol: sym, // broker 原生符号
 				Value:  cs,
 				Unit:   fact.UnitContractSize,
+				Ts:     now,
+				Src:    "mt5",
+			})
+		}
+		// D-173：采集 CalcMode → mt_symbol_product fact（Symbol=canonical，同 swap facts 口径）。
+		// 未映射符号跳过（不阻塞，mt_symbol_meta 仍正常发）。
+		canon, ok := (*sm)[sym]
+		if ok && canon != "" {
+			facts = append(facts, fact.Fact{
+				Kind:   fact.KindMTSymbolProduct,
+				Venue:  a.venue,
+				Symbol: canon, // canonical（不是 broker 原生符号）
+				Value:  float64(si.GetCalcMode()),
+				Unit:   fact.UnitCalcMode,
 				Ts:     now,
 				Src:    "mt5",
 			})

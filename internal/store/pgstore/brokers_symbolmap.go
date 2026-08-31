@@ -147,3 +147,72 @@ func (s *Store) BackfillSymbolContracts(ctx context.Context, venue string, contr
 	}
 	return nil
 }
+
+// VenueCanonKey D-173：(venue, canonical) 复合键，product_group 查询用。
+type VenueCanonKey struct {
+	Venue     string
+	Canonical string
+}
+
+// ProductGroupByVenueCanonical 返回 (venue, canonical) 的 product_group（众数聚合）。
+// ok=false = 未映射或 product_group 为 NULL（未知，调用方放行）。
+func (s *Store) ProductGroupByVenueCanonical(ctx context.Context, venue, canonical string) (string, bool, error) {
+	var pg string
+	err := s.pool.QueryRow(ctx, `
+		SELECT product_group FROM broker_symbol_map
+		WHERE venue = $1 AND canonical = $2 AND product_group IS NOT NULL
+		GROUP BY product_group ORDER BY COUNT(*) DESC LIMIT 1
+	`, venue, canonical).Scan(&pg)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	return pg, true, nil
+}
+
+// ListProductGroups 批量返回所有 (venue, canonical) → product_group 映射（众数聚合）。
+// discoverSwapCombos 用此批量预取。同 (venue, canonical) 多行取众数。
+func (s *Store) ListProductGroups(ctx context.Context) (map[VenueCanonKey]string, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT venue, canonical, product_group FROM (
+			SELECT venue, canonical, product_group,
+			       ROW_NUMBER() OVER (PARTITION BY venue, canonical ORDER BY COUNT(*) DESC) AS rn
+			FROM broker_symbol_map
+			WHERE product_group IS NOT NULL
+			GROUP BY venue, canonical, product_group
+		) t WHERE rn = 1
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[VenueCanonKey]string)
+	for rows.Next() {
+		var k VenueCanonKey
+		var pg string
+		if err := rows.Scan(&k.Venue, &k.Canonical, &pg); err != nil {
+			return nil, err
+		}
+		out[k] = pg
+	}
+	return out, rows.Err()
+}
+
+// UpdateProductGroupByCanonical D-173：按 (venue, canonical) 批量更新 product_group。
+// 一个 venue+canonical 可对应多行（多 broker_symbol），全部更新为同 product_group。
+// productGroup 空字符串 → 不更新（跳过）。
+func (s *Store) UpdateProductGroupByCanonical(ctx context.Context, venue, canonical, productGroup string) (int64, error) {
+	if productGroup == "" {
+		return 0, nil
+	}
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE broker_symbol_map SET product_group = $3
+		WHERE venue = $1 AND canonical = $2
+	`, venue, canonical, productGroup)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
