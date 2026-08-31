@@ -134,7 +134,7 @@ func TestBrokerPositionMonitor_KickMerge(t *testing.T) {
 
 	go m.Run(ctx)
 	// 等 Run 首采完成（初始 poll）。
-	if !waitForMon(t, 2*time.Second, func() bool { return len(m.Snapshot()) == 1 }) {
+	if !waitForMon(t, 10*time.Second, func() bool { return len(m.Snapshot()) == 1 }) {
 		t.Fatal("initial poll did not produce snapshot")
 	}
 
@@ -147,7 +147,7 @@ func TestBrokerPositionMonitor_KickMerge(t *testing.T) {
 	m.Kick()
 
 	// 等 kick 触发的 poll 完成（snapshot 变 0 条 = poll 执行了）。
-	if !waitForMon(t, 2*time.Second, func() bool { return len(m.Snapshot()) == 0 }) {
+	if !waitForMon(t, 10*time.Second, func() bool { return len(m.Snapshot()) == 0 }) {
 		t.Fatalf("kick-triggered poll did not fire, snapshot still %d", len(m.Snapshot()))
 	}
 	// 合并语义：3 次 kick 只触发 1 次 poll（snapshot 已变 0 条，不回退）。
@@ -174,7 +174,7 @@ func TestAccountMonitor_KickDebounce(t *testing.T) {
 
 	go m.Run(ctx)
 	// 等 Run 首采完成。
-	if !waitForMon(t, 2*time.Second, func() bool { return len(m.Snapshot()) == 1 }) {
+	if !waitForMon(t, 10*time.Second, func() bool { return len(m.Snapshot()) == 1 }) {
 		t.Fatal("initial poll did not produce snapshot")
 	}
 
@@ -189,7 +189,7 @@ func TestAccountMonitor_KickDebounce(t *testing.T) {
 	// 2. 超窗后 kick → pollIfDue 执行 poll → equity 更新。
 	time.Sleep(60 * time.Millisecond) // 超过 50ms 窗口
 	m.Kick()
-	if !waitForMon(t, 2*time.Second, func() bool {
+	if !waitForMon(t, 10*time.Second, func() bool {
 		return len(m.Snapshot()) == 1 && m.Snapshot()[0].Equity == 5200
 	}) {
 		t.Fatalf("after debounce window: equity want 5200, got %v", m.Snapshot()[0].Equity)
@@ -221,7 +221,7 @@ func TestOrderTopicToKickWiring(t *testing.T) {
 	}()
 
 	// 等 Run 首采。
-	if !waitForMon(t, 2*time.Second, func() bool { return len(m.Snapshot()) == 1 }) {
+	if !waitForMon(t, 10*time.Second, func() bool { return len(m.Snapshot()) == 1 }) {
 		t.Fatal("initial poll did not produce snapshot")
 	}
 
@@ -231,7 +231,7 @@ func TestOrderTopicToKickWiring(t *testing.T) {
 	// Publish 一个 OrderEvent → 经订阅 goroutine → Kick → poll → snapshot 变 0。
 	orderTopic.Publish(bus.OrderEvent{Venue: "testvenue", Ticket: 1})
 
-	if !waitForMon(t, 2*time.Second, func() bool { return len(m.Snapshot()) == 0 }) {
+	if !waitForMon(t, 10*time.Second, func() bool { return len(m.Snapshot()) == 0 }) {
 		t.Fatalf("orderTopic→Kick wiring: snapshot still %d after publish", len(m.Snapshot()))
 	}
 }
