@@ -28,3 +28,29 @@ func (s *Store) ListAccountIsReal(ctx context.Context) (map[string]*bool, error)
 	}
 	return m, rows.Err()
 }
+
+// ListVenueIsReal 返回统一 venue→*bool 映射（D-178）。
+// 合并 broker_accounts.is_real（CFD）+ exchange_configs.simulated（CEX，取反）。
+// nil=未知（broker_accounts.is_real=NULL 或 venue 不在任何表）。
+// CEX 查询失败 → 仅返回 CFD 部分（fail-open，不阻塞检测）。
+func (s *Store) ListVenueIsReal(ctx context.Context) (map[string]*bool, error) {
+	m, err := s.ListAccountIsReal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.pool.Query(ctx, `SELECT venue, simulated FROM exchange_configs`)
+	if err != nil {
+		return m, nil // CEX 查询失败 → 仅返回 CFD（fail-open）
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var venue string
+		var simulated bool
+		if err := rows.Scan(&venue, &simulated); err != nil {
+			continue
+		}
+		isReal := !simulated
+		m[venue] = &isReal
+	}
+	return m, rows.Err()
+}
