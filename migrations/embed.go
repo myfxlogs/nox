@@ -91,3 +91,6 @@ var PositionIntentFieldsSQL string
 
 //go:embed 0049_cashflows_leg_no.sql
 var CashflowsLegNoSQL string
+
+//go:embed 0050_broker_symbol_map_product_group.sql
+var BrokerSymbolMapProductGroupSQL string
