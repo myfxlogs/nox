@@ -24,7 +24,10 @@ func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 	}
 	// D-173：批量预取 product_group 映射（venue+canonical → product_group）。
 	// fail-open：查询失败=空 map，配对放行（sameProductGroup 空值放行语义）。
-	productGroupMap, _ := e.store.ListProductGroups(ctx)
+	productGroupMap, err := e.store.ListProductGroups(ctx)
+	if err != nil {
+		log.Printf("[autotrade] SWAPARB ListProductGroups failed (fail-open): %v", err)
+	}
 	now := time.Now()
 	maxAge := e.cfg.SwapFactMaxAge
 	var staleLong, staleShort int
