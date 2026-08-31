@@ -3,6 +3,7 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 
 	"arb/internal/store/pgstore"
@@ -161,9 +162,12 @@ func classifySymbols(groups []SymbolGroup, idx canonicalIdx) []Suggestion {
 			BrokerSymbol: g.Symbol, Group: g.Group, ContractSize: g.ContractSize,
 			Canonical: canon, Status: StatusAuto,
 		}
-		if exp := idx.contract[canon]; exp > 0 && g.ContractSize > 0 && exp != g.ContractSize {
-			sug.Status = StatusConflict
-			sug.Reason = fmt.Sprintf("合约规格 %v 与 %s 期望 %v 不符，套利对比不可靠", g.ContractSize, canon, exp)
+		if exp := idx.contract[canon]; exp > 0 && g.ContractSize > 0 && !strings.HasSuffix(g.Symbol, "m") {
+			ratio := math.Max(exp/g.ContractSize, g.ContractSize/exp)
+			if ratio > 2.0 {
+				sug.Status = StatusConflict
+				sug.Reason = fmt.Sprintf("合约规格 %v 与 %s 期望 %v 比值 %.1f 超阈值 2.0", g.ContractSize, canon, exp, ratio)
+			}
 		}
 		out = append(out, sug)
 	}
