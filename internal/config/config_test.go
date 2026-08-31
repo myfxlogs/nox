@@ -117,8 +117,8 @@ func TestLoadEnvOverride(t *testing.T) {
 	if c.CarryMinNetAnnualized != 4.0 {
 		t.Errorf("CarryMinNetAnnualized = %v, want default 4.0", c.CarryMinNetAnnualized)
 	}
-	if c.CommissionTaker["binance"] != 10.0 {
-		t.Errorf("CommissionTaker[binance] = %v, want 10.0", c.CommissionTaker["binance"])
+	if c.CommissionTaker["binance"] != 5.0 {
+		t.Errorf("CommissionTaker[binance] = %v, want 5.0 (D-159 W4a T6 纠偏)", c.CommissionTaker["binance"])
 	}
 }
 
@@ -129,11 +129,25 @@ func TestLoadTakerEnvOverride(t *testing.T) {
 	if c.CommissionTaker["gate"] != 5.0 {
 		t.Errorf("CommissionTaker[gate] = %v, want 5.0", c.CommissionTaker["gate"])
 	}
-	if c.CommissionTaker["okx"] != 10.0 {
-		t.Errorf("CommissionTaker[okx] = %v, want default 10.0", c.CommissionTaker["okx"])
+	if c.CommissionTaker["okx"] != 5.0 {
+		t.Errorf("CommissionTaker[okx] = %v, want default 5.0 (D-159 W4a T6)", c.CommissionTaker["okx"])
 	}
 	if c.CommissionCEXTakerBps != 5.0 {
 		t.Errorf("CommissionCEXTakerBps = %v, want default 5.0 (D-145)", c.CommissionCEXTakerBps)
+	}
+}
+
+// TestCommissionTaker_DefaultIs5 D-159 W4a T6：无 env 覆盖时 CommissionTaker map 默认 5.0（与 CommissionCEXTakerBps 对齐）。
+// W0 T6 铁证：旧默认 10.0 使 CommissionCEXTakerBps 5.0 永不回退，opportunities 表 79 条 CEX×CEX commission_cost=20.0（10×2 腿）。
+func TestCommissionTaker_DefaultIs5(t *testing.T) {
+	c := Load()
+	for _, venue := range []string{"binance", "okx", "gate"} {
+		if c.CommissionTaker[venue] != 5.0 {
+			t.Errorf("CommissionTaker[%s] = %v, want 5.0 (D-159 W4a T6 纠偏，与 CommissionCEXTakerBps 对齐)", venue, c.CommissionTaker[venue])
+		}
+	}
+	if c.CommissionCEXTakerBps != 5.0 {
+		t.Errorf("CommissionCEXTakerBps = %v, want 5.0", c.CommissionCEXTakerBps)
 	}
 }
 

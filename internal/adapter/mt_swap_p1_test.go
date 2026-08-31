@@ -3,7 +3,6 @@ package adapter
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -13,20 +12,21 @@ import (
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
 )
 
-// TestPXBT_SwapTypeZero_Uncalibrated D-112：SwapType=0+非零值 → mt5SwapMode 返回 Uncalibrated → SwapFacts skip。
-// 删除 D-104 P1 T1 override 后，PXBT（1314615）SwapType=0+非零 rates 恢复为矛盾数据 → fail-closed 不 emit swap facts。
-func TestPXBT_SwapTypeZero_Uncalibrated(t *testing.T) {
-	// mt5SwapMode：SwapType=0+非零 → Uncalibrated
+// TestPXBT_SwapTypeZero_OverrideToInPoints D-112→W4a S2：PXBT(1314615) SwapType=0+非零值 → override InPoints → SwapFacts emit。
+// D-112 曾验证"删除 override 后 Uncalibrated skip"；W4a S2 恢复 override（D-104 P1 T1 标定），行为反转为 emit InPoints。
+// mt5SwapMode 纯函数仍返回 Uncalibrated（override 在 mt5SwapModeForVenue 层，不改纯函数签名）。
+func TestPXBT_SwapTypeZero_OverrideToInPoints(t *testing.T) {
+	// mt5SwapMode 纯函数：SwapType=0+非零 → Uncalibrated（override 不改纯函数）
 	mode := mt5SwapMode(mt5pb.SwapType_SwapType_SwapNone, 5.5, -51.55)
 	if mode != SwapModeUncalibrated {
-		t.Fatalf("SwapType=0+非零: mode=%v, want Uncalibrated", mode)
+		t.Fatalf("mt5SwapMode SwapType=0+非零: mode=%v, want Uncalibrated（纯函数不改）", mode)
 	}
-	// mt5SwapMode：SwapType=0+零值 → None（真停用）
-	mode = mt5SwapMode(mt5pb.SwapType_SwapType_SwapNone, 0, 0)
-	if mode != SwapModeNone {
-		t.Errorf("SwapType=0+零值: mode=%v, want None", mode)
+	// mt5SwapModeForVenue：venue=1314615 + SwapType=0 + 非零 → InPoints（override）
+	mode = mt5SwapModeForVenue("1314615", mt5pb.SwapType_SwapType_SwapNone, 5.5, -51.55)
+	if mode != SwapModeInPoints {
+		t.Fatalf("mt5SwapModeForVenue PXBT SwapType=0+非零: mode=%v, want InPoints（override）", mode)
 	}
-	// SwapFacts：venue=1314615 + SwapType=0 + 非零 → skip（不 emit swap_long/swap_short，只 emit trade_mode）
+	// SwapFacts：venue=1314615 + SwapType=0 + 非零 → emit swap_long/swap_short（InPoints override）+ trade_mode
 	q := bus.New()
 	q.Publish(bus.Quote{Symbol: "GBPJPY", Venue: "1314615", VenueType: "mt5", Bid: 190, Ask: 190.01, Time: time.Now()})
 	a := &MT5Adapter{venue: "1314615", mt5: &fakeMT5Client{params: map[string]*mt5pb.SymbolParamsReply{
@@ -38,25 +38,22 @@ func TestPXBT_SwapTypeZero_Uncalibrated(t *testing.T) {
 
 	var fs []fact.Fact
 	var err error
-	logOut := captureLog(t, func() {
+	_ = captureLog(t, func() {
 		fs, err = a.SwapFacts(context.Background(), q)
 	})
 	if err != nil {
 		t.Fatalf("SwapFacts: %v", err)
 	}
-	if n := countFacts(fs, fact.KindSwapLong); n != 0 {
-		t.Errorf("swap_long facts = %d, want 0 (PXBT Uncalibrated skip)", n)
+	// W4a S2：override 后 emit swap_long/swap_short（InPoints）
+	if n := countFacts(fs, fact.KindSwapLong); n != 1 {
+		t.Errorf("swap_long facts = %d, want 1 (PXBT InPoints override emit)", n)
 	}
-	if n := countFacts(fs, fact.KindSwapShort); n != 0 {
-		t.Errorf("swap_short facts = %d, want 0 (PXBT Uncalibrated skip)", n)
+	if n := countFacts(fs, fact.KindSwapShort); n != 1 {
+		t.Errorf("swap_short facts = %d, want 1 (PXBT InPoints override emit)", n)
 	}
 	// trade_mode 仍 emit（不依赖 swap 标定）
 	if n := countFacts(fs, fact.KindTradeMode); n != 1 {
 		t.Errorf("trade_mode facts = %d, want 1", n)
-	}
-	// skip 原因含 Uncalibrated/矛盾数据
-	if !strings.Contains(logOut, "GBPJPY") {
-		t.Errorf("log should contain skip reason for GBPJPY, got: %s", logOut)
 	}
 }
 

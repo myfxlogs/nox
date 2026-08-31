@@ -156,6 +156,8 @@ type Config struct {
 
 	// === Swap 套利入场成本容忍（D-077 修复⑪B N6）===
 	SwapArbEntrySpreadMinBps float64 // ARB_SWAPARB_ENTRY_SPREAD_MIN_BPS（默认 -3）
+	// D-159 W4a R7：单腿 bid-ask spread 宽度上限（bps），>0 才校验，0=不校验。
+	SwapArbMaxLegSpreadBps float64 // ARB_SWAPARB_MAX_LEG_SPREAD_BPS（默认 50.0，保守阈值：SWAPARB 跨账户 FX 品种 bid-ask spread 通常 <10 bps，50 bps 是 5 倍保守）
 
 	// === 前端分析员（D-091）===
 	// AIBaseURL/Key/Model/PGDSN 四 env + RatePerHour 限流；空 Key=未配置（RPC 返回 failed_precondition）。
@@ -215,10 +217,12 @@ func Load() *Config {
 		AlertResendInterval:         envDur("ARB_ALERT_RESEND_INTERVAL", 10*time.Minute), // D-072 铃铛治理：同 key 告警冷却
 		CommissionCFDBps:            envFloat("ARB_COMMISSION_CFD_BPS", 0.3),
 		CommissionCEXTakerBps:       envFloat("ARB_COMMISSION_CEX_TAKER_BPS", 5.0), // D-145：binance/okx VIP0 taker 实测 0.05%=5bps（账户级真值待真金 key 后 commissionFor 精确化）
+		// D-159 W4a T6：CommissionTaker map 默认 5.0（与 CommissionCEXTakerBps 对齐，D-145 意图生效）。
+		// W0 T6 铁证：旧默认 10.0 使 CommissionCEXTakerBps 5.0 永不回退，opportunities 表 79 条 CEX×CEX commission_cost=20.0（10×2 腿）。
 		CommissionTaker: map[string]float64{
-			"binance": envFloat("ARB_COMMISSION_TAKER_BINANCE", 10.0),
-			"okx":     envFloat("ARB_COMMISSION_TAKER_OKX", 10.0),
-			"gate":    envFloat("ARB_COMMISSION_TAKER_GATE", 10.0),
+			"binance": envFloat("ARB_COMMISSION_TAKER_BINANCE", 5.0),
+			"okx":     envFloat("ARB_COMMISSION_TAKER_OKX", 5.0),
+			"gate":    envFloat("ARB_COMMISSION_TAKER_GATE", 5.0),
 		},
 		SwapRefresh:                envDur("ARB_SWAP_REFRESH", time.Hour),
 		TradeModeTTL:               envDur("ARB_TRADEMODE_TTL", 24*time.Hour),
@@ -266,6 +270,7 @@ func Load() *Config {
 		RevalidateAbsBps:           envFloat("ARB_REVALIDATE_ABS_BPS", 2.0),            // D-077 修复⑪B N4
 		RevalidateRelPct:           envFloat("ARB_REVALIDATE_REL_PCT", 20.0),           // D-077 修复⑪B N4
 		SwapArbEntrySpreadMinBps:   envFloat("ARB_SWAPARB_ENTRY_SPREAD_MIN_BPS", -3.0), // D-077 修复⑪B N6
+		SwapArbMaxLegSpreadBps:     envFloat("ARB_SWAPARB_MAX_LEG_SPREAD_BPS", 50.0),   // D-159 W4a R7
 		AIBaseURL:                  envStr("ARB_AI_BASE_URL", ""),
 		AIAPIKey:                   envStr("ARB_AI_API_KEY", ""),
 		AIModel:                    envStr("ARB_AI_MODEL", "glm-4.6"),

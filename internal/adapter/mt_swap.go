@@ -101,6 +101,23 @@ func mt5SwapMode(t mt5pb.SwapType, long, short float64) SwapMode {
 	}
 }
 
+// swapTypeZeroAsInPoints D-104 P1 T1（W4a S2 施工）：PXBT(venue=1314615) SwapType=0 + 非零值 → InPoints 标定。
+// 证据：44/45 品种 swapType=0 + 非零值，幅度交叉验证同量级同向（EURUSD long=-3.6961 点 vs Exness -0.50/IC -0.71/FxPro -0.76）。
+// mode 标签错误（同 D-092 FxPro mode 9 类标定异常），真值是 InPoints 口径。
+var swapTypeZeroAsInPoints = map[string]bool{
+	"1314615": true, // PXBTTrading-1
+}
+
+// mt5SwapModeForVenue D-159 W4a S2：per-venue override + mt5SwapMode 纯函数。
+// venue 在 swapTypeZeroAsInPoints + SwapType==SwapNone + 非零值 → InPoints（PXBT 标定）；
+// 否则走 mt5SwapMode 原逻辑（不改 mt5SwapMode 签名，MT4 路径不受影响）。
+func mt5SwapModeForVenue(venue string, t mt5pb.SwapType, long, short float64) SwapMode {
+	if swapTypeZeroAsInPoints[venue] && t == mt5pb.SwapType_SwapType_SwapNone && (long != 0 || short != 0) {
+		return SwapModeInPoints
+	}
+	return mt5SwapMode(t, long, short)
+}
+
 // swapPerCallTimeout 单符号 SymbolParams 调用超时（S5，2026-08-24）。
 // PXBT 实证：261 次 DeadlineExceeded 全部因单 venue 慢 SymbolParams 拖垮整轮 poll
 // （共享 parent ctx 不自带超时 → 全符号超时 facts 空 → swapResult 返回 err）。
@@ -183,7 +200,7 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 			slot.hasTripleDay = true
 			// trade_mode 不依赖 swap 标定（D-060 F3）：emit/emit0/标定 skip 的符号都发。
 			slot.facts = append(slot.facts, tradeModeFact(a.venue, canon, sg.GetTradeMode(), "mt5"))
-			mode := mt5SwapMode(sg.GetSwapType(), sg.GetSwapLong(), sg.GetSwapShort())
+			mode := mt5SwapModeForVenue(a.venue, sg.GetSwapType(), sg.GetSwapLong(), sg.GetSwapShort())
 			if mode == SwapModeUncalibrated {
 				slot.uncoveredRaw = int32(sg.GetSwapType())
 				slot.hasUncovered = true
