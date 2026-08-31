@@ -66,10 +66,12 @@ type Ledger struct {
 	nonSettleVenues map[string]bool // D-112：已知不结算 swap 的 venue 集合（key=PositionLeg.Venue 完整 key）
 	runTimeout      time.Duration   // 单次外部调用超时（loop-initial-block 铁律：默认 30s）
 	initialDelay    time.Duration   // 首轮延迟（等 adapter 就绪，默认 90s）
+	factTTL         time.Duration   // D-159 W4a R7：swap/funding Fact TTL（env 单源 cfg.SwapFactMaxAge，与 discoverSwapCombos/recalcNetSwap 同源）
 }
 
 // New 创建 swap 记账器。nonSettleVenues 为已知不结算 swap 的 venue 列表（D-112）。
-func New(store Store, notional NotionalResolver, tripleDay TripleDayResolver, nonSettleVenues []string) *Ledger {
+// factTTL 为 swap/funding Fact 过期阈值（D-159 W4a R7，cfg.SwapFactMaxAge env 单源）。
+func New(store Store, notional NotionalResolver, tripleDay TripleDayResolver, nonSettleVenues []string, factTTL time.Duration) *Ledger {
 	nsv := make(map[string]bool, len(nonSettleVenues))
 	for _, v := range nonSettleVenues {
 		nsv[v] = true
@@ -81,6 +83,7 @@ func New(store Store, notional NotionalResolver, tripleDay TripleDayResolver, no
 		nonSettleVenues: nsv,
 		runTimeout:      30 * time.Second,
 		initialDelay:    90 * time.Second,
+		factTTL:         factTTL,
 	}
 }
 
@@ -232,9 +235,6 @@ func (l *Ledger) accountPosition(ctx context.Context, pos pgstore.Position, day 
 	return written, nil
 }
 
-// swapFactTTL D-159 W3a R5：swap/funding Fact 过期阈值（待 W4a Fact TTL 契约定稿后统一）。
-const swapFactTTL = 24 * time.Hour
-
 // legSwapAmount 计算单腿当日 swap/funding USD 金额（纯函数，可单测）。
 // D-159 W3a R5：接收 map[factKey]fact.Fact（含 Ts 供 TTL 检查）。
 // 返回 (amount, ok)；ok=false 表示 rate/notional 不可用或 Fact 过期 → fail-closed 跳过。
@@ -260,10 +260,11 @@ func (l *Ledger) legSwapAmount(canonical string, leg pgstore.PositionLeg, day ti
 	if !rateFound {
 		return 0, false
 	}
-	// D-159 W3a R5：Fact 过期防护——Fact.Ts 超 TTL → fail-closed 不写估算为实际（用 Fact.Ts，无 UpdatedAt 字段）。
-	if time.Since(f.Ts) > swapFactTTL {
+	// D-159 W3a R5 + W4a R7：Fact 过期防护——Fact.Ts 超 l.factTTL → fail-closed 不写估算为实际。
+	// TTL 由 New 注入（cfg.SwapFactMaxAge env 单源，与 discoverSwapCombos/recalcNetSwap 同源）。
+	if l.factTTL > 0 && time.Since(f.Ts) > l.factTTL {
 		log.Printf("[swapledger] leg=%d swap fact expired (kind=%s venue=%s ts=%s, ttl=%v), skip",
-			leg.LegNo, f.Kind, f.Venue, f.Ts.Format(time.RFC3339), swapFactTTL)
+			leg.LegNo, f.Kind, f.Venue, f.Ts.Format(time.RFC3339), l.factTTL)
 		return 0, false
 	}
 	rate := f.Value

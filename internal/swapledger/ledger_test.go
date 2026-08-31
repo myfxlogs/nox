@@ -438,15 +438,15 @@ func TestPerLegIdempotent(t *testing.T) {
 	}
 }
 
-// TestFactExpired D-159 W3a R5 A9：Fact.Ts 超 TTL（24h）→ legSwapAmount fail-closed 返回 (0, false)。
-// 防 swap/funding Fact 过期仍写估算为实际（用 Fact.Ts，无 UpdatedAt 字段）。
+// TestFactExpired D-159 W3a R5 A9 + W4a R7：Fact.Ts 超 factTTL → legSwapAmount fail-closed 返回 (0, false)。
+// TTL 由 New 注入（cfg.SwapFactMaxAge env 单源）；测试用 &Ledger{factTTL:24h} 模拟。
 func TestFactExpired(t *testing.T) {
 	// Fact.Ts 超 24h（25h 前）
 	expiredTs := time.Now().Add(-25 * time.Hour)
 	longMap := map[factKey]fact.Fact{factKey{"AUDJPY", "vA"}: {Value: 5.0, Ts: expiredTs}}
 	notional := stubNotional{vals: map[string]float64{"AUDJPY:vA:mt5:ask": 100000}}
 	r := stubTripleDay{venueDays: map[string]time.Weekday{"vA": time.Wednesday}}
-	l := &Ledger{notional: notional, tripleDay: r}
+	l := &Ledger{notional: notional, tripleDay: r, factTTL: 24 * time.Hour}
 
 	leg := pgstore.PositionLeg{Venue: "vA:mt5", Side: "BUY", Qty: 1.0}
 	monday := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
