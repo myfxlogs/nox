@@ -67,6 +67,43 @@ func TestUSDPerLot_USDPair(t *testing.T) {
 	}
 }
 
+// TestUSDPerLot_CommodityBRENT 商品 CFD（BRENT）无 USD 后缀但 USD 计价 → CS×price 直接美元名义。
+// D-166 修复：BRENT/WTI/SILVER 等商品 canonical 不以 USD/USDT/JPY 结尾，原 default 分支误拒。
+func TestUSDPerLot_CommodityBRENT(t *testing.T) {
+	qbus := bus.New()
+	got, ok := usdPerLot("BRENT", 92.5, 1000, qbus)
+	if !ok {
+		t.Fatal("BRENT (USD-quoted commodity) should be ok")
+	}
+	if math.Abs(got-92500) > 0.01 {
+		t.Errorf("BRENT CS×price want 92500, got %v", got)
+	}
+}
+
+// TestUSDPerLot_CommodityWTI WTI 同 BRENT，USD 计价商品白名单。
+func TestUSDPerLot_CommodityWTI(t *testing.T) {
+	qbus := bus.New()
+	got, ok := usdPerLot("WTI", 85.0, 1000, qbus)
+	if !ok {
+		t.Fatal("WTI (USD-quoted commodity) should be ok")
+	}
+	if math.Abs(got-85000) > 0.01 {
+		t.Errorf("WTI CS×price want 85000, got %v", got)
+	}
+}
+
+// TestUSDPerLot_IndexNAS100 指数 CFD（NAS100）USD 计价白名单。
+func TestUSDPerLot_IndexNAS100(t *testing.T) {
+	qbus := bus.New()
+	got, ok := usdPerLot("NAS100", 20000, 1, qbus)
+	if !ok {
+		t.Fatal("NAS100 (USD-quoted index) should be ok")
+	}
+	if math.Abs(got-20000) > 0.01 {
+		t.Errorf("NAS100 CS×price want 20000, got %v", got)
+	}
+}
+
 // TestUSDPerLot_JPYPair JPY 计价（AUDJPY）→ CS×price÷USDJPY 换算美元。
 // AUDJPY price=113.5, CS=100000 → JPY 名义 11,350,000 ÷ USDJPY 150 ≈ $75,667（与 #264 历史吻合量级）。
 func TestUSDPerLot_JPYPair(t *testing.T) {

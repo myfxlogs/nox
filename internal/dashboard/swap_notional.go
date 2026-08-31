@@ -10,19 +10,30 @@ import (
 // usdPerLot 返回 1 手合约的 USD 名义额（A 修复：swap 定尺寸币种换算 bug）。
 //
 // 报价计价币由 canonical 后缀判定：
-//   - USD 计价（canonical 以 USDT/USD 结尾）→ CS × price（直接美元名义）；
+//   - USD 计价（canonical 以 USDT/USD 结尾，或商品/指数 CFD 如 BRENT/WTI/SILVER 等）→ CS × price（直接美元名义）；
 //   - JPY 计价（canonical 以 JPY 结尾）→ CS × price ÷ USDJPY（日元名义换算美元，USDJPY 取 qbus 最新任一 venue 价）；
 //   - 其他计价币（GBP/EUR 等未来扩展）→ 走对应 fx 对，未支持 → ok=false 跳过 + 日志（勿猜）。
 //
 // price 为该腿报价（bid/ask 由调用方决定）；qbus 用于查 fx 对（USDJPY 等）。
 // ok=false 表示 fx 报价不可用 → fail-closed 跳过该组合（禁止用旧值/硬编码汇率）。
+//
+// USD 计价商品/指数 CFD 白名单：BRENT/WTI/SILVER 等无 USD 后缀但 USD 计价，
+// 显式列举避免 default 分支误拒（D-166 修复，BRENT CMC×PXBT 净 swap +5.67 bps/日被误拒实证）。
+var usdQuotedCommodities = map[string]bool{
+	"BRENT": true, "WTI": true, "SILVER": true, "COPPER": true, "NATGAS": true,
+	"XAUUSD": true, "XAGUSD": true, "XPDUSD": true, "XPTUSD": true,
+	"NAS100": true, "SPX500": true, "US30": true, "US2000": true, "GER40": true,
+	"UK100": true, "HK50": true, "JP225": true, "AUS200": true, "ES35": true,
+	"FR40": true, "STOXX50": true,
+}
+
 func usdPerLot(canonical string, price, contractSize float64, qbus *bus.QuoteBus) (float64, bool) {
 	if contractSize <= 0 || price <= 0 {
 		return 0, false
 	}
 	switch {
-	case strings.HasSuffix(canonical, "USDT"), strings.HasSuffix(canonical, "USD"):
-		// USD 计价：CS × price 直接美元名义
+	case strings.HasSuffix(canonical, "USDT"), strings.HasSuffix(canonical, "USD"), usdQuotedCommodities[canonical]:
+		// USD 计价：CS × price 直接美元名义（含商品/指数 CFD 白名单）
 		return contractSize * price, true
 	case strings.HasSuffix(canonical, "JPY"):
 		// JPY 计价：CS × price ÷ USDJPY（日元名义换算美元）
