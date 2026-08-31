@@ -20,10 +20,10 @@ func TestRuleMatchPositive(t *testing.T) {
 		{"WTI", "WTI"},
 		{"USOIL", "WTI"},
 		{"uscrud", "WTI"},
-		// 贵金属
+		// 贵金属（D-175：只匹配 USD 计价）
 		{"XAUUSD", "XAUUSD"},
 		{"GOLD", "XAUUSD"},
-		{"xag", "SILVER"},
+		{"XAGUSD", "SILVER"},
 		{"SILVER", "SILVER"},
 		// FX 直盘
 		{"EURUSD", "EURUSD"},
@@ -131,5 +131,64 @@ func TestRulePriority(t *testing.T) {
 	}
 	if got2 != "BTCUSDT" {
 		t.Errorf("BTCUSDT: got %s, want BTCUSDT (CEX direct)", got2)
+	}
+}
+
+// TestNormalize_PreciousMetalsUSDOnly D-175：贵金属 regex 只匹配 USD 计价 + 英文名，
+// 不匹配跨币种合约（XAGAUD/XAGEUR/XAUXAG 等旧误归一）。
+func TestNormalize_PreciousMetalsUSDOnly(t *testing.T) {
+	eng := NewRuleEngine()
+	// hit：USD 计价 + 英文名（含 m 后缀/数字后缀变体）
+	hits := []struct {
+		input     string
+		wantCanon string
+	}{
+		{"XAGUSD", "SILVER"},
+		{"XAGUSDm", "SILVER"},
+		{"SILVER", "SILVER"},
+		{"SILVER365", "SILVER"},
+		{"XAUUSD", "XAUUSD"},
+		{"XAUUSDm", "XAUUSD"},
+		{"GOLD", "XAUUSD"},
+		{"XPDUSD", "XPDUSD"},
+		{"XPDUSDm", "XPDUSD"},
+		{"XPTUSD", "XPTUSD"},
+		{"XCUUSD", "XCUUSD"},
+		{"XCUUSDm", "XCUUSD"},
+		{"PALLADIUM", "XPDUSD"},
+		{"PLATINUM", "XPTUSD"},
+		{"COPPER", "XCUUSD"},
+	}
+	for _, c := range hits {
+		got, ok := eng.Match(c.input)
+		if !ok {
+			t.Errorf("Match(%q): not matched, want %s (D-175 USD-only)", c.input, c.wantCanon)
+			continue
+		}
+		if got != c.wantCanon {
+			t.Errorf("Match(%q): got %s, want %s", c.input, got, c.wantCanon)
+		}
+	}
+	// miss：非 USD 计价贵金属（旧规则误归一，新规则正确拒绝）
+	misses := []string{
+		"XAGAUD",
+		"XAGEUR",
+		"XAGGBP",
+		"XAGJPY",
+		"XAGAUDm",
+		"XAUAUD",
+		"XAUXAG",
+		"XAUEUR",
+		"XAUGBP",
+		"XAUJPY",
+		"XAGCAD",
+		"XAGCHF",
+		"XAGNZD",
+	}
+	for _, s := range misses {
+		got, ok := eng.Match(s)
+		if ok {
+			t.Errorf("Match(%q): matched %s, want NOT matched (D-175 cross-currency reject)", s, got)
+		}
 	}
 }

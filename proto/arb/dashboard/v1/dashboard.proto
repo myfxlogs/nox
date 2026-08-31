@@ -208,6 +208,8 @@ message Opportunity {
   int32 verified_level = 24;    // 0=V0 预估 / 1=V1 已验证（V2 预留）
   double verify_ratio = 25;     // R=Σrealized/Σexpected（不可用=0）
   int32 verify_samples = 26;    // 验证样本数
+  string alias_buy = 27;        // D-175：买腿别名（空=回退 venue_buy）
+  string alias_sell = 28;       // D-175：卖腿别名（空=回退 venue_sell）
 }
 
 message ListOpportunitiesRequest {

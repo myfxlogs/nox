@@ -94,3 +94,6 @@ var CashflowsLegNoSQL string
 
 //go:embed 0050_broker_symbol_map_product_group.sql
 var BrokerSymbolMapProductGroupSQL string
+
+//go:embed 0051_delete_precious_metals_cross_currency.sql
+var DeletePreciousMetalsCrossCurrencySQL string

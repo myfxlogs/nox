@@ -46,6 +46,7 @@ var migrationFiles = []struct {
 	{48, migrations.PositionIntentFieldsSQL},
 	{49, migrations.CashflowsLegNoSQL},
 	{50, migrations.BrokerSymbolMapProductGroupSQL},
+	{51, migrations.DeletePreciousMetalsCrossCurrencySQL},
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

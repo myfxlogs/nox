@@ -36,12 +36,12 @@ var seedRules = []Rule{
 	// 能源（高优先：精确前缀优先于宽泛）
 	{regexp.MustCompile(`(?i)^(xbr|ukoil|brent)`), "BRENT", 10, "布伦特原油"},
 	{regexp.MustCompile(`(?i)^(wti|usoil|uscrud|cl)`), "WTI", 10, "WTI 原油"},
-	// 贵金属
-	{regexp.MustCompile(`(?i)^(xau|gold)`), "XAUUSD", 10, "黄金"},
-	{regexp.MustCompile(`(?i)^(xag|silver)`), "SILVER", 10, "白银"},
-	{regexp.MustCompile(`(?i)^(xpd|palladium)`), "XPDUSD", 10, "钯金"},
-	{regexp.MustCompile(`(?i)^(xpt|platinum)`), "XPTUSD", 10, "铂金"},
-	{regexp.MustCompile(`(?i)^(xcu|copper)`), "XCUUSD", 10, "铜"},
+	// 贵金属（D-175：只匹配 USD 计价，不匹配跨币种如 XAGAUD/XAUXAG）
+	{regexp.MustCompile(`(?i)^(xauusd|gold)`), "XAUUSD", 10, "黄金（USD计价）"},
+	{regexp.MustCompile(`(?i)^(xagusd|silver)`), "SILVER", 10, "白银（USD计价）"},
+	{regexp.MustCompile(`(?i)^(xpdusd|palladium)`), "XPDUSD", 10, "钯金（USD计价）"},
+	{regexp.MustCompile(`(?i)^(xptusd|platinum)`), "XPTUSD", 10, "铂金（USD计价）"},
+	{regexp.MustCompile(`(?i)^(xcuusd|copper)`), "XCUUSD", 10, "铜（USD计价）"},
 	// 外汇直盘+交叉盘（7 直盘 + 交叉盘，匹配 6 字母 FX 对）
 	{regexp.MustCompile(`(?i)^(eurusd|eur\.usd|eurusd\..*)$`), "EURUSD", 20, "欧元美元"},
 	{regexp.MustCompile(`(?i)^(gbpusd|gbp\.usd)$`), "GBPUSD", 20, "英镑美元"},
