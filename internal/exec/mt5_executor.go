@@ -94,10 +94,16 @@ func (e *MT5Executor) CloseOrder(ctx context.Context, ref OrderRef) (Fill, error
 	if ord == nil {
 		return Fill{}, fmt.Errorf("mt5 orderclose: nil result")
 	}
+	// OrderClose 返回 Order 是平仓后状态：Lots=剩余持仓（全平=0），CloseLots=本次平仓手数。
+	// 优先 CloseLots；旧 gateway 不填 CloseLots 时 fallback 到 Lots（兼容）。
+	qty := ord.GetCloseLots()
+	if qty <= 0 {
+		qty = ord.GetLots()
+	}
 	return Fill{
 		OrderID:    ref.OrderID,
 		Price:      ord.GetClosePrice(),
-		Qty:        ord.GetLots(),
+		Qty:        qty,
 		Swap:       ord.GetSwap(),
 		Commission: ord.GetCommission(),
 		Ts:         time.Now(),
