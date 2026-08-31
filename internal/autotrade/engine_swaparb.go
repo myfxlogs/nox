@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"arb/internal/bus"
 	"arb/internal/combo"
 	"arb/internal/fact"
 	"arb/internal/store/pgstore"
@@ -209,6 +210,27 @@ func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 	return combos
 }
 
+// legSpreadTooWide D-159 W4a R7：两腿 bid-ask spread 宽度门禁纯函数。
+// maxBps<=0 → 不校验（返回 false）；任一腿 mid<=0 或 spread>maxBps → 返回 (true, reason)。
+// reason 用于 log 跳过原因（调用方拼 canonical）。
+func legSpreadTooWide(qLong, qShort bus.Quote, maxBps float64) (bool, string) {
+	if maxBps <= 0 {
+		return false, ""
+	}
+	longMid := qLong.Mid()
+	shortMid := qShort.Mid()
+	if longMid <= 0 || shortMid <= 0 {
+		return true, fmt.Sprintf("mid<=0 (longMid=%.6f, shortMid=%.6f)", longMid, shortMid)
+	}
+	longSpreadBps := (qLong.Ask - qLong.Bid) / longMid * 10000
+	shortSpreadBps := (qShort.Ask - qShort.Bid) / shortMid * 10000
+	if longSpreadBps > maxBps || shortSpreadBps > maxBps {
+		return true, fmt.Sprintf("leg spread too wide (long=%.2f bps, short=%.2f bps, max=%.1f)",
+			longSpreadBps, shortSpreadBps, maxBps)
+	}
+	return false, ""
+}
+
 // trySwapArb 尝试开仓单个 swap 套利组合（D-072：名义额=broker 余额驱动，经 gate）。
 func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShort string, netSwapBps float64) {
 	// D-080 S4 N9 修订：判死策略停提交（扫描+评估常开喂 rollup，禁用只拦提交无 REJECTED 行）
@@ -226,6 +248,11 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 		if now.Sub(qLong.Time) > e.cfg.FreshnessTTL || now.Sub(qShort.Time) > e.cfg.FreshnessTTL {
 			return
 		}
+	}
+	// D-159 W4a R7：两腿 bid-ask spread 宽度门禁——任一腿 spread 过宽=流动性异常/报价不一致 → skip。
+	if tooWide, reason := legSpreadTooWide(qLong, qShort, e.cfg.SwapArbMaxLegSpreadBps); tooWide {
+		log.Printf("[autotrade] SWAPARB skip %s: %s", canonical, reason)
+		return
 	}
 	spread := qShort.Bid - qLong.Ask
 	spreadBps := spread / qLong.Ask * 10000

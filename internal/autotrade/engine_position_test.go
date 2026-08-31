@@ -111,7 +111,7 @@ func TestRecalcNetSwap_StaleMatchedFact(t *testing.T) {
 		t.Fatalf("insert facts: %v", err)
 	}
 	pos := seedSwapPosition(t, s)
-	e := &Engine{store: s}
+	e := &Engine{store: s, cfg: Config{SwapFactMaxAge: 2 * time.Hour}} // D-159 W4a R7：TTL 统一用 cfg.SwapFactMaxAge
 	got, ok := e.recalcNetSwap(ctx, pos)
 	if ok {
 		t.Errorf("stale matched fact: want ok=false, got ok=true val=%.4f", got)
@@ -185,7 +185,7 @@ func TestRecalcNetFunding_StaleMatchedFact(t *testing.T) {
 	stale := now.Add(-49 * time.Hour)
 	seedFundingFacts(t, s, 10.0, 4.0, stale, stale, true)
 	pos := seedSwapPosition(t, s)
-	e := &Engine{store: s}
+	e := &Engine{store: s, cfg: Config{SwapFactMaxAge: 2 * time.Hour}} // D-159 W4a R7：TTL 统一用 cfg.SwapFactMaxAge
 	got, ok := e.recalcNetFunding(ctx, pos)
 	if ok {
 		t.Errorf("stale: want ok=false, got ok=true val=%.4f", got)

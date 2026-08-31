@@ -205,3 +205,28 @@ func TestEvaluateCrossVenueZeroSpread(t *testing.T) {
 		t.Fatalf("NetBps = %v, want ~2.98 (spread=0 回退 D-078 round-trip)", r.NetBps)
 	}
 }
+
+// TestClassify_Avg30dZero_DowngradeToBreakeven D-159 W4a S5a：avg30dBps=0, netBps>grabThr → Breakeven（旧 Grab）。
+// SSOT §5 Phase 3-MT 第 4 点：无历史基线时降级为 V0/观察，不直接进入自动交易。
+func TestClassify_Avg30dZero_DowngradeToBreakeven(t *testing.T) {
+	got := classify(detector.TypeCarry, 10.0, 10.0, 0, 5.0)
+	if got != RatingBreakeven {
+		t.Errorf("avg30dBps=0 netBps=10>grabThr=5: got %s, want RatingBreakeven（降级 V0/观察）", got)
+	}
+}
+
+// TestClassify_Avg30dPositive_InstantGt2x_Grab D-159 W4a S5a：avg30dBps=5, instantBps=11 → Grab。
+func TestClassify_Avg30dPositive_InstantGt2x_Grab(t *testing.T) {
+	got := classify(detector.TypeCarry, 10.0, 11.0, 5.0, 5.0)
+	if got != RatingGrab {
+		t.Errorf("avg30dBps=5 instantBps=11>10: got %s, want RatingGrab", got)
+	}
+}
+
+// TestClassify_Avg30dPositive_InstantLt2x_Breakeven D-159 W4a S5a：avg30dBps=5, instantBps=9 → Breakeven。
+func TestClassify_Avg30dPositive_InstantLt2x_Breakeven(t *testing.T) {
+	got := classify(detector.TypeCarry, 10.0, 9.0, 5.0, 5.0)
+	if got != RatingBreakeven {
+		t.Errorf("avg30dBps=5 instantBps=9<10: got %s, want RatingBreakeven", got)
+	}
+}

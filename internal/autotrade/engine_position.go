@@ -141,9 +141,10 @@ func (e *Engine) recalcNetSwap(ctx context.Context, p *pgstore.Position) (float6
 		log.Printf("[autotrade] exit pos=%d: swap fact missing venue=%s", p.ID, sellBare)
 		return 0, false
 	}
-	// 48h 新鲜度守卫：对匹配到的 fact 检查（非列表首元素）。
-	if time.Since(longFact.Ts) > 48*time.Hour || time.Since(shortFact.Ts) > 48*time.Hour {
-		log.Printf("[autotrade] skip exit pos=%d: swap facts stale >48h", p.ID)
+	// D-159 W4a R7：TTL 统一用 cfg.SwapFactMaxAge（env 单源，默认 2h），与 discoverSwapCombos/swapledger 同源。
+	maxAge := e.cfg.SwapFactMaxAge
+	if maxAge > 0 && (time.Since(longFact.Ts) > maxAge || time.Since(shortFact.Ts) > maxAge) {
+		log.Printf("[autotrade] skip exit pos=%d: swap facts stale >%v", p.ID, maxAge)
 		return 0, false
 	}
 	return swapLong + swapShort, true
@@ -201,9 +202,10 @@ func (e *Engine) recalcNetFunding(ctx context.Context, p *pgstore.Position) (flo
 		log.Printf("[autotrade] exit pos=%d: funding fact missing venue=%s", p.ID, sellBare)
 		return 0, false
 	}
-	// 48h 新鲜度守卫：对匹配到的 fact 检查（非列表首元素）。
-	if time.Since(longFact.Ts) > 48*time.Hour || time.Since(shortFact.Ts) > 48*time.Hour {
-		log.Printf("[autotrade] skip exit pos=%d: funding facts stale >48h", p.ID)
+	// D-159 W4a R7：TTL 统一用 cfg.SwapFactMaxAge（env 单源，默认 2h），与 discoverSwapCombos/recalcNetSwap 同源。
+	maxAge := e.cfg.SwapFactMaxAge
+	if maxAge > 0 && (time.Since(longFact.Ts) > maxAge || time.Since(shortFact.Ts) > maxAge) {
+		log.Printf("[autotrade] skip exit pos=%d: funding facts stale >%v", p.ID, maxAge)
 		return 0, false
 	}
 	return longFunding - shortFunding, true

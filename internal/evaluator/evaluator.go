@@ -51,6 +51,7 @@ type Result struct {
 	QuoteTime      time.Time
 	ExpiresAt      time.Time
 	Rating         Rating
+	CostQuality    string // D-159 W4a：成本质量标记（unknown/estimated/actual），不落 opportunities 表（内部结构）
 }
 
 // Evaluate 评估单个 Candidate（§6.1）。
@@ -107,6 +108,9 @@ func Evaluate(c detector.Candidate, cfg Config, spreadBuy, spreadSell, commissio
 
 	rating := classify(c.Type, netBps, c.GrossBps, avg30dBps, cfg.GrabMinNetAnnualized)
 
+	// D-159 W4a：成本质量——commissionBps 来源未知（默认值非真实对拍）→ unknown；
+	// 未来真实对拍后改 estimated/actual。当前恒 unknown（保守）。
+	costQuality := "unknown"
 	now := time.Now()
 	qt := time.UnixMilli(c.QuoteTime)
 	return &Result{
@@ -127,6 +131,7 @@ func Evaluate(c detector.Candidate, cfg Config, spreadBuy, spreadSell, commissio
 		QuoteTime:      qt,
 		ExpiresAt:      now.Add(cfg.OpportunityTTL),
 		Rating:         rating,
+		CostQuality:    costQuality,
 	}
 }
 
@@ -141,8 +146,9 @@ func classify(typ detector.OppType, netBps, instantBps, avg30dBps, grabThr float
 	case detector.TypeCrossVenue:
 		return RatingGrab
 	default:
-		// 息差型：net_annualized > grabThr 且瞬时 > 30日均值×2 → grab
-		if netBps > grabThr && (avg30dBps == 0 || instantBps > avg30dBps*2) {
+		// D-159 W4a：avg30dBps=0（无历史基线）→ 降级为 V0/观察，不进 grab（SSOT §5 Phase 3-MT 第 4 点）。
+		// 有基线时瞬时 > 基线×2 → grab。
+		if netBps > grabThr && avg30dBps > 0 && instantBps > avg30dBps*2 {
 			return RatingGrab
 		}
 		return RatingBreakeven
