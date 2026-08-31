@@ -268,3 +268,100 @@ func TestAutoFlattenGoesThroughClosePosition(t *testing.T) {
 		t.Errorf("position.RealizedPnl 应被 ClosePosition 回填（非 nil）")
 	}
 }
+
+// TestClosePosition_EstimatedMark D-159 W3a R4 A10 exec 侧：
+// ①calibrator 接线+部分校准失败（复用 fakePnLCalibrator 未全命中构造）→ ClosePosition 后 note 含 "pnl_estimated"
+// ②calibrator nil → ClosePosition 后 note 不含 "pnl_estimated"（合法配置，用同步公式）
+// 复用 W2a TestClosePosition_ResidualCheck_Fails 的 fake 基建（fakeFlattenExecutor+fakeVerifier）。
+// 反证：删 pipeline_legs.go else 分支的 SetPositionNote → 分支①红（note 不含 pnl_estimated）。
+func TestClosePosition_EstimatedMark(t *testing.T) {
+	// 分支①：calibrator 接线+部分失败 → note 含 pnl_estimated
+	t.Run("calibrated_partial_fail", func(t *testing.T) {
+		s := testStore(t)
+		ctx := context.Background()
+		if _, err := s.Pool().Exec(ctx, `TRUNCATE positions, position_legs, alerts RESTART IDENTITY CASCADE`); err != nil {
+			t.Fatalf("truncate: %v", err)
+		}
+		reg := NewRegistry()
+		reg.Register(&fakeFlattenExecutor{venue: "okx:perp"})
+		reg.Register(&fakeFlattenExecutor{venue: "binance:perp"})
+		p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50})
+		p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{
+			"okx:perp":     {},
+			"binance:perp": {},
+		}}
+		// calibrator 接线，只命中 okx 腿（binance 未命中）→ 部分校准失败 → 标记 estimated
+		// OPEN 腿 OrderID = "fill-BUY"(okx) / "fill-SELL"(binance)（fakeFlattenExecutor.PlaceOrder 返回）
+		p.SetPnLCalibrator(&fakePnLCalibrator{results: map[string]*HistoryPnL{
+			"okx:perp:fill-BUY": {Profit: 10.0},
+		}})
+
+		res, err := p.Execute(ctx,
+			"PERP:BTCUSDT:okx:perp:binance:perp:6", "req-d159-a10-1", "PERP_FUNDING",
+			[]LegSpec{
+				{VenueKey: "okx:perp", VenueSymbol: "BTC-USDT-SWAP", Side: "BUY", Qty: 0.001, PriceExpected: 100000},
+				{VenueKey: "binance:perp", VenueSymbol: "BTCUSDT", Side: "SELL", Qty: 0.001, PriceExpected: 100000},
+			})
+		if err != nil {
+			t.Fatalf("Execute: %v", err)
+		}
+		if res.Status != "OPEN" {
+			t.Fatalf("期望 OPEN（建仓成功），实际 %s", res.Status)
+		}
+
+		if err := p.ClosePosition(ctx, res.PositionID); err != nil {
+			t.Fatalf("ClosePosition: %v", err)
+		}
+
+		pos, _ := s.GetPosition(ctx, res.PositionID)
+		if pos.Status != "CLOSED" {
+			t.Fatalf("期望 CLOSED（残量归零），实际 %s", pos.Status)
+		}
+		if !strings.Contains(pos.Note, "pnl_estimated") {
+			t.Errorf("calibrator 接线+部分失败 → note 应含 'pnl_estimated'，实际 note=%q", pos.Note)
+		}
+	})
+
+	// 分支②：calibrator nil → note 不含 pnl_estimated（合法配置，用同步公式）
+	t.Run("nil_calibrator_no_mark", func(t *testing.T) {
+		s := testStore(t)
+		ctx := context.Background()
+		if _, err := s.Pool().Exec(ctx, `TRUNCATE positions, position_legs, alerts RESTART IDENTITY CASCADE`); err != nil {
+			t.Fatalf("truncate: %v", err)
+		}
+		reg := NewRegistry()
+		reg.Register(&fakeFlattenExecutor{venue: "okx:perp"})
+		reg.Register(&fakeFlattenExecutor{venue: "binance:perp"})
+		p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50})
+		p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{
+			"okx:perp":     {},
+			"binance:perp": {},
+		}}
+		// pnlCalibrator nil（未接线）→ 用同步公式，不标记 estimated
+
+		res, err := p.Execute(ctx,
+			"PERP:BTCUSDT:okx:perp:binance:perp:7", "req-d159-a10-2", "PERP_FUNDING",
+			[]LegSpec{
+				{VenueKey: "okx:perp", VenueSymbol: "BTC-USDT-SWAP", Side: "BUY", Qty: 0.001, PriceExpected: 100000},
+				{VenueKey: "binance:perp", VenueSymbol: "BTCUSDT", Side: "SELL", Qty: 0.001, PriceExpected: 100000},
+			})
+		if err != nil {
+			t.Fatalf("Execute: %v", err)
+		}
+		if res.Status != "OPEN" {
+			t.Fatalf("期望 OPEN（建仓成功），实际 %s", res.Status)
+		}
+
+		if err := p.ClosePosition(ctx, res.PositionID); err != nil {
+			t.Fatalf("ClosePosition: %v", err)
+		}
+
+		pos, _ := s.GetPosition(ctx, res.PositionID)
+		if pos.Status != "CLOSED" {
+			t.Fatalf("期望 CLOSED（残量归零），实际 %s", pos.Status)
+		}
+		if strings.Contains(pos.Note, "pnl_estimated") {
+			t.Errorf("calibrator nil → note 不应含 'pnl_estimated'（合法配置），实际 note=%q", pos.Note)
+		}
+	})
+}
