@@ -11,11 +11,13 @@ import (
 // fakeFactProvider 实现 FactProvider，注入 funding facts。
 type fakeFactProvider struct {
 	funding map[string]map[string]float64
+	isReal  map[string]*bool // D-178
 }
 
 func (f *fakeFactProvider) FundingFacts() map[string]map[string]float64 { return f.funding }
 func (f *fakeFactProvider) SwapFacts() map[string]map[string][2]float64 { return nil }
 func (f *fakeFactProvider) TradeModes() map[string]map[string]int64     { return nil }
+func (f *fakeFactProvider) IsRealMap() map[string]*bool                 { return f.isReal } // D-178
 
 func TestPerpFundingDetector(t *testing.T) {
 	now := time.Now()

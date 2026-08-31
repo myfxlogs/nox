@@ -117,13 +117,15 @@ func TestDedup(t *testing.T) {
 
 // fakeFP 测试用 FactProvider：提供 swap + trade_mode facts。
 type fakeFP struct {
-	swap  map[string]map[string][2]float64
-	modes map[string]map[string]int64
+	swap   map[string]map[string][2]float64
+	modes  map[string]map[string]int64
+	isReal map[string]*bool // D-178
 }
 
 func (f fakeFP) FundingFacts() map[string]map[string]float64 { return nil }
 func (f fakeFP) SwapFacts() map[string]map[string][2]float64 { return f.swap }
 func (f fakeFP) TradeModes() map[string]map[string]int64     { return f.modes }
+func (f fakeFP) IsRealMap() map[string]*bool                 { return f.isReal } // D-178
 
 // TestCarryScan 正息差产候选（年化百分点口径，D-036）、负息差/缺 Fact 不产。
 func TestCarryScan(t *testing.T) {

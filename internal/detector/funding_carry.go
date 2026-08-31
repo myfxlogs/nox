@@ -23,8 +23,10 @@ func (d *FundingHedgeDetector) Scan(_ context.Context, snapshot map[string]map[s
 	var out []Candidate
 	now := time.Now()
 	var fundingFacts map[string]map[string]float64
+	var realMap map[string]*bool
 	if fp != nil {
 		fundingFacts = fp.FundingFacts()
+		realMap = fp.IsRealMap()
 	}
 	for canonical, venues := range snapshot {
 		spot, hasSpot := findVenueType(venues, "spot")
@@ -33,6 +35,10 @@ func (d *FundingHedgeDetector) Scan(_ context.Context, snapshot map[string]map[s
 			continue
 		}
 		if stale(spot, now, d.FreshnessTTL) || stale(perp, now, d.FreshnessTTL) {
+			continue
+		}
+		// D-178：is_real 配对检查（fail-open，gate 层兜底）。
+		if !isRealPair(realMap, spot.Venue, perp.Venue) {
 			continue
 		}
 		funding, ok := lookupFunding(fundingFacts, canonical, perp.Venue)
@@ -84,9 +90,11 @@ func (d *CarryDetector) Scan(_ context.Context, snapshot map[string]map[string]b
 	now := time.Now()
 	var swapFacts map[string]map[string][2]float64
 	var modes map[string]map[string]int64
+	var realMap map[string]*bool
 	if fp != nil {
 		swapFacts = fp.SwapFacts()
 		modes = fp.TradeModes()
+		realMap = fp.IsRealMap()
 	}
 	for canonical, venues := range snapshot {
 		if len(venues) < 2 {
@@ -104,6 +112,10 @@ func (d *CarryDetector) Scan(_ context.Context, snapshot map[string]map[string]b
 				}
 				// 可交易性腿过滤（D-060 F4，仅 Carry）：买腿须可开多、卖腿须可开空；未知放行。
 				if !legTradable(modes, canonical, a.VenueKey(), true) || !legTradable(modes, canonical, b.VenueKey(), false) {
+					continue
+				}
+				// D-178：is_real 配对检查（fail-open，gate 层兜底）。
+				if !isRealPair(realMap, a.Venue, b.Venue) {
 					continue
 				}
 				swapsA, okA := lookupSwap(swapFacts, canonical, a.Venue)

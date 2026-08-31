@@ -37,8 +37,10 @@ func (d *PerpFundingDetector) Scan(_ context.Context, snapshot map[string]map[st
 	var out []Candidate
 	now := time.Now()
 	var fundingFacts map[string]map[string]float64
+	var realMap map[string]*bool
 	if fp != nil {
 		fundingFacts = fp.FundingFacts()
+		realMap = fp.IsRealMap()
 	}
 	for canonical, venues := range snapshot {
 		// D-151 入场白名单：非 BTC/ETH/TRX 跳过（不产候选），首报日志注明。
@@ -75,6 +77,10 @@ func (d *PerpFundingDetector) Scan(_ context.Context, snapshot map[string]map[st
 				a, b := legs[i], legs[j]
 				if a.q.Venue == b.q.Venue {
 					continue // 同所不算跨所
+				}
+				// D-178：is_real 配对检查（fail-open，gate 层兜底）。
+				if !isRealPair(realMap, a.q.Venue, b.q.Venue) {
+					continue
 				}
 				// 净年化 = |fundingA - fundingB|（高 funding 端持空收、低 funding 端持多付）
 				spread := a.funding - b.funding

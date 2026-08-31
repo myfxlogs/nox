@@ -17,6 +17,7 @@ type FactCache struct {
 	// （检测器腿/执行腿），swap 消费方是 Quote.Venue 名键，两者各按各自消费方，不得互相对齐。
 	tradeMode    map[string]map[string]tradeModeEntry
 	tradeModeTTL time.Duration
+	isReal       map[string]*bool // D-178：venue → *bool（nil=未知）
 }
 
 // tradeModeEntry trade_mode 值 + 到达时间（TTL 新鲜度判据）。
@@ -31,6 +32,7 @@ func NewFactCache() *FactCache {
 		swap:         make(map[string]map[string][2]float64),
 		tradeMode:    make(map[string]map[string]tradeModeEntry),
 		tradeModeTTL: 24 * time.Hour, // 缺省兜底；main 注入 config.TradeModeTTL（D-060）
+		isReal:       make(map[string]*bool),
 	}
 }
 
@@ -130,4 +132,22 @@ func (fc *FactCache) TradeMode(canonical, venueKey string) (int64, bool) {
 		return 0, false
 	}
 	return e.mode, true
+}
+
+// UpdateIsRealMap D-178：覆盖写 is_real 映射（boot 加载 + fact sink 周期刷新，幂等无害）。
+func (fc *FactCache) UpdateIsRealMap(m map[string]*bool) {
+	fc.mu.Lock()
+	fc.isReal = m
+	fc.mu.Unlock()
+}
+
+// IsRealMap D-178：返回 is_real 映射深拷贝（venue → *bool，nil=未知）。
+func (fc *FactCache) IsRealMap() map[string]*bool {
+	fc.mu.RLock()
+	defer fc.mu.RUnlock()
+	cp := make(map[string]*bool, len(fc.isReal))
+	for k, v := range fc.isReal {
+		cp[k] = v
+	}
+	return cp
 }

@@ -20,8 +20,10 @@ func (d *CrossVenueDetector) Scan(_ context.Context, snapshot map[string]map[str
 	var out []Candidate
 	now := time.Now()
 	var modes map[string]map[string]int64
+	var realMap map[string]*bool
 	if fp != nil {
 		modes = fp.TradeModes()
+		realMap = fp.IsRealMap()
 	}
 	for canonical, venues := range snapshot {
 		if len(venues) < 2 {
@@ -37,6 +39,10 @@ func (d *CrossVenueDetector) Scan(_ context.Context, snapshot map[string]map[str
 				minBps := crossMinBpsFor([]string{a.VenueType, b.VenueType}, d.CexMinGrossBps, d.CfdMinGrossBps)
 				// 可交易性腿过滤（D-060 F4）：买腿须可开多、卖腿须可开空；未知放行。
 				if !legTradable(modes, canonical, a.VenueKey(), true) || !legTradable(modes, canonical, b.VenueKey(), false) {
+					continue
+				}
+				// D-178：is_real 配对检查（fail-open，对称覆盖正向+反向）。
+				if !isRealPair(realMap, a.Venue, b.Venue) {
 					continue
 				}
 				// 买 A（按 A.ask）卖 B（按 B.bid）：利润 = B.bid - A.ask（D-030 修正符号）

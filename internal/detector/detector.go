@@ -38,6 +38,7 @@ type FactProvider interface {
 	FundingFacts() map[string]map[string]float64 // canonical → venue → 年化
 	SwapFacts() map[string]map[string][2]float64 // canonical → venue → [long, short]
 	TradeModes() map[string]map[string]int64     // canonical → venueKey → mode（TTL 过滤后；D-060 F4）
+	IsRealMap() map[string]*bool                 // D-178：venue → *bool（nil=未知）
 }
 
 // legTradable F4 可交易性腿过滤：买腿（开多）要求 LongOnly/FullAccess，卖腿（开空）要求
