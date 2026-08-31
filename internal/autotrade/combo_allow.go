@@ -28,16 +28,16 @@ import (
 func comboAllowVerdict(allow []exec.ComboAllowSpec, deny []exec.ComboAllowSpec, autoAllow bool, maxActive int, maxGrossExposure float64, intent TradeIntent, activePositions []pgstore.Position) GateVerdict {
 	// D-168 黑名单优先：在 deny 列表中的组合一律拒绝
 	if exec.MatchComboAllow(deny, intent.Canonical, intent.VenueBuy, intent.VenueSell) != nil {
-		return GateVerdict{false, fmt.Sprintf("combo in denylist: %s %s×%s", intent.Canonical, intent.VenueBuy, intent.VenueSell)}
+		return GateVerdict{Pass: false, Reason: fmt.Sprintf("combo in denylist: %s %s×%s", intent.Canonical, intent.VenueBuy, intent.VenueSell)}
 	}
 
 	if !autoAllow {
 		// D-159 原始模式：白名单空=fail-closed，白名单非空=精确匹配
 		if len(allow) == 0 {
-			return GateVerdict{false, "no swaparb combo allowlist configured"}
+			return GateVerdict{Pass: false, Reason: "no swaparb combo allowlist configured"}
 		}
 		if exec.MatchComboAllow(allow, intent.Canonical, intent.VenueBuy, intent.VenueSell) == nil {
-			return GateVerdict{false, fmt.Sprintf("combo not in allowlist: %s %s×%s", intent.Canonical, intent.VenueBuy, intent.VenueSell)}
+			return GateVerdict{Pass: false, Reason: fmt.Sprintf("combo not in allowlist: %s %s×%s", intent.Canonical, intent.VenueBuy, intent.VenueSell)}
 		}
 	}
 	// D-168 autoAllow=true：白名单不拦截（空或非空都放行），由门禁栈兜底
@@ -62,13 +62,19 @@ func comboAllowVerdict(allow []exec.ComboAllowSpec, deny []exec.ComboAllowSpec, 
 		}
 	}
 	if activeCount >= maxActive {
-		return GateVerdict{false, fmt.Sprintf("max active combos reached (%d >= %d)", activeCount, maxActive)}
+		return GateVerdict{Pass: false, Reason: fmt.Sprintf("max active combos reached (%d >= %d)", activeCount, maxActive)}
 	}
 	// D-168 全局额度检查（>0 才校验）：估算活跃名义 = 活跃 SWAPARB 组合数 × 新组合名义
+	// 超限时折分：remaining = maxGross - estimatedGross；>0 则折分 qty 到剩余额度内（Pass=true + AdjustedNotional）
 	if maxGrossExposure > 0 {
 		estimatedGross := float64(activeSwapArbCount) * intent.NotionalUSD
-		if estimatedGross+intent.NotionalUSD > maxGrossExposure {
-			return GateVerdict{false, fmt.Sprintf("gross exposure exceeded: estimated $%.2f + new $%.2f > $%.2f", estimatedGross, intent.NotionalUSD, maxGrossExposure)}
+		remaining := maxGrossExposure - estimatedGross
+		if remaining <= 0 {
+			return GateVerdict{Pass: false, Reason: fmt.Sprintf("gross exposure exhausted: active $%.2f >= $%.2f", estimatedGross, maxGrossExposure)}
+		}
+		if remaining < intent.NotionalUSD {
+			// 超限折分：剩余额度不够原 qty，折分到 remaining
+			return GateVerdict{Pass: true, AdjustedNotional: remaining, Reason: fmt.Sprintf("gross adjusted: $%.2f → $%.2f (remaining within $%.2f cap)", intent.NotionalUSD, remaining, maxGrossExposure)}
 		}
 	}
 	return GateVerdict{Pass: true}

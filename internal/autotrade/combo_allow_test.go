@@ -148,19 +148,36 @@ func TestComboAllowVerdict_DenyListPriority(t *testing.T) {
 	}
 }
 
-// TestComboAllowVerdict_GrossExposure D-168：全局额度超限 → 拒绝。
+// TestComboAllowVerdict_GrossExposure D-168：全局额度超限 → 折分放行（AdjustedNotional=remaining）。
 func TestComboAllowVerdict_GrossExposure(t *testing.T) {
 	intent := TradeIntent{Strategy: "SWAPARB", Canonical: "BRENT", VenueBuy: "A:mt5", VenueSell: "B:mt5", NotionalUSD: 3000}
 	active := []pgstore.Position{
 		{OpportunityID: "SWAPARB:BRENT:C:mt5:D:mt5", Status: "OPEN"},
 	}
-	// 活跃 1 个 SWAPARB × $3000 = $3000 + 新 $3000 = $6000 > $5000
+	// 活跃 1 个 SWAPARB × $3000 = $3000，remaining = $5000 - $3000 = $2000 < $3000 → 折分
+	v := comboAllowVerdict(nil, nil, true, 5, 5000, intent, active)
+	if !v.Pass {
+		t.Fatalf("gross exposure exceeded should split (pass), got reject: %s", v.Reason)
+	}
+	if v.AdjustedNotional != 2000 {
+		t.Errorf("AdjustedNotional want 2000, got %v", v.AdjustedNotional)
+	}
+}
+
+// TestComboAllowVerdict_GrossExposureExhausted D-168：全局额度耗尽（remaining<=0）→ 拒绝。
+func TestComboAllowVerdict_GrossExposureExhausted(t *testing.T) {
+	intent := TradeIntent{Strategy: "SWAPARB", Canonical: "BRENT", VenueBuy: "A:mt5", VenueSell: "B:mt5", NotionalUSD: 3000}
+	active := []pgstore.Position{
+		{OpportunityID: "SWAPARB:BRENT:C:mt5:D:mt5", Status: "OPEN"},
+		{OpportunityID: "SWAPARB:WTI:E:mt5:F:mt5", Status: "OPEN"},
+	}
+	// 活跃 2 个 × $3000 = $6000 > $5000 → remaining = -$1000 <= 0 → 拒绝
 	v := comboAllowVerdict(nil, nil, true, 5, 5000, intent, active)
 	if v.Pass {
-		t.Fatal("gross exposure exceeded should reject")
+		t.Fatal("gross exposure exhausted should reject")
 	}
-	if !strings.Contains(v.Reason, "gross exposure exceeded") {
-		t.Errorf("reason want 'gross exposure exceeded', got %q", v.Reason)
+	if !strings.Contains(v.Reason, "gross exposure exhausted") {
+		t.Errorf("reason want 'gross exposure exhausted', got %q", v.Reason)
 	}
 }
 

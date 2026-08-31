@@ -35,7 +35,7 @@ func TestSwapDeviationGate_CS100_HighDeviation_Rejected(t *testing.T) {
 			return "FAILED", "", 0
 		},
 	}
-	res := g.Submit(context.Background(), intent)
+	res := g.Submit(context.Background(), &intent)
 	if res.Status != "REJECTED" || !strings.Contains(res.Reason, "swap deviation gate") {
 		t.Errorf("CS=100 high deviation: got %s/%s, want REJECTED/swap deviation gate", res.Status, res.Reason)
 	}
@@ -55,7 +55,7 @@ func TestSwapDeviationGate_CS100_LowDeviation_Pass(t *testing.T) {
 		DedupKey: "CROSS_VENUE:AUDJPY:vA:mt5:vB:mt5",
 		Execute:  func(ctx context.Context) (string, string, int64) { return "EXECUTED", "", 1 },
 	}
-	res := g.Submit(context.Background(), intent)
+	res := g.Submit(context.Background(), &intent)
 	if res.Status == "REJECTED" && strings.Contains(res.Reason, "swap deviation gate") {
 		t.Errorf("CS=100 low deviation should pass, rejected: %s", res.Reason)
 	}
@@ -79,7 +79,7 @@ func TestSwapDeviationGate_CS1_OriginalBehavior(t *testing.T) {
 			return "FAILED", "", 0
 		},
 	}
-	res := g.Submit(context.Background(), intent)
+	res := g.Submit(context.Background(), &intent)
 	if res.Status != "REJECTED" || !strings.Contains(res.Reason, "swap deviation gate") {
 		t.Errorf("CS=1: got %s/%s, want REJECTED/swap deviation gate (original behavior)", res.Status, res.Reason)
 	}
@@ -99,7 +99,7 @@ func TestSwapDeviationGate_ResolverNil_FallbackCS1(t *testing.T) {
 		DedupKey: "CROSS_VENUE:AUDJPY:vA:mt5:vB:mt5",
 		Execute:  func(ctx context.Context) (string, string, int64) { return "EXECUTED", "", 1 },
 	}
-	res := g.Submit(context.Background(), intent)
+	res := g.Submit(context.Background(), &intent)
 	// resolver=nil 回退 CS=1，notional=1，facts=0, actual=-2.21 → 偏差 100% → 仍拒绝
 	if res.Status != "REJECTED" || !strings.Contains(res.Reason, "swap deviation gate") {
 		t.Errorf("resolver nil: got %s/%s, want REJECTED (fallback CS=1, high deviation)", res.Status, res.Reason)
@@ -119,7 +119,7 @@ func TestSwapDeviationGate_ResolverOkFalse_SkipLeg(t *testing.T) {
 		DedupKey: "CROSS_VENUE:AUDJPY:vA:mt5:vB:mt5",
 		Execute:  func(ctx context.Context) (string, string, int64) { return "EXECUTED", "", 1 },
 	}
-	res := g.Submit(context.Background(), intent)
+	res := g.Submit(context.Background(), &intent)
 	// resolver ok=false → 跳过 vA 腿 → 无其他匹配腿 → 放行（走 S3）
 	if res.Status == "REJECTED" && strings.Contains(res.Reason, "swap deviation gate") {
 		t.Errorf("resolver ok=false should skip leg (pass to S3), rejected: %s", res.Reason)

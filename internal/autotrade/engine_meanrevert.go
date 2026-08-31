@@ -116,5 +116,5 @@ func (e *Engine) executeMeanRevert(ctx context.Context, canonical, venueBuy, ven
 			return e.service.ExecuteMeanRevert(ctx, canonical, venueBuy, venueSell, reqID, qty, openBps)
 		},
 	}
-	e.gate.Submit(ctx, intent)
+	e.gate.Submit(ctx, &intent)
 }

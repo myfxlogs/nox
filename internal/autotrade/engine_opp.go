@@ -107,7 +107,7 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 			return e.service.ExecuteOpportunityInternal(ctx, opp.ID, reqID, qty)
 		},
 	}
-	e.gate.Submit(ctx, intent)
+	e.gate.Submit(ctx, &intent)
 }
 
 // isMTVenue 判断 venueKey 是否为 MT5/MT4 venue（D-135 sizing CS fail-closed 用）。

@@ -22,32 +22,33 @@ type GateInput struct {
 
 // GateVerdict gateDecision 纯函数返回。
 type GateVerdict struct {
-	Pass   bool
-	Reason string // 拒绝原因（含关键数值）
+	Pass             bool
+	Reason           string  // 拒绝原因（含关键数值）
+	AdjustedNotional float64 // D-168 超限折分：>0 表示需按此名义额折分 qty（Pass=true 时生效）
 }
 
 // gateDecision 检查顺序判定（设计 §3.1，纯函数无 IO）。
 // 检查顺序即优先级：状态→策略禁用→日亏损→持仓数→名义额度→幂等。
 func gateDecision(in GateInput) GateVerdict {
 	if in.State != "RUNNING" {
-		return GateVerdict{false, fmt.Sprintf("system state=%s (not RUNNING)", in.State)}
+		return GateVerdict{Pass: false, Reason: fmt.Sprintf("system state=%s (not RUNNING)", in.State)}
 	}
 	if in.Disabled {
-		return GateVerdict{false, fmt.Sprintf("strategy %s disabled", in.Strategy)}
+		return GateVerdict{Pass: false, Reason: fmt.Sprintf("strategy %s disabled", in.Strategy)}
 	}
 	if in.DailyPnl <= -in.MaxDailyLoss {
-		return GateVerdict{false, fmt.Sprintf("daily loss $%.2f ≤ -$%.2f", in.DailyPnl, in.MaxDailyLoss)}
+		return GateVerdict{Pass: false, Reason: fmt.Sprintf("daily loss $%.2f ≤ -$%.2f", in.DailyPnl, in.MaxDailyLoss)}
 	}
 	if in.OpenCount >= in.MaxPositions {
-		return GateVerdict{false, fmt.Sprintf("max positions reached (%d >= %d)", in.OpenCount, in.MaxPositions)}
+		return GateVerdict{Pass: false, Reason: fmt.Sprintf("max positions reached (%d >= %d)", in.OpenCount, in.MaxPositions)}
 	}
 	// D-108 P3 C1：单笔名义额度判定（持仓数后、幂等前；SkipNotional 跳过 SWAPARB 自管 sizing；
 	// MaxNotional≤0=禁用语义保留——未配置或显式关）。
 	if !in.SkipNotional && in.MaxNotional > 0 && in.NotionalUSD > in.MaxNotional {
-		return GateVerdict{false, fmt.Sprintf("notional $%.2f > cap $%.2f", in.NotionalUSD, in.MaxNotional)}
+		return GateVerdict{Pass: false, Reason: fmt.Sprintf("notional $%.2f > cap $%.2f", in.NotionalUSD, in.MaxNotional)}
 	}
 	if in.DedupHit {
-		return GateVerdict{false, fmt.Sprintf("duplicate dedup key")}
+		return GateVerdict{Pass: false, Reason: fmt.Sprintf("duplicate dedup key")}
 	}
 	return GateVerdict{Pass: true}
 }

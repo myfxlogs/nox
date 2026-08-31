@@ -52,7 +52,7 @@ func TestGateLive_RealVenue_LiveTradeFalse_Rejected(t *testing.T) {
 			return "FAILED", "should not reach", 0
 		},
 	}
-	res := g.Submit(context.Background(), intent)
+	res := g.Submit(context.Background(), &intent)
 	if res.Status != "REJECTED" {
 		t.Errorf("is_real=true + LiveTrade=false: got %s, want REJECTED (reason=%s)", res.Status, res.Reason)
 	}
@@ -74,7 +74,7 @@ func TestGateLive_RealVenue_LiveTradeTrue_PassGate(t *testing.T) {
 			return "EXECUTED", "", 1
 		},
 	}
-	res := g.Submit(context.Background(), intent)
+	res := g.Submit(context.Background(), &intent)
 	// 不应因 LIVE gate 拒绝（LiveTrade=true 放行实盘）
 	if res.Status == "REJECTED" && strings.Contains(res.Reason, "live trade disabled") {
 		t.Errorf("LiveTrade=true should pass LIVE gate, but rejected: %s", res.Reason)
@@ -96,7 +96,7 @@ func TestGateLive_DemoVenue_LiveTradeFalse_PassGate(t *testing.T) {
 			return "EXECUTED", "", 1
 		},
 	}
-	res := g.Submit(context.Background(), intent)
+	res := g.Submit(context.Background(), &intent)
 	if res.Status == "REJECTED" && strings.Contains(res.Reason, "live trade disabled") {
 		t.Errorf("demo venue should not be blocked by LIVE gate, but rejected: %s", res.Reason)
 	}

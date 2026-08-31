@@ -90,7 +90,7 @@ func TestSwapDeviationGate_HighDeviation_Rejected(t *testing.T) {
 			return "FAILED", "should not reach", 0
 		},
 	}
-	res := g.Submit(context.Background(), intent)
+	res := g.Submit(context.Background(), &intent)
 	if res.Status != "REJECTED" {
 		t.Errorf("high deviation: got %s, want REJECTED (reason=%s)", res.Status, res.Reason)
 	}
@@ -115,7 +115,7 @@ func TestSwapDeviationGate_LowDeviation_Pass(t *testing.T) {
 			return "EXECUTED", "", 1
 		},
 	}
-	res := g.Submit(context.Background(), intent)
+	res := g.Submit(context.Background(), &intent)
 	if res.Status == "REJECTED" && strings.Contains(res.Reason, "swap deviation gate") {
 		t.Errorf("low deviation should pass, but rejected: %s", res.Reason)
 	}
@@ -153,7 +153,7 @@ func TestSwapDeviationGate_NoHistory_Pass(t *testing.T) {
 			return "EXECUTED", "", 1
 		},
 	}
-	res := g.Submit(context.Background(), intent)
+	res := g.Submit(context.Background(), &intent)
 	if res.Status == "REJECTED" && strings.Contains(res.Reason, "swap deviation gate") {
 		t.Errorf("no history should pass, but rejected: %s", res.Reason)
 	}
@@ -174,7 +174,7 @@ func TestSwapDeviationGate_Disabled_Pass(t *testing.T) {
 			return "EXECUTED", "", 1
 		},
 	}
-	res := g.Submit(context.Background(), intent)
+	res := g.Submit(context.Background(), &intent)
 	if res.Status == "REJECTED" && strings.Contains(res.Reason, "swap deviation gate") {
 		t.Errorf("disabled (Pct=0) should pass even with high deviation, but rejected: %s", res.Reason)
 	}

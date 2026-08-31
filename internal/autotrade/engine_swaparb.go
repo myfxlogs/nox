@@ -313,26 +313,29 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 		NotionalUSD: notional,
 		DedupKey:    dedupKey,
 		NetBps:      spreadBps,
-		Execute: func(ctx context.Context) (string, string, int64) {
-			reqID := fmt.Sprintf("swaparb-%d", time.Now().UnixNano())
-			status, msg, posID := e.service.ExecuteMeanRevertWithCap(ctx, canonical, venueLong, venueShort, reqID, qty, spreadBps, notional, "SWAPARB")
-			if status != "FAILED" && posID > 0 {
-				// D-080 S1：新持仓直接写组合键（无时间戳），与 opportunities.id 贯通
-				_ = e.store.UpdatePositionOppID(ctx, posID, dedupKey)
-				// D-087 §3.4：SWAPARB typed 双字段——ExecuteMeanRevertWithCap 已写 EntrySpreadBps，
-				// 此处补 SwapBpsDaily + AnnualPct 覆盖写全
-				swap := netSwapBps
-				annual := netSwapBps * 365 / 100
-				_ = e.store.UpdatePositionMeta(ctx, posID, "SWAPARB", pgstore.PositionMeta{
-					EntrySpreadBps: &spreadBps,
-					SwapBpsDaily:   &swap,
-					AnnualPct:      &annual,
-				})
-			}
-			return status, msg, posID
-		},
 	}
-	e.gate.Submit(ctx, intent)
+	// D-168 超限折分：Execute 闭包捕获 intent 指针，读 intent.Qty/NotionalUSD
+	// （gate 层折分时修改 intent 字段，闭包内读到折分后的值）
+	intentPtr := &intent
+	intent.Execute = func(ctx context.Context) (string, string, int64) {
+		reqID := fmt.Sprintf("swaparb-%d", time.Now().UnixNano())
+		status, msg, posID := e.service.ExecuteMeanRevertWithCap(ctx, canonical, venueLong, venueShort, reqID, intentPtr.Qty, spreadBps, intentPtr.NotionalUSD, "SWAPARB")
+		if status != "FAILED" && posID > 0 {
+			// D-080 S1：新持仓直接写组合键（无时间戳），与 opportunities.id 贯通
+			_ = e.store.UpdatePositionOppID(ctx, posID, dedupKey)
+			// D-087 §3.4：SWAPARB typed 双字段——ExecuteMeanRevertWithCap 已写 EntrySpreadBps，
+			// 此处补 SwapBpsDaily + AnnualPct 覆盖写全
+			swap := netSwapBps
+			annual := netSwapBps * 365 / 100
+			_ = e.store.UpdatePositionMeta(ctx, posID, "SWAPARB", pgstore.PositionMeta{
+				EntrySpreadBps: &spreadBps,
+				SwapBpsDaily:   &swap,
+				AnnualPct:      &annual,
+			})
+		}
+		return status, msg, posID
+	}
+	e.gate.Submit(ctx, &intent)
 }
 
 // swapFactsZeroCheck D-165 S3：swap facts 零值校验——任一腿 swap facts=0 但 broker 该 venue

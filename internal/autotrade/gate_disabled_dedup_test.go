@@ -54,9 +54,9 @@ func TestGateDisabled_Stdout1hDedup(t *testing.T) {
 	}
 
 	// 第一次 Submit：disabled 拒绝 → DB 落 1 行 + stdout 首 log
-	g.Submit(ctx, intent)
+	g.Submit(ctx, &intent)
 	// 第二次 Submit：disabled 拒绝 → DB 落 1 行 + stdout 被去重压（1h 内）
-	g.Submit(ctx, intent)
+	g.Submit(ctx, &intent)
 
 	// DB 全量断言：autotrade_logs 2 行 REJECTED
 	var logCount int
@@ -106,7 +106,7 @@ func TestGateDisabled_DifferentStrategiesNoDedup(t *testing.T) {
 			DedupKey:  st + ":BTCUSDT:okx:perp:gate:perp",
 			Execute:   func(ctx context.Context) (string, string, int64) { return "EXECUTED", "", 0 },
 		}
-		g.Submit(ctx, intent)
+		g.Submit(ctx, &intent)
 	}
 
 	g.lastDisabledLogMu.Lock()
@@ -141,7 +141,7 @@ func TestGateDisabled_WindowExpiryResend(t *testing.T) {
 	}
 
 	// Submit：窗口过期 → stdout 放行重发 + 时间戳刷新为 now
-	g.Submit(ctx, intent)
+	g.Submit(ctx, &intent)
 
 	// 内部状态断言：时间戳应刷新为近 now（<1min），证明窗口过期后重发
 	g.lastDisabledLogMu.Lock()
