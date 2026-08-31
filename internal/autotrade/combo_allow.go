@@ -47,7 +47,6 @@ func comboAllowVerdict(allow []exec.ComboAllowSpec, deny []exec.ComboAllowSpec, 
 	}
 	intentCombo := combo.Key(intent.Strategy, intent.Canonical, intent.VenueBuy, intent.VenueSell)
 	activeCount := 0
-	activeSwapArbCount := 0
 	for _, p := range activePositions {
 		if p.OpportunityID == "" {
 			continue
@@ -55,26 +54,32 @@ func comboAllowVerdict(allow []exec.ComboAllowSpec, deny []exec.ComboAllowSpec, 
 		if combo.MatchOppID(p.OpportunityID, intentCombo) {
 			activeCount++
 		}
-		// D-168 全局额度：统计所有活跃 SWAPARB 组合数（Position 无 NotionalUSD 字段，
-		// 用活跃组合数 × intent.NotionalUSD 估算全局名义合计）
-		if strings.HasPrefix(p.OpportunityID, "SWAPARB:") {
-			activeSwapArbCount++
-		}
 	}
 	if activeCount >= maxActive {
 		return GateVerdict{Pass: false, Reason: fmt.Sprintf("max active combos reached (%d >= %d)", activeCount, maxActive)}
 	}
-	// D-168 全局额度检查（>0 才校验）：估算活跃名义 = 活跃 SWAPARB 组合数 × 新组合名义
-	// 超限时折分：remaining = maxGross - estimatedGross；>0 则折分 qty 到剩余额度内（Pass=true + AdjustedNotional）
+	// D-179 S3：全局额度检查——真实 Σ 活跃 SWAPARB notional_usd 替代旧估算（仓数×新组合名义）。
+	// notional_usd 是双腿口径（positions.notional_usd=全部腿名义合计）；intent.NotionalUSD 是单腿口径。
+	// nil 计 0（回填缺失/新仓初始 NULL 窗口）；纯函数不打日志，NULL warn 在调用点 gate.go Submit 预扫。
 	if maxGrossExposure > 0 {
-		estimatedGross := float64(activeSwapArbCount) * intent.NotionalUSD
-		remaining := maxGrossExposure - estimatedGross
-		if remaining <= 0 {
-			return GateVerdict{Pass: false, Reason: fmt.Sprintf("gross exposure exhausted: active $%.2f >= $%.2f", estimatedGross, maxGrossExposure)}
+		activeGross := 0.0
+		for _, p := range activePositions {
+			if p.OpportunityID == "" || !strings.HasPrefix(p.OpportunityID, "SWAPARB:") {
+				continue
+			}
+			if p.NotionalUSD != nil {
+				activeGross += *p.NotionalUSD
+			}
 		}
-		if remaining < intent.NotionalUSD {
-			// 超限折分：剩余额度不够原 qty，折分到 remaining
-			return GateVerdict{Pass: true, AdjustedNotional: remaining, Reason: fmt.Sprintf("gross adjusted: $%.2f → $%.2f (remaining within $%.2f cap)", intent.NotionalUSD, remaining, maxGrossExposure)}
+		remaining := maxGrossExposure - activeGross // 双腿空间
+		if remaining <= 0 {
+			return GateVerdict{Pass: false, Reason: fmt.Sprintf("gross exposure exhausted: active $%.2f >= $%.2f", activeGross, maxGrossExposure)}
+		}
+		// v2-F 全链双腿换算：remaining（双腿）vs intent.NotionalUSD×2（双腿）比较
+		if remaining < intent.NotionalUSD*2 {
+			// 折分：AdjustedNotional=remaining/2（单腿目标名义），保持单腿语义（D-168 ratio 链不动）
+			adjusted := remaining / 2
+			return GateVerdict{Pass: true, AdjustedNotional: adjusted, Reason: fmt.Sprintf("gross adjusted: $%.2f → $%.2f (remaining within $%.2f cap)", intent.NotionalUSD, adjusted, maxGrossExposure)}
 		}
 	}
 	return GateVerdict{Pass: true}

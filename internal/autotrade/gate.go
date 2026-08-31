@@ -2,9 +2,9 @@ package autotrade
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -126,18 +126,33 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 	// gateDecision 已过（state=RUNNING、未禁用、未超仓、未超 notional、未 dedup）才进入此检查。
 	// 非 RUNNING 状态（CLOSE_ONLY 等）已在 gateDecision 拒绝，不会到此。
 	if intent.Strategy == "SWAPARB" {
+		// D-179 S3：预扫活跃 SWAPARB 仓 notional_usd NULL（combo_allow.go 纯函数不打日志，warn 在此调用点）。
+		for _, p := range activePositions {
+			if p.OpportunityID != "" && strings.HasPrefix(p.OpportunityID, "SWAPARB:") && p.NotionalUSD == nil {
+				log.Printf("[autotrade] WARN position %d notional_usd NULL (backfill missing?) counted as 0", p.ID)
+			}
+		}
 		cv := comboAllowVerdict(g.cfg.SwapArbAllowCombos, g.cfg.SwapArbDenyCombos, g.cfg.SwapArbAutoAllow, g.cfg.MaxActiveCombos, g.cfg.SwapArbMaxGrossExposure, *intent, activePositions)
 		if !cv.Pass {
 			g.rejectLog(ctx, *intent, cv.Reason, false)
 			return GateResult{Status: "REJECTED", Reason: cv.Reason}
 		}
 		// D-168 超限折分：AdjustedNotional>0 表示需按剩余额度折分 qty
+		// D-179 S4：折分 qty 向下规整到 0.01 步长（FX min lot），<0.01 拒开（宁可不开不可超限）。
 		if cv.AdjustedNotional > 0 && intent.NotionalUSD > 0 {
 			ratio := cv.AdjustedNotional / intent.NotionalUSD
 			originalQty := intent.Qty
 			originalNotional := intent.NotionalUSD
-			intent.Qty = intent.Qty * ratio
-			intent.NotionalUSD = cv.AdjustedNotional
+			splitQty := intent.Qty * ratio
+			flooredQty, reject := grossSplitFloor(splitQty)
+			if reject {
+				reason := fmt.Sprintf("gross adjusted qty %.4f below min lot floor", splitQty)
+				g.rejectLog(ctx, *intent, reason, false)
+				return GateResult{Status: "REJECTED", Reason: reason}
+			}
+			intent.Qty = flooredQty
+			// 重算 NotionalUSD 保持量价一致（规整后 qty 对应名义）
+			intent.NotionalUSD = cv.AdjustedNotional * flooredQty / splitQty
 			log.Printf("[autotrade] gate gross split: %s qty %.4f → %.4f, notional $%.2f → $%.2f (%s)",
 				intent.DedupKey, originalQty, intent.Qty, originalNotional, intent.NotionalUSD, cv.Reason)
 		}
@@ -230,64 +245,4 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 		log.Printf("[autotrade] gate EXECUTED %s posID=%d", intent.DedupKey, posID)
 	}
 	return GateResult{Status: status, Reason: logEntry.Reason, PosID: posID}
-}
-
-// classifyFailure 按双腿 venue 分类执行失败（D-077 修复⑩ G3）。
-// 取两腿中更严重的 Action（Halt > RetryFresh > Retry > Abort）。
-func (g *Gate) classifyFailure(intent TradeIntent, msg string) errclass.Action {
-	a1 := errclass.ClassifyErr(intent.VenueBuy, errors.New(msg))
-	a2 := errclass.ClassifyErr(intent.VenueSell, errors.New(msg))
-	return worseAction(a1, a2)
-}
-
-// worseAction 返回更严重的 Action（Halt > RetryFresh > Retry > Abort）。
-func worseAction(a, b errclass.Action) errclass.Action {
-	severity := map[errclass.Action]int{
-		errclass.Abort:      0,
-		errclass.Retry:      1,
-		errclass.RetryFresh: 2,
-		errclass.Halt:       3,
-	}
-	if severity[a] >= severity[b] {
-		return a
-	}
-	return b
-}
-
-// haltStrategy Halt 类失败 → DisableStrategy + critical 告警（D-077 修复⑩ G3）。
-func (g *Gate) haltStrategy(ctx context.Context, intent TradeIntent, reason string) {
-	if err := g.store.DisableStrategy(ctx, intent.Strategy, reason); err != nil {
-		log.Printf("[autotrade] halt DisableStrategy %s: %v", intent.Strategy, err)
-	}
-	alertMsg := fmt.Sprintf("strategy %s HALTED: %s", intent.Strategy, reason)
-	_ = g.store.InsertAlert(ctx, nil, "critical", alertMsg)
-	log.Printf("[autotrade] HALT %s: %s", intent.Strategy, reason)
-}
-
-// rejectLog 拒绝路径统一落库 + 日志（fail-closed 检查失败与规则拒绝共用）。
-// D-154 S3：disabled=true 时 stdout 1h 去重（per-strategy），DB 落库保留全量（审计完整性不动）。
-func (g *Gate) rejectLog(ctx context.Context, intent TradeIntent, reason string, disabled bool) {
-	_ = g.store.InsertAutotradeLog(ctx, &pgstore.AutotradeLog{
-		OpportunityID: intent.DedupKey,
-		Strategy:      intent.Strategy,
-		Canonical:     intent.Canonical,
-		VenueBuy:      intent.VenueBuy,
-		VenueSell:     intent.VenueSell,
-		Qty:           intent.Qty,
-		Status:        "REJECTED",
-		Reason:        reason,
-		NetBps:        intent.NetBps,
-	})
-	if disabled {
-		// stdout 1h 去重（per-strategy）；DB 已全量落库
-		g.lastDisabledLogMu.Lock()
-		last, ok := g.lastDisabledLog[intent.Strategy]
-		if ok && time.Since(last) < time.Hour {
-			g.lastDisabledLogMu.Unlock()
-			return
-		}
-		g.lastDisabledLog[intent.Strategy] = time.Now()
-		g.lastDisabledLogMu.Unlock()
-	}
-	log.Printf("[autotrade] gate REJECT %s: %s", intent.DedupKey, reason)
 }

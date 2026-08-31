@@ -208,6 +208,9 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 		if status != "FAILED" && posID > 0 {
 			// D-080 S1：新持仓直接写组合键（无时间戳），与 opportunities.id 贯通
 			_ = e.store.UpdatePositionOppID(ctx, posID, dedupKey)
+			// D-179 S2：落盘 notional_usd=双腿口径（intentPtr.NotionalUSD 是单腿口径，×2=双腿合计）。
+			// gate 折分后 intentPtr.NotionalUSD 已更新为 AdjustedNotional（gate.go:140），此处读折分后值。
+			_ = e.store.UpdatePositionNotional(ctx, posID, intentPtr.NotionalUSD*2)
 			// D-087 §3.4：SWAPARB typed 双字段——ExecuteMeanRevertWithCap 已写 EntrySpreadBps，
 			// 此处补 SwapBpsDaily + AnnualPct 覆盖写全
 			swap := netSwapBps

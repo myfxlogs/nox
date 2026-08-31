@@ -3,6 +3,7 @@ package exec
 import (
 	"context"
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 
@@ -63,6 +64,12 @@ func (e *MT5Executor) PlaceOrder(ctx context.Context, o Order) (Fill, error) {
 	ord := resp.GetResult()
 	if ord == nil {
 		return Fill{}, fmt.Errorf("mt5 ordersend: nil result")
+	}
+	// D-179 S4：overfill 兜底告警——MT 服务端规整 qty 可能大于请求（posID=470 实证 0.0109→0.02）。
+	// 单已成交不可撤，仅告警留痕（digest 可捕捉）。
+	if filled := ord.GetLots(); filled > o.Qty*1.001 {
+		log.Printf("[exec] ERROR overfill: requested %.4f filled %.4f symbol=%s venue=%s",
+			o.Qty, filled, o.Symbol, e.venueKey)
 	}
 	return Fill{
 		OrderID:    strconv.FormatInt(ord.GetTicket(), 10),
