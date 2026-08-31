@@ -173,6 +173,11 @@ func (s *Service) SetLegContractSize(f func(venueKey, venueSymbol string) (float
 	s.legContractSize = f
 }
 
+// LegContractSize D-165 S2：返回 legContractSize resolver（autotrade engine S2 notional 换算用）。
+func (s *Service) LegContractSize() func(venueKey, venueSymbol string) (float64, bool) {
+	return s.legContractSize
+}
+
 // SetMaxLegImbalancePct 注入卖腿名义不平衡上限（百分比；≤0 回退默认 2）。
 func (s *Service) SetMaxLegImbalancePct(p float64) { s.maxLegImbalance = p }
 
