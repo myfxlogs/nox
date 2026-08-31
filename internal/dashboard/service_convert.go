@@ -54,6 +54,8 @@ func (s *Service) oppToProto(o *pgstore.Opportunity) *v1.Opportunity {
 		NetBps:         o.NetBps,
 		NetUsd:         netUSD(o.NetBps, o.Type, s.notionalUSD),
 		NotionalUsd:    s.notionalUSD,
+		AliasBuy:       s.aliasForVenueKey(o.VenueBuy),  // D-175：买腿别名（空=回退 venue_buy）
+		AliasSell:      s.aliasForVenueKey(o.VenueSell), // D-175：卖腿别名（空=回退 venue_sell）
 	}
 	// D-086 验证阶梯：后端按 vkey 聚合填入 verified_level/verify_ratio/verify_samples。
 	s.fillVerifiedFields(pb, o)

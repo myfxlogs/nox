@@ -3,6 +3,7 @@ package dashboard
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -111,6 +112,12 @@ type Service struct {
 	// D-159 W6a S2：LIVE 人工开关（手动入口同源）。
 	// LiveTrade=false 时 is_real=true 账户拒绝开仓。
 	liveTrade bool
+
+	// D-175：venue→alias 缓存（main 启动时加载 ListAccountAliases 注入）。
+	// oppToProto 热路径读此 map 填 alias_buy/alias_sell，避免每条机会查 DB。
+	// nil = 未接线（alias 留空，前端回退 venueKey）。RWMutex 保护并发读/SetAliasMap 写。
+	aliasMu  sync.RWMutex
+	aliasMap map[string]string
 }
 
 // FrontConfig 前端展示阈值（D-077 修复⑪B N7，后端 config 单一真相）。
@@ -221,3 +228,27 @@ func (s *Service) SetEnvironment(env string) { s.environment = env }
 
 // SetLiveTrade 注入 LIVE 人工开关（D-159 W6a S2，手动入口同源）。
 func (s *Service) SetLiveTrade(live bool) { s.liveTrade = live }
+
+// SetAliasMap D-175：注入 venue→alias 缓存（main 启动时加载 ListAccountAliases）。
+// nil/空 = 未接线（oppToProto alias 留空，前端回退 venueKey）。线程安全（RWMutex）。
+func (s *Service) SetAliasMap(m map[string]string) {
+	s.aliasMu.Lock()
+	defer s.aliasMu.Unlock()
+	s.aliasMap = m
+}
+
+// aliasForVenueKey D-175：从 venueKey="{venue}:{src}" 提取 venue 查 alias 缓存。
+// venueKey 无冒号 → 整串当 venue 查；alias 空/未接线 → 返回空（前端回退 venueKey）。
+func (s *Service) aliasForVenueKey(venueKey string) string {
+	s.aliasMu.RLock()
+	m := s.aliasMap
+	s.aliasMu.RUnlock()
+	if m == nil {
+		return ""
+	}
+	venue := venueKey
+	if idx := strings.Index(venueKey, ":"); idx > 0 {
+		venue = venueKey[:idx]
+	}
+	return m[venue]
+}

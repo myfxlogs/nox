@@ -600,6 +600,8 @@ type Opportunity struct {
 	VerifiedLevel int32   `protobuf:"varint,24,opt,name=verified_level,json=verifiedLevel,proto3" json:"verified_level,omitempty"` // 0=V0 预估 / 1=V1 已验证（V2 预留）
 	VerifyRatio   float64 `protobuf:"fixed64,25,opt,name=verify_ratio,json=verifyRatio,proto3" json:"verify_ratio,omitempty"`      // R=Σrealized/Σexpected（不可用=0）
 	VerifySamples int32   `protobuf:"varint,26,opt,name=verify_samples,json=verifySamples,proto3" json:"verify_samples,omitempty"` // 验证样本数
+	AliasBuy      string  `protobuf:"bytes,27,opt,name=alias_buy,json=aliasBuy,proto3" json:"alias_buy,omitempty"`                 // D-175：买腿别名（空=回退 venue_buy）
+	AliasSell     string  `protobuf:"bytes,28,opt,name=alias_sell,json=aliasSell,proto3" json:"alias_sell,omitempty"`              // D-175：卖腿别名（空=回退 venue_sell）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -814,6 +816,20 @@ func (x *Opportunity) GetVerifySamples() int32 {
 		return x.VerifySamples
 	}
 	return 0
+}
+
+func (x *Opportunity) GetAliasBuy() string {
+	if x != nil {
+		return x.AliasBuy
+	}
+	return ""
+}
+
+func (x *Opportunity) GetAliasSell() string {
+	if x != nil {
+		return x.AliasSell
+	}
+	return ""
 }
 
 type ListOpportunitiesRequest struct {
@@ -10913,7 +10929,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x05limit\x18\x04 \x01(\x05R\x05limit\x12\x16\n" +
 	"\x06offset\x18\x05 \x01(\x05R\x06offset\"A\n" +
 	"\x11ListFactsResponse\x12,\n" +
-	"\x05facts\x18\x01 \x03(\v2\x16.arb.dashboard.v1.FactR\x05facts\"\xea\a\n" +
+	"\x05facts\x18\x01 \x03(\v2\x16.arb.dashboard.v1.FactR\x05facts\"\xa6\b\n" +
 	"\vOpportunity\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x1b\n" +
@@ -10948,7 +10964,10 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"updated_at\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12%\n" +
 	"\x0everified_level\x18\x18 \x01(\x05R\rverifiedLevel\x12!\n" +
 	"\fverify_ratio\x18\x19 \x01(\x01R\vverifyRatio\x12%\n" +
-	"\x0everify_samples\x18\x1a \x01(\x05R\rverifySamplesB\x11\n" +
+	"\x0everify_samples\x18\x1a \x01(\x05R\rverifySamples\x12\x1b\n" +
+	"\talias_buy\x18\x1b \x01(\tR\baliasBuy\x12\x1d\n" +
+	"\n" +
+	"alias_sell\x18\x1c \x01(\tR\taliasSellB\x11\n" +
 	"\x0f_breakeven_days\"\\\n" +
 	"\x18ListOpportunitiesRequest\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x14\n" +
