@@ -97,3 +97,6 @@ var BrokerSymbolMapProductGroupSQL string
 
 //go:embed 0051_delete_precious_metals_cross_currency.sql
 var DeletePreciousMetalsCrossCurrencySQL string
+
+//go:embed 0052_position_notional_usd.sql
+var PositionNotionalUsdSQL string

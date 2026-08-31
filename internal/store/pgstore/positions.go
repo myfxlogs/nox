@@ -28,6 +28,7 @@ type Position struct {
 	OpenedAt               *time.Time
 	ClosedAt               *time.Time
 	Note                   string
+	NotionalUSD            *float64 // D-179：该 position 全部腿名义合计（USD；SWAPARB=双腿=2×单腿）
 }
 
 // PositionLeg 对应 position_legs 表（§2.11）。
@@ -50,15 +51,22 @@ type PositionLeg struct {
 
 // CreatePosition 建 position 记录，返回 ID。
 // D-087 §3.3：opened_at = now()（holdDays 计算依赖，原 NULL 兜底 min(leg ts) 仍保留作冗余）。
+// D-179 S2：notional_usd 列同步（p.NotionalUSD 非 nil 时落盘，nil=NULL 向后兼容）。
 func (s *Store) CreatePosition(ctx context.Context, p *Position) (int64, error) {
-	q := `INSERT INTO positions (opportunity_id, type, status, expected_net_bps, opened_at)
-		VALUES ($1, $2, $3, $4, now()) RETURNING id`
+	q := `INSERT INTO positions (opportunity_id, type, status, expected_net_bps, opened_at, notional_usd)
+		VALUES ($1, $2, $3, $4, now(), $5) RETURNING id`
 	var id int64
-	err := s.pool.QueryRow(ctx, q, p.OpportunityID, p.Type, p.Status, p.ExpectedNetBps).Scan(&id)
+	err := s.pool.QueryRow(ctx, q, p.OpportunityID, p.Type, p.Status, p.ExpectedNetBps, p.NotionalUSD).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("create position: %w", err)
 	}
 	return id, nil
+}
+
+// UpdatePositionNotional D-179 S2：写入 notional_usd（Execute 闭包创建 position 后补写双腿口径）。
+func (s *Store) UpdatePositionNotional(ctx context.Context, id int64, notional float64) error {
+	_, err := s.pool.Exec(ctx, `UPDATE positions SET notional_usd = $1 WHERE id = $2`, notional, id)
+	return err
 }
 
 // UpdatePositionStatus 更新持仓状态。

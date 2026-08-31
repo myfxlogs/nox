@@ -78,7 +78,7 @@ func (s *Store) CountPositions(ctx context.Context, status string) (int, error) 
 // D-159 W1a R2：UNKNOWN position 用 CLOSING+uncertainty_reason 识别（不新增 DB 枚举），CLOSING 已在列。
 // 行数=MaxPositions 量级，成本≈COUNT；返回行供 gate 派生 combo.FromOppID 匹配。
 func (s *Store) ListActivePositions(ctx context.Context) ([]Position, error) {
-	q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note
+	q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note, notional_usd
 		FROM positions
 		WHERE status IN ('OPENING','OPEN','LEGGED','CLOSING')
 		ORDER BY id`
@@ -92,7 +92,7 @@ func (s *Store) ListActivePositions(ctx context.Context) ([]Position, error) {
 		var p Position
 		if err := rows.Scan(&p.ID, &p.OpportunityID, &p.Type, &p.Status, &p.ExpectedNetBps,
 			&p.ExpectedEntrySpreadBps, &p.ExpectedSwapBpsDaily, &p.ExpectedAnnualPct,
-			&p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note); err != nil {
+			&p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note, &p.NotionalUSD); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
