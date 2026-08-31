@@ -45,6 +45,12 @@ type Config struct {
 	// is_real=true 账户 + LiveTrade=false → 拒绝开仓（Gate.Submit + 手动 RPC 同源）。
 	// is_real=false（demo）不受限制。切换=改 env+重启+审计日志（无 RPC）。
 	LiveTrade bool
+	// D-165 S1：swap 偏差拦截阈值（默认 50.0）。同 venue 已有 OPEN 持仓偏差超阈值→拒绝新开仓。
+	SwapDeviationGatePct float64
+	// D-165 S2：swap 偏差退出阈值（默认 50.0）。recalcNetSwap 对拍偏差超阈值→用 broker 实际值。
+	SwapDeviationExitPct float64
+	// D-165 S3：swap facts 零值校验开关（默认 true）。facts=0 但 broker 有非零 swap 历史→拒绝。
+	SwapFactsZeroCheckEnabled bool
 
 	// D-072 §3.3/§4.2 swap/funding 退出参数
 	MinNetSwapBps  float64 // discoverSwapCombos 最低净 swap（ARB_AUTOTRADE_MIN_NET_SWAP_BPS，默认 0.2）

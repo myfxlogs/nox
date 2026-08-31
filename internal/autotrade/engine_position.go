@@ -147,7 +147,71 @@ func (e *Engine) recalcNetSwap(ctx context.Context, p *pgstore.Position) (float6
 		log.Printf("[autotrade] skip exit pos=%d: swap facts stale >%v", p.ID, maxAge)
 		return 0, false
 	}
-	return swapLong + swapShort, true
+	factsNetSwap := swapLong + swapShort
+	// D-165 S2：broker 实际 swap 对拍——偏差超阈值用实际值触发退出。
+	// 复用 DailySwapAccrued 取 broker 实际日增量（USD），换算 bps 后 vs facts 规格值算偏差。
+	// 偏差 > SwapDeviationExitPct → 改用 broker 实际值（bps）返回（修复"规格声明 0 但实际负→退出路径不触发"）。
+	// 无快照/ok=false → 用 facts 规格值（回退原行为，不阻塞退出决策）。
+	if e.cfg.SwapDeviationExitPct > 0 {
+		if actualBps, ok := e.brokerActualNetSwapBps(ctx, p, legs, buyBare, sellBare, factsNetSwap); ok {
+			if deviationPct := swapDeviationBetween(factsNetSwap, actualBps); deviationPct > e.cfg.SwapDeviationExitPct {
+				log.Printf("[autotrade] exit pos=%d: swap deviation %.1f%% > %.1f%%, use broker actual %.4f bps vs facts %.4f bps",
+					p.ID, deviationPct, e.cfg.SwapDeviationExitPct, actualBps, factsNetSwap)
+				return actualBps, true
+			}
+		}
+	}
+	return factsNetSwap, true
+}
+
+// brokerActualNetSwapBps D-165 S2：取 broker 实际净 swap（USD/日）换算 bps。
+// 复用 recalcNetSwap 已查的 legs + buyBare/sellBare。DailySwapAccrued 取两腿当日增量。
+// notional 从 legs qty×price_actual 算（无 CS 简化，CEX 腿 CS=1，MT 腿 price_actual 已含 CS 折算）。
+// 任一腿无快照/ok=false → 返回 (0, false)（回退 facts）。
+// factsNetSwap 用于 notional 缺失时回退（无法换算→false）。
+func (e *Engine) brokerActualNetSwapBps(ctx context.Context, p *pgstore.Position, legs []pgstore.PositionLeg, buyBare, sellBare string, factsNetSwap float64) (float64, bool) {
+	now := time.Now().UTC()
+	var buyActualUSD, sellActualUSD float64
+	var buyNotional, sellNotional float64
+	buyOK, sellOK := false, false
+	for _, leg := range legs {
+		if leg.Phase != "OPEN" {
+			continue
+		}
+		legBare := strings.Split(leg.Venue, ":")[0]
+		notional := leg.Qty
+		if leg.PriceActual != nil {
+			notional *= *leg.PriceActual
+		}
+		if leg.Side == "BUY" && legBare == buyBare {
+			usd, ok, err := e.store.DailySwapAccrued(ctx, p.ID, buyBare, now)
+			if err != nil || !ok {
+				return 0, false // 任一腿无快照→回退 facts
+			}
+			buyActualUSD = usd
+			buyNotional = notional
+			buyOK = true
+		} else if leg.Side != "BUY" && legBare == sellBare {
+			usd, ok, err := e.store.DailySwapAccrued(ctx, p.ID, sellBare, now)
+			if err != nil || !ok {
+				return 0, false
+			}
+			sellActualUSD = usd
+			sellNotional = notional
+			sellOK = true
+		}
+	}
+	if !buyOK || !sellOK {
+		return 0, false
+	}
+	// 净 swap USD/日 = buyActual + sellActual（BUY 腿通常负，SELL 腿通常正，净值=两腿之和）
+	netActualUSD := buyActualUSD + sellActualUSD
+	// 换算 bps：用两腿 notional 平均值（简化，对冲两腿名义相近）
+	avgNotional := (buyNotional + sellNotional) / 2
+	if avgNotional <= 0 {
+		return 0, false // 无法换算→回退 facts
+	}
+	return netActualUSD / avgNotional * 10000, true
 }
 
 // recalcNetFunding 重算净 funding 年化（D-072 §4.2，facts 驱动 + 48h 新鲜度守卫）。

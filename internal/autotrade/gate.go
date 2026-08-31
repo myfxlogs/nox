@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"strings"
 	"sync"
 	"time"
 
 	"arb/internal/combo"
 	"arb/internal/errclass"
+	"arb/internal/fact"
 	"arb/internal/store/pgstore"
 )
 
@@ -181,6 +183,16 @@ func (g *Gate) Submit(ctx context.Context, intent TradeIntent) GateResult {
 		}
 	}
 
+	// D-165 S1：swap 偏差拦截——同 venue 已有 OPEN 持仓的 broker 实际 swap vs facts 规格值偏差超阈值→拒绝。
+	// 复用 ListActivePositions（line 91 已查）反查同 venue OPEN 持仓，取 DailySwapAccrued + LatestFacts 实时算偏差。
+	// fail-closed：查询失败→拒绝。首次开仓无历史数据→放行（走 S3 零值校验）。
+	if g.cfg.SwapDeviationGatePct > 0 {
+		if rv := g.swapDeviationGateCheck(ctx, intent, activePositions); !rv.Pass {
+			g.rejectLog(ctx, intent, rv.Reason, false)
+			return GateResult{Status: "REJECTED", Reason: rv.Reason}
+		}
+	}
+
 	// 执行
 	status, msg, posID := intent.Execute(ctx)
 
@@ -324,4 +336,106 @@ func (g *Gate) liveGateCheck(ctx context.Context, intent TradeIntent) GateVerdic
 		}
 	}
 	return GateVerdict{Pass: true}
+}
+
+// swapDeviationGateCheck D-165 S1：swap 偏差拦截——同 venue 已有 OPEN 持仓的 broker 实际 swap
+// vs facts 规格值偏差超阈值→拒绝新开仓。
+// 逻辑：
+//   - 遍历 activePositions，对每个 OPEN 持仓 ListPositionLegs 取 OPEN 腿 venue。
+//   - 腿 venue 与 intent.VenueBuy/VenueSell 的 bare venue 匹配→该持仓是"同 venue 历史持仓"。
+//   - 对匹配持仓的 venue，DailySwapAccrued 取 broker 实际日增量（USD），LatestFacts 取规格值（bps）。
+//   - facts 规格值换算 USD/日 = factsBps × notional / 10000（notional 从 legs qty×price×CS 算）。
+//   - 用 swapDeviationBetween 纯函数算偏差率，超阈值→拒绝。
+//   - 无匹配持仓/无 DailySwapAccrued/无 facts→放行（首次开仓走 S3）。
+//   - 查询失败→fail-closed 拒绝。
+func (g *Gate) swapDeviationGateCheck(ctx context.Context, intent TradeIntent, activePositions []pgstore.Position) GateVerdict {
+	intentBuyBare, _, _ := strings.Cut(intent.VenueBuy, ":")
+	intentSellBare, _, _ := strings.Cut(intent.VenueSell, ":")
+	canonical := intent.Canonical
+
+	// 取 facts 规格值（同 recalcNetSwap 逻辑）
+	longFacts, err := g.store.LatestFacts(ctx, fact.KindSwapLong, "", canonical)
+	if err != nil {
+		return GateVerdict{false, fmt.Sprintf("swap deviation gate: long facts query failed (%v)", err)}
+	}
+	shortFacts, err := g.store.LatestFacts(ctx, fact.KindSwapShort, "", canonical)
+	if err != nil {
+		return GateVerdict{false, fmt.Sprintf("swap deviation gate: short facts query failed (%v)", err)}
+	}
+
+	for _, p := range activePositions {
+		legs, err := g.store.ListPositionLegs(ctx, p.ID)
+		if err != nil {
+			return GateVerdict{false, fmt.Sprintf("swap deviation gate: list legs pos=%d failed (%v)", p.ID, err)}
+		}
+		for _, leg := range legs {
+			if leg.Phase != "OPEN" {
+				continue
+			}
+			legBare, _, _ := strings.Cut(leg.Venue, ":")
+			// 只检查与 intent venue 匹配的腿
+			if legBare != intentBuyBare && legBare != intentSellBare {
+				continue
+			}
+			// 取 broker 实际 swap 日增量
+			actualUSD, ok, err := g.store.DailySwapAccrued(ctx, p.ID, legBare, time.Now().UTC())
+			if err != nil {
+				return GateVerdict{false, fmt.Sprintf("swap deviation gate: daily swap accrued pos=%d venue=%s failed (%v)", p.ID, legBare, err)}
+			}
+			if !ok || actualUSD == 0 {
+				continue // 无快照或零增量→跳过（走 S3）
+			}
+			// 取 facts 规格值（bps）
+			var factsBps float64
+			if leg.Side == "BUY" {
+				for _, f := range longFacts {
+					if f.Venue == legBare {
+						factsBps = f.Value
+						break
+					}
+				}
+			} else {
+				for _, f := range shortFacts {
+					if f.Venue == legBare {
+						factsBps = f.Value
+						break
+					}
+				}
+			}
+			// facts 换算 USD/日 = bps × notional / 10000
+			notional := leg.Qty
+			if leg.PriceActual != nil {
+				notional *= *leg.PriceActual
+			}
+			if notional <= 0 {
+				continue // 无法算 notional→跳过
+			}
+			factsUSD := factsBps * notional / 10000
+			// 偏差率
+			deviationPct := swapDeviationBetween(factsUSD, actualUSD)
+			if deviationPct > g.cfg.SwapDeviationGatePct {
+				return GateVerdict{false, fmt.Sprintf("swap deviation gate: venue=%s deviation=%.1f%% > %.1f%% (broker actual=$%.4f/day vs facts spec=$%.4f/day)",
+					legBare, deviationPct, g.cfg.SwapDeviationGatePct, actualUSD, factsUSD)}
+			}
+		}
+	}
+	return GateVerdict{Pass: true}
+}
+
+// swapDeviationBetween D-165 S1/S2：偏差率纯函数（复用 swapledger.reconcileLeg 公式，但独立实现避免跨包依赖）。
+// 公式：|facts - actual| / max(|facts|, |actual|, 0.01) × 100。
+// 两者为 0→偏差 0（一致）；任一为 0 另一非 0→偏差 100%。
+func swapDeviationBetween(facts, actual float64) float64 {
+	diff := facts - actual
+	if diff < 0 {
+		diff = -diff
+	}
+	maxVal := math.Abs(facts)
+	if math.Abs(actual) > maxVal {
+		maxVal = math.Abs(actual)
+	}
+	if maxVal < 0.01 {
+		maxVal = 0.01
+	}
+	return diff / maxVal * 100
 }
