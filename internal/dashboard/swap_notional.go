@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"arb/internal/bus"
@@ -186,28 +187,35 @@ func (s *Service) SwapArbNotional(canonical, venueLong, venueShort string) (noti
 		return 0, false, "quote/contract size unavailable"
 	}
 	// D-097 R2：sizing 口径——minEq×ratio < minNotional → skip（缩放后名义至少够 1 个最小手）。
+	// D-174：ratio 语义从名义/权益改为保证金/权益，notional=maxMargin×leverage。
 	ratio := swapArbRatio(s.swapArbEquityUseRatio)
-	notional, okSizing := swapArbNotionalSizing(minEq, minNotional, ratio, s.swapArbBareCap)
+	longLev, _ := s.AccountLeverage(venueLong)
+	shortLev, _ := s.AccountLeverage(venueShort)
+	leverage := effectiveLeverage(longLev, shortLev)
+	notional, okSizing := swapArbNotionalSizing(minEq, minNotional, ratio, s.swapArbBareCap, leverage)
 	if !okSizing {
-		return 0, false, fmt.Sprintf("sizing $%.2f < min lot notional $%.2f", minEq*ratio, minNotional)
+		return 0, false, fmt.Sprintf("sizing $%.2f (margin $%.2f × lev %.0f) < min lot notional $%.2f", minEq*ratio*leverage, minEq*ratio, leverage, minNotional)
 	}
 	return notional, true, ""
 }
 
-// swapArbNotionalSizing 纯函数：sizing 口径 + 裸露 cap（D-097 R2）。
-// sizing = minEq×ratio；sizing < minNotional → ok=false（skip）；
-// notional > minEq×bareCap → cap 到 minEq×bareCap（只 cap 不 skip）。
+// swapArbNotionalSizing 纯函数：sizing 口径 + 裸露 cap（D-174 杠杆感知）。
+// ratio 语义=保证金/权益：maxMargin=minEq×ratio，maxNotional=maxMargin×leverage。
+// maxNotional < minNotional → ok=false（skip）；
+// notional > minEq×bareCap×leverage → cap（保证金口径，bareCap=保证金/权益比）。
+// leverage=1.0（无杠杆回落）等价旧 D-097 R2 行为（向后兼容）。
 // bareCap≤0 = 不 cap（等价旧行为，无裸露上限）。
-func swapArbNotionalSizing(minEq, minNotional, ratio, bareCap float64) (notional float64, ok bool) {
-	sizing := minEq * ratio
-	if sizing < minNotional {
+func swapArbNotionalSizing(minEq, minNotional, ratio, bareCap, leverage float64) (notional float64, ok bool) {
+	maxMargin := minEq * ratio
+	maxNotional := maxMargin * leverage
+	if maxNotional < minNotional {
 		return 0, false
 	}
-	notional = sizing
+	notional = maxNotional
 	if cap := swapArbBareCapValue(bareCap); cap > 0 {
-		bareLimit := minEq * cap
-		if notional > bareLimit {
-			notional = bareLimit
+		bareNotionalLimit := minEq * cap * leverage
+		if notional > bareNotionalLimit {
+			notional = bareNotionalLimit
 		}
 	}
 	return notional, true
@@ -229,4 +237,31 @@ func swapArbRatio(r float64) float64 {
 		return 1
 	}
 	return r
+}
+
+// effectiveLeverage D-174：取两腿较小杠杆（保守）。
+// 无限杠杆哨兵 ≥1e6 → 视为无限，用另一腿；两腿都无限/未知 → 回落 1.0（最保守）。
+// 杠杆≤0 = 未知，用另一腿；两腿都未知 → 回落 1.0。
+func effectiveLeverage(longLev, shortLev float64) float64 {
+	longInf := longLev >= 1e6
+	shortInf := shortLev >= 1e6
+	if longInf && shortInf {
+		return 1.0
+	}
+	if longInf {
+		return shortLev
+	}
+	if shortInf {
+		return longLev
+	}
+	if longLev <= 0 && shortLev <= 0 {
+		return 1.0
+	}
+	if longLev <= 0 {
+		return shortLev
+	}
+	if shortLev <= 0 {
+		return longLev
+	}
+	return math.Min(longLev, shortLev)
 }

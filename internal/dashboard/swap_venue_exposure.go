@@ -22,16 +22,18 @@ func canonicalFromComboKey(oppID string) string {
 }
 
 // swapArbVenueExposureCheck 纯函数：判断新仓加入后两腿 venue SWAPARB 合计裸露是否在 cap 内（D-132 T1）。
+// D-174：按保证金口径（名义/杠杆 vs 权益×cap）。cap 语义=保证金/权益比。
 // existingLegs 为当前活跃 SWAPARB 仓的 OPEN 腿；canonicalOf 返回腿所属持仓的 canonical（空=跳过）；
 // usdPerLotOf 返回 (canonical, venue) 1 手 USD 名义（同 USDPerLotForLeg "ask" 口径，ok=false 跳过该腿）。
+// longLev/shortLev = 各腿 venue 杠杆（调用方经 effectiveLeverage 处理后传入，≤0 回落 1.0）。
 // cap ≤ 0 → 不启用（true）；equity ≤ 0 → fail-closed（false）。
-// 新仓名义加到两腿 venue；任一 venue 合计 > equity×cap → false（skip）。
+// 新仓名义加到两腿 venue；任一 venue 保证金 = 合计名义/杠杆 > equity×cap → false（skip）。
 func swapArbVenueExposureCheck(
 	existingLegs []pgstore.PositionLeg,
 	canonicalOf func(posID int64) string,
 	usdPerLotOf func(canonical, venue string) (float64, bool),
 	venueLong, venueShort string,
-	newNotional, eqLong, eqShort, cap float64,
+	newNotional, eqLong, eqShort, cap, longLev, shortLev float64,
 ) bool {
 	if cap <= 0 {
 		return true
@@ -56,7 +58,10 @@ func swapArbVenueExposureCheck(
 	}
 	longExposure := exposure[venueLong] + newNotional
 	shortExposure := exposure[venueShort] + newNotional
-	return longExposure <= eqLong*cap && shortExposure <= eqShort*cap
+	// D-174：按保证金口径（名义/杠杆 vs 权益×cap）。cap 语义=保证金/权益比。
+	longMargin := longExposure / longLev
+	shortMargin := shortExposure / shortLev
+	return longMargin <= eqLong*cap && shortMargin <= eqShort*cap
 }
 
 // SwapArbVenueExposureOK 判断新开 SWAPARB 仓后两腿 venue 合计裸露是否在 cap 内（D-132 T1 venue 级敞口门）。
@@ -102,5 +107,19 @@ func (s *Service) SwapArbVenueExposureOK(ctx context.Context, venueLong, venueSh
 	usdPerLotOf := func(canonical, venue string) (float64, bool) {
 		return s.USDPerLotForLeg(canonical, venue, "ask")
 	}
-	return swapArbVenueExposureCheck(legs, canonicalOf, usdPerLotOf, venueLong, venueShort, newNotional, eqLong, eqShort, s.swapArbVenueExposureCap)
+	// D-174：各腿用自己的杠杆（venue 可能杠杆不同）。≤0/未知 → 回落 1.0（保守）；
+	// ∞ 哨兵（≥1e6）保留（除法得 ~0 保证金，保守通过）。
+	longLev, _ := s.AccountLeverage(venueLong)
+	shortLev, _ := s.AccountLeverage(venueShort)
+	return swapArbVenueExposureCheck(legs, canonicalOf, usdPerLotOf, venueLong, venueShort, newNotional, eqLong, eqShort, s.swapArbVenueExposureCap, safeLegLeverage(longLev), safeLegLeverage(shortLev))
+}
+
+// safeLegLeverage D-174：venue exposure 各腿杠杆安全化。
+// ≤0（未知/离线）→ 1.0（保守回落，无杠杆）；≥1e6（∞ 哨兵）保留（除法得 ~0 保证金）；
+// 其余原值返回。
+func safeLegLeverage(lev float64) float64 {
+	if lev <= 0 {
+		return 1.0
+	}
+	return lev
 }

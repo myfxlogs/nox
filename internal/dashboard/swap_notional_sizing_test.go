@@ -29,6 +29,7 @@ func TestSwapArbNotionalSizing(t *testing.T) {
 		minNotional  float64
 		ratio        float64
 		bareCap      float64
+		leverage     float64
 		wantOK       bool
 		wantNotional float64
 	}{
@@ -38,24 +39,27 @@ func TestSwapArbNotionalSizing(t *testing.T) {
 			minNotional:  minNotional01Lot,
 			ratio:        0.5,
 			bareCap:      1.0,
+			leverage:     1.0, // D-174：leverage=1.0 等价旧 D-097 R2 行为
 			wantOK:       true,
-			wantNotional: 785.0, // 1570×0.5=785 ≥ 716, 785 < 1570×1.0=1570 不 cap
+			wantNotional: 785.0, // 1570×0.5×1=785 ≥ 716, 785 < 1570×1.0×1=1570 不 cap
 		},
 		{
 			name:         "skip_sizing300_lt_min716",
-			minEq:        600.0, // 600×0.5=300 < 716
+			minEq:        600.0, // 600×0.5×1=300 < 716
 			minNotional:  minNotional01Lot,
 			ratio:        0.5,
 			bareCap:      1.0,
+			leverage:     1.0,
 			wantOK:       false,
 			wantNotional: 0,
 		},
 		{
 			name:         "cap_bareCap05_limits_notional",
-			minEq:        10000.0, // 10000×0.5=5000, but bareCap=0.5 → cap to 10000×0.5=5000 (same, no cap)
+			minEq:        10000.0,
 			minNotional:  minNotional01Lot,
-			ratio:        1.0, // ratio=1 → sizing=10000
-			bareCap:      0.5, // bareLimit=10000×0.5=5000 < 10000 → cap to 5000
+			ratio:        1.0, // ratio=1 → maxNotional=10000×1×1=10000
+			bareCap:      0.5, // bareNotionalLimit=10000×0.5×1=5000 < 10000 → cap to 5000
+			leverage:     1.0,
 			wantOK:       true,
 			wantNotional: 5000.0,
 		},
@@ -65,14 +69,56 @@ func TestSwapArbNotionalSizing(t *testing.T) {
 			minNotional:  minNotional01Lot,
 			ratio:        1.0,
 			bareCap:      0, // ≤0 = 不 cap
+			leverage:     1.0,
 			wantOK:       true,
-			wantNotional: 50000.0, // ratio=1, no cap
+			wantNotional: 50000.0, // ratio=1, lev=1, no cap
+		},
+		// D-174 杠杆感知新 case：
+		{
+			name:         "lev1000_pass_silver_scenario",
+			minEq:        1000.0,
+			minNotional:  1354.0,
+			ratio:        0.05, // 5% 保证金使用率
+			bareCap:      1.0,
+			leverage:     1000.0, // 1:1000 → maxNotional=1000×0.05×1000=50000 ≥ 1354
+			wantOK:       true,
+			wantNotional: 50000.0, // 50000 < 1000×1.0×1000=1e6 不 cap
+		},
+		{
+			name:         "lev100_pass",
+			minEq:        1000.0,
+			minNotional:  1354.0,
+			ratio:        0.05,
+			bareCap:      1.0,
+			leverage:     100.0, // 1:100 → maxNotional=1000×0.05×100=5000 ≥ 1354
+			wantOK:       true,
+			wantNotional: 5000.0,
+		},
+		{
+			name:         "lev1_skip_no_leverage",
+			minEq:        1000.0,
+			minNotional:  1354.0,
+			ratio:        0.05,
+			bareCap:      1.0,
+			leverage:     1.0, // 无杠杆 → maxNotional=1000×0.05×1=50 < 1354
+			wantOK:       false,
+			wantNotional: 0,
+		},
+		{
+			name:         "lev1000_bareCap_leverage_aware",
+			minEq:        1000.0,
+			minNotional:  1354.0,
+			ratio:        1.0,  // maxNotional=1000×1×1000=1e6
+			bareCap:      0.05, // bareNotionalLimit=1000×0.05×1000=50000 → cap to 50000
+			leverage:     1000.0,
+			wantOK:       true,
+			wantNotional: 50000.0,
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, ok := swapArbNotionalSizing(c.minEq, c.minNotional, c.ratio, c.bareCap)
+			got, ok := swapArbNotionalSizing(c.minEq, c.minNotional, c.ratio, c.bareCap, c.leverage)
 			if ok != c.wantOK {
 				t.Fatalf("ok=%v want %v", ok, c.wantOK)
 			}
@@ -80,6 +126,29 @@ func TestSwapArbNotionalSizing(t *testing.T) {
 				t.Errorf("notional=%.2f want %.2f", got, c.wantNotional)
 			}
 		})
+	}
+}
+
+// TestEffectiveLeverage D-174：两腿较小杠杆纯函数（无限哨兵/未知保守回落）。
+func TestEffectiveLeverage(t *testing.T) {
+	cases := []struct {
+		name     string
+		longLev  float64
+		shortLev float64
+		want     float64
+	}{
+		{"两腿已知", 1000, 100, 100},
+		{"long 无限", 2e9, 100, 100},
+		{"short 无限", 100, 2e9, 100},
+		{"两腿无限", 2e9, 2e9, 1.0},
+		{"两腿未知", 0, 0, 1.0},
+		{"long 未知", 0, 100, 100},
+		{"short 未知", 100, 0, 100},
+	}
+	for _, c := range cases {
+		if got := effectiveLeverage(c.longLev, c.shortLev); got != c.want {
+			t.Errorf("%s: effectiveLeverage(%v, %v)=%v want %v", c.name, c.longLev, c.shortLev, got, c.want)
+		}
 	}
 }
 

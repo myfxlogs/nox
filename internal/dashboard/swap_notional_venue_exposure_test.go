@@ -40,7 +40,7 @@ func canonicalByPosStub(_ int64) string { return "AUDJPY" }
 
 // TestSwapArbVenueExposureCheck_OverCapSkip ① 3 仓活 + 新仓超 cap → false（skip）。
 // 3 仓 × 0.01 手 × $76000/手 = $2280 现有裸露（venueShort 侧）；equity $1500 × cap 2.0 = $3000 限额。
-// 新仓 $760 → $2280 + $760 = $3040 > $3000 → skip。
+// D-174 leverage=1.0：保证金=名义/1=名义。新仓 $760 → $2280 + $760 = $3040 > $3000 → skip。
 func TestSwapArbVenueExposureCheck_OverCapSkip(t *testing.T) {
 	got := swapArbVenueExposureCheck(
 		threeSwapArbLegs(),
@@ -51,6 +51,8 @@ func TestSwapArbVenueExposureCheck_OverCapSkip(t *testing.T) {
 		1500, // eqLong
 		1500, // eqShort
 		2.0,  // cap
+		1.0,  // longLev（D-174：1.0 等价旧行为）
+		1.0,  // shortLev
 	)
 	if got {
 		t.Error("3 仓活 + 新仓 $760 → venueShort $3040 > $3000 cap, want false (skip)")
@@ -69,9 +71,31 @@ func TestSwapArbVenueExposureCheck_WithinCap(t *testing.T) {
 		5000, // eqLong
 		5000, // eqShort
 		2.0,  // cap
+		1.0,  // longLev
+		1.0,  // shortLev
 	)
 	if !got {
 		t.Error("3 仓活 + 新仓 $760 → venueShort $3040 ≤ $10000 cap, want true (ok)")
+	}
+}
+
+// TestSwapArbVenueExposureCheck_LeveragePass D-174：1:1000 杠杆下大名义通过。
+// exposure $10000 / 1000 = $10 保证金 ≤ eq $1500 × cap 2.0 = $3000 → ok。
+func TestSwapArbVenueExposureCheck_LeveragePass(t *testing.T) {
+	got := swapArbVenueExposureCheck(
+		threeSwapArbLegs(),
+		canonicalByPosStub,
+		mockUSDPerLotForLeg(76000),
+		"529:mt5", "277:mt5",
+		760,    // newNotional
+		1500,   // eqLong
+		1500,   // eqShort
+		2.0,    // cap
+		1000.0, // longLev（1:1000）
+		1000.0, // shortLev
+	)
+	if !got {
+		t.Error("1:1000 杠杆：venueShort $3040/1000=$3.04 ≤ $3000 cap, want true (ok)")
 	}
 }
 
@@ -113,6 +137,8 @@ func TestSwapArbVenueExposureCheck_CapZero_NotEnabled(t *testing.T) {
 		1500, // eqLong
 		1500, // eqShort
 		0,    // cap=0 → 不启用
+		1.0,  // longLev
+		1.0,  // shortLev
 	)
 	if !got {
 		t.Error("cap=0 → 不启用, want true, got false")
