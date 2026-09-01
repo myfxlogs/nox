@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"arb/internal/fact"
+
 	"github.com/jackc/pgx/v5"
 )
 
@@ -98,6 +100,64 @@ func (s *Store) HasNonZeroSwapHistory(ctx context.Context, venue string) (bool, 
 		return false, fmt.Errorf("has non-zero swap history: %w", err)
 	}
 	return has, nil
+}
+
+// ListAllSwapSnapshots D-180 S1：列全部 swap 快照（按 position_id, venue, ts 排序），boot 存量回溯用。
+func (s *Store) ListAllSwapSnapshots(ctx context.Context) ([]SwapSnapshot, error) {
+	q := `SELECT id, position_id, venue, swap_usd, ts
+	      FROM position_swap_snapshots
+	      ORDER BY position_id, venue, ts`
+	rows, err := s.pool.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("list all swap snapshots: %w", err)
+	}
+	defer rows.Close()
+	var out []SwapSnapshot
+	for rows.Next() {
+		var snap SwapSnapshot
+		if err := rows.Scan(&snap.ID, &snap.PositionID, &snap.Venue, &snap.SwapUSD, &snap.Ts); err != nil {
+			return nil, err
+		}
+		out = append(out, snap)
+	}
+	return out, rows.Err()
+}
+
+// FactExistsAt D-180 S1：检查指定 kind+venue+symbol+ts 的 fact 是否已存在（幂等键检查）。
+func (s *Store) FactExistsAt(ctx context.Context, kind, venue, symbol string, ts time.Time) (bool, error) {
+	var exists bool
+	err := s.pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM facts WHERE kind = $1 AND venue = $2 AND symbol = $3 AND ts = $4)`,
+		kind, venue, symbol, ts).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("fact exists at: %w", err)
+	}
+	return exists, nil
+}
+
+// FactsWithin D-180 S2：查指定 kind+venue+symbol 在 since 之后的全部 facts（swapRateFor 7d 窗口用）。
+func (s *Store) FactsWithin(ctx context.Context, kind, venue, symbol string, since time.Time) ([]fact.Fact, error) {
+	q := `SELECT kind, venue, symbol, value, unit, ts, src
+	      FROM facts
+	      WHERE ($1 = '' OR kind = $1)
+	        AND ($2 = '' OR venue = $2)
+	        AND ($3 = '' OR symbol = $3)
+	        AND ts >= $4
+	      ORDER BY ts DESC`
+	rows, err := s.pool.Query(ctx, q, kind, venue, symbol, since)
+	if err != nil {
+		return nil, fmt.Errorf("facts within: %w", err)
+	}
+	defer rows.Close()
+	var out []fact.Fact
+	for rows.Next() {
+		var f fact.Fact
+		if err := rows.Scan(&f.Kind, &f.Venue, &f.Symbol, &f.Value, &f.Unit, &f.Ts, &f.Src); err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
 }
 
 // SumCashflowsForDay SUM(amount_usd) WHERE kind+posID+venue+day 范围（D-110 P2 对账用）。

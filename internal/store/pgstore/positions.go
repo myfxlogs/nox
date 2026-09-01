@@ -139,6 +139,16 @@ func (s *Store) UpdatePositionOppID(ctx context.Context, id int64, oppID string)
 	return err
 }
 
+// UpdateExpectedEntrySpreadBps D-180 S3：写入 expected_entry_spread_bps（双腿成交价差基准）。
+// Execute 闭包双腿成交后调用；存量活跃仓回填也用此方法。
+// 已有值不覆写（回填幂等：WHERE expected_entry_spread_bps IS NULL）。
+func (s *Store) UpdateExpectedEntrySpreadBps(ctx context.Context, id int64, bps float64) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE positions SET expected_entry_spread_bps = $1 WHERE id = $2 AND expected_entry_spread_bps IS NULL`,
+		bps, id)
+	return err
+}
+
 // ClosePosition 平仓回填（D-159 W1a R3-1 原子领取）。
 // WHERE status NOT IN ('CLOSED','FAILED') 守卫：终态不可回退，并发对账+手动平仓重复调用
 // 只第一次生效（RowsAffected=0 返回 ErrTerminalState），防重复 CLOSED + 重复 realized_pnl 覆盖。

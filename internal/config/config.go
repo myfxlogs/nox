@@ -142,6 +142,16 @@ type Config struct {
 	SwapArbEntrySpreadMaxBps float64 // ARB_SWAPARB_ENTRY_SPREAD_MAX_BPS（默认 30）
 	// D-169 P0：入场基差上限（bps），>0 才校验，0=不校验。正负双向拦截。
 	SwapArbEntryBasisMaxBps float64 // ARB_SWAPARB_ENTRY_BASIS_MAX_BPS（默认 30）
+	// D-180 S3：基差止损阈值（bps），PnL_bps < -BasisStopBps → 平仓（默认 4）。
+	SwapArbBasisStopBps float64 // ARB_SWAPARB_BASIS_STOP_BPS（默认 4）
+	// D-180 S4：入场门禁——净息差厚度下限（bps/日，spec 源×折扣后比较；默认 1.0）。
+	SwapArbMinNetCarryBps float64 // ARB_SWAPARB_MIN_NET_CARRY_BPS（默认 1.0）
+	// D-180 S4：spec 源折扣系数（冷启动不裸信规格；默认 0.5）。仅作用入场门禁，止损/展示用原值。
+	SwapArbSpecDiscount float64 // ARB_SWAPARB_SPEC_DISCOUNT（默认 0.5）
+	// D-180 S4：回收期上限（天，2×spreadBps/净息差 ≤ 此值才放行；默认 30）。
+	SwapArbMaxPaybackDays int // ARB_SWAPARB_MAX_PAYBACK_DAYS（默认 30）
+	// D-180 S4：集中度上限（同 venue×symbol 活跃腿数 < 此值才放行；默认 2）。
+	SwapArbMaxLegsPerSymbol int // ARB_SWAPARB_MAX_LEGS_PER_SYMBOL（默认 2）
 
 	// === 前端分析员（D-091）===
 	// AIBaseURL/Key/Model/PGDSN 四 env + RatePerHour 限流；空 Key=未配置（RPC 返回 failed_precondition）。
@@ -255,6 +265,11 @@ func Load() *Config {
 		SwapArbMaxLegSpreadBps:     envFloat("ARB_SWAPARB_MAX_LEG_SPREAD_BPS", 50.0),   // D-159 W4a R7
 		SwapArbEntrySpreadMaxBps:   envFloat("ARB_SWAPARB_ENTRY_SPREAD_MAX_BPS", 30.0), // D-169 P0
 		SwapArbEntryBasisMaxBps:    envFloat("ARB_SWAPARB_ENTRY_BASIS_MAX_BPS", 30.0),  // D-169 P0
+		SwapArbBasisStopBps:        envFloat("ARB_SWAPARB_BASIS_STOP_BPS", 4.0),        // D-180 S3
+		SwapArbMinNetCarryBps:      envFloat("ARB_SWAPARB_MIN_NET_CARRY_BPS", 1.0),     // D-180 S4
+		SwapArbSpecDiscount:        envFloat("ARB_SWAPARB_SPEC_DISCOUNT", 0.5),         // D-180 S4
+		SwapArbMaxPaybackDays:      envInt("ARB_SWAPARB_MAX_PAYBACK_DAYS", 30),         // D-180 S4
+		SwapArbMaxLegsPerSymbol:    envInt("ARB_SWAPARB_MAX_LEGS_PER_SYMBOL", 2),       // D-180 S4
 		AIBaseURL:                  envStr("ARB_AI_BASE_URL", ""),
 		AIAPIKey:                   envStr("ARB_AI_API_KEY", ""),
 		AIModel:                    envStr("ARB_AI_MODEL", "glm-4.6"),
