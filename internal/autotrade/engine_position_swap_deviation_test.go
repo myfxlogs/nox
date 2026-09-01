@@ -54,17 +54,18 @@ func seedSwapDeviationPosition(t *testing.T, s *pgstore.Store, factsLong, factsS
 		t.Fatalf("create leg2: %v", err)
 	}
 	// swap snapshots：昨日 0 + 今日 actualUSD（DailySwapAccrued = today - yesterday = actualUSD）
+	// D-189 P0-1：快照 venue 必须是完整 venueKey（与生产写入口径一致，legs.Venue 同口径）。
 	yesterday := now.AddDate(0, 0, -1)
-	if err := s.InsertSwapSnapshot(ctx, id, "vA", 0, yesterday); err != nil {
+	if err := s.InsertSwapSnapshot(ctx, id, "vA:mt5", 0, yesterday); err != nil {
 		t.Fatalf("insert snap vA yesterday: %v", err)
 	}
-	if err := s.InsertSwapSnapshot(ctx, id, "vA", buyActualUSD, now); err != nil {
+	if err := s.InsertSwapSnapshot(ctx, id, "vA:mt5", buyActualUSD, now); err != nil {
 		t.Fatalf("insert snap vA today: %v", err)
 	}
-	if err := s.InsertSwapSnapshot(ctx, id, "vB", 0, yesterday); err != nil {
+	if err := s.InsertSwapSnapshot(ctx, id, "vB:mt5", 0, yesterday); err != nil {
 		t.Fatalf("insert snap vB yesterday: %v", err)
 	}
-	if err := s.InsertSwapSnapshot(ctx, id, "vB", sellActualUSD, now); err != nil {
+	if err := s.InsertSwapSnapshot(ctx, id, "vB:mt5", sellActualUSD, now); err != nil {
 		t.Fatalf("insert snap vB today: %v", err)
 	}
 	return pos

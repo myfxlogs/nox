@@ -53,9 +53,10 @@ func setupSwapDeviationStore(t *testing.T, factsSwapBps, actualSwapUSD float64) 
 		t.Fatalf("insert legs: %v", err)
 	}
 	// swap snapshots：昨日 0 + 今日 actualSwapUSD（DailySwapAccrued = today - yesterday）
+	// D-189 P0-1：快照 venue 必须是完整 venueKey（与生产写入口径一致，legs.Venue 同口径）。
 	yesterday := now.AddDate(0, 0, -1)
 	if _, err := s.Pool().Exec(ctx,
-		`INSERT INTO position_swap_snapshots (position_id, venue, swap_usd, ts) VALUES ($1, 'vA', 0, $2), ($1, 'vA', $3, $4)`,
+		`INSERT INTO position_swap_snapshots (position_id, venue, swap_usd, ts) VALUES ($1, 'vA:mt5', 0, $2), ($1, 'vA:mt5', $3, $4)`,
 		posID, yesterday, actualSwapUSD, now); err != nil {
 		t.Fatalf("insert swap snapshots: %v", err)
 	}

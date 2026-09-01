@@ -36,7 +36,8 @@ func setupSwapFactsZeroStore(t *testing.T, longSwapBps, shortSwapBps float64, se
 		if err != nil {
 			t.Fatalf("create history position: %v", err)
 		}
-		if err := s.InsertSwapSnapshot(ctx, pid, "vA", -2.21, now); err != nil {
+		// D-189 P0-1：快照 venue 必须是完整 venueKey（与生产写入口径一致）。
+		if err := s.InsertSwapSnapshot(ctx, pid, "vA:mt5", -2.21, now); err != nil {
 			t.Fatalf("insert non-zero history: %v", err)
 		}
 	}

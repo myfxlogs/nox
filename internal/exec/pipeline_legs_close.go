@@ -177,13 +177,10 @@ func (p *Pipeline) ClosePosition(ctx context.Context, posID int64) error {
 				fmt.Sprintf("pnl fx missing venue=%s symbol=%s quoteCcy=%s", leg.Venue, leg.Symbol, quoteCcy))
 		}
 		// swap/commission 入 cashflows（D-105 T2：原 quote-ccy 值 × fx 换算 USD，cashflows 语义=USD）
-		// D-159 W3a R5：cashflows 写入带 legNo（per-leg 幂等键前置，S2 双计拆解后此二者是 swap/commission 唯一载体）。
-		if fill.Swap != 0 {
-			_ = p.store.InsertCashflow(ctx, posID, leg.LegNo, "swap", leg.Venue, fill.Swap*fx, time.Now())
-		}
-		// D-069：commission 入 cashflows（负号=成本）
-		if fill.Commission != 0 {
-			_ = p.store.InsertCashflow(ctx, posID, leg.LegNo, "commission", leg.Venue, -fill.Commission*fx, time.Now())
+		// D-189 P0-2：统一走 writeCloseCashflows（显式错误处理 + per-leg/day 幂等）；
+		// 任一写入失败 → 返回 error 保持 CLOSING，禁止继续到 store.ClosePosition。
+		if err := p.writeCloseCashflows(ctx, posID, leg.LegNo, leg.Venue, fill.Swap, fill.Commission, fx); err != nil {
+			return fmt.Errorf("pos=%d leg=%d close cashflow: %w", posID, leg.LegNo, err)
 		}
 	}
 

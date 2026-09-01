@@ -131,6 +131,11 @@ func (c *fakeCloser) AutoClosePosition(ctx context.Context, posID int64) error {
 	return nil
 }
 
+// D-189 P0-4：ResumeClose 实现（fakeCloser 复用 AutoClosePosition 逻辑）。
+func (c *fakeCloser) ResumeClose(ctx context.Context, posID int64) error {
+	return c.AutoClosePosition(ctx, posID)
+}
+
 // —— fakeHistoryQuerier：实现 OrderHistoryQuerier 接口 ——
 
 type fakeHistoryQuerier struct {
@@ -172,12 +177,17 @@ func ptrFloat(v float64) *float64    { return &v }
 func ptrTime(t time.Time) *time.Time { return &t }
 
 func mkPosition(id int64, status, posType string, openedAt time.Time) *pgstore.Position {
-	return &pgstore.Position{
+	p := &pgstore.Position{
 		ID:       id,
 		Status:   status,
 		Type:     posType,
 		OpenedAt: ptrTime(openedAt),
 	}
+	// D-189 P0-4：CLOSING 状态设 ClosingStartedAt=OpenedAt（isClosingStuck 用此列判定超时）。
+	if status == "CLOSING" {
+		p.ClosingStartedAt = ptrTime(openedAt)
+	}
+	return p
 }
 
 func mkOpenLeg(posID int64, legNo int16, venue, ticket, side, symbol string, qty float64) *pgstore.PositionLeg {
@@ -540,12 +550,12 @@ func TestAutoClose_ClaimFailedFallback(t *testing.T) {
 	fs := newFakeStore()
 	opened := time.Now().Add(-2 * time.Hour)
 	fs.positions[100] = mkPosition(100, "OPEN", "CROSS_VENUE", opened)
-	// 单腿 → otherOpen=false → 走 ClaimFailed 兜底分支
+	// 单腿 → otherOpen=false → 走 ResumeClose（D-189 P0-2 删除 raw 旁路）
 	fs.legs[100] = []*pgstore.PositionLeg{
 		mkOpenLeg(100, 0, "52993526:mt5", "A", "BUY", "AUDJPY", 1.0),
 	}
 
-	fc := &fakeCloser{claimFailed: true} // AutoClosePosition 返回 ErrClaimFailed
+	fc := &fakeCloser{claimFailed: true} // ResumeClose 返回 ErrClaimFailed（模拟 position 已是 CLOSING）
 	fsst := &fakeSettler{}
 	r := &Reconciler{store: fs, closer: fc, settler: fsst}
 
@@ -559,45 +569,22 @@ func TestAutoClose_ClaimFailedFallback(t *testing.T) {
 		t.Fatalf("autoClose: %v", err)
 	}
 
-	// A4 断言①：ClosePosition 的 realizedPnl = hist.Profit（只用价格 PnL，不含 swap/commission）
-	if fs.closeCalls != 1 {
-		t.Fatalf("ClosePosition calls=%d, want 1", fs.closeCalls)
-	}
-	got := *fs.positions[100].RealizedPnl
-	want := 10.0 // hist.Profit only（旧公式 10+0.5-1.0=9.5 双计）
-	if got != want {
-		t.Errorf("ClosePosition realizedPnl=%.4f, want %.4f (Profit only, swap/commission via cashflows)", got, want)
+	// D-189 P0-2 断言①：ResumeClose 被调用（fakeCloser.calls 记录调用）
+	if len(fc.calls) == 0 {
+		t.Fatalf("ResumeClose 未被调用，期望至少 1 次")
 	}
 
-	// A4 断言②：补写 swap + commission cashflows（带 legNo）
-	var swapCF, commCF *fakeCashflow
+	// D-189 P0-2 断言②：store.ClosePosition 不被直接调用（raw 旁路已删除）
+	if fs.closeCalls != 0 {
+		t.Errorf("store.ClosePosition 直接调用=%d, want 0 (D-189 P0-2 删除 raw 旁路)", fs.closeCalls)
+	}
+
+	// D-189 P0-2 断言③：raw cashflow 不被直接写入（由 ResumeClose 内部 writeCloseCashflows 处理）
+	// fakeCloser.ResumeClose 返回 ErrClaimFailed → 不实际写 cashflow，但 auto_close 也不应自行写。
 	for i := range fs.cashflows {
 		c := &fs.cashflows[i]
-		if c.kind == "swap" {
-			swapCF = c
-		}
-		if c.kind == "commission" {
-			commCF = c
-		}
-	}
-	if swapCF == nil {
-		t.Error("missing swap cashflow (兜底分支应补写 swap)")
-	} else {
-		if swapCF.amount != 0.5 {
-			t.Errorf("swap cashflow amount=%.4f, want 0.5 (hist.Swap)", swapCF.amount)
-		}
-		if swapCF.legNo != 0 {
-			t.Errorf("swap cashflow legNo=%d, want 0 (goneLeg.LegNo)", swapCF.legNo)
-		}
-	}
-	if commCF == nil {
-		t.Error("missing commission cashflow (兜底分支应补写 commission)")
-	} else {
-		if commCF.amount != -1.0 {
-			t.Errorf("commission cashflow amount=%.4f, want -1.0 (-hist.Commission)", commCF.amount)
-		}
-		if commCF.legNo != 0 {
-			t.Errorf("commission cashflow legNo=%d, want 0 (goneLeg.LegNo)", commCF.legNo)
+		if c.kind == "swap" || c.kind == "commission" {
+			t.Errorf("auto_close 不应直接写 raw cashflow (kind=%s amount=%.4f)，D-189 P0-2 删除 raw 旁路", c.kind, c.amount)
 		}
 	}
 }

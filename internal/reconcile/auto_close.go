@@ -15,8 +15,10 @@ import (
 
 // Closer 平仓接口（service.AutoClosePosition 实现，reconcile 不依赖 dashboard 包避免循环导入）。
 // 走既有 pipeline.ClosePosition 路径：MT5/MT4 按 ticket CloseOrder，CEX 反向减仓。
+// D-189 P0-4：增加 ResumeClose——reconcile CLOSING 超时自动重触发，走 pipeline.ResumeClose 公共执行核心。
 type Closer interface {
 	AutoClosePosition(ctx context.Context, posID int64) error
+	ResumeClose(ctx context.Context, posID int64) error
 }
 
 // Settler 结算接口（D-087 §3.2，settlement.Settle 的注入面）。
@@ -96,44 +98,16 @@ func (r *Reconciler) autoClose(
 
 	// c. position 置 CLOSED + realized_pnl 汇总
 	// D-159 W2a R3-L174：统一走 close coordinator（不独立置 CLOSED）。
+	// D-189 P0-2 S2：reconcile 收尾不再绕过执行管线直接调 store.ClosePosition / raw cashflow；
+	// 改为调用 Closer.ResumeClose，由执行管线按同一套 USD/现金流/残量规则处理。
 	// auto_close 已回填 CLOSE leg（step a），另一腿无 OPEN（otherOpen=false），
-	// 走 ClosePosition 做残量校验 + PnL 汇总 + CLOSED（ClaimClose 从 OPEN/LEGGED 领取，
-	// 但此处 position 可能已是 CLOSING——ClaimClose 会 ErrClaimFailed，需兜底）。
+	// 走 ResumeClose 做残量校验 + PnL 汇总 + 现金流补齐 + CLOSED。
 	if !otherOpen {
 		sub, cancel := r.withTimeout(ctx)
-		err := r.closer.AutoClosePosition(sub, posID)
+		err := r.closer.ResumeClose(sub, posID)
 		cancel()
 		if err != nil && !errors.Is(err, pgstore.ErrClaimFailed) && !errors.Is(err, pgstore.ErrTerminalState) {
-			return fmt.Errorf("close coordinator: %w", err)
-		}
-		// ClaimFailed=已是 CLOSING（auto_close step a 已回填 CLOSE leg，position 可能已被并发领取），
-		// 用 store.ClosePosition 兜底（残量校验在 ClosePosition 内做，此处只回填 PnL）
-		if errors.Is(err, pgstore.ErrClaimFailed) {
-			pnl := 0.0
-			if hist != nil {
-				// D-159 W3a R4：权威值只用价格 PnL（Profit），Swap/Commission 走 cashflows（双计拆除）。
-				pnl = hist.Profit
-			}
-			sub, cancel := r.withTimeout(ctx)
-			err := r.store.ClosePosition(sub, posID, pnl)
-			cancel()
-			if err != nil && !errors.Is(err, pgstore.ErrTerminalState) {
-				return fmt.Errorf("close position store (claim failed fallback): %w", err)
-			}
-			// D-159 W3a R4：补写 swap/commission cashflows（兜底分支不走 Pipeline.ClosePosition，
-			// S2 后 realized_pnl 不再含 swap/commission，不补写则永久丢失）。legNo 用 goneLeg.LegNo。
-			// hist.Swap/Commission 是 MT 返回原始值（reconcile 层无 fxResolver，与旧路径同语义）——
-			// 非 USD 计价腿的 fx 换算缺口上报决策方（见施工报告观察项）。
-			if hist != nil && (hist.Swap != 0 || hist.Commission != 0) {
-				sub2, cancel2 := r.withTimeout(ctx)
-				if hist.Swap != 0 {
-					_ = r.store.InsertCashflow(sub2, posID, goneLeg.LegNo, "swap", goneLeg.Venue, hist.Swap, time.Now())
-				}
-				if hist.Commission != 0 {
-					_ = r.store.InsertCashflow(sub2, posID, goneLeg.LegNo, "commission", goneLeg.Venue, -hist.Commission, time.Now())
-				}
-				cancel2()
-			}
+			return fmt.Errorf("close coordinator (ResumeClose): %w", err)
 		}
 	}
 

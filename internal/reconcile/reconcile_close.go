@@ -163,8 +163,8 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 		}
 	}
 
-	// 3d. D-159 W2a R3-6：CLOSING 持仓扫描（所有 active 状态都进入对账，不只扫描 OPEN）。
-	// CLOSING 卡住=平仓 I/O 失败或残量未归零，只告警不自动处置（需人工确认 venue 侧状态）。
+	// 3d. D-159 W2a R3-6 / D-189 P0-4：CLOSING 持仓扫描（所有 active 状态都进入对账，不只扫描 OPEN）。
+	// D-189 P0-4：超时分支调 ResumeClose 自动重触发（不再只告警等人工）；UNKNOWN 只告警不自动重试。
 	listCtx, listCancel = r.withTimeout(ctx)
 	closingPositions, err := r.store.ListPositions(listCtx, "CLOSING", 50, 0)
 	listCancel()
@@ -172,10 +172,26 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 		log.Printf("[reconcile] list CLOSING: %v (skip)", err)
 	} else {
 		for _, p := range closingPositions {
-			if isClosingStuck(&p, now) {
-				msg := fmt.Sprintf("CLOSING 持仓 position #%d 超 %v 未完成（平仓失败或残量未归零，人工处置）", p.ID, closingStuckTimeout)
+			if !isClosingStuck(&p, now) {
+				continue
+			}
+			// D-189 P0-4 S2：UNKNOWN（uncertainty_reason 非空）只告警，不自动重试（可能已成交，盲平=反向开新仓）。
+			if p.UncertaintyReason != nil && *p.UncertaintyReason != "" {
+				msg := fmt.Sprintf("CLOSING UNKNOWN position #%d 超 %v 未确认（人工/OrderHistory 查证，不自动重试）", p.ID, closingStuckTimeout)
 				r.insertAlertCtx(ctx, "critical", msg)
 				log.Printf("[reconcile] %s", msg)
+				continue
+			}
+			// D-189 P0-4 S5：普通 CLOSING 超时 → 自动重触发 ResumeClose。
+			msg := fmt.Sprintf("CLOSING position #%d 超 %v 未完成，自动重触发 ResumeClose", p.ID, closingStuckTimeout)
+			r.insertAlertCtx(ctx, "critical", msg)
+			log.Printf("[reconcile] %s", msg)
+			if r.closer != nil {
+				sub, cancel := r.withTimeout(ctx)
+				if err := r.closer.ResumeClose(sub, p.ID); err != nil {
+					log.Printf("[reconcile] ResumeClose pos=%d failed (next cycle retry): %v", p.ID, err)
+				}
+				cancel()
 			}
 		}
 	}
@@ -208,15 +224,15 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 // closingStuckTimeout D-159 W2a R3-6：CLOSING 超 30min 未完成=卡住（平仓 I/O 失败或残量未归零）。
 const closingStuckTimeout = 30 * time.Minute
 
-// isClosingStuck D-159 W2a R3-6：判断 CLOSING 持仓是否卡住（超时未完成）。
-// CLOSING 无 closed_at，用 opened_at 判断（CLOSING 是从 OPEN/LEGGED 转入，opened_at 仍是开仓时间）。
-// 无 opened_at = 异常（直接判卡住）。
+// isClosingStuck D-159 W2a R3-6 / D-189 P0-4：判断 CLOSING 持仓是否卡住（超时未完成）。
+// D-189 P0-4：改用 ClosingStartedAt（进入 CLOSING 的真实起始时间），不再用 opened_at（开仓时间）。
+// 无 ClosingStartedAt = 异常（直接判卡住，fail-closed）；迁移已为存量 CLOSING 行补当前时间。
 func isClosingStuck(pos *pgstore.Position, now time.Time) bool {
 	if pos.Status != "CLOSING" {
 		return false
 	}
-	if pos.OpenedAt == nil {
-		return true // 无时间戳=异常
+	if pos.ClosingStartedAt == nil {
+		return true // 无 closing_started_at=异常（fail-closed）
 	}
-	return now.Sub(*pos.OpenedAt) > closingStuckTimeout
+	return now.Sub(*pos.ClosingStartedAt) > closingStuckTimeout
 }

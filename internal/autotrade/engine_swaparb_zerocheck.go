@@ -41,22 +41,24 @@ func (e *Engine) swapFactsZeroCheck(ctx context.Context, canonical, venueLong, v
 		return "swap facts zero check: venue fact missing (fail-closed)"
 	}
 	// 检查零值腿是否有非零 swap 历史
+	// D-189 P0-1：快照查询必须用完整 venueKey（position_swap_snapshots.venue 是 venueKey），
+	// bare venue 仅用于上面 facts 的 f.Venue 匹配（facts.venue 是 bare）。
 	if swapLong == 0 {
-		has, err := e.store.HasNonZeroSwapHistory(ctx, longBare)
+		has, err := e.store.HasNonZeroSwapHistory(ctx, venueLong)
 		if err != nil {
 			return fmt.Sprintf("swap facts zero check: has non-zero history long failed (fail-closed): %v", err)
 		}
 		if has {
-			return fmt.Sprintf("swap facts zero but broker has non-zero swap history (venue=%s, facts=0 but broker实际收 swap)", longBare)
+			return fmt.Sprintf("swap facts zero but broker has non-zero swap history (venue=%s, facts=0 but broker实际收 swap)", venueLong)
 		}
 	}
 	if swapShort == 0 {
-		has, err := e.store.HasNonZeroSwapHistory(ctx, shortBare)
+		has, err := e.store.HasNonZeroSwapHistory(ctx, venueShort)
 		if err != nil {
 			return fmt.Sprintf("swap facts zero check: has non-zero history short failed (fail-closed): %v", err)
 		}
 		if has {
-			return fmt.Sprintf("swap facts zero but broker has non-zero swap history (venue=%s, facts=0 but broker实际收 swap)", shortBare)
+			return fmt.Sprintf("swap facts zero but broker has non-zero swap history (venue=%s, facts=0 but broker实际收 swap)", venueShort)
 		}
 	}
 	return "" // 放行

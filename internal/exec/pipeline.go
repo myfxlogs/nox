@@ -10,6 +10,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"time"
 
 	"arb/internal/bus"
 	"arb/internal/store/pgstore"
@@ -62,14 +63,18 @@ type Pipeline struct {
 	mtDisasterSlPct float64
 
 	// D-159 W1a R1 S2.3：SWAPARB 精确组合门禁——真实名义额检查。
-	// swapArbComboAllow 非 nil 且 posType=SWAPARB 时，建 position 前校验：
-	//   1. (canonical, venueBuy, venueSell) 在 allowlist
-	//   2. 双腿名义额 ≤ spec.MaxLongQty/MaxShortQty（>0 才校验）
-	//   3. 双腿名义额合计 USD ≤ spec.MaxGrossExposureUSD（>0 才校验）
-	// notionalUSD 用于 qty→USD 换算（config.OpportunityNotionalUSD）。
+	// swapArbComboAllow 非 nil 且 posType=SWAPARB 时，建 position 前校验组合允许+名义额+gross。
 	// nil = 未接线（gate 层 + dashboard 手动入口兜底，pipeline 不重复检查）。
 	swapArbComboAllow []ComboAllowSpec
 	notionalUSD       float64
+
+	// D-189 P0-2：现金流写入 seam——生产默认调 p.store.InsertCashflow，测试注入失败函数验证显式错误处理。
+	cashflowWriter func(ctx context.Context, posID int64, legNo int16, kind, venue string, amount float64, ts time.Time) error
+
+	// D-189 P0-4：per-position close 锁——同进程并发 ClosePosition/ResumeClose 只允许一个执行。
+	closeMu  sync.Mutex
+	closing  map[int64]struct{}
+	closeSem map[int64]*sync.Mutex // per-posID mutex（closeMu 保护此 map）
 }
 
 // NewPipeline 创建执行管线。
@@ -81,6 +86,8 @@ func NewPipeline(reg *Registry, store *pgstore.Store, qbus *bus.QuoteBus, limits
 		limits:           limits,
 		revalidateAbsBps: 2.0, // D-077 修复⑪B N4 默认值（SetRevalidateThresholds 可覆盖）
 		revalidateRelPct: 20.0,
+		closing:          make(map[int64]struct{}),    // D-189 P0-4
+		closeSem:         make(map[int64]*sync.Mutex), // D-189 P0-4
 	}
 }
 

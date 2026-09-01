@@ -105,9 +105,10 @@ func (g *Gate) swapDeviationGateCheck(ctx context.Context, intent TradeIntent, a
 				continue
 			}
 			// 取 broker 实际 swap 日增量
-			actualUSD, ok, err := g.store.DailySwapAccrued(ctx, p.ID, legBare, time.Now().UTC())
+			// D-189 P0-1：快照查询用完整 venueKey（leg.Venue），legBare 仅用于 intent venue 匹配与 facts 匹配。
+			actualUSD, ok, err := g.store.DailySwapAccrued(ctx, p.ID, leg.Venue, time.Now().UTC())
 			if err != nil {
-				return GateVerdict{Pass: false, Reason: fmt.Sprintf("swap deviation gate: daily swap accrued pos=%d venue=%s failed (%v)", p.ID, legBare, err)}
+				return GateVerdict{Pass: false, Reason: fmt.Sprintf("swap deviation gate: daily swap accrued pos=%d venue=%s failed (%v)", p.ID, leg.Venue, err)}
 			}
 			if !ok || actualUSD == 0 {
 				continue // 无快照或零增量→跳过（走 S3）

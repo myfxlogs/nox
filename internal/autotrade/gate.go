@@ -186,7 +186,15 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 		// 检查 3 触发 DAILY_LOSS_HALT
 		if verdict.Reason != "" && state == StateRunning && dailyPnl <= -g.cfg.MaxDailyLoss {
 			haltedOn := time.Now().UTC().Truncate(24 * time.Hour)
-			_ = g.store.SetAutotradeState(ctx, StateDailyLossHalt, verdict.Reason, &haltedOn)
+			// D-189 P0-3：状态写入失败显式处理——日志 + critical alert（alert 失败也 log）。
+			// 不增加 inMemoryHalt（Gate 每次 Submit 重新读状态/日亏/策略禁用，内存 latch 无恢复协议+重复防线）。
+			if err := g.store.SetAutotradeState(ctx, StateDailyLossHalt, verdict.Reason, &haltedOn); err != nil {
+				msg := fmt.Sprintf("SetAutotradeState DAILY_LOSS_HALT failed (fail-closed, will re-read next tick): %v", err)
+				log.Printf("[autotrade] %s", msg)
+				if alertErr := g.store.InsertAlert(ctx, nil, "critical", msg); alertErr != nil {
+					log.Printf("[autotrade] DAILY_LOSS_HALT alert insert also failed: %v", alertErr)
+				}
+			}
 		}
 		// D-080 S1：同组合防重拒绝原因覆盖（gateDecision 返回通用 "duplicate dedup key"）
 		if comboAlreadyOpen {

@@ -217,7 +217,8 @@ func (e *Engine) brokerActualNetSwapBps(ctx context.Context, p *pgstore.Position
 			}
 		}
 		if leg.Side == "BUY" && legBare == buyBare {
-			usd, ok, err := e.store.DailySwapAccrued(ctx, p.ID, buyBare, now)
+			// D-189 P0-1：快照查询用完整 venueKey（leg.Venue），buyBare 仅用于腿匹配与 swapRateFor。
+			usd, ok, err := e.store.DailySwapAccrued(ctx, p.ID, leg.Venue, now)
 			if err != nil || !ok {
 				return 0, false // 任一腿无快照→回退 facts
 			}
@@ -225,7 +226,8 @@ func (e *Engine) brokerActualNetSwapBps(ctx context.Context, p *pgstore.Position
 			buyNotional = notional
 			buyOK = true
 		} else if leg.Side != "BUY" && legBare == sellBare {
-			usd, ok, err := e.store.DailySwapAccrued(ctx, p.ID, sellBare, now)
+			// D-189 P0-1：快照查询用完整 venueKey（leg.Venue），sellBare 仅用于腿匹配与 swapRateFor。
+			usd, ok, err := e.store.DailySwapAccrued(ctx, p.ID, leg.Venue, now)
 			if err != nil || !ok {
 				return 0, false
 			}

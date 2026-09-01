@@ -5,8 +5,11 @@ package exec
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
+	"time"
 
+	"arb/internal/notional"
 	"arb/internal/store/pgstore"
 )
 
@@ -24,7 +27,26 @@ func allCEXLegs(legs []LegSpec) bool {
 // 全部收平成功 → true；任一失败 → false（维持 LEGGED，人工兜底）。
 // 复用既有 CEX 平仓链路（binance positionSide/reduceOnly D-108 P2、okx posSide D-125）。
 // D-159 W2a S4：收平成功后写 CLOSE leg 到 DB，供 ClosePosition 的 closedTickets 检查跳过重复发单。
+// D-189 P0-2：写 CLOSE leg 后调 writeCloseCashflows（与 pipeline_legs_close.go 同口径），失败保持未完成。
 func (p *Pipeline) autoFlattenLEGGED(ctx context.Context, posID int64, legs []LegSpec, results []LegResult) (bool, error) {
+	// D-189 P0-2：计价币→USD 换算（与 ClosePosition 同口径，供现金流写入用）。
+	pos, err := p.store.GetPosition(ctx, posID)
+	if err != nil {
+		return false, fmt.Errorf("get position %d: %w", posID, err)
+	}
+	quoteCcy := notional.QuoteCcy(canonicalFromOppID(pos.OpportunityID))
+	fx := 1.0
+	if quoteCcy != "" && quoteCcy != "USD" {
+		if p.fxResolver != nil {
+			if rate, ok := p.fxResolver.USDPer(ctx, quoteCcy, time.Now()); ok && rate > 0 {
+				fx = rate
+			} else {
+				fx = 0 // fx 缺失 → 0，宁缺勿虚增（对账兜底）
+			}
+		} else {
+			fx = 0
+		}
+	}
 	// D-159 W2a S4：查 DB OPEN legs 获取完整 leg 信息（LegNo/Account 等），供写 CLOSE leg 用。
 	dbLegs, err := p.store.ListPositionLegs(ctx, posID)
 	if err != nil {
@@ -102,6 +124,13 @@ func (p *Pipeline) autoFlattenLEGGED(ctx context.Context, posID int64, legs []Le
 			Status:        "FILLED",
 		}); err != nil && !errors.Is(err, pgstore.ErrTerminalState) {
 			log.Printf("[exec] auto-flatten pos=%d leg=%d write CLOSE leg: %v", posID, i, err)
+			allFlattened = false
+			continue
+		}
+		// D-189 P0-2：写 CLOSE leg 后调 writeCloseCashflows（与 pipeline_legs_close.go 同口径）。
+		// 失败保持未完成（allFlattened=false），不继续置 CLOSED。
+		if err := p.writeCloseCashflows(ctx, posID, dbLeg.LegNo, dbLeg.Venue, fill.Swap, fill.Commission, fx); err != nil {
+			log.Printf("[exec] auto-flatten pos=%d leg=%d write cashflow: %v", posID, i, err)
 			allFlattened = false
 			continue
 		}

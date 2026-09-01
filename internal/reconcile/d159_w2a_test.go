@@ -76,7 +76,8 @@ func TestReconcileCLOSING_Stuck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if !hasAlert(fs, "critical", "CLOSING 持仓 position #200") {
+	// D-189 P0-4：告警消息改为 "CLOSING position #200 超...自动重触发 ResumeClose"。
+	if !hasAlert(fs, "critical", "CLOSING position #200") {
 		t.Errorf("缺少 CLOSING 超时 critical 告警，alerts=%v", fs.alerts)
 	}
 }
@@ -102,27 +103,28 @@ func TestReconcileCLOSING_NotStuck(t *testing.T) {
 }
 
 // TestIsClosingStuck A7：isClosingStuck 边界判定。
+// D-189 P0-4：改用 ClosingStartedAt（不再用 OpenedAt）。
 func TestIsClosingStuck(t *testing.T) {
 	now := time.Now()
 	// 超 30min → 卡住
 	old := now.Add(-31 * time.Minute)
-	pos := &pgstore.Position{Status: "CLOSING", OpenedAt: &old}
+	pos := &pgstore.Position{Status: "CLOSING", ClosingStartedAt: &old}
 	if !isClosingStuck(pos, now) {
 		t.Error("CLOSING >30min: should be stuck")
 	}
 	// 未超 30min → 不卡
 	recent := now.Add(-10 * time.Minute)
-	pos2 := &pgstore.Position{Status: "CLOSING", OpenedAt: &recent}
+	pos2 := &pgstore.Position{Status: "CLOSING", ClosingStartedAt: &recent}
 	if isClosingStuck(pos2, now) {
 		t.Error("CLOSING <30min: should not be stuck")
 	}
-	// 无 opened_at → 异常=卡住
-	pos3 := &pgstore.Position{Status: "CLOSING", OpenedAt: nil}
+	// 无 closing_started_at → 异常=卡住
+	pos3 := &pgstore.Position{Status: "CLOSING", ClosingStartedAt: nil}
 	if !isClosingStuck(pos3, now) {
-		t.Error("CLOSING no opened_at: should be stuck (anomaly)")
+		t.Error("CLOSING no closing_started_at: should be stuck (anomaly)")
 	}
 	// 非 CLOSING → 不判
-	pos4 := &pgstore.Position{Status: "OPEN", OpenedAt: &old}
+	pos4 := &pgstore.Position{Status: "OPEN", ClosingStartedAt: &old}
 	if isClosingStuck(pos4, now) {
 		t.Error("non-CLOSING: should not be stuck")
 	}
@@ -163,9 +165,9 @@ func TestAutoCloseCoordinator(t *testing.T) {
 	}
 }
 
-// TestAutoCloseCoordinator_ClaimFailedFallback A8：AutoClosePosition 返回 ErrClaimFailed → store.ClosePosition 兜底。
-// 场景：position 已是 CLOSING（被并发领取），AutoClosePosition 返回 ErrClaimFailed。
-// 期望：用 store.ClosePosition 兜底回填 PnL。
+// TestAutoCloseCoordinator_ClaimFailedFallback A8 / D-189 P0-2：ResumeClose 返回 ErrClaimFailed → 静默处理（不独立调 store.ClosePosition）。
+// 场景：position 已是 CLOSING（被并发领取），ResumeClose 返回 ErrClaimFailed。
+// 期望：ResumeClose 被调用，ErrClaimFailed 静默处理，store.ClosePosition 不被直接调用（D-189 P0-2 删除 raw 旁路）。
 func TestAutoCloseCoordinator_ClaimFailedFallback(t *testing.T) {
 	fs := newFakeStore()
 	opened := time.Now().Add(-2 * time.Hour)
@@ -187,9 +189,13 @@ func TestAutoCloseCoordinator_ClaimFailedFallback(t *testing.T) {
 	if err := r.autoClose(context.Background(), fs.positions[300], goneLeg, hist); err != nil {
 		t.Fatalf("autoClose: %v", err)
 	}
-	// 走了兜底 store.ClosePosition
-	if fs.closeCalls != 1 {
-		t.Errorf("store.ClosePosition 兜底调用次数=%d，期望 1", fs.closeCalls)
+	// D-189 P0-2：ResumeClose 被调用（fakeCloser.calls 记录 AutoClosePosition+ResumeClose 调用）
+	if len(fc.calls) == 0 {
+		t.Errorf("closer ResumeClose 未被调用，期望至少 1 次")
+	}
+	// store.ClosePosition 不应被直接调用（D-189 P0-2 删除 raw 旁路，由 ResumeClose 内部处理）
+	if fs.closeCalls != 0 {
+		t.Errorf("store.ClosePosition 直接调用次数=%d，期望 0（D-189 P0-2 删除 raw 旁路）", fs.closeCalls)
 	}
 }
 
