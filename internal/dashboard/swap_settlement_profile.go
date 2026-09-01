@@ -23,6 +23,7 @@ type SettlementProfileStore interface {
 	InsertFacts(ctx context.Context, facts []fact.Fact) error
 	FactExistsAt(ctx context.Context, kind, venue, symbol string, ts time.Time) (bool, error)
 	ListAllSwapSnapshots(ctx context.Context) ([]pgstore.SwapSnapshot, error)
+	ListSwapSnapshotsByPosID(ctx context.Context, posID int64) ([]pgstore.SwapSnapshot, error) // D-182 S1
 }
 
 // swapJump D-180 S1：单仓单次结算跳变。
@@ -99,6 +100,8 @@ func (c *SettlementProfileCollector) BackfillFromHistory(ctx context.Context) er
 			}
 			jumps := detectJumpsFromSnapshots(group, legs, group[0].Venue)
 			allJumps = append(allJumps, jumps...)
+			// D-182 S1：同分组零检测——恒零 ≥48h → settled=0（不结算族实测零表达）
+			c.detectAndRecordZero(ctx, group, legs, group[0].Venue)
 		}
 	}
 	if len(allJumps) == 0 {

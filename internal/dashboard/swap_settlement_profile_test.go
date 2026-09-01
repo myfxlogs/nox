@@ -64,6 +64,15 @@ func (f *fakeSettlementProfileStore) FactExistsAt(_ context.Context, kind, venue
 func (f *fakeSettlementProfileStore) ListAllSwapSnapshots(_ context.Context) ([]pgstore.SwapSnapshot, error) {
 	return f.snaps, nil
 }
+func (f *fakeSettlementProfileStore) ListSwapSnapshotsByPosID(_ context.Context, posID int64) ([]pgstore.SwapSnapshot, error) {
+	var out []pgstore.SwapSnapshot
+	for _, s := range f.snaps {
+		if s.PositionID == posID {
+			out = append(out, s)
+		}
+	}
+	return out, nil
+}
 
 // TestD180_DetectJumps_PositiveJump 0→+0.05 跳变检测（BUY 腿，usdPerLot=0.05/0.01=5.0）。
 func TestD180_DetectJumps_PositiveJump(t *testing.T) {
