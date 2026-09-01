@@ -42,6 +42,7 @@ service DashboardService {
   // 执行（认证后，§13）
   rpc ExecuteOpportunity(ExecuteOpportunityRequest) returns (ExecuteOpportunityResponse);
   rpc ClosePosition(ClosePositionRequest) returns (ClosePositionResponse);
+  rpc BackfillSwapHistory(BackfillSwapHistoryRequest) returns (BackfillSwapHistoryReply); // D-181 S1：手动回溯 venue swap 历史→facts
   rpc ListPositions(ListPositionsRequest) returns (ListPositionsResponse);
 
   // Broker 实持仓（D-051 WP3：MT5/MT4 实际持仓统一视图，实时查不落库）
@@ -485,6 +486,16 @@ message ClosePositionRequest {
 message ClosePositionResponse {
   string status = 1;           // CLOSING / FAILED
   string message = 2;
+}
+
+// D-181 S1：BackfillSwapHistory——手动回溯 venue swap 历史→facts（src=order_history）。
+message BackfillSwapHistoryRequest {
+  string venue = 1;            // venueKey 如 "61585565:mt5"
+}
+message BackfillSwapHistoryReply {
+  int32 orders_scanned = 1;    // 扫描的已平仓订单数
+  int32 facts_written = 2;     // 写入的 swap_settled facts 数
+  string summary = 3;          // 人类可读摘要（含空历史/降级提示）
 }
 
 message ListPositionsRequest {

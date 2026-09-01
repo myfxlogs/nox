@@ -25,6 +25,17 @@ func (s *Store) InsertFacts(ctx context.Context, facts []fact.Fact) error {
 	return nil
 }
 
+// DeleteFactsBySrc D-181 S1：删除指定 src + venue 的所有 facts（幂等重写用）。
+// BackfillSwapHistory 重跑前清旧 order_history facts，避免叠加。
+func (s *Store) DeleteFactsBySrc(ctx context.Context, src, venue string) error {
+	_, err := s.pool.Exec(ctx,
+		`DELETE FROM facts WHERE src = $1 AND venue = $2`, src, venue)
+	if err != nil {
+		return fmt.Errorf("delete facts by src: %w", err)
+	}
+	return nil
+}
+
 // LatestFacts 返回每 (kind, venue, symbol) 的最新事实（§8.2 ListLatestFacts）。
 func (s *Store) LatestFacts(ctx context.Context, kind, venue, symbol string) ([]fact.Fact, error) {
 	q := `SELECT DISTINCT ON (kind, venue, symbol)
