@@ -85,9 +85,11 @@ func TestClosePosition_InvalidFillSkipped(t *testing.T) {
 	reg2.Register(&fakeZeroFillExecutor{venue: "okx:perp"})
 	reg2.Register(&fakeFlattenExecutor{venue: "binance:perp"})
 	p.registry = reg2
+	// D-189 R2：ClosePosition 走 closePositionCore → brokerPreflight 需匹配到在仓订单才发平仓单。
+	// verifier 返回 Symbol+Side 匹配的订单（ticket 不同 → checkResidualLegs 不误报残留）。
 	p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{
-		"okx:perp":     {},
-		"binance:perp": {},
+		"okx:perp":     {{Symbol: "BTC-USDT-SWAP", Side: "BUY", Ticket: "okx-open-1"}},
+		"binance:perp": {{Symbol: "BTCUSDT", Side: "SELL", Ticket: "bin-open-1"}},
 	}}
 
 	// ClosePosition → okx 腿 fill.Qty=0 → 跳过不伪造成交 → 残量未归零 → 返回 error
@@ -157,10 +159,12 @@ func TestClosePosition_ResidualCheck_Fails(t *testing.T) {
 	reg.Register(&fakeFlattenExecutor{venue: "okx:perp"})                        // okx 平仓成功（写 CLOSE leg）
 	reg.Register(&fakeFlattenExecutor{venue: "binance:perp", failOnSide: "BUY"}) // binance 平仓 BUY 失败（无 CLOSE leg）
 	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50})
-	// verifier 两 venue 均无残留（fail-closed 需非 nil；残量由 leg 计数校验捕获，非 verifier）
+	// D-189 R2：ClosePosition 走 closePositionCore → brokerPreflight 需匹配到在仓订单才发平仓单。
+	// verifier 返回 Symbol+Side 匹配的订单（ticket 不同 → checkResidualLegs 不误报残留）。
+	// binance failOnSide="BUY" → 平仓 BUY 失败（无 CLOSE leg）→ 残量校验 openFilled=2 > closeFilled=1。
 	p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{
-		"okx:perp":     {},
-		"binance:perp": {},
+		"okx:perp":     {{Symbol: "BTC-USDT-SWAP", Side: "BUY", Ticket: "okx-open-4"}},
+		"binance:perp": {{Symbol: "BTCUSDT", Side: "SELL", Ticket: "bin-open-4"}},
 	}}
 
 	res, err := p.Execute(ctx,
@@ -287,8 +291,8 @@ func TestClosePosition_EstimatedMark(t *testing.T) {
 		reg.Register(&fakeFlattenExecutor{venue: "binance:perp"})
 		p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50})
 		p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{
-			"okx:perp":     {},
-			"binance:perp": {},
+			"okx:perp":     {{Symbol: "BTC-USDT-SWAP", Side: "BUY", Ticket: "okx-open-6"}},
+			"binance:perp": {{Symbol: "BTCUSDT", Side: "SELL", Ticket: "bin-open-6"}},
 		}}
 		// calibrator 接线，只命中 okx 腿（binance 未命中）→ 部分校准失败 → 标记 estimated
 		// OPEN 腿 OrderID = "fill-BUY"(okx) / "fill-SELL"(binance)（fakeFlattenExecutor.PlaceOrder 返回）
@@ -334,8 +338,8 @@ func TestClosePosition_EstimatedMark(t *testing.T) {
 		reg.Register(&fakeFlattenExecutor{venue: "binance:perp"})
 		p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50})
 		p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{
-			"okx:perp":     {},
-			"binance:perp": {},
+			"okx:perp":     {{Symbol: "BTC-USDT-SWAP", Side: "BUY", Ticket: "okx-open-7"}},
+			"binance:perp": {{Symbol: "BTCUSDT", Side: "SELL", Ticket: "bin-open-7"}},
 		}}
 		// pnlCalibrator nil（未接线）→ 用同步公式，不标记 estimated
 

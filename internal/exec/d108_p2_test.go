@@ -295,6 +295,11 @@ func TestD108P2_CloseLegPartialFillQty(t *testing.T) {
 	reg := NewRegistry()
 	reg.Register(&fakeExecExecutor{venue: "vB:perp", fill: Fill{OrderID: "T201", Price: 50000, Qty: 0.3}})
 	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50})
+	// D-189 R2：ClosePosition 走 closePositionCore → brokerPreflight 需匹配到在仓订单才发平仓单。
+	// verifier 返回 Symbol+Side 匹配的订单（ticket="OTHER" ≠ leg.OrderID="T200" → checkResidualLegs 不误报）。
+	p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{
+		"vB:perp": {{Symbol: "BTCUSDT", Side: "BUY", Ticket: "OTHER"}},
+	}}
 	// ClosePosition：CEX 腿走 PlaceOrder 反向 → fake executor 返回 fill.Qty=0.3
 	_ = p.ClosePosition(ctx, posID) // 部分成交，可能不置 CLOSED（A2 残留回读），但 CLOSE leg 应已写
 	// 查 CLOSE leg

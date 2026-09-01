@@ -116,8 +116,9 @@ func (f *fakeStore) InsertCashflow(ctx context.Context, posID int64, legNo int16
 
 type fakeCloser struct {
 	calls       []int64
-	failOnPos   int64 // >0 时该 posID 返回 error
-	claimFailed bool  // D-159 W2a：返回 ErrClaimFailed 模拟 position 已是 CLOSING
+	failOnPos   int64      // >0 时该 posID 返回 error
+	claimFailed bool       // D-159 W2a：返回 ErrClaimFailed 模拟 position 已是 CLOSING
+	store       *fakeStore // D-189 R1：state-aware ResumeClose/ClaimClose（nil=旧 fallback）
 }
 
 func (c *fakeCloser) AutoClosePosition(ctx context.Context, posID int64) error {
@@ -131,8 +132,48 @@ func (c *fakeCloser) AutoClosePosition(ctx context.Context, posID int64) error {
 	return nil
 }
 
-// D-189 P0-4：ResumeClose 实现（fakeCloser 复用 AutoClosePosition 逻辑）。
+// D-189 R1：ClaimClose 模拟真实 store.ClaimClose（OPEN/LEGGED→CLOSING）。
+// claimFailed=true → 返回 ErrClaimFailed（模拟并发已领取）。
+// 设置 ClosingStartedAt=now（模拟真实 ClaimClose 的 COALESCE(now())），避免 CLOSING 扫描误判超时。
+func (c *fakeCloser) ClaimClose(ctx context.Context, posID int64) error {
+	if c.claimFailed {
+		return pgstore.ErrClaimFailed
+	}
+	if c.store != nil {
+		if p, ok := c.store.positions[posID]; ok {
+			if p.Status != "OPEN" && p.Status != "LEGGED" {
+				return pgstore.ErrClaimFailed
+			}
+			p.Status = "CLOSING"
+			now := time.Now()
+			p.ClosingStartedAt = &now
+		}
+	}
+	return nil
+}
+
+// D-189 R1：ResumeClose 模拟真实 Pipeline.ResumeClose 状态检查。
+// CLOSED/FAILED → 幂等返回 nil；CLOSING → 进入核心（AutoClosePosition）；
+// 其他状态 → 返回 error（非 CLOSING）。
+// claimFailed=true → 返回 ErrClaimFailed（模拟核心执行失败/并发冲突）。
+// store=nil → 旧 fallback（直接调 AutoClosePosition，不检查状态）。
 func (c *fakeCloser) ResumeClose(ctx context.Context, posID int64) error {
+	if c.claimFailed {
+		c.calls = append(c.calls, posID)
+		return pgstore.ErrClaimFailed
+	}
+	if c.store != nil {
+		if p, ok := c.store.positions[posID]; ok {
+			switch p.Status {
+			case "CLOSED", "FAILED":
+				return nil
+			case "CLOSING":
+				// 进入核心
+			default:
+				return fmt.Errorf("position %d status=%s not CLOSING (ResumeClose only for CLOSING)", posID, p.Status)
+			}
+		}
+	}
 	return c.AutoClosePosition(ctx, posID)
 }
 
@@ -331,7 +372,7 @@ func TestRun_HistoryHit_AutoClose(t *testing.T) {
 		mkOpenLeg(300, 0, "52993526:mt5", "Y", "BUY", "GBPUSD", 1.0),
 	}
 
-	fc := &fakeCloser{}
+	fc := &fakeCloser{store: fs} // D-189 R1：state-aware fakeCloser（ClaimClose OPEN→CLOSING + ResumeClose 状态检查）
 	fsst := &fakeSettler{}
 	hist := &HistoryOrder{Ticket: "Y", ClosePrice: 1.3, Profit: 5.0, Swap: 0, Commission: 0, Symbol: "GBPUSD"}
 	hq := &fakeHistoryQuerier{venueKey: "52993526:mt5", results: map[string]*HistoryOrder{"Y": hist}}
@@ -586,6 +627,56 @@ func TestAutoClose_ClaimFailedFallback(t *testing.T) {
 		if c.kind == "swap" || c.kind == "commission" {
 			t.Errorf("auto_close 不应直接写 raw cashflow (kind=%s amount=%.4f)，D-189 P0-2 删除 raw 旁路", c.kind, c.amount)
 		}
+	}
+}
+
+// TestFakeCloser_ResumeClose_StateCheck D-189 R1 T1：fakeCloser.ResumeClose 模拟真实 Pipeline.ResumeClose 状态检查。
+// 非 CLOSING 状态 → 返回 error（修复前 fakeCloser 直接调 AutoClosePosition 不检查状态，测试全绿但生产 break）。
+func TestFakeCloser_ResumeClose_StateCheck(t *testing.T) {
+	fs := newFakeStore()
+	opened := time.Now().Add(-1 * time.Hour)
+
+	// 场景①：OPEN → ResumeClose 返回 error（非 CLOSING）
+	fs.positions[100] = mkPosition(100, "OPEN", "CROSS_VENUE", opened)
+	fc := &fakeCloser{store: fs}
+	err := fc.ResumeClose(context.Background(), 100)
+	if err == nil {
+		t.Error("fakeCloser.ResumeClose on OPEN should return error (not CLOSING)")
+	}
+
+	// 场景②：CLOSING → ResumeClose 进入核心（调 AutoClosePosition）
+	fs.positions[101] = mkPosition(101, "CLOSING", "CROSS_VENUE", opened)
+	fc2 := &fakeCloser{store: fs}
+	err = fc2.ResumeClose(context.Background(), 101)
+	if err != nil {
+		t.Errorf("fakeCloser.ResumeClose on CLOSING should enter core (AutoClosePosition), got: %v", err)
+	}
+	if len(fc2.calls) != 1 || fc2.calls[0] != 101 {
+		t.Errorf("CLOSING → AutoClosePosition 调用=%v，期望 [101]", fc2.calls)
+	}
+
+	// 场景③：CLOSED → ResumeClose 幂等返回 nil（不调 AutoClosePosition）
+	fs.positions[102] = mkPosition(102, "CLOSED", "CROSS_VENUE", opened)
+	fc3 := &fakeCloser{store: fs}
+	err = fc3.ResumeClose(context.Background(), 102)
+	if err != nil {
+		t.Errorf("fakeCloser.ResumeClose on CLOSED should return nil (idempotent), got: %v", err)
+	}
+	if len(fc3.calls) != 0 {
+		t.Errorf("CLOSED → 不应调 AutoClosePosition，calls=%v", fc3.calls)
+	}
+
+	// 场景④：ClaimClose OPEN→CLOSING → ResumeClose 成功（端到端状态流转）
+	fs.positions[103] = mkPosition(103, "OPEN", "CROSS_VENUE", opened)
+	fc4 := &fakeCloser{store: fs}
+	if err := fc4.ClaimClose(context.Background(), 103); err != nil {
+		t.Fatalf("ClaimClose on OPEN: %v", err)
+	}
+	if fs.positions[103].Status != "CLOSING" {
+		t.Errorf("ClaimClose 后 status=%s，期望 CLOSING", fs.positions[103].Status)
+	}
+	if err := fc4.ResumeClose(context.Background(), 103); err != nil {
+		t.Errorf("ResumeClose after ClaimClose: %v", err)
 	}
 }
 

@@ -73,7 +73,6 @@ type Pipeline struct {
 
 	// D-189 P0-4：per-position close 锁——同进程并发 ClosePosition/ResumeClose 只允许一个执行。
 	closeMu  sync.Mutex
-	closing  map[int64]struct{}
 	closeSem map[int64]*sync.Mutex // per-posID mutex（closeMu 保护此 map）
 }
 
@@ -86,7 +85,6 @@ func NewPipeline(reg *Registry, store *pgstore.Store, qbus *bus.QuoteBus, limits
 		limits:           limits,
 		revalidateAbsBps: 2.0, // D-077 修复⑪B N4 默认值（SetRevalidateThresholds 可覆盖）
 		revalidateRelPct: 20.0,
-		closing:          make(map[int64]struct{}),    // D-189 P0-4
 		closeSem:         make(map[int64]*sync.Mutex), // D-189 P0-4
 	}
 }

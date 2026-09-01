@@ -16,9 +16,12 @@ import (
 // Closer 平仓接口（service.AutoClosePosition 实现，reconcile 不依赖 dashboard 包避免循环导入）。
 // 走既有 pipeline.ClosePosition 路径：MT5/MT4 按 ticket CloseOrder，CEX 反向减仓。
 // D-189 P0-4：增加 ResumeClose——reconcile CLOSING 超时自动重触发，走 pipeline.ResumeClose 公共执行核心。
+// D-189 R1 修复：增加 ClaimClose——auto_close step c 先 ClaimClose（OPEN→CLOSING）再 ResumeClose，
+// 修复 position 仍 OPEN 时 ResumeClose 拒绝非 CLOSING 状态导致永久卡死。
 type Closer interface {
 	AutoClosePosition(ctx context.Context, posID int64) error
 	ResumeClose(ctx context.Context, posID int64) error
+	ClaimClose(ctx context.Context, posID int64) error
 }
 
 // Settler 结算接口（D-087 §3.2，settlement.Settle 的注入面）。
@@ -100,11 +103,18 @@ func (r *Reconciler) autoClose(
 	// D-159 W2a R3-L174：统一走 close coordinator（不独立置 CLOSED）。
 	// D-189 P0-2 S2：reconcile 收尾不再绕过执行管线直接调 store.ClosePosition / raw cashflow；
 	// 改为调用 Closer.ResumeClose，由执行管线按同一套 USD/现金流/残量规则处理。
-	// auto_close 已回填 CLOSE leg（step a），另一腿无 OPEN（otherOpen=false），
-	// 走 ResumeClose 做残量校验 + PnL 汇总 + 现金流补齐 + CLOSED。
+	// D-189 R1 修复：auto_close 的 position 仍 OPEN（来自 ListPositions("OPEN")），
+	// ResumeClose 只接受 CLOSING → 先 ClaimClose（OPEN→CLOSING）再 ResumeClose。
+	// ClaimClose ErrClaimFailed=已被并发领取为 CLOSING → 仍尝试 ResumeClose（幂等）。
 	if !otherOpen {
 		sub, cancel := r.withTimeout(ctx)
-		err := r.closer.ResumeClose(sub, posID)
+		err := r.closer.ClaimClose(sub, posID)
+		cancel()
+		if err != nil && !errors.Is(err, pgstore.ErrClaimFailed) {
+			return fmt.Errorf("close coordinator (ClaimClose): %w", err)
+		}
+		sub, cancel = r.withTimeout(ctx)
+		err = r.closer.ResumeClose(sub, posID)
 		cancel()
 		if err != nil && !errors.Is(err, pgstore.ErrClaimFailed) && !errors.Is(err, pgstore.ErrTerminalState) {
 			return fmt.Errorf("close coordinator (ResumeClose): %w", err)
