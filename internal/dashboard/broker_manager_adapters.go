@@ -75,13 +75,14 @@ func (m *BrokerManager) startMT4(ctx context.Context, a *pgstore.BrokerAccount) 
 	q := reconcile.NewMT4Querier(a.Venue, ad.Token(), ad.MT4Client())
 
 	r := &running{
-		stop:         func() { cancel(); ad.Stop() },
-		querier:      q,
-		symbols:      fetchSymbols,
-		symbolGroups: fetchSymbolGroups,
-		setSymMap:    ad.SetSymbolMap,
-		resubscribe:  ad.Resubscribe,
-		swap:         func(ctx context.Context) ([]fact.Fact, error) { return ad.SwapFacts(ctx, m.qbus) },
+		stop:             func() { cancel(); ad.Stop() },
+		querier:          q,
+		symbols:          fetchSymbols,
+		symbolGroups:     fetchSymbolGroups,
+		setSymMap:        ad.SetSymbolMap,
+		resubscribe:      ad.Resubscribe,
+		swap:             func(ctx context.Context) ([]fact.Fact, error) { return ad.SwapFacts(ctx, m.qbus) },
+		orderHistoryScan: mt4OrderHistoryScan(ad.MT4Client(), ad.Token()), // D-181 S1
 	}
 	m.attach(a.Venue, r)
 	log.Printf("[broker] %s (MT4) ready", a.Venue)
@@ -223,17 +224,18 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 	q := reconcile.NewMT5Querier(a.Venue, ad.Token(), ad.MT5Client())
 
 	r := &running{
-		stop:         func() { cancel(); ad.Stop() },
-		querier:      q,
-		symbols:      fetchSymbols,
-		symbolGroups: fetchSymbolGroups,
-		symbolParams: fetchContract,
-		volumeSpec:   fetchMinLots,
-		volumeStep:   fetchVolumeStep,
-		setSymMap:    ad.SetSymbolMap,
-		resubscribe:  ad.Resubscribe,
-		swap:         func(ctx context.Context) ([]fact.Fact, error) { return ad.SwapFacts(ctx, m.qbus) },
-		meta:         func(ctx context.Context) ([]fact.Fact, error) { return ad.MetaFacts(ctx) },
+		stop:             func() { cancel(); ad.Stop() },
+		querier:          q,
+		symbols:          fetchSymbols,
+		symbolGroups:     fetchSymbolGroups,
+		symbolParams:     fetchContract,
+		volumeSpec:       fetchMinLots,
+		volumeStep:       fetchVolumeStep,
+		setSymMap:        ad.SetSymbolMap,
+		resubscribe:      ad.Resubscribe,
+		swap:             func(ctx context.Context) ([]fact.Fact, error) { return ad.SwapFacts(ctx, m.qbus) },
+		meta:             func(ctx context.Context) ([]fact.Fact, error) { return ad.MetaFacts(ctx) },
+		orderHistoryScan: mt5OrderHistoryScan(ad.MT5Client(), ad.Token()), // D-181 S1
 	}
 	m.attach(a.Venue, r)
 	log.Printf("[broker] %s (MT5) ready", a.Venue)

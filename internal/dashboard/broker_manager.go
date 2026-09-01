@@ -37,11 +37,12 @@ type running struct {
 	volumeStep func(ctx context.Context, symbol string) (float64, bool, error)
 	// symbolParams 单符号权威合约规格（MT5 SymbolParams；MT4/未运行 = nil）。零信任：
 	// 保存映射的合约校验数据只信 broker 自取，不信前端传值（D-042）。
-	symbolParams func(ctx context.Context, symbol string) (float64, bool, error)
-	setSymMap    func(map[string]string)                        // 运行时刷新 brokerSymbol → canonical
-	resubscribe  func([]string)                                 // 运行时补订阅新符号（保存映射后生效，D-047 缺陷③）
-	swap         func(ctx context.Context) ([]fact.Fact, error) // 轮询 swap facts（§3.6，D-036）
-	meta         func(ctx context.Context) ([]fact.Fact, error) // D-140 S2：MT5 符号元数据 facts（CS 采集）
+	symbolParams     func(ctx context.Context, symbol string) (float64, bool, error)
+	setSymMap        func(map[string]string)                        // 运行时刷新 brokerSymbol → canonical
+	resubscribe      func([]string)                                 // 运行时补订阅新符号（保存映射后生效，D-047 缺陷③）
+	swap             func(ctx context.Context) ([]fact.Fact, error) // 轮询 swap facts（§3.6，D-036）
+	meta             func(ctx context.Context) ([]fact.Fact, error) // D-140 S2：MT5 符号元数据 facts（CS 采集）
+	orderHistoryScan orderHistoryScan                               // D-181 S1：拉历史已平仓订单（BackfillSwapHistory RPC 用），nil=未接线
 
 	// per-venue symbolGroups TTL 缓存（D-045 §3.2.1）：避免矩阵页全量拉取时 N 账号 × SymbolList+SymbolParamsMany
 	// 直连 mtapi；缓存失效回退直连，失败不下发脏数据。
@@ -131,6 +132,17 @@ func (m *BrokerManager) SetQuerierHook(f func([]reconcile.VenueQuerier)) {
 
 // SetBPM D-121：注入 BrokerPositionMonitor（CEX 平仓需查快照获取 side/volume）。
 func (m *BrokerManager) SetBPM(bpm *BrokerPositionMonitor) { m.bpm = bpm }
+
+// OrderHistoryScan D-181 S1：返回指定 venue 的历史订单扫描闭包（nil=未连接/无扫描器）。
+// BackfillSwapHistory RPC 用——拉 venue 已平仓订单计算 usdLotDay → swap_settled facts。
+func (m *BrokerManager) OrderHistoryScan(venue string) orderHistoryScan {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if r, ok := m.running[venue]; ok {
+		return r.orderHistoryScan
+	}
+	return nil
+}
 
 // AddStaticQuerier 登记环境变量适配器的 querier。
 func (m *BrokerManager) AddStaticQuerier(venue string, q reconcile.VenueQuerier) {

@@ -1,0 +1,216 @@
+// D-181 S1：BackfillSwapHistory RPC——手动回溯 venue swap 历史→facts（src=order_history）。
+// 复用 BrokerManager 已连接的 MT5/MT4 adapter，通过 running.orderHistoryScan 闭包拉历史单。
+// RPC handler 在 service_backfill.go（拆分保 ≤300 行）。
+package dashboard
+
+import (
+	"context"
+	"fmt"
+	"sort"
+	"time"
+
+	"arb/internal/adapter/gen/mtapi/mt4"
+	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
+	"arb/internal/fact"
+
+	"google.golang.org/grpc/metadata"
+)
+
+// HistorySwapOrder 已平仓订单的 swap 相关字段（D-181 S1 回溯用）。
+// CloseTime 为零值 = 未平仓（跳过）；Swap=0 = 无结算（跳过）；Lots<=0 = 异常（跳过）。
+type HistorySwapOrder struct {
+	Symbol    string
+	Side      string // "BUY"/"SELL"
+	Swap      float64
+	Lots      float64
+	CloseLots float64 // MT5 部分平仓实际量；MT4 无此字段=Lots
+	OpenTime  time.Time
+	CloseTime time.Time
+}
+
+// orderHistoryScan 闭包类型：拉指定时间窗内的已平仓订单（D-181 S1）。
+// MT5 实现走 OrderHistoryPagination 分页；MT4 实现走 OrderHistory 全量。
+// 返回所有符合时间窗的已平仓订单（含 Swap=0 的，调用方过滤）。
+type orderHistoryScan func(ctx context.Context, from, to time.Time) ([]HistorySwapOrder, error)
+
+// mt5OrderHistoryScan 构造 MT5 分页扫描闭包（D-181 S1）。
+// ordersPerPage=100，sort=CloseTime，ascending=false，ignoreDepositWithdraw=true。
+func mt5OrderHistoryScan(client mt5pb.MT5Client, token string) orderHistoryScan {
+	return func(ctx context.Context, from, to time.Time) ([]HistorySwapOrder, error) {
+		ctx = metadata.AppendToOutgoingContext(ctx, "id", token)
+		fromStr := from.Format("2006-01-02T15:04:05")
+		toStr := to.Format("2006-01-02T15:04:05")
+		ignoreDW := true
+		sortClose := mt5pb.OrderSort_OrderSort_CloseTime
+		ascending := false
+		var all []HistorySwapOrder
+		page := int32(0)
+		for {
+			resp, err := client.OrderHistoryPagination(ctx, &mt5pb.OrderHistoryPaginationRequest{
+				Id:                    token,
+				From:                  fromStr,
+				To:                    toStr,
+				OrdersPerPage:         100,
+				PageNumber:            page,
+				Sort:                  &sortClose,
+				Ascending:             &ascending,
+				IgnoreDepositWithdraw: &ignoreDW,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("mt5 order history pagination page=%d: %w", page, err)
+			}
+			if e := resp.GetError(); e != nil {
+				return nil, fmt.Errorf("mt5 order history pagination: %s", e.GetMessage())
+			}
+			result := resp.GetResult()
+			if result == nil {
+				break
+			}
+			for _, ord := range result.GetOrders() {
+				closeTS := ord.GetCloseTime()
+				if closeTS == nil {
+					continue // 未平仓
+				}
+				openTS := ord.GetOpenTime()
+				if openTS == nil {
+					continue
+				}
+				side := "BUY"
+				if ord.GetOrderType() == mt5pb.OrderType_OrderType_Sell {
+					side = "SELL"
+				}
+				closeLots := ord.GetCloseLots()
+				if closeLots <= 0 {
+					closeLots = ord.GetLots() // 回退全量手数
+				}
+				all = append(all, HistorySwapOrder{
+					Symbol:    ord.GetSymbol(),
+					Side:      side,
+					Swap:      ord.GetSwap(),
+					Lots:      ord.GetLots(),
+					CloseLots: closeLots,
+					OpenTime:  openTS.AsTime(),
+					CloseTime: closeTS.AsTime(),
+				})
+			}
+			pagesCount := result.GetPagesCount()
+			if pagesCount == 0 || page >= pagesCount-1 {
+				break
+			}
+			page++
+		}
+		return all, nil
+	}
+}
+
+// mt4OrderHistoryScan 构造 MT4 全量扫描闭包（D-181 S1，无分页）。
+func mt4OrderHistoryScan(client mt4.MT4Client, token string) orderHistoryScan {
+	return func(ctx context.Context, from, to time.Time) ([]HistorySwapOrder, error) {
+		ctx = metadata.AppendToOutgoingContext(ctx, "id", token)
+		resp, err := client.OrderHistory(ctx, &mt4.OrderHistoryRequest{
+			Id:   token,
+			From: from.Format("2006-01-02T15:04:05"),
+			To:   to.Format("2006-01-02T15:04:05"),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("mt4 order history: %w", err)
+		}
+		if e := resp.GetError(); e != nil {
+			return nil, fmt.Errorf("mt4 order history: %s", e.GetMessage())
+		}
+		var all []HistorySwapOrder
+		for _, ord := range resp.GetResult() {
+			closeTS := ord.GetCloseTime()
+			if closeTS == nil {
+				continue
+			}
+			openTS := ord.GetOpenTime()
+			if openTS == nil {
+				continue
+			}
+			side := "BUY"
+			if ord.GetType() == mt4.Op_Op_Sell {
+				side = "SELL"
+			}
+			all = append(all, HistorySwapOrder{
+				Symbol:    ord.GetSymbol(),
+				Side:      side,
+				Swap:      ord.GetSwap(),
+				Lots:      ord.GetLots(),
+				CloseLots: ord.GetLots(), // MT4 无 CloseLots
+				OpenTime:  openTS.AsTime(),
+				CloseTime: closeTS.AsTime(),
+			})
+		}
+		return all, nil
+	}
+}
+
+// computeUsdLotDay D-181 S1：单订单 usdLotDay 换算。
+// usdLotDay = Swap / (closeLots × holdDays)；holdDays < 1 → 返回 ok=false（日内单跳过）。
+func computeUsdLotDay(o HistorySwapOrder) (float64, bool) {
+	holdDays := o.CloseTime.Sub(o.OpenTime).Hours() / 24
+	if holdDays < 1 {
+		return 0, false
+	}
+	lots := o.CloseLots
+	if lots <= 0 {
+		lots = o.Lots
+	}
+	if lots <= 0 {
+		return 0, false
+	}
+	return o.Swap / (lots * holdDays), true
+}
+
+// aggregateHistoryToUsdLotDay D-181 S1：按 (symbol, side) 聚合 usdLotDay 值取中位数 → facts。
+// 输入：已过滤的 HistorySwapOrder 列表（Swap≠0 && holdDays≥1）。
+// 输出：swap_settled_long/short facts，src=order_history，ts=now。
+func aggregateHistoryToUsdLotDay(orders []HistorySwapOrder, venue string, now time.Time) []fact.Fact {
+	type groupKey struct {
+		symbol string
+		side   string
+	}
+	groups := make(map[groupKey][]float64)
+	for _, o := range orders {
+		v, ok := computeUsdLotDay(o)
+		if !ok {
+			continue
+		}
+		k := groupKey{symbol: o.Symbol, side: o.Side}
+		groups[k] = append(groups[k], v)
+	}
+	var facts []fact.Fact
+	for k, vals := range groups {
+		med := medianFloats(vals)
+		kind := fact.KindSwapSettledLong
+		if k.side != "BUY" {
+			kind = fact.KindSwapSettledShort
+		}
+		facts = append(facts, fact.Fact{
+			Kind:   kind,
+			Venue:  venue,
+			Symbol: k.symbol,
+			Value:  med,
+			Unit:   fact.UnitUsdLotDay,
+			Ts:     now,
+			Src:    "order_history",
+		})
+	}
+	return facts
+}
+
+// medianFloats D-181 S1：浮点切片中位数（复用 swap_settlement_profile.go median 但独立避免依赖）。
+func medianFloats(vals []float64) float64 {
+	if len(vals) == 0 {
+		return 0
+	}
+	sorted := make([]float64, len(vals))
+	copy(sorted, vals)
+	sort.Float64s(sorted)
+	n := len(sorted)
+	if n%2 == 1 {
+		return sorted[n/2]
+	}
+	return (sorted[n/2-1] + sorted[n/2]) / 2
+}
