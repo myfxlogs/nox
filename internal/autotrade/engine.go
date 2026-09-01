@@ -13,6 +13,12 @@ import (
 	"arb/internal/store/pgstore"
 )
 
+// ZeroSettlementDetector D-182 S1：零结算检测接口（scanAndClose 周期调用）。
+// dashboard.SettlementProfileCollector 实现此接口。
+type ZeroSettlementDetector interface {
+	RecordZeroForPosition(ctx context.Context, posID int64)
+}
+
 // Config 自动交易引擎配置（D-070/D-072）。
 type Config struct {
 	Enabled      bool
@@ -116,6 +122,10 @@ type Engine struct {
 	quotes   *bus.QuoteBus // 实时报价（D-070 均值回归平仓用）
 	gate     *Gate         // 统一开仓门禁（D-072）
 
+	// D-182 S1：零结算检测器（scanAndClose 周期对活跃仓检测恒零 → settled=0）。
+	// nil = 未注入（跳过零检测，向后兼容）。
+	zeroDetector ZeroSettlementDetector
+
 	firstTickDone bool // 启动首跑淘汰标记
 
 	// fundingNeedSent 资金注入提醒节流（D-072）：key=SWAPARB:canonical:venueLong:venueShort → YYYY-MM-DD。
@@ -179,6 +189,11 @@ func (e *Engine) ValidateStartup() {
 func (e *Engine) SetSettleDeps(deps settlement.Deps, elim settlement.Eliminator) {
 	e.settleDeps = deps
 	e.eliminator = elim
+}
+
+// SetZeroSettlementDetector D-182 S1：注入零结算检测器（scanAndClose 周期调用）。
+func (e *Engine) SetZeroSettlementDetector(d ZeroSettlementDetector) {
+	e.zeroDetector = d
 }
 
 // Run 启动自动交易引擎（阻塞，ctx 取消时退出）。
@@ -286,6 +301,11 @@ func (e *Engine) scanAndClose(ctx context.Context) {
 		return
 	}
 	for _, p := range positions {
+		// D-182 S1：零结算检测——10min 兜底周期对活跃仓检测恒零 → settled=0。
+		// 在 checkExitCondition 前执行：先写 settled=0，再判退出（settled=0 不触发误杀平仓）。
+		if e.zeroDetector != nil {
+			e.zeroDetector.RecordZeroForPosition(ctx, p.ID)
+		}
 		shouldClose, reason := e.checkExitCondition(ctx, &p)
 		if !shouldClose {
 			continue
