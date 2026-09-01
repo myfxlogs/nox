@@ -80,6 +80,10 @@ func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, request
 			return "FAILED", msg, 0
 		}
 	}
+	// D-182 S4：swap 偏差拦截（手动入口同源，pipeline.Execute 前拦截）。
+	if msg := s.checkSwapDeviationGate(ctx, found.Canonical, found.VenueBuy, found.VenueSell); msg != "" {
+		return "FAILED", msg, 0
+	}
 	result, err := s.pipeline.Execute(ctx, oppID, requestID, found.Type, legs)
 	if err != nil {
 		if errors.Is(err, exec.ErrMaxOpenPositions) || errors.Is(err, exec.ErrDuplicateExecution) ||
@@ -202,6 +206,10 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 		if msg := s.checkLiveGate(ctx, venueBuy, venueSell); msg != "" {
 			return "FAILED", msg, 0
 		}
+	}
+	// D-182 S4：swap 偏差拦截（手动入口同源，pipeline.Execute 前拦截）。
+	if msg := s.checkSwapDeviationGate(ctx, canonical, venueBuy, venueSell); msg != "" {
+		return "FAILED", msg, 0
 	}
 	result, err := s.pipeline.Execute(ctx, oppID, requestID, strategyType, legs)
 	if err != nil {

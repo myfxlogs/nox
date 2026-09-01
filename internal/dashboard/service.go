@@ -113,6 +113,10 @@ type Service struct {
 	// LiveTrade=false 时 is_real=true 账户拒绝开仓。
 	liveTrade bool
 
+	// D-182 S4：swap 偏差拦截阈值（手动入口同源，与 autotrade.Gate.SwapDeviationGatePct 对齐）。
+	// ≤0 = 禁用（默认）。main 从 cfg.SwapDeviationGatePct 注入。
+	swapDeviationGatePct float64
+
 	// D-175：venue→alias 缓存（main 启动时加载 ListAccountAliases 注入）。
 	// oppToProto 热路径读此 map 填 alias_buy/alias_sell，避免每条机会查 DB。
 	// nil = 未接线（alias 留空，前端回退 venueKey）。RWMutex 保护并发读/SetAliasMap 写。
