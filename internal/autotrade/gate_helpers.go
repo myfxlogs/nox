@@ -74,8 +74,9 @@ func (g *Gate) rejectLog(ctx context.Context, intent TradeIntent, reason string,
 
 // grossSplitFloor D-179 S4：折分 qty 向下规整到 0.01 步长（FX min lot）。
 // 返回规整后 qty + 是否拒开（<0.01）。宁可不开不可超限。
+// D-182 S2：+1e-9 浮点容差——0.29/0.01=2.9999…96 会保守缩到 0.28（方向安全但丢精度）。
 func grossSplitFloor(qty float64) (float64, bool) {
-	floored := math.Floor(qty/0.01) * 0.01
+	floored := math.Floor(qty/0.01+1e-9) * 0.01
 	if floored < 0.01 {
 		return 0, true
 	}

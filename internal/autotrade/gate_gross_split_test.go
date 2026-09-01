@@ -20,6 +20,9 @@ func TestGrossSplitFloor(t *testing.T) {
 		{"0.005 → reject（<0.01）", 0.005, 0, true},
 		{"0.05 → 0.05", 0.05, 0.05, false},
 		{"0.025 → 0.02", 0.025, 0.02, false},
+		// D-182 S2：浮点容差——0.29/0.01=2.9999…96 会保守缩到 0.28，+1e-9 后 → 0.29
+		{"0.29 → 0.29（浮点容差修复）", 0.29, 0.29, false},
+		{"0.03 → 0.03（恰好整除不受影响）", 0.03, 0.03, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
