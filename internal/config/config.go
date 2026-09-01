@@ -79,6 +79,11 @@ type Config struct {
 	// 保证金 = notional × 1/leverage（账户级回落，品种级 InitMarginRate 网关不返回）。
 	// 0 = 不启用。无限杠杆（2e9）→ 保证金≈0，不告警。
 	SwapArbMarginBudgetPct float64
+	// D-181 S2：probe 探测仓——无实测腿的首仓自动成为 probe，到期评估升级/拒绝。
+	// ProbeEnabled=false → 不标记不评估（向后兼容，默认 false）。
+	ProbeEnabled bool
+	// ProbeEvalDays probe 评估等待天数（ARB_PROBE_EVAL_DAYS，缺省 3 ≈ 2 结算日）。
+	ProbeEvalDays int
 	// PerpFundMinHold PERP_FUNDING 持有下限（ARB_PERPFUNDING_MIN_HOLD，缺省 8h）——D-133 T1。
 	// 退出判定 floor：now − opened_at < MinHold → 不平仓（至少活过一个结算窗，收益源先参与）。
 	// 0 = 不限（近似旧行为但仍有 debounce）。
@@ -245,6 +250,8 @@ func Load() *Config {
 		SwapArbReentryCooldownDays: envInt("ARB_SWAPARB_REENTRY_COOLDOWN_DAYS", 7),
 		SwapArbVenueExposureCap:    envFloat("ARB_SWAPARB_VENUE_EXPOSURE_CAP", 2.0),    // D-132 T1 venue 级敞口门
 		SwapArbMarginBudgetPct:     envFloat("ARB_SWAPARB_MARGIN_BUDGET_PCT", 0.8),     // D-142 ④ 观察版告警
+		ProbeEnabled:               envBool("ARB_PROBE_ENABLED", false),                // D-181 S2 probe 探测仓总开关
+		ProbeEvalDays:              envInt("ARB_PROBE_EVAL_DAYS", 3),                   // D-181 S2 probe 评估等待天数
 		PerpFundMinHold:            envDur("ARB_PERPFUNDING_MIN_HOLD", 8*time.Hour),    // D-133 T1 持有下限
 		PerpFundExitDebounce:       envInt("ARB_PERPFUNDING_EXIT_DEBOUNCE", 3),         // D-133 T1 连续去抖
 		FundingMaxBreakevenDays:    envFloat("ARB_FUNDING_MAX_BREAKEVEN_DAYS", 1.0),    // D-133 T2 回本周期上门
