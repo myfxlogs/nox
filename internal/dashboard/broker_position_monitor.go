@@ -49,6 +49,9 @@ type BrokerPositionMonitor struct {
 
 	// D-124：账户保证金分摊（方案 C）。acctMon nil = 未注入（测试/首 poll），margin=0。
 	acctMon *AccountMonitor
+
+	// D-180 S1：结算画像采集器（跳变检测 → 聚合写 swap_settled facts）。
+	settlementCollector *SettlementProfileCollector
 }
 
 // SwapSnapshotStore D-110 P2 swap 快照采集依赖（setter 注入，避免 NewBrokerPositionMonitor 签名变更）。
@@ -66,6 +69,11 @@ func (m *BrokerPositionMonitor) SetSwapSnapshotStore(s SwapSnapshotStore) {
 // SetAccountMonitor D-124 注入账户 monitor（方案 C 保证金分摊用）。boot 时调用。
 func (m *BrokerPositionMonitor) SetAccountMonitor(am *AccountMonitor) {
 	m.acctMon = am
+}
+
+// SetSettlementProfileCollector D-180 S1：注入结算画像采集器。boot 时调用。
+func (m *BrokerPositionMonitor) SetSettlementProfileCollector(c *SettlementProfileCollector) {
+	m.settlementCollector = c
 }
 
 // NewBrokerPositionMonitor 创建 monitor。interval 为轮询周期（ARB_BROKER_POS_POLL_MS）。
@@ -177,6 +185,7 @@ func (m *BrokerPositionMonitor) poll(ctx context.Context) {
 // 锁外执行：复制 venues 快照 → 释放锁 → 构建 positionID 索引 → 遍历 orders 写快照。
 // 去重：lastSwapByTicket[ticket] == currentSwap → 跳过；变化或首次 → 写入。
 // swap=0 也写（B2 修订）：Exness swap 恒=0，首次写0后不再变化=去重不写新行，但至少有一条基准行。
+// D-180 S1：swap 值变化时检测跳变 → 收集 swapJump → poll 末尾聚合写 swap_settled facts。
 func (m *BrokerPositionMonitor) collectSwapSnapshots(ctx context.Context) {
 	if m.swapSnapStore == nil {
 		return
@@ -188,6 +197,7 @@ func (m *BrokerPositionMonitor) collectSwapSnapshots(ctx context.Context) {
 
 	idx, _ := buildPositionIDIndex(ctx, m.swapSnapStore)
 	now := time.Now().UTC()
+	var jumps []swapJump // D-180 S1：本轮检测到的跳变
 	for _, vs := range venues {
 		if !vs.online {
 			continue
@@ -198,15 +208,26 @@ func (m *BrokerPositionMonitor) collectSwapSnapshots(ctx context.Context) {
 				continue // 孤儿单/未关联
 			}
 			key := o.VenueKey + "\x00" + o.Ticket
-			if prev, ok := m.lastSwapByTicket[key]; ok && prev == o.Swap {
+			prev, hasPrev := m.lastSwapByTicket[key]
+			if hasPrev && prev == o.Swap {
 				continue // 去重：swap 值未变化
 			}
 			if err := m.swapSnapStore.InsertSwapSnapshot(ctx, posID, o.VenueKey, o.Swap, now); err != nil {
 				log.Printf("[broker-mon] swap snapshot insert posID=%d venue=%s: %v", posID, o.VenueKey, err)
 				continue
 			}
+			// D-180 S1：跳变检测——有前值且值变化 → 记录跳变（首次写入无前值不算跳变）。
+			if hasPrev && prev != o.Swap && m.settlementCollector != nil {
+				if j, ok := detectRealtimeJump(m.swapSnapStore, posID, o, prev, now); ok {
+					jumps = append(jumps, j)
+				}
+			}
 			m.lastSwapByTicket[key] = o.Swap
 		}
+	}
+	// D-180 S1：聚合写 swap_settled facts（三倍日剔除+中位数+幂等）。
+	if m.settlementCollector != nil && len(jumps) > 0 {
+		m.settlementCollector.RecordJumps(ctx, jumps)
 	}
 }
 
