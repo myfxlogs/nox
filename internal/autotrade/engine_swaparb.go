@@ -222,7 +222,6 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 		NotionalUSD: notional,
 		DedupKey:    dedupKey,
 		NetBps:      spreadBps,
-		WillBeProbe: willBeProbe, // D-181 S2：gate combo_allow 排除 probe 计数用
 	}
 	// D-168 超限折分：Execute 闭包捕获 intent 指针，读 intent.Qty/NotionalUSD
 	// （gate 层折分时修改 intent 字段，闭包内读到折分后的值）
