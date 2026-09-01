@@ -124,3 +124,63 @@ func TestIsRealPair(t *testing.T) {
 		}
 	}
 }
+
+// D-187：discoverSwapCombos 策略标记——netSwap 换算年化 ≥ CarryMinNetAnnualized → CARRY，否则 SWAPARB。
+// 用例①：netSwap=2.0 bps/日 → annualPct=7.3 ≥ 4.0 → strategy="CARRY"
+// 用例②：netSwap=0.5 bps/日 → annualPct=1.825 < 4.0 → strategy="SWAPARB"
+func TestDiscoverSwapCombos_CarryStrategyTagging(t *testing.T) {
+	s := testAccumStore(t)
+	now := time.Now().UTC()
+	// demo×demo 同类型配对（vA long × vB short）
+	insertIsRealTestFacts(t, s, []fact.Fact{
+		{Kind: fact.KindSwapLong, Venue: "vA", Symbol: "AUDJPY", Value: 5.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},
+		{Kind: fact.KindSwapShort, Venue: "vB", Symbol: "AUDJPY", Value: -3.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},
+	}, nil, []string{"vA", "vB"}, nil)
+	// netSwap=5.0+(-3.0)=2.0 bps/日 → annualPct=2.0*365/100=7.3 ≥ 4.0 → CARRY
+	e := &Engine{store: s, cfg: Config{MinNetSwapBps: 0, SwapFactMaxAge: 2 * time.Hour, CarryMinNetAnnualized: 4.0}}
+	combos := e.discoverSwapCombos(context.Background())
+	if len(combos) != 1 {
+		t.Fatalf("CARRY case: want 1 combo, got %d", len(combos))
+	}
+	if combos[0].strategy != "CARRY" {
+		t.Errorf("CARRY case: netSwap=2.0 → annualPct=7.3 ≥ 4.0, want strategy=CARRY, got %q", combos[0].strategy)
+	}
+}
+
+// TestDiscoverSwapCombos_SwapArbStrategyTagging D-187：netSwap 换算年化 < CarryMinNetAnnualized → SWAPARB。
+func TestDiscoverSwapCombos_SwapArbStrategyTagging(t *testing.T) {
+	s := testAccumStore(t)
+	now := time.Now().UTC()
+	insertIsRealTestFacts(t, s, []fact.Fact{
+		{Kind: fact.KindSwapLong, Venue: "vA", Symbol: "AUDJPY", Value: 2.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},
+		{Kind: fact.KindSwapShort, Venue: "vB", Symbol: "AUDJPY", Value: -1.5, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},
+	}, nil, []string{"vA", "vB"}, nil)
+	// netSwap=2.0+(-1.5)=0.5 bps/日 → annualPct=0.5*365/100=1.825 < 4.0 → SWAPARB
+	e := &Engine{store: s, cfg: Config{MinNetSwapBps: 0, SwapFactMaxAge: 2 * time.Hour, CarryMinNetAnnualized: 4.0}}
+	combos := e.discoverSwapCombos(context.Background())
+	if len(combos) != 1 {
+		t.Fatalf("SWAPARB case: want 1 combo, got %d", len(combos))
+	}
+	if combos[0].strategy != "SWAPARB" {
+		t.Errorf("SWAPARB case: netSwap=0.5 → annualPct=1.825 < 4.0, want strategy=SWAPARB, got %q", combos[0].strategy)
+	}
+}
+
+// TestDiscoverSwapCombos_CarryThresholdZero D-187：CarryMinNetAnnualized=0 → 全部 SWAPARB（关闭 CARRY 标记）。
+func TestDiscoverSwapCombos_CarryThresholdZero(t *testing.T) {
+	s := testAccumStore(t)
+	now := time.Now().UTC()
+	insertIsRealTestFacts(t, s, []fact.Fact{
+		{Kind: fact.KindSwapLong, Venue: "vA", Symbol: "AUDJPY", Value: 5.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},
+		{Kind: fact.KindSwapShort, Venue: "vB", Symbol: "AUDJPY", Value: -3.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "mt5"},
+	}, nil, []string{"vA", "vB"}, nil)
+	// CarryMinNetAnnualized=0 → 关闭 CARRY 标记，即使 netSwap=2.0（annualPct=7.3）也标 SWAPARB
+	e := &Engine{store: s, cfg: Config{MinNetSwapBps: 0, SwapFactMaxAge: 2 * time.Hour, CarryMinNetAnnualized: 0}}
+	combos := e.discoverSwapCombos(context.Background())
+	if len(combos) != 1 {
+		t.Fatalf("threshold=0 case: want 1 combo, got %d", len(combos))
+	}
+	if combos[0].strategy != "SWAPARB" {
+		t.Errorf("threshold=0: CARRY marking disabled, want SWAPARB, got %q", combos[0].strategy)
+	}
+}

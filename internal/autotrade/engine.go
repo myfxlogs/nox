@@ -67,10 +67,10 @@ type Config struct {
 	LegContractSizeResolver func(venueKey, venueSymbol string) (float64, bool)
 
 	// D-072 §3.3/§4.2 swap/funding 退出参数
-	MinNetSwapBps  float64 // discoverSwapCombos 最低净 swap（ARB_AUTOTRADE_MIN_NET_SWAP_BPS，默认 0.2）
-	SwapArbExitBps float64 // SWAPARB/CARRY 退出净 swap bps（ARB_SWAPARB_EXIT_NET_BPS，默认 0）
-	FundingExitPct float64 // FUNDING_HEDGE/PERP_FUNDING 退出净年化（ARB_FUNDING_EXIT_NET_PCT，默认 0）
-
+	MinNetSwapBps         float64 // discoverSwapCombos 最低净 swap（ARB_AUTOTRADE_MIN_NET_SWAP_BPS，默认 0.2）
+	SwapArbExitBps        float64 // SWAPARB/CARRY 退出净 swap bps（ARB_SWAPARB_EXIT_NET_BPS，默认 0）
+	FundingExitPct        float64 // FUNDING_HEDGE/PERP_FUNDING 退出净年化（ARB_FUNDING_EXIT_NET_PCT，默认 0）
+	CarryMinNetAnnualized float64 // D-187：netSwap 年化 ≥ 此值 → strategy="CARRY"（ARB_CARRY_MIN_NET_ANNUALIZED，默认 4.0）
 	// D-133 T1：PERP_FUNDING 平仓规则重构——持有下限 + 连续去抖
 	PerpFundMinHold      time.Duration // ARB_PERPFUNDING_MIN_HOLD 默认 8h；0=不限
 	PerpFundExitDebounce int           // ARB_PERPFUNDING_EXIT_DEBOUNCE 默认 3；0/1=单次即平

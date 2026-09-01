@@ -75,80 +75,10 @@ func (d *FundingHedgeDetector) Scan(_ context.Context, snapshot map[string]map[s
 	return out
 }
 
-// CarryDetector 检测不同 venue 的 swap rate 息差（§5.3）。
-type CarryDetector struct {
-	MinNetAnnualized float64 // 年化净息差门槛（百分点，5.0=5%，D-036 与 funding 对齐）
-	FreshnessTTL     time.Duration
-}
-
-func (d *CarryDetector) Type() OppType { return TypeCarry }
-
-// Scan 需要 swap Fact（通过 swapFacts 注入）。
-// swapFacts: canonical → venue → {swap_long, swap_short} bps_daily。
-func (d *CarryDetector) Scan(_ context.Context, snapshot map[string]map[string]bus.Quote, fp FactProvider) []Candidate {
-	var out []Candidate
-	now := time.Now()
-	var swapFacts map[string]map[string][2]float64
-	var modes map[string]map[string]int64
-	var realMap map[string]*bool
-	if fp != nil {
-		swapFacts = fp.SwapFacts()
-		modes = fp.TradeModes()
-		realMap = fp.IsRealMap()
-	}
-	for canonical, venues := range snapshot {
-		if len(venues) < 2 {
-			continue
-		}
-		vkeys := sortedKeys(venues)
-		for i := 0; i < len(vkeys); i++ {
-			for j := 0; j < len(vkeys); j++ {
-				if i == j {
-					continue
-				}
-				a, b := venues[vkeys[i]], venues[vkeys[j]]
-				if stale(a, now, d.FreshnessTTL) || stale(b, now, d.FreshnessTTL) {
-					continue
-				}
-				// 可交易性腿过滤（D-060 F4，仅 Carry）：买腿须可开多、卖腿须可开空；未知放行。
-				if !legTradable(modes, canonical, a.VenueKey(), true) || !legTradable(modes, canonical, b.VenueKey(), false) {
-					continue
-				}
-				// D-178：is_real 配对检查（fail-open，gate 层兜底）。
-				if !isRealPair(realMap, a.Venue, b.Venue) {
-					continue
-				}
-				swapsA, okA := lookupSwap(swapFacts, canonical, a.Venue)
-				swapsB, okB := lookupSwap(swapFacts, canonical, b.Venue)
-				if !okA || !okB {
-					continue
-				}
-				// 买 A（swap_long A）+ 卖 B（swap_short B）：日净息差 = swap_long_A + swap_short_B
-				dailyNet := swapsA[0] + swapsB[1] // [0]=long, [1]=short（bps_daily，正=收）
-				// D-036 单位统一：息差型 Candidate.GrossBps 承载年化百分点（与 funding 同口径，D-031 约定）
-				annualPct := dailyNet * 365 / 100
-				if annualPct < d.MinNetAnnualized {
-					continue
-				}
-				qt := a.Time
-				if b.Time.After(qt) {
-					qt = b.Time
-				}
-				out = append(out, Candidate{
-					Type:      TypeCarry,
-					Canonical: canonical,
-					VenueBuy:  a.VenueKey(),
-					VenueSell: b.VenueKey(),
-					PriceBuy:  a.Ask,
-					PriceSell: b.Bid,
-					GrossBps:  annualPct,
-					QuoteTime: qt.UnixMilli(),
-				})
-			}
-		}
-	}
-	return out
-}
+// D-187：CarryDetector 已删除——CARRY 候选由 autotrade.discoverSwapCombos 统一产出
+// （netSwap 换算年化 ≥ CarryMinNetAnnualized → strategy="CARRY"）。CARRY 策略类型保留
+// （position.Type="CARRY"），evaluator/netStoreGate CARRY 分支保留不删（向后兼容）。
+// lookupSwap/SwapFactsToMap 保留供未来恢复 CARRY detector 或其他消费方使用。
 
 func findVenueType(venues map[string]bus.Quote, vt string) (bus.Quote, bool) {
 	for _, q := range venues {

@@ -1,6 +1,7 @@
 package autotrade
 
 import (
+	"strings"
 	"testing"
 
 	"arb/internal/combo"
@@ -207,5 +208,73 @@ func TestGateDedup_OldFormatOppID(t *testing.T) {
 	}
 	if !comboAlreadyOpen {
 		t.Fatal("旧格式 oppID 活跃持仓应匹配新格式 intent")
+	}
+}
+
+// === D-187 CARRY 合并 SWAPARB 统一门禁栈 ===
+
+// TestGateDecision_CarrySkipNotional D-187：CARRY 策略豁免 notional cap（同 SWAPARB）。
+// gateDecision SkipNotional=true → 不校验 MaxNotional（swap 收租需整手，单笔风险 cap 语义不适用）。
+func TestGateDecision_CarrySkipNotional(t *testing.T) {
+	// CARRY intent notional=$99999 > MaxNotional=$1000，但 SkipNotional=true → 放行
+	v := gateDecision(GateInput{
+		State: StateRunning, Strategy: "CARRY", Disabled: false,
+		DailyPnl: 0, MaxDailyLoss: 100, OpenCount: 0, MaxPositions: 5,
+		NotionalUSD: 99999, MaxNotional: 1000, SkipNotional: true, DedupHit: false,
+	})
+	if !v.Pass {
+		t.Fatalf("CARRY SkipNotional=true should pass (exempt notional cap), got reject: %s", v.Reason)
+	}
+	// 对比：非豁免策略 notional 超限 → 拒绝
+	v2 := gateDecision(GateInput{
+		State: StateRunning, Strategy: "MEANREVERT", Disabled: false,
+		DailyPnl: 0, MaxDailyLoss: 100, OpenCount: 0, MaxPositions: 5,
+		NotionalUSD: 99999, MaxNotional: 1000, SkipNotional: false, DedupHit: false,
+	})
+	if v2.Pass {
+		t.Fatal("non-exempt strategy notional > max should reject")
+	}
+}
+
+// TestComboAllowVerdict_CarryAutoAllowPass D-187：CARRY intent + autoAllow=true → 放行（同 SWAPARB）。
+func TestComboAllowVerdict_CarryAutoAllowPass(t *testing.T) {
+	intent := TradeIntent{Strategy: "CARRY", Canonical: "BRENT", VenueBuy: "A:mt5", VenueSell: "B:mt5"}
+	v := comboAllowVerdict(nil, nil, true, 1, 0, intent, nil)
+	if !v.Pass {
+		t.Fatalf("CARRY autoAllow=true should pass, got: %s", v.Reason)
+	}
+}
+
+// TestComboAllowVerdict_CarryGrossSplit D-187：CARRY intent 触发 gross 折分（同 SWAPARB）。
+// activeGross=$3000（CARRY 仓），remaining=$2000 < $3000×2=$6000 → 折分 AdjustedNotional=$1000。
+func TestComboAllowVerdict_CarryGrossSplit(t *testing.T) {
+	intent := TradeIntent{Strategy: "CARRY", Canonical: "BRENT", VenueBuy: "A:mt5", VenueSell: "B:mt5", NotionalUSD: 3000}
+	active := []pgstore.Position{
+		{OpportunityID: "CARRY:BRENT:C:mt5:D:mt5", Status: "OPEN", NotionalUSD: ptrFloat(3000)},
+	}
+	v := comboAllowVerdict(nil, nil, true, 5, 5000, intent, active)
+	if !v.Pass {
+		t.Fatalf("CARRY gross exceeded should split (pass), got reject: %s", v.Reason)
+	}
+	if v.AdjustedNotional != 1000 {
+		t.Errorf("CARRY AdjustedNotional want 1000 (remaining/2), got %v", v.AdjustedNotional)
+	}
+}
+
+// TestComboAllowVerdict_CarryActiveCountedInGross D-187：CARRY 活跃仓计入全局额度（CARRY: 前缀）。
+// CARRY 仓 $50000 + SWAPARB 仓 $1000 → activeGross=$51000 > maxGross=$5000 → 拒绝（额度耗尽）。
+func TestComboAllowVerdict_CarryActiveCountedInGross(t *testing.T) {
+	intent := TradeIntent{Strategy: "SWAPARB", Canonical: "BRENT", VenueBuy: "A:mt5", VenueSell: "B:mt5", NotionalUSD: 2000}
+	active := []pgstore.Position{
+		{OpportunityID: "CARRY:WTI:C:mt5:D:mt5", Status: "OPEN", NotionalUSD: ptrFloat(50000)},
+		{OpportunityID: "SWAPARB:X:A:B", Status: "OPEN", NotionalUSD: ptrFloat(1000)},
+	}
+	// activeGross=$51000（CARRY $50000 + SWAPARB $1000），remaining=$5000-$51000<0 → 拒绝
+	v := comboAllowVerdict(nil, nil, true, 5, 5000, intent, active)
+	if v.Pass {
+		t.Fatal("CARRY active should be counted in gross → exhausted → reject")
+	}
+	if !strings.Contains(v.Reason, "gross exposure exhausted") {
+		t.Errorf("reason want 'gross exposure exhausted', got %q", v.Reason)
 	}
 }

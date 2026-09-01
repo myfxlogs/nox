@@ -118,17 +118,18 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 		// SWAPARB 豁免 notional cap：D-096 判定书（净算月~$110=年化1.8%无杠杆，不注资）+
 		// D-097 自管 sizing（SwapArbBareCap 1 手 + minNotional skip；swap 收租需整手，
 		// MaxNotional 单笔风险 cap 语义不适用——整手收租非单笔风险敞口）。
-		SkipNotional: intent.Strategy == "SWAPARB",
+		SkipNotional: intent.Strategy == "SWAPARB" || intent.Strategy == "CARRY",
 		DedupHit:     comboAlreadyOpen,
 	})
 
-	// D-159 W1a R1：精确组合门禁（SWAPARB 专用，gateDecision 后、Execute 前拦截）。
+	// D-159 W1a R1：精确组合门禁（SWAPARB/CARRY 共用，gateDecision 后、Execute 前拦截）。
+	// D-187：CARRY 合并 SWAPARB 统一门禁栈——comboAllowVerdict/gross split 对 CARRY 同样生效。
 	// gateDecision 已过（state=RUNNING、未禁用、未超仓、未超 notional、未 dedup）才进入此检查。
 	// 非 RUNNING 状态（CLOSE_ONLY 等）已在 gateDecision 拒绝，不会到此。
-	if intent.Strategy == "SWAPARB" {
-		// D-179 S3：预扫活跃 SWAPARB 仓 notional_usd NULL（combo_allow.go 纯函数不打日志，warn 在此调用点）。
+	if intent.Strategy == "SWAPARB" || intent.Strategy == "CARRY" {
+		// D-179 S3：预扫活跃 SWAPARB/CARRY 仓 notional_usd NULL（combo_allow.go 纯函数不打日志，warn 在此调用点）。
 		for _, p := range activePositions {
-			if p.OpportunityID != "" && strings.HasPrefix(p.OpportunityID, "SWAPARB:") && p.NotionalUSD == nil {
+			if p.OpportunityID != "" && (strings.HasPrefix(p.OpportunityID, "SWAPARB:") || strings.HasPrefix(p.OpportunityID, "CARRY:")) && p.NotionalUSD == nil {
 				log.Printf("[autotrade] WARN position %d notional_usd NULL (backfill missing?) counted as 0", p.ID)
 			}
 		}

@@ -68,7 +68,8 @@ func comboAllowVerdict(allow []exec.ComboAllowSpec, deny []exec.ComboAllowSpec, 
 	if maxGrossExposure > 0 {
 		activeGross := 0.0
 		for _, p := range activePositions {
-			if p.OpportunityID == "" || !strings.HasPrefix(p.OpportunityID, "SWAPARB:") {
+			// D-187：全局额度统计需含 CARRY 仓（CARRY 合并 SWAPARB 统一门禁栈）。
+			if p.OpportunityID == "" || (!strings.HasPrefix(p.OpportunityID, "SWAPARB:") && !strings.HasPrefix(p.OpportunityID, "CARRY:")) {
 				continue
 			}
 			if p.NotionalUSD != nil {

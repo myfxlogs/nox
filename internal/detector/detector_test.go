@@ -127,33 +127,6 @@ func (f fakeFP) SwapFacts() map[string]map[string][2]float64 { return f.swap }
 func (f fakeFP) TradeModes() map[string]map[string]int64     { return f.modes }
 func (f fakeFP) IsRealMap() map[string]*bool                 { return f.isReal } // D-178
 
-// TestCarryScan 正息差产候选（年化百分点口径，D-036）、负息差/缺 Fact 不产。
-func TestCarryScan(t *testing.T) {
-	now := time.Now()
-	snap := map[string]map[string]bus.Quote{
-		"EURUSD": {
-			"a:mt5": {Symbol: "EURUSD", Venue: "a", VenueType: "mt5", Bid: 1.1, Ask: 1.1, Time: now},
-			"b:mt5": {Symbol: "EURUSD", Venue: "b", VenueType: "mt5", Bid: 1.1, Ask: 1.1, Time: now},
-		},
-	}
-	fp := fakeFP{swap: map[string]map[string][2]float64{
-		"EURUSD": {"a": {10, -5}, "b": {2, -8}}, // [0]=long, [1]=short（bps_daily）
-	}}
-	d := &CarryDetector{MinNetAnnualized: 4.0, FreshnessTTL: 60 * time.Second}
-	cands := d.Scan(context.Background(), snap, fp)
-	if len(cands) != 1 {
-		t.Fatalf("expected 1 candidate, got %d", len(cands))
-	}
-	c := cands[0]
-	// 买 a(long=10) 卖 b(short=-8)：日净 = 2 bps → 年化 = 2×365/100 = 7.3 百分点
-	if c.VenueBuy != "a:mt5" || c.VenueSell != "b:mt5" {
-		t.Fatalf("pair = %s→%s, want a:mt5→b:mt5", c.VenueBuy, c.VenueSell)
-	}
-	if c.GrossBps < 7.2 || c.GrossBps > 7.4 {
-		t.Fatalf("GrossBps = %v, want ~7.3（年化百分点）", c.GrossBps)
-	}
-}
-
 // TestCrossVenueScanMixedLegs D-056：同 canonical BTCUSDT 下 mt5(CFD)+okx(CEX) 双腿 →
 // 混合门槛 max(cex=10, cfd=2)=10bps；gross>10 触发候选，gross<10 不触发。
 // 验证 canonical 统一映射解除 CFD-CEX cross 结构性盲区（D-035 遗留）。
@@ -194,75 +167,6 @@ func TestCrossVenueScanMixedLegs(t *testing.T) {
 	}
 	if cands := d.Scan(context.Background(), cold, nil); len(cands) != 0 {
 		t.Fatalf("mixed legs gross≈8.18 < 10: expected 0 candidates, got %d", len(cands))
-	}
-}
-
-func TestCarryScanNegativeAndMissing(t *testing.T) {
-	now := time.Now()
-	snap := map[string]map[string]bus.Quote{
-		"EURUSD": {
-			"a:mt5": {Symbol: "EURUSD", Venue: "a", VenueType: "mt5", Bid: 1.1, Ask: 1.1, Time: now},
-			"b:mt5": {Symbol: "EURUSD", Venue: "b", VenueType: "mt5", Bid: 1.1, Ask: 1.1, Time: now},
-		},
-		"GBPUSD": { // 只给 a 的 Fact → b 缺 → 不产
-			"a:mt5": {Symbol: "GBPUSD", Venue: "a", VenueType: "mt5", Bid: 1.3, Ask: 1.3, Time: now},
-			"b:mt5": {Symbol: "GBPUSD", Venue: "b", VenueType: "mt5", Bid: 1.3, Ask: 1.3, Time: now},
-		},
-	}
-	fp := fakeFP{swap: map[string]map[string][2]float64{
-		"EURUSD": {"a": {10, -5}, "b": {2, -30}}, // b short 太负 → 双向日净均 < 0
-		"GBPUSD": {"a": {10, -5}},                // b 缺 Fact
-	}}
-	d := &CarryDetector{MinNetAnnualized: 4.0, FreshnessTTL: 60 * time.Second}
-	cands := d.Scan(context.Background(), snap, fp)
-	if len(cands) != 0 {
-		t.Fatalf("expected 0 candidates（负息差+缺 Fact），got %d", len(cands))
-	}
-}
-
-// TestCarryScanTradeModeFilter D-060 F4：禁交易腿不产候选；未知（无 Fact）放行。
-// swap 息差同 TestCarryScan（买 a 卖 b 为唯一正对），trade_mode 变化只应消灭非法腿的候选。
-func TestCarryScanTradeModeFilter(t *testing.T) {
-	now := time.Now()
-	snap := map[string]map[string]bus.Quote{
-		"EURUSD": {
-			"a:mt5": {Symbol: "EURUSD", Venue: "a", VenueType: "mt5", Bid: 1.1, Ask: 1.1, Time: now},
-			"b:mt5": {Symbol: "EURUSD", Venue: "b", VenueType: "mt5", Bid: 1.1, Ask: 1.1, Time: now},
-		},
-	}
-	swap := map[string]map[string][2]float64{
-		"EURUSD": {"a": {10, -5}, "b": {2, -8}}, // 买 a 卖 b = 唯一正对（~7.3%）
-	}
-	d := &CarryDetector{MinNetAnnualized: 4.0, FreshnessTTL: 60 * time.Second}
-
-	// 买腿 a 禁交易（PXBT BTCUSD 实证形态）→ 不产候选。
-	fp := fakeFP{swap: swap, modes: map[string]map[string]int64{
-		"EURUSD": {"a:mt5": fact.TradeModeDisabled, "b:mt5": fact.TradeModeFull},
-	}}
-	if cands := d.Scan(context.Background(), snap, fp); len(cands) != 0 {
-		t.Fatalf("买腿 Disabled：want 0 candidates, got %d", len(cands))
-	}
-
-	// 卖腿 b 只可开多（ShortOnly 之外）→ 卖腿非法 → 不产。
-	fp.modes = map[string]map[string]int64{
-		"EURUSD": {"a:mt5": fact.TradeModeFull, "b:mt5": fact.TradeModeLongOnly},
-	}
-	if cands := d.Scan(context.Background(), snap, fp); len(cands) != 0 {
-		t.Fatalf("卖腿 LongOnly：want 0 candidates, got %d", len(cands))
-	}
-
-	// 腿模式合法（买 LongOnly 卖 ShortOnly）→ 照常产候选。
-	fp.modes = map[string]map[string]int64{
-		"EURUSD": {"a:mt5": fact.TradeModeLongOnly, "b:mt5": fact.TradeModeShortOnly},
-	}
-	if cands := d.Scan(context.Background(), snap, fp); len(cands) != 1 {
-		t.Fatalf("合法腿：want 1 candidate, got %d", len(cands))
-	}
-
-	// 未知（无 trade_mode Fact）→ 放行（冷启动期不空白化矩阵）。
-	fp.modes = nil
-	if cands := d.Scan(context.Background(), snap, fp); len(cands) != 1 {
-		t.Fatalf("未知放行：want 1 candidate, got %d", len(cands))
 	}
 }
 

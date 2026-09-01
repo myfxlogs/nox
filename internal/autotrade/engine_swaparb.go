@@ -51,14 +51,14 @@ func (e *Engine) scanSwapArb(ctx context.Context, acc *comboAccumulator) {
 	// B：拉 CLOSED 持仓构建冷却集合（ComboKey → 最近 closed_at）
 	cooldownSet := e.swapArbCooldownSet(ctx)
 	for _, c := range combos {
-		ck := combo.Key("SWAPARB", c.canonical, c.vLong, c.vShort)
+		ck := combo.Key(c.strategy, c.canonical, c.vLong, c.vShort)
 		// D-080 S4：全组合喂入 rollup 累积器（含冷却中/低于门槛——覆盖度完整）
-		acc.Record(ck, "SWAPARB", c.netSwapBps, time.Now())
+		acc.Record(ck, c.strategy, c.netSwapBps, time.Now())
 		if closedAt, blocked := cooldownSet[ck]; blocked {
-			log.Printf("[autotrade] SWAPARB skip %s: reentry cooldown (closed %s ago)", ck, time.Since(closedAt).Round(time.Hour))
+			log.Printf("[autotrade] %s skip %s: reentry cooldown (closed %s ago)", c.strategy, ck, time.Since(closedAt).Round(time.Hour))
 			continue
 		}
-		e.trySwapArb(ctx, c.canonical, c.vLong, c.vShort, c.netSwapBps, c.basisBps, c.basisAvailable, c.swapSrc)
+		e.trySwapArb(ctx, c.strategy, c.canonical, c.vLong, c.vShort, c.netSwapBps, c.basisBps, c.basisAvailable, c.swapSrc)
 	}
 }
 
@@ -104,15 +104,15 @@ func buildCooldownSet(closed []pgstore.Position, cooldownDays int, now time.Time
 // trySwapArb 尝试开仓单个 swap 套利组合（D-072：名义额=broker 余额驱动，经 gate）。
 // D-169 P0 S2：basisBps/basisAvailable 由 discoverSwapCombos 传入，供 S3b 入场基差门禁消费。
 // D-180 S2：swapSrc 由 discoverSwapCombos 传入（settled|spec|none），供 S4 门禁折扣判定 + 决策日志。
-func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShort string, netSwapBps, basisBps float64, basisAvailable bool, swapSrc string) {
+func (e *Engine) trySwapArb(ctx context.Context, strategy, canonical, venueLong, venueShort string, netSwapBps, basisBps float64, basisAvailable bool, swapSrc string) {
 	// D-080 S4 N9 修订：判死策略停提交（扫描+评估常开喂 rollup，禁用只拦提交无 REJECTED 行）
-	if disabled, _ := e.store.IsStrategyDisabled(ctx, "SWAPARB"); disabled {
+	if disabled, _ := e.store.IsStrategyDisabled(ctx, strategy); disabled {
 		return
 	}
 	qLong, okL := e.quotes.Latest(canonical, venueLong)
 	qShort, okS := e.quotes.Latest(canonical, venueShort)
 	if !okL || !okS {
-		log.Printf("[autotrade] SWAPARB skip %s: blind leg rejected (quote missing, long=%v short=%v)", canonical, okL, okS)
+		log.Printf("[autotrade] %s skip %s: blind leg rejected (quote missing, long=%v short=%v)", strategy, canonical, okL, okS)
 		return
 	}
 	now := time.Now()
@@ -124,26 +124,26 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 	}
 	// D-159 W4a R7：两腿 bid-ask spread 宽度门禁——任一腿 spread 过宽=流动性异常/报价不一致 → skip。
 	if tooWide, reason := legSpreadTooWide(qLong, qShort, e.cfg.SwapArbMaxLegSpreadBps); tooWide {
-		log.Printf("[autotrade] SWAPARB skip %s: %s", canonical, reason)
+		log.Printf("[autotrade] %s skip %s: %s", strategy, canonical, reason)
 		return
 	}
 	// D-169 P0 S3b：入场基差合理性门禁——盲腿 fail-closed 拒绝；|basisBps| > max 拒绝
 	//（正=虚假价差/卖腿比买腿贵，负=基差已偏离/对冲不良）。max<=0 不校验（向后兼容）。
 	if reject, reason := entryBasisGateCheck(basisBps, basisAvailable, e.cfg.EntryBasisMaxBps); reject {
-		log.Printf("[autotrade] SWAPARB skip %s: entry basis gate (%s, basisBps=%.2f, maxBps=%.2f)", canonical, reason, basisBps, e.cfg.EntryBasisMaxBps)
+		log.Printf("[autotrade] %s skip %s: entry basis gate (%s, basisBps=%.2f, maxBps=%.2f)", strategy, canonical, reason, basisBps, e.cfg.EntryBasisMaxBps)
 		return
 	}
 	spread := qShort.Bid - qLong.Ask
 	spreadBps := spread / qLong.Ask * 10000
 	// D-077 修复⑪B N6：入场成本容忍 env 化（ARB_SWAPARB_ENTRY_SPREAD_MIN_BPS，默认 -3）
 	if spreadBps < e.cfg.EntrySpreadMinBps {
-		log.Printf("[autotrade] SWAPARB skip %s: spreadBps=%.2f < %.2f", canonical, spreadBps, e.cfg.EntrySpreadMinBps)
+		log.Printf("[autotrade] %s skip %s: spreadBps=%.2f < %.2f", strategy, canonical, spreadBps, e.cfg.EntrySpreadMinBps)
 		return
 	}
 	// D-169 P0 S3c：入场价差上限——spreadBps > max 拒绝（"太好的价差"=虚假价差/跨合约不同底层）。
 	// max<=0 不校验（向后兼容）；负值=开仓成本不拦截。
 	if reject, reason := entrySpreadMaxGateCheck(spreadBps, e.cfg.EntrySpreadMaxBps); reject {
-		log.Printf("[autotrade] SWAPARB skip %s: entry spread max gate (%s, spreadBps=%.2f, maxBps=%.2f)", canonical, reason, spreadBps, e.cfg.EntrySpreadMaxBps)
+		log.Printf("[autotrade] %s skip %s: entry spread max gate (%s, spreadBps=%.2f, maxBps=%.2f)", strategy, canonical, reason, spreadBps, e.cfg.EntrySpreadMaxBps)
 		return
 	}
 	// D-165 S3：swap facts 零值校验——任一腿 swap facts=0 但 broker 该 venue 有非零 swap 历史→fail-closed 拒绝。
@@ -151,7 +151,7 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 	// 查询失败 → fail-closed 拒绝。
 	if e.cfg.SwapFactsZeroCheckEnabled {
 		if reason := e.swapFactsZeroCheck(ctx, canonical, venueLong, venueShort); reason != "" {
-			log.Printf("[autotrade] SWAPARB skip %s: %s", canonical, reason)
+			log.Printf("[autotrade] %s skip %s: %s", strategy, canonical, reason)
 			return
 		}
 	}
@@ -164,12 +164,12 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 		if strings.Contains(reason, "sizing") {
 			e.maybePublishFundingNeed(canonical, venueLong, venueShort, reason)
 		}
-		log.Printf("[autotrade] SWAPARB skip %s %s/%s: %s", canonical, venueLong, venueShort, reason)
+		log.Printf("[autotrade] %s skip %s %s/%s: %s", strategy, canonical, venueLong, venueShort, reason)
 		return
 	}
 	// D-180 S2：决策日志带 swap_src（settled|spec）——S4 门禁折扣判定的依据。
-	log.Printf("[autotrade] SWAPARB eval %s %s/%s: swap_src=%s netSwap=%.4f bps spreadBps=%.2f basisBps=%.2f",
-		canonical, venueLong, venueShort, swapSrc, netSwapBps, spreadBps, basisBps)
+	log.Printf("[autotrade] %s eval %s %s/%s: swap_src=%s netSwap=%.4f bps spreadBps=%.2f basisBps=%.2f",
+		strategy, canonical, venueLong, venueShort, swapSrc, netSwapBps, spreadBps, basisBps)
 	// D-180 S4：入场门禁三条——厚度+回收期往返+集中度。
 	// D-181 S2：probe 仓（swapSrc != settled）旁路厚度+回收期（无实测数据不卡厚度），
 	// 集中度不旁路（同 venue×symbol 活跃腿 ≥2 仍拒，立项授权稿 §3）。
@@ -177,44 +177,44 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 	// 厚度：净息差 ≥ MinNetCarryBps（spec 源 × SpecDiscount 折扣，settled 不折扣）。
 	if !willBeProbe {
 		if g := carryThicknessGate(netSwapBps, swapSrc, e.cfg.MinNetCarryBps, e.cfg.SpecDiscount); g.reject {
-			log.Printf("[autotrade] SWAPARB skip %s: %s", canonical, g.reason)
+			log.Printf("[autotrade] %s skip %s: %s", strategy, canonical, g.reason)
 			return
 		}
 		// 回收期往返：2×spreadBps / 净息差 ≤ MaxPaybackDays（2×=开+平对称假设）。
 		if g := paybackRoundTripGate(spreadBps, netSwapBps, e.cfg.MaxPaybackDays); g.reject {
-			log.Printf("[autotrade] SWAPARB skip %s: %s", canonical, g.reason)
+			log.Printf("[autotrade] %s skip %s: %s", strategy, canonical, g.reason)
 			return
 		}
 	}
 	// 集中度：同 venue×symbol 活跃腿 < MaxLegsPerSymbol（471/472 双空单场景拒第三腿）。
 	if g := e.concentrationGate(ctx, canonical, venueLong, venueShort, e.cfg.MaxLegsPerSymbol); g.reject {
-		log.Printf("[autotrade] SWAPARB skip %s: %s", canonical, g.reason)
+		log.Printf("[autotrade] %s skip %s: %s", strategy, canonical, g.reason)
 		return
 	}
 	// D-132 T1：venue 级敞口门——两腿 venue SWAPARB 合计裸露 + 新仓 ≤ equity × cap，否则 skip。
 	if !e.service.SwapArbVenueExposureOK(ctx, venueLong, venueShort, notional) {
-		log.Printf("[autotrade] SWAPARB skip %s: venue exposure cap", canonical)
+		log.Printf("[autotrade] %s skip %s: venue exposure cap", strategy, canonical)
 		return
 	}
 	// A 修复：qty 定尺寸用 usdPerLot（买腿 ask 价）——原 notional/ask 是 USD÷JPY 币种混算。
 	// qty = notional(USD) ÷ usdPerLot(买腿) = USD ÷ (CS×price÷USDJPY) → 手数按计价币正确换算。
 	usdPerLotLong, ok := e.service.USDPerLotForLeg(canonical, venueLong, "ask")
 	if !ok || usdPerLotLong <= 0 {
-		log.Printf("[autotrade] SWAPARB skip %s: usdPerLot buy leg unavailable (fx/quote missing)", canonical)
+		log.Printf("[autotrade] %s skip %s: usdPerLot buy leg unavailable (fx/quote missing)", strategy, canonical)
 		return
 	}
 	qty := notional / usdPerLotLong
 	// H4.2：qty 低于买腿最小步 → debug 跳过（品种适配事实，不产 intent 不落 REJECTED）
 	if e.service.QtyBelowMinStep(venueLong, qLong.VenueSymbol, qty) {
-		log.Printf("[autotrade] SWAPARB skip %s: qty %.6f below min step (notional $%.0f too small for %s)",
-			canonical, qty, notional, qLong.VenueSymbol)
+		log.Printf("[autotrade] %s skip %s: qty %.6f below min step (notional $%.0f too small for %s)",
+			strategy, canonical, qty, notional, qLong.VenueSymbol)
 		return
 	}
-	dedupKey := combo.Key("SWAPARB", canonical, venueLong, venueShort)
+	dedupKey := combo.Key(strategy, canonical, venueLong, venueShort)
 	// D-142 ④：组合保证金预算观察版告警（只告警不拦截）+ 杠杆不对称提示。best-effort 不影响开仓。
 	e.observeMarginBudget(canonical, venueLong, venueShort, notional)
 	intent := TradeIntent{
-		Strategy:    "SWAPARB",
+		Strategy:    strategy,
 		Canonical:   canonical,
 		VenueBuy:    venueLong,
 		VenueSell:   venueShort,
@@ -228,7 +228,7 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 	intentPtr := &intent
 	intent.Execute = func(ctx context.Context) (string, string, int64) {
 		reqID := fmt.Sprintf("swaparb-%d", time.Now().UnixNano())
-		status, msg, posID := e.service.ExecuteMeanRevertWithCap(ctx, canonical, venueLong, venueShort, reqID, intentPtr.Qty, spreadBps, intentPtr.NotionalUSD, "SWAPARB")
+		status, msg, posID := e.service.ExecuteMeanRevertWithCap(ctx, canonical, venueLong, venueShort, reqID, intentPtr.Qty, spreadBps, intentPtr.NotionalUSD, strategy)
 		if status != "FAILED" && posID > 0 {
 			// D-080 S1：新持仓直接写组合键（无时间戳），与 opportunities.id 贯通
 			_ = e.store.UpdatePositionOppID(ctx, posID, dedupKey)
@@ -239,7 +239,7 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 			// 此处补 SwapBpsDaily + AnnualPct 覆盖写全
 			swap := netSwapBps
 			annual := netSwapBps * 365 / 100
-			_ = e.store.UpdatePositionMeta(ctx, posID, "SWAPARB", pgstore.PositionMeta{
+			_ = e.store.UpdatePositionMeta(ctx, posID, strategy, pgstore.PositionMeta{
 				EntrySpreadBps: &spreadBps,
 				SwapBpsDaily:   &swap,
 				AnnualPct:      &annual,

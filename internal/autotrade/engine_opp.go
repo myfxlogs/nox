@@ -43,16 +43,28 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 	// D-080 S4：全组合喂入 rollup 累积器（含低于门槛——覆盖度完整，write-behind）
 	acc.Record(opp.ID, opp.Type, opp.NetBps, time.Now())
 
+	// D-187：CARRY 已合并进 SWAPARB 统一 discoverSwapCombos→trySwapArb 路径，
+	// 不再走 handleOpportunity。防御性 return——CARRY detector 删除后不会再有 CARRY 机会
+	// 从 detector 路径产出，但保留防御以防未来恢复 CARRY detector 时忘记改回；
+	// acc.Record 在前保证 rollup 覆盖度完整。
+	if opp.Type == "CARRY" {
+		log.Printf("[autotrade] skip %s: CARRY merged into SWAPARB unified path (D-187)", opp.ID)
+		return
+	}
+
 	// D-072 §3.4：排除品种从 env 读取
 	if e.cfg.ExcludeCanonicals[opp.Canonical] {
+		log.Printf("[autotrade] skip %s: exclude canonicals (%s)", opp.ID, opp.Canonical)
 		return
 	}
 	// D-072 §3.4：venue 白名单从 env 读取
 	if !e.cfg.AllowVenues[opp.VenueBuy] || !e.cfg.AllowVenues[opp.VenueSell] {
+		log.Printf("[autotrade] skip %s: venue not in allowlist (%s/%s)", opp.ID, opp.VenueBuy, opp.VenueSell)
 		return
 	}
 	// D-072 §3.4：symbol 白名单从 env 读取
 	if len(e.cfg.AllowCanonicals) > 0 && !e.cfg.AllowCanonicals[opp.Canonical] {
+		log.Printf("[autotrade] skip %s: canonical not in allowlist (%s)", opp.ID, opp.Canonical)
 		return
 	}
 	// D-159 W1a R1 + D-168 自动准入：SWAPARB 发现层组合过滤。
@@ -60,17 +72,20 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 	// autoAllow=false：白名单外组合静默过滤（不产 intent 不落 REJECTED），空 allowlist 不过滤（gate 层 fail-closed）。
 	if opp.Type == "SWAPARB" && !e.cfg.SwapArbAutoAllow && len(e.cfg.SwapArbAllowCombos) > 0 {
 		if exec.MatchComboAllow(e.cfg.SwapArbAllowCombos, opp.Canonical, opp.VenueBuy, opp.VenueSell) == nil {
+			log.Printf("[autotrade] skip %s: SWAPARB combo not in allowlist (%s %s×%s)", opp.ID, opp.Canonical, opp.VenueBuy, opp.VenueSell)
 			return
 		}
 	}
 	// D-168 黑名单：发现层静默过滤（deny 组合不产 intent）
 	if opp.Type == "SWAPARB" && len(e.cfg.SwapArbDenyCombos) > 0 {
 		if exec.MatchComboAllow(e.cfg.SwapArbDenyCombos, opp.Canonical, opp.VenueBuy, opp.VenueSell) != nil {
+			log.Printf("[autotrade] skip %s: SWAPARB combo in denylist (%s %s×%s)", opp.ID, opp.Canonical, opp.VenueBuy, opp.VenueSell)
 			return
 		}
 	}
 	// 门槛：净收益
 	if opp.NetBps < e.cfg.MinNetBps {
+		log.Printf("[autotrade] skip %s: netBps %.2f < %.2f", opp.ID, opp.NetBps, e.cfg.MinNetBps)
 		return
 	}
 	log.Printf("[autotrade] pass filter opp=%s type=%s netBps=%.2f", opp.ID, opp.Type, opp.NetBps)

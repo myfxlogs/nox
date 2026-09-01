@@ -116,6 +116,12 @@ func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 			if netSwap < minNetSwapBps {
 				continue
 			}
+			// D-187：CARRY 合并 SWAPARB 统一路径——netSwap 换算年化 ≥ CarryMinNetAnnualized → CARRY，否则 SWAPARB。
+			// annualPct = netSwap(bps/日) × 365 / 100（与 funding_carry.go 旧 CarryDetector 同口径）。
+			strategy := "SWAPARB"
+			if e.cfg.CarryMinNetAnnualized > 0 && netSwap*365/100 >= e.cfg.CarryMinNetAnnualized {
+				strategy = "CARRY"
+			}
 			// D-140 S3：基差 = (卖腿 bid − 买腿 ask) / 买腿 ask × 1e4（只展示不动排序）
 			// e.quotes nil 时 basis=0（测试无 qbus 注入不 panic）
 			basisBps := 0.0
@@ -138,6 +144,7 @@ func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 				basisBps:       basisBps,
 				basisAvailable: basisAvailable, // D-169 P0
 				swapSrc:        swapSrc,        // D-180 S2：决策日志带 swap_src
+				strategy:       strategy,       // D-187：SWAPARB 或 CARRY
 			})
 		}
 	}

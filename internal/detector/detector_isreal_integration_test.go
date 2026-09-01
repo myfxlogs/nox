@@ -22,47 +22,6 @@ func (f *fakeIsRealFP) SwapFacts() map[string]map[string][2]float64 { return f.s
 func (f *fakeIsRealFP) TradeModes() map[string]map[string]int64     { return nil }
 func (f *fakeIsRealFP) IsRealMap() map[string]*bool                 { return f.isReal }
 
-// TestCarryScanIsRealPair D-178：MIXED is_real → 0 候选；SAME is_real → 候选照常。
-func TestCarryScanIsRealPair(t *testing.T) {
-	now := time.Now()
-	snap := map[string]map[string]bus.Quote{
-		"EURUSD": {
-			"a:mt5": {Symbol: "EURUSD", Venue: "a", VenueType: "mt5", Bid: 1.1, Ask: 1.1, Time: now},
-			"b:mt5": {Symbol: "EURUSD", Venue: "b", VenueType: "mt5", Bid: 1.1, Ask: 1.1, Time: now},
-		},
-	}
-	swap := map[string]map[string][2]float64{
-		"EURUSD": {"a": {10, -5}, "b": {2, -8}},
-	}
-	d := &CarryDetector{MinNetAnnualized: 4.0, FreshnessTTL: 60 * time.Second}
-
-	tr, fa := true, false
-
-	// MIXED → 0 候选
-	mixedFP := &fakeIsRealFP{swap: swap, isReal: map[string]*bool{"a": &tr, "b": &fa}}
-	if cands := d.Scan(context.Background(), snap, mixedFP); len(cands) != 0 {
-		t.Fatalf("MIXED is_real: want 0 candidates, got %d", len(cands))
-	}
-
-	// SAME (both real) → 候选照常
-	sameFP := &fakeIsRealFP{swap: swap, isReal: map[string]*bool{"a": &tr, "b": &tr}}
-	if cands := d.Scan(context.Background(), snap, sameFP); len(cands) != 1 {
-		t.Fatalf("SAME is_real (both real): want 1 candidate, got %d", len(cands))
-	}
-
-	// SAME (both demo) → 候选照常
-	sameDemoFP := &fakeIsRealFP{swap: swap, isReal: map[string]*bool{"a": &fa, "b": &fa}}
-	if cands := d.Scan(context.Background(), snap, sameDemoFP); len(cands) != 1 {
-		t.Fatalf("SAME is_real (both demo): want 1 candidate, got %d", len(cands))
-	}
-
-	// nil isReal → 放行（fail-open）
-	nilFP := &fakeIsRealFP{swap: swap, isReal: nil}
-	if cands := d.Scan(context.Background(), snap, nilFP); len(cands) != 1 {
-		t.Fatalf("nil isReal (fail-open): want 1 candidate, got %d", len(cands))
-	}
-}
-
 // TestCrossVenueScanIsRealPair D-178：MIXED is_real → 0 候选；SAME is_real → 候选照常。
 func TestCrossVenueScanIsRealPair(t *testing.T) {
 	now := time.Now()
