@@ -20,7 +20,7 @@ func TestD182_DetectZero_ConstantZero48h(t *testing.T) {
 	legs := []pgstore.PositionLeg{
 		{Phase: "OPEN", Venue: "277842155:mt5", Symbol: "AUDJPY", Side: "SELL", Qty: 0.01},
 	}
-	facts := DetectZeroSettlementFacts(snaps, legs, "277842155:mt5")
+	facts := DetectZeroSettlementFacts(snaps, legs, "277842155:mt5", "AUDJPY")
 	if len(facts) != 1 {
 		t.Fatalf("want 1 fact, got %d", len(facts))
 	}
@@ -38,6 +38,25 @@ func TestD182_DetectZero_ConstantZero48h(t *testing.T) {
 	}
 }
 
+// TestD183_DetectZero_BrokerSymbolVsCanonical D-183：leg.Symbol=AUDJPYm（broker 原始），
+// canonical=AUDJPY → settled fact 的 symbol 必须用 canonical（swapRateFor 按 canonical 查）。
+func TestD183_DetectZero_BrokerSymbolVsCanonical(t *testing.T) {
+	snaps := []pgstore.SwapSnapshot{
+		{PositionID: 1, Venue: "277842155:mt5", SwapUSD: 0, Ts: time.Date(2026, 8, 30, 0, 0, 0, 0, time.UTC)},
+		{PositionID: 1, Venue: "277842155:mt5", SwapUSD: 0, Ts: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)},
+	}
+	legs := []pgstore.PositionLeg{
+		{Phase: "OPEN", Venue: "277842155:mt5", Symbol: "AUDJPYm", Side: "SELL", Qty: 0.01}, // broker 原始符号
+	}
+	facts := DetectZeroSettlementFacts(snaps, legs, "277842155:mt5", "AUDJPY")
+	if len(facts) != 1 {
+		t.Fatalf("want 1 fact, got %d", len(facts))
+	}
+	if facts[0].Symbol != "AUDJPY" {
+		t.Errorf("D-183: settled fact symbol want canonical AUDJPY, got %s (broker symbol leaked)", facts[0].Symbol)
+	}
+}
+
 // TestD182_DetectZero_ConstantZero24h 恒零 24h → 不写（跨度不足 48h）。
 func TestD182_DetectZero_ConstantZero24h(t *testing.T) {
 	snaps := []pgstore.SwapSnapshot{
@@ -47,7 +66,7 @@ func TestD182_DetectZero_ConstantZero24h(t *testing.T) {
 	legs := []pgstore.PositionLeg{
 		{Phase: "OPEN", Venue: "277842155:mt5", Symbol: "AUDJPY", Side: "SELL", Qty: 0.01},
 	}
-	facts := DetectZeroSettlementFacts(snaps, legs, "277842155:mt5")
+	facts := DetectZeroSettlementFacts(snaps, legs, "277842155:mt5", "AUDJPY")
 	if len(facts) != 0 {
 		t.Fatalf("span<48h: want 0 facts, got %d", len(facts))
 	}
@@ -64,7 +83,7 @@ func TestD182_DetectZero_JumpThenZero48h(t *testing.T) {
 	legs := []pgstore.PositionLeg{
 		{Phase: "OPEN", Venue: "vA:mt5", Symbol: "GBPJPY", Side: "BUY", Qty: 0.01},
 	}
-	facts := DetectZeroSettlementFacts(snaps, legs, "vA:mt5")
+	facts := DetectZeroSettlementFacts(snaps, legs, "vA:mt5", "GBPJPY")
 	if len(facts) != 1 {
 		t.Fatalf("jump then zero 48h: want 1 fact, got %d", len(facts))
 	}
@@ -86,7 +105,7 @@ func TestD182_DetectZero_JumpThenNonZero(t *testing.T) {
 	legs := []pgstore.PositionLeg{
 		{Phase: "OPEN", Venue: "vA:mt5", Symbol: "GBPJPY", Side: "SELL", Qty: 0.01},
 	}
-	facts := DetectZeroSettlementFacts(snaps, legs, "vA:mt5")
+	facts := DetectZeroSettlementFacts(snaps, legs, "vA:mt5", "GBPJPY")
 	if len(facts) != 0 {
 		t.Fatalf("non-zero tail: want 0 facts, got %d", len(facts))
 	}
@@ -100,7 +119,7 @@ func TestD182_DetectZero_SingleSnapshot(t *testing.T) {
 	legs := []pgstore.PositionLeg{
 		{Phase: "OPEN", Venue: "vA:mt5", Symbol: "AUDJPY", Side: "SELL", Qty: 0.01},
 	}
-	facts := DetectZeroSettlementFacts(snaps, legs, "vA:mt5")
+	facts := DetectZeroSettlementFacts(snaps, legs, "vA:mt5", "GBPJPY")
 	if len(facts) != 0 {
 		t.Fatalf("single snapshot: want 0 facts, got %d", len(facts))
 	}
@@ -115,7 +134,7 @@ func TestD182_DetectZero_NoOpenLeg(t *testing.T) {
 	legs := []pgstore.PositionLeg{
 		{Phase: "CLOSED", Venue: "vA:mt5", Symbol: "AUDJPY", Side: "SELL", Qty: 0.01},
 	}
-	facts := DetectZeroSettlementFacts(snaps, legs, "vA:mt5")
+	facts := DetectZeroSettlementFacts(snaps, legs, "vA:mt5", "GBPJPY")
 	if len(facts) != 0 {
 		t.Fatalf("no open leg: want 0 facts, got %d", len(facts))
 	}
@@ -124,8 +143,9 @@ func TestD182_DetectZero_NoOpenLeg(t *testing.T) {
 // TestD182_RecordZeroForPosition_Idempotent scanAndClose 路径幂等——同 posID 两次调用只写一条。
 func TestD182_RecordZeroForPosition_Idempotent(t *testing.T) {
 	store := &fakeSettlementProfileStore{
+		positions: []pgstore.Position{{ID: 1, Status: "OPEN", OpportunityID: "SWAPARB:AUDJPY:52993526:mt5:277842155:mt5"}},
 		legsByPos: map[int64][]pgstore.PositionLeg{
-			1: {{Phase: "OPEN", Venue: "277842155:mt5", Symbol: "AUDJPY", Side: "SELL", Qty: 0.01}},
+			1: {{Phase: "OPEN", Venue: "277842155:mt5", Symbol: "AUDJPYm", Side: "SELL", Qty: 0.01}},
 		},
 		snaps: []pgstore.SwapSnapshot{
 			{PositionID: 1, Venue: "277842155:mt5", SwapUSD: 0, Ts: time.Date(2026, 8, 30, 0, 0, 0, 0, time.UTC)},
@@ -140,6 +160,9 @@ func TestD182_RecordZeroForPosition_Idempotent(t *testing.T) {
 	if store.facts[0].Value != 0 {
 		t.Errorf("value: want 0, got %.4f", store.facts[0].Value)
 	}
+	if store.facts[0].Symbol != "AUDJPY" {
+		t.Errorf("D-183: settled fact symbol want canonical AUDJPY, got %s", store.facts[0].Symbol)
+	}
 	// 第二次同 posID → 幂等跳过
 	c.RecordZeroForPosition(context.Background(), 1)
 	if len(store.facts) != 1 {
@@ -150,9 +173,9 @@ func TestD182_RecordZeroForPosition_Idempotent(t *testing.T) {
 // TestD182_BackfillZeroDetection boot 回溯路径——恒零快照 → settled=0 fact。
 func TestD182_BackfillZeroDetection(t *testing.T) {
 	store := &fakeSettlementProfileStore{
-		positions: []pgstore.Position{{ID: 1, Status: "OPEN"}},
+		positions: []pgstore.Position{{ID: 1, Status: "OPEN", OpportunityID: "SWAPARB:AUDJPY:52993526:mt5:277842155:mt5"}},
 		legsByPos: map[int64][]pgstore.PositionLeg{
-			1: {{Phase: "OPEN", Venue: "277842155:mt5", Symbol: "AUDJPY", Side: "SELL", Qty: 0.01}},
+			1: {{Phase: "OPEN", Venue: "277842155:mt5", Symbol: "AUDJPYm", Side: "SELL", Qty: 0.01}},
 		},
 		snaps: []pgstore.SwapSnapshot{
 			{PositionID: 1, Venue: "277842155:mt5", SwapUSD: 0, Ts: time.Date(2026, 8, 30, 0, 0, 0, 0, time.UTC)},
@@ -172,5 +195,13 @@ func TestD182_BackfillZeroDetection(t *testing.T) {
 	}
 	if zeroFacts != 1 {
 		t.Fatalf("want 1 zero fact, got %d (total facts=%d)", zeroFacts, len(store.facts))
+	}
+	// D-183：settled fact symbol 必须用 canonical（AUDJPY）非 broker 符号（AUDJPYm）
+	for _, f := range store.facts {
+		if f.Kind == fact.KindSwapSettledShort && f.Value == 0 {
+			if f.Symbol != "AUDJPY" {
+				t.Errorf("D-183: backfill settled fact symbol want canonical AUDJPY, got %s", f.Symbol)
+			}
+		}
 	}
 }

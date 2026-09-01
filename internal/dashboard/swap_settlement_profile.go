@@ -17,6 +17,7 @@ import (
 // pgstore.Store 实现此接口；测试可注入 fake。
 type SettlementProfileStore interface {
 	PositionLegLister
+	GetPosition(ctx context.Context, id int64) (*pgstore.Position, error) // D-183：解析 canonical
 	LatestFacts(ctx context.Context, kind, venue, symbol string) ([]fact.Fact, error)
 	InsertFacts(ctx context.Context, facts []fact.Fact) error
 	FactExistsAt(ctx context.Context, kind, venue, symbol string, ts time.Time) (bool, error)
@@ -77,6 +78,7 @@ func (c *SettlementProfileCollector) BackfillFromHistory(ctx context.Context) er
 	}
 	// 按 (position_id, venue) 分组检测跳变
 	legsCache := make(map[int64][]pgstore.PositionLeg)
+	canonicalCache := make(map[int64]string) // D-183：posID → canonical（opportunity_id 解析）
 	var allJumps []swapJump
 	groupStart := 0
 	for i := 1; i <= len(snaps); i++ {
@@ -99,7 +101,13 @@ func (c *SettlementProfileCollector) BackfillFromHistory(ctx context.Context) er
 			jumps := detectJumpsFromSnapshots(group, legs, group[0].Venue)
 			allJumps = append(allJumps, jumps...)
 			// D-182 S1：同分组零检测——恒零 ≥48h → settled=0（不结算族实测零表达）
-			c.detectAndRecordZero(ctx, group, legs, group[0].Venue)
+			// D-183：canonical 从 opportunity_id 解析（缓存），settled fact 用 canonical 非 broker 符号。
+			canonical, okc := canonicalCache[posID]
+			if !okc {
+				canonical = canonicalFromPosID(ctx, c.store, posID)
+				canonicalCache[posID] = canonical
+			}
+			c.detectAndRecordZero(ctx, group, legs, group[0].Venue, canonical)
 		}
 	}
 	if len(allJumps) == 0 {

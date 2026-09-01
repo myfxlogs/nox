@@ -3,6 +3,7 @@ package dashboard
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"testing"
 	"time"
@@ -36,6 +37,14 @@ func (f *fakeSettlementProfileStore) ListPositions(_ context.Context, status str
 		}
 	}
 	return out, nil
+}
+func (f *fakeSettlementProfileStore) GetPosition(_ context.Context, id int64) (*pgstore.Position, error) {
+	for i := range f.positions {
+		if f.positions[i].ID == id {
+			return &f.positions[i], nil
+		}
+	}
+	return nil, fmt.Errorf("position %d not found", id)
 }
 func (f *fakeSettlementProfileStore) ListPositionLegs(_ context.Context, posID int64) ([]pgstore.PositionLeg, error) {
 	return f.legsByPos[posID], nil

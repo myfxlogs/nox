@@ -23,7 +23,7 @@ var zeroSettlementMinSpan = 48 * time.Hour
 // 跨度 ≥48h → 返回 settled=0 fact（settlementDay=末快照 UTC 日）。
 // 跳变检测与零检测互斥：有跳变→该腿有结算行为，只看末段恒零（broker 中途停结算场景）。
 // 纯函数，boot 回溯与 scanAndClose 周期共用。
-func DetectZeroSettlementFacts(snaps []pgstore.SwapSnapshot, legs []pgstore.PositionLeg, venueKey string) []fact.Fact {
+func DetectZeroSettlementFacts(snaps []pgstore.SwapSnapshot, legs []pgstore.PositionLeg, venueKey, canonical string) []fact.Fact {
 	if len(snaps) < 2 {
 		return nil
 	}
@@ -70,10 +70,16 @@ func DetectZeroSettlementFacts(snaps []pgstore.SwapSnapshot, legs []pgstore.Posi
 		kind = fact.KindSwapSettledShort
 	}
 	settlementDay := zeroSeg[len(zeroSeg)-1].Ts.UTC().Format("2006-01-02")
+	// D-183：settled fact 的 symbol 用 canonical（swapRateFor 按 canonical 查），
+	// 非 leg.Symbol（broker 原始符号如 AUDJPYm）——否则 swapRateFor 查不到 settled=0 回落 spec。
+	symbol := canonical
+	if symbol == "" {
+		symbol = leg.Symbol // 回退（不应发生，调用方应传 canonical）
+	}
 	return []fact.Fact{{
 		Kind:   kind,
 		Venue:  bareVenue,
-		Symbol: leg.Symbol,
+		Symbol: symbol,
 		Value:  0,
 		Unit:   fact.UnitUsdLotDay,
 		Ts:     parseDayStart(settlementDay),
@@ -83,8 +89,9 @@ func DetectZeroSettlementFacts(snaps []pgstore.SwapSnapshot, legs []pgstore.Posi
 
 // detectAndRecordZero D-182 S1：boot 回溯路径——对一组快照（同 position+venue）检测恒零并写 fact。
 // 在 BackfillFromHistory 内对每个分组调用（与跳变检测同分组）。
-func (c *SettlementProfileCollector) detectAndRecordZero(ctx context.Context, group []pgstore.SwapSnapshot, legs []pgstore.PositionLeg, venueKey string) {
-	facts := DetectZeroSettlementFacts(group, legs, venueKey)
+// D-183：canonical 从 opportunity_id 解析（SWAPARB:CANONICAL:...），settled fact 用 canonical 非 broker 符号。
+func (c *SettlementProfileCollector) detectAndRecordZero(ctx context.Context, group []pgstore.SwapSnapshot, legs []pgstore.PositionLeg, venueKey, canonical string) {
+	facts := DetectZeroSettlementFacts(group, legs, venueKey, canonical)
 	if len(facts) == 0 {
 		return
 	}
@@ -107,6 +114,8 @@ func (c *SettlementProfileCollector) RecordZeroForPosition(ctx context.Context, 
 	if err != nil {
 		return
 	}
+	// D-183：从 opportunity_id 解析 canonical（SWAPARB:CANONICAL:...），settled fact 用 canonical。
+	canonical := canonicalFromPosID(ctx, c.store, posID)
 	// 按 venue 分组（snaps 已按 venue, ts 排序）
 	groupStart := 0
 	for i := 1; i <= len(snaps); i++ {
@@ -117,7 +126,7 @@ func (c *SettlementProfileCollector) RecordZeroForPosition(ctx context.Context, 
 			if len(group) < 2 {
 				continue
 			}
-			c.detectAndRecordZero(ctx, group, legs, group[0].Venue)
+			c.detectAndRecordZero(ctx, group, legs, group[0].Venue, canonical)
 		}
 	}
 }
@@ -128,4 +137,19 @@ func legSideFromKind(kind string) string {
 		return "BUY"
 	}
 	return "SELL"
+}
+
+// canonicalFromPosID D-183：从 positions.opportunity_id 解析 canonical。
+// opportunity_id 格式 = "SWAPARB:CANONICAL:venueBuy:venueSell"（genID 规则）。
+// 查询失败/格式不符 → 返回空（调用方回退 leg.Symbol）。
+func canonicalFromPosID(ctx context.Context, store SettlementProfileStore, posID int64) string {
+	p, err := store.GetPosition(ctx, posID)
+	if err != nil || p == nil || p.OpportunityID == "" {
+		return ""
+	}
+	parts := strings.SplitN(p.OpportunityID, ":", 3)
+	if len(parts) < 2 {
+		return ""
+	}
+	return parts[1]
 }
