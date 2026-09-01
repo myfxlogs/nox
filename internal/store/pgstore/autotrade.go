@@ -159,6 +159,25 @@ func (s *Store) IsStrategyDisabled(ctx context.Context, strategy string) (bool, 
 	return disabled, nil
 }
 
+// ListDisabledStrategies 返回所有 disabled=true 的策略名集合。
+// 供 engine 检测层排除 disabled 策略产出的机会（§1 自动淘汰闭环：disable → 不执行 + 不产机会 + 不展示）。
+func (s *Store) ListDisabledStrategies(ctx context.Context) (map[string]bool, error) {
+	rows, err := s.pool.Query(ctx, `SELECT strategy FROM strategy_stats WHERE disabled = true`)
+	if err != nil {
+		return nil, fmt.Errorf("list disabled strategies: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[string]bool)
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("scan disabled strategy: %w", err)
+		}
+		out[name] = true
+	}
+	return out, rows.Err()
+}
+
 // DailyRealizedPnl 返回当日已平仓持仓的累计 realized_pnl（风控：单日亏损停机）。
 func (s *Store) DailyRealizedPnl(ctx context.Context) (float64, error) {
 	var sum *float64
