@@ -102,6 +102,29 @@ func (s *Store) HasNonZeroSwapHistory(ctx context.Context, venue string) (bool, 
 	return has, nil
 }
 
+// ListSwapSnapshotsByPosID D-182 S1：列指定持仓的全部 swap 快照（按 venue, ts 排序）。
+// scanAndClose 周期零检测用——按 posID 拉序列，避免全量扫描。
+func (s *Store) ListSwapSnapshotsByPosID(ctx context.Context, posID int64) ([]SwapSnapshot, error) {
+	q := `SELECT id, position_id, venue, swap_usd, ts
+	      FROM position_swap_snapshots
+	      WHERE position_id = $1
+	      ORDER BY venue, ts`
+	rows, err := s.pool.Query(ctx, q, posID)
+	if err != nil {
+		return nil, fmt.Errorf("list swap snapshots by pos id: %w", err)
+	}
+	defer rows.Close()
+	var out []SwapSnapshot
+	for rows.Next() {
+		var snap SwapSnapshot
+		if err := rows.Scan(&snap.ID, &snap.PositionID, &snap.Venue, &snap.SwapUSD, &snap.Ts); err != nil {
+			return nil, err
+		}
+		out = append(out, snap)
+	}
+	return out, rows.Err()
+}
+
 // ListAllSwapSnapshots D-180 S1：列全部 swap 快照（按 position_id, venue, ts 排序），boot 存量回溯用。
 func (s *Store) ListAllSwapSnapshots(ctx context.Context) ([]SwapSnapshot, error) {
 	q := `SELECT id, position_id, venue, swap_usd, ts
