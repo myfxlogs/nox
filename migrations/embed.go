@@ -100,3 +100,6 @@ var DeletePreciousMetalsCrossCurrencySQL string
 
 //go:embed 0052_position_notional_usd.sql
 var PositionNotionalUsdSQL string
+
+//go:embed 0053_position_closing_started_at.sql
+var PositionClosingStartedAtSQL string

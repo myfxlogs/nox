@@ -28,7 +28,9 @@ type Position struct {
 	OpenedAt               *time.Time
 	ClosedAt               *time.Time
 	Note                   string
-	NotionalUSD            *float64 // D-179：该 position 全部腿名义合计（USD；SWAPARB=双腿=2×单腿）
+	NotionalUSD            *float64   // D-179：该 position 全部腿名义合计（USD；SWAPARB=双腿=2×单腿）
+	ClosingStartedAt       *time.Time // D-189 P0-4：进入 CLOSING 的真实起始时间（reconcile 超时判定用）
+	UncertaintyReason      *string    // D-189 P0-4：UNKNOWN 标记（CLOSING+uncertainty_reason IS NOT NULL）
 }
 
 // PositionLeg 对应 position_legs 表（§2.11）。
@@ -72,10 +74,16 @@ func (s *Store) UpdatePositionNotional(ctx context.Context, id int64, notional f
 // UpdatePositionStatus 更新持仓状态。
 // D-077 修复⑩ G4：终态不可逆守卫——CLOSED/FAILED 不可回退（WHERE NOT IN）。
 // 返回 ErrTerminalState 表示 0 行受影响（已是终态，晚写拦截）。
+// D-189 P0-4：进入 CLOSING 时写 closing_started_at=COALESCE(closing_started_at, now())（保留首次时间，ResumeClose 重入不覆盖）。
 func (s *Store) UpdatePositionStatus(ctx context.Context, id int64, status string) error {
 	// D-060 实施修正②：去掉 updated_at——positions 表无此列，原 SQL 恒报错且被调用方
 	// `_ =` 吞掉 → 所有 position 状态转换静默失败（position #2 卡 OPENING 实证）。
-	q := `UPDATE positions SET status = $1 WHERE id = $2 AND status NOT IN ('CLOSED','FAILED')`
+	var q string
+	if status == "CLOSING" {
+		q = `UPDATE positions SET status = $1, closing_started_at = COALESCE(closing_started_at, now()) WHERE id = $2 AND status NOT IN ('CLOSED','FAILED')`
+	} else {
+		q = `UPDATE positions SET status = $1 WHERE id = $2 AND status NOT IN ('CLOSED','FAILED')`
+	}
 	ct, err := s.pool.Exec(ctx, q, status, id)
 	if err != nil {
 		return err
@@ -89,8 +97,9 @@ func (s *Store) UpdatePositionStatus(ctx context.Context, id int64, status strin
 // ClaimClose D-159 W1a R3-1：原子领取平仓权。
 // 只有 OPEN/LEGGED → CLOSING 成功（RowsAffected=1）；其他状态（OPENING/CLOSING/CLOSED/FAILED）→ ErrClaimFailed。
 // 防并发对账+手动平仓重复领取：CLOSING→CLOSING 被拒（只允许从 OPEN/LEGGED 进入 CLOSING）。
+// D-189 P0-4：进入 CLOSING 时写 closing_started_at=COALESCE(closing_started_at, now())（保留首次时间）。
 func (s *Store) ClaimClose(ctx context.Context, id int64) error {
-	q := `UPDATE positions SET status = 'CLOSING' WHERE id = $1 AND status IN ('OPEN','LEGGED')`
+	q := `UPDATE positions SET status = 'CLOSING', closing_started_at = COALESCE(closing_started_at, now()) WHERE id = $1 AND status IN ('OPEN','LEGGED')`
 	ct, err := s.pool.Exec(ctx, q, id)
 	if err != nil {
 		return err

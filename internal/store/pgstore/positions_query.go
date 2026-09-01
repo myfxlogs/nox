@@ -17,7 +17,7 @@ func (s *Store) ListPositions(ctx context.Context, status string, limit, offset 
 	}
 	if status == "ACTIVE" {
 		// ACTIVE 路径不绑定 $1（IN 子句无参数），limit/offset 用 $1/$2。
-		q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note
+		q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note, closing_started_at, uncertainty_reason
 			FROM positions
 			WHERE status IN ('OPEN','OPENING','LEGGED','CLOSING')
 			ORDER BY COALESCE(closed_at, opened_at) DESC NULLS LAST LIMIT $1 OFFSET $2`
@@ -28,7 +28,7 @@ func (s *Store) ListPositions(ctx context.Context, status string, limit, offset 
 		defer rows.Close()
 		return scanPositions(rows)
 	}
-	q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note
+	q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note, closing_started_at, uncertainty_reason
 		FROM positions
 		WHERE ($1 = '' OR status = $1)
 		ORDER BY COALESCE(closed_at, opened_at) DESC NULLS LAST LIMIT $2 OFFSET $3`
@@ -41,13 +41,14 @@ func (s *Store) ListPositions(ctx context.Context, status string, limit, offset 
 }
 
 // scanPositions 公共行扫描（ListPositions 两条路径共用）。
+// D-189 P0-4：含 closing_started_at + uncertainty_reason。
 func scanPositions(rows pgx.Rows) ([]Position, error) {
 	var out []Position
 	for rows.Next() {
 		var p Position
 		if err := rows.Scan(&p.ID, &p.OpportunityID, &p.Type, &p.Status, &p.ExpectedNetBps,
 			&p.ExpectedEntrySpreadBps, &p.ExpectedSwapBpsDaily, &p.ExpectedAnnualPct,
-			&p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note); err != nil {
+			&p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note, &p.ClosingStartedAt, &p.UncertaintyReason); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -78,7 +79,7 @@ func (s *Store) CountPositions(ctx context.Context, status string) (int, error) 
 // D-159 W1a R2：UNKNOWN position 用 CLOSING+uncertainty_reason 识别（不新增 DB 枚举），CLOSING 已在列。
 // 行数=MaxPositions 量级，成本≈COUNT；返回行供 gate 派生 combo.FromOppID 匹配。
 func (s *Store) ListActivePositions(ctx context.Context) ([]Position, error) {
-	q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note, notional_usd
+	q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note, notional_usd, closing_started_at, uncertainty_reason
 		FROM positions
 		WHERE status IN ('OPENING','OPEN','LEGGED','CLOSING')
 		ORDER BY id`
@@ -92,7 +93,7 @@ func (s *Store) ListActivePositions(ctx context.Context) ([]Position, error) {
 		var p Position
 		if err := rows.Scan(&p.ID, &p.OpportunityID, &p.Type, &p.Status, &p.ExpectedNetBps,
 			&p.ExpectedEntrySpreadBps, &p.ExpectedSwapBpsDaily, &p.ExpectedAnnualPct,
-			&p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note, &p.NotionalUSD); err != nil {
+			&p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note, &p.NotionalUSD, &p.ClosingStartedAt, &p.UncertaintyReason); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -135,7 +136,7 @@ func (s *Store) ListOpenPositionsByType(ctx context.Context, types []string) ([]
 	if len(types) == 0 {
 		return nil, nil
 	}
-	q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note
+	q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note, closing_started_at, uncertainty_reason
 		FROM positions
 		WHERE status = 'OPEN' AND type = ANY($1)
 		ORDER BY id`
@@ -149,7 +150,7 @@ func (s *Store) ListOpenPositionsByType(ctx context.Context, types []string) ([]
 		var p Position
 		if err := rows.Scan(&p.ID, &p.OpportunityID, &p.Type, &p.Status, &p.ExpectedNetBps,
 			&p.ExpectedEntrySpreadBps, &p.ExpectedSwapBpsDaily, &p.ExpectedAnnualPct,
-			&p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note); err != nil {
+			&p.RealizedPnl, &p.OpenedAt, &p.ClosedAt, &p.Note, &p.ClosingStartedAt, &p.UncertaintyReason); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
