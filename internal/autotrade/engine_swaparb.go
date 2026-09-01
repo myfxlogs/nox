@@ -171,15 +171,20 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 	log.Printf("[autotrade] SWAPARB eval %s %s/%s: swap_src=%s netSwap=%.4f bps spreadBps=%.2f basisBps=%.2f",
 		canonical, venueLong, venueShort, swapSrc, netSwapBps, spreadBps, basisBps)
 	// D-180 S4：入场门禁三条——厚度+回收期往返+集中度。
+	// D-181 S2：probe 仓（swapSrc != settled）旁路厚度+回收期（无实测数据不卡厚度），
+	// 集中度不旁路（同 venue×symbol 活跃腿 ≥2 仍拒，立项授权稿 §3）。
+	willBeProbe := e.cfg.ProbeEnabled && swapSrc != swapSrcSettled
 	// 厚度：净息差 ≥ MinNetCarryBps（spec 源 × SpecDiscount 折扣，settled 不折扣）。
-	if g := carryThicknessGate(netSwapBps, swapSrc, e.cfg.MinNetCarryBps, e.cfg.SpecDiscount); g.reject {
-		log.Printf("[autotrade] SWAPARB skip %s: %s", canonical, g.reason)
-		return
-	}
-	// 回收期往返：2×spreadBps / 净息差 ≤ MaxPaybackDays（2×=开+平对称假设）。
-	if g := paybackRoundTripGate(spreadBps, netSwapBps, e.cfg.MaxPaybackDays); g.reject {
-		log.Printf("[autotrade] SWAPARB skip %s: %s", canonical, g.reason)
-		return
+	if !willBeProbe {
+		if g := carryThicknessGate(netSwapBps, swapSrc, e.cfg.MinNetCarryBps, e.cfg.SpecDiscount); g.reject {
+			log.Printf("[autotrade] SWAPARB skip %s: %s", canonical, g.reason)
+			return
+		}
+		// 回收期往返：2×spreadBps / 净息差 ≤ MaxPaybackDays（2×=开+平对称假设）。
+		if g := paybackRoundTripGate(spreadBps, netSwapBps, e.cfg.MaxPaybackDays); g.reject {
+			log.Printf("[autotrade] SWAPARB skip %s: %s", canonical, g.reason)
+			return
+		}
 	}
 	// 集中度：同 venue×symbol 活跃腿 < MaxLegsPerSymbol（471/472 双空单场景拒第三腿）。
 	if g := e.concentrationGate(ctx, canonical, venueLong, venueShort, e.cfg.MaxLegsPerSymbol); g.reject {
@@ -217,6 +222,7 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 		NotionalUSD: notional,
 		DedupKey:    dedupKey,
 		NetBps:      spreadBps,
+		WillBeProbe: willBeProbe, // D-181 S2：gate combo_allow 排除 probe 计数用
 	}
 	// D-168 超限折分：Execute 闭包捕获 intent 指针，读 intent.Qty/NotionalUSD
 	// （gate 层折分时修改 intent 字段，闭包内读到折分后的值）
@@ -244,6 +250,11 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 			// 口径：entry=成交价(含滑点) / current=报价口径(不含滑点) → PnL 保守(止损偏早=安全)。
 			if entryBps, ok := computeEntrySpreadFromLegs(ctx, e.store, posID); ok {
 				_ = e.store.UpdateExpectedEntrySpreadBps(ctx, posID, entryBps)
+			}
+			// D-181 S2：probe 仓标记——任一腿非 settled → note=PROBE。
+			if willBeProbe {
+				_ = e.store.SetPositionNote(ctx, posID, "PROBE")
+				log.Printf("[autotrade] probe pos=%d marked: swap_src=%s (non-settled legs)", posID, swapSrc)
 			}
 		}
 		return status, msg, posID

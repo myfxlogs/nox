@@ -103,6 +103,12 @@ type Config struct {
 	// B：组合平仓后重入冷却（ARB_SWAPARB_REENTRY_COOLDOWN_DAYS，默认 7）
 	ReentryCooldownDays int
 
+	// D-181 S2：probe 探测仓——无实测腿的首仓自动成为 probe，到期评估升级/拒绝。
+	// ProbeEnabled=false → 不标记不评估（向后兼容，默认 false）。
+	ProbeEnabled bool
+	// ProbeEvalDays probe 评估等待天数（calendar days，默认 3 ≈ 2 结算日）。
+	ProbeEvalDays int
+
 	// D-107 P4：事件触发扫描节流窗口（ARB_SCAN_THROTTLE，默认 30s）。
 	// Kick() 触发 scanIfDue：窗口内丢弃、超窗扫。兜底 10min 保证有界延迟。
 	ScanThrottle time.Duration

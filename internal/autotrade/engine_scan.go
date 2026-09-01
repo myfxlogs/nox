@@ -21,6 +21,26 @@ func (e *Engine) scanAndClose(ctx context.Context) {
 		if e.zeroDetector != nil {
 			e.zeroDetector.RecordZeroForPosition(ctx, p.ID)
 		}
+		// D-181 S2：probe 仓到期评估——在 checkExitCondition 前执行（probe 拒绝优先于止损）。
+		probeRes := e.evaluateProbe(ctx, &p)
+		if probeRes.upgraded {
+			_ = e.store.SetPositionNote(ctx, p.ID, "") // 升级常规仓，清 PROBE note
+			continue                                   // 升级后本轮跳过止损检查（下一轮走常规路径）
+		}
+		if probeRes.shouldClose {
+			log.Printf("[autotrade] auto-close pos=%d type=%s: %s", p.ID, p.Type, probeRes.reason)
+			if err := e.service.AutoClosePosition(ctx, p.ID); err != nil {
+				log.Printf("[autotrade] auto-close pos=%d failed: %v", p.ID, err)
+				continue
+			}
+			if e.settleDeps != nil {
+				if err := settlement.Settle(ctx, e.settleDeps, p.ID, e.eliminator); err != nil {
+					log.Printf("[autotrade] settle pos=%d: %v", p.ID, err)
+					_ = e.service.Store().SetPositionNote(ctx, p.ID, "settle_failed: "+err.Error())
+				}
+			}
+			continue
+		}
 		shouldClose, reason := e.checkExitCondition(ctx, &p)
 		if !shouldClose {
 			continue

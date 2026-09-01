@@ -25,6 +25,9 @@ type TradeIntent struct {
 	DedupKey    string  // 幂等键（SWAPARB:CANONICAL:vLong:vShort / MEANREVERT:... / detector oppID）
 	NetBps      float64 // 开仓时净 bps（日志用）
 	Execute     func(ctx context.Context) (status, msg string, posID int64)
+	// D-181 S2：WillBeProbe=true → gate 旁路厚度+回收期门禁（probe 仓无实测数据不卡厚度）。
+	// 由 trySwapArb 根据 swapSrc != settled 设置；gate 读此字段决定旁路，避免重复调 swapRateFor。
+	WillBeProbe bool
 }
 
 // GateResult Submit 返回值。

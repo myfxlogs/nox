@@ -51,6 +51,10 @@ func comboAllowVerdict(allow []exec.ComboAllowSpec, deny []exec.ComboAllowSpec, 
 		if p.OpportunityID == "" {
 			continue
 		}
+		// D-181 S2：probe 仓不计 MAX_ACTIVE_COMBOS（note LIKE 'PROBE%'）。
+		if strings.HasPrefix(p.Note, "PROBE") {
+			continue
+		}
 		if combo.MatchOppID(p.OpportunityID, intentCombo) {
 			activeCount++
 		}
