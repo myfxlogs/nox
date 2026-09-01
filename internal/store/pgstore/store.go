@@ -4,6 +4,7 @@ package pgstore
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -27,13 +28,21 @@ func (s *Store) SetAlertPaused(paused bool) {
 func (s *Store) SetAlertHook(fn func(a Alert)) { s.alertHook = fn }
 
 // New 创建带连接池的 Store。
+// DSN 可通过 pool_max_conns / pool_min_conns 参数覆盖默认池大小
+// （CI 集成测试用小池降低 fd 压力，D-177 race detector EBADF 根因修复）。
 func New(ctx context.Context, dsn string) (*Store, error) {
 	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("parse dsn: %w", err)
 	}
-	cfg.MaxConns = 10
-	cfg.MinConns = 1
+	// 仅在 DSN 未显式指定时设默认值（pgxpool 默认 MinConns=0 无法区分「未设」与「显式设 0」，
+	// 故用字符串检测）。
+	if !strings.Contains(dsn, "pool_max_conns") {
+		cfg.MaxConns = 10
+	}
+	if !strings.Contains(dsn, "pool_min_conns") {
+		cfg.MinConns = 1
+	}
 	cfg.MaxConnLifetime = time.Hour
 	cfg.MaxConnIdleTime = 30 * time.Minute
 
