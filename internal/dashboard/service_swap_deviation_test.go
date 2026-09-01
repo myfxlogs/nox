@@ -70,13 +70,14 @@ func setupSwapDeviationServiceStore(t *testing.T, venueLong, venueShort string, 
 		t.Fatalf("insert position_leg: %v", err)
 	}
 	// swap snapshots：昨日末条 swap_usd=0，今日末条 swap_usd=actualUSD → DailySwapAccrued=actualUSD
-	// venue 用 bare（vA），与 DailySwapAccrued 查询参数一致（gate_checks.go 同模式）。
+	// D-189 P0-1：快照 venue 必须是完整 venueKey（venueLong），与生产写入口径一致；
+	// vL（bare）仅用于 facts.venue 匹配与 broker_accounts。
 	yesterday := time.Now().UTC().Add(-24 * time.Hour)
 	today := time.Now().UTC()
-	if err := s.InsertSwapSnapshot(ctx, posID, vL, 0, yesterday); err != nil {
+	if err := s.InsertSwapSnapshot(ctx, posID, venueLong, 0, yesterday); err != nil {
 		t.Fatalf("insert swap snapshot yesterday: %v", err)
 	}
-	if err := s.InsertSwapSnapshot(ctx, posID, vL, actualUSD, today); err != nil {
+	if err := s.InsertSwapSnapshot(ctx, posID, venueLong, actualUSD, today); err != nil {
 		t.Fatalf("insert swap snapshot today: %v", err)
 	}
 	return s

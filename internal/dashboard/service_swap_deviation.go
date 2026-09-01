@@ -77,9 +77,10 @@ func (s *Service) checkSwapDeviationGate(ctx context.Context, canonical, venueBu
 			if legBare != intentBuyBare && legBare != intentSellBare {
 				continue
 			}
-			actualUSD, ok, err := s.store.DailySwapAccrued(ctx, p.ID, legBare, time.Now().UTC())
+			// D-189 P0-1：快照查询用完整 venueKey（leg.Venue），legBare 仅用于 intent venue 匹配与 facts 匹配。
+			actualUSD, ok, err := s.store.DailySwapAccrued(ctx, p.ID, leg.Venue, time.Now().UTC())
 			if err != nil {
-				return fmt.Sprintf("swap deviation gate: daily swap accrued pos=%d venue=%s failed (%v)", p.ID, legBare, err)
+				return fmt.Sprintf("swap deviation gate: daily swap accrued pos=%d venue=%s failed (%v)", p.ID, leg.Venue, err)
 			}
 			if !ok || actualUSD == 0 {
 				continue

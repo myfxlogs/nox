@@ -166,6 +166,12 @@ func (s *Service) AutoClosePosition(ctx context.Context, posID int64) error {
 	return s.pipeline.ClosePosition(ctx, posID)
 }
 
+// ResumeClose D-189 P0-4：重触发 CLOSING 持仓平仓（reconcile 超时自动重试入口）。
+// 只转发 pipeline.ResumeClose，不复制执行逻辑。
+func (s *Service) ResumeClose(ctx context.Context, posID int64) error {
+	return s.pipeline.ResumeClose(ctx, posID)
+}
+
 // Settler 结算接口（D-087 §3.2，settlement.Settle 的注入面，dashboard 不依赖 settlement 包避免循环）。
 type Settler interface {
 	Settle(ctx context.Context, posID int64) error
