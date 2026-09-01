@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"arb/internal/bus"
 	"arb/internal/fact"
 )
 
@@ -75,10 +76,13 @@ func (e *Engine) swapRateFor(ctx context.Context, venue, symbol, side string) (f
 	return 0, swapSrcNone
 }
 
-// notionalPerLotForRate D-180 S2：算 notionalPerLot = CS × mid（本 venue 报价）。
+// notionalPerLotForRate D-180 S2：算 notionalPerLot（USD）= CS × mid × 计价币→USD 换算。
+// D-183 修复：原实现 CS × mid 是计价币口径（JPY 对得 10M JPY 非 USD），settled USD/lot/day 换算 bps 时
+// 分子 USD 分母 JPY 口径不一致 → bps 被低估 ~USDJPY 倍（AUDJPY 实证 0.005 vs 正确 0.75）。
+// 修法：复用 usdPerLot 币种换算逻辑（JPY ÷ USDJPY，USD 直接，商品白名单，其他 fail-closed）。
 // venue 为 bare venue（不含 :mt5 后缀），需拼回 venueKey 查报价。
 // CS resolver 未注入/失败 → 用 CS=1（CEX 腿正确，MT 腿保守低估 notional → bps 偏高=保守）。
-// 无报价 → ok=false（调用方走 spec/none fail-closed）。
+// 无报价/fx 缺失 → ok=false（调用方走 spec/none fail-closed）。
 func (e *Engine) notionalPerLotForRate(venue, symbol string) (float64, bool) {
 	if e.quotes == nil {
 		return 0, false
@@ -106,10 +110,63 @@ func (e *Engine) notionalPerLotForRate(venue, symbol string) (float64, bool) {
 					}
 				}
 			}
-			return cs * mid, true
+			// D-183：币种换算——CS × mid 是计价币口径，需转 USD。
+			// JPY 对 ÷ USDJPY；USD/USDT/商品白名单直接；其他 fail-closed（勿猜）。
+			return notionalPerLotUSD(symbol, cs, mid, e.quotes)
 		}
 	}
 	return 0, false
+}
+
+// notionalPerLotUSD D-183：CS × price × 计价币→USD 换算（复用 dashboard.usdPerLot 逻辑）。
+// JPY 对 → CS × price ÷ USDJPY；USD/USDT/商品白名单 → CS × price；其他 → fail-closed。
+// fx 缺失 → ok=false（调用方走 spec/none）。
+func notionalPerLotUSD(canonical string, cs, price float64, quotes *bus.QuoteBus) (float64, bool) {
+	if cs <= 0 || price <= 0 {
+		return 0, false
+	}
+	switch {
+	case strings.HasSuffix(canonical, "USDT"), strings.HasSuffix(canonical, "USD"), usdQuotedCommodities[canonical]:
+		return cs * price, true
+	case strings.HasSuffix(canonical, "JPY"):
+		fx, ok := latestAnyVenueQuote(quotes, "USDJPY")
+		if !ok || fx <= 0 {
+			return 0, false
+		}
+		return cs * price / fx, true
+	default:
+		return 0, false
+	}
+}
+
+// latestAnyVenueQuote 从 QuoteBus 取指定 canonical 的最新任一 venue mid 价（fx 换算用）。
+func latestAnyVenueQuote(quotes *bus.QuoteBus, canonical string) (float64, bool) {
+	if quotes == nil {
+		return 0, false
+	}
+	var best bus.Quote
+	found := false
+	for _, q := range quotes.AllLatest() {
+		if q.Symbol == canonical {
+			if !found || q.Time.After(best.Time) {
+				best = q
+				found = true
+			}
+		}
+	}
+	if !found {
+		return 0, false
+	}
+	return (best.Bid + best.Ask) / 2, true
+}
+
+// usdQuotedCommodities D-183：USD 计价商品/指数 CFD 白名单（与 dashboard.usdPerLot 同源）。
+var usdQuotedCommodities = map[string]bool{
+	"BRENT": true, "WTI": true, "SILVER": true, "COPPER": true, "NATGAS": true,
+	"XAUUSD": true, "XAGUSD": true, "XPDUSD": true, "XPTUSD": true,
+	"NAS100": true, "SPX500": true, "US30": true, "US2000": true, "GER40": true,
+	"UK100": true, "HK50": true, "JP225": true, "AUS200": true, "ES35": true,
+	"FR40": true, "STOXX50": true,
 }
 
 // medianFloat64 中位数（排序后取中间值，偶数取两值平均）。

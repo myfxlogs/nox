@@ -12,6 +12,7 @@ import (
 )
 
 // TestD180_SwapRateFor_SettledHit 实测命中——settled 7d 内有样本 → 换算 bps 返回。
+// D-183：JPY 对需 USDJPY 换算（notionalUSD = CS × mid ÷ USDJPY）。
 func TestD180_SwapRateFor_SettledHit(t *testing.T) {
 	s := testAccumStore(t)
 	ctx := context.Background()
@@ -26,13 +27,17 @@ func TestD180_SwapRateFor_SettledHit(t *testing.T) {
 	}
 	qbus := bus.New()
 	qbus.Publish(bus.Quote{Symbol: "GBPJPY", Venue: "61585565", VenueType: "mt5", Bid: 190.0, Ask: 190.02, VenueSymbol: "GBPJPY", Time: now})
+	qbus.Publish(bus.Quote{Symbol: "USDJPY", Venue: "fx", VenueType: "mt5", Bid: 150.0, Ask: 150.01, VenueSymbol: "USDJPY", Time: now})
 	e := &Engine{store: s, quotes: qbus, cfg: Config{}}
 	bps, src := e.swapRateFor(ctx, "61585565", "GBPJPY", "SELL")
 	if src != swapSrcSettled {
 		t.Fatalf("source: want settled, got %s", src)
 	}
-	wantBps := -14.0 / 190.01 * 10000
-	if absDiffBps(bps, wantBps) > 0.01 {
+	// D-183：CS=1（无 resolver），notionalUSD = 1 × 190.01 ÷ 150.005 = 1.2667
+	// bps = -14 / 1.2667 × 10000 = -110526（CS=1 测试设定，真实 CS=100000 时 bps=-1.105）
+	wantNotionalUSD := 1.0 * 190.01 / 150.005
+	wantBps := -14.0 / wantNotionalUSD * 10000
+	if absDiffBps(bps, wantBps) > 0.1 {
 		t.Errorf("bps: want %.4f, got %.4f", wantBps, bps)
 	}
 }
@@ -142,13 +147,16 @@ func TestD180_SwapRateFor_MedianMultipleSettled(t *testing.T) {
 	}
 	qbus := bus.New()
 	qbus.Publish(bus.Quote{Symbol: "GBPJPY", Venue: "vA", VenueType: "mt5", Bid: 190.0, Ask: 190.02, VenueSymbol: "GBPJPY", Time: now})
+	qbus.Publish(bus.Quote{Symbol: "USDJPY", Venue: "fx", VenueType: "mt5", Bid: 150.0, Ask: 150.01, VenueSymbol: "USDJPY", Time: now})
 	e := &Engine{store: s, quotes: qbus, cfg: Config{}}
 	bps, src := e.swapRateFor(ctx, "vA", "GBPJPY", "SELL")
 	if src != swapSrcSettled {
 		t.Fatalf("source: want settled, got %s", src)
 	}
-	wantBps := -14.0 / 190.01 * 10000 // 中位数 -14.0
-	if absDiffBps(bps, wantBps) > 0.01 {
+	// D-183：JPY 换算 notionalUSD = 1 × 190.01 ÷ 150.005
+	wantNotionalUSD := 1.0 * 190.01 / 150.005
+	wantBps := -14.0 / wantNotionalUSD * 10000 // 中位数 -14.0
+	if absDiffBps(bps, wantBps) > 0.1 {
 		t.Errorf("bps: want %.4f (median -14.0), got %.4f", wantBps, bps)
 	}
 }
@@ -186,13 +194,16 @@ func TestD180_SwapRateForNet(t *testing.T) {
 	qbus := bus.New()
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", VenueType: "mt5", Bid: 100.0, Ask: 100.02, VenueSymbol: "AUDJPY", Time: now})
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vB", VenueType: "mt5", Bid: 100.0, Ask: 100.02, VenueSymbol: "AUDJPY", Time: now})
+	qbus.Publish(bus.Quote{Symbol: "USDJPY", Venue: "fx", VenueType: "mt5", Bid: 150.0, Ask: 150.01, VenueSymbol: "USDJPY", Time: now})
 	e := &Engine{store: s, quotes: qbus, cfg: Config{}}
 	net, src := e.swapRateForNet(ctx, "vA", "vB", "AUDJPY")
 	if src != swapSrcSettled {
 		t.Fatalf("source: want settled, got %s", src)
 	}
-	wantLong := 5.0 / 100.01 * 10000
-	wantShort := -3.0 / 100.01 * 10000
+	// D-183：JPY 换算 notionalUSD = 1 × 100.01 ÷ 150.005
+	wantNotionalUSD := 1.0 * 100.01 / 150.005
+	wantLong := 5.0 / wantNotionalUSD * 10000
+	wantShort := -3.0 / wantNotionalUSD * 10000
 	wantNet := wantLong + wantShort
 	if absDiffBps(net, wantNet) > 0.1 {
 		t.Errorf("net: want %.4f, got %.4f", wantNet, net)
@@ -215,6 +226,7 @@ func TestD180_SwapRateForNet_MixedSource(t *testing.T) {
 	}
 	qbus := bus.New()
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", VenueType: "mt5", Bid: 100.0, Ask: 100.02, VenueSymbol: "AUDJPY", Time: now})
+	qbus.Publish(bus.Quote{Symbol: "USDJPY", Venue: "fx", VenueType: "mt5", Bid: 150.0, Ask: 150.01, VenueSymbol: "USDJPY", Time: now})
 	e := &Engine{store: s, quotes: qbus, cfg: Config{}}
 	_, src := e.swapRateForNet(ctx, "vA", "vB", "AUDJPY")
 	if src != swapSrcSpec {
@@ -237,6 +249,7 @@ func TestD180_SwapRateForNet_NoneFailClosed(t *testing.T) {
 	}
 	qbus := bus.New()
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", VenueType: "mt5", Bid: 100.0, Ask: 100.02, VenueSymbol: "AUDJPY", Time: now})
+	qbus.Publish(bus.Quote{Symbol: "USDJPY", Venue: "fx", VenueType: "mt5", Bid: 150.0, Ask: 150.01, VenueSymbol: "USDJPY", Time: now})
 	e := &Engine{store: s, quotes: qbus, cfg: Config{}}
 	_, src := e.swapRateForNet(ctx, "vA", "vB", "AUDJPY")
 	if src != swapSrcNone {
@@ -268,12 +281,4 @@ func TestD180_SwapSrcFromVenueKey(t *testing.T) {
 	if got := swapSrcFromVenueKey("vA"); got != "vA" {
 		t.Errorf("no suffix: want vA, got %s", got)
 	}
-}
-
-// absDiffBps 浮点比较容差。
-func absDiffBps(a, b float64) float64 {
-	if a < b {
-		return b - a
-	}
-	return a - b
 }
