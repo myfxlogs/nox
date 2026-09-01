@@ -9,7 +9,8 @@ package autotrade
 type swapComboCandidate struct {
 	canonical, vLong, vShort string
 	netSwapBps, basisBps     float64
-	basisAvailable           bool // D-169 P0：quotes nil 或腿缺失→false（trySwapArb fail-closed）
+	basisAvailable           bool   // D-169 P0：quotes nil 或腿缺失→false（trySwapArb fail-closed）
+	swapSrc                  string // D-180 S2：settled|spec|none（决策日志带 swap_src）
 }
 
 // isRealPair D-144 ① 三态：两腿 venue 必须同类型且均非未知——杜绝实盘×demo 假对冲 + 未知不配对。

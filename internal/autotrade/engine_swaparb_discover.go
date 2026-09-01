@@ -13,6 +13,10 @@ import (
 // discoverSwapCombos 从 facts 表自动扫描所有跨账户 swap 组合。
 // D-072：minNetSwapBps 从 env 读取（ARB_AUTOTRADE_MIN_NET_SWAP_BPS，默认 0.2）。
 // D-104 P0：swap facts 新鲜度门禁 fail-closed——now−f.Ts > SwapFactMaxAge → 跳过该 fact + 计数日志。
+// D-180 S2：净 swap 评估改用 swapRateFor（实测优先 settled → spec 兜底 → none fail-closed），
+// 删除规格直查旧路径（longFacts/shortFacts 直接遍历配对）。
+// 候选枚举仍用 spec facts（swap_long/short）作 venue×symbol 索引——settled facts 不覆盖全 venue
+// （冷启动 venue 无画像），spec 是"已知可配对 venue"的完整索引；净 swap 值由 swapRateFor 重算。
 func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 	longFacts, err := e.store.LatestFacts(ctx, fact.KindSwapLong, "", "")
 	if err != nil || len(longFacts) == 0 {
@@ -97,13 +101,21 @@ func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 			if !isRealPair(realMap, lf.Venue, sfKey.venue) {
 				continue
 			}
-			netSwap := lf.Value + sfEntry.value
-			if netSwap < minNetSwapBps {
-				continue
-			}
 			// D-077 修复⑪B N2：用 fact.Src 拼 venueKey（mt4 账户也能进 swap 套利）
 			vLong := lf.Venue + ":" + lf.Src
 			vShort := sfKey.venue + ":" + sfEntry.src
+			// D-180 S2：净 swap 改用 swapRateFor（实测优先 → spec 兜底 → none fail-closed）。
+			// bare venue 从 venueKey 提取（冒号前）。
+			bareLong := swapSrcFromVenueKey(vLong)
+			bareShort := swapSrcFromVenueKey(vShort)
+			netSwap, swapSrc := e.swapRateForNet(ctx, bareLong, bareShort, lf.Symbol)
+			if swapSrc == swapSrcNone {
+				// fail-closed：无 settled 也无 spec → 跳过（不裸信 0）
+				continue
+			}
+			if netSwap < minNetSwapBps {
+				continue
+			}
 			// D-140 S3：基差 = (卖腿 bid − 买腿 ask) / 买腿 ask × 1e4（只展示不动排序）
 			// e.quotes nil 时 basis=0（测试无 qbus 注入不 panic）
 			basisBps := 0.0
@@ -125,6 +137,7 @@ func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 				netSwapBps:     netSwap,
 				basisBps:       basisBps,
 				basisAvailable: basisAvailable, // D-169 P0
+				swapSrc:        swapSrc,        // D-180 S2：决策日志带 swap_src
 			})
 		}
 	}

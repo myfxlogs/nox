@@ -79,6 +79,17 @@ type Config struct {
 	EntrySpreadMaxBps float64 // ARB_SWAPARB_ENTRY_SPREAD_MAX_BPS（默认 30）
 	EntryBasisMaxBps  float64 // ARB_SWAPARB_ENTRY_BASIS_MAX_BPS（默认 30）
 
+	// D-180 S3：基差止损阈值（bps），PnL_bps < -BasisStopBps → 平仓（默认 4）。
+	BasisStopBps float64
+	// D-180 S4：入场门禁——净息差厚度下限（bps/日，spec 源×折扣后比较；默认 1.0）。
+	MinNetCarryBps float64
+	// D-180 S4：spec 源折扣系数（冷启动不裸信规格；默认 0.5）。仅作用入场门禁。
+	SpecDiscount float64
+	// D-180 S4：回收期上限（天，2×spreadBps/净息差 ≤ 此值才放行；默认 30）。
+	MaxPaybackDays int
+	// D-180 S4：集中度上限（同 venue×symbol 活跃腿数 < 此值才放行；默认 2）。
+	MaxLegsPerSymbol int
+
 	// D-104 P0：swap facts 新鲜度门禁（fail-closed，ARB_SWAP_FACT_MAX_AGE，默认 2h）。
 	// discoverSwapCombos 使用 lf/sf 前查 now−f.Ts > SwapFactMaxAge → 跳过该 fact + 计数日志。
 	SwapFactMaxAge time.Duration

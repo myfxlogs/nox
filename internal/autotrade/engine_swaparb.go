@@ -59,7 +59,7 @@ func (e *Engine) scanSwapArb(ctx context.Context, acc *comboAccumulator) {
 			log.Printf("[autotrade] SWAPARB skip %s: reentry cooldown (closed %s ago)", ck, time.Since(closedAt).Round(time.Hour))
 			continue
 		}
-		e.trySwapArb(ctx, c.canonical, c.vLong, c.vShort, c.netSwapBps, c.basisBps, c.basisAvailable)
+		e.trySwapArb(ctx, c.canonical, c.vLong, c.vShort, c.netSwapBps, c.basisBps, c.basisAvailable, c.swapSrc)
 	}
 }
 
@@ -104,7 +104,8 @@ func buildCooldownSet(closed []pgstore.Position, cooldownDays int, now time.Time
 
 // trySwapArb 尝试开仓单个 swap 套利组合（D-072：名义额=broker 余额驱动，经 gate）。
 // D-169 P0 S2：basisBps/basisAvailable 由 discoverSwapCombos 传入，供 S3b 入场基差门禁消费。
-func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShort string, netSwapBps, basisBps float64, basisAvailable bool) {
+// D-180 S2：swapSrc 由 discoverSwapCombos 传入（settled|spec|none），供 S4 门禁折扣判定 + 决策日志。
+func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShort string, netSwapBps, basisBps float64, basisAvailable bool, swapSrc string) {
 	// D-080 S4 N9 修订：判死策略停提交（扫描+评估常开喂 rollup，禁用只拦提交无 REJECTED 行）
 	if disabled, _ := e.store.IsStrategyDisabled(ctx, "SWAPARB"); disabled {
 		return
@@ -167,6 +168,25 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 		log.Printf("[autotrade] SWAPARB skip %s %s/%s: %s", canonical, venueLong, venueShort, reason)
 		return
 	}
+	// D-180 S2：决策日志带 swap_src（settled|spec）——S4 门禁折扣判定的依据。
+	log.Printf("[autotrade] SWAPARB eval %s %s/%s: swap_src=%s netSwap=%.4f bps spreadBps=%.2f basisBps=%.2f",
+		canonical, venueLong, venueShort, swapSrc, netSwapBps, spreadBps, basisBps)
+	// D-180 S4：入场门禁三条——厚度+回收期往返+集中度。
+	// 厚度：净息差 ≥ MinNetCarryBps（spec 源 × SpecDiscount 折扣，settled 不折扣）。
+	if g := carryThicknessGate(netSwapBps, swapSrc, e.cfg.MinNetCarryBps, e.cfg.SpecDiscount); g.reject {
+		log.Printf("[autotrade] SWAPARB skip %s: %s", canonical, g.reason)
+		return
+	}
+	// 回收期往返：2×spreadBps / 净息差 ≤ MaxPaybackDays（2×=开+平对称假设）。
+	if g := paybackRoundTripGate(spreadBps, netSwapBps, e.cfg.MaxPaybackDays); g.reject {
+		log.Printf("[autotrade] SWAPARB skip %s: %s", canonical, g.reason)
+		return
+	}
+	// 集中度：同 venue×symbol 活跃腿 < MaxLegsPerSymbol（471/472 双空单场景拒第三腿）。
+	if g := e.concentrationGate(ctx, canonical, venueLong, venueShort, e.cfg.MaxLegsPerSymbol); g.reject {
+		log.Printf("[autotrade] SWAPARB skip %s: %s", canonical, g.reason)
+		return
+	}
 	// D-132 T1：venue 级敞口门——两腿 venue SWAPARB 合计裸露 + 新仓 ≤ equity × cap，否则 skip。
 	if !e.service.SwapArbVenueExposureOK(ctx, venueLong, venueShort, notional) {
 		log.Printf("[autotrade] SWAPARB skip %s: venue exposure cap", canonical)
@@ -220,6 +240,12 @@ func (e *Engine) trySwapArb(ctx context.Context, canonical, venueLong, venueShor
 				SwapBpsDaily:   &swap,
 				AnnualPct:      &annual,
 			})
+			// D-180 S3：双腿成交后写 expected_entry_spread_bps（成交价口径基准，止损用）。
+			// = (buyActual − sellActual) / buyActual × 10000（BUY 成交=ask、SELL 成交=bid）。
+			// 口径：entry=成交价(含滑点) / current=报价口径(不含滑点) → PnL 保守(止损偏早=安全)。
+			if entryBps, ok := computeEntrySpreadFromLegs(ctx, e.store, posID); ok {
+				_ = e.store.UpdateExpectedEntrySpreadBps(ctx, posID, entryBps)
+			}
 		}
 		return status, msg, posID
 	}

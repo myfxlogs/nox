@@ -70,12 +70,22 @@ func (e *Engine) checkExitCondition(ctx context.Context, p *pgstore.Position) (b
 	if netSwap <= e.cfg.SwapArbExitBps {
 		return true, fmt.Sprintf("net swap %.3f bps/day <= %.1f", netSwap, e.cfg.SwapArbExitBps)
 	}
-	// D-108 A5：基差止损——重算当前基差（两腿 venue 最新报价 cross-broker spread bps），
-	// basisBps > swapArbBasisExitBps（默认 4）→ 平仓（D-102 预设规则代码化）。
-	// 报价缺失/陈旧 → 不决策 return false（与 D-105 fail-closed 一致）。
-	if basisBps, bok := e.currentBasisBps(p); bok {
-		if basisBps > swapArbBasisExitBps {
-			return true, fmt.Sprintf("basis loss limit %.1f bps > %.1f", basisBps, swapArbBasisExitBps)
+	// D-180 S3：基差止损翻正——PnL_bps = currentBasisBps − expected_entry_spread_bps。
+	// PnL_bps < −BasisStopBps → 平仓（亏损方向，非旧 A5 的盈利方向绝对值门禁）。
+	// 口径：entry=成交价(含滑点) / current=报价口径(不含滑点) → PnL 保守(止损偏早=安全)。
+	// 基准列 NULL/报价缺失 → 不决策（fail-closed 惯例）。
+	// BasisStopBps<=0 → 回退旧 swapArbBasisExitBps 绝对值门禁（向后兼容）。
+	if e.cfg.BasisStopBps > 0 {
+		basisBps, bok := e.currentBasisBps(p)
+		if shouldClose, reason := basisStopLossCheck(basisBps, bok, p.ExpectedEntrySpreadBps, e.cfg.BasisStopBps); shouldClose {
+			return true, reason
+		}
+	} else {
+		// D-108 A5 旧门禁（BasisStopBps<=0 时回退）：basisBps > swapArbBasisExitBps → 平仓。
+		if basisBps, bok := e.currentBasisBps(p); bok {
+			if basisBps > swapArbBasisExitBps {
+				return true, fmt.Sprintf("basis loss limit %.1f bps > %.1f", basisBps, swapArbBasisExitBps)
+			}
 		}
 	}
 	return false, ""
@@ -85,17 +95,11 @@ func (e *Engine) checkExitCondition(ctx context.Context, p *pgstore.Position) (b
 // D-105 T1：venue 匹配加 found 标志——任一 venue 未匹配 fact → 缺数据不决策平仓（fail-closed，
 // 修复 #264 误平：facts 缺失时静默取 0 → 0≤0 假信号平仓）。新鲜度守卫改为对匹配到的 fact 检查
 // （旧值查 longFacts[0] 列表首元素，非该 venue 的 fact——同修）。
+// D-180 S2：净 swap 改用 swapRateFor（实测优先 settled → spec 兜底 → none fail-closed），
+// 删除规格直查旧路径。止损用原值（不应用折扣——防误杀存量仓）。
 func (e *Engine) recalcNetSwap(ctx context.Context, p *pgstore.Position) (float64, bool) {
 	canonical := canonicalFromOppID(p.OpportunityID)
 	if canonical == "" {
-		return 0, false
-	}
-	longFacts, err := e.store.LatestFacts(ctx, fact.KindSwapLong, "", canonical)
-	if err != nil || len(longFacts) == 0 {
-		return 0, false
-	}
-	shortFacts, err := e.store.LatestFacts(ctx, fact.KindSwapShort, "", canonical)
-	if err != nil || len(shortFacts) == 0 {
 		return 0, false
 	}
 	// 解析 legs 取 venue
@@ -118,36 +122,28 @@ func (e *Engine) recalcNetSwap(ctx context.Context, p *pgstore.Position) (float6
 	}
 	buyBare := strings.Split(buyVenue, ":")[0]
 	sellBare := strings.Split(sellVenue, ":")[0]
-	// D-105 T1：venue 匹配加 found 标志，缺数据不决策平仓。
-	var swapLong, swapShort float64
-	var longFact, shortFact *fact.Fact
-	for i := range longFacts {
-		if longFacts[i].Venue == buyBare {
-			swapLong = longFacts[i].Value
-			longFact = &longFacts[i]
+	// D-180 S2：swapRateFor 三态（settled 优先 → spec 兜底 → none fail-closed）。
+	// 止损用原值（不应用折扣——防误杀存量仓）。
+	longBps, longSrc := e.swapRateFor(ctx, buyBare, canonical, "BUY")
+	shortBps, shortSrc := e.swapRateFor(ctx, sellBare, canonical, "SELL")
+	if longSrc == swapSrcNone || shortSrc == swapSrcNone {
+		log.Printf("[autotrade] exit pos=%d: swapRateFor none (longSrc=%s shortSrc=%s) fail-closed",
+			p.ID, longSrc, shortSrc)
+		return 0, false
+	}
+	// D-159 W4a R7：spec 源时检查 fact 新鲜度（settled 7d 窗口已隐含新鲜度）。
+	// swapRateFor 内部已对 settled 做 7d 窗口过滤；spec 源需额外检查 SwapFactMaxAge。
+	if longSrc == swapSrcSpec || shortSrc == swapSrcSpec {
+		if !e.swapSpecFactsFresh(ctx, buyBare, sellBare, canonical) {
+			return 0, false
 		}
 	}
-	for i := range shortFacts {
-		if shortFacts[i].Venue == sellBare {
-			swapShort = shortFacts[i].Value
-			shortFact = &shortFacts[i]
-		}
+	factsNetSwap := longBps + shortBps
+	// 决策日志带 swap_src（取较低优先级：任一 spec → spec）
+	swapSrc := swapSrcSettled
+	if longSrc == swapSrcSpec || shortSrc == swapSrcSpec {
+		swapSrc = swapSrcSpec
 	}
-	if longFact == nil {
-		log.Printf("[autotrade] exit pos=%d: swap fact missing venue=%s", p.ID, buyBare)
-		return 0, false
-	}
-	if shortFact == nil {
-		log.Printf("[autotrade] exit pos=%d: swap fact missing venue=%s", p.ID, sellBare)
-		return 0, false
-	}
-	// D-159 W4a R7：TTL 统一用 cfg.SwapFactMaxAge（env 单源，默认 2h），与 discoverSwapCombos/swapledger 同源。
-	maxAge := e.cfg.SwapFactMaxAge
-	if maxAge > 0 && (time.Since(longFact.Ts) > maxAge || time.Since(shortFact.Ts) > maxAge) {
-		log.Printf("[autotrade] skip exit pos=%d: swap facts stale >%v", p.ID, maxAge)
-		return 0, false
-	}
-	factsNetSwap := swapLong + swapShort
 	// D-165 S2：broker 实际 swap 对拍——偏差超阈值用实际值触发退出。
 	// 复用 DailySwapAccrued 取 broker 实际日增量（USD），换算 bps 后 vs facts 规格值算偏差。
 	// 偏差 > SwapDeviationExitPct → 改用 broker 实际值（bps）返回（修复"规格声明 0 但实际负→退出路径不触发"）。
@@ -155,13 +151,41 @@ func (e *Engine) recalcNetSwap(ctx context.Context, p *pgstore.Position) (float6
 	if e.cfg.SwapDeviationExitPct > 0 {
 		if actualBps, ok := e.brokerActualNetSwapBps(ctx, p, legs, buyBare, sellBare, factsNetSwap); ok {
 			if deviationPct := swapDeviationBetween(factsNetSwap, actualBps); deviationPct > e.cfg.SwapDeviationExitPct {
-				log.Printf("[autotrade] exit pos=%d: swap deviation %.1f%% > %.1f%%, use broker actual %.4f bps vs facts %.4f bps",
-					p.ID, deviationPct, e.cfg.SwapDeviationExitPct, actualBps, factsNetSwap)
+				log.Printf("[autotrade] exit pos=%d: swap_src=%s deviation %.1f%% > %.1f%%, use broker actual %.4f bps vs %s %.4f bps",
+					p.ID, swapSrc, deviationPct, e.cfg.SwapDeviationExitPct, actualBps, swapSrc, factsNetSwap)
 				return actualBps, true
 			}
 		}
 	}
+	log.Printf("[autotrade] exit pos=%d: swap_src=%s netSwap=%.4f bps", p.ID, swapSrc, factsNetSwap)
 	return factsNetSwap, true
+}
+
+// swapSpecFactsFresh D-180 S2：检查 spec 源 swap_long/short facts 新鲜度（SwapFactMaxAge）。
+// swapRateFor 返回 spec 源时调用，settled 源已隐含 7d 窗口新鲜度无需再查。
+// 任一 venue 的 spec fact 陈旧 → false（fail-closed 不决策）。
+func (e *Engine) swapSpecFactsFresh(ctx context.Context, buyBare, sellBare, canonical string) bool {
+	maxAge := e.cfg.SwapFactMaxAge
+	if maxAge <= 0 {
+		return true
+	}
+	longFacts, err := e.store.LatestFacts(ctx, fact.KindSwapLong, buyBare, canonical)
+	if err != nil || len(longFacts) == 0 {
+		return false
+	}
+	if time.Since(longFacts[0].Ts) > maxAge {
+		log.Printf("[autotrade] skip exit: spec swap_long stale venue=%s >%v", buyBare, maxAge)
+		return false
+	}
+	shortFacts, err := e.store.LatestFacts(ctx, fact.KindSwapShort, sellBare, canonical)
+	if err != nil || len(shortFacts) == 0 {
+		return false
+	}
+	if time.Since(shortFacts[0].Ts) > maxAge {
+		log.Printf("[autotrade] skip exit: spec swap_short stale venue=%s >%v", sellBare, maxAge)
+		return false
+	}
+	return true
 }
 
 // brokerActualNetSwapBps D-165 S2：取 broker 实际净 swap（USD/日）换算 bps。
