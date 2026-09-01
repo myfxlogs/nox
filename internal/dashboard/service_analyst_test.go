@@ -69,13 +69,24 @@ func TestAppendNoteConcurrent(t *testing.T) {
 	const n = 50
 	var wg sync.WaitGroup
 	wg.Add(n)
+	// 收集 appendNote 错误——fd 压力下 OpenFile 可能失败，忽略错误会把
+	// 基础设施问题误报为并发数据丢失（D-177 CI EBADF 实证）。
+	var mu sync.Mutex
+	var errs []error
 	for i := 0; i < n; i++ {
 		go func(i int) {
 			defer wg.Done()
-			_ = appendNote(full, strings.Repeat("x", 100))
+			if err := appendNote(full, strings.Repeat("x", 100)); err != nil {
+				mu.Lock()
+				errs = append(errs, err)
+				mu.Unlock()
+			}
 		}(i)
 	}
 	wg.Wait()
+	if len(errs) > 0 {
+		t.Fatalf("appendNote errors (%d/%d): %v", len(errs), n, errs[0])
+	}
 	data, _ := os.ReadFile(full)
 	// 每次写 100 字符 'x'，50 次 = 5000 字符（无丢失/交错）
 	if got := len(string(data)); got != n*100 {
