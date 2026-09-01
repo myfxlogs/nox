@@ -172,6 +172,13 @@ func (s *Service) ResumeClose(ctx context.Context, posID int64) error {
 	return s.pipeline.ResumeClose(ctx, posID)
 }
 
+// ClaimClose D-189 R1：转发 store.ClaimClose（OPEN/LEGGED→CLOSING 原子领取）。
+// reconcile auto_close step c 先 ClaimClose 再 ResumeClose，修复 position 仍 OPEN 时
+// ResumeClose 拒绝非 CLOSING 导致永久卡死。
+func (s *Service) ClaimClose(ctx context.Context, posID int64) error {
+	return s.store.ClaimClose(ctx, posID)
+}
+
 // Settler 结算接口（D-087 §3.2，settlement.Settle 的注入面，dashboard 不依赖 settlement 包避免循环）。
 type Settler interface {
 	Settle(ctx context.Context, posID int64) error
