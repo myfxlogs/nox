@@ -80,8 +80,8 @@ func (s *Store) GetStrategyStat(ctx context.Context, strategy string) (*Strategy
 }
 
 // AggregateStrategyStats 实时聚合策略全量平仓净值（D-154 S1 淘汰判定 v2 真相源）。
-// 替代 strategy_stats 累计列——positions + position_cashflows 实时聚合，覆盖 LEGGED/skip 等不入 stat 的平仓。
-// net = realized_pnl + Σ(swap+funding+commission)（D-127 P4 同口径，commission 写入时已带负号）。
+// 替代 strategy_stats 累计列——position_settlements 实时聚合，覆盖 LEGGED/skip 等不入 stat 的平仓。
+// D-193-A：net 改读 settlement.net_realized_usd（正式净 PNL），legacy 行 fallback realized_usd。
 // realized_pnl IS NOT NULL = 可判定口径（LEGGED 历史清理仓 realized NULL 不计入）。
 // 0 笔时 total=0、wins=0、avg=0、median=0（COALESCE 兜底 NULL→0，调用方按 0 处理 → 小样本判据 median<0 永不成立 → 不杀）。
 func (s *Store) AggregateStrategyStats(ctx context.Context, strategy string) (AggregateStat, error) {
@@ -95,10 +95,9 @@ func (s *Store) AggregateStrategyStats(ctx context.Context, strategy string) (Ag
 			       avg(net) AS avg_pnl,
 			       percentile_cont(0.5) WITHIN GROUP (ORDER BY net) AS median_pnl
 			FROM (
-				SELECT p.realized_pnl + COALESCE(cf.net, 0) AS net
-				FROM positions p
-				LEFT JOIN (SELECT position_id, sum(amount_usd) AS net FROM position_cashflows GROUP BY position_id) cf
-					ON cf.position_id = p.id
+				SELECT COALESCE(s.net_realized_usd, s.realized_usd) AS net
+				FROM position_settlements s
+				JOIN positions p ON p.id = s.position_id
 				WHERE p.type = $1 AND p.closed_at IS NOT NULL AND p.realized_pnl IS NOT NULL
 			) t
 		) agg`, strategy).Scan(&st.Total, &st.Wins, &st.AvgPnl, &st.MedianPnl)

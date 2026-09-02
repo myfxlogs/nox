@@ -27,13 +27,15 @@ func testAggregateStore(t *testing.T) *Store {
 	}
 	t.Cleanup(s.Close)
 	prepareTestSchema(t, s)
-	if _, err := s.pool.Exec(ctx, `TRUNCATE positions, position_cashflows, position_legs CASCADE`); err != nil {
-		t.Fatalf("TRUNCATE positions/cashflows/legs: %v", err)
+	if _, err := s.pool.Exec(ctx, `TRUNCATE positions, position_cashflows, position_legs, position_settlements CASCADE`); err != nil {
+		t.Fatalf("TRUNCATE positions/cashflows/legs/settlements: %v", err)
 	}
 	return s
 }
 
-// insertAggPosition 插入一条 CLOSED 持仓（realized_pnl 非空），返回自增 id。
+// insertAggPosition 插入一条 CLOSED 持仓（realized_pnl 非空）+ settlement 行，返回自增 id。
+// D-193-A：AggregateStrategyStats 改读 position_settlements.net_realized_usd，
+// fixture 需同步插 settlement 行（net_realized_usd 初始=realized，cashflow 插入时累加）。
 func insertAggPosition(t *testing.T, s *Store, strategy string, realized float64) int64 {
 	t.Helper()
 	now := time.Now()
@@ -45,10 +47,18 @@ func insertAggPosition(t *testing.T, s *Store, strategy string, realized float64
 		"AGG:"+strategy+":vA:vB:"+now.Format("150405.000000")+"."+strconv.FormatInt(seq, 10), strategy, now, realized).Scan(&id); err != nil {
 		t.Fatalf("insert position: %v", err)
 	}
+	// 插 settlement 行：net_realized_usd 初始=realized（无 cashflow 时 = realized）
+	if _, err := s.pool.Exec(context.Background(),
+		`INSERT INTO position_settlements (position_id, vkey, expected_usd, realized_usd, hold_days, settled_at, net_realized_usd)
+		 VALUES ($1, $2, 10.0, $3, 1.0, now(), $3)`,
+		id, strategy+":vA:vB", realized); err != nil {
+		t.Fatalf("insert settlement pos=%d: %v", id, err)
+	}
 	return id
 }
 
-// insertAggCashflow 插入一条现金流（amount_usd 带符号）。
+// insertAggCashflow 插入一条现金流（amount_usd 带符号）并累加到 settlement.net_realized_usd。
+// D-193-A：AggregateStrategyStats 读 net_realized_usd，cashflow 插入时同步累加保持 net=realized+Σcf 语义。
 func insertAggCashflow(t *testing.T, s *Store, posID int64, kind string, amount float64) {
 	t.Helper()
 	if _, err := s.pool.Exec(context.Background(),
@@ -56,6 +66,12 @@ func insertAggCashflow(t *testing.T, s *Store, posID int64, kind string, amount 
 		 VALUES ($1, $2, 'test', $3, now())`,
 		posID, kind, amount); err != nil {
 		t.Fatalf("insert cashflow pos=%d kind=%s: %v", posID, kind, err)
+	}
+	// 累加到 settlement.net_realized_usd（保持 net = realized + Σcashflows 口径）
+	if _, err := s.pool.Exec(context.Background(),
+		`UPDATE position_settlements SET net_realized_usd = COALESCE(net_realized_usd, realized_usd) + $2 WHERE position_id = $1`,
+		posID, amount); err != nil {
+		t.Fatalf("update settlement net pos=%d: %v", posID, err)
 	}
 }
 

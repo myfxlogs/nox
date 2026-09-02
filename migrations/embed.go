@@ -103,3 +103,9 @@ var PositionNotionalUsdSQL string
 
 //go:embed 0053_position_closing_started_at.sql
 var PositionClosingStartedAtSQL string
+
+//go:embed 0054_cashflows_d193.sql
+var CashflowsD193SQL string
+
+//go:embed 0055_settlements_d193.sql
+var SettlementsD193SQL string
