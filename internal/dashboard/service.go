@@ -18,7 +18,10 @@ type Service struct {
 	store    *pgstore.Store
 	qbus     *bus.QuoteBus
 	pipeline *exec.Pipeline
-	bm       *BrokerManager
+	// D-195-A：执行控制面检查器（避免 dashboard→autotrade 循环依赖，用接口注入）。
+	// dashboard.New 内部自建 storeGateChecker（直接查 execution_controls）。
+	gateChecker GateChecker
+	bm          *BrokerManager
 	// reviewer 复盘触发（§13.6，D-034）。nil = 未接线（RPC 仍可用，仅触发不跑）。
 	reviewer func()
 	// settler 结算触发（D-087 §3.2，手动平仓后调）。nil = 未接线（RPC 仍可用，仅不结算）。
@@ -155,7 +158,7 @@ type FrontConfig struct {
 // commissionFor 为 per-venue 佣金解析器（D-111 收敛型实时 bps 成本扣除，nil = commissionBps=0）。
 // slippageBps 为滑点成本（D-111，slippageCost = slippageBps * 2）。
 func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64, fundingDropRatio float64, swapArbEquityUseRatio float64, swapArbBareCap float64, swapArbVenueExposureCap float64, priceTopic *bus.Topic[position.PositionPrice], oppTopic *bus.Topic[pgstore.Opportunity], orderTopic *bus.Topic[bus.OrderEvent], alertTopic *bus.Topic[pgstore.Alert], bpm *BrokerPositionMonitor, notionalUSD float64, acctMon *AccountMonitor, commissionFor func(string) float64, slippageBps float64) *Service {
-	return &Service{store: store, qbus: qbus, pipeline: pipeline, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, swapArbEquityUseRatio: swapArbEquityUseRatio, swapArbBareCap: swapArbBareCap, swapArbVenueExposureCap: swapArbVenueExposureCap, priceTopic: priceTopic, oppTopic: oppTopic, orderTopic: orderTopic, alertTopic: alertTopic, bpm: bpm, notionalUSD: notionalUSD, acctMon: acctMon, commissionFor: commissionFor, slippageBps: slippageBps}
+	return &Service{store: store, qbus: qbus, pipeline: pipeline, gateChecker: &storeGateChecker{store: store}, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, swapArbEquityUseRatio: swapArbEquityUseRatio, swapArbBareCap: swapArbBareCap, swapArbVenueExposureCap: swapArbVenueExposureCap, priceTopic: priceTopic, oppTopic: oppTopic, orderTopic: orderTopic, alertTopic: alertTopic, bpm: bpm, notionalUSD: notionalUSD, acctMon: acctMon, commissionFor: commissionFor, slippageBps: slippageBps}
 }
 
 // Store 返回底层 store（D-070 autotrade engine 用）。

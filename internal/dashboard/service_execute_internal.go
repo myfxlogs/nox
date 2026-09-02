@@ -21,6 +21,13 @@ func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, request
 	if qty <= 0 {
 		return "FAILED", "invalid quantity", 0
 	}
+	// D-195-A：统一执行模式检查（手动入口同源，首版只用 global scope）
+	if s.gateChecker != nil {
+		mode, allowed, cpReason, cpErr := s.gateChecker.CheckGate(ctx)
+		if cpErr != nil || !allowed {
+			return "FAILED", fmt.Sprintf("execution mode blocked: %s (mode=%s)", cpReason, mode), 0
+		}
+	}
 	opps, err := s.store.ListOpportunities(ctx, "", 200, 0)
 	if err != nil {
 		return "FAILED", fmt.Sprintf("list opportunities: %v", err), 0
@@ -116,6 +123,13 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 	}
 	if qty <= 0 {
 		return "FAILED", "invalid quantity", 0
+	}
+	// D-195-A：统一执行模式检查（手动入口同源，首版只用 global scope）
+	if s.gateChecker != nil {
+		mode, allowed, cpReason, cpErr := s.gateChecker.CheckGate(ctx)
+		if cpErr != nil || !allowed {
+			return "FAILED", fmt.Sprintf("execution mode blocked: %s (mode=%s)", cpReason, mode), 0
+		}
 	}
 	// D-159 W6a S5：手动 RPC 不绕 CLOSE_ONLY——非 RUNNING 拒绝开仓（fail-closed）。
 	state, err := s.checkAutotradeState(ctx)
