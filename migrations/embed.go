@@ -130,3 +130,6 @@ var PositionReviewsSQL string
 
 //go:embed 0062_execution_controls.sql
 var ExecutionControlsSQL string
+
+//go:embed 0063_position_legs_attempt.sql
+var PositionLegsAttemptSQL string

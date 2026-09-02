@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // ErrTerminalState 持仓已是终态（CLOSED/FAILED），不可回退（D-077 修复⑩ G4）。
@@ -31,6 +33,9 @@ type Position struct {
 	NotionalUSD            *float64   // D-179：该 position 全部腿名义合计（USD；SWAPARB=双腿=2×单腿）
 	ClosingStartedAt       *time.Time // D-189 P0-4：进入 CLOSING 的真实起始时间（reconcile 超时判定用）
 	UncertaintyReason      *string    // D-189 P0-4：UNKNOWN 标记（CLOSING+uncertainty_reason IS NOT NULL）
+	RequestID              string     // D-195-B：执行意图唯一 ID（migration 0048 列，本包开始写入）
+	DedupKey               string     // D-195-B：业务组合防重（migration 0048 列，本包开始写入）
+	Environment            string     // D-195-B：执行环境 demo/live（migration 0048 列，本包开始写入）
 }
 
 // PositionLeg 对应 position_legs 表（§2.11）。
@@ -48,17 +53,41 @@ type PositionLeg struct {
 	PriceActual   *float64
 	OrderID       string
 	Status        string
-	Ts            time.Time
+	// D-195-B §4.2：attempt 字段扩展。
+	AttemptNo       int16    // 1=首次尝试；>1=重试
+	ParentAttemptID *int64   // nil = 首次尝试；非 nil = 重试关联原 attempt
+	ClientOrderID   string   // 确定性客户端订单号（venue 支持时携带）
+	RequestedQty    *float64 // nil = 旧行兼容
+	FilledQty       *float64
+	AvgFillPrice    *float64
+	FeeRaw          string // venue 原始手续费字符串
+	FeeUSD          *float64
+	SubmittedAt     *time.Time
+	UncertainAt     *time.Time // status=UNKNOWN 时写入
+	Ts              time.Time
 }
 
 // CreatePosition 建 position 记录，返回 ID。
 // D-087 §3.3：opened_at = now()（holdDays 计算依赖，原 NULL 兜底 min(leg ts) 仍保留作冗余）。
 // D-179 S2：notional_usd 列同步（p.NotionalUSD 非 nil 时落盘，nil=NULL 向后兼容）。
+// D-195-B：request_id/dedup_key/environment 写入（空字符串→NULL，避免触发唯一约束）。
 func (s *Store) CreatePosition(ctx context.Context, p *Position) (int64, error) {
-	q := `INSERT INTO positions (opportunity_id, type, status, expected_net_bps, opened_at, notional_usd)
-		VALUES ($1, $2, $3, $4, now(), $5) RETURNING id`
+	var reqID, dedupKey, env interface{}
+	if p.RequestID != "" {
+		reqID = p.RequestID
+	}
+	if p.DedupKey != "" {
+		dedupKey = p.DedupKey
+	}
+	if p.Environment != "" {
+		env = p.Environment
+	}
+	q := `INSERT INTO positions (opportunity_id, type, status, expected_net_bps, opened_at, notional_usd,
+			request_id, dedup_key, environment)
+		VALUES ($1, $2, $3, $4, now(), $5, $6, $7, $8) RETURNING id`
 	var id int64
-	err := s.pool.QueryRow(ctx, q, p.OpportunityID, p.Type, p.Status, p.ExpectedNetBps, p.NotionalUSD).Scan(&id)
+	err := s.pool.QueryRow(ctx, q, p.OpportunityID, p.Type, p.Status, p.ExpectedNetBps, p.NotionalUSD,
+		reqID, dedupKey, env).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("create position: %w", err)
 	}
@@ -178,13 +207,17 @@ func (s *Store) ClosePosition(ctx context.Context, id int64, realizedPnl float64
 // ON CONFLICT (position_id, leg_no, phase) DO NOTHING：并发对账+手动平仓重复写 CLOSE leg 时
 // 只第一次生效（返回 ErrTerminalState 表示已存在），防重复 CLOSE leg + 重复 cashflow。
 func (s *Store) CreatePositionLeg(ctx context.Context, leg *PositionLeg) error {
-	q := `INSERT INTO position_legs (position_id, leg_no, phase, venue, account, symbol, side, qty,
-		price_expected, price_actual, order_id, status)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-		ON CONFLICT (position_id, leg_no, phase) DO NOTHING`
+	q := `INSERT INTO position_legs (position_id, leg_no, phase, attempt_no, venue, account, symbol, side, qty,
+		price_expected, price_actual, order_id, status,
+		parent_attempt_id, client_order_id, requested_qty, filled_qty, avg_fill_price,
+		fee_raw, fee_usd, submitted_at, uncertain_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+		ON CONFLICT (position_id, leg_no, phase, attempt_no) DO NOTHING`
 	ct, err := s.pool.Exec(ctx, q,
-		leg.PositionID, leg.LegNo, leg.Phase, leg.Venue, leg.Account, leg.Symbol, leg.Side,
-		leg.Qty, leg.PriceExpected, leg.PriceActual, leg.OrderID, leg.Status)
+		leg.PositionID, leg.LegNo, leg.Phase, leg.AttemptNo, leg.Venue, leg.Account, leg.Symbol, leg.Side,
+		leg.Qty, leg.PriceExpected, leg.PriceActual, leg.OrderID, leg.Status,
+		leg.ParentAttemptID, leg.ClientOrderID, leg.RequestedQty, leg.FilledQty, leg.AvgFillPrice,
+		leg.FeeRaw, leg.FeeUSD, leg.SubmittedAt, leg.UncertainAt)
 	if err != nil {
 		return err
 	}
@@ -196,47 +229,25 @@ func (s *Store) CreatePositionLeg(ctx context.Context, leg *PositionLeg) error {
 
 // ListPositionLegs 返回指定持仓的全部腿。
 func (s *Store) ListPositionLegs(ctx context.Context, posID int64) ([]PositionLeg, error) {
-	q := `SELECT id, position_id, leg_no, phase, venue, account, symbol, side, qty,
-		price_expected, price_actual, order_id, status, ts
-		FROM position_legs WHERE position_id = $1 ORDER BY leg_no`
+	q := `SELECT ` + legSelectColumns + ` FROM position_legs WHERE position_id = $1 ORDER BY leg_no`
 	rows, err := s.pool.Query(ctx, q, posID)
 	if err != nil {
 		return nil, fmt.Errorf("list legs: %w", err)
 	}
 	defer rows.Close()
-	var out []PositionLeg
-	for rows.Next() {
-		var l PositionLeg
-		if err := rows.Scan(&l.ID, &l.PositionID, &l.LegNo, &l.Phase, &l.Venue, &l.Account,
-			&l.Symbol, &l.Side, &l.Qty, &l.PriceExpected, &l.PriceActual, &l.OrderID, &l.Status, &l.Ts); err != nil {
-			return nil, err
-		}
-		out = append(out, l)
-	}
-	return out, rows.Err()
+	return scanLegs(rows)
 }
 
 // ListPositionLegsByPhase D-159 W2a：按 phase 过滤查腿（残量校验用，只查 CLOSE phase 腿）。
 // 复用 ListPositionLegs 的 SELECT 列，加 WHERE phase = $2 过滤。
 func (s *Store) ListPositionLegsByPhase(ctx context.Context, posID int64, phase string) ([]PositionLeg, error) {
-	q := `SELECT id, position_id, leg_no, phase, venue, account, symbol, side, qty,
-		price_expected, price_actual, order_id, status, ts
-		FROM position_legs WHERE position_id = $1 AND phase = $2 ORDER BY leg_no`
+	q := `SELECT ` + legSelectColumns + ` FROM position_legs WHERE position_id = $1 AND phase = $2 ORDER BY leg_no`
 	rows, err := s.pool.Query(ctx, q, posID, phase)
 	if err != nil {
 		return nil, fmt.Errorf("list legs by phase: %w", err)
 	}
 	defer rows.Close()
-	var out []PositionLeg
-	for rows.Next() {
-		var l PositionLeg
-		if err := rows.Scan(&l.ID, &l.PositionID, &l.LegNo, &l.Phase, &l.Venue, &l.Account,
-			&l.Symbol, &l.Side, &l.Qty, &l.PriceExpected, &l.PriceActual, &l.OrderID, &l.Status, &l.Ts); err != nil {
-			return nil, err
-		}
-		out = append(out, l)
-	}
-	return out, rows.Err()
+	return scanLegs(rows)
 }
 
 // SetPositionNote D-159 W2a：更新 position.note 字段（settlement 失败标记 settle_failed 用）。
@@ -244,4 +255,33 @@ func (s *Store) ListPositionLegsByPhase(ctx context.Context, posID int64, phase 
 func (s *Store) SetPositionNote(ctx context.Context, id int64, note string) error {
 	_, err := s.pool.Exec(ctx, `UPDATE positions SET note = $1 WHERE id = $2`, note, id)
 	return err
+}
+
+// GetPositionByRequestID D-195-B §4.1：request_id 幂等查询（重复提交返回已有 position）。
+// 不存在 → 返回 (nil, nil)（调用方按"新建"处理）。
+func (s *Store) GetPositionByRequestID(ctx context.Context, requestID string) (*Position, error) {
+	row := s.pool.QueryRow(ctx, `
+		SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), opened_at, closed_at, note,
+		       notional_usd, request_id, dedup_key, environment
+		FROM positions WHERE request_id = $1`, requestID)
+	var p Position
+	var reqID, dedupKey, env *string
+	err := row.Scan(&p.ID, &p.OpportunityID, &p.Type, &p.Status, &p.ExpectedNetBps, &p.OpenedAt, &p.ClosedAt, &p.Note,
+		&p.NotionalUSD, &reqID, &dedupKey, &env)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get position by request_id: %w", err)
+	}
+	if reqID != nil {
+		p.RequestID = *reqID
+	}
+	if dedupKey != nil {
+		p.DedupKey = *dedupKey
+	}
+	if env != nil {
+		p.Environment = *env
+	}
+	return &p, nil
 }
