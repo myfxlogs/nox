@@ -27,12 +27,21 @@ type KillSwitchReason struct {
 // execution_controls 是执行模式唯一持久化来源；
 // autotrade_state 只能降级权限，不能提升执行权限。
 type ControlPlane struct {
-	store *pgstore.Store
+	store           *pgstore.Store
+	liveGateChecker *LiveGateChecker // D-195-C1：LIVE 模式导出门（nil=LIVE 直接拒绝）
 }
 
 // NewControlPlane 创建控制面服务。
 func NewControlPlane(store *pgstore.Store) *ControlPlane {
 	return &ControlPlane{store: store}
+}
+
+// SetLiveGateChecker D-195-C1：注入 LiveGate 检查器（LIVE 模式导出门，nil 安全）。
+// 不改 NewControlPlane 签名（已有调用方不动）；autotrade.New 内部调用此方法注入。
+func (cp *ControlPlane) SetLiveGateChecker(lg *LiveGateChecker) {
+	if lg != nil {
+		cp.liveGateChecker = lg
+	}
 }
 
 // GetMode 读取当前执行模式（首版只用 global scope；account 级覆盖留后续工作包）。
@@ -163,6 +172,17 @@ func (cp *ControlPlane) CheckGate(ctx context.Context) (mode string, allowed boo
 	}
 	if mode == ModePaper || mode == ModeTest {
 		return mode, true, "allowed", nil
+	}
+	// D-195-C1 §3.2：LIVE 模式导出门——LiveGate 8 条检查。
+	if mode == "LIVE" {
+		if cp.liveGateChecker == nil {
+			return mode, false, "LIVE mode but no live gate checker configured", nil
+		}
+		lgResult := cp.liveGateChecker.Check(ctx, "", "", "")
+		if !lgResult.Passed {
+			return mode, false, "live gate check failed: " + FormatLiveGateReasons(lgResult.Reasons), nil
+		}
+		return mode, true, "LIVE allowed by live gate", nil
 	}
 	// 未知 mode → fail-closed
 	return mode, false, "unknown mode: " + mode, nil

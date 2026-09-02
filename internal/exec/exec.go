@@ -157,3 +157,10 @@ func (r *Registry) Get(venueKey string) (Executor, bool) {
 	e, ok := r.executors[venueKey]
 	return e, ok
 }
+
+// Len D-195-C1：返回已注册执行器数量（readiness executor_ready 层用）。
+func (r *Registry) Len() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return len(r.executors)
+}
