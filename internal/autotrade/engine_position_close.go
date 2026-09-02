@@ -61,6 +61,8 @@ func (e *Engine) checkAllStrategiesDisabled(ctx context.Context) bool {
 
 // runStartupElimination 启动首跑淘汰判定（D-072 §4.3，回填后立即生效）。
 // D-154 S1 裁决①：输入源改 AggregateStrategyStats 实时聚合（与 settlement.go 同源 P3）；disabled 仍查 strategy_stats。
+// D-200：聚合改 ByEnvironment，按 e.cfg.Environment 过滤——旧持仓 environment='' 不匹配 'demo'
+// → 聚合 0 笔 → 不触发淘汰（止血：避免未校准 PnL 的旧持仓跨 environment 触发误杀）。
 func (e *Engine) runStartupElimination(ctx context.Context) {
 	strategies := []string{"CROSS_VENUE", "MEANREVERT", "SWAPARB", "CARRY", "FUNDING_HEDGE", "PERP_FUNDING"}
 	for _, s := range strategies {
@@ -68,7 +70,7 @@ func (e *Engine) runStartupElimination(ctx context.Context) {
 		if err != nil {
 			continue
 		}
-		agg, err := e.store.AggregateStrategyStats(ctx, s)
+		agg, err := e.store.AggregateStrategyStatsByEnvironment(ctx, s, e.cfg.Environment)
 		if err != nil {
 			log.Printf("[autotrade] startup elimination aggregate %s: %v", s, err)
 			continue
