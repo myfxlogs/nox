@@ -178,12 +178,22 @@ func TestRunStartupElimination_AggregateInput(t *testing.T) {
 
 	// 场景①：PERP_FUNDING 策略，7 笔全负（median<0 avg<0）→ 判杀
 	// nets = [-3,-3,-2,-1,-1,-0.5,-0.5] → median=-1, avg=-1.57
+	// D-193-A 复审退回 R1：AggregateStrategyStats 改读 position_settlements.net_realized_usd，
+	// fixture 需同步插 settlement 行（net_realized_usd=realized_pnl），与 autotrade_aggregate_test.go 的
+	// insertAggPosition 适配方式一致。
 	for i, realized := range []float64{-3, -3, -2, -1, -1, -0.5, -0.5} {
-		if _, err := s.Pool().Exec(ctx,
+		var posID int64
+		if err := s.Pool().QueryRow(ctx,
 			`INSERT INTO positions (opportunity_id, type, status, opened_at, closed_at, realized_pnl)
-			 VALUES ($1, 'PERP_FUNDING', 'CLOSED', now(), now(), $2)`,
-			"PFUND:kill:vA:vB:"+strconv.Itoa(i), realized); err != nil {
+			 VALUES ($1, 'PERP_FUNDING', 'CLOSED', now(), now(), $2) RETURNING id`,
+			"PFUND:kill:vA:vB:"+strconv.Itoa(i), realized).Scan(&posID); err != nil {
 			t.Fatalf("insert pos %d: %v", i, err)
+		}
+		if _, err := s.Pool().Exec(ctx,
+			`INSERT INTO position_settlements (position_id, vkey, expected_usd, realized_usd, hold_days, settled_at, net_realized_usd)
+			 VALUES ($1, 'PERP_FUNDING:vA:vB', 10.0, $2, 1.0, now(), $2)`,
+			posID, realized); err != nil {
+			t.Fatalf("insert settlement pos %d: %v", i, err)
 		}
 	}
 	// strategy_stats 不插累计列（验证不读累计列）——仅 disabled=false 默认
@@ -202,12 +212,20 @@ func TestRunStartupElimination_AggregateInput(t *testing.T) {
 
 	// 场景②：SWAPARB 策略，8 笔多数正（median>0）→ 不杀
 	// nets = [+1,+1,+1,+1,+1,-0.5,-0.5,-0.5] → median=+1（排序后第4/5位=+1,+1 平均=+1）, avg=+0.4375
+	// D-193-A 复审退回 R1：同场景①补 settlement 行。
 	for i, realized := range []float64{1, 1, 1, 1, 1, -0.5, -0.5, -0.5} {
-		if _, err := s.Pool().Exec(ctx,
+		var posID int64
+		if err := s.Pool().QueryRow(ctx,
 			`INSERT INTO positions (opportunity_id, type, status, opened_at, closed_at, realized_pnl)
-			 VALUES ($1, 'SWAPARB', 'CLOSED', now(), now(), $2)`,
-			"SWARB:keep:vA:vB:"+strconv.Itoa(i), realized); err != nil {
+			 VALUES ($1, 'SWAPARB', 'CLOSED', now(), now(), $2) RETURNING id`,
+			"SWARB:keep:vA:vB:"+strconv.Itoa(i), realized).Scan(&posID); err != nil {
 			t.Fatalf("insert keep pos %d: %v", i, err)
+		}
+		if _, err := s.Pool().Exec(ctx,
+			`INSERT INTO position_settlements (position_id, vkey, expected_usd, realized_usd, hold_days, settled_at, net_realized_usd)
+			 VALUES ($1, 'SWAPARB:vA:vB', 10.0, $2, 1.0, now(), $2)`,
+			posID, realized); err != nil {
+			t.Fatalf("insert keep settlement pos %d: %v", i, err)
 		}
 	}
 	e.runStartupElimination(ctx)
