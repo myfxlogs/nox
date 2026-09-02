@@ -225,6 +225,8 @@ func (s *Service) SetOppContractSize(f func(canonical, venueKey string) (float64
 
 // OppContractSize 透传机会卡 CS 查询（D-135 autotrade engine sizing 用）。
 // nil 接线 → (0,false)；CEX 腿 CS=1 由 resolver 内部处理（与 D-062 同语义）。
+// D-190：勿用于 sizing——notional 链 CS 单一来源=legContractSizeOf（USDPerLotForLeg 内部）。
+// 本函数仅保留机会卡展示用途。
 func (s *Service) OppContractSize(canonical, venueKey string) (float64, bool) {
 	if s.oppContractSize == nil {
 		return 0, false

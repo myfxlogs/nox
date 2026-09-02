@@ -12,6 +12,7 @@ import (
 
 	"arb/internal/fact"
 	"arb/internal/store/pgstore"
+	"arb/internal/usdnotional"
 )
 
 // swapDeviationBetweenPct D-165 S1/S2 同源纯函数（复制避免跨包依赖，与 gate_checks.go 注释一致）。
@@ -101,21 +102,23 @@ func (s *Service) checkSwapDeviationGate(ctx context.Context, canonical, venueBu
 					}
 				}
 			}
-			notional := leg.Qty
+			// D-190：notional 改 usdnotional.PerLot（USD 统一换算，JPY 对 ÷ USDJPY）。
+			// cs 仍用 s.legContractSize，nil→CS=1 回退（现状语义）。
+			price := 0.0
 			if leg.PriceActual != nil {
-				notional *= *leg.PriceActual
+				price = *leg.PriceActual
 			}
-			// D-165.1：补 ContractSize 乘法（MT 腿 CS≠1 时 notional 少算 CS 倍）。
+			cs := 1.0
 			if s.legContractSize != nil {
-				cs, ok := s.legContractSize(leg.Venue, leg.Symbol)
-				if !ok || cs <= 0 {
-					continue
+				if resolved, ok := s.legContractSize(leg.Venue, leg.Symbol); ok && resolved > 0 {
+					cs = resolved
 				}
-				notional *= cs
 			}
-			if notional <= 0 {
-				continue
+			perLot, ok := usdnotional.PerLot(canonical, price, cs, s.qbus)
+			if !ok || perLot <= 0 {
+				continue // 无法算 USD notional→跳过（走 S3，fail-closed）
 			}
+			notional := leg.Qty * perLot
 			factsUSD := factsBps * notional / 10000
 			deviationPct := swapDeviationBetweenPct(factsUSD, actualUSD)
 			if deviationPct > s.swapDeviationGatePct {

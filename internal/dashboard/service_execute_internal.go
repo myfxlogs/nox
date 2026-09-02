@@ -10,6 +10,7 @@ import (
 	"arb/internal/combo"
 	"arb/internal/exec"
 	"arb/internal/store/pgstore"
+	"arb/internal/usdnotional"
 )
 
 // ExecuteOpportunityInternal 执行机会的核心逻辑（D-070 抽取，供 RPC 和 autotrade engine 复用）。
@@ -158,15 +159,23 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 	sellQty := math.Round(qty*csBuy/csSell*100) / 100
 	qty = s.floorToStepQty(venueBuy, qbuy.VenueSymbol, qty)
 	sellQty = s.floorToStepQty(venueSell, qsell.VenueSymbol, sellQty)
-	// CFD notional cap
+	// CFD notional cap（D-190：两处 cap 检查改 usdnotional.PerLot，USD 统一换算）
 	if isMTVenue(venueBuy) {
-		notional := qty * csBuy * qbuy.Ask
+		perLot, ok := usdnotional.PerLot(canonical, qbuy.Ask, csBuy, s.qbus)
+		if !ok {
+			return "FAILED", "buy leg usd per lot unavailable (fail-closed)", 0
+		}
+		notional := qty * perLot
 		if notional > maxNotional {
 			qty = s.floorToStepQtyMin(venueBuy, qbuy.VenueSymbol)
 		}
 	}
 	if isMTVenue(venueSell) {
-		notional := sellQty * csSell * qsell.Bid
+		perLot, ok := usdnotional.PerLot(canonical, qsell.Bid, csSell, s.qbus)
+		if !ok {
+			return "FAILED", "sell leg usd per lot unavailable (fail-closed)", 0
+		}
+		notional := sellQty * perLot
 		if notional > maxNotional {
 			sellQty = s.floorToStepQtyMin(venueSell, qsell.VenueSymbol)
 		}
