@@ -118,3 +118,12 @@ var CapitalSnapshotsSQL string
 
 //go:embed 0058_ledger_d193.sql
 var LedgerD193SQL string
+
+//go:embed 0059_hypotheses.sql
+var HypothesesSQL string
+
+//go:embed 0060_capital_decisions.sql
+var CapitalDecisionsSQL string
+
+//go:embed 0061_position_reviews.sql
+var PositionReviewsSQL string

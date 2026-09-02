@@ -54,6 +54,9 @@ var migrationFiles = []struct {
 	{56, migrations.CapitalAccountsSQL},
 	{57, migrations.CapitalSnapshotsSQL},
 	{58, migrations.LedgerD193SQL},
+	{59, migrations.HypothesesSQL},
+	{60, migrations.CapitalDecisionsSQL},
+	{61, migrations.PositionReviewsSQL},
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

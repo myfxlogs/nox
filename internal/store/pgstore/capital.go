@@ -140,28 +140,9 @@ func (s *Store) AppendCapitalMovement(ctx context.Context, m *capital.CapitalMov
 	return nil
 }
 
-// D-193 审计 P0-4：以下 5 个方法为 D-193-C 占位，返回 not-yet-implemented。
-// D-193-C 替换为真实实现（需 capital_decisions/hypotheses 表）。
-
-func (s *Store) AppendDecision(ctx context.Context, decision capital.CapitalDecision) error {
-	return errors.New("AppendDecision: not yet implemented (D-193-C)")
-}
-
-func (s *Store) CurrentState(ctx context.Context, accountID int64) (string, error) {
-	return "", errors.New("CurrentState: not yet implemented (D-193-C)")
-}
-
-func (s *Store) CurrentOverallState(ctx context.Context, accountIDs []int64) (string, error) {
-	return "", errors.New("CurrentOverallState: not yet implemented (D-193-C)")
-}
-
-func (s *Store) Drawdown(ctx context.Context, accountID int64, at time.Time) (capital.Drawdown, error) {
-	return capital.Drawdown{}, errors.New("Drawdown: not yet implemented (D-193-C)")
-}
-
-func (s *Store) OverallDrawdown(ctx context.Context, accountIDs []int64, at time.Time) (capital.Drawdown, error) {
-	return capital.Drawdown{}, errors.New("OverallDrawdown: not yet implemented (D-193-C)")
-}
+// D-193-C：以下 5 个方法已迁移到真实实现：
+//   AppendDecision/CurrentState/CurrentOverallState → hypotheses.go
+//   Drawdown/OverallDrawdown → capital_drawdown.go
 
 // CurrentOverallSnapshot D-193 §5.1：读总体最新快照（scope_type=overall）。
 // D-193-B 首版：按 scope_key 查最新 overall 快照。D-193-C 接入多账户归约。
