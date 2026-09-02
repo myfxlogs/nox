@@ -1,4 +1,6 @@
 // service_swap_deviation_test.go —— D-182 S4：手动 RPC swap 偏差拦截单测。
+// D-190 返修 R5：AUDJPY 腿 notional 改 usdnotional.PerLot 需 s.qbus 注入 USDJPY 报价；
+// setup 补 newSwapDeviationQuotes helper + Service.qbus 注入；断言按换算后 notional 口径。
 package dashboard
 
 import (
@@ -7,10 +9,19 @@ import (
 	"testing"
 	"time"
 
+	"arb/internal/bus"
 	"arb/internal/fact"
 	"arb/internal/store/pgstore"
 	"arb/internal/testutil"
 )
+
+// newSwapDeviationQuotes D-190 R5：构造带 USDJPY 报价的 QuoteBus（AUDJPY 腿 PerLot 用）。
+// USDJPY=150 → AUDJPY CS=1 price=100 → usdPerLot=100/150≈0.667。
+func newSwapDeviationQuotes() *bus.QuoteBus {
+	qb := bus.New()
+	qb.Publish(bus.Quote{Symbol: "USDJPY", Bid: 149.9, Ask: 150.1, Time: time.Now()})
+	return qb
+}
 
 // setupSwapDeviationServiceStore 构造真库 store + broker_accounts + facts + position+legs+snapshots。
 // factsLongBps/factsShortBps：swap_long/swap_short facts 规格值（bps）。
@@ -108,10 +119,11 @@ func TestSwapDeviationBetweenPct(t *testing.T) {
 }
 
 // TestCheckSwapDeviationGate_HighDeviation_Rejected D-182 S4：偏差 > 50% → 拒绝。
+// D-190 R5：AUDJPY 腿 PerLot 需 USDJPY 报价；CS=1, price=100, USDJPY=150 → usdPerLot=0.667, notional=0.01×0.667=0.00667。
 // facts=0 bps（factsUSD=0），actual=-2.21 USD → 偏差 100% > 50% → 拒绝。
 func TestCheckSwapDeviationGate_HighDeviation_Rejected(t *testing.T) {
 	s := setupSwapDeviationServiceStore(t, "vA:mt5", "vB:mt5", 0.0, 0.0, -2.21, 0.01, 100.0)
-	svc := &Service{store: s, swapDeviationGatePct: 50.0}
+	svc := &Service{store: s, qbus: newSwapDeviationQuotes(), swapDeviationGatePct: 50.0}
 	msg := svc.checkSwapDeviationGate(context.Background(), "AUDJPY", "vA:mt5", "vB:mt5")
 	if msg == "" {
 		t.Fatal("high deviation: want non-empty reject reason, got empty")
@@ -122,10 +134,12 @@ func TestCheckSwapDeviationGate_HighDeviation_Rejected(t *testing.T) {
 }
 
 // TestCheckSwapDeviationGate_LowDeviation_Pass D-182 S4：偏差 < 50% → 放行。
-// facts=0.5 bps（notional=0.01×100=1，factsUSD=0.005），actual=0.005 USD → 偏差 0% < 50% → 放行。
+// D-190 R5：notional=0.00667（JPY ÷USDJPY），facts=0.5 bps → factsUSD=0.5×0.00667/10000≈0.0000003。
+// actual=0.005 USD → 偏差 |0.0000003-0.005|/max(...,0.01)*100 ≈ 50%（边界）。
+// 改用更小 actual 让偏差<50%：actual=0.000001 → 偏差≈0% < 50% → 放行。
 func TestCheckSwapDeviationGate_LowDeviation_Pass(t *testing.T) {
-	s := setupSwapDeviationServiceStore(t, "vA:mt5", "vB:mt5", 0.5, 0.0, 0.005, 0.01, 100.0)
-	svc := &Service{store: s, swapDeviationGatePct: 50.0}
+	s := setupSwapDeviationServiceStore(t, "vA:mt5", "vB:mt5", 0.5, 0.0, 0.000001, 0.01, 100.0)
+	svc := &Service{store: s, qbus: newSwapDeviationQuotes(), swapDeviationGatePct: 50.0}
 	msg := svc.checkSwapDeviationGate(context.Background(), "AUDJPY", "vA:mt5", "vB:mt5")
 	if msg != "" {
 		t.Errorf("low deviation: want empty (pass), got %q", msg)
@@ -135,7 +149,7 @@ func TestCheckSwapDeviationGate_LowDeviation_Pass(t *testing.T) {
 // TestCheckSwapDeviationGate_Disabled_Pass D-182 S4 反证：阈值=0（禁用）→ 高偏差也放行。
 func TestCheckSwapDeviationGate_Disabled_Pass(t *testing.T) {
 	s := setupSwapDeviationServiceStore(t, "vA:mt5", "vB:mt5", 0.0, 0.0, -2.21, 0.01, 100.0)
-	svc := &Service{store: s, swapDeviationGatePct: 0} // 禁用
+	svc := &Service{store: s, qbus: newSwapDeviationQuotes(), swapDeviationGatePct: 0} // 禁用
 	msg := svc.checkSwapDeviationGate(context.Background(), "AUDJPY", "vA:mt5", "vB:mt5")
 	if msg != "" {
 		t.Errorf("disabled: want empty (pass), got %q", msg)
