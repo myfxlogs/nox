@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"context"
 	"strings"
 	"time"
 )
@@ -85,4 +86,26 @@ func (m *MTHealthMonitor) collectQuoteAges(now time.Time) map[string]time.Durati
 		out[v] = now.Sub(t)
 	}
 	return out
+}
+
+// collectAliases 从 store 查 venue→alias 映射（D-203：告警/日志用别名）。
+// 查询失败 → 返回空 map（回退裸账号，不阻断）。
+func (m *MTHealthMonitor) collectAliases(ctx context.Context) map[string]string {
+	out := make(map[string]string)
+	if m.store == nil {
+		return out
+	}
+	aliases, err := m.store.ListAccountAliases(ctx)
+	if err != nil {
+		return out // 回退裸账号
+	}
+	return aliases
+}
+
+// aliasOrVenue 有别名用别名，无别名回退裸 venue（D-203）。
+func aliasOrVenue(venue string, aliases map[string]string) string {
+	if a, ok := aliases[venue]; ok && a != "" {
+		return a
+	}
+	return venue
 }

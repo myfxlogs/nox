@@ -16,9 +16,10 @@ import (
 
 // fakeHealthStore 健康监控 fake store（D-104 P0 单测）。
 type fakeHealthStore struct {
-	mu     sync.Mutex
-	facts  map[string][]fact.Fact // kind → facts
-	alerts []fakeAlert
+	mu      sync.Mutex
+	facts   map[string][]fact.Fact // kind → facts
+	aliases map[string]string      // venue → alias（D-203）
+	alerts  []fakeAlert
 }
 
 type fakeAlert struct {
@@ -27,13 +28,23 @@ type fakeAlert struct {
 }
 
 func newFakeHealthStore() *fakeHealthStore {
-	return &fakeHealthStore{facts: make(map[string][]fact.Fact)}
+	return &fakeHealthStore{facts: make(map[string][]fact.Fact), aliases: make(map[string]string)}
 }
 
 func (s *fakeHealthStore) LatestFacts(_ context.Context, kind, _, _ string) ([]fact.Fact, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.facts[kind], nil
+}
+
+func (s *fakeHealthStore) ListAccountAliases(_ context.Context) (map[string]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make(map[string]string, len(s.aliases))
+	for k, v := range s.aliases {
+		out[k] = v
+	}
+	return out, nil
 }
 
 func (s *fakeHealthStore) InsertAlert(_ context.Context, _ *int64, level, message string) error {
@@ -493,5 +504,70 @@ func TestMTHealth_MT5VenueMarginCritStillWorks(t *testing.T) {
 	}
 	if marginCrit != 1 {
 		t.Errorf("MT5 venue 无 margin fact 应发 1 条 margin critical，got %d", marginCrit)
+	}
+}
+
+// TestMTHealth_AlertUsesAlias D-203：告警消息用别名而非裸账号。
+// 场景：venue "vD:mt5" alias "EXR-test" → margin critical 告警消息含 "EXR-test" 不含 "vD"。
+func TestMTHealth_AlertUsesAlias(t *testing.T) {
+	log.SetOutput(os.NewFile(0, os.DevNull))
+	defer log.SetOutput(os.Stderr)
+
+	store := newFakeHealthStore()
+	store.aliases["vD"] = "EXR-test"
+	qbus := bus.New()
+	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vD:mt5"}}}
+	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+
+	now := wedUTC
+	mon.now = func() time.Time { return now.Add(time.Second) }
+
+	// tick1: quote fresh（首 tick 静默）
+	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vD", Bid: 100, Ask: 100, Time: now})
+	mon.poll(context.Background())
+
+	// tick2: 无 margin fact → margin crit 告警，消息应用别名 "EXR-test"
+	mon.poll(context.Background())
+
+	var foundAlias bool
+	for _, a := range store.snapshot() {
+		if strings.Contains(a.msg, "margin") && a.level == "critical" {
+			if strings.Contains(a.msg, "EXR-test") && !strings.Contains(a.msg, "vD ") {
+				foundAlias = true
+			}
+		}
+	}
+	if !foundAlias {
+		t.Errorf("margin critical 告警应用别名 EXR-test，实际消息：%v", store.snapshot())
+	}
+}
+
+// TestMTHealth_AliasFallback D-203：无别名时回退裸账号。
+func TestMTHealth_AliasFallback(t *testing.T) {
+	log.SetOutput(os.NewFile(0, os.DevNull))
+	defer log.SetOutput(os.Stderr)
+
+	store := newFakeHealthStore() // 无 aliases 设置
+	qbus := bus.New()
+	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vE:mt5"}}}
+	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+
+	now := wedUTC
+	mon.now = func() time.Time { return now.Add(time.Second) }
+
+	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vE", Bid: 100, Ask: 100, Time: now})
+	mon.poll(context.Background())
+	mon.poll(context.Background())
+
+	var foundVenue bool
+	for _, a := range store.snapshot() {
+		if strings.Contains(a.msg, "margin") && a.level == "critical" && strings.Contains(a.msg, "vE") {
+			foundVenue = true
+		}
+	}
+	if !foundVenue {
+		t.Errorf("无别名时应回退裸账号 vE，实际消息：%v", store.snapshot())
 	}
 }

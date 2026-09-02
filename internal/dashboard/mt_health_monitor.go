@@ -24,6 +24,7 @@ import (
 type HealthFactStore interface {
 	LatestFacts(ctx context.Context, kind, venue, symbol string) ([]fact.Fact, error)
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
+	ListAccountAliases(ctx context.Context) (map[string]string, error)
 }
 
 // HealthVenueSource 提供 MT venue 列表（BrokerManager 满足）。
@@ -102,6 +103,7 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 	now := m.nowTime()
 	quoteAges := m.collectQuoteAges(now)
 	swapAges, marginAges := m.collectFactAges(ctx, now)
+	aliases := m.collectAliases(ctx) // D-203：告警/日志用别名（回退裸账号）
 
 	// venue 列表 = brokerMgr venues ∪ quotes venues ∪ facts venues（全覆盖）
 	venueSet := make(map[string]bool)
@@ -161,19 +163,20 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 		}
 		newStates[v] = newState
 
-		// 日志行组件（非 MT venue 的 s:/m: 显示 "-"）
-		logParts = append(logParts, v+"=q:"+durStr(qa)+"/s:"+sLog+"/m:"+mLog)
+		// 日志行组件（用别名，回退裸账号；非 MT venue 的 s:/m: 显示 "-"）
+		display := aliasOrVenue(v, aliases)
+		logParts = append(logParts, display+"=q:"+durStr(qa)+"/s:"+sLog+"/m:"+mLog)
 
 		if firstTick {
 			continue // 首 tick 只记状态不告警
 		}
 		prev := prevStates[v]
-		m.maybeAlert(ctx, v, "quote", prev.quote, newState.quote, qa)
+		m.maybeAlert(ctx, display, "quote", prev.quote, newState.quote, qa)
 		if isMT {
-			m.maybeAlert(ctx, v, "swap", prev.swap, newState.swap, swapAges[v])
+			m.maybeAlert(ctx, display, "swap", prev.swap, newState.swap, swapAges[v])
 		}
 		if isMT5 {
-			m.maybeAlert(ctx, v, "margin", prev.margin, newState.margin, marginAges[v])
+			m.maybeAlert(ctx, display, "margin", prev.margin, newState.margin, marginAges[v])
 		}
 	}
 
