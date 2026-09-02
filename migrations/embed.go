@@ -133,3 +133,6 @@ var ExecutionControlsSQL string
 
 //go:embed 0063_position_legs_attempt.sql
 var PositionLegsAttemptSQL string
+
+//go:embed 0064_live_gate.sql
+var LiveGateSQL string

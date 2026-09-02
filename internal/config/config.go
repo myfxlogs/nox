@@ -207,6 +207,9 @@ type Config struct {
 	// D-165 S3：swap facts 零值校验开关（ARB_SWAP_FACTS_ZERO_CHECK，默认 true）。
 	// 任一腿 swap facts=0 但 broker 该 venue 有非零 swap 历史→fail-closed 拒绝。
 	SwapFactsZeroCheckEnabled bool
+	// D-195-C1：capital snapshot 新鲜度 TTL（ARB_CAPITAL_SNAPSHOT_TTL，默认 5m）。
+	// LiveGate 第 5 条 + readiness capital_snapshot_ready 层用。capital_accounts 表无 TTL 列，从 config 读取。
+	CapitalSnapshotTTL time.Duration
 }
 
 // Load 从环境变量加载配置，未设置用默认值。
@@ -292,5 +295,6 @@ func Load() *Config {
 		SwapDeviationGatePct:       envFloat("ARB_SWAP_DEVIATION_GATE_PCT", 50.0),      // D-165 S1：swap 偏差拦截默认 50%
 		SwapDeviationExitPct:       envFloat("ARB_SWAP_DEVIATION_EXIT_PCT", 50.0),      // D-165 S2：swap 偏差退出默认 50%
 		SwapFactsZeroCheckEnabled:  envBool("ARB_SWAP_FACTS_ZERO_CHECK", true),         // D-165 S3：swap facts 零值校验默认开
+		CapitalSnapshotTTL:         envDur("ARB_CAPITAL_SNAPSHOT_TTL", 5*time.Minute),  // D-195-C1：capital snapshot TTL 默认 5m
 	}
 }

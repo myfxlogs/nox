@@ -59,6 +59,7 @@ var migrationFiles = []struct {
 	{61, migrations.PositionReviewsSQL},
 	{62, migrations.ExecutionControlsSQL},
 	{63, migrations.PositionLegsAttemptSQL},
+	{64, migrations.LiveGateSQL},
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
