@@ -2,10 +2,13 @@ package pgstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"arb/internal/capital"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // GetLatestFactTimestamp D-195-C1 S3：返回最新 fact 时间戳（facts_fresh readiness 层用）。
@@ -43,7 +46,7 @@ func (s *Store) GetLatestCapitalSnapshotByAccountKey(ctx context.Context, accoun
 		&snap.LiquidatableEquityUSD, &snap.EquityUSD, &snap.Quality, &snap.RawCurrency, &snap.RawAmount,
 		&snap.FXRate, &snap.FXSource, &createdAt)
 	if err != nil {
-		if err.Error() == "no rows in result set" {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("latest capital snapshot by account_key=%s: %w", accountKey, err)
@@ -86,7 +89,7 @@ func (s *Store) GetActiveHypothesis(ctx context.Context) (*capital.Hypothesis, e
 	err := row.Scan(&h.HypothesisID, &h.HypothesisVersion, &h.Status, &h.NetReturnHurdle, &h.MaxDrawdown,
 		&h.PrincipalRule, &h.KillRule, &evidenceRef, &approvedAt)
 	if err != nil {
-		if err.Error() == "no rows in result set" {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("get active hypothesis: %w", err)
