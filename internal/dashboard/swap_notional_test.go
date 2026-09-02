@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/usdnotional"
 )
 
 // TestSwapArbRatio_Default ratio=0.5 生效（保留抗单余地）。
@@ -58,7 +59,7 @@ func TestSwapArbRatio_Negative_Clamped(t *testing.T) {
 // TestUSDPerLot_USDPair USD 计价（BTCUSDT）→ CS×price 直接美元名义。
 func TestUSDPerLot_USDPair(t *testing.T) {
 	qbus := bus.New()
-	got, ok := usdPerLot("BTCUSDT", 50000, 1, qbus)
+	got, ok := usdnotional.PerLot("BTCUSDT", 50000, 1, qbus)
 	if !ok {
 		t.Fatal("USD pair should be ok")
 	}
@@ -71,7 +72,7 @@ func TestUSDPerLot_USDPair(t *testing.T) {
 // D-166 修复：BRENT/WTI/SILVER 等商品 canonical 不以 USD/USDT/JPY 结尾，原 default 分支误拒。
 func TestUSDPerLot_CommodityBRENT(t *testing.T) {
 	qbus := bus.New()
-	got, ok := usdPerLot("BRENT", 92.5, 1000, qbus)
+	got, ok := usdnotional.PerLot("BRENT", 92.5, 1000, qbus)
 	if !ok {
 		t.Fatal("BRENT (USD-quoted commodity) should be ok")
 	}
@@ -83,7 +84,7 @@ func TestUSDPerLot_CommodityBRENT(t *testing.T) {
 // TestUSDPerLot_CommodityWTI WTI 同 BRENT，USD 计价商品白名单。
 func TestUSDPerLot_CommodityWTI(t *testing.T) {
 	qbus := bus.New()
-	got, ok := usdPerLot("WTI", 85.0, 1000, qbus)
+	got, ok := usdnotional.PerLot("WTI", 85.0, 1000, qbus)
 	if !ok {
 		t.Fatal("WTI (USD-quoted commodity) should be ok")
 	}
@@ -95,7 +96,7 @@ func TestUSDPerLot_CommodityWTI(t *testing.T) {
 // TestUSDPerLot_IndexNAS100 指数 CFD（NAS100）USD 计价白名单。
 func TestUSDPerLot_IndexNAS100(t *testing.T) {
 	qbus := bus.New()
-	got, ok := usdPerLot("NAS100", 20000, 1, qbus)
+	got, ok := usdnotional.PerLot("NAS100", 20000, 1, qbus)
 	if !ok {
 		t.Fatal("NAS100 (USD-quoted index) should be ok")
 	}
@@ -109,7 +110,7 @@ func TestUSDPerLot_IndexNAS100(t *testing.T) {
 func TestUSDPerLot_JPYPair(t *testing.T) {
 	qbus := bus.New()
 	qbus.Publish(bus.Quote{Symbol: "USDJPY", Venue: "fx", Bid: 149.9, Ask: 150.1, Time: time.Now()})
-	got, ok := usdPerLot("AUDJPY", 113.5, 100000, qbus)
+	got, ok := usdnotional.PerLot("AUDJPY", 113.5, 100000, qbus)
 	if !ok {
 		t.Fatal("JPY pair with USDJPY quote should be ok")
 	}
@@ -122,7 +123,7 @@ func TestUSDPerLot_JPYPair(t *testing.T) {
 // TestUSDPerLot_JPYPair_FailClosed USDJPY 报价缺失 → ok=false fail-closed（禁止硬编码汇率）。
 func TestUSDPerLot_JPYPair_FailClosed(t *testing.T) {
 	qbus := bus.New() // 无 USDJPY 报价
-	_, ok := usdPerLot("AUDJPY", 113.5, 100000, qbus)
+	_, ok := usdnotional.PerLot("AUDJPY", 113.5, 100000, qbus)
 	if ok {
 		t.Error("JPY pair without USDJPY quote should fail-closed (ok=false)")
 	}
@@ -131,7 +132,7 @@ func TestUSDPerLot_JPYPair_FailClosed(t *testing.T) {
 // TestUSDPerLot_UnsupportedCurrency 未支持计价币（GBP/EUR 等）→ ok=false（勿猜）。
 func TestUSDPerLot_UnsupportedCurrency(t *testing.T) {
 	qbus := bus.New()
-	_, ok := usdPerLot("EURGBP", 0.85, 100000, qbus)
+	_, ok := usdnotional.PerLot("EURGBP", 0.85, 100000, qbus)
 	if ok {
 		t.Error("Unsupported currency should fail-closed (ok=false)")
 	}
@@ -140,10 +141,10 @@ func TestUSDPerLot_UnsupportedCurrency(t *testing.T) {
 // TestUSDPerLot_InvalidInput price/CS ≤ 0 → ok=false。
 func TestUSDPerLot_InvalidInput(t *testing.T) {
 	qbus := bus.New()
-	if _, ok := usdPerLot("BTCUSDT", 0, 1, qbus); ok {
+	if _, ok := usdnotional.PerLot("BTCUSDT", 0, 1, qbus); ok {
 		t.Error("price=0 should fail")
 	}
-	if _, ok := usdPerLot("BTCUSDT", 50000, 0, qbus); ok {
+	if _, ok := usdnotional.PerLot("BTCUSDT", 50000, 0, qbus); ok {
 		t.Error("CS=0 should fail")
 	}
 }
