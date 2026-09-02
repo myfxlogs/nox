@@ -127,3 +127,6 @@ var CapitalDecisionsSQL string
 
 //go:embed 0061_position_reviews.sql
 var PositionReviewsSQL string
+
+//go:embed 0062_execution_controls.sql
+var ExecutionControlsSQL string
