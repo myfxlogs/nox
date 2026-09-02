@@ -9,6 +9,7 @@ import (
 	"arb/internal/exec"
 	"arb/internal/fact"
 	"arb/internal/reconcile"
+	"arb/internal/safego"
 	"arb/internal/store/pgstore"
 
 	mt4pb "arb/internal/adapter/gen/mtapi/mt4"
@@ -66,11 +67,11 @@ func (m *BrokerManager) startMT4(ctx context.Context, a *pgstore.BrokerAccount) 
 	ad.SetSymbolMap(symMap)
 
 	ch, cancel := ad.Subscribe(symbols)
-	go func() {
+	safego.Go("broker_manager_adapters:mt4-quote-pump", func() {
 		for q := range ch {
 			m.qbus.Publish(q)
 		}
-	}()
+	})
 	m.reg.Register(exec.NewMT4Executor(a.Venue, ad.Token(), ad.TradingClient()))
 	q := reconcile.NewMT4Querier(a.Venue, ad.Token(), ad.MT4Client())
 
@@ -215,11 +216,11 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 	}
 
 	ch, cancel := ad.Subscribe(symbols)
-	go func() {
+	safego.Go("broker_manager_adapters:mt5-quote-pump", func() {
 		for q := range ch {
 			m.qbus.Publish(q)
 		}
-	}()
+	})
 	m.reg.Register(exec.NewMT5Executor(a.Venue, ad.Token(), ad.TradingClient()))
 	q := reconcile.NewMT5Querier(a.Venue, ad.Token(), ad.MT5Client())
 

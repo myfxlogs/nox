@@ -13,6 +13,7 @@ import (
 	"arb/internal/exec"
 	"arb/internal/fact"
 	"arb/internal/reconcile"
+	"arb/internal/safego"
 	"arb/internal/store/pgstore"
 )
 
@@ -200,14 +201,13 @@ func (m *BrokerManager) AddBroker(ctx context.Context, a *pgstore.BrokerAccount)
 		_ = m.store.SetBrokerAccountStatus(ctx, a.Venue, "failed")
 		return err
 	}
-	// D-142 ②：异步触发规则库补录（best-effort，失败只 log 不影响添加）。
-	// symbolPlan 已完成名字匹配自动映射（source='manual'）；BackfillRuleMappings 补 regex 命中项（source='rule'）。
+	// D-142 ②：异步触发规则库补录（best-effort，失败只 log）；symbolPlan 自动映射 source='manual'，BackfillRuleMappings 补 regex 命中项 source='rule'。
 	if m.RuleBackfill != nil {
-		go func() {
+		safego.Go("broker_manager:rule-backfill", func() {
 			bctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 			m.RuleBackfill(bctx, a.Venue)
-		}()
+		})
 	}
 	return nil
 }

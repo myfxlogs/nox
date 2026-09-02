@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"arb/internal/exec"
+	"arb/internal/safego"
 	"arb/internal/store/pgstore"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
@@ -103,17 +104,17 @@ func (s *Service) ClosePosition(ctx context.Context, req *connect.Request[v1.Clo
 	// D-087 §3.2：手动平仓 → settlement.Settle（fire-and-forget，不阻塞 RPC）
 	// D-159 W2a R3-9：settlement 失败 → 标记 settle_failed 到 position.note（可重试状态）。
 	if s.settler != nil {
-		go func() {
+		safego.Go("service_execute:settle", func() {
 			posID := req.Msg.GetPositionId()
 			if err := s.settler.Settle(context.Background(), posID); err != nil {
 				log.Printf("[dashboard] settle pos=%d failed (retry next round): %v", posID, err)
 				_ = s.store.SetPositionNote(context.Background(), posID, "settle_failed: "+err.Error())
 			}
-		}()
+		})
 	}
 	// 平仓成功 → 触发统计复盘（§13.6，D-034；fire-and-forget，不阻塞 RPC）
 	if s.reviewer != nil {
-		go s.reviewer()
+		safego.Go("service_execute:reviewer", s.reviewer)
 	}
 	return connect.NewResponse(&v1.ClosePositionResponse{
 		Status: "CLOSED",

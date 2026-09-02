@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/safego"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 
@@ -92,7 +93,7 @@ func (s *Service) maybePurgeAckedAlerts(ctx context.Context) {
 		return
 	}
 	s.lastAlertPurge = time.Now()
-	go func() {
+	safego.Go("service_snapshots:purge-acked", func() {
 		n, err := s.store.PurgeAckedAlerts(context.Background(), 7*24*time.Hour)
 		if err != nil {
 			log.Printf("[alerts] purge acked failed: %v", err)
@@ -101,7 +102,7 @@ func (s *Service) maybePurgeAckedAlerts(ctx context.Context) {
 		if n > 0 {
 			log.Printf("[alerts] purged %d acked alerts older than 7d", n)
 		}
-	}()
+	})
 }
 
 func (s *Service) ListTriggerStates(ctx context.Context, req *connect.Request[v1.ListTriggerStatesRequest]) (*connect.Response[v1.ListTriggerStatesResponse], error) {
