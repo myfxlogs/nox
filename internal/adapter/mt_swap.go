@@ -19,6 +19,7 @@ import (
 
 	"arb/internal/bus"
 	"arb/internal/fact"
+	"arb/internal/safego"
 
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
 )
@@ -167,7 +168,8 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 	for i, ent := range syms {
 		wg.Add(1)
 		sem <- struct{}{}
-		go func(i int, ent symEntry) {
+		i, ent := i, ent
+		safego.Go("mt_swap:symbol-params", func() {
 			defer wg.Done()
 			defer func() { <-sem }()
 			slot := &slots[i]
@@ -240,7 +242,7 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 				swapInPointsGuardRail("mt5", a.venue, canon, sg.GetSwapLong(), point, cs, price)
 				swapInPointsGuardRail("mt5", a.venue, canon, sg.GetSwapShort(), point, cs, price)
 			}
-		}(i, ent)
+		})
 	}
 	wg.Wait()
 

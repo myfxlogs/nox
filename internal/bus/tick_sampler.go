@@ -7,6 +7,8 @@ import (
 	"log"
 	"sync"
 	"time"
+
+	"arb/internal/safego"
 )
 
 // TickSampler 订阅 QuoteBus 并按节流间隔采样写入 ticks 表。
@@ -48,7 +50,7 @@ func (ts *TickSampler) Run(ctx context.Context, symbols []string) {
 
 	for _, sym := range symbols {
 		ch, cancel := ts.bus.Subscribe(sym)
-		go func(sym string, ch <-chan Quote) {
+		safego.Go("tick_sampler:sample", func() {
 			defer cancel()
 			for {
 				select {
@@ -61,7 +63,7 @@ func (ts *TickSampler) Run(ctx context.Context, symbols []string) {
 					ts.maybeWrite(ctx, &mu, lastWrite, q)
 				}
 			}
-		}(sym, ch)
+		})
 	}
 	<-ctx.Done()
 }

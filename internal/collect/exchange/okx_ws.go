@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/safego"
 
 	"github.com/gorilla/websocket"
 )
@@ -70,7 +71,7 @@ func (o *OKXWebSocket) runOnce(ctx context.Context, publish func(bus.Quote)) err
 
 	// 启动 ping 保活
 	done := make(chan struct{})
-	go func() {
+	safego.Go("okx_ws:ping", func() {
 		ticker := time.NewTicker(20 * time.Second)
 		defer ticker.Stop()
 		for {
@@ -83,7 +84,7 @@ func (o *OKXWebSocket) runOnce(ctx context.Context, publish func(bus.Quote)) err
 				return
 			}
 		}
-	}()
+	})
 
 	for {
 		select {

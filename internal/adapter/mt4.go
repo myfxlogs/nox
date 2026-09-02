@@ -13,6 +13,7 @@ import (
 
 	mt4pb "arb/internal/adapter/gen/mtapi/mt4"
 	"arb/internal/bus"
+	"arb/internal/safego"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -196,7 +197,7 @@ func (a *MT4Adapter) Subscribe(symbols []string) (<-chan bus.Quote, func()) {
 	ch := make(chan bus.Quote, 16)
 	ctx, cancel := context.WithCancel(a.stopCtx)
 	a.saveSubSet(symbols)
-	go a.runQuoteStream(ctx, ch)
+	safego.Go("mt4:quoteStream", func() { a.runQuoteStream(ctx, ch) })
 	return ch, cancel
 }
 

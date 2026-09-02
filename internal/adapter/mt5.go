@@ -12,6 +12,7 @@ import (
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
 	"arb/internal/bus"
 	"arb/internal/fact"
+	"arb/internal/safego"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -153,9 +154,9 @@ func (a *MT5Adapter) Connect(ctx context.Context) error {
 	// D-099：attach 完成 → 启动 margin 事件驱动采集（MarginSink==nil 时 no-op）。
 	// stopCtx 取消时 Run 自然退出（Stop 调 stopCancel）。a.mu 仍持有：goroutine 异步启动，
 	// 其 a.mu 操作阻塞至 Connect 返回释放锁，无死锁。
-	go a.runMarginSource(a.stopCtx)
+	safego.Go("mt5:marginSource", func() { a.runMarginSource(a.stopCtx) })
 	// D-107 P1：attach 完成 → 启动订单事件流消费（OrderEventSink==nil 时 no-op）。
-	go a.runOrderEventSource(a.stopCtx)
+	safego.Go("mt5:orderEventSource", func() { a.runOrderEventSource(a.stopCtx) })
 	return nil
 }
 
@@ -210,7 +211,7 @@ func (a *MT5Adapter) Subscribe(symbols []string) (<-chan bus.Quote, func()) {
 	ch := make(chan bus.Quote, 16)
 	ctx, cancel := context.WithCancel(a.stopCtx)
 	a.saveSubSet(symbols)
-	go a.runQuoteStream(ctx, ch)
+	safego.Go("mt5:quoteStream", func() { a.runQuoteStream(ctx, ch) })
 	return ch, cancel
 }
 

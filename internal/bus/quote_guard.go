@@ -9,6 +9,8 @@ import (
 	"math"
 	"sort"
 	"sync"
+
+	"arb/internal/safego"
 )
 
 // SymbolMappingStore quoteGuard 所需的 store 接口（避免直接依赖 pgstore）。
@@ -39,7 +41,7 @@ func NewQuoteGuard(bus *QuoteBus, store SymbolMappingStore, reload func(ctx cont
 // 阻塞至 ctx 取消。
 func (g *QuoteGuard) Run(ctx context.Context) {
 	ch, cancel := g.bus.Subscribe("")
-	go func() {
+	safego.Go("quote_guard:consume", func() {
 		defer cancel()
 		for {
 			select {
@@ -52,7 +54,7 @@ func (g *QuoteGuard) Run(ctx context.Context) {
 				g.onQuote(ctx, q)
 			}
 		}
-	}()
+	})
 	<-ctx.Done()
 }
 

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/safego"
 
 	"github.com/gorilla/websocket"
 )
@@ -46,14 +47,14 @@ func NewGateWebSocket(cfg Config) *GateWebSocket {
 func (g *GateWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go func() {
+	safego.Go("gate_ws:spot-loop", func() {
 		defer wg.Done()
 		g.runLoop(ctx, gateSpotWSURL, g.subscribeSpot, g.handleSpot, publish)
-	}()
-	go func() {
+	})
+	safego.Go("gate_ws:futures-loop", func() {
 		defer wg.Done()
 		g.runLoop(ctx, gateFuturesWSURL, g.subscribeFutures, g.handleFutures, publish)
-	}()
+	})
 	wg.Wait()
 }
 
@@ -112,7 +113,7 @@ func (g *GateWebSocket) runOnce(ctx context.Context, url string, subscribe func(
 	}
 
 	done := make(chan struct{})
-	go func() {
+	safego.Go("gate_ws:ping", func() {
 		ticker := time.NewTicker(20 * time.Second)
 		defer ticker.Stop()
 		for {
@@ -125,7 +126,7 @@ func (g *GateWebSocket) runOnce(ctx context.Context, url string, subscribe func(
 				return
 			}
 		}
-	}()
+	})
 
 	for {
 		select {

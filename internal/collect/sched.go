@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"arb/internal/fact"
+	"arb/internal/safego"
 )
 
 // Sink 接收轮询产出，写入存储层。
@@ -46,10 +47,11 @@ func (s *Scheduler) Run(ctx context.Context) error {
 	var wg sync.WaitGroup
 	for _, src := range s.Sources {
 		wg.Add(1)
-		go func(src Named) {
+		src := src
+		safego.Go("sched:runSource", func() {
 			defer wg.Done()
 			s.runSource(ctx, src)
-		}(src)
+		})
 	}
 	<-ctx.Done()
 	wg.Wait()
