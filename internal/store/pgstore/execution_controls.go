@@ -2,7 +2,10 @@ package pgstore
 
 import (
 	"context"
+	"errors"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // ExecutionControl D-195 §3.1.1：执行控制当前状态。
@@ -47,7 +50,7 @@ func (s *Store) GetExecutionControl(ctx context.Context, scopeType, scopeKey str
 	err := row.Scan(&c.ControlID, &c.ScopeType, &c.ScopeKey, &c.Mode, &c.Enabled, &c.ApprovedBy,
 		&c.ConfirmedAt, &c.ExpiresAt, &c.RevokedAt, &c.Reason, &c.ConfigDigest, &c.UpdatedAt)
 	if err != nil {
-		if err.Error() == "no rows in result set" {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, err

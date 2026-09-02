@@ -3,7 +3,6 @@ package pgstore
 import (
 	"context"
 	"testing"
-	"time"
 
 	"arb/internal/testutil"
 )
@@ -176,6 +175,3 @@ func TestExecutionControls_ListControls(t *testing.T) {
 		t.Errorf("mode=%s, want PAPER", list[0].Mode)
 	}
 }
-
-// 辅助：避免 unused import 警告（time 在未来扩展用）。
-var _ time.Duration
