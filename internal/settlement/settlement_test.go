@@ -30,6 +30,12 @@ type fakeDeps struct {
 	cashflowsNet     float64    // D-127 P4 返修①：SumCashflowsNet 返回值
 	lastNetPnl       float64    // D-127 P4：捕获传给 UpdateStrategyStat 的 net 值
 	mu               sync.Mutex // 并发安全计数
+	// D-193-A 字段
+	cashflowsQuality   string                 // SumCashflowsNetWithQuality 返回的 quality；空→按 cashflowsNet 推断
+	cashflowsQueryErr  error                  // SumCashflowsNetWithQuality 返回的 err（模拟查询失败）
+	statsStatus        string                 // GetSettlementStatsStatus 返回值（applied/skipped 短路）
+	markRetryableCount int                    // MarkSettlementStatsRetryable 调用次数
+	lastSettlementRow  *pgstore.SettlementRow // 捕获 InsertSettlement 收到的 row
 }
 
 func (f *fakeDeps) GetPosition(ctx context.Context, id int64) (*pgstore.Position, error) {
@@ -89,6 +95,7 @@ func (f *fakeDeps) InsertSettlement(ctx context.Context, r *pgstore.SettlementRo
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.insertSettlement++
+	f.lastSettlementRow = r // D-193-A：捕获 row 供断言 completeness/stats_status
 	if f.insertFirstOnly {
 		return f.insertSettlement == 1, nil // 并发模拟：仅第一次 won
 	}
@@ -104,12 +111,43 @@ func (f *fakeDeps) SumCashflowsNet(ctx context.Context, posID int64) (float64, e
 	return f.cashflowsNet, nil
 }
 
+// D-193-A：SumCashflowsNetWithQuality 返回 (cashflowsNet, quality, err)。
+// cashflowsQuality 空 → 按 cashflowsNet 推断（非 0=actual，0=no_cashflows）。
+func (f *fakeDeps) SumCashflowsNetWithQuality(ctx context.Context, posID int64) (float64, string, error) {
+	if f.cashflowsQueryErr != nil {
+		return 0, "", f.cashflowsQueryErr
+	}
+	q := f.cashflowsQuality
+	if q == "" {
+		if f.cashflowsNet != 0 {
+			q = "actual"
+		} else {
+			q = "no_cashflows"
+		}
+	}
+	return f.cashflowsNet, q, nil
+}
+
+// D-193 审计 P0-1：GetSettlementStatsStatus 返回预设 statsStatus（空=继续 Settle）。
+func (f *fakeDeps) GetSettlementStatsStatus(ctx context.Context, posID int64) (string, error) {
+	return f.statsStatus, nil
+}
+
+// D-193 审计 P0-2：MarkSettlementStatsRetryable 计数。
+func (f *fakeDeps) MarkSettlementStatsRetryable(ctx context.Context, posID int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.markRetryableCount++
+	return nil
+}
+
 // noElim 永不禁用的 Eliminator（测试用）。
 func noElim(int, float64, float64, float64, bool) (bool, string) { return false, "" }
 
-// TestSettle_Idempotent 已有 position_settlements 行 → 短路，不重复结算。
+// TestSettle_Idempotent 已有 position_settlements 行（stats_status=applied）→ 短路，不重复结算。
+// D-193-A：短路逻辑改为检查 stats_status（applied/skipped 短路）。
 func TestSettle_Idempotent(t *testing.T) {
-	d := &fakeDeps{hasSettlement: true}
+	d := &fakeDeps{statsStatus: "applied"}
 	if err := Settle(context.Background(), d, 100, noElim); err != nil {
 		t.Fatalf("Settle: %v", err)
 	}

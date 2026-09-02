@@ -41,6 +41,14 @@ type Deps interface {
 	HasSettlement(ctx context.Context, posID int64) (bool, error)
 	// SumCashflowsNet 返回持仓 swap+funding+commission 现金流 USD 合计（D-127 P4 返修①：net=realized+cashflowsNet）。
 	SumCashflowsNet(ctx context.Context, posID int64) (float64, error)
+	// D-193-A：替代 SumCashflowsNet，返回 quality 供 completeness 判定。
+	SumCashflowsNetWithQuality(ctx context.Context, posID int64) (sum float64, quality string, err error)
+	// D-193 审计 P0-1：查 settlement 行的 stats_status，用于短路判定。
+	// 不存在行 → 返回 ("", nil)（继续走 Settle 流程）。
+	// 存在行 → 返回 stats_status（applied/skipped 短路；pending/retryable 继续）。
+	GetSettlementStatsStatus(ctx context.Context, posID int64) (statsStatus string, err error)
+	// D-193 审计 P0-2：统计更新失败时改 stats_status=retryable，下轮重试。
+	MarkSettlementStatsRetryable(ctx context.Context, posID int64) error
 }
 
 // Eliminator 淘汰判定函数类型（从 autotrade.evaluateElimination 抽出，避免环依赖）。
@@ -48,18 +56,22 @@ type Deps interface {
 // 返回 (shouldDisable, reason)。
 type Eliminator func(totalTrades int, winRate, avgPnl, medianPnl float64, disabled bool) (bool, string)
 
-// Settle 唯一结算入口（D-087 §3.2）。
-// 幂等：已有 position_settlements 行 → 直接返回。
-// 跳过规则（写行但不入样本）：realized NULL / expectedUsd≤0 / fx 缺失。
-// 通过 → UpsertVerificationSample + UpdateStrategyStat + 淘汰检查。
+// Settle 唯一结算入口（D-087 §3.2，D-193-A 消除 fallback + 净 PNL 事实迁移）。
+// 幂等短路：stats_status=applied/skipped → 直接返回（D-193 审计 P0-1）。
+// 跳过规则（写行但不入样本）：realized NULL / expectedUsd≤0 / fx 缺失 / pnl_estimated。
+// D-193-A：cashflows 查询失败 → 写 unknown/retryable 行 + 返回 error（消除 fallback-to-zero）。
+// 通过（complete+actual）→ UpsertVerificationSample + UpdateStrategyStat + 淘汰检查；
+// 统计更新失败 → MarkSettlementStatsRetryable + 返回 error（D-193 审计 P0-2）。
 func Settle(ctx context.Context, deps Deps, posID int64, elim Eliminator) error {
-	// 幂等短路
-	has, err := deps.HasSettlement(ctx, posID)
+	// D-193 审计 P0-1：短路逻辑改为检查 stats_status。
+	// applied/skipped → 已完成，短路返回 nil。
+	// pending/retryable/""（无行或 legacy）→ 继续走 Settle 流程。
+	statsStatus, err := deps.GetSettlementStatsStatus(ctx, posID)
 	if err != nil {
-		return fmt.Errorf("settle: check existing: %w", err)
+		return fmt.Errorf("settle: check existing stats status: %w", err)
 	}
-	if has {
-		return nil
+	if statsStatus == "applied" || statsStatus == "skipped" {
+		return nil // 已完成，幂等短路
 	}
 
 	// 1. 读 position
@@ -104,22 +116,101 @@ func Settle(ctx context.Context, deps Deps, posID int64, elim Eliminator) error 
 		skippedReason = "pnl_estimated: partial or no calibration"
 	}
 
-	// 6. 写 position_settlements（先写防并发，ON CONFLICT DO NOTHING）
-	// 返修包②：InsertSettlement 返回 won——输家（并发对手已写入）直接 return nil，不走步骤 7/8 防双计。
-	// 附带小项：skipped 行 notional_usd 写 NULL（0 是伪造值）。
+	// 6. D-193-A：cashflows 查询 + 净 PNL + completeness 判定（在 InsertSettlement 前完成，
+	//    因 row 需写入 net_realized_usd/pnl_quality/completeness_status/stats_status）。
+	var (
+		cashflowsNet   float64
+		cfQuality      string
+		pnlQuality     string
+		completeness   string
+		rowStatsStatus string
+		netPnl         float64
+		pricePnl       float64
+	)
+	if skippedReason == "" {
+		// D-193-A：消除 fallback-to-zero。查询失败 → settlement 进入 unknown/retryable，不写 complete，不更新统计。
+		cashflowsNet, cfQuality, err = deps.SumCashflowsNetWithQuality(ctx, posID)
+		if err != nil {
+			mv := 1
+			errRow := &pgstore.SettlementRow{
+				PositionID:             posID,
+				Vkey:                   vkey,
+				ExpectedUsd:            expectedUsd,
+				SkippedReason:          "cashflow query failed: " + err.Error(),
+				SettledAt:              time.Now(),
+				PnlQuality:             "unknown",
+				CompletenessStatus:     "unknown",
+				StatsStatus:            "retryable",
+				SettlementModelVersion: &mv,
+				SettlementEventKey:     fmt.Sprintf("settle:%d", posID),
+			}
+			if p.RealizedPnl != nil {
+				errRow.PricePnlUsd = p.RealizedPnl
+				errRow.RealizedUsd = *p.RealizedPnl
+			}
+			_, _ = deps.InsertSettlement(ctx, errRow) // best-effort 写入，错误已返回
+			return fmt.Errorf("settle: cashflow query pos=%d: %w", posID, err)
+		}
+		// D-193-A：净 PNL = price_pnl + cashflows_net，quality 和 completeness 由现金流质量决定。
+		pricePnl = *p.RealizedPnl
+		netPnl = pricePnl + cashflowsNet
+		pnlQuality = "actual"
+		completeness = "complete"
+		if cfQuality == "unknown" {
+			pnlQuality = "unknown"
+			completeness = "unknown"
+		} else if cfQuality == "estimated" {
+			pnlQuality = "estimated"
+			completeness = "complete" // estimated 仍 complete，但统计层不消费
+		} else if cfQuality == "no_cashflows" && hasCashflowKinds(p.Type) {
+			// D-193 审计 P1-3：传 p.Type 不是 posID
+			// 应有现金流但查不到 → unknown
+			pnlQuality = "unknown"
+			completeness = "unknown"
+		}
+		// D-193 审计 P0-2：stats_status 在 InsertSettlement 时直接写入正确值，不用二次 UPDATE。
+		// complete+actual → stats_status='applied'；非 complete/actual → 'skipped' 或 'retryable'。
+		rowStatsStatus = "applied"
+		if completeness != "complete" || pnlQuality != "actual" {
+			if completeness == "unknown" {
+				rowStatsStatus = "retryable"
+			} else {
+				rowStatsStatus = "skipped"
+			}
+		}
+	} else {
+		// skipped 行：completeness=skipped，pnlQuality=unknown，stats_status=skipped
+		pnlQuality = "unknown"
+		completeness = "skipped"
+		rowStatsStatus = "skipped"
+		if p.RealizedPnl != nil {
+			pricePnl = *p.RealizedPnl
+		}
+	}
+
+	// 7. 写 position_settlements（含 D-193-A 净 PNL + 完整性字段；ON CONFLICT DO NOTHING 防并发）
+	mv := 1
 	row := &pgstore.SettlementRow{
-		PositionID:    posID,
-		Vkey:          vkey,
-		ExpectedUsd:   expectedUsd,
-		HoldDays:      holdDays,
-		SkippedReason: skippedReason,
-		SettledAt:     time.Now(),
+		PositionID:             posID,
+		Vkey:                   vkey,
+		ExpectedUsd:            expectedUsd,
+		HoldDays:               holdDays,
+		SkippedReason:          skippedReason,
+		SettledAt:              time.Now(),
+		PnlQuality:             pnlQuality,
+		CompletenessStatus:     completeness,
+		StatsStatus:            rowStatsStatus, // D-193 审计 P0-2：直接写最终值，无二次 UPDATE
+		SettlementModelVersion: &mv,
+		SettlementEventKey:     fmt.Sprintf("settle:%d", posID),
 	}
 	if skippedReason == "" {
 		row.NotionalUsd = &notionalUsd // 非跳过行写真值
+		row.PricePnlUsd = &pricePnl
+		row.CashflowsNetUsd = &cashflowsNet
+		row.NetRealizedUsd = &netPnl
 	} // 跳过行 NotionalUsd=nil → INSERT 写 NULL
 	if p.RealizedPnl != nil {
-		row.RealizedUsd = *p.RealizedPnl
+		row.RealizedUsd = *p.RealizedPnl // 兼容旧查询
 	}
 	won, err := deps.InsertSettlement(ctx, row)
 	if err != nil {
@@ -130,36 +221,30 @@ func Settle(ctx context.Context, deps Deps, posID int64, elim Eliminator) error 
 		return nil
 	}
 
-	// 7. 跳过=不入样本不入统计，直接返回
-	if skippedReason != "" {
-		log.Printf("[settlement] pos=%d skipped: %s", posID, skippedReason)
+	// 8. 非 complete/actual → 不入样本不入统计，直接返回
+	if rowStatsStatus != "applied" {
+		if skippedReason != "" {
+			log.Printf("[settlement] pos=%d skipped: %s", posID, skippedReason)
+		} else {
+			log.Printf("[settlement] pos=%d not complete/actual: completeness=%s quality=%s stats=%s",
+				posID, completeness, pnlQuality, rowStatsStatus)
+		}
 		return nil
 	}
 
-	// 8. 通过 → UpsertVerificationSample + UpdateStrategyStat + 淘汰
-	// D-127 P4 返修①：net = realized + cashflowsNet（swap+funding−commission 实收纳入淘汰/复盘口径，防套息策略被误杀）。
-	// D-159 W3a R4 双计拆除后语义：realized_pnl = 纯价格差 PnL（calcLegPnL/calibratePnL 已去 swap/commission），
-	// cashflowsNet = swap+funding+commission 组件 → netPnl = 净值一次合成，无双计。
-	cashflowsNet, err := deps.SumCashflowsNet(ctx, posID)
-	if err != nil {
-		log.Printf("[settlement] sum cashflows net pos=%d: %v (fallback net=realized)", posID, err)
-		cashflowsNet = 0 // 查询失败回退到旧口径（不阻塞结算）
-	}
-	netPnl := *p.RealizedPnl + cashflowsNet
-	// D-159 W3a R4 影子对拍框架：S2 后 realized_pnl 是新口径（纯价格差），
-	// netPnl = realized_pnl + cashflowsNet = 净值一次合成。
-	// 旧口径（双计）独立计算待对拍期补（决策方另发指令），本包只标记框架就绪。
-	log.Printf("[settlement] SHADOW pos=%d netPnl=%.2f realized=%.2f cashflowsNet=%.2f (shadow framework ready, legacy calc pending)",
-		posID, netPnl, *p.RealizedPnl, cashflowsNet)
+	// 9. 通过（complete+actual）→ UpsertVerificationSample + UpdateStrategyStat + 淘汰
+	// D-193-A：netPnl = price_pnl + cashflows_net（净值一次合成，无双计）。
 	closedAt := time.Now()
 	if p.ClosedAt != nil {
 		closedAt = *p.ClosedAt
 	}
 	if err := deps.UpsertVerificationSample(ctx, vkey, expectedUsd, netPnl, closedAt); err != nil {
-		// D-159 W2a R3-9：settlement 失败必须进入可重试状态（不只打日志后宣告完成）。
+		// D-193 审计 P0-2：统计更新失败 → 改 stats_status 为 retryable，下轮重试。
+		_ = deps.MarkSettlementStatsRetryable(ctx, posID)
 		return fmt.Errorf("settle: upsert verification pos=%d: %w", posID, err)
 	}
 	if err := deps.UpdateStrategyStat(ctx, p.Type, netPnl); err != nil {
+		_ = deps.MarkSettlementStatsRetryable(ctx, posID)
 		return fmt.Errorf("settle: update strategy stat pos=%d: %w", posID, err)
 	}
 
@@ -190,4 +275,15 @@ func Settle(ctx context.Context, deps Deps, posID int64, elim Eliminator) error 
 		}
 	}
 	return nil
+}
+
+// hasCashflowKinds D-193-A S7：判断该 position 是否应有现金流（SWAPARB/CARRY/FUNDING_HEDGE/PERP_FUNDING 有 swap/funding）。
+// CROSS_VENUE/MEANREVERT 无 swap/funding 现金流 → no_cashflows 是正常状态，不判 unknown。
+func hasCashflowKinds(posType string) bool {
+	switch posType {
+	case "SWAPARB", "CARRY", "FUNDING_HEDGE", "PERP_FUNDING":
+		return true
+	default:
+		return false
+	}
 }
