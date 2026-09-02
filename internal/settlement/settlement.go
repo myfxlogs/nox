@@ -62,7 +62,7 @@ type Eliminator func(totalTrades int, winRate, avgPnl, medianPnl float64, disabl
 // D-193-A：cashflows 查询失败 → 写 unknown/retryable 行 + 返回 error（消除 fallback-to-zero）。
 // 通过（complete+actual）→ UpsertVerificationSample + UpdateStrategyStat + 淘汰检查；
 // 统计更新失败 → MarkSettlementStatsRetryable + 返回 error（D-193 审计 P0-2）。
-func Settle(ctx context.Context, deps Deps, posID int64, elim Eliminator) error {
+func SettleAt(ctx context.Context, deps Deps, posID int64, elim Eliminator, now time.Time) error {
 	// D-193 审计 P0-1：短路逻辑改为检查 stats_status。
 	// applied/skipped → 已完成，短路返回 nil。
 	// pending/retryable/""（无行或 legacy）→ 继续走 Settle 流程。
@@ -137,7 +137,7 @@ func Settle(ctx context.Context, deps Deps, posID int64, elim Eliminator) error 
 				Vkey:                   vkey,
 				ExpectedUsd:            expectedUsd,
 				SkippedReason:          "cashflow query failed: " + err.Error(),
-				SettledAt:              time.Now(),
+				SettledAt:              now,
 				PnlQuality:             "unknown",
 				CompletenessStatus:     "unknown",
 				StatsStatus:            "retryable",
@@ -196,7 +196,7 @@ func Settle(ctx context.Context, deps Deps, posID int64, elim Eliminator) error 
 		ExpectedUsd:            expectedUsd,
 		HoldDays:               holdDays,
 		SkippedReason:          skippedReason,
-		SettledAt:              time.Now(),
+		SettledAt:              now,
 		PnlQuality:             pnlQuality,
 		CompletenessStatus:     completeness,
 		StatsStatus:            rowStatsStatus, // D-193 审计 P0-2：直接写最终值，无二次 UPDATE
@@ -234,7 +234,7 @@ func Settle(ctx context.Context, deps Deps, posID int64, elim Eliminator) error 
 
 	// 9. 通过（complete+actual）→ UpsertVerificationSample + UpdateStrategyStat + 淘汰
 	// D-193-A：netPnl = price_pnl + cashflows_net（净值一次合成，无双计）。
-	closedAt := time.Now()
+	closedAt := now
 	if p.ClosedAt != nil {
 		closedAt = *p.ClosedAt
 	}
@@ -275,6 +275,11 @@ func Settle(ctx context.Context, deps Deps, posID int64, elim Eliminator) error 
 		}
 	}
 	return nil
+}
+
+// Settle 兼容包装（D-194 §3.3：生产旧入口 = SettleAt(..., time.Now())）。
+func Settle(ctx context.Context, deps Deps, posID int64, elim Eliminator) error {
+	return SettleAt(ctx, deps, posID, elim, time.Now())
 }
 
 // hasCashflowKinds D-193-A S7：判断该 position 是否应有现金流（SWAPARB/CARRY/FUNDING_HEDGE/PERP_FUNDING 有 swap/funding）。

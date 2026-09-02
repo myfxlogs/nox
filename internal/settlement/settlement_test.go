@@ -578,3 +578,55 @@ func TestSettle_EstimatedSkip(t *testing.T) {
 		t.Errorf("estimated position updateStat=%d, want 0 (skipped by pnl_estimated, not in formal stats)", d.updateStat)
 	}
 }
+
+// TestSettleAt_DeterministicSettledAt D-194 §3.3：同一 now → settlement 行 SettledAt=now；不同 now → 不同 SettledAt。
+// 利用现有 fakeDeps.lastSettlementRow 捕获断言。
+func TestSettleAt_DeterministicSettledAt(t *testing.T) {
+	now1 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	now2 := time.Date(2026, 1, 2, 12, 0, 0, 0, time.UTC)
+
+	// 第一次：now1
+	d1 := &fakeDeps{
+		position: &pgstore.Position{ID: 200, Type: "SWAPARB", Status: "CLOSED", OpportunityID: "opp-200"},
+	}
+	if err := SettleAt(context.Background(), d1, 200, noElim, now1); err != nil {
+		t.Fatalf("SettleAt(now1): %v", err)
+	}
+	if d1.lastSettlementRow == nil {
+		t.Fatal("lastSettlementRow=nil, want non-nil")
+	}
+	if !d1.lastSettlementRow.SettledAt.Equal(now1) {
+		t.Errorf("SettledAt=%v, want %v (now1)", d1.lastSettlementRow.SettledAt, now1)
+	}
+
+	// 第二次：now2 → 不同 SettledAt
+	d2 := &fakeDeps{
+		position: &pgstore.Position{ID: 201, Type: "SWAPARB", Status: "CLOSED", OpportunityID: "opp-201"},
+	}
+	if err := SettleAt(context.Background(), d2, 201, noElim, now2); err != nil {
+		t.Fatalf("SettleAt(now2): %v", err)
+	}
+	if d2.lastSettlementRow == nil {
+		t.Fatal("lastSettlementRow=nil, want non-nil")
+	}
+	if !d2.lastSettlementRow.SettledAt.Equal(now2) {
+		t.Errorf("SettledAt=%v, want %v (now2)", d2.lastSettlementRow.SettledAt, now2)
+	}
+	if d1.lastSettlementRow.SettledAt.Equal(d2.lastSettlementRow.SettledAt) {
+		t.Errorf("两次 SettledAt 相同，应不同（now1≠now2）")
+	}
+}
+
+// TestSettle_CompatWrapper_DelegatesToSettleAt D-194 §3.3：验证 Settle 内部委托 SettleAt。
+// 通过行为等价验证（Settle 调用后 fakeDeps.lastSettlementRow 非 nil），不断言 SettledAt 精确值。
+func TestSettle_CompatWrapper_DelegatesToSettleAt(t *testing.T) {
+	d := &fakeDeps{
+		position: &pgstore.Position{ID: 300, Type: "SWAPARB", Status: "CLOSED", OpportunityID: "opp-300"},
+	}
+	if err := Settle(context.Background(), d, 300, noElim); err != nil {
+		t.Fatalf("Settle: %v", err)
+	}
+	if d.lastSettlementRow == nil {
+		t.Fatal("lastSettlementRow=nil, want non-nil (Settle should delegate to SettleAt)")
+	}
+}
