@@ -65,3 +65,24 @@ func (m *MTHealthMonitor) nowTime() time.Time {
 	}
 	return time.Now()
 }
+
+// collectQuoteAges 从 qbus 按 Venue 分组取 max(Time)，返回 venue→age。
+func (m *MTHealthMonitor) collectQuoteAges(now time.Time) map[string]time.Duration {
+	out := make(map[string]time.Duration)
+	if m.qbus == nil {
+		return out
+	}
+	latest := make(map[string]time.Time)
+	for _, q := range m.qbus.AllLatest() {
+		if q.Time.IsZero() {
+			continue
+		}
+		if t, ok := latest[q.Venue]; !ok || q.Time.After(t) {
+			latest[q.Venue] = q.Time
+		}
+	}
+	for v, t := range latest {
+		out[v] = now.Sub(t)
+	}
+	return out
+}

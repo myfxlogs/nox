@@ -114,14 +114,19 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 	for v := range marginAges {
 		venueSet[v] = true
 	}
-	// D-104 P0 返修④ R-d1：MT venue 集合——swap/margin 指标仅适用于 MT venue，
-	// CEX venue 无 swap/margin facts（设计如此），永久 n/a → crit → R-c3 30min 假告警洪水。
+	// D-104 R-d1：swap/margin 仅 MT venue（CEX 无 facts）。D-203：margin 仅 MT5 venue
+	// （mt_margin_source 只挂 MT5Adapter，MT4 无 init_margin_rate → 永久 n/a 假洪水）。
 	mtSet := make(map[string]bool)
+	mt5Set := make(map[string]bool)
 	for _, q := range m.venues.AccountQueriers() {
-		v := venueFromKey(q.VenueKey())
+		vk := q.VenueKey()
+		v := venueFromKey(vk)
 		if v != "" {
 			venueSet[v] = true
 			mtSet[v] = true
+			if strings.HasSuffix(vk, ":mt5") {
+				mt5Set[v] = true
+			}
 		}
 	}
 
@@ -136,7 +141,8 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 	for v := range venueSet {
 		qa := quoteAges[v]
 		isMT := mtSet[v]
-		// quote 指标全 venue 不变；swap/margin 仅 MT venue 分类+告警，非 MT 不分类不告警不存状态。
+		isMT5 := mt5Set[v]
+		// quote 全 venue；swap 仅 MT；margin 仅 MT5（D-203：MT4 无 margin facts）。
 		newState := mtHealthState{
 			quote:  classifyAge(qa, m.quoteWarn, m.quoteCrit),
 			swap:   metricHealthy,
@@ -145,10 +151,13 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 		sLog, mLog := "-", "-"
 		if isMT {
 			sa := swapAges[v]
-			ma := marginAges[v]
 			newState.swap = classifyAge(sa, m.factWarn, m.factCrit)
+			sLog = durStr(sa)
+		}
+		if isMT5 {
+			ma := marginAges[v]
 			newState.margin = classifyAge(ma, m.factWarn, m.factCrit)
-			sLog, mLog = durStr(sa), durStr(ma)
+			mLog = durStr(ma)
 		}
 		newStates[v] = newState
 
@@ -162,6 +171,8 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 		m.maybeAlert(ctx, v, "quote", prev.quote, newState.quote, qa)
 		if isMT {
 			m.maybeAlert(ctx, v, "swap", prev.swap, newState.swap, swapAges[v])
+		}
+		if isMT5 {
 			m.maybeAlert(ctx, v, "margin", prev.margin, newState.margin, marginAges[v])
 		}
 	}
@@ -172,27 +183,6 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 
 	// 每 tick 一行可观测性日志（WP1 禁静默）
 	log.Printf("[mt-health] %s", strings.Join(logParts, " "))
-}
-
-// collectQuoteAges 从 qbus 按 Venue 分组取 max(Time)，返回 venue→age。
-func (m *MTHealthMonitor) collectQuoteAges(now time.Time) map[string]time.Duration {
-	out := make(map[string]time.Duration)
-	if m.qbus == nil {
-		return out
-	}
-	latest := make(map[string]time.Time)
-	for _, q := range m.qbus.AllLatest() {
-		if q.Time.IsZero() {
-			continue
-		}
-		if t, ok := latest[q.Venue]; !ok || q.Time.After(t) {
-			latest[q.Venue] = q.Time
-		}
-	}
-	for v, t := range latest {
-		out[v] = now.Sub(t)
-	}
-	return out
 }
 
 // collectFactAges 从 store 查 swap/margin facts，按 Venue 分组取 max(Ts)，返回 venue→age。

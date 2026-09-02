@@ -410,3 +410,88 @@ func TestMTHealth_MTVenueSwapCritRegress(t *testing.T) {
 		t.Errorf("tick2: want MT swap critical, got %s: %s", alerts[0].level, alerts[0].msg)
 	}
 }
+
+// TestMTHealth_MT4VenueNoMarginAlert D-203：MT4 venue 无 margin facts（采集器只挂 MT5），
+// margin 永久 healthy 不告警。swap 仍正常检查（MT4 有 swap facts）。
+// 场景：MT4 venue "vB:mt4" 无 init_margin_rate fact → tick2 margin 不告警；
+// swap fact 7h 前 → swap crit 告警（验证 swap 仍对 MT4 生效）。
+func TestMTHealth_MT4VenueNoMarginAlert(t *testing.T) {
+	log.SetOutput(os.NewFile(0, os.DevNull))
+	defer log.SetOutput(os.Stderr)
+
+	store := newFakeHealthStore()
+	qbus := bus.New()
+	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vB:mt4"}}}
+	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+
+	now := wedUTC
+	mon.now = func() time.Time { return now.Add(time.Second) }
+
+	// tick1: quote fresh + swap fresh（首 tick 静默）。无 margin fact（MT4 不采集）。
+	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vB", Bid: 100, Ask: 100, Time: now})
+	store.setFacts(fact.KindSwapLong, []fact.Fact{{Kind: fact.KindSwapLong, Venue: "vB", Symbol: "AUDJPY", Value: 5, Ts: now, Src: "mt4"}})
+	store.setFacts(fact.KindSwapShort, []fact.Fact{{Kind: fact.KindSwapShort, Venue: "vB", Symbol: "AUDJPY", Value: -3, Ts: now, Src: "mt4"}})
+	mon.poll(context.Background())
+	if got := store.alertCount(); got != 0 {
+		t.Fatalf("tick1 (first tick): want 0, got %d", got)
+	}
+
+	// tick2: swap 7h 前 → swap crit（1 alert）；margin 无 fact 但 MT4 不检查 → 0 margin alert
+	store.setFacts(fact.KindSwapLong, []fact.Fact{{Kind: fact.KindSwapLong, Venue: "vB", Symbol: "AUDJPY", Value: 5, Ts: now.Add(-7 * time.Hour), Src: "mt4"}})
+	store.setFacts(fact.KindSwapShort, []fact.Fact{{Kind: fact.KindSwapShort, Venue: "vB", Symbol: "AUDJPY", Value: -3, Ts: now.Add(-7 * time.Hour), Src: "mt4"}})
+	mon.poll(context.Background())
+
+	alerts := store.snapshot()
+	// 只应有 1 条 swap critical，不应有 margin critical
+	var swapCrit, marginCrit int
+	for _, a := range alerts {
+		if strings.Contains(a.msg, "margin") && a.level == "critical" {
+			marginCrit++
+		}
+		if strings.Contains(a.msg, "swap") && a.level == "critical" {
+			swapCrit++
+		}
+	}
+	if marginCrit != 0 {
+		t.Errorf("MT4 venue 不应发 margin critical（无 margin facts），got %d", marginCrit)
+	}
+	if swapCrit != 1 {
+		t.Errorf("MT4 venue swap crit 应发 1 条，got %d", swapCrit)
+	}
+}
+
+// TestMTHealth_MT5VenueMarginCritStillWorks D-203 回归：MT5 venue 无 margin fact → 仍发 critical（不误修）。
+func TestMTHealth_MT5VenueMarginCritStillWorks(t *testing.T) {
+	log.SetOutput(os.NewFile(0, os.DevNull))
+	defer log.SetOutput(os.Stderr)
+
+	store := newFakeHealthStore()
+	qbus := bus.New()
+	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vC:mt5"}}}
+	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+
+	now := wedUTC
+	mon.now = func() time.Time { return now.Add(time.Second) }
+
+	// tick1: quote fresh，无 swap/margin fact（首 tick 静默）
+	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vC", Bid: 100, Ask: 100, Time: now})
+	mon.poll(context.Background())
+	if got := store.alertCount(); got != 0 {
+		t.Fatalf("tick1 (first tick): want 0, got %d", got)
+	}
+
+	// tick2: 无 margin fact → margin crit 告警（MT5 仍检查 margin）
+	mon.poll(context.Background())
+
+	var marginCrit int
+	for _, a := range store.snapshot() {
+		if strings.Contains(a.msg, "margin") && a.level == "critical" {
+			marginCrit++
+		}
+	}
+	if marginCrit != 1 {
+		t.Errorf("MT5 venue 无 margin fact 应发 1 条 margin critical，got %d", marginCrit)
+	}
+}
