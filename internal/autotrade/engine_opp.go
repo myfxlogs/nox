@@ -90,9 +90,9 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 	}
 	log.Printf("[autotrade] pass filter opp=%s type=%s netBps=%.2f", opp.ID, opp.Type, opp.NetBps)
 
-	qty, skip := computeBuyQty(opp, e.cfg.NotionalUSD, e.service.OppContractSize)
+	qty, skip := computeBuyQty(opp, e.cfg.NotionalUSD, e.service.USDPerLotForLeg)
 	if skip {
-		// D-140 S2：CS-miss 按 (venue,canonical) 聚合计数
+		// D-140 S2/D-190：CS-miss 按 (venue,canonical) 聚合计数（语义扩为「无法定尺寸」，含 CS-miss/no-quote/fx-miss）
 		e.recordCSMiss(opp.VenueBuy, opp.Canonical)
 		return
 	}
@@ -130,20 +130,18 @@ func isMTVenue(venue string) bool {
 	return strings.HasSuffix(venue, ":mt5") || strings.HasSuffix(venue, ":mt4")
 }
 
-// computeBuyQty 计算买腿 qty（D-135：MT 腿乘 CS fail-closed，CEX 腿 CS=1 不变）。
-// csResolver = e.service.OppContractSize（nil 接线时返回 ok=false → MT 腿 skip，CEX 腿正常）。
-// 返回 skip=true 表示 fail-closed 跳过（MT 腿 CS 未知/未接线），调用方应 return。
-func computeBuyQty(opp pgstore.Opportunity, notionalUSD float64, csResolver func(canonical, venueKey string) (float64, bool)) (qty float64, skip bool) {
-	cs := 1.0
-	if isMTVenue(opp.VenueBuy) { // MT 腿必须查到 CS（fail-closed，D-135）
-		v, ok := csResolver(opp.Canonical, opp.VenueBuy)
-		if !ok || v <= 0 {
-			log.Printf("[autotrade] skip opp=%s: MT buy-leg CS unknown (fail-closed) canonical=%s venue=%s", opp.ID, opp.Canonical, opp.VenueBuy)
-			return 0, true
-		}
-		cs = v
+// computeBuyQty 计算买腿 qty（D-190：USD notional 统一，价格源改 live qbus ask）。
+// usdPerLot = e.service.USDPerLotForLeg（内部 legContractSizeOf + usdnotional.PerLot，CS 源单一）。
+// ok=false → skip=true（fail-closed log 含 opp.ID 与原因：CS-miss / no-quote / fx-miss）。
+// **行为变化（D-190 有意）**：价格源从 opp.PriceBuy（机会行，可能陈旧）改为 live qbus ask（更优口径）；
+// CEX 腿现在也要求 qbus 报价在（detector 产 opp 前提下必有）。
+func computeBuyQty(opp pgstore.Opportunity, notionalUSD float64, usdPerLot func(canonical, venueKey, side string) (float64, bool)) (qty float64, skip bool) {
+	perLot, ok := usdPerLot(opp.Canonical, opp.VenueBuy, "ask")
+	if !ok || perLot <= 0 {
+		log.Printf("[autotrade] skip opp=%s: USD-per-lot unavailable (fail-closed) canonical=%s venue=%s", opp.ID, opp.Canonical, opp.VenueBuy)
+		return 0, true
 	}
-	return notionalUSD / (opp.PriceBuy * cs), false
+	return notionalUSD / perLot, false
 }
 
 // === D-140 S2：CS-miss 聚合告警 ===

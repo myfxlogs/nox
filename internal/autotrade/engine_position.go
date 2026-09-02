@@ -10,6 +10,7 @@ import (
 	"arb/internal/fact"
 	"arb/internal/position"
 	"arb/internal/store/pgstore"
+	"arb/internal/usdnotional"
 )
 
 // swapArbBasisExitBps SWAPARB/CARRY 基差止损门槛（D-108 A5，D-102 预设规则代码化）。
@@ -149,7 +150,7 @@ func (e *Engine) recalcNetSwap(ctx context.Context, p *pgstore.Position) (float6
 	// 偏差 > SwapDeviationExitPct → 改用 broker 实际值（bps）返回（修复"规格声明 0 但实际负→退出路径不触发"）。
 	// 无快照/ok=false → 用 facts 规格值（回退原行为，不阻塞退出决策）。
 	if e.cfg.SwapDeviationExitPct > 0 {
-		if actualBps, ok := e.brokerActualNetSwapBps(ctx, p, legs, buyBare, sellBare, factsNetSwap); ok {
+		if actualBps, ok := e.brokerActualNetSwapBps(ctx, p, legs, buyBare, sellBare, canonical, factsNetSwap); ok {
 			if deviationPct := swapDeviationBetween(factsNetSwap, actualBps); deviationPct > e.cfg.SwapDeviationExitPct {
 				log.Printf("[autotrade] exit pos=%d: swap_src=%s deviation %.1f%% > %.1f%%, use broker actual %.4f bps vs %s %.4f bps",
 					p.ID, swapSrc, deviationPct, e.cfg.SwapDeviationExitPct, actualBps, swapSrc, factsNetSwap)
@@ -193,7 +194,10 @@ func (e *Engine) swapSpecFactsFresh(ctx context.Context, buyBare, sellBare, cano
 // notional 从 legs qty×price_actual 算（无 CS 简化，CEX 腿 CS=1，MT 腿 price_actual 已含 CS 折算）。
 // 任一腿无快照/ok=false → 返回 (0, false)（回退 facts）。
 // factsNetSwap 用于 notional 缺失时回退（无法换算→false）。
-func (e *Engine) brokerActualNetSwapBps(ctx context.Context, p *pgstore.Position, legs []pgstore.PositionLeg, buyBare, sellBare string, factsNetSwap float64) (float64, bool) {
+// D-190：notional 改 usdnotional.PerLot（USD 统一换算，JPY 对 ÷ USDJPY）；
+// cs resolver 统一用 e.cfg.LegContractSizeResolver（删 service 双路径）；nil→CS=1 回退；
+// PerLot false → 该腿按无快照处理（回退 factsNetSwap）。
+func (e *Engine) brokerActualNetSwapBps(ctx context.Context, p *pgstore.Position, legs []pgstore.PositionLeg, buyBare, sellBare, canonical string, factsNetSwap float64) (float64, bool) {
 	now := time.Now().UTC()
 	var buyActualUSD, sellActualUSD float64
 	var buyNotional, sellNotional float64
@@ -203,19 +207,22 @@ func (e *Engine) brokerActualNetSwapBps(ctx context.Context, p *pgstore.Position
 			continue
 		}
 		legBare := strings.Split(leg.Venue, ":")[0]
-		notional := leg.Qty
+		// D-190：notional 改 usdnotional.PerLot（USD 统一换算）。
+		price := 0.0
 		if leg.PriceActual != nil {
-			notional *= *leg.PriceActual
+			price = *leg.PriceActual
 		}
-		// D-165.1：补 ContractSize 乘法（MT 腿 CS≠1 时 notional 少算 CS 倍）。
-		// resolver 未注入/失败 → 用 CS=1（回退 facts，不阻塞退出决策）。
-		if e.service != nil {
-			if resolver := e.service.LegContractSize(); resolver != nil {
-				if cs, ok := resolver(leg.Venue, leg.Symbol); ok && cs > 0 {
-					notional *= cs
-				}
+		cs := 1.0
+		if e.cfg.LegContractSizeResolver != nil {
+			if resolved, ok := e.cfg.LegContractSizeResolver(leg.Venue, leg.Symbol); ok && resolved > 0 {
+				cs = resolved
 			}
 		}
+		perLot, ok := usdnotional.PerLot(canonical, price, cs, e.quotes)
+		if !ok || perLot <= 0 {
+			return 0, false // PerLot 不可得→回退 facts（不阻塞退出决策）
+		}
+		notional := leg.Qty * perLot
 		if leg.Side == "BUY" && legBare == buyBare {
 			// D-189 P0-1：快照查询用完整 venueKey（leg.Venue），buyBare 仅用于腿匹配与 swapRateFor。
 			usd, ok, err := e.store.DailySwapAccrued(ctx, p.ID, leg.Venue, now)

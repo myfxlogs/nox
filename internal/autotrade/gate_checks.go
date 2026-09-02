@@ -9,6 +9,7 @@ import (
 
 	"arb/internal/fact"
 	"arb/internal/store/pgstore"
+	"arb/internal/usdnotional"
 )
 
 // environmentIsRealCheck D-159 W1a I6：environment/is_real 一致性检查。
@@ -131,22 +132,24 @@ func (g *Gate) swapDeviationGateCheck(ctx context.Context, intent TradeIntent, a
 				}
 			}
 			// facts 换算 USD/日 = bps × notional / 10000
-			notional := leg.Qty
+			// D-190：notional 改 usdnotional.PerLot（USD 统一换算，JPY 对 ÷ USDJPY）。
+			// canonical 用函数顶部 intent.Canonical 变量（勿用 position.Canonical）。
+			// cs 仍用 g.cfg.LegContractSizeResolver，nil→CS=1 回退（现状语义）。
+			price := 0.0
 			if leg.PriceActual != nil {
-				notional *= *leg.PriceActual
+				price = *leg.PriceActual
 			}
-			// D-165.1：补 ContractSize 乘法（MT 腿 CS≠1 时 notional 少算 CS 倍）。
-			// resolver 未注入（nil）→ 用 CS=1（回退，CEX 腿正确）；注入但 ok=false → 跳过该腿。
+			cs := 1.0
 			if g.cfg.LegContractSizeResolver != nil {
-				cs, ok := g.cfg.LegContractSizeResolver(leg.Venue, leg.Symbol)
-				if !ok || cs <= 0 {
-					continue // 无法算 notional→跳过（走 S3）
+				if resolved, ok := g.cfg.LegContractSizeResolver(leg.Venue, leg.Symbol); ok && resolved > 0 {
+					cs = resolved
 				}
-				notional *= cs
 			}
-			if notional <= 0 {
-				continue // 无法算 notional→跳过
+			perLot, ok := usdnotional.PerLot(canonical, price, cs, g.cfg.Quotes)
+			if !ok || perLot <= 0 {
+				continue // 无法算 USD notional→跳过（走 S3，fail-closed）
 			}
+			notional := leg.Qty * perLot
 			factsUSD := factsBps * notional / 10000
 			// 偏差率
 			deviationPct := swapDeviationBetween(factsUSD, actualUSD)

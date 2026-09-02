@@ -25,6 +25,7 @@ func TestSwapDeviationGate_CS100_HighDeviation_Rejected(t *testing.T) {
 	g := NewGate(s, Config{
 		MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0,
 		LegContractSizeResolver: csResolver(map[string]float64{"vA:mt5": 100, "vB:mt5": 100}),
+		Quotes:                  setupSwapDeviationQuotes(),
 	}, nil)
 	intent := TradeIntent{
 		Strategy: "CROSS_VENUE", Canonical: "AUDJPY",
@@ -48,6 +49,7 @@ func TestSwapDeviationGate_CS100_LowDeviation_Pass(t *testing.T) {
 	g := NewGate(s, Config{
 		MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0,
 		LegContractSizeResolver: csResolver(map[string]float64{"vA:mt5": 100, "vB:mt5": 100}),
+		Quotes:                  setupSwapDeviationQuotes(),
 	}, nil)
 	intent := TradeIntent{
 		Strategy: "CROSS_VENUE", Canonical: "AUDJPY",
@@ -69,6 +71,7 @@ func TestSwapDeviationGate_CS1_OriginalBehavior(t *testing.T) {
 	g := NewGate(s, Config{
 		MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0,
 		LegContractSizeResolver: csResolver(map[string]float64{"vA:mt5": 1, "vB:mt5": 1}),
+		Quotes:                  setupSwapDeviationQuotes(),
 	}, nil)
 	intent := TradeIntent{
 		Strategy: "CROSS_VENUE", Canonical: "AUDJPY",
@@ -92,6 +95,7 @@ func TestSwapDeviationGate_ResolverNil_FallbackCS1(t *testing.T) {
 	g := NewGate(s, Config{
 		MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0,
 		LegContractSizeResolver: nil, // 未注入
+		Quotes:                  setupSwapDeviationQuotes(),
 	}, nil)
 	intent := TradeIntent{
 		Strategy: "CROSS_VENUE", Canonical: "AUDJPY",
@@ -112,6 +116,7 @@ func TestSwapDeviationGate_ResolverOkFalse_SkipLeg(t *testing.T) {
 	g := NewGate(s, Config{
 		MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0,
 		LegContractSizeResolver: csResolver(map[string]float64{}), // 空 map → 全部 ok=false
+		Quotes:                  setupSwapDeviationQuotes(),
 	}, nil)
 	intent := TradeIntent{
 		Strategy: "CROSS_VENUE", Canonical: "AUDJPY",

@@ -1,4 +1,5 @@
 // gate_swap_deviation_test.go —— D-165 S1：swap 偏差拦截单测（Gate.Submit 路径）。
+// D-190：JPY 腿 notional 改 usdnotional.PerLot，测试需注入 Quotes + USDJPY 报价。
 package autotrade
 
 import (
@@ -7,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"arb/internal/bus"
 	"arb/internal/fact"
 	"arb/internal/store/pgstore"
 )
@@ -74,11 +76,20 @@ func setupSwapDeviationStore(t *testing.T, factsSwapBps, actualSwapUSD float64) 
 	return s
 }
 
+// setupSwapDeviationQuotes D-190：构造带 USDJPY 报价的 QuoteBus（JPY 腿 usdnotional.PerLot 用）。
+// USDJPY=150 → AUDJPY CS=1 price=100 → usdPerLot=100/150≈0.667。
+func setupSwapDeviationQuotes() *bus.QuoteBus {
+	qb := bus.New()
+	qb.Publish(bus.Quote{Symbol: "USDJPY", Bid: 149.9, Ask: 150.1, Time: time.Now()})
+	return qb
+}
+
 // TestSwapDeviationGate_HighDeviation_Rejected D-165 S1：偏差 > 50% → REJECTED。
 // facts=0 bps（notional=1×100=100，factsUSD=0），actual=-2.21 USD → 偏差 100% > 50% → 拒绝。
 func TestSwapDeviationGate_HighDeviation_Rejected(t *testing.T) {
 	s := setupSwapDeviationStore(t, 0.0, -2.21)
-	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0, SwapArbAllowCombos: nil}, nil)
+	qb := setupSwapDeviationQuotes()
+	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0, SwapArbAllowCombos: nil, Quotes: qb}, nil)
 	intent := TradeIntent{
 		Strategy:  "CROSS_VENUE",
 		Canonical: "AUDJPY",
@@ -104,7 +115,8 @@ func TestSwapDeviationGate_HighDeviation_Rejected(t *testing.T) {
 // facts=0.5 bps（notional=1，factsUSD=0.005），actual=0.005 USD → 偏差 0% < 50% → 放行。
 func TestSwapDeviationGate_LowDeviation_Pass(t *testing.T) {
 	s := setupSwapDeviationStore(t, 0.5, 0.005)
-	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0}, nil)
+	qb := setupSwapDeviationQuotes()
+	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0, Quotes: qb}, nil)
 	intent := TradeIntent{
 		Strategy:  "CROSS_VENUE",
 		Canonical: "AUDJPY",
@@ -142,7 +154,7 @@ func TestSwapDeviationGate_NoHistory_Pass(t *testing.T) {
 		t.Fatalf("insert broker_accounts: %v", err)
 	}
 	// 无 positions → 无历史持仓
-	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0}, nil)
+	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0, Quotes: setupSwapDeviationQuotes()}, nil)
 	intent := TradeIntent{
 		Strategy:  "CROSS_VENUE",
 		Canonical: "AUDJPY",
@@ -163,7 +175,8 @@ func TestSwapDeviationGate_NoHistory_Pass(t *testing.T) {
 // TestSwapDeviationGate_Disabled_Pass D-165 S1 反证：SwapDeviationGatePct=0（禁用）→ 高偏差也放行。
 func TestSwapDeviationGate_Disabled_Pass(t *testing.T) {
 	s := setupSwapDeviationStore(t, 0.0, -2.21)
-	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 0}, nil) // 禁用
+	qb := setupSwapDeviationQuotes()
+	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 0, Quotes: qb}, nil) // 禁用
 	intent := TradeIntent{
 		Strategy:  "CROSS_VENUE",
 		Canonical: "AUDJPY",
