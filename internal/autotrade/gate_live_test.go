@@ -39,7 +39,7 @@ func setupLiveGateStore(t *testing.T, venueLong, venueShort string, longReal, sh
 // TestGateLive_RealVenue_LiveTradeFalse_Rejected D-159 W6a S2：is_real=true + LiveTrade=false → REJECTED。
 func TestGateLive_RealVenue_LiveTradeFalse_Rejected(t *testing.T) {
 	s := setupLiveGateStore(t, "vA:mt5", "vB:mt5", true, false)
-	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: false})
+	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: false}, nil)
 	intent := TradeIntent{
 		Strategy:  "CROSS_VENUE",
 		Canonical: "AUDJPY",
@@ -62,7 +62,7 @@ func TestGateLive_RealVenue_LiveTradeFalse_Rejected(t *testing.T) {
 // 注：可能被其他 gate 拒绝（如 combo allow），但不应是 LIVE gate 拒绝。
 func TestGateLive_RealVenue_LiveTradeTrue_PassGate(t *testing.T) {
 	s := setupLiveGateStore(t, "vA:mt5", "vB:mt5", true, false)
-	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, Environment: ""}) // Environment 空=不检查 environment
+	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, Environment: ""}, nil) // Environment 空=不检查 environment
 	intent := TradeIntent{
 		Strategy:  "CROSS_VENUE",
 		Canonical: "AUDJPY",
@@ -84,7 +84,7 @@ func TestGateLive_RealVenue_LiveTradeTrue_PassGate(t *testing.T) {
 // TestGateLive_DemoVenue_LiveTradeFalse_PassGate D-159 W6a S2：is_real=false（demo）+ LiveTrade=false → 放行（demo 不受 LIVE gate 限制）。
 func TestGateLive_DemoVenue_LiveTradeFalse_PassGate(t *testing.T) {
 	s := setupLiveGateStore(t, "vA:mt5", "vB:mt5", false, false)
-	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: false, Environment: ""})
+	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: false, Environment: ""}, nil)
 	intent := TradeIntent{
 		Strategy:  "CROSS_VENUE",
 		Canonical: "AUDJPY",

@@ -173,7 +173,7 @@ func New(cfg Config, store *pgstore.Store, service *dashboard.Service, oppTopic 
 		service:         service,
 		oppTopic:        oppTopic,
 		quotes:          quotes,
-		gate:            NewGate(store, cfg),
+		gate:            NewGate(store, cfg, NewControlPlane(store)),
 		fundingNeedSent: make(map[string]string),
 		fundingBreach:   make(map[int64]int),  // D-133 T1：PERP_FUNDING 去抖计数
 		csMissCounts:    make(map[string]int), // D-140 S2：CS-miss 聚合

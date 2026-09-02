@@ -78,7 +78,7 @@ func setupSwapDeviationStore(t *testing.T, factsSwapBps, actualSwapUSD float64) 
 // facts=0 bps（notional=1×100=100，factsUSD=0），actual=-2.21 USD → 偏差 100% > 50% → 拒绝。
 func TestSwapDeviationGate_HighDeviation_Rejected(t *testing.T) {
 	s := setupSwapDeviationStore(t, 0.0, -2.21)
-	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0, SwapArbAllowCombos: nil})
+	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0, SwapArbAllowCombos: nil}, nil)
 	intent := TradeIntent{
 		Strategy:  "CROSS_VENUE",
 		Canonical: "AUDJPY",
@@ -104,7 +104,7 @@ func TestSwapDeviationGate_HighDeviation_Rejected(t *testing.T) {
 // facts=0.5 bps（notional=1，factsUSD=0.005），actual=0.005 USD → 偏差 0% < 50% → 放行。
 func TestSwapDeviationGate_LowDeviation_Pass(t *testing.T) {
 	s := setupSwapDeviationStore(t, 0.5, 0.005)
-	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0})
+	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0}, nil)
 	intent := TradeIntent{
 		Strategy:  "CROSS_VENUE",
 		Canonical: "AUDJPY",
@@ -142,7 +142,7 @@ func TestSwapDeviationGate_NoHistory_Pass(t *testing.T) {
 		t.Fatalf("insert broker_accounts: %v", err)
 	}
 	// 无 positions → 无历史持仓
-	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0})
+	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0}, nil)
 	intent := TradeIntent{
 		Strategy:  "CROSS_VENUE",
 		Canonical: "AUDJPY",
@@ -163,7 +163,7 @@ func TestSwapDeviationGate_NoHistory_Pass(t *testing.T) {
 // TestSwapDeviationGate_Disabled_Pass D-165 S1 反证：SwapDeviationGatePct=0（禁用）→ 高偏差也放行。
 func TestSwapDeviationGate_Disabled_Pass(t *testing.T) {
 	s := setupSwapDeviationStore(t, 0.0, -2.21)
-	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 0}) // 禁用
+	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 0}, nil) // 禁用
 	intent := TradeIntent{
 		Strategy:  "CROSS_VENUE",
 		Canonical: "AUDJPY",

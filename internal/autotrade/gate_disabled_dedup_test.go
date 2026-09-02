@@ -42,7 +42,7 @@ func TestGateDisabled_Stdout1hDedup(t *testing.T) {
 	const strategy = "PERP_FUNDING"
 	s := setupGateDisabledStore(t, strategy)
 	ctx := context.Background()
-	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5})
+	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5}, nil)
 
 	intent := TradeIntent{
 		Strategy:  strategy,
@@ -95,7 +95,7 @@ func TestGateDisabled_DifferentStrategiesNoDedup(t *testing.T) {
 			t.Fatalf("insert strategy_stats %s: %v", st, err)
 		}
 	}
-	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5})
+	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5}, nil)
 
 	for _, st := range []string{"PERP_FUNDING", "MEANREVERT"} {
 		intent := TradeIntent{
@@ -124,7 +124,7 @@ func TestGateDisabled_WindowExpiryResend(t *testing.T) {
 	const strategy = "PERP_FUNDING"
 	s := setupGateDisabledStore(t, strategy)
 	ctx := context.Background()
-	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5})
+	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5}, nil)
 
 	// 手动塞 2h 前的时间戳（模拟窗口已过期）
 	g.lastDisabledLogMu.Lock()

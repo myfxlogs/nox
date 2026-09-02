@@ -41,6 +41,8 @@ type Gate struct {
 	mu    sync.Mutex
 	store *pgstore.Store
 	cfg   Config
+	// D-195-A：执行控制面（execution_controls 是执行模式唯一真相源）。
+	controlPlane *ControlPlane
 	// D-154 S3：disabled 拒绝 stdout 1h 去重（复用 D-144 ② per-key 1h 模式）。
 	// DB 落库保留全量（审计完整性不动），只压 stdout。内存，重启重置。
 	lastDisabledLog   map[string]time.Time
@@ -48,10 +50,12 @@ type Gate struct {
 }
 
 // NewGate 创建门禁。
-func NewGate(store *pgstore.Store, cfg Config) *Gate {
+// D-195-A：新增 controlPlane 参数（autotrade.New 内部自建，签名扩展第 3 参数）。
+func NewGate(store *pgstore.Store, cfg Config, controlPlane *ControlPlane) *Gate {
 	return &Gate{
 		store:           store,
 		cfg:             cfg,
+		controlPlane:    controlPlane,
 		lastDisabledLog: make(map[string]time.Time),
 	}
 }
@@ -61,6 +65,16 @@ func NewGate(store *pgstore.Store, cfg Config) *Gate {
 func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+
+	// D-195-A：统一执行模式检查（execution_controls 是唯一真相源）
+	// 首版只用 global scope；account 级覆盖留后续工作包。
+	if g.controlPlane != nil {
+		mode, allowed, cpReason, cpErr := g.controlPlane.CheckGate(ctx)
+		if cpErr != nil || !allowed {
+			g.rejectLog(ctx, *intent, fmt.Sprintf("control plane: %v (mode=%s)", cpErr, mode), false)
+			return GateResult{Status: "REJECTED", Reason: "execution mode blocked: " + cpReason}
+		}
+	}
 
 	// 读取当前状态
 	stateRow, err := g.store.GetAutotradeState(ctx)
