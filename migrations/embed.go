@@ -109,3 +109,12 @@ var CashflowsD193SQL string
 
 //go:embed 0055_settlements_d193.sql
 var SettlementsD193SQL string
+
+//go:embed 0056_capital_accounts.sql
+var CapitalAccountsSQL string
+
+//go:embed 0057_capital_snapshots.sql
+var CapitalSnapshotsSQL string
+
+//go:embed 0058_ledger_d193.sql
+var LedgerD193SQL string
