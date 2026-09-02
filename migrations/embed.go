@@ -136,3 +136,6 @@ var PositionLegsAttemptSQL string
 
 //go:embed 0064_live_gate.sql
 var LiveGateSQL string
+
+//go:embed 0065_cmc_tables.sql
+var CmcTablesSQL string

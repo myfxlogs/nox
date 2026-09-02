@@ -25,6 +25,9 @@ const (
 	KindMTSymbolMeta     = "mt_symbol_meta"     // MT5 符号元数据（UnitContractSize，D-140 S2 CS 自动来源）
 	KindMTSymbolMargin   = "mt_symbol_margin"   // MT5 品种级保证金率（UnitRatio，D-142 ③ 品种级优先账户级回落）
 	KindMTSymbolProduct  = "mt_symbol_product"  // MT5 CalcMode 产品类型（UnitCalcMode，D-173 product_group 反哺）
+	KindCMCPrice         = "cmc_price"          // CMC 实时报价（UnitPrice，D-205）
+	KindCMCAccount       = "cmc_account"        // CMC 账户摘要（UnitUSD，D-205）
+	KindCMCHistory       = "cmc_history"        // CMC 历史记录/swap（UnitUSD，D-205）
 )
 
 // Unit 常量表（§1.2）。
@@ -39,6 +42,7 @@ const (
 	UnitBps           = "bps"            // 基点（1bp=0.01%，期权平价偏离 D-137）
 	UnitContractSize  = "contract_size"  // 合约规格（D-140 S2，MT5 SymbolInfo.ContractSize）
 	UnitCalcMode      = "calc_mode"      // CalcMode enum 数值（D-173，MT5 产品类型）
+	UnitUSD           = "usd"            // USD 金额（D-205 CMC 账户/历史）
 )
 
 // TradeMode 值域（MT5 ENUM_SYMBOL_TRADE_MODE 透传，D-060 F4/F5 消费；
@@ -78,6 +82,9 @@ var validKinds = map[string]bool{
 	KindMTSymbolMeta:     true,
 	KindMTSymbolMargin:   true,
 	KindMTSymbolProduct:  true,
+	KindCMCPrice:         true,
+	KindCMCAccount:       true,
+	KindCMCHistory:       true,
 }
 
 // ValidKind 报告 k 是否为已知 Kind。
