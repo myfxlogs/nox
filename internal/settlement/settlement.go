@@ -33,6 +33,8 @@ type Deps interface {
 	GetStrategyStat(ctx context.Context, strategy string) (*pgstore.StrategyStat, error)
 	// AggregateStrategyStats 实时聚合策略全量平仓净值（D-154 S1 淘汰判定 v2 真相源）。
 	AggregateStrategyStats(ctx context.Context, strategy string) (pgstore.AggregateStat, error)
+	// AggregateStrategyStatsByEnvironment D-200：按 environment 过滤的聚合（environment='' 等价于原行为）。
+	AggregateStrategyStatsByEnvironment(ctx context.Context, strategy, environment string) (pgstore.AggregateStat, error)
 	// DisableStrategy 禁用策略（淘汰）。
 	DisableStrategy(ctx context.Context, strategy, reason string) error
 	// InsertSettlement 写 position_settlements（幂等 ON CONFLICT DO NOTHING，返修包②返回 won）。
@@ -250,13 +252,14 @@ func SettleAt(ctx context.Context, deps Deps, posID int64, elim Eliminator, now 
 
 	// 淘汰检查（D-154 S1：输入源从 strategy_stats 累计列改为 AggregateStrategyStats 实时聚合；
 	// disabled flag 仍查 strategy_stats——启停载体不变。两调用点同源 P3。）
+	// D-200：聚合改 ByEnvironment，按持仓自身 p.Environment 过滤——每个 environment 独立淘汰判定。
 	if elim != nil {
 		stat, err := deps.GetStrategyStat(ctx, p.Type)
 		if err != nil {
 			log.Printf("[settlement] get strategy stat: %v", err)
 			return nil
 		}
-		agg, err := deps.AggregateStrategyStats(ctx, p.Type)
+		agg, err := deps.AggregateStrategyStatsByEnvironment(ctx, p.Type, p.Environment)
 		if err != nil {
 			log.Printf("[settlement] aggregate strategy stats: %v", err)
 			return nil

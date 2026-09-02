@@ -25,7 +25,8 @@ type fakeDeps struct {
 	upsertVSample    int
 	updateStat       int
 	getStat          *pgstore.StrategyStat
-	aggStat          pgstore.AggregateStat // D-154 S1：AggregateStrategyStats 返回值
+	aggStat          pgstore.AggregateStat            // D-154 S1：AggregateStrategyStats 返回值
+	aggStatByEnv     map[string]pgstore.AggregateStat // D-200：ByEnvironment 按 environment 返回不同 aggStat
 	disableStrategy  string
 	cashflowsNet     float64    // D-127 P4 返修①：SumCashflowsNet 返回值
 	lastNetPnl       float64    // D-127 P4：捕获传给 UpdateStrategyStat 的 net 值
@@ -84,6 +85,20 @@ func (f *fakeDeps) AggregateStrategyStats(ctx context.Context, strategy string) 
 	st := f.aggStat
 	st.Strategy = strategy
 	return st, nil
+}
+
+// D-200：ByEnvironment 测试 stub。aggStatByEnv 非空时按 environment 返回不同 aggStat
+// （验证 environment 隔离）；空时委托 AggregateStrategyStats（忽略 environment 过滤）。
+func (f *fakeDeps) AggregateStrategyStatsByEnvironment(ctx context.Context, strategy, environment string) (pgstore.AggregateStat, error) {
+	if f.aggStatByEnv != nil {
+		st, ok := f.aggStatByEnv[environment]
+		if !ok {
+			return pgstore.AggregateStat{Strategy: strategy}, nil
+		}
+		st.Strategy = strategy
+		return st, nil
+	}
+	return f.AggregateStrategyStats(ctx, strategy)
 }
 
 func (f *fakeDeps) DisableStrategy(ctx context.Context, strategy, reason string) error {
@@ -294,6 +309,88 @@ func TestSettle_EliminatorTriggered(t *testing.T) {
 	}
 	if d.disableStrategy != "CROSS_VENUE" {
 		t.Errorf("disableStrategy=%q, want CROSS_VENUE", d.disableStrategy)
+	}
+}
+
+// TestSettle_EliminatorEnvironmentIsolation D-200：Settle 淘汰检查按持仓 p.Environment 聚合，
+// 不同 environment 返回不同 aggStat → 淘汰判定隔离。
+// 场景①：p.Environment='demo'，aggStatByEnv['demo']={Total:10, AvgPnl:-10} → elim 触发 → 禁用。
+// 场景②：p.Environment='live'，aggStatByEnv['live']={Total:10, AvgPnl:+10} → elim 不触发 → 不禁用。
+// 验证 Settle 把 p.Environment 透传给 AggregateStrategyStatsByEnvironment（而非忽略 environment）。
+func TestSettle_EliminatorEnvironmentIsolation(t *testing.T) {
+	now := time.Now()
+	rp := -5.0
+	elimByAvg := func(total int, winRate, avg, median float64, disabled bool) (bool, string) {
+		if avg < 0 {
+			return true, "avg<0"
+		}
+		return false, ""
+	}
+
+	// 场景①：demo environment → aggStat avg<0 → 禁用
+	dDemo := &fakeDeps{
+		position: &pgstore.Position{
+			ID:             6,
+			OpportunityID:  "CROSS_VENUE:AUDJPY:52993526:mt5:277842155:mt5",
+			Type:           "CROSS_VENUE",
+			Status:         "CLOSED",
+			ExpectedNetBps: 15.0,
+			RealizedPnl:    &rp,
+			OpenedAt:       &now,
+			ClosedAt:       &now,
+			Environment:    "demo",
+		},
+		legs: []pgstore.PositionLeg{
+			{Phase: "OPEN", Status: "FILLED", Venue: "52993526:mt5", Qty: 1.0, PriceActual: ptrFloat(113.5)},
+		},
+		cs:        100000,
+		csOk:      true,
+		fxRate:    150,
+		fxOk:      true,
+		insertWon: true,
+		aggStatByEnv: map[string]pgstore.AggregateStat{
+			"demo": {Total: 10, AvgPnl: -10, MedianPnl: -10},
+			"live": {Total: 10, AvgPnl: 10, MedianPnl: 10},
+		},
+	}
+	if err := Settle(context.Background(), dDemo, 6, elimByAvg); err != nil {
+		t.Fatalf("Settle demo: %v", err)
+	}
+	if dDemo.disableStrategy != "CROSS_VENUE" {
+		t.Errorf("demo: disableStrategy=%q, want CROSS_VENUE（avg<0 应触发淘汰）", dDemo.disableStrategy)
+	}
+
+	// 场景②：live environment → aggStat avg>0 → 不禁用
+	dLive := &fakeDeps{
+		position: &pgstore.Position{
+			ID:             7,
+			OpportunityID:  "CROSS_VENUE:AUDJPY:52993526:mt5:277842155:mt5",
+			Type:           "CROSS_VENUE",
+			Status:         "CLOSED",
+			ExpectedNetBps: 15.0,
+			RealizedPnl:    &rp,
+			OpenedAt:       &now,
+			ClosedAt:       &now,
+			Environment:    "live",
+		},
+		legs: []pgstore.PositionLeg{
+			{Phase: "OPEN", Status: "FILLED", Venue: "52993526:mt5", Qty: 1.0, PriceActual: ptrFloat(113.5)},
+		},
+		cs:        100000,
+		csOk:      true,
+		fxRate:    150,
+		fxOk:      true,
+		insertWon: true,
+		aggStatByEnv: map[string]pgstore.AggregateStat{
+			"demo": {Total: 10, AvgPnl: -10, MedianPnl: -10},
+			"live": {Total: 10, AvgPnl: 10, MedianPnl: 10},
+		},
+	}
+	if err := Settle(context.Background(), dLive, 7, elimByAvg); err != nil {
+		t.Fatalf("Settle live: %v", err)
+	}
+	if dLive.disableStrategy != "" {
+		t.Errorf("live: disableStrategy=%q, want \"\"（avg>0 不应触发淘汰）", dLive.disableStrategy)
 	}
 }
 
