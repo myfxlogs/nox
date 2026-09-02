@@ -45,8 +45,47 @@ func (p *Pipeline) persistOpenLegs(ctx context.Context, requestID string, posID 
 			msg := fmt.Sprintf("leg persist failed position=%d leg=%d venue=%s: %v", posID, i, legs[i].VenueKey, err)
 			log.Printf("[exec] %s", msg)
 			_ = p.store.InsertAlert(ctx, nil, "critical", msg)
+			// D-201：补偿回滚已 FILLED 腿（0~i），best-effort（回滚失败只 log+alert，不阻断返回原 error）。
+			p.rollbackFilledLegs(ctx, posID, legs, results, i)
 			return fmt.Errorf("leg persist: %w", err)
 		}
 	}
 	return nil
+}
+
+// rollbackFilledLegs D-201：persistOpenLegs 失败时补偿回滚 0~failedIdx 的 FILLED 腿。
+// best-effort：回滚失败只 log+alert，不阻断。
+// MT 腿用 CloseOrder（按 ticket），CEX 腿用 PlaceOrder 反向。
+// UNKNOWN/FAILED 腿不回滚（UNKNOWN 可能已成交需人工确认，FAILED 未成交）。
+func (p *Pipeline) rollbackFilledLegs(ctx context.Context, posID int64, legs []LegSpec, results []LegResult, failedIdx int) {
+	for i := 0; i <= failedIdx; i++ {
+		r := results[i]
+		if r.Status != "FILLED" {
+			continue
+		}
+		exe, ok := p.registry.Get(legs[i].VenueKey)
+		if !ok {
+			log.Printf("[exec] rollback pos=%d leg=%d: no executor for %s", posID, i, legs[i].VenueKey)
+			continue
+		}
+		var closeErr error
+		if isMTVenueKey(legs[i].VenueKey) {
+			_, closeErr = exe.CloseOrder(ctx, OrderRef{OrderID: r.OrderID, Venue: legs[i].VenueKey})
+		} else {
+			closeSide := "SELL"
+			if legs[i].Side == "SELL" {
+				closeSide = "BUY"
+			}
+			_, closeErr = exe.PlaceOrder(ctx, Order{
+				Symbol: legs[i].VenueSymbol, Side: closeSide, Qty: legs[i].Qty, Venue: legs[i].VenueKey,
+			})
+		}
+		if closeErr != nil {
+			rmsg := fmt.Sprintf("rollback failed pos=%d leg=%d venue=%s: %v", posID, i, legs[i].VenueKey, closeErr)
+			log.Printf("[exec] %s", rmsg)
+			_ = p.store.InsertAlert(ctx, nil, "critical", rmsg)
+		} else {
+			log.Printf("[exec] rollback ok pos=%d leg=%d venue=%s ticket=%s", posID, i, legs[i].VenueKey, r.OrderID)
+		}
+	}
 }
