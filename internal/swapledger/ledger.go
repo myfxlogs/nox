@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"arb/internal/fact"
+	"arb/internal/safego"
 	"arb/internal/store/pgstore"
 )
 
@@ -94,7 +95,7 @@ func (l *Ledger) StartLoop(ctx context.Context) {
 	defer ticker.Stop()
 
 	// 首轮延迟（等 adapter 就绪），独立 goroutine 跑（不阻塞 ticker loop）
-	go func() {
+	safego.Go("ledger:initial", func() {
 		select {
 		case <-ctx.Done():
 			return
@@ -105,7 +106,7 @@ func (l *Ledger) StartLoop(ctx context.Context) {
 		} else if n > 0 {
 			log.Printf("[swapledger] initial: %d cashflows written", n)
 		}
-	}()
+	})
 
 	for {
 		select {

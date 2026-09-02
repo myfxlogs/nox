@@ -12,6 +12,7 @@ import (
 	"math"
 	"time"
 
+	"arb/internal/safego"
 	"arb/internal/store/pgstore"
 )
 
@@ -53,7 +54,7 @@ func (r *SwapReconciler) StartLoop(ctx context.Context) {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
-	go func() {
+	safego.Go("reconcile_swap:initial", func() {
 		select {
 		case <-ctx.Done():
 			return
@@ -64,7 +65,7 @@ func (r *SwapReconciler) StartLoop(ctx context.Context) {
 		} else if n > 0 {
 			log.Printf("[swap-reconcile] initial: %d alerts", n)
 		}
-	}()
+	})
 
 	for {
 		select {

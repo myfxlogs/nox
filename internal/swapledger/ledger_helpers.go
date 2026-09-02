@@ -2,10 +2,13 @@ package swapledger
 
 import (
 	"log"
+	"math"
 	"strings"
 	"time"
 
 	"arb/internal/decimalutil"
+
+	"github.com/shopspring/decimal"
 )
 
 // factKey (canonical, venue) → swap/funding rate。
@@ -74,16 +77,22 @@ func settleMultiplier(venueKey, canonical string, day time.Time, r TripleDayReso
 // decimalAmount 经 decimalutil 精度守卫计算 swap/funding 金额（D-077 修复⑩ G5）。
 // 公式：rate / divRate / divPeriod × notional × multiplier
 // 经 strconv 字符串中介避免 float64 漂移，返回 float64 供 InsertCashflow。
+// D-190 §3.3：NaN/Inf 输入 → return 0 + log（金额守卫：不 panic、不静默传 NaN）；
+// divRate/divPeriod 为 int → decimal.NewFromInt 精确构造（删 MustFromFloat64 panic 路径）。
 func decimalAmount(rate float64, divRate, divPeriod int, notional float64, multiplier float64) float64 {
+	if math.IsNaN(rate) || math.IsInf(rate, 0) || math.IsNaN(notional) || math.IsInf(notional, 0) || math.IsNaN(multiplier) || math.IsInf(multiplier, 0) {
+		log.Printf("[swapledger] decimalAmount NaN/Inf guard: rate=%v notional=%v mult=%v", rate, notional, multiplier)
+		return 0
+	}
 	dRate, _ := decimalutil.FromFloat64(rate)
 	dNotional, _ := decimalutil.FromFloat64(notional)
 	dMult, _ := decimalutil.FromFloat64(multiplier)
 	result := dRate.Mul(dNotional).Mul(dMult)
 	if divRate > 0 {
-		result = result.Div(decimalutil.MustFromFloat64(float64(divRate)))
+		result = result.Div(decimal.NewFromInt(int64(divRate)))
 	}
 	if divPeriod > 0 {
-		result = result.Div(decimalutil.MustFromFloat64(float64(divPeriod)))
+		result = result.Div(decimal.NewFromInt(int64(divPeriod)))
 	}
 	f, _ := result.Float64()
 	return f
