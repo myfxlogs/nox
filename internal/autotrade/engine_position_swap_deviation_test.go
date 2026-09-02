@@ -72,17 +72,18 @@ func seedSwapDeviationPosition(t *testing.T, s *pgstore.Store, factsLong, factsS
 }
 
 // TestRecalcNetSwap_DeviationHigh_UseBrokerActual D-165 S2：偏差 > 50% → 用 broker 实际值。
-// facts=0.5 bps，broker actual: buy=-2.21 USD, sell=0.5 USD, net=-1.71 USD, avgNotional=100, actualBps=-171。
-// 偏差 |0.5-(-171)|/max(0.5,171,0.01)*100 ≈ 99.7% > 50% → 返回 -171（触发退出）。
+// D-190 返修 R1：AUDJPY 为 JPY 对 → 需 e.quotes 注入 USDJPY 报价让 PerLot ok。
+// CS=1（无 resolver 注入→回退），price=100, USDJPY=150 → usdPerLot=0.667, notional=0.667。
+// actual: buy=-2.21, sell=0.5, net=-1.71。actualBps=-1.71/0.667×10000≈-25650。
+// facts=0.5。偏差 > 50% → 用 actual（负）。
 func TestRecalcNetSwap_DeviationHigh_UseBrokerActual(t *testing.T) {
 	s := testAccumStore(t)
 	pos := seedSwapDeviationPosition(t, s, 0.5, 0.0, -2.21, 0.5)
-	e := &Engine{store: s, cfg: Config{SwapDeviationExitPct: 50.0}}
+	e := &Engine{store: s, quotes: newJPYQuotes(), cfg: Config{SwapDeviationExitPct: 50.0}}
 	got, ok := e.recalcNetSwap(context.Background(), pos)
 	if !ok {
 		t.Fatalf("want ok=true, got false")
 	}
-	// actualBps = (-2.21 + 0.5) / 100 * 10000 = -171
 	if got >= 0 {
 		t.Errorf("high deviation: got %.4f, want negative (broker actual)", got)
 	}

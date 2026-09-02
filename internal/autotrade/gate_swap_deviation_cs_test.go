@@ -110,23 +110,29 @@ func TestSwapDeviationGate_ResolverNil_FallbackCS1(t *testing.T) {
 	}
 }
 
-// TestSwapDeviationGate_ResolverOkFalse_SkipLeg D-165.1 S1：resolver 注入但 ok=false → 跳过该腿（放行走 S3）。
-func TestSwapDeviationGate_ResolverOkFalse_SkipLeg(t *testing.T) {
-	s := setupSwapDeviationStore(t, 0.0, -2.21) // 高偏差，但 resolver 返回 ok=false
+// TestSwapDeviationGate_ResolverOkFalse_RejectsFailClosed D-165.1/D-190 R2：
+// resolver 注入但 ok=false → CS=1 回退 → PerLot ok（有 USDJPY）→ notional 低估 →
+// factsUSD≈0 vs actual=-2.21 → deviation≈100% > 50% → REJECT（fail-closed，复审认可）。
+// 旧语义（跳过腿放行）是审计定性的 fail-open 洞，D-190 修复后 CEX 腿偏差检查首次激活。
+func TestSwapDeviationGate_ResolverOkFalse_RejectsFailClosed(t *testing.T) {
+	s := setupSwapDeviationStore(t, 0.0, -2.21) // facts=0, actual=-2.21 → 高偏差
 	g := NewGate(s, Config{
 		MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0,
-		LegContractSizeResolver: csResolver(map[string]float64{}), // 空 map → 全部 ok=false
+		LegContractSizeResolver: csResolver(map[string]float64{}), // 空 map → 全部 ok=false → CS=1 回退
 		Quotes:                  setupSwapDeviationQuotes(),
 	}, nil)
 	intent := TradeIntent{
 		Strategy: "CROSS_VENUE", Canonical: "AUDJPY",
 		VenueBuy: "vA:mt5", VenueSell: "vB:mt5", Qty: 0.01,
 		DedupKey: "CROSS_VENUE:AUDJPY:vA:mt5:vB:mt5",
-		Execute:  func(ctx context.Context) (string, string, int64) { return "EXECUTED", "", 1 },
+		Execute: func(ctx context.Context) (string, string, int64) {
+			t.Error("Execute should not be called (fail-closed reject)")
+			return "FAILED", "", 0
+		},
 	}
 	res := g.Submit(context.Background(), &intent)
-	// resolver ok=false → 跳过 vA 腿 → 无其他匹配腿 → 放行（走 S3）
-	if res.Status == "REJECTED" && strings.Contains(res.Reason, "swap deviation gate") {
-		t.Errorf("resolver ok=false should skip leg (pass to S3), rejected: %s", res.Reason)
+	// CS=1 回退 → PerLot ok → notional 低估 → facts=0 vs actual=-2.21 → deviation≈100% → REJECT
+	if res.Status != "REJECTED" || !strings.Contains(res.Reason, "swap deviation gate") {
+		t.Errorf("resolver ok=false: got %s/%s, want REJECTED/swap deviation gate (fail-closed)", res.Status, res.Reason)
 	}
 }
