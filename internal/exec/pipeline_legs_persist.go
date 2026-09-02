@@ -53,12 +53,16 @@ func (p *Pipeline) persistOpenLegs(ctx context.Context, requestID string, posID 
 	return nil
 }
 
-// rollbackFilledLegs D-201：persistOpenLegs 失败时补偿回滚 0~failedIdx 的 FILLED 腿。
+// rollbackFilledLegs D-201：persistOpenLegs 失败时补偿回滚所有 FILLED 腿（0~len(results)-1）。
 // best-effort：回滚失败只 log+alert，不阻断。
 // MT 腿用 CloseOrder（按 ticket），CEX 腿用 PlaceOrder 反向。
 // UNKNOWN/FAILED 腿不回滚（UNKNOWN 可能已成交需人工确认，FAILED 未成交）。
+// D-201 复审修正：原设计只回滚 0~failedIdx，但 persistOpenLegs 在第一个失败处 return，
+// failedIdx 之后的腿已在 broker 端并发执行（pipeline.go wg.Wait 后全部完成）——
+// 既未 persist 也未回滚 → 仍是孤儿。扩展回滚范围至全部 results。
 func (p *Pipeline) rollbackFilledLegs(ctx context.Context, posID int64, legs []LegSpec, results []LegResult, failedIdx int) {
-	for i := 0; i <= failedIdx; i++ {
+	_ = failedIdx // D-201 复审修正：保留签名兼容，实际回滚全部 results
+	for i := 0; i < len(results); i++ {
 		r := results[i]
 		if r.Status != "FILLED" {
 			continue

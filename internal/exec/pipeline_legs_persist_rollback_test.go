@@ -179,3 +179,36 @@ func TestPersistOpenLegs_RollbackBestEffort(t *testing.T) {
 		t.Errorf("rollback failed alert 行数=%d, want 1（第 1 腿回滚失败应写 critical alert）", alertCount)
 	}
 }
+
+// TestPersistOpenLegs_RollbackAllLegs D-201 复审修正：persistOpenLegs 在第一个失败处 return，
+// failedIdx 之后的腿已在 broker 端并发执行——回滚范围必须覆盖全部 results，不能只回滚 0~failedIdx。
+// 场景：3 腿 FILLED，failedIdx=0（第 1 腿 persist 失败）→ 回滚全部 3 腿（不只第 1 腿）。
+func TestPersistOpenLegs_RollbackAllLegs(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE alerts CASCADE`); err != nil {
+		t.Fatalf("truncate alerts: %v", err)
+	}
+	reg := NewRegistry()
+	exe := &fakeRollbackExecutor{venue: "52993526:mt5"}
+	reg.Register(exe)
+	p := &Pipeline{registry: reg, store: s}
+
+	legs := []LegSpec{
+		{VenueKey: "52993526:mt5", VenueSymbol: "AUDJPY", Side: "BUY", Qty: 0.01},
+		{VenueKey: "52993526:mt5", VenueSymbol: "AUDJPY", Side: "SELL", Qty: 0.01},
+		{VenueKey: "52993526:mt5", VenueSymbol: "AUDJPY", Side: "BUY", Qty: 0.01},
+	}
+	results := []LegResult{
+		{VenueKey: "52993526:mt5", OrderID: "mt-ticket-1", Status: "FILLED", Qty: 0.01, Price: 113.5},
+		{VenueKey: "52993526:mt5", OrderID: "mt-ticket-2", Status: "FILLED", Qty: 0.01, Price: 113.5},
+		{VenueKey: "52993526:mt5", OrderID: "mt-ticket-3", Status: "FILLED", Qty: 0.01, Price: 113.5},
+	}
+	// failedIdx=0：第 1 腿 persist 失败，但第 2/3 腿已在 broker 端 FILLED
+	p.rollbackFilledLegs(ctx, 995, legs, results, 0)
+
+	// 复审修正：回滚全部 3 腿（不只 0~failedIdx=1 腿）
+	if exe.closeCount != 3 {
+		t.Errorf("CloseOrder 调用次数=%d, want 3（failedIdx=0 但第 2/3 腿已 FILLED，回滚范围=全部 results）", exe.closeCount)
+	}
+}
