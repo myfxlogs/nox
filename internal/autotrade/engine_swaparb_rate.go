@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/bus"
 	"arb/internal/fact"
+	"arb/internal/usdnotional"
 )
 
 // swapRateSource 取数来源标识（决策日志带 swap_src=settled|spec|none）。
@@ -110,64 +110,15 @@ func (e *Engine) notionalPerLotForRate(venue, symbol string) (float64, bool) {
 					}
 				}
 			}
-			// D-183：币种换算——CS × mid 是计价币口径，需转 USD。
-			// JPY 对 ÷ USDJPY；USD/USDT/商品白名单直接；其他 fail-closed（勿猜）。
-			return notionalPerLotUSD(symbol, cs, mid, e.quotes)
+			// D-183/D-190：币种换算——CS × mid 是计价币口径，需转 USD。
+			// usdnotional.PerLot 统一实现（JPY ÷ USDJPY；USD/USDT/商品白名单直接；其他 fail-closed）。
+			return usdnotional.PerLot(symbol, mid, cs, e.quotes)
 		}
 	}
 	return 0, false
 }
 
-// notionalPerLotUSD D-183：CS × price × 计价币→USD 换算（复用 dashboard.usdPerLot 逻辑）。
-// JPY 对 → CS × price ÷ USDJPY；USD/USDT/商品白名单 → CS × price；其他 → fail-closed。
-// fx 缺失 → ok=false（调用方走 spec/none）。
-func notionalPerLotUSD(canonical string, cs, price float64, quotes *bus.QuoteBus) (float64, bool) {
-	if cs <= 0 || price <= 0 {
-		return 0, false
-	}
-	switch {
-	case strings.HasSuffix(canonical, "USDT"), strings.HasSuffix(canonical, "USD"), usdQuotedCommodities[canonical]:
-		return cs * price, true
-	case strings.HasSuffix(canonical, "JPY"):
-		fx, ok := latestAnyVenueQuote(quotes, "USDJPY")
-		if !ok || fx <= 0 {
-			return 0, false
-		}
-		return cs * price / fx, true
-	default:
-		return 0, false
-	}
-}
-
-// latestAnyVenueQuote 从 QuoteBus 取指定 canonical 的最新任一 venue mid 价（fx 换算用）。
-func latestAnyVenueQuote(quotes *bus.QuoteBus, canonical string) (float64, bool) {
-	if quotes == nil {
-		return 0, false
-	}
-	var best bus.Quote
-	found := false
-	for _, q := range quotes.AllLatest() {
-		if q.Symbol == canonical {
-			if !found || q.Time.After(best.Time) {
-				best = q
-				found = true
-			}
-		}
-	}
-	if !found {
-		return 0, false
-	}
-	return (best.Bid + best.Ask) / 2, true
-}
-
-// usdQuotedCommodities D-183：USD 计价商品/指数 CFD 白名单（与 dashboard.usdPerLot 同源）。
-var usdQuotedCommodities = map[string]bool{
-	"BRENT": true, "WTI": true, "SILVER": true, "COPPER": true, "NATGAS": true,
-	"XAUUSD": true, "XAGUSD": true, "XPDUSD": true, "XPTUSD": true,
-	"NAS100": true, "SPX500": true, "US30": true, "US2000": true, "GER40": true,
-	"UK100": true, "HK50": true, "JP225": true, "AUS200": true, "ES35": true,
-	"FR40": true, "STOXX50": true,
-}
+// notionalPerLotUSD/latestAnyVenueQuote/usdQuotedCommodities 已迁移至 internal/usdnotional（D-190 双拷贝清除）。
 
 // medianFloat64 中位数（排序后取中间值，偶数取两值平均）。
 // 共用函数：swapRateFor settled 样本聚合用。
