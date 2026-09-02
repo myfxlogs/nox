@@ -230,3 +230,57 @@ func TestClassify_Avg30dPositive_InstantLt2x_Breakeven(t *testing.T) {
 		t.Errorf("avg30dBps=5 instantBps=9<10: got %s, want RatingBreakeven", got)
 	}
 }
+
+// TestEvaluateAt_DeterministicExpiresAt D-194 §3.3：同一 now → 同一 ExpiresAt；不同 now → 不同 ExpiresAt。
+func TestEvaluateAt_DeterministicExpiresAt(t *testing.T) {
+	c := detector.Candidate{
+		Type:      detector.TypeCrossVenue,
+		Canonical: "EURUSD",
+		VenueBuy:  "a:mt4",
+		VenueSell: "b:mt4",
+		PriceBuy:  1.1001,
+		PriceSell: 1.1010,
+		GrossBps:  8.18,
+		QuoteTime: time.Now().UnixMilli(),
+	}
+	cfg := baseCfg()
+	now1 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	now2 := time.Date(2026, 1, 2, 12, 0, 0, 0, time.UTC)
+	r1 := EvaluateAt(c, cfg, 0.0001, 0.0001, 0.6, 0, now1)
+	r2 := EvaluateAt(c, cfg, 0.0001, 0.0001, 0.6, 0, now1) // 同 now
+	r3 := EvaluateAt(c, cfg, 0.0001, 0.0001, 0.6, 0, now2) // 不同 now
+	if !r1.ExpiresAt.Equal(r2.ExpiresAt) {
+		t.Errorf("同 now ExpiresAt 不一致: r1=%v r2=%v", r1.ExpiresAt, r2.ExpiresAt)
+	}
+	if r1.ExpiresAt.Equal(r3.ExpiresAt) {
+		t.Errorf("不同 now ExpiresAt 相同: r1=%v r3=%v", r1.ExpiresAt, r3.ExpiresAt)
+	}
+	want1 := now1.Add(cfg.OpportunityTTL)
+	if !r1.ExpiresAt.Equal(want1) {
+		t.Errorf("ExpiresAt=%v, want %v (now+TTL)", r1.ExpiresAt, want1)
+	}
+}
+
+// TestEvaluate_CompatWrapper D-194 §3.3：Evaluate 与 EvaluateAt(..., time.Now()) 行为一致。
+func TestEvaluate_CompatWrapper(t *testing.T) {
+	c := detector.Candidate{
+		Type:      detector.TypeCrossVenue,
+		Canonical: "EURUSD",
+		VenueBuy:  "a:mt4",
+		VenueSell: "b:mt4",
+		PriceBuy:  1.1001,
+		PriceSell: 1.1010,
+		GrossBps:  8.18,
+		QuoteTime: time.Now().UnixMilli(),
+	}
+	cfg := baseCfg()
+	before := time.Now()
+	rEval := Evaluate(c, cfg, 0.0001, 0.0001, 0.6, 0)
+	after := time.Now()
+	// ExpiresAt 应在 before+TTL ~ after+TTL 之间（time.Now() 精度内）
+	minExpires := before.Add(cfg.OpportunityTTL)
+	maxExpires := after.Add(cfg.OpportunityTTL)
+	if rEval.ExpiresAt.Before(minExpires) || rEval.ExpiresAt.After(maxExpires) {
+		t.Errorf("Evaluate ExpiresAt=%v 不在 [%v, %v] 范围内（应为 time.Now()+TTL）", rEval.ExpiresAt, minExpires, maxExpires)
+	}
+}

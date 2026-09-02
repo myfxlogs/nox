@@ -67,7 +67,7 @@ type Result struct {
 // D-078 round-trip 成本修正：开仓+平仓各付一轮 commission+slippage（+spread for 息差型），
 // 旧模型只算开仓成本导致净收益虚高——实证 31 笔 CROSS_VENUE avg gross 46bps 但 avg realized -$1.19。
 // D-113 续篇：bid-ask 穿透仍漏算——51 笔只 1 盈累计 -$512，宽 spread venue 组合 net 虚高 21 bps。
-func Evaluate(c detector.Candidate, cfg Config, spreadBuy, spreadSell, commissionBps, avg30dBps float64) *Result {
+func EvaluateAt(c detector.Candidate, cfg Config, spreadBuy, spreadSell, commissionBps, avg30dBps float64, now time.Time) *Result {
 	spreadCost := spreadBuy + spreadSell
 	// D-145 §②：滑点 per-leg 计算——MT 腿用 cfg.SlippageBps（0.3 不变，观察期铁证），
 	// CEX 腿用 slipBpsForCEX（品种分级表，与 cfg.SlippageBps 解耦）。
@@ -111,7 +111,6 @@ func Evaluate(c detector.Candidate, cfg Config, spreadBuy, spreadSell, commissio
 	// D-159 W4a：成本质量——commissionBps 来源未知（默认值非真实对拍）→ unknown；
 	// 未来真实对拍后改 estimated/actual。当前恒 unknown（保守）。
 	costQuality := "unknown"
-	now := time.Now()
 	qt := time.UnixMilli(c.QuoteTime)
 	return &Result{
 		ID:             genID(c, qt),
@@ -133,6 +132,11 @@ func Evaluate(c detector.Candidate, cfg Config, spreadBuy, spreadSell, commissio
 		Rating:         rating,
 		CostQuality:    costQuality,
 	}
+}
+
+// Evaluate 兼容包装（D-194 §3.3：生产旧入口 = EvaluateAt(time.Now())）。
+func Evaluate(c detector.Candidate, cfg Config, spreadBuy, spreadSell, commissionBps, avg30dBps float64) *Result {
+	return EvaluateAt(c, cfg, spreadBuy, spreadSell, commissionBps, avg30dBps, time.Now())
 }
 
 // classify 三档判定（§6.3）。
