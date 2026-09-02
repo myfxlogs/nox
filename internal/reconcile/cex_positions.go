@@ -152,6 +152,7 @@ func (q *CEXPositionQuerier) okxPositions(ctx context.Context) ([]VenueOrder, er
 			OpenedAt:      openedAt,
 			InitialMargin: initMargin,  // D-146 S5 微件③ 返修：imr 优先，margin 回落
 			MaintMargin:   maintMargin, // D-146 S5 微件③ 返修：mmr
+			PosSide:       p.PosSide,   // D-195-C2：OKX long_short_mode position_side
 		})
 	}
 	return out, nil
@@ -195,11 +196,10 @@ func (q *CEXPositionQuerier) gatePositions(ctx context.Context) ([]VenueOrder, e
 		entryPx, _ := strconv.ParseFloat(p.EntryPrice, 64)
 		upl, _ := strconv.ParseFloat(p.UnrealizedPnl, 64)
 		funding, _ := strconv.ParseFloat(p.Funding, 64)
-		side := "BUY"
+		side, posSide := "BUY", "long" // D-195-C2：Gate size>0=long/BUY, <0=short/SELL
 		vol := float64(p.Size)
 		if p.Size < 0 {
-			side = "SELL"
-			vol = -vol
+			side, posSide, vol = "SELL", "short", -vol
 		}
 		// 查合约规格转基础币（缓存避免重复请求）
 		quanto, ok := quantoCache[p.Contract]
@@ -218,6 +218,7 @@ func (q *CEXPositionQuerier) gatePositions(ctx context.Context) ([]VenueOrder, e
 			VenueKey:  q.VenueKey(),
 			Profit:    upl,
 			Swap:      funding, // Gate funding ≈ swap
+			PosSide:   posSide, // D-195-C2：从 size 正负推导
 		})
 	}
 	return out, nil
@@ -273,11 +274,10 @@ func (q *CEXPositionQuerier) binancePositions(ctx context.Context) ([]VenueOrder
 		}
 		entryPx, _ := strconv.ParseFloat(p.EntryPrice, 64)
 		upl, _ := strconv.ParseFloat(p.UnRealizedProfit, 64)
-		side := "BUY"
+		side, posSide := "BUY", "long" // D-195-C2：Binance amt>0=long/BUY, <0=short/SELL
 		vol := amt
 		if amt < 0 {
-			side = "SELL"
-			vol = -vol
+			side, posSide, vol = "SELL", "short", -vol
 		}
 		// D-146 S5 微件③ 返修：逐仓→isolatedWallet；全仓→notional/leverage
 		var initMargin float64
@@ -293,6 +293,7 @@ func (q *CEXPositionQuerier) binancePositions(ctx context.Context) ([]VenueOrder
 			Ticket: p.Symbol, Symbol: p.Symbol, Side: side, Volume: vol,
 			OpenPrice: entryPx, Venue: q.venue, VenueKey: q.VenueKey(), Profit: upl,
 			InitialMargin: initMargin, // MaintMargin=0：positionRisk 无此字段，走 D-124 账户分摊
+			PosSide:       posSide,    // D-195-C2：从 amt 正负推导
 		})
 	}
 	return out, nil

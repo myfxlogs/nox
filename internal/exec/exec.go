@@ -82,10 +82,11 @@ type Prechecker interface {
 
 // OpenedOrder venue 侧在仓订单（D-077 修复⑩ G1 平仓后回读用）。
 type OpenedOrder struct {
-	Ticket string
-	Symbol string
-	Side   string // BUY / SELL
-	Volume float64
+	Ticket  string
+	Symbol  string
+	Side    string // BUY / SELL
+	Volume  float64
+	PosSide string // D-195-C2：CEX 聚合仓 position_side（long/short/net；MT 留空）
 }
 
 // PositionVerifier 按 ticket 回读 venue 在仓订单（D-077 修复⑩ G1）。

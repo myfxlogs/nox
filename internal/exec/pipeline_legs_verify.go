@@ -62,3 +62,19 @@ func (p *Pipeline) checkResidualLegs(ctx context.Context, legs []pgstore.Positio
 func isMTVenueKey(venueKey string) bool {
 	return strings.HasSuffix(venueKey, ":mt5") || strings.HasSuffix(venueKey, ":mt4")
 }
+
+// isCEXVenueKey D-195-C2：判断 venueKey 是否为 CEX（与 isMTVenueKey 对称）。
+func isCEXVenueKey(venueKey string) bool {
+	venue, _, _ := strings.Cut(venueKey, ":")
+	return isCEXVenue(venue)
+}
+
+// isCEXVenue D-195-C2：判断 venue 是否为 CEX（okx/binance/gate）。
+func isCEXVenue(venue string) bool {
+	switch venue {
+	case "okx", "binance", "gate":
+		return true
+	default:
+		return false
+	}
+}

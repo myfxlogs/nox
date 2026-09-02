@@ -28,7 +28,7 @@ func (p *Pipeline) brokerPreflight(ctx context.Context, posID int64, leg pgstore
 		}
 		return false, Fill{}, fmt.Errorf("verify %s: %w", leg.Venue, err)
 	}
-	// MT 腿按 VenueKey+原 OrderID 匹配；CEX 腿按 VenueKey+Symbol+Side 匹配。
+	// MT 腿按 VenueKey+原 OrderID 匹配；CEX 腿按 VenueKey+Symbol+Side+PosSide 匹配（D-195-C2 §6.3 加 position_side）。
 	for _, o := range orders {
 		if isMTVenueKey(leg.Venue) {
 			if o.Ticket == leg.OrderID {
@@ -36,7 +36,20 @@ func (p *Pipeline) brokerPreflight(ctx context.Context, posID int64, leg pgstore
 			}
 		} else {
 			if o.Symbol == leg.Symbol && o.Side == leg.Side {
-				return true, Fill{}, nil
+				// D-195-C2 §6.3：CEX 聚合仓 position_side 维度匹配。
+				// OKX long_short_mode 下 long/short 分列，PosSide 必须匹配才确认是同一持仓。
+				// Gate/Binance 从 size 正负推导 PosSide（long/short），与 leg.Side 推导的 expectedPosSide 一致。
+				// o.PosSide 为空（旧适配器或 MT 透传）→ 回退到 Symbol+Side 匹配（向后兼容）。
+				if o.PosSide == "" {
+					return true, Fill{}, nil
+				}
+				expectedPosSide := "long"
+				if leg.Side == "SELL" {
+					expectedPosSide = "short"
+				}
+				if o.PosSide == expectedPosSide {
+					return true, Fill{}, nil
+				}
 			}
 		}
 	}
@@ -44,7 +57,8 @@ func (p *Pipeline) brokerPreflight(ctx context.Context, posID int64, leg pgstore
 }
 
 // placeCloseOrder D-189 P0-4：发平仓单（MT CloseOrder / CEX PlaceOrder 反向）。
-func (p *Pipeline) placeCloseOrder(ctx context.Context, posID int64, leg pgstore.PositionLeg, closeSide string) (Fill, error) {
+// D-195-C2 §6.4：qty 参数支持部分成交残量继续（全量时 = leg.Qty）。
+func (p *Pipeline) placeCloseOrder(ctx context.Context, posID int64, leg pgstore.PositionLeg, closeSide string, qty float64) (Fill, error) {
 	exe, ok := p.registry.Get(leg.Venue)
 	if !ok {
 		return Fill{}, fmt.Errorf("no executor for venue %s", leg.Venue)
@@ -54,7 +68,7 @@ func (p *Pipeline) placeCloseOrder(ctx context.Context, posID int64, leg pgstore
 	}
 	if pc, ok := exe.(Prechecker); ok {
 		if pcErr := pc.Precheck(ctx, Order{
-			Symbol: leg.Symbol, Side: closeSide, Qty: leg.Qty, Venue: leg.Venue,
+			Symbol: leg.Symbol, Side: closeSide, Qty: qty, Venue: leg.Venue,
 		}); pcErr != nil {
 			return Fill{}, fmt.Errorf("precheck: %w", pcErr)
 		}
@@ -67,7 +81,7 @@ func (p *Pipeline) placeCloseOrder(ctx context.Context, posID int64, leg pgstore
 		positionSide = "short"
 	}
 	return exe.PlaceOrder(ctx, Order{
-		Symbol: leg.Symbol, Side: closeSide, Qty: leg.Qty, Venue: leg.Venue,
+		Symbol: leg.Symbol, Side: closeSide, Qty: qty, Venue: leg.Venue,
 		PositionSide: positionSide, PosID: posID,
 	})
 }

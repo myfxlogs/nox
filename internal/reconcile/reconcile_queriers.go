@@ -47,6 +47,9 @@ type VenueOrder struct {
 	OpenPrice float64
 	Venue     string
 	Comment   string
+	// D-195-C2：CEX 聚合仓 position_side（OKX long/short/net；Gate/Binance 从 size 正负推导）。
+	// MT 留空（MT 按 ticket 匹配，无需 position_side）。
+	PosSide string
 
 	// WP3（D-051）加性扩展：对外视图（ListBrokerPositions）需要的权威字段，对账器原有逻辑不动。
 	VenueKey   string  // "{venue}:{venueType}"（query 时已知类型）

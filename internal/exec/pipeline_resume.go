@@ -111,12 +111,23 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64) error {
 			continue
 		}
 		// D-189 P0-4 S4-1：legNo 去重——已有 CLOSE leg 跳过发单。
-		if _, hasClose := closeByLegNo[leg.LegNo]; hasClose {
-			// D-189 P0-4 S4-5：已有 CLOSE leg 但 cashflows 缺失 → 从权威历史补回。
-			if err := p.backfillMissingCashflows(ctx, posID, leg, fx); err != nil {
-				return fmt.Errorf("pos=%d leg=%d backfill cashflow: %w", posID, leg.LegNo, err)
+		// D-195-C2 §6.4：部分成交残量继续——CLOSE leg filled_qty > 0 且 < OPEN leg qty 时只对剩余量发单。
+		if closeLeg, hasClose := closeByLegNo[leg.LegNo]; hasClose {
+			closeFilledQty := 0.0
+			hasPartialFill := closeLeg.FilledQty != nil && *closeLeg.FilledQty > 0
+			if hasPartialFill {
+				closeFilledQty = *closeLeg.FilledQty
 			}
-			continue
+			if !hasPartialFill || closeFilledQty >= leg.Qty {
+				// 无部分成交（nil/0=未成交或全量）或已全部平仓 → cashflows 补回后跳过。
+				if err := p.backfillMissingCashflows(ctx, posID, leg, fx); err != nil {
+					return fmt.Errorf("pos=%d leg=%d backfill cashflow: %w", posID, leg.LegNo, err)
+				}
+				continue
+			}
+			// 部分成交（0 < filled_qty < open_qty）→ 继续对剩余量发单（不跳过本腿）
+			log.Printf("[exec] resume close leg %d partial fill: openQty=%.4f closeFilledQty=%.4f remaining=%.4f",
+				leg.ID, leg.Qty, closeFilledQty, leg.Qty-closeFilledQty)
 		}
 		// D-189 P0-4 S4-2：broker preflight——查 verifier 确认腿是否仍在仓。
 		stillOpen, fill, err := p.brokerPreflight(ctx, posID, leg)
@@ -135,9 +146,17 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64) error {
 		if leg.Side == "SELL" {
 			closeSide = "BUY"
 		}
+		// D-195-C2 §6.4：部分成交残量继续——计算剩余量（全量时 = leg.Qty）。
+		closeQty := leg.Qty
+		if closeLeg, hasClose := closeByLegNo[leg.LegNo]; hasClose && closeLeg.FilledQty != nil && *closeLeg.FilledQty > 0 {
+			remaining := leg.Qty - *closeLeg.FilledQty
+			if remaining > 0 && remaining < closeQty {
+				closeQty = remaining
+			}
+		}
 		// D-189 P0-4：fill 来自 preflight（已有成交）；若 preflight 未成交则发新单。
 		if fill.OrderID == "" {
-			newFill, closeErr := p.placeCloseOrder(ctx, posID, leg, closeSide)
+			newFill, closeErr := p.placeCloseOrder(ctx, posID, leg, closeSide, closeQty)
 			if closeErr != nil {
 				log.Printf("[exec] resume close leg %d (ticket=%s venue=%s): %v", leg.ID, leg.OrderID, leg.Venue, closeErr)
 				continue
@@ -151,7 +170,7 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64) error {
 			continue
 		}
 		closePrice := fill.Price
-		closeQty := fill.Qty
+		closeQty = fill.Qty
 		if closeQty <= 0 {
 			closeQty = leg.Qty
 		}
