@@ -27,6 +27,10 @@ func (e *CEXExecutor) placeBinance(ctx context.Context, o Order) (Fill, error) {
 	params.Set("side", side)
 	params.Set("type", "MARKET")
 	params.Set("quantity", strconv.FormatFloat(o.Qty, 'f', -1, 64))
+	// D-195-B §4.3：client_order_id 透传（Binance 支持 newClientOrderId）。
+	if o.ClientOrderID != "" {
+		params.Set("newClientOrderId", o.ClientOrderID)
+	}
 
 	endpoint := "/api/v3/order"
 	if e.venueType == "perp" {

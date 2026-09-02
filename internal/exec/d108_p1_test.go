@@ -56,7 +56,7 @@ func TestD108_LegPersistFailClosed_Unit(t *testing.T) {
 	reg := NewRegistry()
 	reg.Register(&fakeExecExecutor{venue: "vA:mt5", fill: Fill{OrderID: "1", Price: 1.0, Qty: 1.0}})
 	reg.Register(&fakeExecExecutor{venue: "vB:mt5", fill: Fill{OrderID: "2", Price: 1.0, Qty: 1.0}})
-	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50})
+	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
 	res, err := p.Execute(ctx,
 		"CROSS:EURUSD:vA:vB:1700000000000", "req-1", "CROSS_VENUE",
 		[]LegSpec{

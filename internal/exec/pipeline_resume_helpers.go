@@ -92,7 +92,7 @@ func (p *Pipeline) backfillCloseFromHistory(ctx context.Context, posID int64, le
 	}
 	closePrice := hp.ClosePrice
 	if err := p.store.CreatePositionLeg(ctx, &pgstore.PositionLeg{
-		PositionID: posID, LegNo: leg.LegNo, Phase: "CLOSE", Venue: leg.Venue, Account: leg.Account,
+		PositionID: posID, LegNo: leg.LegNo, Phase: "CLOSE", AttemptNo: 1, Venue: leg.Venue, Account: leg.Account,
 		Symbol: leg.Symbol, Side: closeSide, Qty: leg.Qty, PriceExpected: leg.PriceExpected,
 		PriceActual: &closePrice, OrderID: leg.OrderID, Status: "FILLED",
 	}); err != nil && !errors.Is(err, pgstore.ErrTerminalState) {

@@ -57,6 +57,7 @@ func (r *Reconciler) autoClose(
 		PositionID:    posID,
 		LegNo:         goneLeg.LegNo,
 		Phase:         "CLOSE",
+		AttemptNo:     1, // D-195-B：首次平仓尝试
 		Venue:         goneLeg.Venue,
 		Account:       goneLeg.Account,
 		Symbol:        goneLeg.Symbol,

@@ -32,7 +32,7 @@ func TestClosePosition_UsesClosePositionCore(t *testing.T) {
 	reg := NewRegistry()
 	// fakeNoOrderExecutor：PlaceOrder 返回 error（若 ClosePosition 旧逻辑直接发单 → 会触发此 error）
 	reg.Register(&fakeNoOrderExecutor{venue: "okx:perp"})
-	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50})
+	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
 	// verifier 返回空 → brokerPreflight 判定 broker 已无腿 → backfillCloseFromHistory
 	p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{
 		"okx:perp": {},
@@ -91,7 +91,7 @@ func TestClosePosition_ConcurrentWithResumeClose(t *testing.T) {
 	reg := NewRegistry()
 	reg.Register(&fakeFlattenExecutor{venue: "okx:perp"})
 	reg.Register(&fakeFlattenExecutor{venue: "binance:perp"})
-	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50})
+	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
 	p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{
 		"okx:perp":     {{Symbol: "BTC-USDT-SWAP", Side: "BUY", Ticket: "okx-c"}},
 		"binance:perp": {{Symbol: "BTCUSDT", Side: "SELL", Ticket: "bin-c"}},
@@ -151,7 +151,7 @@ func TestClosePosition_BrokerNoLeg_NoOrderPlaced(t *testing.T) {
 	reg := NewRegistry()
 	var placeCount int32
 	reg.Register(&fakeNoOrderExecutor{venue: "okx:perp", placeCount: &placeCount})
-	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50})
+	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
 	// verifier 返回空 → broker 已无腿
 	p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{
 		"okx:perp": {},

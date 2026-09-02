@@ -27,7 +27,7 @@ func TestClosePosition_SkipsNonOpenFilledLegs(t *testing.T) {
 	var buyCloseCount int32
 	reg.Register(&fakeFlattenExecutor{venue: "okx:perp", placeCount: &buyCloseCount})
 	reg.Register(&fakeFlattenExecutor{venue: "binance:perp", failOnSide: "SELL"})
-	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50})
+	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
 	p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{
 		"okx:perp":     {},
 		"binance:perp": {},
@@ -64,7 +64,7 @@ func TestClosePosition_InvalidFillSkipped(t *testing.T) {
 	// 开仓时两腿都成功（正常 fill）
 	reg.Register(&fakeFlattenExecutor{venue: "okx:perp"})
 	reg.Register(&fakeFlattenExecutor{venue: "binance:perp"})
-	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50})
+	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
 
 	// 先 Execute 建仓（两腿都 FILLED → OPEN）
 	res, err := p.Execute(ctx,
@@ -117,7 +117,7 @@ func TestClosePosition_StoreCloseFails_Idempotent(t *testing.T) {
 	reg := NewRegistry()
 	reg.Register(&fakeFlattenExecutor{venue: "okx:perp"})
 	reg.Register(&fakeFlattenExecutor{venue: "binance:perp", failOnSide: "SELL"})
-	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50})
+	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
 	p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{
 		"okx:perp":     {},
 		"binance:perp": {},
@@ -158,7 +158,7 @@ func TestClosePosition_ResidualCheck_Fails(t *testing.T) {
 	reg := NewRegistry()
 	reg.Register(&fakeFlattenExecutor{venue: "okx:perp"})                        // okx 平仓成功（写 CLOSE leg）
 	reg.Register(&fakeFlattenExecutor{venue: "binance:perp", failOnSide: "BUY"}) // binance 平仓 BUY 失败（无 CLOSE leg）
-	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50})
+	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
 	// D-189 R2：ClosePosition 走 closePositionCore → brokerPreflight 需匹配到在仓订单才发平仓单。
 	// verifier 返回 Symbol+Side 匹配的订单（ticket 不同 → checkResidualLegs 不误报残留）。
 	// binance failOnSide="BUY" → 平仓 BUY 失败（无 CLOSE leg）→ 残量校验 openFilled=2 > closeFilled=1。
@@ -226,7 +226,7 @@ func TestAutoFlattenGoesThroughClosePosition(t *testing.T) {
 	var okxCount int32
 	reg.Register(&fakeFlattenExecutor{venue: "okx:perp", placeCount: &okxCount})
 	reg.Register(&fakeFlattenExecutor{venue: "binance:perp", failOnSide: "SELL"})
-	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50})
+	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
 	p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{
 		"okx:perp":     {},
 		"binance:perp": {},
@@ -289,7 +289,7 @@ func TestClosePosition_EstimatedMark(t *testing.T) {
 		reg := NewRegistry()
 		reg.Register(&fakeFlattenExecutor{venue: "okx:perp"})
 		reg.Register(&fakeFlattenExecutor{venue: "binance:perp"})
-		p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50})
+		p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
 		p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{
 			"okx:perp":     {{Symbol: "BTC-USDT-SWAP", Side: "BUY", Ticket: "okx-open-6"}},
 			"binance:perp": {{Symbol: "BTCUSDT", Side: "SELL", Ticket: "bin-open-6"}},
@@ -336,7 +336,7 @@ func TestClosePosition_EstimatedMark(t *testing.T) {
 		reg := NewRegistry()
 		reg.Register(&fakeFlattenExecutor{venue: "okx:perp"})
 		reg.Register(&fakeFlattenExecutor{venue: "binance:perp"})
-		p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50})
+		p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
 		p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{
 			"okx:perp":     {{Symbol: "BTC-USDT-SWAP", Side: "BUY", Ticket: "okx-open-7"}},
 			"binance:perp": {{Symbol: "BTCUSDT", Side: "SELL", Ticket: "bin-open-7"}},

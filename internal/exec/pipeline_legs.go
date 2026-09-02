@@ -22,7 +22,7 @@ func isContextTimeoutErr(err error) bool {
 	return strings.Contains(s, "DeadlineExceeded") || strings.Contains(s, "context deadline exceeded")
 }
 
-func (p *Pipeline) executeLeg(ctx context.Context, leg LegSpec) LegResult {
+func (p *Pipeline) executeLeg(ctx context.Context, leg LegSpec, clientOrderID string) LegResult {
 	exe, ok := p.registry.Get(leg.VenueKey)
 	if !ok {
 		return LegResult{VenueKey: leg.VenueKey, Status: "FAILED"}
@@ -34,11 +34,12 @@ func (p *Pipeline) executeLeg(ctx context.Context, leg LegSpec) LegResult {
 		sl = disasterSL(leg.Side, leg.PriceExpected, p.mtDisasterSlPct)
 	}
 	fill, err := exe.PlaceOrder(ctx, Order{
-		Symbol:   leg.VenueSymbol,
-		Side:     leg.Side,
-		Qty:      leg.Qty,
-		Venue:    leg.VenueKey,
-		StopLoss: sl,
+		Symbol:        leg.VenueSymbol,
+		Side:          leg.Side,
+		Qty:           leg.Qty,
+		Venue:         leg.VenueKey,
+		StopLoss:      sl,
+		ClientOrderID: clientOrderID, // D-195-B §4.3：确定性客户端订单号
 	})
 	if err != nil {
 		// D-159 W1a R2：MT 腿 OrderSend 超时/响应丢失 → UNKNOWN（不知成交与否，不能假 FAILED 平仓）。

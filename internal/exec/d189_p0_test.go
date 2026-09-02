@@ -23,7 +23,7 @@ func TestWriteCloseCashflows_WriterFailure_ReturnsError(t *testing.T) {
 		t.Fatalf("truncate: %v", err)
 	}
 	reg := NewRegistry()
-	p := NewPipeline(reg, s, bus.New(), RiskLimits{})
+	p := NewPipeline(reg, s, bus.New(), RiskLimits{}, "demo")
 	// 注入失败的 cashflowWriter
 	p.cashflowWriter = func(ctx context.Context, posID int64, legNo int16, kind, venue string, amount float64, ts time.Time) error {
 		return errors.New("模拟现金流写入失败")
@@ -52,7 +52,7 @@ func TestResumeClose_ClosedIdempotent(t *testing.T) {
 		t.Fatalf("close position: %v", err)
 	}
 	reg := NewRegistry()
-	p := NewPipeline(reg, s, bus.New(), RiskLimits{})
+	p := NewPipeline(reg, s, bus.New(), RiskLimits{}, "demo")
 	if err := p.ResumeClose(ctx, pid); err != nil {
 		t.Errorf("ResumeClose on CLOSED should return nil (idempotent), got: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestResumeClose_NonClosingReturnsError(t *testing.T) {
 		t.Fatalf("create position: %v", err)
 	}
 	reg := NewRegistry()
-	p := NewPipeline(reg, s, bus.New(), RiskLimits{})
+	p := NewPipeline(reg, s, bus.New(), RiskLimits{}, "demo")
 	if err := p.ResumeClose(ctx, pid); err == nil {
 		t.Error("ResumeClose on OPEN should return error (not CLOSING)")
 	}
@@ -88,7 +88,7 @@ func TestResumeClose_PerPositionLock(t *testing.T) {
 		t.Fatalf("create position: %v", err)
 	}
 	reg := NewRegistry()
-	p := NewPipeline(reg, s, bus.New(), RiskLimits{})
+	p := NewPipeline(reg, s, bus.New(), RiskLimits{}, "demo")
 	var wg sync.WaitGroup
 	for i := 0; i < 5; i++ {
 		wg.Add(1)

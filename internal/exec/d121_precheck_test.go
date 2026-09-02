@@ -49,7 +49,7 @@ func TestPipeline_PrecheckFailsRejects(t *testing.T) {
 	reg.Register(gate)
 	reg.Register(binance)
 
-	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50})
+	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
 
 	_, err := p.Execute(ctx, "opp-trx-1", "req-1", "PERP_FUNDING", []LegSpec{
 		{VenueKey: "gate:perp", VenueSymbol: "TRX_USDT", Side: "BUY", Qty: 1},
@@ -89,7 +89,7 @@ func TestPipeline_PrecheckPassesExecutes(t *testing.T) {
 	reg.Register(gate)
 	reg.Register(binance)
 
-	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50})
+	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
 
 	result, err := p.Execute(ctx, "opp-btc-1", "req-1", "PERP_FUNDING", []LegSpec{
 		{VenueKey: "gate:perp", VenueSymbol: "BTC_USDT", Side: "BUY", Qty: 1},

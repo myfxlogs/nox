@@ -113,6 +113,7 @@ func (p *Pipeline) autoFlattenLEGGED(ctx context.Context, posID int64, legs []Le
 			PositionID:    posID,
 			LegNo:         dbLeg.LegNo,
 			Phase:         "CLOSE",
+			AttemptNo:     1, // D-195-B：首次平仓尝试
 			Venue:         dbLeg.Venue,
 			Account:       dbLeg.Account,
 			Symbol:        dbLeg.Symbol,

@@ -148,13 +148,23 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 			}
 		}
 		isClose := o.PositionSide != ""
-		bodyStr = fmt.Sprintf(`{"instId":%q,"tdMode":%q,"side":%q,"ordType":"market","sz":%q,"posSide":%q,"reduceOnly":%t}`,
-			instID, tdMode, side, sz, posSide, isClose)
+		// D-195-B §4.3：client_order_id 透传（OKX 支持 clOrdId，32 字符限制）。
+		clOrdID := ""
+		if o.ClientOrderID != "" {
+			clOrdID = fmt.Sprintf(`,"clOrdId":%q`, o.ClientOrderID)
+		}
+		bodyStr = fmt.Sprintf(`{"instId":%q,"tdMode":%q,"side":%q,"ordType":"market","sz":%q,"posSide":%q,"reduceOnly":%t%s}`,
+			instID, tdMode, side, sz, posSide, isClose, clOrdID)
 	} else {
 		// spot 市价单：缺省买方向 sz=报价币金额（0.0001 当 0.0001 USDT → 51020 最小金额，实测）。
 		// 显式 tgtCcy=base_ccy 固定 sz=基础币数量，与 exec.Order.Qty 契约一致。
-		bodyStr = fmt.Sprintf(`{"instId":%q,"tdMode":%q,"side":%q,"ordType":"market","sz":%q,"tgtCcy":"base_ccy"}`,
-			instID, tdMode, side, sz)
+		// D-195-B §4.3：client_order_id 透传（OKX 支持 clOrdId）。
+		clOrdID := ""
+		if o.ClientOrderID != "" {
+			clOrdID = fmt.Sprintf(`,"clOrdId":%q`, o.ClientOrderID)
+		}
+		bodyStr = fmt.Sprintf(`{"instId":%q,"tdMode":%q,"side":%q,"ordType":"market","sz":%q,"tgtCcy":"base_ccy"%s}`,
+			instID, tdMode, side, sz, clOrdID)
 	}
 
 	path := "/api/v5/trade/order"

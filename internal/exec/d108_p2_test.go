@@ -244,7 +244,7 @@ func TestD108P2_ExecuteLegZeroFill(t *testing.T) {
 	reg := NewRegistry()
 	reg.Register(&fakeExecExecutor{venue: "vA:mt5", fill: Fill{OrderID: "T0", Price: 0, Qty: 0}})
 	p := &Pipeline{registry: reg}
-	r := p.executeLeg(context.Background(), LegSpec{VenueKey: "vA:mt5", Side: "BUY", VenueSymbol: "AUDJPY", Qty: 1.0})
+	r := p.executeLeg(context.Background(), LegSpec{VenueKey: "vA:mt5", Side: "BUY", VenueSymbol: "AUDJPY", Qty: 1.0}, "")
 	if r.Status != "FAILED" {
 		t.Errorf("zero fill: leg status = %q, want FAILED", r.Status)
 	}
@@ -255,7 +255,7 @@ func TestD108P2_ExecuteLegNormalFill(t *testing.T) {
 	reg := NewRegistry()
 	reg.Register(&fakeExecExecutor{venue: "vA:mt5", fill: Fill{OrderID: "T100", Price: 113.5, Qty: 1.0}})
 	p := &Pipeline{registry: reg}
-	r := p.executeLeg(context.Background(), LegSpec{VenueKey: "vA:mt5", Side: "BUY", VenueSymbol: "AUDJPY", Qty: 1.0})
+	r := p.executeLeg(context.Background(), LegSpec{VenueKey: "vA:mt5", Side: "BUY", VenueSymbol: "AUDJPY", Qty: 1.0}, "")
 	if r.Status != "FILLED" {
 		t.Errorf("normal fill: leg status = %q, want FILLED", r.Status)
 	}
@@ -294,7 +294,7 @@ func TestD108P2_CloseLegPartialFillQty(t *testing.T) {
 	// 构造 Pipeline：fake executor 返回部分成交（fill.Qty=0.3）
 	reg := NewRegistry()
 	reg.Register(&fakeExecExecutor{venue: "vB:perp", fill: Fill{OrderID: "T201", Price: 50000, Qty: 0.3}})
-	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50})
+	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
 	// D-189 R2：ClosePosition 走 closePositionCore → brokerPreflight 需匹配到在仓订单才发平仓单。
 	// verifier 返回 Symbol+Side 匹配的订单（ticket="OTHER" ≠ leg.OrderID="T200" → checkResidualLegs 不误报）。
 	p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{

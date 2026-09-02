@@ -74,15 +74,19 @@ type Pipeline struct {
 	// D-189 P0-4：per-position close 锁——同进程并发 ClosePosition/ResumeClose 只允许一个执行。
 	closeMu  sync.Mutex
 	closeSem map[int64]*sync.Mutex // per-posID mutex（closeMu 保护此 map）
+
+	// D-195-B：执行环境 demo/live（从 config 注入，写 positions.environment）。
+	environment string
 }
 
 // NewPipeline 创建执行管线。
-func NewPipeline(reg *Registry, store *pgstore.Store, qbus *bus.QuoteBus, limits RiskLimits) *Pipeline {
+func NewPipeline(reg *Registry, store *pgstore.Store, qbus *bus.QuoteBus, limits RiskLimits, environment string) *Pipeline {
 	return &Pipeline{
 		registry:         reg,
 		store:            store,
 		qbus:             qbus,
 		limits:           limits,
+		environment:      environment,
 		revalidateAbsBps: 2.0, // D-077 修复⑪B N4 默认值（SetRevalidateThresholds 可覆盖）
 		revalidateRelPct: 20.0,
 		closeSem:         make(map[int64]*sync.Mutex), // D-189 P0-4
@@ -99,6 +103,13 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 	}
 	if len(legs) == 0 {
 		return nil, ErrEmptyLegs
+	}
+
+	// D-195-B §4.1：request_id 幂等——重复提交返回已有 position，不新建。
+	if existing, hit, err := p.checkRequestIdIdempotency(ctx, requestID); err != nil {
+		return nil, err
+	} else if hit {
+		return existing, nil
 	}
 
 	// 风控①：持仓上限（D-058）。MaxOpenPositions>0 才启用；OPEN+OPENING+LEGGED 计数超限拒单。
@@ -162,6 +173,9 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 		OpportunityID: opportunityID,
 		Type:          posType,
 		Status:        "OPENING",
+		RequestID:     requestID,
+		DedupKey:      opportunityID, // 当前 dedup_key 业务逻辑=opportunity_id（combo.Key 格式）
+		Environment:   p.environment, // D-195-B：从 config 注入
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create position: %w", err)
@@ -174,7 +188,9 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 		wg.Add(1)
 		go func(idx int, l LegSpec) {
 			defer wg.Done()
-			results[idx] = p.executeLeg(ctx, l)
+			// D-195-B §4.3：client_order_id 确定性编码（attempt_no=1 首次）。
+			coid := generateClientOrderID(requestID, posID, int16(idx), 1)
+			results[idx] = p.executeLeg(ctx, l, coid)
 		}(i, leg)
 	}
 	wg.Wait()
@@ -208,25 +224,9 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 	}
 
 	// 回填 legs 到 DB（D-108 A1 fail-closed：腿写库失败 → error+critical 告警，孤儿不可留）
-	for i, r := range results {
-		if err := p.store.CreatePositionLeg(ctx, &pgstore.PositionLeg{
-			PositionID:    posID,
-			LegNo:         int16(i),
-			Phase:         "OPEN",
-			Venue:         legs[i].VenueKey,
-			Symbol:        legs[i].VenueSymbol,
-			Side:          legs[i].Side,
-			Qty:           legs[i].Qty,
-			PriceExpected: legs[i].PriceExpected,
-			PriceActual:   &r.Price,
-			OrderID:       r.OrderID,
-			Status:        r.Status,
-		}); err != nil {
-			msg := fmt.Sprintf("leg persist failed position=%d leg=%d venue=%s: %v", posID, i, legs[i].VenueKey, err)
-			log.Printf("[exec] %s", msg)
-			_ = p.store.InsertAlert(ctx, nil, "critical", msg)
-			return &ExecuteResult{PositionID: posID, Status: "FAILED", Legs: results}, fmt.Errorf("leg persist: %w", err)
-		}
+	// D-195-B §4.3：client_order_id + attempt 字段填充（提取到 persistOpenLegs 避免 pipeline.go 超限）。
+	if err := p.persistOpenLegs(ctx, requestID, posID, legs, results); err != nil {
+		return &ExecuteResult{PositionID: posID, Status: "FAILED", Legs: results}, err
 	}
 
 	// 更新 position 状态

@@ -159,6 +159,7 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64) error {
 			PositionID:    posID,
 			LegNo:         leg.LegNo,
 			Phase:         "CLOSE",
+			AttemptNo:     1, // D-195-B：首次平仓尝试
 			Venue:         leg.Venue,
 			Account:       leg.Account,
 			Symbol:        leg.Symbol,

@@ -30,6 +30,9 @@ type Order struct {
 	// StopLoss broker 端止损价（D-146 S1：MT 灾难 SL，下单即带原子写入）。
 	// 0 = 不挂 SL（CEX 腿/禁用配置/平仓单）。MT4/MT5 executor 读取此字段写入 proto Stoploss。
 	StopLoss float64
+	// ClientOrderID D-195-B：确定性客户端订单号（venue 支持时携带）。
+	// 空字符串 = venue 不支持或无 request_id（不伪造）。
+	ClientOrderID string
 }
 
 // disasterSL 计算 MT 灾难止损价（D-146 S1，broker 端 SL，下单即带）。
