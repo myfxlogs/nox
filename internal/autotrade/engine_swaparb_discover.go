@@ -71,7 +71,8 @@ func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 	for _, f := range shortFacts {
 		shortMap[swapKey{f.Symbol, f.Venue}] = swapEntry{value: f.Value, src: f.Src}
 	}
-	// D-144 ①：同类型配对安全红线——两腿 is_real 必须相等（杜绝实盘×demo 假对冲）。查询失败 → 空 map（fail-open）。
+	// D-144 ①：同类型配对安全红线——两腿 is_real 必须相等（杜绝实盘×demo 假对冲）。
+	// 查询失败 → 空 map（fail-closed：所有组合不配对，isreal.Pair failOpen=false 对空 map 返回 false）。
 	realMap, _ := e.store.ListAccountIsReal(ctx)
 	var combos []swapComboCandidate
 	minNetSwapBps := e.cfg.MinNetSwapBps

@@ -106,7 +106,13 @@ func buildCooldownSet(closed []pgstore.Position, cooldownDays int, now time.Time
 // D-180 S2：swapSrc 由 discoverSwapCombos 传入（settled|spec|none），供 S4 门禁折扣判定 + 决策日志。
 func (e *Engine) trySwapArb(ctx context.Context, strategy, canonical, venueLong, venueShort string, netSwapBps, basisBps float64, basisAvailable bool, swapSrc string) {
 	// D-080 S4 N9 修订：判死策略停提交（扫描+评估常开喂 rollup，禁用只拦提交无 REJECTED 行）
-	if disabled, _ := e.store.IsStrategyDisabled(ctx, strategy); disabled {
+	// D-190：err → log + return（fail-closed，与 gate.go:75 一致）
+	disabled, err := e.store.IsStrategyDisabled(ctx, strategy)
+	if err != nil {
+		log.Printf("[autotrade] IsStrategyDisabled error (fail-closed skip): %v", err)
+		return
+	}
+	if disabled {
 		return
 	}
 	qLong, okL := e.quotes.Latest(canonical, venueLong)

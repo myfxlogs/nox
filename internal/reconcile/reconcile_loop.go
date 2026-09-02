@@ -4,6 +4,8 @@ import (
 	"context"
 	"log"
 	"time"
+
+	"arb/internal/safego"
 )
 
 // StartLoop 定期对账。阻塞至 ctx 取消。
@@ -14,7 +16,7 @@ func (r *Reconciler) StartLoop(ctx context.Context, interval time.Duration) {
 	defer ticker.Stop()
 
 	// 首轮延迟（等 adapter 就绪），独立 goroutine 跑（不阻塞 ticker loop）
-	go func() {
+	safego.Go("reconcile_loop:initial", func() {
 		select {
 		case <-ctx.Done():
 			return
@@ -23,7 +25,7 @@ func (r *Reconciler) StartLoop(ctx context.Context, interval time.Duration) {
 		if _, err := r.Run(ctx); err != nil {
 			log.Printf("[reconcile] initial: %v", err)
 		}
-	}()
+	})
 
 	for {
 		select {

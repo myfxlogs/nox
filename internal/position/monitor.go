@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/safego"
 	"arb/internal/store/pgstore"
 )
 
@@ -46,7 +47,7 @@ func (m *Monitor) Run(ctx context.Context) {
 		log.Printf("[position-monitor] load: %v", err)
 	}
 	// 定期刷新持仓列表（新开仓的持仓需要被发现）
-	go m.refreshLoop(ctx)
+	safego.Go("monitor:refreshLoop", func() { m.refreshLoop(ctx) })
 
 	ch, cancel := m.bus.Subscribe("")
 	defer cancel()

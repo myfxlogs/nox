@@ -9,6 +9,7 @@ import (
 	"arb/internal/bus"
 	"arb/internal/dashboard"
 	"arb/internal/exec"
+	"arb/internal/safego"
 	"arb/internal/settlement"
 	"arb/internal/store/pgstore"
 )
@@ -202,13 +203,13 @@ func (e *Engine) Run(ctx context.Context) {
 		e.cfg.MaxNotional, e.cfg.MaxPositions, e.cfg.MaxDailyLoss, e.cfg.MinNetBps, e.cfg.ScanThrottle, positionFallbackInterval)
 
 	// 1. 机会订阅循环（detector 产生的 CROSS_VENUE 机会）
-	go e.oppLoop(ctx)
+	safego.Go("engine:oppLoop", func() { e.oppLoop(ctx) })
 
 	// 2. 均值回归扫描循环（D-070：绕过 detector，直接监控价差）
-	go e.meanRevertLoop(ctx)
+	safego.Go("engine:meanRevertLoop", func() { e.meanRevertLoop(ctx) })
 
 	// 3. swap 套利循环（D-070：持有赚 swap）
-	go e.swapArbLoop(ctx)
+	safego.Go("engine:swapArbLoop", func() { e.swapArbLoop(ctx) })
 
 	// 4. 持仓扫描循环（自动平仓 + 状态机 tick）
 	e.positionLoop(ctx)

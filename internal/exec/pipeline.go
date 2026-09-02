@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/safego"
 	"arb/internal/store/pgstore"
 )
 
@@ -186,12 +187,13 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 	var wg sync.WaitGroup
 	for i, leg := range legs {
 		wg.Add(1)
-		go func(idx int, l LegSpec) {
+		idx, l := i, leg
+		safego.Go("pipeline:leg-exec", func() {
 			defer wg.Done()
 			// D-195-B §4.3：client_order_id 确定性编码（attempt_no=1 首次）。
 			coid := generateClientOrderID(requestID, posID, int16(idx), 1)
 			results[idx] = p.executeLeg(ctx, l, coid)
-		}(i, leg)
+		})
 	}
 	wg.Wait()
 

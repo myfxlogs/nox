@@ -87,7 +87,13 @@ func (e *Engine) scanMeanRevert(ctx context.Context, symbols map[string]float64,
 // executeMeanRevert 产 TradeIntent 走 gate（D-072：不直连执行）。
 func (e *Engine) executeMeanRevert(ctx context.Context, canonical, venueBuy, venueSell string, openBps float64) {
 	// D-080 S4 N9 修订：判死策略停提交（扫描+评估常开喂 rollup，禁用只拦提交无 REJECTED 行）
-	if disabled, _ := e.store.IsStrategyDisabled(ctx, "MEANREVERT"); disabled {
+	// D-190：err → log + return（fail-closed，与 gate.go:75 一致）
+	disabled, err := e.store.IsStrategyDisabled(ctx, "MEANREVERT")
+	if err != nil {
+		log.Printf("[autotrade] IsStrategyDisabled error (fail-closed skip): %v", err)
+		return
+	}
+	if disabled {
 		return
 	}
 	qbuy, ok := e.quotes.Latest(canonical, venueBuy)

@@ -1,5 +1,7 @@
 package autotrade
 
+import "arb/internal/isreal"
+
 // D-144 ① 三态：实盘/demo/未知 同类型配对安全红线。
 // 首个实盘账户入池触发——组合引擎不区分 demo/实盘，随时可能开出
 // 「实盘多×demo 空」的假对冲仓（demo 腿盈亏非真钱，基差风险全在真金侧）。
@@ -14,14 +16,9 @@ type swapComboCandidate struct {
 	strategy                 string // D-187：SWAPARB 或 CARRY（netSwap 换算年化 ≥ CarryMinNetAnnualized → CARRY）
 }
 
-// isRealPair D-144 ① 三态：两腿 venue 必须同类型且均非未知——杜绝实盘×demo 假对冲 + 未知不配对。
-// realMap 中 venue 缺失或 is_real=nil（未知）→ 不配对（保守：未标注的账户不参与组合）。
-// 两腿均 true 或均 false → 配对；任一 nil 或缺失 → 不配对。
+// isRealPair D-144/D-190：发现层 is_real 配对检查（fail-closed）。
+// 语义：未知不配对（保守：未标注的账户不参与组合）；两腿已知且相等 → 配对。
+// D-190：实现迁移至 isreal.Pair（单一真相源，failOpen=false）。
 func isRealPair(realMap map[string]*bool, venueA, venueB string) bool {
-	a, okA := realMap[venueA]
-	b, okB := realMap[venueB]
-	if !okA || !okB || a == nil || b == nil {
-		return false // 缺失或未知 → 不配对
-	}
-	return *a == *b
+	return isreal.Pair(realMap, venueA, venueB, false)
 }
