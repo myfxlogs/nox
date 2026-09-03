@@ -17,8 +17,8 @@ func classifyTx(tx txJSON, monitorAddr string, rentalPayers map[string]bool) (pg
 	}
 	switch ct {
 	case "TransferContract":
-		from := tx.TransferFrom()
-		to := tx.TransferTo()
+		from := normalizeAddr(tx.TransferFrom())
+		to := normalizeAddr(tx.TransferTo())
 		amount := tx.TransferAmount()
 		if to == "" || from == "" {
 			return pgstore.TRXTx{TxID: tx.TxID, Ts: ts, Kind: "other"}, true
