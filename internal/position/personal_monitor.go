@@ -33,6 +33,9 @@ type PersonalMonitor struct {
 	liqMMR    float64             // 理论强平维持保证金率（config.ARB_LIQ_MMR）
 	onPrice   func(PositionPrice) // 现价视图回调（nil 安全；main 接 priceTopic.Publish）
 	lastPrice map[int64]float64   // id → 上次广播价（同价去重，防同值连发）
+
+	// D-208 v2：CMC 数据源（nil = 不支持 CMC 行，走老路径）。
+	cmcSource CMCSource
 }
 
 // NewPersonalMonitor 创建个人持仓监控器。onPrice 允许 nil（不广播，仅告警）。
@@ -56,6 +59,13 @@ func NewPersonalMonitor(b *bus.QuoteBus, store *pgstore.Store, freshTTL time.Dur
 		m.lastPrice = make(map[int64]float64)
 	}
 	return m
+}
+
+// SetCMCSource 注入 CMC 数据源（D-208 v2：nil 安全=走老路径）。
+func (m *PersonalMonitor) SetCMCSource(src CMCSource) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.cmcSource = src
 }
 
 // Run 启动监控。阻塞至 ctx 取消。
@@ -145,6 +155,7 @@ func (m *PersonalMonitor) onQuote(ctx context.Context, q bus.Quote) {
 
 	// 实时现价广播（D-049）：与告警正交、不走 5s 节流。用 bus.Snapshot + LatestQuote 同选帧
 	// （多 venue 同符号与快照路径取同一最新未陈旧帧，实时价 = 快照价，30s 对账边界不跳变）。
+	// D-208 v2：CMC 行（cmc_instrument_id 非空 + cmcSource 注入）走 ComputeCMCPositionPrice。
 	if m.onPrice != nil && m.bus != nil {
 		syms := make([]string, 0, 1)
 		for _, p := range m.positions {
@@ -159,7 +170,12 @@ func (m *PersonalMonitor) onQuote(ctx context.Context, q bus.Quote) {
 				if p.PriceSymbol != q.Symbol {
 					continue
 				}
-				view := ComputePositionPrice(p, venues[p.PriceSymbol], m.freshTTL, m.now(), m.liqMMR)
+				var view PositionPrice
+				if p.CMCInstrumentID != "" && m.cmcSource != nil {
+					view = ComputeCMCPositionPrice(p, m.cmcSource, m.freshTTL, m.now())
+				} else {
+					view = ComputePositionPrice(p, venues[p.PriceSymbol], m.freshTTL, m.now(), m.liqMMR)
+				}
 				if view.Price != m.lastPrice[p.ID] {
 					m.lastPrice[p.ID] = view.Price
 					m.onPrice(view)
