@@ -35,9 +35,9 @@ func assertTerminated(t *testing.T, fn func(st *testing.T)) (failed, skipped boo
 	return st.Failed(), st.Skipped()
 }
 
-// D-207 S1 单测：空 DSN→FAIL / 逃生门→SKIP / 无参 DSN→三参数全追加 /
-// 含 ?pool_max_conns=2 → pool 不追加但 lock_timeout 追加 / 已含 options= → 不追加 /
-// DSN 指向非 test 库→拒绝。
+// D-207 v1.1 单测：空 DSN→FAIL / 逃生门→SKIP / 无参 DSN→只追加 options /
+// 已含 pool 参数 → 不追加 pool，只追加 options / 已含 options= → 不追加 /
+// DSN 指向非 test 库→拒绝 / pool 参数不被追加（防回归）。
 func TestTestDSN_EmptyDSN_Fatalf(t *testing.T) {
 	setEnv(t, "ARB_TEST_PG_DSN", "")
 	setEnv(t, "ARB_TEST_ALLOW_SKIP_DSN", "")
@@ -60,27 +60,47 @@ func TestTestDSN_AllowSkip_Skipf(t *testing.T) {
 	}
 }
 
-func TestNormalizeDSN_NoParams_AllAppended(t *testing.T) {
+// TestNormalizeDSN_NoParams_OnlyOptionsAppended：无参 DSN 只追加 options（v1.1：不追加 pool 参数）。
+func TestNormalizeDSN_NoParams_OnlyOptionsAppended(t *testing.T) {
 	dsn := "postgres://arb:arb@localhost:5435/arb_test"
 	got := normalizeDSN(dsn)
-	for _, p := range []string{"pool_max_conns=4", "pool_min_conns=0", "options=-c%20lock_timeout=5s"} {
-		if !strings.Contains(got, p) {
-			t.Errorf("无参 DSN 应追加 %q，got=%s", p, got)
-		}
+	if !strings.Contains(got, "options=-c%20lock_timeout=5s") {
+		t.Errorf("无参 DSN 应追加 options，got=%s", got)
+	}
+	if strings.Contains(got, "pool_max_conns=") {
+		t.Errorf("v1.1 不应追加 pool_max_conns，got=%s", got)
+	}
+	if strings.Contains(got, "pool_min_conns=") {
+		t.Errorf("v1.1 不应追加 pool_min_conns，got=%s", got)
 	}
 }
 
+// TestNormalizeDSN_ExistingPool_LockTimeoutAppended：已有 pool 参数 → 只追加 options（v1.1：pool 不动）。
 func TestNormalizeDSN_ExistingPool_LockTimeoutAppended(t *testing.T) {
 	dsn := "postgres://arb:arb@localhost:5435/arb_test?pool_max_conns=2"
 	got := normalizeDSN(dsn)
-	if strings.Contains(got, "pool_max_conns=4") {
-		t.Errorf("已有 pool_max_conns=2 不应再追加 =4，got=%s", got)
-	}
-	if !strings.Contains(got, "pool_min_conns=0") {
-		t.Errorf("缺 pool_min_conns 应追加，got=%s", got)
+	if !strings.Contains(got, "pool_max_conns=2") {
+		t.Errorf("已有 pool_max_conns=2 应保留，got=%s", got)
 	}
 	if !strings.Contains(got, "options=-c%20lock_timeout=5s") {
 		t.Errorf("缺 options 应追加 lock_timeout，got=%s", got)
+	}
+}
+
+// TestNormalizeDSN_PoolParamsNotAppended：防回归——输出不含 pool_max_conns=/pool_min_conns=（v1.1）。
+func TestNormalizeDSN_PoolParamsNotAppended(t *testing.T) {
+	for _, dsn := range []string{
+		"postgres://arb:arb@localhost:5435/arb_test",
+		"postgres://arb:arb@localhost:5435/arb_test?sslmode=disable",
+		"postgres://arb:arb@localhost:5435/arb_test?pool_max_conns=2",
+	} {
+		got := normalizeDSN(dsn)
+		if strings.Contains(got, "pool_max_conns=") && !strings.Contains(dsn, "pool_max_conns=") {
+			t.Errorf("normalizeDSN 不应追加 pool_max_conns（v1.1 防回归），input=%s got=%s", dsn, got)
+		}
+		if strings.Contains(got, "pool_min_conns=") && !strings.Contains(dsn, "pool_min_conns=") {
+			t.Errorf("normalizeDSN 不应追加 pool_min_conns（v1.1 防回归），input=%s got=%s", dsn, got)
+		}
 	}
 }
 
@@ -89,9 +109,6 @@ func TestNormalizeDSN_ExistingOptions_NotAppended(t *testing.T) {
 	got := normalizeDSN(dsn)
 	if strings.Count(got, "options=") != 1 {
 		t.Errorf("已有 options 不应再追加，got=%s（options= 出现 %d 次）", got, strings.Count(got, "options="))
-	}
-	if !strings.Contains(got, "pool_max_conns=4") {
-		t.Errorf("缺 pool_max_conns 应追加，got=%s", got)
 	}
 }
 

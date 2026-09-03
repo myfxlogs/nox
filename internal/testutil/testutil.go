@@ -5,8 +5,9 @@
 // 测试直接清空生产表。TestDSN 统一为：未设置→Fatalf（D-207）/ 逃生门→Skip / db 名不含 _test→Fatalf 拒绝。
 //
 // D-207 加固：DSN 缺失从静默 SKIP 改为 loud-FAIL（「没跑」不得长得像「过了」=假绿之源，
-// D-189/D-190 三轮返修实证）；DSN 规范化统一追加 pool_max_conns/pool_min_conns/lock_timeout
-// options 参数（62 个 TRUNCATE 位点一处兜底，pgx 认 URL options 参数已实证）。
+// D-189/D-190 三轮返修实证）；DSN 规范化追加 lock_timeout options 参数
+// （62 个 TRUNCATE 位点一处兜底，pgx 认 URL options 参数已实证）。
+// v1.1 修订：不追加 pool_* 参数（pgx.Connect 单连接路径不认 pgxpool 专有参数）。
 package testutil
 
 import (
@@ -32,10 +33,13 @@ func isTestDB(dsn string) bool {
 // 指向非测试库→Fatalf 拒绝。envVar 如 "ARB_TEST_PG_DSN" / "ARB_EXEC_TEST_PG_DSN"。
 //
 // 返回值经 DSN 规范化（追加而非覆盖，已有则跳过）：
-//   - 无 pool_max_conns → 追加 pool_max_conns=4（统一局部/CI 行为，避开紧池死锁与 fd 压力两极）
-//   - 无 pool_min_conns → 追加 pool_min_conns=0
-//   - 无 options=      → 追加 options=-c%20lock_timeout=5s（62 个 TRUNCATE 位点一处兜底，
+//   - 无 options= → 追加 options=-c%20lock_timeout=5s（62 个 TRUNCATE 位点一处兜底，
 //     pgx 认 URL options 参数已实证：SHOW lock_timeout=3s 实测通过）
+//
+// D-207 v1.1 修订：不再追加 pool_max_conns/pool_min_conns——TestDSN 消费方含
+// pgx.Connect（单连接）路径（internal/exec/execute_guard_test.go），pool_* 是
+// pgxpool 专有参数，pgx.Connect 报 unrecognized configuration parameter。
+// 行为中性：pgxpool 默认 defaultMaxConns=4 / min=0（pgx pool.go:19），与原追加值相同。
 func TestDSN(t *testing.T, envVar string) string {
 	t.Helper()
 	dsn := os.Getenv(envVar)
@@ -51,24 +55,17 @@ func TestDSN(t *testing.T, envVar string) string {
 	return normalizeDSN(dsn)
 }
 
-// normalizeDSN 追加缺失的 pool 参数与 lock_timeout options（D-207）。
-// DSN 含 `?` 用 `&` 拼接，否则用 `?`；逐项判存，已有则跳过。
+// normalizeDSN 追加缺失的 lock_timeout options（D-207 v1.1：只追加 options，不追加 pool 参数）。
+// DSN 含 `?` 用 `&` 拼接，否则用 `?`；已有 options= 则跳过。
+// pool_max_conns/pool_min_conns 不追加——TestDSN 消费方含 pgx.Connect 单连接路径，
+// pool_* 是 pgxpool 专有参数。pgxpool 默认 defaultMaxConns=4/min=0 与原追加值相同（行为中性）。
 func normalizeDSN(dsn string) string {
+	if strings.Contains(dsn, "options=") {
+		return dsn
+	}
 	sep := "?"
 	if strings.Contains(dsn, "?") {
 		sep = "&"
 	}
-	add := func(param, value string) {
-		if strings.Contains(dsn, param+"=") {
-			return
-		}
-		dsn += sep + param + "=" + value
-		sep = "&"
-	}
-	add("pool_max_conns", "4")
-	add("pool_min_conns", "0")
-	if !strings.Contains(dsn, "options=") {
-		dsn += sep + "options=-c%20lock_timeout=5s"
-	}
-	return dsn
+	return dsn + sep + "options=-c%20lock_timeout=5s"
 }
