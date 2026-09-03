@@ -15,8 +15,6 @@ import (
 
 	"arb/internal/bus"
 	"arb/internal/exec"
-	"arb/internal/store/pgstore"
-	"arb/internal/testutil"
 )
 
 // setupMeanRevertService 构造 DSN-gated store（RUNNING）+ QuoteBus（AUDJPY 报价，USDJPY 可选）+ fake pipeline。
@@ -24,15 +22,7 @@ import (
 // D-190 R6：注入 fake pipeline（exec.NewPipeline 空 registry）让 ExecuteMeanRevertWithCap 走过 line 122 提前返回。
 func setupMeanRevertService(t *testing.T, withUSDJPY bool) *Service {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
-	st, err := pgstore.New(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	if err := st.Migrate(context.Background()); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	t.Cleanup(func() { st.Close() })
+	st := serviceTestStoreSingleInit(t)
 	ctx := context.Background()
 	if _, err := st.Pool().Exec(ctx, `TRUNCATE autotrade_state CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)

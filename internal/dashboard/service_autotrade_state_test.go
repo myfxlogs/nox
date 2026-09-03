@@ -7,21 +7,12 @@ import (
 	"testing"
 
 	"arb/internal/store/pgstore"
-	"arb/internal/testutil"
 )
 
 // setupAutotradeStateStore 构造真库 store + autotrade_state 种子（state 可空=TRUNCATE）。
 func setupAutotradeStateStore(t *testing.T, state string) *pgstore.Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
-	s, err := pgstore.New(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	if err := s.Migrate(context.Background()); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	t.Cleanup(func() { s.Close() })
+	s := serviceTestStoreSingleInit(t)
 	ctx := context.Background()
 	if _, err := s.Pool().Exec(ctx, `TRUNCATE autotrade_state CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)

@@ -13,28 +13,19 @@ import (
 	"time"
 
 	"arb/internal/normalize"
-	"arb/internal/store/pgstore"
 )
 
 // 用例①：mock symbols 源 → BackfillRuleMappings → store 出现 source='rule' 行（DSN 集成）。
 // 模拟 AddBroker 后异步触发：BrokerManager 有 mock running adapter（symbols 源），
 // BrokerSymbols 拉取 symbols → BackfillRuleMappings → store 出现 source='rule' 行。
 func TestBackfillRuleMappings_MockSymbolsSource(t *testing.T) {
-	dsn := os.Getenv("ARB_TEST_PG_DSN")
-	if dsn == "" {
-		t.Skip("ARB_TEST_PG_DSN 未设置（集成测试需测试库）")
-	}
 	log.SetOutput(os.NewFile(0, os.DevNull))
 	defer log.SetOutput(os.Stderr)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	st, err := pgstore.New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	defer st.Close()
+	st := serviceTestStoreSingleInit(t)
 
 	venue := "test_d142_backfill"
 	// 清理可能残留

@@ -16,10 +16,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// testServiceStore 连接 ARB_TEST_PG_SERVICE_DSN 指定的专用测试库（与 pgstore 包测试库隔离，避免并行 TRUNCATE 竞态）。
-// 未设置时跳过；dbname 必须含 "test"（安全闸）。
-// schema 用 D-054 根治模式：每测试进程 DROP schema + 全量 Migrate（v1..N 真执行），与生产完全同态。
-func testServiceStore(t *testing.T) *pgstore.Store {
+// serviceTestStoreOnce 包级单例 store——所有 SERVICE_DSN 测试共用一个 pool，避免
+// 每测试 pgstore.New 创建独立 pool 累积连接耗尽 pg 服务端 max_connections（D-212 CI 红根因：
+// pool_max_conns=2 × N 测试 → Acquire 卡住 → 30s 超时 flaky）。
+var serviceTestStoreOnce sync.Once
+var serviceTestStoreSingle *pgstore.Store
+
+// serviceTestStoreSingleInit 包级单例 store 初始化（sync.Once，进程结束自动 Close）。
+func serviceTestStoreSingleInit(t *testing.T) *pgstore.Store {
 	t.Helper()
 	dsn := os.Getenv("ARB_TEST_PG_SERVICE_DSN")
 	if dsn == "" {
@@ -32,16 +36,37 @@ func testServiceStore(t *testing.T) *pgstore.Store {
 	if !strings.Contains(cfg.Database, "test") {
 		t.Fatalf("ARB_TEST_PG_SERVICE_DSN 指向非测试库 %q：测试会 TRUNCATE 该库，拒绝执行", cfg.Database)
 	}
-	// D-177 CI 修复：pgstore.New 用 30s 超时（防 fd 压力下挂起），
-	// 但 TRUNCATE 用独立 context（schema 重建可能消耗大部分时间）。
-	newCtx, newCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer newCancel()
-	s, err := pgstore.New(newCtx, dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
+	var initErr error
+	serviceTestStoreOnce.Do(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		s, err := pgstore.New(ctx, dsn)
+		if err != nil {
+			initErr = fmt.Errorf("pgstore.New: %w", err)
+			return
+		}
+		if err := s.Migrate(ctx); err != nil {
+			initErr = fmt.Errorf("migrate: %w", err)
+			return
+		}
+		serviceTestStoreSingle = s
+	})
+	if initErr != nil {
+		t.Fatalf("serviceTestStore init: %v", initErr)
 	}
-	t.Cleanup(s.Close)
-	rebuildServiceTestSchema(t, s)
+	if serviceTestStoreSingle == nil {
+		t.Skip("ARB_TEST_PG_SERVICE_DSN 未设置，跳过需真库的测试")
+	}
+	return serviceTestStoreSingle
+}
+
+// testServiceStore 连接 ARB_TEST_PG_SERVICE_DSN 指定的专用测试库（与 pgstore 包测试库隔离，避免并行 TRUNCATE 竞态）。
+// 未设置时跳过；dbname 必须含 "test"（安全闸）。
+// D-212 CI 红根因修复：改为包级单例 pool（serviceTestStoreSingleInit），避免每测试 New 独立 pool
+// 累积连接耗尽 pg 服务端 max_connections → Acquire 卡住 → 30s 超时 flaky。
+func testServiceStore(t *testing.T) *pgstore.Store {
+	t.Helper()
+	s := serviceTestStoreSingleInit(t)
 	// 每测试函数清财务线表（数据隔离；schema 重建每进程仅一次）。
 	truncCtx, truncCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer truncCancel()
@@ -54,31 +79,11 @@ func testServiceStore(t *testing.T) *pgstore.Store {
 // rebuildServiceTestSchemaOnce 每个测试进程只重建一次服务测试库 schema。
 var rebuildServiceTestSchemaOnce sync.Once
 
-// rebuildServiceTestSchema DROP schema + 全量 Migrate，使服务测试库 schema 恒等于生产最新
-// （同 pgstore.prepareTestSchema，D-054 根治）。旧实现把 v1..7 预标记「已应用」而不物理执行其
-// SQL → 每新增一个迁移边界就要前移一位，前序表（如 0012 canonical 引用的 broker_symbol_map）
-// 在测试库物理缺失 → 全量 go test 崩（KB: backfill-update-test-seed-rows，复发 3 次）。
+// rebuildServiceTestSchema 保留兼容签名（no-op，单例 store 已在 serviceTestStoreSingleInit 内 Migrate）。
+// D-212 CI 红根因修复：原 DROP SCHEMA + Migrate 改为单例 pool + 一次性 Migrate，此函数仅占位。
 func rebuildServiceTestSchema(t *testing.T, s *pgstore.Store) {
 	t.Helper()
-	ctx := context.Background()
-	var rebuildErr error
-	rebuildServiceTestSchemaOnce.Do(func() {
-		if _, err := s.Pool().Exec(ctx, `DROP SCHEMA public CASCADE`); err != nil {
-			rebuildErr = fmt.Errorf("drop schema: %w", err)
-			return
-		}
-		if _, err := s.Pool().Exec(ctx, `CREATE SCHEMA public`); err != nil {
-			rebuildErr = fmt.Errorf("create schema: %w", err)
-			return
-		}
-		if err := s.Migrate(ctx); err != nil {
-			rebuildErr = fmt.Errorf("migrate: %w", err)
-			return
-		}
-	})
-	if rebuildErr != nil {
-		t.Fatalf("服务测试库重建失败: %v", rebuildErr)
-	}
+	// no-op：schema 由 serviceTestStoreSingleInit 的 sync.Once Migrate 保证。
 }
 
 // TestAddInvestmentRecord_InvalidKind：kind 非法 → connect CodeInvalidArgument（store 为空也能拦住，后端校验在前）。

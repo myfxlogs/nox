@@ -12,7 +12,6 @@ import (
 	"arb/internal/bus"
 	"arb/internal/fact"
 	"arb/internal/store/pgstore"
-	"arb/internal/testutil"
 )
 
 // newSwapDeviationQuotes D-190 R5：构造带 USDJPY 报价的 QuoteBus（AUDJPY 腿 PerLot 用）。
@@ -29,15 +28,7 @@ func newSwapDeviationQuotes() *bus.QuoteBus {
 // posQty/posPrice：持仓腿 qty/price（notional=qty×price×CS，CS=1 简化）。
 func setupSwapDeviationServiceStore(t *testing.T, venueLong, venueShort string, factsLongBps, factsShortBps, actualUSD, posQty, posPrice float64) *pgstore.Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
-	s, err := pgstore.New(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	if err := s.Migrate(context.Background()); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	t.Cleanup(func() { s.Close() })
+	s := serviceTestStoreSingleInit(t)
 	ctx := context.Background()
 	// 清表（顺序：依赖关系）
 	for _, tbl := range []string{"position_swap_snapshots", "position_legs", "positions", "facts", "broker_accounts", "autotrade_state"} {
@@ -158,15 +149,7 @@ func TestCheckSwapDeviationGate_Disabled_Pass(t *testing.T) {
 
 // TestCheckSwapDeviationGate_NoHistory_Pass D-182 S4：无 OPEN 持仓 → 放行（首次开仓走 S3）。
 func TestCheckSwapDeviationGate_NoHistory_Pass(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
-	s, err := pgstore.New(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	if err := s.Migrate(context.Background()); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	t.Cleanup(func() { s.Close() })
+	s := serviceTestStoreSingleInit(t)
 	ctx := context.Background()
 	for _, tbl := range []string{"position_swap_snapshots", "position_legs", "positions", "facts", "broker_accounts", "autotrade_state"} {
 		if _, err := s.Pool().Exec(ctx, "TRUNCATE "+tbl+" CASCADE"); err != nil {

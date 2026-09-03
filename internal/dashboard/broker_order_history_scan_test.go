@@ -9,7 +9,6 @@ import (
 
 	"arb/internal/fact"
 	"arb/internal/store/pgstore"
-	"arb/internal/testutil"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 	"connectrpc.com/connect"
@@ -154,15 +153,7 @@ func TestSplitVenueKey(t *testing.T) {
 // setupBackfillServiceStore 构造真库 store（清 facts 表）。
 func setupBackfillServiceStore(t *testing.T) *pgstore.Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
-	s, err := pgstore.New(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	if err := s.Migrate(context.Background()); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	t.Cleanup(func() { s.Close() })
+	s := serviceTestStoreSingleInit(t)
 	if _, err := s.Pool().Exec(context.Background(), "TRUNCATE facts CASCADE"); err != nil {
 		t.Fatalf("truncate facts: %v", err)
 	}

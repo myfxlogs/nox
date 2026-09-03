@@ -4,41 +4,21 @@ package dashboard
 
 import (
 	"context"
-	"os"
-	"strings"
 	"testing"
 	"time"
 
 	"arb/internal/bus"
 	"arb/internal/store/pgstore"
-
-	"github.com/jackc/pgx/v5"
 )
 
 // trxTestStore 创建测试 store（ARB_TEST_PG_SERVICE_DSN，TRUNCATE 全库）。
+// D-212 CI 红根因修复：改为包级单例 pool（serviceTestStoreSingleInit），避免每测试 New 独立 pool
+// 累积连接耗尽 pg 服务端 max_connections → Acquire 卡住 → 30s 超时 flaky。
 func trxTestStore(t *testing.T) *pgstore.Store {
 	t.Helper()
-	dsn := os.Getenv("ARB_TEST_PG_SERVICE_DSN")
-	if dsn == "" {
-		t.Skip("ARB_TEST_PG_SERVICE_DSN 未设置，跳过需真库的测试")
-	}
-	cfg, err := pgx.ParseConfig(dsn)
-	if err != nil {
-		t.Fatalf("parse DSN: %v", err)
-	}
-	if !strings.Contains(cfg.Database, "test") {
-		t.Fatalf("DSN 指向非测试库 %q：测试会 TRUNCATE 该库，拒绝执行", cfg.Database)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	s, err := pgstore.New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	if err := s.Migrate(ctx); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
-	// TRUNCATE 相关表
+	s := serviceTestStoreSingleInit(t)
+	ctx := context.Background()
+	// TRUNCATE 相关表（数据隔离）。
 	for _, tbl := range []string{"fin_trx_account", "fin_trx_txs", "fin_trx_witness", "position_daily_income", "personal_positions"} {
 		if _, err := s.Pool().Exec(ctx, "TRUNCATE TABLE "+tbl+" RESTART IDENTITY CASCADE"); err != nil {
 			t.Fatalf("TRUNCATE %s: %v", tbl, err)

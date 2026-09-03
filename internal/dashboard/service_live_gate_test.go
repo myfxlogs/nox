@@ -8,21 +8,12 @@ import (
 	"time"
 
 	"arb/internal/store/pgstore"
-	"arb/internal/testutil"
 )
 
 // setupLiveGateServiceStore 构造真库 store + broker_accounts 种子 is_real。
 func setupLiveGateServiceStore(t *testing.T, venueLong, venueShort string, longReal, shortReal bool) *pgstore.Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
-	s, err := pgstore.New(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	if err := s.Migrate(context.Background()); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	t.Cleanup(func() { s.Close() })
+	s := serviceTestStoreSingleInit(t)
 	ctx := context.Background()
 	if _, err := s.Pool().Exec(ctx, `TRUNCATE broker_accounts CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
