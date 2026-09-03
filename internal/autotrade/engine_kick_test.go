@@ -126,13 +126,24 @@ func TestEngine_OrderTopicToKickWiring(t *testing.T) {
 
 	// 模拟 setup.go 装配：orderTopic 订阅 → atEngine.Kick。
 	// readyCh 确保订阅就绪后再 Publish（防 goroutine 启动竞态）。
+	// 测试内订阅循环必须 select ctx.Done（D-207：防泄漏 goroutine 持池连接→死锁/EBADF）。
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	readyCh := make(chan struct{})
 	go func() {
 		evCh, evCancel := orderTopic.Subscribe()
 		defer evCancel()
 		close(readyCh)
-		for range evCh {
-			e.Kick()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case _, ok := <-evCh:
+				if !ok {
+					return
+				}
+				e.Kick()
+			}
 		}
 	}()
 	<-readyCh // 等订阅就绪
