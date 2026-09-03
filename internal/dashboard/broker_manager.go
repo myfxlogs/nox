@@ -184,9 +184,12 @@ func (m *BrokerManager) StartAll(ctx context.Context) {
 			log.Printf("[broker] skip %s: env adapter occupies venue", a.Venue)
 			continue
 		}
-		if err := m.startAdapter(ctx, &a); err != nil {
-			log.Printf("[broker] start %s: %v", a.Venue, err)
-		}
+		// D-209：boot 路径用 startWithRetry（指数退避），并行化避免慢/失败连接阻塞其他 venue。
+		// AddBroker 手动路径保持一次性 startAdapter（需即时错误反馈）。
+		a := a
+		safego.Go("broker-retry:"+a.Venue, func() {
+			m.startWithRetry(ctx, a.Venue, func() error { return m.startAdapter(ctx, &a) })
+		})
 	}
 }
 
