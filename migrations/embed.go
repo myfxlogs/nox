@@ -145,3 +145,6 @@ var PersonalCMCLinkSQL string
 
 //go:embed 0067_cmc_positions_meta.sql
 var CMCPositionsMetaSQL string
+
+//go:embed 0068_trx_stake_tables.sql
+var TrxStakeTablesSQL string
