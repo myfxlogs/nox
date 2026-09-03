@@ -357,11 +357,11 @@ func makeContractTxJSON(txID, contractType string) txJSON {
 }
 
 func makeTransferTx(txID, to, from string, amount int64) string {
-	return `{"blockTimestamp":` + itoa(time.Now().UnixMilli()) + `,"txID":"` + txID + `","raw_data":{"contract":[{"type":"TransferContract","parameter":{"value":{"owner_address":"` + from + `","to_address":"` + to + `","amount":` + itoa(amount) + `}}}]}}`
+	return `{"block_timestamp":` + itoa(time.Now().UnixMilli()) + `,"txID":"` + txID + `","raw_data":{"contract":[{"type":"TransferContract","parameter":{"value":{"owner_address":"` + from + `","to_address":"` + to + `","amount":` + itoa(amount) + `}}}]}}`
 }
 
 func makeContractTx(txID, contractType string) string {
-	return `{"blockTimestamp":` + itoa(time.Now().UnixMilli()) + `,"txID":"` + txID + `","raw_data":{"contract":[{"type":"` + contractType + `","parameter":{"value":{}}}]}}`
+	return `{"block_timestamp":` + itoa(time.Now().UnixMilli()) + `,"txID":"` + txID + `","raw_data":{"contract":[{"type":"` + contractType + `","parameter":{"value":{}}}]}}`
 }
 
 func joinJSON(items []string) string {
@@ -407,10 +407,10 @@ func fmtTxID(i int) string {
 
 // ---------- D-211 返修测试（R1-R3，fixture 逐字照抄附录真实样本形状） ----------
 
-// 附录样本形状（R1 对拍）：blockTimestamp 驼峰 + transaction_id 下划线 + raw_data.contract[0].type
+// 真实样本形状（curl 原文 2026-09-03 12:1x 复核）：txID + block_timestamp 下划线——原附录为复审方手写重建，两字段名均错，本 fixture 已对拍真身 + raw_data.contract[0].type
 // + parameter.value.{amount,owner_address,to_address}。R2 修复后 visible=true → 地址 base58（T 前缀）。
 // 本 fixture 照抄附录形状，地址用 base58（模拟 R2 后响应），验证字段名对拍 + 方向分类。
-const appendixFixtureShape = `{"blockTimestamp":1696936089000,"txID":"7c1fabcdef","raw_data":{"contract":[{"type":"TransferContract","parameter":{"value":{"amount":3000000,"owner_address":"TWsbXR6SPvvXPxUtPMQvEj7AMH55555555","to_address":"TBtvnRBgrVE9zZWkWfPvDSiuo65es55555"}}}]}}`
+const appendixFixtureShape = `{"block_timestamp":1696936089000,"txID":"7c1fabcdef","raw_data":{"contract":[{"type":"TransferContract","parameter":{"value":{"amount":3000000,"owner_address":"TWsbXR6SPvvXPxUtPMQvEj7AMH55555555","to_address":"TBtvnRBgrVE9zZWkWfPvDSiuo65es55555"}}}]}}`
 
 // TestR1_FieldMappingAppendixSample R1：附录样本字段名对拍（blockTimestamp 驼峰能解析）。
 func TestR1_FieldMappingAppendixSample(t *testing.T) {
@@ -422,7 +422,7 @@ func TestR1_FieldMappingAppendixSample(t *testing.T) {
 		t.Fatalf("data len = %d, want 1", len(resp.Data))
 	}
 	tx := resp.Data[0]
-	// R1：blockTimestamp 驼峰解析（旧 block_timestamp 下划线会得 0）
+	// R1：block_timestamp 解析（真实字段名，防再漂移）
 	if tx.BlockTimestamp != 1696936089000 {
 		t.Errorf("BlockTimestamp = %d, want 1696936089000 (R1 驼峰对拍)", tx.BlockTimestamp)
 	}
