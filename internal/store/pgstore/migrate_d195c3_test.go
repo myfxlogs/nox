@@ -30,9 +30,9 @@ func TestMigrate_EmptyDBFullMigration(t *testing.T) {
 			fmt.Sprintf("DROP DATABASE IF EXISTS %s;", emptyDB)).Run()
 	})
 
-	// 建空库
+	// 建空库（无 OWNER 子句——owner 默认=当前连接用户，本地 arb/CI postgres 两端通）
 	if out, err := exec.CommandContext(ctx, "psql", admin, "-c",
-		fmt.Sprintf("CREATE DATABASE %s OWNER arb;", emptyDB)).CombinedOutput(); err != nil {
+		fmt.Sprintf("CREATE DATABASE %s;", emptyDB)).CombinedOutput(); err != nil {
 		t.Fatalf("create empty db: %v\n%s", err, out)
 	}
 

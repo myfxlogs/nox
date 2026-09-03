@@ -80,9 +80,9 @@ func setupRestoreTestDB(t *testing.T) (testDSN string) {
 			fmt.Sprintf("DROP DATABASE IF EXISTS %s;", restoreTestDBName)).Run()
 	})
 
-	// 建新临时库
+	// 建新临时库（无 OWNER 子句——owner 默认=当前连接用户，本地 arb/CI postgres 两端通）
 	if out, err := exec.CommandContext(ctx, "psql", admin, "-c",
-		fmt.Sprintf("CREATE DATABASE %s OWNER arb;", restoreTestDBName)).CombinedOutput(); err != nil {
+		fmt.Sprintf("CREATE DATABASE %s;", restoreTestDBName)).CombinedOutput(); err != nil {
 		t.Fatalf("create restore db: %v\n%s", err, out)
 	}
 
