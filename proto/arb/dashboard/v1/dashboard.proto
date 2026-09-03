@@ -53,8 +53,8 @@ service DashboardService {
 
   // 个人持仓（财务线 TRX 持仓接入，D-046）+ 实账化（财务线工作项 3）
   rpc ListPersonalPositions(ListPersonalPositionsRequest) returns (ListPersonalPositionsResponse);
-  rpc ListCMCAccount(ListCMCAccountRequest) returns (ListCMCAccountResponse);  // D-208 v2-C
-  rpc ListTRXAccount(ListTRXAccountRequest) returns (ListTRXAccountResponse);  // D-211 TRX 质押流水卡
+  rpc GetHedgeStructure(GetHedgeStructureRequest) returns (GetHedgeStructureResponse);  // D-212 对冲工作台
+  rpc ListHedgeFlow(ListHedgeFlowRequest) returns (ListHedgeFlowResponse);  // D-212 统一流水卡
   rpc AddDailyIncome(AddDailyIncomeRequest) returns (AddDailyIncomeResponse);
   rpc ListDailyIncome(ListDailyIncomeRequest) returns (ListDailyIncomeResponse);
 
@@ -594,58 +594,84 @@ message ListPersonalPositionsResponse {
   repeated PersonalPosition items = 1;
 }
 
-// === CMC 账户摘要 + 流水（D-208 v2-C：前端个人持仓卡头部摘要行 + 流水小表）===
+// === D-212 对冲工作台：结构卡 + 统一流水卡（替换旧 ListCMCAccount/ListTRXAccount）===
 
-message CMCAccountInfo {
-  double total_account_value = 1;       // 净值
-  double total_cash_balance = 2;        // 现金
-  double total_unrealised_pnl = 3;      // 浮动盈亏
-  double closeout_price = 4;            // 强平价
-  double distance_to_closeout_pct = 5;  // 距强平%（CMC 百分数，如 30.57）
-  google.protobuf.Timestamp fetched_at = 6;  // 最近更新时间
+message HedgeStake {
+  double energy = 1;     // 能量质押（TRX，fin_trx_account.energy_delegated ÷ 1e6）
+  double bandwidth = 2;  // 带宽自押（TRX，fin_trx_account.bandwidth_staked ÷ 1e6）
 }
 
-message CMCHistoryItem {
-  string transaction_id = 1;
-  string transaction_type = 2;          // OVERNIGHT_SETTLEMENT / SELL_TRADE / PAYMENTS_IN 等
-  double amount = 3;
-  double balance = 4;
-  string currency = 5;
-  string order_id = 6;
-  google.protobuf.Timestamp transaction_time = 7;
+message HedgeLegSpot {
+  string label = 1;          // "质押现货"
+  double qty_staked = 2;     // 质押数量（v1.2：fin_trx_account.votes_total=18070，禁 personal_positions 静态）
+  double qty_liquid = 3;     // 流动余额（fin_trx_account.balance_sun ÷ 1e6）
+  double pnl_vs_base = 4;    // 计算值 (mid−baseline)×qty_staked（镜像腿，恒和=0）
+  HedgeStake stake = 5;      // 质押明细 energy+bandwidth
 }
 
-message ListCMCAccountRequest {}
-
-message ListCMCAccountResponse {
-  CMCAccountInfo summary = 1;
-  repeated CMCHistoryItem history = 2;  // 最近 50 条（倒序）
+message HedgeLegShort {
+  string label = 1;           // "CMC 空单"
+  double qty = 2;             // 空单数量（fin_cmc_positions.quantity=18100）
+  double pnl_vs_base = 3;     // 计算值 (baseline−mid)×qty（镜像腿，恒和=0）
+  int32 lev = 4;              // 杠杆（1/margin_percentage 推导）
+  double liq = 5;             // 强平价（fin_cmc_account_summary.closeout_price）
+  double dist_pct = 6;        // 距强平%（distance_to_closeout_pct）
+  double broker_unrealised = 7;  // broker 权威浮盈（fin_cmc_positions.unrealised_pnl，参考展示不做镜像源）
 }
 
-// === TRX 质押账户摘要 + 流水（D-211：与 CMC 流水卡对称）===
-
-message TRXAccountInfo {
-  double balance_trx = 1;         // 流动余额（sun ÷ 1e6）
-  double allowance_trx = 2;       // 未领投票奖励（sun ÷ 1e6）
-  double energy_delegated_trx = 3; // 委托出的能量质押（sun ÷ 1e6）
-  int64 votes_total = 4;          // 票权（tronPowerLimit）
-  string sr_address = 5;          // 投票 SR 地址（base58）
-  google.protobuf.Timestamp fetched_at = 6;  // 最近更新时间
+message HedgeCarry {
+  double trx_rental_7d_trx = 1;   // 近 7 日能量租金（SumDailyIncomeByRange energy_trx）
+  double trx_vote_7d_trx = 2;     // 近 7 日投票收益（SumDailyIncomeByRange voting_trx）
+  double cmc_overnight_7d_usd = 3; // 近 7 日隔夜息（SumCMCOvernightByRange）
+  double cum_usd = 4;             // 累计收益 USD（全量 energy×price+voting×price+interest）
+  double annualized_pct = 5;      // 年化 %（cum_usd / (qty×mid) × 365）
 }
 
-message TRXTxItem {
-  string tx_id = 1;
+message HedgeAccounts {
+  double trx_balance = 1;        // fin_trx_account.balance_sun ÷ 1e6
+  double trx_allowance = 2;      // fin_trx_account.allowance_sun ÷ 1e6
+  double energy_delegated = 3;   // fin_trx_account.energy_delegated ÷ 1e6
+  double votes = 4;              // fin_trx_account.votes_total
+  double cmc_cash = 5;           // fin_cmc_account_summary.total_cash_balance
+  double cmc_equity = 6;         // fin_cmc_account_summary.total_account_value
+  google.protobuf.Timestamp updated_at = 7;  // 最近更新时间（取 TRX/CMC 较新者）
+}
+
+message HedgeStructure {
+  double baseline_price = 1;   // fin_cmc_positions.entry_price（基准=空单开仓价，现货购价未知）
+  double mid = 2;              // fin_cmc_prices 最近 mid（两腿共用同一 mid=镜像成立）
+  HedgeLegSpot leg_spot = 3;
+  HedgeLegShort leg_short = 4;
+  double net_exposure_trx = 5;  // v1.2 真实计算 (balance+staked−short_qty)
+  double net_exposure_usd = 6;  // net_exposure_trx × mid
+  HedgeCarry carry = 7;
+  HedgeAccounts accts = 8;
+}
+
+message GetHedgeStructureRequest {}
+
+message GetHedgeStructureResponse {
+  HedgeStructure structure = 1;  // 空表容忍=nil（前端显示「数据未就绪」）
+}
+
+message HedgeFlowItem {
+  string source = 1;           // trx|cmc
   google.protobuf.Timestamp ts = 2;
-  string kind = 3;                // rental_income|vote_claim|deposit|withdraw|stake|unstake|other
-  double amount_trx = 4;          // sun ÷ 1e6（vote_claim=0）
-  string counterparty = 5;        // 对手方地址（截断显示）
+  string kind = 3;             // 归一 8 类：rental_income|vote_claim|deposit|withdraw|stake|unstake|overnight|other
+  double amount_value = 4;     // 原生单位数值（TRX 笔=TRX 数；CMC 笔=USD）
+  string amount_unit = 5;      // TRX|USD
+  string counterparty = 6;     // TRX=对手方地址；CMC=空
+  string tx_id = 7;            // TRX=tx_id；CMC=transaction_id
 }
 
-message ListTRXAccountRequest {}
+message ListHedgeFlowRequest {
+  string source_filter = 1;    // ""=全部；trx=单源；cmc=单源
+  int32 limit = 2;
+  int32 offset = 3;
+}
 
-message ListTRXAccountResponse {
-  TRXAccountInfo summary = 1;
-  repeated TRXTxItem txs = 2;     // 最近 50 条（倒序）
+message ListHedgeFlowResponse {
+  repeated HedgeFlowItem txs = 1;
 }
 
 // === 每日收益（财务线工作项 3：个人持仓实账化）===
