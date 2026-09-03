@@ -190,6 +190,13 @@ func (c *TxsCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 		if len(resp.Data) < 200 {
 			break
 		}
+		// 止血（2026-09-03 生产实证）：页间限速 1.5s——匿名 burst 8，10 连发翻页必 429；
+		// 0.67 req/s < 恢复速率，10 页 ≈15s 安全
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(1500 * time.Millisecond):
+		}
 	}
 	if fetched > 0 {
 		log.Printf("[trx] txs fetched %d new rows this poll", fetched)
