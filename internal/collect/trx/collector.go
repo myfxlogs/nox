@@ -152,10 +152,23 @@ func NewTxsCollector(address string, store *pgstore.Store, base, apiKey string, 
 func (c *TxsCollector) Kind() string { return "trx_txs" }
 
 // Poll 滚动增量采集交易流。从上次最新 ts 起翻页（≤10 页/poll），分类写入 fin_trx_txs。
+// D-211 R5 缺口兜底：检测库内 oldest ts 远晚于账户创建时间（2023-01-01 锚）说明
+// 429 断点后 lastTs 推进致早期段缺 → 强制 min_timestamp=0 重走全史（禁用增量停止）。
 func (c *TxsCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	var lastTs int64
 	if last, ok, err := c.store.LastTRXTxTs(ctx); err == nil && ok {
 		lastTs = last.UnixMilli()
+	}
+	// R5 缺口检测：库内 oldest > 2024-01-01 说明早期段缺（账户 2023 年活跃）。
+	// forceFullBackfill=true 时禁用增量停止 + 加 min_timestamp=0 强制全史走完。
+	forceFullBackfill := false
+	if lastTs > 0 {
+		if first, ok, err := c.store.FirstTRXTxTs(ctx); err == nil && ok {
+			accountCreationAnchor := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			if first.After(accountCreationAnchor) {
+				forceFullBackfill = true
+			}
+		}
 	}
 	fetched := 0
 	fingerprint := ""
@@ -163,8 +176,12 @@ func (c *TxsCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 		// 止血4（2026-09-03）：TronGrid 翻页=fingerprint（meta 返回，&fingerprint= 传递）；
 		// max_timestamp 是过滤器非游标（asc 下每页返回同样最老 200 条，830=83×10 实证）。
 		// 走法=desc 从最新向旧翻，增量停止=页内最旧 ≤ lastTs 即追平；首拉（lastTs=0）全量走完。
+		// R5：forceFullBackfill 时加 min_timestamp=0 强制全史（不过滤历史段）。
 		url := fmt.Sprintf("%s/v1/accounts/%s/transactions?limit=200&order_by=block_timestamp,desc&visible=true",
 			c.base, c.address)
+		if forceFullBackfill {
+			url += "&min_timestamp=0"
+		}
 		if fingerprint != "" {
 			url += "&fingerprint=" + fingerprint
 		}
@@ -181,8 +198,8 @@ func (c *TxsCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 		}
 		oldest := resp.Data[len(resp.Data)-1].BlockTimestamp
 		for _, tx := range resp.Data {
-			if tx.BlockTimestamp <= lastTs {
-				continue // 增量：已入库的旧交易跳过（幂等双保险）
+			if !forceFullBackfill && tx.BlockTimestamp <= lastTs {
+				continue // 增量：已入库的旧交易跳过（幂等双保险；R5：forceFullBackfill 时重写早期段）
 			}
 			rec, ok := classifyTx(tx, c.address, c.rentalPayers)
 			if !ok {
@@ -193,8 +210,8 @@ func (c *TxsCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 			}
 			fetched++
 		}
-		if oldest <= lastTs || len(resp.Data) < 200 {
-			break // 追平增量 / 尾页
+		if (!forceFullBackfill && oldest <= lastTs) || len(resp.Data) < 200 {
+			break // 追平增量 / 尾页（R5：forceFullBackfill 时禁用增量停止，只走尾页）
 		}
 		fingerprint = resp.Meta.Fingerprint
 		if fingerprint == "" {

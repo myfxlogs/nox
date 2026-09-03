@@ -244,6 +244,62 @@ func TestTxsCollector_Poll_Idempotent(t *testing.T) {
 	}
 }
 
+// TestTxsCollector_Poll_R5GapBackfill D-211 R5：缺口兜底——库内 oldest > 2024-01-01
+// 说明 429 断点后 lastTs 推进致早期段缺 → forceFullBackfill=true，加 min_timestamp=0
+// + 禁用增量停止，重写早期段。
+// 锚：预插 1 条 2025-03 tx（oldest=2025-03 > 2024-01-01 → 触发兜底），
+// mock 返回 2 条（2025-03 已有 + 2023-06 早期缺），Poll 应拉入 2023-06 早期段。
+func TestTxsCollector_Poll_R5GapBackfill(t *testing.T) {
+	st := newTestStore(t)
+	monitorAddr := "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555"
+	// 预插 1 条 2025-03 tx（模拟 429 断点后 lastTs 推进到 2025-03，早期段缺）
+	if err := st.UpsertTRXTx(context.Background(), pgstore.TRXTx{
+		TxID: "existing_2025", Ts: time.Date(2025, 3, 15, 0, 0, 0, 0, time.UTC),
+		Kind: "deposit", AmountSun: 1000000,
+	}); err != nil {
+		t.Fatalf("UpsertTRXTx existing: %v", err)
+	}
+	// mock 返回 2 条：2025-03（已有）+ 2023-06（早期缺）
+	earlyTs := time.Date(2023, 6, 1, 0, 0, 0, 0, time.UTC).UnixMilli()
+	existingTs := time.Date(2025, 3, 15, 0, 0, 0, 0, time.UTC).UnixMilli()
+	resp := `{"data":[` +
+		`{"block_timestamp":` + itoa(existingTs) + `,"txID":"existing_2025","raw_data":{"contract":[{"type":"TransferContract","parameter":{"value":{"owner_address":"TOther","to_address":"` + monitorAddr + `","amount":1000000}}}]}}` +
+		`,` +
+		`{"block_timestamp":` + itoa(earlyTs) + `,"txID":"early_2023","raw_data":{"contract":[{"type":"TransferContract","parameter":{"value":{"owner_address":"TOther","to_address":"` + monitorAddr + `","amount":2000000}}}]}}` +
+		`]}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		// R5 锚：forceFullBackfill 时应带 min_timestamp=0
+		if r.URL.Query().Get("min_timestamp") != "0" {
+			t.Errorf("R5 gap backfill: expected min_timestamp=0, got %q", r.URL.Query().Get("min_timestamp"))
+		}
+		_, _ = w.Write([]byte(resp))
+	}))
+	defer srv.Close()
+
+	c := NewTxsCollector(monitorAddr, st, srv.URL, "", nil)
+	if _, err := c.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	rows, err := st.ListTRXTxs(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("ListTRXTxs: %v", err)
+	}
+	// 应有 2 条：existing_2025 + early_2023（R5 缺口兜底拉入早期段）
+	if len(rows) != 2 {
+		t.Fatalf("R5 gap backfill: got %d txs, want 2 (existing + early)", len(rows))
+	}
+	hasEarly := false
+	for _, r := range rows {
+		if r.TxID == "early_2023" {
+			hasEarly = true
+		}
+	}
+	if !hasEarly {
+		t.Errorf("R5 gap backfill: early_2023 (2023-06) 未拉入——缺口兜底未生效")
+	}
+}
+
 // TestWitnessCollector_Poll_Success 验证见证人快照只存 isJobs 行。
 func TestWitnessCollector_Poll_Success(t *testing.T) {
 	st := newTestStore(t)

@@ -201,6 +201,22 @@ func (s *Store) LastTRXTxTs(ctx context.Context) (time.Time, bool, error) {
 	return ts, true, nil
 }
 
+// FirstTRXTxTs 返回最旧一条交易的 ts（D-211 R5 缺口检测：oldest 远晚于账户创建时间
+// 说明 429 断点后 lastTs 推进致早期段缺，需 min_timestamp=0 强制全史回填）；空表返回零值+false。
+func (s *Store) FirstTRXTxTs(ctx context.Context) (time.Time, bool, error) {
+	var ts time.Time
+	err := s.pool.QueryRow(ctx, `
+		SELECT MIN(ts) FROM fin_trx_txs
+	`).Scan(&ts)
+	if err != nil {
+		return ts, false, fmt.Errorf("first trx tx ts: %w", err)
+	}
+	if ts.IsZero() {
+		return ts, false, nil
+	}
+	return ts, true, nil
+}
+
 // ListTRXWitnesses 返回最近 limit 条见证人快照（按 fetched_at DESC）。
 func (s *Store) ListTRXWitnesses(ctx context.Context, limit int) ([]TRXWitness, error) {
 	if limit <= 0 {
