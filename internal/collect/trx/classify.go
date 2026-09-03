@@ -1,0 +1,55 @@
+// D-211 TRX 交易分类（SSOT §4 分类规则）。
+package trx
+
+import (
+	"time"
+
+	"arb/internal/store/pgstore"
+)
+
+// classifyTx 按合约类型分类（SSOT §4）。monitorAddr 用于判断 TransferContract 方向。
+// 返回 ok=false 表示不入库（P2-3 非资金移动合约）。
+func classifyTx(tx txJSON, monitorAddr string, rentalPayers map[string]bool) (pgstore.TRXTx, bool) {
+	ts := time.UnixMilli(tx.BlockTimestamp)
+	ct := tx.SmartContractType()
+	if ct == "" {
+		return pgstore.TRXTx{TxID: tx.TxID, Ts: ts, Kind: "other"}, true
+	}
+	switch ct {
+	case "TransferContract":
+		from := tx.TransferFrom()
+		to := tx.TransferTo()
+		amount := tx.TransferAmount()
+		if to == "" || from == "" {
+			return pgstore.TRXTx{TxID: tx.TxID, Ts: ts, Kind: "other"}, true
+		}
+		// 方向判断：owner(from)=监控地址 → 转出；to=监控地址 → 转入
+		if from == monitorAddr {
+			cp := to
+			return pgstore.TRXTx{
+				TxID: tx.TxID, Ts: ts, Kind: "withdraw", AmountSun: amount, Counterparty: &cp,
+			}, true
+		}
+		// 转入：from 是付款方；命中 rental_payers → rental_income，否则 deposit
+		kind := "deposit"
+		if rentalPayers[from] {
+			kind = "rental_income"
+		}
+		cp := from
+		return pgstore.TRXTx{
+			TxID: tx.TxID, Ts: ts, Kind: kind, AmountSun: amount, Counterparty: &cp,
+		}, true
+	case "WithdrawBalanceContract":
+		// P2-2：amount=0（WithdrawBalanceContract 无金额参数）
+		return pgstore.TRXTx{TxID: tx.TxID, Ts: ts, Kind: "vote_claim", AmountSun: 0}, true
+	case "FreezeBalanceV2Contract", "StakeV2Contract":
+		return pgstore.TRXTx{TxID: tx.TxID, Ts: ts, Kind: "stake"}, true
+	case "UnfreezeBalanceV2Contract", "WithdrawExpireUnfreezeContract":
+		return pgstore.TRXTx{TxID: tx.TxID, Ts: ts, Kind: "unstake"}, true
+	case "DelegateResourceContract", "UnDelegateResourceContract", "VoteWitnessContract":
+		// P2-3：非资金移动合约不入库（资源操作非资金流）
+		return pgstore.TRXTx{}, false
+	default:
+		return pgstore.TRXTx{TxID: tx.TxID, Ts: ts, Kind: "other"}, true
+	}
+}

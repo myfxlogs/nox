@@ -197,5 +197,31 @@ func (s *Store) LastTRXTxTs(ctx context.Context) (time.Time, bool, error) {
 	return ts, true, nil
 }
 
+// ListTRXWitnesses 返回最近 limit 条见证人快照（按 fetched_at DESC）。
+func (s *Store) ListTRXWitnesses(ctx context.Context, limit int) ([]TRXWitness, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, sr_address, url, vote_count, fetched_at
+		FROM fin_trx_witness
+		ORDER BY fetched_at DESC, id DESC
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list trx witnesses: %w", err)
+	}
+	defer rows.Close()
+	var out []TRXWitness
+	for rows.Next() {
+		var w TRXWitness
+		if err := rows.Scan(&w.ID, &w.SRAddress, &w.URL, &w.VoteCount, &w.FetchedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, w)
+	}
+	return out, rows.Err()
+}
+
 // 确保 pgx import 被引用（CopyFrom 批量写入用，S2 采集器可能用）。
 var _ = pgx.Identifier{}
