@@ -159,7 +159,7 @@ func (c *TxsCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	}
 	fetched := 0
 	for page := 0; page < 10; page++ {
-		url := fmt.Sprintf("%s/v1/accounts/%s/transactions?limit=200&order_by=block_timestamp,asc",
+		url := fmt.Sprintf("%s/v1/accounts/%s/transactions?limit=200&order_by=block_timestamp,asc&visible=true",
 			c.base, c.address)
 		if maxTs > 0 {
 			url += fmt.Sprintf("&max_timestamp=%d", maxTs)

@@ -5,6 +5,7 @@ package pgstore
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -69,6 +70,9 @@ func (s *Store) InsertTRXAccount(ctx context.Context, a TRXAccount) error {
 
 // UpsertTRXTx 幂等写入交易流（tx_id UNIQUE 去重）。
 func (s *Store) UpsertTRXTx(ctx context.Context, t TRXTx) error {
+	if t.TxID == "" {
+		return errors.New("trx txs: empty tx_id — field mapping broken (R3 防御：空键坍缩成一行)")
+	}
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO fin_trx_txs (tx_id, ts, kind, amount_sun, counterparty, fetched_at)
 		VALUES ($1,$2,$3,$4,$5,COALESCE($6,now()))

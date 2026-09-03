@@ -38,10 +38,10 @@ type txsResponseJSON struct {
 	Data []txJSON `json:"data"`
 }
 
-// txJSON 对应单笔交易。TronGrid /v1/transactions 响应结构：
-// block_timestamp(ms)、transaction_id、raw_data.contract[].type + parameter.value
+// txJSON 对应单笔交易。TronGrid /v1/accounts/{addr}/transactions 响应结构（R1 对拍真实样本）：
+// blockTimestamp(ms 驼峰)、transaction_id、raw_data.contract[].type + parameter.value
 type txJSON struct {
-	BlockTimestamp int64  `json:"block_timestamp"`
+	BlockTimestamp int64  `json:"blockTimestamp"` // R1：真实响应是驼峰 blockTimestamp（非 block_timestamp）
 	TxID           string `json:"transaction_id"`
 	RawData        rawDataContractJSON `json:"raw_data"`
 }

@@ -3,8 +3,10 @@ package trx
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -355,11 +357,11 @@ func makeContractTxJSON(txID, contractType string) txJSON {
 }
 
 func makeTransferTx(txID, to, from string, amount int64) string {
-	return `{"block_timestamp":` + itoa(time.Now().UnixMilli()) + `,"transaction_id":"` + txID + `","raw_data":{"contract":[{"type":"TransferContract","parameter":{"value":{"owner_address":"` + from + `","to_address":"` + to + `","amount":` + itoa(amount) + `}}}]}}`
+	return `{"blockTimestamp":` + itoa(time.Now().UnixMilli()) + `,"transaction_id":"` + txID + `","raw_data":{"contract":[{"type":"TransferContract","parameter":{"value":{"owner_address":"` + from + `","to_address":"` + to + `","amount":` + itoa(amount) + `}}}]}}`
 }
 
 func makeContractTx(txID, contractType string) string {
-	return `{"block_timestamp":` + itoa(time.Now().UnixMilli()) + `,"transaction_id":"` + txID + `","raw_data":{"contract":[{"type":"` + contractType + `","parameter":{"value":{}}}]}}`
+	return `{"blockTimestamp":` + itoa(time.Now().UnixMilli()) + `,"transaction_id":"` + txID + `","raw_data":{"contract":[{"type":"` + contractType + `","parameter":{"value":{}}}]}}`
 }
 
 func joinJSON(items []string) string {
@@ -401,4 +403,114 @@ func intToStr(n int64) string {
 
 func fmtTxID(i int) string {
 	return "tx" + intToStr(int64(i))
+}
+
+// ---------- D-211 返修测试（R1-R3，fixture 逐字照抄附录真实样本形状） ----------
+
+// 附录样本形状（R1 对拍）：blockTimestamp 驼峰 + transaction_id 下划线 + raw_data.contract[0].type
+// + parameter.value.{amount,owner_address,to_address}。R2 修复后 visible=true → 地址 base58（T 前缀）。
+// 本 fixture 照抄附录形状，地址用 base58（模拟 R2 后响应），验证字段名对拍 + 方向分类。
+const appendixFixtureShape = `{"blockTimestamp":1696936089000,"transaction_id":"7c1fabcdef","raw_data":{"contract":[{"type":"TransferContract","parameter":{"value":{"amount":3000000,"owner_address":"TWsbXR6SPvvXPxUtPMQvEj7AMH55555555","to_address":"TBtvnRBgrVE9zZWkWfPvDSiuo65es55555"}}}]}}`
+
+// TestR1_FieldMappingAppendixSample R1：附录样本字段名对拍（blockTimestamp 驼峰能解析）。
+func TestR1_FieldMappingAppendixSample(t *testing.T) {
+	var resp txsResponseJSON
+	if err := json.Unmarshal([]byte(`{"data":[`+appendixFixtureShape+`]}`), &resp); err != nil {
+		t.Fatalf("unmarshal appendix fixture: %v", err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("data len = %d, want 1", len(resp.Data))
+	}
+	tx := resp.Data[0]
+	// R1：blockTimestamp 驼峰解析（旧 block_timestamp 下划线会得 0）
+	if tx.BlockTimestamp != 1696936089000 {
+		t.Errorf("BlockTimestamp = %d, want 1696936089000 (R1 驼峰对拍)", tx.BlockTimestamp)
+	}
+	if tx.TxID != "7c1fabcdef" {
+		t.Errorf("TxID = %q, want 7c1fabcdef (transaction_id 对拍)", tx.TxID)
+	}
+	if tx.SmartContractType() != "TransferContract" {
+		t.Errorf("contract type = %q, want TransferContract", tx.SmartContractType())
+	}
+	// R2：visible=true 后地址 base58，能正确读出
+	if tx.TransferFrom() != "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555" {
+		t.Errorf("owner_address = %q, want TWsb…555 (R2 base58)", tx.TransferFrom())
+	}
+	if tx.TransferTo() != "TBtvnRBgrVE9zZWkWfPvDSiuo65es55555" {
+		t.Errorf("to_address = %q, want TBtvnRB… (R2 base58)", tx.TransferTo())
+	}
+	if tx.TransferAmount() != 3000000 {
+		t.Errorf("amount = %d, want 3000000", tx.TransferAmount())
+	}
+}
+
+// TestR2_VisibleBase58_Classify51TransferContracts R2+R4：51 笔 TransferContract 分类（visible=true 后 base58 地址）。
+// 照抄附录形状，51 笔不同方向：20 withdraw / 15 rental_income / 16 deposit。
+func TestR2_VisibleBase58_Classify51TransferContracts(t *testing.T) {
+	monitorAddr := "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555"
+	rentalPayer := "TBtvnRBgrVE9zZWkWfPvDSiuo65es55555"
+	otherAddr := "TOtherAddr111111111111111111111"
+	rentalSet := map[string]bool{rentalPayer: true}
+
+	wantWithdraw, wantRental, wantDeposit := 20, 15, 16
+	gotWithdraw, gotRental, gotDeposit := 0, 0, 0
+	for i := 0; i < 51; i++ {
+		txID := "7c1f_" + intToStr(int64(i))
+		var txJSONStr string
+		switch {
+		case i < wantWithdraw:
+			// owner=monitor → withdraw
+			txJSONStr = makeTransferTx(txID, otherAddr, monitorAddr, 1000000)
+		case i < wantWithdraw+wantRental:
+			// to=monitor + from=rentalPayer → rental_income
+			txJSONStr = makeTransferTx(txID, monitorAddr, rentalPayer, 5320000)
+		default:
+			// to=monitor + from=other → deposit
+			txJSONStr = makeTransferTx(txID, monitorAddr, otherAddr, 2000000)
+		}
+		var resp txsResponseJSON
+		if err := json.Unmarshal([]byte(`{"data":[`+txJSONStr+`]}`), &resp); err != nil {
+			t.Fatalf("unmarshal tx %d: %v", i, err)
+		}
+		rec, ok := classifyTx(resp.Data[0], monitorAddr, rentalSet)
+		if !ok {
+			t.Fatalf("tx %d: ok=false, want true (TransferContract 入库)", i)
+		}
+		switch rec.Kind {
+		case "withdraw":
+			gotWithdraw++
+		case "rental_income":
+			gotRental++
+		case "deposit":
+			gotDeposit++
+		default:
+			t.Errorf("tx %d: kind = %q, want withdraw/rental_income/deposit", i, rec.Kind)
+		}
+	}
+	if gotWithdraw != wantWithdraw {
+		t.Errorf("withdraw = %d, want %d", gotWithdraw, wantWithdraw)
+	}
+	if gotRental != wantRental {
+		t.Errorf("rental_income = %d, want %d", gotRental, wantRental)
+	}
+	if gotDeposit != wantDeposit {
+		t.Errorf("deposit = %d, want %d", gotDeposit, wantDeposit)
+	}
+}
+
+// TestR3_UpsertTRXTxEmptyTxIDLoudFail R3：空 tx_id 拒绝（loud fail，不静默坍缩成一行）。
+func TestR3_UpsertTRXTxEmptyTxIDLoudFail(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	err := st.UpsertTRXTx(ctx, pgstore.TRXTx{TxID: "", Kind: "other"})
+	if err == nil {
+		t.Fatal("UpsertTRXTx(empty tx_id) should fail (R3 loud fail)")
+	}
+	if !strings.Contains(err.Error(), "empty tx_id") {
+		t.Errorf("err = %q, want contains 'empty tx_id'", err.Error())
+	}
+	// 非空 tx_id 正常写入
+	if err := st.UpsertTRXTx(ctx, pgstore.TRXTx{TxID: "valid_tx_1", Kind: "other", Ts: time.Now()}); err != nil {
+		t.Fatalf("UpsertTRXTx(valid): %v", err)
+	}
 }
