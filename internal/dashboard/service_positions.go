@@ -117,7 +117,7 @@ func personalPositionToProto(p *pgstore.PersonalPosition, venues map[string]bus.
 	}
 
 	// D-208 v2：CMC 行视图全自动——从 fin_cmc_positions 填真值 + ComputeCMCPositionPrice。
-	if p.CMCInstrumentID != "" && cmcSrc != nil {
+	if p.CMCInstrumentID != nil && *p.CMCInstrumentID != "" && cmcSrc != nil {
 		applyCMCPositionFields(pb, p, cmcSrc, freshTTL, now)
 		return pb
 	}

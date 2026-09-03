@@ -17,7 +17,7 @@ import (
 // applyCMCPositionFields 从 fin_cmc_positions 填真值 + ComputeCMCPositionPrice（D-208 v2）。
 // EntryPrice/Leverage/OpenedAt/Qty 全部从 CMC 持仓详情填（视图全自动）。
 func applyCMCPositionFields(pb *v1.PersonalPosition, p *pgstore.PersonalPosition, cmcSrc position.CMCSource, freshTTL time.Duration, now time.Time) {
-	if cmcPos, err := cmcSrc.LastCMCPosition(p.CMCInstrumentID); err == nil {
+	if cmcPos, err := cmcSrc.LastCMCPosition(*p.CMCInstrumentID); err == nil {
 		if cmcPos.EntryPrice > 0 {
 			pb.EntryPrice = cmcPos.EntryPrice
 		}
