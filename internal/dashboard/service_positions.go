@@ -77,7 +77,7 @@ func (s *Service) ListPersonalPositions(ctx context.Context, req *connect.Reques
 	now := time.Now()
 	items := make([]*v1.PersonalPosition, 0, len(positions))
 	for i := range positions {
-		items = append(items, personalPositionToProto(&positions[i], snap[positions[i].PriceSymbol], s.freshTTL, now, accrued, s.liqMMR))
+		items = append(items, personalPositionToProto(&positions[i], snap[positions[i].PriceSymbol], s.freshTTL, now, accrued, s.liqMMR, s.cmcSource))
 	}
 	return connect.NewResponse(&v1.ListPersonalPositionsResponse{Items: items}), nil
 }
@@ -85,7 +85,9 @@ func (s *Service) ListPersonalPositions(ctx context.Context, req *connect.Reques
 // personalPositionToProto 组装单个个人持仓响应：取该 symbol 最新（Time 最新）且未超陈旧 TTL 的一帧 mid 为当前价，
 // 复用 position.PersonalLevel 算告警态。无报价或全陈旧 → price 保持 0、level 空（诚实空态，G3）。
 // 实账计算（D-043，全后端）：pnl/liq_price/距强平%/累计利息。
-func personalPositionToProto(p *pgstore.PersonalPosition, venues map[string]bus.Quote, freshTTL time.Duration, now time.Time, accruedInterest float64, liqMMR float64) *v1.PersonalPosition {
+// D-208 v2：CMC 行（cmc_instrument_id 非空 + cmcSource 注入）走 ComputeCMCPositionPrice +
+//   从 fin_cmc_positions 填 EntryPrice/Leverage/OpenedAt/Qty 真值（视图全自动）。
+func personalPositionToProto(p *pgstore.PersonalPosition, venues map[string]bus.Quote, freshTTL time.Duration, now time.Time, accruedInterest float64, liqMMR float64, cmcSrc position.CMCSource) *v1.PersonalPosition {
 	pb := &v1.PersonalPosition{
 		Id:                 p.ID,
 		Asset:              p.Asset,
@@ -112,6 +114,12 @@ func personalPositionToProto(p *pgstore.PersonalPosition, venues map[string]bus.
 	}
 	if p.OpenedAt != nil {
 		pb.OpenedAt = timestamppb.New(*p.OpenedAt)
+	}
+
+	// D-208 v2：CMC 行视图全自动——从 fin_cmc_positions 填真值 + ComputeCMCPositionPrice。
+	if p.CMCInstrumentID != "" && cmcSrc != nil {
+		applyCMCPositionFields(pb, p, cmcSrc, freshTTL, now)
+		return pb
 	}
 
 	// 价格派生字段：单点计算（D-049，P3：快照路径与实时推送共用同一 ComputePositionPrice）。

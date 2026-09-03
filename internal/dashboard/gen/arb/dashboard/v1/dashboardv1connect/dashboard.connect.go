@@ -113,6 +113,9 @@ const (
 	// DashboardServiceListPersonalPositionsProcedure is the fully-qualified name of the
 	// DashboardService's ListPersonalPositions RPC.
 	DashboardServiceListPersonalPositionsProcedure = "/arb.dashboard.v1.DashboardService/ListPersonalPositions"
+	// DashboardServiceListCMCAccountProcedure is the fully-qualified name of the DashboardService's
+	// ListCMCAccount RPC.
+	DashboardServiceListCMCAccountProcedure = "/arb.dashboard.v1.DashboardService/ListCMCAccount"
 	// DashboardServiceAddDailyIncomeProcedure is the fully-qualified name of the DashboardService's
 	// AddDailyIncome RPC.
 	DashboardServiceAddDailyIncomeProcedure = "/arb.dashboard.v1.DashboardService/AddDailyIncome"
@@ -275,6 +278,7 @@ type DashboardServiceClient interface {
 	ListAccounts(context.Context, *connect.Request[v1.ListAccountsRequest]) (*connect.Response[v1.ListAccountsResponse], error)
 	// 个人持仓（财务线 TRX 持仓接入，D-046）+ 实账化（财务线工作项 3）
 	ListPersonalPositions(context.Context, *connect.Request[v1.ListPersonalPositionsRequest]) (*connect.Response[v1.ListPersonalPositionsResponse], error)
+	ListCMCAccount(context.Context, *connect.Request[v1.ListCMCAccountRequest]) (*connect.Response[v1.ListCMCAccountResponse], error)
 	AddDailyIncome(context.Context, *connect.Request[v1.AddDailyIncomeRequest]) (*connect.Response[v1.AddDailyIncomeResponse], error)
 	ListDailyIncome(context.Context, *connect.Request[v1.ListDailyIncomeRequest]) (*connect.Response[v1.ListDailyIncomeResponse], error)
 	// 盈亏统计起点（F4：anchor 重置，业主选 A「不删历史」）
@@ -504,6 +508,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			httpClient,
 			baseURL+DashboardServiceListPersonalPositionsProcedure,
 			connect.WithSchema(dashboardServiceMethods.ByName("ListPersonalPositions")),
+			connect.WithClientOptions(opts...),
+		),
+		listCMCAccount: connect.NewClient[v1.ListCMCAccountRequest, v1.ListCMCAccountResponse](
+			httpClient,
+			baseURL+DashboardServiceListCMCAccountProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListCMCAccount")),
 			connect.WithClientOptions(opts...),
 		),
 		addDailyIncome: connect.NewClient[v1.AddDailyIncomeRequest, v1.AddDailyIncomeResponse](
@@ -784,6 +794,7 @@ type dashboardServiceClient struct {
 	closeBrokerPositions   *connect.Client[v1.CloseBrokerPositionsRequest, v1.CloseBrokerPositionsResponse]
 	listAccounts           *connect.Client[v1.ListAccountsRequest, v1.ListAccountsResponse]
 	listPersonalPositions  *connect.Client[v1.ListPersonalPositionsRequest, v1.ListPersonalPositionsResponse]
+	listCMCAccount         *connect.Client[v1.ListCMCAccountRequest, v1.ListCMCAccountResponse]
 	addDailyIncome         *connect.Client[v1.AddDailyIncomeRequest, v1.AddDailyIncomeResponse]
 	listDailyIncome        *connect.Client[v1.ListDailyIncomeRequest, v1.ListDailyIncomeResponse]
 	getPnlAnchor           *connect.Client[v1.GetPnlAnchorRequest, v1.GetPnlAnchorResponse]
@@ -960,6 +971,11 @@ func (c *dashboardServiceClient) ListAccounts(ctx context.Context, req *connect.
 // ListPersonalPositions calls arb.dashboard.v1.DashboardService.ListPersonalPositions.
 func (c *dashboardServiceClient) ListPersonalPositions(ctx context.Context, req *connect.Request[v1.ListPersonalPositionsRequest]) (*connect.Response[v1.ListPersonalPositionsResponse], error) {
 	return c.listPersonalPositions.CallUnary(ctx, req)
+}
+
+// ListCMCAccount calls arb.dashboard.v1.DashboardService.ListCMCAccount.
+func (c *dashboardServiceClient) ListCMCAccount(ctx context.Context, req *connect.Request[v1.ListCMCAccountRequest]) (*connect.Response[v1.ListCMCAccountResponse], error) {
+	return c.listCMCAccount.CallUnary(ctx, req)
 }
 
 // AddDailyIncome calls arb.dashboard.v1.DashboardService.AddDailyIncome.
@@ -1205,6 +1221,7 @@ type DashboardServiceHandler interface {
 	ListAccounts(context.Context, *connect.Request[v1.ListAccountsRequest]) (*connect.Response[v1.ListAccountsResponse], error)
 	// 个人持仓（财务线 TRX 持仓接入，D-046）+ 实账化（财务线工作项 3）
 	ListPersonalPositions(context.Context, *connect.Request[v1.ListPersonalPositionsRequest]) (*connect.Response[v1.ListPersonalPositionsResponse], error)
+	ListCMCAccount(context.Context, *connect.Request[v1.ListCMCAccountRequest]) (*connect.Response[v1.ListCMCAccountResponse], error)
 	AddDailyIncome(context.Context, *connect.Request[v1.AddDailyIncomeRequest]) (*connect.Response[v1.AddDailyIncomeResponse], error)
 	ListDailyIncome(context.Context, *connect.Request[v1.ListDailyIncomeRequest]) (*connect.Response[v1.ListDailyIncomeResponse], error)
 	// 盈亏统计起点（F4：anchor 重置，业主选 A「不删历史」）
@@ -1430,6 +1447,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		DashboardServiceListPersonalPositionsProcedure,
 		svc.ListPersonalPositions,
 		connect.WithSchema(dashboardServiceMethods.ByName("ListPersonalPositions")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceListCMCAccountHandler := connect.NewUnaryHandler(
+		DashboardServiceListCMCAccountProcedure,
+		svc.ListCMCAccount,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListCMCAccount")),
 		connect.WithHandlerOptions(opts...),
 	)
 	dashboardServiceAddDailyIncomeHandler := connect.NewUnaryHandler(
@@ -1734,6 +1757,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceListAccountsHandler.ServeHTTP(w, r)
 		case DashboardServiceListPersonalPositionsProcedure:
 			dashboardServiceListPersonalPositionsHandler.ServeHTTP(w, r)
+		case DashboardServiceListCMCAccountProcedure:
+			dashboardServiceListCMCAccountHandler.ServeHTTP(w, r)
 		case DashboardServiceAddDailyIncomeProcedure:
 			dashboardServiceAddDailyIncomeHandler.ServeHTTP(w, r)
 		case DashboardServiceListDailyIncomeProcedure:
@@ -1931,6 +1956,10 @@ func (UnimplementedDashboardServiceHandler) ListAccounts(context.Context, *conne
 
 func (UnimplementedDashboardServiceHandler) ListPersonalPositions(context.Context, *connect.Request[v1.ListPersonalPositionsRequest]) (*connect.Response[v1.ListPersonalPositionsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListPersonalPositions is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListCMCAccount(context.Context, *connect.Request[v1.ListCMCAccountRequest]) (*connect.Response[v1.ListCMCAccountResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListCMCAccount is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) AddDailyIncome(context.Context, *connect.Request[v1.AddDailyIncomeRequest]) (*connect.Response[v1.AddDailyIncomeResponse], error) {

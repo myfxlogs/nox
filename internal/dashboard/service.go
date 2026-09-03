@@ -52,6 +52,8 @@ type Service struct {
 	// D-114：告警实时推送 topic（InsertAlert → store.alertHook → alertTopic.Publish → StreamUpdates case 3）。
 	// nil = 未接线（测试直接构造 Service）→ 不订阅。
 	alertTopic *bus.Topic[pgstore.Alert]
+	// D-208 v2：CMC 数据源（nil = 不支持 CMC 行，走老路径）。
+	cmcSource position.CMCSource
 	// bpm Broker 实持仓 monitor（D-052）：ListBrokerPositions 拉 + StreamUpdates case 8 推同源。nil = 未接线（测试直接构造 Service）。
 	bpm *BrokerPositionMonitor
 	// notionalUSD net_usd 换算的单笔名义（config.OpportunityNotionalUSD，D-053）。0 = 未接线（测试），net_usd=0。
@@ -189,6 +191,9 @@ type Settler interface {
 
 // SetSettler 注入结算器（D-087 §3.2，手动平仓后调）。nil = 未接线（RPC 仍可用，仅不结算）。
 func (s *Service) SetSettler(st Settler) { s.settler = st }
+
+// SetCMCSource 注入 CMC 数据源（D-208 v2：nil 安全=走老路径）。
+func (s *Service) SetCMCSource(src position.CMCSource) { s.cmcSource = src }
 
 // SetTradeModes 注入单腿 trade_mode 查询（D-060 F5）。main 在 factCache 处装配；nil = 预检放行。
 func (s *Service) SetTradeModes(f func(canonical, venueKey string) (int64, bool)) {

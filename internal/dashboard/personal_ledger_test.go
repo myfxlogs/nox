@@ -31,7 +31,7 @@ func TestPnlAndLiq(t *testing.T) {
 	}
 
 	t.Run("pnl=(entry-price)*qty", func(t *testing.T) {
-		pb := personalPositionToProto(short, venues(0.29), time.Minute, now, 0, 0.005)
+		pb := personalPositionToProto(short, venues(0.29), time.Minute, now, 0, 0.005, nil)
 		want := (0.30000 - 0.29) * 1000 // 10.0
 		if math.Abs(pb.PnlUsd-want) > 1e-9 {
 			t.Errorf("pnl want %v, got %v", want, pb.PnlUsd)
@@ -42,7 +42,7 @@ func TestPnlAndLiq(t *testing.T) {
 		crit := 0.31000
 		p := *short
 		p.CritHigh = &crit
-		pb := personalPositionToProto(&p, venues(0.29), time.Minute, now, 0, 0.005)
+		pb := personalPositionToProto(&p, venues(0.29), time.Minute, now, 0, 0.005, nil)
 		if pb.LiqPrice != 0.31000 {
 			t.Errorf("liq want crit_high 0.31000, got %v", pb.LiqPrice)
 		}
@@ -55,13 +55,13 @@ func TestPnlAndLiq(t *testing.T) {
 
 	t.Run("liq theoretical + MMR param", func(t *testing.T) {
 		// crit_high 未设 → 理论 = entry × (1 + 1/leverage − MMR)
-		pb := personalPositionToProto(short, venues(0.29), time.Minute, now, 0, 0.005)
+		pb := personalPositionToProto(short, venues(0.29), time.Minute, now, 0, 0.005, nil)
 		want := 0.30000 * (1 + 1.0/10 - 0.005)
 		if math.Abs(pb.LiqPrice-want) > 1e-9 {
 			t.Errorf("liq theoretical want %v, got %v", want, pb.LiqPrice)
 		}
 		// MMR 参数化：更高 MMR → 更低强平价
-		pb2 := personalPositionToProto(short, venues(0.29), time.Minute, now, 0, 0.01)
+		pb2 := personalPositionToProto(short, venues(0.29), time.Minute, now, 0, 0.01, nil)
 		want2 := 0.30000 * (1 + 1.0/10 - 0.01)
 		if math.Abs(pb2.LiqPrice-want2) > 1e-9 {
 			t.Errorf("liq theoretical MMR=0.01 want %v, got %v", want2, pb2.LiqPrice)
@@ -76,7 +76,7 @@ func TestPnlAndLiq(t *testing.T) {
 		p := *short
 		p.CritHigh = &crit
 		// price 0.32 > liq 0.31 → 已破线，负数
-		pb := personalPositionToProto(&p, venues(0.32), time.Minute, now, 0, 0.005)
+		pb := personalPositionToProto(&p, venues(0.32), time.Minute, now, 0, 0.005, nil)
 		want := (0.31000 - 0.32) / 0.32
 		if pb.DistToLiqPct >= 0 || math.Abs(pb.DistToLiqPct-want) > 1e-9 {
 			t.Errorf("dist want negative %v, got %v", want, pb.DistToLiqPct)
@@ -88,7 +88,7 @@ func TestPnlAndLiq(t *testing.T) {
 			ID: 2, Asset: "TRX", Kind: "staking", PriceSymbol: "TRXUSDT",
 			Qty: f64(1000), Status: "OPEN",
 		}
-		pb := personalPositionToProto(staking, venues(0.29), time.Minute, now, 0, 0.005)
+		pb := personalPositionToProto(staking, venues(0.29), time.Minute, now, 0, 0.005, nil)
 		if pb.PnlUsd != 0 {
 			t.Errorf("staking pnl want 0, got %v", pb.PnlUsd)
 		}
@@ -99,7 +99,7 @@ func TestPnlAndLiq(t *testing.T) {
 
 	t.Run("no quote -> pnl=0 liq theoretical still set", func(t *testing.T) {
 		// 无报价 → price=0、pnl=0（无价不算）；liq 理论值仍可由 entry/leverage 算。
-		pb := personalPositionToProto(short, nil, time.Minute, now, 0, 0.005)
+		pb := personalPositionToProto(short, nil, time.Minute, now, 0, 0.005, nil)
 		if pb.Price != 0 || pb.PnlUsd != 0 {
 			t.Errorf("no quote want price=0 pnl=0, got %v/%v", pb.Price, pb.PnlUsd)
 		}
