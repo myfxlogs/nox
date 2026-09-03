@@ -25,7 +25,7 @@ type PersonalPosition struct {
 	EntryPrice      *float64
 	Leverage        *int
 	OpenedAt        *time.Time
-	CMCInstrumentID string // D-208 v2：CMC instrument_id（如 'X-AFQUL'），空 = 非 CMC 行
+	CMCInstrumentID *string // D-208 v2：CMC instrument_id（如 'X-AFQUL'）；列可空（staking 行=NULL）→ 指针（止血修复：非指针 string 扫 NULL 即 500）
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 	ClosedAt        *time.Time
