@@ -122,3 +122,28 @@ func (s *Store) SumDailyIncomeInterest(ctx context.Context) (float64, error) {
 	}
 	return sum, nil
 }
+
+// SumDailyIncomeByRange D-212 A4：全源聚合 [from,to] 区间每日收益（manual 纠错行计入——
+// daily_income 是 SSOT 不分 source）。返回 energy_trx/voting_trx/interest_usd 三列之和。
+// from/to 为 nil = 不设界（全量）。
+func (s *Store) SumDailyIncomeByRange(ctx context.Context, from, to *time.Time) (energyTrx, votingTrx, interestUSD float64, err error) {
+	var fromStr, toStr *string
+	if from != nil {
+		v := from.UTC().Format("2006-01-02")
+		fromStr = &v
+	}
+	if to != nil {
+		v := to.UTC().Format("2006-01-02")
+		toStr = &v
+	}
+	err = s.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(energy_trx),0), COALESCE(SUM(voting_trx),0), COALESCE(SUM(interest_usd),0)
+		FROM position_daily_income
+		WHERE ($1::date IS NULL OR day >= $1::date)
+		  AND ($2::date IS NULL OR day <= $2::date)
+	`, fromStr, toStr).Scan(&energyTrx, &votingTrx, &interestUSD)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("sum daily income by range: %w", err)
+	}
+	return energyTrx, votingTrx, interestUSD, nil
+}
