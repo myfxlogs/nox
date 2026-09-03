@@ -210,13 +210,22 @@ func TestOrderTopicToKickWiring(t *testing.T) {
 	m.quoteTick = 10 * time.Minute
 
 	// 模拟 main.go 装配：orderTopic 订阅 → bpMon.Kick。
+	// 测试内订阅循环必须 select ctx.Done（D-207：防泄漏 goroutine 持池连接→死锁/EBADF）。
 	orderTopic := bus.NewTopic[bus.OrderEvent]()
 	go m.Run(ctx)
 	go func() {
 		evCh, subCancel := orderTopic.Subscribe()
 		defer subCancel()
-		for range evCh {
-			m.Kick()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case _, ok := <-evCh:
+				if !ok {
+					return
+				}
+				m.Kick()
+			}
 		}
 	}()
 
