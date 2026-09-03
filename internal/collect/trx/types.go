@@ -36,6 +36,9 @@ type resourceJSON struct {
 // txsResponseJSON 对应 /v1/accounts/{addr}/transactions 响应。
 type txsResponseJSON struct {
 	Data []txJSON `json:"data"`
+	Meta struct {
+		Fingerprint string `json:"fingerprint"`
+	} `json:"meta"`
 }
 
 // txJSON 对应单笔交易。TronGrid /v1/accounts/{addr}/transactions 响应结构（R1 对拍真实样本）：

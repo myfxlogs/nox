@@ -153,16 +153,20 @@ func (c *TxsCollector) Kind() string { return "trx_txs" }
 
 // Poll 滚动增量采集交易流。从上次最新 ts 起翻页（≤10 页/poll），分类写入 fin_trx_txs。
 func (c *TxsCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
-	var maxTs int64
+	var lastTs int64
 	if last, ok, err := c.store.LastTRXTxTs(ctx); err == nil && ok {
-		maxTs = last.UnixMilli()
+		lastTs = last.UnixMilli()
 	}
 	fetched := 0
+	fingerprint := ""
 	for page := 0; page < 10; page++ {
-		url := fmt.Sprintf("%s/v1/accounts/%s/transactions?limit=200&order_by=block_timestamp,asc&visible=true",
+		// 止血4（2026-09-03）：TronGrid 翻页=fingerprint（meta 返回，&fingerprint= 传递）；
+		// max_timestamp 是过滤器非游标（asc 下每页返回同样最老 200 条，830=83×10 实证）。
+		// 走法=desc 从最新向旧翻，增量停止=页内最旧 ≤ lastTs 即追平；首拉（lastTs=0）全量走完。
+		url := fmt.Sprintf("%s/v1/accounts/%s/transactions?limit=200&order_by=block_timestamp,desc&visible=true",
 			c.base, c.address)
-		if maxTs > 0 {
-			url += fmt.Sprintf("&max_timestamp=%d", maxTs)
+		if fingerprint != "" {
+			url += "&fingerprint=" + fingerprint
 		}
 		body, err := tronGet(ctx, c.base, c.apiKey, url)
 		if err != nil {
@@ -175,7 +179,11 @@ func (c *TxsCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 		if len(resp.Data) == 0 {
 			break
 		}
+		oldest := resp.Data[len(resp.Data)-1].BlockTimestamp
 		for _, tx := range resp.Data {
+			if tx.BlockTimestamp <= lastTs {
+				continue // 增量：已入库的旧交易跳过（幂等双保险）
+			}
 			rec, ok := classifyTx(tx, c.address, c.rentalPayers)
 			if !ok {
 				continue // P2-3：非资金移动合约不入库
@@ -185,9 +193,11 @@ func (c *TxsCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 			}
 			fetched++
 		}
-		last := resp.Data[len(resp.Data)-1]
-		maxTs = last.BlockTimestamp
-		if len(resp.Data) < 200 {
+		if oldest <= lastTs || len(resp.Data) < 200 {
+			break // 追平增量 / 尾页
+		}
+		fingerprint = resp.Meta.Fingerprint
+		if fingerprint == "" {
 			break
 		}
 		// 止血（2026-09-03 生产实证）：页间限速 1.5s——匿名 burst 8，10 连发翻页必 429；

@@ -184,17 +184,20 @@ func TestTxsCollector_Poll_Pagination(t *testing.T) {
 		txs = append(txs, makeTransferTx(
 			fmtTxID(i), "TOtherAddr111111111111111111111", monitorAddr, 1000000))
 	}
-	// 服务端按 max_timestamp 分页：首页返回前 200，次页返回剩余 50
+	// 服务端按 fingerprint 分页（止血4 真实语义）：首页 fp=P1，带 fingerprint=P1 返回次页 fp 空
 	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
-		maxTs := r.URL.Query().Get("max_timestamp")
+		fp := r.URL.Query().Get("fingerprint")
 		var page []string
-		if maxTs == "" {
-			page = txs[:200] // 首页
+		var meta string
+		if fp == "" {
+			page = txs[:200]
+			meta = `,"meta":{"fingerprint":"P1"}`
 		} else {
-			page = txs[200:] // 次页
+			page = txs[200:]
+			meta = `,"meta":{"fingerprint":""}`
 		}
-		_, _ = w.Write([]byte(`{"data":[` + joinJSON(page) + `]}`))
+		_, _ = w.Write([]byte(`{"data":[` + joinJSON(page) + `]` + meta + `}`))
 	}))
 	defer srv2.Close()
 
