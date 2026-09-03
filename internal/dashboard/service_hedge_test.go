@@ -1,0 +1,292 @@
+// D-212 S2 测试：GetHedgeStructure（镜像恒和=0/carry 手算/单位断言/net_exposure 真实计算）+ ListHedgeFlow RPC。
+package dashboard
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"arb/internal/store/pgstore"
+
+	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+
+	"connectrpc.com/connect"
+)
+
+// hedgeTestStore 创建测试 store（ARB_TEST_PG_SERVICE_DSN，TRUNCATE 全库含 fin_cmc_*）。
+func hedgeTestStore(t *testing.T) *pgstore.Store {
+	t.Helper()
+	s := trxTestStore(t) // 复用 trxTestStore（TRUNCATE fin_trx_*/position_daily_income/personal_positions）
+	ctx := context.Background()
+	// 额外清 fin_cmc_* 表（trxTestStore 未含，D-212 跨源测试需要）
+	for _, tbl := range []string{"fin_cmc_history", "fin_cmc_positions", "fin_cmc_account_summary", "fin_cmc_prices"} {
+		if _, err := s.Pool().Exec(ctx, "TRUNCATE TABLE "+tbl+" RESTART IDENTITY CASCADE"); err != nil {
+			t.Fatalf("TRUNCATE %s: %v", tbl, err)
+		}
+	}
+	return s
+}
+
+// TestGetHedgeStructure_MirrorPnlSumZero 镜像断言：两腿 pnl_vs_base 计算值恒和=0。
+// 构造 TRX 账户（18070 质押）+ CMC 持仓（18100 空单，entry=0.33171）+ CMC price（mid=0.3236）。
+func TestGetHedgeStructure_MirrorPnlSumZero(t *testing.T) {
+	s := hedgeTestStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// TRX 账户快照（18070 票权，97.86 TRX 余额）
+	if err := s.InsertTRXAccount(ctx, pgstore.TRXAccount{
+		Address: "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", VotesTotal: 18070,
+		BalanceSun: 97863827, AllowanceSun: 7717994,
+		EnergyDelegated: 17270000000, BandwidthStaked: 800000000,
+		FetchedAt: now,
+	}); err != nil {
+		t.Fatalf("InsertTRXAccount: %v", err)
+	}
+	// CMC 持仓（空单 18100，entry=0.33171）
+	if err := s.InsertCMCPositions(ctx, 1, []pgstore.CMCPosition{{
+		AccountID: 1, InstrumentID: "X-AFQUL", Direction: "SHORT", Quantity: 18100,
+		EntryPrice: 0.33171, UnrealisedPnL: -117.83, MarginPercentage: 0.1,
+		FetchedAt: now,
+	}}); err != nil {
+		t.Fatalf("InsertCMCPositions: %v", err)
+	}
+	// CMC price（mid=0.3236）
+	if err := s.InsertCMCPrice(ctx, pgstore.CMCPrice{
+		InstrumentID: "X-AFQUL", MidPrice: 0.3236, FetchedAt: now,
+	}); err != nil {
+		t.Fatalf("InsertCMCPrice: %v", err)
+	}
+	// CMC 账户摘要（强平价 0.4226，距强平 29.8%）
+	if err := s.InsertCMCAccountSummary(ctx, pgstore.CMCAccountSummary{
+		AccountID: 1, TotalAccountValue: 2169.02, TotalCashBalance: 2026.76,
+		CloseoutPrice: 0.4226, DistanceToCloseoutPct: 29.8, FetchedAt: now,
+	}); err != nil {
+		t.Fatalf("InsertCMCAccountSummary: %v", err)
+	}
+
+	svc := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005}
+	resp, err := svc.GetHedgeStructure(ctx, connect.NewRequest(&v1.GetHedgeStructureRequest{}))
+	if err != nil {
+		t.Fatalf("GetHedgeStructure: %v", err)
+	}
+	st := resp.Msg.Structure
+	if st == nil {
+		t.Fatal("structure = nil")
+	}
+	// baseline + mid
+	if st.BaselinePrice != 0.33171 {
+		t.Errorf("baseline = %v, want 0.33171", st.BaselinePrice)
+	}
+	if st.Mid != 0.3236 {
+		t.Errorf("mid = %v, want 0.3236", st.Mid)
+	}
+	// 镜像恒和=0：leg_spot.pnl + leg_short.pnl = 0
+	spotPnl := st.LegSpot.PnlVsBase
+	shortPnl := st.LegShort.PnlVsBase
+	sum := spotPnl + shortPnl
+	if sum > 1e-9 || sum < -1e-9 {
+		t.Errorf("镜像恒和 = %v, want 0 (spot %v + short %v)", sum, spotPnl, shortPnl)
+	}
+	// leg_spot qty_staked=18070（v1.2 数量源 fin_trx_account）
+	if st.LegSpot.QtyStaked != 18070 {
+		t.Errorf("qty_staked = %v, want 18070 (fin_trx_account.votes_total)", st.LegSpot.QtyStaked)
+	}
+	// leg_short qty=18100（CMC position）
+	if st.LegShort.Qty != 18100 {
+		t.Errorf("leg_short qty = %v, want 18100 (CMC position)", st.LegShort.Qty)
+	}
+	// stake 明细（单位断言：_trx 原值）
+	if st.LegSpot.Stake == nil {
+		t.Fatal("stake = nil")
+	}
+	if st.LegSpot.Stake.Energy != 17270 {
+		t.Errorf("stake.energy = %v, want 17270 (TRX 原值)", st.LegSpot.Stake.Energy)
+	}
+	if st.LegSpot.Stake.Bandwidth != 800 {
+		t.Errorf("stake.bandwidth = %v, want 800 (TRX 原值)", st.LegSpot.Stake.Bandwidth)
+	}
+	// net_exposure 真实计算 (balance+staked−short_qty)×mid = (97.86+18070−18100)×0.3236 = 67.86×0.3236
+	wantNetTrx := 97.863827 + 18070 - 18100
+	if diff := st.NetExposureTrx - wantNetTrx; diff > 1e-6 || diff < -1e-6 {
+		t.Errorf("net_exposure_trx = %v, want %v (balance+staked−short)", st.NetExposureTrx, wantNetTrx)
+	}
+	wantNetUsd := wantNetTrx * 0.3236
+	if diff := st.NetExposureUsd - wantNetUsd; diff > 1e-4 || diff < -1e-4 {
+		t.Errorf("net_exposure_usd = %v, want %v", st.NetExposureUsd, wantNetUsd)
+	}
+	// broker_unrealised 参考展示（-117.83，不做镜像源）
+	if st.LegShort.BrokerUnrealised != -117.83 {
+		t.Errorf("broker_unrealised = %v, want -117.83 (参考展示)", st.LegShort.BrokerUnrealised)
+	}
+	// 强平价 + 距强平%
+	if st.LegShort.Liq != 0.4226 {
+		t.Errorf("liq = %v, want 0.4226", st.LegShort.Liq)
+	}
+	if st.LegShort.DistPct != 29.8 {
+		t.Errorf("dist_pct = %v, want 29.8", st.LegShort.DistPct)
+	}
+	// 双账户摘要
+	if st.Accts == nil {
+		t.Fatal("accts = nil")
+	}
+	if st.Accts.TrxBalance != 97.863827 {
+		t.Errorf("trx_balance = %v, want 97.863827", st.Accts.TrxBalance)
+	}
+	if st.Accts.CmcCash != 2026.76 {
+		t.Errorf("cmc_cash = %v, want 2026.76", st.Accts.CmcCash)
+	}
+}
+
+// TestGetHedgeStructure_CarryHandCalc carry 手算对拍（近 7 日 + 累计 + 年化）。
+func TestGetHedgeStructure_CarryHandCalc(t *testing.T) {
+	s := hedgeTestStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// TRX 账户（18070 质押）
+	if err := s.InsertTRXAccount(ctx, pgstore.TRXAccount{
+		Address: "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", VotesTotal: 18070,
+		BalanceSun: 97863827, EnergyDelegated: 17270000000, BandwidthStaked: 800000000,
+		FetchedAt: now,
+	}); err != nil {
+		t.Fatalf("InsertTRXAccount: %v", err)
+	}
+	// CMC 持仓 + price（mid=0.3236）
+	if err := s.InsertCMCPositions(ctx, 1, []pgstore.CMCPosition{{
+		AccountID: 1, InstrumentID: "X-AFQUL", Direction: "SHORT", Quantity: 18100,
+		EntryPrice: 0.33171, MarginPercentage: 0.1, FetchedAt: now,
+	}}); err != nil {
+		t.Fatalf("InsertCMCPositions: %v", err)
+	}
+	if err := s.InsertCMCPrice(ctx, pgstore.CMCPrice{InstrumentID: "X-AFQUL", MidPrice: 0.3236, FetchedAt: now}); err != nil {
+		t.Fatalf("InsertCMCPrice: %v", err)
+	}
+	// daily_income：2 天 energy=5+10=15, voting=0.1+0.2=0.3, interest=1.5+2.5=4.0
+	day1 := now.Add(-1 * 24 * time.Hour).Truncate(24 * time.Hour)
+	day2 := now.Truncate(24 * time.Hour)
+	if err := s.AddDailyIncomeAuto(ctx, day1, 5.0, 0.1, 1.5, nil, nil, "auto"); err != nil {
+		t.Fatalf("AddDailyIncomeAuto day1: %v", err)
+	}
+	if _, err := s.AddDailyIncome(ctx, day2, 10.0, 0.2, 2.5, nil, nil, "manual"); err != nil {
+		t.Fatalf("AddDailyIncome day2: %v", err)
+	}
+	// CMC 隔夜息：2 笔 1.6+1.5=3.1
+	if err := s.UpsertCMCHistory(ctx, 1, []pgstore.CMCHistoryTx{
+		{AccountID: 1, TransactionID: "o1", TransactionType: "OVERNIGHT_SETTLEMENT", Amount: 1.6, TransactionTime: now.Add(-time.Hour)},
+		{AccountID: 1, TransactionID: "o2", TransactionType: "OVERNIGHT_SETTLEMENT", Amount: 1.5, TransactionTime: now.Add(-2 * time.Hour)},
+	}); err != nil {
+		t.Fatalf("UpsertCMCHistory: %v", err)
+	}
+
+	svc := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005}
+	resp, err := svc.GetHedgeStructure(ctx, connect.NewRequest(&v1.GetHedgeStructureRequest{}))
+	if err != nil {
+		t.Fatalf("GetHedgeStructure: %v", err)
+	}
+	carry := resp.Msg.Structure.Carry
+	if carry == nil {
+		t.Fatal("carry = nil")
+	}
+	// 近 7 日 energy=15, voting=0.3（2 天都在 7 日内）
+	if carry.TrxRental_7DTrx != 15.0 {
+		t.Errorf("trx_rental_7d = %v, want 15.0", carry.TrxRental_7DTrx)
+	}
+	if carry.TrxVote_7DTrx != 0.3 {
+		t.Errorf("trx_vote_7d = %v, want 0.3", carry.TrxVote_7DTrx)
+	}
+	// 近 7 日隔夜息=3.1
+	if carry.CmcOvernight_7DUsd != 3.1 {
+		t.Errorf("cmc_overnight_7d = %v, want 3.1", carry.CmcOvernight_7DUsd)
+	}
+	// 累计 cum_usd = (15+0.3)×0.3236 + 4.0 = 4.950 + 4.0 = 8.950（近似）
+	wantCum := (15.0+0.3)*0.3236 + 4.0
+	if diff := carry.CumUsd - wantCum; diff > 1e-4 || diff < -1e-4 {
+		t.Errorf("cum_usd = %v, want %v", carry.CumUsd, wantCum)
+	}
+	// 年化 = cum_usd / (18070×0.3236) × 365 × 100
+	wantAnnual := wantCum / (18070 * 0.3236) * 365 * 100
+	if diff := carry.AnnualizedPct - wantAnnual; diff > 1e-4 || diff < -1e-4 {
+		t.Errorf("annualized_pct = %v, want %v", carry.AnnualizedPct, wantAnnual)
+	}
+}
+
+// TestListHedgeFlow_RPC 统一流水卡 RPC（跨源交错+kind 归一+单位断言）。
+func TestListHedgeFlow_RPC(t *testing.T) {
+	s := hedgeTestStore(t)
+	ctx := context.Background()
+	base := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
+	// TRX 2 条
+	if err := s.UpsertTRXTx(ctx, pgstore.TRXTx{TxID: "t1", Ts: base, Kind: "rental_income", AmountSun: 5320000}); err != nil {
+		t.Fatalf("UpsertTRXTx: %v", err)
+	}
+	if err := s.UpsertTRXTx(ctx, pgstore.TRXTx{TxID: "t2", Ts: base.Add(2 * time.Minute), Kind: "vote_claim", AmountSun: 0}); err != nil {
+		t.Fatalf("UpsertTRXTx: %v", err)
+	}
+	// CMC 1 条 overnight + 1 条 SELL_TRADE→other
+	if err := s.UpsertCMCHistory(ctx, 1, []pgstore.CMCHistoryTx{
+		{AccountID: 1, TransactionID: "c1", TransactionType: "OVERNIGHT_SETTLEMENT", Amount: 1.6, TransactionTime: base.Add(time.Minute)},
+		{AccountID: 1, TransactionID: "c2", TransactionType: "SELL_TRADE", Amount: 100, TransactionTime: base.Add(3 * time.Minute)},
+	}); err != nil {
+		t.Fatalf("UpsertCMCHistory: %v", err)
+	}
+
+	svc := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005}
+	resp, err := svc.ListHedgeFlow(ctx, connect.NewRequest(&v1.ListHedgeFlowRequest{SourceFilter: "", Limit: 10, Offset: 0}))
+	if err != nil {
+		t.Fatalf("ListHedgeFlow: %v", err)
+	}
+	txs := resp.Msg.Txs
+	if len(txs) != 4 {
+		t.Fatalf("txs len = %d, want 4", len(txs))
+	}
+	// 倒序：c2(12:03) t2(12:02) c1(12:01) t1(12:00)
+	wantOrder := []string{"c2", "t2", "c1", "t1"}
+	for i, w := range wantOrder {
+		if txs[i].TxId != w {
+			t.Errorf("txs[%d].tx_id = %q, want %q", i, txs[i].TxId, w)
+		}
+	}
+	// kind 归一：c2 SELL_TRADE→other，c1 OVERNIGHT→overnight
+	if txs[0].Kind != "other" {
+		t.Errorf("c2 kind = %q, want other (SELL_TRADE→other A5)", txs[0].Kind)
+	}
+	if txs[2].Kind != "overnight" {
+		t.Errorf("c1 kind = %q, want overnight", txs[2].Kind)
+	}
+	// 单位断言：TRX 笔=TRX，CMC 笔=USD
+	if txs[1].AmountUnit != "TRX" {
+		t.Errorf("t2 unit = %q, want TRX", txs[1].AmountUnit)
+	}
+	if txs[0].AmountUnit != "USD" {
+		t.Errorf("c2 unit = %q, want USD", txs[0].AmountUnit)
+	}
+	// source 断言
+	if txs[1].Source != "trx" {
+		t.Errorf("t2 source = %q, want trx", txs[1].Source)
+	}
+	if txs[0].Source != "cmc" {
+		t.Errorf("c2 source = %q, want cmc", txs[0].Source)
+	}
+}
+
+// TestGetHedgeStructure_EmptyTolerant 空表容忍（任一源空 → structure 非 nil 但字段零值）。
+func TestGetHedgeStructure_EmptyTolerant(t *testing.T) {
+	s := hedgeTestStore(t)
+	ctx := context.Background()
+	svc := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005}
+	resp, err := svc.GetHedgeStructure(ctx, connect.NewRequest(&v1.GetHedgeStructureRequest{}))
+	if err != nil {
+		t.Fatalf("GetHedgeStructure empty: %v", err)
+	}
+	st := resp.Msg.Structure
+	if st == nil {
+		t.Fatal("structure = nil, want non-nil (空表容忍)")
+	}
+	if st.Mid != 0 {
+		t.Errorf("mid = %v, want 0 (空表)", st.Mid)
+	}
+	if st.LegSpot == nil {
+		t.Error("leg_spot = nil, want non-nil (空表容忍)")
+	}
+}

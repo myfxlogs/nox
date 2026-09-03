@@ -113,12 +113,12 @@ const (
 	// DashboardServiceListPersonalPositionsProcedure is the fully-qualified name of the
 	// DashboardService's ListPersonalPositions RPC.
 	DashboardServiceListPersonalPositionsProcedure = "/arb.dashboard.v1.DashboardService/ListPersonalPositions"
-	// DashboardServiceListCMCAccountProcedure is the fully-qualified name of the DashboardService's
-	// ListCMCAccount RPC.
-	DashboardServiceListCMCAccountProcedure = "/arb.dashboard.v1.DashboardService/ListCMCAccount"
-	// DashboardServiceListTRXAccountProcedure is the fully-qualified name of the DashboardService's
-	// ListTRXAccount RPC.
-	DashboardServiceListTRXAccountProcedure = "/arb.dashboard.v1.DashboardService/ListTRXAccount"
+	// DashboardServiceGetHedgeStructureProcedure is the fully-qualified name of the DashboardService's
+	// GetHedgeStructure RPC.
+	DashboardServiceGetHedgeStructureProcedure = "/arb.dashboard.v1.DashboardService/GetHedgeStructure"
+	// DashboardServiceListHedgeFlowProcedure is the fully-qualified name of the DashboardService's
+	// ListHedgeFlow RPC.
+	DashboardServiceListHedgeFlowProcedure = "/arb.dashboard.v1.DashboardService/ListHedgeFlow"
 	// DashboardServiceAddDailyIncomeProcedure is the fully-qualified name of the DashboardService's
 	// AddDailyIncome RPC.
 	DashboardServiceAddDailyIncomeProcedure = "/arb.dashboard.v1.DashboardService/AddDailyIncome"
@@ -281,8 +281,8 @@ type DashboardServiceClient interface {
 	ListAccounts(context.Context, *connect.Request[v1.ListAccountsRequest]) (*connect.Response[v1.ListAccountsResponse], error)
 	// 个人持仓（财务线 TRX 持仓接入，D-046）+ 实账化（财务线工作项 3）
 	ListPersonalPositions(context.Context, *connect.Request[v1.ListPersonalPositionsRequest]) (*connect.Response[v1.ListPersonalPositionsResponse], error)
-	ListCMCAccount(context.Context, *connect.Request[v1.ListCMCAccountRequest]) (*connect.Response[v1.ListCMCAccountResponse], error)
-	ListTRXAccount(context.Context, *connect.Request[v1.ListTRXAccountRequest]) (*connect.Response[v1.ListTRXAccountResponse], error)
+	GetHedgeStructure(context.Context, *connect.Request[v1.GetHedgeStructureRequest]) (*connect.Response[v1.GetHedgeStructureResponse], error)
+	ListHedgeFlow(context.Context, *connect.Request[v1.ListHedgeFlowRequest]) (*connect.Response[v1.ListHedgeFlowResponse], error)
 	AddDailyIncome(context.Context, *connect.Request[v1.AddDailyIncomeRequest]) (*connect.Response[v1.AddDailyIncomeResponse], error)
 	ListDailyIncome(context.Context, *connect.Request[v1.ListDailyIncomeRequest]) (*connect.Response[v1.ListDailyIncomeResponse], error)
 	// 盈亏统计起点（F4：anchor 重置，业主选 A「不删历史」）
@@ -514,16 +514,16 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("ListPersonalPositions")),
 			connect.WithClientOptions(opts...),
 		),
-		listCMCAccount: connect.NewClient[v1.ListCMCAccountRequest, v1.ListCMCAccountResponse](
+		getHedgeStructure: connect.NewClient[v1.GetHedgeStructureRequest, v1.GetHedgeStructureResponse](
 			httpClient,
-			baseURL+DashboardServiceListCMCAccountProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("ListCMCAccount")),
+			baseURL+DashboardServiceGetHedgeStructureProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("GetHedgeStructure")),
 			connect.WithClientOptions(opts...),
 		),
-		listTRXAccount: connect.NewClient[v1.ListTRXAccountRequest, v1.ListTRXAccountResponse](
+		listHedgeFlow: connect.NewClient[v1.ListHedgeFlowRequest, v1.ListHedgeFlowResponse](
 			httpClient,
-			baseURL+DashboardServiceListTRXAccountProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("ListTRXAccount")),
+			baseURL+DashboardServiceListHedgeFlowProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListHedgeFlow")),
 			connect.WithClientOptions(opts...),
 		),
 		addDailyIncome: connect.NewClient[v1.AddDailyIncomeRequest, v1.AddDailyIncomeResponse](
@@ -804,8 +804,8 @@ type dashboardServiceClient struct {
 	closeBrokerPositions   *connect.Client[v1.CloseBrokerPositionsRequest, v1.CloseBrokerPositionsResponse]
 	listAccounts           *connect.Client[v1.ListAccountsRequest, v1.ListAccountsResponse]
 	listPersonalPositions  *connect.Client[v1.ListPersonalPositionsRequest, v1.ListPersonalPositionsResponse]
-	listCMCAccount         *connect.Client[v1.ListCMCAccountRequest, v1.ListCMCAccountResponse]
-	listTRXAccount         *connect.Client[v1.ListTRXAccountRequest, v1.ListTRXAccountResponse]
+	getHedgeStructure      *connect.Client[v1.GetHedgeStructureRequest, v1.GetHedgeStructureResponse]
+	listHedgeFlow          *connect.Client[v1.ListHedgeFlowRequest, v1.ListHedgeFlowResponse]
 	addDailyIncome         *connect.Client[v1.AddDailyIncomeRequest, v1.AddDailyIncomeResponse]
 	listDailyIncome        *connect.Client[v1.ListDailyIncomeRequest, v1.ListDailyIncomeResponse]
 	getPnlAnchor           *connect.Client[v1.GetPnlAnchorRequest, v1.GetPnlAnchorResponse]
@@ -984,14 +984,14 @@ func (c *dashboardServiceClient) ListPersonalPositions(ctx context.Context, req 
 	return c.listPersonalPositions.CallUnary(ctx, req)
 }
 
-// ListCMCAccount calls arb.dashboard.v1.DashboardService.ListCMCAccount.
-func (c *dashboardServiceClient) ListCMCAccount(ctx context.Context, req *connect.Request[v1.ListCMCAccountRequest]) (*connect.Response[v1.ListCMCAccountResponse], error) {
-	return c.listCMCAccount.CallUnary(ctx, req)
+// GetHedgeStructure calls arb.dashboard.v1.DashboardService.GetHedgeStructure.
+func (c *dashboardServiceClient) GetHedgeStructure(ctx context.Context, req *connect.Request[v1.GetHedgeStructureRequest]) (*connect.Response[v1.GetHedgeStructureResponse], error) {
+	return c.getHedgeStructure.CallUnary(ctx, req)
 }
 
-// ListTRXAccount calls arb.dashboard.v1.DashboardService.ListTRXAccount.
-func (c *dashboardServiceClient) ListTRXAccount(ctx context.Context, req *connect.Request[v1.ListTRXAccountRequest]) (*connect.Response[v1.ListTRXAccountResponse], error) {
-	return c.listTRXAccount.CallUnary(ctx, req)
+// ListHedgeFlow calls arb.dashboard.v1.DashboardService.ListHedgeFlow.
+func (c *dashboardServiceClient) ListHedgeFlow(ctx context.Context, req *connect.Request[v1.ListHedgeFlowRequest]) (*connect.Response[v1.ListHedgeFlowResponse], error) {
+	return c.listHedgeFlow.CallUnary(ctx, req)
 }
 
 // AddDailyIncome calls arb.dashboard.v1.DashboardService.AddDailyIncome.
@@ -1237,8 +1237,8 @@ type DashboardServiceHandler interface {
 	ListAccounts(context.Context, *connect.Request[v1.ListAccountsRequest]) (*connect.Response[v1.ListAccountsResponse], error)
 	// 个人持仓（财务线 TRX 持仓接入，D-046）+ 实账化（财务线工作项 3）
 	ListPersonalPositions(context.Context, *connect.Request[v1.ListPersonalPositionsRequest]) (*connect.Response[v1.ListPersonalPositionsResponse], error)
-	ListCMCAccount(context.Context, *connect.Request[v1.ListCMCAccountRequest]) (*connect.Response[v1.ListCMCAccountResponse], error)
-	ListTRXAccount(context.Context, *connect.Request[v1.ListTRXAccountRequest]) (*connect.Response[v1.ListTRXAccountResponse], error)
+	GetHedgeStructure(context.Context, *connect.Request[v1.GetHedgeStructureRequest]) (*connect.Response[v1.GetHedgeStructureResponse], error)
+	ListHedgeFlow(context.Context, *connect.Request[v1.ListHedgeFlowRequest]) (*connect.Response[v1.ListHedgeFlowResponse], error)
 	AddDailyIncome(context.Context, *connect.Request[v1.AddDailyIncomeRequest]) (*connect.Response[v1.AddDailyIncomeResponse], error)
 	ListDailyIncome(context.Context, *connect.Request[v1.ListDailyIncomeRequest]) (*connect.Response[v1.ListDailyIncomeResponse], error)
 	// 盈亏统计起点（F4：anchor 重置，业主选 A「不删历史」）
@@ -1466,16 +1466,16 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("ListPersonalPositions")),
 		connect.WithHandlerOptions(opts...),
 	)
-	dashboardServiceListCMCAccountHandler := connect.NewUnaryHandler(
-		DashboardServiceListCMCAccountProcedure,
-		svc.ListCMCAccount,
-		connect.WithSchema(dashboardServiceMethods.ByName("ListCMCAccount")),
+	dashboardServiceGetHedgeStructureHandler := connect.NewUnaryHandler(
+		DashboardServiceGetHedgeStructureProcedure,
+		svc.GetHedgeStructure,
+		connect.WithSchema(dashboardServiceMethods.ByName("GetHedgeStructure")),
 		connect.WithHandlerOptions(opts...),
 	)
-	dashboardServiceListTRXAccountHandler := connect.NewUnaryHandler(
-		DashboardServiceListTRXAccountProcedure,
-		svc.ListTRXAccount,
-		connect.WithSchema(dashboardServiceMethods.ByName("ListTRXAccount")),
+	dashboardServiceListHedgeFlowHandler := connect.NewUnaryHandler(
+		DashboardServiceListHedgeFlowProcedure,
+		svc.ListHedgeFlow,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListHedgeFlow")),
 		connect.WithHandlerOptions(opts...),
 	)
 	dashboardServiceAddDailyIncomeHandler := connect.NewUnaryHandler(
@@ -1780,10 +1780,10 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceListAccountsHandler.ServeHTTP(w, r)
 		case DashboardServiceListPersonalPositionsProcedure:
 			dashboardServiceListPersonalPositionsHandler.ServeHTTP(w, r)
-		case DashboardServiceListCMCAccountProcedure:
-			dashboardServiceListCMCAccountHandler.ServeHTTP(w, r)
-		case DashboardServiceListTRXAccountProcedure:
-			dashboardServiceListTRXAccountHandler.ServeHTTP(w, r)
+		case DashboardServiceGetHedgeStructureProcedure:
+			dashboardServiceGetHedgeStructureHandler.ServeHTTP(w, r)
+		case DashboardServiceListHedgeFlowProcedure:
+			dashboardServiceListHedgeFlowHandler.ServeHTTP(w, r)
 		case DashboardServiceAddDailyIncomeProcedure:
 			dashboardServiceAddDailyIncomeHandler.ServeHTTP(w, r)
 		case DashboardServiceListDailyIncomeProcedure:
@@ -1983,12 +1983,12 @@ func (UnimplementedDashboardServiceHandler) ListPersonalPositions(context.Contex
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListPersonalPositions is not implemented"))
 }
 
-func (UnimplementedDashboardServiceHandler) ListCMCAccount(context.Context, *connect.Request[v1.ListCMCAccountRequest]) (*connect.Response[v1.ListCMCAccountResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListCMCAccount is not implemented"))
+func (UnimplementedDashboardServiceHandler) GetHedgeStructure(context.Context, *connect.Request[v1.GetHedgeStructureRequest]) (*connect.Response[v1.GetHedgeStructureResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetHedgeStructure is not implemented"))
 }
 
-func (UnimplementedDashboardServiceHandler) ListTRXAccount(context.Context, *connect.Request[v1.ListTRXAccountRequest]) (*connect.Response[v1.ListTRXAccountResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListTRXAccount is not implemented"))
+func (UnimplementedDashboardServiceHandler) ListHedgeFlow(context.Context, *connect.Request[v1.ListHedgeFlowRequest]) (*connect.Response[v1.ListHedgeFlowResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListHedgeFlow is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) AddDailyIncome(context.Context, *connect.Request[v1.AddDailyIncomeRequest]) (*connect.Response[v1.AddDailyIncomeResponse], error) {

@@ -1,4 +1,4 @@
-// D-211 TRX 质押监控 P1：rollup + ListTRXAccount RPC handler（SSOT §5/§6）。
+// D-211 TRX 质押监控 P1：rollup（SSOT §5）。ListTRXAccount RPC 已在 D-212 退役（统一流水卡替代）。
 package dashboard
 
 import (
@@ -7,11 +7,6 @@ import (
 	"time"
 
 	"arb/internal/bus"
-
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
-
-	"connectrpc.com/connect"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // RollupTrxDailyIncome 日终 rollup（SSOT §5）：从 fin_trx_* 表汇总当日收入写入 position_daily_income(source='auto')。
@@ -69,47 +64,4 @@ func (s *Service) RollupTrxDailyIncome(ctx context.Context, day time.Time) error
 		return fmt.Errorf("rollup write: %w", err)
 	}
 	return nil
-}
-
-// ListTRXAccount 返回 TRX 账户摘要 + 最近 50 条流水（D-211：与 CMC 流水卡对称）。
-// 摘要空表 → summary=nil（前端显示「TRX 数据未就绪」）；流水空表 → txs 空数组。
-func (s *Service) ListTRXAccount(ctx context.Context, req *connect.Request[v1.ListTRXAccountRequest]) (*connect.Response[v1.ListTRXAccountResponse], error) {
-	resp := &v1.ListTRXAccountResponse{}
-
-	// 摘要（空表容忍——TRX 采集器未跑或表空时 summary=nil）
-	acc, err := s.store.LastTRXAccount(ctx)
-	if err == nil {
-		srAddr := ""
-		if acc.SRAddress != nil {
-			srAddr = *acc.SRAddress
-		}
-		resp.Summary = &v1.TRXAccountInfo{
-			BalanceTrx:        float64(acc.BalanceSun) / 1e6,
-			AllowanceTrx:      float64(acc.AllowanceSun) / 1e6,
-			EnergyDelegatedTrx: float64(acc.EnergyDelegated) / 1e6,
-			VotesTotal:        acc.VotesTotal,
-			SrAddress:         srAddr,
-			FetchedAt:         timestamppb.New(acc.FetchedAt),
-		}
-	}
-
-	// 流水（最近 50 条倒序）
-	txs, err := s.store.ListTRXTxs(ctx, 50)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list trx txs: %w", err))
-	}
-	for _, t := range txs {
-		item := &v1.TRXTxItem{
-			TxId:      t.TxID,
-			Ts:        timestamppb.New(t.Ts),
-			Kind:      t.Kind,
-			AmountTrx: float64(t.AmountSun) / 1e6,
-		}
-		if t.Counterparty != nil {
-			item.Counterparty = *t.Counterparty
-		}
-		resp.Txs = append(resp.Txs, item)
-	}
-
-	return connect.NewResponse(resp), nil
 }

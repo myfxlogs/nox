@@ -1,4 +1,5 @@
-// D-211 S3 测试：RollupTrxDailyIncome（F2 Σ正增量/F5 price+pnl 快照）+ ListTRXAccount RPC。
+// D-211 S3 测试：RollupTrxDailyIncome（F2 Σ正增量/F5 price+pnl 快照）。
+// ListTRXAccount RPC 测试已在 D-212 退役时删除（统一流水卡替代）。
 package dashboard
 
 import (
@@ -11,9 +12,6 @@ import (
 	"arb/internal/bus"
 	"arb/internal/store/pgstore"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
-
-	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -202,84 +200,5 @@ func TestRollupTrxDailyIncome_AutoNotOverwriteManual(t *testing.T) {
 	// manual 行保留（energy=99.99，未被 auto 覆盖）
 	if incomes[0].EnergyTrx != 99.99 {
 		t.Errorf("energy_trx = %v, want 99.99 (manual 保留，auto 不覆盖)", incomes[0].EnergyTrx)
-	}
-}
-
-// TestListTRXAccount_RPCEmpty 验证空表容忍（summary=nil，txs 空数组）。
-func TestListTRXAccount_RPCEmpty(t *testing.T) {
-	s := trxTestStore(t)
-	ctx := context.Background()
-	qbus := bus.New()
-	svc := &Service{store: s, qbus: qbus, freshTTL: time.Minute, liqMMR: 0.005}
-
-	resp, err := svc.ListTRXAccount(ctx, connect.NewRequest(&v1.ListTRXAccountRequest{}))
-	if err != nil {
-		t.Fatalf("ListTRXAccount: %v", err)
-	}
-	if resp.Msg.Summary != nil {
-		t.Errorf("summary = %v, want nil (空表)", resp.Msg.Summary)
-	}
-	if len(resp.Msg.Txs) != 0 {
-		t.Errorf("txs len = %d, want 0 (空表)", len(resp.Msg.Txs))
-	}
-}
-
-// TestListTRXAccount_RPCWithData 验证有数据时 summary+txs 正确返回。
-func TestListTRXAccount_RPCWithData(t *testing.T) {
-	s := trxTestStore(t)
-	ctx := context.Background()
-
-	// 1 条账户快照
-	srAddr := "TNeEwWHXLLUgEtfzTnYN8wtVenGxuMzZCE"
-	if err := s.InsertTRXAccount(ctx, pgstore.TRXAccount{
-		Address: "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", VotesTotal: 18070,
-		SRAddress: &srAddr, BalanceSun: 97863827, AllowanceSun: 7717994,
-		EnergyDelegated: 17270000000, BandwidthStaked: 800000000,
-		FetchedAt: time.Now(),
-	}); err != nil {
-		t.Fatalf("InsertTRXAccount: %v", err)
-	}
-	// 2 条交易
-	cp := "TBtvnRBgrVE9zZWkWfPvDSiuo65es55555"
-	if err := s.UpsertTRXTx(ctx, pgstore.TRXTx{
-		TxID: "tx1", Ts: time.Now(), Kind: "rental_income", AmountSun: 5320000, Counterparty: &cp,
-	}); err != nil {
-		t.Fatalf("UpsertTRXTx 1: %v", err)
-	}
-	if err := s.UpsertTRXTx(ctx, pgstore.TRXTx{
-		TxID: "tx2", Ts: time.Now().Add(-time.Hour), Kind: "vote_claim", AmountSun: 0,
-	}); err != nil {
-		t.Fatalf("UpsertTRXTx 2: %v", err)
-	}
-
-	qbus := bus.New()
-	svc := &Service{store: s, qbus: qbus, freshTTL: time.Minute, liqMMR: 0.005}
-	resp, err := svc.ListTRXAccount(ctx, connect.NewRequest(&v1.ListTRXAccountRequest{}))
-	if err != nil {
-		t.Fatalf("ListTRXAccount: %v", err)
-	}
-	if resp.Msg.Summary == nil {
-		t.Fatal("summary = nil, want non-nil")
-	}
-	// balance = 97863827 sun = 97.863827 TRX
-	wantBalance := 97.863827
-	if diff := resp.Msg.Summary.BalanceTrx - wantBalance; diff > 1e-6 || diff < -1e-6 {
-		t.Errorf("balance_trx = %v, want %v", resp.Msg.Summary.BalanceTrx, wantBalance)
-	}
-	if resp.Msg.Summary.VotesTotal != 18070 {
-		t.Errorf("votes_total = %d, want 18070", resp.Msg.Summary.VotesTotal)
-	}
-	if resp.Msg.Summary.SrAddress != srAddr {
-		t.Errorf("sr_address = %q, want %q", resp.Msg.Summary.SrAddress, srAddr)
-	}
-	if len(resp.Msg.Txs) != 2 {
-		t.Fatalf("txs len = %d, want 2", len(resp.Msg.Txs))
-	}
-	// 第一条（最新）= rental_income
-	if resp.Msg.Txs[0].Kind != "rental_income" {
-		t.Errorf("txs[0] kind = %q, want rental_income", resp.Msg.Txs[0].Kind)
-	}
-	if resp.Msg.Txs[0].AmountTrx != 5.32 {
-		t.Errorf("txs[0] amount = %v, want 5.32", resp.Msg.Txs[0].AmountTrx)
 	}
 }

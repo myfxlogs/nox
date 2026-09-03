@@ -1,8 +1,6 @@
 package dashboard
 
 import (
-	"context"
-	"fmt"
 	"time"
 
 	"arb/internal/position"
@@ -10,7 +8,6 @@ import (
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 
-	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -40,42 +37,4 @@ func applyCMCPositionFields(pb *v1.PersonalPosition, p *pgstore.PersonalPosition
 	pb.DistToLiqPct = v.DistToLiqPct
 }
 
-// ListCMCAccount 返回 CMC 账户摘要 + 最近 50 条流水（D-208 v2-C：前端个人持仓卡头部摘要行 + 流水小表）。
-// 摘要空表 → summary=nil（前端显示「CMC 数据未就绪」）；流水空表 → history 空数组。
-func (s *Service) ListCMCAccount(ctx context.Context, req *connect.Request[v1.ListCMCAccountRequest]) (*connect.Response[v1.ListCMCAccountResponse], error) {
-	resp := &v1.ListCMCAccountResponse{}
-
-	// 摘要（空表容忍——CMC 采集器未跑或表空时 summary=nil）
-	summary, err := s.store.LastCMCAccountSummary(ctx)
-	if err == nil {
-		resp.Summary = &v1.CMCAccountInfo{
-			TotalAccountValue:     summary.TotalAccountValue,
-			TotalCashBalance:      summary.TotalCashBalance,
-			TotalUnrealisedPnl:    summary.TotalUnrealisedPnL,
-			CloseoutPrice:         summary.CloseoutPrice,
-			DistanceToCloseoutPct: summary.DistanceToCloseoutPct,
-			FetchedAt:             timestamppb.New(summary.FetchedAt),
-		}
-	}
-	// ErrNoRows = 空表，summary 保持 nil（非错误）
-
-	// 流水（最近 50 条倒序）
-	history, err := s.store.ListCMCHistory(ctx, summary.AccountID, 50)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list cmc history: %w", err))
-	}
-	for _, h := range history {
-		item := &v1.CMCHistoryItem{
-			TransactionId:   h.TransactionID,
-			TransactionType: h.TransactionType,
-			Amount:          h.Amount,
-			Balance:         h.Balance,
-			Currency:        h.Currency,
-			OrderId:         h.OrderID,
-			TransactionTime: timestamppb.New(h.TransactionTime),
-		}
-		resp.History = append(resp.History, item)
-	}
-
-	return connect.NewResponse(resp), nil
-}
+// ListCMCAccount RPC 已在 D-212 退役（统一流水卡替代）。CMC 账户摘要+流水由 GetHedgeStructure 全量吸收。
