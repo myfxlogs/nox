@@ -54,6 +54,7 @@ service DashboardService {
   // 个人持仓（财务线 TRX 持仓接入，D-046）+ 实账化（财务线工作项 3）
   rpc ListPersonalPositions(ListPersonalPositionsRequest) returns (ListPersonalPositionsResponse);
   rpc ListCMCAccount(ListCMCAccountRequest) returns (ListCMCAccountResponse);  // D-208 v2-C
+  rpc ListTRXAccount(ListTRXAccountRequest) returns (ListTRXAccountResponse);  // D-211 TRX 质押流水卡
   rpc AddDailyIncome(AddDailyIncomeRequest) returns (AddDailyIncomeResponse);
   rpc ListDailyIncome(ListDailyIncomeRequest) returns (ListDailyIncomeResponse);
 
@@ -619,6 +620,32 @@ message ListCMCAccountRequest {}
 message ListCMCAccountResponse {
   CMCAccountInfo summary = 1;
   repeated CMCHistoryItem history = 2;  // 最近 50 条（倒序）
+}
+
+// === TRX 质押账户摘要 + 流水（D-211：与 CMC 流水卡对称）===
+
+message TRXAccountInfo {
+  double balance_trx = 1;         // 流动余额（sun ÷ 1e6）
+  double allowance_trx = 2;       // 未领投票奖励（sun ÷ 1e6）
+  double energy_delegated_trx = 3; // 委托出的能量质押（sun ÷ 1e6）
+  int64 votes_total = 4;          // 票权（tronPowerLimit）
+  string sr_address = 5;          // 投票 SR 地址（base58）
+  google.protobuf.Timestamp fetched_at = 6;  // 最近更新时间
+}
+
+message TRXTxItem {
+  string tx_id = 1;
+  google.protobuf.Timestamp ts = 2;
+  string kind = 3;                // rental_income|vote_claim|deposit|withdraw|stake|unstake|other
+  double amount_trx = 4;          // sun ÷ 1e6（vote_claim=0）
+  string counterparty = 5;        // 对手方地址（截断显示）
+}
+
+message ListTRXAccountRequest {}
+
+message ListTRXAccountResponse {
+  TRXAccountInfo summary = 1;
+  repeated TRXTxItem txs = 2;     // 最近 50 条（倒序）
 }
 
 // === 每日收益（财务线工作项 3：个人持仓实账化）===
