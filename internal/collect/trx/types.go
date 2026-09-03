@@ -42,7 +42,7 @@ type txsResponseJSON struct {
 // blockTimestamp(ms 驼峰)、transaction_id、raw_data.contract[].type + parameter.value
 type txJSON struct {
 	BlockTimestamp int64  `json:"blockTimestamp"` // R1：真实响应是驼峰 blockTimestamp（非 block_timestamp）
-	TxID           string `json:"transaction_id"`
+	TxID           string `json:"txID"`   // 止血修正：真实字段=txID（2026-09-03 实拍铁证，transaction_id/tx_id 均错）
 	RawData        rawDataContractJSON `json:"raw_data"`
 }
 

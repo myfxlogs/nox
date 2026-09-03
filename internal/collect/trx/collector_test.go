@@ -357,11 +357,11 @@ func makeContractTxJSON(txID, contractType string) txJSON {
 }
 
 func makeTransferTx(txID, to, from string, amount int64) string {
-	return `{"blockTimestamp":` + itoa(time.Now().UnixMilli()) + `,"transaction_id":"` + txID + `","raw_data":{"contract":[{"type":"TransferContract","parameter":{"value":{"owner_address":"` + from + `","to_address":"` + to + `","amount":` + itoa(amount) + `}}}]}}`
+	return `{"blockTimestamp":` + itoa(time.Now().UnixMilli()) + `,"txID":"` + txID + `","raw_data":{"contract":[{"type":"TransferContract","parameter":{"value":{"owner_address":"` + from + `","to_address":"` + to + `","amount":` + itoa(amount) + `}}}]}}`
 }
 
 func makeContractTx(txID, contractType string) string {
-	return `{"blockTimestamp":` + itoa(time.Now().UnixMilli()) + `,"transaction_id":"` + txID + `","raw_data":{"contract":[{"type":"` + contractType + `","parameter":{"value":{}}}]}}`
+	return `{"blockTimestamp":` + itoa(time.Now().UnixMilli()) + `,"txID":"` + txID + `","raw_data":{"contract":[{"type":"` + contractType + `","parameter":{"value":{}}}]}}`
 }
 
 func joinJSON(items []string) string {
@@ -410,7 +410,7 @@ func fmtTxID(i int) string {
 // 附录样本形状（R1 对拍）：blockTimestamp 驼峰 + transaction_id 下划线 + raw_data.contract[0].type
 // + parameter.value.{amount,owner_address,to_address}。R2 修复后 visible=true → 地址 base58（T 前缀）。
 // 本 fixture 照抄附录形状，地址用 base58（模拟 R2 后响应），验证字段名对拍 + 方向分类。
-const appendixFixtureShape = `{"blockTimestamp":1696936089000,"transaction_id":"7c1fabcdef","raw_data":{"contract":[{"type":"TransferContract","parameter":{"value":{"amount":3000000,"owner_address":"TWsbXR6SPvvXPxUtPMQvEj7AMH55555555","to_address":"TBtvnRBgrVE9zZWkWfPvDSiuo65es55555"}}}]}}`
+const appendixFixtureShape = `{"blockTimestamp":1696936089000,"txID":"7c1fabcdef","raw_data":{"contract":[{"type":"TransferContract","parameter":{"value":{"amount":3000000,"owner_address":"TWsbXR6SPvvXPxUtPMQvEj7AMH55555555","to_address":"TBtvnRBgrVE9zZWkWfPvDSiuo65es55555"}}}]}}`
 
 // TestR1_FieldMappingAppendixSample R1：附录样本字段名对拍（blockTimestamp 驼峰能解析）。
 func TestR1_FieldMappingAppendixSample(t *testing.T) {
