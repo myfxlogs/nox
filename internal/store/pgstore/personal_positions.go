@@ -11,22 +11,24 @@ import (
 // PersonalPosition 对应 personal_positions 表（设计文档 §3.2）。
 // WarnHigh/CritHigh 为 nil = 该级别不设（此持仓仅展示不报警）。
 // Qty/EntryPrice/Leverage/OpenedAt 为 nil = 未填（staking 只填 Qty，short_hedge 填全）。
+// CMCInstrumentID 非空 = 该行走 CMC 真实数据源（D-208 v2），空 = 赁 venues 老路径。
 type PersonalPosition struct {
-	ID          int64
-	Asset       string
-	Kind        string
-	PriceSymbol string
-	WarnHigh    *float64
-	CritHigh    *float64
-	Note        string
-	Status      string
-	Qty         *float64
-	EntryPrice  *float64
-	Leverage    *int
-	OpenedAt    *time.Time
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	ClosedAt    *time.Time
+	ID              int64
+	Asset           string
+	Kind            string
+	PriceSymbol     string
+	WarnHigh        *float64
+	CritHigh        *float64
+	Note            string
+	Status          string
+	Qty             *float64
+	EntryPrice      *float64
+	Leverage        *int
+	OpenedAt        *time.Time
+	CMCInstrumentID string // D-208 v2：CMC instrument_id（如 'X-AFQUL'），空 = 非 CMC 行
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	ClosedAt        *time.Time
 }
 
 // ListPersonalPositions 分页返回个人持仓（status 空 = 全部）。
@@ -35,7 +37,8 @@ func (s *Store) ListPersonalPositions(ctx context.Context, status string, limit,
 		limit = 50
 	}
 	q := `SELECT id, asset, kind, price_symbol, warn_high, crit_high, note, status,
-	             qty, entry_price, leverage, opened_at, created_at, updated_at, closed_at
+	             qty, entry_price, leverage, opened_at, cmc_instrument_id,
+	             created_at, updated_at, closed_at
 		FROM personal_positions
 		WHERE ($1 = '' OR status = $1)
 		ORDER BY id ASC LIMIT $2 OFFSET $3`
@@ -49,6 +52,7 @@ func (s *Store) ListPersonalPositions(ctx context.Context, status string, limit,
 		var p PersonalPosition
 		if err := rows.Scan(&p.ID, &p.Asset, &p.Kind, &p.PriceSymbol, &p.WarnHigh, &p.CritHigh,
 			&p.Note, &p.Status, &p.Qty, &p.EntryPrice, &p.Leverage, &p.OpenedAt,
+			&p.CMCInstrumentID,
 			&p.CreatedAt, &p.UpdatedAt, &p.ClosedAt); err != nil {
 			return nil, err
 		}

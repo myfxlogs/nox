@@ -53,6 +53,7 @@ service DashboardService {
 
   // 个人持仓（财务线 TRX 持仓接入，D-046）+ 实账化（财务线工作项 3）
   rpc ListPersonalPositions(ListPersonalPositionsRequest) returns (ListPersonalPositionsResponse);
+  rpc ListCMCAccount(ListCMCAccountRequest) returns (ListCMCAccountResponse);  // D-208 v2-C
   rpc AddDailyIncome(AddDailyIncomeRequest) returns (AddDailyIncomeResponse);
   rpc ListDailyIncome(ListDailyIncomeRequest) returns (ListDailyIncomeResponse);
 
@@ -590,6 +591,34 @@ message ListPersonalPositionsRequest {}
 
 message ListPersonalPositionsResponse {
   repeated PersonalPosition items = 1;
+}
+
+// === CMC 账户摘要 + 流水（D-208 v2-C：前端个人持仓卡头部摘要行 + 流水小表）===
+
+message CMCAccountInfo {
+  double total_account_value = 1;       // 净值
+  double total_cash_balance = 2;        // 现金
+  double total_unrealised_pnl = 3;      // 浮动盈亏
+  double closeout_price = 4;            // 强平价
+  double distance_to_closeout_pct = 5;  // 距强平%（CMC 百分数，如 30.57）
+  google.protobuf.Timestamp fetched_at = 6;  // 最近更新时间
+}
+
+message CMCHistoryItem {
+  string transaction_id = 1;
+  string transaction_type = 2;          // OVERNIGHT_SETTLEMENT / SELL_TRADE / PAYMENTS_IN 等
+  double amount = 3;
+  double balance = 4;
+  string currency = 5;
+  string order_id = 6;
+  google.protobuf.Timestamp transaction_time = 7;
+}
+
+message ListCMCAccountRequest {}
+
+message ListCMCAccountResponse {
+  CMCAccountInfo summary = 1;
+  repeated CMCHistoryItem history = 2;  // 最近 50 条（倒序）
 }
 
 // === 每日收益（财务线工作项 3：个人持仓实账化）===

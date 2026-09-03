@@ -78,7 +78,12 @@ const mockPositionsJSON = `{
     "unrealisedPnLInPrimaryCurrency": "151.32",
     "evaluationBidPrice": "0.00",
     "evaluationAskPrice": "0.32335",
-    "instrumentPriceNumberOfDecimals": "5"
+    "instrumentPriceNumberOfDecimals": "5",
+    "orders": [{
+      "orderId": "ORD-OPEN-001",
+      "filledPrice": "0.33171",
+      "submittedTimestamp": "2026-08-17T10:30:00.1234567Z"
+    }]
   }]
 }`
 
@@ -91,8 +96,8 @@ const mockEmptyPositionsJSON = `{
 
 const mockHistoryJSON = `{
   "categoryTypes": ["CASH", "TRADE"],
-  "totalCount": 1,
-  "totalTypes": ["OVERNIGHT_SETTLEMENT"],
+  "totalCount": 3,
+  "totalTypes": ["OVERNIGHT_SETTLEMENT", "SELL_TRADE", "PAYMENTS_IN"],
   "transactions": [{
     "transactionId": "acb760ec-test-0001",
     "amount": "1.6",
@@ -105,6 +110,30 @@ const mockHistoryJSON = `{
     "transactionTime": "2026-09-01T21:00:41.404Z",
     "transactionType": "OVERNIGHT_SETTLEMENT",
     "transactionTypeString": "OVERNIGHT_SETTLEMENT"
+  }, {
+    "transactionId": "acb760ec-test-0002",
+    "amount": "-500.00",
+    "balance": "1500.00",
+    "currency": "USD",
+    "orderId": "ORD-SELL-001",
+    "performedByClient": true,
+    "productName": "X-AFQUL",
+    "profitAndLoss": "0",
+    "transactionTime": "2026-08-17T10:30:00.000Z",
+    "transactionType": "SELL_TRADE",
+    "transactionTypeString": "SELL_TRADE"
+  }, {
+    "transactionId": "acb760ec-test-0003",
+    "amount": "1000.00",
+    "balance": "2500.00",
+    "currency": "USD",
+    "orderId": "",
+    "performedByClient": false,
+    "productName": "Account",
+    "profitAndLoss": "0",
+    "transactionTime": "2026-08-15T08:00:00.000Z",
+    "transactionType": "PAYMENTS_IN",
+    "transactionTypeString": "PAYMENTS_IN"
   }]
 }`
 
@@ -244,6 +273,25 @@ func TestAccountCollector_Poll_Success(t *testing.T) {
 	if dist < 30.1 || dist > 30.3 {
 		t.Errorf("distance = %v, want ~30.2", dist)
 	}
+	// D-208 v2-A：验证 orders[0] 解析——opened_at/order_id 已落库
+	posRow := st.Pool().QueryRow(context.Background(),
+		"SELECT order_id, opened_at FROM fin_cmc_positions WHERE instrument_id = 'X-AFQUL' ORDER BY fetched_at DESC LIMIT 1")
+	var orderID string
+	var openedAt *time.Time
+	if err := posRow.Scan(&orderID, &openedAt); err != nil {
+		t.Fatalf("query positions: %v", err)
+	}
+	if orderID != "ORD-OPEN-001" {
+		t.Errorf("order_id = %q, want ORD-OPEN-001", orderID)
+	}
+	if openedAt == nil {
+		t.Fatal("opened_at = nil, want non-nil (parsed from submittedTimestamp)")
+	}
+	// PostgreSQL TIMESTAMPTZ 微秒精度（6 位小数秒），RFC3339Nano 7 位被截断到微秒
+	wantOpened := time.Date(2026, 8, 17, 10, 30, 0, 123456000, time.UTC)
+	if !openedAt.UTC().Truncate(time.Microsecond).Equal(wantOpened) {
+		t.Errorf("opened_at = %v, want %v (microsecond precision)", *openedAt, wantOpened)
+	}
 }
 
 func TestAccountCollector_Poll_SummaryFail(t *testing.T) {
@@ -371,26 +419,36 @@ func TestHistoryCollector_Poll_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
+	// D-208 v2-A：facts 发射仍只 OVERNIGHT_SETTLEMENT（swap 语义不变）
 	if len(facts) != 1 {
-		t.Fatalf("facts len = %d, want 1", len(facts))
+		t.Fatalf("facts len = %d, want 1 (only OVERNIGHT_SETTLEMENT emits fact)", len(facts))
 	}
 	if facts[0].Value != 1.6 {
 		t.Errorf("Value = %v, want 1.6", facts[0].Value)
+	}
+	// D-208 v2-A：fin_cmc_history 全类型入库（SELL_TRADE/PAYMENTS_IN 不再被丢）
+	var allCount int
+	err = st.Pool().QueryRow(context.Background(),
+		"SELECT count(*) FROM fin_cmc_history WHERE account_id = 38941616").Scan(&allCount)
+	if err != nil {
+		t.Fatalf("count all: %v", err)
+	}
+	if allCount != 3 {
+		t.Errorf("all history count = %d, want 3 (all types persisted)", allCount)
 	}
 	// 再次 Poll 验证幂等（upsert 不重复）
 	_, err = c.Poll(context.Background())
 	if err != nil {
 		t.Fatalf("Poll 2: %v", err)
 	}
-	// 查 DB 验证只有 1 条
-	var count int
+	// 查 DB 验证仍 3 条（upsert 幂等）
 	err = st.Pool().QueryRow(context.Background(),
-		"SELECT count(*) FROM fin_cmc_history WHERE transaction_id = 'acb760ec-test-0001'").Scan(&count)
+		"SELECT count(*) FROM fin_cmc_history WHERE account_id = 38941616").Scan(&allCount)
 	if err != nil {
-		t.Fatalf("count: %v", err)
+		t.Fatalf("count after re-poll: %v", err)
 	}
-	if count != 1 {
-		t.Errorf("history count = %d, want 1 (upsert idempotent)", count)
+	if allCount != 3 {
+		t.Errorf("history count after re-poll = %d, want 3 (upsert idempotent)", allCount)
 	}
 }
 

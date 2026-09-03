@@ -53,19 +53,28 @@ func (c *HistoryCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	if err := json.Unmarshal(body, &h); err != nil {
 		return nil, fmt.Errorf("cmc history unmarshal: %w", err)
 	}
+	// D-208 v2-A：去掉 OVERNIGHT_SETTLEMENT 过滤——全部类型入 fin_cmc_history
+	// （SELL_TRADE 开仓交易/PAYMENTS_IN 出入金都要）；facts 发射仍只 OVERNIGHT_SETTLEMENT（swap 语义不变）。
+	//
+	// v2.1 审计补②（运维标注）：全类型化上线首次部署时，复审方须执行一次性
+	//   TRUNCATE fin_cmc_history;
+	// （下一轮 poll 以 30d 窗口全量重拉，upsert 幂等无重复风险）——
+	// 因为存量 16 条 OVERNIGHT_SETTLEMENT 已推进 LastCMCHistoryTime 游标，
+	// 更早的 SELL_TRADE（2026-08-17 开仓交易）永远拉不到。施工方勿自动 truncate。
 	now := time.Now()
 	var facts []fact.Fact
 	var txs []pgstore.CMCHistoryTx
 	for _, t := range h.Transactions {
-		if t.TransactionType != "OVERNIGHT_SETTLEMENT" {
-			continue
-		}
 		txTime, _ := time.Parse(time.RFC3339, t.TransactionTime)
 		amount := parseFloat(t.Amount)
-		facts = append(facts, fact.Fact{
-			Kind: fact.KindCMCHistory, Venue: "cmc", Symbol: "swap",
-			Value: amount, Unit: fact.UnitUSD, Ts: txTime, Src: "cmc_rest",
-		})
+		// facts 发射仍只 OVERNIGHT_SETTLEMENT（swap 语义不变）
+		if t.TransactionType == "OVERNIGHT_SETTLEMENT" {
+			facts = append(facts, fact.Fact{
+				Kind: fact.KindCMCHistory, Venue: "cmc", Symbol: "swap",
+				Value: amount, Unit: fact.UnitUSD, Ts: txTime, Src: "cmc_rest",
+			})
+		}
+		// 全部类型入 fin_cmc_history
 		txs = append(txs, pgstore.CMCHistoryTx{
 			AccountID:       c.accountID,
 			TransactionID:   t.TransactionID,

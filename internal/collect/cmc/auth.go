@@ -260,3 +260,21 @@ func parseFloat(s string) float64 {
 	v, _ := strconv.ParseFloat(s, 64)
 	return v
 }
+
+// parseRFC3339Loose 宽容解析 RFC3339 时间戳（D-208 v2-A）。
+// CMC orders[0].submittedTimestamp 可能含 7 位小数秒（如 ...1234567Z），
+// time.Parse(time.RFC3339) 只接受最多 9 位但要求正确格式——先试标准 RFC3339，失败再试带小数秒的变体。
+func parseRFC3339Loose(s string) (time.Time, error) {
+	if s == "" {
+		return time.Time{}, fmt.Errorf("empty timestamp")
+	}
+	// 先试标准 RFC3339（0 或 3 位小数秒）
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t, nil
+	}
+	// 再试 RFC3339Nano（最多 9 位小数秒）
+	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
+		return t, nil
+	}
+	return time.Time{}, fmt.Errorf("parse timestamp %q: not RFC3339/RFC3339Nano", s)
+}

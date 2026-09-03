@@ -154,7 +154,7 @@ func (c *AccountCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	}
 	var dbPositions []pgstore.CMCPosition
 	for _, p := range pos.Positions {
-		dbPositions = append(dbPositions, pgstore.CMCPosition{
+		dp := pgstore.CMCPosition{
 			AccountID:          c.accountID,
 			InstrumentID:       p.InstrumentID,
 			Direction:          p.Direction,
@@ -166,7 +166,16 @@ func (c *AccountCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 			EvaluationBidPrice: parseFloat(p.EvaluationBidPrice),
 			EvaluationAskPrice: parseFloat(p.EvaluationAskPrice),
 			FetchedAt:          now,
-		})
+		}
+		// D-208 v2-A：解析 orders[0]——submittedTimestamp→opened_at、orderId→order_id。
+		// RFC3339 可能含 7 位小数秒，time.Parse 宽容处理（标准库支持最多 9 位）。
+		if len(p.Orders) > 0 {
+			dp.OrderID = p.Orders[0].OrderID
+			if t, err := parseRFC3339Loose(p.Orders[0].SubmittedTimestamp); err == nil {
+				dp.OpenedAt = &t
+			}
+		}
+		dbPositions = append(dbPositions, dp)
 	}
 	if err := c.store.InsertCMCPositions(ctx, c.accountID, dbPositions); err != nil {
 		return nil, fmt.Errorf("cmc account insert positions: %w", err)

@@ -139,3 +139,9 @@ var LiveGateSQL string
 
 //go:embed 0065_cmc_tables.sql
 var CmcTablesSQL string
+
+//go:embed 0066_personal_cmc_link.sql
+var PersonalCMCLinkSQL string
+
+//go:embed 0067_cmc_positions_meta.sql
+var CMCPositionsMetaSQL string

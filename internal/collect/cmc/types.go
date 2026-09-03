@@ -31,16 +31,24 @@ type positionsJSON struct {
 }
 
 type positionJSON struct {
-	InstrumentID                   string `json:"instrumentId"`
-	Direction                      string `json:"direction"`
-	Quantity                       string `json:"quantity"`
-	Price                          string `json:"price"`
-	StandardMarginAmount           string `json:"standardMarginAmount"`
-	MarginAmount                   string `json:"marginAmount"`
-	StandardMarginPercentage       string `json:"standardMarginPercentage"`
-	UnrealisedPnLInPrimaryCurrency string `json:"unrealisedPnLInPrimaryCurrency"`
-	EvaluationBidPrice             string `json:"evaluationBidPrice"`
-	EvaluationAskPrice             string `json:"evaluationAskPrice"`
+	InstrumentID                   string      `json:"instrumentId"`
+	Direction                      string      `json:"direction"`
+	Quantity                       string      `json:"quantity"`
+	Price                          string      `json:"price"`
+	StandardMarginAmount           string      `json:"standardMarginAmount"`
+	MarginAmount                   string      `json:"marginAmount"`
+	StandardMarginPercentage       string      `json:"standardMarginPercentage"`
+	UnrealisedPnLInPrimaryCurrency string      `json:"unrealisedPnLInPrimaryCurrency"`
+	EvaluationBidPrice             string      `json:"evaluationBidPrice"`
+	EvaluationAskPrice             string      `json:"evaluationAskPrice"`
+	Orders                         []orderJSON `json:"orders"` // D-208 v2-A：orders[0] 含 submittedTimestamp/orderId/filledPrice
+}
+
+// orderJSON 持仓关联订单（D-208 v2-A：AccountCollector 解析 orders[0]）。
+type orderJSON struct {
+	OrderID           string `json:"orderId"`
+	FilledPrice       string `json:"filledPrice"`
+	SubmittedTimestamp string `json:"submittedTimestamp"` // RFC3339，可能含 7 位小数秒
 }
 
 type historyJSON struct {

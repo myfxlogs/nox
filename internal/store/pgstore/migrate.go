@@ -61,6 +61,8 @@ var migrationFiles = []struct {
 	{63, migrations.PositionLegsAttemptSQL},
 	{64, migrations.LiveGateSQL},
 	{65, migrations.CmcTablesSQL},
+	{66, migrations.PersonalCMCLinkSQL},
+	{67, migrations.CMCPositionsMetaSQL},
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
