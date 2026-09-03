@@ -73,12 +73,12 @@ func ComputePositionPrice(p *pgstore.PersonalPosition, venues map[string]bus.Quo
 func ComputeCMCPositionPrice(p *pgstore.PersonalPosition, src CMCSource, freshTTL time.Duration, now time.Time) PositionPrice {
 	v := PositionPrice{ID: p.ID}
 
-	if src == nil || p.CMCInstrumentID == "" {
+	if src == nil || p.CMCInstrumentID == nil || *p.CMCInstrumentID == "" {
 		return v // 无 CMC 源或非 CMC 行 → 空视图（调用方应走老路径）
 	}
 
 	// mid + 新鲜度
-	mid, fetchedAt, err := src.LastCMCMid(p.CMCInstrumentID)
+	mid, fetchedAt, err := src.LastCMCMid(*p.CMCInstrumentID)
 	if err != nil || mid == 0 {
 		return v // 无报价 → 诚实空态
 	}
@@ -103,7 +103,7 @@ func ComputeCMCPositionPrice(p *pgstore.PersonalPosition, src CMCSource, freshTT
 	}
 
 	// 浮盈：CMC broker 权威 unrealised_pnl
-	pnl, err := src.LastCMCUnrealised(p.CMCInstrumentID)
+	pnl, err := src.LastCMCUnrealised(*p.CMCInstrumentID)
 	if err == nil {
 		v.PnlUsd = pnl
 	}

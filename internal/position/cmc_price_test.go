@@ -83,7 +83,7 @@ func TestComputeCMCPositionPrice_Live(t *testing.T) {
 	p := &pgstore.PersonalPosition{
 		ID: 1, Asset: "TRX", Kind: "short_hedge", PriceSymbol: "TRXUSDT",
 		WarnHigh: &warnHigh, CritHigh: &critHigh, Status: "OPEN",
-		CMCInstrumentID: "X-AFQUL",
+		CMCInstrumentID: strPtr("X-AFQUL"),
 	}
 
 	// 用 CMCSourceAdapter 适配真库
@@ -121,7 +121,7 @@ func TestComputeCMCPositionPrice_StaleEmpty(t *testing.T) {
 		fetchedAt: staleTime,
 	}
 	p := &pgstore.PersonalPosition{
-		ID: 1, CMCInstrumentID: "X-AFQUL", Status: "OPEN",
+		ID: 1, CMCInstrumentID: strPtr("X-AFQUL"), Status: "OPEN",
 	}
 	v := ComputeCMCPositionPrice(p, src, 10*time.Second, now)
 	if v.Price != 0 {
@@ -148,7 +148,7 @@ func TestPersonalMonitor_CMCRouting(t *testing.T) {
 	cmcPos := &pgstore.PersonalPosition{
 		ID: 1, Asset: "TRX", Kind: "short_hedge", PriceSymbol: "TRXUSDT",
 		WarnHigh: &warnHigh, CritHigh: &critHigh, Status: "OPEN",
-		CMCInstrumentID: "X-AFQUL",
+		CMCInstrumentID: strPtr("X-AFQUL"),
 	}
 	nonCMCPos := &pgstore.PersonalPosition{
 		ID: 2, Asset: "TRX", Kind: "staking", PriceSymbol: "TRXUSDT",
@@ -175,7 +175,7 @@ func TestPersonalMonitor_CMCRouting(t *testing.T) {
 
 func TestComputeCMCPositionPrice_NilSource(t *testing.T) {
 	p := &pgstore.PersonalPosition{
-		ID: 1, CMCInstrumentID: "X-AFQUL", Status: "OPEN",
+		ID: 1, CMCInstrumentID: strPtr("X-AFQUL"), Status: "OPEN",
 	}
 	// cmcSource=nil + cmc 行 → 空视图不 panic
 	v := ComputeCMCPositionPrice(p, nil, 10*time.Second, time.Now())
@@ -269,3 +269,5 @@ func TestHistoryCollector_AllTypes(t *testing.T) {
 		}
 	}
 }
+
+func strPtr(s string) *string { return &s }

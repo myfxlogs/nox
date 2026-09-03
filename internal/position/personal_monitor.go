@@ -171,7 +171,7 @@ func (m *PersonalMonitor) onQuote(ctx context.Context, q bus.Quote) {
 					continue
 				}
 				var view PositionPrice
-				if p.CMCInstrumentID != "" && m.cmcSource != nil {
+				if p.CMCInstrumentID != nil && *p.CMCInstrumentID != "" && m.cmcSource != nil {
 					view = ComputeCMCPositionPrice(p, m.cmcSource, m.freshTTL, m.now())
 				} else {
 					view = ComputePositionPrice(p, venues[p.PriceSymbol], m.freshTTL, m.now(), m.liqMMR)
