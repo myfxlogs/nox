@@ -25,6 +25,12 @@ const DefaultRestBase = "https://connectapi.cmcmarkets.com"
 
 const userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
+// refreshFailThreshold refreshJWT 连续失败达此数 → 回退 loginUnlocked（重登兜底）。
+// 阈值 3：sched.go 退避 2s/4s/8s → 第 3 次失败后约 14s 触发重登，远早于人工介入；
+// 单次瞬时 5xx 不触发（避免误杀活 session）。D-214：9-3 15:47 UTC refresh 持续 500
+// 断流 8h+ 实证——状态码不可信任（session 失效后 platform 返回 500 非 401），重登判断须基于连续失败计数。
+const refreshFailThreshold = 3
+
 // AuthManager 管理 CMC 认证链：createsession → SIGN_IN → 静默重登录 → JWT(432)。
 // JWT 惰性刷新（< 60s）+ 主动刷新 ticker（4 分钟）+ 401 触发重新登录。
 type AuthManager struct {
@@ -33,13 +39,14 @@ type AuthManager struct {
 	accountID int64
 	baseURL   string // platform 基址（DefaultPlatformBase；测试注入 httptest URL）
 
-	mu         sync.RWMutex
-	token      string // session token（createsession 获取）
-	jwt        string // JWT（432 获取）
-	jwtExp     time.Time
-	site       string // createsession 响应 site header
-	seq        uint64 // multirequest 序号（loginUnlocked 后终态=20，refreshJWT 递增）
-	httpClient *http.Client
+	mu           sync.RWMutex
+	token        string // session token（createsession 获取）
+	jwt          string // JWT（432 获取）
+	jwtExp       time.Time
+	site         string // createsession 响应 site header
+	seq          uint64 // multirequest 序号（loginUnlocked 后终态=20，refreshJWT 递增）
+	refreshFails int    // refreshJWT 连续失败计数（非 200 且非 401；成功/重登清零）—D-214 重登兜底
+	httpClient   *http.Client
 }
 
 // NewAuthManager 创建 AuthManager。platformBase 生产传 DefaultPlatformBase，测试传 httptest URL。
@@ -126,7 +133,8 @@ func (a *AuthManager) loginUnlocked(ctx context.Context) error {
 	}
 	a.jwt = jwt
 	a.jwtExp = exp
-	a.seq = 20 // 终态=20（勿留在 0——否则首次刷新发 seq=1，对服务端是序号回退）
+	a.seq = 20         // 终态=20（勿留在 0——否则首次刷新发 seq=1，对服务端是序号回退）
+	a.refreshFails = 0 // 登录成功=全部状态复位（D-214）
 	return nil
 }
 
@@ -176,6 +184,12 @@ func (a *AuthManager) refreshJWT(ctx context.Context) error {
 		return a.loginUnlocked(ctx)
 	}
 	if resp.StatusCode != 200 {
+		a.refreshFails++
+		if a.refreshFails >= refreshFailThreshold {
+			log.Printf("[cmc] refreshJWT: 连续 %d 次失败（最后 status %d，非 401）→ 回退 loginUnlocked 重登兜底", a.refreshFails, resp.StatusCode)
+			a.refreshFails = 0
+			return a.loginUnlocked(ctx)
+		}
 		return fmt.Errorf("refreshJWT: status %d", resp.StatusCode)
 	}
 	jwtBytes, err := io.ReadAll(resp.Body)
@@ -192,6 +206,7 @@ func (a *AuthManager) refreshJWT(ctx context.Context) error {
 	}
 	a.jwt = jwt
 	a.jwtExp = exp
+	a.refreshFails = 0 // 刷新成功=计数清零（D-214）
 	return nil
 }
 
