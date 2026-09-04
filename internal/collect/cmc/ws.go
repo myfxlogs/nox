@@ -22,7 +22,9 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-const DefaultWsBase = "wss://connectapi.cmcmarkets.com/ws"
+// DefaultWsBase CMC WebSocket 端点（D-223 设计 C-Final + R6 返修：URL 必须带 ?partialUpdateEventTypes=ALL，
+// 否则连接成功但事件全静默丢弃——实证 docs/cmc/证据/connectapi-ws-帧实证-2026-09-04.log）。
+const DefaultWsBase = "wss://connectapi.cmcmarkets.com/ws?partialUpdateEventTypes=ALL"
 
 const (
 	wsHeartbeatInterval = 5 * time.Second
@@ -146,10 +148,24 @@ func (w *WsClient) runOnce(ctx context.Context) error {
 		return fmt.Errorf("dial: %w", err)
 	}
 	defer conn.Close()
-	// 1. auth（不等待 ack——以首条推送/心跳响应为有效性信号）
+	// 1. auth（D-193-A/R6 返修：等 auth ack {"auth":{"status":"ok"}}，超时 10s 失败重连）
+	// D-193-A/R6 S3：JWT 会话过期（5min 1011 断连）→ 1s 重连自带新 JWT（已实证可用循环）；
+	// 本包不做连接内刷新（协议未取证），重连即续命，Phase B 可选优化。
 	authMsg, _ := json.Marshal(map[string]any{"auth": map[string]any{"token": jwt}})
 	if err := w.writeMsg(conn, authMsg); err != nil {
 		return fmt.Errorf("auth write: %w", err)
+	}
+	conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	_, ackData, err := conn.ReadMessage()
+	if err != nil {
+		return fmt.Errorf("auth ack read: %w", err)
+	}
+	var ackEnv wsEnvelope
+	if err := json.Unmarshal(ackData, &ackEnv); err != nil || ackEnv.Auth == nil {
+		return fmt.Errorf("auth ack parse: %w (first frame not auth ack)", err)
+	}
+	if ackEnv.Auth.Status != "ok" {
+		return fmt.Errorf("auth ack status=%s", ackEnv.Auth.Status)
 	}
 	// 2. 播种（subscribe 前用 REST 拉全量 positions 为 patch 基底）
 	seedPos, err := fetchPositionsJSON(ctx, jwt, w.restBase, w.accountID)
@@ -215,10 +231,38 @@ func (w *WsClient) markEvent() {
 	w.healthy.Store(true)
 }
 func (w *WsClient) handleMessage(ctx context.Context, data []byte) {
-	var msg wsMessage
-	if err := json.Unmarshal(data, &msg); err != nil {
+	// D-193-A/R6 返修：解信封 {"<kind>":{...}}，只 msg 进事件分发
+	var env wsEnvelope
+	if err := json.Unmarshal(data, &env); err != nil {
 		return
 	}
+	// 控制帧按需 log（auth/subscribe 失败才 log，成功静默）
+	if env.Auth != nil {
+		// auth ack 由 runOnce 等待循环处理，此处不重复（runOnce 读首帧判 auth）
+		return
+	}
+	if env.Init != nil {
+		log.Printf("[cmc-ws] init: heartbeatInterval=%dms heartbeatTimeout=%dms subscriptions=%d",
+			env.Init.HeartbeatInterval, env.Init.HeartbeatTimeout, env.Init.SubscriptionsCount)
+		return
+	}
+	if env.Subscribe != nil {
+		if env.Subscribe.Status != "ok" {
+			log.Printf("[cmc-ws] subscribe ack status=%s (非 ok)", env.Subscribe.Status)
+		}
+		return
+	}
+	if env.Heartbeat != nil {
+		if env.Heartbeat.Status != "ok" {
+			log.Printf("[cmc-ws] heartbeat ack status=%s (非 ok)", env.Heartbeat.Status)
+		}
+		return
+	}
+	// msg 事件帧（5/6/7）
+	if env.Msg == nil {
+		return
+	}
+	msg := env.Msg
 	switch msg.Type {
 	case 5:
 		var s accountSummaryJSON
@@ -391,14 +435,3 @@ func (w *WsClient) emitFact(ctx context.Context, facts []fact.Fact) {
 	}
 }
 
-type wsMessage struct {
-	Type      int             `json:"type"`
-	Data      json.RawMessage `json:"data"`
-	Partial   []wsPatch       `json:"partial"`
-	Heartbeat json.RawMessage `json:"heartbeat"`
-}
-type wsPatch struct {
-	T string          `json:"t"`
-	P string          `json:"p"`
-	D json.RawMessage `json:"d"`
-}

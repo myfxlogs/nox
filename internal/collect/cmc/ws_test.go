@@ -69,6 +69,7 @@ func (ts *wsTestServer) handler(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 
 	// 读取客户端消息（auth + subscribe x3 + heartbeat），统计 subscribe
+	// D-193-A/R6 返修：收到 auth 后发 auth ack + init 帧（对照取证日志 FRAME[1]/[2]）
 	subscribeSeen := 0
 	for {
 		_, data, err := conn.ReadMessage()
@@ -77,6 +78,12 @@ func (ts *wsTestServer) handler(w http.ResponseWriter, r *http.Request) {
 		}
 		var msg map[string]json.RawMessage
 		if err := json.Unmarshal(data, &msg); err != nil {
+			continue
+		}
+		if _, ok := msg["auth"]; ok {
+			// 发 auth ack + init 帧（runOnce 等 auth ack 才进 subscribe）
+			_ = conn.WriteMessage(websocket.TextMessage, []byte(wsAuthAck))
+			_ = conn.WriteMessage(websocket.TextMessage, []byte(wsInitFrame))
 			continue
 		}
 		if _, ok := msg["subscribe"]; ok {
@@ -103,51 +110,63 @@ func (ts *wsTestServer) sendEvent(connIdx int, event string) {
 	_ = conn.WriteMessage(websocket.TextMessage, []byte(event))
 }
 
-// wsType5Event 安全评估 §2 type=5 样本（账户摘要）。
+// wsType5Event D-193-A/R6 返修：信封版 {"msg":{type:5,...}}（对照取证日志 FRAME[3]）。
 const wsType5Event = `{
-  "type": 5,
-  "subscriptionId": "38941616",
-  "data": {
-    "primaryAccountCurrency": "USD",
-    "totalAccountValue": "2185.31",
-    "totalEquityFreeForCashTrading": "1442.67",
-    "totalEquityFreeForMarginTrading": "1601.22",
-    "totalEquityUsedInMarginTrading": "584.09",
-    "totalCashBalance": "2026.76",
-    "totalUnrealisedPnL": "158.56"
-  }
-}`
-
-// wsType6Event 安全评估 §2 type=6 样本（账户价值，每秒推）。
-const wsType6Event = `{
-  "type": 6,
-  "subscriptionId": "38941616",
-  "data": {
-    "timestamp": "2026-09-02T08:03:45.0000000Z",
-    "primaryAccountCurrency": "USD",
-    "totalAccountValue": "2186.00",
-    "totalMidPriceAccountValue": "2189.84",
-    "totalEquityFreeForCashTrading": "1442.67",
-    "totalEquityFreeForMarginTrading": "1601.22"
-  }
-}`
-
-// wsType7Event 安全评估 §2 type=7 样本（持仓增量 patch）。
-const wsType7Event = `{
-  "type": 7,
-  "subscriptionId": "38941616",
-  "data": null,
-  "partial": [{
-    "t": "m",
-    "p": "/positions/0/orders/0",
-    "d": {
-      "unrealisedPnLInInstrumentCurrency": "156.93",
-      "unrealisedPnLInPrimaryCurrency": "156.93",
-      "closeValueInInstrumentCurrency": "6160.88",
-      "closeValueInAccountCurrency": "6160.88"
+  "msg": {
+    "type": 5,
+    "subscriptionId": "38941616",
+    "data": {
+      "primaryAccountCurrency": "USD",
+      "totalAccountValue": "2185.31",
+      "totalEquityFreeForCashTrading": "1442.67",
+      "totalEquityFreeForMarginTrading": "1601.22",
+      "totalEquityUsedInMarginTrading": "584.09",
+      "totalCashBalance": "2026.76",
+      "totalUnrealisedPnL": "158.56"
     }
-  }]
+  }
 }`
+
+// wsType6Event D-193-A/R6 返修：信封版 {"msg":{type:6,...}}（对照取证日志 FRAME[7]）。
+const wsType6Event = `{
+  "msg": {
+    "type": 6,
+    "subscriptionId": "38941616",
+    "data": {
+      "timestamp": "2026-09-02T08:03:45.0000000Z",
+      "primaryAccountCurrency": "USD",
+      "totalAccountValue": "2186.00",
+      "totalMidPriceAccountValue": "2189.84",
+      "totalEquityFreeForCashTrading": "1442.67",
+      "totalEquityFreeForMarginTrading": "1601.22"
+    }
+  }
+}`
+
+// wsType7Event D-193-A/R6 返修：信封版 {"msg":{type:7,...}}（对照取证日志 FRAME[19]）。
+const wsType7Event = `{
+  "msg": {
+    "type": 7,
+    "subscriptionId": "38941616",
+    "data": null,
+    "partial": [{
+      "t": "m",
+      "p": "/positions/0/orders/0",
+      "d": {
+        "unrealisedPnLInInstrumentCurrency": "156.93",
+        "unrealisedPnLInPrimaryCurrency": "156.93",
+        "closeValueInInstrumentCurrency": "6160.88",
+        "closeValueInAccountCurrency": "6160.88"
+      }
+    }]
+  }
+}`
+
+// wsAuthAck D-193-A/R6 返修：auth ack 信封 {"auth":{"status":"ok"}}（对照取证日志 FRAME[1]）。
+const wsAuthAck = `{"auth":{"status":"ok"}}`
+
+// wsInitFrame D-193-A/R6 返修：init 信封 {"init":{heartbeatInterval,...}}（对照取证日志 FRAME[2]）。
+const wsInitFrame = `{"init":{"heartbeatInterval":5000,"heartbeatTimeout":12000,"subscriptionsCount":0}}`
 
 // waitSubscribed 等待三条 subscribe 到齐（带超时）。
 func (ts *wsTestServer) waitSubscribed(timeout time.Duration) bool {
