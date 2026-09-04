@@ -4943,6 +4943,7 @@ type HedgeStructure struct {
 	NetExposureUsd float64                `protobuf:"fixed64,6,opt,name=net_exposure_usd,json=netExposureUsd,proto3" json:"net_exposure_usd,omitempty"` // net_exposure_trx × mid
 	Carry          *HedgeCarry            `protobuf:"bytes,7,opt,name=carry,proto3" json:"carry,omitempty"`
 	Accts          *HedgeAccounts         `protobuf:"bytes,8,opt,name=accts,proto3" json:"accts,omitempty"`
+	WsConnected    bool                   `protobuf:"varint,9,opt,name=ws_connected,json=wsConnected,proto3" json:"ws_connected,omitempty"` // cmc ws 事件驱动健康（true=绿/false=黄，兜底中）
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -5031,6 +5032,13 @@ func (x *HedgeStructure) GetAccts() *HedgeAccounts {
 		return x.Accts
 	}
 	return nil
+}
+
+func (x *HedgeStructure) GetWsConnected() bool {
+	if x != nil {
+		return x.WsConnected
+	}
+	return false
 }
 
 type GetHedgeStructureRequest struct {
@@ -12164,7 +12172,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\n" +
 	"cmc_equity\x18\x06 \x01(\x01R\tcmcEquity\x129\n" +
 	"\n" +
-	"updated_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x81\x03\n" +
+	"updated_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xa4\x03\n" +
 	"\x0eHedgeStructure\x12%\n" +
 	"\x0ebaseline_price\x18\x01 \x01(\x01R\rbaselinePrice\x12\x10\n" +
 	"\x03mid\x18\x02 \x01(\x01R\x03mid\x129\n" +
@@ -12173,7 +12181,8 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x10net_exposure_trx\x18\x05 \x01(\x01R\x0enetExposureTrx\x12(\n" +
 	"\x10net_exposure_usd\x18\x06 \x01(\x01R\x0enetExposureUsd\x122\n" +
 	"\x05carry\x18\a \x01(\v2\x1c.arb.dashboard.v1.HedgeCarryR\x05carry\x125\n" +
-	"\x05accts\x18\b \x01(\v2\x1f.arb.dashboard.v1.HedgeAccountsR\x05accts\"\x1a\n" +
+	"\x05accts\x18\b \x01(\v2\x1f.arb.dashboard.v1.HedgeAccountsR\x05accts\x12!\n" +
+	"\fws_connected\x18\t \x01(\bR\vwsConnected\"\x1a\n" +
 	"\x18GetHedgeStructureRequest\"[\n" +
 	"\x19GetHedgeStructureResponse\x12>\n" +
 	"\tstructure\x18\x01 \x01(\v2 .arb.dashboard.v1.HedgeStructureR\tstructure\"\xe4\x01\n" +

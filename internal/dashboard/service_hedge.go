@@ -124,6 +124,10 @@ func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1
 		Carry:          carry,
 		Accts:          accts,
 	}
+	// D-193-A/R9：CMC ws 事件驱动健康（nil=未接线→false=黄点 REST 兜底）
+	if s.cmcWsHealth != nil {
+		resp.Structure.WsConnected = s.cmcWsHealth()
+	}
 	return connect.NewResponse(resp), nil
 }
 
@@ -167,7 +171,7 @@ func (s *Service) computeHedgeCarry(ctx context.Context, mid, qtyStaked float64)
 }
 
 // ListHedgeFlow 统一流水卡（SSOT §2）：UNION ALL 跨源分页（fin_trx_txs + fin_cmc_history）。
-// sourceFilter='' = 全部；'trx'/'cmc' = 单源。kind 归一 8 类（A5：SELL/BUY_TRADE→other）。
+// sourceFilter=” = 全部；'trx'/'cmc' = 单源。kind 归一 8 类（A5：SELL/BUY_TRADE→other）。
 func (s *Service) ListHedgeFlow(ctx context.Context, req *connect.Request[v1.ListHedgeFlowRequest]) (*connect.Response[v1.ListHedgeFlowResponse], error) {
 	limit := int(req.Msg.Limit)
 	if limit <= 0 {

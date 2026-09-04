@@ -290,3 +290,59 @@ func TestGetHedgeStructure_EmptyTolerant(t *testing.T) {
 		t.Error("leg_spot = nil, want non-nil (空表容忍)")
 	}
 }
+
+// TestGetHedgeStructure_WsConnected D-193-A/R9：cmcWsHealth seam true/false → WsConnected 断言。
+// nil=未接线→false（黄点 REST 兜底）；true→绿点 WS 在线。
+func TestGetHedgeStructure_WsConnected(t *testing.T) {
+	s := hedgeTestStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	// 最小数据：TRX 账户 + CMC 持仓 + price（ready=true 才走组装路径）
+	if err := s.InsertTRXAccount(ctx, pgstore.TRXAccount{
+		Address: "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", VotesTotal: 18070,
+		BalanceSun: 97863827, AllowanceSun: 7717994, EnergyDelegated: 17270000000,
+		BandwidthStaked: 800000000,
+		FetchedAt: now,
+	}); err != nil {
+		t.Fatalf("InsertTRXAccount: %v", err)
+	}
+	if err := s.InsertCMCPositions(ctx, 1, []pgstore.CMCPosition{{
+		AccountID: 1, InstrumentID: "X-AFQUL", Direction: "SELL", Quantity: 18100,
+		EntryPrice: 0.33171, FetchedAt: now,
+	}}); err != nil {
+		t.Fatalf("InsertCMCPositions: %v", err)
+	}
+	if err := s.InsertCMCPrice(ctx, pgstore.CMCPrice{InstrumentID: "X-AFQUL", MidPrice: 0.3236, FetchedAt: now}); err != nil {
+		t.Fatalf("InsertCMCPrice: %v", err)
+	}
+
+	// case 1: nil=未接线→false
+	svc1 := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005}
+	resp1, err := svc1.GetHedgeStructure(ctx, connect.NewRequest(&v1.GetHedgeStructureRequest{}))
+	if err != nil {
+		t.Fatalf("GetHedgeStructure case1: %v", err)
+	}
+	if resp1.Msg.Structure.WsConnected {
+		t.Error("nil seam: WsConnected = true, want false (未接线→REST 兜底)")
+	}
+
+	// case 2: true→绿点
+	svc2 := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005, cmcWsHealth: func() bool { return true }}
+	resp2, err := svc2.GetHedgeStructure(ctx, connect.NewRequest(&v1.GetHedgeStructureRequest{}))
+	if err != nil {
+		t.Fatalf("GetHedgeStructure case2: %v", err)
+	}
+	if !resp2.Msg.Structure.WsConnected {
+		t.Error("true seam: WsConnected = false, want true (WS 在线)")
+	}
+
+	// case 3: false→黄点
+	svc3 := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005, cmcWsHealth: func() bool { return false }}
+	resp3, err := svc3.GetHedgeStructure(ctx, connect.NewRequest(&v1.GetHedgeStructureRequest{}))
+	if err != nil {
+		t.Fatalf("GetHedgeStructure case3: %v", err)
+	}
+	if resp3.Msg.Structure.WsConnected {
+		t.Error("false seam: WsConnected = true, want false (REST 兜底)")
+	}
+}

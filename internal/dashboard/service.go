@@ -127,6 +127,10 @@ type Service struct {
 	// nil = 未接线（alias 留空，前端回退 venueKey）。RWMutex 保护并发读/SetAliasMap 写。
 	aliasMu  sync.RWMutex
 	aliasMap map[string]string
+
+	// D-193-A/R9：CMC ws 事件驱动健康检查（nil=未接线→wsConnected=false）。
+	// main 装配 ws.IsHealthy 注入；GetHedgeStructure 组装时调此 seam 填 WsConnected。
+	cmcWsHealth func() bool
 }
 
 // FrontConfig 前端展示阈值（D-077 修复⑪B N7，后端 config 单一真相）。
@@ -263,6 +267,10 @@ func (s *Service) SetAliasMap(m map[string]string) {
 	defer s.aliasMu.Unlock()
 	s.aliasMap = m
 }
+
+// SetCmcWsHealth D-193-A/R9：注入 CMC ws 事件驱动健康检查（main 装配 ws.IsHealthy）。
+// nil = 未接线→GetHedgeStructure 返回 wsConnected=false（前端显示黄点 REST 兜底）。
+func (s *Service) SetCmcWsHealth(fn func() bool) { s.cmcWsHealth = fn }
 
 // aliasForVenueKey D-175：从 venueKey="{venue}:{src}" 提取 venue 查 alias 缓存。
 // venueKey 无冒号 → 整串当 venue 查；alias 空/未接线 → 返回空（前端回退 venueKey）。
