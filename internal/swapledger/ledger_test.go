@@ -338,8 +338,8 @@ func TestLegSwapAmount_NonSettleVenue(t *testing.T) {
 // D-193-A 扩包（决策 8）：InsertCashflow → InsertCashflowFull（接收 *pgstore.Cashflow）。
 type nonSettleStubStore struct {
 	legs            []pgstore.PositionLeg
-	hasCashflowLegs map[int16]bool // legNo → 当日已记（per-leg 幂等模拟）
-	insertedVenues  []string       // 记录 InsertCashflowFull 被调用的 venue
+	hasCashflowLegs map[int16]bool      // legNo → 当日已记（per-leg 幂等模拟）
+	insertedVenues  []string            // 记录 InsertCashflowFull 被调用的 venue
 	insertedCFs     []*pgstore.Cashflow // D-193-A 扩包：记录完整 Cashflow 供断言
 }
 

@@ -206,27 +206,27 @@ func (l *Ledger) legSwapAmount(canonical string, leg pgstore.PositionLeg, day ti
 
 // LegSwapDiagnosis D-193-A 扩包 S3：leg_swapAmount 诊断结果（只读探针用）。
 type LegSwapDiagnosis struct {
-	PositionID    int64
-	LegNo         int16
-	Venue         string
-	Side          string
-	Canonical     string
-	Day           time.Time
-	FactKey       string  // 所查 fact 键 "canonical:venue"
-	FactKind      string  // swap_long/swap_short/funding
-	FactHit       bool    // fact 是否命中
-	FactValue     float64 // fact.Value（命中时）
-	FactTs        time.Time
-	FactExpired   bool // Fact.Ts 超 factTTL
-	NotionalHit   bool // usdPerLot 是否命中
-	UsdPerLot     float64
-	Notional      float64
-	Multiplier    float64
-	MultiplierOK  bool
+	PositionID     int64
+	LegNo          int16
+	Venue          string
+	Side           string
+	Canonical      string
+	Day            time.Time
+	FactKey        string  // 所查 fact 键 "canonical:venue"
+	FactKind       string  // swap_long/swap_short/funding
+	FactHit        bool    // fact 是否命中
+	FactValue      float64 // fact.Value（命中时）
+	FactTs         time.Time
+	FactExpired    bool // Fact.Ts 超 factTTL
+	NotionalHit    bool // usdPerLot 是否命中
+	UsdPerLot      float64
+	Notional       float64
+	Multiplier     float64
+	MultiplierOK   bool
 	NonSettleVenue bool
-	Ok            bool    // legSwapAmount 最终 ok
-	Amount        float64 // legSwapAmount 最终 amount
-	Reason        string  // ok=false 或 amount=0 的原因
+	Ok             bool    // legSwapAmount 最终 ok
+	Amount         float64 // legSwapAmount 最终 amount
+	Reason         string  // ok=false 或 amount=0 的原因
 }
 
 // DiagnoseLegSwapAmount D-193-A 扩包 S3：只读诊断单腿 legSwapAmount 的中间状态。
