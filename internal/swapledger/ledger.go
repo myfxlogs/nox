@@ -89,6 +89,12 @@ func New(store Store, notional NotionalResolver, tripleDay TripleDayResolver, no
 	}
 }
 
+// NewForDiagnosis D-193-A 扩包 S3：创建探针用 Ledger（无 loop 超时/延迟，factTTL=0 不检查过期）。
+// 供 cmd/swapledgerprobe 诊断 legSwapAmount 中间状态用，非生产路径。
+func NewForDiagnosis(store Store, notional NotionalResolver, tripleDay TripleDayResolver, nonSettleVenues []string, factTTL time.Duration) *Ledger {
+	return New(store, notional, tripleDay, nonSettleVenues, factTTL)
+}
+
 // StartLoop 日频 ticker（对账 StartLoop 同模式，loop-initial-block 铁律）。
 // 阻塞至 ctx 取消。首轮延迟 initialDelay（等 adapter 就绪），独立 goroutine 跑（不阻塞 ticker）。
 func (l *Ledger) StartLoop(ctx context.Context) {

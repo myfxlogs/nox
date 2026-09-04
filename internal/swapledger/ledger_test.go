@@ -3,6 +3,7 @@ package swapledger
 import (
 	"context"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -493,5 +494,53 @@ func TestFactExpired(t *testing.T) {
 	}
 	if got != 0 {
 		t.Errorf("expired fact want amount=0, got %.2f", got)
+	}
+}
+
+// TestDiagnoseLegSwapAmount_D193A_FactNotFound D-193-A 扩包 S3：
+// fact 缺失 → ok=false，Reason 含 "fact not found"。
+func TestDiagnoseLegSwapAmount_D193A_FactNotFound(t *testing.T) {
+	notional := stubNotional{vals: map[string]float64{"AUDJPY:vA:mt5:ask": 100000}}
+	r := stubTripleDay{venueDays: map[string]time.Weekday{"vA": time.Wednesday}}
+	l := &Ledger{notional: notional, tripleDay: r}
+	pos := pgstore.Position{ID: 1, Type: "SWAPARB", OpportunityID: "SWAPARB:AUDJPY:vA:mt5:vB:mt5:1"}
+	leg := pgstore.PositionLeg{LegNo: 1, Phase: "OPEN", Venue: "vB:mt5", Side: "SELL", Qty: 1.0}
+	monday := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
+	// longMap 有 vA，shortMap 空（vB 缺失）
+	longMap := map[factKey]fact.Fact{factKey{"AUDJPY", "vA"}: {Value: 5.0, Ts: time.Now()}}
+	d := l.DiagnoseLegSwapAmount(context.Background(), pos, leg, monday, longMap, map[factKey]fact.Fact{}, map[factKey]fact.Fact{})
+	if d.Ok {
+		t.Errorf("fact 缺失应 ok=false, got ok=true amount=%.6f", d.Amount)
+	}
+	if !strings.Contains(d.Reason, "fact not found") {
+		t.Errorf("Reason=%q, want contain 'fact not found'", d.Reason)
+	}
+	if !strings.Contains(d.FactKey, "AUDJPY:vB") {
+		t.Errorf("FactKey=%q, want contain 'AUDJPY:vB'", d.FactKey)
+	}
+}
+
+// TestDiagnoseLegSwapAmount_D193A_Normal D-193-A 扩包 S3：
+// fact 命中 + notional 命中 → ok=true, amount≠0, Reason="normal"。
+func TestDiagnoseLegSwapAmount_D193A_Normal(t *testing.T) {
+	notional := stubNotional{vals: map[string]float64{"AUDJPY:vA:mt5:ask": 100000}}
+	r := stubTripleDay{venueDays: map[string]time.Weekday{"vA": time.Wednesday}}
+	l := &Ledger{notional: notional, tripleDay: r}
+	pos := pgstore.Position{ID: 1, Type: "SWAPARB", OpportunityID: "SWAPARB:AUDJPY:vA:mt5:vB:mt5:1"}
+	leg := pgstore.PositionLeg{LegNo: 0, Phase: "OPEN", Venue: "vA:mt5", Side: "BUY", Qty: 1.0}
+	monday := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC) // Monday
+	longMap := map[factKey]fact.Fact{factKey{"AUDJPY", "vA"}: {Value: 5.0, Ts: time.Now()}}
+	d := l.DiagnoseLegSwapAmount(context.Background(), pos, leg, monday, longMap, map[factKey]fact.Fact{}, map[factKey]fact.Fact{})
+	if !d.Ok {
+		t.Errorf("fact+notional 命中应 ok=true, got ok=false Reason=%s", d.Reason)
+	}
+	if d.Amount == 0 {
+		t.Errorf("amount=0, want non-zero (rate=5bps × notional=100000 × mult=1)")
+	}
+	if d.Reason != "normal" {
+		t.Errorf("Reason=%q, want 'normal'", d.Reason)
+	}
+	if !d.FactHit {
+		t.Errorf("FactHit=false, want true")
 	}
 }

@@ -16,6 +16,15 @@ type factKey struct {
 	canonical, venue string
 }
 
+// FactKey D-193-A 扩包 S3：导出版 factKey 供探针 cmd 构造 map 用（与内部 factKey 同构）。
+type FactKey = factKey
+
+// NewFactKey D-193-A 扩包 S3：构造 FactKey（canonical=fact.Symbol，venue=fact.Venue）。
+// 供探针 cmd 从 fact.Fact 构造 map key 用。
+func NewFactKey(canonical, venue string) FactKey {
+	return factKey{canonical: canonical, venue: venue}
+}
+
 // venueFromKey 从 venueKey（格式 "venueName:mt5"）提取 venue 名。
 func venueFromKey(venueKey string) string {
 	idx := strings.Index(venueKey, ":")
