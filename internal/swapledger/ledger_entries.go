@@ -76,11 +76,13 @@ func (l *Ledger) accountPosition(ctx context.Context, pos pgstore.Position, day 
 		if has {
 			continue
 		}
-		amount, ok := l.legSwapAmount(canonical, leg, day, isFunding, longMap, shortMap, fundMap)
+		amount, ok, reason := l.legSwapAmount(canonical, leg, day, isFunding, longMap, shortMap, fundMap)
 		if !ok {
+			log.Printf("[swapledger] pos=%d leg=%d day=%s skip: %s", pos.ID, leg.LegNo, day.Format("2006-01-02"), reason)
 			continue // swap rate / notional 不可用 → 跳过该腿（fail-closed，不猜）
 		}
 		if amount == 0 {
+			log.Printf("[swapledger] pos=%d leg=%d day=%s skip: zero_swap", pos.ID, leg.LegNo, day.Format("2006-01-02"))
 			continue // 零息 venue → 不写 cashflow（避免无意义行）
 		}
 		// D-193-A 扩包（决策 1-7）：迁 InsertCashflowFull，填事实身份字段。
@@ -135,35 +137,38 @@ func parseVenueAccountID(venue string) *int64 {
 
 // legSwapAmount 计算单腿当日 swap/funding USD 金额（纯函数，可单测）。
 // D-159 W3a R5：接收 map[factKey]fact.Fact（含 Ts 供 TTL 检查）。
-// 返回 (amount, ok)；ok=false 表示 rate/notional 不可用或 Fact 过期 → fail-closed 跳过。
-// amount 正=收 swap，负=付 swap。
+// D-193-A 扩包返修 M2：返回 (amount, ok, reason)；ok=false 时 reason 标识失败分支（定罪 notional 链观察前提）。
+// ok=true 时 reason=""；amount 正=收 swap，负=付 swap。
 func (l *Ledger) legSwapAmount(canonical string, leg pgstore.PositionLeg, day time.Time,
-	isFunding bool, longMap, shortMap, fundMap map[factKey]fact.Fact) (float64, bool) {
+	isFunding bool, longMap, shortMap, fundMap map[factKey]fact.Fact) (float64, bool, string) {
 	venueName := venueFromKey(leg.Venue)
 	fk := factKey{canonical, venueName}
 
 	// 1. 取 swap/funding rate
 	var f fact.Fact
 	var rateFound bool
+	var kindName string
 	if isFunding {
 		f, rateFound = fundMap[fk]
+		kindName = fact.KindFunding
 	} else {
 		// BUY(long) 腿用 swap_long，SELL(short) 腿用 swap_short
 		if leg.Side == "BUY" {
 			f, rateFound = longMap[fk]
+			kindName = fact.KindSwapLong
 		} else {
 			f, rateFound = shortMap[fk]
+			kindName = fact.KindSwapShort
 		}
 	}
 	if !rateFound {
-		return 0, false
+		return 0, false, fmt.Sprintf("fact_not_found kind=%s key=%s:%s", kindName, canonical, venueName)
 	}
 	// D-159 W3a R5 + W4a R7：Fact 过期防护——Fact.Ts 超 l.factTTL → fail-closed 不写估算为实际。
 	// TTL 由 New 注入（cfg.SwapFactMaxAge env 单源，与 discoverSwapCombos/recalcNetSwap 同源）。
+	// D-193-A 扩包返修 M2：TTL 过期并入 reason（删独立 log，避免重复打两条）。
 	if l.factTTL > 0 && time.Since(f.Ts) > l.factTTL {
-		log.Printf("[swapledger] leg=%d swap fact expired (kind=%s venue=%s ts=%s, ttl=%v), skip",
-			leg.LegNo, f.Kind, f.Venue, f.Ts.Format(time.RFC3339), l.factTTL)
-		return 0, false
+		return 0, false, fmt.Sprintf("fact_expired kind=%s venue=%s ts=%s ttl=%v", kindName, f.Venue, f.Ts.Format(time.RFC3339), l.factTTL)
 	}
 	rate := f.Value
 
@@ -174,11 +179,11 @@ func (l *Ledger) legSwapAmount(canonical string, leg pgstore.PositionLeg, day ti
 	}
 	usdPerLot, ok := l.notional.USDPerLotForLeg(canonical, leg.Venue, side)
 	if !ok || usdPerLot <= 0 {
-		return 0, false
+		return 0, false, fmt.Sprintf("notional_usdperlot venue=%s side=%s", leg.Venue, side)
 	}
 	notional := usdPerLot * leg.Qty
 	if notional <= 0 {
-		return 0, false
+		return 0, false, "notional_nonpos"
 	}
 
 	// 3. 算金额（D-077 修复⑩ G5：decimalutil 精度守卫，经 strconv 字符串中介避免 float64 漂移）
@@ -193,15 +198,15 @@ func (l *Ledger) legSwapAmount(canonical string, leg pgstore.PositionLeg, day ti
 		multiplier := settleMultiplier(leg.Venue, canonical, day, l.tripleDay)
 		if multiplier == 0 {
 			// D-077 修复⑪A M4：fail-closed（三倍日未知）→ 跳过该腿记账，不记 0 cashflow
-			return 0, false
+			return 0, false, "settle_multiplier_zero"
 		}
 		amount = decimalAmount(rate, 10000, 1, notional, multiplier)
 	}
 	// D-112：已知不结算 venue → 记 0（不跳过，与零息 venue 同处理——amount=0 → accountPosition 跳过不写 cashflow）
 	if l.nonSettleVenues[leg.Venue] {
-		return 0, true
+		return 0, true, ""
 	}
-	return amount, true
+	return amount, true, ""
 }
 
 // LegSwapDiagnosis D-193-A 扩包 S3：leg_swapAmount 诊断结果（只读探针用）。

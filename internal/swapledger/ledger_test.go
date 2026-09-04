@@ -107,7 +107,7 @@ func TestLegSwapAmount_BuyLegSwapLong(t *testing.T) {
 
 	leg := pgstore.PositionLeg{Venue: "vA:mt5", Side: "BUY", Qty: 2.0}
 	monday := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC) // Monday → multiplier=1
-	got, ok := l.legSwapAmount("AUDJPY", leg, monday, false, longMap, shortMap, fundMap)
+	got, ok, _ := l.legSwapAmount("AUDJPY", leg, monday, false, longMap, shortMap, fundMap)
 	if !ok {
 		t.Fatal("want ok=true, got false")
 	}
@@ -129,7 +129,7 @@ func TestLegSwapAmount_SellLegSwapShort(t *testing.T) {
 
 	leg := pgstore.PositionLeg{Venue: "vB:mt5", Side: "SELL", Qty: 1.0}
 	wed := time.Date(2026, 8, 26, 0, 0, 0, 0, time.UTC) // Wednesday → multiplier=3
-	got, ok := l.legSwapAmount("AUDJPY", leg, wed, false, longMap, shortMap, fundMap)
+	got, ok, _ := l.legSwapAmount("AUDJPY", leg, wed, false, longMap, shortMap, fundMap)
 	if !ok {
 		t.Fatal("want ok=true, got false")
 	}
@@ -151,7 +151,7 @@ func TestLegSwapAmount_FundingType(t *testing.T) {
 
 	leg := pgstore.PositionLeg{Venue: "binance:spot", Side: "BUY", Qty: 1.0}
 	monday := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
-	got, ok := l.legSwapAmount("BTCUSDT", leg, monday, true, longMap, shortMap, fundMap)
+	got, ok, _ := l.legSwapAmount("BTCUSDT", leg, monday, true, longMap, shortMap, fundMap)
 	if !ok {
 		t.Fatal("want ok=true, got false")
 	}
@@ -171,7 +171,7 @@ func TestLegSwapAmount_RateNotFound(t *testing.T) {
 
 	leg := pgstore.PositionLeg{Venue: "vA:mt5", Side: "BUY", Qty: 1.0}
 	monday := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
-	_, ok := l.legSwapAmount("AUDJPY", leg, monday, false, map[factKey]fact.Fact{}, map[factKey]fact.Fact{}, map[factKey]fact.Fact{})
+	_, ok, _ := l.legSwapAmount("AUDJPY", leg, monday, false, map[factKey]fact.Fact{}, map[factKey]fact.Fact{}, map[factKey]fact.Fact{})
 	if ok {
 		t.Error("rate not found want ok=false, got true")
 	}
@@ -186,7 +186,7 @@ func TestLegSwapAmount_NotionalNotFound(t *testing.T) {
 
 	leg := pgstore.PositionLeg{Venue: "vA:mt5", Side: "BUY", Qty: 1.0}
 	monday := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
-	_, ok := l.legSwapAmount("AUDJPY", leg, monday, false, longMap, map[factKey]fact.Fact{}, map[factKey]fact.Fact{})
+	_, ok, _ := l.legSwapAmount("AUDJPY", leg, monday, false, longMap, map[factKey]fact.Fact{}, map[factKey]fact.Fact{})
 	if ok {
 		t.Error("notional not found want ok=false, got true")
 	}
@@ -201,7 +201,7 @@ func TestLegSwapAmount_ZeroRate(t *testing.T) {
 
 	leg := pgstore.PositionLeg{Venue: "vA:mt5", Side: "BUY", Qty: 1.0}
 	monday := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
-	got, ok := l.legSwapAmount("AUDJPY", leg, monday, false, longMap, map[factKey]fact.Fact{}, map[factKey]fact.Fact{})
+	got, ok, _ := l.legSwapAmount("AUDJPY", leg, monday, false, longMap, map[factKey]fact.Fact{}, map[factKey]fact.Fact{})
 	if !ok {
 		t.Fatal("zero rate want ok=true, got false")
 	}
@@ -324,7 +324,7 @@ func TestLegSwapAmount_NonSettleVenue(t *testing.T) {
 
 	leg := pgstore.PositionLeg{Venue: "277842155:mt5", Side: "SELL", Qty: 1.0}
 	monday := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
-	got, ok := l.legSwapAmount("AUDJPY", leg, monday, false, map[factKey]fact.Fact{}, shortMap, map[factKey]fact.Fact{})
+	got, ok, _ := l.legSwapAmount("AUDJPY", leg, monday, false, map[factKey]fact.Fact{}, shortMap, map[factKey]fact.Fact{})
 	if !ok {
 		t.Fatal("non-settle venue want ok=true, got false")
 	}
@@ -488,7 +488,7 @@ func TestFactExpired(t *testing.T) {
 
 	leg := pgstore.PositionLeg{Venue: "vA:mt5", Side: "BUY", Qty: 1.0}
 	monday := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
-	got, ok := l.legSwapAmount("AUDJPY", leg, monday, false, longMap, map[factKey]fact.Fact{}, map[factKey]fact.Fact{})
+	got, ok, _ := l.legSwapAmount("AUDJPY", leg, monday, false, longMap, map[factKey]fact.Fact{}, map[factKey]fact.Fact{})
 	if ok {
 		t.Errorf("expired fact want ok=false (fail-closed), got ok=true amount=%.2f", got)
 	}
