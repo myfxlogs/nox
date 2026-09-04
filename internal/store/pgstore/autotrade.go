@@ -177,12 +177,18 @@ func (s *Store) ListDisabledStrategies(ctx context.Context) (map[string]bool, er
 	return out, rows.Err()
 }
 
-// DailyRealizedPnl 返回当日已平仓持仓的累计 realized_pnl（风控：单日亏损停机）。
+// DailyRealizedPnl 返回当日已平仓持仓的累计净 PNL（风控：单日亏损停机）。
+// D-193-A 扩包（决策 9）：与 AggregateStrategyStats（autotrade.go:98）同构——
+// LEFT JOIN position_settlements + COALESCE 三级 fallback（net_realized_usd → realized_usd → realized_pnl）。
+// 禁止 actual-only 过滤——这是单日亏损停机风控，缺数据静默归零=哑数据击穿风控（D-223 R1 同型）。
+// 无 settlement 行/legacy 行经 fallback 覆盖。
 func (s *Store) DailyRealizedPnl(ctx context.Context) (float64, error) {
 	var sum *float64
 	err := s.pool.QueryRow(ctx, `
-		SELECT COALESCE(SUM(realized_pnl), 0) FROM positions
-		WHERE status = 'CLOSED' AND closed_at >= date_trunc('day', now())`).Scan(&sum)
+		SELECT COALESCE(SUM(COALESCE(s.net_realized_usd, s.realized_usd, p.realized_pnl)), 0)
+		FROM positions p
+		LEFT JOIN position_settlements s ON s.position_id = p.id
+		WHERE p.status = 'CLOSED' AND p.closed_at >= date_trunc('day', now())`).Scan(&sum)
 	if err != nil {
 		return 0, fmt.Errorf("daily realized pnl: %w", err)
 	}
@@ -193,7 +199,8 @@ func (s *Store) DailyRealizedPnl(ctx context.Context) (float64, error) {
 }
 
 // GetPnlAnchor 返回盈亏统计起点（F4，stats_anchor 单行表）。
-// 累计已实现口径 = SUM(realized_pnl) WHERE closed_at >= anchor。
+// D-193-A 扩包（决策 9）：累计已实现口径=SUM(net_realized_usd)（RealizedPnlSinceAnchor 同构）。
+// 本函数只读 stats_anchor 表无 SQL 可改，仅注释口径顺带对齐。
 func (s *Store) GetPnlAnchor(ctx context.Context) (time.Time, error) {
 	var anchor time.Time
 	err := s.pool.QueryRow(ctx, `SELECT anchor FROM stats_anchor WHERE id = 1`).Scan(&anchor)
@@ -204,6 +211,8 @@ func (s *Store) GetPnlAnchor(ctx context.Context) (time.Time, error) {
 }
 
 // RealizedPnlSinceAnchor 返回 closed_at >= anchor 的累计已实现盈亏（F4 后端口径）。
+// D-193-A 扩包（决策 9）：与 AggregateStrategyStats/DailyRealizedPnl 同构——
+// LEFT JOIN position_settlements + COALESCE 三级 fallback。禁止 actual-only 过滤（风控哑数据击穿）。
 func (s *Store) RealizedPnlSinceAnchor(ctx context.Context) (float64, error) {
 	anchor, err := s.GetPnlAnchor(ctx)
 	if err != nil {
@@ -211,8 +220,10 @@ func (s *Store) RealizedPnlSinceAnchor(ctx context.Context) (float64, error) {
 	}
 	var sum *float64
 	err = s.pool.QueryRow(ctx, `
-		SELECT COALESCE(SUM(realized_pnl), 0) FROM positions
-		WHERE status = 'CLOSED' AND closed_at >= $1`, anchor).Scan(&sum)
+		SELECT COALESCE(SUM(COALESCE(s.net_realized_usd, s.realized_usd, p.realized_pnl)), 0)
+		FROM positions p
+		LEFT JOIN position_settlements s ON s.position_id = p.id
+		WHERE p.status = 'CLOSED' AND p.closed_at >= $1`, anchor).Scan(&sum)
 	if err != nil {
 		return 0, fmt.Errorf("realized pnl since anchor: %w", err)
 	}

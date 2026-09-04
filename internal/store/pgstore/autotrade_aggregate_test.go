@@ -202,3 +202,88 @@ func TestAggregateStrategyStats_RealizedNullExcluded(t *testing.T) {
 		t.Errorf("AvgPnl=%.4f, want 5.0", got.AvgPnl)
 	}
 }
+
+// TestDailyRealizedPnl_D193A_SettlementNet D-193-A 扩包 S2（决策 9）：
+// settlement.net_realized_usd ≠ positions.realized_pnl 时取 settlement net。
+// 红证据=改前 DailyRealizedPnl 读 realized_pnl，会取 10 而非 15（settlement net）。
+func TestDailyRealizedPnl_D193A_SettlementNet(t *testing.T) {
+	s := testAggregateStore(t)
+	ctx := context.Background()
+	now := time.Now()
+	seq := atomic.AddInt64(&aggSeq, 1)
+	var id int64
+	if err := s.pool.QueryRow(ctx,
+		`INSERT INTO positions (opportunity_id, type, status, opened_at, closed_at, realized_pnl)
+		 VALUES ($1, 'SWAPARB', 'CLOSED', $2, $2, 10.0) RETURNING id`,
+		"DAILY:nettest:"+now.Format("150405.000000")+"."+strconv.FormatInt(seq, 10), now).Scan(&id); err != nil {
+		t.Fatalf("insert position: %v", err)
+	}
+	// settlement net_realized_usd=15（≠ realized_pnl=10）
+	if _, err := s.pool.Exec(ctx,
+		`INSERT INTO position_settlements (position_id, vkey, expected_usd, realized_usd, hold_days, settled_at, net_realized_usd)
+		 VALUES ($1, 'k', 1.0, 10.0, 1.0, now(), 15.0)`, id); err != nil {
+		t.Fatalf("insert settlement: %v", err)
+	}
+	got, err := s.DailyRealizedPnl(ctx)
+	if err != nil {
+		t.Fatalf("DailyRealizedPnl: %v", err)
+	}
+	// 决策 9：取 settlement net_realized_usd=15，非 realized_pnl=10
+	if !aggApprox(got, 15.0, 0.001) {
+		t.Errorf("DailyRealizedPnl=%.4f, want 15.0 (settlement net 优先于 realized_pnl)", got)
+	}
+}
+
+// TestDailyRealizedPnl_D193A_NoSettlementFallback D-193-A 扩包 S2（决策 9）：
+// 无 settlement 行（479 形态）→ fallback 到 realized_pnl。
+func TestDailyRealizedPnl_D193A_NoSettlementFallback(t *testing.T) {
+	s := testAggregateStore(t)
+	ctx := context.Background()
+	now := time.Now()
+	seq := atomic.AddInt64(&aggSeq, 1)
+	if _, err := s.pool.Exec(ctx,
+		`INSERT INTO positions (opportunity_id, type, status, opened_at, closed_at, realized_pnl)
+		 VALUES ($1, 'CARRY', 'CLOSED', $2, $2, -6.0)`,
+		"DAILY:nosettle:"+now.Format("150405.000000")+"."+strconv.FormatInt(seq, 10), now); err != nil {
+		t.Fatalf("insert position: %v", err)
+	}
+	// 无 settlement 行（479 形态）
+	got, err := s.DailyRealizedPnl(ctx)
+	if err != nil {
+		t.Fatalf("DailyRealizedPnl: %v", err)
+	}
+	// 决策 9：无 settlement → fallback realized_pnl=-6
+	if !aggApprox(got, -6.0, 0.001) {
+		t.Errorf("DailyRealizedPnl=%.4f, want -6.0 (无 settlement 行 fallback realized_pnl)", got)
+	}
+}
+
+// TestDailyRealizedPnl_D193A_LegacySettlement D-193-A 扩包 S2（决策 9）：
+// legacy settlement 行（net_realized_usd=NULL, realized_usd 有值）→ fallback 到 realized_usd。
+func TestDailyRealizedPnl_D193A_LegacySettlement(t *testing.T) {
+	s := testAggregateStore(t)
+	ctx := context.Background()
+	now := time.Now()
+	seq := atomic.AddInt64(&aggSeq, 1)
+	var id int64
+	if err := s.pool.QueryRow(ctx,
+		`INSERT INTO positions (opportunity_id, type, status, opened_at, closed_at, realized_pnl)
+		 VALUES ($1, 'SWAPARB', 'CLOSED', $2, $2, 8.0) RETURNING id`,
+		"DAILY:legacy:"+now.Format("150405.000000")+"."+strconv.FormatInt(seq, 10), now).Scan(&id); err != nil {
+		t.Fatalf("insert position: %v", err)
+	}
+	// legacy settlement：net_realized_usd=NULL, realized_usd=12（≠ realized_pnl=8）
+	if _, err := s.pool.Exec(ctx,
+		`INSERT INTO position_settlements (position_id, vkey, expected_usd, realized_usd, hold_days, settled_at)
+		 VALUES ($1, 'k', 1.0, 12.0, 1.0, now())`, id); err != nil {
+		t.Fatalf("insert settlement: %v", err)
+	}
+	got, err := s.DailyRealizedPnl(ctx)
+	if err != nil {
+		t.Fatalf("DailyRealizedPnl: %v", err)
+	}
+	// 决策 9：net_realized_usd=NULL → fallback realized_usd=12（非 realized_pnl=8）
+	if !aggApprox(got, 12.0, 0.001) {
+		t.Errorf("DailyRealizedPnl=%.4f, want 12.0 (legacy settlement fallback realized_usd)", got)
+	}
+}

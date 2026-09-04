@@ -33,12 +33,15 @@ func (s *Store) AggregateStrategyStatsByEnvironment(ctx context.Context, strateg
 }
 
 // DailyRealizedPnlByEnvironment D-195-B：按 environment 过滤的 DailyRealizedPnl 变体。
+// D-193-A 扩包（决策 9）：与 DailyRealizedPnl 同构——LEFT JOIN + COALESCE 三级 fallback。
 func (s *Store) DailyRealizedPnlByEnvironment(ctx context.Context, environment string) (float64, error) {
 	var sum *float64
 	err := s.pool.QueryRow(ctx, `
-		SELECT COALESCE(SUM(realized_pnl), 0) FROM positions
-		WHERE status = 'CLOSED' AND closed_at >= date_trunc('day', now())
-		  AND ($1 = '' OR environment = $1)`).Scan(&sum)
+		SELECT COALESCE(SUM(COALESCE(s.net_realized_usd, s.realized_usd, p.realized_pnl)), 0)
+		FROM positions p
+		LEFT JOIN position_settlements s ON s.position_id = p.id
+		WHERE p.status = 'CLOSED' AND p.closed_at >= date_trunc('day', now())
+		  AND ($1 = '' OR p.environment = $1)`).Scan(&sum)
 	if err != nil {
 		return 0, fmt.Errorf("daily realized pnl by env: %w", err)
 	}
