@@ -111,15 +111,24 @@ type AccountCollector struct {
 	accountID int64
 	store     *pgstore.Store
 	restBase  string
+	// wsHealthy 注入 ws 健康查询（wire 层回填）；nil=无 ws，照旧 REST 轮询。
+	wsHealthy func() bool
 }
 
 func NewAccountCollector(auth jwtProvider, accountID int64, store *pgstore.Store, restBase string) *AccountCollector {
 	return &AccountCollector{auth: auth, accountID: accountID, store: store, restBase: restBase}
 }
 
+// SetWSHealthy 注入 ws 健康查询函数（wire 层回填）。
+func (c *AccountCollector) SetWSHealthy(fn func() bool) { c.wsHealthy = fn }
+
 func (c *AccountCollector) Kind() string { return fact.KindCMCAccount }
 
 func (c *AccountCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
+	// ws 健康时短路：REST 兜底降级（健康期账户 REST 调用 = 0）
+	if c.wsHealthy != nil && c.wsHealthy() {
+		return nil, nil
+	}
 	jwt, err := c.auth.JWT(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("cmc account JWT: %w", err)
@@ -199,8 +208,9 @@ func (c *AccountCollector) fetchSummary(ctx context.Context, jwt string) (*accou
 	return &s, nil
 }
 
-func (c *AccountCollector) fetchPositions(ctx context.Context, jwt string) (*positionsJSON, error) {
-	url := fmt.Sprintf("%s/v2/accounts/%d/positions", c.restBase, c.accountID)
+// fetchPositionsJSON 包级函数：REST 拉取全量 positions（WsClient 播种 + AccountCollector 共用，R3）。
+func fetchPositionsJSON(ctx context.Context, jwt, restBase string, accountID int64) (*positionsJSON, error) {
+	url := fmt.Sprintf("%s/v2/accounts/%d/positions", restBase, accountID)
 	body, err := cmcGet(ctx, url, jwt)
 	if err != nil {
 		return nil, err
@@ -212,12 +222,14 @@ func (c *AccountCollector) fetchPositions(ctx context.Context, jwt string) (*pos
 	return &p, nil
 }
 
-// calcCloseout 计算强平距离（只对 X-AFQUL，SSOT §6 公式）。
-// 公式：P_closeout = (C + entry × qty) × L / (qty × (L + 0.5))
-// C=cash（summary.total_cash_balance），entry=positions[0].price，qty=positions[0].quantity，
-// L=1/margin_percentage（从 API 推导，不硬编码）。
-// mid=0 或 err 时 distance=0（不除以 0，closeout_price 仍计算写入）。
-func (c *AccountCollector) calcCloseout(ctx context.Context, cash float64, pos *positionsJSON) (closeout, distance float64) {
+func (c *AccountCollector) fetchPositions(ctx context.Context, jwt string) (*positionsJSON, error) {
+	return fetchPositionsJSON(ctx, jwt, c.restBase, c.accountID)
+}
+
+// calcCloseoutValues 包级纯计算函数：强平距离（只对 X-AFQUL，SSOT §6 公式）。
+// mid 由调用方查询 LastCMCPriceMid 传入（零依赖，WsClient + AccountCollector 共用）。
+// mid=0 时 distance=0（不除以 0，closeout_price 仍计算写入）。
+func calcCloseoutValues(cash float64, pos *positionsJSON, mid float64) (closeout, distance float64) {
 	var afqul *positionJSON
 	for i := range pos.Positions {
 		if pos.Positions[i].InstrumentID == "X-AFQUL" {
@@ -239,13 +251,20 @@ func (c *AccountCollector) calcCloseout(ctx context.Context, cash float64, pos *
 		return 0, 0
 	}
 	closeout = (cash + entry*qty) * L / (qty * (L + 0.5))
-	// mid 从 fin_cmc_prices 最近一条 mid_price 获取
-	mid, err := c.store.LastCMCPriceMid(ctx, "X-AFQUL")
-	if err != nil || mid == 0 {
-		return closeout, 0 // 空表/err → distance=0，closeout 仍计算写入
+	if mid == 0 {
+		return closeout, 0
 	}
 	distance = (closeout - mid) / mid * 100
 	return closeout, distance
+}
+
+// calcCloseout 方法薄壳：查询 mid 后调包级 calcCloseoutValues（行为不变，D-208 复算口径勿动）。
+func (c *AccountCollector) calcCloseout(ctx context.Context, cash float64, pos *positionsJSON) (closeout, distance float64) {
+	mid, err := c.store.LastCMCPriceMid(ctx, "X-AFQUL")
+	if err != nil {
+		mid = 0
+	}
+	return calcCloseoutValues(cash, pos, mid)
 }
 
 // cmcGet REST GET 辅助（connectapi 端点头只有两个：Authorization + Origin）。
