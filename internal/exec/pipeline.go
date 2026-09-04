@@ -72,6 +72,11 @@ type Pipeline struct {
 	// 测试注入失败函数验证显式错误处理。签名改 Full 形态（接收 *pgstore.Cashflow，返回 (won, err)）。
 	cashflowWriter func(ctx context.Context, c *pgstore.Cashflow) (won bool, err error)
 
+	// D-193-A 扩包 S5：结算 seam——closePositionCore 关闭后触发 Settle（修复 479 缺 settlement 行根因）。
+	// nil=未接线（reconcile.autoClose 路径仍由 reconcile 侧 settler 触发；手动 ClosePosition/ResumeClose 路径需此 seam）。
+	// 失败不回滚 CLOSED（settlement 可重试，settlement.go SettleAt 幂等）。
+	settler Settler
+
 	// D-189 P0-4：per-position close 锁——同进程并发 ClosePosition/ResumeClose 只允许一个执行。
 	closeMu  sync.Mutex
 	closeSem map[int64]*sync.Mutex // per-posID mutex（closeMu 保护此 map）
@@ -79,6 +84,15 @@ type Pipeline struct {
 	// D-195-B：执行环境 demo/live（从 config 注入，写 positions.environment）。
 	environment string
 }
+
+// Settler D-193-A 扩包 S5：结算接口（closePositionCore 关闭后触发，修复 479 缺 settlement 行）。
+// main 装配时注入 settlement.Settle 包装；nil=未接线（兼容旧测试）。
+type Settler interface {
+	Settle(ctx context.Context, posID int64) error
+}
+
+// SetSettler D-193-A 扩包 S5：注入结算器（main 装配时调）。
+func (p *Pipeline) SetSettler(s Settler) { p.settler = s }
 
 // NewPipeline 创建执行管线。
 func NewPipeline(reg *Registry, store *pgstore.Store, qbus *bus.QuoteBus, limits RiskLimits, environment string) *Pipeline {
