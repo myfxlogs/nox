@@ -25,6 +25,7 @@ type HealthFactStore interface {
 	LatestFacts(ctx context.Context, kind, venue, symbol string) ([]fact.Fact, error)
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
 	ListAccountAliases(ctx context.Context) (map[string]string, error)
+	ListBrokerAccountStatuses(ctx context.Context) (map[string]string, error) // D-216：venue→status，收紧 venueSet
 }
 
 // HealthVenueSource 提供 MT venue 列表（BrokerManager 满足）。
@@ -105,21 +106,23 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 	swapAges, marginAges := m.collectFactAges(ctx, now)
 	aliases := m.collectAliases(ctx) // D-203：告警/日志用别名（回退裸账号）
 
-	// venue 列表 = brokerMgr venues ∪ quotes venues ∪ facts venues（全覆盖）
+	// D-216 venueSet 收紧：mtSet ∪ connectedSet ∪ (qbusVenues \ knownSet)；status 来自 broker_accounts（窄查询零凭据），err 降级=空集。走查表见 D-216 提示词 §3.S2。
+	statuses, err := m.store.ListBrokerAccountStatuses(ctx)
+	knownSet := make(map[string]bool)
+	connectedSet := make(map[string]bool)
+	if err != nil {
+		log.Printf("[mt-health] broker statuses: %v", err)
+	} else {
+		for v, st := range statuses {
+			knownSet[v] = true
+			if st == "connected" {
+				connectedSet[v] = true
+			}
+		}
+	}
 	venueSet := make(map[string]bool)
-	for v := range quoteAges {
-		venueSet[v] = true
-	}
-	for v := range swapAges {
-		venueSet[v] = true
-	}
-	for v := range marginAges {
-		venueSet[v] = true
-	}
-	// D-104 R-d1：swap/margin 仅 MT venue（CEX 无 facts）。D-203：margin 仅 MT5 venue
-	// （mt_margin_source 只挂 MT5Adapter，MT4 无 init_margin_rate → 永久 n/a 假洪水）。
-	mtSet := make(map[string]bool)
-	mt5Set := make(map[string]bool)
+	mtSet := make(map[string]bool)  // swap 仅 MT venue（D-104 R-d1）
+	mt5Set := make(map[string]bool) // margin 仅 MT5 venue（D-203）
 	for _, q := range m.venues.AccountQueriers() {
 		vk := q.VenueKey()
 		v := venueFromKey(vk)
@@ -129,6 +132,14 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 			if strings.HasSuffix(vk, ":mt5") {
 				mt5Set[v] = true
 			}
+		}
+	}
+	for v := range connectedSet { // connected 即使无数据也监控（D-205 型真告警）
+		venueSet[v] = true
+	}
+	for v := range quoteAges { // qbusVenues \ knownSet：CEX 等不在 broker_accounts 的 venue 兜底
+		if !knownSet[v] {
+			venueSet[v] = true
 		}
 	}
 
@@ -195,7 +206,6 @@ func (m *MTHealthMonitor) collectFactAges(ctx context.Context, now time.Time) (s
 	if m.store == nil {
 		return
 	}
-	// swap：long + short 合并取 max
 	swapLongs, err := m.store.LatestFacts(ctx, fact.KindSwapLong, "", "")
 	if err != nil {
 		log.Printf("[mt-health] swap_long facts: %v", err)
@@ -244,13 +254,10 @@ func (m *MTHealthMonitor) collectFactAges(ctx context.Context, now time.Time) (s
 	return
 }
 
-// critRealertInterval crit 持续同态重告警去重窗口（D-104 P0 返修③ R-c3）。
-// 持续 crit 每 30min 重发一条（有界，不洪水）；堵 boot 首 tick 静默边角——
-// boot 时真缺失首 tick 静默记 crit，tick2（1min 后）转换式告警触发，之后持续 crit 每 30min 一条。
+// critRealertInterval crit 持续同态重告警去重窗口（D-104 P0 返修③ R-c3）：持续 crit 每 30min 重发一条（有界，不洪水）；boot 首 tick 静默记 crit，tick2 转换式告警触发。
 const critRealertInterval = 30 * time.Minute
 
-// maybeAlert 状态转换时插告警（healthy→warn/crit；stale→healthy 插 info recovered）。
-// 持续同态不重复插（防洪水）——crit 持续 >30min 重发一条（R-c3）；D-136 修复②：周末休市静默窗内告警静默，状态机照常运转。
+// maybeAlert 状态转换时插告警（healthy→warn/crit；stale→healthy 插 info recovered）；持续同态不重复插（防洪水），crit >30min 重发一条（R-c3）；D-136：周末休市静默窗内告警静默，状态机照常运转。
 func (m *MTHealthMonitor) maybeAlert(ctx context.Context, venue, metric string, prev, cur mtHealthMetric, age time.Duration) {
 	if isMTWeekendQuietWindow(m.nowTime()) {
 		return // 周末休市静默窗

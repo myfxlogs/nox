@@ -16,10 +16,11 @@ import (
 
 // fakeHealthStore 健康监控 fake store（D-104 P0 单测）。
 type fakeHealthStore struct {
-	mu      sync.Mutex
-	facts   map[string][]fact.Fact // kind → facts
-	aliases map[string]string      // venue → alias（D-203）
-	alerts  []fakeAlert
+	mu              sync.Mutex
+	facts           map[string][]fact.Fact // kind → facts
+	aliases         map[string]string      // venue → alias（D-203）
+	accountStatuses map[string]string      // venue → status（D-216）
+	alerts          []fakeAlert
 }
 
 type fakeAlert struct {
@@ -42,6 +43,17 @@ func (s *fakeHealthStore) ListAccountAliases(_ context.Context) (map[string]stri
 	defer s.mu.Unlock()
 	out := make(map[string]string, len(s.aliases))
 	for k, v := range s.aliases {
+		out[k] = v
+	}
+	return out, nil
+}
+
+// ListBrokerAccountStatuses 返回 venue→status 拷贝（D-216）；nil → 空 map, nil error。
+func (s *fakeHealthStore) ListBrokerAccountStatuses(_ context.Context) (map[string]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make(map[string]string, len(s.accountStatuses))
+	for k, v := range s.accountStatuses {
 		out[k] = v
 	}
 	return out, nil
@@ -569,5 +581,131 @@ func TestMTHealth_AliasFallback(t *testing.T) {
 	}
 	if !foundVenue {
 		t.Errorf("无别名时应回退裸账号 vE，实际消息：%v", store.snapshot())
+	}
+}
+
+// TestMTHealth_StoppedVenueFactsResidueNoAlert D-216：停用账号 facts 残留 → 不进 venueSet → 零告警。
+// 复刻生产形态（EXR59892915 stopped，facts 残留 swap_long Ts=now，无 querier 无 qbus）。
+// 旧代码：venue 经 swapAges 进 venueSet，无 quote → quote crit（tick2 R-c3 !ok realert）→ 红。
+func TestMTHealth_StoppedVenueFactsResidueNoAlert(t *testing.T) {
+	log.SetOutput(os.NewFile(0, os.DevNull))
+	defer log.SetOutput(os.Stderr)
+
+	store := newFakeHealthStore()
+	store.accountStatuses = map[string]string{"59892915": "stopped"}
+	qbus := bus.New()
+	vs := &fakeVenueSource{queriers: nil} // 无 querier
+	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+
+	now := wedUTC
+	mon.now = func() time.Time { return now.Add(time.Second) }
+	// facts 残留：swap_long Ts=now（fresh），但 venue 已 stopped
+	store.setFacts(fact.KindSwapLong, []fact.Fact{{Kind: fact.KindSwapLong, Venue: "59892915", Symbol: "AUDJPY", Value: 5, Ts: now, Src: "mt5"}})
+
+	// tick1（首 tick 静默）+ tick2：均零告警
+	mon.poll(context.Background())
+	mon.poll(context.Background())
+	if got := store.alertCount(); got != 0 {
+		t.Fatalf("stopped venue facts 残留应零告警，got %d alerts: %v", got, store.snapshot())
+	}
+}
+
+// TestMTHealth_StoppedVenueQbusResidueNoAlert D-216：停用账号 qbus 残留旧报价 → 不进 venueSet → 零告警。
+// 热停用（DisableBroker 不重启容器）时 qbus 保留死 venue 最后报价，age 持续增大。
+// 旧代码：venue 经 quoteAges 进 venueSet，31m>30m → quote crit → 红。
+func TestMTHealth_StoppedVenueQbusResidueNoAlert(t *testing.T) {
+	log.SetOutput(os.NewFile(0, os.DevNull))
+	defer log.SetOutput(os.Stderr)
+
+	store := newFakeHealthStore()
+	store.accountStatuses = map[string]string{"59892915": "stopped"}
+	qbus := bus.New()
+	vs := &fakeVenueSource{queriers: nil}
+	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+
+	now := wedUTC
+	mon.now = func() time.Time { return now.Add(time.Second) }
+	// qbus 残留 31min 前旧报价
+	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "59892915", Bid: 100, Ask: 100, Time: now.Add(-31 * time.Minute)})
+
+	mon.poll(context.Background())
+	mon.poll(context.Background())
+	if got := store.alertCount(); got != 0 {
+		t.Fatalf("stopped venue qbus 残留应零告警，got %d alerts: %v", got, store.snapshot())
+	}
+}
+
+// TestMTHealth_ConnectedVenueNoDataStillCrit D-216 反向防回归：connected venue 无数据仍 crit。
+// 场景：{"vA":"connected"}，无 querier、无 qbus、无 facts → tick1 静默 + tick2 quote critical。
+// 不许把 D-205 型真告警修没了。旧代码：venue 不进 venueSet（无任何来源）→ 零告警 → 红。
+func TestMTHealth_ConnectedVenueNoDataStillCrit(t *testing.T) {
+	log.SetOutput(os.NewFile(0, os.DevNull))
+	defer log.SetOutput(os.Stderr)
+
+	store := newFakeHealthStore()
+	store.accountStatuses = map[string]string{"vA": "connected"}
+	qbus := bus.New()
+	vs := &fakeVenueSource{queriers: nil}
+	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+
+	now := wedUTC
+	mon.now = func() time.Time { return now.Add(time.Second) }
+
+	// tick1：首 tick 静默
+	mon.poll(context.Background())
+	if got := store.alertCount(); got != 0 {
+		t.Fatalf("tick1 (first tick): want 0, got %d", got)
+	}
+	// tick2：connected 无数据 → quote critical（R-c3 !ok realert）
+	mon.poll(context.Background())
+	alerts := store.snapshot()
+	var quoteCrit int
+	for _, a := range alerts {
+		if strings.Contains(a.msg, "quote") && a.level == "critical" {
+			quoteCrit++
+		}
+	}
+	if quoteCrit != 1 {
+		t.Fatalf("connected venue 无数据应发 1 条 quote critical，got %d (alerts=%v)", quoteCrit, alerts)
+	}
+}
+
+// TestMTHealth_UnknownQbusVenueStillMonitored D-216 兜底路径：unknown qbus venue 仍监控。
+// venue "okx" 不在 accountStatuses、无 querier；tick1 fresh，tick2 stale 31m → quote critical。
+// 证明 qbus\known 兜底收录。注：CEX 生产路径经 cexQs→AccountQueriers 类型断言
+// （CEXPositionQuerier 无 Account 方法），不在本改动面。
+func TestMTHealth_UnknownQbusVenueStillMonitored(t *testing.T) {
+	log.SetOutput(os.NewFile(0, os.DevNull))
+	defer log.SetOutput(os.Stderr)
+
+	store := newFakeHealthStore() // accountStatuses 空
+	qbus := bus.New()
+	vs := &fakeVenueSource{queriers: nil}
+	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+
+	now := wedUTC
+	mon.now = func() time.Time { return now.Add(time.Second) }
+	// tick1：fresh 报价（首 tick 静默）
+	qbus.Publish(bus.Quote{Symbol: "BTCUSDT", Venue: "okx", Bid: 100, Ask: 100, Time: now})
+	mon.poll(context.Background())
+	if got := store.alertCount(); got != 0 {
+		t.Fatalf("tick1 (first tick): want 0, got %d", got)
+	}
+	// tick2：换 31min 前 stale 值 → quote critical
+	qbus.Publish(bus.Quote{Symbol: "BTCUSDT", Venue: "okx", Bid: 100, Ask: 100, Time: now.Add(-31 * time.Minute)})
+	mon.poll(context.Background())
+	alerts := store.snapshot()
+	var quoteCrit int
+	for _, a := range alerts {
+		if strings.Contains(a.msg, "quote") && a.level == "critical" {
+			quoteCrit++
+		}
+	}
+	if quoteCrit != 1 {
+		t.Fatalf("unknown qbus venue stale 应发 1 条 quote critical，got %d (alerts=%v)", quoteCrit, alerts)
 	}
 }
