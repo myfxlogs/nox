@@ -10,7 +10,6 @@ import (
 	"log"
 	"strings"
 	"sync"
-	"time"
 
 	"arb/internal/bus"
 	"arb/internal/safego"
@@ -69,8 +68,9 @@ type Pipeline struct {
 	swapArbComboAllow []ComboAllowSpec
 	notionalUSD       float64
 
-	// D-189 P0-2：现金流写入 seam——生产默认调 p.store.InsertCashflow，测试注入失败函数验证显式错误处理。
-	cashflowWriter func(ctx context.Context, posID int64, legNo int16, kind, venue string, amount float64, ts time.Time) error
+	// D-189 P0-2 → D-193-A 扩包（决策 8）：现金流写入 seam——生产默认调 p.store.InsertCashflowFull，
+	// 测试注入失败函数验证显式错误处理。签名改 Full 形态（接收 *pgstore.Cashflow，返回 (won, err)）。
+	cashflowWriter func(ctx context.Context, c *pgstore.Cashflow) (won bool, err error)
 
 	// D-189 P0-4：per-position close 锁——同进程并发 ClosePosition/ResumeClose 只允许一个执行。
 	closeMu  sync.Mutex

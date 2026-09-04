@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"arb/internal/bus"
 	"arb/internal/store/pgstore"
@@ -24,9 +23,9 @@ func TestWriteCloseCashflows_WriterFailure_ReturnsError(t *testing.T) {
 	}
 	reg := NewRegistry()
 	p := NewPipeline(reg, s, bus.New(), RiskLimits{}, "demo")
-	// 注入失败的 cashflowWriter
-	p.cashflowWriter = func(ctx context.Context, posID int64, legNo int16, kind, venue string, amount float64, ts time.Time) error {
-		return errors.New("模拟现金流写入失败")
+	// 注入失败的 cashflowWriter（D-193-A 扩包决策 8：签名改 Full 形态）
+	p.cashflowWriter = func(ctx context.Context, c *pgstore.Cashflow) (bool, error) {
+		return false, errors.New("模拟现金流写入失败")
 	}
 	err := p.writeCloseCashflows(ctx, 1, 0, "vA:mt5", 0.5, 1.0, 1.0)
 	if err == nil {
@@ -99,4 +98,61 @@ func TestResumeClose_PerPositionLock(t *testing.T) {
 	}
 	wg.Wait()
 	// 验证不 panic 即可（ResumeClose 会因无 legs/verifier 返回 error，但不 panic）
+}
+
+// TestWriteCloseCashflows_D193A_FactFields D-193-A 扩包 S1：writeCloseCashflows 成功路径
+// 断言 InsertCashflowFull 被调且填事实身份字段（决策 1/3/4/6）+ 幂等重放 won=false。
+func TestWriteCloseCashflows_D193A_FactFields(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE positions, position_legs, alerts, position_cashflows RESTART IDENTITY CASCADE`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	reg := NewRegistry()
+	p := NewPipeline(reg, s, bus.New(), RiskLimits{}, "demo")
+
+	var captured []*pgstore.Cashflow
+	p.cashflowWriter = func(ctx context.Context, c *pgstore.Cashflow) (bool, error) {
+		captured = append(captured, c)
+		return true, nil // 首次插入 won=true
+	}
+	// 写 swap cashflow（posID=1, legNo=0, venue="52993526:mt5"）；commission=0 只写 swap 一条
+	if err := p.writeCloseCashflows(ctx, 1, 0, "52993526:mt5", 0.5, 0, 1.0); err != nil {
+		t.Fatalf("writeCloseCashflows: %v", err)
+	}
+	if len(captured) != 1 {
+		t.Fatalf("captured len=%d, want 1", len(captured))
+	}
+	cf := captured[0]
+	// 决策 1：event_key=exec:<posID>:<legNo>:<kind>:<YYYY-MM-DD>
+	if cf.EventKey == nil || *cf.EventKey == "" {
+		t.Fatal("event_key nil/empty")
+	}
+	wantPrefix := "exec:1:0:swap:"
+	if !strings.HasPrefix(*cf.EventKey, wantPrefix) {
+		t.Errorf("event_key=%s, want prefix %s", *cf.EventKey, wantPrefix)
+	}
+	// 决策 3：quality='estimated'
+	if cf.Quality == nil || *cf.Quality != "estimated" {
+		t.Errorf("quality=%v, want estimated", cf.Quality)
+	}
+	// 决策 4：source='exec'
+	if cf.Source == nil || *cf.Source != "exec" {
+		t.Errorf("source=%v, want exec", cf.Source)
+	}
+	// 决策 6：account_id=52993526
+	if cf.AccountID == nil || *cf.AccountID != 52993526 {
+		t.Errorf("account_id=%v, want 52993526", cf.AccountID)
+	}
+	// 决策 2/7：external_event_id=NULL
+	if cf.ExternalEventID != nil {
+		t.Errorf("external_event_id=%v, want nil", cf.ExternalEventID)
+	}
+	// 幂等重放：cashflowWriter 返回 won=false（已存在）
+	p.cashflowWriter = func(ctx context.Context, c *pgstore.Cashflow) (bool, error) {
+		return false, nil // 幂等命中 won=false
+	}
+	if err := p.writeCloseCashflows(ctx, 1, 0, "52993526:mt5", 0.5, 0, 1.0); err != nil {
+		t.Fatalf("writeCloseCashflows replay: %v", err)
+	}
 }

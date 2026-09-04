@@ -1,4 +1,5 @@
 // pipeline_cashflow.go —— D-189 P0-2：平仓现金流写入统一入口（显式错误处理 + per-leg/day 幂等）。
+// D-193-A 扩包：迁 InsertCashflowFull（决策 8），填事实身份字段（决策 1-7）。
 // 从 pipeline_legs_close.go 拆出（pipeline.go >300 行软警告）。
 package exec
 
@@ -35,6 +36,7 @@ func (p *Pipeline) writeCloseCashflows(ctx context.Context, posID int64, legNo i
 
 // insertCashflowIdempotent 幂等写入单条现金流：先查 HasCashflowForLegDay，已存在跳过，未存在写入。
 // 查询失败视为失败（不得当作不存在）；写入失败返回 error。生产路径不得绕过此函数直接调 store。
+// D-193-A 扩包：调 InsertCashflowFull（决策 8），填事实身份字段（决策 1-7）。
 func (p *Pipeline) insertCashflowIdempotent(ctx context.Context, posID int64, legNo int16, kind, venue string, amount float64, dayStart, ts time.Time) error {
 	has, err := p.store.HasCashflowForLegDay(ctx, posID, legNo, kind, dayStart)
 	if err != nil {
@@ -46,19 +48,61 @@ func (p *Pipeline) insertCashflowIdempotent(ctx context.Context, posID int64, le
 		// 已存在 → 幂等跳过（ResumeClose 重复入账防护）
 		return nil
 	}
-	if err := p.cashflowWriterOrStore().InsertCashflow(ctx, posID, legNo, kind, venue, amount, ts); err != nil {
+	// D-193-A 扩包（决策 1-7）：构造 Cashflow 填事实身份字段。
+	// event_key=exec:<posID>:<legNo>:<kind>:<occurred_at YYYY-MM-DD>（决策 1）
+	// quality='estimated'（公式路径，决策 3）；source='exec'（决策 4）
+	// occurred_at=ts（平仓成交时刻，决策 5）；received_ts=now（写入时间）
+	// account_id=venue 前缀数字（决策 6）；external_event_id/raw_*=NULL（公式路径不造假，决策 2/7）
+	now := time.Now().UTC()
+	dayStr := dayStart.Format("2006-01-02")
+	eventKey := fmt.Sprintf("exec:%d:%d:%s:%s", posID, legNo, kind, dayStr)
+	quality := "estimated"
+	src := "exec"
+	cf := &pgstore.Cashflow{
+		PositionID: posID,
+		LegNo:      &legNo,
+		Kind:       kind,
+		Venue:      venue,
+		AmountUSD:  amount,
+		Ts:         ts,
+		EventKey:   &eventKey,
+		Source:     &src,
+		Quality:    &quality,
+		OccurredAt: &ts,
+		ReceivedTs: &now,
+		AccountID:  parseVenueAccountIDExec(venue),
+	}
+	if _, err := p.cashflowWriterOrStore().InsertCashflowFull(ctx, cf); err != nil {
 		p.alertCashflowFailure(ctx, posID, legNo, kind, venue, fmt.Errorf("insert: %w", err))
 		return fmt.Errorf("insert: %w", err)
 	}
 	return nil
 }
 
+// parseVenueAccountIDExec D-193-A 扩包（决策 6）：从 venue key 前缀解析 account_id。
+// venue 格式如 "52993526:mt5" → 52993526；解析失败→nil（不猜）。
+func parseVenueAccountIDExec(venue string) *int64 {
+	// 复用 swapledger 同逻辑；独立函数避免跨包依赖。
+	for i := 0; i < len(venue); i++ {
+		if venue[i] == ':' {
+			var id int64
+			_, err := fmt.Sscanf(venue[:i], "%d", &id)
+			if err != nil {
+				return nil
+			}
+			return &id
+		}
+	}
+	return nil
+}
+
 // cashflowWriterOrStore 返回 cashflowWriter seam（D-189 P0-2），nil 时回退 p.store（零值 Pipeline 安全）。
-// 返回 store 接口以兼容测试注入；生产路径不得绕过此函数直接调 p.store.InsertCashflow。
+// D-193-A 扩包（决策 8）：接口签名改 Full 形态。
+// 返回 store 接口以兼容测试注入；生产路径不得绕过此函数直接调 p.store.InsertCashflowFull。
 func (p *Pipeline) cashflowWriterOrStore() cashflowInserter {
 	if p.cashflowWriter != nil {
-		return cashflowInserterFunc(func(ctx context.Context, posID int64, legNo int16, kind, venue string, amount float64, ts time.Time) error {
-			return p.cashflowWriter(ctx, posID, legNo, kind, venue, amount, ts)
+		return cashflowInserterFunc(func(ctx context.Context, c *pgstore.Cashflow) (bool, error) {
+			return p.cashflowWriter(ctx, c)
 		})
 	}
 	return p.store
@@ -75,16 +119,16 @@ func (p *Pipeline) alertCashflowFailure(ctx context.Context, posID int64, legNo 
 	}
 }
 
-// cashflowInserter 抽象 store.InsertCashflow 与 seam 函数（D-189 P0-2）。
+// cashflowInserter 抽象 store.InsertCashflowFull 与 seam 函数（D-189 P0-2 → D-193-A 扩包决策 8 改签名）。
 type cashflowInserter interface {
-	InsertCashflow(ctx context.Context, posID int64, legNo int16, kind, venue string, amount float64, ts time.Time) error
+	InsertCashflowFull(ctx context.Context, c *pgstore.Cashflow) (won bool, err error)
 }
 
 // cashflowInserterFunc 函数适配器（实现 cashflowInserter）。
-type cashflowInserterFunc func(ctx context.Context, posID int64, legNo int16, kind, venue string, amount float64, ts time.Time) error
+type cashflowInserterFunc func(ctx context.Context, c *pgstore.Cashflow) (won bool, err error)
 
-func (f cashflowInserterFunc) InsertCashflow(ctx context.Context, posID int64, legNo int16, kind, venue string, amount float64, ts time.Time) error {
-	return f(ctx, posID, legNo, kind, venue, amount, ts)
+func (f cashflowInserterFunc) InsertCashflowFull(ctx context.Context, c *pgstore.Cashflow) (won bool, err error) {
+	return f(ctx, c)
 }
 
 // compile-time: pgstore.Store 实现 cashflowInserter。
