@@ -646,6 +646,7 @@ message HedgeStructure {
   double net_exposure_usd = 6;  // net_exposure_trx × mid
   HedgeCarry carry = 7;
   HedgeAccounts accts = 8;
+  bool ws_connected = 9;  // cmc ws 事件驱动健康（true=绿/false=黄，兜底中）
 }
 
 message GetHedgeStructureRequest {}
