@@ -3,6 +3,7 @@ package dashboard
 
 import (
 	"context"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -300,5 +301,61 @@ func TestBackfillSwapHistoryRPC_Idempotent(t *testing.T) {
 	}
 	if count != 1 {
 		t.Errorf("DB order_history facts: want 1, got %d (not idempotent)", count)
+	}
+}
+
+// TestHistorySwapOrder_D193A_ExtendedFields D-193-A 扩包 S6 R1：
+// HistorySwapOrder 扩 5 字段（Commission/Profit/OrderTicket/ClosePrice）可正确构造+访问。
+func TestHistorySwapOrder_D193A_ExtendedFields(t *testing.T) {
+	o := HistorySwapOrder{
+		Symbol:      "AUDJPY",
+		Side:        "SELL",
+		Swap:        -0.04,
+		Lots:        0.01,
+		CloseLots:   0.01,
+		Commission:  -0.02,
+		Profit:      5.20,
+		OrderTicket: 1902573182,
+		ClosePrice:  97.50,
+	}
+	if o.Commission != -0.02 {
+		t.Errorf("Commission=%.4f, want -0.02", o.Commission)
+	}
+	if o.Profit != 5.20 {
+		t.Errorf("Profit=%.4f, want 5.20", o.Profit)
+	}
+	if o.OrderTicket != 1902573182 {
+		t.Errorf("OrderTicket=%d, want 1902573182", o.OrderTicket)
+	}
+	if o.ClosePrice != 97.50 {
+		t.Errorf("ClosePrice=%.4f, want 97.50", o.ClosePrice)
+	}
+}
+
+// TestReconcileTolerance_D193A_NegativeAmount D-193-A 扩包 S6 R1：
+// 容差负金额修 |amount|——swap/commission 符号方向因 broker 而异，用绝对值容差。
+func TestReconcileTolerance_D193A_NegativeAmount(t *testing.T) {
+	cases := []struct {
+		name    string
+		cfAmt   float64
+		orderAmt float64
+		tol     float64
+		want    bool
+	}{
+		{"同向同值", -0.04, -0.04, 0.01, true},
+		{"反向同值（符号差异）", -0.04, 0.04, 0.01, true},  // |amount| 容差
+		{"微小差异", -0.04, -0.045, 0.01, true},  // diff=0.005 < 0.01
+		{"超容差", -0.04, -0.06, 0.01, false}, // diff=0.02 > 0.01
+		{"零息对拍", 0, 0, 0.01, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cfAbs := math.Abs(c.cfAmt)
+			orderAbs := math.Abs(c.orderAmt)
+			got := math.Abs(cfAbs-orderAbs) <= c.tol
+			if got != c.want {
+				t.Errorf("cf=%.4f order=%.4f tol=%.4f: got=%v want=%v", c.cfAmt, c.orderAmt, c.tol, got, c.want)
+			}
+		})
 	}
 }

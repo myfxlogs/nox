@@ -16,16 +16,21 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// HistorySwapOrder 已平仓订单的 swap 相关字段（D-181 S1 回溯用）。
+// HistorySwapOrder 已平仓订单的 swap 相关字段（D-181 S1 回溯用 + D-193-A 扩包 S6 对拍用）。
 // CloseTime 为零值 = 未平仓（跳过）；Swap=0 = 无结算（跳过）；Lots<=0 = 异常（跳过）。
+// D-193-A 扩包 S6 R1：扩 Commission/Profit/OrderTicket/ClosePrice（对拍 cashflows 用，proto 全在 mt5.pb.go:3977-4040）。
 type HistorySwapOrder struct {
-	Symbol    string
-	Side      string // "BUY"/"SELL"
-	Swap      float64
-	Lots      float64
-	CloseLots float64 // MT5 部分平仓实际量；MT4 无此字段=Lots
-	OpenTime  time.Time
-	CloseTime time.Time
+	Symbol     string
+	Side       string // "BUY"/"SELL"
+	Swap       float64
+	Lots       float64
+	CloseLots  float64 // MT5 部分平仓实际量；MT4 无此字段=Lots
+	OpenTime   time.Time
+	CloseTime  time.Time
+	Commission float64 // D-193-A S6：对拍 cashflows.commission
+	Profit     float64 // D-193-A S6：对拍 realized_pnl（deal profit）
+	OrderTicket int64  // D-193-A S6：external_event_id 源
+	ClosePrice  float64 // D-193-A S6：raw_amount 换算用
 }
 
 // orderHistoryScan 闭包类型：拉指定时间窗内的已平仓订单（D-181 S1）。
@@ -84,13 +89,17 @@ func mt5OrderHistoryScan(client mt5pb.MT5Client, token string) orderHistoryScan 
 					closeLots = ord.GetLots() // 回退全量手数
 				}
 				all = append(all, HistorySwapOrder{
-					Symbol:    ord.GetSymbol(),
-					Side:      side,
-					Swap:      ord.GetSwap(),
-					Lots:      ord.GetLots(),
-					CloseLots: closeLots,
-					OpenTime:  openTS.AsTime(),
-					CloseTime: closeTS.AsTime(),
+					Symbol:      ord.GetSymbol(),
+					Side:        side,
+					Swap:        ord.GetSwap(),
+					Lots:        ord.GetLots(),
+					CloseLots:   closeLots,
+					OpenTime:    openTS.AsTime(),
+					CloseTime:   closeTS.AsTime(),
+					Commission:  ord.GetCommission(),
+					Profit:      ord.GetProfit(),
+					OrderTicket: ord.GetTicket(),
+					ClosePrice:  ord.GetClosePrice(),
 				})
 			}
 			pagesCount := result.GetPagesCount()
@@ -133,13 +142,17 @@ func mt4OrderHistoryScan(client mt4.MT4Client, token string) orderHistoryScan {
 				side = "SELL"
 			}
 			all = append(all, HistorySwapOrder{
-				Symbol:    ord.GetSymbol(),
-				Side:      side,
-				Swap:      ord.GetSwap(),
-				Lots:      ord.GetLots(),
-				CloseLots: ord.GetLots(), // MT4 无 CloseLots
-				OpenTime:  openTS.AsTime(),
-				CloseTime: closeTS.AsTime(),
+				Symbol:      ord.GetSymbol(),
+				Side:        side,
+				Swap:        ord.GetSwap(),
+				Lots:        ord.GetLots(),
+				CloseLots:   ord.GetLots(), // MT4 无 CloseLots
+				OpenTime:    openTS.AsTime(),
+				CloseTime:   closeTS.AsTime(),
+				Commission:  ord.GetCommission(),
+				Profit:      ord.GetProfit(),
+				OrderTicket: int64(ord.GetTicket()),
+				ClosePrice:  ord.GetClosePrice(),
 			})
 		}
 		return all, nil
