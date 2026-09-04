@@ -124,6 +124,8 @@ func (w *WsClient) startGuard(ctx context.Context) { // C2 路径② 新鲜度�
 				staleStrikes++
 				if staleStrikes >= 2 {
 					w.healthy.Store(false) // 路径②：哑连击穿（连接活但无事件）
+					// D-193-A 扩包返修 R4：guard 翻转打一行（每次翻转一条）
+					log.Printf("[cmc-ws] freshness guard: no events > window, healthy=false → REST fallback")
 				}
 			} else {
 				staleStrikes = 0
@@ -166,6 +168,8 @@ func (w *WsClient) runOnce(ctx context.Context) error {
 			return fmt.Errorf("subscribe type %d: %w", t, err)
 		}
 	}
+	// D-193-A 扩包返修 R4：订阅成功后打一行（每次连接一条，勿每事件打）
+	log.Printf("[cmc-ws] connected+subscribed account=%d", w.accountID)
 	// 4. heartbeat goroutine（5s 发送，读超时 12s → 断连进重连）
 	done := make(chan struct{})
 	defer close(done)
