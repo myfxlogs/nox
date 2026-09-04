@@ -38,6 +38,13 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 	if err != nil {
 		log.Printf("[reconcile] list legged positions: %v", err)
 	}
+	// D-215：CLOSING 持仓查询上移（原 3d 段），结果复用给 3d 段 + nonOpenLegKeys 抑制集合。
+	listCtx, listCancel = r.withTimeout(ctx)
+	closingPositions, err := r.store.ListPositions(listCtx, "CLOSING", 50, 0)
+	listCancel()
+	if err != nil {
+		log.Printf("[reconcile] list closing positions: %v", err)
+	}
 	now := time.Now()
 
 	// localLegs: venue_key+":"+ticket → (leg, position)，收尾需要 position 引用
@@ -77,6 +84,29 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 		for _, o := range orders {
 			key := o.VenueKey + ":" + o.Ticket
 			venueOrders[key] = o
+		}
+	}
+
+	// D-215：nonOpenLegKeys 抑制集合——非 OPEN 态持仓（CLOSING 平仓执行中 / LEGGED 部分成交）
+	// 的在途腿 key。这些腿在 venue 侧存在是已知状态（正在平/待处置），不是失联——孤儿检查跳过。
+	// 不并入 localLegs：并入会走「本地有 venue 无→查证→autoClose」路径，autoClose 对 CLOSING 的
+	// ClaimClose 必返 ErrClaimFailed → 每 5min 死循环（设计已验证，勿改）。
+	nonOpenLegKeys := make(map[string]int64) // venue_key+":"+ticket → position_id（日志用）
+	nonOpenPositions := make([]pgstore.Position, 0, len(closingPositions)+len(leggedPositions))
+	nonOpenPositions = append(nonOpenPositions, closingPositions...)
+	nonOpenPositions = append(nonOpenPositions, leggedPositions...)
+	for _, p := range nonOpenPositions {
+		sub, cancel := r.withTimeout(ctx)
+		legs, err := r.store.ListPositionLegs(sub, p.ID)
+		cancel()
+		if err != nil {
+			log.Printf("[reconcile] list legs for non-OPEN pos %d: %v (skip suppression)", p.ID, err)
+			continue
+		}
+		for _, leg := range legs {
+			if leg.OrderID != "" && leg.Phase == "OPEN" {
+				nonOpenLegKeys[leg.Venue+":"+leg.OrderID] = p.ID
+			}
 		}
 	}
 
@@ -163,36 +193,29 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 		}
 	}
 
-	// 3d. D-159 W2a R3-6 / D-189 P0-4：CLOSING 持仓扫描（所有 active 状态都进入对账，不只扫描 OPEN）。
+	// 3d. D-159 W2a R3-6 / D-189 P0-4：CLOSING 持仓扫描（closingPositions 已在开头查询，D-215 上移复用）。
 	// D-189 P0-4：超时分支调 ResumeClose 自动重触发（不再只告警等人工）；UNKNOWN 只告警不自动重试。
-	listCtx, listCancel = r.withTimeout(ctx)
-	closingPositions, err := r.store.ListPositions(listCtx, "CLOSING", 50, 0)
-	listCancel()
-	if err != nil {
-		log.Printf("[reconcile] list CLOSING: %v (skip)", err)
-	} else {
-		for _, p := range closingPositions {
-			if !isClosingStuck(&p, now) {
-				continue
-			}
-			// D-189 P0-4 S2：UNKNOWN（uncertainty_reason 非空）只告警，不自动重试（可能已成交，盲平=反向开新仓）。
-			if p.UncertaintyReason != nil && *p.UncertaintyReason != "" {
-				msg := fmt.Sprintf("CLOSING UNKNOWN position #%d 超 %v 未确认（人工/OrderHistory 查证，不自动重试）", p.ID, closingStuckTimeout)
-				r.insertAlertCtx(ctx, "critical", msg)
-				log.Printf("[reconcile] %s", msg)
-				continue
-			}
-			// D-189 P0-4 S5：普通 CLOSING 超时 → 自动重触发 ResumeClose。
-			msg := fmt.Sprintf("CLOSING position #%d 超 %v 未完成，自动重触发 ResumeClose", p.ID, closingStuckTimeout)
+	for _, p := range closingPositions {
+		if !isClosingStuck(&p, now) {
+			continue
+		}
+		// D-189 P0-4 S2：UNKNOWN（uncertainty_reason 非空）只告警，不自动重试（可能已成交，盲平=反向开新仓）。
+		if p.UncertaintyReason != nil && *p.UncertaintyReason != "" {
+			msg := fmt.Sprintf("CLOSING UNKNOWN position #%d 超 %v 未确认（人工/OrderHistory 查证，不自动重试）", p.ID, closingStuckTimeout)
 			r.insertAlertCtx(ctx, "critical", msg)
 			log.Printf("[reconcile] %s", msg)
-			if r.closer != nil {
-				sub, cancel := r.withTimeout(ctx)
-				if err := r.closer.ResumeClose(sub, p.ID); err != nil {
-					log.Printf("[reconcile] ResumeClose pos=%d failed (next cycle retry): %v", p.ID, err)
-				}
-				cancel()
+			continue
+		}
+		// D-189 P0-4 S5：普通 CLOSING 超时 → 自动重触发 ResumeClose。
+		msg := fmt.Sprintf("CLOSING position #%d 超 %v 未完成，自动重触发 ResumeClose", p.ID, closingStuckTimeout)
+		r.insertAlertCtx(ctx, "critical", msg)
+		log.Printf("[reconcile] %s", msg)
+		if r.closer != nil {
+			sub, cancel := r.withTimeout(ctx)
+			if err := r.closer.ResumeClose(sub, p.ID); err != nil {
+				log.Printf("[reconcile] ResumeClose pos=%d failed (next cycle retry): %v", p.ID, err)
 			}
+			cancel()
 		}
 	}
 
@@ -201,6 +224,11 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 	for key, vo := range venueOrders {
 		if _, ok := localLegs[key]; ok {
 			continue // 本地有，正常
+		}
+		// D-215：CLOSING/LEGGED 在途腿在 venue 侧存在是已知状态（正在平/待处置），非失联 → 跳过。
+		if posID, ok := nonOpenLegKeys[key]; ok {
+			log.Printf("[reconcile] venue %s ticket=%s 属 CLOSING/LEGGED position #%d 在途腿，跳过失联告警", vo.Venue, vo.Ticket, posID)
+			continue
 		}
 		if !isARBOrder(vo.Comment) {
 			log.Printf("[reconcile] venue %s 持仓 ticket=%s symbol=%s comment=%q 为系统外单，不追踪",
