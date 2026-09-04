@@ -120,3 +120,21 @@ func (s *Store) SetBrokerAccountStatus(ctx context.Context, venue, status string
 	_, err := s.pool.Exec(ctx, `UPDATE broker_accounts SET status = $1 WHERE venue = $2`, status, venue)
 	return err
 }
+
+// ListBrokerAccountStatuses 返回 venue → status（mt-health D-216：窄查询，不取凭据列）。
+func (s *Store) ListBrokerAccountStatuses(ctx context.Context) (map[string]string, error) {
+	rows, err := s.pool.Query(ctx, `SELECT venue, status FROM broker_accounts`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	m := make(map[string]string)
+	for rows.Next() {
+		var venue, status string
+		if err := rows.Scan(&venue, &status); err != nil {
+			return nil, err
+		}
+		m[venue] = status
+	}
+	return m, rows.Err()
+}
