@@ -42,7 +42,8 @@ type Store interface {
 	// D-159 W3a R5：per-leg 幂等（HasCashflowForLegDay 替代 position 级 HasCashflowForDay——
 	// position 级短路会让失败腿永久漏记，R5：一腿失败下一轮只补失败腿）。
 	HasCashflowForLegDay(ctx context.Context, posID int64, legNo int16, kind string, day time.Time) (bool, error)
-	InsertCashflow(ctx context.Context, posID int64, legNo int16, kind, venue string, amount float64, ts time.Time) error
+	// D-193-A 扩包：生产写入迁 InsertCashflowFull（带事实身份字段）；旧 InsertCashflow 保留供测试基建。
+	InsertCashflowFull(ctx context.Context, c *pgstore.Cashflow) (won bool, err error)
 	LatestFacts(ctx context.Context, kind, venue, symbol string) ([]fact.Fact, error)
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
 }

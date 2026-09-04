@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 	"time"
 
 	"arb/internal/fact"
@@ -81,12 +83,54 @@ func (l *Ledger) accountPosition(ctx context.Context, pos pgstore.Position, day 
 		if amount == 0 {
 			continue // 零息 venue → 不写 cashflow（避免无意义行）
 		}
-		if err := l.store.InsertCashflow(ctx, pos.ID, leg.LegNo, kind, leg.Venue, amount, day); err != nil {
-			return written, fmt.Errorf("insert cashflow leg %d: %w", leg.LegNo, err)
+		// D-193-A 扩包（决策 1-7）：迁 InsertCashflowFull，填事实身份字段。
+		// event_key=<source>:<posID>:<legNo>:<kind>:<occurred_at YYYY-MM-DD>（决策 1）
+		// quality='estimated'（公式记账，决策 3）；source='swapledger'（决策 4）
+		// occurred_at=day 零点（业务时间，决策 5）；received_ts=now（写入时间）
+		// account_id=venue 前缀数字（决策 6）；external_event_id/raw_*=NULL（公式路径不造假，决策 2/7）
+		now := time.Now().UTC()
+		dayStr := day.Format("2006-01-02")
+		eventKey := fmt.Sprintf("swapledger:%d:%d:%s:%s", pos.ID, leg.LegNo, kind, dayStr)
+		quality := "estimated"
+		src := "swapledger"
+		legNoVal := leg.LegNo
+		cf := &pgstore.Cashflow{
+			PositionID: pos.ID,
+			LegNo:      &legNoVal,
+			Kind:       kind,
+			Venue:      leg.Venue,
+			AmountUSD:  amount,
+			Ts:         day,
+			EventKey:   &eventKey,
+			Source:     &src,
+			Quality:    &quality,
+			OccurredAt: &day,
+			ReceivedTs: &now,
+			AccountID:  parseVenueAccountID(leg.Venue),
 		}
-		written++
+		won, err := l.store.InsertCashflowFull(ctx, cf)
+		if err != nil {
+			return written, fmt.Errorf("insert cashflow full leg %d: %w", leg.LegNo, err)
+		}
+		if won {
+			written++
+		}
 	}
 	return written, nil
+}
+
+// parseVenueAccountID D-193-A 扩包（决策 6）：从 venue key 前缀解析 account_id。
+// venue 格式如 "52993526:mt5" → 52993526；解析失败→nil（不猜）。
+func parseVenueAccountID(venue string) *int64 {
+	parts := strings.SplitN(venue, ":", 2)
+	if len(parts) == 0 {
+		return nil
+	}
+	id, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return nil
+	}
+	return &id
 }
 
 // legSwapAmount 计算单腿当日 swap/funding USD 金额（纯函数，可单测）。

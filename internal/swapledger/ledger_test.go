@@ -333,11 +333,13 @@ func TestLegSwapAmount_NonSettleVenue(t *testing.T) {
 }
 
 // nonSettleStubStore TestAccountPosition_NonSettleVenue 用 mock Store（D-112）。
-// D-159 W3a R5：per-leg 幂等——HasCashflowForLegDay 替代 HasCashflowForDay，InsertCashflow 带 legNo。
+// D-159 W3a R5：per-leg 幂等——HasCashflowForLegDay 替代 HasCashflowForDay。
+// D-193-A 扩包（决策 8）：InsertCashflow → InsertCashflowFull（接收 *pgstore.Cashflow）。
 type nonSettleStubStore struct {
 	legs            []pgstore.PositionLeg
 	hasCashflowLegs map[int16]bool // legNo → 当日已记（per-leg 幂等模拟）
-	insertedVenues  []string       // 记录 InsertCashflow 被调用的 venue
+	insertedVenues  []string       // 记录 InsertCashflowFull 被调用的 venue
+	insertedCFs     []*pgstore.Cashflow // D-193-A 扩包：记录完整 Cashflow 供断言
 }
 
 func (s *nonSettleStubStore) ListOpenPositionsByType(_ context.Context, _ []string) ([]pgstore.Position, error) {
@@ -349,13 +351,18 @@ func (s *nonSettleStubStore) ListPositionLegs(_ context.Context, _ int64) ([]pgs
 func (s *nonSettleStubStore) HasCashflowForLegDay(_ context.Context, _ int64, legNo int16, _ string, _ time.Time) (bool, error) {
 	return s.hasCashflowLegs[legNo], nil
 }
-func (s *nonSettleStubStore) InsertCashflow(_ context.Context, _ int64, legNo int16, _, venue string, _ float64, _ time.Time) error {
+func (s *nonSettleStubStore) InsertCashflowFull(_ context.Context, c *pgstore.Cashflow) (bool, error) {
 	if s.hasCashflowLegs == nil {
 		s.hasCashflowLegs = map[int16]bool{}
 	}
+	legNo := int16(-1)
+	if c.LegNo != nil {
+		legNo = *c.LegNo
+	}
 	s.hasCashflowLegs[legNo] = true
-	s.insertedVenues = append(s.insertedVenues, venue)
-	return nil
+	s.insertedVenues = append(s.insertedVenues, c.Venue)
+	s.insertedCFs = append(s.insertedCFs, c)
+	return true, nil
 }
 func (s *nonSettleStubStore) LatestFacts(_ context.Context, _, _, _ string) ([]fact.Fact, error) {
 	return nil, nil
@@ -398,6 +405,36 @@ func TestAccountPosition_NonSettleVenue(t *testing.T) {
 	}
 	if len(store.insertedVenues) != 1 || store.insertedVenues[0] != "52993526:mt5" {
 		t.Errorf("inserted venues = %v, want [52993526:mt5] (Exness should be skipped)", store.insertedVenues)
+	}
+	// D-193-A 扩包 S1 断言（决策 1/3/4/6）：InsertCashflowFull 填事实身份字段。
+	if len(store.insertedCFs) != 1 {
+		t.Fatalf("insertedCFs len=%d, want 1", len(store.insertedCFs))
+	}
+	cf := store.insertedCFs[0]
+	// 决策 1：event_key 格式 swapledger:<posID>:<legNo>:<kind>:<YYYY-MM-DD>
+	wantKey := "swapledger:1:1:swap:2026-08-24"
+	if cf.EventKey == nil || *cf.EventKey != wantKey {
+		t.Errorf("event_key=%v, want %s", cf.EventKey, wantKey)
+	}
+	// 决策 3：quality='estimated'（公式路径）
+	if cf.Quality == nil || *cf.Quality != "estimated" {
+		t.Errorf("quality=%v, want estimated", cf.Quality)
+	}
+	// 决策 4：source='swapledger'
+	if cf.Source == nil || *cf.Source != "swapledger" {
+		t.Errorf("source=%v, want swapledger", cf.Source)
+	}
+	// 决策 6：account_id=venue 前缀数字（52993526）
+	if cf.AccountID == nil || *cf.AccountID != 52993526 {
+		t.Errorf("account_id=%v, want 52993526", cf.AccountID)
+	}
+	// 决策 2/7：external_event_id/raw_*=NULL（公式路径不造假）
+	if cf.ExternalEventID != nil {
+		t.Errorf("external_event_id=%v, want nil (公式路径不造假)", cf.ExternalEventID)
+	}
+	// 决策 5：occurred_at=day 零点
+	if cf.OccurredAt == nil || !cf.OccurredAt.Equal(monday) {
+		t.Errorf("occurred_at=%v, want %v (day 零点)", cf.OccurredAt, monday)
 	}
 }
 
