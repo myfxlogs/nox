@@ -46,8 +46,8 @@ type positionJSON struct {
 
 // orderJSON 持仓关联订单（D-208 v2-A：AccountCollector 解析 orders[0]）。
 type orderJSON struct {
-	OrderID           string `json:"orderId"`
-	FilledPrice       string `json:"filledPrice"`
+	OrderID            string `json:"orderId"`
+	FilledPrice        string `json:"filledPrice"`
 	SubmittedTimestamp string `json:"submittedTimestamp"` // RFC3339，可能含 7 位小数秒
 }
 
