@@ -265,13 +265,7 @@ func (w *WsClient) handleMessage(ctx context.Context, data []byte) {
 	msg := env.Msg
 	switch msg.Type {
 	case 5:
-		var s accountSummaryJSON
-		if err := json.Unmarshal(msg.Data, &s); err == nil {
-			w.lastSummaryMu.Lock()
-			w.lastSummary = s
-			w.lastSummaryMu.Unlock()
-			w.persistSummary(ctx, &s)
-		}
+		w.handleType5(ctx, msg.Data)
 	case 6:
 		w.handleType6(ctx, msg.Data)
 	case 7:
@@ -280,6 +274,23 @@ func (w *WsClient) handleMessage(ctx context.Context, data []byte) {
 		return
 	}
 	w.markEvent()
+}
+
+// handleType5 D-193-A/R7 返修：type5 账户摘要加 60s 节流+ε 变化检测（与 type6 同法，共享 lastType6Val/lastSummaryPersist）。
+// type5 是全量摘要推送（频繁），仅节流窗+TotalAccountValue 变化 > ε 时落库；lastSummary 总更新（缓存最新全量供 type6/type7 复用）。
+func (w *WsClient) handleType5(ctx context.Context, data json.RawMessage) {
+	var s accountSummaryJSON
+	if err := json.Unmarshal(data, &s); err != nil {
+		return
+	}
+	w.lastSummaryMu.Lock()
+	delta := parseFloat(s.TotalAccountValue) - w.lastType6Val
+	shouldPersist := time.Since(w.lastSummaryPersist) >= wsType6Throttle && (delta > wsType6MinDelta || delta < -wsType6MinDelta)
+	w.lastSummary = s
+	w.lastSummaryMu.Unlock()
+	if shouldPersist {
+		w.persistSummary(ctx, &s)
+	}
 }
 func (w *WsClient) handleType6(ctx context.Context, data json.RawMessage) {
 	var v struct {
@@ -434,4 +445,3 @@ func (w *WsClient) emitFact(ctx context.Context, facts []fact.Fact) {
 		}
 	}
 }
-
