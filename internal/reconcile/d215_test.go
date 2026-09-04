@@ -6,7 +6,6 @@ package reconcile
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -123,11 +122,5 @@ func TestD215_SuppressionUsesCompositeKey(t *testing.T) {
 	}
 	if !hasAlert(fs, "critical", "本地未记录") {
 		t.Errorf("缺少 critical「本地未记录」（acctB:123 不应被 acctA:123 抑制），alerts=%v", fs.alerts)
-	}
-	// 确认抑制集合确实含 acctA 的 key（而非 acctB）——通过 alerts 不含 acctA 误抑制间接验证
-	for _, a := range fs.alerts {
-		if a.level == "critical" && strings.Contains(a.msg, "ticket=123") && !strings.Contains(a.msg, "acctB") {
-			// 告警文案含 venue=acctB:mt5（venue 字段），此处仅确认告警发生即可
-		}
 	}
 }
