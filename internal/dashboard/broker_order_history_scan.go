@@ -20,16 +20,16 @@ import (
 // CloseTime 为零值 = 未平仓（跳过）；Swap=0 = 无结算（跳过）；Lots<=0 = 异常（跳过）。
 // D-193-A 扩包 S6 R1：扩 Commission/Profit/OrderTicket/ClosePrice（对拍 cashflows 用，proto 全在 mt5.pb.go:3977-4040）。
 type HistorySwapOrder struct {
-	Symbol     string
-	Side       string // "BUY"/"SELL"
-	Swap       float64
-	Lots       float64
-	CloseLots  float64 // MT5 部分平仓实际量；MT4 无此字段=Lots
-	OpenTime   time.Time
-	CloseTime  time.Time
-	Commission float64 // D-193-A S6：对拍 cashflows.commission
-	Profit     float64 // D-193-A S6：对拍 realized_pnl（deal profit）
-	OrderTicket int64  // D-193-A S6：external_event_id 源
+	Symbol      string
+	Side        string // "BUY"/"SELL"
+	Swap        float64
+	Lots        float64
+	CloseLots   float64 // MT5 部分平仓实际量；MT4 无此字段=Lots
+	OpenTime    time.Time
+	CloseTime   time.Time
+	Commission  float64 // D-193-A S6：对拍 cashflows.commission
+	Profit      float64 // D-193-A S6：对拍 realized_pnl（deal profit）
+	OrderTicket int64   // D-193-A S6：external_event_id 源
 	ClosePrice  float64 // D-193-A S6：raw_amount 换算用
 }
 

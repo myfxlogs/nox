@@ -336,16 +336,16 @@ func TestHistorySwapOrder_D193A_ExtendedFields(t *testing.T) {
 // 容差负金额修 |amount|——swap/commission 符号方向因 broker 而异，用绝对值容差。
 func TestReconcileTolerance_D193A_NegativeAmount(t *testing.T) {
 	cases := []struct {
-		name    string
-		cfAmt   float64
+		name     string
+		cfAmt    float64
 		orderAmt float64
-		tol     float64
-		want    bool
+		tol      float64
+		want     bool
 	}{
 		{"同向同值", -0.04, -0.04, 0.01, true},
-		{"反向同值（符号差异）", -0.04, 0.04, 0.01, true},  // |amount| 容差
-		{"微小差异", -0.04, -0.045, 0.01, true},  // diff=0.005 < 0.01
-		{"超容差", -0.04, -0.06, 0.01, false}, // diff=0.02 > 0.01
+		{"反向同值（符号差异）", -0.04, 0.04, 0.01, true}, // |amount| 容差
+		{"微小差异", -0.04, -0.045, 0.01, true},     // diff=0.005 < 0.01
+		{"超容差", -0.04, -0.06, 0.01, false},      // diff=0.02 > 0.01
 		{"零息对拍", 0, 0, 0.01, true},
 	}
 	for _, c := range cases {
