@@ -107,7 +107,9 @@ func (s *Store) SumCashflowsNet(ctx context.Context, posID int64) (float64, erro
 	return sum, nil
 }
 
-// InsertCashflowFull D-193-A：完整字段写入（新行强制 event_key + quality=actual）。
+// InsertCashflowFull D-193-A：完整字段写入（事实幂等键 event_key + 调用方按证据等级传 quality）。
+// D-193-A 扩包（决策 3）：quality 由调用方按证据等级传入——公式路径传 'estimated'，
+// 对拍金额匹配后升 'actual'，不匹配置 'unknown'。本函数不强制 quality=actual。
 // event_key 为事实幂等键；ON CONFLICT(event_key) DO NOTHING。
 // 返回 won=true 表示新插入，won=false 表示已存在（幂等成功）。
 //
