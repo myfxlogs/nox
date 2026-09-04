@@ -82,8 +82,13 @@ func (l *Ledger) accountPosition(ctx context.Context, pos pgstore.Position, day 
 			continue // swap rate / notional 不可用 → 跳过该腿（fail-closed，不猜）
 		}
 		if amount == 0 {
-			log.Printf("[swapledger] pos=%d leg=%d day=%s skip: zero_swap", pos.ID, leg.LegNo, day.Format("2006-01-02"))
-			continue // 零息 venue → 不写 cashflow（避免无意义行）
+			// D-193-A 扩包返修 R5：reason 为空才回退 zero_swap，non_settle_venue 用专属 reason
+			skipReason := reason
+			if skipReason == "" {
+				skipReason = "zero_swap"
+			}
+			log.Printf("[swapledger] pos=%d leg=%d day=%s skip: %s", pos.ID, leg.LegNo, day.Format("2006-01-02"), skipReason)
+			continue // 零息/non-settle venue → 不写 cashflow（避免无意义行）
 		}
 		// D-193-A 扩包（决策 1-7）：迁 InsertCashflowFull，填事实身份字段。
 		// event_key=<source>:<posID>:<legNo>:<kind>:<occurred_at YYYY-MM-DD>（决策 1）
@@ -203,8 +208,9 @@ func (l *Ledger) legSwapAmount(canonical string, leg pgstore.PositionLeg, day ti
 		amount = decimalAmount(rate, 10000, 1, notional, multiplier)
 	}
 	// D-112：已知不结算 venue → 记 0（不跳过，与零息 venue 同处理——amount=0 → accountPosition 跳过不写 cashflow）
+	// D-193-A 扩包返修 R5：nonSettle 专属 reason（与真零息区分，accountPosition 打 non_settle_venue 而非 zero_swap）
 	if l.nonSettleVenues[leg.Venue] {
-		return 0, true, ""
+		return 0, true, "non_settle_venue"
 	}
 	return amount, true, ""
 }

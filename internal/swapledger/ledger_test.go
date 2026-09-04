@@ -324,12 +324,16 @@ func TestLegSwapAmount_NonSettleVenue(t *testing.T) {
 
 	leg := pgstore.PositionLeg{Venue: "277842155:mt5", Side: "SELL", Qty: 1.0}
 	monday := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
-	got, ok, _ := l.legSwapAmount("AUDJPY", leg, monday, false, map[factKey]fact.Fact{}, shortMap, map[factKey]fact.Fact{})
+	got, ok, reason := l.legSwapAmount("AUDJPY", leg, monday, false, map[factKey]fact.Fact{}, shortMap, map[factKey]fact.Fact{})
 	if !ok {
 		t.Fatal("non-settle venue want ok=true, got false")
 	}
 	if got != 0 {
 		t.Errorf("non-settle venue amount want 0, got %v", got)
+	}
+	// D-193-A 扩包返修 R5：nonSettle 专属 reason（与真零息区分）
+	if reason != "non_settle_venue" {
+		t.Errorf("non-settle venue reason want \"non_settle_venue\", got %q", reason)
 	}
 }
 
