@@ -452,6 +452,88 @@ func TestHistoryCollector_Poll_Success(t *testing.T) {
 	}
 }
 
+// mockHistoryJSONWithBadTime 含一条畸形 TransactionTime（S6 防回归）。
+const mockHistoryJSONWithBadTime = `{
+  "categoryTypes": ["CASH", "TRADE"],
+  "totalCount": 3,
+  "totalTypes": ["OVERNIGHT_SETTLEMENT", "SELL_TRADE", "PAYMENTS_IN"],
+  "transactions": [{
+    "transactionId": "bad-time-0001",
+    "amount": "1.6",
+    "balance": "2026.76",
+    "currency": "USD",
+    "orderId": "1655218453",
+    "performedByClient": false,
+    "productName": "Account",
+    "profitAndLoss": "1.6",
+    "transactionTime": "NOT-A-DATE",
+    "transactionType": "OVERNIGHT_SETTLEMENT",
+    "transactionTypeString": "OVERNIGHT_SETTLEMENT"
+  }, {
+    "transactionId": "good-time-0002",
+    "amount": "-500.00",
+    "balance": "1500.00",
+    "currency": "USD",
+    "orderId": "ORD-SELL-001",
+    "performedByClient": true,
+    "productName": "X-AFQUL",
+    "profitAndLoss": "0",
+    "transactionTime": "2026-08-17T10:30:00.000Z",
+    "transactionType": "SELL_TRADE",
+    "transactionTypeString": "SELL_TRADE"
+  }, {
+    "transactionId": "good-time-0003",
+    "amount": "1000.00",
+    "balance": "2500.00",
+    "currency": "USD",
+    "orderId": "",
+    "performedByClient": false,
+    "productName": "Account",
+    "profitAndLoss": "0",
+    "transactionTime": "2026-08-15T08:00:00.000Z",
+    "transactionType": "PAYMENTS_IN",
+    "transactionTypeString": "PAYMENTS_IN"
+  }]
+}`
+
+// TestHistoryCollector_Poll_BadTimestampSkip 畸形 TransactionTime → 该笔跳过，其余正常入库（S6/D-208 R1 闭环）。
+func TestHistoryCollector_Poll_BadTimestampSkip(t *testing.T) {
+	st := newTestStore(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(mockHistoryJSONWithBadTime))
+	}))
+	defer srv.Close()
+
+	auth := &mockAuth{jwt: "fake.jwt.sig"}
+	c := NewHistoryCollector(auth, 38941616, st, srv.URL)
+	facts, err := c.Poll(context.Background())
+	if err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	// 畸形笔（OVERNIGHT_SETTLEMENT）被跳过 → facts 应为 0
+	if len(facts) != 0 {
+		t.Errorf("facts len = %d, want 0 (bad-timestamp OVERNIGHT_SETTLEMENT skipped)", len(facts))
+	}
+	// 其余 2 笔正常入库
+	var count int
+	err = st.Pool().QueryRow(context.Background(),
+		"SELECT count(*) FROM fin_cmc_history WHERE account_id = 38941616").Scan(&count)
+	if err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("history count = %d, want 2 (bad-timestamp tx skipped, 2 good txs persisted)", count)
+	}
+	// 断言畸形笔不在库中
+	var badCount int
+	_ = st.Pool().QueryRow(context.Background(),
+		"SELECT count(*) FROM fin_cmc_history WHERE account_id = 38941616 AND transaction_id = 'bad-time-0001'").Scan(&badCount)
+	if badCount != 0 {
+		t.Errorf("bad-timestamp tx found in DB (should be skipped): count=%d", badCount)
+	}
+}
+
 // ---------- 强平距离计算测试 ----------
 
 func TestCloseoutCalc(t *testing.T) {

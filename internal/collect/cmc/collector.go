@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"arb/internal/fact"
@@ -28,6 +29,9 @@ type PricesCollector struct {
 	instrumentID string
 	restBase     string
 	store        *pgstore.Store
+	// 门控缓存（S4）：Poll 成功后缓存 market_status + 探测时刻；休市 15min 内短路不发 REST。
+	lastStatus string
+	lastProbe  time.Time
 }
 
 func NewPricesCollector(auth jwtProvider, instrumentID string, store *pgstore.Store, restBase string) *PricesCollector {
@@ -37,6 +41,10 @@ func NewPricesCollector(auth jwtProvider, instrumentID string, store *pgstore.St
 func (c *PricesCollector) Kind() string { return fact.KindCMCPrice }
 
 func (c *PricesCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
+	// 门控：休市且距上次探测 <15min → 直接短路（不发 REST；周末/日结请求 1440/天→~96/天）
+	if strings.EqualFold(c.lastStatus, "closed") && time.Since(c.lastProbe) < 15*time.Minute {
+		return nil, nil
+	}
 	jwt, err := c.auth.JWT(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("cmc price JWT: %w", err)
@@ -75,6 +83,9 @@ func (c *PricesCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	if err := c.store.InsertCMCPrice(ctx, rec); err != nil {
 		return nil, fmt.Errorf("cmc price insert: %w", err)
 	}
+	// 门控缓存更新（S4）：成功后记录 status + 探测时刻
+	c.lastStatus = p.MarketStatus
+	c.lastProbe = time.Now()
 	return []fact.Fact{{
 		Kind: fact.KindCMCPrice, Venue: "cmc", Symbol: "TRXUSD",
 		Value: mid, Unit: fact.UnitPrice, Ts: time.Now(), Src: "cmc_rest",
@@ -83,6 +94,8 @@ func (c *PricesCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 
 // StartWatchdog 数据新鲜度 watchdog（独立 goroutine，不依赖 Poll 成功）。
 // 空表（ErrNoRows）也告警：last 取零值 → Since 巨大 → 触发 warning（v7）。
+// v1.2 R'-1：门控使休市段更新间隔变 15min > 现行 stale 阈值 5min → 休市期误报。
+// 修法：判定前查价格行最近 market_status——closed（EqualFold）则本轮跳过 stale 判定。
 func (c *PricesCollector) StartWatchdog(ctx context.Context) {
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
@@ -91,11 +104,14 @@ func (c *PricesCollector) StartWatchdog(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			var last time.Time
-			if t, err := c.store.LastCMCPriceFetchedAt(ctx); err == nil {
-				last = t
-			} else if !errors.Is(err, pgx.ErrNoRows) {
-				continue // 其他 DB 错误（连接故障）不判 stale
+			status, last, err := c.store.LastCMCPriceStatusAndFetchedAt(ctx)
+			if err != nil {
+				if !errors.Is(err, pgx.ErrNoRows) {
+					continue // 其他 DB 错误（连接故障）不判 stale
+				}
+				// 空表：last 取零值 → Since 巨大 → 触发 warning（v7 行为保留）
+			} else if strings.EqualFold(status, "closed") {
+				continue // 休市：门控使更新间隔变 15min，跳过 stale 判定（v1.2 R'-1）
 			}
 			if time.Since(last) > 5*time.Minute {
 				log.Printf("[cmc] stale warning: no price update for %v", time.Since(last).Round(time.Second))

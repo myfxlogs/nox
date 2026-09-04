@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
 	"arb/internal/fact"
@@ -65,7 +66,11 @@ func (c *HistoryCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	var facts []fact.Fact
 	var txs []pgstore.CMCHistoryTx
 	for _, t := range h.Transactions {
-		txTime, _ := time.Parse(time.RFC3339, t.TransactionTime)
+		txTime, err := parseRFC3339Loose(t.TransactionTime)
+		if err != nil {
+			log.Printf("[cmc-history] unparsable TransactionTime %q: %v", t.TransactionTime, err)
+			continue
+		}
 		amount := parseFloat(t.Amount)
 		// facts 发射仍只 OVERNIGHT_SETTLEMENT（swap 语义不变）
 		if t.TransactionType == "OVERNIGHT_SETTLEMENT" {

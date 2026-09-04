@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"arb/internal/fact"
+	"arb/internal/safego"
 	"arb/internal/store/pgstore"
 
 	"github.com/gorilla/websocket"
@@ -32,15 +33,18 @@ const (
 	wsKickDebounce      = 30 * time.Second
 )
 
-var wsBackoff = func(attempt int) time.Duration { // 指数退避 1s→60s 封顶（D-209 模式，测试覆写）
-	d := time.Duration(1<<uint(attempt)) * time.Second
-	if d > 60*time.Second {
-		return 60 * time.Second
+var ( // 新鲜度守卫参数（C2 路径②）+ 退避：var 便于测试覆写
+	wsGuardInterval = 60 * time.Second
+	wsGuardStale    = 10 * time.Minute
+	wsBackoff       = func(attempt int) time.Duration {
+		d := time.Duration(1<<uint(attempt)) * time.Second
+		if d > 60*time.Second {
+			return 60 * time.Second
+		}
+		return d
 	}
-	return d
-}
+)
 
-// WsClient CMC WebSocket 事件驱动采集器。
 type WsClient struct {
 	auth               jwtProvider
 	accountID          int64
@@ -81,8 +85,8 @@ func (w *WsClient) SetMarketOpen(fn func() bool) {
 	}
 }
 func (w *WsClient) IsHealthy() bool { return w.healthy.Load() }
-
 func (w *WsClient) Run(ctx context.Context) {
+	safego.Go("cmc-ws:guard", func() { w.startGuard(ctx) }) // C2 路径② 新鲜度守卫
 	for attempt := 0; ; attempt++ {
 		if err := w.runOnce(ctx); err != nil {
 			if ctx.Err() != nil {
@@ -100,7 +104,33 @@ func (w *WsClient) Run(ctx context.Context) {
 		return
 	}
 }
-
+func (w *WsClient) startGuard(ctx context.Context) { // C2 路径② 新鲜度守卫：连续 2 窗无事件 → 置 false（防抖）
+	ticker := time.NewTicker(wsGuardInterval)
+	defer ticker.Stop()
+	staleStrikes := 0
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if !w.marketOpen() { // 休市跳过——无事件是正常的
+				staleStrikes = 0
+				continue
+			}
+			w.lastEventMu.Lock()
+			since := time.Since(w.lastEvent)
+			w.lastEventMu.Unlock()
+			if since > wsGuardStale {
+				staleStrikes++
+				if staleStrikes >= 2 {
+					w.healthy.Store(false) // 路径②：哑连击穿（连接活但无事件）
+				}
+			} else {
+				staleStrikes = 0
+			}
+		}
+	}
+}
 func (w *WsClient) runOnce(ctx context.Context) error {
 	jwt, err := w.auth.JWT(ctx)
 	if err != nil {
@@ -114,12 +144,12 @@ func (w *WsClient) runOnce(ctx context.Context) error {
 		return fmt.Errorf("dial: %w", err)
 	}
 	defer conn.Close()
-	// 1. auth（不等待 ack——安全评估 §2 无 ack 样本，以首条推送/心跳响应为有效性信号）
+	// 1. auth（不等待 ack——以首条推送/心跳响应为有效性信号）
 	authMsg, _ := json.Marshal(map[string]any{"auth": map[string]any{"token": jwt}})
 	if err := w.writeMsg(conn, authMsg); err != nil {
 		return fmt.Errorf("auth write: %w", err)
 	}
-	// 2. 播种（D-223 注记①：subscribe 前用 REST 拉全量 positions 为 patch 基底）
+	// 2. 播种（subscribe 前用 REST 拉全量 positions 为 patch 基底）
 	seedPos, err := fetchPositionsJSON(ctx, jwt, w.restBase, w.accountID)
 	if err != nil {
 		return fmt.Errorf("seed positions: %w", err)
@@ -154,8 +184,7 @@ func (w *WsClient) runOnce(ctx context.Context) error {
 			}
 		}
 	}()
-	// 5. read loop
-	w.healthy.Store(true)
+	w.healthy.Store(true) // 5. read loop
 	w.markEvent()
 	for {
 		if ctx.Err() != nil {
@@ -170,7 +199,6 @@ func (w *WsClient) runOnce(ctx context.Context) error {
 		w.handleMessage(ctx, data)
 	}
 }
-
 func (w *WsClient) writeMsg(conn *websocket.Conn, msg []byte) error {
 	w.connMu.Lock()
 	defer w.connMu.Unlock()
@@ -180,50 +208,41 @@ func (w *WsClient) markEvent() {
 	w.lastEventMu.Lock()
 	w.lastEvent = time.Now()
 	w.lastEventMu.Unlock()
+	w.healthy.Store(true)
 }
 func (w *WsClient) handleMessage(ctx context.Context, data []byte) {
 	var msg wsMessage
 	if err := json.Unmarshal(data, &msg); err != nil {
-		log.Printf("[cmc-ws] unmarshal: %v", err)
 		return
 	}
 	switch msg.Type {
 	case 5:
-		w.handleType5(ctx, msg.Data)
+		var s accountSummaryJSON
+		if err := json.Unmarshal(msg.Data, &s); err == nil {
+			w.lastSummaryMu.Lock()
+			w.lastSummary = s
+			w.lastSummaryMu.Unlock()
+			w.persistSummary(ctx, &s)
+		}
 	case 6:
 		w.handleType6(ctx, msg.Data)
 	case 7:
 		w.handleType7(ctx, msg.Partial)
 	default:
-		return // type=0：心跳响应/auth ack/未知 → 忽略
-	}
-	w.markEvent()
-}
-
-func (w *WsClient) handleType5(ctx context.Context, data json.RawMessage) {
-	var s accountSummaryJSON
-	if err := json.Unmarshal(data, &s); err != nil {
-		log.Printf("[cmc-ws] type5 unmarshal: %v", err)
 		return
 	}
-	w.lastSummaryMu.Lock()
-	w.lastSummary = s
-	w.lastSummaryMu.Unlock()
-	w.persistSummary(ctx, &s)
+	w.markEvent()
 }
 func (w *WsClient) handleType6(ctx context.Context, data json.RawMessage) {
 	var v struct {
 		TotalAccountValue string `json:"totalAccountValue"`
 	}
 	if err := json.Unmarshal(data, &v); err != nil {
-		log.Printf("[cmc-ws] type6 unmarshal: %v", err)
 		return
 	}
-	val := parseFloat(v.TotalAccountValue)
 	w.lastSummaryMu.Lock()
-	delta := val - w.lastType6Val
-	shouldPersist := time.Since(w.lastSummaryPersist) >= wsType6Throttle &&
-		(delta > wsType6MinDelta || delta < -wsType6MinDelta)
+	delta := parseFloat(v.TotalAccountValue) - w.lastType6Val
+	shouldPersist := time.Since(w.lastSummaryPersist) >= wsType6Throttle && (delta > wsType6MinDelta || delta < -wsType6MinDelta)
 	s := w.lastSummary
 	s.TotalAccountValue = v.TotalAccountValue
 	w.lastSummaryMu.Unlock()
@@ -255,10 +274,8 @@ func (w *WsClient) persistSummary(ctx context.Context, s *accountSummaryJSON) {
 	w.lastSummaryPersist = now
 	w.lastType6Val = parseFloat(s.TotalAccountValue)
 	w.lastSummaryMu.Unlock()
-	w.emitFact(ctx, []fact.Fact{{
-		Kind: fact.KindCMCAccount, Venue: "cmc", Symbol: "summary",
-		Value: parseFloat(s.TotalAccountValue), Unit: fact.UnitUSD, Ts: now, Src: "cmc_ws",
-	}})
+	w.emitFact(ctx, []fact.Fact{{Kind: fact.KindCMCAccount, Venue: "cmc", Symbol: "summary",
+		Value: parseFloat(s.TotalAccountValue), Unit: fact.UnitUSD, Ts: now, Src: "cmc_ws"}})
 }
 func (w *WsClient) handleType7(ctx context.Context, patches []wsPatch) {
 	w.positionsMu.Lock()
@@ -266,39 +283,34 @@ func (w *WsClient) handleType7(ctx context.Context, patches []wsPatch) {
 		w.applyPatch(patch)
 	}
 	w.positionsMu.Unlock()
-	if w.shouldKickHistory(patches) {
-		w.kickHistoryDebounced()
+	for _, p := range patches {
+		if strings.Contains(p.P, "/orders") {
+			w.kickHistoryDebounced()
+			break
+		}
 	}
 	w.scheduleFlush()
 }
 func (w *WsClient) applyPatch(patch wsPatch) {
 	if patch.T != "m" {
-		log.Printf("[cmc-ws] unknown patch type: %s", patch.T)
 		return
 	}
 	parts := strings.Split(strings.TrimPrefix(patch.P, "/"), "/")
 	if len(parts) < 2 || parts[0] != "positions" {
-		log.Printf("[cmc-ws] unknown patch path: %s", patch.P)
 		return
 	}
 	idx, err := strconv.Atoi(parts[1])
 	if err != nil || idx < 0 || idx >= len(w.positions) {
-		log.Printf("[cmc-ws] patch position index out of range: %s", patch.P)
 		return
 	}
 	var d map[string]json.RawMessage
 	if err := json.Unmarshal(patch.D, &d); err != nil {
-		log.Printf("[cmc-ws] patch data unmarshal: %v", err)
 		return
 	}
 	pos := &w.positions[idx]
 	fields := map[string]*string{
-		"instrumentId":                   &pos.InstrumentID,
-		"direction":                      &pos.Direction,
-		"quantity":                       &pos.Quantity,
-		"price":                          &pos.Price,
-		"standardMarginAmount":           &pos.StandardMarginAmount,
-		"marginAmount":                   &pos.MarginAmount,
+		"instrumentId": &pos.InstrumentID, "direction": &pos.Direction, "quantity": &pos.Quantity,
+		"price": &pos.Price, "standardMarginAmount": &pos.StandardMarginAmount, "marginAmount": &pos.MarginAmount,
 		"standardMarginPercentage":       &pos.StandardMarginPercentage,
 		"unrealisedPnLInPrimaryCurrency": &pos.UnrealisedPnLInPrimaryCurrency,
 		"evaluationBidPrice":             &pos.EvaluationBidPrice,
@@ -307,22 +319,12 @@ func (w *WsClient) applyPatch(patch wsPatch) {
 	for k, v := range d {
 		var s string
 		if err := json.Unmarshal(v, &s); err != nil {
-			continue // 非字符串值跳过（positionJSON 字段全为 string）
+			continue
 		}
 		if ptr, ok := fields[k]; ok {
 			*ptr = s
-		} else {
-			log.Printf("[cmc-ws] unknown patch field: %s", k)
 		}
 	}
-}
-func (w *WsClient) shouldKickHistory(patches []wsPatch) bool {
-	for _, p := range patches {
-		if strings.Contains(p.P, "/orders") {
-			return true
-		}
-	}
-	return false
 }
 func (w *WsClient) kickHistoryDebounced() {
 	if w.kickHistory == nil {
@@ -341,7 +343,7 @@ func (w *WsClient) scheduleFlush() {
 	if w.flushTimer != nil {
 		w.flushTimer.Stop()
 	}
-	w.flushTimer = time.AfterFunc(wsPatchBurstWindow, func() { w.flushPositions() })
+	w.flushTimer = time.AfterFunc(wsPatchBurstWindow, w.flushPositions)
 }
 func (w *WsClient) flushPositions() {
 	w.positionsMu.Lock()
@@ -359,8 +361,8 @@ func (w *WsClient) flushPositions() {
 			Quantity: parseFloat(p.Quantity), EntryPrice: parseFloat(p.Price),
 			UnrealisedPnL: parseFloat(p.UnrealisedPnLInPrimaryCurrency),
 			MarginAmount:  parseFloat(p.MarginAmount), MarginPercentage: parseFloat(p.StandardMarginPercentage),
-			EvaluationBidPrice: parseFloat(p.EvaluationBidPrice), EvaluationAskPrice: parseFloat(p.EvaluationAskPrice),
-			FetchedAt: now,
+			EvaluationBidPrice: parseFloat(p.EvaluationBidPrice),
+			EvaluationAskPrice: parseFloat(p.EvaluationAskPrice), FetchedAt: now,
 		}
 		if len(p.Orders) > 0 {
 			dp.OrderID = p.Orders[0].OrderID
@@ -374,10 +376,8 @@ func (w *WsClient) flushPositions() {
 		log.Printf("[cmc-ws] insert positions: %v", err)
 		return
 	}
-	w.emitFact(context.Background(), []fact.Fact{{
-		Kind: fact.KindCMCAccount, Venue: "cmc", Symbol: "positions",
-		Value: 0, Unit: fact.UnitUSD, Ts: now, Src: "cmc_ws",
-	}})
+	w.emitFact(context.Background(), []fact.Fact{{Kind: fact.KindCMCAccount, Venue: "cmc",
+		Symbol: "positions", Value: 0, Unit: fact.UnitUSD, Ts: now, Src: "cmc_ws"}})
 }
 func (w *WsClient) emitFact(ctx context.Context, facts []fact.Fact) {
 	if w.sink != nil {
@@ -394,7 +394,7 @@ type wsMessage struct {
 	Heartbeat json.RawMessage `json:"heartbeat"`
 }
 type wsPatch struct {
-	T string          `json:"t"` // "m" = modify
-	P string          `json:"p"` // path like "/positions/0/orders/0"
-	D json.RawMessage `json:"d"` // data to merge
+	T string          `json:"t"`
+	P string          `json:"p"`
+	D json.RawMessage `json:"d"`
 }

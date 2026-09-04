@@ -166,6 +166,20 @@ func (s *Store) LastCMCPriceFetchedAt(ctx context.Context) (time.Time, error) {
 	return t, nil
 }
 
+// LastCMCPriceStatusAndFetchedAt 返回 fin_cmc_prices 最近一条 market_status + fetched_at
+// （v1.2 R'-1：watchdog×门控互作修复——休市 status=closed 时跳过 stale 判定）。
+// 空表返回 ErrNoRows（与 LastCMCPriceFetchedAt 行为一致）。
+func (s *Store) LastCMCPriceStatusAndFetchedAt(ctx context.Context) (string, time.Time, error) {
+	var status string
+	var t time.Time
+	err := s.pool.QueryRow(ctx,
+		`SELECT market_status, fetched_at FROM fin_cmc_prices ORDER BY fetched_at DESC LIMIT 1`).Scan(&status, &t)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	return status, t, nil
+}
+
 // LastCMCPriceMid 返回 fin_cmc_prices 指定 instrument 最近一条 mid_price；空表返回 ErrNoRows。
 func (s *Store) LastCMCPriceMid(ctx context.Context, instrumentID string) (float64, error) {
 	var v float64

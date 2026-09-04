@@ -293,3 +293,126 @@ func pgstorePriceRec(instrumentID string, mid float64) pgstore.CMCPrice {
 		FetchedAt:    time.Now(),
 	}
 }
+
+// ---------- T3 哑连击穿（新鲜度守卫）测试 ----------
+
+func TestWsClient_GuardDummyConnection(t *testing.T) {
+	st := newTestStore(t)
+	_ = st.InsertCMCPrice(context.Background(), pgstorePriceRec("X-AFQUL", 0.324530))
+
+	ts := newWsTestServer(t, mockPositionsJSON)
+	defer ts.close()
+	auth := &mockAuth{jwt: "fake.jwt.sig"}
+	ws := NewWsClient(auth, 38941616, st, ts.srv.URL, ts.srv.URL)
+	ws.SetMarketOpen(func() bool { return true }) // 市场时段
+
+	// 缩短守卫窗：interval=200ms，stale=500ms（2 个检查窗=400ms < 500ms → 第 2 窗触发）
+	origInterval, origStale := wsGuardInterval, wsGuardStale
+	wsGuardInterval = 200 * time.Millisecond
+	wsGuardStale = 500 * time.Millisecond
+	defer func() {
+		wsGuardInterval = origInterval
+		wsGuardStale = origStale
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go ws.Run(ctx)
+
+	if !ts.waitSubscribed(10 * time.Second) {
+		t.Fatal("timeout waiting for subscribe")
+	}
+
+	// 推一条事件建立 lastEvent，确保守卫开始计时
+	ts.sendEvent(0, wsType5Event)
+	time.Sleep(300 * time.Millisecond) // 等事件处理
+
+	// 等待守卫击穿：2 个检查窗（~400ms）+ stale 500ms → ~900ms，给 3s 余量
+	deadline := time.Now().Add(3 * time.Second)
+	healthyBecameFalse := false
+	for time.Now().Before(deadline) {
+		if !ws.IsHealthy() {
+			healthyBecameFalse = true
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !healthyBecameFalse {
+		t.Fatal("guard did not trip healthy=false after stale window (dummy connection)")
+	}
+
+	// 重发事件 → 守卫恢复 healthy=true
+	ts.sendEvent(0, wsType5Event)
+	deadline = time.Now().Add(2 * time.Second)
+	healthyBecameTrue := false
+	for time.Now().Before(deadline) {
+		if ws.IsHealthy() {
+			healthyBecameTrue = true
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !healthyBecameTrue {
+		t.Fatal("guard did not recover healthy=true after event resumed")
+	}
+}
+
+// ---------- T4 节流与 patch 合并测试 ----------
+
+func TestWsClient_ThrottleAndPatchBurst(t *testing.T) {
+	st := newTestStore(t)
+	_ = st.InsertCMCPrice(context.Background(), pgstorePriceRec("X-AFQUL", 0.324530))
+
+	ts := newWsTestServer(t, mockPositionsJSON)
+	defer ts.close()
+	auth := &mockAuth{jwt: "fake.jwt.sig"}
+	ws := NewWsClient(auth, 38941616, st, ts.srv.URL, ts.srv.URL)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go ws.Run(ctx)
+
+	if !ts.waitSubscribed(10 * time.Second) {
+		t.Fatal("timeout waiting for subscribe")
+	}
+
+	// T4a: 60s 内推 10 条 type=6 → 仅 1 行落库（节流 60s）
+	for i := 0; i < 10; i++ {
+		ts.sendEvent(0, wsType6Event)
+		time.Sleep(20 * time.Millisecond)
+	}
+	time.Sleep(500 * time.Millisecond) // 等落库
+
+	var summaryCount int
+	_ = st.Pool().QueryRow(context.Background(),
+		"SELECT count(*) FROM fin_cmc_account_summary WHERE account_id = 38941616").Scan(&summaryCount)
+	if summaryCount != 1 {
+		t.Errorf("type=6 throttle: summary rows = %d, want 1 (10 events in 60s window)", summaryCount)
+	}
+
+	// T4b: type=7 burst 3 条 patch → 1 次 flush 落库且字段合并
+	// 先清 positions 表确保计数干净
+	_, _ = st.Pool().Exec(context.Background(),
+		"DELETE FROM fin_cmc_positions WHERE account_id = 38941616")
+
+	for i := 0; i < 3; i++ {
+		ts.sendEvent(0, wsType7Event)
+		time.Sleep(50 * time.Millisecond) // < wsPatchBurstWindow(2s) → 合并
+	}
+	time.Sleep(3 * time.Second) // 等 flush 窗口（2s）+ DB 写入
+
+	var posCount int
+	_ = st.Pool().QueryRow(context.Background(),
+		"SELECT count(*) FROM fin_cmc_positions WHERE account_id = 38941616").Scan(&posCount)
+	if posCount != 1 {
+		t.Errorf("type=7 burst: positions rows = %d, want 1 (3 patches merged in 2s window)", posCount)
+	}
+
+	// 断言 patch 字段已合并：unrealisedPnLInPrimaryCurrency 应为最后一条 patch 的值
+	var pnl string
+	_ = st.Pool().QueryRow(context.Background(),
+		"SELECT unrealised_pnl FROM fin_cmc_positions WHERE account_id = 38941616").Scan(&pnl)
+	if pnl != "156.93" {
+		t.Errorf("patch field merge: unrealised_pnl = %q, want 156.93", pnl)
+	}
+}
