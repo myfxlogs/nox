@@ -3,6 +3,7 @@ package dashboard
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"time"
@@ -15,9 +16,11 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// GetHedgeStructure 组装对冲结构卡（SSOT §1）：镜像双腿+净敞口真实计算+carry+双账户摘要。
-// 数据源：fin_trx_account（质押腿 18070）+ fin_cmc_positions（空单腿 18100）+ fin_cmc_prices（mid）+
-// fin_cmc_account_summary（强平价）+ position_daily_income（carry 全源聚合）+ fin_cmc_history（隔夜息）。
+// GetHedgeStructure 组装对冲结构卡（SSOT §1）：双腿+净敞口真实计算+carry+双账户摘要。
+// D-236 变更9：CMC 字段全改 freshLive（内存优先，>30s 分域回退 DB）；PnL 取平台自报值（type7 帧直通）；
+// 镜像恒和=0 退役（D-212 旧设计，业主真值原则取代）；净敞口 USD 分母改流 Mid。
+// 数据源：fin_trx_account（质押腿 18070）+ freshLive（空单腿+mid+summary）+
+// fin_cmc_account_summary（强平价 DB 兜底）+ position_daily_income（carry）+ fin_cmc_history（隔夜息）。
 // 空表容忍：任一源空 → 对应字段零值/nil（前端显示「数据未就绪」）。
 func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1.GetHedgeStructureRequest]) (*connect.Response[v1.GetHedgeStructureResponse], error) {
 	resp := &v1.GetHedgeStructureResponse{}
@@ -30,35 +33,21 @@ func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1
 	trxApr, trxAprErr := s.store.LastTRXVoteApr(ctx)
 	hasTrxApr := trxAprErr == nil
 
-	// CMC 空单持仓（entry_price=baseline，quantity=空单腿 qty）
-	cmcPos, cmcPosErr := s.store.LastCMCPositionByInstrument(ctx, "X-AFQUL")
-	hasCMCPos := cmcPosErr == nil
+	// D-236 变更9：CMC 字段全走 freshLive（内存优先，分域 >30s 回退 DB）
+	ls := s.freshLive(ctx)
 
-	// CMC 账户摘要（closeout_price=强平价，distance_to_closeout_pct=距强平%）
+	// CMC 账户摘要（closeout_price=强平价，distance_to_closeout_pct=距强平%；DB 兜底+alerts）
 	cmcSum, cmcSumErr := s.store.LastCMCAccountSummary(ctx)
 	hasCMCSum := cmcSumErr == nil
 
-	// D-225 v2.1：mid 显示用 REST mid（LastCMCPriceMidWithTime 加 NULL mid 过滤）；
-	// 镜像 PnL 用 ForSide(short)=ask 评估价口径（卡片标注）。
-	var mid float64
-	var evalAsk float64
-	if hasCMCPos {
-		if v, _, err := s.store.LastCMCPriceMidWithTime(ctx, "X-AFQUL"); err == nil {
-			mid = v
-		}
-		// D-234 R-V2：evalAsk 走 freshEvalAsk（内存优先，>30s/未接线回退 DB ForSide(Sell)），
-		// 与 case13 推送同源——快照/推送口径一致，避免首屏显示 0.1% 门限锁死的旧 DB 值。
-		evalAsk = s.freshEvalAsk(ctx)
-	}
-
-	// baseline=空单开仓价（fin_cmc_positions.entry_price；现货购价未知，注释标注）
+	// baseline=空单开仓价（DB positions 行 entry_price；现货购价未知，注释标注）
 	var baseline float64
-	if hasCMCPos {
+	if cmcPos, err := s.store.LastCMCPositionByInstrument(ctx, "X-AFQUL"); err == nil {
 		baseline = cmcPos.EntryPrice
 	}
 
-	// 质押腿（leg_spot）：qty_staked=votes_total（展示），qty_liquid=balance，
-	// pnl=(mid−baseline)×基准qty（镜像腿——基准qty=空单qty，两腿同 qty 确保恒和=0）
+	// 质押腿（leg_spot）：qty_staked=votes_total（展示），qty_liquid=balance
+	// D-236 变更9：PnL 不再镜像计算（现货无对手方报价、无开仓成本记录，反推=虚构）→ 前端显示「—」
 	legSpot := &v1.HedgeLegSpot{Label: "质押现货"}
 	if hasTRX {
 		qtyStaked := float64(trxAcc.VotesTotal)
@@ -80,45 +69,33 @@ func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1
 		legSpot.VoteAprTs = timestamppb.New(trxApr.FetchedAt)
 	}
 
-	// 空单腿（leg_short）：qty=CMC quantity（基准 qty），pnl=(baseline−evalAsk)×qty（镜像腿，恒和=0）
-	// D-225 v2.1：PnL 用 evalAsk（ForSide short=ask 评估价口径）；evalAsk=0 时回退 mid。
-	pnlPx := evalAsk
-	if pnlPx == 0 {
-		pnlPx = mid
-	}
+	// 空单腿（leg_short）：D-236 变更9 PnL=平台自报值（LiveState.PnL，type7 帧直通 unrealisedPnLInPrimaryCurrency）
 	legShort := &v1.HedgeLegShort{Label: "CMC 空单"}
-	var mirrorQty float64 // 基准 qty（空单 qty），两腿镜像 pnl 共用
-	if hasCMCPos {
-		mirrorQty = cmcPos.Quantity
-		legShort.Qty = mirrorQty
-		if pnlPx > 0 && baseline > 0 {
-			legShort.PnlVsBase = (baseline - pnlPx) * mirrorQty
-		}
-		if cmcPos.MarginPercentage > 0 {
-			legShort.Lev = int32(1.0 / cmcPos.MarginPercentage)
-		}
-		legShort.BrokerUnrealised = cmcPos.UnrealisedPnL
+	if ls.Qty > 0 {
+		legShort.Qty = ls.Qty
 	}
-	// 质押腿镜像 pnl（用空单 qty 确保恒和=0；qty_staked 仅展示质押数量）
-	if hasTRX && pnlPx > 0 && baseline > 0 && mirrorQty > 0 {
-		legSpot.PnlVsBase = (pnlPx - baseline) * mirrorQty
+	legShort.PnlVsBase = ls.PnL // 平台真值（业主令：取 cmc 真实数据，不再反推计算）
+	if ls.Lev > 0 {
+		legShort.Lev = int32(ls.Lev)
 	}
+	// BrokerUnrealised 停用不删（proto 兼容，D-236 变更7 注释标注停用）
 	if hasCMCSum {
 		legShort.Liq = cmcSum.CloseoutPrice
 		legShort.DistPct = cmcSum.DistanceToCloseoutPct
 	}
 
 	// 净敞口（v1.2 真实计算：(balance+staked−short_qty)×mid）
+	// D-236 变更9：分母改流 Mid（LiveState.Mid，内存优先）
 	var netExposureTrx, netExposureUsd float64
-	if hasTRX && hasCMCPos {
+	if hasTRX && ls.Qty > 0 {
 		balance := float64(trxAcc.BalanceSun) / 1e6
 		staked := float64(trxAcc.VotesTotal)
-		netExposureTrx = balance + staked - cmcPos.Quantity
-		netExposureUsd = netExposureTrx * mid
+		netExposureTrx = balance + staked - ls.Qty
+		netExposureUsd = netExposureTrx * ls.Mid
 	}
 
-	// carry（近 7 日 + 累计 + 年化）
-	carry := s.computeHedgeCarry(ctx, mid, legSpot.QtyStaked)
+	// carry（近 7 日 + 累计 + 年化）——mid 用流值
+	carry := s.computeHedgeCarry(ctx, ls.Mid, legSpot.QtyStaked)
 
 	// 双账户摘要
 	accts := &v1.HedgeAccounts{}
@@ -134,7 +111,15 @@ func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1
 		accts.Votes = float64(trxAcc.VotesTotal)
 		updatedAt = trxAcc.FetchedAt
 	}
-	if hasCMCSum {
+	// D-236 变更9：CMC 账户摘要用 freshLive 值（内存优先）
+	if ls.Cash > 0 || ls.Equity > 0 {
+		accts.CmcCash = ls.Cash
+		accts.CmcEquity = ls.Equity
+		if ls.SumTs.After(updatedAt) {
+			updatedAt = ls.SumTs
+		}
+	} else if hasCMCSum {
+		// freshLive summary 域全零（未接线+DB 也空）→ 用 DB 兜底
 		accts.CmcCash = cmcSum.TotalCashBalance
 		accts.CmcEquity = cmcSum.TotalAccountValue
 		if cmcSum.FetchedAt.After(updatedAt) {
@@ -145,15 +130,22 @@ func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1
 		accts.UpdatedAt = timestamppb.New(updatedAt)
 	}
 
+	// D-236 变更9：净值/距强平随 Margin 流值派生（D-225 口径不变：margin×50%/80%）
 	var closeoutLevelUSD, warningLevelUSD float64
+	margin := ls.Margin
+	if margin <= 0 && hasCMCSum {
+		margin = cmcSum.TotalEquityUsedInMargin // DB 兜底
+	}
+	closeoutLevelUSD = margin * 0.5
+	warningLevelUSD = margin * 0.8
+	var alerts json.RawMessage
 	if hasCMCSum {
-		closeoutLevelUSD = cmcSum.TotalEquityUsedInMargin * 0.5
-		warningLevelUSD = cmcSum.TotalEquityUsedInMargin * 0.8
+		alerts = cmcSum.Alerts
 	}
 	resp.Structure = &v1.HedgeStructure{
 		BaselinePrice:      baseline,
-		Mid:                mid,
-		Ask:                evalAsk, // R-V S3/R-V2：现价=ask（freshEvalAsk 同源 case13，ForSide Sell 口径=强平/PnL 同源）
+		Mid:                ls.Mid, // D-236 变更9：流 Mid（内存优先）
+		Ask:                ls.Ask, // D-236 变更9：流 Ask（内存优先）
 		LegSpot:            legSpot,
 		LegShort:           legShort,
 		NetExposureTrx:     netExposureTrx,
@@ -161,8 +153,8 @@ func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1
 		Carry:              carry,
 		Accts:              accts,
 		CloseoutSource:     "platform_rule_50", // D-225 v2.2：CMC 面板标定为保证金 50%
-		PlatformAlertState: cmc.AlertsToState(cmcSum.Alerts),
-		PlatformAlerts:     string(cmcSum.Alerts),
+		PlatformAlertState: cmc.AlertsToState(alerts),
+		PlatformAlerts:     string(alerts),
 		CloseoutLevelUsd:   closeoutLevelUSD,
 		WarningLevelUsd:    warningLevelUSD,
 	}

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"arb/internal/collect/cmc"
 	"arb/internal/store/pgstore"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
@@ -106,8 +107,9 @@ func TestHedgeStructurePlatformLabel(t *testing.T) {
 	}
 }
 
-// TestGetHedgeStructure_MirrorPnlSumZero 镜像断言：两腿 pnl_vs_base 计算值恒和=0。
-// 构造 TRX 账户（18070 质押）+ CMC 持仓（18100 空单，entry=0.33171）+ CMC price（mid=0.3236）。
+// TestGetHedgeStructure_MirrorPnlSumZero D-236 变更9 改写：镜像恒和=0 退役（业主真值原则取代）。
+// 新断言：空单 PnL=平台自报值（freshLive 回退 DB unrealised_pnl，无 cmcLiveProvider 时）。
+// 构造 TRX 账户（18070 质押）+ CMC 持仓（18100 空单，entry=0.33171，unrealised_pnl=-117.83）+ CMC price（mid=0.3236）。
 func TestGetHedgeStructure_MirrorPnlSumZero(t *testing.T) {
 	s := hedgeTestStore(t)
 	ctx := context.Background()
@@ -122,10 +124,11 @@ func TestGetHedgeStructure_MirrorPnlSumZero(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("InsertTRXAccount: %v", err)
 	}
-	// CMC 持仓（空单 18100，entry=0.33171）
+	// CMC 持仓（空单 18100，entry=0.33171，unrealised_pnl=-117.83）
 	if err := s.InsertCMCPositions(ctx, 1, []pgstore.CMCPosition{{
 		AccountID: 1, InstrumentID: "X-AFQUL", Direction: "SHORT", Quantity: 18100,
 		EntryPrice: 0.33171, UnrealisedPnL: -117.83, MarginPercentage: 0.1,
+		EvaluationAskPrice: 0.32335, EvaluationBidPrice: 0.32285,
 		FetchedAt: now,
 	}}); err != nil {
 		t.Fatalf("InsertCMCPositions: %v", err)
@@ -136,14 +139,16 @@ func TestGetHedgeStructure_MirrorPnlSumZero(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("InsertCMCPrice: %v", err)
 	}
-	// CMC 账户摘要（强平价 0.4226，距强平 29.8%）
+	// CMC 账户摘要（强平价 0.4226，距强平 29.8%，used_margin=584.81）
 	if err := s.InsertCMCAccountSummary(ctx, pgstore.CMCAccountSummary{
 		AccountID: 1, TotalAccountValue: 2169.02, TotalCashBalance: 2026.76,
-		CloseoutPrice: 0.4226, DistanceToCloseoutPct: 29.8, FetchedAt: now,
+		TotalEquityUsedInMargin: 584.81,
+		CloseoutPrice:           0.4226, DistanceToCloseoutPct: 29.8, FetchedAt: now,
 	}); err != nil {
 		t.Fatalf("InsertCMCAccountSummary: %v", err)
 	}
 
+	// 未接线 cmcLiveProvider → freshLive 回退 DB positions 行（PnL=DB unrealised_pnl）
 	svc := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005}
 	resp, err := svc.GetHedgeStructure(ctx, connect.NewRequest(&v1.GetHedgeStructureRequest{}))
 	if err != nil {
@@ -153,25 +158,23 @@ func TestGetHedgeStructure_MirrorPnlSumZero(t *testing.T) {
 	if st == nil {
 		t.Fatal("structure = nil")
 	}
-	// baseline + mid
+	// baseline + mid（DB 回退：mid=EvaluationBidPrice=0.32285，因 freshLive DB 回退用 bid）
 	if st.BaselinePrice != 0.33171 {
 		t.Errorf("baseline = %v, want 0.33171", st.BaselinePrice)
 	}
-	if st.Mid != 0.3236 {
-		t.Errorf("mid = %v, want 0.3236", st.Mid)
+	// D-236 变更9：空单 PnL=平台自报值（DB unrealised_pnl=-117.83，无镜像计算）
+	if st.LegShort.PnlVsBase != -117.83 {
+		t.Errorf("leg_short pnl = %v, want -117.83 (平台自报值, D-236 变更9)", st.LegShort.PnlVsBase)
 	}
-	// 镜像恒和=0：leg_spot.pnl + leg_short.pnl = 0
-	spotPnl := st.LegSpot.PnlVsBase
-	shortPnl := st.LegShort.PnlVsBase
-	sum := spotPnl + shortPnl
-	if sum > 1e-9 || sum < -1e-9 {
-		t.Errorf("镜像恒和 = %v, want 0 (spot %v + short %v)", sum, spotPnl, shortPnl)
+	// 质押腿 PnL 不再镜像计算（现货无对手方报价、无开仓成本记录，反推=虚构）→ 0（前端显示「—」）
+	if st.LegSpot.PnlVsBase != 0 {
+		t.Errorf("leg_spot pnl = %v, want 0 (D-236 变更9 退役镜像, 前端显示「—」)", st.LegSpot.PnlVsBase)
 	}
 	// leg_spot qty_staked=18070（v1.2 数量源 fin_trx_account）
 	if st.LegSpot.QtyStaked != 18070 {
 		t.Errorf("qty_staked = %v, want 18070 (fin_trx_account.votes_total)", st.LegSpot.QtyStaked)
 	}
-	// leg_short qty=18100（CMC position）
+	// leg_short qty=18100（CMC position，freshLive DB 回退）
 	if st.LegShort.Qty != 18100 {
 		t.Errorf("leg_short qty = %v, want 18100 (CMC position)", st.LegShort.Qty)
 	}
@@ -185,18 +188,15 @@ func TestGetHedgeStructure_MirrorPnlSumZero(t *testing.T) {
 	if st.LegSpot.Stake.Bandwidth != 800 {
 		t.Errorf("stake.bandwidth = %v, want 800 (TRX 原值)", st.LegSpot.Stake.Bandwidth)
 	}
-	// net_exposure 真实计算 (balance+staked−short_qty)×mid = (97.86+18070−18100)×0.3236 = 67.86×0.3236
+	// net_exposure 真实计算 (balance+staked−short_qty)×mid
+	// D-236 变更9：mid 用流值（freshLive DB 回退=EvaluationBidPrice=0.32285）
 	wantNetTrx := 97.863827 + 18070 - 18100
 	if diff := st.NetExposureTrx - wantNetTrx; diff > 1e-6 || diff < -1e-6 {
 		t.Errorf("net_exposure_trx = %v, want %v (balance+staked−short)", st.NetExposureTrx, wantNetTrx)
 	}
-	wantNetUsd := wantNetTrx * 0.3236
+	wantNetUsd := wantNetTrx * 0.32285
 	if diff := st.NetExposureUsd - wantNetUsd; diff > 1e-4 || diff < -1e-4 {
-		t.Errorf("net_exposure_usd = %v, want %v", st.NetExposureUsd, wantNetUsd)
-	}
-	// broker_unrealised 参考展示（-117.83，不做镜像源）
-	if st.LegShort.BrokerUnrealised != -117.83 {
-		t.Errorf("broker_unrealised = %v, want -117.83 (参考展示)", st.LegShort.BrokerUnrealised)
+		t.Errorf("net_exposure_usd = %v, want %v (D-236 变更9 流 Mid)", st.NetExposureUsd, wantNetUsd)
 	}
 	// 强平价 + 距强平%
 	if st.LegShort.Liq != 0.4226 {
@@ -231,10 +231,11 @@ func TestGetHedgeStructure_CarryHandCalc(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("InsertTRXAccount: %v", err)
 	}
-	// CMC 持仓 + price（mid=0.3236）
+	// CMC 持仓 + price（mid=0.3236；D-236 变更9：mid 走 freshLive DB 回退=EvaluationBidPrice）
 	if err := s.InsertCMCPositions(ctx, 1, []pgstore.CMCPosition{{
 		AccountID: 1, InstrumentID: "X-AFQUL", Direction: "SHORT", Quantity: 18100,
-		EntryPrice: 0.33171, MarginPercentage: 0.1, FetchedAt: now,
+		EntryPrice: 0.33171, MarginPercentage: 0.1,
+		EvaluationBidPrice: 0.3236, EvaluationAskPrice: 0.3240, FetchedAt: now,
 	}}); err != nil {
 		t.Fatalf("InsertCMCPositions: %v", err)
 	}
@@ -426,9 +427,8 @@ func TestGetHedgeStructure_WsConnected(t *testing.T) {
 	}
 }
 
-// TestGetHedgeStructure_AskFreshEvalAskSameSource D-234 R-V2：快照路径 Ask 走 freshEvalAsk（与 case13 推送同源）。
-// 注入 cmcAskProvider 返回新鲜内存值 → GetHedgeStructure 返回 structure.ask=内存值（不取 DB ForSide 门限值）。
-// 同时验证 PnL 用同一 evalAsk（镜像腿恒和=0 已由 MirrorPnlSumZero 覆盖，此处只断言 ask 字段同源）。
+// TestGetHedgeStructure_AskFreshEvalAskSameSource D-234 R-V2 → D-236 变更9：快照路径 Ask 走 freshLive（与 case13 推送同源）。
+// 注入 cmcLiveProvider 返回新鲜内存值 → GetHedgeStructure 返回 structure.ask=内存值（不取 DB ForSide 门限值）。
 func TestGetHedgeStructure_AskFreshEvalAskSameSource(t *testing.T) {
 	s := hedgeTestStore(t)
 	ctx := context.Background()
@@ -443,7 +443,8 @@ func TestGetHedgeStructure_AskFreshEvalAskSameSource(t *testing.T) {
 	}
 	if err := s.InsertCMCPositions(ctx, 1, []pgstore.CMCPosition{{
 		AccountID: 1, InstrumentID: "X-AFQUL", Direction: "SELL", Quantity: 18100,
-		EntryPrice: 0.33171, FetchedAt: now,
+		EntryPrice: 0.33171, EvaluationAskPrice: 0.3000, EvaluationBidPrice: 0.2990,
+		FetchedAt: now,
 	}}); err != nil {
 		t.Fatalf("InsertCMCPositions: %v", err)
 	}
@@ -454,8 +455,8 @@ func TestGetHedgeStructure_AskFreshEvalAskSameSource(t *testing.T) {
 
 	// case 1: provider 注入新鲜内存值 0.3500 → structure.ask=0.3500（内存直通，不取 DB）
 	memAsk := 0.3500
-	svc1 := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005, cmcAskProvider: func() (float64, time.Time) {
-		return memAsk, now // 新鲜（now，<30s）
+	svc1 := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005, cmcLiveProvider: func() cmc.LiveState {
+		return cmc.LiveState{Ask: memAsk, Mid: memAsk, Qty: 18100, PosTs: now} // 新鲜（now，<30s）
 	}}
 	resp1, err := svc1.GetHedgeStructure(ctx, connect.NewRequest(&v1.GetHedgeStructureRequest{}))
 	if err != nil {
@@ -465,7 +466,7 @@ func TestGetHedgeStructure_AskFreshEvalAskSameSource(t *testing.T) {
 		t.Errorf("fresh provider: Ask = %v, want %v (内存直通，与 case13 同源)", got, memAsk)
 	}
 
-	// case 2: provider 未接线（nil）→ 回退 DB ForSide(Sell)（快照/推送同源回退路径）
+	// case 2: provider 未接线（nil）→ 回退 DB positions 行（快照/推送同源回退路径）
 	svc2 := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005}
 	resp2, err := svc2.GetHedgeStructure(ctx, connect.NewRequest(&v1.GetHedgeStructureRequest{}))
 	if err != nil {
@@ -478,8 +479,8 @@ func TestGetHedgeStructure_AskFreshEvalAskSameSource(t *testing.T) {
 
 	// case 3: provider 返回陈旧值（>30s）→ 回退 DB（与 case13 同源新鲜度门限）
 	staleTs := now.Add(-31 * time.Second)
-	svc3 := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005, cmcAskProvider: func() (float64, time.Time) {
-		return memAsk, staleTs // 陈旧（>30s）
+	svc3 := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005, cmcLiveProvider: func() cmc.LiveState {
+		return cmc.LiveState{Ask: memAsk, Mid: memAsk, Qty: 18100, PosTs: staleTs} // 陈旧（>30s）
 	}}
 	resp3, err := svc3.GetHedgeStructure(ctx, connect.NewRequest(&v1.GetHedgeStructureRequest{}))
 	if err != nil {

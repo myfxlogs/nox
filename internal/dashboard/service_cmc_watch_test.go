@@ -84,14 +84,15 @@ func TestNotifyCMCFrameCoalesce(t *testing.T) {
 	}
 }
 
-// TestComputeCMCWatchUpdate_MirrorPnlSumZero D-234：同源公式——双腿 PnL 镜像恒和=0 + bid/ask/mid + 强平净值。
-// 构造 TRX 账户 + CMC 持仓（entry=0.33171, evalBid/evalAsk）+ CMC price（mid=0.3236, ask=0.32335）+ 账户摘要。
+// TestComputeCMCWatchUpdate_MirrorPnlSumZero D-234 → D-236 变更9 改写：镜像恒和=0 退役（业主真值原则取代）。
+// 新断言：空单 PnL=平台自报值（freshLive 回退 DB unrealised_pnl，无 cmcLiveProvider 时）；
+// bid/ask/mid + 强平净值 + 账户摘要（freshLive DB 回退）。
 func TestComputeCMCWatchUpdate_MirrorPnlSumZero(t *testing.T) {
 	s := hedgeTestStore(t)
 	ctx := context.Background()
 	now := time.Now().UTC()
 
-	// CMC 持仓（空单 18100，entry=0.33171，evalBid=0.32285, evalAsk=0.32335）
+	// CMC 持仓（空单 18100，entry=0.33171，evalBid=0.32285, evalAsk=0.32335, unrealised_pnl=-117.83）
 	if err := s.InsertCMCPositions(ctx, 1, []pgstore.CMCPosition{{
 		AccountID: 1, InstrumentID: "X-AFQUL", Direction: "SELL", Quantity: 18100,
 		EntryPrice: 0.33171, UnrealisedPnL: -117.83, MarginPercentage: 0.1,
@@ -105,12 +106,6 @@ func TestComputeCMCWatchUpdate_MirrorPnlSumZero(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("InsertCMCPrice: %v", err)
 	}
-	// CMC WS ask 行（ForSide Sell 取 WS ask=0.32335）
-	if err := s.InsertCMCPrice(ctx, pgstore.CMCPrice{
-		InstrumentID: "X-AFQUL", AskPrice: 0.32335, Src: "cmc_ws", FetchedAt: now.Add(time.Second),
-	}); err != nil {
-		t.Fatalf("InsertCMCPrice ws: %v", err)
-	}
 	// CMC 账户摘要（usedMargin=584.81 → 强平净值=292.405, 预警=467.848）
 	if err := s.InsertCMCAccountSummary(ctx, pgstore.CMCAccountSummary{
 		AccountID: 1, TotalAccountValue: 2169.02, TotalCashBalance: 2026.76,
@@ -120,16 +115,13 @@ func TestComputeCMCWatchUpdate_MirrorPnlSumZero(t *testing.T) {
 		t.Fatalf("InsertCMCAccountSummary: %v", err)
 	}
 
+	// 未接线 cmcLiveProvider → freshLive 回退 DB positions 行
 	svc := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005}
 	upd := svc.computeCMCWatchUpdate(ctx)
 
-	// mid=0.3236（REST mid）
-	if upd.Mid != 0.3236 {
-		t.Errorf("mid = %v, want 0.3236", upd.Mid)
-	}
-	// ask=0.32335（WS ask 优先）
+	// D-236 变更9：mid/ask 走 freshLive DB 回退（mid=EvaluationBidPrice=0.32285, ask=EvaluationAskPrice=0.32335）
 	if upd.Ask != 0.32335 {
-		t.Errorf("ask = %v, want 0.32335 (WS ask priority)", upd.Ask)
+		t.Errorf("ask = %v, want 0.32335 (DB 回退 EvaluationAskPrice)", upd.Ask)
 	}
 	// bid=0.32285（持仓 EvaluationBidPrice）
 	if upd.Bid != 0.32285 {
@@ -146,21 +138,22 @@ func TestComputeCMCWatchUpdate_MirrorPnlSumZero(t *testing.T) {
 	if upd.ShortLev != 10 {
 		t.Errorf("short_lev = %v, want 10 (1/0.1)", upd.ShortLev)
 	}
-	// 镜像恒和=0：pnlPx=evalAsk=0.32335（WS ask 优先，非 0 不回退 mid）
-	// spot_pnl = (0.32335 - 0.33171) × 18100 = -151.396
-	// short_pnl = (0.33171 - 0.32335) × 18100 = 151.396
-	sum := upd.LegSpotPnl + upd.LegShortPnl
-	if sum > 1e-9 || sum < -1e-9 {
-		t.Errorf("镜像恒和 = %v, want 0 (spot %v + short %v)", sum, upd.LegSpotPnl, upd.LegShortPnl)
+	// D-236 变更9：空单 PnL=平台自报值（DB unrealised_pnl=-117.83，无镜像计算）
+	if upd.LegShortPnl != -117.83 {
+		t.Errorf("leg_short_pnl = %v, want -117.83 (平台自报值, D-236 变更9)", upd.LegShortPnl)
 	}
-	// 强平/预警净值（platform_rule_50）
+	// 质押腿 PnL 不再镜像计算（现货无对手方报价、无开仓成本记录，反推=虚构）→ 0（前端显示「—」）
+	if upd.LegSpotPnl != 0 {
+		t.Errorf("leg_spot_pnl = %v, want 0 (D-236 变更9 退役镜像, 前端显示「—」)", upd.LegSpotPnl)
+	}
+	// 强平/预警净值（platform_rule_50，margin DB 回退=584.81）
 	if diff := upd.CloseoutLevelUsd - 584.81*0.5; diff > 1e-9 || diff < -1e-9 {
 		t.Errorf("closeout_level_usd = %v, want %v", upd.CloseoutLevelUsd, 584.81*0.5)
 	}
 	if diff := upd.WarningLevelUsd - 584.81*0.8; diff > 1e-9 || diff < -1e-9 {
 		t.Errorf("warning_level_usd = %v, want %v", upd.WarningLevelUsd, 584.81*0.8)
 	}
-	// 账户摘要
+	// 账户摘要（freshLive summary 域 DB 回退）
 	if upd.CmcCash != 2026.76 {
 		t.Errorf("cmc_cash = %v, want 2026.76", upd.CmcCash)
 	}
@@ -251,15 +244,15 @@ func TestCMCWatchPanelSourceAssert(t *testing.T) {
 	}
 }
 
-// TestComputeCMCWatchUpdate_MemoryEvalAsk D-234 R-V S1：内存 evalAsk 直通 + 新鲜度 >30s 回退 DB。
-// 注入 cmcAskProvider 返回新鲜值 → upd.Ask=内存值（不读 DB）；
-// 注入 cmcAskProvider 返回陈旧值（>30s）→ upd.Ask=DB ForSide(Sell) 值。
+// TestComputeCMCWatchUpdate_MemoryEvalAsk D-234 R-V S1 → D-236 变更9：内存 LiveState 直通 + 新鲜度 >30s 回退 DB。
+// 注入 cmcLiveProvider 返回新鲜值 → upd.Ask=内存值（不读 DB）；
+// 注入 cmcLiveProvider 返回陈旧值（>30s）→ upd.Ask=DB positions 行 EvaluationAskPrice 值。
 func TestComputeCMCWatchUpdate_MemoryEvalAsk(t *testing.T) {
 	s := hedgeTestStore(t)
 	ctx := context.Background()
 	now := time.Now().UTC()
 
-	// CMC 持仓（空单 18100，entry=0.33171）
+	// CMC 持仓（空单 18100，entry=0.33171，evalAsk=0.32335）
 	if err := s.InsertCMCPositions(ctx, 1, []pgstore.CMCPosition{{
 		AccountID: 1, InstrumentID: "X-AFQUL", Direction: "SELL", Quantity: 18100,
 		EntryPrice: 0.33171, UnrealisedPnL: -117.83, MarginPercentage: 0.1,
@@ -267,54 +260,56 @@ func TestComputeCMCWatchUpdate_MemoryEvalAsk(t *testing.T) {
 	}}); err != nil {
 		t.Fatalf("InsertCMCPositions: %v", err)
 	}
-	// CMC price（mid=0.3236 REST 行 + DB ask=0.3240）
+	// CMC price（mid=0.3236 REST 行）
 	if err := s.InsertCMCPrice(ctx, pgstore.CMCPrice{
-		InstrumentID: "X-AFQUL", MidPrice: 0.3236, AskPrice: 0.3240, FetchedAt: now,
+		InstrumentID: "X-AFQUL", MidPrice: 0.3236, FetchedAt: now,
 	}); err != nil {
 		t.Fatalf("InsertCMCPrice: %v", err)
 	}
 
-	// ① 内存新鲜 → upd.Ask=内存值（0.3299），不读 DB ask=0.3240
+	// ① 内存新鲜 → upd.Ask=内存值（0.3299），不读 DB evalAsk=0.32335
 	freshAsk := 0.3299
 	freshTs := time.Now()
 	svc1 := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005,
-		cmcAskProvider: func() (float64, time.Time) { return freshAsk, freshTs }}
+		cmcLiveProvider: func() cmc.LiveState { return cmc.LiveState{Ask: freshAsk, Mid: freshAsk, Qty: 18100, PosTs: freshTs} }}
 	upd1 := svc1.computeCMCWatchUpdate(ctx)
 	if upd1.Ask != freshAsk {
 		t.Errorf("fresh memory ask = %v, want %v (内存直通)", upd1.Ask, freshAsk)
 	}
 
-	// ② 内存陈旧（>30s）→ upd.Ask=DB ForSide(Sell) 值
+	// ② 内存陈旧（>30s）→ upd.Ask=DB positions 行 EvaluationAskPrice=0.32335
 	staleTs := time.Now().Add(-31 * time.Second)
 	svc2 := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005,
-		cmcAskProvider: func() (float64, time.Time) { return 0.9999, staleTs }}
+		cmcLiveProvider: func() cmc.LiveState { return cmc.LiveState{Ask: 0.9999, Mid: 0.9999, Qty: 18100, PosTs: staleTs} }}
 	upd2 := svc2.computeCMCWatchUpdate(ctx)
-	if upd2.Ask != 0.3240 {
-		t.Errorf("stale memory ask = %v, want 0.3240 (DB fallback)", upd2.Ask)
+	if upd2.Ask != 0.32335 {
+		t.Errorf("stale memory ask = %v, want 0.32335 (DB fallback EvaluationAskPrice)", upd2.Ask)
 	}
 
-	// ③ 未接线 cmcAskProvider → upd.Ask=DB ForSide(Sell) 值
+	// ③ 未接线 cmcLiveProvider → upd.Ask=DB positions 行 EvaluationAskPrice=0.32335
 	svc3 := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005}
 	upd3 := svc3.computeCMCWatchUpdate(ctx)
-	if upd3.Ask != 0.3240 {
-		t.Errorf("nil provider ask = %v, want 0.3240 (DB fallback)", upd3.Ask)
+	if upd3.Ask != 0.32335 {
+		t.Errorf("nil provider ask = %v, want 0.32335 (DB fallback EvaluationAskPrice)", upd3.Ask)
 	}
 }
 
-// TestComputeCMCWatchUpdate_ShortLiqNetExposure D-234 R-V S3：short_liq + net_exposure_usd 字段填充。
+// TestComputeCMCWatchUpdate_ShortLiqNetExposure D-234 R-V S3 → D-236 变更9：short_liq + net_exposure_usd 字段填充。
+// D-236 变更9：mid 走 freshLive DB 回退（EvaluationBidPrice），net_exposure_usd 分母改流 Mid。
 func TestComputeCMCWatchUpdate_ShortLiqNetExposure(t *testing.T) {
 	s := hedgeTestStore(t)
 	ctx := context.Background()
 	now := time.Now().UTC()
 
-	// CMC 持仓
+	// CMC 持仓（evalBid=0.3236 → freshLive DB 回退 mid=0.3236）
 	if err := s.InsertCMCPositions(ctx, 1, []pgstore.CMCPosition{{
 		AccountID: 1, InstrumentID: "X-AFQUL", Direction: "SELL", Quantity: 18100,
-		EntryPrice: 0.33171, MarginPercentage: 0.1, FetchedAt: now,
+		EntryPrice: 0.33171, MarginPercentage: 0.1,
+		EvaluationBidPrice: 0.3236, EvaluationAskPrice: 0.3240, FetchedAt: now,
 	}}); err != nil {
 		t.Fatalf("InsertCMCPositions: %v", err)
 	}
-	// CMC price（mid=0.3236）
+	// CMC price（mid=0.3236 REST 行，仅历史账用途）
 	if err := s.InsertCMCPrice(ctx, pgstore.CMCPrice{
 		InstrumentID: "X-AFQUL", MidPrice: 0.3236, FetchedAt: now,
 	}); err != nil {
@@ -342,7 +337,7 @@ func TestComputeCMCWatchUpdate_ShortLiqNetExposure(t *testing.T) {
 	if upd.ShortLiq != 0.4226 {
 		t.Errorf("short_liq = %v, want 0.4226", upd.ShortLiq)
 	}
-	// net_exposure_usd=70×0.3236=22.652
+	// net_exposure_usd=70×0.3236=22.652（D-236 变更9：mid 走 freshLive DB 回退=EvaluationBidPrice=0.3236）
 	wantNetUsd := 70.0 * 0.3236
 	if diff := upd.NetExposureUsd - wantNetUsd; diff > 1e-6 || diff < -1e-6 {
 		t.Errorf("net_exposure_usd = %v, want %v", upd.NetExposureUsd, wantNetUsd)

@@ -58,104 +58,125 @@ func (s *Service) subscribeCMCWatchTopic() (<-chan *v1.CMCWatchUpdate, func()) {
 	return s.cmcWatchTopic.Subscribe()
 }
 
-// computeCMCWatchUpdate D-234 R-V：后端现算 CMC 看盘载荷（与 GetHedgeStructure 同源公式，只取看盘字段不算 carry）。
-// R-V S1：ask/双腿 PnL/quote_time 改用内存 evalAsk（cmcAskProvider），新鲜度 >30s 回退 DB（ws 断连不显假值）。
-// mid=LastCMCPriceMidWithTime（REST mid，WS 行 mid=NULL 不污染）；
-// bid=LastCMCPositionByInstrument.EvaluationBidPrice（type7 patch 更新，15s 节流落库）；
-// 双腿 PnL=(baseline−pnlPx)×mirrorQty 镜像恒和=0（pnlPx=evalAsk，0 回退 mid）；
-// 强平/预警净值=usedMargin×50%/80%（platform_rule_50，D-225 v2.2 标定）。
+// computeCMCWatchUpdate D-234 R-V → D-236 变更9：后端现算 CMC 看盘载荷（与 GetHedgeStructure 同源 freshLive）。
+// D-236 变更9：全字段走 freshLive（内存优先，分域 >30s 回退 DB）；PnL=平台自报值（LiveState.PnL）；
+// 镜像恒和=0 退役（业主真值原则取代）；净敞口 USD 分母改流 Mid；净值随 Margin 流值派生。
+// bid=LastCMCPositionByInstrument.EvaluationBidPrice（type7 patch 更新，15s 节流落库，DB 兜底）；
+// 强平/预警净值=margin×50%/80%（platform_rule_50，D-225 v2.2 标定）。
 func (s *Service) computeCMCWatchUpdate(ctx context.Context) *v1.CMCWatchUpdate {
 	upd := &v1.CMCWatchUpdate{CloseoutSource: "platform_rule_50"}
+
+	// D-236 变更9：全字段走 freshLive（与 GetHedgeStructure 同源）
+	ls := s.freshLive(ctx)
 
 	cmcPos, cmcPosErr := s.store.LastCMCPositionByInstrument(ctx, "X-AFQUL")
 	hasCMCPos := cmcPosErr == nil
 	cmcSum, cmcSumErr := s.store.LastCMCAccountSummary(ctx)
 	hasCMCSum := cmcSumErr == nil
 
-	var mid, evalAsk float64
-	var quoteFetchedAt time.Time
-	if hasCMCPos {
-		if v, t, err := s.store.LastCMCPriceMidWithTime(ctx, "X-AFQUL"); err == nil {
-			mid = v
-			quoteFetchedAt = t
-		}
-		// R-V S1：内存 evalAsk 优先（闸 2 修复），新鲜度 >30s 回退 DB。
-		evalAsk = s.freshEvalAsk(ctx)
-	}
-
 	var baseline float64
 	if hasCMCPos {
 		baseline = cmcPos.EntryPrice
 	}
-	// pnlPx=evalAsk（ForSide short=ask 评估价口径），0 回退 mid（与 GetHedgeStructure 同源）
-	pnlPx := evalAsk
-	if pnlPx == 0 {
-		pnlPx = mid
-	}
 
-	var mirrorQty float64
+	// 空单腿：D-236 变更9 PnL=平台自报值（LiveState.PnL）
+	if ls.Qty > 0 {
+		upd.ShortQty = ls.Qty
+	}
 	if hasCMCPos {
-		mirrorQty = cmcPos.Quantity
-		upd.ShortQty = mirrorQty
 		upd.Bid = cmcPos.EvaluationBidPrice
-		if cmcPos.MarginPercentage > 0 {
-			upd.ShortLev = int32(1.0 / cmcPos.MarginPercentage)
-		}
-		if pnlPx > 0 && baseline > 0 {
-			upd.LegShortPnl = (baseline - pnlPx) * mirrorQty
-		}
 	}
-	// 质押腿镜像 pnl（用空单 qty 确保恒和=0；与 GetHedgeStructure 同源）
-	if pnlPx > 0 && baseline > 0 && mirrorQty > 0 {
-		upd.LegSpotPnl = (pnlPx - baseline) * mirrorQty
+	if ls.Lev > 0 {
+		upd.ShortLev = int32(ls.Lev)
 	}
+	upd.LegShortPnl = ls.PnL // 平台真值（业主令：取 cmc 真实数据，不再反推计算）
+	// 质押腿 PnL 不再镜像计算（现货无对手方报价、无开仓成本记录，反推=虚构）→ 前端显示「—」
 
-	upd.Mid = mid
-	upd.Ask = evalAsk
+	upd.Mid = ls.Mid
+	upd.Ask = ls.Ask
 	upd.BaselinePrice = baseline
 
+	// D-236 变更9：净值/距强平随 Margin 流值派生（D-225 口径不变：margin×50%/80%）
+	margin := ls.Margin
+	if margin <= 0 && hasCMCSum {
+		margin = cmcSum.TotalEquityUsedInMargin // DB 兜底
+	}
 	if hasCMCSum {
 		upd.DistToCloseoutPct = cmcSum.DistanceToCloseoutPct
-		upd.CloseoutLevelUsd = cmcSum.TotalEquityUsedInMargin * 0.5
-		upd.WarningLevelUsd = cmcSum.TotalEquityUsedInMargin * 0.8
-		upd.CmcCash = cmcSum.TotalCashBalance
-		upd.CmcEquity = cmcSum.TotalAccountValue
-		upd.UsedMargin = cmcSum.TotalEquityUsedInMargin
-		upd.ShortLiq = cmcSum.CloseoutPrice // R-V S3：强平价（与 HedgeLegShort.liq 同源）
+		upd.ShortLiq = cmcSum.CloseoutPrice
 		upd.PlatformAlertState = cmc.AlertsToState(cmcSum.Alerts)
 	}
-	// R-V S3：净敞口 USD（与 GetHedgeStructure 同源：netExposureTrx × mid）
-	if hasCMCPos {
+	upd.CloseoutLevelUsd = margin * 0.5
+	upd.WarningLevelUsd = margin * 0.8
+	upd.CmcCash = ls.Cash
+	upd.CmcEquity = ls.Equity
+	upd.UsedMargin = margin
+	// 净敞口 USD（与 GetHedgeStructure 同源：netExposureTrx × 流 Mid）
+	if ls.Qty > 0 {
 		trxAcc, trxErr := s.store.LastTRXAccount(ctx)
 		if trxErr == nil {
 			balance := float64(trxAcc.BalanceSun) / 1e6
 			staked := float64(trxAcc.VotesTotal)
-			netExposureTrx := balance + staked - cmcPos.Quantity
-			upd.NetExposureUsd = netExposureTrx * mid
+			netExposureTrx := balance + staked - ls.Qty
+			upd.NetExposureUsd = netExposureTrx * ls.Mid
 		}
 	}
 	if s.cmcWsHealth != nil {
 		upd.WsConnected = s.cmcWsHealth()
 	}
-	if !quoteFetchedAt.IsZero() {
-		upd.QuoteTime = timestamppb.New(quoteFetchedAt)
+	// quote_time 用 PosTs（流价格帧时戳，与 GetHedgeStructure 同源）
+	if !ls.PosTs.IsZero() {
+		upd.QuoteTime = timestamppb.New(ls.PosTs)
 	}
 	return upd
 }
 
-// freshEvalAsk D-234 R-V S1：内存 evalAsk 优先（cmcAskProvider），新鲜度 >30s 或未接线回退 DB ForSide(Sell)。
-// 闸 2 修复：ws 提取门限 0.1% 锁死 DB 值 → 内存直通绕过落库节流，每跳都新鲜。
-func (s *Service) freshEvalAsk(ctx context.Context) float64 {
-	if s.cmcAskProvider != nil {
-		ask, ts := s.cmcAskProvider()
-		if ask > 0 && !ts.IsZero() && time.Since(ts) <= 30*time.Second {
-			return ask
+// freshLive D-236 变更9：内存 LiveState 优先（cmcLiveProvider），分域新鲜度 >30s 回退 DB。
+// position 域（Ask/Mid/Qty/Lev/PnL）：PosTs 陈旧/未接线→回退 DB positions 行；
+// summary 域（Cash/Equity/Margin）：SumTs 陈旧/未接线→回退 DB summary 行。
+// 替代 D-234 freshEvalAsk（单解析器统一 position+summary 域，自审 B 项违规修正）。
+func (s *Service) freshLive(ctx context.Context) cmc.LiveState {
+	var ls cmc.LiveState
+	if s.cmcLiveProvider != nil {
+		ls = s.cmcLiveProvider()
+	}
+	// position 域回退：PosTs 陈旧/未接线/Ask=0 → 读 DB positions 行
+	posFresh := !ls.PosTs.IsZero() && time.Since(ls.PosTs) <= 30*time.Second
+	if !posFresh || ls.Ask <= 0 {
+		cmcPos, err := s.store.LastCMCPositionByInstrument(ctx, "X-AFQUL")
+		if err == nil {
+			if !posFresh || ls.Ask <= 0 {
+				ls.Ask = cmcPos.EvaluationAskPrice
+			}
+			if !posFresh || ls.Mid <= 0 {
+				ls.Mid = cmcPos.EvaluationBidPrice // DB 回退用 bid（无独立 mid 字段；流 mid=(ask+bid)/2 优先）
+			}
+			if !posFresh || ls.Qty <= 0 {
+				ls.Qty = cmcPos.Quantity
+			}
+			if !posFresh || ls.Lev <= 0 {
+				if cmcPos.MarginPercentage > 0 {
+					ls.Lev = 1.0 / cmcPos.MarginPercentage
+				}
+			}
+			if !posFresh || ls.PnL == 0 {
+				ls.PnL = cmcPos.UnrealisedPnL
+			}
+			if !posFresh {
+				ls.PosTs = cmcPos.FetchedAt
+			}
 		}
 	}
-	// 回退 DB（未接线/新鲜度 >30s/ws 断连）
-	px, _, _, err := s.store.LastCMCPriceForSide(ctx, "X-AFQUL", "Sell")
-	if err != nil {
-		return 0
+	// summary 域回退：SumTs 陈旧/未接线 → 读 DB summary 行
+	sumFresh := !ls.SumTs.IsZero() && time.Since(ls.SumTs) <= 30*time.Second
+	if !sumFresh {
+		cmcSum, err := s.store.LastCMCAccountSummary(ctx)
+		if err == nil {
+			ls.Cash = cmcSum.TotalCashBalance
+			ls.Equity = cmcSum.TotalAccountValue
+			ls.Margin = cmcSum.TotalEquityUsedInMargin
+			ls.SumTs = cmcSum.FetchedAt
+		}
 	}
-	return px
+	return ls
 }

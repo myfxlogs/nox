@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"arb/internal/collect/cmc"
 	"arb/internal/exec"
 	"arb/internal/position"
 )
@@ -89,9 +90,10 @@ func (s *Service) SetAliasMap(m map[string]string) {
 // nil = 未接线→GetHedgeStructure 返回 wsConnected=false（前端显示黄点 REST 兜底）。
 func (s *Service) SetCmcWsHealth(fn func() bool) { s.cmcWsHealth = fn }
 
-// SetCmcAskProvider D-234 R-V S1：注入 CMC ws 内存 evalAsk provider（main 装配 ws.EvalAsk）。
-// nil=未接线→computeCMCWatchUpdate 回退 DB 读 ForSide(Sell)。
-func (s *Service) SetCmcAskProvider(fn func() (float64, time.Time)) { s.cmcAskProvider = fn }
+// SetCmcLiveProvider D-236 变更9：注入 CMC ws 内存 LiveState provider（main 装配 ws.LiveState）。
+// nil=未接线→freshLive 回退 DB（分域：PosTs 陈旧回退 positions 行、SumTs 陈旧回退 summary 行）。
+// 替代 D-234 SetCmcAskProvider（单 seam 统一 position+summary 域）。
+func (s *Service) SetCmcLiveProvider(fn func() cmc.LiveState) { s.cmcLiveProvider = fn }
 
 // aliasForVenueKey D-175：从 venueKey="{venue}:{src}" 提取 venue 查 alias 缓存。
 // venueKey 无冒号 → 整串当 venue 查；alias 空/未接线 → 返回空（前端回退 venueKey）。

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/collect/cmc"
 	"arb/internal/exec"
 	"arb/internal/position"
 	"arb/internal/store/pgstore"
@@ -136,8 +137,9 @@ type Service struct {
 
 	// D-193-A/R9：CMC ws 事件驱动健康检查（nil=未接线→wsConnected=false）。main 装配 ws.IsHealthy 注入。
 	cmcWsHealth func() bool
-	// D-234 R-V S1：CMC ws 内存 evalAsk provider（nil=未接线→回退 DB）。main 装配 ws.EvalAsk 注入。
-	cmcAskProvider func() (float64, time.Time)
+	// D-236 变更9：CMC ws 内存 LiveState provider（nil=未接线→回退 DB）。main 装配 ws.LiveState 注入。
+	// 替代 D-234 cmcAskProvider（单 seam 统一 position+summary 域）。
+	cmcLiveProvider func() cmc.LiveState
 	// D-234：CMC 看盘帧 1s 蓄压状态（NotifyCMCFrame→AfterFunc→flushCMCWatch 现算+Publish）。
 	cmcFrameMu            sync.Mutex
 	cmcFrameTimer         *time.Timer
@@ -205,5 +207,5 @@ type Settler interface {
 	Settle(ctx context.Context, posID int64) error
 }
 
-// setter 注入面（SetSettler/SetCMCSource/SetTradeModes/.../SetCmcAskProvider/aliasForVenueKey）
+// setter 注入面（SetSettler/SetCMCSource/SetTradeModes/.../SetCmcLiveProvider/aliasForVenueKey）
 // 见 service_setters.go（从本文件拆出控行数 <300）。

@@ -22,9 +22,15 @@ func hedgeStructureSource(t *testing.T) string {
 		t.Fatal("runtime.Caller failed")
 	}
 	path := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src", "components", "PositionsPageHedgeStructure.tsx")
+	return readFile(t, path)
+}
+
+// readFile 读取文件内容为字符串（测试辅助，断言用）。
+func readFile(t *testing.T, path string) string {
+	t.Helper()
 	data, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("read hedge structure component: %v", err)
+		t.Fatalf("read %s: %v", path, err)
 	}
 	return string(data)
 }
@@ -98,11 +104,8 @@ func TestD236_AppCmcWatchProp(t *testing.T) {
 		t.Fatal("runtime.Caller failed")
 	}
 	path := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src", "App.tsx")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read App.tsx: %v", err)
-	}
-	if !strings.Contains(string(data), "cmcWatch") {
+	src := readFile(t, path)
+	if !strings.Contains(src, "cmcWatch") {
 		t.Fatal("App.tsx 缺 cmcWatch 透传")
 	}
 }
@@ -127,15 +130,105 @@ func TestD236_CSSGridTwoColumns(t *testing.T) {
 		t.Fatal("runtime.Caller failed")
 	}
 	path := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src", "styles", "13-daily.css")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read 13-daily.css: %v", err)
-	}
-	src := string(data)
+	src := readFile(t, path)
 	if !strings.Contains(src, "grid-template-columns") {
 		t.Fatal("13-daily.css 缺 grid-template-columns（D-236 变更5 两列 grid）")
 	}
 	if !strings.Contains(src, "1 / -1") {
 		t.Fatal("13-daily.css 缺 1 / -1 跨列规则（D-236 变更5 年化行跨双列）")
+	}
+}
+
+// 断言⑧：LiveState 单访问器存在（含 Ask/Mid/Qty/Lev/PnL/Cash/Equity/Margin+双 Ts），
+// EvalAsk 无独立实现（退役或薄委托），快照/case13 均走 freshLive。
+func TestD236_LiveStateSingleAccessor(t *testing.T) {
+	_, testFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	// ① cmc 包含 LiveState 结构（Ask/Mid/Qty/Lev/PnL/Cash/Equity/Margin+PosTs/SumTs）
+	// D-236 变更9：LiveState 可能在 ws.go 或 ws_live.go（拆分保 ws.go ≤300 行）
+	cmcDir := filepath.Join(filepath.Dir(testFile), "..", "..", "internal", "collect", "cmc")
+	wsSrc := readFile(t, filepath.Join(cmcDir, "ws.go"))
+	wsLiveSrc := readFile(t, filepath.Join(cmcDir, "ws_live.go"))
+	cmcSrc := wsSrc + "\n" + wsLiveSrc
+	for _, want := range []string{"type LiveState struct", "Ask, Mid, Qty, Lev, PnL", "Cash, Equity, Margin", "PosTs", "SumTs", "func (w *WsClient) LiveState()"} {
+		if !strings.Contains(cmcSrc, want) {
+			t.Errorf("cmc 包缺 %q（LiveState 单访问器）", want)
+		}
+	}
+	// ② EvalAsk 退役为薄委托（实现体调 LiveState()，无独立 priceMu 锁读）
+	evalIdx := strings.Index(cmcSrc, "func (w *WsClient) EvalAsk()")
+	if evalIdx < 0 {
+		t.Fatal("cmc 包缺 EvalAsk 方法（应保留为薄委托）")
+	}
+	evalEnd := strings.Index(cmcSrc[evalIdx:], "\n}")
+	evalBody := cmcSrc[evalIdx : evalIdx+evalEnd]
+	if !strings.Contains(evalBody, "LiveState()") {
+		t.Error("EvalAsk 未委托 LiveState()（应有 ls := w.LiveState() 薄委托）")
+	}
+	if strings.Contains(evalBody, "w.priceMu.Lock()") {
+		t.Error("EvalAsk 仍有独立 priceMu 锁读（应退役为薄委托）")
+	}
+
+	// ③ dashboard 单 seam SetCmcLiveProvider + freshLive 解析器
+	settersPath := filepath.Join(filepath.Dir(testFile), "service_setters.go")
+	settersSrc := readFile(t, settersPath)
+	if !strings.Contains(settersSrc, "SetCmcLiveProvider") {
+		t.Error("service_setters.go 缺 SetCmcLiveProvider（单 seam）")
+	}
+	watchPath := filepath.Join(filepath.Dir(testFile), "service_cmc_watch.go")
+	watchSrc := readFile(t, watchPath)
+	if !strings.Contains(watchSrc, "func (s *Service) freshLive(") {
+		t.Error("service_cmc_watch.go 缺 freshLive 解析器")
+	}
+	// 旧 SetCmcAskProvider 函数定义应已退役（注释提及旧名允许，但不应有 func 定义）
+	if strings.Contains(settersSrc, "func (s *Service) SetCmcAskProvider") {
+		t.Error("service_setters.go 仍含 SetCmcAskProvider 函数定义（应退役替换为 SetCmcLiveProvider）")
+	}
+
+	// ④ 快照（GetHedgeStructure）与 case13（computeCMCWatchUpdate）均走 freshLive
+	hedgePath := filepath.Join(filepath.Dir(testFile), "service_hedge.go")
+	hedgeSrc := readFile(t, hedgePath)
+	if !strings.Contains(hedgeSrc, "s.freshLive(ctx)") {
+		t.Error("service_hedge.go GetHedgeStructure 缺 freshLive 调用（快照应走 freshLive）")
+	}
+	if !strings.Contains(watchSrc, "s.freshLive(ctx)") {
+		t.Error("service_cmc_watch.go computeCMCWatchUpdate 缺 freshLive 调用（case13 应走 freshLive）")
+	}
+	// 旧 freshEvalAsk 函数定义应已退役（注释提及旧名允许，但不应有 func 定义）
+	if strings.Contains(watchSrc, "func (s *Service) freshEvalAsk(") {
+		t.Error("service_cmc_watch.go 仍含 freshEvalAsk 函数定义（应退役替换为 freshLive）")
+	}
+}
+
+// 断言⑨：broker 列 th/td 不存在（D-236 变更7 删 broker 列）。
+func TestD236_NoBrokerColumn(t *testing.T) {
+	src := hedgeStructureSource(t)
+	if strings.Contains(src, "broker 浮盈") {
+		t.Fatal("PositionsPageHedgeStructure.tsx 仍含 broker 浮盈 th（D-236 变更7 应删）")
+	}
+	if strings.Contains(src, "brokerUnrealised") {
+		t.Fatal("PositionsPageHedgeStructure.tsx 仍含 brokerUnrealised td（D-236 变更7 应删）")
+	}
+}
+
+// 断言⑩：卡片 CMC 字段源文本无 LastCMCAccountSummary/LastCMCPriceMidWithTime 作为主路径（兜底分支除外）。
+func TestD236_NoDBPrimaryPath(t *testing.T) {
+	_, testFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	hedgePath := filepath.Join(filepath.Dir(testFile), "service_hedge.go")
+	hedgeSrc := readFile(t, hedgePath)
+	// LastCMCAccountSummary 允许作为兜底（alerts/closeout_price DB 兜底），但不应作为主路径
+	// 主路径=GetHedgeStructure 的 mid/ask/cmcCash/cmcEquity 应走 freshLive，不读 LastCMCPriceMidWithTime
+	if strings.Contains(hedgeSrc, "LastCMCPriceMidWithTime") {
+		t.Error("service_hedge.go 仍含 LastCMCPriceMidWithTime（D-236 变更9 应改 freshLive，mid 不再读 DB price）")
+	}
+	watchPath := filepath.Join(filepath.Dir(testFile), "service_cmc_watch.go")
+	watchSrc := readFile(t, watchPath)
+	if strings.Contains(watchSrc, "LastCMCPriceMidWithTime") {
+		t.Error("service_cmc_watch.go 仍含 LastCMCPriceMidWithTime（D-236 变更9 应改 freshLive，mid 不再读 DB price）")
 	}
 }
