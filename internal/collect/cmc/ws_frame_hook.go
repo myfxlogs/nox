@@ -13,6 +13,12 @@ const (
 // SetFrameHook D-234：注入帧钩子（main 装配；nil=未接线→fireFrameHook 静默返回）。
 func (w *WsClient) SetFrameHook(fn func(FrameKind)) { w.frameHook = fn }
 
+// FireFrameHook D-234 R-V S2：外部触发帧钩子（exported——PricesCollector REST 写库后转发）。
+// recover 保护——通知 panic 不影响调用方（通知失败不影响落库，硬约束⑦）。
+func (w *WsClient) FireFrameHook(kind FrameKind) {
+	w.fireFrameHook(kind)
+}
+
 // fireFrameHook D-234：落库后通知 dashboard（先落库后通知语义）。
 // recover 保护——通知 panic 不影响落库结果（通知失败不影响落库，硬约束⑦）。
 func (w *WsClient) fireFrameHook(kind FrameKind) {

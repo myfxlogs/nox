@@ -658,6 +658,7 @@ message HedgeStructure {
   string platform_alerts = 12;       // D-225 v2.1：alerts 原文 JSON 透传（前端只渲染）
   double closeout_level_usd = 13;    // D-225 v2.2：平台强平净值 = totalMarginAmount × 50%
   double warning_level_usd = 14;    // D-225 v2.2：平台预警净值 = totalMarginAmount × 80%
+  double ask = 15;                  // D-234 R-V S3：现价=ask（ForSide Sell 口径=强平/PnL 同源，业主批 A）
 }
 
 message GetHedgeStructureRequest {}
@@ -813,6 +814,8 @@ message CMCWatchUpdate {
   bool ws_connected = 16;          // CMC ws 事件驱动健康（true=绿/false=黄 REST 兜底）
   string closeout_source = 17;     // "platform_rule_50"（D-225 v2.2 标定）
   google.protobuf.Timestamp quote_time = 18; // mid 行 fetched_at（无 mid=零值）
+  double short_liq = 19;           // D-234 R-V S3：强平价（fin_cmc_account_summary.closeout_price，与 HedgeLegShort.liq 同源）
+  double net_exposure_usd = 20;    // D-234 R-V S3：净敞口 USD（netExposureTrx × mid，与 GetHedgeStructure 同源）
 }
 
 // 持仓变更通知（D-107 P3）：OnOrderUpdate 事件经 orderTopic → StreamUpdates case 11 推送。

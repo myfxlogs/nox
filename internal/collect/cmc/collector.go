@@ -35,6 +35,9 @@ type PricesCollector struct {
 	// D-225 v2.1 S3：ws 健康期降频——wsHealthy() && time.Since(lastWrite)<15min → return nil。
 	wsHealthy func() bool
 	lastWrite time.Time
+	// D-234 R-V S2：REST 写库后触发同通知（frameHook seam，仿 WsClient.SetFrameHook）。
+	// nil=未接线→不通知（测试默认）。
+	frameHook func(FrameKind)
 }
 
 func NewPricesCollector(auth jwtProvider, instrumentID string, store *pgstore.Store, restBase string) *PricesCollector {
@@ -43,6 +46,10 @@ func NewPricesCollector(auth jwtProvider, instrumentID string, store *pgstore.St
 
 // SetWSHealthy D-225 v2.1 S3：注入 ws 健康查询（wire 层回填）；nil=无 ws，照旧 REST 轮询。
 func (c *PricesCollector) SetWSHealthy(fn func() bool) { c.wsHealthy = fn }
+
+// SetFrameHook D-234 R-V S2：注入帧钩子（main 装配 dashboard.NotifyCMCFrame）；nil=未接线→不通知。
+// REST 写库后触发同通知——5min mid/净敞口至少推得动（ws 静默期兜底）。
+func (c *PricesCollector) SetFrameHook(fn func(FrameKind)) { c.frameHook = fn }
 
 func (c *PricesCollector) Kind() string { return fact.KindCMCPrice }
 
@@ -92,6 +99,11 @@ func (c *PricesCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	}
 	if err := c.store.InsertCMCPrice(ctx, rec); err != nil {
 		return nil, fmt.Errorf("cmc price insert: %w", err)
+	}
+	// D-234 R-V S2：REST 写库后触发同通知（5min mid/净敞口至少推得动）。
+	if c.frameHook != nil {
+		defer func() { _ = recover() }()
+		c.frameHook(FramePrice)
 	}
 	// 门控缓存更新（S4）：成功后记录 status + 探测时刻
 	c.lastStatus = p.MarketStatus
