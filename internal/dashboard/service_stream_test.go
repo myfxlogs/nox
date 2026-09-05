@@ -54,3 +54,31 @@ func TestOrderTopicNilSafe(t *testing.T) {
 		t.Fatal("orderTopic should be nil by default")
 	}
 }
+
+// TestHedgeTopicPublishSubscribe D-231 S5 ⑨：hedgeTopic Publish → 订阅者收到 struct{}{}（case 12 推送的数据源）。
+// 验证 StreamUpdates 的 hedgeTopic.Subscribe() 能收到通知（仿 TestOrderTopicPublishSubscribe 模式）。
+func TestHedgeTopicPublishSubscribe(t *testing.T) {
+	topic := bus.NewTopic[struct{}]()
+	ch, cancel := topic.Subscribe()
+	defer cancel()
+
+	topic.Publish(struct{}{})
+
+	select {
+	case got := <-ch:
+		var want struct{}
+		if got != want {
+			t.Fatalf("round-trip mismatch: got %+v want %+v", got, want)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for published HedgeRefresh notice")
+	}
+}
+
+// TestHedgeTopicNilSafe D-231 S5：Service.hedgeTopic 为 nil（测试未接线）→ StreamUpdates 不订阅该分支不 panic。
+func TestHedgeTopicNilSafe(t *testing.T) {
+	s := &Service{}
+	if s.hedgeTopic != nil {
+		t.Fatal("hedgeTopic should be nil by default")
+	}
+}

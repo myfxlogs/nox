@@ -18,8 +18,7 @@ import (
 
 func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.StreamUpdatesRequest], stream *connect.ServerStream[v1.StreamUpdatesResponse]) error {
 	// 实时推送报价：订阅 QuoteBus 全量（wildcard ""），亚秒级行情走推流。
-	// 机会（D-050）/告警/持仓由引擎 30s 节流产生：新机会经 oppTopic 实时推 case 2；
-	// 告警/持仓仍由前端 30s 低频快照补齐。
+	// 机会（D-050）/告警/持仓由引擎 30s 节流产生：新机会经 oppTopic 实时推 case 2；告警/持仓仍由前端 30s 低频快照补齐。
 	ch, cancel := s.qbus.Subscribe("")
 	defer cancel()
 	// 实时个人持仓现价（D-049）：PersonalMonitor 广播 → 逐仓推 case 7（与 quote 流并存，独立 Topic 扇出）。
@@ -66,32 +65,35 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 		ordCh, ordCancel = s.orderTopic.Subscribe()
 		defer ordCancel()
 	}
-	// D-114：告警实时推送（InsertAlert → store.alertHook → alertTopic → case 3）。
-	// alertTopic 为 nil（测试未接线）→ 不订阅。
+	// D-114：告警实时推送（InsertAlert → store.alertHook → alertTopic → case 3）。nil=不订阅。
 	var alertCh <-chan pgstore.Alert
 	if s.alertTopic != nil {
 		var alertCancel func()
 		alertCh, alertCancel = s.alertTopic.Subscribe()
 		defer alertCancel()
 	}
+	// D-231 S5：对冲结构刷新通知（hedgeTopic → case 12）。nil=不订阅。
+	var hedgeCh <-chan struct{}
+	if s.hedgeTopic != nil {
+		var hc func()
+		hedgeCh, hc = s.hedgeTopic.Subscribe()
+		defer hc()
+	}
 	// keepalive 每 30s（§8.2 D-027）
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
-	// D-090 自选报价条：case 1 蓄压 flush ticker（默认 1s，测试可注 10ms）。
-	// 治吵三刀之一——per (venueKey|symbol) 蓄压只推最新一帧，亚秒裸推 → 1s 节流。
+	// D-090 自选报价条：case 1 蓄压 flush ticker（默认 1s，测试可注 10ms）。per (venueKey|symbol) 蓄压只推最新一帧。
 	flushInterval := s.quoteFlushInterval
 	if flushInterval <= 0 {
 		flushInterval = time.Second
 	}
 	flushTicker := time.NewTicker(flushInterval)
 	defer flushTicker.Stop()
-	// D-090：流启动初始化——缓存未初始化则先查库填缓存（治 App 根流先于任何 GetWatchlist
-	// 启动时快照空+过滤失效；每次连接至多一查）。
+	// D-090：流启动初始化——缓存未初始化则先查库填缓存（治 App 根流先于任何 GetWatchlist 启动时快照空+过滤失效）。
 	if err := s.ensureWatchlistLoaded(ctx); err != nil {
 		return fmt.Errorf("stream init watchlist: %w", err)
 	}
-	// D-090 首帧快照：订阅建立后、进 select 前，AllLatest 按 watchlist 过滤逐条 Send
-	// （秒开不等 tick；与 ListLatestQuotes 同源 quoteToProto）。
+	// D-090 首帧快照：订阅建立后、进 select 前，AllLatest 按 watchlist 过滤逐条 Send（秒开不等 tick）。
 	// 返修包① R1：过滤改用 watchlistHitQuote（双维：symbol+venueKey）。
 	for _, q := range s.qbus.AllLatest() {
 		if !s.watchlistHitQuote(q) {
@@ -115,12 +117,11 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 			if !ok {
 				return nil
 			}
-			// D-090 返修包① R1：RLock 双维命中检查——symbol∈set 且（venues 空 或 venueKey∈venues）。
-			// 未命中丢弃（治吵三刀之一：只推自选）。
+			// D-090 返修包① R1：RLock 双维命中检查——symbol∈set 且（venues 空 或 venueKey∈venues）。未命中丢弃。
 			if !s.watchlistHitQuote(q) {
 				continue
 			}
-			// 蓄压不 Send（复用 VenueKey()，勿手拼），等 flushTicker 周期 flush。
+			// 蓄压不 Send（复用 VenueKey()），等 flushTicker 周期 flush。
 			pending[q.VenueKey()+"|"+q.Symbol] = q
 		case <-flushTicker.C:
 			// D-090：遍历 pending 逐条 Send 后清 map（N 帧只出最新一帧）。
@@ -220,6 +221,14 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 					Alert: alertToProto(&a),
 				},
 			}); err != nil {
+				return err
+			}
+		case _, ok := <-hedgeCh:
+			if !ok {
+				return nil
+			}
+			// D-231 S5：空消息→前端 getHedgeStructure 重取（复用 case 11 模式）。
+			if err := stream.Send(&v1.StreamUpdatesResponse{Update: &v1.StreamUpdatesResponse_HedgeRefresh{HedgeRefresh: &v1.HedgeRefreshNotice{}}}); err != nil {
 				return err
 			}
 		case <-ticker.C:
