@@ -24,6 +24,10 @@ func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1
 	trxAcc, trxErr := s.store.LastTRXAccount(ctx)
 	hasTRX := trxErr == nil
 
+	// D-231 S3：TRX 投票收益率（fin_trx_vote_apr 最新行透传，只渲染不运算）
+	trxApr, trxAprErr := s.store.LastTRXVoteApr(ctx)
+	hasTrxApr := trxAprErr == nil
+
 	// CMC 空单持仓（entry_price=baseline，quantity=空单腿 qty）
 	cmcPos, cmcPosErr := s.store.LastCMCPositionByInstrument(ctx, "X-AFQUL")
 	hasCMCPos := cmcPosErr == nil
@@ -62,6 +66,16 @@ func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1
 			Energy:    float64(trxAcc.EnergyDelegated) / 1e6,
 			Bandwidth: float64(trxAcc.BandwidthStaked) / 1e6,
 		}
+	}
+	// D-231 S3：投票收益率透传（fin_trx_vote_apr 最新行，只渲染不运算）
+	if hasTrxApr {
+		legSpot.VoteAprCurrent = trxApr.CurrentRate
+		legSpot.VoteAprMax = trxApr.MaxRate
+		legSpot.VoteAprSpread = trxApr.Spread
+		if trxApr.MaxSr != nil {
+			legSpot.VoteAprMaxSr = *trxApr.MaxSr
+		}
+		legSpot.VoteAprTs = timestamppb.New(trxApr.FetchedAt)
 	}
 
 	// 空单腿（leg_short）：qty=CMC quantity（基准 qty），pnl=(baseline−evalAsk)×qty（镜像腿，恒和=0）

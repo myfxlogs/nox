@@ -19,7 +19,7 @@ func trxTestStore(t *testing.T) *pgstore.Store {
 	s := serviceTestStoreSingleInit(t)
 	ctx := context.Background()
 	// TRUNCATE 相关表（数据隔离）。
-	for _, tbl := range []string{"fin_trx_account", "fin_trx_txs", "fin_trx_witness", "position_daily_income", "personal_positions"} {
+	for _, tbl := range []string{"fin_trx_account", "fin_trx_txs", "fin_trx_witness", "fin_trx_vote_apr", "position_daily_income", "personal_positions"} {
 		if _, err := s.Pool().Exec(ctx, "TRUNCATE TABLE "+tbl+" RESTART IDENTITY CASCADE"); err != nil {
 			t.Fatalf("TRUNCATE %s: %v", tbl, err)
 		}
@@ -37,7 +37,7 @@ func TestRollupTrxDailyIncome_F2VotingPositiveDelta(t *testing.T) {
 	// 3 条账户快照（allowance 100→150→120 sun）
 	for i, allowance := range []int64{100, 150, 120} {
 		a := pgstore.TRXAccount{
-			Address: "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555",
+			Address:    "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555",
 			VotesTotal: 18070, BalanceSun: 97863827, AllowanceSun: allowance,
 			EnergyDelegated: 17270000000, BandwidthStaked: 800000000,
 			FetchedAt: day.Add(time.Duration(i) * 5 * time.Minute),
