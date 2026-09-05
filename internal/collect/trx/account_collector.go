@@ -100,7 +100,8 @@ func (c *AccountCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 		return nil, fmt.Errorf("trx account insert: %w", err)
 	}
 	// D-231 S5：指纹变化 → onChange（首轮不触发）。
-	fp := computeAccountFingerprint(acc.Votes, acc.Balance, bandwidthStaked+energyDelegated)
+	// D-233 R5：allowance 入指纹——奖励结算步进即触发对冲卡刷新。
+	fp := computeAccountFingerprint(acc.Votes, acc.Balance, bandwidthStaked+energyDelegated, acc.Allowance)
 	if !c.firstPoll && fp != c.lastFingerprint && c.onChange != nil {
 		c.onChange()
 	}

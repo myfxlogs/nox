@@ -154,3 +154,6 @@ var CmcWsEventDrivenSQL string
 
 //go:embed 0071_trx_vote_apr.sql
 var TrxVoteAprSQL string
+
+//go:embed 0072_trx_cycle_vi.sql
+var TrxCycleViSQL string

@@ -130,6 +130,7 @@ type witnessJSON struct {
 // tronscanWitnessJSON 对应 TRONSCAN /api/witness 单行（年化收益率采集）。
 // 字段 annualizedRate=年化 %（字符串，实测 "3.111945"）；brokerage=佣金率；realTimeVotes/votes=票数；
 // name=SR 名；address=SR 地址；producer=true=在任出块 SR（max_rate 只取 producer=true）。
+// D-233 S1：producedTotal=出块总数（Vi 计算辅助字段，annualizedRate 已内含出块奖励故主算路径不依赖）。
 type tronscanWitnessJSON struct {
 	Address        string `json:"address"`
 	Name           string `json:"name"`
@@ -138,6 +139,7 @@ type tronscanWitnessJSON struct {
 	RealTimeVotes  int64  `json:"realTimeVotes"`
 	Votes          int64  `json:"votes"`
 	Producer       bool   `json:"producer"`
+	ProducedTotal  int64  `json:"producedTotal"`
 }
 
 // tronscanVoteJSON 对应 TRONSCAN /api/vote?voter={addr} 单行（当前投票分布）。
@@ -155,4 +157,17 @@ type tronscanVoteJSON struct {
 type tronscanVoteResponseJSON struct {
 	TotalVotes int64              `json:"totalVotes"`
 	Data       []tronscanVoteJSON `json:"data"`
+}
+
+// ---------- D-233 TRX 待领取实时化（getchainparameters） ----------
+
+// chainParametersResponseJSON 对应 TronGrid /wallet/getchainparameters 响应（匿名已实测 200）。
+// D-233 S1：取 blockReward/voteReward 等参数（annualizedRate 已内含故主算路径不依赖，作形状文档+交叉校验用）。
+type chainParametersResponseJSON struct {
+	ChainParameter []chainParameterJSON `json:"chainParameter"`
+}
+
+type chainParameterJSON struct {
+	Key   string `json:"key"`
+	Value int64  `json:"value"`
 }

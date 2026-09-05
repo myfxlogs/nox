@@ -25,7 +25,7 @@ func newTestStore(t *testing.T) *pgstore.Store {
 	if err := st.Migrate(context.Background()); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	for _, tbl := range []string{"fin_trx_account", "fin_trx_txs", "fin_trx_witness", "fin_trx_vote_apr"} {
+	for _, tbl := range []string{"fin_trx_account", "fin_trx_txs", "fin_trx_witness", "fin_trx_vote_apr", "fin_trx_cycle_vi"} {
 		if _, err := st.Pool().Exec(context.Background(), "DELETE FROM "+tbl); err != nil {
 			t.Fatalf("cleanup %s: %v", tbl, err)
 		}
