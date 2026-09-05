@@ -29,7 +29,7 @@ func hedgeStructureSource(t *testing.T) string {
 	return string(data)
 }
 
-// 断言①：投票年化/流动/能量/带宽文本位于 hedge-acct-block 渲染段。
+// 断言①：投票年化/能量/带宽文本位于 hedge-acct-block 渲染段且「流动」行不存在（D-236 变更6 删流动行）。
 func TestD236_AccountInfoInAcctBlock(t *testing.T) {
 	src := hedgeStructureSource(t)
 	idx := strings.Index(src, "hedge-acct-block")
@@ -37,10 +37,14 @@ func TestD236_AccountInfoInAcctBlock(t *testing.T) {
 		t.Fatal("hedge-acct-block 段不存在")
 	}
 	block := src[idx:]
-	for _, want := range []string{"流动", "能量", "带宽", "投票年化"} {
+	for _, want := range []string{"能量", "带宽", "投票年化"} {
 		if !strings.Contains(block, want) {
 			t.Errorf("hedge-acct-block 段缺文本 %q", want)
 		}
+	}
+	// D-236 变更6：流动行已删（qtyLiquid≡BalanceSun÷1e6 与余额同源同值，重复无信息量）
+	if strings.Contains(block, "流动") {
+		t.Error("hedge-acct-block 段仍含「流动」行（D-236 变更6 应删）")
 	}
 }
 
@@ -113,5 +117,25 @@ func TestD236_APRFloorTruncation(t *testing.T) {
 		if strings.Contains(line, "投票年化") && strings.Contains(line, "toFixed(2)") {
 			t.Fatalf("APR 行残留 toFixed(2): %s", strings.TrimSpace(line))
 		}
+	}
+}
+
+// 断言⑦：13-daily.css 含 grid-template-columns 两列与 1/-1 跨列规则（D-236 变更5 两列 grid）。
+func TestD236_CSSGridTwoColumns(t *testing.T) {
+	_, testFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	path := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src", "styles", "13-daily.css")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read 13-daily.css: %v", err)
+	}
+	src := string(data)
+	if !strings.Contains(src, "grid-template-columns") {
+		t.Fatal("13-daily.css 缺 grid-template-columns（D-236 变更5 两列 grid）")
+	}
+	if !strings.Contains(src, "1 / -1") {
+		t.Fatal("13-daily.css 缺 1 / -1 跨列规则（D-236 变更5 年化行跨双列）")
 	}
 }
