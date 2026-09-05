@@ -65,6 +65,7 @@ var migrationFiles = []struct {
 	{67, migrations.CMCPositionsMetaSQL},
 	{68, migrations.TrxStakeTablesSQL},
 	{69, migrations.CmcWsEventDrivenSQL},
+	{70, migrations.CnfiTablesSQL},
 	{71, migrations.TrxVoteAprSQL},
 	{72, migrations.TrxCycleViSQL},
 }
