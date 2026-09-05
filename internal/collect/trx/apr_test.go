@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 // mockWitnessJSON 模拟 TRONSCAN /api/witness 响应：顶层裸数组，不是 {"data": [...]} 信封。
@@ -144,3 +145,205 @@ func TestAprCollector_Poll_OneRowPerPoll(t *testing.T) {
 }
 
 // TestWireTrx_AccountIntervalOneMinute 见 cmd/core/wire_trx_test.go（buildTrxCollectors 在 main 包）。
+
+// ---------- D-231 S5 实时性测试（⑥⑦⑧） ----------
+
+// TestComputeAccountFingerprint ⑥指纹检测：votes 分布变化→不同指纹、不变→同指纹、排序确定性。
+// 纯函数测试（无需 DSN）：验证 computeAccountFingerprint 对 votes 顺序无关 + balance/staked 参与。
+func TestComputeAccountFingerprint(t *testing.T) {
+	votesA := []voteJSON{
+		{VoteAddress: "SR_A", VoteCount: 10000},
+		{VoteAddress: "SR_B", VoteCount: 5000},
+	}
+	votesAShuffled := []voteJSON{
+		{VoteAddress: "SR_B", VoteCount: 5000},
+		{VoteAddress: "SR_A", VoteCount: 10000},
+	}
+	// 顺序无关 → 同指纹
+	fp1 := computeAccountFingerprint(votesA, 100, 200)
+	fp2 := computeAccountFingerprint(votesAShuffled, 100, 200)
+	if fp1 != fp2 {
+		t.Errorf("指纹非排序确定：A=%q shuffled=%q（应相同）", fp1, fp2)
+	}
+	// votes 分布变化 → 不同指纹
+	votesChanged := []voteJSON{
+		{VoteAddress: "SR_A", VoteCount: 10000},
+		{VoteAddress: "SR_C", VoteCount: 5000}, // SR_B → SR_C
+	}
+	fp3 := computeAccountFingerprint(votesChanged, 100, 200)
+	if fp1 == fp3 {
+		t.Errorf("votes 变化未反映到指纹：both=%q（应不同）", fp1)
+	}
+	// balance 变化 → 不同指纹
+	fp4 := computeAccountFingerprint(votesA, 999, 200)
+	if fp1 == fp4 {
+		t.Errorf("balance 变化未反映到指纹：both=%q（应不同）", fp1)
+	}
+	// staked 变化 → 不同指纹
+	fp5 := computeAccountFingerprint(votesA, 100, 999)
+	if fp1 == fp5 {
+		t.Errorf("staked 变化未反映到指纹：both=%q（应不同）", fp1)
+	}
+}
+
+// TestAccountCollector_FingerprintOnChange ⑥指纹检测集成：votes 分布变化→onChange 触发、不变→不触发、重启首轮不触发。
+// DSN-gated：Poll 写 fin_trx_account 表。
+func TestAccountCollector_FingerprintOnChange(t *testing.T) {
+	st := newTestStore(t)
+	var onChangeCalled bool
+	var callCount int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		switch r.URL.Path {
+		case "/wallet/getaccount":
+			_, _ = w.Write([]byte(mockGetAccountJSON))
+		case "/wallet/getaccountresource":
+			_, _ = w.Write([]byte(mockGetResourceJSON))
+		}
+	}))
+	defer srv.Close()
+
+	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, "")
+	c.SetOnChange(func() { onChangeCalled = true; callCount++ })
+
+	// 首轮：firstPoll=true → 不触发（指纹未知，下轮自然恢复比较）
+	onChangeCalled = false
+	if _, err := c.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll 1 (first): %v", err)
+	}
+	if onChangeCalled {
+		t.Error("首轮 onChange 被触发（应 firstPoll=true 不触发）")
+	}
+
+	// 第二轮：同指纹 → 不触发
+	onChangeCalled = false
+	if _, err := c.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll 2 (same): %v", err)
+	}
+	if onChangeCalled {
+		t.Error("指纹未变但 onChange 被触发（应不触发）")
+	}
+
+	// 第三轮：换票 → 触发（mock 改 votes）
+	srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		switch r.URL.Path {
+		case "/wallet/getaccount":
+			_, _ = w.Write([]byte(`{"address":"TWsbXR6SPvvXPxUtPMQvEj7AMH55555555","balance":97863827,"votes":[{"vote_address":"TNewSRAddr","vote_count":18070}],"frozenV2":[{"amount":800000000}],"account_resource":{"delegated_frozenV2_balance_for_energy":17270000000}}`))
+		case "/wallet/getaccountresource":
+			_, _ = w.Write([]byte(mockGetResourceJSON))
+		}
+	})
+	onChangeCalled = false
+	if _, err := c.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll 3 (changed): %v", err)
+	}
+	if !onChangeCalled {
+		t.Error("votes 变化但 onChange 未触发（应触发）")
+	}
+	if callCount != 1 {
+		t.Errorf("onChange 调用次数 = %d, want 1（仅第三轮触发）", callCount)
+	}
+}
+
+// TestAprCollector_TriggerNowDebounce ⑦触发去抖 ≥60s：首次触发→Poll；去抖窗内再触发→不 Poll。
+// 用 SetDebounce(100ms) 缩短去抖窗测试；首次 TriggerNow 调 Poll（DSN-gated），第二次立即调应被去抖。
+func TestAprCollector_TriggerNowDebounce(t *testing.T) {
+	st := newTestStore(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		switch r.URL.Path {
+		case "/api/witness":
+			_, _ = w.Write([]byte(mockWitnessJSON))
+		case "/api/vote":
+			_, _ = w.Write([]byte(mockVoteJSON))
+		}
+	}))
+	defer srv.Close()
+
+	c := NewAprCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL)
+	c.SetDebounce(100 * time.Millisecond) // 测试用短去抖窗
+
+	// 首次 TriggerNow → 触发 Poll（落库一行）
+	c.TriggerNow(context.Background())
+	var count int
+	if err := st.Pool().QueryRow(context.Background(), "SELECT count(*) FROM fin_trx_vote_apr").Scan(&count); err != nil {
+		t.Fatalf("count after first trigger: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("首次 TriggerNow 后 fin_trx_vote_apr rows = %d, want 1（应触发 Poll）", count)
+	}
+
+	// 立即第二次 TriggerNow → 去抖（不触发 Poll，行数不变）
+	c.TriggerNow(context.Background())
+	if err := st.Pool().QueryRow(context.Background(), "SELECT count(*) FROM fin_trx_vote_apr").Scan(&count); err != nil {
+		t.Fatalf("count after second trigger: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("去抖窗内第二次 TriggerNow 后 rows = %d, want 1（应去抖不触发）", count)
+	}
+
+	// 等待去抖窗过期 → 第三次 TriggerNow → 触发 Poll
+	time.Sleep(150 * time.Millisecond)
+	c.TriggerNow(context.Background())
+	if err := st.Pool().QueryRow(context.Background(), "SELECT count(*) FROM fin_trx_vote_apr").Scan(&count); err != nil {
+		t.Fatalf("count after third trigger: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("去抖窗过期后第三次 TriggerNow 后 rows = %d, want 2（应触发 Poll）", count)
+	}
+}
+
+// TestAprCollector_HedgeHookOnChangeOnly ⑧聚合值无变化不发布/有变化发布：
+// 首次 Poll→发布（无上轮=变化）；第二次同值→不发布；第三次改值→发布。
+// DSN-gated：Poll 写 fin_trx_vote_apr 表。
+func TestAprCollector_HedgeHookOnChangeOnly(t *testing.T) {
+	st := newTestStore(t)
+	var publishCount int
+	var currentWitness = mockWitnessJSON
+	var currentVote = mockVoteJSON
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		switch r.URL.Path {
+		case "/api/witness":
+			_, _ = w.Write([]byte(currentWitness))
+		case "/api/vote":
+			_, _ = w.Write([]byte(currentVote))
+		}
+	}))
+	defer srv.Close()
+
+	c := NewAprCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL)
+	c.SetHedgeHook(func() { publishCount++ })
+
+	// 首次 Poll → 发布（hasLastValues=false=变化）
+	if _, err := c.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll 1: %v", err)
+	}
+	if publishCount != 1 {
+		t.Errorf("首次 Poll 后 publishCount = %d, want 1（无上轮=变化→发布）", publishCount)
+	}
+
+	// 第二次同值 → 不发布
+	if _, err := c.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll 2: %v", err)
+	}
+	if publishCount != 1 {
+		t.Errorf("同值第二次 Poll 后 publishCount = %d, want 1（无变化不发布）", publishCount)
+	}
+
+	// 第三次改值（SR-A rate 3.10→4.10）→ 发布
+	currentWitness = `[
+	{"address":"TJvaAeFb8Lykt9RQcVyyTFN2iDvGMuyD4M","name":"Poloniex","url":"https://poloniex.com/","url_level":1,"producer":true,"latestBlockNumber":85976160,"latestSlotNumber":596200068,"missedTotal":369},
+	{"address":"SR_A_ADDR","name":"SR-A","annualizedRate":"4.10","producer":true,"votes":100000},
+	{"address":"SR_B_ADDR","name":"SR-B","annualizedRate":"2.50","producer":true,"votes":50000},
+	{"address":"SR_C_ADDR","name":"SR-C","annualizedRate":"1.00","producer":false,"votes":1000},
+	{"address":"SR_D_ADDR","name":"SR-D","annualizedRate":"","producer":true,"votes":100}
+]`
+	if _, err := c.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll 3: %v", err)
+	}
+	if publishCount != 2 {
+		t.Errorf("改值第三次 Poll 后 publishCount = %d, want 2（有变化→发布）", publishCount)
+	}
+}

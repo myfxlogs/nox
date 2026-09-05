@@ -782,8 +782,13 @@ message StreamUpdatesResponse {
     AccountSnapshot accounts = 9;                       // 账户资产实时推送（全量快照，D-053）
     FundingNeedNotice funding_need = 10;                // 资金注入提醒弹窗（D-072，余额不足实时推）
     PositionChangeNotice position_change = 11;          // 持仓变更通知（D-107 P3，只含通知不含数据）
+    HedgeRefreshNotice hedge_refresh = 12;              // 对冲结构刷新通知（D-231 S5，空消息→前端重取）
   }
 }
+
+// HedgeRefreshNotice（D-231 S5）：TRX 投票/质押/余额变化 → 对冲结构卡刷新通知。
+// 空消息——前端零信任：收到→调 getHedgeStructure 重取（复用 case 11 通知→重取模式）。
+message HedgeRefreshNotice {}
 
 // 持仓变更通知（D-107 P3）：OnOrderUpdate 事件经 orderTopic → StreamUpdates case 11 推送。
 // 只含通知不含数据——前端零信任：收到通知→调既有 RPC 重取（useSnapshot/usePositionsPage 等）。
