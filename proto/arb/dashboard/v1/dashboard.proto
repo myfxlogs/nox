@@ -43,6 +43,8 @@ service DashboardService {
   rpc ExecuteOpportunity(ExecuteOpportunityRequest) returns (ExecuteOpportunityResponse);
   rpc ClosePosition(ClosePositionRequest) returns (ClosePositionResponse);
   rpc BackfillSwapHistory(BackfillSwapHistoryRequest) returns (BackfillSwapHistoryReply); // D-181 S1：手动回溯 venue swap 历史→facts
+  // CN-FI 固收雷达快照（D-226/D-237；只读快照，无流式——日频数据不接 streamUpdates）
+  rpc GetCNFIRadarSnapshot(GetCNFIRadarSnapshotRequest) returns (GetCNFIRadarSnapshotResponse);
   rpc ListPositions(ListPositionsRequest) returns (ListPositionsResponse);
 
   // Broker 实持仓（D-051 WP3：MT5/MT4 实际持仓统一视图，实时查不落库）
@@ -1319,3 +1321,41 @@ message SetAiSettingsRequest {
   bool enabled = 4;
 }
 message SetAiSettingsResponse { bool ok = 1; }
+
+// --- CN-FI 固收雷达（D-226/D-237；D-230 F7：无金额字段，快照语义） ---
+
+message GetCNFIRadarSnapshotRequest {}
+
+message CnfiCurvePoint {
+  string series = 1;      // cgb / ig_aaa / bank_aaa
+  string tenor = 2;       // 3m/1y/3y/5y/10y/30y
+  double value_bp = 3;    // 收盘到期收益率，bp
+  string as_of = 4;       // 中国市场业务日 YYYY-MM-DD
+  string source = 5;      // chinabond / manual:*
+  string quality = 6;     // ok / stale / missing
+}
+
+message CnfiDerivedMetric {
+  string key = 1;         // term_spread_10y2y / credit_spread_3y（P2 增 pctile 键）
+  double value = 2;       // bp 或百分位(0-100)
+  string unit = 3;        // bp / pctile
+  int32 sample_n = 4;     // 窗口内有效观测数
+  string as_of = 5;
+  string quality = 6;     // ok / reduced / N / stale / missing
+}
+
+message CnfiSignalState {
+  string key = 1;
+  string observed_state = 2;  // observe / armed / fired（observe-only 期一律 observe）
+  string message = 3;         // 事实陈述+观察性提示（禁动作词，服务端校验）
+  string as_of = 4;
+  string evidence_ref = 5;
+}
+
+message GetCNFIRadarSnapshotResponse {
+  repeated CnfiCurvePoint points = 1;
+  repeated CnfiDerivedMetric metrics = 2;
+  repeated CnfiSignalState signals = 3;
+  string snapshot_as_of = 4;                     // = 全部 ok 点的 max(as_of)（D-230 F7 钉死）
+  google.protobuf.Timestamp generated_at = 5;    // UTC
+}
