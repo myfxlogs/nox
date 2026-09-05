@@ -3,6 +3,10 @@ package dashboard
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,6 +29,80 @@ func hedgeTestStore(t *testing.T) *pgstore.Store {
 		}
 	}
 	return s
+}
+
+// TestGetHedgeStructure_PlatformCloseoutSource 验证强平价标注切换为平台 50% 规则。
+func TestGetHedgeStructure_PlatformCloseoutSource(t *testing.T) {
+	s := hedgeTestStore(t)
+	ctx := context.Background()
+	if err := s.InsertCMCAccountSummary(ctx, pgstore.CMCAccountSummary{
+		AccountID:               1,
+		TotalEquityUsedInMargin: 600.83,
+		FetchedAt:               time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("InsertCMCAccountSummary: %v", err)
+	}
+
+	svc := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005}
+	resp, err := svc.GetHedgeStructure(ctx, connect.NewRequest(&v1.GetHedgeStructureRequest{}))
+	if err != nil {
+		t.Fatalf("GetHedgeStructure: %v", err)
+	}
+	if got := resp.Msg.Structure.CloseoutSource; got != "platform_rule_50" {
+		t.Fatalf("closeout_source = %q, want %q", got, "platform_rule_50")
+	}
+}
+
+// TestGetHedgeStructure_PlatformLevels 验证平台强平/预警净值均以 used margin 为基数计算。
+func TestGetHedgeStructure_PlatformLevels(t *testing.T) {
+	s := hedgeTestStore(t)
+	ctx := context.Background()
+	if err := s.InsertCMCAccountSummary(ctx, pgstore.CMCAccountSummary{
+		AccountID:               1,
+		TotalEquityUsedInMargin: 600.83,
+		FetchedAt:               time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("InsertCMCAccountSummary: %v", err)
+	}
+
+	svc := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005}
+	resp, err := svc.GetHedgeStructure(ctx, connect.NewRequest(&v1.GetHedgeStructureRequest{}))
+	if err != nil {
+		t.Fatalf("GetHedgeStructure: %v", err)
+	}
+	st := resp.Msg.Structure
+	if diff := st.CloseoutLevelUsd - 600.83*0.5; diff > 1e-9 || diff < -1e-9 {
+		t.Errorf("closeout_level_usd = %v, want %v", st.CloseoutLevelUsd, 600.83*0.5)
+	}
+	if diff := st.WarningLevelUsd - 600.83*0.8; diff > 1e-9 || diff < -1e-9 {
+		t.Errorf("warning_level_usd = %v, want %v", st.WarningLevelUsd, 600.83*0.8)
+	}
+}
+
+// TestHedgeStructurePlatformLabel 验证前端只渲染平台口径标注及其标定提示。
+func TestHedgeStructurePlatformLabel(t *testing.T) {
+	_, testFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	path := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src", "components", "PositionsPageHedgeStructure.tsx")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read hedge structure component: %v", err)
+	}
+	source := string(data)
+	if !strings.Contains(source, `structure!.closeoutSource === "platform_rule_50"`) {
+		t.Fatal("frontend does not gate the label on platform_rule_50")
+	}
+	if !strings.Contains(source, "平台口径 · 50% 规则") {
+		t.Fatal("frontend is missing the platform-rule label")
+	}
+	if !strings.Contains(source, "CMC Balance 面板标定：强平=保证金 50%，预警=保证金 80%；规则变更后需复核") {
+		t.Fatal("frontend is missing the platform calibration tooltip")
+	}
+	if strings.Contains(source, "参考估算（自算）") {
+		t.Fatal("retired self-estimate label remains in frontend")
+	}
 }
 
 // TestGetHedgeStructure_MirrorPnlSumZero 镜像断言：两腿 pnl_vs_base 计算值恒和=0。
@@ -302,7 +380,7 @@ func TestGetHedgeStructure_WsConnected(t *testing.T) {
 		Address: "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", VotesTotal: 18070,
 		BalanceSun: 97863827, AllowanceSun: 7717994, EnergyDelegated: 17270000000,
 		BandwidthStaked: 800000000,
-		FetchedAt: now,
+		FetchedAt:       now,
 	}); err != nil {
 		t.Fatalf("InsertTRXAccount: %v", err)
 	}

@@ -4985,9 +4985,11 @@ type HedgeStructure struct {
 	Carry              *HedgeCarry            `protobuf:"bytes,7,opt,name=carry,proto3" json:"carry,omitempty"`
 	Accts              *HedgeAccounts         `protobuf:"bytes,8,opt,name=accts,proto3" json:"accts,omitempty"`
 	WsConnected        bool                   `protobuf:"varint,9,opt,name=ws_connected,json=wsConnected,proto3" json:"ws_connected,omitempty"`                        // cmc ws 事件驱动健康（true=绿/false=黄，兜底中）
-	CloseoutSource     string                 `protobuf:"bytes,10,opt,name=closeout_source,json=closeoutSource,proto3" json:"closeout_source,omitempty"`               // D-225 v2.1：强平价口径（"estimate_self"=自算估算，Phase B 后切平台值）
+	CloseoutSource     string                 `protobuf:"bytes,10,opt,name=closeout_source,json=closeoutSource,proto3" json:"closeout_source,omitempty"`               // D-225 v2.2：强平价口径（"platform_rule_50"=平台 50% 规则）
 	PlatformAlertState string                 `protobuf:"bytes,11,opt,name=platform_alert_state,json=platformAlertState,proto3" json:"platform_alert_state,omitempty"` // D-225 v2.1：平台预警状态 normal/warning/breach（F13 alerts 直读）
 	PlatformAlerts     string                 `protobuf:"bytes,12,opt,name=platform_alerts,json=platformAlerts,proto3" json:"platform_alerts,omitempty"`               // D-225 v2.1：alerts 原文 JSON 透传（前端只渲染）
+	CloseoutLevelUsd   float64                `protobuf:"fixed64,13,opt,name=closeout_level_usd,json=closeoutLevelUsd,proto3" json:"closeout_level_usd,omitempty"`     // D-225 v2.2：平台强平净值 = totalMarginAmount × 50%
+	WarningLevelUsd    float64                `protobuf:"fixed64,14,opt,name=warning_level_usd,json=warningLevelUsd,proto3" json:"warning_level_usd,omitempty"`        // D-225 v2.2：平台预警净值 = totalMarginAmount × 80%
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -5104,6 +5106,20 @@ func (x *HedgeStructure) GetPlatformAlerts() string {
 		return x.PlatformAlerts
 	}
 	return ""
+}
+
+func (x *HedgeStructure) GetCloseoutLevelUsd() float64 {
+	if x != nil {
+		return x.CloseoutLevelUsd
+	}
+	return 0
+}
+
+func (x *HedgeStructure) GetWarningLevelUsd() float64 {
+	if x != nil {
+		return x.WarningLevelUsd
+	}
+	return 0
 }
 
 type GetHedgeStructureRequest struct {
@@ -12244,7 +12260,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\n" +
 	"cmc_equity\x18\x06 \x01(\x01R\tcmcEquity\x129\n" +
 	"\n" +
-	"updated_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xa8\x04\n" +
+	"updated_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x82\x05\n" +
 	"\x0eHedgeStructure\x12%\n" +
 	"\x0ebaseline_price\x18\x01 \x01(\x01R\rbaselinePrice\x12\x10\n" +
 	"\x03mid\x18\x02 \x01(\x01R\x03mid\x129\n" +
@@ -12258,7 +12274,9 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x0fcloseout_source\x18\n" +
 	" \x01(\tR\x0ecloseoutSource\x120\n" +
 	"\x14platform_alert_state\x18\v \x01(\tR\x12platformAlertState\x12'\n" +
-	"\x0fplatform_alerts\x18\f \x01(\tR\x0eplatformAlerts\"\x1a\n" +
+	"\x0fplatform_alerts\x18\f \x01(\tR\x0eplatformAlerts\x12,\n" +
+	"\x12closeout_level_usd\x18\r \x01(\x01R\x10closeoutLevelUsd\x12*\n" +
+	"\x11warning_level_usd\x18\x0e \x01(\x01R\x0fwarningLevelUsd\"\x1a\n" +
 	"\x18GetHedgeStructureRequest\"[\n" +
 	"\x19GetHedgeStructureResponse\x12>\n" +
 	"\tstructure\x18\x01 \x01(\v2 .arb.dashboard.v1.HedgeStructureR\tstructure\"\xe4\x01\n" +

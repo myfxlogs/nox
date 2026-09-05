@@ -139,6 +139,11 @@ func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1
 		accts.UpdatedAt = timestamppb.New(updatedAt)
 	}
 
+	var closeoutLevelUSD, warningLevelUSD float64
+	if hasCMCSum {
+		closeoutLevelUSD = cmcSum.TotalEquityUsedInMargin * 0.5
+		warningLevelUSD = cmcSum.TotalEquityUsedInMargin * 0.8
+	}
 	resp.Structure = &v1.HedgeStructure{
 		BaselinePrice:      baseline,
 		Mid:                mid,
@@ -148,9 +153,11 @@ func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1
 		NetExposureUsd:     netExposureUsd,
 		Carry:              carry,
 		Accts:              accts,
-		CloseoutSource:     "estimate_self", // D-225 v2.1：过渡期自算估值标注（Phase B 后切平台值）
+		CloseoutSource:     "platform_rule_50", // D-225 v2.2：CMC 面板标定为保证金 50%
 		PlatformAlertState: cmc.AlertsToState(cmcSum.Alerts),
 		PlatformAlerts:     string(cmcSum.Alerts),
+		CloseoutLevelUsd:   closeoutLevelUSD,
+		WarningLevelUsd:    warningLevelUSD,
 	}
 	// D-193-A/R9：CMC ws 事件驱动健康（nil=未接线→false=黄点 REST 兜底）
 	if s.cmcWsHealth != nil {
