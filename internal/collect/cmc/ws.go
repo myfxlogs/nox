@@ -73,8 +73,9 @@ type WsClient struct {
 	kickHistory  func()
 	sink         func(ctx context.Context, facts []fact.Fact) error
 	marketOpen   func() bool
-	marketStatus func() string  // D-225 v2.1 S5：WS 价格行 market_status 注入
-	onEvent      func(Snapshot) // D-225 v2.1 S5：事件即触发回调（R10 接线）
+	marketStatus func() string   // D-225 v2.1 S5：WS 价格行 market_status 注入
+	onEvent      func(Snapshot)  // D-225 v2.1 S5：事件即触发回调（R10 接线）
+	frameHook    func(FrameKind) // D-234：帧钩子——落库后通知 dashboard（先落库后通知，通知失败不影响落库）
 
 	positionsMu sync.Mutex
 	positions   []positionJSON

@@ -38,6 +38,8 @@ func (w *WsClient) handleType5(ctx context.Context, data json.RawMessage) {
 		w.crossCheckStrikes = 0
 	}
 	w.crossCheckMu.Unlock()
+	// D-234：type5 帧通知（交叉校验流，无落库——通知 dashboard 蓄压重算，无变化=同值无害）。
+	w.fireFrameHook(FramePosition)
 }
 
 // handleType6 D-225 v2.1：账户主数据源（全量自持，F2）。
@@ -85,6 +87,8 @@ func (w *WsClient) handleType6(ctx context.Context, data json.RawMessage) {
 		log.Printf("[cmc-ws] alerts changed: %s", string(alerts))
 	}
 	w.recomputeAndFanout(ctx)
+	// D-234：type6 账户摘要帧通知（落库后通知——persistSummary 已完成，通知失败不影响落库）。
+	w.fireFrameHook(FrameAccount)
 }
 
 // handleType7 D-225 v2.1：持仓+价格主数据源（F3/F4）。
@@ -101,6 +105,8 @@ func (w *WsClient) handleType7(ctx context.Context, msg *wsMessage) {
 			w.scheduleFlush()
 			w.extractPriceEvent(ctx)
 			w.recomputeAndFanout(ctx)
+			// D-234：type7 价格帧通知（首帧种子后——extractPriceEvent 落库完成）。
+			w.fireFrameHook(FramePrice)
 			return
 		}
 	}
@@ -130,6 +136,8 @@ func (w *WsClient) handleType7(ctx context.Context, msg *wsMessage) {
 	w.extractPriceEvent(ctx)
 	w.scheduleFlush()
 	w.recomputeAndFanout(ctx)
+	// D-234：type7 价格帧通知（patch 处理后——extractPriceEvent 落库完成）。
+	w.fireFrameHook(FramePrice)
 }
 
 // applyPatchLocked D-225 v2.1：三深度路径分发（调用方持 positionsMu）。

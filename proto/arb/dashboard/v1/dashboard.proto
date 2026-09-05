@@ -783,12 +783,37 @@ message StreamUpdatesResponse {
     FundingNeedNotice funding_need = 10;                // 资金注入提醒弹窗（D-072，余额不足实时推）
     PositionChangeNotice position_change = 11;          // 持仓变更通知（D-107 P3，只含通知不含数据）
     HedgeRefreshNotice hedge_refresh = 12;              // 对冲结构刷新通知（D-231 S5，空消息→前端重取）
+    CMCWatchUpdate cmc_update = 13;                     // CMC 看盘实时帧（D-234，后端现算载荷→前端 merge 渲染）
   }
 }
 
 // HedgeRefreshNotice（D-231 S5）：TRX 投票/质押/余额变化 → 对冲结构卡刷新通知。
 // 空消息——前端零信任：收到→调 getHedgeStructure 重取（复用 case 11 通知→重取模式）。
 message HedgeRefreshNotice {}
+
+// CMCWatchUpdate（D-234）：CMC 看盘实时帧——后端 1s 蓄压后现算载荷，前端按字段 merge 渲染（不全量 load）。
+// 公式与 GetHedgeStructure 同源（mid=REST mid、ask=ForSide Sell、bid=持仓 EvaluationBidPrice、
+// 双腿 PnL=(baseline−pnlPx)×mirrorQty 镜像恒和=0、强平/预警净值=usedMargin×50%/80%）。
+message CMCWatchUpdate {
+  double mid = 1;                  // fin_cmc_prices 最近 mid（REST 行，WS 行 mid=NULL 不污染）
+  double bid = 2;                  // fin_cmc_positions.evaluation_bid_price（type7 patch 更新，15s 节流落库）
+  double ask = 3;                  // ForSide(Sell)=WS ask 优先回退 REST ask（与 GetHedgeStructure evalAsk 同源）
+  double baseline_price = 4;       // fin_cmc_positions.entry_price（基准=空单开仓价）
+  double leg_spot_pnl = 5;         // (pnlPx−baseline)×mirrorQty（镜像腿，恒和=0）
+  double leg_short_pnl = 6;        // (baseline−pnlPx)×mirrorQty（镜像腿，恒和=0）
+  double dist_to_closeout_pct = 7; // fin_cmc_account_summary.distance_to_closeout_pct
+  double closeout_level_usd = 8;   // used_margin × 50%（平台口径 platform_rule_50）
+  double warning_level_usd = 9;    // used_margin × 80%
+  double cmc_cash = 10;            // fin_cmc_account_summary.total_cash_balance
+  double cmc_equity = 11;          // fin_cmc_account_summary.total_account_value
+  double used_margin = 12;         // fin_cmc_account_summary.total_equity_used_in_margin（=totalMarginAmount F12）
+  double short_qty = 13;           // fin_cmc_positions.quantity（基准 qty，两腿镜像共用）
+  int32 short_lev = 14;            // 1/margin_percentage 推导
+  string platform_alert_state = 15; // normal/warning/breach（F13 alerts 直读）
+  bool ws_connected = 16;          // CMC ws 事件驱动健康（true=绿/false=黄 REST 兜底）
+  string closeout_source = 17;     // "platform_rule_50"（D-225 v2.2 标定）
+  google.protobuf.Timestamp quote_time = 18; // mid 行 fetched_at（无 mid=零值）
+}
 
 // 持仓变更通知（D-107 P3）：OnOrderUpdate 事件经 orderTopic → StreamUpdates case 11 推送。
 // 只含通知不含数据——前端零信任：收到通知→调既有 RPC 重取（useSnapshot/usePositionsPage 等）。
