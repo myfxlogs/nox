@@ -3,7 +3,9 @@ package dashboard
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
@@ -31,11 +33,16 @@ func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1
 	cmcSum, cmcSumErr := s.store.LastCMCAccountSummary(ctx)
 	hasCMCSum := cmcSumErr == nil
 
-	// mid（fin_cmc_prices 最近 mid，两腿共用=镜像成立）
+	// D-225 v2.1：mid 显示用 REST mid（LastCMCPriceMidWithTime 加 NULL mid 过滤）；
+	// 镜像 PnL 用 ForSide(short)=ask 评估价口径（卡片标注）。
 	var mid float64
+	var evalAsk float64
 	if hasCMCPos {
-		if v, err := s.store.LastCMCPriceMid(ctx, "X-AFQUL"); err == nil {
+		if v, _, err := s.store.LastCMCPriceMidWithTime(ctx, "X-AFQUL"); err == nil {
 			mid = v
+		}
+		if px, _, _, err := s.store.LastCMCPriceForSide(ctx, "X-AFQUL", "Sell"); err == nil {
+			evalAsk = px
 		}
 	}
 
@@ -58,14 +65,19 @@ func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1
 		}
 	}
 
-	// 空单腿（leg_short）：qty=CMC quantity（基准 qty），pnl=(baseline−mid)×qty（镜像腿，恒和=0）
+	// 空单腿（leg_short）：qty=CMC quantity（基准 qty），pnl=(baseline−evalAsk)×qty（镜像腿，恒和=0）
+	// D-225 v2.1：PnL 用 evalAsk（ForSide short=ask 评估价口径）；evalAsk=0 时回退 mid。
+	pnlPx := evalAsk
+	if pnlPx == 0 {
+		pnlPx = mid
+	}
 	legShort := &v1.HedgeLegShort{Label: "CMC 空单"}
 	var mirrorQty float64 // 基准 qty（空单 qty），两腿镜像 pnl 共用
 	if hasCMCPos {
 		mirrorQty = cmcPos.Quantity
 		legShort.Qty = mirrorQty
-		if mid > 0 && baseline > 0 {
-			legShort.PnlVsBase = (baseline - mid) * mirrorQty
+		if pnlPx > 0 && baseline > 0 {
+			legShort.PnlVsBase = (baseline - pnlPx) * mirrorQty
 		}
 		if cmcPos.MarginPercentage > 0 {
 			legShort.Lev = int32(1.0 / cmcPos.MarginPercentage)
@@ -73,8 +85,8 @@ func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1
 		legShort.BrokerUnrealised = cmcPos.UnrealisedPnL
 	}
 	// 质押腿镜像 pnl（用空单 qty 确保恒和=0；qty_staked 仅展示质押数量）
-	if hasTRX && mid > 0 && baseline > 0 && mirrorQty > 0 {
-		legSpot.PnlVsBase = (mid - baseline) * mirrorQty
+	if hasTRX && pnlPx > 0 && baseline > 0 && mirrorQty > 0 {
+		legSpot.PnlVsBase = (pnlPx - baseline) * mirrorQty
 	}
 	if hasCMCSum {
 		legShort.Liq = cmcSum.CloseoutPrice
@@ -115,14 +127,17 @@ func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1
 	}
 
 	resp.Structure = &v1.HedgeStructure{
-		BaselinePrice:  baseline,
-		Mid:            mid,
-		LegSpot:        legSpot,
-		LegShort:       legShort,
-		NetExposureTrx: netExposureTrx,
-		NetExposureUsd: netExposureUsd,
-		Carry:          carry,
-		Accts:          accts,
+		BaselinePrice:      baseline,
+		Mid:                mid,
+		LegSpot:            legSpot,
+		LegShort:           legShort,
+		NetExposureTrx:     netExposureTrx,
+		NetExposureUsd:     netExposureUsd,
+		Carry:              carry,
+		Accts:              accts,
+		CloseoutSource:     "estimate_self", // D-225 v2.1：过渡期自算估值标注（Phase B 后切平台值）
+		PlatformAlertState: alertsToState(cmcSum.Alerts),
+		PlatformAlerts:     string(cmcSum.Alerts),
 	}
 	// D-193-A/R9：CMC ws 事件驱动健康（nil=未接线→false=黄点 REST 兜底）
 	if s.cmcWsHealth != nil {
@@ -195,4 +210,36 @@ func (s *Service) ListHedgeFlow(ctx context.Context, req *connect.Request[v1.Lis
 		})
 	}
 	return connect.NewResponse(resp), nil
+}
+
+// alertsToState D-225 v2.1：alerts JSON → 平台预警状态（normal/warning/breach）。
+// alerts 空=normal；含 In*Warning=warning；含 In*Breach=breach。（F13 直读直展，零计算）
+func alertsToState(alerts json.RawMessage) string {
+	if len(alerts) == 0 {
+		return "normal"
+	}
+	var items []struct {
+		AlertType string `json:"alertType"`
+	}
+	if err := json.Unmarshal(alerts, &items); err != nil {
+		return "normal"
+	}
+	if len(items) == 0 {
+		return "normal"
+	}
+	hasWarning, hasBreach := false, false
+	for _, a := range items {
+		if strings.Contains(a.AlertType, "Breach") {
+			hasBreach = true
+		} else if strings.Contains(a.AlertType, "Warning") {
+			hasWarning = true
+		}
+	}
+	if hasBreach {
+		return "breach"
+	}
+	if hasWarning {
+		return "warning"
+	}
+	return "normal"
 }

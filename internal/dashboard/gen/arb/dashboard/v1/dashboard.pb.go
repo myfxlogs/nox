@@ -4934,18 +4934,21 @@ func (x *HedgeAccounts) GetUpdatedAt() *timestamppb.Timestamp {
 }
 
 type HedgeStructure struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	BaselinePrice  float64                `protobuf:"fixed64,1,opt,name=baseline_price,json=baselinePrice,proto3" json:"baseline_price,omitempty"` // fin_cmc_positions.entry_price（基准=空单开仓价，现货购价未知）
-	Mid            float64                `protobuf:"fixed64,2,opt,name=mid,proto3" json:"mid,omitempty"`                                          // fin_cmc_prices 最近 mid（两腿共用同一 mid=镜像成立）
-	LegSpot        *HedgeLegSpot          `protobuf:"bytes,3,opt,name=leg_spot,json=legSpot,proto3" json:"leg_spot,omitempty"`
-	LegShort       *HedgeLegShort         `protobuf:"bytes,4,opt,name=leg_short,json=legShort,proto3" json:"leg_short,omitempty"`
-	NetExposureTrx float64                `protobuf:"fixed64,5,opt,name=net_exposure_trx,json=netExposureTrx,proto3" json:"net_exposure_trx,omitempty"` // v1.2 真实计算 (balance+staked−short_qty)
-	NetExposureUsd float64                `protobuf:"fixed64,6,opt,name=net_exposure_usd,json=netExposureUsd,proto3" json:"net_exposure_usd,omitempty"` // net_exposure_trx × mid
-	Carry          *HedgeCarry            `protobuf:"bytes,7,opt,name=carry,proto3" json:"carry,omitempty"`
-	Accts          *HedgeAccounts         `protobuf:"bytes,8,opt,name=accts,proto3" json:"accts,omitempty"`
-	WsConnected    bool                   `protobuf:"varint,9,opt,name=ws_connected,json=wsConnected,proto3" json:"ws_connected,omitempty"` // cmc ws 事件驱动健康（true=绿/false=黄，兜底中）
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	BaselinePrice      float64                `protobuf:"fixed64,1,opt,name=baseline_price,json=baselinePrice,proto3" json:"baseline_price,omitempty"` // fin_cmc_positions.entry_price（基准=空单开仓价，现货购价未知）
+	Mid                float64                `protobuf:"fixed64,2,opt,name=mid,proto3" json:"mid,omitempty"`                                          // fin_cmc_prices 最近 mid（两腿共用同一 mid=镜像成立）
+	LegSpot            *HedgeLegSpot          `protobuf:"bytes,3,opt,name=leg_spot,json=legSpot,proto3" json:"leg_spot,omitempty"`
+	LegShort           *HedgeLegShort         `protobuf:"bytes,4,opt,name=leg_short,json=legShort,proto3" json:"leg_short,omitempty"`
+	NetExposureTrx     float64                `protobuf:"fixed64,5,opt,name=net_exposure_trx,json=netExposureTrx,proto3" json:"net_exposure_trx,omitempty"` // v1.2 真实计算 (balance+staked−short_qty)
+	NetExposureUsd     float64                `protobuf:"fixed64,6,opt,name=net_exposure_usd,json=netExposureUsd,proto3" json:"net_exposure_usd,omitempty"` // net_exposure_trx × mid
+	Carry              *HedgeCarry            `protobuf:"bytes,7,opt,name=carry,proto3" json:"carry,omitempty"`
+	Accts              *HedgeAccounts         `protobuf:"bytes,8,opt,name=accts,proto3" json:"accts,omitempty"`
+	WsConnected        bool                   `protobuf:"varint,9,opt,name=ws_connected,json=wsConnected,proto3" json:"ws_connected,omitempty"`                        // cmc ws 事件驱动健康（true=绿/false=黄，兜底中）
+	CloseoutSource     string                 `protobuf:"bytes,10,opt,name=closeout_source,json=closeoutSource,proto3" json:"closeout_source,omitempty"`               // D-225 v2.1：强平价口径（"estimate_self"=自算估算，Phase B 后切平台值）
+	PlatformAlertState string                 `protobuf:"bytes,11,opt,name=platform_alert_state,json=platformAlertState,proto3" json:"platform_alert_state,omitempty"` // D-225 v2.1：平台预警状态 normal/warning/breach（F13 alerts 直读）
+	PlatformAlerts     string                 `protobuf:"bytes,12,opt,name=platform_alerts,json=platformAlerts,proto3" json:"platform_alerts,omitempty"`               // D-225 v2.1：alerts 原文 JSON 透传（前端只渲染）
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *HedgeStructure) Reset() {
@@ -5039,6 +5042,27 @@ func (x *HedgeStructure) GetWsConnected() bool {
 		return x.WsConnected
 	}
 	return false
+}
+
+func (x *HedgeStructure) GetCloseoutSource() string {
+	if x != nil {
+		return x.CloseoutSource
+	}
+	return ""
+}
+
+func (x *HedgeStructure) GetPlatformAlertState() string {
+	if x != nil {
+		return x.PlatformAlertState
+	}
+	return ""
+}
+
+func (x *HedgeStructure) GetPlatformAlerts() string {
+	if x != nil {
+		return x.PlatformAlerts
+	}
+	return ""
 }
 
 type GetHedgeStructureRequest struct {
@@ -12172,7 +12196,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\n" +
 	"cmc_equity\x18\x06 \x01(\x01R\tcmcEquity\x129\n" +
 	"\n" +
-	"updated_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xa4\x03\n" +
+	"updated_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xa8\x04\n" +
 	"\x0eHedgeStructure\x12%\n" +
 	"\x0ebaseline_price\x18\x01 \x01(\x01R\rbaselinePrice\x12\x10\n" +
 	"\x03mid\x18\x02 \x01(\x01R\x03mid\x129\n" +
@@ -12182,7 +12206,11 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x10net_exposure_usd\x18\x06 \x01(\x01R\x0enetExposureUsd\x122\n" +
 	"\x05carry\x18\a \x01(\v2\x1c.arb.dashboard.v1.HedgeCarryR\x05carry\x125\n" +
 	"\x05accts\x18\b \x01(\v2\x1f.arb.dashboard.v1.HedgeAccountsR\x05accts\x12!\n" +
-	"\fws_connected\x18\t \x01(\bR\vwsConnected\"\x1a\n" +
+	"\fws_connected\x18\t \x01(\bR\vwsConnected\x12'\n" +
+	"\x0fcloseout_source\x18\n" +
+	" \x01(\tR\x0ecloseoutSource\x120\n" +
+	"\x14platform_alert_state\x18\v \x01(\tR\x12platformAlertState\x12'\n" +
+	"\x0fplatform_alerts\x18\f \x01(\tR\x0eplatformAlerts\"\x1a\n" +
 	"\x18GetHedgeStructureRequest\"[\n" +
 	"\x19GetHedgeStructureResponse\x12>\n" +
 	"\tstructure\x18\x01 \x01(\v2 .arb.dashboard.v1.HedgeStructureR\tstructure\"\xe4\x01\n" +
