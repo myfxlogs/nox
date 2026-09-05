@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -244,4 +245,81 @@ func (s *Store) UpsertCNFISignalConfigRaw(ctx context.Context, key string, value
 		       updated_by = EXCLUDED.updated_by, evidence_ref = EXCLUDED.evidence_ref`,
 		key, value, updatedBy, evidenceRef)
 	return err
+}
+
+// AddCNFIAction records one operational action (投资笔记 D-242; amounts runtime-only).
+func (s *Store) AddCNFIAction(ctx context.Context, code, layer, actionType string, qty, amountCny float64, navAtAction *float64, signalSnapshot, rationale, actionDate string) (int64, error) {
+	if (actionType == "buy" || actionType == "sell") && strings.TrimSpace(rationale) == "" {
+		return 0, fmt.Errorf("cnfi action %s: rationale 必填（投资笔记铁律）", actionType)
+	}
+	var id int64
+	err := s.pool.QueryRow(ctx, `
+		INSERT INTO cnfi_actions (code, layer, action_type, qty, amount_cny, nav_at_action, signal_snapshot, rationale, action_date)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+		code, layer, actionType, qty, amountCny, navAtAction, signalSnapshot, rationale, actionDate).Scan(&id)
+	return id, err
+}
+
+// ListCNFIActions returns the newest actions (owner-only personal data; UI 展示合法，禁入 git).
+func (s *Store) ListCNFIActions(ctx context.Context, limit int) ([]CNFIActionRow, error) {
+	rs, err := s.pool.Query(ctx, `
+		SELECT id, code, layer, action_type, qty::float8, amount_cny::float8,
+		       COALESCE(signal_snapshot::text,''), rationale, action_date::text
+		FROM cnfi_actions ORDER BY id DESC LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rs.Close()
+	var out []CNFIActionRow
+	for rs.Next() {
+		var r CNFIActionRow
+		if err := rs.Scan(&r.ID, &r.Code, &r.Layer, &r.ActionType, &r.Qty, &r.AmountCny,
+			&r.SignalSnapshot, &r.Rationale, &r.ActionDate); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rs.Err()
+}
+
+// CNFISignalSnapshotJSON reads all signal states as a JSON snapshot (行动时点证据).
+func (s *Store) CNFISignalSnapshotJSON(ctx context.Context) (json.RawMessage, error) {
+	var raw json.RawMessage
+	rows, err := s.pool.Query(ctx,
+		`SELECT COALESCE(jsonb_agg(jsonb_build_object('key',key,'state',observed_state,'value',last_value,'sample_n',sample_n,'as_of',observed_as_of))::text,'[]')
+		 FROM cnfi_signal_state`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	if rows.Next() {
+		if err := rows.Scan(&raw); err != nil {
+			return nil, err
+		}
+	}
+	return raw, rows.Err()
+}
+
+// CNFIActionRow is one operational action (投资笔记).
+type CNFIActionRow struct {
+	ID             int64
+	Code           string
+	Layer          string
+	ActionType     string
+	Qty            float64
+	AmountCny      float64
+	SignalSnapshot string
+	Rationale      string
+	ActionDate     string
+}
+
+// CNFISignalConfigJSON reads one signal_config value as raw json (” key → nil).
+func (s *Store) CNFISignalConfigJSON(ctx context.Context, key string) (json.RawMessage, error) {
+	var raw json.RawMessage
+	err := s.pool.QueryRow(ctx,
+		`SELECT value::text FROM cnfi_signal_config WHERE key=$1`, key).Scan(&raw)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return raw, err
 }

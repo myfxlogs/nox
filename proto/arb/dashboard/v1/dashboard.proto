@@ -49,6 +49,9 @@ service DashboardService {
   rpc GetCNFIProgress(GetCNFIProgressRequest) returns (GetCNFIProgressResponse);
   // CN-FI 手动持仓录入（P3；L2 人工确认铁律，系统永不下单）
   rpc AddCNFIHolding(AddCNFIHoldingRequest) returns (AddCNFIHoldingResponse);
+  // CN-FI 操作日志/投资笔记（D-242；金额=运行时个人数据，L2 人工）
+  rpc AddCNFIAction(AddCNFIActionRequest) returns (AddCNFIActionResponse);
+  rpc ListCNFIActions(ListCNFIActionsRequest) returns (ListCNFIActionsResponse);
   rpc ListPositions(ListPositionsRequest) returns (ListPositionsResponse);
 
   // Broker 实持仓（D-051 WP3：MT5/MT4 实际持仓统一视图，实时查不落库）
@@ -1371,6 +1374,9 @@ message CnfiLayerProgress {
   double target_pct = 2;  // 目标比例（signal_config layer_targets；未配置=0）
   double actual_pct = 3;  // 实际比例（市值口径，服务端计算）
   int32 holdings = 4;     // 该层持仓笔数
+  double expected_annual_pct = 5;   // 预期年化%（公开市场参数，D-242）
+  double expected_annual_cny = 6;   // 预期年化金额（服务端按市值算，运行时个人数据）
+  double market_value_cny = 7;      // 该层当前市值（运行时个人数据）
 }
 
 message GetCNFIProgressResponse {
@@ -1391,3 +1397,34 @@ message AddCNFIHoldingResponse {
   bool ok = 1;
   string error = 2;
 }
+
+message AddCNFIActionRequest {
+  string code = 1;
+  string layer = 2;       // liquidity/coupon/locked/opportunity/none
+  string action_type = 3; // buy/sell/dividend/note
+  double qty = 4;
+  double amount_cny = 5;
+  string rationale = 6;   // 投资笔记（buy/sell 必填，服务端校验）
+  string action_date = 7;
+}
+
+message AddCNFIActionResponse {
+  bool ok = 1;
+  string error = 2;
+}
+
+message CnfiActionRow {
+  int64 id = 1;
+  string code = 2;
+  string layer = 3;
+  string action_type = 4;
+  double qty = 5;
+  double amount_cny = 6;
+  string rationale = 7;
+  string action_date = 8;
+  string signal_snapshot = 9; // 行动时点信号快照（json 字符串）
+}
+
+message ListCNFIActionsRequest { int32 limit = 1; }
+
+message ListCNFIActionsResponse { repeated CnfiActionRow actions = 1; }
