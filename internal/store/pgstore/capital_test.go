@@ -3,6 +3,7 @@ package pgstore
 import (
 	"context"
 	"testing"
+	"time"
 
 	"arb/internal/capital"
 	"arb/internal/testutil"
@@ -121,6 +122,8 @@ func TestCurrentCapitalSnapshot_Latest(t *testing.T) {
 		t.Fatalf("CreateCapitalAccount: %v", err)
 	}
 	// 插 3 个快照，无 source_event_id（避免幂等去重），source_ts 递增
+	// 用 UTC time.Time 而非字符串——字符串隐式转换依赖服务器时区（Asia/Tehran +03:30），
+	// "2026-01-03" 被解释为本地午夜 → UTC 前一天 20:30 → 日期断言跨时区失败。
 	for i, ts := range []string{"2026-01-01", "2026-01-02", "2026-01-03"} {
 		snap := capital.CapitalSnapshot{
 			ScopeType: "account",
@@ -129,11 +132,15 @@ func TestCurrentCapitalSnapshot_Latest(t *testing.T) {
 			Source:    "broker",
 			Quality:   "actual",
 		}
-		// 用 SQL 直接插，控制 source_ts
+		// 显式 UTC 午夜——pgx 传 time.Time 带时区信息，不依赖服务器 timezone 设置。
+		utcTS, err := time.Parse("2006-01-02", ts)
+		if err != nil {
+			t.Fatalf("parse ts %s: %v", ts, err)
+		}
 		if _, err := s.pool.Exec(ctx,
 			`INSERT INTO capital_snapshots (scope_type, scope_key, account_id, source, source_ts, quality)
 			 VALUES ($1, $2, $3, $4, $5, $6)`,
-			snap.ScopeType, snap.ScopeKey, snap.AccountID, snap.Source, ts, snap.Quality); err != nil {
+			snap.ScopeType, snap.ScopeKey, snap.AccountID, snap.Source, utcTS.UTC(), snap.Quality); err != nil {
 			t.Fatalf("insert snapshot %d: %v", i, err)
 		}
 	}
