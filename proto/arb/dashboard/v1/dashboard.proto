@@ -45,6 +45,10 @@ service DashboardService {
   rpc BackfillSwapHistory(BackfillSwapHistoryRequest) returns (BackfillSwapHistoryReply); // D-181 S1：手动回溯 venue swap 历史→facts
   // CN-FI 固收雷达快照（D-226/D-237；只读快照，无流式——日频数据不接 streamUpdates）
   rpc GetCNFIRadarSnapshot(GetCNFIRadarSnapshotRequest) returns (GetCNFIRadarSnapshotResponse);
+  // CN-FI 四层进度（P3；比例+工具名，响应零金额字段——D-047：金额只在运行时 DB）
+  rpc GetCNFIProgress(GetCNFIProgressRequest) returns (GetCNFIProgressResponse);
+  // CN-FI 手动持仓录入（P3；L2 人工确认铁律，系统永不下单）
+  rpc AddCNFIHolding(AddCNFIHoldingRequest) returns (AddCNFIHoldingResponse);
   rpc ListPositions(ListPositionsRequest) returns (ListPositionsResponse);
 
   // Broker 实持仓（D-051 WP3：MT5/MT4 实际持仓统一视图，实时查不落库）
@@ -1358,4 +1362,32 @@ message GetCNFIRadarSnapshotResponse {
   repeated CnfiSignalState signals = 3;
   string snapshot_as_of = 4;                     // = 全部 ok 点的 max(as_of)（D-230 F7 钉死）
   google.protobuf.Timestamp generated_at = 5;    // UTC
+}
+
+message GetCNFIProgressRequest {}
+
+message CnfiLayerProgress {
+  string layer = 1;       // liquidity / coupon / locked / opportunity
+  double target_pct = 2;  // 目标比例（signal_config layer_targets；未配置=0）
+  double actual_pct = 3;  // 实际比例（市值口径，服务端计算）
+  int32 holdings = 4;     // 该层持仓笔数
+}
+
+message GetCNFIProgressResponse {
+  repeated CnfiLayerProgress layers = 1;
+  string valued_as_of = 2;  // 估值基准（最新 NAV 日）
+}
+
+message AddCNFIHoldingRequest {
+  string code = 1;
+  string layer = 2;
+  double qty = 3;
+  double cost_value = 4;
+  string opened_date = 5;
+  string note = 6;
+}
+
+message AddCNFIHoldingResponse {
+  bool ok = 1;
+  string error = 2;
 }

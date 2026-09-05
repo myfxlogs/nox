@@ -160,3 +160,6 @@ var TrxVoteAprSQL string
 
 //go:embed 0072_trx_cycle_vi.sql
 var TrxCycleViSQL string
+
+//go:embed 0073_cnfi_holdings.sql
+var CnfiHoldingsSQL string
