@@ -142,11 +142,13 @@ type tronscanWitnessJSON struct {
 
 // tronscanVoteJSON 对应 TRONSCAN /api/vote?voter={addr} 单行（当前投票分布）。
 // candidateAddress=候选 SR 地址；candidateName=SR 名；votes=票数；timestamp=投票时间。
+// R4 修复：timestamp 实测为字符串（如 "1757054520000"，生产日志 2026-09-05 实抓），
+// 非 int64——旧假设致每轮 unmarshal 败→current_rate 恒 0。字段无下游消费，保留作形状文档。
 type tronscanVoteJSON struct {
 	CandidateAddress string `json:"candidateAddress"`
 	CandidateName    string `json:"candidateName"`
 	Votes            int64  `json:"votes"`
-	Timestamp        int64  `json:"timestamp"`
+	Timestamp        string `json:"timestamp"`
 }
 
 // tronscanVoteResponseJSON 对应 /api/vote 响应。

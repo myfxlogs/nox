@@ -37,9 +37,9 @@ const mockWitnessJSON = `[
 // SR-UNKNOWN: 2000 票 → 不在 witness 列表 → 跳过+计数
 // 加权平均 = (31000+12500)/(10000+5000) = 43500/15000 = 2.90%
 const mockVoteJSON = `{"totalVotes":17000,"data":[
-	{"candidateAddress":"SR_A_ADDR","candidateName":"SR-A","votes":10000,"timestamp":1700000000000},
-	{"candidateAddress":"SR_B_ADDR","candidateName":"SR-B","votes":5000,"timestamp":1700000000000},
-	{"candidateAddress":"SR_UNKNOWN_ADDR","candidateName":"SR-UNKNOWN","votes":2000,"timestamp":1700000000000}
+	{"candidateAddress":"SR_A_ADDR","candidateName":"SR-A","votes":10000,"timestamp":"1700000000000"},
+	{"candidateAddress":"SR_B_ADDR","candidateName":"SR-B","votes":5000,"timestamp":"1700000000000"},
+	{"candidateAddress":"SR_UNKNOWN_ADDR","candidateName":"SR-UNKNOWN","votes":2000,"timestamp":"1700000000000"}
 ]}`
 
 // TestAprCollector_Poll_WitnessTopLevelArray 是 R1 真实形状红测：
