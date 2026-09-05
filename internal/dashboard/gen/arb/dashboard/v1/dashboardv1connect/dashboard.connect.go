@@ -104,6 +104,12 @@ const (
 	// DashboardServiceAddCNFIHoldingProcedure is the fully-qualified name of the DashboardService's
 	// AddCNFIHolding RPC.
 	DashboardServiceAddCNFIHoldingProcedure = "/arb.dashboard.v1.DashboardService/AddCNFIHolding"
+	// DashboardServiceAddCNFIActionProcedure is the fully-qualified name of the DashboardService's
+	// AddCNFIAction RPC.
+	DashboardServiceAddCNFIActionProcedure = "/arb.dashboard.v1.DashboardService/AddCNFIAction"
+	// DashboardServiceListCNFIActionsProcedure is the fully-qualified name of the DashboardService's
+	// ListCNFIActions RPC.
+	DashboardServiceListCNFIActionsProcedure = "/arb.dashboard.v1.DashboardService/ListCNFIActions"
 	// DashboardServiceListPositionsProcedure is the fully-qualified name of the DashboardService's
 	// ListPositions RPC.
 	DashboardServiceListPositionsProcedure = "/arb.dashboard.v1.DashboardService/ListPositions"
@@ -288,6 +294,9 @@ type DashboardServiceClient interface {
 	GetCNFIProgress(context.Context, *connect.Request[v1.GetCNFIProgressRequest]) (*connect.Response[v1.GetCNFIProgressResponse], error)
 	// CN-FI 手动持仓录入（P3；L2 人工确认铁律，系统永不下单）
 	AddCNFIHolding(context.Context, *connect.Request[v1.AddCNFIHoldingRequest]) (*connect.Response[v1.AddCNFIHoldingResponse], error)
+	// CN-FI 操作日志/投资笔记（D-242；金额=运行时个人数据，L2 人工）
+	AddCNFIAction(context.Context, *connect.Request[v1.AddCNFIActionRequest]) (*connect.Response[v1.AddCNFIActionResponse], error)
+	ListCNFIActions(context.Context, *connect.Request[v1.ListCNFIActionsRequest]) (*connect.Response[v1.ListCNFIActionsResponse], error)
 	ListPositions(context.Context, *connect.Request[v1.ListPositionsRequest]) (*connect.Response[v1.ListPositionsResponse], error)
 	// Broker 实持仓（D-051 WP3：MT5/MT4 实际持仓统一视图，实时查不落库）
 	ListBrokerPositions(context.Context, *connect.Request[v1.ListBrokerPositionsRequest]) (*connect.Response[v1.ListBrokerPositionsResponse], error)
@@ -509,6 +518,18 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			httpClient,
 			baseURL+DashboardServiceAddCNFIHoldingProcedure,
 			connect.WithSchema(dashboardServiceMethods.ByName("AddCNFIHolding")),
+			connect.WithClientOptions(opts...),
+		),
+		addCNFIAction: connect.NewClient[v1.AddCNFIActionRequest, v1.AddCNFIActionResponse](
+			httpClient,
+			baseURL+DashboardServiceAddCNFIActionProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("AddCNFIAction")),
+			connect.WithClientOptions(opts...),
+		),
+		listCNFIActions: connect.NewClient[v1.ListCNFIActionsRequest, v1.ListCNFIActionsResponse](
+			httpClient,
+			baseURL+DashboardServiceListCNFIActionsProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListCNFIActions")),
 			connect.WithClientOptions(opts...),
 		),
 		listPositions: connect.NewClient[v1.ListPositionsRequest, v1.ListPositionsResponse](
@@ -834,6 +855,8 @@ type dashboardServiceClient struct {
 	getCNFIRadarSnapshot   *connect.Client[v1.GetCNFIRadarSnapshotRequest, v1.GetCNFIRadarSnapshotResponse]
 	getCNFIProgress        *connect.Client[v1.GetCNFIProgressRequest, v1.GetCNFIProgressResponse]
 	addCNFIHolding         *connect.Client[v1.AddCNFIHoldingRequest, v1.AddCNFIHoldingResponse]
+	addCNFIAction          *connect.Client[v1.AddCNFIActionRequest, v1.AddCNFIActionResponse]
+	listCNFIActions        *connect.Client[v1.ListCNFIActionsRequest, v1.ListCNFIActionsResponse]
 	listPositions          *connect.Client[v1.ListPositionsRequest, v1.ListPositionsResponse]
 	listBrokerPositions    *connect.Client[v1.ListBrokerPositionsRequest, v1.ListBrokerPositionsResponse]
 	closeBrokerPosition    *connect.Client[v1.CloseBrokerPositionRequest, v1.CloseBrokerPositionResponse]
@@ -1003,6 +1026,16 @@ func (c *dashboardServiceClient) GetCNFIProgress(ctx context.Context, req *conne
 // AddCNFIHolding calls arb.dashboard.v1.DashboardService.AddCNFIHolding.
 func (c *dashboardServiceClient) AddCNFIHolding(ctx context.Context, req *connect.Request[v1.AddCNFIHoldingRequest]) (*connect.Response[v1.AddCNFIHoldingResponse], error) {
 	return c.addCNFIHolding.CallUnary(ctx, req)
+}
+
+// AddCNFIAction calls arb.dashboard.v1.DashboardService.AddCNFIAction.
+func (c *dashboardServiceClient) AddCNFIAction(ctx context.Context, req *connect.Request[v1.AddCNFIActionRequest]) (*connect.Response[v1.AddCNFIActionResponse], error) {
+	return c.addCNFIAction.CallUnary(ctx, req)
+}
+
+// ListCNFIActions calls arb.dashboard.v1.DashboardService.ListCNFIActions.
+func (c *dashboardServiceClient) ListCNFIActions(ctx context.Context, req *connect.Request[v1.ListCNFIActionsRequest]) (*connect.Response[v1.ListCNFIActionsResponse], error) {
+	return c.listCNFIActions.CallUnary(ctx, req)
 }
 
 // ListPositions calls arb.dashboard.v1.DashboardService.ListPositions.
@@ -1286,6 +1319,9 @@ type DashboardServiceHandler interface {
 	GetCNFIProgress(context.Context, *connect.Request[v1.GetCNFIProgressRequest]) (*connect.Response[v1.GetCNFIProgressResponse], error)
 	// CN-FI 手动持仓录入（P3；L2 人工确认铁律，系统永不下单）
 	AddCNFIHolding(context.Context, *connect.Request[v1.AddCNFIHoldingRequest]) (*connect.Response[v1.AddCNFIHoldingResponse], error)
+	// CN-FI 操作日志/投资笔记（D-242；金额=运行时个人数据，L2 人工）
+	AddCNFIAction(context.Context, *connect.Request[v1.AddCNFIActionRequest]) (*connect.Response[v1.AddCNFIActionResponse], error)
+	ListCNFIActions(context.Context, *connect.Request[v1.ListCNFIActionsRequest]) (*connect.Response[v1.ListCNFIActionsResponse], error)
 	ListPositions(context.Context, *connect.Request[v1.ListPositionsRequest]) (*connect.Response[v1.ListPositionsResponse], error)
 	// Broker 实持仓（D-051 WP3：MT5/MT4 实际持仓统一视图，实时查不落库）
 	ListBrokerPositions(context.Context, *connect.Request[v1.ListBrokerPositionsRequest]) (*connect.Response[v1.ListBrokerPositionsResponse], error)
@@ -1503,6 +1539,18 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		DashboardServiceAddCNFIHoldingProcedure,
 		svc.AddCNFIHolding,
 		connect.WithSchema(dashboardServiceMethods.ByName("AddCNFIHolding")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceAddCNFIActionHandler := connect.NewUnaryHandler(
+		DashboardServiceAddCNFIActionProcedure,
+		svc.AddCNFIAction,
+		connect.WithSchema(dashboardServiceMethods.ByName("AddCNFIAction")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceListCNFIActionsHandler := connect.NewUnaryHandler(
+		DashboardServiceListCNFIActionsProcedure,
+		svc.ListCNFIActions,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListCNFIActions")),
 		connect.WithHandlerOptions(opts...),
 	)
 	dashboardServiceListPositionsHandler := connect.NewUnaryHandler(
@@ -1849,6 +1897,10 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceGetCNFIProgressHandler.ServeHTTP(w, r)
 		case DashboardServiceAddCNFIHoldingProcedure:
 			dashboardServiceAddCNFIHoldingHandler.ServeHTTP(w, r)
+		case DashboardServiceAddCNFIActionProcedure:
+			dashboardServiceAddCNFIActionHandler.ServeHTTP(w, r)
+		case DashboardServiceListCNFIActionsProcedure:
+			dashboardServiceListCNFIActionsHandler.ServeHTTP(w, r)
 		case DashboardServiceListPositionsProcedure:
 			dashboardServiceListPositionsHandler.ServeHTTP(w, r)
 		case DashboardServiceListBrokerPositionsProcedure:
@@ -2050,6 +2102,14 @@ func (UnimplementedDashboardServiceHandler) GetCNFIProgress(context.Context, *co
 
 func (UnimplementedDashboardServiceHandler) AddCNFIHolding(context.Context, *connect.Request[v1.AddCNFIHoldingRequest]) (*connect.Response[v1.AddCNFIHoldingResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AddCNFIHolding is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) AddCNFIAction(context.Context, *connect.Request[v1.AddCNFIActionRequest]) (*connect.Response[v1.AddCNFIActionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AddCNFIAction is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListCNFIActions(context.Context, *connect.Request[v1.ListCNFIActionsRequest]) (*connect.Response[v1.ListCNFIActionsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListCNFIActions is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListPositions(context.Context, *connect.Request[v1.ListPositionsRequest]) (*connect.Response[v1.ListPositionsResponse], error) {

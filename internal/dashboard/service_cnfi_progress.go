@@ -4,6 +4,7 @@ package dashboard
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -53,6 +54,63 @@ func (s *Service) GetCNFIProgress(ctx context.Context, req *connect.Request[v1.G
 		lp.TargetPct = targets[layer] // 未配置=0（不猜）
 		resp.Layers = append(resp.Layers, lp)
 	}
+	if err := s.enrichProgressExpectation(ctx, resp); err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(resp), nil
+}
+
+// AddCNFIAction 记录一笔行动（投资笔记；buy/sell 强制 rationale；快照当时信号状态）。
+func (s *Service) AddCNFIAction(ctx context.Context, req *connect.Request[v1.AddCNFIActionRequest]) (*connect.Response[v1.AddCNFIActionResponse], error) {
+	m := req.Msg
+	resp := &v1.AddCNFIActionResponse{}
+	validLayers := map[string]bool{"liquidity": true, "coupon": true, "locked": true, "opportunity": true, "none": true}
+	validTypes := map[string]bool{"buy": true, "sell": true, "dividend": true, "note": true}
+	if !validLayers[m.Layer] || !validTypes[m.ActionType] {
+		resp.Error = "layer/action_type 非法"
+		return connect.NewResponse(resp), nil
+	}
+	day := m.ActionDate
+	if day == "" {
+		day = time.Now().UTC().Format("2006-01-02")
+	}
+	if _, err := time.Parse("2006-01-02", day); err != nil {
+		resp.Error = fmt.Sprintf("action_date 格式应为 YYYY-MM-DD: %v", err)
+		return connect.NewResponse(resp), nil
+	}
+	snap, err := s.store.CNFISignalSnapshotJSON(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var navAt *float64
+	id, err := s.store.AddCNFIAction(ctx, m.Code, m.Layer, m.ActionType, m.Qty, m.AmountCny,
+		navAt, string(snap), m.Rationale, day)
+	if err != nil {
+		resp.Error = err.Error()
+		return connect.NewResponse(resp), nil
+	}
+	_ = id
+	resp.Ok = true
+	return connect.NewResponse(resp), nil
+}
+
+func (s *Service) ListCNFIActions(ctx context.Context, req *connect.Request[v1.ListCNFIActionsRequest]) (*connect.Response[v1.ListCNFIActionsResponse], error) {
+	limit := int(req.Msg.GetLimit())
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	rows, err := s.store.ListCNFIActions(ctx, limit)
+	if err != nil {
+		return nil, err
+	}
+	resp := &v1.ListCNFIActionsResponse{}
+	for _, r := range rows {
+		resp.Actions = append(resp.Actions, &v1.CnfiActionRow{
+			Id: r.ID, Code: r.Code, Layer: r.Layer, ActionType: r.ActionType,
+			Qty: r.Qty, AmountCny: r.AmountCny, Rationale: r.Rationale,
+			ActionDate: r.ActionDate, SignalSnapshot: r.SignalSnapshot,
+		})
+	}
 	return connect.NewResponse(resp), nil
 }
 
@@ -87,4 +145,34 @@ func (s *Service) AddCNFIHolding(ctx context.Context, req *connect.Request[v1.Ad
 	}
 	resp.Ok = true
 	return connect.NewResponse(resp), nil
+}
+
+// CNFIProgress P2 扩展（D-242）：预期年化列（公开参数 signal_config）+ 预期金额（服务端算，运行时数据）。
+func (s *Service) enrichProgressExpectation(ctx context.Context, resp *v1.GetCNFIProgressResponse) error {
+	var expected map[string]float64
+	if raw, err := s.store.CNFISignalConfigJSON(ctx, "layer_expected_annual"); err == nil && len(raw) > 0 {
+		_ = json.Unmarshal(raw, &expected)
+	}
+	for _, lp := range resp.Layers {
+		if e, ok := expected[lp.Layer]; ok {
+			lp.ExpectedAnnualPct = e
+			lp.ExpectedAnnualCny = lp.ActualPct / 100 * 0 // 市值合计在下方重算后填充
+		}
+	}
+	// 金额按层市值：重算 holdings 市值（服务端算，D-043：前端只渲染）
+	rows, err := s.store.ListCNFIHoldingsValued(ctx)
+	if err != nil {
+		return err
+	}
+	layerMV := map[string]float64{}
+	for _, r := range rows {
+		layerMV[r.Layer] += r.MarketValue
+	}
+	for _, lp := range resp.Layers {
+		if e, ok := expected[lp.Layer]; ok {
+			lp.ExpectedAnnualCny = layerMV[lp.Layer] * e / 100
+		}
+		lp.MarketValueCny = layerMV[lp.Layer]
+	}
+	return nil
 }
