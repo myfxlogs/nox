@@ -185,9 +185,9 @@ func TestPricesCollector_Poll_Success(t *testing.T) {
 		t.Errorf("Value = %v, want 0.323100", facts[0].Value)
 	}
 	// 验证 store 写入
-	mid, err := st.LastCMCPriceMid(context.Background(), "X-AFQUL")
+	mid, _, err := st.LastCMCPriceMidWithTime(context.Background(), "X-AFQUL")
 	if err != nil {
-		t.Fatalf("LastCMCPriceMid: %v", err)
+		t.Fatalf("LastCMCPriceMidWithTime: %v", err)
 	}
 	if mid != 0.323100 {
 		t.Errorf("stored mid = %v, want 0.323100", mid)
@@ -223,9 +223,9 @@ func TestPricesCollector_Poll_RESTFail(t *testing.T) {
 
 func TestAccountCollector_Poll_Success(t *testing.T) {
 	st := newTestStore(t)
-	// 先写入一条 price（供 LastCMCPriceMid 查询）
+	// D-225 v2.1：先写入一条 price（含 ask——calcCloseout 现走 LastCMCPriceForSide(short)=ask）
 	_ = st.InsertCMCPrice(context.Background(), pgstore.CMCPrice{
-		InstrumentID: "X-AFQUL", MidPrice: 0.324530, FetchedAt: time.Now(),
+		InstrumentID: "X-AFQUL", MidPrice: 0.324530, AskPrice: 0.323350, FetchedAt: time.Now(),
 	})
 
 	callIdx := 0
@@ -257,10 +257,9 @@ func TestAccountCollector_Poll_Success(t *testing.T) {
 	if facts[0].Value != 2178.07 {
 		t.Errorf("Value = %v, want 2178.07", facts[0].Value)
 	}
-	// 验证强平计算（C=2026.76, entry=0.33171, qty=18100, L=10, mid=0.324530）
+	// D-225 v2.1：验证强平计算（C=2026.76, entry=0.33171, qty=18100, L=10, ask=0.323350）
 	// closeout = (2026.76 + 0.33171*18100) * 10 / (18100 * 10.5) = 0.4226
-	// distance = (0.4226 - 0.324530) / 0.324530 * 100 = 30.2%
-	// 简化：直接查 DB 验证 closeout
+	// distance = (0.4226 - 0.323350) / 0.323350 * 100 = 30.7%（ask 口径，F11 保守修正）
 	row := st.Pool().QueryRow(context.Background(),
 		"SELECT closeout_price, distance_to_closeout_pct FROM fin_cmc_account_summary ORDER BY fetched_at DESC LIMIT 1")
 	var closeout, dist float64
@@ -270,8 +269,8 @@ func TestAccountCollector_Poll_Success(t *testing.T) {
 	if closeout < 0.4225 || closeout > 0.4227 {
 		t.Errorf("closeout = %v, want ~0.4226", closeout)
 	}
-	if dist < 30.1 || dist > 30.3 {
-		t.Errorf("distance = %v, want ~30.2", dist)
+	if dist < 30.5 || dist > 30.9 {
+		t.Errorf("distance = %v, want ~30.7 (ask 口径)", dist)
 	}
 	// D-208 v2-A：验证 orders[0] 解析——opened_at/order_id 已落库
 	posRow := st.Pool().QueryRow(context.Background(),
@@ -370,7 +369,7 @@ func TestAccountCollector_Poll_EmptyPositions(t *testing.T) {
 
 func TestAccountCollector_Poll_NoPriceData(t *testing.T) {
 	st := newTestStore(t)
-	// 不写入任何 price → LastCMCPriceMid 返回 ErrNoRows
+	// 不写入任何 price → LastCMCPriceForSide 返回 ErrNoRows → px=0 → distance=0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/value/summary") {
 			w.WriteHeader(200)

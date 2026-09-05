@@ -647,6 +647,9 @@ message HedgeStructure {
   HedgeCarry carry = 7;
   HedgeAccounts accts = 8;
   bool ws_connected = 9;  // cmc ws 事件驱动健康（true=绿/false=黄，兜底中）
+  string closeout_source = 10;       // D-225 v2.1：强平价口径（"estimate_self"=自算估算，Phase B 后切平台值）
+  string platform_alert_state = 11;  // D-225 v2.1：平台预警状态 normal/warning/breach（F13 alerts 直读）
+  string platform_alerts = 12;       // D-225 v2.1：alerts 原文 JSON 透传（前端只渲染）
 }
 
 message GetHedgeStructureRequest {}

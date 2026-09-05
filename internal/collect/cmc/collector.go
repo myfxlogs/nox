@@ -32,15 +32,25 @@ type PricesCollector struct {
 	// 门控缓存（S4）：Poll 成功后缓存 market_status + 探测时刻；休市 15min 内短路不发 REST。
 	lastStatus string
 	lastProbe  time.Time
+	// D-225 v2.1 S3：ws 健康期降频——wsHealthy() && time.Since(lastWrite)<15min → return nil。
+	wsHealthy func() bool
+	lastWrite time.Time
 }
 
 func NewPricesCollector(auth jwtProvider, instrumentID string, store *pgstore.Store, restBase string) *PricesCollector {
 	return &PricesCollector{auth: auth, instrumentID: instrumentID, store: store, restBase: restBase}
 }
 
+// SetWSHealthy D-225 v2.1 S3：注入 ws 健康查询（wire 层回填）；nil=无 ws，照旧 REST 轮询。
+func (c *PricesCollector) SetWSHealthy(fn func() bool) { c.wsHealthy = fn }
+
 func (c *PricesCollector) Kind() string { return fact.KindCMCPrice }
 
 func (c *PricesCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
+	// D-225 v2.1 S3：ws 健康期降频——15min 内短路（REST 只留 marketStatus 探测 + bid/mid 补充 + WS 不健康时接管）。
+	if c.wsHealthy != nil && c.wsHealthy() && time.Since(c.lastWrite) < 15*time.Minute {
+		return nil, nil
+	}
 	// 门控：休市且距上次探测 <15min → 直接短路（不发 REST；周末/日结请求 1440/天→~96/天）
 	if strings.EqualFold(c.lastStatus, "closed") && time.Since(c.lastProbe) < 15*time.Minute {
 		return nil, nil
@@ -86,6 +96,7 @@ func (c *PricesCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	// 门控缓存更新（S4）：成功后记录 status + 探测时刻
 	c.lastStatus = p.MarketStatus
 	c.lastProbe = time.Now()
+	c.lastWrite = time.Now() // D-225 v2.1 S3：ws 健康期降频计时基准
 	return []fact.Fact{{
 		Kind: fact.KindCMCPrice, Venue: "cmc", Symbol: "TRXUSD",
 		Value: mid, Unit: fact.UnitPrice, Ts: time.Now(), Src: "cmc_rest",
@@ -96,6 +107,8 @@ func (c *PricesCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 // 空表（ErrNoRows）也告警：last 取零值 → Since 巨大 → 触发 warning（v7）。
 // v1.2 R'-1：门控使休市段更新间隔变 15min > 现行 stale 阈值 5min → 休市期误报。
 // 修法：判定前查价格行最近 market_status——closed（EqualFold）则本轮跳过 stale 判定。
+// D-225 v2.1：src 感知阈值——最近行为 cmc_ws → stale 阈值 10min（配合 S2 4min 心跳行消除贴线误报）；
+// 否则现行为不变（5min+closed-skip）。
 func (c *PricesCollector) StartWatchdog(ctx context.Context) {
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
@@ -104,7 +117,7 @@ func (c *PricesCollector) StartWatchdog(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			status, last, err := c.store.LastCMCPriceStatusAndFetchedAt(ctx)
+			src, status, last, err := c.store.LastCMCPriceStatusAndFetchedAt(ctx)
 			if err != nil {
 				if !errors.Is(err, pgx.ErrNoRows) {
 					continue // 其他 DB 错误（连接故障）不判 stale
@@ -113,8 +126,12 @@ func (c *PricesCollector) StartWatchdog(ctx context.Context) {
 			} else if strings.EqualFold(status, "closed") {
 				continue // 休市：门控使更新间隔变 15min，跳过 stale 判定（v1.2 R'-1）
 			}
-			if time.Since(last) > 5*time.Minute {
-				log.Printf("[cmc] stale warning: no price update for %v", time.Since(last).Round(time.Second))
+			staleThreshold := 5 * time.Minute
+			if src == "cmc_ws" {
+				staleThreshold = 10 * time.Minute // D-225 v2.1：WS 行 4min 心跳，10min 阈值有余量
+			}
+			if time.Since(last) > staleThreshold {
+				log.Printf("[cmc] stale warning: no price update for %v (src=%s)", time.Since(last).Round(time.Second), src)
 			}
 		}
 	}
@@ -243,9 +260,9 @@ func (c *AccountCollector) fetchPositions(ctx context.Context, jwt string) (*pos
 }
 
 // calcCloseoutValues 包级纯计算函数：强平距离（只对 X-AFQUL，SSOT §6 公式）。
-// mid 由调用方查询 LastCMCPriceMid 传入（零依赖，WsClient + AccountCollector 共用）。
-// mid=0 时 distance=0（不除以 0，closeout_price 仍计算写入）。
-func calcCloseoutValues(cash float64, pos *positionsJSON, mid float64) (closeout, distance float64) {
+// D-225 v2.1：参数 mid → px（平仓方向价，short=ask；公式本体不动，硬约束 7）。
+// px=0 时 distance=0（不除以 0，closeout_price 仍计算写入）。
+func calcCloseoutValues(cash float64, pos *positionsJSON, px float64) (closeout, distance float64) {
 	var afqul *positionJSON
 	for i := range pos.Positions {
 		if pos.Positions[i].InstrumentID == "X-AFQUL" {
@@ -267,20 +284,20 @@ func calcCloseoutValues(cash float64, pos *positionsJSON, mid float64) (closeout
 		return 0, 0
 	}
 	closeout = (cash + entry*qty) * L / (qty * (L + 0.5))
-	if mid == 0 {
+	if px == 0 {
 		return closeout, 0
 	}
-	distance = (closeout - mid) / mid * 100
+	distance = (closeout - px) / px * 100
 	return closeout, distance
 }
 
-// calcCloseout 方法薄壳：查询 mid 后调包级 calcCloseoutValues（行为不变，D-208 复算口径勿动）。
+// calcCloseout 方法薄壳：查询方向平仓价后调包级 calcCloseoutValues（D-225 v2.1：LastCMCPriceForSide）。
 func (c *AccountCollector) calcCloseout(ctx context.Context, cash float64, pos *positionsJSON) (closeout, distance float64) {
-	mid, err := c.store.LastCMCPriceMid(ctx, "X-AFQUL")
+	px, _, _, err := c.store.LastCMCPriceForSide(ctx, "X-AFQUL", "Sell") // short → ask（F11 保守修正）
 	if err != nil {
-		mid = 0
+		px = 0
 	}
-	return calcCloseoutValues(cash, pos, mid)
+	return calcCloseoutValues(cash, pos, px)
 }
 
 // cmcGet REST GET 辅助（connectapi 端点头只有两个：Authorization + Origin）。

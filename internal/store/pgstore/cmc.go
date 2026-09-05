@@ -2,6 +2,7 @@ package pgstore
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -22,6 +23,7 @@ type CMCPrice struct {
 	MarketStatus string
 	QuoteTime    time.Time
 	FetchedAt    time.Time
+	Src          string // D-225 v2.1: cmc_ws / cmc_rest（默认 cmc_rest）
 }
 
 type CMCAccountSummary struct {
@@ -34,6 +36,7 @@ type CMCAccountSummary struct {
 	CloseoutPrice            float64
 	DistanceToCloseoutPct    float64
 	FetchedAt                time.Time
+	Alerts                   json.RawMessage // D-225 v2.1: accountValueAlerts 原文 JSON（空数组=正常）
 }
 
 type CMCPosition struct {
@@ -67,11 +70,16 @@ type CMCHistoryTx struct {
 // ---------- 写入方法（4 个） ----------
 
 func (s *Store) InsertCMCPrice(ctx context.Context, p CMCPrice) error {
+	src := p.Src
+	if src == "" {
+		src = "cmc_rest"
+	}
+	// D-225 v2.1：WS 行 bid/mid=0 → NULL（NULLIF）——LastCMCPriceMidWithTime 的 IS NOT NULL 过滤才生效
 	_, err := s.pool.Exec(ctx,
 		`INSERT INTO fin_cmc_prices
-		   (instrument_id, bid_price, ask_price, mid_price, market_status, quote_time, fetched_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,COALESCE($7,now()))`,
-		p.InstrumentID, p.BidPrice, p.AskPrice, p.MidPrice, p.MarketStatus, p.QuoteTime, p.FetchedAt)
+		   (instrument_id, bid_price, ask_price, mid_price, market_status, quote_time, fetched_at, src)
+		 VALUES ($1,NULLIF($2,0.0),NULLIF($3,0.0),NULLIF($4,0.0),$5,$6,COALESCE($7,now()),$8)`,
+		p.InstrumentID, p.BidPrice, p.AskPrice, p.MidPrice, p.MarketStatus, p.QuoteTime, p.FetchedAt, src)
 	if err != nil {
 		return fmt.Errorf("insert cmc price: %w", err)
 	}
@@ -79,15 +87,19 @@ func (s *Store) InsertCMCPrice(ctx context.Context, p CMCPrice) error {
 }
 
 func (s *Store) InsertCMCAccountSummary(ctx context.Context, a CMCAccountSummary) error {
+	alerts := a.Alerts
+	if len(alerts) == 0 {
+		alerts = json.RawMessage("[]")
+	}
 	_, err := s.pool.Exec(ctx,
 		`INSERT INTO fin_cmc_account_summary
 		   (account_id, total_account_value, total_cash_balance, total_unrealised_pnl,
 		    total_equity_free_for_margin, total_equity_used_in_margin,
-		    closeout_price, distance_to_closeout_pct, fetched_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,COALESCE($9,now()))`,
+		    closeout_price, distance_to_closeout_pct, fetched_at, alerts)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,COALESCE($9,now()),$10)`,
 		a.AccountID, a.TotalAccountValue, a.TotalCashBalance, a.TotalUnrealisedPnL,
 		a.TotalEquityFreeForMargin, a.TotalEquityUsedInMargin,
-		a.CloseoutPrice, a.DistanceToCloseoutPct, a.FetchedAt)
+		a.CloseoutPrice, a.DistanceToCloseoutPct, a.FetchedAt, alerts)
 	if err != nil {
 		return fmt.Errorf("insert cmc account summary: %w", err)
 	}
@@ -166,56 +178,102 @@ func (s *Store) LastCMCPriceFetchedAt(ctx context.Context) (time.Time, error) {
 	return t, nil
 }
 
-// LastCMCPriceStatusAndFetchedAt 返回 fin_cmc_prices 最近一条 market_status + fetched_at
-// （v1.2 R'-1：watchdog×门控互作修复——休市 status=closed 时跳过 stale 判定）。
+// LastCMCPriceStatusAndFetchedAt 返回 fin_cmc_prices 最近一条 src + market_status + fetched_at
+// （v1.2 R'-1：watchdog×门控互作修复——休市 status=closed 时跳过 stale 判定；
+// D-225 v2.1：加 src 返回——watchdog src 感知阈值 cmc_ws=10min / rest=5min）。
 // 空表返回 ErrNoRows（与 LastCMCPriceFetchedAt 行为一致）。
-func (s *Store) LastCMCPriceStatusAndFetchedAt(ctx context.Context) (string, time.Time, error) {
-	var status string
+func (s *Store) LastCMCPriceStatusAndFetchedAt(ctx context.Context) (string, string, time.Time, error) {
+	var src, status string
 	var t time.Time
 	err := s.pool.QueryRow(ctx,
-		`SELECT market_status, fetched_at FROM fin_cmc_prices ORDER BY fetched_at DESC LIMIT 1`).Scan(&status, &t)
+		`SELECT src, market_status, fetched_at FROM fin_cmc_prices ORDER BY fetched_at DESC LIMIT 1`).Scan(&src, &status, &t)
 	if err != nil {
-		return "", time.Time{}, err
+		return "", "", time.Time{}, err
 	}
-	return status, t, nil
-}
-
-// LastCMCPriceMid 返回 fin_cmc_prices 指定 instrument 最近一条 mid_price；空表返回 ErrNoRows。
-func (s *Store) LastCMCPriceMid(ctx context.Context, instrumentID string) (float64, error) {
-	var v float64
-	err := s.pool.QueryRow(ctx,
-		`SELECT mid_price FROM fin_cmc_prices
-		 WHERE instrument_id = $1 ORDER BY fetched_at DESC LIMIT 1`, instrumentID).Scan(&v)
-	if err != nil {
-		return 0, err
-	}
-	return v, nil
+	return src, status, t, nil
 }
 
 // LastCMCPriceMidWithTime 返回 fin_cmc_prices 指定 instrument 最近一条 mid_price + fetched_at（D-208 v2：新鲜度判定用）。
+// D-225 v2.1：加 mid_price IS NOT NULL 过滤——WS 行 bid/mid 为 NULL，不污染 mid 查询（D-208 个人监控线保护）。
 func (s *Store) LastCMCPriceMidWithTime(ctx context.Context, instrumentID string) (float64, time.Time, error) {
 	var v float64
 	var t time.Time
 	err := s.pool.QueryRow(ctx,
 		`SELECT mid_price, fetched_at FROM fin_cmc_prices
-		 WHERE instrument_id = $1 ORDER BY fetched_at DESC LIMIT 1`, instrumentID).Scan(&v, &t)
+		 WHERE instrument_id = $1 AND mid_price IS NOT NULL
+		 ORDER BY fetched_at DESC LIMIT 1`, instrumentID).Scan(&v, &t)
 	if err != nil {
 		return 0, time.Time{}, err
 	}
 	return v, t, nil
 }
 
-// LastCMCAccountSummary 返回最近一条 CMC 账户摘要（含 closeout_price/distance_to_closeout_pct）；空表返回 ErrNoRows。
+// LastCMCPriceForSide 返回指定 instrument + 方向的平仓价（D-225 v2.1）。
+// short(Sell) → ask_price：WS 行(src=cmc_ws) ask 优先，无 WS 行回退 REST 行 ask。
+// 返回 (px, fetchedAt, src, error)；空表返回 ErrNoRows。
+func (s *Store) LastCMCPriceForSide(ctx context.Context, instrumentID, side string) (float64, time.Time, string, error) {
+	// short → ask；其余 → ask（当前只有 X-AFQUL 空单，统一取 ask）
+	// WS 行优先
+	var px float64
+	var t time.Time
+	var src string
+	err := s.pool.QueryRow(ctx,
+		`SELECT ask_price, fetched_at, src FROM fin_cmc_prices
+		 WHERE instrument_id = $1 AND src = 'cmc_ws' AND ask_price > 0
+		 ORDER BY fetched_at DESC LIMIT 1`, instrumentID).Scan(&px, &t, &src)
+	if err == nil {
+		return px, t, src, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return 0, time.Time{}, "", fmt.Errorf("last cmc price forside ws: %w", err)
+	}
+	// 回退 REST 行 ask
+	err = s.pool.QueryRow(ctx,
+		`SELECT ask_price, fetched_at, src FROM fin_cmc_prices
+		 WHERE instrument_id = $1 AND ask_price > 0
+		 ORDER BY fetched_at DESC LIMIT 1`, instrumentID).Scan(&px, &t, &src)
+	if err != nil {
+		return 0, time.Time{}, "", err
+	}
+	return px, t, src, nil
+}
+
+// LastCMCAlerts 返回 fin_cmc_account_summary 最近一行 alerts 原文 JSON（D-225 v2.1）。
+func (s *Store) LastCMCAlerts(ctx context.Context) (json.RawMessage, error) {
+	var alerts json.RawMessage
+	err := s.pool.QueryRow(ctx,
+		`SELECT alerts FROM fin_cmc_account_summary ORDER BY fetched_at DESC LIMIT 1`).Scan(&alerts)
+	if err != nil {
+		return nil, err
+	}
+	return alerts, nil
+}
+
+// LastCMCMarketStatus 返回最近一条非空 market_status + fetched_at（D-225 v2.1：S5 接线用）。
+func (s *Store) LastCMCMarketStatus(ctx context.Context) (string, time.Time, error) {
+	var status string
+	var t time.Time
+	err := s.pool.QueryRow(ctx,
+		`SELECT market_status, fetched_at FROM fin_cmc_prices
+		 WHERE market_status IS NOT NULL AND market_status != ''
+		 ORDER BY fetched_at DESC LIMIT 1`).Scan(&status, &t)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	return status, t, nil
+}
+
+// LastCMCAccountSummary 返回最近一条 CMC 账户摘要（含 closeout_price/distance_to_closeout_pct/alerts）；空表返回 ErrNoRows。
 func (s *Store) LastCMCAccountSummary(ctx context.Context) (CMCAccountSummary, error) {
 	var a CMCAccountSummary
 	err := s.pool.QueryRow(ctx,
 		`SELECT account_id, total_account_value, total_cash_balance, total_unrealised_pnl,
 		        total_equity_free_for_margin, total_equity_used_in_margin,
-		        closeout_price, distance_to_closeout_pct, fetched_at
+		        closeout_price, distance_to_closeout_pct, fetched_at, alerts
 		 FROM fin_cmc_account_summary ORDER BY fetched_at DESC LIMIT 1`).Scan(
 		&a.AccountID, &a.TotalAccountValue, &a.TotalCashBalance, &a.TotalUnrealisedPnL,
 		&a.TotalEquityFreeForMargin, &a.TotalEquityUsedInMargin,
-		&a.CloseoutPrice, &a.DistanceToCloseoutPct, &a.FetchedAt)
+		&a.CloseoutPrice, &a.DistanceToCloseoutPct, &a.FetchedAt, &a.Alerts)
 	if err != nil {
 		return CMCAccountSummary{}, err
 	}

@@ -148,3 +148,6 @@ var CMCPositionsMetaSQL string
 
 //go:embed 0068_trx_stake_tables.sql
 var TrxStakeTablesSQL string
+
+//go:embed 0069_cmc_ws_event_driven.sql
+var CmcWsEventDrivenSQL string

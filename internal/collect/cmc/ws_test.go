@@ -182,7 +182,7 @@ func (ts *wsTestServer) waitSubscribed(timeout time.Duration) bool {
 
 func TestWsClient_FullChain(t *testing.T) {
 	st := newTestStore(t)
-	// 先写入一条 price（供 LastCMCPriceMid 查询，距离复算用）
+	// D-225 v2.1：先写入一条 price（含 ask——closeout 计算走 ForSide）
 	_ = st.InsertCMCPrice(context.Background(), pgstorePriceRec("X-AFQUL", 0.324530))
 
 	ts := newWsTestServer(t, mockPositionsJSON)
@@ -208,20 +208,20 @@ func TestWsClient_FullChain(t *testing.T) {
 	if !ts.waitSubscribed(10 * time.Second) {
 		t.Fatal("timeout waiting for subscribe")
 	}
-	// 推 type=5（账户摘要）
-	ts.sendEvent(0, wsType5Event)
+	// D-225 v2.1：type6 是账户主数据源（落库）；type5 降为交叉校验（不落库）
+	ts.sendEvent(0, wsType6Event)
 	// 推 type=7（持仓 patch）
 	ts.sendEvent(0, wsType7Event)
 
-	// 等待落库（flush 2s 窗口 + DB 写入）
-	time.Sleep(4 * time.Second)
+	// 等待落库（flush 15s 节流 + DB 写入）
+	time.Sleep(16 * time.Second)
 
-	// 断言 summary 落表
+	// 断言 summary 落表（type6 驱动）
 	var summaryCount int
 	_ = st.Pool().QueryRow(context.Background(),
 		"SELECT count(*) FROM fin_cmc_account_summary WHERE account_id = 38941616").Scan(&summaryCount)
 	if summaryCount == 0 {
-		t.Error("no summary rows written from type=5 event")
+		t.Error("no summary rows written from type=6 event")
 	}
 
 	// 断言 positions 落表（type=7 patch 后 flush）
@@ -342,8 +342,8 @@ func TestWsClient_GuardDummyConnection(t *testing.T) {
 		t.Fatal("timeout waiting for subscribe")
 	}
 
-	// 推一条事件建立 lastEvent，确保守卫开始计时
-	ts.sendEvent(0, wsType5Event)
+	// D-225 v2.1：守卫只看 type6 事件——推 type6 建立计时，type5 不再触发守卫
+	ts.sendEvent(0, wsType6Event)
 	time.Sleep(300 * time.Millisecond) // 等事件处理
 
 	// 等待守卫击穿：2 个检查窗（~400ms）+ stale 500ms → ~900ms，给 3s 余量
@@ -360,8 +360,8 @@ func TestWsClient_GuardDummyConnection(t *testing.T) {
 		t.Fatal("guard did not trip healthy=false after stale window (dummy connection)")
 	}
 
-	// 重发事件 → 守卫恢复 healthy=true
-	ts.sendEvent(0, wsType5Event)
+	// 重发 type6 事件 → 守卫恢复 healthy=true
+	ts.sendEvent(0, wsType6Event)
 	deadline = time.Now().Add(2 * time.Second)
 	healthyBecameTrue := false
 	for time.Now().Before(deadline) {
@@ -410,21 +410,27 @@ func TestWsClient_ThrottleAndPatchBurst(t *testing.T) {
 	}
 
 	// T4b: type=7 burst 3 条 patch → 1 次 flush 落库且字段合并
+	// D-225 v2.1：flush 节流从 2s 改 15s——3 条 patch 在 15s 窗口内合并为 1 次 flush
 	// 先清 positions 表确保计数干净
 	_, _ = st.Pool().Exec(context.Background(),
 		"DELETE FROM fin_cmc_positions WHERE account_id = 38941616")
 
+	// D-225 v2.1：先推 type7 首帧快照种子（patch 需要已有 positions 才能合并）
+	ts.sendEvent(0, wsType7SnapshotEvent)
+	time.Sleep(500 * time.Millisecond)
+
+	// 3 条 position 级 patch（更新 unrealisedPnLInPrimaryCurrency）→ 15s 窗口内合并为 1 次 flush
 	for i := 0; i < 3; i++ {
-		ts.sendEvent(0, wsType7Event)
-		time.Sleep(50 * time.Millisecond) // < wsPatchBurstWindow(2s) → 合并
+		ts.sendEvent(0, `{"msg":{"type":7,"subscriptionId":"38941616","data":null,"partial":[{"t":"m","p":"/positions/0","d":{"unrealisedPnLInPrimaryCurrency":"156.93"}}]}}`)
+		time.Sleep(50 * time.Millisecond) // < 15s → 合并到同一次 flush
 	}
-	time.Sleep(3 * time.Second) // 等 flush 窗口（2s）+ DB 写入
+	time.Sleep(16 * time.Second) // 等 flush 窗口（15s）+ DB 写入
 
 	var posCount int
 	_ = st.Pool().QueryRow(context.Background(),
 		"SELECT count(*) FROM fin_cmc_positions WHERE account_id = 38941616").Scan(&posCount)
 	if posCount != 1 {
-		t.Errorf("type=7 burst: positions rows = %d, want 1 (3 patches merged in 2s window)", posCount)
+		t.Errorf("type=7 burst: positions rows = %d, want 1 (3 patches merged in 15s window)", posCount)
 	}
 
 	// 断言 patch 字段已合并：unrealisedPnLInPrimaryCurrency 应为最后一条 patch 的值

@@ -1,5 +1,7 @@
 package cmc
 
+import "encoding/json"
+
 // JSON 解码结构体（数值字段全为字符串编码，照抄 API端点清单.md 原文）。
 // ⚠️ 数值字段声明为 string 再 strconv.ParseFloat——直接 unmarshal 进 float64 会报错（v7）。
 
@@ -21,6 +23,25 @@ type accountSummaryJSON struct {
 	TotalCashBalance         string `json:"totalCashBalance"`
 	TotalUnrealisedPnL       string `json:"totalUnrealisedPnL"`
 	TotalCFDUnrealisedPnL    string `json:"totalCFDUnrealisedPnL"`
+}
+
+// type6JSON D-225 v2.1：type-6 账户价值全量（F2：70+ 字段 ⊃ REST /v2/accounts/value）。
+// 落库行一律从 type6 取（used_margin←totalMarginAmount F12；quote 时间←timestamp）。
+type type6JSON struct {
+	Timestamp                string          `json:"timestamp"`
+	PrimaryAccountCurrency   string          `json:"primaryAccountCurrency"`
+	TotalAccountValue        string          `json:"totalAccountValue"`
+	TotalCashBalance         string          `json:"totalCashBalance"`
+	TotalUnrealisedPnL       string          `json:"totalUnrealisedPnL"`
+	TotalEquityFreeForMargin string          `json:"totalEquityFreeForMarginTrading"`
+	TotalMarginAmount        string          `json:"totalMarginAmount"`  // F12: ≡ type5 totalEquityUsedInMarginTrading
+	AccountValueAlerts       json.RawMessage `json:"accountValueAlerts"` // F13: 平台强平预警状态
+}
+
+// accountValueAlertJSON F13：平台强平预警单项 {alertType, value}。
+type accountValueAlertJSON struct {
+	AlertType string `json:"alertType"`
+	Value     string `json:"value"`
 }
 
 type positionsJSON struct {
