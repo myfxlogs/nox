@@ -58,9 +58,9 @@ func (s *Service) subscribeCMCWatchTopic() (<-chan *v1.CMCWatchUpdate, func()) {
 	return s.cmcWatchTopic.Subscribe()
 }
 
-// computeCMCWatchUpdate D-234：后端现算 CMC 看盘载荷（与 GetHedgeStructure 同源公式，只取看盘字段不算 carry）。
+// computeCMCWatchUpdate D-234 R-V：后端现算 CMC 看盘载荷（与 GetHedgeStructure 同源公式，只取看盘字段不算 carry）。
+// R-V S1：ask/双腿 PnL/quote_time 改用内存 evalAsk（cmcAskProvider），新鲜度 >30s 回退 DB（ws 断连不显假值）。
 // mid=LastCMCPriceMidWithTime（REST mid，WS 行 mid=NULL 不污染）；
-// ask=LastCMCPriceForSide(Sell)（WS ask 优先回退 REST ask，与 GetHedgeStructure evalAsk 同源）；
 // bid=LastCMCPositionByInstrument.EvaluationBidPrice（type7 patch 更新，15s 节流落库）；
 // 双腿 PnL=(baseline−pnlPx)×mirrorQty 镜像恒和=0（pnlPx=evalAsk，0 回退 mid）；
 // 强平/预警净值=usedMargin×50%/80%（platform_rule_50，D-225 v2.2 标定）。
@@ -79,9 +79,8 @@ func (s *Service) computeCMCWatchUpdate(ctx context.Context) *v1.CMCWatchUpdate 
 			mid = v
 			quoteFetchedAt = t
 		}
-		if px, _, _, err := s.store.LastCMCPriceForSide(ctx, "X-AFQUL", "Sell"); err == nil {
-			evalAsk = px
-		}
+		// R-V S1：内存 evalAsk 优先（闸 2 修复），新鲜度 >30s 回退 DB。
+		evalAsk = s.freshEvalAsk(ctx)
 	}
 
 	var baseline float64
@@ -122,7 +121,18 @@ func (s *Service) computeCMCWatchUpdate(ctx context.Context) *v1.CMCWatchUpdate 
 		upd.CmcCash = cmcSum.TotalCashBalance
 		upd.CmcEquity = cmcSum.TotalAccountValue
 		upd.UsedMargin = cmcSum.TotalEquityUsedInMargin
+		upd.ShortLiq = cmcSum.CloseoutPrice // R-V S3：强平价（与 HedgeLegShort.liq 同源）
 		upd.PlatformAlertState = cmc.AlertsToState(cmcSum.Alerts)
+	}
+	// R-V S3：净敞口 USD（与 GetHedgeStructure 同源：netExposureTrx × mid）
+	if hasCMCPos {
+		trxAcc, trxErr := s.store.LastTRXAccount(ctx)
+		if trxErr == nil {
+			balance := float64(trxAcc.BalanceSun) / 1e6
+			staked := float64(trxAcc.VotesTotal)
+			netExposureTrx := balance + staked - cmcPos.Quantity
+			upd.NetExposureUsd = netExposureTrx * mid
+		}
 	}
 	if s.cmcWsHealth != nil {
 		upd.WsConnected = s.cmcWsHealth()
@@ -131,4 +141,21 @@ func (s *Service) computeCMCWatchUpdate(ctx context.Context) *v1.CMCWatchUpdate 
 		upd.QuoteTime = timestamppb.New(quoteFetchedAt)
 	}
 	return upd
+}
+
+// freshEvalAsk D-234 R-V S1：内存 evalAsk 优先（cmcAskProvider），新鲜度 >30s 或未接线回退 DB ForSide(Sell)。
+// 闸 2 修复：ws 提取门限 0.1% 锁死 DB 值 → 内存直通绕过落库节流，每跳都新鲜。
+func (s *Service) freshEvalAsk(ctx context.Context) float64 {
+	if s.cmcAskProvider != nil {
+		ask, ts := s.cmcAskProvider()
+		if ask > 0 && !ts.IsZero() && time.Since(ts) <= 30*time.Second {
+			return ask
+		}
+	}
+	// 回退 DB（未接线/新鲜度 >30s/ws 断连）
+	px, _, _, err := s.store.LastCMCPriceForSide(ctx, "X-AFQUL", "Sell")
+	if err != nil {
+		return 0
+	}
+	return px
 }

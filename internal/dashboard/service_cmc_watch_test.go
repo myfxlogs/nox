@@ -194,8 +194,9 @@ func TestComputeCMCWatchUpdate_EmptyTolerant(t *testing.T) {
 	}
 }
 
-// TestCMCWatchPanelSourceAssert D-234 R-U2：R-U 端态防回归断言（面板已删，数据管线保留）。
-// 验证：①CMCWatchPanel.tsx 不存在 ②16-cmc-watch.css 不存在 ③useSnapshot.ts 含 case "cmcUpdate" 合并进 hedgeStructure。
+// TestCMCWatchPanelSourceAssert D-234 R-U2/R-V：R-U 端态防回归断言 + R-V 新字段覆盖。
+// 验证：①CMCWatchPanel.tsx 不存在 ②16-cmc-watch.css 不存在 ③useSnapshot.ts 含 case "cmcUpdate" 合并进 hedgeStructure
+// ④R-V merge 含 shortLiq/netExposureUsd/ask（S3 proto 新字段）。
 func TestCMCWatchPanelSourceAssert(t *testing.T) {
 	_, testFile, _, ok := runtime.Caller(0)
 	if !ok {
@@ -227,5 +228,113 @@ func TestCMCWatchPanelSourceAssert(t *testing.T) {
 	}
 	if !strings.Contains(snapSrc, "hedgeStructure") {
 		t.Fatal("useSnapshot cmcUpdate branch missing hedgeStructure merge (R-U: 字段级合并进对冲卡)")
+	}
+	// ④ R-V S4：merge 含 shortLiq/netExposureUsd/ask
+	if !strings.Contains(snapSrc, "shortLiq") {
+		t.Fatal("useSnapshot cmcUpdate merge missing shortLiq (R-V S4)")
+	}
+	if !strings.Contains(snapSrc, "netExposureUsd") {
+		t.Fatal("useSnapshot cmcUpdate merge missing netExposureUsd (R-V S4)")
+	}
+	if !strings.Contains(snapSrc, "v.ask") {
+		t.Fatal("useSnapshot cmcUpdate merge missing ask (R-V S4)")
+	}
+}
+
+// TestComputeCMCWatchUpdate_MemoryEvalAsk D-234 R-V S1：内存 evalAsk 直通 + 新鲜度 >30s 回退 DB。
+// 注入 cmcAskProvider 返回新鲜值 → upd.Ask=内存值（不读 DB）；
+// 注入 cmcAskProvider 返回陈旧值（>30s）→ upd.Ask=DB ForSide(Sell) 值。
+func TestComputeCMCWatchUpdate_MemoryEvalAsk(t *testing.T) {
+	s := hedgeTestStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// CMC 持仓（空单 18100，entry=0.33171）
+	if err := s.InsertCMCPositions(ctx, 1, []pgstore.CMCPosition{{
+		AccountID: 1, InstrumentID: "X-AFQUL", Direction: "SELL", Quantity: 18100,
+		EntryPrice: 0.33171, UnrealisedPnL: -117.83, MarginPercentage: 0.1,
+		EvaluationBidPrice: 0.32285, EvaluationAskPrice: 0.32335, FetchedAt: now,
+	}}); err != nil {
+		t.Fatalf("InsertCMCPositions: %v", err)
+	}
+	// CMC price（mid=0.3236 REST 行 + DB ask=0.3240）
+	if err := s.InsertCMCPrice(ctx, pgstore.CMCPrice{
+		InstrumentID: "X-AFQUL", MidPrice: 0.3236, AskPrice: 0.3240, FetchedAt: now,
+	}); err != nil {
+		t.Fatalf("InsertCMCPrice: %v", err)
+	}
+
+	// ① 内存新鲜 → upd.Ask=内存值（0.3299），不读 DB ask=0.3240
+	freshAsk := 0.3299
+	freshTs := time.Now()
+	svc1 := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005,
+		cmcAskProvider: func() (float64, time.Time) { return freshAsk, freshTs }}
+	upd1 := svc1.computeCMCWatchUpdate(ctx)
+	if upd1.Ask != freshAsk {
+		t.Errorf("fresh memory ask = %v, want %v (内存直通)", upd1.Ask, freshAsk)
+	}
+
+	// ② 内存陈旧（>30s）→ upd.Ask=DB ForSide(Sell) 值
+	staleTs := time.Now().Add(-31 * time.Second)
+	svc2 := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005,
+		cmcAskProvider: func() (float64, time.Time) { return 0.9999, staleTs }}
+	upd2 := svc2.computeCMCWatchUpdate(ctx)
+	if upd2.Ask != 0.3240 {
+		t.Errorf("stale memory ask = %v, want 0.3240 (DB fallback)", upd2.Ask)
+	}
+
+	// ③ 未接线 cmcAskProvider → upd.Ask=DB ForSide(Sell) 值
+	svc3 := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005}
+	upd3 := svc3.computeCMCWatchUpdate(ctx)
+	if upd3.Ask != 0.3240 {
+		t.Errorf("nil provider ask = %v, want 0.3240 (DB fallback)", upd3.Ask)
+	}
+}
+
+// TestComputeCMCWatchUpdate_ShortLiqNetExposure D-234 R-V S3：short_liq + net_exposure_usd 字段填充。
+func TestComputeCMCWatchUpdate_ShortLiqNetExposure(t *testing.T) {
+	s := hedgeTestStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// CMC 持仓
+	if err := s.InsertCMCPositions(ctx, 1, []pgstore.CMCPosition{{
+		AccountID: 1, InstrumentID: "X-AFQUL", Direction: "SELL", Quantity: 18100,
+		EntryPrice: 0.33171, MarginPercentage: 0.1, FetchedAt: now,
+	}}); err != nil {
+		t.Fatalf("InsertCMCPositions: %v", err)
+	}
+	// CMC price（mid=0.3236）
+	if err := s.InsertCMCPrice(ctx, pgstore.CMCPrice{
+		InstrumentID: "X-AFQUL", MidPrice: 0.3236, FetchedAt: now,
+	}); err != nil {
+		t.Fatalf("InsertCMCPrice: %v", err)
+	}
+	// CMC 账户摘要（closeout_price=0.4226）
+	if err := s.InsertCMCAccountSummary(ctx, pgstore.CMCAccountSummary{
+		AccountID: 1, TotalAccountValue: 2169.02, TotalCashBalance: 2026.76,
+		TotalEquityUsedInMargin: 584.81, CloseoutPrice: 0.4226,
+		DistanceToCloseoutPct: 29.8, FetchedAt: now,
+	}); err != nil {
+		t.Fatalf("InsertCMCAccountSummary: %v", err)
+	}
+	// TRX 账户（balance=100, votes=18070 → netExposureTrx=100+18070-18100=70 → netExposureUsd=70×0.3236=22.652）
+	if err := s.InsertTRXAccount(ctx, pgstore.TRXAccount{
+		BalanceSun: 100_000_000, VotesTotal: 18070, FetchedAt: now,
+	}); err != nil {
+		t.Fatalf("InsertTRXAccount: %v", err)
+	}
+
+	svc := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005}
+	upd := svc.computeCMCWatchUpdate(ctx)
+
+	// short_liq=0.4226（与 cmcSum.CloseoutPrice 同源）
+	if upd.ShortLiq != 0.4226 {
+		t.Errorf("short_liq = %v, want 0.4226", upd.ShortLiq)
+	}
+	// net_exposure_usd=70×0.3236=22.652
+	wantNetUsd := 70.0 * 0.3236
+	if diff := upd.NetExposureUsd - wantNetUsd; diff > 1e-6 || diff < -1e-6 {
+		t.Errorf("net_exposure_usd = %v, want %v", upd.NetExposureUsd, wantNetUsd)
 	}
 }

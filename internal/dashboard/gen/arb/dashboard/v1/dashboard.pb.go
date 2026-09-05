@@ -4990,6 +4990,7 @@ type HedgeStructure struct {
 	PlatformAlerts     string                 `protobuf:"bytes,12,opt,name=platform_alerts,json=platformAlerts,proto3" json:"platform_alerts,omitempty"`               // D-225 v2.1：alerts 原文 JSON 透传（前端只渲染）
 	CloseoutLevelUsd   float64                `protobuf:"fixed64,13,opt,name=closeout_level_usd,json=closeoutLevelUsd,proto3" json:"closeout_level_usd,omitempty"`     // D-225 v2.2：平台强平净值 = totalMarginAmount × 50%
 	WarningLevelUsd    float64                `protobuf:"fixed64,14,opt,name=warning_level_usd,json=warningLevelUsd,proto3" json:"warning_level_usd,omitempty"`        // D-225 v2.2：平台预警净值 = totalMarginAmount × 80%
+	Ask                float64                `protobuf:"fixed64,15,opt,name=ask,proto3" json:"ask,omitempty"`                                                         // D-234 R-V S3：现价=ask（ForSide Sell 口径=强平/PnL 同源，业主批 A）
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -5118,6 +5119,13 @@ func (x *HedgeStructure) GetCloseoutLevelUsd() float64 {
 func (x *HedgeStructure) GetWarningLevelUsd() float64 {
 	if x != nil {
 		return x.WarningLevelUsd
+	}
+	return 0
+}
+
+func (x *HedgeStructure) GetAsk() float64 {
+	if x != nil {
+		return x.Ask
 	}
 	return 0
 }
@@ -6624,6 +6632,8 @@ type CMCWatchUpdate struct {
 	WsConnected        bool                   `protobuf:"varint,16,opt,name=ws_connected,json=wsConnected,proto3" json:"ws_connected,omitempty"`                       // CMC ws 事件驱动健康（true=绿/false=黄 REST 兜底）
 	CloseoutSource     string                 `protobuf:"bytes,17,opt,name=closeout_source,json=closeoutSource,proto3" json:"closeout_source,omitempty"`               // "platform_rule_50"（D-225 v2.2 标定）
 	QuoteTime          *timestamppb.Timestamp `protobuf:"bytes,18,opt,name=quote_time,json=quoteTime,proto3" json:"quote_time,omitempty"`                              // mid 行 fetched_at（无 mid=零值）
+	ShortLiq           float64                `protobuf:"fixed64,19,opt,name=short_liq,json=shortLiq,proto3" json:"short_liq,omitempty"`                               // D-234 R-V S3：强平价（fin_cmc_account_summary.closeout_price，与 HedgeLegShort.liq 同源）
+	NetExposureUsd     float64                `protobuf:"fixed64,20,opt,name=net_exposure_usd,json=netExposureUsd,proto3" json:"net_exposure_usd,omitempty"`           // D-234 R-V S3：净敞口 USD（netExposureTrx × mid，与 GetHedgeStructure 同源）
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -6782,6 +6792,20 @@ func (x *CMCWatchUpdate) GetQuoteTime() *timestamppb.Timestamp {
 		return x.QuoteTime
 	}
 	return nil
+}
+
+func (x *CMCWatchUpdate) GetShortLiq() float64 {
+	if x != nil {
+		return x.ShortLiq
+	}
+	return 0
+}
+
+func (x *CMCWatchUpdate) GetNetExposureUsd() float64 {
+	if x != nil {
+		return x.NetExposureUsd
+	}
+	return 0
 }
 
 // 持仓变更通知（D-107 P3）：OnOrderUpdate 事件经 orderTopic → StreamUpdates case 11 推送。
@@ -12513,7 +12537,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\n" +
 	"cmc_equity\x18\x06 \x01(\x01R\tcmcEquity\x129\n" +
 	"\n" +
-	"updated_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x82\x05\n" +
+	"updated_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x94\x05\n" +
 	"\x0eHedgeStructure\x12%\n" +
 	"\x0ebaseline_price\x18\x01 \x01(\x01R\rbaselinePrice\x12\x10\n" +
 	"\x03mid\x18\x02 \x01(\x01R\x03mid\x129\n" +
@@ -12529,7 +12553,8 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x14platform_alert_state\x18\v \x01(\tR\x12platformAlertState\x12'\n" +
 	"\x0fplatform_alerts\x18\f \x01(\tR\x0eplatformAlerts\x12,\n" +
 	"\x12closeout_level_usd\x18\r \x01(\x01R\x10closeoutLevelUsd\x12*\n" +
-	"\x11warning_level_usd\x18\x0e \x01(\x01R\x0fwarningLevelUsd\"\x1a\n" +
+	"\x11warning_level_usd\x18\x0e \x01(\x01R\x0fwarningLevelUsd\x12\x10\n" +
+	"\x03ask\x18\x0f \x01(\x01R\x03ask\"\x1a\n" +
 	"\x18GetHedgeStructureRequest\"[\n" +
 	"\x19GetHedgeStructureResponse\x12>\n" +
 	"\tstructure\x18\x01 \x01(\v2 .arb.dashboard.v1.HedgeStructureR\tstructure\"\xe4\x01\n" +
@@ -12629,7 +12654,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\n" +
 	"cmc_update\x18\r \x01(\v2 .arb.dashboard.v1.CMCWatchUpdateH\x00R\tcmcUpdateB\b\n" +
 	"\x06update\"\x14\n" +
-	"\x12HedgeRefreshNotice\"\x8c\x05\n" +
+	"\x12HedgeRefreshNotice\"\xd3\x05\n" +
 	"\x0eCMCWatchUpdate\x12\x10\n" +
 	"\x03mid\x18\x01 \x01(\x01R\x03mid\x12\x10\n" +
 	"\x03bid\x18\x02 \x01(\x01R\x03bid\x12\x10\n" +
@@ -12653,7 +12678,9 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\fws_connected\x18\x10 \x01(\bR\vwsConnected\x12'\n" +
 	"\x0fcloseout_source\x18\x11 \x01(\tR\x0ecloseoutSource\x129\n" +
 	"\n" +
-	"quote_time\x18\x12 \x01(\v2\x1a.google.protobuf.TimestampR\tquoteTime\"D\n" +
+	"quote_time\x18\x12 \x01(\v2\x1a.google.protobuf.TimestampR\tquoteTime\x12\x1b\n" +
+	"\tshort_liq\x18\x13 \x01(\x01R\bshortLiq\x12(\n" +
+	"\x10net_exposure_usd\x18\x14 \x01(\x01R\x0enetExposureUsd\"D\n" +
 	"\x14PositionChangeNotice\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x16\n" +
 	"\x06ticket\x18\x02 \x01(\x03R\x06ticket\"\x90\x02\n" +

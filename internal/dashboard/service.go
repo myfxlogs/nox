@@ -137,6 +137,8 @@ type Service struct {
 
 	// D-193-A/R9：CMC ws 事件驱动健康检查（nil=未接线→wsConnected=false）。main 装配 ws.IsHealthy 注入。
 	cmcWsHealth func() bool
+	// D-234 R-V S1：CMC ws 内存 evalAsk provider（nil=未接线→回退 DB）。main 装配 ws.EvalAsk 注入。
+	cmcAskProvider func() (float64, time.Time)
 	// D-234：CMC 看盘帧 1s 蓄压状态（NotifyCMCFrame→AfterFunc→flushCMCWatch 现算+Publish）。
 	cmcFrameMu            sync.Mutex
 	cmcFrameTimer         *time.Timer
@@ -282,6 +284,10 @@ func (s *Service) SetAliasMap(m map[string]string) {
 // SetCmcWsHealth D-193-A/R9：注入 CMC ws 事件驱动健康检查（main 装配 ws.IsHealthy）。
 // nil = 未接线→GetHedgeStructure 返回 wsConnected=false（前端显示黄点 REST 兜底）。
 func (s *Service) SetCmcWsHealth(fn func() bool) { s.cmcWsHealth = fn }
+
+// SetCmcAskProvider D-234 R-V S1：注入 CMC ws 内存 evalAsk provider（main 装配 ws.EvalAsk）。
+// nil=未接线→computeCMCWatchUpdate 回退 DB 读 ForSide(Sell)。
+func (s *Service) SetCmcAskProvider(fn func() (float64, time.Time)) { s.cmcAskProvider = fn }
 
 // aliasForVenueKey D-175：从 venueKey="{venue}:{src}" 提取 venue 查 alias 缓存。
 // venueKey 无冒号 → 整串当 venue 查；alias 空/未接线 → 返回空（前端回退 venueKey）。
