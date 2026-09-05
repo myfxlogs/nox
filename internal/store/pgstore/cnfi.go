@@ -81,3 +81,44 @@ func (s *Store) CNFICalendarHasDate(ctx context.Context, day time.Time) (bool, e
 		`SELECT EXISTS (SELECT 1 FROM cnfi_calendar WHERE cal_date = $1)`, day.Format("2006-01-02")).Scan(&ok)
 	return ok, err
 }
+
+// CNFIDerivedSpread returns per-day spread series (leg1−leg2) for days where both
+// legs share the same as_of, newest first, capped at limitDays distinct days (pct-v1 window source).
+func (s *Store) CNFIDerivedSpread(ctx context.Context, s1, t1, s2, t2 string, limitDays int) ([]CNFIPoint, error) {
+	rs, err := s.pool.Query(ctx, `
+		SELECT a.as_of::text, (a.value_bp - b.value_bp)::float8
+		FROM cnfi_series a
+		JOIN cnfi_series b ON b.as_of = a.as_of AND b.series = $3 AND b.tenor = $4
+		WHERE a.series = $1 AND a.tenor = $2
+		ORDER BY a.as_of DESC LIMIT $5`, s1, t1, s2, t2, limitDays)
+	if err != nil {
+		return nil, err
+	}
+	defer rs.Close()
+	var out []CNFIPoint
+	for rs.Next() {
+		var day string
+		var v float64
+		if err := rs.Scan(&day, &v); err != nil {
+			return nil, err
+		}
+		out = append(out, CNFIPoint{AsOf: day, ValueBP: v})
+	}
+	return out, rs.Err()
+}
+
+// UpsertCNFISignalState persists signal evaluation output (observe-only 期 observed_state 恒 observe，C11).
+func (s *Store) UpsertCNFISignalState(ctx context.Context, key, observedState string, lastValue float64, sampleN int, observedAsOf, evidenceRef string) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO cnfi_signal_state (key, observed_state, last_value, sample_n, observed_as_of, updated_at, evidence_ref)
+		VALUES ($1, $2, $3, $4, $5, now(), $6)
+		ON CONFLICT (key) DO UPDATE
+		   SET observed_state = EXCLUDED.observed_state,
+		       last_value = EXCLUDED.last_value,
+		       sample_n = EXCLUDED.sample_n,
+		       observed_as_of = EXCLUDED.observed_as_of,
+		       updated_at = now(),
+		       evidence_ref = EXCLUDED.evidence_ref`,
+		key, observedState, lastValue, sampleN, observedAsOf, evidenceRef)
+	return err
+}

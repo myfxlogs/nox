@@ -71,6 +71,10 @@ func (c *MarketCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 		return nil, err
 	}
 	log.Printf("cnfi: daily collect written=%d changed=%d", written, changed)
+	// P2：采集成功即评估信号（observe-only，C11）——同作业内评估（C3 生命周期）
+	if err := EvaluateSignals(ctx, c.store, true); err != nil {
+		log.Printf("cnfi: signal evaluate: %v（不阻断采集成功）", err)
+	}
 	return nil, nil
 }
 
