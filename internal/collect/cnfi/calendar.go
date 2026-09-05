@@ -71,6 +71,15 @@ func SeedLayerTargets(ctx context.Context, st *pgstore.Store) error {
 	v, _ := json.Marshal(map[string]float64{
 		"liquidity": 20, "coupon": 50, "locked": 15, "opportunity": 15,
 	})
-	return st.UpsertCNFISignalConfigRaw(ctx, "layer_targets", v,
-		"ZCode(D-226/D-241)", "docs/cnfi/研究/cnfi-市场快照-2026-09-05-ZCode.md")
+	if err := st.UpsertCNFISignalConfigRaw(ctx, "layer_targets", v,
+		"ZCode(D-226/D-242)", "docs/cnfi/研究/cnfi-市场快照-2026-09-05-ZCode.md"); err != nil {
+		return err
+	}
+	// 预期年化%（公开市场参数 [媒体·研究纪要]，月度复盘校准）：流动=存单指数 1.4 /
+	// 票息=中短债 2.0 / 锁定=储蓄国债 1.63 [披露·票面] / 机会=二永债基 2.2 [推断]。
+	e, _ := json.Marshal(map[string]float64{
+		"liquidity": 1.4, "coupon": 2.0, "locked": 1.63, "opportunity": 2.2,
+	})
+	return st.UpsertCNFISignalConfigRaw(ctx, "layer_expected_annual", e,
+		"ZCode(D-242)", "docs/cnfi/研究/cnfi-市场快照-2026-09-05-ZCode.md")
 }
