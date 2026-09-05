@@ -1,0 +1,110 @@
+// Service setter 注入面（从 service.go 拆出控行数 <300）。
+// 全部为依赖注入 seam（main 装配 / 测试覆写），无业务逻辑。
+package dashboard
+
+import (
+	"strings"
+	"time"
+
+	"arb/internal/exec"
+	"arb/internal/position"
+)
+
+// SetSettler 注入结算器（D-087 §3.2，手动平仓后调）。nil = 未接线（RPC 仍可用，仅不结算）。
+func (s *Service) SetSettler(st Settler) { s.settler = st }
+
+// SetCMCSource 注入 CMC 数据源（D-208 v2：nil 安全=走老路径）。
+func (s *Service) SetCMCSource(src position.CMCSource) { s.cmcSource = src }
+
+// SetTradeModes 注入单腿 trade_mode 查询（D-060 F5）。main 在 factCache 处装配；nil = 预检放行。
+func (s *Service) SetTradeModes(f func(canonical, venueKey string) (int64, bool)) {
+	s.tradeModes = f
+}
+
+// SetLegContractSize 注入 MT 腿合约规格查询（D-060 实施修正②）。nil = 未接线（resolveLegs 报错）。
+func (s *Service) SetLegContractSize(f func(venueKey, venueSymbol string) (float64, bool)) {
+	s.legContractSize = f
+}
+
+// LegContractSize D-165 S2：返回 legContractSize resolver（autotrade engine S2 notional 换算用）。
+func (s *Service) LegContractSize() func(venueKey, venueSymbol string) (float64, bool) {
+	return s.legContractSize
+}
+
+// SetMaxLegImbalancePct 注入卖腿名义不平衡上限（百分比；≤0 回退默认 2）。
+func (s *Service) SetMaxLegImbalancePct(p float64) { s.maxLegImbalance = p }
+
+// SetLegMinLots 注入 MT 腿最小手数查询（D-061）。nil/未知 = 放行。
+func (s *Service) SetLegMinLots(f func(venueKey, venueSymbol string) (float64, bool)) {
+	s.legMinLots = f
+}
+
+// SetLegVolumeStep 注入 MT 腿 volume step 查询（D-070 qty 精度取整）。nil/未知 = 用默认 0.01。
+func (s *Service) SetLegVolumeStep(f func(venueKey, venueSymbol string) (float64, bool)) {
+	s.legVolumeStep = f
+}
+
+// SetOppContractSize 注入机会卡 USD 派生用合约规格查询（D-062）。nil = 未接线 → USD 字段全 0（前端回退 bps）。
+func (s *Service) SetOppContractSize(f func(canonical, venueKey string) (float64, bool)) {
+	s.oppContractSize = f
+}
+
+// OppContractSize 透传机会卡 CS 查询（D-135 autotrade engine sizing 用）。
+// nil 接线 → (0,false)；CEX 腿 CS=1 由 resolver 内部处理（与 D-062 同语义）。
+// D-190：勿用于 sizing——notional 链 CS 单一来源=legContractSizeOf（USDPerLotForLeg 内部）。
+// 本函数仅保留机会卡展示用途。
+func (s *Service) OppContractSize(canonical, venueKey string) (float64, bool) {
+	if s.oppContractSize == nil {
+		return 0, false
+	}
+	return s.oppContractSize(canonical, venueKey)
+}
+
+// SetFreezeGuard 注入冻结腿预检窗口（D-155）。≤0 = 禁用（全放行）。
+func (s *Service) SetFreezeGuard(d time.Duration) { s.freezeGuard = d }
+
+// SetStepMeta 注入 binance:perp stepSize 权威元数据（D-127 P2）。nil = 仅用硬编码 fallback。
+func (s *Service) SetStepMeta(m *cexStepMeta) { s.stepMeta = m }
+
+// SetSwapArbComboAllow 注入 SWAPARB 精确组合门禁 allowlist（D-159 W1a R1，手动入口同源）。
+// nil/空 = 未接线（gate 层 fail-closed 兜底，手动入口不重复检查）。
+func (s *Service) SetSwapArbComboAllow(allow []exec.ComboAllowSpec) { s.swapArbComboAllow = allow }
+
+// SetEnvironment 注入执行环境固定值（D-159 W1a I6，手动入口同源）。
+// 空 = 未配置（不检查，回退旧行为）。
+func (s *Service) SetEnvironment(env string) { s.environment = env }
+
+// SetLiveTrade 注入 LIVE 人工开关（D-159 W6a S2，手动入口同源）。
+func (s *Service) SetLiveTrade(live bool) { s.liveTrade = live }
+
+// SetAliasMap D-175：注入 venue→alias 缓存（main 启动时加载 ListAccountAliases）。
+// nil/空 = 未接线（oppToProto alias 留空，前端回退 venueKey）。线程安全（RWMutex）。
+func (s *Service) SetAliasMap(m map[string]string) {
+	s.aliasMu.Lock()
+	defer s.aliasMu.Unlock()
+	s.aliasMap = m
+}
+
+// SetCmcWsHealth D-193-A/R9：注入 CMC ws 事件驱动健康检查（main 装配 ws.IsHealthy）。
+// nil = 未接线→GetHedgeStructure 返回 wsConnected=false（前端显示黄点 REST 兜底）。
+func (s *Service) SetCmcWsHealth(fn func() bool) { s.cmcWsHealth = fn }
+
+// SetCmcAskProvider D-234 R-V S1：注入 CMC ws 内存 evalAsk provider（main 装配 ws.EvalAsk）。
+// nil=未接线→computeCMCWatchUpdate 回退 DB 读 ForSide(Sell)。
+func (s *Service) SetCmcAskProvider(fn func() (float64, time.Time)) { s.cmcAskProvider = fn }
+
+// aliasForVenueKey D-175：从 venueKey="{venue}:{src}" 提取 venue 查 alias 缓存。
+// venueKey 无冒号 → 整串当 venue 查；alias 空/未接线 → 返回空（前端回退 venueKey）。
+func (s *Service) aliasForVenueKey(venueKey string) string {
+	s.aliasMu.RLock()
+	m := s.aliasMap
+	s.aliasMu.RUnlock()
+	if m == nil {
+		return ""
+	}
+	venue := venueKey
+	if idx := strings.Index(venueKey, ":"); idx > 0 {
+		venue = venueKey[:idx]
+	}
+	return m[venue]
+}

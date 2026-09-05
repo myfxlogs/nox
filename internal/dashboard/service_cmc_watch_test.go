@@ -229,15 +229,25 @@ func TestCMCWatchPanelSourceAssert(t *testing.T) {
 	if !strings.Contains(snapSrc, "hedgeStructure") {
 		t.Fatal("useSnapshot cmcUpdate branch missing hedgeStructure merge (R-U: 字段级合并进对冲卡)")
 	}
-	// ④ R-V S4：merge 含 shortLiq/netExposureUsd/ask
-	if !strings.Contains(snapSrc, "shortLiq") {
-		t.Fatal("useSnapshot cmcUpdate merge missing shortLiq (R-V S4)")
+	// ④ R-V S4：merge 含 shortLiq/netExposureUsd/ask（在 cmcWatchMerge.ts，从 useSnapshot 拆出）
+	mergePath := filepath.Join(webSrc, "hooks", "cmcWatchMerge.ts")
+	mergeData, err := os.ReadFile(mergePath)
+	if err != nil {
+		t.Fatalf("read cmcWatchMerge: %v", err)
 	}
-	if !strings.Contains(snapSrc, "netExposureUsd") {
-		t.Fatal("useSnapshot cmcUpdate merge missing netExposureUsd (R-V S4)")
+	mergeSrc := string(mergeData)
+	if !strings.Contains(mergeSrc, "shortLiq") {
+		t.Fatal("cmcWatchMerge missing shortLiq (R-V S4)")
 	}
-	if !strings.Contains(snapSrc, "v.ask") {
-		t.Fatal("useSnapshot cmcUpdate merge missing ask (R-V S4)")
+	if !strings.Contains(mergeSrc, "netExposureUsd") {
+		t.Fatal("cmcWatchMerge missing netExposureUsd (R-V S4)")
+	}
+	if !strings.Contains(mergeSrc, "v.ask") {
+		t.Fatal("cmcWatchMerge missing v.ask (R-V S4)")
+	}
+	// useSnapshot.ts 调 mergeCMCWatchUpdate（拆出后入口）
+	if !strings.Contains(snapSrc, "mergeCMCWatchUpdate") {
+		t.Fatal("useSnapshot missing mergeCMCWatchUpdate call (R-V S4 拆分后入口)")
 	}
 }
 
