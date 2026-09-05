@@ -68,13 +68,19 @@ func (c *AccountCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	}
 	energyDelegated := acc.AccountResource.DelegatedFrozenV2BalanceForEnergy
 
+	// R3 修复：votes[] 为逐 SR 票数（业主现投 3 SR 实测 6024/6023/6023≠总 18070）。
+	// votesTotal=Σvotes[i].VoteCount；srAddr=票数最多者（非 votes[0]）。Σ=0 回退 tronPowerLimit。
 	var srAddr *string
 	var votesTotal int64
-	if len(acc.Votes) > 0 {
-		srAddr = &acc.Votes[0].VoteAddress
-		votesTotal = int64(acc.Votes[0].VoteCount)
+	var topVoteCount int64
+	for _, v := range acc.Votes {
+		vc := int64(v.VoteCount)
+		votesTotal += vc
+		if vc > topVoteCount {
+			topVoteCount = vc
+			srAddr = &v.VoteAddress
+		}
 	}
-	// tronPowerLimit 交叉校验（D-210 §2 实证 votes=tronPowerLimit）
 	if res.TronPowerLimit > 0 && votesTotal == 0 {
 		votesTotal = res.TronPowerLimit
 	}

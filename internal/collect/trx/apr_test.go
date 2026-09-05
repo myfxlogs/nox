@@ -9,6 +9,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -346,4 +348,50 @@ func TestAprCollector_HedgeHookOnChangeOnly(t *testing.T) {
 	if publishCount != 2 {
 		t.Errorf("改值第三次 Poll 后 publishCount = %d, want 2（有变化→发布）", publishCount)
 	}
+}
+
+// TestAprCollector_ConcurrentTriggerNowPollRace R2 并发回归门：
+// 调度器每源一 goroutine——trx_apr goroutine 调 Poll + trx_account goroutine 经 TriggerNow 亦调 Poll，
+// 共享状态（lastTrigger/lastCurrentRate/lastMaxRate/lastSpread/hasLastValues）裸读写=构造性数据竞争。
+// 本测试两 goroutine 同时 TriggerNow+Poll 若干轮，-race 下绿=mutex 互斥生效。
+// DSN-gated：Poll 写 fin_trx_vote_apr 表。
+func TestAprCollector_ConcurrentTriggerNowPollRace(t *testing.T) {
+	st := newTestStore(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		switch r.URL.Path {
+		case "/api/witness":
+			_, _ = w.Write([]byte(mockWitnessJSON))
+		case "/api/vote":
+			_, _ = w.Write([]byte(mockVoteJSON))
+		}
+	}))
+	defer srv.Close()
+
+	c := NewAprCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL)
+	c.SetDebounce(1 * time.Millisecond) // 短去抖窗让 TriggerNow 高频触发
+	var hookCalls int64
+	c.SetHedgeHook(func() { atomic.AddInt64(&hookCalls, 1) })
+
+	// 两 goroutine 并发跑：goroutine A 调 Poll（模拟 trx_apr 5min 调度），
+	// goroutine B 调 TriggerNow（模拟 trx_account on-change 触发）。
+	const rounds = 30
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < rounds; i++ {
+			_, _ = c.Poll(context.Background())
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < rounds; i++ {
+			c.TriggerNow(context.Background())
+		}
+	}()
+	wg.Wait()
+
+	// 无 panic/无 race 即通过（行数与 hookCalls 不做精确断言——并发下非确定）。
+	t.Logf("concurrent test done: hookCalls=%d", atomic.LoadInt64(&hookCalls))
 }

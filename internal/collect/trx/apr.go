@@ -15,6 +15,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"arb/internal/fact"
@@ -32,8 +33,11 @@ type AprCollector struct {
 	// D-231 S5：on-change 触发去抖 + 聚合值变化发布。
 	// hedgeHook nil=未接线（测试场景）；debounce 默认 60s（on-change 触发去抖，witness 204KB on-change 才拉）。
 	// lastCurrentRate/lastMaxRate/lastSpread=上轮聚合值，变化才发布 hedgeHook（常规无变化轮不推）。
-	hedgeHook       func()
-	debounce        time.Duration
+	hedgeHook func()
+	debounce  time.Duration
+	// R2 修复：调度器每源一 goroutine（sched.go:22）——trx_apr goroutine 调 Poll + trx_account goroutine
+	// 经 TriggerNow 亦调 Poll，共享状态裸读写=构造性数据竞争。mu 保护 check-and-set 与状态读改段互斥。
+	mu              sync.Mutex
 	lastTrigger     time.Time
 	lastCurrentRate float64
 	lastMaxRate     float64
@@ -53,18 +57,26 @@ func NewAprCollector(address string, store *pgstore.Store, base string) *AprColl
 func (c *AprCollector) SetHedgeHook(fn func()) { c.hedgeHook = fn }
 
 // SetDebounce D-231 S5：设置 on-change 触发去抖间隔（测试可注小值，默认 60s）。
-func (c *AprCollector) SetDebounce(d time.Duration) { c.debounce = d }
+func (c *AprCollector) SetDebounce(d time.Duration) {
+	c.mu.Lock()
+	c.debounce = d
+	c.mu.Unlock()
+}
 
 // TriggerNow D-231 S5：on-change 立即触发 Poll（去抖 ≥debounce）。
 // 用于 AccountCollector 指纹变化时搭车触发——witness 常规 5min 节奏不变，on-change 才即时拉。
+// R2 修复：check-and-set 持锁，与 Poll 状态读改段互斥（防双 goroutine 数据竞争）。
 func (c *AprCollector) TriggerNow(ctx context.Context) {
+	c.mu.Lock()
 	if c.debounce <= 0 {
 		c.debounce = 60 * time.Second
 	}
 	if time.Since(c.lastTrigger) < c.debounce {
+		c.mu.Unlock()
 		return // 去抖：两次触发间隔 ≥debounce
 	}
 	c.lastTrigger = time.Now()
+	c.mu.Unlock()
 	_, _ = c.Poll(ctx)
 }
 
@@ -156,19 +168,22 @@ func (c *AprCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 		return nil, fmt.Errorf("trx apr insert: %w", err)
 	}
 	// D-231 S5：聚合值变化才发布 hedgeHook（常规无变化轮不推，客户端不做无谓全量重取）。
+	// R2 修复：状态读改段持锁，与 TriggerNow check-and-set 互斥（防双 goroutine 数据竞争）。
 	if c.hedgeHook != nil {
 		spread := maxRate - currentRate
+		c.mu.Lock()
 		changed := !c.hasLastValues ||
 			c.lastCurrentRate != currentRate ||
 			c.lastMaxRate != maxRate ||
 			c.lastSpread != spread
-		if changed {
-			c.hedgeHook()
-		}
 		c.lastCurrentRate = currentRate
 		c.lastMaxRate = maxRate
 		c.lastSpread = spread
 		c.hasLastValues = true
+		c.mu.Unlock()
+		if changed {
+			c.hedgeHook()
+		}
 	}
 	if skippedCandidates > 0 {
 		log.Printf("[trx_apr] %d vote candidates not in witness list (skipped for weighted avg)", skippedCandidates)

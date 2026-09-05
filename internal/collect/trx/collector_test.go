@@ -573,3 +573,58 @@ func TestR3_UpsertTRXTxEmptyTxIDLoudFail(t *testing.T) {
 		t.Fatalf("UpsertTRXTx(valid): %v", err)
 	}
 }
+
+// mockGetAccountMultiSRJSON 模拟多 SR 投票分布（R3 fixture，业主现投 3 SR 实测值）：
+// Nansen_ai 6024 + TronSpark 6023 + CryptoGuyInZA 6023 = Σ 18070。
+// srAddr 应取票数最多者（Nansen_ai 6024），votesTotal=Σ=18070（非 votes[0]=6024）。
+const mockGetAccountMultiSRJSON = `{
+	"address":"TWsbXR6SPvvXPxUtPMQvEj7AMH55555555",
+	"balance":97863827,
+	"allowance":7717994,
+	"votes":[
+		{"vote_address":"TNeEwWHXLLUgEtfzTnYN8wtVenGxuMzZCE","vote_count":6024},
+		{"vote_address":"TSecondSrAddr0000000000000000000","vote_count":6023},
+		{"vote_address":"TThirdSrAddr000000000000000000000","vote_count":6023}
+	],
+	"frozenV2":[{"amount":800000000},{"type":"ENERGY"},{"type":"TRON_POWER"}],
+	"account_resource":{"delegated_frozenV2_balance_for_energy":17270000000}
+}`
+
+// TestAccountCollector_Poll_MultiSR_VotesTotalSum R3 多 SR 语义回归门：
+// votes[] 为逐 SR 票数——votesTotal=Σvotes[i].VoteCount（18070），srAddr=票数最多者。
+// 旧代码取 votes[0].VoteCount=6024≠18070，污染卡片质押数量/净敞口/carry 年化分母 ~3× 虚高。
+func TestAccountCollector_Poll_MultiSR_VotesTotalSum(t *testing.T) {
+	st := newTestStore(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		switch r.URL.Path {
+		case "/wallet/getaccount":
+			_, _ = w.Write([]byte(mockGetAccountMultiSRJSON))
+		case "/wallet/getaccountresource":
+			_, _ = w.Write([]byte(mockGetResourceJSON))
+		default:
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer srv.Close()
+
+	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, "")
+	if _, err := c.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	acc, err := st.LastTRXAccount(context.Background())
+	if err != nil {
+		t.Fatalf("LastTRXAccount: %v", err)
+	}
+	// R3：votesTotal=Σ=18070（非 votes[0]=6024）
+	if acc.VotesTotal != 18070 {
+		t.Errorf("VotesTotal = %d, want 18070 (Σvotes: 6024+6023+6023)", acc.VotesTotal)
+	}
+	// R3：srAddr=票数最多者（Nansen_ai 6024，vote_address=TNeEwWHXLLUgEtfzTnYN8wtVenGxuMzZCE）
+	if acc.SRAddress == nil {
+		t.Fatal("SRAddress = nil, want 票数最多者地址")
+	}
+	if *acc.SRAddress != "TNeEwWHXLLUgEtfzTnYN8wtVenGxuMzZCE" {
+		t.Errorf("SRAddress = %s, want TNeEwWHXLLUgEtfzTnYN8wtVenGxuMzZCE (票数最多者 6024)", *acc.SRAddress)
+	}
+}
