@@ -106,20 +106,45 @@ func (s *Service) GetCNFIRadarSnapshot(ctx context.Context, req *connect.Request
 
 	// 信号状态（P1 只读透传；P2 评估器写入）。message 列不在 state 表（规格 C3：
 	// message 归 alerts）；observe-only 期统一模板文案。
+	// pct-v1 分位值同步透出为派生指标（observe-only 值仅供参考，quality 随 sample_n 三档）。
 	sigRs, err := s.store.Pool().Query(ctx,
-		`SELECT key, observed_state, COALESCE(observed_as_of::text,''), COALESCE(evidence_ref,'') FROM cnfi_signal_state ORDER BY key`)
+		`SELECT key, observed_state, last_value::float8, sample_n, COALESCE(observed_as_of::text,''), COALESCE(evidence_ref,'')
+		 FROM cnfi_signal_state ORDER BY key`)
 	if err != nil {
 		return nil, err
 	}
 	defer sigRs.Close()
 	for sigRs.Next() {
-		sig := &v1.CnfiSignalState{Message: "观察条件监控中（observe-only，未启用告警）"}
-		if err := sigRs.Scan(&sig.Key, &sig.ObservedState, &sig.AsOf, &sig.EvidenceRef); err != nil {
+		var key, state, asOf, evidence string
+		var lastValue float64
+		var sampleN int32
+		if err := sigRs.Scan(&key, &state, &lastValue, &sampleN, &asOf, &evidence); err != nil {
 			return nil, err
 		}
-		resp.Signals = append(resp.Signals, sig)
+		resp.Signals = append(resp.Signals, &v1.CnfiSignalState{
+			Key: key, ObservedState: state, AsOf: asOf, EvidenceRef: evidence,
+			Message: "观察条件监控中（observe-only，未启用告警）",
+		})
+		if key == "credit_spread_3y_pctile_pctv1" {
+			resp.Metrics = append(resp.Metrics, &v1.CnfiDerivedMetric{
+				Key: "credit_spread_3y_pctile_pctv1", Value: lastValue, Unit: "pctile",
+				SampleN: sampleN, AsOf: asOf, Quality: cnfiTier(sampleN),
+			})
+		}
 	}
 	return connect.NewResponse(resp), nil
+}
+
+// cnfiTier mirrors collect/cnfi.QualityTier three-tier table (F5 唯一行为表).
+func cnfiTier(sampleN int32) string {
+	switch {
+	case sampleN >= 250:
+		return "ok"
+	case sampleN >= 120:
+		return "reduced"
+	default:
+		return "N"
+	}
 }
 
 // cnfiDerivedSampleN counts days in the trailing window where both legs exist
