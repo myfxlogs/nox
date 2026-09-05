@@ -12,17 +12,21 @@ import (
 	"testing"
 )
 
-// mockWitnessJSON 模拟 TRONSCAN /api/witness 响应（3 个 SR，2 producer）。
+// mockWitnessJSON 模拟 TRONSCAN /api/witness 响应：顶层裸数组，不是 {"data": [...]} 信封。
+// 首行是 2026-09-05 实抓响应的裁剪样本（证据：docs/经验库/证据/tronscan-witness-toplevel-array-2026-09-05.log）：
+// address/name/url/url_level/producer/latestBlockNumber/latestSlotNumber/missedTotal 字段名逐字保留。
+// 其余 SR 行是本测试的最小聚合样本：
 // SR-A: annualizedRate=3.10, producer=true → max 候选
 // SR-B: annualizedRate=2.50, producer=true
 // SR-C: annualizedRate=1.00, producer=false → max 不取（非 producer）
 // SR-D: annualizedRate="" → 畸形行跳过
-const mockWitnessJSON = `{"data":[
+const mockWitnessJSON = `[
+	{"address":"TJvaAeFb8Lykt9RQcVyyTFN2iDvGMuyD4M","name":"Poloniex","url":"https://poloniex.com/","url_level":1,"producer":true,"latestBlockNumber":85976160,"latestSlotNumber":596200068,"missedTotal":369},
 	{"address":"SR_A_ADDR","name":"SR-A","annualizedRate":"3.10","producer":true,"votes":100000},
 	{"address":"SR_B_ADDR","name":"SR-B","annualizedRate":"2.50","producer":true,"votes":50000},
 	{"address":"SR_C_ADDR","name":"SR-C","annualizedRate":"1.00","producer":false,"votes":1000},
 	{"address":"SR_D_ADDR","name":"SR-D","annualizedRate":"","producer":true,"votes":100}
-]}`
+]`
 
 // mockVoteJSON 模拟 TRONSCAN /api/vote?voter={addr} 响应（3 个候选分布）。
 // SR-A: 10000 票 × 3.10% = 31000
@@ -34,6 +38,36 @@ const mockVoteJSON = `{"totalVotes":17000,"data":[
 	{"candidateAddress":"SR_B_ADDR","candidateName":"SR-B","votes":5000,"timestamp":1700000000000},
 	{"candidateAddress":"SR_UNKNOWN_ADDR","candidateName":"SR-UNKNOWN","votes":2000,"timestamp":1700000000000}
 ]}`
+
+// TestAprCollector_Poll_WitnessTopLevelArray 是 R1 真实形状红测：
+// witness 顶层裸数组必须成功解析并落库一行；旧的 data 信封类型会在 Poll 前置解析处失败。
+func TestAprCollector_Poll_WitnessTopLevelArray(t *testing.T) {
+	st := newTestStore(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		switch r.URL.Path {
+		case "/api/witness":
+			_, _ = w.Write([]byte(mockWitnessJSON))
+		case "/api/vote":
+			_, _ = w.Write([]byte(mockVoteJSON))
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	defer srv.Close()
+
+	c := NewAprCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL)
+	if _, err := c.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll with witness top-level array: %v", err)
+	}
+	var count int
+	if err := st.Pool().QueryRow(context.Background(), "SELECT count(*) FROM fin_trx_vote_apr").Scan(&count); err != nil {
+		t.Fatalf("count fin_trx_vote_apr: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("fin_trx_vote_apr rows = %d, want 1", count)
+	}
+}
 
 // TestAprCollector_Poll_Aggregation 验证 ①apr 解析 + ②聚合行正确：
 // annualizedRate 字符串→float；畸形行（""）跳过；max 取 producer=true 降序第一；

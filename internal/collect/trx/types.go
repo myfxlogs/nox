@@ -140,11 +140,6 @@ type tronscanWitnessJSON struct {
 	Producer       bool   `json:"producer"`
 }
 
-// tronscanWitnessResponseJSON 对应 /api/witness 响应（数组在 data 字段）。
-type tronscanWitnessResponseJSON struct {
-	Data []tronscanWitnessJSON `json:"data"`
-}
-
 // tronscanVoteJSON 对应 TRONSCAN /api/vote?voter={addr} 单行（当前投票分布）。
 // candidateAddress=候选 SR 地址；candidateName=SR 名；votes=票数；timestamp=投票时间。
 type tronscanVoteJSON struct {

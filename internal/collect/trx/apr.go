@@ -49,17 +49,17 @@ func (c *AprCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	if err != nil {
 		return nil, fmt.Errorf("trx apr witness: %w", err)
 	}
-	var witnessResp tronscanWitnessResponseJSON
-	if err := json.Unmarshal(witnessBody, &witnessResp); err != nil {
+	var witnessRows []tronscanWitnessJSON
+	if err := json.Unmarshal(witnessBody, &witnessRows); err != nil {
 		return nil, fmt.Errorf("trx apr witness unmarshal: %w", err)
 	}
 
 	// 2. 构建 SR 地址 → 年化 rate 映射（用于 current 票数加权平均）
 	//    同时取 max_rate/max_sr（producer=true 降序第一）
-	rateByAddr := make(map[string]float64, len(witnessResp.Data))
+	rateByAddr := make(map[string]float64, len(witnessRows))
 	var maxRate float64
 	var maxSrName string
-	for _, w := range witnessResp.Data {
+	for _, w := range witnessRows {
 		rate, _ := strconv.ParseFloat(w.AnnualizedRate, 64)
 		if rate <= 0 {
 			continue // 畸形行跳过（年化为空/0/非数字）
