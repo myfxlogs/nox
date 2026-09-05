@@ -11,6 +11,8 @@ import (
 	"arb/internal/exec"
 	"arb/internal/position"
 	"arb/internal/store/pgstore"
+
+	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 )
 
 // Service 实现 DashboardServiceHandler 接口。
@@ -55,6 +57,8 @@ type Service struct {
 	// D-231 S5：对冲结构刷新通知 topic（TRX 投票/质押/余额变化 → hedgeTopic.Publish → StreamUpdates case 12）。
 	// nil = 未接线（测试直接构造 Service）→ 不订阅。
 	hedgeTopic *bus.Topic[struct{}]
+	// D-234：CMC 看盘实时帧 topic（帧钩子→1s 蓄压→computeCMCWatchUpdate→Publish→StreamUpdates case 13）。nil=未接线→不订阅。
+	cmcWatchTopic *bus.Topic[*v1.CMCWatchUpdate]
 	// D-208 v2：CMC 数据源（nil = 不支持 CMC 行，走老路径）。
 	cmcSource position.CMCSource
 	// bpm Broker 实持仓 monitor（D-052）：ListBrokerPositions 拉 + StreamUpdates case 8 推同源。nil = 未接线（测试直接构造 Service）。
@@ -131,9 +135,12 @@ type Service struct {
 	aliasMu  sync.RWMutex
 	aliasMap map[string]string
 
-	// D-193-A/R9：CMC ws 事件驱动健康检查（nil=未接线→wsConnected=false）。
-	// main 装配 ws.IsHealthy 注入；GetHedgeStructure 组装时调此 seam 填 WsConnected。
+	// D-193-A/R9：CMC ws 事件驱动健康检查（nil=未接线→wsConnected=false）。main 装配 ws.IsHealthy 注入。
 	cmcWsHealth func() bool
+	// D-234：CMC 看盘帧 1s 蓄压状态（NotifyCMCFrame→AfterFunc→flushCMCWatch 现算+Publish）。
+	cmcFrameMu            sync.Mutex
+	cmcFrameTimer         *time.Timer
+	cmcWatchFlushInterval time.Duration
 }
 
 // FrontConfig 前端展示阈值（D-077 修复⑪B N7，后端 config 单一真相）。

@@ -18,47 +18,45 @@ import (
 
 func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.StreamUpdatesRequest], stream *connect.ServerStream[v1.StreamUpdatesResponse]) error {
 	// 实时推送报价：订阅 QuoteBus 全量（wildcard ""），亚秒级行情走推流。
-	// 机会（D-050）/告警/持仓由引擎 30s 节流产生：新机会经 oppTopic 实时推 case 2；告警/持仓仍由前端 30s 低频快照补齐。
+	// 机会/告警/持仓由引擎 30s 节流产生：新机会经 oppTopic 实时推 case 2；告警/持仓仍由前端 30s 低频快照补齐。
 	ch, cancel := s.qbus.Subscribe("")
 	defer cancel()
-	// 实时个人持仓现价（D-049）：PersonalMonitor 广播 → 逐仓推 case 7（与 quote 流并存，独立 Topic 扇出）。
-	// priceTopic 可能为 nil（测试直接构造 Service 未接线）→ 不订阅该分支。
+	// 实时个人持仓现价（D-049）：PersonalMonitor 广播 → 逐仓推 case 7。priceTopic nil=不订阅。
 	var ppCh <-chan position.PositionPrice
 	if s.priceTopic != nil {
 		var ppCancel func()
 		ppCh, ppCancel = s.priceTopic.Subscribe()
 		defer ppCancel()
 	}
-	// 实时新机会推送（D-050）：engine 新插入发布 → 逐条推 case 2（与 quote/现价流并存，独立 Topic 扇出）。
-	// oppTopic 可能为 nil（测试直接构造 Service 未接线）→ 不订阅该分支。
+	// 实时新机会推送（D-050）：engine 新插入发布 → 逐条推 case 2。oppTopic nil=不订阅。
 	var oppCh <-chan pgstore.Opportunity
 	if s.oppTopic != nil {
 		var oppCancel func()
 		oppCh, oppCancel = s.oppTopic.Subscribe()
 		defer oppCancel()
 	}
-	// Broker 实持仓推送（D-052）：monitor 变更广播全量快照 → case 8。bpm 为 nil（测试未接线）→ 不订阅。
+	// Broker 实持仓推送（D-052）：monitor 变更广播全量快照 → case 8。bpm nil=不订阅。
 	var bpCh <-chan *v1.BrokerPositionSnapshot
 	if s.bpm != nil && s.bpm.topic != nil {
 		var bpCancel func()
 		bpCh, bpCancel = s.bpm.topic.Subscribe()
 		defer bpCancel()
 	}
-	// 账户资产推送（D-053）：monitor 变更广播全量快照 → case 9。acctMon 为 nil（测试未接线）→ 不订阅。
+	// 账户资产推送（D-053）：monitor 变更广播全量快照 → case 9。acctMon nil=不订阅。
 	var accCh <-chan *v1.AccountSnapshot
 	if s.acctMon != nil && s.acctMon.topic != nil {
 		var accCancel func()
 		accCh, accCancel = s.acctMon.topic.Subscribe()
 		defer accCancel()
 	}
-	// 资金注入提醒推送（D-072）：engine 余额不足发布 → 逐条推 case 10。fundingNeedTopic 为 nil（测试未接线）→ 不订阅。
+	// 资金注入提醒推送（D-072）：engine 余额不足发布 → 逐条推 case 10。fundingNeedTopic nil=不订阅。
 	var fnCh <-chan FundingNeedNotice
 	if s.fundingNeedTopic != nil {
 		var fnCancel func()
 		fnCh, fnCancel = s.fundingNeedTopic.Subscribe()
 		defer fnCancel()
 	}
-	// 持仓变更通知推送（D-107 P3）：OnOrderUpdate 事件 → 逐条推 case 11。orderTopic 为 nil（测试未接线）→ 不订阅。
+	// 持仓变更通知推送（D-107 P3）：OnOrderUpdate 事件 → 逐条推 case 11。orderTopic nil=不订阅。
 	var ordCh <-chan bus.OrderEvent
 	if s.orderTopic != nil {
 		var ordCancel func()
@@ -79,8 +77,10 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 		hedgeCh, hc = s.hedgeTopic.Subscribe()
 		defer hc()
 	}
-	// keepalive 每 30s（§8.2 D-027）
-	ticker := time.NewTicker(30 * time.Second)
+	// D-234：CMC 看盘实时帧（cmcWatchTopic → case 13）。nil=不订阅。
+	cmcWatchCh, cmcWatchCancel := s.subscribeCMCWatchTopic()
+	defer cmcWatchCancel()
+	ticker := time.NewTicker(30 * time.Second) // keepalive 每 30s（§8.2 D-027）
 	defer ticker.Stop()
 	// D-090 自选报价条：case 1 蓄压 flush ticker（默认 1s，测试可注 10ms）。per (venueKey|symbol) 蓄压只推最新一帧。
 	flushInterval := s.quoteFlushInterval
@@ -89,12 +89,10 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 	}
 	flushTicker := time.NewTicker(flushInterval)
 	defer flushTicker.Stop()
-	// D-090：流启动初始化——缓存未初始化则先查库填缓存（治 App 根流先于任何 GetWatchlist 启动时快照空+过滤失效）。
+	// D-090：流启动初始化——缓存未初始化则先查库填缓存。首帧快照：AllLatest 按 watchlist 过滤逐条 Send。
 	if err := s.ensureWatchlistLoaded(ctx); err != nil {
 		return fmt.Errorf("stream init watchlist: %w", err)
 	}
-	// D-090 首帧快照：订阅建立后、进 select 前，AllLatest 按 watchlist 过滤逐条 Send（秒开不等 tick）。
-	// 返修包① R1：过滤改用 watchlistHitQuote（双维：symbol+venueKey）。
 	for _, q := range s.qbus.AllLatest() {
 		if !s.watchlistHitQuote(q) {
 			continue
@@ -107,8 +105,7 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 			return err
 		}
 	}
-	// pending 每连接独立（函数栈上），key=q.VenueKey()+"|"+q.Symbol，覆盖式=自动最新值。
-	pending := make(map[string]bus.Quote)
+	pending := make(map[string]bus.Quote) // D-090：每连接独立，key=venueKey|symbol，覆盖式=自动最新值
 	for {
 		select {
 		case <-ctx.Done():
@@ -117,14 +114,12 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 			if !ok {
 				return nil
 			}
-			// D-090 返修包① R1：RLock 双维命中检查——symbol∈set 且（venues 空 或 venueKey∈venues）。未命中丢弃。
+			// D-090 R1：双维命中检查——symbol∈set 且（venues 空 或 venueKey∈venues）。未命中丢弃。
 			if !s.watchlistHitQuote(q) {
 				continue
 			}
-			// 蓄压不 Send（复用 VenueKey()），等 flushTicker 周期 flush。
-			pending[q.VenueKey()+"|"+q.Symbol] = q
-		case <-flushTicker.C:
-			// D-090：遍历 pending 逐条 Send 后清 map（N 帧只出最新一帧）。
+			pending[q.VenueKey()+"|"+q.Symbol] = q // 蓄压不 Send，等 flushTicker 周期 flush
+		case <-flushTicker.C: // D-090：遍历 pending 逐条 Send 后清 map（N 帧只出最新一帧）
 			for k, q := range pending {
 				if err := stream.Send(&v1.StreamUpdatesResponse{
 					Update: &v1.StreamUpdatesResponse_Quote{
@@ -231,6 +226,13 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 			if err := stream.Send(&v1.StreamUpdatesResponse{Update: &v1.StreamUpdatesResponse_HedgeRefresh{HedgeRefresh: &v1.HedgeRefreshNotice{}}}); err != nil {
 				return err
 			}
+		case v, ok := <-cmcWatchCh:
+			if !ok {
+				return nil
+			}
+			if err := stream.Send(&v1.StreamUpdatesResponse{Update: &v1.StreamUpdatesResponse_CmcUpdate{CmcUpdate: v}}); err != nil {
+				return err
+			}
 		case <-ticker.C:
 			if err := stream.Send(&v1.StreamUpdatesResponse{
 				Update: &v1.StreamUpdatesResponse_Keepalive{
@@ -269,7 +271,6 @@ func (s *Service) GetFrontConfig(ctx context.Context, req *connect.Request[v1.Ge
 }
 
 // GetStrategyLedger D-080 S5：理论 vs 实际对账——策略聚合卡。
-// 返回每策略的承诺年化（活跃持仓 expected_annual_pct 均值）vs 实际年化（realized_pnl 估算）。
 // actual_annual_pct = realized_pnl / (notional × hold_days) × 365（估算，notional 取配置默认值）。
 func (s *Service) GetStrategyLedger(ctx context.Context, req *connect.Request[v1.GetStrategyLedgerRequest]) (*connect.Response[v1.GetStrategyLedgerResponse], error) {
 	aggs, err := s.store.GetStrategyAgg(ctx, req.Msg.Strategy)
@@ -288,8 +289,7 @@ func (s *Service) GetStrategyLedger(ctx context.Context, req *connect.Request[v1
 		if a.PromisedAnnualPct != nil {
 			entry.PromisedAnnualPct = *a.PromisedAnnualPct
 		}
-		// 实际年化估算：realized_pnl / (notional × hold_days) × 365
-		// notional 取配置默认值（单持仓名义额，估算口径）
+		// 实际年化估算：realized_pnl / (notional × hold_days) × 365（notional 取配置默认值）
 		if a.AvgHoldDays > 0 && s.notionalUSD > 0 && a.TotalPositions > 0 {
 			notionalTotal := s.notionalUSD * float64(a.TotalPositions)
 			entry.ActualAnnualPct = a.RealizedPnlUsd / (notionalTotal * a.AvgHoldDays) * 365 * 100
