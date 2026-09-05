@@ -3,11 +3,10 @@ package dashboard
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
+	"arb/internal/collect/cmc"
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 
 	"connectrpc.com/connect"
@@ -136,7 +135,7 @@ func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1
 		Carry:              carry,
 		Accts:              accts,
 		CloseoutSource:     "estimate_self", // D-225 v2.1：过渡期自算估值标注（Phase B 后切平台值）
-		PlatformAlertState: alertsToState(cmcSum.Alerts),
+		PlatformAlertState: cmc.AlertsToState(cmcSum.Alerts),
 		PlatformAlerts:     string(cmcSum.Alerts),
 	}
 	// D-193-A/R9：CMC ws 事件驱动健康（nil=未接线→false=黄点 REST 兜底）
@@ -210,36 +209,4 @@ func (s *Service) ListHedgeFlow(ctx context.Context, req *connect.Request[v1.Lis
 		})
 	}
 	return connect.NewResponse(resp), nil
-}
-
-// alertsToState D-225 v2.1：alerts JSON → 平台预警状态（normal/warning/breach）。
-// alerts 空=normal；含 In*Warning=warning；含 In*Breach=breach。（F13 直读直展，零计算）
-func alertsToState(alerts json.RawMessage) string {
-	if len(alerts) == 0 {
-		return "normal"
-	}
-	var items []struct {
-		AlertType string `json:"alertType"`
-	}
-	if err := json.Unmarshal(alerts, &items); err != nil {
-		return "normal"
-	}
-	if len(items) == 0 {
-		return "normal"
-	}
-	hasWarning, hasBreach := false, false
-	for _, a := range items {
-		if strings.Contains(a.AlertType, "Breach") {
-			hasBreach = true
-		} else if strings.Contains(a.AlertType, "Warning") {
-			hasWarning = true
-		}
-	}
-	if hasBreach {
-		return "breach"
-	}
-	if hasWarning {
-		return "warning"
-	}
-	return "normal"
 }
