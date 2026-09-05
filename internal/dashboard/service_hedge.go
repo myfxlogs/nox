@@ -4,10 +4,12 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"time"
 
 	"arb/internal/collect/cmc"
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	"arb/internal/store/pgstore"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -123,7 +125,9 @@ func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1
 	var updatedAt time.Time
 	if hasTRX {
 		accts.TrxBalance = float64(trxAcc.BalanceSun) / 1e6
-		accts.TrxAllowance = float64(trxAcc.AllowanceSun) / 1e6
+		// D-233 S2：TrxAllowance 承载待领取语义（=allowance + 未结算应计 Vi×userVotes/10^18）。
+		// 协议公式复现 queryReward（MortgageService.java:136-166）；无 Vi 数据时回退纯 allowance。
+		accts.TrxAllowance = computePendingReward(ctx, s.store, trxAcc.AllowanceSun)
 		accts.EnergyDelegated = float64(trxAcc.EnergyDelegated) / 1e6
 		accts.Votes = float64(trxAcc.VotesTotal)
 		updatedAt = trxAcc.FetchedAt
@@ -230,4 +234,36 @@ func (s *Service) ListHedgeFlow(ctx context.Context, req *connect.Request[v1.Lis
 		})
 	}
 	return connect.NewResponse(resp), nil
+}
+
+// computePendingReward D-233 S2：待领取 = allowance + Σ_SRs Vi × userVotes ÷ 10^18（复刻 queryReward）。
+// Vi 从 fin_trx_cycle_vi 最新 cycle 读取（VotesCollector 10min 数值积分累积）。
+// 无 Vi 数据（空表/错误）→ 回退纯 allowance（诚实降级，不阻断卡片展示）。
+// 返回值单位=TRX（sun/1e6）。
+func computePendingReward(ctx context.Context, store interface {
+	LatestTRXCycleVi(context.Context) ([]pgstore.TRXCycleVi, error)
+}, allowanceSun int64) float64 {
+	allowanceTRX := float64(allowanceSun) / 1e6
+	viRows, err := store.LatestTRXCycleVi(ctx)
+	if err != nil || len(viRows) == 0 {
+		return allowanceTRX // 无 Vi 数据→回退纯 allowance
+	}
+	// 待领取 = allowance + Σ_SRs Vi × userVotes / 10^18（sun）
+	// = allowanceSun + Σ (vi × userVotes / 10^18)  → sun → /1e6 → TRX
+	decimalOfViReward := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
+	totalUnsettledSun := new(big.Int)
+	for _, r := range viRows {
+		if r.Vi == nil || r.UserVotes <= 0 {
+			continue
+		}
+		// unsettled = vi × userVotes / 10^18（big.Int 整除，与 java-tron 一致）
+		unsettled := new(big.Int).Mul(r.Vi, big.NewInt(r.UserVotes))
+		unsettled.Div(unsettled, decimalOfViReward)
+		totalUnsettledSun.Add(totalUnsettledSun, unsettled)
+	}
+	// sun → TRX
+	unsettledTRX := new(big.Float).SetInt(totalUnsettledSun)
+	unsettledTRX.Quo(unsettledTRX, big.NewFloat(1e6))
+	f, _ := unsettledTRX.Float64()
+	return allowanceTRX + f
 }
