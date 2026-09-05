@@ -513,7 +513,7 @@ func TestV21_N9_SourceAwareWatchdog(t *testing.T) {
 		`INSERT INTO fin_cmc_prices (instrument_id, bid_price, ask_price, mid_price, market_status, quote_time, fetched_at, src)
 		 VALUES ('X-AFQUL', 0.3228, 0.3233, 0.3231, 'Open', $1, $1, 'cmc_rest')`,
 		time.Now().Add(-6*time.Minute))
-	src2, status2, last2, _ := st.LastCMCPriceStatusAndFetchedAt(ctx)
+	src2, _, last2, _ := st.LastCMCPriceStatusAndFetchedAt(ctx)
 	// REST 行 fetched_at 更新（6min ago < 8min ago → REST 行成为"最近"）
 	if src2 != "cmc_rest" {
 		t.Errorf("src = %q, want cmc_rest (most recent)", src2)
@@ -522,7 +522,6 @@ func TestV21_N9_SourceAwareWatchdog(t *testing.T) {
 	if time.Since(last2) <= 5*time.Minute {
 		t.Errorf("rest row age = %v, should be > 5min (stale)", time.Since(last2))
 	}
-	_ = status2
 
 	// closed-market skip：写一条 closed 行（时间戳最近 → 成为 LastCMCPriceStatusAndFetchedAt 返回行）
 	_, _ = st.Pool().Exec(ctx,

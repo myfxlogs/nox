@@ -136,22 +136,21 @@ func (w *WsClient) persistSummary(ctx context.Context, s *accountSummaryJSON, al
 }
 
 // scheduleFlush D-225 v2.1：持仓落库节流 ≥15s（替换旧 2s burst，F9 实测 2000 行/日 → 目标 ≤400/日）。
+// R1 修：无 pending 才 AfterFunc——旧实现每 type7 帧 Stop+重设 15s 定时器，
+// patch 流期定时器永不到期 → flushPositions 饿死 → positions 零落库。
 func (w *WsClient) scheduleFlush() {
 	w.flushMu.Lock()
 	defer w.flushMu.Unlock()
 	if w.flushTimer != nil {
-		w.flushTimer.Stop()
+		return // 已有 pending 定时器，不重设（R1 修）
 	}
 	w.flushTimer = time.AfterFunc(wsPosFlushInterval, w.flushPositions)
 }
 
 func (w *WsClient) flushPositions() {
+	// R1 修：清 flushTimer 让后续 scheduleFlush 可设新定时器
 	w.flushMu.Lock()
-	if time.Since(w.lastPosFlush) < wsPosFlushInterval {
-		w.flushMu.Unlock()
-		return
-	}
-	w.lastPosFlush = time.Now()
+	w.flushTimer = nil
 	w.flushMu.Unlock()
 
 	w.positionsMu.Lock()

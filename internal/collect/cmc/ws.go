@@ -99,9 +99,8 @@ type WsClient struct {
 	evalAskTs      time.Time
 
 	// 持仓落库节流
-	flushMu      sync.Mutex
-	flushTimer   *time.Timer
-	lastPosFlush time.Time
+	flushMu    sync.Mutex
+	flushTimer *time.Timer
 
 	// 新鲜度守卫（只看 type6）
 	lastEvent6Mu sync.Mutex
