@@ -69,6 +69,7 @@ var migrationFiles = []struct {
 	{71, migrations.TrxVoteAprSQL},
 	{72, migrations.TrxCycleViSQL},
 	{73, migrations.CnfiHoldingsSQL},
+	{74, migrations.CnfiActionsSQL},
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

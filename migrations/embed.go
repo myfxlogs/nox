@@ -163,3 +163,6 @@ var TrxCycleViSQL string
 
 //go:embed 0073_cnfi_holdings.sql
 var CnfiHoldingsSQL string
+
+//go:embed 0074_cnfi_actions.sql
+var CnfiActionsSQL string
