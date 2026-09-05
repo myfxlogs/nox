@@ -426,6 +426,70 @@ func TestGetHedgeStructure_WsConnected(t *testing.T) {
 	}
 }
 
+// TestGetHedgeStructure_AskFreshEvalAskSameSource D-234 R-V2：快照路径 Ask 走 freshEvalAsk（与 case13 推送同源）。
+// 注入 cmcAskProvider 返回新鲜内存值 → GetHedgeStructure 返回 structure.ask=内存值（不取 DB ForSide 门限值）。
+// 同时验证 PnL 用同一 evalAsk（镜像腿恒和=0 已由 MirrorPnlSumZero 覆盖，此处只断言 ask 字段同源）。
+func TestGetHedgeStructure_AskFreshEvalAskSameSource(t *testing.T) {
+	s := hedgeTestStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	if err := s.InsertTRXAccount(ctx, pgstore.TRXAccount{
+		Address: "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", VotesTotal: 18070,
+		BalanceSun: 97863827, AllowanceSun: 7717994, EnergyDelegated: 17270000000,
+		BandwidthStaked: 800000000,
+		FetchedAt:       now,
+	}); err != nil {
+		t.Fatalf("InsertTRXAccount: %v", err)
+	}
+	if err := s.InsertCMCPositions(ctx, 1, []pgstore.CMCPosition{{
+		AccountID: 1, InstrumentID: "X-AFQUL", Direction: "SELL", Quantity: 18100,
+		EntryPrice: 0.33171, FetchedAt: now,
+	}}); err != nil {
+		t.Fatalf("InsertCMCPositions: %v", err)
+	}
+	// DB 写入旧 ask（0.3000）——若快照路径仍取 DB，ask=0.3000；内存值 0.3500 应胜出。
+	if err := s.InsertCMCPrice(ctx, pgstore.CMCPrice{InstrumentID: "X-AFQUL", MidPrice: 0.3236, FetchedAt: now}); err != nil {
+		t.Fatalf("InsertCMCPrice: %v", err)
+	}
+
+	// case 1: provider 注入新鲜内存值 0.3500 → structure.ask=0.3500（内存直通，不取 DB）
+	memAsk := 0.3500
+	svc1 := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005, cmcAskProvider: func() (float64, time.Time) {
+		return memAsk, now // 新鲜（now，<30s）
+	}}
+	resp1, err := svc1.GetHedgeStructure(ctx, connect.NewRequest(&v1.GetHedgeStructureRequest{}))
+	if err != nil {
+		t.Fatalf("GetHedgeStructure case1: %v", err)
+	}
+	if got := resp1.Msg.Structure.Ask; got != memAsk {
+		t.Errorf("fresh provider: Ask = %v, want %v (内存直通，与 case13 同源)", got, memAsk)
+	}
+
+	// case 2: provider 未接线（nil）→ 回退 DB ForSide(Sell)（快照/推送同源回退路径）
+	svc2 := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005}
+	resp2, err := svc2.GetHedgeStructure(ctx, connect.NewRequest(&v1.GetHedgeStructureRequest{}))
+	if err != nil {
+		t.Fatalf("GetHedgeStructure case2: %v", err)
+	}
+	// DB 回退值非 0.3500（内存值）——证明 case1 的 0.3500 来自内存不是 DB
+	if resp2.Msg.Structure.Ask == memAsk {
+		t.Error("nil provider: Ask == memAsk, want DB fallback (证明 case1 内存直通非巧合)")
+	}
+
+	// case 3: provider 返回陈旧值（>30s）→ 回退 DB（与 case13 同源新鲜度门限）
+	staleTs := now.Add(-31 * time.Second)
+	svc3 := &Service{store: s, freshTTL: time.Minute, liqMMR: 0.005, cmcAskProvider: func() (float64, time.Time) {
+		return memAsk, staleTs // 陈旧（>30s）
+	}}
+	resp3, err := svc3.GetHedgeStructure(ctx, connect.NewRequest(&v1.GetHedgeStructureRequest{}))
+	if err != nil {
+		t.Fatalf("GetHedgeStructure case3: %v", err)
+	}
+	if resp3.Msg.Structure.Ask == memAsk {
+		t.Error("stale provider: Ask == memAsk, want DB fallback (>30s 回退，与 case13 同源门限)")
+	}
+}
+
 // TestComputePendingReward D-233 S2：待领取 = allowance + Σ Vi × userVotes / 10^18。
 // 验证：有 Vi 数据→待领取 > allowance；无 Vi 数据→回退纯 allowance。
 func TestComputePendingReward(t *testing.T) {

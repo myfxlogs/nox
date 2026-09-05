@@ -46,9 +46,9 @@ func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1
 		if v, _, err := s.store.LastCMCPriceMidWithTime(ctx, "X-AFQUL"); err == nil {
 			mid = v
 		}
-		if px, _, _, err := s.store.LastCMCPriceForSide(ctx, "X-AFQUL", "Sell"); err == nil {
-			evalAsk = px
-		}
+		// D-234 R-V2：evalAsk 走 freshEvalAsk（内存优先，>30s/未接线回退 DB ForSide(Sell)），
+		// 与 case13 推送同源——快照/推送口径一致，避免首屏显示 0.1% 门限锁死的旧 DB 值。
+		evalAsk = s.freshEvalAsk(ctx)
 	}
 
 	// baseline=空单开仓价（fin_cmc_positions.entry_price；现货购价未知，注释标注）
@@ -153,7 +153,7 @@ func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1
 	resp.Structure = &v1.HedgeStructure{
 		BaselinePrice:      baseline,
 		Mid:                mid,
-		Ask:                evalAsk, // R-V S3：现价=ask（业主批 A，ForSide Sell 口径=强平/PnL 同源）
+		Ask:                evalAsk, // R-V S3/R-V2：现价=ask（freshEvalAsk 同源 case13，ForSide Sell 口径=强平/PnL 同源）
 		LegSpot:            legSpot,
 		LegShort:           legShort,
 		NetExposureTrx:     netExposureTrx,
