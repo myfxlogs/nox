@@ -145,15 +145,6 @@ func (w *WsClient) SetMarketStatus(fn func() string) {
 func (w *WsClient) SetOnEvent(fn func(Snapshot)) { w.onEvent = fn }
 func (w *WsClient) IsHealthy() bool              { return w.healthy.Load() }
 
-// EvalAsk D-234 R-V S1：内存直通——priceMu 锁下读最新 evalAsk+evalAskTs。
-// dashboard computeCMCWatchUpdate 用此替代读 DB（闸 2 修复）；新鲜度 >30s 由调用方回退 DB。
-// 返回 (ask, ts)；ask=0 表示 ws 尚无价格帧。
-func (w *WsClient) EvalAsk() (float64, time.Time) {
-	w.priceMu.Lock()
-	defer w.priceMu.Unlock()
-	return w.evalAsk, w.evalAskTs
-}
-
 // LatestSnapshot D-225 v2.1 S5：只读 accessor（R10 seam 复用）。
 func (w *WsClient) LatestSnapshot() Snapshot {
 	w.summaryMu.Lock()
