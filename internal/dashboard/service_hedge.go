@@ -126,7 +126,9 @@ func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1
 	if hasTRX {
 		accts.TrxBalance = float64(trxAcc.BalanceSun) / 1e6
 		// D-233 S2：TrxAllowance 承载待领取语义（=allowance + 未结算应计 Vi×userVotes/10^18）。
-		// 协议公式复现 queryReward（MortgageService.java:136-166）；无 Vi 数据时回退纯 allowance。
+		// 按 SR 年化积分估算，对齐 TronLink 口径；结算后与链上 allowance 收敛。
+		// 精确复现不可行：reward(cycle,sr) 为节点内部量，公开 API 不暴露（R-D2 诚实化留档）。
+		// 无 Vi 数据时回退纯 allowance（诚实降级，不阻断卡片展示）。
 		accts.TrxAllowance = computePendingReward(ctx, s.store, trxAcc.AllowanceSun)
 		accts.EnergyDelegated = float64(trxAcc.EnergyDelegated) / 1e6
 		accts.Votes = float64(trxAcc.VotesTotal)
@@ -236,8 +238,9 @@ func (s *Service) ListHedgeFlow(ctx context.Context, req *connect.Request[v1.Lis
 	return connect.NewResponse(resp), nil
 }
 
-// computePendingReward D-233 S2：待领取 = allowance + Σ_SRs Vi × userVotes ÷ 10^18（复刻 queryReward）。
-// Vi 从 fin_trx_cycle_vi 最新 cycle 读取（VotesCollector 10min 数值积分累积）。
+// computePendingReward D-233 S2：待领取 = allowance + Σ_SRs Vi × userVotes ÷ 10^18。
+// Vi 从 fin_trx_cycle_vi 最新 cycle 读取（VotesCollector 按 SR 年化积分估算累积）。
+// 按 SR 年化积分估算，对齐 TronLink 口径；精确复现不可行（reward(cycle,sr) 为节点内部量，R-D2 留档）。
 // 无 Vi 数据（空表/错误）→ 回退纯 allowance（诚实降级，不阻断卡片展示）。
 // 返回值单位=TRX（sun/1e6）。
 func computePendingReward(ctx context.Context, store interface {
