@@ -194,51 +194,38 @@ func TestComputeCMCWatchUpdate_EmptyTolerant(t *testing.T) {
 	}
 }
 
-// TestCMCWatchPanelSourceAssert D-234：前端 CMCWatchPanel.tsx 源文本断言（同 D-231 惯例）。
-// 验证：case cmcUpdate merge 渲染、诚实边界标注（静止期/重连窗口）、tape 最近 20 跳、大字 mid 涨跌色。
+// TestCMCWatchPanelSourceAssert D-234 R-U2：R-U 端态防回归断言（面板已删，数据管线保留）。
+// 验证：①CMCWatchPanel.tsx 不存在 ②16-cmc-watch.css 不存在 ③useSnapshot.ts 含 case "cmcUpdate" 合并进 hedgeStructure。
 func TestCMCWatchPanelSourceAssert(t *testing.T) {
 	_, testFile, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("runtime.Caller failed")
 	}
-	path := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src", "components", "CMCWatchPanel.tsx")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read CMCWatchPanel: %v", err)
-	}
-	src := string(data)
-	// tape 最近 20 跳
-	if !strings.Contains(src, "TAPE_MAX = 20") {
-		t.Fatal("CMCWatchPanel missing TAPE_MAX = 20 (最近 20 跳 tape)")
-	}
-	// 大字 mid + 涨跌色
-	if !strings.Contains(src, "cmc-watch-price") {
-		t.Fatal("CMCWatchPanel missing cmc-watch-price (大字 mid)")
-	}
-	// 诚实边界：静止期无跳动
-	if !strings.Contains(src, "静止期无跳动可显") {
-		t.Fatal("CMCWatchPanel missing 静止期诚实边界标注")
-	}
-	// 诚实边界：ws 重连窗口
-	if !strings.Contains(src, "重连窗口") {
-		t.Fatal("CMCWatchPanel missing ws 重连窗口诚实边界标注")
-	}
-	// 平台口径标注
-	if !strings.Contains(src, "platform_rule_50") {
-		t.Fatal("CMCWatchPanel missing platform_rule_50 标注")
+	webSrc := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src")
+
+	// ① CMCWatchPanel.tsx 不存在（R-U 还原：面板已删）
+	panelPath := filepath.Join(webSrc, "components", "CMCWatchPanel.tsx")
+	if _, err := os.Stat(panelPath); !os.IsNotExist(err) {
+		t.Fatalf("CMCWatchPanel.tsx should not exist (R-U 还原), stat err=%v", err)
 	}
 
-	// useSnapshot.ts case cmcUpdate merge（不全量 load）
-	snapPath := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src", "hooks", "useSnapshot.ts")
+	// ② 16-cmc-watch.css 不存在（R-U 还原：样式已删）
+	cssPath := filepath.Join(webSrc, "styles", "16-cmc-watch.css")
+	if _, err := os.Stat(cssPath); !os.IsNotExist(err) {
+		t.Fatalf("16-cmc-watch.css should not exist (R-U 还原), stat err=%v", err)
+	}
+
+	// ③ useSnapshot.ts 含 case "cmcUpdate" 合并进 hedgeStructure（数据管线保留，数据复用对冲卡实时化）
+	snapPath := filepath.Join(webSrc, "hooks", "useSnapshot.ts")
 	snapData, err := os.ReadFile(snapPath)
 	if err != nil {
 		t.Fatalf("read useSnapshot: %v", err)
 	}
 	snapSrc := string(snapData)
 	if !strings.Contains(snapSrc, `u.case === "cmcUpdate"`) {
-		t.Fatal("useSnapshot missing case cmcUpdate branch")
+		t.Fatal("useSnapshot missing case cmcUpdate branch (数据管线应保留)")
 	}
-	if !strings.Contains(snapSrc, "不全量 load") {
-		t.Fatal("useSnapshot cmcUpdate branch missing 不全量 load 注释")
+	if !strings.Contains(snapSrc, "hedgeStructure") {
+		t.Fatal("useSnapshot cmcUpdate branch missing hedgeStructure merge (R-U: 字段级合并进对冲卡)")
 	}
 }
