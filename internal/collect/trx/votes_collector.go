@@ -1,4 +1,4 @@
-// D-233 TRX 待领取实时化：周期快照器（S1）+ Vi 累积器+奖励计算器（S2）。
+// D-233 TRX 待领取实时化：Vi 累积器+奖励计算器（S1+S2，R-D1 修复后并入 account 心跳）。
 //
 // S0 取证结论（java-tron develop 分支源码核对 2026-09-05，三项均为"是"→继续施工）：
 //
@@ -6,17 +6,18 @@
 //	  Vi 语义：accumulateWitnessVi(cycle, sr, voteCount) — deltaVi = reward(cycle,sr) × 10^18 / voteCount，
 //	  Vi = 前缀和（preVi + deltaVi）。reward(cycle,sr) = SR 该周期总奖励 × (1 - brokerage/100)
 //	  （MortgageService.payReward：brokerage 部分进 SR allowance，余下进 delegationStore.addReward）。
-//	② Vi 可由公开观测复现：TRONSCAN /api/witness annualizedRate（TRONSCAN 节点计算，含全部奖励组件）
-//	  + realTimeVotes + getchainparameters → 数值积分 Vi，研究纪要实证线性拟合误差 ±0.005 TRX，
-//	  协议公式复现精度更高（整数舍入级）。
+//	② Vi 公开观测近似：以 TRONSCAN /api/witness annualizedRate（TRONSCAN 节点计算，含全部奖励组件）
+//	  为被积函数 → per-SR 精化估算，研究纪要 §2.3 实测误差 ±0.005 TRX。
+//	  精确复现不可行：reward(cycle,sr) 为节点内部量，公开 API 不暴露（R-D2 诚实化留档）。
 //	③ 维护期记账户径：brokerage 按 cycle 存储（setBrokerage(cycle, addr, brokerage)），
 //	  结算时点=周期边界（beginCycle/endCycle/currentCycle 机制，MortgageService.queryReward）。
 //
-// 数据流：
+// 数据流（R-D1 修复：并入 account 30s 心跳，每 20 tick≈10min 节流采样，无独立轮询器）：
 //
-//	TRONSCAN /api/witness (10min) → annualizedRate per SR → 数值积分 deltaVi → 累积 Vi
-//	→ fin_trx_cycle_vi upsert → GetHedgeStructure 现算 待领取 = allowance + Σ Vi × userVotes / 10^18
-//	周期时钟=allowance 步进检测（30s 序列已实证），不依赖链上内部周期号。
+//	account Poll (30s) → 每 20 tick 调 votes.SampleAndStore → annualizedRate per SR
+//	→ 数值积分 deltaVi → 累积 Vi → fin_trx_cycle_vi upsert
+//	→ GetHedgeStructure 现算 待领取 = allowance + Σ Vi × userVotes / 10^18
+//	周期时钟=allowance 步进检测（account 指纹含 allowance，onChange 通知→NotifyAllowanceStep），不依赖链上内部周期号。
 package trx
 
 import (
@@ -28,7 +29,6 @@ import (
 	"strconv"
 	"time"
 
-	"arb/internal/fact"
 	"arb/internal/store/pgstore"
 )
 
@@ -41,9 +41,9 @@ const cycleDurationSec = 43200
 // decimalOfViReward = 10^18（java-tron DelegationStore.DECIMAL_OF_VI_REWARD，S0 取证①）。
 var decimalOfViReward = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
 
-// VotesCollector D-233 S1+S2：周期快照器+Vi 累积器。
-// 10min 采样 TRONSCAN /api/witness → annualizedRate per SR → 数值积分 Vi → fin_trx_cycle_vi upsert。
-// allowance 步进（由 AccountCollector 指纹变化搭车通知）→ cycle 边界 → Vi checkpoint。
+// VotesCollector D-233 S1+S2：Vi 累积器（R-D1 修复：无独立轮询器，由 AccountCollector 心跳每 20 tick 调用）。
+// 采样 TRONSCAN /api/witness → annualizedRate per SR → 数值积分 Vi → fin_trx_cycle_vi upsert。
+// allowance 步进（由 AccountCollector 指纹变化→onChange→NotifyAllowanceStep 单一路径）→ cycle 边界 → Vi checkpoint。
 type VotesCollector struct {
 	address, tronscanBase, trongridBase, apiKey string
 	store                                       *pgstore.Store
@@ -52,7 +52,6 @@ type VotesCollector struct {
 	currentCycle    int64               // 自有步进号（allowance 步进+1）
 	viBySR          map[string]*big.Int // sr_address → 累积 Vi（当前 cycle）
 	lastSampleAt    time.Time           // 上次采样时间（deltaVi 时间比例折算用）
-	lastAllowance   int64               // 上次已知 allowance（步进检测用）
 	chainParams     map[string]int64    // getchainparameters 缓存（24h）
 	paramsFetchedAt time.Time           // chainParams 获取时间（24h 缓存判断）
 }
@@ -77,10 +76,7 @@ func NewVotesCollector(address string, store *pgstore.Store, tronscanBase, trong
 	}
 }
 
-// Kind 返回采集器标识。
-func (c *VotesCollector) Kind() string { return "trx_votes" }
-
-// NotifyAllowanceStep D-233 S2：allowance 步进通知（由 AccountCollector onChange 搭车触发）。
+// NotifyAllowanceStep D-233 S2：allowance 步进通知（由 AccountCollector onChange 单一路径触发，R-D1 合一）。
 // cycle 边界：当前 Vi checkpoint 落库 → cycle+1 → Vi 重置归零。
 func (c *VotesCollector) NotifyAllowanceStep(ctx context.Context) {
 	// checkpoint 当前 cycle 全部 SR Vi 到 DB（最终态落库）
@@ -99,13 +95,15 @@ func (c *VotesCollector) NotifyAllowanceStep(ctx context.Context) {
 	log.Printf("[trx_votes] cycle boundary → new cycle=%d (allowance step detected)", c.currentCycle)
 }
 
-// Poll D-233 S1+S2：采样 witness+vote → 数值积分 Vi → upsert fin_trx_cycle_vi。
-func (c *VotesCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
-	// 首次 Poll 从 DB 恢复 currentCycle
+// SampleAndStore D-233 S1+S2：采样 witness+vote → 数值积分 Vi → upsert fin_trx_cycle_vi。
+// R-D1 修复：由 AccountCollector 心跳每 20 tick（≈10min）调用，无独立轮询器。
+// allowance 步进检测已合一到 AccountCollector onChange→NotifyAllowanceStep 单一路径（本方法不再自查）。
+func (c *VotesCollector) SampleAndStore(ctx context.Context) error {
+	// 首次调用从 DB 恢复 currentCycle
 	if c.currentCycle == 0 {
 		maxCycle, err := c.store.MaxTRXCycleViCycle(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("trx votes restore cycle: %w", err)
+			return fmt.Errorf("trx votes restore cycle: %w", err)
 		}
 		c.currentCycle = maxCycle // 空表=0，从 cycle 0 开始
 	}
@@ -115,20 +113,17 @@ func (c *VotesCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	// 1. 拉全网 witness（annualizedRate per SR）
 	witnessBody, err := tronscanGet(ctx, c.tronscanBase+"/api/witness")
 	if err != nil {
-		return nil, fmt.Errorf("trx votes witness: %w", err)
+		return fmt.Errorf("trx votes witness: %w", err)
 	}
 	var witnessRows []tronscanWitnessJSON
 	if err := json.Unmarshal(witnessBody, &witnessRows); err != nil {
-		return nil, fmt.Errorf("trx votes witness unmarshal: %w", err)
+		return fmt.Errorf("trx votes witness unmarshal: %w", err)
 	}
 
 	// 2. 拉当前投票分布（/api/vote?voter={addr}）→ 用户 per-SR 票数
 	voteBody, err := tronscanGet(ctx, c.tronscanBase+"/api/vote?voter="+c.address)
 	if err != nil {
 		log.Printf("[trx_votes] vote query failed: %v", err)
-	} else {
-		// voteBody 在下方解析
-		_ = voteBody
 	}
 	var voteResp tronscanVoteResponseJSON
 	if voteBody != nil {
@@ -147,17 +142,7 @@ func (c *VotesCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 		rateByAddr[w.Address] = rate
 	}
 
-	// 4. 检测 allowance 步进（从最新 fin_trx_account 读 allowance）
-	acc, accErr := c.store.LastTRXAccount(ctx)
-	if accErr == nil {
-		if c.lastAllowance > 0 && acc.AllowanceSun != c.lastAllowance {
-			// allowance 步进 → cycle 边界
-			c.NotifyAllowanceStep(ctx)
-		}
-		c.lastAllowance = acc.AllowanceSun
-	}
-
-	// 5. 数值积分 deltaVi（按时间比例折算）
+	// 4. 数值积分 deltaVi（按时间比例折算）
 	// deltaVi = annualizedRate × 10^24 / (100 × cyclesPerYear) × dt / cycleDuration
 	// 简化：deltaVi = annualizedRate × 10^22 × dt / (100 × cyclesPerYear × cycleDuration)
 	//   [10^24 = 10^6(sun) × 10^18(DECIMAL)；但 annualizedRate 已含 % → 除 100]
@@ -191,7 +176,7 @@ func (c *VotesCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	}
 	c.lastSampleAt = now
 
-	// 6. Upsert fin_trx_cycle_vi（当前 cycle 全部用户投票 SR 的 Vi + user_votes）
+	// 5. Upsert fin_trx_cycle_vi（当前 cycle 全部用户投票 SR 的 Vi + user_votes）
 	for _, v := range voteResp.Data {
 		if v.Votes <= 0 {
 			continue
@@ -211,12 +196,12 @@ func (c *VotesCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 		}
 	}
 
-	// 7. getchainparameters（24h 缓存，形状文档+交叉校验用，主算路径不依赖）
+	// 6. getchainparameters（24h 缓存，形状文档+交叉校验用，主算路径不依赖）
 	if time.Since(c.paramsFetchedAt) > 24*time.Hour {
 		c.fetchChainParameters(ctx)
 	}
 
-	return nil, nil
+	return nil
 }
 
 // fetchChainParameters 拉取 TronGrid /wallet/getchainparameters（匿名已实测 200，24h 缓存）。
@@ -246,25 +231,4 @@ func userVotesForSR(votes []tronscanVoteJSON, srAddr string) int64 {
 		}
 	}
 	return 0
-}
-
-// StartWatchdog 数据新鲜度 watchdog（trx 同款最小版，>30min 无新行 → log stale）。
-func (c *VotesCollector) StartWatchdog(ctx context.Context) {
-	ticker := time.NewTicker(60 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			viRows, err := c.store.LatestTRXCycleVi(ctx)
-			if err != nil || len(viRows) == 0 {
-				continue
-			}
-			latest := viRows[0].UpdatedAt
-			if time.Since(latest) > 30*time.Minute {
-				log.Printf("[trx_votes] stale warning: no vi update for %v", time.Since(latest).Round(time.Second))
-			}
-		}
-	}
 }

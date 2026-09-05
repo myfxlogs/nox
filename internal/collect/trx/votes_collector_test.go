@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"arb/internal/store/pgstore"
 )
@@ -44,9 +43,9 @@ const mockGetChainParamsJSON = `{"chainParameter":[
 	{"key":"getChainVoteReward","value":160000000}
 ]}`
 
-// TestVotesCollector_Poll_ViAccumulation S1+S2：witness 采样→Vi 累积→fin_trx_cycle_vi 落库。
-// 验证：两轮 Poll 后 Vi > 0（annualizedRate 积分生效），user_votes 正确落库。
-func TestVotesCollector_Poll_ViAccumulation(t *testing.T) {
+// TestVotesCollector_SampleAndStore_ViAccumulation S1+S2：witness 采样→Vi 累积→fin_trx_cycle_vi 落库。
+// 验证：两轮 SampleAndStore 后 Vi > 0（annualizedRate 积分生效），user_votes 正确落库。
+func TestVotesCollector_SampleAndStore_ViAccumulation(t *testing.T) {
 	st := newTestStore(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
@@ -67,20 +66,14 @@ func TestVotesCollector_Poll_ViAccumulation(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	// 先写一条 fin_trx_account（VotesCollector 从中读 allowance 步进检测）
-	acc := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, "")
-	if _, err := acc.Poll(context.Background()); err != nil {
-		t.Fatalf("account Poll: %v", err)
-	}
-
 	c := NewVotesCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, "")
-	// 第一轮 Poll（lastSampleAt=零值→不积分，仅设 lastSampleAt）
-	if _, err := c.Poll(context.Background()); err != nil {
-		t.Fatalf("first Poll: %v", err)
+	// 第一轮 SampleAndStore（lastSampleAt=零值→不积分，仅设 lastSampleAt）
+	if err := c.SampleAndStore(context.Background()); err != nil {
+		t.Fatalf("first SampleAndStore: %v", err)
 	}
-	// 第二轮 Poll（dt>0→积分 deltaVi）
-	if _, err := c.Poll(context.Background()); err != nil {
-		t.Fatalf("second Poll: %v", err)
+	// 第二轮 SampleAndStore（dt>0→积分 deltaVi）
+	if err := c.SampleAndStore(context.Background()); err != nil {
+		t.Fatalf("second SampleAndStore: %v", err)
 	}
 
 	// 验证 fin_trx_cycle_vi 有行且 Vi > 0
@@ -89,7 +82,7 @@ func TestVotesCollector_Poll_ViAccumulation(t *testing.T) {
 		t.Fatalf("LatestTRXCycleVi: %v", err)
 	}
 	if len(viRows) == 0 {
-		t.Fatal("fin_trx_cycle_vi empty after 2 polls")
+		t.Fatal("fin_trx_cycle_vi empty after 2 SampleAndStore calls")
 	}
 	// 应有 2 SR 行（SR_A_ADDR + SR_B_ADDR）
 	if len(viRows) != 2 {
@@ -110,14 +103,14 @@ func TestVotesCollector_Poll_ViAccumulation(t *testing.T) {
 		}
 	}
 	if !hasPositiveVi {
-		t.Error("no SR has positive Vi after 2 polls (deltaVi integration not working)")
+		t.Error("no SR has positive Vi after 2 SampleAndStore calls (deltaVi integration not working)")
 	}
 }
 
-// TestVotesCollector_AllowanceStep_CycleBoundary S2：allowance 步进→cycle 边界→Vi checkpoint+cycle+1。
+// TestVotesCollector_AllowanceStep_CycleBoundary S2：allowance 步进→NotifyAllowanceStep→cycle 边界→Vi checkpoint+cycle+1。
+// R-D1 修复：步进检测单一路径=AccountCollector onChange→NotifyAllowanceStep（SampleAndStore 不再自查）。
 func TestVotesCollector_AllowanceStep_CycleBoundary(t *testing.T) {
 	st := newTestStore(t)
-	allowance2 := int64(8531099) // +813105（实测步进值）
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
@@ -138,38 +131,20 @@ func TestVotesCollector_AllowanceStep_CycleBoundary(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	// 写第一条 account（allowance1=7717994）
-	acc := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, "")
-	if _, err := acc.Poll(context.Background()); err != nil {
-		t.Fatalf("account Poll 1: %v", err)
-	}
-
 	c := NewVotesCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, "")
-	// 两轮 Poll 积累 Vi
-	_, _ = c.Poll(context.Background())
-	_, _ = c.Poll(context.Background())
+	// 两轮 SampleAndStore 积累 Vi
+	_ = c.SampleAndStore(context.Background())
+	_ = c.SampleAndStore(context.Background())
 
 	cycleBefore := c.currentCycle
 
-	// 模拟 allowance 步进：直接写一条新 account 行（allowance2）
-	if err := st.InsertTRXAccount(context.Background(), pgstore.TRXAccount{
-		Address:      "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555",
-		VotesTotal:   18070,
-		BalanceSun:   97863827,
-		AllowanceSun: allowance2,
-		FetchedAt:    time.Now(),
-	}); err != nil {
-		t.Fatalf("insert account step: %v", err)
-	}
-
-	// 第三轮 Poll → 检测 allowance 步进 → cycle 边界
-	_, _ = c.Poll(context.Background())
+	// 模拟 allowance 步进：直接调 NotifyAllowanceStep（R-D1 单一路径=account onChange 触发）
+	c.NotifyAllowanceStep(context.Background())
 
 	if c.currentCycle != cycleBefore+1 {
 		t.Errorf("after allowance step: cycle = %d, want %d (cycleBefore+1)", c.currentCycle, cycleBefore+1)
 	}
 	// cycle 边界后 NotifyAllowanceStep 已 checkpoint 旧 cycle Vi 到 DB 并重置 viBySR。
-	// 第三轮 Poll 在 reset 后继续累积新 cycle 的 deltaVi（非零=正常，仅 1 轮 delta）。
 	// 验证 DB 有旧 cycle（cycleBefore）的 checkpoint 行。
 	maxCycle, err := st.MaxTRXCycleViCycle(context.Background())
 	if err != nil {
@@ -192,7 +167,7 @@ func TestVotesCollector_RestoreCycle(t *testing.T) {
 	})
 
 	c := NewVotesCollector("addr", st, "", "", "")
-	// 首次 Poll → 从 DB 恢复 currentCycle=5
+	// 首次 SampleAndStore → 从 DB 恢复 currentCycle=5
 	// 用一个返回空 witness/vote 的 mock server
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
@@ -201,7 +176,7 @@ func TestVotesCollector_RestoreCycle(t *testing.T) {
 	defer srv.Close()
 	c.tronscanBase = srv.URL
 	c.trongridBase = srv.URL
-	_, _ = c.Poll(context.Background())
+	_ = c.SampleAndStore(context.Background())
 
 	if c.currentCycle != 5 {
 		t.Errorf("restored cycle = %d, want 5", c.currentCycle)

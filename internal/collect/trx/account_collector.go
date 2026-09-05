@@ -20,6 +20,9 @@ type AccountCollector struct {
 	onChange              func() // D-231 S5：指纹变化回调（nil=未接线）
 	lastFingerprint       string
 	firstPoll             bool // D-231 S5：首轮不触发（指纹未知）
+	// D-233 R-D1：VotesCollector 并入 account 心跳（每 20 tick≈10min 节流采样，无独立轮询器）。
+	votes     *VotesCollector
+	tickCount int // 心跳计数（每 20 tick 调 votes.SampleAndStore）
 }
 
 // NewAccountCollector 创建账户快照采集器。address 为 base58 监控地址。
@@ -32,6 +35,9 @@ func NewAccountCollector(address string, store *pgstore.Store, base, apiKey stri
 
 // SetOnChange D-231 S5：注入指纹变化回调。
 func (c *AccountCollector) SetOnChange(fn func()) { c.onChange = fn }
+
+// SetVotesCollector D-233 R-D1：注入 VotesCollector，并入 account 心跳每 20 tick 节流采样。
+func (c *AccountCollector) SetVotesCollector(v *VotesCollector) { c.votes = v }
 
 // Kind 返回采集器标识。
 func (c *AccountCollector) Kind() string { return "trx_account" }
@@ -106,10 +112,18 @@ func (c *AccountCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 		c.onChange()
 	}
 	c.lastFingerprint, c.firstPoll = fp, false
+	// D-233 R-D1：VotesCollector 并入心跳——每 20 tick（30s×20≈10min）节流采样 Vi。
+	c.tickCount++
+	if c.votes != nil && c.tickCount%20 == 0 {
+		if err := c.votes.SampleAndStore(ctx); err != nil {
+			log.Printf("[trx_account] votes SampleAndStore: %v", err)
+		}
+	}
 	return nil, nil
 }
 
 // StartWatchdog 数据新鲜度 watchdog（CMC 同款最小版，15min 无新行 → log stale）。
+// D-233 R-D1：并入 votes 陈旧检查（>30min 无 Vi 更新 → log stale），无独立 watchdog goroutine。
 func (c *AccountCollector) StartWatchdog(ctx context.Context) {
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
@@ -125,6 +139,17 @@ func (c *AccountCollector) StartWatchdog(ctx context.Context) {
 			if time.Since(last.FetchedAt) > 15*time.Minute {
 				log.Printf("[trx] stale warning: no account update for %v",
 					time.Since(last.FetchedAt).Round(time.Second))
+			}
+			// D-233 R-D1：votes 陈旧检查（并入 account watchdog，无独立 goroutine）
+			if c.votes != nil {
+				viRows, viErr := c.store.LatestTRXCycleVi(ctx)
+				if viErr == nil && len(viRows) > 0 {
+					latestVi := viRows[0].UpdatedAt
+					if time.Since(latestVi) > 30*time.Minute {
+						log.Printf("[trx_votes] stale warning: no vi update for %v",
+							time.Since(latestVi).Round(time.Second))
+					}
+				}
 			}
 		}
 	}
