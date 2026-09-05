@@ -26,6 +26,11 @@ func cnfiSeedSnapshot(t *testing.T) *Service {
 	if err := st.Migrate(ctx); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
+	// R-F1a（D-241 审计挂账）：共享 arb_test 库有真实回填数据——先清空 cnfi_series
+	// 再播种哨兵日，否则快照断言遇既有行假 FAIL（D-212 hedgeTestStore 惯例）。
+	if _, err := st.Pool().Exec(ctx, `TRUNCATE cnfi_series`); err != nil {
+		t.Fatalf("truncate cnfi_series: %v", err)
+	}
 	t.Cleanup(func() {
 		_, _ = st.Pool().Exec(ctx, `DELETE FROM cnfi_series WHERE as_of >= '2098-12-31'`)
 	})
