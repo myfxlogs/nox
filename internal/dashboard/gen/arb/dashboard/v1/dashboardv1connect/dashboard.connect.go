@@ -95,6 +95,9 @@ const (
 	// DashboardServiceBackfillSwapHistoryProcedure is the fully-qualified name of the
 	// DashboardService's BackfillSwapHistory RPC.
 	DashboardServiceBackfillSwapHistoryProcedure = "/arb.dashboard.v1.DashboardService/BackfillSwapHistory"
+	// DashboardServiceGetCNFIRadarSnapshotProcedure is the fully-qualified name of the
+	// DashboardService's GetCNFIRadarSnapshot RPC.
+	DashboardServiceGetCNFIRadarSnapshotProcedure = "/arb.dashboard.v1.DashboardService/GetCNFIRadarSnapshot"
 	// DashboardServiceListPositionsProcedure is the fully-qualified name of the DashboardService's
 	// ListPositions RPC.
 	DashboardServiceListPositionsProcedure = "/arb.dashboard.v1.DashboardService/ListPositions"
@@ -273,6 +276,8 @@ type DashboardServiceClient interface {
 	ExecuteOpportunity(context.Context, *connect.Request[v1.ExecuteOpportunityRequest]) (*connect.Response[v1.ExecuteOpportunityResponse], error)
 	ClosePosition(context.Context, *connect.Request[v1.ClosePositionRequest]) (*connect.Response[v1.ClosePositionResponse], error)
 	BackfillSwapHistory(context.Context, *connect.Request[v1.BackfillSwapHistoryRequest]) (*connect.Response[v1.BackfillSwapHistoryReply], error)
+	// CN-FI 固收雷达快照（D-226/D-237；只读快照，无流式——日频数据不接 streamUpdates）
+	GetCNFIRadarSnapshot(context.Context, *connect.Request[v1.GetCNFIRadarSnapshotRequest]) (*connect.Response[v1.GetCNFIRadarSnapshotResponse], error)
 	ListPositions(context.Context, *connect.Request[v1.ListPositionsRequest]) (*connect.Response[v1.ListPositionsResponse], error)
 	// Broker 实持仓（D-051 WP3：MT5/MT4 实际持仓统一视图，实时查不落库）
 	ListBrokerPositions(context.Context, *connect.Request[v1.ListBrokerPositionsRequest]) (*connect.Response[v1.ListBrokerPositionsResponse], error)
@@ -476,6 +481,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			httpClient,
 			baseURL+DashboardServiceBackfillSwapHistoryProcedure,
 			connect.WithSchema(dashboardServiceMethods.ByName("BackfillSwapHistory")),
+			connect.WithClientOptions(opts...),
+		),
+		getCNFIRadarSnapshot: connect.NewClient[v1.GetCNFIRadarSnapshotRequest, v1.GetCNFIRadarSnapshotResponse](
+			httpClient,
+			baseURL+DashboardServiceGetCNFIRadarSnapshotProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("GetCNFIRadarSnapshot")),
 			connect.WithClientOptions(opts...),
 		),
 		listPositions: connect.NewClient[v1.ListPositionsRequest, v1.ListPositionsResponse](
@@ -798,6 +809,7 @@ type dashboardServiceClient struct {
 	executeOpportunity     *connect.Client[v1.ExecuteOpportunityRequest, v1.ExecuteOpportunityResponse]
 	closePosition          *connect.Client[v1.ClosePositionRequest, v1.ClosePositionResponse]
 	backfillSwapHistory    *connect.Client[v1.BackfillSwapHistoryRequest, v1.BackfillSwapHistoryReply]
+	getCNFIRadarSnapshot   *connect.Client[v1.GetCNFIRadarSnapshotRequest, v1.GetCNFIRadarSnapshotResponse]
 	listPositions          *connect.Client[v1.ListPositionsRequest, v1.ListPositionsResponse]
 	listBrokerPositions    *connect.Client[v1.ListBrokerPositionsRequest, v1.ListBrokerPositionsResponse]
 	closeBrokerPosition    *connect.Client[v1.CloseBrokerPositionRequest, v1.CloseBrokerPositionResponse]
@@ -952,6 +964,11 @@ func (c *dashboardServiceClient) ClosePosition(ctx context.Context, req *connect
 // BackfillSwapHistory calls arb.dashboard.v1.DashboardService.BackfillSwapHistory.
 func (c *dashboardServiceClient) BackfillSwapHistory(ctx context.Context, req *connect.Request[v1.BackfillSwapHistoryRequest]) (*connect.Response[v1.BackfillSwapHistoryReply], error) {
 	return c.backfillSwapHistory.CallUnary(ctx, req)
+}
+
+// GetCNFIRadarSnapshot calls arb.dashboard.v1.DashboardService.GetCNFIRadarSnapshot.
+func (c *dashboardServiceClient) GetCNFIRadarSnapshot(ctx context.Context, req *connect.Request[v1.GetCNFIRadarSnapshotRequest]) (*connect.Response[v1.GetCNFIRadarSnapshotResponse], error) {
+	return c.getCNFIRadarSnapshot.CallUnary(ctx, req)
 }
 
 // ListPositions calls arb.dashboard.v1.DashboardService.ListPositions.
@@ -1229,6 +1246,8 @@ type DashboardServiceHandler interface {
 	ExecuteOpportunity(context.Context, *connect.Request[v1.ExecuteOpportunityRequest]) (*connect.Response[v1.ExecuteOpportunityResponse], error)
 	ClosePosition(context.Context, *connect.Request[v1.ClosePositionRequest]) (*connect.Response[v1.ClosePositionResponse], error)
 	BackfillSwapHistory(context.Context, *connect.Request[v1.BackfillSwapHistoryRequest]) (*connect.Response[v1.BackfillSwapHistoryReply], error)
+	// CN-FI 固收雷达快照（D-226/D-237；只读快照，无流式——日频数据不接 streamUpdates）
+	GetCNFIRadarSnapshot(context.Context, *connect.Request[v1.GetCNFIRadarSnapshotRequest]) (*connect.Response[v1.GetCNFIRadarSnapshotResponse], error)
 	ListPositions(context.Context, *connect.Request[v1.ListPositionsRequest]) (*connect.Response[v1.ListPositionsResponse], error)
 	// Broker 实持仓（D-051 WP3：MT5/MT4 实际持仓统一视图，实时查不落库）
 	ListBrokerPositions(context.Context, *connect.Request[v1.ListBrokerPositionsRequest]) (*connect.Response[v1.ListBrokerPositionsResponse], error)
@@ -1428,6 +1447,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		DashboardServiceBackfillSwapHistoryProcedure,
 		svc.BackfillSwapHistory,
 		connect.WithSchema(dashboardServiceMethods.ByName("BackfillSwapHistory")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceGetCNFIRadarSnapshotHandler := connect.NewUnaryHandler(
+		DashboardServiceGetCNFIRadarSnapshotProcedure,
+		svc.GetCNFIRadarSnapshot,
+		connect.WithSchema(dashboardServiceMethods.ByName("GetCNFIRadarSnapshot")),
 		connect.WithHandlerOptions(opts...),
 	)
 	dashboardServiceListPositionsHandler := connect.NewUnaryHandler(
@@ -1768,6 +1793,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceClosePositionHandler.ServeHTTP(w, r)
 		case DashboardServiceBackfillSwapHistoryProcedure:
 			dashboardServiceBackfillSwapHistoryHandler.ServeHTTP(w, r)
+		case DashboardServiceGetCNFIRadarSnapshotProcedure:
+			dashboardServiceGetCNFIRadarSnapshotHandler.ServeHTTP(w, r)
 		case DashboardServiceListPositionsProcedure:
 			dashboardServiceListPositionsHandler.ServeHTTP(w, r)
 		case DashboardServiceListBrokerPositionsProcedure:
@@ -1957,6 +1984,10 @@ func (UnimplementedDashboardServiceHandler) ClosePosition(context.Context, *conn
 
 func (UnimplementedDashboardServiceHandler) BackfillSwapHistory(context.Context, *connect.Request[v1.BackfillSwapHistoryRequest]) (*connect.Response[v1.BackfillSwapHistoryReply], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.BackfillSwapHistory is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) GetCNFIRadarSnapshot(context.Context, *connect.Request[v1.GetCNFIRadarSnapshotRequest]) (*connect.Response[v1.GetCNFIRadarSnapshotResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetCNFIRadarSnapshot is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListPositions(context.Context, *connect.Request[v1.ListPositionsRequest]) (*connect.Response[v1.ListPositionsResponse], error) {
