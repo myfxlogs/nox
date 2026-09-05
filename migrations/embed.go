@@ -151,3 +151,6 @@ var TrxStakeTablesSQL string
 
 //go:embed 0069_cmc_ws_event_driven.sql
 var CmcWsEventDrivenSQL string
+
+//go:embed 0071_trx_vote_apr.sql
+var TrxVoteAprSQL string

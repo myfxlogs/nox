@@ -44,11 +44,11 @@ type TRXTx struct {
 
 // TRXWitness 对应 fin_trx_witness 表（慢变，24h）。
 type TRXWitness struct {
-	ID         int64
-	SRAddress  string
-	URL        *string // nil = listwitnesses 无 url
-	VoteCount  *int64  // nil = 未返回
-	FetchedAt  time.Time
+	ID        int64
+	SRAddress string
+	URL       *string // nil = listwitnesses 无 url
+	VoteCount *int64  // nil = 未返回
+	FetchedAt time.Time
 }
 
 // ---------- 写入方法 ----------
@@ -245,3 +245,44 @@ func (s *Store) ListTRXWitnesses(ctx context.Context, limit int) ([]TRXWitness, 
 
 // 确保 pgx import 被引用（CopyFrom 批量写入用，S2 采集器可能用）。
 var _ = pgx.Identifier{}
+
+// ---------- D-231 TRX 投票收益率（fin_trx_vote_apr） ----------
+
+// TRXVoteApr 对应 fin_trx_vote_apr 表（5min 聚合一行）。
+type TRXVoteApr struct {
+	ID          int64
+	FetchedAt   time.Time
+	CurrentRate float64 // 票数加权平均年化 %
+	CurrentSr   *string // 当前投票主 SR 名（票数最多者）；nil=无投票
+	MaxRate     float64 // 市场最高年化 %（producer=true 降序第一）
+	MaxSr       *string // 最高年化 SR 名；nil=无 producer
+	Spread      float64 // max_rate − current_rate（pp）
+}
+
+// InsertTRXVoteApr 写一条投票收益率聚合行（5min 级，append-only）。
+func (s *Store) InsertTRXVoteApr(ctx context.Context, a TRXVoteApr) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO fin_trx_vote_apr
+		  (fetched_at, current_rate, current_sr, max_rate, max_sr, spread)
+		VALUES (COALESCE($1,now()),$2,$3,$4,$5,$6)
+	`, a.FetchedAt, a.CurrentRate, a.CurrentSr, a.MaxRate, a.MaxSr, a.Spread)
+	if err != nil {
+		return fmt.Errorf("insert trx vote apr: %w", err)
+	}
+	return nil
+}
+
+// LastTRXVoteApr 返回最新一条投票收益率聚合行（按 fetched_at DESC）；空表返回 ErrNoRows。
+func (s *Store) LastTRXVoteApr(ctx context.Context) (TRXVoteApr, error) {
+	var a TRXVoteApr
+	err := s.pool.QueryRow(ctx, `
+		SELECT id, fetched_at, current_rate, current_sr, max_rate, max_sr, spread
+		FROM fin_trx_vote_apr
+		ORDER BY fetched_at DESC
+		LIMIT 1
+	`).Scan(&a.ID, &a.FetchedAt, &a.CurrentRate, &a.CurrentSr, &a.MaxRate, &a.MaxSr, &a.Spread)
+	if err != nil {
+		return a, fmt.Errorf("last trx vote apr: %w", err)
+	}
+	return a, nil
+}

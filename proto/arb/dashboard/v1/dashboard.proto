@@ -607,6 +607,12 @@ message HedgeLegSpot {
   double qty_liquid = 3;     // 流动余额（fin_trx_account.balance_sun ÷ 1e6）
   double pnl_vs_base = 4;    // 计算值 (mid−baseline)×qty_staked（镜像腿，恒和=0）
   HedgeStake stake = 5;      // 质押明细 energy+bandwidth
+  // D-231 S3：投票收益率（fin_trx_vote_apr 最新行透传，只渲染不运算）
+  double vote_apr_current = 6;    // 当前投票票数加权平均年化 %
+  double vote_apr_max = 7;        // 市场最高年化 %（producer=true 降序第一）
+  string vote_apr_max_sr = 8;     // 最高年化 SR 名
+  double vote_apr_spread = 9;     // max−current 差值（pp）
+  google.protobuf.Timestamp vote_apr_ts = 10;  // fin_trx_vote_apr.fetched_at
 }
 
 message HedgeLegShort {
