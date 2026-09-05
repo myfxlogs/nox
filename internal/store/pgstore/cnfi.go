@@ -222,3 +222,26 @@ func (s *Store) CNFILayerTargets(ctx context.Context) (map[string]float64, error
 	}
 	return m, nil
 }
+
+// UpsertCNFICalendarDay seeds one calendar day (public holiday data, D-047 合规).
+func (s *Store) UpsertCNFICalendarDay(ctx context.Context, day time.Time, isBusiness bool, version string) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO cnfi_calendar (cal_date, is_business_day, cal_version)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (cal_date) DO UPDATE
+		   SET is_business_day = EXCLUDED.is_business_day, cal_version = EXCLUDED.cal_version`,
+		day.Format("2006-01-02"), isBusiness, version)
+	return err
+}
+
+// UpsertCNFISignalConfigRaw writes a signal_config value (研究席位经部署流程使用).
+func (s *Store) UpsertCNFISignalConfigRaw(ctx context.Context, key string, value json.RawMessage, updatedBy, evidenceRef string) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO cnfi_signal_config (key, value, updated_at, updated_by, evidence_ref)
+		VALUES ($1, $2, now(), $3, $4)
+		ON CONFLICT (key) DO UPDATE
+		   SET value = EXCLUDED.value, updated_at = now(),
+		       updated_by = EXCLUDED.updated_by, evidence_ref = EXCLUDED.evidence_ref`,
+		key, value, updatedBy, evidenceRef)
+	return err
+}
