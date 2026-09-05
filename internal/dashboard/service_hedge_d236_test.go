@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -25,14 +26,22 @@ func hedgeStructureSource(t *testing.T) string {
 	return readFile(t, path)
 }
 
-// readFile 读取文件内容为字符串（测试辅助，断言用）。
+// fileCache 缓存文件内容，避免 -race 并行测试下并发 os.ReadFile 触发 EBADF（CI 实证）。
+var fileCache sync.Map
+
+// readFile 读取文件内容为字符串（测试辅助，断言用；sync.Map 缓存保每文件只读一次）。
 func readFile(t *testing.T, path string) string {
 	t.Helper()
+	if v, ok := fileCache.Load(path); ok {
+		return v.(string)
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}
-	return string(data)
+	s := string(data)
+	fileCache.Store(path, s)
+	return s
 }
 
 // 断言①：投票年化/能量/带宽文本位于 hedge-acct-block 渲染段且「流动」行不存在（D-236 变更6 删流动行）。
