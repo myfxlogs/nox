@@ -57,4 +57,3 @@ func normalizeAddr(a string) string {
 	}
 	return a
 }
-

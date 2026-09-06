@@ -12,13 +12,13 @@ import (
 // Source='trx'|'cmc'；Kind 归一 8 类（rental_income/vote_claim/deposit/withdraw/stake/unstake/overnight/other）；
 // AmountValue 原生单位（TRX 笔=sun÷1e6 的 TRX 数；CMC 笔=USD）；AmountUnit='TRX'|'USD'。
 type HedgeFlowItem struct {
-	Source       string    // trx|cmc
+	Source       string // trx|cmc
 	Ts           time.Time
-	Kind         string    // 归一 8 类
-	AmountValue  float64   // 原生单位数值
-	AmountUnit   string    // TRX|USD
-	Counterparty string    // TRX=对手方地址；CMC=空
-	TxID         string    // TRX=tx_id；CMC=transaction_id
+	Kind         string  // 归一 8 类
+	AmountValue  float64 // 原生单位数值
+	AmountUnit   string  // TRX|USD
+	Counterparty string  // TRX=对手方地址；CMC=空
+	TxID         string  // TRX=tx_id；CMC=transaction_id
 }
 
 // SumCMCOvernightByRange D-212 A4：fin_cmc_history OVERNIGHT_SETTLEMENT 之和（USD）[from,to]。
@@ -47,7 +47,7 @@ func (s *Store) SumCMCOvernightByRange(ctx context.Context, from, to *time.Time)
 }
 
 // ListHedgeFlowPage D-212 A4：UNION ALL 跨源分页（fin_trx_txs + fin_cmc_history）按 ts DESC。
-// sourceFilter='' = 全部；'trx'/'cmc' = 单源。limit/offset 后端分页。
+// sourceFilter=” = 全部；'trx'/'cmc' = 单源。limit/offset 后端分页。
 // kind 归一 8 类：TRX 原样（已是 7 类）；CMC OVERNIGHT_SETTLEMENT→overnight，SELL_TRADE/BUY_TRADE→other（A5），其余→other。
 // R1 灰尘过滤（业主裁定）：TRX 转入类（deposit/rental_income/other）amount_sun < 10000（<0.01 TRX）不返回——
 // 灰尘广告转账过滤；仅查询过滤，入库保留（账本完整性，D-211 采集器不动）。CMC 行不受影响。
