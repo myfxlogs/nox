@@ -5,6 +5,7 @@
 // ④现价行含「秒前」
 // ⑤App.tsx 含 cmcWatch 透传
 // ⑥APR 渲染含 floor 截断（Math.floor）且无 toFixed(2) 残留于 APR 三数
+// ⑪镜像双行加开仓价/现价 2 列（D-236 变更10）
 package dashboard
 
 import (
@@ -239,5 +240,60 @@ func TestD236_NoDBPrimaryPath(t *testing.T) {
 	watchSrc := readFile(t, watchPath)
 	if strings.Contains(watchSrc, "LastCMCPriceMidWithTime") {
 		t.Error("service_cmc_watch.go 仍含 LastCMCPriceMidWithTime（D-236 变更9 应改 freshLive，mid 不再读 DB price）")
+	}
+}
+
+// 断言⑪：镜像双行加开仓价/现价 2 列（D-236 变更10）。
+// thead 含两列 th，列序=数量→开仓价→现价→浮动盈亏；
+// 空单腿行含 baselinePrice 引用、现价表达式与头部 ask || structure!.mid 同源；
+// 现货腿行开仓价格为「—」字面量（不含 baselinePrice），现价同空单腿表达式。
+func TestD236_EntryPriceCurrentPriceColumns(t *testing.T) {
+	src := hedgeStructureSource(t)
+	// ① thead 含开仓价/现价两列 th
+	if !strings.Contains(src, `<th scope="col">开仓价</th>`) {
+		t.Fatal(`thead 缺 <th scope="col">开仓价</th>`)
+	}
+	if !strings.Contains(src, `<th scope="col">现价</th>`) {
+		t.Fatal(`thead 缺 <th scope="col">现价</th>`)
+	}
+	// ② 列序：数量 → 开仓价 → 现价 → 浮动盈亏
+	qtyIdx := strings.Index(src, `<th scope="col">数量</th>`)
+	entryIdx := strings.Index(src, `<th scope="col">开仓价</th>`)
+	curIdx := strings.Index(src, `<th scope="col">现价</th>`)
+	pnlIdx := strings.Index(src, `<th scope="col">浮动盈亏</th>`)
+	if !(qtyIdx < entryIdx && entryIdx < curIdx && curIdx < pnlIdx) {
+		t.Fatal("列序不符：应为 数量→开仓价→现价→浮动盈亏")
+	}
+	// ③ 空单腿行含 baselinePrice 引用（开仓价=基准同源），现价与头部同源
+	shortIdx := strings.Index(src, `legShort?.label`)
+	if shortIdx < 0 {
+		t.Fatal("无法定位空单腿行")
+	}
+	shortEnd := strings.Index(src[shortIdx:], "</tr>")
+	if shortEnd < 0 {
+		t.Fatal("无法定位空单腿行结束")
+	}
+	shortRow := src[shortIdx : shortIdx+shortEnd]
+	if !strings.Contains(shortRow, "baselinePrice") {
+		t.Error("空单腿行缺 baselinePrice 引用（开仓价应=基准同源）")
+	}
+	if !strings.Contains(shortRow, "ask || structure!.mid") {
+		t.Error("空单腿行缺 ask || structure!.mid（现价应与头部同源）")
+	}
+	// ④ 现货腿行开仓价为「—」字面量（不含 baselinePrice），现价同空单腿表达式
+	spotIdx := strings.Index(src, `legSpot?.label`)
+	if spotIdx < 0 {
+		t.Fatal("无法定位现货腿行")
+	}
+	spotEnd := strings.Index(src[spotIdx:], "</tr>")
+	if spotEnd < 0 {
+		t.Fatal("无法定位现货腿行结束")
+	}
+	spotRow := src[spotIdx : spotIdx+spotEnd]
+	if strings.Contains(spotRow, "baselinePrice") {
+		t.Error("现货腿行含 baselinePrice（开仓价应为「—」字面量）")
+	}
+	if !strings.Contains(spotRow, "ask || structure!.mid") {
+		t.Error("现货腿行缺 ask || structure!.mid（现价应与头部同源）")
 	}
 }
