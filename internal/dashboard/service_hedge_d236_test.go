@@ -6,6 +6,7 @@
 // ⑤App.tsx→PositionsPage→HedgeStructure 的 cmcWatch prop 链不存在（D-236 变更11 翻转）
 // ⑥APR 渲染含 floor 截断（Math.floor）且无 toFixed(2) 残留于 APR 三数
 // ⑪镜像双行加开仓价/现价 2 列（D-236 变更10；业主令 9-6 现货腿开仓价改用 baselinePrice）
+// ⑬现货腿浮盈=对冲镜像（D-236 变更13；legSpot.PnlVsBase = -ls.PnL 后端算，tsx 读 legSpot?.pnlVsBase）
 package dashboard
 
 import (
@@ -300,6 +301,37 @@ func TestD236_EntryPriceCurrentPriceColumns(t *testing.T) {
 	}
 	if !strings.Contains(spotRow, "ask || structure!.mid") {
 		t.Error("现货腿行缺 ask || structure!.mid（现价应与头部同源）")
+	}
+}
+
+// 断言⑬（D-236 变更13）：现货腿浮盈=对冲镜像。
+// service_hedge.go 源文本含 `legSpot.PnlVsBase = -`（镜像运算在后端，零信任）；
+// tsx 现货腿行含 `legSpot?.pnlVsBase` 且该行不含 `legShort` 引用。
+func TestD236_SpotLegPnlMirror(t *testing.T) {
+	_, testFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	hedgePath := filepath.Join(filepath.Dir(testFile), "service_hedge.go")
+	hedgeSrc := readFile(t, hedgePath)
+	if !strings.Contains(hedgeSrc, "legSpot.PnlVsBase = -") {
+		t.Fatal("service_hedge.go 缺 `legSpot.PnlVsBase = -`（D-236 变更13 现货腿浮盈=对冲镜像，后端算零信任）")
+	}
+	src := hedgeStructureSource(t)
+	spotIdx := strings.Index(src, `legSpot?.label`)
+	if spotIdx < 0 {
+		t.Fatal("无法定位现货腿行")
+	}
+	spotEnd := strings.Index(src[spotIdx:], "</tr>")
+	if spotEnd < 0 {
+		t.Fatal("无法定位现货腿行结束")
+	}
+	spotRow := src[spotIdx : spotIdx+spotEnd]
+	if !strings.Contains(spotRow, "legSpot?.pnlVsBase") {
+		t.Error("现货腿行缺 `legSpot?.pnlVsBase`（D-236 变更13 应读镜像字段）")
+	}
+	if strings.Contains(spotRow, "legShort") {
+		t.Error("现货腿行仍含 legShort 引用（D-236 变更13 应改读 legSpot?.pnlVsBase）")
 	}
 }
 

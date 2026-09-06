@@ -4602,7 +4602,7 @@ type HedgeLegSpot struct {
 	Label     string                 `protobuf:"bytes,1,opt,name=label,proto3" json:"label,omitempty"`                              // "质押现货"
 	QtyStaked float64                `protobuf:"fixed64,2,opt,name=qty_staked,json=qtyStaked,proto3" json:"qty_staked,omitempty"`   // 质押数量（v1.2：fin_trx_account.votes_total=18070，禁 personal_positions 静态）
 	QtyLiquid float64                `protobuf:"fixed64,3,opt,name=qty_liquid,json=qtyLiquid,proto3" json:"qty_liquid,omitempty"`   // 流动余额（fin_trx_account.balance_sun ÷ 1e6）
-	PnlVsBase float64                `protobuf:"fixed64,4,opt,name=pnl_vs_base,json=pnlVsBase,proto3" json:"pnl_vs_base,omitempty"` // 计算值 (mid−baseline)×qty_staked（镜像腿，恒和=0）
+	PnlVsBase float64                `protobuf:"fixed64,4,opt,name=pnl_vs_base,json=pnlVsBase,proto3" json:"pnl_vs_base,omitempty"` // 对冲镜像=−空单平台自报 PnL（现货购价未知，镜像近似）
 	Stake     *HedgeStake            `protobuf:"bytes,5,opt,name=stake,proto3" json:"stake,omitempty"`                              // 质押明细 energy+bandwidth
 	// D-231 S3：投票收益率（fin_trx_vote_apr 最新行透传，只渲染不运算）
 	VoteAprCurrent float64                `protobuf:"fixed64,6,opt,name=vote_apr_current,json=voteAprCurrent,proto3" json:"vote_apr_current,omitempty"` // 当前投票票数加权平均年化 %

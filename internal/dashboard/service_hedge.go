@@ -47,7 +47,7 @@ func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1
 	}
 
 	// 质押腿（leg_spot）：qty_staked=votes_total（展示），qty_liquid=balance
-	// D-236 变更9：PnL 不再镜像计算（现货无对手方报价、无开仓成本记录，反推=虚构）→ 前端显示「—」
+	// D-236 变更13：PnL=对冲镜像（−空单平台自报 PnL，后端算零信任）；现货购价未知，镜像近似非独立估值
 	legSpot := &v1.HedgeLegSpot{Label: "质押现货"}
 	if hasTRX {
 		qtyStaked := float64(trxAcc.VotesTotal)
@@ -68,6 +68,8 @@ func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1
 		}
 		legSpot.VoteAprTs = timestamppb.New(trxApr.FetchedAt)
 	}
+	// D-236 变更13：现货腿浮盈=对冲镜像（−空单平台自报 PnL）。现货购价未知，镜像近似非现货独立估值。
+	legSpot.PnlVsBase = -ls.PnL
 
 	// 空单腿（leg_short）：D-236 变更9 PnL=平台自报值（LiveState.PnL，type7 帧直通 unrealisedPnLInPrimaryCurrency）
 	legShort := &v1.HedgeLegShort{Label: "CMC 空单"}
