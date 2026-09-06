@@ -288,10 +288,12 @@ func TestGetHedgeStructure_CarryHandCalc(t *testing.T) {
 	if diff := carry.CumUsd - wantCum; diff > 1e-4 || diff < -1e-4 {
 		t.Errorf("cum_usd = %v, want %v", carry.CumUsd, wantCum)
 	}
-	// 年化 = cum_usd / (18070×0.3236) × 365 × 100
-	wantAnnual := wantCum / (18070 * 0.3236) * 365 * 100
-	if diff := carry.AnnualizedPct - wantAnnual; diff > 1e-4 || diff < -1e-4 {
-		t.Errorf("annualized_pct = %v, want %v", carry.AnnualizedPct, wantAnnual)
+	// 年化 = cum_usd / (18070×0.3236) / days × 365 × 100（D-236 变更14 时间感知：
+	// days = now − MIN(day)，day1=now-1d 截断至 UTC 午夜 → days≈1+x）。
+	days := now.Sub(day1).Hours() / 24
+	wantAnnual := wantCum / (18070 * 0.3236) / days * 365 * 100
+	if diff := carry.AnnualizedPct - wantAnnual; diff > wantAnnual*1e-6 || diff < -wantAnnual*1e-6 {
+		t.Errorf("annualized_pct = %v, want %v (days=%v)", carry.AnnualizedPct, wantAnnual, days)
 	}
 }
 
