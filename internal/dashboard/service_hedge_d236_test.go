@@ -2,10 +2,10 @@
 // ①投票年化/流动/能量/带宽文本位于 hedge-acct-block 渲染段
 // ②强平格 title 含「平台口径」与两净值文本
 // ③质押格不含「流动」
-// ④现价行含「秒前」
-// ⑤App.tsx 含 cmcWatch 透传
+// ④tsx 源文本不含「秒前」且不含「现价(ask)」（D-236 变更11 翻转：头部价格行已删）
+// ⑤App.tsx→PositionsPage→HedgeStructure 的 cmcWatch prop 链不存在（D-236 变更11 翻转）
 // ⑥APR 渲染含 floor 截断（Math.floor）且无 toFixed(2) 残留于 APR 三数
-// ⑪镜像双行加开仓价/现价 2 列（D-236 变更10）
+// ⑪镜像双行加开仓价/现价 2 列（D-236 变更10；业主令 9-6 现货腿开仓价改用 baselinePrice）
 package dashboard
 
 import (
@@ -99,24 +99,29 @@ func TestD236_StakeCellNoLiquid(t *testing.T) {
 	}
 }
 
-// 断言④：现价行含「秒前」。
+// 断言④（D-236 变更11 翻转）：tsx 源文本不含「秒前」且不含「现价(ask)」（头部价格行已删）。
 func TestD236_PriceRowSecondsAgo(t *testing.T) {
 	src := hedgeStructureSource(t)
-	if !strings.Contains(src, "秒前") {
-		t.Fatal("现价行缺「秒前」时戳")
+	if strings.Contains(src, "秒前") {
+		t.Fatal("tsx 源文本仍含「秒前」（D-236 变更11 头部价格行应删）")
+	}
+	if strings.Contains(src, "现价(ask)") {
+		t.Fatal("tsx 源文本仍含「现价(ask)」（D-236 变更11 头部价格行应删）")
 	}
 }
 
-// 断言⑤：App.tsx 含 cmcWatch 透传。
+// 断言⑤（D-236 变更11 翻转）：App.tsx→PositionsPage→HedgeStructure 的 cmcWatch prop 链不存在。
 func TestD236_AppCmcWatchProp(t *testing.T) {
 	_, testFile, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("runtime.Caller failed")
 	}
-	path := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src", "App.tsx")
-	src := readFile(t, path)
-	if !strings.Contains(src, "cmcWatch") {
-		t.Fatal("App.tsx 缺 cmcWatch 透传")
+	for _, rel := range []string{"App.tsx", "components/PositionsPage.tsx", "components/PositionsPageHedgeStructure.tsx"} {
+		path := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src", rel)
+		src := readFile(t, path)
+		if strings.Contains(src, "cmcWatch") {
+			t.Errorf("%s 仍含 cmcWatch（D-236 变更11 prop 链应退役）", rel)
+		}
 	}
 }
 
@@ -243,10 +248,10 @@ func TestD236_NoDBPrimaryPath(t *testing.T) {
 	}
 }
 
-// 断言⑪：镜像双行加开仓价/现价 2 列（D-236 变更10）。
+// 断言⑪：镜像双行加开仓价/现价 2 列（D-236 变更10；业主令 9-6 现货腿开仓价改用 baselinePrice）。
 // thead 含两列 th，列序=数量→开仓价→现价→浮动盈亏；
 // 空单腿行含 baselinePrice 引用、现价表达式与头部 ask || structure!.mid 同源；
-// 现货腿行开仓价格为「—」字面量（不含 baselinePrice），现价同空单腿表达式。
+// 现货腿行开仓价=baselinePrice（业主令 9-6：CMC 开仓价），现价同空单腿表达式。
 func TestD236_EntryPriceCurrentPriceColumns(t *testing.T) {
 	src := hedgeStructureSource(t)
 	// ① thead 含开仓价/现价两列 th
@@ -280,7 +285,7 @@ func TestD236_EntryPriceCurrentPriceColumns(t *testing.T) {
 	if !strings.Contains(shortRow, "ask || structure!.mid") {
 		t.Error("空单腿行缺 ask || structure!.mid（现价应与头部同源）")
 	}
-	// ④ 现货腿行开仓价为「—」字面量（不含 baselinePrice），现价同空单腿表达式
+	// ④ 现货腿行开仓价=baselinePrice（业主令 9-6：CMC 开仓价），现价同空单腿表达式
 	spotIdx := strings.Index(src, `legSpot?.label`)
 	if spotIdx < 0 {
 		t.Fatal("无法定位现货腿行")
@@ -290,8 +295,8 @@ func TestD236_EntryPriceCurrentPriceColumns(t *testing.T) {
 		t.Fatal("无法定位现货腿行结束")
 	}
 	spotRow := src[spotIdx : spotIdx+spotEnd]
-	if strings.Contains(spotRow, "baselinePrice") {
-		t.Error("现货腿行含 baselinePrice（开仓价应为「—」字面量）")
+	if !strings.Contains(spotRow, "baselinePrice") {
+		t.Error("现货腿行缺 baselinePrice（业主令 9-6：开仓价应=CMC 开仓价）")
 	}
 	if !strings.Contains(spotRow, "ask || structure!.mid") {
 		t.Error("现货腿行缺 ask || structure!.mid（现价应与头部同源）")
