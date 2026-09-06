@@ -216,9 +216,9 @@ func TestListHedgeFlowPage_DustFilter(t *testing.T) {
 	// 4 条 TRX：灰尘 deposit（9000 sun=0.009 TRX）+ 边界 deposit（10000 sun=0.01 TRX）+
 	// 灰尘 vote_claim（9000 sun，非转入类，应返回）+ 正常 rental_income（5320000 sun=5.32 TRX）
 	trxTxs := []TRXTx{
-		{TxID: "dust_dep", Ts: now, Kind: "deposit", AmountSun: 9000},           // 灰尘转入→剔除
-		{TxID: "edge_dep", Ts: now.Add(time.Minute), Kind: "deposit", AmountSun: 10000}, // 边界 0.01 TRX→保留
-		{TxID: "dust_vote", Ts: now.Add(2 * time.Minute), Kind: "vote_claim", AmountSun: 9000}, // 非转入类→保留
+		{TxID: "dust_dep", Ts: now, Kind: "deposit", AmountSun: 9000},                                    // 灰尘转入→剔除
+		{TxID: "edge_dep", Ts: now.Add(time.Minute), Kind: "deposit", AmountSun: 10000},                  // 边界 0.01 TRX→保留
+		{TxID: "dust_vote", Ts: now.Add(2 * time.Minute), Kind: "vote_claim", AmountSun: 9000},           // 非转入类→保留
 		{TxID: "normal_rental", Ts: now.Add(3 * time.Minute), Kind: "rental_income", AmountSun: 5320000}, // 正常→保留
 	}
 	for _, tx := range trxTxs {

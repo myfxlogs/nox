@@ -126,9 +126,9 @@ func TestSumTRXTxRentalByDay(t *testing.T) {
 	day := time.Date(2026, 9, 2, 0, 0, 0, 0, time.UTC)
 	// 写 3 笔 rental（2 笔在 D 日，1 笔在 D+1 日）
 	for _, ts := range []time.Time{
-		day.Add(16 * time.Hour),      // D 日 16:00
-		day.Add(20 * time.Hour),      // D 日 20:00
-		day.Add(36 * time.Hour),      // D+1 日 12:00
+		day.Add(16 * time.Hour), // D 日 16:00
+		day.Add(20 * time.Hour), // D 日 20:00
+		day.Add(36 * time.Hour), // D+1 日 12:00
 	} {
 		if err := s.UpsertTRXTx(ctx, TRXTx{
 			TxID: "r" + ts.Format("150405"), Ts: ts, Kind: "rental_income",
