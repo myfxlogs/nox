@@ -222,3 +222,11 @@ func (a *CMCSourceAdapter) LastCMCUnrealised(instrumentID string) (float64, erro
 func (a *CMCSourceAdapter) LastCMCPosition(instrumentID string) (CMCPosition, error) {
 	return a.Store.LastCMCPositionByInstrument(a.Ctx, instrumentID)
 }
+
+// FirstCMCPositionOpenedAt D-236 变更15：对冲起点=fin_cmc_positions 最早 opened_at。
+// 空表 → nil（对冲后视图回落=结构累计同值并注明）。
+func (s *Store) FirstCMCPositionOpenedAt(ctx context.Context) (*time.Time, error) {
+	var day *time.Time
+	err := s.pool.QueryRow(ctx, `SELECT MIN(opened_at) FROM fin_cmc_positions`).Scan(&day)
+	return day, err
+}

@@ -640,6 +640,8 @@ message HedgeCarry {
   double cmc_overnight_7d_usd = 3; // 近 7 日隔夜息（SumCMCOvernightByRange）
   double cum_usd = 4;             // 累计收益 USD（全量 energy×price+voting×price+interest）
   double annualized_pct = 5;      // 年化 %（cum_usd / (qty×mid) × 365）
+  double hedged_cum_usd = 6;        // D-236 变更15：对冲后累计（窗口=[hedgeStart,now]）
+  double hedged_annualized_pct = 7; // D-236 变更15：对冲后年化（时间感知，days=max(1,now−hedgeStart)）
 }
 
 message HedgeAccounts {
