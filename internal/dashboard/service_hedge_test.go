@@ -107,8 +107,8 @@ func TestHedgeStructurePlatformLabel(t *testing.T) {
 	}
 }
 
-// TestGetHedgeStructure_MirrorPnlSumZero D-236 变更9 改写：镜像恒和=0 退役（业主真值原则取代）。
-// 新断言：空单 PnL=平台自报值（freshLive 回退 DB unrealised_pnl，无 cmcLiveProvider 时）。
+// TestGetHedgeStructure_MirrorPnlSumZero D-236 变更13：镜像恒和=0 恢复（legSpot.PnlVsBase = -ls.PnL，后端算零信任）。
+// 断言：空单 PnL=平台自报值（freshLive 回退 DB unrealised_pnl，无 cmcLiveProvider 时）；现货腿=对冲镜像（−空单 PnL）。
 // 构造 TRX 账户（18070 质押）+ CMC 持仓（18100 空单，entry=0.33171，unrealised_pnl=-117.83）+ CMC price（mid=0.3236）。
 func TestGetHedgeStructure_MirrorPnlSumZero(t *testing.T) {
 	s := hedgeTestStore(t)
@@ -166,9 +166,13 @@ func TestGetHedgeStructure_MirrorPnlSumZero(t *testing.T) {
 	if st.LegShort.PnlVsBase != -117.83 {
 		t.Errorf("leg_short pnl = %v, want -117.83 (平台自报值, D-236 变更9)", st.LegShort.PnlVsBase)
 	}
-	// 质押腿 PnL 不再镜像计算（现货无对手方报价、无开仓成本记录，反推=虚构）→ 0（前端显示「—」）
-	if st.LegSpot.PnlVsBase != 0 {
-		t.Errorf("leg_spot pnl = %v, want 0 (D-236 变更9 退役镜像, 前端显示「—」)", st.LegSpot.PnlVsBase)
+	// D-236 变更13：现货腿 PnL=对冲镜像（−空单平台自报 PnL，后端算零信任）= 117.83
+	if st.LegSpot.PnlVsBase != 117.83 {
+		t.Errorf("leg_spot pnl = %v, want 117.83 (D-236 变更13 对冲镜像=−空单PnL)", st.LegSpot.PnlVsBase)
+	}
+	// 镜像恒和=0 恢复（legSpot + legShort = 117.83 + (-117.83) = 0）
+	if sum := st.LegSpot.PnlVsBase + st.LegShort.PnlVsBase; sum != 0 {
+		t.Errorf("mirror sum = %v, want 0 (D-236 变更13 镜像恒和=0 恢复)", sum)
 	}
 	// leg_spot qty_staked=18070（v1.2 数量源 fin_trx_account）
 	if st.LegSpot.QtyStaked != 18070 {
