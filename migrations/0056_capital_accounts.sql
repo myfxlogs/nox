@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS capital_accounts (
 CREATE TABLE IF NOT EXISTS capital_account_venue_links (
     id                bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     account_id        bigint NOT NULL REFERENCES capital_accounts(account_id),
-    venue_account_key text NOT NULL,             -- venue:platform 格式（如 REDACTED_MT_ACCT:mt5）
+    venue_account_key text NOT NULL,             -- venue:platform 格式（如 <venue>:mt5）
     environment       text NOT NULL,             -- 必须与 capital_accounts.environment 一致
     enabled           boolean NOT NULL DEFAULT true,
     created_at        timestamptz NOT NULL DEFAULT now(),
