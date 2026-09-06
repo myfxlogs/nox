@@ -302,3 +302,65 @@ func TestD236_EntryPriceCurrentPriceColumns(t *testing.T) {
 		t.Error("现货腿行缺 ask || structure!.mid（现价应与头部同源）")
 	}
 }
+
+// --- D-244 变更12 断言⑫（先红后绿；TRX 页第一性重构） ---
+
+// 断言⑫a：AppConstants 含 trx tab（TABS 键 + Tab type）。
+func TestD244_AppConstantsTrxTab(t *testing.T) {
+	_, testFile, _, _ := runtime.Caller(0)
+	path := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src", "AppConstants.ts")
+	src := readFile(t, path)
+	if !strings.Contains(src, `key: "trx"`) {
+		t.Errorf("AppConstants.ts TABS 缺 { key: \"trx\" }（变更12）")
+	}
+	if !strings.Contains(src, `"trx"`) || !strings.Contains(src, `| "trx"`) {
+		t.Errorf("AppConstants.ts Tab type 缺 \"trx\"（变更12）")
+	}
+}
+
+// 断言⑫b：App.tsx 挂 TrxPage；PositionsPage 渲染块不再透传 hedgeStructure。
+func TestD244_AppTrxPageMount(t *testing.T) {
+	_, testFile, _, _ := runtime.Caller(0)
+	dir := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src")
+	app := readFile(t, filepath.Join(dir, "App.tsx"))
+	if !strings.Contains(app, `tab === "trx"`) || !strings.Contains(app, "<TrxPage") {
+		t.Errorf("App.tsx 缺 trx tab 渲染块（变更12）")
+	}
+	pos := readFile(t, filepath.Join(dir, "components", "PositionsPage.tsx"))
+	if strings.Contains(pos, "hedgeStructure={") {
+		t.Errorf("PositionsPage 仍透传 hedgeStructure（应迁 TrxPage）")
+	}
+	if strings.Contains(pos, "hedgeFlow={") {
+		t.Errorf("PositionsPage 仍透传 hedgeFlow（应迁 TrxPage）")
+	}
+}
+
+// 断言⑫c：PositionsPage 不再 import 两迁移组件；TrxPage 三组件齐挂。
+func TestD244_ComponentMigration(t *testing.T) {
+	_, testFile, _, _ := runtime.Caller(0)
+	dir := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src")
+	pos := readFile(t, filepath.Join(dir, "components", "PositionsPage.tsx"))
+	if strings.Contains(pos, "PositionsPageHedgeStructure") || strings.Contains(pos, "PositionsPageHedgeFlow") {
+		t.Errorf("PositionsPage 仍引用迁移组件（应全迁 TrxPage）")
+	}
+	trx := readFile(t, filepath.Join(dir, "components", "TrxPage.tsx"))
+	for _, comp := range []string{"PositionsPageHedgeStructure", "PositionsPageHedgeFlow", "PositionsPageDailyIncome"} {
+		if !strings.Contains(trx, "<"+comp) {
+			t.Errorf("TrxPage 缺挂载 %s（变更12 三组件）", comp)
+		}
+	}
+}
+
+// 断言⑫d：对冲卡表单段退役；收益区组件自带 listDailyIncome。
+func TestD244_FormRelocated(t *testing.T) {
+	_, testFile, _, _ := runtime.Caller(0)
+	dir := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src")
+	hs := readFile(t, filepath.Join(dir, "components", "PositionsPageHedgeStructure.tsx"))
+	if strings.Contains(hs, "addDailyIncome") {
+		t.Errorf("对冲卡仍含内嵌收益表单（应迁 PositionsPageDailyIncome）")
+	}
+	di := readFile(t, filepath.Join(dir, "components", "PositionsPageDailyIncome.tsx"))
+	if !strings.Contains(di, "listDailyIncome") {
+		t.Errorf("DailyIncome 组件缺 listDailyIncome（迁移载体失效）")
+	}
+}
