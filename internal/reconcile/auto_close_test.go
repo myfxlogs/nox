@@ -16,14 +16,15 @@ import (
 // —— fakeStore：实现 reconcile.Store 接口 ——
 
 type fakeStore struct {
-	positions   map[int64]*pgstore.Position
-	legs        map[int64][]*pgstore.PositionLeg
-	alerts      []fakeAlert
-	closedIDs   []int64
-	failedIDs   []int64
-	closeCalls  int
-	statusCalls map[int64]string
-	cashflows   []fakeCashflow // D-159 W3a R4：兜底分支补写记录
+	closeTriggers []pgstore.AutotradeLog // D-245 触发源录制
+	positions     map[int64]*pgstore.Position
+	legs          map[int64][]*pgstore.PositionLeg
+	alerts        []fakeAlert
+	closedIDs     []int64
+	failedIDs     []int64
+	closeCalls    int
+	statusCalls   map[int64]string
+	cashflows     []fakeCashflow // D-159 W3a R4：兜底分支补写记录
 }
 
 type fakeAlert struct {
@@ -682,3 +683,9 @@ func TestFakeCloser_ResumeClose_StateCheck(t *testing.T) {
 
 // 防止 unused 警告（strconv 在 order_history.go 用，这里确保测试包编译）
 var _ = strconv.Itoa
+
+// D-245：CLOSE_TRIGGER 触发源记录（fakeStore 录制，接口新增 InsertAutotradeLog）。
+func (f *fakeStore) InsertAutotradeLog(ctx context.Context, l *pgstore.AutotradeLog) error {
+	f.closeTriggers = append(f.closeTriggers, *l)
+	return nil
+}

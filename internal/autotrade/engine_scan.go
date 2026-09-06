@@ -6,6 +6,8 @@ import (
 	"log"
 
 	"arb/internal/settlement"
+
+	"arb/internal/store/pgstore"
 )
 
 // scanAndClose 扫描 OPEN 持仓，按 type 分派退出条件（D-072 §4.2）。
@@ -29,6 +31,7 @@ func (e *Engine) scanAndClose(ctx context.Context) {
 		}
 		if probeRes.shouldClose {
 			log.Printf("[autotrade] auto-close pos=%d type=%s: %s", p.ID, p.Type, probeRes.reason)
+			logCloseTrigger(ctx, e.store, &p, "probe: "+probeRes.reason) // D-245 触发源持久化
 			if err := e.service.AutoClosePosition(ctx, p.ID); err != nil {
 				log.Printf("[autotrade] auto-close pos=%d failed: %v", p.ID, err)
 				continue
@@ -46,6 +49,7 @@ func (e *Engine) scanAndClose(ctx context.Context) {
 			continue
 		}
 		log.Printf("[autotrade] auto-close pos=%d type=%s: %s", p.ID, p.Type, reason)
+		logCloseTrigger(ctx, e.store, &p, "exit: "+reason) // D-245 触发源持久化
 		if err := e.service.AutoClosePosition(ctx, p.ID); err != nil {
 			log.Printf("[autotrade] auto-close pos=%d failed: %v", p.ID, err)
 			continue
@@ -58,5 +62,20 @@ func (e *Engine) scanAndClose(ctx context.Context) {
 				_ = e.service.Store().SetPositionNote(ctx, p.ID, "settle_failed: "+err.Error())
 			}
 		}
+	}
+}
+
+// logCloseTrigger D-245 缺口2：平仓触发源持久化（481 实证 stdout 随容器重建丢失）。
+// 写失败只 log 不阻断平仓（观测路径不挡执行路径）。
+func logCloseTrigger(ctx context.Context, st *pgstore.Store, p *pgstore.Position, reason string) {
+	posID := p.ID
+	if err := st.InsertAutotradeLog(ctx, &pgstore.AutotradeLog{
+		OpportunityID: p.OpportunityID,
+		PositionID:    &posID,
+		Strategy:      p.Type,
+		Status:        "CLOSE_TRIGGER",
+		Reason:        reason,
+	}); err != nil {
+		log.Printf("[autotrade] D-245 CLOSE_TRIGGER 落库失败 pos=%d: %v", p.ID, err)
 	}
 }

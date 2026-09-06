@@ -31,6 +31,8 @@ type Store interface {
 	ClosePosition(ctx context.Context, id int64, realizedPnl float64) error
 	UpdatePositionStatus(ctx context.Context, id int64, status string) error
 	InsertAlert(ctx context.Context, posID *int64, level, msg string) error
+	// D-245：平仓触发源持久化（三入口调用侧；写失败只 log 不阻断）。
+	InsertAutotradeLog(ctx context.Context, l *pgstore.AutotradeLog) error
 	// D-159 W2a R3-9：settlement 失败标记 settle_failed 到 position.note（可重试状态）。
 	SetPositionNote(ctx context.Context, id int64, note string) error
 	// D-159 W3a R4：auto_close 兜底分支补写 swap/commission cashflows（per-leg 幂等键带 LegNo）。

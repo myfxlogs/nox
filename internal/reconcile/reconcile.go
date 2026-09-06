@@ -12,8 +12,12 @@ import (
 
 // Reconciler 对账器：比对本地 OPEN legs 与 venue 实际持仓。
 type Reconciler struct {
-	store           Store
-	mu              sync.RWMutex
+	store Store
+	mu    sync.RWMutex
+	// D-245：CLOSING 告警分层的小时桶（posID→上次 warn 的整小时），进程重启最多重复 1 条（不落库）。
+	closingAlertHour map[int64]int64
+	// D-245：可注入时钟（测试假时钟；nil=time.Now）。
+	nowFn           func() time.Time
 	queriers        []VenueQuerier
 	historyQueriers []OrderHistoryQuerier
 	closer          Closer
@@ -25,11 +29,21 @@ type Reconciler struct {
 // New 创建对账器。
 func New(store Store, queriers ...VenueQuerier) *Reconciler {
 	return &Reconciler{
-		store:        store,
-		queriers:     queriers,
-		runTimeout:   10 * time.Second,
-		initialDelay: 60 * time.Second,
+		store:            store,
+		queriers:         queriers,
+		runTimeout:       10 * time.Second,
+		initialDelay:     60 * time.Second,
+		closingAlertHour: map[int64]int64{},
+		nowFn:            time.Now,
 	}
+}
+
+// now D-245：可注入时钟（nil=time.Now）。
+func (r *Reconciler) now() time.Time {
+	if r.nowFn == nil {
+		return time.Now()
+	}
+	return r.nowFn()
 }
 
 // SetCloser 注入平仓器（对账自动收尾用，D-073+）。main 装配 service 后调。

@@ -45,7 +45,7 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 	if err != nil {
 		log.Printf("[reconcile] list closing positions: %v", err)
 	}
-	now := time.Now()
+	now := r.now()
 
 	// localLegs: venue_key+":"+ticket → (leg, position)，收尾需要 position 引用
 	// D-159 W2a R3-7：venue 残量按 venue_key+ticket 复合 key 确认（ticket 非全局唯一，跨账户会串仓）。
@@ -199,16 +199,22 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 		if !isClosingStuck(&p, now) {
 			continue
 		}
+		// D-245：告警按时长分层（<2h critical 每循环；≥2h warn 每小时至多 1 条）——
+		// 481 实证：周末休市卡死 ~450 条 critical 淹没真信号；ResumeClose 节奏不变（自愈优先）。
+		stuckFor := time.Duration(0)
+		if p.ClosingStartedAt != nil {
+			stuckFor = now.Sub(*p.ClosingStartedAt)
+		}
 		// D-189 P0-4 S2：UNKNOWN（uncertainty_reason 非空）只告警，不自动重试（可能已成交，盲平=反向开新仓）。
 		if p.UncertaintyReason != nil && *p.UncertaintyReason != "" {
 			msg := fmt.Sprintf("CLOSING UNKNOWN position #%d 超 %v 未确认（人工/OrderHistory 查证，不自动重试）", p.ID, closingStuckTimeout)
-			r.insertAlertCtx(ctx, "critical", msg)
+			r.closingStuckAlert(ctx, &p, stuckFor, msg)
 			log.Printf("[reconcile] %s", msg)
 			continue
 		}
 		// D-189 P0-4 S5：普通 CLOSING 超时 → 自动重触发 ResumeClose。
 		msg := fmt.Sprintf("CLOSING position #%d 超 %v 未完成，自动重触发 ResumeClose", p.ID, closingStuckTimeout)
-		r.insertAlertCtx(ctx, "critical", msg)
+		r.closingStuckAlert(ctx, &p, stuckFor, msg)
 		log.Printf("[reconcile] %s", msg)
 		if r.closer != nil {
 			sub, cancel := r.withTimeout(ctx)
@@ -255,6 +261,31 @@ const closingStuckTimeout = 30 * time.Minute
 // isClosingStuck D-159 W2a R3-6 / D-189 P0-4：判断 CLOSING 持仓是否卡住（超时未完成）。
 // D-189 P0-4：改用 ClosingStartedAt（进入 CLOSING 的真实起始时间），不再用 opened_at（开仓时间）。
 // 无 ClosingStartedAt = 异常（直接判卡住，fail-closed）；迁移已为存量 CLOSING 行补当前时间。
+
+// closingStuckAlert D-245：CLOSING 看护告警分层——卡死 <2h 维持 critical 每循环；
+// ≥2h 降为 warn 且每小时至多 1 条（closingAlertHour 小时桶，进程重启最多重复 1 条）。
+// ResumeClose 重试节奏不受影响（降的是告警不是重试）。
+func (r *Reconciler) closingStuckAlert(ctx context.Context, p *pgstore.Position, stuckFor time.Duration, msg string) {
+	if p.ClosingStartedAt == nil || stuckFor < closingTierWarnAfter {
+		r.insertAlertCtx(ctx, "critical", msg)
+		return
+	}
+	hour := r.now().Unix() / 3600
+	r.mu.RLock()
+	last, ok := r.closingAlertHour[p.ID]
+	r.mu.RUnlock()
+	if ok && last == hour {
+		return
+	}
+	r.mu.Lock()
+	r.closingAlertHour[p.ID] = hour
+	r.mu.Unlock()
+	r.insertAlertCtx(ctx, "warn", msg)
+}
+
+// closingTierWarnAfter D-245：warn 分层门槛（卡死 ≥2h 降频）。
+const closingTierWarnAfter = 2 * time.Hour
+
 func isClosingStuck(pos *pgstore.Position, now time.Time) bool {
 	if pos.Status != "CLOSING" {
 		return false

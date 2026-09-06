@@ -89,6 +89,18 @@ func (r *Reconciler) autoClose(
 		}
 	}
 	if otherOpen && r.closer != nil {
+		// D-245 缺口2：触发源持久化（reconcile_legged；写失败只 log 不阻断平仓）。
+		// 字段口径偏差留痕：设计假设 Position 含 canonical/venue_buy/venue_sell/qty，
+		// 实际这些在 legs 上（Position 只有 OpportunityID/Type/Venue）——按「空串容忍」填可得字段。
+		if err := r.store.InsertAutotradeLog(ctx, &pgstore.AutotradeLog{
+			OpportunityID: pos.OpportunityID,
+			PositionID:    &posID,
+			Strategy:      pos.Type,
+			Status:        "CLOSE_TRIGGER",
+			Reason:        "reconcile_legged",
+		}); err != nil {
+			log.Printf("[reconcile] D-245 CLOSE_TRIGGER 落库失败 pos=%d: %v", posID, err)
+		}
 		// AutoClosePosition 会平掉所有 FILLED 腿（含已回填 CLOSE 的那条——但那条 phase=CLOSE 会被跳过）
 		// 实际上 pipeline.ClosePosition 遍历所有 FILLED 腿按 venue 平——已平腿 CloseOrder 会失败但 continue 不阻断
 		// 更安全：只平另一条 OPEN 腿。但既有路径是整 position 平仓，复用不新造。
