@@ -147,3 +147,11 @@ func (s *Store) SumDailyIncomeByRange(ctx context.Context, from, to *time.Time) 
 	}
 	return energyTrx, votingTrx, interestUSD, nil
 }
+
+// FirstDailyIncomeDay returns the earliest income day (D-236 变更14：年化时间感知分母)。
+// 空表 → nil（调用方按不可得处理，年化回落 0 → 前端空态「—」）。
+func (s *Store) FirstDailyIncomeDay(ctx context.Context) (*time.Time, error) {
+	var day *time.Time
+	err := s.pool.QueryRow(ctx, `SELECT MIN(day) FROM position_daily_income`).Scan(&day)
+	return day, err
+}
