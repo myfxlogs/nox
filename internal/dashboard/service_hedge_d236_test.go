@@ -10,12 +10,18 @@
 package dashboard
 
 import (
+	"context"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
 	"testing"
+	"time"
+
+	"arb/internal/store/pgstore"
+	"arb/internal/testutil"
 )
 
 func hedgeStructureSource(t *testing.T) string {
@@ -394,5 +400,80 @@ func TestD244_FormRelocated(t *testing.T) {
 	di := readFile(t, filepath.Join(dir, "components", "PositionsPageDailyIncome.tsx"))
 	if !strings.Contains(di, "listDailyIncome") {
 		t.Errorf("DailyIncome 组件缺 listDailyIncome（迁移载体失效）")
+	}
+}
+
+// --- D-236 变更14 断言⑭（先红后绿；年化公式时间感知+诚实空态） ---
+
+// 断言⑭a：service_hedge.go 年化改时间感知（days 因子除法），旧式单因子式退役。
+func TestD236_v14_TimeAwareAnnualization(t *testing.T) {
+	_, testFile, _, _ := runtime.Caller(0)
+	path := filepath.Join(filepath.Dir(testFile), "..", "..", "internal", "dashboard", "service_hedge.go")
+	src := readFile(t, path)
+	if !strings.Contains(src, "FirstDailyIncomeDay") {
+		t.Errorf("service_hedge.go 缺 FirstDailyIncomeDay（首收益日=时间感知分母）")
+	}
+	if !strings.Contains(src, "/ days") {
+		t.Errorf("service_hedge.go 缺 days 因子除法（时间感知年化）")
+	}
+	oldForm := "cumUsd / (qtyStaked * mid) * 365 * 100"
+	if strings.Contains(src, oldForm) {
+		t.Errorf("旧式单因子年化式仍存在（累计当单日收益=荒谬值根因）")
+	}
+}
+
+// 断言⑭b：前端 carry 行年化空态「—」（annualized≤0 渲染 —，不渲染 0.00% 伪值）。
+func TestD236_v14_AnnualizedEmptyState(t *testing.T) {
+	_, testFile, _, _ := runtime.Caller(0)
+	path := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src", "components", "PositionsPageHedgeStructure.tsx")
+	src := readFile(t, path)
+	if !strings.Contains(src, `年化 —`) && !strings.Contains(src, `"—"}{{"`) {
+		if !strings.Contains(src, "annualizedPct > 0") {
+			t.Errorf("carry 行缺年化空态分支（annualizedPct>0 才渲染百分数）")
+		}
+	}
+}
+
+// 单测（变更14 机检）：构造已知 days 断言年化值（DSN 门控）。
+func TestD236_v14_CarryAnnualizationMath(t *testing.T) {
+	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	st, err := pgstore.New(context.Background(), dsn)
+	if err != nil {
+		t.Fatalf("pgstore: %v", err)
+	}
+	t.Cleanup(st.Close)
+	ctx := context.Background()
+	if err := st.Migrate(ctx); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = st.Pool().Exec(ctx, `DELETE FROM position_daily_income WHERE day >= '2099-01-01'`)
+	})
+	// 种子：唯一收益日=10 天前（energy 3650 TRX），interest=10 USD。mid=0.33，qty=1000。
+	day := time.Now().UTC().Add(-10 * 24 * time.Hour)
+	day = time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, time.UTC)
+	if _, err := st.AddDailyIncome(ctx, day, 3650, 0, 10.0, nil, nil, "d236v14"); err != nil {
+		t.Fatalf("seed income: %v", err)
+	}
+	mid, qty := 0.33, 1000.0
+	s := &Service{store: st}
+	// 期望天数按实现同口径：读回 MIN(day)（UTC 午夜截断），days=now−firstDay（非整 10）——
+	// 本测验证「公式=时间感知」而非日期边界算术。
+	firstDay, err := st.FirstDailyIncomeDay(ctx)
+	if err != nil || firstDay == nil {
+		t.Fatalf("read first day: %v", err)
+	}
+	days := time.Since(*firstDay).Hours() / 24
+	if days < 1 {
+		days = 1
+	}
+	cumExpected := 3650*mid + 10.0
+	annualExpected := cumExpected / (qty * mid) / days * 365 * 100
+	carry := s.computeHedgeCarry(ctx, mid, qty)
+	if diff := math.Abs(carry.CumUsd - cumExpected); diff > 0.01 {
+		t.Fatalf("cum = %v, want ≈%v", carry.CumUsd, cumExpected)
+	}
+	if diff := math.Abs(carry.AnnualizedPct - annualExpected); diff > annualExpected*0.001 {
+		t.Fatalf("annualized = %v, want ≈%v (±0.1%%, days=%.3f)", carry.AnnualizedPct, annualExpected, days)
 	}
 }

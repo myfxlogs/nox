@@ -191,10 +191,18 @@ func (s *Service) computeHedgeCarry(ctx context.Context, mid, qtyStaked float64)
 	}
 	cumUsd := (energyAll+votingAll)*mid + interestAll
 
-	// 年化（分母=现货市值 qty×mid）
+	// 年化（D-236 变更14 时间感知：分母=现货市值，分子按经过天数折算——
+	// 旧式 cum×365 把累计当单日收益，累计增大后荒谬值显形；firstIncomeDay 缺失=诚实 0→前端「—」）。
 	var annualized float64
 	if mid > 0 && qtyStaked > 0 {
-		annualized = cumUsd / (qtyStaked * mid) * 365 * 100 // 百分数
+		firstDay, err := s.store.FirstDailyIncomeDay(ctx)
+		if err == nil && firstDay != nil {
+			days := now.Sub(*firstDay).Hours() / 24
+			if days < 1 {
+				days = 1
+			}
+			annualized = cumUsd / (qtyStaked * mid) / days * 365 * 100 // 百分数
+		}
 	}
 
 	return &v1.HedgeCarry{
