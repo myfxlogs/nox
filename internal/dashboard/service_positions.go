@@ -86,7 +86,8 @@ func (s *Service) ListPersonalPositions(ctx context.Context, req *connect.Reques
 // 复用 position.PersonalLevel 算告警态。无报价或全陈旧 → price 保持 0、level 空（诚实空态，G3）。
 // 实账计算（D-043，全后端）：pnl/liq_price/距强平%/累计利息。
 // D-208 v2：CMC 行（cmc_instrument_id 非空 + cmcSource 注入）走 ComputeCMCPositionPrice +
-//   从 fin_cmc_positions 填 EntryPrice/Leverage/OpenedAt/Qty 真值（视图全自动）。
+//
+//	从 fin_cmc_positions 填 EntryPrice/Leverage/OpenedAt/Qty 真值（视图全自动）。
 func personalPositionToProto(p *pgstore.PersonalPosition, venues map[string]bus.Quote, freshTTL time.Duration, now time.Time, accruedInterest float64, liqMMR float64, cmcSrc position.CMCSource) *v1.PersonalPosition {
 	pb := &v1.PersonalPosition{
 		Id:                 p.ID,
