@@ -73,17 +73,17 @@ func DetectCaliberBreak(pts []LJJZPoint) *time.Time {
 	return earliest
 }
 
-// BackfillCandidates D-247 S3：候选池净值历史回填（lsjz 分页翻史，每基金 ≥minEntries 条
-// 或源尽；每页礼貌间隔；逐基金回填后做断点检测并写 caliber_break_date）。
+// BackfillCandidates D-247 S3：候选池净值历史回填（lsjz 分页翻史至源尽——≤800 条≈3 年，
+// 超集满足 R4 ≥320 条；每页礼貌间隔；逐基金回填后做断点检测并写 caliber_break_date）。
 // 幂等：Upsert ON CONFLICT 语义，重复跑无副作用。
-func (c *NAVCollector) BackfillCandidates(ctx context.Context, minEntries int) (map[string]int, error) {
+func (c *NAVCollector) BackfillCandidates(ctx context.Context) (map[string]int, error) {
 	funds, err := c.store.ListCNFICandidates(ctx)
 	if err != nil {
 		return nil, err
 	}
 	perFund := map[string]int{}
 	for _, f := range funds {
-		n, berr := c.backfillOne(ctx, f.Code, minEntries)
+		n, berr := c.backfillOne(ctx, f.Code)
 		perFund[f.Code] = n
 		if berr != nil {
 			log.Printf("cnfi: backfill %s: %v（继续下一只）", f.Code, berr)
@@ -96,7 +96,7 @@ func (c *NAVCollector) BackfillCandidates(ctx context.Context, minEntries int) (
 
 // backfillOne 翻史单基金：lsjz 分页（pageSize=20，≤40 页=800 条上限≈3 年，R4 按条数不按自然窗）。
 // 完成后按全序列做 R1 断点检测（取最早断点日写 caliber_break_date）。
-func (c *NAVCollector) backfillOne(ctx context.Context, code string, minEntries int) (int, error) {
+func (c *NAVCollector) backfillOne(ctx context.Context, code string) (int, error) {
 	total := 0
 	var firstErr error
 	for page := 1; page <= 40; page++ {
