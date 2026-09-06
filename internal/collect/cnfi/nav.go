@@ -17,30 +17,35 @@ import (
 // 事件范式（D-232）：挂既有 Scheduler 心跳（1h），Poll 内部「净值日落后于 T-1」双门控。
 type NAVCollector struct {
 	store   *pgstore.Store
-	base    string
+	navBase string // lsjz URL 模板（fundCode/pageIndex/pageSize 三参数，D-247 S3 回填共用）
 	nowFn   func() time.Time
 	fetchFn func(ctx context.Context, url string) ([]byte, error) // 可注入（测试）
 }
 
 func NewNAVCollector(store *pgstore.Store) *NAVCollector {
 	return &NAVCollector{
-		store: store,
-		base:  "https://api.fund.eastmoney.com/f10/lsjz?fundCode=%s&pageIndex=1&pageSize=5",
-		nowFn: func() time.Time { return time.Now() },
+		store:   store,
+		navBase: "https://api.fund.eastmoney.com/f10/lsjz",
+		nowFn:   func() time.Time { return time.Now() },
 	}
 }
 
 func (c *NAVCollector) Kind() string { return "cnfi_nav" }
 
-// eastmoney lsjz JSON 子集（契约字段 FSRQ/DWJZ）。
+// eastmoney lsjz JSON 子集（契约字段 FSRQ/DWJZ/LJJZ）。
 type lsjzResp struct {
 	Data struct {
 		LSJZList []struct {
 			FSRQ string `json:"FSRQ"`
 			DWJZ string `json:"DWJZ"`
+			LJJZ string `json:"LJJZ"`
 		} `json:"LSJZList"`
 	} `json:"Data"`
 	ErrCode int `json:"ErrCode"`
+}
+
+func (c *NAVCollector) navURL(code string, pageIndex, pageSize int) string {
+	return fmt.Sprintf("%s?fundCode=%s&pageIndex=%d&pageSize=%d", c.navBase, code, pageIndex, pageSize)
 }
 
 func (c *NAVCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
@@ -83,8 +88,7 @@ func (c *NAVCollector) pollOne(ctx context.Context, code string) error {
 	if latest >= yesterday {
 		return nil
 	}
-	url := fmt.Sprintf(c.base, code)
-	raw, err := c.fetch(ctx, url)
+	raw, err := c.fetch(ctx, c.navURL(code, 1, 5))
 	if err != nil {
 		return err
 	}
@@ -93,20 +97,43 @@ func (c *NAVCollector) pollOne(ctx context.Context, code string) error {
 		return fmt.Errorf("nav %s: %w", code, err)
 	}
 	for _, e := range entries {
-		if err := c.store.UpsertCNFINAV(ctx, code, e.date, e.nav, "eastmoney", time.Now().UTC()); err != nil {
+		if err := c.store.UpsertCNFINAV(ctx, code, e.date, e.nav, e.ljjz, "eastmoney", time.Now().UTC()); err != nil {
 			return err
 		}
 	}
+	// D-247 S3 日采增量断点检测：新点 vs 前一非空 LJJZ 点（首点不判），>15% 写 caliber_break_date。
+	c.detectIncrementalBreak(ctx, code)
 	return nil
 }
 
-// navEntry is one validated NAV row.
+// detectIncrementalBreak D-247 S3/R1：日采增量口径断点检测（新点 vs 前一非空 LJJZ 点）。
+func (c *NAVCollector) detectIncrementalBreak(ctx context.Context, code string) {
+	last2, err := c.store.LastTwoCNFILJJZ(ctx, code)
+	if err != nil || len(last2) < 2 {
+		return // 首点不判
+	}
+	prev, cur := last2[1].LJJZ, last2[0].LJJZ
+	if prev <= 0 {
+		return
+	}
+	if chg := (cur - prev) / prev; chg > 0.15 || chg < -0.15 {
+		day, _ := time.Parse("2006-01-02", last2[0].Date)
+		log.Printf("cnfi: caliber break: code=%s date=%s", code, last2[0].Date)
+		if err := c.store.SetCNFIInstrumentBreak(ctx, code, day); err != nil {
+			log.Printf("cnfi: set break: %v", err)
+		}
+	}
+}
+
+// navEntry is one validated NAV row (D-247 S2：ljjz=累计净值，收益计算基准；nil=源未披露)。
 type navEntry struct {
 	date string
 	nav  float64
+	ljjz *float64
 }
 
 // parseNAVBody extracts valid entries: 空 FSRQ/空 DWJZ/非正净值全部拒绝（R3 教训：空键静默坍缩）。
+// LJJZ 空串 → ljjz=nil 容忍（仅该字段缺失，不坍缩整行）。
 func parseNAVBody(body []byte) ([]navEntry, error) {
 	var resp lsjzResp
 	if err := json.Unmarshal(body, &resp); err != nil {
@@ -124,7 +151,13 @@ func parseNAVBody(body []byte) ([]navEntry, error) {
 		if err != nil {
 			continue
 		}
-		out = append(out, navEntry{date: e.FSRQ, nav: nav})
+		var ljjz *float64
+		if e.LJJZ != "" {
+			if v, err := parseNav(e.LJJZ); err == nil && v > 0 {
+				ljjz = &v
+			}
+		}
+		out = append(out, navEntry{date: e.FSRQ, nav: nav, ljjz: ljjz})
 	}
 	return out, nil
 }

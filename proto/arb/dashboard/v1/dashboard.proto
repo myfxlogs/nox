@@ -1384,6 +1384,27 @@ message CnfiLayerProgress {
 message GetCNFIProgressResponse {
   repeated CnfiLayerProgress layers = 1;
   string valued_as_of = 2;  // 估值基准（最新 NAV 日）
+  repeated CnfiLayerCompare layer_compares = 3;  // D-247：候选池对比（每层一张）
+}
+
+message CnfiLayerCompare {
+  string layer = 1;                        // liquidity/coupon/locked/opportunity
+  repeated CnfiFundCompare funds = 2;      // 层内候选（按区间收益降序）
+}
+
+message CnfiFundCompare {
+  string code = 1;
+  string name = 2;
+  optional double ret_7d = 3;              // %（LJJZ 口径；缺=源/断点缺失，前端「—」）
+  optional double ret_1m = 4;
+  optional double ret_3m = 5;
+  optional double ret_1y = 6;
+  optional double max_drawdown_3m = 7;     // %
+  optional int32 rank = 8;                 // 层内名次（按 ret_1y，缺失回退 ret_3m）
+  optional int32 n = 9;                    // 层内有效样本数
+  bool passes_screen = 10;                 // R3 三门（v1 冻结名单恒 true；P2 由 signal_config 驱动）
+  optional bool is_break = 11;             // caliber_break_date 命中
+  optional bool is_held = 12;              // P2 预留（持仓高亮）
 }
 
 message AddCNFIHoldingRequest {

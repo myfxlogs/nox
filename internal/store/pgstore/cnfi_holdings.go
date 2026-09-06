@@ -17,15 +17,100 @@ func (s *Store) UpsertCNFIInstrument(ctx context.Context, code, kind, name strin
 }
 
 // UpsertCNFINAV stores one fund NAV day (eastmoney T+1; best-effort source).
-func (s *Store) UpsertCNFINAV(ctx context.Context, code, navDate string, nav float64, source string, fetchedAt time.Time) error {
+// D-247 S2：ljjz=累计净值（收益计算基准；nil=源未披露，行仍入）。
+func (s *Store) UpsertCNFINAV(ctx context.Context, code, navDate string, nav float64, ljjz *float64, source string, fetchedAt time.Time) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO cnfi_nav (code, nav_date, nav, source, fetched_at)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO cnfi_nav (code, nav_date, nav, ljjz, source, fetched_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (code, nav_date) DO UPDATE
-		   SET nav = EXCLUDED.nav, source = EXCLUDED.source, fetched_at = EXCLUDED.fetched_at
-		 WHERE cnfi_nav.nav IS DISTINCT FROM EXCLUDED.nav`,
-		code, navDate, nav, source, fetchedAt)
+		   SET nav = EXCLUDED.nav, ljjz = EXCLUDED.ljjz,
+		       source = EXCLUDED.source, fetched_at = EXCLUDED.fetched_at
+		 WHERE cnfi_nav.nav IS DISTINCT FROM EXCLUDED.nav
+		    OR cnfi_nav.ljjz IS DISTINCT FROM EXCLUDED.ljjz`,
+		code, navDate, nav, ljjz, source, fetchedAt)
 	return err
+}
+
+// CNFILJJZRow is one dated accumulated-NAV point (non-nil ljjz only).
+type CNFILJJZRow struct {
+	Date string
+	LJJZ float64
+}
+
+// LastTwoCNFILJJZ D-247 S3：最近两个非空 LJJZ 点（日采增量断点检测：新点 vs 前一非空点，首点不判）。
+func (s *Store) LastTwoCNFILJJZ(ctx context.Context, code string) ([]CNFILJJZRow, error) {
+	rs, err := s.pool.Query(ctx, `
+		SELECT nav_date::text, ljjz::float8 FROM cnfi_nav
+		WHERE code=$1 AND ljjz IS NOT NULL ORDER BY nav_date DESC LIMIT 2`, code)
+	if err != nil {
+		return nil, err
+	}
+	defer rs.Close()
+	var out []CNFILJJZRow
+	for rs.Next() {
+		var r CNFILJJZRow
+		if err := rs.Scan(&r.Date, &r.LJJZ); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rs.Err()
+}
+
+// SetCNFIInstrumentBreak D-247 S3/R1：LJJZ 口径断点日（取最早断点日写入）。
+func (s *Store) SetCNFIInstrumentBreak(ctx context.Context, code string, day time.Time) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE cnfi_instruments SET caliber_break_date=$2 WHERE code=$1
+		 AND (caliber_break_date IS NULL OR caliber_break_date > $2)`, code, day)
+	return err
+}
+
+// CNFICandidate is one pooled candidate fund (layer non-null).
+type CNFICandidate struct {
+	Code      string
+	Name      string
+	Layer     string
+	BreakDate *time.Time
+}
+
+// ListCNFICandidates D-247 S3/S4：候选池（layer 非空，kind=fund，active）。
+func (s *Store) ListCNFICandidates(ctx context.Context) ([]CNFICandidate, error) {
+	rs, err := s.pool.Query(ctx, `
+		SELECT code, name, layer, caliber_break_date FROM cnfi_instruments
+		WHERE kind='fund' AND is_active AND layer IS NOT NULL ORDER BY layer, code`)
+	if err != nil {
+		return nil, err
+	}
+	defer rs.Close()
+	var out []CNFICandidate
+	for rs.Next() {
+		var c CNFICandidate
+		if err := rs.Scan(&c.Code, &c.Name, &c.Layer, &c.BreakDate); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rs.Err()
+}
+
+// CNFINAVSeries D-247 S4：单基金非空 LJJZ 序列（升序）。
+func (s *Store) CNFINAVSeries(ctx context.Context, code string) ([]CNFILJJZRow, error) {
+	rs, err := s.pool.Query(ctx, `
+		SELECT nav_date::text, ljjz::float8 FROM cnfi_nav
+		WHERE code=$1 AND ljjz IS NOT NULL ORDER BY nav_date ASC`, code)
+	if err != nil {
+		return nil, err
+	}
+	defer rs.Close()
+	var out []CNFILJJZRow
+	for rs.Next() {
+		var r CNFILJJZRow
+		if err := rs.Scan(&r.Date, &r.LJJZ); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rs.Err()
 }
 
 // LatestCNFINAVDate returns the most recent nav_date for a code (” if none).

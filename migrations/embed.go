@@ -166,3 +166,6 @@ var CnfiHoldingsSQL string
 
 //go:embed 0074_cnfi_actions.sql
 var CnfiActionsSQL string
+
+//go:embed 0075_cnfi_candidate_pool.sql
+var CnfiCandidatePoolSQL string
