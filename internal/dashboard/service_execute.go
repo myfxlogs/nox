@@ -95,6 +95,7 @@ func (s *Service) ClosePosition(ctx context.Context, req *connect.Request[v1.Clo
 			Message: "executor not wired",
 		}), nil
 	}
+	s.logCloseTrigger(ctx, req.Msg.GetPositionId(), "manual_rpc") // D-245 触发源持久化
 	if err := s.pipeline.ClosePosition(ctx, req.Msg.GetPositionId()); err != nil {
 		return connect.NewResponse(&v1.ClosePositionResponse{
 			Status:  "FAILED",
@@ -181,4 +182,27 @@ func (s *Service) checkAutotradeState(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("get autotrade state: %w", err)
 	}
 	return st.State, nil
+}
+
+// logCloseTrigger D-245 缺口2：手动 RPC 平仓触发源持久化。
+// Position 无按 ID 单取方法（pgstore 既有面），走 ListActivePositions 过滤；未命中按空字段落行（NOT NULL 空串容忍）。
+// 写失败只 log 不阻断（观测路径不挡执行路径）。
+func (s *Service) logCloseTrigger(ctx context.Context, posID int64, reason string) {
+	var pos *pgstore.Position
+	if actives, err := s.store.ListActivePositions(ctx); err == nil {
+		for i := range actives {
+			if actives[i].ID == posID {
+				pos = &actives[i]
+				break
+			}
+		}
+	}
+	l := &pgstore.AutotradeLog{PositionID: &posID, Status: "CLOSE_TRIGGER", Reason: reason}
+	if pos != nil {
+		l.OpportunityID = pos.OpportunityID
+		l.Strategy = pos.Type
+	}
+	if err := s.store.InsertAutotradeLog(ctx, l); err != nil {
+		log.Printf("[dashboard] D-245 CLOSE_TRIGGER 落库失败 pos=%d: %v", posID, err)
+	}
 }
