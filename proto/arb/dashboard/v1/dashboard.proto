@@ -614,7 +614,7 @@ message HedgeLegSpot {
   string label = 1;          // "质押现货"
   double qty_staked = 2;     // 质押数量（v1.2：fin_trx_account.votes_total=18070，禁 personal_positions 静态）
   double qty_liquid = 3;     // 流动余额（fin_trx_account.balance_sun ÷ 1e6）
-  double pnl_vs_base = 4;    // 计算值 (mid−baseline)×qty_staked（镜像腿，恒和=0）
+  double pnl_vs_base = 4;    // 对冲镜像=−空单平台自报 PnL（现货购价未知，镜像近似）
   HedgeStake stake = 5;      // 质押明细 energy+bandwidth
   // D-231 S3：投票收益率（fin_trx_vote_apr 最新行透传，只渲染不运算）
   double vote_apr_current = 6;    // 当前投票票数加权平均年化 %
