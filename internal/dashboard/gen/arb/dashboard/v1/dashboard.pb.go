@@ -4807,14 +4807,16 @@ func (x *HedgeLegShort) GetBrokerUnrealised() float64 {
 }
 
 type HedgeCarry struct {
-	state              protoimpl.MessageState `protogen:"open.v1"`
-	TrxRental_7DTrx    float64                `protobuf:"fixed64,1,opt,name=trx_rental_7d_trx,json=trxRental7dTrx,proto3" json:"trx_rental_7d_trx,omitempty"`          // 近 7 日能量租金（SumDailyIncomeByRange energy_trx）
-	TrxVote_7DTrx      float64                `protobuf:"fixed64,2,opt,name=trx_vote_7d_trx,json=trxVote7dTrx,proto3" json:"trx_vote_7d_trx,omitempty"`                // 近 7 日投票收益（SumDailyIncomeByRange voting_trx）
-	CmcOvernight_7DUsd float64                `protobuf:"fixed64,3,opt,name=cmc_overnight_7d_usd,json=cmcOvernight7dUsd,proto3" json:"cmc_overnight_7d_usd,omitempty"` // 近 7 日隔夜息（SumCMCOvernightByRange）
-	CumUsd             float64                `protobuf:"fixed64,4,opt,name=cum_usd,json=cumUsd,proto3" json:"cum_usd,omitempty"`                                      // 累计收益 USD（全量 energy×price+voting×price+interest）
-	AnnualizedPct      float64                `protobuf:"fixed64,5,opt,name=annualized_pct,json=annualizedPct,proto3" json:"annualized_pct,omitempty"`                 // 年化 %（cum_usd / (qty×mid) × 365）
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	TrxRental_7DTrx     float64                `protobuf:"fixed64,1,opt,name=trx_rental_7d_trx,json=trxRental7dTrx,proto3" json:"trx_rental_7d_trx,omitempty"`              // 近 7 日能量租金（SumDailyIncomeByRange energy_trx）
+	TrxVote_7DTrx       float64                `protobuf:"fixed64,2,opt,name=trx_vote_7d_trx,json=trxVote7dTrx,proto3" json:"trx_vote_7d_trx,omitempty"`                    // 近 7 日投票收益（SumDailyIncomeByRange voting_trx）
+	CmcOvernight_7DUsd  float64                `protobuf:"fixed64,3,opt,name=cmc_overnight_7d_usd,json=cmcOvernight7dUsd,proto3" json:"cmc_overnight_7d_usd,omitempty"`     // 近 7 日隔夜息（SumCMCOvernightByRange）
+	CumUsd              float64                `protobuf:"fixed64,4,opt,name=cum_usd,json=cumUsd,proto3" json:"cum_usd,omitempty"`                                          // 累计收益 USD（全量 energy×price+voting×price+interest）
+	AnnualizedPct       float64                `protobuf:"fixed64,5,opt,name=annualized_pct,json=annualizedPct,proto3" json:"annualized_pct,omitempty"`                     // 年化 %（cum_usd / (qty×mid) × 365）
+	HedgedCumUsd        float64                `protobuf:"fixed64,6,opt,name=hedged_cum_usd,json=hedgedCumUsd,proto3" json:"hedged_cum_usd,omitempty"`                      // D-236 变更15：对冲后累计（窗口=[hedgeStart,now]）
+	HedgedAnnualizedPct float64                `protobuf:"fixed64,7,opt,name=hedged_annualized_pct,json=hedgedAnnualizedPct,proto3" json:"hedged_annualized_pct,omitempty"` // D-236 变更15：对冲后年化（时间感知，days=max(1,now−hedgeStart)）
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *HedgeCarry) Reset() {
@@ -4878,6 +4880,20 @@ func (x *HedgeCarry) GetCumUsd() float64 {
 func (x *HedgeCarry) GetAnnualizedPct() float64 {
 	if x != nil {
 		return x.AnnualizedPct
+	}
+	return 0
+}
+
+func (x *HedgeCarry) GetHedgedCumUsd() float64 {
+	if x != nil {
+		return x.HedgedCumUsd
+	}
+	return 0
+}
+
+func (x *HedgeCarry) GetHedgedAnnualizedPct() float64 {
+	if x != nil {
+		return x.HedgedAnnualizedPct
 	}
 	return 0
 }
@@ -13531,14 +13547,16 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x03lev\x18\x04 \x01(\x05R\x03lev\x12\x10\n" +
 	"\x03liq\x18\x05 \x01(\x01R\x03liq\x12\x19\n" +
 	"\bdist_pct\x18\x06 \x01(\x01R\adistPct\x12+\n" +
-	"\x11broker_unrealised\x18\a \x01(\x01R\x10brokerUnrealised\"\xcf\x01\n" +
+	"\x11broker_unrealised\x18\a \x01(\x01R\x10brokerUnrealised\"\xa9\x02\n" +
 	"\n" +
 	"HedgeCarry\x12)\n" +
 	"\x11trx_rental_7d_trx\x18\x01 \x01(\x01R\x0etrxRental7dTrx\x12%\n" +
 	"\x0ftrx_vote_7d_trx\x18\x02 \x01(\x01R\ftrxVote7dTrx\x12/\n" +
 	"\x14cmc_overnight_7d_usd\x18\x03 \x01(\x01R\x11cmcOvernight7dUsd\x12\x17\n" +
 	"\acum_usd\x18\x04 \x01(\x01R\x06cumUsd\x12%\n" +
-	"\x0eannualized_pct\x18\x05 \x01(\x01R\rannualizedPct\"\x8b\x02\n" +
+	"\x0eannualized_pct\x18\x05 \x01(\x01R\rannualizedPct\x12$\n" +
+	"\x0ehedged_cum_usd\x18\x06 \x01(\x01R\fhedgedCumUsd\x122\n" +
+	"\x15hedged_annualized_pct\x18\a \x01(\x01R\x13hedgedAnnualizedPct\"\x8b\x02\n" +
 	"\rHedgeAccounts\x12\x1f\n" +
 	"\vtrx_balance\x18\x01 \x01(\x01R\n" +
 	"trxBalance\x12#\n" +

@@ -205,12 +205,31 @@ func (s *Service) computeHedgeCarry(ctx context.Context, mid, qtyStaked float64)
 		}
 	}
 
+	// D-236 变更15：对冲后分段（窗口=[hedgeStart,now]，hedgeStart=fin_cmc_positions 最早 opened_at）。
+	// 空表（未建对冲）→ 对冲后视图回落=结构累计同值并注明（设计规格）。
+	hedgedCumUsd, hedgedAnnual := cumUsd, annualized
+	if hedgeStart, err := s.store.FirstCMCPositionOpenedAt(ctx); err == nil && hedgeStart != nil {
+		energyH, votingH, interestH, err := s.store.SumDailyIncomeByRange(ctx, hedgeStart, &now)
+		if err == nil {
+			hedgedCumUsd = (energyH+votingH)*mid + interestH
+			daysH := now.Sub(*hedgeStart).Hours() / 24
+			if daysH < 1 {
+				daysH = 1
+			}
+			if mid > 0 && qtyStaked > 0 {
+				hedgedAnnual = hedgedCumUsd / (qtyStaked * mid) / daysH * 365 * 100
+			}
+		}
+	}
+
 	return &v1.HedgeCarry{
-		TrxRental_7DTrx:    energy7d,
-		TrxVote_7DTrx:      voting7d,
-		CmcOvernight_7DUsd: overnight7d,
-		CumUsd:             cumUsd,
-		AnnualizedPct:      annualized,
+		TrxRental_7DTrx:     energy7d,
+		TrxVote_7DTrx:       voting7d,
+		CmcOvernight_7DUsd:  overnight7d,
+		CumUsd:              cumUsd,
+		AnnualizedPct:       annualized,
+		HedgedCumUsd:        hedgedCumUsd,
+		HedgedAnnualizedPct: hedgedAnnual,
 	}
 }
 
