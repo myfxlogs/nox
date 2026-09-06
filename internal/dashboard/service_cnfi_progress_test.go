@@ -38,7 +38,7 @@ func cnfiProgressSetup(t *testing.T) *Service {
 		if err := st.UpsertCNFIInstrument(ctx, ins.code, ins.kind, ins.name, true); err != nil {
 			t.Fatalf("instrument: %v", err)
 		}
-		if err := st.UpsertCNFINAV(ctx, ins.code, "2099-01-02", 1.0, "test", time.Now().UTC()); err != nil {
+		if err := st.UpsertCNFINAV(ctx, ins.code, "2099-01-02", 1.0, nil, "test", time.Now().UTC()); err != nil {
 			t.Fatalf("nav: %v", err)
 		}
 	}

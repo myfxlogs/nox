@@ -57,6 +57,12 @@ func (s *Service) GetCNFIProgress(ctx context.Context, req *connect.Request[v1.G
 	if err := s.enrichProgressExpectation(ctx, resp); err != nil {
 		return nil, err
 	}
+	// D-247 P1 S4：候选池对比（每层一张，服务端算）。
+	layers, err := buildCNFICompare(ctx, s, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	resp.LayerCompares = layers
 	return connect.NewResponse(resp), nil
 }
 
