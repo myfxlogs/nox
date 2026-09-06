@@ -138,15 +138,23 @@ func buildCNFICompare(ctx context.Context, s *Service, now time.Time) ([]*v1.Cnf
 			}
 			return -1e18 // 排最后
 		}
+		// R-F1：N=参与排名数（Ret_1Y 或 Ret_3M 非nil），缺失指标不计入——
+		// -1e18 殿后布局下参与者名次恰为参与者内名次（语义保持，最小 diff）。
+		participants := int32(0)
+		for _, f := range funds {
+			if f.Ret_1Y != nil || f.Ret_3M != nil {
+				participants++
+			}
+		}
 		ranked := RankByReturnDesc(funds, retOf)
 		for _, rk := range ranked {
 			f := funds[rk.Idx]
-			// 两者皆缺（无任何区间收益）→ 不参与排名计数
+			// 两者皆缺（无任何区间收益）→ 不参与排名，rank/N 双 nil
 			if f.Ret_1Y == nil && f.Ret_3M == nil {
 				f.Rank = nil
 				f.N = nil
 			} else {
-				rank, n := int32(rk.Rank), int32(rk.N)
+				rank, n := int32(rk.Rank), participants
 				f.Rank = &rank
 				f.N = &n
 			}
