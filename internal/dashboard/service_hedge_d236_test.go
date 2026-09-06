@@ -515,3 +515,24 @@ func TestD236_v15_FrontendHedgedRow(t *testing.T) {
 		t.Errorf("carry 统计条缺「对冲后」分段行（变更15）")
 	}
 }
+
+// --- D-244 变更16 断言⑯（先红后绿；app 外壳版心回归） ---
+
+// 断言⑯：00-base.css main.app-layout 块含 max-width:1440px 与 margin:0 auto（版心回归）。
+func TestD244_v16_AppLayoutVersionCenter(t *testing.T) {
+	_, testFile, _, _ := runtime.Caller(0)
+	path := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src", "styles", "00-base.css")
+	src := readFile(t, path)
+	// 提取 main.app-layout 规则块（到下一个 } 为止）
+	i := strings.Index(src, "main.app-layout {")
+	if i < 0 {
+		t.Fatal("00-base.css 缺 main.app-layout 规则块")
+	}
+	block := src[i : i+strings.Index(src[i:], "}")]
+	if !strings.Contains(block, "max-width: 1440px") {
+		t.Errorf("main.app-layout 缺 max-width: 1440px（版心回归，变更16）")
+	}
+	if !strings.Contains(block, "margin: 0 auto") {
+		t.Errorf("main.app-layout 缺 margin: 0 auto（版心居中，变更16）")
+	}
+}
