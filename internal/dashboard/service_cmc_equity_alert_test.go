@@ -7,6 +7,9 @@ package dashboard
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -168,4 +171,79 @@ func TestD252_RaceConcurrentChecks(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+}
+
+// TestD252_RH1_MainWiring D-252 R-H1：cmd/ 恰 1 命中 SetCMCEquityAlertStore（main 装配实证）。
+func TestD252_RH1_MainWiring(t *testing.T) {
+	_, testFile, _, _ := runtime.Caller(0)
+	repoRoot := filepath.Join(filepath.Dir(testFile), "..", "..")
+	cmdDir := filepath.Join(repoRoot, "cmd")
+	var hits []string
+	err := filepath.Walk(cmdDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return err
+		}
+		if !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		data, rerr := os.ReadFile(path)
+		if rerr != nil {
+			return rerr
+		}
+		if strings.Contains(string(data), "SetCMCEquityAlertStore") {
+			hits = append(hits, path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk cmd/: %v", err)
+	}
+	if len(hits) != 1 {
+		t.Fatalf("SetCMCEquityAlertStore in cmd/: got %d hits %v, want exactly 1 (R-H1 main 装配)", len(hits), hits)
+	}
+}
+
+// TestD252_RH2_AlertTextContainsValues D-252 R-H2：告警文本含实际 equity/线值。
+func TestD252_RH2_AlertTextContainsValues(t *testing.T) {
+	store := &fakeAlertInserter{}
+	m := newCMCEquityAlertMachine(store)
+	// normal → warning：文本含 equity 值与 warning 线值
+	m.check(context.Background(), 1000, 800, 500) // firstTick normal
+	m.check(context.Background(), 700, 800, 500)  // pending warning count=1
+	m.check(context.Background(), 700, 800, 500)  // count=2 → transition, 1 critical
+	alerts := store.snapshot()
+	if len(alerts) != 1 {
+		t.Fatalf("want 1 alert, got %d", len(alerts))
+	}
+	if !strings.Contains(alerts[0].msg, "700") {
+		t.Errorf("warning alert should contain equity value 700, got %q", alerts[0].msg)
+	}
+	if !strings.Contains(alerts[0].msg, "800") {
+		t.Errorf("warning alert should contain warning level 800, got %q", alerts[0].msg)
+	}
+
+	// warning → closeout：文本含 equity 值与 closeout 线值
+	m.check(context.Background(), 400, 800, 500) // pending closeout count=1
+	m.check(context.Background(), 400, 800, 500) // count=2 → transition, 1 critical
+	alerts = store.snapshot()
+	if len(alerts) != 2 {
+		t.Fatalf("want 2 alerts, got %d", len(alerts))
+	}
+	if !strings.Contains(alerts[1].msg, "400") {
+		t.Errorf("closeout alert should contain equity value 400, got %q", alerts[1].msg)
+	}
+	if !strings.Contains(alerts[1].msg, "500") {
+		t.Errorf("closeout alert should contain closeout level 500, got %q", alerts[1].msg)
+	}
+
+	// closeout → normal：recovered 文本含 equity 值
+	m.check(context.Background(), 1000, 800, 500) // pending normal count=1
+	m.check(context.Background(), 1000, 800, 500) // count=2 → transition, 1 info
+	alerts = store.snapshot()
+	if len(alerts) != 3 {
+		t.Fatalf("want 3 alerts, got %d", len(alerts))
+	}
+	if !strings.Contains(alerts[2].msg, "1000") {
+		t.Errorf("recovered alert should contain equity value 1000, got %q", alerts[2].msg)
+	}
 }

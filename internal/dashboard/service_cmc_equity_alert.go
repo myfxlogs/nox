@@ -80,7 +80,7 @@ func (m *cmcEquityAlertMachine) check(ctx context.Context, equity, warningLevel,
 			old := m.confirmed
 			m.confirmed = observed
 			m.pendingCount = 0
-			m.emitTransition(ctx, old, observed)
+			m.emitTransition(ctx, old, observed, equity, warningLevel, closeoutLevel)
 		}
 		return
 	}
@@ -90,24 +90,25 @@ func (m *cmcEquityAlertMachine) check(ctx context.Context, equity, warningLevel,
 	m.pendingCount = 1
 }
 
-// emitTransition D-252：状态转换时插入告警（调用方已持锁，store 自身线程安全）。
-func (m *cmcEquityAlertMachine) emitTransition(ctx context.Context, old, newZone cmcEquityZone) {
+// emitTransition D-252 R-H2：状态转换时插入告警（调用方已持锁，store 自身线程安全）。
+// 文本含实际 equity/线值（R-H2：运维看到告警即知数值，无需再开 UI 查）。
+func (m *cmcEquityAlertMachine) emitTransition(ctx context.Context, old, newZone cmcEquityZone, equity, warningLevel, closeoutLevel float64) {
 	if m.store == nil {
 		return
 	}
 	switch newZone {
 	case equityWarning:
 		_ = m.store.InsertAlert(ctx, nil, "critical",
-			"CMC equity ≤ 预警线 (equity ≤ warning_level_usd)")
+			fmt.Sprintf("CMC equity %.2f ≤ 预警线 %.2f", equity, warningLevel))
 	case equityCloseout:
 		_ = m.store.InsertAlert(ctx, nil, "critical",
-			"CMC equity ≤ 强平线 (equity ≤ closeout_level_usd)")
+			fmt.Sprintf("CMC equity %.2f ≤ 强平线 %.2f", equity, closeoutLevel))
 	case equityNormal:
 		from := "预警线"
 		if old == equityCloseout {
 			from = "强平线"
 		}
 		_ = m.store.InsertAlert(ctx, nil, "info",
-			fmt.Sprintf("CMC equity recovered (from %s)", from))
+			fmt.Sprintf("CMC equity %.2f recovered (from %s)", equity, from))
 	}
 }
