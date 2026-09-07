@@ -52,9 +52,14 @@ func (s *Store) GetPosition(ctx context.Context, id int64) (*Position, error) {
 }
 
 // InsertSettlement 写 position_settlements 行（D-087 §3.2，返修包②并发安全）。
-// 返回 won=true 表示本次插入成功（赢家）；won=false 表示 ON CONFLICT 命中（输家，已有行）。
+// 返回 won=true 表示本次写入生效（INSERT 新行 或 UPDATE 升级了非 applied 行）；
+// won=false 表示 ON CONFLICT 命中但已是 applied（输家，不重写）。
 // 调用方（Settle）输家直接 return nil，不再走步骤 7/8，防并发双计 verification 样本+strategy_stats。
 // D-193-A：写入净 PNL + 完整性状态字段（stats_status 直接写最终值，无二次 UPDATE）。
+// D-249 S4 批3 第2项：ON CONFLICT DO UPDATE WHERE stats_status<>'applied'——
+// 消除审计 P1-2 墓碑行（首写 retryable 后重试永远 won=false 静默跳过统计的升级路径缺失）。
+// xmax=0 表示 INSERT（新行，赢家）；xmax<>0 且 WHERE 命中表示 UPDATE（升级，赢家）；
+// xmax<>0 且 WHERE 未命中（已是 applied）→ pgx.ErrNoRows（输家）。
 func (s *Store) InsertSettlement(ctx context.Context, r *SettlementRow) (won bool, err error) {
 	var posID int64
 	err = s.pool.QueryRow(ctx, `
@@ -63,7 +68,23 @@ func (s *Store) InsertSettlement(ctx context.Context, r *SettlementRow) (won boo
 			 price_pnl_usd, cashflows_net_usd, net_realized_usd, pnl_quality, completeness_status,
 			 stats_status, settlement_model_version, settlement_event_key)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-		ON CONFLICT (position_id) DO NOTHING
+		ON CONFLICT (position_id) DO UPDATE SET
+				vkey = EXCLUDED.vkey,
+				expected_usd = EXCLUDED.expected_usd,
+				realized_usd = EXCLUDED.realized_usd,
+				notional_usd = EXCLUDED.notional_usd,
+				hold_days = EXCLUDED.hold_days,
+				skipped_reason = EXCLUDED.skipped_reason,
+				settled_at = EXCLUDED.settled_at,
+				price_pnl_usd = EXCLUDED.price_pnl_usd,
+				cashflows_net_usd = EXCLUDED.cashflows_net_usd,
+				net_realized_usd = EXCLUDED.net_realized_usd,
+				pnl_quality = EXCLUDED.pnl_quality,
+				completeness_status = EXCLUDED.completeness_status,
+				stats_status = EXCLUDED.stats_status,
+				settlement_model_version = EXCLUDED.settlement_model_version,
+				settlement_event_key = EXCLUDED.settlement_event_key
+			WHERE position_settlements.stats_status <> 'applied'
 		RETURNING position_id
 	`, r.PositionID, r.Vkey, r.ExpectedUsd, r.RealizedUsd, r.NotionalUsd, r.HoldDays, r.SkippedReason, r.SettledAt,
 		r.PricePnlUsd, r.CashflowsNetUsd, r.NetRealizedUsd, nullableText(r.PnlQuality), nullableText(r.CompletenessStatus),
@@ -71,7 +92,7 @@ func (s *Store) InsertSettlement(ctx context.Context, r *SettlementRow) (won boo
 	// r.NotionalUsd is *float64: nil → NULL (pgx native), non-nil → value
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return false, nil // ON CONFLICT 命中，输家
+			return false, nil // ON CONFLICT 命中但已是 applied（输家，不重写）
 		}
 		return false, fmt.Errorf("insert settlement pos=%d: %w", r.PositionID, err)
 	}
