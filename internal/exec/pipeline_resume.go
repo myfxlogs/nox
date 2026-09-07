@@ -271,6 +271,9 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64) error {
 		log.Printf("[exec] close position %d store update: %v", posID, err)
 		return fmt.Errorf("close position %d store: %w", posID, err)
 	}
+	// D-249 S1 第3项：CLOSED 翻译点记录（裁定 a385b84）。
+	// 成功（非 ErrTerminalState）才写；禁预查（TOCTOU）；best-effort 不阻断。
+	p.logClosed(ctx, pos, closeLegs, totalPnL)
 	// D-193-A 扩包 S5：CLOSED 后触发 settlement.Settle（修复 479 缺 settlement 行根因）。
 	// settler nil=未接线（兼容旧测试）；失败不回滚 CLOSED（settlement 可重试，SettleAt 幂等）。
 	if p.settler != nil {
