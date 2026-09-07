@@ -37,9 +37,19 @@ func hedgeStructureSource(t *testing.T) string {
 // fileCache 缓存文件内容，避免 -race 并行测试下并发 os.ReadFile 触发 EBADF（CI 实证）。
 var fileCache sync.Map
 
-// readFile 读取文件内容为字符串（测试辅助，断言用；sync.Map 缓存保每文件只读一次）。
+// fileCacheMu 序列化文件打开，防 -race 下并发 os.ReadFile 触发 EBADF（golang/go#65857）。
+// sync.Map 只防同文件并发读，不防跨文件 fd 并发开；mutex 补此盲区。
+var fileCacheMu sync.Mutex
+
+// readFile 读取文件内容为字符串（测试辅助，断言用；sync.Map 缓存 + mutex 序列化保每文件只读一次）。
 func readFile(t *testing.T, path string) string {
 	t.Helper()
+	if v, ok := fileCache.Load(path); ok {
+		return v.(string)
+	}
+	fileCacheMu.Lock()
+	defer fileCacheMu.Unlock()
+	// double-check after acquiring lock
 	if v, ok := fileCache.Load(path); ok {
 		return v.(string)
 	}
