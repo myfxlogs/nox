@@ -198,6 +198,8 @@ func TestAccountMonitor_KickDebounce(t *testing.T) {
 
 // TestOrderTopicToKickWiring D-107 P2：fake orderTopic Publish → bpMon.Kick 接线验证。
 // 模拟 main.go 的订阅 goroutine：orderTopic.Subscribe → for range → bpMon.Kick()。
+// D-249 S5 R-G5：等待窗口 10s→45s——-race 全仓并行负载下事件可能晚到 10s+（CI 实证 flake，
+// 失败后 1s 内事件到达），45s 窗口给 race detector 足够余量，late-arrival 属调度噪声非缺陷。
 func TestOrderTopicToKickWiring(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -229,8 +231,8 @@ func TestOrderTopicToKickWiring(t *testing.T) {
 		}
 	}()
 
-	// 等 Run 首采。
-	if !waitForMon(t, 10*time.Second, func() bool { return len(m.Snapshot()) == 1 }) {
+	// 等 Run 首采（R-G5：45s 窗口，-race 负载下首采可能延迟）。
+	if !waitForMon(t, 45*time.Second, func() bool { return len(m.Snapshot()) == 1 }) {
 		t.Fatal("initial poll did not produce snapshot")
 	}
 
@@ -238,9 +240,11 @@ func TestOrderTopicToKickWiring(t *testing.T) {
 	q.orders = nil
 
 	// Publish 一个 OrderEvent → 经订阅 goroutine → Kick → poll → snapshot 变 0。
+	// R-G5：45s 窗口——-race 全仓并行下 Publish→Subscribe→Kick→poll 链路可能晚到 10s+，
+	// late-arrival 属调度噪声非缺陷（CI 实证：失败后 1s 内事件到达）。
 	orderTopic.Publish(bus.OrderEvent{Venue: "testvenue", Ticket: 1})
 
-	if !waitForMon(t, 10*time.Second, func() bool { return len(m.Snapshot()) == 0 }) {
+	if !waitForMon(t, 45*time.Second, func() bool { return len(m.Snapshot()) == 0 }) {
 		t.Fatalf("orderTopic→Kick wiring: snapshot still %d after publish", len(m.Snapshot()))
 	}
 }
