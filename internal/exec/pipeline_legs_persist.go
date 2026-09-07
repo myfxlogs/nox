@@ -80,8 +80,19 @@ func (p *Pipeline) rollbackFilledLegs(ctx context.Context, posID int64, legs []L
 			if legs[i].Side == "SELL" {
 				closeSide = "BUY"
 			}
+			// D-249 S4 批3 第1项：回滚单补 PositionSide（对齐 placeCloseOrder/auto-flatten）。
+			// 审计 P1-1：回滚单不带 PositionSide → long_short_mode 账户回滚 long 会新开 short（双倍敞口）。
+			// PositionSide=原持仓侧（leg.Side 推导，与 placeCloseOrder 同款），CEX 适配器据此设 reduceOnly/posSide。
+			var positionSide string
+			switch legs[i].Side {
+			case "BUY":
+				positionSide = "long"
+			case "SELL":
+				positionSide = "short"
+			}
 			_, closeErr = exe.PlaceOrder(ctx, Order{
 				Symbol: legs[i].VenueSymbol, Side: closeSide, Qty: legs[i].Qty, Venue: legs[i].VenueKey,
+				PositionSide: positionSide,
 			})
 		}
 		if closeErr != nil {
