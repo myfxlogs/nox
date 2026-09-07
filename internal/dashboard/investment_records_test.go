@@ -54,8 +54,10 @@ func serviceTestStoreSingleInit(t *testing.T) *pgstore.Store {
 	if initErr != nil {
 		t.Fatalf("serviceTestStore init: %v", initErr)
 	}
+	// D-234批1 R-F2：initErr 为 nil 但单例仍 nil（sync.Once 燃尽后继调用者）→ 可归因 Fatal，
+	// 拒绝 nil store 继续（否则 s.Pool() 空指针 panic，失败归因变脏）。
 	if serviceTestStoreSingle == nil {
-		t.Skip("ARB_TEST_PG_SERVICE_DSN 未设置，跳过需真库的测试")
+		t.Fatalf("serviceTestStore 前序初始化失败（根因见首个 FAIL 测试），拒绝 nil store 继续")
 	}
 	return serviceTestStoreSingle
 }
