@@ -80,7 +80,7 @@ func TestAutoClose_RealPipeline_SingleLeg_OpenToClosed(t *testing.T) {
 	// 构造真实 Pipeline：MT executor（不会被调用，broker 已无腿 → backfill 路径）
 	reg := exec.NewRegistry()
 	reg.Register(&fakeMTNoOrderExecutor{venue: "52993526:mt5"})
-	pipeline := exec.NewPipeline(reg, s, bus.New(), exec.RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50})
+	pipeline := exec.NewPipeline(reg, s, bus.New(), exec.RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
 	// verifier 返回空（venue 无此 ticket → broker 已无腿）
 	pipeline.SetPositionVerifier(&fakeMTVerifier{orders: map[string][]exec.OpenedOrder{
 		"52993526:mt5": {},
