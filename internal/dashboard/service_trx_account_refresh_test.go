@@ -4,6 +4,8 @@ package dashboard
 
 import (
 	"context"
+	"encoding/json"
+	"reflect"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -80,8 +82,20 @@ func TestD254_TrxAccountRefresh_DoubleKickAndReturn(t *testing.T) {
 	if resp.Msg.Votes != 18070 {
 		t.Errorf("votes = %v, want 18070 (votes_total 不除 1e6)", resp.Msg.Votes)
 	}
-	if resp.Msg.Unfrozen != `[{"amount":1000000,"expires":1700000000}]` {
-		t.Errorf("unfrozen = %q, want JSONB 透传", resp.Msg.Unfrozen)
+	// R-J2：unfrozen 语义比较——jsonb 规范化文本输出（分隔符后带空格）vs 种子紧凑形态，逐字比较必 FAIL。
+	// handler 透传行为正确（禁改 handler），测试侧两侧 unmarshal 为 []map[string]any 后 DeepEqual。
+	{
+		want := `[{"amount":1000000,"expires":1700000000}]`
+		var gotVal, wantVal []map[string]any
+		if err := json.Unmarshal([]byte(resp.Msg.Unfrozen), &gotVal); err != nil {
+			t.Fatalf("unfrozen got unmarshal: %v", err)
+		}
+		if err := json.Unmarshal([]byte(want), &wantVal); err != nil {
+			t.Fatalf("unfrozen want unmarshal: %v", err)
+		}
+		if !reflect.DeepEqual(gotVal, wantVal) {
+			t.Errorf("unfrozen = %q, want JSONB 语义等价 %q", resp.Msg.Unfrozen, want)
+		}
 	}
 	if resp.Msg.FetchedAt == nil {
 		t.Error("fetched_at = nil, want timestamp")
