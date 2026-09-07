@@ -110,25 +110,26 @@ func aliasOrVenue(venue string, aliases map[string]string) string {
 	return venue
 }
 
-// marginMissThreshold D-251：margin 连续缺失 ≥3 次才 critical（≈3 分钟，单样本闪断治理）。
-const marginMissThreshold = 3
+// flashMissThreshold D-251/R-H4：连续缺失 ≥3 次才 critical（≈3 分钟，单样本闪断治理）。
+// margin/quote 共用（R-H4 抽公共 helper）。
+const flashMissThreshold = 3
 
-// classifyMarginWithFlashMiss D-251：margin 分支连续缺失计数——单/双样本闪断降为 healthy
-// （info 日志不进 alerts 表），连续 ≥3 次才放行 crit。healthy/warn 时重置计数。
-// 返回调整后的 metric + 当前连续计数 + 是否被抑制。
-func (m *MTHealthMonitor) classifyMarginWithFlashMiss(venue string, raw mtHealthMetric) (adjusted mtHealthMetric, count int, suppressed bool) {
+// classifyWithFlashMiss D-251/R-H4 公共 helper：连续缺失计数——单/双样本闪断降为 healthy
+// （suppressed 日志不进 alerts 表），连续 ≥3 次才放行 crit。healthy/warn 时重置计数。
+// margin/quote 共用（R-H4 消除重复）。返回调整后的 metric + 当前连续计数 + 是否被抑制。
+func (m *MTHealthMonitor) classifyWithFlashMiss(venue string, raw mtHealthMetric, counts map[string]int) (adjusted mtHealthMetric, count int, suppressed bool) {
 	if raw == metricCrit {
 		m.mu.Lock()
-		m.marginMissCount[venue]++
-		count = m.marginMissCount[venue]
+		counts[venue]++
+		count = counts[venue]
 		m.mu.Unlock()
-		if count < marginMissThreshold {
+		if count < flashMissThreshold {
 			return metricHealthy, count, true
 		}
 		return metricCrit, count, false
 	}
 	m.mu.Lock()
-	m.marginMissCount[venue] = 0
+	counts[venue] = 0
 	m.mu.Unlock()
 	return raw, 0, false
 }

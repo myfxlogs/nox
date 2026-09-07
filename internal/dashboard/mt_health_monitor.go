@@ -59,6 +59,7 @@ type MTHealthMonitor struct {
 	firstTick       bool                     // 首 tick 只记状态不告警
 	lastCritAlert   map[string]time.Time     // D-104 P0 返修③ R-c3：venue:metric → 上次 crit 告警时间
 	marginMissCount map[string]int           // D-251：venue → margin 连续缺失计数（≥3 才 crit）
+	quoteMissCount  map[string]int           // R-H4：venue → quote 连续缺失计数（≥3 才 crit，与 margin 共用 helper）
 	now             func() time.Time         // 可注入时钟（测试用，D-136 修复②），nil→time.Now
 }
 
@@ -78,6 +79,7 @@ func NewMTHealthMonitor(venues HealthVenueSource, qbus *bus.QuoteBus, store Heal
 		firstTick:       true,
 		lastCritAlert:   make(map[string]time.Time),
 		marginMissCount: make(map[string]int),
+		quoteMissCount:  make(map[string]int),
 	}
 }
 
@@ -153,13 +155,17 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 		isMT := mtSet[v]
 		isMT5 := mt5Set[v]
 		display := aliasOrVenue(v, aliases) // D-203：告警/日志用别名（回退裸账号）
-		// quote 全 venue；swap 仅 MT；margin 仅 MT5（D-203：MT4 无 margin facts）。
+		// quote 全 venue（R-H4：flash-miss 治理同 margin）；swap 仅 MT；margin 仅 MT5（D-203：MT4 无 margin facts）。
+		qAdjusted, _, qSuppressed := m.classifyWithFlashMiss(v, classifyAge(qa, m.quoteWarn, m.quoteCrit), m.quoteMissCount)
 		newState := mtHealthState{
-			quote:  classifyAge(qa, m.quoteWarn, m.quoteCrit),
+			quote:  qAdjusted,
 			swap:   metricHealthy,
 			margin: metricHealthy,
 		}
 		sLog, mLog := "-", "-"
+		if qSuppressed {
+			log.Printf("[mt-health] %s quote flash-miss suppressed (age=%s)", display, durStr(qa))
+		}
 		if isMT {
 			sa := swapAges[v]
 			newState.swap = classifyAge(sa, m.factWarn, m.factCrit)
@@ -167,7 +173,7 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 		}
 		if isMT5 {
 			ma := marginAges[v]
-			adjusted, _, suppressed := m.classifyMarginWithFlashMiss(v, classifyAge(ma, m.factWarn, m.factCrit))
+			adjusted, _, suppressed := m.classifyWithFlashMiss(v, classifyAge(ma, m.factWarn, m.factCrit), m.marginMissCount)
 			newState.margin = adjusted
 			mLog = durStr(ma)
 			if suppressed {

@@ -393,7 +393,8 @@ func TestD244_AppTrxPageMount(t *testing.T) {
 	}
 }
 
-// 断言⑫c：PositionsPage 不再 import 两迁移组件；TrxPage 三组件齐挂。
+// 断言⑫c：PositionsPage 不再 import 两迁移组件；TrxPage 两组件齐挂。
+// D-253 退役翻转（业主令）：PositionsPageDailyIncome 已退役，TrxPage 仅挂两组件。
 func TestD244_ComponentMigration(t *testing.T) {
 	_, testFile, _, _ := runtime.Caller(0)
 	dir := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src")
@@ -402,14 +403,18 @@ func TestD244_ComponentMigration(t *testing.T) {
 		t.Errorf("PositionsPage 仍引用迁移组件（应全迁 TrxPage）")
 	}
 	trx := readFile(t, filepath.Join(dir, "components", "TrxPage.tsx"))
-	for _, comp := range []string{"PositionsPageHedgeStructure", "PositionsPageHedgeFlow", "PositionsPageDailyIncome"} {
+	for _, comp := range []string{"PositionsPageHedgeStructure", "PositionsPageHedgeFlow"} {
 		if !strings.Contains(trx, "<"+comp) {
-			t.Errorf("TrxPage 缺挂载 %s（变更12 三组件）", comp)
+			t.Errorf("TrxPage 缺挂载 %s（变更12 两组件）", comp)
 		}
+	}
+	// D-253 退役守卫：TrxPage 不得引用已退役的 PositionsPageDailyIncome
+	if strings.Contains(trx, "PositionsPageDailyIncome") {
+		t.Errorf("TrxPage 仍引用已退役 PositionsPageDailyIncome（D-253）")
 	}
 }
 
-// 断言⑫d：对冲卡表单段退役；收益区组件自带 listDailyIncome。
+// 断言⑫d：对冲卡表单段退役；PositionsPageDailyIncome 已删除（D-253 退役翻转）。
 func TestD244_FormRelocated(t *testing.T) {
 	_, testFile, _, _ := runtime.Caller(0)
 	dir := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src")
@@ -417,9 +422,9 @@ func TestD244_FormRelocated(t *testing.T) {
 	if strings.Contains(hs, "addDailyIncome") {
 		t.Errorf("对冲卡仍含内嵌收益表单（应迁 PositionsPageDailyIncome）")
 	}
-	di := readFile(t, filepath.Join(dir, "components", "PositionsPageDailyIncome.tsx"))
-	if !strings.Contains(di, "listDailyIncome") {
-		t.Errorf("DailyIncome 组件缺 listDailyIncome（迁移载体失效）")
+	// D-253 退役翻转：组件文件应已删除
+	if _, err := os.Stat(filepath.Join(dir, "components", "PositionsPageDailyIncome.tsx")); err == nil {
+		t.Errorf("PositionsPageDailyIncome.tsx 应已删除（D-253 退役）")
 	}
 }
 
