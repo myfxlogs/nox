@@ -1,11 +1,7 @@
 // MTHealthMonitor MT 数据采集稳定性健康监控（D-104 P0）。
-// 三指标 per-venue 采集 + 转换式告警状态机（只在状态转换时发告警，防洪水）。
-// 指标：①报价新鲜度（qbus.AllLatest 按 Venue 分组取 max(Time)）
-//
-//	②swap facts 年龄（LatestFacts swap_long/swap_short 按 Venue 取 max(Ts)）
-//	③margin facts 年龄（LatestFacts init_margin_rate 按 Venue 取 max(Ts)）
-//
-// 首个 tick 只记状态不告警（避免重启动噪音）；此后只在转换时插告警。
+// 三指标 per-venue 采集 + 转换式告警状态机（状态转换时发告警，防洪水）。
+// 指标：①报价新鲜度 ②swap facts 年龄 ③margin facts 年龄（D-203 仅 MT5）。
+// 首 tick 只记状态不告警；此后只在转换时插告警。
 package dashboard
 
 import (
@@ -49,7 +45,6 @@ type mtHealthState struct {
 	margin mtHealthMetric
 }
 
-// MTHealthMonitor MT 数据采集健康监控（D-104 P0）。
 type MTHealthMonitor struct {
 	venues HealthVenueSource
 	qbus   *bus.QuoteBus
@@ -59,28 +54,30 @@ type MTHealthMonitor struct {
 	quoteWarn, quoteCrit time.Duration
 	factWarn, factCrit   time.Duration
 
-	mu            sync.Mutex
-	states        map[string]mtHealthState // venue → 状态
-	firstTick     bool                     // 首 tick 只记状态不告警
-	lastCritAlert map[string]time.Time     // D-104 P0 返修③ R-c3：venue:metric → 上次 crit 告警时间
-	now           func() time.Time         // 可注入时钟（测试用，D-136 修复②），nil→time.Now
+	mu              sync.Mutex
+	states          map[string]mtHealthState // venue → 状态
+	firstTick       bool                     // 首 tick 只记状态不告警
+	lastCritAlert   map[string]time.Time     // D-104 P0 返修③ R-c3：venue:metric → 上次 crit 告警时间
+	marginMissCount map[string]int           // D-251：venue → margin 连续缺失计数（≥3 才 crit）
+	now             func() time.Time         // 可注入时钟（测试用，D-136 修复②），nil→time.Now
 }
 
 // NewMTHealthMonitor 创建监控（D-104 P0）。
 func NewMTHealthMonitor(venues HealthVenueSource, qbus *bus.QuoteBus, store HealthFactStore, tick time.Duration,
 	quoteWarn, quoteCrit, factWarn, factCrit time.Duration) *MTHealthMonitor {
 	return &MTHealthMonitor{
-		venues:        venues,
-		qbus:          qbus,
-		store:         store,
-		tick:          tick,
-		quoteWarn:     quoteWarn,
-		quoteCrit:     quoteCrit,
-		factWarn:      factWarn,
-		factCrit:      factCrit,
-		states:        make(map[string]mtHealthState),
-		firstTick:     true,
-		lastCritAlert: make(map[string]time.Time),
+		venues:          venues,
+		qbus:            qbus,
+		store:           store,
+		tick:            tick,
+		quoteWarn:       quoteWarn,
+		quoteCrit:       quoteCrit,
+		factWarn:        factWarn,
+		factCrit:        factCrit,
+		states:          make(map[string]mtHealthState),
+		firstTick:       true,
+		lastCritAlert:   make(map[string]time.Time),
+		marginMissCount: make(map[string]int),
 	}
 }
 
@@ -155,6 +152,7 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 		qa := quoteAges[v]
 		isMT := mtSet[v]
 		isMT5 := mt5Set[v]
+		display := aliasOrVenue(v, aliases) // D-203：告警/日志用别名（回退裸账号）
 		// quote 全 venue；swap 仅 MT；margin 仅 MT5（D-203：MT4 无 margin facts）。
 		newState := mtHealthState{
 			quote:  classifyAge(qa, m.quoteWarn, m.quoteCrit),
@@ -169,13 +167,14 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 		}
 		if isMT5 {
 			ma := marginAges[v]
-			newState.margin = classifyAge(ma, m.factWarn, m.factCrit)
+			adjusted, _, suppressed := m.classifyMarginWithFlashMiss(v, classifyAge(ma, m.factWarn, m.factCrit))
+			newState.margin = adjusted
 			mLog = durStr(ma)
+			if suppressed {
+				log.Printf("[mt-health] %s margin flash-miss suppressed (age=%s)", display, mLog)
+			}
 		}
 		newStates[v] = newState
-
-		// 日志行组件（用别名，回退裸账号；非 MT venue 的 s:/m: 显示 "-"）
-		display := aliasOrVenue(v, aliases)
 		logParts = append(logParts, display+"=q:"+durStr(qa)+"/s:"+sLog+"/m:"+mLog)
 
 		if firstTick {

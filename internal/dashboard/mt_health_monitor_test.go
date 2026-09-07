@@ -133,14 +133,15 @@ func TestMTHealth_StateTransitions(t *testing.T) {
 		t.Fatalf("tick1 (first tick, healthy): want 0 alerts, got %d", got)
 	}
 
-	// tick2: 报价 6m 前 → warn（转换，1 alert）+ swap/margin 持续 crit 首次告警（R-c3 !ok → 2 alerts）
+	// tick2: 报价 6m 前 → warn（转换，1 alert）+ swap 持续 crit 首次告警（R-c3 !ok → 1 crit）；
+	// D-251：margin 缺失 count=2（tick1 boot 已计 1）→ 闪断抑制，0 margin alert
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now.Add(-6 * time.Minute)})
 	mon.poll(context.Background())
-	if got := store.alertCount(); got != 3 {
-		t.Fatalf("tick2 (warn transition + swap/margin crit realert): want 3 alerts, got %d", got)
+	if got := store.alertCount(); got != 2 {
+		t.Fatalf("tick2 (warn transition + swap crit realert): want 2 alerts, got %d", got)
 	}
 	alerts := store.snapshot()
-	// 1 warn (quote) + 2 critical (swap/margin sustained crit realert)
+	// 1 warn (quote) + 1 critical (swap sustained crit realert); margin flash-miss suppressed (D-251)
 	levels := map[string]int{}
 	for _, a := range alerts {
 		levels[a.level]++
@@ -148,15 +149,16 @@ func TestMTHealth_StateTransitions(t *testing.T) {
 	if levels["warn"] != 1 {
 		t.Errorf("tick2: want 1 warn, got %d", levels["warn"])
 	}
-	if levels["critical"] != 2 {
-		t.Errorf("tick2: want 2 critical (swap+margin realert), got %d", levels["critical"])
+	if levels["critical"] != 1 {
+		t.Errorf("tick2: want 1 critical (swap realert; margin suppressed D-251), got %d", levels["critical"])
 	}
 
-	// tick3: 报价 31m 前 → crit（转换，1 alert）；swap/margin 持续 crit 窗口内不重发
+	// tick3: 报价 31m 前 → crit（转换，1 alert）；swap 持续 crit 窗口内不重发；
+	// D-251：margin 缺失 count=3 → critical 告警（1 alert）
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now.Add(-31 * time.Minute)})
 	mon.poll(context.Background())
 	if got := store.alertCount(); got != 4 {
-		t.Fatalf("tick3 (crit transition): want 4 alerts, got %d", got)
+		t.Fatalf("tick3 (crit transition + margin crit count=3): want 4 alerts, got %d", got)
 	}
 	alerts = store.snapshot()
 	if alerts[3].level != "critical" {
@@ -330,15 +332,16 @@ func TestMTHealth_NoDataCrit(t *testing.T) {
 		t.Fatalf("tick1 (first tick, healthy): want 0 alerts, got %d", got)
 	}
 
-	// tick2: 数据消失（新 QuoteBus 无报价 + 清 facts）→ quote+swap+margin 全 crit
+	// tick2: 数据消失（新 QuoteBus 无报价 + 清 facts）→ quote+swap crit；
+	// D-251：margin 缺失 count=1 → 闪断抑制，0 margin alert
 	qbus2 := bus.New() // 新 bus 无报价
 	mon.qbus = qbus2
 	store.setFacts(fact.KindSwapLong, nil)
 	store.setFacts(fact.KindSwapShort, nil)
 	store.setFacts(fact.KindInitMarginRate, nil)
 	mon.poll(context.Background())
-	if got := store.alertCount(); got != 3 {
-		t.Fatalf("tick2 (no data crit): want 3 alerts (quote+swap+margin), got %d", got)
+	if got := store.alertCount(); got != 2 {
+		t.Fatalf("tick2 (no data crit): want 2 alerts (quote+swap; margin suppressed D-251), got %d", got)
 	}
 	alerts := store.snapshot()
 	for i, a := range alerts {
@@ -498,24 +501,23 @@ func TestMTHealth_MT5VenueMarginCritStillWorks(t *testing.T) {
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) }
 
-	// tick1: quote fresh，无 swap/margin fact（首 tick 静默）
+	// tick1: quote fresh，无 swap/margin fact（首 tick 静默；margin count=1 闪断抑制）
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vC", Bid: 100, Ask: 100, Time: now})
 	mon.poll(context.Background())
 	if got := store.alertCount(); got != 0 {
 		t.Fatalf("tick1 (first tick): want 0, got %d", got)
 	}
 
-	// tick2: 无 margin fact → margin crit 告警（MT5 仍检查 margin）
+	// tick2: 无 margin fact → count=2 闪断抑制（D-251），仍 0 margin crit
 	mon.poll(context.Background())
-
-	var marginCrit int
-	for _, a := range store.snapshot() {
-		if strings.Contains(a.msg, "margin") && a.level == "critical" {
-			marginCrit++
-		}
+	if countMarginCrit(store) != 0 {
+		t.Errorf("tick2: margin count=2 应闪断抑制，got %d margin crit", countMarginCrit(store))
 	}
-	if marginCrit != 1 {
-		t.Errorf("MT5 venue 无 margin fact 应发 1 条 margin critical，got %d", marginCrit)
+
+	// tick3: 无 margin fact → count=3 达阈值 → margin crit 告警（MT5 仍检查 margin）
+	mon.poll(context.Background())
+	if marginCrit := countMarginCrit(store); marginCrit != 1 {
+		t.Errorf("tick3: MT5 venue 无 margin fact count=3 应发 1 条 margin critical，got %d", marginCrit)
 	}
 }
 
@@ -535,11 +537,12 @@ func TestMTHealth_AlertUsesAlias(t *testing.T) {
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) }
 
-	// tick1: quote fresh（首 tick 静默）
+	// tick1: quote fresh（首 tick 静默；margin count=1 闪断抑制）
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vD", Bid: 100, Ask: 100, Time: now})
 	mon.poll(context.Background())
-
-	// tick2: 无 margin fact → margin crit 告警，消息应用别名 "EXR-test"
+	// tick2: margin count=2 闪断抑制（D-251）
+	mon.poll(context.Background())
+	// tick3: margin count=3 → crit 告警，消息应用别名 "EXR-test"
 	mon.poll(context.Background())
 
 	var foundAlias bool
@@ -570,8 +573,9 @@ func TestMTHealth_AliasFallback(t *testing.T) {
 	mon.now = func() time.Time { return now.Add(time.Second) }
 
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vE", Bid: 100, Ask: 100, Time: now})
-	mon.poll(context.Background())
-	mon.poll(context.Background())
+	mon.poll(context.Background()) // tick1: first tick, margin count=1
+	mon.poll(context.Background()) // tick2: margin count=2 suppressed (D-251)
+	mon.poll(context.Background()) // tick3: margin count=3 → crit
 
 	var foundVenue bool
 	for _, a := range store.snapshot() {
@@ -708,4 +712,86 @@ func TestMTHealth_UnknownQbusVenueStillMonitored(t *testing.T) {
 	if quoteCrit != 1 {
 		t.Fatalf("unknown qbus venue stale 应发 1 条 quote critical，got %d (alerts=%v)", quoteCrit, alerts)
 	}
+}
+
+// --- D-251 断言（先红后绿；margin 单样本闪断治理——连续 ≥3 次缺失才 critical） ---
+
+// TestD251_MarginFlashMissSuppression D-251：margin 连续缺失 <3 次静默（零 alerts），
+// 第 3 次才发 critical；recovered 后重置计数；再次闪断从 1 计起。
+func TestD251_MarginFlashMissSuppression(t *testing.T) {
+	log.SetOutput(os.NewFile(0, os.DevNull))
+	defer log.SetOutput(os.Stderr)
+
+	store := newFakeHealthStore()
+	qbus := bus.New()
+	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vA:mt5"}}}
+	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+
+	now := wedUTC
+	mon.now = func() time.Time { return now.Add(time.Second) }
+
+	// tick1: quote fresh + margin fresh（首 tick 静默）
+	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now})
+	store.setFacts(fact.KindSwapLong, []fact.Fact{{Kind: fact.KindSwapLong, Venue: "vA", Symbol: "AUDJPY", Value: 5, Ts: now, Src: "mt5"}})
+	store.setFacts(fact.KindSwapShort, []fact.Fact{{Kind: fact.KindSwapShort, Venue: "vA", Symbol: "AUDJPY", Value: -3, Ts: now, Src: "mt5"}})
+	store.setFacts(fact.KindInitMarginRate, []fact.Fact{{Kind: fact.KindInitMarginRate, Venue: "vA", Symbol: "vA", Value: 0.01, Ts: now, Src: "mt5"}})
+	mon.poll(context.Background())
+	if got := store.alertCount(); got != 0 {
+		t.Fatalf("tick1 (first tick): want 0, got %d", got)
+	}
+
+	// tick2: margin 缺失（count=1）→ 静默，零 margin alerts
+	store.setFacts(fact.KindInitMarginRate, nil)
+	mon.poll(context.Background())
+	marginCrit := countMarginCrit(store)
+	if marginCrit != 0 {
+		t.Fatalf("tick2 (flash-miss count=1): want 0 margin crit, got %d", marginCrit)
+	}
+
+	// tick3: margin 仍缺失（count=2）→ 静默
+	mon.poll(context.Background())
+	marginCrit = countMarginCrit(store)
+	if marginCrit != 0 {
+		t.Fatalf("tick3 (flash-miss count=2): want 0 margin crit, got %d", marginCrit)
+	}
+
+	// tick4: margin 仍缺失（count=3）→ critical 告警
+	mon.poll(context.Background())
+	marginCrit = countMarginCrit(store)
+	if marginCrit != 1 {
+		t.Fatalf("tick4 (flash-miss count=3): want 1 margin crit, got %d", marginCrit)
+	}
+
+	// tick5: margin 恢复 → recovered + 计数重置
+	store.setFacts(fact.KindInitMarginRate, []fact.Fact{{Kind: fact.KindInitMarginRate, Venue: "vA", Symbol: "vA", Value: 0.01, Ts: now, Src: "mt5"}})
+	mon.poll(context.Background())
+	marginRecover := 0
+	for _, a := range store.snapshot() {
+		if strings.Contains(a.msg, "margin") && a.level == "info" {
+			marginRecover++
+		}
+	}
+	if marginRecover != 1 {
+		t.Fatalf("tick5 (recover): want 1 margin info recovered, got %d", marginRecover)
+	}
+
+	// tick6: margin 再次缺失（count=1，已重置）→ 静默
+	store.setFacts(fact.KindInitMarginRate, nil)
+	mon.poll(context.Background())
+	// tick5 后 alerts 总数=2（1 crit + 1 info），tick6 不应新增
+	if got := store.alertCount(); got != 2 {
+		t.Fatalf("tick6 (flash-miss after reset count=1): want 2 total alerts, got %d", got)
+	}
+}
+
+// countMarginCrit 统计 store 中 margin critical 告警数。
+func countMarginCrit(store *fakeHealthStore) int {
+	var n int
+	for _, a := range store.snapshot() {
+		if strings.Contains(a.msg, "margin") && a.level == "critical" {
+			n++
+		}
+	}
+	return n
 }

@@ -132,16 +132,36 @@ func TestD236_AppCmcWatchProp(t *testing.T) {
 	}
 }
 
-// 断言⑥：APR 渲染含 floor 截断（Math.floor）且无 toFixed(2) 残留于 APR 三数。
-func TestD236_APRFloorTruncation(t *testing.T) {
+// --- D-250 断言（先红后绿；对冲卡口径块迁移+APR 3dp round） ---
+
+// 断言 D-250-a：CMC 账户块（hedge-acct-block 第二块）含强平/预警净值两行+口径文案。
+func TestD250_CmcBlockCloseoutWarningLevels(t *testing.T) {
 	src := hedgeStructureSource(t)
-	if !strings.Contains(src, "Math.floor") {
-		t.Fatal("APR 渲染缺 Math.floor 截断")
+	// 定位第二个 hedge-acct-block（CMC 账户块）
+	first := strings.Index(src, "hedge-acct-block")
+	if first < 0 {
+		t.Fatal("缺 hedge-acct-block")
 	}
-	for _, line := range strings.Split(src, "\n") {
-		if strings.Contains(line, "投票年化") && strings.Contains(line, "toFixed(2)") {
-			t.Fatalf("APR 行残留 toFixed(2): %s", strings.TrimSpace(line))
+	second := strings.Index(src[first+1:], "hedge-acct-block")
+	if second < 0 {
+		t.Fatal("缺第二个 hedge-acct-block（CMC 账户块）")
+	}
+	cmcBlock := src[first+1+second:]
+	for _, want := range []string{"强平净值", "预警净值", "口径：强平=保证金 50%，预警=80%"} {
+		if !strings.Contains(cmcBlock, want) {
+			t.Errorf("CMC 账户块缺文本 %q", want)
 		}
+	}
+}
+
+// 断言 D-250-b：APR 行用 round3（Math.round），无 Math.floor 残留。
+func TestD250_APRRound3NoFloor(t *testing.T) {
+	src := hedgeStructureSource(t)
+	if !strings.Contains(src, "Math.round") {
+		t.Fatal("APR 渲染缺 Math.round（D-250 变更2：round3 替代 floor2）")
+	}
+	if strings.Contains(src, "Math.floor") {
+		t.Fatal("APR 渲染仍含 Math.floor（D-250 变更2：floor2 应删）")
 	}
 }
 
