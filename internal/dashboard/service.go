@@ -146,6 +146,8 @@ type Service struct {
 	cmcWatchFlushInterval time.Duration
 	// D-249 S3：scheduler kick 注入（on-open 触发采集补轮；nil=未接线→handler no-op）。
 	kickFn func(string)
+	// D-252：CMC 净值阈值告警状态机（nil=未接线→flushCMCWatch 不检查）。
+	cmcEquityAlert *cmcEquityAlertMachine
 }
 
 // FrontConfig 前端展示阈值（D-077 修复⑪B N7，后端 config 单一真相）。

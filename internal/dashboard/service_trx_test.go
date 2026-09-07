@@ -4,6 +4,7 @@ package dashboard
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -180,5 +181,76 @@ func TestRollupTrxDailyIncome_AutoNotOverwriteManual(t *testing.T) {
 	// manual 行保留（energy=99.99，未被 auto 覆盖）
 	if incomes[0].EnergyTrx != 99.99 {
 		t.Errorf("energy_trx = %v, want 99.99 (manual 保留，auto 不覆盖)", incomes[0].EnergyTrx)
+	}
+}
+
+// TestD253_RollupInterestFromCMCOvernight D-253 ⑦：rollup auto 行 interest_usd 并入 CMC overnight。
+// 有 overnight 记录日 interest_usd= overnight 合计；无记录日照旧 0。
+func TestD253_RollupInterestFromCMCOvernight(t *testing.T) {
+	s := hedgeTestStore(t) // 含 fin_cmc_history TRUNCATE
+	ctx := context.Background()
+	day := time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC)
+
+	// 1 条账户快照（触发 rollup）
+	if err := s.InsertTRXAccount(ctx, pgstore.TRXAccount{
+		Address: "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", VotesTotal: 18070,
+		BalanceSun: 97863827, AllowanceSun: 100, EnergyDelegated: 17270000000,
+		BandwidthStaked: 800000000, FetchedAt: day,
+	}); err != nil {
+		t.Fatalf("InsertTRXAccount: %v", err)
+	}
+
+	// 2 条 CMC overnight 记录（1.65 + 1.50 = 3.15 USD）
+	if err := s.UpsertCMCHistory(ctx, 1, []pgstore.CMCHistoryTx{
+		{AccountID: 1, TransactionID: "ov1", TransactionType: "OVERNIGHT_SETTLEMENT", Amount: 1.65, TransactionTime: day.Add(2 * time.Hour)},
+		{AccountID: 1, TransactionID: "ov2", TransactionType: "OVERNIGHT_SETTLEMENT", Amount: 1.50, TransactionTime: day.Add(10 * time.Hour)},
+	}); err != nil {
+		t.Fatalf("UpsertCMCHistory: %v", err)
+	}
+
+	qbus := bus.New()
+	svc := &Service{store: s, qbus: qbus, freshTTL: time.Minute, liqMMR: 0.005}
+	if err := svc.RollupTrxDailyIncome(ctx, day); err != nil {
+		t.Fatalf("RollupTrxDailyIncome: %v", err)
+	}
+
+	incomes, err := s.ListDailyIncome(ctx, nil, nil, 10, 0)
+	if err != nil {
+		t.Fatalf("ListDailyIncome: %v", err)
+	}
+	if len(incomes) != 1 {
+		t.Fatalf("got %d rows, want 1", len(incomes))
+	}
+	got := incomes[0]
+	wantInterest := 1.65 + 1.50 // 3.15
+	if diff := got.InterestUSD - wantInterest; diff > 1e-9 || diff < -1e-9 {
+		t.Errorf("interest_usd = %v, want %v (CMC overnight 合计 D-253)", got.InterestUSD, wantInterest)
+	}
+	if !strings.Contains(got.Note, "overnight=") {
+		t.Errorf("note should contain overnight=, got %q", got.Note)
+	}
+
+	// 无 overnight 记录日照旧 0
+	day2 := time.Date(2026, 9, 4, 0, 0, 0, 0, time.UTC)
+	if err := s.InsertTRXAccount(ctx, pgstore.TRXAccount{
+		Address: "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", VotesTotal: 18070,
+		BalanceSun: 97863827, AllowanceSun: 100, EnergyDelegated: 17270000000,
+		BandwidthStaked: 800000000, FetchedAt: day2,
+	}); err != nil {
+		t.Fatalf("InsertTRXAccount day2: %v", err)
+	}
+	if err := svc.RollupTrxDailyIncome(ctx, day2); err != nil {
+		t.Fatalf("RollupTrxDailyIncome day2: %v", err)
+	}
+	incomes2, err := s.ListDailyIncome(ctx, nil, nil, 10, 0)
+	if err != nil {
+		t.Fatalf("ListDailyIncome: %v", err)
+	}
+	// day2 行（最新首行）interest_usd 应为 0（无 overnight 记录）
+	if incomes2[0].Day.Format("2006-01-02") != day2.Format("2006-01-02") {
+		t.Fatalf("latest row day = %v, want %v", incomes2[0].Day.Format("2006-01-02"), day2.Format("2006-01-02"))
+	}
+	if incomes2[0].InterestUSD != 0 {
+		t.Errorf("day2 interest_usd = %v, want 0 (无 overnight 记录)", incomes2[0].InterestUSD)
 	}
 }

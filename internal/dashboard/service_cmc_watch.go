@@ -22,6 +22,11 @@ func (s *Service) SetCMCWatchTopic(t *bus.Topic[*v1.CMCWatchUpdate]) { s.cmcWatc
 // SetCMCWatchFlushInterval D-234：注入蓄压间隔（测试注 10ms 加速；≤0=默认 1s）。
 func (s *Service) SetCMCWatchFlushInterval(d time.Duration) { s.cmcWatchFlushInterval = d }
 
+// SetCMCEquityAlertStore D-252：注入净值告警状态机的 alert store（main 装配；nil=不接线）。
+func (s *Service) SetCMCEquityAlertStore(store alertInserter) {
+	s.cmcEquityAlert = newCMCEquityAlertMachine(store)
+}
+
 // NotifyCMCFrame D-234：CMC ws 帧钩子通知入口——1s 蓄压（窗口内多帧合并，flush 时现算最后一帧派生值）。
 // 线程安全：帧钩子从 cmc ws goroutine 调用，非阻塞（仅设 pending+启定时器）。
 // kind 仅作日志/未来分诊用，蓄压合并所有帧类型为一次现算（dashboard 从 DB 取最新态，自然反映全部帧）。
@@ -47,6 +52,10 @@ func (s *Service) flushCMCWatch() {
 		return
 	}
 	upd := s.computeCMCWatchUpdate(context.Background())
+	// D-252：净值阈值告警状态机（2 tick 去抖，转换式告警；nil=未接线→跳过）
+	if s.cmcEquityAlert != nil && upd.CmcEquity > 0 {
+		s.cmcEquityAlert.check(context.Background(), upd.CmcEquity, upd.WarningLevelUsd, upd.CloseoutLevelUsd)
+	}
 	s.cmcWatchTopic.Publish(upd)
 }
 

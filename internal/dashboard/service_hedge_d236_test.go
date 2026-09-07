@@ -542,6 +542,28 @@ func TestD236_v15_FrontendHedgedRow(t *testing.T) {
 	}
 }
 
+// --- D-253 断言⑸（先红后绿；每日记录组件退役） ---
+
+// 断言⑸：web/src 零 PositionsPageDailyIncome 引用（组件+import 全删）。
+func TestD253_DailyIncomeComponentRemoved(t *testing.T) {
+	_, testFile, _, _ := runtime.Caller(0)
+	dir := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src")
+	// TrxPage 不再 import 或渲染 PositionsPageDailyIncome
+	trx := readFile(t, filepath.Join(dir, "components", "TrxPage.tsx"))
+	if strings.Contains(trx, "PositionsPageDailyIncome") {
+		t.Error("TrxPage.tsx 仍含 PositionsPageDailyIncome（D-253 应删）")
+	}
+	// 组件文件已删
+	if _, err := os.Stat(filepath.Join(dir, "components", "PositionsPageDailyIncome.tsx")); err == nil {
+		t.Error("PositionsPageDailyIncome.tsx 仍存在（D-253 应删）")
+	}
+	// PositionsPageHelpers todayStr 已删（死 helper 清理）
+	helpers := readFile(t, filepath.Join(dir, "components", "PositionsPageHelpers.ts"))
+	if strings.Contains(helpers, "todayStr") {
+		t.Error("PositionsPageHelpers.ts 仍含 todayStr（D-253 死 helper 应删）")
+	}
+}
+
 // --- D-244 变更16 断言⑯（先红后绿；app 外壳版心回归） ---
 
 // 断言⑯：00-base.css main.app-layout 块含 max-width:1440px 与 margin:0 auto（版心回归）。

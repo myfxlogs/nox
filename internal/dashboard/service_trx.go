@@ -59,8 +59,16 @@ func (s *Service) RollupTrxDailyIncome(ctx context.Context, day time.Time) error
 		}
 	}
 
-	note := fmt.Sprintf("auto: energy=租金 %v TRX / voting=Σ正增量 %v TRX", energyTrx, votingTrx)
-	if err := s.store.AddDailyIncomeAuto(ctx, day, energyTrx, votingTrx, 0, price, pnl, note); err != nil {
+	// D-253：interest_usd 并入 CMC overnight（当日 SumCMCOvernightByRange，治本累计低估 ~$6.5）
+	dayStart := day
+	dayEnd := day.Add(24 * time.Hour)
+	overnight, err := s.store.SumCMCOvernightByRange(ctx, &dayStart, &dayEnd)
+	if err != nil {
+		return fmt.Errorf("rollup overnight: %w", err)
+	}
+
+	note := fmt.Sprintf("auto: energy=租金 %v TRX / voting=Σ正增量 %v TRX / overnight=%v USD", energyTrx, votingTrx, overnight)
+	if err := s.store.AddDailyIncomeAuto(ctx, day, energyTrx, votingTrx, overnight, price, pnl, note); err != nil {
 		return fmt.Errorf("rollup write: %w", err)
 	}
 	return nil
