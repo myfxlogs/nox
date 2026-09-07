@@ -119,7 +119,7 @@ func (s *MarginFactSource) consumeStream(ctx context.Context, sink func(fact.Fac
 	a := s.a
 	sctx := a.withSessionMD(ctx)
 	// SubscribeOrderProfit 注册（幂等，重连后重订阅）。
-	if _, err := a.subs.SubscribeOrderProfit(sctx, &mt5pb.SubscribeOrderProfitRequest{Id: a.token}); err != nil {
+	if _, err := a.subs.SubscribeOrderProfit(sctx, &mt5pb.SubscribeOrderProfitRequest{Id: a.getToken()}); err != nil {
 		if ctx.Err() != nil {
 			return
 		}
@@ -127,7 +127,7 @@ func (s *MarginFactSource) consumeStream(ctx context.Context, sink func(fact.Fac
 		s.reconnectBackoff(ctx)
 		return
 	}
-	stream, err := a.streams.OnOrderProfit(sctx, &mt5pb.OnOrderProfitRequest{Id: a.token})
+	stream, err := a.streams.OnOrderProfit(sctx, &mt5pb.OnOrderProfitRequest{Id: a.getToken()})
 	if err != nil {
 		if ctx.Err() != nil {
 			return

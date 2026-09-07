@@ -8,12 +8,22 @@ import (
 	"time"
 )
 
+// quoteSub D-249 S2：订阅条目（D-108 Topic 同款 close/send 竞态防护）。
+// 每个 sub 独立 mutex 同步 close 与 send，cancel 用 sync.Once 保护 close（重复 cancel 不 panic），
+// Publish 侧 send 前持 sub.mu 检查 closed 标志（race-clean，不依赖 recover）。
+type quoteSub struct {
+	ch     chan Quote
+	mu     sync.Mutex
+	closed bool
+	once   sync.Once
+}
+
 // QuoteBus 是报价 pub/sub 中心（§4.1）。
 // latest 按 canonical → "venue:venueType" → Quote 组织，
 // 避免同 venue 现货/永续互相覆盖（D-026）。
 type QuoteBus struct {
 	mu          sync.RWMutex
-	subscribers map[string][]chan Quote
+	subscribers map[string][]*quoteSub
 	latestMu    sync.RWMutex
 	latest      map[string]map[string]Quote
 	// D-155 freeze guard：lastChange 记录 (canonical, venueKey) 上次「价格值变化」时刻。
@@ -25,35 +35,43 @@ type QuoteBus struct {
 // New 创建 QuoteBus。
 func New() *QuoteBus {
 	return &QuoteBus{
-		subscribers: make(map[string][]chan Quote),
+		subscribers: make(map[string][]*quoteSub),
 		latest:      make(map[string]map[string]Quote),
 		lastChange:  make(map[string]map[string]time.Time),
 	}
 }
 
 // Subscribe 返回接收指定 canonical symbol 报价的 channel。
-// 返回的 cancel func 取消订阅并关闭 channel。
+// 返回的 cancel func 取消订阅并关闭 channel（sync.Once 保护重复 cancel 不 panic）。
 func (b *QuoteBus) Subscribe(symbol string) (<-chan Quote, func()) {
-	ch := make(chan Quote, 1)
+	sub := &quoteSub{ch: make(chan Quote, 1)}
 	b.mu.Lock()
-	b.subscribers[symbol] = append(b.subscribers[symbol], ch)
+	b.subscribers[symbol] = append(b.subscribers[symbol], sub)
 	b.mu.Unlock()
+	ch := sub.ch
 	return ch, func() {
+		sub.once.Do(func() {
+			sub.mu.Lock()
+			sub.closed = true
+			close(sub.ch)
+			sub.mu.Unlock()
+		})
 		b.mu.Lock()
 		subs := b.subscribers[symbol]
 		for i, c := range subs {
-			if c == ch {
+			if c.ch == ch {
 				b.subscribers[symbol] = append(subs[:i], subs[i+1:]...)
 				break
 			}
 		}
 		b.mu.Unlock()
-		close(ch)
 	}
 }
 
 // Publish 发布报价到所有订阅该 canonical symbol 的 channel。
 // drain-then-replace：channel 满时丢旧保新。
+// D-249 S2：send 前持 sub.mu 检查 closed（与 cancel 的 close 同步，race-clean）；
+// 复制 subs 切片避免共享底层数组并发 append 竞争（D-108 Topic 同款）。
 func (b *QuoteBus) Publish(q Quote) {
 	b.latestMu.Lock()
 	vk := q.VenueKey()
@@ -72,21 +90,31 @@ func (b *QuoteBus) Publish(q Quote) {
 	b.latestMu.Unlock()
 
 	b.mu.RLock()
-	chs := append(b.subscribers[q.Symbol], b.subscribers[""]...)
+	symSubs := b.subscribers[q.Symbol]
+	wildSubs := b.subscribers[""]
+	subs := make([]*quoteSub, 0, len(symSubs)+len(wildSubs))
+	subs = append(subs, symSubs...)
+	subs = append(subs, wildSubs...)
 	b.mu.RUnlock()
-	for _, ch := range chs {
+	for _, sub := range subs {
+		sub.mu.Lock()
+		if sub.closed {
+			sub.mu.Unlock()
+			continue
+		}
 		select {
-		case ch <- q:
+		case sub.ch <- q:
 		default:
 			select {
-			case <-ch:
+			case <-sub.ch:
 			default:
 			}
 			select {
-			case ch <- q:
+			case sub.ch <- q:
 			default:
 			}
 		}
+		sub.mu.Unlock()
 	}
 }
 

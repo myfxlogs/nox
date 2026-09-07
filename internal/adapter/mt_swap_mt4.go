@@ -51,7 +51,7 @@ func (a *MT4Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 	uncovered := map[int32]int{}       // swap_type 原始值 → 命中符号数（WP1 计数日志）
 	tripleDays := map[string]float64{} // D-077 修复⑪A M3：canon → 三倍日（per-symbol 全量收集）
 	for brokerSym, canon := range sm {
-		resp, err := a.mt4.SymbolParams(a.withSessionMD(ctx), &mt4pb.SymbolParamsRequest{Id: a.token, Symbol: brokerSym})
+		resp, err := a.mt4.SymbolParams(a.withSessionMD(ctx), &mt4pb.SymbolParamsRequest{Id: a.getToken(), Symbol: brokerSym})
 		if err != nil {
 			errs = append(errs, brokerSym+": "+err.Error())
 			continue

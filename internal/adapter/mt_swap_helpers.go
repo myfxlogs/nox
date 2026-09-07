@@ -211,7 +211,7 @@ func marginFact(kind, venue, symbol string, rate float64, src string) fact.Fact 
 func (a *MT5Adapter) fetchLeverage(ctx context.Context) (float64, bool) {
 	pctx, cancel := context.WithTimeout(a.withSessionMD(ctx), swapPerCallTimeout)
 	defer cancel()
-	resp, err := a.mt5.AccountSummary(pctx, &mt5pb.AccountSummaryRequest{Id: a.token})
+	resp, err := a.mt5.AccountSummary(pctx, &mt5pb.AccountSummaryRequest{Id: a.getToken()})
 	if err != nil {
 		log.Printf("margin: leverage fetch failed: %v", err)
 		return 0, false
