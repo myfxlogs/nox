@@ -447,8 +447,14 @@ func TestD236_v14_CarryAnnualizationMath(t *testing.T) {
 		t.Fatalf("migrate: %v", err)
 	}
 	t.Cleanup(func() {
-		_, _ = st.Pool().Exec(ctx, `DELETE FROM position_daily_income WHERE day >= '2099-01-01'`)
+		// D-249 S6 R-G1：原 `day >= '2099-01-01'` 永不匹配种子日（now-10d）→持久库每跑一次泄漏一行，
+		// 二次运行起 cum 精确翻倍（CI 全新库必绿=本地红/CI 绿陷阱）。改按 note='d236v14' 删（note 列即测试标记）。
+		_, _ = st.Pool().Exec(ctx, `DELETE FROM position_daily_income WHERE note = 'd236v14'`)
 	})
+	// D-249 S6 R-G1：种子前先清同标记行（防前次泄漏行干扰 cum 计算）。
+	if _, err := st.Pool().Exec(ctx, `DELETE FROM position_daily_income WHERE note = 'd236v14'`); err != nil {
+		t.Fatalf("pre-clean d236v14 rows: %v", err)
+	}
 	// 种子：唯一收益日=10 天前（energy 3650 TRX），interest=10 USD。mid=0.33，qty=1000。
 	day := time.Now().UTC().Add(-10 * 24 * time.Hour)
 	day = time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, time.UTC)

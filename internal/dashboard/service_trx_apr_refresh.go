@@ -3,10 +3,12 @@ package dashboard
 
 import (
 	"context"
+	"errors"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 
 	"connectrpc.com/connect"
+	"github.com/jackc/pgx/v5"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -20,7 +22,12 @@ func (s *Service) TrxVoteAprRefresh(ctx context.Context, req *connect.Request[v1
 	}
 	apr, err := s.store.LastTRXVoteApr(ctx)
 	if err != nil {
-		return connect.NewResponse(&v1.TrxVoteAprRefreshResponse{}), nil // 空表→零值（前端「数据未就绪」）
+		// D-249 S6 R-G2：仅 ErrNoRows=空表→零值（前端「数据未就绪」）；
+		// 其余 DB 错误透传 error（前端已有 catch 静默，不伤体验；原吞并一切错误=掩盖真故障）。
+		if errors.Is(err, pgx.ErrNoRows) {
+			return connect.NewResponse(&v1.TrxVoteAprRefreshResponse{}), nil
+		}
+		return nil, err
 	}
 	resp := &v1.TrxVoteAprRefreshResponse{
 		CurrentRate: apr.CurrentRate, MaxRate: apr.MaxRate, Spread: apr.Spread,
