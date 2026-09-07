@@ -19,8 +19,11 @@ ALTER TABLE position_settlements ADD COLUMN IF NOT EXISTS stats_updated_at      
 ALTER TABLE position_settlements ADD COLUMN IF NOT EXISTS settlement_model_version integer;
 ALTER TABLE position_settlements ADD COLUMN IF NOT EXISTS settlement_event_key    text;
 
--- D-193 审计 P2-2：legacy 回填用 BEGIN/COMMIT 包裹，防 splitStatements 分割后部分失败
-BEGIN;
+-- D-193 审计 P2-2 → D-249 S5 更正：原 BEGIN/COMMIT 经 pool.Exec 每语句独立连接，
+-- 事务包裹为零（pgxpool Release 时 TxStatus≠'I' 即 Destroy）——注释宣称的保护是假的。
+-- D-249 S5：migrate.go 已改为 per-migration 单连接事务（applyMigrationTx），
+-- 本文件全部语句在同一个 BEGIN/COMMIT 内执行——SQL 内禁再嵌 BEGIN/COMMIT
+-- （pgx 事务内 BEGIN 产生 WARNING 被忽略，COMMIT 会提前提交外层事务）。
 -- legacy 回填：已有行的 realized_usd → price_pnl_usd，pnl_quality = legacy
 UPDATE position_settlements
 SET price_pnl_usd = realized_usd,
@@ -35,7 +38,6 @@ SET pnl_quality = 'legacy',
     completeness_status = 'skipped',
     stats_status = 'skipped'
 WHERE price_pnl_usd IS NULL AND realized_usd IS NULL;
-COMMIT;
 
 -- CHECK 约束（新行强制合法值，legacy 行已回填）
 ALTER TABLE position_settlements ADD CONSTRAINT settlement_pnl_quality_check

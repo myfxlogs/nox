@@ -95,20 +95,44 @@ func (s *Store) Migrate(ctx context.Context) error {
 		if applied {
 			continue
 		}
-		for _, stmt := range splitStatements(m.sql) {
-			stmt = strings.TrimSpace(stmt)
-			if stmt == "" {
-				continue
-			}
-			if _, err := s.pool.Exec(ctx, stmt); err != nil {
-				return fmt.Errorf("migrate v%d: %w\nstatement: %s", m.version, err, truncate(stmt, 200))
-			}
+		// D-249 S5 审计 P1-6：每个 migration file 在单连接事务内执行（BEGIN/COMMIT），
+		// 防部分失败后 DB 处于"部分应用+未记录"态（0036 RENAME 链最脆弱）。
+		// 事务内含 schema_migrations 记录写入，确保"应用成功+版本记录"原子化。
+		if err := s.applyMigrationTx(ctx, m.version, m.sql); err != nil {
+			return err
 		}
-		if _, err := s.pool.Exec(ctx,
-			`INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING`, m.version,
-		); err != nil {
-			return fmt.Errorf("record migration v%d: %w", m.version, err)
+	}
+	return nil
+}
+
+// applyMigrationTx 在单连接事务内执行一个 migration file 的全部语句 + 记录版本号。
+// D-249 S5 审计 P1-6：per-migration 事务包裹——任一语句失败 → ROLLBACK，DB 不留半途残留，
+// schema_migrations 不记录该版本 → 下次启动可重入重跑（先红：半途残留；后绿：重跑无残留）。
+// 注意：migration SQL 内禁用 BEGIN/COMMIT（0055 已更正）——事务由本方法统一管理，
+// SQL 内嵌 BEGIN 在 pgx 事务内会产生 WARNING 且被忽略，COMMIT 会提前提交外层事务。
+func (s *Store) applyMigrationTx(ctx context.Context, version int, sql string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("migrate v%d begin: %w", version, err)
+	}
+	defer tx.Rollback(ctx) // commit 后 no-op
+
+	for _, stmt := range splitStatements(sql) {
+		stmt = strings.TrimSpace(stmt)
+		if stmt == "" {
+			continue
 		}
+		if _, err := tx.Exec(ctx, stmt); err != nil {
+			return fmt.Errorf("migrate v%d: %w\nstatement: %s", version, err, truncate(stmt, 200))
+		}
+	}
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING`, version,
+	); err != nil {
+		return fmt.Errorf("record migration v%d: %w", version, err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("migrate v%d commit: %w", version, err)
 	}
 	return nil
 }
