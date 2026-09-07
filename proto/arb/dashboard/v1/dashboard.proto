@@ -64,6 +64,7 @@ service DashboardService {
   rpc ListPersonalPositions(ListPersonalPositionsRequest) returns (ListPersonalPositionsResponse);
   rpc GetHedgeStructure(GetHedgeStructureRequest) returns (GetHedgeStructureResponse);  // D-212 对冲工作台
   rpc ListHedgeFlow(ListHedgeFlowRequest) returns (ListHedgeFlowResponse);  // D-212 统一流水卡
+  rpc TrxVoteAprRefresh(TrxVoteAprRefreshRequest) returns (TrxVoteAprRefreshResponse);  // D-249 S3：on-open 触发采集（kick scheduler）
   rpc AddDailyIncome(AddDailyIncomeRequest) returns (AddDailyIncomeResponse);
   rpc ListDailyIncome(ListDailyIncomeRequest) returns (ListDailyIncomeResponse);
 
@@ -1451,3 +1452,15 @@ message CnfiActionRow {
 message ListCNFIActionsRequest { int32 limit = 1; }
 
 message ListCNFIActionsResponse { repeated CnfiActionRow actions = 1; }
+
+// D-249 S3：TRX 投票收益率 on-open 刷新（kick scheduler 补轮后返回最新行）。
+message TrxVoteAprRefreshRequest {}
+
+message TrxVoteAprRefreshResponse {
+  double current_rate = 1;
+  string current_sr = 2;
+  double max_rate = 3;
+  string max_sr = 4;
+  double spread = 5;
+  google.protobuf.Timestamp fetched_at = 6;
+}

@@ -169,3 +169,6 @@ var CnfiActionsSQL string
 
 //go:embed 0075_cnfi_candidate_pool.sql
 var CnfiCandidatePoolSQL string
+
+//go:embed 0076_trx_vote_apr_top.sql
+var TrxVoteAprTopSQL string

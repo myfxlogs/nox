@@ -14,6 +14,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -166,6 +167,35 @@ func (c *AprCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	}
 	if err := c.store.InsertTRXVoteApr(ctx, rec); err != nil {
 		return nil, fmt.Errorf("trx apr insert: %w", err)
+	}
+	// D-249 S3：全 SR top5 producer 年化持久化（身份争议逐 SR 复核）。
+	// 收集 producer=true 且 rate>0 的行，按 rate 降序取前 5，落 fin_trx_vote_apr_top。
+	type srRate struct {
+		name string
+		rate float64
+	}
+	var producers []srRate
+	for _, w := range witnessRows {
+		if !w.Producer {
+			continue
+		}
+		rate, _ := strconv.ParseFloat(w.AnnualizedRate, 64)
+		if rate <= 0 {
+			continue
+		}
+		producers = append(producers, srRate{name: w.Name, rate: rate})
+	}
+	sort.Slice(producers, func(i, j int) bool { return producers[i].rate > producers[j].rate })
+	topN := 5
+	if len(producers) < topN {
+		topN = len(producers)
+	}
+	topRows := make([]pgstore.TRXVoteAprTop, 0, topN)
+	for i := 0; i < topN; i++ {
+		topRows = append(topRows, pgstore.TRXVoteAprTop{FetchedAt: rec.FetchedAt, SrName: producers[i].name, AnnualizedRate: producers[i].rate})
+	}
+	if err := c.store.InsertTRXVoteAprTopBatch(ctx, rec.FetchedAt, topRows); err != nil {
+		log.Printf("[trx_apr] top5 insert failed (non-fatal): %v", err)
 	}
 	// D-231 S5：聚合值变化才发布 hedgeHook（常规无变化轮不推，客户端不做无谓全量重取）。
 	// R2 修复：状态读改段持锁，与 TriggerNow check-and-set 互斥（防双 goroutine 数据竞争）。
