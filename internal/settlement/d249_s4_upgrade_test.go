@@ -29,11 +29,11 @@ func testStore(t *testing.T) *pgstore.Store {
 	return s
 }
 
-// TestD249_Settle_RetryableUpgrade 验证 retryable 行重试时升级为 applied 并走统计更新。
-// 场景：首写 stats_status=retryable（cashflow 查询失败）→ 修复后重试 → 升级为 applied → upsert+updateStat 被调。
-// 修复前：InsertSettlement ON CONFLICT DO NOTHING → won=false → 静默跳过统计（upsertVSample=0/updateStat=0）。
-// 修复后：ON CONFLICT DO UPDATE WHERE stats_status<>'applied' → won=true → 走统计更新。
-func TestD249_Settle_RetryableUpgrade(t *testing.T) {
+// TestD249_Settle_RetryableUpgrade_FakeDeps 验证 Settle() 流逻辑：retryable 行重试时升级为 applied 并走统计更新。
+// D-249 S6 R-G4：原名 TestD249_Settle_RetryableUpgrade 与 TestD249_InsertSettlement_RetryableUpgrade_RealDB 易混淆——
+// 本测试用 fakeDeps（insertWon 手填=true），验证 Settle() 流程编排（短路/升级/统计调用计数），
+// 非 DB 升级路径证明；真证明见 TestD249_InsertSettlement_RetryableUpgrade_RealDB（RealDB ON CONFLICT 实测）。
+func TestD249_Settle_RetryableUpgrade_FakeDeps(t *testing.T) {
 	now := time.Now()
 	rp := 10.0
 	// 模拟：首写 retryable（statsStatus=retryable 短路不触发，继续 Settle），
