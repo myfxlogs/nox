@@ -89,15 +89,23 @@ func (r *Reconciler) autoClose(
 		}
 	}
 	if otherOpen && r.closer != nil {
-		// D-245 缺口2：触发源持久化（reconcile_legged；写失败只 log 不阻断平仓）。
+		// D-245 缺口2 + D-249 S1 第1项：触发源持久化（reconcile_legged；写失败只 log 不阻断平仓）。
+		// D-249 reason 增强：含 venue/ticket/History 依据（481 实证——平仓触发源不可回溯）。
 		// 字段口径偏差留痕：设计假设 Position 含 canonical/venue_buy/venue_sell/qty，
 		// 实际这些在 legs 上（Position 只有 OpportunityID/Type/Venue）——按「空串容忍」填可得字段。
+		histClose, histProfit := 0.0, 0.0
+		if hist != nil {
+			histClose = hist.ClosePrice
+			histProfit = hist.Profit
+		}
+		reason := fmt.Sprintf("reconcile_legged venue=%s ticket=%s symbol=%s hist_close=%.5f hist_profit=%.2f",
+			goneLeg.Venue, goneLeg.OrderID, goneLeg.Symbol, histClose, histProfit)
 		if err := r.store.InsertAutotradeLog(ctx, &pgstore.AutotradeLog{
 			OpportunityID: pos.OpportunityID,
 			PositionID:    &posID,
 			Strategy:      pos.Type,
 			Status:        "CLOSE_TRIGGER",
-			Reason:        "reconcile_legged",
+			Reason:        reason,
 		}); err != nil {
 			log.Printf("[reconcile] D-245 CLOSE_TRIGGER 落库失败 pos=%d: %v", posID, err)
 		}
@@ -278,4 +286,15 @@ func isLeggedZombie(pos *pgstore.Position, now time.Time) bool {
 		return true
 	}
 	return false
+}
+
+// logResumeClose D-249 S1 第2项：ResumeClose 重触发持久化（481 实证；每次调用都记；写失败只 log 不阻断，同 gate.go:263）。
+func (r *Reconciler) logResumeClose(ctx context.Context, p *pgstore.Position, stuckFor time.Duration) {
+	pid := p.ID
+	if err := r.store.InsertAutotradeLog(ctx, &pgstore.AutotradeLog{
+		OpportunityID: p.OpportunityID, PositionID: &pid, Strategy: p.Type, Status: "RESUME_CLOSE",
+		Reason: fmt.Sprintf("resume_close stuck_for=%s pos=#%d", stuckFor.Round(time.Minute), pid),
+	}); err != nil {
+		log.Printf("[reconcile] D-249 RESUME_CLOSE 落库失败 pos=%d: %v", pid, err)
+	}
 }

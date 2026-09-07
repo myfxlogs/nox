@@ -88,8 +88,9 @@ func TestD245_UnknownTiering(t *testing.T) {
 	}
 }
 
-// TestD245_ReconcileLeggedTriggerLogged：对账收尾触发源持久化（缺口2）。
+// TestD245_ReconcileLeggedTriggerLogged：对账收尾触发源持久化（缺口2 + D-249 reason 增强）。
 // 直调 autoClose（镜像 TestAutoClose_HitAndCloseOtherLeg 形态）——单腿消失+History 命中+另一腿 OPEN。
+// D-249 S1 第1项：reason 须含 venue/ticket/History 依据（不再只是裸 "reconcile_legged"）。
 func TestD245_ReconcileLeggedTriggerLogged(t *testing.T) {
 	fs := newFakeStore()
 	opened := time.Now().Add(-2 * time.Hour)
@@ -109,11 +110,36 @@ func TestD245_ReconcileLeggedTriggerLogged(t *testing.T) {
 	}
 	found := false
 	for _, tr := range fs.closeTriggers {
-		if tr.PositionID != nil && *tr.PositionID == 602 && tr.Status == "CLOSE_TRIGGER" && tr.Reason == "reconcile_legged" {
+		if tr.PositionID != nil && *tr.PositionID == 602 && tr.Status == "CLOSE_TRIGGER" &&
+			strings.Contains(tr.Reason, "venue=") && strings.Contains(tr.Reason, "ticket=") {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("对账收尾未落 CLOSE_TRIGGER 日志（缺口2），closeTriggers=%v", fs.closeTriggers)
+		t.Fatalf("对账收尾未落 CLOSE_TRIGGER 日志（reason 须含 venue/ticket），closeTriggers=%v", fs.closeTriggers)
+	}
+}
+
+// TestD249_ResumeCloseTriggerLogged：D-249 S1 第2项——CLOSING 超时重触发 ResumeClose 持久化。
+// 构造 CLOSING 卡死超 30min → Run → ResumeClose 调用前须落 RESUME_CLOSE 行，reason 含卡死时长。
+func TestD249_ResumeCloseTriggerLogged(t *testing.T) {
+	fs := newFakeStore()
+	stuckAt := d245Base.Add(-35 * time.Minute) // 卡死 35min（>30min 阈值）
+	fs.positions[603] = mkPosition(603, "CLOSING", "CARRY", stuckAt)
+	fs.positions[603].ClosingStartedAt = &stuckAt
+	fc := &fakeCloser{store: fs}
+	r := &Reconciler{store: fs, closer: fc, closingAlertHour: map[int64]int64{}, nowFn: func() time.Time { return d245Base }}
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	found := false
+	for _, tr := range fs.closeTriggers {
+		if tr.PositionID != nil && *tr.PositionID == 603 && tr.Status == "RESUME_CLOSE" &&
+			strings.Contains(tr.Reason, "stuck_for=") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("CLOSING 超时重触发未落 RESUME_CLOSE 日志（reason 须含 stuck_for=），closeTriggers=%v", fs.closeTriggers)
 	}
 }

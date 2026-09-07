@@ -217,6 +217,7 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 		r.closingStuckAlert(ctx, &p, stuckFor, msg)
 		log.Printf("[reconcile] %s", msg)
 		if r.closer != nil {
+			r.logResumeClose(ctx, &p, stuckFor)
 			sub, cancel := r.withTimeout(ctx)
 			if err := r.closer.ResumeClose(sub, p.ID); err != nil {
 				log.Printf("[reconcile] ResumeClose pos=%d failed (next cycle retry): %v", p.ID, err)
