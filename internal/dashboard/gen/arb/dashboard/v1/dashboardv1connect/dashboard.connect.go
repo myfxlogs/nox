@@ -134,6 +134,9 @@ const (
 	// DashboardServiceListHedgeFlowProcedure is the fully-qualified name of the DashboardService's
 	// ListHedgeFlow RPC.
 	DashboardServiceListHedgeFlowProcedure = "/arb.dashboard.v1.DashboardService/ListHedgeFlow"
+	// DashboardServiceTrxVoteAprRefreshProcedure is the fully-qualified name of the DashboardService's
+	// TrxVoteAprRefresh RPC.
+	DashboardServiceTrxVoteAprRefreshProcedure = "/arb.dashboard.v1.DashboardService/TrxVoteAprRefresh"
 	// DashboardServiceAddDailyIncomeProcedure is the fully-qualified name of the DashboardService's
 	// AddDailyIncome RPC.
 	DashboardServiceAddDailyIncomeProcedure = "/arb.dashboard.v1.DashboardService/AddDailyIncome"
@@ -307,6 +310,7 @@ type DashboardServiceClient interface {
 	ListPersonalPositions(context.Context, *connect.Request[v1.ListPersonalPositionsRequest]) (*connect.Response[v1.ListPersonalPositionsResponse], error)
 	GetHedgeStructure(context.Context, *connect.Request[v1.GetHedgeStructureRequest]) (*connect.Response[v1.GetHedgeStructureResponse], error)
 	ListHedgeFlow(context.Context, *connect.Request[v1.ListHedgeFlowRequest]) (*connect.Response[v1.ListHedgeFlowResponse], error)
+	TrxVoteAprRefresh(context.Context, *connect.Request[v1.TrxVoteAprRefreshRequest]) (*connect.Response[v1.TrxVoteAprRefreshResponse], error)
 	AddDailyIncome(context.Context, *connect.Request[v1.AddDailyIncomeRequest]) (*connect.Response[v1.AddDailyIncomeResponse], error)
 	ListDailyIncome(context.Context, *connect.Request[v1.ListDailyIncomeRequest]) (*connect.Response[v1.ListDailyIncomeResponse], error)
 	// 盈亏统计起点（F4：anchor 重置，业主选 A「不删历史」）
@@ -578,6 +582,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			httpClient,
 			baseURL+DashboardServiceListHedgeFlowProcedure,
 			connect.WithSchema(dashboardServiceMethods.ByName("ListHedgeFlow")),
+			connect.WithClientOptions(opts...),
+		),
+		trxVoteAprRefresh: connect.NewClient[v1.TrxVoteAprRefreshRequest, v1.TrxVoteAprRefreshResponse](
+			httpClient,
+			baseURL+DashboardServiceTrxVoteAprRefreshProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("TrxVoteAprRefresh")),
 			connect.WithClientOptions(opts...),
 		),
 		addDailyIncome: connect.NewClient[v1.AddDailyIncomeRequest, v1.AddDailyIncomeResponse](
@@ -865,6 +875,7 @@ type dashboardServiceClient struct {
 	listPersonalPositions  *connect.Client[v1.ListPersonalPositionsRequest, v1.ListPersonalPositionsResponse]
 	getHedgeStructure      *connect.Client[v1.GetHedgeStructureRequest, v1.GetHedgeStructureResponse]
 	listHedgeFlow          *connect.Client[v1.ListHedgeFlowRequest, v1.ListHedgeFlowResponse]
+	trxVoteAprRefresh      *connect.Client[v1.TrxVoteAprRefreshRequest, v1.TrxVoteAprRefreshResponse]
 	addDailyIncome         *connect.Client[v1.AddDailyIncomeRequest, v1.AddDailyIncomeResponse]
 	listDailyIncome        *connect.Client[v1.ListDailyIncomeRequest, v1.ListDailyIncomeResponse]
 	getPnlAnchor           *connect.Client[v1.GetPnlAnchorRequest, v1.GetPnlAnchorResponse]
@@ -1076,6 +1087,11 @@ func (c *dashboardServiceClient) GetHedgeStructure(ctx context.Context, req *con
 // ListHedgeFlow calls arb.dashboard.v1.DashboardService.ListHedgeFlow.
 func (c *dashboardServiceClient) ListHedgeFlow(ctx context.Context, req *connect.Request[v1.ListHedgeFlowRequest]) (*connect.Response[v1.ListHedgeFlowResponse], error) {
 	return c.listHedgeFlow.CallUnary(ctx, req)
+}
+
+// TrxVoteAprRefresh calls arb.dashboard.v1.DashboardService.TrxVoteAprRefresh.
+func (c *dashboardServiceClient) TrxVoteAprRefresh(ctx context.Context, req *connect.Request[v1.TrxVoteAprRefreshRequest]) (*connect.Response[v1.TrxVoteAprRefreshResponse], error) {
+	return c.trxVoteAprRefresh.CallUnary(ctx, req)
 }
 
 // AddDailyIncome calls arb.dashboard.v1.DashboardService.AddDailyIncome.
@@ -1332,6 +1348,7 @@ type DashboardServiceHandler interface {
 	ListPersonalPositions(context.Context, *connect.Request[v1.ListPersonalPositionsRequest]) (*connect.Response[v1.ListPersonalPositionsResponse], error)
 	GetHedgeStructure(context.Context, *connect.Request[v1.GetHedgeStructureRequest]) (*connect.Response[v1.GetHedgeStructureResponse], error)
 	ListHedgeFlow(context.Context, *connect.Request[v1.ListHedgeFlowRequest]) (*connect.Response[v1.ListHedgeFlowResponse], error)
+	TrxVoteAprRefresh(context.Context, *connect.Request[v1.TrxVoteAprRefreshRequest]) (*connect.Response[v1.TrxVoteAprRefreshResponse], error)
 	AddDailyIncome(context.Context, *connect.Request[v1.AddDailyIncomeRequest]) (*connect.Response[v1.AddDailyIncomeResponse], error)
 	ListDailyIncome(context.Context, *connect.Request[v1.ListDailyIncomeRequest]) (*connect.Response[v1.ListDailyIncomeResponse], error)
 	// 盈亏统计起点（F4：anchor 重置，业主选 A「不删历史」）
@@ -1599,6 +1616,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		DashboardServiceListHedgeFlowProcedure,
 		svc.ListHedgeFlow,
 		connect.WithSchema(dashboardServiceMethods.ByName("ListHedgeFlow")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceTrxVoteAprRefreshHandler := connect.NewUnaryHandler(
+		DashboardServiceTrxVoteAprRefreshProcedure,
+		svc.TrxVoteAprRefresh,
+		connect.WithSchema(dashboardServiceMethods.ByName("TrxVoteAprRefresh")),
 		connect.WithHandlerOptions(opts...),
 	)
 	dashboardServiceAddDailyIncomeHandler := connect.NewUnaryHandler(
@@ -1917,6 +1940,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceGetHedgeStructureHandler.ServeHTTP(w, r)
 		case DashboardServiceListHedgeFlowProcedure:
 			dashboardServiceListHedgeFlowHandler.ServeHTTP(w, r)
+		case DashboardServiceTrxVoteAprRefreshProcedure:
+			dashboardServiceTrxVoteAprRefreshHandler.ServeHTTP(w, r)
 		case DashboardServiceAddDailyIncomeProcedure:
 			dashboardServiceAddDailyIncomeHandler.ServeHTTP(w, r)
 		case DashboardServiceListDailyIncomeProcedure:
@@ -2142,6 +2167,10 @@ func (UnimplementedDashboardServiceHandler) GetHedgeStructure(context.Context, *
 
 func (UnimplementedDashboardServiceHandler) ListHedgeFlow(context.Context, *connect.Request[v1.ListHedgeFlowRequest]) (*connect.Response[v1.ListHedgeFlowResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListHedgeFlow is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) TrxVoteAprRefresh(context.Context, *connect.Request[v1.TrxVoteAprRefreshRequest]) (*connect.Response[v1.TrxVoteAprRefreshResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.TrxVoteAprRefresh is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) AddDailyIncome(context.Context, *connect.Request[v1.AddDailyIncomeRequest]) (*connect.Response[v1.AddDailyIncomeResponse], error) {
