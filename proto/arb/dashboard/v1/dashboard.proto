@@ -64,7 +64,8 @@ service DashboardService {
   rpc ListPersonalPositions(ListPersonalPositionsRequest) returns (ListPersonalPositionsResponse);
   rpc GetHedgeStructure(GetHedgeStructureRequest) returns (GetHedgeStructureResponse);  // D-212 对冲工作台
   rpc ListHedgeFlow(ListHedgeFlowRequest) returns (ListHedgeFlowResponse);  // D-212 统一流水卡
-  rpc TrxVoteAprRefresh(TrxVoteAprRefreshRequest) returns (TrxVoteAprRefreshResponse);  // D-249 S3：on-open 触发采集（kick scheduler）
+  rpc TrxVoteAprRefresh(TrxVoteAprRefreshRequest) returns (TrxVoteAprRefreshResponse);  // D-249 S3：on-open 触发采集（kick scheduler）【deprecated, use TrxAccountRefresh — D-254 双踢吸收 on-open 职责】
+  rpc TrxAccountRefresh(TrxAccountRefreshRequest) returns (TrxAccountRefreshResponse);  // D-254：手动刷新按钮+on-open 双踢 trx_account+trx_apr，返回最新 fin_trx_account 全字段快照
   rpc AddDailyIncome(AddDailyIncomeRequest) returns (AddDailyIncomeResponse);
   rpc ListDailyIncome(ListDailyIncomeRequest) returns (ListDailyIncomeResponse);
 
@@ -1463,4 +1464,23 @@ message TrxVoteAprRefreshResponse {
   string max_sr = 4;
   double spread = 5;
   google.protobuf.Timestamp fetched_at = 6;
+}
+
+// D-254：TrxAccountRefresh——手动刷新按钮+on-open 双踢 trx_account+trx_apr 后返回最新 fin_trx_account 全字段快照。
+// Q3 裁定：sun 单位 ÷1e6 转 double（对齐 HedgeAccounts 口径，前端零换算）；votes_total 用 double（对齐 HedgeAccounts.votes）。
+// Q1 裁定：全 11 字段透出（unfrozen/sr_address 是 TronLink 展示集合，数据面一次到位，渲染扩展挂账）。
+message TrxAccountRefreshRequest {}
+
+message TrxAccountRefreshResponse {
+  int64 id = 1;                    // fin_trx_account.id（内部主键，透出为完整性）
+  string address = 2;              // 钱包地址
+  string sr_address = 3;           // 投票 SR 地址（nil=空字符串）
+  double trx_balance = 4;          // balance_sun ÷ 1e6（TRX）
+  double trx_allowance = 5;        // allowance_sun ÷ 1e6（TRX）
+  double energy_delegated = 6;     // energy_delegated ÷ 1e6（TRX）
+  double bandwidth_staked = 7;     // bandwidth_staked ÷ 1e6（TRX）
+  double net_limit = 8;            // net_limit ÷ 1e6（TRX）
+  double votes = 9;                // votes_total（票数，对齐 HedgeAccounts.votes 不除 1e6）
+  string unfrozen = 10;            // JSONB 透传（nil=空字符串，在途解押）
+  google.protobuf.Timestamp fetched_at = 11;  // 采集时间
 }
