@@ -12,6 +12,10 @@ import (
 	"arb/internal/store/pgstore"
 )
 
+// D-234批1 R-F1：固定基点除墙钟 flaky——runtime 小时桶按墙钟去重，time.Now() 基点分钟 ≥50 时
+// +10min 用例跨小时桶必败；分钟须 <50（+10min 用例留同小时桶余量）。
+var d245Base = time.Date(2026, 1, 5, 0, 5, 0, 0, time.UTC)
+
 // countAlerts 统计 fakeStore 中匹配 level+子串的告警条数。
 func countAlerts(fs *fakeStore, level, substr string) int {
 	n := 0
@@ -25,7 +29,10 @@ func countAlerts(fs *fakeStore, level, substr string) int {
 
 // TestD245_ClosingAlertTiering：假时钟表驱动——告警分层与小时桶去重。
 func TestD245_ClosingAlertTiering(t *testing.T) {
-	stuckAt := func(d time.Duration) time.Time { return time.Now().Add(-d) }
+	// D-234批1 R-F1：固定基点除墙钟 flaky（runtime 小时桶按墙钟去重，time.Now() 基点分钟 ≥50 时
+	// +10min 用例跨小时桶必败）；分钟须 <50（+10min 用例留同小时桶余量）。
+	base := time.Date(2026, 1, 5, 0, 5, 0, 0, time.UTC)
+	stuckAt := func(d time.Duration) time.Time { return base.Add(-d) }
 	cases := []struct {
 		name     string
 		stuck    time.Duration   // closing_started_at 距今
@@ -43,9 +50,8 @@ func TestD245_ClosingAlertTiering(t *testing.T) {
 			fs.positions[600] = mkPosition(600, "CLOSING", "CARRY", stuckAt(tc.stuck))
 			r := New(fs)
 			r.runTimeout = 5 * time.Second
-			base := time.Now()
 			for _, off := range tc.cycles {
-				r.nowFn = func() time.Time { return base.Add(off) }
+				r.nowFn = func() time.Time { return d245Base.Add(off) }
 				if _, err := r.Run(context.Background()); err != nil {
 					t.Fatalf("Run: %v", err)
 				}
@@ -63,15 +69,14 @@ func TestD245_ClosingAlertTiering(t *testing.T) {
 // TestD245_UnknownTiering：UNKNOWN 分支同规则（≥2h 降 warn 每小时至多 1 条）。
 func TestD245_UnknownTiering(t *testing.T) {
 	fs := newFakeStore()
-	p := mkPosition(601, "CLOSING", "CARRY", time.Now().Add(-3*time.Hour))
+	p := mkPosition(601, "CLOSING", "CARRY", d245Base.Add(-3*time.Hour)) // D-234批1 R-F1：同固定基点
 	u := "broker 返回矛盾"
 	p.UncertaintyReason = &u
 	fs.positions[601] = p
 	r := New(fs)
 	r.runTimeout = 5 * time.Second
-	base := time.Now()
 	for _, off := range []time.Duration{0, 10 * time.Minute, 70 * time.Minute} {
-		r.nowFn = func() time.Time { return base.Add(off) }
+		r.nowFn = func() time.Time { return d245Base.Add(off) }
 		if _, err := r.Run(context.Background()); err != nil {
 			t.Fatalf("Run: %v", err)
 		}
