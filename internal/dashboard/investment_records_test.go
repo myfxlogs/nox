@@ -3,17 +3,15 @@ package dashboard
 import (
 	"context"
 	"fmt"
-	"os"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 	"arb/internal/store/pgstore"
+	"arb/internal/testutil"
 
 	"connectrpc.com/connect"
-	"github.com/jackc/pgx/v5"
 )
 
 // serviceTestStoreOnce 包级单例 store——所有 SERVICE_DSN 测试共用一个 pool，避免
@@ -23,19 +21,10 @@ var serviceTestStoreOnce sync.Once
 var serviceTestStoreSingle *pgstore.Store
 
 // serviceTestStoreSingleInit 包级单例 store 初始化（sync.Once，进程结束自动 Close）。
+// D-234 批 1：DSN 守卫/逃逸门/loud-FAIL 全由 testutil.TestDSN 承担（手动 ParseConfig 检查段删除）。
 func serviceTestStoreSingleInit(t *testing.T) *pgstore.Store {
 	t.Helper()
-	dsn := os.Getenv("ARB_TEST_PG_SERVICE_DSN")
-	if dsn == "" {
-		t.Skip("ARB_TEST_PG_SERVICE_DSN 未设置，跳过需真库的测试")
-	}
-	cfg, err := pgx.ParseConfig(dsn)
-	if err != nil {
-		t.Fatalf("parse ARB_TEST_PG_SERVICE_DSN: %v", err)
-	}
-	if !strings.Contains(cfg.Database, "test") {
-		t.Fatalf("ARB_TEST_PG_SERVICE_DSN 指向非测试库 %q：测试会 TRUNCATE 该库，拒绝执行", cfg.Database)
-	}
+	dsn := testutil.TestDSN(t, "ARB_TEST_PG_SERVICE_DSN")
 	var initErr error
 	serviceTestStoreOnce.Do(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -63,7 +52,7 @@ func serviceTestStoreSingleInit(t *testing.T) *pgstore.Store {
 }
 
 // testServiceStore 连接 ARB_TEST_PG_SERVICE_DSN 指定的专用测试库（与 pgstore 包测试库隔离，避免并行 TRUNCATE 竞态）。
-// 未设置时跳过；dbname 必须含 "test"（安全闸）。
+// DSN 缺失 loud-FAIL + _test 库守卫由 testutil.TestDSN 承担（D-234 批 1）。
 // D-212 CI 红根因修复：改为包级单例 pool（serviceTestStoreSingleInit），避免每测试 New 独立 pool
 // 累积连接耗尽 pg 服务端 max_connections → Acquire 卡住 → 30s 超时 flaky。
 func testServiceStore(t *testing.T) *pgstore.Store {
