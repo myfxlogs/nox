@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -84,4 +85,82 @@ func (s *Store) CNFISignalConfigJSON(ctx context.Context, key string) (json.RawM
 		return nil, nil
 	}
 	return raw, err
+}
+
+// --- D-259 P2: signal_config 驱动筛选与预警 ---
+
+// CNFIFundSignalConfig holds the P2 fund-signal thresholds (D-259 §1).
+// 阈值全在 config（P3 单一真相源），计算路径禁硬编码。
+type CNFIFundSignalConfig struct {
+	UnderperfBps  float64 // 预警①：基金 1 月收益跑输层内中位 ≥此值（bp）
+	LayerDDPct    float64 // 预警②：层内组合 3 月最大回撤 ≥此值（%）
+	RankShift     int     // 预警④：持仓基金层内排名单日变动 ≥此值（位）
+	AlertsEnabled bool    // observe-only 总开关：false=只记 state 不发 alerts
+}
+
+// CNFIFundSignalConfigDefaults returns conservative defaults (observe-only 初值，D-259 §1).
+// 无配置时使用此值 + log（禁静默）。
+func CNFIFundSignalConfigDefaults() CNFIFundSignalConfig {
+	return CNFIFundSignalConfig{
+		UnderperfBps:  20,
+		LayerDDPct:    0.5,
+		RankShift:     2,
+		AlertsEnabled: false,
+	}
+}
+
+// LoadCNFIFundSignalConfig reads P2 thresholds from cnfi_signal_config; missing key = default + log.
+func (s *Store) LoadCNFIFundSignalConfig(ctx context.Context) (CNFIFundSignalConfig, error) {
+	cfg := CNFIFundSignalConfigDefaults()
+	keys := map[string]any{
+		"underperf_bps":  &cfg.UnderperfBps,
+		"layer_dd_pct":   &cfg.LayerDDPct,
+		"rank_shift":     &cfg.RankShift,
+		"alerts_enabled": &cfg.AlertsEnabled,
+	}
+	for key := range keys {
+		raw, err := s.CNFISignalConfigJSON(ctx, key)
+		if err != nil {
+			return cfg, fmt.Errorf("cnfi fund signal config %s: %w", key, err)
+		}
+		if len(raw) == 0 {
+			log.Printf("cnfi: signal config %s missing, using default", key)
+			continue
+		}
+		if err := json.Unmarshal(raw, keys[key]); err != nil {
+			return cfg, fmt.Errorf("cnfi fund signal config %s json: %w", key, err)
+		}
+	}
+	return cfg, nil
+}
+
+// CNFISignalStateValue reads the last_value of a signal state (nil if not found; D-259 rank_prev).
+func (s *Store) CNFISignalStateValue(ctx context.Context, key string) (*float64, error) {
+	var v *float64
+	err := s.pool.QueryRow(ctx,
+		`SELECT last_value::float8 FROM cnfi_signal_state WHERE key=$1`, key).Scan(&v)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return v, err
+}
+
+// CNFIActiveSignalKeys returns signal state keys with observed_as_of within the last `days` days.
+// 用于 passes_screen 判定（D-259 §3）：state 存在且近期=基金处于预警状态。
+func (s *Store) CNFIActiveSignalKeys(ctx context.Context, days int) (map[string]bool, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT key FROM cnfi_signal_state WHERE observed_as_of >= CURRENT_DATE - $1::int`, days)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			return nil, err
+		}
+		out[k] = true
+	}
+	return out, rows.Err()
 }
