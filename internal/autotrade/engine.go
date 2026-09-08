@@ -38,24 +38,17 @@ type Config struct {
 	MeanRevertThresh  map[string]float64 // MR 阈值 map
 
 	// D-159 W1a R1 + D-168 自动准入：SWAPARB 组合门禁。
-	// SwapArbAllowCombos 空切片 = RUNNING 下 fail-closed（autoAllow=false 时）。
-	// autoAllow=true 时空白名单=自动放行所有通过门禁栈的组合。
-	// SwapArbDenyCombos 黑名单（D-168）：显式禁止已知问题组合，优先级最高。
-	// SwapArbMaxGrossExposure 全局活跃组合名义合计上限（>0 才校验）。
-	// MaxActiveCombos 同组合最大并发数，默认 1（D-138 单组合口径）。
+	// SwapArbAllowCombos 空切片 = RUNNING 下 fail-closed（autoAllow=false 时）；autoAllow=true 时空白=自动放行。
+	// SwapArbDenyCombos 黑名单（D-168）：显式禁止已知问题组合，优先级最高。SwapArbMaxGrossExposure 全局活跃组合名义合计上限（>0 才校验）。MaxActiveCombos 同组合最大并发数（默认 1）。
 	SwapArbAllowCombos      []exec.ComboAllowSpec
 	SwapArbDenyCombos       []exec.ComboAllowSpec
 	SwapArbAutoAllow        bool
 	SwapArbMaxGrossExposure float64
 	MaxActiveCombos         int
 
-	// D-159 W1a I6：environment/is_real 一致性检查。
-	// Environment 执行环境固定值（'demo'/'live'）。开仓前校验 venue 的 is_real 与此值一致。
-	// 空 = 未配置（不检查，回退旧行为）。
+	// D-159 W1a I6：environment/is_real 一致性检查。Environment 执行环境固定值（'demo'/'live'），开仓前校验 venue 的 is_real 与此值一致。空=未配置（不检查）。
 	Environment string
-	// D-159 W6a S2：LIVE 人工开关（ARB_LIVE_TRADE，默认 false）。
-	// is_real=true 账户 + LiveTrade=false → 拒绝开仓（Gate.Submit + 手动 RPC 同源）。
-	// is_real=false（demo）不受限制。切换=改 env+重启+审计日志（无 RPC）。
+	// D-159 W6a S2：LIVE 人工开关（ARB_LIVE_TRADE，默认 false）。is_real=true + LiveTrade=false → 拒绝开仓。切换=改 env+重启+审计日志。
 	LiveTrade bool
 	// D-195-C1：LiveGate 检查器（LIVE 模式导出门）。nil=LIVE 直接拒绝（fail-closed）。
 	LiveGateChecker *LiveGateChecker
@@ -65,11 +58,9 @@ type Config struct {
 	SwapDeviationExitPct float64
 	// D-165 S3：swap facts 零值校验开关（默认 true）。facts=0 但 broker 有非零 swap 历史→拒绝。
 	SwapFactsZeroCheckEnabled bool
-	// D-165.1 S1：leg contract size resolver（MT 腿 CS≠1 时 notional 换算用）。
-	// nil = 未注入（回退 CS=1，CEX 腿正确，MT 腿 notional 少算但不阻塞）。
+	// D-165.1 S1：leg contract size resolver（MT 腿 CS≠1 时 notional 换算用）。nil=未注入（回退 CS=1）。
 	LegContractSizeResolver func(venueKey, venueSymbol string) (float64, bool)
-	// D-190：QuoteBus 注入（偏差 gate usdnotional.PerLot JPY 换算用）。
-	// nil = 未注入（JPY 腿 PerLot fail-closed 跳过；USD 腿不受影响）。
+	// D-190：QuoteBus 注入（偏差 gate usdnotional.PerLot JPY 换算用）。nil=未注入（JPY 腿 PerLot fail-closed 跳过）。
 	Quotes *bus.QuoteBus
 
 	// D-072 §3.3/§4.2 swap/funding 退出参数
@@ -119,24 +110,18 @@ type Config struct {
 	// Kick() 触发 scanIfDue：窗口内丢弃、超窗扫。兜底 10min 保证有界延迟。
 	ScanThrottle time.Duration
 
-	// D-142 ④：组合保证金预算观察版告警（只告警不拦截）。
-	// 双腿合计保证金 / min(equity) > 此值 → warn 告警。0 = 不启用。
-	// 杠杆不对称（两腿 leverage 差异显著）→ info 提示。
+	// D-142 ④：组合保证金预算观察版告警（只告警不拦截）。双腿合计保证金 / min(equity) > 此值 → warn 告警。0=不启用。杠杆不对称 → info 提示。
 	SwapArbMarginBudgetPct float64
 
-	// D-256-A S1：non-settle venue 列表（格式 "277842155:mt5"，含 venueType 后缀）。
-	// swapRateFor 入口 guard：bare venue ∈ 集合 → 真值 0（实测不结算，非降级）。
+	// D-256-A S1：non-settle venue 列表（格式 "277842155:mt5"）。swapRateFor 入口 guard：bare venue ∈ 集合 → 真值 0（实测不结算，非降级）。
 	SwapNonSettleVenues []string
 
-	// D-256-A S4：组合级止损计数（reason-aware，替代无差别 cooldown）。
-	// SwapArbComboLossLimit=0 → 关闭组合级止损拦截（向后兼容）。
+	// D-256-A S4：组合级止损计数（reason-aware，替代无差别 cooldown）。SwapArbComboLossLimit=0 → 关闭（向后兼容）。
 	SwapArbComboLossLimit int
 	// SwapArbComboLossWindowDays 止损计数回看窗口天数（默认 30）。
 	SwapArbComboLossWindowDays int
 
-	// D-256-A S5：复活扳机告警阈值（settled-only，默认 2.2 bps/日 ≈ 年化 8.03%）。
-	// netSwapBps >= 此值 且 swapSrc=settled → 发 critical 告警提示复活评估。
-	// 0 = 关闭复活告警。不自动复活，只告警。
+	// D-256-A S5：复活扳机告警阈值（settled-only，默认 2.2 bps/日 ≈ 年化 8.03%）。netSwapBps >= 此值 且 swapSrc=settled → critical 告警提示复活评估。0=关闭。不自动复活，只告警。
 	SwapArbRevivalBps float64
 }
 
@@ -155,13 +140,10 @@ type Engine struct {
 
 	firstTickDone bool // 启动首跑淘汰标记
 
-	// fundingNeedSent 资金注入提醒节流（D-072）：key=SWAPARB:canonical:venueLong:venueShort → YYYY-MM-DD。
-	// 每日每组合至多 1 条（内存，重启重置——实时弹窗语义，不持久化）。
+	// fundingNeedSent 资金注入提醒节流（D-072）：key=SWAPARB:canonical:venueLong:venueShort → YYYY-MM-DD。每日每组合至多 1 条（内存，重启重置——实时弹窗语义）。
 	fundingNeedSent map[string]string
 
-	// D-133 T1：PERP_FUNDING 退出连续去抖计数——key=posID → 连续 breach 次数。
-	// 读写都在 auto-close 轮询 goroutine（单写者），mu 为防御性（未来并发扩展兜底）。
-	// 平仓/读数回正/floor 未满 → 删除条目（防泄漏）。重启丢失=重新去抖（无害，10min 轮询）。
+	// D-133 T1：PERP_FUNDING 退出连续去抖计数——key=posID → 连续 breach 次数。读写都在 auto-close 轮询 goroutine（单写者），mu 为防御性。平仓/读数回正/floor 未满 → 删除条目（防泄漏）。
 	fundingBreach map[int64]int
 	fundingMu     sync.Mutex
 
