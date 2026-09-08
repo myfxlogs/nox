@@ -1,0 +1,98 @@
+package config
+
+// Load 从环境变量加载配置（D-261 S6 从 config.go 搬出，纯搬家）。
+
+import (
+	"time"
+)
+
+// Load 从环境变量加载配置，未设置用默认值。
+func Load() *Config {
+	return &Config{
+		CrossVenueMinGrossBpsCEX:    envFloat("ARB_CROSS_MIN_GROSS_BPS_CEX", 10.0),
+		CrossVenueMinGrossBpsCFD:    envFloat("ARB_CROSS_MIN_GROSS_BPS_CFD", 20.0), // D-078 round-trip 实证：CFD round-trip ~7.5bps+基差~5bps → gross≥20 才可能盈利
+		FundingMinNetAnnualized:     envFloat("ARB_FUNDING_MIN_NET_ANNUALIZED", 4.0),
+		FundingBaselinePct:          envFloat("ARB_FUNDING_BASELINE_PCT", 10.95), // D-084 同所基准费率扣除
+		CarryMinNetAnnualized:       envFloat("ARB_CARRY_MIN_NET_ANNUALIZED", 4.0),
+		PerpFundingMinNetAnnualized: envFloat("ARB_PERP_FUNDING_MIN_NET_ANNUALIZED", 2.0),
+		GrabMinNetAnnualized:        envFloat("ARB_GRAB_MIN_NET_ANNUALIZED", 4.5),
+		DetectorFreshnessTTL:        envDur("ARB_DETECTOR_FRESHNESS_TTL", 120*time.Second), // D-070 均值回归：放宽 freshness 让低频报价 venue 配对
+		SlippageBps:                 envFloat("ARB_SLIPPAGE_BPS", 0.3),                     // D-070 均值回归：降低滑点假设（CFD 限价单）
+		MarginRateAnnual:            envFloat("ARB_MARGIN_RATE_ANNUAL", 4.5),
+		OpportunityTTL:              envDur("ARB_OPPORTUNITY_TTL", 30*time.Second),
+		ScanThrottle:                envDur("ARB_SCAN_THROTTLE", 30*time.Second),
+		CloseBpsThr:                 envFloat("ARB_CLOSE_BPS_THR", 0.5),                  // D-070 均值回归：价差回归到 0.5bps 内平仓
+		AlertResendInterval:         envDur("ARB_ALERT_RESEND_INTERVAL", 10*time.Minute), // D-072 铃铛治理：同 key 告警冷却
+		CommissionCFDBps:            envFloat("ARB_COMMISSION_CFD_BPS", 0.3),
+		CommissionCEXTakerBps:       envFloat("ARB_COMMISSION_CEX_TAKER_BPS", 5.0), // D-145：binance/okx VIP0 taker 实测 0.05%=5bps（账户级真值待真金 key 后 commissionFor 精确化）
+		// D-159 W4a T6：CommissionTaker map 默认 5.0（与 CommissionCEXTakerBps 对齐，D-145 意图生效）。
+		// W0 T6 铁证：旧默认 10.0 使 CommissionCEXTakerBps 5.0 永不回退，opportunities 表 79 条 CEX×CEX commission_cost=20.0（10×2 腿）。
+		CommissionTaker: map[string]float64{
+			"binance": envFloat("ARB_COMMISSION_TAKER_BINANCE", 5.0),
+			"okx":     envFloat("ARB_COMMISSION_TAKER_OKX", 5.0),
+			"gate":    envFloat("ARB_COMMISSION_TAKER_GATE", 5.0),
+		},
+		SwapRefresh:                envDur("ARB_SWAP_REFRESH", time.Hour),
+		TradeModeTTL:               envDur("ARB_TRADEMODE_TTL", 24*time.Hour),
+		MaxLegImbalancePct:         envFloat("ARB_MAX_LEG_IMBALANCE_PCT", 2.0),
+		ReviewMinSamples:           envInt("ARB_REVIEW_MIN_SAMPLES", 3),
+		ReviewCrossBiasBps:         envFloat("ARB_REVIEW_CROSS_BIAS_BPS", 1.0),
+		ReviewCarryBiasAnnualPct:   envFloat("ARB_REVIEW_CARRY_BIAS_ANNUAL_PCT", 1.0),
+		SymbolsTTL:                 envDur("ARB_SYMBOLS_TTL", 5*time.Minute),
+		BinanceFuturesInfoURL:      envStr("ARB_BINANCE_FUTURES_INFO_URL", "https://testnet.binancefuture.com/fapi/v1/exchangeInfo"), // D-127 P2
+		LiqMMR:                     envFloat("ARB_LIQ_MMR", 0.005),
+		FundingDropRatio:           envFloat("ARB_FUNDING_DROP_RATIO", 0.5),
+		SwapArbEquityUseRatio:      envFloat("ARB_SWAPARB_EQUITY_USE_RATIO", 0.5),
+		SwapArbBareCap:             envFloat("ARB_SWAPARB_BARE_CAP", 1.0),
+		SwapArbReentryCooldownDays: envInt("ARB_SWAPARB_REENTRY_COOLDOWN_DAYS", 7),
+		SwapArbVenueExposureCap:    envFloat("ARB_SWAPARB_VENUE_EXPOSURE_CAP", 2.0),    // D-132 T1 venue 级敞口门
+		SwapArbMarginBudgetPct:     envFloat("ARB_SWAPARB_MARGIN_BUDGET_PCT", 0.8),     // D-142 ④ 观察版告警
+		ProbeEnabled:               envBool("ARB_PROBE_ENABLED", false),                // D-181 S2 probe 探测仓总开关
+		ProbeEvalDays:              envInt("ARB_PROBE_EVAL_DAYS", 3),                   // D-181 S2 probe 评估等待天数
+		PerpFundMinHold:            envDur("ARB_PERPFUNDING_MIN_HOLD", 8*time.Hour),    // D-133 T1 持有下限
+		PerpFundExitDebounce:       envInt("ARB_PERPFUNDING_EXIT_DEBOUNCE", 3),         // D-133 T1 连续去抖
+		FundingMaxBreakevenDays:    envFloat("ARB_FUNDING_MAX_BREAKEVEN_DAYS", 1.0),    // D-133 T2 回本周期上门
+		StoreMinNetBps:             envFloat("ARB_STORE_MIN_NET_BPS", 5.0),             // D-078：CROSS_VENUE 入库门槛，round-trip 后 net≥5bps 才入库
+		FundingHedgeMinNetStore:    envFloat("ARB_FUNDING_HEDGE_MIN_NET_STORE", 14.95), // D-085 息差家族净门槛（含基准 10.95+门槛 4）
+		PerpFundingMinNetStore:     envFloat("ARB_PERP_FUNDING_MIN_NET_STORE", 2.0),    // D-085
+		CarryMinNetStore:           envFloat("ARB_CARRY_MIN_NET_STORE", 4.0),           // D-085
+		VerifyWindowDays:           envInt("ARB_VERIFY_WINDOW_DAYS", 30),               // D-086 验证样本新鲜窗口
+		VerifyMinSamples:           envInt("ARB_VERIFY_MIN_SAMPLES", 2),                // D-086 V1 最低样本数
+		VerifyMinRatio:             envFloat("ARB_VERIFY_MIN_RATIO", 0.7),              // D-086 V1 最低 R
+		BrokerPosPollInterval:      envDur("ARB_BROKER_POS_POLL_MS", 5*time.Second),
+		OpportunityNotionalUSD:     envFloat("ARB_OPP_NOTIONAL_USD", 1000),
+		AlertPaused:                envBool("ARB_ALERT_PAUSED", false),
+		AutotradeConfig:            *loadAutotradeConfig(),
+		RevalidateAbsBps:           envFloat("ARB_REVALIDATE_ABS_BPS", 2.0),            // D-077 修复⑪B N4
+		RevalidateRelPct:           envFloat("ARB_REVALIDATE_REL_PCT", 20.0),           // D-077 修复⑪B N4
+		SwapArbEntrySpreadMinBps:   envFloat("ARB_SWAPARB_ENTRY_SPREAD_MIN_BPS", -3.0), // D-077 修复⑪B N6
+		SwapArbMaxLegSpreadBps:     envFloat("ARB_SWAPARB_MAX_LEG_SPREAD_BPS", 50.0),   // D-159 W4a R7
+		SwapArbEntrySpreadMaxBps:   envFloat("ARB_SWAPARB_ENTRY_SPREAD_MAX_BPS", 30.0), // D-169 P0
+		SwapArbEntryBasisMaxBps:    envFloat("ARB_SWAPARB_ENTRY_BASIS_MAX_BPS", 30.0),  // D-169 P0
+		SwapArbBasisStopBps:        envFloat("ARB_SWAPARB_BASIS_STOP_BPS", 4.0),        // D-180 S3
+		SwapArbMinNetCarryBps:      envFloat("ARB_SWAPARB_MIN_NET_CARRY_BPS", 1.0),     // D-180 S4
+		SwapArbSpecDiscount:        envFloat("ARB_SWAPARB_SPEC_DISCOUNT", 0.5),         // D-180 S4
+		SwapArbMaxPaybackDays:      envInt("ARB_SWAPARB_MAX_PAYBACK_DAYS", 30),         // D-180 S4
+		SwapArbMaxLegsPerSymbol:    envInt("ARB_SWAPARB_MAX_LEGS_PER_SYMBOL", 2),       // D-180 S4
+		AIBaseURL:                  envStr("ARB_AI_BASE_URL", ""),
+		AIAPIKey:                   envStr("ARB_AI_API_KEY", ""),
+		AIModel:                    envStr("ARB_AI_MODEL", "glm-4.6"),
+		AIPGDSN:                    envStr("ARB_AI_PG_DSN", ""),
+		AnalystRatePerHour:         envInt("ARB_ANALYST_RATE_PER_HOUR", 20),
+		MTData:                     loadMTData(),
+		SwapReconcileDeviationPct:  envFloat("ARB_SWAP_RECONCILE_DEVIATION_PCT", 10.0), // D-110 P2
+		MTDisasterSlPct:            envFloat("ARB_MT_DISASTER_SL_PCT", 2.0),            // D-146 S1 broker 端灾难 SL
+		SwapNonSettleVenues:        envStringSlice("ARB_SWAP_NON_SETTLE_VENUES"),       // D-112
+		SwapArbComboLossLimit:      envInt("ARB_SWAPARB_COMBO_LOSS_LIMIT", 3),          // D-256-A S4
+		SwapArbComboLossWindowDays: envInt("ARB_SWAPARB_COMBO_LOSS_WINDOW_DAYS", 30),   // D-256-A S4
+		SwapArbRevivalBps:          envFloat("ARB_SWAPARB_REVIVAL_ALERT_BPS", 2.2),     // D-256-A S5
+		TrxEnergyRateFloorPct:      envFloat("ARB_TRX_ENERGY_RATE_FLOOR_PCT", 8.0),     // D-258 S2
+		FreezeGuard:                envDur("ARB_FREEZE_GUARD", 10*time.Minute),         // D-155 freeze guard 冻结腿预检窗口
+		Environment:                envStr("ARB_ENVIRONMENT", "demo"),                  // D-159 W1a I6：缺省 demo fail-safe
+		LiveTrade:                  envBool("ARB_LIVE_TRADE", false),                   // D-159 W6a S2：LIVE 人工开关默认 false
+		SwapDeviationGatePct:       envFloat("ARB_SWAP_DEVIATION_GATE_PCT", 50.0),      // D-165 S1：swap 偏差拦截默认 50%
+		SwapDeviationExitPct:       envFloat("ARB_SWAP_DEVIATION_EXIT_PCT", 50.0),      // D-165 S2：swap 偏差退出默认 50%
+		SwapFactsZeroCheckEnabled:  envBool("ARB_SWAP_FACTS_ZERO_CHECK", true),         // D-165 S3：swap facts 零值校验默认开
+		CapitalSnapshotTTL:         envDur("ARB_CAPITAL_SNAPSHOT_TTL", 5*time.Minute),  // D-195-C1：capital snapshot TTL 默认 5m
+	}
+}
