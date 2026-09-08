@@ -27,6 +27,7 @@ type fakeDeps struct {
 	getStat          *pgstore.StrategyStat
 	aggStat          pgstore.AggregateStat            // D-154 S1：AggregateStrategyStats 返回值
 	aggStatByEnv     map[string]pgstore.AggregateStat // D-200：ByEnvironment 按 environment 返回不同 aggStat
+	aggStatByFamily  map[string]pgstore.AggregateStat // D-256-A S2：族级聚合按 strategies[0] 返回不同 aggStat
 	disableStrategy  string
 	cashflowsNet     float64    // D-127 P4 返修①：SumCashflowsNet 返回值
 	lastNetPnl       float64    // D-127 P4：捕获传给 UpdateStrategyStat 的 net 值
@@ -101,6 +102,23 @@ func (f *fakeDeps) AggregateStrategyStatsByEnvironment(ctx context.Context, stra
 	return f.AggregateStrategyStats(ctx, strategy)
 }
 
+// D-256-A S2：族级聚合 stub。aggStatByFamily 非空时按 strategies[0] 返回预设值；
+// 空时委托 AggregateStrategyStatsByEnvironment（向后兼容）。
+func (f *fakeDeps) AggregateStrategyStatsByEnvironmentFamily(ctx context.Context, strategies []string, environment string) (pgstore.AggregateStat, error) {
+	if len(strategies) == 0 {
+		return pgstore.AggregateStat{}, nil
+	}
+	if f.aggStatByFamily != nil {
+		st, ok := f.aggStatByFamily[strategies[0]]
+		if !ok {
+			return pgstore.AggregateStat{Strategy: strategies[0]}, nil
+		}
+		st.Strategy = strategies[0]
+		return st, nil
+	}
+	return f.AggregateStrategyStatsByEnvironment(ctx, strategies[0], environment)
+}
+
 func (f *fakeDeps) DisableStrategy(ctx context.Context, strategy, reason string) error {
 	f.disableStrategy = strategy
 	return nil
@@ -163,7 +181,7 @@ func noElim(int, float64, float64, float64, bool) (bool, string) { return false,
 // D-193-A：短路逻辑改为检查 stats_status（applied/skipped 短路）。
 func TestSettle_Idempotent(t *testing.T) {
 	d := &fakeDeps{statsStatus: "applied"}
-	if err := Settle(context.Background(), d, 100, noElim); err != nil {
+	if err := Settle(context.Background(), d, 100, noElim, nil); err != nil {
 		t.Fatalf("Settle: %v", err)
 	}
 	if d.insertSettlement != 0 || d.upsertVSample != 0 || d.updateStat != 0 {
@@ -195,7 +213,7 @@ func TestSettle_HappyPath(t *testing.T) {
 		fxOk:      true,
 		insertWon: true, // 返修包②：模拟赢家
 	}
-	if err := Settle(context.Background(), d, 1, noElim); err != nil {
+	if err := Settle(context.Background(), d, 1, noElim, nil); err != nil {
 		t.Fatalf("Settle: %v", err)
 	}
 	if d.insertSettlement != 1 {
@@ -232,7 +250,7 @@ func TestSettle_SkipRealizedNULL(t *testing.T) {
 		fxOk:      true,
 		insertWon: true, // 返修包②：模拟赢家（走 skipped 路径非并发输家）
 	}
-	if err := Settle(context.Background(), d, 2, noElim); err != nil {
+	if err := Settle(context.Background(), d, 2, noElim, nil); err != nil {
 		t.Fatalf("Settle: %v", err)
 	}
 	if d.insertSettlement != 1 {
@@ -267,7 +285,7 @@ func TestSettle_SkipFxUnavailable(t *testing.T) {
 		fxOk:      false, // JPY 汇率不可得
 		insertWon: true,  // 返修包②：模拟赢家（走 skipped 路径非并发输家）
 	}
-	if err := Settle(context.Background(), d, 3, noElim); err != nil {
+	if err := Settle(context.Background(), d, 3, noElim, nil); err != nil {
 		t.Fatalf("Settle: %v", err)
 	}
 	if d.insertSettlement != 1 {
@@ -304,7 +322,7 @@ func TestSettle_EliminatorTriggered(t *testing.T) {
 		getStat:   &pgstore.StrategyStat{Strategy: "CROSS_VENUE", TotalTrades: 10, WinRate: 0.1, AvgPnl: -10},
 	}
 	alwaysElim := func(int, float64, float64, float64, bool) (bool, string) { return true, "test elimination" }
-	if err := Settle(context.Background(), d, 4, alwaysElim); err != nil {
+	if err := Settle(context.Background(), d, 4, alwaysElim, nil); err != nil {
 		t.Fatalf("Settle: %v", err)
 	}
 	if d.disableStrategy != "CROSS_VENUE" {
@@ -353,7 +371,7 @@ func TestSettle_EliminatorEnvironmentIsolation(t *testing.T) {
 			"live": {Total: 10, AvgPnl: 10, MedianPnl: 10},
 		},
 	}
-	if err := Settle(context.Background(), dDemo, 6, elimByAvg); err != nil {
+	if err := Settle(context.Background(), dDemo, 6, elimByAvg, nil); err != nil {
 		t.Fatalf("Settle demo: %v", err)
 	}
 	if dDemo.disableStrategy != "CROSS_VENUE" {
@@ -386,7 +404,7 @@ func TestSettle_EliminatorEnvironmentIsolation(t *testing.T) {
 			"live": {Total: 10, AvgPnl: 10, MedianPnl: 10},
 		},
 	}
-	if err := Settle(context.Background(), dLive, 7, elimByAvg); err != nil {
+	if err := Settle(context.Background(), dLive, 7, elimByAvg, nil); err != nil {
 		t.Fatalf("Settle live: %v", err)
 	}
 	if dLive.disableStrategy != "" {
@@ -429,7 +447,7 @@ func TestSettle_ConcurrentLoser(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_ = Settle(context.Background(), d, 5, noElim)
+			_ = Settle(context.Background(), d, 5, noElim, nil)
 		}()
 	}
 	wg.Wait()
@@ -549,7 +567,7 @@ func TestD127_SettleNetIncludesSwap(t *testing.T) {
 		insertWon:    true,
 		cashflowsNet: 3.0, // swap+funding−commission 实收 +$3
 	}
-	if err := Settle(context.Background(), d, 10, noElim); err != nil {
+	if err := Settle(context.Background(), d, 10, noElim, nil); err != nil {
 		t.Fatalf("Settle: %v", err)
 	}
 	// net = -1 + 3 = +2 → UpdateStrategyStat 收到 +2（win）
@@ -586,7 +604,7 @@ func TestD127_SettleNetNoSwap(t *testing.T) {
 		insertWon:    true,
 		cashflowsNet: 0, // 无 swap/funding/commission
 	}
-	if err := Settle(context.Background(), d, 11, noElim); err != nil {
+	if err := Settle(context.Background(), d, 11, noElim, nil); err != nil {
 		t.Fatalf("Settle: %v", err)
 	}
 	if !approx(d.lastNetPnl, 5.0, 0.001) {
@@ -625,7 +643,7 @@ func TestSettle_NoDoubleCount(t *testing.T) {
 		insertWon:    true,
 		cashflowsNet: 3.0, // swap 5 + commission -2 = 3（cashflows 组件，不再在 realized_pnl 中）
 	}
-	if err := Settle(context.Background(), d, 20, noElim); err != nil {
+	if err := Settle(context.Background(), d, 20, noElim, nil); err != nil {
 		t.Fatalf("Settle: %v", err)
 	}
 	// netPnl = 100 + 3 = 103（净值一次合成）。旧双计 = 103 + 3 = 106。
@@ -664,7 +682,7 @@ func TestSettle_EstimatedSkip(t *testing.T) {
 		fxOk:      true,
 		insertWon: true,
 	}
-	if err := Settle(context.Background(), d, 21, noElim); err != nil {
+	if err := Settle(context.Background(), d, 21, noElim, nil); err != nil {
 		t.Fatalf("Settle: %v", err)
 	}
 	// estimated position 跳过：不入样本/统计（由 pnl_estimated 触发，非 expected_usd<=0）
@@ -686,7 +704,7 @@ func TestSettleAt_DeterministicSettledAt(t *testing.T) {
 	d1 := &fakeDeps{
 		position: &pgstore.Position{ID: 200, Type: "SWAPARB", Status: "CLOSED", OpportunityID: "opp-200"},
 	}
-	if err := SettleAt(context.Background(), d1, 200, noElim, now1); err != nil {
+	if err := SettleAt(context.Background(), d1, 200, noElim, nil, now1); err != nil {
 		t.Fatalf("SettleAt(now1): %v", err)
 	}
 	if d1.lastSettlementRow == nil {
@@ -700,7 +718,7 @@ func TestSettleAt_DeterministicSettledAt(t *testing.T) {
 	d2 := &fakeDeps{
 		position: &pgstore.Position{ID: 201, Type: "SWAPARB", Status: "CLOSED", OpportunityID: "opp-201"},
 	}
-	if err := SettleAt(context.Background(), d2, 201, noElim, now2); err != nil {
+	if err := SettleAt(context.Background(), d2, 201, noElim, nil, now2); err != nil {
 		t.Fatalf("SettleAt(now2): %v", err)
 	}
 	if d2.lastSettlementRow == nil {
@@ -720,10 +738,101 @@ func TestSettle_CompatWrapper_DelegatesToSettleAt(t *testing.T) {
 	d := &fakeDeps{
 		position: &pgstore.Position{ID: 300, Type: "SWAPARB", Status: "CLOSED", OpportunityID: "opp-300"},
 	}
-	if err := Settle(context.Background(), d, 300, noElim); err != nil {
+	if err := Settle(context.Background(), d, 300, noElim, nil); err != nil {
 		t.Fatalf("Settle: %v", err)
 	}
 	if d.lastSettlementRow == nil {
 		t.Fatal("lastSettlementRow=nil, want non-nil (Settle should delegate to SettleAt)")
+	}
+}
+
+// TestD256A_S2_FamilyAggregationUsed D-256-A S2：family 非 nil 时 Settle 用族级聚合。
+// CARRY 持仓 + family resolver → AggregateStrategyStatsByEnvironmentFamily 被调用（而非 ByEnvironment）。
+// aggStatByFamily["CARRY"]={Total:10, AvgPnl:-10} → elim 触发 → 禁用。
+func TestD256A_S2_FamilyAggregationUsed(t *testing.T) {
+	now := time.Now()
+	openAt := now.Add(-24 * time.Hour) // holdDays=1
+	rp := -5.0
+	d := &fakeDeps{
+		position: &pgstore.Position{
+			ID: 400, Type: "CARRY", Status: "CLOSED", OpportunityID: "CARRY:AUDJPY:52993526:mt5:277842155:mt5",
+			RealizedPnl:    &rp,
+			ExpectedNetBps: 10.0, // CARRY 用 ExpectedNetBps 算 ExpectedUsd（>0 不被 skip）
+			OpenedAt:       &openAt,
+			ClosedAt:       &now,
+		},
+		legs: []pgstore.PositionLeg{
+			{Phase: "OPEN", Status: "FILLED", Venue: "52993526:mt5", Qty: 1.0, PriceActual: ptrFloat(113.5)},
+		},
+		cs:        100000,
+		csOk:      true,
+		fxRate:    150,
+		fxOk:      true,
+		insertWon: true,
+		aggStatByFamily: map[string]pgstore.AggregateStat{
+			"CARRY": {Total: 10, Wins: 1, AvgPnl: -10, MedianPnl: -10},
+		},
+		cashflowsNet:     1.0, // CARRY 有 swap 现金流
+		cashflowsQuality: "actual",
+	}
+	elimByAvg := func(total int, winRate, avg, median float64, disabled bool) (bool, string) {
+		if avg < 0 {
+			return true, "family avg<0"
+		}
+		return false, ""
+	}
+	// family resolver: CARRY → [CARRY, SWAPARB]
+	family := func(strategy string) []string {
+		if strategy == "CARRY" || strategy == "SWAPARB" {
+			return []string{"CARRY", "SWAPARB"}
+		}
+		return []string{strategy}
+	}
+	if err := Settle(context.Background(), d, 400, elimByAvg, family); err != nil {
+		t.Fatalf("Settle: %v", err)
+	}
+	if d.disableStrategy != "CARRY" {
+		t.Errorf("disableStrategy=%q, want CARRY (family agg triggered)", d.disableStrategy)
+	}
+}
+
+// TestD256A_S2_FamilyNilFallsBackToByEnvironment D-256-A S2：family=nil 时回退 ByEnvironment。
+// 验证向后兼容——不传 family 时行为不变。
+func TestD256A_S2_FamilyNilFallsBackToByEnvironment(t *testing.T) {
+	now := time.Now()
+	openAt := now.Add(-24 * time.Hour) // holdDays=1
+	rp := -5.0
+	d := &fakeDeps{
+		position: &pgstore.Position{
+			ID: 401, Type: "CARRY", Status: "CLOSED", OpportunityID: "CARRY:AUDJPY:52993526:mt5:277842155:mt5",
+			RealizedPnl:    &rp,
+			ExpectedNetBps: 10.0, // CARRY 用 ExpectedNetBps 算 ExpectedUsd（>0 不被 skip）
+			OpenedAt:       &openAt,
+			ClosedAt:       &now,
+		},
+		legs: []pgstore.PositionLeg{
+			{Phase: "OPEN", Status: "FILLED", Venue: "52993526:mt5", Qty: 1.0, PriceActual: ptrFloat(113.5)},
+		},
+		cs:               100000,
+		csOk:             true,
+		fxRate:           150,
+		fxOk:             true,
+		insertWon:        true,
+		aggStat:          pgstore.AggregateStat{Total: 5, Wins: 1, AvgPnl: -10, MedianPnl: -10},
+		cashflowsNet:     1.0, // CARRY 有 swap 现金流
+		cashflowsQuality: "actual",
+	}
+	elimByAvg := func(total int, winRate, avg, median float64, disabled bool) (bool, string) {
+		if avg < 0 {
+			return true, "avg<0"
+		}
+		return false, ""
+	}
+	// family=nil → 回退 ByEnvironment → 用 aggStat（fakeDeps ByEnvironment 空时委托 AggregateStrategyStats）
+	if err := Settle(context.Background(), d, 401, elimByAvg, nil); err != nil {
+		t.Fatalf("Settle: %v", err)
+	}
+	if d.disableStrategy != "CARRY" {
+		t.Errorf("disableStrategy=%q, want CARRY (ByEnvironment fallback)", d.disableStrategy)
 	}
 }

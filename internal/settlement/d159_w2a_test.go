@@ -59,7 +59,7 @@ func TestSettle_UpsertFails_ReturnsError(t *testing.T) {
 	}
 	d := &failingDeps{fakeDeps: base, upsertErr: errors.New("db down")}
 
-	err := Settle(context.Background(), d, 1, noElim)
+	err := Settle(context.Background(), d, 1, noElim, nil)
 	if err == nil {
 		t.Fatal("Settle 应返回 error（upsert 失败），但返回 nil")
 	}
@@ -92,7 +92,7 @@ func TestSettle_UpdateStatFails_ReturnsError(t *testing.T) {
 	}
 	d := &failingDeps{fakeDeps: base, updateErr: errors.New("db down")}
 
-	err := Settle(context.Background(), d, 2, noElim)
+	err := Settle(context.Background(), d, 2, noElim, nil)
 	if err == nil {
 		t.Fatal("Settle 应返回 error（updateStat 失败），但返回 nil")
 	}
@@ -124,7 +124,7 @@ func TestSettle_HappyPath_StillSucceeds(t *testing.T) {
 		cashflowsNet: 0,
 	}
 
-	err := Settle(context.Background(), d, 3, noElim)
+	err := Settle(context.Background(), d, 3, noElim, nil)
 	if err != nil {
 		t.Fatalf("Settle happy path 应返回 nil，但返回: %v", err)
 	}

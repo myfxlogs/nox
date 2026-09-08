@@ -46,7 +46,7 @@ func d193BaseDeps(posID int64, rp float64) *fakeDeps {
 func TestSettle_CashflowQueryFail_NoFallback(t *testing.T) {
 	d := d193BaseDeps(100, 10.0)
 	d.cashflowsQueryErr = errors.New("db down")
-	err := Settle(context.Background(), d, 100, noElim)
+	err := Settle(context.Background(), d, 100, noElim, nil)
 	if err == nil {
 		t.Fatal("Settle 应返回 error（cashflow 查询失败），但返回 nil")
 	}
@@ -68,7 +68,7 @@ func TestSettle_CashflowQueryFail_NoFallback(t *testing.T) {
 func TestSettle_CashflowQuality_Unknown_NotComplete(t *testing.T) {
 	d := d193BaseDeps(101, 10.0)
 	d.cashflowsQuality = "unknown"
-	if err := Settle(context.Background(), d, 101, noElim); err != nil {
+	if err := Settle(context.Background(), d, 101, noElim, nil); err != nil {
 		t.Fatalf("Settle: %v", err)
 	}
 	if d.upsertVSample != 0 || d.updateStat != 0 {
@@ -86,7 +86,7 @@ func TestSettle_CashflowQuality_Unknown_NotComplete(t *testing.T) {
 func TestSettle_CashflowQuality_Estimated_NotActual(t *testing.T) {
 	d := d193BaseDeps(102, 10.0)
 	d.cashflowsQuality = "estimated"
-	if err := Settle(context.Background(), d, 102, noElim); err != nil {
+	if err := Settle(context.Background(), d, 102, noElim, nil); err != nil {
 		t.Fatalf("Settle: %v", err)
 	}
 	if d.upsertVSample != 0 || d.updateStat != 0 {
@@ -105,7 +105,7 @@ func TestSettle_NetRealizedUsd_Written(t *testing.T) {
 	d := d193BaseDeps(103, 100.0)
 	d.cashflowsNet = 3.0
 	d.cashflowsQuality = "actual"
-	if err := Settle(context.Background(), d, 103, noElim); err != nil {
+	if err := Settle(context.Background(), d, 103, noElim, nil); err != nil {
 		t.Fatalf("Settle: %v", err)
 	}
 	if d.upsertVSample != 1 || d.updateStat != 1 {
@@ -148,7 +148,7 @@ func TestSettle_SkippedReason_StillSkipped(t *testing.T) {
 		fxOk:      true,
 		insertWon: true,
 	}
-	if err := Settle(context.Background(), d, 104, noElim); err != nil {
+	if err := Settle(context.Background(), d, 104, noElim, nil); err != nil {
 		t.Fatalf("Settle: %v", err)
 	}
 	if d.upsertVSample != 0 || d.updateStat != 0 {
@@ -170,7 +170,7 @@ func TestSettle_Retryable_RetriesOnNextCall(t *testing.T) {
 	d := d193BaseDeps(105, 100.0)
 	d.statsStatus = "retryable" // 已有 retryable 行 → 不短路，重试
 	d.cashflowsQuality = "actual"
-	if err := Settle(context.Background(), d, 105, noElim); err != nil {
+	if err := Settle(context.Background(), d, 105, noElim, nil); err != nil {
 		t.Fatalf("Settle: %v", err)
 	}
 	// retryable 不短路 → 走完整流程 → 统计更新
@@ -183,7 +183,7 @@ func TestSettle_Retryable_RetriesOnNextCall(t *testing.T) {
 func TestSettle_Applied_ShortCircuits(t *testing.T) {
 	d := d193BaseDeps(106, 100.0)
 	d.statsStatus = "applied"
-	if err := Settle(context.Background(), d, 106, noElim); err != nil {
+	if err := Settle(context.Background(), d, 106, noElim, nil); err != nil {
 		t.Fatalf("Settle: %v", err)
 	}
 	if d.insertSettlement != 0 || d.upsertVSample != 0 || d.updateStat != 0 {
@@ -196,7 +196,7 @@ func TestSettle_StatsUpdateFail_Retryable(t *testing.T) {
 	base := d193BaseDeps(107, 100.0)
 	base.cashflowsQuality = "actual"
 	d := &failingDeps{fakeDeps: base, upsertErr: errors.New("db down")}
-	err := Settle(context.Background(), d, 107, noElim)
+	err := Settle(context.Background(), d, 107, noElim, nil)
 	if err == nil {
 		t.Fatal("Settle 应返回 error（upsert 失败），但返回 nil")
 	}

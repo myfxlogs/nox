@@ -35,6 +35,9 @@ type Deps interface {
 	AggregateStrategyStats(ctx context.Context, strategy string) (pgstore.AggregateStat, error)
 	// AggregateStrategyStatsByEnvironment D-200：按 environment 过滤的聚合（environment='' 等价于原行为）。
 	AggregateStrategyStatsByEnvironment(ctx context.Context, strategy, environment string) (pgstore.AggregateStat, error)
+	// AggregateStrategyStatsByEnvironmentFamily D-256-A S2：风险族聚合（多策略合并样本，p.type=ANY($1)）。
+	// CARRY/SWAPARB 同族合并统计，避免分桶样本量不足永不触发淘汰。
+	AggregateStrategyStatsByEnvironmentFamily(ctx context.Context, strategies []string, environment string) (pgstore.AggregateStat, error)
 	// DisableStrategy 禁用策略（淘汰）。
 	DisableStrategy(ctx context.Context, strategy, reason string) error
 	// InsertSettlement 写 position_settlements（幂等 ON CONFLICT DO NOTHING，返修包②返回 won）。
@@ -58,13 +61,19 @@ type Deps interface {
 // 返回 (shouldDisable, reason)。
 type Eliminator func(totalTrades int, winRate, avgPnl, medianPnl float64, disabled bool) (bool, string)
 
+// FamilyResolver D-256-A S2：策略→风险族映射（避免环依赖，autotrade.riskFamily 注入）。
+// 返回同族策略名列表（如 CARRY→[CARRY,SWAPARB]），用于族级聚合。
+// nil = 无族合并（每策略独立聚合，向后兼容）。
+type FamilyResolver func(strategy string) []string
+
 // Settle 唯一结算入口（D-087 §3.2，D-193-A 消除 fallback + 净 PNL 事实迁移）。
 // 幂等短路：stats_status=applied/skipped → 直接返回（D-193 审计 P0-1）。
 // 跳过规则（写行但不入样本）：realized NULL / expectedUsd≤0 / fx 缺失 / pnl_estimated。
 // D-193-A：cashflows 查询失败 → 写 unknown/retryable 行 + 返回 error（消除 fallback-to-zero）。
 // 通过（complete+actual）→ UpsertVerificationSample + UpdateStrategyStat + 淘汰检查；
 // 统计更新失败 → MarkSettlementStatsRetryable + 返回 error（D-193 审计 P0-2）。
-func SettleAt(ctx context.Context, deps Deps, posID int64, elim Eliminator, now time.Time) error {
+// D-256-A S2：family 非 nil 时淘汰聚合改用族级（CARRY/SWAPARB 合并样本）。
+func SettleAt(ctx context.Context, deps Deps, posID int64, elim Eliminator, family FamilyResolver, now time.Time) error {
 	// D-193 审计 P0-1：短路逻辑改为检查 stats_status。
 	// applied/skipped → 已完成，短路返回 nil。
 	// pending/retryable/""（无行或 legacy）→ 继续走 Settle 流程。
@@ -253,16 +262,27 @@ func SettleAt(ctx context.Context, deps Deps, posID int64, elim Eliminator, now 
 	// 淘汰检查（D-154 S1：输入源从 strategy_stats 累计列改为 AggregateStrategyStats 实时聚合；
 	// disabled flag 仍查 strategy_stats——启停载体不变。两调用点同源 P3。）
 	// D-200：聚合改 ByEnvironment，按持仓自身 p.Environment 过滤——每个 environment 独立淘汰判定。
+	// D-256-A S2：family 非 nil 时改用族级聚合（CARRY/SWAPARB 合并样本，避免分桶样本量不足）。
 	if elim != nil {
 		stat, err := deps.GetStrategyStat(ctx, p.Type)
 		if err != nil {
 			log.Printf("[settlement] get strategy stat: %v", err)
 			return nil
 		}
-		agg, err := deps.AggregateStrategyStatsByEnvironment(ctx, p.Type, p.Environment)
-		if err != nil {
-			log.Printf("[settlement] aggregate strategy stats: %v", err)
-			return nil
+		var agg pgstore.AggregateStat
+		if family != nil {
+			famStrategies := family(p.Type)
+			agg, err = deps.AggregateStrategyStatsByEnvironmentFamily(ctx, famStrategies, p.Environment)
+			if err != nil {
+				log.Printf("[settlement] aggregate strategy stats family: %v", err)
+				return nil
+			}
+		} else {
+			agg, err = deps.AggregateStrategyStatsByEnvironment(ctx, p.Type, p.Environment)
+			if err != nil {
+				log.Printf("[settlement] aggregate strategy stats: %v", err)
+				return nil
+			}
 		}
 		winRate := 0.0
 		if agg.Total > 0 {
@@ -281,8 +301,8 @@ func SettleAt(ctx context.Context, deps Deps, posID int64, elim Eliminator, now 
 }
 
 // Settle 兼容包装（D-194 §3.3：生产旧入口 = SettleAt(..., time.Now())）。
-func Settle(ctx context.Context, deps Deps, posID int64, elim Eliminator) error {
-	return SettleAt(ctx, deps, posID, elim, time.Now())
+func Settle(ctx context.Context, deps Deps, posID int64, elim Eliminator, family FamilyResolver) error {
+	return SettleAt(ctx, deps, posID, elim, family, time.Now())
 }
 
 // hasCashflowKinds D-193-A S7：判断该 position 是否应有现金流（SWAPARB/CARRY/FUNDING_HEDGE/PERP_FUNDING 有 swap/funding）。

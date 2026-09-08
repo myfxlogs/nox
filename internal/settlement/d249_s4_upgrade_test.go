@@ -59,7 +59,7 @@ func TestD249_Settle_RetryableUpgrade_FakeDeps(t *testing.T) {
 		statsStatus: "retryable", // 短路不触发（非 applied/skipped），继续 Settle
 		insertWon:   true,        // 模拟 ON CONFLICT 升级成功（won=true）
 	}
-	if err := Settle(context.Background(), d, 1, noElim); err != nil {
+	if err := Settle(context.Background(), d, 1, noElim, nil); err != nil {
 		t.Fatalf("Settle retryable upgrade: %v", err)
 	}
 	if d.insertSettlement != 1 {
@@ -77,7 +77,7 @@ func TestD249_Settle_RetryableUpgrade_FakeDeps(t *testing.T) {
 // 场景：已有 applied 行（statsStatus=applied）→ 短路返回，不调 InsertSettlement。
 func TestD249_Settle_AppliedNotOverwritten(t *testing.T) {
 	d := &fakeDeps{statsStatus: "applied"}
-	if err := Settle(context.Background(), d, 100, noElim); err != nil {
+	if err := Settle(context.Background(), d, 100, noElim, nil); err != nil {
 		t.Fatalf("Settle applied: %v", err)
 	}
 	if d.insertSettlement != 0 {
@@ -88,7 +88,7 @@ func TestD249_Settle_AppliedNotOverwritten(t *testing.T) {
 // TestD249_Settle_SkippedNotOverwritten 验证 skipped 行不被重写。
 func TestD249_Settle_SkippedNotOverwritten(t *testing.T) {
 	d := &fakeDeps{statsStatus: "skipped"}
-	if err := Settle(context.Background(), d, 100, noElim); err != nil {
+	if err := Settle(context.Background(), d, 100, noElim, nil); err != nil {
 		t.Fatalf("Settle skipped: %v", err)
 	}
 	if d.insertSettlement != 0 {
