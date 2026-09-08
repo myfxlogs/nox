@@ -50,3 +50,35 @@ func (s *Store) DailyRealizedPnlByEnvironment(ctx context.Context, environment s
 	}
 	return *sum, nil
 }
+
+// AggregateStrategyStatsByEnvironmentFamily D-256-A S2：风险族聚合（多策略合并样本）。
+// strategies 为同族策略名列表（如 CARRY/SWAPARB），用 p.type = ANY($1) 合并统计。
+// environment="" 时等价于不过滤（与 AggregateStrategyStatsByEnvironment 语义一致）。
+// 不改 AggregateStrategyStatsByEnvironment 签名（旧调用方不动）。
+// 返回 AggregateStat.Strategy 取 strategies[0]（调用方已知族，字段仅供日志）。
+func (s *Store) AggregateStrategyStatsByEnvironmentFamily(ctx context.Context, strategies []string, environment string) (AggregateStat, error) {
+	var st AggregateStat
+	if len(strategies) == 0 {
+		return st, nil // 空族 → 零值（不查库）
+	}
+	st.Strategy = strategies[0]
+	err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(total, 0), COALESCE(wins, 0), COALESCE(avg_pnl, 0), COALESCE(median_pnl, 0)
+		FROM (
+			SELECT count(*) AS total,
+			       count(*) FILTER (WHERE net > 0) AS wins,
+			       avg(net) AS avg_pnl,
+			       percentile_cont(0.5) WITHIN GROUP (ORDER BY net) AS median_pnl
+			FROM (
+				SELECT COALESCE(s.net_realized_usd, s.realized_usd) AS net
+				FROM position_settlements s
+				JOIN positions p ON p.id = s.position_id
+				WHERE p.type = ANY($1) AND p.closed_at IS NOT NULL AND p.realized_pnl IS NOT NULL
+				  AND ($2 = '' OR p.environment = $2)
+			) t
+		) agg`, strategies, environment).Scan(&st.Total, &st.Wins, &st.AvgPnl, &st.MedianPnl)
+	if err != nil {
+		return AggregateStat{}, fmt.Errorf("aggregate strategy stats by env family: %w", err)
+	}
+	return st, nil
+}
