@@ -70,28 +70,29 @@ func EvaluateSignals(ctx context.Context, st *pgstore.Store, observeOnly bool) e
 	if err != nil {
 		return fmt.Errorf("cnfi signals: derived spread: %w", err)
 	}
-	if len(series) == 0 {
+	if len(series) > 0 {
+		sort.Slice(series, func(i, j int) bool { return series[i].AsOf > series[j].AsOf })
+		current := series[0]
+		var window []float64
+		for _, p := range series[1:] { // 严格早于当前点
+			window = append(window, p.ValueBP)
+		}
+		sampleN := len(window)
+		pct := PercentilePctV1(window, current.ValueBP)
+		state := "observe"
+		if !observeOnly {
+			state = tierToState(QualityTier(sampleN), pct)
+		}
+		if err := st.UpsertCNFISignalState(ctx, signalKey3yPct, state, pct, sampleN, current.AsOf, signalEvidenceV1); err != nil {
+			return fmt.Errorf("cnfi signals: upsert state: %w", err)
+		}
+		log.Printf("cnfi: signal %s value=%.1f pctile=%.1f sample_n=%d tier=%s state=%s",
+			signalKey3yPct, current.ValueBP, pct, sampleN, QualityTier(sampleN), state)
+	} else {
 		log.Printf("cnfi: signals: no derived data yet (backfill pending)")
-		return nil
 	}
-	sort.Slice(series, func(i, j int) bool { return series[i].AsOf > series[j].AsOf })
-	current := series[0]
-	var window []float64
-	for _, p := range series[1:] { // 严格早于当前点
-		window = append(window, p.ValueBP)
-	}
-	sampleN := len(window)
-	pct := PercentilePctV1(window, current.ValueBP)
-	state := "observe"
-	if !observeOnly {
-		state = tierToState(QualityTier(sampleN), pct)
-	}
-	if err := st.UpsertCNFISignalState(ctx, signalKey3yPct, state, pct, sampleN, current.AsOf, signalEvidenceV1); err != nil {
-		return fmt.Errorf("cnfi signals: upsert state: %w", err)
-	}
-	log.Printf("cnfi: signal %s value=%.1f pctile=%.1f sample_n=%d tier=%s state=%s",
-		signalKey3yPct, current.ValueBP, pct, sampleN, QualityTier(sampleN), state)
 	// D-259 P2：基金信号评估（同链尾部调用，禁另起挂点；observe-only 总开关=alerts_enabled config）。
+	// 独立于 credit-spread 派生数据——基金信号只依赖 NAV/holdings，无 derived 前置。
 	if err := evaluateFundSignals(ctx, st); err != nil {
 		log.Printf("cnfi: fund signal evaluate: %v（不阻断采集成功）", err)
 	}
