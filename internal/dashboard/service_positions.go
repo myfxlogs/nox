@@ -64,8 +64,8 @@ func (s *Service) ListPersonalPositions(ctx context.Context, req *connect.Reques
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	// 累计利息全量一次 SUM（当前组合仅空单一处利息源，设计 §4）。
-	accrued, err := s.store.SumDailyIncomeInterest(ctx)
+	// D-260 S1：累计利息取源切 fin_cmc_history OVERNIGHT_SETTLEMENT 全量（治本 ~$6.62 低估——daily rollup 链 9-7 起跑，9-7 前隔夜息未入 position_daily_income）。SumDailyIncomeInterest 保留历史查询语义。
+	accrued, err := s.store.SumCMCOvernightByRange(ctx, nil, nil)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}

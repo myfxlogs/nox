@@ -112,9 +112,16 @@ func TestPnlAndLiq(t *testing.T) {
 // TestListPersonalPositions_RealFields：测试内自建两条通用持仓行（D-047 中性化，不携带真实持仓）→
 // qty/entry/leverage/opened_at 透传 + pnl/liq/dist 组装 + accrued_interest 累计；staking 腿（无 entry）→ pnl=0/liq=0。
 // 自建种子（而非依赖 migration 0008 回填）——测试库 base 只预标记不物理应用，回填依赖的手工 bootstrap 不可复现（KB: backfill-update-test-seed-rows）。
+// D-260 S1：累计利息取源切 fin_cmc_history OVERNIGHT_SETTLEMENT 全量（治本 ~$6.62 低估）。
+// 断言=插入两条历史日息（早于 rollup 起点日）→ AccruedInterestUsd 含两笔之和；rollup 表空不影响累计值。
 func TestListPersonalPositions_RealFields(t *testing.T) {
 	s := testServiceStore(t)
 	ctx := context.Background()
+
+	// fin_cmc_history 不在 testServiceStore 的 TRUNCATE 清单内，本测试独占清表防残留。
+	if _, err := s.Pool().Exec(ctx, "TRUNCATE fin_cmc_history CASCADE"); err != nil {
+		t.Fatalf("truncate fin_cmc_history: %v", err)
+	}
 
 	// 自建持仓行：short_hedge qty=1000 / entry=0.30000 / lev=10 / opened=2026-08-01 / warn=0.30 / crit=0.31
 	if _, err := s.Pool().Exec(ctx, `
@@ -125,14 +132,14 @@ func TestListPersonalPositions_RealFields(t *testing.T) {
 		t.Fatalf("seed personal_positions: %v", err)
 	}
 
-	// 经 AddDailyIncome 写入两条利息记录（累计利息 = 1.00 + 0.50）
-	day1 := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
-	day2 := time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC)
-	if _, err := s.AddDailyIncome(ctx, day1, 0, 0, 1.00, nil, nil, ""); err != nil {
-		t.Fatalf("seed income day1: %v", err)
+	// D-260 S1：累计利息取源 fin_cmc_history OVERNIGHT_SETTLEMENT 全量。
+	// 两条历史日息早于 rollup 起点日（8-1/8-2 < 9-7），position_daily_income 保持空（rollup 表空不影响累计值）。
+	overnightTxs := []pgstore.CMCHistoryTx{
+		{AccountID: 1, TransactionID: "d260-h1", TransactionType: "OVERNIGHT_SETTLEMENT", Amount: 1.00, TransactionTime: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)},
+		{AccountID: 1, TransactionID: "d260-h2", TransactionType: "OVERNIGHT_SETTLEMENT", Amount: 0.50, TransactionTime: time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC)},
 	}
-	if _, err := s.AddDailyIncome(ctx, day2, 0, 0, 0.50, nil, nil, ""); err != nil {
-		t.Fatalf("seed income day2: %v", err)
+	if err := s.UpsertCMCHistory(ctx, 1, overnightTxs); err != nil {
+		t.Fatalf("seed fin_cmc_history overnight: %v", err)
 	}
 
 	// 注入实时 TRXUSDT 报价（新鲜帧）
@@ -188,7 +195,7 @@ func TestListPersonalPositions_RealFields(t *testing.T) {
 	if math.Abs(short.DistToLiqPct-wantDist) > 1e-9 {
 		t.Errorf("short dist want %v, got %v", wantDist, short.DistToLiqPct)
 	}
-	// accrued_interest 累计（两条记录求和）
+	// accrued_interest 累计（fin_cmc_history 两条 OVERNIGHT_SETTLEMENT 求和；rollup 表空不影响累计值）
 	if math.Abs(short.AccruedInterestUsd-1.50) > 1e-9 {
 		t.Errorf("short accrued want 1.50, got %v", short.AccruedInterestUsd)
 	}
