@@ -44,7 +44,7 @@ func (s *Store) CountComboStopLosses(ctx context.Context, windowDays int) (map[s
 		SELECT opportunity_id, count(*) AS cnt
 		FROM autotrade_logs
 		WHERE status = 'CLOSE_TRIGGER'
-		  AND (reason LIKE 'basis loss%' OR reason LIKE 'net swap%')
+		  AND (reason LIKE 'exit: basis loss%' OR reason LIKE 'exit: net swap%')
 		  AND ts > now() - make_interval(days => $1)
 		GROUP BY opportunity_id`, windowDays)
 	if err != nil {
