@@ -140,6 +140,9 @@ const (
 	// DashboardServiceTrxAccountRefreshProcedure is the fully-qualified name of the DashboardService's
 	// TrxAccountRefresh RPC.
 	DashboardServiceTrxAccountRefreshProcedure = "/arb.dashboard.v1.DashboardService/TrxAccountRefresh"
+	// DashboardServiceGetTrxYieldRadarProcedure is the fully-qualified name of the DashboardService's
+	// GetTrxYieldRadar RPC.
+	DashboardServiceGetTrxYieldRadarProcedure = "/arb.dashboard.v1.DashboardService/GetTrxYieldRadar"
 	// DashboardServiceAddDailyIncomeProcedure is the fully-qualified name of the DashboardService's
 	// AddDailyIncome RPC.
 	DashboardServiceAddDailyIncomeProcedure = "/arb.dashboard.v1.DashboardService/AddDailyIncome"
@@ -315,6 +318,7 @@ type DashboardServiceClient interface {
 	ListHedgeFlow(context.Context, *connect.Request[v1.ListHedgeFlowRequest]) (*connect.Response[v1.ListHedgeFlowResponse], error)
 	TrxVoteAprRefresh(context.Context, *connect.Request[v1.TrxVoteAprRefreshRequest]) (*connect.Response[v1.TrxVoteAprRefreshResponse], error)
 	TrxAccountRefresh(context.Context, *connect.Request[v1.TrxAccountRefreshRequest]) (*connect.Response[v1.TrxAccountRefreshResponse], error)
+	GetTrxYieldRadar(context.Context, *connect.Request[v1.GetTrxYieldRadarRequest]) (*connect.Response[v1.GetTrxYieldRadarResponse], error)
 	AddDailyIncome(context.Context, *connect.Request[v1.AddDailyIncomeRequest]) (*connect.Response[v1.AddDailyIncomeResponse], error)
 	ListDailyIncome(context.Context, *connect.Request[v1.ListDailyIncomeRequest]) (*connect.Response[v1.ListDailyIncomeResponse], error)
 	// 盈亏统计起点（F4：anchor 重置，业主选 A「不删历史」）
@@ -598,6 +602,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			httpClient,
 			baseURL+DashboardServiceTrxAccountRefreshProcedure,
 			connect.WithSchema(dashboardServiceMethods.ByName("TrxAccountRefresh")),
+			connect.WithClientOptions(opts...),
+		),
+		getTrxYieldRadar: connect.NewClient[v1.GetTrxYieldRadarRequest, v1.GetTrxYieldRadarResponse](
+			httpClient,
+			baseURL+DashboardServiceGetTrxYieldRadarProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("GetTrxYieldRadar")),
 			connect.WithClientOptions(opts...),
 		),
 		addDailyIncome: connect.NewClient[v1.AddDailyIncomeRequest, v1.AddDailyIncomeResponse](
@@ -887,6 +897,7 @@ type dashboardServiceClient struct {
 	listHedgeFlow          *connect.Client[v1.ListHedgeFlowRequest, v1.ListHedgeFlowResponse]
 	trxVoteAprRefresh      *connect.Client[v1.TrxVoteAprRefreshRequest, v1.TrxVoteAprRefreshResponse]
 	trxAccountRefresh      *connect.Client[v1.TrxAccountRefreshRequest, v1.TrxAccountRefreshResponse]
+	getTrxYieldRadar       *connect.Client[v1.GetTrxYieldRadarRequest, v1.GetTrxYieldRadarResponse]
 	addDailyIncome         *connect.Client[v1.AddDailyIncomeRequest, v1.AddDailyIncomeResponse]
 	listDailyIncome        *connect.Client[v1.ListDailyIncomeRequest, v1.ListDailyIncomeResponse]
 	getPnlAnchor           *connect.Client[v1.GetPnlAnchorRequest, v1.GetPnlAnchorResponse]
@@ -1108,6 +1119,11 @@ func (c *dashboardServiceClient) TrxVoteAprRefresh(ctx context.Context, req *con
 // TrxAccountRefresh calls arb.dashboard.v1.DashboardService.TrxAccountRefresh.
 func (c *dashboardServiceClient) TrxAccountRefresh(ctx context.Context, req *connect.Request[v1.TrxAccountRefreshRequest]) (*connect.Response[v1.TrxAccountRefreshResponse], error) {
 	return c.trxAccountRefresh.CallUnary(ctx, req)
+}
+
+// GetTrxYieldRadar calls arb.dashboard.v1.DashboardService.GetTrxYieldRadar.
+func (c *dashboardServiceClient) GetTrxYieldRadar(ctx context.Context, req *connect.Request[v1.GetTrxYieldRadarRequest]) (*connect.Response[v1.GetTrxYieldRadarResponse], error) {
+	return c.getTrxYieldRadar.CallUnary(ctx, req)
 }
 
 // AddDailyIncome calls arb.dashboard.v1.DashboardService.AddDailyIncome.
@@ -1366,6 +1382,7 @@ type DashboardServiceHandler interface {
 	ListHedgeFlow(context.Context, *connect.Request[v1.ListHedgeFlowRequest]) (*connect.Response[v1.ListHedgeFlowResponse], error)
 	TrxVoteAprRefresh(context.Context, *connect.Request[v1.TrxVoteAprRefreshRequest]) (*connect.Response[v1.TrxVoteAprRefreshResponse], error)
 	TrxAccountRefresh(context.Context, *connect.Request[v1.TrxAccountRefreshRequest]) (*connect.Response[v1.TrxAccountRefreshResponse], error)
+	GetTrxYieldRadar(context.Context, *connect.Request[v1.GetTrxYieldRadarRequest]) (*connect.Response[v1.GetTrxYieldRadarResponse], error)
 	AddDailyIncome(context.Context, *connect.Request[v1.AddDailyIncomeRequest]) (*connect.Response[v1.AddDailyIncomeResponse], error)
 	ListDailyIncome(context.Context, *connect.Request[v1.ListDailyIncomeRequest]) (*connect.Response[v1.ListDailyIncomeResponse], error)
 	// 盈亏统计起点（F4：anchor 重置，业主选 A「不删历史」）
@@ -1645,6 +1662,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		DashboardServiceTrxAccountRefreshProcedure,
 		svc.TrxAccountRefresh,
 		connect.WithSchema(dashboardServiceMethods.ByName("TrxAccountRefresh")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceGetTrxYieldRadarHandler := connect.NewUnaryHandler(
+		DashboardServiceGetTrxYieldRadarProcedure,
+		svc.GetTrxYieldRadar,
+		connect.WithSchema(dashboardServiceMethods.ByName("GetTrxYieldRadar")),
 		connect.WithHandlerOptions(opts...),
 	)
 	dashboardServiceAddDailyIncomeHandler := connect.NewUnaryHandler(
@@ -1967,6 +1990,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceTrxVoteAprRefreshHandler.ServeHTTP(w, r)
 		case DashboardServiceTrxAccountRefreshProcedure:
 			dashboardServiceTrxAccountRefreshHandler.ServeHTTP(w, r)
+		case DashboardServiceGetTrxYieldRadarProcedure:
+			dashboardServiceGetTrxYieldRadarHandler.ServeHTTP(w, r)
 		case DashboardServiceAddDailyIncomeProcedure:
 			dashboardServiceAddDailyIncomeHandler.ServeHTTP(w, r)
 		case DashboardServiceListDailyIncomeProcedure:
@@ -2200,6 +2225,10 @@ func (UnimplementedDashboardServiceHandler) TrxVoteAprRefresh(context.Context, *
 
 func (UnimplementedDashboardServiceHandler) TrxAccountRefresh(context.Context, *connect.Request[v1.TrxAccountRefreshRequest]) (*connect.Response[v1.TrxAccountRefreshResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.TrxAccountRefresh is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) GetTrxYieldRadar(context.Context, *connect.Request[v1.GetTrxYieldRadarRequest]) (*connect.Response[v1.GetTrxYieldRadarResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetTrxYieldRadar is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) AddDailyIncome(context.Context, *connect.Request[v1.AddDailyIncomeRequest]) (*connect.Response[v1.AddDailyIncomeResponse], error) {
