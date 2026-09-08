@@ -66,6 +66,7 @@ service DashboardService {
   rpc ListHedgeFlow(ListHedgeFlowRequest) returns (ListHedgeFlowResponse);  // D-212 统一流水卡
   rpc TrxVoteAprRefresh(TrxVoteAprRefreshRequest) returns (TrxVoteAprRefreshResponse);  // D-249 S3：on-open 触发采集（kick scheduler）【deprecated, use TrxAccountRefresh — D-254 双踢吸收 on-open 职责】
   rpc TrxAccountRefresh(TrxAccountRefreshRequest) returns (TrxAccountRefreshResponse);  // D-254：手动刷新按钮+on-open 双踢 trx_account+trx_apr，返回最新 fin_trx_account 全字段快照
+  rpc GetTrxYieldRadar(GetTrxYieldRadarRequest) returns (GetTrxYieldRadarResponse);  // D-258 S3：收益率雷达（能量 7d/30d + 投票 APR + floor）
   rpc AddDailyIncome(AddDailyIncomeRequest) returns (AddDailyIncomeResponse);
   rpc ListDailyIncome(ListDailyIncomeRequest) returns (ListDailyIncomeResponse);
 
@@ -1483,4 +1484,19 @@ message TrxAccountRefreshResponse {
   double votes = 9;                // votes_total（票数，对齐 HedgeAccounts.votes 不除 1e6）
   string unfrozen = 10;            // JSONB 透传（nil=空字符串，在途解押）
   google.protobuf.Timestamp fetched_at = 11;  // 采集时间
+}
+
+// D-258 S3：收益率雷达——后端算好，前端零计算（D-043 前端零信任）。
+// 能量=实收年化（rental_income÷在押）；投票=SR APR（D-233 对拍口径）。
+message GetTrxYieldRadarRequest {}
+
+message GetTrxYieldRadarResponse {
+  double energy_apr_7d = 1;     // 7d 能量租金年化 %
+  double energy_apr_30d = 2;    // 30d 能量租金年化 %
+  double vote_apr_current = 3;  // 当前投票 APR %（最新 fin_trx_vote_apr.current_rate）
+  double vote_apr_30d_avg = 4; // 30d 投票 APR 均值 %
+  double floor_pct = 5;        // floor 告警阈值 %（ARB_TRX_ENERGY_RATE_FLOOR_PCT）
+  int32 sample_days_7d = 6;     // 7d 实际样本天数（冷启动 <7 时前端显示「样本不足」）
+  int32 sample_days_30d = 7;   // 30d 实际样本天数
+  google.protobuf.Timestamp updated_at = 8;  // 数据更新时间
 }
