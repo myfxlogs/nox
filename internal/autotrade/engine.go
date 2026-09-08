@@ -8,7 +8,6 @@ import (
 
 	"arb/internal/bus"
 	"arb/internal/dashboard"
-	"arb/internal/exec"
 	"arb/internal/safego"
 	"arb/internal/settlement"
 	"arb/internal/store/pgstore"
@@ -20,125 +19,7 @@ type ZeroSettlementDetector interface {
 	RecordZeroForPosition(ctx context.Context, posID int64)
 }
 
-// Config 自动交易引擎配置（D-070/D-072）。
-type Config struct {
-	Enabled      bool
-	MaxNotional  float64
-	MaxPositions int
-	MaxDailyLoss float64
-	MinNetBps    float64
-	CloseBpsThr  float64       // 收敛型平仓阈值（expected_net_bps <= 此值则平仓）
-	PollInterval time.Duration // OPEN 持仓扫描间隔
-	NotionalUSD  float64       // 单笔名义额（用于算 qty）
-
-	// D-072 §3.4 硬编码外部化（默认值=现行为，零迁移）
-	AllowVenues       map[string]bool    // handleOpportunity venue 白名单 + MR venueA/B
-	AllowCanonicals   map[string]bool    // handleOpportunity symbol 白名单
-	ExcludeCanonicals map[string]bool    // BRENT/WTI 排除
-	MeanRevertThresh  map[string]float64 // MR 阈值 map
-
-	// D-159 W1a R1 + D-168 自动准入：SWAPARB 组合门禁。
-	// SwapArbAllowCombos 空切片 = RUNNING 下 fail-closed（autoAllow=false 时）。
-	// autoAllow=true 时空白名单=自动放行所有通过门禁栈的组合。
-	// SwapArbDenyCombos 黑名单（D-168）：显式禁止已知问题组合，优先级最高。
-	// SwapArbMaxGrossExposure 全局活跃组合名义合计上限（>0 才校验）。
-	// MaxActiveCombos 同组合最大并发数，默认 1（D-138 单组合口径）。
-	SwapArbAllowCombos      []exec.ComboAllowSpec
-	SwapArbDenyCombos       []exec.ComboAllowSpec
-	SwapArbAutoAllow        bool
-	SwapArbMaxGrossExposure float64
-	MaxActiveCombos         int
-
-	// D-159 W1a I6：environment/is_real 一致性检查。
-	// Environment 执行环境固定值（'demo'/'live'）。开仓前校验 venue 的 is_real 与此值一致。
-	// 空 = 未配置（不检查，回退旧行为）。
-	Environment string
-	// D-159 W6a S2：LIVE 人工开关（ARB_LIVE_TRADE，默认 false）。
-	// is_real=true 账户 + LiveTrade=false → 拒绝开仓（Gate.Submit + 手动 RPC 同源）。
-	// is_real=false（demo）不受限制。切换=改 env+重启+审计日志（无 RPC）。
-	LiveTrade bool
-	// D-195-C1：LiveGate 检查器（LIVE 模式导出门）。nil=LIVE 直接拒绝（fail-closed）。
-	LiveGateChecker *LiveGateChecker
-	// D-165 S1：swap 偏差拦截阈值（默认 50.0）。同 venue 已有 OPEN 持仓偏差超阈值→拒绝新开仓。
-	SwapDeviationGatePct float64
-	// D-165 S2：swap 偏差退出阈值（默认 50.0）。recalcNetSwap 对拍偏差超阈值→用 broker 实际值。
-	SwapDeviationExitPct float64
-	// D-165 S3：swap facts 零值校验开关（默认 true）。facts=0 但 broker 有非零 swap 历史→拒绝。
-	SwapFactsZeroCheckEnabled bool
-	// D-165.1 S1：leg contract size resolver（MT 腿 CS≠1 时 notional 换算用）。
-	// nil = 未注入（回退 CS=1，CEX 腿正确，MT 腿 notional 少算但不阻塞）。
-	LegContractSizeResolver func(venueKey, venueSymbol string) (float64, bool)
-	// D-190：QuoteBus 注入（偏差 gate usdnotional.PerLot JPY 换算用）。
-	// nil = 未注入（JPY 腿 PerLot fail-closed 跳过；USD 腿不受影响）。
-	Quotes *bus.QuoteBus
-
-	// D-072 §3.3/§4.2 swap/funding 退出参数
-	MinNetSwapBps         float64 // discoverSwapCombos 最低净 swap（ARB_AUTOTRADE_MIN_NET_SWAP_BPS，默认 0.2）
-	SwapArbExitBps        float64 // SWAPARB/CARRY 退出净 swap bps（ARB_SWAPARB_EXIT_NET_BPS，默认 0）
-	FundingExitPct        float64 // FUNDING_HEDGE/PERP_FUNDING 退出净年化（ARB_FUNDING_EXIT_NET_PCT，默认 0）
-	CarryMinNetAnnualized float64 // D-187：netSwap 年化 ≥ 此值 → strategy="CARRY"（ARB_CARRY_MIN_NET_ANNUALIZED，默认 4.0）
-	// D-133 T1：PERP_FUNDING 平仓规则重构——持有下限 + 连续去抖
-	PerpFundMinHold      time.Duration // ARB_PERPFUNDING_MIN_HOLD 默认 8h；0=不限
-	PerpFundExitDebounce int           // ARB_PERPFUNDING_EXIT_DEBOUNCE 默认 3；0/1=单次即平
-
-	// D-077 修复⑪B N6：入场成本容忍+陈旧度 env 化
-	EntrySpreadMinBps float64       // SWAPARB 入场 spreadBps 下限（ARB_SWAPARB_ENTRY_SPREAD_MIN_BPS，默认 -3）
-	FreshnessTTL      time.Duration // 报价陈旧排除（复用 ARB_DETECTOR_FRESHNESS_TTL，默认 120s）
-	// D-159 W4a R7：单腿 bid-ask spread 宽度上限（bps），>0 才校验，0=不校验（ARB_SWAPARB_MAX_LEG_SPREAD_BPS，默认 50）。
-	SwapArbMaxLegSpreadBps float64 // 任一腿 spread 过宽=流动性异常/报价不一致 → skip
-
-	// D-169 P0：入场价差/基差上限（bps），>0 才校验，0=不校验。
-	EntrySpreadMaxBps float64 // ARB_SWAPARB_ENTRY_SPREAD_MAX_BPS（默认 30）
-	EntryBasisMaxBps  float64 // ARB_SWAPARB_ENTRY_BASIS_MAX_BPS（默认 30）
-
-	// D-180 S3：基差止损阈值（bps），PnL_bps < -BasisStopBps → 平仓（默认 4）。
-	BasisStopBps float64
-	// D-180 S4：入场门禁——净息差厚度下限（bps/日，spec 源×折扣后比较；默认 1.0）。
-	MinNetCarryBps float64
-	// D-180 S4：spec 源折扣系数（冷启动不裸信规格；默认 0.5）。仅作用入场门禁。
-	SpecDiscount float64
-	// D-180 S4：回收期上限（天，2×spreadBps/净息差 ≤ 此值才放行；默认 30）。
-	MaxPaybackDays int
-	// D-180 S4：集中度上限（同 venue×symbol 活跃腿数 < 此值才放行；默认 2）。
-	MaxLegsPerSymbol int
-
-	// D-104 P0：swap facts 新鲜度门禁（fail-closed，ARB_SWAP_FACT_MAX_AGE，默认 2h）。
-	// discoverSwapCombos 使用 lf/sf 前查 now−f.Ts > SwapFactMaxAge → 跳过该 fact + 计数日志。
-	SwapFactMaxAge time.Duration
-
-	// B：组合平仓后重入冷却（ARB_SWAPARB_REENTRY_COOLDOWN_DAYS，默认 7）
-	ReentryCooldownDays int
-
-	// D-181 S2：probe 探测仓——无实测腿的首仓自动成为 probe，到期评估升级/拒绝。
-	// ProbeEnabled=false → 不标记不评估（向后兼容，默认 false）。
-	ProbeEnabled bool
-	// ProbeEvalDays probe 评估等待天数（calendar days，默认 3 ≈ 2 结算日）。
-	ProbeEvalDays int
-
-	// D-107 P4：事件触发扫描节流窗口（ARB_SCAN_THROTTLE，默认 30s）。
-	// Kick() 触发 scanIfDue：窗口内丢弃、超窗扫。兜底 10min 保证有界延迟。
-	ScanThrottle time.Duration
-
-	// D-142 ④：组合保证金预算观察版告警（只告警不拦截）。
-	// 双腿合计保证金 / min(equity) > 此值 → warn 告警。0 = 不启用。
-	// 杠杆不对称（两腿 leverage 差异显著）→ info 提示。
-	SwapArbMarginBudgetPct float64
-
-	// D-256-A S1：non-settle venue 列表（格式 "277842155:mt5"，含 venueType 后缀）。
-	// swapRateFor 入口 guard：bare venue ∈ 集合 → 真值 0（实测不结算，非降级）。
-	SwapNonSettleVenues []string
-
-	// D-256-A S4：组合级止损计数（reason-aware，替代无差别 cooldown）。
-	// SwapArbComboLossLimit=0 → 关闭组合级止损拦截（向后兼容）。
-	SwapArbComboLossLimit int
-	// SwapArbComboLossWindowDays 止损计数回看窗口天数（默认 30）。
-	SwapArbComboLossWindowDays int
-
-	// D-256-A S5：复活扳机告警阈值（settled-only，默认 2.2 bps/日 ≈ 年化 8.03%）。
-	// netSwapBps >= 此值 且 swapSrc=settled → 发 critical 告警提示复活评估。
-	// 0 = 关闭复活告警。不自动复活，只告警。
-	SwapArbRevivalBps float64
-}
+// Config 已提取至 engine_config.go（D-261 S2 纯搬家拆分）。
 
 // Engine 自动交易引擎：三 loop → gate → 执行 → 自动平仓 → 策略淘汰（D-070/D-072）。
 type Engine struct {
