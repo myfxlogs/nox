@@ -1,7 +1,4 @@
-// Package settlement 结算钩子（D-087 §3.2）。
-//
-// 每笔平仓有唯一、幂等、可审计的结算动作：strategy_stats / verification_stats / 淘汰统计同源更新。
-// Settle 是唯一结算入口，三个调用点（手动平仓 RPC / scanAndClose / reconcile auto_close）统一替换。
+// Package settlement 结算钩子（D-087 §3.2）。每笔平仓有唯一、幂等、可审计的结算动作：strategy_stats / verification_stats / 淘汰统计同源更新。Settle 是唯一结算入口。
 package settlement
 
 import (
@@ -35,8 +32,7 @@ type Deps interface {
 	AggregateStrategyStats(ctx context.Context, strategy string) (pgstore.AggregateStat, error)
 	// AggregateStrategyStatsByEnvironment D-200：按 environment 过滤的聚合（environment='' 等价于原行为）。
 	AggregateStrategyStatsByEnvironment(ctx context.Context, strategy, environment string) (pgstore.AggregateStat, error)
-	// AggregateStrategyStatsByEnvironmentFamily D-256-A S2：风险族聚合（多策略合并样本，p.type=ANY($1)）。
-	// CARRY/SWAPARB 同族合并统计，避免分桶样本量不足永不触发淘汰。
+	// AggregateStrategyStatsByEnvironmentFamily D-256-A S2：风险族聚合（多策略合并样本，p.type=ANY($1)）。CARRY/SWAPARB 同族合并统计，避免分桶样本量不足永不触发淘汰。
 	AggregateStrategyStatsByEnvironmentFamily(ctx context.Context, strategies []string, environment string) (pgstore.AggregateStat, error)
 	// DisableStrategy 禁用策略（淘汰）。
 	DisableStrategy(ctx context.Context, strategy, reason string) error
@@ -48,43 +44,31 @@ type Deps interface {
 	SumCashflowsNet(ctx context.Context, posID int64) (float64, error)
 	// D-193-A：替代 SumCashflowsNet，返回 quality 供 completeness 判定。
 	SumCashflowsNetWithQuality(ctx context.Context, posID int64) (sum float64, quality string, err error)
-	// D-193 审计 P0-1：查 settlement 行的 stats_status，用于短路判定。
-	// 不存在行 → 返回 ("", nil)（继续走 Settle 流程）。
-	// 存在行 → 返回 stats_status（applied/skipped 短路；pending/retryable 继续）。
+	// D-193 审计 P0-1：查 settlement 行的 stats_status，用于短路判定。不存在行 → ("", nil)（继续走 Settle 流程）；存在行 → stats_status（applied/skipped 短路；pending/retryable 继续）。
 	GetSettlementStatsStatus(ctx context.Context, posID int64) (statsStatus string, err error)
 	// D-193 审计 P0-2：统计更新失败时改 stats_status=retryable，下轮重试。
 	MarkSettlementStatsRetryable(ctx context.Context, posID int64) error
 }
 
-// Eliminator 淘汰判定函数类型（从 autotrade.evaluateElimination 抽出，避免环依赖）。
-// D-154 S2 加 medianPnl 入参（小样本判据 median<0 AND avg<0）。
-// 返回 (shouldDisable, reason)。
+// Eliminator 淘汰判定函数类型（从 autotrade.evaluateElimination 抽出，避免环依赖）。D-154 S2 加 medianPnl 入参（小样本判据 median<0 AND avg<0）。返回 (shouldDisable, reason)。
 type Eliminator func(totalTrades int, winRate, avgPnl, medianPnl float64, disabled bool) (bool, string)
 
-// FamilyResolver D-256-A S2：策略→风险族映射（避免环依赖，autotrade.riskFamily 注入）。
-// 返回同族策略名列表（如 CARRY→[CARRY,SWAPARB]），用于族级聚合。
-// nil = 无族合并（每策略独立聚合，向后兼容）。
+// FamilyResolver D-256-A S2：策略→风险族映射（避免环依赖，autotrade.riskFamily 注入）。返回同族策略名列表（如 CARRY→[CARRY,SWAPARB]）。nil=无族合并（向后兼容）。
 type FamilyResolver func(strategy string) []string
 
 // Settle 唯一结算入口（D-087 §3.2，D-193-A 消除 fallback + 净 PNL 事实迁移）。
-// 幂等短路：stats_status=applied/skipped → 直接返回（D-193 审计 P0-1）。
-// 跳过规则（写行但不入样本）：realized NULL / expectedUsd≤0 / fx 缺失 / pnl_estimated。
-// D-193-A：cashflows 查询失败 → 写 unknown/retryable 行 + 返回 error（消除 fallback-to-zero）。
-// 通过（complete+actual）→ UpsertVerificationSample + UpdateStrategyStat + 淘汰检查；
-// 统计更新失败 → MarkSettlementStatsRetryable + 返回 error（D-193 审计 P0-2）。
-// D-256-A S2：family 非 nil 时淘汰聚合改用族级（CARRY/SWAPARB 合并样本）。
+// 幂等短路：stats_status=applied/skipped → 直接返回。跳过规则（写行但不入样本）：realized NULL / expectedUsd≤0 / fx 缺失 / pnl_estimated。
+// D-193-A：cashflows 查询失败 → 写 unknown/retryable 行 + 返回 error。通过（complete+actual）→ UpsertVerificationSample + UpdateStrategyStat + 淘汰检查。
+// 统计更新失败 → MarkSettlementStatsRetryable + 返回 error。D-256-A S2：family 非 nil 时淘汰聚合改用族级（CARRY/SWAPARB 合并样本）。
 func SettleAt(ctx context.Context, deps Deps, posID int64, elim Eliminator, family FamilyResolver, now time.Time) error {
-	// D-193 审计 P0-1：短路逻辑改为检查 stats_status。
-	// applied/skipped → 已完成，短路返回 nil。
-	// pending/retryable/""（无行或 legacy）→ 继续走 Settle 流程。
+	// D-193 审计 P0-1：短路逻辑改为检查 stats_status。applied/skipped → 已完成，短路返回 nil。pending/retryable/"" → 继续走 Settle 流程。
 	statsStatus, err := deps.GetSettlementStatsStatus(ctx, posID)
 	if err != nil {
 		return fmt.Errorf("settle: check existing stats status: %w", err)
 	}
 	if statsStatus == "applied" || statsStatus == "skipped" {
-		return nil // 已完成，幂等短路
+		return nil // 幂等短路
 	}
-
 	// 1. 读 position
 	p, err := deps.GetPosition(ctx, posID)
 	if err != nil {
@@ -93,10 +77,8 @@ func SettleAt(ctx context.Context, deps Deps, posID int64, elim Eliminator, fami
 	if p.Status != "CLOSED" {
 		return fmt.Errorf("settle: position %d not CLOSED (status=%s)", posID, p.Status)
 	}
-
 	// 2. 派生 vkey
 	vkey := verification.VkeyFromOppID(p.OpportunityID)
-
 	// 3. 取腿算 notional + holdDays
 	legs, err := deps.ListPositionLegs(ctx, posID)
 	if err != nil {
@@ -105,7 +87,6 @@ func SettleAt(ctx context.Context, deps Deps, posID int64, elim Eliminator, fami
 	canonical := canonicalFromOppID(p.OpportunityID)
 	notionalUsd, fxSkipped := computeNotionalUSD(ctx, deps, legs, canonical)
 	holdDays := computeHoldDays(p, legs)
-
 	// 4. 算 expectedUsd（D-087 §3.4 typed 新签名：netBps + swapBpsDaily 按字段取值）
 	netBps := p.ExpectedNetBps
 	swapBpsDaily := 0.0
@@ -113,7 +94,6 @@ func SettleAt(ctx context.Context, deps Deps, posID int64, elim Eliminator, fami
 		swapBpsDaily = *p.ExpectedSwapBpsDaily
 	}
 	expectedUsd := verification.ExpectedUsd(p.Type, netBps, swapBpsDaily, notionalUsd, holdDays)
-
 	// 5. 跳过规则
 	skippedReason := ""
 	switch {
@@ -127,8 +107,7 @@ func SettleAt(ctx context.Context, deps Deps, posID int64, elim Eliminator, fami
 		skippedReason = "pnl_estimated: partial or no calibration"
 	}
 
-	// 6. D-193-A：cashflows 查询 + 净 PNL + completeness 判定（在 InsertSettlement 前完成，
-	//    因 row 需写入 net_realized_usd/pnl_quality/completeness_status/stats_status）。
+	// 6. D-193-A：cashflows 查询 + 净 PNL + completeness 判定（在 InsertSettlement 前完成，因 row 需写入 net_realized_usd/pnl_quality/completeness_status/stats_status）。
 	var (
 		cashflowsNet   float64
 		cfQuality      string
@@ -259,10 +238,8 @@ func SettleAt(ctx context.Context, deps Deps, posID int64, elim Eliminator, fami
 		return fmt.Errorf("settle: update strategy stat pos=%d: %w", posID, err)
 	}
 
-	// 淘汰检查（D-154 S1：输入源从 strategy_stats 累计列改为 AggregateStrategyStats 实时聚合；
-	// disabled flag 仍查 strategy_stats——启停载体不变。两调用点同源 P3。）
-	// D-200：聚合改 ByEnvironment，按持仓自身 p.Environment 过滤——每个 environment 独立淘汰判定。
-	// D-256-A S2：family 非 nil 时改用族级聚合（CARRY/SWAPARB 合并样本，避免分桶样本量不足）。
+	// 淘汰检查（D-154 S1：输入源从 strategy_stats 累计列改为 AggregateStrategyStats 实时聚合；disabled flag 仍查 strategy_stats——启停载体不变）。
+	// D-200：聚合改 ByEnvironment，按持仓自身 p.Environment 过滤。D-256-A S2：family 非 nil 时改用族级聚合（CARRY/SWAPARB 合并样本）。
 	if elim != nil {
 		stat, err := deps.GetStrategyStat(ctx, p.Type)
 		if err != nil {
@@ -290,8 +267,7 @@ func SettleAt(ctx context.Context, deps Deps, posID int64, elim Eliminator, fami
 		}
 		disable, reason := elim(agg.Total, winRate, agg.AvgPnl, agg.MedianPnl, stat.Disabled)
 		if disable {
-			// D-256-A R1：族内全禁——family 非 nil 时禁用族内全部策略（CARRY/SWAPARB 同族），
-			// 避免复活场景下 CARRY 触发淘汰后 SWAPARB 存活至重启/自身结算（D-256 循环亏漏洞残留）。
+			// D-256-A R1：族内全禁——family 非 nil 时禁用族内全部策略（CARRY/SWAPARB 同族），避免复活场景下 CARRY 触发淘汰后 SWAPARB 存活至重启/自身结算。
 			famStrategies := []string{p.Type}
 			if family != nil {
 				famStrategies = family(p.Type)
