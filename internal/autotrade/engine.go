@@ -157,6 +157,8 @@ type Engine struct {
 	// D-087 §3.2：settlement.Settle 依赖 + 淘汰判定函数（main 装配后调 SetSettleDeps）。
 	settleDeps settlement.Deps
 	eliminator settlement.Eliminator
+	// D-256-A S2：风险族解析器（CARRY/SWAPARB 合并淘汰），main 装配后调 SetSettleDeps 注入。
+	familyResolver settlement.FamilyResolver
 
 	// D-107 P4：事件触发扫描——kickCh buffered(1) 非阻塞 send（合并语义同 P2 监控）；
 	// lastScan 节流基准（仅 positionLoop goroutine 读写，无锁——quoteReconIdx 单协程先例）。
@@ -191,9 +193,11 @@ func (e *Engine) ValidateStartup() {
 }
 
 // SetSettleDeps 注入结算依赖 + 淘汰判定函数（D-087 §3.2，main 装配后调）。
-func (e *Engine) SetSettleDeps(deps settlement.Deps, elim settlement.Eliminator) {
+// D-256-A S2：family 非 nil 时淘汰聚合改用族级（CARRY/SWAPARB 合并样本）。
+func (e *Engine) SetSettleDeps(deps settlement.Deps, elim settlement.Eliminator, family settlement.FamilyResolver) {
 	e.settleDeps = deps
 	e.eliminator = elim
+	e.familyResolver = family
 }
 
 // SetZeroSettlementDetector D-182 S1：注入零结算检测器（scanAndClose 周期调用）。

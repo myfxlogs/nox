@@ -37,7 +37,7 @@ func (e *Engine) scanAndClose(ctx context.Context) {
 				continue
 			}
 			if e.settleDeps != nil {
-				if err := settlement.Settle(ctx, e.settleDeps, p.ID, e.eliminator); err != nil {
+				if err := settlement.Settle(ctx, e.settleDeps, p.ID, e.eliminator, e.familyResolver); err != nil {
 					log.Printf("[autotrade] settle pos=%d: %v", p.ID, err)
 					_ = e.service.Store().SetPositionNote(ctx, p.ID, "settle_failed: "+err.Error())
 				}
@@ -57,7 +57,7 @@ func (e *Engine) scanAndClose(ctx context.Context) {
 		// D-087 §3.2：settlement.Settle 替换 updateStrategyStat（旧对象 no-op 缺陷根除）
 		// D-159 W2a R3-9：settlement 失败 → 标记 settle_failed 到 position.note（可重试状态）。
 		if e.settleDeps != nil {
-			if err := settlement.Settle(ctx, e.settleDeps, p.ID, e.eliminator); err != nil {
+			if err := settlement.Settle(ctx, e.settleDeps, p.ID, e.eliminator, e.familyResolver); err != nil {
 				log.Printf("[autotrade] settle pos=%d: %v", p.ID, err)
 				_ = e.service.Store().SetPositionNote(ctx, p.ID, "settle_failed: "+err.Error())
 			}

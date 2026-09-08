@@ -58,6 +58,9 @@ func (d *settleDeps) AggregateStrategyStats(ctx context.Context, strategy string
 func (d *settleDeps) AggregateStrategyStatsByEnvironment(ctx context.Context, strategy, environment string) (pgstore.AggregateStat, error) {
 	return d.store.AggregateStrategyStatsByEnvironment(ctx, strategy, environment)
 }
+func (d *settleDeps) AggregateStrategyStatsByEnvironmentFamily(ctx context.Context, strategies []string, environment string) (pgstore.AggregateStat, error) {
+	return d.store.AggregateStrategyStatsByEnvironmentFamily(ctx, strategies, environment)
+}
 func (d *settleDeps) DisableStrategy(ctx context.Context, strategy, reason string) error {
 	return d.store.DisableStrategy(ctx, strategy, reason)
 }
@@ -107,8 +110,8 @@ func main() {
 	fmt.Printf("=== D-193-A 扩包 R3：settleonce pos=%d ===\n", *posID)
 	fmt.Printf("before: stats_status=%q\n", before)
 
-	// 调 settlement.SettleAt（幂等，elim=autotrade.EliminatorAdapter）
-	err = settlement.SettleAt(ctx, deps, *posID, autotrade.EliminatorAdapter, time.Now())
+	// 调 settlement.SettleAt（幂等，elim=autotrade.EliminatorAdapter，family=autotrade.FamilyResolverAdapter）
+	err = settlement.SettleAt(ctx, deps, *posID, autotrade.EliminatorAdapter, autotrade.FamilyResolverAdapter, time.Now())
 	if err != nil {
 		log.Fatalf("SettleAt pos=%d: %v", *posID, err)
 	}
