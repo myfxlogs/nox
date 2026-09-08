@@ -191,6 +191,11 @@ type Config struct {
 	// SwapArbComboLossWindowDays 止损计数回看窗口天数（ARB_SWAPARB_COMBO_LOSS_WINDOW_DAYS，缺省 30）。
 	SwapArbComboLossWindowDays int
 
+	// === D-256-A S5：复活扳机告警 ===
+	// SwapArbRevivalBps netSwapBps >= 此值 且 swapSrc=settled → critical 告警（ARB_SWAPARB_REVIVAL_ALERT_BPS，缺省 2.2）。
+	// 0 = 关闭复活告警。不自动复活，只告警提示业主/决策席复审。
+	SwapArbRevivalBps float64
+
 	// === 交易时段防线（D-155 freeze guard）===
 	// FreezeGuard 冻结腿预检窗口（ARB_FREEZE_GUARD，缺省 10m）。
 	// 开仓前双腿各自校验「该腿报价在窗口内发生过价格值变化」；任一腿冻结 → 整组 abort（LEGGED 零容忍）。
@@ -298,6 +303,7 @@ func Load() *Config {
 		SwapNonSettleVenues:        envStringSlice("ARB_SWAP_NON_SETTLE_VENUES"),       // D-112
 		SwapArbComboLossLimit:      envInt("ARB_SWAPARB_COMBO_LOSS_LIMIT", 3),          // D-256-A S4
 		SwapArbComboLossWindowDays: envInt("ARB_SWAPARB_COMBO_LOSS_WINDOW_DAYS", 30),   // D-256-A S4
+		SwapArbRevivalBps:          envFloat("ARB_SWAPARB_REVIVAL_ALERT_BPS", 2.2),     // D-256-A S5
 		FreezeGuard:                envDur("ARB_FREEZE_GUARD", 10*time.Minute),         // D-155 freeze guard 冻结腿预检窗口
 		Environment:                envStr("ARB_ENVIRONMENT", "demo"),                  // D-159 W1a I6：缺省 demo fail-safe
 		LiveTrade:                  envBool("ARB_LIVE_TRADE", false),                   // D-159 W6a S2：LIVE 人工开关默认 false
