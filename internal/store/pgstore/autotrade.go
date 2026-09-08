@@ -34,6 +34,35 @@ func (s *Store) InsertAutotradeLog(ctx context.Context, l *AutotradeLog) error {
 	return nil
 }
 
+// CountComboStopLosses D-256-A S4：组合级止损计数（reason-aware）。
+// 查 autotrade_logs 中 status='CLOSE_TRIGGER' 且 reason 匹配止损前缀（basis loss / net swap）
+// 且 ts > now() - windowDays 天的行，按 opportunity_id 分组计数。
+// 返回 map[oppID]count，调用方用 combo.FromOppID 归并到 ComboKey。
+// reason 前缀过滤：排除 manual_rpc / probe 等非止损触发（D-185 批评无差别 cooldown 误杀成立）。
+func (s *Store) CountComboStopLosses(ctx context.Context, windowDays int) (map[string]int64, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT opportunity_id, count(*) AS cnt
+		FROM autotrade_logs
+		WHERE status = 'CLOSE_TRIGGER'
+		  AND (reason LIKE 'basis loss%' OR reason LIKE 'net swap%')
+		  AND ts > now() - make_interval(days => $1)
+		GROUP BY opportunity_id`, windowDays)
+	if err != nil {
+		return nil, fmt.Errorf("count combo stop losses: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[string]int64)
+	for rows.Next() {
+		var oppID string
+		var cnt int64
+		if err := rows.Scan(&oppID, &cnt); err != nil {
+			return nil, fmt.Errorf("scan combo stop loss row: %w", err)
+		}
+		out[oppID] = cnt
+	}
+	return out, rows.Err()
+}
+
 // StrategyStat 对应 strategy_stats 表（D-070）。
 // D-154 起淘汰判定 v2 不读本表累计列（total/wins/avg/win_rate），仅 disabled/disabled_reason（启停载体）。
 // 累计列仍由 UpdateStrategyStat 写，仅供显示层滚动统计——非淘汰真相源（P3）。

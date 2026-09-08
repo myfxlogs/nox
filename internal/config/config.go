@@ -184,6 +184,13 @@ type Config struct {
 	// swapledger 对这些 venue 记 0（不写 cashflow），避免按规格值误记。
 	SwapNonSettleVenues []string
 
+	// === D-256-A S4：组合级止损计数（reason-aware）===
+	// SwapArbComboLossLimit 同 ComboKey 止损次数 ≥ 此值 → skip 开仓（ARB_SWAPARB_COMBO_LOSS_LIMIT，缺省 3）。
+	// 0 = 关闭组合级止损拦截（向后兼容）。reason 过滤：仅计 basis loss / net swap，排除人工/probe。
+	SwapArbComboLossLimit int
+	// SwapArbComboLossWindowDays 止损计数回看窗口天数（ARB_SWAPARB_COMBO_LOSS_WINDOW_DAYS，缺省 30）。
+	SwapArbComboLossWindowDays int
+
 	// === 交易时段防线（D-155 freeze guard）===
 	// FreezeGuard 冻结腿预检窗口（ARB_FREEZE_GUARD，缺省 10m）。
 	// 开仓前双腿各自校验「该腿报价在窗口内发生过价格值变化」；任一腿冻结 → 整组 abort（LEGGED 零容忍）。
@@ -289,6 +296,8 @@ func Load() *Config {
 		SwapReconcileDeviationPct:  envFloat("ARB_SWAP_RECONCILE_DEVIATION_PCT", 10.0), // D-110 P2
 		MTDisasterSlPct:            envFloat("ARB_MT_DISASTER_SL_PCT", 2.0),            // D-146 S1 broker 端灾难 SL
 		SwapNonSettleVenues:        envStringSlice("ARB_SWAP_NON_SETTLE_VENUES"),       // D-112
+		SwapArbComboLossLimit:      envInt("ARB_SWAPARB_COMBO_LOSS_LIMIT", 3),          // D-256-A S4
+		SwapArbComboLossWindowDays: envInt("ARB_SWAPARB_COMBO_LOSS_WINDOW_DAYS", 30),   // D-256-A S4
 		FreezeGuard:                envDur("ARB_FREEZE_GUARD", 10*time.Minute),         // D-155 freeze guard 冻结腿预检窗口
 		Environment:                envStr("ARB_ENVIRONMENT", "demo"),                  // D-159 W1a I6：缺省 demo fail-safe
 		LiveTrade:                  envBool("ARB_LIVE_TRADE", false),                   // D-159 W6a S2：LIVE 人工开关默认 false
