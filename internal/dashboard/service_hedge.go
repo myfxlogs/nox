@@ -167,9 +167,7 @@ func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1
 	return connect.NewResponse(resp), nil
 }
 
-// computeHedgeCarry 计算 carry 统计（近 7 日 + 累计 + 年化）。
-// cum_usd = 全量 (energy+voting)×price + interest（price 用当期 mid 近似——历史日 price 快照在 daily_income.price）；
-// annualized_pct = cum_usd / (qty×mid) × 365（年化分母=现货市值，A1）。
+// computeHedgeCarry 计算 carry 统计（近 7 日 + 累计 + 年化）。cum_usd=全量 (energy+voting)×mid+interest；annualized_pct=cum_usd/(qty×mid)×365（分母=现货市值，A1）。
 func (s *Service) computeHedgeCarry(ctx context.Context, mid, qtyStaked float64) *v1.HedgeCarry {
 	now := time.Now().UTC()
 	from7d := now.Add(-7 * 24 * time.Hour)
@@ -191,8 +189,7 @@ func (s *Service) computeHedgeCarry(ctx context.Context, mid, qtyStaked float64)
 	}
 	cumUsd := (energyAll+votingAll)*mid + interestAll
 
-	// 年化（D-236 变更14 时间感知：分母=现货市值，分子按经过天数折算——
-	// 旧式 cum×365 把累计当单日收益，累计增大后荒谬值显形；firstIncomeDay 缺失=诚实 0→前端「—」）。
+	// 年化（D-236 变更14 时间感知：分母=现货市值，分子按经过天数折算；firstIncomeDay 缺失=诚实 0→前端「—」）。
 	var annualized float64
 	if mid > 0 && qtyStaked > 0 {
 		firstDay, err := s.store.FirstDailyIncomeDay(ctx)
@@ -205,8 +202,7 @@ func (s *Service) computeHedgeCarry(ctx context.Context, mid, qtyStaked float64)
 		}
 	}
 
-	// D-236 变更15：对冲后分段（窗口=[hedgeStart,now]，hedgeStart=fin_cmc_positions 最早 opened_at）。
-	// 空表（未建对冲）→ 对冲后视图回落=结构累计同值并注明（设计规格）。
+	// D-236 变更15：对冲后分段（窗口=[hedgeStart,now]；空表→回落=结构累计同值）。
 	hedgedCumUsd, hedgedAnnual := cumUsd, annualized
 	if hedgeStart, err := s.store.FirstCMCPositionOpenedAt(ctx); err == nil && hedgeStart != nil {
 		energyH, votingH, interestH, err := s.store.SumDailyIncomeByRange(ctx, hedgeStart, &now)
@@ -222,6 +218,14 @@ func (s *Service) computeHedgeCarry(ctx context.Context, mid, qtyStaked float64)
 		}
 	}
 
+	// D-260 S2：月至今净额（窗口=[月初 UTC,now]，与 cum 同口径，mid 同 snap；空月 → 0+sample 0 前端「—」）。
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	mtdEnergy, mtdVoting, mtdInterest, err := s.store.SumDailyIncomeByRange(ctx, &monthStart, &now)
+	if err != nil {
+		mtdEnergy, mtdVoting, mtdInterest = 0, 0, 0
+	}
+	mtdSampleDays, _ := s.store.CountDailyIncomeByRange(ctx, &monthStart, &now)
+	mtdNetUsd := (mtdEnergy+mtdVoting)*mid + mtdInterest
 	return &v1.HedgeCarry{
 		TrxRental_7DTrx:     energy7d,
 		TrxVote_7DTrx:       voting7d,
@@ -230,6 +234,8 @@ func (s *Service) computeHedgeCarry(ctx context.Context, mid, qtyStaked float64)
 		AnnualizedPct:       annualized,
 		HedgedCumUsd:        hedgedCumUsd,
 		HedgedAnnualizedPct: hedgedAnnual,
+		MtdNetUsd:           mtdNetUsd,
+		MtdSampleDays:       int32(mtdSampleDays),
 	}
 }
 

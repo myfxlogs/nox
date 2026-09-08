@@ -295,6 +295,25 @@ func TestGetHedgeStructure_CarryHandCalc(t *testing.T) {
 	if diff := carry.AnnualizedPct - wantAnnual; diff > wantAnnual*1e-6 || diff < -wantAnnual*1e-6 {
 		t.Errorf("annualized_pct = %v, want %v (days=%v)", carry.AnnualizedPct, wantAnnual, days)
 	}
+	// D-260 S2：月至今净额（与 cum 同口径，窗口=[月初 UTC,now]）。
+	// day1/day2 相对 now 构造——月初附近跑测试时 day1 可能落上月，动态逐日累加防 flaky。
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	wantMtd := 0.0
+	wantMtdDays := 0
+	if !day2.Before(monthStart) {
+		wantMtd += (10.0+0.2)*0.3236 + 2.5
+		wantMtdDays++
+	}
+	if !day1.Before(monthStart) {
+		wantMtd += (5.0+0.1)*0.3236 + 1.5
+		wantMtdDays++
+	}
+	if diff := carry.MtdNetUsd - wantMtd; diff > 1e-4 || diff < -1e-4 {
+		t.Errorf("mtd_net_usd = %v, want %v (monthStart=%v)", carry.MtdNetUsd, wantMtd, monthStart)
+	}
+	if carry.MtdSampleDays != int32(wantMtdDays) {
+		t.Errorf("mtd_sample_days = %v, want %v (monthStart=%v)", carry.MtdSampleDays, wantMtdDays, monthStart)
+	}
 }
 
 // TestListHedgeFlow_RPC 统一流水卡 RPC（跨源交错+kind 归一+单位断言）。

@@ -4815,6 +4815,8 @@ type HedgeCarry struct {
 	AnnualizedPct       float64                `protobuf:"fixed64,5,opt,name=annualized_pct,json=annualizedPct,proto3" json:"annualized_pct,omitempty"`                     // 年化 %（cum_usd / (qty×mid) × 365）
 	HedgedCumUsd        float64                `protobuf:"fixed64,6,opt,name=hedged_cum_usd,json=hedgedCumUsd,proto3" json:"hedged_cum_usd,omitempty"`                      // D-236 变更15：对冲后累计（窗口=[hedgeStart,now]）
 	HedgedAnnualizedPct float64                `protobuf:"fixed64,7,opt,name=hedged_annualized_pct,json=hedgedAnnualizedPct,proto3" json:"hedged_annualized_pct,omitempty"` // D-236 变更15：对冲后年化（时间感知，days=max(1,now−hedgeStart)）
+	MtdNetUsd           float64                `protobuf:"fixed64,8,opt,name=mtd_net_usd,json=mtdNetUsd,proto3" json:"mtd_net_usd,omitempty"`                               // D-260 S2：月至今净额 USD（月窗 energy×mid+voting×mid+interest）
+	MtdSampleDays       int32                  `protobuf:"varint,9,opt,name=mtd_sample_days,json=mtdSampleDays,proto3" json:"mtd_sample_days,omitempty"`                    // D-260 S2：月内 rollup 行数（0=月初冷启动，前端显示「—」）
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -4894,6 +4896,20 @@ func (x *HedgeCarry) GetHedgedCumUsd() float64 {
 func (x *HedgeCarry) GetHedgedAnnualizedPct() float64 {
 	if x != nil {
 		return x.HedgedAnnualizedPct
+	}
+	return 0
+}
+
+func (x *HedgeCarry) GetMtdNetUsd() float64 {
+	if x != nil {
+		return x.MtdNetUsd
+	}
+	return 0
+}
+
+func (x *HedgeCarry) GetMtdSampleDays() int32 {
+	if x != nil {
+		return x.MtdSampleDays
 	}
 	return 0
 }
@@ -14161,7 +14177,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x03lev\x18\x04 \x01(\x05R\x03lev\x12\x10\n" +
 	"\x03liq\x18\x05 \x01(\x01R\x03liq\x12\x19\n" +
 	"\bdist_pct\x18\x06 \x01(\x01R\adistPct\x12+\n" +
-	"\x11broker_unrealised\x18\a \x01(\x01R\x10brokerUnrealised\"\xa9\x02\n" +
+	"\x11broker_unrealised\x18\a \x01(\x01R\x10brokerUnrealised\"\xf1\x02\n" +
 	"\n" +
 	"HedgeCarry\x12)\n" +
 	"\x11trx_rental_7d_trx\x18\x01 \x01(\x01R\x0etrxRental7dTrx\x12%\n" +
@@ -14170,7 +14186,9 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\acum_usd\x18\x04 \x01(\x01R\x06cumUsd\x12%\n" +
 	"\x0eannualized_pct\x18\x05 \x01(\x01R\rannualizedPct\x12$\n" +
 	"\x0ehedged_cum_usd\x18\x06 \x01(\x01R\fhedgedCumUsd\x122\n" +
-	"\x15hedged_annualized_pct\x18\a \x01(\x01R\x13hedgedAnnualizedPct\"\x8b\x02\n" +
+	"\x15hedged_annualized_pct\x18\a \x01(\x01R\x13hedgedAnnualizedPct\x12\x1e\n" +
+	"\vmtd_net_usd\x18\b \x01(\x01R\tmtdNetUsd\x12&\n" +
+	"\x0fmtd_sample_days\x18\t \x01(\x05R\rmtdSampleDays\"\x8b\x02\n" +
 	"\rHedgeAccounts\x12\x1f\n" +
 	"\vtrx_balance\x18\x01 \x01(\x01R\n" +
 	"trxBalance\x12#\n" +
