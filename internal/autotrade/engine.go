@@ -133,6 +133,11 @@ type Config struct {
 	SwapArbComboLossLimit int
 	// SwapArbComboLossWindowDays 止损计数回看窗口天数（默认 30）。
 	SwapArbComboLossWindowDays int
+
+	// D-256-A S5：复活扳机告警阈值（settled-only，默认 2.2 bps/日 ≈ 年化 8.03%）。
+	// netSwapBps >= 此值 且 swapSrc=settled → 发 critical 告警提示复活评估。
+	// 0 = 关闭复活告警。不自动复活，只告警。
+	SwapArbRevivalBps float64
 }
 
 // Engine 自动交易引擎：三 loop → gate → 执行 → 自动平仓 → 策略淘汰（D-070/D-072）。
@@ -181,6 +186,10 @@ type Engine struct {
 	// 同 mt-health lastCritAlert 模式；内存，重启重置（实时告警语义，不持久化）。
 	marginAlertSent map[string]time.Time
 	marginAlertMu   sync.Mutex
+
+	// D-256-A S5：复活扳机告警 per-key 去重（ComboKey → 最近告警时间，1h 窗口）。
+	// 同 marginAlertSent 模式；内存，重启重置（实时告警语义，不持久化）。
+	revivalAlertSent map[string]time.Time
 
 	// D-256-A S1：non-settle venue bare 集合（lazy 构建一次，swapRateFor 入口 guard）。
 	// 条目来自 cfg.SwapNonSettleVenues（格式 "277842155:mt5"），剥离后缀存 bare "277842155"。

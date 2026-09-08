@@ -56,6 +56,9 @@ func (e *Engine) scanSwapArb(ctx context.Context, acc *comboAccumulator) {
 		ck := combo.Key(c.strategy, c.canonical, c.vLong, c.vShort)
 		// D-080 S4：全组合喂入 rollup 累积器（含冷却中/低于门槛——覆盖度完整）
 		acc.Record(ck, c.strategy, c.netSwapBps, time.Now())
+		// D-256-A S5：复活扳机告警——settled-only，netSwapBps >= 阈值 → critical 告警。
+		// 在 cooldown/loss 拦截之前，确保 disabled 策略仍被扫描评估（雷达有人值守）。
+		e.maybeRevivalAlert(ck, c.strategy, c.netSwapBps, c.swapSrc)
 		if closedAt, blocked := cooldownSet[ck]; blocked {
 			log.Printf("[autotrade] %s skip %s: reentry cooldown (closed %s ago)", c.strategy, ck, time.Since(closedAt).Round(time.Hour))
 			continue
@@ -90,6 +93,34 @@ func (e *Engine) swapArbComboLossCounts(ctx context.Context) map[string]int64 {
 		out[ck] += cnt
 	}
 	return out
+}
+
+// maybeRevivalAlert D-256-A S5：复活扳机告警（雷达有人值守）。
+// 条件：netSwapBps >= SwapArbRevivalBps 且 swapSrc == settled → critical 告警（不自动复活）。
+// 节流：in-memory map[comboKey]time.Time，1h/次（重启重置，实时告警语义）。
+// AlertSink nil 或 SwapArbRevivalBps <= 0 → no-op。
+// spec 源不告警（仅 settled 实测值触发复活评估）。
+func (e *Engine) maybeRevivalAlert(ck, strategy string, netSwapBps float64, swapSrc string) {
+	if e.AlertSink == nil || e.cfg.SwapArbRevivalBps <= 0 {
+		return
+	}
+	if swapSrc != swapSrcSettled {
+		return
+	}
+	if netSwapBps < e.cfg.SwapArbRevivalBps {
+		return
+	}
+	e.marginAlertMu.Lock()
+	defer e.marginAlertMu.Unlock()
+	now := time.Now()
+	if last, ok := e.revivalAlertSent[ck]; ok && now.Sub(last) < time.Hour {
+		return
+	}
+	e.revivalAlertSent[ck] = now
+	msg := fmt.Sprintf("[revival] %s %s: netSwap=%.4f bps >= %.2f (settled) — 复活评估触发，需业主/决策席复审",
+		strategy, ck, netSwapBps, e.cfg.SwapArbRevivalBps)
+	log.Printf("[autotrade] %s", msg)
+	e.AlertSink("critical", msg)
 }
 
 // swapArbCooldownSet 返回当前处于重入冷却期的 ComboKey 集合（B 修复）。
