@@ -30,10 +30,14 @@ type TxsCollector struct {
 	base         string
 	apiKey       string
 	rentalPayers map[string]bool // TRX_RENTAL_PAYERS env 解析集
+	// D-258 S2：能量租金率 floor 告警（ARB_TRX_ENERGY_RATE_FLOOR_PCT，默认 8.0；0=禁用）。
+	floorPct     float64
+	lastAlertDay string // 内存节流：上次告警 UTC 日期（YYYY-MM-DD），1 条/天
 }
 
 // NewTxsCollector 创建交易流采集器。rentalPayers 为付款方地址集（env 解析）。
-func NewTxsCollector(address string, store *pgstore.Store, base, apiKey string, rentalPayers []string) *TxsCollector {
+// floorPct=能量租金率 floor 告警阈值（0=禁用）。
+func NewTxsCollector(address string, store *pgstore.Store, base, apiKey string, rentalPayers []string, floorPct float64) *TxsCollector {
 	if base == "" {
 		base = DefaultBase
 	}
@@ -43,7 +47,7 @@ func NewTxsCollector(address string, store *pgstore.Store, base, apiKey string, 
 			set[a] = true
 		}
 	}
-	return &TxsCollector{address: address, store: store, base: base, apiKey: apiKey, rentalPayers: set}
+	return &TxsCollector{address: address, store: store, base: base, apiKey: apiKey, rentalPayers: set, floorPct: floorPct}
 }
 
 // Kind 返回采集器标识。
@@ -125,8 +129,63 @@ func (c *TxsCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	}
 	if fetched > 0 {
 		log.Printf("[trx] txs fetched %d new rows this poll", fetched)
+		c.maybeAlertEnergyRate(ctx)
 	}
 	return nil, nil
+}
+
+// maybeAlertEnergyRate D-258 S2：有新行时计算 7d 能量租金年化，低于 floor → warning 告警。
+// 节流 1 条/天（内存日期戳）；样本 <7d 或 floor=0 不评估。日志诚实：触发与未触发各一行。
+func (c *TxsCollector) maybeAlertEnergyRate(ctx context.Context) {
+	if c.floorPct <= 0 {
+		return // 禁用
+	}
+	now := time.Now().UTC()
+	from := now.AddDate(0, 0, -7)
+	rentalSun, err := c.store.SumTRXTxRentalByRange(ctx, from, now)
+	if err != nil {
+		log.Printf("[trx-yield] energy rate check skipped: sum range: %v", err)
+		return
+	}
+	firstTs, ok, err := c.store.FirstTRXTxRentalTsInRange(ctx, from, now)
+	if err != nil || !ok {
+		log.Printf("[trx-yield] energy rate check skipped: no rental data in 7d (sampleDays=0 floor=%.1f)", c.floorPct)
+		return
+	}
+	sampleDays := int(now.Sub(firstTs)/(24*time.Hour)) + 1
+	if sampleDays < 7 {
+		log.Printf("[trx-yield] energy rate check skipped: sampleDays=%d < 7 (floor=%.1f)", sampleDays, c.floorPct)
+		return
+	}
+	acct, err := c.store.LastTRXAccount(ctx)
+	if err != nil {
+		log.Printf("[trx-yield] energy rate check skipped: last account: %v", err)
+		return
+	}
+	if acct.EnergyDelegated == 0 {
+		log.Printf("[trx-yield] energy rate check skipped: energy_delegated=0 (floor=%.1f)", c.floorPct)
+		return
+	}
+	rentalTRX := float64(rentalSun) / 1e6
+	energyTRX := float64(acct.EnergyDelegated) / 1e6
+	apr := (rentalTRX / float64(sampleDays) * 365) / energyTRX * 100
+	if apr >= c.floorPct {
+		log.Printf("[trx-yield] energy rate ok: apr=%.2f%% floor=%.1f%% sampleDays=%d", apr, c.floorPct, sampleDays)
+		return
+	}
+	today := now.Format("2006-01-02")
+	if c.lastAlertDay == today {
+		log.Printf("[trx-yield] energy rate below floor but already alerted today: apr=%.2f%% floor=%.1f%%", apr, c.floorPct)
+		return
+	}
+	c.lastAlertDay = today
+	msg := fmt.Sprintf("[trx-yield] 能量租金率 %.2f%% < 阈值 %.1f%%（7d 实测，在押 %.0f TRX）——D-191 §9 触发复核",
+		apr, c.floorPct, energyTRX)
+	if err := c.store.InsertAlert(ctx, nil, "warn", msg); err != nil {
+		log.Printf("[trx-yield] alert insert failed: %v", err)
+		return
+	}
+	log.Printf("[trx-yield] energy rate below floor: apr=%.2f%% floor=%.1f%% sampleDays=%d → alert sent", apr, c.floorPct, sampleDays)
 }
 
 // ---------- WitnessCollector（24h） ----------

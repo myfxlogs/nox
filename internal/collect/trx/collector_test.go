@@ -144,7 +144,7 @@ func TestTxsCollector_Poll_Classify(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewTxsCollector(monitorAddr, st, srv.URL, "", []string{rentalPayer})
+	c := NewTxsCollector(monitorAddr, st, srv.URL, "", []string{rentalPayer}, 0)
 	if _, err := c.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
@@ -201,7 +201,7 @@ func TestTxsCollector_Poll_Pagination(t *testing.T) {
 	}))
 	defer srv2.Close()
 
-	c := NewTxsCollector(monitorAddr, st, srv2.URL, "", nil)
+	c := NewTxsCollector(monitorAddr, st, srv2.URL, "", nil, 0)
 	if _, err := c.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
@@ -226,7 +226,7 @@ func TestTxsCollector_Poll_Idempotent(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewTxsCollector(monitorAddr, st, srv.URL, "", nil)
+	c := NewTxsCollector(monitorAddr, st, srv.URL, "", nil, 0)
 	// 第一次 poll
 	if _, err := c.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll 1: %v", err)
@@ -277,7 +277,7 @@ func TestTxsCollector_Poll_R5GapBackfill(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewTxsCollector(monitorAddr, st, srv.URL, "", nil)
+	c := NewTxsCollector(monitorAddr, st, srv.URL, "", nil, 0)
 	if _, err := c.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
