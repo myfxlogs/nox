@@ -87,7 +87,7 @@ func TestHedgeStructurePlatformLabel(t *testing.T) {
 	if !ok {
 		t.Fatal("runtime.Caller failed")
 	}
-	path := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src", "components", "PositionsPageHedgeStructure.tsx")
+	path := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src", "components", "TrxHedgeCard.tsx")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read hedge structure component: %v", err)

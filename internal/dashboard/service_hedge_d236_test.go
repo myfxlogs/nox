@@ -30,7 +30,7 @@ func hedgeStructureSource(t *testing.T) string {
 	if !ok {
 		t.Fatal("runtime.Caller failed")
 	}
-	path := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src", "components", "PositionsPageHedgeStructure.tsx")
+	path := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src", "components", "TrxHedgeCard.tsx")
 	return readFile(t, path)
 }
 
@@ -133,7 +133,7 @@ func TestD236_AppCmcWatchProp(t *testing.T) {
 	if !ok {
 		t.Fatal("runtime.Caller failed")
 	}
-	for _, rel := range []string{"App.tsx", "components/PositionsPage.tsx", "components/PositionsPageHedgeStructure.tsx"} {
+	for _, rel := range []string{"App.tsx", "components/PositionsPage.tsx", "components/TrxHedgeCard.tsx"} {
 		path := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src", rel)
 		src := readFile(t, path)
 		if strings.Contains(src, "cmcWatch") {
@@ -258,10 +258,10 @@ func TestD236_LiveStateSingleAccessor(t *testing.T) {
 func TestD236_NoBrokerColumn(t *testing.T) {
 	src := hedgeStructureSource(t)
 	if strings.Contains(src, "broker 浮盈") {
-		t.Fatal("PositionsPageHedgeStructure.tsx 仍含 broker 浮盈 th（D-236 变更7 应删）")
+		t.Fatal("TrxHedgeCard.tsx 仍含 broker 浮盈 th（D-236 变更7 应删）")
 	}
 	if strings.Contains(src, "brokerUnrealised") {
-		t.Fatal("PositionsPageHedgeStructure.tsx 仍含 brokerUnrealised td（D-236 变更7 应删）")
+		t.Fatal("TrxHedgeCard.tsx 仍含 brokerUnrealised td（D-236 变更7 应删）")
 	}
 }
 
@@ -409,11 +409,11 @@ func TestD244_ComponentMigration(t *testing.T) {
 	_, testFile, _, _ := runtime.Caller(0)
 	dir := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src")
 	pos := readFile(t, filepath.Join(dir, "components", "PositionsPage.tsx"))
-	if strings.Contains(pos, "PositionsPageHedgeStructure") || strings.Contains(pos, "PositionsPageHedgeFlow") {
+	if strings.Contains(pos, "TrxHedgeCard") || strings.Contains(pos, "PositionsPageHedgeFlow") {
 		t.Errorf("PositionsPage 仍引用迁移组件（应全迁 TrxPage）")
 	}
 	trx := readFile(t, filepath.Join(dir, "components", "TrxPage.tsx"))
-	for _, comp := range []string{"PositionsPageHedgeStructure", "PositionsPageHedgeFlow"} {
+	for _, comp := range []string{"TrxHedgeCard", "PositionsPageHedgeFlow"} {
 		if !strings.Contains(trx, "<"+comp) {
 			t.Errorf("TrxPage 缺挂载 %s（变更12 两组件）", comp)
 		}
@@ -428,7 +428,7 @@ func TestD244_ComponentMigration(t *testing.T) {
 func TestD244_FormRelocated(t *testing.T) {
 	_, testFile, _, _ := runtime.Caller(0)
 	dir := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src")
-	hs := readFile(t, filepath.Join(dir, "components", "PositionsPageHedgeStructure.tsx"))
+	hs := readFile(t, filepath.Join(dir, "components", "TrxHedgeCard.tsx"))
 	if strings.Contains(hs, "addDailyIncome") {
 		t.Errorf("对冲卡仍含内嵌收益表单（应迁 PositionsPageDailyIncome）")
 	}
@@ -460,7 +460,7 @@ func TestD236_v14_TimeAwareAnnualization(t *testing.T) {
 // 断言⑭b：前端 carry 行年化空态「—」（annualized≤0 渲染 —，不渲染 0.00% 伪值）。
 func TestD236_v14_AnnualizedEmptyState(t *testing.T) {
 	_, testFile, _, _ := runtime.Caller(0)
-	path := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src", "components", "PositionsPageHedgeStructure.tsx")
+	path := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src", "components", "TrxHedgeCard.tsx")
 	src := readFile(t, path)
 	if !strings.Contains(src, `年化 —`) && !strings.Contains(src, `"—"}{{"`) {
 		if !strings.Contains(src, "annualizedPct > 0") {
@@ -550,7 +550,7 @@ func TestD236_v15_ProtoHedgedFields(t *testing.T) {
 // 断言⑮c：前端含「对冲后」行。
 func TestD236_v15_FrontendHedgedRow(t *testing.T) {
 	_, testFile, _, _ := runtime.Caller(0)
-	path := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src", "components", "PositionsPageHedgeStructure.tsx")
+	path := filepath.Join(filepath.Dir(testFile), "..", "..", "web", "src", "components", "TrxHedgeCard.tsx")
 	src := readFile(t, path)
 	if !strings.Contains(src, "对冲后") {
 		t.Errorf("carry 统计条缺「对冲后」分段行（变更15）")
