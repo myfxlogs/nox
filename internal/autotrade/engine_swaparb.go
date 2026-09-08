@@ -50,6 +50,8 @@ func (e *Engine) scanSwapArb(ctx context.Context, acc *comboAccumulator) {
 	}
 	// B：拉 CLOSED 持仓构建冷却集合（ComboKey → 最近 closed_at）
 	cooldownSet := e.swapArbCooldownSet(ctx)
+	// D-256-A S4：组合级止损计数（reason-aware）——按 ComboKey 归并 autotrade_logs 止损行。
+	comboLossCounts := e.swapArbComboLossCounts(ctx)
 	for _, c := range combos {
 		ck := combo.Key(c.strategy, c.canonical, c.vLong, c.vShort)
 		// D-080 S4：全组合喂入 rollup 累积器（含冷却中/低于门槛——覆盖度完整）
@@ -58,8 +60,36 @@ func (e *Engine) scanSwapArb(ctx context.Context, acc *comboAccumulator) {
 			log.Printf("[autotrade] %s skip %s: reentry cooldown (closed %s ago)", c.strategy, ck, time.Since(closedAt).Round(time.Hour))
 			continue
 		}
+		// D-256-A S4：组合级止损计数 ≥ limit → skip（reason-aware，排除人工/probe）。
+		if e.cfg.SwapArbComboLossLimit > 0 && comboLossCounts != nil {
+			if cnt, hit := comboLossCounts[ck]; hit && cnt >= int64(e.cfg.SwapArbComboLossLimit) {
+				log.Printf("[autotrade] %s skip %s: combo stop loss count %d >= %d (window %dd)", c.strategy, ck, cnt, e.cfg.SwapArbComboLossLimit, e.cfg.SwapArbComboLossWindowDays)
+				continue
+			}
+		}
 		e.trySwapArb(ctx, c.strategy, c.canonical, c.vLong, c.vShort, c.netSwapBps, c.basisBps, c.basisAvailable, c.swapSrc)
 	}
+}
+
+// swapArbComboLossCounts D-256-A S4：查 autotrade_logs 止损行按 ComboKey 归并计数。
+// 返回 map[ComboKey]count（oppID 经 combo.FromOppID 归一化）。
+// 查询失败 → nil（fail-open，不阻断扫描，同 cooldownSet 惯例）。
+// SwapArbComboLossLimit=0 或 SwapArbComboLossWindowDays<=0 → nil（关闭）。
+func (e *Engine) swapArbComboLossCounts(ctx context.Context) map[string]int64 {
+	if e.cfg.SwapArbComboLossLimit <= 0 || e.cfg.SwapArbComboLossWindowDays <= 0 {
+		return nil
+	}
+	oppCounts, err := e.store.CountComboStopLosses(ctx, e.cfg.SwapArbComboLossWindowDays)
+	if err != nil {
+		log.Printf("[autotrade] swapArbComboLossCounts: query failed (fail-open): %v", err)
+		return nil
+	}
+	out := make(map[string]int64)
+	for oppID, cnt := range oppCounts {
+		ck := combo.FromOppID(oppID)
+		out[ck] += cnt
+	}
+	return out
 }
 
 // swapArbCooldownSet 返回当前处于重入冷却期的 ComboKey 集合（B 修复）。

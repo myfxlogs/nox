@@ -127,6 +127,12 @@ type Config struct {
 	// D-256-A S1：non-settle venue 列表（格式 "277842155:mt5"，含 venueType 后缀）。
 	// swapRateFor 入口 guard：bare venue ∈ 集合 → 真值 0（实测不结算，非降级）。
 	SwapNonSettleVenues []string
+
+	// D-256-A S4：组合级止损计数（reason-aware，替代无差别 cooldown）。
+	// SwapArbComboLossLimit=0 → 关闭组合级止损拦截（向后兼容）。
+	SwapArbComboLossLimit int
+	// SwapArbComboLossWindowDays 止损计数回看窗口天数（默认 30）。
+	SwapArbComboLossWindowDays int
 }
 
 // Engine 自动交易引擎：三 loop → gate → 执行 → 自动平仓 → 策略淘汰（D-070/D-072）。
