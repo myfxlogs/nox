@@ -9,7 +9,11 @@ import (
 	"arb/internal/store/pgstore"
 )
 
-// runElimination D-154 S1/D-200/D-256-A S2：淘汰检查（从 SettleAt 提取）。
+// runElimination 淘汰检查（D-261 S5 从 SettleAt 拆出；R4 复原被裁的决策理由四行）。
+// D-154 S1：输入源从 strategy_stats 累计列改为 AggregateStrategyStats 实时聚合；
+// disabled flag 仍查 strategy_stats——启停载体不变。两调用点同源 P3。
+// D-200：聚合改 ByEnvironment，按持仓自身 p.Environment 过滤——每个 environment 独立淘汰判定。
+// D-256-A S2：family 非 nil 时改用族级聚合（CARRY/SWAPARB 合并样本，避免分桶样本量不足）。
 // 输入源从 strategy_stats 累计列改为 AggregateStrategyStats 实时聚合；
 // disabled flag 仍查 strategy_stats——启停载体不变。两调用点同源 P3。
 // D-200：聚合改 ByEnvironment，按持仓自身 p.Environment 过滤——每个 environment 独立淘汰判定。
