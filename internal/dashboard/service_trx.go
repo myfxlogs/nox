@@ -73,3 +73,40 @@ func (s *Service) RollupTrxDailyIncome(ctx context.Context, day time.Time) error
 	}
 	return nil
 }
+
+// TrxEnergyRentalAPR D-258 S1：trailing N 天能量租金年化收益率（纯计算+纯查询，零写入）。
+// 年化 = (rental_income 合计 TRX / sampleDays × 365) / 在押 TRX × 100。
+// 分母为零/样本 <N 天 → 返回 sampleDays 供调用方冷启动判断，aprPct=0 不猜。
+func (s *Service) TrxEnergyRentalAPR(ctx context.Context, days int) (aprPct float64, sampleDays int, err error) {
+	if days <= 0 {
+		days = 7
+	}
+	now := time.Now().UTC()
+	from := now.AddDate(0, 0, -days)
+	rentalSun, err := s.store.SumTRXTxRentalByRange(ctx, from, now)
+	if err != nil {
+		return 0, 0, fmt.Errorf("trx energy apr: %w", err)
+	}
+	firstTs, ok, err := s.store.FirstTRXTxRentalTsInRange(ctx, from, now)
+	if err != nil {
+		return 0, 0, fmt.Errorf("trx energy apr first ts: %w", err)
+	}
+	if !ok {
+		return 0, 0, nil // 无数据
+	}
+	sampleDays = int(now.Sub(firstTs)/(24*time.Hour)) + 1
+	if sampleDays < days {
+		return 0, sampleDays, nil // 冷启动：样本不足，不猜
+	}
+	acct, err := s.store.LastTRXAccount(ctx)
+	if err != nil {
+		return 0, sampleDays, fmt.Errorf("trx energy apr last account: %w", err)
+	}
+	if acct.EnergyDelegated == 0 {
+		return 0, sampleDays, nil // 分母为零
+	}
+	rentalTRX := float64(rentalSun) / 1e6
+	energyTRX := float64(acct.EnergyDelegated) / 1e6
+	aprPct = (rentalTRX / float64(sampleDays) * 365) / energyTRX * 100
+	return aprPct, sampleDays, nil
+}
