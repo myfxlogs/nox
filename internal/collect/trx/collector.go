@@ -178,13 +178,13 @@ func (c *TxsCollector) maybeAlertEnergyRate(ctx context.Context) {
 		log.Printf("[trx-yield] energy rate below floor but already alerted today: apr=%.2f%% floor=%.1f%%", apr, c.floorPct)
 		return
 	}
-	c.lastAlertDay = today
 	msg := fmt.Sprintf("[trx-yield] 能量租金率 %.2f%% < 阈值 %.1f%%（7d 实测，在押 %.0f TRX）——D-191 §9 触发复核",
 		apr, c.floorPct, energyTRX)
 	if err := c.store.InsertAlert(ctx, nil, "warn", msg); err != nil {
 		log.Printf("[trx-yield] alert insert failed: %v", err)
 		return
 	}
+	c.lastAlertDay = today // D-258 复审修正：成功后再置位——失败不消耗当日额度（可重试）
 	log.Printf("[trx-yield] energy rate below floor: apr=%.2f%% floor=%.1f%% sampleDays=%d → alert sent", apr, c.floorPct, sampleDays)
 }
 
