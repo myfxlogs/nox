@@ -1,42 +1,18 @@
 package dashboard
 
-// CN-FI D-247 P1 S4：候选池对比（服务端计算，D-043；层内排名事实序，N 逐行）。
-// 数学=collect/cnfi 的 LJJZ 口径（IntervalReturn/MaxDrawdown/DetectCaliberBreak 同一定义的消费侧）。
-// 日期一律 YYYY-MM-DD 字符串（字典序即时间序），不引入 time.Time 转换层。
+// CN-FI D-247 P1 S4 + D-259 P2 S3：候选池对比（服务端计算，D-043；层内排名事实序，N 逐行）。
+// 数学=collect/cnfi 的 LJJZ 口径（IntervalReturn/MaxDrawdown/SliceByDate/HasCaliberBreak 同一定义）。
+// passes_screen D-259：state 查询驱动（非硬编码 true）——基金未处于①underperf/②层 dd 破位 → true。
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"time"
 
 	"arb/internal/collect/cnfi"
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 )
-
-// cnfiSlice 返回 [fromS,toS] 窗口内的点（含端点日）。
-func cnfiSlice(pts []cnfi.LJJZPoint, fromS, toS string) []cnfi.LJJZPoint {
-	var out []cnfi.LJJZPoint
-	for _, p := range pts {
-		if p.Date >= fromS && p.Date <= toS {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
-// cnfiHasBreak R1：区间起点早于断点日且区间内含 ≥断点日的点 → 该区间跨断点=指标缺失。
-func cnfiHasBreak(pts []cnfi.LJJZPoint, fromS, toS string, breakDate time.Time) bool {
-	breakS := breakDate.Format("2006-01-02")
-	if fromS >= breakS {
-		return false // 区间起点已在断点之后=口径一致
-	}
-	for _, p := range pts {
-		if p.Date >= breakS {
-			return true
-		}
-	}
-	return false
-}
 
 // RankByReturnDesc 按收益率降序名次（并列=先到先得，稳定序；N=参与排名数）。
 type RankedItem struct {
@@ -58,11 +34,17 @@ func RankByReturnDesc[T any](items []T, ret func(i int) float64) []RankedItem {
 	return out
 }
 
-// buildCNFICompare D-247 S4：候选池对比（每层）。区间=7d/1m/3m/1y；跨断点/缺样本 → 指标缺失。
+// buildCNFICompare D-247 S4 + D-259 S3：候选池对比（每层）。区间=7d/1m/3m/1y；跨断点/缺样本 → 指标缺失。
+// passes_screen D-259：查询 cnfi_signal_state（7 天内 active=预警态）驱动，v1 恒 true 退役。
 func buildCNFICompare(ctx context.Context, s *Service, now time.Time) ([]*v1.CnfiLayerCompare, error) {
 	cands, err := s.store.ListCNFICandidates(ctx)
 	if err != nil {
 		return nil, err
+	}
+	// D-259 S3：passes_screen state 驱动（7 天内 active signal = 预警态）
+	activeSignals, err := s.store.CNFIActiveSignalKeys(ctx, 7)
+	if err != nil {
+		return nil, fmt.Errorf("cnfi compare: active signals: %w", err)
 	}
 	nowS := now.Format("2006-01-02")
 	windows := []struct {
@@ -86,16 +68,20 @@ func buildCNFICompare(ctx context.Context, s *Service, now time.Time) ([]*v1.Cnf
 		for _, r := range series {
 			pts = append(pts, cnfi.LJJZPoint{Date: r.Date, LJJZ: r.LJJZ})
 		}
-		fc := &v1.CnfiFundCompare{Code: cand.Code, Name: cand.Name, PassesScreen: true}
+		// D-259 S3：passes_screen = 未处于 ①underperf 或 ②所在层 dd 破位状态
+		underperfKey := fmt.Sprintf("fund_underperf_%s", cand.Code)
+		layerDDKey := fmt.Sprintf("layer_dd_%s", cand.Layer)
+		passes := !activeSignals[underperfKey] && !activeSignals[layerDDKey]
+		fc := &v1.CnfiFundCompare{Code: cand.Code, Name: cand.Name, PassesScreen: passes}
 		if cand.BreakDate != nil {
 			b := true
 			fc.IsBreak = &b
 		}
 		rets := map[string]*float64{}
 		for _, w := range windows {
-			slice := cnfiSlice(pts, w.from.Format("2006-01-02"), nowS)
+			slice := cnfi.SliceByDate(pts, w.from.Format("2006-01-02"), nowS)
 			// R1：跨断点区间 → 指标缺失（不做 −23% 毒值）
-			if cand.BreakDate != nil && cnfiHasBreak(slice, w.from.Format("2006-01-02"), nowS, *cand.BreakDate) {
+			if cand.BreakDate != nil && cnfi.HasCaliberBreak(slice, w.from.Format("2006-01-02"), nowS, *cand.BreakDate) {
 				continue
 			}
 			ret := cnfi.IntervalReturn(slice)
@@ -115,8 +101,8 @@ func buildCNFICompare(ctx context.Context, s *Service, now time.Time) ([]*v1.Cnf
 		if v, ok := rets["ret_1y"]; ok {
 			fc.Ret_1Y = v
 		}
-		ddSlice := cnfiSlice(pts, ddFrom.Format("2006-01-02"), nowS)
-		if cand.BreakDate == nil || !cnfiHasBreak(ddSlice, ddFrom.Format("2006-01-02"), nowS, *cand.BreakDate) {
+		ddSlice := cnfi.SliceByDate(pts, ddFrom.Format("2006-01-02"), nowS)
+		if cand.BreakDate == nil || !cnfi.HasCaliberBreak(ddSlice, ddFrom.Format("2006-01-02"), nowS, *cand.BreakDate) {
 			if dd := cnfi.MaxDrawdown(ddSlice); dd != nil {
 				fc.MaxDrawdown_3M = dd
 			}
