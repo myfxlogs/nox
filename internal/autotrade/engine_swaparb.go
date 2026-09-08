@@ -245,11 +245,19 @@ func (e *Engine) trySwapArb(ctx context.Context, strategy, canonical, venueLong,
 			// 此处补 SwapBpsDaily + AnnualPct 覆盖写全
 			swap := netSwapBps
 			annual := netSwapBps * 365 / 100
-			_ = e.store.UpdatePositionMeta(ctx, posID, strategy, pgstore.PositionMeta{
+			meta := pgstore.PositionMeta{
 				EntrySpreadBps: &spreadBps,
 				SwapBpsDaily:   &swap,
 				AnnualPct:      &annual,
-			})
+			}
+			// D-256-A S3：CARRY expected_net_bps 落值——ExpectedUsd CARRY 分支读 netBps（年化百分点），
+			// 不写则 expected_net_bps=0 → ExpectedUsd=0 → 结算恒 skip → verification 样本饿死。
+			// SWAPARB 不写 NetBps（ExpectedUsd SWAPARB 分支读 swapBpsDaily，不读 netBps）。
+			if strategy == "CARRY" {
+				netBps := annual
+				meta.NetBps = &netBps
+			}
+			_ = e.store.UpdatePositionMeta(ctx, posID, strategy, meta)
 			// D-180 S3：双腿成交后写 expected_entry_spread_bps（成交价口径基准，止损用）。
 			// = (buyActual − sellActual) / buyActual × 10000（BUY 成交=ask、SELL 成交=bid）。
 			// 口径：entry=成交价(含滑点) / current=报价口径(不含滑点) → PnL 保守(止损偏早=安全)。
