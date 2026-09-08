@@ -89,11 +89,14 @@ func (e *Engine) runStartupElimination(ctx context.Context) {
 			Disabled:    stat.Disabled,
 		})
 		if disable {
-			if err := e.store.DisableStrategy(ctx, s, reason); err != nil {
-				log.Printf("[autotrade] startup elimination disable %s: %v", s, err)
-			} else {
-				log.Printf("[autotrade] STARTUP ELIMINATION: %s disabled: %s", s, reason)
+			// D-256-A R1：族内全禁——禁用族内全部策略（CARRY/SWAPARB 同族），
+			// 避免复活场景下 CARRY 触发淘汰后 SWAPARB 存活至重启/自身结算。
+			for _, fam := range famStrategies {
+				if err := e.store.DisableStrategy(ctx, fam, reason); err != nil {
+					log.Printf("[autotrade] startup elimination disable %s: %v", fam, err)
+				}
 			}
+			log.Printf("[autotrade] STARTUP ELIMINATION: family=%v disabled: %s", famStrategies, reason)
 		}
 	}
 }

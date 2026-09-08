@@ -64,8 +64,10 @@ func (e *Engine) scanSwapArb(ctx context.Context, acc *comboAccumulator) {
 			continue
 		}
 		// D-256-A S4：组合级止损计数 ≥ limit → skip（reason-aware，排除人工/probe）。
+		// D-256-A R2：查表键剥策略前缀（与 swapArbComboLossCounts 归并键一致），跨标签保护。
 		if e.cfg.SwapArbComboLossLimit > 0 && comboLossCounts != nil {
-			if cnt, hit := comboLossCounts[ck]; hit && cnt >= int64(e.cfg.SwapArbComboLossLimit) {
+			lossKey := stripStrategyPrefix(ck)
+			if cnt, hit := comboLossCounts[lossKey]; hit && cnt >= int64(e.cfg.SwapArbComboLossLimit) {
 				log.Printf("[autotrade] %s skip %s: combo stop loss count %d >= %d (window %dd)", c.strategy, ck, cnt, e.cfg.SwapArbComboLossLimit, e.cfg.SwapArbComboLossWindowDays)
 				continue
 			}
@@ -90,9 +92,23 @@ func (e *Engine) swapArbComboLossCounts(ctx context.Context) map[string]int64 {
 	out := make(map[string]int64)
 	for oppID, cnt := range oppCounts {
 		ck := combo.FromOppID(oppID)
+		// D-256-A R2：剥策略前缀——combo.Key 含 strategy 前缀，CARRY/SWAPARB 标签漂移时
+		// 同配对的止损计数键不一致，跨标签循环保护失效。剥首段后键=canonical:venueBuy:venueSell。
+		ck = stripStrategyPrefix(ck)
 		out[ck] += cnt
 	}
 	return out
+}
+
+// stripStrategyPrefix D-256-A R2：剥 combo.Key 的策略前缀段。
+// combo.Key = strategy:canonical:venueBuy:venueSell → canonical:venueBuy:venueSell。
+// 无 ":" 的异常输入原样返回（同 combo.FromOppID 防御惯例）。
+func stripStrategyPrefix(ck string) string {
+	idx := strings.Index(ck, ":")
+	if idx < 0 {
+		return ck
+	}
+	return ck[idx+1:]
 }
 
 // maybeRevivalAlert D-256-A S5：复活扳机告警（雷达有人值守）。

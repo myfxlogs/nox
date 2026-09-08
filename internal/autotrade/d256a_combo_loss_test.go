@@ -49,3 +49,54 @@ func TestD256A_S4_WindowZeroDisabled(t *testing.T) {
 		t.Errorf("SwapArbComboLossWindowDays=0: got %v, want nil (disabled)", got)
 	}
 }
+
+// TestD256A_R2_StripStrategyPrefix stripStrategyPrefix 剥策略前缀。
+// combo.Key = strategy:canonical:venueBuy:venueSell → canonical:venueBuy:venueSell。
+func TestD256A_R2_StripStrategyPrefix(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"CARRY:AUDJPY:vA:mt5:vB:mt5", "AUDJPY:vA:mt5:vB:mt5"},
+		{"SWAPARB:USDJPY:vA:mt5:vB:mt5", "USDJPY:vA:mt5:vB:mt5"},
+		{"CROSS_VENUE:EURUSD:ic:mt5:pxb:mt5", "EURUSD:ic:mt5:pxb:mt5"},
+		{"noColon", "noColon"}, // 异常输入原样返回
+	}
+	for _, c := range cases {
+		got := stripStrategyPrefix(c.in)
+		if got != c.want {
+			t.Errorf("stripStrategyPrefix(%q)=%q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// TestD256A_R2_CrossLabelLossCountMerge D-256-A R2：CARRY 标签止损计数与 SWAPARB 标签
+// 同配对归并到同一键（剥策略前缀后），跨标签循环保护生效。
+func TestD256A_R2_CrossLabelLossCountMerge(t *testing.T) {
+	// 模拟 CountComboStopLosses 返回的 map[oppID]count
+	// CARRY 标签 2 次 + SWAPARB 标签 1 次，同配对 AUDJPY:vA:mt5:vB:mt5
+	oppCounts := map[string]int64{
+		"CARRY:AUDJPY:vA:mt5:vB:mt5":   2,
+		"SWAPARB:AUDJPY:vA:mt5:vB:mt5": 1,
+	}
+	wantKey := "AUDJPY:vA:mt5:vB:mt5"
+
+	// 归并逻辑（同 swapArbComboLossCounts，含 stripStrategyPrefix）
+	out := make(map[string]int64)
+	for oppID, cnt := range oppCounts {
+		ck := combo.FromOppID(oppID)
+		ck = stripStrategyPrefix(ck)
+		out[ck] += cnt
+	}
+
+	got := out[wantKey]
+	if got != 3 {
+		t.Errorf("R2 cross-label merge: key %s count=%d, want 3 (2 CARRY + 1 SWAPARB merged)", wantKey, got)
+	}
+	// 验证查表键不含策略前缀——CARRY 候选用 stripStrategyPrefix 后能命中
+	carryCk := stripStrategyPrefix("CARRY:AUDJPY:vA:mt5:vB:mt5")
+	if carryCk != wantKey {
+		t.Errorf("R2 lookup key: CARRY stripped=%q, want %q", carryCk, wantKey)
+	}
+	swaparbCk := stripStrategyPrefix("SWAPARB:AUDJPY:vA:mt5:vB:mt5")
+	if swaparbCk != wantKey {
+		t.Errorf("R2 lookup key: SWAPARB stripped=%q, want %q", swaparbCk, wantKey)
+	}
+}
