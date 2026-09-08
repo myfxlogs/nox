@@ -29,6 +29,7 @@ type fakeDeps struct {
 	aggStatByEnv     map[string]pgstore.AggregateStat // D-200：ByEnvironment 按 environment 返回不同 aggStat
 	aggStatByFamily  map[string]pgstore.AggregateStat // D-256-A S2：族级聚合按 strategies[0] 返回不同 aggStat
 	disableStrategy  string
+	disabledStrats   []string   // D-256-A R1：族内全禁——记录所有被禁用策略
 	cashflowsNet     float64    // D-127 P4 返修①：SumCashflowsNet 返回值
 	lastNetPnl       float64    // D-127 P4：捕获传给 UpdateStrategyStat 的 net 值
 	mu               sync.Mutex // 并发安全计数
@@ -120,7 +121,10 @@ func (f *fakeDeps) AggregateStrategyStatsByEnvironmentFamily(ctx context.Context
 }
 
 func (f *fakeDeps) DisableStrategy(ctx context.Context, strategy, reason string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.disableStrategy = strategy
+	f.disabledStrats = append(f.disabledStrats, strategy) // D-256-A R1：族内全禁记录
 	return nil
 }
 
@@ -791,8 +795,16 @@ func TestD256A_S2_FamilyAggregationUsed(t *testing.T) {
 	if err := Settle(context.Background(), d, 400, elimByAvg, family); err != nil {
 		t.Fatalf("Settle: %v", err)
 	}
-	if d.disableStrategy != "CARRY" {
-		t.Errorf("disableStrategy=%q, want CARRY (family agg triggered)", d.disableStrategy)
+	// D-256-A R1：族内全禁——CARRY 触发淘汰时 SWAPARB 也被禁用。
+	if len(d.disabledStrats) != 2 {
+		t.Fatalf("R1 family disable: want 2 disabled [CARRY SWAPARB], got %v", d.disabledStrats)
+	}
+	got := map[string]bool{}
+	for _, s := range d.disabledStrats {
+		got[s] = true
+	}
+	if !got["CARRY"] || !got["SWAPARB"] {
+		t.Errorf("R1 family disable: want [CARRY SWAPARB], got %v", d.disabledStrats)
 	}
 }
 

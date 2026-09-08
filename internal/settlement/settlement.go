@@ -290,11 +290,18 @@ func SettleAt(ctx context.Context, deps Deps, posID int64, elim Eliminator, fami
 		}
 		disable, reason := elim(agg.Total, winRate, agg.AvgPnl, agg.MedianPnl, stat.Disabled)
 		if disable {
-			if err := deps.DisableStrategy(ctx, p.Type, reason); err != nil {
-				log.Printf("[settlement] disable strategy %s: %v", p.Type, err)
-			} else {
-				log.Printf("[settlement] STRATEGY DISABLED type=%s: %s", p.Type, reason)
+			// D-256-A R1：族内全禁——family 非 nil 时禁用族内全部策略（CARRY/SWAPARB 同族），
+			// 避免复活场景下 CARRY 触发淘汰后 SWAPARB 存活至重启/自身结算（D-256 循环亏漏洞残留）。
+			famStrategies := []string{p.Type}
+			if family != nil {
+				famStrategies = family(p.Type)
 			}
+			for _, fam := range famStrategies {
+				if err := deps.DisableStrategy(ctx, fam, reason); err != nil {
+					log.Printf("[settlement] disable strategy %s: %v", fam, err)
+				}
+			}
+			log.Printf("[settlement] STRATEGY DISABLED family=%v: %s", famStrategies, reason)
 		}
 	}
 	return nil
