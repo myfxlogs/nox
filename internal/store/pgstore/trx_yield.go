@@ -46,3 +46,22 @@ func (s *Store) FirstTRXTxRentalTsInRange(ctx context.Context, from, to time.Tim
 	}
 	return ts, true, nil
 }
+
+// AvgTRXVoteAprByRange D-258 S3：返回 [from, to) 区间 fin_trx_vote_apr.current_rate 均值。
+// 空表/无匹配返回 false（冷启动不猜）。
+func (s *Store) AvgTRXVoteAprByRange(ctx context.Context, from, to time.Time) (float64, bool, error) {
+	from = from.UTC()
+	to = to.UTC()
+	var avg *float64
+	err := s.pool.QueryRow(ctx, `
+		SELECT AVG(current_rate) FROM fin_trx_vote_apr
+		WHERE fetched_at >= $1 AND fetched_at < $2
+	`, from, to).Scan(&avg)
+	if err != nil {
+		return 0, false, fmt.Errorf("avg trx vote apr by range: %w", err)
+	}
+	if avg == nil {
+		return 0, false, nil
+	}
+	return *avg, true, nil
+}
