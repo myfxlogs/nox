@@ -645,6 +645,8 @@ message HedgeCarry {
   double annualized_pct = 5;      // 年化 %（cum_usd / (qty×mid) × 365）
   double hedged_cum_usd = 6;        // D-236 变更15：对冲后累计（窗口=[hedgeStart,now]）
   double hedged_annualized_pct = 7; // D-236 变更15：对冲后年化（时间感知，days=max(1,now−hedgeStart)）
+  double mtd_net_usd = 8;        // D-260 S2：月至今净额 USD（月窗 energy×mid+voting×mid+interest）
+  int32 mtd_sample_days = 9;     // D-260 S2：月内 rollup 行数（0=月初冷启动，前端显示「—」）
 }
 
 message HedgeAccounts {

@@ -155,3 +155,27 @@ func (s *Store) FirstDailyIncomeDay(ctx context.Context) (*time.Time, error) {
 	err := s.pool.QueryRow(ctx, `SELECT MIN(day) FROM position_daily_income`).Scan(&day)
 	return day, err
 }
+
+// CountDailyIncomeByRange D-260 S2：月内 rollup 行数 [from,to]（mtd_sample_days 语义）。
+// from/to 为 nil = 不设界（全量）。空月 → 0（月初冷启动，前端显示「—」）。
+func (s *Store) CountDailyIncomeByRange(ctx context.Context, from, to *time.Time) (int, error) {
+	var fromStr, toStr *string
+	if from != nil {
+		v := from.UTC().Format("2006-01-02")
+		fromStr = &v
+	}
+	if to != nil {
+		v := to.UTC().Format("2006-01-02")
+		toStr = &v
+	}
+	var n int
+	err := s.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM position_daily_income
+		WHERE ($1::date IS NULL OR day >= $1::date)
+		  AND ($2::date IS NULL OR day <= $2::date)
+	`, fromStr, toStr).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("count daily income by range: %w", err)
+	}
+	return n, nil
+}
