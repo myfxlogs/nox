@@ -73,6 +73,33 @@ func DetectCaliberBreak(pts []LJJZPoint) *time.Time {
 	return earliest
 }
 
+// SliceByDate returns points within [fromS, toS] (inclusive; D-247 §4 端点取可得日).
+// Exported for cross-package reuse (dashboard service_cnfi_compare.go 消费同一定义).
+func SliceByDate(pts []LJJZPoint, fromS, toS string) []LJJZPoint {
+	var out []LJJZPoint
+	for _, p := range pts {
+		if p.Date >= fromS && p.Date <= toS {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// HasCaliberBreak checks if the slice spans a caliber break date (D-247 R1: 跨断点区间=缺失).
+// Exported for cross-package reuse.
+func HasCaliberBreak(pts []LJJZPoint, fromS, toS string, breakDate time.Time) bool {
+	breakS := breakDate.Format("2006-01-02")
+	if fromS >= breakS {
+		return false // 区间起点已在断点之后=口径一致
+	}
+	for _, p := range pts {
+		if p.Date >= breakS {
+			return true
+		}
+	}
+	return false
+}
+
 // BackfillCandidates D-247 S3：候选池净值历史回填（lsjz 分页翻史至源尽——≤800 条≈3 年，
 // 超集满足 R4 ≥320 条；每页礼貌间隔；逐基金回填后做断点检测并写 caliber_break_date）。
 // 幂等：Upsert ON CONFLICT 语义，重复跑无副作用。
