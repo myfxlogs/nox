@@ -148,6 +148,8 @@ type Service struct {
 	kickFn func(string)
 	// D-252：CMC 净值阈值告警状态机（nil=未接线→flushCMCWatch 不检查）。
 	cmcEquityAlert *cmcEquityAlertMachine
+	// D-258 S3：TRX 能量租金率 floor 告警阈值（ARB_TRX_ENERGY_RATE_FLOOR_PCT，默认 8.0；0=禁用）。
+	trxFloorPct float64
 }
 
 // FrontConfig 前端展示阈值（D-077 修复⑪B N7，后端 config 单一真相）。
