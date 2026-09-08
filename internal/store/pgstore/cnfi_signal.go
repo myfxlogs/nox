@@ -145,6 +145,21 @@ func (s *Store) CNFISignalStateValue(ctx context.Context, key string) (*float64,
 	return v, err
 }
 
+// CNFISignalStateAsOf returns the observed_as_of date string for a signal state key ("" if not found).
+// 用于 D-259 幂等判定：observed_as_of == today → 已评估，跳过。
+func (s *Store) CNFISignalStateAsOf(ctx context.Context, key string) (string, error) {
+	var asOf *string
+	err := s.pool.QueryRow(ctx,
+		`SELECT observed_as_of::text FROM cnfi_signal_state WHERE key=$1`, key).Scan(&asOf)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil || asOf == nil {
+		return "", err
+	}
+	return *asOf, nil
+}
+
 // CNFIActiveSignalKeys returns signal state keys with observed_as_of within the last `days` days.
 // 用于 passes_screen 判定（D-259 §3）：state 存在且近期=基金处于预警状态。
 func (s *Store) CNFIActiveSignalKeys(ctx context.Context, days int) (map[string]bool, error) {
