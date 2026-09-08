@@ -123,6 +123,10 @@ type Config struct {
 	// 双腿合计保证金 / min(equity) > 此值 → warn 告警。0 = 不启用。
 	// 杠杆不对称（两腿 leverage 差异显著）→ info 提示。
 	SwapArbMarginBudgetPct float64
+
+	// D-256-A S1：non-settle venue 列表（格式 "277842155:mt5"，含 venueType 后缀）。
+	// swapRateFor 入口 guard：bare venue ∈ 集合 → 真值 0（实测不结算，非降级）。
+	SwapNonSettleVenues []string
 }
 
 // Engine 自动交易引擎：三 loop → gate → 执行 → 自动平仓 → 策略淘汰（D-070/D-072）。
@@ -169,6 +173,11 @@ type Engine struct {
 	// 同 mt-health lastCritAlert 模式；内存，重启重置（实时告警语义，不持久化）。
 	marginAlertSent map[string]time.Time
 	marginAlertMu   sync.Mutex
+
+	// D-256-A S1：non-settle venue bare 集合（lazy 构建一次，swapRateFor 入口 guard）。
+	// 条目来自 cfg.SwapNonSettleVenues（格式 "277842155:mt5"），剥离后缀存 bare "277842155"。
+	nonSettleOnce sync.Once
+	nonSettleBare map[string]bool
 }
 
 // New 已提取至 engine_new.go（D-195-C1 拆分避免超 300 行）。

@@ -34,7 +34,13 @@ var settledWindow = 7 * 24 * time.Hour
 //
 // venue 为 bare venue（不含 :mt5 后缀）；side 为 "BUY"/"SELL"。
 // 折扣（SpecDiscount）不在此处应用——helper 返回原值，折扣由 S4 门禁按 source 判定后乘。
+// D-256-A S1：non-settle venue（实测不执行 swap 结算）→ 真值 0，source=settled（已知确定行为，
+// 使净额不被 spec 折扣；IC×Exness 净额 1.21→~1.4 厚度门禁更易过）。
 func (e *Engine) swapRateFor(ctx context.Context, venue, symbol, side string) (float64, string) {
+	// D-256-A S1：non-settle venue guard——实测不结算=真值 0（非降级）。
+	if e.isNonSettleBareVenue(venue) {
+		return 0, swapSrcSettled
+	}
 	kind := fact.KindSwapSettledLong
 	if side != "BUY" {
 		kind = fact.KindSwapSettledShort
@@ -170,4 +176,28 @@ func swapSrcFromVenueKey(venueKey string) string {
 		return venueKey[:idx]
 	}
 	return venueKey
+}
+
+// nonSettleBareVenues D-256-A S1：lazy 构建 non-settle venue 的 bare 集合（sync.Once 一次）。
+// cfg.SwapNonSettleVenues 条目格式 "277842155:mt5" → 剥离后缀存 bare "277842155"。
+// 空/未配置 → nil map（isNonSettleBareVenue 返回 false，全放行）。
+func (e *Engine) nonSettleBareVenues() map[string]bool {
+	e.nonSettleOnce.Do(func() {
+		for _, v := range e.cfg.SwapNonSettleVenues {
+			bare := swapSrcFromVenueKey(v)
+			if bare != "" {
+				if e.nonSettleBare == nil {
+					e.nonSettleBare = make(map[string]bool)
+				}
+				e.nonSettleBare[bare] = true
+			}
+		}
+	})
+	return e.nonSettleBare
+}
+
+// isNonSettleBareVenue D-256-A S1：bare venue 是否在 non-settle 集合中。
+func (e *Engine) isNonSettleBareVenue(bareVenue string) bool {
+	m := e.nonSettleBareVenues()
+	return m[bareVenue]
 }
