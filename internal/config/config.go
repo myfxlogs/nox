@@ -1,4 +1,6 @@
-// Package config 集中管理全链路经济参数（D-035：禁止散落硬编码魔法数字）。全部 env 可覆盖（ARB_* 前缀），默认值单一出处；阈值初值取保守默认，由 D-034 统计复盘以真实成交数据校准。
+// Package config 集中管理全链路经济参数（D-035：禁止散落硬编码魔法数字）。
+// 全部 env 可覆盖（ARB_* 前缀），默认值单一出处；阈值初值取保守默认，
+// 由 D-034 统计复盘以真实成交数据校准。
 package config
 
 import (
@@ -34,7 +36,8 @@ type Config struct {
 
 	// === MT swap 采集（§3.6）===
 	SwapRefresh time.Duration // swap 轮询间隔（默认 1h，swap 变化慢）
-	// TradeModeTTL trade_mode Fact 新鲜度（D-060 F4/F5 共用）：超期视为未知放行（broker 周末置 Disabled 不跨周末误杀周一；venue 服务端拒单是最终权威）。
+	// TradeModeTTL trade_mode Fact 新鲜度（D-060 F4/F5 共用）：超期视为未知放行
+	//（broker 周末置 Disabled 不跨周末误杀周一；venue 服务端拒单是最终权威）。
 	TradeModeTTL       time.Duration
 	MaxLegImbalancePct float64 // 卖腿名义不平衡上限（百分比，D-028/D-060 实施修正②）
 
@@ -55,25 +58,42 @@ type Config struct {
 	FundingDropRatio float64
 
 	// === Swap 套利风控（S6/B）===
-	// SwapArbEquityUseRatio swap 套利名义额资金使用率系数（ARB_SWAPARB_EQUITY_USE_RATIO，缺省 0.5）。notional = min(equityLong, equityShort) × ratio；ratio=1 等价旧行为。
+	// SwapArbEquityUseRatio swap 套利名义额资金使用率系数（ARB_SWAPARB_EQUITY_USE_RATIO，缺省 0.5）。
+	// notional = min(equityLong, equityShort) × ratio；保留抗单余地（单腿裸露承受力）。
+	// ratio=1 等价旧行为（100% 资金使用率）；不限额=无绝对上限，ratio=单组合资金使用率。
 	SwapArbEquityUseRatio float64
-	// SwapArbBareCap swap 套利单腿裸露上限系数（ARB_SWAPARB_BARE_CAP，缺省 1.0）。D-097 R2：notional = minEq×ratio，若 > minEq×BareCap 则 cap 到 minEq×BareCap（只 cap 不 skip）。
+	// SwapArbBareCap swap 套利单腿裸露上限系数（ARB_SWAPARB_BARE_CAP，缺省 1.0）。
+	// D-097 R2：notional = minEq×ratio，若 > minEq×BareCap 则 cap 到 minEq×BareCap（只 cap 不 skip）。
+	// 语义=单腿名义≤BareCap 倍权益，防大权益+高 ratio 放大裸露。1.0=单腿名义≤1 倍权益。
 	SwapArbBareCap float64
-	// SwapArbReentryCooldownDays 组合平仓后重入冷却天数（ARB_SWAPARB_REENTRY_COOLDOWN_DAYS，缺省 7）。该 ComboKey 存在 CLOSED 持仓且 closed_at > now() − N 天 → 跳过。0 = 关闭冷却。
+	// SwapArbReentryCooldownDays 组合平仓后重入冷却天数（ARB_SWAPARB_REENTRY_COOLDOWN_DAYS，缺省 7）。
+	// 该 ComboKey 存在 CLOSED 持仓且 closed_at > now() − N 天 → 跳过（不尝试/不弹窗/不落 REJECTED 噪音）。
+	// 冷却外或无 CLOSED 记录 → 放行；0 = 关闭冷却（始终放行）。
 	SwapArbReentryCooldownDays int
-	// SwapArbVenueExposureCap 单 venue SWAPARB 合计裸露上限系数（ARB_SWAPARB_VENUE_EXPOSURE_CAP，缺省 2.0）。D-132 T1：新开仓时若任一腿 venue 现有 SWAPARB 活仓合计名义 + 新仓名义 > venue equity × cap → skip。0 = 不启用。
+	// SwapArbVenueExposureCap 单 venue SWAPARB 合计裸露上限系数（ARB_SWAPARB_VENUE_EXPOSURE_CAP，缺省 2.0）。
+	// D-132 T1：新开仓时若任一腿 venue 现有 SWAPARB 活仓合计名义 + 新仓名义 > venue equity × cap → skip。
+	// 语义=单 venue SWAPARB 裸露 ≤ cap 倍权益；注资后各档自动满足，组合数失控时硬顶。0 = 不启用。
 	SwapArbVenueExposureCap float64
-	// SwapArbMarginBudgetPct 组合保证金预算告警阈值（ARB_SWAPARB_MARGIN_BUDGET_PCT，缺省 0.8）——D-142 ④。双腿合计保证金 / min(equity) > 此值 → 观察版 warn 告警（只告警不拦截）。0 = 不启用。
+	// SwapArbMarginBudgetPct 组合保证金预算告警阈值（ARB_SWAPARB_MARGIN_BUDGET_PCT，缺省 0.8）——D-142 ④。
+	// 双腿合计保证金 / min(equity) > 此值 → 观察版 warn 告警（只告警不拦截）。
+	// 保证金 = notional × 1/leverage（账户级回落，品种级 InitMarginRate 网关不返回）。
+	// 0 = 不启用。无限杠杆（2e9）→ 保证金≈0，不告警。
 	SwapArbMarginBudgetPct float64
-	// D-181 S2：probe 探测仓——无实测腿的首仓自动成为 probe，到期评估升级/拒绝。ProbeEnabled=false → 不标记不评估（向后兼容，默认 false）。
+	// D-181 S2：probe 探测仓——无实测腿的首仓自动成为 probe，到期评估升级/拒绝。
+	// ProbeEnabled=false → 不标记不评估（向后兼容，默认 false）。
 	ProbeEnabled bool
 	// ProbeEvalDays probe 评估等待天数（ARB_PROBE_EVAL_DAYS，缺省 3 ≈ 2 结算日）。
 	ProbeEvalDays int
-	// PerpFundMinHold PERP_FUNDING 持有下限（ARB_PERPFUNDING_MIN_HOLD，缺省 8h）——D-133 T1。退出判定 floor：now − opened_at < MinHold → 不平仓。0 = 不限。
+	// PerpFundMinHold PERP_FUNDING 持有下限（ARB_PERPFUNDING_MIN_HOLD，缺省 8h）——D-133 T1。
+	// 退出判定 floor：now − opened_at < MinHold → 不平仓（至少活过一个结算窗，收益源先参与）。
+	// 0 = 不限（近似旧行为但仍有 debounce）。
 	PerpFundMinHold time.Duration
-	// PerpFundExitDebounce PERP_FUNDING 退出连续去抖次数（ARB_PERPFUNDING_EXIT_DEBOUNCE，缺省 3）——D-133 T1。净 funding ≤ 阈值需连续 N 次读数成立才平；任一次回正 → 计数清零。0/1 = 单次即平。
+	// PerpFundExitDebounce PERP_FUNDING 退出连续去抖次数（ARB_PERPFUNDING_EXIT_DEBOUNCE，缺省 3）——D-133 T1。
+	// 净 funding ≤ 阈值需连续 N 次读数成立才平；任一次回正 → 计数清零。0 或 1 = 单次即平（近似旧行为）。
 	PerpFundExitDebounce int
-	// FundingMaxBreakevenDays 息差型回本周期上门（ARB_FUNDING_MAX_BREAKEVEN_DAYS，缺省 1.0）——D-133 T2。breakevenDays > 此值 → NetBps 置负，使下游 funding_min% 过滤自然淘汰。0 = 不启用。
+	// FundingMaxBreakevenDays 息差型回本周期上门（ARB_FUNDING_MAX_BREAKEVEN_DAYS，缺省 1.0）——D-133 T2。
+	// breakevenDays > 此值 → NetBps 置负，使下游 funding_min% 过滤自然淘汰（不加新淘汰通道）。
+	// 0 = 不启用（回本门关闭）。
 	FundingMaxBreakevenDays float64
 
 	// === 机会站内推送（D-050；修复⑭ S3 退役 minNotifyNetBps 发布门槛 → oppTopic 全量事件流）===
