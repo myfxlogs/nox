@@ -147,6 +147,44 @@ func TestSumTRXTxRentalByDay(t *testing.T) {
 	}
 }
 
+// TestSumTRXTxRentalByRange D-258 S1：区间汇总 rental_income。
+func TestSumTRXTxRentalByRange(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.pool.Exec(ctx, "TRUNCATE fin_trx_txs CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	cp := "TBtvnRBgrVE9zZWkWfPvDSiuo65es55555"
+	day := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	// 写 4 笔 rental：D 日 2 笔，D+1 日 1 笔，D+2 日 1 笔
+	for _, ts := range []time.Time{
+		day.Add(2 * time.Hour),  // D 日 02:00
+		day.Add(10 * time.Hour), // D 日 10:00
+		day.Add(30 * time.Hour), // D+1 日 06:00
+		day.Add(54 * time.Hour), // D+2 日 06:00
+	} {
+		if err := s.UpsertTRXTx(ctx, TRXTx{
+			TxID: "rr" + ts.Format("150405"), Ts: ts, Kind: "rental_income",
+			AmountSun: 3000000, Counterparty: &cp,
+		}); err != nil {
+			t.Fatalf("UpsertTRXTx: %v", err)
+		}
+	}
+	// [D, D+2) = D+D+1 = 3 笔 × 3000000 = 9000000
+	got, err := s.SumTRXTxRentalByRange(ctx, day, day.Add(48*time.Hour))
+	if err != nil {
+		t.Fatalf("SumTRXTxRentalByRange: %v", err)
+	}
+	if got != 9000000 {
+		t.Errorf("range [D,D+2) = %d, want 9000000", got)
+	}
+	// from >= to → 0
+	got, _ = s.SumTRXTxRentalByRange(ctx, day.Add(48*time.Hour), day)
+	if got != 0 {
+		t.Errorf("from>=to should return 0, got %d", got)
+	}
+}
+
 // TestAddDailyIncomeAutoF1Anchor F1 锚：auto 行→手工纠错→再 rollup 不回退（数值保持手工值）。
 func TestAddDailyIncomeAutoF1Anchor(t *testing.T) {
 	s := testStore(t)

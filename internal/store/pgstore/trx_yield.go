@@ -1,0 +1,48 @@
+// D-258 S1：能量租金率序列查询（区间和+区间最早 ts）。
+package pgstore
+
+import (
+	"context"
+	"fmt"
+	"time"
+)
+
+// SumTRXTxRentalByRange D-258 S1：返回 [from, to) 区间 rental_income 之和（amount_sun）。
+// 仿 SumCMCOvernightByRange 模式；from/to UTC 归一，from>=to 返回 0。
+func (s *Store) SumTRXTxRentalByRange(ctx context.Context, from, to time.Time) (int64, error) {
+	from = from.UTC()
+	to = to.UTC()
+	if !from.Before(to) {
+		return 0, nil
+	}
+	var sum int64
+	err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(amount_sun), 0)
+		FROM fin_trx_txs
+		WHERE kind = 'rental_income' AND ts >= $1 AND ts < $2
+	`, from, to).Scan(&sum)
+	if err != nil {
+		return 0, fmt.Errorf("sum trx rental by range: %w", err)
+	}
+	return sum, nil
+}
+
+// FirstTRXTxRentalTsInRange D-258 S1：返回 [from, to) 区间最早的 rental_income ts。
+// 空表/无匹配返回零值+false（供 TrxEnergyRentalAPR 判定实际样本天数）。
+func (s *Store) FirstTRXTxRentalTsInRange(ctx context.Context, from, to time.Time) (time.Time, bool, error) {
+	from = from.UTC()
+	to = to.UTC()
+	var ts time.Time
+	err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(MIN(ts), '0001-01-01T00:00:00Z'::timestamptz)
+		FROM fin_trx_txs
+		WHERE kind = 'rental_income' AND ts >= $1 AND ts < $2
+	`, from, to).Scan(&ts)
+	if err != nil {
+		return ts, false, fmt.Errorf("first trx rental ts in range: %w", err)
+	}
+	if ts.IsZero() {
+		return ts, false, nil
+	}
+	return ts, true, nil
+}
