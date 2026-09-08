@@ -9,8 +9,11 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"arb/internal/bus"
+	"arb/internal/combo"
+	"arb/internal/store/pgstore"
 )
 
 // legSpreadTooWide D-159 W4a R7：两腿 bid-ask spread 宽度门禁纯函数。
@@ -190,4 +193,108 @@ func legVenueBare(venue string) string {
 		return venue[:idx]
 	}
 	return venue
+}
+
+// --- D-261 S3：以下从 engine_swaparb.go 搬入（纯搬家：冷却集 + 止损计数 + 复活告警） ---
+
+// swapArbComboLossCounts D-256-A S4：查 autotrade_logs 止损行按 ComboKey 归并计数。
+// 返回 map[ComboKey]count（oppID 经 combo.FromOppID 归一化）。
+// 查询失败 → nil（fail-open，不阻断扫描，同 cooldownSet 惯例）。
+// SwapArbComboLossLimit=0 或 SwapArbComboLossWindowDays<=0 → nil（关闭）。
+func (e *Engine) swapArbComboLossCounts(ctx context.Context) map[string]int64 {
+	if e.cfg.SwapArbComboLossLimit <= 0 || e.cfg.SwapArbComboLossWindowDays <= 0 {
+		return nil
+	}
+	oppCounts, err := e.store.CountComboStopLosses(ctx, e.cfg.SwapArbComboLossWindowDays)
+	if err != nil {
+		log.Printf("[autotrade] swapArbComboLossCounts: query failed (fail-open): %v", err)
+		return nil
+	}
+	out := make(map[string]int64)
+	for oppID, cnt := range oppCounts {
+		ck := combo.FromOppID(oppID)
+		// D-256-A R2：剥策略前缀——combo.Key 含 strategy 前缀，CARRY/SWAPARB 标签漂移时
+		// 同配对的止损计数键不一致，跨标签循环保护失效。剥首段后键=canonical:venueBuy:venueSell。
+		ck = stripStrategyPrefix(ck)
+		out[ck] += cnt
+	}
+	return out
+}
+
+// stripStrategyPrefix D-256-A R2：剥 combo.Key 的策略前缀段。
+// combo.Key = strategy:canonical:venueBuy:venueSell → canonical:venueBuy:venueSell。
+// 无 ":" 的异常输入原样返回（同 combo.FromOppID 防御惯例）。
+func stripStrategyPrefix(ck string) string {
+	idx := strings.Index(ck, ":")
+	if idx < 0 {
+		return ck
+	}
+	return ck[idx+1:]
+}
+
+// maybeRevivalAlert D-256-A S5：复活扳机告警（雷达有人值守）。
+// 条件：netSwapBps >= SwapArbRevivalBps 且 swapSrc == settled → critical 告警（不自动复活）。
+// 节流：in-memory map[comboKey]time.Time，1h/次（重启重置，实时告警语义）。
+// AlertSink nil 或 SwapArbRevivalBps <= 0 → no-op。
+// spec 源不告警（仅 settled 实测值触发复活评估）。
+func (e *Engine) maybeRevivalAlert(ck, strategy string, netSwapBps float64, swapSrc string) {
+	if e.AlertSink == nil || e.cfg.SwapArbRevivalBps <= 0 {
+		return
+	}
+	if swapSrc != swapSrcSettled {
+		return
+	}
+	if netSwapBps < e.cfg.SwapArbRevivalBps {
+		return
+	}
+	e.marginAlertMu.Lock()
+	defer e.marginAlertMu.Unlock()
+	now := time.Now()
+	if last, ok := e.revivalAlertSent[ck]; ok && now.Sub(last) < time.Hour {
+		return
+	}
+	e.revivalAlertSent[ck] = now
+	msg := fmt.Sprintf("[revival] %s %s: netSwap=%.4f bps >= %.2f (settled) — 复活评估触发，需业主/决策席复审",
+		strategy, ck, netSwapBps, e.cfg.SwapArbRevivalBps)
+	log.Printf("[autotrade] %s", msg)
+	e.AlertSink("critical", msg)
+}
+
+// swapArbCooldownSet 返回当前处于重入冷却期的 ComboKey 集合（B 修复）。
+// 判定：CLOSED 持仓的 combo.FromOppID(oppID) ∈ 冷却期（closed_at > now() − ReentryCooldownDays 天）。
+// ReentryCooldownDays=0 → 关闭冷却（返回空集）；查询失败 → 空集（fail-open，不阻断扫描）。
+func (e *Engine) swapArbCooldownSet(ctx context.Context) map[string]time.Time {
+	if e.cfg.ReentryCooldownDays <= 0 {
+		return nil
+	}
+	closed, err := e.store.ListPositions(ctx, "CLOSED", 200, 0)
+	if err != nil {
+		log.Printf("[autotrade] swapArbCooldownSet: list closed positions: %v (fail-open)", err)
+		return nil
+	}
+	return buildCooldownSet(closed, e.cfg.ReentryCooldownDays, time.Now())
+}
+
+// buildCooldownSet 纯函数：从 CLOSED 持仓列表构建冷却 ComboKey 集合（B 修复，可单测）。
+// cutoff = now − cooldownDays 天；closed_at > cutoff 的持仓按 combo.FromOppID(oppID) 入集。
+func buildCooldownSet(closed []pgstore.Position, cooldownDays int, now time.Time) map[string]time.Time {
+	if cooldownDays <= 0 {
+		return nil
+	}
+	cutoff := now.AddDate(0, 0, -cooldownDays)
+	out := make(map[string]time.Time)
+	for _, p := range closed {
+		if p.ClosedAt == nil || p.OpportunityID == "" {
+			continue
+		}
+		if p.ClosedAt.Before(cutoff) {
+			continue // 冷却过期，放行
+		}
+		ck := combo.FromOppID(p.OpportunityID)
+		// 同 ComboKey 多次平仓取最近 closed_at
+		if prev, ok := out[ck]; !ok || p.ClosedAt.After(prev) {
+			out[ck] = *p.ClosedAt
+		}
+	}
+	return out
 }
