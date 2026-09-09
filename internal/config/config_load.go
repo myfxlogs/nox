@@ -3,6 +3,8 @@ package config
 // Load 从环境变量加载配置（D-261 S6 从 config.go 搬出，纯搬家）。
 
 import (
+	"os"
+
 	"time"
 )
 
@@ -87,6 +89,8 @@ func Load() *Config {
 		SwapArbComboLossWindowDays: envInt("ARB_SWAPARB_COMBO_LOSS_WINDOW_DAYS", 30),   // D-256-A S4
 		SwapArbRevivalBps:          envFloat("ARB_SWAPARB_REVIVAL_ALERT_BPS", 2.2),     // D-256-A S5
 		TrxEnergyRateFloorPct:      envFloat("ARB_TRX_ENERGY_RATE_FLOOR_PCT", 8.0),     // D-258 S2
+		FeishuAppID:                os.Getenv("ARB_FEISHU_APP_ID"),                     // D-264
+		FeishuAppSecret:            os.Getenv("ARB_FEISHU_APP_SECRET"),                 // D-264
 		FreezeGuard:                envDur("ARB_FREEZE_GUARD", 10*time.Minute),         // D-155 freeze guard 冻结腿预检窗口
 		Environment:                envStr("ARB_ENVIRONMENT", "demo"),                  // D-159 W1a I6：缺省 demo fail-safe
 		LiveTrade:                  envBool("ARB_LIVE_TRADE", false),                   // D-159 W6a S2：LIVE 人工开关默认 false

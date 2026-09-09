@@ -196,6 +196,9 @@ type Config struct {
 	// 0 = 关闭复活告警。不自动复活，只告警提示业主/决策席复审。
 	SwapArbRevivalBps float64
 
+	// D-264：飞书告警推送凭据（ARB_FEISHU_APP_ID/APP_SECRET，空=禁用）。
+	FeishuAppID     string
+	FeishuAppSecret string
 	// D-258 S2：TRX 能量租金率 floor 告警阈值（ARB_TRX_ENERGY_RATE_FLOOR_PCT，默认 8.0）。
 	// 7d 实测年化 < floor → warn 告警（D-191 §9 触发复核）；0=禁用。
 	TrxEnergyRateFloorPct float64

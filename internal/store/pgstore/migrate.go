@@ -72,6 +72,7 @@ var migrationFiles = []struct {
 	{74, migrations.CnfiActionsSQL},
 	{75, migrations.CnfiCandidatePoolSQL},
 	{76, migrations.TrxVoteAprTopSQL},
+	{77, migrations.FeishuPushTargetSQL}, // D-264 飞书告警推送目标
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
