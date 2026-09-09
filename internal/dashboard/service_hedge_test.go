@@ -328,10 +328,11 @@ func TestListHedgeFlow_RPC(t *testing.T) {
 	if err := s.UpsertTRXTx(ctx, pgstore.TRXTx{TxID: "t2", Ts: base.Add(2 * time.Minute), Kind: "vote_claim", AmountSun: 0}); err != nil {
 		t.Fatalf("UpsertTRXTx: %v", err)
 	}
-	// CMC 1 条 overnight + 1 条 SELL_TRADE→other
+	// CMC 1 条 overnight + 1 条 PAYMENTS_IN→deposit + 1 条 SELL_TRADE（R2：非资金流应被排除）
 	if err := s.UpsertCMCHistory(ctx, 1, []pgstore.CMCHistoryTx{
 		{AccountID: 1, TransactionID: "c1", TransactionType: "OVERNIGHT_SETTLEMENT", Amount: 1.6, TransactionTime: base.Add(time.Minute)},
-		{AccountID: 1, TransactionID: "c2", TransactionType: "SELL_TRADE", Amount: 100, TransactionTime: base.Add(3 * time.Minute)},
+		{AccountID: 1, TransactionID: "c2", TransactionType: "PAYMENTS_IN", Amount: 6000, TransactionTime: base.Add(3 * time.Minute)},
+		{AccountID: 1, TransactionID: "c3", TransactionType: "SELL_TRADE", Amount: 0, TransactionTime: base.Add(4 * time.Minute)},
 	}); err != nil {
 		t.Fatalf("UpsertCMCHistory: %v", err)
 	}
@@ -343,18 +344,23 @@ func TestListHedgeFlow_RPC(t *testing.T) {
 	}
 	txs := resp.Msg.Txs
 	if len(txs) != 4 {
-		t.Fatalf("txs len = %d, want 4", len(txs))
+		t.Fatalf("txs len = %d, want 4 (c3 SELL_TRADE 被 R2 排除)", len(txs))
 	}
-	// 倒序：c2(12:03) t2(12:02) c1(12:01) t1(12:00)
+	// 倒序：c2(12:03) t2(12:02) c1(12:01) t1(12:00)；c3(12:04) 被 R2 过滤不出现
 	wantOrder := []string{"c2", "t2", "c1", "t1"}
 	for i, w := range wantOrder {
 		if txs[i].TxId != w {
 			t.Errorf("txs[%d].tx_id = %q, want %q", i, txs[i].TxId, w)
 		}
 	}
-	// kind 归一：c2 SELL_TRADE→other，c1 OVERNIGHT→overnight
-	if txs[0].Kind != "other" {
-		t.Errorf("c2 kind = %q, want other (SELL_TRADE→other A5)", txs[0].Kind)
+	for _, tx := range txs {
+		if tx.TxId == "c3" {
+			t.Errorf("c3 SELL_TRADE 不应返回（R2：CFD 开平仓非资金流）")
+		}
+	}
+	// kind 归一：c2 PAYMENTS_IN→deposit，c1 OVERNIGHT→overnight
+	if txs[0].Kind != "deposit" {
+		t.Errorf("c2 kind = %q, want deposit (PAYMENTS_IN→deposit R2)", txs[0].Kind)
 	}
 	if txs[2].Kind != "overnight" {
 		t.Errorf("c1 kind = %q, want overnight", txs[2].Kind)
