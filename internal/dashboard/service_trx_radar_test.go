@@ -8,6 +8,10 @@ import (
 
 	"arb/internal/bus"
 	"arb/internal/store/pgstore"
+
+	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+
+	"connectrpc.com/connect"
 )
 
 // TestTrxEnergyRentalAPR_7d 7d trailing 年化精确断言。
@@ -133,5 +137,52 @@ func TestTrxEnergyRentalAPR_ZeroDenominator(t *testing.T) {
 	}
 	if apr != 0 {
 		t.Errorf("apr = %v, want 0 (zero denominator)", apr)
+	}
+}
+
+// TestGetTrxYieldRadar_Transition 9-9 过渡期护栏：7d 窗内 energy_delegated 变化>20% →
+// transition=true（B' 真实场景夹具 17,270→106,532）；稳定在押对照 → false。
+func TestGetTrxYieldRadar_Transition(t *testing.T) {
+	s := trxTestStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	// 7 天 rental 样本（主流程 sampleDays 门槛）
+	for i := 6; i >= 0; i-- {
+		ts := now.Add(-time.Duration(i) * 24 * time.Hour)
+		if err := s.UpsertTRXTx(ctx, pgstore.TRXTx{
+			TxID: "tr_" + ts.Format("20060102"), Ts: ts,
+			Kind: "rental_income", AmountSun: 5000000,
+		}); err != nil {
+			t.Fatalf("UpsertTRXTx: %v", err)
+		}
+	}
+	addr := "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555"
+	// case1：B' 场景——窗内两快照 17,270 → 106,532（6.2×）
+	if err := s.InsertTRXAccount(ctx, pgstore.TRXAccount{Address: addr, VotesTotal: 18070, EnergyDelegated: 17270000000, FetchedAt: now.Add(-6 * 24 * time.Hour)}); err != nil {
+		t.Fatalf("InsertTRXAccount old: %v", err)
+	}
+	if err := s.InsertTRXAccount(ctx, pgstore.TRXAccount{Address: addr, VotesTotal: 107332, EnergyDelegated: 106532000000, FetchedAt: now}); err != nil {
+		t.Fatalf("InsertTRXAccount new: %v", err)
+	}
+	svc := &Service{store: s, qbus: bus.New(), freshTTL: time.Minute, liqMMR: 0.005}
+	resp, err := svc.GetTrxYieldRadar(ctx, connect.NewRequest(&v1.GetTrxYieldRadarRequest{}))
+	if err != nil {
+		t.Fatalf("GetTrxYieldRadar: %v", err)
+	}
+	if !resp.Msg.Transition {
+		t.Errorf("case1 transition = false, want true（17,270→106,532 = 6.2× >20%%）")
+	}
+	// case2：稳定在押（单快照）→ false
+	s2 := trxTestStore(t)
+	if err := s2.InsertTRXAccount(ctx, pgstore.TRXAccount{Address: addr, VotesTotal: 107332, EnergyDelegated: 106532000000, FetchedAt: now}); err != nil {
+		t.Fatalf("InsertTRXAccount stable: %v", err)
+	}
+	svc2 := &Service{store: s2, qbus: bus.New(), freshTTL: time.Minute, liqMMR: 0.005}
+	resp2, err := svc2.GetTrxYieldRadar(ctx, connect.NewRequest(&v1.GetTrxYieldRadarRequest{}))
+	if err != nil {
+		t.Fatalf("GetTrxYieldRadar case2: %v", err)
+	}
+	if resp2.Msg.Transition {
+		t.Errorf("case2 transition = true, want false（稳定在押无变化）")
 	}
 }

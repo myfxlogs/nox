@@ -13693,6 +13693,7 @@ type GetTrxYieldRadarResponse struct {
 	SampleDays_7D  int32                  `protobuf:"varint,6,opt,name=sample_days_7d,json=sampleDays7d,proto3" json:"sample_days_7d,omitempty"`        // 7d 实际样本天数（冷启动 <7 时前端显示「样本不足」）
 	SampleDays_30D int32                  `protobuf:"varint,7,opt,name=sample_days_30d,json=sampleDays30d,proto3" json:"sample_days_30d,omitempty"`     // 30d 实际样本天数
 	UpdatedAt      *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`                    // 数据更新时间
+	Transition     bool                   `protobuf:"varint,9,opt,name=transition,proto3" json:"transition,omitempty"`                                  // 扩容过渡期（7d 窗内 energy_delegated 变化>20%）：读数=旧租金÷新在押，floor 判定无效（9-9 B' 教训）
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -13781,6 +13782,13 @@ func (x *GetTrxYieldRadarResponse) GetUpdatedAt() *timestamppb.Timestamp {
 		return x.UpdatedAt
 	}
 	return nil
+}
+
+func (x *GetTrxYieldRadarResponse) GetTransition() bool {
+	if x != nil {
+		return x.Transition
+	}
+	return false
 }
 
 var File_arb_dashboard_v1_dashboard_proto protoreflect.FileDescriptor
@@ -14858,7 +14866,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	" \x01(\tR\bunfrozen\x129\n" +
 	"\n" +
 	"fetched_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tfetchedAt\"\x19\n" +
-	"\x17GetTrxYieldRadarRequest\"\xdd\x02\n" +
+	"\x17GetTrxYieldRadarRequest\"\xfd\x02\n" +
 	"\x18GetTrxYieldRadarResponse\x12\"\n" +
 	"\renergy_apr_7d\x18\x01 \x01(\x01R\venergyApr7d\x12$\n" +
 	"\x0eenergy_apr_30d\x18\x02 \x01(\x01R\fenergyApr30d\x12(\n" +
@@ -14868,7 +14876,10 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x0esample_days_7d\x18\x06 \x01(\x05R\fsampleDays7d\x12&\n" +
 	"\x0fsample_days_30d\x18\a \x01(\x05R\rsampleDays30d\x129\n" +
 	"\n" +
-	"updated_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt*z\n" +
+	"updated_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x1e\n" +
+	"\n" +
+	"transition\x18\t \x01(\bR\n" +
+	"transition*z\n" +
 	"\vMatrixState\x12\x1c\n" +
 	"\x18MATRIX_STATE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15MATRIX_STATE_COMPLETE\x10\x01\x12\x18\n" +

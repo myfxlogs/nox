@@ -54,6 +54,10 @@ func (s *Service) GetTrxYieldRadar(ctx context.Context, req *connect.Request[v1.
 	if err == nil && !vote.FetchedAt.IsZero() {
 		updatedAt = vote.FetchedAt
 	}
+	// 9-9 过渡期护栏：7d 窗内 energy_delegated 变化>20% → 读数=旧租金÷新在押，floor 判定无效（B' 教训）
+	from7d := now.AddDate(0, 0, -7)
+	minE, maxE, err := s.store.EnergyDelegatedRangeInWindow(ctx, from7d, now)
+	transition := err == nil && minE > 0 && maxE > minE*12/10
 	return connect.NewResponse(&v1.GetTrxYieldRadarResponse{
 		EnergyApr_7D:   apr7d,
 		EnergyApr_30D:  apr30d,
@@ -63,5 +67,6 @@ func (s *Service) GetTrxYieldRadar(ctx context.Context, req *connect.Request[v1.
 		SampleDays_7D:  int32(sample7d),
 		SampleDays_30D: int32(sample30d),
 		UpdatedAt:      timestamppb.New(updatedAt),
+		Transition:     transition,
 	}), nil
 }
