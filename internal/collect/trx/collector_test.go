@@ -628,3 +628,32 @@ func TestAccountCollector_Poll_MultiSR_VotesTotalSum(t *testing.T) {
 		t.Errorf("SRAddress = %s, want TNeEwWHXLLUgEtfzTnYN8wtVenGxuMzZCE (票数最多者 6024)", *acc.SRAddress)
 	}
 }
+
+// TestClassifyTxStakeAmount 9-9：质押/解押合约资金量解析——frozen_balance/unfreeze_balance
+// → amount_sun（流水卡质押行显示「N TRX」而非「—」；生产锚=B' 质押 89,262 TRX 链上实证）。
+func TestClassifyTxStakeAmount(t *testing.T) {
+	freezeJSON := `{"block_timestamp":` + itoa(time.Now().UnixMilli()) + `,"txID":"st_amt_1","raw_data":{"contract":[{"type":"FreezeBalanceV2Contract","parameter":{"value":{"frozen_balance":89262000000}}}]}}`
+	var freezeTx txJSON
+	if err := json.Unmarshal([]byte(freezeJSON), &freezeTx); err != nil {
+		t.Fatalf("unmarshal freeze: %v", err)
+	}
+	got, ok := classifyTx(freezeTx, "TMonitor", map[string]bool{})
+	if !ok || got.Kind != "stake" {
+		t.Fatalf("freeze: ok=%v kind=%q, want stake", ok, got.Kind)
+	}
+	if got.AmountSun != 89262000000 {
+		t.Errorf("freeze amount_sun = %d, want 89262000000 (89,262 TRX)", got.AmountSun)
+	}
+	unfreezeJSON := `{"block_timestamp":` + itoa(time.Now().UnixMilli()) + `,"txID":"st_amt_2","raw_data":{"contract":[{"type":"UnfreezeBalanceV2Contract","parameter":{"value":{"unfreeze_balance":5000000}}}]}}`
+	var unfreezeTx txJSON
+	if err := json.Unmarshal([]byte(unfreezeJSON), &unfreezeTx); err != nil {
+		t.Fatalf("unmarshal unfreeze: %v", err)
+	}
+	got2, ok2 := classifyTx(unfreezeTx, "TMonitor", map[string]bool{})
+	if !ok2 || got2.Kind != "unstake" {
+		t.Fatalf("unfreeze: ok=%v kind=%q, want unstake", ok2, got2.Kind)
+	}
+	if got2.AmountSun != 5000000 {
+		t.Errorf("unfreeze amount_sun = %d, want 5000000", got2.AmountSun)
+	}
+}

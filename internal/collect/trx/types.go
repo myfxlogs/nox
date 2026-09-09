@@ -113,6 +113,34 @@ func (t txJSON) TransferAmount() int64 {
 	return v.Amount
 }
 
+// freezeValueJSON 质押类合约的 parameter.value（Freeze/StakeV2=frozen_balance；UnfreezeV2=unfreeze_balance）。
+type freezeValueJSON struct {
+	FrozenBalance  int64 `json:"frozen_balance"`
+	UnfreezeAmount int64 `json:"unfreeze_balance"`
+}
+
+// StakeAmount 返回质押类合约的资金量（sun）：Freeze/StakeV2 取 frozen_balance，
+// UnfreezeV2 取 unfreeze_balance；其他合约/解析失败=0（9-9：流水卡质押行金额显示用）。
+func (t txJSON) StakeAmount() int64 {
+	if len(t.RawData.Contract) == 0 {
+		return 0
+	}
+	ct := t.RawData.Contract[0].Type
+	if ct != "FreezeBalanceV2Contract" && ct != "StakeV2Contract" && ct != "UnfreezeBalanceV2Contract" {
+		return 0
+	}
+	var v freezeValueJSON
+	if err := json.Unmarshal(t.RawData.Contract[0].Parameter.Value, &v); err != nil {
+		return 0
+	}
+	switch ct {
+	case "UnfreezeBalanceV2Contract":
+		return v.UnfreezeAmount
+	default:
+		return v.FrozenBalance
+	}
+}
+
 // witnessResponseJSON 对应 listwitnesses 响应。
 type witnessResponseJSON struct {
 	Witnesses []witnessJSON `json:"witnesses"`
