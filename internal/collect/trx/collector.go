@@ -166,6 +166,12 @@ func (c *TxsCollector) maybeAlertEnergyRate(ctx context.Context) {
 		log.Printf("[trx-yield] energy rate check skipped: energy_delegated=0 (floor=%.1f)", c.floorPct)
 		return
 	}
+	// 9-9 过渡期护栏：7d 窗内 energy_delegated 变化>20% → 分母失真（旧租金÷新在押），floor 评估无效。
+	minE, maxE, err := c.store.EnergyDelegatedRangeInWindow(ctx, from, now)
+	if err == nil && minE > 0 && maxE > minE*12/10 {
+		log.Printf("[trx-yield] energy rate check skipped: transition window (delegated %.0f→%.0f TRX, >20%% change)", float64(minE)/1e6, float64(maxE)/1e6)
+		return
+	}
 	rentalTRX := float64(rentalSun) / 1e6
 	energyTRX := float64(acct.EnergyDelegated) / 1e6
 	apr := (rentalTRX / float64(sampleDays) * 365) / energyTRX * 100
@@ -178,7 +184,7 @@ func (c *TxsCollector) maybeAlertEnergyRate(ctx context.Context) {
 		log.Printf("[trx-yield] energy rate below floor but already alerted today: apr=%.2f%% floor=%.1f%%", apr, c.floorPct)
 		return
 	}
-	msg := fmt.Sprintf("[trx-yield] 能量租金率 %.2f%% < 阈值 %.1f%%（7d 实测，在押 %.0f TRX）——D-191 §9 触发复核",
+	msg := fmt.Sprintf("[trx-yield] 能量租金率 %.2f%% < 参考线 %.1f%%（7d 实测，在押 %.0f TRX）——真实收益率跌破线，需复核质押模式是否维持",
 		apr, c.floorPct, energyTRX)
 	if err := c.store.InsertAlert(ctx, nil, "warn", msg); err != nil {
 		log.Printf("[trx-yield] alert insert failed: %v", err)

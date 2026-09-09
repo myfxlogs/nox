@@ -1501,4 +1501,5 @@ message GetTrxYieldRadarResponse {
   int32 sample_days_7d = 6;     // 7d 实际样本天数（冷启动 <7 时前端显示「样本不足」）
   int32 sample_days_30d = 7;   // 30d 实际样本天数
   google.protobuf.Timestamp updated_at = 8;  // 数据更新时间
+  bool transition = 9;  // 扩容过渡期（7d 窗内 energy_delegated 变化>20%）：读数=旧租金÷新在押，floor 判定无效（9-9 B' 教训）
 }

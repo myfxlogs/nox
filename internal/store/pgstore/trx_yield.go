@@ -65,3 +65,24 @@ func (s *Store) AvgTRXVoteAprByRange(ctx context.Context, from, to time.Time) (f
 	}
 	return *avg, true, nil
 }
+
+// EnergyDelegatedRangeInWindow 9-9 过渡期护栏：[from,to) 窗内 fin_trx_account 快照的
+// energy_delegated min/max。max>min×1.2（min>0）=扩容/减仓过渡期——7d 窗读数分母失真，
+// collector 跳过 floor 评估、雷达 RPC 置 transition 供前端灰显（D-258 尾巴，B' 教训）。
+func (s *Store) EnergyDelegatedRangeInWindow(ctx context.Context, from, to time.Time) (int64, int64, error) {
+	from = from.UTC()
+	to = to.UTC()
+	if !from.Before(to) {
+		return 0, 0, nil
+	}
+	var minE, maxE int64
+	err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(MIN(energy_delegated),0), COALESCE(MAX(energy_delegated),0)
+		FROM fin_trx_account
+		WHERE fetched_at >= $1 AND fetched_at < $2
+	`, from, to).Scan(&minE, &maxE)
+	if err != nil {
+		return 0, 0, fmt.Errorf("energy delegated range in window: %w", err)
+	}
+	return minE, maxE, nil
+}
