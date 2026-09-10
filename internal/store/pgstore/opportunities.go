@@ -196,6 +196,19 @@ func (s *Store) DeleteAlerts(ctx context.Context, ids []int64) (int64, error) {
 	return tag.RowsAffected(), nil
 }
 
+// AlertExistsByFragment 检查当日告警中是否已存在含 fragment 的行（D-265 事件盯梢去重）。
+// fragment = 公告唯一标识（NEWS_ID 或 URL），用于 LIKE 匹配。
+func (s *Store) AlertExistsByFragment(ctx context.Context, fragment string) (bool, error) {
+	var count int
+	err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM alerts WHERE message LIKE '%' || $1 || '%' AND ts >= CURRENT_DATE`,
+		fragment).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("alert exists check: %w", err)
+	}
+	return count > 0, nil
+}
+
 // ClearAckedAlerts 删除所有已确认告警（不管时间）。
 func (s *Store) ClearAckedAlerts(ctx context.Context) (int64, error) {
 	tag, err := s.pool.Exec(ctx, `DELETE FROM alerts WHERE acked = true`)
