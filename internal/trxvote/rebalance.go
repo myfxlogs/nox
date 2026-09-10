@@ -104,8 +104,14 @@ func Decide(input RebalanceInput) RebalanceDecision {
 		return candidates[i].RealTimeVotes < candidates[j].RealTimeVotes
 	})
 
-	// 3. 选 top N（clamp MinSRs..MaxSRs），等权分配
+	// 3. 选 top N（clamp MinSRs..MaxSRs，但不超过候选数），等权分配
 	n := clamp(len(candidates), input.Config.MinSRs, input.Config.MaxSRs)
+	if n > len(candidates) {
+		n = len(candidates) // 候选不足时用全部
+	}
+	if n <= 0 {
+		return RebalanceDecision{NeedRebalance: false, Reason: "no candidates"}
+	}
 	selected := candidates[:n]
 	votesPerSR := input.TotalTP / int64(n)
 
