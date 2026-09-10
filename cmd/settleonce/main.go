@@ -64,6 +64,9 @@ func (d *settleDeps) AggregateStrategyStatsByEnvironmentFamily(ctx context.Conte
 func (d *settleDeps) DisableStrategy(ctx context.Context, strategy, reason string) error {
 	return d.store.DisableStrategy(ctx, strategy, reason)
 }
+func (d *settleDeps) InsertAlert(ctx context.Context, ruleID *int64, level, message string) error {
+	return d.store.InsertAlert(ctx, ruleID, level, message)
+}
 func (d *settleDeps) InsertSettlement(ctx context.Context, r *pgstore.SettlementRow) (bool, error) {
 	return d.store.InsertSettlement(ctx, r)
 }
