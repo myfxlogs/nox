@@ -193,3 +193,6 @@ var CnfiRepoConfigSQL string
 
 //go:embed 0083_cex_scan.sql
 var CexScanSQL string
+
+//go:embed 0084_exchange_configs_unique_simulated.sql
+var ExchangeConfigsUniqueSimulatedSQL string

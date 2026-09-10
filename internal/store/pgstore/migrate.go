@@ -72,13 +72,14 @@ var migrationFiles = []struct {
 	{74, migrations.CnfiActionsSQL},
 	{75, migrations.CnfiCandidatePoolSQL},
 	{76, migrations.TrxVoteAprTopSQL},
-	{77, migrations.FeishuPushTargetSQL},    // D-264 飞书告警推送目标
-	{78, migrations.RepoRatesSQL},           // D-266 CNY 逆回购利率雷达
-	{79, migrations.TrxVoteRebalanceSQL},    // D-269 TRX 投票收益优化器
-	{80, migrations.CnfiRepoOpsSQL},         // D-270 逆回购周四操作闭环
-	{81, migrations.TrxAccountTronPowerSQL}, // D-211 返修：补 tron_power 列（质押量）
-	{82, migrations.CnfiRepoConfigSQL},      // D-270 R2 逆回购提醒配置 DB 化
-	{83, migrations.CexScanSQL},             // D-271 CEX 只读扫描器
+	{77, migrations.FeishuPushTargetSQL},               // D-264 飞书告警推送目标
+	{78, migrations.RepoRatesSQL},                      // D-266 CNY 逆回购利率雷达
+	{79, migrations.TrxVoteRebalanceSQL},               // D-269 TRX 投票收益优化器
+	{80, migrations.CnfiRepoOpsSQL},                    // D-270 逆回购周四操作闭环
+	{81, migrations.TrxAccountTronPowerSQL},            // D-211 返修：补 tron_power 列（质押量）
+	{82, migrations.CnfiRepoConfigSQL},                 // D-270 R2 逆回购提醒配置 DB 化
+	{83, migrations.CexScanSQL},                        // D-271 CEX 只读扫描器
+	{84, migrations.ExchangeConfigsUniqueSimulatedSQL}, // D-271 R1：exchange_configs 唯一约束加 simulated
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
