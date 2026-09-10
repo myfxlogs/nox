@@ -120,8 +120,14 @@ func Decide(input RebalanceInput) RebalanceDecision {
 	}
 
 	// 5. 与当前投票对比，判断是否需要改投
-	currentYield := calcYield(input.CurrentVotes, input.SRRanking)
-	targetYield := calcYield(target, input.SRRanking)
+	// calcYield 返回绝对收益量（sun/年），除以 TotalTP（质押 sun）×100 得年化百分比。
+	currentYieldAbs := calcYield(input.CurrentVotes, input.SRRanking)
+	targetYieldAbs := calcYield(target, input.SRRanking)
+	var currentYield, targetYield float64
+	if input.TotalTP > 0 {
+		currentYield = currentYieldAbs / float64(input.TotalTP) * 100
+		targetYield = targetYieldAbs / float64(input.TotalTP) * 100
+	}
 	var improvement float64
 	if currentYield > 0 {
 		improvement = (targetYield - currentYield) / currentYield * 100
