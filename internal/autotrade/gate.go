@@ -266,6 +266,9 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 		log.Printf("[autotrade] gate FAILED %s: %s", intent.DedupKey, logEntry.Reason)
 	} else {
 		log.Printf("[autotrade] gate EXECUTED %s posID=%d", intent.DedupKey, posID)
+		_ = g.store.InsertAlert(ctx, nil, "warn",
+			fmt.Sprintf("[机会执行] %s %s net=%.1fbps posID=%d",
+				intent.Strategy, intent.Canonical, intent.NetBps, posID))
 	}
 	return GateResult{Status: status, Reason: logEntry.Reason, PosID: posID}
 }
