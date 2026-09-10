@@ -96,8 +96,8 @@ func collectOKXWithBase(ctx context.Context, c *EarnCollector, base string) ([]p
 		Code string `json:"code"`
 		Msg  string `json:"msg"`
 		Data []struct {
-			Ccy     string `json:"ccy"`
-			EstRate string `json:"estRate"`
+			Ccy     string      `json:"ccy"`
+			EstRate json.Number `json:"estRate"`
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
@@ -109,9 +109,9 @@ func collectOKXWithBase(ctx context.Context, c *EarnCollector, base string) ([]p
 
 	var out []pgstore.CexEarnAPR
 	for _, d := range raw.Data {
-		rate, err := strconv.ParseFloat(d.EstRate, 64)
+		rate, err := d.EstRate.Float64()
 		if err != nil {
-			log.Printf("[cexscan] okx estRate parse %q: %v", d.EstRate, err)
+			log.Printf("[cexscan] okx estRate parse %q: %v", d.EstRate.String(), err)
 			continue
 		}
 		out = append(out, pgstore.CexEarnAPR{
@@ -152,17 +152,19 @@ func (c *EarnCollector) CollectBinance(ctx context.Context) ([]pgstore.CexEarnAP
 		return nil, fmt.Errorf("binance earn HTTP %d: %s", resp.StatusCode, string(body))
 	}
 
-	var rows []struct {
-		Asset                      string          `json:"asset"`
-		LatestAnnualPercentageRate string          `json:"latestAnnualPercentageRate"`
-		TierAnnualPercentageRate   json.RawMessage `json:"tierAnnualPercentageRate"`
+	var resp2 struct {
+		Rows []struct {
+			Asset                      string          `json:"asset"`
+			LatestAnnualPercentageRate string          `json:"latestAnnualPercentageRate"`
+			TierAnnualPercentageRate   json.RawMessage `json:"tierAnnualPercentageRate"`
+		} `json:"rows"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&resp2); err != nil {
 		return nil, fmt.Errorf("binance earn decode: %w", err)
 	}
 
 	var out []pgstore.CexEarnAPR
-	for _, r := range rows {
+	for _, r := range resp2.Rows {
 		rate, err := strconv.ParseFloat(r.LatestAnnualPercentageRate, 64)
 		if err != nil {
 			log.Printf("[cexscan] binance rate parse %q: %v", r.LatestAnnualPercentageRate, err)
