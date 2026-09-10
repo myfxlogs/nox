@@ -68,9 +68,13 @@ func (f *fakeTargetStore) UpsertFeishuTarget(_ context.Context, chatID, openID s
 	return nil
 }
 
+func (f *fakeTargetStore) FeishuTarget(_ context.Context) (chatID, openID string, err error) {
+	return f.chatID, f.openID, nil
+}
+
 func TestFeishuWebhookHandler(t *testing.T) {
 	store := &fakeTargetStore{}
-	h := FeishuWebhookHandler(store, "vt-ok")
+	h := FeishuWebhookHandler(store, "vt-ok", nil, nil)
 	// ① challenge 握手
 	req := httptest.NewRequest(http.MethodPost, "/webhook/feishu", strings.NewReader(`{"type":"url_verification","challenge":"ch-123"}`))
 	rec := httptest.NewRecorder()
