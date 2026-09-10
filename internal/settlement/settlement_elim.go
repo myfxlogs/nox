@@ -4,6 +4,7 @@ package settlement
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"arb/internal/store/pgstore"
@@ -60,5 +61,6 @@ func runElimination(ctx context.Context, deps Deps, p *pgstore.Position, elim El
 			}
 		}
 		log.Printf("[settlement] STRATEGY DISABLED family=%v: %s", famStrategies, reason)
+		_ = deps.InsertAlert(ctx, nil, "warn", fmt.Sprintf("[策略淘汰] %v: %s", famStrategies, reason))
 	}
 }

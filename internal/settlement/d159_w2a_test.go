@@ -32,6 +32,11 @@ func (f *failingDeps) UpdateStrategyStat(ctx context.Context, strategy string, r
 	return f.fakeDeps.UpdateStrategyStat(ctx, strategy, realizedPnl)
 }
 
+// D-268 告警点 4：结算时策略淘汰告警 stub（委托 fakeDeps）。
+func (f *failingDeps) InsertAlert(ctx context.Context, ruleID *int64, level, message string) error {
+	return f.fakeDeps.InsertAlert(ctx, ruleID, level, message)
+}
+
 // TestSettle_UpsertFails_ReturnsError A9：UpsertVerificationSample 失败 → Settle 返回 error（不只打日志）。
 func TestSettle_UpsertFails_ReturnsError(t *testing.T) {
 	now := time.Now()

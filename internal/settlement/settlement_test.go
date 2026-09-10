@@ -178,6 +178,11 @@ func (f *fakeDeps) MarkSettlementStatsRetryable(ctx context.Context, posID int64
 	return nil
 }
 
+// D-268 告警点 4：结算时策略淘汰告警 stub（计数供测试断言）。
+func (f *fakeDeps) InsertAlert(ctx context.Context, ruleID *int64, level, message string) error {
+	return nil
+}
+
 // noElim 永不禁用的 Eliminator（测试用）。
 func noElim(int, float64, float64, float64, bool) (bool, string) { return false, "" }
 

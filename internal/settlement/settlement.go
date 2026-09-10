@@ -40,6 +40,8 @@ type Deps interface {
 	AggregateStrategyStatsByEnvironmentFamily(ctx context.Context, strategies []string, environment string) (pgstore.AggregateStat, error)
 	// DisableStrategy 禁用策略（淘汰）。
 	DisableStrategy(ctx context.Context, strategy, reason string) error
+	// InsertAlert 写告警（D-268 告警点 4：结算时策略淘汰告警）。
+	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
 	// InsertSettlement 写 position_settlements（幂等 ON CONFLICT DO NOTHING，返修包②返回 won）。
 	InsertSettlement(ctx context.Context, s *pgstore.SettlementRow) (won bool, err error)
 	// HasSettlement 查 position_settlements 是否已有行（幂等短路）。
