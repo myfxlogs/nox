@@ -89,6 +89,12 @@ func Load() *Config {
 		SwapArbComboLossWindowDays: envInt("ARB_SWAPARB_COMBO_LOSS_WINDOW_DAYS", 30),   // D-256-A S4
 		SwapArbRevivalBps:          envFloat("ARB_SWAPARB_REVIVAL_ALERT_BPS", 2.2),     // D-256-A S5
 		TrxEnergyRateFloorPct:      envFloat("ARB_TRX_ENERGY_RATE_FLOOR_PCT", 8.0),     // D-258 S2
+		RepoSpikeWarnPct:           envFloat("ARB_REPO_SPIKE_WARN_PCT", 3.0),           // D-266 S5
+		RepoSpikeCriticalPct:       envFloat("ARB_REPO_SPIKE_CRITICAL_PCT", 5.0),       // D-266 S5
+		RepoCollectInterval:        envDur("ARB_REPO_COLLECT_INTERVAL", 5*time.Minute), // D-266 S5
+		RepoIdleCny:                envFloat("ARB_REPO_IDLE_CNY", 0),                   // D-270 S2（个人数据 .env gitignored）
+		RepoMinReturnCny:           envFloat("ARB_REPO_MIN_RETURN_CNY", 5.0),           // D-270 S2
+		RepoReminderHour:           envInt("ARB_REPO_REMINDER_HOUR", 10),               // D-270 S2
 		FeishuAppID:                os.Getenv("ARB_FEISHU_APP_ID"),                     // D-264
 		FeishuAppSecret:            os.Getenv("ARB_FEISHU_APP_SECRET"),                 // D-264
 		FreezeGuard:                envDur("ARB_FREEZE_GUARD", 10*time.Minute),         // D-155 freeze guard 冻结腿预检窗口

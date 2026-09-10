@@ -25,3 +25,11 @@ func (s *Store) FeishuChatID(ctx context.Context) (string, error) {
 	}
 	return chatID, nil
 }
+
+// FeishuTarget 读推送目标 chat_id+open_id（空=未绑定）。
+// D-270：确认流程需同时读 open_id 做发送者校验。
+func (s *Store) FeishuTarget(ctx context.Context) (chatID, openID string, err error) {
+	err = s.pool.QueryRow(ctx,
+		`SELECT chat_id, open_id FROM feishu_push_target WHERE id = 1`).Scan(&chatID, &openID)
+	return
+}

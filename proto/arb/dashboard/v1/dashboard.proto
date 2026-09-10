@@ -52,6 +52,8 @@ service DashboardService {
   // CN-FI 操作日志/投资笔记（D-242；金额=运行时个人数据，L2 人工）
   rpc AddCNFIAction(AddCNFIActionRequest) returns (AddCNFIActionResponse);
   rpc ListCNFIActions(ListCNFIActionsRequest) returns (ListCNFIActionsResponse);
+  // D-270：逆回购操作记录列表（周四操作闭环审计）
+  rpc ListRepoOps(ListRepoOpsRequest) returns (ListRepoOpsResponse);
   rpc ListPositions(ListPositionsRequest) returns (ListPositionsResponse);
 
   // Broker 实持仓（D-051 WP3：MT5/MT4 实际持仓统一视图，实时查不落库）
@@ -67,6 +69,7 @@ service DashboardService {
   rpc TrxVoteAprRefresh(TrxVoteAprRefreshRequest) returns (TrxVoteAprRefreshResponse);  // D-249 S3：on-open 触发采集（kick scheduler）【deprecated, use TrxAccountRefresh — D-254 双踢吸收 on-open 职责】
   rpc TrxAccountRefresh(TrxAccountRefreshRequest) returns (TrxAccountRefreshResponse);  // D-254：手动刷新按钮+on-open 双踢 trx_account+trx_apr，返回最新 fin_trx_account 全字段快照
   rpc GetTrxYieldRadar(GetTrxYieldRadarRequest) returns (GetTrxYieldRadarResponse);  // D-258 S3：收益率雷达（能量 7d/30d + 投票 APR + floor）
+  rpc GetRepoRateRadar(GetRepoRateRadarRequest) returns (GetRepoRateRadarResponse);  // D-266 S3：逆回购利率雷达（4 品种 + GC007 30d 均值 + OHLC + 窗口提醒）
   rpc AddDailyIncome(AddDailyIncomeRequest) returns (AddDailyIncomeResponse);
   rpc ListDailyIncome(ListDailyIncomeRequest) returns (ListDailyIncomeResponse);
 
@@ -1434,6 +1437,7 @@ message AddCNFIActionRequest {
   double amount_cny = 5;
   string rationale = 6;   // 投资笔记（buy/sell 必填，服务端校验）
   string action_date = 7;
+  optional double rate_pct = 8; // D-270：逆回购操作利率（liquidity 层专用，其他层可空）
 }
 
 message AddCNFIActionResponse {
@@ -1451,11 +1455,35 @@ message CnfiActionRow {
   string rationale = 7;
   string action_date = 8;
   string signal_snapshot = 9; // 行动时点信号快照（json 字符串）
+  optional double rate_pct = 10; // D-270：逆回购操作利率（liquidity 层专用）
 }
 
 message ListCNFIActionsRequest { int32 limit = 1; }
 
 message ListCNFIActionsResponse { repeated CnfiActionRow actions = 1; }
+
+// D-270：逆回购操作记录列表（周四操作闭环审计）。
+message ListRepoOpsRequest { int32 limit = 1; }
+
+message RepoOpRow {
+  int64 id = 1;
+  string opportunity_week = 2;
+  string instrument_code = 3;
+  string instrument_name = 4;
+  string status = 5;          // pending/operated/skipped
+  double trigger_rate_pct = 6;
+  double expected_return_cny = 7;
+  int32 holding_days = 8;
+  string signal_snapshot = 9;
+  int32 reminder_count = 10;
+  string skip_reason = 11;
+  double operation_amount_cny = 12;
+  double operation_rate_pct = 13;
+  string created_at = 14;
+  string updated_at = 15;
+}
+
+message ListRepoOpsResponse { repeated RepoOpRow ops = 1; }
 
 // D-249 S3：TRX 投票收益率 on-open 刷新（kick scheduler 补轮后返回最新行）。
 message TrxVoteAprRefreshRequest {}
@@ -1502,4 +1530,28 @@ message GetTrxYieldRadarResponse {
   int32 sample_days_30d = 7;   // 30d 实际样本天数
   google.protobuf.Timestamp updated_at = 8;  // 数据更新时间
   bool transition = 9;  // 扩容过渡期（7d 窗内 energy_delegated 变化>20%）：读数=旧租金÷新在押，floor 判定无效（9-9 B' 教训）
+}
+
+// D-266 S3：逆回购利率雷达——后端算好，前端零计算（D-043 前端零信任）。
+// 4 品种最新利率 + GC007 30d 均值基线 + GC007 当日 OHLC + 窗口提醒 + 更新时间。
+message GetRepoRateRadarRequest {}
+
+message GetRepoRateRadarResponse {
+  repeated RepoRateSnapshot rates = 1;       // 4 品种最新利率（GC001/GC007/GC014/GC028）
+  double gc007_30d_avg = 2;                   // GC007 30d 均值（基线）
+  double gc007_open = 3;                     // GC007 当日开盘
+  double gc007_close = 4;                    // GC007 当日收盘
+  double gc007_high = 5;                     // GC007 当日最高
+  double gc007_low = 6;                      // GC007 当日最低
+  bool window_alert = 7;                     // 窗口提醒（季末/年末/节前 3 交易日）
+  string window_label = 8;                   // 窗口标签（前端展示用）
+  google.protobuf.Timestamp updated_at = 9;  // 数据更新时间
+}
+
+// RepoRateSnapshot 是单个品种的最新利率快照。
+message RepoRateSnapshot {
+  string code = 1;      // "204001" / "204007" / "204014" / "204028"
+  string name = 2;      // "GC001" / "GC007" / ...
+  double rate_pct = 3;  // 年化利率%
+  optional double change_pct = 4; // 涨跌幅%（可空，缺失=—，真实零=0.00%）
 }

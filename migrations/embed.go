@@ -176,5 +176,11 @@ var TrxVoteAprTopSQL string
 //go:embed 0077_feishu_push_target.sql
 var FeishuPushTargetSQL string
 
+//go:embed 0078_repo_rates.sql
+var RepoRatesSQL string
+
 //go:embed 0079_trx_vote_rebalance.sql
 var TrxVoteRebalanceSQL string
+
+//go:embed 0080_cnfi_repo_ops.sql
+var CnfiRepoOpsSQL string
