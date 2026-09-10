@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -194,28 +195,27 @@ func TestFormatEDGAR(t *testing.T) {
 
 // --- 去重测试（mock store） ---
 
-type mockStore struct {
-	existingFragments map[string]bool
-	inserted          []string
+// fakeStore 实现 alertStore 接口，记录所有 InsertAlert 调用（R1 Poll 级测试用）。
+type fakeStore struct {
+	existingFragments map[string]bool // 已存在的 fragment（去重查命中=true）
+	inserted          []string        // 所有 InsertAlert 的 message
 }
 
-func (m *mockStore) AlertExistsByFragment(ctx context.Context, fragment string) (bool, error) {
-	return m.existingFragments[fragment], nil
+func newFakeStore() *fakeStore {
+	return &fakeStore{existingFragments: make(map[string]bool)}
 }
 
-func (m *mockStore) InsertAlert(ctx context.Context, ruleID *int64, level, message string) error {
-	for frag := range m.existingFragments {
-		if strings.Contains(message, frag) {
-			m.existingFragments[frag] = true
-			m.inserted = append(m.inserted, message)
-			return nil
-		}
-	}
-	// 新 fragment：取 message 中第一个 [事件] 行的标识作为 key
-	m.existingFragments[message] = true
-	m.inserted = append(m.inserted, message)
+func (f *fakeStore) AlertExistsByFragment(_ context.Context, fragment string) (bool, error) {
+	return f.existingFragments[fragment], nil
+}
+
+func (f *fakeStore) InsertAlert(_ context.Context, _ *int64, _, message string) error {
+	f.inserted = append(f.inserted, message)
 	return nil
 }
+
+// 旧 mockStore 保留供历史测试引用（签名与 fakeStore 相同）。
+type mockStore = fakeStore
 
 // --- 失效降级测试（mock server 返回 500） ---
 
@@ -270,5 +270,200 @@ func TestEDGARFeedXMLStructure(t *testing.T) {
 	// entry 内 link 标签的文本内容为空（href 是属性），所以 Link 字段为空
 	if feed.Entries[0].Link != "" {
 		t.Errorf("entry link text should be empty for href-only link, got %q", feed.Entries[0].Link)
+	}
+}
+
+// --- R1: Poll 级测试（mock fetch + fake store） ---
+
+// newTestCollector 构造可注入 mock fetch + fake store 的 Collector。
+func newTestCollector(store alertStore, hkexFn func(context.Context, *http.Client, string) ([]hkexItem, error), edgarFn func(context.Context, *http.Client, string) ([]edgarEntry, error)) *Collector {
+	return &Collector{
+		store:      store,
+		watchCodes: []string{"00626", "01788"},
+		hc:         &http.Client{},
+		hkexBase:   "http://test",
+		edgarURL:   "http://test",
+		hkexFetch:  hkexFn,
+		edgarFetch: edgarFn,
+	}
+}
+
+// R1①：2 条命中 → InsertAlert 2 次
+func TestPoll_TwoHits_TwoAlerts(t *testing.T) {
+	store := newFakeStore()
+	// 用非在跟代码（00700）避免在跟代码定向重复推送
+	hkexItems := []hkexItem{
+		{NewsID: "2001", StockCode: "00700", Title: "Voluntary Offer - Privatisation", FileLink: "/a/2001.pdf"},
+		{NewsID: "2002", StockCode: "00700", Title: "Scheme of Arrangement", FileLink: "/a/2002.pdf"},
+	}
+	c := newTestCollector(store,
+		func(_ context.Context, _ *http.Client, _ string) ([]hkexItem, error) { return hkexItems, nil },
+		func(_ context.Context, _ *http.Client, _ string) ([]edgarEntry, error) { return nil, nil },
+	)
+	c.Poll(context.Background())
+	// 2 条关键词命中（Voluntary Offer + Scheme of Arrangement）→ 2 次 InsertAlert
+	if len(store.inserted) != 2 {
+		t.Fatalf("expected 2 alerts, got %d: %v", len(store.inserted), store.inserted)
+	}
+	for _, msg := range store.inserted {
+		if !strings.HasPrefix(msg, "[事件]") {
+			t.Errorf("alert missing [事件] prefix: %q", msg)
+		}
+	}
+}
+
+// R1②：fragment 已存在 → 0 次跳过
+func TestPoll_FragmentExists_ZeroAlerts(t *testing.T) {
+	store := newFakeStore()
+	// 预置已存在 fragment
+	store.existingFragments["2001"] = true
+	store.existingFragments["2002"] = true
+	hkexItems := []hkexItem{
+		{NewsID: "2001", StockCode: "00626", Title: "Voluntary Offer", FileLink: "/a/2001.pdf"},
+		{NewsID: "2002", StockCode: "00700", Title: "Scheme of Arrangement", FileLink: "/a/2002.pdf"},
+	}
+	c := newTestCollector(store,
+		func(_ context.Context, _ *http.Client, _ string) ([]hkexItem, error) { return hkexItems, nil },
+		func(_ context.Context, _ *http.Client, _ string) ([]edgarEntry, error) { return nil, nil },
+	)
+	c.Poll(context.Background())
+	if len(store.inserted) != 0 {
+		t.Fatalf("expected 0 alerts (all fragments exist), got %d: %v", len(store.inserted), store.inserted)
+	}
+}
+
+// R1③：两源全失败累计 36 轮 → 第 36 轮通道 warn 恰 1 次后计数重置
+func TestPoll_AllFail_36Rounds_OneWarnThenReset(t *testing.T) {
+	store := newFakeStore()
+	failHkex := func(_ context.Context, _ *http.Client, _ string) ([]hkexItem, error) {
+		return nil, fmt.Errorf("hkex down")
+	}
+	failEdgar := func(_ context.Context, _ *http.Client, _ string) ([]edgarEntry, error) {
+		return nil, fmt.Errorf("edgar down")
+	}
+	c := newTestCollector(store, failHkex, failEdgar)
+	ctx := context.Background()
+	// 前 35 轮：全失败但不达阈值 → 0 条告警
+	for i := 0; i < 35; i++ {
+		c.Poll(ctx)
+	}
+	if len(store.inserted) != 0 {
+		t.Fatalf("after 35 fail rounds, expected 0 alerts, got %d", len(store.inserted))
+	}
+	if c.failStreak != 35 {
+		t.Errorf("after 35 rounds, failStreak=%d, want 35", c.failStreak)
+	}
+	// 第 36 轮：达到阈值 → 1 条通道 warn
+	c.Poll(ctx)
+	if len(store.inserted) != 1 {
+		t.Fatalf("after 36th fail round, expected 1 warn, got %d: %v", len(store.inserted), store.inserted)
+	}
+	if !strings.Contains(store.inserted[0], "全失败") {
+		t.Errorf("warn should mention 全失败: %q", store.inserted[0])
+	}
+	// 计数重置
+	if c.failStreak != 0 {
+		t.Errorf("after warn, failStreak should reset to 0, got %d", c.failStreak)
+	}
+	// 再 1 轮失败 → failStreak=1，无新告警
+	c.Poll(ctx)
+	if c.failStreak != 1 {
+		t.Errorf("after reset+1 fail, failStreak=%d, want 1", c.failStreak)
+	}
+	if len(store.inserted) != 1 {
+		t.Errorf("after reset+1 fail, expected still 1 alert, got %d", len(store.inserted))
+	}
+}
+
+// --- R2: 零结果降级测试 ---
+
+// R2①：36 tick 全零 → 第 36 轮 warn 1 次后重置
+func TestPoll_AllZero_36Ticks_OneWarnThenReset(t *testing.T) {
+	store := newFakeStore()
+	emptyHkex := func(_ context.Context, _ *http.Client, _ string) ([]hkexItem, error) {
+		return []hkexItem{}, nil // 成功但 0 条
+	}
+	emptyEdgar := func(_ context.Context, _ *http.Client, _ string) ([]edgarEntry, error) {
+		return []edgarEntry{}, nil // 成功但 0 条
+	}
+	c := newTestCollector(store, emptyHkex, emptyEdgar)
+	ctx := context.Background()
+	// 前 35 轮：全零但不达阈值 → 0 条告警
+	for i := 0; i < 35; i++ {
+		c.Poll(ctx)
+	}
+	if len(store.inserted) != 0 {
+		t.Fatalf("after 35 zero rounds, expected 0 alerts, got %d", len(store.inserted))
+	}
+	if c.zeroStreak != 35 {
+		t.Errorf("after 35 zero rounds, zeroStreak=%d, want 35", c.zeroStreak)
+	}
+	// 第 36 轮：达到阈值 → 1 条零结果 warn
+	c.Poll(ctx)
+	if len(store.inserted) != 1 {
+		t.Fatalf("after 36th zero round, expected 1 warn, got %d: %v", len(store.inserted), store.inserted)
+	}
+	if !strings.Contains(store.inserted[0], "零结果") {
+		t.Errorf("warn should mention 零结果: %q", store.inserted[0])
+	}
+	// 计数重置
+	if c.zeroStreak != 0 {
+		t.Errorf("after warn, zeroStreak should reset to 0, got %d", c.zeroStreak)
+	}
+}
+
+// R2②：任一源有结果 → zeroStreak 重置
+func TestPoll_AnyResult_ResetsZeroStreak(t *testing.T) {
+	store := newFakeStore()
+	// 前 3 轮全零
+	emptyHkex := func(_ context.Context, _ *http.Client, _ string) ([]hkexItem, error) {
+		return []hkexItem{}, nil
+	}
+	emptyEdgar := func(_ context.Context, _ *http.Client, _ string) ([]edgarEntry, error) {
+		return []edgarEntry{}, nil
+	}
+	c := newTestCollector(store, emptyHkex, emptyEdgar)
+	ctx := context.Background()
+	for i := 0; i < 3; i++ {
+		c.Poll(ctx)
+	}
+	if c.zeroStreak != 3 {
+		t.Fatalf("after 3 zero rounds, zeroStreak=%d, want 3", c.zeroStreak)
+	}
+	// 第 4 轮：HKEX 有结果（非关键词命中，不产生告警，但 hkexCount>0 → 重置 zeroStreak）
+	hkexWithItem := []hkexItem{
+		{NewsID: "9999", StockCode: "00700", Title: "Annual Report", FileLink: "/a/9999.pdf"},
+	}
+	c.hkexFetch = func(_ context.Context, _ *http.Client, _ string) ([]hkexItem, error) {
+		return hkexWithItem, nil
+	}
+	c.Poll(ctx)
+	if c.zeroStreak != 0 {
+		t.Errorf("after a source has results, zeroStreak should reset to 0, got %d", c.zeroStreak)
+	}
+	// 无告警产生（Annual Report 不命中关键词，00700 不在在跟代码）
+	if len(store.inserted) != 0 {
+		t.Errorf("expected 0 alerts for non-keyword non-watch item, got %d", len(store.inserted))
+	}
+}
+
+// R2③：一源失败一源零结果 → 不累加 zeroStreak（非"两源都成功"）
+func TestPoll_OneFailOneZero_NoZeroStreak(t *testing.T) {
+	store := newFakeStore()
+	failHkex := func(_ context.Context, _ *http.Client, _ string) ([]hkexItem, error) {
+		return nil, fmt.Errorf("hkex down")
+	}
+	emptyEdgar := func(_ context.Context, _ *http.Client, _ string) ([]edgarEntry, error) {
+		return []edgarEntry{}, nil
+	}
+	c := newTestCollector(store, failHkex, emptyEdgar)
+	ctx := context.Background()
+	c.Poll(ctx)
+	// 一源失败一源零结果 → 既不累加 failStreak（非两源全失败）也不累加 zeroStreak（非两源都成功）
+	if c.failStreak != 0 {
+		t.Errorf("one fail one zero: failStreak=%d, want 0 (not all failed)", c.failStreak)
+	}
+	if c.zeroStreak != 0 {
+		t.Errorf("one fail one zero: zeroStreak=%d, want 0 (not all succeeded)", c.zeroStreak)
 	}
 }

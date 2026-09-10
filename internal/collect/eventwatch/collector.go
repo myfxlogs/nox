@@ -19,6 +19,8 @@ const (
 	uaHeader = "ARBResearch admin@myfxlogs.org"
 	// 关键词过滤（大小写不敏感）：私有化/协议安排/要约/scheme/voluntary offer/privatisation
 	// 用于全量公告列表中筛选事件驱动信号。
+	// failStreak/zeroStreak 阈值：连续 3 天（≈36 个 2h tick）→ 推 warn（设计 §5）。
+	streakThreshold = 36
 )
 
 var keywords = []string{
@@ -27,15 +29,23 @@ var keywords = []string{
 	"going private", "takeover", "tender offer",
 }
 
-// Collector 采集事件驱动机会公告，命中 → InsertAlert(warn) → D-264 飞书推送。
+// alertStore 采集器所需的告警存储接口（解耦 *pgstore.Store，测试可注入 fake）。
+type alertStore interface {
+	AlertExistsByFragment(ctx context.Context, fragment string) (bool, error)
+	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
+}
+
+// Collector 采集事件驱动机会公告，命中新公告 → InsertAlert(warn) → D-264 飞书推送。
 type Collector struct {
-	store      *pgstore.Store
+	store      alertStore
 	watchCodes []string // 在跟代码（00626, 01788），全部公告不限关键词
 	hc         *http.Client
 	hkexBase   string
 	edgarURL   string
-	// 连续失败计数（in-memory，重启重置；连续 3 天=36 tick 全失败才推 warn）
+	// 连续全源失败计数（in-memory，重启重置；连续 3 天=36 tick 全失败才推 warn）
 	failStreak int
+	// 连续全源零结果计数（R2：设计 §5；两源都成功但 0 条→累加，任一有结果→重置）
+	zeroStreak int
 	// 可注入（测试用）
 	hkexFetch  func(ctx context.Context, hc *http.Client, base string) ([]hkexItem, error)
 	edgarFetch func(ctx context.Context, hc *http.Client, url string) ([]edgarEntry, error)
@@ -57,15 +67,18 @@ func NewCollector(store *pgstore.Store, watchCodes []string) *Collector {
 func (c *Collector) Kind() string { return "eventwatch" }
 
 // Poll 采集三源公告，命中新公告 → InsertAlert(warn)。不产 fact（直落 alerts 表）。
+// 失效追踪（设计 §5）：
+//   - failStreak：两源全失败 → 累加；任一成功 → 重置；连续 36 tick → warn 1 条后重置
+//   - zeroStreak（R2）：两源都成功但 0 条 → 累加；任一有结果 → 重置；连续 36 tick → warn 1 条后重置
 func (c *Collector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	var hkexCount, edgarCount, watchCount, pushed int
-	var firstErr error
+	var hkexFailed, edgarFailed bool
 
 	// ① HKEXnews 全量公告 → 关键词过滤
 	items, err := c.hkexFetch(ctx, c.hc, c.hkexBase)
 	if err != nil {
 		log.Printf("[eventwatch] hkex fetch: %v", err)
-		firstErr = err
+		hkexFailed = true
 	} else {
 		hkexCount = len(items)
 		for _, item := range items {
@@ -91,9 +104,7 @@ func (c *Collector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	entries, err := c.edgarFetch(ctx, c.hc, c.edgarURL)
 	if err != nil {
 		log.Printf("[eventwatch] edgar fetch: %v", err)
-		if firstErr == nil {
-			firstErr = err
-		}
+		edgarFailed = true
 	} else {
 		edgarCount = len(entries)
 		for _, e := range entries {
@@ -103,11 +114,10 @@ func (c *Collector) Poll(ctx context.Context) ([]fact.Fact, error) {
 		}
 	}
 
-	// 失效追踪：两源全失败 → 累加 failStreak；任一成功 → 重置
-	if firstErr != nil && len(items) == 0 && len(entries) == 0 {
+	// 失效追踪：failStreak（两源全失败 → 累加；任一成功 → 重置）
+	if hkexFailed && edgarFailed {
 		c.failStreak++
-		// 连续 3 天（≈36 个 2h tick）全失败 → 推 warn（通道可能死了）
-		if c.failStreak >= 36 {
+		if c.failStreak >= streakThreshold {
 			log.Printf("[eventwatch] 连续 %d 次全源失败，推送通道告警", c.failStreak)
 			_ = c.store.InsertAlert(ctx, nil, "warn",
 				"[事件] 事件盯梢通道异常：连续 3 天采集全失败，需人工检查 HKEXnews/EDGAR 端点")
@@ -115,6 +125,19 @@ func (c *Collector) Poll(ctx context.Context) ([]fact.Fact, error) {
 		}
 	} else {
 		c.failStreak = 0
+	}
+
+	// 零结果追踪（R2 设计 §5）：两源都成功但 0 条 → 累加；任一有结果 → 重置
+	if !hkexFailed && !edgarFailed && hkexCount == 0 && edgarCount == 0 {
+		c.zeroStreak++
+		if c.zeroStreak >= streakThreshold {
+			log.Printf("[eventwatch] 连续 %d 次全源零结果，推送通道告警", c.zeroStreak)
+			_ = c.store.InsertAlert(ctx, nil, "warn",
+				"[事件] 事件盯梢通道异常：连续 3 天采集零结果，页面结构可能变更")
+			c.zeroStreak = 0
+		}
+	} else if hkexCount > 0 || edgarCount > 0 {
+		c.zeroStreak = 0
 	}
 
 	log.Printf("[eventwatch] hkex=%d edgar=%d watch=%d pushed=%d", hkexCount, edgarCount, watchCount, pushed)
