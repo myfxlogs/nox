@@ -43,6 +43,15 @@ func (e *Engine) stateMachineTick(ctx context.Context) {
 			}
 		} else {
 			log.Printf("[autotrade] state %s → %s: %s", stateRow.State, next, reason)
+			if e.AlertSink != nil {
+				level := "warn"
+				label := "恢复"
+				if next != StateRunning {
+					level = "critical"
+					label = "降级"
+				}
+				e.AlertSink(level, fmt.Sprintf("[状态%s] %s → %s: %s", label, stateRow.State, next, reason))
+			}
 		}
 	}
 }
