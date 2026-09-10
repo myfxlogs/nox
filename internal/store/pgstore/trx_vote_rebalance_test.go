@@ -86,7 +86,7 @@ func TestTrxVoteRebalancedToday(t *testing.T) {
 	s := trxVoteRebalanceTestStore(t)
 	ctx := context.Background()
 	// 未插入 → false
-	if s.TrxVoteRebalancedToday(ctx) {
+	if s.TrxVoteRebalancedToday(ctx, 1) {
 		t.Error("empty: TrxVoteRebalancedToday = true, want false")
 	}
 	// 插入 1 条 pending → false（pending 不算已执行）
@@ -99,14 +99,14 @@ func TestTrxVoteRebalancedToday(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Insert pending: %v", err)
 	}
-	if s.TrxVoteRebalancedToday(ctx) {
+	if s.TrxVoteRebalancedToday(ctx, 1) {
 		t.Error("pending only: TrxVoteRebalancedToday = true, want false")
 	}
 	// UpdateTrxVoteRebalanceResult → status=executed → true
 	if err := s.UpdateTrxVoteRebalanceResult(ctx, id, "deadbeef", "executed"); err != nil {
 		t.Fatalf("UpdateTrxVoteRebalanceResult: %v", err)
 	}
-	if !s.TrxVoteRebalancedToday(ctx) {
+	if !s.TrxVoteRebalancedToday(ctx, 1) {
 		t.Error("after executed: TrxVoteRebalancedToday = false, want true")
 	}
 }
@@ -123,8 +123,42 @@ func TestTrxVoteRebalancedToday_NoExecution(t *testing.T) {
 	if _, err := s.InsertTrxVoteRebalance(ctx, rec); err != nil {
 		t.Fatalf("Insert skipped: %v", err)
 	}
-	if s.TrxVoteRebalancedToday(ctx) {
+	if s.TrxVoteRebalancedToday(ctx, 1) {
 		t.Error("skipped only: TrxVoteRebalancedToday = true, want false")
+	}
+}
+
+// TestTrxVoteRebalancedToday_MaxPerDay maxPerDay 参数：插入 2 条 executed，
+// maxPerDay=1 返回 true（达上限），maxPerDay=2 返回 false（未达上限）。
+func TestTrxVoteRebalancedToday_MaxPerDay(t *testing.T) {
+	s := trxVoteRebalanceTestStore(t)
+	ctx := context.Background()
+	// 插入 2 条 executed
+	for i := 0; i < 2; i++ {
+		rec := TRXVoteRebalance{
+			CurrentYield: 100.0, TargetYield: 120.0, ImprovementPct: 20.0,
+			NeedRebalance: true, Reason: "test", TargetVotes: []byte(`[]`),
+			Status: "pending",
+		}
+		id, err := s.InsertTrxVoteRebalance(ctx, rec)
+		if err != nil {
+			t.Fatalf("Insert %d: %v", i, err)
+		}
+		if err := s.UpdateTrxVoteRebalanceResult(ctx, id, "deadbeef", "executed"); err != nil {
+			t.Fatalf("Update %d: %v", i, err)
+		}
+	}
+	// maxPerDay=1 → count=2 >= 1 → true（达上限）
+	if !s.TrxVoteRebalancedToday(ctx, 1) {
+		t.Error("maxPerDay=1: TrxVoteRebalancedToday = false, want true (2 executed >= 1)")
+	}
+	// maxPerDay=2 → count=2 >= 2 → true（达上限）
+	if !s.TrxVoteRebalancedToday(ctx, 2) {
+		t.Error("maxPerDay=2: TrxVoteRebalancedToday = false, want true (2 executed >= 2)")
+	}
+	// maxPerDay=3 → count=2 < 3 → false（未达上限）
+	if s.TrxVoteRebalancedToday(ctx, 3) {
+		t.Error("maxPerDay=3: TrxVoteRebalancedToday = true, want false (2 executed < 3)")
 	}
 }
 

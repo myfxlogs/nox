@@ -4,6 +4,7 @@ package pgstore
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -52,16 +53,19 @@ func (s *Store) UpdateTrxVoteRebalanceResult(ctx context.Context, id int64, txHa
 	return nil
 }
 
-// TrxVoteRebalancedToday 查今日是否已有 status='executed' 的改投记录（每日上限 1 次，D-269 §4.3）。
-func (s *Store) TrxVoteRebalancedToday(ctx context.Context) bool {
-	var exists bool
+// TrxVoteRebalancedToday 查今日（业主时区 Asia/Shanghai）已执行改投次数是否达上限（D-269 §4.3 v1.2）。
+// v1.2：MaxRebalancePerDay 参数 + 业主时区（非 UTC CURRENT_DATE）+ 查询失败 log.Printf。
+func (s *Store) TrxVoteRebalancedToday(ctx context.Context, maxPerDay int) bool {
+	var count int
 	err := s.pool.QueryRow(ctx,
-		`SELECT EXISTS (SELECT 1 FROM fin_trx_vote_rebalance
-		 WHERE status = 'executed' AND decided_at::date = CURRENT_DATE)`).Scan(&exists)
+		`SELECT COUNT(*) FROM fin_trx_vote_rebalance
+		 WHERE status = 'executed'
+		 AND (decided_at AT TIME ZONE 'Asia/Shanghai')::date = (now() AT TIME ZONE 'Asia/Shanghai')::date`).Scan(&count)
 	if err != nil {
-		return false // 查询失败保守返回 false（不阻塞决策，但日志告警）
+		log.Printf("[trxvote] TrxVoteRebalancedToday query failed: %v", err)
+		return false // 查询失败保守返回 false（不阻塞决策），但有日志
 	}
-	return exists
+	return count >= maxPerDay
 }
 
 // GetLastTrxVoteRebalance 取最近一条决策记录（按 decided_at DESC LIMIT 1）。
