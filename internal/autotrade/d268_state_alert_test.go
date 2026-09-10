@@ -20,8 +20,10 @@ func setupStateTestStore(t *testing.T, state string, haltedOn *time.Time) *Engin
 		`TRUNCATE positions, position_legs, autotrade_state, strategy_stats, position_settlements CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
-	if err := s.SetAutotradeState(ctx, state, "test init", haltedOn); err != nil {
-		t.Fatalf("set autotrade state %s: %v", state, err)
+	if _, err := s.Pool().Exec(ctx,
+		`INSERT INTO autotrade_state (state, reason, halted_on) VALUES ($1, 'test init', $2)`,
+		state, haltedOn); err != nil {
+		t.Fatalf("insert autotrade state %s: %v", state, err)
 	}
 	return &Engine{
 		store:         s,
