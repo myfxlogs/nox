@@ -190,3 +190,6 @@ var TrxAccountTronPowerSQL string
 
 //go:embed 0082_cnfi_repo_config.sql
 var CnfiRepoConfigSQL string
+
+//go:embed 0083_cex_scan.sql
+var CexScanSQL string

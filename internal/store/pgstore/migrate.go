@@ -78,6 +78,7 @@ var migrationFiles = []struct {
 	{80, migrations.CnfiRepoOpsSQL},         // D-270 逆回购周四操作闭环
 	{81, migrations.TrxAccountTronPowerSQL}, // D-211 返修：补 tron_power 列（质押量）
 	{82, migrations.CnfiRepoConfigSQL},      // D-270 R2 逆回购提醒配置 DB 化
+	{83, migrations.CexScanSQL},             // D-271 CEX 只读扫描器
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

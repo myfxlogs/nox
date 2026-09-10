@@ -111,5 +111,19 @@ func Load() *Config {
 		TrxVoteYieldDropPct:   envFloat("ARB_TRX_VOTE_YIELD_DROP_PCT", 15.0), // 收益下降阈值 15%
 		TrxVoteBetterOppPct:   envFloat("ARB_TRX_VOTE_BETTER_OPP_PCT", 20.0), // 更优机会阈值 20%
 		TrxVoteMaxRebalPerDay: envInt("ARB_TRX_VOTE_MAX_REBAL_PER_DAY", 1),   // 每日最大改投 1 次
+		// === D-271 CEX 只读扫描器 ===
+		CexScanInterval:      envDur("ARB_CEX_SCAN_INTERVAL", 5*time.Minute),
+		CexScanSpreadBps:     envFloat("ARB_CEX_SCAN_SPREAD_BPS", 50),
+		CexScanEarnAprMin:    envFloat("ARB_CEX_SCAN_EARN_APR_MIN", 0.03),
+		CexScanFundingAprMin: envFloat("ARB_CEX_SCAN_FUNDING_APR_MIN", 10),
+		CexScanSymbols:       cexScanSymbolsDefault(),
 	}
+}
+
+// cexScanSymbolsDefault 读 ARB_CEX_SCAN_SYMBOLS，空则返回默认币种集（D-271）。
+func cexScanSymbolsDefault() []string {
+	if v := envStringSlice("ARB_CEX_SCAN_SYMBOLS"); v != nil {
+		return v
+	}
+	return []string{"BTC", "ETH", "TRX", "SOL", "USDT", "USDC"}
 }

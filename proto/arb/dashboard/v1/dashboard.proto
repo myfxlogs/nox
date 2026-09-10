@@ -142,6 +142,8 @@ service DashboardService {
   // D-270 R2：逆回购提醒配置 DB 化（前端可改免重启）
   rpc GetRepoConfig(GetRepoConfigRequest) returns (GetRepoConfigResponse);
   rpc SetRepoConfig(SetRepoConfigRequest) returns (SetRepoConfigResponse);
+  // D-271：CEX 只读扫描器快照（理财 APR + 跨所价差 + funding + 余额）
+  rpc GetCexScanSnapshot(GetCexScanSnapshotRequest) returns (GetCexScanSnapshotResponse);
 }
 
 // === Quote（§1.1）===
@@ -1575,3 +1577,46 @@ message SetRepoConfigRequest {
   bool enabled = 4;
 }
 message SetRepoConfigResponse { bool ok = 1; }
+
+// D-271：CEX 只读扫描器快照
+message GetCexScanSnapshotRequest {}
+message GetCexScanSnapshotResponse {
+  repeated CexEarnAPRRow earn_aprs = 1;
+  repeated CexSpreadRow spreads = 2;
+  repeated CexFundingRow fundings = 3;
+  repeated CexBalanceRow balances = 4;
+}
+
+message CexEarnAPRRow {
+  string venue = 1;
+  string ccy = 2;
+  string product_type = 3;
+  double apr = 4;         // 小数年化（0.035=3.5%）
+  optional string tier_apr = 5;
+  string ts = 6;          // RFC3339
+}
+
+message CexSpreadRow {
+  string symbol = 1;
+  string venue_buy = 2;
+  string venue_sell = 3;
+  double price_buy = 4;
+  double price_sell = 5;
+  double spread_bps = 6;
+  string ts = 7;
+}
+
+message CexFundingRow {
+  string venue = 1;
+  string symbol = 2;
+  double rate = 3;        // 小数年化
+  string ts = 4;
+}
+
+message CexBalanceRow {
+  string venue = 1;
+  string venue_type = 2;
+  double balance = 3;
+  double equity = 4;
+  double free_margin = 5;
+}
