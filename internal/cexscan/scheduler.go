@@ -66,18 +66,13 @@ func (s *Scanner) Run(ctx context.Context) {
 	}
 }
 
-// scanOnce 串行 ①ScanAccounts ②ScanFundingRates ③earn.Collect→InsertCexEarnAPR ④CalcSpreads→InsertCexSpread ⑤alert.Evaluate。
+// scanOnce 串行 ①ScanAccounts ②earn.Collect→InsertCexEarnAPR ③CalcSpreads→InsertCexSpread ④alert.Evaluate。
+// D-271 R3：funding 扫描已移除——现有 engine/evaluator 管线已覆盖 funding 机会分析。
 func (s *Scanner) scanOnce(ctx context.Context) error {
 	// ① 账户扫描（纯读缓存，不报错）
 	_ = ScanAccounts(s.accounts)
 
-	// ② Funding 扫描（读库）
-	fundings, err := ScanFundingRates(ctx, s.store)
-	if err != nil {
-		log.Printf("[cexscan] funding scan: %v", err)
-	}
-
-	// ③ 理财 APR 采集 → 入库
+	// ② 理财 APR 采集 → 入库
 	earnAPRs, err := s.earn.Collect(ctx)
 	if err != nil {
 		log.Printf("[cexscan] earn collect: %v", err)
@@ -89,7 +84,7 @@ func (s *Scanner) scanOnce(ctx context.Context) error {
 		}
 	}
 
-	// ④ 跨所价差 → 入库
+	// ③ 跨所价差 → 入库
 	spreads, err := CalcSpreads(ctx, s.client, s.bnAPIURL, s.symbols)
 	if err != nil {
 		log.Printf("[cexscan] calc spreads: %v", err)
@@ -109,8 +104,8 @@ func (s *Scanner) scanOnce(ctx context.Context) error {
 		}
 	}
 
-	// ⑤ 告警评估
-	if err := s.alert.Evaluate(ctx, earnAPRs, spreads, fundings); err != nil {
+	// ④ 告警评估
+	if err := s.alert.Evaluate(ctx, earnAPRs, spreads); err != nil {
 		return err
 	}
 	return nil

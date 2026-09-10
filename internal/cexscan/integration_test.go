@@ -161,23 +161,19 @@ func TestScanOnce_FullFlow(t *testing.T) {
 		}
 	}
 
-	// 告警评估（OKX APR 0.035 >= 0.03 → 告警；spread 10 < 50 → 不告警；funding 10.49 >= 10 → 告警）
-	fundings := []FundingEntry{
-		{Venue: "okx", Symbol: "BTCUSDT", Rate: 10.49},    // pct_annualized, >= 10 → 告警
-		{Venue: "binance", Symbol: "BTCUSDT", Rate: 9.25}, // < 10 → 不告警
-	}
-	if err := scanner.alert.Evaluate(ctx, allAPRs, spreads, fundings); err != nil {
+	// 告警评估（OKX APR 0.035 >= 0.03 → 告警；spread 10 < 50 → 不告警）
+	if err := scanner.alert.Evaluate(ctx, allAPRs, spreads); err != nil {
 		t.Fatalf("Evaluate: %v", err)
 	}
 
-	// 验证 alerts 表有 2 条（OKX 理财 APR >= 0.03 + okx funding 10.49 >= 10）
+	// 验证 alerts 表有 1 条（OKX 理财 APR >= 0.03）
 	var count int
 	err = s.Pool().QueryRow(ctx, "SELECT count(*) FROM alerts").Scan(&count)
 	if err != nil {
 		t.Fatalf("count alerts: %v", err)
 	}
-	if count != 2 {
-		t.Errorf("alerts count = %d, want 2 (OKX earn APR + okx funding)", count)
+	if count != 1 {
+		t.Errorf("alerts count = %d, want 1 (OKX earn APR)", count)
 	}
 
 	// 验证 DB 有理财 APR
@@ -223,7 +219,7 @@ func TestScanOnce_Dedup5Min(t *testing.T) {
 	earnAPRs := []pgstore.CexEarnAPR{{Venue: "okx", Ccy: "USDT", APR: 0.035}}
 
 	// 第一次 → 告警
-	if err := ev.Evaluate(ctx, earnAPRs, nil, nil); err != nil {
+	if err := ev.Evaluate(ctx, earnAPRs, nil); err != nil {
 		t.Fatalf("Evaluate 1: %v", err)
 	}
 	var count1 int
@@ -233,7 +229,7 @@ func TestScanOnce_Dedup5Min(t *testing.T) {
 	}
 
 	// 第二次（5 分钟内）→ 去重
-	if err := ev.Evaluate(ctx, earnAPRs, nil, nil); err != nil {
+	if err := ev.Evaluate(ctx, earnAPRs, nil); err != nil {
 		t.Fatalf("Evaluate 2: %v", err)
 	}
 	var count2 int

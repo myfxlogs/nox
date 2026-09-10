@@ -28,8 +28,11 @@ func NewAlertEvaluator(cfg *config.Config, store *pgstore.Store) *AlertEvaluator
 	}
 }
 
-// Evaluate 评估理财 APR + 跨所价差 + Funding，超阈值 → InsertAlert("warn", ...)。
-func (e *AlertEvaluator) Evaluate(ctx context.Context, earnAPRs []pgstore.CexEarnAPR, spreads []SpreadResult, fundings []FundingEntry) error {
+// Evaluate 评估理财 APR + 跨所价差，超阈值 → InsertAlert("warn", ...)。
+// D-271 R3：funding 告警已移除——现有 engine/evaluator 管线已做完整摩擦分析
+// （基准扣除 D-084 + spread/commission/slippage 往返 + MarginRateAnnual + breakeven_days），
+// D-271 的毛 funding 告警绕过了所有摩擦分析，纯噪音（548 条假告警实证）。
+func (e *AlertEvaluator) Evaluate(ctx context.Context, earnAPRs []pgstore.CexEarnAPR, spreads []SpreadResult) error {
 	now := time.Now()
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -58,20 +61,6 @@ func (e *AlertEvaluator) Evaluate(ctx context.Context, earnAPRs []pgstore.CexEar
 			msg := fmt.Sprintf("[CEX价差] %s %s→%s %.1fbps", s.Symbol, s.VenueBuy, s.VenueSell, s.SpreadBps)
 			if err := e.store.InsertAlert(ctx, nil, "warn", msg); err != nil {
 				return fmt.Errorf("insert spread alert: %w", err)
-			}
-		}
-	}
-
-	// Funding：rate >= cfg.CexScanFundingAprMin → 告警（fact.Value 已是 pct_annualized 百分比，勿 *100）
-	for _, f := range fundings {
-		if f.Rate >= e.cfg.CexScanFundingAprMin {
-			key := "funding:" + f.Venue + ":" + f.Symbol
-			if !e.shouldAlert(key, now) {
-				continue
-			}
-			msg := fmt.Sprintf("[CEX funding] %s %s %.2f%%/yr", f.Venue, f.Symbol, f.Rate)
-			if err := e.store.InsertAlert(ctx, nil, "warn", msg); err != nil {
-				return fmt.Errorf("insert funding alert: %w", err)
 			}
 		}
 	}
