@@ -1,13 +1,10 @@
-// D-271 S3 测试：账户扫描 + Funding 扫描。
+// D-271 S3 测试：账户扫描。
 package cexscan
 
 import (
-	"context"
-	"os"
 	"testing"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
-	"arb/internal/store/pgstore"
 )
 
 // fakeSnapshotter mock AccountSnapshotter。
@@ -57,23 +54,4 @@ func TestScanAccounts_Empty(t *testing.T) {
 	if len(snaps) != 0 {
 		t.Fatalf("got %d snaps, want 0", len(snaps))
 	}
-}
-
-// TestScanFundingRates_DSN 需要 DB，用 DSN 测试。
-func TestScanFundingRates_DSN(t *testing.T) {
-	dsn := os.Getenv("ARB_TEST_PG_DSN")
-	if dsn == "" {
-		t.Skip("ARB_TEST_PG_DSN not set")
-	}
-	ctx := context.Background()
-	s, err := pgstore.New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	defer s.Close()
-	entries, err := ScanFundingRates(ctx, s)
-	if err != nil {
-		t.Fatalf("ScanFundingRates: %v", err)
-	}
-	_ = entries
 }

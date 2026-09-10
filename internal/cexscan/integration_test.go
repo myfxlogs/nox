@@ -44,8 +44,10 @@ func mockAllBinance(t *testing.T) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/simple-earn/flexible/list":
-			json.NewEncoder(w).Encode([]map[string]any{
-				{"asset": "USDT", "latestAnnualPercentageRate": "0.025", "tierAnnualPercentageRate": nil},
+			json.NewEncoder(w).Encode(map[string]any{
+				"rows": []map[string]any{
+					{"asset": "USDT", "latestAnnualPercentageRate": "0.025", "tierAnnualPercentageRate": nil},
+				},
 			})
 		case "/v3/ticker/price":
 			json.NewEncoder(w).Encode(map[string]string{"symbol": "BTCUSDT", "price": "50050"})
@@ -85,11 +87,10 @@ func TestScanOnce_FullFlow(t *testing.T) {
 	}
 
 	cfg := &config.Config{
-		CexScanInterval:      time.Minute,
-		CexScanSpreadBps:     50,
-		CexScanEarnAprMin:    0.03,
-		CexScanFundingAprMin: 10,
-		CexScanSymbols:       []string{"BTC"},
+		CexScanInterval:   time.Minute,
+		CexScanSpreadBps:  50,
+		CexScanEarnAprMin: 0.03,
+		CexScanSymbols:    []string{"BTC"},
 	}
 	// 构造 Scanner，注入 mock URL
 	scanner := &Scanner{

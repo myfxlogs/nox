@@ -251,11 +251,10 @@ type Config struct {
 	TrxVoteBetterOppPct   float64 // 触发改投的更优机会阈值（ARB_TRX_VOTE_BETTER_OPP_PCT，默认 20.0）
 	TrxVoteMaxRebalPerDay int     // 每日最大改投次数（ARB_TRX_VOTE_MAX_REBAL_PER_DAY，默认 1）
 	// === D-271 CEX 只读扫描器 ===
-	CexScanInterval      time.Duration // 扫描间隔（ARB_CEX_SCAN_INTERVAL，默认 5m）
-	CexScanSpreadBps     float64       // 价差告警阈值 bps（ARB_CEX_SCAN_SPREAD_BPS，默认 50）
-	CexScanEarnAprMin    float64       // 理财 APR 告警阈值小数年化（ARB_CEX_SCAN_EARN_APR_MIN，默认 0.03）
-	CexScanFundingAprMin float64       // Funding 告警阈值年化百分比（ARB_CEX_SCAN_FUNDING_APR_MIN，默认 10）
-	CexScanSymbols       []string      // 价差扫描币种（ARB_CEX_SCAN_SYMBOLS，默认 BTC/ETH/TRX/SOL/USDT/USDC）
+	CexScanInterval   time.Duration // 扫描间隔（ARB_CEX_SCAN_INTERVAL，默认 5m）
+	CexScanSpreadBps  float64       // 价差告警阈值 bps（ARB_CEX_SCAN_SPREAD_BPS，默认 50）
+	CexScanEarnAprMin float64       // 理财 APR 告警阈值小数年化（ARB_CEX_SCAN_EARN_APR_MIN，默认 0.03）
+	CexScanSymbols    []string      // 价差扫描币种（ARB_CEX_SCAN_SYMBOLS，默认 BTC/ETH/TRX/SOL/USDT/USDC）
 }
 
 // Load 从环境变量加载配置——已提取至 config_load.go（D-261 S6 纯搬家拆分）。

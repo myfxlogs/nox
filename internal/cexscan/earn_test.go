@@ -24,8 +24,8 @@ func mockOKXEarnServer(t *testing.T) *httptest.Server {
 			"code": "0",
 			"msg":  "",
 			"data": []map[string]any{
-				{"ccy": "USDT", "estRate": "0.035"},
-				{"ccy": "USDC", "estRate": "0.030"},
+				{"ccy": "USDT", "estRate": 0.035},   // 数字（真实 API 格式）
+				{"ccy": "USDC", "estRate": "0.030"}, // string（json.Number 兼容性验证）
 			},
 		}
 		json.NewEncoder(w).Encode(resp)
@@ -40,9 +40,11 @@ func mockBinanceEarnServer(t *testing.T) *httptest.Server {
 			http.Error(w, "missing key", 401)
 			return
 		}
-		resp := []map[string]any{
-			{"asset": "USDT", "latestAnnualPercentageRate": "0.02523341", "tierAnnualPercentageRate": map[string]string{"0-1000": "0.025"}},
-			{"asset": "USDC", "latestAnnualPercentageRate": "0.020", "tierAnnualPercentageRate": nil},
+		resp := map[string]any{
+			"rows": []map[string]any{
+				{"asset": "USDT", "latestAnnualPercentageRate": "0.02523341", "tierAnnualPercentageRate": map[string]string{"0-1000": "0.025"}},
+				{"asset": "USDC", "latestAnnualPercentageRate": "0.020", "tierAnnualPercentageRate": nil},
+			},
 		}
 		json.NewEncoder(w).Encode(resp)
 	}))
