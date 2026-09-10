@@ -62,7 +62,7 @@ type fakeSnap struct{ infos []*v1.AccountInfo }
 
 func (f *fakeSnap) Snapshot() []*v1.AccountInfo { return f.infos }
 
-// TestScanOnce_FullFlow DSN 集成：scanOnce 全流程（账户→funding→理财→价差→告警）。
+// TestScanOnce_FullFlow DSN 集成：scanOnce 全流程（账户→理财→价差→入库）。
 func TestScanOnce_FullFlow(t *testing.T) {
 	dsn := os.Getenv("ARB_TEST_PG_DSN")
 	if dsn == "" {
@@ -82,15 +82,13 @@ func TestScanOnce_FullFlow(t *testing.T) {
 	if err := s.Migrate(ctx); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	if _, err := s.Pool().Exec(ctx, "TRUNCATE fin_cex_earn_apr, fin_cex_spread, alerts CASCADE"); err != nil {
+	if _, err := s.Pool().Exec(ctx, "TRUNCATE fin_cex_earn_apr, fin_cex_spread CASCADE"); err != nil {
 		t.Fatalf("TRUNCATE: %v", err)
 	}
 
 	cfg := &config.Config{
-		CexScanInterval:   time.Minute,
-		CexScanSpreadBps:  50,
-		CexScanEarnAprMin: 0.03,
-		CexScanSymbols:    []string{"BTC"},
+		CexScanInterval: time.Minute,
+		CexScanSymbols:  []string{"BTC"},
 	}
 	// 构造 Scanner，注入 mock URL
 	scanner := &Scanner{
@@ -103,7 +101,6 @@ func TestScanOnce_FullFlow(t *testing.T) {
 			bnKey: "k", bnSecret: "s",
 			bnSapiURL: bnSrv.URL,
 		},
-		alert:    NewAlertEvaluator(cfg, s),
 		client:   bnSrv.Client(),
 		bnAPIURL: bnSrv.URL,
 		symbols:  []string{"BTC"},
@@ -162,21 +159,6 @@ func TestScanOnce_FullFlow(t *testing.T) {
 		}
 	}
 
-	// 告警评估（OKX APR 0.035 >= 0.03 → 告警；spread 10 < 50 → 不告警）
-	if err := scanner.alert.Evaluate(ctx, allAPRs, spreads); err != nil {
-		t.Fatalf("Evaluate: %v", err)
-	}
-
-	// 验证 alerts 表有 1 条（OKX 理财 APR >= 0.03）
-	var count int
-	err = s.Pool().QueryRow(ctx, "SELECT count(*) FROM alerts").Scan(&count)
-	if err != nil {
-		t.Fatalf("count alerts: %v", err)
-	}
-	if count != 1 {
-		t.Errorf("alerts count = %d, want 1 (OKX earn APR)", count)
-	}
-
 	// 验证 DB 有理财 APR
 	gotAPRs, err := s.LatestCexEarnAPRs(ctx)
 	if err != nil {
@@ -196,50 +178,6 @@ func TestScanOnce_FullFlow(t *testing.T) {
 	}
 }
 
-// TestScanOnce_Dedup5Min 告警去重（同 key 5 分钟内不重复）。
-func TestScanOnce_Dedup5Min(t *testing.T) {
-	dsn := os.Getenv("ARB_TEST_PG_DSN")
-	if dsn == "" {
-		t.Skip("ARB_TEST_PG_DSN not set")
-	}
-	ctx := context.Background()
-	s, err := pgstore.New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	defer s.Close()
-	if err := s.Migrate(ctx); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
-	if _, err := s.Pool().Exec(ctx, "TRUNCATE alerts CASCADE"); err != nil {
-		t.Fatalf("TRUNCATE: %v", err)
-	}
-
-	cfg := &config.Config{CexScanEarnAprMin: 0.03}
-	ev := NewAlertEvaluator(cfg, s)
-	earnAPRs := []pgstore.CexEarnAPR{{Venue: "okx", Ccy: "USDT", APR: 0.035}}
-
-	// 第一次 → 告警
-	if err := ev.Evaluate(ctx, earnAPRs, nil); err != nil {
-		t.Fatalf("Evaluate 1: %v", err)
-	}
-	var count1 int
-	s.Pool().QueryRow(ctx, "SELECT count(*) FROM alerts").Scan(&count1)
-	if count1 != 1 {
-		t.Fatalf("count1 = %d, want 1", count1)
-	}
-
-	// 第二次（5 分钟内）→ 去重
-	if err := ev.Evaluate(ctx, earnAPRs, nil); err != nil {
-		t.Fatalf("Evaluate 2: %v", err)
-	}
-	var count2 int
-	s.Pool().QueryRow(ctx, "SELECT count(*) FROM alerts").Scan(&count2)
-	if count2 != 1 {
-		t.Errorf("count2 = %d, want 1 (deduped)", count2)
-	}
-}
-
 // TestScanOnce_SymbolNormalization symbol 归一化（OKX BTC-USDT ↔ Binance BTCUSDT）。
 func TestScanOnce_SymbolNormalization(t *testing.T) {
 	if okxSymbol("BTC") != "BTC-USDT" {
@@ -253,5 +191,19 @@ func TestScanOnce_SymbolNormalization(t *testing.T) {
 	}
 	if binanceSymbol("ETH") != "ETHUSDT" {
 		t.Errorf("binanceSymbol(ETH) = %q, want ETHUSDT", binanceSymbol("ETH"))
+	}
+}
+
+// TestCalcSpreads_SkipStablecoin 稳定币跳过（USDT-USDT/USDTUSDT 无意义）。
+func TestCalcSpreads_SkipStablecoin(t *testing.T) {
+	for _, ccy := range []string{"USDT", "USDC", "DAI"} {
+		if !isStablecoin(ccy) {
+			t.Errorf("isStablecoin(%q) = false, want true", ccy)
+		}
+	}
+	for _, ccy := range []string{"BTC", "ETH", "TRX", "SOL"} {
+		if isStablecoin(ccy) {
+			t.Errorf("isStablecoin(%q) = true, want false", ccy)
+		}
 	}
 }

@@ -31,15 +31,29 @@ func binanceSymbol(ccy string) string {
 	return ccy + "USDT"
 }
 
+// isStablecoin 判断是否为稳定币（USDT/USDC/DAI 等锚定 USDT 的币种）。
+// 稳定币跟自身比价差无意义（USDT-USDT 不存在）。
+func isStablecoin(ccy string) bool {
+	switch ccy {
+	case "USDT", "USDC", "DAI", "TUSD", "BUSD", "FDUSD":
+		return true
+	}
+	return false
+}
+
 // CalcSpreads 从公开行情算 OKX vs Binance spot 价差。
 // OKX：GET https://www.okx.com/api/v5/market/ticker?instId={okxSymbol}（公开），取 data[0].last
 // Binance：GET {bnAPIURL}/v3/ticker/price?symbol={binanceSymbol}（走代理 /api，公开），取 price
 // spread_bps = (high-low)/low * 10000
 // venue_buy=低价所，venue_sell=高价所
+// 稳定币（USDT/USDC）跳过——跟自身比 USDT-USDT/USDTUSDT 无意义（D-271 R5）。
 // 单币种错误跳过（log warn 继续）。
 func CalcSpreads(ctx context.Context, client *http.Client, bnAPIURL string, symbols []string) ([]SpreadResult, error) {
 	var out []SpreadResult
 	for _, ccy := range symbols {
+		if isStablecoin(ccy) {
+			continue
+		}
 		okxPrice, err := fetchOKXTicker(ctx, client, "https://www.okx.com", ccy)
 		if err != nil {
 			log.Printf("[cexscan] okx ticker %s: %v", ccy, err)

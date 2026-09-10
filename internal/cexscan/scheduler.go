@@ -18,7 +18,6 @@ type Scanner struct {
 	store    *pgstore.Store
 	accounts AccountSnapshotter
 	earn     *EarnCollector
-	alert    *AlertEvaluator
 	client   *http.Client
 	bnAPIURL string
 	symbols  []string
@@ -39,7 +38,6 @@ func NewScanner(cfg *config.Config, store *pgstore.Store, am AccountSnapshotter,
 		store:    store,
 		accounts: am,
 		earn:     earn,
-		alert:    NewAlertEvaluator(cfg, store),
 		client:   httpx.Client(),
 		bnAPIURL: bnAPIURL,
 		symbols:  cfg.CexScanSymbols,
@@ -66,8 +64,10 @@ func (s *Scanner) Run(ctx context.Context) {
 	}
 }
 
-// scanOnce 串行 ①ScanAccounts ②earn.Collect→InsertCexEarnAPR ③CalcSpreads→InsertCexSpread ④alert.Evaluate。
+// scanOnce 串行 ①ScanAccounts ②earn.Collect→InsertCexEarnAPR ③CalcSpreads→InsertCexSpread。
 // D-271 R3：funding 扫描已移除——现有 engine/evaluator 管线已覆盖 funding 机会分析。
+// D-271 R5：理财 APR + 价差告警已移除——理财告警是毛数据噪音（280 条实证），
+// 价差告警现有 CrossVenueDetector 已事件驱动覆盖。保留采集入库供前端展示。
 func (s *Scanner) scanOnce(ctx context.Context) error {
 	// ① 账户扫描（纯读缓存，不报错）
 	_ = ScanAccounts(s.accounts)
@@ -102,11 +102,6 @@ func (s *Scanner) scanOnce(ctx context.Context) error {
 				log.Printf("[cexscan] insert spread %s: %v", spreads[i].Symbol, err)
 			}
 		}
-	}
-
-	// ④ 告警评估
-	if err := s.alert.Evaluate(ctx, earnAPRs, spreads); err != nil {
-		return err
 	}
 	return nil
 }
