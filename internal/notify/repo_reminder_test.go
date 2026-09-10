@@ -1,4 +1,5 @@
-// D-270 S2 测试：周四操作提醒触发判定（fake store 注入，纯逻辑测试）。
+// D-270 S2 测试 → R2 重构：周四操作提醒触发判定（fake store 注入，纯逻辑测试）。
+// R2 变更：去掉 warnPct/idleCny/minReturn/reminderHour 参数，改用 GetRepoConfig mock。
 package notify
 
 import (
@@ -13,7 +14,10 @@ type fakeReminderStore struct {
 	rates         []RepoRateRow
 	avg30d        float64
 	avgHas        bool
+	pct30d        float64
+	pctHas        bool
 	isBusinessDay bool
+	cfg           *RepoConfigRow
 	pending       *RepoOpRow
 	created       bool
 	incremented   bool
@@ -26,6 +30,12 @@ func (f *fakeReminderStore) LatestRepoRates(ctx context.Context) ([]RepoRateRow,
 }
 func (f *fakeReminderStore) RepoRate30dAvg(ctx context.Context, code string) (float64, bool, error) {
 	return f.avg30d, f.avgHas, nil
+}
+func (f *fakeReminderStore) RepoRate30dPercentile(ctx context.Context, code string, currentRate float64) (float64, bool, error) {
+	return f.pct30d, f.pctHas, nil
+}
+func (f *fakeReminderStore) GetRepoConfig(ctx context.Context) (*RepoConfigRow, error) {
+	return f.cfg, nil
 }
 func (f *fakeReminderStore) CNFICalendarIsBusinessDay(ctx context.Context, day time.Time) (bool, error) {
 	return f.isBusinessDay, nil
@@ -49,8 +59,8 @@ func (f *fakeReminderStore) InsertAlert(ctx context.Context, ruleID *int64, leve
 	return nil
 }
 
-// newReminderSvc 构造测试用提醒服务。
-func newReminderSvc(t *testing.T, store *fakeReminderStore, now time.Time, warnPct, idleCny, minReturn float64, reminderHour int) *RepoReminderService {
+// newReminderSvc 构造测试用提醒服务（R2：去掉 warnPct/idleCny/minReturn/reminderHour 参数）。
+func newReminderSvc(t *testing.T, store *fakeReminderStore, now time.Time) *RepoReminderService {
 	t.Helper()
 	loc, _ := time.LoadLocation("Asia/Shanghai")
 	if loc == nil {
@@ -58,7 +68,7 @@ func newReminderSvc(t *testing.T, store *fakeReminderStore, now time.Time, warnP
 	}
 	svc := NewRepoReminderService(store, func(level, msg string) {
 		_ = store.InsertAlert(context.Background(), nil, level, msg)
-	}, warnPct, idleCny, minReturn, reminderHour)
+	})
 	svc.SetNowFn(func() time.Time { return now.In(loc) })
 	return svc
 }
@@ -69,16 +79,24 @@ func thursdayAt10() time.Time {
 	return time.Date(2026, 9, 10, 10, 0, 0, 0, loc) // 2026-09-10 周四
 }
 
-// TestReminderTrigger_Thursday 周四+工作日+GC001 利率>阈值+idle>0 → CreateRepoOp + InsertAlert。
+// defaultCfg 返回默认启用配置（idle=50000, minReturn=5, hour=10, enabled=true）。
+func defaultCfg() *RepoConfigRow {
+	return &RepoConfigRow{IdleCny: 50000, MinReturnCny: 5, ReminderHour: 10, Enabled: true}
+}
+
+// TestReminderTrigger_Thursday 周四+工作日+GC001>活期基准(0.2%)+idle>0 → CreateRepoOp + InsertAlert。
 func TestReminderTrigger_Thursday(t *testing.T) {
 	store := &fakeReminderStore{
-		rates:         []RepoRateRow{{Code: "204001", Name: "GC001", RatePct: 3.5}}, // 3.5 > 3.0 阈值
+		rates:         []RepoRateRow{{Code: "204001", Name: "GC001", RatePct: 1.4}}, // 1.4 > 0.2 活期基准
 		avg30d:        2.50,
 		avgHas:        true,
+		pct30d:        60,
+		pctHas:        true,
 		isBusinessDay: true,
 		pending:       nil, // 无 pending → 创建
+		cfg:           defaultCfg(),
 	}
-	svc := newReminderSvc(t, store, thursdayAt10(), 3.0, 50000, 5.0, 10)
+	svc := newReminderSvc(t, store, thursdayAt10())
 	if err := svc.Check(context.Background()); err != nil {
 		t.Fatalf("Check: %v", err)
 	}
@@ -101,8 +119,11 @@ func TestReminderTrigger_NotThursday(t *testing.T) {
 		time.Date(2026, 9, 9, 10, 0, 0, 0, loc),  // 周三
 		time.Date(2026, 9, 13, 10, 0, 0, 0, loc), // 周日
 	} {
-		store := &fakeReminderStore{rates: []RepoRateRow{{Code: "204001", RatePct: 3.5}}, isBusinessDay: true}
-		svc := newReminderSvc(t, store, day, 3.0, 50000, 5.0, 10)
+		store := &fakeReminderStore{
+			rates: []RepoRateRow{{Code: "204001", RatePct: 1.4}},
+			cfg:   defaultCfg(),
+		}
+		svc := newReminderSvc(t, store, day)
 		if err := svc.Check(context.Background()); err != nil {
 			t.Fatalf("Check %s: %v", day.Weekday(), err)
 		}
@@ -115,10 +136,11 @@ func TestReminderTrigger_NotThursday(t *testing.T) {
 // TestReminderTrigger_Holiday 周四非工作日 → 无操作。
 func TestReminderTrigger_Holiday(t *testing.T) {
 	store := &fakeReminderStore{
-		rates:         []RepoRateRow{{Code: "204001", RatePct: 3.5}},
+		rates:         []RepoRateRow{{Code: "204001", RatePct: 1.4}},
 		isBusinessDay: false, // 节假日
+		cfg:           defaultCfg(),
 	}
-	svc := newReminderSvc(t, store, thursdayAt10(), 3.0, 50000, 5.0, 10)
+	svc := newReminderSvc(t, store, thursdayAt10())
 	if err := svc.Check(context.Background()); err != nil {
 		t.Fatalf("Check: %v", err)
 	}
@@ -127,13 +149,30 @@ func TestReminderTrigger_Holiday(t *testing.T) {
 	}
 }
 
-// TestReminderTrigger_IdleZero idle=0 → 无操作。
+// TestReminderTrigger_Disabled cfg.Enabled=false → 无操作。
+func TestReminderTrigger_Disabled(t *testing.T) {
+	store := &fakeReminderStore{
+		rates:         []RepoRateRow{{Code: "204001", RatePct: 1.4}},
+		isBusinessDay: true,
+		cfg:           &RepoConfigRow{IdleCny: 50000, MinReturnCny: 5, ReminderHour: 10, Enabled: false},
+	}
+	svc := newReminderSvc(t, store, thursdayAt10())
+	if err := svc.Check(context.Background()); err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+	if store.created {
+		t.Error("CreateRepoOp called when disabled, want no action")
+	}
+}
+
+// TestReminderTrigger_IdleZero cfg.IdleCny=0 → 无操作。
 func TestReminderTrigger_IdleZero(t *testing.T) {
 	store := &fakeReminderStore{
-		rates:         []RepoRateRow{{Code: "204001", RatePct: 3.5}},
+		rates:         []RepoRateRow{{Code: "204001", RatePct: 1.4}},
 		isBusinessDay: true,
+		cfg:           &RepoConfigRow{IdleCny: 0, MinReturnCny: 5, ReminderHour: 10, Enabled: true},
 	}
-	svc := newReminderSvc(t, store, thursdayAt10(), 3.0, 0, 5.0, 10) // idle=0
+	svc := newReminderSvc(t, store, thursdayAt10())
 	if err := svc.Check(context.Background()); err != nil {
 		t.Fatalf("Check: %v", err)
 	}
@@ -142,30 +181,32 @@ func TestReminderTrigger_IdleZero(t *testing.T) {
 	}
 }
 
-// TestReminderTrigger_RateBelowThreshold GC001 < warn 阈值 → 无操作。
-func TestReminderTrigger_RateBelowThreshold(t *testing.T) {
+// TestReminderTrigger_RateBelowDemandDeposit GC001 < 活期基准(0.2%) → 无操作。
+func TestReminderTrigger_RateBelowDemandDeposit(t *testing.T) {
 	store := &fakeReminderStore{
-		rates:         []RepoRateRow{{Code: "204001", RatePct: 2.0}}, // 2.0 < 3.0
+		rates:         []RepoRateRow{{Code: "204001", RatePct: 0.1}}, // 0.1 < 0.2 活期基准
 		isBusinessDay: true,
+		cfg:           defaultCfg(),
 	}
-	svc := newReminderSvc(t, store, thursdayAt10(), 3.0, 50000, 5.0, 10)
+	svc := newReminderSvc(t, store, thursdayAt10())
 	if err := svc.Check(context.Background()); err != nil {
 		t.Fatalf("Check: %v", err)
 	}
 	if store.created {
-		t.Error("CreateRepoOp called with rate below threshold, want no action")
+		t.Error("CreateRepoOp called with rate below demand deposit, want no action")
 	}
 }
 
 // TestReminderTrigger_AlreadyConfirmed 本周已 operated/skipped → 无操作（pending=nil，CreateRepoOp 唯一约束冲突→优雅跳过）。
 func TestReminderTrigger_AlreadyConfirmed(t *testing.T) {
 	store := &fakeReminderStore{
-		rates:         []RepoRateRow{{Code: "204001", RatePct: 3.5}},
+		rates:         []RepoRateRow{{Code: "204001", RatePct: 1.4}},
 		isBusinessDay: true,
 		pending:       nil,                                       // 已确认 → 无 pending
 		createErr:     errors.New("unique constraint violation"), // 模拟唯一约束冲突
+		cfg:           defaultCfg(),
 	}
-	svc := newReminderSvc(t, store, thursdayAt10(), 3.0, 50000, 5.0, 10)
+	svc := newReminderSvc(t, store, thursdayAt10())
 	if err := svc.Check(context.Background()); err != nil {
 		t.Fatalf("Check: %v", err)
 	}
@@ -181,8 +222,11 @@ func TestReminderTrigger_AlreadyConfirmed(t *testing.T) {
 func TestReminderTrigger_BeforeHour(t *testing.T) {
 	loc, _ := time.LoadLocation("Asia/Shanghai")
 	before10 := time.Date(2026, 9, 10, 9, 0, 0, 0, loc) // 周四 9:00 < 10
-	store := &fakeReminderStore{rates: []RepoRateRow{{Code: "204001", RatePct: 3.5}}, isBusinessDay: true}
-	svc := newReminderSvc(t, store, before10, 3.0, 50000, 5.0, 10)
+	store := &fakeReminderStore{
+		rates: []RepoRateRow{{Code: "204001", RatePct: 1.4}},
+		cfg:   defaultCfg(),
+	}
+	svc := newReminderSvc(t, store, before10)
 	if err := svc.Check(context.Background()); err != nil {
 		t.Fatalf("Check: %v", err)
 	}
@@ -194,11 +238,12 @@ func TestReminderTrigger_BeforeHour(t *testing.T) {
 // TestReminderTrigger_ExpectedReturnBelowMin 预期收益 < 最小收益 → 无操作。
 func TestReminderTrigger_ExpectedReturnBelowMin(t *testing.T) {
 	store := &fakeReminderStore{
-		rates:         []RepoRateRow{{Code: "204001", RatePct: 3.5}},
+		rates:         []RepoRateRow{{Code: "204001", RatePct: 1.4}},
 		isBusinessDay: true,
+		cfg:           &RepoConfigRow{IdleCny: 100, MinReturnCny: 5, ReminderHour: 10, Enabled: true},
 	}
-	// expectedReturn = 2.85 × 100 × 3 / 365 = 2.34 < 5 → 不触发
-	svc := newReminderSvc(t, store, thursdayAt10(), 3.0, 100, 5.0, 10)
+	// expectedReturn = 1.4 × 100 × 3 / 365 = 1.15 < 5 → 不触发
+	svc := newReminderSvc(t, store, thursdayAt10())
 	if err := svc.Check(context.Background()); err != nil {
 		t.Fatalf("Check: %v", err)
 	}
@@ -211,11 +256,12 @@ func TestReminderTrigger_ExpectedReturnBelowMin(t *testing.T) {
 func TestReminderTrigger_ThursdayPendingExists(t *testing.T) {
 	yesterday := thursdayAt10().Add(-24 * time.Hour)
 	store := &fakeReminderStore{
-		rates:         []RepoRateRow{{Code: "204001", RatePct: 3.5}},
+		rates:         []RepoRateRow{{Code: "204001", RatePct: 1.4}},
 		isBusinessDay: true,
 		pending:       &RepoOpRow{ID: 1, ReminderCount: 1, LastReminderAt: &yesterday, Status: "pending"},
+		cfg:           defaultCfg(),
 	}
-	svc := newReminderSvc(t, store, thursdayAt10(), 3.0, 50000, 5.0, 10)
+	svc := newReminderSvc(t, store, thursdayAt10())
 	if err := svc.Check(context.Background()); err != nil {
 		t.Fatalf("Check: %v", err)
 	}
@@ -231,11 +277,12 @@ func TestReminderTrigger_ThursdayPendingExists(t *testing.T) {
 func TestReminderTrigger_ThursdayPendingAlreadyRemindedToday(t *testing.T) {
 	now := thursdayAt10()
 	store := &fakeReminderStore{
-		rates:         []RepoRateRow{{Code: "204001", RatePct: 3.5}},
+		rates:         []RepoRateRow{{Code: "204001", RatePct: 1.4}},
 		isBusinessDay: true,
 		pending:       &RepoOpRow{ID: 1, ReminderCount: 1, LastReminderAt: &now, Status: "pending"}, // 今天已提醒
+		cfg:           defaultCfg(),
 	}
-	svc := newReminderSvc(t, store, now, 3.0, 50000, 5.0, 10)
+	svc := newReminderSvc(t, store, now)
 	if err := svc.Check(context.Background()); err != nil {
 		t.Fatalf("Check: %v", err)
 	}
@@ -252,8 +299,9 @@ func TestReminderReRemind_Friday(t *testing.T) {
 	store := &fakeReminderStore{
 		isBusinessDay: true,
 		pending:       &RepoOpRow{ID: 1, ReminderCount: 1, LastReminderAt: &yesterday, Status: "pending"},
+		cfg:           defaultCfg(),
 	}
-	svc := newReminderSvc(t, store, friday, 3.0, 50000, 5.0, 10)
+	svc := newReminderSvc(t, store, friday)
 	if err := svc.Check(context.Background()); err != nil {
 		t.Fatalf("Check: %v", err)
 	}
@@ -273,8 +321,9 @@ func TestReminderReRemind_Monday(t *testing.T) {
 	store := &fakeReminderStore{
 		isBusinessDay: true,
 		pending:       &RepoOpRow{ID: 1, ReminderCount: 2, LastReminderAt: &lastWeek, Status: "pending"},
+		cfg:           defaultCfg(),
 	}
-	svc := newReminderSvc(t, store, monday, 3.0, 50000, 5.0, 10)
+	svc := newReminderSvc(t, store, monday)
 	if err := svc.Check(context.Background()); err != nil {
 		t.Fatalf("Check: %v", err)
 	}
@@ -294,8 +343,9 @@ func TestReminderReRemind_NotTargetDay(t *testing.T) {
 		store := &fakeReminderStore{
 			isBusinessDay: true,
 			pending:       &RepoOpRow{ID: 1, ReminderCount: 1, Status: "pending"},
+			cfg:           defaultCfg(),
 		}
-		svc := newReminderSvc(t, store, day, 3.0, 50000, 5.0, 10)
+		svc := newReminderSvc(t, store, day)
 		if err := svc.Check(context.Background()); err != nil {
 			t.Fatalf("Check %s: %v", day.Weekday(), err)
 		}
@@ -312,8 +362,9 @@ func TestReminderReRemind_Holiday(t *testing.T) {
 	store := &fakeReminderStore{
 		isBusinessDay: false, // 节假日
 		pending:       &RepoOpRow{ID: 1, ReminderCount: 1, Status: "pending"},
+		cfg:           defaultCfg(),
 	}
-	svc := newReminderSvc(t, store, friday, 3.0, 50000, 5.0, 10)
+	svc := newReminderSvc(t, store, friday)
 	if err := svc.Check(context.Background()); err != nil {
 		t.Fatalf("Check: %v", err)
 	}
@@ -329,8 +380,9 @@ func TestReminderReRemind_NoPending(t *testing.T) {
 	store := &fakeReminderStore{
 		isBusinessDay: true,
 		pending:       nil, // 无 pending
+		cfg:           defaultCfg(),
 	}
-	svc := newReminderSvc(t, store, friday, 3.0, 50000, 5.0, 10)
+	svc := newReminderSvc(t, store, friday)
 	if err := svc.Check(context.Background()); err != nil {
 		t.Fatalf("Check: %v", err)
 	}
@@ -346,8 +398,9 @@ func TestReminderStopAfterConfirm(t *testing.T) {
 	store := &fakeReminderStore{
 		isBusinessDay: true,
 		pending:       nil, // 已确认 → 无 pending
+		cfg:           defaultCfg(),
 	}
-	svc := newReminderSvc(t, store, friday, 3.0, 50000, 5.0, 10)
+	svc := newReminderSvc(t, store, friday)
 	if err := svc.Check(context.Background()); err != nil {
 		t.Fatalf("Check: %v", err)
 	}
@@ -359,12 +412,13 @@ func TestReminderStopAfterConfirm(t *testing.T) {
 // TestReminderCreateError CreateRepoOp 失败（如唯一约束=本周已确认）→ Check 优雅降级返回 nil。
 func TestReminderCreateError(t *testing.T) {
 	store := &fakeReminderStore{
-		rates:         []RepoRateRow{{Code: "204001", RatePct: 3.5}},
+		rates:         []RepoRateRow{{Code: "204001", RatePct: 1.4}},
 		isBusinessDay: true,
 		pending:       nil,
 		createErr:     errors.New("unique constraint violation"),
+		cfg:           defaultCfg(),
 	}
-	svc := newReminderSvc(t, store, thursdayAt10(), 3.0, 50000, 5.0, 10)
+	svc := newReminderSvc(t, store, thursdayAt10())
 	err := svc.Check(context.Background())
 	if err != nil {
 		t.Fatalf("Check = %v, want nil (优雅降级：本周已确认或 DB 错误不崩溃)", err)

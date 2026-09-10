@@ -65,11 +65,20 @@ func insertTestRepoRates(t *testing.T, s *pgstore.Store, ratePct float64) {
 
 // thursdayAt10 已在 repo_reminder_test.go 定义，此处复用。
 
+// setTestRepoConfig 设置 DB 配置（idle=50000, minReturn=5, hour=10, enabled=true）。
+func setTestRepoConfig(t *testing.T, s *pgstore.Store) {
+	t.Helper()
+	if err := s.SetRepoConfig(context.Background(), 50000, 5, 10, true); err != nil {
+		t.Fatalf("SetRepoConfig: %v", err)
+	}
+}
+
 // TestIntegration_OKFlow repo rate 插入 → 提醒 → repo op → OK 回复 → 确认 operated + cnfi_actions。
 func TestIntegration_OKFlow(t *testing.T) {
 	s := integrationTestStore(t)
 	ctx := context.Background()
-	insertTestRepoRates(t, s, 3.5) // 3.5 > 3.0 阈值
+	insertTestRepoRates(t, s, 3.5) // 3.5 > 0.2 活期基准
+	setTestRepoConfig(t, s)
 
 	// 1. 提醒服务触发 → 创建 pending repo op。
 	reminderStore := &PgStoreReminderAdapter{Store: s}
@@ -77,7 +86,7 @@ func TestIntegration_OKFlow(t *testing.T) {
 	svc := NewRepoReminderService(reminderStore, func(level, msg string) {
 		alertSent = true
 		_ = s.InsertAlert(ctx, nil, level, msg)
-	}, 3.0, 50000, 5.0, 10)
+	})
 	svc.SetNowFn(thursdayAt10)
 	if err := svc.Check(ctx); err != nil {
 		t.Fatalf("reminder Check: %v", err)
@@ -170,6 +179,7 @@ func TestIntegration_SKIPFlow(t *testing.T) {
 	s := integrationTestStore(t)
 	ctx := context.Background()
 	insertTestRepoRates(t, s, 3.5)
+	setTestRepoConfig(t, s)
 
 	// 1. 提醒服务触发 → 创建 pending repo op。
 	reminderStore := &PgStoreReminderAdapter{Store: s}
@@ -177,7 +187,7 @@ func TestIntegration_SKIPFlow(t *testing.T) {
 	svc := NewRepoReminderService(reminderStore, func(level, msg string) {
 		alertSent = true
 		_ = s.InsertAlert(ctx, nil, level, msg)
-	}, 3.0, 50000, 5.0, 10)
+	})
 	svc.SetNowFn(thursdayAt10)
 	if err := svc.Check(ctx); err != nil {
 		t.Fatalf("reminder Check: %v", err)
@@ -238,6 +248,7 @@ func TestIntegration_ReminderStopAfterConfirm(t *testing.T) {
 	s := integrationTestStore(t)
 	ctx := context.Background()
 	insertTestRepoRates(t, s, 3.5)
+	setTestRepoConfig(t, s)
 
 	// 1. 提醒触发 → 创建 pending。
 	reminderStore := &PgStoreReminderAdapter{Store: s}
@@ -245,7 +256,7 @@ func TestIntegration_ReminderStopAfterConfirm(t *testing.T) {
 	svc := NewRepoReminderService(reminderStore, func(level, msg string) {
 		alertCount++
 		_ = s.InsertAlert(ctx, nil, level, msg)
-	}, 3.0, 50000, 5.0, 10)
+	})
 	svc.SetNowFn(thursdayAt10)
 	if err := svc.Check(ctx); err != nil {
 		t.Fatalf("reminder Check 1: %v", err)

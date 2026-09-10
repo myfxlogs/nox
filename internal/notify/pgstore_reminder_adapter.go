@@ -69,5 +69,24 @@ func (a *PgStoreReminderAdapter) InsertAlert(ctx context.Context, ruleID *int64,
 	return a.Store.InsertAlert(ctx, ruleID, level, message)
 }
 
+// GetRepoConfig R2：读 DB 配置，转换为 notify.RepoConfigRow。
+func (a *PgStoreReminderAdapter) GetRepoConfig(ctx context.Context) (*RepoConfigRow, error) {
+	c, err := a.Store.GetRepoConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &RepoConfigRow{
+		IdleCny:      c.IdleCny,
+		MinReturnCny: c.MinReturnCny,
+		ReminderHour: c.ReminderHour,
+		Enabled:      c.Enabled,
+	}, nil
+}
+
+// RepoRate30dPercentile R2：透传分位数查询。
+func (a *PgStoreReminderAdapter) RepoRate30dPercentile(ctx context.Context, code string, currentRate float64) (float64, bool, error) {
+	return a.Store.RepoRate30dPercentile(ctx, code, currentRate)
+}
+
 // compile-time: *PgStoreReminderAdapter 实现 RepoReminderStore 接口。
 var _ RepoReminderStore = (*PgStoreReminderAdapter)(nil)
