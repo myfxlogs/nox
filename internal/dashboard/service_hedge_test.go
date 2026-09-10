@@ -117,7 +117,7 @@ func TestGetHedgeStructure_MirrorPnlSumZero(t *testing.T) {
 
 	// TRX 账户快照（18070 票权，97.86 TRX 余额）
 	if err := s.InsertTRXAccount(ctx, pgstore.TRXAccount{
-		Address: "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", VotesTotal: 18070,
+		Address: "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", VotesTotal: 18070, TronPower: 18070000000,
 		BalanceSun: 97863827, AllowanceSun: 7717994,
 		EnergyDelegated: 17270000000, BandwidthStaked: 800000000,
 		FetchedAt: now,
@@ -229,7 +229,7 @@ func TestGetHedgeStructure_CarryHandCalc(t *testing.T) {
 
 	// TRX 账户（18070 质押）
 	if err := s.InsertTRXAccount(ctx, pgstore.TRXAccount{
-		Address: "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", VotesTotal: 18070,
+		Address: "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", VotesTotal: 18070, TronPower: 18070000000,
 		BalanceSun: 97863827, EnergyDelegated: 17270000000, BandwidthStaked: 800000000,
 		FetchedAt: now,
 	}); err != nil {
@@ -410,7 +410,7 @@ func TestGetHedgeStructure_WsConnected(t *testing.T) {
 	now := time.Now().UTC()
 	// 最小数据：TRX 账户 + CMC 持仓 + price（ready=true 才走组装路径）
 	if err := s.InsertTRXAccount(ctx, pgstore.TRXAccount{
-		Address: "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", VotesTotal: 18070,
+		Address: "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", VotesTotal: 18070, TronPower: 18070000000,
 		BalanceSun: 97863827, AllowanceSun: 7717994, EnergyDelegated: 17270000000,
 		BandwidthStaked: 800000000,
 		FetchedAt:       now,
@@ -465,7 +465,7 @@ func TestGetHedgeStructure_AskFreshEvalAskSameSource(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 	if err := s.InsertTRXAccount(ctx, pgstore.TRXAccount{
-		Address: "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", VotesTotal: 18070,
+		Address: "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", VotesTotal: 18070, TronPower: 18070000000,
 		BalanceSun: 97863827, AllowanceSun: 7717994, EnergyDelegated: 17270000000,
 		BandwidthStaked: 800000000,
 		FetchedAt:       now,

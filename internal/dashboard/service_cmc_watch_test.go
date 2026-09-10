@@ -325,7 +325,7 @@ func TestComputeCMCWatchUpdate_ShortLiqNetExposure(t *testing.T) {
 	}
 	// TRX 账户（balance=100, votes=18070 → netExposureTrx=100+18070-18100=70 → netExposureUsd=70×0.3236=22.652）
 	if err := s.InsertTRXAccount(ctx, pgstore.TRXAccount{
-		BalanceSun: 100_000_000, VotesTotal: 18070, FetchedAt: now,
+		BalanceSun: 100_000_000, VotesTotal: 18070, TronPower: 18070000000, FetchedAt: now,
 	}); err != nil {
 		t.Fatalf("InsertTRXAccount: %v", err)
 	}

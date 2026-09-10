@@ -271,6 +271,12 @@ const (
 	// DashboardServiceSetAiSettingsProcedure is the fully-qualified name of the DashboardService's
 	// SetAiSettings RPC.
 	DashboardServiceSetAiSettingsProcedure = "/arb.dashboard.v1.DashboardService/SetAiSettings"
+	// DashboardServiceGetRepoConfigProcedure is the fully-qualified name of the DashboardService's
+	// GetRepoConfig RPC.
+	DashboardServiceGetRepoConfigProcedure = "/arb.dashboard.v1.DashboardService/GetRepoConfig"
+	// DashboardServiceSetRepoConfigProcedure is the fully-qualified name of the DashboardService's
+	// SetRepoConfig RPC.
+	DashboardServiceSetRepoConfigProcedure = "/arb.dashboard.v1.DashboardService/SetRepoConfig"
 )
 
 // DashboardServiceClient is a client for the arb.dashboard.v1.DashboardService service.
@@ -384,6 +390,9 @@ type DashboardServiceClient interface {
 	// D-091 返修② R3：AI 配置 DB 化（前端可配，Get 掩码/Set 空 key 不覆盖）
 	GetAiSettings(context.Context, *connect.Request[v1.GetAiSettingsRequest]) (*connect.Response[v1.GetAiSettingsResponse], error)
 	SetAiSettings(context.Context, *connect.Request[v1.SetAiSettingsRequest]) (*connect.Response[v1.SetAiSettingsResponse], error)
+	// D-270 R2：逆回购提醒配置 DB 化（前端可改免重启）
+	GetRepoConfig(context.Context, *connect.Request[v1.GetRepoConfigRequest]) (*connect.Response[v1.GetRepoConfigResponse], error)
+	SetRepoConfig(context.Context, *connect.Request[v1.SetRepoConfigRequest]) (*connect.Response[v1.SetRepoConfigResponse], error)
 }
 
 // NewDashboardServiceClient constructs a client for the arb.dashboard.v1.DashboardService service.
@@ -877,6 +886,18 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("SetAiSettings")),
 			connect.WithClientOptions(opts...),
 		),
+		getRepoConfig: connect.NewClient[v1.GetRepoConfigRequest, v1.GetRepoConfigResponse](
+			httpClient,
+			baseURL+DashboardServiceGetRepoConfigProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("GetRepoConfig")),
+			connect.WithClientOptions(opts...),
+		),
+		setRepoConfig: connect.NewClient[v1.SetRepoConfigRequest, v1.SetRepoConfigResponse](
+			httpClient,
+			baseURL+DashboardServiceSetRepoConfigProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("SetRepoConfig")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -962,6 +983,8 @@ type dashboardServiceClient struct {
 	appendAnalystNote      *connect.Client[v1.AppendAnalystNoteRequest, v1.AppendAnalystNoteResponse]
 	getAiSettings          *connect.Client[v1.GetAiSettingsRequest, v1.GetAiSettingsResponse]
 	setAiSettings          *connect.Client[v1.SetAiSettingsRequest, v1.SetAiSettingsResponse]
+	getRepoConfig          *connect.Client[v1.GetRepoConfigRequest, v1.GetRepoConfigResponse]
+	setRepoConfig          *connect.Client[v1.SetRepoConfigRequest, v1.SetRepoConfigResponse]
 }
 
 // ListLatestQuotes calls arb.dashboard.v1.DashboardService.ListLatestQuotes.
@@ -1364,6 +1387,16 @@ func (c *dashboardServiceClient) SetAiSettings(ctx context.Context, req *connect
 	return c.setAiSettings.CallUnary(ctx, req)
 }
 
+// GetRepoConfig calls arb.dashboard.v1.DashboardService.GetRepoConfig.
+func (c *dashboardServiceClient) GetRepoConfig(ctx context.Context, req *connect.Request[v1.GetRepoConfigRequest]) (*connect.Response[v1.GetRepoConfigResponse], error) {
+	return c.getRepoConfig.CallUnary(ctx, req)
+}
+
+// SetRepoConfig calls arb.dashboard.v1.DashboardService.SetRepoConfig.
+func (c *dashboardServiceClient) SetRepoConfig(ctx context.Context, req *connect.Request[v1.SetRepoConfigRequest]) (*connect.Response[v1.SetRepoConfigResponse], error) {
+	return c.setRepoConfig.CallUnary(ctx, req)
+}
+
 // DashboardServiceHandler is an implementation of the arb.dashboard.v1.DashboardService service.
 type DashboardServiceHandler interface {
 	// 快照类
@@ -1475,6 +1508,9 @@ type DashboardServiceHandler interface {
 	// D-091 返修② R3：AI 配置 DB 化（前端可配，Get 掩码/Set 空 key 不覆盖）
 	GetAiSettings(context.Context, *connect.Request[v1.GetAiSettingsRequest]) (*connect.Response[v1.GetAiSettingsResponse], error)
 	SetAiSettings(context.Context, *connect.Request[v1.SetAiSettingsRequest]) (*connect.Response[v1.SetAiSettingsResponse], error)
+	// D-270 R2：逆回购提醒配置 DB 化（前端可改免重启）
+	GetRepoConfig(context.Context, *connect.Request[v1.GetRepoConfigRequest]) (*connect.Response[v1.GetRepoConfigResponse], error)
+	SetRepoConfig(context.Context, *connect.Request[v1.SetRepoConfigRequest]) (*connect.Response[v1.SetRepoConfigResponse], error)
 }
 
 // NewDashboardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1964,6 +2000,18 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("SetAiSettings")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceGetRepoConfigHandler := connect.NewUnaryHandler(
+		DashboardServiceGetRepoConfigProcedure,
+		svc.GetRepoConfig,
+		connect.WithSchema(dashboardServiceMethods.ByName("GetRepoConfig")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceSetRepoConfigHandler := connect.NewUnaryHandler(
+		DashboardServiceSetRepoConfigProcedure,
+		svc.SetRepoConfig,
+		connect.WithSchema(dashboardServiceMethods.ByName("SetRepoConfig")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/arb.dashboard.v1.DashboardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DashboardServiceListLatestQuotesProcedure:
@@ -2126,6 +2174,10 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceGetAiSettingsHandler.ServeHTTP(w, r)
 		case DashboardServiceSetAiSettingsProcedure:
 			dashboardServiceSetAiSettingsHandler.ServeHTTP(w, r)
+		case DashboardServiceGetRepoConfigProcedure:
+			dashboardServiceGetRepoConfigHandler.ServeHTTP(w, r)
+		case DashboardServiceSetRepoConfigProcedure:
+			dashboardServiceSetRepoConfigHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -2453,4 +2505,12 @@ func (UnimplementedDashboardServiceHandler) GetAiSettings(context.Context, *conn
 
 func (UnimplementedDashboardServiceHandler) SetAiSettings(context.Context, *connect.Request[v1.SetAiSettingsRequest]) (*connect.Response[v1.SetAiSettingsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetAiSettings is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) GetRepoConfig(context.Context, *connect.Request[v1.GetRepoConfigRequest]) (*connect.Response[v1.GetRepoConfigResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetRepoConfig is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) SetRepoConfig(context.Context, *connect.Request[v1.SetRepoConfigRequest]) (*connect.Response[v1.SetRepoConfigResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetRepoConfig is not implemented"))
 }

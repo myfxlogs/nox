@@ -125,7 +125,7 @@ func (s *Service) computeCMCWatchUpdate(ctx context.Context) *v1.CMCWatchUpdate 
 		trxAcc, trxErr := s.store.LastTRXAccount(ctx)
 		if trxErr == nil {
 			balance := float64(trxAcc.BalanceSun) / 1e6
-			staked := float64(trxAcc.VotesTotal)
+			staked := float64(trxAcc.TronPower) / 1e6
 			netExposureTrx := balance + staked - ls.Qty
 			upd.NetExposureUsd = netExposureTrx * ls.Mid
 		}

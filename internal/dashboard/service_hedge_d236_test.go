@@ -440,16 +440,16 @@ func TestD244_FormRelocated(t *testing.T) {
 
 // --- D-236 变更14 断言⑭（先红后绿；年化公式时间感知+诚实空态） ---
 
-// 断言⑭a：service_hedge.go 年化改时间感知（days 因子除法），旧式单因子式退役。
+// 断言⑭a：service_hedge_carry.go 年化改时间感知（days 因子除法），旧式单因子式退役。
 func TestD236_v14_TimeAwareAnnualization(t *testing.T) {
 	_, testFile, _, _ := runtime.Caller(0)
-	path := filepath.Join(filepath.Dir(testFile), "..", "..", "internal", "dashboard", "service_hedge.go")
+	path := filepath.Join(filepath.Dir(testFile), "..", "..", "internal", "dashboard", "service_hedge_carry.go")
 	src := readFile(t, path)
 	if !strings.Contains(src, "FirstDailyIncomeDay") {
-		t.Errorf("service_hedge.go 缺 FirstDailyIncomeDay（首收益日=时间感知分母）")
+		t.Errorf("service_hedge_carry.go 缺 FirstDailyIncomeDay（首收益日=时间感知分母）")
 	}
 	if !strings.Contains(src, "/ days") {
-		t.Errorf("service_hedge.go 缺 days 因子除法（时间感知年化）")
+		t.Errorf("service_hedge_carry.go 缺 days 因子除法（时间感知年化）")
 	}
 	oldForm := "cumUsd / (qtyStaked * mid) * 365 * 100"
 	if strings.Contains(src, oldForm) {
@@ -521,16 +521,16 @@ func TestD236_v14_CarryAnnualizationMath(t *testing.T) {
 
 // --- D-236 变更15 断言⑮（先红后绿；对冲前后分段年化） ---
 
-// 断言⑮a：service_hedge.go 含第二窗口计算（from=hedgeStart，FirstCMCPositionOpenedAt）。
+// 断言⑮a：service_hedge_carry.go 含第二窗口计算（from=hedgeStart，FirstCMCPositionOpenedAt）。
 func TestD236_v15_HedgedSecondWindow(t *testing.T) {
 	_, testFile, _, _ := runtime.Caller(0)
-	path := filepath.Join(filepath.Dir(testFile), "..", "..", "internal", "dashboard", "service_hedge.go")
+	path := filepath.Join(filepath.Dir(testFile), "..", "..", "internal", "dashboard", "service_hedge_carry.go")
 	src := readFile(t, path)
 	if !strings.Contains(src, "FirstCMCPositionOpenedAt") {
-		t.Errorf("service_hedge.go 缺 FirstCMCPositionOpenedAt（对冲起点）")
+		t.Errorf("service_hedge_carry.go 缺 FirstCMCPositionOpenedAt（对冲起点）")
 	}
 	if !strings.Contains(src, "hedgedCumUsd") {
-		t.Errorf("service_hedge.go 缺第二窗口累计（hedgedCumUsd）")
+		t.Errorf("service_hedge_carry.go 缺第二窗口累计（hedgedCumUsd）")
 	}
 }
 
