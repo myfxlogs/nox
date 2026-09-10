@@ -1,6 +1,7 @@
 package eventwatch
 
 import (
+	"bytes"
 	"context"
 	"encoding/xml"
 	"fmt"
@@ -53,11 +54,31 @@ func fetchEDGAR(ctx context.Context, hc *http.Client, edgarURL string) ([]edgarE
 	return parseEDGAR(body)
 }
 
+// latin1ToUTF8 ISO-8859-1 → UTF-8（Latin-1 每字节直接映射 Unicode 码点，转换平凡）。
+// EDGAR Atom feed 声明 encoding="ISO-8859-1"（生产实测 2026-09-10），Go xml.Decoder
+// 对非 UTF-8 声明要求 CharsetReader——此处零依赖实现（golang.org/x/net/charset 引入违反零新依赖约束）。
+func latin1ToUTF8(charset string, input io.Reader) (io.Reader, error) {
+	if charset == "ISO-8859-1" || charset == "latin1" {
+		body, err := io.ReadAll(input)
+		if err != nil {
+			return nil, err
+		}
+		runes := make([]rune, len(body))
+		for i, b := range body {
+			runes[i] = rune(b)
+		}
+		return bytes.NewReader([]byte(string(runes))), nil
+	}
+	return input, nil // 其他声明原样交 Go 默认（UTF-8）
+}
+
 // parseEDGAR 解析 EDGAR Atom XML feed。
 // 无 filing 时 feed 无 entry 元素（S0 实证：返回空 feed + "No recent filings" 标题）。
 func parseEDGAR(body []byte) ([]edgarEntry, error) {
+	dec := xml.NewDecoder(bytes.NewReader(body))
+	dec.CharsetReader = latin1ToUTF8
 	var feed edgarFeed
-	if err := xml.Unmarshal(body, &feed); err != nil {
+	if err := dec.Decode(&feed); err != nil {
 		return nil, fmt.Errorf("edgar unmarshal: %w", err)
 	}
 	// entry 内 <link> 标签：优先取 href 属性，回退到文本内容

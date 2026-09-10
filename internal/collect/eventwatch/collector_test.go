@@ -467,3 +467,29 @@ func TestPoll_OneFailOneZero_NoZeroStreak(t *testing.T) {
 		t.Errorf("one fail one zero: zeroStreak=%d, want 0 (not all succeeded)", c.zeroStreak)
 	}
 }
+
+// TestParseEDGAR_Latin1 生产缺陷复归（2026-09-10 部署锚抓到）：EDGAR Atom feed 声明
+// encoding="ISO-8859-1"，Go xml.Decoder 无 CharsetReader 时报错→EDGAR 源全废。
+// 夹具=9-9 真实 curl 响应头形态（F6 规则①：字符串匹配规格贴真实样本）。
+func TestParseEDGAR_Latin1(t *testing.T) {
+	body := `<?xml version="1.0" encoding="ISO-8859-1" ?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+<title>Latest Filings - No recent filings</title>
+<entry>
+<title>SC 13E-3 [amend] CAFE CO, LTD - Amended</title>
+<link rel="alternate" type="text/html" href="https://www.sec.gov/Archives/edgar/data/1/0001.htm"/>
+<id>urn:accession-number:0001140361-26-001234</id>
+<updated>2026-09-10T00:00:00Z</updated>
+</entry>
+</feed>`
+	entries, err := parseEDGAR([]byte(body))
+	if err != nil {
+		t.Fatalf("latin1 parse: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("entries = %d, want 1", len(entries))
+	}
+	if entries[0].Link == "" {
+		t.Errorf("link empty（href 未取到）")
+	}
+}
