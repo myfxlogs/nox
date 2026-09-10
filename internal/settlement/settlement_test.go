@@ -39,6 +39,7 @@ type fakeDeps struct {
 	statsStatus        string                 // GetSettlementStatsStatus 返回值（applied/skipped 短路）
 	markRetryableCount int                    // MarkSettlementStatsRetryable 调用次数
 	lastSettlementRow  *pgstore.SettlementRow // 捕获 InsertSettlement 收到的 row
+	insertAlertMsgs    []string               // D-268：InsertAlert 捕获的 level:message 列表（spy）
 }
 
 func (f *fakeDeps) GetPosition(ctx context.Context, id int64) (*pgstore.Position, error) {
@@ -178,8 +179,11 @@ func (f *fakeDeps) MarkSettlementStatsRetryable(ctx context.Context, posID int64
 	return nil
 }
 
-// D-268 告警点 4：结算时策略淘汰告警 stub（计数供测试断言）。
+// D-268 告警点 4：结算时策略淘汰告警 stub（spy：捕获 level:message 供测试断言）。
 func (f *fakeDeps) InsertAlert(ctx context.Context, ruleID *int64, level, message string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.insertAlertMsgs = append(f.insertAlertMsgs, level+":"+message)
 	return nil
 }
 
