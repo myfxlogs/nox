@@ -277,6 +277,9 @@ const (
 	// DashboardServiceSetRepoConfigProcedure is the fully-qualified name of the DashboardService's
 	// SetRepoConfig RPC.
 	DashboardServiceSetRepoConfigProcedure = "/arb.dashboard.v1.DashboardService/SetRepoConfig"
+	// DashboardServiceGetCexScanSnapshotProcedure is the fully-qualified name of the DashboardService's
+	// GetCexScanSnapshot RPC.
+	DashboardServiceGetCexScanSnapshotProcedure = "/arb.dashboard.v1.DashboardService/GetCexScanSnapshot"
 )
 
 // DashboardServiceClient is a client for the arb.dashboard.v1.DashboardService service.
@@ -393,6 +396,8 @@ type DashboardServiceClient interface {
 	// D-270 R2：逆回购提醒配置 DB 化（前端可改免重启）
 	GetRepoConfig(context.Context, *connect.Request[v1.GetRepoConfigRequest]) (*connect.Response[v1.GetRepoConfigResponse], error)
 	SetRepoConfig(context.Context, *connect.Request[v1.SetRepoConfigRequest]) (*connect.Response[v1.SetRepoConfigResponse], error)
+	// D-271：CEX 只读扫描器快照（理财 APR + 跨所价差 + funding + 余额）
+	GetCexScanSnapshot(context.Context, *connect.Request[v1.GetCexScanSnapshotRequest]) (*connect.Response[v1.GetCexScanSnapshotResponse], error)
 }
 
 // NewDashboardServiceClient constructs a client for the arb.dashboard.v1.DashboardService service.
@@ -898,6 +903,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("SetRepoConfig")),
 			connect.WithClientOptions(opts...),
 		),
+		getCexScanSnapshot: connect.NewClient[v1.GetCexScanSnapshotRequest, v1.GetCexScanSnapshotResponse](
+			httpClient,
+			baseURL+DashboardServiceGetCexScanSnapshotProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("GetCexScanSnapshot")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -985,6 +996,7 @@ type dashboardServiceClient struct {
 	setAiSettings          *connect.Client[v1.SetAiSettingsRequest, v1.SetAiSettingsResponse]
 	getRepoConfig          *connect.Client[v1.GetRepoConfigRequest, v1.GetRepoConfigResponse]
 	setRepoConfig          *connect.Client[v1.SetRepoConfigRequest, v1.SetRepoConfigResponse]
+	getCexScanSnapshot     *connect.Client[v1.GetCexScanSnapshotRequest, v1.GetCexScanSnapshotResponse]
 }
 
 // ListLatestQuotes calls arb.dashboard.v1.DashboardService.ListLatestQuotes.
@@ -1397,6 +1409,11 @@ func (c *dashboardServiceClient) SetRepoConfig(ctx context.Context, req *connect
 	return c.setRepoConfig.CallUnary(ctx, req)
 }
 
+// GetCexScanSnapshot calls arb.dashboard.v1.DashboardService.GetCexScanSnapshot.
+func (c *dashboardServiceClient) GetCexScanSnapshot(ctx context.Context, req *connect.Request[v1.GetCexScanSnapshotRequest]) (*connect.Response[v1.GetCexScanSnapshotResponse], error) {
+	return c.getCexScanSnapshot.CallUnary(ctx, req)
+}
+
 // DashboardServiceHandler is an implementation of the arb.dashboard.v1.DashboardService service.
 type DashboardServiceHandler interface {
 	// 快照类
@@ -1511,6 +1528,8 @@ type DashboardServiceHandler interface {
 	// D-270 R2：逆回购提醒配置 DB 化（前端可改免重启）
 	GetRepoConfig(context.Context, *connect.Request[v1.GetRepoConfigRequest]) (*connect.Response[v1.GetRepoConfigResponse], error)
 	SetRepoConfig(context.Context, *connect.Request[v1.SetRepoConfigRequest]) (*connect.Response[v1.SetRepoConfigResponse], error)
+	// D-271：CEX 只读扫描器快照（理财 APR + 跨所价差 + funding + 余额）
+	GetCexScanSnapshot(context.Context, *connect.Request[v1.GetCexScanSnapshotRequest]) (*connect.Response[v1.GetCexScanSnapshotResponse], error)
 }
 
 // NewDashboardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -2012,6 +2031,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("SetRepoConfig")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceGetCexScanSnapshotHandler := connect.NewUnaryHandler(
+		DashboardServiceGetCexScanSnapshotProcedure,
+		svc.GetCexScanSnapshot,
+		connect.WithSchema(dashboardServiceMethods.ByName("GetCexScanSnapshot")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/arb.dashboard.v1.DashboardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DashboardServiceListLatestQuotesProcedure:
@@ -2178,6 +2203,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceGetRepoConfigHandler.ServeHTTP(w, r)
 		case DashboardServiceSetRepoConfigProcedure:
 			dashboardServiceSetRepoConfigHandler.ServeHTTP(w, r)
+		case DashboardServiceGetCexScanSnapshotProcedure:
+			dashboardServiceGetCexScanSnapshotHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -2513,4 +2540,8 @@ func (UnimplementedDashboardServiceHandler) GetRepoConfig(context.Context, *conn
 
 func (UnimplementedDashboardServiceHandler) SetRepoConfig(context.Context, *connect.Request[v1.SetRepoConfigRequest]) (*connect.Response[v1.SetRepoConfigResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetRepoConfig is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) GetCexScanSnapshot(context.Context, *connect.Request[v1.GetCexScanSnapshotRequest]) (*connect.Response[v1.GetCexScanSnapshotResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetCexScanSnapshot is not implemented"))
 }
