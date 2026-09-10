@@ -220,22 +220,22 @@ func TestDoClaim_Failed(t *testing.T) {
 	}
 }
 
-// TestConvertVotes map → []VoteEntry 转换。
+// TestConvertVotes map → []VoteEntry 转换（sun → TRX，除以 1e6）。
 func TestConvertVotes(t *testing.T) {
-	m := map[string]int64{"Tsr1": 5000, "Tsr2": 3000}
+	m := map[string]int64{"Tsr1": 5000000, "Tsr2": 3000000} // sun
 	votes := convertVotes(m)
 	if len(votes) != 2 {
 		t.Fatalf("len = %d, want 2", len(votes))
 	}
-	byAddr := make(map[string]int64)
+	byAddr := make(map[string]float64)
 	for _, v := range votes {
 		byAddr[v.SRAddress] = v.Votes
 	}
-	if byAddr["Tsr1"] != 5000 {
-		t.Errorf("Tsr1 votes = %d, want 5000", byAddr["Tsr1"])
+	if byAddr["Tsr1"] != 5.0 {
+		t.Errorf("Tsr1 votes = %f, want 5.0 TRX", byAddr["Tsr1"])
 	}
-	if byAddr["Tsr2"] != 3000 {
-		t.Errorf("Tsr2 votes = %d, want 3000", byAddr["Tsr2"])
+	if byAddr["Tsr2"] != 3.0 {
+		t.Errorf("Tsr2 votes = %f, want 3.0 TRX", byAddr["Tsr2"])
 	}
 }
 

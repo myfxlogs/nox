@@ -88,7 +88,7 @@ func TestDecide_DiversifyN(t *testing.T) {
 	// 等权分配：10000/5 = 2000
 	for _, v := range dec.Target {
 		if v.Votes != 2000 {
-			t.Errorf("votes = %d, want 2000 (等权分配 10000/5)", v.Votes)
+			t.Errorf("votes = %f, want 2000 (等权分配 10000/5)", v.Votes)
 		}
 	}
 }

@@ -19,10 +19,10 @@ type SRInfo struct {
 	Rank           int     // 得票排名 1-127
 }
 
-// VoteEntry 是单个 SR 的投票分配。
+// VoteEntry 是单个 SR 的投票分配（TRX 单位，浮点）。
 type VoteEntry struct {
 	SRAddress string
-	Votes     int64
+	Votes     float64
 }
 
 // RebalanceConfig 是决策引擎配置（从 env 注入，有默认值）。
@@ -111,7 +111,7 @@ func Decide(input RebalanceInput) RebalanceDecision {
 		return RebalanceDecision{NeedRebalance: false, Reason: "no candidates"}
 	}
 	selected := candidates[:n]
-	votesPerSR := input.TotalTP / int64(n)
+	votesPerSR := float64(input.TotalTP) / float64(n)
 
 	// 4. 构建目标投票分布
 	target := make([]VoteEntry, n)
@@ -120,7 +120,7 @@ func Decide(input RebalanceInput) RebalanceDecision {
 	}
 
 	// 5. 与当前投票对比，判断是否需要改投
-	// calcYield 返回绝对收益量（sun/年），除以 TotalTP（质押 sun）×100 得年化百分比。
+	// calcYield 返回绝对收益量（TRX/年），除以 TotalTP（TRX）×100 得年化百分比。
 	currentYieldAbs := calcYield(input.CurrentVotes, input.SRRanking)
 	targetYieldAbs := calcYield(target, input.SRRanking)
 	var currentYield, targetYield float64

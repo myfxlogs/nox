@@ -46,7 +46,7 @@ func NewExecutor(conn TronClient, privKey *btcec.PrivateKey, fromAddr string, al
 func (e *Executor) Vote(ctx context.Context, target []VoteEntry) (string, error) {
 	witnessMap := make(map[string]int64, len(target))
 	for _, v := range target {
-		witnessMap[v.SRAddress] = v.Votes
+		witnessMap[v.SRAddress] = int64(v.Votes * 1e6) // TRX → sun（链上 vote_count 单位）
 	}
 
 	// 1. 构建未签名交易（v1.1 B4：用 GetTransaction() 取 *core.Transaction）

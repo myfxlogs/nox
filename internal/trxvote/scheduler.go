@@ -199,11 +199,12 @@ func (s *Scheduler) doClaim(ctx context.Context) {
 	s.executor.Alert("warn", formatClaimAlert(txHash, amount))
 }
 
-// convertVotes 将 map[string]int64 转为 []VoteEntry。
+// convertVotes 将 map[string]int64（gotron-sdk Votes，sun 单位）转为 []VoteEntry（TRX 单位）。
+// gotron-sdk accDetail.Votes 是 sun（1 TRX = 1e6 sun），calcYield 用 TRX 统一。
 func convertVotes(votes map[string]int64) []VoteEntry {
 	out := make([]VoteEntry, 0, len(votes))
 	for addr, v := range votes {
-		out = append(out, VoteEntry{SRAddress: addr, Votes: v})
+		out = append(out, VoteEntry{SRAddress: addr, Votes: float64(v) / 1e6})
 	}
 	return out
 }
