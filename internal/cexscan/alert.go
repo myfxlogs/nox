@@ -62,15 +62,14 @@ func (e *AlertEvaluator) Evaluate(ctx context.Context, earnAPRs []pgstore.CexEar
 		}
 	}
 
-	// Funding：rate*100 >= cfg.CexScanFundingAprMin → 告警
+	// Funding：rate >= cfg.CexScanFundingAprMin → 告警（fact.Value 已是 pct_annualized 百分比，勿 *100）
 	for _, f := range fundings {
-		pct := f.Rate * 100
-		if pct >= e.cfg.CexScanFundingAprMin {
+		if f.Rate >= e.cfg.CexScanFundingAprMin {
 			key := "funding:" + f.Venue + ":" + f.Symbol
 			if !e.shouldAlert(key, now) {
 				continue
 			}
-			msg := fmt.Sprintf("[CEX funding] %s %s %.2f%%/yr", f.Venue, f.Symbol, pct)
+			msg := fmt.Sprintf("[CEX funding] %s %s %.2f%%/yr", f.Venue, f.Symbol, f.Rate)
 			if err := e.store.InsertAlert(ctx, nil, "warn", msg); err != nil {
 				return fmt.Errorf("insert funding alert: %w", err)
 			}

@@ -13,7 +13,7 @@ import (
 type FundingEntry struct {
 	Venue  string
 	Symbol string
-	Rate   float64 // 小数年化（fact.Value）
+	Rate   float64 // 百分比年化（fact.Value, unit=pct_annualized，10.49=10.49%/yr）
 	Ts     time.Time
 }
 
