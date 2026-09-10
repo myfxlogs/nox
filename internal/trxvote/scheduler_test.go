@@ -4,6 +4,8 @@ package trxvote
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -127,11 +129,40 @@ func TestDoRebalance_FetchFail(t *testing.T) {
 	}
 }
 
-// TestDoRebalance_AccountFail 账户查询失败 → warn 告警。
+// TestDoRebalance_AccountFail 账户查询失败 → warn 告警 + 不落库。
 func TestDoRebalance_AccountFail(t *testing.T) {
-	// 这个测试需要 mock fetchSRList 成功 + account 失败
-	// 用 httptest mock TronScan
-	t.Skip("S5 集成测试覆盖完整链路")
+	// httptest mock TronScan 成功 + account 查询失败 → warn 告警
+	srFixture := `[{"address":"SR1","name":"SR1","annualizedRate":"5.0","brokerage":0,"realTimeVotes":100000,"votes":100000,"producer":true,"producedTotal":100}]`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(srFixture))
+	}))
+	defer srv.Close()
+	SetHTTPClient(srv.Client())
+	defer SetHTTPClient(&http.Client{})
+
+	store := &fakeStore{rebalancedToday: false}
+	accFetcher := &mockAccountFetcher{err: errors.New("account query failed")}
+	sched, exec := testScheduler(t, store, accFetcher, &testExecutorConn{})
+	sched.tronscanBase = srv.URL
+	var gotAlert string
+	exec.alertSink = func(level, msg string) {
+		gotAlert = level + ":" + msg
+	}
+
+	sched.doRebalance(context.Background())
+
+	// account 查询失败 → warn 告警（scheduler.go:138 发 warn）
+	if gotAlert == "" {
+		t.Fatal("should alert on account query failure")
+	}
+	if len(gotAlert) < 4 || gotAlert[:4] != "warn" {
+		t.Errorf("alert level = %q, want warn", gotAlert)
+	}
+	// 不落库（account 失败在落库之前 return）
+	if store.insertedRebalance != nil {
+		t.Error("should not insert on account query failure")
+	}
 }
 
 // TestDoClaim_ZeroReward reward=0 → 跳过。
