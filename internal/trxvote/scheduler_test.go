@@ -37,7 +37,7 @@ func (f *fakeStore) UpdateTrxVoteRebalanceResult(_ context.Context, id int64, tx
 	f.updateStatus = status
 	return f.updateErr
 }
-func (f *fakeStore) TrxVoteRebalancedToday(_ context.Context) bool {
+func (f *fakeStore) TrxVoteRebalancedToday(_ context.Context, _ int) bool {
 	return f.rebalancedToday
 }
 

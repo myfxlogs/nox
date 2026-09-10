@@ -34,7 +34,7 @@ func (s *integrationStore) UpdateTrxVoteRebalanceResult(_ context.Context, id in
 	s.updatedStatus = status
 	return nil
 }
-func (s *integrationStore) TrxVoteRebalancedToday(_ context.Context) bool {
+func (s *integrationStore) TrxVoteRebalancedToday(_ context.Context, _ int) bool {
 	return s.rebalancedToday
 }
 

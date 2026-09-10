@@ -32,8 +32,8 @@ func (a *PgStoreAdapter) UpdateTrxVoteRebalanceResult(ctx context.Context, id in
 }
 
 // TrxVoteRebalancedToday 透传。
-func (a *PgStoreAdapter) TrxVoteRebalancedToday(ctx context.Context) bool {
-	return a.Store.TrxVoteRebalancedToday(ctx)
+func (a *PgStoreAdapter) TrxVoteRebalancedToday(ctx context.Context, maxPerDay int) bool {
+	return a.Store.TrxVoteRebalancedToday(ctx, maxPerDay)
 }
 
 // compile-time: *PgStoreAdapter 实现 Store 接口。

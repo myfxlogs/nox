@@ -32,7 +32,7 @@ type Scheduler struct {
 type Store interface {
 	InsertTrxVoteRebalance(ctx context.Context, rec TRXVoteRebalanceRecord) (int64, error)
 	UpdateTrxVoteRebalanceResult(ctx context.Context, id int64, txHash, status string) error
-	TrxVoteRebalancedToday(ctx context.Context) bool
+	TrxVoteRebalancedToday(ctx context.Context, maxPerDay int) bool
 }
 
 // TRXVoteRebalanceRecord 是 Store.InsertTrxVoteRebalance 的输入（解耦 pgstore struct 供测试）。
@@ -118,7 +118,7 @@ func (s *Scheduler) waitUntilNextClaimSlot(ctx context.Context) {
 // doRebalance 执行一轮改投决策（设计 §5 v1.1）。
 func (s *Scheduler) doRebalance(ctx context.Context) {
 	// 1. 检查今日是否已改投
-	if s.store.TrxVoteRebalancedToday(ctx) {
+	if s.store.TrxVoteRebalancedToday(ctx, s.config.MaxRebalancePerDay) {
 		log.Println("[trxvote] 今日已改投，跳过")
 		return
 	}

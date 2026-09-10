@@ -31,7 +31,6 @@ type RebalanceConfig struct {
 	MaxSRs             int     // 最多分散 SR 数（默认 5）
 	MaxBrokerage       int     // 最大可接受 brokerage（默认 20，即 20%）
 	MinRank            int     // 最低排名要求（默认 127，即 top 127 都可）
-	PreferProducer     bool    // 偏好出块 SR（默认 true）
 	YieldDropPct       float64 // 触发改投的收益下降阈值（默认 15%）
 	BetterOppPct       float64 // 触发改投的更优机会阈值（默认 20%）
 	MaxRebalancePerDay int     // 每日最大改投次数（默认 1）
@@ -62,7 +61,6 @@ func DefaultConfig() RebalanceConfig {
 		MaxSRs:             5,
 		MaxBrokerage:       20,
 		MinRank:            127,
-		PreferProducer:     true,
 		YieldDropPct:       15.0,
 		BetterOppPct:       20.0,
 		MaxRebalancePerDay: 1,
