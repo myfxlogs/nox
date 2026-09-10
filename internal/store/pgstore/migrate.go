@@ -73,7 +73,7 @@ var migrationFiles = []struct {
 	{75, migrations.CnfiCandidatePoolSQL},
 	{76, migrations.TrxVoteAprTopSQL},
 	{77, migrations.FeishuPushTargetSQL}, // D-264 飞书告警推送目标
-	{78, migrations.TrxVoteRebalanceSQL}, // D-269 TRX 投票收益优化器
+	{79, migrations.TrxVoteRebalanceSQL}, // D-269 TRX 投票收益优化器
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

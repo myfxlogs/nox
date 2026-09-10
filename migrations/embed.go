@@ -176,5 +176,5 @@ var TrxVoteAprTopSQL string
 //go:embed 0077_feishu_push_target.sql
 var FeishuPushTargetSQL string
 
-//go:embed 0078_trx_vote_rebalance.sql
+//go:embed 0079_trx_vote_rebalance.sql
 var TrxVoteRebalanceSQL string
