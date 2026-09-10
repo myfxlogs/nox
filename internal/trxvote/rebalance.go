@@ -138,9 +138,6 @@ func Decide(input RebalanceInput) RebalanceDecision {
 	if improvement >= input.Config.BetterOppPct {
 		needRebalance = true
 		reason = fmt.Sprintf("更优机会 +%.1f%% (≥%.0f%%)", improvement, input.Config.BetterOppPct)
-	} else if currentYield > 0 && targetYield < currentYield*(1-input.Config.YieldDropPct/100) {
-		needRebalance = true
-		reason = fmt.Sprintf("收益下降 %.1f%% (≥%.0f%%)", (currentYield-targetYield)/currentYield*100, input.Config.YieldDropPct)
 	} else {
 		reason = fmt.Sprintf("无需改投 (改善 %.1f%%)", improvement)
 	}

@@ -91,6 +91,9 @@ func (s *Scheduler) claimLoop(ctx context.Context) {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 	s.waitUntilNextClaimSlot(ctx)
+	if ctx.Err() != nil {
+		return // ctx 已取消（容器重启），勿执行 doClaim 避免虚假告警
+	}
 	s.doClaim(ctx)
 	for {
 		select {
