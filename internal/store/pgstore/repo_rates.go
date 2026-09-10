@@ -99,3 +99,21 @@ func (s *Store) AlreadyAlertedToday(ctx context.Context, pattern string) (bool, 
 	}
 	return exists, nil
 }
+
+// RepoRate30dPercentile 返回指定 code 当前利率在 30 日分布中的分位数（0-100）。
+// 冷启动（无数据）返回 (0, false, nil)——不阻塞提醒，分位数仅用于展示。
+// 用 COUNT FILTER 计算（精确分位数，无需 PG 特定函数）。
+func (s *Store) RepoRate30dPercentile(ctx context.Context, code string, currentRate float64) (float64, bool, error) {
+	var total, below int64
+	err := s.pool.QueryRow(ctx,
+		`SELECT COUNT(*), COUNT(*) FILTER (WHERE rate_pct <= $2)
+		 FROM fin_repo_rates WHERE code = $1 AND ts >= now() - interval '30 days'`,
+		code, currentRate).Scan(&total, &below)
+	if err != nil {
+		return 0, false, err
+	}
+	if total == 0 {
+		return 0, false, nil
+	}
+	return float64(below) / float64(total) * 100, true, nil
+}

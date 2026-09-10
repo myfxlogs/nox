@@ -91,9 +91,13 @@ func (c *AccountCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 		votesTotal = res.TronPowerLimit
 	}
 
+	// TronPower = bandwidthStaked + energyDelegated（sun 单位，对齐 balance_sun 口径；除以 1e6 得 TRX）
+	tronPowerSun := bandwidthStaked + energyDelegated
+
 	rec := pgstore.TRXAccount{
 		Address:         c.address,
 		VotesTotal:      votesTotal,
+		TronPower:       tronPowerSun,
 		SRAddress:       srAddr,
 		BalanceSun:      acc.Balance,
 		AllowanceSun:    acc.Allowance,

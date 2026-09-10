@@ -189,3 +189,60 @@ func TestRepoRate_TradeDateShanghaiTZ(t *testing.T) {
 		t.Errorf("trade_date = %s, want 2026-09-10（上海午夜不应偏移到前一天）", tradeDate)
 	}
 }
+
+// TestRepoRate_30dPercentile 分位数查询测试。
+// 插入 10 行 rate_pct: 1.0, 1.1, ..., 1.9 → 验证分位数计算。
+func TestRepoRate_30dPercentile(t *testing.T) {
+	s := repoTestStore(t)
+	ctx := context.Background()
+	day := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
+	for i := 0; i < 10; i++ {
+		rate := 1.0 + float64(i)*0.1
+		if err := s.InsertRepoRate(ctx, "204001", "GC001", rate, nil, day); err != nil {
+			t.Fatalf("InsertRepoRate %d: %v", i, err)
+		}
+	}
+	// currentRate=1.5 → below=5 (1.0,1.1,1.2,1.3,1.4,1.5 都 <= 1.5), total=10 → percentile=60
+	pct, has, err := s.RepoRate30dPercentile(ctx, "204001", 1.5)
+	if err != nil {
+		t.Fatalf("RepoRate30dPercentile: %v", err)
+	}
+	if !has {
+		t.Fatal("has=false, want true")
+	}
+	if pct != 60 {
+		t.Errorf("percentile = %v, want 60", pct)
+	}
+	// currentRate=1.0 → below=1, total=10 → percentile=10
+	pct, _, err = s.RepoRate30dPercentile(ctx, "204001", 1.0)
+	if err != nil {
+		t.Fatalf("RepoRate30dPercentile: %v", err)
+	}
+	if pct != 10 {
+		t.Errorf("percentile = %v, want 10", pct)
+	}
+	// currentRate=2.0 → below=10, total=10 → percentile=100
+	pct, _, err = s.RepoRate30dPercentile(ctx, "204001", 2.0)
+	if err != nil {
+		t.Fatalf("RepoRate30dPercentile: %v", err)
+	}
+	if pct != 100 {
+		t.Errorf("percentile = %v, want 100", pct)
+	}
+}
+
+// TestRepoRate_30dPercentile_ColdStart 冷启动（无数据）→ (0, false, nil)。
+func TestRepoRate_30dPercentile_ColdStart(t *testing.T) {
+	s := repoTestStore(t)
+	ctx := context.Background()
+	pct, has, err := s.RepoRate30dPercentile(ctx, "204001", 1.5)
+	if err != nil {
+		t.Fatalf("RepoRate30dPercentile: %v", err)
+	}
+	if has {
+		t.Error("has=true, want false（冷启动）")
+	}
+	if pct != 0 {
+		t.Errorf("percentile = %v, want 0（冷启动）", pct)
+	}
+}

@@ -184,3 +184,9 @@ var TrxVoteRebalanceSQL string
 
 //go:embed 0080_cnfi_repo_ops.sql
 var CnfiRepoOpsSQL string
+
+//go:embed 0081_trx_account_tron_power.sql
+var TrxAccountTronPowerSQL string
+
+//go:embed 0082_cnfi_repo_config.sql
+var CnfiRepoConfigSQL string

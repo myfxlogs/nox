@@ -139,6 +139,9 @@ service DashboardService {
   // D-091 返修② R3：AI 配置 DB 化（前端可配，Get 掩码/Set 空 key 不覆盖）
   rpc GetAiSettings(GetAiSettingsRequest) returns (GetAiSettingsResponse);
   rpc SetAiSettings(SetAiSettingsRequest) returns (SetAiSettingsResponse);
+  // D-270 R2：逆回购提醒配置 DB 化（前端可改免重启）
+  rpc GetRepoConfig(GetRepoConfigRequest) returns (GetRepoConfigResponse);
+  rpc SetRepoConfig(SetRepoConfigRequest) returns (SetRepoConfigResponse);
 }
 
 // === Quote（§1.1）===
@@ -1555,3 +1558,20 @@ message RepoRateSnapshot {
   double rate_pct = 3;  // 年化利率%
   optional double change_pct = 4; // 涨跌幅%（可空，缺失=—，真实零=0.00%）
 }
+
+// D-270 R2：逆回购提醒配置（DB 化，前端可改免重启）
+message GetRepoConfigRequest {}
+message GetRepoConfigResponse {
+  double idle_cny = 1;        // 闲置 CNY 金额（0=禁用）
+  double min_return_cny = 2;  // 最小预期收益（元）
+  int32 reminder_hour = 3;   // 提醒时段（0-23，北京时间）
+  bool enabled = 4;           // 总开关
+}
+
+message SetRepoConfigRequest {
+  double idle_cny = 1;
+  double min_return_cny = 2;
+  int32 reminder_hour = 3;
+  bool enabled = 4;
+}
+message SetRepoConfigResponse { bool ok = 1; }

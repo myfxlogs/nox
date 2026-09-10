@@ -20,6 +20,7 @@ type TRXAccount struct {
 	ID              int64
 	Address         string
 	VotesTotal      int64
+	TronPower       int64   // 质押量（sun，=bandwidthStaked+energyDelegated）
 	SRAddress       *string // nil = 无投票
 	BalanceSun      int64
 	AllowanceSun    int64
@@ -57,10 +58,10 @@ type TRXWitness struct {
 func (s *Store) InsertTRXAccount(ctx context.Context, a TRXAccount) error {
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO fin_trx_account
-		  (address, votes_total, sr_address, balance_sun, allowance_sun,
+		  (address, votes_total, tron_power, sr_address, balance_sun, allowance_sun,
 		   energy_delegated, bandwidth_staked, net_limit, unfrozen, fetched_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10,now()))
-	`, a.Address, a.VotesTotal, a.SRAddress, a.BalanceSun, a.AllowanceSun,
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,COALESCE($11,now()))
+	`, a.Address, a.VotesTotal, a.TronPower, a.SRAddress, a.BalanceSun, a.AllowanceSun,
 		a.EnergyDelegated, a.BandwidthStaked, a.NetLimit, a.Unfrozen, a.FetchedAt)
 	if err != nil {
 		return fmt.Errorf("insert trx account: %w", err)
@@ -102,12 +103,12 @@ func (s *Store) InsertTRXWitness(ctx context.Context, w TRXWitness) error {
 func (s *Store) LastTRXAccount(ctx context.Context) (TRXAccount, error) {
 	var a TRXAccount
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, address, votes_total, sr_address, balance_sun, allowance_sun,
+		SELECT id, address, votes_total, tron_power, sr_address, balance_sun, allowance_sun,
 		       energy_delegated, bandwidth_staked, net_limit, unfrozen, fetched_at
 		FROM fin_trx_account
 		ORDER BY fetched_at DESC
 		LIMIT 1
-	`).Scan(&a.ID, &a.Address, &a.VotesTotal, &a.SRAddress, &a.BalanceSun, &a.AllowanceSun,
+	`).Scan(&a.ID, &a.Address, &a.VotesTotal, &a.TronPower, &a.SRAddress, &a.BalanceSun, &a.AllowanceSun,
 		&a.EnergyDelegated, &a.BandwidthStaked, &a.NetLimit, &a.Unfrozen, &a.FetchedAt)
 	if err != nil {
 		return a, fmt.Errorf("last trx account: %w", err)
@@ -120,7 +121,7 @@ func (s *Store) ListTRXAccountByDay(ctx context.Context, day time.Time) ([]TRXAc
 	start := day.UTC().Truncate(24 * time.Hour)
 	end := start.Add(24 * time.Hour)
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, address, votes_total, sr_address, balance_sun, allowance_sun,
+		SELECT id, address, votes_total, tron_power, sr_address, balance_sun, allowance_sun,
 		       energy_delegated, bandwidth_staked, net_limit, unfrozen, fetched_at
 		FROM fin_trx_account
 		WHERE fetched_at >= $1 AND fetched_at < $2
@@ -133,7 +134,7 @@ func (s *Store) ListTRXAccountByDay(ctx context.Context, day time.Time) ([]TRXAc
 	var out []TRXAccount
 	for rows.Next() {
 		var a TRXAccount
-		if err := rows.Scan(&a.ID, &a.Address, &a.VotesTotal, &a.SRAddress, &a.BalanceSun,
+		if err := rows.Scan(&a.ID, &a.Address, &a.VotesTotal, &a.TronPower, &a.SRAddress, &a.BalanceSun,
 			&a.AllowanceSun, &a.EnergyDelegated, &a.BandwidthStaked, &a.NetLimit,
 			&a.Unfrozen, &a.FetchedAt); err != nil {
 			return nil, err

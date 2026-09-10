@@ -88,6 +88,10 @@ func TestAccountCollector_Poll_Success(t *testing.T) {
 	if acc.VotesTotal != 18070 {
 		t.Errorf("VotesTotal = %d, want 18070", acc.VotesTotal)
 	}
+	// TronPower = bandwidthStaked + energyDelegated（D-211 返修）
+	if acc.TronPower != 800000000+17270000000 {
+		t.Errorf("TronPower = %d, want %d", acc.TronPower, 800000000+17270000000)
+	}
 	if acc.BalanceSun != 97863827 {
 		t.Errorf("BalanceSun = %d, want 97863827", acc.BalanceSun)
 	}
@@ -619,6 +623,10 @@ func TestAccountCollector_Poll_MultiSR_VotesTotalSum(t *testing.T) {
 	// R3：votesTotal=Σ=18070（非 votes[0]=6024）
 	if acc.VotesTotal != 18070 {
 		t.Errorf("VotesTotal = %d, want 18070 (Σvotes: 6024+6023+6023)", acc.VotesTotal)
+	}
+	// D-211 返修：TronPower = bandwidthStaked + energyDelegated
+	if acc.TronPower != acc.BandwidthStaked+acc.EnergyDelegated {
+		t.Errorf("TronPower = %d, want %d (bandwidthStaked+energyDelegated)", acc.TronPower, acc.BandwidthStaked+acc.EnergyDelegated)
 	}
 	// R3：srAddr=票数最多者（Nansen_ai 6024，vote_address=TNeEwWHXLLUgEtfzTnYN8wtVenGxuMzZCE）
 	if acc.SRAddress == nil {

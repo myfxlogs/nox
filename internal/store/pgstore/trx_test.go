@@ -19,6 +19,7 @@ func TestTRXAccountInsertAndLast(t *testing.T) {
 	a := TRXAccount{
 		Address:         "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555",
 		VotesTotal:      18070,
+		TronPower:       107332000000, // sun（= 107332 TRX）
 		SRAddress:       &sr,
 		BalanceSun:      97863827,
 		AllowanceSun:    7717994,
@@ -46,6 +47,9 @@ func TestTRXAccountInsertAndLast(t *testing.T) {
 	}
 	if got.VotesTotal != 18070 {
 		t.Errorf("VotesTotal = %d, want 18070", got.VotesTotal)
+	}
+	if got.TronPower != 107332000000 {
+		t.Errorf("TronPower = %d, want 107332000000", got.TronPower)
 	}
 	if got.SRAddress == nil || *got.SRAddress != sr {
 		t.Errorf("SRAddress = %v, want %s", got.SRAddress, sr)
