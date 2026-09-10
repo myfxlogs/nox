@@ -89,8 +89,12 @@ func (s *Service) AddCNFIAction(ctx context.Context, req *connect.Request[v1.Add
 		return nil, err
 	}
 	var navAt *float64
+	var ratePct *float64
+	if m.RatePct != nil {
+		ratePct = m.RatePct
+	}
 	id, err := s.store.AddCNFIAction(ctx, m.Code, m.Layer, m.ActionType, m.Qty, m.AmountCny,
-		navAt, string(snap), m.Rationale, day)
+		navAt, ratePct, string(snap), m.Rationale, day)
 	if err != nil {
 		resp.Error = err.Error()
 		return connect.NewResponse(resp), nil
@@ -111,11 +115,15 @@ func (s *Service) ListCNFIActions(ctx context.Context, req *connect.Request[v1.L
 	}
 	resp := &v1.ListCNFIActionsResponse{}
 	for _, r := range rows {
-		resp.Actions = append(resp.Actions, &v1.CnfiActionRow{
+		row := &v1.CnfiActionRow{
 			Id: r.ID, Code: r.Code, Layer: r.Layer, ActionType: r.ActionType,
 			Qty: r.Qty, AmountCny: r.AmountCny, Rationale: r.Rationale,
 			ActionDate: r.ActionDate, SignalSnapshot: r.SignalSnapshot,
-		})
+		}
+		if r.RatePct != nil {
+			row.RatePct = r.RatePct
+		}
+		resp.Actions = append(resp.Actions, row)
 	}
 	return connect.NewResponse(resp), nil
 }
@@ -181,4 +189,44 @@ func (s *Service) enrichProgressExpectation(ctx context.Context, resp *v1.GetCNF
 		lp.MarketValueCny = layerMV[lp.Layer]
 	}
 	return nil
+}
+
+// ListRepoOps 列出逆回购操作记录（D-270 周四操作闭环审计）。
+func (s *Service) ListRepoOps(ctx context.Context, req *connect.Request[v1.ListRepoOpsRequest]) (*connect.Response[v1.ListRepoOpsResponse], error) {
+	limit := int(req.Msg.GetLimit())
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	rows, err := s.store.ListRepoOps(ctx, limit)
+	if err != nil {
+		return nil, err
+	}
+	resp := &v1.ListRepoOpsResponse{}
+	for _, r := range rows {
+		row := &v1.RepoOpRow{
+			Id: r.ID, OpportunityWeek: r.OpportunityWeek,
+			InstrumentCode: r.InstrumentCode, InstrumentName: r.InstrumentName,
+			Status: r.Status, TriggerRatePct: r.RatePctAtTrigger,
+			HoldingDays: int32(r.HoldingDays), ReminderCount: int32(r.ReminderCount),
+			CreatedAt: r.CreatedAt.Format("2006-01-02 15:04"),
+			UpdatedAt: r.UpdatedAt.Format("2006-01-02 15:04"),
+		}
+		if r.ExpectedReturnCny != nil {
+			row.ExpectedReturnCny = *r.ExpectedReturnCny
+		}
+		if r.SignalSnapshot != nil {
+			row.SignalSnapshot = *r.SignalSnapshot
+		}
+		if r.SkipReason != nil {
+			row.SkipReason = *r.SkipReason
+		}
+		if r.OperatedAmountCny != nil {
+			row.OperationAmountCny = *r.OperatedAmountCny
+		}
+		if r.OperatedRatePct != nil {
+			row.OperationRatePct = *r.OperatedRatePct
+		}
+		resp.Ops = append(resp.Ops, row)
+	}
+	return connect.NewResponse(resp), nil
 }

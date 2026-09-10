@@ -110,6 +110,9 @@ const (
 	// DashboardServiceListCNFIActionsProcedure is the fully-qualified name of the DashboardService's
 	// ListCNFIActions RPC.
 	DashboardServiceListCNFIActionsProcedure = "/arb.dashboard.v1.DashboardService/ListCNFIActions"
+	// DashboardServiceListRepoOpsProcedure is the fully-qualified name of the DashboardService's
+	// ListRepoOps RPC.
+	DashboardServiceListRepoOpsProcedure = "/arb.dashboard.v1.DashboardService/ListRepoOps"
 	// DashboardServiceListPositionsProcedure is the fully-qualified name of the DashboardService's
 	// ListPositions RPC.
 	DashboardServiceListPositionsProcedure = "/arb.dashboard.v1.DashboardService/ListPositions"
@@ -143,6 +146,9 @@ const (
 	// DashboardServiceGetTrxYieldRadarProcedure is the fully-qualified name of the DashboardService's
 	// GetTrxYieldRadar RPC.
 	DashboardServiceGetTrxYieldRadarProcedure = "/arb.dashboard.v1.DashboardService/GetTrxYieldRadar"
+	// DashboardServiceGetRepoRateRadarProcedure is the fully-qualified name of the DashboardService's
+	// GetRepoRateRadar RPC.
+	DashboardServiceGetRepoRateRadarProcedure = "/arb.dashboard.v1.DashboardService/GetRepoRateRadar"
 	// DashboardServiceAddDailyIncomeProcedure is the fully-qualified name of the DashboardService's
 	// AddDailyIncome RPC.
 	DashboardServiceAddDailyIncomeProcedure = "/arb.dashboard.v1.DashboardService/AddDailyIncome"
@@ -306,6 +312,8 @@ type DashboardServiceClient interface {
 	// CN-FI 操作日志/投资笔记（D-242；金额=运行时个人数据，L2 人工）
 	AddCNFIAction(context.Context, *connect.Request[v1.AddCNFIActionRequest]) (*connect.Response[v1.AddCNFIActionResponse], error)
 	ListCNFIActions(context.Context, *connect.Request[v1.ListCNFIActionsRequest]) (*connect.Response[v1.ListCNFIActionsResponse], error)
+	// D-270：逆回购操作记录列表（周四操作闭环审计）
+	ListRepoOps(context.Context, *connect.Request[v1.ListRepoOpsRequest]) (*connect.Response[v1.ListRepoOpsResponse], error)
 	ListPositions(context.Context, *connect.Request[v1.ListPositionsRequest]) (*connect.Response[v1.ListPositionsResponse], error)
 	// Broker 实持仓（D-051 WP3：MT5/MT4 实际持仓统一视图，实时查不落库）
 	ListBrokerPositions(context.Context, *connect.Request[v1.ListBrokerPositionsRequest]) (*connect.Response[v1.ListBrokerPositionsResponse], error)
@@ -319,6 +327,7 @@ type DashboardServiceClient interface {
 	TrxVoteAprRefresh(context.Context, *connect.Request[v1.TrxVoteAprRefreshRequest]) (*connect.Response[v1.TrxVoteAprRefreshResponse], error)
 	TrxAccountRefresh(context.Context, *connect.Request[v1.TrxAccountRefreshRequest]) (*connect.Response[v1.TrxAccountRefreshResponse], error)
 	GetTrxYieldRadar(context.Context, *connect.Request[v1.GetTrxYieldRadarRequest]) (*connect.Response[v1.GetTrxYieldRadarResponse], error)
+	GetRepoRateRadar(context.Context, *connect.Request[v1.GetRepoRateRadarRequest]) (*connect.Response[v1.GetRepoRateRadarResponse], error)
 	AddDailyIncome(context.Context, *connect.Request[v1.AddDailyIncomeRequest]) (*connect.Response[v1.AddDailyIncomeResponse], error)
 	ListDailyIncome(context.Context, *connect.Request[v1.ListDailyIncomeRequest]) (*connect.Response[v1.ListDailyIncomeResponse], error)
 	// 盈亏统计起点（F4：anchor 重置，业主选 A「不删历史」）
@@ -544,6 +553,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("ListCNFIActions")),
 			connect.WithClientOptions(opts...),
 		),
+		listRepoOps: connect.NewClient[v1.ListRepoOpsRequest, v1.ListRepoOpsResponse](
+			httpClient,
+			baseURL+DashboardServiceListRepoOpsProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListRepoOps")),
+			connect.WithClientOptions(opts...),
+		),
 		listPositions: connect.NewClient[v1.ListPositionsRequest, v1.ListPositionsResponse](
 			httpClient,
 			baseURL+DashboardServiceListPositionsProcedure,
@@ -608,6 +623,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			httpClient,
 			baseURL+DashboardServiceGetTrxYieldRadarProcedure,
 			connect.WithSchema(dashboardServiceMethods.ByName("GetTrxYieldRadar")),
+			connect.WithClientOptions(opts...),
+		),
+		getRepoRateRadar: connect.NewClient[v1.GetRepoRateRadarRequest, v1.GetRepoRateRadarResponse](
+			httpClient,
+			baseURL+DashboardServiceGetRepoRateRadarProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("GetRepoRateRadar")),
 			connect.WithClientOptions(opts...),
 		),
 		addDailyIncome: connect.NewClient[v1.AddDailyIncomeRequest, v1.AddDailyIncomeResponse](
@@ -887,6 +908,7 @@ type dashboardServiceClient struct {
 	addCNFIHolding         *connect.Client[v1.AddCNFIHoldingRequest, v1.AddCNFIHoldingResponse]
 	addCNFIAction          *connect.Client[v1.AddCNFIActionRequest, v1.AddCNFIActionResponse]
 	listCNFIActions        *connect.Client[v1.ListCNFIActionsRequest, v1.ListCNFIActionsResponse]
+	listRepoOps            *connect.Client[v1.ListRepoOpsRequest, v1.ListRepoOpsResponse]
 	listPositions          *connect.Client[v1.ListPositionsRequest, v1.ListPositionsResponse]
 	listBrokerPositions    *connect.Client[v1.ListBrokerPositionsRequest, v1.ListBrokerPositionsResponse]
 	closeBrokerPosition    *connect.Client[v1.CloseBrokerPositionRequest, v1.CloseBrokerPositionResponse]
@@ -898,6 +920,7 @@ type dashboardServiceClient struct {
 	trxVoteAprRefresh      *connect.Client[v1.TrxVoteAprRefreshRequest, v1.TrxVoteAprRefreshResponse]
 	trxAccountRefresh      *connect.Client[v1.TrxAccountRefreshRequest, v1.TrxAccountRefreshResponse]
 	getTrxYieldRadar       *connect.Client[v1.GetTrxYieldRadarRequest, v1.GetTrxYieldRadarResponse]
+	getRepoRateRadar       *connect.Client[v1.GetRepoRateRadarRequest, v1.GetRepoRateRadarResponse]
 	addDailyIncome         *connect.Client[v1.AddDailyIncomeRequest, v1.AddDailyIncomeResponse]
 	listDailyIncome        *connect.Client[v1.ListDailyIncomeRequest, v1.ListDailyIncomeResponse]
 	getPnlAnchor           *connect.Client[v1.GetPnlAnchorRequest, v1.GetPnlAnchorResponse]
@@ -1071,6 +1094,11 @@ func (c *dashboardServiceClient) ListCNFIActions(ctx context.Context, req *conne
 	return c.listCNFIActions.CallUnary(ctx, req)
 }
 
+// ListRepoOps calls arb.dashboard.v1.DashboardService.ListRepoOps.
+func (c *dashboardServiceClient) ListRepoOps(ctx context.Context, req *connect.Request[v1.ListRepoOpsRequest]) (*connect.Response[v1.ListRepoOpsResponse], error) {
+	return c.listRepoOps.CallUnary(ctx, req)
+}
+
 // ListPositions calls arb.dashboard.v1.DashboardService.ListPositions.
 func (c *dashboardServiceClient) ListPositions(ctx context.Context, req *connect.Request[v1.ListPositionsRequest]) (*connect.Response[v1.ListPositionsResponse], error) {
 	return c.listPositions.CallUnary(ctx, req)
@@ -1124,6 +1152,11 @@ func (c *dashboardServiceClient) TrxAccountRefresh(ctx context.Context, req *con
 // GetTrxYieldRadar calls arb.dashboard.v1.DashboardService.GetTrxYieldRadar.
 func (c *dashboardServiceClient) GetTrxYieldRadar(ctx context.Context, req *connect.Request[v1.GetTrxYieldRadarRequest]) (*connect.Response[v1.GetTrxYieldRadarResponse], error) {
 	return c.getTrxYieldRadar.CallUnary(ctx, req)
+}
+
+// GetRepoRateRadar calls arb.dashboard.v1.DashboardService.GetRepoRateRadar.
+func (c *dashboardServiceClient) GetRepoRateRadar(ctx context.Context, req *connect.Request[v1.GetRepoRateRadarRequest]) (*connect.Response[v1.GetRepoRateRadarResponse], error) {
+	return c.getRepoRateRadar.CallUnary(ctx, req)
 }
 
 // AddDailyIncome calls arb.dashboard.v1.DashboardService.AddDailyIncome.
@@ -1370,6 +1403,8 @@ type DashboardServiceHandler interface {
 	// CN-FI 操作日志/投资笔记（D-242；金额=运行时个人数据，L2 人工）
 	AddCNFIAction(context.Context, *connect.Request[v1.AddCNFIActionRequest]) (*connect.Response[v1.AddCNFIActionResponse], error)
 	ListCNFIActions(context.Context, *connect.Request[v1.ListCNFIActionsRequest]) (*connect.Response[v1.ListCNFIActionsResponse], error)
+	// D-270：逆回购操作记录列表（周四操作闭环审计）
+	ListRepoOps(context.Context, *connect.Request[v1.ListRepoOpsRequest]) (*connect.Response[v1.ListRepoOpsResponse], error)
 	ListPositions(context.Context, *connect.Request[v1.ListPositionsRequest]) (*connect.Response[v1.ListPositionsResponse], error)
 	// Broker 实持仓（D-051 WP3：MT5/MT4 实际持仓统一视图，实时查不落库）
 	ListBrokerPositions(context.Context, *connect.Request[v1.ListBrokerPositionsRequest]) (*connect.Response[v1.ListBrokerPositionsResponse], error)
@@ -1383,6 +1418,7 @@ type DashboardServiceHandler interface {
 	TrxVoteAprRefresh(context.Context, *connect.Request[v1.TrxVoteAprRefreshRequest]) (*connect.Response[v1.TrxVoteAprRefreshResponse], error)
 	TrxAccountRefresh(context.Context, *connect.Request[v1.TrxAccountRefreshRequest]) (*connect.Response[v1.TrxAccountRefreshResponse], error)
 	GetTrxYieldRadar(context.Context, *connect.Request[v1.GetTrxYieldRadarRequest]) (*connect.Response[v1.GetTrxYieldRadarResponse], error)
+	GetRepoRateRadar(context.Context, *connect.Request[v1.GetRepoRateRadarRequest]) (*connect.Response[v1.GetRepoRateRadarResponse], error)
 	AddDailyIncome(context.Context, *connect.Request[v1.AddDailyIncomeRequest]) (*connect.Response[v1.AddDailyIncomeResponse], error)
 	ListDailyIncome(context.Context, *connect.Request[v1.ListDailyIncomeRequest]) (*connect.Response[v1.ListDailyIncomeResponse], error)
 	// 盈亏统计起点（F4：anchor 重置，业主选 A「不删历史」）
@@ -1604,6 +1640,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("ListCNFIActions")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceListRepoOpsHandler := connect.NewUnaryHandler(
+		DashboardServiceListRepoOpsProcedure,
+		svc.ListRepoOps,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListRepoOps")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceListPositionsHandler := connect.NewUnaryHandler(
 		DashboardServiceListPositionsProcedure,
 		svc.ListPositions,
@@ -1668,6 +1710,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		DashboardServiceGetTrxYieldRadarProcedure,
 		svc.GetTrxYieldRadar,
 		connect.WithSchema(dashboardServiceMethods.ByName("GetTrxYieldRadar")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceGetRepoRateRadarHandler := connect.NewUnaryHandler(
+		DashboardServiceGetRepoRateRadarProcedure,
+		svc.GetRepoRateRadar,
+		connect.WithSchema(dashboardServiceMethods.ByName("GetRepoRateRadar")),
 		connect.WithHandlerOptions(opts...),
 	)
 	dashboardServiceAddDailyIncomeHandler := connect.NewUnaryHandler(
@@ -1970,6 +2018,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceAddCNFIActionHandler.ServeHTTP(w, r)
 		case DashboardServiceListCNFIActionsProcedure:
 			dashboardServiceListCNFIActionsHandler.ServeHTTP(w, r)
+		case DashboardServiceListRepoOpsProcedure:
+			dashboardServiceListRepoOpsHandler.ServeHTTP(w, r)
 		case DashboardServiceListPositionsProcedure:
 			dashboardServiceListPositionsHandler.ServeHTTP(w, r)
 		case DashboardServiceListBrokerPositionsProcedure:
@@ -1992,6 +2042,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceTrxAccountRefreshHandler.ServeHTTP(w, r)
 		case DashboardServiceGetTrxYieldRadarProcedure:
 			dashboardServiceGetTrxYieldRadarHandler.ServeHTTP(w, r)
+		case DashboardServiceGetRepoRateRadarProcedure:
+			dashboardServiceGetRepoRateRadarHandler.ServeHTTP(w, r)
 		case DashboardServiceAddDailyIncomeProcedure:
 			dashboardServiceAddDailyIncomeHandler.ServeHTTP(w, r)
 		case DashboardServiceListDailyIncomeProcedure:
@@ -2187,6 +2239,10 @@ func (UnimplementedDashboardServiceHandler) ListCNFIActions(context.Context, *co
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListCNFIActions is not implemented"))
 }
 
+func (UnimplementedDashboardServiceHandler) ListRepoOps(context.Context, *connect.Request[v1.ListRepoOpsRequest]) (*connect.Response[v1.ListRepoOpsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListRepoOps is not implemented"))
+}
+
 func (UnimplementedDashboardServiceHandler) ListPositions(context.Context, *connect.Request[v1.ListPositionsRequest]) (*connect.Response[v1.ListPositionsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListPositions is not implemented"))
 }
@@ -2229,6 +2285,10 @@ func (UnimplementedDashboardServiceHandler) TrxAccountRefresh(context.Context, *
 
 func (UnimplementedDashboardServiceHandler) GetTrxYieldRadar(context.Context, *connect.Request[v1.GetTrxYieldRadarRequest]) (*connect.Response[v1.GetTrxYieldRadarResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetTrxYieldRadar is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) GetRepoRateRadar(context.Context, *connect.Request[v1.GetRepoRateRadarRequest]) (*connect.Response[v1.GetRepoRateRadarResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetRepoRateRadar is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) AddDailyIncome(context.Context, *connect.Request[v1.AddDailyIncomeRequest]) (*connect.Response[v1.AddDailyIncomeResponse], error) {
