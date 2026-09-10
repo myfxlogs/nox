@@ -121,7 +121,7 @@ func TestIntegration_RebalanceExecute(t *testing.T) {
 	// 当前投 SRbad（高票低 yield）→ 目标选 SRgood（低票高 yield）→ NeedRebalance=true
 	acc := &account.Account{
 		TronPower: 10000,
-		Votes:     map[string]int64{"SRbad": 10000000000},
+		Votes:     map[string]int64{"SRbad": 10000},
 	}
 
 	sched, exec, _ := makeIntegrationScheduler(t, srFixture, store, conn, acc)
@@ -165,10 +165,10 @@ func TestIntegration_RebalanceNoExecute(t *testing.T) {
 	conn := &integrationConn{}
 	// 当前已等权投两个 SR（与目标一致）→ NeedRebalance=false
 	// 注意：DefaultConfig MinSRs=3 但只有 2 个候选 → n=2，等权分配 5000 TRX each
-	// acc.Votes 单位是 sun（gotron-sdk），5000 TRX = 5000000000 sun
+	// acc.Votes 单位是 TRX（链上 vote_count=TRX）
 	acc := &account.Account{
 		TronPower: 10000,
-		Votes:     map[string]int64{"SRgood": 5000000000, "SRbad": 5000000000},
+		Votes:     map[string]int64{"SRgood": 5000, "SRbad": 5000},
 	}
 
 	sched, exec, _ := makeIntegrationScheduler(t, srFixture, store, conn, acc)
@@ -213,7 +213,7 @@ func TestIntegration_RebalanceExecuteFailed(t *testing.T) {
 	}
 	acc := &account.Account{
 		TronPower: 10000,
-		Votes:     map[string]int64{"SRbad": 10000000000},
+		Votes:     map[string]int64{"SRbad": 10000},
 	}
 
 	sched, exec, _ := makeIntegrationScheduler(t, srFixture, store, conn, acc)
