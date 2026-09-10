@@ -106,6 +106,9 @@ func (e *Engine) runStartupElimination(ctx context.Context) {
 				}
 			}
 			log.Printf("[autotrade] STARTUP ELIMINATION: family=%v disabled: %s", famStrategies, reason)
+			if e.AlertSink != nil {
+				e.AlertSink("warn", fmt.Sprintf("[策略淘汰] %v: %s", famStrategies, reason))
+			}
 		}
 	}
 }
