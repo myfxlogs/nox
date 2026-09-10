@@ -229,6 +229,13 @@ type Config struct {
 	// D-195-C1：capital snapshot 新鲜度 TTL（ARB_CAPITAL_SNAPSHOT_TTL，默认 5m）。
 	// LiveGate 第 5 条 + readiness capital_snapshot_ready 层用。capital_accounts 表无 TTL 列，从 config 读取。
 	CapitalSnapshotTTL time.Duration
+	// === D-269 TRX 投票收益优化器 ===
+	TrxVoteMinSRs         int     // 最少分散 SR 数（ARB_TRX_VOTE_MIN_SRS，默认 3）
+	TrxVoteMaxSRs         int     // 最多分散 SR 数（ARB_TRX_VOTE_MAX_SRS，默认 5）
+	TrxVoteMaxBrokerage   int     // 最大可接受 brokerage（ARB_TRX_VOTE_MAX_BROKERAGE，默认 20）
+	TrxVoteYieldDropPct   float64 // 触发改投的收益下降阈值（ARB_TRX_VOTE_YIELD_DROP_PCT，默认 15.0）
+	TrxVoteBetterOppPct   float64 // 触发改投的更优机会阈值（ARB_TRX_VOTE_BETTER_OPP_PCT，默认 20.0）
+	TrxVoteMaxRebalPerDay int     // 每日最大改投次数（ARB_TRX_VOTE_MAX_REBAL_PER_DAY，默认 1）
 }
 
 // Load 从环境变量加载配置——已提取至 config_load.go（D-261 S6 纯搬家拆分）。

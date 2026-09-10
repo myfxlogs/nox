@@ -98,5 +98,12 @@ func Load() *Config {
 		SwapDeviationExitPct:       envFloat("ARB_SWAP_DEVIATION_EXIT_PCT", 50.0),      // D-165 S2：swap 偏差退出默认 50%
 		SwapFactsZeroCheckEnabled:  envBool("ARB_SWAP_FACTS_ZERO_CHECK", true),         // D-165 S3：swap facts 零值校验默认开
 		CapitalSnapshotTTL:         envDur("ARB_CAPITAL_SNAPSHOT_TTL", 5*time.Minute),  // D-195-C1：capital snapshot TTL 默认 5m
+		// === D-269 TRX 投票收益优化器 ===
+		TrxVoteMinSRs:         envInt("ARB_TRX_VOTE_MIN_SRS", 3),             // 最少分散 SR 数
+		TrxVoteMaxSRs:         envInt("ARB_TRX_VOTE_MAX_SRS", 5),             // 最多分散 SR 数
+		TrxVoteMaxBrokerage:   envInt("ARB_TRX_VOTE_MAX_BROKERAGE", 20),      // 最大 brokerage 20%
+		TrxVoteYieldDropPct:   envFloat("ARB_TRX_VOTE_YIELD_DROP_PCT", 15.0), // 收益下降阈值 15%
+		TrxVoteBetterOppPct:   envFloat("ARB_TRX_VOTE_BETTER_OPP_PCT", 20.0), // 更优机会阈值 20%
+		TrxVoteMaxRebalPerDay: envInt("ARB_TRX_VOTE_MAX_REBAL_PER_DAY", 1),   // 每日最大改投 1 次
 	}
 }
