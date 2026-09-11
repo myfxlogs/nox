@@ -104,6 +104,7 @@ func TestMTHealth_FirstTickSilent(t *testing.T) {
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
 		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
 	mon.now = func() time.Time { return wedUTC.Add(time.Second) } // D-136 修复②：注入非周末时钟防日期依赖
+	mon.bootGraceTicks = 1                                        // 测试用 1 tick 宽限（生产默认 3）
 	mon.poll(context.Background())
 	if got := store.alertCount(); got != 0 {
 		t.Errorf("first tick should not alert, got %d alerts", got)
@@ -126,6 +127,7 @@ func TestMTHealth_StateTransitions(t *testing.T) {
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) } // D-136 修复②：注入非周末时钟
+	mon.bootGraceTicks = 1                                     // 测试用 1 tick 宽限（生产默认 3）
 
 	// tick1: quote healthy（首 tick 静默）；swap/margin 无数据=crit（首 tick 静默）
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now})
@@ -213,6 +215,7 @@ func TestMTHealth_SwapFactStale(t *testing.T) {
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) } // D-136 修复②：注入非周末时钟
+	mon.bootGraceTicks = 1                                     // 测试用 1 tick 宽限（生产默认 3）
 	// tick1: 报价 fresh + swap facts fresh（首 tick 静默）
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now})
 	store.setFacts(fact.KindSwapLong, []fact.Fact{{Kind: fact.KindSwapLong, Venue: "vA", Symbol: "AUDJPY", Value: 5, Ts: now, Src: "mt5"}})
@@ -254,6 +257,7 @@ func TestMTHealth_CritRealert(t *testing.T) {
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) } // D-136 修复②：注入非周末时钟
+	mon.bootGraceTicks = 1                                     // 测试用 1 tick 宽限（生产默认 3）
 	// tick1: 全 healthy（首 tick 静默）——报价+swap+margin 都 fresh
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now})
 	store.setFacts(fact.KindSwapLong, []fact.Fact{{Kind: fact.KindSwapLong, Venue: "vA", Symbol: "AUDJPY", Value: 5, Ts: now, Src: "mt5"}})
@@ -312,6 +316,7 @@ func TestMTHealth_WarnSustainedNoRealert(t *testing.T) {
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) } // D-136 修复②：注入非周末时钟
+	mon.bootGraceTicks = 1                                     // 测试用 1 tick 宽限（生产默认 3）
 	// tick1: 全 healthy（首 tick 静默）
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now})
 	store.setFacts(fact.KindSwapLong, []fact.Fact{{Kind: fact.KindSwapLong, Venue: "vA", Symbol: "AUDJPY", Value: 5, Ts: now, Src: "mt5"}})
@@ -348,6 +353,7 @@ func TestMTHealth_NoDataCrit(t *testing.T) {
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) } // D-136 修复②：注入非周末时钟
+	mon.bootGraceTicks = 1                                     // 测试用 1 tick 宽限（生产默认 3）
 	// tick1: 有数据（首 tick 静默，记 healthy 状态）
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now})
 	store.setFacts(fact.KindSwapLong, []fact.Fact{{Kind: fact.KindSwapLong, Venue: "vA", Symbol: "AUDJPY", Value: 5, Ts: now, Src: "mt5"}})
@@ -408,6 +414,7 @@ func TestMTHealth_CEXVenueNoSwapMarginAlerts(t *testing.T) {
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) } // D-136 修复②：注入非周末时钟
+	mon.bootGraceTicks = 1                                     // 测试用 1 tick 宽限（生产默认 3）
 	// tick1: fresh（首 tick 静默）
 	qbus.Publish(bus.Quote{Symbol: "BTCUSDT", Venue: "binance", Bid: 100, Ask: 100, Time: now})
 	mon.poll(context.Background())
@@ -463,6 +470,7 @@ func TestMTHealth_MTVenueSwapCritRegress(t *testing.T) {
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) } // D-136 修复②：注入非周末时钟
+	mon.bootGraceTicks = 1                                     // 测试用 1 tick 宽限（生产默认 3）
 	// tick1: quote fresh + swap/margin fresh（首 tick 静默）
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now})
 	store.setFacts(fact.KindSwapLong, []fact.Fact{{Kind: fact.KindSwapLong, Venue: "vA", Symbol: "AUDJPY", Value: 5, Ts: now, Src: "mt5"}})
@@ -502,6 +510,7 @@ func TestMTHealth_MT4VenueNoMarginAlert(t *testing.T) {
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) }
+	mon.bootGraceTicks = 1 // 测试用 1 tick 宽限（生产默认 3）
 
 	// tick1: quote fresh + swap fresh（首 tick 静默）。无 margin fact（MT4 不采集）。
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vB", Bid: 100, Ask: 100, Time: now})
@@ -549,6 +558,7 @@ func TestMTHealth_MT5VenueMarginCritStillWorks(t *testing.T) {
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) }
+	mon.bootGraceTicks = 1 // 测试用 1 tick 宽限（生产默认 3）
 
 	// tick1: quote fresh，无 swap/margin fact（首 tick 静默；margin count=1 闪断抑制）
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vC", Bid: 100, Ask: 100, Time: now})
@@ -585,6 +595,7 @@ func TestMTHealth_AlertUsesAlias(t *testing.T) {
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) }
+	mon.bootGraceTicks = 1 // 测试用 1 tick 宽限（生产默认 3）
 
 	// tick1: quote fresh（首 tick 静默；margin count=1 闪断抑制）
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vD", Bid: 100, Ask: 100, Time: now})
@@ -620,6 +631,7 @@ func TestMTHealth_AliasFallback(t *testing.T) {
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) }
+	mon.bootGraceTicks = 1 // 测试用 1 tick 宽限（生产默认 3）
 
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vE", Bid: 100, Ask: 100, Time: now})
 	mon.poll(context.Background()) // tick1: first tick, margin count=1
@@ -653,6 +665,7 @@ func TestMTHealth_StoppedVenueFactsResidueNoAlert(t *testing.T) {
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) }
+	mon.bootGraceTicks = 1 // 测试用 1 tick 宽限（生产默认 3）
 	// facts 残留：swap_long Ts=now（fresh），但 venue 已 stopped
 	store.setFacts(fact.KindSwapLong, []fact.Fact{{Kind: fact.KindSwapLong, Venue: "59892915", Symbol: "AUDJPY", Value: 5, Ts: now, Src: "mt5"}})
 
@@ -680,6 +693,7 @@ func TestMTHealth_StoppedVenueQbusResidueNoAlert(t *testing.T) {
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) }
+	mon.bootGraceTicks = 1 // 测试用 1 tick 宽限（生产默认 3）
 	// qbus 残留 31min 前旧报价
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "59892915", Bid: 100, Ask: 100, Time: now.Add(-31 * time.Minute)})
 
@@ -706,6 +720,7 @@ func TestMTHealth_ConnectedVenueNoDataStillCrit(t *testing.T) {
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) }
+	mon.bootGraceTicks = 1 // 测试用 1 tick 宽限（生产默认 3）
 
 	// tick1：首 tick 静默（quote crit count=1 suppressed）
 	mon.poll(context.Background())
@@ -747,6 +762,7 @@ func TestMTHealth_UnknownQbusVenueStillMonitored(t *testing.T) {
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) }
+	mon.bootGraceTicks = 1 // 测试用 1 tick 宽限（生产默认 3）
 	// tick1：fresh 报价（首 tick 静默）
 	qbus.Publish(bus.Quote{Symbol: "BTCUSDT", Venue: "okx", Bid: 100, Ask: 100, Time: now})
 	mon.poll(context.Background())
@@ -786,6 +802,7 @@ func TestD251_MarginFlashMissSuppression(t *testing.T) {
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) }
+	mon.bootGraceTicks = 1 // 测试用 1 tick 宽限（生产默认 3）
 
 	// tick1: quote fresh + margin fresh（首 tick 静默）
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now})
@@ -868,6 +885,7 @@ func TestRH4_QuoteFlashMissSuppression(t *testing.T) {
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) }
+	mon.bootGraceTicks = 1 // 测试用 1 tick 宽限（生产默认 3）
 
 	// tick1: quote fresh + swap/margin fresh（首 tick 静默）
 	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now})
@@ -929,4 +947,41 @@ func countQuoteCrit(store *fakeHealthStore) int {
 		}
 	}
 	return n
+}
+
+// TestMTHealth_BootGracePeriod boot 宽限期内（默认 3 tick）不告警，宽限结束后才告警。
+// 防容器重启后采集器未就绪 → 假 critical 噪音（9-11 业主报 ICR1503**** swap recovered 噪音）。
+func TestMTHealth_BootGracePeriod(t *testing.T) {
+	log.SetOutput(os.NewFile(0, os.DevNull))
+	defer log.SetOutput(os.Stderr)
+
+	store := newFakeHealthStore()
+	qbus := bus.New()
+	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vA:mt5"}}}
+	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+	// 生产默认 bootGraceTicks=3，不覆盖
+
+	now := wedUTC
+	mon.now = func() time.Time { return now.Add(time.Second) }
+
+	// tick1-3: quote+margin fresh，无 swap facts（swap crit）但 boot 宽限内 → 零告警
+	qbus.Publish(bus.Quote{Symbol: "AUDJPY", Venue: "vA", Bid: 100, Ask: 100, Time: now})
+	store.setFacts(fact.KindInitMarginRate, []fact.Fact{{Kind: fact.KindInitMarginRate, Venue: "vA", Symbol: "vA", Value: 0.01, Ts: now, Src: "mt5"}})
+	for i := 0; i < 3; i++ {
+		mon.poll(context.Background())
+		if got := store.alertCount(); got != 0 {
+			t.Fatalf("tick%d (boot grace): want 0 alerts, got %d", i+1, got)
+		}
+	}
+
+	// tick4: boot 宽限结束 → swap crit 首次告警（R-c3 !ok realert）
+	mon.poll(context.Background())
+	if got := store.alertCount(); got != 1 {
+		t.Fatalf("tick4 (grace expired): want 1 alert (swap crit), got %d", got)
+	}
+	alerts := store.snapshot()
+	if alerts[0].level != "critical" || !strings.Contains(alerts[0].msg, "swap") {
+		t.Errorf("tick4: want swap critical, got %s: %s", alerts[0].level, alerts[0].msg)
+	}
 }

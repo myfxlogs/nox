@@ -1,7 +1,7 @@
 // MTHealthMonitor MT 数据采集稳定性健康监控（D-104 P0）。
 // 三指标 per-venue 采集 + 转换式告警状态机（状态转换时发告警，防洪水）。
 // 指标：①报价新鲜度 ②swap facts 年龄 ③margin facts 年龄（D-203 仅 MT5）。
-// 首 tick 只记状态不告警；此后只在转换时插告警。
+// boot 宽限：前 bootGraceTicks 个 tick 只记状态不告警（给采集器启动时间，防重启噪音）。
 package dashboard
 
 import (
@@ -56,7 +56,7 @@ type MTHealthMonitor struct {
 
 	mu              sync.Mutex
 	states          map[string]mtHealthState // venue → 状态
-	firstTick       bool                     // 首 tick 只记状态不告警
+	bootGraceTicks  int                      // boot 宽限剩余 tick 数（>0 时只记状态不告警）
 	lastCritAlert   map[string]time.Time     // D-104 P0 返修③ R-c3：venue:metric → 上次 crit 告警时间
 	marginMissCount map[string]int           // D-251：venue → margin 连续缺失计数（≥3 才 crit）
 	quoteMissCount  map[string]int           // R-H4：venue → quote 连续缺失计数（≥3 才 crit，与 margin 共用 helper）
@@ -76,7 +76,7 @@ func NewMTHealthMonitor(venues HealthVenueSource, qbus *bus.QuoteBus, store Heal
 		factWarn:        factWarn,
 		factCrit:        factCrit,
 		states:          make(map[string]mtHealthState),
-		firstTick:       true,
+		bootGraceTicks:  3, // boot 宽限 3 tick（≈3min）给采集器启动，防重启 critical 噪音
 		lastCritAlert:   make(map[string]time.Time),
 		marginMissCount: make(map[string]int),
 		quoteMissCount:  make(map[string]int),
@@ -143,8 +143,10 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 	}
 
 	m.mu.Lock()
-	firstTick := m.firstTick
-	m.firstTick = false
+	inGrace := m.bootGraceTicks > 0
+	if inGrace {
+		m.bootGraceTicks--
+	}
 	prevStates := m.states
 	newStates := make(map[string]mtHealthState, len(venueSet))
 	m.mu.Unlock()
@@ -183,8 +185,8 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 		newStates[v] = newState
 		logParts = append(logParts, display+"=q:"+durStr(qa)+"/s:"+sLog+"/m:"+mLog)
 
-		if firstTick {
-			continue // 首 tick 只记状态不告警
+		if inGrace {
+			continue // boot 宽限内只记状态不告警
 		}
 		prev := prevStates[v]
 		m.maybeAlert(ctx, display, "quote", prev.quote, newState.quote, qa)
