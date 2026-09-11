@@ -21,6 +21,11 @@ const BandwidthNeedVoteBP int64 = 500
 // BandwidthNeedClaimBP 领奖所需带宽（BP）——D-269 预检+D-278 S5 资源显示同源引用（禁双写）。
 const BandwidthNeedClaimBP int64 = 250
 
+// ArbPermissionId 多签账户 arb 权限 ID（active[1]，threshold=1 单签）。
+// TWsbXR6 多签后 owner threshold=2 需双签，arb 权限单签可执行 Vote+WithdrawBalance。
+// gotron-sdk 不设 PermissionId 默认=0(owner)，单签广播报 "sig error"。
+const ArbPermissionId int32 = 3
+
 // TronClient 是 Executor 依赖的 TRON gRPC 客户端接口（便于 mock 测试）。
 type TronClient interface {
 	VoteWitnessAccountCtx(ctx context.Context, from string, witnessMap map[string]int64) (*api.TransactionExtention, error)
@@ -65,6 +70,9 @@ func (e *Executor) Vote(ctx context.Context, target []VoteEntry) (string, error)
 		return "", fmt.Errorf("build vote tx: nil transaction returned")
 	}
 
+	// 多签账户：设 arb 权限（permission_id=3，threshold=1 单签），默认 owner=0 需双签。
+	txExt.GetTransaction().RawData.Contract[0].PermissionId = ArbPermissionId
+
 	// 2. 客户端签名（私钥不出本进程）
 	signedTx, err := transaction.SignTransaction(txExt.GetTransaction(), e.privKey)
 	if err != nil {
@@ -100,6 +108,9 @@ func (e *Executor) ClaimReward(ctx context.Context) (string, int64, error) {
 	if txExt == nil || txExt.GetTransaction() == nil {
 		return "", 0, fmt.Errorf("build withdraw tx: nil transaction returned")
 	}
+
+	// 多签账户：设 arb 权限（permission_id=3，threshold=1 单签），默认 owner=0 需双签。
+	txExt.GetTransaction().RawData.Contract[0].PermissionId = ArbPermissionId
 
 	// 3. 签名+广播
 	signedTx, err := transaction.SignTransaction(txExt.GetTransaction(), e.privKey)

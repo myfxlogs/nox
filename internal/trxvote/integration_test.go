@@ -116,10 +116,7 @@ func TestIntegration_RebalanceExecute(t *testing.T) {
 	store := &integrationStore{rebalancedToday: false}
 	txid := []byte{0xde, 0xad, 0xbe, 0xef, 0x12, 0x34, 0x56, 0x78}
 	conn := &integrationConn{
-		voteTxExt: &api.TransactionExtention{
-			Transaction: &core.Transaction{},
-			Txid:        txid,
-		},
+		voteTxExt: makeTxExt(txid),
 	}
 	// 当前投 SRbad（高票低 yield）→ 目标选 SRgood（低票高 yield）→ NeedRebalance=true
 	acc := &account.Account{

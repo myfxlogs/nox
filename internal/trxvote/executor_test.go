@@ -21,6 +21,8 @@ type mockTronClient struct {
 	rewardErr       error
 	broadcastErr    error
 	broadcastCalled bool
+	// 捕获广播时交易的 PermissionId（验证多签权限设置）。
+	broadcastPermID int32
 	// 带宽查询 mock（nil=充足带宽）
 	acctResource *api.AccountResourceMessage
 	acctResErr   error
@@ -35,8 +37,11 @@ func (m *mockTronClient) WithdrawBalanceCtx(_ context.Context, _ string) (*api.T
 func (m *mockTronClient) GetRewardsInfoCtx(_ context.Context, _ string) (int64, error) {
 	return m.reward, m.rewardErr
 }
-func (m *mockTronClient) BroadcastCtx(_ context.Context, _ *core.Transaction) (*api.Return, error) {
+func (m *mockTronClient) BroadcastCtx(_ context.Context, tx *core.Transaction) (*api.Return, error) {
 	m.broadcastCalled = true
+	if tx != nil && tx.RawData != nil && len(tx.RawData.Contract) > 0 {
+		m.broadcastPermID = tx.RawData.Contract[0].GetPermissionId()
+	}
 	return &api.Return{}, m.broadcastErr
 }
 func (m *mockTronClient) GetAccountResourceCtx(_ context.Context, _ string) (*api.AccountResourceMessage, error) {
@@ -61,12 +66,17 @@ func testPrivKey(t *testing.T) *btcec.PrivateKey {
 	return privKey
 }
 
-// makeTxExt 构造带 txid 的 TransactionExtention。
+// makeTxExt 构造带 txid + RawData.Contract 的 TransactionExtention。
 // txidBytes 是原始字节，hex.EncodeToString(txidBytes) 是期望的 txHash。
+// Contract 必须存在，executor 在签名前设 PermissionId 到 Contract[0]。
 func makeTxExt(txidBytes []byte) *api.TransactionExtention {
 	return &api.TransactionExtention{
-		Transaction: &core.Transaction{},
-		Txid:        txidBytes,
+		Transaction: &core.Transaction{
+			RawData: &core.TransactionRaw{
+				Contract: []*core.Transaction_Contract{{}},
+			},
+		},
+		Txid: txidBytes,
 	}
 }
 
@@ -87,6 +97,9 @@ func TestVote_Normal(t *testing.T) {
 	}
 	if !mc.broadcastCalled {
 		t.Error("Broadcast not called")
+	}
+	if mc.broadcastPermID != ArbPermissionId {
+		t.Errorf("PermissionId = %d, want %d (arb)", mc.broadcastPermID, ArbPermissionId)
 	}
 }
 
@@ -176,6 +189,9 @@ func TestClaimReward_Normal(t *testing.T) {
 	}
 	if !mc.broadcastCalled {
 		t.Error("Broadcast not called")
+	}
+	if mc.broadcastPermID != ArbPermissionId {
+		t.Errorf("PermissionId = %d, want %d (arb)", mc.broadcastPermID, ArbPermissionId)
 	}
 }
 

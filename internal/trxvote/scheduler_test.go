@@ -241,11 +241,8 @@ func TestDoClaim_BandwidthLow(t *testing.T) {
 func TestDoClaim_Normal(t *testing.T) {
 	txid := []byte{0xca, 0xfe, 0x12, 0x34}
 	conn := &testExecutorConn{
-		reward: 15_000_000, // 15 TRX > 10 TRX 阈值
-		withdrawTxExt: &api.TransactionExtention{
-			Transaction: &core.Transaction{},
-			Txid:        txid,
-		},
+		reward:        15_000_000, // 15 TRX > 10 TRX 阈值
+		withdrawTxExt: makeTxExt(txid),
 	}
 	sched, exec := testScheduler(t, &fakeStore{}, &mockAccountFetcher{}, conn)
 	var gotAlert string
