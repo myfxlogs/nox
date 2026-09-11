@@ -93,7 +93,7 @@ func TestListHedgeFlowPage_CrossSourceTimeOrder(t *testing.T) {
 			t.Fatalf("UpsertTRXTx %s: %v", tx.TxID, err)
 		}
 	}
-	// CMC 2 条：t2(12:01 overnight) t4(12:03 SELL_TRADE→other)
+	// CMC 2 条：t2(12:01 overnight) t4(12:03 SELL_TRADE→other，入库保留但不返回，D-212 R2)
 	cmcTxs := []CMCHistoryTx{
 		{AccountID: 1, TransactionID: "c2", TransactionType: "OVERNIGHT_SETTLEMENT", Amount: 1.6, TransactionTime: base.Add(time.Minute)},
 		{AccountID: 1, TransactionID: "c4", TransactionType: "SELL_TRADE", Amount: 100, TransactionTime: base.Add(3 * time.Minute)},
@@ -101,33 +101,39 @@ func TestListHedgeFlowPage_CrossSourceTimeOrder(t *testing.T) {
 	if err := s.UpsertCMCHistory(ctx, 1, cmcTxs); err != nil {
 		t.Fatalf("UpsertCMCHistory: %v", err)
 	}
-	// 全部 5 条倒序：t5 c4 t3 c2 t1
+	// D-212 R2：SELL_TRADE 不返回 → 4 条倒序：t5 t3 c2 t1（c4 被过滤）
 	items, err := s.ListHedgeFlowPage(ctx, "", 10, 0)
 	if err != nil {
 		t.Fatalf("ListHedgeFlowPage: %v", err)
 	}
-	if len(items) != 5 {
-		t.Fatalf("got %d items, want 5", len(items))
+	if len(items) != 4 {
+		t.Fatalf("got %d items, want 4 (SELL_TRADE filtered, D-212 R2)", len(items))
 	}
-	wantOrder := []string{"t5", "c4", "t3", "c2", "t1"}
+	wantOrder := []string{"t5", "t3", "c2", "t1"}
 	for i, w := range wantOrder {
 		if items[i].TxID != w {
-			t.Errorf("item[%d].txID = %q, want %q (时间序交错)", i, items[i].TxID, w)
+			t.Errorf("item[%d].txID = %q, want %q (时间序交错, SELL_TRADE 排除)", i, items[i].TxID, w)
+		}
+	}
+	// SELL_TRADE 守卫断言：c4 不出现在结果中（D-212 R2 行为钉成守卫）
+	for _, it := range items {
+		if it.TxID == "c4" {
+			t.Error("c4 (SELL_TRADE) appeared in results, want filtered out (D-212 R2)")
 		}
 	}
 	// kind 归一断言
-	if items[1].Kind != "other" {
-		t.Errorf("c4 kind = %q, want other (SELL_TRADE→other A5)", items[1].Kind)
+	if items[1].Kind != "deposit" {
+		t.Errorf("t3 kind = %q, want deposit", items[1].Kind)
 	}
-	if items[3].Kind != "overnight" {
-		t.Errorf("c2 kind = %q, want overnight", items[3].Kind)
+	if items[2].Kind != "overnight" {
+		t.Errorf("c2 kind = %q, want overnight", items[2].Kind)
 	}
 	// 单位断言（A1：TRX 原值 TRX，CMC USD）
 	if items[0].AmountUnit != "TRX" {
 		t.Errorf("t5 unit = %q, want TRX", items[0].AmountUnit)
 	}
-	if items[1].AmountUnit != "USD" {
-		t.Errorf("c4 unit = %q, want USD", items[1].AmountUnit)
+	if items[2].AmountUnit != "USD" {
+		t.Errorf("c2 unit = %q, want USD", items[2].AmountUnit)
 	}
 }
 
