@@ -15,6 +15,12 @@ import (
 	"github.com/fbsobreira/gotron-sdk/pkg/proto/core"
 )
 
+// BandwidthNeedVoteBP 改投所需带宽（BP）——D-269 预检+D-278 S5 资源显示同源引用（禁双写）。
+const BandwidthNeedVoteBP int64 = 500
+
+// BandwidthNeedClaimBP 领奖所需带宽（BP）——D-269 预检+D-278 S5 资源显示同源引用（禁双写）。
+const BandwidthNeedClaimBP int64 = 250
+
 // TronClient 是 Executor 依赖的 TRON gRPC 客户端接口（便于 mock 测试）。
 type TronClient interface {
 	VoteWitnessAccountCtx(ctx context.Context, from string, witnessMap map[string]int64) (*api.TransactionExtention, error)

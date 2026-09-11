@@ -176,7 +176,7 @@ func (s *Scheduler) doRebalance(ctx context.Context) {
 	}
 
 	// 6.1 带宽预检：改投需要 ~500 BP，不足则跳过避免烧 TRX
-	ok, err := s.executor.HasBandwidth(ctx, 500)
+	ok, err := s.executor.HasBandwidth(ctx, BandwidthNeedVoteBP)
 	if err != nil {
 		log.Printf("[trxvote] bandwidth check: %v", err)
 		s.executor.Alert("warn", "[投票带宽查询失败] "+err.Error())
@@ -205,7 +205,7 @@ func (s *Scheduler) doRebalance(ctx context.Context) {
 // 奖励阈值：Executor.ClaimReward 内部已过滤 <10 TRX，此处只处理带宽。
 func (s *Scheduler) doClaim(ctx context.Context) {
 	// 带宽预检（领奖 ~250 BP）
-	ok, err := s.executor.HasBandwidth(ctx, 250)
+	ok, err := s.executor.HasBandwidth(ctx, BandwidthNeedClaimBP)
 	if err != nil {
 		log.Printf("[trxvote] claim bandwidth check: %v", err)
 		s.executor.Alert("warn", "[投票领奖带宽查询失败] "+err.Error())
