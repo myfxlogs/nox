@@ -280,6 +280,21 @@ const (
 	// DashboardServiceGetCexScanSnapshotProcedure is the fully-qualified name of the DashboardService's
 	// GetCexScanSnapshot RPC.
 	DashboardServiceGetCexScanSnapshotProcedure = "/arb.dashboard.v1.DashboardService/GetCexScanSnapshot"
+	// DashboardServiceRecordRepoTradeProcedure is the fully-qualified name of the DashboardService's
+	// RecordRepoTrade RPC.
+	DashboardServiceRecordRepoTradeProcedure = "/arb.dashboard.v1.DashboardService/RecordRepoTrade"
+	// DashboardServiceListRepoTradesProcedure is the fully-qualified name of the DashboardService's
+	// ListRepoTrades RPC.
+	DashboardServiceListRepoTradesProcedure = "/arb.dashboard.v1.DashboardService/ListRepoTrades"
+	// DashboardServiceSettleRepoTradeProcedure is the fully-qualified name of the DashboardService's
+	// SettleRepoTrade RPC.
+	DashboardServiceSettleRepoTradeProcedure = "/arb.dashboard.v1.DashboardService/SettleRepoTrade"
+	// DashboardServiceDeleteRepoTradeProcedure is the fully-qualified name of the DashboardService's
+	// DeleteRepoTrade RPC.
+	DashboardServiceDeleteRepoTradeProcedure = "/arb.dashboard.v1.DashboardService/DeleteRepoTrade"
+	// DashboardServiceGetRepoStrategyValidationProcedure is the fully-qualified name of the
+	// DashboardService's GetRepoStrategyValidation RPC.
+	DashboardServiceGetRepoStrategyValidationProcedure = "/arb.dashboard.v1.DashboardService/GetRepoStrategyValidation"
 )
 
 // DashboardServiceClient is a client for the arb.dashboard.v1.DashboardService service.
@@ -398,6 +413,12 @@ type DashboardServiceClient interface {
 	SetRepoConfig(context.Context, *connect.Request[v1.SetRepoConfigRequest]) (*connect.Response[v1.SetRepoConfigResponse], error)
 	// D-271：CEX 只读扫描器快照（理财 APR + 跨所价差 + funding + 余额）
 	GetCexScanSnapshot(context.Context, *connect.Request[v1.GetCexScanSnapshotRequest]) (*connect.Response[v1.GetCexScanSnapshotResponse], error)
+	// D-272：逆回购操作记录+策略验证闭环
+	RecordRepoTrade(context.Context, *connect.Request[v1.RecordRepoTradeRequest]) (*connect.Response[v1.RecordRepoTradeResponse], error)
+	ListRepoTrades(context.Context, *connect.Request[v1.ListRepoTradesRequest]) (*connect.Response[v1.ListRepoTradesResponse], error)
+	SettleRepoTrade(context.Context, *connect.Request[v1.SettleRepoTradeRequest]) (*connect.Response[v1.SettleRepoTradeResponse], error)
+	DeleteRepoTrade(context.Context, *connect.Request[v1.DeleteRepoTradeRequest]) (*connect.Response[v1.DeleteRepoTradeResponse], error)
+	GetRepoStrategyValidation(context.Context, *connect.Request[v1.GetRepoStrategyValidationRequest]) (*connect.Response[v1.GetRepoStrategyValidationResponse], error)
 }
 
 // NewDashboardServiceClient constructs a client for the arb.dashboard.v1.DashboardService service.
@@ -909,94 +930,129 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("GetCexScanSnapshot")),
 			connect.WithClientOptions(opts...),
 		),
+		recordRepoTrade: connect.NewClient[v1.RecordRepoTradeRequest, v1.RecordRepoTradeResponse](
+			httpClient,
+			baseURL+DashboardServiceRecordRepoTradeProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("RecordRepoTrade")),
+			connect.WithClientOptions(opts...),
+		),
+		listRepoTrades: connect.NewClient[v1.ListRepoTradesRequest, v1.ListRepoTradesResponse](
+			httpClient,
+			baseURL+DashboardServiceListRepoTradesProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListRepoTrades")),
+			connect.WithClientOptions(opts...),
+		),
+		settleRepoTrade: connect.NewClient[v1.SettleRepoTradeRequest, v1.SettleRepoTradeResponse](
+			httpClient,
+			baseURL+DashboardServiceSettleRepoTradeProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("SettleRepoTrade")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteRepoTrade: connect.NewClient[v1.DeleteRepoTradeRequest, v1.DeleteRepoTradeResponse](
+			httpClient,
+			baseURL+DashboardServiceDeleteRepoTradeProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("DeleteRepoTrade")),
+			connect.WithClientOptions(opts...),
+		),
+		getRepoStrategyValidation: connect.NewClient[v1.GetRepoStrategyValidationRequest, v1.GetRepoStrategyValidationResponse](
+			httpClient,
+			baseURL+DashboardServiceGetRepoStrategyValidationProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("GetRepoStrategyValidation")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // dashboardServiceClient implements DashboardServiceClient.
 type dashboardServiceClient struct {
-	listLatestQuotes       *connect.Client[v1.ListQuotesRequest, v1.ListQuotesResponse]
-	listLatestFacts        *connect.Client[v1.ListLatestFactsRequest, v1.ListLatestFactsResponse]
-	listOpportunities      *connect.Client[v1.ListOpportunitiesRequest, v1.ListOpportunitiesResponse]
-	listAlerts             *connect.Client[v1.ListAlertsRequest, v1.ListAlertsResponse]
-	listTriggerStates      *connect.Client[v1.ListTriggerStatesRequest, v1.ListTriggerStatesResponse]
-	listSourceHealth       *connect.Client[v1.ListSourceHealthRequest, v1.ListSourceHealthResponse]
-	listFacts              *connect.Client[v1.ListFactsRequest, v1.ListFactsResponse]
-	ackAlert               *connect.Client[v1.AckAlertRequest, v1.AckAlertResponse]
-	ackAll                 *connect.Client[v1.AckAllRequest, v1.AckAllResponse]
-	listUnacked            *connect.Client[v1.ListUnackedRequest, v1.ListUnackedResponse]
-	deleteAlerts           *connect.Client[v1.DeleteAlertsRequest, v1.DeleteAlertsResponse]
-	clearAckedAlerts       *connect.Client[v1.ClearAckedAlertsRequest, v1.ClearAckedAlertsResponse]
-	addLedgerEntry         *connect.Client[v1.AddLedgerEntryRequest, v1.AddLedgerEntryResponse]
-	listLedgerEntries      *connect.Client[v1.ListLedgerEntriesRequest, v1.ListLedgerEntriesResponse]
-	ledgerSummary          *connect.Client[v1.LedgerSummaryRequest, v1.LedgerSummaryResponse]
-	addInvestmentRecord    *connect.Client[v1.AddInvestmentRecordRequest, v1.AddInvestmentRecordResponse]
-	listInvestmentRecords  *connect.Client[v1.ListInvestmentRecordsRequest, v1.ListInvestmentRecordsResponse]
-	listKnowledgeEntries   *connect.Client[v1.ListKnowledgeEntriesRequest, v1.ListKnowledgeEntriesResponse]
-	executeOpportunity     *connect.Client[v1.ExecuteOpportunityRequest, v1.ExecuteOpportunityResponse]
-	closePosition          *connect.Client[v1.ClosePositionRequest, v1.ClosePositionResponse]
-	backfillSwapHistory    *connect.Client[v1.BackfillSwapHistoryRequest, v1.BackfillSwapHistoryReply]
-	getCNFIRadarSnapshot   *connect.Client[v1.GetCNFIRadarSnapshotRequest, v1.GetCNFIRadarSnapshotResponse]
-	getCNFIProgress        *connect.Client[v1.GetCNFIProgressRequest, v1.GetCNFIProgressResponse]
-	addCNFIHolding         *connect.Client[v1.AddCNFIHoldingRequest, v1.AddCNFIHoldingResponse]
-	addCNFIAction          *connect.Client[v1.AddCNFIActionRequest, v1.AddCNFIActionResponse]
-	listCNFIActions        *connect.Client[v1.ListCNFIActionsRequest, v1.ListCNFIActionsResponse]
-	listRepoOps            *connect.Client[v1.ListRepoOpsRequest, v1.ListRepoOpsResponse]
-	listPositions          *connect.Client[v1.ListPositionsRequest, v1.ListPositionsResponse]
-	listBrokerPositions    *connect.Client[v1.ListBrokerPositionsRequest, v1.ListBrokerPositionsResponse]
-	closeBrokerPosition    *connect.Client[v1.CloseBrokerPositionRequest, v1.CloseBrokerPositionResponse]
-	closeBrokerPositions   *connect.Client[v1.CloseBrokerPositionsRequest, v1.CloseBrokerPositionsResponse]
-	listAccounts           *connect.Client[v1.ListAccountsRequest, v1.ListAccountsResponse]
-	listPersonalPositions  *connect.Client[v1.ListPersonalPositionsRequest, v1.ListPersonalPositionsResponse]
-	getHedgeStructure      *connect.Client[v1.GetHedgeStructureRequest, v1.GetHedgeStructureResponse]
-	listHedgeFlow          *connect.Client[v1.ListHedgeFlowRequest, v1.ListHedgeFlowResponse]
-	trxVoteAprRefresh      *connect.Client[v1.TrxVoteAprRefreshRequest, v1.TrxVoteAprRefreshResponse]
-	trxAccountRefresh      *connect.Client[v1.TrxAccountRefreshRequest, v1.TrxAccountRefreshResponse]
-	getTrxYieldRadar       *connect.Client[v1.GetTrxYieldRadarRequest, v1.GetTrxYieldRadarResponse]
-	getRepoRateRadar       *connect.Client[v1.GetRepoRateRadarRequest, v1.GetRepoRateRadarResponse]
-	addDailyIncome         *connect.Client[v1.AddDailyIncomeRequest, v1.AddDailyIncomeResponse]
-	listDailyIncome        *connect.Client[v1.ListDailyIncomeRequest, v1.ListDailyIncomeResponse]
-	getPnlAnchor           *connect.Client[v1.GetPnlAnchorRequest, v1.GetPnlAnchorResponse]
-	resetPnlAnchor         *connect.Client[v1.ResetPnlAnchorRequest, v1.ResetPnlAnchorResponse]
-	listKBEntries          *connect.Client[v1.ListKBEntriesRequest, v1.ListKBEntriesResponse]
-	getKBEntry             *connect.Client[v1.GetKBEntryRequest, v1.GetKBEntryResponse]
-	listVerificationStats  *connect.Client[v1.ListVerificationStatsRequest, v1.ListVerificationStatsResponse]
-	searchBroker           *connect.Client[v1.SearchBrokerRequest, v1.SearchBrokerResponse]
-	addBroker              *connect.Client[v1.AddBrokerRequest, v1.AddBrokerResponse]
-	removeBroker           *connect.Client[v1.RemoveBrokerRequest, v1.RemoveBrokerResponse]
-	listBrokerAccounts     *connect.Client[v1.ListBrokerAccountsRequest, v1.ListBrokerAccountsResponse]
-	verifyAccount          *connect.Client[v1.VerifyAccountRequest, v1.VerifyAccountResponse]
-	listExchanges          *connect.Client[v1.ListExchangesRequest, v1.ListExchangesResponse]
-	addExchange            *connect.Client[v1.AddExchangeRequest, v1.AddExchangeResponse]
-	removeExchange         *connect.Client[v1.RemoveExchangeRequest, v1.RemoveExchangeResponse]
-	setExchangeLabel       *connect.Client[v1.SetExchangeLabelRequest, v1.SetExchangeLabelResponse]
-	setExchangeWebsite     *connect.Client[v1.SetExchangeWebsiteRequest, v1.SetExchangeWebsiteResponse]
-	brokerSymbols          *connect.Client[v1.BrokerSymbolsRequest, v1.BrokerSymbolsResponse]
-	setBrokerAccountAlias  *connect.Client[v1.SetBrokerAccountAliasRequest, v1.SetBrokerAccountAliasResponse]
-	setBrokerAccountIsReal *connect.Client[v1.SetBrokerAccountIsRealRequest, v1.SetBrokerAccountIsRealResponse]
-	setBrokerDisabled      *connect.Client[v1.SetBrokerDisabledRequest, v1.SetBrokerDisabledResponse]
-	setBrokerCommission    *connect.Client[v1.SetBrokerCommissionRequest, v1.SetBrokerCommissionResponse]
-	setBrokerWebsite       *connect.Client[v1.SetBrokerWebsiteRequest, v1.SetBrokerWebsiteResponse]
-	listSymbolMappings     *connect.Client[v1.ListSymbolMappingsRequest, v1.ListSymbolMappingsResponse]
-	saveSymbolMapping      *connect.Client[v1.SaveSymbolMappingRequest, v1.SaveSymbolMappingResponse]
-	deleteSymbolMapping    *connect.Client[v1.DeleteSymbolMappingRequest, v1.DeleteSymbolMappingResponse]
-	listMappingSuggestions *connect.Client[v1.ListMappingSuggestionsRequest, v1.ListMappingSuggestionsResponse]
-	listCanonicals         *connect.Client[v1.ListCanonicalsRequest, v1.ListCanonicalsResponse]
-	autoMapBroker          *connect.Client[v1.AutoMapBrokerRequest, v1.AutoMapBrokerResponse]
-	listSwapCombos         *connect.Client[v1.ListSwapCombosRequest, v1.ListSwapCombosResponse]
-	listMatrixUniverse     *connect.Client[v1.ListMatrixUniverseRequest, v1.ListMatrixUniverseResponse]
-	streamUpdates          *connect.Client[v1.StreamUpdatesRequest, v1.StreamUpdatesResponse]
-	health                 *connect.Client[v1.HealthRequest, v1.HealthResponse]
-	getFrontConfig         *connect.Client[v1.GetFrontConfigRequest, v1.GetFrontConfigResponse]
-	getStrategyLedger      *connect.Client[v1.GetStrategyLedgerRequest, v1.GetStrategyLedgerResponse]
-	getWatchlist           *connect.Client[v1.GetWatchlistRequest, v1.GetWatchlistResponse]
-	setWatchlist           *connect.Client[v1.SetWatchlistRequest, v1.SetWatchlistResponse]
-	askAnalyst             *connect.Client[v1.AskAnalystRequest, v1.AskAnalystResponse]
-	appendAnalystNote      *connect.Client[v1.AppendAnalystNoteRequest, v1.AppendAnalystNoteResponse]
-	getAiSettings          *connect.Client[v1.GetAiSettingsRequest, v1.GetAiSettingsResponse]
-	setAiSettings          *connect.Client[v1.SetAiSettingsRequest, v1.SetAiSettingsResponse]
-	getRepoConfig          *connect.Client[v1.GetRepoConfigRequest, v1.GetRepoConfigResponse]
-	setRepoConfig          *connect.Client[v1.SetRepoConfigRequest, v1.SetRepoConfigResponse]
-	getCexScanSnapshot     *connect.Client[v1.GetCexScanSnapshotRequest, v1.GetCexScanSnapshotResponse]
+	listLatestQuotes          *connect.Client[v1.ListQuotesRequest, v1.ListQuotesResponse]
+	listLatestFacts           *connect.Client[v1.ListLatestFactsRequest, v1.ListLatestFactsResponse]
+	listOpportunities         *connect.Client[v1.ListOpportunitiesRequest, v1.ListOpportunitiesResponse]
+	listAlerts                *connect.Client[v1.ListAlertsRequest, v1.ListAlertsResponse]
+	listTriggerStates         *connect.Client[v1.ListTriggerStatesRequest, v1.ListTriggerStatesResponse]
+	listSourceHealth          *connect.Client[v1.ListSourceHealthRequest, v1.ListSourceHealthResponse]
+	listFacts                 *connect.Client[v1.ListFactsRequest, v1.ListFactsResponse]
+	ackAlert                  *connect.Client[v1.AckAlertRequest, v1.AckAlertResponse]
+	ackAll                    *connect.Client[v1.AckAllRequest, v1.AckAllResponse]
+	listUnacked               *connect.Client[v1.ListUnackedRequest, v1.ListUnackedResponse]
+	deleteAlerts              *connect.Client[v1.DeleteAlertsRequest, v1.DeleteAlertsResponse]
+	clearAckedAlerts          *connect.Client[v1.ClearAckedAlertsRequest, v1.ClearAckedAlertsResponse]
+	addLedgerEntry            *connect.Client[v1.AddLedgerEntryRequest, v1.AddLedgerEntryResponse]
+	listLedgerEntries         *connect.Client[v1.ListLedgerEntriesRequest, v1.ListLedgerEntriesResponse]
+	ledgerSummary             *connect.Client[v1.LedgerSummaryRequest, v1.LedgerSummaryResponse]
+	addInvestmentRecord       *connect.Client[v1.AddInvestmentRecordRequest, v1.AddInvestmentRecordResponse]
+	listInvestmentRecords     *connect.Client[v1.ListInvestmentRecordsRequest, v1.ListInvestmentRecordsResponse]
+	listKnowledgeEntries      *connect.Client[v1.ListKnowledgeEntriesRequest, v1.ListKnowledgeEntriesResponse]
+	executeOpportunity        *connect.Client[v1.ExecuteOpportunityRequest, v1.ExecuteOpportunityResponse]
+	closePosition             *connect.Client[v1.ClosePositionRequest, v1.ClosePositionResponse]
+	backfillSwapHistory       *connect.Client[v1.BackfillSwapHistoryRequest, v1.BackfillSwapHistoryReply]
+	getCNFIRadarSnapshot      *connect.Client[v1.GetCNFIRadarSnapshotRequest, v1.GetCNFIRadarSnapshotResponse]
+	getCNFIProgress           *connect.Client[v1.GetCNFIProgressRequest, v1.GetCNFIProgressResponse]
+	addCNFIHolding            *connect.Client[v1.AddCNFIHoldingRequest, v1.AddCNFIHoldingResponse]
+	addCNFIAction             *connect.Client[v1.AddCNFIActionRequest, v1.AddCNFIActionResponse]
+	listCNFIActions           *connect.Client[v1.ListCNFIActionsRequest, v1.ListCNFIActionsResponse]
+	listRepoOps               *connect.Client[v1.ListRepoOpsRequest, v1.ListRepoOpsResponse]
+	listPositions             *connect.Client[v1.ListPositionsRequest, v1.ListPositionsResponse]
+	listBrokerPositions       *connect.Client[v1.ListBrokerPositionsRequest, v1.ListBrokerPositionsResponse]
+	closeBrokerPosition       *connect.Client[v1.CloseBrokerPositionRequest, v1.CloseBrokerPositionResponse]
+	closeBrokerPositions      *connect.Client[v1.CloseBrokerPositionsRequest, v1.CloseBrokerPositionsResponse]
+	listAccounts              *connect.Client[v1.ListAccountsRequest, v1.ListAccountsResponse]
+	listPersonalPositions     *connect.Client[v1.ListPersonalPositionsRequest, v1.ListPersonalPositionsResponse]
+	getHedgeStructure         *connect.Client[v1.GetHedgeStructureRequest, v1.GetHedgeStructureResponse]
+	listHedgeFlow             *connect.Client[v1.ListHedgeFlowRequest, v1.ListHedgeFlowResponse]
+	trxVoteAprRefresh         *connect.Client[v1.TrxVoteAprRefreshRequest, v1.TrxVoteAprRefreshResponse]
+	trxAccountRefresh         *connect.Client[v1.TrxAccountRefreshRequest, v1.TrxAccountRefreshResponse]
+	getTrxYieldRadar          *connect.Client[v1.GetTrxYieldRadarRequest, v1.GetTrxYieldRadarResponse]
+	getRepoRateRadar          *connect.Client[v1.GetRepoRateRadarRequest, v1.GetRepoRateRadarResponse]
+	addDailyIncome            *connect.Client[v1.AddDailyIncomeRequest, v1.AddDailyIncomeResponse]
+	listDailyIncome           *connect.Client[v1.ListDailyIncomeRequest, v1.ListDailyIncomeResponse]
+	getPnlAnchor              *connect.Client[v1.GetPnlAnchorRequest, v1.GetPnlAnchorResponse]
+	resetPnlAnchor            *connect.Client[v1.ResetPnlAnchorRequest, v1.ResetPnlAnchorResponse]
+	listKBEntries             *connect.Client[v1.ListKBEntriesRequest, v1.ListKBEntriesResponse]
+	getKBEntry                *connect.Client[v1.GetKBEntryRequest, v1.GetKBEntryResponse]
+	listVerificationStats     *connect.Client[v1.ListVerificationStatsRequest, v1.ListVerificationStatsResponse]
+	searchBroker              *connect.Client[v1.SearchBrokerRequest, v1.SearchBrokerResponse]
+	addBroker                 *connect.Client[v1.AddBrokerRequest, v1.AddBrokerResponse]
+	removeBroker              *connect.Client[v1.RemoveBrokerRequest, v1.RemoveBrokerResponse]
+	listBrokerAccounts        *connect.Client[v1.ListBrokerAccountsRequest, v1.ListBrokerAccountsResponse]
+	verifyAccount             *connect.Client[v1.VerifyAccountRequest, v1.VerifyAccountResponse]
+	listExchanges             *connect.Client[v1.ListExchangesRequest, v1.ListExchangesResponse]
+	addExchange               *connect.Client[v1.AddExchangeRequest, v1.AddExchangeResponse]
+	removeExchange            *connect.Client[v1.RemoveExchangeRequest, v1.RemoveExchangeResponse]
+	setExchangeLabel          *connect.Client[v1.SetExchangeLabelRequest, v1.SetExchangeLabelResponse]
+	setExchangeWebsite        *connect.Client[v1.SetExchangeWebsiteRequest, v1.SetExchangeWebsiteResponse]
+	brokerSymbols             *connect.Client[v1.BrokerSymbolsRequest, v1.BrokerSymbolsResponse]
+	setBrokerAccountAlias     *connect.Client[v1.SetBrokerAccountAliasRequest, v1.SetBrokerAccountAliasResponse]
+	setBrokerAccountIsReal    *connect.Client[v1.SetBrokerAccountIsRealRequest, v1.SetBrokerAccountIsRealResponse]
+	setBrokerDisabled         *connect.Client[v1.SetBrokerDisabledRequest, v1.SetBrokerDisabledResponse]
+	setBrokerCommission       *connect.Client[v1.SetBrokerCommissionRequest, v1.SetBrokerCommissionResponse]
+	setBrokerWebsite          *connect.Client[v1.SetBrokerWebsiteRequest, v1.SetBrokerWebsiteResponse]
+	listSymbolMappings        *connect.Client[v1.ListSymbolMappingsRequest, v1.ListSymbolMappingsResponse]
+	saveSymbolMapping         *connect.Client[v1.SaveSymbolMappingRequest, v1.SaveSymbolMappingResponse]
+	deleteSymbolMapping       *connect.Client[v1.DeleteSymbolMappingRequest, v1.DeleteSymbolMappingResponse]
+	listMappingSuggestions    *connect.Client[v1.ListMappingSuggestionsRequest, v1.ListMappingSuggestionsResponse]
+	listCanonicals            *connect.Client[v1.ListCanonicalsRequest, v1.ListCanonicalsResponse]
+	autoMapBroker             *connect.Client[v1.AutoMapBrokerRequest, v1.AutoMapBrokerResponse]
+	listSwapCombos            *connect.Client[v1.ListSwapCombosRequest, v1.ListSwapCombosResponse]
+	listMatrixUniverse        *connect.Client[v1.ListMatrixUniverseRequest, v1.ListMatrixUniverseResponse]
+	streamUpdates             *connect.Client[v1.StreamUpdatesRequest, v1.StreamUpdatesResponse]
+	health                    *connect.Client[v1.HealthRequest, v1.HealthResponse]
+	getFrontConfig            *connect.Client[v1.GetFrontConfigRequest, v1.GetFrontConfigResponse]
+	getStrategyLedger         *connect.Client[v1.GetStrategyLedgerRequest, v1.GetStrategyLedgerResponse]
+	getWatchlist              *connect.Client[v1.GetWatchlistRequest, v1.GetWatchlistResponse]
+	setWatchlist              *connect.Client[v1.SetWatchlistRequest, v1.SetWatchlistResponse]
+	askAnalyst                *connect.Client[v1.AskAnalystRequest, v1.AskAnalystResponse]
+	appendAnalystNote         *connect.Client[v1.AppendAnalystNoteRequest, v1.AppendAnalystNoteResponse]
+	getAiSettings             *connect.Client[v1.GetAiSettingsRequest, v1.GetAiSettingsResponse]
+	setAiSettings             *connect.Client[v1.SetAiSettingsRequest, v1.SetAiSettingsResponse]
+	getRepoConfig             *connect.Client[v1.GetRepoConfigRequest, v1.GetRepoConfigResponse]
+	setRepoConfig             *connect.Client[v1.SetRepoConfigRequest, v1.SetRepoConfigResponse]
+	getCexScanSnapshot        *connect.Client[v1.GetCexScanSnapshotRequest, v1.GetCexScanSnapshotResponse]
+	recordRepoTrade           *connect.Client[v1.RecordRepoTradeRequest, v1.RecordRepoTradeResponse]
+	listRepoTrades            *connect.Client[v1.ListRepoTradesRequest, v1.ListRepoTradesResponse]
+	settleRepoTrade           *connect.Client[v1.SettleRepoTradeRequest, v1.SettleRepoTradeResponse]
+	deleteRepoTrade           *connect.Client[v1.DeleteRepoTradeRequest, v1.DeleteRepoTradeResponse]
+	getRepoStrategyValidation *connect.Client[v1.GetRepoStrategyValidationRequest, v1.GetRepoStrategyValidationResponse]
 }
 
 // ListLatestQuotes calls arb.dashboard.v1.DashboardService.ListLatestQuotes.
@@ -1414,6 +1470,31 @@ func (c *dashboardServiceClient) GetCexScanSnapshot(ctx context.Context, req *co
 	return c.getCexScanSnapshot.CallUnary(ctx, req)
 }
 
+// RecordRepoTrade calls arb.dashboard.v1.DashboardService.RecordRepoTrade.
+func (c *dashboardServiceClient) RecordRepoTrade(ctx context.Context, req *connect.Request[v1.RecordRepoTradeRequest]) (*connect.Response[v1.RecordRepoTradeResponse], error) {
+	return c.recordRepoTrade.CallUnary(ctx, req)
+}
+
+// ListRepoTrades calls arb.dashboard.v1.DashboardService.ListRepoTrades.
+func (c *dashboardServiceClient) ListRepoTrades(ctx context.Context, req *connect.Request[v1.ListRepoTradesRequest]) (*connect.Response[v1.ListRepoTradesResponse], error) {
+	return c.listRepoTrades.CallUnary(ctx, req)
+}
+
+// SettleRepoTrade calls arb.dashboard.v1.DashboardService.SettleRepoTrade.
+func (c *dashboardServiceClient) SettleRepoTrade(ctx context.Context, req *connect.Request[v1.SettleRepoTradeRequest]) (*connect.Response[v1.SettleRepoTradeResponse], error) {
+	return c.settleRepoTrade.CallUnary(ctx, req)
+}
+
+// DeleteRepoTrade calls arb.dashboard.v1.DashboardService.DeleteRepoTrade.
+func (c *dashboardServiceClient) DeleteRepoTrade(ctx context.Context, req *connect.Request[v1.DeleteRepoTradeRequest]) (*connect.Response[v1.DeleteRepoTradeResponse], error) {
+	return c.deleteRepoTrade.CallUnary(ctx, req)
+}
+
+// GetRepoStrategyValidation calls arb.dashboard.v1.DashboardService.GetRepoStrategyValidation.
+func (c *dashboardServiceClient) GetRepoStrategyValidation(ctx context.Context, req *connect.Request[v1.GetRepoStrategyValidationRequest]) (*connect.Response[v1.GetRepoStrategyValidationResponse], error) {
+	return c.getRepoStrategyValidation.CallUnary(ctx, req)
+}
+
 // DashboardServiceHandler is an implementation of the arb.dashboard.v1.DashboardService service.
 type DashboardServiceHandler interface {
 	// 快照类
@@ -1530,6 +1611,12 @@ type DashboardServiceHandler interface {
 	SetRepoConfig(context.Context, *connect.Request[v1.SetRepoConfigRequest]) (*connect.Response[v1.SetRepoConfigResponse], error)
 	// D-271：CEX 只读扫描器快照（理财 APR + 跨所价差 + funding + 余额）
 	GetCexScanSnapshot(context.Context, *connect.Request[v1.GetCexScanSnapshotRequest]) (*connect.Response[v1.GetCexScanSnapshotResponse], error)
+	// D-272：逆回购操作记录+策略验证闭环
+	RecordRepoTrade(context.Context, *connect.Request[v1.RecordRepoTradeRequest]) (*connect.Response[v1.RecordRepoTradeResponse], error)
+	ListRepoTrades(context.Context, *connect.Request[v1.ListRepoTradesRequest]) (*connect.Response[v1.ListRepoTradesResponse], error)
+	SettleRepoTrade(context.Context, *connect.Request[v1.SettleRepoTradeRequest]) (*connect.Response[v1.SettleRepoTradeResponse], error)
+	DeleteRepoTrade(context.Context, *connect.Request[v1.DeleteRepoTradeRequest]) (*connect.Response[v1.DeleteRepoTradeResponse], error)
+	GetRepoStrategyValidation(context.Context, *connect.Request[v1.GetRepoStrategyValidationRequest]) (*connect.Response[v1.GetRepoStrategyValidationResponse], error)
 }
 
 // NewDashboardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -2037,6 +2124,36 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("GetCexScanSnapshot")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceRecordRepoTradeHandler := connect.NewUnaryHandler(
+		DashboardServiceRecordRepoTradeProcedure,
+		svc.RecordRepoTrade,
+		connect.WithSchema(dashboardServiceMethods.ByName("RecordRepoTrade")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceListRepoTradesHandler := connect.NewUnaryHandler(
+		DashboardServiceListRepoTradesProcedure,
+		svc.ListRepoTrades,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListRepoTrades")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceSettleRepoTradeHandler := connect.NewUnaryHandler(
+		DashboardServiceSettleRepoTradeProcedure,
+		svc.SettleRepoTrade,
+		connect.WithSchema(dashboardServiceMethods.ByName("SettleRepoTrade")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceDeleteRepoTradeHandler := connect.NewUnaryHandler(
+		DashboardServiceDeleteRepoTradeProcedure,
+		svc.DeleteRepoTrade,
+		connect.WithSchema(dashboardServiceMethods.ByName("DeleteRepoTrade")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceGetRepoStrategyValidationHandler := connect.NewUnaryHandler(
+		DashboardServiceGetRepoStrategyValidationProcedure,
+		svc.GetRepoStrategyValidation,
+		connect.WithSchema(dashboardServiceMethods.ByName("GetRepoStrategyValidation")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/arb.dashboard.v1.DashboardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DashboardServiceListLatestQuotesProcedure:
@@ -2205,6 +2322,16 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceSetRepoConfigHandler.ServeHTTP(w, r)
 		case DashboardServiceGetCexScanSnapshotProcedure:
 			dashboardServiceGetCexScanSnapshotHandler.ServeHTTP(w, r)
+		case DashboardServiceRecordRepoTradeProcedure:
+			dashboardServiceRecordRepoTradeHandler.ServeHTTP(w, r)
+		case DashboardServiceListRepoTradesProcedure:
+			dashboardServiceListRepoTradesHandler.ServeHTTP(w, r)
+		case DashboardServiceSettleRepoTradeProcedure:
+			dashboardServiceSettleRepoTradeHandler.ServeHTTP(w, r)
+		case DashboardServiceDeleteRepoTradeProcedure:
+			dashboardServiceDeleteRepoTradeHandler.ServeHTTP(w, r)
+		case DashboardServiceGetRepoStrategyValidationProcedure:
+			dashboardServiceGetRepoStrategyValidationHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -2544,4 +2671,24 @@ func (UnimplementedDashboardServiceHandler) SetRepoConfig(context.Context, *conn
 
 func (UnimplementedDashboardServiceHandler) GetCexScanSnapshot(context.Context, *connect.Request[v1.GetCexScanSnapshotRequest]) (*connect.Response[v1.GetCexScanSnapshotResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetCexScanSnapshot is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) RecordRepoTrade(context.Context, *connect.Request[v1.RecordRepoTradeRequest]) (*connect.Response[v1.RecordRepoTradeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.RecordRepoTrade is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListRepoTrades(context.Context, *connect.Request[v1.ListRepoTradesRequest]) (*connect.Response[v1.ListRepoTradesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListRepoTrades is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) SettleRepoTrade(context.Context, *connect.Request[v1.SettleRepoTradeRequest]) (*connect.Response[v1.SettleRepoTradeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SettleRepoTrade is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) DeleteRepoTrade(context.Context, *connect.Request[v1.DeleteRepoTradeRequest]) (*connect.Response[v1.DeleteRepoTradeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.DeleteRepoTrade is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) GetRepoStrategyValidation(context.Context, *connect.Request[v1.GetRepoStrategyValidationRequest]) (*connect.Response[v1.GetRepoStrategyValidationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetRepoStrategyValidation is not implemented"))
 }
