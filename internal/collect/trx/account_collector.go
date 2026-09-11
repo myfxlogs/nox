@@ -65,14 +65,20 @@ func (c *AccountCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	}
 
 	// frozenV2 拼合（经验库 tron-frozenv2-composite-stake-reading）：
-	// 带宽自押 = frozenV2[BANDWIDTH].amount；能量全委托 → delegated_frozenV2_balance_for_energy
+	// 带宽自押 = frozenV2[BANDWIDTH].amount；能量 = frozenV2[ENERGY].amount（自押）+ delegated_frozenV2_balance_for_energy（委托出）
 	var bandwidthStaked int64
+	var energySelfStaked int64
 	for _, f := range acc.FrozenV2 {
-		if f.Amount != nil && (f.Type == nil || *f.Type == "" || *f.Type == "BANDWIDTH") {
+		if f.Amount == nil {
+			continue
+		}
+		if f.Type == nil || *f.Type == "" || *f.Type == "BANDWIDTH" {
 			bandwidthStaked += *f.Amount
+		} else if *f.Type == "ENERGY" {
+			energySelfStaked += *f.Amount
 		}
 	}
-	energyDelegated := acc.AccountResource.DelegatedFrozenV2BalanceForEnergy
+	energyDelegated := acc.AccountResource.DelegatedFrozenV2BalanceForEnergy + energySelfStaked
 
 	// R3 修复：votes[] 为逐 SR 票数（业主现投 3 SR 实测 6024/6023/6023≠总 18070）。
 	// votesTotal=Σvotes[i].VoteCount；srAddr=票数最多者（非 votes[0]）。Σ=0 回退 tronPowerLimit。

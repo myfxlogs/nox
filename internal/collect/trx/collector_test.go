@@ -103,6 +103,51 @@ func TestAccountCollector_Poll_Success(t *testing.T) {
 	}
 }
 
+// mockGetAccountJSON_EnergySelfStake 模拟能量自押场景（frozenV2[ENERGY] 带 amount）。
+const mockGetAccountJSON_EnergySelfStake = `{
+	"address":"TWsbXR6SPvvXPxUtPMQvEj7AMH55555555",
+	"balance":3956000,
+	"allowance":6598019,
+	"votes":[{"vote_address":"TKSXDA8HfE9E1y39RczVQ1ZascUEtaSToF","vote_count":35778},{"vote_address":"TLG2B6w4K18HSnje7udYvqMMdJYQ9uYxjJ","vote_count":71554}],
+	"frozenV2":[{"amount":800000000},{"type":"ENERGY","amount":106532000000},{"type":"TRON_POWER"}],
+	"account_resource":{"delegated_frozenV2_balance_for_energy":0}
+}`
+
+// TestAccountCollector_Poll_EnergySelfStake 验证能量自押场景：frozenV2[ENERGY].amount 计入 energyDelegated。
+func TestAccountCollector_Poll_EnergySelfStake(t *testing.T) {
+	st := newTestStore(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		switch r.URL.Path {
+		case "/wallet/getaccount":
+			_, _ = w.Write([]byte(mockGetAccountJSON_EnergySelfStake))
+		case "/wallet/getaccountresource":
+			_, _ = w.Write([]byte(`{"NetLimit":1285,"tronPowerLimit":107332}`))
+		default:
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer srv.Close()
+
+	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, "")
+	if _, err := c.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	acc, err := st.LastTRXAccount(context.Background())
+	if err != nil {
+		t.Fatalf("LastTRXAccount: %v", err)
+	}
+	if acc.BandwidthStaked != 800000000 {
+		t.Errorf("BandwidthStaked = %d, want 800000000", acc.BandwidthStaked)
+	}
+	if acc.EnergyDelegated != 106532000000 {
+		t.Errorf("EnergyDelegated = %d, want 106532000000 (self-staked energy)", acc.EnergyDelegated)
+	}
+	if acc.TronPower != 800000000+106532000000 {
+		t.Errorf("TronPower = %d, want %d", acc.TronPower, 800000000+106532000000)
+	}
+}
+
 // TestAccountCollector_Poll_RESTFail 验证非 200 返回错误。
 func TestAccountCollector_Poll_RESTFail(t *testing.T) {
 	st := newTestStore(t)
