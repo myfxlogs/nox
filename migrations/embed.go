@@ -208,3 +208,6 @@ var RepoTradesFeeSQL string
 
 //go:embed 0088_trx_account_resource.sql
 var TrxAccountResourceSQL string
+
+//go:embed 0089_trx_txs_cheat_status.sql
+var TrxTxsCheatStatusSQL string

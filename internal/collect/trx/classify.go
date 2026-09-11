@@ -47,10 +47,26 @@ func classifyTx(tx txJSON, monitorAddr string, rentalPayers map[string]bool) (pg
 		return pgstore.TRXTx{TxID: tx.TxID, Ts: ts, Kind: "stake", AmountSun: tx.StakeAmount()}, true
 	case "UnfreezeBalanceV2Contract", "WithdrawExpireUnfreezeContract":
 		return pgstore.TRXTx{TxID: tx.TxID, Ts: ts, Kind: "unstake", AmountSun: tx.StakeAmount()}, true
-	case "DelegateResourceContract", "UnDelegateResourceContract", "VoteWitnessContract":
-		// P2-3：非资金移动合约不入库（资源操作非资金流）
+	case "AccountPermissionUpdateContract":
+		// D-279：权限变更，无转账金额，fee 是实际成本
+		return pgstore.TRXTx{TxID: tx.TxID, Ts: ts, Kind: "permission_update", AmountSun: tx.Fee()}, true
+	case "CancelAllUnfreezeV2Contract":
+		// D-279：取消解冻，无转账金额，fee 是实际成本
+		return pgstore.TRXTx{TxID: tx.TxID, Ts: ts, Kind: "unstake_cancel", AmountSun: tx.Fee()}, true
+	case "VoteWitnessContract":
+		// D-279 v3：投票操作入库（业主裁定），amount=fee
+		return pgstore.TRXTx{TxID: tx.TxID, Ts: ts, Kind: "vote", AmountSun: tx.Fee()}, true
+	case "DelegateResourceContract":
+		// D-279 v3：委托资源入库（业主裁定），amount=fee
+		return pgstore.TRXTx{TxID: tx.TxID, Ts: ts, Kind: "delegate", AmountSun: tx.Fee()}, true
+	case "UnDelegateResourceContract":
+		// D-279 v3：收回委托入库（业主裁定），amount=fee
+		return pgstore.TRXTx{TxID: tx.TxID, Ts: ts, Kind: "undelegate", AmountSun: tx.Fee()}, true
+	case "TransferAssetContract", "TriggerSmartContract":
+		// D-279 v4：非 TRX 代币转账（TRC10/TRC20）不入库（业主裁定流水卡仅显示 TRX）
 		return pgstore.TRXTx{}, false
 	default:
-		return pgstore.TRXTx{TxID: tx.TxID, Ts: ts, Kind: "other"}, true
+		// D-279：未识别合约用 fee 作 amount（fee=0 → amount=0 → 显示 "—"）
+		return pgstore.TRXTx{TxID: tx.TxID, Ts: ts, Kind: "other", AmountSun: tx.Fee()}, true
 	}
 }

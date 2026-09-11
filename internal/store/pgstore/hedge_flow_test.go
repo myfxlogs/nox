@@ -209,9 +209,9 @@ func TestListHedgeFlowPage_Pagination(t *testing.T) {
 	}
 }
 
-// TestListHedgeFlowPage_DustFilter R1 灰尘过滤：TRX 转入类 <0.01 TRX（<10000 sun）不返回，入库保留。
-// 锚：0.009 TRX deposit（9000 sun）→ 不返回；0.01 TRX deposit（10000 sun）→ 返回；
-// 0.009 TRX vote_claim（非转入类）→ 返回（灰尘过滤仅 deposit/rental_income/other）；CMC 小额行不受影响。
+// TestListHedgeFlowPage_DustFilter D-279：灰尘过滤改用 TronScan 官方 cheat_status。
+// 锚：cheat=true 不返回（入库保留）；cheat=false 全返回（含小额 1 sun）；
+// CMC 小额行不受 cheat_status 影响。
 func TestListHedgeFlowPage_DustFilter(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
@@ -219,12 +219,12 @@ func TestListHedgeFlowPage_DustFilter(t *testing.T) {
 		t.Fatalf("truncate: %v", err)
 	}
 	now := time.Now().UTC()
-	// 4 条 TRX：灰尘 deposit（9000 sun=0.009 TRX）+ 边界 deposit（10000 sun=0.01 TRX）+
-	// 灰尘 vote_claim（9000 sun，非转入类，应返回）+ 正常 rental_income（5320000 sun=5.32 TRX）
+	// 4 条 TRX：cheat deposit（9000 sun，cheat=true→剔除）+ 正常 deposit（10000 sun，cheat=false→保留）+
+	// 小额 vote_claim（1 sun，cheat=false→保留，验证非金额过滤）+ 正常 rental_income（5320000 sun→保留）
 	trxTxs := []TRXTx{
-		{TxID: "dust_dep", Ts: now, Kind: "deposit", AmountSun: 9000},                                    // 灰尘转入→剔除
-		{TxID: "edge_dep", Ts: now.Add(time.Minute), Kind: "deposit", AmountSun: 10000},                  // 边界 0.01 TRX→保留
-		{TxID: "dust_vote", Ts: now.Add(2 * time.Minute), Kind: "vote_claim", AmountSun: 9000},           // 非转入类→保留
+		{TxID: "cheat_dep", Ts: now, Kind: "deposit", AmountSun: 9000, CheatStatus: true},                // cheat→剔除
+		{TxID: "edge_dep", Ts: now.Add(time.Minute), Kind: "deposit", AmountSun: 10000},                  // cheat=false→保留
+		{TxID: "tiny_vote", Ts: now.Add(2 * time.Minute), Kind: "vote_claim", AmountSun: 1},              // 1 sun cheat=false→保留
 		{TxID: "normal_rental", Ts: now.Add(3 * time.Minute), Kind: "rental_income", AmountSun: 5320000}, // 正常→保留
 	}
 	for _, tx := range trxTxs {
@@ -232,7 +232,7 @@ func TestListHedgeFlowPage_DustFilter(t *testing.T) {
 			t.Fatalf("UpsertTRXTx %s: %v", tx.TxID, err)
 		}
 	}
-	// 1 条 CMC 小额（0.005 USD，不受灰尘过滤影响）
+	// 1 条 CMC 小额（0.005 USD，不受 cheat_status 影响）
 	if err := s.UpsertCMCHistory(ctx, 1, []CMCHistoryTx{
 		{AccountID: 1, TransactionID: "cmc_small", TransactionType: "OVERNIGHT_SETTLEMENT", Amount: 0.005, TransactionTime: now.Add(4 * time.Minute)},
 	}); err != nil {
@@ -243,34 +243,34 @@ func TestListHedgeFlowPage_DustFilter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListHedgeFlowPage: %v", err)
 	}
-	// 应返回 4 条：edge_dep + dust_vote + normal_rental + cmc_small（dust_dep 剔除）
+	// 应返回 4 条：edge_dep + tiny_vote + normal_rental + cmc_small（cheat_dep 剔除）
 	if len(items) != 4 {
-		t.Fatalf("got %d items, want 4 (dust_dep 剔除)", len(items))
+		t.Fatalf("got %d items, want 4 (cheat_dep 剔除)", len(items))
 	}
-	// 断言 dust_dep 不在结果中
+	// 断言 cheat_dep 不在结果中
 	txIDs := make(map[string]bool, len(items))
 	for _, it := range items {
 		txIDs[it.TxID] = true
 	}
-	if txIDs["dust_dep"] {
-		t.Errorf("dust_dep (0.009 TRX deposit) 应被灰尘过滤剔除")
+	if txIDs["cheat_dep"] {
+		t.Errorf("cheat_dep (cheat=true) 应被 cheat_status 过滤剔除")
 	}
 	if !txIDs["edge_dep"] {
-		t.Errorf("edge_dep (0.01 TRX deposit) 应保留（边界 ≥10000 sun）")
+		t.Errorf("edge_dep (cheat=false) 应保留")
 	}
-	if !txIDs["dust_vote"] {
-		t.Errorf("dust_vote (0.009 TRX vote_claim) 应保留（非转入类不受灰尘过滤）")
+	if !txIDs["tiny_vote"] {
+		t.Errorf("tiny_vote (1 sun, cheat=false) 应保留（D-279 非金额过滤）")
 	}
 	if !txIDs["cmc_small"] {
-		t.Errorf("cmc_small (0.005 USD) 应保留（CMC 行不受 TRX 灰尘过滤影响）")
+		t.Errorf("cmc_small (0.005 USD) 应保留（CMC 行不受 cheat_status 影响）")
 	}
 
-	// 入库保留断言：dust_dep 仍在 fin_trx_txs 表中（账本完整性）
+	// 入库保留断言：cheat_dep 仍在 fin_trx_txs 表中（账本完整性）
 	var cnt int
-	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM fin_trx_txs WHERE tx_id = 'dust_dep'").Scan(&cnt); err != nil {
-		t.Fatalf("query dust_dep: %v", err)
+	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM fin_trx_txs WHERE tx_id = 'cheat_dep'").Scan(&cnt); err != nil {
+		t.Fatalf("query cheat_dep: %v", err)
 	}
 	if cnt != 1 {
-		t.Errorf("dust_dep 入库行数 = %d, want 1（仅查询过滤，入库保留）", cnt)
+		t.Errorf("cheat_dep 入库行数 = %d, want 1（仅查询过滤，入库保留）", cnt)
 	}
 }

@@ -29,6 +29,7 @@ type TxsCollector struct {
 	store        *pgstore.Store
 	base         string
 	apiKey       string
+	tronscanBase string          // D-279：TronScan cheatStatus 查询基址（默认 DefaultTronscanBase，空=跳过）
 	rentalPayers map[string]bool // TRX_RENTAL_PAYERS env 解析集
 	// D-258 S2：能量租金率 floor 告警（ARB_TRX_ENERGY_RATE_FLOOR_PCT，默认 8.0；0=禁用）。
 	floorPct     float64
@@ -54,7 +55,7 @@ func NewTxsCollector(address string, store *pgstore.Store, base, apiKey string, 
 			set[a] = true
 		}
 	}
-	return &TxsCollector{address: address, store: store, base: base, apiKey: apiKey, rentalPayers: set, floorPct: floorPct}
+	return &TxsCollector{address: address, store: store, base: base, apiKey: apiKey, tronscanBase: DefaultTronscanBase, rentalPayers: set, floorPct: floorPct}
 }
 
 // Kind 返回采集器标识。
@@ -80,6 +81,8 @@ func (c *TxsCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 		}
 	}
 	fetched := 0
+	// D-279：批量查 TronScan cheatStatus（同地址最近 N 笔）
+	cheatMap := c.fetchCheatStatuses(ctx, 200)
 	fingerprint := ""
 	for page := 0; page < 10; page++ {
 		// 止血4（2026-09-03）：TronGrid 翻页=fingerprint（meta 返回，&fingerprint= 传递）；
@@ -114,6 +117,7 @@ func (c *TxsCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 			if !ok {
 				continue // P2-3：非资金移动合约不入库
 			}
+			rec.CheatStatus = cheatMap[tx.TxID] // D-279：官方恶意标记
 			if err := c.store.UpsertTRXTx(ctx, rec); err != nil {
 				return nil, fmt.Errorf("trx txs upsert: %w", err)
 			}
@@ -140,6 +144,31 @@ func (c *TxsCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 		c.checkYieldTriggers(ctx) // D-278 S1/S2：扳机只喊不动手
 	}
 	return nil, nil
+}
+
+// fetchCheatStatuses D-279：批量查 TronScan /api/transaction 获取 cheatStatus。
+// 返回 txID → cheatStatus 映射；失败或 tronscanBase 空=返回 nil（不阻断采集）。
+func (c *TxsCollector) fetchCheatStatuses(ctx context.Context, limit int) map[string]bool {
+	if c.tronscanBase == "" {
+		return nil
+	}
+	url := fmt.Sprintf("%s/api/transaction?sort=-timestamp&count=true&limit=%d&start=0&address=%s",
+		c.tronscanBase, limit, c.address)
+	body, err := tronGet(ctx, c.tronscanBase, "", url)
+	if err != nil {
+		log.Printf("[trx] cheatStatus fetch skipped: %v", err)
+		return nil
+	}
+	var resp tronScanTxsResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		log.Printf("[trx] cheatStatus unmarshal skipped: %v", err)
+		return nil
+	}
+	m := make(map[string]bool, len(resp.Data))
+	for _, tx := range resp.Data {
+		m[tx.Hash] = tx.CheatStatus
+	}
+	return m
 }
 
 // maybeAlertEnergyRate D-258 S2：有新行时计算 7d 能量租金年化，低于 floor → warning 告警。

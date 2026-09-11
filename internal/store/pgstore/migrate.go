@@ -84,6 +84,7 @@ var migrationFiles = []struct {
 	{86, migrations.CexEarnJudgmentSQL},                // D-273：earn APR 判断引擎
 	{87, migrations.RepoTradesFeeSQL},                  // D-276 逆回购手续费模型
 	{88, migrations.TrxAccountResourceSQL},             // D-278 S5 地址资源显示列
+	{89, migrations.TrxTxsCheatStatusSQL},              // D-279 TRX 交易 cheat_status 列
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

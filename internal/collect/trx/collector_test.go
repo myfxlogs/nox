@@ -194,6 +194,7 @@ func TestTxsCollector_Poll_Classify(t *testing.T) {
 	defer srv.Close()
 
 	c := NewTxsCollector(monitorAddr, st, srv.URL, "", []string{rentalPayer}, 0)
+	c.tronscanBase = "" // D-279：跳过 TronScan cheatStatus 查询（测试用 mock）
 	if _, err := c.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
@@ -201,16 +202,16 @@ func TestTxsCollector_Poll_Classify(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListTRXTxs: %v", err)
 	}
-	// 8 笔交易 - 2 笔不入库（Delegate/VoteWitness）= 6 笔
-	if len(rows) != 6 {
-		t.Fatalf("got %d txs, want 6 (P2-3: Delegate/VoteWitness 不入库)", len(rows))
+	// D-279 v3：8 笔全部入库（Delegate/VoteWitness 从不入库改为入库）
+	if len(rows) != 8 {
+		t.Fatalf("got %d txs, want 8 (D-279 v3: Delegate/VoteWitness 入库)", len(rows))
 	}
 	// 验证分类
 	kinds := map[string]bool{}
 	for _, r := range rows {
 		kinds[r.Kind] = true
 	}
-	for _, want := range []string{"rental_income", "deposit", "withdraw", "vote_claim", "stake", "unstake"} {
+	for _, want := range []string{"rental_income", "deposit", "withdraw", "vote_claim", "stake", "unstake", "delegate", "vote"} {
 		if !kinds[want] {
 			t.Errorf("missing kind %q", want)
 		}
@@ -251,6 +252,7 @@ func TestTxsCollector_Poll_Pagination(t *testing.T) {
 	defer srv2.Close()
 
 	c := NewTxsCollector(monitorAddr, st, srv2.URL, "", nil, 0)
+	c.tronscanBase = "" // D-279：跳过 TronScan
 	if _, err := c.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
@@ -276,6 +278,7 @@ func TestTxsCollector_Poll_Idempotent(t *testing.T) {
 	defer srv.Close()
 
 	c := NewTxsCollector(monitorAddr, st, srv.URL, "", nil, 0)
+	c.tronscanBase = "" // D-279：跳过 TronScan
 	// 第一次 poll
 	if _, err := c.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll 1: %v", err)
@@ -327,6 +330,7 @@ func TestTxsCollector_Poll_R5GapBackfill(t *testing.T) {
 	defer srv.Close()
 
 	c := NewTxsCollector(monitorAddr, st, srv.URL, "", nil, 0)
+	c.tronscanBase = "" // D-279：跳过 TronScan
 	if _, err := c.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
@@ -411,13 +415,43 @@ func TestClassifyTxRentalEnvHit(t *testing.T) {
 	}
 }
 
-// TestClassifyTxNonFundingNotStored P2-3：非资金移动合约不入库。
+// TestClassifyTxNonFundingNotStored D-279 v4：非 TRX 代币合约（TransferAsset/TriggerSmart）不入库。
 func TestClassifyTxNonFundingNotStored(t *testing.T) {
-	for _, ct := range []string{"DelegateResourceContract", "UnDelegateResourceContract", "VoteWitnessContract"} {
+	for _, ct := range []string{"TransferAssetContract", "TriggerSmartContract"} {
 		tx := makeContractTxJSON("tx_"+ct, ct)
 		_, ok := classifyTx(tx, "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", nil)
 		if ok {
-			t.Errorf("%s: ok=true, want false (P2-3 不入库)", ct)
+			t.Errorf("%s: ok=true, want false (D-279 v4 非 TRX 代币不入库)", ct)
+		}
+	}
+}
+
+// TestClassifyTxD279NewKinds D-279：五个新分类 + fee 作 amount。
+func TestClassifyTxD279NewKinds(t *testing.T) {
+	monitorAddr := "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555"
+	tests := []struct {
+		contractType string
+		wantKind     string
+		fee          int64
+	}{
+		{"AccountPermissionUpdateContract", "permission_update", 100400000},
+		{"CancelAllUnfreezeV2Contract", "unstake_cancel", 1317000},
+		{"VoteWitnessContract", "vote", 0},
+		{"DelegateResourceContract", "delegate", 0},
+		{"UnDelegateResourceContract", "undelegate", 0},
+	}
+	for _, tt := range tests {
+		tx := makeContractTxJSONWithFee("tx_"+tt.contractType, tt.contractType, tt.fee)
+		rec, ok := classifyTx(tx, monitorAddr, nil)
+		if !ok {
+			t.Errorf("%s: ok=false, want true (D-279 入库)", tt.contractType)
+			continue
+		}
+		if rec.Kind != tt.wantKind {
+			t.Errorf("%s kind = %q, want %q", tt.contractType, rec.Kind, tt.wantKind)
+		}
+		if rec.AmountSun != tt.fee {
+			t.Errorf("%s AmountSun = %d, want %d (fee)", tt.contractType, rec.AmountSun, tt.fee)
 		}
 	}
 }
@@ -461,6 +495,21 @@ func makeContractTxJSON(txID, contractType string) txJSON {
 				Parameter: parameterJSON{Value: []byte(`{}`)},
 			}},
 		},
+	}
+}
+
+// makeContractTxJSONWithFee D-279：带 ret.fee 的合约交易。
+func makeContractTxJSONWithFee(txID, contractType string, fee int64) txJSON {
+	return txJSON{
+		BlockTimestamp: time.Now().UnixMilli(),
+		TxID:           txID,
+		RawData: rawDataContractJSON{
+			Contract: []contractEntryJSON{{
+				Type:      contractType,
+				Parameter: parameterJSON{Value: []byte(`{}`)},
+			}},
+		},
+		Ret: []retJSON{{Fee: fee}},
 	}
 }
 
@@ -708,5 +757,118 @@ func TestClassifyTxStakeAmount(t *testing.T) {
 	}
 	if got2.AmountSun != 5000000 {
 		t.Errorf("unfreeze amount_sun = %d, want 5000000", got2.AmountSun)
+	}
+}
+
+// ---------- D-279 测试 ----------
+
+// TestTxsCollector_FetchCheatStatuses D-279：mock TronScan /api/transaction 批量查 cheatStatus。
+func TestTxsCollector_FetchCheatStatuses(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		// 返回 2 笔：cheat_tx cheatStatus=true + clean_tx cheatStatus=false
+		_, _ = w.Write([]byte(`{"data":[
+			{"hash":"cheat_tx","cheatStatus":true},
+			{"hash":"clean_tx","cheatStatus":false}
+		]}`))
+	}))
+	defer srv.Close()
+
+	c := NewTxsCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", nil, "", "", nil, 0)
+	c.tronscanBase = srv.URL
+	m := c.fetchCheatStatuses(context.Background(), 200)
+	if m == nil {
+		t.Fatal("fetchCheatStatuses returned nil, want map")
+	}
+	if !m["cheat_tx"] {
+		t.Errorf("cheat_tx cheatStatus = false, want true")
+	}
+	if m["clean_tx"] {
+		t.Errorf("clean_tx cheatStatus = true, want false")
+	}
+}
+
+// TestTxsCollector_FetchCheatStatuses_EmptyBase D-279：tronscanBase 空=跳过返回 nil。
+func TestTxsCollector_FetchCheatStatuses_EmptyBase(t *testing.T) {
+	c := NewTxsCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", nil, "", "", nil, 0)
+	c.tronscanBase = ""
+	m := c.fetchCheatStatuses(context.Background(), 200)
+	if m != nil {
+		t.Errorf("fetchCheatStatuses with empty base = %v, want nil (skip)", m)
+	}
+}
+
+// TestTxsCollector_Poll_CheatStatusPersisted D-279：Poll 内 cheatStatus 写入 DB。
+func TestTxsCollector_Poll_CheatStatusPersisted(t *testing.T) {
+	st := newTestStore(t)
+	monitorAddr := "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555"
+	// TronGrid mock：1 笔 TransferContract
+	trxResp := `{"data":[` + makeTransferTx("tx_cheat_test", monitorAddr, "TOther", 1000000) + `]}`
+	// TronScan mock：同笔 cheatStatus=true
+	tronscanResp := `{"data":[{"hash":"tx_cheat_test","cheatStatus":true}]}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		if strings.Contains(r.URL.Path, "/api/transaction") {
+			_, _ = w.Write([]byte(tronscanResp))
+			return
+		}
+		_, _ = w.Write([]byte(trxResp))
+	}))
+	defer srv.Close()
+
+	c := NewTxsCollector(monitorAddr, st, srv.URL, "", nil, 0)
+	c.tronscanBase = srv.URL // D-279：指向 mock
+	if _, err := c.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	rows, err := st.ListTRXTxs(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("ListTRXTxs: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("got %d rows, want 1", len(rows))
+	}
+	// cheatStatus 应持久化到 DB
+	var cheatStatus bool
+	if err := st.Pool().QueryRow(context.Background(),
+		"SELECT cheat_status FROM fin_trx_txs WHERE tx_id = 'tx_cheat_test'").Scan(&cheatStatus); err != nil {
+		t.Fatalf("query cheat_status: %v", err)
+	}
+	if !cheatStatus {
+		t.Errorf("cheat_status = false, want true (TronScan marked cheat)")
+	}
+	// cheat 行不应出现在 ListHedgeFlowPage
+	items, err := st.ListHedgeFlowPage(context.Background(), "trx", 50, 0)
+	if err != nil {
+		t.Fatalf("ListHedgeFlowPage: %v", err)
+	}
+	for _, it := range items {
+		if it.TxID == "tx_cheat_test" {
+			t.Error("tx_cheat_test (cheat=true) appeared in flow, want filtered out")
+		}
+	}
+}
+
+// TestTxFee_Parsing D-279 S1：ret[0].fee 解析。
+func TestTxFee_Parsing(t *testing.T) {
+	// 权限变更 fee=100400000 sun（100.4 TRX）
+	tx := txJSON{
+		TxID: "perm_tx",
+		RawData: rawDataContractJSON{
+			Contract: []contractEntryJSON{{
+				Type:      "AccountPermissionUpdateContract",
+				Parameter: parameterJSON{Value: []byte(`{}`)},
+			}},
+		},
+		Ret: []retJSON{{Fee: 100400000}},
+	}
+	if fee := tx.Fee(); fee != 100400000 {
+		t.Errorf("Fee() = %d, want 100400000 (100.4 TRX)", fee)
+	}
+	// ret 为空=0
+	tx2 := txJSON{TxID: "no_ret"}
+	if fee := tx2.Fee(); fee != 0 {
+		t.Errorf("Fee() with empty ret = %d, want 0", fee)
 	}
 }

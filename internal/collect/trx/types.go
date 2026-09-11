@@ -53,6 +53,21 @@ type txJSON struct {
 	BlockTimestamp int64               `json:"block_timestamp"` // R1：真实响应是驼峰 blockTimestamp（非 block_timestamp）
 	TxID           string              `json:"txID"`            // 止血修正：真实字段=txID（2026-09-03 实拍铁证，transaction_id/tx_id 均错）
 	RawData        rawDataContractJSON `json:"raw_data"`
+	Ret            []retJSON           `json:"ret"` // D-279：fee 捕获
+}
+
+// retJSON 对应 TronGrid ret 数组单行。
+type retJSON struct {
+	ContractRet string `json:"contractRet"`
+	Fee         int64  `json:"fee"`
+}
+
+// Fee 返回交易 fee（sun）。ret 为空或解析失败=0。
+func (t txJSON) Fee() int64 {
+	if len(t.Ret) == 0 {
+		return 0
+	}
+	return t.Ret[0].Fee
 }
 
 type rawDataContractJSON struct {
@@ -204,4 +219,16 @@ type chainParametersResponseJSON struct {
 type chainParameterJSON struct {
 	Key   string `json:"key"`
 	Value int64  `json:"value"`
+}
+
+// ---------- D-279 TronScan cheatStatus ----------
+
+// tronScanTxsResponse 对应 TronScan /api/transaction 响应。
+type tronScanTxsResponse struct {
+	Data []tronScanTxJSON `json:"data"`
+}
+
+type tronScanTxJSON struct {
+	Hash        string `json:"hash"`
+	CheatStatus bool   `json:"cheatStatus"`
 }

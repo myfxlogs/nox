@@ -36,15 +36,15 @@ type TRXAccount struct {
 	FetchedAt       time.Time
 }
 
-// TRXTx 对应 fin_trx_txs 表（收入交易流，幂等键 tx_id）。
-// AmountSun=0 用于 vote_claim（WithdrawBalanceContract 无金额参数，P2-2）。
+// TRXTx 对应 fin_trx_txs 表（收入交易流，幂等键 tx_id）。AmountSun=0 用于 vote_claim（P2-2）。
 type TRXTx struct {
 	ID           int64
 	TxID         string
 	Ts           time.Time
-	Kind         string // rental_income|vote_claim|deposit|withdraw|stake|unstake|other
+	Kind         string // rental_income|vote_claim|deposit|withdraw|stake|unstake|other|permission_update|unstake_cancel|vote|delegate|undelegate
 	AmountSun    int64
 	Counterparty *string // nil = 无对手方
+	CheatStatus  bool    // D-279：TronScan 官方恶意标记（cheatStatus）
 	FetchedAt    time.Time
 }
 
@@ -82,10 +82,10 @@ func (s *Store) UpsertTRXTx(ctx context.Context, t TRXTx) error {
 		return errors.New("trx txs: empty tx_id — field mapping broken (R3 防御：空键坍缩成一行)")
 	}
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO fin_trx_txs (tx_id, ts, kind, amount_sun, counterparty, fetched_at)
-		VALUES ($1,$2,$3,$4,$5,COALESCE($6,now()))
+		INSERT INTO fin_trx_txs (tx_id, ts, kind, amount_sun, counterparty, cheat_status, fetched_at)
+		VALUES ($1,$2,$3,$4,$5,$6,COALESCE($7,now()))
 		ON CONFLICT (tx_id) DO NOTHING
-	`, t.TxID, t.Ts, t.Kind, t.AmountSun, t.Counterparty, t.FetchedAt)
+	`, t.TxID, t.Ts, t.Kind, t.AmountSun, t.Counterparty, t.CheatStatus, t.FetchedAt)
 	if err != nil {
 		return fmt.Errorf("upsert trx tx: %w", err)
 	}
