@@ -27,6 +27,11 @@ type TRXAccount struct {
 	EnergyDelegated int64
 	BandwidthStaked int64
 	NetLimit        int64
+	NetUsed         int64           // D-278 S5：已用带宽（sun）
+	FreeNetUsed     int64           // D-278 S5：免费已用带宽（sun）
+	FreeNetLimit    int64           // D-278 S5：免费带宽上限（sun）
+	EnergyLimit     int64           // D-278 S5：能量上限（sun）
+	EnergyUsed      int64           // D-278 S5：已用能量（sun）
 	Unfrozen        json.RawMessage // nil = 无在途；JSONB 透传
 	FetchedAt       time.Time
 }
@@ -59,10 +64,12 @@ func (s *Store) InsertTRXAccount(ctx context.Context, a TRXAccount) error {
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO fin_trx_account
 		  (address, votes_total, tron_power, sr_address, balance_sun, allowance_sun,
-		   energy_delegated, bandwidth_staked, net_limit, unfrozen, fetched_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,COALESCE($11,now()))
+		   energy_delegated, bandwidth_staked, net_limit, net_used, free_net_used,
+		   free_net_limit, energy_limit, energy_used, unfrozen, fetched_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,COALESCE($16,now()))
 	`, a.Address, a.VotesTotal, a.TronPower, a.SRAddress, a.BalanceSun, a.AllowanceSun,
-		a.EnergyDelegated, a.BandwidthStaked, a.NetLimit, a.Unfrozen, a.FetchedAt)
+		a.EnergyDelegated, a.BandwidthStaked, a.NetLimit, a.NetUsed, a.FreeNetUsed,
+		a.FreeNetLimit, a.EnergyLimit, a.EnergyUsed, a.Unfrozen, a.FetchedAt)
 	if err != nil {
 		return fmt.Errorf("insert trx account: %w", err)
 	}
@@ -104,12 +111,14 @@ func (s *Store) LastTRXAccount(ctx context.Context) (TRXAccount, error) {
 	var a TRXAccount
 	err := s.pool.QueryRow(ctx, `
 		SELECT id, address, votes_total, tron_power, sr_address, balance_sun, allowance_sun,
-		       energy_delegated, bandwidth_staked, net_limit, unfrozen, fetched_at
+		       energy_delegated, bandwidth_staked, net_limit, net_used, free_net_used,
+		       free_net_limit, energy_limit, energy_used, unfrozen, fetched_at
 		FROM fin_trx_account
 		ORDER BY fetched_at DESC
 		LIMIT 1
 	`).Scan(&a.ID, &a.Address, &a.VotesTotal, &a.TronPower, &a.SRAddress, &a.BalanceSun, &a.AllowanceSun,
-		&a.EnergyDelegated, &a.BandwidthStaked, &a.NetLimit, &a.Unfrozen, &a.FetchedAt)
+		&a.EnergyDelegated, &a.BandwidthStaked, &a.NetLimit, &a.NetUsed, &a.FreeNetUsed,
+		&a.FreeNetLimit, &a.EnergyLimit, &a.EnergyUsed, &a.Unfrozen, &a.FetchedAt)
 	if err != nil {
 		return a, fmt.Errorf("last trx account: %w", err)
 	}
@@ -122,7 +131,8 @@ func (s *Store) ListTRXAccountByDay(ctx context.Context, day time.Time) ([]TRXAc
 	end := start.Add(24 * time.Hour)
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, address, votes_total, tron_power, sr_address, balance_sun, allowance_sun,
-		       energy_delegated, bandwidth_staked, net_limit, unfrozen, fetched_at
+		       energy_delegated, bandwidth_staked, net_limit, net_used, free_net_used,
+		       free_net_limit, energy_limit, energy_used, unfrozen, fetched_at
 		FROM fin_trx_account
 		WHERE fetched_at >= $1 AND fetched_at < $2
 		ORDER BY fetched_at ASC
@@ -136,6 +146,7 @@ func (s *Store) ListTRXAccountByDay(ctx context.Context, day time.Time) ([]TRXAc
 		var a TRXAccount
 		if err := rows.Scan(&a.ID, &a.Address, &a.VotesTotal, &a.TronPower, &a.SRAddress, &a.BalanceSun,
 			&a.AllowanceSun, &a.EnergyDelegated, &a.BandwidthStaked, &a.NetLimit,
+			&a.NetUsed, &a.FreeNetUsed, &a.FreeNetLimit, &a.EnergyLimit, &a.EnergyUsed,
 			&a.Unfrozen, &a.FetchedAt); err != nil {
 			return nil, err
 		}

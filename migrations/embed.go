@@ -205,3 +205,6 @@ var CexEarnJudgmentSQL string
 
 //go:embed 0087_repo_trades_fee.sql
 var RepoTradesFeeSQL string
+
+//go:embed 0088_trx_account_resource.sql
+var TrxAccountResourceSQL string

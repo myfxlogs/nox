@@ -28,8 +28,14 @@ type accountResourceJSON struct {
 }
 
 // resourceJSON 对应 getaccountresource 响应（节选）。
+// D-278 S5：补 NetUsed/FreeNetUsed/EnergyLimit/EnergyUsed（剩余带宽/能量显示）。
 type resourceJSON struct {
 	NetLimit       int64 `json:"NetLimit"`
+	NetUsed        int64 `json:"NetUsed"`
+	FreeNetLimit   int64 `json:"freeNetLimit"`
+	FreeNetUsed    int64 `json:"freeNetUsed"`
+	EnergyLimit    int64 `json:"EnergyLimit"`
+	EnergyUsed     int64 `json:"EnergyUsed"`
 	TronPowerLimit int64 `json:"tronPowerLimit"`
 }
 

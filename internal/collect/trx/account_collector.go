@@ -110,6 +110,11 @@ func (c *AccountCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 		EnergyDelegated: energyDelegated,
 		BandwidthStaked: bandwidthStaked,
 		NetLimit:        res.NetLimit,
+		NetUsed:         res.NetUsed,
+		FreeNetUsed:     res.FreeNetUsed,
+		FreeNetLimit:    res.FreeNetLimit,
+		EnergyLimit:     res.EnergyLimit,
+		EnergyUsed:      res.EnergyUsed,
 		FetchedAt:       time.Now(),
 	}
 	if err := c.store.InsertTRXAccount(ctx, rec); err != nil {

@@ -33,6 +33,13 @@ type TxsCollector struct {
 	// D-258 S2：能量租金率 floor 告警（ARB_TRX_ENERGY_RATE_FLOOR_PCT，默认 8.0；0=禁用）。
 	floorPct     float64
 	lastAlertDay string // 内存节流：上次告警 UTC 日期（YYYY-MM-DD），1 条/天
+	// D-278 S2：扳机三件套节流（各 1 条/天，内存日期戳）。
+	lastEnergy30dAlertDay   string // 能量 30d 年化 <8% critical
+	lastOvernightDeclineDay string // 空单隔夜 7d 衰退 >50% warning
+	lastOvernightNegDay     string // 隔夜连续 2 日为负 warning
+	lastPressureDay         string // 净值压力 warning
+	lastS1CombinedDay       string // S1 30d 合成年化 <12% warning
+	lastS1OvernightNegDay   string // S1 隔夜连续 2 日为负 warning
 }
 
 // NewTxsCollector 创建交易流采集器。rentalPayers 为付款方地址集（env 解析）。
@@ -130,6 +137,7 @@ func (c *TxsCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	if fetched > 0 {
 		log.Printf("[trx] txs fetched %d new rows this poll", fetched)
 		c.maybeAlertEnergyRate(ctx)
+		c.checkYieldTriggers(ctx) // D-278 S1/S2：扳机只喊不动手
 	}
 	return nil, nil
 }
