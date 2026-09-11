@@ -36,10 +36,10 @@ func (s *Service) GetTrxYieldCurve(ctx context.Context, req *connect.Request[v1.
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	// 2. 现价（fin_cmc_positions.evaluation_bid_price，X-AFQUL 空单快照）
+	// 2. 现价（fin_cmc_prices REST mid，X-AFQUL——D-278 F2 换源，复用 D-208 既有方法）
 	var currentPrice float64
-	if pos, err := s.store.LastCMCPositionByInstrument(ctx, trxShortInstrument); err == nil {
-		currentPrice = pos.EvaluationBidPrice
+	if mid, _, err := s.store.LastCMCPriceMidWithTime(ctx, trxShortInstrument); err == nil {
+		currentPrice = mid
 	}
 
 	// 3. 构造日序列 + 滚动年化
