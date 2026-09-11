@@ -31,7 +31,7 @@ func TestD254_TrxAccountRefresh_DoubleKickAndReturn(t *testing.T) {
 		AllowanceSun:    1_500_000,  // 1.5 TRX
 		EnergyDelegated: 8_000_000,  // 8 TRX
 		BandwidthStaked: 2_000_000,  // 2 TRX
-		NetLimit:        600_000,    // 0.6 TRX
+		NetLimit:        600_000,    // 600000 BP（链上 sun 原值）
 		Unfrozen:        []byte(`[{"amount":1000000,"expires":1700000000}]`),
 		FetchedAt:       now,
 	}); err != nil {
@@ -76,8 +76,18 @@ func TestD254_TrxAccountRefresh_DoubleKickAndReturn(t *testing.T) {
 	if resp.Msg.BandwidthStaked != 2.0 {
 		t.Errorf("bandwidth_staked = %v, want 2.0", resp.Msg.BandwidthStaked)
 	}
-	if resp.Msg.NetLimit != 0.6 {
-		t.Errorf("net_limit = %v, want 0.6", resp.Msg.NetLimit)
+	if resp.Msg.NetLimit != 600000 {
+		t.Errorf("net_limit = %v, want 600000 (BP 原值不 ÷1e6)", resp.Msg.NetLimit)
+	}
+	// D-278 返修：资源字段不 ÷1e6，BP/Energy 原值透传（种子未设 net_used 等默认 0）
+	if resp.Msg.NetUsed != 0 {
+		t.Errorf("net_used = %v, want 0 (种子未设)", resp.Msg.NetUsed)
+	}
+	if resp.Msg.FreeNetLimit != 0 {
+		t.Errorf("free_net_limit = %v, want 0 (种子未设)", resp.Msg.FreeNetLimit)
+	}
+	if resp.Msg.EnergyLimit != 0 {
+		t.Errorf("energy_limit = %v, want 0 (种子未设)", resp.Msg.EnergyLimit)
 	}
 	if resp.Msg.Votes != 18070 {
 		t.Errorf("votes = %v, want 18070 (votes_total 不除 1e6)", resp.Msg.Votes)

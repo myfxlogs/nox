@@ -66,15 +66,15 @@ func (s *Service) TrxAccountRefresh(ctx context.Context, req *connect.Request[v1
 		TrxAllowance:    float64(acc.AllowanceSun) / 1e6,
 		EnergyDelegated: float64(acc.EnergyDelegated) / 1e6,
 		BandwidthStaked: float64(acc.BandwidthStaked) / 1e6,
-		NetLimit:        float64(acc.NetLimit) / 1e6,
+		NetLimit:        float64(acc.NetLimit),
 		Votes:           float64(acc.VotesTotal),
 		FetchedAt:       timestamppb.New(acc.FetchedAt),
 		// D-278 S5：地址资源显示
-		NetUsed:         float64(acc.NetUsed) / 1e6,
-		FreeNetUsed:     float64(acc.FreeNetUsed) / 1e6,
-		FreeNetLimit:    float64(acc.FreeNetLimit) / 1e6,
-		EnergyLimit:     float64(acc.EnergyLimit) / 1e6,
-		EnergyUsed:      float64(acc.EnergyUsed) / 1e6,
+		NetUsed:         float64(acc.NetUsed),
+		FreeNetUsed:     float64(acc.FreeNetUsed),
+		FreeNetLimit:    float64(acc.FreeNetLimit),
+		EnergyLimit:     float64(acc.EnergyLimit),
+		EnergyUsed:      float64(acc.EnergyUsed),
 		BandwidthStatus: bandwidthStatus(acc),
 	}
 	if acc.SRAddress != nil {

@@ -4924,12 +4924,12 @@ type HedgeAccounts struct {
 	CmcEquity       float64                `protobuf:"fixed64,6,opt,name=cmc_equity,json=cmcEquity,proto3" json:"cmc_equity,omitempty"`                   // fin_cmc_account_summary.total_account_value
 	UpdatedAt       *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`                     // 最近更新时间（取 TRX/CMC 较新者）
 	// D-278 S5：地址资源显示（剩余带宽/能量，后端算好前端零计算）
-	NetLimit        float64 `protobuf:"fixed64,8,opt,name=net_limit,json=netLimit,proto3" json:"net_limit,omitempty"`                     // 带宽上限（TRX，net_limit ÷ 1e6）
-	NetUsed         float64 `protobuf:"fixed64,9,opt,name=net_used,json=netUsed,proto3" json:"net_used,omitempty"`                        // 已用带宽（TRX，net_used ÷ 1e6）
-	FreeNetLimit    float64 `protobuf:"fixed64,10,opt,name=free_net_limit,json=freeNetLimit,proto3" json:"free_net_limit,omitempty"`      // 免费带宽上限（TRX，free_net_limit ÷ 1e6）
-	FreeNetUsed     float64 `protobuf:"fixed64,11,opt,name=free_net_used,json=freeNetUsed,proto3" json:"free_net_used,omitempty"`         // 免费已用带宽（TRX，free_net_used ÷ 1e6）
-	EnergyLimit     float64 `protobuf:"fixed64,12,opt,name=energy_limit,json=energyLimit,proto3" json:"energy_limit,omitempty"`           // 能量上限（TRX，energy_limit ÷ 1e6）
-	EnergyUsed      float64 `protobuf:"fixed64,13,opt,name=energy_used,json=energyUsed,proto3" json:"energy_used,omitempty"`              // 已用能量（TRX，energy_used ÷ 1e6）
+	NetLimit        float64 `protobuf:"fixed64,8,opt,name=net_limit,json=netLimit,proto3" json:"net_limit,omitempty"`                     // 带宽上限（BP，链上 sun 原值直接透传，不 ÷1e6）
+	NetUsed         float64 `protobuf:"fixed64,9,opt,name=net_used,json=netUsed,proto3" json:"net_used,omitempty"`                        // 已用带宽（BP，链上 sun 原值直接透传）
+	FreeNetLimit    float64 `protobuf:"fixed64,10,opt,name=free_net_limit,json=freeNetLimit,proto3" json:"free_net_limit,omitempty"`      // 免费带宽上限（BP，链上 sun 原值直接透传）
+	FreeNetUsed     float64 `protobuf:"fixed64,11,opt,name=free_net_used,json=freeNetUsed,proto3" json:"free_net_used,omitempty"`         // 免费已用带宽（BP，链上 sun 原值直接透传）
+	EnergyLimit     float64 `protobuf:"fixed64,12,opt,name=energy_limit,json=energyLimit,proto3" json:"energy_limit,omitempty"`           // 能量上限（Energy，链上原值直接透传，不 ÷1e6）
+	EnergyUsed      float64 `protobuf:"fixed64,13,opt,name=energy_used,json=energyUsed,proto3" json:"energy_used,omitempty"`              // 已用能量（Energy，链上原值直接透传）
 	BandwidthStatus string  `protobuf:"bytes,14,opt,name=bandwidth_status,json=bandwidthStatus,proto3" json:"bandwidth_status,omitempty"` // 带宽状态 normal/yellow/red（后端算，阈值=trxvote 常量同源引用禁双写）
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
@@ -13917,16 +13917,16 @@ type TrxAccountRefreshResponse struct {
 	TrxAllowance    float64                `protobuf:"fixed64,5,opt,name=trx_allowance,json=trxAllowance,proto3" json:"trx_allowance,omitempty"`          // allowance_sun ÷ 1e6（TRX）
 	EnergyDelegated float64                `protobuf:"fixed64,6,opt,name=energy_delegated,json=energyDelegated,proto3" json:"energy_delegated,omitempty"` // energy_delegated ÷ 1e6（TRX）
 	BandwidthStaked float64                `protobuf:"fixed64,7,opt,name=bandwidth_staked,json=bandwidthStaked,proto3" json:"bandwidth_staked,omitempty"` // bandwidth_staked ÷ 1e6（TRX）
-	NetLimit        float64                `protobuf:"fixed64,8,opt,name=net_limit,json=netLimit,proto3" json:"net_limit,omitempty"`                      // net_limit ÷ 1e6（TRX）
+	NetLimit        float64                `protobuf:"fixed64,8,opt,name=net_limit,json=netLimit,proto3" json:"net_limit,omitempty"`                      // 带宽上限（BP，链上原值透传）
 	Votes           float64                `protobuf:"fixed64,9,opt,name=votes,proto3" json:"votes,omitempty"`                                            // votes_total（票数，对齐 HedgeAccounts.votes 不除 1e6）
 	Unfrozen        string                 `protobuf:"bytes,10,opt,name=unfrozen,proto3" json:"unfrozen,omitempty"`                                       // JSONB 透传（nil=空字符串，在途解押）
 	FetchedAt       *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=fetched_at,json=fetchedAt,proto3" json:"fetched_at,omitempty"`                    // 采集时间
 	// D-278 S5：地址资源显示（剩余带宽/能量）
-	NetUsed         float64 `protobuf:"fixed64,12,opt,name=net_used,json=netUsed,proto3" json:"net_used,omitempty"`                       // net_used ÷ 1e6（TRX）
-	FreeNetUsed     float64 `protobuf:"fixed64,13,opt,name=free_net_used,json=freeNetUsed,proto3" json:"free_net_used,omitempty"`         // free_net_used ÷ 1e6（TRX）
-	FreeNetLimit    float64 `protobuf:"fixed64,14,opt,name=free_net_limit,json=freeNetLimit,proto3" json:"free_net_limit,omitempty"`      // free_net_limit ÷ 1e6（TRX）
-	EnergyLimit     float64 `protobuf:"fixed64,15,opt,name=energy_limit,json=energyLimit,proto3" json:"energy_limit,omitempty"`           // energy_limit ÷ 1e6（TRX）
-	EnergyUsed      float64 `protobuf:"fixed64,16,opt,name=energy_used,json=energyUsed,proto3" json:"energy_used,omitempty"`              // energy_used ÷ 1e6（TRX）
+	NetUsed         float64 `protobuf:"fixed64,12,opt,name=net_used,json=netUsed,proto3" json:"net_used,omitempty"`                       // 已用带宽（BP，链上原值透传）
+	FreeNetUsed     float64 `protobuf:"fixed64,13,opt,name=free_net_used,json=freeNetUsed,proto3" json:"free_net_used,omitempty"`         // 免费已用带宽（BP，链上原值透传）
+	FreeNetLimit    float64 `protobuf:"fixed64,14,opt,name=free_net_limit,json=freeNetLimit,proto3" json:"free_net_limit,omitempty"`      // 免费带宽上限（BP，链上原值透传）
+	EnergyLimit     float64 `protobuf:"fixed64,15,opt,name=energy_limit,json=energyLimit,proto3" json:"energy_limit,omitempty"`           // 能量上限（Energy，链上原值透传）
+	EnergyUsed      float64 `protobuf:"fixed64,16,opt,name=energy_used,json=energyUsed,proto3" json:"energy_used,omitempty"`              // 已用能量（Energy，链上原值透传）
 	BandwidthStatus string  `protobuf:"bytes,17,opt,name=bandwidth_status,json=bandwidthStatus,proto3" json:"bandwidth_status,omitempty"` // 带宽状态 normal/yellow/red（后端算，阈值=trxvote 常量同源）
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
