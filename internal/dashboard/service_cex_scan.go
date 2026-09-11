@@ -5,6 +5,7 @@ package dashboard
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"connectrpc.com/connect"
@@ -84,14 +85,38 @@ func (s *Service) GetCexScanSnapshot(ctx context.Context, req *connect.Request[v
 				Balance:    info.Balance,
 				Equity:     info.Equity,
 				FreeMargin: info.FreeMargin,
+				VenueKey:   info.VenueKey, // D-273：前端稳定 React key（P2-6）
+				Holdings:   info.Holdings, // D-273：币种明细展开（P3-1）
 			})
 		}
 	}
 
+	// 判断结果（D-273）：reasons 入库为 JSON 数组字符串，此处 Unmarshal 还原为逐条 reason（N2 反向映射）
+	judgments, err := s.store.LatestCexEarnJudgments(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("latest cex earn judgments: %w", err)
+	}
+	var judgmentRows []*v1.CexEarnJudgmentRow
+	for _, j := range judgments {
+		row := &v1.CexEarnJudgmentRow{
+			Venue:       j.Venue,
+			Ccy:         j.Ccy,
+			ProductType: j.ProductType,
+			Apr:         j.APR,
+			Category:    j.Category,
+			Verdict:     j.Verdict,
+		}
+		if err := json.Unmarshal([]byte(j.Reasons), &row.Reasons); err != nil {
+			row.Reasons = nil // 脏数据兜底：解析失败不阻断快照，前端显示无理由
+		}
+		judgmentRows = append(judgmentRows, row)
+	}
+
 	return connect.NewResponse(&v1.GetCexScanSnapshotResponse{
-		EarnAprs: earnRows,
-		Spreads:  spreadRows,
-		Fundings: fundingRows,
-		Balances: balanceRows,
+		EarnAprs:  earnRows,
+		Spreads:   spreadRows,
+		Fundings:  fundingRows,
+		Balances:  balanceRows,
+		Judgments: judgmentRows,
 	}), nil
 }

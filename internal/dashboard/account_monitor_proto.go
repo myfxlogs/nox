@@ -31,6 +31,7 @@ func accountToProto(a *reconcile.AccountInfo, online bool, now time.Time) *v1.Ac
 		Simulated:  a.Simulated,
 		Website:    a.Website,
 		UpdatedAt:  timestamppb.New(now),
+		Holdings:   a.Holdings,
 	}
 	return pb
 }
