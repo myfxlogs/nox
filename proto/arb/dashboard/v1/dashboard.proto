@@ -144,6 +144,12 @@ service DashboardService {
   rpc SetRepoConfig(SetRepoConfigRequest) returns (SetRepoConfigResponse);
   // D-271：CEX 只读扫描器快照（理财 APR + 跨所价差 + funding + 余额）
   rpc GetCexScanSnapshot(GetCexScanSnapshotRequest) returns (GetCexScanSnapshotResponse);
+  // D-272：逆回购操作记录+策略验证闭环
+  rpc RecordRepoTrade(RecordRepoTradeRequest) returns (RecordRepoTradeResponse);
+  rpc ListRepoTrades(ListRepoTradesRequest) returns (ListRepoTradesResponse);
+  rpc SettleRepoTrade(SettleRepoTradeRequest) returns (SettleRepoTradeResponse);
+  rpc DeleteRepoTrade(DeleteRepoTradeRequest) returns (DeleteRepoTradeResponse);
+  rpc GetRepoStrategyValidation(GetRepoStrategyValidationRequest) returns (GetRepoStrategyValidationResponse);
 }
 
 // === Quote（§1.1）===
@@ -1641,4 +1647,102 @@ message CexBalanceRow {
   double free_margin = 5;
   string venue_key = 6;           // D-273：稳定 React key（P2-6）
   repeated Holding holdings = 7;  // D-273：币种明细展开（P3-1）
+}
+
+// === D-272 逆回购操作记录+策略验证闭环 ===
+
+message RecordRepoTradeRequest {
+  string instrument_code = 1;    // "204001" (GC001)
+  string trade_date = 2;         // 操作日期 YYYY-MM-DD
+  int32 holding_days = 3;        // 利息天数（GC001周四=3）
+  double principal_cny = 4;      // 本金（实际操作金额）
+  double actual_rate_pct = 5;    // 实际成交利率%（年化，百分数 1.45=1.45%）
+  string rationale = 6;          // 操作笔记（可选）
+  optional int64 repo_op_id = 7; // 关联 cnfi_repo_ops.id（可选）
+  optional string maturity_date = 8; // 资金可用日（可选，空=后端默认；业主可覆盖）
+}
+
+message RecordRepoTradeResponse {
+  bool ok = 1;
+  string error = 2;
+  int64 id = 3;                     // 新建的 trade id
+  optional double theoretical_rate_pct = 4;     // 系统抓取的理论利率（回显，NULL=非交易时段未采集）
+  optional double theoretical_return_by_idle = 5; // 系统建议收益（回显）
+  optional double theoretical_return_cny = 6;   // 同金额理论收益（回显）
+  string maturity_date = 7;         // 到期日（回显：业主覆盖值，未提供时后端默认）
+  optional double deviation_rate_bps = 8;       // 利率偏差（回显，NULL=理论利率为空）
+  double deviation_principal_cny = 9;           // 金额偏差（回显）
+}
+
+message ListRepoTradesRequest {
+  int32 limit = 1;               // 默认 50，上限 200
+  optional string status = 2;    // 筛选状态 open/settled（空=全部）
+}
+
+message RepoTradeRow {
+  int64 id = 1;
+  string instrument_code = 2;
+  string instrument_name = 3;       // 后端从 code 映射（"204001"→"GC001"），非 DB 列
+  string trade_date = 4;
+  string maturity_date = 5;
+  int32 holding_days = 6;
+  double principal_cny = 7;
+  double actual_rate_pct = 8;
+  optional double theoretical_rate_pct = 9;
+  optional double theoretical_return_by_idle = 10;
+  optional double theoretical_return_cny = 11;
+  optional double idle_cny_at_record = 12;
+  optional double actual_return_cny = 13;
+  optional string settled_at = 14;
+  optional double deviation_rate_bps = 15;
+  optional double deviation_principal_cny = 16;
+  optional double deviation_return_cny = 17;
+  optional double deviation_return_pct = 18;
+  string status = 19;
+  string entry_source = 20;
+  string rationale = 21;
+}
+
+message ListRepoTradesResponse {
+  repeated RepoTradeRow trades = 1;
+}
+
+message SettleRepoTradeRequest {
+  int64 id = 1;
+  double actual_return_cny = 2;  // 实际到账收益
+}
+
+message SettleRepoTradeResponse {
+  bool ok = 1;
+  string error = 2;
+  optional double deviation_return_cny = 3;   // 结算后偏差（回显，NULL=理论收益为空）
+  optional double deviation_return_pct = 4;   // 结算后偏差率（回显，NULL=理论收益为空）
+}
+
+message DeleteRepoTradeRequest {
+  int64 id = 1;
+}
+
+message DeleteRepoTradeResponse {
+  bool ok = 1;
+  string error = 2;
+}
+
+message GetRepoStrategyValidationRequest {}
+
+message GetRepoStrategyValidationResponse {
+  // 累计统计（仅 settled）
+  int32 total_trades = 1;
+  int32 settled_trades = 2;
+  int32 open_trades = 3;
+  double total_principal_cny = 4;          // 累计本金（settled）
+  double total_theoretical_return_cny = 5; // 累计同金额理论收益（settled）
+  double total_actual_return_cny = 6;      // 累计实际收益（settled）
+  double total_deviation_cny = 7;          // 累计收益偏差（settled）
+  double total_deviation_pct = 8;          // 累计收益偏差率（settled）
+  double avg_rate_deviation_bps = 9;       // 平均利率偏差（settled，仅 theoretical_rate 非空行）
+  double avg_principal_deviation_cny = 10; // 平均金额偏差（settled）
+  // 在途持仓
+  double open_principal_cny = 11;          // 在途本金
+  double open_theoretical_return_cny = 12; // 在途同金额理论收益
 }

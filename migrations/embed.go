@@ -197,5 +197,8 @@ var CexScanSQL string
 //go:embed 0084_exchange_configs_unique_simulated.sql
 var ExchangeConfigsUniqueSimulatedSQL string
 
+//go:embed 0085_repo_trades.sql
+var RepoTradesSQL string
+
 //go:embed 0086_cex_earn_judgment.sql
 var CexEarnJudgmentSQL string
