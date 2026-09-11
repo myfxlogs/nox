@@ -15199,13 +15199,15 @@ type RecordRepoTradeResponse struct {
 	state                   protoimpl.MessageState `protogen:"open.v1"`
 	Ok                      bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
 	Error                   string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
-	Id                      int64                  `protobuf:"varint,3,opt,name=id,proto3" json:"id,omitempty"`                                                                                     // 新建的 trade id
-	TheoreticalRatePct      *float64               `protobuf:"fixed64,4,opt,name=theoretical_rate_pct,json=theoreticalRatePct,proto3,oneof" json:"theoretical_rate_pct,omitempty"`                  // 系统抓取的理论利率（回显，NULL=非交易时段未采集）
-	TheoreticalReturnByIdle *float64               `protobuf:"fixed64,5,opt,name=theoretical_return_by_idle,json=theoreticalReturnByIdle,proto3,oneof" json:"theoretical_return_by_idle,omitempty"` // 系统建议收益（回显）
-	TheoreticalReturnCny    *float64               `protobuf:"fixed64,6,opt,name=theoretical_return_cny,json=theoreticalReturnCny,proto3,oneof" json:"theoretical_return_cny,omitempty"`            // 同金额理论收益（回显）
-	MaturityDate            string                 `protobuf:"bytes,7,opt,name=maturity_date,json=maturityDate,proto3" json:"maturity_date,omitempty"`                                              // 到期日（回显：业主覆盖值，未提供时后端默认）
-	DeviationRateBps        *float64               `protobuf:"fixed64,8,opt,name=deviation_rate_bps,json=deviationRateBps,proto3,oneof" json:"deviation_rate_bps,omitempty"`                        // 利率偏差（回显，NULL=理论利率为空）
-	DeviationPrincipalCny   float64                `protobuf:"fixed64,9,opt,name=deviation_principal_cny,json=deviationPrincipalCny,proto3" json:"deviation_principal_cny,omitempty"`               // 金额偏差（回显）
+	Id                      int64                  `protobuf:"varint,3,opt,name=id,proto3" json:"id,omitempty"`                                                                                      // 新建的 trade id
+	TheoreticalRatePct      *float64               `protobuf:"fixed64,4,opt,name=theoretical_rate_pct,json=theoreticalRatePct,proto3,oneof" json:"theoretical_rate_pct,omitempty"`                   // 系统抓取的理论利率（回显，NULL=非交易时段未采集）
+	TheoreticalReturnByIdle *float64               `protobuf:"fixed64,5,opt,name=theoretical_return_by_idle,json=theoreticalReturnByIdle,proto3,oneof" json:"theoretical_return_by_idle,omitempty"`  // 系统建议收益（回显）
+	TheoreticalReturnCny    *float64               `protobuf:"fixed64,6,opt,name=theoretical_return_cny,json=theoreticalReturnCny,proto3,oneof" json:"theoretical_return_cny,omitempty"`             // 同金额理论收益（回显）
+	MaturityDate            string                 `protobuf:"bytes,7,opt,name=maturity_date,json=maturityDate,proto3" json:"maturity_date,omitempty"`                                               // 到期日（回显：业主覆盖值，未提供时后端默认）
+	DeviationRateBps        *float64               `protobuf:"fixed64,8,opt,name=deviation_rate_bps,json=deviationRateBps,proto3,oneof" json:"deviation_rate_bps,omitempty"`                         // 利率偏差（回显，NULL=理论利率为空）
+	DeviationPrincipalCny   float64                `protobuf:"fixed64,9,opt,name=deviation_principal_cny,json=deviationPrincipalCny,proto3" json:"deviation_principal_cny,omitempty"`                // 金额偏差（回显）
+	FeeCny                  float64                `protobuf:"fixed64,10,opt,name=fee_cny,json=feeCny,proto3" json:"fee_cny,omitempty"`                                                              // D-276 手续费（成交金额×品种佣金率）
+	NetTheoreticalReturnCny *float64               `protobuf:"fixed64,11,opt,name=net_theoretical_return_cny,json=netTheoreticalReturnCny,proto3,oneof" json:"net_theoretical_return_cny,omitempty"` // D-276 净理论收益（毛理论−费用，NULL=理论为空）
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -15303,6 +15305,20 @@ func (x *RecordRepoTradeResponse) GetDeviationPrincipalCny() float64 {
 	return 0
 }
 
+func (x *RecordRepoTradeResponse) GetFeeCny() float64 {
+	if x != nil {
+		return x.FeeCny
+	}
+	return 0
+}
+
+func (x *RecordRepoTradeResponse) GetNetTheoreticalReturnCny() float64 {
+	if x != nil && x.NetTheoreticalReturnCny != nil {
+		return *x.NetTheoreticalReturnCny
+	}
+	return 0
+}
+
 type ListRepoTradesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Limit         int32                  `protobuf:"varint,1,opt,name=limit,proto3" json:"limit,omitempty"`        // 默认 50，上限 200
@@ -15378,6 +15394,8 @@ type RepoTradeRow struct {
 	Status                  string                 `protobuf:"bytes,19,opt,name=status,proto3" json:"status,omitempty"`
 	EntrySource             string                 `protobuf:"bytes,20,opt,name=entry_source,json=entrySource,proto3" json:"entry_source,omitempty"`
 	Rationale               string                 `protobuf:"bytes,21,opt,name=rationale,proto3" json:"rationale,omitempty"`
+	FeeCny                  *float64               `protobuf:"fixed64,22,opt,name=fee_cny,json=feeCny,proto3,oneof" json:"fee_cny,omitempty"`                                                        // D-276 手续费
+	NetTheoreticalReturnCny *float64               `protobuf:"fixed64,23,opt,name=net_theoretical_return_cny,json=netTheoreticalReturnCny,proto3,oneof" json:"net_theoretical_return_cny,omitempty"` // D-276 净理论收益（后端派生）
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -15557,6 +15575,20 @@ func (x *RepoTradeRow) GetRationale() string {
 		return x.Rationale
 	}
 	return ""
+}
+
+func (x *RepoTradeRow) GetFeeCny() float64 {
+	if x != nil && x.FeeCny != nil {
+		return *x.FeeCny
+	}
+	return 0
+}
+
+func (x *RepoTradeRow) GetNetTheoreticalReturnCny() float64 {
+	if x != nil && x.NetTheoreticalReturnCny != nil {
+		return *x.NetTheoreticalReturnCny
+	}
+	return 0
 }
 
 type ListRepoTradesResponse struct {
@@ -15871,8 +15903,11 @@ type GetRepoStrategyValidationResponse struct {
 	// 在途持仓
 	OpenPrincipalCny         float64 `protobuf:"fixed64,11,opt,name=open_principal_cny,json=openPrincipalCny,proto3" json:"open_principal_cny,omitempty"`                           // 在途本金
 	OpenTheoreticalReturnCny float64 `protobuf:"fixed64,12,opt,name=open_theoretical_return_cny,json=openTheoreticalReturnCny,proto3" json:"open_theoretical_return_cny,omitempty"` // 在途同金额理论收益
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	// D-276 手续费聚合
+	TotalFeeCny                  float64 `protobuf:"fixed64,13,opt,name=total_fee_cny,json=totalFeeCny,proto3" json:"total_fee_cny,omitempty"`                                                        // 累计手续费（settled）
+	TotalNetTheoreticalReturnCny float64 `protobuf:"fixed64,14,opt,name=total_net_theoretical_return_cny,json=totalNetTheoreticalReturnCny,proto3" json:"total_net_theoretical_return_cny,omitempty"` // 累计净理论收益（毛理论−费用，settled）
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
 }
 
 func (x *GetRepoStrategyValidationResponse) Reset() {
@@ -15985,6 +16020,20 @@ func (x *GetRepoStrategyValidationResponse) GetOpenPrincipalCny() float64 {
 func (x *GetRepoStrategyValidationResponse) GetOpenTheoreticalReturnCny() float64 {
 	if x != nil {
 		return x.OpenTheoreticalReturnCny
+	}
+	return 0
+}
+
+func (x *GetRepoStrategyValidationResponse) GetTotalFeeCny() float64 {
+	if x != nil {
+		return x.TotalFeeCny
+	}
+	return 0
+}
+
+func (x *GetRepoStrategyValidationResponse) GetTotalNetTheoreticalReturnCny() float64 {
+	if x != nil {
+		return x.TotalNetTheoreticalReturnCny
 	}
 	return 0
 }
@@ -17209,7 +17258,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"repo_op_id\x18\a \x01(\x03H\x00R\brepoOpId\x88\x01\x01\x12(\n" +
 	"\rmaturity_date\x18\b \x01(\tH\x01R\fmaturityDate\x88\x01\x01B\r\n" +
 	"\v_repo_op_idB\x10\n" +
-	"\x0e_maturity_date\"\xfd\x03\n" +
+	"\x0e_maturity_date\"\xf7\x04\n" +
 	"\x17RecordRepoTradeResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12\x0e\n" +
@@ -17219,15 +17268,20 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x16theoretical_return_cny\x18\x06 \x01(\x01H\x02R\x14theoreticalReturnCny\x88\x01\x01\x12#\n" +
 	"\rmaturity_date\x18\a \x01(\tR\fmaturityDate\x121\n" +
 	"\x12deviation_rate_bps\x18\b \x01(\x01H\x03R\x10deviationRateBps\x88\x01\x01\x126\n" +
-	"\x17deviation_principal_cny\x18\t \x01(\x01R\x15deviationPrincipalCnyB\x17\n" +
+	"\x17deviation_principal_cny\x18\t \x01(\x01R\x15deviationPrincipalCny\x12\x17\n" +
+	"\afee_cny\x18\n" +
+	" \x01(\x01R\x06feeCny\x12@\n" +
+	"\x1anet_theoretical_return_cny\x18\v \x01(\x01H\x04R\x17netTheoreticalReturnCny\x88\x01\x01B\x17\n" +
 	"\x15_theoretical_rate_pctB\x1d\n" +
 	"\x1b_theoretical_return_by_idleB\x19\n" +
 	"\x17_theoretical_return_cnyB\x15\n" +
-	"\x13_deviation_rate_bps\"U\n" +
+	"\x13_deviation_rate_bpsB\x1d\n" +
+	"\x1b_net_theoretical_return_cny\"U\n" +
 	"\x15ListRepoTradesRequest\x12\x14\n" +
 	"\x05limit\x18\x01 \x01(\x05R\x05limit\x12\x1b\n" +
 	"\x06status\x18\x02 \x01(\tH\x00R\x06status\x88\x01\x01B\t\n" +
-	"\a_status\"\x8a\t\n" +
+	"\a_status\"\x95\n" +
+	"\n" +
 	"\fRepoTradeRow\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12'\n" +
 	"\x0finstrument_code\x18\x02 \x01(\tR\x0einstrumentCode\x12'\n" +
@@ -17252,7 +17306,10 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x14deviation_return_pct\x18\x12 \x01(\x01H\tR\x12deviationReturnPct\x88\x01\x01\x12\x16\n" +
 	"\x06status\x18\x13 \x01(\tR\x06status\x12!\n" +
 	"\fentry_source\x18\x14 \x01(\tR\ventrySource\x12\x1c\n" +
-	"\trationale\x18\x15 \x01(\tR\trationaleB\x17\n" +
+	"\trationale\x18\x15 \x01(\tR\trationale\x12\x1c\n" +
+	"\afee_cny\x18\x16 \x01(\x01H\n" +
+	"R\x06feeCny\x88\x01\x01\x12@\n" +
+	"\x1anet_theoretical_return_cny\x18\x17 \x01(\x01H\vR\x17netTheoreticalReturnCny\x88\x01\x01B\x17\n" +
 	"\x15_theoretical_rate_pctB\x1d\n" +
 	"\x1b_theoretical_return_by_idleB\x19\n" +
 	"\x17_theoretical_return_cnyB\x15\n" +
@@ -17262,7 +17319,10 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x13_deviation_rate_bpsB\x1a\n" +
 	"\x18_deviation_principal_cnyB\x17\n" +
 	"\x15_deviation_return_cnyB\x17\n" +
-	"\x15_deviation_return_pct\"P\n" +
+	"\x15_deviation_return_pctB\n" +
+	"\n" +
+	"\b_fee_cnyB\x1d\n" +
+	"\x1b_net_theoretical_return_cny\"P\n" +
 	"\x16ListRepoTradesResponse\x126\n" +
 	"\x06trades\x18\x01 \x03(\v2\x1e.arb.dashboard.v1.RepoTradeRowR\x06trades\"T\n" +
 	"\x16SettleRepoTradeRequest\x12\x0e\n" +
@@ -17280,7 +17340,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x17DeleteRepoTradeResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\"\"\n" +
-	" GetRepoStrategyValidationRequest\"\xf7\x04\n" +
+	" GetRepoStrategyValidationRequest\"\xe3\x05\n" +
 	"!GetRepoStrategyValidationResponse\x12!\n" +
 	"\ftotal_trades\x18\x01 \x01(\x05R\vtotalTrades\x12%\n" +
 	"\x0esettled_trades\x18\x02 \x01(\x05R\rsettledTrades\x12\x1f\n" +
@@ -17295,7 +17355,9 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x1bavg_principal_deviation_cny\x18\n" +
 	" \x01(\x01R\x18avgPrincipalDeviationCny\x12,\n" +
 	"\x12open_principal_cny\x18\v \x01(\x01R\x10openPrincipalCny\x12=\n" +
-	"\x1bopen_theoretical_return_cny\x18\f \x01(\x01R\x18openTheoreticalReturnCny*z\n" +
+	"\x1bopen_theoretical_return_cny\x18\f \x01(\x01R\x18openTheoreticalReturnCny\x12\"\n" +
+	"\rtotal_fee_cny\x18\r \x01(\x01R\vtotalFeeCny\x12F\n" +
+	" total_net_theoretical_return_cny\x18\x0e \x01(\x01R\x1ctotalNetTheoreticalReturnCny*z\n" +
 	"\vMatrixState\x12\x1c\n" +
 	"\x18MATRIX_STATE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15MATRIX_STATE_COMPLETE\x10\x01\x12\x18\n" +

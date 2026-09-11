@@ -101,6 +101,9 @@ func (s *Service) RecordRepoTrade(ctx context.Context, req *connect.Request[v1.R
 	// 5. 计算录入时偏差
 	deviationPrincipalCny := m.PrincipalCny - idleCny
 
+	// 5.1 D-276 计算手续费（成交金额 × 品种佣金率）
+	feeCny := m.PrincipalCny * feeRates[m.InstrumentCode]
+
 	// 6. 生成 signal_snapshot JSON
 	snap := buildSignalSnapshot(m.InstrumentCode, theoreticalRatePct, avg30d, avgHas, idleCny, theoreticalReturnByIdle)
 	snapStr := string(snap)
@@ -120,6 +123,7 @@ func (s *Service) RecordRepoTrade(ctx context.Context, req *connect.Request[v1.R
 		SignalSnapshot:          &snapStr,
 		DeviationRateBps:        deviationRateBps,
 		DeviationPrincipalCny:   &deviationPrincipalCny,
+		FeeCny:                  &feeCny,
 	}
 	if m.RepoOpId != nil {
 		row.RepoOpID = m.RepoOpId
@@ -167,6 +171,12 @@ func (s *Service) RecordRepoTrade(ctx context.Context, req *connect.Request[v1.R
 	if deviationRateBps != nil {
 		resp.DeviationRateBps = deviationRateBps
 	}
+	// D-276 回显手续费+净理论收益
+	resp.FeeCny = feeCny
+	if theoreticalReturnCny != nil {
+		netTheo := *theoreticalReturnCny - feeCny
+		resp.NetTheoreticalReturnCny = &netTheo
+	}
 	return connect.NewResponse(resp), nil
 }
 
@@ -197,16 +207,20 @@ func (s *Service) SettleRepoTrade(ctx context.Context, req *connect.Request[v1.S
 		return connect.NewResponse(resp), nil
 	}
 
-	// 计算收益偏差（theoretical_return_cny 非空时）
+	// 计算收益偏差（D-276：vs 净理论 = theoretical_return_cny − fee_cny）
 	var deviationReturnCny, deviationReturnPct *float64
 	if trade.TheoreticalReturnCny != nil {
-		cny := m.ActualReturnCny - *trade.TheoreticalReturnCny
+		netTheo := *trade.TheoreticalReturnCny
+		if trade.FeeCny != nil {
+			netTheo -= *trade.FeeCny
+		}
+		cny := m.ActualReturnCny - netTheo
 		deviationReturnCny = &cny
-		if *trade.TheoreticalReturnCny == 0 {
+		if netTheo == 0 {
 			zero := 0.0
 			deviationReturnPct = &zero
 		} else {
-			pct := cny / *trade.TheoreticalReturnCny * 100
+			pct := cny / netTheo * 100
 			deviationReturnPct = &pct
 		}
 	}

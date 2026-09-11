@@ -324,3 +324,137 @@ func TestGetRepoStrategyValidation(t *testing.T) {
 		t.Errorf("TotalActualReturnCny = %v, want 50.0", resp.Msg.TotalActualReturnCny)
 	}
 }
+
+// D-276 测试：RecordRepoTrade 回显 fee_cny + net_theoretical_return_cny。
+func TestRecordRepoTrade_FeeEcho(t *testing.T) {
+	s := repoTradesSvcTest(t)
+	ctx := context.Background()
+	tradeDate := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
+	s.store.InsertRepoRate(ctx, "204001", "GC001", 1.385, nil, tradeDate)
+	resp, err := s.RecordRepoTrade(ctx, connect.NewRequest(&v1.RecordRepoTradeRequest{
+		InstrumentCode: "204001", TradeDate: "2026-09-10",
+		HoldingDays: 1, PrincipalCny: 407000, ActualRatePct: 1.385,
+	}))
+	if err != nil {
+		t.Fatalf("RecordRepoTrade: %v", err)
+	}
+	if !resp.Msg.Ok {
+		t.Fatalf("ok=false, error=%s", resp.Msg.Error)
+	}
+	// fee_cny = 407000 × 0.00001 = 4.07
+	expectedFee := 407000.0 * 0.00001
+	if resp.Msg.FeeCny != expectedFee {
+		t.Errorf("FeeCny = %v, want %v", resp.Msg.FeeCny, expectedFee)
+	}
+	// net_theoretical = theoretical - fee
+	if resp.Msg.TheoreticalReturnCny == nil {
+		t.Fatal("TheoreticalReturnCny = nil, want non-nil")
+	}
+	expectedNet := *resp.Msg.TheoreticalReturnCny - expectedFee
+	if resp.Msg.NetTheoreticalReturnCny == nil {
+		t.Fatal("NetTheoreticalReturnCny = nil, want non-nil")
+	}
+	if *resp.Msg.NetTheoreticalReturnCny != expectedNet {
+		t.Errorf("NetTheoreticalReturnCny = %v, want %v", *resp.Msg.NetTheoreticalReturnCny, expectedNet)
+	}
+}
+
+// D-276 测试：SettleRepoTrade 净口径偏差（actual=42.26, net_theoretical=42.26 → deviation=0）。
+func TestSettleRepoTrade_NetDeviation(t *testing.T) {
+	s := repoTradesSvcTest(t)
+	ctx := context.Background()
+	tradeDate := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
+	// r=1.385%, 1 day, principal=407000 → theoretical = 1.385/100 * 407000 * 1/365 = 15.443...
+	// fee = 407000 * 0.00001 = 4.07
+	// net_theoretical = theoretical - fee
+	s.store.InsertRepoRate(ctx, "204001", "GC001", 1.385, nil, tradeDate)
+	recResp, _ := s.RecordRepoTrade(ctx, connect.NewRequest(&v1.RecordRepoTradeRequest{
+		InstrumentCode: "204001", TradeDate: "2026-09-10",
+		HoldingDays: 1, PrincipalCny: 407000, ActualRatePct: 1.385,
+	}))
+	if !recResp.Msg.Ok {
+		t.Fatalf("RecordRepoTrade failed: %s", recResp.Msg.Error)
+	}
+	// 验收锚：407000 GC001 → fee=4.07
+	if recResp.Msg.FeeCny != 4.07 {
+		t.Errorf("FeeCny = %v, want 4.07", recResp.Msg.FeeCny)
+	}
+	// 结算：actual = net_theoretical → deviation = 0
+	if recResp.Msg.NetTheoreticalReturnCny == nil {
+		t.Fatal("NetTheoreticalReturnCny = nil")
+	}
+	actualReturn := *recResp.Msg.NetTheoreticalReturnCny
+	resp, err := s.SettleRepoTrade(ctx, connect.NewRequest(&v1.SettleRepoTradeRequest{
+		Id: recResp.Msg.Id, ActualReturnCny: actualReturn,
+	}))
+	if err != nil {
+		t.Fatalf("SettleRepoTrade: %v", err)
+	}
+	if !resp.Msg.Ok {
+		t.Fatalf("ok=false, error=%s", resp.Msg.Error)
+	}
+	// 净口径偏差 = actual - net_theoretical = 0
+	if resp.Msg.DeviationReturnCny == nil {
+		t.Fatal("DeviationReturnCny = nil, want 0.0")
+	}
+	if *resp.Msg.DeviationReturnCny > 0.01 || *resp.Msg.DeviationReturnCny < -0.01 {
+		t.Errorf("DeviationReturnCny = %v, want ~0 (净口径闭环)", *resp.Msg.DeviationReturnCny)
+	}
+}
+
+// D-276 测试：ListRepoTrades 回显 fee_cny + net_theoretical_return_cny。
+func TestListRepoTrades_FeeFields(t *testing.T) {
+	s := repoTradesSvcTest(t)
+	ctx := context.Background()
+	s.store.InsertRepoRate(ctx, "204001", "GC001", 1.385, nil, time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC))
+	s.RecordRepoTrade(ctx, connect.NewRequest(&v1.RecordRepoTradeRequest{
+		InstrumentCode: "204001", TradeDate: "2026-09-10",
+		HoldingDays: 1, PrincipalCny: 407000, ActualRatePct: 1.385,
+	}))
+	resp, err := s.ListRepoTrades(ctx, connect.NewRequest(&v1.ListRepoTradesRequest{Limit: 10}))
+	if err != nil {
+		t.Fatalf("ListRepoTrades: %v", err)
+	}
+	if len(resp.Msg.Trades) != 1 {
+		t.Fatalf("len = %d, want 1", len(resp.Msg.Trades))
+	}
+	row := resp.Msg.Trades[0]
+	if row.FeeCny == nil {
+		t.Error("FeeCny = nil, want 4.07")
+	} else if *row.FeeCny != 4.07 {
+		t.Errorf("FeeCny = %v, want 4.07", *row.FeeCny)
+	}
+	if row.NetTheoreticalReturnCny == nil {
+		t.Error("NetTheoreticalReturnCny = nil, want non-nil")
+	}
+}
+
+// D-276 测试：GetRepoStrategyValidation 含 fee 聚合字段。
+func TestGetRepoStrategyValidation_FeeAggregation(t *testing.T) {
+	s := repoTradesSvcTest(t)
+	ctx := context.Background()
+	tradeDate := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
+	s.store.InsertRepoRate(ctx, "204001", "GC001", 1.385, nil, tradeDate)
+	recResp, _ := s.RecordRepoTrade(ctx, connect.NewRequest(&v1.RecordRepoTradeRequest{
+		InstrumentCode: "204001", TradeDate: "2026-09-10",
+		HoldingDays: 1, PrincipalCny: 407000, ActualRatePct: 1.385,
+	}))
+	s.SettleRepoTrade(ctx, connect.NewRequest(&v1.SettleRepoTradeRequest{
+		Id: recResp.Msg.Id, ActualReturnCny: 42.26,
+	}))
+	resp, err := s.GetRepoStrategyValidation(ctx, connect.NewRequest(&v1.GetRepoStrategyValidationRequest{}))
+	if err != nil {
+		t.Fatalf("GetRepoStrategyValidation: %v", err)
+	}
+	if resp.Msg.TotalFeeCny != 4.07 {
+		t.Errorf("TotalFeeCny = %v, want 4.07", resp.Msg.TotalFeeCny)
+	}
+	// net = theoretical - fee
+	if resp.Msg.TotalTheoreticalReturnCny == 0 {
+		t.Error("TotalTheoreticalReturnCny = 0, want non-zero")
+	}
+	expectedNet := resp.Msg.TotalTheoreticalReturnCny - resp.Msg.TotalFeeCny
+	if resp.Msg.TotalNetTheoreticalReturnCny != expectedNet {
+		t.Errorf("TotalNetTheoreticalReturnCny = %v, want %v", resp.Msg.TotalNetTheoreticalReturnCny, expectedNet)
+	}
+}

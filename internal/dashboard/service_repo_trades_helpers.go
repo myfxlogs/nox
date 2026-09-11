@@ -26,6 +26,15 @@ var validInstrumentCodes = map[string]bool{
 	"204028": true,
 }
 
+// feeRates 逆回购佣金率（成交金额 × 费率 = 手续费，一次性非年化非按占用天数）。
+// 204001=生产实证 9-11（407,000×0.00001=4.07）；其余三品种按上交所公布回购佣金率，待首个实测成交日后校准。
+var feeRates = map[string]float64{
+	"204001": 0.00001,
+	"204007": 0.00005,
+	"204014": 0.00010,
+	"204028": 0.00020,
+}
+
 // computeDefaultMaturityDate §0 A-1 修订：从 trade_date+1 起有界前扫（≤15天）首个工作日。
 // 扫描越界或日历查询出错 → 回退 trade_date+1。
 func computeDefaultMaturityDate(ctx context.Context, store *pgstore.Store, tradeDate time.Time) time.Time {

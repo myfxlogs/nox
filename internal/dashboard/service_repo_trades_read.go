@@ -70,6 +70,14 @@ func (s *Service) ListRepoTrades(ctx context.Context, req *connect.Request[v1.Li
 		if r.DeviationReturnPct != nil {
 			row.DeviationReturnPct = r.DeviationReturnPct
 		}
+		// D-276 fee_cny + net_theoretical_return_cny（后端派生，net 非 DB 列）
+		if r.FeeCny != nil {
+			row.FeeCny = r.FeeCny
+		}
+		if r.TheoreticalReturnCny != nil && r.FeeCny != nil {
+			net := *r.TheoreticalReturnCny - *r.FeeCny
+			row.NetTheoreticalReturnCny = &net
+		}
 		if r.Rationale != nil {
 			row.Rationale = *r.Rationale
 		}
@@ -85,17 +93,19 @@ func (s *Service) GetRepoStrategyValidation(ctx context.Context, req *connect.Re
 		return nil, fmt.Errorf("get repo strategy validation: %w", err)
 	}
 	return connect.NewResponse(&v1.GetRepoStrategyValidationResponse{
-		TotalTrades:               v.TotalTrades,
-		SettledTrades:             v.SettledTrades,
-		OpenTrades:                v.OpenTrades,
-		TotalPrincipalCny:         v.TotalPrincipalCny,
-		TotalTheoreticalReturnCny: v.TotalTheoreticalReturn,
-		TotalActualReturnCny:      v.TotalActualReturn,
-		TotalDeviationCny:         v.TotalDeviationCny,
-		TotalDeviationPct:         v.TotalDeviationPct,
-		AvgRateDeviationBps:       v.AvgRateDeviationBps,
-		AvgPrincipalDeviationCny:  v.AvgPrincipalDeviationCny,
-		OpenPrincipalCny:          v.OpenPrincipalCny,
-		OpenTheoreticalReturnCny:  v.OpenTheoreticalReturn,
+		TotalTrades:                  v.TotalTrades,
+		SettledTrades:                v.SettledTrades,
+		OpenTrades:                   v.OpenTrades,
+		TotalPrincipalCny:            v.TotalPrincipalCny,
+		TotalTheoreticalReturnCny:    v.TotalTheoreticalReturn,
+		TotalActualReturnCny:         v.TotalActualReturn,
+		TotalDeviationCny:            v.TotalDeviationCny,
+		TotalDeviationPct:            v.TotalDeviationPct,
+		AvgRateDeviationBps:          v.AvgRateDeviationBps,
+		AvgPrincipalDeviationCny:     v.AvgPrincipalDeviationCny,
+		OpenPrincipalCny:             v.OpenPrincipalCny,
+		OpenTheoreticalReturnCny:     v.OpenTheoreticalReturn,
+		TotalFeeCny:                  v.TotalFeeCny,               // D-276
+		TotalNetTheoreticalReturnCny: v.TotalNetTheoreticalReturn, // D-276
 	}), nil
 }
