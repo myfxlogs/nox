@@ -30,6 +30,13 @@ type RepoOpRow struct {
 	Status         string
 }
 
+// MaturedRepoTrade 是到期提醒用的 trade 行（notify 包本地类型，避免 notify→pgstore 依赖）。
+type MaturedRepoTrade struct {
+	ID             int64
+	InstrumentCode string
+	PrincipalCny   float64
+}
+
 // RepoConfigRow 是提醒服务用的配置行（notify 包本地类型，避免 notify→pgstore 依赖）。
 type RepoConfigRow struct {
 	IdleCny      float64
@@ -51,6 +58,9 @@ type RepoReminderStore interface {
 	GetPendingRepoOp(ctx context.Context, week string) (*RepoOpRow, error)
 	IncrementRepoReminder(ctx context.Context, id int64) error
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
+	// D-272 到期提醒
+	ListMaturedRepoTrades(ctx context.Context, today time.Time) ([]MaturedRepoTrade, error)
+	UpdateMaturityReminded(ctx context.Context, id int64) error
 }
 
 // AlertFn 是告警注入面（main 装配 st.InsertAlert 包装，复用 D-264 飞书链路）。
@@ -104,6 +114,7 @@ func (s *RepoReminderService) Run(ctx context.Context) {
 
 // Check 是 ticker 调用入口（每小时一次）。
 // R2：reminderHour 从 DB config 读（每小时刷新，免重启）。
+// D-272：checkMaturity 在所有门控之前调用，与 Enabled/ReminderHour/weekday 完全解耦。
 // 非目标时段/不满足条件 → return nil（空操作）。
 func (s *RepoReminderService) Check(ctx context.Context) error {
 	now := s.nowFn()
@@ -112,10 +123,18 @@ func (s *RepoReminderService) Check(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("get repo config: %w", err)
 	}
+
+	// D-272 到期提醒：在所有 D-270 门控之前调用，完全解耦。
+	// 到期是客观事件，不依赖 Enabled/ReminderHour/weekday。
+	if err := s.checkMaturity(ctx, now); err != nil {
+		log.Printf("[repo_reminder] maturity check: %v", err)
+	}
+
+	// 2. D-270 周四提醒门控（不影响到期提醒）
 	if !cfg.Enabled || cfg.IdleCny <= 0 {
 		return nil
 	}
-	// 2. 未到提醒时段 → return nil
+	// 3. 未到提醒时段 → return nil
 	if now.Hour() < cfg.ReminderHour {
 		return nil
 	}

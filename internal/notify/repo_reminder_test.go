@@ -23,6 +23,9 @@ type fakeReminderStore struct {
 	incremented   bool
 	alerts        []string // 记录 InsertAlert 的 message
 	createErr     error
+	// D-272 到期提醒
+	maturedTrades    []MaturedRepoTrade
+	maturityReminded bool
 }
 
 func (f *fakeReminderStore) LatestRepoRates(ctx context.Context) ([]RepoRateRow, error) {
@@ -56,6 +59,15 @@ func (f *fakeReminderStore) IncrementRepoReminder(ctx context.Context, id int64)
 }
 func (f *fakeReminderStore) InsertAlert(ctx context.Context, ruleID *int64, level, message string) error {
 	f.alerts = append(f.alerts, level+":"+message)
+	return nil
+}
+
+// D-272 到期提醒接口实现
+func (f *fakeReminderStore) ListMaturedRepoTrades(ctx context.Context, today time.Time) ([]MaturedRepoTrade, error) {
+	return f.maturedTrades, nil
+}
+func (f *fakeReminderStore) UpdateMaturityReminded(ctx context.Context, id int64) error {
+	f.maturityReminded = true
 	return nil
 }
 

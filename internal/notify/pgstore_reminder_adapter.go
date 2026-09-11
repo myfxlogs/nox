@@ -88,5 +88,27 @@ func (a *PgStoreReminderAdapter) RepoRate30dPercentile(ctx context.Context, code
 	return a.Store.RepoRate30dPercentile(ctx, code, currentRate)
 }
 
+// ListMaturedRepoTrades D-272：转换 pgstore.RepoTradeRow → notify.MaturedRepoTrade。
+func (a *PgStoreReminderAdapter) ListMaturedRepoTrades(ctx context.Context, today time.Time) ([]MaturedRepoTrade, error) {
+	rows, err := a.Store.ListMaturedRepoTrades(ctx, today)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]MaturedRepoTrade, len(rows))
+	for i, r := range rows {
+		out[i] = MaturedRepoTrade{
+			ID:             r.ID,
+			InstrumentCode: r.InstrumentCode,
+			PrincipalCny:   r.PrincipalCny,
+		}
+	}
+	return out, nil
+}
+
+// UpdateMaturityReminded D-272：透传。
+func (a *PgStoreReminderAdapter) UpdateMaturityReminded(ctx context.Context, id int64) error {
+	return a.Store.UpdateMaturityReminded(ctx, id)
+}
+
 // compile-time: *PgStoreReminderAdapter 实现 RepoReminderStore 接口。
 var _ RepoReminderStore = (*PgStoreReminderAdapter)(nil)
