@@ -214,3 +214,6 @@ var TrxTxsCheatStatusSQL string
 
 //go:embed 0090_trx_txs_kind_widen.sql
 var TrxTxsKindWidenSQL string
+
+//go:embed 0091_price_alerts.sql
+var PriceAlertsSQL string
