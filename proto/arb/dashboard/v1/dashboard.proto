@@ -888,6 +888,14 @@ message AccountInfo {
   google.protobuf.Timestamp updated_at = 14;
   bool simulated = 15;     // CEX 模拟盘标记（OKX demo=true/binance 实盘=false；CFD 零值 false 无意义——CFD 实盘/模拟由 BrokerAccount.isReal 管）
   string website = 16;     // 官网（D-157 V3：CEX 从 ExchangeConfig.website 透传；CFD 从 BrokerAccount.website 透传；空 = 未设置）
+  repeated Holding holdings = 17;  // 币种明细（D-273 S2：CEX 现货采集器保留明细不丢弃；只含 qty>0；CFD 空）
+}
+
+// 单账户币种明细持有（D-273 S2）。
+message Holding {
+  string ccy = 1;         // 币种
+  double qty = 2;         // 本币数量（OKX cashBal 缺失 fallback availBal / Binance free+locked）
+  double usdt_value = 3;  // USD 估值（OKX eqUsd——2026-09-10 实采实证 eq 为本币权益非 USD；Binance qty×USDT 价，无价=0 保留）
 }
 
 // 账户资产全量快照（D-053）：monitor 变更时广播，含离线 venue 的最近快照；前端全量替换。
@@ -1585,6 +1593,18 @@ message GetCexScanSnapshotResponse {
   repeated CexSpreadRow spreads = 2;
   repeated CexFundingRow fundings = 3;
   repeated CexBalanceRow balances = 4;
+  repeated CexEarnJudgmentRow judgments = 5;  // D-273：earn APR 判断结果
+}
+
+// earn APR 判断结果行（D-273 S6）。
+message CexEarnJudgmentRow {
+  string venue = 1;
+  string ccy = 2;
+  string product_type = 3;
+  double apr = 4;         // 小数年化（0.035=3.5%）
+  string category = 5;    // stable / token
+  string verdict = 6;     // opportunity / not_opportunity / trap
+  repeated string reasons = 7;
 }
 
 message CexEarnAPRRow {
@@ -1619,4 +1639,6 @@ message CexBalanceRow {
   double balance = 3;
   double equity = 4;
   double free_margin = 5;
+  string venue_key = 6;           // D-273：稳定 React key（P2-6）
+  repeated Holding holdings = 7;  // D-273：币种明细展开（P3-1）
 }

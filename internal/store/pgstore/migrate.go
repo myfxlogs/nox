@@ -80,6 +80,7 @@ var migrationFiles = []struct {
 	{82, migrations.CnfiRepoConfigSQL},                 // D-270 R2 逆回购提醒配置 DB 化
 	{83, migrations.CexScanSQL},                        // D-271 CEX 只读扫描器
 	{84, migrations.ExchangeConfigsUniqueSimulatedSQL}, // D-271 R1：exchange_configs 唯一约束加 simulated
+	{86, migrations.CexEarnJudgmentSQL},                // D-273：earn APR 判断引擎
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

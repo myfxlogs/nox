@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"arb/internal/config"
+	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 	"arb/internal/httpx"
 	"arb/internal/store/pgstore"
 )
@@ -64,10 +65,11 @@ func (s *Scanner) Run(ctx context.Context) {
 	}
 }
 
-// scanOnce 串行 ①ScanAccounts ②earn.Collect→InsertCexEarnAPR ③CalcSpreads→InsertCexSpread。
+// scanOnce 串行 ①ScanAccounts ②earn.Collect→InsertCexEarnAPR ③CalcSpreads→InsertCexSpread ④earn APR 判断。
 // D-271 R3：funding 扫描已移除——现有 engine/evaluator 管线已覆盖 funding 机会分析。
 // D-271 R5：理财 APR + 价差告警已移除——理财告警是毛数据噪音（280 条实证），
 // 价差告警现有 CrossVenueDetector 已事件驱动覆盖。保留采集入库供前端展示。
+// D-273 ④：earn APR 判断结果 upsert 入库（fin_cex_earn_judgment），供前端展示，不发告警。
 func (s *Scanner) scanOnce(ctx context.Context) error {
 	// ① 账户扫描（纯读缓存，不报错）
 	_ = ScanAccounts(s.accounts)
@@ -103,5 +105,47 @@ func (s *Scanner) scanOnce(ctx context.Context) error {
 			}
 		}
 	}
+
+	// ④ earn APR 判断（D-273）：只依赖本币余额明细与逆回购基准，失败只记日志不阻断采集。
+	holdings := buildHoldingsFromSnapshot(s.accounts.Snapshot())
+	judge := NewEarnJudge(s.store, holdings)
+	judgments, err := judge.Judge(ctx, earnAPRs)
+	if err != nil {
+		log.Printf("[cexscan] earn judge: %v", err)
+	} else {
+		for i := range judgments {
+			row := &pgstore.CexEarnJudgment{
+				Venue:       judgments[i].Venue,
+				Ccy:         judgments[i].Ccy,
+				ProductType: judgments[i].ProductType,
+				APR:         judgments[i].APR,
+				Category:    judgments[i].Category,
+				Verdict:     judgments[i].Verdict,
+				Reasons:     toJSONString(judgments[i].Reasons),
+			}
+			if err := s.store.UpsertCexEarnJudgment(ctx, row); err != nil {
+				log.Printf("[cexscan] upsert earn judgment %s/%s: %v", judgments[i].Venue, judgments[i].Ccy, err)
+			}
+		}
+	}
 	return nil
+}
+
+// buildHoldingsFromSnapshot 从账户快照提取现货持币明细（D-273 S4）。
+// 账户范围三条件过滤：CEX + 现货 + 非模拟——perp 余额是合约保证金不是现货持仓，
+// 模拟盘是 demo 资金，CFD 不是币；同 venue 多 spot 账户按 venue 聚合累加。
+func buildHoldingsFromSnapshot(infos []*v1.AccountInfo) map[string]map[string]float64 {
+	out := make(map[string]map[string]float64)
+	for _, info := range infos {
+		if info == nil || info.AssetType != "cex" || info.VenueType != "spot" || info.Simulated {
+			continue
+		}
+		if out[info.Venue] == nil {
+			out[info.Venue] = make(map[string]float64)
+		}
+		for _, h := range info.Holdings {
+			out[info.Venue][h.Ccy] += h.Qty
+		}
+	}
+	return out
 }
