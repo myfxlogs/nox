@@ -211,3 +211,6 @@ var TrxAccountResourceSQL string
 
 //go:embed 0089_trx_txs_cheat_status.sql
 var TrxTxsCheatStatusSQL string
+
+//go:embed 0090_trx_txs_kind_widen.sql
+var TrxTxsKindWidenSQL string
