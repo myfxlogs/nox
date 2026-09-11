@@ -673,12 +673,12 @@ message HedgeAccounts {
   double cmc_equity = 6;         // fin_cmc_account_summary.total_account_value
   google.protobuf.Timestamp updated_at = 7;  // 最近更新时间（取 TRX/CMC 较新者）
   // D-278 S5：地址资源显示（剩余带宽/能量，后端算好前端零计算）
-  double net_limit = 8;          // 带宽上限（TRX，net_limit ÷ 1e6）
-  double net_used = 9;           // 已用带宽（TRX，net_used ÷ 1e6）
-  double free_net_limit = 10;    // 免费带宽上限（TRX，free_net_limit ÷ 1e6）
-  double free_net_used = 11;     // 免费已用带宽（TRX，free_net_used ÷ 1e6）
-  double energy_limit = 12;      // 能量上限（TRX，energy_limit ÷ 1e6）
-  double energy_used = 13;       // 已用能量（TRX，energy_used ÷ 1e6）
+  double net_limit = 8;          // 带宽上限（BP，链上 sun 原值直接透传，不 ÷1e6）
+  double net_used = 9;           // 已用带宽（BP，链上 sun 原值直接透传）
+  double free_net_limit = 10;    // 免费带宽上限（BP，链上 sun 原值直接透传）
+  double free_net_used = 11;     // 免费已用带宽（BP，链上 sun 原值直接透传）
+  double energy_limit = 12;      // 能量上限（Energy，链上原值直接透传，不 ÷1e6）
+  double energy_used = 13;       // 已用能量（Energy，链上原值直接透传）
   string bandwidth_status = 14; // 带宽状态 normal/yellow/red（后端算，阈值=trxvote 常量同源引用禁双写）
 }
 
@@ -1538,16 +1538,16 @@ message TrxAccountRefreshResponse {
   double trx_allowance = 5;        // allowance_sun ÷ 1e6（TRX）
   double energy_delegated = 6;     // energy_delegated ÷ 1e6（TRX）
   double bandwidth_staked = 7;     // bandwidth_staked ÷ 1e6（TRX）
-  double net_limit = 8;            // net_limit ÷ 1e6（TRX）
+  double net_limit = 8;            // 带宽上限（BP，链上原值透传）
   double votes = 9;                // votes_total（票数，对齐 HedgeAccounts.votes 不除 1e6）
   string unfrozen = 10;            // JSONB 透传（nil=空字符串，在途解押）
   google.protobuf.Timestamp fetched_at = 11;  // 采集时间
   // D-278 S5：地址资源显示（剩余带宽/能量）
-  double net_used = 12;            // net_used ÷ 1e6（TRX）
-  double free_net_used = 13;       // free_net_used ÷ 1e6（TRX）
-  double free_net_limit = 14;      // free_net_limit ÷ 1e6（TRX）
-  double energy_limit = 15;        // energy_limit ÷ 1e6（TRX）
-  double energy_used = 16;         // energy_used ÷ 1e6（TRX）
+  double net_used = 12;            // 已用带宽（BP，链上原值透传）
+  double free_net_used = 13;       // 免费已用带宽（BP，链上原值透传）
+  double free_net_limit = 14;      // 免费带宽上限（BP，链上原值透传）
+  double energy_limit = 15;        // 能量上限（Energy，链上原值透传）
+  double energy_used = 16;         // 已用能量（Energy，链上原值透传）
   string bandwidth_status = 17;   // 带宽状态 normal/yellow/red（后端算，阈值=trxvote 常量同源）
 }
 
