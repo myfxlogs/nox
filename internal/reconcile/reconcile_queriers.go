@@ -9,6 +9,7 @@ import (
 
 	"arb/internal/adapter/gen/mtapi/mt4"
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
+	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 	"arb/internal/exec"
 	"arb/internal/store/pgstore"
 	"google.golang.org/grpc/metadata"
@@ -87,6 +88,9 @@ type AccountInfo struct {
 	Currency   string
 	Simulated  bool   // CEX 模拟盘标记（D-156 V2：CEXAccountQuerier 填充 q.simulated；CFD 零值 false）
 	Website    string // D-157 V3：官网（CEX 从 ExchangeConfig.website 透传；CFD 从 BrokerAccount.website 透传）
+	// Holdings 币种明细（D-273 S2：CEX 现货采集器填充，qty>0； earn 持币判断与余额展开行的数据源）。
+	// CFD 账户无此概念，恒 nil。
+	Holdings []*v1.Holding
 }
 
 // AccountQuerier 查询单个账户资金的统一接口（D-053）。与 VenueQuerier 并列，同用 VenueKey 身份。

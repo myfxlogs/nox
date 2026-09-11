@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -39,8 +40,8 @@ func TestCEXAccount_Binance(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	// srv.URL 是 http://host:port；Binance 走 https，直接用 srv.URL 作 base（httptest 忽略签名校验）。
-	q := NewCEXAccountQuerier("binance", "spot", "key", "secret", "", srv.URL, "", false)
+	// srv.URL 是 http://host:port；生产 base 已含 /api 前缀（fapi→api 替换后），D-273 S1 契约=代码不再拼前缀。
+	q := NewCEXAccountQuerier("binance", "spot", "key", "secret", "", srv.URL+"/api", "", false)
 	acct, err := q.Account(context.Background())
 	if err != nil {
 		t.Fatalf("binance account: %v", err)
@@ -67,7 +68,7 @@ func TestCEXAccount_BinancePerp(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	q := NewCEXAccountQuerier("binance", "perp", "key", "secret", "", srv.URL, "", false)
+	q := NewCEXAccountQuerier("binance", "perp", "key", "secret", "", srv.URL+"/fapi", "", false)
 	acct, err := q.Account(context.Background())
 	if err != nil {
 		t.Fatalf("binance perp account: %v", err)
@@ -151,7 +152,7 @@ func TestCEXAccount_BinanceProxyToken(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	q := NewCEXAccountQuerier("binance", "spot", "key", "secret", "", srv.URL, "", false)
+	q := NewCEXAccountQuerier("binance", "spot", "key", "secret", "", srv.URL+"/api", "", false)
 	if _, err := q.Account(context.Background()); err != nil {
 		t.Fatalf("binance account: %v", err)
 	}
@@ -249,5 +250,61 @@ func TestHttpxClientTrustsProxyCA(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status want 200, got %d", resp.StatusCode)
+	}
+}
+
+// TestCEXAccount_BinancePathNoDoublePrefix（D-273 S1）：base URL 已含 /api 或 /fapi 时，
+// 代码不得再拼一次前缀（双 /api //fapi 是生产 404 根因）。断言实际请求路径与总权益。
+func TestCEXAccount_BinancePathNoDoublePrefix(t *testing.T) {
+	var mu []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu = append(mu, r.URL.Path)
+		switch r.URL.Path {
+		case "/api/v3/account":
+			fmt.Fprint(w, `{"balances":[{"asset":"USDT","free":"500","locked":"0"},{"asset":"BTC","free":"0.01","locked":"0"}]}`)
+		case "/api/v3/ticker/price":
+			fmt.Fprint(w, `{"price":"60000"}`)
+		case "/fapi/v2/account":
+			fmt.Fprint(w, `{"totalWalletBalance":"1234.5"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	// spot：base 已含 /api → 期望 /api/v3/account + /api/v3/ticker/price，BTC 计入权益=500+600
+	q := NewCEXAccountQuerier("binance", "spot", "k", "s", "", srv.URL+"/api", "", false)
+	acc, err := q.Account(context.Background())
+	if err != nil {
+		t.Fatalf("spot account: %v", err)
+	}
+	if acc.Equity != 1100 {
+		t.Errorf("spot equity want 1100 (500 USDT + 0.01 BTC×60000), got %v（ticker 路径断链则 BTC 被跳过）", acc.Equity)
+	}
+	// perp：base 已含 /fapi → 期望 /fapi/v2/account
+	pq := NewCEXAccountQuerier("binance", "perp", "k", "s", "", srv.URL+"/fapi", "", false)
+	pacc, err := pq.Account(context.Background())
+	if err != nil {
+		t.Fatalf("perp account: %v", err)
+	}
+	if pacc.Equity != 1234.5 {
+		t.Errorf("perp equity want 1234.5, got %v", pacc.Equity)
+	}
+	// 请求路径断言：任一请求路径不得含双前缀 /api/api 或 /fapi/fapi
+	for _, p := range mu {
+		if strings.Contains(p, "/api/api") || strings.Contains(p, "/fapi/fapi") {
+			t.Errorf("double-prefix path: %s", p)
+		}
+	}
+	for _, want := range []string{"/api/v3/account", "/api/v3/ticker/price", "/fapi/v2/account"} {
+		found := false
+		for _, p := range mu {
+			if p == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("expected request path %s not seen (got %v)", want, mu)
+		}
 	}
 }

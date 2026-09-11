@@ -5,16 +5,15 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
+	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 	"arb/internal/exec"
 	"arb/internal/httpx"
 )
@@ -60,108 +59,6 @@ func (q *CEXAccountQuerier) Account(ctx context.Context) (*AccountInfo, error) {
 	}
 }
 
-// === Binance ===
-
-func (q *CEXAccountQuerier) accountBinance(ctx context.Context) (*AccountInfo, error) {
-	if q.venueType == "perp" {
-		return q.accountBinancePerp(ctx)
-	}
-	// spot base：BINANCE_PROXY_URL 是 fapi 风格（采集同法 replace fapi→api 得 spot）。
-	spotBase := strings.Replace(q.baseURL, "fapi", "api", 1)
-	params := url.Values{}
-	params.Set("timestamp", strconv.FormatInt(time.Now().UnixMilli(), 10))
-	params.Set("recvWindow", "5000")
-	sig := binanceSign(q.apiSecret, params.Encode())
-	params.Set("signature", sig)
-
-	h := http.Header{}
-	h.Set("X-MBX-APIKEY", q.apiKey) // 令牌由 httpx 传输层自动注入
-	body, err := q.get(ctx, spotBase+"/api/v3/account?"+params.Encode(), h)
-	if err != nil {
-		return nil, fmt.Errorf("binance account: %w", err)
-	}
-	var acc struct {
-		Balances []struct {
-			Asset  string `json:"asset"`
-			Free   string `json:"free"`
-			Locked string `json:"locked"`
-		} `json:"balances"`
-	}
-	if err := json.Unmarshal(body, &acc); err != nil {
-		return nil, fmt.Errorf("binance account json: %w", err)
-	}
-
-	// 权益估算：Σ (free+locked) × USDT 价；USDT 价=1，其余取公开 ticker/price（失败该币跳过，诚实估算）。
-	total := 0.0
-	for _, b := range acc.Balances {
-		free, _ := strconv.ParseFloat(b.Free, 64)
-		locked, _ := strconv.ParseFloat(b.Locked, 64)
-		qty := free + locked
-		if qty <= 0 {
-			continue
-		}
-		if b.Asset == "USDT" {
-			total += qty
-			continue
-		}
-		price, perr := q.binanceUsdtPrice(ctx, spotBase, b.Asset)
-		if perr != nil {
-			continue // 无 USDT 对的资产跳过（如仅 BTC 计价的小 alt），不算入估算
-		}
-		total += qty * price
-	}
-	return &AccountInfo{
-		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
-		Balance: total, Equity: total, Currency: "USDT",
-		Simulated: q.simulated, Website: q.website,
-	}, nil
-}
-
-// accountBinancePerp 合约账户权益：GET /fapi/v2/account，totalWalletBalance 为权威 USDT 权益
-// （模拟盘合约在 demo-fapi.binance.com，D-059 实施修正② 复核实测：demo key 对 USDT-M 合约
-// 同 key 有效，-1109 已解；baseURL 由调用方给到 demofapi 代理前缀，此处直接拼 /fapi 路径）。
-func (q *CEXAccountQuerier) accountBinancePerp(ctx context.Context) (*AccountInfo, error) {
-	params := url.Values{}
-	params.Set("timestamp", strconv.FormatInt(time.Now().UnixMilli(), 10))
-	params.Set("recvWindow", "5000")
-	sig := binanceSign(q.apiSecret, params.Encode())
-	params.Set("signature", sig)
-
-	h := http.Header{}
-	h.Set("X-MBX-APIKEY", q.apiKey) // 令牌由 httpx 传输层自动注入
-	body, err := q.get(ctx, q.baseURL+"/fapi/v2/account?"+params.Encode(), h)
-	if err != nil {
-		return nil, fmt.Errorf("binance perp account: %w", err)
-	}
-	var acc struct {
-		TotalWalletBalance string `json:"totalWalletBalance"`
-	}
-	if err := json.Unmarshal(body, &acc); err != nil {
-		return nil, fmt.Errorf("binance perp account json: %w", err)
-	}
-	eq, _ := strconv.ParseFloat(acc.TotalWalletBalance, 64)
-	return &AccountInfo{
-		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
-		Balance: eq, Equity: eq, Currency: "USDT",
-		Simulated: q.simulated, Website: q.website,
-	}, nil
-}
-
-// binanceUsdtPrice 取资产 USDT 价（公开接口，无需签名）。
-func (q *CEXAccountQuerier) binanceUsdtPrice(ctx context.Context, spotBase, asset string) (float64, error) {
-	body, err := q.get(ctx, spotBase+"/api/v3/ticker/price?symbol="+asset+"USDT", nil) // 令牌由 httpx 注入
-	if err != nil {
-		return 0, err
-	}
-	var tp struct {
-		Price string `json:"price"`
-	}
-	if err := json.Unmarshal(body, &tp); err != nil {
-		return 0, err
-	}
-	return strconv.ParseFloat(tp.Price, 64)
-}
-
 // === OKX ===
 
 func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error) {
@@ -190,6 +87,13 @@ func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error
 		Msg  string `json:"msg"`
 		Data []struct {
 			TotalEq string `json:"totalEq"` // 交易所权威 USD 总权益
+			Details []struct {
+				Ccy      string `json:"ccy"`
+				Eq       string `json:"eq"`       // 本币权益（2026-09-10 实采实证：币种计价，非 USD）
+				CashBal  string `json:"cashBal"`  // 本币数量（总持有）
+				AvailBal string `json:"availBal"` // 可用余额
+				EqUsd    string `json:"eqUsd"`    // USD 等值
+			} `json:"details"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
@@ -201,22 +105,30 @@ func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error
 	if len(resp.Data) == 0 {
 		return nil, fmt.Errorf("okx balance: empty data")
 	}
+	// D-273 S2：币种明细（实采语义核验 2026-09-10——qty=cashBal 缺失 fallback availBal；usdt_value=eqUsd
+	//（设计原写 eq，实采证明 eq 为本币权益，BTC eq=1 而 eqUsd=76757，按 eq 存会差 4 个数量级）；解析失败跳过该币）。
+	var holdings []*v1.Holding
+	for _, d := range resp.Data[0].Details {
+		qtyStr := d.CashBal
+		if qtyStr == "" {
+			qtyStr = d.AvailBal
+		}
+		qty, perr := strconv.ParseFloat(qtyStr, 64)
+		if perr != nil || qty <= 0 {
+			continue
+		}
+		usd, _ := strconv.ParseFloat(d.EqUsd, 64)
+		holdings = append(holdings, &v1.Holding{Ccy: d.Ccy, Qty: qty, UsdtValue: usd})
+	}
 	eq, _ := strconv.ParseFloat(resp.Data[0].TotalEq, 64)
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
 		Balance: eq, Equity: eq, Currency: "USDT",
-		Simulated: q.simulated, Website: q.website,
+		Simulated: q.simulated, Website: q.website, Holdings: holdings,
 	}, nil
 }
 
 // === 签名工具 ===
-
-// binanceSign HMAC-SHA256 hex 签名（与 exec.CEXExecutor 同法）。
-func binanceSign(secret, query string) string {
-	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write([]byte(query))
-	return hex.EncodeToString(mac.Sum(nil))
-}
 
 // okxSign OKX 签名：base64(HMAC-SHA256(secret, ts+method+path+body))。
 func okxSign(secret, prehash string) string {
