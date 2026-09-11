@@ -53,7 +53,8 @@ type txJSON struct {
 	BlockTimestamp int64               `json:"block_timestamp"` // R1：真实响应是驼峰 blockTimestamp（非 block_timestamp）
 	TxID           string              `json:"txID"`            // 止血修正：真实字段=txID（2026-09-03 实拍铁证，transaction_id/tx_id 均错）
 	RawData        rawDataContractJSON `json:"raw_data"`
-	Ret            []retJSON           `json:"ret"` // D-279：fee 捕获
+	Ret            []retJSON           `json:"ret"`             // D-279：fee 捕获
+	WithdrawAmount int64               `json:"withdraw_amount"` // D-280：奖励提取金额（sun），仅 WithdrawBalanceContract 有值
 }
 
 // retJSON 对应 TronGrid ret 数组单行。

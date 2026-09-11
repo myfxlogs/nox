@@ -175,8 +175,8 @@ func TestTxsCollector_Poll_Classify(t *testing.T) {
 		makeTransferTx("tx2", monitorAddr, "TOtherAddr111111111111111111111", 1000000),
 		// 3. withdraw（转出）
 		makeTransferTx("tx3", "TOtherAddr111111111111111111111", monitorAddr, 2000000),
-		// 4. vote_claim（WithdrawBalanceContract，amount=0）
-		makeContractTx("tx4", "WithdrawBalanceContract"),
+		// 4. vote_claim（WithdrawBalanceContract，D-280 amount=withdraw_amount）
+		`{"block_timestamp":` + itoa(time.Now().UnixMilli()) + `,"txID":"tx4","raw_data":{"contract":[{"type":"WithdrawBalanceContract","parameter":{"value":{}}}]},` + `"withdraw_amount":11418180}`,
 		// 5. stake（FreezeBalanceV2）
 		makeContractTx("tx5", "FreezeBalanceV2Contract"),
 		// 6. unstake（UnfreezeBalanceV2）
@@ -216,10 +216,10 @@ func TestTxsCollector_Poll_Classify(t *testing.T) {
 			t.Errorf("missing kind %q", want)
 		}
 	}
-	// vote_claim amount=0（P2-2）
+	// vote_claim amount=withdraw_amount（D-280）
 	for _, r := range rows {
-		if r.Kind == "vote_claim" && r.AmountSun != 0 {
-			t.Errorf("vote_claim AmountSun = %d, want 0 (P2-2)", r.AmountSun)
+		if r.Kind == "vote_claim" && r.AmountSun != 11418180 {
+			t.Errorf("vote_claim AmountSun = %d, want 11418180 (D-280 withdraw_amount)", r.AmountSun)
 		}
 	}
 }
@@ -456,15 +456,15 @@ func TestClassifyTxD279NewKinds(t *testing.T) {
 	}
 }
 
-// TestClassifyTxVoteClaimAmountZero P2-2：vote_claim amount=0。
-func TestClassifyTxVoteClaimAmountZero(t *testing.T) {
-	tx := makeContractTxJSON("tx_vote", "WithdrawBalanceContract")
+// TestClassifyTxVoteClaimWithdrawAmount D-280：vote_claim amount=withdraw_amount。
+func TestClassifyTxVoteClaimWithdrawAmount(t *testing.T) {
+	tx := makeContractTxJSONWithWithdrawAmount("tx_vote", 11418180)
 	rec, ok := classifyTx(tx, "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", nil)
 	if !ok || rec.Kind != "vote_claim" {
 		t.Fatalf("ok=%v kind=%q, want vote_claim", ok, rec.Kind)
 	}
-	if rec.AmountSun != 0 {
-		t.Errorf("vote_claim AmountSun = %d, want 0 (P2-2)", rec.AmountSun)
+	if rec.AmountSun != 11418180 {
+		t.Errorf("vote_claim AmountSun = %d, want 11418180 (D-280 withdraw_amount)", rec.AmountSun)
 	}
 }
 
@@ -510,6 +510,21 @@ func makeContractTxJSONWithFee(txID, contractType string, fee int64) txJSON {
 			}},
 		},
 		Ret: []retJSON{{Fee: fee}},
+	}
+}
+
+// makeContractTxJSONWithWithdrawAmount D-280：带 withdraw_amount 的 WithdrawBalanceContract 交易。
+func makeContractTxJSONWithWithdrawAmount(txID string, withdrawAmount int64) txJSON {
+	return txJSON{
+		BlockTimestamp: time.Now().UnixMilli(),
+		TxID:           txID,
+		RawData: rawDataContractJSON{
+			Contract: []contractEntryJSON{{
+				Type:      "WithdrawBalanceContract",
+				Parameter: parameterJSON{Value: []byte(`{}`)},
+			}},
+		},
+		WithdrawAmount: withdrawAmount,
 	}
 }
 

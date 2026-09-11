@@ -40,8 +40,8 @@ func classifyTx(tx txJSON, monitorAddr string, rentalPayers map[string]bool) (pg
 			TxID: tx.TxID, Ts: ts, Kind: kind, AmountSun: amount, Counterparty: &cp,
 		}, true
 	case "WithdrawBalanceContract":
-		// P2-2：amount=0（WithdrawBalanceContract 无金额参数）
-		return pgstore.TRXTx{TxID: tx.TxID, Ts: ts, Kind: "vote_claim", AmountSun: 0}, true
+		// D-280：amount=withdraw_amount（奖励从 allowance 转入 balance 的实际金额）
+		return pgstore.TRXTx{TxID: tx.TxID, Ts: ts, Kind: "vote_claim", AmountSun: tx.WithdrawAmount}, true
 	case "FreezeBalanceV2Contract", "StakeV2Contract":
 		// 9-9：质押量入 amount_sun（冻结非转账但金额有意义——流水卡显示「质押 N TRX」而非「—」）
 		return pgstore.TRXTx{TxID: tx.TxID, Ts: ts, Kind: "stake", AmountSun: tx.StakeAmount()}, true
