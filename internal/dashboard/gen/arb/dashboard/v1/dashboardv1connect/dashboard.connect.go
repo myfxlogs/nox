@@ -146,6 +146,9 @@ const (
 	// DashboardServiceGetTrxYieldRadarProcedure is the fully-qualified name of the DashboardService's
 	// GetTrxYieldRadar RPC.
 	DashboardServiceGetTrxYieldRadarProcedure = "/arb.dashboard.v1.DashboardService/GetTrxYieldRadar"
+	// DashboardServiceGetTrxYieldCurveProcedure is the fully-qualified name of the DashboardService's
+	// GetTrxYieldCurve RPC.
+	DashboardServiceGetTrxYieldCurveProcedure = "/arb.dashboard.v1.DashboardService/GetTrxYieldCurve"
 	// DashboardServiceGetRepoRateRadarProcedure is the fully-qualified name of the DashboardService's
 	// GetRepoRateRadar RPC.
 	DashboardServiceGetRepoRateRadarProcedure = "/arb.dashboard.v1.DashboardService/GetRepoRateRadar"
@@ -351,6 +354,7 @@ type DashboardServiceClient interface {
 	TrxVoteAprRefresh(context.Context, *connect.Request[v1.TrxVoteAprRefreshRequest]) (*connect.Response[v1.TrxVoteAprRefreshResponse], error)
 	TrxAccountRefresh(context.Context, *connect.Request[v1.TrxAccountRefreshRequest]) (*connect.Response[v1.TrxAccountRefreshResponse], error)
 	GetTrxYieldRadar(context.Context, *connect.Request[v1.GetTrxYieldRadarRequest]) (*connect.Response[v1.GetTrxYieldRadarResponse], error)
+	GetTrxYieldCurve(context.Context, *connect.Request[v1.GetTrxYieldCurveRequest]) (*connect.Response[v1.GetTrxYieldCurveResponse], error)
 	GetRepoRateRadar(context.Context, *connect.Request[v1.GetRepoRateRadarRequest]) (*connect.Response[v1.GetRepoRateRadarResponse], error)
 	AddDailyIncome(context.Context, *connect.Request[v1.AddDailyIncomeRequest]) (*connect.Response[v1.AddDailyIncomeResponse], error)
 	ListDailyIncome(context.Context, *connect.Request[v1.ListDailyIncomeRequest]) (*connect.Response[v1.ListDailyIncomeResponse], error)
@@ -658,6 +662,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			httpClient,
 			baseURL+DashboardServiceGetTrxYieldRadarProcedure,
 			connect.WithSchema(dashboardServiceMethods.ByName("GetTrxYieldRadar")),
+			connect.WithClientOptions(opts...),
+		),
+		getTrxYieldCurve: connect.NewClient[v1.GetTrxYieldCurveRequest, v1.GetTrxYieldCurveResponse](
+			httpClient,
+			baseURL+DashboardServiceGetTrxYieldCurveProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("GetTrxYieldCurve")),
 			connect.WithClientOptions(opts...),
 		),
 		getRepoRateRadar: connect.NewClient[v1.GetRepoRateRadarRequest, v1.GetRepoRateRadarResponse](
@@ -1003,6 +1013,7 @@ type dashboardServiceClient struct {
 	trxVoteAprRefresh         *connect.Client[v1.TrxVoteAprRefreshRequest, v1.TrxVoteAprRefreshResponse]
 	trxAccountRefresh         *connect.Client[v1.TrxAccountRefreshRequest, v1.TrxAccountRefreshResponse]
 	getTrxYieldRadar          *connect.Client[v1.GetTrxYieldRadarRequest, v1.GetTrxYieldRadarResponse]
+	getTrxYieldCurve          *connect.Client[v1.GetTrxYieldCurveRequest, v1.GetTrxYieldCurveResponse]
 	getRepoRateRadar          *connect.Client[v1.GetRepoRateRadarRequest, v1.GetRepoRateRadarResponse]
 	addDailyIncome            *connect.Client[v1.AddDailyIncomeRequest, v1.AddDailyIncomeResponse]
 	listDailyIncome           *connect.Client[v1.ListDailyIncomeRequest, v1.ListDailyIncomeResponse]
@@ -1243,6 +1254,11 @@ func (c *dashboardServiceClient) TrxAccountRefresh(ctx context.Context, req *con
 // GetTrxYieldRadar calls arb.dashboard.v1.DashboardService.GetTrxYieldRadar.
 func (c *dashboardServiceClient) GetTrxYieldRadar(ctx context.Context, req *connect.Request[v1.GetTrxYieldRadarRequest]) (*connect.Response[v1.GetTrxYieldRadarResponse], error) {
 	return c.getTrxYieldRadar.CallUnary(ctx, req)
+}
+
+// GetTrxYieldCurve calls arb.dashboard.v1.DashboardService.GetTrxYieldCurve.
+func (c *dashboardServiceClient) GetTrxYieldCurve(ctx context.Context, req *connect.Request[v1.GetTrxYieldCurveRequest]) (*connect.Response[v1.GetTrxYieldCurveResponse], error) {
+	return c.getTrxYieldCurve.CallUnary(ctx, req)
 }
 
 // GetRepoRateRadar calls arb.dashboard.v1.DashboardService.GetRepoRateRadar.
@@ -1549,6 +1565,7 @@ type DashboardServiceHandler interface {
 	TrxVoteAprRefresh(context.Context, *connect.Request[v1.TrxVoteAprRefreshRequest]) (*connect.Response[v1.TrxVoteAprRefreshResponse], error)
 	TrxAccountRefresh(context.Context, *connect.Request[v1.TrxAccountRefreshRequest]) (*connect.Response[v1.TrxAccountRefreshResponse], error)
 	GetTrxYieldRadar(context.Context, *connect.Request[v1.GetTrxYieldRadarRequest]) (*connect.Response[v1.GetTrxYieldRadarResponse], error)
+	GetTrxYieldCurve(context.Context, *connect.Request[v1.GetTrxYieldCurveRequest]) (*connect.Response[v1.GetTrxYieldCurveResponse], error)
 	GetRepoRateRadar(context.Context, *connect.Request[v1.GetRepoRateRadarRequest]) (*connect.Response[v1.GetRepoRateRadarResponse], error)
 	AddDailyIncome(context.Context, *connect.Request[v1.AddDailyIncomeRequest]) (*connect.Response[v1.AddDailyIncomeResponse], error)
 	ListDailyIncome(context.Context, *connect.Request[v1.ListDailyIncomeRequest]) (*connect.Response[v1.ListDailyIncomeResponse], error)
@@ -1852,6 +1869,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		DashboardServiceGetTrxYieldRadarProcedure,
 		svc.GetTrxYieldRadar,
 		connect.WithSchema(dashboardServiceMethods.ByName("GetTrxYieldRadar")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceGetTrxYieldCurveHandler := connect.NewUnaryHandler(
+		DashboardServiceGetTrxYieldCurveProcedure,
+		svc.GetTrxYieldCurve,
+		connect.WithSchema(dashboardServiceMethods.ByName("GetTrxYieldCurve")),
 		connect.WithHandlerOptions(opts...),
 	)
 	dashboardServiceGetRepoRateRadarHandler := connect.NewUnaryHandler(
@@ -2232,6 +2255,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceTrxAccountRefreshHandler.ServeHTTP(w, r)
 		case DashboardServiceGetTrxYieldRadarProcedure:
 			dashboardServiceGetTrxYieldRadarHandler.ServeHTTP(w, r)
+		case DashboardServiceGetTrxYieldCurveProcedure:
+			dashboardServiceGetTrxYieldCurveHandler.ServeHTTP(w, r)
 		case DashboardServiceGetRepoRateRadarProcedure:
 			dashboardServiceGetRepoRateRadarHandler.ServeHTTP(w, r)
 		case DashboardServiceAddDailyIncomeProcedure:
@@ -2491,6 +2516,10 @@ func (UnimplementedDashboardServiceHandler) TrxAccountRefresh(context.Context, *
 
 func (UnimplementedDashboardServiceHandler) GetTrxYieldRadar(context.Context, *connect.Request[v1.GetTrxYieldRadarRequest]) (*connect.Response[v1.GetTrxYieldRadarResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetTrxYieldRadar is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) GetTrxYieldCurve(context.Context, *connect.Request[v1.GetTrxYieldCurveRequest]) (*connect.Response[v1.GetTrxYieldCurveResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetTrxYieldCurve is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GetRepoRateRadar(context.Context, *connect.Request[v1.GetRepoRateRadarRequest]) (*connect.Response[v1.GetRepoRateRadarResponse], error) {

@@ -109,6 +109,14 @@ func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1
 		accts.TrxAllowance = computePendingReward(ctx, s.store, trxAcc.AllowanceSun)
 		accts.EnergyDelegated = float64(trxAcc.EnergyDelegated) / 1e6
 		accts.Votes = float64(trxAcc.VotesTotal)
+		// D-278 S5：地址资源显示（剩余带宽/能量+状态，后端算好前端零计算）
+		accts.NetLimit = float64(trxAcc.NetLimit) / 1e6
+		accts.NetUsed = float64(trxAcc.NetUsed) / 1e6
+		accts.FreeNetLimit = float64(trxAcc.FreeNetLimit) / 1e6
+		accts.FreeNetUsed = float64(trxAcc.FreeNetUsed) / 1e6
+		accts.EnergyLimit = float64(trxAcc.EnergyLimit) / 1e6
+		accts.EnergyUsed = float64(trxAcc.EnergyUsed) / 1e6
+		accts.BandwidthStatus = bandwidthStatus(trxAcc)
 		updatedAt = trxAcc.FetchedAt
 	}
 	// D-236 变更9：CMC 账户摘要用 freshLive 值（内存优先）
