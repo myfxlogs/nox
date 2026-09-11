@@ -11,18 +11,19 @@ import (
 
 // fakeReminderStore 注入测试数据，记录调用。
 type fakeReminderStore struct {
-	rates         []RepoRateRow
-	avg30d        float64
-	avgHas        bool
-	pct30d        float64
-	pctHas        bool
-	isBusinessDay bool
-	cfg           *RepoConfigRow
-	pending       *RepoOpRow
-	created       bool
-	incremented   bool
-	alerts        []string // 记录 InsertAlert 的 message
-	createErr     error
+	rates              []RepoRateRow
+	avg30d             float64
+	avgHas             bool
+	pct30d             float64
+	pctHas             bool
+	isBusinessDay      bool
+	cfg                *RepoConfigRow
+	pending            *RepoOpRow
+	created            bool
+	lastExpectedReturn float64 // D-277 A1：捕获 CreateRepoOp 传入的 expectedReturn（净额）
+	incremented        bool
+	alerts             []string // 记录 InsertAlert 的 message
+	createErr          error
 	// D-272 到期提醒
 	maturedTrades    []MaturedRepoTrade
 	maturityReminded bool
@@ -48,6 +49,7 @@ func (f *fakeReminderStore) CreateRepoOp(ctx context.Context, week, code, name s
 		return 0, f.createErr
 	}
 	f.created = true
+	f.lastExpectedReturn = expectedReturn
 	return 1, nil
 }
 func (f *fakeReminderStore) GetPendingRepoOp(ctx context.Context, week string) (*RepoOpRow, error) {
@@ -254,7 +256,7 @@ func TestReminderTrigger_ExpectedReturnBelowMin(t *testing.T) {
 		isBusinessDay: true,
 		cfg:           &RepoConfigRow{IdleCny: 100, MinReturnCny: 5, ReminderHour: 10, Enabled: true},
 	}
-	// expectedReturn = 1.4 × 100 × 3 / 365 = 1.15 < 5 → 不触发
+	// D-277 A1：净口径 expectedReturn = 1.4/100 × 100 × 3 / 365 − 佣金(100×0.00001=0.001) = 0.0105 < 5 → 不触发
 	svc := newReminderSvc(t, store, thursdayAt10())
 	if err := svc.Check(context.Background()); err != nil {
 		t.Fatalf("Check: %v", err)
@@ -262,6 +264,37 @@ func TestReminderTrigger_ExpectedReturnBelowMin(t *testing.T) {
 	if store.created {
 		t.Error("CreateRepoOp called with expected return below min, want no action")
 	}
+}
+
+// TestReminderTrigger_NetReturnAnchor D-277 A1 数值锚：50k@1.45%×3/365=5.96 毛，净 5.96−0.5=5.46。
+func TestReminderTrigger_NetReturnAnchor(t *testing.T) {
+	store := &fakeReminderStore{
+		rates:         []RepoRateRow{{Code: "204001", Name: "GC001", RatePct: 1.45}},
+		avg30d:        2.50,
+		avgHas:        true,
+		pct30d:        60,
+		pctHas:        true,
+		isBusinessDay: true,
+		pending:       nil,
+		cfg:           defaultCfg(), // IdleCny=50000, MinReturnCny=5
+	}
+	svc := newReminderSvc(t, store, thursdayAt10())
+	if err := svc.Check(context.Background()); err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+	if !store.created {
+		t.Fatal("CreateRepoOp not called, want trigger (net 5.46 >= min 5)")
+	}
+	// gross = 1.45/100 × 50000 × 3 / 365 = 5.9589...; commission = 50000 × 0.00001 = 0.5; net = 5.4589...
+	want := 1.45/100*50000*3/365 - 50000*0.00001
+	if !approxEqual(store.lastExpectedReturn, want, 0.01) {
+		t.Errorf("expectedReturn = %.4f, want %.4f (net: gross 5.96 − commission 0.50)", store.lastExpectedReturn, want)
+	}
+}
+
+// approxEqual 浮点近似比较（容差）。
+func approxEqual(a, b, tol float64) bool {
+	return a-b < tol && b-a < tol
 }
 
 // TestReminderTrigger_ThursdayPendingExists 周四有 pending 且今天未提醒 → IncrementRepoReminder + InsertAlert。

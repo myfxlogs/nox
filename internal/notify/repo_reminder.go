@@ -15,6 +15,15 @@ import (
 // 硬编码常量（非配置）——活期基准是客观值，不应由业主调。
 const demandDepositRatePct = 0.2
 
+// repoFeeRates 逆回购佣金率（notify 包本地副本，与 dashboard.service_repo_trades_helpers.feeRates 互指，两处需同步改）。
+// 204001=生产实证 9-11（407,000×0.00001=4.07）；其余三品种按上交所公布回购佣金率，待首个实测成交日后校准。
+var repoFeeRates = map[string]float64{
+	"204001": 0.00001,
+	"204007": 0.00005,
+	"204014": 0.00010,
+	"204028": 0.00020,
+}
+
 // RepoRateRow 是提醒服务用的利率行（notify 包本地类型，避免 notify→pgstore 依赖）。
 type RepoRateRow struct {
 	Code    string
@@ -175,9 +184,11 @@ func (s *RepoReminderService) checkThursday(ctx context.Context, now time.Time, 
 	if gc001 == nil || gc001.RatePct <= demandDepositRatePct {
 		return nil
 	}
-	// 7. 预期收益 < 最小收益 → return nil
+	// 7. 预期净收益 < 最小收益 → return nil（D-277 A1：/100 修正+净口径=毛息−佣金）
 	holdingDays := 3 // GC001 周四=3 天利息（T+1 结算享周末）
-	expectedReturn := gc001.RatePct * cfg.IdleCny * float64(holdingDays) / 365
+	grossReturn := gc001.RatePct / 100 * cfg.IdleCny * float64(holdingDays) / 365
+	commission := cfg.IdleCny * repoFeeRates["204001"]
+	expectedReturn := grossReturn - commission
 	if expectedReturn < cfg.MinReturnCny {
 		return nil
 	}
@@ -201,7 +212,7 @@ func (s *RepoReminderService) checkThursday(ctx context.Context, now time.Time, 
 			log.Printf("[repo_reminder] create repo op: %v（可能本周已确认）", err)
 			return nil
 		}
-		s.sendReminder(ctx, gc001.RatePct, avg30d, pct, expectedReturn, cfg.IdleCny, 1)
+		s.sendReminder(ctx, gc001.RatePct, avg30d, pct, expectedReturn, cfg.IdleCny, commission, 1)
 		return nil
 	}
 	// 有 pending 且今天未提醒 → 再提醒
@@ -211,7 +222,7 @@ func (s *RepoReminderService) checkThursday(ctx context.Context, now time.Time, 
 	if err := s.store.IncrementRepoReminder(ctx, pending.ID); err != nil {
 		return fmt.Errorf("increment reminder: %w", err)
 	}
-	s.sendReminder(ctx, gc001.RatePct, avg30d, pct, expectedReturn, cfg.IdleCny, pending.ReminderCount+1)
+	s.sendReminder(ctx, gc001.RatePct, avg30d, pct, expectedReturn, cfg.IdleCny, commission, pending.ReminderCount+1)
 	return nil
 }
 
@@ -248,13 +259,13 @@ func (s *RepoReminderService) checkReRemind(ctx context.Context, now time.Time) 
 }
 
 // sendReminder 发飞书提醒（InsertAlert → alertHook → 飞书）。
-// R2：消息含 30 日分位数。
-func (s *RepoReminderService) sendReminder(ctx context.Context, ratePct, avg30d, percentile, expectedReturn, idleCny float64, count int) {
+// R2：消息含 30 日分位数。D-277 A1：净口径+公式加佣金项。
+func (s *RepoReminderService) sendReminder(ctx context.Context, ratePct, avg30d, percentile, expectedReturn, idleCny, commission float64, count int) {
 	if s.alertFn == nil {
 		return
 	}
-	msg := fmt.Sprintf("[CNY逆回购] 周四操作提醒 #%d\n\nGC001: %.2f%%（30日均值 %.2f%%，分位 %.0f%%）\n闲置资金: ¥%.0f\n预计收益: ¥%.2f（%.2f%% × ¥%.0f × 3天 / 365）\n\n回复格式：\n  操作: OK GC001 50000 2.85\n  跳过: SKIP 原因",
-		count, ratePct, avg30d, percentile, idleCny, expectedReturn, ratePct, idleCny)
+	msg := fmt.Sprintf("[CNY逆回购] 周四操作提醒 #%d\n\nGC001: %.2f%%（30日均值 %.2f%%，分位 %.0f%%）\n闲置资金: ¥%.0f\n预计净收益: ¥%.2f（%.2f%% ÷100 × ¥%.0f × 3天 ÷365 −佣金¥%.2f）\n\n回复格式：\n  操作: OK GC001 50000 2.85\n  跳过: SKIP 原因",
+		count, ratePct, avg30d, percentile, idleCny, expectedReturn, ratePct, idleCny, commission)
 	s.alertFn("warn", msg)
 }
 
