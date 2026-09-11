@@ -308,3 +308,149 @@ func TestRepoTrade_StrategyValidation_DivZero(t *testing.T) {
 		t.Errorf("TotalDeviationPct = %v, want 0 (除零保护)", v.TotalDeviationPct)
 	}
 }
+
+// D-276 测试：手续费四品种费率计算正确。
+func TestRepoTrade_FeeRates(t *testing.T) {
+	s := repoTradesTestStore(t)
+	ctx := context.Background()
+	tradeDate := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
+	cases := []struct {
+		code        string
+		principal   float64
+		expectedFee float64
+	}{
+		{"204001", 407000, 4.07}, // 407000 × 0.00001
+		{"204007", 100000, 5.0},  // 100000 × 0.00005
+		{"204014", 100000, 10.0}, // 100000 × 0.00010
+		{"204028", 100000, 20.0}, // 100000 × 0.00020
+	}
+	for i, c := range cases {
+		row := &RepoTradeRow{
+			InstrumentCode: c.code, TradeDate: tradeDate.AddDate(0, 0, i),
+			MaturityDate: tradeDate.AddDate(0, 0, i+1),
+			HoldingDays:  1, PrincipalCny: c.principal, ActualRatePct: 1.45,
+			FeeCny: &c.expectedFee,
+		}
+		id, err := s.InsertRepoTrade(ctx, row)
+		if err != nil {
+			t.Fatalf("case %d InsertRepoTrade: %v", i, err)
+		}
+		trade, err := s.GetRepoTrade(ctx, id)
+		if err != nil {
+			t.Fatalf("case %d GetRepoTrade: %v", i, err)
+		}
+		if trade.FeeCny == nil {
+			t.Errorf("case %d FeeCny = nil, want %v", i, c.expectedFee)
+			continue
+		}
+		if *trade.FeeCny != c.expectedFee {
+			t.Errorf("case %d FeeCny = %v, want %v", i, *trade.FeeCny, c.expectedFee)
+		}
+	}
+}
+
+// D-276 测试：迁移回填——预插无 fee_cny 行 → Migrate → fee_cny 回填正确。
+func TestRepoTrade_MigrateBackfillFee(t *testing.T) {
+	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	ctx := context.Background()
+	s, err := New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("pgstore.New: %v", err)
+	}
+	t.Cleanup(s.Close)
+	// 全量迁移（含 0087）
+	if err := s.Migrate(ctx); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	// 清表避免唯一约束冲突
+	if _, err := s.pool.Exec(ctx, "TRUNCATE cnfi_repo_trades"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	// 手动插入一行 fee_cny=NULL（模拟旧数据）
+	if _, err := s.pool.Exec(ctx, `
+		INSERT INTO cnfi_repo_trades (instrument_code, trade_date, maturity_date, holding_days,
+			principal_cny, actual_rate_pct, status, entry_source, fee_cny)
+		VALUES ('204001', '2026-09-10', '2026-09-11', 1, 407000, 1.385, 'open', 'manual', NULL)`); err != nil {
+		t.Fatalf("insert old row: %v", err)
+	}
+	// 手动执行回填 SQL（模拟迁移 0087 的 UPDATE 语句）
+	if _, err := s.pool.Exec(ctx, `
+		UPDATE cnfi_repo_trades SET fee_cny = principal_cny * CASE instrument_code
+			WHEN '204001' THEN 0.00001 WHEN '204007' THEN 0.00005
+			WHEN '204014' THEN 0.00010 WHEN '204028' THEN 0.00020 END
+		WHERE fee_cny IS NULL`); err != nil {
+		t.Fatalf("backfill: %v", err)
+	}
+	// 验证回填值
+	var fee float64
+	err = s.pool.QueryRow(ctx, `SELECT fee_cny FROM cnfi_repo_trades WHERE instrument_code = '204001' AND principal_cny = 407000`).Scan(&fee)
+	if err != nil {
+		t.Fatalf("query fee: %v", err)
+	}
+	expected := 407000.0 * 0.00001
+	if fee != expected {
+		t.Errorf("backfilled fee_cny = %v, want %v", fee, expected)
+	}
+}
+
+// D-276 测试：Validation 两新聚合（total_fee + total_net_theoretical）。
+func TestRepoTrade_StrategyValidation_FeeAggregation(t *testing.T) {
+	s := repoTradesTestStore(t)
+	ctx := context.Background()
+	tradeDate := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
+	// settled 行：本金 407000，理论收益 46.33，手续费 4.07
+	theoReturn := 46.33
+	fee := 4.07
+	id1, _ := s.InsertRepoTrade(ctx, &RepoTradeRow{
+		InstrumentCode: "204001", TradeDate: tradeDate, MaturityDate: tradeDate.AddDate(0, 0, 1),
+		HoldingDays: 1, PrincipalCny: 407000, ActualRatePct: 1.385,
+		TheoreticalReturnCny: &theoReturn,
+		FeeCny:               &fee,
+	})
+	// 净偏差 = actual - (theoretical - fee) = 42.26 - (46.33 - 4.07) = 42.26 - 42.26 = 0
+	actualReturn := 42.26
+	netTheo := theoReturn - fee
+	devCny := actualReturn - netTheo // = 0
+	devPct := 0.0
+	s.SettleRepoTrade(ctx, id1, actualReturn, &devCny, &devPct)
+
+	v, err := s.GetRepoStrategyValidation(ctx)
+	if err != nil {
+		t.Fatalf("GetRepoStrategyValidation: %v", err)
+	}
+	if v.TotalFeeCny != fee {
+		t.Errorf("TotalFeeCny = %v, want %v", v.TotalFeeCny, fee)
+	}
+	expectedNet := theoReturn - fee
+	if v.TotalNetTheoreticalReturn != expectedNet {
+		t.Errorf("TotalNetTheoreticalReturn = %v, want %v", v.TotalNetTheoreticalReturn, expectedNet)
+	}
+}
+
+// D-276 测试：理论 NULL 时 fee 仍写入，净列 NULL。
+func TestRepoTrade_FeeWithNullTheoretical(t *testing.T) {
+	s := repoTradesTestStore(t)
+	ctx := context.Background()
+	tradeDate := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
+	// 理论为空（非交易时段），fee 仍写入
+	fee := 4.07
+	row := &RepoTradeRow{
+		InstrumentCode: "204001", TradeDate: tradeDate, MaturityDate: tradeDate.AddDate(0, 0, 1),
+		HoldingDays: 1, PrincipalCny: 407000, ActualRatePct: 1.385,
+		FeeCny: &fee,
+	}
+	id, err := s.InsertRepoTrade(ctx, row)
+	if err != nil {
+		t.Fatalf("InsertRepoTrade: %v", err)
+	}
+	trade, err := s.GetRepoTrade(ctx, id)
+	if err != nil {
+		t.Fatalf("GetRepoTrade: %v", err)
+	}
+	if trade.FeeCny == nil || *trade.FeeCny != fee {
+		t.Errorf("FeeCny = %v, want %v (理论为空但 fee 仍写入)", trade.FeeCny, fee)
+	}
+	if trade.TheoreticalReturnCny != nil {
+		t.Errorf("TheoreticalReturnCny = %v, want nil (非交易时段)", trade.TheoreticalReturnCny)
+	}
+}

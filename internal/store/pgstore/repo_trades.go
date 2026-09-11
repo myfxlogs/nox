@@ -31,6 +31,7 @@ type RepoTradeRow struct {
 	DeviationPrincipalCny   *float64
 	DeviationReturnCny      *float64
 	DeviationReturnPct      *float64
+	FeeCny                  *float64 // D-276 手续费（成交金额×品种佣金率）
 	Status                  string
 	RepoOpID                *int64
 	EntrySource             string
@@ -51,14 +52,16 @@ func (s *Store) InsertRepoTrade(ctx context.Context, r *RepoTradeRow) (int64, er
 			theoretical_rate_pct, theoretical_return_by_idle, theoretical_return_cny,
 			idle_cny_at_record, signal_snapshot,
 			deviation_rate_bps, deviation_principal_cny,
+			fee_cny,
 			status, repo_op_id, entry_source, rationale
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'open', $14, 'manual', $15)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'open', $15, 'manual', $16)
 		RETURNING id`,
 		r.InstrumentCode, r.TradeDate.Format("2006-01-02"), r.HoldingDays, r.MaturityDate.Format("2006-01-02"),
 		r.PrincipalCny, r.ActualRatePct,
 		r.TheoreticalRatePct, r.TheoreticalReturnByIdle, r.TheoreticalReturnCny,
 		r.IdleCnyAtRecord, r.SignalSnapshot,
 		r.DeviationRateBps, r.DeviationPrincipalCny,
+		r.FeeCny,
 		r.RepoOpID, r.Rationale,
 	).Scan(&id)
 	return id, err
@@ -79,7 +82,7 @@ func (s *Store) ListRepoTrades(ctx context.Context, limit int, status string) ([
 			       idle_cny_at_record, signal_snapshot,
 			       actual_return_cny, settled_at,
 			       deviation_rate_bps, deviation_principal_cny,
-			       deviation_return_cny, deviation_return_pct,
+			       deviation_return_cny, deviation_return_pct, fee_cny,
 			       status, repo_op_id, entry_source, last_maturity_reminded_at,
 			       rationale, created_at, updated_at
 			FROM cnfi_repo_trades WHERE status = $1
@@ -93,7 +96,7 @@ func (s *Store) ListRepoTrades(ctx context.Context, limit int, status string) ([
 			       idle_cny_at_record, signal_snapshot,
 			       actual_return_cny, settled_at,
 			       deviation_rate_bps, deviation_principal_cny,
-			       deviation_return_cny, deviation_return_pct,
+			       deviation_return_cny, deviation_return_pct, fee_cny,
 			       status, repo_op_id, entry_source, last_maturity_reminded_at,
 			       rationale, created_at, updated_at
 			FROM cnfi_repo_trades
@@ -125,7 +128,7 @@ func (s *Store) GetRepoTrade(ctx context.Context, id int64) (*RepoTradeRow, erro
 		       idle_cny_at_record, signal_snapshot,
 		       actual_return_cny, settled_at,
 		       deviation_rate_bps, deviation_principal_cny,
-		       deviation_return_cny, deviation_return_pct,
+		       deviation_return_cny, deviation_return_pct, fee_cny,
 		       status, repo_op_id, entry_source, last_maturity_reminded_at,
 		       rationale, created_at, updated_at
 		FROM cnfi_repo_trades WHERE id = $1`, id)
@@ -171,7 +174,7 @@ func (s *Store) ListMaturedRepoTrades(ctx context.Context, today time.Time) ([]R
 		       idle_cny_at_record, signal_snapshot,
 		       actual_return_cny, settled_at,
 		       deviation_rate_bps, deviation_principal_cny,
-		       deviation_return_cny, deviation_return_pct,
+		       deviation_return_cny, deviation_return_pct, fee_cny,
 		       status, repo_op_id, entry_source, last_maturity_reminded_at,
 		       rationale, created_at, updated_at
 		FROM cnfi_repo_trades
@@ -202,18 +205,20 @@ func (s *Store) UpdateMaturityReminded(ctx context.Context, id int64) error {
 
 // RepoStrategyValidation 策略验证总览聚合数据。
 type RepoStrategyValidation struct {
-	TotalTrades              int32
-	SettledTrades            int32
-	OpenTrades               int32
-	TotalPrincipalCny        float64
-	TotalTheoreticalReturn   float64
-	TotalActualReturn        float64
-	TotalDeviationCny        float64
-	TotalDeviationPct        float64
-	AvgRateDeviationBps      float64
-	AvgPrincipalDeviationCny float64
-	OpenPrincipalCny         float64
-	OpenTheoreticalReturn    float64
+	TotalTrades               int32
+	SettledTrades             int32
+	OpenTrades                int32
+	TotalPrincipalCny         float64
+	TotalTheoreticalReturn    float64
+	TotalActualReturn         float64
+	TotalDeviationCny         float64
+	TotalDeviationPct         float64
+	AvgRateDeviationBps       float64
+	AvgPrincipalDeviationCny  float64
+	OpenPrincipalCny          float64
+	OpenTheoreticalReturn     float64
+	TotalFeeCny               float64 // D-276 累计手续费（settled）
+	TotalNetTheoreticalReturn float64 // D-276 累计净理论收益（毛理论−费用，settled）
 }
 
 // GetRepoStrategyValidation 聚合已结算行 + 在途行统计（后端算好，前端零计算）。
@@ -227,14 +232,18 @@ func (s *Store) GetRepoStrategyValidation(ctx context.Context) (*RepoStrategyVal
 		       COALESCE(SUM(actual_return_cny), 0),
 		       COALESCE(SUM(deviation_return_cny), 0),
 		       COALESCE(AVG(deviation_rate_bps) FILTER (WHERE deviation_rate_bps IS NOT NULL), 0),
-		       COALESCE(AVG(deviation_principal_cny) FILTER (WHERE deviation_principal_cny IS NOT NULL), 0)
+		       COALESCE(AVG(deviation_principal_cny) FILTER (WHERE deviation_principal_cny IS NOT NULL), 0),
+		       COALESCE(SUM(fee_cny), 0)
 		FROM cnfi_repo_trades WHERE status = 'settled'`).Scan(
 		&v.SettledTrades, &v.TotalPrincipalCny, &v.TotalTheoreticalReturn,
 		&v.TotalActualReturn, &v.TotalDeviationCny,
-		&v.AvgRateDeviationBps, &v.AvgPrincipalDeviationCny)
+		&v.AvgRateDeviationBps, &v.AvgPrincipalDeviationCny,
+		&v.TotalFeeCny)
 	if err != nil {
 		return nil, err
 	}
+	// D-276 净理论 = 毛理论 − 费用
+	v.TotalNetTheoreticalReturn = v.TotalTheoreticalReturn - v.TotalFeeCny
 	// 收益偏差率 = 累计偏差 / 累计理论 * 100（除零保护）
 	if v.TotalTheoreticalReturn != 0 {
 		v.TotalDeviationPct = v.TotalDeviationCny / v.TotalTheoreticalReturn * 100
@@ -265,7 +274,7 @@ func scanRepoTradeRowScan(scan func(dest ...any) error, r *RepoTradeRow) error {
 		&r.IdleCnyAtRecord, &r.SignalSnapshot,
 		&r.ActualReturnCny, &r.SettledAt,
 		&r.DeviationRateBps, &r.DeviationPrincipalCny,
-		&r.DeviationReturnCny, &r.DeviationReturnPct,
+		&r.DeviationReturnCny, &r.DeviationReturnPct, &r.FeeCny,
 		&r.Status, &r.RepoOpID, &r.EntrySource, &r.LastMaturityRemindedAt,
 		&r.Rationale, &r.CreatedAt, &r.UpdatedAt,
 	)

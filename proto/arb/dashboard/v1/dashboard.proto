@@ -1672,6 +1672,8 @@ message RecordRepoTradeResponse {
   string maturity_date = 7;         // 到期日（回显：业主覆盖值，未提供时后端默认）
   optional double deviation_rate_bps = 8;       // 利率偏差（回显，NULL=理论利率为空）
   double deviation_principal_cny = 9;           // 金额偏差（回显）
+  double fee_cny = 10;                          // D-276 手续费（成交金额×品种佣金率）
+  optional double net_theoretical_return_cny = 11; // D-276 净理论收益（毛理论−费用，NULL=理论为空）
 }
 
 message ListRepoTradesRequest {
@@ -1701,6 +1703,8 @@ message RepoTradeRow {
   string status = 19;
   string entry_source = 20;
   string rationale = 21;
+  optional double fee_cny = 22;                    // D-276 手续费
+  optional double net_theoretical_return_cny = 23; // D-276 净理论收益（后端派生）
 }
 
 message ListRepoTradesResponse {
@@ -1745,4 +1749,7 @@ message GetRepoStrategyValidationResponse {
   // 在途持仓
   double open_principal_cny = 11;          // 在途本金
   double open_theoretical_return_cny = 12; // 在途同金额理论收益
+  // D-276 手续费聚合
+  double total_fee_cny = 13;                   // 累计手续费（settled）
+  double total_net_theoretical_return_cny = 14; // 累计净理论收益（毛理论−费用，settled）
 }

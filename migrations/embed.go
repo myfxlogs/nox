@@ -202,3 +202,6 @@ var RepoTradesSQL string
 
 //go:embed 0086_cex_earn_judgment.sql
 var CexEarnJudgmentSQL string
+
+//go:embed 0087_repo_trades_fee.sql
+var RepoTradesFeeSQL string

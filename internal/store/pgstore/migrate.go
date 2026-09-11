@@ -82,6 +82,7 @@ var migrationFiles = []struct {
 	{84, migrations.ExchangeConfigsUniqueSimulatedSQL}, // D-271 R1：exchange_configs 唯一约束加 simulated
 	{85, migrations.RepoTradesSQL},                     // D-272 逆回购操作记录+策略验证闭环
 	{86, migrations.CexEarnJudgmentSQL},                // D-273：earn APR 判断引擎
+	{87, migrations.RepoTradesFeeSQL},                  // D-276 逆回购手续费模型
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
