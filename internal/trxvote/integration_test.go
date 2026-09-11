@@ -58,6 +58,9 @@ func (c *integrationConn) GetRewardsInfoCtx(_ context.Context, _ string) (int64,
 func (c *integrationConn) BroadcastCtx(_ context.Context, _ *core.Transaction) (*api.Return, error) {
 	return &api.Return{}, c.broadcastErr
 }
+func (c *integrationConn) GetAccountResourceCtx(_ context.Context, _ string) (*api.AccountResourceMessage, error) {
+	return &api.AccountResourceMessage{FreeNetLimit: 600, NetLimit: 1285}, nil // 充足带宽
+}
 
 // integrationAccount 是集成测试用的 mock AccountFetcher。
 type integrationAccount struct {

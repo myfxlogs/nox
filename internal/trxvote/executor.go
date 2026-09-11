@@ -21,6 +21,7 @@ type TronClient interface {
 	WithdrawBalanceCtx(ctx context.Context, from string) (*api.TransactionExtention, error)
 	GetRewardsInfoCtx(ctx context.Context, addr string) (int64, error)
 	BroadcastCtx(ctx context.Context, tx *core.Transaction) (*api.Return, error)
+	GetAccountResourceCtx(ctx context.Context, addr string) (*api.AccountResourceMessage, error)
 }
 
 // Executor 执行 TRX 投票交易（改投+领奖）。
@@ -74,15 +75,15 @@ func (e *Executor) Vote(ctx context.Context, target []VoteEntry) (string, error)
 
 // ClaimReward 领取投票奖励（设计 §4.1）。
 // 流程：查未领取奖励 → 构建 withdraw tx → 签名 → 广播 → 返回 txHash+amount。
-// reward=0 → 跳过（返回空 txHash, 0, nil）。
+// reward < 10 TRX（10_000_000 sun）→ 跳过（节省带宽，业主 9-11 定）。
 func (e *Executor) ClaimReward(ctx context.Context) (string, int64, error) {
 	// 1. 查未领取奖励（v1.1 B1：GetReward → GetRewardsInfoCtx）
 	reward, err := e.conn.GetRewardsInfoCtx(ctx, e.fromAddr)
 	if err != nil {
 		return "", 0, fmt.Errorf("get reward: %w", err)
 	}
-	if reward == 0 {
-		return "", 0, nil // 无奖励可领
+	if reward < 10_000_000 {
+		return "", 0, nil // 奖励不足 10 TRX，跳过节省带宽
 	}
 
 	// 2. 构建 withdrawbalance 交易
@@ -111,6 +112,19 @@ func (e *Executor) Alert(level, msg string) {
 	if e.alertSink != nil {
 		e.alertSink(level, msg)
 	}
+}
+
+// HasBandwidth 检查账户剩余带宽是否 >= need BP。
+// 剩余 = (FreeNetLimit - FreeNetUsed) + (NetLimit - NetUsed)。
+func (e *Executor) HasBandwidth(ctx context.Context, need int64) (bool, error) {
+	res, err := e.conn.GetAccountResourceCtx(ctx, e.fromAddr)
+	if err != nil {
+		return false, fmt.Errorf("get account resource: %w", err)
+	}
+	free := res.GetFreeNetLimit() - res.GetFreeNetUsed()
+	staked := res.GetNetLimit() - res.GetNetUsed()
+	remaining := free + staked
+	return remaining >= need, nil
 }
 
 // compile-time: *client.GrpcClient 实现 TronClient 接口。

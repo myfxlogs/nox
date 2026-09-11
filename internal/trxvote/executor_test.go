@@ -21,6 +21,9 @@ type mockTronClient struct {
 	rewardErr       error
 	broadcastErr    error
 	broadcastCalled bool
+	// 带宽查询 mock（nil=充足带宽）
+	acctResource *api.AccountResourceMessage
+	acctResErr   error
 }
 
 func (m *mockTronClient) VoteWitnessAccountCtx(_ context.Context, _ string, _ map[string]int64) (*api.TransactionExtention, error) {
@@ -35,6 +38,15 @@ func (m *mockTronClient) GetRewardsInfoCtx(_ context.Context, _ string) (int64, 
 func (m *mockTronClient) BroadcastCtx(_ context.Context, _ *core.Transaction) (*api.Return, error) {
 	m.broadcastCalled = true
 	return &api.Return{}, m.broadcastErr
+}
+func (m *mockTronClient) GetAccountResourceCtx(_ context.Context, _ string) (*api.AccountResourceMessage, error) {
+	if m.acctResErr != nil {
+		return nil, m.acctResErr
+	}
+	if m.acctResource != nil {
+		return m.acctResource, nil
+	}
+	return &api.AccountResourceMessage{FreeNetLimit: 600, NetLimit: 1285}, nil
 }
 
 // testPrivKey 生成测试用私钥（确定性，never used for real TRX）。
@@ -143,11 +155,11 @@ func TestClaimReward_ZeroReward(t *testing.T) {
 	}
 }
 
-// TestClaimReward_Normal 正常流程 → 返回 txHash + amount。
+// TestClaimReward_Normal 正常流程 → 返回 txHash + amount（reward ≥ 10 TRX 阈值）。
 func TestClaimReward_Normal(t *testing.T) {
 	txid := []byte{0xca, 0xfe, 0x12, 0x34}
 	mc := &mockTronClient{
-		reward:        1000000, // 1M sun = 1 TRX
+		reward:        15_000_000, // 15 TRX > 10 TRX 阈值
 		withdrawTxExt: makeTxExt(txid),
 	}
 	e := NewExecutor(mc, testPrivKey(t), "Tfrom", nil)
@@ -159,8 +171,8 @@ func TestClaimReward_Normal(t *testing.T) {
 	if txHash != "cafe1234" {
 		t.Errorf("txHash = %q, want cafe1234", txHash)
 	}
-	if amount != 1000000 {
-		t.Errorf("amount = %d, want 1000000", amount)
+	if amount != 15_000_000 {
+		t.Errorf("amount = %d, want 15000000", amount)
 	}
 	if !mc.broadcastCalled {
 		t.Error("Broadcast not called")
@@ -183,7 +195,7 @@ func TestClaimReward_QueryFailed(t *testing.T) {
 // TestClaimReward_BuildFailed 构建失败 → error。
 func TestClaimReward_BuildFailed(t *testing.T) {
 	mc := &mockTronClient{
-		reward:      1000000,
+		reward:      15_000_000, // ≥ 10 TRX 阈值
 		withdrawErr: errors.New("build error"),
 	}
 	e := NewExecutor(mc, testPrivKey(t), "Tfrom", nil)
@@ -197,7 +209,7 @@ func TestClaimReward_BuildFailed(t *testing.T) {
 // TestClaimReward_BroadcastFailed 广播失败 → error。
 func TestClaimReward_BroadcastFailed(t *testing.T) {
 	mc := &mockTronClient{
-		reward:        1000000,
+		reward:        15_000_000, // ≥ 10 TRX 阈值
 		withdrawTxExt: makeTxExt([]byte{0xca, 0xfe}),
 		broadcastErr:  errors.New("broadcast error"),
 	}

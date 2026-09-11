@@ -175,6 +175,19 @@ func (s *Scheduler) doRebalance(ctx context.Context) {
 		return
 	}
 
+	// 6.1 带宽预检：改投需要 ~500 BP，不足则跳过避免烧 TRX
+	ok, err := s.executor.HasBandwidth(ctx, 500)
+	if err != nil {
+		log.Printf("[trxvote] bandwidth check: %v", err)
+		s.executor.Alert("warn", "[投票带宽查询失败] "+err.Error())
+		return
+	}
+	if !ok {
+		log.Println("[trxvote] 带宽不足，跳过改投（避免烧 TRX）")
+		s.executor.Alert("warn", "[投票改投跳过] 带宽不足，等待恢复")
+		return
+	}
+
 	txHash, err := s.executor.Vote(ctx, decision.Target)
 	if err != nil {
 		log.Printf("[trxvote] rebalance failed: %v", err)
@@ -188,7 +201,22 @@ func (s *Scheduler) doRebalance(ctx context.Context) {
 }
 
 // doClaim 执行一轮领奖（设计 §5）。
+// 带宽预检：领奖需要 ~250 BP，不足则跳过避免烧 TRX。
+// 奖励阈值：Executor.ClaimReward 内部已过滤 <10 TRX，此处只处理带宽。
 func (s *Scheduler) doClaim(ctx context.Context) {
+	// 带宽预检（领奖 ~250 BP）
+	ok, err := s.executor.HasBandwidth(ctx, 250)
+	if err != nil {
+		log.Printf("[trxvote] claim bandwidth check: %v", err)
+		s.executor.Alert("warn", "[投票领奖带宽查询失败] "+err.Error())
+		return
+	}
+	if !ok {
+		log.Println("[trxvote] 带宽不足，跳过领奖（避免烧 TRX）")
+		s.executor.Alert("warn", "[投票领奖跳过] 带宽不足，等待恢复")
+		return
+	}
+
 	txHash, amount, err := s.executor.ClaimReward(ctx)
 	if err != nil {
 		log.Printf("[trxvote] claim failed: %v", err)
@@ -196,7 +224,7 @@ func (s *Scheduler) doClaim(ctx context.Context) {
 		return
 	}
 	if txHash == "" {
-		log.Println("[trxvote] 无奖励可领，跳过")
+		log.Println("[trxvote] 奖励不足 10 TRX 或无奖励，跳过")
 		return
 	}
 	s.executor.Alert("warn", formatClaimAlert(txHash, amount))

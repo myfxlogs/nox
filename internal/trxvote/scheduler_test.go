@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -60,6 +61,9 @@ type testExecutorConn struct {
 	withdrawTxExt *api.TransactionExtention
 	withdrawErr   error
 	broadcastErr  error
+	// 带宽预检 mock（nil=返回充足带宽）
+	acctResource *api.AccountResourceMessage
+	acctResErr   error
 }
 
 func (m *testExecutorConn) VoteWitnessAccountCtx(_ context.Context, _ string, _ map[string]int64) (*api.TransactionExtention, error) {
@@ -73,6 +77,21 @@ func (m *testExecutorConn) GetRewardsInfoCtx(_ context.Context, _ string) (int64
 }
 func (m *testExecutorConn) BroadcastCtx(_ context.Context, _ *core.Transaction) (*api.Return, error) {
 	return &api.Return{}, m.broadcastErr
+}
+func (m *testExecutorConn) GetAccountResourceCtx(_ context.Context, _ string) (*api.AccountResourceMessage, error) {
+	if m.acctResErr != nil {
+		return nil, m.acctResErr
+	}
+	if m.acctResource != nil {
+		return m.acctResource, nil
+	}
+	// 默认返回充足带宽（free 600 used 0 + staked 1285 used 0 = 1885 BP）
+	return &api.AccountResourceMessage{
+		FreeNetLimit: 600,
+		FreeNetUsed:  0,
+		NetLimit:     1285,
+		NetUsed:      0,
+	}, nil
 }
 
 // testScheduler 构造带 mock 的 Scheduler。
@@ -179,11 +198,50 @@ func TestDoClaim_ZeroReward(t *testing.T) {
 	}
 }
 
-// TestDoClaim_Normal 正常 → warn 告警。
+// TestDoClaim_BelowThreshold reward < 10 TRX → 跳过（节省带宽）。
+func TestDoClaim_BelowThreshold(t *testing.T) {
+	conn := &testExecutorConn{reward: 5_000_000} // 5 TRX < 10 TRX 阈值
+	sched, exec := testScheduler(t, &fakeStore{}, &mockAccountFetcher{}, conn)
+	var alertCalled bool
+	exec.alertSink = func(level, msg string) {
+		alertCalled = true
+	}
+	sched.doClaim(context.Background())
+	if alertCalled {
+		t.Error("should not alert when reward < 10 TRX threshold")
+	}
+}
+
+// TestDoClaim_BandwidthLow 带宽不足 → 跳过领奖。
+func TestDoClaim_BandwidthLow(t *testing.T) {
+	conn := &testExecutorConn{
+		reward: 20_000_000, // 20 TRX > 阈值，但带宽不足
+		acctResource: &api.AccountResourceMessage{
+			FreeNetLimit: 600,
+			FreeNetUsed:  590, // 剩余 10 BP
+			NetLimit:     1285,
+			NetUsed:      1280, // 剩余 5 BP → 总 15 BP < 250
+		},
+	}
+	sched, exec := testScheduler(t, &fakeStore{}, &mockAccountFetcher{}, conn)
+	var gotAlert string
+	exec.alertSink = func(level, msg string) {
+		gotAlert = level + ":" + msg
+	}
+	sched.doClaim(context.Background())
+	if gotAlert == "" {
+		t.Fatal("should alert when bandwidth insufficient")
+	}
+	if !strings.Contains(gotAlert, "带宽不足") {
+		t.Errorf("alert should mention 带宽不足: %q", gotAlert)
+	}
+}
+
+// TestDoClaim_Normal 正常 → warn 告警（reward ≥ 10 TRX 阈值）。
 func TestDoClaim_Normal(t *testing.T) {
 	txid := []byte{0xca, 0xfe, 0x12, 0x34}
 	conn := &testExecutorConn{
-		reward: 1000000,
+		reward: 15_000_000, // 15 TRX > 10 TRX 阈值
 		withdrawTxExt: &api.TransactionExtention{
 			Transaction: &core.Transaction{},
 			Txid:        txid,
