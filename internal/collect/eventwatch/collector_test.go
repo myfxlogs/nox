@@ -315,9 +315,9 @@ func TestPoll_TwoHits_TwoAlerts(t *testing.T) {
 // R1②：fragment 已存在 → 0 次跳过
 func TestPoll_FragmentExists_ZeroAlerts(t *testing.T) {
 	store := newFakeStore()
-	// 预置已存在 fragment
-	store.existingFragments["2001"] = true
-	store.existingFragments["2002"] = true
+	// 预置已存在 fragment（FileLink 为去重键）
+	store.existingFragments["/a/2001.pdf"] = true
+	store.existingFragments["/a/2002.pdf"] = true
 	hkexItems := []hkexItem{
 		{NewsID: "2001", StockCode: "00626", Title: "Voluntary Offer", FileLink: "/a/2001.pdf"},
 		{NewsID: "2002", StockCode: "00700", Title: "Scheme of Arrangement", FileLink: "/a/2002.pdf"},

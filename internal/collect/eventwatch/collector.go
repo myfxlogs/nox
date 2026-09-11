@@ -83,7 +83,7 @@ func (c *Collector) Poll(ctx context.Context) ([]fact.Fact, error) {
 		hkexCount = len(items)
 		for _, item := range items {
 			if matchKeyword(item.Title) {
-				if c.pushAlert(ctx, item.NewsID, formatHKEX(item, false)) {
+				if c.pushAlert(ctx, item.FileLink, formatHKEX(item, false)) {
 					pushed++
 				}
 			}
@@ -94,7 +94,7 @@ func (c *Collector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	for _, item := range items {
 		if matchWatchCode(item.StockCode, c.watchCodes) {
 			watchCount++
-			if c.pushAlert(ctx, item.NewsID, formatHKEX(item, true)) {
+			if c.pushAlert(ctx, item.FileLink, formatHKEX(item, true)) {
 				pushed++
 			}
 		}
@@ -108,7 +108,7 @@ func (c *Collector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	} else {
 		edgarCount = len(entries)
 		for _, e := range entries {
-			if c.pushAlert(ctx, e.ID, formatEDGAR(e)) {
+			if c.pushAlert(ctx, e.Link, formatEDGAR(e)) {
 				pushed++
 			}
 		}
