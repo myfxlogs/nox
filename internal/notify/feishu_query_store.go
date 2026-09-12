@@ -5,7 +5,6 @@ package notify
 
 import (
 	"context"
-	"math/big"
 	"time"
 )
 
@@ -19,18 +18,18 @@ type FeishuQueryStore interface {
 	SumTodayIncome(ctx context.Context) (energyTrx, votingTrx, interestUSD float64, err error)
 	SumTRXTxRentalAll(ctx context.Context) (float64, error)
 	SumTRXTxVoteClaimAll(ctx context.Context) (float64, error)
-	LatestTRXCycleVi(ctx context.Context) ([]TRXCycleViRow, error)
 }
 
 // TRXAccountSummary TRX 账户快照（notify 包本地，sun→TRX 已换算）。
 type TRXAccountSummary struct {
-	BalanceTRX      float64
-	AllowanceTRX    float64
-	TronPowerTRX    float64
-	VotesTotal      int64
-	EnergyDelegated float64
-	BandwidthStaked float64
-	FetchedAt       time.Time
+	BalanceTRX       float64
+	AllowanceTRX     float64
+	PendingRewardTRX float64 // D-285：tronscan rewardNum（待领取真值，TRX）
+	TronPowerTRX     float64
+	VotesTotal       int64
+	EnergyDelegated  float64
+	BandwidthStaked  float64
+	FetchedAt        time.Time
 }
 
 // CMCAccountSummary CMC 账户摘要。
@@ -51,11 +50,4 @@ type CMCPositionSummary struct {
 	EntryPrice    float64
 	UnrealisedPnL float64
 	FetchedAt     time.Time
-}
-
-// TRXCycleViRow TRX 投票 Vi 快照行（待领取=Σ vi×user_votes/10^18 用）。
-type TRXCycleViRow struct {
-	SRAddress string
-	Vi        *big.Int
-	UserVotes int64
 }

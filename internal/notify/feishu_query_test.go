@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -29,7 +28,6 @@ type fakeQueryStore struct {
 	cmcSum         CMCAccountSummary
 	cmcPos         CMCPositionSummary
 	today          [3]float64
-	viRows         []TRXCycleViRow
 }
 
 func (s *fakeQueryStore) FeishuTarget(context.Context) (string, string, error) {
@@ -52,9 +50,6 @@ func (s *fakeQueryStore) SumTodayIncome(context.Context) (float64, float64, floa
 }
 func (s *fakeQueryStore) SumTRXTxRentalAll(context.Context) (float64, error)    { return 0, nil }
 func (s *fakeQueryStore) SumTRXTxVoteClaimAll(context.Context) (float64, error) { return 0, nil }
-func (s *fakeQueryStore) LatestTRXCycleVi(context.Context) ([]TRXCycleViRow, error) {
-	return s.viRows, nil
-}
 
 type fakeAISettings struct{ enabled bool }
 
@@ -177,19 +172,18 @@ func TestQuery_TRXPrice(t *testing.T) {
 func TestQuery_PendingReward(t *testing.T) {
 	fs := &fakeQueryStore{
 		chatID: "chat1", openID: "user1",
-		trxAcc: TRXAccountSummary{AllowanceTRX: 7.717994, BalanceTRX: 1000, TronPowerTRX: 107332, VotesTotal: 78714},
-		viRows: []TRXCycleViRow{{SRAddress: "SR_A", Vi: new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil), UserVotes: 10000}},
+		trxAcc: TRXAccountSummary{AllowanceTRX: 0, PendingRewardTRX: 7.236, BalanceTRX: 1000, TronPowerTRX: 107332, VotesTotal: 78714},
 	}
 	feishuSrv, msgCh := feishuMockServer(t)
 	old := feishuBase
 	feishuBase = feishuSrv.URL
 	t.Cleanup(func() { feishuBase = old })
-	llmSrv := llmToolTextServer(t, "query_trx_account", "待领取 7.727994 TRX")
+	llmSrv := llmToolTextServer(t, "query_trx_account", "待领取 7.236 TRX")
 	h := newTestHandler(fs, llmSrv.URL, 10*time.Second)
 	h.HandleReply(context.Background(), textEvent("投票奖励多少未提"))
 	msg := waitForMsg(t, msgCh)
-	if !strings.Contains(msg, "7.72") {
-		t.Errorf("msg=%q, want contains ~7.72", msg)
+	if !strings.Contains(msg, "7.23") {
+		t.Errorf("msg=%q, want contains ~7.23", msg)
 	}
 }
 

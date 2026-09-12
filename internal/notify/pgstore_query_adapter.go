@@ -24,13 +24,14 @@ func (a *PgStoreQueryAdapter) LastTRXAccount(ctx context.Context) (TRXAccountSum
 		return TRXAccountSummary{}, err
 	}
 	return TRXAccountSummary{
-		BalanceTRX:      float64(acc.BalanceSun) / 1e6,
-		AllowanceTRX:    float64(acc.AllowanceSun) / 1e6,
-		TronPowerTRX:    float64(acc.TronPower) / 1e6,
-		VotesTotal:      acc.VotesTotal,
-		EnergyDelegated: float64(acc.EnergyDelegated) / 1e6,
-		BandwidthStaked: float64(acc.BandwidthStaked) / 1e6,
-		FetchedAt:       acc.FetchedAt,
+		BalanceTRX:       float64(acc.BalanceSun) / 1e6,
+		AllowanceTRX:     float64(acc.AllowanceSun) / 1e6,
+		PendingRewardTRX: float64(acc.RewardNumSun) / 1e6,
+		TronPowerTRX:     float64(acc.TronPower) / 1e6,
+		VotesTotal:       acc.VotesTotal,
+		EnergyDelegated:  float64(acc.EnergyDelegated) / 1e6,
+		BandwidthStaked:  float64(acc.BandwidthStaked) / 1e6,
+		FetchedAt:        acc.FetchedAt,
 	}, nil
 }
 
@@ -76,18 +77,6 @@ func (a *PgStoreQueryAdapter) SumTRXTxRentalAll(ctx context.Context) (float64, e
 func (a *PgStoreQueryAdapter) SumTRXTxVoteClaimAll(ctx context.Context) (float64, error) {
 	sun, err := a.Store.SumTRXTxVoteClaimAll(ctx)
 	return float64(sun) / 1e6, err
-}
-
-func (a *PgStoreQueryAdapter) LatestTRXCycleVi(ctx context.Context) ([]TRXCycleViRow, error) {
-	rows, err := a.Store.LatestTRXCycleVi(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]TRXCycleViRow, len(rows))
-	for i, r := range rows {
-		out[i] = TRXCycleViRow{SRAddress: r.SRAddress, Vi: r.Vi, UserVotes: r.UserVotes}
-	}
-	return out, nil
 }
 
 // SumTodayIncome 今日 UTC 0:00 起的 energy+voting TRX + interest USD。
