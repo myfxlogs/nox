@@ -102,11 +102,8 @@ func (s *Service) GetHedgeStructure(ctx context.Context, req *connect.Request[v1
 	var updatedAt time.Time
 	if hasTRX {
 		accts.TrxBalance = float64(trxAcc.BalanceSun) / 1e6
-		// D-233 S2：TrxAllowance 承载待领取语义（=allowance + 未结算应计 Vi×userVotes/10^18）。
-		// 按 SR 年化积分估算，对齐 TronLink 口径；结算后与链上 allowance 收敛。
-		// 精确复现不可行：reward(cycle,sr) 为节点内部量，公开 API 不暴露（R-D2 诚实化留档）。
-		// 无 Vi 数据时回退纯 allowance（诚实降级，不阻断卡片展示）。
-		accts.TrxAllowance = computePendingReward(ctx, s.store, trxAcc.AllowanceSun)
+		// D-285：待领取=tronscan rewardNum（链上真值，与 TronLink 一致）。
+		accts.TrxAllowance = float64(trxAcc.RewardNumSun) / 1e6
 		accts.EnergyDelegated = float64(trxAcc.EnergyDelegated) / 1e6
 		accts.Votes = float64(trxAcc.VotesTotal)
 		// D-278 S5：地址资源显示（剩余带宽/能量+状态，后端算好前端零计算）

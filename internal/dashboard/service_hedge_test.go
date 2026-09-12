@@ -3,7 +3,6 @@ package dashboard
 
 import (
 	"context"
-	"math/big"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -519,44 +518,5 @@ func TestGetHedgeStructure_AskFreshEvalAskSameSource(t *testing.T) {
 	}
 	if resp3.Msg.Structure.Ask == memAsk {
 		t.Error("stale provider: Ask == memAsk, want DB fallback (>30s 回退，与 case13 同源门限)")
-	}
-}
-
-// TestComputePendingReward D-233 S2：待领取 = allowance + Σ Vi × userVotes / 10^18。
-// 验证：有 Vi 数据→待领取 > allowance；无 Vi 数据→回退纯 allowance。
-func TestComputePendingReward(t *testing.T) {
-	s := trxTestStore(t)
-	ctx := context.Background()
-
-	// 无 Vi 数据 → 回退纯 allowance
-	got := computePendingReward(ctx, s, 7717994) // 7.717994 TRX
-	if got <= 0 {
-		t.Errorf("no Vi fallback: got %v, want >0 (pure allowance)", got)
-	}
-	// 应约等于 7.717994（纯 allowance，无 Vi）
-	if got < 7.7 || got > 7.8 {
-		t.Errorf("no Vi fallback: got %v, want ~7.717994 (pure allowance)", got)
-	}
-
-	// 写 Vi 数据：1 SR，Vi=10^18（即 1 sun/vote/cycle），userVotes=10000
-	// unsettled = 10^18 × 10000 / 10^18 = 10000 sun = 0.01 TRX
-	vi := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
-	if err := s.UpsertTRXCycleVi(ctx, pgstore.TRXCycleVi{
-		Cycle:     1,
-		SRAddress: "SR_A_ADDR",
-		Vi:        vi,
-		UserVotes: 10000,
-		UpdatedAt: time.Now(),
-	}); err != nil {
-		t.Fatalf("UpsertTRXCycleVi: %v", err)
-	}
-
-	got2 := computePendingReward(ctx, s, 7717994) // 7.717994 + 0.01 = 7.727994
-	if got2 <= 7.717994 {
-		t.Errorf("with Vi: got %v, want > 7.717994 (allowance + unsettled)", got2)
-	}
-	// 应约等于 7.727994
-	if got2 < 7.72 || got2 > 7.74 {
-		t.Errorf("with Vi: got %v, want ~7.727994 (allowance + 0.01 unsettled)", got2)
 	}
 }
