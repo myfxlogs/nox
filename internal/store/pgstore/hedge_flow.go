@@ -72,6 +72,9 @@ func (s *Store) ListHedgeFlowPage(ctx context.Context, sourceFilter string, limi
 			       CASE transaction_type
 			         WHEN 'OVERNIGHT_SETTLEMENT' THEN 'overnight'
 			         WHEN 'PAYMENTS_IN' THEN 'deposit'
+			         WHEN 'CLOSE_TRADE' THEN 'close_trade'
+			         WHEN 'SELL_ORDER' THEN 'sell_order'
+			         WHEN 'ORDER_CANCELLED' THEN 'order_cancelled'
 			         ELSE 'other'
 			       END AS kind,
 			       amount AS amount_value, 'USD' AS amount_unit,
