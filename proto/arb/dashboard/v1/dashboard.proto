@@ -1565,6 +1565,10 @@ message GetTrxYieldRadarResponse {
   int32 sample_days_30d = 7;   // 30d 实际样本天数
   google.protobuf.Timestamp updated_at = 8;  // 数据更新时间
   bool transition = 9;  // 扩容过渡期（7d 窗内 energy_delegated 变化>20%）：读数=旧租金÷新在押，floor 判定无效（9-9 B' 教训）
+  // D-288：投票市场最高 APR（从 fin_trx_vote_apr 同行透传，消除 TrxHedgeCard 投票年化行重复）
+  double vote_apr_max = 10;      // 市场最高 APR %（producer=true 降序第一）
+  string vote_apr_max_sr = 11;   // 最高 APR SR 名
+  double vote_apr_spread = 12;   // max−current 差值（pp）
 }
 
 // D-278 S1：净收益率日曲线——后端聚合三成分日序列+滚动年化，前端零计算（D-043 前端零信任）。
