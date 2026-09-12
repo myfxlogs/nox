@@ -228,3 +228,74 @@ func TestCalcYield_ProducerBonus(t *testing.T) {
 		t.Errorf("producer yield (%.2f) should > non-producer yield (%.2f)", yieldProd, yieldNoProd)
 	}
 }
+
+// D-285 S5：3 个新增测试。
+
+// TestDecide_ZeroThreshold_NoChange BetterOppPct=0 + current==target → 不触发（验证 S3 `>` 修复）。
+func TestDecide_ZeroThreshold_NoChange(t *testing.T) {
+	srList := []SRInfo{
+		makeSR("SR_best", 0, 5.0, 100000, true, 1),
+		makeSR("SR_ok", 0, 4.0, 200000, true, 2),
+		makeSR("SR_mid", 0, 3.5, 300000, true, 3),
+	}
+	cfg := DefaultConfig() // BetterOppPct=0.0（D-285 S2）
+	cfg.MinSRs = 1
+	cfg.MaxSRs = 1
+	// 当前已投 SR_best（与目标一致）→ improvement=0，0 > 0 = false → 不触发
+	currentVotes := []VoteEntry{{SRAddress: "SR_best", Votes: 10000}}
+	dec := Decide(RebalanceInput{
+		SRRanking:    srList,
+		CurrentVotes: currentVotes,
+		TotalTP:      10000,
+		Config:       cfg,
+	})
+	if dec.NeedRebalance {
+		t.Errorf("NeedRebalance = true, want false (BetterOppPct=0 + current==target, improvement=0, 0>0=false); improvement=%.4f%%", dec.Improvement)
+	}
+}
+
+// TestDecide_ZeroThreshold_TinyImprovement BetterOppPct=0 + target 略优于 current → 触发（验证 0% 阈值生效）。
+func TestDecide_ZeroThreshold_TinyImprovement(t *testing.T) {
+	srList := []SRInfo{
+		makeSR("SR_best", 0, 5.0, 100000, true, 1), // 低票 → 高出块奖励
+		makeSR("SR_ok", 0, 4.0, 200000, true, 2),   // 中票
+		makeSR("SR_mid", 0, 3.5, 300000, true, 3),
+	}
+	cfg := DefaultConfig() // BetterOppPct=0.0
+	cfg.MinSRs = 1
+	cfg.MaxSRs = 1
+	// 当前投 SR_ok，目标选 SR_best → improvement > 0 → 触发（即使改善很小）
+	currentVotes := []VoteEntry{{SRAddress: "SR_ok", Votes: 10000}}
+	dec := Decide(RebalanceInput{
+		SRRanking:    srList,
+		CurrentVotes: currentVotes,
+		TotalTP:      10000,
+		Config:       cfg,
+	})
+	if !dec.NeedRebalance {
+		t.Errorf("NeedRebalance = false, want true (BetterOppPct=0 + target 略优, improvement>0); improvement=%.4f%%", dec.Improvement)
+	}
+}
+
+// TestCalcYield_MatchesTronscan D-285 S5：用固定 mock 数据验证修复后年化 ≈3.3%（非 12.9%）。
+// 链上实测数据 2026-09-12 09:05 UTC：Nansen_ai brokerage=5/realTimeVotes=781751208/producer=true，
+// CryptoChain brokerage=4/realTimeVotes=836503761/producer=true。
+// 投票分布：Nansen_ai 71554 + CryptoChain 35778，TP=107332。
+// srList 含 1 个 dummy SR 代表其余 ~125 SR（totalVotesTop127≈43.6B 接近全网真实总票）。
+func TestCalcYield_MatchesTronscan(t *testing.T) {
+	srList := []SRInfo{
+		makeSR("Nansen_ai", 5, 4.0, 781751208, true, 1),
+		makeSR("CryptoChain", 4, 4.0, 836503761, true, 2),
+		// dummy SR 代表其余 ~125 SR，使 totalVotesTop127 接近全网真实值 ~43.6B TRX
+		makeSR("SR_others", 20, 3.0, 42000000000, false, 3),
+	}
+	votes := []VoteEntry{
+		{SRAddress: "Nansen_ai", Votes: 71554},
+		{SRAddress: "CryptoChain", Votes: 35778},
+	}
+	yieldAbs := calcYield(votes, srList)
+	annualized := yieldAbs / 107332 * 100
+	if annualized < 3.2 || annualized > 3.4 {
+		t.Errorf("annualized = %.4f%%, want 3.2-3.4%% (修复后不应多乘 27 倍)", annualized)
+	}
+}
