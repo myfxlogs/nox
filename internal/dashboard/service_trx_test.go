@@ -20,7 +20,7 @@ func trxTestStore(t *testing.T) *pgstore.Store {
 	s := serviceTestStoreSingleInit(t)
 	ctx := context.Background()
 	// TRUNCATE 相关表（数据隔离）。
-	for _, tbl := range []string{"fin_trx_account", "fin_trx_txs", "fin_trx_witness", "fin_trx_vote_apr", "fin_trx_cycle_vi", "position_daily_income", "personal_positions"} {
+	for _, tbl := range []string{"fin_trx_account", "fin_trx_txs", "fin_trx_witness", "fin_trx_vote_apr", "position_daily_income", "personal_positions"} {
 		if _, err := s.Pool().Exec(ctx, "TRUNCATE TABLE "+tbl+" RESTART IDENTITY CASCADE"); err != nil {
 			t.Fatalf("TRUNCATE %s: %v", tbl, err)
 		}
