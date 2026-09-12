@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/safego"
 )
 
 // PriceAlertRule 是提醒规则（notify 包本地类型，避免 notify→pgstore 依赖）。
@@ -72,7 +73,7 @@ func (s *PriceAlertService) Run(ctx context.Context) {
 	if err := s.loadRules(ctx); err != nil {
 		log.Printf("[price_alert] load: %v", err)
 	}
-	go s.refreshLoop(ctx)
+	safego.Go("price_alert:refreshLoop", func() { s.refreshLoop(ctx) })
 	ch, cancel := s.bus.Subscribe("")
 	defer cancel()
 	for {
