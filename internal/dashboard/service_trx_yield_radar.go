@@ -29,14 +29,20 @@ func (s *Service) GetTrxYieldRadar(ctx context.Context, req *connect.Request[v1.
 	if err != nil {
 		return nil, err
 	}
-	// 投票当前 APR（最新 fin_trx_vote_apr.current_rate）
-	var voteCurrent float64
+	// 投票当前 APR（最新 fin_trx_vote_apr.current_rate）+ 市场最高（D-288：从同行透传 max/spread/sr）
+	var voteCurrent, voteMax, voteSpread float64
+	var voteMaxSr string
 	vote, err := s.store.LastTRXVoteApr(ctx)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err
 	}
 	if err == nil {
 		voteCurrent = vote.CurrentRate
+		voteMax = vote.MaxRate
+		voteSpread = vote.Spread
+		if vote.MaxSr != nil {
+			voteMaxSr = *vote.MaxSr
+		}
 	}
 	// 投票 30d 均值
 	var vote30dAvg float64
@@ -68,5 +74,8 @@ func (s *Service) GetTrxYieldRadar(ctx context.Context, req *connect.Request[v1.
 		SampleDays_30D: int32(sample30d),
 		UpdatedAt:      timestamppb.New(updatedAt),
 		Transition:     transition,
+		VoteAprMax:     voteMax,
+		VoteAprMaxSr:   voteMaxSr,
+		VoteAprSpread:  voteSpread,
 	}), nil
 }

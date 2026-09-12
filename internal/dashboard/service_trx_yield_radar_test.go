@@ -72,6 +72,13 @@ func TestGetTrxYieldRadar_FullData(t *testing.T) {
 	if r.VoteAprCurrent != 3.29 {
 		t.Errorf("VoteAprCurrent = %v, want 3.29", r.VoteAprCurrent)
 	}
+	// D-288：市场最高 APR 透传（MaxRate=4.0, Spread=0.71）
+	if r.VoteAprMax != 4.0 {
+		t.Errorf("VoteAprMax = %v, want 4.0", r.VoteAprMax)
+	}
+	if r.VoteAprSpread != 0.71 {
+		t.Errorf("VoteAprSpread = %v, want 0.71", r.VoteAprSpread)
+	}
 	// 投票 30d 均值 ≈ 3.20
 	if r.VoteApr_30DAvg < 3.0 || r.VoteApr_30DAvg > 3.4 {
 		t.Errorf("VoteApr_30DAvg = %.4f, want ~3.20", r.VoteApr_30DAvg)

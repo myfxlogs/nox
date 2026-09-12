@@ -14130,8 +14130,12 @@ type GetTrxYieldRadarResponse struct {
 	SampleDays_30D int32                  `protobuf:"varint,7,opt,name=sample_days_30d,json=sampleDays30d,proto3" json:"sample_days_30d,omitempty"`     // 30d 实际样本天数
 	UpdatedAt      *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`                    // 数据更新时间
 	Transition     bool                   `protobuf:"varint,9,opt,name=transition,proto3" json:"transition,omitempty"`                                  // 扩容过渡期（7d 窗内 energy_delegated 变化>20%）：读数=旧租金÷新在押，floor 判定无效（9-9 B' 教训）
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// D-288：投票市场最高 APR（从 fin_trx_vote_apr 同行透传，消除 TrxHedgeCard 投票年化行重复）
+	VoteAprMax    float64 `protobuf:"fixed64,10,opt,name=vote_apr_max,json=voteAprMax,proto3" json:"vote_apr_max,omitempty"`          // 市场最高 APR %（producer=true 降序第一）
+	VoteAprMaxSr  string  `protobuf:"bytes,11,opt,name=vote_apr_max_sr,json=voteAprMaxSr,proto3" json:"vote_apr_max_sr,omitempty"`    // 最高 APR SR 名
+	VoteAprSpread float64 `protobuf:"fixed64,12,opt,name=vote_apr_spread,json=voteAprSpread,proto3" json:"vote_apr_spread,omitempty"` // max−current 差值（pp）
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetTrxYieldRadarResponse) Reset() {
@@ -14225,6 +14229,27 @@ func (x *GetTrxYieldRadarResponse) GetTransition() bool {
 		return x.Transition
 	}
 	return false
+}
+
+func (x *GetTrxYieldRadarResponse) GetVoteAprMax() float64 {
+	if x != nil {
+		return x.VoteAprMax
+	}
+	return 0
+}
+
+func (x *GetTrxYieldRadarResponse) GetVoteAprMaxSr() string {
+	if x != nil {
+		return x.VoteAprMaxSr
+	}
+	return ""
+}
+
+func (x *GetTrxYieldRadarResponse) GetVoteAprSpread() float64 {
+	if x != nil {
+		return x.VoteAprSpread
+	}
+	return 0
 }
 
 // D-278 S1：净收益率日曲线——后端聚合三成分日序列+滚动年化，前端零计算（D-043 前端零信任）。
@@ -17526,7 +17551,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\venergy_used\x18\x10 \x01(\x01R\n" +
 	"energyUsed\x12)\n" +
 	"\x10bandwidth_status\x18\x11 \x01(\tR\x0fbandwidthStatus\"\x19\n" +
-	"\x17GetTrxYieldRadarRequest\"\xfd\x02\n" +
+	"\x17GetTrxYieldRadarRequest\"\xee\x03\n" +
 	"\x18GetTrxYieldRadarResponse\x12\"\n" +
 	"\renergy_apr_7d\x18\x01 \x01(\x01R\venergyApr7d\x12$\n" +
 	"\x0eenergy_apr_30d\x18\x02 \x01(\x01R\fenergyApr30d\x12(\n" +
@@ -17539,7 +17564,12 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"updated_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x1e\n" +
 	"\n" +
 	"transition\x18\t \x01(\bR\n" +
-	"transition\"-\n" +
+	"transition\x12 \n" +
+	"\fvote_apr_max\x18\n" +
+	" \x01(\x01R\n" +
+	"voteAprMax\x12%\n" +
+	"\x0fvote_apr_max_sr\x18\v \x01(\tR\fvoteAprMaxSr\x12&\n" +
+	"\x0fvote_apr_spread\x18\f \x01(\x01R\rvoteAprSpread\"-\n" +
 	"\x17GetTrxYieldCurveRequest\x12\x12\n" +
 	"\x04days\x18\x01 \x01(\x05R\x04days\"\xe1\x01\n" +
 	"\x12TrxYieldCurvePoint\x12,\n" +
