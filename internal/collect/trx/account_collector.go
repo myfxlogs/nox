@@ -15,29 +15,26 @@ import (
 
 // AccountCollector 采集账户快照：getaccount + getaccountresource 拼合质押量。
 type AccountCollector struct {
-	address, base, apiKey string
-	store                 *pgstore.Store
-	onChange              func() // D-231 S5：指纹变化回调（nil=未接线）
-	lastFingerprint       string
-	firstPoll             bool // D-231 S5：首轮不触发（指纹未知）
-	// D-233 R-D1：VotesCollector 并入 account 心跳（每 20 tick≈10min 节流采样，无独立轮询器）。
-	votes     *VotesCollector
-	tickCount int // 心跳计数（每 20 tick 调 votes.SampleAndStore）
+	address, base, apiKey, tronscanBase string
+	store                               *pgstore.Store
+	onChange                            func() // D-231 S5：指纹变化回调（nil=未接线）
+	lastFingerprint                     string
+	firstPoll                           bool // D-231 S5：首轮不触发（指纹未知）
 }
 
 // NewAccountCollector 创建账户快照采集器。address 为 base58 监控地址。
-func NewAccountCollector(address string, store *pgstore.Store, base, apiKey string) *AccountCollector {
+func NewAccountCollector(address string, store *pgstore.Store, base, tronscanBase, apiKey string) *AccountCollector {
 	if base == "" {
 		base = DefaultBase
 	}
-	return &AccountCollector{address: address, store: store, base: base, apiKey: apiKey, firstPoll: true}
+	if tronscanBase == "" {
+		tronscanBase = DefaultTronscanBase
+	}
+	return &AccountCollector{address: address, store: store, base: base, tronscanBase: tronscanBase, apiKey: apiKey, firstPoll: true}
 }
 
 // SetOnChange D-231 S5：注入指纹变化回调。
 func (c *AccountCollector) SetOnChange(fn func()) { c.onChange = fn }
-
-// SetVotesCollector D-233 R-D1：注入 VotesCollector，并入 account 心跳每 20 tick 节流采样。
-func (c *AccountCollector) SetVotesCollector(v *VotesCollector) { c.votes = v }
 
 // Kind 返回采集器标识。
 func (c *AccountCollector) Kind() string { return "trx_account" }
@@ -100,6 +97,13 @@ func (c *AccountCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	// TronPower = bandwidthStaked + energyDelegated（sun 单位，对齐 balance_sun 口径；除以 1e6 得 TRX）
 	tronPowerSun := bandwidthStaked + energyDelegated
 
+	// D-285 S7：采 tronscan /api/account rewardNum（待领取真值，替代 Vi 估算）
+	rewardNum, err := fetchTronscanRewardNum(ctx, c.tronscanBase, c.address)
+	if err != nil {
+		log.Printf("[trx_account] tronscan rewardNum fetch: %v (回退 0)", err)
+		rewardNum = 0
+	}
+
 	rec := pgstore.TRXAccount{
 		Address:         c.address,
 		VotesTotal:      votesTotal,
@@ -107,6 +111,7 @@ func (c *AccountCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 		SRAddress:       srAddr,
 		BalanceSun:      acc.Balance,
 		AllowanceSun:    acc.Allowance,
+		RewardNumSun:    rewardNum,
 		EnergyDelegated: energyDelegated,
 		BandwidthStaked: bandwidthStaked,
 		NetLimit:        res.NetLimit,
@@ -127,18 +132,10 @@ func (c *AccountCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 		c.onChange()
 	}
 	c.lastFingerprint, c.firstPoll = fp, false
-	// D-233 R-D1：VotesCollector 并入心跳——每 20 tick（30s×20≈10min）节流采样 Vi。
-	c.tickCount++
-	if c.votes != nil && c.tickCount%20 == 0 {
-		if err := c.votes.SampleAndStore(ctx); err != nil {
-			log.Printf("[trx_account] votes SampleAndStore: %v", err)
-		}
-	}
 	return nil, nil
 }
 
 // StartWatchdog 数据新鲜度 watchdog（CMC 同款最小版，15min 无新行 → log stale）。
-// D-233 R-D1：并入 votes 陈旧检查（>30min 无 Vi 更新 → log stale），无独立 watchdog goroutine。
 func (c *AccountCollector) StartWatchdog(ctx context.Context) {
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
@@ -155,17 +152,21 @@ func (c *AccountCollector) StartWatchdog(ctx context.Context) {
 				log.Printf("[trx] stale warning: no account update for %v",
 					time.Since(last.FetchedAt).Round(time.Second))
 			}
-			// D-233 R-D1：votes 陈旧检查（并入 account watchdog，无独立 goroutine）
-			if c.votes != nil {
-				viRows, viErr := c.store.LatestTRXCycleVi(ctx)
-				if viErr == nil && len(viRows) > 0 {
-					latestVi := viRows[0].UpdatedAt
-					if time.Since(latestVi) > 30*time.Minute {
-						log.Printf("[trx_votes] stale warning: no vi update for %v",
-							time.Since(latestVi).Round(time.Second))
-					}
-				}
-			}
 		}
 	}
+}
+
+// fetchTronscanRewardNum D-285 S7：采 tronscan /api/account 的 rewardNum（待领取奖励真值，sun 单位）。
+func fetchTronscanRewardNum(ctx context.Context, tronscanBase, addr string) (int64, error) {
+	body, err := tronscanGet(ctx, tronscanBase+"/api/account?address="+addr)
+	if err != nil {
+		return 0, err
+	}
+	var resp struct {
+		RewardNum int64 `json:"rewardNum"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return 0, err
+	}
+	return resp.RewardNum, nil
 }

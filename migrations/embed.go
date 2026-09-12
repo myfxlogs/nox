@@ -217,3 +217,6 @@ var TrxTxsKindWidenSQL string
 
 //go:embed 0091_price_alerts.sql
 var PriceAlertsSQL string
+
+//go:embed 0092_trx_account_reward_num.sql
+var TrxAccountRewardNumSQL string

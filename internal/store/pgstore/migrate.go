@@ -87,6 +87,7 @@ var migrationFiles = []struct {
 	{89, migrations.TrxTxsCheatStatusSQL},              // D-279 TRX 交易 cheat_status 列
 	{90, migrations.TrxTxsKindWidenSQL},                // D-279 kind 列扩容 varchar(32)
 	{91, migrations.PriceAlertsSQL},                    // D-282 价格提醒规则引擎
+	{92, migrations.TrxAccountRewardNumSQL},            // D-285 TRX 待领取奖励真值列
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
