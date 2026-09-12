@@ -62,7 +62,7 @@ func DefaultConfig() RebalanceConfig {
 		MaxBrokerage:       20,
 		MinRank:            127,
 		YieldDropPct:       15.0,
-		BetterOppPct:       20.0,
+		BetterOppPct:       0.0,
 		MaxRebalancePerDay: 1,
 	}
 }
@@ -135,9 +135,9 @@ func Decide(input RebalanceInput) RebalanceDecision {
 
 	needRebalance := false
 	reason := ""
-	if improvement >= input.Config.BetterOppPct {
+	if improvement > input.Config.BetterOppPct {
 		needRebalance = true
-		reason = fmt.Sprintf("更优机会 +%.1f%% (≥%.0f%%)", improvement, input.Config.BetterOppPct)
+		reason = fmt.Sprintf("更优机会 +%.1f%% (>%.0f%%)", improvement, input.Config.BetterOppPct)
 	} else {
 		reason = fmt.Sprintf("无需改投 (改善 %.1f%%)", improvement)
 	}
@@ -183,7 +183,9 @@ func clamp(n, minV, maxV int) int {
 
 // calcYield 计算给定投票分布的预期年化收益率（TRX/年，设计 §3.3）。
 // 投票奖励部分 = (1-brokerage) × votes × 1345162240 / totalVotesTop127
-// 出块奖励部分（仅 producer）= (1-brokerage) × votes × 84072640 / (realTimeVotes+1)
+// 出块奖励部分（仅 producer）= (1-brokerage) × votes × 3113800 / (realTimeVotes+1)
+// 3113800 = 每 SR 年出块奖励池（设计 §收益模型：日出块 3113800 × 365）。
+// 注意：84072640 = 3113800 × 27 是全网 27 SR 总和，不能直接用于单 SR（D-285 修复）。
 func calcYield(votes []VoteEntry, srList []SRInfo) float64 {
 	if len(votes) == 0 || len(srList) == 0 {
 		return 0
@@ -214,7 +216,7 @@ func calcYield(votes []VoteEntry, srList []SRInfo) float64 {
 		yield += voteReward
 		// 出块奖励部分（仅 top 27 SR / producer）
 		if sr.Producer {
-			blockReward := 84072640.0 *
+			blockReward := 3113800.0 *
 				(1 - float64(sr.Brokerage)/100) *
 				float64(v.Votes) / float64(sr.RealTimeVotes+1) // +1 防除零
 			yield += blockReward
