@@ -109,7 +109,7 @@ func Load() *Config {
 		TrxVoteMaxSRs:         envInt("ARB_TRX_VOTE_MAX_SRS", 5),             // 最多分散 SR 数
 		TrxVoteMaxBrokerage:   envInt("ARB_TRX_VOTE_MAX_BROKERAGE", 20),      // 最大 brokerage 20%
 		TrxVoteYieldDropPct:   envFloat("ARB_TRX_VOTE_YIELD_DROP_PCT", 15.0), // 收益下降阈值 15%
-		TrxVoteBetterOppPct:   envFloat("ARB_TRX_VOTE_BETTER_OPP_PCT", 20.0), // 更优机会阈值 20%
+		TrxVoteBetterOppPct:   envFloat("ARB_TRX_VOTE_BETTER_OPP_PCT", 0.0),  // D-285：更优机会阈值降零（任何更高就改投）
 		TrxVoteMaxRebalPerDay: envInt("ARB_TRX_VOTE_MAX_REBAL_PER_DAY", 1),   // 每日最大改投 1 次
 		// === D-271 CEX 只读扫描器 ===
 		CexScanInterval: envDur("ARB_CEX_SCAN_INTERVAL", 5*time.Minute),

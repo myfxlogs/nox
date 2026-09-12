@@ -24,6 +24,7 @@ type TRXAccount struct {
 	SRAddress       *string // nil = 无投票
 	BalanceSun      int64
 	AllowanceSun    int64
+	RewardNumSun    int64 // D-285：tronscan rewardNum（待领取奖励真值，sun）
 	EnergyDelegated int64
 	BandwidthStaked int64
 	NetLimit        int64
@@ -63,12 +64,12 @@ type TRXWitness struct {
 func (s *Store) InsertTRXAccount(ctx context.Context, a TRXAccount) error {
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO fin_trx_account
-		  (address, votes_total, tron_power, sr_address, balance_sun, allowance_sun,
+		  (address, votes_total, tron_power, sr_address, balance_sun, allowance_sun, reward_num_sun,
 		   energy_delegated, bandwidth_staked, net_limit, net_used, free_net_used,
 		   free_net_limit, energy_limit, energy_used, unfrozen, fetched_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,COALESCE($16,now()))
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,COALESCE($17,now()))
 	`, a.Address, a.VotesTotal, a.TronPower, a.SRAddress, a.BalanceSun, a.AllowanceSun,
-		a.EnergyDelegated, a.BandwidthStaked, a.NetLimit, a.NetUsed, a.FreeNetUsed,
+		a.RewardNumSun, a.EnergyDelegated, a.BandwidthStaked, a.NetLimit, a.NetUsed, a.FreeNetUsed,
 		a.FreeNetLimit, a.EnergyLimit, a.EnergyUsed, a.Unfrozen, a.FetchedAt)
 	if err != nil {
 		return fmt.Errorf("insert trx account: %w", err)
@@ -110,14 +111,14 @@ func (s *Store) InsertTRXWitness(ctx context.Context, w TRXWitness) error {
 func (s *Store) LastTRXAccount(ctx context.Context) (TRXAccount, error) {
 	var a TRXAccount
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, address, votes_total, tron_power, sr_address, balance_sun, allowance_sun,
+		SELECT id, address, votes_total, tron_power, sr_address, balance_sun, allowance_sun, reward_num_sun,
 		       energy_delegated, bandwidth_staked, net_limit, net_used, free_net_used,
 		       free_net_limit, energy_limit, energy_used, unfrozen, fetched_at
 		FROM fin_trx_account
 		ORDER BY fetched_at DESC
 		LIMIT 1
 	`).Scan(&a.ID, &a.Address, &a.VotesTotal, &a.TronPower, &a.SRAddress, &a.BalanceSun, &a.AllowanceSun,
-		&a.EnergyDelegated, &a.BandwidthStaked, &a.NetLimit, &a.NetUsed, &a.FreeNetUsed,
+		&a.RewardNumSun, &a.EnergyDelegated, &a.BandwidthStaked, &a.NetLimit, &a.NetUsed, &a.FreeNetUsed,
 		&a.FreeNetLimit, &a.EnergyLimit, &a.EnergyUsed, &a.Unfrozen, &a.FetchedAt)
 	if err != nil {
 		return a, fmt.Errorf("last trx account: %w", err)
@@ -130,7 +131,7 @@ func (s *Store) ListTRXAccountByDay(ctx context.Context, day time.Time) ([]TRXAc
 	start := day.UTC().Truncate(24 * time.Hour)
 	end := start.Add(24 * time.Hour)
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, address, votes_total, tron_power, sr_address, balance_sun, allowance_sun,
+		SELECT id, address, votes_total, tron_power, sr_address, balance_sun, allowance_sun, reward_num_sun,
 		       energy_delegated, bandwidth_staked, net_limit, net_used, free_net_used,
 		       free_net_limit, energy_limit, energy_used, unfrozen, fetched_at
 		FROM fin_trx_account
@@ -145,7 +146,7 @@ func (s *Store) ListTRXAccountByDay(ctx context.Context, day time.Time) ([]TRXAc
 	for rows.Next() {
 		var a TRXAccount
 		if err := rows.Scan(&a.ID, &a.Address, &a.VotesTotal, &a.TronPower, &a.SRAddress, &a.BalanceSun,
-			&a.AllowanceSun, &a.EnergyDelegated, &a.BandwidthStaked, &a.NetLimit,
+			&a.AllowanceSun, &a.RewardNumSun, &a.EnergyDelegated, &a.BandwidthStaked, &a.NetLimit,
 			&a.NetUsed, &a.FreeNetUsed, &a.FreeNetLimit, &a.EnergyLimit, &a.EnergyUsed,
 			&a.Unfrozen, &a.FetchedAt); err != nil {
 			return nil, err
@@ -213,8 +214,7 @@ func (s *Store) LastTRXTxTs(ctx context.Context) (time.Time, bool, error) {
 	return ts, true, nil
 }
 
-// FirstTRXTxTs 返回最旧一条交易的 ts（D-211 R5 缺口检测：oldest 远晚于账户创建时间
-// 说明 429 断点后 lastTs 推进致早期段缺，需 min_timestamp=0 强制全史回填）；空表返回零值+false。
+// FirstTRXTxTs 返回最旧一条交易的 ts（D-211 R5 缺口检测：oldest 远晚于账户创建时间，429 断点后需 min_timestamp=0 全史回填）；空表返回零值+false。
 func (s *Store) FirstTRXTxTs(ctx context.Context) (time.Time, bool, error) {
 	var ts time.Time
 	err := s.pool.QueryRow(ctx, `

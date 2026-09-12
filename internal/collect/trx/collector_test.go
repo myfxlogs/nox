@@ -25,7 +25,7 @@ func newTestStore(t *testing.T) *pgstore.Store {
 	if err := st.Migrate(context.Background()); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	for _, tbl := range []string{"fin_trx_account", "fin_trx_txs", "fin_trx_witness", "fin_trx_vote_apr", "fin_trx_cycle_vi"} {
+	for _, tbl := range []string{"fin_trx_account", "fin_trx_txs", "fin_trx_witness", "fin_trx_vote_apr"} {
 		if _, err := st.Pool().Exec(context.Background(), "DELETE FROM "+tbl); err != nil {
 			t.Fatalf("cleanup %s: %v", tbl, err)
 		}
@@ -66,7 +66,7 @@ func TestAccountCollector_Poll_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, "")
+	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, "")
 	facts, err := c.Poll(context.Background())
 	if err != nil {
 		t.Fatalf("Poll: %v", err)
@@ -129,7 +129,7 @@ func TestAccountCollector_Poll_EnergySelfStake(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, "")
+	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, "")
 	if _, err := c.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestAccountCollector_Poll_RESTFail(t *testing.T) {
 		w.WriteHeader(500)
 	}))
 	defer srv.Close()
-	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, "")
+	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, "")
 	if _, err := c.Poll(context.Background()); err == nil {
 		t.Fatal("Poll should fail on 500")
 	}
@@ -721,7 +721,7 @@ func TestAccountCollector_Poll_MultiSR_VotesTotalSum(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, "")
+	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, "")
 	if _, err := c.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
