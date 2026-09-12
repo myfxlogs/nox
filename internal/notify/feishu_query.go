@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/big"
 	"strings"
 	"time"
 
@@ -204,8 +203,7 @@ func (t *feishuQueryTools) execTrxAccount(ctx context.Context, call analyst.Tool
 	if err != nil {
 		return analyst.ToolResult{ToolUseID: call.ID, Content: "查 TRX 账户失败: " + err.Error(), IsError: true}, nil, nil
 	}
-	viRows, _ := t.store.LatestTRXCycleVi(ctx)
-	pending := computePendingRewardTRX(acc.AllowanceTRX, viRows)
+	pending := acc.PendingRewardTRX
 	out, _ := json.Marshal(map[string]any{
 		"balance_trx":        acc.BalanceTRX,
 		"allowance_trx":      acc.AllowanceTRX,
@@ -249,25 +247,4 @@ func (t *feishuQueryTools) execTodayIncome(ctx context.Context, call analyst.Too
 		"interest_usd": interest,
 	})
 	return analyst.ToolResult{ToolUseID: call.ID, Content: string(out)}, nil, nil
-}
-
-// computePendingRewardTRX 待领取 = allowance + Σ Vi×userVotes/10^18（与 service_hedge_carry.go:94-119 同源）。
-func computePendingRewardTRX(allowanceTRX float64, viRows []TRXCycleViRow) float64 {
-	if len(viRows) == 0 {
-		return allowanceTRX
-	}
-	decimalOfViReward := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
-	totalUnsettledSun := new(big.Int)
-	for _, r := range viRows {
-		if r.Vi == nil || r.UserVotes <= 0 {
-			continue
-		}
-		unsettled := new(big.Int).Mul(r.Vi, big.NewInt(r.UserVotes))
-		unsettled.Div(unsettled, decimalOfViReward)
-		totalUnsettledSun.Add(totalUnsettledSun, unsettled)
-	}
-	unsettledTRX := new(big.Float).SetInt(totalUnsettledSun)
-	unsettledTRX.Quo(unsettledTRX, big.NewFloat(1e6))
-	f, _ := unsettledTRX.Float64()
-	return allowanceTRX + f
 }
