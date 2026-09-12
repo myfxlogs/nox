@@ -26,18 +26,23 @@ type LoopResult struct {
 	Grounded bool // 全程零工具调用=false
 }
 
-// Run 执行 agent 循环。
+// Run 执行 agent 循环（硬编码 ToolSpecs()+SystemPrompt）。
 // 初始 messages 由调用方构造（含系统提示词注入的首条 user 消息）；
 // 每轮：StreamMessages → delta 流出 + tool_use 收集 → stop_reason=tool_use 时执行工具回填 → 下一轮；
 // stop_reason=end_turn 或 max_tokens 时结束；≤8 轮硬截断。
 func Run(ctx context.Context, c *Client, tools ToolExecutor, msgs []Message, cb LoopCallbacks) (LoopResult, error) {
-	toolSpecs := ToolSpecs()
+	return RunWithSpecs(ctx, c, tools, ToolSpecs(), SystemPrompt, msgs, cb)
+}
+
+// RunWithSpecs 执行 agent 循环（toolSpecs/systemPrompt 由调用方注入）。
+// D-284：飞书查询用专用工具+提示词，不复用前端分析员的 ToolSpecs/SystemPrompt。
+func RunWithSpecs(ctx context.Context, c *Client, tools ToolExecutor, toolSpecs []ToolSpec, systemPrompt string, msgs []Message, cb LoopCallbacks) (LoopResult, error) {
 	grounded := false
 	for round := 0; round < MaxToolRounds; round++ {
 		req := &MessageRequest{
 			Model:     c.Model,
 			MaxTokens: 2048,
-			System:    SystemPrompt,
+			System:    systemPrompt,
 			Messages:  msgs,
 			Stream:    true,
 			Tools:     toolSpecs,

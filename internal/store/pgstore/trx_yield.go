@@ -239,3 +239,23 @@ func (s *Store) SumTRXTxVoteClaimAll(ctx context.Context) (int64, error) {
 	}
 	return sum, nil
 }
+
+// SumTRXTxVoteClaimByRange D-284 S3：返回 [from, to) 区间 vote_claim 之和（amount_sun）。
+// 与 SumTRXTxRentalByRange 同模式（kind='vote_claim'）。
+func (s *Store) SumTRXTxVoteClaimByRange(ctx context.Context, from, to time.Time) (int64, error) {
+	from = from.UTC()
+	to = to.UTC()
+	if !from.Before(to) {
+		return 0, nil
+	}
+	var sum int64
+	err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(amount_sun), 0)
+		FROM fin_trx_txs
+		WHERE kind = 'vote_claim' AND ts >= $1 AND ts < $2
+	`, from, to).Scan(&sum)
+	if err != nil {
+		return 0, fmt.Errorf("sum trx vote claim by range: %w", err)
+	}
+	return sum, nil
+}
