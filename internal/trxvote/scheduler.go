@@ -5,6 +5,7 @@ package trxvote
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -129,6 +130,10 @@ func (s *Scheduler) doRebalance(ctx context.Context) {
 	// 2. 拉 SR 列表（独立 HTTP fetch TronScan /api/witness）
 	srList, err := fetchSRList(ctx, s.tronscanBase)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			log.Printf("[trxvote] fetch SR list canceled (container shutdown)")
+			return
+		}
 		log.Printf("[trxvote] fetch SR list: %v", err)
 		s.executor.Alert("warn", "[投票采集失败] "+err.Error())
 		return
@@ -137,6 +142,10 @@ func (s *Scheduler) doRebalance(ctx context.Context) {
 	// 3. 拉当前投票分布 + 总 TP
 	accDetail, err := s.account.GetAccountDetailedCtx(ctx, s.address)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			log.Printf("[trxvote] get account detail canceled (container shutdown)")
+			return
+		}
 		log.Printf("[trxvote] get account detail: %v", err)
 		s.executor.Alert("warn", "[投票账户查询失败] "+err.Error())
 		return
