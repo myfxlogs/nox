@@ -6,6 +6,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 )
 
@@ -125,5 +126,45 @@ func TestAccountCollector_TrionscanFailCarryPrevReward(t *testing.T) {
 	}
 	if last.RewardNumSun != 15000000 {
 		t.Errorf("second Poll RewardNumSun = %d, want 15000000 (carry prev, not 0)", last.RewardNumSun)
+	}
+}
+
+// TestAccountCollector_RewardChangeFiresOnChange D-295 S6：rewardNum 变化触发 onChange（解冻页面刷新）。
+// 红绿锚：旧指纹不含 rewardNum → 第二轮不触发；新指纹含 rewardNum → 第二轮触发。
+func TestAccountCollector_RewardChangeFiresOnChange(t *testing.T) {
+	st := newTestStore(t)
+	reward := int64(15000000) // server flag 切 rewardNum
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/wallet/getaccount":
+			_, _ = w.Write([]byte(mockGetAccountJSON))
+		case "/wallet/getaccountresource":
+			_, _ = w.Write([]byte(mockGetResourceJSON))
+		default:
+			_, _ = w.Write([]byte(`{"rewardNum":` + strconv.FormatInt(reward, 10) + `}`))
+		}
+	}))
+	defer srv.Close()
+
+	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, "")
+	fired := 0
+	c.SetOnChange(func() { fired++ })
+
+	// 第一轮 Poll：rewardNum=15000000，首轮不触发 onChange（firstPoll 语义）。
+	if _, err := c.Poll(context.Background()); err != nil {
+		t.Fatalf("first Poll: %v", err)
+	}
+	if fired != 0 {
+		t.Errorf("first Poll fired=%d, want 0 (firstPoll 不触发)", fired)
+	}
+
+	// 第二轮 Poll：rewardNum=20000000，指纹变化 → onChange 触发。
+	reward = 20000000
+	if _, err := c.Poll(context.Background()); err != nil {
+		t.Fatalf("second Poll: %v", err)
+	}
+	if fired != 1 {
+		t.Errorf("second Poll fired=%d, want 1 (rewardNum 变化触发 onChange；D-295 S6)", fired)
 	}
 }
