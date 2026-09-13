@@ -66,7 +66,6 @@ service DashboardService {
   rpc ListPersonalPositions(ListPersonalPositionsRequest) returns (ListPersonalPositionsResponse);
   rpc GetHedgeStructure(GetHedgeStructureRequest) returns (GetHedgeStructureResponse);  // D-212 对冲工作台
   rpc ListHedgeFlow(ListHedgeFlowRequest) returns (ListHedgeFlowResponse);  // D-212 统一流水卡
-  rpc TrxVoteAprRefresh(TrxVoteAprRefreshRequest) returns (TrxVoteAprRefreshResponse);  // D-249 S3：on-open 触发采集（kick scheduler）【deprecated, use TrxAccountRefresh — D-254 双踢吸收 on-open 职责】
   rpc TrxAccountRefresh(TrxAccountRefreshRequest) returns (TrxAccountRefreshResponse);  // D-254：手动刷新按钮+on-open 双踢 trx_account+trx_apr，返回最新 fin_trx_account 全字段快照
   rpc GetTrxYieldRadar(GetTrxYieldRadarRequest) returns (GetTrxYieldRadarResponse);  // D-258 S3：收益率雷达（能量 7d/30d + 投票 APR + floor）
   rpc GetTrxYieldCurve(GetTrxYieldCurveRequest) returns (GetTrxYieldCurveResponse);  // D-278 S1：净收益率日曲线（三成分日序列+7d/30d 滚动年化+S4 敞口）
@@ -1517,18 +1516,6 @@ message RepoOpRow {
 }
 
 message ListRepoOpsResponse { repeated RepoOpRow ops = 1; }
-
-// D-249 S3：TRX 投票收益率 on-open 刷新（kick scheduler 补轮后返回最新行）。
-message TrxVoteAprRefreshRequest {}
-
-message TrxVoteAprRefreshResponse {
-  double current_rate = 1;
-  string current_sr = 2;
-  double max_rate = 3;
-  string max_sr = 4;
-  double spread = 5;
-  google.protobuf.Timestamp fetched_at = 6;
-}
 
 // D-254：TrxAccountRefresh——手动刷新按钮+on-open 双踢 trx_account+trx_apr 后返回最新 fin_trx_account 全字段快照。
 // Q3 裁定：sun 单位 ÷1e6 转 double（对齐 HedgeAccounts 口径，前端零换算）；votes_total 用 double（对齐 HedgeAccounts.votes）。
