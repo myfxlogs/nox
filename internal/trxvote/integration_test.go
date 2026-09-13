@@ -50,6 +50,7 @@ type integrationConn struct {
 	reward        int64
 	withdrawTxExt *api.TransactionExtention
 	broadcastErr  error
+	acctResource  *api.AccountResourceMessage // nil=返回充足带宽
 }
 
 func (c *integrationConn) VoteWitnessAccountCtx(_ context.Context, _ string, _ map[string]int64) (*api.TransactionExtention, error) {
@@ -65,6 +66,9 @@ func (c *integrationConn) BroadcastCtx(_ context.Context, _ *core.Transaction) (
 	return &api.Return{}, c.broadcastErr
 }
 func (c *integrationConn) GetAccountResourceCtx(_ context.Context, _ string) (*api.AccountResourceMessage, error) {
+	if c.acctResource != nil {
+		return c.acctResource, nil
+	}
 	return &api.AccountResourceMessage{FreeNetLimit: 600, NetLimit: 1285}, nil // 充足带宽
 }
 
@@ -246,5 +250,52 @@ func TestIntegration_RebalanceExecuteFailed(t *testing.T) {
 	// 验证不回填 executed（执行失败）
 	if store.updatedStatus == "executed" {
 		t.Error("updatedStatus should not be executed on failure")
+	}
+}
+
+// TestIntegration_RebalanceBandwidthLowCooldown 带宽不足→告警+设冷却；冷却内再调→不告警（防 30min 周期重复轰炸）。
+func TestIntegration_RebalanceBandwidthLowCooldown(t *testing.T) {
+	srFixture := `[
+		{"address":"SRgood","name":"SR1","annualizedRate":"5.0","brokerage":0,"realTimeVotes":100000,"votes":100000,"producer":true,"producedTotal":100},
+		{"address":"SRbad","name":"SR2","annualizedRate":"1.0","brokerage":0,"realTimeVotes":10000000,"votes":10000000,"producer":true,"producedTotal":100}
+	]`
+	store := &integrationStore{rebalancedToday: false}
+	// 带宽不足：free 600 used 590 + staked 1285 used 1280 = 15 BP < 500
+	conn := &integrationConn{
+		acctResource: &api.AccountResourceMessage{
+			FreeNetLimit: 600, FreeNetUsed: 590,
+			NetLimit: 1285, NetUsed: 1280,
+		},
+	}
+	acc := &account.Account{
+		TronPower: 10000,
+		Votes:     map[string]int64{"SRbad": 10000}, // NeedRebalance=true
+	}
+
+	sched, exec, _ := makeIntegrationScheduler(t, srFixture, store, conn, acc)
+	alertCount := 0
+	exec.alertSink = func(level, msg string) {
+		alertCount++
+	}
+
+	// 第一次：带宽不足 → 告警 + 设冷却 + 落库决策记录
+	sched.doRebalance(context.Background())
+	if alertCount != 1 {
+		t.Fatalf("first call: alertCount = %d, want 1 (bandwidth insufficient alert)", alertCount)
+	}
+	if sched.lastRebalanceBlockAt.IsZero() {
+		t.Error("lastRebalanceBlockAt should be set on bandwidth insufficient")
+	}
+	if store.insertedCount != 1 {
+		t.Errorf("first call: insertedCount = %d, want 1", store.insertedCount)
+	}
+
+	// 第二次：冷却内 → 不告警 + 不落库（防轰炸）
+	sched.doRebalance(context.Background())
+	if alertCount != 1 {
+		t.Errorf("second call: alertCount = %d, want 1 (cooldown suppresses alert)", alertCount)
+	}
+	if store.insertedCount != 1 {
+		t.Errorf("second call: insertedCount = %d, want 1 (cooldown skips insert)", store.insertedCount)
 	}
 }

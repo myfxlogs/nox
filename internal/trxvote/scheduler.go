@@ -1,5 +1,4 @@
-// D-269 S4：TRX 投票收益优化器调度器（6h rebalance + 24h claim）。
-// SSOT: docs/D-269设计-TRX投票收益优化器-2026-09-10-Claude.md §5
+// D-269 S4：TRX 投票收益优化器调度器。SSOT: docs/D-269设计…Claude.md §5
 package trxvote
 
 import (
@@ -20,15 +19,16 @@ type AccountFetcher interface {
 
 // Scheduler 调度 TRX 投票收益优化器的两个独立 tick。
 type Scheduler struct {
-	executor        *Executor
-	store           Store
-	address         string
-	tronscanBase    string
-	config          RebalanceConfig
-	account         AccountFetcher // 获取当前投票+总 TP
-	now             func() time.Time
-	lastClaimFailAt time.Time // D-293 S2：领奖阻塞冷却（失败/带宽不足共用，15min，防 60s 周期重复告警轰炸）
-	aboveThreshold  bool      // D-293 R1 P3-1：reward 是否在 >10e6 区间（状态迁移才打日志，避免每 60s 刷屏）
+	executor             *Executor
+	store                Store
+	address              string
+	tronscanBase         string
+	config               RebalanceConfig
+	account              AccountFetcher // 获取当前投票+总 TP
+	now                  func() time.Time
+	lastClaimFailAt      time.Time // 领奖阻塞冷却（失败/带宽不足共用，15min）
+	lastRebalanceBlockAt time.Time // 改投阻塞冷却（带宽不足/查询失败共用，15min）
+	aboveThreshold       bool      // reward 是否在 >10e6 区间（状态迁移才打日志）
 }
 
 // Store 是 Scheduler 依赖的存储接口（解耦 pgstore.Store 供测试注入）。
@@ -66,13 +66,12 @@ func NewScheduler(executor *Executor, store Store, address, tronscanBase string,
 // SetNow 替换 now 函数（测试用）。
 func (s *Scheduler) SetNow(fn func() time.Time) { s.now = fn }
 
-// Run 启动改投 tick（D-293 S2：领奖删 24h 槽位，改搭车 60s 采集流→ClaimCheck）。
-// - 改投 tick：每 30min（boot 后等 5min 首次执行）—— S3 改 6h→30min
+// Run 启动改投 tick（每 30min，boot 后等 5min 首次执行）。
 func (s *Scheduler) Run(ctx context.Context) {
 	go s.rebalanceLoop(ctx)
 }
 
-// rebalanceLoop 每 TickInterval 执行改投决策（D-293 S3：6h→30min 参数化）。
+// rebalanceLoop 每 TickInterval 执行改投决策。
 func (s *Scheduler) rebalanceLoop(ctx context.Context) {
 	interval := s.config.TickInterval
 	if interval <= 0 {
@@ -92,10 +91,9 @@ func (s *Scheduler) rebalanceLoop(ctx context.Context) {
 	}
 }
 
-// ClaimCheck 领奖条件触发（D-293 S2：搭车 60s 采集流，删 24h 槽位）。
-// 三态：reward≤10e6 零 RPC 跳过；失败/带宽不足冷却<15min 跳过；否则预检→ClaimReward。
+// ClaimCheck 领奖条件触发（搭车 60s 采集流）。三态：≤10e6 跳过；冷却<15min 跳过；否则预检→ClaimReward。
 func (s *Scheduler) ClaimCheck(ctx context.Context, rewardSun int64) {
-	if rewardSun <= 10_000_000 { // 1. 奖励不足 10 TRX → 零 RPC 跳过（P3-1：状态迁移才打日志）
+	if rewardSun <= 10_000_000 { // 1. 奖励不足 10 TRX → 零 RPC 跳过（状态迁移才打日志）
 		if s.aboveThreshold {
 			s.aboveThreshold = false
 			log.Printf("[trxvote] claim check: reward=%d sun ≤10e6, entered below-threshold (skip)", rewardSun)
@@ -106,7 +104,7 @@ func (s *Scheduler) ClaimCheck(ctx context.Context, rewardSun int64) {
 		s.aboveThreshold = true
 		log.Printf("[trxvote] claim check: reward=%d sun >10e6, entered above-threshold", rewardSun)
 	}
-	// 2. 冷却：距上次领奖阻塞（失败/带宽不足）<15min → 跳过（防 60s 周期重复告警轰炸）
+	// 2. 冷却：距上次领奖阻塞 <15min → 跳过（防重复告警轰炸）
 	if !s.lastClaimFailAt.IsZero() && s.now().Sub(s.lastClaimFailAt) < 15*time.Minute {
 		log.Printf("[trxvote] claim check: cooling down (last block %v ago), skip", s.now().Sub(s.lastClaimFailAt).Round(time.Second))
 		return
@@ -122,7 +120,7 @@ func (s *Scheduler) ClaimCheck(ctx context.Context, rewardSun int64) {
 	if !ok {
 		log.Println("[trxvote] 带宽不足，跳过领奖（避免烧 TRX）")
 		s.executor.Alert("warn", "[投票领奖跳过] 带宽不足，等待恢复")
-		s.lastClaimFailAt = s.now() // D-293 R1 P2-1：带宽不足同样设冷却，防每 60s 告警轰炸
+		s.lastClaimFailAt = s.now() // 带宽不足设冷却防告警轰炸
 		return
 	}
 	// 4. 执行领奖
@@ -141,15 +139,14 @@ func (s *Scheduler) ClaimCheck(ctx context.Context, rewardSun int64) {
 	s.executor.Alert("warn", formatClaimAlert(txHash, amount))
 }
 
-// doRebalance 执行一轮改投决策（设计 §5 v1.1）。
+// doRebalance 执行一轮改投决策（设计 §5）。
 func (s *Scheduler) doRebalance(ctx context.Context) {
 	// 1. 检查今日是否已改投
 	if s.store.TrxVoteRebalancedToday(ctx, s.config.MaxRebalancePerDay) {
 		log.Println("[trxvote] 今日已改投，跳过")
 		return
 	}
-
-	// 1.1 D-293 S3：防抖——距上次 executed < MinInterval → 跳过（不落库，与今日已改投同位置）
+	// 1.1 防抖：距上次 executed < MinInterval → 跳过（不落库）
 	if s.config.MinInterval > 0 {
 		lastExec, err := s.store.LastExecutedRebalanceAt(ctx)
 		if err == nil && !lastExec.IsZero() && s.now().Sub(lastExec) < s.config.MinInterval {
@@ -158,7 +155,11 @@ func (s *Scheduler) doRebalance(ctx context.Context) {
 			return
 		}
 	}
-
+	// 1.2 带宽阻塞冷却：距上次带宽不足/查询失败 <15min → 跳过（防重复告警轰炸）
+	if !s.lastRebalanceBlockAt.IsZero() && s.now().Sub(s.lastRebalanceBlockAt) < 15*time.Minute {
+		log.Printf("[trxvote] rebalance bandwidth: cooling down (last block %v ago), skip", s.now().Sub(s.lastRebalanceBlockAt).Round(time.Second))
+		return
+	}
 	// 2. 拉 SR 列表（独立 HTTP fetch TronScan /api/witness）
 	srList, err := fetchSRList(ctx, s.tronscanBase)
 	if err != nil {
@@ -192,7 +193,6 @@ func (s *Scheduler) doRebalance(ctx context.Context) {
 		TotalTP:      tp,
 		Config:       s.config,
 	})
-
 	// 5. 落库决策记录（无论是否执行）
 	targetJSON, _ := json.Marshal(decision.Target)
 	rec := TRXVoteRebalanceRecord{
@@ -209,7 +209,6 @@ func (s *Scheduler) doRebalance(ctx context.Context) {
 		log.Printf("[trxvote] insert rebalance record: %v", err)
 		return
 	}
-
 	// 6. 执行（仅在 needRebalance=true 时）
 	if !decision.NeedRebalance {
 		log.Printf("[trxvote] 无需改投: %s", decision.Reason)
@@ -221,11 +220,13 @@ func (s *Scheduler) doRebalance(ctx context.Context) {
 	if err != nil {
 		log.Printf("[trxvote] bandwidth check: %v", err)
 		s.executor.Alert("warn", "[投票带宽查询失败] "+err.Error())
+		s.lastRebalanceBlockAt = s.now()
 		return
 	}
 	if !ok {
 		log.Println("[trxvote] 带宽不足，跳过改投（避免烧 TRX）")
 		s.executor.Alert("warn", "[投票改投跳过] 带宽不足，等待恢复")
+		s.lastRebalanceBlockAt = s.now() // 设冷却防重复告警
 		return
 	}
 
@@ -255,7 +256,6 @@ func convertVotes(votes map[string]int64) []VoteEntry {
 }
 
 // formatRebalanceAlert 格式化改投告警（设计 §8，D-293 S4 加 SR 变化明细）。
-// 旧/新 top SR 地址各取前 8 字符，便于一眼看出改投方向。
 func formatRebalanceAlert(txHash string, d RebalanceDecision, currentVotes []VoteEntry) string {
 	short := txHash
 	if len(short) > 16 {
@@ -267,7 +267,7 @@ func formatRebalanceAlert(txHash string, d RebalanceDecision, currentVotes []Vot
 		" SR " + topSRPrefix(currentVotes) + "→" + topSRPrefix(d.Target)
 }
 
-// topSRPrefix 取投票分布中票数最高的 SR 地址前 8 字符（无投票返回 "无"）。
+// topSRPrefix 取票数最高 SR 地址前 8 字符（无投票返回 "无"）。
 func topSRPrefix(votes []VoteEntry) string {
 	if len(votes) == 0 {
 		return "无"
@@ -294,7 +294,7 @@ func formatClaimAlert(txHash string, amount int64) string {
 	return "[投票领奖] tx=" + short + " amount=" + formatFloat(float64(amount)) + " TRX"
 }
 
-// formatFloat 格式化浮点数（4 位小数，D-293 S4：原 2 位→4 位精确化）。
+// formatFloat 格式化浮点数（4 位小数）。
 func formatFloat(f float64) string {
 	return fmt.Sprintf("%.4f", f)
 }
