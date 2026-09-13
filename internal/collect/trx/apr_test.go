@@ -151,8 +151,9 @@ func TestAprCollector_Poll_OneRowPerPoll(t *testing.T) {
 // ---------- D-231 S5 实时性测试（⑥⑦⑧） ----------
 
 // TestComputeAccountFingerprint ⑥指纹检测：votes 分布变化→不同指纹、不变→同指纹、排序确定性。
-// 纯函数测试（无需 DSN）：验证 computeAccountFingerprint 对 votes 顺序无关 + balance/staked/allowance 参与。
+// 纯函数测试（无需 DSN）：验证 computeAccountFingerprint 对 votes 顺序无关 + balance/staked/allowance/rewardNum 参与。
 // D-233 R5：allowance 入指纹——奖励结算步进即触发刷新。
+// D-295 S6：rewardNum 入指纹——待领取应计变化触发刷新（allowance 物化值失效后继承语义）。
 func TestComputeAccountFingerprint(t *testing.T) {
 	votesA := []voteJSON{
 		{VoteAddress: "SR_A", VoteCount: 10000},
@@ -163,8 +164,8 @@ func TestComputeAccountFingerprint(t *testing.T) {
 		{VoteAddress: "SR_A", VoteCount: 10000},
 	}
 	// 顺序无关 → 同指纹
-	fp1 := computeAccountFingerprint(votesA, 100, 200, 300)
-	fp2 := computeAccountFingerprint(votesAShuffled, 100, 200, 300)
+	fp1 := computeAccountFingerprint(votesA, 100, 200, 300, 0)
+	fp2 := computeAccountFingerprint(votesAShuffled, 100, 200, 300, 0)
 	if fp1 != fp2 {
 		t.Errorf("指纹非排序确定：A=%q shuffled=%q（应相同）", fp1, fp2)
 	}
@@ -173,24 +174,29 @@ func TestComputeAccountFingerprint(t *testing.T) {
 		{VoteAddress: "SR_A", VoteCount: 10000},
 		{VoteAddress: "SR_C", VoteCount: 5000}, // SR_B → SR_C
 	}
-	fp3 := computeAccountFingerprint(votesChanged, 100, 200, 300)
+	fp3 := computeAccountFingerprint(votesChanged, 100, 200, 300, 0)
 	if fp1 == fp3 {
 		t.Errorf("votes 变化未反映到指纹：both=%q（应不同）", fp1)
 	}
 	// balance 变化 → 不同指纹
-	fp4 := computeAccountFingerprint(votesA, 999, 200, 300)
+	fp4 := computeAccountFingerprint(votesA, 999, 200, 300, 0)
 	if fp1 == fp4 {
 		t.Errorf("balance 变化未反映到指纹：both=%q（应不同）", fp1)
 	}
 	// staked 变化 → 不同指纹
-	fp5 := computeAccountFingerprint(votesA, 100, 999, 300)
+	fp5 := computeAccountFingerprint(votesA, 100, 999, 300, 0)
 	if fp1 == fp5 {
 		t.Errorf("staked 变化未反映到指纹：both=%q（应不同）", fp1)
 	}
 	// D-233 R5：allowance 变化 → 不同指纹
-	fp6 := computeAccountFingerprint(votesA, 100, 200, 999)
+	fp6 := computeAccountFingerprint(votesA, 100, 200, 999, 0)
 	if fp1 == fp6 {
 		t.Errorf("allowance 变化未反映到指纹：both=%q（应不同）", fp1)
+	}
+	// D-295 S6：rewardNum 变化 → 不同指纹（待领取应计入指纹，解冻页面刷新）
+	fp7 := computeAccountFingerprint(votesA, 100, 200, 300, 999)
+	if fp7 == fp1 {
+		t.Error("rewardNum 变化必须改变指纹（D-295 S6：待领取应计入指纹，解冻页面刷新）")
 	}
 }
 
