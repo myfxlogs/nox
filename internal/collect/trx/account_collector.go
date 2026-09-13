@@ -107,10 +107,14 @@ func (c *AccountCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	tronPowerSun := bandwidthStaked + energyDelegated
 
 	// D-285 S7：采 tronscan /api/account rewardNum（待领取真值，替代 Vi 估算）
+	// D-295：失败回退上一快照值（禁写 0——0 污染 rewardNum 差分链路+页面待领取闪 0，
+	// DB 实证 17/1359 行假 0）。首行无前值才允许 0。
 	rewardNum, err := fetchTronscanRewardNum(ctx, c.tronscanBase, c.address)
 	if err != nil {
-		log.Printf("[trx_account] tronscan rewardNum fetch: %v (回退 0)", err)
-		rewardNum = 0
+		if prev, perr := c.store.LastTRXAccount(ctx); perr == nil {
+			rewardNum = prev.RewardNumSun
+		}
+		log.Printf("[trx_account] tronscan rewardNum fetch: %v (回退上一快照 %d)", err, rewardNum)
 	}
 
 	rec := pgstore.TRXAccount{
