@@ -20,13 +20,14 @@ type AccountFetcher interface {
 
 // Scheduler 调度 TRX 投票收益优化器的两个独立 tick。
 type Scheduler struct {
-	executor     *Executor
-	store        Store
-	address      string
-	tronscanBase string
-	config       RebalanceConfig
-	account      AccountFetcher // 获取当前投票+总 TP
-	now          func() time.Time
+	executor        *Executor
+	store           Store
+	address         string
+	tronscanBase    string
+	config          RebalanceConfig
+	account         AccountFetcher // 获取当前投票+总 TP
+	now             func() time.Time
+	lastClaimFailAt time.Time // D-293 S2：领奖失败冷却（15min，防 60s 周期重复告警轰炸）
 }
 
 // Store 是 Scheduler 依赖的存储接口（解耦 pgstore.Store 供测试注入）。
@@ -63,17 +64,15 @@ func NewScheduler(executor *Executor, store Store, address, tronscanBase string,
 // SetNow 替换 now 函数（测试用）。
 func (s *Scheduler) SetNow(fn func() time.Time) { s.now = fn }
 
-// Run 启动两个独立 tick（设计 §5）：
-// - 改投 tick：每 6h（boot 后等 5min 首次执行）
-// - 领奖 tick：每 24h（UTC 00:30）
+// Run 启动改投 tick（D-293 S2：领奖删 24h 槽位，改搭车 60s 采集流→ClaimCheck）。
+// - 改投 tick：每 30min（boot 后等 5min 首次执行）—— S3 改 6h→30min
 func (s *Scheduler) Run(ctx context.Context) {
 	go s.rebalanceLoop(ctx)
-	go s.claimLoop(ctx)
 }
 
-// rebalanceLoop 每 6h 执行改投决策。
+// rebalanceLoop 每 30min 执行改投决策（D-293 S3：6h→30min）。
 func (s *Scheduler) rebalanceLoop(ctx context.Context) {
-	ticker := time.NewTicker(6 * time.Hour)
+	ticker := time.NewTicker(30 * time.Minute)
 	defer ticker.Stop()
 	time.Sleep(5 * time.Minute) // boot 后等 5min 首次执行
 	s.doRebalance(ctx)
@@ -87,36 +86,47 @@ func (s *Scheduler) rebalanceLoop(ctx context.Context) {
 	}
 }
 
-// claimLoop 每 24h 执行领奖（UTC 00:30）。
-func (s *Scheduler) claimLoop(ctx context.Context) {
-	ticker := time.NewTicker(24 * time.Hour)
-	defer ticker.Stop()
-	s.waitUntilNextClaimSlot(ctx)
-	if ctx.Err() != nil {
-		return // ctx 已取消（容器重启），勿执行 doClaim 避免虚假告警
+// ClaimCheck 领奖条件触发（D-293 S2：搭车 60s 采集流，删 24h 槽位）。
+// 三态：rewardSun ≤10e6 → 零 RPC 跳过；失败冷却 <15min → 跳过；否则带宽预检→ClaimReward。
+// 由 account_collector 每轮采到 rewardNumSun 后调用（hook recover 包裹防拖垮采集主循环）。
+func (s *Scheduler) ClaimCheck(ctx context.Context, rewardSun int64) {
+	// 1. 奖励不足 10 TRX → 零 RPC 跳过（每 60s 一次也无负担）
+	if rewardSun <= 10_000_000 {
+		log.Printf("[trxvote] claim check: reward=%d sun ≤10e6, skip (zero RPC)", rewardSun)
+		return
 	}
-	s.doClaim(ctx)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			s.doClaim(ctx)
-		}
+	// 2. 失败冷却：距上次 ClaimReward 失败 <15min → 跳过（防 60s 周期重复告警轰炸）
+	if !s.lastClaimFailAt.IsZero() && s.now().Sub(s.lastClaimFailAt) < 15*time.Minute {
+		log.Printf("[trxvote] claim check: cooling down (last fail %v ago), skip", s.now().Sub(s.lastClaimFailAt).Round(time.Second))
+		return
 	}
-}
-
-// waitUntilNextClaimSlot 等到下一个 UTC 00:30（设计 §5）。
-func (s *Scheduler) waitUntilNextClaimSlot(ctx context.Context) {
-	now := s.now().UTC()
-	next := time.Date(now.Year(), now.Month(), now.Day(), 0, 30, 0, 0, time.UTC)
-	if !next.After(now) {
-		next = next.Add(24 * time.Hour)
+	// 3. 带宽预检（领奖 ~250 BP）
+	ok, err := s.executor.HasBandwidth(ctx, BandwidthNeedClaimBP)
+	if err != nil {
+		log.Printf("[trxvote] claim bandwidth check: %v", err)
+		s.executor.Alert("warn", "[投票领奖带宽查询失败] "+err.Error())
+		s.lastClaimFailAt = s.now()
+		return
 	}
-	select {
-	case <-ctx.Done():
-	case <-time.After(next.Sub(now)):
+	if !ok {
+		log.Println("[trxvote] 带宽不足，跳过领奖（避免烧 TRX）")
+		s.executor.Alert("warn", "[投票领奖跳过] 带宽不足，等待恢复")
+		return
 	}
+	// 4. 执行领奖
+	txHash, amount, err := s.executor.ClaimReward(ctx)
+	if err != nil {
+		log.Printf("[trxvote] claim failed: %v", err)
+		s.executor.Alert("critical", "[投票领奖失败] "+err.Error())
+		s.lastClaimFailAt = s.now()
+		return
+	}
+	if txHash == "" {
+		log.Println("[trxvote] claim: reward dropped below threshold, skip")
+		return
+	}
+	log.Printf("[trxvote] claim success: tx=%s amount=%d sun (%.4f TRX)", txHash, amount, float64(amount)/1e6)
+	s.executor.Alert("warn", formatClaimAlert(txHash, amount))
 }
 
 // doRebalance 执行一轮改投决策（设计 §5 v1.1）。
@@ -207,36 +217,6 @@ func (s *Scheduler) doRebalance(ctx context.Context) {
 		log.Printf("[trxvote] update rebalance result: %v", err)
 	}
 	s.executor.Alert("warn", formatRebalanceAlert(txHash, decision))
-}
-
-// doClaim 执行一轮领奖（设计 §5）。
-// 带宽预检：领奖需要 ~250 BP，不足则跳过避免烧 TRX。
-// 奖励阈值：Executor.ClaimReward 内部已过滤 <10 TRX，此处只处理带宽。
-func (s *Scheduler) doClaim(ctx context.Context) {
-	// 带宽预检（领奖 ~250 BP）
-	ok, err := s.executor.HasBandwidth(ctx, BandwidthNeedClaimBP)
-	if err != nil {
-		log.Printf("[trxvote] claim bandwidth check: %v", err)
-		s.executor.Alert("warn", "[投票领奖带宽查询失败] "+err.Error())
-		return
-	}
-	if !ok {
-		log.Println("[trxvote] 带宽不足，跳过领奖（避免烧 TRX）")
-		s.executor.Alert("warn", "[投票领奖跳过] 带宽不足，等待恢复")
-		return
-	}
-
-	txHash, amount, err := s.executor.ClaimReward(ctx)
-	if err != nil {
-		log.Printf("[trxvote] claim failed: %v", err)
-		s.executor.Alert("critical", "[投票领奖失败] "+err.Error())
-		return
-	}
-	if txHash == "" {
-		log.Println("[trxvote] 奖励不足 10 TRX 或无奖励，跳过")
-		return
-	}
-	s.executor.Alert("warn", formatClaimAlert(txHash, amount))
 }
 
 // convertVotes 将 map[string]int64（gotron-sdk Votes，TRX 单位）转为 []VoteEntry。

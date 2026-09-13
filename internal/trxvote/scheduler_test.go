@@ -1,4 +1,5 @@
-// D-269 S4 测试：Scheduler doRebalance + doClaim（mock executor + fake store + mock account）。
+// D-269 S4 测试：Scheduler doRebalance + ClaimCheck（mock executor + fake store + mock account）。
+// D-293 S2：doClaim 测试适配为 ClaimCheck 路径（三态+冷却+hook panic）。
 package trxvote
 
 import (
@@ -8,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/fbsobreira/gotron-sdk/pkg/account"
@@ -54,13 +56,14 @@ func (m *mockAccountFetcher) GetAccountDetailedCtx(_ context.Context, _ string) 
 
 // mockExecutorConn 实现 TronClient（用于构造 Executor）。
 type testExecutorConn struct {
-	voteTxExt     *api.TransactionExtention
-	voteErr       error
-	reward        int64
-	rewardErr     error
-	withdrawTxExt *api.TransactionExtention
-	withdrawErr   error
-	broadcastErr  error
+	voteTxExt       *api.TransactionExtention
+	voteErr         error
+	reward          int64
+	rewardErr       error
+	withdrawTxExt   *api.TransactionExtention
+	withdrawErr     error
+	broadcastErr    error
+	broadcastCalled bool // D-293 S2：断言 ClaimCheck 零 RPC 路径未广播
 	// 带宽预检 mock（nil=返回充足带宽）
 	acctResource *api.AccountResourceMessage
 	acctResErr   error
@@ -76,6 +79,7 @@ func (m *testExecutorConn) GetRewardsInfoCtx(_ context.Context, _ string) (int64
 	return m.reward, m.rewardErr
 }
 func (m *testExecutorConn) BroadcastCtx(_ context.Context, _ *core.Transaction) (*api.Return, error) {
+	m.broadcastCalled = true
 	return &api.Return{}, m.broadcastErr
 }
 func (m *testExecutorConn) GetAccountResourceCtx(_ context.Context, _ string) (*api.AccountResourceMessage, error) {
@@ -184,36 +188,25 @@ func TestDoRebalance_AccountFail(t *testing.T) {
 	}
 }
 
-// TestDoClaim_ZeroReward reward=0 → 跳过。
-func TestDoClaim_ZeroReward(t *testing.T) {
+// TestClaimCheck_BelowThreshold rewardSun ≤10e6 → 零 RPC 跳过（无告警）。
+func TestClaimCheck_BelowThreshold(t *testing.T) {
 	conn := &testExecutorConn{reward: 0}
 	sched, exec := testScheduler(t, &fakeStore{}, &mockAccountFetcher{}, conn)
 	var alertCalled bool
 	exec.alertSink = func(level, msg string) {
 		alertCalled = true
 	}
-	sched.doClaim(context.Background())
+	sched.ClaimCheck(context.Background(), 5_000_000) // 5 TRX < 10 TRX 阈值
 	if alertCalled {
-		t.Error("should not alert when reward=0")
+		t.Error("should not alert when reward ≤10e6 (zero RPC skip)")
+	}
+	if conn.broadcastCalled {
+		t.Error("should not call broadcast when reward ≤10e6")
 	}
 }
 
-// TestDoClaim_BelowThreshold reward < 10 TRX → 跳过（节省带宽）。
-func TestDoClaim_BelowThreshold(t *testing.T) {
-	conn := &testExecutorConn{reward: 5_000_000} // 5 TRX < 10 TRX 阈值
-	sched, exec := testScheduler(t, &fakeStore{}, &mockAccountFetcher{}, conn)
-	var alertCalled bool
-	exec.alertSink = func(level, msg string) {
-		alertCalled = true
-	}
-	sched.doClaim(context.Background())
-	if alertCalled {
-		t.Error("should not alert when reward < 10 TRX threshold")
-	}
-}
-
-// TestDoClaim_BandwidthLow 带宽不足 → 跳过领奖。
-func TestDoClaim_BandwidthLow(t *testing.T) {
+// TestClaimCheck_BandwidthLow 带宽不足 → 跳过领奖 + warn 告警。
+func TestClaimCheck_BandwidthLow(t *testing.T) {
 	conn := &testExecutorConn{
 		reward: 20_000_000, // 20 TRX > 阈值，但带宽不足
 		acctResource: &api.AccountResourceMessage{
@@ -228,7 +221,7 @@ func TestDoClaim_BandwidthLow(t *testing.T) {
 	exec.alertSink = func(level, msg string) {
 		gotAlert = level + ":" + msg
 	}
-	sched.doClaim(context.Background())
+	sched.ClaimCheck(context.Background(), 20_000_000)
 	if gotAlert == "" {
 		t.Fatal("should alert when bandwidth insufficient")
 	}
@@ -237,8 +230,8 @@ func TestDoClaim_BandwidthLow(t *testing.T) {
 	}
 }
 
-// TestDoClaim_Normal 正常 → warn 告警（reward ≥ 10 TRX 阈值）。
-func TestDoClaim_Normal(t *testing.T) {
+// TestClaimCheck_Normal 正常 → warn 告警（reward > 10 TRX 阈值 + 带宽充足）。
+func TestClaimCheck_Normal(t *testing.T) {
 	txid := []byte{0xca, 0xfe, 0x12, 0x34}
 	conn := &testExecutorConn{
 		reward:        15_000_000, // 15 TRX > 10 TRX 阈值
@@ -249,7 +242,7 @@ func TestDoClaim_Normal(t *testing.T) {
 	exec.alertSink = func(level, msg string) {
 		gotAlert = level + ":" + msg
 	}
-	sched.doClaim(context.Background())
+	sched.ClaimCheck(context.Background(), 15_000_000)
 	if gotAlert == "" {
 		t.Fatal("should alert on successful claim")
 	}
@@ -258,20 +251,62 @@ func TestDoClaim_Normal(t *testing.T) {
 	}
 }
 
-// TestDoClaim_Failed 领奖失败 → critical 告警。
-func TestDoClaim_Failed(t *testing.T) {
+// TestClaimCheck_Failed 领奖失败 → critical 告警 + 设置失败冷却时间戳。
+func TestClaimCheck_Failed(t *testing.T) {
 	conn := &testExecutorConn{rewardErr: errors.New("query failed")}
 	sched, exec := testScheduler(t, &fakeStore{}, &mockAccountFetcher{}, conn)
 	var gotAlert string
 	exec.alertSink = func(level, msg string) {
 		gotAlert = level + ":" + msg
 	}
-	sched.doClaim(context.Background())
+	sched.ClaimCheck(context.Background(), 15_000_000) // >10e6 触发 ClaimReward
 	if gotAlert == "" {
 		t.Error("should alert on claim failure")
 	}
 	if len(gotAlert) < 8 || gotAlert[:8] != "critical" {
 		t.Errorf("alert level = %q, want critical", gotAlert)
+	}
+	if sched.lastClaimFailAt.IsZero() {
+		t.Error("lastClaimFailAt should be set on failure")
+	}
+}
+
+// TestClaimCheck_Cooldown 失败冷却 <15min → 跳过（无 RPC 无告警）。
+func TestClaimCheck_Cooldown(t *testing.T) {
+	conn := &testExecutorConn{reward: 15_000_000}
+	sched, exec := testScheduler(t, &fakeStore{}, &mockAccountFetcher{}, conn)
+	// 模拟 5 分钟前失败
+	sched.lastClaimFailAt = time.Now().Add(-5 * time.Minute)
+	var alertCalled bool
+	exec.alertSink = func(level, msg string) {
+		alertCalled = true
+	}
+	sched.ClaimCheck(context.Background(), 15_000_000) // >10e6 但在冷却期
+	if alertCalled {
+		t.Error("should not alert when cooling down (<15min since last fail)")
+	}
+	if conn.broadcastCalled {
+		t.Error("should not call broadcast when cooling down")
+	}
+}
+
+// TestClaimCheck_CooldownExpired 失败冷却 ≥15min → 放行执行。
+func TestClaimCheck_CooldownExpired(t *testing.T) {
+	txid := []byte{0xca, 0xfe, 0x12, 0x34}
+	conn := &testExecutorConn{
+		reward:        15_000_000,
+		withdrawTxExt: makeTxExt(txid),
+	}
+	sched, exec := testScheduler(t, &fakeStore{}, &mockAccountFetcher{}, conn)
+	// 模拟 16 分钟前失败（超过 15min 冷却）
+	sched.lastClaimFailAt = time.Now().Add(-16 * time.Minute)
+	var gotAlert string
+	exec.alertSink = func(level, msg string) {
+		gotAlert = level + ":" + msg
+	}
+	sched.ClaimCheck(context.Background(), 15_000_000)
+	if gotAlert == "" {
+		t.Fatal("should proceed when cooldown expired (≥15min)")
 	}
 }
 
