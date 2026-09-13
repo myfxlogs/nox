@@ -151,6 +151,11 @@ service DashboardService {
   rpc SettleRepoTrade(SettleRepoTradeRequest) returns (SettleRepoTradeResponse);
   rpc DeleteRepoTrade(DeleteRepoTradeRequest) returns (DeleteRepoTradeResponse);
   rpc GetRepoStrategyValidation(GetRepoStrategyValidationRequest) returns (GetRepoStrategyValidationResponse);
+  // D-292：价格提醒规则前端管理（CRUD；引擎 30s 重载自动生效，无通知机制）
+  rpc ListPriceAlertRules(ListPriceAlertRulesRequest) returns (ListPriceAlertRulesResponse);
+  rpc CreatePriceAlertRule(CreatePriceAlertRuleRequest) returns (CreatePriceAlertRuleResponse);
+  rpc UpdatePriceAlertRule(UpdatePriceAlertRuleRequest) returns (UpdatePriceAlertRuleResponse);
+  rpc DeletePriceAlertRule(DeletePriceAlertRuleRequest) returns (DeletePriceAlertRuleResponse);
 }
 
 // === Quote（§1.1）===
@@ -1803,4 +1808,64 @@ message GetRepoStrategyValidationResponse {
   // D-276 手续费聚合
   double total_fee_cny = 13;                   // 累计手续费（settled）
   double total_net_theoretical_return_cny = 14; // 累计净理论收益（毛理论−费用，settled）
+}
+
+// === D-292 价格提醒规则前端管理 ===
+
+// PriceAlertRuleRow 对应 price_alerts 表一行（管理面视图）。
+message PriceAlertRuleRow {
+  int64 id = 1;
+  string symbol = 2;        // 规范化大写，如 TRXUSDT
+  string op = 3;            // ">=" | "<="
+  double threshold = 4;
+  string level = 5;         // info|warn|critical
+  string message = 6;
+  bool enabled = 7;
+  string last_alert_at = 8; // RFC3339，空=从未触发
+  bool source_matched = 9;  // 后端填：symbol 是否在 QuoteBus 已订阅集合（防 typo 永不触发）
+}
+
+message ListPriceAlertRulesRequest {}
+
+message ListPriceAlertRulesResponse {
+  repeated PriceAlertRuleRow rules = 1;
+}
+
+message CreatePriceAlertRuleRequest {
+  string symbol = 1;
+  string op = 2;
+  double threshold = 3;
+  string level = 4;
+  string message = 5;
+}
+
+message CreatePriceAlertRuleResponse {
+  bool ok = 1;
+  string error = 2;          // 校验失败文案（前端原样展示）
+  PriceAlertRuleRow rule = 3; // 成功时回显新建行（含 id/source_matched）
+}
+
+message UpdatePriceAlertRuleRequest {
+  int64 id = 1;
+  string symbol = 2;
+  string op = 3;
+  double threshold = 4;
+  string level = 5;
+  string message = 6;
+  bool enabled = 7;
+}
+
+message UpdatePriceAlertRuleResponse {
+  bool ok = 1;
+  string error = 2;
+  PriceAlertRuleRow rule = 3; // 回显更新后行
+}
+
+message DeletePriceAlertRuleRequest {
+  int64 id = 1;
+}
+
+message DeletePriceAlertRuleResponse {
+  bool ok = 1;
+  string error = 2;
 }
