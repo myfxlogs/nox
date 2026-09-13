@@ -298,6 +298,18 @@ const (
 	// DashboardServiceGetRepoStrategyValidationProcedure is the fully-qualified name of the
 	// DashboardService's GetRepoStrategyValidation RPC.
 	DashboardServiceGetRepoStrategyValidationProcedure = "/arb.dashboard.v1.DashboardService/GetRepoStrategyValidation"
+	// DashboardServiceListPriceAlertRulesProcedure is the fully-qualified name of the
+	// DashboardService's ListPriceAlertRules RPC.
+	DashboardServiceListPriceAlertRulesProcedure = "/arb.dashboard.v1.DashboardService/ListPriceAlertRules"
+	// DashboardServiceCreatePriceAlertRuleProcedure is the fully-qualified name of the
+	// DashboardService's CreatePriceAlertRule RPC.
+	DashboardServiceCreatePriceAlertRuleProcedure = "/arb.dashboard.v1.DashboardService/CreatePriceAlertRule"
+	// DashboardServiceUpdatePriceAlertRuleProcedure is the fully-qualified name of the
+	// DashboardService's UpdatePriceAlertRule RPC.
+	DashboardServiceUpdatePriceAlertRuleProcedure = "/arb.dashboard.v1.DashboardService/UpdatePriceAlertRule"
+	// DashboardServiceDeletePriceAlertRuleProcedure is the fully-qualified name of the
+	// DashboardService's DeletePriceAlertRule RPC.
+	DashboardServiceDeletePriceAlertRuleProcedure = "/arb.dashboard.v1.DashboardService/DeletePriceAlertRule"
 )
 
 // DashboardServiceClient is a client for the arb.dashboard.v1.DashboardService service.
@@ -423,6 +435,11 @@ type DashboardServiceClient interface {
 	SettleRepoTrade(context.Context, *connect.Request[v1.SettleRepoTradeRequest]) (*connect.Response[v1.SettleRepoTradeResponse], error)
 	DeleteRepoTrade(context.Context, *connect.Request[v1.DeleteRepoTradeRequest]) (*connect.Response[v1.DeleteRepoTradeResponse], error)
 	GetRepoStrategyValidation(context.Context, *connect.Request[v1.GetRepoStrategyValidationRequest]) (*connect.Response[v1.GetRepoStrategyValidationResponse], error)
+	// D-292：价格提醒规则前端管理（CRUD；引擎 30s 重载自动生效，无通知机制）
+	ListPriceAlertRules(context.Context, *connect.Request[v1.ListPriceAlertRulesRequest]) (*connect.Response[v1.ListPriceAlertRulesResponse], error)
+	CreatePriceAlertRule(context.Context, *connect.Request[v1.CreatePriceAlertRuleRequest]) (*connect.Response[v1.CreatePriceAlertRuleResponse], error)
+	UpdatePriceAlertRule(context.Context, *connect.Request[v1.UpdatePriceAlertRuleRequest]) (*connect.Response[v1.UpdatePriceAlertRuleResponse], error)
+	DeletePriceAlertRule(context.Context, *connect.Request[v1.DeletePriceAlertRuleRequest]) (*connect.Response[v1.DeletePriceAlertRuleResponse], error)
 }
 
 // NewDashboardServiceClient constructs a client for the arb.dashboard.v1.DashboardService service.
@@ -970,6 +987,30 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("GetRepoStrategyValidation")),
 			connect.WithClientOptions(opts...),
 		),
+		listPriceAlertRules: connect.NewClient[v1.ListPriceAlertRulesRequest, v1.ListPriceAlertRulesResponse](
+			httpClient,
+			baseURL+DashboardServiceListPriceAlertRulesProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListPriceAlertRules")),
+			connect.WithClientOptions(opts...),
+		),
+		createPriceAlertRule: connect.NewClient[v1.CreatePriceAlertRuleRequest, v1.CreatePriceAlertRuleResponse](
+			httpClient,
+			baseURL+DashboardServiceCreatePriceAlertRuleProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("CreatePriceAlertRule")),
+			connect.WithClientOptions(opts...),
+		),
+		updatePriceAlertRule: connect.NewClient[v1.UpdatePriceAlertRuleRequest, v1.UpdatePriceAlertRuleResponse](
+			httpClient,
+			baseURL+DashboardServiceUpdatePriceAlertRuleProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("UpdatePriceAlertRule")),
+			connect.WithClientOptions(opts...),
+		),
+		deletePriceAlertRule: connect.NewClient[v1.DeletePriceAlertRuleRequest, v1.DeletePriceAlertRuleResponse](
+			httpClient,
+			baseURL+DashboardServiceDeletePriceAlertRuleProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("DeletePriceAlertRule")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1064,6 +1105,10 @@ type dashboardServiceClient struct {
 	settleRepoTrade           *connect.Client[v1.SettleRepoTradeRequest, v1.SettleRepoTradeResponse]
 	deleteRepoTrade           *connect.Client[v1.DeleteRepoTradeRequest, v1.DeleteRepoTradeResponse]
 	getRepoStrategyValidation *connect.Client[v1.GetRepoStrategyValidationRequest, v1.GetRepoStrategyValidationResponse]
+	listPriceAlertRules       *connect.Client[v1.ListPriceAlertRulesRequest, v1.ListPriceAlertRulesResponse]
+	createPriceAlertRule      *connect.Client[v1.CreatePriceAlertRuleRequest, v1.CreatePriceAlertRuleResponse]
+	updatePriceAlertRule      *connect.Client[v1.UpdatePriceAlertRuleRequest, v1.UpdatePriceAlertRuleResponse]
+	deletePriceAlertRule      *connect.Client[v1.DeletePriceAlertRuleRequest, v1.DeletePriceAlertRuleResponse]
 }
 
 // ListLatestQuotes calls arb.dashboard.v1.DashboardService.ListLatestQuotes.
@@ -1511,6 +1556,26 @@ func (c *dashboardServiceClient) GetRepoStrategyValidation(ctx context.Context, 
 	return c.getRepoStrategyValidation.CallUnary(ctx, req)
 }
 
+// ListPriceAlertRules calls arb.dashboard.v1.DashboardService.ListPriceAlertRules.
+func (c *dashboardServiceClient) ListPriceAlertRules(ctx context.Context, req *connect.Request[v1.ListPriceAlertRulesRequest]) (*connect.Response[v1.ListPriceAlertRulesResponse], error) {
+	return c.listPriceAlertRules.CallUnary(ctx, req)
+}
+
+// CreatePriceAlertRule calls arb.dashboard.v1.DashboardService.CreatePriceAlertRule.
+func (c *dashboardServiceClient) CreatePriceAlertRule(ctx context.Context, req *connect.Request[v1.CreatePriceAlertRuleRequest]) (*connect.Response[v1.CreatePriceAlertRuleResponse], error) {
+	return c.createPriceAlertRule.CallUnary(ctx, req)
+}
+
+// UpdatePriceAlertRule calls arb.dashboard.v1.DashboardService.UpdatePriceAlertRule.
+func (c *dashboardServiceClient) UpdatePriceAlertRule(ctx context.Context, req *connect.Request[v1.UpdatePriceAlertRuleRequest]) (*connect.Response[v1.UpdatePriceAlertRuleResponse], error) {
+	return c.updatePriceAlertRule.CallUnary(ctx, req)
+}
+
+// DeletePriceAlertRule calls arb.dashboard.v1.DashboardService.DeletePriceAlertRule.
+func (c *dashboardServiceClient) DeletePriceAlertRule(ctx context.Context, req *connect.Request[v1.DeletePriceAlertRuleRequest]) (*connect.Response[v1.DeletePriceAlertRuleResponse], error) {
+	return c.deletePriceAlertRule.CallUnary(ctx, req)
+}
+
 // DashboardServiceHandler is an implementation of the arb.dashboard.v1.DashboardService service.
 type DashboardServiceHandler interface {
 	// 快照类
@@ -1634,6 +1699,11 @@ type DashboardServiceHandler interface {
 	SettleRepoTrade(context.Context, *connect.Request[v1.SettleRepoTradeRequest]) (*connect.Response[v1.SettleRepoTradeResponse], error)
 	DeleteRepoTrade(context.Context, *connect.Request[v1.DeleteRepoTradeRequest]) (*connect.Response[v1.DeleteRepoTradeResponse], error)
 	GetRepoStrategyValidation(context.Context, *connect.Request[v1.GetRepoStrategyValidationRequest]) (*connect.Response[v1.GetRepoStrategyValidationResponse], error)
+	// D-292：价格提醒规则前端管理（CRUD；引擎 30s 重载自动生效，无通知机制）
+	ListPriceAlertRules(context.Context, *connect.Request[v1.ListPriceAlertRulesRequest]) (*connect.Response[v1.ListPriceAlertRulesResponse], error)
+	CreatePriceAlertRule(context.Context, *connect.Request[v1.CreatePriceAlertRuleRequest]) (*connect.Response[v1.CreatePriceAlertRuleResponse], error)
+	UpdatePriceAlertRule(context.Context, *connect.Request[v1.UpdatePriceAlertRuleRequest]) (*connect.Response[v1.UpdatePriceAlertRuleResponse], error)
+	DeletePriceAlertRule(context.Context, *connect.Request[v1.DeletePriceAlertRuleRequest]) (*connect.Response[v1.DeletePriceAlertRuleResponse], error)
 }
 
 // NewDashboardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -2177,6 +2247,30 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("GetRepoStrategyValidation")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceListPriceAlertRulesHandler := connect.NewUnaryHandler(
+		DashboardServiceListPriceAlertRulesProcedure,
+		svc.ListPriceAlertRules,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListPriceAlertRules")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceCreatePriceAlertRuleHandler := connect.NewUnaryHandler(
+		DashboardServiceCreatePriceAlertRuleProcedure,
+		svc.CreatePriceAlertRule,
+		connect.WithSchema(dashboardServiceMethods.ByName("CreatePriceAlertRule")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceUpdatePriceAlertRuleHandler := connect.NewUnaryHandler(
+		DashboardServiceUpdatePriceAlertRuleProcedure,
+		svc.UpdatePriceAlertRule,
+		connect.WithSchema(dashboardServiceMethods.ByName("UpdatePriceAlertRule")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceDeletePriceAlertRuleHandler := connect.NewUnaryHandler(
+		DashboardServiceDeletePriceAlertRuleProcedure,
+		svc.DeletePriceAlertRule,
+		connect.WithSchema(dashboardServiceMethods.ByName("DeletePriceAlertRule")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/arb.dashboard.v1.DashboardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DashboardServiceListLatestQuotesProcedure:
@@ -2357,6 +2451,14 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceDeleteRepoTradeHandler.ServeHTTP(w, r)
 		case DashboardServiceGetRepoStrategyValidationProcedure:
 			dashboardServiceGetRepoStrategyValidationHandler.ServeHTTP(w, r)
+		case DashboardServiceListPriceAlertRulesProcedure:
+			dashboardServiceListPriceAlertRulesHandler.ServeHTTP(w, r)
+		case DashboardServiceCreatePriceAlertRuleProcedure:
+			dashboardServiceCreatePriceAlertRuleHandler.ServeHTTP(w, r)
+		case DashboardServiceUpdatePriceAlertRuleProcedure:
+			dashboardServiceUpdatePriceAlertRuleHandler.ServeHTTP(w, r)
+		case DashboardServiceDeletePriceAlertRuleProcedure:
+			dashboardServiceDeletePriceAlertRuleHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -2720,4 +2822,20 @@ func (UnimplementedDashboardServiceHandler) DeleteRepoTrade(context.Context, *co
 
 func (UnimplementedDashboardServiceHandler) GetRepoStrategyValidation(context.Context, *connect.Request[v1.GetRepoStrategyValidationRequest]) (*connect.Response[v1.GetRepoStrategyValidationResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetRepoStrategyValidation is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListPriceAlertRules(context.Context, *connect.Request[v1.ListPriceAlertRulesRequest]) (*connect.Response[v1.ListPriceAlertRulesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListPriceAlertRules is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) CreatePriceAlertRule(context.Context, *connect.Request[v1.CreatePriceAlertRuleRequest]) (*connect.Response[v1.CreatePriceAlertRuleResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.CreatePriceAlertRule is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) UpdatePriceAlertRule(context.Context, *connect.Request[v1.UpdatePriceAlertRuleRequest]) (*connect.Response[v1.UpdatePriceAlertRuleResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.UpdatePriceAlertRule is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) DeletePriceAlertRule(context.Context, *connect.Request[v1.DeletePriceAlertRuleRequest]) (*connect.Response[v1.DeletePriceAlertRuleResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.DeletePriceAlertRule is not implemented"))
 }
