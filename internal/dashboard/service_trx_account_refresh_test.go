@@ -28,7 +28,8 @@ func TestD254_TrxAccountRefresh_DoubleKickAndReturn(t *testing.T) {
 		VotesTotal:      18070,
 		SRAddress:       &srAddr,
 		BalanceSun:      50_000_000, // 50 TRX
-		AllowanceSun:    1_500_000,  // 1.5 TRX
+		AllowanceSun:    1_500_000,  // 1.5 TRX（链上 allowance，已不用作待领取展示）
+		RewardNumSun:    1_500_000,  // 1.5 TRX（D-285 链上真值，待领取展示源）
 		EnergyDelegated: 8_000_000,  // 8 TRX
 		BandwidthStaked: 2_000_000,  // 2 TRX
 		NetLimit:        600_000,    // 600000 BP（链上 sun 原值）
@@ -68,7 +69,7 @@ func TestD254_TrxAccountRefresh_DoubleKickAndReturn(t *testing.T) {
 		t.Errorf("trx_balance = %v, want 50.0 (50e6 sun ÷ 1e6)", resp.Msg.TrxBalance)
 	}
 	if resp.Msg.TrxAllowance != 1.5 {
-		t.Errorf("trx_allowance = %v, want 1.5 (1.5e6 sun ÷ 1e6)", resp.Msg.TrxAllowance)
+		t.Errorf("trx_allowance = %v, want 1.5 (reward_num_sun 1.5e6 ÷ 1e6, D-285)", resp.Msg.TrxAllowance)
 	}
 	if resp.Msg.EnergyDelegated != 8.0 {
 		t.Errorf("energy_delegated = %v, want 8.0", resp.Msg.EnergyDelegated)

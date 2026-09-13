@@ -63,7 +63,7 @@ func (s *Service) TrxAccountRefresh(ctx context.Context, req *connect.Request[v1
 		Id:              acc.ID,
 		Address:         acc.Address,
 		TrxBalance:      float64(acc.BalanceSun) / 1e6,
-		TrxAllowance:    float64(acc.AllowanceSun) / 1e6,
+		TrxAllowance:    float64(acc.RewardNumSun) / 1e6, // D-285：reward_num_sun 链上真值（与 GetHedgeStructure 同源）
 		EnergyDelegated: float64(acc.EnergyDelegated) / 1e6,
 		BandwidthStaked: float64(acc.BandwidthStaked) / 1e6,
 		NetLimit:        float64(acc.NetLimit),
