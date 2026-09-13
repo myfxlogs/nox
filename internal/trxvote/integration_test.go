@@ -149,8 +149,10 @@ func TestIntegration_RebalanceExecute(t *testing.T) {
 	if store.updatedStatus != "executed" {
 		t.Errorf("updatedStatus = %q, want executed", store.updatedStatus)
 	}
-	if store.updatedTxHash != "deadbeef12345678" {
-		t.Errorf("updatedTxHash = %q, want deadbeef12345678", store.updatedTxHash)
+	// D-293 S1：返回重算 hash（变异后），非 txExt.GetTxid()（变异前 deadbeef12345678）
+	wantHash := recomputeHash(t, conn.voteTxExt.GetTransaction())
+	if store.updatedTxHash != wantHash {
+		t.Errorf("updatedTxHash = %q, want %q (recomputed)", store.updatedTxHash, wantHash)
 	}
 	// 验证告警
 	if gotAlert == "" {
