@@ -75,3 +75,55 @@ func TestAccountCollector_HookCalled(t *testing.T) {
 		t.Errorf("hook rewardNumSun = %d, want 15000000", gotReward)
 	}
 }
+
+// TestAccountCollector_TrionscanFailCarryPrevReward D-295 S1：tronscan 失败回退上一快照 rewardNum（禁写 0）。
+// 红绿锚：旧代码失败轮写 0 → 新代码回退上一快照 15000000。
+func TestAccountCollector_TrionscanFailCarryPrevReward(t *testing.T) {
+	st := newTestStore(t)
+	ok := true // server flag 控制 /api/account 首轮成功、次轮 500
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/wallet/getaccount":
+			_, _ = w.Write([]byte(mockGetAccountJSON))
+		case "/wallet/getaccountresource":
+			_, _ = w.Write([]byte(mockGetResourceJSON))
+		default:
+			// tronscan /api/account
+			if ok {
+				_, _ = w.Write([]byte(`{"rewardNum":15000000}`))
+				return
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"error":"tronscan down"}`))
+		}
+	}))
+	defer srv.Close()
+
+	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, "")
+
+	// 第一次 Poll：tronscan 成功，rewardNum=15000000。
+	if _, err := c.Poll(context.Background()); err != nil {
+		t.Fatalf("first Poll: %v", err)
+	}
+	last, err := st.LastTRXAccount(context.Background())
+	if err != nil {
+		t.Fatalf("LastTRXAccount after first Poll: %v", err)
+	}
+	if last.RewardNumSun != 15000000 {
+		t.Fatalf("first Poll RewardNumSun = %d, want 15000000", last.RewardNumSun)
+	}
+
+	// 第二次 Poll：tronscan 500，应回退上一快照 15000000（不是 0）。
+	ok = false
+	if _, err := c.Poll(context.Background()); err != nil {
+		t.Fatalf("second Poll: %v", err)
+	}
+	last, err = st.LastTRXAccount(context.Background())
+	if err != nil {
+		t.Fatalf("LastTRXAccount after second Poll: %v", err)
+	}
+	if last.RewardNumSun != 15000000 {
+		t.Errorf("second Poll RewardNumSun = %d, want 15000000 (carry prev, not 0)", last.RewardNumSun)
+	}
+}
