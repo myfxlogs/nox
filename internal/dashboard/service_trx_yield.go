@@ -97,7 +97,8 @@ func (s *Service) GetTrxYieldCurve(ctx context.Context, req *connect.Request[v1.
 	if trxAcc, err := s.store.LastTRXAccount(ctx); err == nil && currentPrice > 0 {
 		balance := float64(trxAcc.BalanceSun) / 1e6
 		staked := float64(trxAcc.TronPower) / 1e6
-		spotExposure := balance + staked + cumIncomeTRX // 含累积未对冲收益
+		spotExposure := balance + staked // D-295：禁加累计收入——claim 入 balance 后已被转出（DB 实证 balance=29.5 ≪ claims 1238），
+		// 加回=幽灵敞口，漂移虚高 ~1.3% 且随 claim 线性累积 ~2 个月后假穿 2% 告警线
 		if pos, err := s.store.LastCMCPositionByInstrument(ctx, trxShortInstrument); err == nil && pos.Quantity > 0 {
 			shortNotional := pos.Quantity
 			driftPct = math.Abs(spotExposure-shortNotional) / shortNotional * 100
