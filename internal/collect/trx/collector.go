@@ -44,8 +44,7 @@ type TxsCollector struct {
 }
 
 // NewTxsCollector 创建交易流采集器。rentalPayers 为付款方地址集（env 解析）。
-// floorPct=能量租金率 floor 告警阈值（0=禁用）。
-// tronscanBase 空=DefaultTronscanBase（D-296 S3：参数化，由 wire 层 resolveTronscanBase 传入）。
+// floorPct=能量租金率 floor 告警阈值（0=禁用）。tronscanBase 空=DefaultTronscanBase（D-296 S3 参数化）。
 func NewTxsCollector(address string, store *pgstore.Store, base, apiKey, tronscanBase string, rentalPayers []string, floorPct float64) *TxsCollector {
 	if base == "" {
 		base = DefaultBase
