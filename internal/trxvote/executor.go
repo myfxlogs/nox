@@ -5,6 +5,7 @@ package trxvote
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/fbsobreira/gotron-sdk/pkg/client/transaction"
 	"github.com/fbsobreira/gotron-sdk/pkg/proto/api"
 	"github.com/fbsobreira/gotron-sdk/pkg/proto/core"
+	"google.golang.org/protobuf/proto"
 )
 
 // BandwidthNeedVoteBP 改投所需带宽（BP）——D-269 预检+D-278 S5 资源显示同源引用（禁双写）。
@@ -79,12 +81,17 @@ func (e *Executor) Vote(ctx context.Context, target []VoteEntry) (string, error)
 		return "", fmt.Errorf("sign vote tx: %w", err)
 	}
 
-	// 3. 广播（v1.1 B3：Broadcast 返回 *api.Return 无 Txid，txHash 从 txExt.GetTxid() 取）
+	// 3. 广播（v1.1 B3：Broadcast 返回 *api.Return 无 Txid）
 	if _, err := e.conn.BroadcastCtx(ctx, signedTx); err != nil {
 		return "", fmt.Errorf("broadcast vote tx: %w", err)
 	}
 
-	return hex.EncodeToString(txExt.GetTxid()), nil
+	// D-293 F1：签名后本地重算 tx hash（PermissionId 变异在取 txid 前，txExt.GetTxid() 是变异前 hash）。
+	txHash, err := recomputeTxHash(signedTx)
+	if err != nil {
+		return "", fmt.Errorf("recompute vote txid: %w", err)
+	}
+	return txHash, nil
 }
 
 // ClaimReward 领取投票奖励（设计 §4.1）。
@@ -121,7 +128,12 @@ func (e *Executor) ClaimReward(ctx context.Context) (string, int64, error) {
 		return "", 0, fmt.Errorf("broadcast withdraw tx: %w", err)
 	}
 
-	return hex.EncodeToString(txExt.GetTxid()), reward, nil
+	// D-293 F1：签名后本地重算 tx hash（同 Vote 修复）。
+	txHash, err := recomputeTxHash(signedTx)
+	if err != nil {
+		return "", 0, fmt.Errorf("recompute withdraw txid: %w", err)
+	}
+	return txHash, reward, nil
 }
 
 // Alert 发送告警（封装 alertSink nil 安全）。
@@ -146,3 +158,15 @@ func (e *Executor) HasBandwidth(ctx context.Context, need int64) (bool, error) {
 
 // compile-time: *client.GrpcClient 实现 TronClient 接口。
 var _ TronClient = (*client.GrpcClient)(nil)
+
+// recomputeTxHash 签名后本地重算 tx hash（D-293 F1 根因修复）。
+// TRON txID = sha256(raw_data 序列化)；PermissionId 变异在签名前，变异后必须重算。
+// txExt.GetTxid() 返回的是变异前的 hash（节点构建时算好），广播后链上查无。
+func recomputeTxHash(signedTx *core.Transaction) (string, error) {
+	rawBytes, err := proto.Marshal(signedTx.GetRawData())
+	if err != nil {
+		return "", fmt.Errorf("marshal raw_data for txid: %w", err)
+	}
+	sum := sha256.Sum256(rawBytes)
+	return hex.EncodeToString(sum[:]), nil
+}

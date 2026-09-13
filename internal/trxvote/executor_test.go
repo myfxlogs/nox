@@ -1,14 +1,18 @@
 // D-269 S3 测试：Executor Vote + ClaimReward（mock TronClient）。
+// D-293 S1：tx hash 重算红绿锚（变异后重算 ≠ 原 txid，证明修复必要+正确）。
 package trxvote
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"testing"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/fbsobreira/gotron-sdk/pkg/proto/api"
 	"github.com/fbsobreira/gotron-sdk/pkg/proto/core"
+	"google.golang.org/protobuf/proto"
 )
 
 // mockTronClient 实现 TronClient 接口用于测试。
@@ -80,7 +84,7 @@ func makeTxExt(txidBytes []byte) *api.TransactionExtention {
 	}
 }
 
-// TestVote_Normal 正常流程 → 返回 txHash。
+// TestVote_Normal 正常流程 → 返回重算 txHash（D-293 F1：变异后重算，非 txExt.GetTxid()）。
 func TestVote_Normal(t *testing.T) {
 	txid := []byte{0xde, 0xad, 0xbe, 0xef, 0x12, 0x34, 0x56, 0x78}
 	mc := &mockTronClient{
@@ -92,8 +96,13 @@ func TestVote_Normal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Vote: %v", err)
 	}
-	if txHash != "deadbeef12345678" {
-		t.Errorf("txHash = %q, want deadbeef12345678", txHash)
+	// D-293 F1：返回的是重算 hash（变异后），非 txExt.GetTxid()（变异前）
+	want := recomputeHash(t, mc.voteTxExt.GetTransaction())
+	if txHash != want {
+		t.Errorf("txHash = %q, want recompute %q", txHash, want)
+	}
+	if txHash == "deadbeef12345678" {
+		t.Error("txHash == txExt.GetTxid()，变异后未重算——F1 bug 仍在")
 	}
 	if !mc.broadcastCalled {
 		t.Error("Broadcast not called")
@@ -168,7 +177,7 @@ func TestClaimReward_ZeroReward(t *testing.T) {
 	}
 }
 
-// TestClaimReward_Normal 正常流程 → 返回 txHash + amount（reward ≥ 10 TRX 阈值）。
+// TestClaimReward_Normal 正常流程 → 返回重算 txHash + amount（reward ≥ 10 TRX 阈值）。
 func TestClaimReward_Normal(t *testing.T) {
 	txid := []byte{0xca, 0xfe, 0x12, 0x34}
 	mc := &mockTronClient{
@@ -181,8 +190,13 @@ func TestClaimReward_Normal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ClaimReward: %v", err)
 	}
-	if txHash != "cafe1234" {
-		t.Errorf("txHash = %q, want cafe1234", txHash)
+	// D-293 F1：返回的是重算 hash（变异后），非 txExt.GetTxid()（变异前）
+	want := recomputeHash(t, mc.withdrawTxExt.GetTransaction())
+	if txHash != want {
+		t.Errorf("txHash = %q, want recompute %q", txHash, want)
+	}
+	if txHash == "cafe1234" {
+		t.Error("txHash == txExt.GetTxid()，变异后未重算——F1 bug 仍在")
 	}
 	if amount != 15_000_000 {
 		t.Errorf("amount = %d, want 15000000", amount)
@@ -259,5 +273,89 @@ func TestAlert_WithSink(t *testing.T) {
 	e.Alert("warn", "test")
 	if !called {
 		t.Error("alertSink not called")
+	}
+}
+
+// recomputeHash 重算 tx hash：sha256(proto.Marshal(raw))。
+func recomputeHash(t *testing.T, tx *core.Transaction) string {
+	t.Helper()
+	rawBytes, err := proto.Marshal(tx.GetRawData())
+	if err != nil {
+		t.Fatalf("proto.Marshal: %v", err)
+	}
+	sum := sha256.Sum256(rawBytes)
+	return hex.EncodeToString(sum[:])
+}
+
+// TestVote_TxHashRecomputedAfterMutation 红绿锚：变异 PermissionId 后返回的 hash
+// 必须 ≠ txExt.GetTxid()（变异前 hash），证明修复必要。
+// 修复前（返回 txExt.GetTxid()）→ 此测试 FAIL（hash == txid，未重算）。
+// 修复后（返回重算 hash）→ 此测试 PASS（hash ≠ txid，已重算）。
+func TestVote_TxHashRecomputedAfterMutation(t *testing.T) {
+	txid := []byte{0xde, 0xad, 0xbe, 0xef, 0x12, 0x34, 0x56, 0x78}
+	mc := &mockTronClient{voteTxExt: makeTxExt(txid)}
+	e := NewExecutor(mc, testPrivKey(t), "Tfrom", nil)
+
+	txHash, err := e.Vote(context.Background(), []VoteEntry{{SRAddress: "Tsr1", Votes: 5000}})
+	if err != nil {
+		t.Fatalf("Vote: %v", err)
+	}
+	origTxidHex := hex.EncodeToString(txid)
+	if txHash == origTxidHex {
+		t.Fatalf("txHash == txExt.GetTxid() (%q)，变异后未重算——F1 bug 仍在", txHash)
+	}
+	// 重算 hash 必须与独立重算结果一致（证明重算逻辑正确）
+	want := recomputeHash(t, mc.voteTxExt.GetTransaction())
+	if txHash != want {
+		t.Errorf("txHash = %q, want recompute %q", txHash, want)
+	}
+}
+
+// TestVote_PreMutationHashMatchesTxid 等式锚：变异前重算 hash == txExt.GetTxid()，
+// 证明重算逻辑与 TRON txid 计算一致（sha256(raw_data)）。
+// mock txid 必须构造为 sha256(raw_data) 才能验证等式。
+func TestVote_PreMutationHashMatchesTxid(t *testing.T) {
+	txExt := makeTxExt(nil) // txid 先空
+	// 构造 txid = sha256(raw_data)（TRON txid 计算法）
+	rawBytes, err := proto.Marshal(txExt.GetTransaction().GetRawData())
+	if err != nil {
+		t.Fatalf("proto.Marshal: %v", err)
+	}
+	sum := sha256.Sum256(rawBytes)
+	txExt.Txid = sum[:]
+	origTxidHex := hex.EncodeToString(sum[:])
+	// 变异前重算
+	preHash := recomputeHash(t, txExt.GetTransaction())
+	if preHash != origTxidHex {
+		t.Fatalf("变异前重算 hash %q != txExt.GetTxid() %q——重算逻辑与 TRON txid 不一致", preHash, origTxidHex)
+	}
+	// 变异后重算（证明修复必要）
+	txExt.GetTransaction().RawData.Contract[0].PermissionId = ArbPermissionId
+	postHash := recomputeHash(t, txExt.GetTransaction())
+	if postHash == origTxidHex {
+		t.Fatal("变异后重算 hash == 原 txid——变异未影响 hash，修复无意义")
+	}
+}
+
+// TestClaimReward_TxHashRecomputedAfterMutation 红绿锚：ClaimReward 同 Vote 修复。
+func TestClaimReward_TxHashRecomputedAfterMutation(t *testing.T) {
+	txid := []byte{0xca, 0xfe, 0x12, 0x34}
+	mc := &mockTronClient{
+		reward:        15_000_000,
+		withdrawTxExt: makeTxExt(txid),
+	}
+	e := NewExecutor(mc, testPrivKey(t), "Tfrom", nil)
+
+	txHash, _, err := e.ClaimReward(context.Background())
+	if err != nil {
+		t.Fatalf("ClaimReward: %v", err)
+	}
+	origTxidHex := hex.EncodeToString(txid)
+	if txHash == origTxidHex {
+		t.Fatalf("txHash == txExt.GetTxid() (%q)，变异后未重算——F1 bug 仍在", txHash)
+	}
+	want := recomputeHash(t, mc.withdrawTxExt.GetTransaction())
+	if txHash != want {
+		t.Errorf("txHash = %q, want recompute %q", txHash, want)
 	}
 }
