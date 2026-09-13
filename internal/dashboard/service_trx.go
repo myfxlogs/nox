@@ -11,7 +11,8 @@ import (
 
 // RollupTrxDailyIncome 日终 rollup（SSOT §5）：从 fin_trx_* 表汇总当日收入写入 position_daily_income(source='auto')。
 // 快照窗口=D 日 [00:00, 23:55]；23:55→00:00(D+1) 的增量归 D+1 日。
-// energy_trx = 当日 rental_income 之和（sun ÷ 1e6）；voting_trx = Σmax(0,Δallowance) 相邻快照正增量。
+// energy_trx = 当日 rental_income 之和（sun ÷ 1e6）；voting_trx = Σmax(0,Δreward_num) 相邻快照正增量（D-295：allowance 是 tx 物化值、claim 后长期归零，
+// 计量的是物化事件非当日应计；rewardNum 是链上应计真值，claim 归零被 max(0,·) 天然滤掉）。
 // price/pnl 快照复用手工语义（qbus TRXUSDT+陈旧守卫+空单浮亏）。
 func (s *Service) RollupTrxDailyIncome(ctx context.Context, day time.Time) error {
 	day = day.UTC().Truncate(24 * time.Hour)
@@ -23,14 +24,14 @@ func (s *Service) RollupTrxDailyIncome(ctx context.Context, day time.Time) error
 	}
 	energyTrx := float64(rentalSun) / 1e6
 
-	// voting_trx = Σmax(0, Δallowance) 相邻 5min 快照正增量（F2：剥离 claim 清零）
+	// voting_trx = Σmax(0, Δreward_num) 相邻 5min 快照正增量（F2：剥离 claim 清零；D-295：allowance→rewardNum）
 	accounts, err := s.store.ListTRXAccountByDay(ctx, day)
 	if err != nil {
 		return fmt.Errorf("rollup voting: %w", err)
 	}
 	var votingTrx float64
 	for i := 1; i < len(accounts); i++ {
-		delta := accounts[i].AllowanceSun - accounts[i-1].AllowanceSun
+		delta := accounts[i].RewardNumSun - accounts[i-1].RewardNumSun
 		if delta > 0 {
 			votingTrx += float64(delta) / 1e6
 		}
