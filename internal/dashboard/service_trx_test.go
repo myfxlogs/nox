@@ -28,18 +28,18 @@ func trxTestStore(t *testing.T) *pgstore.Store {
 	return s
 }
 
-// TestRollupTrxDailyIncome_F2VotingPositiveDelta F2 锚：voting=Σmax(0,Δallowance) 正增量。
-// 构造 3 条账户快照：allowance 100→150→120（正增量 50+0=50，claim 清零不累入）。
+// TestRollupTrxDailyIncome_F2VotingPositiveDelta F2 锚：voting=Σmax(0,Δreward_num) 正增量（D-295：allowance→rewardNum）。
+// 构造 3 条账户快照：rewardNum 100→150→120（正增量 50+0=50，claim 清零不累入），AllowanceSun=0 模拟现状。
 func TestRollupTrxDailyIncome_F2VotingPositiveDelta(t *testing.T) {
 	s := trxTestStore(t)
 	ctx := context.Background()
 	day := time.Date(2026, 9, 2, 0, 0, 0, 0, time.UTC)
 
-	// 3 条账户快照（allowance 100→150→120 sun）
-	for i, allowance := range []int64{100, 150, 120} {
+	// 3 条账户快照（rewardNum 100→150→120 sun，AllowanceSun=0 模拟 claim 后归零现状）
+	for i, rewardNum := range []int64{100, 150, 120} {
 		a := pgstore.TRXAccount{
 			Address:    "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555",
-			VotesTotal: 18070, BalanceSun: 97863827, AllowanceSun: allowance,
+			VotesTotal: 18070, BalanceSun: 97863827, AllowanceSun: 0, RewardNumSun: rewardNum,
 			EnergyDelegated: 17270000000, BandwidthStaked: 800000000,
 			FetchedAt: day.Add(time.Duration(i) * 5 * time.Minute),
 		}
