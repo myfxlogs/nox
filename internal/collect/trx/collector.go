@@ -45,9 +45,13 @@ type TxsCollector struct {
 
 // NewTxsCollector 创建交易流采集器。rentalPayers 为付款方地址集（env 解析）。
 // floorPct=能量租金率 floor 告警阈值（0=禁用）。
-func NewTxsCollector(address string, store *pgstore.Store, base, apiKey string, rentalPayers []string, floorPct float64) *TxsCollector {
+// tronscanBase 空=DefaultTronscanBase（D-296 S3：参数化，由 wire 层 resolveTronscanBase 传入）。
+func NewTxsCollector(address string, store *pgstore.Store, base, apiKey, tronscanBase string, rentalPayers []string, floorPct float64) *TxsCollector {
 	if base == "" {
 		base = DefaultBase
+	}
+	if tronscanBase == "" {
+		tronscanBase = DefaultTronscanBase
 	}
 	set := make(map[string]bool, len(rentalPayers))
 	for _, a := range rentalPayers {
@@ -55,7 +59,7 @@ func NewTxsCollector(address string, store *pgstore.Store, base, apiKey string, 
 			set[a] = true
 		}
 	}
-	return &TxsCollector{address: address, store: store, base: base, apiKey: apiKey, tronscanBase: DefaultTronscanBase, rentalPayers: set, floorPct: floorPct}
+	return &TxsCollector{address: address, store: store, base: base, apiKey: apiKey, tronscanBase: tronscanBase, rentalPayers: set, floorPct: floorPct}
 }
 
 // Kind 返回采集器标识。
