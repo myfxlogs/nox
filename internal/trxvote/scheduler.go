@@ -93,11 +93,9 @@ func (s *Scheduler) rebalanceLoop(ctx context.Context) {
 }
 
 // ClaimCheck 领奖条件触发（D-293 S2：搭车 60s 采集流，删 24h 槽位）。
-// 三态：rewardSun ≤10e6 → 零 RPC 跳过；失败/带宽不足冷却 <15min → 跳过；否则带宽预检→ClaimReward。
-// 由 account_collector 每轮采到 rewardNumSun 后调用（hook recover 包裹防拖垮采集主循环）。
+// 三态：reward≤10e6 零 RPC 跳过；失败/带宽不足冷却<15min 跳过；否则预检→ClaimReward。
 func (s *Scheduler) ClaimCheck(ctx context.Context, rewardSun int64) {
-	// 1. 奖励不足 10 TRX → 零 RPC 跳过（D-293 R1 P3-1：仅状态迁移时打日志，避免每 60s 刷屏）
-	if rewardSun <= 10_000_000 {
+	if rewardSun <= 10_000_000 { // 1. 奖励不足 10 TRX → 零 RPC 跳过（P3-1：状态迁移才打日志）
 		if s.aboveThreshold {
 			s.aboveThreshold = false
 			log.Printf("[trxvote] claim check: reward=%d sun ≤10e6, entered below-threshold (skip)", rewardSun)
