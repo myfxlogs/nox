@@ -406,20 +406,33 @@ func TestConvertVotes(t *testing.T) {
 	}
 }
 
-// TestFormatRebalanceAlert 告警格式。
+// TestFormatRebalanceAlert 告警格式（D-293 S4：含 SR 变化明细）。
 func TestFormatRebalanceAlert(t *testing.T) {
 	d := RebalanceDecision{
 		CurrentYield: 100.0,
 		TargetYield:  120.0,
 		Improvement:  20.0,
+		Target: []VoteEntry{
+			{SRAddress: "TNewSR12345678", Votes: 5000},
+		},
 	}
-	alert := formatRebalanceAlert("deadbeef1234567890abcdef", d)
+	currentVotes := []VoteEntry{
+		{SRAddress: "TOldSR87654321", Votes: 3000},
+	}
+	alert := formatRebalanceAlert("deadbeef1234567890abcdef", d, currentVotes)
 	if alert == "" {
 		t.Error("alert should not be empty")
 	}
 	// txHash 应截断到 16 位
 	if len(alert) < 16 {
 		t.Error("alert too short")
+	}
+	// D-293 S4：应含旧/新 SR 前 8 字符
+	if !strings.Contains(alert, "TOldSR87") {
+		t.Errorf("alert should contain old top SR prefix 'TOldSR87': %q", alert)
+	}
+	if !strings.Contains(alert, "TNewSR12") {
+		t.Errorf("alert should contain new top SR prefix 'TNewSR12': %q", alert)
 	}
 }
 

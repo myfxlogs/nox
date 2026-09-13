@@ -231,7 +231,10 @@ func (s *Scheduler) doRebalance(ctx context.Context) {
 	if err := s.store.UpdateTrxVoteRebalanceResult(ctx, id, txHash, "executed"); err != nil {
 		log.Printf("[trxvote] update rebalance result: %v", err)
 	}
-	s.executor.Alert("warn", formatRebalanceAlert(txHash, decision))
+	log.Printf("[trxvote] rebalance success: tx=%s yield %s→%s TRX/yr (+%s%%) SR %s→%s",
+		txHash, formatFloat(decision.CurrentYield), formatFloat(decision.TargetYield),
+		formatFloat(decision.Improvement), topSRPrefix(currentVotes), topSRPrefix(decision.Target))
+	s.executor.Alert("warn", formatRebalanceAlert(txHash, decision, currentVotes))
 }
 
 // convertVotes 将 map[string]int64（gotron-sdk Votes，TRX 单位）转为 []VoteEntry。
@@ -244,15 +247,35 @@ func convertVotes(votes map[string]int64) []VoteEntry {
 	return out
 }
 
-// formatRebalanceAlert 格式化改投告警（设计 §8）。
-func formatRebalanceAlert(txHash string, d RebalanceDecision) string {
+// formatRebalanceAlert 格式化改投告警（设计 §8，D-293 S4 加 SR 变化明细）。
+// 旧/新 top SR 地址各取前 8 字符，便于一眼看出改投方向。
+func formatRebalanceAlert(txHash string, d RebalanceDecision, currentVotes []VoteEntry) string {
 	short := txHash
 	if len(short) > 16 {
 		short = short[:16]
 	}
 	return "[投票改投] tx=" + short +
 		" yield " + formatFloat(d.CurrentYield) + "→" + formatFloat(d.TargetYield) +
-		" TRX/yr (+" + formatFloat(d.Improvement) + "%)"
+		" TRX/yr (+" + formatFloat(d.Improvement) + "%)" +
+		" SR " + topSRPrefix(currentVotes) + "→" + topSRPrefix(d.Target)
+}
+
+// topSRPrefix 取投票分布中票数最高的 SR 地址前 8 字符（无投票返回 "无"）。
+func topSRPrefix(votes []VoteEntry) string {
+	if len(votes) == 0 {
+		return "无"
+	}
+	top := votes[0]
+	for _, v := range votes[1:] {
+		if v.Votes > top.Votes {
+			top = v
+		}
+	}
+	addr := top.SRAddress
+	if len(addr) > 8 {
+		addr = addr[:8]
+	}
+	return addr
 }
 
 // formatClaimAlert 格式化领奖告警（设计 §8）。
@@ -264,7 +287,7 @@ func formatClaimAlert(txHash string, amount int64) string {
 	return "[投票领奖] tx=" + short + " amount=" + formatFloat(float64(amount)) + " TRX"
 }
 
-// formatFloat 格式化浮点数（2 位小数）。
+// formatFloat 格式化浮点数（4 位小数，D-293 S4：原 2 位→4 位精确化）。
 func formatFloat(f float64) string {
-	return fmt.Sprintf("%.2f", f)
+	return fmt.Sprintf("%.4f", f)
 }
