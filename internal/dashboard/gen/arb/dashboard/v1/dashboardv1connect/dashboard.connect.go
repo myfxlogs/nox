@@ -137,9 +137,6 @@ const (
 	// DashboardServiceListHedgeFlowProcedure is the fully-qualified name of the DashboardService's
 	// ListHedgeFlow RPC.
 	DashboardServiceListHedgeFlowProcedure = "/arb.dashboard.v1.DashboardService/ListHedgeFlow"
-	// DashboardServiceTrxVoteAprRefreshProcedure is the fully-qualified name of the DashboardService's
-	// TrxVoteAprRefresh RPC.
-	DashboardServiceTrxVoteAprRefreshProcedure = "/arb.dashboard.v1.DashboardService/TrxVoteAprRefresh"
 	// DashboardServiceTrxAccountRefreshProcedure is the fully-qualified name of the DashboardService's
 	// TrxAccountRefresh RPC.
 	DashboardServiceTrxAccountRefreshProcedure = "/arb.dashboard.v1.DashboardService/TrxAccountRefresh"
@@ -363,7 +360,6 @@ type DashboardServiceClient interface {
 	ListPersonalPositions(context.Context, *connect.Request[v1.ListPersonalPositionsRequest]) (*connect.Response[v1.ListPersonalPositionsResponse], error)
 	GetHedgeStructure(context.Context, *connect.Request[v1.GetHedgeStructureRequest]) (*connect.Response[v1.GetHedgeStructureResponse], error)
 	ListHedgeFlow(context.Context, *connect.Request[v1.ListHedgeFlowRequest]) (*connect.Response[v1.ListHedgeFlowResponse], error)
-	TrxVoteAprRefresh(context.Context, *connect.Request[v1.TrxVoteAprRefreshRequest]) (*connect.Response[v1.TrxVoteAprRefreshResponse], error)
 	TrxAccountRefresh(context.Context, *connect.Request[v1.TrxAccountRefreshRequest]) (*connect.Response[v1.TrxAccountRefreshResponse], error)
 	GetTrxYieldRadar(context.Context, *connect.Request[v1.GetTrxYieldRadarRequest]) (*connect.Response[v1.GetTrxYieldRadarResponse], error)
 	GetTrxYieldCurve(context.Context, *connect.Request[v1.GetTrxYieldCurveRequest]) (*connect.Response[v1.GetTrxYieldCurveResponse], error)
@@ -661,12 +657,6 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			httpClient,
 			baseURL+DashboardServiceListHedgeFlowProcedure,
 			connect.WithSchema(dashboardServiceMethods.ByName("ListHedgeFlow")),
-			connect.WithClientOptions(opts...),
-		),
-		trxVoteAprRefresh: connect.NewClient[v1.TrxVoteAprRefreshRequest, v1.TrxVoteAprRefreshResponse](
-			httpClient,
-			baseURL+DashboardServiceTrxVoteAprRefreshProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("TrxVoteAprRefresh")),
 			connect.WithClientOptions(opts...),
 		),
 		trxAccountRefresh: connect.NewClient[v1.TrxAccountRefreshRequest, v1.TrxAccountRefreshResponse](
@@ -1051,7 +1041,6 @@ type dashboardServiceClient struct {
 	listPersonalPositions     *connect.Client[v1.ListPersonalPositionsRequest, v1.ListPersonalPositionsResponse]
 	getHedgeStructure         *connect.Client[v1.GetHedgeStructureRequest, v1.GetHedgeStructureResponse]
 	listHedgeFlow             *connect.Client[v1.ListHedgeFlowRequest, v1.ListHedgeFlowResponse]
-	trxVoteAprRefresh         *connect.Client[v1.TrxVoteAprRefreshRequest, v1.TrxVoteAprRefreshResponse]
 	trxAccountRefresh         *connect.Client[v1.TrxAccountRefreshRequest, v1.TrxAccountRefreshResponse]
 	getTrxYieldRadar          *connect.Client[v1.GetTrxYieldRadarRequest, v1.GetTrxYieldRadarResponse]
 	getTrxYieldCurve          *connect.Client[v1.GetTrxYieldCurveRequest, v1.GetTrxYieldCurveResponse]
@@ -1284,11 +1273,6 @@ func (c *dashboardServiceClient) GetHedgeStructure(ctx context.Context, req *con
 // ListHedgeFlow calls arb.dashboard.v1.DashboardService.ListHedgeFlow.
 func (c *dashboardServiceClient) ListHedgeFlow(ctx context.Context, req *connect.Request[v1.ListHedgeFlowRequest]) (*connect.Response[v1.ListHedgeFlowResponse], error) {
 	return c.listHedgeFlow.CallUnary(ctx, req)
-}
-
-// TrxVoteAprRefresh calls arb.dashboard.v1.DashboardService.TrxVoteAprRefresh.
-func (c *dashboardServiceClient) TrxVoteAprRefresh(ctx context.Context, req *connect.Request[v1.TrxVoteAprRefreshRequest]) (*connect.Response[v1.TrxVoteAprRefreshResponse], error) {
-	return c.trxVoteAprRefresh.CallUnary(ctx, req)
 }
 
 // TrxAccountRefresh calls arb.dashboard.v1.DashboardService.TrxAccountRefresh.
@@ -1627,7 +1611,6 @@ type DashboardServiceHandler interface {
 	ListPersonalPositions(context.Context, *connect.Request[v1.ListPersonalPositionsRequest]) (*connect.Response[v1.ListPersonalPositionsResponse], error)
 	GetHedgeStructure(context.Context, *connect.Request[v1.GetHedgeStructureRequest]) (*connect.Response[v1.GetHedgeStructureResponse], error)
 	ListHedgeFlow(context.Context, *connect.Request[v1.ListHedgeFlowRequest]) (*connect.Response[v1.ListHedgeFlowResponse], error)
-	TrxVoteAprRefresh(context.Context, *connect.Request[v1.TrxVoteAprRefreshRequest]) (*connect.Response[v1.TrxVoteAprRefreshResponse], error)
 	TrxAccountRefresh(context.Context, *connect.Request[v1.TrxAccountRefreshRequest]) (*connect.Response[v1.TrxAccountRefreshResponse], error)
 	GetTrxYieldRadar(context.Context, *connect.Request[v1.GetTrxYieldRadarRequest]) (*connect.Response[v1.GetTrxYieldRadarResponse], error)
 	GetTrxYieldCurve(context.Context, *connect.Request[v1.GetTrxYieldCurveRequest]) (*connect.Response[v1.GetTrxYieldCurveResponse], error)
@@ -1921,12 +1904,6 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		DashboardServiceListHedgeFlowProcedure,
 		svc.ListHedgeFlow,
 		connect.WithSchema(dashboardServiceMethods.ByName("ListHedgeFlow")),
-		connect.WithHandlerOptions(opts...),
-	)
-	dashboardServiceTrxVoteAprRefreshHandler := connect.NewUnaryHandler(
-		DashboardServiceTrxVoteAprRefreshProcedure,
-		svc.TrxVoteAprRefresh,
-		connect.WithSchema(dashboardServiceMethods.ByName("TrxVoteAprRefresh")),
 		connect.WithHandlerOptions(opts...),
 	)
 	dashboardServiceTrxAccountRefreshHandler := connect.NewUnaryHandler(
@@ -2343,8 +2320,6 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceGetHedgeStructureHandler.ServeHTTP(w, r)
 		case DashboardServiceListHedgeFlowProcedure:
 			dashboardServiceListHedgeFlowHandler.ServeHTTP(w, r)
-		case DashboardServiceTrxVoteAprRefreshProcedure:
-			dashboardServiceTrxVoteAprRefreshHandler.ServeHTTP(w, r)
 		case DashboardServiceTrxAccountRefreshProcedure:
 			dashboardServiceTrxAccountRefreshHandler.ServeHTTP(w, r)
 		case DashboardServiceGetTrxYieldRadarProcedure:
@@ -2606,10 +2581,6 @@ func (UnimplementedDashboardServiceHandler) GetHedgeStructure(context.Context, *
 
 func (UnimplementedDashboardServiceHandler) ListHedgeFlow(context.Context, *connect.Request[v1.ListHedgeFlowRequest]) (*connect.Response[v1.ListHedgeFlowResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListHedgeFlow is not implemented"))
-}
-
-func (UnimplementedDashboardServiceHandler) TrxVoteAprRefresh(context.Context, *connect.Request[v1.TrxVoteAprRefreshRequest]) (*connect.Response[v1.TrxVoteAprRefreshResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.TrxVoteAprRefresh is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) TrxAccountRefresh(context.Context, *connect.Request[v1.TrxAccountRefreshRequest]) (*connect.Response[v1.TrxAccountRefreshResponse], error) {
