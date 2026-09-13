@@ -1540,7 +1540,7 @@ message TrxAccountRefreshResponse {
   string address = 2;              // 钱包地址
   string sr_address = 3;           // 投票 SR 地址（nil=空字符串）
   double trx_balance = 4;          // balance_sun ÷ 1e6（TRX）
-  double trx_allowance = 5;        // allowance_sun ÷ 1e6（TRX）
+  double trx_allowance = 5;        // reward_num_sun ÷ 1e6（D-285 链上真值，与 GetHedgeStructure.hedge_accounts.trx_allowance 同源）
   double energy_delegated = 6;     // energy_delegated ÷ 1e6（TRX）
   double bandwidth_staked = 7;     // bandwidth_staked ÷ 1e6（TRX）
   double net_limit = 8;            // 带宽上限（BP，链上原值透传）
