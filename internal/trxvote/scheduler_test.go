@@ -282,7 +282,8 @@ func TestClaimCheck_BelowThreshold(t *testing.T) {
 	}
 }
 
-// TestClaimCheck_BandwidthLow 带宽不足 → 跳过领奖 + warn 告警。
+// TestClaimCheck_BandwidthLow 带宽不足 → 跳过领奖 + warn 告警 + 设冷却。
+// D-293 R1 P2-1：连调两次，第二次不告警（冷却内），防每 60s 告警轰炸。
 func TestClaimCheck_BandwidthLow(t *testing.T) {
 	conn := &testExecutorConn{
 		reward: 20_000_000, // 20 TRX > 阈值，但带宽不足
@@ -294,16 +295,22 @@ func TestClaimCheck_BandwidthLow(t *testing.T) {
 		},
 	}
 	sched, exec := testScheduler(t, &fakeStore{}, &mockAccountFetcher{}, conn)
-	var gotAlert string
+	alertCount := 0
 	exec.alertSink = func(level, msg string) {
-		gotAlert = level + ":" + msg
+		alertCount++
 	}
+	// 第一次调用：带宽不足 → 告警 + 设冷却
 	sched.ClaimCheck(context.Background(), 20_000_000)
-	if gotAlert == "" {
-		t.Fatal("should alert when bandwidth insufficient")
+	if alertCount != 1 {
+		t.Fatalf("first call: alertCount = %d, want 1 (bandwidth insufficient alert)", alertCount)
 	}
-	if !strings.Contains(gotAlert, "带宽不足") {
-		t.Errorf("alert should mention 带宽不足: %q", gotAlert)
+	// 第二次调用：冷却内 → 不告警（防轰炸）
+	sched.ClaimCheck(context.Background(), 20_000_000)
+	if alertCount != 1 {
+		t.Errorf("second call: alertCount = %d, want 1 (cooldown suppresses alert)", alertCount)
+	}
+	if sched.lastClaimFailAt.IsZero() {
+		t.Error("lastClaimFailAt should be set on bandwidth insufficient (P2-1 cooldown)")
 	}
 }
 

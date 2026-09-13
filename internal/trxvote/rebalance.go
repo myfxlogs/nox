@@ -68,7 +68,7 @@ func DefaultConfig() RebalanceConfig {
 		BetterOppPct:       0.0,
 		MaxRebalancePerDay: 1,
 		TickInterval:       30 * time.Minute, // D-293 S3：6h→30min
-		MinInterval:        2 * time.Hour,    // D-293 S3：防抖 2h（env TRX_VOTE_MIN_INTERVAL_MINUTES 可调）
+		MinInterval:        2 * time.Hour,    // D-293 S3：防抖 2h（env ARB_TRX_VOTE_MIN_INTERVAL_MINUTES 可调）
 	}
 }
 

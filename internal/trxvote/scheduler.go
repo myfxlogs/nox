@@ -27,7 +27,8 @@ type Scheduler struct {
 	config          RebalanceConfig
 	account         AccountFetcher // 获取当前投票+总 TP
 	now             func() time.Time
-	lastClaimFailAt time.Time // D-293 S2：领奖失败冷却（15min，防 60s 周期重复告警轰炸）
+	lastClaimFailAt time.Time // D-293 S2：领奖阻塞冷却（失败/带宽不足共用，15min，防 60s 周期重复告警轰炸）
+	aboveThreshold  bool      // D-293 R1 P3-1：reward 是否在 >10e6 区间（状态迁移才打日志，避免每 60s 刷屏）
 }
 
 // Store 是 Scheduler 依赖的存储接口（解耦 pgstore.Store 供测试注入）。
@@ -92,17 +93,24 @@ func (s *Scheduler) rebalanceLoop(ctx context.Context) {
 }
 
 // ClaimCheck 领奖条件触发（D-293 S2：搭车 60s 采集流，删 24h 槽位）。
-// 三态：rewardSun ≤10e6 → 零 RPC 跳过；失败冷却 <15min → 跳过；否则带宽预检→ClaimReward。
+// 三态：rewardSun ≤10e6 → 零 RPC 跳过；失败/带宽不足冷却 <15min → 跳过；否则带宽预检→ClaimReward。
 // 由 account_collector 每轮采到 rewardNumSun 后调用（hook recover 包裹防拖垮采集主循环）。
 func (s *Scheduler) ClaimCheck(ctx context.Context, rewardSun int64) {
-	// 1. 奖励不足 10 TRX → 零 RPC 跳过（每 60s 一次也无负担）
+	// 1. 奖励不足 10 TRX → 零 RPC 跳过（D-293 R1 P3-1：仅状态迁移时打日志，避免每 60s 刷屏）
 	if rewardSun <= 10_000_000 {
-		log.Printf("[trxvote] claim check: reward=%d sun ≤10e6, skip (zero RPC)", rewardSun)
+		if s.aboveThreshold {
+			s.aboveThreshold = false
+			log.Printf("[trxvote] claim check: reward=%d sun ≤10e6, entered below-threshold (skip)", rewardSun)
+		}
 		return
 	}
-	// 2. 失败冷却：距上次 ClaimReward 失败 <15min → 跳过（防 60s 周期重复告警轰炸）
+	if !s.aboveThreshold {
+		s.aboveThreshold = true
+		log.Printf("[trxvote] claim check: reward=%d sun >10e6, entered above-threshold", rewardSun)
+	}
+	// 2. 冷却：距上次领奖阻塞（失败/带宽不足）<15min → 跳过（防 60s 周期重复告警轰炸）
 	if !s.lastClaimFailAt.IsZero() && s.now().Sub(s.lastClaimFailAt) < 15*time.Minute {
-		log.Printf("[trxvote] claim check: cooling down (last fail %v ago), skip", s.now().Sub(s.lastClaimFailAt).Round(time.Second))
+		log.Printf("[trxvote] claim check: cooling down (last block %v ago), skip", s.now().Sub(s.lastClaimFailAt).Round(time.Second))
 		return
 	}
 	// 3. 带宽预检（领奖 ~250 BP）
@@ -116,6 +124,7 @@ func (s *Scheduler) ClaimCheck(ctx context.Context, rewardSun int64) {
 	if !ok {
 		log.Println("[trxvote] 带宽不足，跳过领奖（避免烧 TRX）")
 		s.executor.Alert("warn", "[投票领奖跳过] 带宽不足，等待恢复")
+		s.lastClaimFailAt = s.now() // D-293 R1 P2-1：带宽不足同样设冷却，防每 60s 告警轰炸
 		return
 	}
 	// 4. 执行领奖
