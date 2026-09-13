@@ -20,6 +20,9 @@ type AccountCollector struct {
 	onChange                            func() // D-231 S5：指纹变化回调（nil=未接线）
 	lastFingerprint                     string
 	firstPoll                           bool // D-231 S5：首轮不触发（指纹未知）
+	// D-293 S2：领奖条件触发 hook——每轮采到 rewardNumSun 后调用（nil=未接线）。
+	// hook panic 由调用方 recover 包裹，不得拖垮采集主循环。
+	onAccountFetched func(ctx context.Context, rewardNumSun int64)
 }
 
 // NewAccountCollector 创建账户快照采集器。address 为 base58 监控地址。
@@ -35,6 +38,12 @@ func NewAccountCollector(address string, store *pgstore.Store, base, tronscanBas
 
 // SetOnChange D-231 S5：注入指纹变化回调。
 func (c *AccountCollector) SetOnChange(fn func()) { c.onChange = fn }
+
+// SetOnAccountFetched D-293 S2：注入领奖条件触发 hook。
+// 每轮采到 rewardNumSun 成功落库后调用（recover 包裹防拖垮采集主循环）。
+func (c *AccountCollector) SetOnAccountFetched(fn func(ctx context.Context, rewardNumSun int64)) {
+	c.onAccountFetched = fn
+}
 
 // Kind 返回采集器标识。
 func (c *AccountCollector) Kind() string { return "trx_account" }
@@ -124,6 +133,18 @@ func (c *AccountCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	}
 	if err := c.store.InsertTRXAccount(ctx, rec); err != nil {
 		return nil, fmt.Errorf("trx account insert: %w", err)
+	}
+	// D-293 S2：领奖条件触发 hook——采到 rewardNumSun 后通知 scheduler.ClaimCheck。
+	// recover 包裹：hook panic 不得拖垮采集主循环。
+	if c.onAccountFetched != nil {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[trx_account] onAccountFetched hook panic: %v", r)
+				}
+			}()
+			c.onAccountFetched(ctx, rewardNum)
+		}()
 	}
 	// D-231 S5：指纹变化 → onChange（首轮不触发）。
 	// D-233 R5：allowance 入指纹——奖励结算步进即触发对冲卡刷新。

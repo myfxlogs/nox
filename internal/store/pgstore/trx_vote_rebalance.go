@@ -87,3 +87,16 @@ func (s *Store) GetLastTrxVoteRebalance(ctx context.Context) (*TRXVoteRebalance,
 	r.FailReason = failReason
 	return &r, nil
 }
+
+// LastExecutedRebalanceAt D-293 S3：查最近一次 status='executed' 的 decided_at（防抖用）。
+// 无记录或查询失败 → 返回 zero time（不阻塞决策，保守放行）。
+func (s *Store) LastExecutedRebalanceAt(ctx context.Context) (time.Time, error) {
+	var decidedAt time.Time
+	err := s.pool.QueryRow(ctx,
+		`SELECT decided_at FROM fin_trx_vote_rebalance
+		 WHERE status = 'executed' ORDER BY decided_at DESC LIMIT 1`).Scan(&decidedAt)
+	if err != nil {
+		return time.Time{}, err // 调用方判断 pgx.ErrNoRows → zero time
+	}
+	return decidedAt, nil
+}
