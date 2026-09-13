@@ -126,6 +126,7 @@ func (h *FeishuQueryHandler) HandleReply(ctx context.Context, ev ReplyEvent) (st
 }
 
 // resolveClient 读 ai_settings（DB 优先→env 回落）构造临时 analyst.Client。
+// base_url 语义：根 URL，不含 /v1/messages（analyst.Client 内部自动拼接 /v1/messages）。
 func (h *FeishuQueryHandler) resolveClient(ctx context.Context) (*analyst.Client, error) {
 	baseURL := h.envBaseURL
 	model := h.envModel
