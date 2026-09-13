@@ -1,5 +1,6 @@
 -- 0042_ai_settings.sql - AI 分析员配置单行表（D-091 返修② R3）
 -- 前端可配勿硬编码：base_url/model/api_key/enabled 存 DB，AskAnalyst 每问读库（改完即生效免重启）。
+-- base_url 语义：根 URL，不含 /v1/messages（analyst client 自动拼接 /v1/messages）。
 -- 单行约束：id=1 CHECK，UPSERT 语义。
 -- api_key 仅存 DB 不打日志；Get 响应掩码返回尾 4 位。
 
