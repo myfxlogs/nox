@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/fbsobreira/gotron-sdk/pkg/account"
@@ -21,6 +22,8 @@ type integrationStore struct {
 	updatedID       int64
 	updatedTxHash   string
 	updatedStatus   string
+	// D-293 S3：防抖查询 mock
+	lastExecutedAt time.Time
 }
 
 func (s *integrationStore) InsertTrxVoteRebalance(_ context.Context, rec TRXVoteRebalanceRecord) (int64, error) {
@@ -36,6 +39,9 @@ func (s *integrationStore) UpdateTrxVoteRebalanceResult(_ context.Context, id in
 }
 func (s *integrationStore) TrxVoteRebalancedToday(_ context.Context, _ int) bool {
 	return s.rebalancedToday
+}
+func (s *integrationStore) LastExecutedRebalanceAt(_ context.Context) (time.Time, error) {
+	return s.lastExecutedAt, nil
 }
 
 // integrationConn 是集成测试用的 mock TronClient。

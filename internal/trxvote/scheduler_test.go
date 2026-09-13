@@ -27,6 +27,9 @@ type fakeStore struct {
 	updateStatus      string
 	updateErr         error
 	rebalancedToday   bool
+	// D-293 S3：防抖查询 mock
+	lastExecutedAt  time.Time
+	lastExecutedErr error
 }
 
 func (f *fakeStore) InsertTrxVoteRebalance(_ context.Context, rec TRXVoteRebalanceRecord) (int64, error) {
@@ -42,6 +45,9 @@ func (f *fakeStore) UpdateTrxVoteRebalanceResult(_ context.Context, id int64, tx
 }
 func (f *fakeStore) TrxVoteRebalancedToday(_ context.Context, _ int) bool {
 	return f.rebalancedToday
+}
+func (f *fakeStore) LastExecutedRebalanceAt(_ context.Context) (time.Time, error) {
+	return f.lastExecutedAt, f.lastExecutedErr
 }
 
 // mockAccountFetcher 实现 AccountFetcher 接口。
@@ -185,6 +191,77 @@ func TestDoRebalance_AccountFail(t *testing.T) {
 	// 不落库（account 失败在落库之前 return）
 	if store.insertedRebalance != nil {
 		t.Error("should not insert on account query failure")
+	}
+}
+
+// TestDoRebalance_MinIntervalSkip D-293 S3：距上次 executed < MinInterval → 跳过（不落库）。
+func TestDoRebalance_MinIntervalSkip(t *testing.T) {
+	store := &fakeStore{
+		rebalancedToday: false,
+		lastExecutedAt:  time.Now().Add(-30 * time.Minute), // 30min 前 executed
+	}
+	sched, _ := testScheduler(t, store, &mockAccountFetcher{}, &testExecutorConn{})
+	sched.config.MinInterval = 2 * time.Hour // MinInterval=2h
+	sched.doRebalance(context.Background())
+	if store.insertedRebalance != nil {
+		t.Error("should not insert when last executed < MinInterval (debounce)")
+	}
+}
+
+// TestDoRebalance_MinIntervalExpired D-293 S3：距上次 executed ≥ MinInterval → 放行（落库）。
+func TestDoRebalance_MinIntervalExpired(t *testing.T) {
+	// 需要 httptest mock SR list 成功才能走到落库
+	srFixture := `[{"address":"SR1","name":"SR1","annualizedRate":"5.0","brokerage":0,"realTimeVotes":100000,"votes":100000,"producer":true,"producedTotal":100}]`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(srFixture))
+	}))
+	defer srv.Close()
+	SetHTTPClient(srv.Client())
+	defer SetHTTPClient(&http.Client{})
+
+	store := &fakeStore{
+		rebalancedToday: false,
+		lastExecutedAt:  time.Now().Add(-3 * time.Hour), // 3h 前 executed > 2h MinInterval
+	}
+	accFetcher := &mockAccountFetcher{acc: &account.Account{
+		Votes:     map[string]int64{"SR1": 18070},
+		TronPower: 18070,
+	}}
+	sched, _ := testScheduler(t, store, accFetcher, &testExecutorConn{})
+	sched.tronscanBase = srv.URL
+	sched.config.MinInterval = 2 * time.Hour
+	sched.doRebalance(context.Background())
+	if store.insertedRebalance == nil {
+		t.Fatal("should insert when last executed ≥ MinInterval (debounce expired)")
+	}
+}
+
+// TestDoRebalance_MinIntervalZero D-293 S3：MinInterval=0 → 不防抖（每次评估都可执行）。
+func TestDoRebalance_MinIntervalZero(t *testing.T) {
+	srFixture := `[{"address":"SR1","name":"SR1","annualizedRate":"5.0","brokerage":0,"realTimeVotes":100000,"votes":100000,"producer":true,"producedTotal":100}]`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(srFixture))
+	}))
+	defer srv.Close()
+	SetHTTPClient(srv.Client())
+	defer SetHTTPClient(&http.Client{})
+
+	store := &fakeStore{
+		rebalancedToday: false,
+		lastExecutedAt:  time.Now().Add(-1 * time.Minute), // 1min 前 executed
+	}
+	accFetcher := &mockAccountFetcher{acc: &account.Account{
+		Votes:     map[string]int64{"SR1": 18070},
+		TronPower: 18070,
+	}}
+	sched, _ := testScheduler(t, store, accFetcher, &testExecutorConn{})
+	sched.tronscanBase = srv.URL
+	sched.config.MinInterval = 0 // MinInterval=0 → 不防抖
+	sched.doRebalance(context.Background())
+	if store.insertedRebalance == nil {
+		t.Fatal("should insert when MinInterval=0 (no debounce)")
 	}
 }
 

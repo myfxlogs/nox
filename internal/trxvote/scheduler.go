@@ -35,6 +35,7 @@ type Store interface {
 	InsertTrxVoteRebalance(ctx context.Context, rec TRXVoteRebalanceRecord) (int64, error)
 	UpdateTrxVoteRebalanceResult(ctx context.Context, id int64, txHash, status string) error
 	TrxVoteRebalancedToday(ctx context.Context, maxPerDay int) bool
+	LastExecutedRebalanceAt(ctx context.Context) (time.Time, error) // D-293 S3：防抖查询
 }
 
 // TRXVoteRebalanceRecord 是 Store.InsertTrxVoteRebalance 的输入（解耦 pgstore struct 供测试）。
@@ -70,9 +71,13 @@ func (s *Scheduler) Run(ctx context.Context) {
 	go s.rebalanceLoop(ctx)
 }
 
-// rebalanceLoop 每 30min 执行改投决策（D-293 S3：6h→30min）。
+// rebalanceLoop 每 TickInterval 执行改投决策（D-293 S3：6h→30min 参数化）。
 func (s *Scheduler) rebalanceLoop(ctx context.Context) {
-	ticker := time.NewTicker(30 * time.Minute)
+	interval := s.config.TickInterval
+	if interval <= 0 {
+		interval = 30 * time.Minute // 默认 30min
+	}
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	time.Sleep(5 * time.Minute) // boot 后等 5min 首次执行
 	s.doRebalance(ctx)
@@ -135,6 +140,16 @@ func (s *Scheduler) doRebalance(ctx context.Context) {
 	if s.store.TrxVoteRebalancedToday(ctx, s.config.MaxRebalancePerDay) {
 		log.Println("[trxvote] 今日已改投，跳过")
 		return
+	}
+
+	// 1.1 D-293 S3：防抖——距上次 executed < MinInterval → 跳过（不落库，与今日已改投同位置）
+	if s.config.MinInterval > 0 {
+		lastExec, err := s.store.LastExecutedRebalanceAt(ctx)
+		if err == nil && !lastExec.IsZero() && s.now().Sub(lastExec) < s.config.MinInterval {
+			log.Printf("[trxvote] 距上次改投 %v < MinInterval %v，跳过（防抖）",
+				s.now().Sub(lastExec).Round(time.Second), s.config.MinInterval)
+			return
+		}
 	}
 
 	// 2. 拉 SR 列表（独立 HTTP fetch TronScan /api/witness）

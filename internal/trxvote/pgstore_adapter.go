@@ -4,6 +4,7 @@ package trxvote
 
 import (
 	"context"
+	"time"
 
 	"arb/internal/store/pgstore"
 )
@@ -34,6 +35,11 @@ func (a *PgStoreAdapter) UpdateTrxVoteRebalanceResult(ctx context.Context, id in
 // TrxVoteRebalancedToday 透传。
 func (a *PgStoreAdapter) TrxVoteRebalancedToday(ctx context.Context, maxPerDay int) bool {
 	return a.Store.TrxVoteRebalancedToday(ctx, maxPerDay)
+}
+
+// LastExecutedRebalanceAt D-293 S3 透传。
+func (a *PgStoreAdapter) LastExecutedRebalanceAt(ctx context.Context) (time.Time, error) {
+	return a.Store.LastExecutedRebalanceAt(ctx)
 }
 
 // compile-time: *PgStoreAdapter 实现 Store 接口。
