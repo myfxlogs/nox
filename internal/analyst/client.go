@@ -1,7 +1,7 @@
 package analyst
 
 // client.go Anthropic 兼容 messages API 客户端（纯 net/http，无 SDK）。
-// POST {ARB_AI_BASE_URL}/v1/messages，SSE 流式解析。
+// POST {ARB_AI_BASE_URL}/v1/messages，SSE 流式解析。baseURL 为根 URL（不含 /v1/messages，代码自动拼接）。
 // 设计 §2：x-api-key + anthropic-version: 2023-06-01 头；stream:true。
 
 import (

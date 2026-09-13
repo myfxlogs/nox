@@ -220,3 +220,6 @@ var PriceAlertsSQL string
 
 //go:embed 0092_trx_account_reward_num.sql
 var TrxAccountRewardNumSQL string
+
+//go:embed 0093_system_settings.sql
+var SystemSettingsSQL string
