@@ -223,3 +223,6 @@ var TrxAccountRewardNumSQL string
 
 //go:embed 0093_system_settings.sql
 var SystemSettingsSQL string
+
+//go:embed 0094_trx_vote_apr_min_rate.sql
+var TrxVoteAprMinRateSQL string

@@ -257,9 +257,7 @@ func (s *Store) ListTRXWitnesses(ctx context.Context, limit int) ([]TRXWitness, 
 
 // 确保 pgx import 被引用（CopyFrom 批量写入用，S2 采集器可能用）。
 var _ = pgx.Identifier{}
-
 // ---------- D-231 TRX 投票收益率（fin_trx_vote_apr） ----------
-
 // TRXVoteApr 对应 fin_trx_vote_apr 表（5min 聚合一行）。
 type TRXVoteApr struct {
 	ID          int64

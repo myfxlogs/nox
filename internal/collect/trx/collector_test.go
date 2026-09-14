@@ -523,7 +523,7 @@ func makeContractTxJSONWithWithdrawAmount(txID string, withdrawAmount int64) txJ
 		TxID:           txID,
 		RawData: rawDataContractJSON{
 			Contract: []contractEntryJSON{{
-				Type: "WithdrawBalanceContract",
+				Type:      "WithdrawBalanceContract",
 				Parameter: parameterJSON{Value: []byte(fmt.Sprintf(`{"withdraw_amount":%d}`, withdrawAmount))},
 			}},
 		},

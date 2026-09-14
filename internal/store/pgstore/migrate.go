@@ -89,6 +89,7 @@ var migrationFiles = []struct {
 	{91, migrations.PriceAlertsSQL},                    // D-282 价格提醒规则引擎
 	{92, migrations.TrxAccountRewardNumSQL},            // D-285 TRX 待领取奖励真值列
 	{93, migrations.SystemSettingsSQL},                 // D-296 系统配置单行表（tronscan_base）
+	{94, migrations.TrxVoteAprMinRateSQL},              // D-297 TRX 投票 APR 加 min_rate/min_sr 列
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
