@@ -1,0 +1,11 @@
+{
+  "upstreams": [
+    {"prefix": "/api/v5", "target": "https://www.okx.com"},
+    {"prefix": "/api/v4", "target": "https://api.gateio.ws"},
+    {"prefix": "/demofapi", "target": "https://demo-fapi.binance.com", "strip_prefix": true},
+    {"prefix": "/demo", "target": "https://demo-api.binance.com", "strip_prefix": true},
+    {"prefix": "/fapi", "target": "https://fapi.binance.com"},
+    {"prefix": "/sapi", "target": "https://api.binance.com"},
+    {"prefix": "/api", "target": "https://api.binance.com"}
+  ]
+}
