@@ -229,3 +229,6 @@ var TrxVoteAprMinRateSQL string
 
 //go:embed 0095_xasset_monitor.sql
 var XassetMonitorSQL string
+
+//go:embed 0096_event_cases_paper_trades.sql
+var EventCasesPaperTradesSQL string
