@@ -37,7 +37,11 @@ func (s *Service) GetTrxYieldRadar(ctx context.Context, req *connect.Request[v1.
 		return nil, err
 	}
 	if err == nil {
-		voteCurrent = vote.CurrentRate
+		// D-297：显示口径改最低年化（业主要）；min_rate=0（历史行）fallback current_rate
+		voteCurrent = vote.MinRate
+		if voteCurrent == 0 {
+			voteCurrent = vote.CurrentRate // 历史行兼容
+		}
 		voteMax = vote.MaxRate
 		voteSpread = vote.Spread
 		if vote.MaxSr != nil {
