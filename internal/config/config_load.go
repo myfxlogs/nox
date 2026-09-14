@@ -112,6 +112,7 @@ func Load() *Config {
 		TrxVoteBetterOppPct:   envFloat("ARB_TRX_VOTE_BETTER_OPP_PCT", 0.0),     // D-285：更优机会阈值降零（任何更高就改投）
 		TrxVoteMaxRebalPerDay: envInt("ARB_TRX_VOTE_MAX_REBAL_PER_DAY", 1),      // 每日最大改投 1 次
 		TrxVoteMinIntervalMin: envInt("ARB_TRX_VOTE_MIN_INTERVAL_MINUTES", 120), // D-293 S3：防抖 2h
+		TrxVoteSpreadThreshold: envFloat("ARB_TRX_VOTE_SPREAD_THRESHOLD", 0.001), // D-297：价差触发改投阈值 0.001pp
 		// === D-271 CEX 只读扫描器 ===
 		CexScanInterval: envDur("ARB_CEX_SCAN_INTERVAL", 5*time.Minute),
 		CexScanSymbols:  cexScanSymbolsDefault(),

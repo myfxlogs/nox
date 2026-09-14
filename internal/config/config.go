@@ -251,6 +251,7 @@ type Config struct {
 	TrxVoteBetterOppPct   float64 // 触发改投的更优机会阈值（ARB_TRX_VOTE_BETTER_OPP_PCT，默认 20.0）
 	TrxVoteMaxRebalPerDay int     // 每日最大改投次数（ARB_TRX_VOTE_MAX_REBAL_PER_DAY，默认 1）
 	TrxVoteMinIntervalMin int     // D-293 S3：改投防抖间隔分钟（ARB_TRX_VOTE_MIN_INTERVAL_MINUTES，默认 120=2h）
+	TrxVoteSpreadThreshold float64 // D-297：价差触发改投阈值（ARB_TRX_VOTE_SPREAD_THRESHOLD，默认 0.001）
 	// === D-271 CEX 只读扫描器 ===
 	CexScanInterval time.Duration // 扫描间隔（ARB_CEX_SCAN_INTERVAL，默认 5m）
 	CexScanSymbols  []string      // 价差扫描币种（ARB_CEX_SCAN_SYMBOLS，默认 BTC/ETH/TRX/SOL/USDT/USDC）
