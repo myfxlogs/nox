@@ -299,3 +299,105 @@ func TestCalcYield_MatchesTronscan(t *testing.T) {
 		t.Errorf("annualized = %.4f%%, want 3.2-3.4%% (修复后不应多乘 27 倍)", annualized)
 	}
 }
+
+// ---------- D-297 S5：价差驱动触发测试 ----------
+
+// TestDecide_SpreadTrigger D-297：价差 >= SpreadThreshold → 触发；< → 不触发。
+func TestDecide_SpreadTrigger(t *testing.T) {
+	// candidates: SR_hi(3.28), SR_mid(3.275), SR_lo(3.27)
+	srList := []SRInfo{
+		makeSR("SR_hi", 0, 3.28, 100000, true, 1),
+		makeSR("SR_mid", 0, 3.275, 200000, true, 2),
+		makeSR("SR_lo", 0, 3.27, 300000, true, 3),
+	}
+	cfg := DefaultConfig()
+	cfg.MinSRs = 1
+	cfg.MaxSRs = 1
+	cfg.SpreadThreshold = 0.001
+
+	// 当前投 SR_lo（最低年化），未投最高 SR_hi → spread=3.28-3.27=0.01 >= 0.001 → 触发
+	currentVotes := []VoteEntry{{SRAddress: "SR_lo", Votes: 10000}}
+	dec := Decide(RebalanceInput{
+		SRRanking:    srList,
+		CurrentVotes: currentVotes,
+		TotalTP:      10000,
+		Config:       cfg,
+	})
+	if !dec.NeedRebalance {
+		t.Errorf("NeedRebalance = false, want true (spread=0.01 >= 0.001); reason=%s", dec.Reason)
+	}
+
+	// spread=0.0005 < 0.001 → 不触发（调高阈值）
+	cfg.SpreadThreshold = 0.02
+	dec2 := Decide(RebalanceInput{
+		SRRanking:    srList,
+		CurrentVotes: currentVotes,
+		TotalTP:      10000,
+		Config:       cfg,
+	})
+	if dec2.NeedRebalance {
+		t.Errorf("NeedRebalance = true, want false (spread=0.01 < 0.02); reason=%s", dec2.Reason)
+	}
+}
+
+// TestDecide_SpreadTrigger_NotVotedOnly D-297：已投含 candidates 最高年化 → maxNotVoted < minVoted → 不触发（防空转）。
+func TestDecide_SpreadTrigger_NotVotedOnly(t *testing.T) {
+	// candidates: SR_best(3.28), SR_mid(3.275), SR_lo(3.27)
+	srList := []SRInfo{
+		makeSR("SR_best", 0, 3.28, 100000, true, 1),
+		makeSR("SR_mid", 0, 3.275, 200000, true, 2),
+		makeSR("SR_lo", 0, 3.27, 300000, true, 3),
+	}
+	cfg := DefaultConfig()
+	cfg.MinSRs = 1
+	cfg.MaxSRs = 1
+	cfg.SpreadThreshold = 0.001
+
+	// 当前投 SR_best（最高年化），未投最高 = SR_mid(3.275)
+	// spread = 3.275 - 3.28 = -0.005 < 0.001 → 不触发（防每日空转）
+	currentVotes := []VoteEntry{{SRAddress: "SR_best", Votes: 10000}}
+	dec := Decide(RebalanceInput{
+		SRRanking:    srList,
+		CurrentVotes: currentVotes,
+		TotalTP:      10000,
+		Config:       cfg,
+	})
+	if dec.NeedRebalance {
+		t.Errorf("NeedRebalance = true, want false (已投最优 SR，maxNotVoted < minVoted，防空转); reason=%s", dec.Reason)
+	}
+}
+
+// TestDecide_SpreadTrigger_NoOpGuard D-297：target SR 集合 == current → 跳过（防 no-op 浪费带宽）。
+func TestDecide_SpreadTrigger_NoOpGuard(t *testing.T) {
+	// candidates: SR_a(3.28), SR_b(3.275), SR_c(3.27)
+	srList := []SRInfo{
+		makeSR("SR_a", 0, 3.28, 100000, true, 1),
+		makeSR("SR_b", 0, 3.275, 200000, true, 2),
+		makeSR("SR_c", 0, 3.27, 300000, true, 3),
+	}
+	cfg := DefaultConfig()
+	cfg.MinSRs = 3
+	cfg.MaxSRs = 3
+	cfg.SpreadThreshold = 0.001
+
+	// 当前投 SR_a + SR_b + SR_c（与 target 集合相同，但票数不同）
+	// target = top 3 = SR_a, SR_b, SR_c（排序后 brokerage=0, rate desc）
+	// votedSet = {SR_a, SR_b, SR_c} → maxNotVoted = 0（全部已投）
+	// minVoted = 3.27 (SR_c)
+	// spread = 0 - 3.27 = -3.27 < 0.001 → 不触发（maxNotVoted=0 时 spread 负）
+	// 但即使 spread 触发，sameSRSet 也会拦截
+	currentVotes := []VoteEntry{
+		{SRAddress: "SR_a", Votes: 3000},
+		{SRAddress: "SR_b", Votes: 3000},
+		{SRAddress: "SR_c", Votes: 4000},
+	}
+	dec := Decide(RebalanceInput{
+		SRRanking:    srList,
+		CurrentVotes: currentVotes,
+		TotalTP:      10000,
+		Config:       cfg,
+	})
+	if dec.NeedRebalance {
+		t.Errorf("NeedRebalance = true, want false (target==current SR 集合，no-op 守卫); reason=%s", dec.Reason)
+	}
+}

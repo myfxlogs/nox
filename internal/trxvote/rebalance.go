@@ -32,11 +32,13 @@ type RebalanceConfig struct {
 	MaxSRs             int           // 最多分散 SR 数（默认 5）
 	MaxBrokerage       int           // 最大可接受 brokerage（默认 20，即 20%）
 	MinRank            int           // 最低排名要求（默认 127，即 top 127 都可）
+	// D-297 deprecated: 改用 SpreadThreshold 触发，保留 env 兼容
 	YieldDropPct       float64       // 触发改投的收益下降阈值（默认 15%）
 	BetterOppPct       float64       // 触发改投的更优机会阈值（默认 20%）
 	MaxRebalancePerDay int           // 每日最大改投次数（默认 1）
 	TickInterval       time.Duration // D-293 S3：评估周期（默认 30min，原 6h）
 	MinInterval        time.Duration // D-293 S3：防抖间隔（距上次 executed <MinInterval → 跳过，默认 2h）
+	SpreadThreshold     float64       // D-297：价差触发改投阈值（pp，默认 0.001）
 }
 
 // RebalanceInput 是决策引擎输入。
@@ -69,6 +71,7 @@ func DefaultConfig() RebalanceConfig {
 		MaxRebalancePerDay: 1,
 		TickInterval:       30 * time.Minute, // D-293 S3：6h→30min
 		MinInterval:        2 * time.Hour,    // D-293 S3：防抖 2h（env ARB_TRX_VOTE_MIN_INTERVAL_MINUTES 可调）
+		SpreadThreshold:    0.001,           // D-297：价差触发改投阈值 0.001pp
 	}
 }
 
@@ -140,11 +143,42 @@ func Decide(input RebalanceInput) RebalanceDecision {
 
 	needRebalance := false
 	reason := ""
-	if improvement > input.Config.BetterOppPct {
-		needRebalance = true
-		reason = fmt.Sprintf("更优机会 +%.1f%% (>%.0f%%)", improvement, input.Config.BetterOppPct)
+	// D-297：价差驱动——(未投候选最高年化 − 已投最低年化) >= SpreadThreshold → 触发改投
+	// D1：用 candidates（filterCandidates 后）非 SRRanking 全网
+	// D2：用 maxNotVotedRate（未投候选最高），非 maxAvailable（含已投）——
+	//   已投最优 SR 时 maxNotVoted < minVoted → spread < 0 → 不触发，防每日空转
+	votedSet := make(map[string]bool)
+	for _, v := range input.CurrentVotes {
+		votedSet[v.SRAddress] = true
+	}
+	var maxNotVotedRate float64
+	for _, sr := range candidates {
+		if !votedSet[sr.Address] && sr.AnnualizedRate > maxNotVotedRate {
+			maxNotVotedRate = sr.AnnualizedRate
+		}
+	}
+	var minVotedRate float64
+	for _, v := range input.CurrentVotes {
+		for _, sr := range candidates {
+			if sr.Address == v.SRAddress {
+				if minVotedRate == 0 || sr.AnnualizedRate < minVotedRate {
+					minVotedRate = sr.AnnualizedRate
+				}
+				break
+			}
+		}
+	}
+	spread := maxNotVotedRate - minVotedRate
+	needRebalance = spread >= input.Config.SpreadThreshold
+	if needRebalance {
+		reason = fmt.Sprintf("价差 +%.4fpp (≥%.3fpp)，改投更高年化 SR", spread, input.Config.SpreadThreshold)
 	} else {
-		reason = fmt.Sprintf("无需改投 (改善 %.1f%%)", improvement)
+		reason = fmt.Sprintf("无需改投 (价差 %.4fpp < %.3fpp)", spread, input.Config.SpreadThreshold)
+	}
+	// D3：no-op 守卫——目标 SR 集合 == 当前 SR 集合 → 跳过（避免浪费带宽）
+	if needRebalance && sameSRSet(target, input.CurrentVotes) {
+		needRebalance = false
+		reason = "目标 SR 集合与当前一致，跳过（避免 no-op 浪费带宽）"
 	}
 
 	return RebalanceDecision{
@@ -155,6 +189,23 @@ func Decide(input RebalanceInput) RebalanceDecision {
 		Improvement:   improvement,
 		Reason:        reason,
 	}
+}
+
+// sameSRSet 判断目标投票分布与当前投票分布的 SR 集合是否相同（不管票数）。
+func sameSRSet(target, current []VoteEntry) bool {
+	if len(target) != len(current) {
+		return false
+	}
+	set := make(map[string]bool, len(current))
+	for _, v := range current {
+		set[v.SRAddress] = true
+	}
+	for _, v := range target {
+		if !set[v.SRAddress] {
+			return false
+		}
+	}
+	return true
 }
 
 // filterCandidates 过滤合格 SR：brokerage <= MaxBrokerage && rank <= MinRank && annualizedRate > 0。
