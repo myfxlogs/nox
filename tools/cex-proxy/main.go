@@ -173,23 +173,30 @@ func newHandler(token string, cfg Config) (http.Handler, error) {
 		return len(routes[i].up.Prefix) > len(routes[j].up.Prefix)
 	})
 
-	proxy := &httputil.ReverseProxy{Director: func(r *http.Request) {
-		path := r.URL.Path
+	proxy := &httputil.ReverseProxy{Rewrite: func(r *httputil.ProxyRequest) {
+		// Rewrite 不会自动添加 X-Forwarded-*（Director 会自动加回，导致 Binance
+		// 白名单看到客户端 IP 而非代理 IP → -2015）。CEX 白名单按 TCP 源 IP 校验，
+		// 代理服务器 IP 即为白名单 IP，不需透传客户端 IP。
+		r.Out.Header.Del("X-Forwarded-For")
+		r.Out.Header.Del("X-Forwarded-Host")
+		r.Out.Header.Del("X-Forwarded-Proto")
+		r.Out.Header.Del("X-Real-Ip")
+		path := r.Out.URL.Path
 		for _, rt := range routes {
 			if !strings.HasPrefix(path, rt.up.Prefix) {
 				continue
 			}
-			r.URL.Scheme = rt.target.Scheme
-			r.URL.Host = rt.target.Host
-			r.Host = rt.target.Host // CEX/CDN 按 Host 路由，必须改写
+			r.Out.URL.Scheme = rt.target.Scheme
+			r.Out.URL.Host = rt.target.Host
+			r.Out.Host = rt.target.Host // CEX/CDN 按 Host 路由，必须改写
 			if rt.up.StripPrefix {
-				r.URL.Path = strings.TrimPrefix(path, rt.up.Prefix)
+				r.Out.URL.Path = strings.TrimPrefix(path, rt.up.Prefix)
 			}
 			return
 		}
-		// 无匹配前缀 → 返回 404（Director 无法设状态码，由 ErrorHandler 兜底）。
-		r.URL.Scheme = ""
-		r.URL.Host = ""
+		// 无匹配前缀 → ErrorHandler 兜底 404。
+		r.Out.URL.Scheme = ""
+		r.Out.URL.Host = ""
 	}}
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 		if r.URL.Host == "" {
