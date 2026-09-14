@@ -226,3 +226,6 @@ var SystemSettingsSQL string
 
 //go:embed 0094_trx_vote_apr_min_rate.sql
 var TrxVoteAprMinRateSQL string
+
+//go:embed 0095_xasset_monitor.sql
+var XassetMonitorSQL string
