@@ -53,8 +53,7 @@ type txJSON struct {
 	BlockTimestamp int64               `json:"block_timestamp"` // R1：真实响应是驼峰 blockTimestamp（非 block_timestamp）
 	TxID           string              `json:"txID"`            // 止血修正：真实字段=txID（2026-09-03 实拍铁证，transaction_id/tx_id 均错）
 	RawData        rawDataContractJSON `json:"raw_data"`
-	Ret            []retJSON           `json:"ret"`             // D-279：fee 捕获
-	WithdrawAmount int64               `json:"withdraw_amount"` // D-280：奖励提取金额（sun），仅 WithdrawBalanceContract 有值
+	Ret            []retJSON           `json:"ret"` // D-279：fee 捕获
 }
 
 // retJSON 对应 TronGrid ret 数组单行。
@@ -133,6 +132,25 @@ func (t txJSON) TransferAmount() int64 {
 		return 0
 	}
 	return v.Amount
+}
+
+// withdrawValueJSON WithdrawBalanceContract 的 parameter.value。
+type withdrawValueJSON struct {
+	OwnerAddress   string `json:"owner_address"`
+	WithdrawAmount int64  `json:"withdraw_amount"`
+}
+
+// WithdrawAmount 返回 WithdrawBalanceContract 的 withdraw_amount（sun）。
+// TronGrid 返回在 raw_data.contract[0].parameter.value 内层（非顶层）。
+func (t txJSON) WithdrawAmount() int64 {
+	if len(t.RawData.Contract) == 0 || t.RawData.Contract[0].Type != "WithdrawBalanceContract" {
+		return 0
+	}
+	var v withdrawValueJSON
+	if err := json.Unmarshal(t.RawData.Contract[0].Parameter.Value, &v); err != nil {
+		return 0
+	}
+	return v.WithdrawAmount
 }
 
 // freezeValueJSON 质押类合约的 parameter.value（Freeze/StakeV2=frozen_balance；UnfreezeV2=unfreeze_balance）。

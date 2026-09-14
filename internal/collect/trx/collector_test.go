@@ -4,6 +4,7 @@ package trx
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -176,7 +177,8 @@ func TestTxsCollector_Poll_Classify(t *testing.T) {
 		// 3. withdraw（转出）
 		makeTransferTx("tx3", "TOtherAddr111111111111111111111", monitorAddr, 2000000),
 		// 4. vote_claim（WithdrawBalanceContract，D-280 amount=withdraw_amount）
-		`{"block_timestamp":` + itoa(time.Now().UnixMilli()) + `,"txID":"tx4","raw_data":{"contract":[{"type":"WithdrawBalanceContract","parameter":{"value":{}}}]},` + `"withdraw_amount":11418180}`,
+		// D-297：withdraw_amount 在 parameter.value 内层（TronGrid 真实形状）
+		`{"block_timestamp":` + itoa(time.Now().UnixMilli()) + `,"txID":"tx4","raw_data":{"contract":[{"type":"WithdrawBalanceContract","parameter":{"value":{"withdraw_amount":11418180}}}]}}`,
 		// 5. stake（FreezeBalanceV2）
 		makeContractTx("tx5", "FreezeBalanceV2Contract"),
 		// 6. unstake（UnfreezeBalanceV2）
@@ -514,17 +516,17 @@ func makeContractTxJSONWithFee(txID, contractType string, fee int64) txJSON {
 }
 
 // makeContractTxJSONWithWithdrawAmount D-280：带 withdraw_amount 的 WithdrawBalanceContract 交易。
+// D-297：withdraw_amount 在 parameter.value 内层（TronGrid 真实形状），删顶层 WithdrawAmount 字段。
 func makeContractTxJSONWithWithdrawAmount(txID string, withdrawAmount int64) txJSON {
 	return txJSON{
 		BlockTimestamp: time.Now().UnixMilli(),
 		TxID:           txID,
 		RawData: rawDataContractJSON{
 			Contract: []contractEntryJSON{{
-				Type:      "WithdrawBalanceContract",
-				Parameter: parameterJSON{Value: []byte(`{}`)},
+				Type: "WithdrawBalanceContract",
+				Parameter: parameterJSON{Value: []byte(fmt.Sprintf(`{"withdraw_amount":%d}`, withdrawAmount))},
 			}},
 		},
-		WithdrawAmount: withdrawAmount,
 	}
 }
 
