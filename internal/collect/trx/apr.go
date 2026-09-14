@@ -119,6 +119,9 @@ func (c *AprCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	//    rate_i 按候选地址对齐 witness 列表；候选不在列表内则该条跳过并计数。
 	var currentRate float64
 	var currentSrName string
+	// D-297：追踪已投 SR 中最低年化（业主要显示最低而非加权平均）
+	var minRate float64
+	var minSrName string
 	var skippedCandidates int
 	voteBody, err := tronscanGet(ctx, c.base+"/api/vote?voter="+c.address)
 	if err != nil {
@@ -144,6 +147,11 @@ func (c *AprCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 					topVotes = v.Votes
 					topVoteSr = v.CandidateName
 				}
+				// D-297：追踪最低年化 SR
+				if minRate == 0 || rate < minRate {
+					minRate = rate
+					minSrName = v.CandidateName
+				}
 			}
 			if totalVotes > 0 {
 				currentRate = weightedSum / totalVotes
@@ -153,17 +161,22 @@ func (c *AprCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	}
 
 	// 4. 聚合一行写入 fin_trx_vote_apr
+	// D-297：spread 口径改 maxRate - minRate（与 voteAprCurrent=minRate 自洽）
 	rec := pgstore.TRXVoteApr{
 		FetchedAt:   time.Now(),
 		CurrentRate: currentRate,
 		MaxRate:     maxRate,
-		Spread:      maxRate - currentRate,
+		MinRate:     minRate,
+		Spread:      maxRate - minRate,
 	}
 	if currentSrName != "" {
 		rec.CurrentSr = &currentSrName
 	}
 	if maxSrName != "" {
 		rec.MaxSr = &maxSrName
+	}
+	if minSrName != "" {
+		rec.MinSr = &minSrName
 	}
 	if err := c.store.InsertTRXVoteApr(ctx, rec); err != nil {
 		return nil, fmt.Errorf("trx apr insert: %w", err)
@@ -200,7 +213,7 @@ func (c *AprCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	// D-231 S5：聚合值变化才发布 hedgeHook（常规无变化轮不推，客户端不做无谓全量重取）。
 	// R2 修复：状态读改段持锁，与 TriggerNow check-and-set 互斥（防双 goroutine 数据竞争）。
 	if c.hedgeHook != nil {
-		spread := maxRate - currentRate
+		spread := maxRate - minRate // D-297：与落库 spread 口径一致
 		c.mu.Lock()
 		changed := !c.hasLastValues ||
 			c.lastCurrentRate != currentRate ||

@@ -115,10 +115,56 @@ func TestAprCollector_Poll_Aggregation(t *testing.T) {
 	if apr.CurrentSr == nil || *apr.CurrentSr != "SR-A" {
 		t.Errorf("current_sr = %v, want SR-A (票数最多)", apr.CurrentSr)
 	}
-	// spread = max − current
-	wantSpread := 3.10 - wantCurrent
+	// D-297：min_rate=已投 SR 中最低年化=2.50（SR-B）
+	if apr.MinRate != 2.50 {
+		t.Errorf("min_rate = %v, want 2.50 (SR-B 最低年化)", apr.MinRate)
+	}
+	if apr.MinSr == nil || *apr.MinSr != "SR-B" {
+		t.Errorf("min_sr = %v, want SR-B", apr.MinSr)
+	}
+	// D-297：spread = max − min（非 max − current）
+	wantSpread := 3.10 - 2.50
 	if apr.Spread < wantSpread-0.01 || apr.Spread > wantSpread+0.01 {
-		t.Errorf("spread = %v, want ~%.2f", apr.Spread, wantSpread)
+		t.Errorf("spread = %v, want ~%.2f (max−min)", apr.Spread, wantSpread)
+	}
+}
+
+// TestAprCollector_PollMinRate D-297：min_rate 采集——mock witness + vote 响应，
+// 断言 MinRate = 最低年化（非加权平均），MinSr = 最低年化 SR 名。
+func TestAprCollector_PollMinRate(t *testing.T) {
+	st := newTestStore(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		switch r.URL.Path {
+		case "/api/witness":
+			_, _ = w.Write([]byte(mockWitnessJSON))
+		case "/api/vote":
+			_, _ = w.Write([]byte(mockVoteJSON))
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	defer srv.Close()
+
+	c := NewAprCollector("TWsbXR6SPvvXPxUtPMQv7AMH55555555", st, srv.URL)
+	if _, err := c.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	apr, err := st.LastTRXVoteApr(context.Background())
+	if err != nil {
+		t.Fatalf("LastTRXVoteApr: %v", err)
+	}
+	// mockVoteJSON: SR-A(3.10, 10000 votes) + SR-B(2.50, 5000 votes)
+	// min_rate = 2.50（SR-B 最低年化），非加权平均 2.90
+	if apr.MinRate != 2.50 {
+		t.Errorf("min_rate = %v, want 2.50 (SR-B 最低年化，非加权平均)", apr.MinRate)
+	}
+	if apr.MinSr == nil || *apr.MinSr != "SR-B" {
+		t.Errorf("min_sr = %v, want SR-B", apr.MinSr)
+	}
+	// min_rate <= current_rate（加权平均）
+	if apr.MinRate > apr.CurrentRate {
+		t.Errorf("min_rate (%v) > current_rate (%v)，最低应 <= 加权平均", apr.MinRate, apr.CurrentRate)
 	}
 }
 
