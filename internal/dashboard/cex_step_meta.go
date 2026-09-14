@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"arb/internal/httpx"
 )
 
 // D-127 P2：binance:perp stepSize 权威化。
@@ -67,7 +69,7 @@ func (m *cexStepMeta) refresh(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpx.Client().Do(req)
 	if err != nil {
 		return err
 	}
