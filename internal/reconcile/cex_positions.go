@@ -234,7 +234,7 @@ func (q *CEXPositionQuerier) gatePositions(ctx context.Context) ([]VenueOrder, e
 func (q *CEXPositionQuerier) binancePositions(ctx context.Context) ([]VenueOrder, error) {
 	params := "timestamp=" + strconv.FormatInt(time.Now().UnixMilli(), 10) + "&recvWindow=5000"
 	sig := binanceSign(q.apiSecret, params)
-	url := q.baseURL + "/fapi/v2/positionRisk?" + params + "&signature=" + sig
+	url := q.baseURL + "/v2/positionRisk?" + params + "&signature=" + sig
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err

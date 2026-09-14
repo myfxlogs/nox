@@ -18,7 +18,7 @@ func (e *CEXExecutor) binanceDualSide(ctx context.Context) (dual, probed bool) {
 		return e.dualSide, true
 	}
 	params := url.Values{}
-	body, err := e.signedBinanceRequest(ctx, "GET", "/fapi/v1/positionSide/dual", params)
+	body, err := e.signedBinanceRequest(ctx, "GET", "/v1/positionSide/dual", params)
 	if err != nil {
 		log.Printf("[cex] binance dualSide probe failed venue=%s: %v（保守按 hedge 处理）", e.venue, err)
 		return false, false // 未探测成功，保守 hedge

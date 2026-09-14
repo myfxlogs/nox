@@ -87,7 +87,7 @@ func TestCEXExecutor_BinancePerpEndpoint(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	e := NewCEXExecutor("binance", "perp", "k", "s", "", srv.URL, false)
+	e := NewCEXExecutor("binance", "perp", "k", "s", "", srv.URL+"/fapi", false)
 	if _, err := e.PlaceOrder(context.Background(), Order{Symbol: "TRXUSDT", Side: "SELL", Qty: 1}); err != nil {
 		t.Fatalf("PlaceOrder: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestCEXExecutor_BinancePerpPollsAsyncFill(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	e := NewCEXExecutor("binance", "perp", "k", "s", "", srv.URL, false)
+	e := NewCEXExecutor("binance", "perp", "k", "s", "", srv.URL+"/fapi", false)
 	fill, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTCUSDT", Side: "BUY", Qty: 0.001})
 	if err != nil {
 		t.Fatalf("PlaceOrder: %v", err)
@@ -134,7 +134,7 @@ func TestCEXExecutor_BinanceOrderTerminalCanceled(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	e := NewCEXExecutor("binance", "perp", "k", "s", "", srv.URL, false)
+	e := NewCEXExecutor("binance", "perp", "k", "s", "", srv.URL+"/fapi", false)
 	if _, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTCUSDT", Side: "SELL", Qty: 0.001}); err == nil {
 		t.Error("订单被取消应报错，got nil")
 	} else if !strings.Contains(err.Error(), "EXPIRED") {

@@ -34,7 +34,7 @@ func (e *CEXExecutor) placeBinance(ctx context.Context, o Order) (Fill, error) {
 
 	endpoint := "/api/v3/order"
 	if e.venueType == "perp" {
-		endpoint = "/fapi/v1/order"
+		endpoint = "/v1/order"
 		// D-108 P2 T1：perp 平仓补 positionSide/reduceOnly。
 		// hedge 模式 → positionSide=原持仓侧（与 OKX 同机制，调用方传 Order.PositionSide）；
 		// one-way 模式 → 平仓 reduceOnly=true（market reduce，防开反向敞口）。
@@ -126,7 +126,7 @@ func (e *CEXExecutor) binanceOrderStatus(ctx context.Context, symbol, ordID stri
 }, error) {
 	endpoint := "/api/v3/order"
 	if e.venueType == "perp" {
-		endpoint = "/fapi/v1/order"
+		endpoint = "/v1/order"
 	}
 	params := url.Values{}
 	params.Set("symbol", symbol)

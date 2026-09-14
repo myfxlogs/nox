@@ -199,7 +199,7 @@ func TestD121_BinancePositions(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	q := NewCEXPositionQuerier("binance", "perp", "key", "secret", "", srv.URL, false)
+	q := NewCEXPositionQuerier("binance", "perp", "key", "secret", "", srv.URL+"/fapi", false)
 	orders, err := q.QueryOpenedOrders(context.Background())
 	if err != nil {
 		t.Fatalf("binance positions: %v", err)

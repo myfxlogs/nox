@@ -38,7 +38,7 @@ func TestD108P2_BinancePerpHedgePosSide(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	e := NewCEXExecutor("binance", "perp", "k", "s", "", srv.URL, false)
+	e := NewCEXExecutor("binance", "perp", "k", "s", "", srv.URL+"/fapi", false)
 	_, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTCUSDT", Side: "SELL", Qty: 1, PositionSide: "long"})
 	if err != nil {
 		t.Fatalf("PlaceOrder: %v", err)
@@ -66,7 +66,7 @@ func TestD108P2_BinancePerpOneWayReduceOnly(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	e := NewCEXExecutor("binance", "perp", "k", "s", "", srv.URL, false)
+	e := NewCEXExecutor("binance", "perp", "k", "s", "", srv.URL+"/fapi", false)
 	_, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTCUSDT", Side: "SELL", Qty: 1, PositionSide: "long"})
 	if err != nil {
 		t.Fatalf("PlaceOrder: %v", err)
@@ -91,7 +91,7 @@ func TestD120_BinancePerpOneWayOpenNoReduceOnly(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	e := NewCEXExecutor("binance", "perp", "k", "s", "", srv.URL, false)
+	e := NewCEXExecutor("binance", "perp", "k", "s", "", srv.URL+"/fapi", false)
 	_, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTCUSDT", Side: "SELL", Qty: 1})
 	if err != nil {
 		t.Fatalf("PlaceOrder: %v", err)
@@ -117,7 +117,7 @@ func TestD108P2_BinancePerpProbeFailConservative(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	e := NewCEXExecutor("binance", "perp", "k", "s", "", srv.URL, false)
+	e := NewCEXExecutor("binance", "perp", "k", "s", "", srv.URL+"/fapi", false)
 	_, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTCUSDT", Side: "SELL", Qty: 1, PositionSide: "long"})
 	if err != nil {
 		t.Fatalf("PlaceOrder: %v", err)
@@ -137,7 +137,7 @@ func TestD108P2_BinancePerpRejectedCritical(t *testing.T) {
 
 	var alertMsg string
 	var alertPosID *int64
-	e := NewCEXExecutor("binance", "perp", "k", "s", "", srv.URL, false)
+	e := NewCEXExecutor("binance", "perp", "k", "s", "", srv.URL+"/fapi", false)
 	e.AlertFn = func(posID *int64, level, msg string) {
 		alertPosID = posID
 		alertMsg = msg
