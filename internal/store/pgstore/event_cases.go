@@ -296,3 +296,22 @@ func (s *Store) UpdateEventCaseOutcome(ctx context.Context, caseID int, outcome 
 	}
 	return nil
 }
+
+// GetCaseStats 全库统计（M2 §4；v1.2 裁 10：n=全库样本量不分层）。
+// SuccessRate = count(outcome='success') / count(outcome IN ('success','failed'))。
+// AvgDrawdown = avg(fail_drawdown_pct) WHERE outcome='failed' AND fail_drawdown_pct IS NOT NULL。
+// SampleSize = count(*)（全库，含 pending）。
+func (s *Store) GetCaseStats(ctx context.Context) (successRate, avgDrawdown float64, sampleSize int, err error) {
+	err = s.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*)::int AS total,
+			COALESCE(COUNT(*) FILTER (WHERE outcome='success')::float8
+				/ NULLIF(COUNT(*) FILTER (WHERE outcome IN ('success','failed')), 0), 0) AS success_rate,
+			COALESCE(AVG(fail_drawdown_pct) FILTER (WHERE outcome='failed' AND fail_drawdown_pct IS NOT NULL), 0) AS avg_drawdown
+		FROM event_cases
+	`).Scan(&sampleSize, &successRate, &avgDrawdown)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("get case stats: %w", err)
+	}
+	return successRate, avgDrawdown, sampleSize, nil
+}

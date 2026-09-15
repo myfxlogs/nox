@@ -255,6 +255,12 @@ type Config struct {
 	// === D-271 CEX 只读扫描器 ===
 	CexScanInterval time.Duration // 扫描间隔（ARB_CEX_SCAN_INTERVAL，默认 5m）
 	CexScanSymbols  []string      // 价差扫描币种（ARB_CEX_SCAN_SYMBOLS，默认 BTC/ETH/TRX/SOL/USDT/USDC）
+
+	// === D-274 事件驱动研判引擎 ===
+	// JudgeBalanceHKD/USD sizing 双币余额（M2 §5 M6：按市场币种取余额，map HK→HKD/US→USD）。
+	// 0=未配置（sizing 降级 qty=0+qtyReason「余额未配置」）。
+	JudgeBalanceHKD float64 // ARB_JUDGE_BALANCE_HKD
+	JudgeBalanceUSD float64 // ARB_JUDGE_BALANCE_USD
 }
 
 // Load 从环境变量加载配置——已提取至 config_load.go（D-261 S6 纯搬家拆分）。
