@@ -61,6 +61,24 @@ func NewTxsCollector(address string, store *pgstore.Store, base, apiKey, tronsca
 	return &TxsCollector{address: address, store: store, base: base, apiKey: apiKey, tronscanBase: tronscanBase, rentalPayers: set, floorPct: floorPct}
 }
 
+// fetchWithdrawAmount 调 gettransactioninfobyid 取 WithdrawBalance（vote_claim）领取额（sun）。
+// 2026-09-15 业主报「—」修复：原始交易 parameter 仅 owner_address，链上权威值在 TXINFO withdraw_amount。
+// 失败/缺字段=0（不阻断采集；UpsertTRXTx 按 tx_id 幂等，下轮 Poll 重试）。
+func (c *TxsCollector) fetchWithdrawAmount(ctx context.Context, txID string) int64 {
+	body, err := tronPost(ctx, c.base, c.apiKey, "/wallet/gettransactioninfobyid",
+		fmt.Sprintf(`{"value":"%s","visible":true}`, txID))
+	if err != nil {
+		return 0
+	}
+	var info struct {
+		WithdrawAmount int64 `json:"withdraw_amount"`
+	}
+	if err := json.Unmarshal(body, &info); err != nil {
+		return 0
+	}
+	return info.WithdrawAmount
+}
+
 // Kind 返回采集器标识。
 func (c *TxsCollector) Kind() string { return "trx_txs" }
 
@@ -121,6 +139,15 @@ func (c *TxsCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 				continue // P2-3：非资金移动合约不入库
 			}
 			rec.CheatStatus = cheatMap[tx.TxID] // D-279：官方恶意标记
+			// 投票奖励领取额补全（2026-09-15 业主报「—」）：WithdrawBalance 原始交易无金额字段
+			// （parameter 仅 owner_address，D-297 解析层面对此类型无源可取），链上权威值在
+			// gettransactioninfobyid 的 withdraw_amount（sun）。仅解析额为 0 时富集——claims 低频，额外调用可忽略；
+			// 失败不阻断采集（返回 0，UpsertTRXTx 按 tx_id 幂等，下轮重试）。
+			if rec.Kind == "vote_claim" && rec.AmountSun == 0 {
+				if amt := c.fetchWithdrawAmount(ctx, tx.TxID); amt > 0 {
+					rec.AmountSun = amt
+				}
+			}
 			if err := c.store.UpsertTRXTx(ctx, rec); err != nil {
 				return nil, fmt.Errorf("trx txs upsert: %w", err)
 			}
