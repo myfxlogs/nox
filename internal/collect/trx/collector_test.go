@@ -889,3 +889,37 @@ func TestTxFee_Parsing(t *testing.T) {
 		t.Errorf("Fee() with empty ret = %d, want 0", fee)
 	}
 }
+
+// TestFetchWithdrawAmount vote_claim 领取额 TXINFO 富集（2026-09-15「—」修复）：
+// WithdrawBalance 原始交易无金额，权威值在 gettransactioninfobyid 的 withdraw_amount。
+func TestFetchWithdrawAmount(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/wallet/gettransactioninfobyid" {
+			fmt.Fprint(w, `{"id":"x","withdraw_amount":12030015}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+	c := NewTxsCollector("addr", nil, srv.URL, "", "", nil, -1)
+	if got := c.fetchWithdrawAmount(context.Background(), "f4d079ed"); got != 12030015 {
+		t.Errorf("withdraw_amount = %d, want 12030015", got)
+	}
+}
+
+// TestFetchWithdrawAmount_ZeroOnMissing 缺字段/失败=0 不阻断（幂等下轮重试语义）。
+func TestFetchWithdrawAmount_ZeroOnMissing(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{}`) // 无 withdraw_amount
+	}))
+	defer srv.Close()
+	c := NewTxsCollector("addr", nil, srv.URL, "", "", nil, -1)
+	if got := c.fetchWithdrawAmount(context.Background(), "tx"); got != 0 {
+		t.Errorf("missing withdraw_amount should be 0, got %d", got)
+	}
+	// 网络失败同样归 0
+	c2 := NewTxsCollector("addr", nil, "http://127.0.0.1:1", "", "", nil, -1)
+	if got := c2.fetchWithdrawAmount(context.Background(), "tx"); got != 0 {
+		t.Errorf("network fail should be 0, got %d", got)
+	}
+}
