@@ -91,6 +91,7 @@ var migrationFiles = []struct {
 	{93, migrations.SystemSettingsSQL},                 // D-296 系统配置单行表（tronscan_base）
 	{94, migrations.TrxVoteAprMinRateSQL},              // D-297 TRX 投票 APR 加 min_rate/min_sr 列
 	{95, migrations.XassetMonitorSQL},                  // D-299 PAXG-XAU 跨市场套利监控快照
+	{96, migrations.EventCasesPaperTradesSQL},          // D-274 事件驱动研判引擎：event_cases + paper_trades
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

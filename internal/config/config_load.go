@@ -116,6 +116,9 @@ func Load() *Config {
 		// === D-271 CEX 只读扫描器 ===
 		CexScanInterval: envDur("ARB_CEX_SCAN_INTERVAL", 5*time.Minute),
 		CexScanSymbols:  cexScanSymbolsDefault(),
+		// === D-274 事件驱动研判引擎 ===
+		JudgeBalanceHKD: envFloat("ARB_JUDGE_BALANCE_HKD", 0),
+		JudgeBalanceUSD: envFloat("ARB_JUDGE_BALANCE_USD", 0),
 	}
 }
 
