@@ -307,6 +307,18 @@ const (
 	// DashboardServiceDeletePriceAlertRuleProcedure is the fully-qualified name of the
 	// DashboardService's DeletePriceAlertRule RPC.
 	DashboardServiceDeletePriceAlertRuleProcedure = "/arb.dashboard.v1.DashboardService/DeletePriceAlertRule"
+	// DashboardServiceListEventJudgmentsProcedure is the fully-qualified name of the DashboardService's
+	// ListEventJudgments RPC.
+	DashboardServiceListEventJudgmentsProcedure = "/arb.dashboard.v1.DashboardService/ListEventJudgments"
+	// DashboardServiceListPaperTradesProcedure is the fully-qualified name of the DashboardService's
+	// ListPaperTrades RPC.
+	DashboardServiceListPaperTradesProcedure = "/arb.dashboard.v1.DashboardService/ListPaperTrades"
+	// DashboardServiceAcceptJudgmentProcedure is the fully-qualified name of the DashboardService's
+	// AcceptJudgment RPC.
+	DashboardServiceAcceptJudgmentProcedure = "/arb.dashboard.v1.DashboardService/AcceptJudgment"
+	// DashboardServiceSettlePaperTradeProcedure is the fully-qualified name of the DashboardService's
+	// SettlePaperTrade RPC.
+	DashboardServiceSettlePaperTradeProcedure = "/arb.dashboard.v1.DashboardService/SettlePaperTrade"
 )
 
 // DashboardServiceClient is a client for the arb.dashboard.v1.DashboardService service.
@@ -436,6 +448,11 @@ type DashboardServiceClient interface {
 	CreatePriceAlertRule(context.Context, *connect.Request[v1.CreatePriceAlertRuleRequest]) (*connect.Response[v1.CreatePriceAlertRuleResponse], error)
 	UpdatePriceAlertRule(context.Context, *connect.Request[v1.UpdatePriceAlertRuleRequest]) (*connect.Response[v1.UpdatePriceAlertRuleResponse], error)
 	DeletePriceAlertRule(context.Context, *connect.Request[v1.DeletePriceAlertRuleRequest]) (*connect.Response[v1.DeletePriceAlertRuleResponse], error)
+	// D-274：事件驱动研判引擎（S8）
+	ListEventJudgments(context.Context, *connect.Request[v1.ListEventJudgmentsRequest]) (*connect.Response[v1.ListEventJudgmentsResponse], error)
+	ListPaperTrades(context.Context, *connect.Request[v1.ListPaperTradesRequest]) (*connect.Response[v1.ListPaperTradesResponse], error)
+	AcceptJudgment(context.Context, *connect.Request[v1.AcceptJudgmentRequest]) (*connect.Response[v1.AcceptJudgmentResponse], error)
+	SettlePaperTrade(context.Context, *connect.Request[v1.SettlePaperTradeRequest]) (*connect.Response[v1.SettlePaperTradeResponse], error)
 }
 
 // NewDashboardServiceClient constructs a client for the arb.dashboard.v1.DashboardService service.
@@ -1001,6 +1018,30 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("DeletePriceAlertRule")),
 			connect.WithClientOptions(opts...),
 		),
+		listEventJudgments: connect.NewClient[v1.ListEventJudgmentsRequest, v1.ListEventJudgmentsResponse](
+			httpClient,
+			baseURL+DashboardServiceListEventJudgmentsProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListEventJudgments")),
+			connect.WithClientOptions(opts...),
+		),
+		listPaperTrades: connect.NewClient[v1.ListPaperTradesRequest, v1.ListPaperTradesResponse](
+			httpClient,
+			baseURL+DashboardServiceListPaperTradesProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListPaperTrades")),
+			connect.WithClientOptions(opts...),
+		),
+		acceptJudgment: connect.NewClient[v1.AcceptJudgmentRequest, v1.AcceptJudgmentResponse](
+			httpClient,
+			baseURL+DashboardServiceAcceptJudgmentProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("AcceptJudgment")),
+			connect.WithClientOptions(opts...),
+		),
+		settlePaperTrade: connect.NewClient[v1.SettlePaperTradeRequest, v1.SettlePaperTradeResponse](
+			httpClient,
+			baseURL+DashboardServiceSettlePaperTradeProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("SettlePaperTrade")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1098,6 +1139,10 @@ type dashboardServiceClient struct {
 	createPriceAlertRule      *connect.Client[v1.CreatePriceAlertRuleRequest, v1.CreatePriceAlertRuleResponse]
 	updatePriceAlertRule      *connect.Client[v1.UpdatePriceAlertRuleRequest, v1.UpdatePriceAlertRuleResponse]
 	deletePriceAlertRule      *connect.Client[v1.DeletePriceAlertRuleRequest, v1.DeletePriceAlertRuleResponse]
+	listEventJudgments        *connect.Client[v1.ListEventJudgmentsRequest, v1.ListEventJudgmentsResponse]
+	listPaperTrades           *connect.Client[v1.ListPaperTradesRequest, v1.ListPaperTradesResponse]
+	acceptJudgment            *connect.Client[v1.AcceptJudgmentRequest, v1.AcceptJudgmentResponse]
+	settlePaperTrade          *connect.Client[v1.SettlePaperTradeRequest, v1.SettlePaperTradeResponse]
 }
 
 // ListLatestQuotes calls arb.dashboard.v1.DashboardService.ListLatestQuotes.
@@ -1560,6 +1605,26 @@ func (c *dashboardServiceClient) DeletePriceAlertRule(ctx context.Context, req *
 	return c.deletePriceAlertRule.CallUnary(ctx, req)
 }
 
+// ListEventJudgments calls arb.dashboard.v1.DashboardService.ListEventJudgments.
+func (c *dashboardServiceClient) ListEventJudgments(ctx context.Context, req *connect.Request[v1.ListEventJudgmentsRequest]) (*connect.Response[v1.ListEventJudgmentsResponse], error) {
+	return c.listEventJudgments.CallUnary(ctx, req)
+}
+
+// ListPaperTrades calls arb.dashboard.v1.DashboardService.ListPaperTrades.
+func (c *dashboardServiceClient) ListPaperTrades(ctx context.Context, req *connect.Request[v1.ListPaperTradesRequest]) (*connect.Response[v1.ListPaperTradesResponse], error) {
+	return c.listPaperTrades.CallUnary(ctx, req)
+}
+
+// AcceptJudgment calls arb.dashboard.v1.DashboardService.AcceptJudgment.
+func (c *dashboardServiceClient) AcceptJudgment(ctx context.Context, req *connect.Request[v1.AcceptJudgmentRequest]) (*connect.Response[v1.AcceptJudgmentResponse], error) {
+	return c.acceptJudgment.CallUnary(ctx, req)
+}
+
+// SettlePaperTrade calls arb.dashboard.v1.DashboardService.SettlePaperTrade.
+func (c *dashboardServiceClient) SettlePaperTrade(ctx context.Context, req *connect.Request[v1.SettlePaperTradeRequest]) (*connect.Response[v1.SettlePaperTradeResponse], error) {
+	return c.settlePaperTrade.CallUnary(ctx, req)
+}
+
 // DashboardServiceHandler is an implementation of the arb.dashboard.v1.DashboardService service.
 type DashboardServiceHandler interface {
 	// 快照类
@@ -1687,6 +1752,11 @@ type DashboardServiceHandler interface {
 	CreatePriceAlertRule(context.Context, *connect.Request[v1.CreatePriceAlertRuleRequest]) (*connect.Response[v1.CreatePriceAlertRuleResponse], error)
 	UpdatePriceAlertRule(context.Context, *connect.Request[v1.UpdatePriceAlertRuleRequest]) (*connect.Response[v1.UpdatePriceAlertRuleResponse], error)
 	DeletePriceAlertRule(context.Context, *connect.Request[v1.DeletePriceAlertRuleRequest]) (*connect.Response[v1.DeletePriceAlertRuleResponse], error)
+	// D-274：事件驱动研判引擎（S8）
+	ListEventJudgments(context.Context, *connect.Request[v1.ListEventJudgmentsRequest]) (*connect.Response[v1.ListEventJudgmentsResponse], error)
+	ListPaperTrades(context.Context, *connect.Request[v1.ListPaperTradesRequest]) (*connect.Response[v1.ListPaperTradesResponse], error)
+	AcceptJudgment(context.Context, *connect.Request[v1.AcceptJudgmentRequest]) (*connect.Response[v1.AcceptJudgmentResponse], error)
+	SettlePaperTrade(context.Context, *connect.Request[v1.SettlePaperTradeRequest]) (*connect.Response[v1.SettlePaperTradeResponse], error)
 }
 
 // NewDashboardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -2248,6 +2318,30 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("DeletePriceAlertRule")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceListEventJudgmentsHandler := connect.NewUnaryHandler(
+		DashboardServiceListEventJudgmentsProcedure,
+		svc.ListEventJudgments,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListEventJudgments")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceListPaperTradesHandler := connect.NewUnaryHandler(
+		DashboardServiceListPaperTradesProcedure,
+		svc.ListPaperTrades,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListPaperTrades")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceAcceptJudgmentHandler := connect.NewUnaryHandler(
+		DashboardServiceAcceptJudgmentProcedure,
+		svc.AcceptJudgment,
+		connect.WithSchema(dashboardServiceMethods.ByName("AcceptJudgment")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceSettlePaperTradeHandler := connect.NewUnaryHandler(
+		DashboardServiceSettlePaperTradeProcedure,
+		svc.SettlePaperTrade,
+		connect.WithSchema(dashboardServiceMethods.ByName("SettlePaperTrade")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/arb.dashboard.v1.DashboardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DashboardServiceListLatestQuotesProcedure:
@@ -2434,6 +2528,14 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceUpdatePriceAlertRuleHandler.ServeHTTP(w, r)
 		case DashboardServiceDeletePriceAlertRuleProcedure:
 			dashboardServiceDeletePriceAlertRuleHandler.ServeHTTP(w, r)
+		case DashboardServiceListEventJudgmentsProcedure:
+			dashboardServiceListEventJudgmentsHandler.ServeHTTP(w, r)
+		case DashboardServiceListPaperTradesProcedure:
+			dashboardServiceListPaperTradesHandler.ServeHTTP(w, r)
+		case DashboardServiceAcceptJudgmentProcedure:
+			dashboardServiceAcceptJudgmentHandler.ServeHTTP(w, r)
+		case DashboardServiceSettlePaperTradeProcedure:
+			dashboardServiceSettlePaperTradeHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -2809,4 +2911,20 @@ func (UnimplementedDashboardServiceHandler) UpdatePriceAlertRule(context.Context
 
 func (UnimplementedDashboardServiceHandler) DeletePriceAlertRule(context.Context, *connect.Request[v1.DeletePriceAlertRuleRequest]) (*connect.Response[v1.DeletePriceAlertRuleResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.DeletePriceAlertRule is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListEventJudgments(context.Context, *connect.Request[v1.ListEventJudgmentsRequest]) (*connect.Response[v1.ListEventJudgmentsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListEventJudgments is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListPaperTrades(context.Context, *connect.Request[v1.ListPaperTradesRequest]) (*connect.Response[v1.ListPaperTradesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListPaperTrades is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) AcceptJudgment(context.Context, *connect.Request[v1.AcceptJudgmentRequest]) (*connect.Response[v1.AcceptJudgmentResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AcceptJudgment is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) SettlePaperTrade(context.Context, *connect.Request[v1.SettlePaperTradeRequest]) (*connect.Response[v1.SettlePaperTradeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SettlePaperTrade is not implemented"))
 }
