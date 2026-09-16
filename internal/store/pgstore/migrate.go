@@ -93,6 +93,7 @@ var migrationFiles = []struct {
 	{95, migrations.XassetMonitorSQL},                  // D-299 PAXG-XAU 跨市场套利监控快照
 	{96, migrations.EventCasesPaperTradesSQL},          // D-274 事件驱动研判引擎：event_cases + paper_trades
 	{97, migrations.XassetCarrySQL},                    // D-300 跨标的同质资产套利：asset_equiv + opportunities XASSET_CARRY
+	{98, migrations.XassetXautSQL},                     // D-300 增量：GOLD 挂 XAUTUSDT（业主 9-16 并存裁定）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
