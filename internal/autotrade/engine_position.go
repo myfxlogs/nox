@@ -32,8 +32,30 @@ func (e *Engine) checkExitCondition(ctx context.Context, p *pgstore.Position) (b
 		}
 		return false, ""
 	}
-	// 息差型：按 swap/funding 子分派（IsCarryType 已判定为息差家族，此处只区分 swap vs funding；
-	// XASSET_CARRY 无执行路径，落此分支时按 swap 侧处理且数据缺失 fail-closed，安全）
+	// 息差型：按 swap/funding 子分派（IsCarryType 已判定为息差家族，此处只区分 swap vs funding）
+	// D-311 S5：XASSET_CARRY 专属分支——跨 canonical 逐腿泛化净收入（perp=funding、MT=swap），
+	// 不复用 recalcNetFunding 的 long−short 口径（疑似存量反向，另列 D-312 待裁）。
+	// 退出判定复用 perpFundingExitDecision（持有下限+连续去抖+fail-closed，同一把 fundingMu）。
+	if p.Type == "XASSET_CARRY" {
+		netCarry, ok := e.recalcXAssetNetCarry(ctx, p)
+		var held time.Duration
+		if p.OpenedAt != nil {
+			held = time.Since(*p.OpenedAt)
+		}
+		e.fundingMu.Lock()
+		curCount := e.fundingBreach[p.ID]
+		shouldClose, newCount, reason := perpFundingExitDecision(ok, held, netCarry, e.cfg.FundingExitPct, e.cfg.PerpFundMinHold, e.cfg.PerpFundExitDebounce, curCount)
+		if newCount == 0 {
+			delete(e.fundingBreach, p.ID)
+		} else {
+			e.fundingBreach[p.ID] = newCount
+		}
+		e.fundingMu.Unlock()
+		if shouldClose {
+			return true, reason
+		}
+		return e.basisStopCheck(p)
+	}
 	if p.Type == "FUNDING_HEDGE" || p.Type == "PERP_FUNDING" {
 		// D-133 T1：PERP_FUNDING 走持有下限 + 连续去抖（修复 D-129 瞬时费率判平致命缺陷）；
 		// FUNDING_HEDGE 保持旧语义（单次瞬时读数 ≤ 阈值即平，CFD 无结算窗概念）。
@@ -72,11 +94,16 @@ func (e *Engine) checkExitCondition(ctx context.Context, p *pgstore.Position) (b
 	if netSwap <= e.cfg.SwapArbExitBps {
 		return true, fmt.Sprintf("net swap %.3f bps/day <= %.1f", netSwap, e.cfg.SwapArbExitBps)
 	}
-	// D-180 S3：基差止损翻正——PnL_bps = currentBasisBps − expected_entry_spread_bps。
-	// PnL_bps < −BasisStopBps → 平仓（亏损方向，非旧 A5 的盈利方向绝对值门禁）。
-	// 口径：entry=成交价(含滑点) / current=报价口径(不含滑点) → PnL 保守(止损偏早=安全)。
-	// 基准列 NULL/报价缺失 → 不决策（fail-closed 惯例）。
-	// BasisStopBps<=0 → 回退旧 swapArbBasisExitBps 绝对值门禁（向后兼容）。
+	return e.basisStopCheck(p)
+}
+
+// basisStopCheck D-311 S5：基差止损块抽出共用（SWAPARB/CARRY 与 XASSET_CARRY 同语义）。
+// D-180 S3：PnL_bps = currentBasisBps − expected_entry_spread_bps。
+// PnL_bps < −BasisStopBps → 平仓（亏损方向，非旧 A5 的盈利方向绝对值门禁）。
+// 口径：entry=成交价(含滑点) / current=报价口径(不含滑点) → PnL 保守(止损偏早=安全)。
+// 基准列 NULL/报价缺失 → 不决策（fail-closed 惯例）。
+// BasisStopBps<=0 → 回退旧 swapArbBasisExitBps 绝对值门禁（向后兼容）。
+func (e *Engine) basisStopCheck(p *pgstore.Position) (bool, string) {
 	if e.cfg.BasisStopBps > 0 {
 		basisBps, bok := e.currentBasisBps(p)
 		if shouldClose, reason := basisStopLossCheck(basisBps, bok, p.ExpectedEntrySpreadBps, e.cfg.BasisStopBps); shouldClose {

@@ -38,6 +38,11 @@ type Config struct {
 	SwapArbMaxGrossExposure float64
 	MaxActiveCombos         int
 
+	// D-311 S6：XASSET_CARRY 精确组合门禁——零信任显式白名单。
+	// handleOpportunity 前置拦截：不命中→静默跳过（不产 intent 不落 REJECTED，
+	// 修 462 条/时 REJECTED 刷屏）。空表=全拒。
+	XAssetAllowCombos []exec.XAssetComboAllowSpec
+
 	// D-159 W1a I6：environment/is_real 一致性检查。
 	// Environment 执行环境固定值（'demo'/'live'）。开仓前校验 venue 的 is_real 与此值一致。
 	// 空 = 未配置（不检查，回退旧行为）。

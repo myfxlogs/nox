@@ -20,21 +20,27 @@ import (
 //   - venue 不存在 → fail-closed 拒绝
 //
 // venueKey 格式 "account:mt5"，venue=account（broker_accounts.venue）。
+// D-311 S7：GetBrokerAccount → ListVenueIsReal 合并视图（broker_accounts.is_real ∪
+// exchange_configs.simulated 取反）——CEX venue（gate/okx/binance）开始可判；MT 语义不变。
 func (g *Gate) environmentIsRealCheck(ctx context.Context, intent TradeIntent) GateVerdict {
 	wantLive := g.cfg.Environment == "live"
+	isRealMap, err := g.store.ListVenueIsReal(ctx)
+	if err != nil {
+		return GateVerdict{Pass: false, Reason: fmt.Sprintf("environment check: is_real map query failed (%v)", err)}
+	}
 	for _, venueKey := range []string{intent.VenueBuy, intent.VenueSell} {
 		venue, _, _ := strings.Cut(venueKey, ":")
 		if venue == "" {
 			return GateVerdict{Pass: false, Reason: fmt.Sprintf("environment check: empty venue in %s", venueKey)}
 		}
-		acct, err := g.store.GetBrokerAccount(ctx, venue)
-		if err != nil {
-			return GateVerdict{Pass: false, Reason: fmt.Sprintf("environment check: venue %s not found (%v)", venue, err)}
+		isReal, known := isRealMap[venue]
+		if !known {
+			return GateVerdict{Pass: false, Reason: fmt.Sprintf("environment check: venue %s not found", venue)}
 		}
-		if acct.IsReal == nil {
+		if isReal == nil {
 			return GateVerdict{Pass: false, Reason: fmt.Sprintf("environment check: venue %s is_real unknown (null)", venue)}
 		}
-		isLive := *acct.IsReal
+		isLive := *isReal
 		if isLive != wantLive {
 			return GateVerdict{Pass: false, Reason: fmt.Sprintf("environment check: venue %s is_real=%v != environment=%s", venue, isLive, g.cfg.Environment)}
 		}
@@ -46,20 +52,25 @@ func (g *Gate) environmentIsRealCheck(ctx context.Context, intent TradeIntent) G
 // LiveTrade=false 时，任一腿 is_real=true → 拒绝（实盘账户不允许开仓）。
 // is_real=false（demo）→ 放行。is_real=nil（未知）→ fail-closed 拒绝。
 // venue 不存在 → fail-closed 拒绝。
+// D-311 S7：同 environmentIsRealCheck 切 ListVenueIsReal 合并视图（CEX venue 可判）。
 func (g *Gate) liveGateCheck(ctx context.Context, intent TradeIntent) GateVerdict {
+	isRealMap, err := g.store.ListVenueIsReal(ctx)
+	if err != nil {
+		return GateVerdict{Pass: false, Reason: fmt.Sprintf("live gate: is_real map query failed (%v)", err)}
+	}
 	for _, venueKey := range []string{intent.VenueBuy, intent.VenueSell} {
 		venue, _, _ := strings.Cut(venueKey, ":")
 		if venue == "" {
 			return GateVerdict{Pass: false, Reason: fmt.Sprintf("live gate: empty venue in %s", venueKey)}
 		}
-		acct, err := g.store.GetBrokerAccount(ctx, venue)
-		if err != nil {
-			return GateVerdict{Pass: false, Reason: fmt.Sprintf("live gate: venue %s not found (%v)", venue, err)}
+		isReal, known := isRealMap[venue]
+		if !known {
+			return GateVerdict{Pass: false, Reason: fmt.Sprintf("live gate: venue %s not found", venue)}
 		}
-		if acct.IsReal == nil {
+		if isReal == nil {
 			return GateVerdict{Pass: false, Reason: fmt.Sprintf("live gate: venue %s is_real unknown (null)", venue)}
 		}
-		if *acct.IsReal {
+		if *isReal {
 			return GateVerdict{Pass: false, Reason: fmt.Sprintf("live trade disabled (ARB_LIVE_TRADE=false, venue=%s is_real=true)", venue)}
 		}
 	}

@@ -31,9 +31,10 @@ var (
 	// ErrEmptyLegs legs 为空，拒绝建仓（修复⑭ S4：nil legs 无下单意图，不应落库）。
 	ErrEmptyLegs = errors.New("legs required (nil/empty legs has no execution intent)")
 	// D-159 W1a R1 S2.3：SWAPARB 精确组合门禁错误。
-	ErrComboNotAllowed      = errors.New("swaparb combo not in allowlist")
-	ErrQtyExceedsLimit      = errors.New("swaparb leg qty exceeds allowlist limit")
-	ErrGrossExposureExceeds = errors.New("swaparb gross exposure exceeds allowlist limit")
+	ErrComboNotAllowed       = errors.New("swaparb combo not in allowlist")
+	ErrXAssetComboNotAllowed = errors.New("xasset combo not in allowlist") // D-311 S6
+	ErrQtyExceedsLimit       = errors.New("swaparb leg qty exceeds allowlist limit")
+	ErrGrossExposureExceeds  = errors.New("swaparb gross exposure exceeds allowlist limit")
 )
 
 // Pipeline 是执行管线（§13.1）。
@@ -63,6 +64,10 @@ type Pipeline struct {
 	// nil = 未接线（gate 层 + dashboard 手动入口兜底，pipeline 不重复检查）。
 	swapArbComboAllow []ComboAllowSpec
 	notionalUSD       float64
+
+	// D-311 S6：XASSET_CARRY 精确组合门禁——零信任显式白名单。
+	// posType=XASSET_CARRY 时无条件校验（空表=全拒），canonical_sell 从 opportunities 行解析。
+	xassetComboAllow []XAssetComboAllowSpec
 
 	// D-189 P0-2 → D-193-A 扩包（决策 8）：现金流写入 seam——生产默认调 p.store.InsertCashflowFull，
 	// 测试注入失败函数验证显式错误处理。签名改 Full 形态（接收 *pgstore.Cashflow，返回 (won, err)）。

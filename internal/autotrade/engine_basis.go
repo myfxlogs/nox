@@ -6,10 +6,13 @@ import (
 	"arb/internal/store/pgstore"
 )
 
-// currentBasisBps 重算 SWAPARB/CARRY 当前基差（两腿 venue 最新报价 cross-broker spread bps）。
+// currentBasisBps 重算 SWAPARB/CARRY/XASSET_CARRY 当前基差（两腿 venue 最新报价 cross-broker spread bps）。
 // 复用 recalcNetSwap 的 legs/venue 解析链；报价取 e.quotes.Latest。
 // 报价缺失 → (0, false) 不决策（与 D-105 fail-closed 一致）。
 // D-108 A5：从 engine_position.go 拆出（357→310 行达标）。
+// D-311 S5：双腿各自 canonical——买=canonicalFromOppID、卖=canonical_sell（xassetSellCanonical
+// 同解析路径）。非 XASSET 类型 canonical_sell 恒 NULL → map 兜底命中同 canonical = 旧行为；
+// XASSET 解析不出 → fail-closed（不拿买 canonical 错查卖腿报价——同所跨 canonical 会静默错腿）。
 func (e *Engine) currentBasisBps(p *pgstore.Position) (float64, bool) {
 	if e.quotes == nil {
 		return 0, false
@@ -35,8 +38,15 @@ func (e *Engine) currentBasisBps(p *pgstore.Position) (float64, bool) {
 	if buyLeg == nil || sellLeg == nil {
 		return 0, false
 	}
+	sellCanonical := e.xassetSellCanonical(context.Background(), p, legs)
+	if sellCanonical == "" {
+		if p.Type == "XASSET_CARRY" {
+			return 0, false // XASSET 跨 canonical：解析不出不拿买 canonical 错查
+		}
+		sellCanonical = canonical // 旧行为回退（SWAPARB/CARRY 同 canonical 组合）
+	}
 	buyQuote, ok1 := e.quotes.Latest(canonical, buyLeg.Venue)
-	sellQuote, ok2 := e.quotes.Latest(canonical, sellLeg.Venue)
+	sellQuote, ok2 := e.quotes.Latest(sellCanonical, sellLeg.Venue)
 	if !ok1 || !ok2 {
 		return 0, false
 	}

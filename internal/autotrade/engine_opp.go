@@ -83,6 +83,19 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 			return
 		}
 	}
+	// D-311 S6：XASSET_CARRY 前置拦截——零信任白名单（空表=全拒）。
+	// 不命中→静默跳过（不产 intent 不落 REJECTED，修 462 条/时 REJECTED 刷屏；
+	// 环境门挡不住时白名单是 CEX 真单的最后闸）。canonical_sell nil/空→回退 canonical。
+	if opp.Type == "XASSET_CARRY" {
+		sellCanonical := opp.Canonical
+		if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
+			sellCanonical = *opp.CanonicalSell
+		}
+		if exec.MatchXAssetComboAllow(e.cfg.XAssetAllowCombos, opp.Canonical, sellCanonical, opp.VenueBuy, opp.VenueSell) == nil {
+			log.Printf("[autotrade] skip %s: XASSET_CARRY combo not in allowlist (%s/%s %s×%s)", opp.ID, opp.Canonical, sellCanonical, opp.VenueBuy, opp.VenueSell)
+			return
+		}
+	}
 	// 门槛：净收益
 	if opp.NetBps < e.cfg.MinNetBps {
 		log.Printf("[autotrade] skip %s: netBps %.2f < %.2f", opp.ID, opp.NetBps, e.cfg.MinNetBps)

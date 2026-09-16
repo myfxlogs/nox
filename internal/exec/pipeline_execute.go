@@ -87,6 +87,14 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 		}
 	}
 
+	// D-311 S6：XASSET_CARRY 精确组合门禁——零信任显式白名单（空表=全拒，区别于 SWAPARB
+	// 的 nil=未接线）。建 position 前校验组合允许 + 双腿名义额/gross 上限。
+	if posType == "XASSET_CARRY" {
+		if err := p.checkXAssetComboAllow(ctx, opportunityID, legs); err != nil {
+			return nil, err
+		}
+	}
+
 	// 建 position(OPENING)——type 在创建时即写入（修复⑭ S4：原创建空 type 撞 positions_type_check，
 	// 靠调用方事后 UpdatePositionMeta 补 type，空窗期约束已拒）。
 	posID, err := p.store.CreatePosition(ctx, &pgstore.Position{

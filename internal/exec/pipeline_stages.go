@@ -39,6 +39,12 @@ func (p *Pipeline) SetSwapArbComboAllow(allow []ComboAllowSpec, notionalUSD floa
 	p.notionalUSD = notionalUSD
 }
 
+// SetXAssetComboAllow 注入 XASSET_CARRY 精确组合门禁 allowlist（D-311 S6）。
+// 零信任：posType=XASSET_CARRY 时无条件校验（空表=全拒）。
+func (p *Pipeline) SetXAssetComboAllow(allow []XAssetComboAllowSpec) {
+	p.xassetComboAllow = allow
+}
+
 // LegSpec 是单腿下单规格。
 type LegSpec struct {
 	VenueKey      string // "venue:venueType"
@@ -131,6 +137,80 @@ func (p *Pipeline) checkSwapArbComboAllow(ctx context.Context, opportunityID str
 		}
 		if grossUSD > spec.MaxGrossExposureUSD {
 			return fmt.Errorf("%w: gross $%.2f > $%.2f", ErrGrossExposureExceeds, grossUSD, spec.MaxGrossExposureUSD)
+		}
+	}
+	return nil
+}
+
+// checkXAssetComboAllow D-311 S6：XASSET_CARRY 精确组合门禁——零信任显式白名单。
+// 从 opportunityID 解析 (canonicalBuy, venueBuy, venueSell)；canonical_sell 从
+// opportunities 行读（无行/NULL → 回退 canonicalBuy）。空表/不命中 → ErrComboNotAllowed；
+// 命中后校验双腿 qty 上限 + 真实名义额 gross USD 上限（CS/FX 缺失 fail-closed，
+// 与 checkSwapArbComboAllow 同语义；计价币按各腿自己的 canonical 取）。
+func (p *Pipeline) checkXAssetComboAllow(ctx context.Context, opportunityID string, legs []LegSpec) error {
+	comboKey := combo.FromOppID(opportunityID)
+	// 与 checkSwapArbComboAllow 同款切分：strategy|canonical|acct|plat|acct|plat（6 段）。
+	allParts := strings.Split(comboKey, ":")
+	if len(allParts) < 6 {
+		return fmt.Errorf("%w: cannot parse combo key %q (want 6+ parts, got %d)", ErrXAssetComboNotAllowed, comboKey, len(allParts))
+	}
+	canonicalBuy := allParts[1]
+	venueBuy := allParts[2] + ":" + allParts[3]
+	venueSell := allParts[4] + ":" + allParts[5]
+	canonicalSell := canonicalBuy
+	if opp, err := p.store.GetOpportunity(ctx, opportunityID); err != nil {
+		return fmt.Errorf("%w: canonical_sell lookup %q failed (%v)", ErrXAssetComboNotAllowed, opportunityID, err)
+	} else if opp != nil && opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
+		canonicalSell = *opp.CanonicalSell
+	}
+	spec := MatchXAssetComboAllow(p.xassetComboAllow, canonicalBuy, canonicalSell, venueBuy, venueSell)
+	if spec == nil {
+		return fmt.Errorf("%w: %s/%s %s×%s", ErrXAssetComboNotAllowed, canonicalBuy, canonicalSell, venueBuy, venueSell)
+	}
+	var longQty, shortQty float64
+	for _, leg := range legs {
+		if leg.Side == "BUY" {
+			longQty = leg.Qty
+		} else if leg.Side == "SELL" {
+			shortQty = leg.Qty
+		}
+	}
+	if spec.MaxLongQty > 0 && longQty > spec.MaxLongQty {
+		return fmt.Errorf("%w: long %.4f > %.4f", ErrQtyExceedsLimit, longQty, spec.MaxLongQty)
+	}
+	if spec.MaxShortQty > 0 && shortQty > spec.MaxShortQty {
+		return fmt.Errorf("%w: short %.4f > %.4f", ErrQtyExceedsLimit, shortQty, spec.MaxShortQty)
+	}
+	if spec.MaxGrossUSD > 0 {
+		var grossUSD float64
+		for _, leg := range legs {
+			legCanonical := canonicalSell
+			if leg.Side == "BUY" {
+				legCanonical = canonicalBuy
+			}
+			quoteCcy := notional.QuoteCcy(legCanonical)
+			if p.csResolver == nil {
+				return fmt.Errorf("%w: csResolver not wired (fail-closed)", ErrComboNotAllowed)
+			}
+			cs, ok := p.csResolver.ContractSize(leg.VenueKey, leg.VenueSymbol)
+			if !ok || cs <= 0 {
+				return fmt.Errorf("%w: CS missing for %s %s (fail-closed)", ErrComboNotAllowed, leg.VenueKey, leg.VenueSymbol)
+			}
+			fx := 1.0
+			if quoteCcy != "" && quoteCcy != "USD" {
+				if p.fxResolver == nil {
+					return fmt.Errorf("%w: fxResolver not wired for non-USD quote ccy %s (fail-closed)", ErrComboNotAllowed, quoteCcy)
+				}
+				rate, ok := p.fxResolver.USDPer(ctx, quoteCcy, time.Now())
+				if !ok || rate <= 0 {
+					return fmt.Errorf("%w: fx missing for %s (fail-closed)", ErrComboNotAllowed, quoteCcy)
+				}
+				fx = rate
+			}
+			grossUSD += leg.Qty * cs * leg.PriceExpected * fx
+		}
+		if grossUSD > spec.MaxGrossUSD {
+			return fmt.Errorf("%w: gross $%.2f > $%.2f", ErrGrossExposureExceeds, grossUSD, spec.MaxGrossUSD)
 		}
 	}
 	return nil
