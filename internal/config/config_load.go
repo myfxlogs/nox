@@ -17,6 +17,9 @@ func Load() *Config {
 		FundingBaselinePct:          envFloat("ARB_FUNDING_BASELINE_PCT", 10.95), // D-084 同所基准费率扣除
 		CarryMinNetAnnualized:       envFloat("ARB_CARRY_MIN_NET_ANNUALIZED", 4.0),
 		PerpFundingMinNetAnnualized: envFloat("ARB_PERP_FUNDING_MIN_NET_ANNUALIZED", 2.0),
+		XassetEntryMinBps:           envFloat("ARB_XASSET_ENTRY_MIN_BPS", -20.0),    // D-300：容忍 ≤0.2% 逆价进场（evaluator 计入回本天数）
+		XassetMinNetAnnualPct:       envFloat("ARB_XASSET_MIN_NET_ANNUAL_PCT", 0.0), // D-300：净息差>0 即候选（margin 扣减在 evaluator）
+		XassetTrackingMaxBps:        envFloat("ARB_XASSET_TRACKING_MAX_BPS", 50.0),  // D-300 §5.3
 		GrabMinNetAnnualized:        envFloat("ARB_GRAB_MIN_NET_ANNUALIZED", 4.5),
 		DetectorFreshnessTTL:        envDur("ARB_DETECTOR_FRESHNESS_TTL", 120*time.Second), // D-070 均值回归：放宽 freshness 让低频报价 venue 配对
 		SlippageBps:                 envFloat("ARB_SLIPPAGE_BPS", 0.3),                     // D-070 均值回归：降低滑点假设（CFD 限价单）
@@ -58,6 +61,7 @@ func Load() *Config {
 		FundingHedgeMinNetStore:    envFloat("ARB_FUNDING_HEDGE_MIN_NET_STORE", 14.95), // D-085 息差家族净门槛（含基准 10.95+门槛 4）
 		PerpFundingMinNetStore:     envFloat("ARB_PERP_FUNDING_MIN_NET_STORE", 2.0),    // D-085
 		CarryMinNetStore:           envFloat("ARB_CARRY_MIN_NET_STORE", 4.0),           // D-085
+		XassetCarryMinNetStore:     envFloat("ARB_XASSET_CARRY_MIN_NET_STORE", 0.0),    // D-300 G5
 		VerifyWindowDays:           envInt("ARB_VERIFY_WINDOW_DAYS", 30),               // D-086 验证样本新鲜窗口
 		VerifyMinSamples:           envInt("ARB_VERIFY_MIN_SAMPLES", 2),                // D-086 V1 最低样本数
 		VerifyMinRatio:             envFloat("ARB_VERIFY_MIN_RATIO", 0.7),              // D-086 V1 最低 R

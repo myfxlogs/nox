@@ -14,6 +14,8 @@ type Opportunity struct {
 	ID             string
 	Type           string
 	Canonical      string
+	CanonicalSell  *string // D-300：卖腿 canonical（XASSET_CARRY；其余 type NULL）
+	AssetClass     *string // D-300：标的等价类（XASSET_CARRY；其余 type NULL）
 	VenueBuy       string
 	VenueSell      string
 	PriceBuy       float64
@@ -38,12 +40,13 @@ type Opportunity struct {
 // D-080：id=组合键（6 段，无时间戳），同组合每 tick 刷新同行（last_seen=now()）。
 func (s *Store) UpsertOpportunity(ctx context.Context, o *Opportunity) (bool, error) {
 	q := `INSERT INTO opportunities (
-			id, type, canonical, venue_buy, venue_sell, price_buy, price_sell,
+			id, type, canonical, canonical_sell, asset_class, venue_buy, venue_sell, price_buy, price_sell,
 			gross_bps, spread_cost, commission_cost, slippage_cost, swap_cost,
 			net_bps, breakeven_days, quote_time, expires_at, created_at, updated_at
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,now(),now())
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,now(),now())
 		ON CONFLICT (id) DO UPDATE SET
 			canonical=EXCLUDED.canonical,
+			canonical_sell=EXCLUDED.canonical_sell, asset_class=EXCLUDED.asset_class,
 			price_buy=EXCLUDED.price_buy, price_sell=EXCLUDED.price_sell,
 			gross_bps=EXCLUDED.gross_bps, spread_cost=EXCLUDED.spread_cost,
 			commission_cost=EXCLUDED.commission_cost, slippage_cost=EXCLUDED.slippage_cost,
@@ -53,7 +56,7 @@ func (s *Store) UpsertOpportunity(ctx context.Context, o *Opportunity) (bool, er
 		RETURNING (xmax = 0) AS inserted`
 	var inserted bool
 	if err := s.pool.QueryRow(ctx, q,
-		o.ID, o.Type, o.Canonical, o.VenueBuy, o.VenueSell, o.PriceBuy, o.PriceSell,
+		o.ID, o.Type, o.Canonical, o.CanonicalSell, o.AssetClass, o.VenueBuy, o.VenueSell, o.PriceBuy, o.PriceSell,
 		o.GrossBps, o.SpreadCost, o.CommissionCost, o.SlippageCost, o.SwapCost,
 		o.NetBps, o.BreakevenDays, o.QuoteTime, o.ExpiresAt).Scan(&inserted); err != nil {
 		return false, fmt.Errorf("upsert opportunity: %w", err)
@@ -66,7 +69,7 @@ func (s *Store) ListOpportunities(ctx context.Context, typ string, limit, offset
 	if limit <= 0 {
 		limit = 50
 	}
-	q := `SELECT id, type, canonical, venue_buy, venue_sell, price_buy, price_sell,
+	q := `SELECT id, type, canonical, canonical_sell, asset_class, venue_buy, venue_sell, price_buy, price_sell,
 			gross_bps, spread_cost, commission_cost, slippage_cost, swap_cost,
 			net_bps, breakeven_days, quote_time, expires_at, created_at, updated_at
 		FROM opportunities
@@ -84,13 +87,13 @@ func (s *Store) ListOpportunities(ctx context.Context, typ string, limit, offset
 
 // GetOpportunity D-091 分析员 get_entity：按 ID 读单条机会（含已过期）。不存在→nil, nil。
 func (s *Store) GetOpportunity(ctx context.Context, id string) (*Opportunity, error) {
-	q := `SELECT id, type, canonical, venue_buy, venue_sell, price_buy, price_sell,
+	q := `SELECT id, type, canonical, canonical_sell, asset_class, venue_buy, venue_sell, price_buy, price_sell,
 			gross_bps, spread_cost, commission_cost, slippage_cost, swap_cost,
 			net_bps, breakeven_days, quote_time, expires_at, created_at, updated_at
 		FROM opportunities WHERE id = $1`
 	var o Opportunity
 	err := s.pool.QueryRow(ctx, q, id).Scan(
-		&o.ID, &o.Type, &o.Canonical, &o.VenueBuy, &o.VenueSell, &o.PriceBuy, &o.PriceSell,
+		&o.ID, &o.Type, &o.Canonical, &o.CanonicalSell, &o.AssetClass, &o.VenueBuy, &o.VenueSell, &o.PriceBuy, &o.PriceSell,
 		&o.GrossBps, &o.SpreadCost, &o.CommissionCost, &o.SlippageCost, &o.SwapCost,
 		&o.NetBps, &o.BreakevenDays, &o.QuoteTime, &o.ExpiresAt, &o.CreatedAt, &o.UpdatedAt)
 	if err != nil {
@@ -248,7 +251,7 @@ func scanOpportunities(rows pgx.Rows) ([]Opportunity, error) {
 	for rows.Next() {
 		var o Opportunity
 		if err := rows.Scan(
-			&o.ID, &o.Type, &o.Canonical, &o.VenueBuy, &o.VenueSell, &o.PriceBuy, &o.PriceSell,
+			&o.ID, &o.Type, &o.Canonical, &o.CanonicalSell, &o.AssetClass, &o.VenueBuy, &o.VenueSell, &o.PriceBuy, &o.PriceSell,
 			&o.GrossBps, &o.SpreadCost, &o.CommissionCost, &o.SlippageCost, &o.SwapCost,
 			&o.NetBps, &o.BreakevenDays, &o.QuoteTime, &o.ExpiresAt, &o.CreatedAt, &o.UpdatedAt,
 		); err != nil {

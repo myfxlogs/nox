@@ -10,14 +10,18 @@ import (
 // Config 全链路经济参数。
 type Config struct {
 	// === 检测器阈值（§5，息差型统一为年化百分点，D-036）===
-	CrossVenueMinGrossBpsCEX    float64       // CEX(spot/perp) 跨所 gross 门槛（bps）。D-035：cross 降级，仅报价错位捕获
-	CrossVenueMinGrossBpsCFD    float64       // CFD(mt4/mt5) 跨所 gross 观察门槛（bps）。低于保本 2.6，展示仍靠评估器 net>0（D-051 WP1）
-	FundingMinNetAnnualized     float64       // funding hedge 净年化门槛（%）
-	FundingBaselinePct          float64       // 同所 funding 基准费率年化（%，ARB_FUNDING_BASELINE_PCT，缺省 10.95=0.01%/8h×3×365；D-084 基准≠机会，同所扣后过门槛）
-	CarryMinNetAnnualized       float64       // carry 净年化门槛（%）——D-036 由 bps 改百分点，与 funding 对齐
-	PerpFundingMinNetAnnualized float64       // perp×perp funding 差净年化门槛（%）——D-064
-	GrabMinNetAnnualized        float64       // grab 档门槛（%），替代 classify 硬编码 4.5（D-036）
-	DetectorFreshnessTTL        time.Duration // 报价陈旧排除 TTL
+	CrossVenueMinGrossBpsCEX    float64 // CEX(spot/perp) 跨所 gross 门槛（bps）。D-035：cross 降级，仅报价错位捕获
+	CrossVenueMinGrossBpsCFD    float64 // CFD(mt4/mt5) 跨所 gross 观察门槛（bps）。低于保本 2.6，展示仍靠评估器 net>0（D-051 WP1）
+	FundingMinNetAnnualized     float64 // funding hedge 净年化门槛（%）
+	FundingBaselinePct          float64 // 同所 funding 基准费率年化（%，ARB_FUNDING_BASELINE_PCT，缺省 10.95=0.01%/8h×3×365；D-084 基准≠机会，同所扣后过门槛）
+	CarryMinNetAnnualized       float64 // carry 净年化门槛（%）——D-036 由 bps 改百分点，与 funding 对齐
+	PerpFundingMinNetAnnualized float64 // perp×perp funding 差净年化门槛（%）——D-064
+	// === D-300 跨标的同质资产套利（XASSET_CARRY）===
+	XassetEntryMinBps     float64       // 进场价差门槛（bps，负值=容忍逆价进场；ARB_XASSET_ENTRY_MIN_BPS）
+	XassetMinNetAnnualPct float64       // 净息差门槛（funding−swap 年化 pp；ARB_XASSET_MIN_NET_ANNUAL_PCT）
+	XassetTrackingMaxBps  float64       // 跟踪误差上限（bps，设计 §5.3=50；ARB_XASSET_TRACKING_MAX_BPS）
+	GrabMinNetAnnualized  float64       // grab 档门槛（%），替代 classify 硬编码 4.5（D-036）
+	DetectorFreshnessTTL  time.Duration // 报价陈旧排除 TTL
 
 	// === 评估器成本（§6）===
 	SlippageBps      float64       // 单腿滑点（bps）
@@ -109,6 +113,7 @@ type Config struct {
 	FundingHedgeMinNetStore float64 // ARB_FUNDING_HEDGE_MIN_NET_STORE
 	PerpFundingMinNetStore  float64 // ARB_PERP_FUNDING_MIN_NET_STORE（默认 2.0）
 	CarryMinNetStore        float64 // ARB_CARRY_MIN_NET_STORE（默认 4.0）
+	XassetCarryMinNetStore  float64 // ARB_XASSET_CARRY_MIN_NET_STORE（默认 0=不过滤；detector 净息差门+evaluator margin 已双道）
 
 	// === 机会验证阶梯（D-086 V-Ladder）===
 	// VerifyWindowDays 验证样本新鲜窗口（ARB_VERIFY_WINDOW_DAYS，缺省 30 天）。

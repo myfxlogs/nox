@@ -250,6 +250,8 @@ message Opportunity {
   int32 verify_samples = 26;    // 验证样本数
   string alias_buy = 27;        // D-175：买腿别名（空=回退 venue_buy）
   string alias_sell = 28;       // D-175：卖腿别名（空=回退 venue_sell）
+  string asset_class = 29;      // D-300：跨标的同质资产类（XASSET_CARRY 填，如 GOLD；其余类型空）
+  string canonical_sell = 30;   // D-300：卖腿 canonical（XASSET_CARRY 跨 canonical 配对填；其余类型空=与买腿同）
 }
 
 message ListOpportunitiesRequest {
