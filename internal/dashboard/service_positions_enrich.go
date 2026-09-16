@@ -181,4 +181,13 @@ func enrichOne(ctx context.Context, s *Service, pb *v1.Position, legs []pgstore.
 			pb.CurrentNetBps = &bps
 		}
 	}
+
+	// 4. D-311 R10：回本列预期值回落——透传 opp.breakeven_days（入场评估保本天数），
+	// 前端实测缺省时回落显示「预 X.X 天」（实测优先在展示侧；XASSET 公式含价差冲减可近 0，>=0 即收）。
+	// error/行缺失/NULL/负值 → 静默缺省（勿污染主路径）；每仓一次查询（N 小，不批量预取）。
+	if pb.OpportunityId != "" && s.store != nil {
+		if o, err := s.store.GetOpportunity(ctx, pb.OpportunityId); err == nil && o != nil && o.BreakevenDays != nil && *o.BreakevenDays >= 0 {
+			pb.ExpectedBreakevenDays = o.BreakevenDays
+		}
+	}
 }

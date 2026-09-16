@@ -181,3 +181,75 @@ func TestEnrichOne_XAssetCarryThreeCols(t *testing.T) {
 		t.Errorf("breakEven=%.2f, want ≈%.2f 天", *pb.BreakEvenDays, want)
 	}
 }
+
+// TestEnrichOne_ExpectedBreakevenFallback D-311 R10：回本列预期值回落——
+// opp.breakeven_days 透传 expected_breakeven_days（实测缺省时前端回落「预 X.X 天」）。
+// 实测有值时 expected 仍透传（展示侧实测优先）；opp 无行/NULL/负值 → 缺省。
+func TestEnrichOne_ExpectedBreakevenFallback(t *testing.T) {
+	st := serviceTestStoreSingleInit(t)
+	ctx := context.Background()
+	be, neg := 1.5, -0.5
+	mustOpp := func(id string, breakeven *float64) {
+		_, err := st.UpsertOpportunity(ctx, &pgstore.Opportunity{
+			ID: id, Type: "XASSET_CARRY", Canonical: "CLUSDT",
+			VenueBuy: "gate:perp", VenueSell: "3001157:mt5",
+			PriceBuy: 63.5, PriceSell: 63.4, NetBps: 27.69, BreakevenDays: breakeven,
+			QuoteTime: time.Now(), ExpiresAt: time.Now().Add(time.Hour),
+		})
+		if err != nil {
+			t.Fatalf("upsert opp %s: %v", id, err)
+		}
+	}
+	mustOpp("XASSET:R10A:gate:perp:3001157:mt5", &be)
+	mustOpp("XASSET:R10B:gate:perp:3001157:mt5", nil)  // breakeven NULL
+	mustOpp("XASSET:R10C:gate:perp:3001157:mt5", &neg) // 负值 → 缺省
+
+	bpm := fakeBPMWithCache(nil)
+	s := newEnrichService(bpm)
+	s.store = st
+	now := time.Now()
+	mkPos := func(id int64, oppID string) *v1.Position {
+		return &v1.Position{Id: id, OpportunityId: oppID, Type: "XASSET_CARRY", Status: "OPEN",
+			OpenedAt: timestamppb.New(now.AddDate(0, 0, -3))}
+	}
+
+	// ① 实测缺省（matched=false+funding=0 → breakEven nil）→ expected=1.5 透传
+	pb1 := mkPos(901, "XASSET:R10A:gate:perp:3001157:mt5")
+	enrichOne(ctx, s, pb1, nil, bpm.Snapshot(), now, map[string]time.Weekday{}, map[int64]float64{})
+	if pb1.BreakEvenDays != nil {
+		t.Fatalf("case1 breakEven 应缺省（无收息），got %v", *pb1.BreakEvenDays)
+	}
+	if pb1.ExpectedBreakevenDays == nil || math.Abs(*pb1.ExpectedBreakevenDays-1.5) > 1e-9 {
+		t.Fatalf("case1 expected=%v, want 1.5（opp.breakeven_days 透传）", pb1.ExpectedBreakevenDays)
+	}
+
+	// ② 实测有值（funding>0 → breakEven=0 已回本）→ expected 仍透传，前端优先实测
+	pb2 := mkPos(902, "XASSET:R10A:gate:perp:3001157:mt5")
+	enrichOne(ctx, s, pb2, nil, bpm.Snapshot(), now, map[string]time.Weekday{}, map[int64]float64{902: 0.73})
+	if pb2.BreakEvenDays == nil {
+		t.Fatal("case2 breakEven 应出值（funding>0 实测），got nil")
+	}
+	if pb2.ExpectedBreakevenDays == nil || math.Abs(*pb2.ExpectedBreakevenDays-1.5) > 1e-9 {
+		t.Fatalf("case2 expected=%v, want 1.5（实测有值仍透传，展示侧实测优先）", pb2.ExpectedBreakevenDays)
+	}
+
+	// ③ opp breakeven NULL → expected 缺省；④ 负值 → 缺省
+	for _, tc := range []struct {
+		id    int64
+		oppID string
+	}{{903, "XASSET:R10B:gate:perp:3001157:mt5"}, {904, "XASSET:R10C:gate:perp:3001157:mt5"}} {
+		pb := mkPos(tc.id, tc.oppID)
+		enrichOne(ctx, s, pb, nil, bpm.Snapshot(), now, map[string]time.Weekday{}, map[int64]float64{})
+		if pb.ExpectedBreakevenDays != nil {
+			t.Errorf("opp %s expected 应缺省（NULL/负值），got %v", tc.oppID, *pb.ExpectedBreakevenDays)
+		}
+	}
+
+	// ⑤ store=nil → 静默缺省不 panic
+	s2 := newEnrichService(fakeBPMWithCache(nil))
+	pb5 := mkPos(905, "XASSET:R10A:gate:perp:3001157:mt5")
+	enrichOne(ctx, s2, pb5, nil, nil, now, map[string]time.Weekday{}, map[int64]float64{})
+	if pb5.ExpectedBreakevenDays != nil {
+		t.Errorf("store=nil expected 应缺省，got %v", *pb5.ExpectedBreakevenDays)
+	}
+}
