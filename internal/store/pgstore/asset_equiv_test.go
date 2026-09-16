@@ -88,6 +88,26 @@ func TestAssetEquivProvider_Partners(t *testing.T) {
 	}
 }
 
+// TestAssetEquivProvider_PartnersDedupMultiVenue 返修 R4：同 canonical 多 venue 行时
+// partners 不重复——GOLD 下 PAXGUSDT 两行（binance/okx）+XAUUSD 一行 → Partners("XAUUSD") 恰为 [PAXGUSDT]。
+func TestAssetEquivProvider_PartnersDedupMultiVenue(t *testing.T) {
+	l := &fakeEquivLister{rows: []AssetEquivEntry{
+		{AssetClass: "GOLD", Canonical: "PAXGUSDT", VenueType: "perp", Venue: "binance"},
+		{AssetClass: "GOLD", Canonical: "PAXGUSDT", VenueType: "perp", Venue: "okx"},
+		{AssetClass: "GOLD", Canonical: "XAUUSD", VenueType: "mt5", Venue: "3001157"},
+	}}
+	p := NewAssetEquivProvider(l, time.Minute)
+	if err := p.Refresh(context.Background()); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	if got := p.Partners("XAUUSD"); len(got) != 1 || got[0] != "PAXGUSDT" {
+		t.Fatalf("XAUUSD partners=%v want [PAXGUSDT] len 1", got)
+	}
+	if got := p.Partners("PAXGUSDT"); len(got) != 1 || got[0] != "XAUUSD" {
+		t.Fatalf("PAXGUSDT partners=%v want [XAUUSD] len 1", got)
+	}
+}
+
 // TestAssetEquivProvider_MaybeRefreshTTL TTL 内不重查、过期重查。
 func TestAssetEquivProvider_MaybeRefreshTTL(t *testing.T) {
 	l := &fakeEquivLister{rows: []AssetEquivEntry{

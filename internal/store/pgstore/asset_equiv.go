@@ -89,10 +89,11 @@ func (p *AssetEquivProvider) Refresh(ctx context.Context) error {
 				canonicals = append(canonicals, e.Canonical)
 			}
 		}
-		for _, e := range entries {
-			for _, c := range canonicals {
-				if c != e.Canonical {
-					partners[e.Canonical] = append(partners[e.Canonical], c)
+		// 返修 R4：partners 按 canonicals 两两组合（同 canonical 多 venue 行不重复）。
+		for _, a := range canonicals {
+			for _, b := range canonicals {
+				if a != b {
+					partners[a] = append(partners[a], b)
 				}
 			}
 		}
