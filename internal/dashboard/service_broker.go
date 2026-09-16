@@ -103,11 +103,16 @@ func annotatePositionID(ctx context.Context, store *pgstore.Store, bps []*v1.Bro
 }
 
 // annotateWithIndex 纯函数：用预建索引标注 broker 持仓 position_id + order_id（可单测，无 DB 依赖）。
+// D-311 R7④：PositionId 命中即标 IsArb——CEX 聚合仓无 comment（MT comment 前缀判定保留为
+// 初值），positionId 标注是 CEX 腿唯一归属信号。
 func annotateWithIndex(bps []*v1.BrokerPosition, posIdx map[string]int64, orderIdx map[string]string) {
 	for _, bp := range bps {
 		key := bp.VenueKey + "\x00" + bp.Ticket
 		bp.PositionId = posIdx[key]
 		bp.OrderId = orderIdx[key]
+		if bp.PositionId != 0 {
+			bp.IsArb = true
+		}
 	}
 }
 
