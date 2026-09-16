@@ -76,7 +76,7 @@ func (s *Store) UpdateVerificationStatForPosition(ctx context.Context, p *Positi
 			if c, ok, _ := s.ContractSizeByCanonical(ctx, l.Venue, canonical); ok && c > 0 {
 				cs = c
 			}
-			notional += l.Qty * cs * *l.PriceActual
+			notional += l.EffectiveQty() * cs * *l.PriceActual // D-311 R6：成交口径（CEX=基础币）
 		}
 		if minLegTs.IsZero() || l.Ts.Before(minLegTs) {
 			minLegTs = l.Ts

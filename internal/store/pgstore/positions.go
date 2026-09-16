@@ -67,6 +67,17 @@ type PositionLeg struct {
 	Ts              time.Time
 }
 
+// EffectiveQty 实际持仓量（成交口径，时代稳定）：filled_qty 非空且>0 → 成交量
+// （CEX=基础币，MT=手数）；否则回退 qty（pre-D-311 旧行 qty 本身即成交量）。
+// qty 列=LegSpec 请求量，语义随时代分裂（CEX 旧行=基础币 / post-D-311 新行=合约数），
+// 「实际持仓量」消费点一律用本方法（D-311 R6）。
+func (l PositionLeg) EffectiveQty() float64 {
+	if l.FilledQty != nil && *l.FilledQty > 0 {
+		return *l.FilledQty
+	}
+	return l.Qty
+}
+
 // CreatePosition 建 position 记录，返回 ID。
 // D-087 §3.3：opened_at = now()（holdDays 计算依赖，原 NULL 兜底 min(leg ts) 仍保留作冗余）。
 // D-179 S2：notional_usd 列同步（p.NotionalUSD 非 nil 时落盘，nil=NULL 向后兼容）。
