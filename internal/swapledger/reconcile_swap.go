@@ -121,15 +121,17 @@ func (r *SwapReconciler) reconcilePosition(ctx context.Context, pos pgstore.Posi
 		if leg.Phase != "OPEN" {
 			continue
 		}
-		// per-leg 预检查：该腿当日未记 swap → 跳过该腿（swapledger 未记，不误告警）
-		has, err := r.store.HasCashflowForLegDay(ctx, pos.ID, leg.LegNo, "swap", day)
+		// per-leg 预检查：该腿当日未记 → 跳过该腿（swapledger 未记，不误告警）
+		// D-314：kind per-leg 判定（XASSET_CARRY perp 腿=funding、MT 腿=swap）。
+		kind := cashflowKind(pos.Type, leg.Venue)
+		has, err := r.store.HasCashflowForLegDay(ctx, pos.ID, leg.LegNo, kind, day)
 		if err != nil {
 			return 0, fmt.Errorf("check cashflow: %w", err)
 		}
 		if !has {
 			continue
 		}
-		alerted, err := r.reconcileLegWithStore(ctx, pos.ID, leg.Venue, day)
+		alerted, err := r.reconcileLegWithStore(ctx, pos.ID, pos.Type, leg.Venue, day)
 		if err != nil {
 			log.Printf("[swap-reconcile] leg posID=%d venue=%s: %v", pos.ID, leg.Venue, err)
 			continue
@@ -142,8 +144,10 @@ func (r *SwapReconciler) reconcilePosition(ctx context.Context, pos pgstore.Posi
 }
 
 // reconcileLegWithStore 取公式值+快照后调纯函数 reconcileLeg。
-func (r *SwapReconciler) reconcileLegWithStore(ctx context.Context, posID int64, venue string, day time.Time) (bool, error) {
-	formulaUSD, err := r.store.SumCashflowsForDay(ctx, posID, "swap", venue, day)
+// D-314：posType 入参供 per-leg kind 判定（XASSET_CARRY perp 腿公式值查 kind=funding）。
+func (r *SwapReconciler) reconcileLegWithStore(ctx context.Context, posID int64, posType, venue string, day time.Time) (bool, error) {
+	kind := cashflowKind(posType, venue)
+	formulaUSD, err := r.store.SumCashflowsForDay(ctx, posID, kind, venue, day)
 	if err != nil {
 		return false, err
 	}

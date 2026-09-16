@@ -30,7 +30,9 @@ const (
 )
 
 // SwapPositionTypes 需要逐日 swap 记账的持仓类型。
-var SwapPositionTypes = []string{"SWAPARB", "CARRY"}
+// D-314：XASSET_CARRY 入列（混合 venue 类型，kind 由 cashflowKind per-leg 判定，与本清单归属无关——
+// 清单只用于 Run()/reconcile 查持仓）。
+var SwapPositionTypes = []string{"SWAPARB", "CARRY", "XASSET_CARRY"}
 
 // FundingPositionTypes 需要逐日 funding 记账的持仓类型（8h×3 周期）。
 var FundingPositionTypes = []string{"FUNDING_HEDGE", "PERP_FUNDING"}

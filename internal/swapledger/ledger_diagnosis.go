@@ -41,7 +41,7 @@ type LegSwapDiagnosis struct {
 func (l *Ledger) DiagnoseLegSwapAmount(ctx context.Context, pos pgstore.Position, leg pgstore.PositionLeg, day time.Time,
 	longMap, shortMap, fundMap map[factKey]fact.Fact) LegSwapDiagnosis {
 	canonical := canonicalFromOppID(pos.OpportunityID)
-	isFunding := isFundingType(pos.Type)
+	isFunding := isFundingLeg(pos.Type, leg.Venue) // D-314：per-leg 判定（XASSET_CARRY perp 腿=funding）
 	d := LegSwapDiagnosis{
 		PositionID: pos.ID,
 		LegNo:      leg.LegNo,
