@@ -48,6 +48,7 @@ func TestD127_AutoFlattenLEGGED_Success(t *testing.T) {
 	reg.Register(&fakeFlattenExecutor{venue: "okx:perp", failOnSide: "", placeCount: &buyCount})
 	reg.Register(&fakeFlattenExecutor{venue: "binance:perp", failOnSide: "SELL"})
 	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
+	p.SetContractSizeResolver(permissiveCSResolver{}) // D-311 R4：:perp 腿执行器边界换算需要 cs（=1 与旧行为一致）
 	// D-159 W2a S4：autoFlatten 走 ClosePosition，需要 verifier（残量校验）。
 	// 收平后 venue 无残留 → verifier 返回空（不包含已平仓 ticket）。
 	p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{
@@ -94,6 +95,7 @@ func TestD127_AutoFlattenLEGGED_FlattenFail(t *testing.T) {
 	reg.Register(&fakeFlattenExecutor{venue: "okx:perp", failOnSide: "SELL"}) // 开仓 BUY 成功，收平 SELL 失败
 	reg.Register(&fakeFlattenExecutor{venue: "binance:perp", failOnSide: "SELL"})
 	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
+	p.SetContractSizeResolver(permissiveCSResolver{}) // D-311 R4：:perp 腿执行器边界换算需要 cs（=1 与旧行为一致）
 
 	res, err := p.Execute(ctx,
 		"PERP:BTCUSDT:okx:perp:binance:perp:2", "req-d127-2", "PERP_FUNDING",

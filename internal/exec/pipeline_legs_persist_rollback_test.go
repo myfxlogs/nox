@@ -84,7 +84,7 @@ func TestPersistOpenLegs_RollbackCEX(t *testing.T) {
 	reg := NewRegistry()
 	exe := &fakeRollbackExecutor{venue: "okx:perp"}
 	reg.Register(exe)
-	p := &Pipeline{registry: reg, store: s}
+	p := &Pipeline{registry: reg, store: s, csResolver: permissiveCSResolver{}} // D-311 R4：:perp 腿回滚换算需要 cs
 
 	legs := []LegSpec{
 		{VenueKey: "okx:perp", VenueSymbol: "BTC-USDT-SWAP", Side: "BUY", Qty: 0.001},

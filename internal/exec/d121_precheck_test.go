@@ -50,6 +50,7 @@ func TestPipeline_PrecheckFailsRejects(t *testing.T) {
 	reg.Register(binance)
 
 	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
+	p.SetContractSizeResolver(permissiveCSResolver{}) // D-311 R4：:perp 腿执行器边界换算需要 cs（=1 与旧行为一致）
 
 	_, err := p.Execute(ctx, "opp-trx-1", "req-1", "PERP_FUNDING", []LegSpec{
 		{VenueKey: "gate:perp", VenueSymbol: "TRX_USDT", Side: "BUY", Qty: 1},
@@ -90,6 +91,7 @@ func TestPipeline_PrecheckPassesExecutes(t *testing.T) {
 	reg.Register(binance)
 
 	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
+	p.SetContractSizeResolver(permissiveCSResolver{}) // D-311 R4：:perp 腿执行器边界换算需要 cs（=1 与旧行为一致）
 
 	result, err := p.Execute(ctx, "opp-btc-1", "req-1", "PERP_FUNDING", []LegSpec{
 		{VenueKey: "gate:perp", VenueSymbol: "BTC_USDT", Side: "BUY", Qty: 1},

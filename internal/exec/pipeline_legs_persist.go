@@ -90,10 +90,16 @@ func (p *Pipeline) rollbackFilledLegs(ctx context.Context, posID int64, legs []L
 			case "SELL":
 				positionSide = "short"
 			}
-			_, closeErr = exe.PlaceOrder(ctx, Order{
-				Symbol: legs[i].VenueSymbol, Side: closeSide, Qty: legs[i].Qty, Venue: legs[i].VenueKey,
-				PositionSide: positionSide,
-			})
+			// D-311 R4：回滚单同执行器边界——:perp 腿合约数→基础币（不换算会 1/cs 倍超量回滚）。
+			orderQty, convErr := p.orderQtyFor(legs[i])
+			if convErr != nil {
+				closeErr = convErr
+			} else {
+				_, closeErr = exe.PlaceOrder(ctx, Order{
+					Symbol: legs[i].VenueSymbol, Side: closeSide, Qty: orderQty, Venue: legs[i].VenueKey,
+					PositionSide: positionSide,
+				})
+			}
 		}
 		if closeErr != nil {
 			rmsg := fmt.Sprintf("rollback failed pos=%d leg=%d venue=%s: %v", posID, i, legs[i].VenueKey, closeErr)

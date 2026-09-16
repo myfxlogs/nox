@@ -18,6 +18,14 @@ func (f *fakeCSResolver) ContractSize(venueKey, venueSymbol string) (float64, bo
 	return v, ok
 }
 
+// permissiveCSResolver 任意 venueKey:symbol → CS=1（D-311 R4：存量测试管线接线用——
+// :perp 腿执行器边界换算需要 cs，cs=1 时 orderQty=leg.Qty 与旧行为一致，原断言不受影响）。
+type permissiveCSResolver struct{}
+
+func (permissiveCSResolver) ContractSize(venueKey, venueSymbol string) (float64, bool) {
+	return 1, true
+}
+
 // fakePnLCalibrator 测试用 PnLCalibrator（D-077 修复⑪A M1 回读校准）。
 type fakePnLCalibrator struct {
 	results map[string]*HistoryPnL // key = "venueKey:ticket"

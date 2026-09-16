@@ -3,6 +3,7 @@ package exec
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"math"
 	"strings"
@@ -22,9 +23,33 @@ func isContextTimeoutErr(err error) bool {
 	return strings.Contains(s, "DeadlineExceeded") || strings.Contains(s, "context deadline exceeded")
 }
 
+// orderQtyFor LegSpec.Qty → exec.Order.Qty 执行器边界换算（D-311 R4）。
+// pipeline 口径：:perp 腿 qty=合约数（张）；执行器口径：Order.Qty=基础币数量 → ×cs
+// （gate quanto/okx ctVal/binance 1.0，缺失 fail-closed——qty 单位断裂曾致名义放大 1/cs 倍）。
+// :spot=基础币、MT=手数，原样不换算。
+func (p *Pipeline) orderQtyFor(leg LegSpec) (float64, error) {
+	if !strings.HasSuffix(leg.VenueKey, ":perp") {
+		return leg.Qty, nil
+	}
+	if p.csResolver == nil {
+		return 0, fmt.Errorf("csResolver not wired (fail-closed)")
+	}
+	cs, ok := p.csResolver.ContractSize(leg.VenueKey, leg.VenueSymbol)
+	if !ok || cs <= 0 {
+		return 0, fmt.Errorf("contract size unavailable %s %s (fail-closed)", leg.VenueKey, leg.VenueSymbol)
+	}
+	return leg.Qty * cs, nil
+}
+
 func (p *Pipeline) executeLeg(ctx context.Context, leg LegSpec, clientOrderID string) LegResult {
 	exe, ok := p.registry.Get(leg.VenueKey)
 	if !ok {
+		return LegResult{VenueKey: leg.VenueKey, Status: "FAILED"}
+	}
+	// D-311 R4：:perp 腿合约数→基础币换算（缺失 fail-closed）。
+	orderQty, err := p.orderQtyFor(leg)
+	if err != nil {
+		log.Printf("[exec] leg %s %s %s: %v", leg.VenueKey, leg.Side, leg.VenueSymbol, err)
 		return LegResult{VenueKey: leg.VenueKey, Status: "FAILED"}
 	}
 	// D-146 S1：MT 腿下单即带 broker 端灾难 SL（原子写入，断连时服务器端兜底）。
@@ -36,7 +61,7 @@ func (p *Pipeline) executeLeg(ctx context.Context, leg LegSpec, clientOrderID st
 	fill, err := exe.PlaceOrder(ctx, Order{
 		Symbol:        leg.VenueSymbol,
 		Side:          leg.Side,
-		Qty:           leg.Qty,
+		Qty:           orderQty,
 		Venue:         leg.VenueKey,
 		StopLoss:      sl,
 		ClientOrderID: clientOrderID, // D-195-B §4.3：确定性客户端订单号

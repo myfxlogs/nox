@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -199,23 +200,26 @@ func okxSign(secret, prehash string) string {
 	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
 }
 
-// okxContractVal 查 okx swap 合约面值 ctVal + 最小张数 lotSz。
+// okxSwapSpec okx SWAP instruments 规格（ctVal=合约面值/lotSz=最小张数）。
+type okxSwapSpec struct{ ctVal, lotSz float64 }
+
+// okxSwapSpecCache instruments 规格包级缓存（ctVal/lotSz 不变）——
+// D-311 R4：CEXExecutor 下单换算与 dashboard floorToStepQty 共用同源缓存。
+var okxSwapSpecCache sync.Map // instID → okxSwapSpec
+
+// OkxSwapSpec 查 okx swap 合约面值 ctVal + 最小张数 lotSz（D-311 R4 从 okxContractVal 提取共用）。
 // 公开端点 GET /api/v5/public/instruments?instType=SWAP&instId=XXX 无需签名。
-// 缓存 per-executor（ctVal/lotSz 不变），避免每单查。D-125。
-func (e *CEXExecutor) okxContractVal(ctx context.Context, instID string) (ctVal, lotSz float64, err error) {
-	if e.okxCtVal != nil {
-		if v, ok := e.okxCtVal[instID]; ok {
-			if l, ok2 := e.okxLotSz[instID]; ok2 {
-				return v, l, nil
-			}
-		}
+func OkxSwapSpec(ctx context.Context, client *http.Client, baseURL, instID string) (ctVal, lotSz float64, err error) {
+	if v, ok := okxSwapSpecCache.Load(instID); ok {
+		s := v.(okxSwapSpec)
+		return s.ctVal, s.lotSz, nil
 	}
 	endpoint := "/api/v5/public/instruments?instType=SWAP&instId=" + instID
-	req, err := http.NewRequestWithContext(ctx, "GET", e.baseURL+endpoint, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", baseURL+endpoint, nil)
 	if err != nil {
 		return 0, 0, fmt.Errorf("okx instruments req: %w", err)
 	}
-	resp, err := e.client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return 0, 0, fmt.Errorf("okx instruments %s: %w", instID, err)
 	}
@@ -248,11 +252,13 @@ func (e *CEXExecutor) okxContractVal(ctx context.Context, instID string) (ctVal,
 	if err != nil || lotSz <= 0 {
 		return 0, 0, fmt.Errorf("okx instruments %s: lotSz=%q invalid", instID, out.Data[0].LotSz)
 	}
-	if e.okxCtVal == nil {
-		e.okxCtVal = make(map[string]float64)
-		e.okxLotSz = make(map[string]float64)
-	}
-	e.okxCtVal[instID] = ctVal
-	e.okxLotSz[instID] = lotSz
+	okxSwapSpecCache.Store(instID, okxSwapSpec{ctVal: ctVal, lotSz: lotSz})
 	return ctVal, lotSz, nil
+}
+
+// okxContractVal 查 okx swap 合约面值 ctVal + 最小张数 lotSz。
+// 公开端点 GET /api/v5/public/instruments?instType=SWAP&instId=XXX 无需签名。
+// 缓存包级共享（D-311 R4，原 per-executor），避免每单查。D-125。
+func (e *CEXExecutor) okxContractVal(ctx context.Context, instID string) (ctVal, lotSz float64, err error) {
+	return OkxSwapSpec(ctx, e.client, e.baseURL, instID)
 }

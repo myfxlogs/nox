@@ -22,7 +22,7 @@ func TestD249_RollbackCEX_PositionSide(t *testing.T) {
 	reg := NewRegistry()
 	exe := &fakeRollbackExecutor{venue: "okx:perp"}
 	reg.Register(exe)
-	p := &Pipeline{registry: reg, store: s}
+	p := &Pipeline{registry: reg, store: s, csResolver: permissiveCSResolver{}} // D-311 R4：:perp 腿回滚/执行换算需要 cs
 
 	legs := []LegSpec{
 		{VenueKey: "okx:perp", VenueSymbol: "BTC-USDT-SWAP", Side: "BUY", Qty: 0.001},
@@ -57,7 +57,7 @@ func TestD249_RollbackCEX_BuyLeg_PositionSide(t *testing.T) {
 	reg := NewRegistry()
 	exe := &fakeRollbackExecutor{venue: "binance:perp"}
 	reg.Register(exe)
-	p := &Pipeline{registry: reg, store: s}
+	p := &Pipeline{registry: reg, store: s, csResolver: permissiveCSResolver{}} // D-311 R4：:perp 腿回滚/执行换算需要 cs
 
 	legs := []LegSpec{
 		{VenueKey: "binance:perp", VenueSymbol: "BTCUSDT", Side: "BUY", Qty: 0.002},

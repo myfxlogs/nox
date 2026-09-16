@@ -47,10 +47,10 @@ func (p *Pipeline) SetXAssetComboAllow(allow []XAssetComboAllowSpec) {
 
 // LegSpec 是单腿下单规格。
 type LegSpec struct {
-	VenueKey      string // "venue:venueType"
-	VenueSymbol   string // venue 原生符号
-	Side          string // BUY / SELL
-	Qty           float64
+	VenueKey      string  // "venue:venueType"
+	VenueSymbol   string  // venue 原生符号
+	Side          string  // BUY / SELL
+	Qty           float64 // :perp 腿=合约数（张），其余=基础币数量/MT 手数（D-311 R4：构造 exec.Order 时经 orderQtyFor ×cs 换算为基础币）
 	PriceExpected float64 // 下单时本腿可执行价（买=ask 卖=bid，D-060 实施修正②：复盘 deviation 口径需要）
 }
 

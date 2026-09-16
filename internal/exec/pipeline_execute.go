@@ -64,10 +64,15 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 			return nil, fmt.Errorf("precheck: no executor for venue %s", leg.VenueKey)
 		}
 		if pc, ok := exe.(Prechecker); ok {
+			// D-311 R4：Order.Qty 契约=基础币——:perp 腿同 executeLeg 边界换算。
+			orderQty, convErr := p.orderQtyFor(leg)
+			if convErr != nil {
+				return nil, fmt.Errorf("precheck leg %s: %w", leg.VenueKey, convErr)
+			}
 			if err := pc.Precheck(ctx, Order{
 				Symbol: leg.VenueSymbol,
 				Side:   leg.Side,
-				Qty:    leg.Qty,
+				Qty:    orderQty,
 				Venue:  leg.VenueKey,
 			}); err != nil {
 				return nil, fmt.Errorf("precheck leg %s: %w", leg.VenueKey, err)

@@ -35,10 +35,8 @@ type CEXExecutor struct {
 	// D-120：gate futures 合约规格缓存（contract → quanto_multiplier，避免每单查）。
 	gateQuanto map[string]float64
 	dualSideMu sync.Mutex // 保护 dualSide/dualSideProbed 探测
-	// D-125：okx perp 合约面值缓存（instId → ctVal，避免每单查）。
+	// D-125：okx perp 合约面值缓存已转包级共享 okxSwapSpecCache（D-311 R4，instId → ctVal/lotSz）。
 	// okx swap sz 单位=张数，o.Qty 是基础币数量 → sz=qty/ctVal。
-	okxCtVal map[string]float64
-	okxLotSz map[string]float64 // instId → lotSz（最小张数，sz 必须是其倍数）
 	// AlertFn 平仓被拒时 critical 告警（main 注入 store.InsertAlert；nil=不告警，测试用）。
 	AlertFn func(posID *int64, level, msg string)
 }

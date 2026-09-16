@@ -92,6 +92,7 @@ func TestClosePosition_ConcurrentWithResumeClose(t *testing.T) {
 	reg.Register(&fakeFlattenExecutor{venue: "okx:perp"})
 	reg.Register(&fakeFlattenExecutor{venue: "binance:perp"})
 	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
+	p.SetContractSizeResolver(permissiveCSResolver{}) // D-311 R4：:perp 腿执行器边界换算需要 cs（=1 与旧行为一致）
 	p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{
 		"okx:perp":     {{Symbol: "BTC-USDT-SWAP", Side: "BUY", Ticket: "okx-c"}},
 		"binance:perp": {{Symbol: "BTCUSDT", Side: "SELL", Ticket: "bin-c"}},
