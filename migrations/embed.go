@@ -232,3 +232,6 @@ var XassetMonitorSQL string
 
 //go:embed 0096_event_cases_paper_trades.sql
 var EventCasesPaperTradesSQL string
+
+//go:embed 0097_xasset_carry.sql
+var XassetCarrySQL string
