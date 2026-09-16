@@ -73,6 +73,10 @@ type Service struct {
 	// legContractSize MT 腿合约规格查询（D-060 实施修正② 卖腿等名义反算）：venueKey+venueSymbol → CS。
 	// nil = 未接线 → resolveLegs 报错（fail-safe）。main 接 broker_symbol_map.contract_size。
 	legContractSize func(venueKey, venueSymbol string) (float64, bool)
+	// cexContractSize CEX perp 腿合约面值查询（D-311 S3）：bare venue+venueSymbol → ct_val。
+	// nil = 未接线 → legContractSizeOf 对 :perp 腿报错（fail-closed，不猜 1.0）。
+	// main 接 fin_cex_universe.ct_val（gate=quanto_multiplier/okx=ctVal/binance=1.0）。
+	cexContractSize func(venue, venueSymbol string) (float64, bool)
 	// maxLegImbalance 卖腿名义不平衡上限（百分比，默认 2，D-028/D-060 实施修正②）。
 	maxLegImbalance float64
 	// legMinLots MT 腿最小手数查询（D-061 量规格预检）：venueKey+venueSymbol → min lots。
@@ -117,6 +121,10 @@ type Service struct {
 	// 非 nil 时 ExecuteOpportunityInternal/ExecuteMeanRevertWithCap(SWAPARB) 在 pipeline.Execute 前检查。
 	// ComboAllowSpec 定义在 exec 包（最底层无依赖，dashboard/autotrade 复用）。
 	swapArbComboAllow []exec.ComboAllowSpec
+
+	// D-311 S6：XASSET_CARRY 精确组合门禁（手动入口同源）——零信任显式白名单。
+	// 与 SWAPARB 不同：无条件检查（空表=全拒），XASSET_CARRY 唯一放行闸。
+	xassetComboAllow []exec.XAssetComboAllowSpec
 
 	// D-159 W1a I6：environment/is_real 一致性检查（手动入口同源）。
 	// environment 空 = 未配置（不检查，回退旧行为）。

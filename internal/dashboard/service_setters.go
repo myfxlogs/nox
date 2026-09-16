@@ -27,6 +27,12 @@ func (s *Service) SetLegContractSize(f func(venueKey, venueSymbol string) (float
 	s.legContractSize = f
 }
 
+// SetCexContractSize 注入 CEX perp 腿合约面值查询（D-311 S3，venue=bare+venueSymbol → ct_val）。
+// nil = 未接线（legContractSizeOf 对 :perp 腿 fail-closed 报错）。
+func (s *Service) SetCexContractSize(f func(venue, venueSymbol string) (float64, bool)) {
+	s.cexContractSize = f
+}
+
 // LegContractSize D-165 S2：返回 legContractSize resolver（autotrade engine S2 notional 换算用）。
 func (s *Service) LegContractSize() func(venueKey, venueSymbol string) (float64, bool) {
 	return s.legContractSize
@@ -70,6 +76,10 @@ func (s *Service) SetStepMeta(m *cexStepMeta) { s.stepMeta = m }
 // SetSwapArbComboAllow 注入 SWAPARB 精确组合门禁 allowlist（D-159 W1a R1，手动入口同源）。
 // nil/空 = 未接线（gate 层 fail-closed 兜底，手动入口不重复检查）。
 func (s *Service) SetSwapArbComboAllow(allow []exec.ComboAllowSpec) { s.swapArbComboAllow = allow }
+
+// SetXAssetComboAllow 注入 XASSET_CARRY 精确组合门禁 allowlist（D-311 S6，手动入口同源）。
+// 零信任：空表 = 全拒（不是 SWAPARB 的 nil=未接线语义）。
+func (s *Service) SetXAssetComboAllow(allow []exec.XAssetComboAllowSpec) { s.xassetComboAllow = allow }
 
 // SetEnvironment 注入执行环境固定值（D-159 W1a I6，手动入口同源）。
 // 空 = 未配置（不检查，回退旧行为）。

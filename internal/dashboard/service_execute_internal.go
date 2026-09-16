@@ -65,7 +65,12 @@ func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, request
 		log.Printf("[exec] %v", err)
 		return "FAILED", err.Error(), 0
 	}
-	if err := s.checkFreezeGuard(found.Canonical, legs); err != nil { // D-155：冻结腿预检 fail-closed
+	// D-311 S4：freezeGuard 双腿各自 canonical——卖腿 tick 在 canonical_sell 命名空间下。
+	sellCanonical := found.Canonical
+	if found.CanonicalSell != nil && *found.CanonicalSell != "" {
+		sellCanonical = *found.CanonicalSell
+	}
+	if err := s.checkFreezeGuard(found.Canonical, sellCanonical, legs); err != nil { // D-155：冻结腿预检 fail-closed
 		log.Printf("[exec] %v", err)
 		return "FAILED", err.Error(), 0
 	}
@@ -74,6 +79,13 @@ func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, request
 	if found.Type == "SWAPARB" && len(s.swapArbComboAllow) > 0 {
 		if exec.MatchComboAllow(s.swapArbComboAllow, found.Canonical, found.VenueBuy, found.VenueSell) == nil {
 			return "FAILED", fmt.Sprintf("combo not in allowlist: %s %s×%s", found.Canonical, found.VenueBuy, found.VenueSell), 0
+		}
+	}
+	// D-311 S6：XASSET_CARRY 组合门禁（手动入口同源）——零信任：空 allowlist 全拒，
+	// 命中才放行（区别于 SWAPARB 的 nil=未接线；pipeline 层另有名义额/gross 校验）。
+	if found.Type == "XASSET_CARRY" {
+		if exec.MatchXAssetComboAllow(s.xassetComboAllow, found.Canonical, sellCanonical, found.VenueBuy, found.VenueSell) == nil {
+			return "FAILED", fmt.Sprintf("combo not in xasset allowlist: %s/%s %s×%s", found.Canonical, sellCanonical, found.VenueBuy, found.VenueSell), 0
 		}
 	}
 	// D-159 W1a I6：environment/is_real 一致性检查（手动入口同源，pipeline.Execute 前拦截）。
@@ -208,7 +220,7 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 		log.Printf("[exec] %v", err)
 		return "FAILED", err.Error(), 0
 	}
-	if err := s.checkFreezeGuard(canonical, legs); err != nil { // D-155：冻结腿预检 fail-closed
+	if err := s.checkFreezeGuard(canonical, canonical, legs); err != nil { // D-155：冻结腿预检 fail-closed（D-311：单 canonical 路径双腿同键）
 		log.Printf("[exec] %v", err)
 		return "FAILED", err.Error(), 0
 	}
@@ -216,6 +228,13 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 	if strategyType == "SWAPARB" && len(s.swapArbComboAllow) > 0 {
 		if exec.MatchComboAllow(s.swapArbComboAllow, canonical, venueBuy, venueSell) == nil {
 			return "FAILED", fmt.Sprintf("combo not in allowlist: %s %s×%s", canonical, venueBuy, venueSell), 0
+		}
+	}
+	// D-311 S6：XASSET_CARRY 组合门禁（手动入口同源）——零信任：空 allowlist 全拒。
+	// 本路径无 opportunities 行可查 canonical_sell → 双腿同 canonical 兜底（与 pipeline 门禁同源）。
+	if strategyType == "XASSET_CARRY" {
+		if exec.MatchXAssetComboAllow(s.xassetComboAllow, canonical, canonical, venueBuy, venueSell) == nil {
+			return "FAILED", fmt.Sprintf("combo not in xasset allowlist: %s %s×%s", canonical, venueBuy, venueSell), 0
 		}
 	}
 	// D-159 W1a I6：environment/is_real 一致性检查（手动入口同源，pipeline.Execute 前拦截）。

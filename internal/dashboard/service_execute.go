@@ -22,12 +22,18 @@ import (
 // 任一腿冻结（从未变化 / 超窗口未变）→ 拒绝整组（LEGGED 零容忍，单腿不降级）。
 // freezeGuard≤0 = 禁用（全放行）。预检在 pipeline.Execute 前拦截，不落 position、不开任何腿。
 // 与 D-104 freshness 分层：freshness=采集侧时间戳门禁（心跳报价骗得过），freeze guard=执行侧价格变化门禁（骗不过）。
-func (s *Service) checkFreezeGuard(canonical string, legs []exec.LegSpec) error {
+// D-311 S4：双腿各自 canonical——BUY 腿用 buyCanonical、其余腿用 sellCanonical 查 LastChangeAt
+// （修前单 canonical：跨 canonical 卖腿 tick 挂在 canonical_sell 下 → 永判 frozen 拒）。
+func (s *Service) checkFreezeGuard(buyCanonical, sellCanonical string, legs []exec.LegSpec) error {
 	if s.freezeGuard <= 0 {
 		return nil
 	}
 	now := time.Now()
 	for _, l := range legs {
+		canonical := sellCanonical
+		if l.Side == "BUY" {
+			canonical = buyCanonical
+		}
 		t, ok := s.qbus.LastChangeAt(canonical, l.VenueKey)
 		if !ok {
 			// 从未发生过价格变化（首见 / 仅心跳）→ 冻结
@@ -128,21 +134,28 @@ func (s *Service) ClosePosition(ctx context.Context, req *connect.Request[v1.Clo
 //   - is_real=true ↔ environment='live' / is_real=false ↔ environment='demo'
 //   - is_real=nil（未知）→ fail-closed 拒绝
 //   - venue 不存在 → fail-closed 拒绝
+//
+// D-311 S7：GetBrokerAccount → ListVenueIsReal 合并视图（broker_accounts.is_real ∪
+// exchange_configs.simulated 取反）——CEX venue 开始可判；MT 语义不变（严格超集）。
 func (s *Service) checkEnvironmentIsReal(ctx context.Context, venueBuy, venueSell string) string {
 	wantLive := s.environment == "live"
+	isRealMap, err := s.store.ListVenueIsReal(ctx)
+	if err != nil {
+		return fmt.Sprintf("environment check: is_real map query failed (%v)", err)
+	}
 	for _, venueKey := range []string{venueBuy, venueSell} {
 		venue, _, _ := strings.Cut(venueKey, ":")
 		if venue == "" {
 			return fmt.Sprintf("environment check: empty venue in %s", venueKey)
 		}
-		acct, err := s.store.GetBrokerAccount(ctx, venue)
-		if err != nil {
-			return fmt.Sprintf("environment check: venue %s not found (%v)", venue, err)
+		isReal, known := isRealMap[venue]
+		if !known {
+			return fmt.Sprintf("environment check: venue %s not found", venue)
 		}
-		if acct.IsReal == nil {
+		if isReal == nil {
 			return fmt.Sprintf("environment check: venue %s is_real unknown (null)", venue)
 		}
-		isLive := *acct.IsReal
+		isLive := *isReal
 		if isLive != wantLive {
 			return fmt.Sprintf("environment check: venue %s is_real=%v != environment=%s", venue, isLive, s.environment)
 		}
@@ -153,20 +166,25 @@ func (s *Service) checkEnvironmentIsReal(ctx context.Context, venueBuy, venueSel
 // checkLiveGate D-159 W6a S2：LIVE 人工开关检查（手动入口同源）。
 // LiveTrade=false 时，任一腿 is_real=true → 返回拒绝原因；demo 放行。
 // 校验逻辑与 autotrade.Gate.liveGateCheck 同源。
+// D-311 S7：同 checkEnvironmentIsReal 切 ListVenueIsReal 合并视图（CEX venue 可判）。
 func (s *Service) checkLiveGate(ctx context.Context, venueBuy, venueSell string) string {
+	isRealMap, err := s.store.ListVenueIsReal(ctx)
+	if err != nil {
+		return fmt.Sprintf("live gate: is_real map query failed (%v)", err)
+	}
 	for _, venueKey := range []string{venueBuy, venueSell} {
 		venue, _, _ := strings.Cut(venueKey, ":")
 		if venue == "" {
 			return fmt.Sprintf("live gate: empty venue in %s", venueKey)
 		}
-		acct, err := s.store.GetBrokerAccount(ctx, venue)
-		if err != nil {
-			return fmt.Sprintf("live gate: venue %s not found (%v)", venue, err)
+		isReal, known := isRealMap[venue]
+		if !known {
+			return fmt.Sprintf("live gate: venue %s not found", venue)
 		}
-		if acct.IsReal == nil {
+		if isReal == nil {
 			return fmt.Sprintf("live gate: venue %s is_real unknown (null)", venue)
 		}
-		if *acct.IsReal {
+		if *isReal {
 			return fmt.Sprintf("live trade disabled (ARB_LIVE_TRADE=false, venue=%s is_real=true)", venue)
 		}
 	}

@@ -46,9 +46,17 @@ func (s *Service) checkTradability(found *pgstore.Opportunity) error {
 // D-060 实施修正②（D-028 补课）：卖腿等名义反算 sellQty = qty×CS_buy/CS_sell（0.01 取整）
 // + 名义不平衡拒绝 + PriceExpected 落腿。实证：position #2 油 1000:100 桶/手同 qty 0.1
 // 发卖腿被 IC 拒「Invalid volume」→ LEGGED（等名义反算 D-028 设计了但从未实现）。
+// D-311 S4：跨 canonical——买腿用 found.Canonical、卖腿用 found.CanonicalSell
+// （nil/空回退 found.Canonical）。修前双腿同 canonical：跨 canonical 卖腿报价永 unavailable；
+// 同所跨 canonical（买 XAUTUSDT 卖 PAXGUSDT @binance:perp）更糟——卖腿静默建成 XAUTUSDT
+// 同码错腿（双腿同 symbol 自对冲+白烧手续费，且能过 validateLegQtys/freezeGuard）。
 func (s *Service) resolveLegs(found *pgstore.Opportunity, qty float64) ([]exec.LegSpec, error) {
+	sellCanonical := found.Canonical
+	if found.CanonicalSell != nil && *found.CanonicalSell != "" {
+		sellCanonical = *found.CanonicalSell
+	}
 	qbuy, okBuy := s.qbus.Latest(found.Canonical, found.VenueBuy)
-	qsell, okSell := s.qbus.Latest(found.Canonical, found.VenueSell)
+	qsell, okSell := s.qbus.Latest(sellCanonical, found.VenueSell)
 	if !okBuy || !okSell {
 		return nil, errors.New("buy/sell leg quote unavailable")
 	}
@@ -109,10 +117,23 @@ func (s *Service) checkLegVolume(venueKey, venueSymbol string, qty float64) erro
 	return fmt.Errorf("qty %v below venue min lot %.2f for %s %s", qty, min, venueKey, venueSymbol)
 }
 
-// legContractSizeOf 单腿合约规格：CEX 腿 CS=1（qty 即基础币数）；MT 腿经 legContractSize
+// legContractSizeOf 单腿合约规格：CEX :spot 腿 CS=1（qty 即基础币数）；CEX :perp 腿经
+// cexContractSize 注入查 fin_cex_universe.ct_val（D-311 S3，gate=quanto_multiplier/okx=ctVal/
+// binance=1.0——旧版恒返 1.0，gate/okx 腿 qty/名义错 10~1000 倍）；MT 腿经 legContractSize
 // 注入查询（main 接 broker_symbol_map.contract_size，D-042 backfilled）。缺失/未接线 →
 // 报错拒不猜（fail-safe，防 position #2 形态复发）。
 func (s *Service) legContractSizeOf(venueKey, venueSymbol string) (float64, error) {
+	if strings.HasSuffix(venueKey, ":perp") {
+		if s.cexContractSize == nil {
+			return 0, errors.New("cex contract size resolver not wired")
+		}
+		venue, _, _ := strings.Cut(venueKey, ":")
+		cs, ok := s.cexContractSize(venue, venueSymbol)
+		if !ok || cs <= 0 {
+			return 0, fmt.Errorf("contract size unknown for %s %s (reject: notional derivation unavailable)", venueKey, venueSymbol)
+		}
+		return cs, nil
+	}
 	if !strings.HasSuffix(venueKey, ":mt5") && !strings.HasSuffix(venueKey, ":mt4") {
 		return 1.0, nil
 	}

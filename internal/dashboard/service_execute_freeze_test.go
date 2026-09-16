@@ -39,7 +39,7 @@ func TestCheckFreezeGuard_FrozenLegAborts(t *testing.T) {
 	b := makeFreezeBus(false) // sell 腿冻结
 	s := &Service{qbus: b, freezeGuard: 10 * time.Minute}
 
-	err := s.checkFreezeGuard("XAUUSD", freezeLegs())
+	err := s.checkFreezeGuard("XAUUSD", "XAUUSD", freezeLegs())
 	if err == nil {
 		t.Fatal("冻结腿应拒绝整组，got nil")
 	}
@@ -56,7 +56,7 @@ func TestCheckFreezeGuard_BothActivePass(t *testing.T) {
 	b := makeFreezeBus(true) // 双腿活跃
 	s := &Service{qbus: b, freezeGuard: 10 * time.Minute}
 
-	if err := s.checkFreezeGuard("XAUUSD", freezeLegs()); err != nil {
+	if err := s.checkFreezeGuard("XAUUSD", "XAUUSD", freezeLegs()); err != nil {
 		t.Fatalf("双腿活跃应放行, got %v", err)
 	}
 }
@@ -67,12 +67,12 @@ func TestCheckFreezeGuard_DisabledAllPass(t *testing.T) {
 	b := makeFreezeBus(false) // 双腿冻结
 	s := &Service{qbus: b, freezeGuard: 0}
 
-	if err := s.checkFreezeGuard("XAUUSD", freezeLegs()); err != nil {
+	if err := s.checkFreezeGuard("XAUUSD", "XAUUSD", freezeLegs()); err != nil {
 		t.Fatalf("禁用开关应全放行, got %v", err)
 	}
 	// 负值同样禁用
 	s.freezeGuard = -1
-	if err := s.checkFreezeGuard("XAUUSD", freezeLegs()); err != nil {
+	if err := s.checkFreezeGuard("XAUUSD", "XAUUSD", freezeLegs()); err != nil {
 		t.Fatalf("负值禁用应全放行, got %v", err)
 	}
 }
