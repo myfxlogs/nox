@@ -94,6 +94,7 @@ var migrationFiles = []struct {
 	{96, migrations.EventCasesPaperTradesSQL},          // D-274 事件驱动研判引擎：event_cases + paper_trades
 	{97, migrations.XassetCarrySQL},                    // D-300 跨标的同质资产套利：asset_equiv + opportunities XASSET_CARRY（种子 GOLD=PAXG+XAUT+XAU 三行，裁 12 并入）
 	{98, migrations.XauusdtGoldSQL},                    // D-303 GOLD+XAUUSDT
+	{99, migrations.CexUniverseSQL},                    // D-307 CEX 全量合约雷达：universe/events/radar 三表
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

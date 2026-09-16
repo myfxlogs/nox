@@ -238,3 +238,6 @@ var XassetCarrySQL string
 
 //go:embed 0098_xauusdt_gold.sql
 var XauusdtGoldSQL string
+
+//go:embed 0099_cex_universe.sql
+var CexUniverseSQL string
