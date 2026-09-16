@@ -51,7 +51,13 @@ func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, request
 	if state != "RUNNING" {
 		return "FAILED", fmt.Sprintf("autotrade not RUNNING (state=%s), open rejected", state), 0
 	}
-	if !s.pipeline.Revalidate(found.Canonical, found.VenueBuy, found.VenueSell, found.Type, found.GrossBps) {
+	// D-311 S4/R3：跨 canonical 卖腿——CanonicalSell nil/空回退 Canonical
+	//（Revalidate/freezeGuard/combo 门禁同源，P3 单一真相）。
+	sellCanonical := found.Canonical
+	if found.CanonicalSell != nil && *found.CanonicalSell != "" {
+		sellCanonical = *found.CanonicalSell
+	}
+	if !s.pipeline.Revalidate(found.Canonical, sellCanonical, found.VenueBuy, found.VenueSell, found.Type, found.GrossBps) {
 		return "FAILED", "quote stale or net benefit degraded beyond threshold", 0
 	}
 	if err := s.checkTradability(found); err != nil {
@@ -65,11 +71,7 @@ func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, request
 		log.Printf("[exec] %v", err)
 		return "FAILED", err.Error(), 0
 	}
-	// D-311 S4：freezeGuard 双腿各自 canonical——卖腿 tick 在 canonical_sell 命名空间下。
-	sellCanonical := found.Canonical
-	if found.CanonicalSell != nil && *found.CanonicalSell != "" {
-		sellCanonical = *found.CanonicalSell
-	}
+	// freezeGuard 双腿各自 canonical——卖腿 tick 在 canonical_sell 命名空间下（sellCanonical 前置 :56 已算）。
 	if err := s.checkFreezeGuard(found.Canonical, sellCanonical, legs); err != nil { // D-155：冻结腿预检 fail-closed
 		log.Printf("[exec] %v", err)
 		return "FAILED", err.Error(), 0
