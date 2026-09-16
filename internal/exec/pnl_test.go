@@ -312,3 +312,33 @@ func TestCalibratePnL_FxMissingZero(t *testing.T) {
 		t.Errorf("fx=0 want 0, got %.4f", got)
 	}
 }
+
+// TestCalcLegPnL_CexLegNoContractSize D-311 R5 缺陷#6a：持久化 leg.Qty 对 CEX 腿=基础币
+// （Fill.Qty 契约），csResolver 的 ct_val 不得再乘——gate ct_val=0.01 qty=15.75 基础币
+// → PnL=diff×15.75；okx ct_val=1000 qty=2950 基础币 → PnL=diff×2950（生产实证曾放千倍）。
+func TestCalcLegPnL_CexLegNoContractSize(t *testing.T) {
+	p := &Pipeline{csResolver: &fakeCSResolver{sizes: map[string]float64{
+		"gate:perp:CL_USDT":      0.01,
+		"okx:perp:TRX-USDT-SWAP": 1000,
+	}}}
+
+	open := 63.5
+	gateLeg := pgstore.PositionLeg{
+		Phase: "OPEN", Status: "FILLED", Venue: "gate:perp", Symbol: "CL_USDT",
+		Side: "BUY", Qty: 15.75, PriceActual: &open,
+	}
+	got := p.calcLegPnL(gateLeg, Fill{Price: 64.5, Qty: 15.75}, 1.0)
+	if want := 15.75; got != want {
+		t.Errorf("gate:perp PnL want $%.2f（qty=基础币不乘 ct_val，×0.01 会得 $0.16）, got $%.2f", want, got)
+	}
+
+	open2 := 0.10
+	okxLeg := pgstore.PositionLeg{
+		Phase: "OPEN", Status: "FILLED", Venue: "okx:perp", Symbol: "TRX-USDT-SWAP",
+		Side: "BUY", Qty: 2950, PriceActual: &open2,
+	}
+	got = p.calcLegPnL(okxLeg, Fill{Price: 0.11, Qty: 2950}, 1.0)
+	if want := 29.5; math.Abs(got-want) > 1e-9 {
+		t.Errorf("okx:perp PnL want $%.2f（×ct_val=1000 会得 $29500）, got $%.6f", want, got)
+	}
+}
