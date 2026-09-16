@@ -254,7 +254,7 @@ type Config struct {
 	TrxVoteSpreadThreshold float64 // D-297：价差触发改投阈值（ARB_TRX_VOTE_SPREAD_THRESHOLD，默认 0.001）
 	// === D-271 CEX 只读扫描器 ===
 	CexScanInterval time.Duration // 扫描间隔（ARB_CEX_SCAN_INTERVAL，默认 5m）
-	CexScanSymbols  []string      // 价差扫描币种（ARB_CEX_SCAN_SYMBOLS，默认 BTC/ETH/TRX/SOL/USDT/USDC）
+	CexScanSymbols  []string      // 价差扫描币种（ARB_CEX_SCAN_SYMBOLS，默认 BTC/ETH/TRX/SOL/USDT/USDC/PAXG）
 
 	// === D-274 事件驱动研判引擎 ===
 	// JudgeBalanceHKD/USD sizing 双币余额（M2 §5 M6：按市场币种取余额，map HK→HKD/US→USD）。

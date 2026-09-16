@@ -81,7 +81,9 @@ func (b *BinanceFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
 		url := fmt.Sprintf("%s/fapi/v1/premiumIndex?symbol=%s", b.cfg.BinanceBaseURL, pair)
 		body, err := getJSON(ctx, b.cfg.Client, url)
 		if err != nil {
-			return nil, fmt.Errorf("binance funding %s: %w", pair, err)
+			// D-300 S2：单符号失败跳过——新链（PAXG）故障不拖累既有主链。
+			fmt.Printf("[exchange:binance] funding %s: %v (skip)\n", pair, err)
+			continue
 		}
 		rate, ok := body["lastFundingRate"].(string)
 		if !ok {
@@ -161,7 +163,8 @@ func (g *GateFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
 		url := fmt.Sprintf("%s/api/v4/futures/usdt/contracts/%s", g.cfg.GateBaseURL, contract)
 		body, err := getJSON(ctx, g.cfg.Client, url)
 		if err != nil {
-			return nil, fmt.Errorf("gate funding %s: %w", contract, err)
+			fmt.Printf("[exchange:gate] funding %s: %v (skip)\n", contract, err)
+			continue
 		}
 		rate, ok := body["funding_rate"].(string)
 		if !ok {
@@ -201,7 +204,8 @@ func (o *OKXFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
 		url := fmt.Sprintf("%s/api/v5/public/funding-rate?instId=%s", o.cfg.OKXBaseURL, instID)
 		body, err := getJSON(ctx, o.cfg.Client, url)
 		if err != nil {
-			return nil, fmt.Errorf("okx funding %s: %w", instID, err)
+			fmt.Printf("[exchange:okx] funding %s: %v (skip)\n", instID, err)
+			continue
 		}
 		data, ok := body["data"].([]any)
 		if !ok || len(data) == 0 {

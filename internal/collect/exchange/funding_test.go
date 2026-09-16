@@ -1,6 +1,11 @@
 package exchange
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -67,6 +72,33 @@ func TestAnnualizeFunding_4h(t *testing.T) {
 	newVal := annualizeFunding(rate, 6)
 	if newVal != 2*oldVal {
 		t.Errorf("4h annualized want 2× old (%.4f), got %.4f", 2*oldVal, newVal)
+	}
+}
+
+// TestBinanceFunding_SymbolFailSkip D-300 S2 回归锚：
+// 新链符号（PAXG）funding 查询失败只跳过该符号，不拖累既有主链（BTC/ETH）。
+func TestBinanceFunding_SymbolFailSkip(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.String(), "PAXGUSDT") {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{"lastFundingRate": "0.0001"})
+	}))
+	defer srv.Close()
+
+	cfg := Config{Symbols: []string{"BTC", "ETH", "PAXG"}, BinanceBaseURL: srv.URL, Client: srv.Client()}
+	out, err := NewBinanceFunding(cfg).Poll(context.Background())
+	if err != nil {
+		t.Fatalf("Poll must not fail on single symbol error: %v", err)
+	}
+	if len(out) != 2 {
+		t.Fatalf("want 2 facts (BTC+ETH, PAXG skipped), got %d", len(out))
+	}
+	for _, f := range out {
+		if f.Symbol == "PAXGUSDT" {
+			t.Errorf("failed symbol must be skipped, got %s", f.Symbol)
+		}
 	}
 }
 
