@@ -79,13 +79,21 @@ func runPair(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL, 
 		return fmt.Errorf("fetch binance %s: %w", sym, err)
 	}
 
+	// D-301a S2：funding 年化周期按 symbol 取真值（fundingInfo fundingIntervalHours）。
+	// PAXG/XAUT 实为 4h 结算 → 6 期/日，旧版硬编码 3 低估 2×。
+	periodsPerDay, err := fetchFundingPeriodsPerDay(ctx, hc, proxyURL, sym)
+	if err != nil {
+		log.Printf("xasset-monitor: pair=%s fundingInfo fetch failed, fallback 3/day: %v", pair, err)
+		periodsPerDay = 3 // D-079 禁静默回退
+	}
+
 	// 算指标（口径分离 D1）。
 	entrySpread := (bid - exAsk) / exAsk * 10000
 	exitSpread := (ask - exBid) / exBid * 10000
 	const binanceMakerCostBps = 4.0 // 0.04% × 2 开+平
 	exnessSpread := (exAsk - exBid) / exAsk * 10000
 	entryNet := entrySpread - binanceMakerCostBps - exnessSpread
-	fundingAnnualPct := fundingRate * 3 * 365 * 100
+	fundingAnnualPct := fundingRate * float64(periodsPerDay) * 365 * 100
 	tokenMid := (bid + ask) / 2
 	xauMid := (exBid + exAsk) / 2
 	trackingErr := math.Abs(tokenMid-xauMid) / xauMid * 10000
@@ -131,30 +139,31 @@ type binancePremiumIndex struct {
 }
 
 func fetchBinanceGold(ctx context.Context, hc *http.Client, proxyURL, symbol string) (bid, ask, fundingRate float64, err error) {
-	bt, err := fetchJSON(ctx, hc, proxyURL+"/fapi/v1/ticker/bookTicker?symbol="+symbol)
+	bt, err := fetchBinanceJSON(ctx, hc, proxyURL+"/fapi/v1/ticker/bookTicker?symbol="+symbol, func() any { return &binanceBookTicker{} })
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf("bookTicker: %w", err)
 	}
-	bid, err = strconv.ParseFloat(bt.BidPrice, 64)
+	bid, err = strconv.ParseFloat(bt.(*binanceBookTicker).BidPrice, 64)
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf("parse bidPrice: %w", err)
 	}
-	ask, err = strconv.ParseFloat(bt.AskPrice, 64)
+	ask, err = strconv.ParseFloat(bt.(*binanceBookTicker).AskPrice, 64)
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf("parse askPrice: %w", err)
 	}
-	pi, err := fetchJSONPremium(ctx, hc, proxyURL+"/fapi/v1/premiumIndex?symbol="+symbol)
+	pi, err := fetchBinanceJSON(ctx, hc, proxyURL+"/fapi/v1/premiumIndex?symbol="+symbol, func() any { return &binancePremiumIndex{} })
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf("premiumIndex: %w", err)
 	}
-	fundingRate, err = strconv.ParseFloat(pi.LastFundingRate, 64)
+	fundingRate, err = strconv.ParseFloat(pi.(*binancePremiumIndex).LastFundingRate, 64)
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf("parse lastFundingRate: %w", err)
 	}
 	return bid, ask, fundingRate, nil
 }
 
-func fetchJSON(ctx context.Context, hc *http.Client, url string) (*binanceBookTicker, error) {
+// fetchBinanceJSON 通用 GET+JSON 解码（合并 fetchJSON/fetchJSONPremium，D-301a 行数治理）。
+func fetchBinanceJSON(ctx context.Context, hc *http.Client, url string, mk func() any) (any, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -168,32 +177,11 @@ func fetchJSON(ctx context.Context, hc *http.Client, url string) (*binanceBookTi
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("status %d: %s", resp.StatusCode, string(body))
 	}
-	var bt binanceBookTicker
-	if err := json.NewDecoder(resp.Body).Decode(&bt); err != nil {
+	v := mk()
+	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
 		return nil, err
 	}
-	return &bt, nil
-}
-
-func fetchJSONPremium(ctx context.Context, hc *http.Client, url string) (*binancePremiumIndex, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := hc.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("status %d: %s", resp.StatusCode, string(body))
-	}
-	var pi binancePremiumIndex
-	if err := json.NewDecoder(resp.Body).Decode(&pi); err != nil {
-		return nil, err
-	}
-	return &pi, nil
+	return v, nil
 }
 
 func latestExnessXAU(ctx context.Context, pool *pgxpool.Pool, venue string) (bid, ask float64, err error) {
@@ -201,6 +189,47 @@ func latestExnessXAU(ctx context.Context, pool *pgxpool.Pool, venue string) (bid
 		SELECT bid, ask FROM ticks WHERE venue=$1 AND symbol='XAUUSD' ORDER BY ts DESC LIMIT 1
 	`, venue).Scan(&bid, &ask)
 	return bid, ask, err
+}
+
+// fetchFundingPeriodsPerDay D-301a S2：从 Binance fundingInfo 取 per-symbol 结算周期。
+// 返回 periods/day（4h=6, 8h=3）；失败 → error（调用方回退 3）。
+func fetchFundingPeriodsPerDay(ctx context.Context, hc *http.Client, proxyURL, symbol string) (int, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, proxyURL+"/fapi/v1/fundingInfo", nil)
+	if err != nil {
+		return 0, err
+	}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return 0, fmt.Errorf("fundingInfo http %d", resp.StatusCode)
+	}
+	var fi []struct {
+		Symbol               string `json:"symbol"`
+		FundingIntervalHours any    `json:"fundingIntervalHours"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&fi); err != nil {
+		return 0, err
+	}
+	for _, f := range fi {
+		if f.Symbol != symbol {
+			continue
+		}
+		hours := 0
+		switch v := f.FundingIntervalHours.(type) {
+		case float64:
+			hours = int(v)
+		case string:
+			hours, _ = strconv.Atoi(v)
+		}
+		if hours <= 0 {
+			return 0, fmt.Errorf("fundingInfo %s: invalid hours %v", symbol, f.FundingIntervalHours)
+		}
+		return 24 / hours, nil
+	}
+	return 0, fmt.Errorf("fundingInfo: symbol %s not found", symbol)
 }
 
 // alertItem 告警项。
@@ -238,24 +267,15 @@ func checkAlerts(entrySpread, exitSpread, entryNet, fundingAnnual, fundingRate, 
 }
 
 func sendFeishuAlert(ctx context.Context, st *pgstore.Store, alerts []alertItem, rec *pgstore.XassetMonitor) {
-	appID := os.Getenv("ARB_FEISHU_APP_ID")
-	appSecret := os.Getenv("ARB_FEISHU_APP_SECRET")
-	if appID == "" || appSecret == "" {
-		log.Printf("xasset-monitor: 飞书凭据未配置，告警跳过（%d 项）", len(alerts))
-		return
-	}
+	appID, appSecret := os.Getenv("ARB_FEISHU_APP_ID"), os.Getenv("ARB_FEISHU_APP_SECRET")
 	fc := notify.NewFeishuClient(appID, appSecret)
-	if !fc.Enabled() {
-		log.Printf("xasset-monitor: 飞书客户端未启用，告警跳过（%d 项）", len(alerts))
+	if appID == "" || appSecret == "" || !fc.Enabled() {
+		log.Printf("xasset-monitor: 飞书未配置/未启用，告警跳过（%d 项）", len(alerts))
 		return
 	}
 	chatID, err := st.FeishuChatID(ctx)
-	if err != nil {
-		log.Printf("xasset-monitor: 读 chat_id 失败: %v", err)
-		return
-	}
-	if chatID == "" {
-		log.Printf("xasset-monitor: chat_id 未绑定，告警跳过（%d 项）", len(alerts))
+	if err != nil || chatID == "" {
+		log.Printf("xasset-monitor: chat_id 读取失败/未绑定，告警跳过（%d 项）", len(alerts))
 		return
 	}
 	text := fmt.Sprintf("[%s 监控] %d 项告警\n", rec.Pair, len(alerts))
