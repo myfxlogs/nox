@@ -1,7 +1,6 @@
-// cex_positions.go — CEX perp 持仓查询器（D-121）。
-// 实现 VenueQuerier 接口查 OKX/Gate/Binance perp 全部持仓 → []VenueOrder；
-// 注册进 BrokerManager → BrokerPositionMonitor 轮询 → enrichPositions 匹配 → 前端显示浮盈/funding。
-// CEX perp 持仓是聚合仓位（无单一 ticket）→ Ticket=Symbol；buildPositionIDIndex 按 venueKey+symbol 匹配 positionId。
+// cex_positions.go — CEX perp 持仓查询器（D-121）：实现 VenueQuerier 查 OKX/Gate/Binance
+// perp 全部持仓 → []VenueOrder → BrokerPositionMonitor 轮询 → enrichPositions → 前端显示。
+// CEX perp 持仓是聚合仓位（无单一 ticket）→ Ticket=Symbol；positionId 索引按 venueKey+symbol 匹配。
 package reconcile
 
 import (
@@ -66,10 +65,9 @@ func (q *CEXPositionQuerier) QueryOpenedOrders(ctx context.Context) ([]VenueOrde
 }
 
 // === OKX ===
-// GET /api/v5/account/positions?instType=SWAP — 全部 SWAP 持仓。
-// long_short_mode：long/short 分列；pos=合约数（张）；upl=浮盈（USDT）；fee=累计手续费。
-// D-146 S5 微件③ 返修：保证金优先 imr（初始保证金）→margin 回落；mmr→MaintMargin。
-// D-146 微件③ 追加：sim 环境 imr 实证为恒定假值（$1 名义也占 ~$333），demo 置 0（宁缺毋假）。
+// GET /api/v5/account/positions?instType=SWAP — 全部 SWAP 持仓。long_short_mode：long/short 分列；
+// pos=合约数（张）；upl=浮盈；fee=累计手续费。D-146 S5 微件③：保证金优先 imr→margin 回落、mmr→MaintMargin；
+// sim 环境 imr 实证为恒定假值（$1 名义也占 ~$333），demo 置 0（宁缺毋假）。
 func (q *CEXPositionQuerier) okxPositions(ctx context.Context) ([]VenueOrder, error) {
 	const path = "/api/v5/account/positions?instType=SWAP"
 	ts := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
@@ -126,13 +124,11 @@ func (q *CEXPositionQuerier) okxPositions(ctx context.Context) ([]VenueOrder, er
 		}
 		ctimeMs, _ := strconv.ParseInt(p.CTime, 10, 64)
 		openedAt := time.UnixMilli(ctimeMs)
-		// D-146 S5 微件③ 返修：优先 imr（初始保证金），margin 回落
-		initMargin, _ := strconv.ParseFloat(p.Imr, 64)
+		initMargin, _ := strconv.ParseFloat(p.Imr, 64) // D-146 S5：imr（初始保证金）优先，margin 回落
 		if initMargin == 0 {
-			initMargin, _ = strconv.ParseFloat(p.Margin, 64) // 回落：imr 缺失时用 margin（当前占用）
+			initMargin, _ = strconv.ParseFloat(p.Margin, 64)
 		}
-		// D-146 微件③ 追加：sim 环境 imr 实证为恒定假值（$1 名义也占 ~$333，2026-08-29 业主实证
-		// 「okx 保证金都这么高」）——demo 不展示（宁缺毋假），真金（simulated=false）自然恢复真值。
+		// sim 环境 imr 实证为恒定假值（$1 名义也占 ~$333）——demo 置 0 宁缺毋假，真金自然恢复。
 		if q.simulated {
 			initMargin = 0
 		}
@@ -157,8 +153,9 @@ func (q *CEXPositionQuerier) okxPositions(ctx context.Context) ([]VenueOrder, er
 }
 
 // === Gate ===
-// GET /futures/usdt/positions — 全部 USDT 本位合约持仓（数组）。
-// size > 0 多头 / < 0 空头；entry_price=开仓价；unrealized_pnl=浮盈。
+// GET /futures/usdt/positions — 全部 USDT 本位合约持仓（数组）。size>0 多/<0 空。
+// D-311 R8 字段名实证修正：unrealised_pnl=浮盈（英式拼写）、pnl_fund=仓累计资金费、
+// initial_margin 优先 margin 回落（cross 模式 margin 恒 0，镜像 okx imr→margin）、maintenance_margin→MaintMargin。
 func (q *CEXPositionQuerier) gatePositions(ctx context.Context) ([]VenueOrder, error) {
 	const endpoint = "/futures/usdt/positions"
 	urlPath := "/api/v4" + endpoint
@@ -173,14 +170,15 @@ func (q *CEXPositionQuerier) gatePositions(ctx context.Context) ([]VenueOrder, e
 	if err != nil {
 		return nil, fmt.Errorf("gate positions: %w", err)
 	}
-	// Gate 返回数组（ListPositions），非单对象
-	var positions []struct {
+	var positions []struct { // Gate 返回数组（ListPositions），非单对象
 		Contract      string `json:"contract"`
 		Size          int64  `json:"size"` // >0 多 / <0 空
 		EntryPrice    string `json:"entry_price"`
-		UnrealizedPnl string `json:"unrealized_pnl"`
-		Funding       string `json:"funding"` // 累计 funding
-		Margin        string `json:"margin"`  // 仓位保证金（USDT；API 实测字段名，D-311 R7③）
+		UnrealisedPnl string `json:"unrealised_pnl"`     // D-311 R8①：英式拼写实测字段名
+		PnlFund       string `json:"pnl_fund"`           // D-311 R8②：仓累计资金费
+		InitialMargin string `json:"initial_margin"`     // D-311 R8③：初始保证金（优先）
+		Margin        string `json:"margin"`             // D-311 R8③：回落字段（cross 模式恒 0）
+		MaintMargin   string `json:"maintenance_margin"` // D-311 R8④：维持保证金
 	}
 	if err := json.Unmarshal(body, &positions); err != nil {
 		return nil, fmt.Errorf("gate positions json: %w", err)
@@ -193,21 +191,24 @@ func (q *CEXPositionQuerier) gatePositions(ctx context.Context) ([]VenueOrder, e
 			continue
 		}
 		entryPx, _ := strconv.ParseFloat(p.EntryPrice, 64)
-		upl, _ := strconv.ParseFloat(p.UnrealizedPnl, 64)
-		funding, _ := strconv.ParseFloat(p.Funding, 64)
+		upl, _ := strconv.ParseFloat(p.UnrealisedPnl, 64)
+		funding, _ := strconv.ParseFloat(p.PnlFund, 64)
 		side, posSide := "BUY", "long" // D-195-C2：Gate size>0=long/BUY, <0=short/SELL
 		vol := float64(p.Size)
 		if p.Size < 0 {
 			side, posSide, vol = "SELL", "short", -vol
 		}
-		// 查合约规格转基础币（缓存避免重复请求）
-		quanto, ok := quantoCache[p.Contract]
+		quanto, ok := quantoCache[p.Contract] // 查合约规格转基础币（缓存避免重复请求）
 		if !ok {
 			quanto = gateQuantoMultiplier(ctx, q.client, q.baseURL, q.apiKey, q.apiSecret, p.Contract)
 			quantoCache[p.Contract] = quanto
 		}
-		vol = vol * quanto // 合约数 × quanto = 基础币数量
-		margin, _ := strconv.ParseFloat(p.Margin, 64)
+		vol = vol * quanto                                       // 合约数 × quanto = 基础币数量
+		initMargin, _ := strconv.ParseFloat(p.InitialMargin, 64) // R8③：initial_margin 优先，margin 回落
+		if initMargin == 0 {
+			initMargin, _ = strconv.ParseFloat(p.Margin, 64)
+		}
+		maintMargin, _ := strconv.ParseFloat(p.MaintMargin, 64)
 		out = append(out, VenueOrder{
 			Ticket:        p.Contract, // CEX 聚合仓位 → 用 symbol
 			Symbol:        p.Contract,
@@ -217,18 +218,19 @@ func (q *CEXPositionQuerier) gatePositions(ctx context.Context) ([]VenueOrder, e
 			Venue:         q.venue,
 			VenueKey:      q.VenueKey(),
 			Profit:        upl,
-			Swap:          funding, // Gate funding ≈ swap
+			Swap:          funding, // D-311 R8②：pnl_fund 仓累计资金费，供 swapAccrued/达成分子
 			PosSide:       posSide, // D-195-C2：从 size 正负推导
-			InitialMargin: margin,  // D-311 R7③：API margin 字段=仓位占用保证金
+			InitialMargin: initMargin,
+			MaintMargin:   maintMargin, // D-311 R8④
 		})
 	}
 	return out, nil
 }
 
 // === Binance ===
-// GET /fapi/v2/positionRisk — 全部 USDT-M 合约持仓（含 0 仓位）。positionAmt >0 多 /<0 空；unRealizedProfit=浮盈。
-// D-146 S5 微件③ 返修：positionRisk 不返回 initialMargin/maintMargin（账户级 /fapi/v2/account 字段，
-// 字段想当然错配→保证金恒 0）。per-position 保证金：逐仓→isolatedWallet；全仓→notional/leverage。MaintMargin=0 走 D-124 账户分摊。
+// GET /fapi/v2/positionRisk — 全部 USDT-M 合约持仓（含 0 仓位）。positionAmt>0 多/<0 空；unRealizedProfit=浮盈。
+// D-146 S5：positionRisk 无 initialMargin/maintMargin（账户级字段）——逐仓→isolatedWallet、
+// 全仓→notional/leverage；MaintMargin=0 走 D-124 账户分摊。
 func (q *CEXPositionQuerier) binancePositions(ctx context.Context) ([]VenueOrder, error) {
 	params := "timestamp=" + strconv.FormatInt(time.Now().UnixMilli(), 10) + "&recvWindow=5000"
 	sig := binanceSign(q.apiSecret, params)

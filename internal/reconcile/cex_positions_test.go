@@ -147,10 +147,10 @@ func TestD121_GatePositions(t *testing.T) {
 		if r.URL.Path != "/futures/usdt/positions" {
 			t.Errorf("want /futures/usdt/positions, got %s", r.URL.Path)
 		}
-		// Gate 返回数组
+		// Gate 返回数组（实证字段名：unrealised_pnl/pnl_fund，D-311 R8）
 		positions := []map[string]any{
-			{"contract": "ETH_USDT", "size": 40, "entry_price": "2537.12", "unrealized_pnl": "1.5", "funding": "-0.0023"},
-			{"contract": "BTC_USDT", "size": -10, "entry_price": "60000", "unrealized_pnl": "-3.0", "funding": "0.001"},
+			{"contract": "ETH_USDT", "size": 40, "entry_price": "2537.12", "unrealised_pnl": "1.5", "pnl_fund": "-0.0023"},
+			{"contract": "BTC_USDT", "size": -10, "entry_price": "60000", "unrealised_pnl": "-3.0", "pnl_fund": "0.001"},
 		}
 		_ = json.NewEncoder(w).Encode(positions)
 	}))
@@ -251,16 +251,58 @@ func TestD121_VenueKey(t *testing.T) {
 	}
 }
 
-// TestD311R7_GateMargin D-311 R7③：Gate /futures/usdt/positions 响应 margin 字段
-// （API 实测字段名=仓位占用保证金 USDT）解析进 VenueOrder.InitialMargin。
-func TestD311R7_GateMargin(t *testing.T) {
+// TestD311R8_GatePositionFields D-311 R8：Gate /futures/usdt/positions 响应实证字段名
+// 四列全验——unrealised_pnl→Profit、pnl_fund→Swap、initial_margin→InitialMargin
+// （cross 模式 margin 恒 0，initial_margin 优先）、maintenance_margin→MaintMargin。
+// （R7③ margin 直读经 R8 实证修正为 initial_margin 优先 margin 回落。）
+func TestD311R8_GatePositionFields(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/futures/usdt/contracts/") {
 			_, _ = io.WriteString(w, `{"quanto_multiplier":"0.01"}`)
 			return
 		}
 		positions := []map[string]any{
-			{"contract": "CL_USDT", "size": 1012, "entry_price": "63.5", "unrealized_pnl": "1.0", "funding": "0.5", "margin": "64.26"},
+			{"contract": "CL_USDT", "size": 1012, "entry_price": "63.5", "unrealised_pnl": "1.0", "pnl_fund": "0.5", "initial_margin": "64.26", "margin": "0", "maintenance_margin": "32.13"},
+		}
+		_ = json.NewEncoder(w).Encode(positions)
+	}))
+	defer srv.Close()
+
+	q := NewCEXPositionQuerier("gate", "perp", "key", "secret", "", srv.URL, false)
+	orders, err := q.QueryOpenedOrders(context.Background())
+	if err != nil {
+		t.Fatalf("gate positions: %v", err)
+	}
+	if len(orders) != 1 {
+		t.Fatalf("want 1 order, got %d", len(orders))
+	}
+	if orders[0].Profit != 1.0 {
+		t.Errorf("Profit=%v, want 1.0（unrealised_pnl）", orders[0].Profit)
+	}
+	if orders[0].Swap != 0.5 {
+		t.Errorf("Swap=%v, want 0.5（pnl_fund 仓累计资金费）", orders[0].Swap)
+	}
+	if orders[0].InitialMargin != 64.26 {
+		t.Errorf("InitialMargin=%v, want 64.26（initial_margin 优先，margin=0 cross 场景）", orders[0].InitialMargin)
+	}
+	if orders[0].MaintMargin != 32.13 {
+		t.Errorf("MaintMargin=%v, want 32.13（maintenance_margin）", orders[0].MaintMargin)
+	}
+	// 既有字段回归：size=1012 张 × quanto 0.01 = 10.12 基础币
+	if math.Abs(orders[0].Volume-10.12) > 1e-9 {
+		t.Errorf("Volume=%v, want 10.12", orders[0].Volume)
+	}
+}
+
+// TestD311R8_GateMarginFallback D-311 R8③：initial_margin 缺失（空字符串）→ margin 回落。
+func TestD311R8_GateMarginFallback(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/futures/usdt/contracts/") {
+			_, _ = io.WriteString(w, `{"quanto_multiplier":"0.01"}`)
+			return
+		}
+		positions := []map[string]any{
+			{"contract": "CL_USDT", "size": 1012, "entry_price": "63.5", "unrealised_pnl": "1.0", "pnl_fund": "0", "initial_margin": "", "margin": "64.26", "maintenance_margin": ""},
 		}
 		_ = json.NewEncoder(w).Encode(positions)
 	}))
@@ -275,10 +317,9 @@ func TestD311R7_GateMargin(t *testing.T) {
 		t.Fatalf("want 1 order, got %d", len(orders))
 	}
 	if orders[0].InitialMargin != 64.26 {
-		t.Errorf("InitialMargin=%v, want 64.26（API margin 字段）", orders[0].InitialMargin)
+		t.Errorf("InitialMargin=%v, want 64.26（initial_margin 缺失→margin 回落）", orders[0].InitialMargin)
 	}
-	// 既有字段回归：size=1012 张 × quanto 0.01 = 10.12 基础币
-	if math.Abs(orders[0].Volume-10.12) > 1e-9 {
-		t.Errorf("Volume=%v, want 10.12", orders[0].Volume)
+	if orders[0].MaintMargin != 0 {
+		t.Errorf("MaintMargin=%v, want 0（maintenance_margin 缺失）", orders[0].MaintMargin)
 	}
 }
