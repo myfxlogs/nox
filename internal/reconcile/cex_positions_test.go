@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -247,5 +248,37 @@ func TestD121_VenueKey(t *testing.T) {
 	q := NewCEXPositionQuerier("okx", "perp", "k", "s", "p", "http://x", true)
 	if q.VenueKey() != "okx:perp" {
 		t.Errorf("want okx:perp, got %s", q.VenueKey())
+	}
+}
+
+// TestD311R7_GateMargin D-311 R7③：Gate /futures/usdt/positions 响应 margin 字段
+// （API 实测字段名=仓位占用保证金 USDT）解析进 VenueOrder.InitialMargin。
+func TestD311R7_GateMargin(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/futures/usdt/contracts/") {
+			_, _ = io.WriteString(w, `{"quanto_multiplier":"0.01"}`)
+			return
+		}
+		positions := []map[string]any{
+			{"contract": "CL_USDT", "size": 1012, "entry_price": "63.5", "unrealized_pnl": "1.0", "funding": "0.5", "margin": "64.26"},
+		}
+		_ = json.NewEncoder(w).Encode(positions)
+	}))
+	defer srv.Close()
+
+	q := NewCEXPositionQuerier("gate", "perp", "key", "secret", "", srv.URL, false)
+	orders, err := q.QueryOpenedOrders(context.Background())
+	if err != nil {
+		t.Fatalf("gate positions: %v", err)
+	}
+	if len(orders) != 1 {
+		t.Fatalf("want 1 order, got %d", len(orders))
+	}
+	if orders[0].InitialMargin != 64.26 {
+		t.Errorf("InitialMargin=%v, want 64.26（API margin 字段）", orders[0].InitialMargin)
+	}
+	// 既有字段回归：size=1012 张 × quanto 0.01 = 10.12 基础币
+	if math.Abs(orders[0].Volume-10.12) > 1e-9 {
+		t.Errorf("Volume=%v, want 10.12", orders[0].Volume)
 	}
 }
