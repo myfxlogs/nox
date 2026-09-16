@@ -20,7 +20,8 @@ func canonicalFromOppID(oppID string) string {
 
 // calcLegPnL 同步路径计算单腿平仓 PnL（D-077 修复⑪A M1）。
 // 公式：((Fill.Price − 开仓价) × qty × CS × 方向 + Fill.Swap − Fill.Commission) × fx
-// CS：MT 腿经 csResolver 查服务器规格（修掉漏 CS 的 100 倍错误）；CEX 腿 CS=1。
+// CS：MT 腿经 csResolver 查服务器规格（修掉漏 CS 的 100 倍错误）；CEX 腿经复合 resolver
+// （D-311 R2：:perp=ct_val 真值/:spot=1.0，未接线/缺值回退 cs=1.0）。
 // fx：计价币→USD 换算（D-105 T2）；fx=0（缺失）→ PnL=0（宁缺勿虚增，调用方发 critical alert）。
 // 开仓价缺失 → PnL=0（不猜，留对账纠偏）。
 func (p *Pipeline) calcLegPnL(leg pgstore.PositionLeg, fill Fill, fx float64) float64 {

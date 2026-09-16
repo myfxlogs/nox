@@ -214,3 +214,51 @@ func TestD311_CheckXAssetComboAllow(t *testing.T) {
 		t.Errorf("missing opp row: want ErrXAssetComboNotAllowed, got %v", err)
 	}
 }
+
+// TestD311_CheckXAssetComboAllow_CexLegCS D-311 R2 锚：CEX perp 腿 gross 校验消费
+// 复合 resolver 的 ct_val——CS=0.01 时 sell 名义=4×0.01×100000=$4000（CS=1.0 旧缺
+// 陷口径=$400000 会误超 $300000 限）；ct_val 缺失→fail-closed 拒。
+func TestD311_CheckXAssetComboAllow_CexLegCS(t *testing.T) {
+	s := d311ExecStore(t)
+	ctx := context.Background()
+	oppID := "XASSET_CARRY:WTIUSD:3001157:mt5:gate:perp"
+	cs := "BTCUSDT"
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE opportunities CASCADE`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	if _, err := s.UpsertOpportunity(ctx, &pgstore.Opportunity{
+		ID: oppID, Type: "XASSET_CARRY", Canonical: "WTIUSD", CanonicalSell: &cs,
+		VenueBuy: "3001157:mt5", VenueSell: "gate:perp",
+		QuoteTime: time.Now(), ExpiresAt: time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("seed opportunity: %v", err)
+	}
+	allow := []XAssetComboAllowSpec{
+		{CanonicalBuy: "WTIUSD", CanonicalSell: "BTCUSDT", VenueBuy: "3001157:mt5", VenueSell: "gate:perp",
+			MaxGrossUSD: 300000}, // CS=0.01→gross $6000 过；CS=1.0 误算→$402000 超限（判别锚）
+	}
+	legs := []LegSpec{
+		{VenueKey: "3001157:mt5", VenueSymbol: "WTIUSD", Side: "BUY", Qty: 0.5, PriceExpected: 40},
+		{VenueKey: "gate:perp", VenueSymbol: "BTC_USDT", Side: "SELL", Qty: 4, PriceExpected: 100000},
+	}
+	// ① CEX 腿 ct_val 命中（复合 resolver :perp 分支语义）→ gross $6000 < $300000 → 放行
+	p := &Pipeline{
+		store:            s,
+		xassetComboAllow: allow,
+		csResolver:       &fakeCSResolver{sizes: map[string]float64{"3001157:mt5:WTIUSD": 100, "gate:perp:BTC_USDT": 0.01}},
+		fxResolver:       fakeFxResolver{rates: map[string]float64{"USD": 1}, ok: true},
+	}
+	if err := p.checkXAssetComboAllow(ctx, oppID, legs); err != nil {
+		t.Errorf("cex leg ct_val hit: want nil, got %v", err)
+	}
+	// ② CEX 腿 ct_val 缺失（map 只留 MT 腿 CS）→ fail-closed 拒
+	p = &Pipeline{
+		store:            s,
+		xassetComboAllow: allow,
+		csResolver:       &fakeCSResolver{sizes: map[string]float64{"3001157:mt5:WTIUSD": 100}},
+		fxResolver:       fakeFxResolver{rates: map[string]float64{"USD": 1}, ok: true},
+	}
+	if err := p.checkXAssetComboAllow(ctx, oppID, legs); !errors.Is(err, ErrComboNotAllowed) {
+		t.Errorf("cex leg ct_val missing: want ErrComboNotAllowed, got %v", err)
+	}
+}
