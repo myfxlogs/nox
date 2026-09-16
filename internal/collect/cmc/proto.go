@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -115,7 +116,14 @@ func first(fields []fld, n int) *fld {
 
 // ---------- createsession 模板（D-011 验证，UUID/timestamp 运行时替换） ----------
 
-const createTpl = "REDACTED_CMC_HEX"
+// createTplHex env 注入（2026-09-16 CMC 断流修复·方案 B）：
+// 原值系 D-011 抓包的 protobuf 协议帧模板（594 hex，运行时替换 UUID/timestamp，
+// 内嵌 UA/Asia-Tehran 时区——非活凭据），9-14 E3 凭据清洗被 64+hex 规则误伤为占位符，
+// 兜底重登路径 100% 失效致断流 19.4h（调查=docs/调查-CMC采集失效根因-2026-09-16-Devin.md）。
+// 移出仓库：.env ARB_CMC_CREATE_TPL 注入（compose 透传），免疫未来凭据清洗。
+// 惰性每次读（包级 var 在 import 期求值，t.Setenv 测试注入会错过）；登录低频开销可忽略。
+// 空/非法时 fail-closed：buildCreateSession 返回 error 上抛，采集器停转非崩溃。
+func createTplHex() string { return os.Getenv("ARB_CMC_CREATE_TPL") }
 
 const oldUUID = "73f87a3e-57b8-457b-9849-b1be0f37c179"
 
@@ -131,7 +139,7 @@ func genUUID() string {
 // buildCreateSession 模板重放：替换 timestamp varint + UUID。
 // v7：探针的模板头校验 panic 改为返回 error（panic 会崩整个进程，D-188 同族）。
 func buildCreateSession(ts uint64, uuid string) ([]byte, error) {
-	tpl, err := hex.DecodeString(createTpl)
+	tpl, err := hex.DecodeString(createTplHex())
 	if err != nil {
 		return nil, fmt.Errorf("createTpl hex decode: %w", err)
 	}
