@@ -247,3 +247,6 @@ var T1PromotionSQL string
 
 //go:embed 0101_canonical_fix.sql
 var CanonicalFixSQL string
+
+//go:embed 0102_xasset_exec.sql
+var XassetExecSQL string

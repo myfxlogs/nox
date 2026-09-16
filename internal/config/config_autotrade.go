@@ -35,6 +35,11 @@ type AutotradeConfig struct {
 	SwapArbDenyCombosRaw    string  // ARB_SWAPARB_DENY_COMBOS
 	SwapArbMaxGrossExposure float64 // ARB_SWAPARB_MAX_GROSS_EXPOSURE（默认 0=不校验）
 
+	// D-311 S6：XASSET_CARRY 精确组合门禁（零信任显式白名单）。
+	// record 格式 `canonicalBuy|canonicalSell|venueBuy|venueSell|maxLongQty|maxShortQty|maxGrossUSD`，
+	// 分号分隔；venue 用 account key 格式（"3001157:mt5"）。空 = 全拒（pipeline+dashboard+autotrade 三处同源）。
+	XAssetAllowCombosRaw string // ARB_XASSET_ALLOW_COMBOS
+
 	// D-072 §3.3/§4.2 swap/funding 退出参数
 	AutoTradeMinNetSwapBps float64 // ARB_AUTOTRADE_MIN_NET_SWAP_BPS（默认 0.2）
 	SwapArbExitNetBps      float64 // ARB_SWAPARB_EXIT_NET_BPS（默认 0）
@@ -58,6 +63,7 @@ func loadAutotradeConfig() *AutotradeConfig {
 		SwapArbAutoAllow:           envBool("ARB_SWAPARB_AUTO_ALLOW", false),      // D-168 自动准入
 		SwapArbDenyCombosRaw:       envStr("ARB_SWAPARB_DENY_COMBOS", ""),         // D-168 黑名单
 		SwapArbMaxGrossExposure:    envFloat("ARB_SWAPARB_MAX_GROSS_EXPOSURE", 0), // D-168 全局额度（0=不校验）
+		XAssetAllowCombosRaw:       envStr("ARB_XASSET_ALLOW_COMBOS", ""),         // D-311 S6：空=全拒（零信任）
 		MeanRevertThresholds:       envFloatMap("ARB_MEANREVERT_THRESHOLDS", "NAS100:1.5,ETHUSDT:0.5,XAUUSD:0.5"),
 		AutoTradeMinNetSwapBps:     envFloat("ARB_AUTOTRADE_MIN_NET_SWAP_BPS", 0.2),
 		SwapArbExitNetBps:          envFloat("ARB_SWAPARB_EXIT_NET_BPS", 0),

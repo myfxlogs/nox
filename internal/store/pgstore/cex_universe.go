@@ -2,12 +2,15 @@ package pgstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // CexUniverseRow 是 fin_cex_universe 一行（D-307 universe 现状表）。
-// LaunchTS/FundingAnn/Vol24h/LastAlertTS 为 NULL 可空列，用指针表达。
+// LaunchTS/FundingAnn/Vol24h/LastAlertTS/CtVal 为 NULL 可空列，用指针表达。
 type CexUniverseRow struct {
 	Venue, Symbol, Base, Class, Status string
 	LaunchTS                           *time.Time
@@ -15,6 +18,7 @@ type CexUniverseRow struct {
 	LastAlertTS                        *time.Time
 	HedgeCanonical, Tier               string
 	FundingAnn, Vol24h                 *float64
+	CtVal                              *float64 // D-311：合约面值（1 张=基础资产数），nil=未知
 }
 
 // CexEvent 是 fin_cex_events 一行（append-only 事件）。
@@ -33,7 +37,7 @@ type CexRadarRow struct {
 func (s *Store) ListCexUniverse(ctx context.Context) (map[string]CexUniverseRow, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT venue, symbol, base, underlying_class, status, launch_ts,
-		       first_seen, last_alert_ts, hedge_canonical, tier, last_funding_ann, last_vol24h
+		       first_seen, last_alert_ts, hedge_canonical, tier, last_funding_ann, last_vol24h, ct_val
 		FROM fin_cex_universe`)
 	if err != nil {
 		return nil, fmt.Errorf("list cex_universe: %w", err)
@@ -43,7 +47,7 @@ func (s *Store) ListCexUniverse(ctx context.Context) (map[string]CexUniverseRow,
 	for rows.Next() {
 		var r CexUniverseRow
 		if err := rows.Scan(&r.Venue, &r.Symbol, &r.Base, &r.Class, &r.Status, &r.LaunchTS,
-			&r.FirstSeen, &r.LastAlertTS, &r.HedgeCanonical, &r.Tier, &r.FundingAnn, &r.Vol24h); err != nil {
+			&r.FirstSeen, &r.LastAlertTS, &r.HedgeCanonical, &r.Tier, &r.FundingAnn, &r.Vol24h, &r.CtVal); err != nil {
 			return nil, err
 		}
 		out[r.Venue+"|"+r.Symbol] = r
@@ -65,8 +69,8 @@ func (s *Store) UpsertCexUniverse(ctx context.Context, rows []CexUniverseRow, no
 	for _, r := range rows {
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO fin_cex_universe (venue, symbol, base, underlying_class, status,
-				launch_ts, last_seen, hedge_canonical, tier, last_funding_ann, last_vol24h)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+				launch_ts, last_seen, hedge_canonical, tier, last_funding_ann, last_vol24h, ct_val)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
 			ON CONFLICT (venue, symbol) DO UPDATE SET
 				base = EXCLUDED.base,
 				underlying_class = EXCLUDED.underlying_class,
@@ -76,13 +80,34 @@ func (s *Store) UpsertCexUniverse(ctx context.Context, rows []CexUniverseRow, no
 				hedge_canonical = EXCLUDED.hedge_canonical,
 				tier = EXCLUDED.tier,
 				last_funding_ann = EXCLUDED.last_funding_ann,
-				last_vol24h = EXCLUDED.last_vol24h`,
+				last_vol24h = EXCLUDED.last_vol24h,
+				ct_val = EXCLUDED.ct_val`,
 			r.Venue, r.Symbol, r.Base, r.Class, r.Status,
-			r.LaunchTS, now, r.HedgeCanonical, r.Tier, r.FundingAnn, r.Vol24h); err != nil {
+			r.LaunchTS, now, r.HedgeCanonical, r.Tier, r.FundingAnn, r.Vol24h, r.CtVal); err != nil {
 			return fmt.Errorf("upsert cex_universe %s|%s: %w", r.Venue, r.Symbol, err)
 		}
 	}
 	return tx.Commit(ctx)
+}
+
+// GetCexContractSize D-311 S3：按 (venue, symbol) 查 fin_cex_universe.ct_val。
+// venue=bare 名（gate/okx/binance）、symbol=venue 原生合约名（CL_USDT/BTC-USDT-SWAP/XAUUSDT）。
+// 缺行/NULL/≤0 → ok=false（legContractSizeOf 上游 fail-closed 报错，不猜合约规格）。
+func (s *Store) GetCexContractSize(ctx context.Context, venue, symbol string) (float64, bool, error) {
+	var ctVal *float64
+	err := s.pool.QueryRow(ctx,
+		`SELECT ct_val FROM fin_cex_universe WHERE venue = $1 AND symbol = $2`,
+		venue, symbol).Scan(&ctVal)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, false, nil
+		}
+		return 0, false, fmt.Errorf("cex contract size %s|%s: %w", venue, symbol, err)
+	}
+	if ctVal == nil || *ctVal <= 0 {
+		return 0, false, nil
+	}
+	return *ctVal, true, nil
 }
 
 // InsertCexEvents 批量落事件行（ts 取库 now()）。
