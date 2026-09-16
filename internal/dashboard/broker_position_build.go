@@ -60,7 +60,7 @@ func (m *BrokerPositionMonitor) build(ctx context.Context) []*v1.BrokerPosition 
 				canonical = cm[o.Symbol]
 			}
 			// CEX perp/spot 无 symbol_mappings 记录时，从符号派生 canonical（与采集器同构）：
-			// binance TRXUSDT → TRXUSDT；okx TRX-USDT-SWAP → TRXUSDT（去 -SWAP + 替换 -）。
+			// binance TRXUSDT → TRXUSDT；okx TRX-USDT-SWAP → TRXUSDT（去 -SWAP + 替换 -）；gate CL_USDT → CLUSDT。
 			// 无映射则 qbus.Latest 查不到 → 现价显示「—」；派生后可查到实时报价。
 			if canonical == "" && isCEXVenueKey(o.VenueKey) {
 				canonical = cexCanonical(o.Symbol)
@@ -125,8 +125,10 @@ func isCEXVenueKey(vk string) bool {
 }
 
 // cexCanonical 从 CEX 交易所符号派生 canonical（与采集器同构）：
-// binance TRXUSDT → TRXUSDT；okx TRX-USDT-SWAP → TRXUSDT（去 -SWAP + 替换 -）。
+// binance TRXUSDT → TRXUSDT；okx TRX-USDT-SWAP → TRXUSDT（去 -SWAP + 替换 -）；
+// gate CL_USDT → CLUSDT（替换 _，镜像 canonicalFromGate=ReplaceAll("_","")，D-311 R6④）。
 func cexCanonical(symbol string) string {
 	s := strings.TrimSuffix(symbol, "-SWAP")
-	return strings.ReplaceAll(s, "-", "")
+	s = strings.ReplaceAll(s, "-", "")
+	return strings.ReplaceAll(s, "_", "")
 }
