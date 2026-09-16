@@ -52,6 +52,8 @@ func (s *Store) SumCMCOvernightByRange(ctx context.Context, from, to *time.Time)
 // D-279：灰尘过滤改用 TronScan 官方 cheat_status——cheat_status=true 不返回（仅查询过滤，入库保留）。
 // R2（9-9 业主问询修复）：①PAYMENTS_IN→deposit（入金 $6,000 误显「其他」）②SELL_TRADE/BUY_TRADE 不进流水卡——
 // CFD 开平仓零现金流（生产实证 amount=0），流水卡职责=资金流；开仓事件由对冲卡空单腿展示，入库保留。
+// 9-16 业主令：vote 行剔除——投票交易零金额零对手方（生产实证 7/7 行 amount_sun=0/counterparty 空），
+// 纯噪音无资金流语义；仅查询过滤，入库保留（同 R2 先例）。
 func (s *Store) ListHedgeFlowPage(ctx context.Context, sourceFilter string, limit, offset int) ([]HedgeFlowItem, error) {
 	if limit <= 0 {
 		limit = 50
@@ -67,6 +69,7 @@ func (s *Store) ListHedgeFlowPage(ctx context.Context, sourceFilter string, limi
 			FROM fin_trx_txs
 			WHERE ($1 = '' OR $1 = 'trx')
 			  AND NOT cheat_status
+			  AND kind <> 'vote'
 			UNION ALL
 			SELECT 'cmc' AS source, transaction_time AS ts,
 			       CASE transaction_type
