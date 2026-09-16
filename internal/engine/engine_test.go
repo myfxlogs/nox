@@ -31,12 +31,12 @@ func TestCommissionResolver(t *testing.T) {
 	cex := map[string]float64{"gate": 5.0}
 	commFor := testCommissionResolver(t, cfd, cex)
 	cases := map[string]float64{
-		"277842155:mt5": 0.7, // 账号真实佣金
+		"277842155:mt5":        0.7, // 账号真实佣金
 		"REDACTED_MT_ACCT:mt4": 0.3, // 无账号值 → CFD 默认
-		"binance:spot":  10.0,
-		"okx:perp":      10.0,
-		"gate:spot":     5.0, // 逐所 taker
-		"gate:perp":     5.0,
+		"binance:spot":         10.0,
+		"okx:perp":             10.0,
+		"gate:spot":            5.0, // 逐所 taker
+		"gate:perp":            5.0,
 	}
 	for k, want := range cases {
 		if got := commFor(k); got != want {
@@ -52,5 +52,5 @@ func TestNewRequiresResolver(t *testing.T) {
 			t.Fatal("expected panic on nil commission resolver")
 		}
 	}()
-	New(nil, nil, evaluator.Config{}, nil, nil, nil, time.Second, nil, 0, 0, 0, 0)
+	New(nil, nil, evaluator.Config{}, nil, nil, nil, time.Second, nil, 0, 0, 0, 0, 0)
 }
