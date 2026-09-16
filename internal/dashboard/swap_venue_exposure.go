@@ -6,6 +6,7 @@ import (
 
 	"arb/internal/combo"
 	"arb/internal/store/pgstore"
+	"arb/internal/usdnotional"
 )
 
 // canonicalFromComboKey 从组合键/opportunity_id 派生 canonical（D-132 T1）。
@@ -24,7 +25,8 @@ func canonicalFromComboKey(oppID string) string {
 // swapArbVenueExposureCheck 纯函数：判断新仓加入后两腿 venue SWAPARB 合计裸露是否在 cap 内（D-132 T1）。
 // D-174：按保证金口径（名义/杠杆 vs 权益×cap）。cap 语义=保证金/权益比。
 // existingLegs 为当前活跃 SWAPARB 仓的 OPEN 腿；canonicalOf 返回腿所属持仓的 canonical（空=跳过）；
-// usdPerLotOf 返回 (canonical, venue) 1 手 USD 名义（同 USDPerLotForLeg "ask" 口径，ok=false 跳过该腿）。
+// usdPerLotOf 返回 (canonical, venue) 每 leg.Qty 单位 USD 名义——MT 腿=1 手（同 USDPerLotForLeg
+// "ask" 口径），CEX 腿=1 基础币（qty 已是基础币，勿乘 ct_val，D-311 R5）；ok=false 跳过该腿。
 // longLev/shortLev = 各腿 venue 杠杆（调用方经 effectiveLeverage 处理后传入，≤0 回落 1.0）。
 // cap ≤ 0 → 不启用（true）；equity ≤ 0 → fail-closed（false）。
 // 新仓名义加到两腿 venue；任一 venue 保证金 = 合计名义/杠杆 > equity×cap → false（skip）。
@@ -66,7 +68,7 @@ func swapArbVenueExposureCheck(
 
 // SwapArbVenueExposureOK 判断新开 SWAPARB 仓后两腿 venue 合计裸露是否在 cap 内（D-132 T1 venue 级敞口门）。
 // cap ≤ 0 → 不启用（true）；venue 离线/币种非 USD → fail-closed（false，与 SwapArbNotional 同判）。
-// 聚合活仓 OPEN 腿名义 = qty × USDPerLotForLeg(canonical, venue, "ask")（同 trySwapArb sizing 口径）。
+// 聚合活仓 OPEN 腿名义 = qty × 单位名义（MT=USDPerLotForLeg "ask" 口径；CEX=price×fx，D-311 R5）。
 // store 未接线（测试）→ 仅 cap+equity 门生效，放行（无活仓可聚合）。
 func (s *Service) SwapArbVenueExposureOK(ctx context.Context, venueLong, venueShort string, newNotional float64) bool {
 	if s.swapArbVenueExposureCap <= 0 {
@@ -105,6 +107,16 @@ func (s *Service) SwapArbVenueExposureOK(ctx context.Context, venueLong, venueSh
 	}
 	canonicalOf := func(posID int64) string { return canonicalByPos[posID] }
 	usdPerLotOf := func(canonical, venue string) (float64, bool) {
+		// D-311 R5 缺陷#6b：CEX 腿持久化 qty=基础币 → 单位名义=price×fx（cs=1），
+		// 勿乘 ct_val（ct_val=1000 腿敞口曾放千倍→新 SWAPARB 被静默过度拦截）；
+		// MT 腿 qty=手数 → 维持 per-lot（price×cs×fx）。
+		if !isMTVenue(venue) {
+			q, ok := s.qbus.Latest(canonical, venue)
+			if !ok {
+				return 0, false
+			}
+			return usdnotional.PerLot(canonical, q.Ask, 1.0, s.qbus)
+		}
 		return s.USDPerLotForLeg(canonical, venue, "ask")
 	}
 	// D-174：各腿用自己的杠杆（venue 可能杠杆不同）。≤0/未知 → 回落 1.0（保守）；

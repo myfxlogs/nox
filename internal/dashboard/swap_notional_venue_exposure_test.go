@@ -12,7 +12,9 @@ package dashboard
 import (
 	"context"
 	"testing"
+	"time"
 
+	"arb/internal/bus"
 	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
 )
@@ -162,5 +164,49 @@ func TestCanonicalFromComboKey(t *testing.T) {
 		if got != c.want {
 			t.Errorf("canonicalFromComboKey(%q)=%q want %q", c.oppID, got, c.want)
 		}
+	}
+}
+
+// TestSwapArbVenueExposureOK_CexLegBaseQty D-311 R5 缺陷#6b：CEX 腿持久化 qty=基础币，
+// 敞口=qty×price×fx，勿乘 ct_val——okx ct_val=1000 腿旧码敞口放千倍，新 SWAPARB 被静默过度拦截。
+func TestSwapArbVenueExposureOK_CexLegBaseQty(t *testing.T) {
+	st := serviceTestStoreSingleInit(t)
+	ctx := context.Background()
+	for _, tbl := range []string{"position_legs", "positions"} {
+		if _, err := st.Pool().Exec(ctx, "TRUNCATE "+tbl+" CASCADE"); err != nil {
+			t.Fatalf("truncate %s: %v", tbl, err)
+		}
+	}
+	var posID int64
+	if err := st.Pool().QueryRow(ctx,
+		`INSERT INTO positions (opportunity_id, type, status, opened_at) VALUES ('SWAPARB:TRXUSDT:okx:perp:binance:perp', 'SWAPARB', 'OPEN', NOW()) RETURNING id`).Scan(&posID); err != nil {
+		t.Fatalf("insert position: %v", err)
+	}
+	// okx TRX-USDT-SWAP ct_val=1000：2950 基础币 ≈ 2.95 张，qty 存基础币。
+	if _, err := st.Pool().Exec(ctx,
+		`INSERT INTO position_legs (position_id, leg_no, phase, venue, account, symbol, side, qty, price_expected, status)
+		 VALUES ($1, 1, 'OPEN', 'okx:perp', 'acct', 'TRX-USDT-SWAP', 'BUY', 2950, 0.10, 'FILLED')`, posID); err != nil {
+		t.Fatalf("insert leg: %v", err)
+	}
+
+	longQ := &fakeAccountQuerier{key: "okx:perp", acct: &reconcile.AccountInfo{
+		VenueKey: "okx:perp", Venue: "okx", VenueType: "perp", AssetType: "cex",
+		Balance: 500, Equity: 500, Currency: "USD",
+	}}
+	shortQ := &fakeAccountQuerier{key: "binance:perp", acct: &reconcile.AccountInfo{
+		VenueKey: "binance:perp", Venue: "binance", VenueType: "perp", AssetType: "cex",
+		Balance: 500, Equity: 500, Currency: "USD",
+	}}
+	s := newSwapArbServiceWithAccts(t, longQ, shortQ)
+	s.store = st
+	s.swapArbVenueExposureCap = 2.0
+	qb := bus.New()
+	qb.Publish(bus.Quote{Symbol: "TRXUSDT", Venue: "okx", VenueType: "perp", Bid: 0.10, Ask: 0.10, Time: time.Now(), VenueSymbol: "TRX-USDT-SWAP"})
+	s.qbus = qb
+
+	// 存量敞口=2950 基础币×$0.10=$295；新仓 $100 → okx 侧 $395 ≤ 500×2.0=$1000 → 放行。
+	// 旧码 usdPerLot=0.10×ct_val1000=$100：敞口 $295,000 → 误拒。
+	if !s.SwapArbVenueExposureOK(ctx, "okx:perp", "binance:perp", 100) {
+		t.Error("CEX 腿敞口应按 qty(基础币)×price 计（$295+$100 ≤ $1000），want true got false")
 	}
 }
