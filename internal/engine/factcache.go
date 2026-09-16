@@ -18,6 +18,9 @@ type FactCache struct {
 	tradeMode    map[string]map[string]tradeModeEntry
 	tradeModeTTL time.Duration
 	isReal       map[string]*bool // D-178：venue → *bool（nil=未知）
+	// D-300 裁 9：swap-free venue 白名单（消费侧置 0——facts 管道名义值污染不治本，
+	// 采集侧下沉列后续；Exness 全品种 swap-free=账号 "3001157"）。
+	swapFree map[string]bool
 }
 
 // tradeModeEntry trade_mode 值 + 到达时间（TTL 新鲜度判据）。
@@ -34,6 +37,17 @@ func NewFactCache() *FactCache {
 		tradeModeTTL: 24 * time.Hour, // 缺省兜底；main 注入 config.TradeModeTTL（D-060）
 		isReal:       make(map[string]*bool),
 	}
+}
+
+// SetSwapFreeVenues 注入 swap-free venue 白名单（config.SwapFreeVenues）。boot 期一次性调用。
+func (fc *FactCache) SetSwapFreeVenues(venues []string) {
+	m := make(map[string]bool, len(venues))
+	for _, v := range venues {
+		m[v] = true
+	}
+	fc.mu.Lock()
+	fc.swapFree = m
+	fc.mu.Unlock()
 }
 
 // SetTradeModeTTL 注入 trade_mode 新鲜度（config.ARB_TRADEMODE_TTL）。boot 期一次性调用。
@@ -96,6 +110,9 @@ func (fc *FactCache) SwapFacts() map[string]map[string][2]float64 {
 	for k, v := range fc.swap {
 		cp[k] = make(map[string][2]float64, len(v))
 		for kk, vv := range v {
+			if fc.swapFree[kk] {
+				continue // swap-free venue：facts 名义值不进消费侧（D-300 裁 9）
+			}
 			cp[k][kk] = vv
 		}
 	}

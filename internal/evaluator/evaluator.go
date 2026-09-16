@@ -192,6 +192,8 @@ var cexSlipBpsByCanonical = map[string]float64{
 	"TRXUSDT":  8.0,
 	"ATOMUSDT": 8.0,
 	"NEARUSDT": 8.0,
+	// D-300 裁 4：PAXG 24h $11.6M 流动性 → 三线 8.0（禁回落默认 3.0）
+	"PAXGUSDT": 8.0,
 }
 
 // slipBpsForCEX 返回 CEX 品种的单腿滑点 bps（品种表命中→分级值；未知→cexSlipDefaultBps）。
