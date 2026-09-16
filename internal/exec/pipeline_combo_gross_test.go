@@ -102,8 +102,34 @@ func TestCheckSwapArbComboAllow_CSResolverNotWired(t *testing.T) {
 		// csResolver nil
 	}
 	err := p.checkSwapArbComboAllow(context.Background(), "SWAPARB:XAUUSD:A:mt5:B:mt5",
-		[]LegSpec{{VenueKey: "A:mt5", VenueSymbol: "XAUUSD", Side: "BUY", Qty: 0.06, PriceExpected: 2500}})
+		[]LegSpec{
+			{VenueKey: "A:mt5", VenueSymbol: "XAUUSD", Side: "BUY", Qty: 0.06, PriceExpected: 2500},
+			{VenueKey: "B:mt5", VenueSymbol: "XAUUSD", Side: "SELL", Qty: 0.06, PriceExpected: 2500},
+		})
 	if !errors.Is(err, ErrComboNotAllowed) {
 		t.Errorf("csResolver not wired: want ErrComboNotAllowed, got %v", err)
+	}
+}
+
+// TestCheckSwapArbComboAllow_VenueOrderFromLegs D-311 返修同修锚：ID 内 venue 对经
+// genID 字典序排序——venue 方向以双腿为准（SWAPARB 不入 opportunities 表，无行可查）。
+// 双腿真实方向命中→放行；仅 ID 序向命中→拒（旧码解析 ID 会错向）。
+func TestCheckSwapArbComboAllow_VenueOrderFromLegs(t *testing.T) {
+	// ID 段排序序 A<B，双腿真实方向 B 买 A 卖（与 ID 序向相反）
+	legs := []LegSpec{
+		{VenueKey: "B:mt5", VenueSymbol: "XAUUSD", Side: "BUY", Qty: 0.06, PriceExpected: 2500},
+		{VenueKey: "A:mt5", VenueSymbol: "XAUUSD", Side: "SELL", Qty: 0.06, PriceExpected: 2500},
+	}
+	p := &Pipeline{swapArbComboAllow: []ComboAllowSpec{
+		{Canonical: "XAUUSD", VenueLong: "B:mt5", VenueShort: "A:mt5"},
+	}}
+	if err := p.checkSwapArbComboAllow(context.Background(), "SWAPARB:XAUUSD:A:mt5:B:mt5", legs); err != nil {
+		t.Errorf("legs-direction match: want nil, got %v", err)
+	}
+	p = &Pipeline{swapArbComboAllow: []ComboAllowSpec{
+		{Canonical: "XAUUSD", VenueLong: "A:mt5", VenueShort: "B:mt5"},
+	}}
+	if err := p.checkSwapArbComboAllow(context.Background(), "SWAPARB:XAUUSD:A:mt5:B:mt5", legs); !errors.Is(err, ErrComboNotAllowed) {
+		t.Errorf("id-sorted direction only: want ErrComboNotAllowed, got %v", err)
 	}
 }

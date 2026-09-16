@@ -180,4 +180,37 @@ func TestD311_CheckXAssetComboAllow(t *testing.T) {
 	}); err != nil {
 		t.Errorf("canonical_sell NULL fallback: want nil, got %v", err)
 	}
+	// ⑧ venue 序向交换（D-311 返修锚）：ID 内 venue 对经 genID 字典序排序——
+	// "3001157:mt5" < "gate:perp" 故 ID 序向与真实买卖方向相反。venue 须以行
+	// VenueBuy/VenueSell 为准：行方向命中→放行；仅 ID 序向命中→拒（旧码会误放行反向组合）。
+	swapOppID := "XASSET_CARRY:XPTUSD:3001157:mt5:gate:perp"
+	csPaxg := "PAXGUSDT"
+	if _, err := s.UpsertOpportunity(ctx, &pgstore.Opportunity{
+		ID: swapOppID, Type: "XASSET_CARRY", Canonical: "XPTUSD", CanonicalSell: &csPaxg,
+		VenueBuy: "gate:perp", VenueSell: "3001157:mt5",
+		QuoteTime: time.Now(), ExpiresAt: time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("seed swapped-venue opportunity: %v", err)
+	}
+	swapLegs := []LegSpec{
+		{VenueKey: "gate:perp", VenueSymbol: "XPT_USDT", Side: "BUY", Qty: 1, PriceExpected: 1000},
+		{VenueKey: "3001157:mt5", VenueSymbol: "PAXGUSD", Side: "SELL", Qty: 1, PriceExpected: 2500},
+	}
+	p = &Pipeline{store: s, xassetComboAllow: []XAssetComboAllowSpec{
+		{CanonicalBuy: "XPTUSD", CanonicalSell: "PAXGUSDT", VenueBuy: "gate:perp", VenueSell: "3001157:mt5"},
+	}}
+	if err := p.checkXAssetComboAllow(ctx, swapOppID, swapLegs); err != nil {
+		t.Errorf("row-direction match: want nil, got %v", err)
+	}
+	p = &Pipeline{store: s, xassetComboAllow: []XAssetComboAllowSpec{
+		{CanonicalBuy: "XPTUSD", CanonicalSell: "PAXGUSDT", VenueBuy: "3001157:mt5", VenueSell: "gate:perp"},
+	}}
+	if err := p.checkXAssetComboAllow(ctx, swapOppID, swapLegs); !errors.Is(err, ErrXAssetComboNotAllowed) {
+		t.Errorf("id-sorted direction only: want ErrXAssetComboNotAllowed, got %v", err)
+	}
+	// ⑨ 行缺失 fail-closed（返修：无机会行不得靠排序 ID 猜方向）
+	p = &Pipeline{store: s, xassetComboAllow: mkAllow()}
+	if err := p.checkXAssetComboAllow(ctx, "XASSET_CARRY:ZZZ:gone:mt5:gone:perp", legsOK); !errors.Is(err, ErrXAssetComboNotAllowed) {
+		t.Errorf("missing opp row: want ErrXAssetComboNotAllowed, got %v", err)
+	}
 }

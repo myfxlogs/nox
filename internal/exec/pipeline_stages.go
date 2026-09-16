@@ -73,20 +73,31 @@ type LegResult struct {
 }
 
 // checkSwapArbComboAllow D-159 W1a R1 S2.3：SWAPARB 精确组合门禁——真实名义额检查。
-// 从 opportunityID 解析 (canonical, venueBuy, venueSell)，匹配 allowlist 后校验 qty/gross。
+// (canonical, venueBuy, venueSell) 匹配 allowlist 后校验 qty/gross。
+// D-311 返修同修：venue 方向取双腿权威值（BUY 腿=venueLong，SELL 腿=venueShort）——
+// ID 内 venue 对经 evaluator genID 字典序排序，解析会错向；SWAPARB 不在
+// opportunities_type_check 内（唯一入口 ExecuteMeanRevertWithCap 的 combo.Key
+// 合成 ID，永无机会行可查），legs 才是实际下单方向。canonical 段不排序，可解析。
 // grossUSD = Σ(qty × CS × price × fx)（SSOT 要求真实名义额，非 notionalUSD 近似）。
-// CS/FX 缺失 → fail-closed 拒绝（不回退 1.0）；legs 中 BUY 腿=venueLong，SELL 腿=venueShort。
+// CS/FX 缺失 → fail-closed 拒绝（不回退 1.0）。
 func (p *Pipeline) checkSwapArbComboAllow(ctx context.Context, opportunityID string, legs []LegSpec) error {
 	comboKey := combo.FromOppID(opportunityID)
-	// comboKey 格式 "STRATEGY:canonical:venueLong:venueShort"，venueKey 含 ":"（如 "acct:mt5"）。
-	// SplitN(":",4) 会把 venueLong 截断 → 用全切分重组：strategy|canonical|acct|plat|acct|plat（6 段）。
 	allParts := strings.Split(comboKey, ":")
-	if len(allParts) < 6 {
-		return fmt.Errorf("%w: cannot parse combo key %q (want 6+ parts, got %d)", ErrComboNotAllowed, comboKey, len(allParts))
+	if len(allParts) < 2 {
+		return fmt.Errorf("%w: cannot parse combo key %q (want 2+ parts, got %d)", ErrComboNotAllowed, comboKey, len(allParts))
 	}
 	canonical := allParts[1]
-	venueBuy := allParts[2] + ":" + allParts[3]
-	venueSell := allParts[4] + ":" + allParts[5]
+	var venueBuy, venueSell string
+	for _, leg := range legs {
+		if leg.Side == "BUY" {
+			venueBuy = leg.VenueKey
+		} else if leg.Side == "SELL" {
+			venueSell = leg.VenueKey
+		}
+	}
+	if venueBuy == "" || venueSell == "" {
+		return fmt.Errorf("%w: legs missing BUY/SELL venue for %q (fail-closed)", ErrComboNotAllowed, opportunityID)
+	}
 	spec := MatchComboAllow(p.swapArbComboAllow, canonical, venueBuy, venueSell)
 	if spec == nil {
 		return fmt.Errorf("%w: %s %s×%s", ErrComboNotAllowed, canonical, venueBuy, venueSell)
@@ -143,24 +154,24 @@ func (p *Pipeline) checkSwapArbComboAllow(ctx context.Context, opportunityID str
 }
 
 // checkXAssetComboAllow D-311 S6：XASSET_CARRY 精确组合门禁——零信任显式白名单。
-// 从 opportunityID 解析 (canonicalBuy, venueBuy, venueSell)；canonical_sell 从
-// opportunities 行读（无行/NULL → 回退 canonicalBuy）。空表/不命中 → ErrComboNotAllowed；
-// 命中后校验双腿 qty 上限 + 真实名义额 gross USD 上限（CS/FX 缺失 fail-closed，
-// 与 checkSwapArbComboAllow 同语义；计价币按各腿自己的 canonical 取）。
+// (canonicalBuy, canonicalSell, venueBuy, venueSell) 全部从 opportunities 行读——
+// ID 内 venue 对经 evaluator genID 字典序排序，解析会错向（D-311 返修）；
+// 行缺失/查询失败 → fail-closed 拒绝。canonical_sell NULL → 回退 canonicalBuy。
+// 空表/不命中 → ErrComboNotAllowed；命中后校验双腿 qty 上限 + 真实名义额 gross USD
+// 上限（CS/FX 缺失 fail-closed，与 checkSwapArbComboAllow 同语义；计价币按各腿自己的
+// canonical 取）。
 func (p *Pipeline) checkXAssetComboAllow(ctx context.Context, opportunityID string, legs []LegSpec) error {
-	comboKey := combo.FromOppID(opportunityID)
-	// 与 checkSwapArbComboAllow 同款切分：strategy|canonical|acct|plat|acct|plat（6 段）。
-	allParts := strings.Split(comboKey, ":")
-	if len(allParts) < 6 {
-		return fmt.Errorf("%w: cannot parse combo key %q (want 6+ parts, got %d)", ErrXAssetComboNotAllowed, comboKey, len(allParts))
+	if p.store == nil {
+		return fmt.Errorf("%w: store not wired (fail-closed)", ErrXAssetComboNotAllowed)
 	}
-	canonicalBuy := allParts[1]
-	venueBuy := allParts[2] + ":" + allParts[3]
-	venueSell := allParts[4] + ":" + allParts[5]
+	opp, err := p.store.GetOpportunity(ctx, opportunityID)
+	if err != nil || opp == nil {
+		return fmt.Errorf("%w: opportunity %q lookup failed (fail-closed, err=%v)", ErrXAssetComboNotAllowed, opportunityID, err)
+	}
+	canonicalBuy := opp.Canonical
+	venueBuy, venueSell := opp.VenueBuy, opp.VenueSell
 	canonicalSell := canonicalBuy
-	if opp, err := p.store.GetOpportunity(ctx, opportunityID); err != nil {
-		return fmt.Errorf("%w: canonical_sell lookup %q failed (%v)", ErrXAssetComboNotAllowed, opportunityID, err)
-	} else if opp != nil && opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
+	if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
 		canonicalSell = *opp.CanonicalSell
 	}
 	spec := MatchXAssetComboAllow(p.xassetComboAllow, canonicalBuy, canonicalSell, venueBuy, venueSell)
