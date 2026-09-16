@@ -219,6 +219,8 @@ var cexSlipBpsByCanonical = map[string]float64{
 	"PAXGUSDT": 8.0,
 	// 9-16 业主并存裁定：XAUT 24h $37.3M（实测）深度更浅 → 同三线 8.0
 	"XAUTUSDT": 8.0,
+	// D-303：XAUUSDT 金价指数永续——±10bps 盘口 $2M+/$100k taker ≤0.3bps 实测 → 一线 1.0
+	"XAUUSDT": 1.0,
 }
 
 // slipBpsForCEX 返回 CEX 品种的单腿滑点 bps（品种表命中→分级值；未知→cexSlipDefaultBps）。

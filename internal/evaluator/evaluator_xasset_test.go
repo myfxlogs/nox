@@ -74,3 +74,17 @@ func TestEvaluateXAssetCarry_EntrySpreadBonus(t *testing.T) {
 		t.Fatalf("favorable entry should shorten breakeven: base=%v bonus=%v", *base.BreakevenDays, *withBonus.BreakevenDays)
 	}
 }
+
+// TestEvaluateXAssetCarry_XauusdtSlip D-303：卖腿 CanonicalSell=XAUUSDT 走一线滑点 1.0——
+// SlippageCost = cfg.SlippageBps（MT 买腿 1.0）+ 1.0 = 2.0。
+func TestEvaluateXAssetCarry_XauusdtSlip(t *testing.T) {
+	c := xassetCand(8.0)
+	c.CanonicalSell = "XAUUSDT"
+	r := Evaluate(c, baseCfg(), 0.05, 0.05, 0.6, 0)
+	if r == nil {
+		t.Fatal("nil result")
+	}
+	if r.SlippageCost < 1.9 || r.SlippageCost > 2.1 {
+		t.Fatalf("SlippageCost = %v, want ~2.0（MT 1.0 + XAUUSDT 1.0）", r.SlippageCost)
+	}
+}

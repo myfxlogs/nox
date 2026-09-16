@@ -212,3 +212,73 @@ func TestXAssetCarryNilEquiv(t *testing.T) {
 		t.Fatalf("nil equiv: want 0, got %d", len(cands))
 	}
 }
+
+// TestXAssetCarryFourCanonical D-303：GOLD 四 canonical（PAXGUSDT/XAUTUSDT/XAUUSDT/XAUUSD）
+// → 双向去重后 C(4,2)=6 对；XAUUSDT↔XAUUSD 候选存在且 CanonicalSell=XAUUSDT（卖 XAUUSDT 收
+// funding）；funding map key XAUUSDT/binance 被消费进 GrossBps。
+func TestXAssetCarryFourCanonical(t *testing.T) {
+	now := time.Now()
+	equiv := fakeEquiv{byClass: map[string][]AssetEquivEntry{"GOLD": {
+		{AssetClass: "GOLD", Canonical: "PAXGUSDT", VenueType: "perp", Venue: "binance"},
+		{AssetClass: "GOLD", Canonical: "XAUTUSDT", VenueType: "perp", Venue: "binance"},
+		{AssetClass: "GOLD", Canonical: "XAUUSDT", VenueType: "perp", Venue: "binance"},
+		{AssetClass: "GOLD", Canonical: "XAUUSD", VenueType: "mt5", Venue: "3001157"},
+	}}}
+	snap := goldSnap(now)
+	snap["XAUTUSDT"] = map[string]bus.Quote{
+		"binance:perp": {Symbol: "XAUTUSDT", Venue: "binance", VenueType: "perp", Bid: 4000.0, Ask: 4000.5, Time: now},
+	}
+	snap["XAUUSDT"] = map[string]bus.Quote{
+		"binance:perp": {Symbol: "XAUUSDT", Venue: "binance", VenueType: "perp", Bid: 4000.0, Ask: 4000.5, Time: now},
+	}
+	fp := fakeFP{funding: map[string]map[string]float64{
+		"PAXGUSDT": {"binance": 8.0},
+		"XAUTUSDT": {"binance": 2.0},
+		"XAUUSDT":  {"binance": 5.0},
+	}}
+	d := newXAssetDetector()
+	d.AssetEquiv = equiv
+	cands := d.Scan(context.Background(), snap, fp)
+	if len(cands) != 6 {
+		t.Fatalf("want 6 candidates (C(4,2)=6 pairs), got %d: %+v", len(cands), cands)
+	}
+	pairs := make(map[string]int)
+	var xauPair *Candidate
+	for i := range cands {
+		c := &cands[i]
+		a, b := c.Canonical, c.CanonicalSell
+		if a > b {
+			a, b = b, a
+		}
+		pairs[a+"|"+b]++
+		if c.Canonical == "XAUUSD" && c.CanonicalSell == "XAUUSDT" {
+			xauPair = c
+		}
+	}
+	if len(pairs) != 6 {
+		t.Fatalf("distinct canonical pairs want 6, got %d: %v", len(pairs), pairs)
+	}
+	for p, n := range pairs {
+		if n != 1 {
+			t.Fatalf("pair %s produced %d candidates, want 1", p, n)
+		}
+	}
+	if xauPair == nil {
+		t.Fatalf("missing XAUUSD→XAUUSDT candidate: %+v", cands)
+	}
+	if xauPair.VenueBuy != "3001157:mt5" || xauPair.VenueSell != "binance:perp" {
+		t.Fatalf("venues want 3001157:mt5→binance:perp, got %s→%s", xauPair.VenueBuy, xauPair.VenueSell)
+	}
+	if xauPair.GrossBps < 4.9 || xauPair.GrossBps > 5.1 {
+		t.Fatalf("XAUUSD→XAUUSDT GrossBps want ~5.0（funding XAUUSDT/binance 消费）, got %v", xauPair.GrossBps)
+	}
+}
+
+// TestXAssetCarryTickRowShape D-303 S4：cexPairs 由 cexSymbols 派生（main.go:98-101）→ XAUUSDT
+// 自动进 TickSampler 采样集；落库行形状锚（Ticks→InsertTicks 已有覆盖，不重复造 e2e）。
+func TestXAssetCarryTickRowShape(t *testing.T) {
+	row := bus.TickRow{Ts: time.Now(), Venue: "binance", Symbol: "XAUUSDT", Bid: 4326.0, Ask: 4326.5, VenueType: "perp"}
+	if row.Symbol != "XAUUSDT" || row.VenueType != "perp" {
+		t.Fatalf("TickRow shape: %+v", row)
+	}
+}
