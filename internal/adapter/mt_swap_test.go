@@ -199,3 +199,20 @@ func TestNonPXBT_SwapTypeZero_NotOverride(t *testing.T) {
 		t.Errorf("非 PXBT SwapType=0+非零值: mode=%v, want SwapModeUncalibrated（不 override）", got)
 	}
 }
+
+// TestSwapFreeServerOverride D-300 S0 定案：Exness 白名单 venue 全品种 swap 置 0——
+// 规格 XAUUSDm SwapLong=-534.9（名义标价账单不执行）不得污染 canonical（3001157 实证）。
+func TestSwapFreeServerOverride(t *testing.T) {
+	if !swapFreeServer("Exness-MT5Real") || !swapFreeServer("exness-mt5trial5") {
+		t.Error("Exness 前缀 server 应命中白名单（大小写不敏感）")
+	}
+	if swapFreeServer("ICMarketsSC-Demo") || swapFreeServer("FxPro-MT5 Demo") {
+		t.Error("非白名单 server 不应命中")
+	}
+	// 归一化端到端：白名单下 mode 覆盖为 None → 两方向恒 0
+	l, okL := normalizeSwapBpsDaily(SwapModeNone, -534.9, 4287, 0.01, 100)
+	s, okS := normalizeSwapBpsDaily(SwapModeNone, 0, 4287, 0.01, 100)
+	if !okL || !okS || l != 0 || s != 0 {
+		t.Errorf("SwapModeNone 归一应恒 0（got l=%v ok=%v, s=%v ok=%v）", l, okL, s, okS)
+	}
+}
