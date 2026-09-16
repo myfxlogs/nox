@@ -107,7 +107,7 @@ func (p *Pipeline) autoFlattenLEGGED(ctx context.Context, posID int64, legs []Le
 		closePrice := fill.Price
 		closeQty := fill.Qty
 		if closeQty <= 0 {
-			closeQty = r.Qty
+			closeQty = dbLeg.EffectiveQty() // D-311 R6：兜底用持久化成交口径（CEX=基础币）
 		}
 		if err := p.store.CreatePositionLeg(ctx, &pgstore.PositionLeg{
 			PositionID:    posID,

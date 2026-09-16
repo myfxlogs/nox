@@ -342,3 +342,49 @@ func TestCalcLegPnL_CexLegNoContractSize(t *testing.T) {
 		t.Errorf("okx:perp PnL want $%.2f（×ct_val=1000 会得 $29500）, got $%.6f", want, got)
 	}
 }
+
+// TestCalcLegPnL_EffectiveQtyEra D-311 R6：qty 列=LegSpec 请求量（CEX 新行=合约数），
+// 实际持仓量取 EffectiveQty（filled_qty=成交基础币）；旧行 filled NULL 回退 qty。
+func TestCalcLegPnL_EffectiveQtyEra(t *testing.T) {
+	p := &Pipeline{csResolver: &fakeCSResolver{sizes: map[string]float64{
+		"gate:perp:CL_USDT":      0.01,
+		"vA:mt5:XAUUSD":          100,
+		"3001157:mt5:CL-OIL":     1000,
+		"okx:perp:TRX-USDT-SWAP": 1000,
+	}}}
+
+	// 新时代 CEX 行：qty=1012 张（LegSpec 请求合约数），filled_qty=10.12 基础币。
+	// PnL 必须按 10.12 计——按 qty=1012 会放大 100 倍（旧码缺陷）。
+	open := 63.5
+	filledGate := 10.12
+	gateLeg := pgstore.PositionLeg{
+		Phase: "OPEN", Status: "FILLED", Venue: "gate:perp", Symbol: "CL_USDT",
+		Side: "BUY", Qty: 1012, FilledQty: &filledGate, PriceActual: &open,
+	}
+	got := p.calcLegPnL(gateLeg, Fill{Price: 64.5, Qty: 10.12}, 1.0)
+	if want := 10.12; math.Abs(got-want) > 1e-9 {
+		t.Errorf("gate new-row PnL want $%.2f（diff×filled_qty 10.12；按 qty=1012 张会得 $1012）, got $%.6f", want, got)
+	}
+
+	// 旧时代 CEX 行：filled_qty=NULL → 回退 qty（qty 本身即基础币成交量）——行为不变。
+	oldLeg := pgstore.PositionLeg{
+		Phase: "OPEN", Status: "FILLED", Venue: "gate:perp", Symbol: "CL_USDT",
+		Side: "BUY", Qty: 15.75, PriceActual: &open,
+	}
+	got = p.calcLegPnL(oldLeg, Fill{Price: 64.5, Qty: 15.75}, 1.0)
+	if want := 15.75; math.Abs(got-want) > 1e-9 {
+		t.Errorf("gate old-row PnL want $%.2f（filled NULL 回退 qty）, got $%.6f", want, got)
+	}
+
+	// MT 腿部分成交：filled_qty=0.3 手 < qty=0.5 手 → 按实际成交 0.3×cs 计（isMTVenueKey 门控保留）。
+	openMT := 2000.0
+	filledMT := 0.3
+	mtLeg := pgstore.PositionLeg{
+		Phase: "OPEN", Status: "FILLED", Venue: "vA:mt5", Symbol: "XAUUSD",
+		Side: "BUY", Qty: 0.5, FilledQty: &filledMT, PriceActual: &openMT,
+	}
+	got = p.calcLegPnL(mtLeg, Fill{Price: 2001.0, Qty: 0.3}, 1.0)
+	if want := 30.0; math.Abs(got-want) > 1e-9 {
+		t.Errorf("MT partial-fill PnL want $%.2f（1.0×0.3手×cs100；按 qty=0.5 会得 $50）, got $%.6f", want, got)
+	}
+}

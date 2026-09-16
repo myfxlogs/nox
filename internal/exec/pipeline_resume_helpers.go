@@ -57,7 +57,7 @@ func (p *Pipeline) brokerPreflight(ctx context.Context, posID int64, leg pgstore
 }
 
 // placeCloseOrder D-189 P0-4：发平仓单（MT CloseOrder / CEX PlaceOrder 反向）。
-// D-195-C2 §6.4：qty 参数支持部分成交残量继续（全量时 = leg.Qty）。
+// D-195-C2 §6.4：qty 参数支持部分成交残量继续（全量时 = leg.EffectiveQty()，R6 成交口径）。
 func (p *Pipeline) placeCloseOrder(ctx context.Context, posID int64, leg pgstore.PositionLeg, closeSide string, qty float64) (Fill, error) {
 	exe, ok := p.registry.Get(leg.Venue)
 	if !ok {
@@ -107,7 +107,7 @@ func (p *Pipeline) backfillCloseFromHistory(ctx context.Context, posID int64, le
 	closePrice := hp.ClosePrice
 	if err := p.store.CreatePositionLeg(ctx, &pgstore.PositionLeg{
 		PositionID: posID, LegNo: leg.LegNo, Phase: "CLOSE", AttemptNo: 1, Venue: leg.Venue, Account: leg.Account,
-		Symbol: leg.Symbol, Side: closeSide, Qty: leg.Qty, PriceExpected: leg.PriceExpected,
+		Symbol: leg.Symbol, Side: closeSide, Qty: leg.EffectiveQty(), PriceExpected: leg.PriceExpected, // D-311 R6：回填成交量口径
 		PriceActual: &closePrice, OrderID: leg.OrderID, Status: "FILLED",
 	}); err != nil && !errors.Is(err, pgstore.ErrTerminalState) {
 		return fmt.Errorf("backfill CLOSE leg: %w", err)

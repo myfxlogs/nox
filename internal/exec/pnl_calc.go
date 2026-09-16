@@ -21,8 +21,9 @@ func canonicalFromOppID(oppID string) string {
 // calcLegPnL 同步路径计算单腿平仓 PnL（D-077 修复⑪A M1）。
 // 公式：((Fill.Price − 开仓价) × qty × CS × 方向 + Fill.Swap − Fill.Commission) × fx
 // CS：仅 MT 腿经 csResolver 查服务器规格（qty=手数，修掉漏 CS 的 100 倍错误）；
-// CEX 腿 cs=1.0——持久化 leg.Qty=Fill.Qty 已是基础币，×ct_val=二次换算
-// （D-311 R5 缺陷#6a：okx TRX qty=2950 基础币 ×ct_val 1000 曾放千倍）。
+// CEX 腿 cs=1.0——EffectiveQty=filled_qty 已是基础币，×ct_val=二次换算
+// （D-311 R5 缺陷#6a：okx TRX qty=2950 基础币 ×ct_val 1000 曾放千倍；
+// R6：qty 列=LegSpec 请求量含合约数时代，实际持仓量取 EffectiveQty）。
 // fx：计价币→USD 换算（D-105 T2）；fx=0（缺失）→ PnL=0（宁缺勿虚增，调用方发 critical alert）。
 // 开仓价缺失 → PnL=0（不猜，留对账纠偏）。
 func (p *Pipeline) calcLegPnL(leg pgstore.PositionLeg, fill Fill, fx float64) float64 {
@@ -39,7 +40,8 @@ func (p *Pipeline) calcLegPnL(leg pgstore.PositionLeg, fill Fill, fx float64) fl
 	if leg.Side == "SELL" {
 		dir = -1.0
 	}
-	priceDiff := (fill.Price - *leg.PriceActual) * leg.Qty * cs * dir
+	// D-311 R6：EffectiveQty=成交口径——CEX=基础币（cs=1.0 两时代全对）、MT=手数（×cs）。
+	priceDiff := (fill.Price - *leg.PriceActual) * leg.EffectiveQty() * cs * dir
 	// D-159 W3a R4：双计拆除——calcLegPnL 只算价格差 PnL，swap/commission 走 cashflows
 	//（pipeline_legs.go 平仓写入）。settlement netPnl = realized_pnl（价格差）+ cashflowsNet（组件）
 	// = 净值一次合成（原 realized 含 swap/commission 再加 cashflowsNet = 双计）。
