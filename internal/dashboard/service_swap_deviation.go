@@ -118,7 +118,8 @@ func (s *Service) checkSwapDeviationGate(ctx context.Context, canonical, venueBu
 			if !ok || perLot <= 0 {
 				continue // 无法算 USD notional→跳过（走 S3，fail-closed）
 			}
-			notional := leg.Qty * perLot
+			// D-311 R6：EffectiveQty=成交口径（CEX=基础币 cs=1 两时代全对、MT=手数）。
+			notional := leg.EffectiveQty() * perLot
 			factsUSD := factsBps * notional / 10000
 			deviationPct := swapDeviationBetweenPct(factsUSD, actualUSD)
 			if deviationPct > s.swapDeviationGatePct {
