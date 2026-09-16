@@ -13,6 +13,13 @@ import (
 	"arb/internal/store/pgstore"
 )
 
+// AssetEquivView 引擎侧标的等价类消费口（D-300 裁 5：与 detector 共享同一
+// pgstore.AssetEquivProvider 实例）。Partners 反查快照扩展；MaybeRefresh TTL 节流重载。
+type AssetEquivView interface {
+	Partners(canonical string) []string
+	MaybeRefresh(ctx context.Context)
+}
+
 // opportunityStore 引擎所需的机会存储接口（D-050 测试注入：生产为 pgstore.Store，测试用 fake 判定 inserted）。
 // 注：生产侧自 D-080 实施修正①起不再消费 inserted（oppTopic 发布条件去 inserted，见下方 upsert 后逻辑），
 // bool 返回值仅保留以维持测试语义（fake 仍按 id 去重判定 inserted）。
@@ -44,6 +51,9 @@ type Engine struct {
 	fundingHedgeMinNetStore float64
 	perpFundingMinNetStore  float64
 	carryMinNetStore        float64
+	xassetCarryMinNetStore  float64
+	// assetEquiv 跨标的等价类映射（D-300 G1 快照扩展）。nil=无等价类（存量 4 型行为不变）。
+	assetEquiv AssetEquivView
 	// excludeCanonicals 检测产出排除集合（D-072 资金提醒弹窗提示词 B1：复用 ARB_AUTOTRADE_EXCLUDE_CANONICALS
 	// 双用途——执行层排除 + 检测层排除，P3 单一真相）。nil/空 = 不排除（测试默认）。
 	// 命中时机会不入库（TTL 自然过期不适用——根本不产），从源头消除 BRENT/WTI 假机会（1314615 报价偏高 $3，D-068 实证）。
@@ -63,7 +73,7 @@ type Engine struct {
 // minStoreNetBps 为 CROSS_VENUE 入库门槛（D-078，缺省 0 = 不过滤）。
 // fundingHedgeMinNetStore/perpFundingMinNetStore/carryMinNetStore 为息差家族入库净门槛
 // （D-085，作用在 evaluator 扣成本后的 NetBps=年化百分点，缺省 0 = 不过滤）。
-func New(b *bus.QuoteBus, detectors []detector.Detector, cfg evaluator.Config, store opportunityStore, fc *FactCache, commissionFor func(venueKey string) float64, scanThrottle time.Duration, oppTopic *bus.Topic[pgstore.Opportunity], minStoreNetBps, fundingHedgeMinNetStore, perpFundingMinNetStore, carryMinNetStore float64) *Engine {
+func New(b *bus.QuoteBus, detectors []detector.Detector, cfg evaluator.Config, store opportunityStore, fc *FactCache, commissionFor func(venueKey string) float64, scanThrottle time.Duration, oppTopic *bus.Topic[pgstore.Opportunity], minStoreNetBps, fundingHedgeMinNetStore, perpFundingMinNetStore, carryMinNetStore, xassetCarryMinNetStore float64) *Engine {
 	if commissionFor == nil {
 		panic("engine: commissionFor resolver required (D-036 per-venue 佣金)")
 	}
@@ -83,8 +93,15 @@ func New(b *bus.QuoteBus, detectors []detector.Detector, cfg evaluator.Config, s
 		fundingHedgeMinNetStore: fundingHedgeMinNetStore,
 		perpFundingMinNetStore:  perpFundingMinNetStore,
 		carryMinNetStore:        carryMinNetStore,
+		xassetCarryMinNetStore:  xassetCarryMinNetStore,
 		lastScan:                make(map[string]time.Time),
 	}
+}
+
+// SetAssetEquiv 注入标的等价类视图（D-300 裁 5 单实例共享）。
+// nil=关闭跨标的功能——快照不扩展，存量 detector 行为不变。
+func (e *Engine) SetAssetEquiv(v AssetEquivView) {
+	e.assetEquiv = v
 }
 
 // SetExcludeCanonicals 注入检测产出排除集合（D-072 资金提醒弹窗提示词 B1）。
@@ -144,7 +161,14 @@ func (e *Engine) onQuote(ctx context.Context, q bus.Quote) {
 		return
 	}
 
-	snapshot := e.bus.Snapshot(ctx, []string{q.Symbol})
+	// D-300 G1 快照扩展：q.Symbol ∪ Partners(q.Symbol)——存量 canonical partners 为空时零影响。
+	// MaybeRefresh 由报价事件驱动（TTL 内不重查）；detector 共享同一实例禁 Scan 内查库（裁 5）。
+	symbols := []string{q.Symbol}
+	if e.assetEquiv != nil {
+		e.assetEquiv.MaybeRefresh(ctx)
+		symbols = append(symbols, e.assetEquiv.Partners(q.Symbol)...)
+	}
+	snapshot := e.bus.Snapshot(ctx, symbols)
 	candidates := detector.ScanAll(e.detectors, snapshot, e.facts)
 
 	for _, c := range candidates {
@@ -188,9 +212,13 @@ func (e *Engine) onQuote(ctx context.Context, q bus.Quote) {
 }
 
 func (e *Engine) evaluate(ctx context.Context, c detector.Candidate, snapshot map[string]map[string]bus.Quote) *evaluator.Result {
-	// 查买/卖腿报价获取 spread
+	// 查买/卖腿报价获取 spread（D-300 G4：卖腿用 CanonicalSell，空回退 Canonical——同标的机会不变）
+	sellCanonical := c.CanonicalSell
+	if sellCanonical == "" {
+		sellCanonical = c.Canonical
+	}
 	buyQ := findQuote(snapshot, c.Canonical, c.VenueBuy)
-	sellQ := findQuote(snapshot, c.Canonical, c.VenueSell)
+	sellQ := findQuote(snapshot, sellCanonical, c.VenueSell)
 	if buyQ == nil || sellQ == nil {
 		return nil
 	}
@@ -218,6 +246,8 @@ func netStoreGate(o *pgstore.Opportunity, e *Engine) bool {
 		return !(e.perpFundingMinNetStore > 0 && o.NetBps < e.perpFundingMinNetStore)
 	case "CARRY":
 		return !(e.carryMinNetStore > 0 && o.NetBps < e.carryMinNetStore)
+	case "XASSET_CARRY":
+		return !(e.xassetCarryMinNetStore > 0 && o.NetBps < e.xassetCarryMinNetStore)
 	default:
 		return true
 	}
@@ -238,10 +268,20 @@ func findQuote(snapshot map[string]map[string]bus.Quote, canonical, venueKey str
 }
 
 func resultToOpp(r *evaluator.Result) *pgstore.Opportunity {
+	// D-300：跨标的配对列——空串转 NULL（非 XASSET_CARRY 不留空串）。
+	var canonicalSell, assetClass *string
+	if r.CanonicalSell != "" {
+		canonicalSell = &r.CanonicalSell
+	}
+	if r.AssetClass != "" {
+		assetClass = &r.AssetClass
+	}
 	return &pgstore.Opportunity{
 		ID:             r.ID,
 		Type:           r.Type,
 		Canonical:      r.Canonical,
+		CanonicalSell:  canonicalSell,
+		AssetClass:     assetClass,
 		VenueBuy:       r.VenueBuy,
 		VenueSell:      r.VenueSell,
 		PriceBuy:       r.PriceBuy,

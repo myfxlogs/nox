@@ -16,6 +16,7 @@ import (
 type fakeOppStore struct {
 	mu      sync.Mutex
 	upserts map[string]bool
+	last    *pgstore.Opportunity // D-300：列断言用
 }
 
 func newFakeOppStore() *fakeOppStore {
@@ -25,6 +26,7 @@ func newFakeOppStore() *fakeOppStore {
 func (f *fakeOppStore) UpsertOpportunity(_ context.Context, o *pgstore.Opportunity) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.last = o
 	if _, seen := f.upserts[o.ID]; seen {
 		return false, nil
 	}
@@ -81,7 +83,7 @@ func newNotifyEngine(t *testing.T, cand detector.Candidate) (*Engine, <-chan pgs
 		OpportunityTTL:       30 * time.Second,
 	}
 	topic := bus.NewTopic[pgstore.Opportunity]()
-	e := New(qbus, []detector.Detector{&fakeDetector{candidates: []detector.Candidate{cand}}}, cfg, store, NewFactCache(), testCommissionResolver(t, nil, nil), time.Nanosecond, topic, 0, 0, 0, 0)
+	e := New(qbus, []detector.Detector{&fakeDetector{candidates: []detector.Candidate{cand}}}, cfg, store, NewFactCache(), testCommissionResolver(t, nil, nil), time.Nanosecond, topic, 0, 0, 0, 0, 0)
 	ch, cancel := topic.Subscribe()
 	t.Cleanup(cancel)
 	return e, ch, store

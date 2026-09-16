@@ -32,7 +32,8 @@ func (e *Engine) checkExitCondition(ctx context.Context, p *pgstore.Position) (b
 		}
 		return false, ""
 	}
-	// 息差型：按 swap/funding 子分派（IsCarryType 已判定为 4 类之一，此处只区分 swap vs funding）
+	// 息差型：按 swap/funding 子分派（IsCarryType 已判定为息差家族，此处只区分 swap vs funding；
+	// XASSET_CARRY 无执行路径，落此分支时按 swap 侧处理且数据缺失 fail-closed，安全）
 	if p.Type == "FUNDING_HEDGE" || p.Type == "PERP_FUNDING" {
 		// D-133 T1：PERP_FUNDING 走持有下限 + 连续去抖（修复 D-129 瞬时费率判平致命缺陷）；
 		// FUNDING_HEDGE 保持旧语义（单次瞬时读数 ≤ 阈值即平，CFD 无结算窗概念）。
