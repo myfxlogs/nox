@@ -24,6 +24,15 @@ type Row struct {
 	FundingRate                 float64   // 单次结算费率（原始小数）
 	IntervalH                   int       // funding 结算间隔小时（0=无数据）
 	Vol24h, Mark, Index         float64
+	CtVal                       *float64 // D-311 S2：合约面值（1 张=基础资产数）；nil=缺失/解析失败→落 NULL
+}
+
+// f64ptr 正数转指针；≤0 返回 nil（ct_val 无义值不落库，下游 fail-closed 兜底）。
+func f64ptr(v float64) *float64 {
+	if v <= 0 {
+		return nil
+	}
+	return &v
 }
 
 // Source venue 适配接口。

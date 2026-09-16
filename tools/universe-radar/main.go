@@ -107,7 +107,7 @@ func run(ctx context.Context) error {
 			Venue: n.Venue, Symbol: n.Symbol, Base: normBase(n.Symbol), Class: n.Class,
 			Status: n.Status, LaunchTS: launchPtr(n.LaunchTS),
 			HedgeCanonical: n.HedgeCanonical, Tier: n.Tier,
-			FundingAnn: n.FundingAnn, Vol24h: &n.Vol24h,
+			FundingAnn: n.FundingAnn, Vol24h: &n.Vol24h, CtVal: n.CtVal,
 		})
 		rrows = append(rrows, pgstore.CexRadarRow{
 			Venue: n.Venue, Symbol: n.Symbol, FundingAnn: n.FundingAnn,

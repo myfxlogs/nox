@@ -19,9 +19,10 @@ func (o okx) Venue() string { return "okx" }
 func (o okx) Scan(ctx context.Context) ([]Row, error) {
 	var ins struct {
 		Data []struct {
-			InstID   string  `json:"instId"`
-			State    string  `json:"state"`
-			ListTime flexInt `json:"listTime"` // ms
+			InstID   string    `json:"instId"`
+			State    string    `json:"state"`
+			ListTime flexInt   `json:"listTime"` // ms
+			CtVal    flexFloat `json:"ctVal"`    // D-311 S2：合约面值（base 单位，BTC-USDT-SWAP=0.01）
 		} `json:"data"`
 	}
 	if err := getJSON(ctx, o.hc, o.base+"/api/v5/public/instruments?instType=SWAP", &ins); err != nil {
@@ -41,6 +42,7 @@ func (o okx) Scan(ctx context.Context) ([]Row, error) {
 		rows = append(rows, Row{
 			Symbol: d.InstID, Base: strings.TrimSuffix(d.InstID, "-USDT-SWAP"),
 			Status: st, LaunchTS: msTime(int64(d.ListTime)),
+			CtVal: f64ptr(float64(d.CtVal)),
 		})
 	}
 	var fr struct {

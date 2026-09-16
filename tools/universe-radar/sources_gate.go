@@ -18,14 +18,15 @@ func (g gate) Venue() string { return "gate" }
 
 func (g gate) Scan(ctx context.Context) ([]Row, error) {
 	var cs []struct {
-		Name            string    `json:"name"`
-		Status          string    `json:"status"`
-		InDelisting     bool      `json:"in_delisting"`
-		LaunchTime      flexInt   `json:"launch_time"`      // 秒
-		FundingRate     flexFloat `json:"funding_rate"`     // 单次结算费率
-		FundingInterval flexInt   `json:"funding_interval"` // 秒（14400=4h）
-		IndexPrice      flexFloat `json:"index_price"`
-		MarkPrice       flexFloat `json:"mark_price"`
+		Name             string    `json:"name"`
+		Status           string    `json:"status"`
+		InDelisting      bool      `json:"in_delisting"`
+		LaunchTime       flexInt   `json:"launch_time"`      // 秒
+		FundingRate      flexFloat `json:"funding_rate"`     // 单次结算费率
+		FundingInterval  flexInt   `json:"funding_interval"` // 秒（14400=4h）
+		IndexPrice       flexFloat `json:"index_price"`
+		MarkPrice        flexFloat `json:"mark_price"`
+		QuantoMultiplier flexFloat `json:"quanto_multiplier"` // D-311 S2：合约面值（CL_USDT=0.01）
 	}
 	if err := getJSON(ctx, g.hc, g.base+"/api/v4/futures/usdt/contracts", &cs); err != nil {
 		return nil, fmt.Errorf("contracts: %w", err)
@@ -44,6 +45,7 @@ func (g gate) Scan(ctx context.Context) ([]Row, error) {
 			FundingRate: float64(c.FundingRate),
 			IntervalH:   int(c.FundingInterval) / 3600,
 			Mark:        float64(c.MarkPrice), Index: float64(c.IndexPrice),
+			CtVal: f64ptr(float64(c.QuantoMultiplier)),
 		})
 	}
 	var tk []struct {

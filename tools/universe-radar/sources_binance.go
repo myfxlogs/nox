@@ -45,6 +45,7 @@ func (b binance) Scan(ctx context.Context) ([]Row, error) {
 		rows = append(rows, Row{
 			Symbol: s.Symbol, Base: s.BaseAsset, Class: s.UnderlyingType,
 			Status: s.Status, LaunchTS: msTime(int64(s.OnboardDate)),
+			CtVal: f64ptr(1.0), // D-311 S2：USDT-M qty=基础币数，无合约面值概念
 		})
 	}
 	var pi []struct {
