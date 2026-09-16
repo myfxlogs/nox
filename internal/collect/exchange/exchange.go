@@ -68,9 +68,17 @@ func DefaultConfig(symbols []string) Config {
 
 // BinanceFunding 采集 Binance funding rate（REST 轮询，§3.3）。
 // BinanceBaseURL 可指向 Cloudflare Worker 代理以绕过 451 地区限制。
-type BinanceFunding struct{ cfg Config }
+// D-301a S2：intervals 注入 per-symbol 结算周期真值（fundingInfo fundingIntervalHours），
+// nil → 回退 3（8h×3，D-079 禁静默）。
+type BinanceFunding struct {
+	cfg       Config
+	intervals *FundingIntervalCache
+}
 
 func NewBinanceFunding(cfg Config) *BinanceFunding { return &BinanceFunding{cfg: cfg} }
+
+// SetFundingIntervals 注入 funding 周期缓存（D-301a S2）。
+func (b *BinanceFunding) SetFundingIntervals(c *FundingIntervalCache) { b.intervals = c }
 
 func (b *BinanceFunding) Kind() string { return fact.KindFunding }
 
@@ -91,9 +99,13 @@ func (b *BinanceFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
 		}
 		var f float64
 		fmt.Sscanf(rate, "%f", &f)
-		// D-079：Binance premiumIndex 不返回 prevFundingTime → 无法算间隔 → 固定 3/天（8h）。
-		// 旧版用 nextFundingTime-now（剩余时间）当间隔 → 结算前年化爆炸（94.9% vs 真实 10.95%）。
-		periodsPerDay := fundingPeriodsPerDay(0) // 固定回退 3/天
+		// D-301a S2：per-symbol 结算周期真值（fundingInfo fundingIntervalHours）；
+		// D-079：Binance premiumIndex 不返回 prevFundingTime → 旧版固定回退 3/天（8h）。
+		// PAXG/XAUT 实为 4h 结算 → 6/天，旧版低估 2×。
+		periodsPerDay := fundingPeriodsPerDay(0) // 回退 3/天
+		if b.intervals != nil {
+			periodsPerDay = b.intervals.PeriodsPerDay(pair)
+		}
 		annualized := annualizeFunding(f, periodsPerDay)
 		out = append(out, fact.Fact{
 			Kind:   fact.KindFunding,
@@ -172,8 +184,13 @@ func (g *GateFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
 		}
 		var f float64
 		fmt.Sscanf(rate, "%f", &f)
-		// D-079：Gate contracts 接口不返回上次结算时刻 → 无法算间隔 → 固定 3/天（8h）。
-		periodsPerDay := fundingPeriodsPerDay(0) // 固定回退 3/天
+		// D-301a S2：Gate contracts 接口返回 funding_interval（秒）→ per-symbol 真值；
+		// D-079：旧版固定回退 3/天（8h），4h 结算币种低估 2×。
+		var intervalSec float64
+		if v, ok := body["funding_interval"].(float64); ok {
+			intervalSec = v
+		}
+		periodsPerDay := fundingPeriodsPerDay(intervalSec * 1000) // intervalMs
 		annualized := annualizeFunding(f, periodsPerDay)
 		out = append(out, fact.Fact{
 			Kind:   fact.KindFunding,

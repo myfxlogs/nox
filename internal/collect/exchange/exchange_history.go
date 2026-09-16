@@ -44,14 +44,20 @@ func startTS(ctx context.Context, resolve HistoryStartResolver, venue, symbol st
 // BinanceFundingHistory 采集 Binance funding 结算历史。
 // 端点 GET /fapi/v1/fundingRate?symbol=&startTime=&endTime=&limit=1000
 // 响应：[{fundingTime(ms number), fundingRate(string)}]，limit 1000 覆盖 30 天。
+// D-301a S2：intervals 注入 per-symbol 结算周期真值（fundingInfo fundingIntervalHours），
+// nil → 回退 fundingHistoryPeriodsPerDay=3（8h，D-079 禁静默）。
 type BinanceFundingHistory struct {
-	cfg     Config
-	resolve HistoryStartResolver
+	cfg       Config
+	resolve   HistoryStartResolver
+	intervals *FundingIntervalCache
 }
 
 func NewBinanceFundingHistory(cfg Config, r HistoryStartResolver) *BinanceFundingHistory {
 	return &BinanceFundingHistory{cfg: cfg, resolve: r}
 }
+
+// SetFundingIntervals 注入 funding 周期缓存（D-301a S2）。
+func (b *BinanceFundingHistory) SetFundingIntervals(c *FundingIntervalCache) { b.intervals = c }
 
 func (b *BinanceFundingHistory) Kind() string { return fact.KindFundingHistory }
 
@@ -81,9 +87,14 @@ func (b *BinanceFundingHistory) Poll(ctx context.Context) ([]fact.Fact, error) {
 			rateStr, _ := m["fundingRate"].(string)
 			var f float64
 			fmt.Sscanf(rateStr, "%f", &f)
+			// D-301a S2：per-symbol 结算周期真值（fundingInfo fundingIntervalHours）。
+			periods := fundingHistoryPeriodsPerDay
+			if b.intervals != nil {
+				periods = b.intervals.PeriodsPerDay(pair)
+			}
 			out = append(out, fact.Fact{
 				Kind: fact.KindFundingHistory, Venue: VenueBinance, Symbol: pair,
-				Value: annualizeFunding(f, fundingHistoryPeriodsPerDay),
+				Value: annualizeFunding(f, periods),
 				Unit:  fact.UnitPctAnnualized, Ts: time.UnixMilli(int64(ft)), Src: "binance_fapi_history",
 			})
 		}

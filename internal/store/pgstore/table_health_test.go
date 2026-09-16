@@ -1,0 +1,98 @@
+// D-301a S1 测试：TableMaxTs 白名单命中/未命中/error 三态（DSN 真实夹具）。
+package pgstore
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"arb/internal/testutil"
+)
+
+// tableHealthTestStore 连接 ARB_TEST_PG_DSN，迁移后隔离。
+func tableHealthTestStore(t *testing.T) *Store {
+	t.Helper()
+	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	ctx := context.Background()
+	s, err := New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("pgstore.New: %v", err)
+	}
+	t.Cleanup(s.Close)
+	prepareTestSchema(t, s)
+	return s
+}
+
+// TestTableMaxTs_WhitelistHit 白名单命中 → 执行 SQL 返回时间戳。
+func TestTableMaxTs_WhitelistHit(t *testing.T) {
+	s := tableHealthTestStore(t)
+	ctx := context.Background()
+
+	// 插入一行 fin_cex_spread → max(ts) 应返回该时间戳。
+	ts := time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)
+	if _, err := s.pool.Exec(ctx,
+		`INSERT INTO fin_cex_spread (symbol, venue_buy, venue_sell, price_buy, price_sell, spread_bps, ts)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		"BTCUSDT", "binance", "okx", 50000.0, 50010.0, 2.0, ts); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	got, err := s.TableMaxTs(ctx, "cex_spread")
+	if err != nil {
+		t.Fatalf("TableMaxTs cex_spread: %v", err)
+	}
+	if got.IsZero() {
+		t.Fatal("TableMaxTs cex_spread returned zero time after insert")
+	}
+	// 比较秒级（pg TIMESTAMPTZ 微秒精度与 Go time 可能微秒级差异）
+	if got.Unix() != ts.Unix() {
+		t.Errorf("TableMaxTs cex_spread want ts~%v, got %v", ts, got)
+	}
+}
+
+// TestTableMaxTs_EmptyTable 空表 → 零值时间（调用方视为 crit）。
+func TestTableMaxTs_EmptyTable(t *testing.T) {
+	s := tableHealthTestStore(t)
+	ctx := context.Background()
+
+	// 清空 fin_cex_spread（prepareTestSchema 已建表，TRUNCATE 隔离）
+	if _, err := s.pool.Exec(ctx, "TRUNCATE fin_cex_spread"); err != nil {
+		t.Fatalf("TRUNCATE: %v", err)
+	}
+	got, err := s.TableMaxTs(ctx, "cex_spread")
+	if err != nil {
+		t.Fatalf("TableMaxTs empty table should not error, got %v", err)
+	}
+	if !got.IsZero() {
+		t.Errorf("TableMaxTs empty table want zero time, got %v", got)
+	}
+}
+
+// TestTableMaxTs_UnknownName 白名单未命中 → error（防绕过白名单注入外部表名）。
+func TestTableMaxTs_UnknownName(t *testing.T) {
+	s := tableHealthTestStore(t)
+	ctx := context.Background()
+
+	_, err := s.TableMaxTs(ctx, "evil_table; DROP TABLE users; --")
+	if err == nil {
+		t.Fatal("TableMaxTs unknown name should error")
+	}
+}
+
+// TestTableMaxTs_FactsQuery funding_hist_binance 查询走 facts 表 WHERE 子句。
+func TestTableMaxTs_FactsQuery(t *testing.T) {
+	s := tableHealthTestStore(t)
+	ctx := context.Background()
+
+	// 清空 facts 隔离
+	if _, err := s.pool.Exec(ctx, "TRUNCATE facts"); err != nil {
+		t.Fatalf("TRUNCATE facts: %v", err)
+	}
+	// 空表 → 零值
+	got, err := s.TableMaxTs(ctx, "funding_hist_binance")
+	if err != nil {
+		t.Fatalf("TableMaxTs funding_hist_binance empty: %v", err)
+	}
+	if !got.IsZero() {
+		t.Errorf("empty facts want zero time, got %v", got)
+	}
+}
