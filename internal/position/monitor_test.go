@@ -31,7 +31,7 @@ func TestFloat64ToStr(t *testing.T) {
 
 // TestIsCarryType 息差型判定（P3 单一真相：monitor.go 跳过收敛告警 + autotrade 退出分派同源）。
 func TestIsCarryType(t *testing.T) {
-	carry := []string{"SWAPARB", "CARRY", "FUNDING_HEDGE", "PERP_FUNDING"}
+	carry := []string{"SWAPARB", "CARRY", "FUNDING_HEDGE", "PERP_FUNDING", "XASSET_CARRY"}
 	for _, tp := range carry {
 		if !IsCarryType(tp) {
 			t.Errorf("IsCarryType(%q) = false, want true", tp)
