@@ -25,8 +25,8 @@ func canonicalFromComboKey(oppID string) string {
 // swapArbVenueExposureCheck 纯函数：判断新仓加入后两腿 venue SWAPARB 合计裸露是否在 cap 内（D-132 T1）。
 // D-174：按保证金口径（名义/杠杆 vs 权益×cap）。cap 语义=保证金/权益比。
 // existingLegs 为当前活跃 SWAPARB 仓的 OPEN 腿；canonicalOf 返回腿所属持仓的 canonical（空=跳过）；
-// usdPerLotOf 返回 (canonical, venue) 每 leg.Qty 单位 USD 名义——MT 腿=1 手（同 USDPerLotForLeg
-// "ask" 口径），CEX 腿=1 基础币（qty 已是基础币，勿乘 ct_val，D-311 R5）；ok=false 跳过该腿。
+// usdPerLotOf 返回 (canonical, venue) 每 EffectiveQty 单位 USD 名义——MT 腿=1 手（同 USDPerLotForLeg
+// "ask" 口径），CEX 腿=1 基础币（EffectiveQty 已是基础币，勿乘 ct_val，D-311 R5/R6）；ok=false 跳过该腿。
 // longLev/shortLev = 各腿 venue 杠杆（调用方经 effectiveLeverage 处理后传入，≤0 回落 1.0）。
 // cap ≤ 0 → 不启用（true）；equity ≤ 0 → fail-closed（false）。
 // 新仓名义加到两腿 venue；任一 venue 保证金 = 合计名义/杠杆 > equity×cap → false（skip）。
@@ -56,7 +56,8 @@ func swapArbVenueExposureCheck(
 		if !ok || usdPerLot <= 0 {
 			continue
 		}
-		exposure[leg.Venue] += leg.Qty * usdPerLot
+		// D-311 R6：EffectiveQty=成交口径（CEX=基础币/MT=手数），与 usdPerLotOf 分派同单位。
+		exposure[leg.Venue] += leg.EffectiveQty() * usdPerLot
 	}
 	longExposure := exposure[venueLong] + newNotional
 	shortExposure := exposure[venueShort] + newNotional

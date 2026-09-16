@@ -165,3 +165,20 @@ func TestCheckSwapDeviationGate_NoHistory_Pass(t *testing.T) {
 		t.Errorf("no history: want empty (pass), got %q", msg)
 	}
 }
+
+// TestCheckSwapDeviationGate_EffectiveQtyNewRow D-311 R6：新时代 CEX 行 qty=1012 合约数、
+// filled_qty=10.12 基础币 → notional=10.12×perLot（勿按 qty=1012 放大百倍致误拒）。
+// notional=10.12×0.667≈6.75 → factsUSD=0.5bps×6.75/1e4≈0.000337 vs actual=0.0004 → 偏差≈16%<50% 放行；
+// 旧码 notional=1012×0.667≈674.7 → factsUSD≈0.0337 → 偏差≈99%>50% 误拒。
+func TestCheckSwapDeviationGate_EffectiveQtyNewRow(t *testing.T) {
+	s := setupSwapDeviationServiceStore(t, "okx:perp", "vB:mt5", 0.5, 0.0, 0.0004, 1012, 100.0)
+	if _, err := s.Pool().Exec(context.Background(),
+		`UPDATE position_legs SET filled_qty = 10.12 WHERE phase = 'OPEN'`); err != nil {
+		t.Fatalf("set filled_qty: %v", err)
+	}
+	svc := &Service{store: s, qbus: newSwapDeviationQuotes(), swapDeviationGatePct: 50.0}
+	msg := svc.checkSwapDeviationGate(context.Background(), "AUDJPY", "okx:perp", "vB:mt5")
+	if msg != "" {
+		t.Errorf("new-row CEX leg: notional 应按 EffectiveQty 计（偏差≈16%%），want pass got %q", msg)
+	}
+}

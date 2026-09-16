@@ -210,3 +210,47 @@ func TestSwapArbVenueExposureOK_CexLegBaseQty(t *testing.T) {
 		t.Error("CEX 腿敞口应按 qty(基础币)×price 计（$295+$100 ≤ $1000），want true got false")
 	}
 }
+
+// TestSwapArbVenueExposureOK_CexLegFilledQty D-311 R6：新时代 CEX 行 qty=1012 合约数、
+// filled_qty=10.12 基础币 → 敞口按 EffectiveQty=10.12×price，勿按 qty=1012 放大百倍。
+func TestSwapArbVenueExposureOK_CexLegFilledQty(t *testing.T) {
+	st := serviceTestStoreSingleInit(t)
+	ctx := context.Background()
+	for _, tbl := range []string{"position_legs", "positions"} {
+		if _, err := st.Pool().Exec(ctx, "TRUNCATE "+tbl+" CASCADE"); err != nil {
+			t.Fatalf("truncate %s: %v", tbl, err)
+		}
+	}
+	var posID int64
+	if err := st.Pool().QueryRow(ctx,
+		`INSERT INTO positions (opportunity_id, type, status, opened_at) VALUES ('SWAPARB:CLUSDT:gate:perp:binance:perp', 'SWAPARB', 'OPEN', NOW()) RETURNING id`).Scan(&posID); err != nil {
+		t.Fatalf("insert position: %v", err)
+	}
+	// 新时代行：qty=1012 张（LegSpec 请求合约数），filled_qty=10.12 成交基础币。
+	if _, err := st.Pool().Exec(ctx,
+		`INSERT INTO position_legs (position_id, leg_no, phase, venue, account, symbol, side, qty, filled_qty, price_expected, status)
+		 VALUES ($1, 1, 'OPEN', 'gate:perp', 'acct', 'CL_USDT', 'BUY', 1012, 10.12, 63.5, 'FILLED')`, posID); err != nil {
+		t.Fatalf("insert leg: %v", err)
+	}
+
+	longQ := &fakeAccountQuerier{key: "gate:perp", acct: &reconcile.AccountInfo{
+		VenueKey: "gate:perp", Venue: "gate", VenueType: "perp", AssetType: "cex",
+		Balance: 500, Equity: 500, Currency: "USD",
+	}}
+	shortQ := &fakeAccountQuerier{key: "binance:perp", acct: &reconcile.AccountInfo{
+		VenueKey: "binance:perp", Venue: "binance", VenueType: "perp", AssetType: "cex",
+		Balance: 500, Equity: 500, Currency: "USD",
+	}}
+	s := newSwapArbServiceWithAccts(t, longQ, shortQ)
+	s.store = st
+	s.swapArbVenueExposureCap = 2.0
+	qb := bus.New()
+	qb.Publish(bus.Quote{Symbol: "CLUSDT", Venue: "gate", VenueType: "perp", Bid: 63.5, Ask: 63.5, Time: time.Now(), VenueSymbol: "CL_USDT"})
+	s.qbus = qb
+
+	// 正确敞口=10.12 基础币×$63.5=$642.62；+新仓 $100=$742.62 ≤ 500×2.0=$1000 → 放行。
+	// 旧码 qty=1012×$63.5=$64,262 → 误拒。
+	if !s.SwapArbVenueExposureOK(ctx, "gate:perp", "binance:perp", 100) {
+		t.Error("CEX 新行敞口应按 EffectiveQty(基础币)×price 计（$642.62+$100 ≤ $1000），want true got false")
+	}
+}

@@ -72,7 +72,7 @@ func computeEntryNotional(ctx context.Context, s *Service, openLegs []pgstore.Po
 			}
 			fx = rate
 		}
-		total += notional.LegUSD(l.Qty, cs, *l.PriceActual, fx)
+		total += notional.LegUSD(l.EffectiveQty(), cs, *l.PriceActual, fx) // D-311 R6：成交口径（CEX=基础币）
 	}
 	return total
 }
