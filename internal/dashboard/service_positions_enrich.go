@@ -30,8 +30,9 @@ var activeStatuses = map[string]bool{
 }
 
 // carryTypes 息差型（填 12/16/17）；收敛型填 18，互不越界。
+// XASSET_CARRY（D-311 R7①）：§1 回本周期启用；2b settleDays 分支由 ExpectedSwapBpsDaily 门控不受影响。
 var carryTypes = map[string]bool{
-	"SWAPARB": true, "CARRY": true, "FUNDING_HEDGE": true, "PERP_FUNDING": true,
+	"SWAPARB": true, "CARRY": true, "FUNDING_HEDGE": true, "PERP_FUNDING": true, "XASSET_CARRY": true,
 }
 
 // convergentTypes 收敛型（填 current_net_bps）。
@@ -131,7 +132,8 @@ func enrichOne(ctx context.Context, s *Service, pb *v1.Position, legs []pgstore.
 	// CEX funding 24/7 计息（8h×3/天，含周末）→ 用 calendar holdDays 非 settleDays（MT5 swap 日历）。
 	// expected_net_bps 为年化百分点（5.0=5%，evaluator.go:85-87）→ expected_usd = (bps/100)×notional×(holdDays/365)。
 	// 实收复用 swapAccrued（S5 已并 funding 合计）；达成=实收÷应得×100。
-	if pb.Type == "PERP_FUNDING" && pb.ExpectedNetBps > 0 {
+	// XASSET_CARRY（D-311 R7②）：perp 腿 funding 同为 24/7 计息年化%口径，复用同款模型——修类型门控不修公式。
+	if (pb.Type == "PERP_FUNDING" || pb.Type == "XASSET_CARRY") && pb.ExpectedNetBps > 0 {
 		canonical := canonicalFromOppID(pb.OpportunityId)
 		notionalUSD := computeEntryNotional(ctx, s, openLegs, canonical)
 		if notionalUSD > 0 {

@@ -151,3 +151,27 @@ func TestAnnotatePositionID_Regression(t *testing.T) {
 		t.Errorf("ORPHAN order_id want empty, got %q", bps[2].OrderId)
 	}
 }
+
+// TestAnnotateWithIndex_IsArbFromPositionID D-311 R7④：PositionId 命中即 IsArb=true——
+// CEX 聚合仓无 comment（comment 前缀判定给 false），positionId 是唯一归属信号；
+// 未命中行保持 false（MT comment 前缀初值不受影响）。
+func TestAnnotateWithIndex_IsArbFromPositionID(t *testing.T) {
+	posIdx := map[string]int64{
+		"gate:perp\x00CL_USDT": 484,
+	}
+	bps := []*v1.BrokerPosition{
+		{VenueKey: "gate:perp", Ticket: "CL_USDT"},             // CEX 聚合仓，comment 空 → IsArb=false 初值
+		{VenueKey: "3001157:mt5", Ticket: "8842", IsArb: true}, // MT comment 前缀已标（模拟既有路径）
+		{VenueKey: "okx:perp", Ticket: "TRX-USDT-SWAP"},        // 未命中 → 保持 false
+	}
+	annotateWithIndex(bps, posIdx, map[string]string{})
+	if !bps[0].IsArb {
+		t.Error("CEX 仓 positionId 命中 → IsArb want true（旧码恒 false）")
+	}
+	if !bps[1].IsArb {
+		t.Error("MT comment 命中行 IsArb 应保持 true")
+	}
+	if bps[2].IsArb {
+		t.Error("未命中行 IsArb want false")
+	}
+}

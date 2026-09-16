@@ -128,3 +128,56 @@ func TestEnrichOne_PerpFundingAttainmentFormula(t *testing.T) {
 		t.Errorf("attainment = %.4f%%, want 25.0%%", pct)
 	}
 }
+
+// TestCarryTypes_XAssetCarry D-311 R7①：XASSET_CARRY 入息差型集合（§1 回本周期启用）。
+func TestCarryTypes_XAssetCarry(t *testing.T) {
+	if !carryTypes["XASSET_CARRY"] {
+		t.Error("carryTypes 应含 XASSET_CARRY")
+	}
+}
+
+// TestEnrichOne_XAssetCarryThreeCols D-311 R7②：XASSET_CARRY 走 PERP_FUNDING 同款年化模型——
+// expectedNetBps=27.69、notional=EffectiveQty(10.12 基础币)×63.5=642.62、holdDays=3 →
+// 应得=0.2769×642.62×3/365≈1.463；实收 funding=0.73 → 达成≈49.9%；§1 回本周期出值。
+// 旧码类型门控只放 PERP_FUNDING → 三列恒 nil。
+func TestEnrichOne_XAssetCarryThreeCols(t *testing.T) {
+	st := serviceTestStoreSingleInit(t)
+	bpm := fakeBPMWithCache([]*v1.BrokerPosition{
+		{VenueKey: "gate:perp", Symbol: "CL_USDT", Pnl: -2.0, Swap: 0, PositionId: 484},
+	})
+	s := newEnrichService(bpm)
+	s.store = st // notional 需 store 非 nil（ContractSizeByCanonical miss→cs=1）
+	pb := &v1.Position{
+		Id: 484, OpportunityId: "XASSET:CLUSDT:gate:perp:3001157:mt5",
+		Type: "XASSET_CARRY", Status: "OPEN", ExpectedNetBps: 27.69,
+		OpenedAt: timestamppb.New(time.Now().AddDate(0, 0, -3)),
+	}
+	filled := 10.12
+	legs := []pgstore.PositionLeg{
+		{Phase: "OPEN", Venue: "gate:perp", Symbol: "CL_USDT", Status: "FILLED",
+			Qty: 1012, FilledQty: &filled, PriceActual: ptrFloat(63.5), Ts: time.Now().AddDate(0, 0, -3)},
+	}
+	now := time.Now()
+	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, map[string]time.Weekday{}, map[int64]float64{484: 0.73})
+
+	notional := 10.12 * 63.5 // 642.62（EffectiveQty 成交口径，勿按 qty=1012 合约数）
+	wantExpected := 0.2769 * notional * 3.0 / 365
+	if pb.ExpectedSwapUsdToDate == nil {
+		t.Fatal("XASSET_CARRY 应得应出值（类型门控已放行），got nil")
+	}
+	if math.Abs(*pb.ExpectedSwapUsdToDate-wantExpected) > 0.01 {
+		t.Errorf("expected=%.4f, want %.4f（27.69%%×%.2f×3/365）", *pb.ExpectedSwapUsdToDate, wantExpected, notional)
+	}
+	if pb.AttainmentPct == nil {
+		t.Fatal("达成应出值（swapAccrued=0.73>0），got nil")
+	}
+	if want := 0.73 / wantExpected * 100; math.Abs(*pb.AttainmentPct-want) > 0.5 {
+		t.Errorf("attainment=%.2f%%, want ≈%.2f%%", *pb.AttainmentPct, want)
+	}
+	// §1 回本周期（carryTypes 门控）：net=-2.0+0.73=-1.27<0，dailySwap=0.73/3 → breakEven≈5.22 天。
+	if pb.BreakEvenDays == nil {
+		t.Error("XASSET_CARRY 回本周期应出值（carryTypes 已含），got nil")
+	} else if want := 1.27 / (0.73 / 3.0); math.Abs(*pb.BreakEvenDays-want) > 0.05 {
+		t.Errorf("breakEven=%.2f, want ≈%.2f 天", *pb.BreakEvenDays, want)
+	}
+}
