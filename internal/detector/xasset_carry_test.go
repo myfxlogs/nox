@@ -16,7 +16,8 @@ type fakeEquiv struct {
 
 func (f fakeEquiv) ByClass() map[string][]AssetEquivEntry { return f.byClass }
 
-// goldEquiv v1 种子形状：GOLD = PAXGUSDT@binance:perp + XAUUSD@3001157:mt5。
+// goldEquiv 基准形状：GOLD = PAXGUSDT@binance:perp + XAUUSD@3001157:mt5
+// （0097 种子另含 XAUTUSDT@binance:perp，三 canonical 覆盖见 TestXAssetCarryThreeCanonical）。
 var goldEquiv = fakeEquiv{byClass: map[string][]AssetEquivEntry{
 	"GOLD": {
 		{AssetClass: "GOLD", Canonical: "PAXGUSDT", VenueType: "perp", Venue: "binance"},
@@ -160,6 +161,47 @@ func TestXAssetCarryTradeMode(t *testing.T) {
 	fp.modes["XAUUSD"]["3001157:mt5"] = fact.TradeModeLongOnly
 	if cands := newXAssetDetector().Scan(context.Background(), goldSnap(now), fp); len(cands) != 1 {
 		t.Fatalf("buy leg LongOnly: want 1, got %d", len(cands))
+	}
+}
+
+// TestXAssetCarryThreeCanonical 返修 R7（裁 11）：GOLD 三 canonical 两两=3 对，
+// 含 PAXGUSDT↔XAUTUSDT 同所双 perp——GrossBps=funding 差（卖高息收/买低息付）。
+func TestXAssetCarryThreeCanonical(t *testing.T) {
+	now := time.Now()
+	equiv := fakeEquiv{byClass: map[string][]AssetEquivEntry{"GOLD": {
+		{AssetClass: "GOLD", Canonical: "PAXGUSDT", VenueType: "perp", Venue: "binance"},
+		{AssetClass: "GOLD", Canonical: "XAUTUSDT", VenueType: "perp", Venue: "binance"},
+		{AssetClass: "GOLD", Canonical: "XAUUSD", VenueType: "mt5", Venue: "3001157"},
+	}}}
+	snap := goldSnap(now)
+	snap["XAUTUSDT"] = map[string]bus.Quote{
+		"binance:perp": {Symbol: "XAUTUSDT", Venue: "binance", VenueType: "perp", Bid: 4000.0, Ask: 4000.5, Time: now},
+	}
+	fp := fakeFP{funding: map[string]map[string]float64{
+		"PAXGUSDT": {"binance": 8.0},
+		"XAUTUSDT": {"binance": 2.0},
+	}}
+	d := newXAssetDetector()
+	d.AssetEquiv = equiv
+	cands := d.Scan(context.Background(), snap, fp)
+	// 三对各一候选：XAU→PAXG(net8) / XAU→XAUT(net2) / XAUT→PAXG(net6=8−2)
+	if len(cands) != 3 {
+		t.Fatalf("want 3 candidates (3 pairs), got %d: %+v", len(cands), cands)
+	}
+	var pp *Candidate
+	for i := range cands {
+		if cands[i].Canonical == "XAUTUSDT" && cands[i].CanonicalSell == "PAXGUSDT" {
+			pp = &cands[i]
+		}
+	}
+	if pp == nil {
+		t.Fatalf("missing PAXGUSDT↔XAUTUSDT pair candidate: %+v", cands)
+	}
+	if pp.GrossBps < 5.9 || pp.GrossBps > 6.1 {
+		t.Fatalf("PAXG-XAUT GrossBps want ~6.0 (funding 8−2), got %v", pp.GrossBps)
+	}
+	if pp.VenueBuy != "binance:perp" || pp.VenueSell != "binance:perp" {
+		t.Fatalf("PAXG-XAUT venues want binance:perp both legs, got %s→%s", pp.VenueBuy, pp.VenueSell)
 	}
 }
 
