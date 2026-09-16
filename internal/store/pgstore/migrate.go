@@ -96,6 +96,7 @@ var migrationFiles = []struct {
 	{98, migrations.XauusdtGoldSQL},                    // D-303 GOLD+XAUUSDT
 	{99, migrations.CexUniverseSQL},                    // D-307 CEX 全量合约雷达：universe/events/radar 三表
 	{100, migrations.T1PromotionSQL},                   // D-308 非加密 T1 晋级：asset_equiv 十类+XAGUSD 腿映射
+	{101, migrations.CanonicalFixSQL},                  // D-308 勘误：perp/mt5 canonical 回正到 ticks 命名空间
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

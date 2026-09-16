@@ -184,17 +184,24 @@ func TestMigration0100_T1Promotion(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, migrations.T1PromotionSQL); err != nil {
 		t.Fatalf("replay 0100: %v", err)
 	}
+	// 0101 勘误重放：perp canonical 回正 <base>USDT 同键命名空间 + SILVER mt5 腿。
+	if _, err := s.pool.Exec(ctx, migrations.CanonicalFixSQL); err != nil {
+		t.Fatalf("replay 0101: %v", err)
+	}
 	var n int
 	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM asset_equiv WHERE asset_class = 'WTI'`).Scan(&n); err != nil {
 		t.Fatalf("count WTI: %v", err)
 	}
 	if n != 4 {
-		t.Fatalf("WTI class want 4 members（CLUSDT/CL-USDT-SWAP/CL_USDT/WTI）, got %d", n)
+		t.Fatalf("WTI class want 4 members（CLUSDT×三所/WTI）, got %d", n)
 	}
-	if err := s.pool.QueryRow(ctx, `SELECT 1 FROM asset_equiv WHERE asset_class='GOLD' AND canonical='XAU-USDT-SWAP' AND venue='okx'`).Scan(&one); err != nil {
+	if err := s.pool.QueryRow(ctx, `SELECT 1 FROM asset_equiv WHERE asset_class='GOLD' AND canonical='XAUUSDT' AND venue='okx'`).Scan(&one); err != nil {
 		t.Fatalf("GOLD okx leg missing: %v", err)
 	}
-	if err := s.pool.QueryRow(ctx, `SELECT 1 FROM broker_symbol_map WHERE venue='3001157' AND broker_symbol='XAGUSDm' AND canonical='XAGUSD'`).Scan(&one); err != nil {
+	if err := s.pool.QueryRow(ctx, `SELECT 1 FROM asset_equiv WHERE asset_class='SILVER' AND canonical='SILVER' AND venue='3001157'`).Scan(&one); err != nil {
+		t.Fatalf("SILVER mt5 leg missing: %v", err)
+	}
+	if err := s.pool.QueryRow(ctx, `SELECT 1 FROM broker_symbol_map WHERE venue='3001157' AND broker_symbol='XAGUSDm' AND canonical='SILVER'`).Scan(&one); err != nil {
 		t.Fatalf("broker_symbol_map XAGUSDm missing: %v", err)
 	}
 }
