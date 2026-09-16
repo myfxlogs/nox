@@ -61,13 +61,16 @@ func (b *BinanceFundingHistory) Poll(ctx context.Context) ([]fact.Fact, error) {
 		pair := sym + "USDT"
 		start, err := startTS(ctx, b.resolve, VenueBinance, pair)
 		if err != nil {
-			return nil, fmt.Errorf("binance funding_history %s: %w", pair, err)
+			// D-308 S1：逐符号 fail-open——cexSymbols 全局表在所间不对称，缺符号静默跳过不炸全所。
+			fmt.Printf("[exchange:binance] funding_history %s: %v (skip)\n", pair, err)
+			continue
 		}
 		url := fmt.Sprintf("%s/fapi/v1/fundingRate?symbol=%s&startTime=%d&endTime=%d&limit=1000",
 			b.cfg.BinanceBaseURL, pair, start.UnixMilli(), time.Now().UnixMilli())
 		arr, err := getJSONArray(ctx, b.cfg.Client, url)
 		if err != nil {
-			return nil, fmt.Errorf("binance funding_history %s: %w", pair, err)
+			fmt.Printf("[exchange:binance] funding_history %s: %v (skip)\n", pair, err)
+			continue
 		}
 		for _, item := range arr {
 			m, ok := item.(map[string]any)
@@ -105,15 +108,19 @@ func (o *OKXFundingHistory) Kind() string { return fact.KindFundingHistory }
 
 func (o *OKXFundingHistory) Poll(ctx context.Context) ([]fact.Fact, error) {
 	var out []fact.Fact
+symLoop:
 	for _, sym := range o.cfg.Symbols {
 		pair := sym + "USDT"
 		start, err := startTS(ctx, o.resolve, VenueOKX, pair)
 		if err != nil {
-			return nil, fmt.Errorf("okx funding_history %s: %w", pair, err)
+			// D-308 S1：逐符号 fail-open（同 Binance）——部分页数据弃置，出参只带成功符号。
+			fmt.Printf("[exchange:okx] funding_history %s: %v (skip)\n", pair, err)
+			continue
 		}
 		instID := sym + "-USDT-SWAP"
 		afterMs := strconv.FormatInt(start.UnixMilli(), 10)
 		before := "" // 首页无上界（从最新开始）
+		var symFacts []fact.Fact
 		for {
 			url := fmt.Sprintf("%s/api/v5/public/funding-rate-history?instId=%s&after=%s&limit=100",
 				o.cfg.OKXBaseURL, instID, afterMs)
@@ -122,7 +129,8 @@ func (o *OKXFundingHistory) Poll(ctx context.Context) ([]fact.Fact, error) {
 			}
 			body, err := getJSON(ctx, o.cfg.Client, url)
 			if err != nil {
-				return nil, fmt.Errorf("okx funding_history %s: %w", instID, err)
+				fmt.Printf("[exchange:okx] funding_history %s: %v (skip)\n", pair, err)
+				continue symLoop
 			}
 			data, ok := body["data"].([]any)
 			if !ok || len(data) == 0 {
@@ -139,7 +147,7 @@ func (o *OKXFundingHistory) Poll(ctx context.Context) ([]fact.Fact, error) {
 				var f float64
 				fmt.Sscanf(rateStr, "%f", &f)
 				ftMs, _ := strconv.ParseInt(ftStr, 10, 64)
-				out = append(out, fact.Fact{
+				symFacts = append(symFacts, fact.Fact{
 					Kind: fact.KindFundingHistory, Venue: VenueOKX, Symbol: pair,
 					Value: annualizeFunding(f, fundingHistoryPeriodsPerDay),
 					Unit:  fact.UnitPctAnnualized, Ts: time.UnixMilli(ftMs), Src: "okx_v5_history",
@@ -151,6 +159,7 @@ func (o *OKXFundingHistory) Poll(ctx context.Context) ([]fact.Fact, error) {
 			}
 			before = oldest // 翻页：取比最旧更早的记录
 		}
+		out = append(out, symFacts...)
 	}
 	return out, nil
 }
@@ -176,14 +185,17 @@ func (g *GateFundingHistory) Poll(ctx context.Context) ([]fact.Fact, error) {
 		pair := sym + "USDT"
 		start, err := startTS(ctx, g.resolve, VenueGate, pair)
 		if err != nil {
-			return nil, fmt.Errorf("gate funding_history %s: %w", pair, err)
+			// D-308 S1：逐符号 fail-open（同 Binance）。
+			fmt.Printf("[exchange:gate] funding_history %s: %v (skip)\n", pair, err)
+			continue
 		}
 		contract := sym + "_USDT"
 		url := fmt.Sprintf("%s/api/v4/futures/usdt/funding_rate?contract=%s&from=%d&to=%d&limit=1000",
 			g.cfg.GateBaseURL, contract, start.Unix(), time.Now().Unix())
 		arr, err := getJSONArray(ctx, g.cfg.Client, url)
 		if err != nil {
-			return nil, fmt.Errorf("gate funding_history %s: %w", contract, err)
+			fmt.Printf("[exchange:gate] funding_history %s: %v (skip)\n", pair, err)
+			continue
 		}
 		for _, item := range arr {
 			m, ok := item.(map[string]any)

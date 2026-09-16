@@ -131,6 +131,88 @@ func TestGateFundingHistory_Poll(t *testing.T) {
 	}
 }
 
+// TestFundingHistoryFailOpen D-308 S1：单符号失败不连坐全所——cexSymbols 全局表
+// 在所间不对称（COPPER 仅 binance、指数仅 gate/okx），缺符号必须静默跳过且
+// 正常符号数据仍产出；OKX 分页中途失败的符号整符号弃置（出参只带成功符号）。
+func TestFundingHistoryFailOpen(t *testing.T) {
+	ctx := context.Background()
+
+	// Binance：COPPERUSDT 400，BTCUSDT 正常 → 只产 BTC facts。
+	binSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("symbol") == "COPPERUSDT" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		json.NewEncoder(w).Encode([]map[string]any{
+			{"fundingTime": float64(1788163200000), "fundingRate": "0.0001"},
+		})
+	}))
+	defer binSrv.Close()
+	bin := NewBinanceFundingHistory(
+		Config{Symbols: []string{"COPPER", "BTC"}, BinanceBaseURL: binSrv.URL, Client: binSrv.Client()}, zeroResolver)
+	out, err := bin.Poll(ctx)
+	if err != nil {
+		t.Fatalf("binance Poll should not fail on single-symbol error: %v", err)
+	}
+	if len(out) != 1 || out[0].Symbol != "BTCUSDT" {
+		t.Fatalf("binance want only BTCUSDT fact, got %v", out)
+	}
+
+	// Gate：COPPER_USDT 400，BTC_USDT 正常。
+	gateSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("contract") == "COPPER_USDT" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		json.NewEncoder(w).Encode([]map[string]any{
+			{"r": "0.0001", "t": float64(1788163201)},
+		})
+	}))
+	defer gateSrv.Close()
+	gate := NewGateFundingHistory(
+		Config{Symbols: []string{"COPPER", "BTC"}, GateBaseURL: gateSrv.URL, Client: gateSrv.Client()}, zeroResolver)
+	out, err = gate.Poll(ctx)
+	if err != nil {
+		t.Fatalf("gate Poll should not fail on single-symbol error: %v", err)
+	}
+	if len(out) != 1 || out[0].Symbol != "BTCUSDT" {
+		t.Fatalf("gate want only BTCUSDT fact, got %v", out)
+	}
+
+	// OKX：PGFAIL 首页 100 条（触发翻页）第二页 400 → 整符号弃置零产出；BTC 正常。
+	okxSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		switch q.Get("instId") {
+		case "COPPER-USDT-SWAP":
+			w.WriteHeader(http.StatusBadRequest)
+		case "PGFAIL-USDT-SWAP":
+			if q.Get("before") != "" { // 第二页失败
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			page := make([]map[string]any, 100)
+			for i := range page {
+				page[i] = map[string]any{"fundingRate": "0.0001", "fundingTime": "1788163200000"}
+			}
+			json.NewEncoder(w).Encode(map[string]any{"code": "0", "data": page})
+		default:
+			json.NewEncoder(w).Encode(map[string]any{"code": "0", "data": []map[string]any{
+				{"fundingRate": "0.0001", "fundingTime": "1788163200000"},
+			}})
+		}
+	}))
+	defer okxSrv.Close()
+	okx := NewOKXFundingHistory(
+		Config{Symbols: []string{"COPPER", "PGFAIL", "BTC"}, OKXBaseURL: okxSrv.URL, Client: okxSrv.Client()}, zeroResolver)
+	out, err = okx.Poll(ctx)
+	if err != nil {
+		t.Fatalf("okx Poll should not fail on single-symbol error: %v", err)
+	}
+	if len(out) != 1 || out[0].Symbol != "BTCUSDT" {
+		t.Fatalf("okx want only BTCUSDT fact（PGFAIL 部分页须弃置）, got %v", out)
+	}
+}
+
 // TestStartTS_FirstBackfill 无历史数据 → now-30d。
 func TestStartTS_FirstBackfill(t *testing.T) {
 	start, err := startTS(context.Background(), zeroResolver, "binance", "BTCUSDT")
