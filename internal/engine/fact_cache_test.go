@@ -33,28 +33,6 @@ func TestFactCacheTradeModes(t *testing.T) {
 	}
 }
 
-// TestFactCacheSwapFreeVenues D-300 裁 9：白名单 venue 的 swap facts 消费侧置 0（不读出）；
-// 非白名单 venue 原样读出（facts 名义值污染不影响白名单外消费）。
-func TestFactCacheSwapFreeVenues(t *testing.T) {
-	fc := NewFactCache()
-	fc.UpdateFacts([]fact.Fact{
-		{Kind: fact.KindSwapLong, Venue: "3001157", Symbol: "XAUUSD", Value: -1.2481, Ts: time.Now(), Src: "mt5"},
-		{Kind: fact.KindSwapLong, Venue: "52993526", Symbol: "EURUSD", Value: -0.5, Ts: time.Now(), Src: "mt5"},
-	})
-	// 未设白名单 → 全读出
-	if sw := fc.SwapFacts(); sw["XAUUSD"]["3001157"][0] != -1.2481 {
-		t.Fatalf("no whitelist: want -1.2481, got %+v", sw)
-	}
-	fc.SetSwapFreeVenues([]string{"3001157"})
-	sw := fc.SwapFacts()
-	if _, ok := sw["XAUUSD"]["3001157"]; ok {
-		t.Fatalf("swap-free venue must be hidden, got %+v", sw["XAUUSD"])
-	}
-	if sw["EURUSD"]["52993526"][0] != -0.5 {
-		t.Fatalf("non-whitelisted venue unchanged, got %+v", sw["EURUSD"])
-	}
-}
-
 func TestFactCacheTradeModeTTLExpiry(t *testing.T) {
 	fc := NewFactCache()
 	fc.UpdateFacts([]fact.Fact{

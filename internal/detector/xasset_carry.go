@@ -27,8 +27,8 @@ type AssetEquivSource interface {
 // XAssetCarryDetector 检测同 asset_class 跨 canonical 的套利机会（D-300 §5）。
 // 与 CrossVenueDetector 的区别：配对不同 canonical（PAXG↔XAU），而非同 canonical 跨 venue。
 // 结构：卖 perp 腿收 funding，买 MT 腿付 swap；净息差（年化 pp）= funding + swap_long(buy MT)
-// + swap_short(sell MT)——swap fact 为负=付息自然扣减（裁 9：swap-free venue 已在
-// FactCache 消费侧置 0，detector 原样消费）。
+// + swap_short(sell MT)——swap fact 为负=付息自然扣减（swap-free venue 由 adapter 源头
+// 置 0：mt_swap.go swapFreeServerPrefixes，bc388c43；detector 原样消费）。
 type XAssetCarryDetector struct {
 	EntryMinBps     float64          // 进场价差门槛（一次性 bps；可负=容忍小幅逆价进场）
 	MinNetAnnualPct float64          // 净息差门槛（funding−swap 年化百分点）

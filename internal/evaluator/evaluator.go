@@ -115,7 +115,7 @@ func EvaluateAt(c detector.Candidate, cfg Config, spreadBuy, spreadSell, commiss
 	case detector.TypeXAssetCarry:
 		// D-300 S5（G2 撤回 D4）：息差家族同口径——净年化 pp = gross − 资金机会成本（R1=A 4.5pp）。
 		// gross=detector 净息差（funding−swap 已含）；swap_cost 列恒 0——swap 已并入 gross，
-		// 消费侧白名单下 Exness 实收=0 语义一致（裁 9）。
+		// swap-free venue 由 adapter 源头置 0（bc388c43），Exness 实收=0 语义一致（裁 9）。
 		netBps = grossBps - cfg.MarginRateAnnual
 		// 一次性摩擦进 breakeven_days：进场价差（有利时为负项缩短回本）+ spread+commission+slip 往返。
 		entrySpreadBps := (c.PriceSell - c.PriceBuy) / ((c.PriceBuy + c.PriceSell) / 2) * 10000
