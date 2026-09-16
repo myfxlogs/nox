@@ -56,6 +56,7 @@ func TestIsCarryType(t *testing.T) {
 		{"CARRY", true},
 		{"FUNDING_HEDGE", true},
 		{"PERP_FUNDING", true},
+		{"XASSET_CARRY", true}, // D-300：息差家族（net=年化百分点）
 		{"CROSS_VENUE", false},
 		{"MEANREVERT", false},
 		{"UNKNOWN", false},

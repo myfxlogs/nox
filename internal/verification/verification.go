@@ -48,11 +48,11 @@ func ExpectedUsd(typ string, netBps, swapBpsDaily, notionalUSD, holdDays float64
 	}
 }
 
-// IsCarryType 判断是否为息差型策略（D-087 §3.4 收敛——SWAPARB/CARRY/FUNDING_HEDGE/PERP_FUNDING 统一）。
+// IsCarryType 判断是否为息差型策略（D-087 §3.4 收敛——SWAPARB/CARRY/FUNDING_HEDGE/PERP_FUNDING 统一；D-300 +XASSET_CARRY）。
 // 息差型期望收益随持有天数增长；收敛型（CROSS_VENUE/MEANREVERT）为一次性 bps。
 func IsCarryType(typ string) bool {
 	switch typ {
-	case "SWAPARB", "CARRY", "FUNDING_HEDGE", "PERP_FUNDING":
+	case "SWAPARB", "CARRY", "FUNDING_HEDGE", "PERP_FUNDING", "XASSET_CARRY":
 		return true
 	default:
 		return false
