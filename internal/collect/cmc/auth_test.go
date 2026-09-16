@@ -66,6 +66,10 @@ func mockAuthServer(t *testing.T, jwt string) *httptest.Server {
 	}))
 }
 
+// testCreateTpl 合法头合成模板（0a07 08+ts6字节+1a + oldUUID ASCII）——非真值，
+// 仅满足 buildCreateSession 头校验与 UUID 替换（真模板经 .env 注入）。
+const testCreateTpl = "0a07080000000000001a37336638376133652d353762382d343537622d393834392d62316265306633376331373920"
+
 // containsMsgType 简单检测 protobuf body 是否包含某消息类型 varint。
 func containsMsgType(body []byte, msgType uint64) bool {
 	// 消息类型在 field 1 varint 中——简化检测字节序列
@@ -74,6 +78,7 @@ func containsMsgType(body []byte, msgType uint64) bool {
 }
 
 func TestAuthManager_Login_Success(t *testing.T) {
+	t.Setenv("ARB_CMC_CREATE_TPL", testCreateTpl)
 	jwt := fakeJWT(time.Now().Add(300 * time.Second))
 	srv := mockAuthServer(t, jwt)
 	defer srv.Close()
@@ -94,6 +99,7 @@ func TestAuthManager_Login_Success(t *testing.T) {
 }
 
 func TestAuthManager_Login_CreatesessionFail(t *testing.T) {
+	t.Setenv("ARB_CMC_CREATE_TPL", testCreateTpl)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/createsession/ng" {
 			w.WriteHeader(400)
@@ -111,6 +117,7 @@ func TestAuthManager_Login_CreatesessionFail(t *testing.T) {
 }
 
 func TestAuthManager_JWT_CachedValid(t *testing.T) {
+	t.Setenv("ARB_CMC_CREATE_TPL", testCreateTpl)
 	jwt := fakeJWT(time.Now().Add(300 * time.Second))
 	srv := mockAuthServer(t, jwt)
 	defer srv.Close()
@@ -132,6 +139,7 @@ func TestAuthManager_JWT_CachedValid(t *testing.T) {
 }
 
 func TestAuthManager_JWT_RefreshNearExpiry(t *testing.T) {
+	t.Setenv("ARB_CMC_CREATE_TPL", testCreateTpl)
 	// 先登录获取 JWT，然后设 jwtExp 为近过期，验证刷新
 	jwt1 := fakeJWT(time.Now().Add(300 * time.Second))
 	jwt2 := fakeJWT(time.Now().Add(600 * time.Second))
@@ -184,6 +192,7 @@ func TestAuthManager_JWT_RefreshNearExpiry(t *testing.T) {
 }
 
 func TestAuthManager_RefreshJWT_SessionExpired(t *testing.T) {
+	t.Setenv("ARB_CMC_CREATE_TPL", testCreateTpl)
 	jwt1 := fakeJWT(time.Now().Add(300 * time.Second))
 	jwt2 := fakeJWT(time.Now().Add(600 * time.Second))
 	multirequestCount := 0
@@ -243,6 +252,7 @@ func TestAuthManager_RefreshJWT_SessionExpired(t *testing.T) {
 }
 
 func TestAuthManager_NoDeadlock(t *testing.T) {
+	t.Setenv("ARB_CMC_CREATE_TPL", testCreateTpl)
 	jwt := fakeJWT(time.Now().Add(300 * time.Second))
 	srv := mockAuthServer(t, jwt)
 	defer srv.Close()
@@ -284,6 +294,7 @@ func TestParseExp(t *testing.T) {
 }
 
 func TestBuildCreateSession_ErrorOnBadTemplate(t *testing.T) {
+	t.Setenv("ARB_CMC_CREATE_TPL", testCreateTpl)
 	// 正常模板应成功
 	_, err := buildCreateSession(ts(), genUUID())
 	if err != nil {

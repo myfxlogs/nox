@@ -21,6 +21,7 @@ func (c *jwtReqCounter) next() int32 { return atomic.AddInt32(&c.n, 1) }
 // loginUnlocked 重登兜底，最终拿到 jwt2。D-214 核心场景：服务端 session 失效返回 500 非 401，
 // refreshJWT 仅 401 回退会陷入死循环；连续失败计数 ≥3 触发重登自愈。
 func TestAuthManager_RefreshJWT_ConsecutiveFailsRelogin(t *testing.T) {
+	t.Setenv("ARB_CMC_CREATE_TPL", testCreateTpl)
 	jwt1 := fakeJWT(time.Now().Add(300 * time.Second))
 	jwt2 := fakeJWT(time.Now().Add(600 * time.Second))
 	var jc jwtReqCounter
@@ -89,6 +90,7 @@ func TestAuthManager_RefreshJWT_ConsecutiveFailsRelogin(t *testing.T) {
 // TestAuthManager_RefreshJWT_TransientFailNoRelogin：refresh 单次瞬时 500 后立即 200 成功 →
 // 不触发重登（createsession 仅 Login 时调用 1 次）。防误杀活 session。
 func TestAuthManager_RefreshJWT_TransientFailNoRelogin(t *testing.T) {
+	t.Setenv("ARB_CMC_CREATE_TPL", testCreateTpl)
 	jwt1 := fakeJWT(time.Now().Add(300 * time.Second))
 	jwt2 := fakeJWT(time.Now().Add(600 * time.Second))
 	var jc jwtReqCounter
@@ -169,6 +171,7 @@ func TestAuthManager_RefreshJWT_TransientFailNoRelogin(t *testing.T) {
 // 清零正确：全程 fails 峰值=2，不重登，createsession==1。
 // 清零遗漏：c=3 不清零（fails=1）→ c=4 fails=2 → c=5 fails=3 → 回退 loginUnlocked（createsession=2）→ 回归锚命中。
 func TestAuthManager_RefreshJWT_SuccessResetsCounter(t *testing.T) {
+	t.Setenv("ARB_CMC_CREATE_TPL", testCreateTpl)
 	jwt1 := fakeJWT(time.Now().Add(300 * time.Second))
 	jwt2 := fakeJWT(time.Now().Add(600 * time.Second))
 	jwt3 := fakeJWT(time.Now().Add(900 * time.Second))
