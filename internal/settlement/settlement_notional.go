@@ -34,7 +34,7 @@ func computeNotionalUSD(ctx context.Context, deps Deps, legs []pgstore.PositionL
 			}
 			fx = rate // USDPer 返回 USD per quoteCcy，直接作 fx（D-087 返修③：删双重求逆）
 		}
-		total += notional.LegUSD(l.Qty, cs, *l.PriceActual, fx)
+		total += notional.LegUSD(l.EffectiveQty(), cs, *l.PriceActual, fx) // D-311 R6：成交口径（CEX=基础币）
 	}
 	return total, skipped
 }
