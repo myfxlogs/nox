@@ -131,5 +131,5 @@ func cexScanSymbolsDefault() []string {
 	if v := envStringSlice("ARB_CEX_SCAN_SYMBOLS"); v != nil {
 		return v
 	}
-	return []string{"BTC", "ETH", "TRX", "SOL", "USDT", "USDC", "PAXG", "XAUT"}
+	return []string{"BTC", "ETH", "TRX", "SOL", "USDT", "USDC"}
 }
