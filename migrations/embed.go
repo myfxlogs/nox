@@ -244,3 +244,6 @@ var CexUniverseSQL string
 
 //go:embed 0100_t1_promotion.sql
 var T1PromotionSQL string
+
+//go:embed 0101_canonical_fix.sql
+var CanonicalFixSQL string
