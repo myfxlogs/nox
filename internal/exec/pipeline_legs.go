@@ -74,16 +74,19 @@ func (p *Pipeline) executeLeg(ctx context.Context, leg LegSpec, clientOrderID st
 // currentBps（spread/mid×10000）同口径比较才正确。返回 true 通过复核，false 劣化超阈值应拒绝。
 // D-068 修复：FUNDING_HEDGE 收益来自 funding rate 差不是价格差，价格差近 0 是正常的，
 // 用价格差复核会误拒 → FUNDING_HEDGE 只检查报价新鲜度（QuoteBus 有报价即可），跳过价差劣化。
-func (p *Pipeline) Revalidate(canonical, venueBuy, venueSell, oppType string, originalGrossBps float64) bool {
+// D-311 R3：卖腿报价挂 canonicalSell 命名空间（XASSET 跨 canonical，调用方回退 canonical）；
+// XASSET_CARRY 收益是 carry 年化口径与瞬时价差不可比 → 并入新鲜度免检分支。
+func (p *Pipeline) Revalidate(canonical, canonicalSell, venueBuy, venueSell, oppType string, originalGrossBps float64) bool {
 	qbuy, ok1 := p.qbus.Latest(canonical, venueBuy)
-	qsell, ok2 := p.qbus.Latest(canonical, venueSell)
+	qsell, ok2 := p.qbus.Latest(canonicalSell, venueSell)
 	if !ok1 || !ok2 {
 		return false // 报价缺失 = 不通过
 	}
-	// FUNDING_HEDGE / PERP_FUNDING：只检查报价新鲜度，跳过价格差劣化
+	// FUNDING_HEDGE / PERP_FUNDING / XASSET_CARRY：只检查报价新鲜度，跳过价格差劣化
 	//（funding rate 差是收益来源，价格差近 0 正常，D-068 修复 FUNDING_HEDGE，
-	// D-120 扩展 PERP_FUNDING 同理——gate futures 只有 mark_price 无真实 spread）
-	if oppType == "FUNDING_HEDGE" || oppType == "PERP_FUNDING" {
+	// D-120 扩展 PERP_FUNDING 同理——gate futures 只有 mark_price 无真实 spread；
+	// D-311 R3：XASSET_CARRY 收益口径=carry 年化 pp，与瞬时价差 bps 不可比，同先例免检）
+	if oppType == "FUNDING_HEDGE" || oppType == "PERP_FUNDING" || oppType == "XASSET_CARRY" {
 		return true
 	}
 	// CROSS_VENUE：重算瞬时毛 spread
