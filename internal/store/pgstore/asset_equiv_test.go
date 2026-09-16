@@ -133,3 +133,38 @@ func TestAssetEquivProvider_MaybeRefreshTTL(t *testing.T) {
 		t.Fatalf("calls=%d want >=3 (过期重查)", l.calls)
 	}
 }
+
+// TestAssetEquivProvider_PartnersXauusdt D-303：0098 种子行后 GOLD 四 canonical——
+// Partners("XAUUSD") 与 Partners("PAXGUSDT") 均含 XAUUSDT。
+// 先锚 schema_migrations version=98 台账（防 embed/migrate 漏登记假绿，经验库
+// migration-file-without-embed-registration）；表内行可能被前序测试 TRUNCATE，故种子自补。
+func TestAssetEquivProvider_PartnersXauusdt(t *testing.T) {
+	s := assetEquivTestStore(t)
+	ctx := context.Background()
+	var one int
+	if err := s.pool.QueryRow(ctx, `SELECT 1 FROM schema_migrations WHERE version = 98`).Scan(&one); err != nil {
+		t.Fatalf("schema_migrations version=98 missing: %v", err)
+	}
+	if _, err := s.pool.Exec(ctx, `INSERT INTO asset_equiv (asset_class, canonical, venue_type, venue) VALUES
+		('GOLD','PAXGUSDT','perp','binance'),('GOLD','XAUTUSDT','perp','binance'),
+		('GOLD','XAUUSD','mt5','3001157'),('GOLD','XAUUSDT','perp','binance')
+		ON CONFLICT (asset_class, canonical, venue) DO NOTHING`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	p := NewAssetEquivProvider(s, time.Minute)
+	if err := p.Refresh(ctx); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	for _, canonical := range []string{"XAUUSD", "PAXGUSDT"} {
+		got := p.Partners(canonical)
+		found := false
+		for _, c := range got {
+			if c == "XAUUSDT" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("Partners(%q)=%v want contains XAUUSDT", canonical, got)
+		}
+	}
+}

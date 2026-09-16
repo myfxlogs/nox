@@ -235,3 +235,6 @@ var EventCasesPaperTradesSQL string
 
 //go:embed 0097_xasset_carry.sql
 var XassetCarrySQL string
+
+//go:embed 0098_xauusdt_gold.sql
+var XauusdtGoldSQL string
