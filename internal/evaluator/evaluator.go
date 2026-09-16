@@ -228,25 +228,29 @@ var cexSlipBpsByCanonical = map[string]float64{
 	"COPPERUSDT": 5.0, // $31M
 	"XPTUSDT":    8.0, // <$10M 薄
 	"XPDUSDT":    8.0,
-	// D-308 跨所腿与指数薄盘保守全 8.0
-	"XAG-USDT-SWAP":   8.0,
-	"XAG_USDT":        8.0,
-	"CL-USDT-SWAP":    8.0,
-	"CL_USDT":         8.0,
-	"BZ-USDT-SWAP":    8.0,
-	"BZ_USDT":         8.0,
-	"XPT-USDT-SWAP":   8.0,
-	"XPT_USDT":        8.0,
-	"XPD-USDT-SWAP":   8.0,
-	"XPD_USDT":        8.0,
-	"NAS100_USDT":     8.0,
-	"US30_USDT":       8.0,
-	"SPX500_USDT":     8.0,
-	"JP225-USDT-SWAP": 8.0,
 }
 
-// slipBpsForCEX 返回 CEX 品种的单腿滑点 bps（品种表命中→分级值；未知→cexSlipDefaultBps）。
-func slipBpsForCEX(canonical string) float64 {
+// D-308 跨所腿与指数薄盘保守全 8.0。键 venue:canonical——ticks canonical 全所同键
+// <base>USDT（gate CL_USDT→存 CLUSDT），venue 原生名永不命中，故按 venue 区分。
+var cexSlipBpsByVenueCanonical = map[string]float64{
+	"gate:XAUUSDT": 8.0, "okx:XAUUSDT": 8.0,
+	"gate:CLUSDT": 8.0, "okx:CLUSDT": 8.0,
+	"gate:BZUSDT": 8.0, "okx:BZUSDT": 8.0,
+	"gate:XAGUSDT": 8.0, "okx:XAGUSDT": 8.0,
+	"gate:XPTUSDT": 8.0, "okx:XPTUSDT": 8.0,
+	"gate:XPDUSDT": 8.0, "okx:XPDUSDT": 8.0,
+	"gate:NAS100USDT": 8.0,
+	"gate:US30USDT":   8.0,
+	"gate:SPX500USDT": 8.0,
+	"okx:JP225USDT":   8.0,
+}
+
+// slipBpsForCEX 返回 CEX 品种的单腿滑点 bps（venue 分级→品种分级→cexSlipDefaultBps）。
+func slipBpsForCEX(venueKey, canonical string) float64 {
+	venue := strings.SplitN(venueKey, ":", 2)[0]
+	if v, ok := cexSlipBpsByVenueCanonical[venue+":"+canonical]; ok {
+		return v
+	}
 	if v, ok := cexSlipBpsByCanonical[canonical]; ok {
 		return v
 	}
@@ -259,5 +263,5 @@ func slipForLeg(venueKey, canonical string, mtSlipBps float64) float64 {
 	if strings.HasSuffix(venueKey, ":mt4") || strings.HasSuffix(venueKey, ":mt5") {
 		return mtSlipBps
 	}
-	return slipBpsForCEX(canonical)
+	return slipBpsForCEX(venueKey, canonical)
 }

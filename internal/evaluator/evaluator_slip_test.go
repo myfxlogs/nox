@@ -30,7 +30,7 @@ func TestSlipBpsForCEX(t *testing.T) {
 		{"", cexSlipDefaultBps, "空 canonical 回落"},
 	}
 	for _, tc := range cases {
-		got := slipBpsForCEX(tc.canonical)
+		got := slipBpsForCEX("binance:perp", tc.canonical)
 		if got != tc.want {
 			t.Errorf("slipBpsForCEX(%s) = %v, want %v (%s)", tc.canonical, got, tc.want, tc.tier)
 		}

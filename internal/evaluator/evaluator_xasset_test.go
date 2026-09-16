@@ -1,6 +1,7 @@
 package evaluator
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -96,13 +97,21 @@ func TestSlipBpsForCEX_D308Tiers(t *testing.T) {
 		"CLUSDT": 2.0, "BZUSDT": 2.0, "XAGUSDT": 2.0,
 		"COPPERUSDT": 5.0,
 		"XPTUSDT":    8.0, "XPDUSDT": 8.0,
-		"XAG-USDT-SWAP": 8.0, "XAG_USDT": 8.0, "CL-USDT-SWAP": 8.0, "CL_USDT": 8.0,
-		"BZ-USDT-SWAP": 8.0, "BZ_USDT": 8.0, "XPT-USDT-SWAP": 8.0, "XPT_USDT": 8.0,
-		"XPD-USDT-SWAP": 8.0, "XPD_USDT": 8.0, "NAS100_USDT": 8.0, "US30_USDT": 8.0,
-		"SPX500_USDT": 8.0, "JP225-USDT-SWAP": 8.0,
 	} {
-		if got := slipBpsForCEX(sym); got != want {
-			t.Errorf("slipBpsForCEX(%q) = %v, want %v", sym, got, want)
+		if got := slipBpsForCEX("binance:perp", sym); got != want {
+			t.Errorf("slipBpsForCEX(binance:perp, %q) = %v, want %v", sym, got, want)
+		}
+	}
+	// venue:canonical 分级（0101 勘误：canonical 全所同键 <base>USDT，薄盘跨所腿 8.0）
+	for vk, want := range map[string]float64{
+		"gate:CLUSDT": 8.0, "okx:CLUSDT": 8.0, "gate:XAGUSDT": 8.0,
+		"gate:XAUUSDT": 8.0, "okx:XAUUSDT": 8.0,
+		"gate:NAS100USDT": 8.0, "gate:US30USDT": 8.0, "gate:SPX500USDT": 8.0,
+		"okx:JP225USDT": 8.0,
+	} {
+		parts := strings.SplitN(vk, ":", 2)
+		if got := slipBpsForCEX(parts[0]+":perp", parts[1]); got != want {
+			t.Errorf("slipBpsForCEX(%s) = %v, want %v", vk, got, want)
 		}
 	}
 }

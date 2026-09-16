@@ -8,82 +8,60 @@ import (
 	"arb/internal/bus"
 )
 
-// TestXAssetCarryWTICrossVenue D-308 S5：asset_equiv 新类（WTI 四成员=
-// CLUSDT@binance + CL-USDT-SWAP@okx + CL_USDT@gate + WTI@3001157:mt5）配对自动展开
-// C(4,2)=6 对各一候选，含 perp-perp 跨所对（CL_USDT→CLUSDT 卖高息收 funding 差）。
-// funding map：CLUSDT/binance=8.0、CL-USDT-SWAP/okx=5.0、CL_USDT/gate=2.0。
+// TestXAssetCarryWTICrossVenue D-308 S5 + 0101 勘误后语义：canonical 全所同键
+// <base>USDT，WTI 四成员=CLUSDT@{binance,okx,gate} + WTI@3001157:mt5 →
+// byCanon 两组（CLUSDT 三 venue 行同组作备选报价）→ 仅 CLUSDT↔WTI 一对，
+// 卖腿按 venue 展开 3 个候选（gross=各所 funding：8.0/5.0/2.0）。
+// 同 canonical 跨所 funding 对（CLUSDT@gate↔CLUSDT@binance）不属本 detector——
+// 是 CrossVenueDetector 领地。
 func TestXAssetCarryWTICrossVenue(t *testing.T) {
 	now := time.Now()
 	equiv := fakeEquiv{byClass: map[string][]AssetEquivEntry{"WTI": {
 		{AssetClass: "WTI", Canonical: "CLUSDT", VenueType: "perp", Venue: "binance"},
-		{AssetClass: "WTI", Canonical: "CL-USDT-SWAP", VenueType: "perp", Venue: "okx"},
-		{AssetClass: "WTI", Canonical: "CL_USDT", VenueType: "perp", Venue: "gate"},
+		{AssetClass: "WTI", Canonical: "CLUSDT", VenueType: "perp", Venue: "okx"},
+		{AssetClass: "WTI", Canonical: "CLUSDT", VenueType: "perp", Venue: "gate"},
 		{AssetClass: "WTI", Canonical: "WTI", VenueType: "mt5", Venue: "3001157"},
 	}}}
-	mkQ := func(sym, venue, vt string) map[string]bus.Quote {
-		return map[string]bus.Quote{venue + ":" + vt: {
-			Symbol: sym, Venue: venue, VenueType: vt, Bid: 70.0, Ask: 70.02, Time: now,
-		}}
-	}
 	snap := map[string]map[string]bus.Quote{
-		"CLUSDT":       mkQ("CLUSDT", "binance", "perp"),
-		"CL-USDT-SWAP": mkQ("CL-USDT-SWAP", "okx", "perp"),
-		"CL_USDT":      mkQ("CL_USDT", "gate", "perp"),
-		"WTI":          mkQ("WTI", "3001157", "mt5"),
+		"CLUSDT": {
+			"binance:perp": {Symbol: "CLUSDT", Venue: "binance", VenueType: "perp", Bid: 70.0, Ask: 70.02, Time: now},
+			"okx:perp":     {Symbol: "CLUSDT", Venue: "okx", VenueType: "perp", Bid: 70.0, Ask: 70.02, Time: now},
+			"gate:perp":    {Symbol: "CLUSDT", Venue: "gate", VenueType: "perp", Bid: 70.0, Ask: 70.02, Time: now},
+		},
+		"WTI": {
+			"3001157:mt5": {Symbol: "WTI", Venue: "3001157", VenueType: "mt5", Bid: 70.0, Ask: 70.02, Time: now},
+		},
 	}
 	fp := fakeFP{funding: map[string]map[string]float64{
-		"CLUSDT":       {"binance": 8.0},
-		"CL-USDT-SWAP": {"okx": 5.0},
-		"CL_USDT":      {"gate": 2.0},
+		"CLUSDT": {"binance": 8.0, "okx": 5.0, "gate": 2.0},
 	}}
 	d := newXAssetDetector()
 	d.AssetEquiv = equiv
 	cands := d.Scan(context.Background(), snap, fp)
-	if len(cands) != 6 {
-		t.Fatalf("want 6 candidates (C(4,2)=6 pairs), got %d: %+v", len(cands), cands)
+	if len(cands) != 3 {
+		t.Fatalf("want 3 candidates (CLUSDT↔WTI × 3 venue sell legs), got %d: %+v", len(cands), cands)
 	}
-	pairs := make(map[string]int)
-	var crossVenue, mt5Leg *Candidate
-	for i := range cands {
-		c := &cands[i]
-		a, b := c.Canonical, c.CanonicalSell
-		if a > b {
-			a, b = b, a
+	want := map[string]float64{"binance:perp": 8.0, "okx:perp": 5.0, "gate:perp": 2.0}
+	for _, c := range cands {
+		if c.Canonical != "WTI" || c.CanonicalSell != "CLUSDT" {
+			t.Fatalf("candidate want WTI→CLUSDT, got %s→%s", c.Canonical, c.CanonicalSell)
 		}
-		pairs[a+"|"+b]++
-		if c.Canonical == "CL_USDT" && c.CanonicalSell == "CLUSDT" {
-			crossVenue = c
+		if c.VenueBuy != "3001157:mt5" {
+			t.Fatalf("VenueBuy want 3001157:mt5, got %s", c.VenueBuy)
 		}
-		if c.Canonical == "WTI" && c.CanonicalSell == "CLUSDT" {
-			mt5Leg = c
+		g, ok := want[c.VenueSell]
+		if !ok {
+			t.Fatalf("unexpected VenueSell %s", c.VenueSell)
 		}
-	}
-	if len(pairs) != 6 {
-		t.Fatalf("distinct canonical pairs want 6, got %d: %v", len(pairs), pairs)
-	}
-	for p, n := range pairs {
-		if n != 1 {
-			t.Fatalf("pair %s produced %d candidates, want 1", p, n)
+		if c.GrossBps < g-0.1 || c.GrossBps > g+0.1 {
+			t.Fatalf("VenueSell %s GrossBps want ~%v, got %v", c.VenueSell, g, c.GrossBps)
 		}
+		if c.AssetClass != "WTI" {
+			t.Fatalf("AssetClass want WTI, got %s", c.AssetClass)
+		}
+		delete(want, c.VenueSell)
 	}
-	// perp-perp 跨所对：卖 CLUSDT（funding 8.0）买 CL_USDT（funding 2.0）→ 毛息差 6.0。
-	if crossVenue == nil {
-		t.Fatalf("missing CL_USDT→CLUSDT cross-venue candidate: %+v", cands)
-	}
-	if crossVenue.VenueBuy != "gate:perp" || crossVenue.VenueSell != "binance:perp" {
-		t.Fatalf("cross-venue venues want gate:perp→binance:perp, got %s→%s", crossVenue.VenueBuy, crossVenue.VenueSell)
-	}
-	if crossVenue.GrossBps < 5.9 || crossVenue.GrossBps > 6.1 {
-		t.Fatalf("CL_USDT→CLUSDT GrossBps want ~6.0 (8.0−2.0), got %v", crossVenue.GrossBps)
-	}
-	if crossVenue.AssetClass != "WTI" {
-		t.Fatalf("AssetClass want WTI, got %s", crossVenue.AssetClass)
-	}
-	// mt5 腿方向：买 WTI@3001157 卖 CLUSDT 收 funding 8.0。
-	if mt5Leg == nil {
-		t.Fatalf("missing WTI→CLUSDT candidate: %+v", cands)
-	}
-	if mt5Leg.VenueBuy != "3001157:mt5" || mt5Leg.GrossBps < 7.9 || mt5Leg.GrossBps > 8.1 {
-		t.Fatalf("WTI→CLUSDT want buy=3001157:mt5 gross~8.0, got %s %v", mt5Leg.VenueBuy, mt5Leg.GrossBps)
+	if len(want) != 0 {
+		t.Fatalf("missing venue sell legs: %v", want)
 	}
 }
