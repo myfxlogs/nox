@@ -2,6 +2,7 @@ package swapledger
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -244,21 +245,8 @@ func TestCanonicalFromOppID(t *testing.T) {
 	}
 }
 
-// TestCashflowKind 按类型返回 kind。
-func TestCashflowKind(t *testing.T) {
-	if got := cashflowKind("SWAPARB"); got != "swap" {
-		t.Errorf("SWAPARB kind want swap, got %s", got)
-	}
-	if got := cashflowKind("CARRY"); got != "swap" {
-		t.Errorf("CARRY kind want swap, got %s", got)
-	}
-	if got := cashflowKind("FUNDING_HEDGE"); got != "funding" {
-		t.Errorf("FUNDING_HEDGE kind want funding, got %s", got)
-	}
-	if got := cashflowKind("PERP_FUNDING"); got != "funding" {
-		t.Errorf("PERP_FUNDING kind want funding, got %s", got)
-	}
-}
+// TestCashflowKind 已迁 ledger_helpers_test.go（D-314 S6 方案 A：cashflowKind 改两参数签名，
+// 新同名测试含 XASSET_CARRY per-leg + 向后兼容断言）。
 
 // TestIsFundingType funding 类型判定。
 func TestIsFundingType(t *testing.T) {
@@ -345,6 +333,7 @@ type nonSettleStubStore struct {
 	hasCashflowLegs map[int16]bool      // legNo → 当日已记（per-leg 幂等模拟）
 	insertedVenues  []string            // 记录 InsertCashflowFull 被调用的 venue
 	insertedCFs     []*pgstore.Cashflow // D-193-A 扩包：记录完整 Cashflow 供断言
+	hasQueries      []string            // D-314：记录 HasCashflowForLegDay 收到的 "legNo:kind"（per-leg 幂等路由断言）
 }
 
 func (s *nonSettleStubStore) ListOpenPositionsByType(_ context.Context, _ []string) ([]pgstore.Position, error) {
@@ -353,7 +342,8 @@ func (s *nonSettleStubStore) ListOpenPositionsByType(_ context.Context, _ []stri
 func (s *nonSettleStubStore) ListPositionLegs(_ context.Context, _ int64) ([]pgstore.PositionLeg, error) {
 	return s.legs, nil
 }
-func (s *nonSettleStubStore) HasCashflowForLegDay(_ context.Context, _ int64, legNo int16, _ string, _ time.Time) (bool, error) {
+func (s *nonSettleStubStore) HasCashflowForLegDay(_ context.Context, _ int64, legNo int16, kind string, _ time.Time) (bool, error) {
+	s.hasQueries = append(s.hasQueries, fmt.Sprintf("%d:%s", legNo, kind))
 	return s.hasCashflowLegs[legNo], nil
 }
 func (s *nonSettleStubStore) InsertCashflowFull(_ context.Context, c *pgstore.Cashflow) (bool, error) {

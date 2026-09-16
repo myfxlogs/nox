@@ -43,12 +43,22 @@ func canonicalFromOppID(oppID string) string {
 	return parts[1]
 }
 
-// cashflowKind 按持仓类型返回 cashflow kind（swap 或 funding）。
-func cashflowKind(posType string) string {
-	if isFundingType(posType) {
+// cashflowKind 按持仓类型+腿 venue 返回 cashflow kind（swap 或 funding）。
+// XASSET_CARRY per-leg 判定：CEX perp 腿=funding，MT 腿=swap（D-314）。
+func cashflowKind(posType, venue string) string {
+	if isFundingLeg(posType, venue) {
 		return "funding"
 	}
 	return "swap"
+}
+
+// isFundingLeg 判定单腿是否走 funding 路径（D-314 per-leg 扩展）。
+// XASSET_CARRY: CEX perp 腿=funding，MT 腿=swap；其他类型按 posType（向后兼容）。
+func isFundingLeg(posType, venue string) bool {
+	if posType == "XASSET_CARRY" {
+		return strings.HasSuffix(venue, ":perp")
+	}
+	return isFundingType(posType)
 }
 
 // isFundingType 判断是否为 funding 类持仓（8h×3 周期）。

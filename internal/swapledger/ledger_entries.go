@@ -60,14 +60,16 @@ func (l *Ledger) accountPosition(ctx context.Context, pos pgstore.Position, day 
 		return 0, fmt.Errorf("canonical from oppID %q empty", pos.OpportunityID)
 	}
 
-	isFunding := isFundingType(pos.Type)
-	kind := cashflowKind(pos.Type)
 	written := 0
 	for _, leg := range legs {
 		// 只记 OPEN phase 的腿（CLOSE phase 是平仓腿，无 swap 记账）
 		if leg.Phase != "OPEN" {
 			continue
 		}
+		// D-314：per-leg kind/isFunding——XASSET_CARRY 混合 venue（perp 腿=funding、MT 腿=swap），
+		// 其他类型按 posType 向后兼容（isFundingLeg 内部回落 isFundingType）。
+		isFunding := isFundingLeg(pos.Type, leg.Venue)
+		kind := cashflowKind(pos.Type, leg.Venue)
 		// D-159 W3a R5：per-leg 幂等检查（该腿当日已记→跳过该腿，不短路整笔）。
 		has, err := l.store.HasCashflowForLegDay(ctx, pos.ID, leg.LegNo, kind, day)
 		if err != nil {
