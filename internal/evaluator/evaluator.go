@@ -37,6 +37,8 @@ type Result struct {
 	ID             string
 	Type           string
 	Canonical      string
+	CanonicalSell  string // D-300：卖腿 canonical（跨标的套利；同标的留空）
+	AssetClass     string // D-300：标的等价类（同标的机会留空）
 	VenueBuy       string
 	VenueSell      string
 	PriceBuy       float64
@@ -72,7 +74,13 @@ func EvaluateAt(c detector.Candidate, cfg Config, spreadBuy, spreadSell, commiss
 	// D-145 §②：滑点 per-leg 计算——MT 腿用 cfg.SlippageBps（0.3 不变，观察期铁证），
 	// CEX 腿用 slipBpsForCEX（品种分级表，与 cfg.SlippageBps 解耦）。
 	// 纯 MT 组合行为与现状完全一致（0.3×2 回归锚）；混合腿 MT×CEX 不再误伤。
-	slippageCost := slipForLeg(c.VenueBuy, c.Canonical, cfg.SlippageBps) + slipForLeg(c.VenueSell, c.Canonical, cfg.SlippageBps)
+	// D-300 D1/G4：卖腿滑点用 CanonicalSell（跨标的配对 canonical 不同，如 PAXGUSDT 三线 8.0），
+	// 空回退 Canonical（同标的机会不变）。
+	sellCanonical := c.CanonicalSell
+	if sellCanonical == "" {
+		sellCanonical = c.Canonical
+	}
+	slippageCost := slipForLeg(c.VenueBuy, c.Canonical, cfg.SlippageBps) + slipForLeg(c.VenueSell, sellCanonical, cfg.SlippageBps)
 	grossBps := c.GrossBps
 
 	// 净收益计算（§6.2）
@@ -104,6 +112,19 @@ func EvaluateAt(c detector.Candidate, cfg Config, spreadBuy, spreadSell, commiss
 		if cfg.FundingMaxBreakevenDays > 0 && breakevenDays != nil && *breakevenDays > cfg.FundingMaxBreakevenDays {
 			netBps = -1
 		}
+	case detector.TypeXAssetCarry:
+		// D-300 S5（G2 撤回 D4）：息差家族同口径——净年化 pp = gross − 资金机会成本（R1=A 4.5pp）。
+		// gross=detector 净息差（funding−swap 已含）；swap_cost 列恒 0——swap 已并入 gross，
+		// 消费侧白名单下 Exness 实收=0 语义一致（裁 9）。
+		netBps = grossBps - cfg.MarginRateAnnual
+		// 一次性摩擦进 breakeven_days：进场价差（有利时为负项缩短回本）+ spread+commission+slip 往返。
+		entrySpreadBps := (c.PriceSell - c.PriceBuy) / ((c.PriceBuy + c.PriceSell) / 2) * 10000
+		oneTimeCost := (spreadCost+commissionBps+slippageCost)*2 - entrySpreadBps
+		dailyNetBps := netBps / 100 * 10000 / 365
+		if dailyNetBps > 0 {
+			bd := oneTimeCost / dailyNetBps
+			breakevenDays = &bd
+		}
 	}
 
 	rating := classify(c.Type, netBps, c.GrossBps, avg30dBps, cfg.GrabMinNetAnnualized)
@@ -116,6 +137,8 @@ func EvaluateAt(c detector.Candidate, cfg Config, spreadBuy, spreadSell, commiss
 		ID:             genID(c, qt),
 		Type:           string(c.Type),
 		Canonical:      c.Canonical,
+		CanonicalSell:  c.CanonicalSell,
+		AssetClass:     c.AssetClass,
 		VenueBuy:       c.VenueBuy,
 		VenueSell:      c.VenueSell,
 		PriceBuy:       c.PriceBuy,

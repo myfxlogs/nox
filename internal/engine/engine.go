@@ -268,10 +268,20 @@ func findQuote(snapshot map[string]map[string]bus.Quote, canonical, venueKey str
 }
 
 func resultToOpp(r *evaluator.Result) *pgstore.Opportunity {
+	// D-300：跨标的配对列——空串转 NULL（非 XASSET_CARRY 不留空串）。
+	var canonicalSell, assetClass *string
+	if r.CanonicalSell != "" {
+		canonicalSell = &r.CanonicalSell
+	}
+	if r.AssetClass != "" {
+		assetClass = &r.AssetClass
+	}
 	return &pgstore.Opportunity{
 		ID:             r.ID,
 		Type:           r.Type,
 		Canonical:      r.Canonical,
+		CanonicalSell:  canonicalSell,
+		AssetClass:     assetClass,
 		VenueBuy:       r.VenueBuy,
 		VenueSell:      r.VenueSell,
 		PriceBuy:       r.PriceBuy,

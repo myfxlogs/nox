@@ -111,6 +111,47 @@ func TestXAssetNetStoreGate(t *testing.T) {
 	}
 }
 
+// TestXAssetOnQuoteE2E S5 A2 落库锚：全链路 onQuote → 候选 → 评估 → 入库，
+// 断言 asset_class/canonical_sell 列填充 + net=3.5（funding 8.0 − margin 4.5，swap=0）。
+func TestXAssetOnQuoteE2E(t *testing.T) {
+	qbus := bus.New()
+	now := time.Now()
+	qbus.Publish(bus.Quote{Symbol: "PAXGUSDT", Venue: "binance", VenueType: "perp", Bid: 4000.0, Ask: 4000.5, Time: now})
+	qbus.Publish(bus.Quote{Symbol: "XAUUSD", Venue: "3001157", VenueType: "mt5", Bid: 3999.8, Ask: 4000.0, Time: now})
+
+	fc := NewFactCache()
+	fc.UpdateFacts([]fact.Fact{{Kind: fact.KindFunding, Venue: "binance", Symbol: "PAXGUSDT", Value: 8.0, Ts: now}})
+	d := &detector.XAssetCarryDetector{
+		EntryMinBps: -20, MinNetAnnualPct: 1.0, TrackingMaxBps: 50, FreshnessTTL: time.Minute,
+		AssetEquiv: fakeEquivSrc{m: map[string][]detector.AssetEquivEntry{"GOLD": {
+			{AssetClass: "GOLD", Canonical: "PAXGUSDT", VenueType: "perp", Venue: "binance"},
+			{AssetClass: "GOLD", Canonical: "XAUUSD", VenueType: "mt5", Venue: "3001157"},
+		}}},
+	}
+	equiv := &fakeEquivView{partners: map[string][]string{"PAXGUSDT": {"XAUUSD"}, "XAUUSD": {"PAXGUSDT"}}}
+	store := newFakeOppStore()
+	e := New(qbus, []detector.Detector{d}, evaluator.Config{MarginRateAnnual: 4.5, SlippageBps: 1.0, DetectorFreshnessTTL: time.Minute, OpportunityTTL: time.Minute}, store, fc, testCommissionResolver(t, nil, nil), time.Nanosecond, nil, 0, 0, 0, 0, 0)
+	e.SetAssetEquiv(equiv)
+
+	e.onQuote(context.Background(), bus.Quote{Symbol: "XAUUSD", Venue: "3001157", VenueType: "mt5", Bid: 3999.8, Ask: 4000.0, Time: now})
+	if c := store.count(); c != 1 {
+		t.Fatalf("want 1 upsert, got %d", c)
+	}
+	o := store.last
+	if o.Type != "XASSET_CARRY" || o.Canonical != "XAUUSD" {
+		t.Fatalf("type/canonical want XASSET_CARRY/XAUUSD, got %s/%s", o.Type, o.Canonical)
+	}
+	if o.CanonicalSell == nil || *o.CanonicalSell != "PAXGUSDT" {
+		t.Fatalf("canonical_sell want PAXGUSDT, got %v", o.CanonicalSell)
+	}
+	if o.AssetClass == nil || *o.AssetClass != "GOLD" {
+		t.Fatalf("asset_class want GOLD, got %v", o.AssetClass)
+	}
+	if o.NetBps < 3.4 || o.NetBps > 3.6 {
+		t.Fatalf("net_bps want ~3.5, got %v", o.NetBps)
+	}
+}
+
 // TestXAssetOnQuoteStaleLeg A4：XAU 腿 stale → detector 不产候选，引擎零产出零报错。
 func TestXAssetOnQuoteStaleLeg(t *testing.T) {
 	qbus := bus.New()
