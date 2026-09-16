@@ -274,3 +274,44 @@ func TestListHedgeFlowPage_DustFilter(t *testing.T) {
 		t.Errorf("cheat_dep 入库行数 = %d, want 1（仅查询过滤，入库保留）", cnt)
 	}
 }
+
+// TestListHedgeFlowPage_VoteFilter 9-16 业主令：vote 行剔除——投票零金额零对手方纯噪音，
+// 仅查询过滤、入库保留（同 R2 SELL_TRADE 先例）。
+func TestListHedgeFlowPage_VoteFilter(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.pool.Exec(ctx, "TRUNCATE fin_trx_txs, fin_cmc_history CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	now := time.Now().UTC()
+	trxTxs := []TRXTx{
+		{TxID: "v1", Ts: now, Kind: "vote", AmountSun: 0},                             // vote→剔除
+		{TxID: "d1", Ts: now.Add(time.Minute), Kind: "deposit", AmountSun: 1000000},   // 保留
+		{TxID: "vc1", Ts: now.Add(2 * time.Minute), Kind: "vote_claim", AmountSun: 5}, // vote_claim≠vote→保留
+	}
+	for _, tx := range trxTxs {
+		if err := s.UpsertTRXTx(ctx, tx); err != nil {
+			t.Fatalf("UpsertTRXTx %s: %v", tx.TxID, err)
+		}
+	}
+	items, err := s.ListHedgeFlowPage(ctx, "", 10, 0)
+	if err != nil {
+		t.Fatalf("ListHedgeFlowPage: %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("got %d items, want 2 (vote filtered)", len(items))
+	}
+	for _, it := range items {
+		if it.Kind == "vote" || it.TxID == "v1" {
+			t.Errorf("vote 行出现在结果中（%s/%s），应被过滤", it.Kind, it.TxID)
+		}
+	}
+	// 入库保留断言
+	var cnt int
+	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM fin_trx_txs WHERE tx_id = 'v1'").Scan(&cnt); err != nil {
+		t.Fatalf("query v1: %v", err)
+	}
+	if cnt != 1 {
+		t.Errorf("v1 入库行数 = %d, want 1（仅查询过滤，入库保留）", cnt)
+	}
+}
