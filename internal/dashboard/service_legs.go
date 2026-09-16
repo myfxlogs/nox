@@ -195,8 +195,22 @@ func (s *Service) floorToStepQty(venueKey, symbol string, qty float64) float64 {
 		log.Printf("[exec] floorToStepQty mt %s %s qty=%.6f step=%.4f → %.6f", venueKey, symbol, qty, step, result)
 		return result
 	}
-	// CEX：按品种 stepSize（D-127 P2：cexStepSize 返回 0=未知，fail-closed）
-	step := s.cexStepSize(symbol)
+	// CEX：按 venueKey 分派（D-311 R4）——gate:perp=1.0（整数张协议事实）；
+	// okx:perp=instId→lotSz（instruments 同源缓存，取不到→0 fail-closed）；
+	// binance=stepMeta 运行时+fallback；其余→0（D-127 P2：fail-closed，由 P3 预检拒单）。
+	var step float64
+	switch {
+	case venueKey == "gate:perp":
+		step = 1.0
+	case venueKey == "okx:perp":
+		if s.okxLotSz != nil {
+			if l, ok := s.okxLotSz(symbol); ok && l > 0 {
+				step = l
+			}
+		}
+	case strings.HasPrefix(venueKey, "binance:"):
+		step = s.cexStepSize(symbol)
+	}
 	if step <= 0 {
 		log.Printf("[exec] floorToStepQty cex %s %s qty=%.6f step=0 → 0 (fail-closed, unknown symbol)", venueKey, symbol, qty)
 		return 0

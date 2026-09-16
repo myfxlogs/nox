@@ -78,3 +78,43 @@ func TestStepDecimals(t *testing.T) {
 		}
 	}
 }
+
+// D-311 R4：floorToStepQty CEX 分支 venueKey 分派回归——
+// gate:perp=1.0（整数张协议事实）；okx:perp=instId→lotSz（instruments 同源缓存）；
+// binance=stepMeta/fallback 不变；其余→0 fail-closed。
+func TestFloorToStepQty_CexVenueDispatch(t *testing.T) {
+	s := &Service{
+		okxLotSz: func(instID string) (float64, bool) {
+			if instID == "CL-USDT-SWAP" {
+				return 0.1, true
+			}
+			return 0, false
+		},
+	}
+	// gate:perp → step=1.0 整数张（生产实证 CL_USDT qty=1010.407194 → 1010 张；
+	// 旧码查 binance 表 step=0 → fail-closed qty=0 → buy 名义 $0 imbalance Abort）
+	if got := s.floorToStepQty("gate:perp", "CL_USDT", 1010.407194); got != 1010 {
+		t.Fatalf("gate:perp floorToStepQty=%v，期望 1010（step=1.0 整数张）", got)
+	}
+	// okx:perp → instId→lotSz=0.1 → 1010.407194 → 1010.4
+	if got := s.floorToStepQty("okx:perp", "CL-USDT-SWAP", 1010.407194); got != 1010.4 {
+		t.Fatalf("okx:perp floorToStepQty=%v，期望 1010.4（lotSz=0.1）", got)
+	}
+	// okx:perp 解析器取不到 → 0 fail-closed
+	if got := s.floorToStepQty("okx:perp", "ZZZ-USDT-SWAP", 100); got != 0 {
+		t.Fatalf("okx:perp 未知 instId floorToStepQty=%v，期望 0", got)
+	}
+	// binance:perp → fallback 表不变（BTCUSDT step=0.001 → 1.2345→1.234）
+	if got := s.floorToStepQty("binance:perp", "BTCUSDT", 1.2345); got != 1.234 {
+		t.Fatalf("binance:perp floorToStepQty=%v，期望 1.234（fallback step=0.001）", got)
+	}
+	// 未知 venue → 0 fail-closed（不再蹭 binance fallback 表）
+	if got := s.floorToStepQty("gate:spot", "BTC_USDT", 1.5); got != 0 {
+		t.Fatalf("gate:spot floorToStepQty=%v，期望 0（非 binance 不查 binance 表）", got)
+	}
+	// okxLotSz 未接线 → 0 fail-closed
+	s2 := &Service{}
+	if got := s2.floorToStepQty("okx:perp", "CL-USDT-SWAP", 100); got != 0 {
+		t.Fatalf("okx:perp 未接线 floorToStepQty=%v，期望 0", got)
+	}
+}

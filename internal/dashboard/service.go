@@ -112,6 +112,9 @@ type Service struct {
 	slippageBps float64
 	// D-127 P2：binance:perp stepSize 权威元数据（运行时 exchangeInfo + fallback）。nil = 仅用 fallback。
 	stepMeta *cexStepMeta
+	// D-311 R4：okx:perp 腿最小张数 lotSz 查询（instId→lotSz，instruments 同源缓存）。
+	// nil = 未接线 → okx:perp step=0 fail-closed。
+	okxLotSz func(instID string) (float64, bool)
 	// D-155 freeze guard：冻结腿预检窗口（config.FreezeGuard）。
 	// 开仓前双腿各自校验「报价在窗口内发生过价格值变化」；≤0 = 禁用（全放行）。
 	freezeGuard time.Duration

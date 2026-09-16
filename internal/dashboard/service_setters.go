@@ -73,6 +73,10 @@ func (s *Service) SetFreezeGuard(d time.Duration) { s.freezeGuard = d }
 // SetStepMeta 注入 binance:perp stepSize 权威元数据（D-127 P2）。nil = 仅用硬编码 fallback。
 func (s *Service) SetStepMeta(m *cexStepMeta) { s.stepMeta = m }
 
+// SetOkxLotSz 注入 okx:perp 腿最小张数 lotSz 查询（D-311 R4，instId→lotSz，instruments 同源缓存）。
+// nil = 未接线 → okx:perp step=0 fail-closed。
+func (s *Service) SetOkxLotSz(f func(instID string) (float64, bool)) { s.okxLotSz = f }
+
 // SetSwapArbComboAllow 注入 SWAPARB 精确组合门禁 allowlist（D-159 W1a R1，手动入口同源）。
 // nil/空 = 未接线（gate 层 fail-closed 兜底，手动入口不重复检查）。
 func (s *Service) SetSwapArbComboAllow(allow []exec.ComboAllowSpec) { s.swapArbComboAllow = allow }
