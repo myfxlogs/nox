@@ -176,7 +176,7 @@ func notionalFromLegs(legs []pgstore.PositionLeg, csFn func(venueKey, brokerSymb
 			symbol = l.Symbol
 			venue = l.Venue
 		}
-		notional += l.Qty * price * cs
+		notional += l.EffectiveQty() * price * cs // D-311 R6：成交口径（CEX=基础币）
 	}
 	return notional, symbol, venue
 }
