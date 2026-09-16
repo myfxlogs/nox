@@ -118,7 +118,7 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64) error {
 			if hasPartialFill {
 				closeFilledQty = *closeLeg.FilledQty
 			}
-			if !hasPartialFill || closeFilledQty >= leg.Qty {
+			if !hasPartialFill || closeFilledQty >= leg.EffectiveQty() {
 				// 无部分成交（nil/0=未成交或全量）或已全部平仓 → cashflows 补回后跳过。
 				if err := p.backfillMissingCashflows(ctx, posID, leg, fx); err != nil {
 					return fmt.Errorf("pos=%d leg=%d backfill cashflow: %w", posID, leg.LegNo, err)
@@ -126,8 +126,9 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64) error {
 				continue
 			}
 			// 部分成交（0 < filled_qty < open_qty）→ 继续对剩余量发单（不跳过本腿）
+			// D-311 R6：比对同单位——filled_qty 与 EffectiveQty 均为成交口径（CEX=基础币）。
 			log.Printf("[exec] resume close leg %d partial fill: openQty=%.4f closeFilledQty=%.4f remaining=%.4f",
-				leg.ID, leg.Qty, closeFilledQty, leg.Qty-closeFilledQty)
+				leg.ID, leg.EffectiveQty(), closeFilledQty, leg.EffectiveQty()-closeFilledQty)
 		}
 		// D-189 P0-4 S4-2：broker preflight——查 verifier 确认腿是否仍在仓。
 		stillOpen, fill, err := p.brokerPreflight(ctx, posID, leg)
@@ -146,10 +147,11 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64) error {
 		if leg.Side == "SELL" {
 			closeSide = "BUY"
 		}
-		// D-195-C2 §6.4：部分成交残量继续——计算剩余量（全量时 = leg.Qty）。
-		closeQty := leg.Qty
+		// D-195-C2 §6.4：部分成交残量继续——计算剩余量（全量时 = 实际持仓量）。
+		// D-311 R6：EffectiveQty=成交口径（CEX=基础币），与 closeLeg.FilledQty 同单位。
+		closeQty := leg.EffectiveQty()
 		if closeLeg, hasClose := closeByLegNo[leg.LegNo]; hasClose && closeLeg.FilledQty != nil && *closeLeg.FilledQty > 0 {
-			remaining := leg.Qty - *closeLeg.FilledQty
+			remaining := leg.EffectiveQty() - *closeLeg.FilledQty
 			if remaining > 0 && remaining < closeQty {
 				closeQty = remaining
 			}
@@ -172,7 +174,7 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64) error {
 		closePrice := fill.Price
 		closeQty = fill.Qty
 		if closeQty <= 0 {
-			closeQty = leg.Qty
+			closeQty = leg.EffectiveQty() // D-311 R6：兜底用成交口径（CEX=基础币）
 		}
 		if err := p.store.CreatePositionLeg(ctx, &pgstore.PositionLeg{
 			PositionID:    posID,

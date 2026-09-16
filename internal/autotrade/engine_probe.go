@@ -79,7 +79,7 @@ func (e *Engine) evaluateProbe(ctx context.Context, p *pgstore.Position) probeEv
 		}
 		legSwap, legHasJump := sumSwapJumpsSince(legSnaps, *p.OpenedAt)
 		totalSwapUSD += legSwap
-		totalQty += leg.Qty
+		totalQty += leg.EffectiveQty() // D-311 R6：成交口径
 		if legHasJump {
 			hasJump = true
 		}

@@ -160,7 +160,7 @@ func (g *Gate) swapDeviationGateCheck(ctx context.Context, intent TradeIntent, a
 			if !ok || perLot <= 0 {
 				continue // 无法算 USD notional→跳过（走 S3，fail-closed）
 			}
-			notional := leg.Qty * perLot
+			notional := leg.EffectiveQty() * perLot // D-311 R6：成交口径（CEX=基础币）
 			factsUSD := factsBps * notional / 10000
 			// 偏差率
 			deviationPct := swapDeviationBetween(factsUSD, actualUSD)

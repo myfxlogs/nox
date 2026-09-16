@@ -250,7 +250,7 @@ func (e *Engine) brokerActualNetSwapBps(ctx context.Context, p *pgstore.Position
 		if !ok || perLot <= 0 {
 			return 0, false // PerLot 不可得→回退 facts（不阻塞退出决策）
 		}
-		notional := leg.Qty * perLot
+		notional := leg.EffectiveQty() * perLot // D-311 R6：成交口径（CEX=基础币）
 		if leg.Side == "BUY" && legBare == buyBare {
 			// D-189 P0-1：快照查询用完整 venueKey（leg.Venue），buyBare 仅用于腿匹配与 swapRateFor。
 			usd, ok, err := e.store.DailySwapAccrued(ctx, p.ID, leg.Venue, now)

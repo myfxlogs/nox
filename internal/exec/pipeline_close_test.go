@@ -5,6 +5,7 @@ package exec
 
 import (
 	"context"
+	"math"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -394,3 +395,209 @@ func TestSettlement_StatsFailRetryable(t *testing.T) {
 
 // 确保 time 包被使用（部分测试可能不用）
 var _ = time.Since
+
+// TestClose_EffectiveQtyResidual_NewRow D-311 R6：新时代 CEX 行（qty=1012 合约数，filled_qty=10.12
+// 基础币）+ CLOSE 腿部分成交 filled=5.0 → 残量按同单位（成交口径）=10.12−5.0=5.12 发单。
+// 旧码按 leg.Qty=1012 比对/计算 → 残量 1007，错误发单近百倍。
+func TestClose_EffectiveQtyResidual_NewRow(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE positions, position_legs, alerts, position_cashflows RESTART IDENTITY CASCADE`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	reg := NewRegistry()
+	exe := &fakeCountingExecutor{
+		venue: "gate:perp",
+		fill:  Fill{OrderID: "close-fill-1", Qty: 5.12, Price: 64.5},
+	}
+	reg.Register(exe)
+	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
+	p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{
+		"gate:perp": {{Symbol: "CL_USDT", Side: "BUY", PosSide: "long"}},
+	}}
+
+	var posID int64
+	if err := s.Pool().QueryRow(ctx, `
+		INSERT INTO positions (opportunity_id, type, status, opened_at)
+		VALUES ('XASSET:CLUSDT:gate:perp:3001157:mt5', 'XASSET_CARRY', 'CLOSING', NOW())
+		RETURNING id`).Scan(&posID); err != nil {
+		t.Fatalf("seed position: %v", err)
+	}
+	openFilled := 10.12
+	if err := s.CreatePositionLeg(ctx, &pgstore.PositionLeg{
+		PositionID: posID, LegNo: 0, Phase: "OPEN", Venue: "gate:perp",
+		Symbol: "CL_USDT", Side: "BUY", Qty: 1012, FilledQty: &openFilled,
+		OrderID: "open-1", Status: "FILLED",
+	}); err != nil {
+		t.Fatalf("seed OPEN leg: %v", err)
+	}
+	closeFilled := 5.0
+	if err := s.CreatePositionLeg(ctx, &pgstore.PositionLeg{
+		PositionID: posID, LegNo: 0, Phase: "CLOSE", AttemptNo: 1, Venue: "gate:perp",
+		Symbol: "CL_USDT", Side: "SELL", Qty: 1012, OrderID: "close-partial",
+		Status: "FILLED", FilledQty: &closeFilled,
+	}); err != nil {
+		t.Fatalf("seed CLOSE leg: %v", err)
+	}
+
+	if err := p.closePositionCore(ctx, posID); err != nil {
+		t.Logf("closePositionCore err (expected, residual check): %v", err)
+	}
+	if exe.placeCount == 0 {
+		t.Fatal("placeCloseOrder 未被调用（应对残量发单）")
+	}
+	if want := 5.12; math.Abs(exe.lastQty-want) > 1e-9 {
+		t.Errorf("残量 closeQty=%.4f, want %.4f（EffectiveQty 10.12 − closeFilled 5.0；旧码按 qty=1012 得 1007）", exe.lastQty, want)
+	}
+}
+
+// TestClose_EffectiveQtyFull_NewRow D-311 R6：新时代 CEX 行无 CLOSE 腿 → 全量平仓
+// closeQty=EffectiveQty=10.12 基础币（勿按 qty=1012 合约数发单）。
+func TestClose_EffectiveQtyFull_NewRow(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE positions, position_legs, alerts, position_cashflows RESTART IDENTITY CASCADE`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	reg := NewRegistry()
+	exe := &fakeCountingExecutor{
+		venue: "gate:perp",
+		fill:  Fill{OrderID: "close-fill-1", Qty: 10.12, Price: 64.5},
+	}
+	reg.Register(exe)
+	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
+	p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{
+		"gate:perp": {{Symbol: "CL_USDT", Side: "BUY", PosSide: "long"}},
+	}}
+
+	var posID int64
+	if err := s.Pool().QueryRow(ctx, `
+		INSERT INTO positions (opportunity_id, type, status, opened_at)
+		VALUES ('XASSET:CLUSDT:gate:perp:3001157:mt5', 'XASSET_CARRY', 'CLOSING', NOW())
+		RETURNING id`).Scan(&posID); err != nil {
+		t.Fatalf("seed position: %v", err)
+	}
+	openFilled := 10.12
+	if err := s.CreatePositionLeg(ctx, &pgstore.PositionLeg{
+		PositionID: posID, LegNo: 0, Phase: "OPEN", Venue: "gate:perp",
+		Symbol: "CL_USDT", Side: "BUY", Qty: 1012, FilledQty: &openFilled,
+		OrderID: "open-1", Status: "FILLED",
+	}); err != nil {
+		t.Fatalf("seed OPEN leg: %v", err)
+	}
+
+	if err := p.closePositionCore(ctx, posID); err != nil {
+		t.Logf("closePositionCore err (expected): %v", err)
+	}
+	if exe.placeCount == 0 {
+		t.Fatal("placeCloseOrder 未被调用")
+	}
+	if want := 10.12; math.Abs(exe.lastQty-want) > 1e-9 {
+		t.Errorf("closeQty=%.4f, want %.4f（EffectiveQty=filled_qty 基础币；旧码按 qty=1012 合约数）", exe.lastQty, want)
+	}
+}
+
+// TestResume_BackfillCloseUsesEffectiveQty D-311 R6：broker 已无腿 → backfillCloseFromHistory
+// 写 CLOSE 腿 Qty=EffectiveQty（成交口径 10.12），勿落 qty=1012 合约数。
+func TestResume_BackfillCloseUsesEffectiveQty(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE positions, position_legs, alerts, position_cashflows RESTART IDENTITY CASCADE`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	reg := NewRegistry()
+	reg.Register(&fakeCountingExecutor{venue: "gate:perp", fill: Fill{OrderID: "x", Qty: 1, Price: 64.5}})
+	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
+	p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{"gate:perp": {}}} // broker 已无腿
+	p.SetPnLCalibrator(&fakePnLCalibrator{results: map[string]*HistoryPnL{
+		"gate:perp:open-1": {Profit: 1.0, ClosePrice: 64.5},
+	}})
+
+	var posID int64
+	if err := s.Pool().QueryRow(ctx, `
+		INSERT INTO positions (opportunity_id, type, status, opened_at)
+		VALUES ('XASSET:CLUSDT:gate:perp:3001157:mt5', 'XASSET_CARRY', 'CLOSING', NOW())
+		RETURNING id`).Scan(&posID); err != nil {
+		t.Fatalf("seed position: %v", err)
+	}
+	openFilled := 10.12
+	if err := s.CreatePositionLeg(ctx, &pgstore.PositionLeg{
+		PositionID: posID, LegNo: 0, Phase: "OPEN", Venue: "gate:perp",
+		Symbol: "CL_USDT", Side: "BUY", Qty: 1012, FilledQty: &openFilled,
+		OrderID: "open-1", Status: "FILLED",
+	}); err != nil {
+		t.Fatalf("seed OPEN leg: %v", err)
+	}
+
+	if err := p.closePositionCore(ctx, posID); err != nil {
+		t.Logf("closePositionCore err (expected): %v", err)
+	}
+	legs, err := s.ListPositionLegs(ctx, posID)
+	if err != nil {
+		t.Fatalf("list legs: %v", err)
+	}
+	var closeLeg *pgstore.PositionLeg
+	for i := range legs {
+		if legs[i].Phase == "CLOSE" {
+			closeLeg = &legs[i]
+		}
+	}
+	if closeLeg == nil {
+		t.Fatal("backfill CLOSE leg 未写入")
+	}
+	if want := 10.12; math.Abs(closeLeg.Qty-want) > 1e-9 {
+		t.Errorf("backfill CLOSE leg qty=%.4f, want %.4f（EffectiveQty=成交基础币；旧码落 qty=1012 合约数）", closeLeg.Qty, want)
+	}
+}
+
+// TestAutoFlatten_EffectiveQtyFallback D-311 R6：auto-flatten fill.Qty≤0 兜底写 CLOSE 腿
+// Qty=dbLeg.EffectiveQty()（10.12 基础币），勿落 qty=1012 合约数。
+func TestAutoFlatten_EffectiveQtyFallback(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE positions, position_legs, alerts, position_cashflows RESTART IDENTITY CASCADE`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	reg := NewRegistry()
+	// fill.Qty=0 → 触发 EffectiveQty 兜底。
+	reg.Register(&fakeCountingExecutor{venue: "gate:perp", fill: Fill{OrderID: "flat-1", Qty: 0, Price: 64.5}})
+	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
+
+	var posID int64
+	if err := s.Pool().QueryRow(ctx, `
+		INSERT INTO positions (opportunity_id, type, status, opened_at)
+		VALUES ('XASSET:CLUSDT:gate:perp:3001157:mt5', 'XASSET_CARRY', 'LEGGED', NOW())
+		RETURNING id`).Scan(&posID); err != nil {
+		t.Fatalf("seed position: %v", err)
+	}
+	openFilled := 10.12
+	if err := s.CreatePositionLeg(ctx, &pgstore.PositionLeg{
+		PositionID: posID, LegNo: 0, Phase: "OPEN", Venue: "gate:perp",
+		Symbol: "CL_USDT", Side: "BUY", Qty: 1012, FilledQty: &openFilled,
+		OrderID: "open-1", Status: "FILLED",
+	}); err != nil {
+		t.Fatalf("seed OPEN leg: %v", err)
+	}
+
+	legs := []LegSpec{{VenueKey: "gate:perp", VenueSymbol: "CL_USDT", Side: "BUY", Qty: 1012, PriceExpected: 63.5}}
+	results := []LegResult{{VenueKey: "gate:perp", OrderID: "open-1", Price: 63.5, Qty: 10.12, Status: "FILLED"}}
+	if _, err := p.autoFlattenLEGGED(ctx, posID, legs, results); err != nil {
+		t.Logf("autoFlattenLEGGED err (expected, cashflow): %v", err)
+	}
+	dbLegs, err := s.ListPositionLegs(ctx, posID)
+	if err != nil {
+		t.Fatalf("list legs: %v", err)
+	}
+	var closeLeg *pgstore.PositionLeg
+	for i := range dbLegs {
+		if dbLegs[i].Phase == "CLOSE" {
+			closeLeg = &dbLegs[i]
+		}
+	}
+	if closeLeg == nil {
+		t.Fatal("flatten CLOSE leg 未写入")
+	}
+	if want := 10.12; math.Abs(closeLeg.Qty-want) > 1e-9 {
+		t.Errorf("flatten CLOSE leg qty=%.4f, want %.4f（EffectiveQty 兜底；旧码 r.Qty 虽同值但语义非持久化口径）", closeLeg.Qty, want)
+	}
+}

@@ -62,7 +62,7 @@ func (r *Reconciler) autoClose(
 		Account:       goneLeg.Account,
 		Symbol:        goneLeg.Symbol,
 		Side:          closeSide,
-		Qty:           goneLeg.Qty,
+		Qty:           goneLeg.EffectiveQty(), // D-311 R6：回填成交量口径（CEX=基础币）
 		PriceExpected: goneLeg.PriceExpected,
 		PriceActual:   &closePrice,
 		OrderID:       goneLeg.OrderID, // 原 ticket（venue 侧已平，无新单号）
