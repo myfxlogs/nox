@@ -602,6 +602,8 @@ type Opportunity struct {
 	VerifySamples int32   `protobuf:"varint,26,opt,name=verify_samples,json=verifySamples,proto3" json:"verify_samples,omitempty"` // 验证样本数
 	AliasBuy      string  `protobuf:"bytes,27,opt,name=alias_buy,json=aliasBuy,proto3" json:"alias_buy,omitempty"`                 // D-175：买腿别名（空=回退 venue_buy）
 	AliasSell     string  `protobuf:"bytes,28,opt,name=alias_sell,json=aliasSell,proto3" json:"alias_sell,omitempty"`              // D-175：卖腿别名（空=回退 venue_sell）
+	AssetClass    string  `protobuf:"bytes,29,opt,name=asset_class,json=assetClass,proto3" json:"asset_class,omitempty"`           // D-300：跨标的同质资产类（XASSET_CARRY 填，如 GOLD；其余类型空）
+	CanonicalSell string  `protobuf:"bytes,30,opt,name=canonical_sell,json=canonicalSell,proto3" json:"canonical_sell,omitempty"`  // D-300：卖腿 canonical（XASSET_CARRY 跨 canonical 配对填；其余类型空=与买腿同）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -828,6 +830,20 @@ func (x *Opportunity) GetAliasBuy() string {
 func (x *Opportunity) GetAliasSell() string {
 	if x != nil {
 		return x.AliasSell
+	}
+	return ""
+}
+
+func (x *Opportunity) GetAssetClass() string {
+	if x != nil {
+		return x.AssetClass
+	}
+	return ""
+}
+
+func (x *Opportunity) GetCanonicalSell() string {
+	if x != nil {
+		return x.CanonicalSell
 	}
 	return ""
 }
@@ -17764,7 +17780,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x05limit\x18\x04 \x01(\x05R\x05limit\x12\x16\n" +
 	"\x06offset\x18\x05 \x01(\x05R\x06offset\"A\n" +
 	"\x11ListFactsResponse\x12,\n" +
-	"\x05facts\x18\x01 \x03(\v2\x16.arb.dashboard.v1.FactR\x05facts\"\xa6\b\n" +
+	"\x05facts\x18\x01 \x03(\v2\x16.arb.dashboard.v1.FactR\x05facts\"\xee\b\n" +
 	"\vOpportunity\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x1b\n" +
@@ -17802,7 +17818,10 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x0everify_samples\x18\x1a \x01(\x05R\rverifySamples\x12\x1b\n" +
 	"\talias_buy\x18\x1b \x01(\tR\baliasBuy\x12\x1d\n" +
 	"\n" +
-	"alias_sell\x18\x1c \x01(\tR\taliasSellB\x11\n" +
+	"alias_sell\x18\x1c \x01(\tR\taliasSell\x12\x1f\n" +
+	"\vasset_class\x18\x1d \x01(\tR\n" +
+	"assetClass\x12%\n" +
+	"\x0ecanonical_sell\x18\x1e \x01(\tR\rcanonicalSellB\x11\n" +
 	"\x0f_breakeven_days\"\\\n" +
 	"\x18ListOpportunitiesRequest\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x14\n" +
