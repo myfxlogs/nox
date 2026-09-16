@@ -14,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -38,6 +39,21 @@ const (
 	SwapModeAnnualPct                      // 年化百分比：S% / 365（mode 5/6）
 	SwapModeUncalibrated                   // 未标定 / 矛盾数据：跳过 + 计数日志（mode 7/8/10+）
 )
+
+// swapFreeServerPrefixes swap-free 账单豁免白名单（server 前缀匹配，D-300 S0 定案）。
+// 白名单内 venue 全品种 swap 置 0——规格字段（含名义标价）不代表账单实收。
+// 新增 venue 须业主确认账单层豁免后追加；删改走 D# 留痕。
+var swapFreeServerPrefixes = []string{"Exness"}
+
+// swapFreeServer 判断 MT server 是否属 swap-free 豁免白名单（大小写不敏感前缀）。
+func swapFreeServer(server string) bool {
+	for _, p := range swapFreeServerPrefixes {
+		if len(server) >= len(p) && strings.EqualFold(server[:len(p)], p) {
+			return true
+		}
+	}
+	return false
+}
 
 // normalizeSwapBpsDaily 归一单方向 swap 原始值为日 bps（正=收，负=付）。
 // ok=false 表示缺价格或未标定，调用方跳过该 Fact。
@@ -203,6 +219,14 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 			// trade_mode 不依赖 swap 标定（D-060 F3）：emit/emit0/标定 skip 的符号都发。
 			slot.facts = append(slot.facts, tradeModeFact(a.venue, canon, sg.GetTradeMode(), "mt5"))
 			mode := mt5SwapModeForVenue(a.venue, sg.GetSwapType(), sg.GetSwapLong(), sg.GetSwapShort())
+			// D-300 S0 定案（业主 2026-09-16 两轮断言+规格直连亲证）：Exness swap-free 营销
+			// ——规格字段系名义标价、账单不执行（XAUUSDm SwapLong=-534.9 但实收 0）。
+			// 白名单 venue 全品种 swap 置 0 发射（走 SwapModeNone 零值路径——零息 venue 是 carry
+			// 最佳对手的 facts 语义保留）；同时消解 m 后缀品种折叠对标准 canonical 的名义值污染
+			// （Exness-MT5Real 3001157 XAUUSD canonical 曾被 XAUUSDm 名义 swap 污染为 -1.2481 bps/day）。
+			if swapFreeServer(a.server) && mode != SwapModeNone {
+				mode = SwapModeNone // 下游 switch 自动按 emit0 计数（零值路径），此处只覆盖 mode
+			}
 			if mode == SwapModeUncalibrated {
 				slot.uncoveredRaw = int32(sg.GetSwapType())
 				slot.hasUncovered = true
