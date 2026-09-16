@@ -5,6 +5,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"arb/migrations"
 )
 
 // assetEquivTestStore 复用 testStore 基建（prepareTestSchema 全量迁移含 0097 种子）。
@@ -166,5 +168,33 @@ func TestAssetEquivProvider_PartnersXauusdt(t *testing.T) {
 		if !found {
 			t.Fatalf("Partners(%q)=%v want contains XAUUSDT", canonical, got)
 		}
+	}
+}
+
+// TestMigration0100_T1Promotion D-308：迁移 0100 台账+种子行锚——
+// schema_migrations version=100（防 embed/migrate 漏登记假绿，同 D-303 先例）；
+// 前序测试会 TRUNCATE asset_equiv，故幂等重放迁移 SQL 再断言行（兼验文件内容可执行）。
+func TestMigration0100_T1Promotion(t *testing.T) {
+	s := assetEquivTestStore(t)
+	ctx := context.Background()
+	var one int
+	if err := s.pool.QueryRow(ctx, `SELECT 1 FROM schema_migrations WHERE version = 100`).Scan(&one); err != nil {
+		t.Fatalf("schema_migrations version=100 missing: %v", err)
+	}
+	if _, err := s.pool.Exec(ctx, migrations.T1PromotionSQL); err != nil {
+		t.Fatalf("replay 0100: %v", err)
+	}
+	var n int
+	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM asset_equiv WHERE asset_class = 'WTI'`).Scan(&n); err != nil {
+		t.Fatalf("count WTI: %v", err)
+	}
+	if n != 4 {
+		t.Fatalf("WTI class want 4 members（CLUSDT/CL-USDT-SWAP/CL_USDT/WTI）, got %d", n)
+	}
+	if err := s.pool.QueryRow(ctx, `SELECT 1 FROM asset_equiv WHERE asset_class='GOLD' AND canonical='XAU-USDT-SWAP' AND venue='okx'`).Scan(&one); err != nil {
+		t.Fatalf("GOLD okx leg missing: %v", err)
+	}
+	if err := s.pool.QueryRow(ctx, `SELECT 1 FROM broker_symbol_map WHERE venue='3001157' AND broker_symbol='XAGUSDm' AND canonical='XAGUSD'`).Scan(&one); err != nil {
+		t.Fatalf("broker_symbol_map XAGUSDm missing: %v", err)
 	}
 }

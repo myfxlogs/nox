@@ -241,3 +241,6 @@ var XauusdtGoldSQL string
 
 //go:embed 0099_cex_universe.sql
 var CexUniverseSQL string
+
+//go:embed 0100_t1_promotion.sql
+var T1PromotionSQL string
