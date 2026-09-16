@@ -1,6 +1,7 @@
 // D-299 PAXG-XAU 跨市场套利监控脚本（独立工具，cron 调度）。
+// 9-16 业主并存裁定：PAXG+XAUT 两对都监控（XAUTUSDT=Tether Gold 永续，funding 当前更高）。
 //
-// 流程：拉 Binance PAXG 合约 bid/ask + funding rate（走 cex-proxy，httpx.Client 自动注入 CA+token）
+// 流程：拉 Binance 黄金代币合约 bid/ask + funding rate（走 cex-proxy，httpx.Client 自动注入 CA+token）
 // → 读 Exness XAU tick 最新行 → 算价差/净收益/跟踪误差 → 入库 fin_xasset_monitor
 // → 超阈值飞书告警。不自动下单，只监控+纸面交易支撑。
 package main
@@ -51,17 +52,31 @@ func run(ctx context.Context) error {
 	defer st.Close()
 	pool := st.Pool()
 
-	// 拉 Binance PAXG 合约 bid/ask + funding rate（httpx.Client 自动带 CA + X-Proxy-Token）。
 	hc := httpx.Client()
-	bid, ask, fundingRate, err := fetchBinancePAXG(ctx, hc, proxyURL)
-	if err != nil {
-		return fmt.Errorf("fetch binance: %w", err)
-	}
 
 	// 读 Exness XAU tick 最新行。
 	exBid, exAsk, err := latestExnessXAU(ctx, pool, exnessVenue)
 	if err != nil {
 		return fmt.Errorf("read exness tick: %w", err)
+	}
+
+	// 9-16 业主并存裁定：PAXG+XAUT 两对逐对 fail-open（一对失败不拖累另一对，同 S2 funding 口径）。
+	var firstErr error
+	for _, p := range []struct{ sym, pair string }{{"PAXGUSDT", "PAXG-XAU"}, {"XAUTUSDT", "XAUT-XAU"}} {
+		if err := runPair(ctx, st, hc, proxyURL, p.sym, p.pair, exBid, exAsk); err != nil {
+			log.Printf("xasset-monitor: pair=%s 失败: %v", p.pair, err)
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}
+
+func runPair(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL, sym, pair string, exBid, exAsk float64) error {
+	bid, ask, fundingRate, err := fetchBinanceGold(ctx, hc, proxyURL, sym)
+	if err != nil {
+		return fmt.Errorf("fetch binance %s: %w", sym, err)
 	}
 
 	// 算指标（口径分离 D1）。
@@ -71,13 +86,13 @@ func run(ctx context.Context) error {
 	exnessSpread := (exAsk - exBid) / exAsk * 10000
 	entryNet := entrySpread - binanceMakerCostBps - exnessSpread
 	fundingAnnualPct := fundingRate * 3 * 365 * 100
-	paxgMid := (bid + ask) / 2
+	tokenMid := (bid + ask) / 2
 	xauMid := (exBid + exAsk) / 2
-	trackingErr := math.Abs(paxgMid-xauMid) / xauMid * 10000
+	trackingErr := math.Abs(tokenMid-xauMid) / xauMid * 10000
 	equivAnnual := entryNet/100 + fundingAnnualPct
 
 	rec := &pgstore.XassetMonitor{
-		Pair:             "PAXG-XAU",
+		Pair:             pair,
 		BinanceBid:       bid,
 		BinanceAsk:       ask,
 		ExnessBid:        exBid,
@@ -115,8 +130,8 @@ type binancePremiumIndex struct {
 	LastFundingRate string `json:"lastFundingRate"`
 }
 
-func fetchBinancePAXG(ctx context.Context, hc *http.Client, proxyURL string) (bid, ask, fundingRate float64, err error) {
-	bt, err := fetchJSON(ctx, hc, proxyURL+"/fapi/v1/ticker/bookTicker?symbol=PAXGUSDT")
+func fetchBinanceGold(ctx context.Context, hc *http.Client, proxyURL, symbol string) (bid, ask, fundingRate float64, err error) {
+	bt, err := fetchJSON(ctx, hc, proxyURL+"/fapi/v1/ticker/bookTicker?symbol="+symbol)
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf("bookTicker: %w", err)
 	}
@@ -128,7 +143,7 @@ func fetchBinancePAXG(ctx context.Context, hc *http.Client, proxyURL string) (bi
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf("parse askPrice: %w", err)
 	}
-	pi, err := fetchJSONPremium(ctx, hc, proxyURL+"/fapi/v1/premiumIndex?symbol=PAXGUSDT")
+	pi, err := fetchJSONPremium(ctx, hc, proxyURL+"/fapi/v1/premiumIndex?symbol="+symbol)
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf("premiumIndex: %w", err)
 	}
@@ -243,7 +258,7 @@ func sendFeishuAlert(ctx context.Context, st *pgstore.Store, alerts []alertItem,
 		log.Printf("xasset-monitor: chat_id 未绑定，告警跳过（%d 项）", len(alerts))
 		return
 	}
-	text := fmt.Sprintf("[PAXG-XAU 监控] %d 项告警\n", len(alerts))
+	text := fmt.Sprintf("[%s 监控] %d 项告警\n", rec.Pair, len(alerts))
 	for _, a := range alerts {
 		text += fmt.Sprintf("• %s: %.4f (阈值 %s %.4f)\n", a.name, a.val, a.op, a.thr)
 	}
