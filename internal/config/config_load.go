@@ -89,7 +89,6 @@ func Load() *Config {
 		SwapReconcileDeviationPct:  envFloat("ARB_SWAP_RECONCILE_DEVIATION_PCT", 10.0), // D-110 P2
 		MTDisasterSlPct:            envFloat("ARB_MT_DISASTER_SL_PCT", 2.0),            // D-146 S1 broker 端灾难 SL
 		SwapNonSettleVenues:        envStringSlice("ARB_SWAP_NON_SETTLE_VENUES"),       // D-112
-		SwapFreeVenues:             envStringList("ARB_SWAP_FREE_VENUES", "3001157"),   // D-300 裁 9：Exness swap-free（账号键）
 		SwapArbComboLossLimit:      envInt("ARB_SWAPARB_COMBO_LOSS_LIMIT", 3),          // D-256-A S4
 		SwapArbComboLossWindowDays: envInt("ARB_SWAPARB_COMBO_LOSS_WINDOW_DAYS", 30),   // D-256-A S4
 		SwapArbRevivalBps:          envFloat("ARB_SWAPARB_REVIVAL_ALERT_BPS", 2.2),     // D-256-A S5

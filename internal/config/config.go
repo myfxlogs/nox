@@ -44,9 +44,6 @@ type Config struct {
 	//（broker 周末置 Disabled 不跨周末误杀周一；venue 服务端拒单是最终权威）。
 	TradeModeTTL       time.Duration
 	MaxLegImbalancePct float64 // 卖腿名义不平衡上限（百分比，D-028/D-060 实施修正②）
-	// SwapFreeVenues swap-free venue 白名单（D-300 裁 9 消费侧豁免）：
-	// facts 名义值对这些 venue 置 0 读出。venue=Fact.Venue 键（MT 类=账号 ID）。
-	SwapFreeVenues []string
 
 	// === 复盘闭环（§13.6，D-034）===
 	ReviewMinSamples         int     // 聚合出调参建议的最小样本数（防单笔噪声）
