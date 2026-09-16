@@ -88,3 +88,21 @@ func TestEvaluateXAssetCarry_XauusdtSlip(t *testing.T) {
 		t.Fatalf("SlippageCost = %v, want ~2.0（MT 1.0 + XAUUSDT 1.0）", r.SlippageCost)
 	}
 }
+
+// TestSlipBpsForCEX_D308Tiers D-308 滑点分级表锚：binance 主力所按量分档（CL/BZ/XAG=2.0、
+// COPPER=5.0、XPT/XPD=8.0），跨所与指数薄盘全 8.0；漏项会静默回落默认 3.0 故逐档断言。
+func TestSlipBpsForCEX_D308Tiers(t *testing.T) {
+	for sym, want := range map[string]float64{
+		"CLUSDT": 2.0, "BZUSDT": 2.0, "XAGUSDT": 2.0,
+		"COPPERUSDT": 5.0,
+		"XPTUSDT":    8.0, "XPDUSDT": 8.0,
+		"XAG-USDT-SWAP": 8.0, "XAG_USDT": 8.0, "CL-USDT-SWAP": 8.0, "CL_USDT": 8.0,
+		"BZ-USDT-SWAP": 8.0, "BZ_USDT": 8.0, "XPT-USDT-SWAP": 8.0, "XPT_USDT": 8.0,
+		"XPD-USDT-SWAP": 8.0, "XPD_USDT": 8.0, "NAS100_USDT": 8.0, "US30_USDT": 8.0,
+		"SPX500_USDT": 8.0, "JP225-USDT-SWAP": 8.0,
+	} {
+		if got := slipBpsForCEX(sym); got != want {
+			t.Errorf("slipBpsForCEX(%q) = %v, want %v", sym, got, want)
+		}
+	}
+}

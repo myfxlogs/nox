@@ -221,6 +221,28 @@ var cexSlipBpsByCanonical = map[string]float64{
 	"XAUTUSDT": 8.0,
 	// D-303：XAUUSDT 金价指数永续——±10bps 盘口 $2M+/$100k taker ≤0.3bps 实测 → 一线 1.0
 	"XAUUSDT": 1.0,
+	// D-308 雷达量分级，待实盘滑点实测修正：binance 主力所按 24h 量分档。
+	"CLUSDT":     2.0, // >$500M
+	"BZUSDT":     2.0,
+	"XAGUSDT":    2.0,
+	"COPPERUSDT": 5.0, // $31M
+	"XPTUSDT":    8.0, // <$10M 薄
+	"XPDUSDT":    8.0,
+	// D-308 跨所腿与指数薄盘保守全 8.0
+	"XAG-USDT-SWAP":   8.0,
+	"XAG_USDT":        8.0,
+	"CL-USDT-SWAP":    8.0,
+	"CL_USDT":         8.0,
+	"BZ-USDT-SWAP":    8.0,
+	"BZ_USDT":         8.0,
+	"XPT-USDT-SWAP":   8.0,
+	"XPT_USDT":        8.0,
+	"XPD-USDT-SWAP":   8.0,
+	"XPD_USDT":        8.0,
+	"NAS100_USDT":     8.0,
+	"US30_USDT":       8.0,
+	"SPX500_USDT":     8.0,
+	"JP225-USDT-SWAP": 8.0,
 }
 
 // slipBpsForCEX 返回 CEX 品种的单腿滑点 bps（品种表命中→分级值；未知→cexSlipDefaultBps）。
