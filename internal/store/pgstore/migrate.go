@@ -92,8 +92,7 @@ var migrationFiles = []struct {
 	{94, migrations.TrxVoteAprMinRateSQL},              // D-297 TRX 投票 APR 加 min_rate/min_sr 列
 	{95, migrations.XassetMonitorSQL},                  // D-299 PAXG-XAU 跨市场套利监控快照
 	{96, migrations.EventCasesPaperTradesSQL},          // D-274 事件驱动研判引擎：event_cases + paper_trades
-	{97, migrations.XassetCarrySQL},                    // D-300 跨标的同质资产套利：asset_equiv + opportunities XASSET_CARRY
-	{98, migrations.XassetXautSQL},                     // D-300 增量：GOLD 挂 XAUTUSDT（业主 9-16 并存裁定）
+	{97, migrations.XassetCarrySQL},                    // D-300 跨标的同质资产套利：asset_equiv + opportunities XASSET_CARRY（种子 GOLD=PAXG+XAUT+XAU 三行，裁 12 并入）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

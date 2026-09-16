@@ -11,9 +11,11 @@ CREATE TABLE asset_equiv (
 );
 CREATE INDEX idx_asset_equiv_class ON asset_equiv(asset_class) WHERE enabled;
 
--- v1 只注册 PAXG-XAU 一对（裁 8：XAU venue=Exness 实盘账号 3001157，非 'exness'）
+-- v1 注册 GOLD=PAXG+XAUT+XAU 三 canonical（裁 8：XAU venue=Exness 实盘账号 3001157，非 'exness'；
+-- 9-16 业主并存裁定+决策席裁 10/12：XAUT 并入本迁移，配对=PAXG-XAU/XAUT-XAU/PAXG-XAUT 三对）
 INSERT INTO asset_equiv (asset_class, canonical, venue_type, venue) VALUES
   ('GOLD', 'PAXGUSDT', 'perp', 'binance'),
+  ('GOLD', 'XAUTUSDT', 'perp', 'binance'),
   ('GOLD', 'XAUUSD', 'mt5', '3001157');
 
 -- D-300 opportunities 扩展：XASSET_CARRY type + asset_class + canonical_sell（卖腿 canonical）

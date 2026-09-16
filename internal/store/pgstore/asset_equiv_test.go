@@ -13,7 +13,7 @@ func assetEquivTestStore(t *testing.T) *Store {
 	return testStore(t)
 }
 
-// TestListAssetEquiv_SeedRows 迁移 0097 种子两行在库（裁 8：XAU venue=3001157）。
+// TestListAssetEquiv_SeedRows 迁移 0097 种子三行在库（裁 8：XAU venue=3001157；裁 12：XAUT 并入 0097）。
 func TestListAssetEquiv_SeedRows(t *testing.T) {
 	s := assetEquivTestStore(t)
 	ctx := context.Background()
@@ -21,29 +21,29 @@ func TestListAssetEquiv_SeedRows(t *testing.T) {
 		t.Fatalf("truncate: %v", err)
 	}
 	if _, err := s.pool.Exec(ctx, `INSERT INTO asset_equiv (asset_class, canonical, venue_type, venue) VALUES
-		('GOLD','PAXGUSDT','perp','binance'),('GOLD','XAUUSD','mt5','3001157')`); err != nil {
+		('GOLD','PAXGUSDT','perp','binance'),('GOLD','XAUTUSDT','perp','binance'),('GOLD','XAUUSD','mt5','3001157')`); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	rows, err := s.ListAssetEquiv(ctx)
 	if err != nil {
 		t.Fatalf("ListAssetEquiv: %v", err)
 	}
-	if len(rows) != 2 {
-		t.Fatalf("want 2 rows, got %d", len(rows))
+	if len(rows) != 3 {
+		t.Fatalf("want 3 rows, got %d", len(rows))
 	}
 	if rows[0].AssetClass != "GOLD" {
 		t.Fatalf("asset_class=%q", rows[0].AssetClass)
 	}
 	// enabled=false 行不出现
 	if _, err := s.pool.Exec(ctx, `INSERT INTO asset_equiv (asset_class, canonical, venue_type, venue, enabled) VALUES
-		('GOLD','XAUTUSDT','perp','binance',false)`); err != nil {
+		('GOLD','XAGUSD','mt5','3001157',false)`); err != nil {
 		t.Fatalf("insert disabled: %v", err)
 	}
 	rows, err = s.ListAssetEquiv(ctx)
 	if err != nil {
 		t.Fatalf("ListAssetEquiv2: %v", err)
 	}
-	if len(rows) != 2 {
+	if len(rows) != 3 {
 		t.Fatalf("disabled row leaked: got %d rows", len(rows))
 	}
 }
