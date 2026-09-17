@@ -28,6 +28,11 @@ func TestTableMaxTs_WhitelistHit(t *testing.T) {
 	s := tableHealthTestStore(t)
 	ctx := context.Background()
 
+	// D-316①：TRUNCATE 自隔离——全量包跑时先行测试经 pgstore API 插入的 now 行会污染
+	// max(ts) 精确断言（master 全量同红实证、-run 子集绿=D-301a 验收未暴露）。
+	if _, err := s.pool.Exec(ctx, "TRUNCATE fin_cex_spread"); err != nil {
+		t.Fatalf("TRUNCATE fin_cex_spread: %v", err)
+	}
 	// 插入一行 fin_cex_spread → max(ts) 应返回该时间戳。
 	ts := time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)
 	if _, err := s.pool.Exec(ctx,
