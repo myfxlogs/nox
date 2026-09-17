@@ -62,7 +62,7 @@ func (s *Service) ListOpportunities(ctx context.Context, req *connect.Request[v1
 	}
 	var pbOpps []*v1.Opportunity
 	for _, o := range opps {
-		pbOpps = append(pbOpps, s.oppToProto(&o))
+		pbOpps = append(pbOpps, s.oppToProto(ctx, &o))
 	}
 	return connect.NewResponse(&v1.ListOpportunitiesResponse{Opportunities: pbOpps}), nil
 }
