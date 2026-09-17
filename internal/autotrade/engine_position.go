@@ -33,8 +33,9 @@ func (e *Engine) checkExitCondition(ctx context.Context, p *pgstore.Position) (b
 		return false, ""
 	}
 	// 息差型：按 swap/funding 子分派（IsCarryType 已判定为息差家族，此处只区分 swap vs funding）
-	// D-311 S5：XASSET_CARRY 专属分支——跨 canonical 逐腿泛化净收入（perp=funding、MT=swap），
-	// 不复用 recalcNetFunding 的 long−short 口径（疑似存量反向，另列 D-312 待裁）。
+	// D-311 S5：XASSET_CARRY 专属分支——跨 canonical 逐腿泛化净收入（perp=funding、MT=swap）。
+	// 不复用 recalcNetFunding：XASSET 需跨 canonical（卖腿 canonical_sell）+ MT 腿 swap 泛化
+	// （recalcNetFunding 的 long−short 反向口径已由 D-312 修复为逐腿 :perp 净收入）。
 	// 退出判定复用 perpFundingExitDecision（持有下限+连续去抖+fail-closed，同一把 fundingMu）。
 	if p.Type == "XASSET_CARRY" {
 		netCarry, ok := e.recalcXAssetNetCarry(ctx, p)
