@@ -35,7 +35,9 @@ const (
 	// +1（D-216 幽灵 venue）即超；40960 覆盖 ~120 条，grep 检索面仍廉价（<40KB）。
 	// 2026-09-09 40960→49152：+1 条目（state-table-stats-need-replay-or-snapshot）达 41478B 结构性触顶；
 	// 49152 覆盖 ~135 条，同因第七次上浮，grep 检索面仍廉价（<48KB）。
-	maxBytes    = 49152
+	// 2026-09-17 49152→57344：+1 条目（funding-rate-sign-needs-leg-side，D-322）达 49415B 结构性触顶；
+	// 57344 覆盖 ~155 条，同因第八次上浮，grep 检索面仍廉价（<56KB）。
+	maxBytes    = 57344
 	maxKeywords = 5
 )
 
