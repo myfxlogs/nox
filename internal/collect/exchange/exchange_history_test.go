@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -188,19 +189,25 @@ func TestFundingHistoryFailOpen(t *testing.T) {
 	}
 
 	// OKX：PGFAIL 首页 100 条（触发翻页）第二页 400 → 整符号弃置零产出；BTC 正常。
+	// R1 §6.2c：翻页检测改按 instId 请求计数（第二请求 400），与方向参数解耦——
+	// 页 canned fundingTime 取 now-24h（> start=now-30d），对齐真实 API「只回 before 之后」语义，
+	// S4 向前游标下翻页才会真正发生。
+	pgfailReqs := 0
 	okxSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		switch q.Get("instId") {
 		case "COPPER-USDT-SWAP":
 			w.WriteHeader(http.StatusBadRequest)
 		case "PGFAIL-USDT-SWAP":
-			if q.Get("after") != "" { // D-321 S1 修后翻页游标=after：第二页失败
+			pgfailReqs++
+			if pgfailReqs >= 2 { // 第二请求=翻页请求：失败
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
+			ft := strconv.FormatInt(time.Now().Add(-24*time.Hour).UnixMilli(), 10)
 			page := make([]map[string]any, 100)
 			for i := range page {
-				page[i] = map[string]any{"fundingRate": "0.0001", "fundingTime": "1788163200000"}
+				page[i] = map[string]any{"fundingRate": "0.0001", "fundingTime": ft}
 			}
 			json.NewEncoder(w).Encode(map[string]any{"code": "0", "data": page})
 		default:
@@ -253,8 +260,9 @@ func TestStartTS_Incremental(t *testing.T) {
 // okxPageReq 记录一次 funding-rate-history 请求的方向参数（T1/T2 断言用）。
 type okxPageReq struct{ before, after string }
 
-// okxRealSemanticsHandler 按真实 OKX 语义 mock funding-rate-history（D-321 API 实证：
-// before=X 只回「更新于 X」、after=X 只回「早于 X」，降序返回，limit 截断）；
+// okxRealSemanticsHandler 按真实 OKX 语义 mock funding-rate-history。
+// D-321 R1 §6.1 勘误（OKX 直连探测实证）：before=X 返回窗口 (X,∞) 的**最旧** limit 条切片
+// （降序尾部截断）——before 是向前翻页游标；after-only 取窗口最新 limit 条（降序首部截断）。
 // 周期探测端点回 8h 差值（与方向断言无关）。
 func okxRealSemanticsHandler(recs []map[string]any, reqs *[]okxPageReq) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -277,7 +285,7 @@ func okxRealSemanticsHandler(recs []map[string]any, reqs *[]okxPageReq) http.Han
 		if n, err := strconv.Atoi(q.Get("limit")); err == nil && n > 0 {
 			limit = n
 		}
-		out := make([]map[string]any, 0, limit)
+		var matches []map[string]any
 		for _, rec := range recs { // recs 须降序
 			ftMs, _ := strconv.ParseInt(rec["fundingTime"].(string), 10, 64)
 			if q.Get("before") != "" && ftMs <= beforeMs {
@@ -286,12 +294,16 @@ func okxRealSemanticsHandler(recs []map[string]any, reqs *[]okxPageReq) http.Han
 			if q.Get("after") != "" && ftMs >= afterMs {
 				continue
 			}
-			if len(out) == limit {
-				break
-			}
-			out = append(out, rec)
+			matches = append(matches, rec)
 		}
-		json.NewEncoder(w).Encode(map[string]any{"code": "0", "data": out})
+		if len(matches) > limit {
+			if q.Get("before") != "" {
+				matches = matches[len(matches)-limit:] // R1 勘误：before 窗口截最旧 limit 条（尾部）
+			} else {
+				matches = matches[:limit] // after-only 截最新 limit 条（首部）
+			}
+		}
+		json.NewEncoder(w).Encode(map[string]any{"code": "0", "data": matches})
 	}
 }
 
@@ -332,8 +344,10 @@ func TestOKXFundingHistory_IncrementalDirection(t *testing.T) {
 	}
 }
 
-// TestOKXFundingHistory_PagingWithinWindow D-321 T2：watermark 之后 >100 条须窗口内翻页——
-// 第二请求带 after=页1最旧，共产出 150 条全部新于 watermark 且无重。
+// TestOKXFundingHistory_PagingWithinWindow D-321 T2（R1 §6.2 断言翻转）：watermark 之后 >100 条
+// 须向前翻页——真实语义下页 1 回窗口最旧 100 条，页 2 请求 before==<页1最大 fundingTime>、
+// 全部请求无 after，共产出 150 条全部新于 watermark 且无重。
+// 失真 mock 修复后对现行码（after 翻页合成空集提前 break）先 RED：只产 100 条即停。
 func TestOKXFundingHistory_PagingWithinWindow(t *testing.T) {
 	t0 := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
 	t0ms := t0.UnixMilli()
@@ -356,11 +370,13 @@ func TestOKXFundingHistory_PagingWithinWindow(t *testing.T) {
 	if len(reqs) != 2 {
 		t.Fatalf("want 2 paged requests, got %d: %+v", len(reqs), reqs)
 	}
-	if reqs[0].before == "" || reqs[0].after != "" {
-		t.Errorf("page1 want before=<watermark> without after, got %+v", reqs[0])
+	// startTS 增量口径=watermark+1s（防重复）→ 页 1 before=wm+1000ms 而非 wm 本身
+	if want := strconv.FormatInt(t0ms+1000, 10); reqs[0].before != want || reqs[0].after != "" {
+		t.Errorf("page1 want before=<watermark+1s %s> without after, got %+v", want, reqs[0])
 	}
-	if want := recs[99]["fundingTime"]; reqs[1].after != want { // 页1最旧=第 100 新
-		t.Errorf("page2 want after=<page1 oldest %s>, got %+v", want, reqs[1])
+	// 页 1=窗口最旧 100 条（recs[50..149]），其最大=recs[50] → 页 2 before 推进到该值
+	if want := recs[50]["fundingTime"]; reqs[1].before != want || reqs[1].after != "" {
+		t.Errorf("page2 want before=<page1 max %s> without after, got %+v", want, reqs[1])
 	}
 	if len(out) != 150 {
 		t.Fatalf("want 150 facts, got %d", len(out))
@@ -459,4 +475,46 @@ func TestOKXFundingHistory_PeriodsProbe(t *testing.T) {
 			}
 		}
 	})
+}
+
+// TestOKXFundingHistory_NoProgressGuard D-321 T6d：API 恒定页（任意 before 恒回同一满页，
+// 页最大不推进）→ Poll 必须终止不挂死（S4 无进展保护）。
+// 5s ctx 兜底 + 请求数断言收敛：无保护码会恒定翻页空转直至 ctx 耗尽（请求数无界 → RED）。
+func TestOKXFundingHistory_NoProgressGuard(t *testing.T) {
+	t0 := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
+	t0ms := t0.UnixMilli()
+	const step = int64(8 * 3600 * 1000)
+	page := make([]map[string]any, 100) // 恒定满页：100 条降序、全 > watermark（handler 无视 before）
+	for i := range page {
+		page[i] = map[string]any{"fundingRate": "0.0001", "fundingTime": strconv.FormatInt(t0ms+int64(100-i)*step, 10)}
+	}
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v5/public/funding-rate" {
+			json.NewEncoder(w).Encode(map[string]any{"code": "0", "data": []map[string]any{
+				{"fundingTime": "1788998400000", "nextFundingTime": "1789027200000"},
+			}})
+			return
+		}
+		atomic.AddInt32(&calls, 1)
+		json.NewEncoder(w).Encode(map[string]any{"code": "0", "data": page}) // 恒定页：无视任何方向参数
+	}))
+	defer srv.Close()
+
+	resolver := func(context.Context, string, string) (time.Time, error) { return t0, nil }
+	cfg := Config{Symbols: []string{"BTC"}, OKXBaseURL: srv.URL, Client: srv.Client()}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := NewOKXFundingHistory(cfg, resolver).Poll(ctx)
+	if err != nil {
+		t.Fatalf("Poll must terminate without error: %v", err)
+	}
+	// S4：页 1 推进 bound 后，页 2 页最大==bound → break。请求数必须收敛（≤3 含容差）；
+	// 无保护实现会空转至 ctx 耗尽（calls 上千）。
+	if n := atomic.LoadInt32(&calls); n > 3 {
+		t.Errorf("no-progress guard failed: %d requests (unbounded paging), want <=3", n)
+	}
+	if len(out) == 0 {
+		t.Errorf("constant page should still yield facts before guard trips, got 0")
+	}
 }
