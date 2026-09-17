@@ -50,10 +50,12 @@ func (d *XAssetCarryDetector) Scan(_ context.Context, snapshot map[string]map[st
 	var funding map[string]map[string]float64
 	var swap map[string]map[string][2]float64
 	var modes map[string]map[string]int64
+	var realMap map[string]*bool
 	if fp != nil {
 		funding = fp.FundingFacts()
 		swap = fp.SwapFacts()
 		modes = fp.TradeModes()
+		realMap = fp.IsRealMap()
 	}
 	var out []Candidate
 	for class, entries := range d.AssetEquiv.ByClass() {
@@ -83,10 +85,10 @@ func (d *XAssetCarryDetector) Scan(_ context.Context, snapshot map[string]map[st
 							continue
 						}
 						// 正向：买 ca 卖 cb；反向：买 cb 卖 ca
-						if c := d.tryPair(class, ca, ea, qa, cb, eb, qb, funding, swap, modes, now); c != nil {
+						if c := d.tryPair(class, ca, ea, qa, cb, eb, qb, funding, swap, modes, realMap, now); c != nil {
 							out = append(out, *c)
 						}
-						if c := d.tryPair(class, cb, eb, qb, ca, ea, qa, funding, swap, modes, now); c != nil {
+						if c := d.tryPair(class, cb, eb, qb, ca, ea, qa, funding, swap, modes, realMap, now); c != nil {
 							out = append(out, *c)
 						}
 					}
@@ -98,18 +100,22 @@ func (d *XAssetCarryDetector) Scan(_ context.Context, snapshot map[string]map[st
 }
 
 // tryPair 评估一个方向：buy（按 ask 买 bc）/ sell（按 bid 卖 sc）。
-// 门槛序：新鲜度 → legTradable（裁 7 沿用，isRealPair v1 显式跳过——XAU 腿是 MT 非 CEX real pair）
+// 门槛序：新鲜度 → legTradable（裁 7 沿用）→ isRealPair（D-319：D-311 S7 起 IsRealMap=
+// MT 账户+CEX 合并视图，「XAU 腿是 MT 非 CEX real pair」的 v1 跳过理由失效，虚实同层配对）
 // → 跟踪误差 → 进场价差 → 净息差。
 func (d *XAssetCarryDetector) tryPair(
 	class, bc string, be AssetEquivEntry, bq bus.Quote,
 	sc string, se AssetEquivEntry, sq bus.Quote,
 	funding map[string]map[string]float64, swap map[string]map[string][2]float64,
-	modes map[string]map[string]int64, now time.Time,
+	modes map[string]map[string]int64, realMap map[string]*bool, now time.Time,
 ) *Candidate {
 	if stale(bq, now, d.FreshnessTTL) || stale(sq, now, d.FreshnessTTL) {
 		return nil
 	}
 	if !legTradable(modes, bc, bq.VenueKey(), true) || !legTradable(modes, sc, sq.VenueKey(), false) {
+		return nil
+	}
+	if !isRealPair(realMap, be.Venue, se.Venue) {
 		return nil
 	}
 	// 跟踪误差（§5.3）：分母=卖腿 mid（canonical_b 对应 sc）。
