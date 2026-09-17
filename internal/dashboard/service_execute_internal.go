@@ -126,6 +126,11 @@ func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, request
 	// D-087：typed 化（metaForType 按型构造 PositionMeta）
 	if result.PositionID > 0 {
 		_ = s.store.UpdatePositionMeta(ctx, result.PositionID, found.Type, metaForType(found.Type, found.NetBps))
+		// D-327 S1：XASSET_CARRY 补写成交价基准——metaForType 不产 EntrySpreadBps 且
+		// UpdatePositionMeta 无条件覆写该列，必须在 meta 之后补；IS NULL 幂等（已有不覆写）。
+		if found.Type == "XASSET_CARRY" {
+			_ = s.store.EnsureEntrySpreadFromLegs(ctx, result.PositionID)
+		}
 	}
 	return result.Status, "", result.PositionID
 }
@@ -273,6 +278,10 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 	}
 	if result.PositionID > 0 {
 		_ = s.store.UpdatePositionMeta(ctx, result.PositionID, strategyType, metaForType(strategyType, openBps))
+		// D-327 S1：XASSET_CARRY 补写成交价基准（同 :128 写点——meta 覆写后补，IS NULL 幂等）。
+		if strategyType == "XASSET_CARRY" {
+			_ = s.store.EnsureEntrySpreadFromLegs(ctx, result.PositionID)
+		}
 	}
 	return result.Status, "", result.PositionID
 }
