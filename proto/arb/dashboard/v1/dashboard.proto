@@ -252,6 +252,9 @@ message Opportunity {
   string alias_sell = 28;       // D-175：卖腿别名（空=回退 venue_sell）
   string asset_class = 29;      // D-300：跨标的同质资产类（XASSET_CARRY 填，如 GOLD；其余类型空）
   string canonical_sell = 30;   // D-300：卖腿 canonical（XASSET_CARRY 跨 canonical 配对填；其余类型空=与买腿同）
+  optional double settle_net_bps = 31;   // D-318：结算口径净息差（perp 腿 funding 项以近 7d funding_history 均值替换预测值；单位同 net_bps=年化百分点）。无 perp 腿/缺数据=缺省。
+  optional double settle_net_usd = 32;   // D-318：同上 USD 口径（net_usd 同 notional 派生）。
+  optional int32  settle_samples = 33;   // D-318：参与均值的期数（两腿取小）。
 }
 
 message ListOpportunitiesRequest {

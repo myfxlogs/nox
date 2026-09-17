@@ -261,3 +261,35 @@ func scanOpportunities(rows pgx.Rows) ([]Opportunity, error) {
 	}
 	return out, rows.Err()
 }
+
+// SettleAvg funding_history 结算均值（D-318 S1）：Avg=年化百分点均值（facts.value 库内口径
+// 一致），N=参与期数（前端「N期/7d」展示）。
+type SettleAvg struct {
+	Avg float64
+	N   int
+}
+
+// FundingSettleAvgs 按 (venue,symbol) 拉取 ts>=since 的 funding_history 结算均值（D-318 S1）。
+// 返回 map[venue][symbol]SettleAvg；无行=无键（调用方按缺数据缺省）。
+func (s *Store) FundingSettleAvgs(ctx context.Context, since time.Time) (map[string]map[string]SettleAvg, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT venue, symbol, avg(value), count(*) FROM facts WHERE kind='funding_history' AND ts >= $1 GROUP BY venue, symbol`,
+		since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[string]map[string]SettleAvg)
+	for rows.Next() {
+		var venue, symbol string
+		var sa SettleAvg
+		if err := rows.Scan(&venue, &symbol, &sa.Avg, &sa.N); err != nil {
+			return nil, err
+		}
+		if out[venue] == nil {
+			out[venue] = make(map[string]SettleAvg)
+		}
+		out[venue][symbol] = sa
+	}
+	return out, rows.Err()
+}
