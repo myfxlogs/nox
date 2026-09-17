@@ -199,7 +199,13 @@ func (l *Ledger) legSwapAmount(canonical string, leg pgstore.PositionLeg, day ti
 		// D-077 修复⑪A M2：funding 记账删三倍虚乘。
 		// 采集层 Fact 已是年化口径 → 日金额 = rate/100/DaysPerYear × notional（含 8h×3 周期合计）。
 		// 旧公式 × PeriodsPerDay(3) = 3 倍虚乘（现记 9f 实收 3f）→ 删除。
+		// D-322 S1：funding rate 无腿向，金额符号必须带腿向——资金费=多付空收（rate>0 时
+		// long 付/short 收）：BUY 取负（负费率→正额=收）、SELL 不变（正费率→正额=收）。
+		// 旧码无符号隐含 funding 腿恒空单，多 perp 收负费率仓（XASSET_CARRY）整号记反。
 		amount = decimalAmount(rate, 100, DaysPerYear, notional, 1)
+		if leg.Side == "BUY" {
+			amount = -amount
+		}
 	} else {
 		// swap：日 bps → 日金额 = rate/10000 × notional × settleMultiplier
 		multiplier := settleMultiplier(leg.Venue, canonical, day, l.tripleDay)

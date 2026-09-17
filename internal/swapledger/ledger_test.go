@@ -142,15 +142,17 @@ func TestLegSwapAmount_SellLegSwapShort(t *testing.T) {
 }
 
 // TestLegSwapAmount_FundingType funding 类用年化百分点（D-077 修复⑪A M2：删三倍虚乘）。
+// D-322：fixture 复刻历史真实形态（funding 腿=空 perp 收正费率，SELL×正率→正=收）；
+// 腿向符号四象限见 TestLegSwapAmount_FundingDirectionQuadrants。
 func TestLegSwapAmount_FundingType(t *testing.T) {
 	longMap := map[factKey]fact.Fact{}
 	shortMap := map[factKey]fact.Fact{}
 	fundMap := map[factKey]fact.Fact{factKey{"BTCUSDT", "binance"}: {Value: 10.95, Ts: time.Now()}} // 10.95% 年化
-	notional := stubNotional{vals: map[string]float64{"BTCUSDT:binance:spot:ask": 50000}}
+	notional := stubNotional{vals: map[string]float64{"BTCUSDT:binance:spot:bid": 50000}}
 	r := stubTripleDay{}
 	l := &Ledger{notional: notional, tripleDay: r}
 
-	leg := pgstore.PositionLeg{Venue: "binance:spot", Side: "BUY", Qty: 1.0}
+	leg := pgstore.PositionLeg{Venue: "binance:spot", Side: "SELL", Qty: 1.0}
 	monday := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
 	got, ok, _ := l.legSwapAmount("BTCUSDT", leg, monday, true, longMap, shortMap, fundMap)
 	if !ok {
@@ -161,6 +163,44 @@ func TestLegSwapAmount_FundingType(t *testing.T) {
 	want := 10.95 / 100 / DaysPerYear * 50000
 	if math.Abs(got-want) > 0.01 {
 		t.Errorf("funding amount want %.2f (no triple multiply), got %.2f", want, got)
+	}
+}
+
+// TestLegSwapAmount_FundingDirectionQuadrants D-322 S2：funding 腿方向四象限。
+// 符号语义从规格推导（资金费=多付空收：rate>0 时 long 付/short 收），非归纳现行码——
+// BUY×负率→正（收，pos 485 形态：多 perp 收负费率）；BUY×正率→负（付）；
+// SELL×正率→正（收，PERP_FUNDING 历史形态）；SELL×负率→负（付）。
+// 摘除 S1 符号修正 → BUY 两象限转红（变异对抗锚）。
+func TestLegSwapAmount_FundingDirectionQuadrants(t *testing.T) {
+	notional := stubNotional{vals: map[string]float64{
+		"CLUSDT:gate:perp:ask": 100000, // BUY→ask
+		"CLUSDT:gate:perp:bid": 100000, // SELL→bid
+	}}
+	l := &Ledger{notional: notional, tripleDay: stubTripleDay{}}
+	cases := []struct {
+		name string
+		side string
+		rate float64
+		want float64
+	}{
+		{"BUY×负率→收", "BUY", -7.3, 7.3 / 100 / DaysPerYear * 100000},
+		{"BUY×正率→付", "BUY", 10.95, -10.95 / 100 / DaysPerYear * 100000},
+		{"SELL×正率→收", "SELL", 10.95, 10.95 / 100 / DaysPerYear * 100000},
+		{"SELL×负率→付", "SELL", -7.3, -(7.3 / 100 / DaysPerYear * 100000)},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fundMap := map[factKey]fact.Fact{factKey{"CLUSDT", "gate"}: {Value: c.rate, Ts: time.Now()}}
+			leg := pgstore.PositionLeg{Venue: "gate:perp", Side: c.side, Qty: 1.0}
+			monday := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
+			got, ok, _ := l.legSwapAmount("CLUSDT", leg, monday, true, map[factKey]fact.Fact{}, map[factKey]fact.Fact{}, fundMap)
+			if !ok {
+				t.Fatal("want ok=true, got false")
+			}
+			if math.Abs(got-c.want) > 0.01 {
+				t.Errorf("%s rate=%.2f: amount=%.4f, want %.4f", c.side, c.rate, got, c.want)
+			}
+		})
 	}
 }
 
