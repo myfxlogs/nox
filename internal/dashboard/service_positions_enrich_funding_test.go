@@ -33,7 +33,7 @@ func TestEnrichOne_CexFundingMerged(t *testing.T) {
 		{Phase: "OPEN", Venue: "binance:spot", Symbol: "BTCUSDT", Status: "FILLED", Qty: 0.01, PriceActual: ptrFloat(60000), Ts: time.Now().AddDate(0, 0, -3)},
 	}
 	now := time.Now()
-	fundingByPos := map[int64]float64{456: 3.0} // CEX funding 实收
+	fundingByPos := map[string]float64{"456\x00binance:spot": 3.0} // CEX funding 实收（venue 未报 swap=0 → cashflow 兜底计入）
 	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, map[string]time.Weekday{}, fundingByPos)
 
 	// swapAccrued = swap 快照(0) + funding(3.0) = 3.0
@@ -74,7 +74,7 @@ func TestEnrichOne_CexFundingNoMatchButFunding(t *testing.T) {
 		{Phase: "OPEN", Venue: "binance:spot", Symbol: "ETHUSDT", Status: "FILLED", Qty: 0.1, PriceActual: ptrFloat(2500), Ts: time.Now().AddDate(0, 0, -2)},
 	}
 	now := time.Now()
-	fundingByPos := map[int64]float64{789: 2.0}
+	fundingByPos := map[string]float64{"789\x00binance:spot": 2.0}
 	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, map[string]time.Weekday{}, fundingByPos)
 
 	// matched=false 但 funding>0 → 仍出值
@@ -113,7 +113,7 @@ func TestEnrichOne_ZeroFlowStillDash(t *testing.T) {
 		{Phase: "OPEN", Venue: "binance:spot", Symbol: "BTCUSDT", Status: "FILLED", Qty: 0.01, PriceActual: ptrFloat(60000), Ts: time.Now()},
 	}
 	now := time.Now()
-	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, map[string]time.Weekday{}, map[int64]float64{})
+	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, map[string]time.Weekday{}, map[string]float64{})
 
 	if pb.FloatingPnlUsd != nil || pb.SwapAccruedUsd != nil || pb.NetPnlUsd != nil {
 		t.Errorf("零流仓应全 nil: floating=%v swap=%v net=%v", pb.FloatingPnlUsd, pb.SwapAccruedUsd, pb.NetPnlUsd)
@@ -142,7 +142,7 @@ func TestEnrichOne_PureMTRegression(t *testing.T) {
 	}
 	now := time.Now()
 	// 空 fundingByPos → 纯 MT 仓无 funding 加成
-	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, map[string]time.Weekday{}, map[int64]float64{})
+	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, map[string]time.Weekday{}, map[string]float64{})
 
 	// 回归锚：与 TestEnrichPositions_MatchedSum 同值（funding=0 不改变口径）
 	if pb.FloatingPnlUsd == nil || math.Abs(*pb.FloatingPnlUsd-(-35.0)) > 0.001 {
@@ -160,9 +160,11 @@ func TestEnrichOne_PureMTRegression(t *testing.T) {
 	}
 }
 
-// TestEnrichOne_FundingWithSwapMerged CEX 仓 matched=true + swap 快照>0 + funding>0 → 两源合并。
-// swap=1.5 + funding=2.5 → swapAccrued=4.0；floating=-8, commission=-0.5 → net=-8+4-0.5=-4.5。
-func TestEnrichOne_FundingWithSwapMerged(t *testing.T) {
+// TestEnrichOne_VenueActualNotDoubleCounted D-322 S3b：venue 真值优先去重——
+// CEX 腿匹配到 broker position 且 bp.Swap=1.5（venue 实报，matchBrokerLegs 已计入 swapAccrued）
+// → 该 venue 的 cashflow 估算（2.5）跳过，swapAccrued=1.5 而非 4.0；
+// 旧码（D-146）两源相加=同腿 actual+estimate 双计（pos 485：+0.12 实收 + 估算异号相加双重污染）。
+func TestEnrichOne_VenueActualNotDoubleCounted(t *testing.T) {
 	bpm := fakeBPMWithCache([]*v1.BrokerPosition{
 		{VenueKey: "okx:perp", Symbol: "BTCUSDT", Pnl: -8.0, Swap: 1.5, Commission: -0.5, PositionId: 321},
 	})
@@ -176,19 +178,19 @@ func TestEnrichOne_FundingWithSwapMerged(t *testing.T) {
 		{Phase: "OPEN", Venue: "okx:perp", Symbol: "BTCUSDT", Status: "FILLED", Qty: 0.01, PriceActual: ptrFloat(60000), Ts: time.Now().AddDate(0, 0, -2)},
 	}
 	now := time.Now()
-	fundingByPos := map[int64]float64{321: 2.5}
+	fundingByPos := map[string]float64{"321\x00okx:perp": 2.5}
 	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, map[string]time.Weekday{}, fundingByPos)
 
-	// swapAccrued = swap(1.5) + funding(2.5) = 4.0
-	if pb.SwapAccruedUsd == nil || math.Abs(*pb.SwapAccruedUsd-4.0) > 0.001 {
-		t.Errorf("swap_accrued = %v, want 4.0 (swap=1.5+funding=2.5)", pb.SwapAccruedUsd)
+	// swapAccrued = venue 实报 1.5（cashflow 估算 2.5 去重跳过，不双计）
+	if pb.SwapAccruedUsd == nil || math.Abs(*pb.SwapAccruedUsd-1.5) > 0.001 {
+		t.Errorf("swap_accrued = %v, want 1.5 (venue 实报优先，估算不双计)", pb.SwapAccruedUsd)
 	}
-	// net = floating(-8) + commission(-0.5) + swapAccrued(4.0) = -4.5
-	if pb.NetPnlUsd == nil || math.Abs(*pb.NetPnlUsd-(-4.5)) > 0.001 {
-		t.Errorf("net = %v, want -4.5", pb.NetPnlUsd)
+	// net = floating(-8) + commission(-0.5) + swapAccrued(1.5) = -7.0
+	if pb.NetPnlUsd == nil || math.Abs(*pb.NetPnlUsd-(-7.0)) > 0.001 {
+		t.Errorf("net = %v, want -7.0", pb.NetPnlUsd)
 	}
-	// 回本 = |net| ÷ (swapAccrued/holdDays) = 4.5 ÷ (4.0/2) = 2.25
-	wantBE := 4.5 / (4.0 / 2.0)
+	// 回本 = |net| ÷ (swapAccrued/holdDays) = 7.0 ÷ (1.5/2) ≈ 9.33
+	wantBE := 7.0 / (1.5 / 2.0)
 	if pb.BreakEvenDays == nil || math.Abs(*pb.BreakEvenDays-wantBE) > 0.01 {
 		t.Errorf("break_even_days = %v, want %.4f", pb.BreakEvenDays, wantBE)
 	}

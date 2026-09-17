@@ -44,7 +44,8 @@ var convergentTypes = map[string]bool{
 // bpm 为 nil（测试未接线）时整组跳过；legs 按 positionID 批量预取。
 // D-117：brokerSnap 需标注 positionId（与 ListBrokerPositions 同源），matchBrokerLegs 按 positionId 唯一匹配。
 // D-118：批量预取 per-venue triple_swap_day（facts 表），传给 enrichOne 算结算日历感知预期 swap。
-// D-146 S5：批量预取 per-position funding 实收（position_cashflows），传给 enrichOne 扩展回本口径。
+// D-146 S5：批量预取 funding 实收（position_cashflows），传给 enrichOne 扩展回本口径；
+// D-322 S3b：预取改 per-(pos,venue) 合计，enrichOne 按 venue 对照 broker 实报 swap 去重。
 func (s *Service) enrichPositions(ctx context.Context, pbPositions []*v1.Position, legsByPos map[int64][]pgstore.PositionLeg) {
 	if s.bpm == nil {
 		return // 测试未接线 → 整组跳过（诚实缺省，不伪造）
@@ -53,7 +54,7 @@ func (s *Service) enrichPositions(ctx context.Context, pbPositions []*v1.Positio
 	annotatePositionID(ctx, s.store, brokerSnap) // D-117：标注 positionId（与 ListBrokerPositions 同源）
 	// D-118：批量预取 per-venue triple_swap_day（从 OPEN legs 提取 venue 列表）
 	tripleDayByVenue := s.prefetchTripleSwapDays(ctx, pbPositions, legsByPos)
-	// D-146 S5：批量预取 per-position funding 实收（CEX 仓回本口径扩展）
+	// D-146 S5 + D-322 S3b：批量预取 per-(pos,venue) funding 合计（CEX 仓回本口径扩展）
 	fundingByPos := s.prefetchFundingCashflows(ctx, pbPositions)
 	now := time.Now()
 	for _, pb := range pbPositions {
@@ -65,44 +66,51 @@ func (s *Service) enrichPositions(ctx context.Context, pbPositions []*v1.Positio
 	}
 }
 
-// prefetchFundingCashflows D-146 S5：批量预取活跃持仓的 funding 实收（position_cashflows SUM WHERE kind='funding'）。
+// prefetchFundingCashflows D-146 S5：批量预取活跃持仓的 funding 实收。
+// D-322 S3b：改 per-(pos,venue) 合计（SumCashflowsByPosVenue，key=posID\x00venue）——
+// enrichOne 需按 venue 对照 broker 实报 swap 去重（venue 真值优先，估算不双计）。
 // store=nil（测试未接线）→ 返回空 map（enrichOne 无 funding 加成，纯 MT 仓行为不变）。
-// 查询失败 → 该 position 不入 map（enrichOne 视为 funding=0，fail-closed 不冒充）。
-func (s *Service) prefetchFundingCashflows(ctx context.Context, pbPositions []*v1.Position) map[int64]float64 {
-	out := make(map[int64]float64)
+// 查询失败 → 空 map（enrichOne 视为 funding=0，fail-closed 不冒充）。
+func (s *Service) prefetchFundingCashflows(ctx context.Context, pbPositions []*v1.Position) map[string]float64 {
+	out := make(map[string]float64)
 	if s.store == nil {
 		return out // 测试未接线 → 空 map（enrichOne 无 funding 加成）
 	}
+	seen := make(map[int64]bool)
+	posIDs := make([]int64, 0, len(pbPositions))
 	for _, pb := range pbPositions {
-		if !activeStatuses[pb.Status] {
+		if !activeStatuses[pb.Status] || seen[pb.Id] {
 			continue
 		}
-		sum, err := s.store.SumFundingCashflows(ctx, pb.Id)
-		if err == nil && sum != 0 {
-			out[pb.Id] = sum
-		}
-		// 查询失败/sum=0 → 不入 map（enrichOne 视为 funding=0）
+		seen[pb.Id] = true
+		posIDs = append(posIDs, pb.Id)
 	}
-	return out
+	sums, err := s.store.SumCashflowsByPosVenue(ctx, posIDs)
+	if err != nil {
+		return out // fail-closed：视为无 funding 流
+	}
+	return sums
 }
 
 // enrichOne 单行派生（拆出便于测试）。
 // D-118：tripleDayByVenue 为 per-venue triple_swap_day 预取 map（可能空，enrichOne 退化为纯结算天数）。
-// D-146 S5：fundingByPos 为 per-position funding 实收预取 map（可能空，enrichOne 无 funding 加成）。
+// D-146 S5：fundingByPos 为 funding 实收预取 map（D-322 S3b 起 key=posID\x00venue，可能空）。
 //
-// 回本口径扩展（D-146 S5）：
-//   - swapAccrued = broker 快照 Σ swap + position_cashflows funding 实收（CEX 仓 PERP_FUNDING 并入）
+// 回本口径扩展（D-146 S5 + D-322 S3b）：
+//   - swapAccrued = broker 快照 Σ swap + funding cashflow（per-venue 去重：venue 实报≠0 的腿
+//     只计 venue 真值，估算跳过；venue 未报才用 cashflow 兜底）
 //   - net = floating + commission + swapAccrued（同口径：floating+commission+swap+funding）
 //   - matched=false 但 funding>0 → 仍出值（CEX 仓有 funding 流→回本显示数值）
 //   - matched=false 且 funding=0 → 三字段缺省（零流仓仍「—」）
-func enrichOne(ctx context.Context, s *Service, pb *v1.Position, legs []pgstore.PositionLeg, brokerSnap []*v1.BrokerPosition, now time.Time, tripleDayByVenue map[string]time.Weekday, fundingByPos map[int64]float64) {
+func enrichOne(ctx context.Context, s *Service, pb *v1.Position, legs []pgstore.PositionLeg, brokerSnap []*v1.BrokerPosition, now time.Time, tripleDayByVenue map[string]time.Weekday, fundingByPos map[string]float64) {
 	// 1. 匹配 broker position：OPEN 腿 venueKey+symbol+positionId → Σ profit / Σ swap / Σ commission
 	// D-117 修正：加 positionId 约束，避免同 venue+symbol 跨 position double-counting（D-095 遗留 bug）
 	openLegs := filterOpenLegs(legs)
 	floating, swapAccrued, commission, matched := matchBrokerLegs(openLegs, brokerSnap, pb.Id)
-	// D-146 S5：funding 实收并入 swapAccrued 口径（CEX 仓 PERP_FUNDING 回本显示）
-	funding := fundingByPos[pb.Id] // 不在 map → 0（纯 MT 仓无 funding，行为不变）
-	swapAccrued += funding         // 口径扩展：swap 快照 + funding 实收
+	// D-146 S5：funding 实收并入 swapAccrued 口径；D-322 S3b：per-venue 去重——
+	// venue 实报（bp.Swap≠0，已计入 swapAccrued）的 venue 跳过 cashflow 估算，否则兜底计入
+	funding := fundingForLegs(pb.Id, openLegs, brokerSnap, fundingByPos)
+	swapAccrued += funding // 口径扩展：swap 快照 + funding 实收
 	if matched || funding != 0 {
 		pb.FloatingPnlUsd = &floating
 		pb.SwapAccruedUsd = &swapAccrued
