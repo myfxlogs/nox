@@ -129,6 +129,10 @@ type Service struct {
 	// 与 SWAPARB 不同：无条件检查（空表=全拒），XASSET_CARRY 唯一放行闸。
 	xassetComboAllow []exec.XAssetComboAllowSpec
 
+	// D-328 S5：carry 入口 funding regime 持久性闸参数（ExecuteOpportunityInternal 消费）。
+	// 零值 = fail-closed（XASSET_CARRY 全拒）。
+	carryRegime exec.CarryRegimeConfig
+
 	// D-159 W1a I6：environment/is_real 一致性检查（手动入口同源）。
 	// environment 空 = 未配置（不检查，回退旧行为）。
 	environment string

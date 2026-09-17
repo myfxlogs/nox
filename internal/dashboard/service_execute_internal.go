@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"time"
 
 	"arb/internal/combo"
 	"arb/internal/exec"
@@ -105,6 +106,13 @@ func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, request
 	// D-182 S4：swap 偏差拦截（手动入口同源，pipeline.Execute 前拦截）。
 	if msg := s.checkSwapDeviationGate(ctx, found.Canonical, found.VenueBuy, found.VenueSell); msg != "" {
 		return "FAILED", msg, 0
+	}
+	// D-328 S4：carry 入口 funding regime 持久性闸（XASSET 唯一漏斗；autotrade intent.Execute
+	// 亦经此函数=S3 闸失效的兜底防线）。失败 FAILED 带 reason。
+	if found.Type == "XASSET_CARRY" {
+		if ok, reason := exec.CarryFundingRegimeCheck(ctx, s.store, found.VenueBuy, found.VenueSell, found.Canonical, sellCanonical, time.Now(), s.carryRegime); !ok {
+			return "FAILED", "funding regime 未持续: " + reason, 0
+		}
 	}
 	result, err := s.pipeline.Execute(ctx, oppID, requestID, found.Type, legs)
 	if err != nil {
