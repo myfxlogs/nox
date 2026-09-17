@@ -114,7 +114,14 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 			slot.hasTripleDay = true
 			// trade_mode 不依赖 swap 标定（D-060 F3）：emit/emit0/标定 skip 的符号都发。
 			slot.facts = append(slot.facts, tradeModeFact(a.venue, canon, sg.GetTradeMode(), "mt5"))
+			// D-325 S1：native variant 双发 trade_mode——与 swap 双发同据（brokerSym==canon 跳过防重复行）。
+			if brokerSym != canon {
+				slot.facts = append(slot.facts, tradeModeFact(a.venue, brokerSym, sg.GetTradeMode(), "mt5"))
+			}
 			mode := mt5SwapModeForVenue(a.venue, sg.GetSwapType(), sg.GetSwapLong(), sg.GetSwapShort())
+			// D-325 S1：先捕获 raw 模式——下方 Exness override 只作用于 canonical（D-300 S0 裁定），
+			// native variant fact 恒用 raw 值（XAUUSDm 周末腿判据需分辨 XAUUSDm/XAUUSD247m 真实差异）。
+			rawMode := mode
 			// D-300 S0 定案（业主 2026-09-16 两轮断言+规格直连亲证）：Exness swap-free 营销
 			// ——规格字段系名义标价、账单不执行（XAUUSDm SwapLong=-534.9 但实收 0）。
 			// 白名单 venue 全品种 swap 置 0 发射（走 SwapModeNone 零值路径——零息 venue 是 carry
@@ -156,6 +163,17 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 			default:
 				slot.emit++
 			}
+			// D-325 S1：native variant swap 双发——rawMode+raw 值（不经 D-300 S0 override），
+			// 同一 SymbolParams 响应零新增 RPC；缺价时 normalize 自返回 ok=false（该轮零发射，
+			// 与 canonical fail-safe 一致）；rawMode==Uncalibrated 已在上方提前返回不会到达。
+			if brokerSym != canon {
+				if l, ok := normalizeSwapBpsDaily(rawMode, sg.GetSwapLong(), price, point, cs); ok {
+					slot.facts = append(slot.facts, swapFact(fact.KindSwapLong, a.venue, brokerSym, l, "mt5"))
+				}
+				if s, ok := normalizeSwapBpsDaily(rawMode, sg.GetSwapShort(), price, point, cs); ok {
+					slot.facts = append(slot.facts, swapFact(fact.KindSwapShort, a.venue, brokerSym, s, "mt5"))
+				}
+			}
 			// D-092 护栏：InPoints emit 后检查每手日 swap 美元额（防 FxPro mode 9 语义漂移）。
 			// D-104 P1 T2：传 canon + price（JPY 计价 → USD 换算）。
 			if mode == SwapModeInPoints {
@@ -191,6 +209,10 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 		}
 		if slot.hasTripleDay {
 			tripleDays[ent.canon] = slot.tripleDay
+			// D-325 S1：native variant 并列入列（key 不同不冲突），collectTripleSwapDayFacts 按 key 发射。
+			if ent.brokerSym != ent.canon {
+				tripleDays[ent.brokerSym] = slot.tripleDay
+			}
 		}
 	}
 	swapPollSummary("mt5", a.venue, emit, emit0, skips)

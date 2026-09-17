@@ -186,12 +186,14 @@ func TestMT5SwapFactsSkipObservability(t *testing.T) {
 	}
 
 	// swap Fact：emit 3 条（EURUSD+XAUUSD）+ emit0 1 条（BTCUSD 零值 long）。
-	if n := countFacts(fs, fact.KindSwapLong); n != 3 {
-		t.Errorf("swap_long facts = %d, want 3（emit×2+emit0×1）", n)
+	// D-325 S1：BTCUSD→BTCUSDT 是 variant 折叠 → native 零值行并列（rawMode=None 归一仍零）→ 4。
+	if n := countFacts(fs, fact.KindSwapLong); n != 4 {
+		t.Errorf("swap_long facts = %d, want 4（emit×2+emit0 canonical×1+native×1）", n)
 	}
 	// trade_mode：emit/emit0/标定 skip 的符号都发；result=nil/symbolGroup=nil 无数据不发（F3）。
-	if n := countFacts(fs, fact.KindTradeMode); n != 4 {
-		t.Errorf("trade_mode facts = %d, want 4", n)
+	// D-325 S1：BTCUSD/ETHUSD 双 variant 各加 1 行 native trade_mode → 4+2=6。
+	if n := countFacts(fs, fact.KindTradeMode); n != 6 {
+		t.Errorf("trade_mode facts = %d, want 6（canonical×4+native variant×2）", n)
 	}
 	var btcMode *fact.Fact
 	for i := range fs {

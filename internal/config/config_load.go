@@ -130,9 +130,11 @@ func Load() *Config {
 }
 
 // cexScanSymbolsDefault 读 ARB_CEX_SCAN_SYMBOLS，空则返回默认币种集（D-271）。
+// D-325 S3：+XAU（XAUUSDT 金价永续进只读扫描集；cexSymbols 采集链 D-303 已含，
+// funding_history 走 cexCfg 全符号无需另改）。
 func cexScanSymbolsDefault() []string {
 	if v := envStringSlice("ARB_CEX_SCAN_SYMBOLS"); v != nil {
 		return v
 	}
-	return []string{"BTC", "ETH", "TRX", "SOL", "USDT", "USDC"}
+	return []string{"BTC", "ETH", "TRX", "SOL", "USDT", "USDC", "XAU"}
 }
