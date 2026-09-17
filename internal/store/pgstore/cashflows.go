@@ -193,23 +193,9 @@ func (s *Store) SumCashflowsNetWithQuality(ctx context.Context, posID int64) (su
 	}
 }
 
-// SumFundingCashflows 返回指定持仓 funding 现金流的 USD 合计（D-146 S5 回本口径扩展）。
-// enrich 回本计算用：CEX 仓（PERP_FUNDING/FUNDING_HEDGE）的 funding 实收并入日均收益。
-// 无匹配行 → 返回 0（纯 MT 仓无 funding 流，行为不变）。
-func (s *Store) SumFundingCashflows(ctx context.Context, posID int64) (float64, error) {
-	var sum float64
-	err := s.pool.QueryRow(ctx,
-		`SELECT COALESCE(SUM(amount_usd), 0) FROM position_cashflows
-		 WHERE position_id = $1 AND kind = 'funding'`,
-		posID).Scan(&sum)
-	if err != nil {
-		return 0, fmt.Errorf("sum funding cashflows: %w", err)
-	}
-	return sum, nil
-}
-
 // SumCashflowsByPosVenue 批量返回 (position_id, venue) → swap+funding 合计（D-152 微件①）。
 // broker_position_build 用：CEX 腿按 (position_id, venue) 聚合 cashflows 填 swap 字段。
+// D-322 S3b 起 dashboard.enrich 回本口径亦用此聚合（per-venue 对照 broker 实报 swap 去重）。
 // key 格式 = posID\x00venue；无匹配行 → 该 key 不在 map 中（调用方按 0 处理）。
 func (s *Store) SumCashflowsByPosVenue(ctx context.Context, posIDs []int64) (map[string]float64, error) {
 	out := make(map[string]float64)
