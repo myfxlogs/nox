@@ -61,8 +61,13 @@ func run(ctx context.Context) error {
 	}
 
 	// 9-16 业主并存裁定：PAXG+XAUT 两对逐对 fail-open（一对失败不拖累另一对，同 S2 funding 口径）。
+	// D-326 v2：+XAUUSDT-XAU（XAUUSDT 永续进采集链后补第三监控对；runPair 仍取 canonical XAUUSD 报价）。
 	var firstErr error
-	for _, p := range []struct{ sym, pair string }{{"PAXGUSDT", "PAXG-XAU"}, {"XAUTUSDT", "XAUT-XAU"}} {
+	for _, p := range []struct{ sym, pair string }{
+		{"PAXGUSDT", "PAXG-XAU"},
+		{"XAUTUSDT", "XAUT-XAU"},
+		{"XAUUSDT", "XAUUSDT-XAU"},
+	} {
 		if err := runPair(ctx, st, hc, proxyURL, p.sym, p.pair, exBid, exAsk); err != nil {
 			log.Printf("xasset-monitor: pair=%s 失败: %v", p.pair, err)
 			if firstErr == nil {
