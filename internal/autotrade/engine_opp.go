@@ -101,6 +101,19 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 		log.Printf("[autotrade] skip %s: netBps %.2f < %.2f", opp.ID, opp.NetBps, e.cfg.MinNetBps)
 		return
 	}
+	// D-328 S3：carry 入口 funding regime 持久性闸——入口侧对称闸（退出侧已有「连 3 期转正」
+	// 平仓规则），regime 坍塌途中不再照放（pos 485 归因）。失败静默跳过不落 REJECTED
+	//（同 D-311 S6 先例）；manual/intent.Execute 路径同判于 ExecuteOpportunityInternal（S4 兜底）。
+	if opp.Type == "XASSET_CARRY" {
+		sellCanonical := opp.Canonical
+		if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
+			sellCanonical = *opp.CanonicalSell
+		}
+		if ok, reason := exec.CarryFundingRegimeCheck(ctx, e.store, opp.VenueBuy, opp.VenueSell, opp.Canonical, sellCanonical, time.Now(), e.cfg.CarryRegime); !ok {
+			log.Printf("[autotrade] skip %s: funding regime 未持续 (%s)", opp.ID, reason)
+			return
+		}
+	}
 	log.Printf("[autotrade] pass filter opp=%s type=%s netBps=%.2f", opp.ID, opp.Type, opp.NetBps)
 
 	qty, skip := computeBuyQty(opp, e.cfg.NotionalUSD, e.service.USDPerLotForLeg)

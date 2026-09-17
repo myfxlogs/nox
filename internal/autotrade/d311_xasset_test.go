@@ -366,6 +366,16 @@ func TestD311_HandleOpportunityXAssetPreIntercept(t *testing.T) {
 	s := testAccumStore(t)
 	d311Truncate(t, s)
 	ctx := context.Background()
+	// D-328 S3 涟漪适配：case③ 白名单命中后须过 regime 闸才到 sizing——种卖腿（gate:perp×BTCUSDT）
+	// 健康正样本（requiredSign=+1 全程 ≥floor）。
+	for i := 0; i < 13; i++ {
+		if _, err := s.Pool().Exec(ctx,
+			`INSERT INTO facts (kind, venue, symbol, value, unit, ts, src)
+			 VALUES ('funding', 'gate', 'BTCUSDT', $1, 'pct_annualized', $2, 'd311test')`,
+			5.0+float64(i), time.Now().Add(-time.Duration(13-i)*5*time.Minute)); err != nil {
+			t.Fatalf("seed funding fact %d: %v", i, err)
+		}
+	}
 	opp := pgstore.Opportunity{
 		ID: "XASSET_CARRY:WTIUSD:3001157:mt5:gate:perp", Type: "XASSET_CARRY",
 		Canonical: "WTIUSD", CanonicalSell: d311strptr("BTCUSDT"),
@@ -389,6 +399,9 @@ func TestD311_HandleOpportunityXAssetPreIntercept(t *testing.T) {
 				MinNetBps:         0,
 				AllowVenues:       map[string]bool{"3001157:mt5": true, "gate:perp": true},
 				XAssetAllowCombos: allow,
+				// D-328 S3 涟漪适配：regime 闸在白名单之后，不配置=fail-closed 会拦住 case③；
+				// 配置 + 下方种健康样本保持本锚原语义（白名单拦截点验证）。
+				CarryRegime: exec.CarryRegimeConfig{Window: 24 * time.Hour, FloorPct: 2.0, MinSamples: 12},
 			},
 		}
 	}

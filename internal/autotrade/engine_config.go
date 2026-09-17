@@ -43,6 +43,9 @@ type Config struct {
 	// 修 462 条/时 REJECTED 刷屏）。空表=全拒。
 	XAssetAllowCombos []exec.XAssetComboAllowSpec
 
+	// D-328 S5：carry 入口 funding regime 持久性闸三参数（handleOpportunity 闸消费）。
+	CarryRegime exec.CarryRegimeConfig
+
 	// D-159 W1a I6：environment/is_real 一致性检查。
 	// Environment 执行环境固定值（'demo'/'live'）。开仓前校验 venue 的 is_real 与此值一致。
 	// 空 = 未配置（不检查，回退旧行为）。
