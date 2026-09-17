@@ -96,3 +96,58 @@ func TestTableMaxTs_FactsQuery(t *testing.T) {
 		t.Errorf("empty facts want zero time, got %v", got)
 	}
 }
+
+// TestTableMaxTs_DailyIncomeCoversToPeriodEnd C1（D-315）：day 是 DATE 日粒度——day=昨日 的行
+// 覆盖到 今日 00:00，TableMaxTs 应返回覆盖期末（age<24h 不告警），非行标签起点（旧码返回
+// 昨日 00:00，健康日 age 落 24-48h 假 crit）。
+func TestTableMaxTs_DailyIncomeCoversToPeriodEnd(t *testing.T) {
+	s := tableHealthTestStore(t)
+	ctx := context.Background()
+	if _, err := s.pool.Exec(ctx, "TRUNCATE position_daily_income"); err != nil {
+		t.Fatalf("TRUNCATE position_daily_income: %v", err)
+	}
+	yesterday := time.Now().UTC().AddDate(0, 0, -1)
+	if _, err := s.pool.Exec(ctx,
+		`INSERT INTO position_daily_income (day) VALUES ($1)`, yesterday); err != nil {
+		t.Fatalf("insert day=yesterday: %v", err)
+	}
+	got, err := s.TableMaxTs(ctx, "daily_income")
+	if err != nil {
+		t.Fatalf("TableMaxTs daily_income: %v", err)
+	}
+	want := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, time.UTC).
+		AddDate(0, 0, 1) // 覆盖期末 = day+1 的 00:00 UTC
+	if got.Unix() != want.Unix() {
+		t.Errorf("C1: daily_income day=yesterday want coverage-end %v, got %v", want, got)
+	}
+	if age := time.Since(got); age >= 24*time.Hour {
+		t.Errorf("C1: healthy rollup age want <24h, got %v (would false-crit)", age)
+	}
+}
+
+// TestTableMaxTs_DailyIncomeMissingDayCrossesThreshold C2（D-315）：day=前日 → 覆盖期末=
+// 昨日 00:00 → age≥24h 越线可告警（漏写一日起 warn/crit 继续爬升，监控意图不变）。
+func TestTableMaxTs_DailyIncomeMissingDayCrossesThreshold(t *testing.T) {
+	s := tableHealthTestStore(t)
+	ctx := context.Background()
+	if _, err := s.pool.Exec(ctx, "TRUNCATE position_daily_income"); err != nil {
+		t.Fatalf("TRUNCATE position_daily_income: %v", err)
+	}
+	dayBefore := time.Now().UTC().AddDate(0, 0, -2)
+	if _, err := s.pool.Exec(ctx,
+		`INSERT INTO position_daily_income (day) VALUES ($1)`, dayBefore); err != nil {
+		t.Fatalf("insert day=day-before-yesterday: %v", err)
+	}
+	got, err := s.TableMaxTs(ctx, "daily_income")
+	if err != nil {
+		t.Fatalf("TableMaxTs daily_income: %v", err)
+	}
+	want := time.Date(dayBefore.Year(), dayBefore.Month(), dayBefore.Day(), 0, 0, 0, 0, time.UTC).
+		AddDate(0, 0, 1) // 覆盖期末 = 昨日 00:00 UTC
+	if got.Unix() != want.Unix() {
+		t.Errorf("C2: daily_income day=day-before want coverage-end %v, got %v", want, got)
+	}
+	if age := time.Since(got); age < 24*time.Hour {
+		t.Errorf("C2: missing-day age want >=24h (alertable), got %v", age)
+	}
+}
