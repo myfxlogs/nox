@@ -1,4 +1,9 @@
 // D-182 S3 拆分：从 engine_position.go 提取 recalcNetFunding（funding 退出判定）。
+// D-312 S1：重写为逐腿 :perp 口径——旧 longFunding−shortFunding 两处病：
+// ①符号反向（funding 正值=多头付空方，与 detector/perp_funding.go 同源），返回值=−净收入，
+// 消费方 netFunding<=FundingExitPct 判平 → 盈利仓误平、亏损仓永不触发；
+// ②venue-pair 模型对套保结构不成立——同所双腿同 bare 命中同一条 fact net≡0 首查误平，
+// 跨所 spot 腿错配该所 perp fact 或缺 fact 永不退出。
 package autotrade
 
 import (
@@ -7,67 +12,53 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/fact"
 	"arb/internal/store/pgstore"
 )
 
-// recalcNetFunding 重算净 funding 年化（D-072 §4.2，facts 驱动 + 48h 新鲜度守卫）。
-// D-105 T1：同 recalcNetSwap fail-closed 修复——venue 匹配加 found 标志，任一 venue 未匹配
-// → 缺数据不决策平仓；新鲜度守卫改为对匹配到的 fact 检查（旧值查列表首元素同修）。
+// recalcNetFunding 逐腿求和持仓 funding 净收入（年化百分点，正=净收钱）。
+// funding 只挂 :perp 腿：SELL（空）收 → +rate、BUY（多）付 → −rate；非 :perp 腿
+// （:spot/:mt4/:mt5 等）贡献 0 不查 fact（现货/MT 腿不收付 funding）。
+// fact 复用 fundingRateForVenue（D-311 已有 helper，勿再写 LatestFacts 匹配循环）；
+// 任一 :perp 腿缺 fact / 陈旧 >SwapFactMaxAge（>0 时）/ 无 :perp 腿 → (0,false) fail-closed。
+// 双腿同 canonical（canonicalFromOppID，FUNDING_HEDGE/PERP_FUNDING 沿用现状）。
 func (e *Engine) recalcNetFunding(ctx context.Context, p *pgstore.Position) (float64, bool) {
-	canonical := canonicalFromOppID(p.OpportunityID)
-	if canonical == "" {
-		return 0, false
-	}
-	fundingFacts, err := e.store.LatestFacts(ctx, fact.KindFunding, "", canonical)
-	if err != nil || len(fundingFacts) == 0 {
-		return 0, false
-	}
 	legs, err := e.store.ListPositionLegs(ctx, p.ID)
 	if err != nil {
 		return 0, false
 	}
-	var buyVenue, sellVenue string
-	for i := range legs {
-		if legs[i].Phase == "OPEN" {
-			if legs[i].Side == "BUY" {
-				buyVenue = legs[i].Venue
-			} else {
-				sellVenue = legs[i].Venue
-			}
-		}
-	}
-	if buyVenue == "" || sellVenue == "" {
+	canonical := canonicalFromOppID(p.OpportunityID)
+	if canonical == "" {
 		return 0, false
 	}
-	buyBare := strings.Split(buyVenue, ":")[0]
-	sellBare := strings.Split(sellVenue, ":")[0]
-	// D-105 T1：venue 匹配加 found 标志，缺数据不决策平仓。
-	var longFunding, shortFunding float64
-	var longFact, shortFact *fact.Fact
-	for i := range fundingFacts {
-		if fundingFacts[i].Venue == buyBare {
-			longFunding = fundingFacts[i].Value
-			longFact = &fundingFacts[i]
-		}
-		if fundingFacts[i].Venue == sellBare {
-			shortFunding = fundingFacts[i].Value
-			shortFact = &fundingFacts[i]
-		}
-	}
-	if longFact == nil {
-		log.Printf("[autotrade] exit pos=%d: funding fact missing venue=%s", p.ID, buyBare)
-		return 0, false
-	}
-	if shortFact == nil {
-		log.Printf("[autotrade] exit pos=%d: funding fact missing venue=%s", p.ID, sellBare)
-		return 0, false
-	}
-	// D-159 W4a R7：TTL 统一用 cfg.SwapFactMaxAge（env 单源，默认 2h），与 discoverSwapCombos/recalcNetSwap 同源。
 	maxAge := e.cfg.SwapFactMaxAge
-	if maxAge > 0 && (time.Since(longFact.Ts) > maxAge || time.Since(shortFact.Ts) > maxAge) {
-		log.Printf("[autotrade] skip exit pos=%d: funding facts stale >%v", p.ID, maxAge)
+	var net float64
+	hasPerp := false
+	for i := range legs {
+		leg := legs[i]
+		if leg.Phase != "OPEN" || !strings.HasSuffix(leg.Venue, ":perp") {
+			continue
+		}
+		bare := strings.Split(leg.Venue, ":")[0]
+		rate, ts, ok := e.fundingRateForVenue(ctx, bare, canonical)
+		if !ok {
+			log.Printf("[autotrade] exit pos=%d: funding fact missing venue=%s canonical=%s (fail-closed)", p.ID, bare, canonical)
+			return 0, false
+		}
+		if maxAge > 0 && time.Since(ts) > maxAge {
+			log.Printf("[autotrade] exit pos=%d: funding fact stale venue=%s canonical=%s >%v (fail-closed)", p.ID, bare, canonical, maxAge)
+			return 0, false
+		}
+		// 持有净收入：BUY（多头）付 funding=−rate；SELL（空头）收 funding=+rate。
+		if leg.Side == "BUY" {
+			net -= rate
+		} else {
+			net += rate
+		}
+		hasPerp = true
+	}
+	if !hasPerp {
+		log.Printf("[autotrade] exit pos=%d: no :perp leg (fail-closed)", p.ID)
 		return 0, false
 	}
-	return longFunding - shortFunding, true
+	return net, true
 }
