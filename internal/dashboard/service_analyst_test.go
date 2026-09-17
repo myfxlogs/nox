@@ -193,8 +193,18 @@ func TestAppendAnalystNoteCleansMultiline(t *testing.T) {
 }
 
 // TestAppendAnalystNoteTruncatesChineseSafe R1 返修③：中文 60+ 字符截断无 U+FFFD。
+// D-316③：自管临时目录替代 t.TempDir——本机 FS 负载下偶发 readdirent EBADF（同包 fileCache
+// 先例同族），框架把 TempDir 清理失败判测试失败而断言从未失败；容忍清理只记日志不断言。
 func TestAppendAnalystNoteTruncatesChineseSafe(t *testing.T) {
-	dir := t.TempDir()
+	dir, mkErr := os.MkdirTemp("", "analyst-note-test")
+	if mkErr != nil {
+		t.Fatalf("MkdirTemp: %v", mkErr)
+	}
+	t.Cleanup(func() {
+		if rmErr := os.RemoveAll(dir); rmErr != nil {
+			t.Logf("cleanup (non-fatal, host FS EBADF family transient, D-316③): %v", rmErr)
+		}
+	})
 	rel := "docs/经验库/待归纳-分析员.md"
 	_ = os.MkdirAll(filepath.Join(dir, "docs", "经验库"), 0755)
 	s := newAnalystService(dir, rel)

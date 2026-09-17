@@ -164,14 +164,16 @@ func TestD250_CmcBlockCloseoutWarningLevels(t *testing.T) {
 	}
 }
 
-// 断言 D-250-b：APR 行用 round3（Math.round），无 Math.floor 残留。
+// 断言 D-250-b：APR 渲染四舍五入、不向下截断（无 Math.floor 回归）。
+// D-316②：当代实现=toFixed(2)——D-288（a385e139，TRX 页从简）将 Math.round 合法替换为
+// toFixed(2)，原锚断言 Math.round 字面量随实现细节过期（master 恒红根因）；不变量不变。
 func TestD250_APRRound3NoFloor(t *testing.T) {
 	src := hedgeStructureSource(t)
-	if !strings.Contains(src, "Math.round") {
-		t.Fatal("APR 渲染缺 Math.round（D-250 变更2：round3 替代 floor2）")
+	if !strings.Contains(src, "toFixed(2)") {
+		t.Fatal("APR 渲染缺 toFixed(2) 舍入（D-250 不变量=四舍五入非截断；当代实现 D-288 toFixed）")
 	}
 	if strings.Contains(src, "Math.floor") {
-		t.Fatal("APR 渲染仍含 Math.floor（D-250 变更2：floor2 应删）")
+		t.Fatal("APR 渲染仍含 Math.floor（D-250 变更2：floor 不得回归）")
 	}
 }
 

@@ -200,6 +200,9 @@ func TestAccountMonitor_KickDebounce(t *testing.T) {
 // 模拟 main.go 的订阅 goroutine：orderTopic.Subscribe → for range → bpMon.Kick()。
 // D-249 S5 R-G5：等待窗口 10s→45s——-race 全仓并行负载下事件可能晚到 10s+（CI 实证 flake，
 // 失败后 1s 内事件到达），45s 窗口给 race detector 足够余量，late-arrival 属调度噪声非缺陷。
+// D-316④：45s→120s——共享主机峰值负载下订阅/Kick goroutine 饥饿可超 45s（全量包 45.00s
+// 整点超时实证一次，master 隔离绿）；单发 Publish 入空缓冲 1 必达不丢（topic.go 丢旧保新
+// 只在缓冲满时发生），等待预算继续沿「晚到非缺陷」策略放大。
 func TestOrderTopicToKickWiring(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -231,8 +234,8 @@ func TestOrderTopicToKickWiring(t *testing.T) {
 		}
 	}()
 
-	// 等 Run 首采（R-G5：45s 窗口，-race 负载下首采可能延迟）。
-	if !waitForMon(t, 45*time.Second, func() bool { return len(m.Snapshot()) == 1 }) {
+	// 等 Run 首采（D-316④：120s 窗口，共享主机峰值负载下首采可能延迟）。
+	if !waitForMon(t, 120*time.Second, func() bool { return len(m.Snapshot()) == 1 }) {
 		t.Fatal("initial poll did not produce snapshot")
 	}
 
@@ -240,11 +243,11 @@ func TestOrderTopicToKickWiring(t *testing.T) {
 	q.orders = nil
 
 	// Publish 一个 OrderEvent → 经订阅 goroutine → Kick → poll → snapshot 变 0。
-	// R-G5：45s 窗口——-race 全仓并行下 Publish→Subscribe→Kick→poll 链路可能晚到 10s+，
-	// late-arrival 属调度噪声非缺陷（CI 实证：失败后 1s 内事件到达）。
+	// D-316④：120s 窗口——Publish→Subscribe→Kick→poll 链路在共享主机峰值负载下可晚到
+	// （单发事件入空缓冲 1 必达不丢），late-arrival 属调度噪声非缺陷。
 	orderTopic.Publish(bus.OrderEvent{Venue: "testvenue", Ticket: 1})
 
-	if !waitForMon(t, 45*time.Second, func() bool { return len(m.Snapshot()) == 0 }) {
+	if !waitForMon(t, 120*time.Second, func() bool { return len(m.Snapshot()) == 0 }) {
 		t.Fatalf("orderTopic→Kick wiring: snapshot still %d after publish", len(m.Snapshot()))
 	}
 }
