@@ -147,7 +147,7 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 			}
 			if err := stream.Send(&v1.StreamUpdatesResponse{
 				Update: &v1.StreamUpdatesResponse_Opportunity{
-					Opportunity: s.oppToProto(&v),
+					Opportunity: s.oppToProto(ctx, &v),
 				},
 			}); err != nil {
 				return err

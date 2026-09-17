@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"context"
 	"strings"
 
 	"arb/internal/fact"
@@ -38,7 +39,7 @@ func netUSD(netBps float64, typ string, notional float64) float64 {
 	return netBps / 100 * notional
 }
 
-func (s *Service) oppToProto(o *pgstore.Opportunity) *v1.Opportunity {
+func (s *Service) oppToProto(ctx context.Context, o *pgstore.Opportunity) *v1.Opportunity {
 	pb := &v1.Opportunity{
 		Id:             o.ID,
 		Type:           o.Type,
@@ -66,6 +67,8 @@ func (s *Service) oppToProto(o *pgstore.Opportunity) *v1.Opportunity {
 	}
 	// D-086 验证阶梯：后端按 vkey 聚合填入 verified_level/verify_ratio/verify_samples。
 	s.fillVerifiedFields(pb, o)
+	// D-318：结算口径参照（settle_net_bps/usd/samples，缺数据/无 perp 腿=缺省不填）。
+	s.fillSettleRef(ctx, pb, o)
 	// D-062 显示层 USD 派生（存储不动）。gap_usd_per_unit 无 CS 依赖恒填；
 	// per-lot 字段依赖 venue_buy 侧 CS（D-061 对称桶保证跨 venue 一致），缺失/≤0 → 全 0（前端回退 bps）。
 	pb.GapUsdPerUnit = o.PriceSell - o.PriceBuy

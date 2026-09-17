@@ -146,6 +146,10 @@ type Service struct {
 	aliasMu  sync.RWMutex
 	aliasMap map[string]string
 
+	// D-318：结算口径参照缓存（settle=7d funding_history 均值 TTL 10min + pred=当期预测 TTL 60s）。
+	// 模式同 aliasMu/aliasMap；定义与填充逻辑见 service_settle_ref.go。
+	settleRef settleRefCache
+
 	// D-193-A/R9：CMC ws 事件驱动健康检查（nil=未接线→wsConnected=false）。main 装配 ws.IsHealthy 注入。
 	cmcWsHealth func() bool
 	// D-236 变更9：CMC ws 内存 LiveState provider（nil=未接线→回退 DB）。main 装配 ws.LiveState 注入。

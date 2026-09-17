@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"context"
 	"math"
 	"strings"
 	"testing"
@@ -237,7 +238,7 @@ func TestOppToProtoUSDDerivation(t *testing.T) {
 		SpreadCost: 20, CommissionCost: 10, SlippageCost: 10, SwapCost: 10, // total 50
 	}
 	s := &Service{oppContractSize: resolver}
-	pb := s.oppToProto(cross)
+	pb := s.oppToProto(context.Background(), cross)
 	if math.Abs(pb.GapUsdPerUnit-3.0) > eps {
 		t.Errorf("cross gap_usd_per_unit want 3.0, got %v", pb.GapUsdPerUnit)
 	}
@@ -258,7 +259,7 @@ func TestOppToProtoUSDDerivation(t *testing.T) {
 		PriceBuy: 0.10, PriceSell: 0.1001, NetBps: 1095,
 		SpreadCost: 20, CommissionCost: 10, SlippageCost: 10, SwapCost: 10,
 	}
-	pb2 := s.oppToProto(carry)
+	pb2 := s.oppToProto(context.Background(), carry)
 	if math.Abs(pb2.GapUsdPerUnit-0.0001) > eps {
 		t.Errorf("carry gap_usd_per_unit want 0.0001, got %v", pb2.GapUsdPerUnit)
 	}
@@ -274,7 +275,7 @@ func TestOppToProtoUSDDerivation(t *testing.T) {
 
 	// CS 缺失 → per-lot 全 0，gap 仍填。
 	noCS := &Service{oppContractSize: func(_, _ string) (float64, bool) { return 0, false }}
-	pb3 := noCS.oppToProto(cross)
+	pb3 := noCS.oppToProto(context.Background(), cross)
 	if math.Abs(pb3.GapUsdPerUnit-3.0) > eps {
 		t.Errorf("no-CS gap_usd_per_unit want 3.0, got %v", pb3.GapUsdPerUnit)
 	}
@@ -284,7 +285,7 @@ func TestOppToProtoUSDDerivation(t *testing.T) {
 
 	// 未接线（nil）→ 同 CS 缺失语义。
 	bare := &Service{}
-	pb4 := bare.oppToProto(cross)
+	pb4 := bare.oppToProto(context.Background(), cross)
 	if pb4.NetUsdPerLot != 0 || pb4.CostUsdPerLot != 0 {
 		t.Errorf("unwired per-lot want 0, got net=%v cost=%v", pb4.NetUsdPerLot, pb4.CostUsdPerLot)
 	}

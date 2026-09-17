@@ -597,13 +597,16 @@ type Opportunity struct {
 	CreatedAt       *timestamppb.Timestamp `protobuf:"bytes,16,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt       *timestamppb.Timestamp `protobuf:"bytes,17,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	// D-086 验证阶梯：后端按 vkey 聚合填入（D-043 前端零信任只渲染）。
-	VerifiedLevel int32   `protobuf:"varint,24,opt,name=verified_level,json=verifiedLevel,proto3" json:"verified_level,omitempty"` // 0=V0 预估 / 1=V1 已验证（V2 预留）
-	VerifyRatio   float64 `protobuf:"fixed64,25,opt,name=verify_ratio,json=verifyRatio,proto3" json:"verify_ratio,omitempty"`      // R=Σrealized/Σexpected（不可用=0）
-	VerifySamples int32   `protobuf:"varint,26,opt,name=verify_samples,json=verifySamples,proto3" json:"verify_samples,omitempty"` // 验证样本数
-	AliasBuy      string  `protobuf:"bytes,27,opt,name=alias_buy,json=aliasBuy,proto3" json:"alias_buy,omitempty"`                 // D-175：买腿别名（空=回退 venue_buy）
-	AliasSell     string  `protobuf:"bytes,28,opt,name=alias_sell,json=aliasSell,proto3" json:"alias_sell,omitempty"`              // D-175：卖腿别名（空=回退 venue_sell）
-	AssetClass    string  `protobuf:"bytes,29,opt,name=asset_class,json=assetClass,proto3" json:"asset_class,omitempty"`           // D-300：跨标的同质资产类（XASSET_CARRY 填，如 GOLD；其余类型空）
-	CanonicalSell string  `protobuf:"bytes,30,opt,name=canonical_sell,json=canonicalSell,proto3" json:"canonical_sell,omitempty"`  // D-300：卖腿 canonical（XASSET_CARRY 跨 canonical 配对填；其余类型空=与买腿同）
+	VerifiedLevel int32    `protobuf:"varint,24,opt,name=verified_level,json=verifiedLevel,proto3" json:"verified_level,omitempty"`       // 0=V0 预估 / 1=V1 已验证（V2 预留）
+	VerifyRatio   float64  `protobuf:"fixed64,25,opt,name=verify_ratio,json=verifyRatio,proto3" json:"verify_ratio,omitempty"`            // R=Σrealized/Σexpected（不可用=0）
+	VerifySamples int32    `protobuf:"varint,26,opt,name=verify_samples,json=verifySamples,proto3" json:"verify_samples,omitempty"`       // 验证样本数
+	AliasBuy      string   `protobuf:"bytes,27,opt,name=alias_buy,json=aliasBuy,proto3" json:"alias_buy,omitempty"`                       // D-175：买腿别名（空=回退 venue_buy）
+	AliasSell     string   `protobuf:"bytes,28,opt,name=alias_sell,json=aliasSell,proto3" json:"alias_sell,omitempty"`                    // D-175：卖腿别名（空=回退 venue_sell）
+	AssetClass    string   `protobuf:"bytes,29,opt,name=asset_class,json=assetClass,proto3" json:"asset_class,omitempty"`                 // D-300：跨标的同质资产类（XASSET_CARRY 填，如 GOLD；其余类型空）
+	CanonicalSell string   `protobuf:"bytes,30,opt,name=canonical_sell,json=canonicalSell,proto3" json:"canonical_sell,omitempty"`        // D-300：卖腿 canonical（XASSET_CARRY 跨 canonical 配对填；其余类型空=与买腿同）
+	SettleNetBps  *float64 `protobuf:"fixed64,31,opt,name=settle_net_bps,json=settleNetBps,proto3,oneof" json:"settle_net_bps,omitempty"` // D-318：结算口径净息差（perp 腿 funding 项以近 7d funding_history 均值替换预测值；单位同 net_bps=年化百分点）。无 perp 腿/缺数据=缺省。
+	SettleNetUsd  *float64 `protobuf:"fixed64,32,opt,name=settle_net_usd,json=settleNetUsd,proto3,oneof" json:"settle_net_usd,omitempty"` // D-318：同上 USD 口径（net_usd 同 notional 派生）。
+	SettleSamples *int32   `protobuf:"varint,33,opt,name=settle_samples,json=settleSamples,proto3,oneof" json:"settle_samples,omitempty"` // D-318：参与均值的期数（两腿取小）。
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -846,6 +849,27 @@ func (x *Opportunity) GetCanonicalSell() string {
 		return x.CanonicalSell
 	}
 	return ""
+}
+
+func (x *Opportunity) GetSettleNetBps() float64 {
+	if x != nil && x.SettleNetBps != nil {
+		return *x.SettleNetBps
+	}
+	return 0
+}
+
+func (x *Opportunity) GetSettleNetUsd() float64 {
+	if x != nil && x.SettleNetUsd != nil {
+		return *x.SettleNetUsd
+	}
+	return 0
+}
+
+func (x *Opportunity) GetSettleSamples() int32 {
+	if x != nil && x.SettleSamples != nil {
+		return *x.SettleSamples
+	}
+	return 0
 }
 
 type ListOpportunitiesRequest struct {
@@ -17788,7 +17812,8 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x05limit\x18\x04 \x01(\x05R\x05limit\x12\x16\n" +
 	"\x06offset\x18\x05 \x01(\x05R\x06offset\"A\n" +
 	"\x11ListFactsResponse\x12,\n" +
-	"\x05facts\x18\x01 \x03(\v2\x16.arb.dashboard.v1.FactR\x05facts\"\xee\b\n" +
+	"\x05facts\x18\x01 \x03(\v2\x16.arb.dashboard.v1.FactR\x05facts\"\xa9\n" +
+	"\n" +
 	"\vOpportunity\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x1b\n" +
@@ -17829,8 +17854,14 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"alias_sell\x18\x1c \x01(\tR\taliasSell\x12\x1f\n" +
 	"\vasset_class\x18\x1d \x01(\tR\n" +
 	"assetClass\x12%\n" +
-	"\x0ecanonical_sell\x18\x1e \x01(\tR\rcanonicalSellB\x11\n" +
-	"\x0f_breakeven_days\"\\\n" +
+	"\x0ecanonical_sell\x18\x1e \x01(\tR\rcanonicalSell\x12)\n" +
+	"\x0esettle_net_bps\x18\x1f \x01(\x01H\x01R\fsettleNetBps\x88\x01\x01\x12)\n" +
+	"\x0esettle_net_usd\x18  \x01(\x01H\x02R\fsettleNetUsd\x88\x01\x01\x12*\n" +
+	"\x0esettle_samples\x18! \x01(\x05H\x03R\rsettleSamples\x88\x01\x01B\x11\n" +
+	"\x0f_breakeven_daysB\x11\n" +
+	"\x0f_settle_net_bpsB\x11\n" +
+	"\x0f_settle_net_usdB\x11\n" +
+	"\x0f_settle_samples\"\\\n" +
 	"\x18ListOpportunitiesRequest\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
