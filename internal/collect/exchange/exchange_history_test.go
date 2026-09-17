@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -63,8 +64,15 @@ func TestBinanceFundingHistory_Poll(t *testing.T) {
 
 // TestOKXFundingHistory_Poll 解析 OKX funding-rate-history 响应并年化。
 // 响应形状：{data:[{fundingRate(string), fundingTime(ms string)}]}。
+// D-321 S2：mock 补 funding-rate 周期探测端点（8h 差值 → ×3，值断言 10.95 不变）。
 func TestOKXFundingHistory_Poll(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v5/public/funding-rate" {
+			json.NewEncoder(w).Encode(map[string]any{"code": "0", "data": []map[string]any{
+				{"fundingRate": "0.0001", "fundingTime": "1788163200000", "nextFundingTime": "1788192000000"},
+			}})
+			return
+		}
 		resp := map[string]any{
 			"code": "0",
 			"data": []map[string]any{
@@ -186,7 +194,7 @@ func TestFundingHistoryFailOpen(t *testing.T) {
 		case "COPPER-USDT-SWAP":
 			w.WriteHeader(http.StatusBadRequest)
 		case "PGFAIL-USDT-SWAP":
-			if q.Get("before") != "" { // 第二页失败
+			if q.Get("after") != "" { // D-321 S1 修后翻页游标=after：第二页失败
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
@@ -238,4 +246,217 @@ func TestStartTS_Incremental(t *testing.T) {
 	if !start.Equal(want) {
 		t.Errorf("incremental want %v, got %v", want, start)
 	}
+}
+
+// —— D-321 S3：OKX 增量方向/翻页/空窗/周期锚 ——
+
+// okxPageReq 记录一次 funding-rate-history 请求的方向参数（T1/T2 断言用）。
+type okxPageReq struct{ before, after string }
+
+// okxRealSemanticsHandler 按真实 OKX 语义 mock funding-rate-history（D-321 API 实证：
+// before=X 只回「更新于 X」、after=X 只回「早于 X」，降序返回，limit 截断）；
+// 周期探测端点回 8h 差值（与方向断言无关）。
+func okxRealSemanticsHandler(recs []map[string]any, reqs *[]okxPageReq) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v5/public/funding-rate" {
+			json.NewEncoder(w).Encode(map[string]any{"code": "0", "data": []map[string]any{
+				{"fundingTime": "1788998400000", "nextFundingTime": "1789027200000"},
+			}})
+			return
+		}
+		q := r.URL.Query()
+		*reqs = append(*reqs, okxPageReq{before: q.Get("before"), after: q.Get("after")})
+		var beforeMs, afterMs int64
+		if s := q.Get("before"); s != "" {
+			beforeMs, _ = strconv.ParseInt(s, 10, 64)
+		}
+		if s := q.Get("after"); s != "" {
+			afterMs, _ = strconv.ParseInt(s, 10, 64)
+		}
+		limit := 100
+		if n, err := strconv.Atoi(q.Get("limit")); err == nil && n > 0 {
+			limit = n
+		}
+		out := make([]map[string]any, 0, limit)
+		for _, rec := range recs { // recs 须降序
+			ftMs, _ := strconv.ParseInt(rec["fundingTime"].(string), 10, 64)
+			if q.Get("before") != "" && ftMs <= beforeMs {
+				continue
+			}
+			if q.Get("after") != "" && ftMs >= afterMs {
+				continue
+			}
+			if len(out) == limit {
+				break
+			}
+			out = append(out, rec)
+		}
+		json.NewEncoder(w).Encode(map[string]any{"code": "0", "data": out})
+	}
+}
+
+// okxRecs 构造降序罐装记录（fundingTime 毫秒字符串）。
+func okxRecs(ftMs ...int64) []map[string]any {
+	recs := make([]map[string]any, len(ftMs))
+	for i, ms := range ftMs {
+		recs[i] = map[string]any{"fundingRate": "0.0001", "fundingTime": strconv.FormatInt(ms, 10)}
+	}
+	return recs
+}
+
+// TestOKXFundingHistory_IncrementalDirection D-321 T1 主锚：增量必须取「比 watermark 更新」。
+// mock 实现真实 OKX 语义，罐装数据含 watermark 两侧记录；旧码把 watermark 塞 after
+// （取更早）→ 只回旧集 → RED。
+func TestOKXFundingHistory_IncrementalDirection(t *testing.T) {
+	t0 := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC) // watermark=最后已知结算
+	var reqs []okxPageReq
+	// 降序罐装：3 条新于 t0（09-10 08:00/16:00、09-11 00:00）+ 2 条旧于 t0（09-09 16:00/08:00）
+	recs := okxRecs(1789084800000, 1789056000000, 1789027200000, 1788969600000, 1788940800000)
+	srv := httptest.NewServer(okxRealSemanticsHandler(recs, &reqs))
+	defer srv.Close()
+
+	resolver := func(context.Context, string, string) (time.Time, error) { return t0, nil }
+	cfg := Config{Symbols: []string{"BTC"}, OKXBaseURL: srv.URL, Client: srv.Client()}
+	out, err := NewOKXFundingHistory(cfg, resolver).Poll(context.Background())
+	if err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	want := map[int64]bool{1789027200000: true, 1789056000000: true, 1789084800000: true}
+	if len(out) != len(want) {
+		t.Fatalf("want only %d records newer than watermark, got %d", len(want), len(out))
+	}
+	for _, f := range out {
+		if !want[f.Ts.UnixMilli()] {
+			t.Errorf("produced record not newer than watermark: ts=%d", f.Ts.UnixMilli())
+		}
+	}
+}
+
+// TestOKXFundingHistory_PagingWithinWindow D-321 T2：watermark 之后 >100 条须窗口内翻页——
+// 第二请求带 after=页1最旧，共产出 150 条全部新于 watermark 且无重。
+func TestOKXFundingHistory_PagingWithinWindow(t *testing.T) {
+	t0 := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
+	t0ms := t0.UnixMilli()
+	const step = int64(8 * 3600 * 1000)
+	recs := make([]map[string]any, 150) // 降序：i=0 最新
+	for i := range recs {
+		ft := t0ms + int64(150-i)*step
+		recs[i] = map[string]any{"fundingRate": "0.0001", "fundingTime": strconv.FormatInt(ft, 10)}
+	}
+	var reqs []okxPageReq
+	srv := httptest.NewServer(okxRealSemanticsHandler(recs, &reqs))
+	defer srv.Close()
+
+	resolver := func(context.Context, string, string) (time.Time, error) { return t0, nil }
+	cfg := Config{Symbols: []string{"BTC"}, OKXBaseURL: srv.URL, Client: srv.Client()}
+	out, err := NewOKXFundingHistory(cfg, resolver).Poll(context.Background())
+	if err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	if len(reqs) != 2 {
+		t.Fatalf("want 2 paged requests, got %d: %+v", len(reqs), reqs)
+	}
+	if reqs[0].before == "" || reqs[0].after != "" {
+		t.Errorf("page1 want before=<watermark> without after, got %+v", reqs[0])
+	}
+	if want := recs[99]["fundingTime"]; reqs[1].after != want { // 页1最旧=第 100 新
+		t.Errorf("page2 want after=<page1 oldest %s>, got %+v", want, reqs[1])
+	}
+	if len(out) != 150 {
+		t.Fatalf("want 150 facts, got %d", len(out))
+	}
+	seen := map[int64]bool{}
+	for _, f := range out {
+		ms := f.Ts.UnixMilli()
+		if ms <= t0ms {
+			t.Errorf("record not newer than watermark: %d", ms)
+		}
+		if seen[ms] {
+			t.Errorf("duplicate record: %d", ms)
+		}
+		seen[ms] = true
+	}
+}
+
+// TestOKXFundingHistory_EmptyWindow D-321 T3：watermark 新于全部记录 → 0 facts 无错。
+// 旧码把 watermark 塞 after（取更早）→ 反而吐出全部旧记录 → RED。
+func TestOKXFundingHistory_EmptyWindow(t *testing.T) {
+	var reqs []okxPageReq
+	recs := okxRecs(1789084800000, 1789056000000, 1789027200000) // 全部旧于 watermark
+	srv := httptest.NewServer(okxRealSemanticsHandler(recs, &reqs))
+	defer srv.Close()
+
+	t0 := time.Date(2026, 9, 12, 0, 0, 0, 0, time.UTC)
+	resolver := func(context.Context, string, string) (time.Time, error) { return t0, nil }
+	cfg := Config{Symbols: []string{"BTC"}, OKXBaseURL: srv.URL, Client: srv.Client()}
+	out, err := NewOKXFundingHistory(cfg, resolver).Poll(context.Background())
+	if err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	if len(out) != 0 {
+		t.Fatalf("watermark newer than all records: want 0 facts, got %d", len(out))
+	}
+}
+
+// TestOKXFundingHistory_PeriodsProbe D-321 T4：funding-rate 端点 ft/nft 差值探测结算周期
+// （4h 差值 → ×6），端点 400 → 回退 ×3。
+func TestOKXFundingHistory_PeriodsProbe(t *testing.T) {
+	t0 := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
+	resolver := func(context.Context, string, string) (time.Time, error) { return t0, nil }
+	hist := []map[string]any{ // 降序，均新于 watermark
+		{"fundingRate": "0.0001", "fundingTime": "1789056000000"},
+		{"fundingRate": "0.0001", "fundingTime": "1789027200000"},
+	}
+
+	t.Run("probe4h", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/api/v5/public/funding-rate" { // CL-USDT-SWAP 实测形态：4h 结算
+				json.NewEncoder(w).Encode(map[string]any{"code": "0", "data": []map[string]any{
+					{"fundingTime": "1789027200000", "nextFundingTime": "1789041600000"},
+				}})
+				return
+			}
+			json.NewEncoder(w).Encode(map[string]any{"code": "0", "data": hist})
+		}))
+		defer srv.Close()
+		cfg := Config{Symbols: []string{"BTC"}, OKXBaseURL: srv.URL, Client: srv.Client()}
+		out, err := NewOKXFundingHistory(cfg, resolver).Poll(context.Background())
+		if err != nil {
+			t.Fatalf("Poll: %v", err)
+		}
+		if len(out) != 2 {
+			t.Fatalf("want 2 facts, got %d", len(out))
+		}
+		// 0.0001 × 6 × 365 × 100 = 21.9
+		for _, f := range out {
+			if f.Value < 21.8 || f.Value > 22.0 {
+				t.Errorf("4h probe want ~21.9, got %.4f", f.Value)
+			}
+		}
+	})
+
+	t.Run("probeFail", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/api/v5/public/funding-rate" {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			json.NewEncoder(w).Encode(map[string]any{"code": "0", "data": hist})
+		}))
+		defer srv.Close()
+		cfg := Config{Symbols: []string{"BTC"}, OKXBaseURL: srv.URL, Client: srv.Client()}
+		out, err := NewOKXFundingHistory(cfg, resolver).Poll(context.Background())
+		if err != nil {
+			t.Fatalf("Poll: %v", err)
+		}
+		if len(out) != 2 {
+			t.Fatalf("want 2 facts, got %d", len(out))
+		}
+		// 探测失败回退 ×3：0.0001 × 3 × 365 × 100 = 10.95
+		for _, f := range out {
+			if f.Value < 10.9 || f.Value > 11.0 {
+				t.Errorf("probe-fail fallback want ~10.95, got %.4f", f.Value)
+			}
+		}
+	})
 }

@@ -103,9 +103,11 @@ func (b *BinanceFundingHistory) Poll(ctx context.Context) ([]fact.Fact, error) {
 }
 
 // OKXFundingHistory 采集 OKX funding 结算历史。
-// 端点 GET /api/v5/public/funding-rate-history?instId=&after=&before=&limit=100
+// 端点 GET /api/v5/public/funding-rate-history?instId=&before=&after=&limit=100
 // 响应：{data:[{fundingRate(string), fundingTime(ms string)}]}，降序（新→旧）。
-// limit 100，30 天 8h=90 条单页够；cap 触发 4h/1h 时分页（before=最旧 fundingTime）。
+// 分页语义与参数命名相反（D-321 API 实证）：before=X 取「更新于 X」、after=X 取「早于 X」。
+// 增量上界=before=watermark（取比已知更新的），窗口内翻页=after=本页最旧 fundingTime。
+// limit 100，30 天 8h=90 条单页够；4h/1h 结算满页翻页。
 type OKXFundingHistory struct {
 	cfg     Config
 	resolve HistoryStartResolver
@@ -116,6 +118,36 @@ func NewOKXFundingHistory(cfg Config, r HistoryStartResolver) *OKXFundingHistory
 }
 
 func (o *OKXFundingHistory) Kind() string { return fact.KindFundingHistory }
+
+// okxFundingPeriodsPerDay D-321 S2：探测 per-symbol 结算周期——funding-rate 端点
+// fundingTime/nextFundingTime 差值推导（与实时路径 D-079 同口径）。OKX 存在 4h 结算
+// symbol（CL-USDT-SWAP 实测），旧 ×3 硬编码低估 2×。任一失败 printf+回退 3
+// （fail-open，同构增量路径的逐符号跳过）。
+func (o *OKXFundingHistory) okxFundingPeriodsPerDay(ctx context.Context, instID string) int {
+	url := fmt.Sprintf("%s/api/v5/public/funding-rate?instId=%s", o.cfg.OKXBaseURL, instID)
+	body, err := getJSON(ctx, o.cfg.Client, url)
+	if err != nil {
+		fmt.Printf("[exchange:okx] funding_history %s period probe: %v (fallback 3/day)\n", instID, err)
+		return fundingHistoryPeriodsPerDay
+	}
+	data, ok := body["data"].([]any)
+	if !ok || len(data) == 0 {
+		fmt.Printf("[exchange:okx] funding_history %s period probe empty (fallback 3/day)\n", instID)
+		return fundingHistoryPeriodsPerDay
+	}
+	item, _ := data[0].(map[string]any)
+	var ftMs, nftMs float64
+	if s, ok := item["fundingTime"].(string); ok {
+		fmt.Sscanf(s, "%f", &ftMs)
+	}
+	if s, ok := item["nextFundingTime"].(string); ok {
+		fmt.Sscanf(s, "%f", &nftMs)
+	}
+	if nftMs-ftMs <= 0 {
+		fmt.Printf("[exchange:okx] funding_history %s period probe ft=%v nft=%v (fallback 3/day)\n", instID, ftMs, nftMs)
+	}
+	return fundingPeriodsPerDay(nftMs - ftMs)
+}
 
 func (o *OKXFundingHistory) Poll(ctx context.Context) ([]fact.Fact, error) {
 	var out []fact.Fact
@@ -129,14 +161,18 @@ symLoop:
 			continue
 		}
 		instID := sym + "-USDT-SWAP"
-		afterMs := strconv.FormatInt(start.UnixMilli(), 10)
-		before := "" // 首页无上界（从最新开始）
+		periods := o.okxFundingPeriodsPerDay(ctx, instID) // D-321 S2：per-symbol 周期真值
+		// D-321 S1：参数角色对调——watermark 放 before（取更新方向）。旧码塞 after
+		// （OKX 语义=取更早）→ 每轮只重取已知历史，dedup 零新增零报错，watermark 冻结
+		// （KB pagination-direction-silent-freeze）。
+		beforeMs := strconv.FormatInt(start.UnixMilli(), 10)
+		after := "" // 窗口内翻页游标（首页不带）
 		var symFacts []fact.Fact
 		for {
-			url := fmt.Sprintf("%s/api/v5/public/funding-rate-history?instId=%s&after=%s&limit=100",
-				o.cfg.OKXBaseURL, instID, afterMs)
-			if before != "" {
-				url += "&before=" + before
+			url := fmt.Sprintf("%s/api/v5/public/funding-rate-history?instId=%s&before=%s&limit=100",
+				o.cfg.OKXBaseURL, instID, beforeMs)
+			if after != "" {
+				url += "&after=" + after
 			}
 			body, err := getJSON(ctx, o.cfg.Client, url)
 			if err != nil {
@@ -160,7 +196,7 @@ symLoop:
 				ftMs, _ := strconv.ParseInt(ftStr, 10, 64)
 				symFacts = append(symFacts, fact.Fact{
 					Kind: fact.KindFundingHistory, Venue: VenueOKX, Symbol: pair,
-					Value: annualizeFunding(f, fundingHistoryPeriodsPerDay),
+					Value: annualizeFunding(f, periods),
 					Unit:  fact.UnitPctAnnualized, Ts: time.UnixMilli(ftMs), Src: "okx_v5_history",
 				})
 				oldest = ftStr
@@ -168,7 +204,7 @@ symLoop:
 			if len(data) < 100 {
 				break
 			}
-			before = oldest // 翻页：取比最旧更早的记录
+			after = oldest // 翻页：取比本页最旧更早、仍新于 watermark 的下一段
 		}
 		out = append(out, symFacts...)
 	}
