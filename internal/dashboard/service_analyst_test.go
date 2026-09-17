@@ -20,8 +20,25 @@ func newAnalystService(knRoot, notePath string) *Service {
 	return &Service{analyst: &analystDeps{knRoot: knRoot, notePath: notePath}}
 }
 
+// analystTempDir D-316 R1a：本机 FS 负载偶发 readdirent EBADF（同包 fileCache CI 实证同族），
+// 框架把 t.TempDir 清理失败判测试失败（断言从未失败）——自管 MkdirTemp+容忍清理统一封装。
+// 本文件全部临时目录（7 处）须经此 helper，禁再直用 t.TempDir。
+func analystTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "analyst-test")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() {
+		if rmErr := os.RemoveAll(dir); rmErr != nil {
+			t.Logf("cleanup (non-fatal, host FS EBADF family transient, D-316 R1a): %v", rmErr)
+		}
+	})
+	return dir
+}
+
 func TestAppendAnalystNoteRejectsEmpty(t *testing.T) {
-	s := newAnalystService(t.TempDir(), "docs/经验库/待归纳-分析员.md")
+	s := newAnalystService(analystTempDir(t), "docs/经验库/待归纳-分析员.md")
 	_, err := s.AppendAnalystNote(context.Background(), connect.NewRequest(&v1.AppendAnalystNoteRequest{}))
 	if err == nil {
 		t.Fatal("expected error for empty question/summary")
@@ -29,7 +46,7 @@ func TestAppendAnalystNoteRejectsEmpty(t *testing.T) {
 }
 
 func TestAppendAnalystNoteRejectsPathEscape(t *testing.T) {
-	dir := t.TempDir()
+	dir := analystTempDir(t)
 	s := &Service{analyst: &analystDeps{knRoot: dir, notePath: "../../etc/passwd"}}
 	_, err := s.AppendAnalystNote(context.Background(), connect.NewRequest(&v1.AppendAnalystNoteRequest{
 		Question: "q", Summary: "s",
@@ -40,7 +57,7 @@ func TestAppendAnalystNoteRejectsPathEscape(t *testing.T) {
 }
 
 func TestAppendAnalystNoteWrites(t *testing.T) {
-	dir := t.TempDir()
+	dir := analystTempDir(t)
 	rel := "docs/经验库/待归纳-分析员.md"
 	_ = os.MkdirAll(filepath.Join(dir, "docs", "经验库"), 0755)
 	s := newAnalystService(dir, rel)
@@ -62,7 +79,7 @@ func TestAppendAnalystNoteWrites(t *testing.T) {
 }
 
 func TestAppendNoteConcurrent(t *testing.T) {
-	dir := t.TempDir()
+	dir := analystTempDir(t)
 	rel := "docs/经验库/待归纳-分析员.md"
 	full := filepath.Join(dir, rel)
 	_ = os.MkdirAll(filepath.Dir(full), 0755)
@@ -157,7 +174,7 @@ func TestCleanNoteField(t *testing.T) {
 
 // TestAppendAnalystNoteCleansMultiline R1 返修③：多行 summary 落盘后产物单行、管道已转义、无 U+FFFD。
 func TestAppendAnalystNoteCleansMultiline(t *testing.T) {
-	dir := t.TempDir()
+	dir := analystTempDir(t)
 	rel := "docs/经验库/待归纳-分析员.md"
 	_ = os.MkdirAll(filepath.Join(dir, "docs", "经验库"), 0755)
 	s := newAnalystService(dir, rel)
@@ -193,18 +210,9 @@ func TestAppendAnalystNoteCleansMultiline(t *testing.T) {
 }
 
 // TestAppendAnalystNoteTruncatesChineseSafe R1 返修③：中文 60+ 字符截断无 U+FFFD。
-// D-316③：自管临时目录替代 t.TempDir——本机 FS 负载下偶发 readdirent EBADF（同包 fileCache
-// 先例同族），框架把 TempDir 清理失败判测试失败而断言从未失败；容忍清理只记日志不断言。
+// D-316③/R1a：容忍清理统一走 analystTempDir helper（本文件 7 处临时目录全覆盖）。
 func TestAppendAnalystNoteTruncatesChineseSafe(t *testing.T) {
-	dir, mkErr := os.MkdirTemp("", "analyst-note-test")
-	if mkErr != nil {
-		t.Fatalf("MkdirTemp: %v", mkErr)
-	}
-	t.Cleanup(func() {
-		if rmErr := os.RemoveAll(dir); rmErr != nil {
-			t.Logf("cleanup (non-fatal, host FS EBADF family transient, D-316③): %v", rmErr)
-		}
-	})
+	dir := analystTempDir(t)
 	rel := "docs/经验库/待归纳-分析员.md"
 	_ = os.MkdirAll(filepath.Join(dir, "docs", "经验库"), 0755)
 	s := newAnalystService(dir, rel)
@@ -272,7 +280,7 @@ func TestResolveAiConfigNilDeps(t *testing.T) {
 
 // TestAppendAnalystNoteTableFormat R5 返修②：落盘格式为表格行。
 func TestAppendAnalystNoteTableFormat(t *testing.T) {
-	dir := t.TempDir()
+	dir := analystTempDir(t)
 	rel := "docs/经验库/待归纳-分析员.md"
 	_ = os.MkdirAll(filepath.Join(dir, "docs", "经验库"), 0755)
 	s := newAnalystService(dir, rel)

@@ -167,13 +167,27 @@ func TestD250_CmcBlockCloseoutWarningLevels(t *testing.T) {
 // 断言 D-250-b：APR 渲染四舍五入、不向下截断（无 Math.floor 回归）。
 // D-316②：当代实现=toFixed(2)——D-288（a385e139，TRX 页从简）将 Math.round 合法替换为
 // toFixed(2)，原锚断言 Math.round 字面量随实现细节过期（master 恒红根因）；不变量不变。
+// D-316 R1b：全文件 Contains 灵敏度不足（4 处 toFixed(2) 任意存活即过）——行级锚定
+// carry.annualizedPct / hedgedAnnualizedPct 各自所在行必须带 toFixed(2)（两键消子串歧义：
+// "annualizedPct" 是 "hedgedAnnualizedPct" 的子串，须带接收者前缀区分）。
 func TestD250_APRRound3NoFloor(t *testing.T) {
 	src := hedgeStructureSource(t)
-	if !strings.Contains(src, "toFixed(2)") {
-		t.Fatal("APR 渲染缺 toFixed(2) 舍入（D-250 不变量=四舍五入非截断；当代实现 D-288 toFixed）")
-	}
 	if strings.Contains(src, "Math.floor") {
 		t.Fatal("APR 渲染仍含 Math.floor（D-250 变更2：floor 不得回归）")
+	}
+	for _, field := range []string{"carry.annualizedPct", "hedgedAnnualizedPct"} {
+		anchored := false
+		for _, line := range strings.Split(src, "\n") {
+			// 锚「字段紧贴舍入调用」（field+".toFixed(2)"）——同行他字段（如 hedgedCumUsd）
+			// 的 toFixed(2) 不能替代本字段的舍入（R1 变异实证行级 Contains 漏检）。
+			if strings.Contains(line, field+".toFixed(2)") {
+				anchored = true
+				break
+			}
+		}
+		if !anchored {
+			t.Fatalf("D-250 R1b: APR 渲染缺舍入锚——%s 须以 .toFixed(2) 舍入（四舍五入非截断）", field)
+		}
 	}
 }
 
