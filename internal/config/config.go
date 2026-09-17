@@ -154,6 +154,10 @@ type Config struct {
 	SwapArbEntryBasisMaxBps float64 // ARB_SWAPARB_ENTRY_BASIS_MAX_BPS（默认 30）
 	// D-180 S3：基差止损阈值（bps），PnL_bps < -BasisStopBps → 平仓（默认 4）。
 	SwapArbBasisStopBps float64 // ARB_SWAPARB_BASIS_STOP_BPS（默认 4）
+	// D-328 S5：carry 入口 funding regime 持久性闸三参数。
+	CarryRegimeWindowH    float64 // ARB_CARRY_REGIME_WINDOW_H（默认 24）
+	CarryRegimeFloorPct   float64 // ARB_CARRY_REGIME_FLOOR_PCT（默认 2.0，年化百分点）
+	CarryRegimeMinSamples int     // ARB_CARRY_REGIME_MIN_SAMPLES（默认 12）
 	// D-180 S4：入场门禁——净息差厚度下限（bps/日，spec 源×折扣后比较；默认 1.0）。
 	SwapArbMinNetCarryBps float64 // ARB_SWAPARB_MIN_NET_CARRY_BPS（默认 1.0）
 	// D-180 S4：spec 源折扣系数（冷启动不裸信规格；默认 0.5）。仅作用入场门禁，止损/展示用原值。

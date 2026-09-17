@@ -76,6 +76,9 @@ func Load() *Config {
 		SwapArbEntrySpreadMaxBps:   envFloat("ARB_SWAPARB_ENTRY_SPREAD_MAX_BPS", 30.0), // D-169 P0
 		SwapArbEntryBasisMaxBps:    envFloat("ARB_SWAPARB_ENTRY_BASIS_MAX_BPS", 30.0),  // D-169 P0
 		SwapArbBasisStopBps:        envFloat("ARB_SWAPARB_BASIS_STOP_BPS", 4.0),        // D-180 S3
+		CarryRegimeWindowH:         envFloat("ARB_CARRY_REGIME_WINDOW_H", 24.0),        // D-328 S5
+		CarryRegimeFloorPct:        envFloat("ARB_CARRY_REGIME_FLOOR_PCT", 2.0),        // D-328 S5
+		CarryRegimeMinSamples:      envInt("ARB_CARRY_REGIME_MIN_SAMPLES", 12),         // D-328 S5
 		SwapArbMinNetCarryBps:      envFloat("ARB_SWAPARB_MIN_NET_CARRY_BPS", 1.0),     // D-180 S4
 		SwapArbSpecDiscount:        envFloat("ARB_SWAPARB_SPEC_DISCOUNT", 0.5),         // D-180 S4
 		SwapArbMaxPaybackDays:      envInt("ARB_SWAPARB_MAX_PAYBACK_DAYS", 30),         // D-180 S4

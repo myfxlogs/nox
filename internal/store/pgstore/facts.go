@@ -149,3 +149,32 @@ func (s *Store) PurgeOptParityFacts(ctx context.Context, maxAge time.Duration) (
 	}
 	return tag.RowsAffected(), nil
 }
+
+// FactPoint funding 预测流窗口采样点（D-328 S1：行集而非聚合，供收入腿判定与测试断言）。
+type FactPoint struct {
+	Ts    time.Time
+	Value float64
+}
+
+// FundingPredWindow 返回 funding 预测流在 [since, ∞) 的全部样本（ts 升序）。
+// D-328 S1：carry 入口持久性闸数据源——kind='funding' 预测流实时入库且 facts 留全史
+// （funding_history 结算史是 24h 批量，结算后最长一天才入库，不可用于入场时点判定）。
+func (s *Store) FundingPredWindow(ctx context.Context, venue, symbol string, since time.Time) ([]FactPoint, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT ts, value FROM facts
+		 WHERE kind='funding' AND venue=$1 AND symbol=$2 AND ts>=$3 ORDER BY ts`,
+		venue, symbol, since)
+	if err != nil {
+		return nil, fmt.Errorf("funding pred window: %w", err)
+	}
+	defer rows.Close()
+	var out []FactPoint
+	for rows.Next() {
+		var p FactPoint
+		if err := rows.Scan(&p.Ts, &p.Value); err != nil {
+			return nil, fmt.Errorf("scan funding pred window: %w", err)
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
