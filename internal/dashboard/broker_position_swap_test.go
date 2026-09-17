@@ -43,6 +43,22 @@ func TestAnnotateCEXSwapWithMap_NoCashflowKeepsOriginal(t *testing.T) {
 	}
 }
 
+// TestAnnotateCEXSwapWithMap_VenueTruthWins D-322 S3a：venue 真值优先——
+// gate pnl_fund 已报实收（bp.Swap=+0.1209）不被 cashflow 估算（−0.1964）覆写；
+// 旧码（D-152）无条件覆写，venue 真值被账本估算盖掉（pos 485 swap 列显示 −0.2 根因）。
+func TestAnnotateCEXSwapWithMap_VenueTruthWins(t *testing.T) {
+	bps := []*v1.BrokerPosition{
+		{VenueKey: "gate:perp", Venue: "gate", Ticket: "CL_USDT", PositionId: 485, Swap: 0.1209},
+	}
+	sums := map[string]float64{
+		"485\x00gate:perp": -0.1964, // 账本估算（错号行形态）
+	}
+	annotateCEXSwapWithMap(bps, sums)
+	if math.Abs(bps[0].Swap-0.1209) > 0.0001 {
+		t.Errorf("gate:perp swap = %.4f, want 0.1209 (venue 真值优先，不被估算覆写)", bps[0].Swap)
+	}
+}
+
 // TestAnnotateCEXSwapWithMap_MTNotTouched MT 仓 swap 不动（Order.Swap 透传链完整）。
 // 52993526:mt5 pos=456 swap=4.99 → 不被 cashflow 覆盖（isCEXVenueKey=false）。
 func TestAnnotateCEXSwapWithMap_MTNotTouched(t *testing.T) {

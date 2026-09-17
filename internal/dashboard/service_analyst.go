@@ -51,7 +51,7 @@ func (s *Service) EnrichPositionForAnalyst() func(ctx context.Context, p *pgstor
 		pb := positionToProto(p)
 		// D-118：analyst 路径无批量预取，传空 map（enrichOne 退化为纯结算天数，无三倍日加成）
 		// D-146 S5：analyst 路径无 funding 预取，传空 map（enrichOne 无 funding 加成）
-		enrichOne(ctx, s, pb, legs, s.bpm.Snapshot(), time.Now(), map[string]time.Weekday{}, map[int64]float64{})
+		enrichOne(ctx, s, pb, legs, s.bpm.Snapshot(), time.Now(), map[string]time.Weekday{}, map[string]float64{})
 		derived := map[string]any{}
 		if pb.FloatingPnlUsd != nil {
 			derived["floating_pnl_usd"] = *pb.FloatingPnlUsd

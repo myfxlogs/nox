@@ -138,7 +138,9 @@ func annotateAliasWithMap(bps []*v1.BrokerPosition, m map[string]string) {
 
 // annotateCEXSwap D-152 微件①：CEX 腿按 (position_id, venue) 聚合 position_cashflows 填 swap 字段。
 // MT 腿不动（Order.Swap 透传链已完整）。仅在 annotatePositionID 之后调用（需 position_id）。
-// 查询失败不阻断（fail-open，保留原 swap）。无 cashflow 行的 CEX 仓保留原 swap（Gate funding / 0）。
+// 查询失败不阻断（fail-open，保留原 swap）。
+// D-322 S3a：venue 真值优先——bp.Swap≠0（gate pnl_fund 实报）不被 cashflow 估算覆写；
+// bp.Swap=0（gate 未结算 / binance、okx 无 Swap 字段）才用 cashflow 兜底。
 func annotateCEXSwap(ctx context.Context, store *pgstore.Store, bps []*v1.BrokerPosition) {
 	if len(bps) == 0 || store == nil {
 		return
@@ -163,11 +165,12 @@ func annotateCEXSwap(ctx context.Context, store *pgstore.Store, bps []*v1.Broker
 }
 
 // annotateCEXSwapWithMap 纯函数：用预建 (posID\x00venue)→sum map 标注 CEX 仓 swap（可单测）。
+// D-322 S3a：只在 venue 未报（bp.Swap=0）时兜底——venue 实报真值（gate pnl_fund≠0）优先。
 func annotateCEXSwapWithMap(bps []*v1.BrokerPosition, sums map[string]float64) {
 	for _, bp := range bps {
 		if bp.PositionId > 0 && isCEXVenueKey(bp.VenueKey) {
 			key := fmt.Sprintf("%d\x00%s", bp.PositionId, bp.VenueKey)
-			if sum, ok := sums[key]; ok {
+			if sum, ok := sums[key]; ok && bp.Swap == 0 {
 				bp.Swap = sum
 			}
 		}

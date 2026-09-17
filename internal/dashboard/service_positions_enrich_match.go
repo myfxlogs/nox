@@ -5,6 +5,7 @@ package dashboard
 
 import (
 	"context"
+	"fmt"
 
 	"arb/internal/notional"
 	"arb/internal/store/pgstore"
@@ -45,6 +46,35 @@ func matchBrokerLegs(openLegs []pgstore.PositionLeg, brokerSnap []*v1.BrokerPosi
 		}
 	}
 	return floating, swap, commission, matched
+}
+
+// fundingForLegs D-322 S3b：CEX 腿 funding cashflow 按 venue 去重并入回本口径。
+// 去重谓词与 matchBrokerLegs 同型（venueKey+symbol+positionId）：该腿匹配到 broker position
+// 且 bp.Swap≠0（venue 实报收讫，已计入 swapAccrued）→ 跳过该 venue 的 cashflow 估算；
+// 未匹配或 bp.Swap=0（binance/okx 无 Swap 字段恒 0）→ cashflow 兜底计入。
+// MT 腿不入账（swap 走 broker 快照，口径同 D-146 S5 前）；每 venue 只计一次（cashflow 按
+// (pos,venue) 聚合，多腿同 venue 会重复累加）。sums=SumCashflowsByPosVenue 预取（key=posID\x00venue）。
+func fundingForLegs(posID int64, openLegs []pgstore.PositionLeg, brokerSnap []*v1.BrokerPosition, sums map[string]float64) float64 {
+	total := 0.0
+	counted := make(map[string]bool)
+	for _, leg := range openLegs {
+		if !isCEXVenueKey(leg.Venue) || counted[leg.Venue] {
+			continue
+		}
+		counted[leg.Venue] = true
+		venueReported := false
+		for _, bp := range brokerSnap {
+			if bp.VenueKey == leg.Venue && bp.Symbol == leg.Symbol && bp.PositionId == posID && bp.Swap != 0 {
+				venueReported = true
+				break
+			}
+		}
+		if venueReported {
+			continue // venue 真值已在 swapAccrued（matchBrokerLegs Σ swap），估算不双计
+		}
+		total += sums[fmt.Sprintf("%d\x00%s", posID, leg.Venue)]
+	}
+	return total
 }
 
 // computeEntryNotional Σ OPEN FILLED 腿 LegUSD（CS+fx 经 store 查询）。
