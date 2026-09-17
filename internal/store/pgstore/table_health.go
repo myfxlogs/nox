@@ -19,7 +19,9 @@ var tableHealthQueries = map[string]string{
 	"cex_spread":           "SELECT max(ts) FROM fin_cex_spread",
 	"funding_hist_binance": "SELECT max(ts) FROM facts WHERE kind='funding_history' AND venue='binance'",
 	"trx_account":          "SELECT max(fetched_at) FROM fin_trx_account",
-	"daily_income":         "SELECT max(day) FROM position_daily_income",
+	// D-315：day 是 DATE（日粒度），新鲜基准=覆盖期末 day+1d 的 00:00（健康 age<24h，
+	// 漏写一日 >24h 越线）——旧码取行标签起点 max(day)，健康日 age 落 24-48h 假 critical。
+	"daily_income": "SELECT max(day)::timestamp + interval '1 day' FROM position_daily_income",
 }
 
 // TableMaxTs 返回监控项 name 对应表的最新时间戳（D-301a S1）。
