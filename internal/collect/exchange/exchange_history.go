@@ -162,18 +162,17 @@ symLoop:
 		}
 		instID := sym + "-USDT-SWAP"
 		periods := o.okxFundingPeriodsPerDay(ctx, instID) // D-321 S2：per-symbol 周期真值
-		// D-321 S1：参数角色对调——watermark 放 before（取更新方向）。旧码塞 after
-		// （OKX 语义=取更早）→ 每轮只重取已知历史，dedup 零新增零报错，watermark 冻结
-		// （KB pagination-direction-silent-freeze）。
-		beforeMs := strconv.FormatInt(start.UnixMilli(), 10)
-		after := "" // 窗口内翻页游标（首页不带）
+		// D-321 S1：watermark 放 before（取更新方向）。旧码塞 after（OKX 语义=取更早）→
+		// 每轮只重取已知历史，dedup 零新增零报错，watermark 冻结（KB pagination-direction-silent-freeze）。
+		// D-321 S4（R1 §6.1/§6.2 勘误）：before=X 返回窗口 (X,∞) 的**最旧** 100 条切片——
+		// before 是向前翻页游标：满页后 boundMs 推进到本页最大 fundingTime，下页严格更新
+		// 零重复零漏边（旧 after=页最旧 与 before=wm 合成空集 → 每轮只填最旧 100 条）。
+		// 无进展保护（页最大未越过上界）防 API 恒定页死循环。
+		boundMs := start.UnixMilli()
 		var symFacts []fact.Fact
 		for {
-			url := fmt.Sprintf("%s/api/v5/public/funding-rate-history?instId=%s&before=%s&limit=100",
-				o.cfg.OKXBaseURL, instID, beforeMs)
-			if after != "" {
-				url += "&after=" + after
-			}
+			url := fmt.Sprintf("%s/api/v5/public/funding-rate-history?instId=%s&before=%d&limit=100",
+				o.cfg.OKXBaseURL, instID, boundMs)
 			body, err := getJSON(ctx, o.cfg.Client, url)
 			if err != nil {
 				fmt.Printf("[exchange:okx] funding_history %s: %v (skip)\n", pair, err)
@@ -183,7 +182,7 @@ symLoop:
 			if !ok || len(data) == 0 {
 				break
 			}
-			var oldest string
+			var maxMs int64
 			for _, item := range data {
 				m, ok := item.(map[string]any)
 				if !ok {
@@ -199,12 +198,17 @@ symLoop:
 					Value: annualizeFunding(f, periods),
 					Unit:  fact.UnitPctAnnualized, Ts: time.UnixMilli(ftMs), Src: "okx_v5_history",
 				})
-				oldest = ftStr
+				if ftMs > maxMs { // 降序→首元素即最大，防御乱序仍取 max
+					maxMs = ftMs
+				}
 			}
 			if len(data) < 100 {
 				break
 			}
-			after = oldest // 翻页：取比本页最旧更早、仍新于 watermark 的下一段
+			if maxMs <= boundMs {
+				break // 无进展保护：页最大未越过上界（恒定页）→ 再翻死循环
+			}
+			boundMs = maxMs
 		}
 		out = append(out, symFacts...)
 	}
