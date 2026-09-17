@@ -112,6 +112,8 @@ func (s *Store) GetStrategyStat(ctx context.Context, strategy string) (*Strategy
 // 替代 strategy_stats 累计列——position_settlements 实时聚合，覆盖 LEGGED/skip 等不入 stat 的平仓。
 // D-193-A：net 改读 settlement.net_realized_usd（正式净 PNL），legacy 行 fallback realized_usd。
 // realized_pnl IS NOT NULL = 可判定口径（LEGGED 历史清理仓 realized NULL 不计入）。
+// D-323 S1：stats_status 过滤（COALESCE NULL→applied=legacy 兼容）——skipped/retryable/pending
+// 行出局，统计层只消费数据质量过关的结算（D-193-A 原意闭环）。
 // 0 笔时 total=0、wins=0、avg=0、median=0（COALESCE 兜底 NULL→0，调用方按 0 处理 → 小样本判据 median<0 永不成立 → 不杀）。
 func (s *Store) AggregateStrategyStats(ctx context.Context, strategy string) (AggregateStat, error) {
 	var st AggregateStat
@@ -128,6 +130,7 @@ func (s *Store) AggregateStrategyStats(ctx context.Context, strategy string) (Ag
 				FROM position_settlements s
 				JOIN positions p ON p.id = s.position_id
 				WHERE p.type = $1 AND p.closed_at IS NOT NULL AND p.realized_pnl IS NOT NULL
+				  AND COALESCE(s.stats_status, 'applied') = 'applied'
 			) t
 		) agg`, strategy).Scan(&st.Total, &st.Wins, &st.AvgPnl, &st.MedianPnl)
 	if err != nil {

@@ -23,6 +23,7 @@ func (s *Store) AggregateStrategyStatsByEnvironment(ctx context.Context, strateg
 				FROM position_settlements s
 				JOIN positions p ON p.id = s.position_id
 				WHERE p.type = $1 AND p.closed_at IS NOT NULL AND p.realized_pnl IS NOT NULL
+				  AND COALESCE(s.stats_status, 'applied') = 'applied'
 				  AND ($2 = '' OR p.environment = $2)
 			) t
 		) agg`, strategy, environment).Scan(&st.Total, &st.Wins, &st.AvgPnl, &st.MedianPnl)
@@ -74,6 +75,7 @@ func (s *Store) AggregateStrategyStatsByEnvironmentFamily(ctx context.Context, s
 				FROM position_settlements s
 				JOIN positions p ON p.id = s.position_id
 				WHERE p.type = ANY($1) AND p.closed_at IS NOT NULL AND p.realized_pnl IS NOT NULL
+				  AND COALESCE(s.stats_status, 'applied') = 'applied'
 				  AND ($2 = '' OR p.environment = $2)
 			) t
 		) agg`, strategies, environment).Scan(&st.Total, &st.Wins, &st.AvgPnl, &st.MedianPnl)
