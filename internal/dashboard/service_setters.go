@@ -85,6 +85,10 @@ func (s *Service) SetSwapArbComboAllow(allow []exec.ComboAllowSpec) { s.swapArbC
 // 零信任：空表 = 全拒（不是 SWAPARB 的 nil=未接线语义）。
 func (s *Service) SetXAssetComboAllow(allow []exec.XAssetComboAllowSpec) { s.xassetComboAllow = allow }
 
+// SetCarryRegime 注入 carry 入口 funding regime 持久性闸参数（D-328 S5，手动入口同源）。
+// 零值 = fail-closed（XASSET_CARRY 全拒），装配缺接线不会静默放行。
+func (s *Service) SetCarryRegime(cfg exec.CarryRegimeConfig) { s.carryRegime = cfg }
+
 // SetEnvironment 注入执行环境固定值（D-159 W1a I6，手动入口同源）。
 // 空 = 未配置（不检查，回退旧行为）。
 func (s *Service) SetEnvironment(env string) { s.environment = env }
