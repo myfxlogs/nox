@@ -11,37 +11,16 @@ import (
 	"arb/internal/store/pgstore"
 )
 
-// computeEntrySpreadFromLegs D-180 S3：从 position_legs 取双腿 price_actual 算 entry spread bps。
+// computeEntrySpreadFromLegs D-180 S3（D-327 S1 起薄包装）：实现下沉 pgstore.EntrySpreadBpsFromLegs
+// （P3 公式单一真相源），SWAPARB intent 闭包与 backfillEntrySpread 经此取值。
 // = (buyActual − sellActual) / buyActual × 10000（BUY 成交=ask、SELL 成交=bid）。
 // 任一腿 price_actual nil 或 buyActual<=0 → ok=false（fail-closed 不写基准）。
 func computeEntrySpreadFromLegs(ctx context.Context, store *pgstore.Store, posID int64) (float64, bool) {
-	legs, err := store.ListPositionLegs(ctx, posID)
+	bps, ok, err := store.EntrySpreadBpsFromLegs(ctx, posID)
 	if err != nil {
 		return 0, false
 	}
-	var buyLeg, sellLeg *pgstore.PositionLeg
-	for i := range legs {
-		if legs[i].Phase != "OPEN" {
-			continue
-		}
-		if legs[i].Side == "BUY" {
-			buyLeg = &legs[i]
-		} else {
-			sellLeg = &legs[i]
-		}
-	}
-	if buyLeg == nil || sellLeg == nil {
-		return 0, false
-	}
-	if buyLeg.PriceActual == nil || sellLeg.PriceActual == nil {
-		return 0, false
-	}
-	buyActual := *buyLeg.PriceActual
-	sellActual := *sellLeg.PriceActual
-	if buyActual <= 0 {
-		return 0, false
-	}
-	return (buyActual - sellActual) / buyActual * 10000, true
+	return bps, ok
 }
 
 // basisStopLossCheck D-180 S3：基差止损翻正——PnL_bps = currentBasisBps − expected_entry_spread_bps。
@@ -76,7 +55,9 @@ func (e *Engine) backfillEntrySpread(ctx context.Context) {
 		return
 	}
 	for _, p := range positions {
-		if p.Type != "SWAPARB" && p.Type != "CARRY" {
+		// D-327 S2：白名单扩型——XASSET_CARRY 与 SWAPARB/CARRY 同享成交价基准回填
+		//（pos 485 实证：XASSET 全型 expected_entry_spread_bps=NULL → basisStopCheck fail-closed 不决策）。
+		if p.Type != "SWAPARB" && p.Type != "CARRY" && p.Type != "XASSET_CARRY" {
 			continue
 		}
 		if p.ExpectedEntrySpreadBps != nil {
