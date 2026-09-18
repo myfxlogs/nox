@@ -52,6 +52,9 @@ type BrokerPositionMonitor struct {
 
 	// D-180 S1：结算画像采集器（跳变检测 → 聚合写 swap_settled facts）。
 	settlementCollector *SettlementProfileCollector
+
+	// D-337 S2：venue server 时区缓存（swap 倒计时数据源）。nil = 未注入（诚实空态）。
+	tzCache *serverTZCache
 }
 
 // SwapSnapshotStore D-110 P2 swap 快照采集依赖（setter 注入，避免 NewBrokerPositionMonitor 签名变更）。
@@ -74,6 +77,11 @@ func (m *BrokerPositionMonitor) SetAccountMonitor(am *AccountMonitor) {
 // SetSettlementProfileCollector D-180 S1：注入结算画像采集器。boot 时调用。
 func (m *BrokerPositionMonitor) SetSettlementProfileCollector(c *SettlementProfileCollector) {
 	m.settlementCollector = c
+}
+
+// SetServerTZCache D-337 S2：注入 venue server 时区缓存（swap 倒计时）。boot 时调用；nil=诚实空态。
+func (m *BrokerPositionMonitor) SetServerTZCache(c *serverTZCache) {
+	m.tzCache = c
 }
 
 // NewBrokerPositionMonitor 创建 monitor。interval 为轮询周期（ARB_BROKER_POS_POLL_MS）。

@@ -16,14 +16,24 @@ import (
 
 // fakeVenueQuerier 受控 querier（D-052 monitor 测试）：orders/err 可随时切换，模拟在线/离线/空仓。
 type fakeVenueQuerier struct {
-	key    string
-	orders []reconcile.VenueOrder
-	err    error
+	key      string
+	orders   []reconcile.VenueOrder
+	err      error
+	tzOffset float64
+	tzErr    error
 }
 
 func (f *fakeVenueQuerier) VenueKey() string { return f.key }
 func (f *fakeVenueQuerier) QueryOpenedOrders(context.Context) ([]reconcile.VenueOrder, error) {
 	return f.orders, f.err
+}
+
+// ServerTimezone D-337 S2 可选接口实现（fake 可控 offset/err）。
+func (f *fakeVenueQuerier) ServerTimezone(context.Context) (float64, error) {
+	if f.tzErr != nil {
+		return 0, f.tzErr
+	}
+	return f.tzOffset, nil
 }
 
 // newMonTest 组装 monitor：nil store（BrokerSymbolMap 空 map → canonical=""，不动 broker_symbol_map 表）。
@@ -384,5 +394,41 @@ func TestCollectSwapSnapshots_PositionIDZeroSkips(t *testing.T) {
 	m.Refresh(ctx)
 	if len(fake.inserts) != 0 {
 		t.Fatalf("orphan order: want 0 inserts, got %d", len(fake.inserts))
+	}
+}
+
+// TestD337_BuildSwapChargeAt T3：同 venue 订单 swap_charge_at 相同且有值；
+// 时区获取失败 venue → nil（诚实空态）。
+func TestD337_BuildSwapChargeAt(t *testing.T) {
+	ctx := context.Background()
+	q := &fakeVenueQuerier{key: "testvenue:mt5", orders: []reconcile.VenueOrder{
+		{Venue: "testvenue", VenueKey: "testvenue:mt5", Ticket: "1", Symbol: "XAUUSD", Side: "SELL", Volume: 0.01, OpenPrice: 4000, Profit: 0},
+		{Venue: "testvenue", VenueKey: "testvenue:mt5", Ticket: "2", Symbol: "XAUUSD", Side: "SELL", Volume: 0.01, OpenPrice: 4001, Profit: 0},
+	}}
+	m, _, _ := newMonTest(t, q)
+	m.SetServerTZCache(newServerTZCache(time.Hour, func(_ context.Context, _ string) (float64, error) {
+		return 3, nil // EEST 形态
+	}))
+	got := m.Refresh(ctx)
+	if len(got) != 2 {
+		t.Fatalf("want 2 positions, got %d", len(got))
+	}
+	if got[0].SwapChargeAt == nil || got[1].SwapChargeAt == nil {
+		t.Fatalf("swap_charge_at 应有值（红=现码无填充）, got %v / %v", got[0].SwapChargeAt, got[1].SwapChargeAt)
+	}
+	if !got[0].SwapChargeAt.AsTime().Equal(got[1].SwapChargeAt.AsTime()) {
+		t.Errorf("同 venue 两单应同一计费时刻: %v vs %v", got[0].SwapChargeAt, got[1].SwapChargeAt)
+	}
+	// 时区获取失败 venue → nil
+	q2 := &fakeVenueQuerier{key: "v2:mt5", orders: []reconcile.VenueOrder{
+		{Venue: "v2", VenueKey: "v2:mt5", Ticket: "9", Symbol: "XAUUSD", Side: "SELL", Volume: 0.01, OpenPrice: 4000, Profit: 0},
+	}}
+	m2, _, _ := newMonTest(t, q2)
+	m2.SetServerTZCache(newServerTZCache(time.Hour, func(_ context.Context, _ string) (float64, error) {
+		return 0, errors.New("rpc down")
+	}))
+	got2 := m2.Refresh(ctx)
+	if len(got2) != 1 || got2[0].SwapChargeAt != nil {
+		t.Errorf("无时区 venue want nil, got %d/%v", len(got2), got2[0].SwapChargeAt)
 	}
 }

@@ -17,7 +17,7 @@ func TestBrokerPositionToProto_SLPassthrough(t *testing.T) {
 		Profit: 12.34, Comment: "arb", Magic: 777,
 		StopLoss: 1960.0, // D-146 S1 灾难 SL：entry × (1 − 2%) = 1960
 	}
-	pb := brokerPositionToProto(o, "XAUUSD", bus.Quote{}, false, true, time.Minute, time.Now(), 0)
+	pb := brokerPositionToProto(o, "XAUUSD", bus.Quote{}, false, true, time.Minute, time.Now(), 0, nil)
 	if pb.Sl != 1960.0 {
 		t.Errorf("SL 透传 want 1960.0, got %v", pb.Sl)
 	}
@@ -32,7 +32,7 @@ func TestBrokerPositionToProto_SLZeroEmpty(t *testing.T) {
 		Comment: "arb",
 		// CEX 无 SL 概念 → StopLoss 零值
 	}
-	pb := brokerPositionToProto(o, "BTCUSDT", bus.Quote{}, false, true, time.Minute, time.Now(), 0)
+	pb := brokerPositionToProto(o, "BTCUSDT", bus.Quote{}, false, true, time.Minute, time.Now(), 0, nil)
 	if pb.Sl != 0 {
 		t.Errorf("无 SL 应透传 0, got %v", pb.Sl)
 	}

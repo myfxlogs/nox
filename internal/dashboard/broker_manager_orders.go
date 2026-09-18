@@ -63,6 +63,18 @@ func (m *BrokerManager) syncQueriers() {
 	}
 }
 
+// ServerTZQueriers D-337 S2：汇总实现了 ServerTZQuerier 的 querier（venueKey→querier）。
+// 每轮重取跟随 attach/detach；仅 MT5 实现（MT4/CEX 不在 map=swap 倒计时诚实空态）。
+func (m *BrokerManager) ServerTZQueriers() map[string]reconcile.ServerTZQuerier {
+	out := make(map[string]reconcile.ServerTZQuerier)
+	for _, q := range m.queriers() {
+		if zq, ok := q.(reconcile.ServerTZQuerier); ok && zq != nil {
+			out[q.VenueKey()] = zq
+		}
+	}
+	return out
+}
+
 // VenueOrderResult 逐 venue 查询结果（D-052）：venue 身份 + 持仓 + 失败详情，
 // 供 BrokerPositionMonitor 跟踪在线状态（0 持仓成功也知 venue 在线）。
 type VenueOrderResult struct {

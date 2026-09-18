@@ -12,6 +12,8 @@ import (
 	"arb/internal/reconcile"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // build 按 venueKey 排序（确定性）构建全量视图：canonical 解析 + 现价（后端算，D-043）+ 保证金分摊（D-124 方案 C）。
@@ -79,7 +81,15 @@ func (m *BrokerPositionMonitor) build(ctx context.Context) []*v1.BrokerPosition 
 			if o.InitialMargin > 0 {
 				margin = o.InitialMargin
 			}
-			out = append(out, brokerPositionToProto(o, canonical, price, hasPrice, vs.online, m.freshTTL, now, margin))
+			// D-337 S2：swap 倒计时——同 venue 所有订单同一计费时刻（server 零点换算）。
+			// CEX venue 无此概念 → nil；tz 未就绪/失败 → nil（诚实空态，RPC 后台取不阻塞组装）。
+			var swapChargeAt *timestamppb.Timestamp
+			if m.tzCache != nil && !isCEXVenueKey(o.VenueKey) {
+				if tzLoc := m.tzCache.get(ctx, o.VenueKey); tzLoc != nil {
+					swapChargeAt = timestamppb.New(nextSwapChargeAtInLoc(now, tzLoc))
+				}
+			}
+			out = append(out, brokerPositionToProto(o, canonical, price, hasPrice, vs.online, m.freshTTL, now, margin, swapChargeAt))
 		}
 	}
 	return out
