@@ -2,7 +2,9 @@ package dashboard
 
 import (
 	"context"
+	"log"
 	"strings"
+	"time"
 
 	"arb/internal/fact"
 	"arb/internal/store/pgstore"
@@ -69,6 +71,8 @@ func (s *Service) oppToProto(ctx context.Context, o *pgstore.Opportunity) *v1.Op
 	s.fillVerifiedFields(pb, o)
 	// D-318：结算口径参照（settle_net_bps/usd/samples，缺数据/无 perp 腿=缺省不填）。
 	s.fillSettleRef(ctx, pb, o)
+	// D-331：机会卡「已持仓」标识（活跃仓 opportunity_id 集合命中；store 未接线/查询失败=false fail-safe）。
+	pb.HasOpenPosition = s.activeOpportunityIDs(ctx)[o.ID]
 	// D-062 显示层 USD 派生（存储不动）。gap_usd_per_unit 无 CS 依赖恒填；
 	// per-lot 字段依赖 venue_buy 侧 CS（D-061 对称桶保证跨 venue 一致），缺失/≤0 → 全 0（前端回退 bps）。
 	pb.GapUsdPerUnit = o.PriceSell - o.PriceBuy
@@ -113,6 +117,33 @@ func (s *Service) oppToProto(ctx context.Context, o *pgstore.Opportunity) *v1.Op
 // 含 SWAPARB/CARRY/FUNDING_HEDGE/PERP_FUNDING，与 netUSD 的 CROSS_VENUE 分支互补。
 func isCarryType(typ string) bool {
 	return verification.IsCarryType(typ)
+}
+
+// activeOppCacheTTL D-331：活跃仓 opportunity_id 集合缓存窗口。
+const activeOppCacheTTL = 15 * time.Second
+
+// activeOpportunityIDs D-331：有活跃仓位（OPENING/OPEN/LEGGED/CLOSING）的 opportunity_id
+// 集合，15s TTL 缓存——机会列表/stream 出卡热路径防 N+1 直查。
+// fail-safe（同 fillVerifiedFields 姿态）：store 未接线或查询失败 → 返回上次缓存
+// （首次无缓存=空 map），err 打 log 不 panic。刷新整体替换 map 引用，调用方读旧引用安全。
+func (s *Service) activeOpportunityIDs(ctx context.Context) map[string]bool {
+	s.activeOppMu.Lock()
+	defer s.activeOppMu.Unlock()
+	if s.activeOppIDs == nil || time.Since(s.activeOppAt) > activeOppCacheTTL {
+		if s.store != nil {
+			ids, err := s.store.ActiveOpportunityIDs(ctx)
+			if err != nil {
+				log.Printf("[dashboard] active opportunity ids: %v (keep last cache)", err)
+			} else {
+				s.activeOppIDs = ids
+				s.activeOppAt = time.Now()
+			}
+		}
+	}
+	if s.activeOppIDs == nil {
+		return map[string]bool{}
+	}
+	return s.activeOppIDs
 }
 
 func alertToProto(a *pgstore.Alert) *v1.Alert {

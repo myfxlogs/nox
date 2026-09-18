@@ -163,6 +163,11 @@ type Service struct {
 	cmcFrameMu            sync.Mutex
 	cmcFrameTimer         *time.Timer
 	cmcWatchFlushInterval time.Duration
+	// D-331：机会卡「已持仓」标识缓存（活跃仓 opportunity_id 集合，15s TTL；
+	// ListOpportunities/StreamUpdates 热路径防 N+1 直查。查询失败保上次缓存）。
+	activeOppMu  sync.Mutex
+	activeOppIDs map[string]bool
+	activeOppAt  time.Time
 	// D-249 S3：scheduler kick 注入（on-open 触发采集补轮；nil=未接线→handler no-op）。
 	kickFn func(string)
 	// D-252：CMC 净值阈值告警状态机（nil=未接线→flushCMCWatch 不检查）。

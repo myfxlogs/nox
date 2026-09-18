@@ -352,3 +352,42 @@ func TestQtyBelowMinStep_ZeroOrNegative(t *testing.T) {
 		t.Error("qty<0 should be below min step (invalid)")
 	}
 }
+
+// TestD331_OppToProtoHasOpenPosition T4：机会卡「已持仓」标识（D-331 S6）。
+// ① 无 store（裸 Service）：HasOpenPosition=false 不 panic（fail-safe，同 fillVerifiedFields 姿态）；
+// ② DSN：活跃仓（OPEN）命中=true；翻 CLOSED+缓存强制过期刷新后=false（TTL 刷新路径覆盖）。
+func TestD331_OppToProtoHasOpenPosition(t *testing.T) {
+	opp := &pgstore.Opportunity{
+		ID: "XASSET_CARRY:XAUUSD:277842155:mt5:binance:perp", Type: "XASSET_CARRY",
+		Canonical: "XAUUSD", VenueBuy: "277842155:mt5", VenueSell: "binance:perp", NetBps: 8.1,
+	}
+	// ① 无 store
+	bare := &Service{}
+	if pb := bare.oppToProto(context.Background(), opp); pb.HasOpenPosition {
+		t.Error("无 store：HasOpenPosition 应 false（fail-safe）")
+	}
+	// ② DSN：OPEN 命中 → CLOSED 过期刷新后不命中
+	st := serviceTestStoreSingleInit(t)
+	ctx := context.Background()
+	if _, err := st.Pool().Exec(ctx, `TRUNCATE positions CASCADE`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	if _, err := st.Pool().Exec(ctx,
+		`INSERT INTO positions (opportunity_id, type, status) VALUES ($1, 'XASSET_CARRY', 'OPEN')`, opp.ID); err != nil {
+		t.Fatalf("seed open position: %v", err)
+	}
+	s := &Service{store: st}
+	if pb := s.oppToProto(ctx, opp); !pb.HasOpenPosition {
+		t.Error("OPEN 仓命中：HasOpenPosition 应 true")
+	}
+	if _, err := st.Pool().Exec(ctx,
+		`UPDATE positions SET status='CLOSED' WHERE opportunity_id=$1`, opp.ID); err != nil {
+		t.Fatalf("close position: %v", err)
+	}
+	s.activeOppMu.Lock()
+	s.activeOppAt = time.Time{} // 强制 TTL 过期（15s 窗口内测试不等钟）
+	s.activeOppMu.Unlock()
+	if pb := s.oppToProto(ctx, opp); pb.HasOpenPosition {
+		t.Error("CLOSED 后（缓存过期刷新）：HasOpenPosition 应 false")
+	}
+}
