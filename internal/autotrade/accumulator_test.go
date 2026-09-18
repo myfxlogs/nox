@@ -221,3 +221,25 @@ func TestAccumulator_ConcurrentNoRace(t *testing.T) {
 		t.Errorf("want %d rollup rows, got %d", n, count)
 	}
 }
+
+// TestD332_AccumulatorXAssetAnnualAvg T4：XASSET_CARRY netBps=年化百分点 → annual_avg=net_avg
+// （与 FUNDING_HEDGE 同待遇）。红=现码白名单缺型 → annual_avg=NULL。
+func TestD332_AccumulatorXAssetAnnualAvg(t *testing.T) {
+	s := testAccumStore(t)
+	ctx := context.Background()
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE combo_daily_rollup`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	a := newComboAccumulator()
+	a.Record("XASSET_CARRY:XAUUSD:277842155:mt5:binance:perp", "XASSET_CARRY", 8.1, time.Now().UTC())
+	if err := a.Flush(ctx, s); err != nil {
+		t.Fatalf("flush: %v", err)
+	}
+	rows, err := s.ListComboDaily(ctx, "XASSET_CARRY:XAUUSD:277842155:mt5:binance:perp", 10)
+	if err != nil {
+		t.Fatalf("ListComboDaily: %v", err)
+	}
+	if len(rows) != 1 || rows[0].AnnualAvg == nil || absFloat(*rows[0].AnnualAvg-8.1) > 0.0001 {
+		t.Errorf("XASSET_CARRY annual_avg: want 8.1（红=现码 NULL）, got %+v", rows)
+	}
+}

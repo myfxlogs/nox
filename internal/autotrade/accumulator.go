@@ -101,7 +101,7 @@ func flushDay(ctx context.Context, store *pgstore.Store, day time.Time, entries 
 	for _, e := range entries {
 		netAvg := e.sum / float64(e.count)
 		var annualAvg *float64
-		if e.typ == "FUNDING_HEDGE" || e.typ == "PERP_FUNDING" {
+		if e.typ == "FUNDING_HEDGE" || e.typ == "PERP_FUNDING" || e.typ == "XASSET_CARRY" { // D-332 补型：netBps=年化百分点同口径
 			v := netAvg
 			annualAvg = &v
 		}

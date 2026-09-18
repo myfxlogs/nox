@@ -58,7 +58,7 @@ func (e *Engine) stateMachineTick(ctx context.Context) {
 
 // checkAllStrategiesDisabled 检查全部策略是否被禁用。
 func (e *Engine) checkAllStrategiesDisabled(ctx context.Context) bool {
-	strategies := []string{"CROSS_VENUE", "MEANREVERT", "SWAPARB", "CARRY", "FUNDING_HEDGE", "PERP_FUNDING"}
+	strategies := []string{"CROSS_VENUE", "MEANREVERT", "SWAPARB", "CARRY", "FUNDING_HEDGE", "PERP_FUNDING", "XASSET_CARRY"} // D-332 补型
 	for _, s := range strategies {
 		disabled, err := e.store.IsStrategyDisabled(ctx, s)
 		if err == nil && !disabled {
@@ -74,7 +74,7 @@ func (e *Engine) checkAllStrategiesDisabled(ctx context.Context) bool {
 // → 聚合 0 笔 → 不触发淘汰（止血：避免未校准 PnL 的旧持仓跨 environment 触发误杀）。
 // D-256-A S2：CARRY/SWAPARB 改用族级聚合（riskFamily 合并样本，避免分桶样本量不足）。
 func (e *Engine) runStartupElimination(ctx context.Context) {
-	strategies := []string{"CROSS_VENUE", "MEANREVERT", "SWAPARB", "CARRY", "FUNDING_HEDGE", "PERP_FUNDING"}
+	strategies := []string{"CROSS_VENUE", "MEANREVERT", "SWAPARB", "CARRY", "FUNDING_HEDGE", "PERP_FUNDING", "XASSET_CARRY"} // D-332 补型
 	for _, s := range strategies {
 		stat, err := e.store.GetStrategyStat(ctx, s)
 		if err != nil {
