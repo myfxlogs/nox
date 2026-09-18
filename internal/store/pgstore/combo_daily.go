@@ -16,7 +16,7 @@ type ComboDailyRow struct {
 	NetAvg    float64
 	NetMin    float64
 	NetMax    float64
-	AnnualAvg *float64 // FUNDING_HEDGE/PERP_FUNDING=net_avg，其他=NULL
+	AnnualAvg *float64 // FUNDING_HEDGE/PERP_FUNDING/XASSET_CARRY=net_avg（D-332 +XASSET），其他=NULL
 	FirstAt   time.Time
 	LastAt    time.Time
 }

@@ -165,7 +165,7 @@ func (s *Store) SetPositionUncertainty(ctx context.Context, id int64, reason str
 //   - SWAPARB：EntrySpreadBps=入场 spread / SwapBpsDaily=日 swap / NetBps=nil / AnnualPct=SwapBpsDaily×365/100
 //   - CARRY：NetBps=年化百分点（同 FUNDING_HEDGE/PERP_FUNDING），消费方 verification.ExpectedUsd CARRY 分支
 //     读 netBps/100×notional×holdDays/365；AnnualPct=NetBps（D-256-A S3 落值=netSwap×365/100）
-//   - FUNDING_HEDGE/PERP_FUNDING：NetBps=年化百分点 / AnnualPct=NetBps
+//   - FUNDING_HEDGE/PERP_FUNDING/XASSET_CARRY：NetBps=年化百分点 / AnnualPct=NetBps（D-332 +XASSET，归 FUNDING 直存非 CARRY 折算）
 type PositionMeta struct {
 	EntrySpreadBps *float64
 	SwapBpsDaily   *float64
