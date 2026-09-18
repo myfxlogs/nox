@@ -250,3 +250,6 @@ var CanonicalFixSQL string
 
 //go:embed 0102_xasset_exec.sql
 var XassetExecSQL string
+
+//go:embed 0103_income_events.sql
+var IncomeEventsSQL string

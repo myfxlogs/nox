@@ -92,3 +92,14 @@ func toFundingIntervalHours(v any) int {
 	}
 	return 0
 }
+
+// Lookup D-334ab S3：带命中位的周期查询——边界计算需区分真值与回退（回退 8h 须 warn 禁静默）。
+func (c *FundingIntervalCache) Lookup(symbol string) (int, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	p, ok := c.periods[symbol]
+	if !ok || p <= 0 {
+		return 0, false
+	}
+	return p, true
+}

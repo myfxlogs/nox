@@ -215,58 +215,6 @@ symLoop:
 	return out, nil
 }
 
-// GateFundingHistory 采集 Gate funding 结算历史。
-// 端点 GET /api/v4/futures/usdt/funding_rate?contract=&from=&to=&limit=1000
-// 响应（实测 2026-08-31）：[{"r":"rate(string)","t":sec}]——t 是秒非毫秒（紧凑格式）。
-// limit 1000（Gate API 上限，实测 limit=2000 返回 HTTP 400）；30 天 8h=90 条，1h 结算最坏 720 条，1000 够。
-type GateFundingHistory struct {
-	cfg     Config
-	resolve HistoryStartResolver
-}
-
-func NewGateFundingHistory(cfg Config, r HistoryStartResolver) *GateFundingHistory {
-	return &GateFundingHistory{cfg: cfg, resolve: r}
-}
-
-func (g *GateFundingHistory) Kind() string { return fact.KindFundingHistory }
-
-func (g *GateFundingHistory) Poll(ctx context.Context) ([]fact.Fact, error) {
-	var out []fact.Fact
-	for _, sym := range g.cfg.Symbols {
-		pair := sym + "USDT"
-		start, err := startTS(ctx, g.resolve, VenueGate, pair)
-		if err != nil {
-			// D-308 S1：逐符号 fail-open（同 Binance）。
-			fmt.Printf("[exchange:gate] funding_history %s: %v (skip)\n", pair, err)
-			continue
-		}
-		contract := sym + "_USDT"
-		url := fmt.Sprintf("%s/api/v4/futures/usdt/funding_rate?contract=%s&from=%d&to=%d&limit=1000",
-			g.cfg.GateBaseURL, contract, start.Unix(), time.Now().Unix())
-		arr, err := getJSONArray(ctx, g.cfg.Client, url)
-		if err != nil {
-			fmt.Printf("[exchange:gate] funding_history %s: %v (skip)\n", pair, err)
-			continue
-		}
-		for _, item := range arr {
-			m, ok := item.(map[string]any)
-			if !ok {
-				continue
-			}
-			rateStr, _ := m["r"].(string)
-			tSec, _ := m["t"].(float64) // Gate t = Unix 秒
-			var f float64
-			fmt.Sscanf(rateStr, "%f", &f)
-			out = append(out, fact.Fact{
-				Kind: fact.KindFundingHistory, Venue: VenueGate, Symbol: pair,
-				Value: annualizeFunding(f, fundingHistoryPeriodsPerDay),
-				Unit:  fact.UnitPctAnnualized, Ts: time.Unix(int64(tSec), 0), Src: "gate_v4_history",
-			})
-		}
-	}
-	return out, nil
-}
-
 // getJSONArray 发 GET 请求并解析 JSON 数组（Binance/Gate 历史端点返回数组非对象）。
 func getJSONArray(ctx context.Context, client *http.Client, url string) ([]any, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
