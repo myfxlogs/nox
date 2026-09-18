@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"arb/internal/httpx" // SSOT：自动注入 CA + X-Proxy-Token
 	"arb/internal/store/pgstore"
@@ -49,25 +50,37 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("connect pg: %w", err)
 	}
 	defer st.Close()
-	pool := st.Pool()
 
 	hc := httpx.Client()
 
-	// 读 Exness XAU tick 最新行。
-	exBid, exAsk, err := latestExnessXAU(ctx, pool, exnessVenue)
-	if err != nil {
-		return fmt.Errorf("read exness tick: %w", err)
-	}
+	return runPairs(ctx, st, hc, proxyURL, exnessVenue, monitorPairs())
+}
 
-	// 9-16 业主并存裁定：PAXG+XAUT 两对逐对 fail-open（一对失败不拖累另一对，同 S2 funding 口径）。
-	// D-326 v2：+XAUUSDT-XAU（XAUUSDT 永续进采集链后补第三监控对；runPair 仍取 canonical XAUUSD 报价）。
+// monitorPair D-335R1 S1：三元素 {sym, pair, exSym}——每对取各自 Exness 腿报价（参数化）。
+type monitorPair struct{ sym, pair, exSym string }
+
+// monitorPairs 全监控对清单（S0 缺陷修复：旧版共享单一 XAUUSD 报价喂全部对 →
+// BTCUSDT-BTC 实为 binance BTC×XAU 顶替，esp=175348bps 垃圾行 14:20 实拍；
+// 事实核查=3001157 流内 BTC 符号=BTCUSDT）。
+func monitorPairs() []monitorPair {
+	return []monitorPair{
+		{"PAXGUSDT", "PAXG-XAU", "XAUUSD"},
+		{"XAUTUSDT", "XAUT-XAU", "XAUUSD"},
+		{"XAUUSDT", "XAUUSDT-XAU", "XAUUSD"},
+		{"BTCUSDT", "BTCUSDT-BTC", "BTCUSDT"}, // D-335 S0：业主批第四对（BTCUSDT×BTCUSDT，swap 免息，纳入观察）
+	}
+}
+
+// runPairs S2：逐对取各自 exSym 报价（无新鲜 tick → 该对 skip+warn 逐对 fail-open，
+// 9-16 业主并存裁定）——禁止任何腿顶替。返回首个 pair 失败错误（skip 非失败）。
+func runPairs(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL, exnessVenue string, pairs []monitorPair) error {
 	var firstErr error
-	for _, p := range []struct{ sym, pair string }{
-		{"PAXGUSDT", "PAXG-XAU"},
-		{"XAUTUSDT", "XAUT-XAU"},
-		{"XAUUSDT", "XAUUSDT-XAU"},
-		{"BTCUSDT", "BTCUSDT-BTC"}, // D-335 S0：业主批第四对（BTCUSDT×BTCUSD，swap 免息，纳入观察）
-	} {
+	for _, p := range pairs {
+		exBid, exAsk, err := latestExnessTick(ctx, st.Pool(), exnessVenue, p.exSym)
+		if err != nil {
+			log.Printf("xasset-monitor: pair=%s skip (Exness 腿 %s 无新鲜 tick: %v)", p.pair, p.exSym, err)
+			continue // S2：逐对 skip，禁止顶替腿
+		}
 		if err := runPair(ctx, st, hc, proxyURL, p.sym, p.pair, exBid, exAsk); err != nil {
 			log.Printf("xasset-monitor: pair=%s 失败: %v", p.pair, err)
 			if firstErr == nil {
@@ -79,13 +92,13 @@ func run(ctx context.Context) error {
 }
 
 func runPair(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL, sym, pair string, exBid, exAsk float64) error {
-	bid, ask, fundingRate, err := fetchBinanceGold(ctx, hc, proxyURL, sym)
+	bid, ask, fundingRate, err := fetchBinanceGoldFn(ctx, hc, proxyURL, sym)
 	if err != nil {
 		return fmt.Errorf("fetch binance %s: %w", sym, err)
 	}
 
 	// D-301a S2：funding 年化周期按 symbol 取真值（fundingInfo）——PAXG/XAUT 实为 4h→6 期/日，旧版 ×3 低估 2×。
-	periodsPerDay, err := fetchFundingPeriodsPerDay(ctx, hc, proxyURL, sym)
+	periodsPerDay, err := fetchFundingPeriodsPerDayFn(ctx, hc, proxyURL, sym)
 	if err != nil {
 		log.Printf("xasset-monitor: pair=%s fundingInfo fetch failed, fallback 3/day: %v", pair, err)
 		periodsPerDay = 3 // D-079 禁静默回退
@@ -146,6 +159,12 @@ type binancePremiumIndex struct {
 	LastFundingRate string `json:"lastFundingRate"`
 }
 
+// fetchBinanceGoldFn/fetchFundingPeriodsPerDayFn 测试 seam（生产=真实现；T1/T2 stub 隔离 cex-proxy）。
+var (
+	fetchBinanceGoldFn          = fetchBinanceGold
+	fetchFundingPeriodsPerDayFn = fetchFundingPeriodsPerDay
+)
+
 func fetchBinanceGold(ctx context.Context, hc *http.Client, proxyURL, symbol string) (bid, ask, fundingRate float64, err error) {
 	bt, err := fetchBinanceJSON(ctx, hc, proxyURL+"/fapi/v1/ticker/bookTicker?symbol="+symbol, func() any { return &binanceBookTicker{} })
 	if err != nil {
@@ -192,11 +211,20 @@ func fetchBinanceJSON(ctx context.Context, hc *http.Client, url string, mk func(
 	return v, nil
 }
 
-func latestExnessXAU(ctx context.Context, pool *pgxpool.Pool, venue string) (bid, ask float64, err error) {
+// latestExnessTick D-335R1 S1：读 Exness 指定符号最新 tick（XAUUSD 泛化参数化）。
+// 行龄 >10min 或无行 → error（调用方该对 skip+warn，禁止顶替腿）。
+func latestExnessTick(ctx context.Context, pool *pgxpool.Pool, venue, symbol string) (bid, ask float64, err error) {
+	var ts time.Time
 	err = pool.QueryRow(ctx, `
-		SELECT bid, ask FROM ticks WHERE venue=$1 AND symbol='XAUUSD' ORDER BY ts DESC LIMIT 1
-	`, venue).Scan(&bid, &ask)
-	return bid, ask, err
+		SELECT bid, ask, ts FROM ticks WHERE venue=$1 AND symbol=$2 ORDER BY ts DESC LIMIT 1
+	`, venue, symbol).Scan(&bid, &ask, &ts)
+	if err != nil {
+		return 0, 0, fmt.Errorf("latest tick: %w", err)
+	}
+	if time.Since(ts) > 10*time.Minute {
+		return 0, 0, fmt.Errorf("stale tick age=%v > 10m", time.Since(ts).Round(time.Second))
+	}
+	return bid, ask, nil
 }
 
 // fetchFundingPeriodsPerDay D-301a S2：从 Binance fundingInfo 取 per-symbol 结算周期。
