@@ -48,6 +48,10 @@ type Store interface {
 	InsertCashflowFull(ctx context.Context, c *pgstore.Cashflow) (won bool, err error)
 	LatestFacts(ctx context.Context, kind, venue, symbol string) ([]fact.Fact, error)
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
+	// D-330 断层④：sellCanonical 三段链查询（pgstore 既有实现，接口补齐）——
+	// SELL 腿 funding/swap fact 按侧向 canonical 查，跨 canonical 对不再必然 miss。
+	GetOpportunity(ctx context.Context, oppID string) (*pgstore.Opportunity, error)
+	ListSymbolMappings(ctx context.Context, venue string) ([]pgstore.SymbolMapping, error)
 }
 
 // NotionalResolver 单腿 USD 名义额查询（dashboard.Service.USDPerLotForLeg 实现）。

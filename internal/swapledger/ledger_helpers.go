@@ -1,12 +1,15 @@
 package swapledger
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"math"
 	"strings"
 	"time"
 
 	"arb/internal/decimalutil"
+	"arb/internal/store/pgstore"
 
 	"github.com/shopspring/decimal"
 )
@@ -41,6 +44,37 @@ func canonicalFromOppID(oppID string) string {
 		return ""
 	}
 	return parts[1]
+}
+
+// sellCanonical 解析 SELL 腿侧向 canonical（D-330 断层④修复；镜像 autotrade
+// recalcXAssetNetCarry 出口链 xassetSellCanonical 三段语义，尾段回落 canonicalFromOppID
+// =向后兼容现状——双腿同 canonical 对解析结果不变）：
+// ①opportunities.canonical_sell（opp 行命中且非空）→ ②卖腿 broker_symbol_map
+// （bare venue+Symbol→Canonical）→ ③canonicalFromOppID。
+// ②查询 DB 失败 → err（调用方该腿 skip 记 reason，不整仓 fail）；③不可空（oppID
+// canonical 已由 accountPosition 前置校验）。
+// XASSET 数据模型 canonical=买侧、canonical_sell=卖侧：CLUSDT 型持仓 SELL 腿
+// canonical CLUSDT→WTI 是修正（WTI 才是 USOILm canonical，facts 按 canonical 存）。
+func (l *Ledger) sellCanonical(ctx context.Context, oppID string, legs []pgstore.PositionLeg) (string, error) {
+	if opp, err := l.store.GetOpportunity(ctx, oppID); err == nil &&
+		opp != nil && opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
+		return *opp.CanonicalSell, nil
+	}
+	for i := range legs {
+		if legs[i].Phase == "OPEN" && legs[i].Side != "BUY" {
+			maps, err := l.store.ListSymbolMappings(ctx, venueFromKey(legs[i].Venue))
+			if err != nil {
+				return "", fmt.Errorf("list symbol mappings: %w", err)
+			}
+			for _, m := range maps {
+				if m.BrokerSymbol == legs[i].Symbol && m.Canonical != "" {
+					return m.Canonical, nil
+				}
+			}
+			break // 卖腿映射无行 → 兜底 ③（解不出=现状，§2.3 向后兼容）
+		}
+	}
+	return canonicalFromOppID(oppID), nil
 }
 
 // cashflowKind 按持仓类型+腿 venue 返回 cashflow kind（swap 或 funding）。

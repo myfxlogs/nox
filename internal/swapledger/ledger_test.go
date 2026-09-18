@@ -370,10 +370,20 @@ func TestLegSwapAmount_NonSettleVenue(t *testing.T) {
 // D-193-A 扩包（决策 8）：InsertCashflow → InsertCashflowFull（接收 *pgstore.Cashflow）。
 type nonSettleStubStore struct {
 	legs            []pgstore.PositionLeg
-	hasCashflowLegs map[int16]bool      // legNo → 当日已记（per-leg 幂等模拟）
-	insertedVenues  []string            // 记录 InsertCashflowFull 被调用的 venue
-	insertedCFs     []*pgstore.Cashflow // D-193-A 扩包：记录完整 Cashflow 供断言
-	hasQueries      []string            // D-314：记录 HasCashflowForLegDay 收到的 "legNo:kind"（per-leg 幂等路由断言）
+	hasCashflowLegs map[int16]bool          // legNo → 当日已记（per-leg 幂等模拟）
+	insertedVenues  []string                // 记录 InsertCashflowFull 被调用的 venue
+	insertedCFs     []*pgstore.Cashflow     // D-193-A 扩包：记录完整 Cashflow 供断言
+	hasQueries      []string                // D-314：记录 HasCashflowForLegDay 收到的 "legNo:kind"（per-leg 幂等路由断言）
+	opp             *pgstore.Opportunity    // D-330：GetOpportunity 桩（nil=无 opp 行）
+	maps            []pgstore.SymbolMapping // D-330：ListSymbolMappings 桩
+}
+
+func (s *nonSettleStubStore) GetOpportunity(_ context.Context, _ string) (*pgstore.Opportunity, error) {
+	return s.opp, nil
+}
+
+func (s *nonSettleStubStore) ListSymbolMappings(_ context.Context, _ string) ([]pgstore.SymbolMapping, error) {
+	return s.maps, nil
 }
 
 func (s *nonSettleStubStore) ListOpenPositionsByType(_ context.Context, _ []string) ([]pgstore.Position, error) {

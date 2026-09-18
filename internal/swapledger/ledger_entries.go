@@ -59,12 +59,27 @@ func (l *Ledger) accountPosition(ctx context.Context, pos pgstore.Position, day 
 	if canonical == "" {
 		return 0, fmt.Errorf("canonical from oppID %q empty", pos.OpportunityID)
 	}
+	// D-330 断层④：SELL 腿侧向 canonical（镜像 recalcXAssetNetCarry 出口链）——
+	// 双腿共用买侧 canonical 查 fact 在跨 canonical 对上必然 miss（黄金对 SELL 腿
+	// fact_not_found{XAUUSD,binance} → funding 永不入账根因；CLUSDT 纯属符号巧合成立）。
+	sellCanon, sellCanonErr := l.sellCanonical(ctx, pos.OpportunityID, legs)
 
 	written := 0
 	for _, leg := range legs {
 		// 只记 OPEN phase 的腿（CLOSE phase 是平仓腿，无 swap 记账）
 		if leg.Phase != "OPEN" {
 			continue
+		}
+		// D-330：腿 canonical 分侧——BUY=canonicalFromOppID 不变；SELL=sellCanonical
+		// 三段链（解析失败→该腿 skip 记 reason，不整仓 fail）。
+		legCanonical := canonical
+		if leg.Side != "BUY" {
+			if sellCanonErr != nil {
+				log.Printf("[swapledger] pos=%d leg=%d day=%s skip: sell_canonical_unresolved (%v)",
+					pos.ID, leg.LegNo, day.Format("2006-01-02"), sellCanonErr)
+				continue
+			}
+			legCanonical = sellCanon
 		}
 		// D-314：per-leg kind/isFunding——XASSET_CARRY 混合 venue（perp 腿=funding、MT 腿=swap），
 		// 其他类型按 posType 向后兼容（isFundingLeg 内部回落 isFundingType）。
@@ -78,7 +93,7 @@ func (l *Ledger) accountPosition(ctx context.Context, pos pgstore.Position, day 
 		if has {
 			continue
 		}
-		amount, ok, reason := l.legSwapAmount(canonical, leg, day, isFunding, longMap, shortMap, fundMap)
+		amount, ok, reason := l.legSwapAmount(legCanonical, leg, day, isFunding, longMap, shortMap, fundMap)
 		if !ok {
 			log.Printf("[swapledger] pos=%d leg=%d day=%s skip: %s", pos.ID, leg.LegNo, day.Format("2006-01-02"), reason)
 			continue // swap rate / notional 不可用 → 跳过该腿（fail-closed，不猜）
