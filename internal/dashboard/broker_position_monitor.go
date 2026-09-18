@@ -52,17 +52,15 @@ type BrokerPositionMonitor struct {
 	// D-180 S1：结算画像采集器（跳变检测 → 聚合写 swap_settled facts）。
 	settlementCollector *SettlementProfileCollector
 
-	// D-337R2 S1：venue server 时区缓存（swap 倒计时）——构造必选注入（零值=fetch nil 诚实空态，
-	// setter 已删：忘接=编译错，装配断链编译期守卫）。
-	// D-337R1 S2：CEX 腿 funding 结算时钟（周期缓存+年化费率源）。nil 任一=CEX 腿诚实空态。
+	// D-337R3 S1：CEX 腿 funding 结算周期缓存——构造必选第 8 参（nil=CEX 腿诚实空态）。；D-337R1 S2：CEX 腿年化费率源（函数 seam；engine 后建故 setter 注入，装配锚 d340）。
 	tzCache        ServerTZCache
 	cexIntervals   *exchange.FundingIntervalCache
 	cexFundingRate func(ctx context.Context, venue, symbol string) (annualPct float64, ok bool)
 }
 
-// SetCEXClock D-337R1 S2：注入 CEX funding 周期缓存与费率源（boot 装配）。
-func (m *BrokerPositionMonitor) SetCEXClock(intervals *exchange.FundingIntervalCache, fundingRate func(ctx context.Context, venue, symbol string) (float64, bool)) {
-	m.cexIntervals = intervals
+// SetCEXFundingRate D-337R3 S1：注入 CEX 腿年化费率源（cexIntervals 已改构造必选第 8 参；
+// 费率源依赖 engine facts 读路径，engine 后建故保留 setter——非新增依赖）。
+func (m *BrokerPositionMonitor) SetCEXFundingRate(fundingRate func(ctx context.Context, venue, symbol string) (float64, bool)) {
 	m.cexFundingRate = fundingRate
 }
 
@@ -90,20 +88,25 @@ func (m *BrokerPositionMonitor) SetSettlementProfileCollector(c *SettlementProfi
 
 // NewBrokerPositionMonitor 创建 monitor。interval 为轮询周期（ARB_BROKER_POS_POLL_MS）。
 // F5：quoteTick 为浮盈实时重算节流间隔（默认 1s，不查 venue 只重算浮盈）。
-func NewBrokerPositionMonitor(bm *BrokerManager, qbus *bus.QuoteBus, freshTTL, interval, quoteTick time.Duration, topic *bus.Topic[*v1.BrokerPositionSnapshot], tzCache ServerTZCache) *BrokerPositionMonitor {
+// D-337R2 S1：tzCache 构造必选注入（忘接=编译失败；零值 ServerTZCache=诚实空态）。
+// D-337R3 S1：cexIntervals 构造必选第 8 参（CEX 腿 funding 结算周期；忘接=编译失败，
+// nil=CEX 腿诚实空态）——house rule：本 monitor 新依赖一律构造必选，禁新增 Set* 注入
+// （setter 可忘=装配断链，D-337R1/R2/R3 三连教训；既有 Set* 仅存量兼容）。
+func NewBrokerPositionMonitor(bm *BrokerManager, qbus *bus.QuoteBus, freshTTL, interval, quoteTick time.Duration, topic *bus.Topic[*v1.BrokerPositionSnapshot], tzCache ServerTZCache, cexIntervals *exchange.FundingIntervalCache) *BrokerPositionMonitor {
 	if quoteTick <= 0 {
 		quoteTick = time.Second
 	}
 	return &BrokerPositionMonitor{
-		bm:        bm,
-		tzCache:   tzCache,
-		qbus:      qbus,
-		freshTTL:  freshTTL,
-		interval:  interval,
-		topic:     topic,
-		venues:    make(map[string]venueState),
-		quoteTick: quoteTick,
-		kickCh:    make(chan struct{}, 1), // D-107 P2：buffered(1) 非阻塞 send = 事件合并
+		bm:           bm,
+		tzCache:      tzCache,
+		cexIntervals: cexIntervals,
+		qbus:         qbus,
+		freshTTL:     freshTTL,
+		interval:     interval,
+		topic:        topic,
+		venues:       make(map[string]venueState),
+		quoteTick:    quoteTick,
+		kickCh:       make(chan struct{}, 1), // D-107 P2：buffered(1) 非阻塞 send = 事件合并
 	}
 }
 
