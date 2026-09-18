@@ -18,7 +18,6 @@ import (
 	"strconv"
 
 	"arb/internal/httpx" // SSOT：自动注入 CA + X-Proxy-Token
-	"arb/internal/notify"
 	"arb/internal/store/pgstore"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -67,6 +66,7 @@ func run(ctx context.Context) error {
 		{"PAXGUSDT", "PAXG-XAU"},
 		{"XAUTUSDT", "XAUT-XAU"},
 		{"XAUUSDT", "XAUUSDT-XAU"},
+		{"BTCUSDT", "BTCUSDT-BTC"}, // D-335 S0：业主批第四对（BTCUSDT×BTCUSD，swap 免息，纳入观察）
 	} {
 		if err := runPair(ctx, st, hc, proxyURL, p.sym, p.pair, exBid, exAsk); err != nil {
 			log.Printf("xasset-monitor: pair=%s 失败: %v", p.pair, err)
@@ -84,8 +84,7 @@ func runPair(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL, 
 		return fmt.Errorf("fetch binance %s: %w", sym, err)
 	}
 
-	// D-301a S2：funding 年化周期按 symbol 取真值（fundingInfo fundingIntervalHours）。
-	// PAXG/XAUT 实为 4h 结算 → 6 期/日，旧版硬编码 3 低估 2×。
+	// D-301a S2：funding 年化周期按 symbol 取真值（fundingInfo）——PAXG/XAUT 实为 4h→6 期/日，旧版 ×3 低估 2×。
 	periodsPerDay, err := fetchFundingPeriodsPerDay(ctx, hc, proxyURL, sym)
 	if err != nil {
 		log.Printf("xasset-monitor: pair=%s fundingInfo fetch failed, fallback 3/day: %v", pair, err)
@@ -95,14 +94,17 @@ func runPair(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL, 
 	// 算指标（口径分离 D1）。
 	entrySpread := (bid - exAsk) / exAsk * 10000
 	exitSpread := (ask - exBid) / exBid * 10000
-	const binanceMakerCostBps = 4.0 // 0.04% × 2 开+平
+	const binanceMakerCostBps = 4.0
 	exnessSpread := (exAsk - exBid) / exAsk * 10000
-	entryNet := entrySpread - binanceMakerCostBps - exnessSpread
+	entryNet := entrySpread - binanceMakerCostBps - exnessSpread // 开+平净价差（maker 0.04%×2+Exness 点差）
 	fundingAnnualPct := fundingRate * float64(periodsPerDay) * 365 * 100
 	tokenMid := (bid + ask) / 2
 	xauMid := (exBid + exAsk) / 2
 	trackingErr := math.Abs(tokenMid-xauMid) / xauMid * 10000
 	equivAnnual := entryNet/100 + fundingAnnualPct
+
+	// D-335 S1：noise_bps=trailing 24h 摆幅半径 (max−min)/2（含当前行；样本 <12 → NULL）。
+	noiseBps := computeNoiseBps(append(trailing24hEntries(ctx, st.Pool(), pair), entrySpread))
 
 	rec := &pgstore.XassetMonitor{
 		Pair:             pair,
@@ -117,6 +119,7 @@ func runPair(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL, 
 		FundingAnnualPct: fundingAnnualPct,
 		TrackingErrorBps: trackingErr,
 		EquivAnnualPct:   equivAnnual,
+		NoiseBps:         noiseBps,
 	}
 	if err := st.InsertXassetMonitor(ctx, rec); err != nil {
 		return fmt.Errorf("insert monitor: %w", err)
@@ -235,63 +238,4 @@ func fetchFundingPeriodsPerDay(ctx context.Context, hc *http.Client, proxyURL, s
 		return 24 / hours, nil
 	}
 	return 0, fmt.Errorf("fundingInfo: symbol %s not found", symbol)
-}
-
-// alertItem 告警项。
-type alertItem struct {
-	name string
-	val  float64
-	thr  float64
-	op   string // "<" 或 ">"
-}
-
-func checkAlerts(entrySpread, exitSpread, entryNet, fundingAnnual, fundingRate, trackingErr, equivAnnual float64) []alertItem {
-	var out []alertItem
-	if entrySpread < 10 {
-		out = append(out, alertItem{"进场价差不足", entrySpread, 10, "<"})
-	}
-	if exitSpread > 10 {
-		out = append(out, alertItem{"平仓成本高", exitSpread, 10, ">"})
-	}
-	if entryNet < 5 {
-		out = append(out, alertItem{"进场无利", entryNet, 5, "<"})
-	}
-	if fundingAnnual < 1.0 {
-		out = append(out, alertItem{"funding 年化过低", fundingAnnual, 1.0, "<"})
-	}
-	if fundingRate < 0 {
-		out = append(out, alertItem{"funding 单次负值", fundingRate, 0, "<"})
-	}
-	if trackingErr > 50 {
-		out = append(out, alertItem{"跟踪误差过大", trackingErr, 50, ">"})
-	}
-	if equivAnnual < 2.0 {
-		out = append(out, alertItem{"等效年化低于基准", equivAnnual, 2.0, "<"})
-	}
-	return out
-}
-
-func sendFeishuAlert(ctx context.Context, st *pgstore.Store, alerts []alertItem, rec *pgstore.XassetMonitor) {
-	appID, appSecret := os.Getenv("ARB_FEISHU_APP_ID"), os.Getenv("ARB_FEISHU_APP_SECRET")
-	fc := notify.NewFeishuClient(appID, appSecret)
-	if appID == "" || appSecret == "" || !fc.Enabled() {
-		log.Printf("xasset-monitor: 飞书未配置/未启用，告警跳过（%d 项）", len(alerts))
-		return
-	}
-	chatID, err := st.FeishuChatID(ctx)
-	if err != nil || chatID == "" {
-		log.Printf("xasset-monitor: chat_id 读取失败/未绑定，告警跳过（%d 项）", len(alerts))
-		return
-	}
-	text := fmt.Sprintf("[%s 监控] %d 项告警\n", rec.Pair, len(alerts))
-	for _, a := range alerts {
-		text += fmt.Sprintf("• %s: %.4f (阈值 %s %.4f)\n", a.name, a.val, a.op, a.thr)
-	}
-	text += fmt.Sprintf("\n当前：进场价差 %.2fbps / 进场净收益 %.2fbps / funding 年化 %.2f%% / 跟踪误差 %.2fbps / 等效年化 %.2f%%",
-		rec.EntrySpreadBps, rec.EntryNetBps, rec.FundingAnnualPct, rec.TrackingErrorBps, rec.EquivAnnualPct)
-	if err := fc.SendText(ctx, chatID, text); err != nil {
-		log.Printf("xasset-monitor: 飞书告警发送失败: %v", err)
-		return
-	}
-	log.Printf("xasset-monitor: 飞书告警已推送（%d 项）", len(alerts))
 }
