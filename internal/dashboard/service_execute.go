@@ -72,7 +72,7 @@ func metaForType(posType string, openBps float64) pgstore.PositionMeta {
 	case "CARRY":
 		annual := v * 365 / 100
 		return pgstore.PositionMeta{NetBps: &v, AnnualPct: &annual}
-	case "FUNDING_HEDGE", "PERP_FUNDING":
+	case "FUNDING_HEDGE", "PERP_FUNDING", "XASSET_CARRY": // D-332：XASSET net_bps=年化百分点同口径（484-488 实证），归 FUNDING 直存非 CARRY 折算
 		return pgstore.PositionMeta{NetBps: &v, AnnualPct: &v}
 	default: // CROSS_VENUE / MEANREVERT / 未知
 		return pgstore.PositionMeta{NetBps: &v}
