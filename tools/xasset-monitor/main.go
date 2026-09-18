@@ -9,6 +9,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -26,6 +27,14 @@ import (
 
 func main() {
 	ctx := context.Background()
+	backfill := flag.Bool("backfill", false, "D-341 S5：价差史深回填（ticks×klines 5min 对齐，src=backfill）")
+	flag.Parse()
+	if *backfill {
+		if err := runBackfillMode(ctx); err != nil {
+			log.Fatalf("xasset-monitor backfill: %v", err)
+		}
+		return
+	}
 	if err := run(ctx); err != nil {
 		log.Fatalf("xasset-monitor: %v", err)
 	}
@@ -118,6 +127,8 @@ func runPair(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL, 
 
 	// D-335 S1：noise_bps=trailing 24h 摆幅半径 (max−min)/2（含当前行；样本 <12 → NULL）。
 	noiseBps := computeNoiseBps(append(trailing24hEntries(ctx, st.Pool(), pair), entrySpread))
+	// D-341 S1：harvest_floor=min(q25, entry−MIN_CAPTURE)——trailing 全深序列（含当前行）。
+	harvestFloor := computeHarvestFloor(append(trailingAllEntries(ctx, st.Pool(), pair), entrySpread), entrySpread)
 
 	rec := &pgstore.XassetMonitor{
 		Pair:             pair,
@@ -133,6 +144,8 @@ func runPair(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL, 
 		TrackingErrorBps: trackingErr,
 		EquivAnnualPct:   equivAnnual,
 		NoiseBps:         noiseBps,
+		HarvestFloorBps:  harvestFloor,
+		Src:              "live",
 	}
 	if err := st.InsertXassetMonitor(ctx, rec); err != nil {
 		return fmt.Errorf("insert monitor: %w", err)

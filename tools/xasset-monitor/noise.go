@@ -45,3 +45,55 @@ func computeNoiseBps(vals []float64) *float64 {
 	half := (max - min) / 2
 	return &half
 }
+
+// computeHarvestFloor D-341 T1：收割线=min(q25, entry−MIN_CAPTURE)；样本 <48 → NULL。
+// vals=同 pair trailing 全深 entry_spread 序列（含当前行）；q25=25 分位（线性插值）。
+const harvestMinSamples = 48
+
+// MinCaptureBps D-341 S1：收割线下限（≥2×往返成本 1.2-1.5bps，防带压缩期收割线贴入场线 churn）。
+const MinCaptureBps = 3.0
+
+func computeHarvestFloor(vals []float64, entrySpread float64) *float64 {
+	if len(vals) < harvestMinSamples {
+		return nil
+	}
+	sorted := append([]float64(nil), vals...)
+	for i := 0; i < len(sorted); i++ {
+		for j := i + 1; j < len(sorted); j++ {
+			if sorted[j] < sorted[i] {
+				sorted[i], sorted[j] = sorted[j], sorted[i]
+			}
+		}
+	}
+	pos := 0.25 * float64(len(sorted)-1)
+	lo := int(pos)
+	hi := lo + 1
+	if hi >= len(sorted) {
+		hi = lo
+	}
+	q25 := sorted[lo] + (pos-float64(lo))*(sorted[hi]-sorted[lo])
+	floor := q25
+	if cap := entrySpread - MinCaptureBps; cap < floor {
+		floor = cap
+	}
+	return &floor
+}
+
+// trailingAllEntries D-341 S1：同 pair 全深 entry_spread 序列（收割线窗口=可用史全深，随积累变厚）。
+func trailingAllEntries(ctx context.Context, pool *pgxpool.Pool, pair string) []float64 {
+	rows, err := pool.Query(ctx,
+		`SELECT entry_spread_bps FROM fin_xasset_monitor WHERE pair=$1 AND src='live'`, pair)
+	if err != nil {
+		log.Printf("xasset-monitor: harvest sample query pair=%s: %v (本次 NULL)", pair, err)
+		return nil
+	}
+	defer rows.Close()
+	var out []float64
+	for rows.Next() {
+		var v float64
+		if err := rows.Scan(&v); err == nil {
+			out = append(out, v)
+		}
+	}
+	return out
+}
