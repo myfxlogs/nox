@@ -34,7 +34,7 @@ func (s *Service) ListPositions(ctx context.Context, req *connect.Request[v1.Lis
 	legsByPos := make(map[int64][]pgstore.PositionLeg, len(positions))
 	posIDs := make([]int64, 0, len(positions))
 	for _, p := range positions {
-		pb := positionToProto(&p)
+		pb := s.positionToProto(ctx, &p)
 		// D-069：填充 legs（成交历史，OPEN + CLOSE phase）
 		legs, err := s.store.ListPositionLegs(ctx, p.ID)
 		if err != nil {

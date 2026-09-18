@@ -163,7 +163,8 @@ func alertToProto(a *pgstore.Alert) *v1.Alert {
 	return pb
 }
 
-func positionToProto(p *pgstore.Position) *v1.Position {
+// positionToProto D-340 S3：改方法以挂年化对照填充（List/analyst 两消费路径同 helper P3）。
+func (s *Service) positionToProto(ctx context.Context, p *pgstore.Position) *v1.Position {
 	pb := &v1.Position{
 		Id:             p.ID,
 		OpportunityId:  p.OpportunityID,
@@ -181,6 +182,8 @@ func positionToProto(p *pgstore.Position) *v1.Position {
 	if p.ClosedAt != nil {
 		pb.ClosedAt = timestamppb.New(*p.ClosedAt)
 	}
+	// D-340 S3：年化对照填充（OPEN 息差型 live / CLOSED realized 折算；缺省诚实空态）。
+	s.fillCarryComparison(ctx, pb, p)
 	// D-080 S3：承诺年化%（可选，收敛型为 nil）
 	if p.ExpectedAnnualPct != nil {
 		pb.ExpectedAnnualPct = p.ExpectedAnnualPct

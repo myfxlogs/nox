@@ -168,6 +168,12 @@ type Service struct {
 	activeOppMu  sync.Mutex
 	activeOppIDs map[string]bool
 	activeOppAt  time.Time
+	// D-340 S3：XASSET 当前净 carry 引擎包装注入（与退出判定同源）+15s TTL 缓存
+	//（OPEN 息差型年化对照列）。nil=未注入（live 缺省，诚实空态）。
+	xassetCarryLive func(ctx context.Context, posID int64) (float64, bool)
+	carryMu         sync.Mutex
+	carryLive       map[int64]float64
+	carryLiveAt     map[int64]time.Time
 	// D-249 S3：scheduler kick 注入（on-open 触发采集补轮；nil=未接线→handler no-op）。
 	kickFn func(string)
 	// D-252：CMC 净值阈值告警状态机（nil=未接线→flushCMCWatch 不检查）。
