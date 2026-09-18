@@ -1,6 +1,4 @@
-// BrokerPositionMonitor Broker 实持仓视图的单一真相源（D-052）。
-// 轮询逐 venue 查询持仓 → 跟踪在线状态（离线保留最近成功快照）→ 变更时经 Topic 广播全量快照。
-// 推（StreamUpdates case 8）与拉（ListBrokerPositions）同源；前端全量替换，天然自愈断流。
+// BrokerPositionMonitor Broker 实持仓视图单一真相源（D-052）：轮询逐 venue 查持仓 → 跟踪在线状态（离线保留最近快照）→ 变更经 Topic 广播全量快照；推（StreamUpdates case 8）与拉（ListBrokerPositions）同源；前端全量替换，天然自愈断流。
 package dashboard
 
 import (
@@ -13,6 +11,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/collect/exchange"
 	"arb/internal/reconcile"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
@@ -53,8 +52,17 @@ type BrokerPositionMonitor struct {
 	// D-180 S1：结算画像采集器（跳变检测 → 聚合写 swap_settled facts）。
 	settlementCollector *SettlementProfileCollector
 
-	// D-337 S2：venue server 时区缓存（swap 倒计时数据源）。nil = 未注入（诚实空态）。
-	tzCache *serverTZCache
+	// D-337 S2：venue server 时区缓存（swap 倒计时）。nil=未注入（诚实空态）。
+	// D-337R1 S2：CEX 腿 funding 结算时钟（周期缓存+年化费率源）。nil 任一=CEX 腿诚实空态。
+	tzCache        *serverTZCache
+	cexIntervals   *exchange.FundingIntervalCache
+	cexFundingRate func(ctx context.Context, venue, symbol string) (annualPct float64, ok bool)
+}
+
+// SetCEXClock D-337R1 S2：注入 CEX funding 周期缓存与费率源（boot 装配）。
+func (m *BrokerPositionMonitor) SetCEXClock(intervals *exchange.FundingIntervalCache, fundingRate func(ctx context.Context, venue, symbol string) (float64, bool)) {
+	m.cexIntervals = intervals
+	m.cexFundingRate = fundingRate
 }
 
 // SwapSnapshotStore D-110 P2 swap 快照采集依赖（setter 注入，避免 NewBrokerPositionMonitor 签名变更）。

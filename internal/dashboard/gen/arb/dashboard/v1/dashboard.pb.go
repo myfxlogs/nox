@@ -3842,33 +3842,34 @@ func (x *ListPositionsResponse) GetTotal() int32 {
 }
 
 type BrokerPosition struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Venue         string                 `protobuf:"bytes,1,opt,name=venue,proto3" json:"venue,omitempty"`                       // 裸 venue 名
-	VenueKey      string                 `protobuf:"bytes,2,opt,name=venue_key,json=venueKey,proto3" json:"venue_key,omitempty"` // "{venue}:{venueType}"
-	Ticket        string                 `protobuf:"bytes,3,opt,name=ticket,proto3" json:"ticket,omitempty"`                     // venue 订单号（字符串，可能超 JS 安全整数）
-	Symbol        string                 `protobuf:"bytes,4,opt,name=symbol,proto3" json:"symbol,omitempty"`                     // venue 原生符号
-	Canonical     string                 `protobuf:"bytes,5,opt,name=canonical,proto3" json:"canonical,omitempty"`               // 解析后的 canonical；未映射 → ""（诚实空态）
-	Side          string                 `protobuf:"bytes,6,opt,name=side,proto3" json:"side,omitempty"`                         // BUY / SELL
-	Volume        float64                `protobuf:"fixed64,7,opt,name=volume,proto3" json:"volume,omitempty"`
-	OpenPrice     float64                `protobuf:"fixed64,8,opt,name=open_price,json=openPrice,proto3" json:"open_price,omitempty"`
-	CurrentPrice  float64                `protobuf:"fixed64,9,opt,name=current_price,json=currentPrice,proto3" json:"current_price,omitempty"` // 0 + fresh=false = 无报价（诚实空态）
-	Fresh         bool                   `protobuf:"varint,10,opt,name=fresh,proto3" json:"fresh,omitempty"`
-	Pnl           float64                `protobuf:"fixed64,11,opt,name=pnl,proto3" json:"pnl,omitempty"` // venue 权威浮盈（Order.Profit，后端透传，前端不自算 D-043）
-	Swap          float64                `protobuf:"fixed64,12,opt,name=swap,proto3" json:"swap,omitempty"`
-	Commission    float64                `protobuf:"fixed64,13,opt,name=commission,proto3" json:"commission,omitempty"`
-	Comment       string                 `protobuf:"bytes,14,opt,name=comment,proto3" json:"comment,omitempty"`
-	IsArb         bool                   `protobuf:"varint,15,opt,name=is_arb,json=isArb,proto3" json:"is_arb,omitempty"` // comment 前缀 = exec.OrderComment("arb") → ARB 源订单
-	OpenedAt      *timestamppb.Timestamp `protobuf:"bytes,16,opt,name=opened_at,json=openedAt,proto3" json:"opened_at,omitempty"`
-	Magic         int64                  `protobuf:"varint,17,opt,name=magic,proto3" json:"magic,omitempty"`                                    // MT5 ExpertId / MT4 MagicNumber；0 = 无（手动单）
-	VenueOnline   bool                   `protobuf:"varint,18,opt,name=venue_online,json=venueOnline,proto3" json:"venue_online,omitempty"`     // venue 在线状态；false = 最近快照（离线，非实时）
-	PositionId    int64                  `protobuf:"varint,19,opt,name=position_id,json=positionId,proto3" json:"position_id,omitempty"`        // S4：关联持仓组合 ID；0 = 未关联（孤儿订单）
-	AccountAlias  string                 `protobuf:"bytes,20,opt,name=account_alias,json=accountAlias,proto3" json:"account_alias,omitempty"`   // F3：账号别名（broker_accounts.alias）；空 = 未设别名，前端回落 venue
-	Margin        float64                `protobuf:"fixed64,21,opt,name=margin,proto3" json:"margin,omitempty"`                                 // D-124：分摊保证金 USD（方案 C）；0=未知/CEX/无账户数据
-	OrderId       string                 `protobuf:"bytes,22,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`                  // S4：关联持仓 OPEN 腿的 order_id（position_legs.order_id 透出）；空=未关联/孤儿
-	Sl            float64                `protobuf:"fixed64,23,opt,name=sl,proto3" json:"sl,omitempty"`                                         // D-155：broker 端止损 SL 值透传（MT5 Order.StopLoss / MT4 Order.StopLoss；0=未设/CEX 无概念）；D-146 S1 灾难 SL 生产验证闭环基础设施
-	SwapChargeAt  *timestamppb.Timestamp `protobuf:"bytes,24,opt,name=swap_charge_at,json=swapChargeAt,proto3" json:"swap_charge_at,omitempty"` // D-337：下次 swap 计费时刻=server 零点（venue 时区换算 UTC）；nil=时区未知（诚实空态）
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	Venue                  string                 `protobuf:"bytes,1,opt,name=venue,proto3" json:"venue,omitempty"`                       // 裸 venue 名
+	VenueKey               string                 `protobuf:"bytes,2,opt,name=venue_key,json=venueKey,proto3" json:"venue_key,omitempty"` // "{venue}:{venueType}"
+	Ticket                 string                 `protobuf:"bytes,3,opt,name=ticket,proto3" json:"ticket,omitempty"`                     // venue 订单号（字符串，可能超 JS 安全整数）
+	Symbol                 string                 `protobuf:"bytes,4,opt,name=symbol,proto3" json:"symbol,omitempty"`                     // venue 原生符号
+	Canonical              string                 `protobuf:"bytes,5,opt,name=canonical,proto3" json:"canonical,omitempty"`               // 解析后的 canonical；未映射 → ""（诚实空态）
+	Side                   string                 `protobuf:"bytes,6,opt,name=side,proto3" json:"side,omitempty"`                         // BUY / SELL
+	Volume                 float64                `protobuf:"fixed64,7,opt,name=volume,proto3" json:"volume,omitempty"`
+	OpenPrice              float64                `protobuf:"fixed64,8,opt,name=open_price,json=openPrice,proto3" json:"open_price,omitempty"`
+	CurrentPrice           float64                `protobuf:"fixed64,9,opt,name=current_price,json=currentPrice,proto3" json:"current_price,omitempty"` // 0 + fresh=false = 无报价（诚实空态）
+	Fresh                  bool                   `protobuf:"varint,10,opt,name=fresh,proto3" json:"fresh,omitempty"`
+	Pnl                    float64                `protobuf:"fixed64,11,opt,name=pnl,proto3" json:"pnl,omitempty"` // venue 权威浮盈（Order.Profit，后端透传，前端不自算 D-043）
+	Swap                   float64                `protobuf:"fixed64,12,opt,name=swap,proto3" json:"swap,omitempty"`
+	Commission             float64                `protobuf:"fixed64,13,opt,name=commission,proto3" json:"commission,omitempty"`
+	Comment                string                 `protobuf:"bytes,14,opt,name=comment,proto3" json:"comment,omitempty"`
+	IsArb                  bool                   `protobuf:"varint,15,opt,name=is_arb,json=isArb,proto3" json:"is_arb,omitempty"` // comment 前缀 = exec.OrderComment("arb") → ARB 源订单
+	OpenedAt               *timestamppb.Timestamp `protobuf:"bytes,16,opt,name=opened_at,json=openedAt,proto3" json:"opened_at,omitempty"`
+	Magic                  int64                  `protobuf:"varint,17,opt,name=magic,proto3" json:"magic,omitempty"`                                                                      // MT5 ExpertId / MT4 MagicNumber；0 = 无（手动单）
+	VenueOnline            bool                   `protobuf:"varint,18,opt,name=venue_online,json=venueOnline,proto3" json:"venue_online,omitempty"`                                       // venue 在线状态；false = 最近快照（离线，非实时）
+	PositionId             int64                  `protobuf:"varint,19,opt,name=position_id,json=positionId,proto3" json:"position_id,omitempty"`                                          // S4：关联持仓组合 ID；0 = 未关联（孤儿订单）
+	AccountAlias           string                 `protobuf:"bytes,20,opt,name=account_alias,json=accountAlias,proto3" json:"account_alias,omitempty"`                                     // F3：账号别名（broker_accounts.alias）；空 = 未设别名，前端回落 venue
+	Margin                 float64                `protobuf:"fixed64,21,opt,name=margin,proto3" json:"margin,omitempty"`                                                                   // D-124：分摊保证金 USD（方案 C）；0=未知/CEX/无账户数据
+	OrderId                string                 `protobuf:"bytes,22,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`                                                    // S4：关联持仓 OPEN 腿的 order_id（position_legs.order_id 透出）；空=未关联/孤儿
+	Sl                     float64                `protobuf:"fixed64,23,opt,name=sl,proto3" json:"sl,omitempty"`                                                                           // D-155：broker 端止损 SL 值透传（MT5 Order.StopLoss / MT4 Order.StopLoss；0=未设/CEX 无概念）；D-146 S1 灾难 SL 生产验证闭环基础设施
+	SwapChargeAt           *timestamppb.Timestamp `protobuf:"bytes,24,opt,name=swap_charge_at,json=swapChargeAt,proto3" json:"swap_charge_at,omitempty"`                                   // D-337R1 语义：下次计费/结算时刻（MT5=server 零点 swap，venue 时区换算 UTC；CEX=下次 funding 结算 UTC）；nil=时区/周期未知（诚实空态）
+	FundingRatePeriodicPct float64                `protobuf:"fixed64,25,opt,name=funding_rate_periodic_pct,json=fundingRatePeriodicPct,proto3" json:"funding_rate_periodic_pct,omitempty"` // D-337R1：CEX 周期费率 %（=年化/(365×periods)，零信任后端换算）；0=未知诚实空态
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *BrokerPosition) Reset() {
@@ -4067,6 +4068,13 @@ func (x *BrokerPosition) GetSwapChargeAt() *timestamppb.Timestamp {
 		return x.SwapChargeAt
 	}
 	return nil
+}
+
+func (x *BrokerPosition) GetFundingRatePeriodicPct() float64 {
+	if x != nil {
+		return x.FundingRatePeriodicPct
+	}
+	return 0
 }
 
 type ListBrokerPositionsRequest struct {
@@ -18103,7 +18111,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x06offset\x18\x03 \x01(\x05R\x06offset\"g\n" +
 	"\x15ListPositionsResponse\x128\n" +
 	"\tpositions\x18\x01 \x03(\v2\x1a.arb.dashboard.v1.PositionR\tpositions\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x05R\x05total\"\xcb\x05\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\"\x86\x06\n" +
 	"\x0eBrokerPosition\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x1b\n" +
 	"\tvenue_key\x18\x02 \x01(\tR\bvenueKey\x12\x16\n" +
@@ -18133,7 +18141,8 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x06margin\x18\x15 \x01(\x01R\x06margin\x12\x19\n" +
 	"\border_id\x18\x16 \x01(\tR\aorderId\x12\x0e\n" +
 	"\x02sl\x18\x17 \x01(\x01R\x02sl\x12@\n" +
-	"\x0eswap_charge_at\x18\x18 \x01(\v2\x1a.google.protobuf.TimestampR\fswapChargeAt\"6\n" +
+	"\x0eswap_charge_at\x18\x18 \x01(\v2\x1a.google.protobuf.TimestampR\fswapChargeAt\x129\n" +
+	"\x19funding_rate_periodic_pct\x18\x19 \x01(\x01R\x16fundingRatePeriodicPct\"6\n" +
 	"\x1aListBrokerPositionsRequest\x12\x18\n" +
 	"\arefresh\x18\x01 \x01(\bR\arefresh\"]\n" +
 	"\x1bListBrokerPositionsResponse\x12>\n" +

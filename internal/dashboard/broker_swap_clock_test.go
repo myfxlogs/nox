@@ -51,7 +51,7 @@ func TestD337_NextSwapChargeAtInLoc(t *testing.T) {
 func TestD337_ServerTZCache(t *testing.T) {
 	ctx := context.Background()
 	fetches := 0
-	c := newServerTZCache(time.Hour, func(_ context.Context, _ string) (float64, error) {
+	c := NewServerTZCache(time.Hour, func(_ context.Context, _ string) (float64, error) {
 		fetches++
 		return 3, nil
 	})
@@ -65,7 +65,7 @@ func TestD337_ServerTZCache(t *testing.T) {
 	}
 	// 失败 → nil 不报错且不缓存正结果（下轮重试）
 	boom := errors.New("rpc down")
-	c2 := newServerTZCache(time.Hour, func(_ context.Context, _ string) (float64, error) {
+	c2 := NewServerTZCache(time.Hour, func(_ context.Context, _ string) (float64, error) {
 		return 0, boom
 	})
 	if got := c2.get(ctx, "v:mt5"); got != nil {

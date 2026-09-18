@@ -36,6 +36,18 @@ func (f *fakeVenueQuerier) ServerTimezone(context.Context) (float64, error) {
 	return f.tzOffset, nil
 }
 
+// newMonTestQ 组装 monitor（querier 泛化入口——fakeVenueQuerier/fakeCEXQuerier 均可）。
+func newMonTestQ(t *testing.T, q reconcile.VenueQuerier) (*BrokerPositionMonitor, *bus.Topic[*v1.BrokerPositionSnapshot], <-chan *v1.BrokerPositionSnapshot) {
+	t.Helper()
+	qbus := bus.New()
+	bm := NewBrokerManager(nil, qbus, exec.NewRegistry(), time.Minute)
+	bm.AddStaticQuerier(q.VenueKey(), q)
+	topic := bus.NewTopic[*v1.BrokerPositionSnapshot]()
+	ch, _ := topic.Subscribe()
+	m := NewBrokerPositionMonitor(bm, qbus, time.Minute, time.Millisecond, time.Second, topic)
+	return m, topic, ch
+}
+
 // newMonTest 组装 monitor：nil store（BrokerSymbolMap 空 map → canonical=""，不动 broker_symbol_map 表）。
 func newMonTest(t *testing.T, q *fakeVenueQuerier) (*BrokerPositionMonitor, *bus.Topic[*v1.BrokerPositionSnapshot], <-chan *v1.BrokerPositionSnapshot) {
 	t.Helper()
@@ -406,7 +418,7 @@ func TestD337_BuildSwapChargeAt(t *testing.T) {
 		{Venue: "testvenue", VenueKey: "testvenue:mt5", Ticket: "2", Symbol: "XAUUSD", Side: "SELL", Volume: 0.01, OpenPrice: 4001, Profit: 0},
 	}}
 	m, _, _ := newMonTest(t, q)
-	m.SetServerTZCache(newServerTZCache(time.Hour, func(_ context.Context, _ string) (float64, error) {
+	m.SetServerTZCache(NewServerTZCache(time.Hour, func(_ context.Context, _ string) (float64, error) {
 		return 3, nil // EEST 形态
 	}))
 	got := m.Refresh(ctx)
@@ -424,7 +436,7 @@ func TestD337_BuildSwapChargeAt(t *testing.T) {
 		{Venue: "v2", VenueKey: "v2:mt5", Ticket: "9", Symbol: "XAUUSD", Side: "SELL", Volume: 0.01, OpenPrice: 4000, Profit: 0},
 	}}
 	m2, _, _ := newMonTest(t, q2)
-	m2.SetServerTZCache(newServerTZCache(time.Hour, func(_ context.Context, _ string) (float64, error) {
+	m2.SetServerTZCache(NewServerTZCache(time.Hour, func(_ context.Context, _ string) (float64, error) {
 		return 0, errors.New("rpc down")
 	}))
 	got2 := m2.Refresh(ctx)

@@ -27,7 +27,8 @@ type serverTZCache struct {
 	fetchedAt map[string]time.Time // 成功=ttl 内命中；失败=冷却计时（retry after cooldown）
 }
 
-func newServerTZCache(ttl time.Duration, fetch ServerTZFetcher) *serverTZCache {
+// NewServerTZCache D-337R1 S1：导出构造（cmd/core 装配接线用；fetcher 适配 BrokerManager.ServerTZQueriers）。
+func NewServerTZCache(ttl time.Duration, fetch ServerTZFetcher) *serverTZCache {
 	return &serverTZCache{
 		ttl:       ttl,
 		fetch:     fetch,
@@ -78,4 +79,23 @@ func nextSwapChargeAtInLoc(now time.Time, loc *time.Location) time.Time {
 func nextSwapChargeAtOffset(now time.Time, offsetHours float64) time.Time {
 	loc := time.FixedZone(fmt.Sprintf("server%+.2f", offsetHours), int(offsetHours*3600))
 	return nextSwapChargeAtInLoc(now, loc)
+}
+
+// NextUTCBoundaryHours D-337R1 S2 下沉：now（UTC）之后的下一个整 k×hours 边界
+// （恰在边界上→取下一个，防双触发）。原 cmd/core nextUTCBoundary 逻辑（income 边界
+// 与 CEX funding 结算边界共用，消双份复制）。
+func NextUTCBoundaryHours(now time.Time, hours int) time.Time {
+	mid := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	step := time.Duration(hours) * time.Hour
+	k := int(now.Sub(mid)/step) + 1
+	return mid.Add(time.Duration(k) * step)
+}
+
+// NextFundingSettlementUTC D-337R1 S2：CEX 腿下次 funding 结算边界（UTC）。
+// periodsPerDay 无缓存真值回退 3（8h，D-079 禁静默）——binance 偶发结算时间漂移=显示级误差可忍（设计 §3 边界）。
+func NextFundingSettlementUTC(now time.Time, periodsPerDay int) time.Time {
+	if periodsPerDay <= 0 {
+		periodsPerDay = 3
+	}
+	return NextUTCBoundaryHours(now, 24/periodsPerDay)
 }

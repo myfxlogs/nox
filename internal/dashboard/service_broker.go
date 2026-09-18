@@ -219,7 +219,7 @@ func (s *Service) ListAccounts(ctx context.Context, req *connect.Request[v1.List
 //	JPY 计价符号差 ~660 倍。venue 每次 poll 拿最新 Profit（已实时），无需重算。
 //
 // venueOnline=false = 离线 venue 的最近快照（非实时，诚实标注，D-052）。
-func brokerPositionToProto(o reconcile.VenueOrder, canonical string, price bus.Quote, hasPrice bool, venueOnline bool, freshTTL time.Duration, now time.Time, margin float64, swapChargeAt *timestamppb.Timestamp) *v1.BrokerPosition {
+func brokerPositionToProto(o reconcile.VenueOrder, canonical string, price bus.Quote, hasPrice bool, venueOnline bool, freshTTL time.Duration, now time.Time, margin float64, swapChargeAt *timestamppb.Timestamp, fundingRatePeriodicPct float64) *v1.BrokerPosition {
 	pb := &v1.BrokerPosition{
 		Venue:       o.Venue,
 		VenueKey:    o.VenueKey,
@@ -246,6 +246,7 @@ func brokerPositionToProto(o reconcile.VenueOrder, canonical string, price bus.Q
 	if !o.OpenedAt.IsZero() {
 		pb.OpenedAt = timestamppb.New(o.OpenedAt)
 	}
-	pb.SwapChargeAt = swapChargeAt // D-337：下次 swap 计费时刻（同 venue 同值；nil=时区未知诚实空态）
+	pb.SwapChargeAt = swapChargeAt                     // D-337：下次计费/结算时刻（同 venue 同值；nil=时区/周期未知诚实空态）
+	pb.FundingRatePeriodicPct = fundingRatePeriodicPct // D-337R1：CEX 周期费率%（MT5=0 空态）
 	return pb
 }

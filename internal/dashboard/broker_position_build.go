@@ -3,6 +3,7 @@ package dashboard
 
 import (
 	"context"
+	"log"
 	"maps"
 	"sort"
 	"strings"
@@ -81,15 +82,30 @@ func (m *BrokerPositionMonitor) build(ctx context.Context) []*v1.BrokerPosition 
 			if o.InitialMargin > 0 {
 				margin = o.InitialMargin
 			}
-			// D-337 S2：swap 倒计时——同 venue 所有订单同一计费时刻（server 零点换算）。
-			// CEX venue 无此概念 → nil；tz 未就绪/失败 → nil（诚实空态，RPC 后台取不阻塞组装）。
+			// D-337 S2 + D-337R1 S2：下次计费/结算时刻——MT5=server 零点（tzCache）；CEX=下次 funding
+			// 结算边界（周期缓存真值，回退 8h；binance 偶发结算漂移=显示级误差可忍）。未就绪→nil 诚实空态。
 			var swapChargeAt *timestamppb.Timestamp
-			if m.tzCache != nil && !isCEXVenueKey(o.VenueKey) {
+			var periodicPct float64
+			if isCEXVenueKey(o.VenueKey) {
+				if m.cexIntervals != nil && canonical != "" {
+					periods, ok := m.cexIntervals.Lookup(canonical)
+					if !ok {
+						log.Printf("[broker] cex funding interval %s miss (fallback 8h boundary)", canonical)
+						periods = 3
+					}
+					swapChargeAt = timestamppb.New(NextFundingSettlementUTC(now.UTC(), periods))
+					if m.cexFundingRate != nil {
+						if annual, ok2 := m.cexFundingRate(ctx, venue, canonical); ok2 {
+							periodicPct = annual / (365 * float64(periods)) // 年化% → 周期%（12.35/(365×6)≈0.0056）
+						}
+					}
+				}
+			} else if m.tzCache != nil {
 				if tzLoc := m.tzCache.get(ctx, o.VenueKey); tzLoc != nil {
 					swapChargeAt = timestamppb.New(nextSwapChargeAtInLoc(now, tzLoc))
 				}
 			}
-			out = append(out, brokerPositionToProto(o, canonical, price, hasPrice, vs.online, m.freshTTL, now, margin, swapChargeAt))
+			out = append(out, brokerPositionToProto(o, canonical, price, hasPrice, vs.online, m.freshTTL, now, margin, swapChargeAt, periodicPct))
 		}
 	}
 	return out
