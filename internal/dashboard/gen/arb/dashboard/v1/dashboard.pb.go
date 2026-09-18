@@ -3197,6 +3197,8 @@ type Position struct {
 	HoldDays              *float64               `protobuf:"fixed64,21,opt,name=hold_days,json=holdDays,proto3,oneof" json:"hold_days,omitempty"`                                              // D-106：持有天数（结算行 hold_days 优先；否则 closed_at−opened_at）
 	BreakEvenDays         *float64               `protobuf:"fixed64,22,opt,name=break_even_days,json=breakEvenDays,proto3,oneof" json:"break_even_days,omitempty"`                             // D-117：回本周期（净值<0÷日均实际swap；≥0=0已回本；日均swap≤0=缺省）
 	ExpectedBreakevenDays *float64               `protobuf:"fixed64,23,opt,name=expected_breakeven_days,json=expectedBreakevenDays,proto3,oneof" json:"expected_breakeven_days,omitempty"`     // D-311 R10：预期回本（opp.breakeven_days 透传，实测缺省时回落显示）
+	LiveNetCarryPct       *float64               `protobuf:"fixed64,24,opt,name=live_net_carry_pct,json=liveNetCarryPct,proto3,oneof" json:"live_net_carry_pct,omitempty"`                     // D-340：OPEN 息差型当前净 carry（年化百分点；与引擎退出判定 recalcXAssetNetCarry 同源；缺省=facts 过期 fail-closed 或非息差型）
+	RealizedAnnualPct     *float64               `protobuf:"fixed64,25,opt,name=realized_annual_pct,json=realizedAnnualPct,proto3,oneof" json:"realized_annual_pct,omitempty"`                 // D-340：CLOSED 已实现年化（realized_pnl/(入场名义×持有天数)×365×100；缺省=名义/天数不可得）
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -3388,6 +3390,20 @@ func (x *Position) GetBreakEvenDays() float64 {
 func (x *Position) GetExpectedBreakevenDays() float64 {
 	if x != nil && x.ExpectedBreakevenDays != nil {
 		return *x.ExpectedBreakevenDays
+	}
+	return 0
+}
+
+func (x *Position) GetLiveNetCarryPct() float64 {
+	if x != nil && x.LiveNetCarryPct != nil {
+		return *x.LiveNetCarryPct
+	}
+	return 0
+}
+
+func (x *Position) GetRealizedAnnualPct() float64 {
+	if x != nil && x.RealizedAnnualPct != nil {
+		return *x.RealizedAnnualPct
 	}
 	return 0
 }
@@ -18038,8 +18054,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\border_id\x18\f \x01(\tR\aorderId\x12\x16\n" +
 	"\x06status\x18\r \x01(\tR\x06status\x12*\n" +
 	"\x02ts\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\x02tsB\x0f\n" +
-	"\r_price_actual\"\xb2\n" +
-	"\n" +
+	"\r_price_actual\"\xc8\v\n" +
 	"\bPosition\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12%\n" +
 	"\x0eopportunity_id\x18\x02 \x01(\tR\ropportunityId\x12\x12\n" +
@@ -18065,7 +18080,9 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"R\x12settledNotionalUsd\x88\x01\x01\x12 \n" +
 	"\thold_days\x18\x15 \x01(\x01H\vR\bholdDays\x88\x01\x01\x12+\n" +
 	"\x0fbreak_even_days\x18\x16 \x01(\x01H\fR\rbreakEvenDays\x88\x01\x01\x12;\n" +
-	"\x17expected_breakeven_days\x18\x17 \x01(\x01H\rR\x15expectedBreakevenDays\x88\x01\x01B\x0f\n" +
+	"\x17expected_breakeven_days\x18\x17 \x01(\x01H\rR\x15expectedBreakevenDays\x88\x01\x01\x120\n" +
+	"\x12live_net_carry_pct\x18\x18 \x01(\x01H\x0eR\x0fliveNetCarryPct\x88\x01\x01\x123\n" +
+	"\x13realized_annual_pct\x18\x19 \x01(\x01H\x0fR\x11realizedAnnualPct\x88\x01\x01B\x0f\n" +
 	"\r_realized_pnlB\x16\n" +
 	"\x14_expected_annual_pctB\x1a\n" +
 	"\x18_expected_swap_bps_dailyB\x13\n" +
@@ -18080,7 +18097,9 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\n" +
 	"_hold_daysB\x12\n" +
 	"\x10_break_even_daysB\x1a\n" +
-	"\x18_expected_breakeven_days\"\xcd\x01\n" +
+	"\x18_expected_breakeven_daysB\x15\n" +
+	"\x13_live_net_carry_pctB\x16\n" +
+	"\x14_realized_annual_pct\"\xcd\x01\n" +
 	"\x19ExecuteOpportunityRequest\x12%\n" +
 	"\x0eopportunity_id\x18\x01 \x01(\tR\ropportunityId\x12\x1d\n" +
 	"\n" +

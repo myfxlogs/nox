@@ -130,6 +130,8 @@ func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, request
 		// UpdatePositionMeta 无条件覆写该列，必须在 meta 之后补；IS NULL 幂等（已有不覆写）。
 		if found.Type == "XASSET_CARRY" {
 			_ = s.store.EnsureEntrySpreadFromLegs(ctx, result.PositionID)
+			// D-341 S1：开仓学习样本锚（monitor harvest_floor/noise 落 positions 两列）。
+			s.ensureEntryGateSnapshot(ctx, result.PositionID, found)
 		}
 	}
 	return result.Status, "", result.PositionID
@@ -286,6 +288,8 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 		// D-327 S1：XASSET_CARRY 补写成交价基准（同 :128 写点——meta 覆写后补，IS NULL 幂等）。
 		if strategyType == "XASSET_CARRY" {
 			_ = s.store.EnsureEntrySpreadFromLegs(ctx, result.PositionID)
+			// D-341 S1：开仓学习样本锚（本路径无 opp 行，canonical 双腿同键兜底）。
+			s.ensureEntryGateSnapshotCanonical(ctx, result.PositionID, canonical)
 		}
 	}
 	return result.Status, "", result.PositionID
