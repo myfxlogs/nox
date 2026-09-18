@@ -204,3 +204,20 @@ func TestSettle_StatsUpdateFail_Retryable(t *testing.T) {
 		t.Errorf("MarkSettlementStatsRetryable 调用次数=%d, want 1", base.markRetryableCount)
 	}
 }
+
+// TestHasCashflowKinds D-331 T2：XASSET_CARRY 归「应有现金流」型——该型仓位 funding
+// 现金流缺失必须走 no_cashflows→unknown→retryable（D-193 保守口径），不再静默 skipped；
+// CROSS_VENUE/MEANREVERT 负例=无 swap/funding 现金流型，no_cashflows 属正常状态。
+func TestHasCashflowKinds(t *testing.T) {
+	for _, typ := range []string{"SWAPARB", "CARRY", "FUNDING_HEDGE", "PERP_FUNDING", "XASSET_CARRY"} {
+		if !hasCashflowKinds(typ) {
+			t.Errorf("hasCashflowKinds(%q) = false, want true", typ)
+		}
+	}
+	if hasCashflowKinds("CROSS_VENUE") {
+		t.Error(`hasCashflowKinds("CROSS_VENUE") = true, want false（无现金流型负例）`)
+	}
+	if hasCashflowKinds("MEANREVERT") {
+		t.Error(`hasCashflowKinds("MEANREVERT") = true, want false（无现金流型负例）`)
+	}
+}
