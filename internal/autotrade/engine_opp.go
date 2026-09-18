@@ -118,6 +118,32 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 	}
 	log.Printf("[autotrade] pass filter opp=%s type=%s netBps=%.2f", opp.ID, opp.Type, opp.NetBps)
 
+	// D-335 v2：安全边际闸——顺价深度 ≤ 24h 摆幅半径 = 摆幅内开仓负期望（485/488 实证）。
+	// monitor 符号约定 entry_spread_bps=(binance bid−exness ask)/ask，本结构顺价=正值（单向判定无绝对值）。
+	// 数据缺失/过期 fail-open + warn（期望值过滤非风险保护；止损链独立管命）。manual 路径不拦
+	//（advisory 管钱 vs D-328 risk-gate 管命，设计显式裁定，防未来误同步）。
+	if opp.Type == "XASSET_CARRY" {
+		// pair 键以 monitor 工具存储现值为准（"XAUUSDT-XAU"，S2 钉死）：第二段=canonical 去 USD 后缀。
+		pairKey := opp.Canonical
+		if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
+			pairKey = *opp.CanonicalSell + "-" + strings.TrimSuffix(opp.Canonical, "USD")
+		}
+		if entryBps, noiseBps, ok, err := e.store.LatestXAssetEntryGate(ctx, pairKey, xassetEntryGateMaxAge); err != nil {
+			log.Printf("[autotrade] safety margin: %s query: %v (fail-open)", pairKey, err)
+		} else if ok {
+			switch {
+			case entryBps <= 0:
+				log.Printf("[autotrade] skip %s: safety margin entry %.2fbps <= 0 (逆价不开)", opp.ID, entryBps)
+				return
+			case entryBps <= noiseBps:
+				log.Printf("[autotrade] skip %s: safety margin entry %.2fbps <= noise %.2fbps (摆幅内不开)", opp.ID, entryBps, noiseBps)
+				return
+			}
+		} else {
+			log.Printf("[autotrade] safety margin: no monitor data for %s (fail-open)", pairKey)
+		}
+	}
+
 	qty, perLot, skip := computeBuyQty(opp, e.cfg.NotionalUSD, e.service.USDPerLotForLeg)
 	if skip {
 		// D-140 S2/D-190：CS-miss 按 (venue,canonical) 聚合计数（语义扩为「无法定尺寸」，含 CS-miss/no-quote/fx-miss）
@@ -186,6 +212,9 @@ func computeBuyQty(opp pgstore.Opportunity, notionalUSD float64, usdPerLot func(
 	}
 	return notionalUSD / perLot, perLot, false
 }
+
+// xassetEntryGateMaxAge D-335：monitor 行龄上限（5min 采集节奏的 6 倍容差）；过期 fail-open。
+const xassetEntryGateMaxAge = 30 * time.Minute
 
 // xassetQtyFloor D-330 断层②：XASSET_CARRY qty<minStep 时的 spec 驱动可行量下限（§2.2）。
 // MaxLongQty 复用为「spec 核准可行量」（cap 字段兼任——floorToStepQtyMin 无私有外出路，
