@@ -68,35 +68,21 @@ func (s *Service) resolveLegs(found *pgstore.Opportunity, qty float64) ([]exec.L
 	if err != nil {
 		return nil, err
 	}
-	sellQty := math.Round(qty*csBuy/csSell*100) / 100
-	// D-070：qty 精度对齐（Binance -1111 / MT5 Invalid volume 修复）
-	// MT5 取整后为 0 会回退到 1 step（最小可交易量），不会返回 0
-	qty = s.floorToStepQty(found.VenueBuy, qbuy.VenueSymbol, qty)
-	sellQty = s.floorToStepQty(found.VenueSell, qsell.VenueSymbol, sellQty)
-	// 不平衡口径修正：按买腿参考价统一计两腿名义——D-028 防的是「取整导致的数量差」，
-	// 不是两腿各自可执行价的差（那是套利缺口本身：等量对冲腿在不同 venue 价格下名义额必然不同，
-	// 3.3% 价差曾把正确订单误拒为 imbalance）。
-	ref := qbuy.Ask
-	notionalBuy := qty * csBuy * ref
-	notionalSell := sellQty * csSell * ref
-	maxImb := s.maxLegImbalance
-	if maxImb <= 0 {
-		maxImb = 2.0
-	}
-	imb := math.Abs(notionalSell-notionalBuy) / notionalBuy
-	if notionalBuy <= 0 || imb > maxImb/100 {
-		return nil, fmt.Errorf("leg notional imbalance: buy $%.2f vs sell $%.2f (%.2f%% > %.1f%%)",
-			notionalBuy, notionalSell, imb*100, maxImb)
+	// D-329：腿名义两段式匹配（pass-1 原样 + pass-2 粗腿锚定，见 service_legs_match.go）——
+	// CLUSDT 型结构性失衡（粗腿步长 > 名义粒度带）从恒 abort 改为锚定匹配放行/语义化 fail-fast。
+	buyQty, sellQty, err := s.matchLegsNotional(found.VenueBuy, qbuy, csBuy, found.VenueSell, qsell, csSell, qty)
+	if err != nil {
+		return nil, err
 	}
 	// 量规格预检（D-061）：双腿 qty 不得低于 venue 最小手数（position #3 实证形态）。
-	if err := s.checkLegVolume(found.VenueBuy, qbuy.VenueSymbol, qty); err != nil {
+	if err := s.checkLegVolume(found.VenueBuy, qbuy.VenueSymbol, buyQty); err != nil {
 		return nil, err
 	}
 	if err := s.checkLegVolume(found.VenueSell, qsell.VenueSymbol, sellQty); err != nil {
 		return nil, err
 	}
 	return []exec.LegSpec{
-		{VenueKey: found.VenueBuy, VenueSymbol: qbuy.VenueSymbol, Side: "BUY", Qty: qty, PriceExpected: qbuy.Ask},
+		{VenueKey: found.VenueBuy, VenueSymbol: qbuy.VenueSymbol, Side: "BUY", Qty: buyQty, PriceExpected: qbuy.Ask},
 		{VenueKey: found.VenueSell, VenueSymbol: qsell.VenueSymbol, Side: "SELL", Qty: sellQty, PriceExpected: qsell.Bid},
 	}, nil
 }
@@ -177,39 +163,17 @@ func (s *Service) QtyBelowMinStep(venueKey, venueSymbol string, qty float64) boo
 }
 
 // floorToStepQty 按品种精度向下取整 qty（D-070 修复 Binance -1111 / MT5 Invalid volume）。
-// MT 腿：查 legVolumeStep（SymbolParams VolumeStep），未接线/未知用默认 0.01。
-// D-070 CFD 适配：取整后为 0 则回退到 1 个 step（最小可交易量），防 qty=0 无法交易。
-// CEX 腿：按品种 stepSize 取整；D-127 P2 起未知品种返回 0（fail-closed，由 P3 预检拒单）。
+// 步长分派下沉至 legStepQty（D-329 提取复用）：MT 腿取整后为 0 回退 1 step（最小可交易量）；
+// CEX 腿按品种 stepSize 取整，D-127 P2 起未知品种返回 0（fail-closed，由 P3 预检拒单）。
 func (s *Service) floorToStepQty(venueKey, symbol string, qty float64) float64 {
+	step := s.legStepQty(venueKey, symbol)
 	if isMTVenue(venueKey) {
-		step := 0.01 // 默认 MT5 手数步长
-		if s.legVolumeStep != nil {
-			if vs, ok := s.legVolumeStep(venueKey, symbol); ok && vs > 0 {
-				step = vs
-			}
-		}
 		result := floorToStep(qty, step)
 		if result <= 0 {
 			result = step // 回退到最小可交易量 1 step
 		}
 		log.Printf("[exec] floorToStepQty mt %s %s qty=%.6f step=%.4f → %.6f", venueKey, symbol, qty, step, result)
 		return result
-	}
-	// CEX：按 venueKey 分派（D-311 R4）——gate:perp=1.0（整数张协议事实）；
-	// okx:perp=instId→lotSz（instruments 同源缓存，取不到→0 fail-closed）；
-	// binance=stepMeta 运行时+fallback；其余→0（D-127 P2：fail-closed，由 P3 预检拒单）。
-	var step float64
-	switch {
-	case venueKey == "gate:perp":
-		step = 1.0
-	case venueKey == "okx:perp":
-		if s.okxLotSz != nil {
-			if l, ok := s.okxLotSz(symbol); ok && l > 0 {
-				step = l
-			}
-		}
-	case strings.HasPrefix(venueKey, "binance:"):
-		step = s.cexStepSize(symbol)
 	}
 	if step <= 0 {
 		log.Printf("[exec] floorToStepQty cex %s %s qty=%.6f step=0 → 0 (fail-closed, unknown symbol)", venueKey, symbol, qty)

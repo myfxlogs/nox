@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math"
 	"time"
 
 	"arb/internal/combo"
@@ -183,9 +182,13 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 	if err != nil {
 		return "FAILED", fmt.Sprintf("sell CS: %v", err), 0
 	}
-	sellQty := math.Round(qty*csBuy/csSell*100) / 100
-	qty = s.floorToStepQty(venueBuy, qbuy.VenueSymbol, qty)
-	sellQty = s.floorToStepQty(venueSell, qsell.VenueSymbol, sellQty)
+	// D-329 S2：腿名义两段式匹配与 resolveLegs 同源（matchLegsNotional：pass-1 原样 +
+	// pass-2 粗腿锚定）——仅 sellQty 计算与失衡检查收敛；下方 maxNotional clamp 是独立
+	// 逻辑原样保留（匹配后在 cap 检查中压回 1 step）。
+	qty, sellQty, err := s.matchLegsNotional(venueBuy, qbuy, csBuy, venueSell, qsell, csSell, qty)
+	if err != nil {
+		return "FAILED", err.Error(), 0
+	}
 	// CFD notional cap（D-190：两处 cap 检查改 usdnotional.PerLot，USD 统一换算）
 	if isMTVenue(venueBuy) {
 		perLot, ok := usdnotional.PerLot(canonical, qbuy.Ask, csBuy, s.qbus)
@@ -206,19 +209,6 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 		if notional > maxNotional {
 			sellQty = s.floorToStepQtyMin(venueSell, qsell.VenueSymbol)
 		}
-	}
-	// imbalance 检查
-	ref := qbuy.Ask
-	notionalBuy := qty * csBuy * ref
-	notionalSell := sellQty * csSell * ref
-	maxImb := s.maxLegImbalance
-	if maxImb <= 0 {
-		maxImb = 2.0
-	}
-	imb := math.Abs(notionalSell-notionalBuy) / notionalBuy
-	if notionalBuy <= 0 || imb > maxImb/100 {
-		return "FAILED", fmt.Sprintf("leg notional imbalance: buy $%.2f vs sell $%.2f (%.2f%% > %.1f%%)",
-			notionalBuy, notionalSell, imb*100, maxImb), 0
 	}
 	if err := s.checkLegVolume(venueBuy, qbuy.VenueSymbol, qty); err != nil {
 		return "FAILED", err.Error(), 0

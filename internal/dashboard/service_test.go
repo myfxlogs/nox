@@ -50,7 +50,8 @@ func TestResolveLegs(t *testing.T) {
 }
 
 // TestResolveLegsNotionalScaling D-060 实施修正②：不等 CS（油 1000:100 桶/手）卖腿等名义反算
-// 10×；CS 缺失拒；未接线拒；取整致不平衡超限拒。
+// 10×；CS 缺失拒；未接线拒。D-329：取整致失衡改两段式——pass-2 粗腿锚定匹配放行，
+// 匹配仍超才拒（leg granularity unexecutable，锚=d329_legs_match_test.go T3）。
 func TestResolveLegsNotionalScaling(t *testing.T) {
 	b := bus.New()
 	now := time.Now()
@@ -82,15 +83,19 @@ func TestResolveLegsNotionalScaling(t *testing.T) {
 		t.Errorf("not wired want reject, got %v", err)
 	}
 
-	// 取整致不平衡 >2% → 拒（CS 1:6，qty 0.1 → sell 0.02，名义差 20%）。
+	// 取整致失衡 >2%（CS 1:6，qty 0.1 → sell 0.02，名义差 20%）→ D-329 pass-2：
+	// 粗腿（sell cs=6，unit $6 vs buy $1）锚定 0.02 不动，buy 回算 0.1→0.12（=0.02×6）平衡放行。
 	b2 := bus.New()
 	b2.Publish(bus.Quote{Symbol: "X", Venue: "b", VenueType: "mt5", Bid: 100, Ask: 100, Time: now, VenueSymbol: "A"})
 	b2.Publish(bus.Quote{Symbol: "X", Venue: "s", VenueType: "mt5", Bid: 100, Ask: 100, Time: now, VenueSymbol: "B"})
 	cs2 := map[string]float64{"A": 1, "B": 6}
 	s2 := &Service{qbus: b2, legContractSize: func(_, sym string) (float64, bool) { v, ok := cs2[sym]; return v, ok }}
 	f2 := &pgstore.Opportunity{Canonical: "X", VenueBuy: "b:mt5", VenueSell: "s:mt5"}
-	if _, err := s2.resolveLegs(f2, 0.1); err == nil || !strings.Contains(err.Error(), "imbalance") {
-		t.Errorf("imbalance want reject, got %v", err)
+	legs4, err := s2.resolveLegs(f2, 0.1)
+	if err != nil {
+		t.Errorf("rounding imbalance should match via pass-2 coarse anchor, got %v", err)
+	} else if legs4[0].Qty != 0.12 || legs4[1].Qty != 0.02 {
+		t.Errorf("matched qty want buy 0.12 / sell 0.02 (anchor), got %v / %v", legs4[0].Qty, legs4[1].Qty)
 	}
 }
 
