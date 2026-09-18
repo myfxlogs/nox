@@ -282,3 +282,47 @@ func TestListPositions_NullExpectedNetBps(t *testing.T) {
 		t.Errorf("GetType=%q, want SWAPARB", p.Type)
 	}
 }
+
+// TestActiveOpportunityIDs D-331 T3：活跃态集合口径=positions_active_dedup_key_idx（0048）
+// 四态（OPENING/OPEN/LEGGED/CLOSING 命中，CLOSING 平仓途中仍算持有）；
+// CLOSED/FAILED 不命中；opportunity_id 去重。
+func TestActiveOpportunityIDs(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.pool.Exec(ctx, `TRUNCATE positions CASCADE`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	insertPosition(t, s, "T3:CROSS_VENUE:a:spot:b:perp", "OPEN")
+	insertPosition(t, s, "T3:CROSS_VENUE:c:spot:d:perp", "OPENING")
+	insertPosition(t, s, "T3:CROSS_VENUE:e:spot:f:perp", "LEGGED")
+	insertPosition(t, s, "T3:CROSS_VENUE:g:spot:h:perp", "CLOSING")
+	insertPosition(t, s, "T3:CROSS_VENUE:i:spot:j:perp", "CLOSED")
+	insertPosition(t, s, "T3:CROSS_VENUE:k:spot:l:perp", "FAILED")
+	got, err := s.ActiveOpportunityIDs(ctx)
+	if err != nil {
+		t.Fatalf("ActiveOpportunityIDs: %v", err)
+	}
+	wantActive := []string{
+		"T3:CROSS_VENUE:a:spot:b:perp",
+		"T3:CROSS_VENUE:c:spot:d:perp",
+		"T3:CROSS_VENUE:e:spot:f:perp",
+		"T3:CROSS_VENUE:g:spot:h:perp",
+	}
+	wantInactive := []string{
+		"T3:CROSS_VENUE:i:spot:j:perp",
+		"T3:CROSS_VENUE:k:spot:l:perp",
+	}
+	if len(got) != len(wantActive) {
+		t.Fatalf("active set size=%d (%v), want %d", len(got), got, len(wantActive))
+	}
+	for _, id := range wantActive {
+		if !got[id] {
+			t.Errorf("active set missing %q", id)
+		}
+	}
+	for _, id := range wantInactive {
+		if got[id] {
+			t.Errorf("inactive %q must not be in active set", id)
+		}
+	}
+}

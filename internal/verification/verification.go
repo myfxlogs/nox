@@ -33,7 +33,7 @@ func ExpectedUsd(typ string, netBps, swapBpsDaily, notionalUSD, holdDays float64
 	switch typ {
 	case "CROSS_VENUE", "MEANREVERT":
 		return netBps / 10000 * notionalUSD
-	case "FUNDING_HEDGE", "PERP_FUNDING", "CARRY":
+	case "FUNDING_HEDGE", "PERP_FUNDING", "CARRY", "XASSET_CARRY": // D-331：XASSET net_bps=年化百分点同口径（pos 488 实证）
 		if holdDays <= 0 || netBps <= 0 {
 			return 0
 		}

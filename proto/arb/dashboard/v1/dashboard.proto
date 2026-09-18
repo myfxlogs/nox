@@ -255,6 +255,7 @@ message Opportunity {
   optional double settle_net_bps = 31;   // D-318：结算口径净息差（perp 腿 funding 项以近 7d funding_history 均值替换预测值；单位同 net_bps=年化百分点）。无 perp 腿/缺数据=缺省。
   optional double settle_net_usd = 32;   // D-318：同上 USD 口径（net_usd 同 notional 派生）。
   optional int32  settle_samples = 33;   // D-318：参与均值的期数（两腿取小）。
+  bool has_open_position = 34;  // D-331：该机会 id 已有活跃仓位（OPENING/OPEN/LEGGED/CLOSING）
 }
 
 message ListOpportunitiesRequest {

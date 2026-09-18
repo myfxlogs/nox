@@ -157,3 +157,24 @@ func (s *Store) ListOpenPositionsByType(ctx context.Context, types []string) ([]
 	}
 	return out, rows.Err()
 }
+
+// ActiveOpportunityIDs 返回有活跃仓位的 opportunity_id 集合（D-331 机会卡「已持仓」标识）。
+// 活跃态权威定义=positions_active_dedup_key_idx（0048）：status IN ('OPENING','OPEN','LEGGED','CLOSING')
+// ——CLOSING（平仓途中）仍算持有。空集返空 map 不返 nil。
+func (s *Store) ActiveOpportunityIDs(ctx context.Context) (map[string]bool, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT DISTINCT opportunity_id FROM positions WHERE status IN ('OPENING','OPEN','LEGGED','CLOSING')`)
+	if err != nil {
+		return nil, fmt.Errorf("list active opportunity ids: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[string]bool)
+	for rows.Next() {
+		var oppID string
+		if err := rows.Scan(&oppID); err != nil {
+			return nil, err
+		}
+		out[oppID] = true
+	}
+	return out, rows.Err()
+}

@@ -27,6 +27,10 @@ func TestExpectedUsd(t *testing.T) {
 		{"FUNDING_HEDGE 负期望", "FUNDING_HEDGE", -2.0, 0, 1000, 30, 0}, // D-087：netBps≤0 → 0（防负期望入统计）
 		{"FUNDING_HEDGE holdDays=0", "FUNDING_HEDGE", 15.0, 0, 1000, 0, 0},
 
+		// D-331 T1：XASSET_CARRY 归 FUNDING 族分支（net_bps=年化百分点语义，pos 488 expected_net_bps=8.10 同口径）
+		{"XASSET_CARRY 正期望", "XASSET_CARRY", 8.0, 0, 4364, 1, 8.0 / 100 * 4364 * 1 / 365},
+		{"XASSET_CARRY 负期望", "XASSET_CARRY", -2.0, 0, 1000, 30, 0},
+
 		// SWAPARB 日 bps×天数（D-087：用 swapBpsDaily，netBps 不参与）
 		{"SWAPARB 正期望", "SWAPARB", 0, 0.5, 1000, 10, 0.5 / 10000 * 1000 * 10},
 		{"SWAPARB swapBpsDaily=0", "SWAPARB", 0, 0, 1000, 5, 0}, // D-087：swapBpsDaily≤0 → 0
