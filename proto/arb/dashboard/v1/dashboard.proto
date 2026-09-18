@@ -509,6 +509,8 @@ message Position {
   optional double hold_days               = 21;  // D-106：持有天数（结算行 hold_days 优先；否则 closed_at−opened_at）
   optional double break_even_days         = 22;  // D-117：回本周期（净值<0÷日均实际swap；≥0=0已回本；日均swap≤0=缺省）
   optional double expected_breakeven_days = 23;  // D-311 R10：预期回本（opp.breakeven_days 透传，实测缺省时回落显示）
+  optional double live_net_carry_pct = 24;   // D-340：OPEN 息差型当前净 carry（年化百分点；与引擎退出判定 recalcXAssetNetCarry 同源；缺省=facts 过期 fail-closed 或非息差型）
+  optional double realized_annual_pct = 25;  // D-340：CLOSED 已实现年化（realized_pnl/(入场名义×持有天数)×365×100；缺省=名义/天数不可得）
 }
 
 message ExecuteOpportunityRequest {
