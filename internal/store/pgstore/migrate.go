@@ -102,6 +102,7 @@ var migrationFiles = []struct {
 	{104, migrations.XassetNoiseSQL},                   // D-335 S1：fin_xasset_monitor noise_bps 真噪声列（24h 摆幅半径）
 	{105, migrations.XassetAllowCombosSQL},             // D-338 S1：XASSET 白名单表化（播种四行=.env:27 逐字）
 	{106, migrations.HarvestCycleSQL},                  // D-341 S1：收割线/学习样本锚/exit_kind/v_cycle_realrate 视图
+	{107, migrations.CarryUniverseSQL},                 // D-336 S2：carry 宇宙扫描快照表（发现层）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

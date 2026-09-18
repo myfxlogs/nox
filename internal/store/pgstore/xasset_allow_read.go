@@ -6,6 +6,8 @@ package pgstore
 import (
 	"context"
 	"fmt"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // XAssetAllowRow xasset_allow_combos 行（调用方映射到 exec.XAssetComboAllowSpec——
@@ -41,4 +43,40 @@ func (s *Store) LoadXAssetAllowCombos(ctx context.Context, environment string) (
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+// CarryUniverseRow fin_carry_universe 行（D-336 S2 扫描快照）。
+type CarryUniverseRow struct {
+	Canonical        string
+	MtVenue          string
+	CexVenue         string
+	NetAnnualPct     float64
+	FundingAnnualPct float64
+	SwapLongPct      *float64
+	SwapShortPct     *float64
+	SwapFree         bool
+	Structure        string
+}
+
+// ReplaceCarryUniverse D-336 S2：写入当轮全行（当前快照语义——先清当轮前全表，
+// 历史靠 ts 保留 30d 由既有清理策略兜底）。事务内单轮原子。
+func (s *Store) ReplaceCarryUniverse(ctx context.Context, rows []CarryUniverseRow) error {
+	batch := &pgx.Batch{}
+	batch.Queue(`DELETE FROM fin_carry_universe`)
+	for _, r := range rows {
+		batch.Queue(`
+			INSERT INTO fin_carry_universe (canonical, mt_venue, cex_venue, net_annual_pct,
+				funding_annual_pct, swap_long_pct, swap_short_pct, swap_free, structure)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+			r.Canonical, r.MtVenue, r.CexVenue, r.NetAnnualPct, r.FundingAnnualPct,
+			r.SwapLongPct, r.SwapShortPct, r.SwapFree, r.Structure)
+	}
+	br := s.pool.SendBatch(ctx, batch)
+	defer br.Close()
+	for range rows {
+		if _, err := br.Exec(); err != nil {
+			return fmt.Errorf("insert carry universe: %w", err)
+		}
+	}
+	return nil
 }
