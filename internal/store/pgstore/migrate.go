@@ -99,6 +99,7 @@ var migrationFiles = []struct {
 	{101, migrations.CanonicalFixSQL},                  // D-308 勘误：perp/mt5 canonical 回正到 ticks 命名空间
 	{102, migrations.XassetExecSQL},                    // D-311 XASSET_CARRY 通路：positions CHECK 七值 + universe ct_val
 	{103, migrations.IncomeEventsSQL},                  // D-334ab 位点①：income_events 实数轨（tranId 三列唯一幂等）
+	{104, migrations.XassetNoiseSQL},                   // D-335 S1：fin_xasset_monitor noise_bps 真噪声列（24h 摆幅半径）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

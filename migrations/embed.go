@@ -253,3 +253,6 @@ var XassetExecSQL string
 
 //go:embed 0103_income_events.sql
 var IncomeEventsSQL string
+
+//go:embed 0104_xasset_noise.sql
+var XassetNoiseSQL string
