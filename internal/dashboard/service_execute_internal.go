@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"time"
 
 	"arb/internal/combo"
@@ -209,6 +210,20 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 		if notional > maxNotional {
 			sellQty = s.floorToStepQtyMin(venueSell, qsell.VenueSymbol)
 		}
+	}
+	// D-329 R1 返修：clamp 后失衡复检原样恢复——matchLegsNotional 的平衡在 clamp 压腿后
+	// 不再成立（非对称形态：MT 买腿压回 1 step + CEX 卖腿不 clamp），复检拦回（R3 锚）。
+	ref := qbuy.Ask
+	notionalBuy := qty * csBuy * ref
+	notionalSell := sellQty * csSell * ref
+	maxImb := s.maxLegImbalance
+	if maxImb <= 0 {
+		maxImb = 2.0
+	}
+	imb := math.Abs(notionalSell-notionalBuy) / notionalBuy
+	if notionalBuy <= 0 || imb > maxImb/100 {
+		return "FAILED", fmt.Sprintf("leg notional imbalance: buy $%.2f vs sell $%.2f (%.2f%% > %.1f%%)",
+			notionalBuy, notionalSell, imb*100, maxImb), 0
 	}
 	if err := s.checkLegVolume(venueBuy, qbuy.VenueSymbol, qty); err != nil {
 		return "FAILED", err.Error(), 0

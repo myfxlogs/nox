@@ -66,17 +66,14 @@ func (s *Service) matchLegsNotional(venueBuy string, qbuy bus.Quote, csBuy float
 	if notionalBuy > 0 && imb <= maxImb/100 {
 		return buyQty, sellQty, nil
 	}
-	// pass-2：粗腿锚定匹配
+	// pass-2：粗腿锚定匹配——锚腿取 pass-1 量不动，细腿回算 floor 到锚名义以下
 	buyUnit := s.legStepQty(venueBuy, qbuy.VenueSymbol) * csBuy * ref
 	sellUnit := s.legStepQty(venueSell, qsell.VenueSymbol) * csSell * ref
+	preBuy, preSell := buyQty, sellQty
 	if buyUnit < sellUnit {
-		pre := buyQty
 		buyQty = s.floorToStepQty(venueBuy, qbuy.VenueSymbol, sellQty*csSell/csBuy)
-		log.Printf("[exec] leg notional matched: %s qty %.4f→%.4f (coarse anchor %s)", venueBuy, pre, buyQty, venueSell)
 	} else {
-		pre := sellQty
 		sellQty = s.floorToStepQty(venueSell, qsell.VenueSymbol, buyQty*csBuy/csSell)
-		log.Printf("[exec] leg notional matched: %s qty %.4f→%.4f (coarse anchor %s)", venueSell, pre, sellQty, venueBuy)
 	}
 	notionalBuy = buyQty * csBuy * ref
 	notionalSell = sellQty * csSell * ref
@@ -84,6 +81,12 @@ func (s *Service) matchLegsNotional(venueBuy string, qbuy bus.Quote, csBuy float
 	if notionalBuy <= 0 || notionalSell <= 0 || imb > maxImb/100 {
 		return 0, 0, fmt.Errorf("leg granularity unexecutable: buy $%.2f vs sell $%.2f (coarse step $%.2f > tolerance at this notional)",
 			notionalBuy, notionalSell, math.Max(buyUnit, sellUnit))
+	}
+	// D-329 R2 返修：matched 日志只在最终 imb 复检成功后打——失败路径误打 matched 误导 digest 分诊。
+	if buyUnit < sellUnit {
+		log.Printf("[exec] leg notional matched: %s qty %.4f→%.4f (coarse anchor %s)", venueBuy, preBuy, buyQty, venueSell)
+	} else {
+		log.Printf("[exec] leg notional matched: %s qty %.4f→%.4f (coarse anchor %s)", venueSell, preSell, sellQty, venueBuy)
 	}
 	return buyQty, sellQty, nil
 }

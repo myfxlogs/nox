@@ -175,3 +175,45 @@ func TestD329_MeanRevertWithCap_SameHelper(t *testing.T) {
 		t.Errorf("msg=%q, want contain 'leg granularity unexecutable'（红=现码旧文案）", msg)
 	}
 }
+
+// TestD329R1_MeanRevertAsymmetricClampImbalanceRecheck R3 返修锚：非对称 clamp——
+// MT 买腿超帽压回 1 step + CEX 卖腿不 clamp → clamp 后失衡复检拦回（FAILED 含原文案
+// "leg notional imbalance"）。红=现码（R1 前）helper 匹配平衡放行穿透过 clamp、后续门禁
+// 以别的原因 FAILED。数值：qty=0.05，helper 匹配平衡（买 0.05×100×4355=$21775=卖
+// 5×1×4355）；clamp 后买=0.01（$4355）vs 卖 5（$21775）→ imb=400%。
+func TestD329R1_MeanRevertAsymmetricClampImbalanceRecheck(t *testing.T) {
+	st := serviceTestStoreSingleInit(t)
+	ctx := context.Background()
+	if _, err := st.Pool().Exec(ctx, `TRUNCATE autotrade_state CASCADE`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	if _, err := st.Pool().Exec(ctx, `INSERT INTO autotrade_state (state, reason, halted_on) VALUES ('RUNNING', '', NULL)`); err != nil {
+		t.Fatalf("insert RUNNING: %v", err)
+	}
+	now := time.Now()
+	qb := bus.New()
+	qb.Publish(bus.Quote{Symbol: "XAUUSD", Venue: "vA", VenueType: "mt5", Bid: 4354.5, Ask: 4355, Time: now, VenueSymbol: "XAUUSDm"})
+	qb.Publish(bus.Quote{Symbol: "XAUUSD", Venue: "binance", VenueType: "perp", Bid: 4355, Ask: 4355.2, Time: now, VenueSymbol: "BTCUSDT"})
+	pipeline := exec.NewPipeline(exec.NewRegistry(), st, qb, exec.RiskLimits{}, "demo")
+	s := &Service{store: st, qbus: qb, pipeline: pipeline}
+	s.SetLegContractSize(func(venueKey, venueSymbol string) (float64, bool) {
+		if venueKey == "vA:mt5" {
+			return 100, true // CS=100oz/lot
+		}
+		return 0, false
+	})
+	s.SetCexContractSize(func(venue, venueSymbol string) (float64, bool) {
+		if venue == "binance" && venueSymbol == "BTCUSDT" {
+			return 1.0, true
+		}
+		return 0, false
+	})
+	// maxNotional=1000：买腿 $21775 超帽 → 压回 1 step；CEX 卖腿无 clamp。
+	status, msg, _ := s.ExecuteMeanRevertWithCap(ctx, "XAUUSD", "vA:mt5", "binance:perp", "req-d329r1", 0.05, 0, 1000, "MEANREVERT")
+	if status != "FAILED" {
+		t.Fatalf("非对称 clamp 后应 FAILED, got %s", status)
+	}
+	if !strings.Contains(msg, "leg notional imbalance") {
+		t.Errorf("msg=%q, want contain 'leg notional imbalance'（红=R1 前放行穿透过，后续门禁以别的原因拒）", msg)
+	}
+}
