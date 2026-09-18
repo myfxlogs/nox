@@ -94,7 +94,7 @@ func TestComputeBuyQtySkipRecordsCSMiss(t *testing.T) {
 		PriceBuy: 95.0,
 	}
 	// D-190：usdPerLot 返回 ok=false → skip=true（fail-closed）
-	_, skip := computeBuyQty(opp, 1000.0, func(c, v, s string) (float64, bool) { return 0, false })
+	_, _, skip := computeBuyQty(opp, 1000.0, func(c, v, s string) (float64, bool) { return 0, false })
 	if !skip {
 		t.Fatal("computeBuyQty should skip when CS unknown")
 	}

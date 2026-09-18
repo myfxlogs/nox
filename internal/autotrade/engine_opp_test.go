@@ -81,7 +81,7 @@ func TestComputeBuyQty(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			qty, skip := computeBuyQty(c.opp, notional, c.usdPerLot)
+			qty, _, skip := computeBuyQty(c.opp, notional, c.usdPerLot)
 			if skip != c.wantSkip {
 				t.Fatalf("%s: skip=%v want=%v", c.name, skip, c.wantSkip)
 			}
@@ -109,7 +109,7 @@ func TestComputeBuyQty_NilResolverCEXNormal(t *testing.T) {
 	opp := pgstore.Opportunity{ID: "x", Canonical: "ETHUSDT", VenueBuy: "binance:perp", PriceBuy: 2500}
 	// CEX 腿 usdPerLot 返回 ok（模拟 qbus 有报价）
 	usdPerLot := func(c, v, s string) (float64, bool) { return 2500, true }
-	qty, skip := computeBuyQty(opp, 1000, usdPerLot)
+	qty, _, skip := computeBuyQty(opp, 1000, usdPerLot)
 	if skip {
 		t.Fatalf("CEX 腿 usdPerLot ok 不应 skip")
 	}
@@ -124,7 +124,7 @@ func TestComputeBuyQty_NilResolverCEXNormal(t *testing.T) {
 func TestComputeBuyQty_JPYAnchor(t *testing.T) {
 	opp := pgstore.Opportunity{ID: "x", Canonical: "AUDJPY", VenueBuy: "ic:mt5", PriceBuy: 97.0}
 	usdPerLot := func(c, v, s string) (float64, bool) { return 64666.67, true } // CS×price÷USDJPY
-	qty, skip := computeBuyQty(opp, 1000.0, usdPerLot)
+	qty, _, skip := computeBuyQty(opp, 1000.0, usdPerLot)
 	if skip {
 		t.Fatal("JPY anchor: expected ok, got skip")
 	}

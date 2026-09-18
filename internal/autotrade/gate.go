@@ -132,7 +132,9 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 		// SWAPARB 豁免 notional cap：D-096 判定书（净算月~$110=年化1.8%无杠杆，不注资）+
 		// D-097 自管 sizing（SwapArbBareCap 1 手 + minNotional skip；swap 收租需整手，
 		// MaxNotional 单笔风险 cap 语义不适用——整手收租非单笔风险敞口）。
-		SkipNotional: intent.Strategy == "SWAPARB" || intent.Strategy == "CARRY",
+		// D-330：XASSET_CARRY 同豁免——intent.NotionalUSD 是 sizing 预算语义，黄金对实额可超
+		// 单笔 cap；敞口闸=combo spec MaxGrossUSD（pipeline checkXAssetComboAllow 事后校验终审）。
+		SkipNotional: intent.Strategy == "SWAPARB" || intent.Strategy == "CARRY" || intent.Strategy == "XASSET_CARRY",
 		DedupHit:     comboAlreadyOpen,
 	})
 

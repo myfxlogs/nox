@@ -86,12 +86,14 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 	// D-311 S6：XASSET_CARRY 前置拦截——零信任白名单（空表=全拒）。
 	// 不命中→静默跳过（不产 intent 不落 REJECTED，修 462 条/时 REJECTED 刷屏；
 	// 环境门挡不住时白名单是 CEX 真单的最后闸）。canonical_sell nil/空→回退 canonical。
+	// D-330 S3：spec 捕获下传 H4.2（MaxLongQty 复用为 spec 核准可行量下限）。
+	var xassetSpec *exec.XAssetComboAllowSpec
 	if opp.Type == "XASSET_CARRY" {
 		sellCanonical := opp.Canonical
 		if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
 			sellCanonical = *opp.CanonicalSell
 		}
-		if exec.MatchXAssetComboAllow(e.cfg.XAssetAllowCombos, opp.Canonical, sellCanonical, opp.VenueBuy, opp.VenueSell) == nil {
+		if xassetSpec = exec.MatchXAssetComboAllow(e.cfg.XAssetAllowCombos, opp.Canonical, sellCanonical, opp.VenueBuy, opp.VenueSell); xassetSpec == nil {
 			log.Printf("[autotrade] skip %s: XASSET_CARRY combo not in allowlist (%s/%s %s×%s)", opp.ID, opp.Canonical, sellCanonical, opp.VenueBuy, opp.VenueSell)
 			return
 		}
@@ -116,7 +118,7 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 	}
 	log.Printf("[autotrade] pass filter opp=%s type=%s netBps=%.2f", opp.ID, opp.Type, opp.NetBps)
 
-	qty, skip := computeBuyQty(opp, e.cfg.NotionalUSD, e.service.USDPerLotForLeg)
+	qty, perLot, skip := computeBuyQty(opp, e.cfg.NotionalUSD, e.service.USDPerLotForLeg)
 	if skip {
 		// D-140 S2/D-190：CS-miss 按 (venue,canonical) 聚合计数（语义扩为「无法定尺寸」，含 CS-miss/no-quote/fx-miss）
 		e.recordCSMiss(opp.VenueBuy, opp.Canonical)
@@ -127,11 +129,25 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 	}
 	// H4.2：qty 低于买腿最小步 → debug 跳过（品种适配事实，不产 intent 不落 REJECTED）
 	// venueSymbol 从 qbus 取（handleOpportunity 无直接 quote，用 opp.VenueBuy 查）
+	intentNotional := e.cfg.NotionalUSD
 	if qbuy, ok := e.quotes.Latest(opp.Canonical, opp.VenueBuy); ok {
 		if e.service.QtyBelowMinStep(opp.VenueBuy, qbuy.VenueSymbol, qty) {
-			log.Printf("[autotrade] skip opp=%s: qty %.6f below min step (notional $%.0f too small for %s)",
-				opp.ID, qty, e.cfg.NotionalUSD, qbuy.VenueSymbol)
-			return
+			// D-330 断层②：XASSET_CARRY 且 spec 命中时走 spec 驱动可行量下限（§2.2）——
+			// 黄金对 perLot≈$435.5k，$1000 预算 qty 0.0023<0.01 每轮被静默吞；不满足条件维持静默跳过。
+			floored := false
+			if opp.Type == "XASSET_CARRY" && xassetSpec != nil {
+				if nq, nn, ok2 := xassetQtyFloor(xassetSpec, !e.service.QtyBelowMinStep(opp.VenueBuy, qbuy.VenueSymbol, xassetSpec.MaxLongQty), perLot); ok2 {
+					qty = nq
+					intentNotional = nn
+					floored = true
+				}
+			}
+			if !floored {
+				log.Printf("[autotrade] skip opp=%s: qty %.6f below min step (notional $%.0f too small for %s)",
+					opp.ID, qty, e.cfg.NotionalUSD, qbuy.VenueSymbol)
+				return
+			}
+			log.Printf("[autotrade] xasset qty floor from combo spec: %s qty %.6f notional $%.0f", opp.ID, qty, intentNotional)
 		}
 	}
 	intent := TradeIntent{
@@ -140,7 +156,7 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 		VenueBuy:    opp.VenueBuy,
 		VenueSell:   opp.VenueSell,
 		Qty:         qty,
-		NotionalUSD: e.cfg.NotionalUSD,
+		NotionalUSD: intentNotional,
 		DedupKey:    opp.ID,
 		NetBps:      opp.NetBps,
 		Execute: func(ctx context.Context) (string, string, int64) {
@@ -161,13 +177,29 @@ func isMTVenue(venue string) bool {
 // ok=false → skip=true（fail-closed log 含 opp.ID 与原因：CS-miss / no-quote / fx-miss）。
 // **行为变化（D-190 有意）**：价格源从 opp.PriceBuy（机会行，可能陈旧）改为 live qbus ask（更优口径）；
 // CEX 腿现在也要求 qbus 报价在（detector 产 opp 前提下必有）。
-func computeBuyQty(opp pgstore.Opportunity, notionalUSD float64, usdPerLot func(canonical, venueKey, side string) (float64, bool)) (qty float64, skip bool) {
+// D-330：返回值扩 perLot（H4.2 spec 可行量下限换算 intent.NotionalUSD=qty×perLot 实额，取最小 diff）。
+func computeBuyQty(opp pgstore.Opportunity, notionalUSD float64, usdPerLot func(canonical, venueKey, side string) (float64, bool)) (qty, perLot float64, skip bool) {
 	perLot, ok := usdPerLot(opp.Canonical, opp.VenueBuy, "ask")
 	if !ok || perLot <= 0 {
 		log.Printf("[autotrade] skip opp=%s: USD-per-lot unavailable (fail-closed) canonical=%s venue=%s", opp.ID, opp.Canonical, opp.VenueBuy)
-		return 0, true
+		return 0, 0, true
 	}
-	return notionalUSD / perLot, false
+	return notionalUSD / perLot, perLot, false
+}
+
+// xassetQtyFloor D-330 断层②：XASSET_CARRY qty<minStep 时的 spec 驱动可行量下限（§2.2）。
+// MaxLongQty 复用为「spec 核准可行量」（cap 字段兼任——floorToStepQtyMin 无私有外出路，
+// QtyBelowMinStep(bool) 是现成公共判据；误配大值由 gross 预闸 + pipeline checkXAssetComboAllow
+// 终审双层兜底，安全方向正确）。gross 预闸=双腿 2×qty×perLot ≤ MaxGrossUSD（>0 时）。
+// ok=false → 调用方维持静默跳过（原 H4.2 语义）；正常路径（qty≥minStep）不消费 MaxLongQty。
+func xassetQtyFloor(spec *exec.XAssetComboAllowSpec, specQtyExecutable bool, perLot float64) (qty, notionalUSD float64, ok bool) {
+	if spec == nil || spec.MaxLongQty <= 0 || !specQtyExecutable {
+		return 0, 0, false
+	}
+	if spec.MaxGrossUSD > 0 && 2*spec.MaxLongQty*perLot > spec.MaxGrossUSD {
+		return 0, 0, false
+	}
+	return spec.MaxLongQty, spec.MaxLongQty * perLot, true
 }
 
 // === D-140 S2：CS-miss 聚合告警 ===
