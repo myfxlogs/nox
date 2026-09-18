@@ -22,9 +22,10 @@ type FundingWindowQuerier interface {
 
 // CarryRegimeConfig 持久性闸三参数（D-328 S5 env 注入；零值=fail-closed 全拒 XASSET）。
 type CarryRegimeConfig struct {
-	Window     time.Duration // 回看窗口（默认 24h）
-	FloorPct   float64       // 收入下限（年化百分点，默认 2.0；区分「弱而活」与「已死」）
-	MinSamples int           // 窗口最少样本数（默认 12；不足=fail-closed）
+	Window      time.Duration // 回看窗口（默认 24h）
+	FloorPct    float64       // 收入下限（年化百分点，默认 2.0；区分「弱而活」与「已死」）
+	MinSamples  int           // 窗口最少样本数（默认 12；不足=fail-closed）
+	PulsedAware bool          // D-334c S1：demo 域脉动型 funding 品种均值语义（mean+latest 判）；real 恒 false=worst 严判一字不动
 }
 
 // FundingRegimeOK 单腿持久性判定（纯函数，可单测；rows 按 ts 升序）。
@@ -34,7 +35,7 @@ type CarryRegimeConfig struct {
 //   - 收入腿：窗口内全部样本 requiredSign×v ≥ floorPct（sign>0 看 minV、sign<0 看 maxV≤−floor）
 //
 // reason 串带 latest/min/max/n 供日志与 FAILED message。
-func FundingRegimeOK(rows []pgstore.FactPoint, requiredSign, floorPct float64, minSamples int) (gate bool, income bool, reason string) {
+func FundingRegimeOK(rows []pgstore.FactPoint, requiredSign, floorPct float64, minSamples int, pulsedAware bool) (gate bool, income bool, reason string) {
 	n := len(rows)
 	if n == 0 || n < minSamples {
 		return false, false, fmt.Sprintf("insufficient n=%d < %d", n, minSamples)
@@ -42,6 +43,22 @@ func FundingRegimeOK(rows []pgstore.FactPoint, requiredSign, floorPct float64, m
 	latest := rows[n-1].Value
 	if requiredSign*latest <= 0 {
 		return true, false, fmt.Sprintf("non-income leg skip latest=%.4g", latest)
+	}
+	// D-334c S2：demo 域脉动型分支（PulsedAware）——mean≥floor && latest≥floor && n≥minSamples
+	//（n 检查已在函数头）。经济语义：均值含零样本=真实期望收益（零期拉低均值是诚实反映非一票否决）；
+	// latest=当下未坍塌；fail-closed 保留。已知取舍（显式接受）：窗内中段塌落（latest 尚正、均值
+	// 尚高）逃逸比 worst 判多——demo=学习环境；real 域不受影响（一字不动=铁边界）。
+	if pulsedAware {
+		var sum float64
+		for _, r := range rows {
+			sum += requiredSign * r.Value
+		}
+		mean := sum / float64(n)
+		signedLatest := requiredSign * latest
+		if mean < floorPct || signedLatest < floorPct {
+			return false, true, fmt.Sprintf("mean=%.4g latest=%.4g n=%d < floor %.2f", mean, signedLatest, n, floorPct)
+		}
+		return true, true, fmt.Sprintf("income ok (demo pulsed) mean=%.4g latest=%.4g n=%d", mean, signedLatest, n)
 	}
 	minV, maxV := rows[0].Value, rows[0].Value
 	for _, r := range rows[1:] {
@@ -87,7 +104,7 @@ func CarryFundingRegimeCheck(ctx context.Context, q FundingWindowQuerier, venueB
 		if err != nil {
 			return false, fmt.Sprintf("%s/%s query: %v (fail-closed)", leg.venueKey, leg.symbol, err)
 		}
-		gate, income, reason := FundingRegimeOK(rows, leg.sign, cfg.FloorPct, cfg.MinSamples)
+		gate, income, reason := FundingRegimeOK(rows, leg.sign, cfg.FloorPct, cfg.MinSamples, cfg.PulsedAware)
 		if !gate {
 			return false, fmt.Sprintf("%s/%s %s", leg.venueKey, leg.symbol, reason)
 		}
