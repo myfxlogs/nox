@@ -3,6 +3,7 @@
 package dashboard
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -127,4 +128,10 @@ func (s *Service) aliasForVenueKey(venueKey string) string {
 		venue = venueKey[:idx]
 	}
 	return m[venue]
+}
+
+// SetXAssetCarryLive D-340 S3：注入引擎当前净 carry 公开包装（autotrade.XAssetNetCarryPublic，
+// 与退出判定 recalcXAssetNetCarry 同源；engine 后建故 setter 注入——装配锚见 d340 测试+setup 注入行）。
+func (s *Service) SetXAssetCarryLive(fn func(ctx context.Context, posID int64) (float64, bool)) {
+	s.xassetCarryLive = fn
 }

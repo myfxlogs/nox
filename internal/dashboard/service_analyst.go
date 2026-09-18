@@ -48,7 +48,7 @@ func (s *Service) EnrichPositionForAnalyst() func(ctx context.Context, p *pgstor
 		if s.bpm == nil {
 			return nil // 未接线 → 诚实缺省
 		}
-		pb := positionToProto(p)
+		pb := s.positionToProto(ctx, p)
 		// D-118：analyst 路径无批量预取，传空 map（enrichOne 退化为纯结算天数，无三倍日加成）
 		// D-146 S5：analyst 路径无 funding 预取，传空 map（enrichOne 无 funding 加成）
 		enrichOne(ctx, s, pb, legs, s.bpm.Snapshot(), time.Now(), map[string]time.Weekday{}, map[string]float64{})
