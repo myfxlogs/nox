@@ -44,7 +44,8 @@ func newMonTestQ(t *testing.T, q reconcile.VenueQuerier) (*BrokerPositionMonitor
 	bm.AddStaticQuerier(q.VenueKey(), q)
 	topic := bus.NewTopic[*v1.BrokerPositionSnapshot]()
 	ch, _ := topic.Subscribe()
-	m := NewBrokerPositionMonitor(bm, qbus, time.Minute, time.Millisecond, time.Second, topic)
+	m := NewBrokerPositionMonitor(bm, qbus, time.Minute, time.Millisecond, time.Second, topic,
+		NewServerTZCache(time.Minute, func(context.Context, string) (float64, error) { return 0, errors.New("n/a") }))
 	return m, topic, ch
 }
 
@@ -56,7 +57,8 @@ func newMonTest(t *testing.T, q *fakeVenueQuerier) (*BrokerPositionMonitor, *bus
 	bm.AddStaticQuerier("testvenue", q)
 	topic := bus.NewTopic[*v1.BrokerPositionSnapshot]()
 	ch, _ := topic.Subscribe()
-	m := NewBrokerPositionMonitor(bm, qbus, time.Minute, time.Millisecond, time.Second, topic)
+	m := NewBrokerPositionMonitor(bm, qbus, time.Minute, time.Millisecond, time.Second, topic,
+		NewServerTZCache(time.Minute, func(context.Context, string) (float64, error) { return 0, errors.New("n/a") }))
 	return m, topic, ch
 }
 
@@ -417,10 +419,14 @@ func TestD337_BuildSwapChargeAt(t *testing.T) {
 		{Venue: "testvenue", VenueKey: "testvenue:mt5", Ticket: "1", Symbol: "XAUUSD", Side: "SELL", Volume: 0.01, OpenPrice: 4000, Profit: 0},
 		{Venue: "testvenue", VenueKey: "testvenue:mt5", Ticket: "2", Symbol: "XAUUSD", Side: "SELL", Volume: 0.01, OpenPrice: 4001, Profit: 0},
 	}}
-	m, _, _ := newMonTest(t, q)
-	m.SetServerTZCache(NewServerTZCache(time.Hour, func(_ context.Context, _ string) (float64, error) {
-		return 3, nil // EEST 形态
-	}))
+	qb1 := bus.New()
+	bm1 := NewBrokerManager(nil, qb1, exec.NewRegistry(), time.Minute)
+	bm1.AddStaticQuerier(q.key, q)
+	m := NewBrokerPositionMonitor(bm1, qb1, time.Minute, time.Millisecond, time.Second,
+		bus.NewTopic[*v1.BrokerPositionSnapshot](),
+		NewServerTZCache(time.Hour, func(_ context.Context, _ string) (float64, error) {
+			return 3, nil // EEST 形态
+		}))
 	got := m.Refresh(ctx)
 	if len(got) != 2 {
 		t.Fatalf("want 2 positions, got %d", len(got))
@@ -435,10 +441,14 @@ func TestD337_BuildSwapChargeAt(t *testing.T) {
 	q2 := &fakeVenueQuerier{key: "v2:mt5", orders: []reconcile.VenueOrder{
 		{Venue: "v2", VenueKey: "v2:mt5", Ticket: "9", Symbol: "XAUUSD", Side: "SELL", Volume: 0.01, OpenPrice: 4000, Profit: 0},
 	}}
-	m2, _, _ := newMonTest(t, q2)
-	m2.SetServerTZCache(NewServerTZCache(time.Hour, func(_ context.Context, _ string) (float64, error) {
-		return 0, errors.New("rpc down")
-	}))
+	qb2 := bus.New()
+	bm2 := NewBrokerManager(nil, qb2, exec.NewRegistry(), time.Minute)
+	bm2.AddStaticQuerier(q2.key, q2)
+	m2 := NewBrokerPositionMonitor(bm2, qb2, time.Minute, time.Millisecond, time.Second,
+		bus.NewTopic[*v1.BrokerPositionSnapshot](),
+		NewServerTZCache(time.Hour, func(_ context.Context, _ string) (float64, error) {
+			return 0, errors.New("rpc down")
+		}))
 	got2 := m2.Refresh(ctx)
 	if len(got2) != 1 || got2[0].SwapChargeAt != nil {
 		t.Errorf("无时区 venue want nil, got %d/%v", len(got2), got2[0].SwapChargeAt)

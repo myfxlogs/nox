@@ -100,7 +100,7 @@ func (m *BrokerPositionMonitor) build(ctx context.Context) []*v1.BrokerPosition 
 						}
 					}
 				}
-			} else if m.tzCache != nil {
+			} else if m.tzCache.fetch != nil { // D-337R2：零值缓存=诚实空态（构造必选注入）
 				if tzLoc := m.tzCache.get(ctx, o.VenueKey); tzLoc != nil {
 					swapChargeAt = timestamppb.New(nextSwapChargeAtInLoc(now, tzLoc))
 				}

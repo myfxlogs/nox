@@ -52,9 +52,10 @@ type BrokerPositionMonitor struct {
 	// D-180 S1：结算画像采集器（跳变检测 → 聚合写 swap_settled facts）。
 	settlementCollector *SettlementProfileCollector
 
-	// D-337 S2：venue server 时区缓存（swap 倒计时）。nil=未注入（诚实空态）。
+	// D-337R2 S1：venue server 时区缓存（swap 倒计时）——构造必选注入（零值=fetch nil 诚实空态，
+	// setter 已删：忘接=编译错，装配断链编译期守卫）。
 	// D-337R1 S2：CEX 腿 funding 结算时钟（周期缓存+年化费率源）。nil 任一=CEX 腿诚实空态。
-	tzCache        *serverTZCache
+	tzCache        ServerTZCache
 	cexIntervals   *exchange.FundingIntervalCache
 	cexFundingRate func(ctx context.Context, venue, symbol string) (annualPct float64, ok bool)
 }
@@ -87,19 +88,15 @@ func (m *BrokerPositionMonitor) SetSettlementProfileCollector(c *SettlementProfi
 	m.settlementCollector = c
 }
 
-// SetServerTZCache D-337 S2：注入 venue server 时区缓存（swap 倒计时）。boot 时调用；nil=诚实空态。
-func (m *BrokerPositionMonitor) SetServerTZCache(c *serverTZCache) {
-	m.tzCache = c
-}
-
 // NewBrokerPositionMonitor 创建 monitor。interval 为轮询周期（ARB_BROKER_POS_POLL_MS）。
 // F5：quoteTick 为浮盈实时重算节流间隔（默认 1s，不查 venue 只重算浮盈）。
-func NewBrokerPositionMonitor(bm *BrokerManager, qbus *bus.QuoteBus, freshTTL, interval, quoteTick time.Duration, topic *bus.Topic[*v1.BrokerPositionSnapshot]) *BrokerPositionMonitor {
+func NewBrokerPositionMonitor(bm *BrokerManager, qbus *bus.QuoteBus, freshTTL, interval, quoteTick time.Duration, topic *bus.Topic[*v1.BrokerPositionSnapshot], tzCache ServerTZCache) *BrokerPositionMonitor {
 	if quoteTick <= 0 {
 		quoteTick = time.Second
 	}
 	return &BrokerPositionMonitor{
 		bm:        bm,
+		tzCache:   tzCache,
 		qbus:      qbus,
 		freshTTL:  freshTTL,
 		interval:  interval,

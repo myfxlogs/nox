@@ -9,7 +9,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"sync"
 	"time"
 )
 
@@ -19,17 +18,19 @@ type ServerTZFetcher func(ctx context.Context, venueKey string) (offsetHours flo
 // serverTZRetryCooldown D-337：失败后重试冷却（"失败重试下轮"=下几个轮询周期，防失败 RPC 每秒重放）。
 const serverTZRetryCooldown = 5 * time.Minute
 
-type serverTZCache struct {
+// ServerTZCache D-337R2 S1：venue server 时区缓存——构造注入值类型（nil 字面量编译红=
+// 编译期装配守卫；D-337R1 setter 可忘断链事故根除）。无锁：仅 broker build 单写者协程访问。
+// 零值=fetch nil → get 恒 nil（诚实空态，自防御）。
+type ServerTZCache struct {
 	ttl       time.Duration
 	fetch     ServerTZFetcher
-	mu        sync.Mutex
 	loc       map[string]*time.Location
 	fetchedAt map[string]time.Time // 成功=ttl 内命中；失败=冷却计时（retry after cooldown）
 }
 
-// NewServerTZCache D-337R1 S1：导出构造（cmd/core 装配接线用；fetcher 适配 BrokerManager.ServerTZQueriers）。
-func NewServerTZCache(ttl time.Duration, fetch ServerTZFetcher) *serverTZCache {
-	return &serverTZCache{
+// NewServerTZCache 构造（值返回；map 字段引用语义共享底层；cmd/core 装配点用）。
+func NewServerTZCache(ttl time.Duration, fetch ServerTZFetcher) ServerTZCache {
+	return ServerTZCache{
 		ttl:       ttl,
 		fetch:     fetch,
 		loc:       map[string]*time.Location{},
@@ -40,11 +41,12 @@ func NewServerTZCache(ttl time.Duration, fetch ServerTZFetcher) *serverTZCache {
 // get 返回 venue 的 server 时区。miss/过期/冷却结束 → 同步抓取一次（每冷却期至多一次
 // 阻塞尝试，组装不被反复阻塞；成功 TTL 24h，失败 5min 冷却后重试——"失败重试下轮"）。
 // 失败 → nil（诚实空态，组装继续）。
-func (c *serverTZCache) get(ctx context.Context, venueKey string) *time.Location {
-	c.mu.Lock()
+func (c ServerTZCache) get(ctx context.Context, venueKey string) *time.Location {
+	if c.fetch == nil {
+		return nil // 零值缓存（构造必选注入后不可达；自防御诚实空态）
+	}
 	loc, hasLoc := c.loc[venueKey]
 	at, hasAt := c.fetchedAt[venueKey]
-	c.mu.Unlock()
 	if hasLoc && hasAt && time.Since(at) < c.ttl {
 		return loc // 成功缓存 TTL 内
 	}
@@ -53,8 +55,6 @@ func (c *serverTZCache) get(ctx context.Context, venueKey string) *time.Location
 	}
 	off, err := c.fetch(ctx, venueKey)
 	now := time.Now()
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	if err != nil {
 		log.Printf("[broker] server timezone %s: %v (cooldown %v)", venueKey, err, serverTZRetryCooldown)
 		c.loc[venueKey] = nil
