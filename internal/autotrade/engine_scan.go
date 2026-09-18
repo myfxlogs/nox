@@ -68,6 +68,10 @@ func (e *Engine) scanAndClose(ctx context.Context) {
 // logCloseTrigger D-245 缺口2：平仓触发源持久化（481 实证 stdout 随容器重建丢失）。
 // 写失败只 log 不阻断平仓（观测路径不挡执行路径）。
 func logCloseTrigger(ctx context.Context, st *pgstore.Store, p *pgstore.Position, reason string) {
+	// D-341 S3：周期学习样本——exit_kind 单写点（reason 前缀映射；IS NULL 幂等首因为准）。
+	if err := st.UpdatePositionExitKind(ctx, p.ID, pgstore.ExitKindFromReason(reason)); err != nil {
+		log.Printf("[autotrade] exit_kind %d: %v", p.ID, err)
+	}
 	posID := p.ID
 	if err := st.InsertAutotradeLog(ctx, &pgstore.AutotradeLog{
 		OpportunityID: p.OpportunityID,
