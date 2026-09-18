@@ -256,3 +256,6 @@ var IncomeEventsSQL string
 
 //go:embed 0104_xasset_noise.sql
 var XassetNoiseSQL string
+
+//go:embed 0105_xasset_allow_combos.sql
+var XassetAllowCombosSQL string
