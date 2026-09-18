@@ -213,6 +213,11 @@ func (q *MT4Querier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error
 }
 
 // MT5Querier 通过 MT5 gRPC 查询持仓。
+// ServerTZQuerier D-337 S2：MT5 venue server 时区查询可选实现（MT4/CEX 不实现 → swap 倒计时诚实空态 nil）。
+type ServerTZQuerier interface {
+	ServerTimezone(ctx context.Context) (offsetHours float64, err error)
+}
+
 type MT5Querier struct {
 	token string
 	mt5   mt5pb.MT5Client
@@ -236,6 +241,19 @@ func (q *MT5Querier) Account(ctx context.Context) (*AccountInfo, error) {
 		return nil, fmt.Errorf("mt5 account summary: %s", e.GetMessage())
 	}
 	return accountSummaryToInfoMT5(q.venue, "mt5", resp.GetResult()), nil
+}
+
+// ServerTimezone D-337 S2：server 时区偏移（小时，含 DST 在效偏移）。镜像 QueryOpenedOrders 的会话透传。
+func (q *MT5Querier) ServerTimezone(ctx context.Context) (float64, error) {
+	ctx = metadata.AppendToOutgoingContext(ctx, "id", q.token)
+	resp, err := q.mt5.ServerTimezone(ctx, &mt5pb.ServerTimezoneRequest{Id: q.token})
+	if err != nil {
+		return 0, fmt.Errorf("mt5 server timezone: %w", err)
+	}
+	if e := resp.GetError(); e != nil {
+		return 0, fmt.Errorf("mt5 server timezone: %v", e)
+	}
+	return resp.GetResult(), nil
 }
 
 func (q *MT5Querier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error) {
