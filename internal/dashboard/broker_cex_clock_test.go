@@ -4,13 +4,17 @@ package dashboard
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"arb/internal/bus"
 	"arb/internal/collect/exchange"
+	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	"arb/internal/exec"
 	"arb/internal/fact"
 	"arb/internal/reconcile"
 )
@@ -51,8 +55,14 @@ func TestD337R1_CEXLegClockAndRate(t *testing.T) {
 	q := &fakeCEXQuerier{key: "binance:perp", orders: []reconcile.VenueOrder{
 		{Venue: "binance", VenueKey: "binance:perp", Ticket: "XAUUSDT", Symbol: "XAUUSDT", Side: "SELL", Volume: 1, OpenPrice: 4355, Profit: 0},
 	}}
-	mon, _, _ := newMonTestQ(t, q)
-	mon.SetCEXClock(intervals, func(_ context.Context, venue, symbol string) (float64, bool) {
+	qb := bus.New()
+	bm := NewBrokerManager(nil, qb, exec.NewRegistry(), time.Minute)
+	bm.AddStaticQuerier(q.key, q)
+	mon := NewBrokerPositionMonitor(bm, qb, time.Minute, time.Millisecond, time.Second,
+		bus.NewTopic[*v1.BrokerPositionSnapshot](), NewServerTZCache(time.Minute, func(context.Context, string) (float64, error) {
+			return 0, errors.New("n/a")
+		}), intervals)
+	mon.SetCEXFundingRate(func(_ context.Context, venue, symbol string) (float64, bool) {
 		if venue != "binance" || symbol != "XAUUSDT" {
 			return 0, false
 		}
@@ -98,8 +108,14 @@ func TestD337R1_CEXNoFactZero(t *testing.T) {
 	q := &fakeCEXQuerier{key: "binance:perp", orders: []reconcile.VenueOrder{
 		{Venue: "binance", VenueKey: "binance:perp", Ticket: "XAUUSDT", Symbol: "XAUUSDT", Side: "SELL", Volume: 1, OpenPrice: 4355, Profit: 0},
 	}}
-	mon, _, _ := newMonTestQ(t, q)
-	mon.SetCEXClock(intervals, func(_ context.Context, _, _ string) (float64, bool) { return 0, false }) // 无 facts 行
+	qb := bus.New()
+	bm := NewBrokerManager(nil, qb, exec.NewRegistry(), time.Minute)
+	bm.AddStaticQuerier(q.key, q)
+	mon := NewBrokerPositionMonitor(bm, qb, time.Minute, time.Millisecond, time.Second,
+		bus.NewTopic[*v1.BrokerPositionSnapshot](), NewServerTZCache(time.Minute, func(context.Context, string) (float64, error) {
+			return 0, errors.New("n/a")
+		}), intervals)
+	mon.SetCEXFundingRate(func(_ context.Context, _, _ string) (float64, bool) { return 0, false }) // 无 facts 行
 	got := mon.Refresh(ctx)
 	if len(got) != 1 {
 		t.Fatalf("want 1, got %d", len(got))
