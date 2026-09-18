@@ -137,7 +137,7 @@ func (s *Store) ListOpenPositionsByType(ctx context.Context, types []string) ([]
 	if len(types) == 0 {
 		return nil, nil
 	}
-	q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note, closing_started_at, uncertainty_reason
+	q := `SELECT id, opportunity_id, type, status, COALESCE(expected_net_bps, 0), expected_entry_spread_bps, expected_swap_bps_daily, expected_annual_pct, realized_pnl, opened_at, closed_at, note, closing_started_at, uncertainty_reason, entry_noise_bps, entry_harvest_floor_bps
 		FROM positions
 		WHERE status = 'OPEN' AND type = ANY($1)
 		ORDER BY id`
