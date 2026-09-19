@@ -41,7 +41,11 @@ func (s *Service) GetRepoRateRadar(ctx context.Context, req *connect.Request[v1.
 	if err != nil {
 		loc = time.FixedZone("CST", 8*3600)
 	}
-	now := time.Now().In(loc)
+	nowFn := s.nowFn
+	if nowFn == nil {
+		nowFn = time.Now // D-347：nil = 生产墙钟
+	}
+	now := nowFn().In(loc)
 	tradeDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
 	open, close_, high, low, err := s.store.RepoRateDailyOHLC(ctx, "204007", tradeDate)
 	if err != nil {

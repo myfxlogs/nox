@@ -11,9 +11,9 @@ func TestAliasForVenueKey(t *testing.T) {
 	}
 	// 注入 alias map（key=venue，即 venueKey 冒号前部分）
 	s.SetAliasMap(map[string]string{
-		"1314615":  "pt1314615",
+		"1314615":          "pt1314615",
 		"REDACTED_MT_ACCT": "ICR1503****",
-		"binance":  "Binance",
+		"binance":          "Binance",
 	})
 	cases := []struct {
 		venueKey string

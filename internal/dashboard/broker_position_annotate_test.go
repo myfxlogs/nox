@@ -60,13 +60,13 @@ func TestAnnotateWithIndex_SamePositionBothLegs(t *testing.T) {
 		{VenueKey: "REDACTED_MT_ACCT:mt5", Ticket: "T3"}, // 不同 position
 	}
 	posIdx := map[string]int64{
-		"52993526:mt5\x00T1":  300,
-		"277842155:mt5\x00T2": 300, // 同 position 300
+		"52993526:mt5\x00T1":         300,
+		"277842155:mt5\x00T2":        300, // 同 position 300
 		"REDACTED_MT_ACCT:mt5\x00T3": 301,
 	}
 	orderIdx := map[string]string{
-		"52993526:mt5\x00T1":  "T1",
-		"277842155:mt5\x00T2": "T2",
+		"52993526:mt5\x00T1":         "T1",
+		"277842155:mt5\x00T2":        "T2",
 		"REDACTED_MT_ACCT:mt5\x00T3": "T3",
 	}
 	annotateWithIndex(bps, posIdx, orderIdx)
