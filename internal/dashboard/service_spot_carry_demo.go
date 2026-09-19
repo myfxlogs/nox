@@ -21,6 +21,19 @@ import (
 	"connectrpc.com/connect"
 )
 
+// pickSimulatedConfig D-350R1 S1（缺陷 1 P0 实盘混选）：配置选择必须命中 simulated=true
+// （demo）——ListExchangeConfigs 按 created_at 序，venue+venueType 只比二者会命中主网行
+// （id=20 主网 perp 先于 id=25 demo），以实盘 key 打主网真仓=fail-dangerous。
+// 无命中返回 nil（RPC 侧报 failed_precondition 明示需 demo 配置）。
+func pickSimulatedConfig(cfgs []pgstore.ExchangeConfig, venue, venueType string) *pgstore.ExchangeConfig {
+	for i := range cfgs {
+		if cfgs[i].Venue == venue && cfgs[i].VenueType == venueType && cfgs[i].Simulated {
+			return &cfgs[i]
+		}
+	}
+	return nil
+}
+
 // deriveSpotBaseURL demo 现货端点构造：perp demo base（…/demofapi/fapi）尾部 /fapi → /api
 // （T3 unit 锚）；非 /fapi 尾（如 id=19 主网 …/api）原样返回。
 func deriveSpotBaseURL(perpBase string) string {
@@ -57,16 +70,10 @@ func (s *Service) ExecuteSpotCarryDemo(ctx context.Context, req *connect.Request
 	if err != nil {
 		return nil, err
 	}
-	var perpCfg *pgstore.ExchangeConfig
-	for i := range cfgs {
-		if cfgs[i].Venue == in.Venue && cfgs[i].VenueType == "perp" {
-			perpCfg = &cfgs[i]
-			break
-		}
-	}
+	perpCfg := pickSimulatedConfig(cfgs, in.Venue, "perp")
 	if perpCfg == nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
-			fmt.Errorf("venue %q 无 perp demo 配置", in.Venue))
+			fmt.Errorf("venue %q 无 demo（simulated=true）perp 配置", in.Venue))
 	}
 	spotBase := deriveSpotBaseURL(perpCfg.BaseURL)
 	// 降级路径：demo spot 可用性首验（部署后 A8-③）；不可用 → 本 RPC 报 failed_precondition
@@ -94,7 +101,7 @@ func (s *Service) ExecuteSpotCarryDemo(ctx context.Context, req *connect.Request
 	perpLeg := &v1.SpotCarryDemoLeg{Side: perpSide, Market: "perp"}
 	resp.Legs = append(resp.Legs, spotLeg, perpLeg)
 
-	rollback := func(ex *exec.CEXExecutor, leg *v1.SpotCarryDemoLeg, price float64) {
+	rollback := func(ex *exec.CEXExecutor, leg *v1.SpotCarryDemoLeg) {
 		rbSide := "SELL"
 		if leg.Side == "SELL" {
 			rbSide = "BUY"
@@ -105,7 +112,6 @@ func (s *Service) ExecuteSpotCarryDemo(ctx context.Context, req *connect.Request
 		} else {
 			leg.RolledBack = true
 		}
-		_ = price
 	}
 	// 先现货
 	spotFill, err := spotEx.PlaceOrder(ctx, exec.Order{
@@ -120,26 +126,36 @@ func (s *Service) ExecuteSpotCarryDemo(ctx context.Context, req *connect.Request
 		Symbol: in.Symbol, Side: perpSide, Qty: in.QtyUsd / perpPrice, Venue: in.Venue,
 	})
 	if err != nil {
-		rollback(spotEx, spotLeg, spotPrice)
+		rollback(spotEx, spotLeg)
 		return nil, connect.NewError(connect.CodeInternal,
 			fmt.Errorf("永续腿失败，现货腿已回滚：%v", err))
 	}
 	perpLeg.OrderId, perpLeg.Qty = perpFill.OrderID, perpFill.Qty
 	// 在册：paper_spot_carry status='demo'（同 symbol 活跃唯一索引兜底防重复开）
+	// D-350R1 S2（缺陷 2）：demo 目标 symbol 必然已有纸面 active 行（雷达 Top=纸面必开）——
+	// Insert 撞唯一 → 走 Promote 支路（旧行 promoted_demo 封账保留+demo 行在册）。
+	note := fmt.Sprintf("spot=%s@%.6g perp=%s@%.6g", spotFill.OrderID, spotPrice, perpFill.OrderID, perpPrice)
 	pr := &pgstore.PaperSpotCarry{
 		Venue: in.Venue, Symbol: in.Symbol, Side: in.Side,
-		EntryFundingAnn: 0, QtyUSD: in.QtyUsd,
+		EntryFundingAnn: 0, QtyUSD: in.QtyUsd, Note: note,
 	}
 	if err := s.store.InsertPaperSpotCarry(ctx, pr); err != nil {
-		resp.Ok = true // 腿已成交：在册失败不回滚（真实仓位），critical 告警人工补录
-		s.store.InsertAlert(ctx, nil, "critical",
-			fmt.Sprintf("[spot-carry demo] 双腿已成交但在册失败（%v）——人工补录 paper_spot_carry", err))
-		return connect.NewResponse(resp), nil
-	}
-	note := fmt.Sprintf("spot=%s@%.6g perp=%s@%.6g", spotFill.OrderID, spotPrice, perpFill.OrderID, perpPrice)
-	if err := s.store.MarkPaperSpotCarryDemo(ctx, pr.ID, note); err != nil {
-		s.store.InsertAlert(ctx, nil, "critical",
-			fmt.Sprintf("[spot-carry demo] demo 标记失败 paper=%d（%v）", pr.ID, err))
+		if err != pgstore.ErrPaperExists {
+			resp.Ok = true // 腿已成交：在册失败不回滚（真实仓位），critical 告警人工补录
+			s.store.InsertAlert(ctx, nil, "critical",
+				fmt.Sprintf("[spot-carry demo] 双腿已成交但在册失败（%v）——人工补录 paper_spot_carry", err))
+			return connect.NewResponse(resp), nil
+		}
+		if perr := s.store.PromotePaperToDemo(ctx, in.Venue, in.Symbol, pr); perr != nil {
+			if perr == pgstore.ErrPaperPromoteNoActive {
+				return nil, connect.NewError(connect.CodeAlreadyExists,
+					fmt.Errorf("%s 已有 demo 实测仓（无 active 纸面行可升级）", in.Symbol))
+			}
+			resp.Ok = true // 腿已成交：promote 失败不回滚，critical 人工补录
+			s.store.InsertAlert(ctx, nil, "critical",
+				fmt.Sprintf("[spot-carry demo] 双腿已成交但 promote 失败（%v）——人工补录", perr))
+			return connect.NewResponse(resp), nil
+		}
 	}
 	resp.PaperId = pr.ID
 	resp.Ok = true

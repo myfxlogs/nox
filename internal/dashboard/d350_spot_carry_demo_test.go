@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	"arb/internal/store/pgstore"
 
 	"connectrpc.com/connect"
 )
@@ -47,5 +48,24 @@ func TestD350_ExecuteSpotCarryDemoParamValidation(t *testing.T) {
 		if connect.CodeOf(err) != c.code {
 			t.Errorf("%s：code = %v, want %v", c.name, connect.CodeOf(err), c.code)
 		}
+	}
+}
+
+// TestD350R1_TR1_PickSimulatedConfig P0：配置选择必须命中 simulated=true（demo）——
+// created_at 序下 id=20 主网 perp 先于 id=25 demo，无 Simulated 过滤即实盘混选（fail-dangerous）。
+func TestD350R1_TR1_PickSimulatedConfig(t *testing.T) {
+	cfgs := []pgstore.ExchangeConfig{
+		{ID: 20, Venue: "binance", VenueType: "perp", Simulated: false}, // 主网（created_at 在前）
+		{ID: 25, Venue: "binance", VenueType: "perp", Simulated: true},  // demo
+	}
+	got := pickSimulatedConfig(cfgs, "binance", "perp")
+	if got == nil || got.ID != 25 {
+		t.Errorf("pick = %+v, want id=25（红=P0 实盘混选变形）", got)
+	}
+	if pickSimulatedConfig(cfgs, "binance", "spot") != nil {
+		t.Error("无 demo（simulated=true）行应返回 nil（RPC 报 failed_precondition）")
+	}
+	if pickSimulatedConfig(nil, "binance", "perp") != nil {
+		t.Error("空配置表应返回 nil")
 	}
 }
