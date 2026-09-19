@@ -24,6 +24,8 @@ type XassetMonitor struct {
 	TrackingErrorBps float64
 	EquivAnnualPct   float64
 	NoiseBps         *float64 // D-335 S1：24h 摆幅半径（样本 <12 NULL）
+	HarvestFloorBps  *float64 // D-341 S1：收割线=min(q25, entry−MIN_CAPTURE)（样本 <48 NULL）
+	Src              string   // D-341 S5：live/backfill（默认 live）
 }
 
 // InsertXassetMonitor 插入监控快照，回填 id + ts。
@@ -32,12 +34,18 @@ func (s *Store) InsertXassetMonitor(ctx context.Context, r *XassetMonitor) error
 		INSERT INTO fin_xasset_monitor (
 			pair, binance_bid, binance_ask, exness_bid, exness_ask,
 			entry_spread_bps, exit_spread_bps, entry_net_bps,
-			funding_rate_8h, funding_annual_pct, tracking_error_bps, equiv_annual_pct, noise_bps
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+			funding_rate_8h, funding_annual_pct, tracking_error_bps, equiv_annual_pct, noise_bps, harvest_floor_bps, src
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
 		RETURNING id, ts
 	`, r.Pair, r.BinanceBid, r.BinanceAsk, r.ExnessBid, r.ExnessAsk,
 		r.EntrySpreadBps, r.ExitSpreadBps, r.EntryNetBps,
-		r.FundingRate8h, r.FundingAnnualPct, r.TrackingErrorBps, r.EquivAnnualPct, r.NoiseBps,
+		r.FundingRate8h, r.FundingAnnualPct, r.TrackingErrorBps, r.EquivAnnualPct, r.NoiseBps, r.HarvestFloorBps,
+		func() string {
+			if r.Src == "" {
+				return "live"
+			}
+			return r.Src
+		}(),
 	).Scan(&r.ID, &r.Ts)
 	if err != nil {
 		return fmt.Errorf("insert xasset monitor: %w", err)

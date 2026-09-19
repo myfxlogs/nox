@@ -259,3 +259,6 @@ var XassetNoiseSQL string
 
 //go:embed 0105_xasset_allow_combos.sql
 var XassetAllowCombosSQL string
+
+//go:embed 0106_harvest_cycle.sql
+var HarvestCycleSQL string

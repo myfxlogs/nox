@@ -33,6 +33,8 @@ type Position struct {
 	NotionalUSD            *float64   // D-179：该 position 全部腿名义合计（USD；SWAPARB=双腿=2×单腿）
 	ClosingStartedAt       *time.Time // D-189 P0-4：进入 CLOSING 的真实起始时间（reconcile 超时判定用）
 	UncertaintyReason      *string    // D-189 P0-4：UNKNOWN 标记（CLOSING+uncertainty_reason IS NOT NULL）
+	EntryNoiseBps          *float64   // D-341 S1：开仓时噪声（学习样本锚；S2 止损带外化判距用）
+	EntryHarvestFloorBps   *float64   // D-341 S1：开仓时收割线（学习样本锚）
 	RequestID              string     // D-195-B：执行意图唯一 ID（migration 0048 列，本包开始写入）
 	DedupKey               string     // D-195-B：业务组合防重（migration 0048 列，本包开始写入）
 	Environment            string     // D-195-B：执行环境 demo/live（migration 0048 列，本包开始写入）
@@ -167,26 +169,12 @@ func (s *Store) SetPositionUncertainty(ctx context.Context, id int64, reason str
 //     读 netBps/100×notional×holdDays/365；AnnualPct=NetBps（D-256-A S3 落值=netSwap×365/100）
 //   - FUNDING_HEDGE/PERP_FUNDING/XASSET_CARRY：NetBps=年化百分点 / AnnualPct=NetBps（D-332 +XASSET，归 FUNDING 直存非 CARRY 折算）
 type PositionMeta struct {
-	EntrySpreadBps *float64
-	SwapBpsDaily   *float64
-	NetBps         *float64
-	AnnualPct      *float64
-}
-
-// UpdatePositionMeta 回填持仓元数据（D-087 §3.4 typed 化）。
-// 调用方按型构造 PositionMeta，本方法按字段写入（typed 列分离，不再混用 expected_net_bps）。
-func (s *Store) UpdatePositionMeta(ctx context.Context, id int64, posType string, m PositionMeta) error {
-	_, err := s.pool.Exec(ctx,
-		`UPDATE positions SET type = $1, expected_net_bps = $2, expected_entry_spread_bps = $3,
-			expected_swap_bps_daily = $4, expected_annual_pct = $5 WHERE id = $6`,
-		posType, m.NetBps, m.EntrySpreadBps, m.SwapBpsDaily, m.AnnualPct, id)
-	return err
-}
-
-// UpdatePositionOppID 更新持仓的 opportunity_id（D-070 swap 套利用）。
-func (s *Store) UpdatePositionOppID(ctx context.Context, id int64, oppID string) error {
-	_, err := s.pool.Exec(ctx, `UPDATE positions SET opportunity_id = $1 WHERE id = $2`, oppID, id)
-	return err
+	EntrySpreadBps       *float64
+	SwapBpsDaily         *float64
+	NetBps               *float64
+	AnnualPct            *float64
+	EntryNoiseBps        *float64 // D-341 S1：开仓时噪声（学习样本锚）
+	EntryHarvestFloorBps *float64 // D-341 S1：开仓时收割线（学习样本锚）
 }
 
 // UpdateExpectedEntrySpreadBps D-180 S3：写入 expected_entry_spread_bps（双腿成交价差基准）。
