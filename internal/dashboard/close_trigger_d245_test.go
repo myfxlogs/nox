@@ -8,20 +8,12 @@ import (
 	"time"
 
 	"arb/internal/store/pgstore"
-	"arb/internal/testutil"
+	"arb/internal/testutil/storetest"
 )
 
 func TestD245_LogCloseTrigger_DashboardEntry(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
-	st, err := pgstore.New(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("pgstore: %v", err)
-	}
-	t.Cleanup(st.Close)
+	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
 	ctx := context.Background()
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
 	t.Cleanup(func() {
 		_, _ = st.Pool().Exec(ctx, `DELETE FROM autotrade_logs WHERE reason='manual_rpc' AND opportunity_id='D-245-opp-dash'`)
 		_, _ = st.Pool().Exec(ctx, `DELETE FROM positions WHERE opportunity_id LIKE 'D-245%'`)

@@ -7,8 +7,7 @@ import (
 
 	"connectrpc.com/connect"
 
-	"arb/internal/store/pgstore"
-	"arb/internal/testutil"
+	"arb/internal/testutil/storetest"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 )
@@ -16,15 +15,8 @@ import (
 // P3 四层进度与录入校验（DSN 门控 D-207；金额为合成测试值，非个人数据）。
 func cnfiProgressSetup(t *testing.T) *Service {
 	t.Helper()
-	st, err := pgstore.New(context.Background(), testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
-	if err != nil {
-		t.Fatalf("pgstore: %v", err)
-	}
-	t.Cleanup(st.Close)
+	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
 	ctx := context.Background()
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
 	t.Cleanup(func() {
 		_, _ = st.Pool().Exec(ctx, `DELETE FROM cnfi_holdings WHERE opened_date='2099-01-02'`)
 		_, _ = st.Pool().Exec(ctx, `DELETE FROM cnfi_nav WHERE code LIKE 'TEST%'`)

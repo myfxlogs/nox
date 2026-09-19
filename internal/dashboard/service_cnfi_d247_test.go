@@ -5,8 +5,7 @@ import (
 	"connectrpc.com/connect"
 	"context"
 
-	"arb/internal/store/pgstore"
-	"arb/internal/testutil"
+	"arb/internal/testutil/storetest"
 	"path/filepath"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
@@ -58,16 +57,8 @@ func TestD247_BackfillFlag(t *testing.T) {
 // 断言⑰f 消费侧（R-F2，D-247 复审 §4）：跨断点区间=缺失非毒值 + is_break 标记 + N=参与数。
 // 同层两基金：A 正常序列（ret_3m 可得）；B 断点跨窗（ret 缺失）。B 的 N 断言在 R-F1 修复前必须红。
 func TestD247_BreakCrossIntervalMissing(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
-	st, err := pgstore.New(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("pgstore: %v", err)
-	}
-	t.Cleanup(st.Close)
+	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
 	ctx := context.Background()
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
 	t.Cleanup(func() {
 		_, _ = st.Pool().Exec(ctx, `DELETE FROM cnfi_nav WHERE code LIKE 'D247%'`)
 		_, _ = st.Pool().Exec(ctx, `DELETE FROM cnfi_instruments WHERE code LIKE 'D247%'`)

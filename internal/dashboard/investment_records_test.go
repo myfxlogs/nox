@@ -2,53 +2,22 @@ package dashboard
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"testing"
 	"time"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 	"arb/internal/store/pgstore"
-	"arb/internal/testutil"
+	"arb/internal/testutil/storetest"
 
 	"connectrpc.com/connect"
 )
 
-// serviceTestStoreOnce 包级单例 store——所有 SERVICE_DSN 测试共用一个 pool，避免
-// 每测试 pgstore.New 创建独立 pool 累积连接耗尽 pg 服务端 max_connections（D-212 CI 红根因：
-// pool_max_conns=2 × N 测试 → Acquire 卡住 → 30s 超时 flaky）。
-var serviceTestStoreOnce sync.Once
-var serviceTestStoreSingle *pgstore.Store
-
-// serviceTestStoreSingleInit 包级单例 store 初始化（sync.Once，进程结束自动 Close）。
-// D-234 批 1：DSN 守卫/逃逸门/loud-FAIL 全由 testutil.TestDSN 承担（手动 ParseConfig 检查段删除）。
+// serviceTestStoreSingleInit D-351 S1：改走 storetest.SharedStore 共享池（原 D-212/D-234
+// 本包手搓单例的泛化收编——机制上移 testutil，dial 数进程级 O(1)）。
 func serviceTestStoreSingleInit(t *testing.T) *pgstore.Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_SERVICE_DSN")
-	var initErr error
-	serviceTestStoreOnce.Do(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		s, err := pgstore.New(ctx, dsn)
-		if err != nil {
-			initErr = fmt.Errorf("pgstore.New: %w", err)
-			return
-		}
-		if err := s.Migrate(ctx); err != nil {
-			initErr = fmt.Errorf("migrate: %w", err)
-			return
-		}
-		serviceTestStoreSingle = s
-	})
-	if initErr != nil {
-		t.Fatalf("serviceTestStore init: %v", initErr)
-	}
-	// D-234批1 R-F2：initErr 为 nil 但单例仍 nil（sync.Once 燃尽后继调用者）→ 可归因 Fatal，
-	// 拒绝 nil store 继续（否则 s.Pool() 空指针 panic，失败归因变脏）。
-	if serviceTestStoreSingle == nil {
-		t.Fatalf("serviceTestStore 前序初始化失败（根因见首个 FAIL 测试），拒绝 nil store 继续")
-	}
-	return serviceTestStoreSingle
+	return storetest.SharedStore(t, "ARB_TEST_PG_SERVICE_DSN")
 }
 
 // testServiceStore 连接 ARB_TEST_PG_SERVICE_DSN 指定的专用测试库（与 pgstore 包测试库隔离，避免并行 TRUNCATE 竞态）。

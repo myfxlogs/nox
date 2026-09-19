@@ -11,7 +11,7 @@ import (
 
 	"arb/internal/fact"
 	"arb/internal/store/pgstore"
-	"arb/internal/testutil"
+	"arb/internal/testutil/storetest"
 
 	"connectrpc.com/connect"
 
@@ -21,14 +21,7 @@ import (
 func settleRefSetup(t *testing.T) (*Service, *pgstore.Store) {
 	t.Helper()
 	ctx := context.Background()
-	st, err := pgstore.New(ctx, testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	t.Cleanup(st.Close)
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
 	t.Cleanup(func() {
 		_, _ = st.Pool().Exec(ctx, `TRUNCATE facts, opportunities`)
 	})

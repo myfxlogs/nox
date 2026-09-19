@@ -8,8 +8,7 @@ import (
 	"connectrpc.com/connect"
 
 	"arb/internal/bus"
-	"arb/internal/store/pgstore"
-	"arb/internal/testutil"
+	"arb/internal/testutil/storetest"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 )
@@ -17,16 +16,8 @@ import (
 // priceAlertSvcTest 连接 ARB_TEST_PG_DSN，构造 Service（含 qbus）+ 清表。
 func priceAlertSvcTest(t *testing.T) *Service {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
-	st, err := pgstore.New(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	t.Cleanup(st.Close)
+	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
 	ctx := context.Background()
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
 	if _, err := st.Pool().Exec(ctx, "TRUNCATE price_alerts RESTART IDENTITY"); err != nil {
 		t.Fatalf("TRUNCATE price_alerts: %v", err)
 	}

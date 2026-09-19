@@ -20,8 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/store/pgstore"
-	"arb/internal/testutil"
+	"arb/internal/testutil/storetest"
 )
 
 func hedgeStructureSource(t *testing.T) string {
@@ -487,16 +486,8 @@ func TestD236_v14_AnnualizedEmptyState(t *testing.T) {
 
 // 单测（变更14 机检）：构造已知 days 断言年化值（DSN 门控）。
 func TestD236_v14_CarryAnnualizationMath(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
-	st, err := pgstore.New(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("pgstore: %v", err)
-	}
-	t.Cleanup(st.Close)
+	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
 	ctx := context.Background()
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
 	t.Cleanup(func() {
 		// D-249 S6 R-G1：原 `day >= '2099-01-01'` 永不匹配种子日（now-10d）→持久库每跑一次泄漏一行，
 		// 二次运行起 cum 精确翻倍（CI 全新库必绿=本地红/CI 绿陷阱）。改按 note='d236v14' 删（note 列即测试标记）。

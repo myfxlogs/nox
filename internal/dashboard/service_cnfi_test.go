@@ -7,8 +7,7 @@ import (
 
 	"connectrpc.com/connect"
 
-	"arb/internal/store/pgstore"
-	"arb/internal/testutil"
+	"arb/internal/testutil/storetest"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 )
@@ -16,16 +15,8 @@ import (
 // DSN 门控（D-207）；哨兵日期 2098/2099 避免与真实/回填数据撞车（共享库 B-1 债）。
 func cnfiSeedSnapshot(t *testing.T) *Service {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
-	st, err := pgstore.New(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("pgstore: %v", err)
-	}
-	t.Cleanup(st.Close)
+	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
 	ctx := context.Background()
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
 	// R-F1a（D-241 审计挂账）：共享 arb_test 库有真实回填数据——先清空 cnfi_series
 	// 再播种哨兵日，否则快照断言遇既有行假 FAIL（D-212 hedgeTestStore 惯例）。
 	if _, err := st.Pool().Exec(ctx, `TRUNCATE cnfi_series`); err != nil {

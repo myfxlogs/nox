@@ -8,22 +8,13 @@ import (
 	"time"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
-	"arb/internal/store/pgstore"
-	"arb/internal/testutil"
+	"arb/internal/testutil/storetest"
 )
 
 // 断言：fund_underperf signal 存在 → passes_screen=false；不存在 → true.
 func TestD259_PassesScreenStateDriven(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
-	st, err := pgstore.New(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("pgstore: %v", err)
-	}
-	t.Cleanup(st.Close)
+	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
 	ctx := context.Background()
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
 	t.Cleanup(func() {
 		_, _ = st.Pool().Exec(ctx, `DELETE FROM cnfi_signal_state WHERE key LIKE 'fund_underperf_D259%'`)
 		_, _ = st.Pool().Exec(ctx, `DELETE FROM cnfi_signal_state WHERE key LIKE 'layer_dd_coupon'`)
