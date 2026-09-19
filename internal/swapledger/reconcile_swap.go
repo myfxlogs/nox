@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"strings"
 	"time"
 
 	"arb/internal/safego"
@@ -23,6 +24,8 @@ type SwapReconcileStore interface {
 	// D-159 W3a R5：per-leg 幂等检查（pgstore HasCashflowForDay 已被 HasCashflowForLegDay 替代）。
 	HasCashflowForLegDay(ctx context.Context, posID int64, legNo int16, kind string, day time.Time) (bool, error)
 	SumCashflowsForDay(ctx context.Context, posID int64, kind, venue string, day time.Time) (float64, error)
+	// D-349 S1：CEX perp 腿实际值=income_events 当日日和（账户级口径），rows 供结算窗语义。
+	SumIncomeForDay(ctx context.Context, venue, symbol string, day time.Time) (float64, int, error)
 	LatestSwapSnapshot(ctx context.Context, posID int64, venue string) (pgstore.SwapSnapshot, error)
 	LatestSwapSnapshotBefore(ctx context.Context, posID int64, venue string, before time.Time) (pgstore.SwapSnapshot, error)
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
@@ -131,7 +134,7 @@ func (r *SwapReconciler) reconcilePosition(ctx context.Context, pos pgstore.Posi
 		if !has {
 			continue
 		}
-		alerted, err := r.reconcileLegWithStore(ctx, pos.ID, pos.Type, leg.Venue, day)
+		alerted, err := r.reconcileLegWithStore(ctx, pos.ID, pos.Type, leg.Venue, leg.Symbol, day, day)
 		if err != nil {
 			log.Printf("[swap-reconcile] leg posID=%d venue=%s: %v", pos.ID, leg.Venue, err)
 			continue
@@ -143,13 +146,44 @@ func (r *SwapReconciler) reconcilePosition(ctx context.Context, pos pgstore.Posi
 	return alerts, nil
 }
 
-// reconcileLegWithStore 取公式值+快照后调纯函数 reconcileLeg。
+// reconcileLegWithStore 取公式值+实际值后比对告警。
 // D-314：posType 入参供 per-leg kind 判定（XASSET_CARRY perp 腿公式值查 kind=funding）。
-func (r *SwapReconciler) reconcileLegWithStore(ctx context.Context, posID int64, posType, venue string, day time.Time) (bool, error) {
+// D-349 S1 腿型分流：CEX perp 腿（venue 带 ":perp" 后缀）实际值=income_events 日和——
+// binance positionRisk.Order.Swap 恒 0（funding 走 income API 独立结算不入持仓 swap 字段，
+// 快照差结构性恒 0=100% 假报实证 pos492）；MT 腿维持快照差路径不动。
+// now 独立入参供测试注入（生产调用方与 day 同源=time.Now()）。
+func (r *SwapReconciler) reconcileLegWithStore(ctx context.Context, posID int64, posType, venue, symbol string, day, now time.Time) (bool, error) {
 	kind := cashflowKind(posType, venue)
 	formulaUSD, err := r.store.SumCashflowsForDay(ctx, posID, kind, venue, day)
 	if err != nil {
 		return false, err
+	}
+
+	if strings.HasSuffix(venue, ":perp") {
+		// CEX perp 腿：实际值=income 当日实收日和（venue 剥 :perp 后缀=income_events.venue 口径）。
+		actualUSD, rows, err := r.store.SumIncomeForDay(ctx, venueFromKey(venue), symbol, day)
+		if err != nil {
+			return false, err
+		}
+		// D-349 S2：0 行且公式值>0——未过结算窗 skip（0 行≠实收 0：无法区分未结算与真 0）；
+		// 过窗后仍 0 实收 → 落到下方比对=真告警（funding 实收为 0 是真信息）。
+		if rows == 0 && formulaUSD > 0 && !cexSettleWindowPassed(day, now) {
+			return false, nil
+		}
+		deviation := math.Abs(formulaUSD - actualUSD)
+		denom := math.Max(math.Max(math.Abs(formulaUSD), math.Abs(actualUSD)), 0.01)
+		deviationPct := deviation / denom * 100
+		level := alertLevel(deviationPct, r.deviationPct)
+		if level == "" {
+			return false, nil
+		}
+		msg := fmt.Sprintf("[swap-reconcile] position_id=%d venue=%s: 公式值=$%.4f 实际收入=$%.4f 偏差率=%.1f%% (阈值=%.1f%%)",
+			posID, venue, formulaUSD, actualUSD, deviationPct, r.deviationPct)
+		if err := r.store.InsertAlert(ctx, nil, level, msg); err != nil {
+			return false, fmt.Errorf("insert alert: %w", err)
+		}
+		log.Printf("[swap-reconcile] ALERT %s: %s", level, msg)
+		return true, nil
 	}
 
 	todaySnap, err := r.store.LatestSwapSnapshot(ctx, posID, venue)
@@ -198,6 +232,14 @@ func reconcileLeg(formulaUSD float64, todaySnap, yesterdaySnap pgstore.SwapSnaps
 	denom := math.Max(math.Abs(formulaUSD), math.Abs(actualUSD))
 	denom = math.Max(denom, 0.01) // 防除零
 	return deviation / denom * 100, true
+}
+
+// cexSettleWindowPassed D-349 S2 简化选择（提示词授权）：当日 23:59:59 UTC + 5min 容差。
+// binance funding 日内多期结算均落当日内（XAUUSDT 实证 4h 一结），日终窗未过前 income
+// 0 行无法区分「未结算」与「实收 0」→ skip；过窗后才比对。
+func cexSettleWindowPassed(day, now time.Time) bool {
+	dayEnd := time.Date(day.Year(), day.Month(), day.Day(), 23, 59, 59, 0, time.UTC)
+	return now.After(dayEnd.Add(5 * time.Minute))
 }
 
 // alertLevel 纯函数：偏差率 → 告警级别。
