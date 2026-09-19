@@ -10,12 +10,13 @@ import (
 	"arb/internal/store/pgstore"
 )
 
-// fakeScanStore 受控 store（facts 行+映射表+落库计数）。
+// fakeScanStore 受控 store（facts 行+映射表+落库计数+universe 雷达表）。
 type fakeScanStore struct {
 	facts    []fact.Fact
 	mappings []pgstore.SymbolMapping
 	replaced []pgstore.CarryUniverseRow
 	alerts   []string
+	universe map[string]pgstore.CexUniverseRow
 }
 
 func (f *fakeScanStore) LatestFacts(_ context.Context, kind, _, _ string) ([]fact.Fact, error) {
@@ -39,6 +40,10 @@ func (f *fakeScanStore) ListSymbolMappings(_ context.Context, venue string) ([]p
 func (f *fakeScanStore) ReplaceCarryUniverse(_ context.Context, rows []pgstore.CarryUniverseRow) error {
 	f.replaced = rows
 	return nil
+}
+
+func (f *fakeScanStore) ListCexUniverse(_ context.Context) (map[string]pgstore.CexUniverseRow, error) {
+	return f.universe, nil
 }
 
 // TestD336_ScanJoinAndRank T1/T2：BTC（swap 0/0 swap_free）+负 carry canonical——

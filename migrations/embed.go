@@ -268,3 +268,6 @@ var CarryUniverseSQL string
 
 //go:embed 0108_carry_universe_note.sql
 var CarryUniverseNoteSQL string
+
+//go:embed 0109_paper_spot_carry.sql
+var PaperSpotCarrySQL string

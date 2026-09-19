@@ -21,6 +21,11 @@ func (p *PGStore) ListSymbolMappings(ctx context.Context, venue string) ([]pgsto
 	return p.S.ListSymbolMappings(ctx, venue)
 }
 
+// ListCexUniverse D-350：fin_cex_universe 雷达表（spot_carry 第三结构数据源）。
+func (p *PGStore) ListCexUniverse(ctx context.Context) (map[string]pgstore.CexUniverseRow, error) {
+	return p.S.ListCexUniverse(ctx)
+}
+
 func (p *PGStore) ReplaceCarryUniverse(ctx context.Context, rows []pgstore.CarryUniverseRow) error {
 	return p.S.ReplaceCarryUniverse(ctx, rows)
 }
