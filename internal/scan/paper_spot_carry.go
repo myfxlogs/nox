@@ -74,6 +74,7 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, now time.Time) (open
 		key     string
 		u       pgstore.CexUniverseRow
 		funding float64
+		net     float64
 	}
 	cands := []cand{}
 	for key, u := range uni {
@@ -93,9 +94,12 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, now time.Time) (open
 		if _, ok := activeByKey[key]; ok {
 			continue
 		}
-		cands = append(cands, cand{key: key, u: u, funding: *u.FundingAnn})
+		cands = append(cands, cand{key: key, u: u, funding: *u.FundingAnn, net: net})
 	}
-	sort.Slice(cands, func(i, j int) bool { return cands[i].funding > cands[j].funding })
+	// D-350R2 S2：排序键=net 降序（|funding|−cost，与闸同键）。签名 funding 降序会把负 funding
+	// （long_perp）恒排全部正侧之后——cap 命中时 long_perp 侧系统性饿死，且 age_7d 退出即重进
+	// 使饿死可永久化（实证：ESPUSDT net 292.85 净序应榜首，签名序垫底进不了 cap）。
+	sort.Slice(cands, func(i, j int) bool { return cands[i].net > cands[j].net })
 	for _, c := range cands {
 		if len(activeByKey)+len(opened) >= PaperMaxActive {
 			break

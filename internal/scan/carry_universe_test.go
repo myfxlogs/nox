@@ -146,6 +146,8 @@ func TestD336_ThresholdAlert(t *testing.T) {
 		{Canonical: "HOT", NetAnnual: 9.0, SwapFree: true, Structure: "long_cfd_short_perp", MtVenue: "a", CexVenue: "b"},
 		{Canonical: "WARM", NetAnnual: 6.65, SwapFree: true, Structure: "long_cfd_short_perp", MtVenue: "a", CexVenue: "b"},
 		{Canonical: "NOTFREE", NetAnnual: 12.0, SwapFree: false, Structure: "long_cfd_short_perp", MtVenue: "a", CexVenue: "b"},
+		// D-350R2 S3 锚：spot_carry 行零插入（net 92 高位+swap_free——skip 摘除必红，告警洪水回归锚）。
+		{Canonical: "SPOTG", NetAnnual: 92, SwapFree: true, Structure: "spot_carry", MtVenue: "(spot)", CexVenue: "b"},
 	}
 	var got []string
 	EmitThresholdAlerts(context.Background(), func(_ context.Context, _, _ string) error {
@@ -155,7 +157,12 @@ func TestD336_ThresholdAlert(t *testing.T) {
 		return nil
 	})
 	if len(got) != 1 || !containsSub(got[0], "HOT") || !containsSub(got[0], "真候选浮现") {
-		t.Errorf("仅 HOT（8%% 且 swap_free）应告警, got %v", got)
+		t.Errorf("仅 HOT（8%% 且 swap_free）应告警, got %v（len≠1=SPOTG spot 行插入，红）", got)
+	}
+	for _, m := range got {
+		if containsSub(m, "SPOTG") {
+			t.Errorf("spot_carry 行入选告警: %s（红=spot_carry skip 摘除）", m)
+		}
 	}
 }
 

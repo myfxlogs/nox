@@ -262,9 +262,45 @@ func TestD350R1_TR5_DemoRowAccrues(t *testing.T) {
 	if r.Status != "demo" {
 		t.Errorf("status = %s, want demo（demo 行不被自动退出）", r.Status)
 	}
-	want := 92.0 / 100 / 365 * 24 / 24 * 1000 // 1 天
+	want := 92.0 / 100 / 365 * 1 * 1000 // 1 天
 	if diff := r.AccruedUSD - want; diff < -0.01 || diff > 0.01 {
 		t.Errorf("demo accrued = %v, want ≈%.4f（红=累积不含 demo 行）", r.AccruedUSD, want)
+	}
+}
+
+// TestD350R2_NetDescUnderCap T-R2②：cap 场景排序键=net 降序——负 funding（long_perp）高 net 行
+// 不被签名降序饿死（危害实证：ESPUSDT net 292.85 签名序垫底；age_7d 退出即重进使饿死可永久化）。
+// 红=签名降序：+100 侧 12 行先填满 cap，NEG250USDT（net 249.85）恒排尾进不了 cap。
+func TestD350R2_NetDescUnderCap(t *testing.T) {
+	s := d350Store(t)
+	ctx := context.Background()
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	seedUniVol(t, s, "binance", "NEG250USDT", "TRADING", "T3", 72*time.Hour, -250, 100e6) // net=249.85 long_perp
+	for i := 0; i < 12; i++ {
+		seedUniVol(t, s, "binance", fmt.Sprintf("POS%02dUSDT", i), "TRADING", "T3", 72*time.Hour, 100, 100e6) // net=99.85 short_perp
+	}
+	opened, exited, err := StepPaperSpotCarry(ctx, s, now)
+	if err != nil {
+		t.Fatalf("step: %v", err)
+	}
+	if len(opened) != 12 || exited != 0 {
+		t.Fatalf("opened=%d exited=%d, want 12/0", len(opened), exited)
+	}
+	if opened[0] != "NEG250USDT" {
+		t.Errorf("opened[0] = %q, want NEG250USDT（net 249.85 降序榜首；红=签名降序负侧饿死）", opened[0])
+	}
+	rows, _ := s.ListActivePaperSpotCarry(ctx)
+	var negSeen, negSide bool
+	for _, r := range rows {
+		if r.Symbol == "NEG250USDT" {
+			negSeen, negSide = true, r.Side == "long_perp"
+		}
+	}
+	if !negSeen {
+		t.Fatal("NEG250USDT 未开仓（cap 下负侧饿死，红）")
+	}
+	if !negSide {
+		t.Errorf("NEG250USDT side 非 long_perp（红=funding 符号判侧错）")
 	}
 }
 
