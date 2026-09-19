@@ -59,6 +59,21 @@ func cexCanonical(symbol string) string {
 	return ""
 }
 
+// normalizeJoinKey D-336R1：join 键双侧规范化——canonical 双形分裂（MT map 侧
+// XAUUSD vs CEX 侧 XAU）永不相等致黄金/BTC/PAXG 全 join 失败的层内根修
+// （系统级两形并存=既有债不动）。去尾部 _、依次尝试去 USDT/USD 后缀
+// （去后非空才去，USDT 优先）：XAUUSD→XAU、XAUUSDT→XAU、SPX500_→SPX500、BTCUSDT→BTC。
+func normalizeJoinKey(s string) string {
+	s = strings.TrimSuffix(s, "_")
+	if r := strings.TrimSuffix(s, "USDT"); r != "" && r != s {
+		return r
+	}
+	if r := strings.TrimSuffix(s, "USD"); r != "" && r != s {
+		return r
+	}
+	return s
+}
+
 // Run 一轮扫描：facts 近 24h 双面→join→结构计算→排序。
 func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanResult, error) {
 	res := ScanResult{}
@@ -93,7 +108,7 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 		canonical := ""
 		for _, m := range maps {
 			if m.BrokerSymbol == f.Symbol && m.Canonical != "" {
-				canonical = m.Canonical
+				canonical = normalizeJoinKey(m.Canonical) // D-336R1：双侧规范化后入键
 				break
 			}
 		}
@@ -117,7 +132,7 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 		canonical := ""
 		for _, m := range maps {
 			if m.BrokerSymbol == f.Symbol && m.Canonical != "" {
-				canonical = m.Canonical
+				canonical = normalizeJoinKey(m.Canonical) // D-336R1：双侧规范化后入键
 				break
 			}
 		}
@@ -137,7 +152,7 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 	}
 	fundByCanon := map[string]cexF{}
 	for _, f := range cexFunding {
-		canonical := cexCanonical(f.Symbol)
+		canonical := normalizeJoinKey(cexCanonical(f.Symbol)) // D-336R1：双侧规范化后入键
 		if canonical == "" {
 			res.Skipped++
 			continue
