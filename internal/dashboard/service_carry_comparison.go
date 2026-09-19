@@ -9,6 +9,7 @@ import (
 	"arb/internal/store/pgstore"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	"strings"
 )
 
 // carryLiveTTL D-340 S3：live 值缓存窗口（OPEN 息差型 ≤2 仓量级；与 ActiveOpportunityIDs 15s 先例同规）。
@@ -18,6 +19,9 @@ const carryLiveTTL = 15 * time.Second
 // OPEN+XASSET_CARRY：live=引擎包装（15s TTL；fail-closed 缺省，与退出判定同病同药）；
 // CLOSED+realized_pnl：realized_annual=realized/(Σ OPEN 腿 qty×usdPerLot)×365/hold×100
 // （usdPerLot 走 USDPerLotForLeg 单点；任一缺→缺省诚实空态）。
+// entryGateSnapshotMaxAge D-341 S1：开仓时点 monitor 行新鲜度（同 D-335 闸 30min 容差）。
+const entryGateSnapshotMaxAge = 30 * time.Minute
+
 func (s *Service) fillCarryComparison(ctx context.Context, pb *v1.Position, p *pgstore.Position) {
 	switch {
 	case p.Status == "OPEN" && p.Type == "XASSET_CARRY" && s.xassetCarryLive != nil:
@@ -100,4 +104,20 @@ func (s *Service) cachedCarryLive(ctx context.Context, posID int64) (float64, bo
 	}
 	s.carryMu.Unlock()
 	return v, ok
+}
+
+// ensureEntryGateSnapshot D-341 S1：ExecuteOpportunityInternal 写点——
+// pairKey=D-335 同款（CanonicalSell-TrimSuffix(Canonical,"USD")）。
+func (s *Service) ensureEntryGateSnapshot(ctx context.Context, posID int64, found *pgstore.Opportunity) {
+	sellCanon := found.Canonical
+	if found.CanonicalSell != nil && *found.CanonicalSell != "" {
+		sellCanon = *found.CanonicalSell
+	}
+	pairKey := sellCanon + "-" + strings.TrimSuffix(found.Canonical, "USD")
+	_ = s.store.EnsureEntryGateSnapshot(ctx, posID, pairKey, entryGateSnapshotMaxAge)
+}
+
+// ensureEntryGateSnapshotCanonical D-341 S1：MeanRevertWithCap 写点（双腿同 canonical 兜底形态）。
+func (s *Service) ensureEntryGateSnapshotCanonical(ctx context.Context, posID int64, canonical string) {
+	_ = s.store.EnsureEntryGateSnapshot(ctx, posID, canonical+"-"+strings.TrimSuffix(canonical, "USD"), entryGateSnapshotMaxAge)
 }
