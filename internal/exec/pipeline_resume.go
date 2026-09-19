@@ -190,6 +190,8 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64) error {
 			PriceActual:   &closePrice,
 			OrderID:       fill.OrderID,
 			Status:        "FILLED",
+			FilledQty:     &closeQty,   // D-346：与 OPEN 腿同字段语义，realized 逐腿分解复核
+			AvgFillPrice:  &closePrice, // D-346：488/489/490 验尸=CLOSE 腿恒 NULL
 		}); err != nil {
 			if errors.Is(err, pgstore.ErrTerminalState) {
 				log.Printf("[exec] resume close leg %d already persisted (concurrent), skip", leg.ID)
