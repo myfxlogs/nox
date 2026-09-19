@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -17,8 +18,7 @@ import (
 	"arb/internal/httpx"
 )
 
-// CEXPositionQuerier 查询 CEX perp 持仓（实现 VenueQuerier）。
-// 字段同 CEXAccountQuerier（复用签名逻辑），但查持仓而非余额。
+// CEXPositionQuerier 查询 CEX perp 持仓（实现 VenueQuerier）；字段同 CEXAccountQuerier（复用签名逻辑），但查持仓而非余额。
 type CEXPositionQuerier struct {
 	venue      string // okx / gate / binance
 	venueType  string // perp（spot 无持仓查询）
@@ -230,7 +230,7 @@ func (q *CEXPositionQuerier) gatePositions(ctx context.Context) ([]VenueOrder, e
 // === Binance ===
 // GET /fapi/v2/positionRisk — 全部 USDT-M 合约持仓（含 0 仓位）。positionAmt>0 多/<0 空；unRealizedProfit=浮盈。
 // D-146 S5：positionRisk 无 initialMargin/maintMargin（账户级字段）——逐仓→isolatedWallet、
-// 全仓→notional/leverage；MaintMargin=0 走 D-124 账户分摊。
+// 全仓→|notional|/leverage（D-343：空头 notional 负值取绝对值）；MaintMargin=0 走 D-124 账户分摊。
 func (q *CEXPositionQuerier) binancePositions(ctx context.Context) ([]VenueOrder, error) {
 	params := "timestamp=" + strconv.FormatInt(time.Now().UnixMilli(), 10) + "&recvWindow=5000"
 	sig := binanceSign(q.apiSecret, params)
@@ -261,7 +261,7 @@ func (q *CEXPositionQuerier) binancePositions(ctx context.Context) ([]VenueOrder
 		MarginType       string `json:"marginType"`     // isolated / cross
 		IsolatedWallet   string `json:"isolatedWallet"` // 逐仓钱包余额（=占用保证金，isolated 时权威）
 		Leverage         string `json:"leverage"`       // 杠杆倍数
-		Notional         string `json:"notional"`       // 名义价值（USDT，全仓保证金=notional/leverage）
+		Notional         string `json:"notional"`       // 名义价值（USDT，空头为负；全仓保证金=|notional|/leverage）
 	}
 	if err := json.Unmarshal(data, &positions); err != nil {
 		return nil, fmt.Errorf("binance positions json: %w", err)
@@ -286,7 +286,7 @@ func (q *CEXPositionQuerier) binancePositions(ctx context.Context) ([]VenueOrder
 		} else {
 			notional, _ := strconv.ParseFloat(p.Notional, 64)
 			if lev, _ := strconv.ParseFloat(p.Leverage, 64); lev > 0 {
-				initMargin = notional / lev
+				initMargin = math.Abs(notional) / lev // D-343：空头腿 notional 负值→Abs（符号坑，负 margin 被下游 >0 守卫拒）
 			}
 		}
 		out = append(out, VenueOrder{
