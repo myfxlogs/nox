@@ -7,6 +7,7 @@ package scan
 import (
 	"context"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"time"
@@ -235,7 +236,9 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 	// 伪影），质量防线=持续性闸+纸面 normalization 退出（B2USDT 120.4% 持续 3 天=设计在案真候选）。
 	uni, err := sc.store.ListCexUniverse(ctx)
 	if err != nil {
-		return res, fmt.Errorf("cex universe: %w", err)
+		// D-350R1 S6：universe 读取失败降级跳过 spot 段（CFD 行照常返回，D-336 语义不回归）
+		log.Printf("[scan] carry universe: list cex universe: %v（spot_carry 段本轮跳过）", err)
+		uni = nil
 	}
 	now := time.Now()
 	for _, u := range uni {
@@ -249,6 +252,9 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 			continue // 持续性闸：上市窗瞬态 spike 不入候选
 		}
 		net := abs(*u.FundingAnn) - SPOT_CARRY_COST_PCT
+		if net < PaperOpenNetPct {
+			continue // D-350R1 S4：落表 floor=net≥20（低于不落行，观测价值不抵榜单噪音）
+		}
 		res.Rows = append(res.Rows, UniverseRow{
 			Canonical: u.Symbol, MtVenue: "(spot)", CexVenue: u.Venue,
 			NetAnnual: net, FundingAnn: *u.FundingAnn,

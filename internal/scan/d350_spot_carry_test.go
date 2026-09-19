@@ -4,6 +4,7 @@ package scan
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -30,14 +31,20 @@ func d350Store(t *testing.T) *pgstore.Store {
 	return s
 }
 
-// seedUni 插入 fin_cex_universe 一行。
+// seedUni 插入 fin_cex_universe 一行（vol24hUSD<0 → NULL）。
 func seedUni(t *testing.T, s *pgstore.Store, venue, symbol, status, tier string, firstSeenAgo time.Duration, funding float64) {
+	t.Helper()
+	seedUniVol(t, s, venue, symbol, status, tier, firstSeenAgo, funding, 100e6)
+}
+
+// seedUniVol 同 seedUni，显式 vol24h（D-350R1 v1.1 流动性闸锚用）。
+func seedUniVol(t *testing.T, s *pgstore.Store, venue, symbol, status, tier string, firstSeenAgo time.Duration, funding, vol24h float64) {
 	t.Helper()
 	f := funding
 	if _, err := s.Pool().Exec(context.Background(), `
-		INSERT INTO fin_cex_universe (venue, symbol, base, status, first_seen, tier, last_funding_ann)
-		VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-		venue, symbol, symbol, status, time.Now().Add(-firstSeenAgo), tier, &f); err != nil {
+		INSERT INTO fin_cex_universe (venue, symbol, base, status, first_seen, tier, last_funding_ann, last_vol24h)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+		venue, symbol, symbol, status, time.Now().Add(-firstSeenAgo), tier, &f, &vol24h); err != nil {
 		t.Fatalf("seed uni %s: %v", symbol, err)
 	}
 }
@@ -50,7 +57,7 @@ func TestD350_ScannerSpotCarryStructure(t *testing.T) {
 	seedUni(t, s, "binance", "B2USDT", "TRADING", "T3", 72*time.Hour, 120.4)
 	seedUni(t, s, "binance", "HOMEUSDT", "TRADING", "T3", 1*time.Hour, 200)  // <48h 闸外
 	seedUni(t, s, "binance", "AAPLUSDT", "TRADING", "T2", 72*time.Hour, 50)  // T2 类非加密跳过
-	seedUni(t, s, "binance", "ZEROUSDT", "TRADING", "T3", 72*time.Hour, 0.5) // net<0 无意义仍落行（观测）
+	seedUni(t, s, "binance", "ZEROUSDT", "TRADING", "T3", 72*time.Hour, 0.5) // net<20 落表 floor 外（R1 S4 反转锚：不落行）
 
 	res, err := NewCarryUniverseScanner(NewCarryUniverseStore(s)).Run(context.Background(), time.Now())
 	if err != nil {
@@ -62,8 +69,8 @@ func TestD350_ScannerSpotCarryStructure(t *testing.T) {
 			bySym[r.Canonical] = r
 		}
 	}
-	if len(bySym) != 3 {
-		t.Fatalf("spot_carry rows = %d, want 3（HOME 闸外/AAPL T2 排除）: %+v", len(bySym), bySym)
+	if len(bySym) != 2 {
+		t.Fatalf("spot_carry rows = %d, want 2（HOME 闸外/AAPL T2 排除/ZEROUSDT floor 外）: %+v", len(bySym), bySym)
 	}
 	g, ok := bySym["GUSDT"]
 	if !ok {
@@ -84,6 +91,9 @@ func TestD350_ScannerSpotCarryStructure(t *testing.T) {
 	if _, ok := bySym["AAPLUSDT"]; ok {
 		t.Error("AAPLUSDT T2 类入选（应跳过）")
 	}
+	if _, ok := bySym["ZEROUSDT"]; ok {
+		t.Error("ZEROUSDT net=0.35 落表（floor=net≥20 反转锚，R1 S4）")
+	}
 }
 
 // TestD350_PaperSpotCarryLifecycle T2：纸面轨三态数值锚——
@@ -96,13 +106,13 @@ func TestD350_PaperSpotCarryLifecycle(t *testing.T) {
 	seedUni(t, s, "binance", "GUSDT", "TRADING", "T3", 72*time.Hour, 92)
 	seedUni(t, s, "binance", "NEGUSDT", "TRADING", "T3", 72*time.Hour, -30)
 
-	// 开仓：两 symbol 各一行（side 按 funding 符号）
+	// 开仓：两 symbol 各一行（side 按 funding 符号；R1 S3 opened=symbol 清单按 net 降序）
 	opened, exited, err := StepPaperSpotCarry(ctx, s, now)
 	if err != nil {
 		t.Fatalf("step open: %v", err)
 	}
-	if opened != 2 || exited != 0 {
-		t.Fatalf("opened=%d exited=%d, want 2/0（红=现无此轨）", opened, exited)
+	if len(opened) != 2 || exited != 0 || opened[0] != "GUSDT" || opened[1] != "NEGUSDT" {
+		t.Fatalf("opened=%v exited=%d, want [GUSDT NEGUSDT]/0（红=现无此轨）", opened, exited)
 	}
 	rows, err := s.ListActivePaperSpotCarry(ctx)
 	if err != nil || len(rows) != 2 {
@@ -124,8 +134,8 @@ func TestD350_PaperSpotCarryLifecycle(t *testing.T) {
 		t.Fatalf("rewind: %v", err)
 	}
 	opened, exited, err = StepPaperSpotCarry(ctx, s, now)
-	if err != nil || opened != 0 || exited != 0 {
-		t.Fatalf("step accrue: opened=%d exited=%d err=%v", opened, exited, err)
+	if err != nil || len(opened) != 0 || exited != 0 {
+		t.Fatalf("step accrue: opened=%v exited=%d err=%v", opened, exited, err)
 	}
 	rows, _ = s.ListActivePaperSpotCarry(ctx)
 	for _, r := range rows {
@@ -176,5 +186,124 @@ func TestD350_PaperSpotCarryLifecycle(t *testing.T) {
 	}
 	if reason != "age_7d" {
 		t.Errorf("exit_reason = %q, want age_7d", reason)
+	}
+}
+
+// TestD350R1_TR4_GatesAndCap v1.1 闸校准：①vol24h<$10M 不开 ②net>300 band 外不开
+// ③13 合格行 → active 恒 12（cap，候选按 net 降序）。
+func TestD350R1_TR4_GatesAndCap(t *testing.T) {
+	s := d350Store(t)
+	ctx := context.Background()
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	seedUniVol(t, s, "binance", "ILLIQUID", "TRADING", "T3", 72*time.Hour, 250, 5e6)  // vol<$10M（net=249.85 高位——若摘 vol 闸必入 cap 内，变异可观测）
+	seedUniVol(t, s, "binance", "BANDOUT", "TRADING", "T3", 72*time.Hour, 350, 100e6) // band 外
+	for i := 0; i < 13; i++ {
+		seedUniVol(t, s, "binance", fmt.Sprintf("CAP%02dUSDT", i), "TRADING", "T3", 72*time.Hour, 150-float64(i), 50e6)
+	}
+	opened, exited, err := StepPaperSpotCarry(ctx, s, now)
+	if err != nil {
+		t.Fatalf("step: %v", err)
+	}
+	rows, _ := s.ListActivePaperSpotCarry(ctx)
+	if len(rows) != 12 {
+		t.Errorf("active = %d, want 12（cap，红=cap 摘除变形）", len(rows))
+	}
+	for _, r := range rows {
+		if r.Symbol == "ILLIQUID" || r.Symbol == "BANDOUT" {
+			t.Errorf("%s 不应开仓（vol/band 闸失效）", r.Symbol)
+		}
+	}
+	if len(opened) != 12 {
+		t.Errorf("opened = %d, want 12", len(opened))
+	}
+	// cap 降序：净收最高的 CAP00 在列、CAP12（最低）被 cap 挤出
+	if _, err := s.Pool().Exec(ctx, `SELECT 1 WHERE false`); err != nil {
+		t.Fatalf("noop: %v", err)
+	}
+	var hasLowest bool
+	for _, r := range rows {
+		if r.Symbol == "CAP12USDT" {
+			hasLowest = true
+		}
+	}
+	if hasLowest {
+		t.Error("CAP12USDT（最低 net）不应在 cap 内")
+	}
+	_ = exited
+}
+
+// TestD350R1_TR5_DemoRowAccrues demo 行累积且不被自动退出（R1 S5）。
+func TestD350R1_TR5_DemoRowAccrues(t *testing.T) {
+	s := d350Store(t)
+	ctx := context.Background()
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	seedUni(t, s, "binance", "GUSDT", "TRADING", "T3", 72*time.Hour, 92)
+	pr := &pgstore.PaperSpotCarry{Venue: "binance", Symbol: "GUSDT", Side: "short_perp",
+		EntryFundingAnn: 92, QtyUSD: 1000, Note: "spot=x perp=y"}
+	if err := s.InsertPaperSpotCarry(ctx, pr); err != nil {
+		t.Fatalf("seed demo row: %v", err)
+	}
+	if err := s.MarkPaperSpotCarryDemo(ctx, pr.ID, pr.Note); err != nil {
+		t.Fatalf("mark demo: %v", err)
+	}
+	if _, err := s.Pool().Exec(ctx,
+		`UPDATE paper_spot_carry SET last_accrue_ts = $1`, now.Add(-24*time.Hour)); err != nil {
+		t.Fatalf("rewind: %v", err)
+	}
+	opened, exited, err := StepPaperSpotCarry(ctx, s, now)
+	if err != nil || len(opened) != 0 || exited != 0 {
+		t.Fatalf("step: opened=%v exited=%d err=%v", opened, exited, err)
+	}
+	accrable, err := s.ListAccrablePaperSpotCarry(ctx)
+	if err != nil || len(accrable) != 1 {
+		t.Fatalf("accrable = %d: %v", len(accrable), err)
+	}
+	r := accrable[0]
+	if r.Status != "demo" {
+		t.Errorf("status = %s, want demo（demo 行不被自动退出）", r.Status)
+	}
+	want := 92.0 / 100 / 365 * 24 / 24 * 1000 // 1 天
+	if diff := r.AccruedUSD - want; diff < -0.01 || diff > 0.01 {
+		t.Errorf("demo accrued = %v, want ≈%.4f（红=累积不含 demo 行）", r.AccruedUSD, want)
+	}
+}
+
+// TestD350R1_TR2_PromotePaperToDemo 升级支路：active 行→promote→旧行封账+demo 行在册；
+// 无 active 行（已 demo）→ ErrPaperPromoteNoActive。
+func TestD350R1_TR2_PromotePaperToDemo(t *testing.T) {
+	s := d350Store(t)
+	ctx := context.Background()
+	seedUni(t, s, "binance", "GUSDT", "TRADING", "T3", 72*time.Hour, 92)
+	if _, _, err := StepPaperSpotCarry(ctx, s, time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("open paper: %v", err)
+	}
+	pr := &pgstore.PaperSpotCarry{Venue: "binance", Symbol: "GUSDT", Side: "short_perp",
+		EntryFundingAnn: 90, QtyUSD: 500, Note: "spot=o1 perp=o2"}
+	if err := s.PromotePaperToDemo(ctx, "binance", "GUSDT", pr); err != nil {
+		t.Fatalf("promote: %v", err)
+	}
+	if pr.ID == 0 || pr.Status != "demo" {
+		t.Errorf("promote 返回行 = %+v, want demo 行 id>0", pr)
+	}
+	var status, reason string
+	if err := s.Pool().QueryRow(ctx,
+		`SELECT status, COALESCE(exit_reason,'') FROM paper_spot_carry ORDER BY id LIMIT 1`).Scan(&status, &reason); err != nil {
+		t.Fatalf("query old: %v", err)
+	}
+	if status != "exited" || reason != "promoted_demo" {
+		t.Errorf("旧行 = %s/%s, want exited/promoted_demo（纸面账封账保留）", status, reason)
+	}
+	var dstatus, note string
+	if err := s.Pool().QueryRow(ctx,
+		`SELECT status, note FROM paper_spot_carry ORDER BY id DESC LIMIT 1`).Scan(&dstatus, &note); err != nil {
+		t.Fatalf("query new: %v", err)
+	}
+	if dstatus != "demo" || note != "spot=o1 perp=o2" {
+		t.Errorf("新行 = %s/note=%q, want demo/双腿回执", dstatus, note)
+	}
+	// 无 active 行（已 demo）→ 明确错误
+	err := s.PromotePaperToDemo(ctx, "binance", "GUSDT", &pgstore.PaperSpotCarry{Side: "short_perp", QtyUSD: 1})
+	if err == nil || err != pgstore.ErrPaperPromoteNoActive {
+		t.Errorf("重复 promote err = %v, want ErrPaperPromoteNoActive", err)
 	}
 }

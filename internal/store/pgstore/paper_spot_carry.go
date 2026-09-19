@@ -61,6 +61,11 @@ func (s *Store) ListDemoPaperSpotCarry(ctx context.Context) ([]PaperSpotCarry, e
 	return s.scanPaperSpotCarry(ctx, `SELECT `+paperSpotCarryCols+` FROM paper_spot_carry WHERE status = 'demo' ORDER BY id`)
 }
 
+// ListAccrablePaperSpotCarry 可累积仓（active+demo，D-350R1 S5：demo 行也累积）。
+func (s *Store) ListAccrablePaperSpotCarry(ctx context.Context) ([]PaperSpotCarry, error) {
+	return s.scanPaperSpotCarry(ctx, `SELECT `+paperSpotCarryCols+` FROM paper_spot_carry WHERE status IN ('active','demo') ORDER BY id`)
+}
+
 // AccruePaperSpotCarry 逐轮累积：accrued += last_funding_ann/100/365×间隔天×qty；回写 last_funding_ann/last_accrue_ts/low_streak。
 // 返回更新后的 low_streak 与本轮增量。
 func (s *Store) AccruePaperSpotCarry(ctx context.Context, id int64, lastFundingAnn float64, accruedAdd float64, lowStreak int) error {
@@ -76,6 +81,39 @@ func (s *Store) AccruePaperSpotCarry(ctx context.Context, id int64, lastFundingA
 		return fmt.Errorf("accrue paper spot carry %d: row gone", id)
 	}
 	return nil
+}
+
+// ErrPaperPromoteNoActive 无 active 纸面行可升级（该 symbol 已是 demo 行）——RPC 侧映射 already_exists。
+var ErrPaperPromoteNoActive = errors.New("paper spot carry: no active row to promote")
+
+// PromotePaperToDemo D-350R1 S2：纸面 active 行升级为 demo 实测仓（单 tx）——
+// 旧行封账保留（status='exited'+exit_reason='promoted_demo'，纸面账历史不丢），
+// 新行 status='demo'（note=双腿回执）。无 active 行可升 → ErrPaperPromoteNoActive。
+func (s *Store) PromotePaperToDemo(ctx context.Context, venue, symbol string, r *PaperSpotCarry) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("promote begin: %w", err)
+	}
+	defer tx.Rollback(context.WithoutCancel(ctx)) //nolint:errcheck // 显式 Commit；失败路径 rollback
+	ct, err := tx.Exec(ctx, `
+		UPDATE paper_spot_carry SET status = 'exited', exit_ts = now(), exit_reason = 'promoted_demo'
+		WHERE venue = $1 AND symbol = $2 AND status = 'active'`, venue, symbol)
+	if err != nil {
+		return fmt.Errorf("promote close active: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrPaperPromoteNoActive
+	}
+	r.Status = "demo"
+	err = tx.QueryRow(ctx, `
+		INSERT INTO paper_spot_carry (venue, symbol, side, entry_funding_ann, qty_usd, last_funding_ann, status, note)
+		VALUES ($1,$2,$3,$4,$5,$6,'demo',$7)
+		RETURNING id`,
+		venue, symbol, r.Side, r.EntryFundingAnn, r.QtyUSD, r.EntryFundingAnn, r.Note).Scan(&r.ID)
+	if err != nil {
+		return fmt.Errorf("promote insert demo: %w", err)
+	}
+	return tx.Commit(ctx)
 }
 
 // MarkPaperSpotCarryDemo 纸面行标记为 demo 实测仓（阶段③：记录双腿回执 note）。
