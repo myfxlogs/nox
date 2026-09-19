@@ -18,7 +18,7 @@ const carryLiveTTL = 15 * time.Second
 // fillCarryComparison D-340 S3：年化对照填充——
 // OPEN+XASSET_CARRY：live=引擎包装（15s TTL；fail-closed 缺省，与退出判定同病同药）；
 // CLOSED+realized_pnl：realized_annual=realized/(Σ OPEN 腿 qty×usdPerLot)×365/hold×100
-// （usdPerLot 走 USDPerLotForLeg 单点；任一缺→缺省诚实空态）。
+// （usdPerLot 走 USDPerLotForLeg 单点；任一缺→缺省诚实空态；hold<1 缺省=D-340R2 短仓护栏）。
 // entryGateSnapshotMaxAge D-341 S1：开仓时点 monitor 行新鲜度（同 D-335 闸 30min 容差）。
 const entryGateSnapshotMaxAge = 30 * time.Minute
 
@@ -30,7 +30,7 @@ func (s *Service) fillCarryComparison(ctx context.Context, pb *v1.Position, p *p
 		}
 	case p.Status == "CLOSED" && p.RealizedPnl != nil && p.OpenedAt != nil && p.ClosedAt != nil:
 		holdDays := p.ClosedAt.Sub(*p.OpenedAt).Hours() / 24
-		if holdDays <= 0 {
+		if holdDays < 1 { // D-340R2：不足一日不折年化——短仓分母→0 年化爆炸（491 实证 −6417%），绝对盈亏在 realized 字段可见
 			return
 		}
 		legs, err := s.store.ListPositionLegs(ctx, p.ID)
