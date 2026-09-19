@@ -7,6 +7,7 @@ package dashboard
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -58,6 +59,42 @@ func validateSpotCarryDemoParams(venue, symbol, side string, qtyUSD float64) err
 		return fmt.Errorf("qty_usd 必须 >0")
 	}
 	return nil
+}
+
+// errDemoRowExists 目标 symbol 已有 demo 实测行（promote 报 ErrPaperPromoteNoActive）——
+// RPC 侧映射 connect CodeAlreadyExists（语义沿 R1）。
+var errDemoRowExists = errors.New("spot-carry demo: demo row already exists")
+
+// demoPaperStore demo 在册窄接口（三方法，*pgstore.Store 原生满足；单测 fake 注入走三分支）。
+type demoPaperStore interface {
+	InsertPaperSpotCarry(ctx context.Context, r *pgstore.PaperSpotCarry) error
+	PromotePaperToDemo(ctx context.Context, venue, symbol string, r *pgstore.PaperSpotCarry) error
+	MarkPaperSpotCarryDemo(ctx context.Context, id int64, note string) error
+}
+
+// registerSpotCarryDemoRow D-350R2 S1（缺陷①）demo 在册收口：三分支终态必 demo 行。
+// fresh（无 active/demo 行）：Insert 成功后立即 Mark——Insert 硬编码 status='active'，不 Mark 则
+// 行以 active 纸面行存在（ListSpotCarryDemo 漏此仓+纸面自动退出误作用+实际 qty 污染纸面账；
+// 可达场景：纸面行已 normalized/age_7d 退出后再 demo，或目标 symbol 在纸面闸外）。
+// active 行在：Insert 撞 ErrPaperExists → Promote（旧行 promoted_demo 封账+新 demo 行，R1 S2）。
+// demo 行在：Promote 报 ErrPaperPromoteNoActive → errDemoRowExists。
+func registerSpotCarryDemoRow(ctx context.Context, st demoPaperStore, venue, symbol, note string, pr *pgstore.PaperSpotCarry) error {
+	err := st.InsertPaperSpotCarry(ctx, pr)
+	switch {
+	case err == nil:
+		return st.MarkPaperSpotCarryDemo(ctx, pr.ID, note)
+	case err != pgstore.ErrPaperExists:
+		return fmt.Errorf("insert paper row: %w", err)
+	}
+	perr := st.PromotePaperToDemo(ctx, venue, symbol, pr)
+	switch {
+	case perr == nil:
+		return nil
+	case perr == pgstore.ErrPaperPromoteNoActive:
+		return errDemoRowExists
+	default:
+		return fmt.Errorf("promote paper row: %w", perr)
+	}
 }
 
 // ExecuteSpotCarryDemo 手动双腿闭环：现货腿（demo /api 段）+永续腿（既有 demo-fapi 路径）。
@@ -131,31 +168,23 @@ func (s *Service) ExecuteSpotCarryDemo(ctx context.Context, req *connect.Request
 			fmt.Errorf("永续腿失败，现货腿已回滚：%v", err))
 	}
 	perpLeg.OrderId, perpLeg.Qty = perpFill.OrderID, perpFill.Qty
-	// 在册：paper_spot_carry status='demo'（同 symbol 活跃唯一索引兜底防重复开）
-	// D-350R1 S2（缺陷 2）：demo 目标 symbol 必然已有纸面 active 行（雷达 Top=纸面必开）——
-	// Insert 撞唯一 → 走 Promote 支路（旧行 promoted_demo 封账保留+demo 行在册）。
+	// 在册：paper_spot_carry status='demo'（同 symbol 活跃唯一索引兜底防重复开）。
+	// D-350R2 S1（缺陷①）：在册收口三分支终态必 demo 行——fresh（纸面行已退出/闸外 symbol）
+	// Insert 后立即 Mark demo 化；active 在册 → Promote 支路（R1 S2）；demo 在册 → already_exists。
 	note := fmt.Sprintf("spot=%s@%.6g perp=%s@%.6g", spotFill.OrderID, spotPrice, perpFill.OrderID, perpPrice)
 	pr := &pgstore.PaperSpotCarry{
 		Venue: in.Venue, Symbol: in.Symbol, Side: in.Side,
 		EntryFundingAnn: 0, QtyUSD: in.QtyUsd, Note: note,
 	}
-	if err := s.store.InsertPaperSpotCarry(ctx, pr); err != nil {
-		if err != pgstore.ErrPaperExists {
-			resp.Ok = true // 腿已成交：在册失败不回滚（真实仓位），critical 告警人工补录
-			s.store.InsertAlert(ctx, nil, "critical",
-				fmt.Sprintf("[spot-carry demo] 双腿已成交但在册失败（%v）——人工补录 paper_spot_carry", err))
-			return connect.NewResponse(resp), nil
+	if err := registerSpotCarryDemoRow(ctx, s.store, in.Venue, in.Symbol, note, pr); err != nil {
+		if err == errDemoRowExists {
+			return nil, connect.NewError(connect.CodeAlreadyExists,
+				fmt.Errorf("%s 已有 demo 实测仓（无 active 纸面行可升级）", in.Symbol))
 		}
-		if perr := s.store.PromotePaperToDemo(ctx, in.Venue, in.Symbol, pr); perr != nil {
-			if perr == pgstore.ErrPaperPromoteNoActive {
-				return nil, connect.NewError(connect.CodeAlreadyExists,
-					fmt.Errorf("%s 已有 demo 实测仓（无 active 纸面行可升级）", in.Symbol))
-			}
-			resp.Ok = true // 腿已成交：promote 失败不回滚，critical 人工补录
-			s.store.InsertAlert(ctx, nil, "critical",
-				fmt.Sprintf("[spot-carry demo] 双腿已成交但 promote 失败（%v）——人工补录", perr))
-			return connect.NewResponse(resp), nil
-		}
+		resp.Ok = true // 腿已成交：在册失败不回滚（真实仓位），critical 告警人工补录（语义沿 R1）
+		s.store.InsertAlert(ctx, nil, "critical",
+			fmt.Sprintf("[spot-carry demo] 双腿已成交但在册失败（%v）——人工补录 paper_spot_carry", err))
+		return connect.NewResponse(resp), nil
 	}
 	resp.PaperId = pr.ID
 	resp.Ok = true
