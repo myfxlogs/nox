@@ -328,6 +328,9 @@ const (
 	// DashboardServiceListSpotCarryDemoProcedure is the fully-qualified name of the DashboardService's
 	// ListSpotCarryDemo RPC.
 	DashboardServiceListSpotCarryDemoProcedure = "/arb.dashboard.v1.DashboardService/ListSpotCarryDemo"
+	// DashboardServiceListPaperSpotCarryProcedure is the fully-qualified name of the DashboardService's
+	// ListPaperSpotCarry RPC.
+	DashboardServiceListPaperSpotCarryProcedure = "/arb.dashboard.v1.DashboardService/ListPaperSpotCarry"
 )
 
 // DashboardServiceClient is a client for the arb.dashboard.v1.DashboardService service.
@@ -467,6 +470,8 @@ type DashboardServiceClient interface {
 	// D-350 阶段③：spot-carry demo 手动实测（双腿原子：先现货后永续，失败回滚已成交腿）。
 	ExecuteSpotCarryDemo(context.Context, *connect.Request[v1.ExecuteSpotCarryDemoRequest]) (*connect.Response[v1.ExecuteSpotCarryDemoResponse], error)
 	ListSpotCarryDemo(context.Context, *connect.Request[v1.ListSpotCarryDemoRequest]) (*connect.Response[v1.ListSpotCarryDemoResponse], error)
+	// D-352：纸面轨前端卡（持仓页第三卡）——active+demo+近 14 天 exited 三态。
+	ListPaperSpotCarry(context.Context, *connect.Request[v1.ListPaperSpotCarryRequest]) (*connect.Response[v1.ListPaperSpotCarryResponse], error)
 }
 
 // NewDashboardServiceClient constructs a client for the arb.dashboard.v1.DashboardService service.
@@ -1074,6 +1079,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("ListSpotCarryDemo")),
 			connect.WithClientOptions(opts...),
 		),
+		listPaperSpotCarry: connect.NewClient[v1.ListPaperSpotCarryRequest, v1.ListPaperSpotCarryResponse](
+			httpClient,
+			baseURL+DashboardServiceListPaperSpotCarryProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListPaperSpotCarry")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1178,6 +1189,7 @@ type dashboardServiceClient struct {
 	getFinanceOverview        *connect.Client[v1.GetFinanceOverviewRequest, v1.GetFinanceOverviewResponse]
 	executeSpotCarryDemo      *connect.Client[v1.ExecuteSpotCarryDemoRequest, v1.ExecuteSpotCarryDemoResponse]
 	listSpotCarryDemo         *connect.Client[v1.ListSpotCarryDemoRequest, v1.ListSpotCarryDemoResponse]
+	listPaperSpotCarry        *connect.Client[v1.ListPaperSpotCarryRequest, v1.ListPaperSpotCarryResponse]
 }
 
 // ListLatestQuotes calls arb.dashboard.v1.DashboardService.ListLatestQuotes.
@@ -1675,6 +1687,11 @@ func (c *dashboardServiceClient) ListSpotCarryDemo(ctx context.Context, req *con
 	return c.listSpotCarryDemo.CallUnary(ctx, req)
 }
 
+// ListPaperSpotCarry calls arb.dashboard.v1.DashboardService.ListPaperSpotCarry.
+func (c *dashboardServiceClient) ListPaperSpotCarry(ctx context.Context, req *connect.Request[v1.ListPaperSpotCarryRequest]) (*connect.Response[v1.ListPaperSpotCarryResponse], error) {
+	return c.listPaperSpotCarry.CallUnary(ctx, req)
+}
+
 // DashboardServiceHandler is an implementation of the arb.dashboard.v1.DashboardService service.
 type DashboardServiceHandler interface {
 	// 快照类
@@ -1812,6 +1829,8 @@ type DashboardServiceHandler interface {
 	// D-350 阶段③：spot-carry demo 手动实测（双腿原子：先现货后永续，失败回滚已成交腿）。
 	ExecuteSpotCarryDemo(context.Context, *connect.Request[v1.ExecuteSpotCarryDemoRequest]) (*connect.Response[v1.ExecuteSpotCarryDemoResponse], error)
 	ListSpotCarryDemo(context.Context, *connect.Request[v1.ListSpotCarryDemoRequest]) (*connect.Response[v1.ListSpotCarryDemoResponse], error)
+	// D-352：纸面轨前端卡（持仓页第三卡）——active+demo+近 14 天 exited 三态。
+	ListPaperSpotCarry(context.Context, *connect.Request[v1.ListPaperSpotCarryRequest]) (*connect.Response[v1.ListPaperSpotCarryResponse], error)
 }
 
 // NewDashboardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -2415,6 +2434,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("ListSpotCarryDemo")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceListPaperSpotCarryHandler := connect.NewUnaryHandler(
+		DashboardServiceListPaperSpotCarryProcedure,
+		svc.ListPaperSpotCarry,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListPaperSpotCarry")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/arb.dashboard.v1.DashboardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DashboardServiceListLatestQuotesProcedure:
@@ -2615,6 +2640,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceExecuteSpotCarryDemoHandler.ServeHTTP(w, r)
 		case DashboardServiceListSpotCarryDemoProcedure:
 			dashboardServiceListSpotCarryDemoHandler.ServeHTTP(w, r)
+		case DashboardServiceListPaperSpotCarryProcedure:
+			dashboardServiceListPaperSpotCarryHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -3018,4 +3045,8 @@ func (UnimplementedDashboardServiceHandler) ExecuteSpotCarryDemo(context.Context
 
 func (UnimplementedDashboardServiceHandler) ListSpotCarryDemo(context.Context, *connect.Request[v1.ListSpotCarryDemoRequest]) (*connect.Response[v1.ListSpotCarryDemoResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListSpotCarryDemo is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListPaperSpotCarry(context.Context, *connect.Request[v1.ListPaperSpotCarryRequest]) (*connect.Response[v1.ListPaperSpotCarryResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListPaperSpotCarry is not implemented"))
 }
