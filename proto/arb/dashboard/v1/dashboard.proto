@@ -164,6 +164,10 @@ service DashboardService {
 
   // D-348：财务总览聚合（三个数+收益分解+统一流水；后端算，前端零信任零计算）。
   rpc GetFinanceOverview(GetFinanceOverviewRequest) returns (GetFinanceOverviewResponse);
+
+  // D-350 阶段③：spot-carry demo 手动实测（双腿原子：先现货后永续，失败回滚已成交腿）。
+  rpc ExecuteSpotCarryDemo(ExecuteSpotCarryDemoRequest) returns (ExecuteSpotCarryDemoResponse);
+  rpc ListSpotCarryDemo(ListSpotCarryDemoRequest) returns (ListSpotCarryDemoResponse);
 }
 
 // === Quote（§1.1）===
@@ -2009,4 +2013,50 @@ message GetFinanceOverviewResponse {
   repeated FinancePnlByEnv pnl_by_env = 4;
   repeated FinanceIncomeRow income_by_kind = 5;
   repeated FinanceFlowRow flows = 6;  // ts 倒序 LIMIT 200
+}
+
+// === Spot-carry demo 手动实测（D-350 阶段③；无 auto——发现≠授权，auto 化待经验另立 D#）===
+
+message ExecuteSpotCarryDemoRequest {
+  string venue = 1;      // binance（当前仅 binance demo）
+  string symbol = 2;     // 合约 symbol（现货 GUSDT / 永续 GUSDT）
+  string side = 3;       // short_perp（正 funding：买现货+空永续）/ long_perp（负 funding：卖现货+多永续）
+  double qty_usd = 4;    // 名义（USD）；两腿按实时价折算币量
+}
+
+message SpotCarryDemoLeg {
+  string side = 1;         // BUY/SELL
+  string market = 2;       // spot / perp
+  string order_id = 3;
+  double qty = 4;          // 币量（基础币）
+  double price = 5;        // 成交价（0=未得回执价）
+  bool rolled_back = 6;    // 对侧失败时被反腿市价回滚
+}
+
+message ExecuteSpotCarryDemoResponse {
+  bool ok = 1;
+  string error = 2;
+  int64 paper_id = 3;                    // paper_spot_carry 行 id（status='demo'）
+  repeated SpotCarryDemoLeg legs = 4;
+  double spot_price = 5;                 // 下单时现货价
+  double perp_price = 6;                 // 下单时永续 mark 价
+}
+
+message SpotCarryDemoRow {
+  int64 paper_id = 1;
+  string venue = 2;
+  string symbol = 3;
+  string side = 4;
+  double qty_usd = 5;
+  double entry_funding_ann = 6;
+  double last_funding_ann = 7;           // 雷达最新（0=缺行）
+  double accrued_usd = 8;                // 纸面累积（同口径复用）
+  string entry_ts = 9;                   // RFC3339
+  string note = 10;
+}
+
+message ListSpotCarryDemoRequest {}
+
+message ListSpotCarryDemoResponse {
+  repeated SpotCarryDemoRow rows = 1;
 }

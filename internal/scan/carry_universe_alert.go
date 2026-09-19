@@ -21,6 +21,9 @@ type AlertSink func(ctx context.Context, level, message string) error
 // 去重由 D-301c 同指纹冷却链负责）。
 func EmitThresholdAlerts(ctx context.Context, sink AlertSink, rows []UniverseRow, insert func(ctx context.Context, ruleID *int64, level, message string) error) {
 	for _, r := range rows {
+		if r.Structure == "spot_carry" {
+			continue // D-350R1 S3：spot 行不触发「真候选浮现」（1369 行/轮告警洪水；开仓事件告警在 wire_scan）
+		}
 		if r.NetAnnual >= AlertThresholdPct && r.SwapFree {
 			msg := fmt.Sprintf("[carry 宇宙] 真候选浮现: %s 净 carry %.2f%%/yr (%s, %s×%s, swap-free)——发现≠授权，白名单/开仓需业主拍板",
 				r.Canonical, r.NetAnnual, r.Structure, r.MtVenue, r.CexVenue)
