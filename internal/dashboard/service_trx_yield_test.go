@@ -26,7 +26,7 @@ func TestGetTrxYieldCurve_DriftNoPhantomIncome(t *testing.T) {
 
 	// 账户快照：balance 30 TRX + tronPower 107,400 TRX（sun 单位）
 	if err := s.InsertTRXAccount(ctx, pgstore.TRXAccount{
-		Address: "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555",
+		Address:    "TWsbXR6SPvvXPxUtPMQvEj7AMH55555555",
 		BalanceSun: 30_000_000, TronPower: 107_400_000_000,
 		FetchedAt: now,
 	}); err != nil {
