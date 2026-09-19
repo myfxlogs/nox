@@ -52,14 +52,13 @@ type BrokerPositionMonitor struct {
 	// D-180 S1：结算画像采集器（跳变检测 → 聚合写 swap_settled facts）。
 	settlementCollector *SettlementProfileCollector
 
-	// D-337R3 S1：CEX 腿 funding 结算周期缓存——构造必选第 8 参（nil=CEX 腿诚实空态）。；D-337R1 S2：CEX 腿年化费率源（函数 seam；engine 后建故 setter 注入，装配锚 d340）。
+	// D-337R2/R3/R4：tzCache/cexIntervals/cexFundingRate——构造必选/同 commit 接线，nil/零值=诚实空态。
 	tzCache        ServerTZCache
 	cexIntervals   *exchange.FundingIntervalCache
 	cexFundingRate func(ctx context.Context, venue, symbol string) (annualPct float64, ok bool)
 }
 
-// SetCEXFundingRate D-337R3 S1：注入 CEX 腿年化费率源（cexIntervals 已改构造必选第 8 参；
-// 费率源依赖 engine facts 读路径，engine 后建故保留 setter——非新增依赖）。
+// SetCEXFundingRate D-337R3 S1：注入 CEX 腿年化费率源（构造必选第 8 参之外的同 commit 接线面）。
 func (m *BrokerPositionMonitor) SetCEXFundingRate(fundingRate func(ctx context.Context, venue, symbol string) (float64, bool)) {
 	m.cexFundingRate = fundingRate
 }
@@ -90,7 +89,8 @@ func (m *BrokerPositionMonitor) SetSettlementProfileCollector(c *SettlementProfi
 // F5：quoteTick 为浮盈实时重算节流间隔（默认 1s，不查 venue 只重算浮盈）。
 // D-337R2 S1：tzCache 构造必选注入（忘接=编译失败；零值 ServerTZCache=诚实空态）。
 // D-337R3 S1：cexIntervals 构造必选第 8 参（CEX 腿 funding 结算周期；忘接=编译失败，
-// nil=CEX 腿诚实空态）——house rule：本 monitor 新依赖一律构造必选，禁新增 Set* 注入
+// nil=CEX 腿诚实空态）——house rule：新依赖一律构造必选禁新增 Set*；拆分/新增任何
+// Set* 必须同 commit 接线并全树 grep 自证零遗漏（D-337R4 S2 补强）。
 // （setter 可忘=装配断链，D-337R1/R2/R3 三连教训；既有 Set* 仅存量兼容）。
 func NewBrokerPositionMonitor(bm *BrokerManager, qbus *bus.QuoteBus, freshTTL, interval, quoteTick time.Duration, topic *bus.Topic[*v1.BrokerPositionSnapshot], tzCache ServerTZCache, cexIntervals *exchange.FundingIntervalCache) *BrokerPositionMonitor {
 	if quoteTick <= 0 {
