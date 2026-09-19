@@ -262,3 +262,6 @@ var XassetAllowCombosSQL string
 
 //go:embed 0106_harvest_cycle.sql
 var HarvestCycleSQL string
+
+//go:embed 0107_carry_universe.sql
+var CarryUniverseSQL string
