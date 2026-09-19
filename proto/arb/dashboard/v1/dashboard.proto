@@ -2082,6 +2082,13 @@ message PaperSpotCarryRow {
   string exit_ts = 13;                   // RFC3339，空=未退出
   string exit_reason = 14;               // normalized / age_7d / promoted_demo
   string note = 15;
+  // D-354 S3：盈亏视图（基差=mark/index 近似；成本 0.30% 常量预估；NULL=诚实缺显「—」）
+  optional double entry_basis_bps = 16;  // 开仓基差快照（存量行 NULL）
+  optional double last_basis_bps = 17;   // 当前基差
+  optional double basis_pnl_usd = 18;    // 基差浮盈（short: qty×(entry−last)/1e4；long 反号）
+  optional double total_pnl_usd = 19;    // 净浮盈=accrued+basis_pnl−qty×0.003（basis 缺→null）
+  double ret_pct = 20;                   // 累计收益率%=accrued/qty×100
+  optional double realized_ann_pct = 21; // 实收年化%=accrued/qty×365/days×100（days=0→null）
 }
 
 message ListPaperSpotCarryResponse {

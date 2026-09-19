@@ -336,3 +336,55 @@ func TestD350R1_TR2_PromotePaperToDemo(t *testing.T) {
 		t.Errorf("重复 promote err = %v, want ErrPaperPromoteNoActive", err)
 	}
 }
+
+// TestD354_PaperBasisColumns D-354 T2：开仓 entry_basis 落位（uni 有值/NULL 两态）
+// +每轮 last_basis 随 uni 更新（entry 不变）。
+func TestD354_PaperBasisColumns(t *testing.T) {
+	s := d350Store(t)
+	ctx := context.Background()
+	now := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
+	seedUniVol(t, s, "binance", "BASGUSDT", "TRADING", "T3", 72*time.Hour, 92, 100e6)
+	seedUniVol(t, s, "binance", "NULLBASUSDT", "TRADING", "T3", 72*time.Hour, 92, 100e6)
+	if _, err := s.Pool().Exec(ctx,
+		`UPDATE fin_cex_universe SET last_basis_bps = 50 WHERE symbol = 'BASGUSDT'`); err != nil {
+		t.Fatalf("seed basis: %v", err)
+	} // NULLBASUSDT 保持 NULL
+
+	if _, _, err := StepPaperSpotCarry(ctx, s, now); err != nil {
+		t.Fatalf("step open: %v", err)
+	}
+	rows, _ := s.ListActivePaperSpotCarry(ctx)
+	got := map[string][2]*float64{} // [entry, last]
+	for _, r := range rows {
+		got[r.Symbol] = [2]*float64{r.EntryBasisBps, r.LastBasisBps}
+	}
+	b := got["BASGUSDT"]
+	if b[0] == nil || *b[0] != 50 || b[1] == nil || *b[1] != 50 {
+		t.Errorf("BASGUSDT entry/last basis = %v/%v, want 50/50（开仓时落 uni 当轮值）", b[0], b[1])
+	}
+	nb := got["NULLBASUSDT"]
+	if nb[0] != nil || nb[1] != nil {
+		t.Errorf("NULLBASUSDT 基差应 NULL 传播: %v/%v", nb[0], nb[1])
+	}
+
+	// 每轮更新：uni last_basis 50→30，重算后 last 变 30、entry 仍 50
+	if _, err := s.Pool().Exec(ctx,
+		`UPDATE fin_cex_universe SET last_basis_bps = 30 WHERE symbol = 'BASGUSDT'`); err != nil {
+		t.Fatalf("upd basis: %v", err)
+	}
+	if _, _, err := StepPaperSpotCarry(ctx, s, now.Add(time.Hour)); err != nil {
+		t.Fatalf("step 2: %v", err)
+	}
+	rows, _ = s.ListActivePaperSpotCarry(ctx)
+	for _, r := range rows {
+		if r.Symbol != "BASGUSDT" {
+			continue
+		}
+		if r.LastBasisBps == nil || *r.LastBasisBps != 30 {
+			t.Errorf("第二轮 last_basis = %v, want 30（红=每轮更新摘除）", r.LastBasisBps)
+		}
+		if r.EntryBasisBps == nil || *r.EntryBasisBps != 50 {
+			t.Errorf("entry_basis 应保持开仓值 50, got %v", r.EntryBasisBps)
+		}
+	}
+}

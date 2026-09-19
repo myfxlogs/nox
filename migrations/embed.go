@@ -271,3 +271,6 @@ var CarryUniverseNoteSQL string
 
 //go:embed 0109_paper_spot_carry.sql
 var PaperSpotCarrySQL string
+
+//go:embed 0110_paper_basis.sql
+var PaperBasisSQL string

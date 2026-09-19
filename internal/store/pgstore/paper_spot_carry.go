@@ -30,6 +30,8 @@ type PaperSpotCarry struct {
 	ExitReason      string
 	Status          string // active / exited / demo
 	Note            string
+	EntryBasisBps   *float64 // D-354 S2：开仓时 uni 当轮基差快照（NULL=当轮缺，传播不臆造）
+	LastBasisBps    *float64 // D-354 S2：StepPaperSpotCarry 每轮随 uni 更新
 }
 
 // InsertPaperSpotCarry 开纸面仓（同 venue+symbol 活跃行唯一由部分唯一索引兜底；
@@ -37,11 +39,11 @@ type PaperSpotCarry struct {
 func (s *Store) InsertPaperSpotCarry(ctx context.Context, r *PaperSpotCarry) error {
 	r.Status = "active"
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO paper_spot_carry (venue, symbol, side, entry_funding_ann, qty_usd, last_funding_ann, last_accrue_ts)
-		VALUES ($1,$2,$3,$4,$5,$6,now())
+		INSERT INTO paper_spot_carry (venue, symbol, side, entry_funding_ann, qty_usd, last_funding_ann, last_accrue_ts, entry_basis_bps, last_basis_bps)
+		VALUES ($1,$2,$3,$4,$5,$6,now(),$7,$7)
 		ON CONFLICT (venue, symbol) WHERE status IN ('active','demo') DO NOTHING
 		RETURNING id, status`,
-		r.Venue, r.Symbol, r.Side, r.EntryFundingAnn, r.QtyUSD, r.EntryFundingAnn).Scan(&r.ID, &r.Status)
+		r.Venue, r.Symbol, r.Side, r.EntryFundingAnn, r.QtyUSD, r.EntryFundingAnn, r.EntryBasisBps).Scan(&r.ID, &r.Status)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return ErrPaperExists
@@ -74,14 +76,14 @@ func (s *Store) ListPaperSpotCarryBoard(ctx context.Context, recentWindow time.D
 		ORDER BY id`, recentWindow.Seconds())
 }
 
-// AccruePaperSpotCarry 逐轮累积：accrued += last_funding_ann/100/365×间隔天×qty；回写 last_funding_ann/last_accrue_ts/low_streak。
-// 返回更新后的 low_streak 与本轮增量。
-func (s *Store) AccruePaperSpotCarry(ctx context.Context, id int64, lastFundingAnn float64, accruedAdd float64, lowStreak int) error {
+// AccruePaperSpotCarry 逐轮累积：accrued += last_funding_ann/100/365×间隔天×qty；回写 last_funding_ann/last_accrue_ts/low_streak/last_basis_bps。
+// lastBasisBps：D-354 S2 每轮随 uni 更新（nil=当轮缺，保持 NULL）。
+func (s *Store) AccruePaperSpotCarry(ctx context.Context, id int64, lastFundingAnn float64, accruedAdd float64, lowStreak int, lastBasisBps *float64) error {
 	ct, err := s.pool.Exec(ctx, `
 		UPDATE paper_spot_carry
 		SET accrued_usd = accrued_usd + $2, last_funding_ann = $3,
-		    last_accrue_ts = now(), low_streak = $4
-		WHERE id = $1`, id, accruedAdd, lastFundingAnn, lowStreak)
+		    last_accrue_ts = now(), low_streak = $4, last_basis_bps = $5
+		WHERE id = $1`, id, accruedAdd, lastFundingAnn, lowStreak, lastBasisBps)
 	if err != nil {
 		return fmt.Errorf("accrue paper spot carry %d: %w", id, err)
 	}
@@ -153,7 +155,8 @@ func (s *Store) ExitPaperSpotCarry(ctx context.Context, id int64, reason string)
 }
 
 const paperSpotCarryCols = `id, venue, symbol, side, entry_funding_ann, entry_ts, qty_usd,
-	last_funding_ann, accrued_usd, last_accrue_ts, low_streak, exit_ts, exit_reason, status, note`
+	last_funding_ann, accrued_usd, last_accrue_ts, low_streak, exit_ts, exit_reason, status, note,
+	entry_basis_bps, last_basis_bps`
 
 func (s *Store) scanPaperSpotCarry(ctx context.Context, q string, args ...any) ([]PaperSpotCarry, error) {
 	rows, err := s.pool.Query(ctx, q, args...)
@@ -166,7 +169,8 @@ func (s *Store) scanPaperSpotCarry(ctx context.Context, q string, args ...any) (
 		var r PaperSpotCarry
 		if err := rows.Scan(&r.ID, &r.Venue, &r.Symbol, &r.Side, &r.EntryFundingAnn, &r.EntryTs,
 			&r.QtyUSD, &r.LastFundingAnn, &r.AccruedUSD, &r.LastAccrueTs, &r.LowStreak,
-			&r.ExitTs, &r.ExitReason, &r.Status, &r.Note); err != nil {
+			&r.ExitTs, &r.ExitReason, &r.Status, &r.Note,
+			&r.EntryBasisBps, &r.LastBasisBps); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

@@ -105,6 +105,7 @@ var migrationFiles = []struct {
 	{107, migrations.CarryUniverseSQL},                 // D-336 S2：carry 宇宙扫描快照表（发现层）
 	{108, migrations.CarryUniverseNoteSQL},             // D-345：suspect 门注记列
 	{109, migrations.PaperSpotCarrySQL},                // D-350：spot-carry 纸面验证轨
+	{110, migrations.PaperBasisSQL},                    // D-354：纸面仓盈亏视图（基差采集+两列）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
