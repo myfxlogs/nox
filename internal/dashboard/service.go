@@ -186,6 +186,11 @@ type Service struct {
 	financeMu       sync.Mutex
 	financeCached   *v1.GetFinanceOverviewResponse
 	financeCachedAt time.Time
+	// D-352：纸面轨前端卡 15s TTL 缓存（financeOverview 同款）+ 单测 fake 注入源。
+	paperBoardMu       sync.Mutex
+	paperBoardCached   *v1.ListPaperSpotCarryResponse
+	paperBoardCachedAt time.Time
+	paperBoardSrc      paperBoardSource
 }
 
 // FrontConfig 前端展示阈值（D-077 修复⑪B N7，后端 config 单一真相）。
