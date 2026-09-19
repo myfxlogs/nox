@@ -180,6 +180,8 @@ type Service struct {
 	cmcEquityAlert *cmcEquityAlertMachine
 	// D-258 S3：TRX 能量租金率 floor 告警阈值（ARB_TRX_ENERGY_RATE_FLOOR_PCT，默认 8.0；0=禁用）。
 	trxFloorPct float64
+	// D-347：可注入时钟（repo 雷达「当日」OHLC 交易日计算；nil = time.Now 生产墙钟）。
+	nowFn func() time.Time
 }
 
 // FrontConfig 前端展示阈值（D-077 修复⑪B N7，后端 config 单一真相）。

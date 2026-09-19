@@ -29,10 +29,13 @@ func repoRadarTestStore(t *testing.T) *pgstore.Store {
 }
 
 // seedRepoRates 插入 4 品种最新行 + GC007 30d 历史。
-func seedRepoRates(t *testing.T, s *pgstore.Store) {
+// D-347 日期稳定锚：trade_date 基准=注入时刻的 CST 当日 12:00——与服务端 OHLC 窗
+// （北京时间交易日）同 TZ 同源，且基点远离零点（wallclock-base-periodic-bucket-flaky 修法）。
+func seedRepoRates(t *testing.T, s *pgstore.Store, now time.Time) {
 	t.Helper()
 	ctx := context.Background()
-	now := time.Now().UTC()
+	cst := now.In(cstZone)
+	base := time.Date(cst.Year(), cst.Month(), cst.Day(), 12, 0, 0, 0, cstZone)
 	// 4 品种最新行
 	for _, r := range []struct {
 		code, name string
@@ -43,13 +46,13 @@ func seedRepoRates(t *testing.T, s *pgstore.Store) {
 		{"204014", "GC014", 1.415},
 		{"204028", "GC028", 1.430},
 	} {
-		if err := s.InsertRepoRate(ctx, r.code, r.name, r.rate, ptrFloat(2), now); err != nil {
+		if err := s.InsertRepoRate(ctx, r.code, r.name, r.rate, ptrFloat(2), base); err != nil {
 			t.Fatalf("InsertRepoRate %s: %v", r.name, err)
 		}
 	}
 	// GC007 30d 历史（30 行，每天 1 行，rate=2.0）
 	for i := 29; i >= 0; i-- {
-		ts := now.Add(-time.Duration(i) * 24 * time.Hour)
+		ts := base.AddDate(0, 0, -i)
 		if err := s.InsertRepoRate(ctx, "204007", "GC007", 2.0, nil, ts); err != nil {
 			t.Fatalf("InsertRepoRate history %d: %v", i, err)
 		}
@@ -59,7 +62,7 @@ func seedRepoRates(t *testing.T, s *pgstore.Store) {
 // TestGetRepoRateRadar_FullData 全量数据 → 各字段正确填充。
 func TestGetRepoRateRadar_FullData(t *testing.T) {
 	s := repoRadarTestStore(t)
-	seedRepoRates(t, s)
+	seedRepoRates(t, s, time.Now())
 	ctx := context.Background()
 	qbus := bus.New()
 	svc := &Service{store: s, qbus: qbus, freshTTL: time.Minute, liqMMR: 0.005}
@@ -194,7 +197,7 @@ func TestGetRepoRateRadar_Empty(t *testing.T) {
 // TestGetRepoRateRadar_HttpSmoke HTTP smoke：通过 ConnectRPC 客户端调用。
 func TestGetRepoRateRadar_HttpSmoke(t *testing.T) {
 	s := repoRadarTestStore(t)
-	seedRepoRates(t, s)
+	seedRepoRates(t, s, time.Now())
 	ctx := context.Background()
 	qbus := bus.New()
 	svc := &Service{store: s, qbus: qbus, freshTTL: time.Minute, liqMMR: 0.005}
@@ -210,5 +213,42 @@ func TestGetRepoRateRadar_HttpSmoke(t *testing.T) {
 	}
 	if len(resp.Msg.Rates) != 4 {
 		t.Errorf("HTTP smoke: Rates len = %d, want 4", len(resp.Msg.Rates))
+	}
+}
+
+// cstZone D-347：与 service_repo_radar.go LoadLocation fallback 同源的固定 +8 区
+// （Asia/Shanghai 无夏令时，偏移恒等；测试不依赖 tzdata）。
+var cstZone = time.FixedZone("CST", 8*3600)
+
+// TestGetRepoRateRadar_DateStableAcrossMidnight D-347：跨 CST 零点双时点「当日」OHLC 同绿
+// （日期稳定锚：seed 与服务窗同一注入时钟同一基准；变异不适用=测试修复，红证=旧 seed
+// UTC 基准在本测直接红）。缺陷实录：旧 seed 用 time.Now().UTC() 传 trade_date，
+// CST 00:00–07:59（=UTC 16:00–23:59 前一日）UTC 日期≠CST 日期 → 当日窗错位 OHLC 全零。
+func TestGetRepoRateRadar_DateStableAcrossMidnight(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		fake time.Time
+	}{
+		{"CST 23:5x", time.Date(2030, 1, 13, 23, 55, 0, 0, cstZone)},
+		{"CST 00:0x", time.Date(2030, 1, 14, 0, 5, 0, 0, cstZone)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := repoRadarTestStore(t)
+			seedRepoRates(t, s, tc.fake) // 与服务窗同一注入时钟=同基准
+			svc := &Service{store: s, qbus: bus.New(), freshTTL: time.Minute, liqMMR: 0.005,
+				nowFn: func() time.Time { return tc.fake }}
+			resp, err := svc.GetRepoRateRadar(context.Background(), connect.NewRequest(&v1.GetRepoRateRadarRequest{}))
+			if err != nil {
+				t.Fatalf("GetRepoRateRadar: %v", err)
+			}
+			r := resp.Msg
+			// 当日窗必须命中 seed：high=历史行 2.0、low=最新行 1.405（红=日期基准错位→全零）
+			if r.Gc007High != 2.0 || r.Gc007Low != 1.405 {
+				t.Errorf("OHLC high=%v low=%v, want 2.0/1.405（「当日」窗未命中 seed=日期基准错位）", r.Gc007High, r.Gc007Low)
+			}
+			if r.Gc007Open <= 0 || r.Gc007Close <= 0 {
+				t.Errorf("OHLC open=%v close=%v, want >0", r.Gc007Open, r.Gc007Close)
+			}
+		})
 	}
 }
