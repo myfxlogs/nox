@@ -322,6 +322,12 @@ const (
 	// DashboardServiceGetFinanceOverviewProcedure is the fully-qualified name of the DashboardService's
 	// GetFinanceOverview RPC.
 	DashboardServiceGetFinanceOverviewProcedure = "/arb.dashboard.v1.DashboardService/GetFinanceOverview"
+	// DashboardServiceExecuteSpotCarryDemoProcedure is the fully-qualified name of the
+	// DashboardService's ExecuteSpotCarryDemo RPC.
+	DashboardServiceExecuteSpotCarryDemoProcedure = "/arb.dashboard.v1.DashboardService/ExecuteSpotCarryDemo"
+	// DashboardServiceListSpotCarryDemoProcedure is the fully-qualified name of the DashboardService's
+	// ListSpotCarryDemo RPC.
+	DashboardServiceListSpotCarryDemoProcedure = "/arb.dashboard.v1.DashboardService/ListSpotCarryDemo"
 )
 
 // DashboardServiceClient is a client for the arb.dashboard.v1.DashboardService service.
@@ -458,6 +464,9 @@ type DashboardServiceClient interface {
 	SettlePaperTrade(context.Context, *connect.Request[v1.SettlePaperTradeRequest]) (*connect.Response[v1.SettlePaperTradeResponse], error)
 	// D-348：财务总览聚合（三个数+收益分解+统一流水；后端算，前端零信任零计算）。
 	GetFinanceOverview(context.Context, *connect.Request[v1.GetFinanceOverviewRequest]) (*connect.Response[v1.GetFinanceOverviewResponse], error)
+	// D-350 阶段③：spot-carry demo 手动实测（双腿原子：先现货后永续，失败回滚已成交腿）。
+	ExecuteSpotCarryDemo(context.Context, *connect.Request[v1.ExecuteSpotCarryDemoRequest]) (*connect.Response[v1.ExecuteSpotCarryDemoResponse], error)
+	ListSpotCarryDemo(context.Context, *connect.Request[v1.ListSpotCarryDemoRequest]) (*connect.Response[v1.ListSpotCarryDemoResponse], error)
 }
 
 // NewDashboardServiceClient constructs a client for the arb.dashboard.v1.DashboardService service.
@@ -1053,6 +1062,18 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("GetFinanceOverview")),
 			connect.WithClientOptions(opts...),
 		),
+		executeSpotCarryDemo: connect.NewClient[v1.ExecuteSpotCarryDemoRequest, v1.ExecuteSpotCarryDemoResponse](
+			httpClient,
+			baseURL+DashboardServiceExecuteSpotCarryDemoProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ExecuteSpotCarryDemo")),
+			connect.WithClientOptions(opts...),
+		),
+		listSpotCarryDemo: connect.NewClient[v1.ListSpotCarryDemoRequest, v1.ListSpotCarryDemoResponse](
+			httpClient,
+			baseURL+DashboardServiceListSpotCarryDemoProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListSpotCarryDemo")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1155,6 +1176,8 @@ type dashboardServiceClient struct {
 	acceptJudgment            *connect.Client[v1.AcceptJudgmentRequest, v1.AcceptJudgmentResponse]
 	settlePaperTrade          *connect.Client[v1.SettlePaperTradeRequest, v1.SettlePaperTradeResponse]
 	getFinanceOverview        *connect.Client[v1.GetFinanceOverviewRequest, v1.GetFinanceOverviewResponse]
+	executeSpotCarryDemo      *connect.Client[v1.ExecuteSpotCarryDemoRequest, v1.ExecuteSpotCarryDemoResponse]
+	listSpotCarryDemo         *connect.Client[v1.ListSpotCarryDemoRequest, v1.ListSpotCarryDemoResponse]
 }
 
 // ListLatestQuotes calls arb.dashboard.v1.DashboardService.ListLatestQuotes.
@@ -1642,6 +1665,16 @@ func (c *dashboardServiceClient) GetFinanceOverview(ctx context.Context, req *co
 	return c.getFinanceOverview.CallUnary(ctx, req)
 }
 
+// ExecuteSpotCarryDemo calls arb.dashboard.v1.DashboardService.ExecuteSpotCarryDemo.
+func (c *dashboardServiceClient) ExecuteSpotCarryDemo(ctx context.Context, req *connect.Request[v1.ExecuteSpotCarryDemoRequest]) (*connect.Response[v1.ExecuteSpotCarryDemoResponse], error) {
+	return c.executeSpotCarryDemo.CallUnary(ctx, req)
+}
+
+// ListSpotCarryDemo calls arb.dashboard.v1.DashboardService.ListSpotCarryDemo.
+func (c *dashboardServiceClient) ListSpotCarryDemo(ctx context.Context, req *connect.Request[v1.ListSpotCarryDemoRequest]) (*connect.Response[v1.ListSpotCarryDemoResponse], error) {
+	return c.listSpotCarryDemo.CallUnary(ctx, req)
+}
+
 // DashboardServiceHandler is an implementation of the arb.dashboard.v1.DashboardService service.
 type DashboardServiceHandler interface {
 	// 快照类
@@ -1776,6 +1809,9 @@ type DashboardServiceHandler interface {
 	SettlePaperTrade(context.Context, *connect.Request[v1.SettlePaperTradeRequest]) (*connect.Response[v1.SettlePaperTradeResponse], error)
 	// D-348：财务总览聚合（三个数+收益分解+统一流水；后端算，前端零信任零计算）。
 	GetFinanceOverview(context.Context, *connect.Request[v1.GetFinanceOverviewRequest]) (*connect.Response[v1.GetFinanceOverviewResponse], error)
+	// D-350 阶段③：spot-carry demo 手动实测（双腿原子：先现货后永续，失败回滚已成交腿）。
+	ExecuteSpotCarryDemo(context.Context, *connect.Request[v1.ExecuteSpotCarryDemoRequest]) (*connect.Response[v1.ExecuteSpotCarryDemoResponse], error)
+	ListSpotCarryDemo(context.Context, *connect.Request[v1.ListSpotCarryDemoRequest]) (*connect.Response[v1.ListSpotCarryDemoResponse], error)
 }
 
 // NewDashboardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -2367,6 +2403,18 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("GetFinanceOverview")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceExecuteSpotCarryDemoHandler := connect.NewUnaryHandler(
+		DashboardServiceExecuteSpotCarryDemoProcedure,
+		svc.ExecuteSpotCarryDemo,
+		connect.WithSchema(dashboardServiceMethods.ByName("ExecuteSpotCarryDemo")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceListSpotCarryDemoHandler := connect.NewUnaryHandler(
+		DashboardServiceListSpotCarryDemoProcedure,
+		svc.ListSpotCarryDemo,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListSpotCarryDemo")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/arb.dashboard.v1.DashboardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DashboardServiceListLatestQuotesProcedure:
@@ -2563,6 +2611,10 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceSettlePaperTradeHandler.ServeHTTP(w, r)
 		case DashboardServiceGetFinanceOverviewProcedure:
 			dashboardServiceGetFinanceOverviewHandler.ServeHTTP(w, r)
+		case DashboardServiceExecuteSpotCarryDemoProcedure:
+			dashboardServiceExecuteSpotCarryDemoHandler.ServeHTTP(w, r)
+		case DashboardServiceListSpotCarryDemoProcedure:
+			dashboardServiceListSpotCarryDemoHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -2958,4 +3010,12 @@ func (UnimplementedDashboardServiceHandler) SettlePaperTrade(context.Context, *c
 
 func (UnimplementedDashboardServiceHandler) GetFinanceOverview(context.Context, *connect.Request[v1.GetFinanceOverviewRequest]) (*connect.Response[v1.GetFinanceOverviewResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetFinanceOverview is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ExecuteSpotCarryDemo(context.Context, *connect.Request[v1.ExecuteSpotCarryDemoRequest]) (*connect.Response[v1.ExecuteSpotCarryDemoResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ExecuteSpotCarryDemo is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListSpotCarryDemo(context.Context, *connect.Request[v1.ListSpotCarryDemoRequest]) (*connect.Response[v1.ListSpotCarryDemoResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListSpotCarryDemo is not implemented"))
 }
