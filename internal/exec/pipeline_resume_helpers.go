@@ -105,10 +105,12 @@ func (p *Pipeline) backfillCloseFromHistory(ctx context.Context, posID int64, le
 		closeSide = "BUY"
 	}
 	closePrice := hp.ClosePrice
+	filledQty := leg.EffectiveQty() // D-346：回填无独立 fill 回执，成交口径=OPEN 腿实际持仓量
 	if err := p.store.CreatePositionLeg(ctx, &pgstore.PositionLeg{
 		PositionID: posID, LegNo: leg.LegNo, Phase: "CLOSE", AttemptNo: 1, Venue: leg.Venue, Account: leg.Account,
 		Symbol: leg.Symbol, Side: closeSide, Qty: leg.EffectiveQty(), PriceExpected: leg.PriceExpected, // D-311 R6：回填成交量口径
 		PriceActual: &closePrice, OrderID: leg.OrderID, Status: "FILLED",
+		FilledQty: &filledQty, AvgFillPrice: &closePrice, // D-346：488/489/490 验尸=CLOSE 腿恒 NULL
 	}); err != nil && !errors.Is(err, pgstore.ErrTerminalState) {
 		return fmt.Errorf("backfill CLOSE leg: %w", err)
 	}
