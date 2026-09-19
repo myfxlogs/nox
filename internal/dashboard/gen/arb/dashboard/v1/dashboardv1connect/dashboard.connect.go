@@ -319,6 +319,9 @@ const (
 	// DashboardServiceSettlePaperTradeProcedure is the fully-qualified name of the DashboardService's
 	// SettlePaperTrade RPC.
 	DashboardServiceSettlePaperTradeProcedure = "/arb.dashboard.v1.DashboardService/SettlePaperTrade"
+	// DashboardServiceGetFinanceOverviewProcedure is the fully-qualified name of the DashboardService's
+	// GetFinanceOverview RPC.
+	DashboardServiceGetFinanceOverviewProcedure = "/arb.dashboard.v1.DashboardService/GetFinanceOverview"
 )
 
 // DashboardServiceClient is a client for the arb.dashboard.v1.DashboardService service.
@@ -453,6 +456,8 @@ type DashboardServiceClient interface {
 	ListPaperTrades(context.Context, *connect.Request[v1.ListPaperTradesRequest]) (*connect.Response[v1.ListPaperTradesResponse], error)
 	AcceptJudgment(context.Context, *connect.Request[v1.AcceptJudgmentRequest]) (*connect.Response[v1.AcceptJudgmentResponse], error)
 	SettlePaperTrade(context.Context, *connect.Request[v1.SettlePaperTradeRequest]) (*connect.Response[v1.SettlePaperTradeResponse], error)
+	// D-348：财务总览聚合（三个数+收益分解+统一流水；后端算，前端零信任零计算）。
+	GetFinanceOverview(context.Context, *connect.Request[v1.GetFinanceOverviewRequest]) (*connect.Response[v1.GetFinanceOverviewResponse], error)
 }
 
 // NewDashboardServiceClient constructs a client for the arb.dashboard.v1.DashboardService service.
@@ -1042,6 +1047,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("SettlePaperTrade")),
 			connect.WithClientOptions(opts...),
 		),
+		getFinanceOverview: connect.NewClient[v1.GetFinanceOverviewRequest, v1.GetFinanceOverviewResponse](
+			httpClient,
+			baseURL+DashboardServiceGetFinanceOverviewProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("GetFinanceOverview")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1143,6 +1154,7 @@ type dashboardServiceClient struct {
 	listPaperTrades           *connect.Client[v1.ListPaperTradesRequest, v1.ListPaperTradesResponse]
 	acceptJudgment            *connect.Client[v1.AcceptJudgmentRequest, v1.AcceptJudgmentResponse]
 	settlePaperTrade          *connect.Client[v1.SettlePaperTradeRequest, v1.SettlePaperTradeResponse]
+	getFinanceOverview        *connect.Client[v1.GetFinanceOverviewRequest, v1.GetFinanceOverviewResponse]
 }
 
 // ListLatestQuotes calls arb.dashboard.v1.DashboardService.ListLatestQuotes.
@@ -1625,6 +1637,11 @@ func (c *dashboardServiceClient) SettlePaperTrade(ctx context.Context, req *conn
 	return c.settlePaperTrade.CallUnary(ctx, req)
 }
 
+// GetFinanceOverview calls arb.dashboard.v1.DashboardService.GetFinanceOverview.
+func (c *dashboardServiceClient) GetFinanceOverview(ctx context.Context, req *connect.Request[v1.GetFinanceOverviewRequest]) (*connect.Response[v1.GetFinanceOverviewResponse], error) {
+	return c.getFinanceOverview.CallUnary(ctx, req)
+}
+
 // DashboardServiceHandler is an implementation of the arb.dashboard.v1.DashboardService service.
 type DashboardServiceHandler interface {
 	// 快照类
@@ -1757,6 +1774,8 @@ type DashboardServiceHandler interface {
 	ListPaperTrades(context.Context, *connect.Request[v1.ListPaperTradesRequest]) (*connect.Response[v1.ListPaperTradesResponse], error)
 	AcceptJudgment(context.Context, *connect.Request[v1.AcceptJudgmentRequest]) (*connect.Response[v1.AcceptJudgmentResponse], error)
 	SettlePaperTrade(context.Context, *connect.Request[v1.SettlePaperTradeRequest]) (*connect.Response[v1.SettlePaperTradeResponse], error)
+	// D-348：财务总览聚合（三个数+收益分解+统一流水；后端算，前端零信任零计算）。
+	GetFinanceOverview(context.Context, *connect.Request[v1.GetFinanceOverviewRequest]) (*connect.Response[v1.GetFinanceOverviewResponse], error)
 }
 
 // NewDashboardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -2342,6 +2361,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("SettlePaperTrade")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceGetFinanceOverviewHandler := connect.NewUnaryHandler(
+		DashboardServiceGetFinanceOverviewProcedure,
+		svc.GetFinanceOverview,
+		connect.WithSchema(dashboardServiceMethods.ByName("GetFinanceOverview")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/arb.dashboard.v1.DashboardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DashboardServiceListLatestQuotesProcedure:
@@ -2536,6 +2561,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceAcceptJudgmentHandler.ServeHTTP(w, r)
 		case DashboardServiceSettlePaperTradeProcedure:
 			dashboardServiceSettlePaperTradeHandler.ServeHTTP(w, r)
+		case DashboardServiceGetFinanceOverviewProcedure:
+			dashboardServiceGetFinanceOverviewHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -2927,4 +2954,8 @@ func (UnimplementedDashboardServiceHandler) AcceptJudgment(context.Context, *con
 
 func (UnimplementedDashboardServiceHandler) SettlePaperTrade(context.Context, *connect.Request[v1.SettlePaperTradeRequest]) (*connect.Response[v1.SettlePaperTradeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SettlePaperTrade is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) GetFinanceOverview(context.Context, *connect.Request[v1.GetFinanceOverviewRequest]) (*connect.Response[v1.GetFinanceOverviewResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetFinanceOverview is not implemented"))
 }
