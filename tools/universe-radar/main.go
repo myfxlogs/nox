@@ -145,13 +145,15 @@ func run(ctx context.Context) error {
 				log.Printf("universe-radar: touch alert %s: %v", key, err)
 			}
 		}
-		for _, n := range fundingAlertRows(rows, fundingMinPct, volMinUSD) {
-			if o, ok := old[n.Venue+"|"+n.Symbol]; ok && !cooldownOK(o.LastAlertTS, now) {
+		// D-353 S1：事件式——只在状态转移（新进/翻转/跌出）时发声，稳态零报；
+		// last_alert_ts 24h 冷却保留作 flap 抑制（进出带抖动至多一报/日）。
+		for _, ev := range fundingTransitions(rows, old, fundingMinPct, volMinUSD) {
+			if o, ok := old[ev.row.Venue+"|"+ev.row.Symbol]; ok && !cooldownOK(o.LastAlertTS, now) {
 				continue
 			}
-			lines = append(lines, alertLine("FUNDING", n))
-			if err := st.TouchCexUniverseAlert(ctx, n.Venue, n.Symbol, now); err != nil {
-				log.Printf("universe-radar: touch alert %s|%s: %v", n.Venue, n.Symbol, err)
+			lines = append(lines, fundingEventLine(ev))
+			if err := st.TouchCexUniverseAlert(ctx, ev.row.Venue, ev.row.Symbol, now); err != nil {
+				log.Printf("universe-radar: touch alert %s|%s: %v", ev.row.Venue, ev.row.Symbol, err)
 			}
 		}
 		if len(lines) > 0 {
@@ -207,6 +209,30 @@ func hedgeCanonicals(ctx context.Context, st *pgstore.Store) (map[string]bool, m
 }
 
 // alertLine 告警行：`[universe-radar] <EVENT> <tier> <venue> <symbol> (leg=<hedge>[ class=<GOLD>]) ann=<x>%/yr vol=$<y>`。
+// fundingEventLine D-353 S1：事件式告警行——kind 标签 + ann 旧→新两侧数值
+// （跌出行旧值→新值；新进行旧值多为 n/a）。
+func fundingEventLine(ev fundingEvent) string {
+	label := map[fundingEventKind]string{
+		fundingNewEntry: "FUNDING 进入极端带",
+		fundingSignFlip: "FUNDING 符号翻转",
+		fundingExitBand: "FUNDING 跌出极端带",
+	}[ev.kind]
+	leg := ev.row.HedgeCanonical
+	if leg == "" {
+		leg = "无"
+	} else if ev.row.HedgeClass != "" {
+		leg += " class=" + ev.row.HedgeClass
+	}
+	ann := func(v *float64) string {
+		if v == nil {
+			return "n/a"
+		}
+		return fmt.Sprintf("%+.1f", *v)
+	}
+	return fmt.Sprintf("[universe-radar] %s %s %s %s (leg=%s) ann %s%%→%s%%/yr vol=$%.0f",
+		label, ev.row.Tier, ev.row.Venue, ev.row.Symbol, leg, ann(ev.oldAnn), ann(ev.row.FundingAnn), ev.row.Vol24h)
+}
+
 func alertLine(event string, n normRow) string {
 	leg := n.HedgeCanonical
 	if leg == "" {

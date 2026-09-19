@@ -37,7 +37,9 @@ const (
 	// 49152 覆盖 ~135 条，同因第七次上浮，grep 检索面仍廉价（<48KB）。
 	// 2026-09-17 49152→57344：+1 条目（funding-rate-sign-needs-leg-side，D-322）达 49415B 结构性触顶；
 	// 57344 覆盖 ~155 条，同因第八次上浮，grep 检索面仍廉价（<56KB）。
-	maxBytes    = 57344
+	// 2026-09-19 57344→65536：+1 条目（threshold-alert-becomes-transition-events，D-353）达 57487B 结构性触顶；
+	// 65536 覆盖 ~175 条，同因第九次上浮，grep 检索面仍廉价（<64KB）。
+	maxBytes    = 65536
 	maxKeywords = 5
 )
 

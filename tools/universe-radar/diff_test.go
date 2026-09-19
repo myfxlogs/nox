@@ -124,19 +124,7 @@ func TestDiffUniverseBootstrap(t *testing.T) {
 }
 
 // TestFundingAlertRows funding 告警门槛：|ann|≥15%/yr 且 vol24h≥$5M。
-func TestFundingAlertRows(t *testing.T) {
-	rows := []normRow{
-		{Row: Row{Symbol: "A", Vol24h: 6e6}, FundingAnn: fptr(16.0)},  // 过
-		{Row: Row{Symbol: "B", Vol24h: 6e6}, FundingAnn: fptr(-16.0)}, // 过（负值绝对值）
-		{Row: Row{Symbol: "C", Vol24h: 1e6}, FundingAnn: fptr(30.0)},  // 量不足
-		{Row: Row{Symbol: "D", Vol24h: 6e6}, FundingAnn: fptr(10.0)},  // ann 不足
-		{Row: Row{Symbol: "E", Vol24h: 6e6}},                          // 无 funding 数据
-	}
-	out := fundingAlertRows(rows, 15, 5e6)
-	if len(out) != 2 || out[0].Symbol != "A" || out[1].Symbol != "B" {
-		t.Fatalf("want [A B], got %v", out)
-	}
-}
+// TestFundingAlertRows 已随 fundingAlertRows 删除（D-353 S2 事件式改造，测试随迁；见 TestFundingTransitions）。
 
 // TestDivergences 同 canonical 跨所分化 ≥20%/yr 出事件、<20% 不出、同所不比。
 func TestDivergences(t *testing.T) {
@@ -187,3 +175,74 @@ func TestCooldownOK(t *testing.T) {
 
 func fptr(v float64) *float64        { return &v }
 func ptrTime(t time.Time) *time.Time { return &t }
+
+// TestFundingTransitions D-353 T1：事件式 funding 告警四情形+边界——
+// 稳态（old qualify 同号）零事件（红=现行为每日重报）；new_entry/sign_flip/exit_band 各一；
+// old 缺行/ann nil 边界。行整体消失（VANISH）不属 exit_band（DELISTED 已单报，防双报）。
+func TestFundingTransitions(t *testing.T) {
+	old := map[string]pgstore.CexUniverseRow{
+		"binance|STEADY":   {Venue: "binance", Symbol: "STEADY", FundingAnn: fptr(16), Vol24h: fptr(6e6)},
+		"binance|FLIP":     {Venue: "binance", Symbol: "FLIP", FundingAnn: fptr(16), Vol24h: fptr(6e6)},
+		"binance|EXIT":     {Venue: "binance", Symbol: "EXIT", FundingAnn: fptr(20), Vol24h: fptr(6e6)},
+		"binance|VOLDROP":  {Venue: "binance", Symbol: "VOLDROP", FundingAnn: fptr(20), Vol24h: fptr(6e6)},
+		"binance|NILANN":   {Venue: "binance", Symbol: "NILANN", FundingAnn: fptr(20), Vol24h: fptr(6e6)},
+		"binance|VANISH":   {Venue: "binance", Symbol: "VANISH", FundingAnn: fptr(20), Vol24h: fptr(6e6)},
+		"binance|NEGRIGHT": {Venue: "binance", Symbol: "NEGRIGHT", FundingAnn: fptr(-16), Vol24h: fptr(6e6)},
+	}
+	rows := []normRow{
+		{Row: Row{Symbol: "STEADY", Vol24h: 6e6}, Venue: "binance", FundingAnn: fptr(16)},    // 稳态：零事件
+		{Row: Row{Symbol: "NEWIN", Vol24h: 6e6}, Venue: "binance", FundingAnn: fptr(25)},     // old 缺行 → new_entry
+		{Row: Row{Symbol: "FLIP", Vol24h: 6e6}, Venue: "binance", FundingAnn: fptr(-18)},     // 符号翻转
+		{Row: Row{Symbol: "NEGRIGHT", Vol24h: 6e6}, Venue: "binance", FundingAnn: fptr(-17)}, // 负侧稳态（同号）：零事件
+		{Row: Row{Symbol: "EXIT", Vol24h: 6e6}, Venue: "binance", FundingAnn: fptr(5)},       // ann 归常态 → exit_band
+		{Row: Row{Symbol: "VOLDROP", Vol24h: 1e6}, Venue: "binance", FundingAnn: fptr(20)},   // vol 跌破 → exit_band
+		{Row: Row{Symbol: "NILANN", Vol24h: 6e6}, Venue: "binance"},                          // ann→nil → exit_band
+		// VANISH 行整体消失：不在 rows → 不产生 exit_band（DELISTED 已单报）
+	}
+	out := fundingTransitions(rows, old, 15, 5e6)
+	got := map[string]fundingEventKind{}
+	for _, ev := range out {
+		got[ev.row.Symbol] = ev.kind
+	}
+	if _, ok := got["STEADY"]; ok {
+		t.Errorf("STEADY 稳态同号不应有事件（红=每日重报退化）: %v", got)
+	}
+	if _, ok := got["NEGRIGHT"]; ok {
+		t.Errorf("NEGRIGHT 负侧稳态不应有事件: %v", got)
+	}
+	if got["NEWIN"] != fundingNewEntry {
+		t.Errorf("NEWIN = %v, want new_entry（old 缺行）", got["NEWIN"])
+	}
+	if got["FLIP"] != fundingSignFlip {
+		t.Errorf("FLIP = %v, want sign_flip", got["FLIP"])
+	}
+	for _, sym := range []string{"EXIT", "VOLDROP", "NILANN"} {
+		if got[sym] != fundingExitBand {
+			t.Errorf("%s = %v, want exit_band", sym, got[sym])
+		}
+	}
+	if _, ok := got["VANISH"]; ok {
+		t.Error("VANISH 行整体消失不应产生 exit_band（DELISTED 已单报，防双报）")
+	}
+	// exit_band 旧→新值锚（文案数据源）：EXIT 20→5；NILANN 新值 nil
+	for _, ev := range out {
+		if ev.row.Symbol == "EXIT" && (ev.oldAnn == nil || *ev.oldAnn != 20) {
+			t.Errorf("EXIT oldAnn = %v, want 20", ev.oldAnn)
+		}
+		if ev.row.Symbol == "NILANN" && ev.oldAnn == nil {
+			t.Errorf("NILANN oldAnn 不应为 nil（old qualify 20）")
+		}
+	}
+}
+
+// TestFundingTransitions_OldNilVol 边界：old 行 Vol24h nil → 不 qualify → 本轮 qualify 判 new_entry。
+func TestFundingTransitions_OldNilVol(t *testing.T) {
+	old := map[string]pgstore.CexUniverseRow{
+		"okx|X": {Venue: "okx", Symbol: "X", FundingAnn: fptr(20)},
+	}
+	rows := []normRow{{Row: Row{Symbol: "X", Vol24h: 6e6}, Venue: "okx", FundingAnn: fptr(20)}}
+	out := fundingTransitions(rows, old, 15, 5e6)
+	if len(out) != 1 || out[0].kind != fundingNewEntry {
+		t.Errorf("old vol nil → 本轮应 new_entry, got %v", out)
+	}
+}
