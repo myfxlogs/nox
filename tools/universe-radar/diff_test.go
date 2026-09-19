@@ -246,3 +246,19 @@ func TestFundingTransitions_OldNilVol(t *testing.T) {
 		t.Errorf("old vol nil → 本轮应 new_entry, got %v", out)
 	}
 }
+
+// TestBasisBps D-354 T1：mark/index→bps 换算锚——(mark/index−1)×1e4 round 1 位；
+// mark≤0 或 index≤0 → nil（fail-closed，不臆造）。
+func TestBasisBps(t *testing.T) {
+	if got := basisBps(1.005, 1.0); got == nil || *got != 50.0 {
+		t.Errorf("basisBps(1.005,1.0) = %v, want 50.0（+0.5%%→50bps）", got)
+	}
+	if got := basisBps(0.9995, 1.0); got == nil || *got != -5.0 {
+		t.Errorf("basisBps(0.9995,1.0) = %v, want -5.0（贴水为负）", got)
+	}
+	for _, bad := range [][2]float64{{0, 1}, {1, 0}, {-1, 1}, {1, -1}} {
+		if got := basisBps(bad[0], bad[1]); got != nil {
+			t.Errorf("basisBps(%v,%v) = %v, want nil（非正数 fail-closed）", bad[0], bad[1], got)
+		}
+	}
+}
