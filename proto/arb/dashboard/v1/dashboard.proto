@@ -161,6 +161,9 @@ service DashboardService {
   rpc ListPaperTrades(ListPaperTradesRequest) returns (ListPaperTradesResponse);
   rpc AcceptJudgment(AcceptJudgmentRequest) returns (AcceptJudgmentResponse);
   rpc SettlePaperTrade(SettlePaperTradeRequest) returns (SettlePaperTradeResponse);
+
+  // D-348：财务总览聚合（三个数+收益分解+统一流水；后端算，前端零信任零计算）。
+  rpc GetFinanceOverview(GetFinanceOverviewRequest) returns (GetFinanceOverviewResponse);
 }
 
 // === Quote（§1.1）===
@@ -1965,4 +1968,45 @@ message SettlePaperTradeResponse {
   bool ok = 1;
   string error = 2;
   optional double actual_net_return_pct = 3;
+}
+
+// === Finance Overview（D-348 财务 Tab 第一性重构：三个数+收益分解+统一流水）===
+
+message GetFinanceOverviewRequest {}
+
+// FinancePnlByEnv 已实现 PnL 按环境分层（real/demo；environment NULL=legacy real 链路）。
+message FinancePnlByEnv {
+  string environment = 1;
+  double realized_pnl = 2;
+  int32 closed = 3;
+}
+
+// FinanceIncomeRow 收入构成按类型（funding/swap/commission；cashflows 全量口径）。
+message FinanceIncomeRow {
+  string kind = 1;
+  double total_usd = 2;
+  int32 rows = 3;
+}
+
+// FinanceFlowRow 统一流水行（三源合并：income_events 结算 / position_cashflows 实数轨
+// quality<>'estimated' / ledger 台账；防双计=estimated 排除+同 venue+kind 时间轴无重叠；
+// 防漏计=NULL 轨必入——okx/MT 结算实数 income_events 不覆盖）。
+message FinanceFlowRow {
+  google.protobuf.Timestamp ts = 1;
+  string source = 2;       // venue（binance / 277842155…）或 ledger
+  string kind = 3;         // funding/swap/commission（ledger 源=channel）
+  string symbol = 4;       // income_events 有；cashflows 组合级无（诚实空）；ledger 无
+  double amount_usd = 5;   // ledger 源=台账原币 amount（台账口径，D-348 施工注）
+  int64 position_id = 6;   // 0=非持仓级（ledger）
+  string note = 7;
+}
+
+message GetFinanceOverviewResponse {
+  double deposited_usd = 1;     // ledger 手工台账 sum（正=入金；台账原币语义=既有 LedgerSummary 同款）
+  double total_equity_usd = 2;  // Σ AccountInfo.equity（在线或快照；只计实盘：CFD broker_accounts
+                                // is_real=true 且非 stopped / CEX simulated=false；非 USD 计价跳过+warn）
+  double net_pnl_usd = 3;       // total_equity − deposited（单口径可对账）
+  repeated FinancePnlByEnv pnl_by_env = 4;
+  repeated FinanceIncomeRow income_by_kind = 5;
+  repeated FinanceFlowRow flows = 6;  // ts 倒序 LIMIT 200
 }
