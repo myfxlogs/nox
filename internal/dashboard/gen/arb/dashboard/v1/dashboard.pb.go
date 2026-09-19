@@ -18637,8 +18637,15 @@ type PaperSpotCarryRow struct {
 	ExitTs          string                 `protobuf:"bytes,13,opt,name=exit_ts,json=exitTs,proto3" json:"exit_ts,omitempty"`             // RFC3339，空=未退出
 	ExitReason      string                 `protobuf:"bytes,14,opt,name=exit_reason,json=exitReason,proto3" json:"exit_reason,omitempty"` // normalized / age_7d / promoted_demo
 	Note            string                 `protobuf:"bytes,15,opt,name=note,proto3" json:"note,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// D-354 S3：盈亏视图（基差=mark/index 近似；成本 0.30% 常量预估；NULL=诚实缺显「—」）
+	EntryBasisBps  *float64 `protobuf:"fixed64,16,opt,name=entry_basis_bps,json=entryBasisBps,proto3,oneof" json:"entry_basis_bps,omitempty"`    // 开仓基差快照（存量行 NULL）
+	LastBasisBps   *float64 `protobuf:"fixed64,17,opt,name=last_basis_bps,json=lastBasisBps,proto3,oneof" json:"last_basis_bps,omitempty"`       // 当前基差
+	BasisPnlUsd    *float64 `protobuf:"fixed64,18,opt,name=basis_pnl_usd,json=basisPnlUsd,proto3,oneof" json:"basis_pnl_usd,omitempty"`          // 基差浮盈（short: qty×(entry−last)/1e4；long 反号）
+	TotalPnlUsd    *float64 `protobuf:"fixed64,19,opt,name=total_pnl_usd,json=totalPnlUsd,proto3,oneof" json:"total_pnl_usd,omitempty"`          // 净浮盈=accrued+basis_pnl−qty×0.003（basis 缺→null）
+	RetPct         float64  `protobuf:"fixed64,20,opt,name=ret_pct,json=retPct,proto3" json:"ret_pct,omitempty"`                                 // 累计收益率%=accrued/qty×100
+	RealizedAnnPct *float64 `protobuf:"fixed64,21,opt,name=realized_ann_pct,json=realizedAnnPct,proto3,oneof" json:"realized_ann_pct,omitempty"` // 实收年化%=accrued/qty×365/days×100（days=0→null）
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *PaperSpotCarryRow) Reset() {
@@ -18774,6 +18781,48 @@ func (x *PaperSpotCarryRow) GetNote() string {
 		return x.Note
 	}
 	return ""
+}
+
+func (x *PaperSpotCarryRow) GetEntryBasisBps() float64 {
+	if x != nil && x.EntryBasisBps != nil {
+		return *x.EntryBasisBps
+	}
+	return 0
+}
+
+func (x *PaperSpotCarryRow) GetLastBasisBps() float64 {
+	if x != nil && x.LastBasisBps != nil {
+		return *x.LastBasisBps
+	}
+	return 0
+}
+
+func (x *PaperSpotCarryRow) GetBasisPnlUsd() float64 {
+	if x != nil && x.BasisPnlUsd != nil {
+		return *x.BasisPnlUsd
+	}
+	return 0
+}
+
+func (x *PaperSpotCarryRow) GetTotalPnlUsd() float64 {
+	if x != nil && x.TotalPnlUsd != nil {
+		return *x.TotalPnlUsd
+	}
+	return 0
+}
+
+func (x *PaperSpotCarryRow) GetRetPct() float64 {
+	if x != nil {
+		return x.RetPct
+	}
+	return 0
+}
+
+func (x *PaperSpotCarryRow) GetRealizedAnnPct() float64 {
+	if x != nil && x.RealizedAnnPct != nil {
+		return *x.RealizedAnnPct
+	}
+	return 0
 }
 
 type ListPaperSpotCarryResponse struct {
@@ -20426,7 +20475,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x18ListSpotCarryDemoRequest\"S\n" +
 	"\x19ListSpotCarryDemoResponse\x126\n" +
 	"\x04rows\x18\x01 \x03(\v2\".arb.dashboard.v1.SpotCarryDemoRowR\x04rows\"\x1b\n" +
-	"\x19ListPaperSpotCarryRequest\"\xd7\x03\n" +
+	"\x19ListPaperSpotCarryRequest\"\xa9\x06\n" +
 	"\x11PaperSpotCarryRow\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x14\n" +
 	"\x05venue\x18\x02 \x01(\tR\x05venue\x12\x16\n" +
@@ -20445,10 +20494,21 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\aexit_ts\x18\r \x01(\tR\x06exitTs\x12\x1f\n" +
 	"\vexit_reason\x18\x0e \x01(\tR\n" +
 	"exitReason\x12\x12\n" +
-	"\x04note\x18\x0f \x01(\tR\x04noteB\x13\n" +
+	"\x04note\x18\x0f \x01(\tR\x04note\x12+\n" +
+	"\x0fentry_basis_bps\x18\x10 \x01(\x01H\x02R\rentryBasisBps\x88\x01\x01\x12)\n" +
+	"\x0elast_basis_bps\x18\x11 \x01(\x01H\x03R\flastBasisBps\x88\x01\x01\x12'\n" +
+	"\rbasis_pnl_usd\x18\x12 \x01(\x01H\x04R\vbasisPnlUsd\x88\x01\x01\x12'\n" +
+	"\rtotal_pnl_usd\x18\x13 \x01(\x01H\x05R\vtotalPnlUsd\x88\x01\x01\x12\x17\n" +
+	"\aret_pct\x18\x14 \x01(\x01R\x06retPct\x12-\n" +
+	"\x10realized_ann_pct\x18\x15 \x01(\x01H\x06R\x0erealizedAnnPct\x88\x01\x01B\x13\n" +
 	"\x11_last_funding_annB\n" +
 	"\n" +
-	"\b_net_now\"U\n" +
+	"\b_net_nowB\x12\n" +
+	"\x10_entry_basis_bpsB\x11\n" +
+	"\x0f_last_basis_bpsB\x10\n" +
+	"\x0e_basis_pnl_usdB\x10\n" +
+	"\x0e_total_pnl_usdB\x13\n" +
+	"\x11_realized_ann_pct\"U\n" +
 	"\x1aListPaperSpotCarryResponse\x127\n" +
 	"\x04rows\x18\x01 \x03(\v2#.arb.dashboard.v1.PaperSpotCarryRowR\x04rows*z\n" +
 	"\vMatrixState\x12\x1c\n" +

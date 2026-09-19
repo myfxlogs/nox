@@ -4,6 +4,7 @@ package dashboard
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 
@@ -200,4 +201,56 @@ func (f *fakePaperBoardSource) ListCexUniverse(_ context.Context) (map[string]pg
 		return map[string]pgstore.CexUniverseRow{}, nil
 	}
 	return f.uni, nil
+}
+
+// TestD354_PnlNumbers D-354 T3：收益率三数+净浮盈——short 基差回落=正/long 反号、
+// 净浮盈=accrued+basis−qty×0.3%（$1000→−3 精确锚）、okx/NULL 行「—」路径、实收年化 47.45 量级锚。
+func TestD354_PnlNumbers(t *testing.T) {
+	now := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
+	fake := &fakePaperBoardSource{rows: []pgstore.PaperSpotCarry{
+		{ID: 1, Venue: "binance", Symbol: "SHORTOK", Side: "short_perp", Status: "active",
+			QtyUSD: 1000, EntryFundingAnn: 92, EntryTs: now.Add(-2 * 24 * time.Hour), AccruedUSD: 2.6,
+			EntryBasisBps: boardF64(50), LastBasisBps: boardF64(30)}, // 基差回落 50→30 → +$2
+		{ID: 2, Venue: "binance", Symbol: "LONGOK", Side: "long_perp", Status: "active",
+			QtyUSD: 1000, EntryFundingAnn: -30, EntryTs: now.Add(-2 * 24 * time.Hour), AccruedUSD: 2.6,
+			EntryBasisBps: boardF64(50), LastBasisBps: boardF64(30)}, // 多侧基差回落 50→30：short 语义=+2，long 反号=−2（亏损——变异摘符号则变 +2 可观测）
+		{ID: 3, Venue: "okx", Symbol: "AKE", Side: "short_perp", Status: "active",
+			QtyUSD: 1000, EntryFundingAnn: 25, EntryTs: now.Add(-2 * 24 * time.Hour), AccruedUSD: 1.0}, // 无基差
+	}}
+	rows, err := buildPaperSpotCarryBoard(context.Background(), fake, now)
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	bySym := map[string]*v1.PaperSpotCarryRow{}
+	for _, r := range rows {
+		bySym[r.Symbol] = r
+	}
+	// short：basisPnl=1000×(50−30)/1e4=+2；净浮盈=2.6+2−3=1.6
+	s := bySym["SHORTOK"]
+	if s.BasisPnlUsd == nil || *s.BasisPnlUsd != 2 {
+		t.Errorf("SHORTOK basis_pnl = %v, want 2（基差回落=正）", s.BasisPnlUsd)
+	}
+	if s.TotalPnlUsd == nil || math.Abs(*s.TotalPnlUsd-1.6) > 1e-9 {
+		t.Errorf("SHORTOK total_pnl = %v, want 1.6（accrued+basis−3）", *s.TotalPnlUsd)
+	}
+	// long：basisPnl=−1000×(50−30)/1e4=−2（多侧基差回落=亏损——反号语义）
+	l := bySym["LONGOK"]
+	if l.BasisPnlUsd == nil || *l.BasisPnlUsd != -2 {
+		t.Errorf("LONGOK basis_pnl = %v, want -2（long_perp 反号：基差回落=负）", l.BasisPnlUsd)
+	}
+	// okx 无基差：三数「—」路径（nil）
+	a := bySym["AKE"]
+	if a.BasisPnlUsd != nil || a.TotalPnlUsd != nil {
+		t.Errorf("无基差行 basis/total 应 nil（诚实「—」）: %v/%v", a.BasisPnlUsd, a.TotalPnlUsd)
+	}
+	// 三率：ret=2.6/1000×100=0.26；实收年化=2.6/1000×365/2×100=47.45
+	if s.RetPct < 0.25 || s.RetPct > 0.27 {
+		t.Errorf("ret_pct = %v, want ≈0.26", s.RetPct)
+	}
+	if s.RealizedAnnPct == nil || *s.RealizedAnnPct < 47 || *s.RealizedAnnPct > 48 {
+		t.Errorf("realized_ann_pct = %v, want ≈47.45（2 天 accrued $2.6）", s.RealizedAnnPct)
+	}
+	if s.EntryBasisBps == nil || *s.EntryBasisBps != 50 || s.LastBasisBps == nil || *s.LastBasisBps != 30 {
+		t.Errorf("基差两列回传: entry=%v last=%v", s.EntryBasisBps, s.LastBasisBps)
+	}
 }

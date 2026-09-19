@@ -27,6 +27,11 @@ const paperSpotCostPct = 0.15
 // paperExitRecentWindow exited 行证据流窗口（提示词 §1：近 14 天）。
 const paperExitRecentWindow = 14 * 24 * time.Hour
 
+// paperTurnCostPct D-354 全周转成本预估常量：现货 taker 0.1%×2+perp taker 0.05%×2=0.30%
+// （公开费率卡常量非实测，诚实标注）。与 net_now 的 0.15%/yr 摊销口径并存不混淆：
+// net_now=排名展示年化扣减；0.30%=平仓一次性实际成本预估。
+const paperTurnCostPct = 0.003
+
 // paperBoardSource 数据源窄接口（*pgstore.Store 原生满足；单测 fake 注入驱动 TTL/排序锚）。
 type paperBoardSource interface {
 	ListPaperSpotCarryBoard(ctx context.Context, recentWindow time.Duration) ([]pgstore.PaperSpotCarry, error)
@@ -100,6 +105,26 @@ func buildPaperSpotCarryBoard(ctx context.Context, src paperBoardSource, now tim
 			row.LastFundingAnn = &last
 			net := math.Abs(last) - paperSpotCostPct
 			row.NetNow = &net
+		}
+		// D-354 S3：盈亏三数——基差浮盈（short: qty×(entry−last)/1e4；long 反号）；
+		// 净浮盈=accrued+basis−qty×0.003；两列基差 NULL→basis/total NULL（诚实「—」）。
+		row.EntryBasisBps = p.EntryBasisBps
+		row.LastBasisBps = p.LastBasisBps
+		if p.EntryBasisBps != nil && p.LastBasisBps != nil {
+			diff := (*p.EntryBasisBps - *p.LastBasisBps) / 1e4
+			if p.Side == "long_perp" {
+				diff = -diff
+			}
+			basis := p.QtyUSD * diff
+			row.BasisPnlUsd = &basis
+			total := p.AccruedUSD + basis - p.QtyUSD*paperTurnCostPct
+			row.TotalPnlUsd = &total
+		}
+		// 三率：累计收益率%；实收年化%（days=days_held 同源值，0 天护→null）
+		row.RetPct = p.AccruedUSD / p.QtyUSD * 100
+		if days := row.DaysHeld; days > 0 {
+			ann := p.AccruedUSD / p.QtyUSD * 365 / days * 100
+			row.RealizedAnnPct = &ann
 		}
 		rows = append(rows, row)
 	}
