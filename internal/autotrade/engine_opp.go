@@ -128,7 +128,7 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 		if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
 			pairKey = *opp.CanonicalSell + "-" + strings.TrimSuffix(opp.Canonical, "USD")
 		}
-		if entryBps, noiseBps, ok, err := e.store.LatestXAssetEntryGate(ctx, pairKey, xassetEntryGateMaxAge); err != nil {
+		if entryBps, noiseBps, _, _, ok, err := e.store.LatestXAssetEntryGate(ctx, pairKey, xassetEntryGateMaxAge); err != nil {
 			log.Printf("[autotrade] safety margin: %s query: %v (fail-open)", pairKey, err)
 		} else if ok {
 			switch {

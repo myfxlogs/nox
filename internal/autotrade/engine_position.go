@@ -13,12 +13,10 @@ import (
 	"arb/internal/usdnotional"
 )
 
-// swapArbBasisExitBps SWAPARB/CARRY 基差止损门槛（D-108 A5，D-102 预设规则代码化）。
-// 包级 var 便于测试覆写（marginReconnectBackoff 先例）。
+// swapArbBasisExitBps SWAPARB/CARRY 基差止损门槛（D-108 A5，D-102 预设规则代码化）。； 包级 var 便于测试覆写（marginReconnectBackoff 先例）。
 var swapArbBasisExitBps = 4.0
 
-// checkExitCondition 按 type 分派退出条件（D-072 §4.2）。
-// 息差型判定走 position.IsCarryType 共用 helper（P3 单一真相：monitor.go 跳过收敛告警 + 此处退出分派同源）。
+// checkExitCondition 按 type 分派退出条件（D-072 §4.2）。； 息差型判定走 position.IsCarryType 共用 helper（P3 单一真相：monitor.go 跳过收敛告警 + 此处退出分派同源）。
 // 返回 (shouldClose, reason)。
 func (e *Engine) checkExitCondition(ctx context.Context, p *pgstore.Position) (bool, string) {
 	if !position.IsCarryType(p.Type) {
@@ -55,7 +53,12 @@ func (e *Engine) checkExitCondition(ctx context.Context, p *pgstore.Position) (b
 		if shouldClose {
 			return true, reason
 		}
-		return e.basisStopCheck(p)
+		// D-341 S1：收敛止盈（收割线=滚动分位数，monitor harvest_floor 列）——带底收割出口，
+		// 不受 minHold 约束（利润兑现无需等待；minHold 专属 carry 死亡判定）。floor NULL=不触发。
+		if shouldHarvest, harvestReason := e.harvestCheck(ctx, p); shouldHarvest {
+			return true, harvestReason
+		}
+		return e.basisStopCheckXAsset(p)
 	}
 	if p.Type == "FUNDING_HEDGE" || p.Type == "PERP_FUNDING" {
 		// D-133 T1：PERP_FUNDING 走持有下限 + 连续去抖（修复 D-129 瞬时费率判平致命缺陷）；
@@ -98,25 +101,24 @@ func (e *Engine) checkExitCondition(ctx context.Context, p *pgstore.Position) (b
 	return e.basisStopCheck(p)
 }
 
-// basisStopCheck D-311 S5：基差止损块抽出共用（SWAPARB/CARRY 与 XASSET_CARRY 同语义）。
-// D-180 S3：PnL_bps = currentBasisBps − expected_entry_spread_bps。
-// PnL_bps < −BasisStopBps → 平仓（亏损方向，非旧 A5 的盈利方向绝对值门禁）。
-// 口径：entry=成交价(含滑点) / current=报价口径(不含滑点) → PnL 保守(止损偏早=安全)。
-// 基准列 NULL/报价缺失 → 不决策（fail-closed 惯例）。
-// BasisStopBps<=0 → 回退旧 swapArbBasisExitBps 绝对值门禁（向后兼容）。
-func (e *Engine) basisStopCheck(p *pgstore.Position) (bool, string) {
-	if e.cfg.BasisStopBps > 0 {
-		basisBps, bok := e.currentBasisBps(p)
-		if shouldClose, reason := basisStopLossCheck(basisBps, bok, p.ExpectedEntrySpreadBps, e.cfg.BasisStopBps); shouldClose {
-			return true, reason
-		}
-	} else {
-		// D-108 A5 旧门禁（BasisStopBps<=0 时回退）：basisBps > swapArbBasisExitBps → 平仓。
-		if basisBps, bok := e.currentBasisBps(p); bok {
-			if basisBps > swapArbBasisExitBps {
-				return true, fmt.Sprintf("basis loss limit %.1f bps > %.1f", basisBps, swapArbBasisExitBps)
-			}
-		}
+// harvestCheck D-341 S1：XASSET 收敛止盈——spread_now ≤ harvest_floor（monitor 滚动 q25 分位数
+// 收割线，MIN_CAPTURE 防贴线 churn 由 monitor 计算侧保证）→ 带底收割。monitor 缺行/floor NULL
+// → 不触发（诚实空态；数据自 monitor 工具 S1 列）。pairKey=D-335 同款（CanonicalSell-TrimSuffix）。
+func (e *Engine) harvestCheck(ctx context.Context, p *pgstore.Position) (bool, string) {
+	pairKey := canonicalFromOppID(p.OpportunityID)
+	opp, err := e.store.GetOpportunity(ctx, p.OpportunityID)
+	if err != nil || opp == nil {
+		return false, ""
+	}
+	if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
+		pairKey = *opp.CanonicalSell + "-" + strings.TrimSuffix(opp.Canonical, "USD")
+	}
+	entryBps, _, floor, hasFloor, ok, err := e.store.LatestXAssetEntryGate(ctx, pairKey, xassetEntryGateMaxAge)
+	if err != nil || !ok || !hasFloor {
+		return false, ""
+	}
+	if entryBps <= floor {
+		return true, fmt.Sprintf("harvest: spread %.2f ≤ floor %.2f (+%.2f bps captured)", entryBps, floor, floor-entryBps)
 	}
 	return false, ""
 }
