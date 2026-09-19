@@ -17,7 +17,7 @@ type CexUniverseRow struct {
 	FirstSeen                          time.Time
 	LastAlertTS                        *time.Time
 	HedgeCanonical, Tier               string
-	FundingAnn, Vol24h                 *float64
+	FundingAnn, Vol24h, LastBasisBps   *float64
 	CtVal                              *float64 // D-311：合约面值（1 张=基础资产数），nil=未知
 }
 
@@ -37,7 +37,8 @@ type CexRadarRow struct {
 func (s *Store) ListCexUniverse(ctx context.Context) (map[string]CexUniverseRow, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT venue, symbol, base, underlying_class, status, launch_ts,
-		       first_seen, last_alert_ts, hedge_canonical, tier, last_funding_ann, last_vol24h, ct_val
+		       first_seen, last_alert_ts, hedge_canonical, tier, last_funding_ann, last_vol24h, ct_val,
+		       last_basis_bps
 		FROM fin_cex_universe`)
 	if err != nil {
 		return nil, fmt.Errorf("list cex_universe: %w", err)
@@ -47,7 +48,8 @@ func (s *Store) ListCexUniverse(ctx context.Context) (map[string]CexUniverseRow,
 	for rows.Next() {
 		var r CexUniverseRow
 		if err := rows.Scan(&r.Venue, &r.Symbol, &r.Base, &r.Class, &r.Status, &r.LaunchTS,
-			&r.FirstSeen, &r.LastAlertTS, &r.HedgeCanonical, &r.Tier, &r.FundingAnn, &r.Vol24h, &r.CtVal); err != nil {
+			&r.FirstSeen, &r.LastAlertTS, &r.HedgeCanonical, &r.Tier, &r.FundingAnn, &r.Vol24h, &r.CtVal,
+			&r.LastBasisBps); err != nil {
 			return nil, err
 		}
 		out[r.Venue+"|"+r.Symbol] = r
@@ -69,8 +71,8 @@ func (s *Store) UpsertCexUniverse(ctx context.Context, rows []CexUniverseRow, no
 	for _, r := range rows {
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO fin_cex_universe (venue, symbol, base, underlying_class, status,
-				launch_ts, last_seen, hedge_canonical, tier, last_funding_ann, last_vol24h, ct_val)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+				launch_ts, last_seen, hedge_canonical, tier, last_funding_ann, last_vol24h, ct_val, last_basis_bps)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
 			ON CONFLICT (venue, symbol) DO UPDATE SET
 				base = EXCLUDED.base,
 				underlying_class = EXCLUDED.underlying_class,
@@ -81,9 +83,11 @@ func (s *Store) UpsertCexUniverse(ctx context.Context, rows []CexUniverseRow, no
 				tier = EXCLUDED.tier,
 				last_funding_ann = EXCLUDED.last_funding_ann,
 				last_vol24h = EXCLUDED.last_vol24h,
-				ct_val = EXCLUDED.ct_val`,
+				ct_val = EXCLUDED.ct_val,
+				last_basis_bps = EXCLUDED.last_basis_bps`,
 			r.Venue, r.Symbol, r.Base, r.Class, r.Status,
-			r.LaunchTS, now, r.HedgeCanonical, r.Tier, r.FundingAnn, r.Vol24h, r.CtVal); err != nil {
+			r.LaunchTS, now, r.HedgeCanonical, r.Tier, r.FundingAnn, r.Vol24h, r.CtVal,
+			r.LastBasisBps); err != nil {
 			return fmt.Errorf("upsert cex_universe %s|%s: %w", r.Venue, r.Symbol, err)
 		}
 	}

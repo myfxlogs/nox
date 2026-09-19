@@ -42,7 +42,7 @@ type PaperStore interface {
 	ListActivePaperSpotCarry(ctx context.Context) ([]pgstore.PaperSpotCarry, error)
 	ListAccrablePaperSpotCarry(ctx context.Context) ([]pgstore.PaperSpotCarry, error)
 	InsertPaperSpotCarry(ctx context.Context, r *pgstore.PaperSpotCarry) error
-	AccruePaperSpotCarry(ctx context.Context, id int64, lastFundingAnn, accruedAdd float64, lowStreak int) error
+	AccruePaperSpotCarry(ctx context.Context, id int64, lastFundingAnn, accruedAdd float64, lowStreak int, lastBasisBps *float64) error
 	ExitPaperSpotCarry(ctx context.Context, id int64, reason string) error
 }
 
@@ -111,6 +111,7 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, now time.Time) (open
 		r := &pgstore.PaperSpotCarry{
 			Venue: c.u.Venue, Symbol: c.u.Symbol, Side: side,
 			EntryFundingAnn: c.funding, QtyUSD: PaperQtyUSD,
+			EntryBasisBps: c.u.LastBasisBps, LastBasisBps: c.u.LastBasisBps, // D-354 S2：开仓基差快照（NULL 传播）
 		}
 		if err := st.InsertPaperSpotCarry(ctx, r); err != nil {
 			if err == pgstore.ErrPaperExists {
@@ -146,9 +147,13 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, now time.Time) (open
 		} else {
 			streak = 0
 		}
+		var lastBasis *float64
+		if u, ok := uni[p.Venue+"|"+p.Symbol]; ok {
+			lastBasis = u.LastBasisBps // D-354 S2：每轮随 uni 更新（map 既有加载，零新查询）
+		}
 		if p.Status != "active" {
 			// demo 行只累积不自动退（出场=人工/业主域，R1 S5）
-			if err := st.AccruePaperSpotCarry(ctx, p.ID, f, accruedAdd, p.LowStreak); err != nil {
+			if err := st.AccruePaperSpotCarry(ctx, p.ID, f, accruedAdd, p.LowStreak, lastBasis); err != nil {
 				return opened, exited, fmt.Errorf("paper step: accrue demo %d: %w", p.ID, err)
 			}
 			continue
@@ -167,7 +172,7 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, now time.Time) (open
 			exited++
 			continue
 		}
-		if err := st.AccruePaperSpotCarry(ctx, p.ID, f, accruedAdd, streak); err != nil {
+		if err := st.AccruePaperSpotCarry(ctx, p.ID, f, accruedAdd, streak, lastBasis); err != nil {
 			return opened, exited, fmt.Errorf("paper step: accrue %d: %w", p.ID, err)
 		}
 	}
