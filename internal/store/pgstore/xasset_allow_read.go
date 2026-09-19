@@ -56,6 +56,7 @@ type CarryUniverseRow struct {
 	SwapShortPct     *float64
 	SwapFree         bool
 	Structure        string
+	Note             string // D-345：suspect 疑因标注（干净组合空串）
 }
 
 // ReplaceCarryUniverse D-336 S2：写入当轮全行（当前快照语义——先清当轮前全表，
@@ -66,10 +67,10 @@ func (s *Store) ReplaceCarryUniverse(ctx context.Context, rows []CarryUniverseRo
 	for _, r := range rows {
 		batch.Queue(`
 			INSERT INTO fin_carry_universe (canonical, mt_venue, cex_venue, net_annual_pct,
-				funding_annual_pct, swap_long_pct, swap_short_pct, swap_free, structure)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+				funding_annual_pct, swap_long_pct, swap_short_pct, swap_free, structure, note)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
 			r.Canonical, r.MtVenue, r.CexVenue, r.NetAnnualPct, r.FundingAnnualPct,
-			r.SwapLongPct, r.SwapShortPct, r.SwapFree, r.Structure)
+			r.SwapLongPct, r.SwapShortPct, r.SwapFree, r.Structure, r.Note)
 	}
 	br := s.pool.SendBatch(ctx, batch)
 	defer br.Close()

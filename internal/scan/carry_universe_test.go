@@ -172,8 +172,53 @@ func toPgRows(rows []UniverseRow) []pgstore.CarryUniverseRow {
 			Canonical: r.Canonical, MtVenue: r.MtVenue, CexVenue: r.CexVenue,
 			NetAnnualPct: r.NetAnnual, FundingAnnualPct: r.FundingAnn,
 			SwapLongPct: r.SwapLongPct, SwapShortPct: r.SwapShortPct,
-			SwapFree: r.SwapFree, Structure: r.Structure,
+			SwapFree: r.SwapFree, Structure: r.Structure, Note: r.Note,
 		})
 	}
 	return out
+}
+
+// TestD345_SuspectGate D-345：任一输入腿 |年化|>100% → 行仍落表但 net=0+swap_free=false+note
+// （不删行保观测，剔除排名）。红=现净 carry 481.5 窜首霸榜（DOT 脏源实证形态：
+// broker 1314615 DOTUSDT swap_long=−469.5%/yr 离谱定价）。
+func TestD345_SuspectGate(t *testing.T) {
+	st := &fakeScanStore{
+		facts: []fact.Fact{
+			{Kind: "funding", Venue: "binance", Symbol: "BTCUSDT", Value: 6.65, Ts: time.Now()},
+			{Kind: "swap_long", Venue: "277842155", Symbol: "BTCUSD", Value: 0, Ts: time.Now()},
+			{Kind: "swap_short", Venue: "277842155", Symbol: "BTCUSD", Value: 0, Ts: time.Now()},
+			{Kind: "funding", Venue: "binance", Symbol: "DOTUSDT", Value: 12.0, Ts: time.Now()},
+			{Kind: "swap_long", Venue: "1314615", Symbol: "DOTUSDT", Value: -469.5, Ts: time.Now()}, // 脏源
+		},
+		mappings: []pgstore.SymbolMapping{
+			{Venue: "277842155", BrokerSymbol: "BTCUSD", Canonical: "BTC"},
+			{Venue: "1314615", BrokerSymbol: "DOTUSDT", Canonical: "DOT"},
+		},
+	}
+	res, err := NewCarryUniverseScanner(st).Run(context.Background(), time.Now().Add(-24*time.Hour))
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(res.Rows) != 2 {
+		t.Fatalf("rows=%d, want 2: %+v", len(res.Rows), res.Rows)
+	}
+	// 剔除排名：健康 BTC 居首，suspect DOT 垫底（红=现 DOT 481.5 窜首）
+	if res.Rows[0].Canonical != "BTC" || res.Rows[1].Canonical != "DOT" {
+		t.Fatalf("排序错（suspect 行应垫底）: %+v", res.Rows)
+	}
+	dot := res.Rows[1]
+	if dot.NetAnnual != 0 {
+		t.Errorf("DOT net = %v, want 0（红=现 481.5 上榜）", dot.NetAnnual)
+	}
+	if dot.SwapFree {
+		t.Error("DOT swap_free = true, want false（脏源非免息）")
+	}
+	if dot.Note != "suspect: swap 469.5%" {
+		t.Errorf("DOT note = %q, want %q", dot.Note, "suspect: swap 469.5%")
+	}
+	// 健康行不受门误伤：note 空、net 正常、swap_free 保持
+	btc := res.Rows[0]
+	if btc.Note != "" || btc.NetAnnual < 6.6 || !btc.SwapFree {
+		t.Errorf("BTC 健康行被门误伤: %+v", btc)
+	}
 }

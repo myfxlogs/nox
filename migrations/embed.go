@@ -265,3 +265,6 @@ var HarvestCycleSQL string
 
 //go:embed 0107_carry_universe.sql
 var CarryUniverseSQL string
+
+//go:embed 0108_carry_universe_note.sql
+var CarryUniverseNoteSQL string

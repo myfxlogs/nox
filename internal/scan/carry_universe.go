@@ -33,6 +33,7 @@ type UniverseRow struct {
 	SwapShortPct *float64
 	SwapFree     bool
 	Structure    string
+	Note         string // D-345：suspect 疑因标注（干净组合空串）
 }
 
 // ScanResult 一轮扫描输出（每 canonical 取 max(net) 一行，net 降序）。
@@ -72,6 +73,26 @@ func normalizeJoinKey(s string) string {
 		return r
 	}
 	return s
+}
+
+// SUSPECT_PCT D-345：输入腿年化疑源线（%）。DOT 脏源实证（broker 1314615 DOTUSDT
+// swap_long=−469.5%/yr 离谱定价致假机会霸榜=发现层失能）：越界行不删（保观测），
+// net=0+swap_free=false+note 剔除排名，digest/告警自然排除。
+const SUSPECT_PCT = 100.0
+
+// suspectNote D-345：任一输入腿 |年化|>SUSPECT_PCT → 返回疑因 note；干净组合返回 ""。
+func suspectNote(swapPct, fundingPct float64) string {
+	parts := make([]string, 0, 2)
+	if abs(swapPct) > SUSPECT_PCT {
+		parts = append(parts, fmt.Sprintf("swap %.1f%%", abs(swapPct)))
+	}
+	if abs(fundingPct) > SUSPECT_PCT {
+		parts = append(parts, fmt.Sprintf("funding %.1f%%", abs(fundingPct)))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "suspect: " + strings.Join(parts, ", ")
 }
 
 // Run 一轮扫描：facts 近 24h 双面→join→结构计算→排序。
@@ -167,20 +188,28 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 		if ml, ok := longByCanon[canonical]; ok {
 			// 多 CFD+空 perp：net=funding_ann−swap_long_cost（funding>0 空头收；swap_long<0 成本）
 			net := cf.val - ml.val
-			candidates = append(candidates, UniverseRow{
+			row := UniverseRow{
 				Canonical: canonical, MtVenue: ml.venue, CexVenue: cf.venue,
 				NetAnnual: net, FundingAnn: cf.val, SwapLongPct: &ml.val,
 				SwapFree: ml.val == 0, Structure: "long_cfd_short_perp",
-			})
+			}
+			if note := suspectNote(ml.val, cf.val); note != "" { // D-345：脏源行 net=0 剔除排名
+				row.NetAnnual, row.SwapFree, row.Note = 0, false, note
+			}
+			candidates = append(candidates, row)
 		}
 		if ms, ok := shortByCanon[canonical]; ok {
 			// 空 CFD+多 perp：net=swap_short_recv−funding_ann（funding<0 多头收）
 			net := ms.val - cf.val
-			candidates = append(candidates, UniverseRow{
+			row := UniverseRow{
 				Canonical: canonical, MtVenue: ms.venue, CexVenue: cf.venue,
 				NetAnnual: net, FundingAnn: cf.val, SwapShortPct: &ms.val,
 				SwapFree: ms.val == 0, Structure: "short_cfd_long_perp",
-			})
+			}
+			if note := suspectNote(ms.val, cf.val); note != "" { // D-345：脏源行 net=0 剔除排名
+				row.NetAnnual, row.SwapFree, row.Note = 0, false, note
+			}
+			candidates = append(candidates, row)
 		}
 		if len(candidates) == 0 {
 			continue
