@@ -5,20 +5,13 @@ import (
 	"context"
 	"testing"
 	"time"
-
-	"arb/internal/testutil"
 )
 
 // trxVoteRebalanceTestStore 连接 ARB_TEST_PG_DSN 测试库，TRUNCATE fin_trx_vote_rebalance 隔离数据。
 func trxVoteRebalanceTestStore(t *testing.T) *Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	s := sharedTestStore(t)
 	ctx := context.Background()
-	s, err := New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	t.Cleanup(s.Close)
 	prepareTestSchema(t, s)
 	if _, err := s.pool.Exec(ctx, "TRUNCATE fin_trx_vote_rebalance CASCADE"); err != nil {
 		t.Fatalf("TRUNCATE fin_trx_vote_rebalance: %v", err)

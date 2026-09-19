@@ -3,24 +3,14 @@ package pgstore
 import (
 	"context"
 	"testing"
-
-	"arb/internal/testutil"
 )
 
 // D-195-B：position_legs attempt 字段 + Position intent 字段 CRUD 测试（DSN-gated 真库）。
 
 func testAttemptStore(t *testing.T) *Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	s := sharedTestStore(t)
 	ctx := context.Background()
-	s, err := New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	if err := s.Migrate(ctx); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	t.Cleanup(func() { s.Close() })
 	if _, err := s.pool.Exec(ctx, `TRUNCATE positions, position_legs CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}

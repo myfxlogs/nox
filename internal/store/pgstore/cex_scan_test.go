@@ -5,20 +5,13 @@ import (
 	"context"
 	"database/sql"
 	"testing"
-
-	"arb/internal/testutil"
 )
 
 // cexScanTestStore 连接 ARB_TEST_PG_DSN，迁移后 TRUNCATE 隔离。
 func cexScanTestStore(t *testing.T) *Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	s := sharedTestStore(t)
 	ctx := context.Background()
-	s, err := New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	t.Cleanup(s.Close)
 	prepareTestSchema(t, s)
 	if _, err := s.pool.Exec(ctx, "TRUNCATE fin_cex_earn_apr, fin_cex_spread CASCADE"); err != nil {
 		t.Fatalf("TRUNCATE: %v", err)

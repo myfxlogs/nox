@@ -8,20 +8,12 @@ import (
 	"time"
 
 	"arb/internal/fact"
-	"arb/internal/testutil"
 )
 
 func settleAvgsTestStore(t *testing.T) *Store {
 	t.Helper()
+	st := sharedTestStore(t)
 	ctx := context.Background()
-	st, err := New(ctx, testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	t.Cleanup(st.Close)
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
 	if _, err := st.Pool().Exec(ctx, `TRUNCATE facts`); err != nil {
 		t.Fatalf("TRUNCATE facts: %v", err)
 	}

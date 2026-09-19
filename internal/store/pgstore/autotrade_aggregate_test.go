@@ -6,8 +6,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"arb/internal/testutil"
 )
 
 // aggSeq 聚合测试 opp_id 唯一性计数器（避免同纳秒撞 opp_id）。
@@ -19,13 +17,8 @@ var aggSeq int64
 
 func testAggregateStore(t *testing.T) *Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	s := sharedTestStore(t)
 	ctx := context.Background()
-	s, err := New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	t.Cleanup(s.Close)
 	prepareTestSchema(t, s)
 	if _, err := s.pool.Exec(ctx, `TRUNCATE positions, position_cashflows, position_legs, position_settlements CASCADE`); err != nil {
 		t.Fatalf("TRUNCATE positions/cashflows/legs/settlements: %v", err)

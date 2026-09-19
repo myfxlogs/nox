@@ -9,21 +9,14 @@ import (
 	"time"
 
 	"arb/internal/store/pgstore"
-	"arb/internal/testutil"
+	"arb/internal/testutil/storetest"
 )
 
-// d350Store DSN 测试库（scan 包自建 helper：Migrate 幂等建全量 schema）。
+// d350Store DSN 测试库（scan 包 helper：走 storetest.SharedStore 共享池，D-351 S1；
+// 行级隔离由本 helper 的 TRUNCATE 自持）。
 func d350Store(t *testing.T) *pgstore.Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
-	s, err := pgstore.New(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	t.Cleanup(s.Close)
-	if err := s.Migrate(context.Background()); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	s := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
 	if _, err := s.Pool().Exec(context.Background(),
 		`TRUNCATE fin_carry_universe, fin_cex_universe, paper_spot_carry RESTART IDENTITY`); err != nil {
 		t.Fatalf("TRUNCATE: %v", err)

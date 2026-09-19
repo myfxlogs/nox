@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"sync"
 	"testing"
-
-	"arb/internal/testutil"
 )
 
 // testStore 连接 ARB_TEST_PG_DSN 指定的专用测试库（可销毁数据）。
@@ -14,15 +12,9 @@ import (
 // 安全闸（ref/arbcn 同款教训）：测试会对目标表 TRUNCATE，绝不允许指向非测试库——TestDSN fail-closed 门禁。
 func testStore(t *testing.T) *Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
-	ctx := context.Background()
-	s, err := New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	t.Cleanup(s.Close)
+	s := sharedTestStore(t)
 	prepareTestSchema(t, s)
-	if _, err := s.pool.Exec(ctx, "TRUNCATE investment_records, position_daily_income CASCADE"); err != nil {
+	if _, err := s.pool.Exec(context.Background(), "TRUNCATE investment_records, position_daily_income CASCADE"); err != nil {
 		t.Fatalf("TRUNCATE investment_records, position_daily_income: %v", err)
 	}
 	return s

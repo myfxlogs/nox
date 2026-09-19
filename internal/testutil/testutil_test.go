@@ -1,9 +1,14 @@
 package testutil
 
 import (
+	"context"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // setEnv 设置并注册清理（测试隔离）。
@@ -120,5 +125,80 @@ func TestTestDSN_NonTestDB_Rejected(t *testing.T) {
 	})
 	if !failed {
 		t.Fatal("指向非 test 库应 Fatalf（Failed），但未 Failed")
+	}
+}
+
+// TestNormalizeDSN_ConnectTimeoutAppended D-351 T1（S2）：normalizeDSN 输出必须含
+// connect_timeout=5——连接类故障 120s 挂死变 5s 快败（pgx/libpq 原生参数）。
+func TestNormalizeDSN_ConnectTimeoutAppended(t *testing.T) {
+	for _, dsn := range []string{
+		"postgres://arb:arb@localhost:5435/arb_test",
+		"postgres://arb:arb@localhost:5435/arb_test?sslmode=disable",
+		"postgres://arb:arb@localhost:5435/arb_test?options=-c%20lock_timeout=10s",
+	} {
+		got := normalizeDSN(dsn)
+		if strings.Count(got, "connect_timeout=5") != 1 {
+			t.Errorf("normalizeDSN 应追加恰一个 connect_timeout=5，input=%s got=%s", dsn, got)
+		}
+		if strings.Count(got, "connect_timeout=") != 1 {
+			t.Errorf("已有 connect_timeout 不应重复追加，input=%s got=%s", dsn, got)
+		}
+	}
+	// 已有自定义 connect_timeout=3 → 原样保留不覆盖
+	got := normalizeDSN("postgres://arb:arb@localhost:5435/arb_test?connect_timeout=3")
+	if !strings.Contains(got, "connect_timeout=3") {
+		t.Errorf("已有 connect_timeout=3 应保留，got=%s", got)
+	}
+}
+
+// TestNormalizeDSN_ConnectTimeoutParsedByPgx T1 补充锚：pgx 必须真认这个参数
+// （ConnectTimeout=5s）——防「追加了个 pgx 不认的键=静默无效」伪绿。
+func TestNormalizeDSN_ConnectTimeoutParsedByPgx(t *testing.T) {
+	cfg, err := pgx.ParseConfig(normalizeDSN("postgres://arb:arb@localhost:5435/arb_test"))
+	if err != nil {
+		t.Fatalf("pgx.ParseConfig: %v", err)
+	}
+	if cfg.ConnectTimeout != 5*time.Second {
+		t.Errorf("pgx ConnectTimeout = %v, want 5s（红=connect_timeout 未被 pgx 识别）", cfg.ConnectTimeout)
+	}
+}
+
+// TestConnectTimeout_FastFail T1 行为锚：不可达主机（blackhole，SYN 无应答）在
+// connect_timeout=5 下必须秒级快败（旧径=OS 默认 ~130s 挂死）。
+func TestConnectTimeout_FastFail(t *testing.T) {
+	dsn := normalizeDSN("postgres://postgres:test@10.255.255.1:5432/arb_test")
+	start := time.Now()
+	conn, err := pgx.Connect(context.Background(), dsn)
+	elapsed := time.Since(start)
+	if err == nil {
+		conn.Close(context.Background())
+		t.Fatal("blackhole 地址不应连接成功")
+	}
+	if elapsed > 20*time.Second {
+		t.Errorf("连接耗时 %v（>20s），connect_timeout=5 快败未生效（旧径 120s 挂死）", elapsed)
+	}
+}
+
+// TestPerPkgDSN D-351 T1（S3 纯函数锚）：env 指向共享 arb_test → 改写 arb_test_<tag>；
+// 其他库名（CI 四库配方）与空 tag 原样不动。
+func TestPerPkgDSN(t *testing.T) {
+	got, changed := perPkgDSN("postgres://u:p@h:5432/arb_test?sslmode=disable", "scan")
+	if !changed || !strings.Contains(got, "/arb_test_scan?") || strings.Contains(got, "host=/arb_test") {
+		t.Errorf("arb_test 应改写为 arb_test_scan: changed=%v got=%s", changed, got)
+	}
+	if u, _ := url.Parse(got); u.Path != "/arb_test_scan" {
+		t.Errorf("改写后 Path = %q, want /arb_test_scan", u.Path)
+	}
+	for _, dsn := range []string{
+		"postgres://u:p@h:5432/arb_service_test", // CI 显式库名
+		"postgres://u:p@h:5432/arb_exec_test",
+		"postgres://u:p@h:5432/arb_test_local",
+	} {
+		if got, changed := perPkgDSN(dsn, "scan"); changed {
+			t.Errorf("非 arb_test 库名不应改写: %s → %s", dsn, got)
+		}
+	}
+	if got, changed := perPkgDSN("postgres://u:p@h:5432/arb_test", ""); changed {
+		t.Errorf("空 tag（推导失败）应原样返回: got=%s", got)
 	}
 }

@@ -5,8 +5,6 @@ import (
 	"context"
 	"testing"
 	"time"
-
-	"arb/internal/testutil"
 )
 
 func ptrFloat(v float64) *float64 { return &v }
@@ -14,13 +12,8 @@ func ptrFloat(v float64) *float64 { return &v }
 // repoTestStore 连接 ARB_TEST_PG_DSN 测试库，TRUNCATE fin_repo_rates + alerts 隔离数据。
 func repoTestStore(t *testing.T) *Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	s := sharedTestStore(t)
 	ctx := context.Background()
-	s, err := New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	t.Cleanup(s.Close)
 	prepareTestSchema(t, s)
 	if _, err := s.pool.Exec(ctx, "TRUNCATE fin_repo_rates, alerts CASCADE"); err != nil {
 		t.Fatalf("TRUNCATE fin_repo_rates, alerts: %v", err)

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"arb/internal/capital"
-	"arb/internal/testutil"
 )
 
 // D-193-B：CapitalAccount/Snapshot/Movement 持久化测试（DSN-gated）。
@@ -14,13 +13,8 @@ import (
 
 func testCapitalStore(t *testing.T) *Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	s := sharedTestStore(t)
 	ctx := context.Background()
-	s, err := New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	t.Cleanup(s.Close)
 	prepareTestSchema(t, s)
 	if _, err := s.pool.Exec(ctx, `TRUNCATE capital_accounts, capital_account_venue_links, capital_snapshots, ledger CASCADE`); err != nil {
 		t.Fatalf("truncate capital tables: %v", err)

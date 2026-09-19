@@ -5,20 +5,13 @@ import (
 	"context"
 	"testing"
 	"time"
-
-	"arb/internal/testutil"
 )
 
 // eventCasesTestStore 连接 ARB_TEST_PG_DSN，迁移后 TRUNCATE 隔离。
 func eventCasesTestStore(t *testing.T) *Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	s := sharedTestStore(t)
 	ctx := context.Background()
-	s, err := New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	t.Cleanup(s.Close)
 	prepareTestSchema(t, s)
 	if _, err := s.pool.Exec(ctx, "TRUNCATE event_cases, paper_trades CASCADE"); err != nil {
 		t.Fatalf("TRUNCATE: %v", err)

@@ -4,22 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
-
-	"arb/internal/testutil"
 )
 
 // D-259 S1: signal_config store helper — defaults + config-driven override + missing-key log.
 func TestLoadCNFIFundSignalConfig_DefaultsAndOverride(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
-	st, err := New(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("pgstore: %v", err)
-	}
-	t.Cleanup(st.Close)
+	st := sharedTestStore(t)
 	ctx := context.Background()
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
 	t.Cleanup(func() {
 		_, _ = st.Pool().Exec(ctx, `DELETE FROM cnfi_signal_config WHERE key IN ('underperf_bps','layer_dd_pct','rank_shift','alerts_enabled')`)
 	})

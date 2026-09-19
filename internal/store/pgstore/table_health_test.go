@@ -5,20 +5,12 @@ import (
 	"context"
 	"testing"
 	"time"
-
-	"arb/internal/testutil"
 )
 
 // tableHealthTestStore 连接 ARB_TEST_PG_DSN，迁移后隔离。
 func tableHealthTestStore(t *testing.T) *Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
-	ctx := context.Background()
-	s, err := New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	t.Cleanup(s.Close)
+	s := sharedTestStore(t)
 	prepareTestSchema(t, s)
 	return s
 }

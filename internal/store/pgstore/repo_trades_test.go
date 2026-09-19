@@ -5,20 +5,13 @@ import (
 	"context"
 	"testing"
 	"time"
-
-	"arb/internal/testutil"
 )
 
 // repoTradesTestStore 连接 ARB_TEST_PG_DSN 测试库，TRUNCATE cnfi_repo_trades 隔离数据。
 func repoTradesTestStore(t *testing.T) *Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	s := sharedTestStore(t)
 	ctx := context.Background()
-	s, err := New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	t.Cleanup(s.Close)
 	prepareTestSchema(t, s)
 	if _, err := s.pool.Exec(ctx, "TRUNCATE cnfi_repo_trades, cnfi_repo_ops, alerts, fin_repo_rates, cnfi_repo_config CASCADE"); err != nil {
 		t.Fatalf("TRUNCATE: %v", err)
@@ -351,17 +344,8 @@ func TestRepoTrade_FeeRates(t *testing.T) {
 
 // D-276 测试：迁移回填——预插无 fee_cny 行 → Migrate → fee_cny 回填正确。
 func TestRepoTrade_MigrateBackfillFee(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	s := sharedTestStore(t)
 	ctx := context.Background()
-	s, err := New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	t.Cleanup(s.Close)
-	// 全量迁移（含 0087）
-	if err := s.Migrate(ctx); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
 	// 清表避免唯一约束冲突
 	if _, err := s.pool.Exec(ctx, "TRUNCATE cnfi_repo_trades"); err != nil {
 		t.Fatalf("truncate: %v", err)
@@ -383,7 +367,7 @@ func TestRepoTrade_MigrateBackfillFee(t *testing.T) {
 	}
 	// 验证回填值
 	var fee float64
-	err = s.pool.QueryRow(ctx, `SELECT fee_cny FROM cnfi_repo_trades WHERE instrument_code = '204001' AND principal_cny = 407000`).Scan(&fee)
+	err := s.pool.QueryRow(ctx, `SELECT fee_cny FROM cnfi_repo_trades WHERE instrument_code = '204001' AND principal_cny = 407000`).Scan(&fee)
 	if err != nil {
 		t.Fatalf("query fee: %v", err)
 	}

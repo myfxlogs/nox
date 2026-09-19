@@ -4,20 +4,12 @@ package pgstore
 import (
 	"context"
 	"testing"
-
-	"arb/internal/testutil"
 )
 
 // repoConfigTestStore 连接 ARB_TEST_PG_DSN 测试库，迁移后直接测试（单行表 id=1 由 migration 插入）。
 func repoConfigTestStore(t *testing.T) *Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
-	ctx := context.Background()
-	s, err := New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	t.Cleanup(s.Close)
+	s := sharedTestStore(t)
 	prepareTestSchema(t, s)
 	return s
 }

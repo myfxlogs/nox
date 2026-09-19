@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"arb/internal/capital"
-	"arb/internal/testutil"
 )
 
 // D-193-C：Hypothesis/Decision/Drawdown/Review/Report 持久化测试（DSN-gated）。
@@ -14,13 +13,8 @@ import (
 
 func testCapitalStoreC(t *testing.T) *Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	s := sharedTestStore(t)
 	ctx := context.Background()
-	s, err := New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	t.Cleanup(s.Close)
 	prepareTestSchema(t, s)
 	if _, err := s.pool.Exec(ctx, `TRUNCATE capital_accounts, capital_account_venue_links, capital_snapshots, capital_decisions, hypotheses, position_reviews, ledger, position_settlements, positions CASCADE`); err != nil {
 		t.Fatalf("truncate capital tables: %v", err)

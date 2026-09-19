@@ -4,21 +4,11 @@ package pgstore
 import (
 	"context"
 	"testing"
-
-	"arb/internal/testutil"
 )
 
 func TestCexEarnJudgment_UpsertDedup(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	s := sharedTestStore(t)
 	ctx := context.Background()
-	s, err := New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	defer s.Close()
-	if err := s.Migrate(ctx); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
 	if _, err := s.Pool().Exec(ctx, "TRUNCATE fin_cex_earn_judgment"); err != nil {
 		t.Fatalf("TRUNCATE: %v", err)
 	}

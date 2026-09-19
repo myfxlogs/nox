@@ -3,19 +3,12 @@ package pgstore
 import (
 	"context"
 	"testing"
-
-	"arb/internal/testutil"
 )
 
 // TestListDisabledStrategies DSN-gated 真库测试：插入 disabled=true/false 行，验证只返回 disabled=true 集合。
 func TestListDisabledStrategies(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	s := sharedTestStore(t)
 	ctx := context.Background()
-	s, err := New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	t.Cleanup(s.Close)
 	prepareTestSchema(t, s)
 	if _, err := s.pool.Exec(ctx, `TRUNCATE strategy_stats`); err != nil {
 		t.Fatalf("TRUNCATE strategy_stats: %v", err)
@@ -52,13 +45,8 @@ func TestListDisabledStrategies(t *testing.T) {
 
 // TestListDisabledStrategies_EmptyTable 空表 → 空集合（不报错）。
 func TestListDisabledStrategies_EmptyTable(t *testing.T) {
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	s := sharedTestStore(t)
 	ctx := context.Background()
-	s, err := New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	t.Cleanup(s.Close)
 	prepareTestSchema(t, s)
 	if _, err := s.pool.Exec(ctx, `TRUNCATE strategy_stats`); err != nil {
 		t.Fatalf("TRUNCATE strategy_stats: %v", err)

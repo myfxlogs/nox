@@ -3,20 +3,13 @@ package pgstore
 import (
 	"context"
 	"testing"
-
-	"arb/internal/testutil"
 )
 
 // systemSettingsTestStore 连接 ARB_TEST_PG_DSN 测试库，TRUNCATE system_settings 隔离数据。
 func systemSettingsTestStore(t *testing.T) *Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	s := sharedTestStore(t)
 	ctx := context.Background()
-	s, err := New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	t.Cleanup(s.Close)
 	prepareTestSchema(t, s)
 	if _, err := s.pool.Exec(ctx, "TRUNCATE system_settings"); err != nil {
 		t.Fatalf("TRUNCATE system_settings: %v", err)

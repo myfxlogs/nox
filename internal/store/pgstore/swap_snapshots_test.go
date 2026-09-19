@@ -4,8 +4,6 @@ import (
 	"context"
 	"testing"
 	"time"
-
-	"arb/internal/testutil"
 )
 
 // D-110 P2: position_swap_snapshots 集成测试（DSN-gated）。
@@ -13,13 +11,8 @@ import (
 
 func testSwapSnapshotStore(t *testing.T) *Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
+	s := sharedTestStore(t)
 	ctx := context.Background()
-	s, err := New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	t.Cleanup(s.Close)
 	prepareTestSchema(t, s)
 	if _, err := s.pool.Exec(ctx, "TRUNCATE position_swap_snapshots CASCADE"); err != nil {
 		t.Fatalf("TRUNCATE position_swap_snapshots: %v", err)
