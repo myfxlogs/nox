@@ -66,6 +66,14 @@ func (s *Store) ListAccrablePaperSpotCarry(ctx context.Context) ([]PaperSpotCarr
 	return s.scanPaperSpotCarry(ctx, `SELECT `+paperSpotCarryCols+` FROM paper_spot_carry WHERE status IN ('active','demo') ORDER BY id`)
 }
 
+// ListPaperSpotCarryBoard D-352 S1：纸面轨前端卡行源——active+demo 全量+近 window 内
+// exited（exit_ts ≥ now−window；退出原因=「坑还是机会」的实证记录流，窗口防表无限长）。
+func (s *Store) ListPaperSpotCarryBoard(ctx context.Context, recentWindow time.Duration) ([]PaperSpotCarry, error) {
+	return s.scanPaperSpotCarry(ctx, `SELECT `+paperSpotCarryCols+` FROM paper_spot_carry
+		WHERE status IN ('active','demo') OR (status = 'exited' AND exit_ts >= now() - ($1::double precision * interval '1 second'))
+		ORDER BY id`, recentWindow.Seconds())
+}
+
 // AccruePaperSpotCarry 逐轮累积：accrued += last_funding_ann/100/365×间隔天×qty；回写 last_funding_ann/last_accrue_ts/low_streak。
 // 返回更新后的 low_streak 与本轮增量。
 func (s *Store) AccruePaperSpotCarry(ctx context.Context, id int64, lastFundingAnn float64, accruedAdd float64, lowStreak int) error {
@@ -147,8 +155,8 @@ func (s *Store) ExitPaperSpotCarry(ctx context.Context, id int64, reason string)
 const paperSpotCarryCols = `id, venue, symbol, side, entry_funding_ann, entry_ts, qty_usd,
 	last_funding_ann, accrued_usd, last_accrue_ts, low_streak, exit_ts, exit_reason, status, note`
 
-func (s *Store) scanPaperSpotCarry(ctx context.Context, q string) ([]PaperSpotCarry, error) {
-	rows, err := s.pool.Query(ctx, q)
+func (s *Store) scanPaperSpotCarry(ctx context.Context, q string, args ...any) ([]PaperSpotCarry, error) {
+	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list paper spot carry: %w", err)
 	}
