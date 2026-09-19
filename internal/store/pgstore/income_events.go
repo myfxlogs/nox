@@ -66,6 +66,24 @@ func (s *Store) InsertIncomeEvents(ctx context.Context, evs []IncomeEvent) (int6
 	return written, nil
 }
 
+// SumIncomeForDay D-349 S1：CEX perp 腿对账实际值——venue+symbol 当日 income 实收日和。
+// 账户级口径（不绑 position_id——income 行 position_id 匹配为账本增强非对账前提，D-334ab 可空）。
+// 返回 (金额和, 行数)；行数供「0 行=未到结算窗」语义（无行≠实收 0）。
+func (s *Store) SumIncomeForDay(ctx context.Context, venue, symbol string, day time.Time) (float64, int, error) {
+	start := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, time.UTC)
+	end := start.AddDate(0, 0, 1)
+	var sum float64
+	var rows int
+	err := s.pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(amount_usd), 0), COUNT(*) FROM income_events
+		 WHERE venue = $1 AND symbol = $2 AND ts >= $3 AND ts < $4`,
+		venue, symbol, start, end).Scan(&sum, &rows)
+	if err != nil {
+		return 0, 0, fmt.Errorf("sum income for day: %w", err)
+	}
+	return sum, rows, nil
+}
+
 // MatchOpenLegForIncome income 行→OPEN 仓腿匹配：venue+symbol 在活跃仓（四态，同
 // positions_active_dedup_key_idx 口径）OPEN 腿中**唯一命中**才返回 (posID, legNo, 1)；
 // 零命中 → (0,0,0)；多义 → (last, hits>1)——调用方按 hits==1 才采信（不猜，venue 侧可重查）。
