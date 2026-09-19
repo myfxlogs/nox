@@ -2,8 +2,6 @@
 package adapter
 
 import (
-	"strings"
-
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
 )
 
@@ -18,19 +16,23 @@ const (
 	SwapModeUncalibrated                   // 未标定 / 矛盾数据：跳过 + 计数日志（mode 7/8/10+）
 )
 
-// swapFreeServerPrefixes swap-free 账单豁免白名单（server 前缀匹配，D-300 S0 定案）。
-// 白名单内 venue 全品种 swap 置 0——规格字段（含名义标价）不代表账单实收。
-// 新增 venue 须业主确认账单层豁免后追加；删改走 D# 留痕。
-var swapFreeServerPrefixes = []string{"Exness"}
+// swapFreeWhitelist swap-free 账单豁免白名单（server→exempt symbol 集合，D-342R1 修订
+// D-300 S0 的 server 前缀级判定）。语义：集合内 "*"=该 server 全品种免（real 账户账单级
+// 豁免，D-300 S0 实证：3001157 XAUUSDm 名义 -534.9 实收 0）；具名 symbol=仅该形免。
+// D-342R1 收窄实证：Exness-MT5Trial5(277842155) 账单执行 swap（pos 492 XAUUSD247m 实收
+// -0.55/日，2026-09-18 rollover）——D-300「Exness 账单不执行」对 Trial 账户不成立，仅
+// 标准形 XAUUSD 保留免；m/247m 变体走正常值路径（raw bps/day 入 canonical→ledger 入账）。
+// 新增条目须业主确认账单层豁免后追加；删改走 D# 留痕。
+var swapFreeWhitelist = map[string]map[string]bool{
+	"Exness-MT5Real":   {"*": true},
+	"Exness-MT5Real5":  {"*": true},
+	"Exness-MT5Trial5": {"XAUUSD": true},
+}
 
-// swapFreeServer 判断 MT server 是否属 swap-free 豁免白名单（大小写不敏感前缀）。
-func swapFreeServer(server string) bool {
-	for _, p := range swapFreeServerPrefixes {
-		if len(server) >= len(p) && strings.EqualFold(server[:len(p)], p) {
-			return true
-		}
-	}
-	return false
+// swapFreeServer 判定 (server, broker_symbol) 是否属 swap-free 豁免（精确匹配）。
+func swapFreeServer(server, symbol string) bool {
+	set, ok := swapFreeWhitelist[server]
+	return ok && (set["*"] || set[symbol])
 }
 
 // normalizeSwapBpsDaily 归一单方向 swap 原始值为日 bps（正=收，负=付）。

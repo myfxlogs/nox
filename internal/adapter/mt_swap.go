@@ -122,12 +122,15 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 			// D-325 S1：先捕获 raw 模式——下方 Exness override 只作用于 canonical（D-300 S0 裁定），
 			// native variant fact 恒用 raw 值（XAUUSDm 周末腿判据需分辨 XAUUSDm/XAUUSD247m 真实差异）。
 			rawMode := mode
-			// D-300 S0 定案（业主 2026-09-16 两轮断言+规格直连亲证）：Exness swap-free 营销
-			// ——规格字段系名义标价、账单不执行（XAUUSDm SwapLong=-534.9 但实收 0）。
-			// 白名单 venue 全品种 swap 置 0 发射（走 SwapModeNone 零值路径——零息 venue 是 carry
+			// D-300 S0 定案（业主 2026-09-16 两轮断言+规格直连亲证）→D-342R1 修订①（收窄为
+			// (server,broker_symbol) 白名单，mt_swap_mode.go swapFreeWhitelist）：Exness swap-free
+			// 营销——规格字段系名义标价、账单不执行（real 账户 XAUUSDm SwapLong=-534.9 但实收 0）。
+			// 白名单命中 symbol swap 置 0 发射（走 SwapModeNone 零值路径——零息 venue 是 carry
 			// 最佳对手的 facts 语义保留）；同时消解 m 后缀品种折叠对标准 canonical 的名义值污染
 			// （Exness-MT5Real 3001157 XAUUSD canonical 曾被 XAUUSDm 名义 swap 污染为 -1.2481 bps/day）。
-			if swapFreeServer(a.server) && mode != SwapModeNone {
+			// D-342R1：Trial5(277842155) 账单实证执行（492 XAUUSD247m 实收 -0.55/日）→ 仅标准形免，
+			// variant 走正常值路径（raw bps/day 入 canonical→swapledger 入账）。
+			if swapFreeServer(a.server, brokerSym) && mode != SwapModeNone {
 				mode = SwapModeNone // 下游 switch 自动按 emit0 计数（零值路径），此处只覆盖 mode
 			}
 			if mode == SwapModeUncalibrated {

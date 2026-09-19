@@ -200,13 +200,19 @@ func TestNonPXBT_SwapTypeZero_NotOverride(t *testing.T) {
 	}
 }
 
-// TestSwapFreeServerOverride D-300 S0 定案：Exness 白名单 venue 全品种 swap 置 0——
-// 规格 XAUUSDm SwapLong=-534.9（名义标价账单不执行）不得污染 canonical（3001157 实证）。
+// TestSwapFreeServerOverride D-300 S0→D-342R1 修订①：白名单收窄为 (server,broker_symbol) 精确判定——
+// real 账户全品种免（XAUUSDm -534.9 名义标价账单不执行实证）；Trial5 仅标准形免，variant 走值。
 func TestSwapFreeServerOverride(t *testing.T) {
-	if !swapFreeServer("Exness-MT5Real") || !swapFreeServer("exness-mt5trial5") {
-		t.Error("Exness 前缀 server 应命中白名单（大小写不敏感）")
+	if !swapFreeServer("Exness-MT5Real", "XAUUSDm") || !swapFreeServer("Exness-MT5Real5", "XAUUSD247m") {
+		t.Error("real server 通配豁免应命中（D-300 S0 账单级豁免不变）")
 	}
-	if swapFreeServer("ICMarketsSC-Demo") || swapFreeServer("FxPro-MT5 Demo") {
+	if !swapFreeServer("Exness-MT5Trial5", "XAUUSD") {
+		t.Error("Trial5 标准形 XAUUSD 应命中白名单")
+	}
+	if swapFreeServer("Exness-MT5Trial5", "XAUUSDm") || swapFreeServer("Exness-MT5Trial5", "XAUUSD247m") {
+		t.Error("Trial5 variant 不应命中（账单实证执行 swap，D-342R1）")
+	}
+	if swapFreeServer("ICMarketsSC-Demo", "XAUUSD") || swapFreeServer("FxPro-MT5 Demo", "XAUUSD") {
 		t.Error("非白名单 server 不应命中")
 	}
 	// 归一化端到端：白名单下 mode 覆盖为 None → 两方向恒 0
