@@ -239,3 +239,13 @@ func divergences(rows []normRow, divPct, volMinUSD float64) []pgstore.CexEvent {
 func cooldownOK(last *time.Time, now time.Time) bool {
 	return last == nil || now.Sub(*last) >= 24*time.Hour
 }
+
+// basisBps D-354 S1：基差=(mark/index−1)×1e4，round 1 位；mark≤0 或 index≤0 → nil
+// （fail-closed，不臆造；okx 行无 index 面→NULL 诚实缺）。
+func basisBps(mark, index float64) *float64 {
+	if mark <= 0 || index <= 0 {
+		return nil
+	}
+	v := math.Round((mark/index-1)*1e4*10) / 10
+	return &v
+}
