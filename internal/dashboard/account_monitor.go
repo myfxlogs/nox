@@ -203,6 +203,8 @@ func (m *AccountMonitor) poll(ctx context.Context) {
 		}
 		vk := q.VenueKey()
 		// D-077 修复⑩ G2：RPC 冷却——连续超时 ≥2 → 10s 冷却跳过（archive #22 事故防御）。
+		// D-362 S4③ 核证：cooldown/offline 状态以生效键（含 #id 后缀）为键——撞键双配置
+		// 各自独立冷却/在线状态=正确语义（demo 超时不遮蔽 real）。
 		if m.cooldown.Skip(vk) {
 			continue
 		}

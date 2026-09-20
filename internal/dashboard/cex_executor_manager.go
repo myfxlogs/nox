@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"arb/internal/exec"
+	"arb/internal/reconcile"
 )
 
 // CexExecutorManager 管理 CEX 执行器注册。
@@ -63,13 +64,24 @@ func (m *CexExecutorManager) sync(ctx context.Context) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// D-362 S3：撞键归一（同 S1 函数同源调用）——binance:perp 赢家（sim）保 canonical：
+	// allowlist 流量仍打 sim 执行器=零路由变更（D-158 安全语义保持，SSOT §1 案 C）；
+	// 真盘 binance:perp#20 注册但无人调用=休眠可见。gate:perp 单 config 无撞键键不变。
+	// D-362 S4① 核证：ARB_AUTOTRADE_ALLOW_VENUES 匹配在 engine_opp.go:61 用 opp 腿
+	// venue（canonical 形），#id 后缀键天然不命中 allowlist 条目=安全。
+	// D-362 S4② 核证：pipeline 执行路由 reg.Get(leg.VenueKey)（pipeline_execute.go:62 等）
+	// 用仓腿 venue（canonical 形）→ 永不路由到 #id 后缀执行器=休眠不可达。
+	// D-362 S4⑤ 核证：readiness executor_ready 消费 reg.Len()（exec.go:162）——计数语义
+	// =已注册执行器数，休眠 real 执行器使计数 +1（上限语义非白名单，可接受）。
+	winners := cexKeyWinners(cfgs)
 	seen := make(map[string]bool, len(cfgs))
 	for i := range cfgs {
 		c := &cfgs[i]
 		base := resolveExchangeBaseURL(*c)
-		vk := c.Venue + ":" + c.VenueType
+		vk := reconcile.CexVenueKey(c.Venue, c.VenueType, c.ID, winners)
 		seen[vk] = true
 		exe := exec.NewCEXExecutor(c.Venue, c.VenueType, c.APIKey, c.APISecret, c.Passphrase, base, c.Simulated)
+		exe.SetKeyOverride(vk)
 		exe.AlertFn = m.alertFn // D-108 P2 T1：平仓被拒 critical 告警注入
 		m.reg.Register(exe)
 		if !m.keys[vk] {

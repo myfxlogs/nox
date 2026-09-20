@@ -13,6 +13,8 @@ import (
 )
 
 // accountToProto 账户视图 → proto（D-053）。
+// D-362 S4④ 核证：VenueKey 字段随 querier 生效键（撞键非赢家带 #id 后缀）→ Accounts 页
+// 双行可分；Venue/VenueType 数据字段保持原值（binance/perp）+Simulated 徽标区分可读。
 func accountToProto(a *reconcile.AccountInfo, online bool, now time.Time) *v1.AccountInfo {
 	pb := &v1.AccountInfo{
 		VenueKey:   a.VenueKey,
