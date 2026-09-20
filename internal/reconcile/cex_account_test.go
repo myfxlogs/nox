@@ -322,7 +322,8 @@ func TestCEXAccount_BinanceEarnLD(t *testing.T) {
 				{"asset":"LDUSDT","free":"20225","locked":"0"},
 				{"asset":"LDUSDC","free":"18.65","locked":"0"},
 				{"asset":"LDTRX","free":"1000","locked":"0"},
-				{"asset":"LD未知","free":"5","locked":"0"}
+				{"asset":"LD未知","free":"5","locked":"0"},
+				{"asset":"LDO","free":"10","locked":"0"}
 			]}`)
 		case "/api/v3/ticker/price":
 			switch r.URL.Query().Get("symbol") {
@@ -330,6 +331,8 @@ func TestCEXAccount_BinanceEarnLD(t *testing.T) {
 				fmt.Fprint(w, `{"symbol":"USDCUSDT","price":"1.00"}`)
 			case "TRXUSDT":
 				fmt.Fprint(w, `{"symbol":"TRXUSDT","price":"0.28"}`)
+			case "LDOUSDT":
+				fmt.Fprint(w, `{"symbol":"LDOUSDT","price":"1.2"}`)
 			default:
 				http.Error(w, "invalid symbol", http.StatusBadRequest)
 			}
@@ -344,7 +347,9 @@ func TestCEXAccount_BinanceEarnLD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("binance account: %v", err)
 	}
-	want := 0.40 + 20225 + 18.65 + 1000*0.28 // 裸 USDT + LDUSDT(=1) + LDUSDC×1 + LDTRX×0.28；LD未知跳过
+	// R1 兜底序锚：LDO 是真币（LDOUSDT 有对）→ 原币计价 10×1.2=12；旧剥前缀序误剥成 OUSDT
+	// 无对跳过（红=缺口 12）。
+	want := 0.40 + 20225 + 18.65 + 1000*0.28 + 12 // 裸 USDT + LDUSDT(=1) + LDUSDC×1 + LDTRX×0.28 + LDO×1.2；LD未知跳过
 	if acct.Equity < want-0.0001 || acct.Equity > want+0.0001 {
 		t.Errorf("equity want %.4f, got %.4f（LD 前缀未剥则 Earn 全跳过=20524.05 缺口）", want, acct.Equity)
 	}

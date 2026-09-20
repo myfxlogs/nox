@@ -60,16 +60,25 @@ func (q *CEXAccountQuerier) accountBinance(ctx context.Context) (*AccountInfo, e
 		if qty <= 0 {
 			continue
 		}
-		// D-361 S2：Simple Earn 封装币（LD 前缀）剥前缀按底层币计价——LDUSDT→USDT=1、
-		// LDTRX→TRXUSDT ticker；剥后仍无交易对 → 跳过同现规约（明细保留不猜价，
-		// BFUSD/LDXUSD 类「LD 后接非常规币」走同一路径）。
-		asset := strings.TrimPrefix(b.Asset, "LD")
-		if asset == "USDT" {
+		// D-361 S2/R1：LD 剥前缀改兜底序——先按原币计价（真币 LDO→LDOUSDT 有对，防前缀
+		// 误剥真币）；查无对且带 LD 前缀才剥前缀重查底层币（LDTRX→TRXUSDT；LDUSDT 剥后
+		// =USDT 价恒 1）；剥后仍无对 → 跳过同现规约（明细保留不猜价，BFUSD/LDXUSD 类同路径）。
+		if b.Asset == "USDT" {
 			total += qty
 			holdings = append(holdings, &v1.Holding{Ccy: b.Asset, Qty: qty, UsdtValue: qty})
 			continue
 		}
-		price, perr := q.binanceUsdtPrice(ctx, spotBase, asset)
+		price, perr := q.binanceUsdtPrice(ctx, spotBase, b.Asset)
+		if perr != nil && strings.HasPrefix(b.Asset, "LD") {
+			asset := strings.TrimPrefix(b.Asset, "LD")
+			if asset == "USDT" {
+				// LDUSDT = USDT 计价封装，价恒 1
+				total += qty
+				holdings = append(holdings, &v1.Holding{Ccy: b.Asset, Qty: qty, UsdtValue: qty})
+				continue
+			}
+			price, perr = q.binanceUsdtPrice(ctx, spotBase, asset)
+		}
 		if perr != nil {
 			// 无 USDT 对的资产（如仅 BTC 计价的小 alt）：不计入估算，明细保留
 			holdings = append(holdings, &v1.Holding{Ccy: b.Asset, Qty: qty})
