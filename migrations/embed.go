@@ -283,3 +283,6 @@ var VenueSnapshotRealOnlySQL string
 
 //go:embed 0113_okx_unified_cleanup.sql
 var OkxUnifiedCleanupSQL string
+
+//go:embed 0114_cex_subaccount_seeds.sql
+var CexSubaccountSeedsSQL string
