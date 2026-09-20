@@ -1,6 +1,9 @@
 package pgstore
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 // D-144 ① 三态：实盘/demo/未知 标记 store 方法（从 brokers.go 拆出控行数）。
 
@@ -53,4 +56,25 @@ func (s *Store) ListVenueIsReal(ctx context.Context) (map[string]*bool, error) {
 		m[venue] = &isReal
 	}
 	return m, rows.Err()
+}
+
+// BrokerRealAccountKeys D-360 S2：real 账户键集（venue=user_id::text，核证点②：
+// 与 fin_venue_account_snapshot.venue 等值，生产 DB 两列互证留证 9-20）。
+// 快照写时过滤用（证真才留）；查询失败由调用方 fail-closed 处置。
+func (s *Store) BrokerRealAccountKeys(ctx context.Context) (map[string]bool, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT user_id::text FROM broker_accounts WHERE is_real AND user_id IS NOT NULL`)
+	if err != nil {
+		return nil, fmt.Errorf("broker real account keys: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			return nil, err
+		}
+		out[k] = true
+	}
+	return out, rows.Err()
 }

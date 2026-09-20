@@ -70,3 +70,41 @@ func TestListVenueIsReal(t *testing.T) {
 		t.Fatalf("unknown venue should not be in map")
 	}
 }
+
+// TestBrokerRealAccountKeys D-360 S5 锚：real/demo/NULL 混合 → 仅 is_real=true 键
+// （user_id::text 为键，核证点②；NULL is_real 不收=证真才留）。
+func TestBrokerRealAccountKeys(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.pool.Exec(ctx, `TRUNCATE broker_accounts RESTART IDENTITY CASCADE`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	for _, r := range []struct {
+		venue  string
+		userID int64
+		real   *bool
+	}{
+		{"3001157", 3001157, boolPtr(true)},
+		{"52993526", 52993526, boolPtr(false)},
+		{"9999999", 9999999, nil},
+	} {
+		if _, err := s.pool.Exec(ctx,
+			`INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, is_real)
+			 VALUES ($1, 1, 'h', 443, $2, 'p', $3)`, r.venue, r.userID, r.real); err != nil {
+			t.Fatalf("insert %s: %v", r.venue, err)
+		}
+	}
+	keys, err := s.BrokerRealAccountKeys(ctx)
+	if err != nil {
+		t.Fatalf("BrokerRealAccountKeys: %v", err)
+	}
+	if !keys["3001157"] {
+		t.Errorf("real 键 3001157 应在集合, got %v", keys)
+	}
+	if len(keys) != 1 {
+		t.Errorf("键集应仅 real 1 个, got %d: %v", len(keys), keys)
+	}
+}
+
+// boolPtr 测试辅助（is_real 三态 seed 用）。
+func boolPtr(b bool) *bool { return &b }

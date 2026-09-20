@@ -277,3 +277,6 @@ var PaperBasisSQL string
 
 //go:embed 0111_venue_account_snapshot.sql
 var VenueAccountSnapshotSQL string
+
+//go:embed 0112_venue_snapshot_real_only.sql
+var VenueSnapshotRealOnlySQL string

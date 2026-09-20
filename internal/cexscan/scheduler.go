@@ -73,18 +73,30 @@ func (s *Scanner) Run(ctx context.Context) {
 func (s *Scanner) scanOnce(ctx context.Context) error {
 	// ① 账户扫描（纯读缓存，不报错）→ D-358 S2：快照落库（append 语义，喂覆盖率面板；
 	// 失败只记日志不阻断采集，同②③惯例）。
+	// D-360 S2：写时过滤只收 real（证真才留）——cex=!Simulated / cfd=venue∈is_real 键集
+	// （核证点①②见 account.go IsRealAccount）；键集查询失败 → 本轮整批不落（fail-closed）。
 	snaps := ScanAccounts(s.accounts)
 	if len(snaps) > 0 {
-		rows := make([]pgstore.VenueAccountSnapshot, len(snaps))
-		for i, sn := range snaps {
-			rows[i] = pgstore.VenueAccountSnapshot{
-				Venue: sn.Venue, VenueType: sn.VenueType,
-				BalanceRaw: sn.Balance, EquityRaw: sn.Equity, FreeMarginRaw: sn.FreeMargin,
-				Currency: sn.Currency, FetchedAt: sn.Ts,
+		realKeys, err := s.store.BrokerRealAccountKeys(ctx)
+		if err != nil {
+			log.Printf("[cexscan] broker real keys: %v（本轮快照不落库，证真才留 fail-closed）", err)
+		} else {
+			rows := make([]pgstore.VenueAccountSnapshot, 0, len(snaps))
+			for _, sn := range snaps {
+				if !IsRealAccount(sn.AssetType, sn.Simulated, sn.Venue, realKeys) {
+					continue
+				}
+				rows = append(rows, pgstore.VenueAccountSnapshot{
+					Venue: sn.Venue, VenueType: sn.VenueType,
+					BalanceRaw: sn.Balance, EquityRaw: sn.Equity, FreeMarginRaw: sn.FreeMargin,
+					Currency: sn.Currency, FetchedAt: sn.Ts,
+				})
 			}
-		}
-		if err := s.store.InsertVenueAccountSnapshots(ctx, rows); err != nil {
-			log.Printf("[cexscan] insert venue account snapshots: %v", err)
+			if len(rows) > 0 {
+				if err := s.store.InsertVenueAccountSnapshots(ctx, rows); err != nil {
+					log.Printf("[cexscan] insert venue account snapshots: %v", err)
+				}
+			}
 		}
 	}
 
