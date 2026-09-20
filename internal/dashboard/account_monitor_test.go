@@ -3,6 +3,8 @@ package dashboard
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -147,5 +149,70 @@ func TestResolveExchangeBaseURL_VenueTypeAware(t *testing.T) {
 	okx := resolveExchangeBaseURL(pgstore.ExchangeConfig{Venue: "okx", VenueType: "spot"})
 	if okx != "https://www.okx.com" {
 		t.Errorf("okx want www.okx.com, got %q", okx)
+	}
+}
+
+// fakeExchangeStore D-362-R1：撞键锚注入路径（ExchangeStore 接口 fake，双 binance/perp 配置）。
+type fakeExchangeStore struct {
+	cfgs []pgstore.ExchangeConfig
+}
+
+func (f *fakeExchangeStore) ListExchangeConfigs(context.Context) ([]pgstore.ExchangeConfig, error) {
+	return f.cfgs, nil
+}
+
+// TestAccountMonitor_CollisionKeys D-362-R1 S2 锚：双 binance/perp config（id20 real 先建
+// +id25 sim 后建）→ monitor states 现 binance:perp（sim 赢家 canonical）+binance:perp#20
+// （real 输家后缀）两键；AccountInfo 数据字段 Venue/VenueType 保持原值、Simulated 徽标区分。
+// 旧代码（R0 queriers() 未接线）红=states 仅 1 键后写覆盖。
+func TestAccountMonitor_CollisionKeys(t *testing.T) {
+	ctx := context.Background()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"totalWalletBalance":"345.72"}`))
+	}))
+	defer srv.Close()
+	t0 := time.Date(2026, 9, 20, 0, 0, 0, 0, time.UTC)
+	m := NewAccountMonitor(NewBrokerManager(nil, bus.New(), exec.NewRegistry(), time.Minute), time.Millisecond, nil)
+	m.SetExchangeStore(&fakeExchangeStore{cfgs: []pgstore.ExchangeConfig{
+		{ID: 20, Venue: "binance", VenueType: "perp", APIKey: "k20", APISecret: "s20",
+			BaseURL: srv.URL, Simulated: false, CreatedAt: t0},
+		{ID: 25, Venue: "binance", VenueType: "perp", APIKey: "k25", APISecret: "s25",
+			BaseURL: srv.URL, Simulated: true, CreatedAt: t0.Add(time.Hour)},
+	}})
+	got := m.Refresh(ctx)
+	if len(got) != 2 {
+		t.Fatalf("snapshot want 2 accounts（双配置现形）, got %d: %+v", len(got), got)
+	}
+	if len(m.states) != 2 {
+		keys := make([]string, 0, len(m.states))
+		for k := range m.states {
+			keys = append(keys, k)
+		}
+		t.Fatalf("states want 2 keys, got %d: %v", len(m.states), keys)
+	}
+	if _, ok := m.states["binance:perp"]; !ok {
+		t.Error("states 缺 binance:perp（sim 赢家 canonical）")
+	}
+	if _, ok := m.states["binance:perp#20"]; !ok {
+		t.Error("states 缺 binance:perp#20（real 输家后缀键）")
+	}
+	for _, a := range got {
+		if a.Venue != "binance" || a.VenueType != "perp" {
+			t.Errorf("数据字段应保持原值 binance/perp, got %s/%s", a.Venue, a.VenueType)
+		}
+		if a.Equity != 345.72 {
+			t.Errorf("equity = %v, want 345.72", a.Equity)
+		}
+		wantKey := "binance:perp"
+		wantSim := true
+		if a.Simulated == false {
+			wantKey, wantSim = "binance:perp#20", false
+		}
+		if a.Simulated != wantSim {
+			t.Errorf("Simulated = %v, want %v (key %s)", a.Simulated, wantSim, wantKey)
+		}
+		if a.VenueKey != wantKey {
+			t.Errorf("VenueKey = %q, want %q（键带后缀/数据字段原值）", a.VenueKey, wantKey)
+		}
 	}
 }

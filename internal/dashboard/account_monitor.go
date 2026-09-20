@@ -178,10 +178,16 @@ func (m *AccountMonitor) queriers(ctx context.Context) []reconcile.AccountQuerie
 		if err != nil {
 			log.Printf("[account-mon] list exchanges: %v", err)
 		} else {
+			// D-362 S2/R1：撞键归一——同 venue:type 多 config 时赢家保 canonical、
+			// 非赢家键加 #<id>（reconcile.CexVenueKey，与 executor/持仓查询器同源调用）。
+			// AccountInfo.Venue/VenueType 保持原值，后缀只在键（前端 Simulated 徽标区分）。
+			winners := cexKeyWinners(cfgs)
 			for i := range cfgs {
 				c := &cfgs[i]
 				base := resolveExchangeBaseURL(*c)
-				qs = append(qs, reconcile.NewCEXAccountQuerier(c.Venue, c.VenueType, c.APIKey, c.APISecret, c.Passphrase, base, c.Website, c.Simulated))
+				q := reconcile.NewCEXAccountQuerier(c.Venue, c.VenueType, c.APIKey, c.APISecret, c.Passphrase, base, c.Website, c.Simulated)
+				q.SetKeyOverride(reconcile.CexVenueKey(c.Venue, c.VenueType, c.ID, winners))
+				qs = append(qs, q)
 				log.Printf("[account] cex querier: %s:%s", c.Venue, c.VenueType)
 			}
 		}
