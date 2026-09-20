@@ -29,7 +29,7 @@ type VoteEntry struct {
 // RebalanceConfig 是决策引擎配置（从 env 注入，有默认值）。
 type RebalanceConfig struct {
 	MinSRs       int // 最少分散 SR 数（默认 3）
-	MaxSRs       int // 最多分散 SR 数（默认 5）
+	MaxSRs       int // 最多分散 SR 数（默认 3，D-355）
 	MaxBrokerage int // 最大可接受 brokerage（默认 20，即 20%）
 	MinRank      int // 最低排名要求（默认 127，即 top 127 都可）
 	// D-297 deprecated: 改用 SpreadThreshold 触发，保留 env 兼容
@@ -63,7 +63,7 @@ type RebalanceDecision struct {
 func DefaultConfig() RebalanceConfig {
 	return RebalanceConfig{
 		MinSRs:             3,
-		MaxSRs:             5,
+		MaxSRs:             3,
 		MaxBrokerage:       20,
 		MinRank:            127,
 		YieldDropPct:       15.0,
@@ -77,7 +77,7 @@ func DefaultConfig() RebalanceConfig {
 
 // Decide 决策算法（设计 §3.2）：
 // 1. 过滤 brokerage <= MaxBrokerage && rank <= MinRank && annualizedRate > 0
-// 2. 排序 brokerage 升序 → 年化降序 → 票数升序（低票优先，出块奖励占比大）
+// 2. 排序：年化降序 → brokerage 升序 → 票数升序（低票优先，出块奖励占比大）
 // 3. 选 top N（clamp MinSRs..MaxSRs），等权分配
 // 4. calcYield 对比当前 vs 目标
 // 5. needRebalance = improvement >= BetterOppPct || yield drop > YieldDropPct
@@ -99,13 +99,13 @@ func Decide(input RebalanceInput) RebalanceDecision {
 		}
 	}
 
-	// 2. 排序：brokerage 升序 → 年化降序 → 票数升序
+	// 2. 排序：年化降序（净 APR 主键，D-355）→ brokerage 升序 → 票数升序
 	sort.Slice(candidates, func(i, j int) bool {
-		if candidates[i].Brokerage != candidates[j].Brokerage {
-			return candidates[i].Brokerage < candidates[j].Brokerage
-		}
 		if candidates[i].AnnualizedRate != candidates[j].AnnualizedRate {
 			return candidates[i].AnnualizedRate > candidates[j].AnnualizedRate
+		}
+		if candidates[i].Brokerage != candidates[j].Brokerage {
+			return candidates[i].Brokerage < candidates[j].Brokerage
 		}
 		return candidates[i].RealTimeVotes < candidates[j].RealTimeVotes
 	})

@@ -75,21 +75,48 @@ func TestDecide_DiversifyN(t *testing.T) {
 	for i := range srList {
 		srList[i] = makeSR("SR"+string(rune('a'+i)), 0, 4.0, 100000, true, i+1)
 	}
-	cfg := DefaultConfig() // MinSRs=3, MaxSRs=5
+	cfg := DefaultConfig() // MinSRs=3, MaxSRs=3（D-355）
 	dec := Decide(RebalanceInput{
 		SRRanking: srList,
 		TotalTP:   10000,
 		Config:    cfg,
 	})
-	// 10 候选 → clamp(10, 3, 5) = 5
-	if len(dec.Target) != 5 {
-		t.Errorf("target len = %d, want 5 (MaxSRs, 10 candidates)", len(dec.Target))
+	// 10 候选 → clamp(10, 3, 3) = 3
+	if len(dec.Target) != 3 {
+		t.Errorf("target len = %d, want 3 (MaxSRs, 10 candidates)", len(dec.Target))
 	}
-	// 等权分配：10000/5 = 2000
+	// 等权分配：10000/3
+	wantVotes := 10000.0 / 3.0
 	for _, v := range dec.Target {
-		if v.Votes != 2000 {
-			t.Errorf("votes = %f, want 2000 (等权分配 10000/5)", v.Votes)
+		if v.Votes != wantVotes {
+			t.Errorf("votes = %f, want %f (等权分配 10000/3)", v.Votes, wantVotes)
 		}
+	}
+}
+
+// TestDecide_NetAPRBeatsLowBrokerage D-355：净 APR 主键——高净 APR 高佣金 SR 胜过低净 APR 零佣金 SR。
+// 回归锚（OKCoinJapan 实证 9-20）：tronscan annualizedRate 已是扣佣金后选民净 APR，
+// 旧 brokerage-first 序对 b>0 SR 二次惩罚 → 只要 b=0 候选够多，b>0 永不进目标集
+// （触发真→空转跳死循环）。旧代码下此测试必红（b=0 先排）。
+func TestDecide_NetAPRBeatsLowBrokerage(t *testing.T) {
+	srList := []SRInfo{
+		makeSR("SR_b0", 0, 3.28, 100000, true, 1),   // 零佣金但净 APR 低
+		makeSR("SR_b5", 5, 3.30, 200000, true, 2),   // 5% 佣金但净 APR 高（OKCoinJapan 类）
+		makeSR("SR_fill", 0, 3.10, 300000, true, 3), // 垫底补齐
+	}
+	cfg := DefaultConfig()
+	cfg.MinSRs = 1
+	cfg.MaxSRs = 1
+	dec := Decide(RebalanceInput{
+		SRRanking: srList,
+		TotalTP:   10000,
+		Config:    cfg,
+	})
+	if len(dec.Target) != 1 {
+		t.Fatalf("target len = %d, want 1", len(dec.Target))
+	}
+	if dec.Target[0].SRAddress != "SR_b5" {
+		t.Errorf("target[0] = %s, want SR_b5 (净 APR 3.30 高者胜，brokerage 不再一票否决)", dec.Target[0].SRAddress)
 	}
 }
 
