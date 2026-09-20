@@ -219,7 +219,7 @@ func venueAccountRows(ctx context.Context, s *Service) []*v1.CapitalCoverageRow 
 	}
 	out := make([]*v1.CapitalCoverageRow, 0, len(lates))
 	for _, l := range lates {
-		r := covRow("venue账户 " + l.Venue)
+		r := covRow("venue账户 " + l.Venue + "/" + l.VenueType)
 		r.Status = "有数"
 		age := time.Since(l.FetchedAt)
 		ageNote := fmt.Sprintf("%s 快照 %dh 前", l.VenueType, int(age.Hours()))

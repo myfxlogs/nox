@@ -144,7 +144,7 @@ func TestGetCapitalCoverage_SummaryWeights(t *testing.T) {
 	if len(resp.Rows) != 5 {
 		t.Fatalf("rows len = %d, want 5:", len(resp.Rows))
 	}
-	for i, want := range []string{"TRX 质押+投票+能量", "CMC 账户（手动持仓监控域）", "系统持仓（live）", "系统持仓（paper）", "venue账户 binance"} {
+	for i, want := range []string{"TRX 质押+投票+能量", "CMC 账户（手动持仓监控域）", "系统持仓（live）", "系统持仓（paper）", "venue账户 binance/perp"} {
 		if resp.Rows[i].Pool != want {
 			t.Errorf("rows[%d] = %q, want %q", i, resp.Rows[i].Pool, want)
 		}
