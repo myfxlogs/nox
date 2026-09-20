@@ -22,15 +22,16 @@ import (
 // Binance：GET /api/v3/account（HMAC-SHA256 签名 + X-MBX-APIKEY），权益 = Σ 持币×USDT 价（公开 ticker/price 估算）。
 // OKX：GET /api/v5/account/balance（OK-ACCESS-* 四头，SIGN=base64(HMAC-SHA256(secret, ts+method+path+body))），totalEq 为交易所权威 USD。
 type CEXAccountQuerier struct {
-	venue      string // binance / okx
-	venueType  string // spot
-	apiKey     string
-	apiSecret  string
-	passphrase string // OKX 必填；Binance 空
-	baseURL    string // spot base（binance 走代理；okx www.okx.com）
-	simulated  bool   // OKX 模拟盘：请求带 x-simulated-trading:1（demo key 必开，D-054）
-	website    string // D-157 V3：交易所官网（从 ExchangeConfig.website 透传）
-	client     *http.Client
+	venue       string // binance / okx
+	venueType   string // spot
+	apiKey      string
+	apiSecret   string
+	passphrase  string // OKX 必填；Binance 空
+	baseURL     string // spot base（binance 走代理；okx www.okx.com）
+	simulated   bool   // OKX 模拟盘：请求带 x-simulated-trading:1（demo key 必开，D-054）
+	website     string // D-157 V3：交易所官网（从 ExchangeConfig.website 透传）
+	keyOverride string // D-362 S2：撞键非赢家的注册键覆盖（"venue:type#<id>"；空=canonical）
+	client      *http.Client
 }
 
 // NewCEXAccountQuerier 创建 CEX 账户查询器。
@@ -43,7 +44,17 @@ func NewCEXAccountQuerier(venue, venueType, apiKey, apiSecret, passphrase, baseU
 }
 
 // VenueKey 账户身份（"{venue}:{venueType}"，与持仓视图同 key 空间）。
-func (q *CEXAccountQuerier) VenueKey() string { return q.venue + ":" + q.venueType }
+// D-362 S2：撞键非赢家经 SetKeyOverride 返回 "venue:type#<id>"（只在键，AccountInfo
+// 数据字段 venue/venueType 保持原值——前端徽标区分，SSOT §2）。
+func (q *CEXAccountQuerier) VenueKey() string {
+	if q.keyOverride != "" {
+		return q.keyOverride
+	}
+	return q.venue + ":" + q.venueType
+}
+
+// SetKeyOverride D-362 S2：设置撞键归一后的注册键（由 reconcile.CexVenueKey 计算）。
+func (q *CEXAccountQuerier) SetKeyOverride(k string) { q.keyOverride = k }
 
 // Account 查询账户余额/权益。CEX 的 Margin/FreeMargin/Credit/Profit=0（无对应概念）。
 func (q *CEXAccountQuerier) Account(ctx context.Context) (*AccountInfo, error) {

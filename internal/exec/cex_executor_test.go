@@ -437,3 +437,16 @@ func hmacSHA256(secret, msg string) []byte {
 	mac.Write([]byte(msg))
 	return mac.Sum(nil)
 }
+
+// TestCEXExecutor_KeyOverride D-362 S3 锚：撞键非赢家 Key() 返回 "venue:type#<id>"，
+// 未设 override 时 canonical——Registry.Register 以 Key() 路由（休眠 real 执行器不可达）。
+func TestCEXExecutor_KeyOverride(t *testing.T) {
+	e := NewCEXExecutor("binance", "perp", "k", "s", "", "https://x", false)
+	if got := e.Key(); got != "binance:perp" {
+		t.Errorf("canonical Key = %q, want binance:perp", got)
+	}
+	e.SetKeyOverride("binance:perp#20")
+	if got := e.Key(); got != "binance:perp#20" {
+		t.Errorf("override Key = %q, want binance:perp#20", got)
+	}
+}

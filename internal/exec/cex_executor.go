@@ -19,14 +19,15 @@ import (
 // base64 HMAC + x-simulated-trading:1 模拟盘），venue 分派。
 // D-108 P2 T1：Binance perp 双仓探测缓存（dualSide/dualSideProbed）+ AlertFn 平仓被拒告警。
 type CEXExecutor struct {
-	venue      string
-	venueType  string // spot / perp
-	apiKey     string
-	apiSecret  string
-	passphrase string // OKX 必填；Binance 空
-	baseURL    string // binance: proxy/demo 根；okx: www.okx.com
-	simulated  bool   // OKX 模拟盘：请求带 x-simulated-trading:1（demo key 必开，D-054 同款）
-	client     *http.Client
+	venue       string
+	venueType   string // spot / perp
+	apiKey      string
+	apiSecret   string
+	passphrase  string // OKX 必填；Binance 空
+	baseURL     string // binance: proxy/demo 根；okx: www.okx.com
+	simulated   bool   // OKX 模拟盘：请求带 x-simulated-trading:1（demo key 必开，D-054 同款）
+	keyOverride string // D-362 S3：撞键非赢家注册键（"venue:type#<id>"；空=canonical）
+	client      *http.Client
 
 	// D-108 P2 T1：Binance perp 双仓模式探测缓存（per executor 实例，避免每单探测）。
 	dualSide       bool // true=hedge mode（双仓），false=one-way（单仓）
@@ -65,7 +66,17 @@ func (e *CEXExecutor) alertCritical(o Order, msg string) {
 	}
 }
 
-func (e *CEXExecutor) Key() string { return e.venue + ":" + e.venueType }
+// Key 注册键。D-362 S3：撞键非赢家经 SetKeyOverride 返回 "venue:type#<id>"
+// （Registry.Register 以本键路由；被顶掉的真实盘执行器休眠注册不可达=D-158 安全语义保持）。
+func (e *CEXExecutor) Key() string {
+	if e.keyOverride != "" {
+		return e.keyOverride
+	}
+	return e.venue + ":" + e.venueType
+}
+
+// SetKeyOverride D-362 S3：设置撞键归一后的注册键（由 reconcile.CexVenueKey 计算）。
+func (e *CEXExecutor) SetKeyOverride(k string) { e.keyOverride = k }
 
 // Precheck 下单前预检（D-121）：gate perp 查合约存在性（testnet 部分合约缺失如 TRX_USDT，
 // 不预检则一腿成交一腿失败→LEGGED）。OKX/binance perp 暂无预检（testnet 主流币种覆盖全）。

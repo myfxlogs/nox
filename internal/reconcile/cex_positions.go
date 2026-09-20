@@ -15,54 +15,7 @@ import (
 	"time"
 
 	"arb/internal/exec"
-	"arb/internal/httpx"
 )
-
-// CEXPositionQuerier 查询 CEX perp 持仓（实现 VenueQuerier）；字段同 CEXAccountQuerier（复用签名逻辑），但查持仓而非余额。
-type CEXPositionQuerier struct {
-	venue      string // okx / gate / binance
-	venueType  string // perp（spot 无持仓查询）
-	apiKey     string
-	apiSecret  string
-	passphrase string // OKX 必填
-	baseURL    string
-	simulated  bool
-	client     *http.Client
-}
-
-// NewCEXPositionQuerier 创建 CEX perp 持仓查询器。
-func NewCEXPositionQuerier(venue, venueType, apiKey, apiSecret, passphrase, baseURL string, simulated bool) *CEXPositionQuerier {
-	return &CEXPositionQuerier{
-		venue:      venue,
-		venueType:  venueType,
-		apiKey:     apiKey,
-		apiSecret:  apiSecret,
-		passphrase: passphrase,
-		baseURL:    baseURL,
-		simulated:  simulated,
-		client:     httpx.Client(), // CA 信任 + X-Proxy-Token（Binance demo-fapi 自签证书，D-055 同款）
-	}
-}
-
-func (q *CEXPositionQuerier) VenueKey() string { return q.venue + ":" + q.venueType }
-
-// QueryOpenedOrders 查询全部 perp 持仓 → []VenueOrder。
-// spot venue 返回空（无持仓概念）；perp 按 venue 分派。
-func (q *CEXPositionQuerier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error) {
-	if q.venueType != "perp" {
-		return nil, nil // spot 无持仓查询
-	}
-	switch q.venue {
-	case "okx":
-		return q.okxPositions(ctx)
-	case "gate":
-		return q.gatePositions(ctx)
-	case "binance":
-		return q.binancePositions(ctx)
-	default:
-		return nil, fmt.Errorf("cex positions: unsupported venue %q", q.venue)
-	}
-}
 
 // === OKX ===
 // GET /api/v5/account/positions?instType=SWAP — 全部 SWAP 持仓。long_short_mode：long/short 分列；
