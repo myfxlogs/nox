@@ -80,22 +80,9 @@ func (s *Scanner) scanOnce(ctx context.Context) error {
 		realKeys, err := s.store.BrokerRealAccountKeys(ctx)
 		if err != nil {
 			log.Printf("[cexscan] broker real keys: %v（本轮快照不落库，证真才留 fail-closed）", err)
-		} else {
-			rows := make([]pgstore.VenueAccountSnapshot, 0, len(snaps))
-			for _, sn := range snaps {
-				if !IsRealAccount(sn.AssetType, sn.Simulated, sn.Venue, realKeys) {
-					continue
-				}
-				rows = append(rows, pgstore.VenueAccountSnapshot{
-					Venue: sn.Venue, VenueType: sn.VenueType,
-					BalanceRaw: sn.Balance, EquityRaw: sn.Equity, FreeMarginRaw: sn.FreeMargin,
-					Currency: sn.Currency, FetchedAt: sn.Ts,
-				})
-			}
-			if len(rows) > 0 {
-				if err := s.store.InsertVenueAccountSnapshots(ctx, rows); err != nil {
-					log.Printf("[cexscan] insert venue account snapshots: %v", err)
-				}
+		} else if rows := buildVenueSnapshotRows(snaps, realKeys); len(rows) > 0 {
+			if err := s.store.InsertVenueAccountSnapshots(ctx, rows); err != nil {
+				log.Printf("[cexscan] insert venue account snapshots: %v", err)
 			}
 		}
 	}
@@ -174,4 +161,42 @@ func buildHoldingsFromSnapshot(infos []*v1.AccountInfo) map[string]map[string]fl
 		}
 	}
 	return out
+}
+
+// isUnifiedAccountVenue D-361 S3：统一账户 venue 白名单（仅 okx——统一账户 spot/perp 双
+// config 查同一 /account/balance；binance/gate 现货合约分钱包实证不归一，SSOT §0）。
+func isUnifiedAccountVenue(venue string) bool { return venue == "okx" }
+
+// normalizeVenueType D-361 S3：统一账户写侧归一——okx cex 账户 venue_type 一律 "unified"
+// （双 config 同钱，落两行=面板双计；读侧零改）。
+func normalizeVenueType(assetType, venue, venueType string) string {
+	if assetType == "cex" && isUnifiedAccountVenue(venue) {
+		return "unified"
+	}
+	return venueType
+}
+
+// buildVenueSnapshotRows 快照行构造（纯函数，D-361 S3 自 scanOnce 抽出可测）：
+// real 过滤（IsRealAccount 证真才留）→ venue_type 归一 → 同 (venue,venue_type) 去重仅留首行
+// （okx spot/perp 双 config 各返回一次统一账户=同钱，去重后落一行 unified）。
+func buildVenueSnapshotRows(snaps []AccountSnapshot, realKeys map[string]bool) []pgstore.VenueAccountSnapshot {
+	rows := make([]pgstore.VenueAccountSnapshot, 0, len(snaps))
+	seen := map[string]bool{}
+	for _, sn := range snaps {
+		if !IsRealAccount(sn.AssetType, sn.Simulated, sn.Venue, realKeys) {
+			continue
+		}
+		vt := normalizeVenueType(sn.AssetType, sn.Venue, sn.VenueType)
+		key := sn.Venue + ":" + vt
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		rows = append(rows, pgstore.VenueAccountSnapshot{
+			Venue: sn.Venue, VenueType: vt,
+			BalanceRaw: sn.Balance, EquityRaw: sn.Equity, FreeMarginRaw: sn.FreeMargin,
+			Currency: sn.Currency, FetchedAt: sn.Ts,
+		})
+	}
+	return rows
 }

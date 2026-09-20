@@ -108,6 +108,7 @@ var migrationFiles = []struct {
 	{110, migrations.PaperBasisSQL},                    // D-354：纸面仓盈亏视图（基差采集+两列）
 	{111, migrations.VenueAccountSnapshotSQL},          // D-358 S1：CEX/MT 账户余额快照（原币 _raw+currency）
 	{112, migrations.VenueSnapshotRealOnlySQL},         // D-360 S3：快照只留 real（MT demo NOT EXISTS/CEX sim EXISTS 清理）
+	{113, migrations.OkxUnifiedCleanupSQL},             // D-361 S3：OKX 统一账户旧 spot/perp 双行清场（写侧归一 unified）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

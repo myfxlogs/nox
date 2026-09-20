@@ -280,3 +280,6 @@ var VenueAccountSnapshotSQL string
 
 //go:embed 0112_venue_snapshot_real_only.sql
 var VenueSnapshotRealOnlySQL string
+
+//go:embed 0113_okx_unified_cleanup.sql
+var OkxUnifiedCleanupSQL string
