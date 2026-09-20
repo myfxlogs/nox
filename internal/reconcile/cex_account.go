@@ -58,6 +58,10 @@ func (q *CEXAccountQuerier) SetKeyOverride(k string) { q.keyOverride = k }
 
 // Account 查询账户余额/权益。CEX 的 Margin/FreeMargin/Credit/Profit=0（无对应概念）。
 func (q *CEXAccountQuerier) Account(ctx context.Context) (*AccountInfo, error) {
+	// D-363 S2：资金（funding）/理财（earn）子账户先于交易账户分派（同函数签名零新管道）。
+	if q.venueType == "funding" || q.venueType == "earn" {
+		return q.accountSubaccount(ctx)
+	}
 	switch q.venue {
 	case "binance":
 		return q.accountBinance(ctx)
