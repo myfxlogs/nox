@@ -58,3 +58,34 @@ func TestBuildVenueSnapshotRows_OKXDedup(t *testing.T) {
 		}
 	}
 }
+
+// TestBuildVenueSnapshotRows_OKXSubaccounts D-363-R1 S2：okx 四快照（spot+perp+funding+
+// earn）→ 落三行（unified=交易账户双 config 去重；funding/earn 子账户各归各值原样穿透）。
+// 旧实现（归一无条件压全部 type）红=funding/earn 塌进 unified 被去重（生产 23:06 实证
+// earn $5,261 顶掉 unified $6.24）。
+func TestBuildVenueSnapshotRows_OKXSubaccounts(t *testing.T) {
+	now := time.Date(2026, 9, 21, 23, 6, 0, 0, time.UTC)
+	snaps := []AccountSnapshot{
+		{Venue: "okx", VenueType: "spot", AssetType: "cex", Equity: 6.24, Currency: "USDT", Ts: now},
+		{Venue: "okx", VenueType: "perp", AssetType: "cex", Equity: 6.24, Currency: "USDT", Ts: now},
+		{Venue: "okx", VenueType: "funding", AssetType: "cex", Equity: 0, Currency: "USDT", Ts: now},
+		{Venue: "okx", VenueType: "earn", AssetType: "cex", Equity: 5261.25, Currency: "USDT", Ts: now},
+	}
+	rows := buildVenueSnapshotRows(snaps, map[string]bool{}) // cex real 无需 MT 键
+	if len(rows) != 3 {
+		t.Fatalf("rows = %d, want 3（unified+funding+earn 各归各值）: %+v", len(rows), rows)
+	}
+	byType := map[string]float64{}
+	for _, r := range rows {
+		byType[r.VenueType] = r.EquityRaw
+	}
+	if byType["unified"] != 6.24 {
+		t.Errorf("unified equity = %v, want 6.24（交易账户双 config 去重）", byType["unified"])
+	}
+	if byType["funding"] != 0 {
+		t.Errorf("funding equity = %v, want 0（原样穿透）", byType["funding"])
+	}
+	if byType["earn"] != 5261.25 {
+		t.Errorf("earn equity = %v, want 5261.25（原样穿透，不被 unified 顶掉）", byType["earn"])
+	}
+}
