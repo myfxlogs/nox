@@ -71,8 +71,22 @@ func (s *Scanner) Run(ctx context.Context) {
 // 价差告警现有 CrossVenueDetector 已事件驱动覆盖。保留采集入库供前端展示。
 // D-273 ④：earn APR 判断结果 upsert 入库（fin_cex_earn_judgment），供前端展示，不发告警。
 func (s *Scanner) scanOnce(ctx context.Context) error {
-	// ① 账户扫描（纯读缓存，不报错）
-	_ = ScanAccounts(s.accounts)
+	// ① 账户扫描（纯读缓存，不报错）→ D-358 S2：快照落库（append 语义，喂覆盖率面板；
+	// 失败只记日志不阻断采集，同②③惯例）。
+	snaps := ScanAccounts(s.accounts)
+	if len(snaps) > 0 {
+		rows := make([]pgstore.VenueAccountSnapshot, len(snaps))
+		for i, sn := range snaps {
+			rows[i] = pgstore.VenueAccountSnapshot{
+				Venue: sn.Venue, VenueType: sn.VenueType,
+				BalanceRaw: sn.Balance, EquityRaw: sn.Equity, FreeMarginRaw: sn.FreeMargin,
+				Currency: sn.Currency, FetchedAt: sn.Ts,
+			}
+		}
+		if err := s.store.InsertVenueAccountSnapshots(ctx, rows); err != nil {
+			log.Printf("[cexscan] insert venue account snapshots: %v", err)
+		}
+	}
 
 	// ② 理财 APR 采集 → 入库
 	earnAPRs, err := s.earn.Collect(ctx)

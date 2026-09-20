@@ -274,3 +274,6 @@ var PaperSpotCarrySQL string
 
 //go:embed 0110_paper_basis.sql
 var PaperBasisSQL string
+
+//go:embed 0111_venue_account_snapshot.sql
+var VenueAccountSnapshotSQL string

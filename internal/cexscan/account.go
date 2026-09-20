@@ -20,6 +20,7 @@ type AccountSnapshot struct {
 	Balance    float64
 	Equity     float64
 	FreeMargin float64
+	Currency   string // D-358：原币（MT 原币直传/CEX USDT，核证见 migration 0111 头注）
 	Ts         time.Time
 }
 
@@ -38,6 +39,7 @@ func ScanAccounts(s AccountSnapshotter) []AccountSnapshot {
 			Balance:    info.Balance,
 			Equity:     info.Equity,
 			FreeMargin: info.FreeMargin,
+			Currency:   info.Currency,
 			Ts:         now,
 		})
 	}

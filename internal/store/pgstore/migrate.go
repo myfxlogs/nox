@@ -106,6 +106,7 @@ var migrationFiles = []struct {
 	{108, migrations.CarryUniverseNoteSQL},             // D-345：suspect 门注记列
 	{109, migrations.PaperSpotCarrySQL},                // D-350：spot-carry 纸面验证轨
 	{110, migrations.PaperBasisSQL},                    // D-354：纸面仓盈亏视图（基差采集+两列）
+	{111, migrations.VenueAccountSnapshotSQL},          // D-358 S1：CEX/MT 账户余额快照（原币 _raw+currency）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
