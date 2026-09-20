@@ -113,7 +113,7 @@ func Load() *Config {
 		CapitalSnapshotTTL:         envDur("ARB_CAPITAL_SNAPSHOT_TTL", 5*time.Minute),  // D-195-C1：capital snapshot TTL 默认 5m
 		// === D-269 TRX 投票收益优化器 ===
 		TrxVoteMinSRs:          envInt("ARB_TRX_VOTE_MIN_SRS", 3),                // 最少分散 SR 数
-		TrxVoteMaxSRs:          envInt("ARB_TRX_VOTE_MAX_SRS", 5),                // 最多分散 SR 数
+		TrxVoteMaxSRs:          envInt("ARB_TRX_VOTE_MAX_SRS", 3),                // 最多分散 SR 数（D-355）
 		TrxVoteMaxBrokerage:    envInt("ARB_TRX_VOTE_MAX_BROKERAGE", 20),         // 最大 brokerage 20%
 		TrxVoteYieldDropPct:    envFloat("ARB_TRX_VOTE_YIELD_DROP_PCT", 15.0),    // 收益下降阈值 15%
 		TrxVoteBetterOppPct:    envFloat("ARB_TRX_VOTE_BETTER_OPP_PCT", 0.0),     // D-285：更优机会阈值降零（任何更高就改投）

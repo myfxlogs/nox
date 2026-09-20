@@ -254,7 +254,7 @@ type Config struct {
 	CapitalSnapshotTTL time.Duration
 	// === D-269 TRX 投票收益优化器 ===
 	TrxVoteMinSRs          int     // 最少分散 SR 数（ARB_TRX_VOTE_MIN_SRS，默认 3）
-	TrxVoteMaxSRs          int     // 最多分散 SR 数（ARB_TRX_VOTE_MAX_SRS，默认 5）
+	TrxVoteMaxSRs          int     // 最多分散 SR 数（ARB_TRX_VOTE_MAX_SRS，默认 3，D-355）
 	TrxVoteMaxBrokerage    int     // 最大可接受 brokerage（ARB_TRX_VOTE_MAX_BROKERAGE，默认 20）
 	TrxVoteYieldDropPct    float64 // 触发改投的收益下降阈值（ARB_TRX_VOTE_YIELD_DROP_PCT，默认 15.0）
 	TrxVoteBetterOppPct    float64 // 触发改投的更优机会阈值（ARB_TRX_VOTE_BETTER_OPP_PCT，默认 20.0）
