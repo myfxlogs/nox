@@ -140,23 +140,25 @@ func TestGetCapitalCoverage_SummaryWeights(t *testing.T) {
 		t.Fatalf("InsertVenueAccountSnapshots: %v", err)
 	}
 	resp := covResponse(ctx, t, covTestService(s))
-	// 行序断言：TRX→CMC→live→paper→venue（资金快照/capital_snapshots 表空不列）
-	if len(resp.Rows) != 5 {
-		t.Fatalf("rows len = %d, want 5:", len(resp.Rows))
+	// D-360 S4：paper 行不再出现（demo/纸面=噪声不入面板）——行序 TRX→CMC→live→venue
+	if len(resp.Rows) != 4 {
+		t.Fatalf("rows len = %d, want 4:", len(resp.Rows))
 	}
-	for i, want := range []string{"TRX 质押+投票+能量", "CMC 账户（手动持仓监控域）", "系统持仓（live）", "系统持仓（paper）", "venue账户 binance/perp"} {
+	for i, want := range []string{"TRX 质押+投票+能量", "CMC 账户（手动持仓监控域）", "系统持仓（live）", "venue账户 binance/perp"} {
 		if resp.Rows[i].Pool != want {
 			t.Errorf("rows[%d] = %q, want %q", i, resp.Rows[i].Pool, want)
+		}
+	}
+	for _, r := range resp.Rows {
+		if r.Pool == "系统持仓（paper）" {
+			t.Error("paper 行应不出现（D-360 S4：demo/纸面=噪声不入）")
 		}
 	}
 	// 状态与权重语义
 	if got := resp.Rows[1].Status; got != "手动持仓中（浮盈 $-123.45）" {
 		t.Errorf("CMC status = %q, want 手动持仓中（浮盈 $-123.45）", got)
 	}
-	if resp.Rows[3].RealMoney {
-		t.Error("paper 行应 RealMoney=false（非真金不入汇总）")
-	}
-	if !resp.Rows[4].RealMoney || resp.Rows[4].Productive {
+	if !resp.Rows[3].RealMoney || resp.Rows[3].Productive {
 		t.Error("venue USDT 行应 RealMoney=true∧Productive=false（入分母的睡钱）")
 	}
 	// 汇总两数：总 30000+10000+10000+8000=58000；在产=TRX30000+CMC10000+live10000=50000

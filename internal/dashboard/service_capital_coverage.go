@@ -10,13 +10,12 @@ import (
 	"time"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
-	"arb/internal/store/pgstore"
 
 	"connectrpc.com/connect"
 )
 
 // capitalCoverageCaliberNote 口径注记（与 digest renderCapitalCoverageSection 注记同文本）。
-const capitalCoverageCaliberNote = "口径：快照时点在产=TRX 在赚+系统 live 持仓+CMC 持仓中（非时序加权，日级趋势看历史行）；加权年化分母=有年化真金行余额（CMC 手动仓/未采/纸面/venue 现金不进分子分母）；纸面持仓非真金不入汇总；venue 账户现金=闲置不计在产（睡钱暴露，USDT 行入总资金分母）；CFD 周末闭市持仓中≠空转；系统持仓年化=position_daily_income 近7日日均 carry（TRX 收益×快照价+利息，浮动盈亏不计）折算年化；能量 APR=D-258 30d 口径。"
+const capitalCoverageCaliberNote = "口径：快照时点在产=TRX 在赚+系统 live 持仓+CMC 持仓中（非时序加权，日级趋势看历史行）；加权年化分母=有年化真金行余额（CMC 手动仓/未采/纸面/venue 现金不进分子分母）；仅 real 账户/持仓入表（demo/sim/纸面=噪声不入）；venue 账户现金=闲置不计在产（睡钱暴露，USDT 行入总资金分母）；CFD 周末闭市持仓中≠空转；系统持仓年化=position_daily_income 近7日日均 carry（TRX 收益×快照价+利息，浮动盈亏不计）折算年化；能量 APR=D-258 30d 口径。"
 
 // GetCapitalCoverage D-359：五源逐池行+汇总（后端算，前端零计算）。
 func (s *Service) GetCapitalCoverage(ctx context.Context, req *connect.Request[v1.GetCapitalCoverageRequest]) (*connect.Response[v1.GetCapitalCoverageResponse], error) {
@@ -121,9 +120,9 @@ func cmcPoolRow(ctx context.Context, s *Service) *v1.CapitalCoverageRow {
 	return r
 }
 
-// positionPoolRows ③系统持仓：活跃仓 Σnotional_usd 按 environment（live 前纸面后）；
-// 全零仓→live $0「零持仓」行；年化=AvgDailyIncomeCarry7d×365/Σnotional×100，
-// 无样本→「新开仓」；paper 非真金不入汇总。
+// positionPoolRows ③系统持仓：活跃仓 Σnotional_usd 仅 live（D-360 S4——demo/sim/纸面=
+// 噪声不入面板；pgstore ActiveNotionalByEnv 已滤）；无 live 仓→$0「零持仓」行；
+// 年化=AvgDailyIncomeCarry7d×365/Σnotional×100，无样本→「新开仓」。
 func positionPoolRows(ctx context.Context, s *Service) []*v1.CapitalCoverageRow {
 	ens, err := s.store.ActiveNotionalByEnv(ctx)
 	if err != nil {
@@ -133,54 +132,26 @@ func positionPoolRows(ctx context.Context, s *Service) []*v1.CapitalCoverageRow 
 	if err != nil {
 		hasAvg = false
 	}
-	// live 前 paper 后（SQL GROUP BY 无序保证）
-	live, paper := -1, -1
-	for i, e := range ens {
-		if e.Env == "live" && live < 0 {
-			live = i
-		}
-		if e.Env != "live" && paper < 0 {
-			paper = i
-		}
-	}
-	ordered := make([]pgstore.EnvNotional, 0, len(ens))
-	if live >= 0 {
-		ordered = append(ordered, ens[live])
-	}
-	for i, e := range ens {
-		if i != live && (paper < 0 || i != paper) {
-			ordered = append(ordered, e)
-		}
-	}
-	if paper >= 0 {
-		ordered = append(ordered, ens[paper])
-	}
-	if len(ordered) == 0 {
+	if len(ens) == 0 {
 		r := covRow("系统持仓（live）")
 		r.Status = "零持仓"
 		r.Note = "无活跃仓"
 		return []*v1.CapitalCoverageRow{r}
 	}
-	out := make([]*v1.CapitalCoverageRow, 0, len(ordered))
-	for _, e := range ordered {
+	out := make([]*v1.CapitalCoverageRow, 0, len(ens))
+	for _, e := range ens {
 		r := covRow("系统持仓（live）")
 		r.BalanceUsd = e.NotionalUSD
 		r.HasBalance = true
-		if e.Env != "live" {
-			r.Pool = "系统持仓（paper）"
-			r.Status = "在跑（纸面）"
-			r.Note = "非真金不入汇总（D-356 §1.3）"
-		} else {
-			r.Status = "在跑"
-			r.Productive = true
-			r.RealMoney = true
-			r.Note = "近7日日均 carry 折算"
-			if e.NotionalUSD > 0 && hasAvg {
-				r.AprPct = avg * 365 / e.NotionalUSD * 100
-				r.HasApr = true
-			} else if e.NotionalUSD > 0 {
-				r.AprText = "新开仓"
-			}
+		r.Status = "在跑"
+		r.Productive = true
+		r.RealMoney = true
+		r.Note = "近7日日均 carry 折算"
+		if e.NotionalUSD > 0 && hasAvg {
+			r.AprPct = avg * 365 / e.NotionalUSD * 100
+			r.HasApr = true
+		} else if e.NotionalUSD > 0 {
+			r.AprText = "新开仓"
 		}
 		out = append(out, r)
 	}
