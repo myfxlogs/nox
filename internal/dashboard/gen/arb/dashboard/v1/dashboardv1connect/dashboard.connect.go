@@ -331,6 +331,9 @@ const (
 	// DashboardServiceListPaperSpotCarryProcedure is the fully-qualified name of the DashboardService's
 	// ListPaperSpotCarry RPC.
 	DashboardServiceListPaperSpotCarryProcedure = "/arb.dashboard.v1.DashboardService/ListPaperSpotCarry"
+	// DashboardServiceGetCapitalCoverageProcedure is the fully-qualified name of the DashboardService's
+	// GetCapitalCoverage RPC.
+	DashboardServiceGetCapitalCoverageProcedure = "/arb.dashboard.v1.DashboardService/GetCapitalCoverage"
 )
 
 // DashboardServiceClient is a client for the arb.dashboard.v1.DashboardService service.
@@ -472,6 +475,8 @@ type DashboardServiceClient interface {
 	ListSpotCarryDemo(context.Context, *connect.Request[v1.ListSpotCarryDemoRequest]) (*connect.Response[v1.ListSpotCarryDemoResponse], error)
 	// D-352：纸面轨前端卡（持仓页第三卡）——active+demo+近 14 天 exited 三态。
 	ListPaperSpotCarry(context.Context, *connect.Request[v1.ListPaperSpotCarryRequest]) (*connect.Response[v1.ListPaperSpotCarryResponse], error)
+	// D-359：资金不眠覆盖率前端面板（口径 SSOT=D-356 §1.1；digest 段同源双实现，后端算前端零计算）。
+	GetCapitalCoverage(context.Context, *connect.Request[v1.GetCapitalCoverageRequest]) (*connect.Response[v1.GetCapitalCoverageResponse], error)
 }
 
 // NewDashboardServiceClient constructs a client for the arb.dashboard.v1.DashboardService service.
@@ -1085,6 +1090,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("ListPaperSpotCarry")),
 			connect.WithClientOptions(opts...),
 		),
+		getCapitalCoverage: connect.NewClient[v1.GetCapitalCoverageRequest, v1.GetCapitalCoverageResponse](
+			httpClient,
+			baseURL+DashboardServiceGetCapitalCoverageProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("GetCapitalCoverage")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1190,6 +1201,7 @@ type dashboardServiceClient struct {
 	executeSpotCarryDemo      *connect.Client[v1.ExecuteSpotCarryDemoRequest, v1.ExecuteSpotCarryDemoResponse]
 	listSpotCarryDemo         *connect.Client[v1.ListSpotCarryDemoRequest, v1.ListSpotCarryDemoResponse]
 	listPaperSpotCarry        *connect.Client[v1.ListPaperSpotCarryRequest, v1.ListPaperSpotCarryResponse]
+	getCapitalCoverage        *connect.Client[v1.GetCapitalCoverageRequest, v1.GetCapitalCoverageResponse]
 }
 
 // ListLatestQuotes calls arb.dashboard.v1.DashboardService.ListLatestQuotes.
@@ -1692,6 +1704,11 @@ func (c *dashboardServiceClient) ListPaperSpotCarry(ctx context.Context, req *co
 	return c.listPaperSpotCarry.CallUnary(ctx, req)
 }
 
+// GetCapitalCoverage calls arb.dashboard.v1.DashboardService.GetCapitalCoverage.
+func (c *dashboardServiceClient) GetCapitalCoverage(ctx context.Context, req *connect.Request[v1.GetCapitalCoverageRequest]) (*connect.Response[v1.GetCapitalCoverageResponse], error) {
+	return c.getCapitalCoverage.CallUnary(ctx, req)
+}
+
 // DashboardServiceHandler is an implementation of the arb.dashboard.v1.DashboardService service.
 type DashboardServiceHandler interface {
 	// 快照类
@@ -1831,6 +1848,8 @@ type DashboardServiceHandler interface {
 	ListSpotCarryDemo(context.Context, *connect.Request[v1.ListSpotCarryDemoRequest]) (*connect.Response[v1.ListSpotCarryDemoResponse], error)
 	// D-352：纸面轨前端卡（持仓页第三卡）——active+demo+近 14 天 exited 三态。
 	ListPaperSpotCarry(context.Context, *connect.Request[v1.ListPaperSpotCarryRequest]) (*connect.Response[v1.ListPaperSpotCarryResponse], error)
+	// D-359：资金不眠覆盖率前端面板（口径 SSOT=D-356 §1.1；digest 段同源双实现，后端算前端零计算）。
+	GetCapitalCoverage(context.Context, *connect.Request[v1.GetCapitalCoverageRequest]) (*connect.Response[v1.GetCapitalCoverageResponse], error)
 }
 
 // NewDashboardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -2440,6 +2459,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("ListPaperSpotCarry")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceGetCapitalCoverageHandler := connect.NewUnaryHandler(
+		DashboardServiceGetCapitalCoverageProcedure,
+		svc.GetCapitalCoverage,
+		connect.WithSchema(dashboardServiceMethods.ByName("GetCapitalCoverage")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/arb.dashboard.v1.DashboardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DashboardServiceListLatestQuotesProcedure:
@@ -2642,6 +2667,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceListSpotCarryDemoHandler.ServeHTTP(w, r)
 		case DashboardServiceListPaperSpotCarryProcedure:
 			dashboardServiceListPaperSpotCarryHandler.ServeHTTP(w, r)
+		case DashboardServiceGetCapitalCoverageProcedure:
+			dashboardServiceGetCapitalCoverageHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -3049,4 +3076,8 @@ func (UnimplementedDashboardServiceHandler) ListSpotCarryDemo(context.Context, *
 
 func (UnimplementedDashboardServiceHandler) ListPaperSpotCarry(context.Context, *connect.Request[v1.ListPaperSpotCarryRequest]) (*connect.Response[v1.ListPaperSpotCarryResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListPaperSpotCarry is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) GetCapitalCoverage(context.Context, *connect.Request[v1.GetCapitalCoverageRequest]) (*connect.Response[v1.GetCapitalCoverageResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetCapitalCoverage is not implemented"))
 }
