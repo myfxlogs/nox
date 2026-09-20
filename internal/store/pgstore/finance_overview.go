@@ -100,9 +100,13 @@ func (s *Store) FinanceFlows(ctx context.Context, limit int) ([]FinanceFlow, err
 	}
 	rows, err := s.pool.Query(ctx, `
 		SELECT ts, source, kind, symbol, amount_usd, position_id, note FROM (
-			SELECT ie.ts, ie.venue AS source, LOWER(ie.income_type) AS kind, ie.symbol,
+			-- D-362-R2 S1：sim 配置来源行 source 标 '#sim'（LEFT JOIN 按 config id；
+			-- ie.venue 列原值不动=核证点④，标识只进显示列；无匹配配置→'' 不标）。
+			SELECT ie.ts, ie.venue || CASE WHEN ec.simulated THEN '#sim' ELSE '' END AS source,
+			       LOWER(ie.income_type) AS kind, ie.symbol,
 			       ie.amount_usd, COALESCE(ie.position_id, 0)::BIGINT AS position_id, '' AS note
 			FROM income_events ie
+			LEFT JOIN exchange_configs ec ON ec.id = ie.account_id
 			UNION ALL
 			SELECT cf.ts, cf.venue, cf.kind, '' AS symbol, cf.amount_usd,
 			       cf.position_id::BIGINT, '' AS note
