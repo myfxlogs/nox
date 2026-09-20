@@ -118,8 +118,13 @@ func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error
 	}
 	// D-273 S2：币种明细（实采语义核验 2026-09-10——qty=cashBal 缺失 fallback availBal；usdt_value=eqUsd
 	//（设计原写 eq，实采证明 eq 为本币权益，BTC eq=1 而 eqUsd=76757，按 eq 存会差 4 个数量级）；解析失败跳过该币）。
+	// D-364 v2 S2：holdings 同「不读取」语义——details 循环只保留 Ccy=="USDT" 行，
+	// 其余币种连明细行都不进（业主明谕非 USDT 标不读取不统计）。
 	var holdings []*v1.Holding
 	for _, d := range resp.Data[0].Details {
+		if d.Ccy != "USDT" {
+			continue
+		}
 		qtyStr := d.CashBal
 		if qtyStr == "" {
 			qtyStr = d.AvailBal
@@ -131,7 +136,19 @@ func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error
 		usd, _ := strconv.ParseFloat(d.EqUsd, 64)
 		holdings = append(holdings, &v1.Holding{Ccy: d.Ccy, Qty: qty, UsdtValue: usd})
 	}
-	eq, _ := strconv.ParseFloat(resp.Data[0].TotalEq, 64)
+	// D-364 S2：equity 只计 USDT 标（业主令）——eq=Σ details[USDT].EqUsd（USDT eqUsd=
+	// 本币 1:1，复用已解析字段零新增）；details 无 USDT 行 → eq=0 不 panic。
+	// 旧 TotalEq=统一账户全币总权益（含 DOGE/PENGU 类杂币折算），不再采用。
+	// holdings 明细不动（全币展示保留，D-273 S2）。
+	eq := 0.0
+	for _, d := range resp.Data[0].Details {
+		if d.Ccy != "USDT" {
+			continue
+		}
+		if usd, perr := strconv.ParseFloat(d.EqUsd, 64); perr == nil {
+			eq += usd
+		}
+	}
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
 		Balance: eq, Equity: eq, Currency: "USDT",

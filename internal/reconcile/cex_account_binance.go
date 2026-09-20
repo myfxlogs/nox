@@ -50,7 +50,10 @@ func (q *CEXAccountQuerier) accountBinance(ctx context.Context) (*AccountInfo, e
 	}
 
 	// 权益估算：Σ (free+locked) × USDT 价；USDT 价=1，其余取公开 ticker/price（失败该币跳过，诚实估算）。
-	// D-273 S2：同步保留币种明细（无 USDT 对的资产 usdt_value=0 但 qty 保留——earn 持币判断需要）。
+	// D-364 v2 S1：非 USDT 标资产不读取不统计（业主明谕「其他的币种都不用读取和统计」
+	// ——USDT=CEX 本位币对标 CFD USD）——循环首行过滤，非 USDT 标不进 total/holdings/
+	// 不发 ticker 定价请求（~90 个 LD* 杂币每轮省 ~90 次 ticker 调用）。
+	// D-361 LD 计价链（binanceUsdtPrice 兜底序）随「不读取」不可达，整段删除（史实在 git）。
 	total := 0.0
 	var holdings []*v1.Holding
 	for _, b := range acc.Balances {
@@ -60,32 +63,12 @@ func (q *CEXAccountQuerier) accountBinance(ctx context.Context) (*AccountInfo, e
 		if qty <= 0 {
 			continue
 		}
-		// D-361 S2/R1：LD 剥前缀改兜底序——先按原币计价（真币 LDO→LDOUSDT 有对，防前缀
-		// 误剥真币）；查无对且带 LD 前缀才剥前缀重查底层币（LDTRX→TRXUSDT；LDUSDT 剥后
-		// =USDT 价恒 1）；剥后仍无对 → 跳过同现规约（明细保留不猜价，BFUSD/LDXUSD 类同路径）。
-		if b.Asset == "USDT" {
-			total += qty
-			holdings = append(holdings, &v1.Holding{Ccy: b.Asset, Qty: qty, UsdtValue: qty})
-			continue
+		if b.Asset != "USDT" && strings.TrimPrefix(b.Asset, "LD") != "USDT" {
+			continue // 非 USDT 标（LDUSDC/LDTRX/LDO/BFUSD/杂币）：不读取不统计
 		}
-		price, perr := q.binanceUsdtPrice(ctx, spotBase, b.Asset)
-		if perr != nil && strings.HasPrefix(b.Asset, "LD") {
-			asset := strings.TrimPrefix(b.Asset, "LD")
-			if asset == "USDT" {
-				// LDUSDT = USDT 计价封装，价恒 1
-				total += qty
-				holdings = append(holdings, &v1.Holding{Ccy: b.Asset, Qty: qty, UsdtValue: qty})
-				continue
-			}
-			price, perr = q.binanceUsdtPrice(ctx, spotBase, asset)
-		}
-		if perr != nil {
-			// 无 USDT 对的资产（如仅 BTC 计价的小 alt）：不计入估算，明细保留
-			holdings = append(holdings, &v1.Holding{Ccy: b.Asset, Qty: qty})
-			continue
-		}
-		total += qty * price
-		holdings = append(holdings, &v1.Holding{Ccy: b.Asset, Qty: qty, UsdtValue: qty * price})
+		// USDT/LDUSDT 皆 1:1 计 qty，无需价
+		total += qty
+		holdings = append(holdings, &v1.Holding{Ccy: b.Asset, Qty: qty, UsdtValue: qty})
 	}
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
@@ -122,21 +105,6 @@ func (q *CEXAccountQuerier) accountBinancePerp(ctx context.Context) (*AccountInf
 		Balance: eq, Equity: eq, Currency: "USDT",
 		Simulated: q.simulated, Website: q.website,
 	}, nil
-}
-
-// binanceUsdtPrice 取资产 USDT 价（公开接口，无需签名）。
-func (q *CEXAccountQuerier) binanceUsdtPrice(ctx context.Context, spotBase, asset string) (float64, error) {
-	body, err := q.get(ctx, spotBase+"/v3/ticker/price?symbol="+asset+"USDT", nil) // 令牌由 httpx 注入
-	if err != nil {
-		return 0, err
-	}
-	var tp struct {
-		Price string `json:"price"`
-	}
-	if err := json.Unmarshal(body, &tp); err != nil {
-		return 0, err
-	}
-	return strconv.ParseFloat(tp.Price, 64)
 }
 
 // binanceSign HMAC-SHA256 hex 签名（与 exec.CEXExecutor 同法）。

@@ -16,8 +16,8 @@ import (
 	"arb/internal/httpx"
 )
 
-// TestCEXAccount_Binance：签名余额查询 → 权益 = Σ 持币×USDT 价（USDT 价=1，其余走公开 ticker/price）。
-// 用 httptest 模拟 /api/v3/account 与 /api/v3/ticker/price（无签名验证——本地假服务只看响应解析）。
+// TestCEXAccount_Binance：签名余额查询 → D-364 v2 权益=USDT 标 qty 和（非 USDT 标不读取，
+// 不发 ticker）；holdings 只含 USDT 标行。httptest 模拟 /api/v3/account（无签名验证）。
 func TestCEXAccount_Binance(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -46,9 +46,12 @@ func TestCEXAccount_Binance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("binance account: %v", err)
 	}
-	want := 500 + 0.01*60000 // USDT + BTC×价；TRX 无价跳过
-	if acct.Equity != want {
-		t.Errorf("equity want %v, got %v", want, acct.Equity)
+	// D-364 v2：equity 只计 USDT 标=500；BTC 不读取（holdings 无行）。
+	if acct.Equity != 500 {
+		t.Errorf("equity want 500（USDT only）, got %v", acct.Equity)
+	}
+	if len(acct.Holdings) != 1 || acct.Holdings[0].Ccy != "USDT" {
+		t.Errorf("holdings want 仅 USDT 行, got %+v", acct.Holdings)
 	}
 	if acct.VenueKey != "binance:spot" || acct.AssetType != "cex" || acct.Currency != "USDT" {
 		t.Errorf("meta mismatch: %+v", acct)
@@ -90,7 +93,7 @@ func TestCEXAccount_OKX(t *testing.T) {
 			return
 		}
 		gotHeaders = r.Header
-		fmt.Fprint(w, `{"code":"0","msg":"","data":[{"totalEq":"1234.56","details":[{"ccy":"USDT","eq":"1234.56"}]}]}`)
+		fmt.Fprint(w, `{"code":"0","msg":"","data":[{"totalEq":"1234.56","details":[{"ccy":"USDT","eq":"1234.56","cashBal":"1234.56","eqUsd":"1234.56"}]}]}`)
 	}))
 	defer srv.Close()
 
@@ -134,8 +137,9 @@ func TestCEXAccount_OKXSimulated(t *testing.T) {
 	}
 }
 
-// TestCEXAccount_BinanceProxyToken：配置 ARB_BINANCE_PROXY_TOKEN 时，Binance 签名请求与公开
-// ticker 都带 X-Proxy-Token 头（静态代理防开放中继鉴权，D-055）。
+// TestCEXAccount_BinanceProxyToken：配置 ARB_BINANCE_PROXY_TOKEN 时，Binance 签名请求
+// 带 X-Proxy-Token 头（静态代理防开放中继鉴权，D-055；D-364 v2 起 ticker 不再调用，
+// 仅签名 account 请求）。
 func TestCEXAccount_BinanceProxyToken(t *testing.T) {
 	t.Setenv("ARB_BINANCE_PROXY_TOKEN", "tok-123")
 	var gotHeaders []http.Header
@@ -156,8 +160,8 @@ func TestCEXAccount_BinanceProxyToken(t *testing.T) {
 	if _, err := q.Account(context.Background()); err != nil {
 		t.Fatalf("binance account: %v", err)
 	}
-	if len(gotHeaders) < 2 {
-		t.Fatalf("应至少收到 account+ticker 两个请求，got %d", len(gotHeaders))
+	if len(gotHeaders) < 1 {
+		t.Fatalf("应收到 account 请求，got %d", len(gotHeaders))
 	}
 	for i, h := range gotHeaders {
 		if h.Get("X-Proxy-Token") != "tok-123" {
@@ -272,14 +276,15 @@ func TestCEXAccount_BinancePathNoDoublePrefix(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	// spot：base 已含 /api → 期望 /api/v3/account + /api/v3/ticker/price，BTC 计入权益=500+600
+	// spot：base 已含 /api → 期望 /api/v3/account（D-364 v2：非 USDT 标不发 ticker，
+	// /api/v3/ticker/price 路径零调用）；equity 只计 USDT=500。
 	q := NewCEXAccountQuerier("binance", "spot", "k", "s", "", srv.URL+"/api", "", false)
 	acc, err := q.Account(context.Background())
 	if err != nil {
 		t.Fatalf("spot account: %v", err)
 	}
-	if acc.Equity != 1100 {
-		t.Errorf("spot equity want 1100 (500 USDT + 0.01 BTC×60000), got %v（ticker 路径断链则 BTC 被跳过）", acc.Equity)
+	if acc.Equity != 500 {
+		t.Errorf("spot equity want 500 (USDT only；ticker 路径断链则 BTC 明细 usdt_value 缺失), got %v", acc.Equity)
 	}
 	// perp：base 已含 /fapi → 期望 /fapi/v2/account
 	pq := NewCEXAccountQuerier("binance", "perp", "k", "s", "", srv.URL+"/fapi", "", false)
@@ -296,7 +301,7 @@ func TestCEXAccount_BinancePathNoDoublePrefix(t *testing.T) {
 			t.Errorf("double-prefix path: %s", p)
 		}
 	}
-	for _, want := range []string{"/api/v3/account", "/api/v3/ticker/price", "/fapi/v2/account"} {
+	for _, want := range []string{"/api/v3/account", "/fapi/v2/account"} {
 		found := false
 		for _, p := range mu {
 			if p == want {
@@ -309,11 +314,12 @@ func TestCEXAccount_BinancePathNoDoublePrefix(t *testing.T) {
 	}
 }
 
-// TestCEXAccount_BinanceEarnLD D-361 S2：Simple Earn 封装币（LD 前缀）剥前缀按底层币计价——
-// LDUSDT→USDT=1、LDTRX→TRXUSDT ticker、LDUSDC→USDCUSDT；剥后仍无对（LD未知）→跳过同现规约
-// （明细保留不猜价）。实证基线：现货钱包 LDUSDT 20,225+LDUSDC 18.65+~90 LD* 币被跳过=面板
-// $0.40 vs 真值 ≈$20.2k。旧实现红=LD 资产全部无对跳过（equity 仅裸 USDT）。
+// TestCEXAccount_BinanceEarnLD D-364 v2 S1/S4：非 USDT 标资产不读取不统计——equity=USDT 标和
+// （裸 USDT+LDUSDT 1:1）、holdings 只 2 行 USDT 标；fake ticker 断言零调用（「不读取」实证
+// =杂币连定价请求都不发，~90 个 LD* 每轮省调用）。红锚=v1 全计价实现（equity 20536.05+杂币
+// 进 holdings+ticker 有调用）。
 func TestCEXAccount_BinanceEarnLD(t *testing.T) {
+	tickerCalls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/v3/account":
@@ -326,16 +332,8 @@ func TestCEXAccount_BinanceEarnLD(t *testing.T) {
 				{"asset":"LDO","free":"10","locked":"0"}
 			]}`)
 		case "/api/v3/ticker/price":
-			switch r.URL.Query().Get("symbol") {
-			case "USDCUSDT":
-				fmt.Fprint(w, `{"symbol":"USDCUSDT","price":"1.00"}`)
-			case "TRXUSDT":
-				fmt.Fprint(w, `{"symbol":"TRXUSDT","price":"0.28"}`)
-			case "LDOUSDT":
-				fmt.Fprint(w, `{"symbol":"LDOUSDT","price":"1.2"}`)
-			default:
-				http.Error(w, "invalid symbol", http.StatusBadRequest)
-			}
+			tickerCalls++
+			fmt.Fprint(w, `{"price":"1.0"}`)
 		default:
 			http.NotFound(w, r)
 		}
@@ -347,20 +345,55 @@ func TestCEXAccount_BinanceEarnLD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("binance account: %v", err)
 	}
-	// R1 兜底序锚：LDO 是真币（LDOUSDT 有对）→ 原币计价 10×1.2=12；旧剥前缀序误剥成 OUSDT
-	// 无对跳过（红=缺口 12）。
-	want := 0.40 + 20225 + 18.65 + 1000*0.28 + 12 // 裸 USDT + LDUSDT(=1) + LDUSDC×1 + LDTRX×0.28 + LDO×1.2；LD未知跳过
+	// D-364 v2：equity=裸 USDT 0.40+LDUSDT 20225（1:1）=20225.40；红锚=v1 全计价 20536.05。
+	want := 0.40 + 20225
 	if acct.Equity < want-0.0001 || acct.Equity > want+0.0001 {
-		t.Errorf("equity want %.4f, got %.4f（LD 前缀未剥则 Earn 全跳过=20524.05 缺口）", want, acct.Equity)
+		t.Errorf("equity want %.4f, got %.4f（v1 全计价=20536.05 含杂币）", want, acct.Equity)
 	}
-	// 明细保留：LD未知 qty 在 Holdings（usdt_value=0 诚实缺）
-	foundLD未知 := false
+	// holdings 只 2 行 USDT 标；杂币（LDUSDC/LDTRX/LDO/LD未知）不读取不进明细
+	if len(acct.Holdings) != 2 {
+		t.Fatalf("holdings want 2 行 USDT 标, got %d: %+v", len(acct.Holdings), acct.Holdings)
+	}
 	for _, h := range acct.Holdings {
-		if h.Ccy == "LD未知" && h.Qty == 5 && h.UsdtValue == 0 {
-			foundLD未知 = true
+		if h.Ccy != "USDT" && h.Ccy != "LDUSDT" {
+			t.Errorf("holdings 含非 USDT 标 %q（v2 不读取）", h.Ccy)
+		}
+		if h.UsdtValue != h.Qty {
+			t.Errorf("USDT 标 1:1: %s usdt_value=%v qty=%v", h.Ccy, h.UsdtValue, h.Qty)
 		}
 	}
-	if !foundLD未知 {
-		t.Error("LD未知 应保留明细（qty=5, usdt_value=0 不猜）")
+	if tickerCalls != 0 {
+		t.Errorf("ticker 调用 = %d, want 0（非 USDT 标不发定价请求=不读取实证）", tickerCalls)
+	}
+}
+
+// TestCEXAccount_OKXUSDTOnly D-364 S2：okx equity 只计 USDT 标——eq=Σ details[USDT].EqUsd
+// （USDT eqUsd=本币 1:1）；totalEq（全币总权益）不再采用。红锚=旧 TotalEq 实现（含 DOGE/
+// PENGU 杂币折算）。details 无 USDT 行 → equity=0 不 panic。
+func TestCEXAccount_OKXUSDTOnly(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v5/account/balance" {
+			http.NotFound(w, r)
+			return
+		}
+		fmt.Fprint(w, `{"code":"0","msg":"","data":[{"totalEq":"52.24","details":[
+			{"ccy":"USDT","eq":"6.24","cashBal":"6.24","eqUsd":"6.24"},
+			{"ccy":"DOGE","eq":"25.13","cashBal":"10000","eqUsd":"25.13"},
+			{"ccy":"PENGU","eq":"16.95","cashBal":"50000","eqUsd":"16.95"}
+		]}]}`)
+	}))
+	defer srv.Close()
+
+	q := NewCEXAccountQuerier("okx", "spot", "key", "secret", "pass", srv.URL, "", false)
+	acct, err := q.Account(context.Background())
+	if err != nil {
+		t.Fatalf("okx account: %v", err)
+	}
+	if acct.Equity < 6.2399 || acct.Equity > 6.2401 {
+		t.Errorf("equity want 6.24（USDT only）, got %v（旧 TotalEq=52.24 含杂币）", acct.Equity)
+	}
+	// D-364 v2 S2：holdings 只 USDT 行（非 USDT 标不读取）
+	if len(acct.Holdings) != 1 || acct.Holdings[0].Ccy != "USDT" {
+		t.Errorf("holdings want 仅 USDT 行, got %+v", acct.Holdings)
 	}
 }
