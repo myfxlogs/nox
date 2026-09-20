@@ -308,3 +308,54 @@ func TestCEXAccount_BinancePathNoDoublePrefix(t *testing.T) {
 		}
 	}
 }
+
+// TestCEXAccount_BinanceEarnLD D-361 S2：Simple Earn 封装币（LD 前缀）剥前缀按底层币计价——
+// LDUSDT→USDT=1、LDTRX→TRXUSDT ticker、LDUSDC→USDCUSDT；剥后仍无对（LD未知）→跳过同现规约
+// （明细保留不猜价）。实证基线：现货钱包 LDUSDT 20,225+LDUSDC 18.65+~90 LD* 币被跳过=面板
+// $0.40 vs 真值 ≈$20.2k。旧实现红=LD 资产全部无对跳过（equity 仅裸 USDT）。
+func TestCEXAccount_BinanceEarnLD(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v3/account":
+			fmt.Fprint(w, `{"balances":[
+				{"asset":"USDT","free":"0.40","locked":"0"},
+				{"asset":"LDUSDT","free":"20225","locked":"0"},
+				{"asset":"LDUSDC","free":"18.65","locked":"0"},
+				{"asset":"LDTRX","free":"1000","locked":"0"},
+				{"asset":"LD未知","free":"5","locked":"0"}
+			]}`)
+		case "/api/v3/ticker/price":
+			switch r.URL.Query().Get("symbol") {
+			case "USDCUSDT":
+				fmt.Fprint(w, `{"symbol":"USDCUSDT","price":"1.00"}`)
+			case "TRXUSDT":
+				fmt.Fprint(w, `{"symbol":"TRXUSDT","price":"0.28"}`)
+			default:
+				http.Error(w, "invalid symbol", http.StatusBadRequest)
+			}
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	q := NewCEXAccountQuerier("binance", "spot", "key", "secret", "", srv.URL+"/api", "", false)
+	acct, err := q.Account(context.Background())
+	if err != nil {
+		t.Fatalf("binance account: %v", err)
+	}
+	want := 0.40 + 20225 + 18.65 + 1000*0.28 // 裸 USDT + LDUSDT(=1) + LDUSDC×1 + LDTRX×0.28；LD未知跳过
+	if acct.Equity < want-0.0001 || acct.Equity > want+0.0001 {
+		t.Errorf("equity want %.4f, got %.4f（LD 前缀未剥则 Earn 全跳过=20524.05 缺口）", want, acct.Equity)
+	}
+	// 明细保留：LD未知 qty 在 Holdings（usdt_value=0 诚实缺）
+	foundLD未知 := false
+	for _, h := range acct.Holdings {
+		if h.Ccy == "LD未知" && h.Qty == 5 && h.UsdtValue == 0 {
+			foundLD未知 = true
+		}
+	}
+	if !foundLD未知 {
+		t.Error("LD未知 应保留明细（qty=5, usdt_value=0 不猜）")
+	}
+}

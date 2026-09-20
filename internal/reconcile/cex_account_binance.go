@@ -60,12 +60,16 @@ func (q *CEXAccountQuerier) accountBinance(ctx context.Context) (*AccountInfo, e
 		if qty <= 0 {
 			continue
 		}
-		if b.Asset == "USDT" {
+		// D-361 S2：Simple Earn 封装币（LD 前缀）剥前缀按底层币计价——LDUSDT→USDT=1、
+		// LDTRX→TRXUSDT ticker；剥后仍无交易对 → 跳过同现规约（明细保留不猜价，
+		// BFUSD/LDXUSD 类「LD 后接非常规币」走同一路径）。
+		asset := strings.TrimPrefix(b.Asset, "LD")
+		if asset == "USDT" {
 			total += qty
 			holdings = append(holdings, &v1.Holding{Ccy: b.Asset, Qty: qty, UsdtValue: qty})
 			continue
 		}
-		price, perr := q.binanceUsdtPrice(ctx, spotBase, b.Asset)
+		price, perr := q.binanceUsdtPrice(ctx, spotBase, asset)
 		if perr != nil {
 			// 无 USDT 对的资产（如仅 BTC 计价的小 alt）：不计入估算，明细保留
 			holdings = append(holdings, &v1.Holding{Ccy: b.Asset, Qty: qty})
