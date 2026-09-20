@@ -170,6 +170,9 @@ service DashboardService {
   rpc ListSpotCarryDemo(ListSpotCarryDemoRequest) returns (ListSpotCarryDemoResponse);
   // D-352：纸面轨前端卡（持仓页第三卡）——active+demo+近 14 天 exited 三态。
   rpc ListPaperSpotCarry(ListPaperSpotCarryRequest) returns (ListPaperSpotCarryResponse);
+
+  // D-359：资金不眠覆盖率前端面板（口径 SSOT=D-356 §1.1；digest 段同源双实现，后端算前端零计算）。
+  rpc GetCapitalCoverage(GetCapitalCoverageRequest) returns (GetCapitalCoverageResponse);
 }
 
 // === Quote（§1.1）===
@@ -2093,4 +2096,32 @@ message PaperSpotCarryRow {
 
 message ListPaperSpotCarryResponse {
   repeated PaperSpotCarryRow rows = 1;   // active（net_now desc，null 殿后）→ demo → exited（exit_ts desc）
+}
+
+// === D-359：资金不眠覆盖率（口径 SSOT=D-356 §1.1；has_* 布尔对替代 0/nil 歧义）===
+
+message GetCapitalCoverageRequest {}
+
+message CapitalCoverageRow {
+  string pool        = 1;
+  double balance_usd = 2;  // has_balance=false 时无意义
+  bool   has_balance = 3;  // nil 语义：无 USD 价/未采 → 前端渲染「—」
+  string status      = 4;
+  double apr_pct     = 5;  // has_apr=false 时无意义
+  bool   has_apr     = 6;
+  string apr_text    = 7;  // APRNilText（如「新开仓」；空且 has_apr=false → 「—」）
+  string note        = 8;
+  bool   productive  = 9;
+  bool   real_money  = 10;
+}
+
+message GetCapitalCoverageResponse {
+  repeated CapitalCoverageRow rows = 1;
+  double total_usd      = 2;  // 总资金（真金行余额和）
+  double productive_usd = 3;  // 在产
+  double coverage_pct   = 4;  // 在产/总资金×100；total=0 → 0+has_summary=false
+  double weighted_apr   = 5;  // Σbal×apr/Σ有年化真金 bal；无年化行 → has_weighted=false
+  bool   has_summary    = 6;
+  bool   has_weighted   = 7;
+  string caliber_note   = 8;  // 口径注记（与 digest 段注记同文本）
 }

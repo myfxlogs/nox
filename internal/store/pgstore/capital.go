@@ -194,3 +194,35 @@ func (s *Store) CurrentSnapshot(ctx context.Context, accountID int64) (capital.C
 	}
 	return *snap, nil
 }
+
+// CapitalSnapshotLite 最新 per-scope 快照（D-359 覆盖率面板行）。
+type CapitalSnapshotLite struct {
+	ScopeType string
+	ScopeKey  string
+	Quality   string
+	USD       *float64 // 清算净值链 liquidatable→equity→cash，全空则 nil
+}
+
+// LatestCapitalSnapshotRows 每 (scope_type, scope_key) 最新一行（快照 id 降序=最新）。
+// 表空 → 空 nil 切片（体系未喂数自动不列，D-356 口径）。
+func (s *Store) LatestCapitalSnapshotRows(ctx context.Context) ([]CapitalSnapshotLite, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT ON (scope_type, scope_key)
+		       scope_type, scope_key, quality,
+		       COALESCE(liquidatable_equity_usd, equity_usd, cash_usd)
+		FROM capital_snapshots
+		ORDER BY scope_type, scope_key, snapshot_id DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("latest capital snapshot rows: %w", err)
+	}
+	defer rows.Close()
+	var out []CapitalSnapshotLite
+	for rows.Next() {
+		var r CapitalSnapshotLite
+		if err := rows.Scan(&r.ScopeType, &r.ScopeKey, &r.Quality, &r.USD); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}

@@ -230,3 +230,15 @@ func (s *Store) FirstCMCPositionOpenedAt(ctx context.Context) (*time.Time, error
 	err := s.pool.QueryRow(ctx, `SELECT MIN(opened_at) FROM fin_cmc_positions`).Scan(&day)
 	return day, err
 }
+
+// LastCMCPositionSnapshotSummary 最新持仓快照聚合（D-359 覆盖率面板）：
+// 最新 fetched_at 快照的行数与浮盈和；空表 → n=0。
+func (s *Store) LastCMCPositionSnapshotSummary(ctx context.Context) (pnl *float64, n int, err error) {
+	err = s.pool.QueryRow(ctx, `
+		SELECT SUM(unrealised_pnl), COUNT(*) FROM fin_cmc_positions
+		WHERE fetched_at = (SELECT MAX(fetched_at) FROM fin_cmc_positions)`).Scan(&pnl, &n)
+	if err != nil {
+		return nil, 0, fmt.Errorf("last cmc position snapshot summary: %w", err)
+	}
+	return pnl, n, nil
+}

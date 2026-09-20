@@ -43,3 +43,34 @@ func (s *Store) InsertVenueAccountSnapshots(ctx context.Context, snaps []VenueAc
 	}
 	return nil
 }
+
+// VenueAccountLatest 每 venue 最新快照（D-359 覆盖率面板行）。
+type VenueAccountLatest struct {
+	Venue     string
+	VenueType string
+	EquityRaw *float64 // 列可空
+	Currency  string
+	FetchedAt time.Time
+}
+
+// LatestVenueAccountSnapshots 每 venue 最新一行（DISTINCT ON venue，fetched_at DESC）。
+// 空表 → 空 nil 切片（调用方回退「未采」占位）。
+func (s *Store) LatestVenueAccountSnapshots(ctx context.Context) ([]VenueAccountLatest, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT ON (venue) venue, venue_type, equity_raw, currency, fetched_at
+		FROM fin_venue_account_snapshot
+		ORDER BY venue, fetched_at DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("latest venue account snapshots: %w", err)
+	}
+	defer rows.Close()
+	var out []VenueAccountLatest
+	for rows.Next() {
+		var r VenueAccountLatest
+		if err := rows.Scan(&r.Venue, &r.VenueType, &r.EquityRaw, &r.Currency, &r.FetchedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}

@@ -179,3 +179,21 @@ func (s *Store) CountDailyIncomeByRange(ctx context.Context, from, to *time.Time
 	}
 	return n, nil
 }
+
+// AvgDailyIncomeCarry7d 近 7 日日均 carry（D-359 覆盖率面板系统持仓年化）：
+// (energy+voting)×快照价+利息，浮动盈亏不计（与 digest D-356 段同口径）。
+// 无样本 → ok=false。
+func (s *Store) AvgDailyIncomeCarry7d(ctx context.Context) (avg float64, ok bool, err error) {
+	var v *float64
+	err = s.pool.QueryRow(ctx, `
+		SELECT AVG((COALESCE(energy_trx, 0) + COALESCE(voting_trx, 0)) * COALESCE(price, 0) + COALESCE(interest_usd, 0))
+		FROM position_daily_income
+		WHERE day >= CURRENT_DATE - INTERVAL '7 days'`).Scan(&v)
+	if err != nil {
+		return 0, false, fmt.Errorf("avg daily income carry 7d: %w", err)
+	}
+	if v == nil {
+		return 0, false, nil
+	}
+	return *v, true, nil
+}

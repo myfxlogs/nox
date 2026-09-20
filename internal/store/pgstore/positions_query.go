@@ -180,3 +180,32 @@ func (s *Store) ActiveOpportunityIDs(ctx context.Context) (map[string]bool, erro
 	}
 	return out, rows.Err()
 }
+
+// EnvNotional 活跃仓名义额按 environment 分组（D-359 覆盖率面板行）。
+type EnvNotional struct {
+	Env         string // live / demo（NULL 归 live）
+	NotionalUSD float64
+}
+
+// ActiveNotionalByEnv 活跃仓（OPEN/OPENING/LEGGED/CLOSING）Σ notional_usd 按 environment。
+// 零活跃仓 → 空切片（调用方出「零持仓」行）。
+func (s *Store) ActiveNotionalByEnv(ctx context.Context) ([]EnvNotional, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT COALESCE(environment, 'live'), COALESCE(SUM(notional_usd), 0)
+		FROM positions
+		WHERE status IN ('OPENING', 'OPEN', 'LEGGED', 'CLOSING')
+		GROUP BY 1`)
+	if err != nil {
+		return nil, fmt.Errorf("active notional by env: %w", err)
+	}
+	defer rows.Close()
+	var out []EnvNotional
+	for rows.Next() {
+		var e EnvNotional
+		if err := rows.Scan(&e.Env, &e.NotionalUSD); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
