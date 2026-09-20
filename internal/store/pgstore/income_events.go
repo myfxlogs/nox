@@ -87,13 +87,16 @@ func (s *Store) SumIncomeForDay(ctx context.Context, venue, symbol string, day t
 // MatchOpenLegForIncome income 行→OPEN 仓腿匹配：venue+symbol 在活跃仓（四态，同
 // positions_active_dedup_key_idx 口径）OPEN 腿中**唯一命中**才返回 (posID, legNo, 1)；
 // 零命中 → (0,0,0)；多义 → (last, hits>1)——调用方按 hits==1 才采信（不猜，venue 侧可重查）。
-func (s *Store) MatchOpenLegForIncome(ctx context.Context, venue, symbol string) (posID int64, legNo int16, hits int, err error) {
+// D-362 S5：env=demo/live 环境一致性——sim 配置事件只配 environment='demo' 腿、
+// real 只配 live（NULL 归 live）；venue 传全形（"binance:perp"=position_legs.venue 口径）。
+func (s *Store) MatchOpenLegForIncome(ctx context.Context, venue, symbol, env string) (posID int64, legNo int16, hits int, err error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT p.id, l.leg_no
 		FROM position_legs l
 		JOIN positions p ON p.id = l.position_id
 		WHERE l.venue = $1 AND l.symbol = $2 AND l.phase = 'OPEN'
-		  AND p.status IN ('OPENING','OPEN','LEGGED','CLOSING')`, venue, symbol)
+		  AND p.status IN ('OPENING','OPEN','LEGGED','CLOSING')
+		  AND COALESCE(p.environment, 'live') = $3`, venue, symbol, env)
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf("match open leg: %w", err)
 	}

@@ -26,12 +26,15 @@ type BinanceIncomeAccount struct {
 	APIKey    string
 	APISecret string
 	BaseURL   string
+	Simulated bool // D-362 S5：sim 配置事件只配 demo 腿（environment 一致性）
 }
 
 // IncomeEventSink income_events 落库/游标/匹配依赖（pgstore.Store 实现；单测用 fake）。
 type IncomeEventSink interface {
 	MaxIncomeEventTS(ctx context.Context, venue string, accountID int64) (time.Time, bool, error)
-	MatchOpenLegForIncome(ctx context.Context, venue, symbol string) (posID int64, legNo int16, hits int, err error)
+	// D-362 S5：venue 传全形（"binance:perp"=腿 venue 口径，修 "binance" 格式不匹配的
+	// 结构性死匹配）；env=demo/live 配置环境一致性过滤。
+	MatchOpenLegForIncome(ctx context.Context, venue, symbol, env string) (posID int64, legNo int16, hits int, err error)
 	InsertIncomeEvents(ctx context.Context, evs []pgstore.IncomeEvent) (int64, error)
 }
 
@@ -84,7 +87,13 @@ func (c *BinanceIncomeCollector) RunOnce(ctx context.Context) (int64, error) {
 				Venue: VenueBinance, AccountID: acc.ID, Symbol: r.Symbol,
 				IncomeType: r.IncomeType, AmountUSD: r.Income, TranID: r.TranID, Ts: r.Ts,
 			}
-			posID, legNo, hits, err := c.sink.MatchOpenLegForIncome(ctx, VenueBinance, r.Symbol)
+			// D-362 S5：venue 全形（腿口径）+ 环境一致性（sim 配置事件只配 demo 腿，
+			// real 只配 live——income_events.venue 列保持 'binance' 原值，核证点④）。
+			env := "live"
+			if acc.Simulated {
+				env = "demo"
+			}
+			posID, legNo, hits, err := c.sink.MatchOpenLegForIncome(ctx, VenueBinance+":perp", r.Symbol, env)
 			switch {
 			case err != nil:
 				fmt.Printf("[income] match %s: %v (leave NULL)\n", r.Symbol, err)

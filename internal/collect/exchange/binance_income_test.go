@@ -22,16 +22,16 @@ import (
 type fakeIncomeSink struct {
 	maxTS    time.Time
 	hasMax   bool
-	match    func(venue, symbol string) (int64, int16, int, error)
+	match    func(venue, symbol, env string) (int64, int16, int, error)
 	inserted []pgstore.IncomeEvent
 }
 
 func (f *fakeIncomeSink) MaxIncomeEventTS(_ context.Context, _ string, _ int64) (time.Time, bool, error) {
 	return f.maxTS, f.hasMax, nil
 }
-func (f *fakeIncomeSink) MatchOpenLegForIncome(_ context.Context, venue, symbol string) (int64, int16, int, error) {
+func (f *fakeIncomeSink) MatchOpenLegForIncome(_ context.Context, venue, symbol, env string) (int64, int16, int, error) {
 	if f.match != nil {
-		return f.match(venue, symbol)
+		return f.match(venue, symbol, env)
 	}
 	return 0, 0, 0, nil
 }
