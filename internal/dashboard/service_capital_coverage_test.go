@@ -5,6 +5,7 @@ package dashboard
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -192,5 +193,43 @@ func TestGetCapitalCoverage_Empty(t *testing.T) {
 	}
 	if resp.CaliberNote == "" {
 		t.Error("口径注记应随响应返回")
+	}
+}
+
+// TestGetCapitalCoverage_VenueUSDDenominator D-361 S1 锚：USDT/USD 同视 1:1 入总资金分母
+// （业主令），UST 仍排除（「—」+note 不猜）。
+func TestGetCapitalCoverage_VenueUSDDenominator(t *testing.T) {
+	s := covTestStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	if err := s.InsertVenueAccountSnapshots(ctx, []pgstore.VenueAccountSnapshot{
+		{Venue: "binance", VenueType: "spot", EquityRaw: 100, Currency: "USDT", FetchedAt: now},
+		{Venue: "1279967", VenueType: "mt5", EquityRaw: 500, Currency: "USD", FetchedAt: now},
+		{Venue: "15032313", VenueType: "mt5", EquityRaw: 700, Currency: "UST", FetchedAt: now},
+	}); err != nil {
+		t.Fatalf("seed venue snapshots: %v", err)
+	}
+	resp := covResponse(ctx, t, covTestService(s))
+	var usdRow, ustRow *v1.CapitalCoverageRow
+	for _, r := range resp.Rows {
+		if r.Pool == "venue账户 1279967/mt5" {
+			usdRow = r
+		}
+		if r.Pool == "venue账户 15032313/mt5" {
+			ustRow = r
+		}
+	}
+	if usdRow == nil || !usdRow.HasBalance || usdRow.BalanceUsd != 500 {
+		t.Fatalf("USD 行应入分母（HasBalance=500）, got %+v", usdRow)
+	}
+	if ustRow == nil || ustRow.HasBalance {
+		t.Fatalf("UST 行应无 USD 价（HasBalance=false）, got %+v", ustRow)
+	}
+	// 总资金含 USD 行：total ≥ 500（=100 USDT+500 USD），UST 700 不入
+	if !resp.HasSummary || resp.TotalUsd != 600 {
+		t.Errorf("total = %f (has=%v), want 600（USDT 100+USD 500；UST 700 排除）", resp.TotalUsd, resp.HasSummary)
+	}
+	if !strings.Contains(resp.CaliberNote, "USDT/USD 行同视 USD 入总资金分母") {
+		t.Errorf("口径注记应含 USDT/USD 同文: %s", resp.CaliberNote)
 	}
 }

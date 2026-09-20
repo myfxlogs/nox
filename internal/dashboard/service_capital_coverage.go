@@ -15,7 +15,7 @@ import (
 )
 
 // capitalCoverageCaliberNote 口径注记（与 digest renderCapitalCoverageSection 注记同文本）。
-const capitalCoverageCaliberNote = "口径：快照时点在产=TRX 在赚+系统 live 持仓+CMC 持仓中（非时序加权，日级趋势看历史行）；加权年化分母=有年化真金行余额（CMC 手动仓/未采/纸面/venue 现金不进分子分母）；仅 real 账户/持仓入表（demo/sim/纸面=噪声不入）；venue 账户现金=闲置不计在产（睡钱暴露，USDT 行入总资金分母）；CFD 周末闭市持仓中≠空转；系统持仓年化=position_daily_income 近7日日均 carry（TRX 收益×快照价+利息，浮动盈亏不计）折算年化；能量 APR=D-258 30d 口径。"
+const capitalCoverageCaliberNote = "口径：快照时点在产=TRX 在赚+系统 live 持仓+CMC 持仓中（非时序加权，日级趋势看历史行）；加权年化分母=有年化真金行余额（CMC 手动仓/未采/纸面/venue 现金不进分子分母）；仅 real 账户/持仓入表（demo/sim/纸面=噪声不入）；venue 账户现金=闲置不计在产（睡钱暴露，USDT/USD 行同视 USD 入总资金分母）；CFD 周末闭市持仓中≠空转；系统持仓年化=position_daily_income 近7日日均 carry（TRX 收益×快照价+利息，浮动盈亏不计）折算年化；能量 APR=D-258 30d 口径。"
 
 // GetCapitalCoverage D-359：五源逐池行+汇总（后端算，前端零计算）。
 func (s *Service) GetCapitalCoverage(ctx context.Context, req *connect.Request[v1.GetCapitalCoverageRequest]) (*connect.Response[v1.GetCapitalCoverageResponse], error) {
@@ -179,7 +179,7 @@ func capitalSnapshotRows(ctx context.Context, s *Service) []*v1.CapitalCoverageR
 	return out
 }
 
-// venueAccountRows ⑤CEX/MT：每 venue 最新快照（D-358 落库）；USDT 行入总资金分母，
+// venueAccountRows ⑤CEX/MT：每 venue 最新快照（D-358 落库）；USDT/USD 行同视 USD 入总资金分母，
 // 非 USDT 不折算标原币（D-358 §4）；现金=闲置 Productive=false。
 // 空表/缺表 → 行省略（D-359 §S2 口径：rows 全空=前端「数据源全缺」；与 digest 段的
 // 未采回退行不同——双实现各按其 SSOT 条款）。
@@ -197,13 +197,13 @@ func venueAccountRows(ctx context.Context, s *Service) []*v1.CapitalCoverageRow 
 		if age > 24*time.Hour {
 			ageNote += "（陈旧）"
 		}
-		if l.EquityRaw != nil && l.Currency == "USDT" {
+		if l.EquityRaw != nil && (l.Currency == "USDT" || l.Currency == "USD") { // D-361 S1：USDT/USD 同视 1:1
 			r.BalanceUsd = *l.EquityRaw
 			r.HasBalance = true
 			r.RealMoney = true
 			r.Note = ageNote
 		} else if l.EquityRaw != nil {
-			r.Note = fmt.Sprintf("%s，equity %.2f %s（非 USDT 不折算）", ageNote, *l.EquityRaw, l.Currency)
+			r.Note = fmt.Sprintf("%s，equity %.2f %s（非 USDT/USD 不折算）", ageNote, *l.EquityRaw, l.Currency)
 		} else {
 			r.Note = ageNote + "，equity 空"
 		}
