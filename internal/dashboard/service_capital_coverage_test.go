@@ -229,7 +229,7 @@ func TestGetCapitalCoverage_VenueUSDDenominator(t *testing.T) {
 	if !resp.HasSummary || resp.TotalUsd != 600 {
 		t.Errorf("total = %f (has=%v), want 600（USDT 100+USD 500；UST 700 排除）", resp.TotalUsd, resp.HasSummary)
 	}
-	if !strings.Contains(resp.CaliberNote, "USDT/USD 行同视 USD 入总资金分母") {
+	if !strings.Contains(resp.CaliberNote, "CEX=USDT 标余额，USDT/LDUSDT 计、杂币不折算；MT=USD 同视") {
 		t.Errorf("口径注记应含 USDT/USD 同文: %s", resp.CaliberNote)
 	}
 }

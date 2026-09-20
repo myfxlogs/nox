@@ -15,7 +15,7 @@ import (
 )
 
 // capitalCoverageCaliberNote 口径注记（与 digest renderCapitalCoverageSection 注记同文本）。
-const capitalCoverageCaliberNote = "口径：快照时点在产=TRX 在赚+系统 live 持仓+CMC 持仓中（非时序加权，日级趋势看历史行）；加权年化分母=有年化真金行余额（CMC 手动仓/未采/纸面/venue 现金不进分子分母）；仅 real 账户/持仓入表（demo/sim/纸面=噪声不入）；venue 账户现金=闲置不计在产（睡钱暴露，USDT/USD 行同视 USD 入总资金分母）；CFD 周末闭市持仓中≠空转；系统持仓年化=position_daily_income 近7日日均 carry（TRX 收益×快照价+利息，浮动盈亏不计）折算年化；能量 APR=D-258 30d 口径。"
+const capitalCoverageCaliberNote = "口径：快照时点在产=TRX 在赚+系统 live 持仓+CMC 持仓中（非时序加权，日级趋势看历史行）；加权年化分母=有年化真金行余额（CMC 手动仓/未采/纸面/venue 现金不进分子分母）；仅 real 账户/持仓入表（demo/sim/纸面=噪声不入）；venue 账户现金=闲置不计在产（睡钱暴露；CEX=USDT 标余额，USDT/LDUSDT 计、杂币不折算；MT=USD 同视）；CFD 周末闭市持仓中≠空转；系统持仓年化=position_daily_income 近7日日均 carry（TRX 收益×快照价+利息，浮动盈亏不计）折算年化；能量 APR=D-258 30d 口径。"
 
 // GetCapitalCoverage D-359：五源逐池行+汇总（后端算，前端零计算）。
 func (s *Service) GetCapitalCoverage(ctx context.Context, req *connect.Request[v1.GetCapitalCoverageRequest]) (*connect.Response[v1.GetCapitalCoverageResponse], error) {
