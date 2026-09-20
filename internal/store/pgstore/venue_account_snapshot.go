@@ -53,13 +53,14 @@ type VenueAccountLatest struct {
 	FetchedAt time.Time
 }
 
-// LatestVenueAccountSnapshots 每 venue 最新一行（DISTINCT ON venue，fetched_at DESC）。
+// LatestVenueAccountSnapshots 每 (venue, venue_type) 最新一行（DISTINCT ON 双键，
+// D-358fix：同 venue 双 type 如 okx spot/perp 是两个独立资金池，折叠成一行=漏行）。
 // 空表 → 空 nil 切片（调用方回退「未采」占位）。
 func (s *Store) LatestVenueAccountSnapshots(ctx context.Context) ([]VenueAccountLatest, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT DISTINCT ON (venue) venue, venue_type, equity_raw, currency, fetched_at
+		SELECT DISTINCT ON (venue, venue_type) venue, venue_type, equity_raw, currency, fetched_at
 		FROM fin_venue_account_snapshot
-		ORDER BY venue, fetched_at DESC`)
+		ORDER BY venue, venue_type, fetched_at DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("latest venue account snapshots: %w", err)
 	}

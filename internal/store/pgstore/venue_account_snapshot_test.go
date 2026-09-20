@@ -44,3 +44,38 @@ func TestInsertVenueAccountSnapshots(t *testing.T) {
 		t.Errorf("row = %s/%s/%f/%s, want Exness/mt5/10050/USC", venue, vt, eq, ccy)
 	}
 }
+
+// TestLatestVenueAccountSnapshots_DualType D-358fix 锚：同 venue 双 venue_type → 两行
+// （各自取最新；旧 DISTINCT ON (venue) 单键把 okx spot/perp 折叠成一行=漏池）。
+func TestLatestVenueAccountSnapshots_DualType(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.pool.Exec(ctx, "TRUNCATE fin_venue_account_snapshot"); err != nil {
+		t.Fatalf("TRUNCATE: %v", err)
+	}
+	now := time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)
+	err := s.InsertVenueAccountSnapshots(ctx, []VenueAccountSnapshot{
+		{Venue: "okx", VenueType: "spot", EquityRaw: 100, Currency: "USDT", FetchedAt: now.Add(-2 * time.Hour)},
+		{Venue: "okx", VenueType: "perp", EquityRaw: 200, Currency: "USDT", FetchedAt: now.Add(-2 * time.Hour)},
+		// spot 新一轮 300（应胜出）；perp 旧轮 250（比现有 200 更旧，应被该 type 折叠掉）
+		{Venue: "okx", VenueType: "spot", EquityRaw: 300, Currency: "USDT", FetchedAt: now},
+		{Venue: "okx", VenueType: "perp", EquityRaw: 250, Currency: "USDT", FetchedAt: now.Add(-3 * time.Hour)},
+	})
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	lates, err := s.LatestVenueAccountSnapshots(ctx)
+	if err != nil {
+		t.Fatalf("latest: %v", err)
+	}
+	if len(lates) != 2 {
+		t.Fatalf("rows = %d, want 2（同 venue 双 type 不折叠）: %+v", len(lates), lates)
+	}
+	// ORDER BY venue, venue_type → perp 前 spot 后；各取自身 venue_type 最新
+	if lates[0].VenueType != "perp" || lates[0].EquityRaw == nil || *lates[0].EquityRaw != 200 {
+		t.Errorf("rows[0] = %s equity %v, want perp/200（旧轮 250 被折叠）", lates[0].VenueType, lates[0].EquityRaw)
+	}
+	if lates[1].VenueType != "spot" || lates[1].EquityRaw == nil || *lates[1].EquityRaw != 300 {
+		t.Errorf("rows[1] = %s equity %v, want spot/300（最新轮胜出）", lates[1].VenueType, lates[1].EquityRaw)
+	}
+}
