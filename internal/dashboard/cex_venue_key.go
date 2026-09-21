@@ -4,24 +4,16 @@
 package dashboard
 
 import (
-	"time"
-
+	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
 )
 
-// cexKeyWinners 计算撞键组赢家：同 "venue:type" 多 config 取 created_at 最大
-// （=今日后写覆盖赢家语义的显式化，SSOT §0/§6D；created_at 并列取 id 大，确定性）。
-// 返回 "venue:type" → 赢家 configID。单 config 组无撞键（CexVenueKey 原样放行）。
+// cexKeyWinners D-369-R2 S1：薄转发 reconcile.CexKeyWinners（赢家逻辑单一实现，
+// 防双份漂移；本文件仅保留 pgstore.ExchangeConfig → WinnersConfig 适配）。
 func cexKeyWinners(cfgs []pgstore.ExchangeConfig) map[string]int64 {
-	winners := make(map[string]int64, len(cfgs))
-	bestCreated := make(map[string]time.Time, len(cfgs))
-	for _, c := range cfgs {
-		k := c.Venue + ":" + c.VenueType
-		prev, seen := bestCreated[k]
-		if !seen || c.CreatedAt.After(prev) || (c.CreatedAt.Equal(prev) && c.ID > winners[k]) {
-			bestCreated[k] = c.CreatedAt
-			winners[k] = c.ID
-		}
+	in := make([]reconcile.WinnersConfig, len(cfgs))
+	for i, c := range cfgs {
+		in[i] = reconcile.WinnersConfig{Venue: c.Venue, VenueType: c.VenueType, ID: c.ID, CreatedAt: c.CreatedAt}
 	}
-	return winners
+	return reconcile.CexKeyWinners(in)
 }
