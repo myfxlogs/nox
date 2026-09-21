@@ -10,8 +10,10 @@
 // v1.1 修订：不追加 pool_* 参数（pgx.Connect 单连接路径不认 pgxpool 专有参数）。
 // D-351 三杠杆（测试连接稳定性）：S1 SharedStore 包进程级共享池（per-test 池=每包 dial
 // 数百次是 D-350 两轮复审假红的连接层根因 amplifier）；S2 normalizeDSN 追加
-// connect_timeout=5（连接类故障 120s 挂死→5s 快败）；S3 逐包库名（env 指向共享 arb_test
-// 时改写 arb_test_<包tag>+幂等建库——多包/多席并行零互踩，-p 1 从纪律降级为非必要）。
+// connect_timeout=5（连接类故障 120s 挂死→5s 快败）；S3 逐包库名（env 指向共享 *_test
+// 基名时改写 <基名>_<包tag>+幂等建库——多包/多席并行零互踩，-p 1 从纪律降级为非必要；
+// D-373 泛化：判定从 arb_test 精确名放宽为一切 _test 结尾基名，收编 service/exec 共享基名
+// 漏网通道——本机并行跑时全消费方共库互踩；ci.yml 四显式建库行变冗余但无害零改动兼容）。
 package testutil
 
 import (
@@ -49,8 +51,10 @@ func isTestDB(dsn string) bool {
 //   - 无 options= → 追加 options=-c%20lock_timeout=5s（62 个 TRUNCATE 位点一处兜底，
 //     pgx 认 URL options 参数已实证：SHOW lock_timeout=3s 实测通过）
 //   - 追加 connect_timeout=5（D-351 S2：连接类故障从 pgx 回退链 120s 挂死变 5s 快败）
-//   - db 名恰为共享 arb_test → 改写 arb_test_<调用方包tag> 并幂等建库（D-351 S3：
-//     多包/多席并行零互踩；其他库名=CI 四库配方等显式指定，原样不动）
+//   - db 名以 _test 结尾的共享基名（arb_test/arb_service_test/arb_exec_test/任意基名）→
+//     改写 <基名>_<调用方包tag> 并幂等建库（D-351 S3 逐包隔离；D-373 泛化——此前仅 arb_test
+//     精确名改写，service/exec 共享基名漏网=本机并行跑时全消费方共库 TRUNCATE 互踩；显式命名
+//     的库（不以 _test 结尾）=调用方自担隔离责任。ci.yml 四显式建库行变冗余但无害，零改动兼容）
 //
 // D-207 v1.1 修订：不再追加 pool_max_conns/pool_min_conns——TestDSN 消费方含
 // pgx.Connect（单连接）路径（internal/exec/execute_guard_test.go），pool_* 是
@@ -100,15 +104,21 @@ func normalizeDSN(dsn string) string {
 	return dsn
 }
 
-// perPkgDSN D-351 S3：db 名恰为共享 arb_test → 改写 arb_test_<tag>（逐包隔离，
-// 并行多包/多席共用实例零互踩）；其他库名（CI 四库配方/arb_test_local 等显式指定）
-// 与空 tag（调用方推导失败）原样不动。
+// perPkgDSN D-351 S3 + D-373 泛化：db 名以 _test 结尾的共享基名（arb_test /
+// arb_service_test / arb_exec_test / 任意未来基名）→ 改写 <基名>_<tag>（逐包隔离，
+// 并行多包/多席共用实例零互踩；CI ci.yml 四显式建库行变冗余但无害）。已 tag 名
+// （arb_test_scan，后缀非 _test）幂等不再追加；显式命名的库（不以 _test 结尾，如
+// arb_test_local）=调用方自担隔离责任；空 tag（调用方推导失败）原样不动。
 func perPkgDSN(dsn, tag string) (string, bool) {
 	u, err := url.Parse(dsn)
-	if err != nil || u.Path != "/arb_test" || tag == "" {
+	if err != nil || u.Path == "" || tag == "" {
 		return dsn, false
 	}
-	u.Path = "/arb_test_" + tag
+	name := strings.TrimPrefix(u.Path, "/")
+	if !strings.HasSuffix(name, "_test") {
+		return dsn, false
+	}
+	u.Path = "/" + name + "_" + tag
 	return u.String(), true
 }
 

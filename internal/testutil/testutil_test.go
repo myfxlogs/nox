@@ -179,23 +179,34 @@ func TestConnectTimeout_FastFail(t *testing.T) {
 	}
 }
 
-// TestPerPkgDSN D-351 T1（S3 纯函数锚）：env 指向共享 arb_test → 改写 arb_test_<tag>；
-// 其他库名（CI 四库配方）与空 tag 原样不动。
+// TestPerPkgDSN D-351 T1（S3 纯函数锚）+ D-373 泛化改义：db 名以 _test 结尾的共享基名
+// 一律改写 <基名>_<tag>（arb_test 既有语义不变 + arb_service_test/arb_exec_test 新收编 +
+// 任意 my_test 同权）；已 tag 名（arb_test_scan，_scan 不在结尾）幂等不再追加；
+// 显式非 _test 结尾名（arb_test_local）=调用方自担隔离，原样放行；空 tag 原样。
 func TestPerPkgDSN(t *testing.T) {
-	got, changed := perPkgDSN("postgres://u:p@h:5432/arb_test?sslmode=disable", "scan")
-	if !changed || !strings.Contains(got, "/arb_test_scan?") || strings.Contains(got, "host=/arb_test") {
-		t.Errorf("arb_test 应改写为 arb_test_scan: changed=%v got=%s", changed, got)
+	// 改写集：*_test 结尾基名 → <基名>_<tag>
+	for _, tc := range []struct{ base, wantPath string }{
+		{"arb_test", "/arb_test_scan"},                 // 既有行为不变（向后兼容锚）
+		{"arb_service_test", "/arb_service_test_scan"}, // D-373 新收编（原「CI 显式库名」注释放行的漏网通道）
+		{"arb_exec_test", "/arb_exec_test_scan"},       // D-373 新收编
+		{"my_test", "/my_test_scan"},                   // 任意 *_test 名同权隔离（命名注入更严不是更松）
+	} {
+		got, changed := perPkgDSN("postgres://u:p@h:5432/"+tc.base+"?sslmode=disable", "scan")
+		if !changed {
+			t.Errorf("%s 应改写（D-373 *_test 后缀判定）: got=%s", tc.base, got)
+			continue
+		}
+		if u, _ := url.Parse(got); u.Path != tc.wantPath {
+			t.Errorf("%s 改写后 Path = %q, want %q", tc.base, u.Path, tc.wantPath)
+		}
 	}
-	if u, _ := url.Parse(got); u.Path != "/arb_test_scan" {
-		t.Errorf("改写后 Path = %q, want /arb_test_scan", u.Path)
-	}
+	// 不改写集：已 tag 名幂等 + 显式命名库
 	for _, dsn := range []string{
-		"postgres://u:p@h:5432/arb_service_test", // CI 显式库名
-		"postgres://u:p@h:5432/arb_exec_test",
-		"postgres://u:p@h:5432/arb_test_local",
+		"postgres://u:p@h:5432/arb_test_scan",  // 已 tag：幂等不再追加（_scan 不在结尾）
+		"postgres://u:p@h:5432/arb_test_local", // 显式命名库：调用方自担隔离责任
 	} {
 		if got, changed := perPkgDSN(dsn, "scan"); changed {
-			t.Errorf("非 arb_test 库名不应改写: %s → %s", dsn, got)
+			t.Errorf("不改写集命中: %s → %s", dsn, got)
 		}
 	}
 	if got, changed := perPkgDSN("postgres://u:p@h:5432/arb_test", ""); changed {
