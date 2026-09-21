@@ -19,7 +19,9 @@ import (
 	"arb/internal/safego"
 	"arb/internal/store/pgstore"
 
+	"fmt"
 	"github.com/gorilla/websocket"
+	"strings"
 )
 
 // DefaultWsBase CMC WebSocket 端点（D-223 设计 C-Final + R6 返修：URL 必须带 ?partialUpdateEventTypes=ALL，
@@ -46,7 +48,10 @@ const (
 var ( // 新鲜度守卫参数（C2 路径②）+ 退避：var 便于测试覆写
 	wsGuardInterval = 60 * time.Second
 	wsGuardStale    = 10 * time.Minute
-	wsBackoff       = func(attempt int) time.Duration {
+	// D-370 S2/S3：断流告警阈值（unhealthy 持续 >10min 即告）+ 同指纹冷却 30min
+	wsAlertAfterStale = 10 * time.Minute
+	wsAlertCooldown   = 30 * time.Minute
+	wsBackoff         = func(attempt int) time.Duration {
 		d := time.Duration(1<<uint(attempt)) * time.Second
 		if d > 60*time.Second {
 			return 60 * time.Second
@@ -72,10 +77,10 @@ type WsClient struct {
 	healthy      atomic.Bool
 	kickHistory  func()
 	sink         func(ctx context.Context, facts []fact.Fact) error
-	marketOpen   func() bool
-	marketStatus func() string   // D-225 v2.1 S5：WS 价格行 market_status 注入
-	onEvent      func(Snapshot)  // D-225 v2.1 S5：事件即触发回调（R10 接线）
-	frameHook    func(FrameKind) // D-234：帧钩子——落库后通知 dashboard（先落库后通知，通知失败不影响落库）
+	relogin      func(context.Context) error // D-370 S1：Session expired → 完整重登缝
+	marketStatus func() string               // D-225 v2.1 S5：WS 价格行 market_status 注入
+	onEvent      func(Snapshot)              // D-225 v2.1 S5：事件即触发回调（R10 接线）
+	frameHook    func(FrameKind)             // D-234：帧钩子——落库后通知 dashboard（先落库后通知，通知失败不影响落库）
 
 	positionsMu sync.Mutex
 	positions   []positionJSON
@@ -122,21 +127,47 @@ type WsClient struct {
 }
 
 func NewWsClient(auth jwtProvider, accountID int64, store *pgstore.Store, wsBase, restBase string) *WsClient {
-	return &WsClient{
+	w := &WsClient{
 		auth: auth, accountID: accountID, store: store, wsBase: wsBase, restBase: restBase,
-		marketOpen:   func() bool { return true }, // 保守默认：无缓存时视为市场时段
-		marketStatus: func() string { return "" }, // 默认无注入
+		marketStatus: func() string { return "" }, // 默认无注入（R2 修复：S1 重构误删已补回）
 		lastAlerts:   json.RawMessage("[]"),
 	}
+	// D-370 S1：auth 实现 Login 时注入完整重登缝（Session expired → Login 而非 refreshJWT）。
+	if p, ok := auth.(interface {
+		Login(context.Context) error
+	}); ok {
+		w.relogin = p.Login
+	}
+	return w
+}
+
+// maybeRelogin D-370 S1：Session expired 命中 → 完整 re-Login（relogin 缝；测试注入点）。
+// 返回是否命中（Run 循环用于日志分流）。
+func (w *WsClient) maybeRelogin(ctx context.Context, err error) bool {
+	if !isSessionExpired(err) || w.relogin == nil {
+		return false
+	}
+	if lerr := w.relogin(ctx); lerr != nil {
+		log.Printf("[cmc-ws] re-login after session expired: %v", lerr)
+	} else {
+		log.Printf("[cmc-ws] session expired → full re-login ok")
+	}
+	return true
+}
+
+// isSessionExpired D-370 S1：CMC auth ack 无独立错误码，status 字符串 "Session expired"
+// 为失效特征（生产实采 Session expired×18）；"auth ack status=" 前缀=结构性 session 拒绝
+// 双保险（错误码优先+字符串 fallback）。
+func isSessionExpired(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "Session expired") || strings.HasPrefix(msg, "auth ack status=")
 }
 
 func (w *WsClient) SetKickHistory(fn func())                                      { w.kickHistory = fn }
 func (w *WsClient) SetSink(fn func(ctx context.Context, facts []fact.Fact) error) { w.sink = fn }
-func (w *WsClient) SetMarketOpen(fn func() bool) {
-	if fn != nil {
-		w.marketOpen = fn
-	}
-}
 func (w *WsClient) SetMarketStatus(fn func() string) {
 	if fn != nil {
 		w.marketStatus = fn
@@ -179,6 +210,9 @@ func (w *WsClient) Run(ctx context.Context) {
 			if ctx.Err() != nil {
 				return
 			}
+			// D-370 S1：Session expired → 完整 re-Login（4 步全链，不等 refreshJWT 阈值）；
+			// 失败仍走既有退避（不重置 attempt）。
+			w.maybeRelogin(ctx, err)
 			wait := wsBackoff(attempt)
 			log.Printf("[cmc-ws] runOnce failed (attempt %d): %v, retry in %s", attempt+1, err, wait)
 			select {
@@ -193,31 +227,47 @@ func (w *WsClient) Run(ctx context.Context) {
 }
 
 func (w *WsClient) startGuard(ctx context.Context) {
-	// D-225 v2.1：守卫只看 type6 事件（F1/F2 周期推，沉默=真异常）；type7 沉默≠异常（F3 变更驱动）。
 	ticker := time.NewTicker(wsGuardInterval)
 	defer ticker.Stop()
-	staleStrikes := 0
+	var unhealthySince, lastAlert time.Time
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if !w.marketOpen() {
-				staleStrikes = 0
-				continue
-			}
-			w.lastEvent6Mu.Lock()
-			since := time.Since(w.lastEvent6)
-			w.lastEvent6Mu.Unlock()
-			if since > wsGuardStale {
-				staleStrikes++
-				if staleStrikes >= 2 {
-					w.healthy.Store(false)
-					log.Printf("[cmc-ws] freshness guard: no type6 events > window, healthy=false → REST fallback")
-				}
-			} else {
-				staleStrikes = 0
-			}
+			w.guardTick(ctx, &unhealthySince, &lastAlert)
+		}
+	}
+}
+
+// guardTick D-370 S2/S3 单 tick：新鲜度判定（1 次 stale 即 unhealthy——R4 前为 2 次且被
+// marketOpen 门控静默跳过=生产 0 触发根因）+ 每 tick 日志（R4 前零取证）+ unhealthy 持续
+// >10min 断流告警（同指纹 30min 冷却，经 alerts 表）。传输层健康与市场时段无关——
+// marketOpen 门控摘除（守卫不再依赖 DB 残留 status）。
+func (w *WsClient) guardTick(ctx context.Context, unhealthySince, lastAlert *time.Time) {
+	w.lastEvent6Mu.Lock()
+	since := time.Since(w.lastEvent6)
+	last6 := w.lastEvent6
+	w.lastEvent6Mu.Unlock()
+	healthy := since <= wsGuardStale
+	w.healthy.Store(healthy)
+	log.Printf("[cmc-ws] guard: lastType6=%v ago, healthy=%v", since.Round(time.Second), healthy)
+	if healthy {
+		*unhealthySince = time.Time{}
+		return
+	}
+	now := time.Now()
+	if unhealthySince.IsZero() {
+		*unhealthySince = now
+	}
+	if now.Sub(*unhealthySince) > wsAlertAfterStale && now.Sub(*lastAlert) >= wsAlertCooldown {
+		msg := fmt.Sprintf("[cmc-ws] 断流 %v（last type6 at %s UTC）",
+			now.Sub(*unhealthySince).Round(time.Second), last6.UTC().Format("2006-01-02 15:04:05"))
+		if err := w.store.InsertAlert(ctx, nil, "warn", msg); err != nil {
+			log.Printf("[cmc-ws] 断流告警写入失败: %v", err)
+		} else {
+			*lastAlert = now
+			log.Printf("%s", msg)
 		}
 	}
 }

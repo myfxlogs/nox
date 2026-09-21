@@ -323,7 +323,6 @@ func TestWsClient_GuardDummyConnection(t *testing.T) {
 	defer ts.close()
 	auth := &mockAuth{jwt: "fake.jwt.sig"}
 	ws := NewWsClient(auth, 38941616, st, ts.srv.URL, ts.srv.URL)
-	ws.SetMarketOpen(func() bool { return true }) // 市场时段
 
 	// 缩短守卫窗：interval=200ms，stale=500ms（2 个检查窗=400ms < 500ms → 第 2 窗触发）
 	origInterval, origStale := wsGuardInterval, wsGuardStale
