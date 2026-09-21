@@ -43,13 +43,15 @@ func (d *PerpFundingDetector) Scan(_ context.Context, snapshot map[string]map[st
 		realMap = fp.IsRealMap()
 	}
 	for canonical, venues := range snapshot {
-		// D-151 入场白名单：非 BTC/ETH/TRX 跳过（不产候选），首报日志注明。
-		// D-154 S3：seenReject 每 canonical 仅首报一次（进程生命周期），降噪 ×4391 同族。
-		if !perpFundingWhitelist[canonical] {
+		// D-151 入场白名单 + D-369 S3 sim 试单通道：非白名单 canonical 不立即跳过——
+		// 收集 legs 后，若存在双腿均【已知 sim】（realMap 显式 false）的 venue 对 → 仅该
+		// sim 对产候选（demo 轨验证；real/混合对维持原拒）。无全 sim 对 → 维持原跳过
+		// +首报日志。白名单 canonical（BTC/ETH/TRX）行为完全不变。
+		simOnlyPair := !perpFundingWhitelist[canonical]
+		if simOnlyPair {
 			if _, loaded := d.seenReject.LoadOrStore(canonical, true); !loaded {
-				log.Printf("[perp_funding] D-151 白名单拒绝 canonical=%s（仅 BTC/ETH/TRX 入场，首报）", canonical)
+				log.Printf("[perp_funding] D-151 白名单外 canonical=%s：仅双腿已知 sim 产候选（D-369 S3），首报", canonical)
 			}
-			continue
 		}
 		// 收集所有 perp venue 的报价 + funding
 		type perpLeg struct {
@@ -79,7 +81,16 @@ func (d *PerpFundingDetector) Scan(_ context.Context, snapshot map[string]map[st
 					continue // 同所不算跨所
 				}
 				// D-178：is_real 配对检查（fail-open，gate 层兜底）。
-				if !isRealPair(realMap, a.q.Venue, b.q.Venue) {
+				// D-369 S3：非白名单 canonical → 仅放行双腿均【已知 sim】的 venue 对
+				// （realMap 显式 false；nil=未知不放行——与 seed/执行层 fail-closed 语义对齐）。
+				// real/混合对维持原拒；白名单 canonical 行为完全不变。
+				if simOnlyPair {
+					simA := realMap[a.q.Venue] != nil && !*realMap[a.q.Venue]
+					simB := realMap[b.q.Venue] != nil && !*realMap[b.q.Venue]
+					if !simA || !simB {
+						continue
+					}
+				} else if !isRealPair(realMap, a.q.Venue, b.q.Venue) {
 					continue
 				}
 				// 净年化 = |fundingA - fundingB|（高 funding 端持空收、低 funding 端持多付）
