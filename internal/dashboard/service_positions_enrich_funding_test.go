@@ -34,7 +34,7 @@ func TestEnrichOne_CexFundingMerged(t *testing.T) {
 	}
 	now := time.Now()
 	fundingByPos := map[string]float64{"456\x00binance:spot": 3.0} // CEX funding 实收（venue 未报 swap=0 → cashflow 兜底计入）
-	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, map[string]time.Weekday{}, fundingByPos)
+	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, map[string]time.Weekday{}, fundingByPos, map[int64]float64{})
 
 	// swapAccrued = swap 快照(0) + funding(3.0) = 3.0
 	if pb.SwapAccruedUsd == nil {
@@ -75,7 +75,7 @@ func TestEnrichOne_CexFundingNoMatchButFunding(t *testing.T) {
 	}
 	now := time.Now()
 	fundingByPos := map[string]float64{"789\x00binance:spot": 2.0}
-	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, map[string]time.Weekday{}, fundingByPos)
+	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, map[string]time.Weekday{}, fundingByPos, map[int64]float64{})
 
 	// matched=false 但 funding>0 → 仍出值
 	if pb.SwapAccruedUsd == nil {
@@ -113,7 +113,7 @@ func TestEnrichOne_ZeroFlowStillDash(t *testing.T) {
 		{Phase: "OPEN", Venue: "binance:spot", Symbol: "BTCUSDT", Status: "FILLED", Qty: 0.01, PriceActual: ptrFloat(60000), Ts: time.Now()},
 	}
 	now := time.Now()
-	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, map[string]time.Weekday{}, map[string]float64{})
+	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, map[string]time.Weekday{}, map[string]float64{}, map[int64]float64{})
 
 	if pb.FloatingPnlUsd != nil || pb.SwapAccruedUsd != nil || pb.NetPnlUsd != nil {
 		t.Errorf("零流仓应全 nil: floating=%v swap=%v net=%v", pb.FloatingPnlUsd, pb.SwapAccruedUsd, pb.NetPnlUsd)
@@ -142,7 +142,7 @@ func TestEnrichOne_PureMTRegression(t *testing.T) {
 	}
 	now := time.Now()
 	// 空 fundingByPos → 纯 MT 仓无 funding 加成
-	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, map[string]time.Weekday{}, map[string]float64{})
+	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, map[string]time.Weekday{}, map[string]float64{}, map[int64]float64{})
 
 	// 回归锚：与 TestEnrichPositions_MatchedSum 同值（funding=0 不改变口径）
 	if pb.FloatingPnlUsd == nil || math.Abs(*pb.FloatingPnlUsd-(-35.0)) > 0.001 {
@@ -179,7 +179,7 @@ func TestEnrichOne_VenueActualNotDoubleCounted(t *testing.T) {
 	}
 	now := time.Now()
 	fundingByPos := map[string]float64{"321\x00okx:perp": 2.5}
-	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, map[string]time.Weekday{}, fundingByPos)
+	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, map[string]time.Weekday{}, fundingByPos, map[int64]float64{})
 
 	// swapAccrued = venue 实报 1.5（cashflow 估算 2.5 去重跳过，不双计）
 	if pb.SwapAccruedUsd == nil || math.Abs(*pb.SwapAccruedUsd-1.5) > 0.001 {

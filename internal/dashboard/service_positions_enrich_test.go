@@ -270,7 +270,7 @@ func TestEnrichOne_ExpectedSwapNilStoreNoNotional(t *testing.T) {
 		{Phase: "OPEN", Venue: "591:mt5", Symbol: "AUDJPY", Status: "FILLED", Qty: 0.01, PriceActual: ptrFloat(113.5), Ts: openedAt},
 	}
 	tripleDayByVenue := map[string]time.Weekday{"591:mt5": time.Wednesday}
-	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, tripleDayByVenue, map[string]float64{})
+	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, tripleDayByVenue, map[string]float64{}, map[int64]float64{})
 	// store=nil → notional=0 → expected_swap_usd_to_date 应 nil（诚实缺省）
 	if pb.ExpectedSwapUsdToDate != nil {
 		t.Errorf("store=nil notional=0 → expected_swap_usd_to_date 应 nil, got %v", *pb.ExpectedSwapUsdToDate)

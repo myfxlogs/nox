@@ -62,7 +62,7 @@ func TestEnrichOne_PerpFundingThreeColsSkipStoreNil(t *testing.T) {
 	}
 	now := time.Now()
 	fundingByPos := map[string]float64{"555\x00binance:spot": 3.0}
-	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, map[string]time.Weekday{}, fundingByPos)
+	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, map[string]time.Weekday{}, fundingByPos, map[int64]float64{})
 
 	// store=nil → notional=0 → expected_swap_usd_to_date 应 nil（诚实缺省）
 	if pb.ExpectedSwapUsdToDate != nil {
@@ -97,7 +97,7 @@ func TestEnrichOne_SwapARBRegressionNoPerpFundingBranch(t *testing.T) {
 		{Phase: "OPEN", Venue: "277842155:mt5", Symbol: "AUDJPY.", Status: "FILLED", Qty: 1.0, PriceActual: ptrFloat(113.503), Ts: time.Now().AddDate(0, 0, -3)},
 	}
 	now := time.Now()
-	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, map[string]time.Weekday{}, map[string]float64{})
+	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, map[string]time.Weekday{}, map[string]float64{}, map[int64]float64{})
 
 	// 回归锚：floating/swapAccrued/net 与 #456 同值
 	if pb.FloatingPnlUsd == nil || math.Abs(*pb.FloatingPnlUsd-(-35.0)) > 0.001 {
@@ -158,7 +158,7 @@ func TestEnrichOne_XAssetCarryThreeCols(t *testing.T) {
 			Qty: 1012, FilledQty: &filled, PriceActual: ptrFloat(63.5), Ts: time.Now().AddDate(0, 0, -3)},
 	}
 	now := time.Now()
-	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, map[string]time.Weekday{}, map[string]float64{"484\x00gate:perp": 0.73})
+	enrichOne(context.Background(), s, pb, legs, bpm.Snapshot(), now, map[string]time.Weekday{}, map[string]float64{"484\x00gate:perp": 0.73}, map[int64]float64{})
 
 	notional := 10.12 * 63.5 // 642.62（EffectiveQty 成交口径，勿按 qty=1012 合约数）
 	wantExpected := 0.2769 * notional * 3.0 / 365
@@ -215,7 +215,7 @@ func TestEnrichOne_ExpectedBreakevenFallback(t *testing.T) {
 
 	// ① 实测缺省（matched=false+funding=0 → breakEven nil）→ expected=1.5 透传
 	pb1 := mkPos(901, "XASSET:R10A:gate:perp:3001157:mt5")
-	enrichOne(ctx, s, pb1, nil, bpm.Snapshot(), now, map[string]time.Weekday{}, map[string]float64{})
+	enrichOne(ctx, s, pb1, nil, bpm.Snapshot(), now, map[string]time.Weekday{}, map[string]float64{}, map[int64]float64{})
 	if pb1.BreakEvenDays != nil {
 		t.Fatalf("case1 breakEven 应缺省（无收息），got %v", *pb1.BreakEvenDays)
 	}
@@ -227,7 +227,7 @@ func TestEnrichOne_ExpectedBreakevenFallback(t *testing.T) {
 	// D-322 S3b：funding 须经 OPEN CEX 腿归属——fixture 带 gate:perp 腿（未匹配 bp → cashflow 兜底计入）。
 	pb2 := mkPos(902, "XASSET:R10A:gate:perp:3001157:mt5")
 	legs902 := []pgstore.PositionLeg{{Phase: "OPEN", Venue: "gate:perp", Symbol: "CL_USDT", Status: "FILLED", Qty: 10.12}}
-	enrichOne(ctx, s, pb2, legs902, bpm.Snapshot(), now, map[string]time.Weekday{}, map[string]float64{"902\x00gate:perp": 0.73})
+	enrichOne(ctx, s, pb2, legs902, bpm.Snapshot(), now, map[string]time.Weekday{}, map[string]float64{"902\x00gate:perp": 0.73}, map[int64]float64{})
 	if pb2.BreakEvenDays == nil {
 		t.Fatal("case2 breakEven 应出值（funding>0 实测），got nil")
 	}
@@ -241,7 +241,7 @@ func TestEnrichOne_ExpectedBreakevenFallback(t *testing.T) {
 		oppID string
 	}{{903, "XASSET:R10B:gate:perp:3001157:mt5"}, {904, "XASSET:R10C:gate:perp:3001157:mt5"}} {
 		pb := mkPos(tc.id, tc.oppID)
-		enrichOne(ctx, s, pb, nil, bpm.Snapshot(), now, map[string]time.Weekday{}, map[string]float64{})
+		enrichOne(ctx, s, pb, nil, bpm.Snapshot(), now, map[string]time.Weekday{}, map[string]float64{}, map[int64]float64{})
 		if pb.ExpectedBreakevenDays != nil {
 			t.Errorf("opp %s expected 应缺省（NULL/负值），got %v", tc.oppID, *pb.ExpectedBreakevenDays)
 		}
@@ -250,7 +250,7 @@ func TestEnrichOne_ExpectedBreakevenFallback(t *testing.T) {
 	// ⑤ store=nil → 静默缺省不 panic
 	s2 := newEnrichService(fakeBPMWithCache(nil))
 	pb5 := mkPos(905, "XASSET:R10A:gate:perp:3001157:mt5")
-	enrichOne(ctx, s2, pb5, nil, nil, now, map[string]time.Weekday{}, map[string]float64{})
+	enrichOne(ctx, s2, pb5, nil, nil, now, map[string]time.Weekday{}, map[string]float64{}, map[int64]float64{})
 	if pb5.ExpectedBreakevenDays != nil {
 		t.Errorf("store=nil expected 应缺省，got %v", *pb5.ExpectedBreakevenDays)
 	}
