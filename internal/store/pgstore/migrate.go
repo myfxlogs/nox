@@ -115,6 +115,7 @@ var migrationFiles = []struct {
 	{117, migrations.AppConfigSQL},                     // D-368 S1：运维旋钮 KV（Bucket B 首批，零种子）
 	{118, migrations.RadarWatchlistSQL},                // D-369 S2：确认信号 watchlist（radar 写/core 读）
 	{119, migrations.PaperCfdColumnsSQL},               // D-374 S2：纸面轨扩 cfd×perp（structure/mt_venue 两列）
+	{120, migrations.PositionEvalsSQL},                 // D-377 S1：XASSET 退出评估观测轨（position_evals 窄行表）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
