@@ -4,6 +4,7 @@ package autotrade
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -40,18 +41,20 @@ func (e *Engine) xassetExitCheck(ctx context.Context, p *pgstore.Position) (bool
 	if !shouldClose && !shouldHarvest {
 		shouldDrift, driftReason = e.execDriftCheck(ctx, p)
 	}
-	shouldStop, stopReason := false, ""
+	shouldDisaster, disasterReason, stale, staleAge := false, "", false, time.Duration(0)
 	if !shouldClose && !shouldHarvest && !shouldDrift {
-		shouldStop, stopReason = e.basisStopCheckXAsset(p)
+		// D-378b S2：灾难带（替换 basisStopCheckXAsset 的位置与角色；窄阈撤除）。
+		shouldDisaster, disasterReason, stale, staleAge = e.disasterCheckXAsset(ctx, p)
 	}
 
 	// D-377 S2：观测行——decision=本次评估结论；detail=阈值/reason 短串（store 侧 200 截断）。
-	// fail_closed 也落行（quote 缺/锚缺/腿缺=「评估跑了但无法判」正证据）。
+	// fail_closed 也落行（quote 缺/锚缺/腿缺/stale=「评估跑了但无法判」正证据）。
 	e.recordXAssetEval(ctx, p, xassetEvalOutcome{
 		carryDeath: shouldClose, carryDeathReason: reason,
 		harvest: shouldHarvest, harvestReason: harvestReason,
 		drift: shouldDrift, driftReason: driftReason,
-		stop: shouldStop, stopReason: stopReason,
+		disaster: shouldDisaster, disasterReason: disasterReason,
+		stale: stale, staleAge: staleAge,
 	})
 
 	if shouldClose {
@@ -63,10 +66,11 @@ func (e *Engine) xassetExitCheck(ctx context.Context, p *pgstore.Position) (bool
 	if shouldDrift {
 		return true, driftReason
 	}
-	return shouldStop, stopReason
+	return shouldDisaster, disasterReason
 }
 
 // xassetEvalOutcome 评估链四判结果（观测行 decision 归并可测）。
+// D-378b S2：stop 族改 disaster（灾难带替换窄阈）；stale=双腿报价超龄（不判灾难只留观测）。
 type xassetEvalOutcome struct {
 	carryDeath       bool
 	carryDeathReason string
@@ -74,14 +78,17 @@ type xassetEvalOutcome struct {
 	harvestReason    string
 	drift            bool
 	driftReason      string
-	stop             bool
-	stopReason       string
+	disaster         bool
+	disasterReason   string
+	stale            bool
+	staleAge         time.Duration
 }
 
 // recordXAssetEval D-377 S2：落观测行。basis=currentBasisBps 同函数复用（公式单点；
 // in-memory quote 读代价可忽略）；fill=EntrySpreadBpsFromLegs 现成重算。
-// decision 归并序：carry_death/harvest/exec_drift/stop（评估已出结论，序=链序）→
-// fail_closed 族（no_basis→no_anchor→no_legs，评估跑了但无法判）→ hold。
+// decision 归并序：carry_death/harvest/exec_drift/disaster（评估已出结论，序=链序；
+// D-378b：stop 族改 disaster）→ stale（fail_closed:stale，报价超龄不判灾难）→
+// fail_closed 族（no_basis→no_anchor→no_legs）→ hold。
 // basis/fill 两列无论结论都记录（D1 漂移序列源）。
 // fail-open 钉注：写库失败 → warn 日志（观测丢失显式留痕）继续评估流程。
 // 非 XASSET_CARRY 不写行——scope 闸在调用点（engine_position.go 一行 if）。
@@ -96,16 +103,19 @@ func (e *Engine) recordXAssetEval(ctx context.Context, p *pgstore.Position, out 
 		decision, detail = "harvest", out.harvestReason
 	case out.drift:
 		decision, detail = "exec_drift", out.driftReason
-	case out.stop:
-		decision, detail = "stop", out.stopReason
+	case out.stale:
+		decision, detail = "fail_closed:stale", fmt.Sprintf("quote age %s > max %s; band=%s",
+			out.staleAge.Round(time.Second), e.cfg.XAssetQuoteMaxAge, fmtDisasterBand(e.cfg.XAssetDisasterBps, e.cfg.XAssetDisasterNoiseMult, p.EntryNoiseBps))
+	case out.disaster:
+		decision, detail = "disaster", out.disasterReason
 	case !basisOK:
-		decision, detail = "fail_closed:no_basis", fmtStopBps(e.cfg.BasisStopBps, p.EntryNoiseBps)
+		decision, detail = "fail_closed:no_basis", fmtDisasterBand(e.cfg.XAssetDisasterBps, e.cfg.XAssetDisasterNoiseMult, p.EntryNoiseBps)
 	case p.ExpectedEntrySpreadBps == nil:
-		decision, detail = "fail_closed:no_anchor", fmtStopBps(e.cfg.BasisStopBps, p.EntryNoiseBps)
+		decision, detail = "fail_closed:no_anchor", fmtDisasterBand(e.cfg.XAssetDisasterBps, e.cfg.XAssetDisasterNoiseMult, p.EntryNoiseBps)
 	case !fillOK:
-		decision, detail = "fail_closed:no_legs", fmtStopBps(e.cfg.BasisStopBps, p.EntryNoiseBps)
+		decision, detail = "fail_closed:no_legs", fmtDisasterBand(e.cfg.XAssetDisasterBps, e.cfg.XAssetDisasterNoiseMult, p.EntryNoiseBps)
 	default:
-		decision, detail = "hold", fmtStopBps(e.cfg.BasisStopBps, p.EntryNoiseBps)
+		decision, detail = "hold", fmtDisasterBand(e.cfg.XAssetDisasterBps, e.cfg.XAssetDisasterNoiseMult, p.EntryNoiseBps)
 	}
 	var basis, fill *float64
 	if basisOK {

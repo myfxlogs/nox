@@ -43,8 +43,10 @@ type Engine struct {
 	// D-133 T1：PERP_FUNDING 退出连续去抖计数——key=posID → 连续 breach 次数。
 	// 读写都在 auto-close 轮询 goroutine（单写者），mu 为防御性（未来并发扩展兜底）。
 	// 平仓/读数回正/floor 未满 → 删除条目（防泄漏）。重启丢失=重新去抖（无害，10min 轮询）。
-	fundingBreach map[int64]int
-	fundingMu     sync.Mutex
+	fundingBreach  map[int64]int
+	disasterBreach map[int64]int // D-378b S1：灾难带去抖计数
+	disasterMu     sync.Mutex    // D-378b：disasterBreach 锁（独立于 fundingMu——异判定域不互斥）
+	fundingMu      sync.Mutex
 
 	// D-087 §3.2：settlement.Settle 依赖 + 淘汰判定函数（main 装配后调 SetSettleDeps）。
 	settleDeps settlement.Deps

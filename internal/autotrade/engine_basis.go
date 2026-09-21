@@ -2,6 +2,7 @@ package autotrade
 
 import (
 	"context"
+	"time"
 
 	"arb/internal/store/pgstore"
 )
@@ -14,16 +15,23 @@ import (
 // 同解析路径）。非 XASSET 类型 canonical_sell 恒 NULL → map 兜底命中同 canonical = 旧行为；
 // XASSET 解析不出 → fail-closed（不拿买 canonical 错查卖腿报价——同所跨 canonical 会静默错腿）。
 func (e *Engine) currentBasisBps(p *pgstore.Position) (float64, bool) {
+	bps, _, ok := e.currentBasisBpsAged(p)
+	return bps, ok
+}
+
+// currentBasisBpsAged D-378b S1：带报价龄变体——minQuoteAge=双腿 now−Quote.Time 较大者
+// （灾难带新鲜度闸取数；原 currentBasisBps 改一行包装丢 age，既有调用点零签名变更零行为变更）。
+func (e *Engine) currentBasisBpsAged(p *pgstore.Position) (float64, time.Duration, bool) {
 	if e.quotes == nil {
-		return 0, false
+		return 0, 0, false
 	}
 	canonical := canonicalFromOppID(p.OpportunityID)
 	if canonical == "" {
-		return 0, false
+		return 0, 0, false
 	}
 	legs, err := e.store.ListPositionLegs(context.Background(), p.ID)
 	if err != nil {
-		return 0, false
+		return 0, 0, false
 	}
 	var buyLeg, sellLeg *pgstore.PositionLeg
 	for i := range legs {
@@ -36,19 +44,24 @@ func (e *Engine) currentBasisBps(p *pgstore.Position) (float64, bool) {
 		}
 	}
 	if buyLeg == nil || sellLeg == nil {
-		return 0, false
+		return 0, 0, false
 	}
 	sellCanonical := e.xassetSellCanonical(context.Background(), p, legs)
 	if sellCanonical == "" {
 		if p.Type == "XASSET_CARRY" {
-			return 0, false // XASSET 跨 canonical：解析不出不拿买 canonical 错查
+			return 0, 0, false // XASSET 跨 canonical：解析不出不拿买 canonical 错查
 		}
 		sellCanonical = canonical // 旧行为回退（SWAPARB/CARRY 同 canonical 组合）
 	}
 	buyQuote, ok1 := e.quotes.Latest(canonical, buyLeg.Venue)
 	sellQuote, ok2 := e.quotes.Latest(sellCanonical, sellLeg.Venue)
 	if !ok1 || !ok2 {
-		return 0, false
+		return 0, 0, false
+	}
+	// D-378b S1：报价龄=双腿 now−Quote.Time 较大者（周末/收盘假偏移防误杀）
+	minQuoteAge := time.Since(buyQuote.Time)
+	if a := time.Since(sellQuote.Time); a > minQuoteAge {
+		minQuoteAge = a
 	}
 	// 基差 = 买入腿 bid − 卖出腿 ask（收敛收益的镜像：spread 越大=基差越大=亏损扩大）
 	spread := buyQuote.Bid - sellQuote.Ask
@@ -57,9 +70,9 @@ func (e *Engine) currentBasisBps(p *pgstore.Position) (float64, bool) {
 		refPrice = *buyLeg.PriceActual
 	}
 	if refPrice <= 0 {
-		return 0, false
+		return 0, 0, false
 	}
-	return spread / refPrice * 10000, true
+	return spread / refPrice * 10000, minQuoteAge, true
 }
 
 // currentNetBps 实时计算持仓的当前净 bps（收敛型平仓用）。

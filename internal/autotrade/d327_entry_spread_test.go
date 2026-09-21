@@ -66,9 +66,9 @@ func TestD327_BackfillEntrySpread_XAssetCarry(t *testing.T) {
 	}
 }
 
-// TestD327_BasisStopCheck_Armed T3 端到端：XASSET 仓基准补齐后（entry=−0.145），
-// 基差漂移至 −5.0（PnL≈−4.85 < −4）→ checkExitCondition 返回平仓（止损链路武装证明）；
-// 基准 NULL（485 缺陷形态）同行情 → 不决策（fail-closed 对照）。
+// TestD327_BasisStopCheck_Armed T3 端到端（D-378b 改义）：XASSET 仓基准补齐后（entry=−0.145），
+// 基差漂移至 −50.0（偏离 49.9 > 灾难带 40）→ checkExitCondition 返回平仓（退出链路武装证明；
+// 窄阈 4bps 止损已撤，武装尺度改灾难带）；基准 NULL（485 缺陷形态）同行情 → 不决策（fail-closed 对照）。
 func TestD327_BasisStopCheck_Armed(t *testing.T) {
 	s := testAccumStore(t)
 	d311Truncate(t, s)
@@ -82,10 +82,11 @@ func TestD327_BasisStopCheck_Armed(t *testing.T) {
 	}
 	pos.ExpectedEntrySpreadBps = &entry // basisStopCheck 读内存 struct（DB 列同步仅供查询一致性）
 
-	// 报价：buy XPTUSD 4000/4000.2，sell XPTUSDT 4002/4002.02 → basis=(4000−4002.02)/4000.2×1e4 ≈ −5.05
+	// 报价：buy XPTUSD 3982/4000.2，sell XPTUSDT 4002/4002.02 → basis=(3982−4002.02)/4000.2×1e4 ≈ −50.04
+	// （对 entry −0.145 偏离 49.9 > 灾难带 40）
 	qb := bus.New()
 	now := time.Now()
-	qb.Publish(bus.Quote{Symbol: "XPTUSD", Venue: "3001157", VenueType: "mt5", Bid: 4000, Ask: 4000.2, Time: now, VenueSymbol: "XPTUSD"})
+	qb.Publish(bus.Quote{Symbol: "XPTUSD", Venue: "3001157", VenueType: "mt5", Bid: 3982, Ask: 4000.2, Time: now, VenueSymbol: "XPTUSD"})
 	qb.Publish(bus.Quote{Symbol: "XPTUSDT", Venue: "okx", VenueType: "perp", Bid: 4002, Ask: 4002.02, Time: now, VenueSymbol: "XPT-USDT-SWAP"})
 
 	e := &Engine{
@@ -97,15 +98,15 @@ func TestD327_BasisStopCheck_Armed(t *testing.T) {
 			FundingExitPct:       0,
 			PerpFundMinHold:      0,
 			PerpFundExitDebounce: 2,
-			BasisStopBps:         4,
+			XAssetDisasterBps:    40, XAssetDisasterNoiseMult: 4, XAssetDisasterDebounce: 1, XAssetQuoteMaxAge: 5 * time.Minute,
 		},
 	}
 	close, reason := e.checkExitCondition(context.Background(), pos)
 	if !close {
-		t.Fatalf("基差漂移穿阈值应平仓（止损武装）, reason=%s", reason)
+		t.Fatalf("基差偏离穿灾难带应平仓（退出链路武装）, reason=%s", reason)
 	}
-	if !strings.Contains(reason, "basis loss") {
-		t.Errorf("reason 应来自 basisStopLossCheck, got %q", reason)
+	if !strings.HasPrefix(reason, "disaster") {
+		t.Errorf("reason 应为 disaster 判定, got %q", reason)
 	}
 
 	// 对照：基准 NULL（485 缺陷形态）→ fail-closed 不决策

@@ -5,6 +5,7 @@ package autotrade
 import (
 	"context"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -144,17 +145,18 @@ func TestD377_EvalExecDrift_RowLanded(t *testing.T) {
 	}
 }
 
-// TestD377_EvalStop_RowBeforeClose 锚2：基差走坏触 stop → decision=stop 且行在返回前已写。
+// TestD377_EvalStop_RowBeforeClose 锚2（D-378b 改义）：持续偏离触灾难带 → decision=disaster
+// 且行在返回前已写（窄阈 stop 撤除；本 cfg Debounce=0 防呆钳 1=单次即杀，平仓立即发生）。
 func TestD377_EvalStop_RowBeforeClose(t *testing.T) {
 	st, posID, e := d377SeedXAsset(t)
-	d377PublishQuotes(e.quotes, 90.00, 90.02) // basis≈−1122 → PnL=−1127 ≪ 阈（drift=0 过闸）
+	d377PublishQuotes(e.quotes, 90.00, 90.02) // basis≈−1122 → dev 1113 ≫ band 40（drift=0 过闸）
 	should, reason := e.checkExitCondition(context.Background(), d377OpenPos(t, st, posID))
-	if !should {
-		t.Fatalf("锚2: basis 走坏应触发 stop, got %q", reason)
+	if !should || !strings.HasPrefix(reason, "disaster") {
+		t.Fatalf("锚2: 持续偏离应触发 disaster, got %v/%q", should, reason)
 	}
 	rows := d377Evals(t, st, posID)
-	if len(rows) != 1 || rows[0].Decision != "stop" {
-		t.Fatalf("锚2: want 1 row decision=stop, got %+v", rows)
+	if len(rows) != 1 || rows[0].Decision != "disaster" {
+		t.Fatalf("锚2: want 1 row decision=disaster, got %+v", rows)
 	}
 }
 

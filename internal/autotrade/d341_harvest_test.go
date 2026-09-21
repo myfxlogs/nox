@@ -176,17 +176,18 @@ func TestD341_BasisStopXAssetEngine(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	// noise=10：pnl=-3.5 → 不触发（噪声内）
-	e1 := &Engine{store: s, quotes: qb, cfg: Config{BasisStopBps: 4}}
+	// D-378b 改义：窄阈 basisStopCheckXAsset 撤除，判距语义 1:1 迁移灾难带
+	// （band=max(4,1×noise)、debounce=1 单次即杀——与旧 max(cfg,noise) 外化等价形态）。
+	e1 := &Engine{store: s, quotes: qb, cfg: Config{XAssetDisasterBps: 4, XAssetDisasterNoiseMult: 1, XAssetDisasterDebounce: 1, XAssetQuoteMaxAge: 5 * time.Minute}}
 	p1 := *pOK
 	p1.EntryNoiseBps = d341fptr(10)
-	if close, reason := e1.basisStopCheckXAsset(&p1); close {
-		t.Errorf("noise=10：pnl=-3.5 噪声内不应触发, reason=%q", reason)
+	if close, reason, _, _ := e1.disasterCheckXAsset(ctx, &p1); close {
+		t.Errorf("noise=10：dev=3.5 噪声内不应触发, reason=%q", reason)
 	}
-	// noise=nil：退 cfg=4 → pnl=-3.5 > -4 仍不触发（边界验证）
+	// noise=nil：退 cfg=4 → dev=3.5 > -4 仍不触发（边界验证）
 	p2 := *pOK
-	if close, _ := e1.basisStopCheckXAsset(&p2); close {
-		t.Error("noise=nil cfg=4：pnl=-3.5 不应触发（边界）")
+	if close, _, _, _ := e1.disasterCheckXAsset(ctx, &p2); close {
+		t.Error("noise=nil cfg=4：dev=3.5 不应触发（边界）")
 	}
 	// 恶化：current=-27.5（sell ask=4014）→ pnl=-13.5：noise=10 触发（M2 变异=回 4 也触发——
 	// 差异锚取「noise=10 但 pnl=-6.5（stop 外但 noise 内）」形态：current=-20.5 sell ask=4007）
@@ -194,12 +195,12 @@ func TestD341_BasisStopXAssetEngine(t *testing.T) {
 	qb.Publish(bus.Quote{Symbol: "XPTUSDT", Venue: "okx", VenueType: "perp", Bid: 4001, Ask: 4001.2, Time: now, VenueSymbol: "XPT-USDT-SWAP"})
 	p3 := *pOK
 	p3.EntryNoiseBps = d341fptr(10)
-	if close, _ := e1.basisStopCheckXAsset(&p3); close {
-		t.Error("noise=10：pnl=-6.5 噪声内（>−10）不应触发（M2 变异红点：回 4 会触发）")
+	if close, _, _, _ := e1.disasterCheckXAsset(ctx, &p3); close {
+		t.Error("noise=10：dev=6.5 噪声内（>−10）不应触发（M2 变异红点：回 4 会触发）")
 	}
 	p4 := *pOK
 	p4.EntryNoiseBps = nil
-	if close, reason := e1.basisStopCheckXAsset(&p4); !close {
-		t.Errorf("noise=nil：pnl=-6.5 超 cfg=4 应触发, reason=%q", reason)
+	if close, reason, _, _ := e1.disasterCheckXAsset(ctx, &p4); !close {
+		t.Errorf("noise=nil：dev=6.5 超 cfg=4 应触发, reason=%q", reason)
 	}
 }

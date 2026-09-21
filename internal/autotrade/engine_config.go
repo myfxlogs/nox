@@ -116,6 +116,12 @@ type Config struct {
 	ComboLossLimit           int           // ≤0 = 检查关闭（逃生阀）
 	ComboLossWindow          time.Duration
 
+	// D-378b：灾难带（撤窄阈基差止损，XASSET 限定；SWAPARB/CARRY 的 basisStopCheck 不动）。
+	XAssetDisasterBps       float64
+	XAssetDisasterNoiseMult float64
+	XAssetDisasterDebounce  int
+	XAssetQuoteMaxAge       time.Duration // ≤0 = 不查新鲜度（回退旧行为）
+
 	// D-181 S2：probe 探测仓——无实测腿的首仓自动成为 probe，到期评估升级/拒绝。
 	// ProbeEnabled=false → 不标记不评估（向后兼容，默认 false）。
 	ProbeEnabled bool

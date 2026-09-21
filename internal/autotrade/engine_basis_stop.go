@@ -10,21 +10,6 @@ import (
 // basisStopCheckXAsset D-341 S2：XASSET 专用止损——判距外化 max(BasisStopBps, entry_noise_bps)
 // （噪声内不止损；风险注记=单次止损额升至 ~noise×notional，换噪声内零误杀，S3 样本验证降幅）。
 // entry_noise_bps NULL（历史行/学习锚缺）→ 退回 cfg.BasisStopBps（保守不放宽）。
-func (e *Engine) basisStopCheckXAsset(p *pgstore.Position) (bool, string) {
-	stopBps := e.cfg.BasisStopBps
-	if p.EntryNoiseBps != nil && *p.EntryNoiseBps > stopBps {
-		stopBps = *p.EntryNoiseBps
-	}
-	if stopBps <= 0 {
-		return false, ""
-	}
-	basisBps, bok := e.currentBasisBps(p)
-	if shouldClose, reason := basisStopLossCheck(basisBps, bok, p.ExpectedEntrySpreadBps, stopBps); shouldClose {
-		return true, reason + fmt.Sprintf(" [stop=%s]", fmtStopBps(e.cfg.BasisStopBps, p.EntryNoiseBps))
-	}
-	return false, ""
-}
-
 // fmtStopBps S2 日志两值（cfg vs noise 外化后判距来源）。
 func fmtStopBps(cfgBps float64, noise *float64) string {
 	if noise != nil {

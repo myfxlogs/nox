@@ -17,7 +17,7 @@ import (
 // manual=人工平仓后被机器人开回=违背操作意图。
 // harvest（收敛收割，价差重开=合法新信号）/carry_death（复活走 entry gate 重评）/
 // NULL·other（D-245 前历史行）不冷——SQL 侧排除，应用层零判断。
-var cooledExitKinds = []string{"stop", "manual"}
+var cooledExitKinds = []string{"stop", "manual", "disaster"} // D-378b：结构断裂后立即重进=同坑再跳
 
 // stopCooldownCheck D-372：同组合 stop/manual 冷却窗内平仓 → 命中。
 // kind+窗口过滤已在 SQL（ListCooledExits），行自带冷却语义，应用层只剩组合键匹配；
@@ -44,7 +44,7 @@ func (g *Gate) stopCooldownCheck(ctx context.Context, intentCombo string) (hit b
 
 // comboLossExitKinds C1 计数集：stop（基差止损）+ exec_drift（D-378a S2 执行质量破产）——
 // 毒成交三连击=组合质量破产，与 stop 同罪累计。manual 不计（人为操作非策略性亏损）。
-var comboLossExitKinds = []string{"stop", "exec_drift"}
+var comboLossExitKinds = []string{"stop", "exec_drift", "disaster"} // D-378b：结构断裂同罪累计
 
 // comboLossCheck D-378a S4：同 ComboKey 止损/执行漂移平仓计数 ≥ ComboLossLimit（in window）→ Hit。
 // 独立调用 ListCooledExits（与 stopCooldownCheck 各查各的——kind 集与窗口不同，见 gate.go 注）。
