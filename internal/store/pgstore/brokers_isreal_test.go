@@ -5,7 +5,8 @@ import (
 	"testing"
 )
 
-// TestListVenueIsReal D-178：统一 venue→*bool 映射——CFD 透传 + CEX 取反 + 两表合并。
+// TestListVenueIsReal D-178/D-371：统一 venue:type→*bool 映射——CFD 透传（venue:platform
+// 拼键）+ CEX 取反 + 两表合并。
 func TestListVenueIsReal(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
@@ -45,25 +46,26 @@ func TestListVenueIsReal(t *testing.T) {
 		t.Fatalf("ListVenueIsReal: %v", err)
 	}
 
-	// CFD true
-	if v := m["1314615"]; v == nil || !*v {
-		t.Fatalf("1314615 want *true, got %v", v)
+	// CFD true（key=venue:mt5）
+	if v := m["1314615:mt5"]; v == nil || !*v {
+		t.Fatalf("1314615:mt5 want *true, got %v", v)
 	}
-	// CFD false
-	if v := m["5208379"]; v == nil || *v {
-		t.Fatalf("5208379 want *false, got %v", v)
+	// CFD false（key=venue:mt4）
+	if v := m["5208379:mt4"]; v == nil || *v {
+		t.Fatalf("5208379:mt4 want *false, got %v", v)
 	}
 	// CFD NULL → nil
-	if v := m["9999999"]; v != nil {
-		t.Fatalf("9999999 want nil, got %v", v)
+	if v := m["9999999:mt5"]; v != nil {
+		t.Fatalf("9999999:mt5 want nil, got %v", v)
 	}
-	// CEX simulated=true → is_real=false
-	if v := m["binance"]; v == nil || *v {
-		t.Fatalf("binance want *false (simulated=true), got %v", v)
+	// CEX simulated=true → is_real=false（key=venue:venue_type）
+	// CEX simulated=true → is_real=false（key=venue:venue_type）
+	if v := m["binance:spot"]; v == nil || *v {
+		t.Fatalf("binance:spot want *false (simulated=true), got %v", v)
 	}
 	// CEX simulated=false → is_real=true
-	if v := m["okx"]; v == nil || !*v {
-		t.Fatalf("okx want *true (simulated=false), got %v", v)
+	if v := m["okx:spot"]; v == nil || !*v {
+		t.Fatalf("okx:spot want *true (simulated=false), got %v; full map: %+v", v, m)
 	}
 	// 未知 venue 不在 map
 	if _, ok := m["unknown"]; ok {

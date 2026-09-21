@@ -32,30 +32,56 @@ func (s *Store) ListAccountIsReal(ctx context.Context) (map[string]*bool, error)
 	return m, rows.Err()
 }
 
-// ListVenueIsReal 返回统一 venue→*bool 映射（D-178）。
-// 合并 broker_accounts.is_real（CFD）+ exchange_configs.simulated（CEX，取反）。
-// nil=未知（broker_accounts.is_real=NULL 或 venue 不在任何表）。
-// CEX 查询失败 → 仅返回 CFD 部分（fail-open，不阻塞检测）。
+// ListVenueIsReal 返回统一 venue:type → *bool 映射（D-178；D-371 键域升级 venueKey 粒度）。
+// 合并 broker_accounts.is_real（MT：key=venue+":"+platform，0→mt4/1→mt5——brokers.go:15
+// 注释 × MT4Executor.venueKey=venue+":mt4" 互证）+ exchange_configs.simulated 取反
+// （CEX：DISTINCT ON (venue,venue_type) 赢家 config——created_at DESC, id DESC，与
+// reconcile.CexKeyWinners 同语义镜像【注释互指防漂移】；pgstore 不能 import reconcile=环，
+// SQL 单查询是 pgstore 内最简等价，配平锚 D-371 S5-e 钉双实现一致性）。
+// nil=未知（is_real=NULL 或 venue 不在任何表）。两半边独立容错（CEX 查询失败仍返回 MT 半边）。
 func (s *Store) ListVenueIsReal(ctx context.Context) (map[string]*bool, error) {
-	m, err := s.ListAccountIsReal(ctx)
+	m := make(map[string]*bool)
+	// MT 半边：broker_accounts（key=venue:platform 映射）
+	mtRows, err := s.pool.Query(ctx, `SELECT venue, platform, is_real FROM broker_accounts`)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.pool.Query(ctx, `SELECT venue, simulated FROM exchange_configs`)
-	if err != nil {
-		return m, nil // CEX 查询失败 → 仅返回 CFD（fail-open）
-	}
-	defer rows.Close()
-	for rows.Next() {
+	defer mtRows.Close()
+	for mtRows.Next() {
 		var venue string
+		var platform int
+		var isReal *bool
+		if err := mtRows.Scan(&venue, &platform, &isReal); err != nil {
+			return nil, err
+		}
+		vt := "mt5"
+		if platform == 0 {
+			vt = "mt4"
+		}
+		m[venue+":"+vt] = isReal
+	}
+	if err := mtRows.Err(); err != nil {
+		return nil, err
+	}
+	// CEX 半边：exchange_configs 赢家 config（撞键取 created_at/id 最新）
+	cexRows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT ON (venue, venue_type) venue, venue_type, simulated
+		FROM exchange_configs
+		ORDER BY venue, venue_type, created_at DESC, id DESC`)
+	if err != nil {
+		return m, nil // CEX 查询失败 → 仅返回 MT 半边（fail-open）
+	}
+	defer cexRows.Close()
+	for cexRows.Next() {
+		var venue, vt string
 		var simulated bool
-		if err := rows.Scan(&venue, &simulated); err != nil {
+		if err := cexRows.Scan(&venue, &vt, &simulated); err != nil {
 			continue
 		}
 		isReal := !simulated
-		m[venue] = &isReal
+		m[venue+":"+vt] = &isReal
 	}
-	return m, rows.Err()
+	return m, cexRows.Err()
 }
 
 // BrokerRealAccountKeys D-360 S2：real 账户键集（venue=user_id::text，核证点②：
