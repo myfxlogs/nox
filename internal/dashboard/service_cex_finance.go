@@ -42,9 +42,10 @@ func (s *Service) GetCexFinance(ctx context.Context, req *connect.Request[v1.Get
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	winners := cexKeyWinners(cfgs)
+	finCfgs := dedupOkxTradingConfigs(cfgs) // R2 S2 接线：循环必须遍历去重后清单（防纯函数绿但没接线）
 	resp := &v1.GetCexFinanceResponse{}
-	for i := range cfgs {
-		c := &cfgs[i]
+	for i := range finCfgs {
+		c := &finCfgs[i]
 		if c.Simulated || (c.Venue != "binance" && c.Venue != "okx") || c.APIKey == "" || c.APISecret == "" {
 			continue // real CEX only（D-363 FilterIOAccounts 同判据）
 		}
@@ -56,7 +57,7 @@ func (s *Service) GetCexFinance(ctx context.Context, req *connect.Request[v1.Get
 		}
 		blk := &v1.CexAccountFinance{
 			Venue: c.Venue, VenueType: c.VenueType,
-			Key:          reconcile.CexVenueKey(c.Venue, c.VenueType, c.ID, winners),
+			Key:          cexFinanceKey(c, winners),
 			Simulated:    c.Simulated,
 			UsdtEquity:   inv.UsdtEquity,
 			InventoryUsd: inv.InventoryUSD,
@@ -104,10 +105,11 @@ func dedupOkxTradingConfigs(cfgs []pgstore.ExchangeConfig) []pgstore.ExchangeCon
 		}
 		if c.Venue == "okx" && (c.VenueType == "spot" || c.VenueType == "perp") {
 			if okxTradingSeen {
-				continue // 同一统一账户，spot/perp 双 config 只出一张卡（首张按 id 序）
+				continue // 同一统一账户，spot/perp 双 config 只出一张卡（首张=min id）
 			}
 			okxTradingSeen = true
-			// VenueType 保持原值（spot/perp）供 FullInventory 分派；渲染层标 unified
+			c.VenueType = "unified" // R2 定死语义：改写后 FullInventory 分派自然走 trading impl，
+			// 卡键/渲染与 monitor 快照 okx/unified 同名一致
 		}
 		out = append(out, c)
 	}
@@ -115,7 +117,8 @@ func dedupOkxTradingConfigs(cfgs []pgstore.ExchangeConfig) []pgstore.ExchangeCon
 	return out
 }
 
-// cexFinanceKey 财务块 key：okx unified 卡用 okx:unified，其余 CexVenueKey 同源语义。
+// cexFinanceKey 财务块 key：okx unified 卡用 okx:unified（与 monitor 快照 okx/unified
+// 同名一致），其余 CexVenueKey 同源语义。
 func cexFinanceKey(c *pgstore.ExchangeConfig, winners map[string]int64) string {
 	if c.Venue == "okx" && c.VenueType == "unified" {
 		return "okx:unified"
