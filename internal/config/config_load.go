@@ -50,6 +50,7 @@ func Load() *Config {
 		SwapArbEquityUseRatio:      envFloat("ARB_SWAPARB_EQUITY_USE_RATIO", 0.5),
 		SwapArbBareCap:             envFloat("ARB_SWAPARB_BARE_CAP", 1.0),
 		SwapArbReentryCooldownDays: envInt("ARB_SWAPARB_REENTRY_COOLDOWN_DAYS", 7),
+		StopReentryMinutes:         envInt("ARB_STOP_REENTRY_MINUTES", 60),             // D-372 gate 止损重进冷却
 		SwapArbVenueExposureCap:    envFloat("ARB_SWAPARB_VENUE_EXPOSURE_CAP", 2.0),    // D-132 T1 venue 级敞口门
 		SwapArbMarginBudgetPct:     envFloat("ARB_SWAPARB_MARGIN_BUDGET_PCT", 0.8),     // D-142 ④ 观察版告警
 		ProbeEnabled:               envBool("ARB_PROBE_ENABLED", false),                // D-181 S2 probe 探测仓总开关

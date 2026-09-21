@@ -74,6 +74,11 @@ type Config struct {
 	// 该 ComboKey 存在 CLOSED 持仓且 closed_at > now() − N 天 → 跳过（不尝试/不弹窗/不落 REJECTED 噪音）。
 	// 冷却外或无 CLOSED 记录 → 放行；0 = 关闭冷却（始终放行）。
 	SwapArbReentryCooldownDays int
+	// StopReentryMinutes gate 止损重进冷却分钟数（ARB_STOP_REENTRY_MINUTES，缺省 60）。
+	// D-372：同 ComboKey stop/manual 平仓后 N 分钟内 gate 拒绝自动重进（全策略统一，
+	// 补机会驱动路径零覆盖）。60min=打碎 stop→秒级重进毒环且容 detector 分钟级重评；
+	// 0 = 关闭检查（逃生阀，与 SwapArbReentryCooldownDays 语义对齐）。
+	StopReentryMinutes int
 	// SwapArbVenueExposureCap 单 venue SWAPARB 合计裸露上限系数（ARB_SWAPARB_VENUE_EXPOSURE_CAP，缺省 2.0）。
 	// D-132 T1：新开仓时若任一腿 venue 现有 SWAPARB 活仓合计名义 + 新仓名义 > venue equity × cap → skip。
 	// 语义=单 venue SWAPARB 裸露 ≤ cap 倍权益；注资后各档自动满足，组合数失控时硬顶。0 = 不启用。
