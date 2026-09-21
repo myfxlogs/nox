@@ -193,33 +193,31 @@ func (s *Store) SumCashflowsNetWithQuality(ctx context.Context, posID int64) (su
 	}
 }
 
-// SumCashflowsByPosVenue 批量返回 (position_id, venue) → swap+funding 合计（D-152 微件①）。
-// broker_position_build 用：CEX 腿按 (position_id, venue) 聚合 cashflows 填 swap 字段。
-// D-322 S3b 起 dashboard.enrich 回本口径亦用此聚合（per-venue 对照 broker 实报 swap 去重）。
-// key 格式 = posID\x00venue；无匹配行 → 该 key 不在 map 中（调用方按 0 处理）。
-func (s *Store) SumCashflowsByPosVenue(ctx context.Context, posIDs []int64) (map[string]float64, error) {
-	out := make(map[string]float64)
+// SumEstimatedCashflowsByPos D-375 S1：批量返回 position_id → swap+funding estimated 公式计提合计
+// （「息差已收」列的「估」参考行数据源——与实收（income_events/broker 快照）是两个世界）。
+// actual/NULL quality 排除（实收不双计）；kind 过滤 commission 不计；无匹配行 → 该 key 不在 map。
+func (s *Store) SumEstimatedCashflowsByPos(ctx context.Context, posIDs []int64) (map[int64]float64, error) {
+	out := make(map[int64]float64)
 	if len(posIDs) == 0 {
 		return out, nil
 	}
 	rows, err := s.pool.Query(ctx,
-		`SELECT position_id, venue, COALESCE(SUM(amount_usd), 0)
+		`SELECT position_id, COALESCE(SUM(amount_usd), 0)
 		 FROM position_cashflows
-		 WHERE position_id = ANY($1) AND kind IN ('swap','funding')
-		 GROUP BY position_id, venue`,
+		 WHERE position_id = ANY($1) AND kind IN ('swap','funding') AND quality = 'estimated'
+		 GROUP BY position_id`,
 		posIDs)
 	if err != nil {
-		return nil, fmt.Errorf("sum cashflows by pos venue: %w", err)
+		return nil, fmt.Errorf("sum estimated cashflows by pos: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var posID int64
-		var venue string
 		var sum float64
-		if err := rows.Scan(&posID, &venue, &sum); err != nil {
-			return nil, err
+		if err := rows.Scan(&posID, &sum); err != nil {
+			return nil, fmt.Errorf("scan estimated sum: %w", err)
 		}
-		out[fmt.Sprintf("%d\x00%s", posID, venue)] = sum
+		out[posID] = sum
 	}
 	return out, rows.Err()
 }

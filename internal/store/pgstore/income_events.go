@@ -133,3 +133,36 @@ func (s *Store) OpenLegSymbols(ctx context.Context, venue string) ([]string, err
 	}
 	return out, rows.Err()
 }
+
+// SumIncomeByPosVenue D-375 S1：批量返回 (position_id, venue) → income 实收合计
+// （「息差已收」列实收源——展示侧不重做匹配，P3：匹配逻辑单点在 collector 插入期）。
+// key 格式 = posID\x00venue（venue=position_legs.venue 全形如 "binance:perp"）。
+// join 必带 l.phase='OPEN'——同 leg_no 有 OPEN+CLOSE 两行（pos494 实证），漏则 SUM 翻倍；
+// position_id NULL 行（未匹配，不猜）经 join+ANY 天然排除。
+func (s *Store) SumIncomeByPosVenue(ctx context.Context, posIDs []int64) (map[string]float64, error) {
+	out := make(map[string]float64)
+	if len(posIDs) == 0 {
+		return out, nil
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT ie.position_id, l.venue, COALESCE(SUM(ie.amount_usd), 0)
+		FROM income_events ie
+		JOIN position_legs l ON l.position_id = ie.position_id AND l.leg_no = ie.leg_no AND l.phase = 'OPEN'
+		WHERE ie.position_id = ANY($1)
+		GROUP BY ie.position_id, l.venue`,
+		posIDs)
+	if err != nil {
+		return nil, fmt.Errorf("sum income by pos venue: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var posID int64
+		var venue string
+		var sum float64
+		if err := rows.Scan(&posID, &venue, &sum); err != nil {
+			return nil, fmt.Errorf("scan income sum: %w", err)
+		}
+		out[fmt.Sprintf("%d\x00%s", posID, venue)] = sum
+	}
+	return out, rows.Err()
+}
