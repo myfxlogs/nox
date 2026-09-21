@@ -36,33 +36,9 @@ func (e *Engine) checkExitCondition(ctx context.Context, p *pgstore.Position) (b
 	// （recalcNetFunding 的 long−short 反向口径已由 D-312 修复为逐腿 :perp 净收入）。
 	// 退出判定复用 perpFundingExitDecision（持有下限+连续去抖+fail-closed，同一把 fundingMu）。
 	if p.Type == "XASSET_CARRY" {
-		netCarry, ok := e.recalcXAssetNetCarry(ctx, p)
-		var held time.Duration
-		if p.OpenedAt != nil {
-			held = time.Since(*p.OpenedAt)
-		}
-		e.fundingMu.Lock()
-		curCount := e.fundingBreach[p.ID]
-		shouldClose, newCount, reason := perpFundingExitDecision(ok, held, netCarry, e.cfg.FundingExitPct, e.cfg.PerpFundMinHold, e.cfg.PerpFundExitDebounce, curCount)
-		if newCount == 0 {
-			delete(e.fundingBreach, p.ID)
-		} else {
-			e.fundingBreach[p.ID] = newCount
-		}
-		e.fundingMu.Unlock()
-		if shouldClose {
-			return true, reason
-		}
-		// D-341 S1：收敛止盈（收割线=滚动分位数，monitor harvest_floor 列）——带底收割出口，
-		// 不受 minHold 约束（利润兑现无需等待；minHold 专属 carry 死亡判定）。floor NULL=不触发。
-		if shouldHarvest, harvestReason := e.harvestCheck(ctx, p); shouldHarvest {
-			return true, harvestReason
-		}
-		// D-378a S2：执行质量闸（harvest 后、basisStop 前）——漂移仓首个评估即杀，不等基差走坏。
-		if shouldDrift, driftReason := e.execDriftCheck(ctx, p); shouldDrift {
-			return true, driftReason
-		}
-		return e.basisStopCheckXAsset(p)
+		// D-377 S2：XASSET 分支整组移入 engine_xasset_eval.go（评估行写入同文件族）。
+		// 非 XASSET_CARRY 不写行——scope 闸即本分支判定本身（其他型走原路径零触碰）。
+		return e.xassetExitCheck(ctx, p)
 	}
 	if p.Type == "FUNDING_HEDGE" || p.Type == "PERP_FUNDING" {
 		// D-133 T1：PERP_FUNDING 走持有下限 + 连续去抖（修复 D-129 瞬时费率判平致命缺陷）；
