@@ -132,3 +132,40 @@ func TestFilterIOAccounts(t *testing.T) {
 		t.Errorf("okx 基址应直连 www.okx.com（核证点④）, got %q", accs[1].BaseURL)
 	}
 }
+
+// TestCexIOCollector_BinanceProxyToken D-365-R4 S2 锚：env 设 ARB_BINANCE_PROXY_TOKEN 时
+// binance 请求带 X-Proxy-Token 头（httpx.Client() 注入；旧实现红=裸 DefaultClient 头缺失
+// =生产 x509 skip 复现）。
+func TestCexIOCollector_BinanceProxyToken(t *testing.T) {
+	t.Setenv("ARB_BINANCE_PROXY_TOKEN", "tok-364r4")
+	var gotToken []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotToken = append(gotToken, r.Header.Get("X-Proxy-Token"))
+		switch r.URL.Path {
+		case "/sapi/v1/capital/deposit/hisrec":
+			fmt.Fprint(w, `[{"id":"1","amount":"1","coin":"USDT","status":1,"insertTime":1789818586000}]`)
+		case "/sapi/v1/capital/withdraw/history":
+			fmt.Fprint(w, `[]`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	sink := &fakeIOSink{}
+	col := NewCexIOCollector(sink, func() []CexIOAccount {
+		return []CexIOAccount{{ID: 20, Venue: "binance", APIKey: "k", APISecret: "s", BaseURL: srv.URL + "/api"}}
+	})
+	n, err := col.RunOnce(context.Background())
+	if err != nil || n != 1 {
+		t.Fatalf("RunOnce = %d (err=%v), want 1", n, err)
+	}
+	if len(gotToken) == 0 {
+		t.Fatal("binance 请求未到达 fake server")
+	}
+	for i, tok := range gotToken {
+		if tok != "tok-364r4" {
+			t.Errorf("请求 %d X-Proxy-Token = %q, want tok-364r4（裸 client 头缺失=R4 缺陷复现）", i, tok)
+		}
+	}
+}

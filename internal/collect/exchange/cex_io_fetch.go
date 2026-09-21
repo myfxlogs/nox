@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"arb/internal/httpx"
 	"arb/internal/store/pgstore"
 )
 
@@ -50,7 +51,11 @@ func (c *CexIOCollector) fetchBinance(ctx context.Context, acc CexIOAccount, dir
 	default:
 		return nil, fmt.Errorf("bad direction %q", direction)
 	}
-	body, err := signedBinanceGet(ctx, http.DefaultClient, sapiBase, path, acc.APIKey, acc.APISecret, extra)
+	// D-365-R4 S1：binance 必须走 httpx.Client()——静态代理自签 CA（ARB_BINANCE_PROXY_CA）
+	// 与 X-Proxy-Token（ARB_BINANCE_PROXY_TOKEN）全靠该 client 注入；裸 DefaultClient →
+	// 生产 x509: unknown authority 每轮 skip（reconcile querier httpx.Client() 同款先例）。
+	// okx 保持 DefaultClient 直连（公网 CA 够用且 proxy token 不外发）。
+	body, err := signedBinanceGet(ctx, httpx.Client(), sapiBase, path, acc.APIKey, acc.APISecret, extra)
 	if err != nil {
 		return nil, err
 	}
