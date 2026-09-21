@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"arb/internal/exec"
@@ -144,20 +143,20 @@ func (s *Service) checkEnvironmentIsReal(ctx context.Context, venueBuy, venueSel
 		return fmt.Sprintf("environment check: is_real map query failed (%v)", err)
 	}
 	for _, venueKey := range []string{venueBuy, venueSell} {
-		venue, _, _ := strings.Cut(venueKey, ":")
-		if venue == "" {
-			return fmt.Sprintf("environment check: empty venue in %s", venueKey)
+		// D-371 S2：venueKey 全键直查
+		if venueKey == "" {
+			return "environment check: empty venueKey"
 		}
-		isReal, known := isRealMap[venue]
+		isReal, known := isRealMap[venueKey]
 		if !known {
-			return fmt.Sprintf("environment check: venue %s not found", venue)
+			return fmt.Sprintf("environment check: venue %s not found", venueKey)
 		}
 		if isReal == nil {
-			return fmt.Sprintf("environment check: venue %s is_real unknown (null)", venue)
+			return fmt.Sprintf("environment check: venue %s is_real unknown (null)", venueKey)
 		}
 		isLive := *isReal
 		if isLive != wantLive {
-			return fmt.Sprintf("environment check: venue %s is_real=%v != environment=%s", venue, isLive, s.environment)
+			return fmt.Sprintf("environment check: venue %s is_real=%v != environment=%s", venueKey, isLive, s.environment)
 		}
 	}
 	return ""
@@ -173,19 +172,19 @@ func (s *Service) checkLiveGate(ctx context.Context, venueBuy, venueSell string)
 		return fmt.Sprintf("live gate: is_real map query failed (%v)", err)
 	}
 	for _, venueKey := range []string{venueBuy, venueSell} {
-		venue, _, _ := strings.Cut(venueKey, ":")
-		if venue == "" {
-			return fmt.Sprintf("live gate: empty venue in %s", venueKey)
+		// D-371 S2：venueKey 全键直查
+		if venueKey == "" {
+			return "live gate: empty venueKey"
 		}
-		isReal, known := isRealMap[venue]
+		isReal, known := isRealMap[venueKey]
 		if !known {
-			return fmt.Sprintf("live gate: venue %s not found", venue)
+			return fmt.Sprintf("live gate: venue %s not found", venueKey)
 		}
 		if isReal == nil {
-			return fmt.Sprintf("live gate: venue %s is_real unknown (null)", venue)
+			return fmt.Sprintf("live gate: venue %s is_real unknown (null)", venueKey)
 		}
 		if *isReal {
-			return fmt.Sprintf("live trade disabled (ARB_LIVE_TRADE=false, venue=%s is_real=true)", venue)
+			return fmt.Sprintf("live trade disabled (ARB_LIVE_TRADE=false, venueKey=%s is_real=true)", venueKey)
 		}
 	}
 	return ""
