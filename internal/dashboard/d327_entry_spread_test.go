@@ -33,8 +33,10 @@ type d327CSResolver struct{}
 
 func (d327CSResolver) ContractSize(string, string) (float64, bool) { return 1.0, true }
 
-// TestD327_ExecuteInternal_EntrySpreadBackfilled T1：开仓 EXECUTED 后成交价基准落列。
-// buy fill 60.02 / sell fill 60.00 → (60.02−60.00)/60.02×1e4 ≈ 3.332。
+// TestD327_ExecuteInternal_EntrySpreadBackfilled T1：开仓 EXECUTED 后 entry spread 基准落列。
+// D-378a S1 改义：XASSET 锚=纯 quote 口径（fill 口径吸收 venue 成交噪声=493 毒锚根因）——
+// buy quote bid 60.00 / ask 60.02、sell quote ask 60.02 → (60.00−60.02)/60.02×1e4 ≈ −3.332。
+// sellCanonical 走 broker_symbol_map 反查（opp.CanonicalSell NULL）。
 func TestD327_ExecuteInternal_EntrySpreadBackfilled(t *testing.T) {
 	st := serviceTestStoreSingleInit(t)
 	ctx := context.Background()
@@ -44,6 +46,11 @@ func TestD327_ExecuteInternal_EntrySpreadBackfilled(t *testing.T) {
 	if _, err := st.Pool().Exec(ctx,
 		`INSERT INTO autotrade_state (state, reason, halted_on) VALUES ('RUNNING', '', NULL)`); err != nil {
 		t.Fatalf("seed RUNNING: %v", err)
+	}
+	// D-378a S1：quote 锚需卖腿 canonical 反查（3001157 venue 裸名 × 卖腿 symbol）
+	if _, err := st.Pool().Exec(ctx,
+		`INSERT INTO broker_symbol_map (venue, broker_symbol, canonical) VALUES ('3001157','USOILm','CLUSDT') ON CONFLICT DO NOTHING`); err != nil {
+		t.Fatalf("seed symbol map: %v", err)
 	}
 	oppID := "XASSET_CARRY:CLUSDT:gate:perp:3001157:mt5"
 	if _, err := st.UpsertOpportunity(ctx, &pgstore.Opportunity{
@@ -103,8 +110,8 @@ func TestD327_ExecuteInternal_EntrySpreadBackfilled(t *testing.T) {
 	if got == nil {
 		t.Fatal("EXECUTED 后 XASSET_CARRY 基准应非 NULL（S1 写点）")
 	}
-	want := (60.02 - 60.00) / 60.02 * 10000
+	want := (60.00 - 60.02) / 60.02 * 10000
 	if math.Abs(*got-want) > 1e-9 {
-		t.Errorf("baseline = %.6f, want %.6f（成交价公式）", *got, want)
+		t.Errorf("baseline = %.6f, want %.6f（D-378a quote 口径）", *got, want)
 	}
 }
