@@ -334,6 +334,9 @@ const (
 	// DashboardServiceGetCapitalCoverageProcedure is the fully-qualified name of the DashboardService's
 	// GetCapitalCoverage RPC.
 	DashboardServiceGetCapitalCoverageProcedure = "/arb.dashboard.v1.DashboardService/GetCapitalCoverage"
+	// DashboardServiceGetCexFinanceProcedure is the fully-qualified name of the DashboardService's
+	// GetCexFinance RPC.
+	DashboardServiceGetCexFinanceProcedure = "/arb.dashboard.v1.DashboardService/GetCexFinance"
 )
 
 // DashboardServiceClient is a client for the arb.dashboard.v1.DashboardService service.
@@ -477,6 +480,8 @@ type DashboardServiceClient interface {
 	ListPaperSpotCarry(context.Context, *connect.Request[v1.ListPaperSpotCarryRequest]) (*connect.Response[v1.ListPaperSpotCarryResponse], error)
 	// D-359：资金不眠覆盖率前端面板（口径 SSOT=D-356 §1.1；digest 段同源双实现，后端算前端零计算）。
 	GetCapitalCoverage(context.Context, *connect.Request[v1.GetCapitalCoverageRequest]) (*connect.Response[v1.GetCapitalCoverageResponse], error)
+	// D-365：CEX 财务页（账户级盘点全币种+进出/收益流水；后端算+占比，前端零计算）。
+	GetCexFinance(context.Context, *connect.Request[v1.GetCexFinanceRequest]) (*connect.Response[v1.GetCexFinanceResponse], error)
 }
 
 // NewDashboardServiceClient constructs a client for the arb.dashboard.v1.DashboardService service.
@@ -1096,6 +1101,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("GetCapitalCoverage")),
 			connect.WithClientOptions(opts...),
 		),
+		getCexFinance: connect.NewClient[v1.GetCexFinanceRequest, v1.GetCexFinanceResponse](
+			httpClient,
+			baseURL+DashboardServiceGetCexFinanceProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("GetCexFinance")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1202,6 +1213,7 @@ type dashboardServiceClient struct {
 	listSpotCarryDemo         *connect.Client[v1.ListSpotCarryDemoRequest, v1.ListSpotCarryDemoResponse]
 	listPaperSpotCarry        *connect.Client[v1.ListPaperSpotCarryRequest, v1.ListPaperSpotCarryResponse]
 	getCapitalCoverage        *connect.Client[v1.GetCapitalCoverageRequest, v1.GetCapitalCoverageResponse]
+	getCexFinance             *connect.Client[v1.GetCexFinanceRequest, v1.GetCexFinanceResponse]
 }
 
 // ListLatestQuotes calls arb.dashboard.v1.DashboardService.ListLatestQuotes.
@@ -1709,6 +1721,11 @@ func (c *dashboardServiceClient) GetCapitalCoverage(ctx context.Context, req *co
 	return c.getCapitalCoverage.CallUnary(ctx, req)
 }
 
+// GetCexFinance calls arb.dashboard.v1.DashboardService.GetCexFinance.
+func (c *dashboardServiceClient) GetCexFinance(ctx context.Context, req *connect.Request[v1.GetCexFinanceRequest]) (*connect.Response[v1.GetCexFinanceResponse], error) {
+	return c.getCexFinance.CallUnary(ctx, req)
+}
+
 // DashboardServiceHandler is an implementation of the arb.dashboard.v1.DashboardService service.
 type DashboardServiceHandler interface {
 	// 快照类
@@ -1850,6 +1867,8 @@ type DashboardServiceHandler interface {
 	ListPaperSpotCarry(context.Context, *connect.Request[v1.ListPaperSpotCarryRequest]) (*connect.Response[v1.ListPaperSpotCarryResponse], error)
 	// D-359：资金不眠覆盖率前端面板（口径 SSOT=D-356 §1.1；digest 段同源双实现，后端算前端零计算）。
 	GetCapitalCoverage(context.Context, *connect.Request[v1.GetCapitalCoverageRequest]) (*connect.Response[v1.GetCapitalCoverageResponse], error)
+	// D-365：CEX 财务页（账户级盘点全币种+进出/收益流水；后端算+占比，前端零计算）。
+	GetCexFinance(context.Context, *connect.Request[v1.GetCexFinanceRequest]) (*connect.Response[v1.GetCexFinanceResponse], error)
 }
 
 // NewDashboardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -2465,6 +2484,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("GetCapitalCoverage")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceGetCexFinanceHandler := connect.NewUnaryHandler(
+		DashboardServiceGetCexFinanceProcedure,
+		svc.GetCexFinance,
+		connect.WithSchema(dashboardServiceMethods.ByName("GetCexFinance")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/arb.dashboard.v1.DashboardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DashboardServiceListLatestQuotesProcedure:
@@ -2669,6 +2694,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceListPaperSpotCarryHandler.ServeHTTP(w, r)
 		case DashboardServiceGetCapitalCoverageProcedure:
 			dashboardServiceGetCapitalCoverageHandler.ServeHTTP(w, r)
+		case DashboardServiceGetCexFinanceProcedure:
+			dashboardServiceGetCexFinanceHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -3080,4 +3107,8 @@ func (UnimplementedDashboardServiceHandler) ListPaperSpotCarry(context.Context, 
 
 func (UnimplementedDashboardServiceHandler) GetCapitalCoverage(context.Context, *connect.Request[v1.GetCapitalCoverageRequest]) (*connect.Response[v1.GetCapitalCoverageResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetCapitalCoverage is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) GetCexFinance(context.Context, *connect.Request[v1.GetCexFinanceRequest]) (*connect.Response[v1.GetCexFinanceResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetCexFinance is not implemented"))
 }
