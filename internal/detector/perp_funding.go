@@ -38,9 +38,11 @@ func (d *PerpFundingDetector) Scan(_ context.Context, snapshot map[string]map[st
 	now := time.Now()
 	var fundingFacts map[string]map[string]float64
 	var realMap map[string]*bool
+	var simMap map[string]bool // D-369-R2 S3：sim 键集（"venue:type"→true，赢家 config 判定）
 	if fp != nil {
 		fundingFacts = fp.FundingFacts()
 		realMap = fp.IsRealMap()
+		simMap = fp.SimVenueKeys()
 	}
 	for canonical, venues := range snapshot {
 		// D-151 入场白名单 + D-369 S3 sim 试单通道：非白名单 canonical 不立即跳过——
@@ -82,12 +84,11 @@ func (d *PerpFundingDetector) Scan(_ context.Context, snapshot map[string]map[st
 				}
 				// D-178：is_real 配对检查（fail-open，gate 层兜底）。
 				// D-369 S3：非白名单 canonical → 仅放行双腿均【已知 sim】的 venue 对
-				// （realMap 显式 false；nil=未知不放行——与 seed/执行层 fail-closed 语义对齐）。
-				// real/混合对维持原拒；白名单 canonical 行为完全不变。
+				// D-369-R2 S3：非白名单 canonical → 仅放行双腿均在 sim 键集的 venue 对
+				// （simMap["venue:type"]==true=赢家 config 为 sim；缺席=未知→跳过 fail-closed）。
+				// 既有 isRealPair/白名单零改动（real 域维持 D-151/D-178 语义）。
 				if simOnlyPair {
-					simA := realMap[a.q.Venue] != nil && !*realMap[a.q.Venue]
-					simB := realMap[b.q.Venue] != nil && !*realMap[b.q.Venue]
-					if !simA || !simB {
+					if !simMap[a.q.Venue+":"+a.q.VenueType] || !simMap[b.q.Venue+":"+b.q.VenueType] {
 						continue
 					}
 				} else if !isRealPair(realMap, a.q.Venue, b.q.Venue) {

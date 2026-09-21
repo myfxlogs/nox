@@ -15,11 +15,13 @@ type fakeIsRealFP struct {
 	funding map[string]map[string]float64
 	swap    map[string]map[string][2]float64
 	isReal  map[string]*bool
+	simKeys map[string]bool // D-369-R2：sim venue 键集（nil map=缺席→跳过）
 }
 
 func (f *fakeIsRealFP) FundingFacts() map[string]map[string]float64 { return f.funding }
 func (f *fakeIsRealFP) SwapFacts() map[string]map[string][2]float64 { return f.swap }
 func (f *fakeIsRealFP) TradeModes() map[string]map[string]int64     { return nil }
+func (f *fakeIsRealFP) SimVenueKeys() map[string]bool               { return f.simKeys } // D-369-R2
 func (f *fakeIsRealFP) IsRealMap() map[string]*bool                 { return f.isReal }
 
 // TestCrossVenueScanIsRealPair D-178：MIXED is_real → 0 候选；SAME is_real → 候选照常。
