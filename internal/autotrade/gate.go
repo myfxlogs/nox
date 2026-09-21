@@ -119,6 +119,15 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 		}
 	}
 
+	// D-372 检查 7: 止损重进冷却——closed 持仓抑制（stop/manual × 冷却窗 × 同 ComboKey）。
+	// gate 统一闸单点覆盖全 intent 来源（扫描/机会/MEANREVERT）；harvest/carry_death/NULL 豁免。
+	// fail-closed：查询失败=拒绝（与检查 4+6 同风格）；StopReentryCooldown<=0=检查关闭。
+	stopHit, stopKind, stopAgo, err := g.stopCooldownCheck(ctx, intentCombo)
+	if err != nil {
+		g.rejectLog(ctx, *intent, fmt.Sprintf("list cooled exits: %v", err), false)
+		return GateResult{Status: "REJECTED", Reason: "cooled exits check failed"}
+	}
+
 	verdict := gateDecision(GateInput{
 		State:        state,
 		Strategy:     intent.Strategy,
@@ -136,6 +145,10 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 		// 单笔 cap；敞口闸=combo spec MaxGrossUSD（pipeline checkXAssetComboAllow 事后校验终审）。
 		SkipNotional: intent.Strategy == "SWAPARB" || intent.Strategy == "CARRY" || intent.Strategy == "XASSET_CARRY",
 		DedupHit:     comboAlreadyOpen,
+		// D-372：止损重进冷却命中（组合级历史抑制，DedupHit 同族）
+		StopCooldownHit:  stopHit,
+		StopCooldownKind: stopKind,
+		StopCooldownAgo:  stopAgo,
 	})
 
 	// D-159 W1a R1：精确组合门禁（SWAPARB/CARRY 共用，gateDecision 后、Execute 前拦截）。

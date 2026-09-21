@@ -18,6 +18,10 @@ type GateInput struct {
 	MaxNotional  float64 // 单笔名义上限（USD，>0 启用，≤0 禁用）
 	SkipNotional bool    // 跳过 notional 判定（SWAPARB 自管 sizing 豁免，D-096/D-097）
 	DedupHit     bool    // 幂等命中
+	// D-372：同组合 stop/manual 冷却命中（组合级历史抑制，DedupHit 同族；kind/ago 供审计 reason）。
+	StopCooldownHit  bool
+	StopCooldownKind string
+	StopCooldownAgo  time.Duration
 }
 
 // GateVerdict gateDecision 纯函数返回。
@@ -46,6 +50,11 @@ func gateDecision(in GateInput) GateVerdict {
 	// MaxNotional≤0=禁用语义保留——未配置或显式关）。
 	if !in.SkipNotional && in.MaxNotional > 0 && in.NotionalUSD > in.MaxNotional {
 		return GateVerdict{Pass: false, Reason: fmt.Sprintf("notional $%.2f > cap $%.2f", in.NotionalUSD, in.MaxNotional)}
+	}
+	// D-372：止损重进冷却（DedupHit 同组——组合级历史抑制语义族，幂等前）。
+	// reason 带 exit_kind 与平仓距今时长便于审计。
+	if in.StopCooldownHit {
+		return GateVerdict{Pass: false, Reason: fmt.Sprintf("combo reentry cooldown (exit_kind=%s, closed %s ago)", in.StopCooldownKind, in.StopCooldownAgo.Round(time.Second))}
 	}
 	if in.DedupHit {
 		return GateVerdict{Pass: false, Reason: fmt.Sprintf("duplicate dedup key")}
