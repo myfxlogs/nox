@@ -106,6 +106,10 @@ type Config struct {
 	// B：组合平仓后重入冷却（ARB_SWAPARB_REENTRY_COOLDOWN_DAYS，默认 7）
 	ReentryCooldownDays int
 
+	// D-372：gate 止损重进冷却——同 ComboKey stop/manual 平仓后窗口内拒绝自动重进
+	// （gate 统一闸单点覆盖全 intent 来源；<=0 = 检查关闭，逃生阀）。
+	StopReentryCooldown time.Duration
+
 	// D-181 S2：probe 探测仓——无实测腿的首仓自动成为 probe，到期评估升级/拒绝。
 	// ProbeEnabled=false → 不标记不评估（向后兼容，默认 false）。
 	ProbeEnabled bool
