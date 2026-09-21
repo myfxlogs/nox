@@ -44,15 +44,24 @@ type CexIOAccount struct {
 	BaseURL    string // binance=config 原值（/api 后缀采集器内派生 /sapi）；okx=直连基址
 }
 
-// FilterIOAccounts D-365 S3：exchange_configs → 进出账采集账户列表（纯函数可测）。
+// FilterIOAccounts D-365 S3/R1：exchange_configs → 进出账采集账户列表（纯函数可测）。
 // 只收 venue∈{binance,okx} 且 !simulated 且有凭据的配置（real-only 姿态；gate 仅 sim 跳过）；
-// okx 资金域端点直连 www.okx.com（核证点④：代理 403 实探）。
+// R1：(venue,api_key) 去重——同凭据多 config（spot/perp/funding/earn 同账号）只采一次，
+// 归属 canonical=min(id)（binance 3→1、okx 4→1；不同 key 仍各采）——进出账是账号级事实，
+// 重复采集只会撞幂等键浪费调用。okx 资金域端点直连 www.okx.com（核证点④：代理 403 实探）。
 func FilterIOAccounts(cfgs []pgstore.ExchangeConfig) []CexIOAccount {
-	var out []CexIOAccount
+	pick := map[string]pgstore.ExchangeConfig{} // (venue,api_key) → canonical（min id）
 	for _, c := range cfgs {
 		if c.Simulated || (c.Venue != "binance" && c.Venue != "okx") || c.APIKey == "" || c.APISecret == "" {
 			continue
 		}
+		dedupKey := c.Venue + ":" + c.APIKey
+		if prev, ok := pick[dedupKey]; !ok || c.ID < prev.ID {
+			pick[dedupKey] = c // canonical=min(id)，不依赖输入序
+		}
+	}
+	out := make([]CexIOAccount, 0, len(pick))
+	for _, c := range pick {
 		base := c.BaseURL
 		if c.Venue == "okx" {
 			base = "https://www.okx.com"
