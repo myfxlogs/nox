@@ -12,6 +12,7 @@ import (
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 	"arb/internal/reconcile"
+	"arb/internal/store/pgstore"
 
 	"connectrpc.com/connect"
 )
@@ -85,6 +86,41 @@ func (s *Service) GetCexFinance(ctx context.Context, req *connect.Request[v1.Get
 	cexFinanceCachedAt = time.Now()
 	cexFinanceMu.Unlock()
 	return connect.NewResponse(resp), nil
+}
+
+// dedupOkxTradingConfigs D-365-R1 S3：real CEX 配置 → 财务块清单（纯函数可测）。
+// real-only 判据沿 FilterIOAccounts 同款；okx spot/perp 是同一统一账户 → 只保留一张
+// unified 卡（min id 代表，VenueType 改 unified），binance spot/perp 是独立钱包不合并。
+// 输出按 id 升序（确定性）。
+func dedupOkxTradingConfigs(cfgs []pgstore.ExchangeConfig) []pgstore.ExchangeConfig {
+	sorted := make([]pgstore.ExchangeConfig, len(cfgs))
+	copy(sorted, cfgs)
+	sort.Slice(sorted, func(a, b int) bool { return sorted[a].ID < sorted[b].ID }) // 首张=min id（确定性）
+	var out []pgstore.ExchangeConfig
+	okxTradingSeen := false
+	for _, c := range sorted {
+		if c.Simulated || (c.Venue != "binance" && c.Venue != "okx") || c.APIKey == "" || c.APISecret == "" {
+			continue
+		}
+		if c.Venue == "okx" && (c.VenueType == "spot" || c.VenueType == "perp") {
+			if okxTradingSeen {
+				continue // 同一统一账户，spot/perp 双 config 只出一张卡（首张按 id 序）
+			}
+			okxTradingSeen = true
+			// VenueType 保持原值（spot/perp）供 FullInventory 分派；渲染层标 unified
+		}
+		out = append(out, c)
+	}
+	sort.Slice(out, func(a, b int) bool { return out[a].ID < out[b].ID })
+	return out
+}
+
+// cexFinanceKey 财务块 key：okx unified 卡用 okx:unified，其余 CexVenueKey 同源语义。
+func cexFinanceKey(c *pgstore.ExchangeConfig, winners map[string]int64) string {
+	if c.Venue == "okx" && c.VenueType == "unified" {
+		return "okx:unified"
+	}
+	return reconcile.CexVenueKey(c.Venue, c.VenueType, c.ID, winners)
 }
 
 // cexFinanceFlows 进出（fin_venue_io）+收益（income_events）合并，ts 倒序，各 50 上限。
