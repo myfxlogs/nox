@@ -25,15 +25,25 @@ type FullInventory struct {
 	Holdings     []*v1.Holding
 }
 
-// FullInventory 按 venue 分派全币种盘点。
+// FullInventory 按 venue+venue_type 分派全币种盘点（R1：子账户/合约钱包各有独立余额域，
+// 同 venue 不同 type 是不同盘点目标——binance spot/perp/funding 三钱包、okx 交易统一
+// 账户（spot/perp 合并语义由 service 层去重）/funding/earn）。
 func (q *CEXAccountQuerier) FullInventory(ctx context.Context) (*FullInventory, error) {
-	switch q.venue {
-	case "binance":
-		return q.fullInventoryBinance(ctx)
-	case "okx":
-		return q.fullInventoryOkx(ctx)
+	switch {
+	case q.venue == "binance" && q.venueType == "perp":
+		return q.fullInventoryBinancePerp(ctx)
+	case q.venue == "binance" && q.venueType == "funding":
+		return q.fullInventoryBinanceFunding(ctx)
+	case q.venue == "binance":
+		return q.fullInventoryBinanceSpot(ctx)
+	case q.venue == "okx" && q.venueType == "funding":
+		return q.fullInventoryOkxBySource(ctx, "funding")
+	case q.venue == "okx" && q.venueType == "earn":
+		return q.fullInventoryOkxBySource(ctx, "earn")
+	case q.venue == "okx":
+		return q.fullInventoryOkxTrading(ctx)
 	default:
-		return nil, fmt.Errorf("full inventory: unsupported venue %q", q.venue)
+		return nil, fmt.Errorf("full inventory: unsupported %s:%s", q.venue, q.venueType)
 	}
 }
 
@@ -53,9 +63,9 @@ func (q *CEXAccountQuerier) binanceUsdtPrice(ctx context.Context, spotBase, asse
 	return strconv.ParseFloat(tp.Price, 64)
 }
 
-// fullInventoryBinance binance spot 全币种盘点：GET /v3/account 全量 + /v3/ticker/price
+// fullInventoryBinanceSpot binance spot 全币种盘点：GET /v3/account 全量 + /v3/ticker/price
 // 逐币计价 + LD 兜底序（D-364-R2 移植）。
-func (q *CEXAccountQuerier) fullInventoryBinance(ctx context.Context) (*FullInventory, error) {
+func (q *CEXAccountQuerier) fullInventoryBinanceSpot(ctx context.Context) (*FullInventory, error) {
 	spotBase := strings.Replace(q.baseURL, "fapi", "api", 1)
 	params := url.Values{}
 	params.Set("timestamp", strconv.FormatInt(time.Now().UnixMilli(), 10))
@@ -109,9 +119,36 @@ func (q *CEXAccountQuerier) fullInventoryBinance(ctx context.Context) (*FullInve
 	return inv, nil
 }
 
-// fullInventoryOkx okx 全币种盘点：交易账户 /account/balance details 全 ccy（eqUsd 直接取）
-// + 资金账户 /asset/balances + 理财 /finance/savings/balance（USDT）三源合并。
-func (q *CEXAccountQuerier) fullInventoryOkx(ctx context.Context) (*FullInventory, error) {
+// fullInventoryBinancePerp binance 合约钱包盘点：GET /fapi/v2/account 的
+// totalWalletBalance（USDT-M 钱包本位即 USDT 标，保证金资产以 USDT 计）。
+func (q *CEXAccountQuerier) fullInventoryBinancePerp(ctx context.Context) (*FullInventory, error) {
+	params := url.Values{}
+	params.Set("timestamp", strconv.FormatInt(time.Now().UnixMilli(), 10))
+	params.Set("recvWindow", "5000")
+	sig := binanceSign(q.apiSecret, params.Encode())
+	params.Set("signature", sig)
+	h := http.Header{}
+	h.Set("X-MBX-APIKEY", q.apiKey)
+	body, err := q.get(ctx, q.baseURL+"/v2/account?"+params.Encode(), h)
+	if err != nil {
+		return nil, fmt.Errorf("binance perp full inventory: %w", err)
+	}
+	var acc struct {
+		TotalWalletBalance string `json:"totalWalletBalance"`
+	}
+	if err := json.Unmarshal(body, &acc); err != nil {
+		return nil, fmt.Errorf("binance perp full inventory json: %w", err)
+	}
+	eq, _ := strconv.ParseFloat(acc.TotalWalletBalance, 64)
+	return &FullInventory{
+		UsdtEquity: eq, InventoryUSD: eq,
+		Holdings: []*v1.Holding{{Ccy: "USDT", Qty: eq, UsdtValue: eq}},
+	}, nil
+}
+
+// fullInventoryOkxTrading okx 交易账户（spot/perp 统一账户）盘点：/account/balance
+// details 全 ccy eqUsd 直接取（service 层 spot/perp 同源去重只出一张 unified 卡）。
+func (q *CEXAccountQuerier) fullInventoryOkxTrading(ctx context.Context) (*FullInventory, error) {
 	const path = "/api/v5/account/balance"
 	ts := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 	sign := okxSign(q.apiSecret, ts+"GET"+path)
