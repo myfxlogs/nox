@@ -48,12 +48,14 @@ func matchBrokerLegs(openLegs []pgstore.PositionLeg, brokerSnap []*v1.BrokerPosi
 	return floating, swap, commission, matched
 }
 
-// fundingForLegs D-322 S3b：CEX 腿 funding cashflow 按 venue 去重并入回本口径。
+// fundingForLegs D-322 S3b：CEX 腿 funding 按 venue 去重并入回本口径。
 // 去重谓词与 matchBrokerLegs 同型（venueKey+symbol+positionId）：该腿匹配到 broker position
-// 且 bp.Swap≠0（venue 实报收讫，已计入 swapAccrued）→ 跳过该 venue 的 cashflow 估算；
-// 未匹配或 bp.Swap=0（binance/okx 无 Swap 字段恒 0）→ cashflow 兜底计入。
-// MT 腿不入账（swap 走 broker 快照，口径同 D-146 S5 前）；每 venue 只计一次（cashflow 按
-// (pos,venue) 聚合，多腿同 venue 会重复累加）。sums=SumCashflowsByPosVenue 预取（key=posID\x00venue）。
+// 且 bp.Swap≠0（venue 实报收讫，已计入 swapAccrued）→ 跳过该 venue；
+// 未匹配或 bp.Swap=0（binance/okx 无 Swap 字段恒 0）→ 兜底计入。
+// D-375 S2：兜底源由 cashflow 估算换 income_events 实收（estimated cashflow 退出已收列；
+// collector 插入期已挂 position_id/leg_no，展示侧不重做匹配）。
+// MT 腿不入账（swap 走 broker 快照，口径同 D-146 S5 前）；每 venue 只计一次（income 按
+// (pos,venue) 聚合，多腿同 venue 会重复累加）。sums=SumIncomeByPosVenue 预取（key=posID\x00venue）。
 func fundingForLegs(posID int64, openLegs []pgstore.PositionLeg, brokerSnap []*v1.BrokerPosition, sums map[string]float64) float64 {
 	total := 0.0
 	counted := make(map[string]bool)
