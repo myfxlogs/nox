@@ -72,10 +72,10 @@ type WsClient struct {
 	healthy      atomic.Bool
 	kickHistory  func()
 	sink         func(ctx context.Context, facts []fact.Fact) error
-	marketOpen   func() bool
-	marketStatus func() string   // D-225 v2.1 S5：WS 价格行 market_status 注入
-	onEvent      func(Snapshot)  // D-225 v2.1 S5：事件即触发回调（R10 接线）
-	frameHook    func(FrameKind) // D-234：帧钩子——落库后通知 dashboard（先落库后通知，通知失败不影响落库）
+	relogin      func(context.Context) error // D-370 S1：Session expired → 完整重登缝
+	marketStatus func() string               // D-225 v2.1 S5：WS 价格行 market_status 注入
+	onEvent      func(Snapshot)              // D-225 v2.1 S5：事件即触发回调（R10 接线）
+	frameHook    func(FrameKind)             // D-234：帧钩子——落库后通知 dashboard（先落库后通知，通知失败不影响落库）
 
 	positionsMu sync.Mutex
 	positions   []positionJSON
@@ -122,21 +122,22 @@ type WsClient struct {
 }
 
 func NewWsClient(auth jwtProvider, accountID int64, store *pgstore.Store, wsBase, restBase string) *WsClient {
-	return &WsClient{
+	w := &WsClient{
 		auth: auth, accountID: accountID, store: store, wsBase: wsBase, restBase: restBase,
-		marketOpen:   func() bool { return true }, // 保守默认：无缓存时视为市场时段
-		marketStatus: func() string { return "" }, // 默认无注入
+		marketStatus: func() string { return "" }, // 默认无注入（R2 修复：S1 重构误删已补回）
 		lastAlerts:   json.RawMessage("[]"),
 	}
+	// D-370 S1：auth 实现 Login 时注入完整重登缝（Session expired → Login 而非 refreshJWT）。
+	if p, ok := auth.(interface {
+		Login(context.Context) error
+	}); ok {
+		w.relogin = p.Login
+	}
+	return w
 }
 
 func (w *WsClient) SetKickHistory(fn func())                                      { w.kickHistory = fn }
 func (w *WsClient) SetSink(fn func(ctx context.Context, facts []fact.Fact) error) { w.sink = fn }
-func (w *WsClient) SetMarketOpen(fn func() bool) {
-	if fn != nil {
-		w.marketOpen = fn
-	}
-}
 func (w *WsClient) SetMarketStatus(fn func() string) {
 	if fn != nil {
 		w.marketStatus = fn
@@ -179,6 +180,9 @@ func (w *WsClient) Run(ctx context.Context) {
 			if ctx.Err() != nil {
 				return
 			}
+			// D-370 S1：Session expired → 完整 re-Login（4 步全链，不等 refreshJWT 阈值）；
+			// 失败仍走既有退避（不重置 attempt）。
+			w.maybeRelogin(ctx, err)
 			wait := wsBackoff(attempt)
 			log.Printf("[cmc-ws] runOnce failed (attempt %d): %v, retry in %s", attempt+1, err, wait)
 			select {
@@ -189,36 +193,6 @@ func (w *WsClient) Run(ctx context.Context) {
 			continue
 		}
 		return
-	}
-}
-
-func (w *WsClient) startGuard(ctx context.Context) {
-	// D-225 v2.1：守卫只看 type6 事件（F1/F2 周期推，沉默=真异常）；type7 沉默≠异常（F3 变更驱动）。
-	ticker := time.NewTicker(wsGuardInterval)
-	defer ticker.Stop()
-	staleStrikes := 0
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if !w.marketOpen() {
-				staleStrikes = 0
-				continue
-			}
-			w.lastEvent6Mu.Lock()
-			since := time.Since(w.lastEvent6)
-			w.lastEvent6Mu.Unlock()
-			if since > wsGuardStale {
-				staleStrikes++
-				if staleStrikes >= 2 {
-					w.healthy.Store(false)
-					log.Printf("[cmc-ws] freshness guard: no type6 events > window, healthy=false → REST fallback")
-				}
-			} else {
-				staleStrikes = 0
-			}
-		}
 	}
 }
 

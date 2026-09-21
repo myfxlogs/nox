@@ -354,7 +354,6 @@ func TestV21_N6_GuardType6Only(t *testing.T) {
 	defer ts.close()
 	auth := &mockAuth{jwt: "fake.jwt.sig"}
 	ws := NewWsClient(auth, 38941616, st, ts.srv.URL, ts.srv.URL)
-	ws.SetMarketOpen(func() bool { return true })
 
 	// 缩短守卫窗
 	origInterval, origStale := wsGuardInterval, wsGuardStale

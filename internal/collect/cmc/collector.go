@@ -139,8 +139,8 @@ func (c *PricesCollector) StartWatchdog(ctx context.Context) {
 				continue // 休市：门控使更新间隔变 15min，跳过 stale 判定（v1.2 R'-1）
 			}
 			staleThreshold := 5 * time.Minute
-			if src == "cmc_ws" {
-				staleThreshold = 10 * time.Minute // D-225 v2.1：WS 行 4min 心跳，10min 阈值有余量
+			if src == "cmc_ws" || src == "cmc_ws_hb" {
+				staleThreshold = 10 * time.Minute // D-225 v2.1：WS 行 4min 心跳；D-370 S4：hb 行同阈值（4min 节奏不变）
 			}
 			if time.Since(last) > staleThreshold {
 				log.Printf("[cmc] stale warning: no price update for %v (src=%s)", time.Since(last).Round(time.Second), src)

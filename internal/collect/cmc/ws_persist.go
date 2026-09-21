@@ -46,12 +46,18 @@ func (w *WsClient) extractPriceEvent(ctx context.Context) {
 	}
 	w.priceMu.Unlock()
 	if shouldWrite {
-		w.persistPrice(ctx, ask, now)
+		w.persistPrice(ctx, ask, now, false)
 	}
 }
 
-// persistPrice 写 WS 价格行（src=cmc_ws, bid/mid NULL, quote_time=到达时刻, market_status=注入值）。
-func (w *WsClient) persistPrice(ctx context.Context, ask float64, now time.Time) {
+// persistPrice 写 WS 价格行（src=cmc_ws / 心跳行 cmc_ws_hb——D-370 S4 轻量路径：
+// src 区分零 migration，落库间隔统计可 WHERE src 剔除心跳；bid/mid NULL，
+// quote_time=到达时刻, market_status=注入值）。
+func (w *WsClient) persistPrice(ctx context.Context, ask float64, now time.Time, heartbeat bool) {
+	src := "cmc_ws"
+	if heartbeat {
+		src = "cmc_ws_hb"
+	}
 	rec := pgstore.CMCPrice{
 		InstrumentID: "X-AFQUL",
 		AskPrice:     ask,
@@ -60,7 +66,7 @@ func (w *WsClient) persistPrice(ctx context.Context, ask float64, now time.Time)
 		MarketStatus: w.marketStatus(),
 		QuoteTime:    now, // patch 无时间戳，如实标注=帧到达时刻
 		FetchedAt:    now,
-		Src:          "cmc_ws",
+		Src:          src,
 	}
 	if err := w.store.InsertCMCPrice(ctx, rec); err != nil {
 		log.Printf("[cmc-ws] insert ws price: %v", err)
@@ -68,7 +74,7 @@ func (w *WsClient) persistPrice(ctx context.Context, ask float64, now time.Time)
 	}
 	w.emitFact(ctx, []fact.Fact{{
 		Kind: fact.KindCMCPrice, Venue: "cmc", Symbol: "TRXUSD",
-		Value: ask, Unit: fact.UnitPrice, Ts: now, Src: "cmc_ws",
+		Value: ask, Unit: fact.UnitPrice, Ts: now, Src: src,
 	}})
 }
 
@@ -81,7 +87,7 @@ func (w *WsClient) persistPriceHeartbeat(ctx context.Context) {
 		return
 	}
 	now := time.Now()
-	w.persistPrice(ctx, ask, now)
+	w.persistPrice(ctx, ask, now, true) // D-370 S4：heartbeat 行 src=cmc_ws_hb
 	// 心跳也更新 lastPriceWrite 防止下一轮非心跳行立即触发
 	w.priceMu.Lock()
 	w.lastPriceWrite = now
