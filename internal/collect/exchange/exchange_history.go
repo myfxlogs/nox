@@ -63,7 +63,7 @@ func (b *BinanceFundingHistory) Kind() string { return fact.KindFundingHistory }
 
 func (b *BinanceFundingHistory) Poll(ctx context.Context) ([]fact.Fact, error) {
 	var out []fact.Fact
-	for _, sym := range b.cfg.Symbols {
+	for _, sym := range b.syms() {
 		pair := sym + "USDT"
 		start, err := startTS(ctx, b.resolve, VenueBinance, pair)
 		if err != nil {
@@ -152,7 +152,7 @@ func (o *OKXFundingHistory) okxFundingPeriodsPerDay(ctx context.Context, instID 
 func (o *OKXFundingHistory) Poll(ctx context.Context) ([]fact.Fact, error) {
 	var out []fact.Fact
 symLoop:
-	for _, sym := range o.cfg.Symbols {
+	for _, sym := range o.syms() {
 		pair := sym + "USDT"
 		start, err := startTS(ctx, o.resolve, VenueOKX, pair)
 		if err != nil {
@@ -239,3 +239,9 @@ func getJSONArray(ctx context.Context, client *http.Client, url string) ([]any, 
 	}
 	return arr, nil
 }
+
+// syms D-369 S2：binance funding history 符号集（env ∪ provider 动态集）。
+func (b *BinanceFundingHistory) syms() []string { return b.cfg.effectiveSymbols() }
+
+// syms D-369 S2：okx funding history 符号集。
+func (o *OKXFundingHistory) syms() []string { return o.cfg.effectiveSymbols() }

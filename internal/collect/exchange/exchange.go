@@ -48,11 +48,43 @@ func annualizeFunding(rate float64, periodsPerDay int) float64 {
 
 // Config CEX 采集配置。
 type Config struct {
-	Symbols        []string // 基础币种 BTC/ETH/TRX
-	BinanceBaseURL string   // Binance fapi base，可指向 CF Worker 代理
+	Symbols        []string       // 基础币种 BTC/ETH/TRX
+	SymProvider    SymbolProvider // D-369 S2：动态符号集（radar_watchlist ∪ env；nil=仅 env）
+	BinanceBaseURL string         // Binance fapi base，可指向 CF Worker 代理
 	GateBaseURL    string
 	OKXBaseURL     string
 	Client         *http.Client
+}
+
+// SymbolProvider D-369 S2：动态符号集供给（radar_watchlist provider 实现；nil 安全）。
+type SymbolProvider interface {
+	Symbols() []string
+}
+
+// effectiveSymbols env 基础集 ∪ provider 动态集（去重；provider nil/空集 → env 原样）。
+func (c Config) effectiveSymbols() []string {
+	if c.SymProvider == nil {
+		return c.Symbols
+	}
+	extra := c.SymProvider.Symbols()
+	if len(extra) == 0 {
+		return c.Symbols
+	}
+	seen := make(map[string]bool, len(c.Symbols)+len(extra))
+	out := make([]string, 0, len(c.Symbols)+len(extra))
+	for _, s := range c.Symbols {
+		if !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	for _, s := range extra {
+		if !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // DefaultConfig 返回默认配置。
@@ -84,7 +116,7 @@ func (b *BinanceFunding) Kind() string { return fact.KindFunding }
 
 func (b *BinanceFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
 	var out []fact.Fact
-	for _, sym := range b.cfg.Symbols {
+	for _, sym := range b.syms() {
 		pair := sym + "USDT"
 		url := fmt.Sprintf("%s/fapi/v1/premiumIndex?symbol=%s", b.cfg.BinanceBaseURL, pair)
 		body, err := getJSON(ctx, b.cfg.Client, url)
@@ -128,7 +160,7 @@ func NewBinanceTicker(cfg Config) *BinanceTicker { return &BinanceTicker{cfg: cf
 func (b *BinanceTicker) PollQuotes(ctx context.Context) ([]bus.Quote, error) {
 	var out []bus.Quote
 	spotBase := strings.Replace(b.cfg.BinanceBaseURL, "fapi", "api", 1)
-	for _, sym := range b.cfg.Symbols {
+	for _, sym := range b.syms() {
 		pair := sym + "USDT"
 		spotURL := fmt.Sprintf("%s/api/v3/ticker/bookTicker?symbol=%s", spotBase, pair)
 		if q, err := fetchBinanceBookTicker(ctx, b.cfg.Client, spotURL, pair, VenueBinance, "spot"); err == nil {
@@ -170,7 +202,7 @@ func (g *GateFunding) Kind() string { return fact.KindFunding }
 
 func (g *GateFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
 	var out []fact.Fact
-	for _, sym := range g.cfg.Symbols {
+	for _, sym := range g.syms() {
 		contract := sym + "_USDT"
 		url := fmt.Sprintf("%s/api/v4/futures/usdt/contracts/%s", g.cfg.GateBaseURL, contract)
 		body, err := getJSON(ctx, g.cfg.Client, url)
@@ -216,7 +248,7 @@ func (o *OKXFunding) Kind() string { return fact.KindFunding }
 
 func (o *OKXFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
 	var out []fact.Fact
-	for _, sym := range o.cfg.Symbols {
+	for _, sym := range o.syms() {
 		instID := sym + "-USDT-SWAP"
 		url := fmt.Sprintf("%s/api/v5/public/funding-rate?instId=%s", o.cfg.OKXBaseURL, instID)
 		body, err := getJSON(ctx, o.cfg.Client, url)
@@ -289,3 +321,15 @@ func getJSON(ctx context.Context, client *http.Client, url string) (map[string]a
 	}
 	return m, nil
 }
+
+// syms D-369 S2：binance 采集器符号集（env ∪ provider 动态集）。
+func (b *BinanceFunding) syms() []string { return b.cfg.effectiveSymbols() }
+
+// syms D-369 S2：binance ticker 符号集。
+func (b *BinanceTicker) syms() []string { return b.cfg.effectiveSymbols() }
+
+// syms D-369 S2：gate/okx funding 符号集（env ∪ provider 动态集）。
+func (g *GateFunding) syms() []string { return g.cfg.effectiveSymbols() }
+
+// syms D-369 S2：okx funding 符号集。
+func (o *OKXFunding) syms() []string { return o.cfg.effectiveSymbols() }

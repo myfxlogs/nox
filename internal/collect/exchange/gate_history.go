@@ -41,7 +41,7 @@ func (g *GateFundingHistory) Kind() string { return fact.KindFundingHistory }
 
 func (g *GateFundingHistory) Poll(ctx context.Context) ([]fact.Fact, error) {
 	var out []fact.Fact
-	for _, sym := range g.cfg.Symbols {
+	for _, sym := range g.syms() {
 		pair := sym + "USDT"
 		start, err := startTS(ctx, g.resolve, VenueGate, pair)
 		if err != nil {
@@ -89,3 +89,6 @@ func (g *GateFundingHistory) Poll(ctx context.Context) ([]fact.Fact, error) {
 	}
 	return out, nil
 }
+
+// syms D-369 S2：gate funding history 符号集。
+func (g *GateFundingHistory) syms() []string { return g.cfg.effectiveSymbols() }

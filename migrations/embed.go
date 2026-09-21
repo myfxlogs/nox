@@ -295,3 +295,6 @@ var XassetComboNotionalSQL string
 
 //go:embed 0117_app_config.sql
 var AppConfigSQL string
+
+//go:embed 0118_radar_watchlist.sql
+var RadarWatchlistSQL string

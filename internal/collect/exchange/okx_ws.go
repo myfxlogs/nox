@@ -54,22 +54,31 @@ func (o *OKXWebSocket) runOnce(ctx context.Context, publish func(bus.Quote)) err
 	}
 	defer conn.Close()
 
-	// 订阅 spot + perp tickers
-	var args []map[string]string
-	for _, sym := range o.cfg.Symbols {
-		instID := sym + "-USDT"
-		perpID := sym + "-USDT-SWAP"
-		args = append(args,
-			map[string]string{"channel": "tickers", "instId": instID},
-			map[string]string{"channel": "tickers", "instId": perpID},
-		)
+	// 订阅 spot + perp tickers（D-369 S2：subscribed 集跟踪，ping 期差集增量订阅）
+	subscribed := map[string]bool{}
+	subscribeArgs := func(syms []string) []map[string]string {
+		var args []map[string]string
+		for _, sym := range syms {
+			instID := sym + "-USDT"
+			perpID := sym + "-USDT-SWAP"
+			key := instID + "|" + perpID
+			if subscribed[key] {
+				continue
+			}
+			subscribed[key] = true
+			args = append(args,
+				map[string]string{"channel": "tickers", "instId": instID},
+				map[string]string{"channel": "tickers", "instId": perpID},
+			)
+		}
+		return args
 	}
-	sub := map[string]any{"op": "subscribe", "args": args}
+	sub := map[string]any{"op": "subscribe", "args": subscribeArgs(o.syms())}
 	if err := conn.WriteJSON(sub); err != nil {
 		return fmt.Errorf("subscribe: %w", err)
 	}
 
-	// 启动 ping 保活
+	// 启动 ping 保活 + 差集增量订阅（provider 符号集变化时；服务端拒则读报错走重连）
 	done := make(chan struct{})
 	safego.Go("okx_ws:ping", func() {
 		ticker := time.NewTicker(20 * time.Second)
@@ -79,6 +88,9 @@ func (o *OKXWebSocket) runOnce(ctx context.Context, publish func(bus.Quote)) err
 			case <-ticker.C:
 				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 					return
+				}
+				if args := subscribeArgs(o.syms()); len(args) > 0 {
+					_ = conn.WriteJSON(map[string]any{"op": "subscribe", "args": args})
 				}
 			case <-done:
 				return
@@ -174,3 +186,6 @@ type wsMsg struct {
 	} `json:"arg"`
 	Data []map[string]any `json:"data"`
 }
+
+// syms D-369 S2：okx WS 订阅符号集（env ∪ provider 动态集，连接期可增量）。
+func (o *OKXWebSocket) syms() []string { return o.cfg.effectiveSymbols() }

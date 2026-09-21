@@ -49,11 +49,11 @@ func (g *GateWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 	wg.Add(2)
 	safego.Go("gate_ws:spot-loop", func() {
 		defer wg.Done()
-		g.runLoop(ctx, gateSpotWSURL, g.subscribeSpot, g.handleSpot, publish)
+		g.runLoop(ctx, gateSpotWSURL, "spot.tickers", g.handleSpot, publish)
 	})
 	safego.Go("gate_ws:futures-loop", func() {
 		defer wg.Done()
-		g.runLoop(ctx, gateFuturesWSURL, g.subscribeFutures, g.handleFutures, publish)
+		g.runLoop(ctx, gateFuturesWSURL, "futures.tickers", g.handleFutures, publish)
 	})
 	wg.Wait()
 }
@@ -70,26 +70,22 @@ func subscribePayload(channel string, payload []string) map[string]any {
 
 // spotSymbols 返回 spot 交易对（BTC_USDT）。
 func (g *GateWebSocket) spotSymbols() []string {
-	out := make([]string, len(g.cfg.Symbols))
-	for i, s := range g.cfg.Symbols {
-		out[i] = s + "_USDT"
+	out := make([]string, 0, len(g.syms()))
+	for _, s := range g.syms() {
+		out = append(out, s+"_USDT")
 	}
 	return out
 }
 
-func (g *GateWebSocket) subscribeSpot(c *websocket.Conn) error {
-	return c.WriteJSON(subscribePayload("spot.tickers", g.spotSymbols()))
-}
-
-func (g *GateWebSocket) subscribeFutures(c *websocket.Conn) error {
-	// futures 合约名与 spot 交易对同名（BTC_USDT）
-	return c.WriteJSON(subscribePayload("futures.tickers", g.spotSymbols()))
+// subscribeChannel 写初始订阅帧（全量符号）。
+func (g *GateWebSocket) subscribeChannel(c *websocket.Conn, channel string, pairs []string) error {
+	return c.WriteJSON(subscribePayload(channel, pairs))
 }
 
 // runLoop 单连接重连循环。
-func (g *GateWebSocket) runLoop(ctx context.Context, url string, subscribe func(*websocket.Conn) error, handle func([]byte, func(bus.Quote)), publish func(bus.Quote)) {
+func (g *GateWebSocket) runLoop(ctx context.Context, url string, channel string, handle func([]byte, func(bus.Quote)), publish func(bus.Quote)) {
 	for {
-		if err := g.runOnce(ctx, url, subscribe, handle, publish); err != nil {
+		if err := g.runOnce(ctx, url, channel, handle, publish); err != nil {
 			select {
 			case <-ctx.Done():
 				return
@@ -100,15 +96,28 @@ func (g *GateWebSocket) runLoop(ctx context.Context, url string, subscribe func(
 	}
 }
 
-// runOnce 单次连接：dial → subscribe → ping 保活 → 读循环。
-func (g *GateWebSocket) runOnce(ctx context.Context, url string, subscribe func(*websocket.Conn) error, handle func([]byte, func(bus.Quote)), publish func(bus.Quote)) error {
+// runOnce 单次连接：dial → subscribe（全量符号）→ ping 保活+差集增量订阅 → 读循环。
+// D-369 S2：provider 符号集变化 → 对新符号差集发一次 subscribe payload（服务端拒则读
+// 报错走 runLoop 重连 fallback）。
+func (g *GateWebSocket) runOnce(ctx context.Context, url string, channel string, handle func([]byte, func(bus.Quote)), publish func(bus.Quote)) error {
 	conn, _, err := g.dialer.DialContext(ctx, url, nil)
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
 	}
 	defer conn.Close()
 
-	if err := subscribe(conn); err != nil {
+	subscribed := map[string]bool{}
+	subscribeAll := func() error {
+		pairs := pairsD369(g.syms(), "_USDT")
+		if err := g.subscribeChannel(conn, channel, pairs); err != nil {
+			return err
+		}
+		for _, p := range pairs {
+			subscribed[p] = true
+		}
+		return nil
+	}
+	if err := subscribeAll(); err != nil {
 		return fmt.Errorf("subscribe: %w", err)
 	}
 
@@ -121,6 +130,20 @@ func (g *GateWebSocket) runOnce(ctx context.Context, url string, subscribe func(
 			case <-ticker.C:
 				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 					return
+				}
+				// D-369 S2：差集增量订阅（新符号 only；差集为空不动）
+				var newPairs []string
+				for _, p := range pairsD369(g.syms(), "_USDT") {
+					if !subscribed[p] {
+						newPairs = append(newPairs, p)
+					}
+				}
+				if len(newPairs) > 0 {
+					if err := g.subscribeChannel(conn, channel, newPairs); err == nil {
+						for _, p := range newPairs {
+							subscribed[p] = true
+						}
+					}
 				}
 			case <-done:
 				return
@@ -227,4 +250,16 @@ func (g *GateWebSocket) handleFutures(data []byte, publish func(bus.Quote)) {
 // canonicalFromGate 将 Gate 交易对/合约名（BTC_USDT）映射为 canonical（BTCUSDT）。
 func canonicalFromGate(pair string) string {
 	return strings.ReplaceAll(pair, "_", "")
+}
+
+// syms D-369 S2：gate WS 订阅符号集（env ∪ provider 动态集，连接期可增量）。
+func (g *GateWebSocket) syms() []string { return g.cfg.effectiveSymbols() }
+
+// pairs 符号→gate 交易对后缀拼接（BTC → BTC_USDT）。
+func pairsD369(syms []string, suffix string) []string {
+	out := make([]string, 0, len(syms))
+	for _, s := range syms {
+		out = append(out, s+suffix)
+	}
+	return out
 }

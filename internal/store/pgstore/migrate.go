@@ -113,6 +113,7 @@ var migrationFiles = []struct {
 	{115, migrations.FinVenueIOSQL},                    // D-365 S1：CEX 进出账流水（幂等四元唯一键+ts 倒序索引）
 	{116, migrations.XassetComboNotionalSQL},           // D-367 S1：组合级 sizing 名义额列（NULL=回退全局 env）
 	{117, migrations.AppConfigSQL},                     // D-368 S1：运维旋钮 KV（Bucket B 首批，零种子）
+	{118, migrations.RadarWatchlistSQL},                // D-369 S2：确认信号 watchlist（radar 写/core 读）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
