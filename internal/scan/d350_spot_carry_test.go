@@ -95,7 +95,7 @@ func TestD350_ScannerSpotCarryStructure(t *testing.T) {
 func TestD350_PaperSpotCarryLifecycle(t *testing.T) {
 	s := d350Store(t)
 	ctx := context.Background()
-	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC() // 锚=真实钟相对（原冻结 2026-09-19 与 seed 真实钟 48h 闸跨日相撞，9-21 起翻红）
 	seedUni(t, s, "binance", "GUSDT", "TRADING", "T3", 72*time.Hour, 92)
 	seedUni(t, s, "binance", "NEGUSDT", "TRADING", "T3", 72*time.Hour, -30)
 
@@ -187,7 +187,7 @@ func TestD350_PaperSpotCarryLifecycle(t *testing.T) {
 func TestD350R1_TR4_GatesAndCap(t *testing.T) {
 	s := d350Store(t)
 	ctx := context.Background()
-	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()                                                           // 锚=真实钟相对（原冻结 2026-09-19 与 seed 真实钟 48h 闸跨日相撞，9-21 起翻红）
 	seedUniVol(t, s, "binance", "ILLIQUID", "TRADING", "T3", 72*time.Hour, 250, 5e6)  // vol<$10M（net=249.85 高位——若摘 vol 闸必入 cap 内，变异可观测）
 	seedUniVol(t, s, "binance", "BANDOUT", "TRADING", "T3", 72*time.Hour, 350, 100e6) // band 外
 	for i := 0; i < 13; i++ {
@@ -229,7 +229,7 @@ func TestD350R1_TR4_GatesAndCap(t *testing.T) {
 func TestD350R1_TR5_DemoRowAccrues(t *testing.T) {
 	s := d350Store(t)
 	ctx := context.Background()
-	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC() // 锚=真实钟相对（原冻结 2026-09-19 与 seed 真实钟 48h 闸跨日相撞，9-21 起翻红）
 	seedUni(t, s, "binance", "GUSDT", "TRADING", "T3", 72*time.Hour, 92)
 	pr := &pgstore.PaperSpotCarry{Venue: "binance", Symbol: "GUSDT", Side: "short_perp",
 		EntryFundingAnn: 92, QtyUSD: 1000, Note: "spot=x perp=y"}
@@ -267,7 +267,7 @@ func TestD350R1_TR5_DemoRowAccrues(t *testing.T) {
 func TestD350R2_NetDescUnderCap(t *testing.T) {
 	s := d350Store(t)
 	ctx := context.Background()
-	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()                                                               // 锚=真实钟相对（原冻结 2026-09-19 与 seed 真实钟 48h 闸跨日相撞，9-21 起翻红）
 	seedUniVol(t, s, "binance", "NEG250USDT", "TRADING", "T3", 72*time.Hour, -250, 100e6) // net=249.85 long_perp
 	for i := 0; i < 12; i++ {
 		seedUniVol(t, s, "binance", fmt.Sprintf("POS%02dUSDT", i), "TRADING", "T3", 72*time.Hour, 100, 100e6) // net=99.85 short_perp
@@ -303,7 +303,7 @@ func TestD350R1_TR2_PromotePaperToDemo(t *testing.T) {
 	s := d350Store(t)
 	ctx := context.Background()
 	seedUni(t, s, "binance", "GUSDT", "TRADING", "T3", 72*time.Hour, 92)
-	if _, _, err := StepPaperSpotCarry(ctx, s, time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)); err != nil {
+	if _, _, err := StepPaperSpotCarry(ctx, s, time.Now().UTC()); err != nil { // 锚=真实钟相对（同上跨日相撞修复）
 		t.Fatalf("open paper: %v", err)
 	}
 	pr := &pgstore.PaperSpotCarry{Venue: "binance", Symbol: "GUSDT", Side: "short_perp",
@@ -342,7 +342,9 @@ func TestD350R1_TR2_PromotePaperToDemo(t *testing.T) {
 func TestD354_PaperBasisColumns(t *testing.T) {
 	s := d350Store(t)
 	ctx := context.Background()
-	now := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
+	// 锚=真实钟相对（原冻结 2026-09-20 12:00 与 seed 的真实钟 −72h 跨日相撞：9-21 起
+	// 差 0.5h 过不了 48h 持续性闸，基线 stash 实证同红非本包回归）——seed 与判定同钟。
+	now := time.Now().UTC()
 	seedUniVol(t, s, "binance", "BASGUSDT", "TRADING", "T3", 72*time.Hour, 92, 100e6)
 	seedUniVol(t, s, "binance", "NULLBASUSDT", "TRADING", "T3", 72*time.Hour, 92, 100e6)
 	if _, err := s.Pool().Exec(ctx,
