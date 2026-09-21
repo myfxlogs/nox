@@ -292,3 +292,6 @@ var FinVenueIOSQL string
 
 //go:embed 0116_xasset_combo_notional.sql
 var XassetComboNotionalSQL string
+
+//go:embed 0117_app_config.sql
+var AppConfigSQL string
