@@ -15,6 +15,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"arb/internal/httpx" // SSOT：自动注入 CA + X-Proxy-Token
@@ -82,7 +83,8 @@ func run(ctx context.Context) error {
 
 	// FUNDING_DIVERGENCE：冷却 ≥24h 才落事件+告警（冷却内零写入）。
 	divSeen := make(map[string]bool)
-	for _, e := range divergences(rows, divPct, volMinUSD) {
+	divEvs, classFiltered := divergences(rows, divPct, volMinUSD)
+	for _, e := range divEvs {
 		if bootstrap || divSeen[e.Symbol] {
 			continue
 		}
@@ -151,6 +153,11 @@ func run(ctx context.Context) error {
 		// D-369 S1/S2（R3 拆分）：digest 累加/分流判定/watchlist 写侧 → digest.go
 		// d369RouteFundingEvents（块体逐字节搬移零行为变更）。
 		d369RouteFundingEvents(ctx, st, rows, old, events, now, fundingMinPct, volMinUSD, &lines)
+		// D-374 A 面：非币类 canonical divergence 压 digest（class_filtered，与 leg=无 同款汇总模式）。
+		if len(classFiltered) > 0 {
+			lines = append(lines, fmt.Sprintf("[universe-radar] %d 个非币类 canonical divergence 已压 digest（class_filtered：%s）",
+				len(classFiltered), strings.Join(classFiltered, ",")))
+		}
 		if len(lines) > 0 {
 			sendRadarAlert(ctx, st, lines)
 		}

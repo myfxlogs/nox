@@ -12,6 +12,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -203,17 +204,37 @@ func fundingTransitions(rows []normRow, old map[string]pgstore.CexUniverseRow, f
 	return out
 }
 
+// classFilteredKinds D-374 A 面：股权/指数/盘前类 perp 的 funding 语义各所不同（休市冻结/
+// 基准不同），跨所数值差不可解释也不可执行 → divergence 压 digest（保留可见性不删）。
+// 豁免：COMMODITY（XAU 类 CEX perp funding 24/7 真有价）/FX/COIN/空 class（不能证明是股票）。
+var classFilteredKinds = map[string]bool{
+	"EQUITY": true, "CN_EQUITY": true, "HK_EQUITY": true, "KR_EQUITY": true,
+	"INDEX": true, "PREMARKET": true,
+}
+
 // divergences 同 canonical 跨所 funding 分化候选：|ann_i−ann_j|≥divPct 且两侧 vol≥volMinUSD。
 // venue='multi'/symbol=canonical/detail=所对+两侧年化；24h 冷却由调用方查 LastCexEventTS。
-func divergences(rows []normRow, divPct, volMinUSD float64) []pgstore.CexEvent {
+// D-374 A 面：canonical 分组内任一侧非空 Class ∈ classFilteredKinds → 全部 pair 跳过，
+// canonical 计入 classFiltered 返回（digest 汇总渲染）；双侧矛盾取非空侧=宁可信其有。
+func divergences(rows []normRow, divPct, volMinUSD float64) (evs []pgstore.CexEvent, classFiltered []string) {
 	byCanon := make(map[string][]normRow)
 	for _, n := range rows {
 		if n.FundingAnn != nil && n.Vol24h >= volMinUSD {
 			byCanon[n.Canonical] = append(byCanon[n.Canonical], n)
 		}
 	}
-	var out []pgstore.CexEvent
 	for canon, rs := range byCanon {
+		filtered := false
+		for _, r := range rs {
+			if classFilteredKinds[r.Class] {
+				filtered = true
+				break
+			}
+		}
+		if filtered {
+			classFiltered = append(classFiltered, canon)
+			continue
+		}
 		for i := 0; i < len(rs); i++ {
 			for j := i + 1; j < len(rs); j++ {
 				a, b := rs[i], rs[j]
@@ -224,7 +245,7 @@ func divergences(rows []normRow, divPct, volMinUSD float64) []pgstore.CexEvent {
 					a, b = b, a
 				}
 				if math.Abs(*a.FundingAnn-*b.FundingAnn) >= divPct {
-					out = append(out, pgstore.CexEvent{
+					evs = append(evs, pgstore.CexEvent{
 						Venue: "multi", Symbol: canon, EventType: "FUNDING_DIVERGENCE",
 						Detail: fmt.Sprintf("%s:%s %+.1f%% vs %+.1f%% ann", a.Venue, b.Venue, *a.FundingAnn, *b.FundingAnn),
 					})
@@ -232,7 +253,8 @@ func divergences(rows []normRow, divPct, volMinUSD float64) []pgstore.CexEvent {
 			}
 		}
 	}
-	return out
+	sort.Strings(classFiltered) // map 迭代无序 → digest 输出确定
+	return evs, classFiltered
 }
 
 // cooldownOK last_alert_ts 冷却判定：nil/超过 24h → 可告警。
