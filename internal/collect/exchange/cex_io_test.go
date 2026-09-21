@@ -47,7 +47,9 @@ func TestCexIOCollector_Binance(t *testing.T) {
 		case "/sapi/v1/capital/deposit/hisrec":
 			fmt.Fprint(w, `[{"id":"5232145709440380673","amount":"22000","coin":"USDT","network":"TRX","status":1,"txId":"0xdep","insertTime":1789818586000}]`)
 		case "/sapi/v1/capital/withdraw/history":
-			fmt.Fprint(w, `[{"id":"999","amount":"379.0191","transactionFee":"1.5","coin":"TRX","status":6,"txId":"0xwd","applyTime":1789904986000}]`)
+			// D-365-R5 S2：applyTime 真实格式=string（"2006-01-02 15:04:05" UTC）——
+			// 旧 int64 解析实现红=unmarshal 炸整腿零行（生产日志复现）。
+			fmt.Fprint(w, `[{"id":"999","amount":"379.0191","transactionFee":"1.5","coin":"TRX","status":6,"txId":"0xwd","applyTime":"2026-09-10 16:04:44"}]`)
 		default:
 			http.NotFound(w, r)
 		}
@@ -78,6 +80,11 @@ func TestCexIOCollector_Binance(t *testing.T) {
 	}
 	if wd == nil || wd.ExternalID != "999" || wd.Fee == nil || *wd.Fee != 1.5 || wd.Status != "6" {
 		t.Errorf("withdraw row = %+v", wd)
+	}
+	// D-365-R5 S2：applyTime string → ts=2026-09-10 16:04:44 UTC
+	wantTs := time.Date(2026, 9, 10, 16, 4, 44, 0, time.UTC)
+	if !wd.Ts.Equal(wantTs) {
+		t.Errorf("withdraw ts = %v, want %v（string 格式 UTC 解析）", wd.Ts, wantTs)
 	}
 }
 
