@@ -7,16 +7,8 @@ import (
 	"arb/internal/store/pgstore"
 )
 
-// basisStopCheckXAsset D-341 S2：XASSET 专用止损——判距外化 max(BasisStopBps, entry_noise_bps)
-// （噪声内不止损；风险注记=单次止损额升至 ~noise×notional，换噪声内零误杀，S3 样本验证降幅）。
-// entry_noise_bps NULL（历史行/学习锚缺）→ 退回 cfg.BasisStopBps（保守不放宽）。
-// fmtStopBps S2 日志两值（cfg vs noise 外化后判距来源）。
-func fmtStopBps(cfgBps float64, noise *float64) string {
-	if noise != nil {
-		return fmt.Sprintf("max(%.1f,noise %.1f)", cfgBps, *noise)
-	}
-	return fmt.Sprintf("cfg %.1f", cfgBps)
-}
+// basisStopCheckXAsset D-378b 撤除（窄阈止损改灾难带，见 engine_disaster.go）。
+// fmtStopBps 同删（零调用方——XASSET 观测行 detail 改用 fmtDisasterBand）。
 
 // basisStopCheck D-311 S5：基差止损块抽出共用（SWAPARB/CARRY 与 XASSET_CARRY 同语义）。
 // D-180 S3：PnL_bps = currentBasisBps − expected_entry_spread_bps。
