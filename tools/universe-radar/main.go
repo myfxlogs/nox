@@ -14,12 +14,10 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
 	"arb/internal/httpx" // SSOT：自动注入 CA + X-Proxy-Token
-	"arb/internal/notify"
 	"arb/internal/store/pgstore"
 )
 
@@ -81,10 +79,19 @@ func run(ctx context.Context) error {
 
 	events := diffUniverse(old, rows)
 
-	// FUNDING_DIVERGENCE：冷却 ≥24h 才落事件+告警（冷却内零写入）。
+	// FUNDING_DIVERGENCE：D-376 告警分层——双腿确证 sim → 既有 event+cooldown+alert 路径零变更；
+	// 任一侧真/未知 → digest 行+纸面（不走告警 event）；suspect（极端 funding 病态尾部）→ digest
+	// 计数不开仓。perp×perp 纸面步进吃全部非 suspect 对（24h 冷却只挡告警不挡纸面）。
 	divSeen := make(map[string]bool)
-	divEvs, classFiltered := divergences(rows, divPct, volMinUSD)
-	for _, e := range divEvs {
+	pairs, classFiltered := divergences(rows, divPct, volMinUSD)
+	simMap, err := st.ListVenueIsReal(ctx) // venueKey→*bool；nil=未知保守当真腿
+	if err != nil {
+		log.Printf("universe-radar: list venue is_real: %v（保守全当真腿，digest 化）", err)
+		simMap = map[string]*bool{}
+	}
+	simPairs, realPairs, suspectList := splitDivPairs(pairs, simMap)
+	for _, p := range simPairs {
+		e := divEvent(p)
 		if bootstrap || divSeen[e.Symbol] {
 			continue
 		}
@@ -97,6 +104,21 @@ func run(ctx context.Context) error {
 		}
 		divSeen[e.Symbol] = true
 		events = append(events, e)
+	}
+	// D-376 B 面：perp×perp 纸面轨步进（radar 1h 轮，streak=2≈2h；见 paper_perp.go 头注）。
+	nonSuspect := append(append([]divPair{}, simPairs...), realPairs...)
+	pOpened, pExited, perr := stepPaperPerpCarry(ctx, st, nonSuspect, rows, divPct, now)
+	if perr != nil {
+		log.Printf("universe-radar: paper perp step: %v", perr)
+	} else {
+		if len(pOpened) > 0 {
+			if aerr := st.InsertAlert(ctx, nil, "info", "[perp-perp 纸面开仓] "+strings.Join(pOpened, ", ")); aerr != nil {
+				log.Printf("universe-radar: paper perp alert: %v", aerr)
+			}
+		}
+		if len(pOpened) > 0 || pExited > 0 {
+			log.Printf("[universe-radar] paper perp carry: opened=%d exited=%d", len(pOpened), pExited)
+		}
 	}
 
 	// 落库：universe upsert + events + radar 全量行（L0）。
@@ -158,6 +180,20 @@ func run(ctx context.Context) error {
 			lines = append(lines, fmt.Sprintf("[universe-radar] %d 个非币类 canonical divergence 已压 digest（class_filtered：%s）",
 				len(classFiltered), strings.Join(classFiltered, ",")))
 		}
+		// D-376 S3：真腿 divergence digest 行+极端 funding suspect 压制行（同款汇总风格；
+		// 真腿不做完全静默——digest 保留可见性，行动项=纸面验证轨）。
+		if len(realPairs) > 0 {
+			items := make([]string, 0, len(realPairs))
+			for _, p := range realPairs {
+				items = append(items, fmt.Sprintf("%s %s×%s@%+.1f%%/%+.1f%%", p.Canon, p.ShortVenue, p.LongVenue, p.FundShort, p.FundLong))
+			}
+			lines = append(lines, fmt.Sprintf("[universe-radar] %d 条真腿 divergence 转纸面验证（real_leg：%s）",
+				len(realPairs), strings.Join(items, ", ")))
+		}
+		if len(suspectList) > 0 {
+			lines = append(lines, fmt.Sprintf("[universe-radar] %d 条极端 funding divergence 已压（suspect：%s）",
+				len(suspectList), strings.Join(suspectList, ",")))
+		}
 		if len(lines) > 0 {
 			sendRadarAlert(ctx, st, lines)
 		}
@@ -167,118 +203,4 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("prune radar: %w", err)
 	}
 	return firstErr
-}
-
-func envFloat(key string, def float64) float64 {
-	if v := os.Getenv(key); v != "" {
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
-			return f
-		}
-	}
-	return def
-}
-
-func launchPtr(t time.Time) *time.Time {
-	if t.IsZero() {
-		return nil
-	}
-	return &t
-}
-
-// hedgeCanonicals 腿集=broker_symbol_map distinct canonical + asset_equiv enabled canonical；
-// classOf=asset_equiv canonical→asset_class（告警行展示 GOLD 有腿，broker 腿无类）。
-func hedgeCanonicals(ctx context.Context, st *pgstore.Store) (map[string]bool, map[string]string, error) {
-	set := make(map[string]bool)
-	maps, err := st.ListSymbolMappings(ctx, "")
-	if err != nil {
-		return nil, nil, err
-	}
-	for _, m := range maps {
-		if m.Canonical != "" {
-			set[m.Canonical] = true
-		}
-	}
-	classOf := make(map[string]string)
-	eq, err := st.ListAssetEquiv(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	for _, e := range eq {
-		set[e.Canonical] = true
-		classOf[e.Canonical] = e.AssetClass
-	}
-	return set, classOf, nil
-}
-
-// alertLine 告警行：`[universe-radar] <EVENT> <tier> <venue> <symbol> (leg=<hedge>[ class=<GOLD>]) ann=<x>%/yr vol=$<y>`。
-// fundingEventLine D-353 S1：事件式告警行——kind 标签 + ann 旧→新两侧数值
-// （跌出行旧值→新值；新进行旧值多为 n/a）。
-func fundingEventLine(ev fundingEvent) string {
-	label := map[fundingEventKind]string{
-		fundingNewEntry: "FUNDING 进入极端带",
-		fundingSignFlip: "FUNDING 符号翻转",
-		fundingExitBand: "FUNDING 跌出极端带",
-	}[ev.kind]
-	leg := ev.row.HedgeCanonical
-	if leg == "" {
-		leg = "无"
-	} else if ev.row.HedgeClass != "" {
-		leg += " class=" + ev.row.HedgeClass
-	}
-	ann := func(v *float64) string {
-		if v == nil {
-			return "n/a"
-		}
-		return fmt.Sprintf("%+.1f", *v)
-	}
-	return fmt.Sprintf("[universe-radar] %s %s %s %s (leg=%s) ann %s%%→%s%%/yr vol=$%.0f",
-		label, ev.row.Tier, ev.row.Venue, ev.row.Symbol, leg, ann(ev.oldAnn), ann(ev.row.FundingAnn), ev.row.Vol24h)
-}
-
-func alertLine(event string, n normRow) string {
-	leg := n.HedgeCanonical
-	if leg == "" {
-		leg = "无"
-	} else if n.HedgeClass != "" {
-		leg += " class=" + n.HedgeClass
-	}
-	ann := "n/a"
-	if n.FundingAnn != nil {
-		ann = fmt.Sprintf("%.1f", *n.FundingAnn)
-	}
-	return fmt.Sprintf("[universe-radar] %s %s %s %s (leg=%s) ann=%s%%/yr vol=$%.0f",
-		event, n.Tier, n.Venue, n.Symbol, leg, ann, n.Vol24h)
-}
-
-// sendRadarAlert 飞书批量推送（凭据/chat_id 缺失=log 跳过，不炸轮）。
-func sendRadarAlert(ctx context.Context, st *pgstore.Store, lines []string) {
-	appID := os.Getenv("ARB_FEISHU_APP_ID")
-	appSecret := os.Getenv("ARB_FEISHU_APP_SECRET")
-	if appID == "" || appSecret == "" {
-		log.Printf("universe-radar: 飞书凭据未配置，告警跳过（%d 条）", len(lines))
-		return
-	}
-	fc := notify.NewFeishuClient(appID, appSecret)
-	if !fc.Enabled() {
-		log.Printf("universe-radar: 飞书客户端未启用，告警跳过（%d 条）", len(lines))
-		return
-	}
-	chatID, err := st.FeishuChatID(ctx)
-	if err != nil {
-		log.Printf("universe-radar: 读 chat_id 失败: %v", err)
-		return
-	}
-	if chatID == "" {
-		log.Printf("universe-radar: chat_id 未绑定，告警跳过（%d 条）", len(lines))
-		return
-	}
-	text := fmt.Sprintf("[universe-radar] %d 条告警\n", len(lines))
-	for _, l := range lines {
-		text += "• " + l + "\n"
-	}
-	if err := fc.SendText(ctx, chatID, text); err != nil {
-		log.Printf("universe-radar: 飞书告警发送失败: %v", err)
-		return
-	}
-	log.Printf("universe-radar: 飞书告警已推送（%d 条）", len(lines))
 }

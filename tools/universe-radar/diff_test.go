@@ -141,20 +141,20 @@ func TestDivergences(t *testing.T) {
 		mk("binance", "ETHUSDT", 30.0, 1e6),    // ETH；vol 不足不参与
 		mk("okx", "ETH-USDT-SWAP", -30.0, 1e6), // ETH
 	}
-	evs, classFiltered := divergences(rows, 20, 5e6) // D-374：签名加 classFiltered 返回
-	// XAUUSD：3 所两两 → binance:okx 23、gate:okx 24 ≥20 → 2 事件（binance:gate 差 1 不出）
-	if len(evs) != 2 {
-		t.Fatalf("want 2 divergence events, got %d: %v", len(evs), evs)
+	pairs, classFiltered := divergences(rows, 20, 5e6) // D-376：签名改 divPair 返回
+	// XAUUSD：3 所两两 → binance:okx 23、gate:okx 24 ≥20 → 2 对（binance:gate 差 1 不出）
+	if len(pairs) != 2 {
+		t.Fatalf("want 2 divergence pairs, got %d: %v", len(pairs), pairs)
 	}
-	for _, e := range evs {
-		if e.Venue != "multi" || e.Symbol != "XAUUSD" || e.EventType != "FUNDING_DIVERGENCE" {
-			t.Fatalf("bad divergence row: %+v", e)
+	for _, p := range pairs {
+		if p.Canon != "XAUUSD" {
+			t.Fatalf("bad divergence pair: %+v", p)
 		}
 	}
-	// BTC 3<20、ETH vol 不足 → 均无事件；D-374：全部 COIN/XAU 类 → 零 class 过滤
-	for _, e := range evs {
-		if e.Symbol == "BTC" || e.Symbol == "ETH" {
-			t.Fatalf("unexpected divergence: %+v", e)
+	// BTC 3<20、ETH vol 不足 → 均无对；D-374：全部 COIN/XAU 类 → 零 class 过滤
+	for _, p := range pairs {
+		if p.Canon == "BTC" || p.Canon == "ETH" {
+			t.Fatalf("unexpected divergence: %+v", p)
 		}
 	}
 	if len(classFiltered) != 0 {

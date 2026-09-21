@@ -212,11 +212,22 @@ var classFilteredKinds = map[string]bool{
 	"INDEX": true, "PREMARKET": true,
 }
 
+// divPair D-376：divergence 对的结构化承载（event 文案/纸面开仓/告警分层共用数据源）。
+type divPair struct {
+	Canon                 string
+	ShortVenue, LongVenue string  // short=funding 高侧（收割方向在键内）
+	ShortSym, LongSym     string  // 两侧原始 symbol——纸面重算按 venue|rawSym 查行
+	FundShort, FundLong   float64 // 两侧 funding_ann（%/yr）
+	NetAnn                float64 // = FundShort−FundLong ≥ divPct
+	VolMin                float64
+}
+
 // divergences 同 canonical 跨所 funding 分化候选：|ann_i−ann_j|≥divPct 且两侧 vol≥volMinUSD。
-// venue='multi'/symbol=canonical/detail=所对+两侧年化；24h 冷却由调用方查 LastCexEventTS。
 // D-374 A 面：canonical 分组内任一侧非空 Class ∈ classFilteredKinds → 全部 pair 跳过，
 // canonical 计入 classFiltered 返回（digest 汇总渲染）；双侧矛盾取非空侧=宁可信其有。
-func divergences(rows []normRow, divPct, volMinUSD float64) (evs []pgstore.CexEvent, classFiltered []string) {
+// D-376 S1：重构为 divPair 返回（event 文案/纸面开仓/分层分流共用源）——canonical 分组与
+// class 过滤逻辑逐字节保留；short=funding 高侧（NetAnn 恒正），event 渲染走 divEvent。
+func divergences(rows []normRow, divPct, volMinUSD float64) (pairs []divPair, classFiltered []string) {
 	byCanon := make(map[string][]normRow)
 	for _, n := range rows {
 		if n.FundingAnn != nil && n.Vol24h >= volMinUSD {
@@ -241,20 +252,34 @@ func divergences(rows []normRow, divPct, volMinUSD float64) (evs []pgstore.CexEv
 				if a.Venue == b.Venue {
 					continue
 				}
-				if b.Venue < a.Venue { // 所名排序保证 detail 输出确定
-					a, b = b, a
+				sh, lo := a, b // short=funding 高侧（确定性排序：净差≥divPct 排除等值歧义）
+				if *b.FundingAnn > *a.FundingAnn {
+					sh, lo = b, a
 				}
 				if math.Abs(*a.FundingAnn-*b.FundingAnn) >= divPct {
-					evs = append(evs, pgstore.CexEvent{
-						Venue: "multi", Symbol: canon, EventType: "FUNDING_DIVERGENCE",
-						Detail: fmt.Sprintf("%s:%s %+.1f%% vs %+.1f%% ann", a.Venue, b.Venue, *a.FundingAnn, *b.FundingAnn),
+					pairs = append(pairs, divPair{
+						Canon:      canon,
+						ShortVenue: sh.Venue, LongVenue: lo.Venue,
+						ShortSym: sh.Symbol, LongSym: lo.Symbol,
+						FundShort: *sh.FundingAnn, FundLong: *lo.FundingAnn,
+						NetAnn: *sh.FundingAnn - *lo.FundingAnn,
+						VolMin: math.Min(sh.Vol24h, lo.Vol24h),
 					})
 				}
 			}
 		}
 	}
 	sort.Strings(classFiltered) // map 迭代无序 → digest 输出确定
-	return evs, classFiltered
+	return pairs, classFiltered
+}
+
+// divEvent D-376 S1：pair → FUNDING_DIVERGENCE 事件（文案格式与旧径逐字同型——
+// Short:Long 在前，旧为所名字母序，现为 funding 高侧序；watchlist 解析取两侧不依赖顺序）。
+func divEvent(p divPair) pgstore.CexEvent {
+	return pgstore.CexEvent{
+		Venue: "multi", Symbol: p.Canon, EventType: "FUNDING_DIVERGENCE",
+		Detail: fmt.Sprintf("%s:%s %+.1f%% vs %+.1f%% ann", p.ShortVenue, p.LongVenue, p.FundShort, p.FundLong),
+	}
 }
 
 // cooldownOK last_alert_ts 冷却判定：nil/超过 24h → 可告警。

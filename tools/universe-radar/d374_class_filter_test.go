@@ -25,12 +25,12 @@ func TestDivergences_ClassFiltered(t *testing.T) {
 		mkClass("binance", "TSLAUSDT", "EQUITY", 18.0),
 		mkClass("okx", "TSLA-USDT-SWAP", "", 1.0), // 一侧非空 EQUITY → 压
 	}
-	evs, filtered := divergences(rows, 20, 5e6)
-	if len(evs) != 1 {
-		t.Fatalf("锚A: want 1 event（BTC only）, got %d: %v", len(evs), evs)
+	pairs, filtered := divergences(rows, 20, 5e6) // D-376：签名改 divPair 返回
+	if len(pairs) != 1 {
+		t.Fatalf("锚A: want 1 pair（BTC only）, got %d: %v", len(pairs), pairs)
 	}
-	if evs[0].Symbol != "BTC" {
-		t.Fatalf("锚A: want BTC event, got %+v", evs[0])
+	if pairs[0].Canon != "BTC" {
+		t.Fatalf("锚A: want BTC pair, got %+v", pairs[0])
 	}
 	if len(filtered) != 2 || filtered[0] != "AVGO" || filtered[1] != "TSLA" {
 		t.Fatalf("锚A: classFiltered want [AVGO TSLA], got %v", filtered)
