@@ -38,7 +38,7 @@ func (d *FundingHedgeDetector) Scan(_ context.Context, snapshot map[string]map[s
 			continue
 		}
 		// D-178：is_real 配对检查（fail-open，gate 层兜底）。
-		if !isRealPair(realMap, spot.Venue, perp.Venue) {
+		if !isRealPair(realMap, spot.VenueKey(), perp.VenueKey()) {
 			continue
 		}
 		funding, ok := lookupFunding(fundingFacts, canonical, perp.Venue)

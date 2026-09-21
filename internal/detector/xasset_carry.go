@@ -115,7 +115,7 @@ func (d *XAssetCarryDetector) tryPair(
 	if !legTradable(modes, bc, bq.VenueKey(), true) || !legTradable(modes, sc, sq.VenueKey(), false) {
 		return nil
 	}
-	if !isRealPair(realMap, be.Venue, se.Venue) {
+	if !isRealPair(realMap, bq.VenueKey(), sq.VenueKey()) {
 		return nil
 	}
 	// 跟踪误差（§5.3）：分母=卖腿 mid（canonical_b 对应 sc）。

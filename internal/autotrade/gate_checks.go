@@ -29,20 +29,20 @@ func (g *Gate) environmentIsRealCheck(ctx context.Context, intent TradeIntent) G
 		return GateVerdict{Pass: false, Reason: fmt.Sprintf("environment check: is_real map query failed (%v)", err)}
 	}
 	for _, venueKey := range []string{intent.VenueBuy, intent.VenueSell} {
-		venue, _, _ := strings.Cut(venueKey, ":")
-		if venue == "" {
-			return GateVerdict{Pass: false, Reason: fmt.Sprintf("environment check: empty venue in %s", venueKey)}
+		// D-371 S2：venueKey 全键直查（venue:type 粒度；裸 venue 查询吃漂移=安全洞）
+		if venueKey == "" {
+			return GateVerdict{Pass: false, Reason: "environment check: empty venueKey"}
 		}
-		isReal, known := isRealMap[venue]
+		isReal, known := isRealMap[venueKey]
 		if !known {
-			return GateVerdict{Pass: false, Reason: fmt.Sprintf("environment check: venue %s not found", venue)}
+			return GateVerdict{Pass: false, Reason: fmt.Sprintf("environment check: venue %s not found", venueKey)}
 		}
 		if isReal == nil {
-			return GateVerdict{Pass: false, Reason: fmt.Sprintf("environment check: venue %s is_real unknown (null)", venue)}
+			return GateVerdict{Pass: false, Reason: fmt.Sprintf("environment check: venue %s is_real unknown (null)", venueKey)}
 		}
 		isLive := *isReal
 		if isLive != wantLive {
-			return GateVerdict{Pass: false, Reason: fmt.Sprintf("environment check: venue %s is_real=%v != environment=%s", venue, isLive, g.cfg.Environment)}
+			return GateVerdict{Pass: false, Reason: fmt.Sprintf("environment check: venue %s is_real=%v != environment=%s", venueKey, isLive, g.cfg.Environment)}
 		}
 	}
 	return GateVerdict{Pass: true}
@@ -59,19 +59,19 @@ func (g *Gate) liveGateCheck(ctx context.Context, intent TradeIntent) GateVerdic
 		return GateVerdict{Pass: false, Reason: fmt.Sprintf("live gate: is_real map query failed (%v)", err)}
 	}
 	for _, venueKey := range []string{intent.VenueBuy, intent.VenueSell} {
-		venue, _, _ := strings.Cut(venueKey, ":")
-		if venue == "" {
-			return GateVerdict{Pass: false, Reason: fmt.Sprintf("live gate: empty venue in %s", venueKey)}
+		// D-371 S2：venueKey 全键直查
+		if venueKey == "" {
+			return GateVerdict{Pass: false, Reason: fmt.Sprintf("live gate: empty venueKey")}
 		}
-		isReal, known := isRealMap[venue]
+		isReal, known := isRealMap[venueKey]
 		if !known {
-			return GateVerdict{Pass: false, Reason: fmt.Sprintf("live gate: venue %s not found", venue)}
+			return GateVerdict{Pass: false, Reason: fmt.Sprintf("live gate: venue %s not found", venueKey)}
 		}
 		if isReal == nil {
-			return GateVerdict{Pass: false, Reason: fmt.Sprintf("live gate: venue %s is_real unknown (null)", venue)}
+			return GateVerdict{Pass: false, Reason: fmt.Sprintf("live gate: venue %s is_real unknown (null)", venueKey)}
 		}
 		if *isReal {
-			return GateVerdict{Pass: false, Reason: fmt.Sprintf("live trade disabled (ARB_LIVE_TRADE=false, venue=%s is_real=true)", venue)}
+			return GateVerdict{Pass: false, Reason: fmt.Sprintf("live trade disabled (ARB_LIVE_TRADE=false, venueKey=%s is_real=true)", venueKey)}
 		}
 	}
 	return GateVerdict{Pass: true}

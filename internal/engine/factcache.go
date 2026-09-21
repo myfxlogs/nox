@@ -17,8 +17,7 @@ type FactCache struct {
 	// （检测器腿/执行腿），swap 消费方是 Quote.Venue 名键，两者各按各自消费方，不得互相对齐。
 	tradeMode    map[string]map[string]tradeModeEntry
 	tradeModeTTL time.Duration
-	isReal       map[string]*bool // D-178：venue → *bool（nil=未知）
-	simVenueKeys map[string]bool  // D-369-R2：sim venue 键集（"venue:type"→true，赢家 config 判定）
+	isReal       map[string]*bool // D-178：venue:type → *bool（nil=未知）
 }
 
 // tradeModeEntry trade_mode 值 + 到达时间（TTL 新鲜度判据）。
@@ -133,27 +132,6 @@ func (fc *FactCache) TradeMode(canonical, venueKey string) (int64, bool) {
 		return 0, false
 	}
 	return e.mode, true
-}
-
-// UpdateSimVenueKeys D-369-R2 S2：覆盖写 sim venue 键集（key="venue:type"——该键组合
-// 赢家 exchange_configs.simulated=true；来源=ListExchangeConfigs→CexKeyWinners 撞键赢家
-// 判定，与撞键归一同源防漂移。刷新点=main boot+wire_meta_sink 周期，与 UpdateIsRealMap
-// 同点；失败=nil/不清=fail-closed）。
-func (fc *FactCache) UpdateSimVenueKeys(m map[string]bool) {
-	fc.mu.Lock()
-	defer fc.mu.Unlock()
-	fc.simVenueKeys = m
-}
-
-// SimVenueKeys D-369-R2 S2：返回 sim venue 键集拷贝（"venue:type"→true）。
-func (fc *FactCache) SimVenueKeys() map[string]bool {
-	fc.mu.RLock()
-	defer fc.mu.RUnlock()
-	out := make(map[string]bool, len(fc.simVenueKeys))
-	for k, v := range fc.simVenueKeys {
-		out[k] = v
-	}
-	return out
 }
 
 // UpdateIsRealMap D-178：覆盖写 is_real 映射（boot 加载 + fact sink 周期刷新，幂等无害）。

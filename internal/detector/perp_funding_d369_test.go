@@ -22,11 +22,11 @@ func TestPerpFunding_SimPairBypass(t *testing.T) {
 			"gate:perp":    {Symbol: "ONDOUSDT", Venue: "gate", VenueType: "perp", Bid: 0.99, Ask: 1.0, Time: now},
 		},
 	}
-	// R2 语义：SimVenueKeys 键集判定（"venue:type"→true）
-	simKeys := map[string]bool{"binance:perp": true, "gate:perp": true}
+	// D-371 S3 收敛：realMap venueKey 粒度判定（双腿均已知 sim）
+	isReal := map[string]*bool{"binance:perp": boolPtrR2(false), "gate:perp": boolPtrR2(false)}
 
 	// 双腿均在 sim 键集 → 产候选
-	fp := &fakeFactProvider{funding: funding, isReal: map[string]*bool{}, simKeys: simKeys}
+	fp := &fakeFactProvider{funding: funding, isReal: isReal}
 	d := &PerpFundingDetector{MinNetAnnualized: 2.0, FreshnessTTL: 30 * time.Second}
 	cands := d.Scan(context.Background(), snapshot, fp)
 	if len(cands) != 1 {
@@ -36,14 +36,14 @@ func TestPerpFunding_SimPairBypass(t *testing.T) {
 		t.Errorf("canonical = %q, want ONDOUSDT", cands[0].Canonical)
 	}
 
-	// 赢家 real（binance:perp 缺席 sim 键集）→ 零候选（fail-closed）
-	fp2 := &fakeFactProvider{funding: funding, isReal: map[string]*bool{}, simKeys: map[string]bool{"gate:perp": true}}
+	// 赢家 real（binance:perp 缺席 realMap 键）→ 零候选（fail-closed）
+	fp2 := &fakeFactProvider{funding: funding, isReal: map[string]*bool{"gate:perp": boolPtrR2(false)}}
 	if cands := d.Scan(context.Background(), snapshot, fp2); len(cands) != 0 {
 		t.Errorf("赢家 real 应零候选, got %d", len(cands))
 	}
 
 	// 缺 key（sim 键集空）→ 零候选
-	fp3 := &fakeFactProvider{funding: funding, isReal: map[string]*bool{}, simKeys: map[string]bool{}}
+	fp3 := &fakeFactProvider{funding: funding, isReal: map[string]*bool{}}
 	if cands := d.Scan(context.Background(), snapshot, fp3); len(cands) != 0 {
 		t.Errorf("缺 key 应零候选（fail-closed）, got %d", len(cands))
 	}
@@ -62,3 +62,5 @@ func TestPerpFunding_SimPairBypass(t *testing.T) {
 		t.Error("白名单 canonical（BTC）行为应完全不变（照产候选）")
 	}
 }
+
+func boolPtrR2(b bool) *bool { return &b }

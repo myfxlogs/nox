@@ -79,10 +79,10 @@ func hasPair(cands []Candidate, a, b string) bool {
 // → 混层组合零候选。
 func TestXAssetIsReal_MixedRejected(t *testing.T) {
 	realMap := map[string]*bool{
-		"277842155": boolPtr(false),
-		"3001157":   boolPtr(true),
-		"binance":   boolPtr(true),
-		"gate":      boolPtr(false),
+		"277842155:mt5": boolPtr(false),
+		"3001157:mt5":   boolPtr(true),
+		"binance:perp":  boolPtr(true),
+		"gate:perp":     boolPtr(false),
 	}
 	cands := isrealDetector().Scan(context.Background(), isrealSnap(time.Now()), isrealFP(realMap))
 	if n := mixedCount(cands, realMap); n != 0 {
@@ -101,10 +101,10 @@ func TestXAssetIsReal_MixedRejected(t *testing.T) {
 // 各产候选（其余门槛照过——同快照下三门槛全放行）。
 func TestXAssetIsReal_SameLayerPass(t *testing.T) {
 	realMap := map[string]*bool{
-		"277842155": boolPtr(false),
-		"3001157":   boolPtr(true),
-		"binance":   boolPtr(true),
-		"gate":      boolPtr(false),
+		"277842155:mt5": boolPtr(false),
+		"3001157:mt5":   boolPtr(true),
+		"binance:perp":  boolPtr(true),
+		"gate:perp":     boolPtr(false),
 	}
 	cands := isrealDetector().Scan(context.Background(), isrealSnap(time.Now()), isrealFP(realMap))
 	if !hasPair(cands, "277842155:mt5", "gate:perp") {
@@ -118,7 +118,7 @@ func TestXAssetIsReal_SameLayerPass(t *testing.T) {
 // TestXAssetIsReal_FailOpen T3：realMap 缺 binance 键（未知）→ 277842155×binance 放行
 // （检测层 fail-open 惯例，可执行性由 gate 层 fail-closed 兜底）。
 func TestXAssetIsReal_FailOpen(t *testing.T) {
-	realMap := map[string]*bool{"277842155": boolPtr(false)} // binance 未知
+	realMap := map[string]*bool{"277842155:mt5": boolPtr(false)} // binance 未知
 	cands := isrealDetector().Scan(context.Background(), isrealSnap(time.Now()), isrealFP(realMap))
 	if !hasPair(cands, "277842155:mt5", "binance:perp") {
 		t.Fatalf("T3: fail-open (unknown venue) want pair allowed, got %+v", cands)

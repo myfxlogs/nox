@@ -38,13 +38,13 @@ func TestCrossVenueScanIsRealPair(t *testing.T) {
 	tr, fa := true, false
 
 	// MIXED → 0 候选
-	mixedFP := &fakeIsRealFP{isReal: map[string]*bool{"a": &tr, "b": &fa}}
+	mixedFP := &fakeIsRealFP{isReal: map[string]*bool{"a:mt5": &tr, "b:mt5": &fa}}
 	if cands := d.Scan(context.Background(), snap, mixedFP); len(cands) != 0 {
 		t.Fatalf("MIXED is_real: want 0 candidates, got %d", len(cands))
 	}
 
 	// SAME → 候选照常
-	sameFP := &fakeIsRealFP{isReal: map[string]*bool{"a": &tr, "b": &tr}}
+	sameFP := &fakeIsRealFP{isReal: map[string]*bool{"a:mt5": &tr, "b:mt5": &tr}}
 	if cands := d.Scan(context.Background(), snap, sameFP); len(cands) == 0 {
 		t.Fatalf("SAME is_real: want candidates, got 0")
 	}
@@ -67,13 +67,13 @@ func TestPerpFundingScanIsRealPair(t *testing.T) {
 	tr, fa := true, false
 
 	// MIXED → 0 候选
-	mixedFP := &fakeIsRealFP{funding: funding, isReal: map[string]*bool{"okx": &tr, "gate": &fa}}
+	mixedFP := &fakeIsRealFP{funding: funding, isReal: map[string]*bool{"okx:perp": &tr, "gate:perp": &fa}}
 	if cands := d.Scan(context.Background(), snap, mixedFP); len(cands) != 0 {
 		t.Fatalf("MIXED is_real: want 0 candidates, got %d", len(cands))
 	}
 
 	// SAME (both demo) → 候选照常
-	sameFP := &fakeIsRealFP{funding: funding, isReal: map[string]*bool{"okx": &fa, "gate": &fa}}
+	sameFP := &fakeIsRealFP{funding: funding, isReal: map[string]*bool{"okx:perp": &fa, "gate:perp": &fa}}
 	if cands := d.Scan(context.Background(), snap, sameFP); len(cands) == 0 {
 		t.Fatalf("SAME is_real (both demo): want candidates, got 0")
 	}
@@ -107,13 +107,13 @@ func TestFundingHedgeScanIsRealPair(t *testing.T) {
 	}
 
 	// MIXED → 0 候选
-	mixedFP := &fakeIsRealFP{funding: fundingMixed, isReal: map[string]*bool{"okx": &tr, "gate": &fa}}
+	mixedFP := &fakeIsRealFP{funding: fundingMixed, isReal: map[string]*bool{"okx:spot": &tr, "gate:perp": &fa}}
 	if cands := d.Scan(context.Background(), snapMixed, mixedFP); len(cands) != 0 {
 		t.Fatalf("MIXED is_real: want 0 candidates, got %d", len(cands))
 	}
 
 	// SAME → 候选照常（同 venue okx）
-	sameFP := &fakeIsRealFP{funding: funding, isReal: map[string]*bool{"okx": &tr}}
+	sameFP := &fakeIsRealFP{funding: funding, isReal: map[string]*bool{"okx:spot": &tr}}
 	if cands := d.Scan(context.Background(), snap, sameFP); len(cands) != 1 {
 		t.Fatalf("SAME is_real: want 1 candidate, got %d", len(cands))
 	}

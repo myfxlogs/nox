@@ -42,7 +42,7 @@ func (d *CrossVenueDetector) Scan(_ context.Context, snapshot map[string]map[str
 					continue
 				}
 				// D-178：is_real 配对检查（fail-open，对称覆盖正向+反向）。
-				if !isRealPair(realMap, a.Venue, b.Venue) {
+				if !isRealPair(realMap, a.VenueKey(), b.VenueKey()) {
 					continue
 				}
 				// 买 A（按 A.ask）卖 B（按 B.bid）：利润 = B.bid - A.ask（D-030 修正符号）
