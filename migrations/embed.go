@@ -203,4 +203,6 @@ var (
 	RadarWatchlistSQL string
 	//go:embed 0119_paper_cfd_columns.sql
 	PaperCfdColumnsSQL string
+	//go:embed 0120_position_evals.sql
+	PositionEvalsSQL string
 )
