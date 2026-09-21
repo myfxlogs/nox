@@ -112,7 +112,7 @@ type cexIOWithdrawRow struct {
 	Coin           string `json:"coin"`
 	Status         int    `json:"status"`
 	TxID           string `json:"txId"`
-	ApplyTime      int64  `json:"applyTime"` // ms
+	ApplyTime      string `json:"applyTime"` // D-365-R5："2006-01-02 15:04:05" UTC 字符串（真探实证非 ms int64）
 	Network        string `json:"network"`
 }
 

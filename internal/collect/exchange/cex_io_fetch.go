@@ -83,11 +83,17 @@ func (c *CexIOCollector) fetchBinance(ctx context.Context, acc CexIOAccount, dir
 		for _, r := range rows {
 			amt, _ := strconv.ParseFloat(r.Amount, 64)
 			fee, _ := strconv.ParseFloat(r.TransactionFee, 64)
+			// D-365-R5 S1：applyTime 是 "2006-01-02 15:04:05" 字符串（UTC），非 ms int64
+			//（真探 9-21 实证："2026-09-10 16:04:44"）；解析失败 fail-closed 报错不断言。
+			ts, terr := time.Parse("2006-01-02 15:04:05", r.ApplyTime)
+			if terr != nil {
+				return nil, fmt.Errorf("withdraw %s applyTime %q: %w", r.ID, r.ApplyTime, terr)
+			}
 			out = append(out, pgstore.VenueIO{
 				Venue: "binance", ConfigID: acc.ID, Direction: "withdraw",
 				Ccy: r.Coin, Amount: amt, Fee: &fee, Status: strconv.Itoa(r.Status),
 				TxID: r.TxID, ExternalID: r.ID,
-				Ts: time.UnixMilli(r.ApplyTime),
+				Ts: ts.UTC(),
 			})
 		}
 	}
