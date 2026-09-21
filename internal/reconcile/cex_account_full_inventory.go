@@ -168,7 +168,8 @@ func (q *CEXAccountQuerier) fullInventoryOkxTrading(ctx context.Context) (*FullI
 		Data []struct {
 			Details []struct {
 				Ccy   string `json:"ccy"`
-				EqUsd string `json:"eqUsd"`
+				Eq    string `json:"eq"`    // ccy 本位数量（D-365-R3：Qty 语义）
+				EqUsd string `json:"eqUsd"` // USD 等值（UsdtValue 语义）
 			} `json:"details"`
 		} `json:"data"`
 	}
@@ -180,6 +181,11 @@ func (q *CEXAccountQuerier) fullInventoryOkxTrading(ctx context.Context) (*FullI
 	}
 	inv := &FullInventory{}
 	for _, d := range resp.Data[0].Details {
+		// D-365-R3：Qty=eq（ccy 本位真数量——R0 缺陷曾塞 eqUsd 美元值=同类不一致）；
+		// UsdtValue=eqUsd。eq 缺失/解析失败 → qty=0 保留（估值仍诚实）。
+		// D-365-R3：Qty=eq（ccy 本位真数量——R0 缺陷曾塞 eqUsd 美元值=同类不一致）；
+		// UsdtValue=eqUsd。eq 缺失/解析失败 → qty=0 保留（估值仍诚实）。
+		eq, _ := strconv.ParseFloat(d.Eq, 64)
 		usd, perr := strconv.ParseFloat(d.EqUsd, 64)
 		if perr != nil || usd == 0 {
 			continue
@@ -188,7 +194,7 @@ func (q *CEXAccountQuerier) fullInventoryOkxTrading(ctx context.Context) (*FullI
 			inv.UsdtEquity += usd
 		}
 		inv.InventoryUSD += usd
-		inv.Holdings = append(inv.Holdings, &v1.Holding{Ccy: d.Ccy, Qty: usd, UsdtValue: usd})
+		inv.Holdings = append(inv.Holdings, &v1.Holding{Ccy: d.Ccy, Qty: eq, UsdtValue: usd})
 	}
 	// D-365-R1：funding/earn 子账户不再合并（R2 分型分派——各自独立 FullInventory 块），
 	// 旧三源合并体删除（funding/earn 配置经分派走 fullInventoryOkxBySource）。

@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 )
 
 // TestFullInventory_BinancePerpWallet R1 S2 锚：perp 配置走 /fapi/v2/account 合约钱包
@@ -90,5 +92,43 @@ func TestFullInventory_BinanceFundingPriced(t *testing.T) {
 	}
 	if inv.InventoryUSD < total-0.01 || inv.InventoryUSD > total+0.01 {
 		t.Errorf("inventory = %v, want %v（全币种计价和）", inv.InventoryUSD, total)
+	}
+}
+
+// TestFullInventory_OkxTradingQty D-365-R3：trading details 的 Holding.Qty=eq（ccy 本位
+// 真数量），UsdtValue=eqUsd——R0 缺陷曾把 eqUsd 美元值塞 Qty（同类不一致，杂币持有时
+// 明细数量假）。红=R0 实现 Qty=88.7。
+func TestFullInventory_OkxTradingQty(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v5/account/balance" {
+			http.NotFound(w, r)
+			return
+		}
+		fmt.Fprint(w, `{"code":"0","data":[{"details":[
+			{"ccy":"DOGE","eq":"1000","eqUsd":"88.7"},
+			{"ccy":"USDT","eq":"6.24","eqUsd":"6.24"}
+		]}]}`)
+	}))
+	defer srv.Close()
+
+	q := NewCEXAccountQuerier("okx", "spot", "k", "s", "p", srv.URL, "", false)
+	inv, err := q.FullInventory(context.Background())
+	if err != nil {
+		t.Fatalf("okx trading full inventory: %v", err)
+	}
+	var doge *v1.Holding
+	for _, h := range inv.Holdings {
+		if h.Ccy == "DOGE" {
+			doge = h
+		}
+	}
+	if doge == nil {
+		t.Fatalf("holdings 缺 DOGE: %+v", inv.Holdings)
+	}
+	if doge.Qty != 1000 {
+		t.Errorf("DOGE Qty = %v, want 1000（本位真数量，R0 曾塞 eqUsd=88.7）", doge.Qty)
+	}
+	if doge.UsdtValue < 88.6999 || doge.UsdtValue > 88.7001 {
+		t.Errorf("DOGE UsdtValue = %v, want 88.7", doge.UsdtValue)
 	}
 }
