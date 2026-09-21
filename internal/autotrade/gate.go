@@ -13,27 +13,6 @@ import (
 	"arb/internal/store/pgstore"
 )
 
-// TradeIntent 三 loop 产出的统一开仓意图（D-072 §3.1）。
-// Execute 闭包内才调 service.Execute*——三 loop 零直连执行。
-type TradeIntent struct {
-	Strategy    string // SWAPARB / MEANREVERT / CROSS_VENUE / CARRY / FUNDING_HEDGE / PERP_FUNDING
-	Canonical   string
-	VenueBuy    string
-	VenueSell   string
-	Qty         float64
-	NotionalUSD float64 // 本笔名义额（swap=余额推导，其余=cfg.NotionalUSD）
-	DedupKey    string  // 幂等键（SWAPARB:CANONICAL:vLong:vShort / MEANREVERT:... / detector oppID）
-	NetBps      float64 // 开仓时净 bps（日志用）
-	Execute     func(ctx context.Context) (status, msg string, posID int64)
-}
-
-// GateResult Submit 返回值。
-type GateResult struct {
-	Status string // EXECUTED / FAILED / REJECTED
-	Reason string
-	PosID  int64
-}
-
 // Gate 统一开仓门禁（D-072 §3.1）。三 goroutine 串行化。
 // D-080 R1：防重改 DB 实时派生——删内存 openCombos 集，每次 Submit 实时查 ListActivePositions
 // 派生组合键匹配。治手动路径旁路（service.go 直接调 pipeline.Execute 不经 gate 的开仓也能被防重）。
@@ -128,6 +107,15 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 		return GateResult{Status: "REJECTED", Reason: "cooled exits check failed"}
 	}
 
+	// D-378a S4 检查 8: 组合级止损保险丝（C1）——同 ComboKey stop/exec_drift 平仓 ≥ComboLossLimit
+	// in ComboLossWindow → 拒。与 cooldown 各查各的（kind 集与窗口不同，合并查询会把 kind 过滤
+	// 抬进应用层，破坏「SQL 侧过滤、应用层零判断」语义）。fail-closed 同 cooldown。
+	comboHit, comboCount, err := g.comboLossCheck(ctx, intentCombo)
+	if err != nil {
+		g.rejectLog(ctx, *intent, fmt.Sprintf("combo loss check: %v", err), false)
+		return GateResult{Status: "REJECTED", Reason: "combo loss check failed"}
+	}
+
 	verdict := gateDecision(GateInput{
 		State:        state,
 		Strategy:     intent.Strategy,
@@ -149,6 +137,9 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 		StopCooldownHit:  stopHit,
 		StopCooldownKind: stopKind,
 		StopCooldownAgo:  stopAgo,
+		// D-378a S4：组合级止损保险丝命中（C1，count 供审计 reason）
+		ComboLossHit:   comboHit,
+		ComboLossCount: comboCount,
 	})
 
 	// D-159 W1a R1：精确组合门禁（SWAPARB/CARRY 共用，gateDecision 后、Execute 前拦截）。

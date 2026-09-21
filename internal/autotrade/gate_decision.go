@@ -1,9 +1,31 @@
 package autotrade
 
 import (
+	"context"
 	"fmt"
 	"time"
 )
+
+// TradeIntent 三 loop 产出的统一开仓意图（D-072 §3.1）。
+// Execute 闭包内才调 service.Execute*——三 loop 零直连执行。
+type TradeIntent struct {
+	Strategy    string // SWAPARB / MEANREVERT / CROSS_VENUE / CARRY / FUNDING_HEDGE / PERP_FUNDING
+	Canonical   string
+	VenueBuy    string
+	VenueSell   string
+	Qty         float64
+	NotionalUSD float64 // 本笔名义额（swap=余额推导，其余=cfg.NotionalUSD）
+	DedupKey    string  // 幂等键（SWAPARB:CANONICAL:vLong:vShort / MEANREVERT:... / detector oppID）
+	NetBps      float64 // 开仓时净 bps（日志用）
+	Execute     func(ctx context.Context) (status, msg string, posID int64)
+}
+
+// GateResult Submit 返回值。
+type GateResult struct {
+	Status string // EXECUTED / FAILED / REJECTED
+	Reason string
+	PosID  int64
+}
 
 // GateInput gateDecision 纯函数入参（可测性，无 IO）。
 type GateInput struct {
@@ -22,6 +44,9 @@ type GateInput struct {
 	StopCooldownHit  bool
 	StopCooldownKind string
 	StopCooldownAgo  time.Duration
+	// D-378a S4：组合级止损保险丝命中（C1；count 供审计 reason）。
+	ComboLossHit   bool
+	ComboLossCount int64
 }
 
 // GateVerdict gateDecision 纯函数返回。
@@ -55,6 +80,10 @@ func gateDecision(in GateInput) GateVerdict {
 	// reason 带 exit_kind 与平仓距今时长便于审计。
 	if in.StopCooldownHit {
 		return GateVerdict{Pass: false, Reason: fmt.Sprintf("combo reentry cooldown (exit_kind=%s, closed %s ago)", in.StopCooldownKind, in.StopCooldownAgo.Round(time.Second))}
+	}
+	// D-378a S4：组合级止损保险丝（StopCooldownHit 之后、DedupHit 之前——组合级历史抑制族）。
+	if in.ComboLossHit {
+		return GateVerdict{Pass: false, Reason: fmt.Sprintf("combo loss limit (exit_kinds>=%d in window)", in.ComboLossCount)}
 	}
 	if in.DedupHit {
 		return GateVerdict{Pass: false, Reason: fmt.Sprintf("duplicate dedup key")}

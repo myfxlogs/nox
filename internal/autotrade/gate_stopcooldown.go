@@ -41,3 +41,30 @@ func (g *Gate) stopCooldownCheck(ctx context.Context, intentCombo string) (hit b
 	}
 	return false, "", 0, nil
 }
+
+// comboLossExitKinds C1 计数集：stop（基差止损）+ exec_drift（D-378a S2 执行质量破产）——
+// 毒成交三连击=组合质量破产，与 stop 同罪累计。manual 不计（人为操作非策略性亏损）。
+var comboLossExitKinds = []string{"stop", "exec_drift"}
+
+// comboLossCheck D-378a S4：同 ComboKey 止损/执行漂移平仓计数 ≥ ComboLossLimit（in window）→ Hit。
+// 独立调用 ListCooledExits（与 stopCooldownCheck 各查各的——kind 集与窗口不同，见 gate.go 注）。
+// ComboLossLimit/Window ≤0 → 检查关闭（逃生阀同 D-372 惯例）。
+func (g *Gate) comboLossCheck(ctx context.Context, intentCombo string) (hit bool, count int64, err error) {
+	if g.cfg.ComboLossLimit <= 0 || g.cfg.ComboLossWindow <= 0 {
+		return false, 0, nil
+	}
+	cooled, err := g.store.ListCooledExits(ctx, comboLossExitKinds, time.Now().Add(-g.cfg.ComboLossWindow))
+	if err != nil {
+		return false, 0, fmt.Errorf("list combo loss exits: %w", err)
+	}
+	var n int64
+	for _, ce := range cooled {
+		if ce.ClosedAt == nil { // 防御：SQL WHERE closed_at > since 已排 NULL
+			continue
+		}
+		if combo.MatchOppID(ce.OpportunityID, intentCombo) {
+			n++
+		}
+	}
+	return n >= int64(g.cfg.ComboLossLimit), n, nil
+}

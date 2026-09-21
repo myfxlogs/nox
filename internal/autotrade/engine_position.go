@@ -58,6 +58,10 @@ func (e *Engine) checkExitCondition(ctx context.Context, p *pgstore.Position) (b
 		if shouldHarvest, harvestReason := e.harvestCheck(ctx, p); shouldHarvest {
 			return true, harvestReason
 		}
+		// D-378a S2：执行质量闸（harvest 后、basisStop 前）——漂移仓首个评估即杀，不等基差走坏。
+		if shouldDrift, driftReason := e.execDriftCheck(ctx, p); shouldDrift {
+			return true, driftReason
+		}
 		return e.basisStopCheckXAsset(p)
 	}
 	if p.Type == "FUNDING_HEDGE" || p.Type == "PERP_FUNDING" {
@@ -99,28 +103,6 @@ func (e *Engine) checkExitCondition(ctx context.Context, p *pgstore.Position) (b
 		return true, fmt.Sprintf("net swap %.3f bps/day <= %.1f", netSwap, e.cfg.SwapArbExitBps)
 	}
 	return e.basisStopCheck(p)
-}
-
-// harvestCheck D-341 S1：XASSET 收敛止盈——spread_now ≤ harvest_floor（monitor 滚动 q25 分位数
-// 收割线，MIN_CAPTURE 防贴线 churn 由 monitor 计算侧保证）→ 带底收割。monitor 缺行/floor NULL
-// → 不触发（诚实空态；数据自 monitor 工具 S1 列）。pairKey=D-335 同款（CanonicalSell-TrimSuffix）。
-func (e *Engine) harvestCheck(ctx context.Context, p *pgstore.Position) (bool, string) {
-	pairKey := canonicalFromOppID(p.OpportunityID)
-	opp, err := e.store.GetOpportunity(ctx, p.OpportunityID)
-	if err != nil || opp == nil {
-		return false, ""
-	}
-	if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
-		pairKey = *opp.CanonicalSell + "-" + strings.TrimSuffix(opp.Canonical, "USD")
-	}
-	entryBps, _, floor, hasFloor, ok, err := e.store.LatestXAssetEntryGate(ctx, pairKey, xassetEntryGateMaxAge)
-	if err != nil || !ok || !hasFloor {
-		return false, ""
-	}
-	if entryBps <= floor {
-		return true, fmt.Sprintf("harvest: spread %.2f ≤ floor %.2f (+%.2f bps captured)", entryBps, floor, floor-entryBps)
-	}
-	return false, ""
 }
 
 // recalcNetSwap 重算净 swap（D-072 §4.2，facts 驱动 + 48h 新鲜度守卫）。

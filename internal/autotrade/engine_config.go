@@ -110,6 +110,12 @@ type Config struct {
 	// （gate 统一闸单点覆盖全 intent 来源；<=0 = 检查关闭，逃生阀）。
 	StopReentryCooldown time.Duration
 
+	// D-378a：XASSET 执行质量闸（exec_drift）+ 评估节拍 + 组合级止损保险丝（C1）。
+	XAssetExecDriftBps       float64
+	PositionFallbackInterval time.Duration // ≤0 → 回退 10min 旧值（engine.fallbackInterval 防呆）
+	ComboLossLimit           int           // ≤0 = 检查关闭（逃生阀）
+	ComboLossWindow          time.Duration
+
 	// D-181 S2：probe 探测仓——无实测腿的首仓自动成为 probe，到期评估升级/拒绝。
 	// ProbeEnabled=false → 不标记不评估（向后兼容，默认 false）。
 	ProbeEnabled bool

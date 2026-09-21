@@ -145,9 +145,20 @@ func maxPositionsReachedDecision(openCount, maxPositions int) bool {
 	return openCount >= maxPositions
 }
 
-// positionFallbackInterval D-107 P4：低频兜底扫描间隔（10min，防网关事件丢失窗口）。
-// 包级 var 测试可覆写（marginReconnectBackoff 先例）。
+// positionFallbackInterval D-107 P4：低频兜底扫描间隔旧值（10min）。
+// D-378a S3 起默认 60s 配置化（ARB_POSITION_EVAL_SEC→cfg.PositionFallbackInterval）；
+// 本常量保留为 ≤0 防呆回退值。包级 var 测试可覆写（marginReconnectBackoff 先例）。
 var positionFallbackInterval = 10 * time.Minute
+
+// fallbackInterval D-378a S3：评估节拍——修复评估饥荒（无订单事件时退出评估最多饿 10min，
+// 「T 分钟持续」类判据无定义域）。scanAndClose 全仓扫描（≤50 仓×内存 quote 读）60s 成本可忽略；
+// 顺带治愈 SWAPARB 等其他型同款饥荒。事件驱动路径（orderTopic→kick→30s 节流）逐字节不动。
+func (e *Engine) fallbackInterval() time.Duration {
+	if e.cfg.PositionFallbackInterval > 0 {
+		return e.cfg.PositionFallbackInterval
+	}
+	return positionFallbackInterval
+}
 
 // Kick D-107 P4：orderTopic 事件触发重扫（非阻塞 send 到 buffered(1) chan——合并语义同 P2 监控）。
 func (e *Engine) Kick() {
@@ -177,7 +188,7 @@ func (e *Engine) positionLoop(ctx context.Context) {
 	e.stateMachineTick(ctx)
 	e.lastScan = time.Now()
 
-	fallback := time.NewTicker(positionFallbackInterval)
+	fallback := time.NewTicker(e.fallbackInterval()) // D-378a S3：节拍配置化
 	defer fallback.Stop()
 	csMissTick := time.NewTicker(csMissAlertInterval) // D-140 S2：CS-miss 聚合告警
 	defer csMissTick.Stop()
