@@ -144,7 +144,8 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 		}
 	}
 
-	qty, perLot, skip := computeBuyQty(opp, e.cfg.NotionalUSD, e.service.USDPerLotForLeg)
+	notionalUSD := effectiveNotionalUSD(e.cfg.NotionalUSD, xassetSpec) // D-367 S4
+	qty, perLot, skip := computeBuyQty(opp, notionalUSD, e.service.USDPerLotForLeg)
 	if skip {
 		// D-140 S2/D-190：CS-miss 按 (venue,canonical) 聚合计数（语义扩为「无法定尺寸」，含 CS-miss/no-quote/fx-miss）
 		e.recordCSMiss(opp.VenueBuy, opp.Canonical)
@@ -155,7 +156,7 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 	}
 	// H4.2：qty 低于买腿最小步 → debug 跳过（品种适配事实，不产 intent 不落 REJECTED）
 	// venueSymbol 从 qbus 取（handleOpportunity 无直接 quote，用 opp.VenueBuy 查）
-	intentNotional := e.cfg.NotionalUSD
+	intentNotional := notionalUSD // D-367 S4：与 qty 同取有效值（intent 名义=qty 实额基准一致）
 	if qbuy, ok := e.quotes.Latest(opp.Canonical, opp.VenueBuy); ok {
 		if e.service.QtyBelowMinStep(opp.VenueBuy, qbuy.VenueSymbol, qty) {
 			// D-330 断层②：XASSET_CARRY 且 spec 命中时走 spec 驱动可行量下限（§2.2）——
@@ -196,6 +197,15 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 // isMTVenue 判断 venueKey 是否为 MT5/MT4 venue（D-135 sizing CS fail-closed 用）。
 func isMTVenue(venue string) bool {
 	return strings.HasSuffix(venue, ":mt5") || strings.HasSuffix(venue, ":mt4")
+}
+
+// effectiveNotionalUSD D-367 S4：有效名义额=组合级 spec 列优先，NULL（行缺列或 env 来源）
+// 回退全局 env——渐进收编零漂移。纯函数（S5 T1/T2 锚点）。
+func effectiveNotionalUSD(cfgNotional float64, spec *exec.XAssetComboAllowSpec) float64 {
+	if spec != nil && spec.NotionalUSD != nil {
+		return *spec.NotionalUSD
+	}
+	return cfgNotional
 }
 
 // computeBuyQty 计算买腿 qty（D-190：USD notional 统一，价格源改 live qbus ask）。
