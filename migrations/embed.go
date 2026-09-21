@@ -286,3 +286,6 @@ var OkxUnifiedCleanupSQL string
 
 //go:embed 0114_cex_subaccount_seeds.sql
 var CexSubaccountSeedsSQL string
+
+//go:embed 0115_fin_venue_io.sql
+var FinVenueIOSQL string
