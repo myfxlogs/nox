@@ -111,6 +111,7 @@ var migrationFiles = []struct {
 	{113, migrations.OkxUnifiedCleanupSQL},             // D-361 S3：OKX 统一账户旧 spot/perp 双行清场（写侧归一 unified）
 	{114, migrations.CexSubaccountSeedsSQL},            // D-363 S1：funding/earn 子账户 config 种子（凭据 SELECT 复用/幂等）
 	{115, migrations.FinVenueIOSQL},                    // D-365 S1：CEX 进出账流水（幂等四元唯一键+ts 倒序索引）
+	{116, migrations.XassetComboNotionalSQL},           // D-367 S1：组合级 sizing 名义额列（NULL=回退全局 env）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

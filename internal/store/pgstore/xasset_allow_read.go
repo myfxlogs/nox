@@ -12,7 +12,8 @@ import (
 
 // XAssetAllowRow xasset_allow_combos 行（调用方映射到 exec.XAssetComboAllowSpec——
 // pgstore 不能 import exec：exec→pgstore 既有依赖方向成环；结构同构零信息损失，
-// exec.XAssetComboAllowSpec 结构不变约束保持）。
+// exec.XAssetComboAllowSpec 结构不变约束保持。D-367 S2：NotionalUSD 指针=NULL 语义
+// 显式（NULL=回退 ARB_OPP_NOTIONAL_USD 全局缺省），同构零信息损失约束随列扩展保持）。
 type XAssetAllowRow struct {
 	CanonicalBuy  string
 	CanonicalSell string
@@ -21,12 +22,13 @@ type XAssetAllowRow struct {
 	MaxLongQty    float64
 	MaxShortQty   float64
 	MaxGrossUSD   float64
+	NotionalUSD   *float64 // D-367 S2：组合级 sizing 名义额；NULL=回退全局 env
 	Note          string
 }
 
 func (s *Store) LoadXAssetAllowCombos(ctx context.Context, environment string) ([]XAssetAllowRow, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT canonical_buy, canonical_sell, venue_buy, venue_sell, max_long_qty, max_short_qty, max_gross_usd, note
+		SELECT canonical_buy, canonical_sell, venue_buy, venue_sell, max_long_qty, max_short_qty, max_gross_usd, notional_usd, note
 		FROM xasset_allow_combos
 		WHERE enabled AND (simulated IS NULL OR simulated = ($1='demo'))`, environment)
 	if err != nil {
@@ -37,7 +39,7 @@ func (s *Store) LoadXAssetAllowCombos(ctx context.Context, environment string) (
 	for rows.Next() {
 		var r XAssetAllowRow
 		if err := rows.Scan(&r.CanonicalBuy, &r.CanonicalSell, &r.VenueBuy, &r.VenueSell,
-			&r.MaxLongQty, &r.MaxShortQty, &r.MaxGrossUSD, &r.Note); err != nil {
+			&r.MaxLongQty, &r.MaxShortQty, &r.MaxGrossUSD, &r.NotionalUSD, &r.Note); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

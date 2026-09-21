@@ -289,3 +289,6 @@ var CexSubaccountSeedsSQL string
 
 //go:embed 0115_fin_venue_io.sql
 var FinVenueIOSQL string
+
+//go:embed 0116_xasset_combo_notional.sql
+var XassetComboNotionalSQL string
