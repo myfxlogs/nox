@@ -45,6 +45,9 @@ func TestFullInventory_BinanceFundingPriced(t *testing.T) {
 				{"asset":"USDT","free":"0","locked":"0"}
 			]`)
 		case "/v3/ticker/price":
+			// R2 硬化：根路径 /v3/ticker 生产 404——必须走 /api 前缀（S1 修正实证）
+			http.Error(w, "ticker must use /api prefix", http.StatusNotFound)
+		case "/api/v3/ticker/price":
 			switch r.URL.Query().Get("symbol") {
 			case "DOGEUSDT":
 				fmt.Fprint(w, `{"price":"0.1"}`)

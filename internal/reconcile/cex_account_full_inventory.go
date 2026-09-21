@@ -190,22 +190,7 @@ func (q *CEXAccountQuerier) fullInventoryOkxTrading(ctx context.Context) (*FullI
 		inv.InventoryUSD += usd
 		inv.Holdings = append(inv.Holdings, &v1.Holding{Ccy: d.Ccy, Qty: usd, UsdtValue: usd})
 	}
-	// 子账户两源合并（资金+理财，USDT-only——D-363 端点直连核证点④）：
-	for _, src := range []struct {
-		path  string
-		field string
-	}{{"/api/v5/asset/balances?ccy=USDT", "bal"}, {"/api/v5/finance/savings/balance?ccy=USDT", "amt"}} {
-		sub, err := q.okxSubaccountSignedGet(ctx, src.path)
-		if err != nil {
-			return nil, fmt.Errorf("okx full inventory sub %s: %w", src.path, err)
-		}
-		usdt, rows, err := parseOkxUSDTBalance(sub, src.field)
-		if err != nil {
-			return nil, fmt.Errorf("okx full inventory sub %s parse: %w", src.path, err)
-		}
-		inv.UsdtEquity += usdt
-		inv.InventoryUSD += usdt
-		inv.Holdings = append(inv.Holdings, rows...)
-	}
+	// D-365-R1：funding/earn 子账户不再合并（R2 分型分派——各自独立 FullInventory 块），
+	// 旧三源合并体删除（funding/earn 配置经分派走 fullInventoryOkxBySource）。
 	return inv, nil
 }
