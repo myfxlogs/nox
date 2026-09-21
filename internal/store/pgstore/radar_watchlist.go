@@ -49,19 +49,3 @@ func (s *Store) LoadRadarWatchlist(ctx context.Context) ([]RadarWatchlistRow, er
 	}
 	return out, rows.Err()
 }
-
-// SeedXassetAutoCombo D-369 S4：combo 自动 seed（ON CONFLICT DO NOTHING 幂等；
-// simulated=t/cap 保守——sim×sim 限定由调用方判定）。venueBuy/venueSell=watchlist 双腿
-// （排序定对内次序，保证同对幂等）。返回是否新插入。
-func (s *Store) SeedXassetAutoCombo(ctx context.Context, canonical, venueBuy, venueSell string, maxGrossUSD float64) (bool, error) {
-	tag, err := s.pool.Exec(ctx, `
-		INSERT INTO xasset_allow_combos
-			(canonical_buy, canonical_sell, venue_buy, venue_sell, max_long_qty, max_short_qty, max_gross_usd, enabled, simulated, note)
-		VALUES ($1, $1, $2, $3, 0.01, 0.01, $4, true, true, 'D-369 auto-seed divergence')
-		ON CONFLICT (canonical_buy, canonical_sell, venue_buy, venue_sell) DO NOTHING`,
-		canonical, venueBuy, venueSell, maxGrossUSD)
-	if err != nil {
-		return false, fmt.Errorf("seed xasset auto combo %s: %w", canonical, err)
-	}
-	return tag.RowsAffected() > 0, nil
-}
