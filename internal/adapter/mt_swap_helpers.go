@@ -110,7 +110,7 @@ var weekdayNames = []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursda
 // 新增 venue 需有 position_swap_snapshots 实证（活仓结算跳变倍数对拍）。
 var tripleSwapDayOverrides = map[string]float64{
 	"REDACTED_MT_ACCT": 3, // Wednesday，8-26 实证：#290 0.05→0.19≈3x
-	"39050818":  3, // Wednesday，8-26 实证：#291 0.04→0.16=3x
+	"39050818":         3, // Wednesday，8-26 实证：#291 0.04→0.16=3x
 }
 
 // applyTripleSwapDayOverride D-115：venue 在 override map 里 → 全符号替换为 override 值。

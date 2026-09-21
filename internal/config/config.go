@@ -79,6 +79,17 @@ type Config struct {
 	// 补机会驱动路径零覆盖）。60min=打碎 stop→秒级重进毒环且容 detector 分钟级重评；
 	// 0 = 关闭检查（逃生阀，与 SwapArbReentryCooldownDays 语义对齐）。
 	StopReentryMinutes int
+	// XAssetExecDriftBps XASSET 执行质量闸阈（ARB_XASSET_EXEC_DRIFT_BPS，缺省 8.0）。
+	// D-378a S2：|fill 口径−quote 锚|>thresh → exec_drift 平仓（双向都杀；entry_noise_bps 可抬阈）。
+	XAssetExecDriftBps float64
+	// PositionEvalSec 退出评估兜底扫描间隔秒（ARB_POSITION_EVAL_SEC，缺省 60）。
+	// D-378a S3：评估饥荒修复——无订单事件时退出评估最多饿 10min → 60s（事件驱动路径不动）。
+	PositionEvalSec int
+	// ComboLossLimit 组合级止损保险丝（C1）：同 ComboKey stop/exec_drift 平仓计数 ≥ 此值 → gate 拒
+	// （ARB_COMBO_LOSS_LIMIT，缺省 3）；0 = 关闭（逃生阀）。
+	ComboLossLimit int
+	// ComboLossWindowH 止损计数回看窗口小时（ARB_COMBO_LOSS_WINDOW_H，缺省 24）；0 = 关闭。
+	ComboLossWindowH int
 	// SwapArbVenueExposureCap 单 venue SWAPARB 合计裸露上限系数（ARB_SWAPARB_VENUE_EXPOSURE_CAP，缺省 2.0）。
 	// D-132 T1：新开仓时若任一腿 venue 现有 SWAPARB 活仓合计名义 + 新仓名义 > venue equity × cap → skip。
 	// 语义=单 venue SWAPARB 裸露 ≤ cap 倍权益；注资后各档自动满足，组合数失控时硬顶。0 = 不启用。

@@ -75,6 +75,8 @@ func ExitKindFromReason(reason string) string {
 		return "harvest"
 	case strings.Contains(reason, "basis loss"), strings.Contains(reason, "basis stop"):
 		return "stop"
+	case strings.Contains(reason, "exec_drift"): // D-378a S2：执行质量破产（置于 carry/funding 前，防未来 reason 串扰误判）
+		return "exec_drift"
 	case strings.Contains(reason, "carry"), strings.Contains(reason, "funding"):
 		return "carry_death"
 	case strings.Contains(reason, "manual"):
