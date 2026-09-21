@@ -71,6 +71,8 @@ func (s *Store) UpdatePositionExitKind(ctx context.Context, posID int64, kind st
 // ExitKindFromReason D-341 S3：close reason 前缀 → exit_kind（logCloseTrigger 单映射点）。
 func ExitKindFromReason(reason string) string {
 	switch {
+	case strings.HasPrefix(reason, "disaster"): // D-378b：置于 contains 族前——reason 串含 basis/carry/stop 子串会被截胡
+		return "disaster"
 	case strings.HasPrefix(reason, "harvest"):
 		return "harvest"
 	case strings.Contains(reason, "basis loss"), strings.Contains(reason, "basis stop"):

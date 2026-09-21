@@ -85,6 +85,15 @@ type Config struct {
 	// PositionEvalSec 退出评估兜底扫描间隔秒（ARB_POSITION_EVAL_SEC，缺省 60）。
 	// D-378a S3：评估饥荒修复——无订单事件时退出评估最多饿 10min → 60s（事件驱动路径不动）。
 	PositionEvalSec int
+	// D-378b 灾难带四件（撤窄阈基差止损，XASSET 限定；语义详 engine_disaster.go）：
+	// DisasterBps=绝对下限（ARB_XASSET_DISASTER_BPS 缺省 40，≤0→40 防呆）；NoiseMult=noise
+	// 倍数（…_NOISE_MULT 缺省 4，与绝对下限取 max，≤0→不乘）；Debounce=连续评估次数
+	// （…_DEBOUNCE 缺省 2，单次尖刺不杀，≤1→单次即杀）；QuoteMaxAge=双腿报价新鲜度上限
+	// （…_QUOTE_MAX_AGE 缺省 5m，超龄→fail_closed:stale 不判灾难，≤0→不查回退旧行为）。
+	XAssetDisasterBps       float64
+	XAssetDisasterNoiseMult float64
+	XAssetDisasterDebounce  int
+	XAssetQuoteMaxAge       time.Duration
 	// ComboLossLimit 组合级止损保险丝（C1）：同 ComboKey stop/exec_drift 平仓计数 ≥ 此值 → gate 拒
 	// （ARB_COMBO_LOSS_LIMIT，缺省 3）；0 = 关闭（逃生阀）。
 	ComboLossLimit int

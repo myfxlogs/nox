@@ -55,6 +55,10 @@ func Load() *Config {
 		PositionEvalSec:            envInt("ARB_POSITION_EVAL_SEC", 60),                // D-378a S3 评估节拍
 		ComboLossLimit:             envInt("ARB_COMBO_LOSS_LIMIT", 3),                  // D-378a S4 组合保险丝
 		ComboLossWindowH:           envInt("ARB_COMBO_LOSS_WINDOW_H", 24),              // D-378a S4 保险丝窗口
+		XAssetDisasterBps:          envFloat("ARB_XASSET_DISASTER_BPS", 40.0),          // D-378b 灾难带绝对下限
+		XAssetDisasterNoiseMult:    envFloat("ARB_XASSET_DISASTER_NOISE_MULT", 4.0),    // D-378b 灾难带 noise 倍数
+		XAssetDisasterDebounce:     envInt("ARB_XASSET_DISASTER_DEBOUNCE", 2),          // D-378b 灾难带去抖
+		XAssetQuoteMaxAge:          envDur("ARB_XASSET_QUOTE_MAX_AGE", 5*time.Minute),  // D-378b 报价新鲜度
 		SwapArbVenueExposureCap:    envFloat("ARB_SWAPARB_VENUE_EXPOSURE_CAP", 2.0),    // D-132 T1 venue 级敞口门
 		SwapArbMarginBudgetPct:     envFloat("ARB_SWAPARB_MARGIN_BUDGET_PCT", 0.8),     // D-142 ④ 观察版告警
 		ProbeEnabled:               envBool("ARB_PROBE_ENABLED", false),                // D-181 S2 probe 探测仓总开关
