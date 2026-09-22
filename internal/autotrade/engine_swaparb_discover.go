@@ -32,6 +32,33 @@ func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
 	if err != nil {
 		log.Printf("[autotrade] SWAPARB ListProductGroups failed (fail-open): %v", err)
 	}
+	// D-388 S1：broker 托管 venue 非 connected → facts 退出配对（停用即剔除，不等 facts
+	// 自然过期——52993526 停用后 facts 残留窗口内仍刷配对的实证缺陷）。fail-open 先例同
+	// productGroupMap；venue ∉ broker_accounts（CEX/adapter 自管）放行（pgstore.BrokerVenueDiscoverable）。
+	brokerStatuses, err := e.store.ListBrokerAccountStatuses(ctx)
+	if err != nil {
+		log.Printf("[autotrade] SWAPARB ListBrokerAccountStatuses failed (fail-open): %v", err)
+		brokerStatuses = nil
+	}
+	{
+		kept := longFacts[:0]
+		for _, f := range longFacts {
+			if pgstore.BrokerVenueDiscoverable(brokerStatuses, f.Venue) {
+				kept = append(kept, f)
+			}
+		}
+		longFacts = kept
+		kept = shortFacts[:0]
+		for _, f := range shortFacts {
+			if pgstore.BrokerVenueDiscoverable(brokerStatuses, f.Venue) {
+				kept = append(kept, f)
+			}
+		}
+		shortFacts = kept
+		if len(longFacts) == 0 || len(shortFacts) == 0 {
+			return nil
+		}
+	}
 	now := time.Now()
 	maxAge := e.cfg.SwapFactMaxAge
 	var staleLong, staleShort int
