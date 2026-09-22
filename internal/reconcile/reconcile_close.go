@@ -53,6 +53,22 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 		leg pgstore.PositionLeg
 		pos pgstore.Position
 	}
+	// D-385 S1：CEX venue 集合——CEX perp 持仓是聚合仓位（无 ticket/comment），逐单 key
+	// 匹配结构性不存在 → CEX 腿不进 localLegs/nonOpenLegKeys，累计 venue+symbol+side 聚合量对拍。
+	cexVenues := make(map[string]bool)
+	for _, q := range r.snapshot() {
+		if _, ok := q.(*CEXPositionQuerier); ok {
+			cexVenues[q.VenueKey()] = true
+		}
+	}
+	cexLocal := make(map[string]float64)    // venueKey:symbol:side → 本地聚合量
+	cexLocalPos := make(map[string][]int64) // 同 key → 贡献腿 position_id（告警归因）
+	aggLeg := func(leg *pgstore.PositionLeg, posID int64) {
+		k := cexAggKey(leg.Venue, leg.Symbol, leg.Side)
+		cexLocal[k] += leg.EffectiveQty()
+		cexLocalPos[k] = appendPosID(cexLocalPos[k], posID)
+	}
+
 	localLegs := make(map[string]legWithPos)
 	for _, p := range openPositions {
 		sub, cancel := r.withTimeout(ctx)
@@ -64,6 +80,10 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 		}
 		for _, leg := range legs {
 			if leg.OrderID != "" && leg.Phase == "OPEN" {
+				if cexVenues[leg.Venue] {
+					aggLeg(&leg, p.ID)
+					continue
+				}
 				key := leg.Venue + ":" + leg.OrderID
 				localLegs[key] = legWithPos{leg: leg, pos: p}
 			}
@@ -73,6 +93,7 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 	// 2. 查 venue 实际持仓（每个 querier 独立超时，单个失败不阻断其余）
 	// D-159 W2a R3-7：venueOrders 也用 venue_key+":"+ticket 复合 key（与 localLegs 对齐）。
 	venueOrders := make(map[string]VenueOrder) // venue_key+":"+ticket → order
+	cexVenue := make(map[string]float64)       // D-385 S1：venueKey:symbol:side → venue 聚合量
 	for _, q := range r.snapshot() {
 		sub, cancel := r.withTimeout(ctx)
 		orders, err := q.QueryOpenedOrders(sub)
@@ -81,7 +102,12 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 			log.Printf("[reconcile] query venue %s: %v（本轮跳过）", q.VenueKey(), err)
 			continue
 		}
+		isCEX := cexVenues[q.VenueKey()]
 		for _, o := range orders {
+			if isCEX {
+				cexVenue[cexAggKey(o.VenueKey, o.Symbol, o.Side)] += o.Volume
+				continue
+			}
 			key := o.VenueKey + ":" + o.Ticket
 			venueOrders[key] = o
 		}
@@ -105,6 +131,10 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 		}
 		for _, leg := range legs {
 			if leg.OrderID != "" && leg.Phase == "OPEN" {
+				if cexVenues[leg.Venue] {
+					aggLeg(&leg, p.ID) // D-385 S1：非 OPEN 态仓的 CEX 腿同入聚合（真实在仓敞口）
+					continue
+				}
 				nonOpenLegKeys[leg.Venue+":"+leg.OrderID] = p.ID
 			}
 		}
@@ -249,50 +279,12 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 		log.Printf("[reconcile] %s", msg)
 	}
 
+	// D-385 S1：CEX 聚合对拍（venue+symbol+side 粒度，loop2 之后）。
+	mismatches += r.reconcileCEXAggregate(ctx, cexLocal, cexVenue, cexLocalPos)
+
 	if mismatches == 0 {
-		log.Printf("[reconcile] OK: %d local legs, %d venue orders, all matched", len(localLegs), len(venueOrders))
+		log.Printf("[reconcile] OK: %d local legs, %d venue orders, %d CEX 聚合键 all matched", len(localLegs), len(venueOrders), len(cexLocal))
 	}
 
 	return mismatches, nil
-}
-
-// closingStuckTimeout D-159 W2a R3-6：CLOSING 超 30min 未完成=卡住（平仓 I/O 失败或残量未归零）。
-const closingStuckTimeout = 30 * time.Minute
-
-// isClosingStuck D-159 W2a R3-6 / D-189 P0-4：判断 CLOSING 持仓是否卡住（超时未完成）。
-// D-189 P0-4：改用 ClosingStartedAt（进入 CLOSING 的真实起始时间），不再用 opened_at（开仓时间）。
-// 无 ClosingStartedAt = 异常（直接判卡住，fail-closed）；迁移已为存量 CLOSING 行补当前时间。
-
-// closingStuckAlert D-245：CLOSING 看护告警分层——卡死 <2h 维持 critical 每循环；
-// ≥2h 降为 warn 且每小时至多 1 条（closingAlertHour 小时桶，进程重启最多重复 1 条）。
-// ResumeClose 重试节奏不受影响（降的是告警不是重试）。
-func (r *Reconciler) closingStuckAlert(ctx context.Context, p *pgstore.Position, stuckFor time.Duration, msg string) {
-	if p.ClosingStartedAt == nil || stuckFor < closingTierWarnAfter {
-		r.insertAlertCtx(ctx, "critical", msg)
-		return
-	}
-	hour := r.now().Unix() / 3600
-	r.mu.RLock()
-	last, ok := r.closingAlertHour[p.ID]
-	r.mu.RUnlock()
-	if ok && last == hour {
-		return
-	}
-	r.mu.Lock()
-	r.closingAlertHour[p.ID] = hour
-	r.mu.Unlock()
-	r.insertAlertCtx(ctx, "warn", msg)
-}
-
-// closingTierWarnAfter D-245：warn 分层门槛（卡死 ≥2h 降频）。
-const closingTierWarnAfter = 2 * time.Hour
-
-func isClosingStuck(pos *pgstore.Position, now time.Time) bool {
-	if pos.Status != "CLOSING" {
-		return false
-	}
-	if pos.ClosingStartedAt == nil {
-		return true // 无 closing_started_at=异常（fail-closed）
-	}
-	return now.Sub(*pos.ClosingStartedAt) > closingStuckTimeout
 }

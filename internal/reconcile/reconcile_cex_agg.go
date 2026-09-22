@@ -1,0 +1,82 @@
+// reconcile_cex_agg.go —— D-385 S1：CEX 聚合持仓对拍。
+// CEX perp 仓位是账户级聚合仓位（Ticket=instId，无 comment 概念）——逐单 key 匹配在 CEX
+// 结构性不存在，唯一正确粒度=venueKey+symbol+side 聚合量比对。
+// 已知边界：同 symbol 两个仓同向腿的聚合量天然混算——per-position 归因不可能也不必，
+// 告警粒度=键+贡献腿 position_id 集合（供人工定位）。OPENING 态仓不遍历腿（现状），
+// 其 FILLED 腿存在窗口期聚合差，5min 周期内自然收敛。
+package reconcile
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"math"
+	"sort"
+	"strings"
+)
+
+// cexAggKey 聚合键单点收口（R0-B2）：position_legs.venue 与 querier VenueKey 同形
+// （"okx:perp"）靠约定不靠类型——改 venue 口径时两侧必须同步，否则聚合对拍静默全失配。
+func cexAggKey(venue, symbol, side string) string {
+	return venue + ":" + symbol + ":" + side
+}
+
+// cexAggTol 聚合量容差：0.5% 相对容差盖 lotSz/张数取整尘（不藏真分叉）；
+// 1e-8 绝对下限=零值语义（0v0 与「0 vs 尘埃」判匹配）。同 key 同单位，永不跨量纲对拍（R0-B1 驳回留据）。
+func cexAggTol(venue, local float64) float64 {
+	return math.Max(1e-8, 0.005*math.Max(venue, local))
+}
+
+// appendPosID 去重追加贡献腿 position_id（告警归因列表，小集合线性查重）。
+func appendPosID(ids []int64, id int64) []int64 {
+	for _, x := range ids {
+		if x == id {
+			return ids
+		}
+	}
+	return append(ids, id)
+}
+
+// reconcileCEXAggregate 对拍 cexLocal（本地 CEX 腿聚合）vs cexVenue（venue 持仓聚合），
+// 返回不一致数。三态：venue-only=系统外单不追踪（维持原语义，外部/手工单不归本系统管）；
+// 差值≤tol=匹配静默；local>0 且超 tol（含 venue=0）=critical 告警含贡献腿 posIDs。
+func (r *Reconciler) reconcileCEXAggregate(ctx context.Context, cexLocal, cexVenue map[string]float64, cexLocalPos map[string][]int64) int {
+	keys := make(map[string]bool, len(cexLocal)+len(cexVenue))
+	for k := range cexLocal {
+		keys[k] = true
+	}
+	for k := range cexVenue {
+		keys[k] = true
+	}
+	sorted := make([]string, 0, len(keys))
+	for k := range keys {
+		sorted = append(sorted, k)
+	}
+	sort.Strings(sorted)
+
+	mismatches := 0
+	for _, k := range sorted {
+		// key=venueKey:symbol:side（venueKey 本身含 ":" 如 okx:perp）——按首尾":"切三段。
+		venue, symbol, side := k, "", ""
+		if i := strings.Index(k, ":"); i >= 0 {
+			if j := strings.LastIndex(k, ":"); j > i {
+				venue, symbol, side = k[:i], k[i+1:j], k[j+1:]
+			}
+		}
+		local, venueQty := cexLocal[k], cexVenue[k]
+		switch {
+		case local == 0 && venueQty > 0:
+			log.Printf("[reconcile] venue %s 持仓 %s %s vol=%f 为系统外单（CEX 无 comment 源判别），不追踪",
+				venue, symbol, side, venueQty)
+		case local > 0 && math.Abs(venueQty-local) <= cexAggTol(venueQty, local):
+			// 匹配，静默
+		default:
+			mismatches++
+			msg := fmt.Sprintf("CEX 聚合持仓对拍不一致 venue=%s symbol=%s side=%s venue=%f local=%f posIDs=%v（人工定位）",
+				venue, symbol, side, venueQty, local, cexLocalPos[k])
+			r.insertAlertCtx(ctx, "critical", msg)
+			log.Printf("[reconcile] %s", msg)
+		}
+	}
+	return mismatches
+}
