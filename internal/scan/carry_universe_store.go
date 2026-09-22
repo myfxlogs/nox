@@ -26,6 +26,11 @@ func (p *PGStore) ListCexUniverse(ctx context.Context) (map[string]pgstore.CexUn
 	return p.S.ListCexUniverse(ctx)
 }
 
+// ListBrokerAccountStatuses D-388 S1.3：venue→status（broker 托管 venue 非 connected 退配对）。
+func (p *PGStore) ListBrokerAccountStatuses(ctx context.Context) (map[string]string, error) {
+	return p.S.ListBrokerAccountStatuses(ctx)
+}
+
 func (p *PGStore) ReplaceCarryUniverse(ctx context.Context, rows []pgstore.CarryUniverseRow) error {
 	return p.S.ReplaceCarryUniverse(ctx, rows)
 }

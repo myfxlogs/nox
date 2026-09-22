@@ -9,7 +9,10 @@ import (
 
 // SetBrokerAccountIsReal 更新账号实盘标记。isReal=nil → 清除回未知(NULL)。
 func (s *Store) SetBrokerAccountIsReal(ctx context.Context, venue string, isReal *bool) error {
-	_, err := s.pool.Exec(ctx, `UPDATE broker_accounts SET is_real = $1 WHERE venue = $2`, isReal, venue)
+	tag, err := s.pool.Exec(ctx, `UPDATE broker_accounts SET is_real = $1 WHERE venue = $2`, isReal, venue)
+	if err == nil && tag.RowsAffected() == 0 {
+		err = fmt.Errorf("%w: %s", ErrBrokerAccountNotFound, venue)
+	}
 	return err
 }
 

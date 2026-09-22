@@ -3,8 +3,22 @@ package pgstore
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 )
+
+// ErrBrokerAccountNotFound venue 不存在于 broker_accounts（D-388 S0.2：UPDATE 0 行命中
+// 不再静默返回 nil——静默无操作让前端停用点击以 2xx 假成功收尾）。errors.Is 判定。
+var ErrBrokerAccountNotFound = errors.New("broker account venue not found")
+
+// BrokerVenueDiscoverable D-388 S1：发现层配对 venue 过滤谓词（autotrade/scan 共用收口，
+// 禁复制逻辑）——venue ∈ statuses 且 ≠"connected" → false（停用/失败 broker 立即退出配对，
+// 不等 facts 自然过期）；venue ∉ statuses（CEX/adapter 自管 venue 不在 broker_accounts）→ true 放行。
+func BrokerVenueDiscoverable(statuses map[string]string, venue string) bool {
+	st, ok := statuses[venue]
+	return !ok || st == "connected"
+}
 
 // BrokerAccount broker_accounts 行。
 // Venue 为登录账号号（D-033 短化，原 {server}-{user} 复合格式已废弃）。
@@ -74,8 +88,11 @@ func (s *Store) GetBrokerAccount(ctx context.Context, venue string) (*BrokerAcco
 
 // SetBrokerCommission 更新账号真实佣金（bps/腿，D-036）；nil 清除回退默认。
 func (s *Store) SetBrokerCommission(ctx context.Context, venue string, bps *float64) error {
-	_, err := s.pool.Exec(ctx,
+	tag, err := s.pool.Exec(ctx,
 		`UPDATE broker_accounts SET commission_bps = $1 WHERE venue = $2`, bps, venue)
+	if err == nil && tag.RowsAffected() == 0 {
+		err = fmt.Errorf("%w: %s", ErrBrokerAccountNotFound, venue)
+	}
 	return err
 }
 
@@ -87,13 +104,19 @@ func (s *Store) DeleteBrokerAccount(ctx context.Context, venue string) error {
 
 // SetBrokerAccountAlias 设置别名；空串 = 清除。
 func (s *Store) SetBrokerAccountAlias(ctx context.Context, venue, alias string) error {
-	_, err := s.pool.Exec(ctx, `UPDATE broker_accounts SET alias = $1 WHERE venue = $2`, alias, venue)
+	tag, err := s.pool.Exec(ctx, `UPDATE broker_accounts SET alias = $1 WHERE venue = $2`, alias, venue)
+	if err == nil && tag.RowsAffected() == 0 {
+		err = fmt.Errorf("%w: %s", ErrBrokerAccountNotFound, venue)
+	}
 	return err
 }
 
 // SetBrokerWebsite 设置 broker 官网；空串 = 清除（D-157 V3.1）。
 func (s *Store) SetBrokerWebsite(ctx context.Context, venue, website string) error {
-	_, err := s.pool.Exec(ctx, `UPDATE broker_accounts SET website = $1 WHERE venue = $2`, website, venue)
+	tag, err := s.pool.Exec(ctx, `UPDATE broker_accounts SET website = $1 WHERE venue = $2`, website, venue)
+	if err == nil && tag.RowsAffected() == 0 {
+		err = fmt.Errorf("%w: %s", ErrBrokerAccountNotFound, venue)
+	}
 	return err
 }
 
@@ -117,7 +140,10 @@ func (s *Store) ListAccountAliases(ctx context.Context) (map[string]string, erro
 
 // SetBrokerAccountStatus 更新连接状态。
 func (s *Store) SetBrokerAccountStatus(ctx context.Context, venue, status string) error {
-	_, err := s.pool.Exec(ctx, `UPDATE broker_accounts SET status = $1 WHERE venue = $2`, status, venue)
+	tag, err := s.pool.Exec(ctx, `UPDATE broker_accounts SET status = $1 WHERE venue = $2`, status, venue)
+	if err == nil && tag.RowsAffected() == 0 {
+		err = fmt.Errorf("%w: %s", ErrBrokerAccountNotFound, venue)
+	}
 	return err
 }
 

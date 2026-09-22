@@ -21,6 +21,8 @@ type Store interface {
 	LatestFacts(ctx context.Context, kind, venue, symbol string) ([]fact.Fact, error)
 	ListSymbolMappings(ctx context.Context, venue string) ([]pgstore.SymbolMapping, error)
 	ReplaceCarryUniverse(ctx context.Context, rows []pgstore.CarryUniverseRow) error
+	// ListBrokerAccountStatuses D-388 S1.3：发现层 venue status 过滤（同 autotrade 收口谓词）。
+	ListBrokerAccountStatuses(ctx context.Context) (map[string]string, error)
 	// ListCexUniverse D-350：CEX 宇宙雷达表（spot_carry 第三结构数据源；first_seen 持续性闸锚）。
 	ListCexUniverse(ctx context.Context) (map[string]pgstore.CexUniverseRow, error)
 }
@@ -118,6 +120,12 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 	if err != nil {
 		return res, fmt.Errorf("funding facts: %w", err)
 	}
+	// D-388 S1.3：broker 托管 venue 非 connected → facts 退出候选（停用即剔除，
+	// 不等 facts 过期；同 autotrade discoverSwapCombos 收口谓词，fail-open 同惯例）。
+	brokerStatuses := sc.activeVenueStatuses(ctx)
+	mtSwapLong = keepDiscoverableFacts(mtSwapLong, brokerStatuses)
+	mtSwapShort = keepDiscoverableFacts(mtSwapShort, brokerStatuses)
+	cexFunding = keepDiscoverableFacts(cexFunding, brokerStatuses)
 	// D-382 S1：trade_mode 消费——可执行性过滤数据源（facts 已在库零新数据源）。
 	// 读取失败 fail-open 视同全未知（发现层不因数据缺席误杀，F5 同惯例）。
 	tmFacts, err := sc.store.LatestFacts(ctx, fact.KindTradeMode, "", "")

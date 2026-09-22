@@ -17,6 +17,7 @@ type fakeScanStore struct {
 	replaced []pgstore.CarryUniverseRow
 	alerts   []string
 	universe map[string]pgstore.CexUniverseRow
+	statuses map[string]string // D-388：venue→status（nil=fail-open 全放行）
 }
 
 func (f *fakeScanStore) LatestFacts(_ context.Context, kind, _, _ string) ([]fact.Fact, error) {
@@ -44,6 +45,10 @@ func (f *fakeScanStore) ReplaceCarryUniverse(_ context.Context, rows []pgstore.C
 
 func (f *fakeScanStore) ListCexUniverse(_ context.Context) (map[string]pgstore.CexUniverseRow, error) {
 	return f.universe, nil
+}
+
+func (f *fakeScanStore) ListBrokerAccountStatuses(_ context.Context) (map[string]string, error) {
+	return f.statuses, nil
 }
 
 // TestD336_ScanJoinAndRank T1/T2：BTC（swap 0/0 swap_free）+负 carry canonical——
@@ -232,5 +237,37 @@ func TestD345_SuspectGate(t *testing.T) {
 	btc := res.Rows[0]
 	if btc.Note != "" || btc.NetAnnual < 6.6 || !btc.SwapFree {
 		t.Errorf("BTC 健康行被门误伤: %+v", btc)
+	}
+}
+
+// TestD388_StoppedVenueExcluded S1.3：broker 托管 venue status=stopped → 其 swap facts
+// 退出宇宙配对（funding 单侧无对 → 零行）；同 venue connected 时三行全出（对照组）。
+func TestD388_StoppedVenueExcluded(t *testing.T) {
+	mk := func(statuses map[string]string) *fakeScanStore {
+		return &fakeScanStore{
+			facts: []fact.Fact{
+				{Kind: "funding", Venue: "binance", Symbol: "BTCUSDT", Value: 6.65, Ts: time.Now()},
+				{Kind: "swap_long", Venue: "277842155", Symbol: "BTCUSD", Value: 0, Ts: time.Now()},
+				{Kind: "swap_short", Venue: "277842155", Symbol: "BTCUSD", Value: 0, Ts: time.Now()},
+			},
+			mappings: []pgstore.SymbolMapping{
+				{Venue: "277842155", BrokerSymbol: "BTCUSD", Canonical: "BTC"},
+			},
+			statuses: statuses,
+		}
+	}
+	res, err := NewCarryUniverseScanner(mk(map[string]string{"277842155": "stopped"})).Run(context.Background(), time.Now().Add(-24*time.Hour))
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(res.Rows) != 0 {
+		t.Fatalf("stopped venue 应零候选, got %d rows: %+v", len(res.Rows), res.Rows)
+	}
+	res2, err := NewCarryUniverseScanner(mk(map[string]string{"277842155": "connected"})).Run(context.Background(), time.Now().Add(-24*time.Hour))
+	if err != nil {
+		t.Fatalf("run2: %v", err)
+	}
+	if len(res2.Rows) == 0 {
+		t.Error("connected 对照组应有候选（binance 不在 broker_accounts 放行）")
 	}
 }
