@@ -59,13 +59,14 @@ func (m *BrokerManager) startMT4(ctx context.Context, a *pgstore.BrokerAccount) 
 		}
 		return out, nil
 	}
-	symMap, symbols, err := m.symbolPlan(ctx, a.Venue, fetchSymbolGroups)
+	symMap, symbols, blocked, err := m.symbolPlan(ctx, a.Venue, fetchSymbolGroups)
 	if err != nil || len(symMap) == 0 {
 		log.Printf("[broker] %s symbol plan: %v", a.Venue, err)
 		symMap, symbols = identityMap(defaultSymbols)
+		blocked = nil
 	}
-	ad.SetSymbolMap(symMap)
-
+	ad.SetSymbolMap(symMap)             // 全量（含 blocked 行）——native/variant fact 仍需（D-383 A2.3）
+	ad.SetCanonicalEmitBlocked(blocked) // D-383 A2.3：canonical 标签发射抑制集
 	ch, cancel := ad.Subscribe(symbols)
 	safego.Go("broker_manager_adapters:mt4-quote-pump", func() {
 		for q := range ch {
@@ -81,6 +82,7 @@ func (m *BrokerManager) startMT4(ctx context.Context, a *pgstore.BrokerAccount) 
 		symbols:          fetchSymbols,
 		symbolGroups:     fetchSymbolGroups,
 		setSymMap:        ad.SetSymbolMap,
+		setEmitBlocked:   ad.SetCanonicalEmitBlocked,
 		resubscribe:      ad.Resubscribe,
 		swap:             func(ctx context.Context) ([]fact.Fact, error) { return ad.SwapFacts(ctx, m.qbus) },
 		orderHistoryScan: mt4OrderHistoryScan(ad.MT4Client(), ad.Token()), // D-181 S1
@@ -204,12 +206,14 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 		cs := sp.GetSymbolInfo().GetContractSize()
 		return cs, cs > 0, nil
 	}
-	symMap, symbols, err := m.symbolPlan(ctx, a.Venue, fetchSymbolGroups)
+	symMap, symbols, blocked, err := m.symbolPlan(ctx, a.Venue, fetchSymbolGroups)
 	if err != nil || len(symMap) == 0 {
 		log.Printf("[broker] %s symbol plan: %v", a.Venue, err)
 		symMap, symbols = identityMap(defaultSymbols)
+		blocked = nil
 	}
-	ad.SetSymbolMap(symMap)
+	ad.SetSymbolMap(symMap)             // 全量（含 blocked 行）——native/variant fact 仍需（D-383 A2.3）
+	ad.SetCanonicalEmitBlocked(blocked) // D-383 A2.3：canonical 标签发射抑制集
 	// 历史映射（D-042 前）无合约 → 启动时回填，恢复规格画像（零信任校验基线）。
 	if gs, gerr := fetchSymbolGroups(ctx); gerr == nil {
 		m.backfillContracts(ctx, a.Venue, gs)
@@ -233,6 +237,7 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 		volumeSpec:       fetchMinLots,
 		volumeStep:       fetchVolumeStep,
 		setSymMap:        ad.SetSymbolMap,
+		setEmitBlocked:   ad.SetCanonicalEmitBlocked,
 		resubscribe:      ad.Resubscribe,
 		swap:             func(ctx context.Context) ([]fact.Fact, error) { return ad.SwapFacts(ctx, m.qbus) },
 		meta:             func(ctx context.Context) ([]fact.Fact, error) { return ad.MetaFacts(ctx) },

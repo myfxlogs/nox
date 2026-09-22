@@ -8,6 +8,7 @@ import (
 )
 
 // ReloadSymbolMap 重读 venue 映射并推送到运行中适配器（保存/删除映射后运行时生效）。
+// D-383 A2.2/A2.3：同步刷新 canonical 发射抑制集 + 歧义组告警（(venue,canonical) 键冷却）。
 func (m *BrokerManager) ReloadSymbolMap(ctx context.Context, venue string) {
 	m.mu.Lock()
 	r := m.running[venue]
@@ -20,11 +21,16 @@ func (m *BrokerManager) ReloadSymbolMap(ctx context.Context, venue string) {
 		log.Printf("[broker] %s list mappings: %v", venue, err)
 		return
 	}
+	_, blocked, dead := primarySplit(mappings)
+	m.alertAmbiguousGroups(dead)
 	sm := make(map[string]string, len(mappings))
 	for _, mp := range mappings {
 		sm[mp.BrokerSymbol] = mp.Canonical
 	}
 	r.setSymMap(sm)
+	if r.setEmitBlocked != nil {
+		r.setEmitBlocked(blocked)
+	}
 	log.Printf("[broker] %s symbol map refreshed (%d)", venue, len(sm))
 	m.kickSwap() // 映射增删后立即补一轮 swap（D-060 F2，新符号缺价自然走冷启动退避自愈）
 }
@@ -54,6 +60,7 @@ func (m *BrokerManager) BrokerSymbols(ctx context.Context, venue string) ([]Symb
 
 // Resubscribe 运行时补订阅该 venue 的新符号（保存映射后调用）。
 // D-047 缺陷③：映射了不重订阅 = 没报价流；mtapi 会话订阅幂等，已开报价流自动接上新符号。
+// D-383 A6：入参过同规则滤——非合格行（多行组非 primary）不进订阅；映射查询失败 fail-closed 不订。
 func (m *BrokerManager) Resubscribe(venue string, symbols []string) {
 	m.mu.Lock()
 	r := m.running[venue]
@@ -61,7 +68,28 @@ func (m *BrokerManager) Resubscribe(venue string, symbols []string) {
 	if r == nil || r.resubscribe == nil || len(symbols) == 0 {
 		return
 	}
-	r.resubscribe(symbols)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mappings, err := m.store.ListSymbolMappings(ctx, venue)
+	if err != nil {
+		log.Printf("[broker] %s resubscribe: list mappings: %v（fail-closed 不订）", venue, err)
+		return
+	}
+	ok, _, _ := primarySplit(mappings)
+	eligible := make(map[string]bool, len(ok))
+	for _, mp := range ok {
+		eligible[mp.BrokerSymbol] = true
+	}
+	filtered := make([]string, 0, len(symbols))
+	for _, s := range symbols {
+		if eligible[s] {
+			filtered = append(filtered, s)
+		}
+	}
+	if len(filtered) == 0 {
+		return
+	}
+	r.resubscribe(filtered)
 }
 
 // AllSymbolGroups 返回全部 connected 账号的 symbolGroups（D-045 §3.2 装配用）。

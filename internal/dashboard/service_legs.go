@@ -60,6 +60,27 @@ func (s *Service) resolveLegs(found *pgstore.Opportunity, qty float64) ([]exec.L
 	if !okBuy || !okSell {
 		return nil, errors.New("buy/sell leg quote unavailable")
 	}
+	// D-383 A2.4：执行解析 primary-only——MT 腿报价槽 VenueSymbol 须为 (venue,canonical)
+	// 合格行（primary/隐式 primary）；多行组零 primary → 歧义态 fail-closed 拒单（宁拒单
+	// 不可再撞车，497 LEGGED 实证）；报价槽符号 ≠ 合格行 → 陈旧/变体报价拒绝。
+	// nil = 未接线（测试/CEX-only 部署）跳过校验。
+	if s.primarySymbol != nil {
+		for _, leg := range []struct{ venueKey, canonical, sym string }{
+			{found.VenueBuy, found.Canonical, qbuy.VenueSymbol},
+			{found.VenueSell, sellCanonical, qsell.VenueSymbol},
+		} {
+			if !strings.HasSuffix(leg.venueKey, ":mt5") && !strings.HasSuffix(leg.venueKey, ":mt4") {
+				continue // CEX 腿无 broker_symbol_map 语义
+			}
+			primary, err := s.primarySymbol(leg.venueKey, leg.canonical)
+			if err != nil {
+				return nil, fmt.Errorf("resolve %s %s: %w", leg.venueKey, leg.canonical, err)
+			}
+			if primary != leg.sym {
+				return nil, fmt.Errorf("quote venue symbol %s != primary %s for %s %s (reject: stale/variant quote)", leg.sym, primary, leg.venueKey, leg.canonical)
+			}
+		}
+	}
 	csBuy, err := s.legContractSizeOf(found.VenueBuy, qbuy.VenueSymbol)
 	if err != nil {
 		return nil, err

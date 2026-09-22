@@ -73,6 +73,9 @@ type Service struct {
 	// legContractSize MT 腿合约规格查询（D-060 实施修正② 卖腿等名义反算）：venueKey+venueSymbol → CS。
 	// nil = 未接线 → resolveLegs 报错（fail-safe）。main 接 broker_symbol_map.contract_size。
 	legContractSize func(venueKey, venueSymbol string) (float64, bool)
+	// primarySymbol D-383 A2.4：执行解析 primary-only 闸（venueKey+canonical → 合格 broker_symbol）。
+	// 多行组零 primary → 含 "symbol resolution ambiguous" 的错误（fail-closed 拒单）。
+	primarySymbol func(venueKey, canonical string) (string, error)
 	// cexContractSize CEX perp 腿合约面值查询（D-311 S3）：bare venue+venueSymbol → ct_val。
 	// nil = 未接线 → legContractSizeOf 对 :perp 腿报错（fail-closed，不猜 1.0）。
 	// main 接 fin_cex_universe.ct_val（gate=quanto_multiplier/okx=ctVal/binance=1.0）。

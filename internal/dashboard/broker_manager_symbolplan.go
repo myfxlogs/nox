@@ -9,19 +9,57 @@ import (
 	"arb/internal/store/pgstore"
 )
 
+// primarySplit D-383 A2.2/A2.3：按「is_primary 或 (venue,canonical) 组内恰一行（隐式 primary）」
+// 切分映射行。canonical==” 行不属撞车空间（migration 0122 索引同域排除）恒合格。
+// 返回：合格行集（可订阅/canonical 供数）、canonical 发射须抑制的 broker_symbol 集
+// （多行组非 primary 行——native/variant fact 照常，仅 canonical 标签停发）、
+// 歧义组键（venue|canonical，多行零 primary——canonical 事实源 fail-dead，须 alerts 表告警）。
+func primarySplit(mappings []pgstore.SymbolMapping) (ok []pgstore.SymbolMapping, blockedSyms map[string]bool, deadGroups map[string]bool) {
+	count := make(map[string]int)
+	primarySeen := make(map[string]bool)
+	for _, m := range mappings {
+		if m.Canonical == "" {
+			continue
+		}
+		key := m.Venue + "|" + m.Canonical
+		count[key]++
+		if m.IsPrimary {
+			primarySeen[key] = true
+		}
+	}
+	blockedSyms = make(map[string]bool)
+	deadGroups = make(map[string]bool)
+	for _, m := range mappings {
+		key := m.Venue + "|" + m.Canonical
+		if m.Canonical == "" || m.IsPrimary || count[key] == 1 {
+			ok = append(ok, m)
+			continue
+		}
+		blockedSyms[m.BrokerSymbol] = true
+		if !primarySeen[key] {
+			deadGroups[key] = true
+		}
+	}
+	return ok, blockedSyms, deadGroups
+}
+
 // symbolPlan 决定订阅符号与映射（D-042 用户策展模型，canonical 数量用户自定）：
 //  1. DB 已有该 venue 人工映射 → 校验 brokerSymbol 存在于服务器，失效项删除，返回。
 //  2. 无映射 → 自动映射：既有 canonical（跨全部 venue 已映射）∪ 默认种子，名字+合约匹配者
 //     落库并订阅（默认种子 = 首 broker 开箱 bootstrap；合约未知任一侧不阻塞）。
 //  3. 全部不中 → identityMap 保底（原样订阅默认符号，个别不存在由订阅容错）。
-func (m *BrokerManager) symbolPlan(ctx context.Context, venue string, fetchGroups func(context.Context) ([]SymbolGroup, error)) (map[string]string, []string, error) {
+//
+// D-383 A2.2：返回 (全量 sm 供适配器 native/variant fact、合格行订阅集、canonical 发射抑制集)。
+// 合格行=is_primary 或组内恰一行（隐式 primary）；多行零 primary 组不订阅并 alerts 表告警
+// （A2.3，fail-dead 宁死勿错配）；primary 禁止默默猜（SSOT A2.6，Upsert 恒默认 false）。
+func (m *BrokerManager) symbolPlan(ctx context.Context, venue string, fetchGroups func(context.Context) ([]SymbolGroup, error)) (map[string]string, []string, map[string]bool, error) {
 	groups, err := fetchGroups(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	mappings, err := m.store.ListSymbolMappings(ctx, venue)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if len(mappings) > 0 {
 		// 校验映射有效性：brokerSymbol 必须存在于服务器符号表，否则失效（如旧版 identity 默认表
@@ -30,33 +68,37 @@ func (m *BrokerManager) symbolPlan(ctx context.Context, venue string, fetchGroup
 		for _, g := range groups {
 			set[g.Symbol] = true
 		}
-		sm := make(map[string]string)
-		keys := make([]string, 0, len(mappings))
+		valid := make([]pgstore.SymbolMapping, 0, len(mappings))
 		for _, mp := range mappings {
 			if !set[mp.BrokerSymbol] {
 				_ = m.store.DeleteSymbolMapping(ctx, mp.Venue, mp.BrokerSymbol)
 				continue
 			}
+			valid = append(valid, mp)
+		}
+		ok, blocked, dead := primarySplit(valid)
+		m.alertAmbiguousGroups(dead)
+		sm := make(map[string]string, len(valid)) // 全量（含 blocked 行）——适配器 native/variant fact 仍需
+		keys := make([]string, 0, len(ok))        // 订阅集=合格行（A6：非 primary 不进订阅，报价槽恒 primary）
+		for _, mp := range valid {
 			sm[mp.BrokerSymbol] = mp.Canonical
+		}
+		for _, mp := range ok {
 			keys = append(keys, mp.BrokerSymbol)
 		}
 		if len(sm) > 0 {
-			return sm, keys, nil
+			return sm, keys, blocked, nil
 		}
 	}
 	all, err := m.store.ListSymbolMappings(ctx, "")
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	idx := buildCanonicalIdx(all, defaultSymbols)
-	sm := make(map[string]string)
-	var syms []string
 	for _, sug := range classifySymbols(groups, idx) {
 		if sug.Status != StatusAuto {
 			continue
 		}
-		sm[sug.BrokerSymbol] = sug.Canonical
-		syms = append(syms, sug.BrokerSymbol)
 		var cs *float64
 		if sug.ContractSize > 0 {
 			v := sug.ContractSize
@@ -66,11 +108,27 @@ func (m *BrokerManager) symbolPlan(ctx context.Context, venue string, fetchGroup
 			Venue: venue, BrokerSymbol: sug.BrokerSymbol, Canonical: sug.Canonical, ContractSize: cs,
 		})
 	}
+	// D-383 A2.2/A8：自动映射行 is_primary 恒 false（Upsert 不默默猜）——重读落库态再切分：
+	// 单行组=隐式 primary 可订阅；多行零 primary 组（同 canonical 匹配多符号）不订阅+告警待种子。
+	fresh, err := m.store.ListSymbolMappings(ctx, venue)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	ok, blocked, dead := primarySplit(fresh)
+	m.alertAmbiguousGroups(dead)
+	sm := make(map[string]string, len(fresh))
+	syms := make([]string, 0, len(ok))
+	for _, mp := range fresh {
+		sm[mp.BrokerSymbol] = mp.Canonical
+	}
+	for _, mp := range ok {
+		syms = append(syms, mp.BrokerSymbol)
+	}
 	if len(sm) > 0 {
-		return sm, syms, nil
+		return sm, syms, blocked, nil
 	}
 	sm, syms = identityMap(defaultSymbols)
-	return sm, syms, nil
+	return sm, syms, nil, nil
 }
 
 // mappingStatus 建议映射分类（D-042 自动映射 + 建议共用判据）。

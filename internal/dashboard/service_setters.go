@@ -28,6 +28,11 @@ func (s *Service) SetLegContractSize(f func(venueKey, venueSymbol string) (float
 	s.legContractSize = f
 }
 
+// SetPrimarySymbol D-383 A2.4：注入执行解析 primary-only 闸。nil = 未接线（resolveLegs 跳过校验）。
+func (s *Service) SetPrimarySymbol(f func(venueKey, canonical string) (string, error)) {
+	s.primarySymbol = f
+}
+
 // SetCexContractSize 注入 CEX perp 腿合约面值查询（D-311 S3，venue=bare+venueSymbol → ct_val）。
 // nil = 未接线（legContractSizeOf 对 :perp 腿 fail-closed 报错）。
 func (s *Service) SetCexContractSize(f func(venue, venueSymbol string) (float64, bool)) {

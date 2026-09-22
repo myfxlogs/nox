@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"arb/internal/alertcool"
 	"arb/internal/bus"
 	"arb/internal/exec"
 	"arb/internal/fact"
@@ -40,6 +41,7 @@ type running struct {
 	// 保存映射的合约校验数据只信 broker 自取，不信前端传值（D-042）。
 	symbolParams     func(ctx context.Context, symbol string) (float64, bool, error)
 	setSymMap        func(map[string]string)                        // 运行时刷新 brokerSymbol → canonical
+	setEmitBlocked   func(map[string]bool)                          // D-383 A2.3：运行时刷新 canonical 发射抑制集
 	resubscribe      func([]string)                                 // 运行时补订阅新符号（保存映射后生效，D-047 缺陷③）
 	swap             func(ctx context.Context) ([]fact.Fact, error) // 轮询 swap facts（§3.6，D-036）
 	meta             func(ctx context.Context) ([]fact.Fact, error) // D-140 S2：MT5 符号元数据 facts（CS 采集）
@@ -108,22 +110,14 @@ type BrokerManager struct {
 	// main 注入 func(level, msg string) { _ = st.InsertAlert(ctx, nil, level, msg) }，nil 安全。
 	AlertSink func(level, msg string)
 
+	// primaryAlertCool D-383 A2.3：歧义组告警 (venue,canonical) 键 30min 冷却
+	//（独立冷却器，不扰动共享 AlertSink 语义）。
+	primaryAlertCool *alertcool.Cooler
+
 	// RuleBackfill D-142 ②：AddBroker 后异步触发规则库补录（免重启）。
 	// symbolPlan 自动映射（名字匹配）在 startAdapter 内已完成；BackfillRuleMappings 补 regex 规则命中
 	// 但名字不匹配的符号（source='rule'）。wiring/main 注入（同 SwapKick 模式），nil=未接线（测试直接构造）。
 	RuleBackfill func(ctx context.Context, venue string)
-}
-
-// NewBrokerManager 创建管理器。symbolsTTL 由调用方从 config.SymbolsTTL 注入。
-func NewBrokerManager(store *pgstore.Store, qbus *bus.QuoteBus, reg *exec.Registry, symbolsTTL time.Duration) *BrokerManager {
-	return &BrokerManager{
-		store:           store,
-		qbus:            qbus,
-		reg:             reg,
-		running:         make(map[string]*running),
-		commission:      make(map[string]float64),
-		symbolGroupsTTL: symbolsTTL,
-	}
 }
 
 // SetQuerierHook 注册 querier 集合变更回调（main 接 reconciler.SetQueriers）。
