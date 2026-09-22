@@ -71,14 +71,22 @@ func (m *Monitor) loadPositions(ctx context.Context) error {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for i := range positions {
-		p := &positions[i]
-		if p.Status == "OPEN" || p.Status == "LEGGED" {
-			m.positions[p.ID] = p
-		}
-	}
+	mergeLoaded(m.positions, positions)
 	log.Printf("[position-monitor] loaded %d open/legged positions", len(m.positions))
 	return nil
+}
+
+// mergeLoaded 刷新持仓缓存：OPEN/LEGGED 收录，其余状态驱逐——旧实现只增不删，
+// CLOSED 持仓残留为陈旧 LEGGED 导致 critical 告警按冷却节拍无限复读（497 实证）。
+func mergeLoaded(positions map[int64]*pgstore.Position, loaded []pgstore.Position) {
+	for i := range loaded {
+		p := &loaded[i]
+		if p.Status == "OPEN" || p.Status == "LEGGED" {
+			positions[p.ID] = p
+		} else {
+			delete(positions, p.ID)
+		}
+	}
 }
 
 func (m *Monitor) refreshLoop(ctx context.Context) {
