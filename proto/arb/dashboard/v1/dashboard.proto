@@ -2096,10 +2096,27 @@ message PaperSpotCarryRow {
   optional double total_pnl_usd = 19;    // 净浮盈=accrued+basis_pnl−qty×0.003（basis 缺→null）
   double ret_pct = 20;                   // 累计收益率%=accrued/qty×100
   optional double realized_ann_pct = 21; // 实收年化%=accrued/qty×365/days×100（days=0→null）
+  // D-393：DB 列透出（scanPaperSpotCarry 空串→spot_carry 归一，服务层直接信任）。
+  string structure = 22;                 // spot_carry / perp_perp / long_cfd_short_perp / short_cfd_long_perp
+  optional string mt_venue = 23;         // cfd 行 MT 腿 venue；spot/perp_perp 恒 NULL（前端「—」）
+}
+
+// D-393：轨级汇总（行源=卡片同批 papers，exited=同 14d 窗口行；零新查询）。
+message PaperTrackSummary {
+  string structure = 1;              // spot_carry/perp_perp/long_cfd_short_perp/short_cfd_long_perp
+  int32 active_n = 2;
+  int32 demo_n = 3;
+  double accrued_holding_usd = 4;    // 在轨+demo 应计合计（持仓中已收割的息差）
+  int32 exited_n = 5;                // 窗口内退出数
+  double exited_accrued_sum_usd = 6; // 退出行终态应计合计（轨道历史收割总量）
+  double win_rate_pct = 7;           // 退出胜率%：win=(total_pnl_usd ?? accrued_usd)>0，无退出→0
+  double avg_exit_days = 8;          // 退出行均存活天数（exit_ts−entry_ts）；无退出→0
+  double notional_holding_usd = 9;   // 在轨+demo 名义合计
 }
 
 message ListPaperSpotCarryResponse {
   repeated PaperSpotCarryRow rows = 1;   // active（net_now desc，null 殿后）→ demo → exited（exit_ts desc）
+  repeated PaperTrackSummary tracks = 2; // D-393：轨级汇总（固定序四轨，未知 structure 尾追加）
 }
 
 // === D-359：资金不眠覆盖率（口径 SSOT=D-356 §1.1；has_* 布尔对替代 0/nil 歧义）===
