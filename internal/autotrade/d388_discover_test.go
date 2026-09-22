@@ -58,6 +58,9 @@ func TestD388_DiscoverSwapCombos_VenueStatusFilter(t *testing.T) {
 		{"short stopped", "connected", "stopped", 0},
 		{"long failed", "failed", "connected", 0},
 		{"both stopped", "stopped", "stopped", 0},
+		// R0-A3 第四值：status 列无 CHECK 约束，'unknown' 必须丢弃——
+		// 证判据是 ≠connected 而非 ∈{stopped,failed} 枚举。
+		{"long unknown", "unknown", "connected", 0},
 	} {
 		if got := d388Combos(t, s, tc.longSt, tc.shortSt); got != tc.want {
 			t.Errorf("%s: want %d combos, got %d", tc.name, tc.want, got)
