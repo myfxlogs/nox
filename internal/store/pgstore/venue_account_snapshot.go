@@ -9,6 +9,8 @@ import (
 )
 
 // VenueAccountSnapshot 账户余额快照行（原币值，currency 由 AccountMonitor 透传）。
+// Src D-383 B1/B2：写路标记（scheduler=调度回放默认/mt_event=MT order-event/okx_event=
+// OKX private WS push）；空值落库时回退 scheduler（列默认同值，migration 0121）。
 type VenueAccountSnapshot struct {
 	Venue         string
 	VenueType     string
@@ -17,6 +19,7 @@ type VenueAccountSnapshot struct {
 	FreeMarginRaw float64
 	Currency      string
 	FetchedAt     time.Time
+	Src           string
 }
 
 // InsertVenueAccountSnapshots 批量落账户快照（单 SQL 多行 VALUES；空切片 no-op）。
@@ -26,17 +29,21 @@ func (s *Store) InsertVenueAccountSnapshots(ctx context.Context, snaps []VenueAc
 		return nil
 	}
 	sql := `INSERT INTO fin_venue_account_snapshot
-		(venue, venue_type, balance_raw, equity_raw, free_margin_raw, currency, fetched_at) VALUES `
-	args := make([]any, 0, len(snaps)*7)
+		(venue, venue_type, balance_raw, equity_raw, free_margin_raw, currency, fetched_at, src) VALUES `
+	args := make([]any, 0, len(snaps)*8)
 	for i, sn := range snaps {
 		if i > 0 {
 			sql += ","
 		}
-		base := i * 7
-		sql += fmt.Sprintf("($%d,$%d,$%d,$%d,$%d,$%d,$%d)",
-			base+1, base+2, base+3, base+4, base+5, base+6, base+7)
+		base := i * 8
+		sql += fmt.Sprintf("($%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d)",
+			base+1, base+2, base+3, base+4, base+5, base+6, base+7, base+8)
+		src := sn.Src
+		if src == "" {
+			src = "scheduler" // 既有调度路径零改动（migration 0121 列默认同值）
+		}
 		args = append(args, sn.Venue, sn.VenueType, sn.BalanceRaw, sn.EquityRaw,
-			sn.FreeMarginRaw, sn.Currency, sn.FetchedAt)
+			sn.FreeMarginRaw, sn.Currency, sn.FetchedAt, src)
 	}
 	if _, err := s.pool.Exec(ctx, sql, args...); err != nil {
 		return fmt.Errorf("insert venue account snapshots: %w", err)
