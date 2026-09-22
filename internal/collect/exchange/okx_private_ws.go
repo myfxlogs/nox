@@ -34,6 +34,9 @@ const (
 	okxPrivateStaleAfter = 30 * time.Minute
 	// okxPrivateWarnCooldown 断流 warn 单次冷却（D-370 模式）。
 	okxPrivateWarnCooldown = 30 * time.Minute
+	// okxPrivateReadIdle 读空闲上限（R2 返修）：pong 到即顺延——静默账户靠 pong 保活
+	// 不再被固定读超时空转重连；真死链（无 pong）超时判死重连。
+	okxPrivateReadIdle = 60 * time.Second
 )
 
 // VenueSnapshotSink D-383 B2：WS 推送落库面（*pgstore.Store 原生实现）。
@@ -91,9 +94,15 @@ func (o *OKXPrivateWS) runOnce(ctx context.Context) error {
 
 	// login（SSOT §5 B.2：sign=base64(HMAC-SHA256(secret, ts+"GET"+"/users/self/verify"))）。
 	ts := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
-	if err := conn.WriteJSON(okxPrivateLoginFrame(o.apiKey, o.passphrase, ts, okxPrivateSign(o.apiSecret, ts))); err != nil {
+	if err := conn.WriteJSON(o.loginFrame(ts)); err != nil {
 		return fmt.Errorf("login write: %w", err)
 	}
+
+	// R2 返修：读超时由 pong 顺延（pong 到→now+60s），ping 20s 保活不变；连接期只设一次。
+	_ = conn.SetReadDeadline(time.Now().Add(okxPrivateReadIdle))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(okxPrivateReadIdle))
+	})
 
 	stale := newStaleGuard()
 	done := make(chan struct{})
@@ -123,7 +132,6 @@ func (o *OKXPrivateWS) runOnce(ctx context.Context) error {
 			return nil
 		default:
 		}
-		conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 		_, data, err := conn.ReadMessage()
 		if err != nil {
 			return fmt.Errorf("read: %w", err)
@@ -200,6 +208,17 @@ func (g *staleGuard) warnDue(now time.Time, idle, cooldown time.Duration) bool {
 	}
 	g.lastWarn = now
 	return true
+}
+
+// okxPrivateLoginPrehash OKX login 签名原串（SSOT §5 B.2：ts+"GET"+"/users/self/verify"）。
+// R1 返修抽取：调用点经此构造 prehash，锚钉组合而非只测纯函数。
+func okxPrivateLoginPrehash(ts string) string {
+	return ts + "GET" + "/users/self/verify"
+}
+
+// loginFrame 组装完整 login 帧（含签名）。
+func (o *OKXPrivateWS) loginFrame(ts string) map[string]any {
+	return okxPrivateLoginFrame(o.apiKey, o.passphrase, ts, okxPrivateSign(o.apiSecret, okxPrivateLoginPrehash(ts)))
 }
 
 // okxPrivateSign OKX 签名（与 reconcile.okxSign 同算法：base64(HMAC-SHA256(secret, prehash))）。

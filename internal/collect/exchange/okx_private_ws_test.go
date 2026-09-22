@@ -122,3 +122,20 @@ func TestD383B3_StaleGuardCooldown(t *testing.T) {
 func TestD383B4_SnapshotSinkSignature(t *testing.T) {
 	var _ VenueSnapshotSink = (*pgstore.Store)(nil)
 }
+
+// TestD383B2R1_LoginFrameSignPinned R1 返修锚：钉调用点组合（不只测纯函数）——
+// login 帧 sign 必须=base64(HMAC-SHA256(secret, ts+"GET"+"/users/self/verify"))。
+// 固定 ts/key/secret 期望值离线预计算；prehash 缺 "GET"+path 时本锚必红（OKX 拒签）。
+func TestD383B2R1_LoginFrameSignPinned(t *testing.T) {
+	const ts = "2026-09-22T00:00:00.000Z"
+	const want = "3johKPZs7sfE6CPMMnu8a8ISVSlHsubzTS5OovZf+qQ=" // secret=secret 离线预计算
+	o := NewOKXPrivateWS("my-key", "secret", "my-pass", false, nil)
+	frame := o.loginFrame(ts)
+	args, ok := frame["args"].([]map[string]string)
+	if !ok || len(args) != 1 {
+		t.Fatalf("login args 形状错: %#v", frame["args"])
+	}
+	if got := args[0]["sign"]; got != want {
+		t.Fatalf("login sign = %s, want %s（红=R1 prehash 组合错，OKX 必拒签死循环）", got, want)
+	}
+}
