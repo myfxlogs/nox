@@ -4,6 +4,7 @@ package dashboard
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -216,10 +217,19 @@ func (s *Service) BrokerSymbols(ctx context.Context, req *connect.Request[v1.Bro
 	return connect.NewResponse(&v1.BrokerSymbolsResponse{Symbols: entries}), nil
 }
 
+// brokerStoreErr D-388 S0.2：venue 不存在（0 行命中）映射 CodeNotFound——
+// 静默无操作以 2xx 假成功收尾是前端停用点击失败的嫌疑路径之一，硬化后错误显眼上抛。
+func brokerStoreErr(err error) error {
+	if errors.Is(err, pgstore.ErrBrokerAccountNotFound) {
+		return connect.NewError(connect.CodeNotFound, err)
+	}
+	return connect.NewError(connect.CodeInternal, err)
+}
+
 // SetBrokerAccountAlias 设置账号别名；空串 = 清除。
 func (s *Service) SetBrokerAccountAlias(ctx context.Context, req *connect.Request[v1.SetBrokerAccountAliasRequest]) (*connect.Response[v1.SetBrokerAccountAliasResponse], error) {
 	if err := s.store.SetBrokerAccountAlias(ctx, req.Msg.GetVenue(), req.Msg.GetAlias()); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+		return nil, brokerStoreErr(err)
 	}
 	return connect.NewResponse(&v1.SetBrokerAccountAliasResponse{}), nil
 }
@@ -227,7 +237,7 @@ func (s *Service) SetBrokerAccountAlias(ctx context.Context, req *connect.Reques
 // SetBrokerWebsite D-157 V3.1：设置 broker 官网；空串 = 清除。
 func (s *Service) SetBrokerWebsite(ctx context.Context, req *connect.Request[v1.SetBrokerWebsiteRequest]) (*connect.Response[v1.SetBrokerWebsiteResponse], error) {
 	if err := s.store.SetBrokerWebsite(ctx, req.Msg.GetVenue(), req.Msg.GetWebsite()); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+		return nil, brokerStoreErr(err)
 	}
 	return connect.NewResponse(&v1.SetBrokerWebsiteResponse{}), nil
 }
@@ -235,7 +245,7 @@ func (s *Service) SetBrokerWebsite(ctx context.Context, req *connect.Request[v1.
 // SetBrokerAccountIsReal D-144 ① 三态：设置账号实盘标记。is_real 缺省=清除回未知(NULL)。
 func (s *Service) SetBrokerAccountIsReal(ctx context.Context, req *connect.Request[v1.SetBrokerAccountIsRealRequest]) (*connect.Response[v1.SetBrokerAccountIsRealResponse], error) {
 	if err := s.store.SetBrokerAccountIsReal(ctx, req.Msg.GetVenue(), req.Msg.IsReal); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+		return nil, brokerStoreErr(err)
 	}
 	return connect.NewResponse(&v1.SetBrokerAccountIsRealResponse{}), nil
 }
@@ -253,7 +263,7 @@ func (s *Service) SetBrokerCommission(ctx context.Context, req *connect.Request[
 		bps = &v
 	}
 	if err := s.store.SetBrokerCommission(ctx, venue, bps); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+		return nil, brokerStoreErr(err)
 	}
 	s.bm.SetCommission(venue, bps)
 	return connect.NewResponse(&v1.SetBrokerCommissionResponse{}), nil
@@ -269,7 +279,7 @@ func (s *Service) SetBrokerDisabled(ctx context.Context, req *connect.Request[v1
 		err = s.bm.EnableBroker(ctx, venue)
 	}
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+		return nil, brokerStoreErr(err)
 	}
 	return connect.NewResponse(&v1.SetBrokerDisabledResponse{}), nil
 }
