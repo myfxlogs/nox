@@ -93,7 +93,7 @@ func (o *OKXPrivateWS) runOnce(ctx context.Context) error {
 	defer conn.Close()
 
 	// login（SSOT §5 B.2：sign=base64(HMAC-SHA256(secret, ts+"GET"+"/users/self/verify"))）。
-	ts := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+	ts := okxPrivateLoginTs(time.Now())
 	if err := conn.WriteJSON(o.loginFrame(ts)); err != nil {
 		return fmt.Errorf("login write: %w", err)
 	}
@@ -208,6 +208,12 @@ func (g *staleGuard) warnDue(now time.Time, idle, cooldown time.Duration) bool {
 	}
 	g.lastWarn = now
 	return true
+}
+
+// okxPrivateLoginTs login timestamp 串（R3 返修：SSOT §5 B.2 订正=Unix epoch 秒串；
+// 原 ISO8601 系 REST 头格式误植——OKX WS login 60004 Invalid timestamp 在产实证）。
+func okxPrivateLoginTs(now time.Time) string {
+	return strconv.FormatInt(now.Unix(), 10)
 }
 
 // okxPrivateLoginPrehash OKX login 签名原串（SSOT §5 B.2：ts+"GET"+"/users/self/verify"）。
