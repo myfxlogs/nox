@@ -74,12 +74,13 @@ func TestD388_BrokerSetters_ExistOK(t *testing.T) {
 
 // BrokerVenueDiscoverable 三分支：stopped/failed→false、connected→true、absent(CEX 自管)→true。
 func TestD388_BrokerVenueDiscoverable(t *testing.T) {
-	m := map[string]string{"a": "connected", "b": "stopped", "c": "failed"}
+	m := map[string]string{"a": "connected", "b": "stopped", "c": "failed", "d": "unknown"}
 	for _, tc := range []struct {
 		venue string
 		want  bool
 	}{
-		{"a", true}, {"b", false}, {"c", false}, {"cex-venue", true},
+		// R0-A3：'unknown' 第四值必须丢弃——判据是 ≠connected 而非枚举
+		{"a", true}, {"b", false}, {"c", false}, {"d", false}, {"cex-venue", true},
 	} {
 		if got := BrokerVenueDiscoverable(m, tc.venue); got != tc.want {
 			t.Errorf("venue %s: got %v want %v", tc.venue, got, tc.want)
