@@ -174,11 +174,12 @@ func TestEnrichOne_XAssetCarryThreeCols(t *testing.T) {
 	if want := 0.73 / wantExpected * 100; math.Abs(*pb.AttainmentPct-want) > 0.5 {
 		t.Errorf("attainment=%.2f%%, want ≈%.2f%%", *pb.AttainmentPct, want)
 	}
-	// §1 回本周期（carryTypes 门控）：net=-2.0+0.73=-1.27<0，dailySwap=0.73/3 → breakEven≈5.22 天。
+	// §1 回本周期（carryTypes 门控）：D-391 新口径——本=入场摩擦（本 fixture 无 fee/佣金/
+	// 正点差，xassetCexFeeBps=0 不估算）→ 本=0，实收 0.73 已覆盖 → 已回本=0。
 	if pb.BreakEvenDays == nil {
 		t.Error("XASSET_CARRY 回本周期应出值（carryTypes 已含），got nil")
-	} else if want := 1.27 / (0.73 / 3.0); math.Abs(*pb.BreakEvenDays-want) > 0.05 {
-		t.Errorf("breakEven=%.2f, want ≈%.2f 天", *pb.BreakEvenDays, want)
+	} else if *pb.BreakEvenDays != 0 {
+		t.Errorf("breakEven=%.2f, want 0（本=0 实收已覆盖）", *pb.BreakEvenDays)
 	}
 }
 

@@ -17,8 +17,11 @@ package dashboard
 
 import (
 	"context"
+	"log"
+	"math"
 	"time"
 
+	"arb/internal/notional"
 	"arb/internal/store/pgstore"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
@@ -130,18 +133,21 @@ func enrichOne(ctx context.Context, s *Service, pb *v1.Position, legs []pgstore.
 		net := floating + swapAccrued + commission
 		pb.NetPnlUsd = &net
 
-		// D-117：回本周期（实时计算，非理论值）
-		// 日均收益 = (swap 快照 + funding 实收) ÷ 持有天数；净值<0 → |净值|÷日均收益；≥0 → 0（已回本）
+		// D-117→D-391：回本周期「本」口径重定义=入场摩擦成本（点差+手续费+佣金），
+		// 开仓即定不随行情漂；剩余洞=本−息差实收；≤0 → 0（已回本）；>0 → 剩余÷当前日息率。
+		// 净盈亏列口径不动（回答「现在平仓亏多少」，与回本互补）。
 		if carryTypes[pb.Type] {
 			holdDays := holdDaysToNow(pb, openLegs, now)
 			if holdDays > 0 {
 				dailySwap := swapAccrued / holdDays
 				if dailySwap > 0 {
+					entryCost := s.entryFrictionUSD(ctx, pb, openLegs, commission)
+					remaining := entryCost - swapAccrued
 					var breakEven float64
-					if net < 0 {
-						breakEven = -net / dailySwap
+					if remaining > 0 {
+						breakEven = remaining / dailySwap
 					}
-					// net ≥ 0 → breakEven=0（已回本）；dailySwap>0 保证除法安全
+					// remaining ≤ 0 → breakEven=0（已回本）；dailySwap>0 保证除法安全
 					pb.BreakEvenDays = &breakEven
 				}
 				// dailySwap ≤ 0 → 缺省（付息型或不结算，不显示回本周期）
@@ -211,4 +217,38 @@ func enrichOne(ctx context.Context, s *Service, pb *v1.Position, legs []pgstore.
 			pb.ExpectedBreakevenDays = o.BreakevenDays
 		}
 	}
+}
+
+// entryFrictionUSD D-391：回本列「本」=入场摩擦成本（USD，开仓即定不随行情漂）。
+//   - 点差付出：max(0, entrySpreadBps)/10000 × notionalUSD。EntrySpreadBpsFromLegSlice 用成交价
+//     （期望点差+双腿滑点已合并，滑点不单列——498 型 −11.56bps 已含 $0.13 滑点）；
+//     点差为赚（<0）→ 计 0 且不冲抵手续费。
+//   - Σ leg fee_usd（正数成本口径）；CEX 腿 fee_usd NULL → fillNotional×cfg.XAssetCexFeeBps
+//     估算回退（log 注明；无回退则历史腿本=0 显「已回本」=数据缺口假相）。MT 腿 NULL→0。
+//   - MT5 commission：matchBrokerLegs 快照口径，负=付出才计（max(0,−commission)，返佣正号不反向减）；
+//     matched=false 时 commission=0 天然诚实缺省。
+func (s *Service) entryFrictionUSD(ctx context.Context, pb *v1.Position, openLegs []pgstore.PositionLeg, commission float64) float64 {
+	cost := math.Max(0, -commission)
+	canonical := canonicalFromOppID(pb.OpportunityId)
+	if bps, ok := pgstore.EntrySpreadBpsFromLegSlice(openLegs); ok && bps > 0 {
+		if n := computeEntryNotional(ctx, s, openLegs, canonical); n > 0 {
+			cost += bps / 10000 * n
+		}
+	}
+	quoteCcy := notional.QuoteCcy(canonical)
+	for _, l := range openLegs {
+		if l.FeeUSD != nil {
+			cost += *l.FeeUSD
+			continue
+		}
+		// fee_usd NULL 回退估算：仅 CEX 腿（MT5 佣金走 snapshot commission 已计）。
+		if isCEXVenueKey(l.Venue) && s.xassetCexFeeBps > 0 && s.store != nil {
+			if ln := s.legNotionalUSD(ctx, l, canonical, quoteCcy); ln > 0 {
+				est := ln * s.xassetCexFeeBps / 10000
+				log.Printf("[enrich] pos=%d leg %s %s fee_usd NULL → 估算 $%.4f（notional %.2f × %.1fbps）", pb.Id, l.Venue, l.Symbol, est, ln, s.xassetCexFeeBps)
+				cost += est
+			}
+		}
+	}
+	return cost
 }

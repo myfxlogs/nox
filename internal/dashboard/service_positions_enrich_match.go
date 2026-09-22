@@ -89,22 +89,28 @@ func computeEntryNotional(ctx context.Context, s *Service, openLegs []pgstore.Po
 	quoteCcy := notional.QuoteCcy(canonical)
 	total := 0.0
 	for _, l := range openLegs {
-		if l.Status != "FILLED" || l.PriceActual == nil || *l.PriceActual <= 0 || l.Qty <= 0 {
-			continue
-		}
-		cs := 1.0
-		if c, ok, _ := s.store.ContractSizeByCanonical(ctx, l.Venue, canonical); ok && c > 0 {
-			cs = c
-		}
-		fx := 1.0
-		if quoteCcy != "" && quoteCcy != "USD" {
-			rate, ok := s.store.USDPer(ctx, quoteCcy, l.Ts)
-			if !ok {
-				continue
-			}
-			fx = rate
-		}
-		total += notional.LegUSD(l.EffectiveQty(), cs, *l.PriceActual, fx) // D-311 R6：成交口径（CEX=基础币）
+		total += s.legNotionalUSD(ctx, l, canonical, quoteCcy)
 	}
 	return total
+}
+
+// legNotionalUSD 单腿名义 USD（computeEntryNotional 的逐腿因子，D-391 拆出供 fee 估算回退复用）。
+// 缺 CS → cs=1.0；非 USD 计价缺 fx → 该腿计 0。
+func (s *Service) legNotionalUSD(ctx context.Context, l pgstore.PositionLeg, canonical, quoteCcy string) float64 {
+	if l.Status != "FILLED" || l.PriceActual == nil || *l.PriceActual <= 0 || l.Qty <= 0 {
+		return 0
+	}
+	cs := 1.0
+	if c, ok, _ := s.store.ContractSizeByCanonical(ctx, l.Venue, canonical); ok && c > 0 {
+		cs = c
+	}
+	fx := 1.0
+	if quoteCcy != "" && quoteCcy != "USD" {
+		rate, ok := s.store.USDPer(ctx, quoteCcy, l.Ts)
+		if !ok {
+			return 0
+		}
+		fx = rate
+	}
+	return notional.LegUSD(l.EffectiveQty(), cs, *l.PriceActual, fx) // D-311 R6：成交口径（CEX=基础币）
 }

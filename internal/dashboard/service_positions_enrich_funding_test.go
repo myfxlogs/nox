@@ -50,13 +50,12 @@ func TestEnrichOne_CexFundingMerged(t *testing.T) {
 	if math.Abs(*pb.NetPnlUsd-(-7.0)) > 0.001 {
 		t.Errorf("net = %.4f, want -7.0 (floating=-10+swap+funding=3)", *pb.NetPnlUsd)
 	}
-	// 回本周期 = |net| ÷ (swapAccrued/holdDays) = 7.0 ÷ (3.0/3) = 7.0
+	// D-391：回本列「本」=入场摩擦——本=0（无 fee/佣金/正点差）→ 实收 3.0 已覆盖 → 已回本=0。
 	if pb.BreakEvenDays == nil {
 		t.Fatal("break_even_days should not be nil (PERP_FUNDING + funding>0)")
 	}
-	wantBE := 7.0 / (3.0 / 3.0)
-	if math.Abs(*pb.BreakEvenDays-wantBE) > 0.01 {
-		t.Errorf("break_even_days = %.4f, want %.4f", *pb.BreakEvenDays, wantBE)
+	if *pb.BreakEvenDays != 0 {
+		t.Errorf("break_even_days = %.4f, want 0（本=0 实收已覆盖）", *pb.BreakEvenDays)
 	}
 }
 
@@ -154,9 +153,9 @@ func TestEnrichOne_PureMTRegression(t *testing.T) {
 	if pb.NetPnlUsd == nil || math.Abs(*pb.NetPnlUsd-(-30.01)) > 0.001 {
 		t.Errorf("net = %v, want -30.01", pb.NetPnlUsd)
 	}
-	wantBE := 30.01 / (4.99 / 3.0)
-	if pb.BreakEvenDays == nil || math.Abs(*pb.BreakEvenDays-wantBE) > 0.01 {
-		t.Errorf("break_even_days = %v, want %.4f", pb.BreakEvenDays, wantBE)
+	// D-391：本=0（无 fee/佣金/正点差）→ 实收已覆盖 → 已回本=0。
+	if pb.BreakEvenDays == nil || *pb.BreakEvenDays != 0 {
+		t.Errorf("break_even_days = %v, want 0（本=0 实收已覆盖）", pb.BreakEvenDays)
 	}
 }
 
@@ -189,9 +188,8 @@ func TestEnrichOne_VenueActualNotDoubleCounted(t *testing.T) {
 	if pb.NetPnlUsd == nil || math.Abs(*pb.NetPnlUsd-(-7.0)) > 0.001 {
 		t.Errorf("net = %v, want -7.0", pb.NetPnlUsd)
 	}
-	// 回本 = |net| ÷ (swapAccrued/holdDays) = 7.0 ÷ (1.5/2) ≈ 9.33
-	wantBE := 7.0 / (1.5 / 2.0)
-	if pb.BreakEvenDays == nil || math.Abs(*pb.BreakEvenDays-wantBE) > 0.01 {
-		t.Errorf("break_even_days = %v, want %.4f", pb.BreakEvenDays, wantBE)
+	// D-391：本=入场摩擦=佣金 0.5（commission −0.5 付出→正数成本）；实收 1.5 已覆盖 → 已回本=0。
+	if pb.BreakEvenDays == nil || *pb.BreakEvenDays != 0 {
+		t.Errorf("break_even_days = %v, want 0（本=0.5 佣金，实收 1.5 已覆盖）", pb.BreakEvenDays)
 	}
 }

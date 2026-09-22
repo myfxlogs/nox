@@ -66,13 +66,13 @@ func TestEnrichPositions_MatchedSum(t *testing.T) {
 	if math.Abs(*pb.NetPnlUsd-(-30.01)) > 0.001 {
 		t.Errorf("net = %.4f, want -30.01", *pb.NetPnlUsd)
 	}
-	// D-117：回本周期 = |net| ÷ (swap/holdDays) = 30.01 ÷ (4.99/3) ≈ 18.04
+	// D-391：回本列「本」=入场摩擦（点差+手续费+佣金）——fixture 双腿无 Side/fee/佣金
+	// → 本=0，实收 4.99 已覆盖 → 已回本=0（不再随 floating 噪声漂）。
 	if pb.BreakEvenDays == nil {
 		t.Fatal("break_even_days should not be nil (SWAPARB + matched + swap>0)")
 	}
-	wantBE := 30.01 / (4.99 / 3.0)
-	if math.Abs(*pb.BreakEvenDays-wantBE) > 0.01 {
-		t.Errorf("break_even_days = %.4f, want %.4f", *pb.BreakEvenDays, wantBE)
+	if *pb.BreakEvenDays != 0 {
+		t.Errorf("break_even_days = %.4f, want 0（本=0 实收已覆盖）", *pb.BreakEvenDays)
 	}
 }
 

@@ -113,6 +113,8 @@ type Service struct {
 	commissionFor func(venueKey string) float64
 	// D-111：收敛型实时 bps 滑点成本（cfg.SlippageBps，slippageCost = slippageBps * 2）。
 	slippageBps float64
+	// D-391：回本列「本」口径 CEX 腿 fee_usd NULL 回退估算率（cfg.XAssetCexFeeBps，bps）。
+	xassetCexFeeBps float64
 	// D-127 P2：binance:perp stepSize 权威元数据（运行时 exchangeInfo + fallback）。nil = 仅用 fallback。
 	stepMeta *cexStepMeta
 	// D-311 R4：okx:perp 腿最小张数 lotSz 查询（instId→lotSz，instruments 同源缓存）。
@@ -227,8 +229,8 @@ type FrontConfig struct {
 // hedgeTopic 为对冲结构刷新通知广播（D-231 S5，传 main 创建的 hedgeTopic；TRX 投票/质押/余额变化 → hedgeTopic.Publish → case 12）。
 // commissionFor 为 per-venue 佣金解析器（D-111 收敛型实时 bps 成本扣除，nil = commissionBps=0）。
 // slippageBps 为滑点成本（D-111，slippageCost = slippageBps * 2）。
-func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64, fundingDropRatio float64, swapArbEquityUseRatio float64, swapArbBareCap float64, swapArbVenueExposureCap float64, priceTopic *bus.Topic[position.PositionPrice], oppTopic *bus.Topic[pgstore.Opportunity], orderTopic *bus.Topic[bus.OrderEvent], alertTopic *bus.Topic[pgstore.Alert], hedgeTopic *bus.Topic[struct{}], bpm *BrokerPositionMonitor, notionalUSD float64, acctMon *AccountMonitor, commissionFor func(string) float64, slippageBps float64, kickFn func(string)) *Service {
-	return &Service{store: store, qbus: qbus, pipeline: pipeline, gateChecker: &storeGateChecker{store: store}, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, swapArbEquityUseRatio: swapArbEquityUseRatio, swapArbBareCap: swapArbBareCap, swapArbVenueExposureCap: swapArbVenueExposureCap, priceTopic: priceTopic, oppTopic: oppTopic, orderTopic: orderTopic, alertTopic: alertTopic, hedgeTopic: hedgeTopic, bpm: bpm, notionalUSD: notionalUSD, acctMon: acctMon, commissionFor: commissionFor, slippageBps: slippageBps, kickFn: kickFn}
+func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64, fundingDropRatio float64, swapArbEquityUseRatio float64, swapArbBareCap float64, swapArbVenueExposureCap float64, priceTopic *bus.Topic[position.PositionPrice], oppTopic *bus.Topic[pgstore.Opportunity], orderTopic *bus.Topic[bus.OrderEvent], alertTopic *bus.Topic[pgstore.Alert], hedgeTopic *bus.Topic[struct{}], bpm *BrokerPositionMonitor, notionalUSD float64, acctMon *AccountMonitor, commissionFor func(string) float64, slippageBps float64, xassetCexFeeBps float64, kickFn func(string)) *Service {
+	return &Service{store: store, qbus: qbus, pipeline: pipeline, gateChecker: &storeGateChecker{store: store}, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, swapArbEquityUseRatio: swapArbEquityUseRatio, swapArbBareCap: swapArbBareCap, swapArbVenueExposureCap: swapArbVenueExposureCap, priceTopic: priceTopic, oppTopic: oppTopic, orderTopic: orderTopic, alertTopic: alertTopic, hedgeTopic: hedgeTopic, bpm: bpm, notionalUSD: notionalUSD, acctMon: acctMon, commissionFor: commissionFor, slippageBps: slippageBps, xassetCexFeeBps: xassetCexFeeBps, kickFn: kickFn}
 }
 
 // Store 返回底层 store（D-070 autotrade engine 用）。
