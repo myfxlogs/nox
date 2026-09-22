@@ -60,6 +60,42 @@ func TestSchedulerKickWakesImmediately(t *testing.T) {
 	}
 }
 
+// deadlineCollector D-398 S4①：记录 Poll 收到的 ctx deadline，验证 per-collector 预算注入。
+type deadlineCollector struct {
+	dl  time.Time
+	has bool
+}
+
+func (c *deadlineCollector) Kind() string { return "deadline_test" }
+
+func (c *deadlineCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
+	c.dl, c.has = ctx.Deadline()
+	return nil, nil
+}
+
+// TestPollOncePerCollectorTimeout D-398 S4①：Named.PollTimeout 覆盖全局；
+// 未配置回落 Scheduler.PollTimeout→35s 三级链不变（长尾扇出源放宽不影响其他源）。
+func TestPollOncePerCollectorTimeout(t *testing.T) {
+	sink := func(context.Context, []fact.Fact) error { return nil }
+	s := &Scheduler{PollTimeout: time.Second, Sink: sink}
+
+	c1 := &deadlineCollector{}
+	if err := s.pollOnce(context.Background(), Named{Name: "wide", PollTimeout: 10 * time.Minute, Collector: c1}); err != nil {
+		t.Fatalf("pollOnce: %v", err)
+	}
+	if !c1.has || time.Until(c1.dl) < 9*time.Minute {
+		t.Fatalf("src.PollTimeout 未生效：deadline=%v has=%v（旧实现红=全局 1s）", c1.dl, c1.has)
+	}
+
+	c2 := &deadlineCollector{}
+	if err := s.pollOnce(context.Background(), Named{Name: "def", Collector: c2}); err != nil {
+		t.Fatalf("pollOnce: %v", err)
+	}
+	if !c2.has || time.Until(c2.dl) > 2*time.Second {
+		t.Fatalf("未配置源应回落 s.PollTimeout=1s：deadline=%v", c2.dl)
+	}
+}
+
 func TestSchedulerKickNonBlocking(t *testing.T) {
 	// 源未运行（chan 缓冲 1 满后多余 kick 全丢弃），连续 Kick 不得阻塞调用方。
 	c := &kickCollector{ch: make(chan struct{}, 1)}

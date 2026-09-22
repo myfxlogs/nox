@@ -518,3 +518,46 @@ func TestOKXFundingHistory_NoProgressGuard(t *testing.T) {
 		t.Errorf("constant page should still yield facts before guard trips, got 0")
 	}
 }
+
+// TestOKXFundingHistory_PeriodCache D-398 S4②：周期探测缓存——
+// 两轮 Poll 同符号只发一次 funding-rate 探测（命中免重复 HTTP）；过期条目重探。
+// 旧实现每轮必探（probes=轮数）=本测试红。
+func TestOKXFundingHistory_PeriodCache(t *testing.T) {
+	var probes atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v5/public/funding-rate" {
+			probes.Add(1)
+			json.NewEncoder(w).Encode(map[string]any{"code": "0", "data": []map[string]any{
+				{"fundingRate": "0.0001", "fundingTime": "1788163200000", "nextFundingTime": "1788192000000"},
+			}})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{"code": "0", "data": []map[string]any{
+			{"fundingRate": "0.0001", "fundingTime": "1788163200000"},
+		}})
+	}))
+	defer srv.Close()
+
+	cfg := Config{Symbols: []string{"BTC"}, OKXBaseURL: srv.URL, Client: srv.Client()}
+	c := NewOKXFundingHistory(cfg, zeroResolver)
+	for i := 0; i < 2; i++ {
+		if _, err := c.Poll(context.Background()); err != nil {
+			t.Fatalf("Poll %d: %v", i, err)
+		}
+	}
+	if n := probes.Load(); n != 1 {
+		t.Fatalf("两轮 Poll 探测数 = %d, want 1（缓存命中免重复探测）", n)
+	}
+
+	// 过期条目重探：人为老化缓存 ts 越过 TTL。
+	c.periods["BTC-USDT-SWAP"] = okxPeriodEntry{n: 6, ts: time.Now().Add(-okxPeriodCacheTTL - time.Hour)}
+	if _, err := c.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll expired: %v", err)
+	}
+	if n := probes.Load(); n != 2 {
+		t.Fatalf("过期后探测数 = %d, want 2（过期重探）", n)
+	}
+	if e := c.periods["BTC-USDT-SWAP"]; e.n != 3 {
+		t.Fatalf("重探后缓存 n = %d, want 3（8h 差值→×3）", e.n)
+	}
+}

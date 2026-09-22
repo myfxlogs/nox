@@ -21,6 +21,9 @@ type Named struct {
 	Name      string
 	Interval  time.Duration
 	Collector Collector
+	// PollTimeout D-398 S1：per-collector 单轮预算（0=回落 Scheduler.PollTimeout→35s）。
+	// 长尾扇出采集器（如 okx_funding_history 百级符号串行探测）可放宽而不动全局快速失败语义。
+	PollTimeout time.Duration
 }
 
 // Scheduler 每源一个 goroutine：独立间隔 + 抖动 + 重试退避。
@@ -137,7 +140,10 @@ func (s *Scheduler) sleep(ctx context.Context, kick chan struct{}, d time.Durati
 }
 
 func (s *Scheduler) pollOnce(ctx context.Context, src Named) error {
-	timeout := s.PollTimeout
+	timeout := src.PollTimeout
+	if timeout == 0 {
+		timeout = s.PollTimeout
+	}
 	if timeout == 0 {
 		timeout = 35 * time.Second
 	}

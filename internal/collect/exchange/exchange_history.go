@@ -111,10 +111,21 @@ func (b *BinanceFundingHistory) Poll(ctx context.Context) ([]fact.Fact, error) {
 type OKXFundingHistory struct {
 	cfg     Config
 	resolve HistoryStartResolver
+	// periods D-398 S3：per-symbol 结算周期探测缓存（TTL 24h）——结算周期准静态，
+	// 旧码每轮 ~100+ 符号各探一次 ≈ 半数 HTTP 浪费（长尾饿死同因）。
+	// 无竞态依据：sched 每源单 goroutine 串行 Poll（Scheduler.runSource），普通 map 安全。
+	periods map[string]okxPeriodEntry
 }
 
+type okxPeriodEntry struct {
+	n  int
+	ts time.Time
+}
+
+const okxPeriodCacheTTL = 24 * time.Hour
+
 func NewOKXFundingHistory(cfg Config, r HistoryStartResolver) *OKXFundingHistory {
-	return &OKXFundingHistory{cfg: cfg, resolve: r}
+	return &OKXFundingHistory{cfg: cfg, resolve: r, periods: map[string]okxPeriodEntry{}}
 }
 
 func (o *OKXFundingHistory) Kind() string { return fact.KindFundingHistory }
@@ -124,11 +135,14 @@ func (o *OKXFundingHistory) Kind() string { return fact.KindFundingHistory }
 // symbol（CL-USDT-SWAP 实测），旧 ×3 硬编码低估 2×。任一失败 printf+回退 3
 // （fail-open，同构增量路径的逐符号跳过）。
 func (o *OKXFundingHistory) okxFundingPeriodsPerDay(ctx context.Context, instID string) int {
+	if e, ok := o.periods[instID]; ok && time.Since(e.ts) < okxPeriodCacheTTL {
+		return e.n // D-398 S3：缓存命中免探测（key=instID，新符号自然 miss）
+	}
 	url := fmt.Sprintf("%s/api/v5/public/funding-rate?instId=%s", o.cfg.OKXBaseURL, instID)
 	body, err := getJSON(ctx, o.cfg.Client, url)
 	if err != nil {
 		fmt.Printf("[exchange:okx] funding_history %s period probe: %v (fallback 3/day)\n", instID, err)
-		return fundingHistoryPeriodsPerDay
+		return fundingHistoryPeriodsPerDay // 失败不写缓存：下轮重探
 	}
 	data, ok := body["data"].([]any)
 	if !ok || len(data) == 0 {
@@ -146,7 +160,9 @@ func (o *OKXFundingHistory) okxFundingPeriodsPerDay(ctx context.Context, instID 
 	if nftMs-ftMs <= 0 {
 		fmt.Printf("[exchange:okx] funding_history %s period probe ft=%v nft=%v (fallback 3/day)\n", instID, ftMs, nftMs)
 	}
-	return fundingPeriodsPerDay(nftMs - ftMs)
+	n := fundingPeriodsPerDay(nftMs - ftMs)
+	o.periods[instID] = okxPeriodEntry{n: n, ts: time.Now()} // 探测成功才写
+	return n
 }
 
 func (o *OKXFundingHistory) Poll(ctx context.Context) ([]fact.Fact, error) {
