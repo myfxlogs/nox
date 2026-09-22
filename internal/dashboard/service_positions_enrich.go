@@ -141,7 +141,7 @@ func enrichOne(ctx context.Context, s *Service, pb *v1.Position, legs []pgstore.
 			if holdDays > 0 {
 				dailySwap := swapAccrued / holdDays
 				if dailySwap > 0 {
-					entryCost := s.entryFrictionUSD(ctx, pb, openLegs, commission)
+					entryCost := s.entryFrictionUSD(ctx, pb, openLegs, brokerSnap)
 					remaining := entryCost - swapAccrued
 					var breakEven float64
 					if remaining > 0 {
@@ -219,17 +219,22 @@ func enrichOne(ctx context.Context, s *Service, pb *v1.Position, legs []pgstore.
 	}
 }
 
-// entryFrictionUSD D-391：回本列「本」=入场摩擦成本（USD，开仓即定不随行情漂）。
+// entryFrictionUSD D-391 R1：回本列「本」=入场摩擦成本（USD，开仓即定不随行情漂）。
 //   - 点差付出：max(0, entrySpreadBps)/10000 × notionalUSD。EntrySpreadBpsFromLegSlice 用成交价
 //     （期望点差+双腿滑点已合并，滑点不单列——498 型 −11.56bps 已含 $0.13 滑点）；
 //     点差为赚（<0）→ 计 0 且不冲抵手续费。
-//   - Σ leg fee_usd（正数成本口径）；CEX 腿 fee_usd NULL → fillNotional×cfg.XAssetCexFeeBps
-//     估算回退（log 注明；无回退则历史腿本=0 显「已回本」=数据缺口假相）。MT 腿 NULL→0。
-//   - MT5 commission：matchBrokerLegs 快照口径，负=付出才计（max(0,−commission)，返佣正号不反向减）；
-//     matched=false 时 commission=0 天然诚实缺省。
-func (s *Service) entryFrictionUSD(ctx context.Context, pb *v1.Position, openLegs []pgstore.PositionLeg, commission float64) float64 {
-	cost := math.Max(0, -commission)
+//   - 手续费逐腿三级互斥（同笔费只计一次）：fee_usd > 快照 commission > 估算。
+//     ① l.FeeUSD 非空 → 实值优先，该腿快照 commission 跳过（防双计：D-385 起 CEX 聚合仓
+//     bp.Commission 亦映射真费，498 实证快照 −2.18095 与 NULL 估算 $2.1810 双计）；
+//     ② CEX 腿 fee NULL 且快照有该腿负 commission → 快照真费（仓位累计费近似入场摩擦——
+//     部分平仓后含出场费略高估，出场费也是已付成本，接受近似）；
+//     ③ CEX 腿双缺 → notional×XAssetCexFeeBps 估算回退（log 注明）；
+//     ④ MT 腿 → max(0,−legCommission)（负=付出才计，返佣正号不反向减）。
+//     legCommission 匹配谓词与 matchBrokerLegs 同型（venueKey+symbol+positionId）；
+//     同 venue+symbol 多腿共享同一 bp 的既有局限照旧（498 型一腿一 venue 不受影响）。
+func (s *Service) entryFrictionUSD(ctx context.Context, pb *v1.Position, openLegs []pgstore.PositionLeg, brokerSnap []*v1.BrokerPosition) float64 {
 	canonical := canonicalFromOppID(pb.OpportunityId)
+	cost := 0.0
 	if bps, ok := pgstore.EntrySpreadBpsFromLegSlice(openLegs); ok && bps > 0 {
 		if n := computeEntryNotional(ctx, s, openLegs, canonical); n > 0 {
 			cost += bps / 10000 * n
@@ -241,14 +246,27 @@ func (s *Service) entryFrictionUSD(ctx context.Context, pb *v1.Position, openLeg
 			cost += *l.FeeUSD
 			continue
 		}
-		// fee_usd NULL 回退估算：仅 CEX 腿（MT5 佣金走 snapshot commission 已计）。
-		if isCEXVenueKey(l.Venue) && s.xassetCexFeeBps > 0 && s.store != nil {
-			if ln := s.legNotionalUSD(ctx, l, canonical, quoteCcy); ln > 0 {
-				est := ln * s.xassetCexFeeBps / 10000
-				log.Printf("[enrich] pos=%d leg %s %s fee_usd NULL → 估算 $%.4f（notional %.2f × %.1fbps）", pb.Id, l.Venue, l.Symbol, est, ln, s.xassetCexFeeBps)
-				cost += est
+		legComm := 0.0
+		for _, bp := range brokerSnap {
+			if bp.VenueKey == l.Venue && bp.Symbol == l.Symbol && bp.PositionId == pb.Id {
+				legComm += bp.Commission
 			}
 		}
+		if isCEXVenueKey(l.Venue) {
+			if legComm < 0 {
+				cost += -legComm // 快照真费优先于估算
+				continue
+			}
+			if s.xassetCexFeeBps > 0 && s.store != nil {
+				if ln := s.legNotionalUSD(ctx, l, canonical, quoteCcy); ln > 0 {
+					est := ln * s.xassetCexFeeBps / 10000
+					log.Printf("[enrich] pos=%d leg %s %s fee_usd NULL → 估算 $%.4f（notional %.2f × %.1fbps）", pb.Id, l.Venue, l.Symbol, est, ln, s.xassetCexFeeBps)
+					cost += est
+				}
+			}
+			continue
+		}
+		cost += math.Max(0, -legComm)
 	}
 	return cost
 }
