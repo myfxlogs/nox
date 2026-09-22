@@ -119,6 +119,7 @@ var migrationFiles = []struct {
 	{121, migrations.VenueAccountSnapshotSrcSQL},       // D-383 B1/B2：快照行写路标记 src 列（事件 mt_event/okx_event，默认 scheduler）
 	{122, migrations.BrokerSymbolMapIsPrimarySQL},      // D-383 A2.1/A2.6：is_primary+部分唯一索引+单行组固化+27 组种子
 	{123, migrations.RadarDigestStateSQL},              // D-389 S1：digest 边沿化集合 hash 状态表
+	{124, migrations.RadarDigestMemberSQL},             // D-392 S1：digest 成员级边沿（新入才推+flap TTL）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

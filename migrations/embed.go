@@ -211,4 +211,6 @@ var (
 	BrokerSymbolMapIsPrimarySQL string
 	//go:embed 0123_radar_digest_state.sql
 	RadarDigestStateSQL string
+	//go:embed 0124_radar_digest_member.sql
+	RadarDigestMemberSQL string
 )
