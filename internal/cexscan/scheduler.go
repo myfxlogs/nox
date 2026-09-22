@@ -5,6 +5,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"arb/internal/config"
@@ -22,6 +23,10 @@ type Scanner struct {
 	client   *http.Client
 	bnAPIURL string
 	symbols  []string
+
+	// D-383 B1：order-event 定向落库收合态（per-venue lastWrite，OnOrderEvent 专用）。
+	orderSnapMu   sync.Mutex
+	orderSnapLast map[string]time.Time
 }
 
 // NewScanner 创建扫描器。
@@ -35,13 +40,14 @@ func NewScanner(cfg *config.Config, store *pgstore.Store, am AccountSnapshotter,
 		}
 	}
 	return &Scanner{
-		cfg:      cfg,
-		store:    store,
-		accounts: am,
-		earn:     earn,
-		client:   httpx.Client(),
-		bnAPIURL: bnAPIURL,
-		symbols:  cfg.CexScanSymbols,
+		cfg:           cfg,
+		store:         store,
+		accounts:      am,
+		earn:          earn,
+		client:        httpx.Client(),
+		bnAPIURL:      bnAPIURL,
+		symbols:       cfg.CexScanSymbols,
+		orderSnapLast: make(map[string]time.Time),
 	}
 }
 

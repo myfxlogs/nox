@@ -116,6 +116,7 @@ var migrationFiles = []struct {
 	{118, migrations.RadarWatchlistSQL},                // D-369 S2：确认信号 watchlist（radar 写/core 读）
 	{119, migrations.PaperCfdColumnsSQL},               // D-374 S2：纸面轨扩 cfd×perp（structure/mt_venue 两列）
 	{120, migrations.PositionEvalsSQL},                 // D-377 S1：XASSET 退出评估观测轨（position_evals 窄行表）
+	{121, migrations.VenueAccountSnapshotSrcSQL},       // D-383 B1/B2：快照行写路标记 src 列（事件 mt_event/okx_event，默认 scheduler）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
