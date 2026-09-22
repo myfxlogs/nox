@@ -1,8 +1,9 @@
 // cex_account_subaccounts.go —— D-363 S2：CEX 资金（funding）/理财（earn）子账户查询。
 // 只报 USDT 余额（D-364 v2 同语义：非 USDT 标不读取不统计，DOGE/USDC 等全跳）。
-// 路由核证点④（9-20 真 key 实探留证）：binance sapi 走代理根路径（/api 前缀 404 实探）；
-// okx 资金/理财端点代理不路由（403 实探）→ 直连 www.okx.com；交易账户 /account/balance
-// 代理路由不受影响（生产在跑）。
+// 路由核证点④（9-20 真 key 实探留证）：binance sapi 走代理根路径（/api 前缀 404 实探）。
+// 9-22 Devin 终席更正：okx 资金/理财端点「代理不路由（403）」系误诊——CF 1010 bot 拦截
+// （无 UA 探针特征）被当成不路由；真签名实测经代理 200。直连使流量被本机 mihomo 分流到
+// 轮换节点 → OKX 白名单 50110 刷屏。改回 config base_url（代理）优先、直连兜底。
 package reconcile
 
 import (
@@ -108,13 +109,14 @@ func (q *CEXAccountQuerier) accountBinanceFunding(ctx context.Context) (*Account
 	}, nil
 }
 
-// okxSubaccountBase okx 资金/理财端点直连基址（核证点④：okx 资金端点代理不路由 403 实探
-// → 直连 www.okx.com；config base=代理 IP 对交易账户 /account/balance 有效但不适用本端点。
-// 包级变量=测试 httptest 注入点）。种子 config 的 base_url（复制自 spot 代理行）对本端点
-// 刻意忽略。
+// okxSubaccountBase okx 资金/理财端点兜底基址：config base_url 为空才直连 www.okx.com。
+// 9-22 更正（Devin 终席）：9-20「代理不路由 403」系 CF 1010 bot 拦截误诊，真签名实测代理
+// 路由正常且代理 IP 在白名单内；直连会被主机代理分流到轮换出口 IP → 50110。包级变量保留
+// 为测试 httptest 注入点与无 config 兜底。
 var okxSubaccountBase = "https://www.okx.com"
 
 // okxSubaccountSignedGet okx 子账户端点签名 GET（签名同 accountOKX：prehash=ts+method+path+query）。
+// 路由：config base_url 非空走之（cex-proxy 固定 IP 白名单），空才回落直连兜底。
 func (q *CEXAccountQuerier) okxSubaccountSignedGet(ctx context.Context, pathWithQuery string) ([]byte, error) {
 	ts := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 	sign := okxSign(q.apiSecret, ts+"GET"+pathWithQuery)
@@ -125,7 +127,11 @@ func (q *CEXAccountQuerier) okxSubaccountSignedGet(ctx context.Context, pathWith
 		"OK-ACCESS-PASSPHRASE": {q.passphrase},
 		"Content-Type":         {"application/json"},
 	}
-	return q.get(ctx, okxSubaccountBase+pathWithQuery, headers)
+	base := q.baseURL
+	if base == "" {
+		base = okxSubaccountBase
+	}
+	return q.get(ctx, base+pathWithQuery, headers)
 }
 
 // accountOkxFunding okx 资金账户：GET /api/v5/asset/balances?ccy=USDT → USDT 行 bal（真探

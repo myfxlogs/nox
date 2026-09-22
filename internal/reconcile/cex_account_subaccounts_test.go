@@ -70,6 +70,45 @@ func TestCEXAccount_OkxFunding(t *testing.T) {
 	}
 }
 
+// TestCEXAccount_OkxSubaccountPrefersConfigBase 9-22 回归锚：config base_url（cex-proxy）
+// 优先于直连兜底 okxSubaccountBase——9-20「代理不路由」系 CF 1010 误诊，直连会被主机
+// 代理分流到轮换出口 IP → OKX 白名单 50110。
+func TestCEXAccount_OkxSubaccountPrefersConfigBase(t *testing.T) {
+	hitProxy, hitFallback := false, false
+	srvProxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitProxy = true
+		fmt.Fprint(w, `{"code":"0","data":[{"availBal":"0","bal":"0","ccy":"USDT","frozenBal":"0"}]}`)
+	}))
+	defer srvProxy.Close()
+	srvFallback := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitFallback = true
+		fmt.Fprint(w, `{"code":"0","data":[{"availBal":"0","bal":"0","ccy":"USDT","frozenBal":"0"}]}`)
+	}))
+	defer srvFallback.Close()
+
+	old := okxSubaccountBase
+	okxSubaccountBase = srvFallback.URL
+	defer func() { okxSubaccountBase = old }()
+
+	q := NewCEXAccountQuerier("okx", "funding", "key", "secret", "pass", srvProxy.URL, "", false)
+	if _, err := q.Account(context.Background()); err != nil {
+		t.Fatalf("account: %v", err)
+	}
+	if !hitProxy || hitFallback {
+		t.Errorf("base_url 优先断言失败: hitProxy=%v hitFallback=%v", hitProxy, hitFallback)
+	}
+
+	// 兜底分支：base_url 空 → 回落 okxSubaccountBase
+	hitProxy, hitFallback = false, false
+	q2 := NewCEXAccountQuerier("okx", "funding", "key", "secret", "pass", "", "", false)
+	if _, err := q2.Account(context.Background()); err != nil {
+		t.Fatalf("account fallback: %v", err)
+	}
+	if !hitFallback {
+		t.Errorf("空 base_url 应回落直连兜底, hitFallback=%v", hitFallback)
+	}
+}
+
 // TestCEXAccount_OkxEarn D-363 S2：okx earn 走 /api/v5/finance/savings/balance?ccy=USDT
 // → equity=amt（真探实证 5261.25）；holdings 单行 USDT。
 func TestCEXAccount_OkxEarn(t *testing.T) {
