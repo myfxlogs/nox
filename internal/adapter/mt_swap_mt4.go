@@ -42,6 +42,9 @@ func (a *MT4Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 		return nil, nil
 	}
 	snap := q.Snapshot(ctx, symbolSet(sm))
+	// D-383 A2.3/A7：MT4 无 native 双发（canonical 即唯一值）——blocked 行（多行组非 primary）
+	// 整行跳过，canonical 只由合格行（primary/隐式）供数。
+	blocked := a.emitBlockedSet()
 	var facts []fact.Fact
 	var errs []string
 	var skips []string
@@ -51,6 +54,10 @@ func (a *MT4Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 	uncovered := map[int32]int{}       // swap_type 原始值 → 命中符号数（WP1 计数日志）
 	tripleDays := map[string]float64{} // D-077 修复⑪A M3：canon → 三倍日（per-symbol 全量收集）
 	for brokerSym, canon := range sm {
+		if blocked[brokerSym] {
+			skips = append(skips, brokerSym+": canonical emit suppressed (non-primary group variant, D-383)")
+			continue
+		}
 		resp, err := a.mt4.SymbolParams(a.withSessionMD(ctx), &mt4pb.SymbolParamsRequest{Id: a.getToken(), Symbol: brokerSym})
 		if err != nil {
 			errs = append(errs, brokerSym+": "+err.Error())

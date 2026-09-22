@@ -15,16 +15,20 @@ import (
 // ContractSize 该 broker 符号真实合约规格（MT5 SymbolInfo.ContractSize，D-042）；
 // nil = 未知（MT4 / 历史映射），校验跳过。
 // Source 映射来源（D-140 S1）：manual=人工录入 / rule=规则库自动补录 / meta=MT5 元数据采集。
+// IsPrimary D-383 A2.1：一 canonical 一主品种标记（false+组内恰一行=隐式 primary，语义同真）。
 type SymbolMapping struct {
 	Venue        string
 	BrokerSymbol string
 	Canonical    string
 	ContractSize *float64
 	Source       string // D-140 S1：manual/rule/meta，空=manual（DEFAULT 兜底）
+	IsPrimary    bool   // D-383 A2.1
 }
 
 // UpsertSymbolMapping 写入映射（venue+broker_symbol 冲突时更新 canonical + contract_size + source）。
 // ContractSize nil 写 NULL（未知）。Source 空=manual（DB DEFAULT 兜底）。
+// is_primary 恒默认 false（D-383 A8 锚字面）：单行组靠隐式 primary 语义工作，
+// 既有组的显式 primary 由 migration 0122 固化+种子表指定，多行组禁止默默猜。
 func (s *Store) UpsertSymbolMapping(ctx context.Context, m *SymbolMapping) error {
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO broker_symbol_map (venue, broker_symbol, canonical, contract_size, source)
@@ -50,7 +54,7 @@ func (s *Store) DeleteVenueSymbolMappings(ctx context.Context, venue string) err
 // ListSymbolMappings 映射列表；venue 空 = 全部。
 func (s *Store) ListSymbolMappings(ctx context.Context, venue string) ([]SymbolMapping, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT venue, broker_symbol, canonical, contract_size, source FROM broker_symbol_map
+		SELECT venue, broker_symbol, canonical, contract_size, source, is_primary FROM broker_symbol_map
 		WHERE ($1 = '' OR venue = $1)
 		ORDER BY venue, broker_symbol
 	`, venue)
@@ -61,12 +65,56 @@ func (s *Store) ListSymbolMappings(ctx context.Context, venue string) ([]SymbolM
 	var out []SymbolMapping
 	for rows.Next() {
 		var m SymbolMapping
-		if err := rows.Scan(&m.Venue, &m.BrokerSymbol, &m.Canonical, &m.ContractSize, &m.Source); err != nil {
+		if err := rows.Scan(&m.Venue, &m.BrokerSymbol, &m.Canonical, &m.ContractSize, &m.Source, &m.IsPrimary); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
 	}
 	return out, rows.Err()
+}
+
+// ResolvePrimarySymbol D-383 A2.4：执行路径 canonical → venue 原生符号解析（primary-only）。
+// 规则=is_primary 或 (venue, canonical) 组内恰一行（隐式 primary）；多行组零 primary →
+// 歧义态错误 `symbol resolution ambiguous (venue, canonical)`（fail-closed 宁拒单不撞车，
+// 497 实证）；未映射/空 canonical → not mapped 错误。解析确定性：多合格行（唯一索引下不应
+// 存在）按 broker_symbol 序取首。
+func (s *Store) ResolvePrimarySymbol(ctx context.Context, venue, canonical string) (string, error) {
+	if canonical == "" {
+		return "", fmt.Errorf("symbol not mapped (%s, %s)", venue, canonical)
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT broker_symbol, is_primary FROM broker_symbol_map
+		WHERE venue = $1 AND canonical = $2
+		ORDER BY broker_symbol
+	`, venue, canonical)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	type symRow struct {
+		sym     string
+		primary bool
+	}
+	var all []symRow
+	for rows.Next() {
+		var r symRow
+		if err := rows.Scan(&r.sym, &r.primary); err != nil {
+			return "", err
+		}
+		all = append(all, r)
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+	if len(all) == 0 {
+		return "", fmt.Errorf("symbol not mapped (%s, %s)", venue, canonical)
+	}
+	for _, r := range all {
+		if r.primary || len(all) == 1 {
+			return r.sym, nil
+		}
+	}
+	return "", fmt.Errorf("symbol resolution ambiguous (%s, %s)", venue, canonical)
 }
 
 // CanonicalContractProfile 返回 canonical 的期望合约规格（跨全部 venue 该 canonical

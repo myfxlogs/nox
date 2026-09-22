@@ -52,6 +52,9 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 		return nil, nil
 	}
 	snap := q.Snapshot(ctx, symbolSet(sm))
+	// D-383 A2.3：canonical 标签发射闸——多行组非 primary 行仅 canonical 标签停发，
+	// native/variant fact 照发（D-325 语义保留）。blocked 集快照单次读取（同 SymbolMap 并发风格）。
+	blocked := a.emitBlockedSet()
 
 	// D-104 P1 T3：有界并发 8——符号列表 + per-index 结果槽（含全部产出），循环后按序合并。
 	type symEntry struct{ brokerSym, canon string }
@@ -113,7 +116,10 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 			slot.tripleDay = mt5TripleSwapDay(sg.GetThreeDaysSwap())
 			slot.hasTripleDay = true
 			// trade_mode 不依赖 swap 标定（D-060 F3）：emit/emit0/标定 skip 的符号都发。
-			slot.facts = append(slot.facts, tradeModeFact(a.venue, canon, sg.GetTradeMode(), "mt5"))
+			// D-383 A2.3：blocked 行仅 canonical 标签停发（native 照发）。
+			if !blocked[brokerSym] {
+				slot.facts = append(slot.facts, tradeModeFact(a.venue, canon, sg.GetTradeMode(), "mt5"))
+			}
 			// D-325 S1：native variant 双发 trade_mode——与 swap 双发同据（brokerSym==canon 跳过防重复行）。
 			if brokerSym != canon {
 				slot.facts = append(slot.facts, tradeModeFact(a.venue, brokerSym, sg.GetTradeMode(), "mt5"))
@@ -150,15 +156,21 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 				return
 			}
 			n := 0
-			if l, ok := normalizeSwapBpsDaily(mode, sg.GetSwapLong(), price, point, cs); ok {
-				slot.facts = append(slot.facts, swapFact(fact.KindSwapLong, a.venue, canon, l, "mt5"))
-				n++
-			}
-			if s, ok := normalizeSwapBpsDaily(mode, sg.GetSwapShort(), price, point, cs); ok {
-				slot.facts = append(slot.facts, swapFact(fact.KindSwapShort, a.venue, canon, s, "mt5"))
-				n++
+			if !blocked[brokerSym] {
+				if l, ok := normalizeSwapBpsDaily(mode, sg.GetSwapLong(), price, point, cs); ok {
+					slot.facts = append(slot.facts, swapFact(fact.KindSwapLong, a.venue, canon, l, "mt5"))
+					n++
+				}
+				if s, ok := normalizeSwapBpsDaily(mode, sg.GetSwapShort(), price, point, cs); ok {
+					slot.facts = append(slot.facts, swapFact(fact.KindSwapShort, a.venue, canon, s, "mt5"))
+					n++
+				}
+			} else {
+				slot.skips = append(slot.skips, brokerSym+": canonical emit suppressed (non-primary group variant, D-383)")
 			}
 			switch {
+			case blocked[brokerSym]:
+				// canonical 停发行不进 emit 计数（native 仍在下方照发）
 			case n == 0:
 				slot.skips = append(slot.skips, brokerSym+": normalize failed (no contract size?)")
 			case mode == SwapModeNone:
@@ -179,7 +191,7 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 			}
 			// D-092 护栏：InPoints emit 后检查每手日 swap 美元额（防 FxPro mode 9 语义漂移）。
 			// D-104 P1 T2：传 canon + price（JPY 计价 → USD 换算）。
-			if mode == SwapModeInPoints {
+			if mode == SwapModeInPoints && !blocked[brokerSym] {
 				swapInPointsGuardRail("mt5", a.venue, canon, sg.GetSwapLong(), point, cs, price)
 				swapInPointsGuardRail("mt5", a.venue, canon, sg.GetSwapShort(), point, cs, price)
 			}
@@ -211,7 +223,10 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 			uncovered[slot.uncoveredRaw]++
 		}
 		if slot.hasTripleDay {
-			tripleDays[ent.canon] = slot.tripleDay
+			// D-383 A2.3：canonical 键只在合格行收集（blocked 行仅 native 键）。
+			if !blocked[ent.brokerSym] {
+				tripleDays[ent.canon] = slot.tripleDay
+			}
 			// D-325 S1：native variant 并列入列（key 不同不冲突），collectTripleSwapDayFacts 按 key 发射。
 			if ent.brokerSym != ent.canon {
 				tripleDays[ent.brokerSym] = slot.tripleDay

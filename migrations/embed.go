@@ -205,4 +205,6 @@ var (
 	PaperCfdColumnsSQL string
 	//go:embed 0120_position_evals.sql
 	PositionEvalsSQL string
+	//go:embed 0122_broker_symbol_map_is_primary.sql
+	BrokerSymbolMapIsPrimarySQL string
 )

@@ -116,6 +116,7 @@ var migrationFiles = []struct {
 	{118, migrations.RadarWatchlistSQL},                // D-369 S2：确认信号 watchlist（radar 写/core 读）
 	{119, migrations.PaperCfdColumnsSQL},               // D-374 S2：纸面轨扩 cfd×perp（structure/mt_venue 两列）
 	{120, migrations.PositionEvalsSQL},                 // D-377 S1：XASSET 退出评估观测轨（position_evals 窄行表）
+	{122, migrations.BrokerSymbolMapIsPrimarySQL},      // D-383 A2.1/A2.6：is_primary+部分唯一索引+单行组固化+27 组种子（0121 归在审 B 票防撞号）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

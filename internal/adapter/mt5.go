@@ -41,6 +41,8 @@ type MT5Adapter struct {
 	gatewayFallbacks []string
 
 	symMap atomic.Pointer[map[string]string] // brokerSymbol → canonical
+	// emitBlocked D-383 A2.3：canonical 标签发射抑制集（多行组非 primary 行；native 照发）。
+	emitBlocked atomic.Pointer[map[string]bool]
 
 	// MarginSink margin fact 下沉（D-099 事件驱动化）：由 main 经 BrokerManager 注入
 	// （SwapKick 同模式：wiring/main 注入，brokerMgr 只存字段不依赖 engine 包）。
@@ -99,6 +101,25 @@ func (a *MT5Adapter) SetSymbolMap(m map[string]string) {
 		cp[k] = v
 	}
 	a.symMap.Store(&cp)
+}
+
+// SetCanonicalEmitBlocked D-383 A2.3：设置 canonical 标签发射抑制集（多行组非 primary 行）。
+// 抑制行 native/variant fact 照发（D-325 语义保留），仅 canonical 标签停发；MT4 无 native
+// → 抑制行整行跳过（canonical 即唯一值）。
+func (a *MT5Adapter) SetCanonicalEmitBlocked(blocked map[string]bool) {
+	cp := make(map[string]bool, len(blocked))
+	for k, v := range blocked {
+		cp[k] = v
+	}
+	a.emitBlocked.Store(&cp)
+}
+
+// emitBlockedSet 原子快照（SwapFacts 单次读取，与 SetSymbolMap 同并发风格）。
+func (a *MT5Adapter) emitBlockedSet() map[string]bool {
+	if p := a.emitBlocked.Load(); p != nil {
+		return *p
+	}
+	return nil
 }
 
 func (a *MT5Adapter) canonical(brokerSym string) string {
