@@ -4,12 +4,9 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -104,8 +101,8 @@ type radarStore interface {
 	FeishuChatID(ctx context.Context) (string, error)
 	TouchCexUniverseAlert(ctx context.Context, venue, symbol string, ts time.Time) error
 	UpsertRadarWatchlist(ctx context.Context, symbol string, venues []string, reason string) error
-	GetRadarDigests(ctx context.Context) (map[string]string, error)
-	UpsertRadarDigest(ctx context.Context, kind, hash string) error
+	GetRadarDigestMembers(ctx context.Context) (map[string]map[string]pgstore.RadarDigestMember, error)
+	ApplyRadarDigestRun(ctx context.Context, cur map[string][]string, pushed map[string][]string, now time.Time) error
 }
 
 // alertTouch 延后落库的边沿事件冷却戳（venue|symbol）。
@@ -115,24 +112,35 @@ type alertTouch struct{ venue, symbol string }
 // 费率漂移对已上纸面轨 pair 零新增行动项，不重推=设计取舍非缺陷）。
 func realLegKey(p divPair) string { return p.Canon + " " + p.ShortVenue + "×" + p.LongVenue }
 
-// digestHash 集合内容 hash：sha256(sort(keys) join)——集合判等即边沿语义。
-func digestHash(keys []string) string {
-	s := append([]string(nil), keys...)
-	sort.Strings(s)
-	sum := sha256.Sum256([]byte(strings.Join(s, "\x00")))
-	return hex.EncodeToString(sum[:])
-}
-
-// pushDigestIfChanged D-389 S3：digest 行边沿触发——stored==hash 跳过（集合不变不推），
-// 不同→append 行并记 pending[kind]=hash（推送成功后才落库，见 pushAndBookkeep）。
-func pushDigestIfChanged(stored map[string]string, pending map[string]string, lines *[]string, kind string, keys []string, line string) {
-	h := digestHash(keys)
-	if stored[kind] == h {
-		log.Printf("universe-radar: digest unchanged kind=%s n=%d", kind, len(keys))
+// pushDigestNewMembers D-392 S3：digest 成员级边沿——只报新入成员（集合进出抖不再触发）。
+// 可报谓词：m∈cur 且 m∉prevSet（in_prev_set=false/无行）且（last_pushed NULL 或 <now−24h flap TTL）。
+// 新入非空 → 组行（含「另 N 在册」尾注）并记 pending[kind]=新入成员（推送成功后才落库，
+// 见 pushAndBookkeep→ApplyRadarDigestRun）；stored nil=查询失败 fail-open 视为全新入。
+func pushDigestNewMembers(stored map[string]pgstore.RadarDigestMember, pending map[string][]string, lines *[]string, kind string, curKeys []string, itemOf func(string) string, now time.Time) {
+	var newKeys []string
+	inPrev := 0
+	for _, m := range curKeys {
+		st, ok := stored[m]
+		if ok && st.InPrevSet {
+			inPrev++
+			continue // 在册续验不重报
+		}
+		if ok && st.LastPushedAt != nil && now.Sub(*st.LastPushedAt) < 24*time.Hour {
+			continue // flap：跌出 24h 内回归压
+		}
+		newKeys = append(newKeys, m)
+	}
+	if len(newKeys) == 0 {
+		log.Printf("universe-radar: digest 无新入 kind=%s cur=%d", kind, len(curKeys))
 		return
 	}
-	*lines = append(*lines, line)
-	pending[kind] = h
+	items := make([]string, len(newKeys))
+	for i, m := range newKeys {
+		items[i] = itemOf(m)
+	}
+	*lines = append(*lines, fmt.Sprintf("[universe-radar] %s 新入 %d：%s（另 %d 在册续验不重复）",
+		kind, len(newKeys), strings.Join(items, ", "), inPrev))
+	pending[kind] = newKeys
 }
 
 // pushAndBookkeep D-389 S3（R0-A2/R2/R3）：整批发送→成功后记账。
@@ -141,9 +149,9 @@ func pushDigestIfChanged(stored map[string]string, pending map[string]string, li
 // （TouchCexUniverseAlert 移到发送成功后，防「信号已冷却却没推出」静默丢 24h 前置缺陷）。
 // UpsertRadarDigest 失败=上抛 error 终止本轮（R0-A3/R2：写侧静默吞错+读侧 fail-open
 // =永久重推，噪声换形态复发；上抛后不落 hash 下轮重试且错误可见）。
-func pushAndBookkeep(ctx context.Context, st radarStore, send func(context.Context, []string) error, lines []string, pending map[string]string, touches []alertTouch, now time.Time) error {
+func pushAndBookkeep(ctx context.Context, st radarStore, send func(context.Context, []string) error, lines []string, cur map[string][]string, pending map[string][]string, touches []alertTouch, now time.Time) error {
 	if err := send(ctx, lines); err != nil {
-		log.Printf("universe-radar: 告警整批未发出（%d 条丢失，digest hash 与冷却戳均不落，下轮重试）：%v", len(lines), err)
+		log.Printf("universe-radar: 告警整批未发出（%d 条丢失，digest 成员态与冷却戳均不落，下轮重试）：%v", len(lines), err)
 		return nil
 	}
 	for _, t := range touches {
@@ -151,10 +159,8 @@ func pushAndBookkeep(ctx context.Context, st radarStore, send func(context.Conte
 			log.Printf("universe-radar: touch alert %s|%s: %v", t.venue, t.symbol, err)
 		}
 	}
-	for kind, h := range pending {
-		if err := st.UpsertRadarDigest(ctx, kind, h); err != nil {
-			return fmt.Errorf("upsert digest %s: %w", kind, err)
-		}
+	if err := st.ApplyRadarDigestRun(ctx, cur, pending, now); err != nil {
+		return fmt.Errorf("apply digest run: %w", err)
 	}
 	return nil
 }

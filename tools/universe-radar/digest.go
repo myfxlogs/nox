@@ -4,7 +4,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -16,11 +15,12 @@ import (
 // 有腿 → 实时推送）+ radar_watchlist 写侧（divergence 双腿/有腿 band 单腿）。
 // D-389 S3：冷却戳不再即时落库——收集进 touches 由 pushAndBookkeep 在发送成功后落
 // （R0-A2：发送失败=信号已冷却却没推出=静默丢 24h 前置缺陷收编）；legless digest
-// 行走 pushDigestIfChanged 边沿触发（集合不变不推）。
+// 行走 pushDigestNewMembers 成员级边沿触发（D-392：新入才推）。
 func d369RouteFundingEvents(ctx context.Context, st radarStore, rows []normRow,
 	old map[string]pgstore.CexUniverseRow, events []pgstore.CexEvent, now time.Time,
 	fundingMinPct, volMinUSD float64, lines *[]string,
-	stored map[string]string, pending map[string]string, touches *[]alertTouch) {
+	stored map[string]map[string]pgstore.RadarDigestMember, cur map[string][]string,
+	pending map[string][]string, touches *[]alertTouch) {
 
 	// D-369 S1（D1 裁定）：leg=无 的 funding band 事件不进实时推送（单腿信号噪声；
 	// 可行动信号由 FUNDING_DIVERGENCE 单独报），改累计进 digest 汇总行（每轮至多一条）。
@@ -36,17 +36,22 @@ func d369RouteFundingEvents(ctx context.Context, st radarStore, rows []normRow,
 		*lines = append(*lines, fundingEventLine(ev))
 		*touches = append(*touches, alertTouch{ev.row.Venue, ev.row.Symbol})
 	}
-	if len(legless) > 0 {
-		syms := make([]string, 0, len(legless))
-		for _, ev := range legless {
-			syms = append(syms, ev.row.Symbol)
+	syms := make([]string, 0, len(legless))
+	for _, ev := range legless {
+		syms = append(syms, ev.row.Symbol)
+	}
+	cur["legless_band"] = syms
+	pushDigestNewMembers(stored["legless_band"], pending, lines, "legless_band", syms,
+		func(m string) string { return m }, now)
+	// D-392 S4b：冷却戳成员粒度化——只给本轮被推行的新入成员盖戳（被压成员的冷却
+	// 不消耗：未推不抑制其后续真边沿；拿到腿后进场仍可实时报）。
+	if pushed := pending["legless_band"]; len(pushed) > 0 {
+		pushedSet := map[string]bool{}
+		for _, m := range pushed {
+			pushedSet[m] = true
 		}
-		pushDigestIfChanged(stored, pending, lines, "legless_band", syms,
-			fmt.Sprintf("[universe-radar] %d 条 leg=无 funding band 事件已压 digest（%s）",
-				len(legless), strings.Join(syms, ",")))
-		// 集合判变且行已入队才盖冷却戳（行未推时不应抑制后续真边沿）。
-		if _, queued := pending["legless_band"]; queued {
-			for _, ev := range legless {
+		for _, ev := range legless {
+			if pushedSet[ev.row.Symbol] {
 				*touches = append(*touches, alertTouch{ev.row.Venue, ev.row.Symbol})
 			}
 		}

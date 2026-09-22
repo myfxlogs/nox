@@ -156,15 +156,18 @@ func run(ctx context.Context) error {
 	// funding 类统一生效（FUNDING_DIVERGENCE 走自身事件表冷却，venue='multi' 无 universe 行）。
 	var lines []string
 	if !bootstrap {
-		// D-389 S3：digest 边沿状态读出——查询失败=fail-open（视为全变照推，
+		// D-392：digest 成员级边沿状态读出——查询失败=fail-open（视为全新入照推，
 		// digest 是低价值行宁滥勿漏；代价=R0-A4 已声明：DB 故障期间 digest
 		// 可能每轮重推=已接受取舍，触发源从集合不变变 DB 故障）。
-		stored, derr := st.GetRadarDigests(ctx)
+		stored, derr := st.GetRadarDigestMembers(ctx)
 		if derr != nil {
-			log.Printf("universe-radar: GetRadarDigests 失败，fail-open 照推: %v", derr)
+			log.Printf("universe-radar: GetRadarDigestMembers 失败，fail-open 照推: %v", derr)
 			stored = nil
 		}
-		pending := map[string]string{}
+		// cur 收全部四类键含空集（S2：in_prev 清零不得依赖该类本轮有成员，
+		// 否则空集周期残留标记永久误压「离开>24h 再回归」）。
+		cur := map[string][]string{"legless_band": nil, "class_filtered": nil, "real_leg": nil, "suspect": nil}
+		pending := map[string][]string{}
 		var touches []alertTouch
 		for _, e := range events {
 			if e.EventType == "FUNDING_DIVERGENCE" {
@@ -183,41 +186,41 @@ func run(ctx context.Context) error {
 		// last_alert_ts 24h 冷却保留作 flap 抑制（进出带抖动至多一报/日）。
 		// D-369 S1/S2（R3 拆分）：digest 累加/分流判定/watchlist 写侧 → digest.go
 		// d369RouteFundingEvents（块体逐字节搬移零行为变更）。
-		d369RouteFundingEvents(ctx, st, rows, old, events, now, fundingMinPct, volMinUSD, &lines, stored, pending, &touches)
-		// D-374 A 面：非币类 canonical divergence 压 digest（class_filtered，与 leg=无 同款汇总模式）。
-		if len(classFiltered) > 0 {
-			pushDigestIfChanged(stored, pending, &lines, "class_filtered", classFiltered,
-				fmt.Sprintf("[universe-radar] %d 个非币类 canonical divergence 已压 digest（class_filtered：%s）",
-					len(classFiltered), strings.Join(classFiltered, ",")))
-		}
+		d369RouteFundingEvents(ctx, st, rows, old, events, now, fundingMinPct, volMinUSD, &lines, stored, cur, pending, &touches)
+		// D-374 A 面：非币类 canonical divergence 压 digest（class_filtered，成员级边沿）。
+		cur["class_filtered"] = classFiltered
+		pushDigestNewMembers(stored["class_filtered"], pending, &lines, "class_filtered", classFiltered,
+			func(m string) string { return m }, now)
 		// D-376 S3：真腿 divergence digest 行+极端 funding suspect 压制行（同款汇总风格；
 		// 真腿不做完全静默——digest 保留可见性，行动项=纸面验证轨）。
 		// D-389 R0-A1 裁定选项 (a)：real_leg 集合 hash 键=pair 身份（canon+short×long），
 		// 不含费率——对已上纸面验证轨的 pair，费率漂移零新增行动项；代价=漂移不再
 		// 重推（行内 @x.x% 数字变化而 pair 不变时不推）=设计取舍非缺陷。
-		if len(realPairs) > 0 {
-			items := make([]string, 0, len(realPairs))
-			keys := make([]string, 0, len(realPairs))
-			for _, p := range realPairs {
-				items = append(items, fmt.Sprintf("%s %s×%s@%+.1f%%/%+.1f%%", p.Canon, p.ShortVenue, p.LongVenue, p.FundShort, p.FundLong))
-				keys = append(keys, realLegKey(p))
-			}
-			pushDigestIfChanged(stored, pending, &lines, "real_leg", keys,
-				fmt.Sprintf("[universe-radar] %d 条真腿 divergence 转纸面验证（real_leg：%s）",
-					len(realPairs), strings.Join(items, ", ")))
+		// 成员键=pair 身份（canon+short×long），item 含费率（新入成员信息量保留）。
+		realItem := map[string]string{}
+		for _, p := range realPairs {
+			cur["real_leg"] = append(cur["real_leg"], realLegKey(p))
+			realItem[realLegKey(p)] = fmt.Sprintf("%s %s×%s@%+.1f%%/%+.1f%%", p.Canon, p.ShortVenue, p.LongVenue, p.FundShort, p.FundLong)
 		}
-		if len(suspectList) > 0 {
-			pushDigestIfChanged(stored, pending, &lines, "suspect", suspectList,
-				fmt.Sprintf("[universe-radar] %d 条极端 funding divergence 已压（suspect：%s）",
-					len(suspectList), strings.Join(suspectList, ",")))
-		}
+		pushDigestNewMembers(stored["real_leg"], pending, &lines, "real_leg", cur["real_leg"],
+			func(m string) string { return realItem[m] }, now)
+		cur["suspect"] = suspectList
+		pushDigestNewMembers(stored["suspect"], pending, &lines, "suspect", suspectList,
+			func(m string) string { return m }, now)
 		if len(lines) > 0 {
-			// D-389 R0-A3/R2：UpsertRadarDigest 失败=上抛终止本轮（不落 hash 下轮重试，
-			// 错误可见——读侧 fail-open + 写侧静默吞错的组合净效果=永久重推）。
+			// D-389 R0-A3/R2 + D-392 S5：ApplyRadarDigestRun 失败=上抛终止本轮
+			// （不落成员态下轮重试，错误可见——读侧 fail-open + 写侧静默吞错=永久重推）。
 			if err := pushAndBookkeep(ctx, st, func(c context.Context, l []string) error {
 				return sendRadarAlert(c, st, l)
-			}, lines, pending, touches, now); err != nil {
+			}, lines, cur, pending, touches, now); err != nil {
 				return err
+			}
+		} else {
+			// 零行轮次仍记账：in_prev 清零+过期清理每轮必跑（S2 缺陷 2——
+			// 静默轮不记账则跌出成员 in_prev 残留，>24h 回归被永久误压）。
+			// pending 必为空（无行即无新推），last_pushed_at 不动。
+			if err := st.ApplyRadarDigestRun(ctx, cur, nil, now); err != nil {
+				log.Printf("universe-radar: digest 成员态记账失败（零行轮，下轮重试）: %v", err)
 			}
 		}
 	}
