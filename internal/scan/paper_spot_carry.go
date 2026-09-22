@@ -46,11 +46,13 @@ type PaperStore interface {
 	ExitPaperSpotCarry(ctx context.Context, id int64, reason string) error
 }
 
-// StepPaperSpotCarry 每轮扫描后调用：①开仓（20≤net≤300 ∧ vol24h≥$10M ∧ 持续≥48h ∧ active<12，
-// 候选按 net 降序开到上限止）②逐仓累积（active+demo，R1 S5）③退出（|funding|<10% 连续 2 轮 →
+// StepPaperSpotCarry 每轮扫描后调用：①开仓（20≤net≤300 ∧ vol24h≥$10M ∧ 持续≥48h ∧
+// 连续 PaperEntryStreakRounds 轮全条件达标（D-383C 进场持续闸，entryStreak 由 wire_scan
+// 装配一次逐轮传入）∧ active<12，达标候选按 net 降序开到上限止，streak 未满者不参与
+// cap 竞争防尖峰占坑）②逐仓累积（active+demo，R1 S5）③退出（|funding|<10% 连续 2 轮 →
 // normalized；满 7 天 → age_7d 强评——**仅 active**，demo 行只累积不自动退=人工/业主域）。
 // 返回本轮开仓 symbol 清单（wire 侧聚一条开仓事件告警，D-350R1 S3）与退出行数。
-func StepPaperSpotCarry(ctx context.Context, st PaperStore, now time.Time) (opened []string, exited int, err error) {
+func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntryStreak, now time.Time) (opened []string, exited int, err error) {
 	uni, err := st.ListCexUniverse(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("paper step: list cex universe: %w", err)
@@ -96,11 +98,21 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, now time.Time) (open
 		}
 		cands = append(cands, cand{key: key, u: u, funding: *u.FundingAnn, net: net})
 	}
+	// D-383C 进场持续闸：连续 PaperEntryStreakRounds 轮全条件达标才放行——任一条件失败/
+	// 候选从 uni 消失由 Step 清零（键=venue|symbol）；streak 未满的键不进开仓排序。
+	passed := make([]string, 0, len(cands))
+	for _, c := range cands {
+		passed = append(passed, c.key)
+	}
+	eligible := entryStreak.Step(passed, PaperEntryStreakRounds)
 	// D-350R2 S2：排序键=net 降序（|funding|−cost，与闸同键）。签名 funding 降序会把负 funding
 	// （long_perp）恒排全部正侧之后——cap 命中时 long_perp 侧系统性饿死，且 age_7d 退出即重进
 	// 使饿死可永久化（实证：ESPUSDT net 292.85 净序应榜首，签名序垫底进不了 cap）。
 	sort.Slice(cands, func(i, j int) bool { return cands[i].net > cands[j].net })
 	for _, c := range cands {
+		if _, ok := eligible[c.key]; !ok {
+			continue // streak 未满，不参与 cap 竞争（防尖峰占坑）
+		}
 		if len(activeByKey)+len(opened) >= PaperMaxActive {
 			break
 		}
@@ -120,6 +132,7 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, now time.Time) (open
 			return opened, exited, fmt.Errorf("paper step: open %s: %w", c.key, err)
 		}
 		opened = append(opened, c.u.Symbol)
+		entryStreak.Drop(c.key) // 开仓成功即删键（已 active，D-383C）
 	}
 	// ②累积（active+demo）+ ③退出（仅 active）
 	for _, p := range accrable {
