@@ -47,11 +47,28 @@ type ScanResult struct {
 
 // CarryUniverseScanner 4h 扫描器。
 type CarryUniverseScanner struct {
-	store Store
+	store        Store
+	tradeModeTTL time.Duration // D-382 S1：trade_mode fact 新鲜度（超期视同未知放行）
 }
 
 func NewCarryUniverseScanner(store Store) *CarryUniverseScanner {
-	return &CarryUniverseScanner{store: store}
+	return &CarryUniverseScanner{store: store, tradeModeTTL: 24 * time.Hour}
+}
+
+// SetTradeModeTTL D-382 S1：注入 trade_mode 新鲜度（仿 FactCache.SetTradeModeTTL 惯例，
+// wire_scan 装配传 cfg.TradeModeTTL）。≤0 = 不查新鲜度（全按存在性判定）。
+func (sc *CarryUniverseScanner) SetTradeModeTTL(d time.Duration) {
+	sc.tradeModeTTL = d
+}
+
+// modeAllowed D-382 S1：方向感知可交易性（detector.legTradable 语义对齐、独立实现防包耦合）。
+// 买腿（long_cfd）要求 mode∈{LongOnly,Full}；卖腿（short_cfd）∈{ShortOnly,Full}；
+// CloseOnly/Disabled 皆拦开新仓——用「允许集」判定不是「≠0」。
+func modeAllowed(mode int64, buy bool) bool {
+	if buy {
+		return mode == fact.TradeModeLongOnly || mode == fact.TradeModeFull
+	}
+	return mode == fact.TradeModeShortOnly || mode == fact.TradeModeFull
 }
 
 // cexCanonical CEX symbol→canonical（detector/采集器现行规则同构：去 USDT 后缀）。
@@ -78,26 +95,6 @@ func normalizeJoinKey(s string) string {
 	return s
 }
 
-// SUSPECT_PCT D-345：输入腿年化疑源线（%）。DOT 脏源实证（broker 1314615 DOTUSDT
-// swap_long=−469.5%/yr 离谱定价致假机会霸榜=发现层失能）：越界行不删（保观测），
-// net=0+swap_free=false+note 剔除排名，digest/告警自然排除。
-const SUSPECT_PCT = 100.0
-
-// suspectNote D-345：任一输入腿 |年化|>SUSPECT_PCT → 返回疑因 note；干净组合返回 ""。
-func suspectNote(swapPct, fundingPct float64) string {
-	parts := make([]string, 0, 2)
-	if abs(swapPct) > SUSPECT_PCT {
-		parts = append(parts, fmt.Sprintf("swap %.1f%%", abs(swapPct)))
-	}
-	if abs(fundingPct) > SUSPECT_PCT {
-		parts = append(parts, fmt.Sprintf("funding %.1f%%", abs(fundingPct)))
-	}
-	if len(parts) == 0 {
-		return ""
-	}
-	return "suspect: " + strings.Join(parts, ", ")
-}
-
 // SPOT_CARRY_COST_PCT D-350：spot-carry 双边成本折算（%/yr）≈ binance 现货 taker 0.1% +
 // perp taker 0.05% 单边摊一年持有期（粗折算，纸面轨/demo 用真实成交校准）。
 const SPOT_CARRY_COST_PCT = 0.15
@@ -121,6 +118,30 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 	if err != nil {
 		return res, fmt.Errorf("funding facts: %w", err)
 	}
+	// D-382 S1：trade_mode 消费——可执行性过滤数据源（facts 已在库零新数据源）。
+	// 读取失败 fail-open 视同全未知（发现层不因数据缺席误杀，F5 同惯例）。
+	tmFacts, err := sc.store.LatestFacts(ctx, fact.KindTradeMode, "", "")
+	if err != nil {
+		log.Printf("[scan] carry universe: trade_mode facts: %v（视同全未知放行）", err)
+		tmFacts = nil
+	}
+	tmByKey := make(map[string]fact.Fact, len(tmFacts))
+	for _, f := range tmFacts {
+		tmByKey[f.Venue+":"+f.Symbol] = f
+	}
+	// tmKnown trade_mode 已知且新鲜判定：超 tradeModeTTL 视同未知（venue 停报时陈旧
+	// mode=0 不得永久压死已解禁候选——「不逃脱」公理，A7 锚）。
+	tmKnown := func(f fact.Fact) (int64, bool) {
+		tf, ok := tmByKey[f.Venue+":"+f.Symbol]
+		if !ok {
+			return 0, false
+		}
+		if sc.tradeModeTTL > 0 && time.Since(tf.Ts) > sc.tradeModeTTL {
+			return 0, false
+		}
+		return int64(tf.Value), true
+	}
+	filteredCanonicals := map[string]bool{} // D-382 S2：有 swap fact 进入过滤评估的 canonical 集
 	// MT swap facts 按 symbol→canonical（broker_symbol_map join；同一 symbol 多 venue 取
 	// swap 条件最好的组合）。
 	type mtSwap struct {
@@ -148,6 +169,12 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 			res.Skipped++
 			continue
 		}
+		// D-382 S1：可执行性过滤——买腿要求 mode∈{LongOnly,Full}；已知且禁 → skip 该 fact
+		// （fact 级过滤=最优 venue 被禁时归并自然落次优可交易 venue，canonical 存活不逃脱）。
+		if mode, known := tmKnown(f); known && !modeAllowed(mode, true) {
+			filteredCanonicals[canonical] = true
+			continue
+		}
 		// 同 canonical 多 venue：取成本最低（值最大，负值里最接近 0）
 		if cur, ok := longByCanon[canonical]; !ok || f.Value > cur.val {
 			longByCanon[canonical] = mtSwap{venue: f.Venue, canonical: canonical, val: f.Value}
@@ -170,6 +197,11 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 		}
 		if canonical == "" {
 			res.Skipped++
+			continue
+		}
+		// D-382 S1：卖腿要求 mode∈{ShortOnly,Full}（同 long 循环，fact 级过滤 venue 回退）。
+		if mode, known := tmKnown(f); known && !modeAllowed(mode, false) {
+			filteredCanonicals[canonical] = true
 			continue
 		}
 		if cur, ok := shortByCanon[canonical]; !ok || f.Value > cur.val {
@@ -223,44 +255,24 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 			candidates = append(candidates, row)
 		}
 		if len(candidates) == 0 {
+			// D-382 S2：全禁标记行——三条件全满足才产（v2 钉死）：①canonical∈fundByCanon
+			// （无 funding 本就不产行=正确静默）②有 swap fact 进入过滤评估 ③双向归并零存活。
+			// 行语义=D-345 suspect 先例（脏行可见、net=0 沉底、告警天然不触）+D-350 (spot)
+			// 哨兵 venue 先例；venue 日后解禁 → facts 更新 → 行自动复活为真候选。
+			if filteredCanonicals[canonical] {
+				res.Rows = append(res.Rows, UniverseRow{
+					Canonical: canonical, MtVenue: "(all-disabled)", CexVenue: cf.venue,
+					NetAnnual: 0, FundingAnn: cf.val, SwapFree: false,
+					Note: "mt_trade_disabled",
+				})
+			}
 			continue
 		}
 		sort.Slice(candidates, func(i, j int) bool { return candidates[i].NetAnnual > candidates[j].NetAnnual })
 		res.Rows = append(res.Rows, candidates[0])
 	}
-	// D-350 阶段①：第三结构 spot_carry——同所「买现货+空永续」（正 funding）/反向（负 funding），
-	// 现货对冲腿=虚拟零成本腿：net=|funding_ann|−SPOT_CARRY_COST_PCT。数据源=fin_cex_universe
-	//（T1∪T3 TRADING 行；T2 类非加密无现货跳过）。独立行独立排名（与 CFD 结构不可直接比 net，
-	// mt_venue='(spot)' 标记）。持续性闸=first_seen ≥48h（瞬态 spike 不入，D-328 概念）。
-	// 注：D-345 suspect 门不作用于本结构——CEX funding 是真实可收现金流（非 MT swap 定价
-	// 伪影），质量防线=持续性闸+纸面 normalization 退出（B2USDT 120.4% 持续 3 天=设计在案真候选）。
-	uni, err := sc.store.ListCexUniverse(ctx)
-	if err != nil {
-		// D-350R1 S6：universe 读取失败降级跳过 spot 段（CFD 行照常返回，D-336 语义不回归）
-		log.Printf("[scan] carry universe: list cex universe: %v（spot_carry 段本轮跳过）", err)
-		uni = nil
-	}
-	now := time.Now()
-	for _, u := range uni {
-		if u.Status != "TRADING" || (u.Tier != "T1" && u.Tier != "T3") {
-			continue
-		}
-		if u.FundingAnn == nil {
-			continue
-		}
-		if now.Sub(u.FirstSeen) < spotCarryMinAge {
-			continue // 持续性闸：上市窗瞬态 spike 不入候选
-		}
-		net := abs(*u.FundingAnn) - SPOT_CARRY_COST_PCT
-		if net < PaperOpenNetPct {
-			continue // D-350R1 S4：落表 floor=net≥20（低于不落行，观测价值不抵榜单噪音）
-		}
-		res.Rows = append(res.Rows, UniverseRow{
-			Canonical: u.Symbol, MtVenue: "(spot)", CexVenue: u.Venue,
-			NetAnnual: net, FundingAnn: *u.FundingAnn,
-			SwapFree: true, Structure: "spot_carry",
-		})
-	}
+	// D-350 阶段①：第三结构 spot_carry 段（D-382 S3 拆出 carry_universe_spot.go，纯搬移）。
+	sc.appendSpotCarryRows(ctx, &res)
 	sort.Slice(res.Rows, func(i, j int) bool { return res.Rows[i].NetAnnual > res.Rows[j].NetAnnual })
 	return res, nil
 }
