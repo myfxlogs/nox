@@ -6,6 +6,7 @@ package exchange
 import (
 	"encoding/json"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -137,5 +138,17 @@ func TestD383B2R1_LoginFrameSignPinned(t *testing.T) {
 	}
 	if got := args[0]["sign"]; got != want {
 		t.Fatalf("login sign = %s, want %s（红=R1 prehash 组合错，OKX 必拒签死循环）", got, want)
+	}
+}
+
+// TestD383B2R3_LoginTsUnixSeconds R3 返修锚：login ts 必须=Unix epoch 秒串（SSOT §5 B.2
+// 订正）——全数字可 ParseInt；ISO8601 残留（REST 头格式误植）时本锚必红（OKX 60004）。
+func TestD383B2R3_LoginTsUnixSeconds(t *testing.T) {
+	if got := okxPrivateLoginTs(time.Unix(1538054050, 0)); got != "1538054050" {
+		t.Fatalf("login ts = %q, want Unix 秒串 1538054050（红=ISO8601 残留）", got)
+	}
+	n, err := strconv.ParseInt(okxPrivateLoginTs(time.Now()), 10, 64)
+	if err != nil || n <= 0 {
+		t.Fatalf("login ts 须全数字可 ParseInt: %q err=%v（SSOT 锚字面）", okxPrivateLoginTs(time.Now()), err)
 	}
 }
