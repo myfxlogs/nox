@@ -49,11 +49,10 @@ func (s *Service) ListPaperSpotCarry(ctx context.Context, req *connect.Request[v
 	s.paperBoardMu.Unlock()
 
 	src := s.paperBoardSourceOf()
-	rows, err := buildPaperSpotCarryBoard(ctx, src, time.Now())
+	resp, err := buildPaperSpotCarryBoard(ctx, src, time.Now())
 	if err != nil {
 		return nil, err
 	}
-	resp := &v1.ListPaperSpotCarryResponse{Rows: rows}
 
 	s.paperBoardMu.Lock()
 	s.paperBoardCached, s.paperBoardCachedAt = resp, time.Now()
@@ -69,8 +68,10 @@ func (s *Service) paperBoardSourceOf() paperBoardSource {
 	return s.store
 }
 
-// buildPaperSpotCarryBoard 行构建+三段排序（纯函数，注入 now 供数值锚测试）。
-func buildPaperSpotCarryBoard(ctx context.Context, src paperBoardSource, now time.Time) ([]*v1.PaperSpotCarryRow, error) {
+// buildPaperSpotCarryBoard 行构建+三段排序+轨级汇总（纯函数，注入 now 供数值锚测试）。
+// D-393：tracks 由同一批 papers 聚合（零新查询）；days_held 存活口径=(exit_ts ?? now)−entry_ts
+// ——exited 行旧口径 now−entry_ts 是活计时器（退出后数字继续涨，DB 实拍可复现），随票收编。
+func buildPaperSpotCarryBoard(ctx context.Context, src paperBoardSource, now time.Time) (*v1.ListPaperSpotCarryResponse, error) {
 	papers, err := src.ListPaperSpotCarryBoard(ctx, paperExitRecentWindow)
 	if err != nil {
 		return nil, err
@@ -81,7 +82,23 @@ func buildPaperSpotCarryBoard(ctx context.Context, src paperBoardSource, now tim
 	}
 
 	rows := make([]*v1.PaperSpotCarryRow, 0, len(papers))
+	tracks := map[string]*v1.PaperTrackSummary{}
 	for _, p := range papers {
+		structure := p.Structure
+		if structure == "" {
+			structure = "spot_carry" // 历史行空串归一（scanPaperSpotCarry 同款）
+		}
+		// 存活时长：exited 冻结在 exit_ts，active/demo 走到 now（退出后不再涨）。
+		heldEnd := now
+		if p.ExitTs != nil {
+			heldEnd = *p.ExitTs
+		}
+		// 轨级聚合（win 判定 total_pnl_usd 优先、accrued_usd 兜底——见 proto 口径钉死）。
+		tr := tracks[structure]
+		if tr == nil {
+			tr = &v1.PaperTrackSummary{Structure: structure}
+			tracks[structure] = tr
+		}
 		row := &v1.PaperSpotCarryRow{
 			Id:              p.ID,
 			Venue:           p.Venue,
@@ -92,8 +109,10 @@ func buildPaperSpotCarryBoard(ctx context.Context, src paperBoardSource, now tim
 			EntryFundingAnn: p.EntryFundingAnn,
 			AccruedUsd:      p.AccruedUSD,
 			EntryTs:         p.EntryTs.Format(time.RFC3339),
-			DaysHeld:        math.Floor(now.Sub(p.EntryTs).Hours()/24*10) / 10,
+			DaysHeld:        math.Floor(heldEnd.Sub(p.EntryTs).Hours()/24*10) / 10,
 			Note:            p.Note,
+			Structure:       structure,
+			MtVenue:         p.MtVenue,
 		}
 		if p.ExitTs != nil {
 			row.ExitTs = p.ExitTs.Format(time.RFC3339)
@@ -126,7 +145,34 @@ func buildPaperSpotCarryBoard(ctx context.Context, src paperBoardSource, now tim
 			ann := p.AccruedUSD / p.QtyUSD * 365 / days * 100
 			row.RealizedAnnPct = &ann
 		}
+		switch p.Status {
+		case "active":
+			tr.ActiveN++
+			tr.AccruedHoldingUsd += p.AccruedUSD
+			tr.NotionalHoldingUsd += p.QtyUSD
+		case "demo":
+			tr.DemoN++
+			tr.AccruedHoldingUsd += p.AccruedUSD
+			tr.NotionalHoldingUsd += p.QtyUSD
+		default: // exited（窗口内）
+			tr.ExitedN++
+			tr.ExitedAccruedSumUsd += p.AccruedUSD
+			win := p.AccruedUSD // total_pnl 优先，NULL 回退 accrued（基差缺失时收割口径兜底）
+			if row.TotalPnlUsd != nil {
+				win = *row.TotalPnlUsd
+			}
+			if win > 0 {
+				tr.WinRatePct++ // 暂存 win 计数，循环后换算%
+			}
+			tr.AvgExitDays += heldEnd.Sub(p.EntryTs).Hours() / 24 // 暂存合计，循环后取均
+		}
 		rows = append(rows, row)
+	}
+	for _, tr := range tracks {
+		if tr.ExitedN > 0 {
+			tr.WinRatePct = tr.WinRatePct / float64(tr.ExitedN) * 100
+			tr.AvgExitDays /= float64(tr.ExitedN)
+		}
 	}
 
 	// 排序三段：active（net_now desc，null 殿后）→ demo → exited（exit_ts desc）；
@@ -149,7 +195,25 @@ func buildPaperSpotCarryBoard(ctx context.Context, src paperBoardSource, now tim
 		}
 		return false
 	})
-	return rows, nil
+
+	// 轨序固定（四轨），未知 structure 尾部字典序追加（未来新轨不丢）。
+	order := map[string]int{"spot_carry": 0, "perp_perp": 1, "long_cfd_short_perp": 2, "short_cfd_long_perp": 3}
+	trackList := make([]*v1.PaperTrackSummary, 0, len(tracks))
+	for _, tr := range tracks {
+		trackList = append(trackList, tr)
+	}
+	sort.SliceStable(trackList, func(i, j int) bool {
+		oi, oki := order[trackList[i].Structure]
+		oj, okj := order[trackList[j].Structure]
+		if oki != okj {
+			return oki // 已知轨在前
+		}
+		if oki {
+			return oi < oj
+		}
+		return trackList[i].Structure < trackList[j].Structure
+	})
+	return &v1.ListPaperSpotCarryResponse{Rows: rows, Tracks: trackList}, nil
 }
 
 // segRank 三段序：active=0 / demo=1 / exited=2。

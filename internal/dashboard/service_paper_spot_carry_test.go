@@ -151,10 +151,11 @@ func TestD352_BuildBoard_NumericAnchors(t *testing.T) {
 		"binance|A": {Venue: "binance", Symbol: "A", FundingAnn: boardF64(-293.2)}, // |−293.2|−0.15=293.05
 		// B 缺行
 	}
-	rows, err := buildPaperSpotCarryBoard(context.Background(), fake, now)
+	resp, err := buildPaperSpotCarryBoard(context.Background(), fake, now)
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
+	rows := resp.Rows
 	if rows[0].DaysHeld != 1.5 {
 		t.Errorf("A days_held = %v, want 1.5（36h 取整 1 位）", rows[0].DaysHeld)
 	}
@@ -217,12 +218,12 @@ func TestD354_PnlNumbers(t *testing.T) {
 		{ID: 3, Venue: "okx", Symbol: "AKE", Side: "short_perp", Status: "active",
 			QtyUSD: 1000, EntryFundingAnn: 25, EntryTs: now.Add(-2 * 24 * time.Hour), AccruedUSD: 1.0}, // 无基差
 	}}
-	rows, err := buildPaperSpotCarryBoard(context.Background(), fake, now)
+	resp, err := buildPaperSpotCarryBoard(context.Background(), fake, now)
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
 	bySym := map[string]*v1.PaperSpotCarryRow{}
-	for _, r := range rows {
+	for _, r := range resp.Rows {
 		bySym[r.Symbol] = r
 	}
 	// short：basisPnl=1000×(50−30)/1e4=+2；净浮盈=2.6+2−3=1.6
