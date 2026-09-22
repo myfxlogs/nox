@@ -37,11 +37,11 @@ type Config struct {
 	CommissionCFDBps      float64            // MT4/MT5 单腿回退默认（账号 commission_bps NULL 时用）
 	CommissionCEXTakerBps float64            // CEX taker 单腿回退默认
 	CommissionTaker       map[string]float64 // CEX 逐交易所 taker（binance/okx/gate）
+	XAssetCexFeeBps       float64            // D-391：回本「本」CEX fee 估算率（缺省 5.0），fee_usd NULL 回退
 
 	// === MT swap 采集（§3.6）===
 	SwapRefresh time.Duration // swap 轮询间隔（默认 1h，swap 变化慢）
-	// TradeModeTTL trade_mode Fact 新鲜度（D-060 F4/F5 共用）：超期视为未知放行
-	//（broker 周末置 Disabled 不跨周末误杀周一；venue 服务端拒单是最终权威）。
+	// TradeModeTTL trade_mode Fact 新鲜度（D-060 F4/F5 共用）：超期视为未知放行（broker 周末置 Disabled 不误杀周一；venue 拒单为最终权威）。
 	TradeModeTTL       time.Duration
 	MaxLegImbalancePct float64 // 卖腿名义不平衡上限（百分比，D-028/D-060 实施修正②）
 
