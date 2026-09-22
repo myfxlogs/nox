@@ -48,7 +48,7 @@ type CexIOAccount struct {
 // 只收 venue∈{binance,okx} 且 !simulated 且有凭据的配置（real-only 姿态；gate 仅 sim 跳过）；
 // R1：(venue,api_key) 去重——同凭据多 config（spot/perp/funding/earn 同账号）只采一次，
 // 归属 canonical=min(id)（binance 3→1、okx 4→1；不同 key 仍各采）——进出账是账号级事实，
-// 重复采集只会撞幂等键浪费调用。okx 资金域端点直连 www.okx.com（核证点④：代理 403 实探）。
+// 重复采集只会撞幂等键浪费调用。okx base_url 取 DB 配置（现值=cex-proxy，D-396），空值才兜底直连 www.okx.com。
 func FilterIOAccounts(cfgs []pgstore.ExchangeConfig) []CexIOAccount {
 	pick := map[string]pgstore.ExchangeConfig{} // (venue,api_key) → canonical（min id）
 	for _, c := range cfgs {
@@ -63,7 +63,7 @@ func FilterIOAccounts(cfgs []pgstore.ExchangeConfig) []CexIOAccount {
 	out := make([]CexIOAccount, 0, len(pick))
 	for _, c := range pick {
 		base := c.BaseURL
-		if c.Venue == "okx" {
+		if c.Venue == "okx" && base == "" {
 			base = "https://www.okx.com"
 		}
 		out = append(out, CexIOAccount{

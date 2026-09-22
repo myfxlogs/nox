@@ -122,7 +122,8 @@ func TestCexIOCollector_OkxWatermarkFilter(t *testing.T) {
 	}
 }
 
-// TestFilterIOAccounts D-365 S5：sim 配置与无凭据行不进采集列表（real-only）；okx 直连基址注入。
+// TestFilterIOAccounts D-365 S5：sim 配置与无凭据行不进采集列表（real-only）；
+// D-396：okx base_url 空值兜底 www.okx.com，非空（=cex-proxy）透出不被覆盖。
 func TestFilterIOAccounts(t *testing.T) {
 	cfgs := []pgstore.ExchangeConfig{
 		{ID: 1, Venue: "binance", VenueType: "spot", APIKey: "k", APISecret: "s", Simulated: false},
@@ -130,13 +131,23 @@ func TestFilterIOAccounts(t *testing.T) {
 		{ID: 3, Venue: "gate", VenueType: "perp", APIKey: "k3", APISecret: "s3", Simulated: false},
 		{ID: 4, Venue: "okx", VenueType: "spot", APIKey: "", APISecret: "", Simulated: false},
 		{ID: 5, Venue: "okx", VenueType: "spot", APIKey: "k5", APISecret: "s5", Simulated: false},
+		{ID: 6, Venue: "okx", VenueType: "spot", APIKey: "k6", APISecret: "s6", Simulated: false, BaseURL: "https://proxy:8443"},
 	}
 	accs := FilterIOAccounts(cfgs)
-	if len(accs) != 2 {
-		t.Fatalf("accs = %d, want 2（sim/gate/无凭据全滤）: %+v", len(accs), accs)
+	if len(accs) != 3 {
+		t.Fatalf("accs = %d, want 3（sim/gate/无凭据全滤）: %+v", len(accs), accs)
 	}
-	if accs[1].Venue == "okx" && accs[1].BaseURL != "https://www.okx.com" {
-		t.Errorf("okx 基址应直连 www.okx.com（核证点④）, got %q", accs[1].BaseURL)
+	okxBase := map[string]string{} // apiKey → baseURL（map 迭代序不定，按键断言）
+	for _, a := range accs {
+		if a.Venue == "okx" {
+			okxBase[a.APIKey] = a.BaseURL
+		}
+	}
+	if okxBase["k5"] != "https://www.okx.com" {
+		t.Errorf("okx 空 base_url 应兜底 www.okx.com, got %q", okxBase["k5"])
+	}
+	if okxBase["k6"] != "https://proxy:8443" {
+		t.Errorf("okx 非空 base_url 应透出不被覆盖（D-396）, got %q", okxBase["k6"])
 	}
 }
 
