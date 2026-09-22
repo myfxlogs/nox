@@ -70,6 +70,8 @@ type LegResult struct {
 	Status     string // FILLED / FAILED
 	Swap       float64
 	Commission float64
+	// FeeUSD D-391 S2：入场手续费（正数成本口径；0=venue 未回报）。
+	FeeUSD float64
 }
 
 // checkSwapArbComboAllow D-159 W1a R1 S2.3：SWAPARB 精确组合门禁——真实名义额检查。

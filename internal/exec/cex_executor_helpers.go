@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -31,17 +32,23 @@ func asString(v any) string {
 }
 
 // okxOrderStatus 查询单笔订单成交（GET /api/v5/trade/order，签名四头 + simulated 头）。
+// D-391 S2：+fee/feeCcy——实证（2026-09-22 pos498 ordId=3943917115077283840 实拍）：
+// order 响应含累计 fee="-2.18095" feeCcy="USDT"（负号=付出）。
 func (e *CEXExecutor) okxOrderStatus(ctx context.Context, instID, ordID string) (struct {
 	AccFillSz          string `json:"accFillSz"`
 	AvgPx              string `json:"avgPx"`
 	State              string `json:"state"`
 	CancelSourceReason string `json:"cancelSourceReason"`
+	Fee                string `json:"fee"`
+	FeeCcy             string `json:"feeCcy"`
 }, error) {
 	var out struct {
 		AccFillSz          string `json:"accFillSz"`
 		AvgPx              string `json:"avgPx"`
 		State              string `json:"state"`
 		CancelSourceReason string `json:"cancelSourceReason"`
+		Fee                string `json:"fee"`
+		FeeCcy             string `json:"feeCcy"`
 	}
 	path := "/api/v5/trade/order?instId=" + url.QueryEscape(instID) + "&ordId=" + url.QueryEscape(ordID)
 	ts := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
@@ -67,6 +74,8 @@ func (e *CEXExecutor) okxOrderStatus(ctx context.Context, instID, ordID string) 
 			AvgPx              string `json:"avgPx"`
 			State              string `json:"state"`
 			CancelSourceReason string `json:"cancelSourceReason"`
+			Fee                string `json:"fee"`
+			FeeCcy             string `json:"feeCcy"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
@@ -77,7 +86,26 @@ func (e *CEXExecutor) okxOrderStatus(ctx context.Context, instID, ordID string) 
 	}
 	d := resp.Data[0]
 	out.AccFillSz, out.AvgPx, out.State, out.CancelSourceReason = d.AccFillSz, d.AvgPx, d.State, d.CancelSourceReason
+	out.Fee, out.FeeCcy = d.Fee, d.FeeCcy
 	return out, nil
+}
+
+// okxFeeToUSD D-391 S2：OKX order/fills 响应 fee 字段 → USD 正数成本。
+// venue 原始负号=付出（实证 fee="-2.18095"）→ 取绝对值；feeCcy 非 USD 稳定币 → ok=false
+// （fail-open 回退 NULL，不猜换算——KB unspecified-err-handling-defaults-unsafe）。
+func okxFeeToUSD(feeStr, feeCcy string) (float64, bool) {
+	if feeStr == "" {
+		return 0, false
+	}
+	fee, err := strconv.ParseFloat(feeStr, 64)
+	if err != nil || fee == 0 {
+		return 0, false
+	}
+	switch feeCcy {
+	case "USD", "USDT", "USDC":
+		return math.Abs(fee), true
+	}
+	return 0, false
 }
 
 // OKXPosition 是一条 OKX 持仓（GET /api/v5/account/positions，D-059 实施修正② 自愈清理用）。

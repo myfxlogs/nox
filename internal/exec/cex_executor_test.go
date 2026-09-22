@@ -160,6 +160,10 @@ func TestCEXExecutor_OKXOrder(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == "/api/v5/trade/order" {
+					_, _ = io.WriteString(w, `{"code":"0","data":[{"ordId":"312269865356374016","fee":"","feeCcy":""}]}`)
+					return
+				}
 				if r.URL.Path != "/api/v5/trade/order" {
 					t.Errorf("want /api/v5/trade/order, got %s", r.URL.Path)
 				}
@@ -260,6 +264,8 @@ func TestCEXExecutor_OKXPerpTdMode(t *testing.T) {
 				t.Errorf("perp sz = %q, want 0.01 (10/1000, 1 lot)", body["sz"])
 			}
 			_, _ = io.WriteString(w, `{"code":"0","msg":"","data":[{"ordId":"1","sCode":"0","accFillSz":"0.01","avgPx":"0.3342"}]}`)
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/trade/order":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ordId":"0","fee":"","feeCcy":""}]}`)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -292,6 +298,8 @@ func TestCEXExecutor_OKXPerpPosSideOverride(t *testing.T) {
 				t.Errorf("平 long: side=%q posSide=%q, want sell/long", body["side"], body["posSide"])
 			}
 			_, _ = io.WriteString(w, `{"code":"0","msg":"","data":[{"ordId":"88","sCode":"0","accFillSz":"1","avgPx":"71904.8"}]}`)
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/trade/order":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ordId":"0","fee":"","feeCcy":""}]}`)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -314,6 +322,8 @@ func TestCEXExecutor_OKXOrderPollTerminalCanceled(t *testing.T) {
 			_, _ = io.WriteString(w, `{"code":"0","msg":"","data":[{"ordId":"999","sCode":"0"}]}`) // 无成交 → 轮询
 		case r.Method == http.MethodGet:
 			_, _ = io.WriteString(w, `{"code":"0","msg":"","data":[{"ordId":"999","accFillSz":"","avgPx":"","state":"canceled"}]}`)
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/trade/order":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ordId":"0","fee":"","feeCcy":""}]}`)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -355,6 +365,8 @@ func TestCEXExecutor_OKXOrderPollsFill(t *testing.T) {
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/trade/order" && r.URL.Query().Get("ordId") == "777":
 			gotGET = true
 			_, _ = io.WriteString(w, `{"code":"0","msg":"","data":[{"ordId":"777","accFillSz":"0.001","avgPx":"70811.6","state":"filled"}]}`)
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/trade/order":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ordId":"0","fee":"","feeCcy":""}]}`)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}

@@ -165,7 +165,9 @@ func TestD108P2_OKXPerpReduceOnly(t *testing.T) {
 			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"0.01","lotSz":"0.01"}]}`)
 		default:
 			body, _ := io.ReadAll(r.Body)
-			capturedBody = string(body)
+			if r.Method == http.MethodPost {
+				capturedBody = string(body)
+			}
 			_, _ = io.WriteString(w, `{"code":"0","data":[{"ordId":"123","sCode":"0","avgPx":"50000","accFillSz":"1.0"}]}`)
 		}
 	}))
@@ -190,7 +192,9 @@ func TestD120_OKXPerpOpenNoReduceOnly(t *testing.T) {
 			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"0.01","lotSz":"0.01"}]}`)
 		default:
 			body, _ := io.ReadAll(r.Body)
-			capturedBody = string(body)
+			if r.Method == http.MethodPost {
+				capturedBody = string(body)
+			}
 			_, _ = io.WriteString(w, `{"code":"0","data":[{"ordId":"456","sCode":"0","avgPx":"50000","accFillSz":"1.0"}]}`)
 		}
 	}))

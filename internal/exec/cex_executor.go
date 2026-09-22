@@ -267,13 +267,18 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 					avgPx = p
 				}
 				if qty > 0 && avgPx > 0 {
-					return Fill{OrderID: d.OrdID, Price: avgPx, Qty: qty, Ts: time.Now()}, nil
+					feeUSD, _ := okxFeeToUSD(st.Fee, st.FeeCcy) // D-391 S2：查单响应累计 fee（已在本轮 st 内，免再查）
+					return Fill{OrderID: d.OrdID, Price: avgPx, Qty: qty, FeeUSD: feeUSD, Ts: time.Now()}, nil
 				}
 			}
 		}
 	}
 	// 超时仍未拿到成交：如实返回已下订单 + 当前已知 qty（可 0），不伪造。
-	return Fill{OrderID: d.OrdID, Price: avgPx, Qty: qty, Ts: time.Now()}, nil
+	var feeUSD float64
+	if qty > 0 {
+		feeUSD = e.okxOrderFeeUSD(ctx, instID, d.OrdID) // D-391 S2：补查 fee（fail-open 0→NULL）
+	}
+	return Fill{OrderID: d.OrdID, Price: avgPx, Qty: qty, FeeUSD: feeUSD, Ts: time.Now()}, nil
 }
 
 func (e *CEXExecutor) CloseOrder(ctx context.Context, ref OrderRef) (Fill, error) {

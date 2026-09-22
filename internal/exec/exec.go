@@ -55,7 +55,10 @@ type Fill struct {
 	Qty        float64
 	Swap       float64 // MT 平仓时 swap（开仓时通常 0）
 	Commission float64
-	Ts         time.Time
+	// FeeUSD D-391 S2：入场手续费（正数成本口径，venue 原始负号已取绝对值）。
+	// 0 = venue 未回报/未采集（诚实缺省，调用方写 NULL 不写 0）。
+	FeeUSD float64
+	Ts     time.Time
 }
 
 // OrderRef 是平仓引用。

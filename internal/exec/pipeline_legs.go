@@ -91,6 +91,7 @@ func (p *Pipeline) executeLeg(ctx context.Context, leg LegSpec, clientOrderID st
 		Status:     "FILLED",
 		Swap:       fill.Swap,
 		Commission: fill.Commission,
+		FeeUSD:     fill.FeeUSD,
 	}
 }
 

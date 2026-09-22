@@ -46,7 +46,7 @@ func floatPtr(f float64) *float64 { return &f }
 // d335Engine 仿 d311 mkEngine（白名单命中+regime 配置；strategy disabled 由用例自seed）。
 func d335Engine(s *pgstore.Store) (*Engine, pgstore.Opportunity, context.Context) {
 	ctx := context.Background()
-	svc := dashboard.New(nil, bus.New(), nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, nil, nil, nil, 0, nil, nil, 0, nil)
+	svc := dashboard.New(nil, bus.New(), nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, nil, nil, nil, 0, nil, nil, 0, 0, nil)
 	e := &Engine{
 		store: s, service: svc, quotes: bus.New(), gate: NewGate(s, Config{}, nil),
 		csMissCounts: map[string]int{}, csMissSent: map[string]time.Time{},

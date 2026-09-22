@@ -22,6 +22,17 @@ func (p *Pipeline) persistOpenLegs(ctx context.Context, requestID string, posID 
 		}
 		filledQty := r.Qty
 		avgPrice := r.Price
+		// D-391 S2：fee_usd 采集补洞（declared-but-never-wired 收编）。正数成本口径：
+		// CEX 走 Fill.FeeUSD（okx order 响应 fee 实证）；MT 腿顺手用 broker 回报
+		// commission（负=付出→取绝对值）。拿不到 → NULL（不写 0 冒充无费）。
+		fee := r.FeeUSD
+		if fee <= 0 && r.Commission < 0 {
+			fee = -r.Commission
+		}
+		var feeUSD *float64
+		if fee > 0 {
+			feeUSD = &fee
+		}
 		if err := p.store.CreatePositionLeg(ctx, &pgstore.PositionLeg{
 			PositionID:    posID,
 			LegNo:         int16(i),
@@ -41,6 +52,7 @@ func (p *Pipeline) persistOpenLegs(ctx context.Context, requestID string, posID 
 			AvgFillPrice:  &avgPrice,
 			SubmittedAt:   &now,
 			UncertainAt:   uncertainAt,
+			FeeUSD:        feeUSD,
 		}); err != nil {
 			msg := fmt.Sprintf("leg persist failed position=%d leg=%d venue=%s: %v", posID, i, legs[i].VenueKey, err)
 			log.Printf("[exec] %s", msg)

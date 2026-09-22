@@ -391,7 +391,7 @@ func TestD311_HandleOpportunityXAssetPreIntercept(t *testing.T) {
 	}
 	mkEngine := func(allow []exec.XAssetComboAllowSpec) *Engine {
 		// dashboard.New 注入空 QuoteBus（裸 &Service{} 的 nil qbus 会在 USDPerLotForLeg panic）。
-		svc := dashboard.New(nil, bus.New(), nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, nil, nil, nil, 0, nil, nil, 0, nil)
+		svc := dashboard.New(nil, bus.New(), nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, nil, nil, nil, 0, nil, nil, 0, 0, nil)
 		return &Engine{
 			store: s, service: svc,
 			csMissCounts: map[string]int{}, csMissSent: map[string]time.Time{},

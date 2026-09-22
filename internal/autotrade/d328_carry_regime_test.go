@@ -33,7 +33,7 @@ func d328SeedFunding(t *testing.T, s *pgstore.Store, venue, symbol string, vals 
 
 // d328Engine 构造带 store+regime 配置的 Engine（镜像 D-311 mkEngine harness）。
 func d328Engine(t *testing.T, s *pgstore.Store, allow []exec.XAssetComboAllowSpec) *Engine {
-	svc := dashboard.New(nil, bus.New(), nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, nil, nil, nil, 0, nil, nil, 0, nil)
+	svc := dashboard.New(nil, bus.New(), nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, nil, nil, nil, 0, nil, nil, 0, 0, nil)
 	return &Engine{
 		store: s, service: svc,
 		csMissCounts: map[string]int{}, csMissSent: map[string]time.Time{},
