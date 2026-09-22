@@ -209,4 +209,6 @@ var (
 	VenueAccountSnapshotSrcSQL string
 	//go:embed 0122_broker_symbol_map_is_primary.sql
 	BrokerSymbolMapIsPrimarySQL string
+	//go:embed 0123_radar_digest_state.sql
+	RadarDigestStateSQL string
 )
