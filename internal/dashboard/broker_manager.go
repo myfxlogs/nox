@@ -195,7 +195,10 @@ func (m *BrokerManager) AddBroker(ctx context.Context, a *pgstore.BrokerAccount)
 		return fmt.Errorf("insert broker: %w", err)
 	}
 	if err := m.startAdapter(ctx, a); err != nil {
-		_ = m.store.SetBrokerAccountStatus(ctx, a.Venue, "failed")
+		// D-388 S0.2：回写失败不再吞（硬化 setter 而留吞错调用方=静默失败换层不换形态）
+		if serr := m.store.SetBrokerAccountStatus(ctx, a.Venue, "failed"); serr != nil {
+			log.Printf("[broker] mark %s failed: %v", a.Venue, serr)
+		}
 		return err
 	}
 	// D-142 ②：异步触发规则库补录（best-effort，失败只 log）；symbolPlan 自动映射 source='manual'，BackfillRuleMappings 补 regex 命中项 source='rule'。
@@ -281,7 +284,10 @@ func (m *BrokerManager) EnableBroker(ctx context.Context, venue string) error {
 		return fmt.Errorf("get broker %s: %w", venue, err)
 	}
 	if err := m.startAdapter(ctx, a); err != nil {
-		_ = m.store.SetBrokerAccountStatus(ctx, venue, "failed")
+		// D-388 S0.2：回写失败不再吞（同上）
+		if serr := m.store.SetBrokerAccountStatus(ctx, venue, "failed"); serr != nil {
+			log.Printf("[broker] mark %s failed: %v", venue, serr)
+		}
 		return err
 	}
 	if err := m.store.SetBrokerAccountStatus(ctx, venue, "connected"); err != nil {

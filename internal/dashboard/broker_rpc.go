@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	"arb/internal/adapter"
@@ -272,6 +273,9 @@ func (s *Service) SetBrokerCommission(ctx context.Context, req *connect.Request[
 // SetBrokerDisabled 停用/启用账号（D-033）：停用停适配器保留凭据，启用重新连接。
 func (s *Service) SetBrokerDisabled(ctx context.Context, req *connect.Request[v1.SetBrokerDisabledRequest]) (*connect.Response[v1.SetBrokerDisabledResponse], error) {
 	venue := req.Msg.GetVenue()
+	// D-388 S0.0：RPC 入口审计日志——「handler 是否执行」从此永远可观测（R0-A1：
+	// 负证据只能证「未留可观测痕迹」不能证「未到达 handler」，本行关闭该观测洞）。
+	log.Printf("[broker] rpc set-disabled venue=%s disabled=%v", venue, req.Msg.GetDisabled())
 	var err error
 	if req.Msg.GetDisabled() {
 		err = s.bm.DisableBroker(ctx, venue)
