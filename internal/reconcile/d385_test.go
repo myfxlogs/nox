@@ -41,9 +41,12 @@ func TestD385_CEXAgg_Matched(t *testing.T) {
 	defer srv.Close()
 	fs := newFakeStore()
 	fs.positions[498] = mkPosition(498, "OPEN", "CROSS_VENUE", time.Now().Add(-time.Hour))
-	fs.legs[498] = []*pgstore.PositionLeg{
-		mkOpenLeg(498, 0, "okx:perp", "ordX", "SELL", "XAU-USDT-SWAP", 1000),
-	}
+	// 498 真实形状锚（返修2）：Qty=1000 张（venue 请求单位）vs FilledQty=1（base 口径）——
+	// 聚合对拍必须用 Qty（venue 单位），用 EffectiveQty 会取 FilledQty=1 必误报。
+	leg := mkOpenLeg(498, 0, "okx:perp", "ordX", "SELL", "XAU-USDT-SWAP", 1000)
+	one := 1.0
+	leg.FilledQty = &one
+	fs.legs[498] = []*pgstore.PositionLeg{leg}
 	r := New(fs, okxQuerier(srv))
 	r.runTimeout = 5 * time.Second
 

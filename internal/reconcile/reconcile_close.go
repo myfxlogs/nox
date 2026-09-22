@@ -65,7 +65,12 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 	cexLocalPos := make(map[string][]int64) // 同 key → 贡献腿 position_id（告警归因）
 	aggLeg := func(leg *pgstore.PositionLeg, posID int64) {
 		k := cexAggKey(leg.Venue, leg.Symbol, leg.Side)
-		cexLocal[k] += leg.EffectiveQty()
+		// D-385 返修2（SSOT S1.2 订正）：聚合量用 leg.Qty——venue 单位对拍（qty post-D-311=
+		// venue 请求单位，张对张/base 对 base）。勿用 EffectiveQty：其 filled_qty 优先语义对
+		// CEX 是基础币，与 venue pos 张数跨单位（498 实证 local=1 XAU vs venue=1000 张必误报）。
+		// 边界知悉：pre-D-311 legacy 行 qty=base（当前零活跃 CEX 腿实证）；gate 腿 qty=张 vs
+		// venue vol=base（无 gate 持仓，latent）；部分成交时 qty=请求量非实收（tol 吸收或如实告警）。
+		cexLocal[k] += leg.Qty
 		cexLocalPos[k] = appendPosID(cexLocalPos[k], posID)
 	}
 
