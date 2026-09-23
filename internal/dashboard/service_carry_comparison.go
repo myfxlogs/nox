@@ -108,16 +108,26 @@ func (s *Service) cachedCarryLive(ctx context.Context, posID int64) (float64, bo
 
 // ensureEntryGateSnapshot D-341 S1：ExecuteOpportunityInternal 写点——
 // pairKey=D-335 同款（CanonicalSell-TrimSuffix(Canonical,"USD")）。
+// D-423：venue 两维取机会 venue 字段（:mt4/:mt5 后缀判 MT 余为 CEX；无 MT=空串查询自然 miss）。
 func (s *Service) ensureEntryGateSnapshot(ctx context.Context, posID int64, found *pgstore.Opportunity) {
 	sellCanon := found.Canonical
 	if found.CanonicalSell != nil && *found.CanonicalSell != "" {
 		sellCanon = *found.CanonicalSell
 	}
 	pairKey := sellCanon + "-" + strings.TrimSuffix(found.Canonical, "USD")
-	_ = s.store.EnsureEntryGateSnapshot(ctx, posID, pairKey, entryGateSnapshotMaxAge)
+	cexVenue, mtVenue := "", ""
+	for _, v := range [2]string{found.VenueBuy, found.VenueSell} {
+		if strings.HasSuffix(v, ":mt5") || strings.HasSuffix(v, ":mt4") {
+			mtVenue = v
+		} else {
+			cexVenue = v
+		}
+	}
+	_ = s.store.EnsureEntryGateSnapshot(ctx, posID, pairKey, cexVenue, mtVenue, entryGateSnapshotMaxAge)
 }
 
 // ensureEntryGateSnapshotCanonical D-341 S1：MeanRevertWithCap 写点（双腿同 canonical 兜底形态）。
+// D-423：无 venue 信息可派 → 空串（三元组查询自然 miss 不写锚=诚实缺样本）。
 func (s *Service) ensureEntryGateSnapshotCanonical(ctx context.Context, posID int64, canonical string) {
-	_ = s.store.EnsureEntryGateSnapshot(ctx, posID, canonical+"-"+strings.TrimSuffix(canonical, "USD"), entryGateSnapshotMaxAge)
+	_ = s.store.EnsureEntryGateSnapshot(ctx, posID, canonical+"-"+strings.TrimSuffix(canonical, "USD"), "", "", entryGateSnapshotMaxAge)
 }
