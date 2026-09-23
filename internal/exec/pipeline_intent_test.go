@@ -15,9 +15,9 @@ func TestGenerateClientOrderID_Truncation(t *testing.T) {
 	if len(coid) > 32 {
 		t.Errorf("len=%d, want <= 32", len(coid))
 	}
-	// 后缀确定性：-123-0-1
-	if !strings.HasSuffix(coid, "-123-0-1") {
-		t.Errorf("coid=%s, want suffix -123-0-1", coid)
+	// 后缀确定性：p{pos}l{leg}a{attempt}
+	if !strings.HasSuffix(coid, "p123l0a1") {
+		t.Errorf("coid=%s, want suffix p123l0a1", coid)
 	}
 }
 
@@ -38,42 +38,39 @@ func TestGenerateClientOrderID_Deterministic(t *testing.T) {
 	}
 }
 
-// TestGenerateClientOrderID_NormalCase：正常长度不截断。
+// TestGenerateClientOrderID_NormalCase：正常长度不截断，非字母数字剥除。
 func TestGenerateClientOrderID_NormalCase(t *testing.T) {
 	coid := generateClientOrderID("req-1", 100, 0, 1)
-	want := "req-1-100-0-1"
+	want := "req1p100l0a1"
 	if coid != want {
 		t.Errorf("coid=%s, want %s", coid, want)
 	}
 }
 
-// TestGenerateClientOrderID_VenueSafe D-413：499/500 实案——autotrade requestID 内嵌
-// opp.ID（含冒号）截断后产 "autotrade-1790157313864--499-1-1"（双横线），OKX 拒单
-// sCode=51000 → LEGGED 裸腿。断言：字符集全 [A-Za-z0-9_-]、无 "--"、后缀确定性保留。
+// TestGenerateClientOrderID_VenueSafe D-413：499/500/501 三连实案——autotrade requestID
+// 内嵌 opp.ID（含冒号）。OKX clOrdId 只收纯 [a-zA-Z0-9]：冒号版/双横线版/单横线版全拒
+// （sCode=51000 → LEGGED 裸腿）。断言：字符集全 [a-zA-Z0-9]、后缀确定性保留。
 func TestGenerateClientOrderID_VenueSafe(t *testing.T) {
 	coid := generateClientOrderID("autotrade-1790157313864-XASSET_CARRY:XAUUSD:3001157:mt5:okx:perp", 499, 1, 1)
 	if len(coid) > 32 {
 		t.Errorf("len=%d, want <= 32", len(coid))
 	}
-	if strings.Contains(coid, "--") {
-		t.Errorf("coid=%s contains double dash", coid)
-	}
 	for _, r := range coid {
-		ok := r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' || r == '-'
+		ok := r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9'
 		if !ok {
-			t.Fatalf("coid=%s illegal char %q", coid, r)
+			t.Fatalf("coid=%s illegal char %q (OKX clOrdId 只收 [a-zA-Z0-9])", coid, r)
 		}
 	}
-	if !strings.HasSuffix(coid, "-499-1-1") {
-		t.Errorf("coid=%s, want suffix -499-1-1", coid)
+	if !strings.HasSuffix(coid, "p499l1a1") {
+		t.Errorf("coid=%s, want suffix p499l1a1", coid)
 	}
 }
 
 // TestGenerateClientOrderID_AllIllegalHead：requestID 全非法字符 → 消毒后空 → 兜 "x"。
 func TestGenerateClientOrderID_AllIllegalHead(t *testing.T) {
 	coid := generateClientOrderID(":::", 7, 0, 1)
-	if coid != "x-7-0-1" {
-		t.Errorf("coid=%s, want x-7-0-1", coid)
+	if coid != "xp7l0a1" {
+		t.Errorf("coid=%s, want xp7l0a1", coid)
 	}
 }
 
@@ -91,8 +88,8 @@ func TestPipeline_RequestIdReplay(t *testing.T) {
 func TestPipeline_ClientOrderIDDeterministic(t *testing.T) {
 	// 生成函数确定性已覆盖，端到端见 pgstore 测试
 	coid := generateClientOrderID("req-e2e", 200, 1, 1)
-	if coid != "req-e2e-200-1-1" {
-		t.Errorf("coid=%s, want req-e2e-200-1-1", coid)
+	if coid != "reqe2ep200l1a1" {
+		t.Errorf("coid=%s, want reqe2ep200l1a1", coid)
 	}
 }
 
