@@ -55,23 +55,22 @@ func (e *Engine) harvestCheck(ctx context.Context, p *pgstore.Position) (bool, s
 		pairKey = *opp.CanonicalSell + "-" + strings.TrimSuffix(opp.Canonical, "USD")
 	}
 	if p.EntryHarvestFloorBps != nil && p.ExpectedEntrySpreadBps != nil && *p.ExpectedEntrySpreadBps != 0 && p.OpenedAt != nil {
-		if entrySpread, ok, err := e.store.XAssetMonitorRowNear(ctx, pairKey, *p.OpenedAt, 15*time.Minute); err == nil && ok {
-			basis, quoteAge, okB := e.currentBasisBpsAged(p)
-			if !okB || (e.cfg.XAssetQuoteMaxAge > 0 && quoteAge > e.cfg.XAssetQuoteMaxAge) {
-				return false, ""
+		if basis, line, capture, found, usable := e.xassetTrueLegLine(ctx, p, pairKey); found {
+			if !usable {
+				return false, "" // 报价缺/超龄 → 本轮不判（fail-closed，不回退错尺度）
 			}
 			anchor := *p.ExpectedEntrySpreadBps
-			line := math.Abs(anchor) - (entrySpread - *p.EntryHarvestFloorBps)
 			sign := 1.0
 			if anchor < 0 {
 				sign = -1.0
 			}
 			if sign*basis <= line {
 				return true, fmt.Sprintf("harvest: basis %.2f sign-line %.2f (anchor %.2f capture %.2f)",
-					basis, sign*line, anchor, entrySpread-*p.EntryHarvestFloorBps)
+					basis, sign*line, anchor, capture)
 			}
 			return false, ""
 		}
+		// found=false（monitor 行缺/超窗）→ 落代理路径（旧仓兼容回退）
 	}
 	entryBps, _, floor, hasFloor, ok, err := e.store.LatestXAssetEntryGate(ctx, pairKey, xassetEntryGateMaxAge)
 	if err != nil || !ok || !hasFloor {
@@ -81,4 +80,21 @@ func (e *Engine) harvestCheck(ctx context.Context, p *pgstore.Position) (bool, s
 		return true, fmt.Sprintf("harvest: spread %.2f ≤ floor %.2f (+%.2f bps captured)", entryBps, floor, floor-entryBps)
 	}
 	return false, ""
+}
+
+// xassetTrueLegLine D-404 真腿尺度收割线（D-406 S2 提取共享——rotateCheck 剩余收敛折算同源）。
+// found=开仓时点 monitor 行在场（ts<=opened_at 最新行±15min）；usable=found 且报价新鲜可判。
+// line=|anchor|−capture；capture=开仓时点 entry_spread−floor（尺度不变量平移）。
+// 前置：调用方已确认三要素齐（floor/anchor≠0/opened_at 非 nil）。
+func (e *Engine) xassetTrueLegLine(ctx context.Context, p *pgstore.Position, pairKey string) (basis, line, capture float64, found, usable bool) {
+	entrySpread, ok, err := e.store.XAssetMonitorRowNear(ctx, pairKey, *p.OpenedAt, 15*time.Minute)
+	if err != nil || !ok {
+		return 0, 0, 0, false, false
+	}
+	basis, quoteAge, okB := e.currentBasisBpsAged(p)
+	if !okB || (e.cfg.XAssetQuoteMaxAge > 0 && quoteAge > e.cfg.XAssetQuoteMaxAge) {
+		return 0, 0, 0, true, false
+	}
+	capture = entrySpread - *p.EntryHarvestFloorBps
+	return basis, math.Abs(*p.ExpectedEntrySpreadBps) - capture, capture, true, true
 }

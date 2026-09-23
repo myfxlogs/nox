@@ -44,39 +44,13 @@ func (e *Engine) recalcXAssetNetCarry(ctx context.Context, p *pgstore.Position) 
 		if leg.Side != "BUY" {
 			canonical = sellCanonical
 		}
-		bare := strings.Split(leg.Venue, ":")[0]
-		switch {
-		case strings.HasSuffix(leg.Venue, ":perp"):
-			rate, ts, ok := e.fundingRateForVenue(ctx, bare, canonical)
-			if !ok {
-				log.Printf("[autotrade] exit pos=%d: funding fact missing venue=%s canonical=%s (fail-closed)", p.ID, bare, canonical)
-				return 0, false
-			}
-			if maxAge > 0 && time.Since(ts) > maxAge {
-				log.Printf("[autotrade] exit pos=%d: funding fact stale venue=%s canonical=%s >%v (fail-closed)", p.ID, bare, canonical, maxAge)
-				return 0, false
-			}
-			// 持有净收入：BUY（多头）付 funding=−rate；SELL（空头）收 funding=+rate。
-			if leg.Side == "BUY" {
-				netCarry -= rate
-			} else {
-				netCarry += rate
-			}
-		case strings.HasSuffix(leg.Venue, ":mt5"), strings.HasSuffix(leg.Venue, ":mt4"):
-			bps, src := e.swapRateFor(ctx, bare, canonical, leg.Side)
-			if src == swapSrcNone {
-				log.Printf("[autotrade] exit pos=%d: swapRateFor none venue=%s canonical=%s side=%s (fail-closed)", p.ID, bare, canonical, leg.Side)
-				return 0, false
-			}
-			if src == swapSrcSpec && !e.xassetSpecFactFresh(ctx, bare, canonical, leg.Side) {
-				return 0, false
-			}
-			// swapRateFor 返回 bps/日（正=收）→ ×3.65 转 %/yr。
-			netCarry += bps * 3.65
-		default:
-			log.Printf("[autotrade] exit pos=%d: unknown venue type %s (fail-closed)", p.ID, leg.Venue)
+		// D-406 S2：腿级 carry 提取共享 helper（替代组合假想腿同函数族算，不双标）。
+		legCarry, ok := e.xassetLegCarryAnnual(ctx, leg.Venue, canonical, leg.Side, maxAge)
+		if !ok {
+			log.Printf("[autotrade] exit pos=%d: leg carry fail-closed venue=%s canonical=%s side=%s", p.ID, leg.Venue, canonical, leg.Side)
 			return 0, false
 		}
+		netCarry += legCarry
 		foundAny = true
 	}
 	if !foundAny {
@@ -84,6 +58,44 @@ func (e *Engine) recalcXAssetNetCarry(ctx context.Context, p *pgstore.Position) 
 	}
 	log.Printf("[autotrade] exit pos=%d: xasset netCarry=%.4f%% ann", p.ID, netCarry)
 	return netCarry, true
+}
+
+// xassetLegCarryAnnual 单腿持有净收入（年化 %；正=收）。
+// :perp → funding fact（BUY 付 −rate / SELL 收 +rate，按 SwapFactMaxAge 新鲜度闸）；
+// :mt4/:mt5 → swapRateFor（settled/spec/none，spec 源另过 xassetSpecFactFresh）×3.65 年化。
+// 任一源缺/不新鲜/未知 venue 型 → ok=false（fail-closed）。
+func (e *Engine) xassetLegCarryAnnual(ctx context.Context, venueKey, canonical, side string, maxAge time.Duration) (float64, bool) {
+	bare := strings.Split(venueKey, ":")[0]
+	switch {
+	case strings.HasSuffix(venueKey, ":perp"):
+		rate, ts, ok := e.fundingRateForVenue(ctx, bare, canonical)
+		if !ok {
+			log.Printf("[autotrade] carry: funding fact missing venue=%s canonical=%s (fail-closed)", bare, canonical)
+			return 0, false
+		}
+		if maxAge > 0 && time.Since(ts) > maxAge {
+			log.Printf("[autotrade] carry: funding fact stale venue=%s canonical=%s >%v (fail-closed)", bare, canonical, maxAge)
+			return 0, false
+		}
+		// 持有净收入：BUY（多头）付 funding=−rate；SELL（空头）收 funding=+rate。
+		if side == "BUY" {
+			return -rate, true
+		}
+		return rate, true
+	case strings.HasSuffix(venueKey, ":mt5"), strings.HasSuffix(venueKey, ":mt4"):
+		bps, src := e.swapRateFor(ctx, bare, canonical, side)
+		if src == swapSrcNone {
+			log.Printf("[autotrade] carry: swapRateFor none venue=%s canonical=%s side=%s (fail-closed)", bare, canonical, side)
+			return 0, false
+		}
+		if src == swapSrcSpec && !e.xassetSpecFactFresh(ctx, bare, canonical, side) {
+			return 0, false
+		}
+		return bps * 3.65, true
+	default:
+		log.Printf("[autotrade] carry: unknown venue type %s (fail-closed)", venueKey)
+		return 0, false
+	}
 }
 
 // fundingRateForVenue 取 (bareVenue, canonical) 最新 funding 年化 %（pct_annualized）。

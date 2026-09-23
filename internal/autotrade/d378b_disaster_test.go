@@ -86,8 +86,9 @@ func TestD378b_A1_494Replay_Hold(t *testing.T) {
 		t.Fatalf("A1: 494 回放应全程 hold（偏离 %.2f < band 40）, got %q", math.Abs(-15.9-(-8.97)), reason)
 	}
 	rows := d377Evals(t, st, posID)
-	if len(rows) != 1 || rows[0].Decision != "hold" {
-		t.Fatalf("A1: want 1 hold row, got %+v", rows)
+	// D-406：hold 语义不变（未平仓）；五闸全过后轮转闸留证 → decision=hold_rotate_check。
+	if len(rows) != 1 || rows[0].Decision != "hold_rotate_check" {
+		t.Fatalf("A1: want 1 hold_rotate_check row, got %+v", rows)
 	}
 }
 
@@ -187,8 +188,9 @@ func TestD378b_A6_495Replay_Hold(t *testing.T) {
 		t.Fatal("A6: 495 回放（偏离 15.23 < 40）应全程 hold")
 	}
 	rows := d377Evals(t, st, posID)
-	if len(rows) != 1 || rows[0].Decision != "hold" {
-		t.Fatalf("A6: want hold row, got %+v", rows)
+	// D-406：hold 语义不变（未平仓）；五闸全过后轮转闸留证 → decision=hold_rotate_check。
+	if len(rows) != 1 || rows[0].Decision != "hold_rotate_check" {
+		t.Fatalf("A6: want hold_rotate_check row, got %+v", rows)
 	}
 }
 

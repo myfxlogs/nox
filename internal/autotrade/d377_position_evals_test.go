@@ -107,8 +107,10 @@ func TestD377_EvalHold_RowLanded(t *testing.T) {
 		t.Fatalf("锚1: want 1 eval row, got %d", len(rows))
 	}
 	r := rows[0]
-	if r.Decision != "hold" {
-		t.Fatalf("锚1: decision = %q, want hold", r.Decision)
+	// D-406：五闸全过后轮转闸必评——旧 fixture 缺收割锚三要素 → 拦阻留证 hold_rotate_check
+	// （detail 含拦阻因），决策语义仍是 hold（未平仓）。
+	if r.Decision != "hold_rotate_check" {
+		t.Fatalf("锚1: decision = %q, want hold_rotate_check（D-406 轮转闸拦阻留证）", r.Decision)
 	}
 	if r.Basis == nil || math.Abs(*r.Basis-4.99) > 0.01 {
 		t.Fatalf("锚1: basis = %v, want ≈+4.99", r.Basis)

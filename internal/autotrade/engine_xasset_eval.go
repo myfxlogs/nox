@@ -46,6 +46,11 @@ func (e *Engine) xassetExitCheck(ctx context.Context, p *pgstore.Position) (bool
 		// D-378b S2：灾难带（替换 basisStopCheckXAsset 的位置与角色；窄阈撤除）。
 		shouldDisaster, disasterReason, stale, staleAge = e.disasterCheckXAsset(ctx, p)
 	}
+	// D-406 S1：轮转第五闸（链尾——四闸全过且非 stale 才评；先保命再优化）。
+	var rot *rotateOutcome
+	if !shouldClose && !shouldHarvest && !shouldDrift && !shouldDisaster && !stale {
+		_, rot = e.rotateCheck(ctx, p) // triggered 在 rotateCheck 内置位
+	}
 
 	// D-377 S2：观测行——decision=本次评估结论；detail=阈值/reason 短串（store 侧 200 截断）。
 	// fail_closed 也落行（quote 缺/锚缺/腿缺/stale=「评估跑了但无法判」正证据）。
@@ -55,6 +60,7 @@ func (e *Engine) xassetExitCheck(ctx context.Context, p *pgstore.Position) (bool
 		drift: shouldDrift, driftReason: driftReason,
 		disaster: shouldDisaster, disasterReason: disasterReason,
 		stale: stale, staleAge: staleAge,
+		rotate: rot,
 	})
 
 	if shouldClose {
@@ -66,7 +72,13 @@ func (e *Engine) xassetExitCheck(ctx context.Context, p *pgstore.Position) (bool
 	if shouldDrift {
 		return true, driftReason
 	}
-	return shouldDisaster, disasterReason
+	if shouldDisaster {
+		return true, disasterReason
+	}
+	if rot != nil && rot.triggered {
+		return true, "rotate_to:" + rot.altOppID
+	}
+	return false, ""
 }
 
 // xassetEvalOutcome 评估链四判结果（观测行 decision 归并可测）。
@@ -82,6 +94,8 @@ type xassetEvalOutcome struct {
 	disasterReason   string
 	stale            bool
 	staleAge         time.Duration
+	// rotate D-406：第五闸结果（nil=本轮未评——前四闸已触发/stale）。
+	rotate *rotateOutcome
 }
 
 // recordXAssetEval D-377 S2：落观测行。basis=currentBasisBps 同函数复用（公式单点；
@@ -114,6 +128,11 @@ func (e *Engine) recordXAssetEval(ctx context.Context, p *pgstore.Position, out 
 		decision, detail = "fail_closed:no_anchor", fmtDisasterBand(e.cfg.XAssetDisasterBps, e.cfg.XAssetDisasterNoiseMult, p.EntryNoiseBps)
 	case !fillOK:
 		decision, detail = "fail_closed:no_legs", fmtDisasterBand(e.cfg.XAssetDisasterBps, e.cfg.XAssetDisasterNoiseMult, p.EntryNoiseBps)
+	case out.rotate != nil && out.rotate.triggered:
+		decision, detail = "rotate", out.rotate.detail
+	case out.rotate != nil:
+		// D-406：轮转评了未触发 → hold_rotate_check（detail 含 alt/cur/cost 三值+拦阻因）。
+		decision, detail = "hold_rotate_check", out.rotate.detail
 	default:
 		decision, detail = "hold", fmtDisasterBand(e.cfg.XAssetDisasterBps, e.cfg.XAssetDisasterNoiseMult, p.EntryNoiseBps)
 	}

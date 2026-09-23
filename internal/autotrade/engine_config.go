@@ -128,6 +128,9 @@ type Config struct {
 	// ProbeEvalDays probe 评估等待天数（calendar days，默认 3 ≈ 2 结算日）。
 	ProbeEvalDays int
 
+	// D-406：轮转比较器日限（ARB_ROTATE_MAX_PER_DAY，默认 1；<=0=不启用日限——逃生阀）。
+	RotateMaxPerDay int
+
 	// D-107 P4：事件触发扫描节流窗口（ARB_SCAN_THROTTLE，默认 30s）。
 	// Kick() 触发 scanIfDue：窗口内丢弃、超窗扫。兜底 10min 保证有界延迟。
 	ScanThrottle time.Duration
