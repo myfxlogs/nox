@@ -34,79 +34,72 @@ type HistorySwapOrder struct {
 }
 
 // orderHistoryScan 闭包类型：拉指定时间窗内的已平仓订单（D-181 S1）。
-// MT5 实现走 OrderHistoryPagination 分页；MT4 实现走 OrderHistory 全量。
+// D-418：MT5 改走 OrderHistory 全量（OrderHistoryPagination 网关实测 Unimplemented，
+// probe 实证 OrderHistory 可用；数据量放大再议分页）。MT4 走 OrderHistory 全量。
 // 返回所有符合时间窗的已平仓订单（含 Swap=0 的，调用方过滤）。
 type orderHistoryScan func(ctx context.Context, from, to time.Time) ([]HistorySwapOrder, error)
 
-// mt5OrderHistoryScan 构造 MT5 分页扫描闭包（D-181 S1）。
-// ordersPerPage=100，sort=CloseTime，ascending=false，ignoreDepositWithdraw=true。
+// mt5OrderHistoryScan 构造 MT5 全量扫描闭包（D-181 S1 → D-418 哑管复活）。
+// OrderHistory 非分页一次拉窗口全量（probe 实测窗口内 total=6，无分页压力）。
+// 时间戳字段 OpenTimestampUTC/CloseTimestampUTC=int64 毫秒（KB mt5-order-history-timestamps-millis），
+// 非 pagination 记录里的 timestamppb CloseTime/OpenTime。
 func mt5OrderHistoryScan(client mt5pb.MT5Client, token string) orderHistoryScan {
 	return func(ctx context.Context, from, to time.Time) ([]HistorySwapOrder, error) {
 		ctx = metadata.AppendToOutgoingContext(ctx, "id", token)
-		fromStr := from.Format("2006-01-02T15:04:05")
-		toStr := to.Format("2006-01-02T15:04:05")
-		ignoreDW := true
-		sortClose := mt5pb.OrderSort_OrderSort_CloseTime
 		ascending := false
+		resp, err := client.OrderHistory(ctx, &mt5pb.OrderHistoryRequest{
+			Id:        token,
+			From:      from.Format("2006-01-02T15:04:05"),
+			To:        to.Format("2006-01-02T15:04:05"),
+			Ascending: &ascending,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("mt5 order history: %w", err)
+		}
+		if e := resp.GetError(); e != nil {
+			return nil, fmt.Errorf("mt5 order history: %s", e.GetMessage())
+		}
 		var all []HistorySwapOrder
-		page := int32(0)
-		for {
-			resp, err := client.OrderHistoryPagination(ctx, &mt5pb.OrderHistoryPaginationRequest{
-				Id:                    token,
-				From:                  fromStr,
-				To:                    toStr,
-				OrdersPerPage:         100,
-				PageNumber:            page,
-				Sort:                  &sortClose,
-				Ascending:             &ascending,
-				IgnoreDepositWithdraw: &ignoreDW,
+		for _, ord := range resp.GetResult() {
+			// 主路径 int64 毫秒（KB 实证）；兜底 timestamppb（网关若混填两型不误杀）。
+			closeT, openT := time.Time{}, time.Time{}
+			if ms := ord.GetCloseTimestampUTC(); ms != 0 {
+				closeT = time.UnixMilli(ms).UTC()
+			} else if ts := ord.GetCloseTime(); ts != nil {
+				closeT = ts.AsTime()
+			}
+			if closeT.IsZero() {
+				continue // 未平仓
+			}
+			if ms := ord.GetOpenTimestampUTC(); ms != 0 {
+				openT = time.UnixMilli(ms).UTC()
+			} else if ts := ord.GetOpenTime(); ts != nil {
+				openT = ts.AsTime()
+			}
+			if openT.IsZero() {
+				continue
+			}
+			side := "BUY"
+			if ord.GetOrderType() == mt5pb.OrderType_OrderType_Sell {
+				side = "SELL"
+			}
+			closeLots := ord.GetCloseLots()
+			if closeLots <= 0 {
+				closeLots = ord.GetLots() // 回退全量手数
+			}
+			all = append(all, HistorySwapOrder{
+				Symbol:      ord.GetSymbol(),
+				Side:        side,
+				Swap:        ord.GetSwap(),
+				Lots:        ord.GetLots(),
+				CloseLots:   closeLots,
+				OpenTime:    openT,
+				CloseTime:   closeT,
+				Commission:  ord.GetCommission(),
+				Profit:      ord.GetProfit(),
+				OrderTicket: ord.GetTicket(),
+				ClosePrice:  ord.GetClosePrice(),
 			})
-			if err != nil {
-				return nil, fmt.Errorf("mt5 order history pagination page=%d: %w", page, err)
-			}
-			if e := resp.GetError(); e != nil {
-				return nil, fmt.Errorf("mt5 order history pagination: %s", e.GetMessage())
-			}
-			result := resp.GetResult()
-			if result == nil {
-				break
-			}
-			for _, ord := range result.GetOrders() {
-				closeTS := ord.GetCloseTime()
-				if closeTS == nil {
-					continue // 未平仓
-				}
-				openTS := ord.GetOpenTime()
-				if openTS == nil {
-					continue
-				}
-				side := "BUY"
-				if ord.GetOrderType() == mt5pb.OrderType_OrderType_Sell {
-					side = "SELL"
-				}
-				closeLots := ord.GetCloseLots()
-				if closeLots <= 0 {
-					closeLots = ord.GetLots() // 回退全量手数
-				}
-				all = append(all, HistorySwapOrder{
-					Symbol:      ord.GetSymbol(),
-					Side:        side,
-					Swap:        ord.GetSwap(),
-					Lots:        ord.GetLots(),
-					CloseLots:   closeLots,
-					OpenTime:    openTS.AsTime(),
-					CloseTime:   closeTS.AsTime(),
-					Commission:  ord.GetCommission(),
-					Profit:      ord.GetProfit(),
-					OrderTicket: ord.GetTicket(),
-					ClosePrice:  ord.GetClosePrice(),
-				})
-			}
-			pagesCount := result.GetPagesCount()
-			if pagesCount == 0 || page >= pagesCount-1 {
-				break
-			}
-			page++
 		}
 		return all, nil
 	}
