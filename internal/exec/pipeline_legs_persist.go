@@ -66,7 +66,9 @@ func (p *Pipeline) persistOpenLegs(ctx context.Context, requestID string, posID 
 		if feeUSD != nil {
 			ts := now.UTC()
 			dayStart := time.Date(ts.Year(), ts.Month(), ts.Day(), 0, 0, 0, 0, time.UTC)
-			if err := p.insertCashflowIdempotent(ctx, posID, int16(i), "commission", legs[i].VenueKey, -*feeUSD, dayStart, ts); err != nil {
+			// dedupTag="open"：与同日同腿 CLOSE 佣金（tag=""）分键不互吞（D-422 R1）；
+			// quality='actual'（Fill/Commission 实采，D-425）。
+			if err := p.insertCashflowIdempotent(ctx, posID, int16(i), "commission", legs[i].VenueKey, -*feeUSD, "actual", dayStart, ts, "open"); err != nil {
 				log.Printf("[exec] pos=%d leg=%d open fee cashflow: %v", posID, i, err)
 				_ = p.store.InsertAlert(ctx, nil, "critical",
 					fmt.Sprintf("position %d leg %d open fee cashflow write failed: %v", posID, i, err))

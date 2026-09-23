@@ -120,8 +120,11 @@ func (t *resettler) run(ctx context.Context, posID int64, dry bool) {
 		fmt.Printf("pos=%d: position not found err=%v\n", posID, err)
 		return
 	}
-	if !strings.Contains(pos.Note, "pnl_estimated") {
-		fmt.Printf("pos=%d: no pnl_estimated note, skip\n", posID)
+	// 处理条件：note 含 pnl_estimated，或结算仍 skipped（resend 幂等路径——
+	// 前次已清 note 但 quality 未升级时仍可补升重结算）。
+	stats, _ := t.store.GetSettlementStatsStatus(ctx, posID)
+	if !strings.Contains(pos.Note, "pnl_estimated") && stats != "skipped" {
+		fmt.Printf("pos=%d: no pnl_estimated note & stats=%s, skip\n", posID, stats)
 		return
 	}
 	legs, err := t.store.ListPositionLegs(ctx, posID)
@@ -197,6 +200,13 @@ func (t *resettler) run(ctx context.Context, posID int64, dry bool) {
 		   note=btrim(regexp_replace(COALESCE(note,''), '\s*;?\s*pnl_estimated:[^;]*', '', 'g'), '')
 		 WHERE id=$1`, posID, auth); err != nil {
 		fmt.Printf("pos=%d: clear note/update pnl err=%v, keep\n", posID, err)
+		return
+	}
+	// D-425：校准可达证明该仓现金流源自实采（hp/fill 路径）——存量 estimated 行是
+	// 误标（writeCloseCashflows 旧版硬编码 estimated），升 'actual' 过 stats 质量门。
+	if _, err := t.store.Pool().Exec(ctx,
+		`UPDATE position_cashflows SET quality='actual' WHERE position_id=$1 AND quality='estimated'`, posID); err != nil {
+		fmt.Printf("pos=%d: quality→actual err=%v, keep\n", posID, err)
 		return
 	}
 	if _, err := t.store.Pool().Exec(ctx,

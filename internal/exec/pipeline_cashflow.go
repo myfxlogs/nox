@@ -31,24 +31,39 @@ func (p *Pipeline) writeCloseCashflows(ctx context.Context, posID int64, legNo i
 	now := time.Now().UTC()
 	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	if swap != 0 {
-		if err := p.insertCashflowIdempotent(ctx, posID, legNo, "swap", venue, swap*fx, dayStart, now); err != nil {
+		// D-425：fill/hp 实采值 → quality='actual'。
+		if err := p.insertCashflowIdempotent(ctx, posID, legNo, "swap", venue, swap*fx, "actual", dayStart, now, ""); err != nil {
 			return fmt.Errorf("pos=%d leg=%d swap cashflow: %w", posID, legNo, err)
 		}
 	}
 	if commissionUSD := commission*fx + feeUSD; commissionUSD != 0 {
-		// commission 入库为负值（成本）；CEX feeUSD 已是 USD 直接并入。
-		if err := p.insertCashflowIdempotent(ctx, posID, legNo, "commission", venue, -commissionUSD, dayStart, now); err != nil {
+		// commission 入库为负值（成本）；CEX feeUSD 已是 USD 直接并入。D-425 实采 → 'actual'。
+		if err := p.insertCashflowIdempotent(ctx, posID, legNo, "commission", venue, -commissionUSD, "actual", dayStart, now, ""); err != nil {
 			return fmt.Errorf("pos=%d leg=%d commission cashflow: %w", posID, legNo, err)
 		}
 	}
 	return nil
 }
 
-// insertCashflowIdempotent 幂等写入单条现金流：先查 HasCashflowForLegDay，已存在跳过，未存在写入。
-// 查询失败视为失败（不得当作不存在）；写入失败返回 error。生产路径不得绕过此函数直接调 store。
-// D-193-A 扩包：调 InsertCashflowFull（决策 8），填事实身份字段（决策 1-7）。
-func (p *Pipeline) insertCashflowIdempotent(ctx context.Context, posID int64, legNo int16, kind, venue string, amount float64, dayStart, ts time.Time) error {
-	has, err := p.store.HasCashflowForLegDay(ctx, posID, legNo, kind, dayStart)
+// insertCashflowIdempotent 幂等写入单条现金流：先查 HasCashflowByEventKey（event_key 精确匹配），
+// 已存在跳过，未存在写入。查询失败视为失败（不得当作不存在）；写入失败返回 error。
+// D-422 R1：幂等键改 event_key 粒度——腿日粗粒度会让同日同腿 OPEN 费与 CLOSE 佣金互吞；
+// dedupTag 非空时 event_key 追加 ":<tag>" 区分同源并发写入（OPEN 费传 "open"）。
+// D-425：quality 由调用方按证据等级传入（fill/hp 实采='actual'，公式回退='estimated'）。
+// 生产路径不得绕过此函数直接调 store。
+func (p *Pipeline) insertCashflowIdempotent(ctx context.Context, posID int64, legNo int16, kind, venue string, amount float64, quality string, dayStart, ts time.Time, dedupTag string) error {
+	// D-193-A 扩包（决策 1-7）：构造 Cashflow 填事实身份字段。
+	// event_key=exec:<posID>:<legNo>:<kind>:<occurred_at YYYY-MM-DD>[:<dedupTag>]（决策 1 + R1 tag）
+	// quality=调用方传入（D-425）；source='exec'（决策 4）
+	// occurred_at=ts（平仓成交时刻，决策 5）；received_ts=now（写入时间）
+	// account_id=venue 前缀数字（决策 6）；external_event_id/raw_*=NULL（公式路径不造假，决策 2/7）
+	now := time.Now().UTC()
+	dayStr := dayStart.Format("2006-01-02")
+	eventKey := fmt.Sprintf("exec:%d:%d:%s:%s", posID, legNo, kind, dayStr)
+	if dedupTag != "" {
+		eventKey += ":" + dedupTag
+	}
+	has, err := p.store.HasCashflowByEventKey(ctx, posID, eventKey)
 	if err != nil {
 		// 查询失败 → fail-closed（不当作不存在）
 		p.alertCashflowFailure(ctx, posID, legNo, kind, venue, fmt.Errorf("has-check query: %w", err))
@@ -58,15 +73,6 @@ func (p *Pipeline) insertCashflowIdempotent(ctx context.Context, posID int64, le
 		// 已存在 → 幂等跳过（ResumeClose 重复入账防护）
 		return nil
 	}
-	// D-193-A 扩包（决策 1-7）：构造 Cashflow 填事实身份字段。
-	// event_key=exec:<posID>:<legNo>:<kind>:<occurred_at YYYY-MM-DD>（决策 1）
-	// quality='estimated'（公式路径，决策 3）；source='exec'（决策 4）
-	// occurred_at=ts（平仓成交时刻，决策 5）；received_ts=now（写入时间）
-	// account_id=venue 前缀数字（决策 6）；external_event_id/raw_*=NULL（公式路径不造假，决策 2/7）
-	now := time.Now().UTC()
-	dayStr := dayStart.Format("2006-01-02")
-	eventKey := fmt.Sprintf("exec:%d:%d:%s:%s", posID, legNo, kind, dayStr)
-	quality := "estimated"
 	src := "exec"
 	cf := &pgstore.Cashflow{
 		PositionID: posID,

@@ -132,9 +132,9 @@ func TestWriteCloseCashflows_D193A_FactFields(t *testing.T) {
 	if !strings.HasPrefix(*cf.EventKey, wantPrefix) {
 		t.Errorf("event_key=%s, want prefix %s", *cf.EventKey, wantPrefix)
 	}
-	// 决策 3：quality='estimated'
-	if cf.Quality == nil || *cf.Quality != "estimated" {
-		t.Errorf("quality=%v, want estimated", cf.Quality)
+	// D-425：fill/hp 实采值 → quality='actual'（公式回退才 'estimated'）
+	if cf.Quality == nil || *cf.Quality != "actual" {
+		t.Errorf("quality=%v, want actual（实采值，D-425）", cf.Quality)
 	}
 	// 决策 4：source='exec'
 	if cf.Source == nil || *cf.Source != "exec" {
