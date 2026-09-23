@@ -61,6 +61,16 @@ func mt5OrderHistoryScan(client mt5pb.MT5Client, token string) orderHistoryScan 
 		}
 		var all []HistorySwapOrder
 		for _, ord := range resp.GetResult() {
+			// D-427 I4：OrderType 白名单 fail-closed（Balance/Credit/未知枚举跳过）。
+			switch ord.GetOrderType() {
+			case mt5pb.OrderType_OrderType_Buy, mt5pb.OrderType_OrderType_Sell,
+				mt5pb.OrderType_OrderType_BuyLimit, mt5pb.OrderType_OrderType_SellLimit,
+				mt5pb.OrderType_OrderType_BuyStop, mt5pb.OrderType_OrderType_SellStop,
+				mt5pb.OrderType_OrderType_BuyStopLimit, mt5pb.OrderType_OrderType_SellStopLimit,
+				mt5pb.OrderType_OrderType_CloseBy:
+			default:
+				continue
+			}
 			// 主路径 int64 毫秒（KB 实证）；兜底 timestamppb（网关若混填两型不误杀）。
 			closeT, openT := time.Time{}, time.Time{}
 			if ms := ord.GetCloseTimestampUTC(); ms != 0 {
@@ -122,6 +132,13 @@ func mt4OrderHistoryScan(client mt4.MT4Client, token string) orderHistoryScan {
 		}
 		var all []HistorySwapOrder
 		for _, ord := range resp.GetResult() {
+			// D-427 I4：OrderType 白名单 fail-closed（Op_Balance/Op_Credit/未知跳过）。
+			switch ord.GetType() {
+			case mt4.Op_Op_Buy, mt4.Op_Op_Sell, mt4.Op_Op_BuyLimit,
+				mt4.Op_Op_SellLimit, mt4.Op_Op_BuyStop, mt4.Op_Op_SellStop:
+			default:
+				continue
+			}
 			closeTS := ord.GetCloseTime()
 			if closeTS == nil {
 				continue
