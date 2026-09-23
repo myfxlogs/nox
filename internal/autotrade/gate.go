@@ -26,6 +26,8 @@ type Gate struct {
 	// DB 落库保留全量（审计完整性不动），只压 stdout。内存，重启重置。
 	lastDisabledLog   map[string]time.Time
 	lastDisabledLogMu sync.Mutex
+	// D-405 S4：开户门槛档检查器（dashboard.MarginFloorCheck 注入；nil=未接线不检查）。
+	marginFloor marginFloorChecker
 }
 
 // NewGate 创建门禁。
@@ -243,6 +245,13 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 			g.rejectLog(ctx, *intent, rv.Reason, false)
 			return GateResult{Status: "REJECTED", Reason: rv.Reason}
 		}
+	}
+
+	// D-405 S4：开户门槛档——venue 可用保证金 < 新仓所需（隐含保证金率口径）→ 拒 + info 告警。
+	// 未接线（nil checker）跳过；数据源缺由 checker 内部 fail-open 处理（监控件不阻断开仓链）。
+	if rv := g.marginFloorGateCheck(ctx, *intent); !rv.Pass {
+		g.rejectLog(ctx, *intent, rv.Reason, false)
+		return GateResult{Status: "REJECTED", Reason: rv.Reason}
 	}
 
 	// 执行

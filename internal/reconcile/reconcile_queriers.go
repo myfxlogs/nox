@@ -91,6 +91,9 @@ type AccountInfo struct {
 	// Holdings 币种明细（D-273 S2：CEX 现货采集器填充，qty>0； earn 持币判断与余额展开行的数据源）。
 	// CFD 账户无此概念，恒 nil。
 	Holdings []*v1.Holding
+	// BufferMultiple D-405 S2：CEX「距强平缓冲倍数」=equity/MMR，写时归一
+	// （binance=marginBalance/maintMargin；okx=mgnRatio/100）。<=0=未采（MT/spot 恒 0）。
+	BufferMultiple float64
 }
 
 // AccountQuerier 查询单个账户资金的统一接口（D-053）。与 VenueQuerier 并列，同用 VenueKey 身份。

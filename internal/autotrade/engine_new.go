@@ -28,6 +28,10 @@ func New(cfg Config, store *pgstore.Store, service *dashboard.Service, oppTopic 
 		revivalAlertSent: make(map[string]time.Time), // D-256-A S5：复活扳机告警去重
 		kickCh:           make(chan struct{}, 1),     // D-107 P4：buffered(1) 非阻塞 send = 事件合并
 	}
+	// D-405 S4：开户门槛档——dashboard.MarginFloorCheck 注入（nil service=未接线不检查）。
+	if service != nil {
+		e.gate.SetMarginFloorChecker(service)
+	}
 	// D-403 S3：热重载指针初值=启动加载结果（cfg.XAssetAllowCombos，setup 期 xassetAllowFromTable 产出）。
 	initAllow := cfg.XAssetAllowCombos
 	e.xassetAllow.Store(&initAllow)

@@ -101,8 +101,9 @@ func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error
 		Code string `json:"code"`
 		Msg  string `json:"msg"`
 		Data []struct {
-			TotalEq string `json:"totalEq"` // 交易所权威 USD 总权益
-			Details []struct {
+			TotalEq  string `json:"totalEq"`  // 交易所权威 USD 总权益
+			MgnRatio string `json:"mgnRatio"` // D-405 S2：保证金率（百分数口径，越高越安全）
+			Details  []struct {
 				Ccy      string `json:"ccy"`
 				Eq       string `json:"eq"`       // 本币权益（2026-09-10 实采实证：币种计价，非 USD）
 				CashBal  string `json:"cashBal"`  // 本币数量（总持有）
@@ -153,10 +154,17 @@ func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error
 			eq += usd
 		}
 	}
+	// D-405 S2：buffer_multiple=mgnRatio/100（官方口径百分数→倍数写时归一；
+	// 空/解析失败 → 0=未采，guard 判 data_stale；空仓账户 mgnRatio 空值同样落 0）。
+	var buffer float64
+	if mr, perr := strconv.ParseFloat(resp.Data[0].MgnRatio, 64); perr == nil && mr > 0 {
+		buffer = mr / 100
+	}
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
 		Balance: eq, Equity: eq, Currency: "USDT",
 		Simulated: q.simulated, Website: q.website, Holdings: holdings,
+		BufferMultiple: buffer,
 	}, nil
 }
 

@@ -95,15 +95,26 @@ func (q *CEXAccountQuerier) accountBinancePerp(ctx context.Context) (*AccountInf
 	}
 	var acc struct {
 		TotalWalletBalance string `json:"totalWalletBalance"`
+		MarginBalance      string `json:"totalMarginBalance"` // D-405 S2：钱包余额+未实现盈亏（equity）
+		MaintMargin        string `json:"totalMaintMargin"`   // D-405 S2：账户级维持保证金（MMR）
 	}
 	if err := json.Unmarshal(body, &acc); err != nil {
 		return nil, fmt.Errorf("binance perp account json: %w", err)
 	}
 	eq, _ := strconv.ParseFloat(acc.TotalWalletBalance, 64)
+	// D-405 S2：buffer_multiple=marginBalance/maintMargin（写时归一 equity/MMR；
+	// maintMargin<=0 无仓 → 不采 0=未采语义，marginGuard 按 data_stale 处理需区分——
+	// 空仓账户 MMR=0 实际缓冲无穷大，此处落 0 由 guard 判「无仓恒 normal」）。
+	var buffer float64
+	if mb, _ := strconv.ParseFloat(acc.MarginBalance, 64); mb > 0 {
+		if mm, _ := strconv.ParseFloat(acc.MaintMargin, 64); mm > 0 {
+			buffer = mb / mm
+		}
+	}
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
 		Balance: eq, Equity: eq, Currency: "USDT",
-		Simulated: q.simulated, Website: q.website,
+		Simulated: q.simulated, Website: q.website, BufferMultiple: buffer,
 	}, nil
 }
 
