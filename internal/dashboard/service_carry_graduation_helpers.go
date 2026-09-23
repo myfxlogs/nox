@@ -4,10 +4,13 @@ package dashboard
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	"arb/internal/exec"
 	"arb/internal/scan"
 	"arb/internal/store/pgstore"
 
@@ -138,4 +141,24 @@ func (s *Service) autoMapBrokerSummary(ctx context.Context, venue string) (strin
 		}
 	}
 	return fmt.Sprintf("applied=%d skipped=%d conflicts=%d", resp.Msg.GetApplied(), resp.Msg.GetSkipped(), conflicts), nil
+}
+
+// refreshXAssetSnapshots D-403 R2：approve 三链扇出的 pipeline/手动链快照刷新——
+// rows 单查一次→exec.XAssetSpecsFromRows 单源映射（D-367 剔除规则随源）→两处 atomic Store；
+// engine 链由 xassetReloader 自 reload（幂等），本函数只管另外两链。
+func (s *Service) refreshXAssetSnapshots(ctx context.Context) error {
+	if s.xassetEnv == "" {
+		return errors.New("xasset environment 未接线（SetXAssetAllowEnvironment 缺装配）")
+	}
+	rows, err := s.gradDB().LoadXAssetAllowCombos(ctx, s.xassetEnv)
+	if err != nil {
+		return fmt.Errorf("load xasset rows: %w", err)
+	}
+	specs, dropped := exec.XAssetSpecsFromRows(rows)
+	if s.pipeline != nil {
+		s.pipeline.ReloadXAssetComboAllow(specs)
+	}
+	s.SetXAssetComboAllow(specs)
+	log.Printf("[whitelist] xasset fan-out: rows=%d dropped=%d（pipeline+手动链快照已刷新）", len(specs), dropped)
+	return nil
 }

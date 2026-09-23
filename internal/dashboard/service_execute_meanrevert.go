@@ -132,7 +132,7 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 	// D-311 S6：XASSET_CARRY 组合门禁（手动入口同源）——零信任：空 allowlist 全拒。
 	// 本路径无 opportunities 行可查 canonical_sell → 双腿同 canonical 兜底（与 pipeline 门禁同源）。
 	if strategyType == "XASSET_CARRY" {
-		if exec.MatchXAssetComboAllow(s.xassetComboAllow, canonical, canonical, venueBuy, venueSell) == nil {
+		if exec.MatchXAssetComboAllow(s.xassetAllowSpecs(), canonical, canonical, venueBuy, venueSell) == nil {
 			return "FAILED", fmt.Sprintf("combo not in xasset allowlist: %s %s×%s", canonical, venueBuy, venueSell), 0
 		}
 	}

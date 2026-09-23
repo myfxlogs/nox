@@ -35,6 +35,7 @@ type graduationStore interface {
 	ListBrokerAccounts(ctx context.Context) ([]pgstore.BrokerAccount, error)
 	InsertXAssetAllowCombo(ctx context.Context, r *pgstore.XAssetComboInsert) (int64, error)
 	UpdateCarryGraduationDecision(ctx context.Context, id int64, status string, comboID *int64, note string) error
+	LoadXAssetAllowCombos(ctx context.Context, environment string) ([]pgstore.XAssetAllowRow, error)
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
 	ListCarryGraduations(ctx context.Context) ([]pgstore.CarryGraduation, error)
 }
@@ -188,9 +189,13 @@ func (s *Service) ApproveCarryGraduation(ctx context.Context, req *connect.Reque
 		return fail("写白名单失败: %v", err)
 	}
 	resp.ComboId = &comboID
-	// ④ engine 热重载（免重启生效；失败=引擎持旧名单，重启可恢复，如实报错不落账）
+	// ④ 热重载三链扇出（R2）：engine 经既有 reloader（幂等自载）+ pipeline/自快照
+	// rows 单查一次→共享映射→两处 atomic Store。任一失败=该链持旧名单直至重启，如实报错不落账。
 	if err := s.xassetReloader.ReloadXAssetAllowCombos(ctx); err != nil {
-		return fail("白名单已写入但热重载失败（重启后生效）: %v", err)
+		return fail("白名单已写入但引擎热重载失败（重启后生效）: %v", err)
+	}
+	if err := s.refreshXAssetSnapshots(ctx); err != nil {
+		return fail("白名单已写入但 pipeline/手动链快照刷新失败（重启后生效）: %v", err)
 	}
 	// ⑤ AutoMap 兜底（幂等+conflict 不自动应用；多为幂等空跑）
 	summary, automapErr := s.autoMapBrokerSummary(ctx, mtVenue)

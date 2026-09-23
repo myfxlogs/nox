@@ -89,7 +89,18 @@ func (s *Service) SetSwapArbComboAllow(allow []exec.ComboAllowSpec) { s.swapArbC
 
 // SetXAssetComboAllow 注入 XASSET_CARRY 精确组合门禁 allowlist（D-311 S6，手动入口同源）。
 // 零信任：空表 = 全拒（不是 SWAPARB 的 nil=未接线语义）。
-func (s *Service) SetXAssetComboAllow(allow []exec.XAssetComboAllowSpec) { s.xassetComboAllow = allow }
+func (s *Service) SetXAssetComboAllow(allow []exec.XAssetComboAllowSpec) { s.xassetAllow.Store(&allow) } // D-403 R2：热刷新写侧
+
+// SetXAssetAllowEnvironment D-403 R2：白名单加载环境（approve 扇出 rows 单查用）。
+func (s *Service) SetXAssetAllowEnvironment(env string) { s.xassetEnv = env }
+
+// xassetAllowSpecs D-403 R2：手动执行链读侧（atomic Load；nil=未接线=空集全拒）。
+func (s *Service) xassetAllowSpecs() []exec.XAssetComboAllowSpec {
+	if v := s.xassetAllow.Load(); v != nil {
+		return *v
+	}
+	return nil
+}
 
 // SetCarryRegime 注入 carry 入口 funding regime 持久性闸参数（D-328 S5，手动入口同源）。
 // 零值 = fail-closed（XASSET_CARRY 全拒），装配缺接线不会静默放行。

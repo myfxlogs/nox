@@ -4,6 +4,7 @@ package dashboard
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"arb/internal/bus"
@@ -132,7 +133,10 @@ type Service struct {
 
 	// D-311 S6：XASSET_CARRY 精确组合门禁（手动入口同源）——零信任显式白名单。
 	// 与 SWAPARB 不同：无条件检查（空表=全拒），XASSET_CARRY 唯一放行闸。
-	xassetComboAllow []exec.XAssetComboAllowSpec
+	// D-403 R2：atomic 热刷新（approve 扇出写 vs 手动执行读竞态安全；Load nil=空集全拒）。
+	xassetAllow atomic.Pointer[[]exec.XAssetComboAllowSpec]
+	// D-403 R2：白名单加载环境（approve 扇出 rows 单查用；wire 传 cfg.Environment）。
+	xassetEnv string
 
 	// D-328 S5：carry 入口 funding regime 持久性闸参数（ExecuteOpportunityInternal 消费）。
 	// 零值 = fail-closed（XASSET_CARRY 全拒）。

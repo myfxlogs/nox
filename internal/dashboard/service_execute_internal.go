@@ -84,7 +84,7 @@ func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, request
 	// D-311 S6：XASSET_CARRY 组合门禁（手动入口同源）——零信任：空 allowlist 全拒，
 	// 命中才放行（区别于 SWAPARB 的 nil=未接线；pipeline 层另有名义额/gross 校验）。
 	if found.Type == "XASSET_CARRY" {
-		if exec.MatchXAssetComboAllow(s.xassetComboAllow, found.Canonical, sellCanonical, found.VenueBuy, found.VenueSell) == nil {
+		if exec.MatchXAssetComboAllow(s.xassetAllowSpecs(), found.Canonical, sellCanonical, found.VenueBuy, found.VenueSell) == nil {
 			return "FAILED", fmt.Sprintf("combo not in xasset allowlist: %s/%s %s×%s", found.Canonical, sellCanonical, found.VenueBuy, found.VenueSell), 0
 		}
 	}

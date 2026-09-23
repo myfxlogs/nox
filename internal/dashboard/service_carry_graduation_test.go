@@ -7,6 +7,8 @@ import (
 	"context"
 	"testing"
 
+	"arb/internal/exec"
+
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 	"arb/internal/store/pgstore"
 	"connectrpc.com/connect"
@@ -59,6 +61,13 @@ func (f *fakeGradDB) ListCarryGraduations(context.Context) ([]pgstore.CarryGradu
 	return nil, nil
 }
 
+func (f *fakeGradDB) LoadXAssetAllowCombos(_ context.Context, environment string) ([]pgstore.XAssetAllowRow, error) {
+	return []pgstore.XAssetAllowRow{{
+		CanonicalBuy: "BTCUSDT", CanonicalSell: "BTCUSD", VenueBuy: "gate:perp", VenueSell: "1279967:mt5",
+		MaxLongQty: 1000, MaxShortQty: 0.01, MaxGrossUSD: 5000,
+	}}, nil
+}
+
 type fakeReloader struct{ calls int }
 
 func (f *fakeReloader) ReloadXAssetAllowCombos(context.Context) error { f.calls++; return nil }
@@ -71,9 +80,32 @@ func gradFixture(structure string) (*fakeGradDB, *Service) {
 		maps:  []pgstore.SymbolMapping{{Venue: "1279967", BrokerSymbol: "BTCUSD", Canonical: "BTCUSD", IsPrimary: true}},
 		accts: []pgstore.BrokerAccount{{Venue: "1279967", Platform: 1}},
 	}
-	s := &Service{gradStore: f, xassetReloader: &fakeReloader{}, autoTradeAllowVenues: map[string]bool{"gate:perp": true}}
+	s := &Service{
+		gradStore: f, xassetReloader: &fakeReloader{},
+		autoTradeAllowVenues: map[string]bool{"gate:perp": true},
+		xassetEnv:            "real",
+		pipeline:             exec.NewPipeline(exec.NewRegistry(), nil, nil, exec.RiskLimits{}, "real"),
+	}
 	s.autoMapFn = func(context.Context, string) (string, error) { return "applied=0 skipped=3 conflicts=0", nil }
 	return f, s
+}
+
+// TestD403_Approve_FanOutRefresh R2：approve 后 pipeline+自快照两链刷新（Match 立即可见）。
+func TestD403_Approve_FanOutRefresh(t *testing.T) {
+	f, s := gradFixture("long_cfd_short_perp")
+	resp, err := s.ApproveCarryGraduation(context.Background(), approveReq())
+	if err != nil || !resp.Msg.Ok {
+		t.Fatalf("ok=%v err=%v errstr=%s", resp.Msg.Ok, err, resp.Msg.Error)
+	}
+	// pipeline 链：fake store rows（模拟 DB 已写入）经扇出后立即可见
+	if spec := exec.MatchXAssetComboAllow(s.pipeline.XAssetAllowSpecs(), "BTCUSDT", "BTCUSD", "gate:perp", "1279967:mt5"); spec == nil {
+		t.Error("扇出后 pipeline 快照应命中新 combo（免重启）")
+	}
+	// 自链（手动执行读点）
+	if spec := exec.MatchXAssetComboAllow(s.xassetAllowSpecs(), "BTCUSDT", "BTCUSD", "gate:perp", "1279967:mt5"); spec == nil {
+		t.Error("扇出后自快照应命中新 combo")
+	}
+	_ = f
 }
 
 func approveReq() *connect.Request[v1.ApproveCarryGraduationRequest] {
@@ -209,4 +241,24 @@ func index2(s, sub string) int {
 		}
 	}
 	return -1
+}
+
+// TestD403R2_FanOut_Race R2 race 锚：手动执行链读侧（xassetAllowSpecs+Match）vs
+// approve 扇出写（refreshXAssetSnapshots 两处 Store），-race 下零 DATA RACE 即过（×3 外层）。
+func TestD403R2_FanOut_Race(t *testing.T) {
+	f, s := gradFixture("long_cfd_short_perp")
+	_ = f
+	done := make(chan struct{})
+	go func() { // 读侧：模拟 Execute 内部组合闸
+		defer close(done)
+		for i := 0; i < 500; i++ {
+			_ = exec.MatchXAssetComboAllow(s.xassetAllowSpecs(), "BTCUSDT", "BTCUSD", "gate:perp", "1279967:mt5")
+		}
+	}()
+	for i := 0; i < 50; i++ {
+		if err := s.refreshXAssetSnapshots(context.Background()); err != nil {
+			t.Fatalf("refresh: %v", err)
+		}
+	}
+	<-done
 }
