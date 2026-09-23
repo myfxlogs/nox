@@ -52,6 +52,10 @@ func gradPaper(id int64, status string, entryOffsetDays, exitOffsetDays float64,
 		ts := now.Add(time.Duration(-exitOffsetDays*24) * time.Hour)
 		p.ExitTs = &ts
 	}
+	// D-410 S5：判据升 all-in 净额——fixture 默认账齐（fee=0.5/conv=0.1 → net=accrued−0.4，
+	// accrued≤0 仍拒、accrued>0 仍收），既有矩阵语义不变；NULL 拒毕业由 d410 测试覆盖。
+	fee, conv := 0.5, 0.1
+	p.EstRoundTripFeeUSD, p.ConvergenceUSD = &fee, &conv
 	return p
 }
 

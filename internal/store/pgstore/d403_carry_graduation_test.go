@@ -31,7 +31,7 @@ func d403InsertPaper(t *testing.T, s *Store, venue, symbol, status string, struc
 		t.Fatalf("insert paper: %v", err)
 	}
 	if status == "exited" {
-		if err := s.ExitPaperSpotCarry(context.Background(), r.ID, exitReason); err != nil {
+		if err := s.ExitPaperSpotCarry(context.Background(), r.ID, exitReason, nil); err != nil {
 			t.Fatalf("exit paper: %v", err)
 		}
 	}

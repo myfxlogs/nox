@@ -27,7 +27,7 @@ func eligibleStreak(keys ...string) *EntryStreak {
 // stepOpen 步进一轮并断言无错，返回 opened 清单。
 func stepOpen(t *testing.T, s *pgstore.Store, es *EntryStreak, now time.Time) []string {
 	t.Helper()
-	opened, _, err := StepPaperSpotCarry(context.Background(), s, es, now)
+	opened, _, err := StepPaperSpotCarry(context.Background(), s, es, now, 5.0)
 	if err != nil {
 		t.Fatalf("step: %v", err)
 	}
@@ -119,21 +119,21 @@ func TestD383C3_ExitLowStreakUnchanged(t *testing.T) {
 	}
 	// r2：低于退出线 → low_streak=1，不退
 	setF(5)
-	if _, exited, err := StepPaperSpotCarry(ctx, s, NewEntryStreak(), now.Add(time.Hour)); err != nil || exited != 0 {
+	if _, exited, err := StepPaperSpotCarry(ctx, s, NewEntryStreak(), now.Add(time.Hour), 5.0); err != nil || exited != 0 {
 		t.Fatalf("r2 exited=%d err=%v, want 0（streak 1 未达退出线）", exited, err)
 	}
 	// r3：恢复 ≥10 → low_streak 清零，不退（既有中断语义）
 	setF(50)
-	if _, exited, err := StepPaperSpotCarry(ctx, s, NewEntryStreak(), now.Add(2*time.Hour)); err != nil || exited != 0 {
+	if _, exited, err := StepPaperSpotCarry(ctx, s, NewEntryStreak(), now.Add(2*time.Hour), 5.0); err != nil || exited != 0 {
 		t.Fatalf("r3 exited=%d err=%v, want 0（恢复应清零）", exited, err)
 	}
 	// r4：再低于 → streak=1，不退
 	setF(5)
-	if _, exited, err := StepPaperSpotCarry(ctx, s, NewEntryStreak(), now.Add(3*time.Hour)); err != nil || exited != 0 {
+	if _, exited, err := StepPaperSpotCarry(ctx, s, NewEntryStreak(), now.Add(3*time.Hour), 5.0); err != nil || exited != 0 {
 		t.Fatalf("r4 exited=%d err=%v, want 0", exited, err)
 	}
 	// r5：连续第 2 轮低于 → exit normalized（原语义阈值不变）
-	if _, exited, err := StepPaperSpotCarry(ctx, s, NewEntryStreak(), now.Add(4*time.Hour)); err != nil || exited != 1 {
+	if _, exited, err := StepPaperSpotCarry(ctx, s, NewEntryStreak(), now.Add(4*time.Hour), 5.0); err != nil || exited != 1 {
 		t.Fatalf("r5 exited=%d err=%v, want 1（low_streak≥2 normalized）", exited, err)
 	}
 	var reason string

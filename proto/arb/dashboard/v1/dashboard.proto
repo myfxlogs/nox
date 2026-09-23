@@ -2229,6 +2229,7 @@ message CarryGraduationRow {
   string created_at = 11; string decided_at = 12; string decided_note = 13;
   optional int64 combo_id = 14;
   repeated string venue_gaps = 15;       // approve 时算的 venue env 缺口（pending 即时算；decided 回读快照）
+  optional double net_all_in_usd = 16;   // D-410 S5：全账净额（accrued−est_fee+convergence；缺账行 NULL）
 }
 message ListCarryGraduationsRequest {}
 message ListCarryGraduationsResponse { repeated CarryGraduationRow rows = 1; }

@@ -219,4 +219,6 @@ var (
 	MarginGuardSQL string
 	//go:embed 0127_alerts_position_id.sql
 	AlertsPositionIDSQL string
+	//go:embed 0128_paper_all_in.sql
+	PaperAllInSQL string
 )

@@ -34,6 +34,9 @@ type PaperSpotCarry struct {
 	LastBasisBps    *float64 // D-354 S2：StepPaperSpotCarry 每轮随 uni 更新
 	Structure       string   // D-374 S2：行结构（spot_carry / long_cfd_short_perp / short_cfd_long_perp；DB 缺省 spot_carry）
 	MtVenue         *string  // D-374 S2：cfd 行 CFD 腿 venue（NULL=spot_carry）
+	// D-410 S1：全账口径（KB nullable-column：可空列全指针扫描）。
+	EstRoundTripFeeUSD *float64 // 开仓一次性记账往返费用估计（存正幅度；NULL=venue 未覆盖拒填行）
+	ConvergenceUSD     *float64 // 退出冻结收敛捕获 dir×(last−entry)×qty/1e4（active 行 NULL）
 }
 
 // InsertPaperSpotCarry 开纸面仓（同 venue+symbol 活跃行唯一由部分唯一索引兜底；
@@ -45,11 +48,11 @@ func (s *Store) InsertPaperSpotCarry(ctx context.Context, r *PaperSpotCarry) err
 		r.Structure = "spot_carry"
 	}
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO paper_spot_carry (venue, symbol, side, entry_funding_ann, qty_usd, last_funding_ann, last_accrue_ts, entry_basis_bps, last_basis_bps, structure, mt_venue)
-		VALUES ($1,$2,$3,$4,$5,$6,now(),$7,$7,$8,$9)
+		INSERT INTO paper_spot_carry (venue, symbol, side, entry_funding_ann, qty_usd, last_funding_ann, last_accrue_ts, entry_basis_bps, last_basis_bps, structure, mt_venue, est_round_trip_fee_usd)
+		VALUES ($1,$2,$3,$4,$5,$6,now(),$7,$7,$8,$9,$10)
 		ON CONFLICT (venue, symbol) WHERE status IN ('active','demo') DO NOTHING
 		RETURNING id, status`,
-		r.Venue, r.Symbol, r.Side, r.EntryFundingAnn, r.QtyUSD, r.EntryFundingAnn, r.EntryBasisBps, r.Structure, r.MtVenue).Scan(&r.ID, &r.Status)
+		r.Venue, r.Symbol, r.Side, r.EntryFundingAnn, r.QtyUSD, r.EntryFundingAnn, r.EntryBasisBps, r.Structure, r.MtVenue, r.EstRoundTripFeeUSD).Scan(&r.ID, &r.Status)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return ErrPaperExists
@@ -145,12 +148,26 @@ func (s *Store) MarkPaperSpotCarryDemo(ctx context.Context, id int64, note strin
 	return nil
 }
 
+// LatestPaperExitTs D-410 S4：该 venue|symbol 键最近退出时点（max(exit_ts)，保底槽 flap
+// 冷却重构源——列已在表上零新表；无退出行 → nil）。
+func (s *Store) LatestPaperExitTs(ctx context.Context, venue, symbol string) (*time.Time, error) {
+	var ts *time.Time
+	err := s.pool.QueryRow(ctx, `
+		SELECT max(exit_ts) FROM paper_spot_carry
+		WHERE venue = $1 AND symbol = $2 AND exit_ts IS NOT NULL`, venue, symbol).Scan(&ts)
+	if err != nil {
+		return nil, fmt.Errorf("latest paper exit ts %s|%s: %w", venue, symbol, err)
+	}
+	return ts, nil
+}
+
 // ExitPaperSpotCarry 退出（reason='normalized'/'age_7d'）。
-func (s *Store) ExitPaperSpotCarry(ctx context.Context, id int64, reason string) error {
+// D-410 S2：convergenceUSD 退出时冻结收敛捕获（nil→列保持 NULL=缺账诚实缺）。
+func (s *Store) ExitPaperSpotCarry(ctx context.Context, id int64, reason string, convergenceUSD *float64) error {
 	ct, err := s.pool.Exec(ctx, `
 		UPDATE paper_spot_carry
-		SET status = 'exited', exit_ts = now(), exit_reason = $2
-		WHERE id = $1 AND status = 'active'`, id, reason)
+		SET status = 'exited', exit_ts = now(), exit_reason = $2, convergence_usd = $3
+		WHERE id = $1 AND status = 'active'`, id, reason, convergenceUSD)
 	if err != nil {
 		return fmt.Errorf("exit paper spot carry %d: %w", id, err)
 	}
@@ -162,7 +179,7 @@ func (s *Store) ExitPaperSpotCarry(ctx context.Context, id int64, reason string)
 
 const paperSpotCarryCols = `id, venue, symbol, side, entry_funding_ann, entry_ts, qty_usd,
 	last_funding_ann, accrued_usd, last_accrue_ts, low_streak, exit_ts, exit_reason, status, note,
-	entry_basis_bps, last_basis_bps, structure, mt_venue`
+	entry_basis_bps, last_basis_bps, structure, mt_venue, est_round_trip_fee_usd, convergence_usd`
 
 func (s *Store) scanPaperSpotCarry(ctx context.Context, q string, args ...any) ([]PaperSpotCarry, error) {
 	rows, err := s.pool.Query(ctx, q, args...)
@@ -176,7 +193,8 @@ func (s *Store) scanPaperSpotCarry(ctx context.Context, q string, args ...any) (
 		if err := rows.Scan(&r.ID, &r.Venue, &r.Symbol, &r.Side, &r.EntryFundingAnn, &r.EntryTs,
 			&r.QtyUSD, &r.LastFundingAnn, &r.AccruedUSD, &r.LastAccrueTs, &r.LowStreak,
 			&r.ExitTs, &r.ExitReason, &r.Status, &r.Note,
-			&r.EntryBasisBps, &r.LastBasisBps, &r.Structure, &r.MtVenue); err != nil {
+			&r.EntryBasisBps, &r.LastBasisBps, &r.Structure, &r.MtVenue,
+			&r.EstRoundTripFeeUSD, &r.ConvergenceUSD); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

@@ -22,7 +22,7 @@ func TestD374_CfdOpen_ComboVenue(t *testing.T) {
 	s := d350Store(t)
 	ctx := context.Background()
 	rows := []UniverseRow{d374Row("SOL", "277842155", "binance", "long_cfd_short_perp", 10.95, "")}
-	opened, exited, err := StepPaperCfdCarry(ctx, s, rows, time.Now())
+	opened, exited, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts())
 	if err != nil {
 		t.Fatalf("step: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestD374_CfdOpen_Rejected(t *testing.T) {
 		d374Row("SOL", "277842155", "binance", "long_cfd_short_perp", 7, ""),           // 地板 8 下
 		d374Row("XRP", "277842155", "binance", "long_cfd_short_perp", 12, "swap 证据不足"), // suspect 行
 	}
-	opened, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now())
+	opened, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts())
 	if err != nil {
 		t.Fatalf("step: %v", err)
 	}
@@ -78,11 +78,11 @@ func TestD374_CfdExit_MissStreak(t *testing.T) {
 	s := d350Store(t)
 	ctx := context.Background()
 	rows := []UniverseRow{d374Row("SOL", "277842155", "binance", "long_cfd_short_perp", 10.95, "")}
-	if _, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now()); err != nil {
+	if _, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts()); err != nil {
 		t.Fatalf("open: %v", err)
 	}
 	// miss#1：streak=1 未达退出线，行仍 active
-	_, exited1, err := StepPaperCfdCarry(ctx, s, nil, time.Now())
+	_, exited1, err := StepPaperCfdCarry(ctx, s, nil, time.Now(), d410Opts())
 	if err != nil {
 		t.Fatalf("miss1: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestD374_CfdExit_MissStreak(t *testing.T) {
 		t.Fatalf("锚B4: miss#1 want 1 active streak=1, got %+v", active)
 	}
 	// miss#2：streak=2 → normalized
-	_, exited2, err := StepPaperCfdCarry(ctx, s, nil, time.Now())
+	_, exited2, err := StepPaperCfdCarry(ctx, s, nil, time.Now(), d410Opts())
 	if err != nil {
 		t.Fatalf("miss2: %v", err)
 	}
@@ -125,14 +125,14 @@ func TestD374_CfdAccrual(t *testing.T) {
 	s := d350Store(t)
 	ctx := context.Background()
 	rows := []UniverseRow{d374Row("SOL", "277842155", "binance", "long_cfd_short_perp", 10.95, "")}
-	if _, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now()); err != nil {
+	if _, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts()); err != nil {
 		t.Fatalf("open: %v", err)
 	}
 	// 回拨 last_accrue_ts 24h → 本轮恰 1 天
 	if _, err := s.Pool().Exec(ctx, `UPDATE paper_spot_carry SET last_accrue_ts = now() - interval '24 hours'`); err != nil {
 		t.Fatalf("rewind: %v", err)
 	}
-	if _, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now()); err != nil {
+	if _, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts()); err != nil {
 		t.Fatalf("accrue round: %v", err)
 	}
 	active, _ := s.ListActivePaperSpotCarry(ctx)
@@ -149,7 +149,7 @@ func TestD374_CfdAccrual(t *testing.T) {
 	}
 	// 下一轮 net=7 → streak=1（未达 2 轮不退）且照常累积
 	low := []UniverseRow{d374Row("SOL", "277842155", "binance", "long_cfd_short_perp", 7, "")}
-	if _, exited, err := StepPaperCfdCarry(ctx, s, low, time.Now()); err != nil || exited != 0 {
+	if _, exited, err := StepPaperCfdCarry(ctx, s, low, time.Now(), d410Opts()); err != nil || exited != 0 {
 		t.Fatalf("low round: err=%v exited=%d", err, exited)
 	}
 	active, _ = s.ListActivePaperSpotCarry(ctx)
@@ -157,7 +157,7 @@ func TestD374_CfdAccrual(t *testing.T) {
 		t.Fatalf("锚B5: net=7 want streak=1 still active, got %+v", active)
 	}
 	// 回稳 → streak 归零
-	if _, exited, err := StepPaperCfdCarry(ctx, s, rows, time.Now()); err != nil || exited != 0 {
+	if _, exited, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts()); err != nil || exited != 0 {
 		t.Fatalf("recover round: err=%v exited=%d", err, exited)
 	}
 	active, _ = s.ListActivePaperSpotCarry(ctx)

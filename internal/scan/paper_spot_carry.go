@@ -43,7 +43,15 @@ type PaperStore interface {
 	ListAccrablePaperSpotCarry(ctx context.Context) ([]pgstore.PaperSpotCarry, error)
 	InsertPaperSpotCarry(ctx context.Context, r *pgstore.PaperSpotCarry) error
 	AccruePaperSpotCarry(ctx context.Context, id int64, lastFundingAnn, accruedAdd float64, lowStreak int, lastBasisBps *float64) error
-	ExitPaperSpotCarry(ctx context.Context, id int64, reason string) error
+	// D-410 S2：退出冻结收敛捕获（nil→列 NULL 诚实缺）。
+	ExitPaperSpotCarry(ctx context.Context, id int64, reason string, convergenceUSD *float64) error
+	// D-410 S4：cfd 轨 monitor basis 面与保底槽数据源（*pgstore.Store 原生实现）。
+	XAssetMonitorRowNear(ctx context.Context, pair string, ts time.Time, maxGap time.Duration) (entrySpreadBps float64, ok bool, err error)
+	LatestXAssetEntryGate(ctx context.Context, pair string, maxAge time.Duration) (entryBps, noiseBps, harvestFloorBps float64, hasFloor, ok bool, err error)
+	LoadXAssetAllowCombos(ctx context.Context, environment string) ([]pgstore.XAssetAllowRow, error)
+	LatestPaperExitTs(ctx context.Context, venue, symbol string) (*time.Time, error)
+	// D-410 S4：保底槽宇宙行缺席 warn 节流（禁 `_ =` 吞错，cashflow-write-error 同族条款）。
+	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
 }
 
 // StepPaperSpotCarry 每轮扫描后调用：①开仓（20≤net≤300 ∧ vol24h≥$10M ∧ 持续≥48h ∧
@@ -52,7 +60,8 @@ type PaperStore interface {
 // cap 竞争防尖峰占坑）②逐仓累积（active+demo，R1 S5）③退出（|funding|<10% 连续 2 轮 →
 // normalized；满 7 天 → age_7d 强评——**仅 active**，demo 行只累积不自动退=人工/业主域）。
 // 返回本轮开仓 symbol 清单（wire 侧聚一条开仓事件告警，D-350R1 S3）与退出行数。
-func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntryStreak, now time.Time) (opened []string, exited int, err error) {
+// cexFeeBps：D-410 S3 开仓记账往返费用率源（=cfg.XAssetCexFeeBps，同源同值禁第二口径）。
+func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntryStreak, now time.Time, cexFeeBps float64) (opened []string, exited int, err error) {
 	uni, err := st.ListCexUniverse(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("paper step: list cex universe: %w", err)
@@ -124,6 +133,7 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 			Venue: c.u.Venue, Symbol: c.u.Symbol, Side: side,
 			EntryFundingAnn: c.funding, QtyUSD: PaperQtyUSD,
 			EntryBasisBps: c.u.LastBasisBps, LastBasisBps: c.u.LastBasisBps, // D-354 S2：开仓基差快照（NULL 传播）
+			EstRoundTripFeeUSD: paperEstFeeUSD(c.u.Venue, PaperQtyUSD, cexFeeBps), // D-410 S3：开仓一次性记账（venue 未覆盖→NULL 拒填）
 		}
 		if err := st.InsertPaperSpotCarry(ctx, r); err != nil {
 			if err == pgstore.ErrPaperExists {
@@ -171,16 +181,14 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 			}
 			continue
 		}
-		if streak >= paperExitStreakRounds {
-			if err := st.ExitPaperSpotCarry(ctx, p.ID, "normalized"); err != nil {
-				return opened, exited, fmt.Errorf("paper step: exit %d: %w", p.ID, err)
+		if streak >= paperExitStreakRounds || now.Sub(p.EntryTs).Hours()/24 >= paperMaxAgeDays {
+			reason := "normalized"
+			if streak < paperExitStreakRounds {
+				reason = "age_7d"
 			}
-			exited++
-			continue
-		}
-		if now.Sub(p.EntryTs).Hours()/24 >= paperMaxAgeDays {
-			if err := st.ExitPaperSpotCarry(ctx, p.ID, "age_7d"); err != nil {
-				return opened, exited, fmt.Errorf("paper step: exit age %d: %w", p.ID, err)
+			// D-410 S3：退出冻结收敛捕获（本轮 last 缺→回退行内 last，双缺→NULL 诚实缺）。
+			if err := st.ExitPaperSpotCarry(ctx, p.ID, reason, paperExitConvergence(p, lastBasis)); err != nil {
+				return opened, exited, fmt.Errorf("paper step: exit %d: %w", p.ID, err)
 			}
 			exited++
 			continue

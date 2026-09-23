@@ -28,7 +28,8 @@ type CarryGraduation struct {
 	AgeDays        float64
 	AccruedUSD     float64
 	LastFundingAnn *float64
-	Status         string // pending / approved / rejected
+	NetAllInUSD    *float64 // D-410 S5：建议时点全账净额（accrued−est_fee+convergence；NULL=缺账行不该产生，防御性指针）
+	Status         string   // pending / approved / rejected
 	CreatedAt      time.Time
 	DecidedAt      *time.Time
 	DecidedNote    string
@@ -47,11 +48,11 @@ func (s *Store) ListPaperForGraduation(ctx context.Context) ([]PaperSpotCarry, e
 // 返回是否新插（false=已存在建议行，调用方不计 newCount）。
 func (s *Store) InsertCarryGraduation(ctx context.Context, g *CarryGraduation) (bool, error) {
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO carry_graduations (paper_id, venue, symbol, structure, mt_venue, age_days, accrued_usd, last_funding_ann)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+		INSERT INTO carry_graduations (paper_id, venue, symbol, structure, mt_venue, age_days, accrued_usd, last_funding_ann, net_all_in_usd)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
 		ON CONFLICT (paper_id) DO NOTHING
 		RETURNING id`,
-		g.PaperID, g.Venue, g.Symbol, g.Structure, g.MtVenue, g.AgeDays, g.AccruedUSD, g.LastFundingAnn).Scan(&g.ID)
+		g.PaperID, g.Venue, g.Symbol, g.Structure, g.MtVenue, g.AgeDays, g.AccruedUSD, g.LastFundingAnn, g.NetAllInUSD).Scan(&g.ID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return false, nil
@@ -65,7 +66,7 @@ func (s *Store) InsertCarryGraduation(ctx context.Context, g *CarryGraduation) (
 func (s *Store) GetCarryGraduation(ctx context.Context, id int64) (*CarryGraduation, error) {
 	row := s.pool.QueryRow(ctx, `
 		SELECT id, paper_id, venue, symbol, structure, mt_venue, age_days, accrued_usd,
-		       last_funding_ann, status, created_at, decided_at, decided_note, combo_id
+		       last_funding_ann, net_all_in_usd, status, created_at, decided_at, decided_note, combo_id
 		FROM carry_graduations WHERE id = $1`, id)
 	return scanCarryGraduation(row)
 }
@@ -74,7 +75,7 @@ func (s *Store) GetCarryGraduation(ctx context.Context, id int64) (*CarryGraduat
 func (s *Store) ListCarryGraduations(ctx context.Context) ([]CarryGraduation, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, paper_id, venue, symbol, structure, mt_venue, age_days, accrued_usd,
-		       last_funding_ann, status, created_at, decided_at, decided_note, combo_id
+		       last_funding_ann, net_all_in_usd, status, created_at, decided_at, decided_note, combo_id
 		FROM carry_graduations ORDER BY created_at DESC, id DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("list carry graduations: %w", err)
@@ -84,8 +85,8 @@ func (s *Store) ListCarryGraduations(ctx context.Context) ([]CarryGraduation, er
 	for rows.Next() {
 		var g CarryGraduation
 		if err := rows.Scan(&g.ID, &g.PaperID, &g.Venue, &g.Symbol, &g.Structure, &g.MtVenue,
-			&g.AgeDays, &g.AccruedUSD, &g.LastFundingAnn, &g.Status, &g.CreatedAt, &g.DecidedAt,
-			&g.DecidedNote, &g.ComboID); err != nil {
+			&g.AgeDays, &g.AccruedUSD, &g.LastFundingAnn, &g.NetAllInUSD, &g.Status, &g.CreatedAt,
+			&g.DecidedAt, &g.DecidedNote, &g.ComboID); err != nil {
 			return nil, err
 		}
 		out = append(out, g)
@@ -183,8 +184,8 @@ func (s *Store) ListCfdCarryUniverseClean(ctx context.Context) ([]CarryUniverseR
 func scanCarryGraduation(row pgx.Row) (*CarryGraduation, error) {
 	var g CarryGraduation
 	err := row.Scan(&g.ID, &g.PaperID, &g.Venue, &g.Symbol, &g.Structure, &g.MtVenue,
-		&g.AgeDays, &g.AccruedUSD, &g.LastFundingAnn, &g.Status, &g.CreatedAt, &g.DecidedAt,
-		&g.DecidedNote, &g.ComboID)
+		&g.AgeDays, &g.AccruedUSD, &g.LastFundingAnn, &g.NetAllInUSD, &g.Status, &g.CreatedAt,
+		&g.DecidedAt, &g.DecidedNote, &g.ComboID)
 	if err != nil {
 		return nil, err
 	}

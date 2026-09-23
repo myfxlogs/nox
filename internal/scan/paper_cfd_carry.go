@@ -8,7 +8,9 @@ package scan
 import (
 	"context"
 	"fmt"
+	"log"
 	"sort"
+	"strings"
 	"time"
 
 	"arb/internal/store/pgstore"
@@ -21,9 +23,19 @@ const (
 	PaperCfdOpenNetPct = 8.0
 	// PaperCfdMaxNetPct 开仓上限（band 上限同 spot 语义：≥300% 为长尾区）。
 	PaperCfdMaxNetPct = 300.0
-	// PaperCfdMaxActive 活跃 cfd 纸面行硬上限。
+	// PaperCfdMaxActive 活跃 cfd 纸面行硬上限（保底槽不占此额，D-410 S4）。
 	PaperCfdMaxActive = 6
 )
+
+// PaperCfdOpts D-410 S4 装配参数（wire_scan 注入 cfg/env 值，scan 层不读 env）。
+type PaperCfdOpts struct {
+	// CexFeeBps 往返费率源（=cfg.XAssetCexFeeBps 同源同值）。
+	CexFeeBps float64
+	// AuthorizedMaxActive 授权组合保底槽独立上限（env ARB_PAPER_AUTHORIZED_MAX_ACTIVE，默认 8）。
+	AuthorizedMaxActive int
+	// ReopenCooldown 保底槽 flap 冷却（env ARB_PAPER_AUTHORIZED_REOPEN_COOLDOWN_HOURS，默认 24h）。
+	ReopenCooldown time.Duration
+}
 
 // cfdStructures fin_carry_universe 的 cfd×perp 结构集（进 cfd 纸面轨的行子集判定）。
 var cfdStructures = map[string]bool{"long_cfd_short_perp": true, "short_cfd_long_perp": true}
@@ -41,8 +53,15 @@ var cfdStructures = map[string]bool{"long_cfd_short_perp": true, "short_cfd_long
 // ③退出（仅 active）：行消失或 net<8 → low_streak++，连续 paperExitStreakRounds 轮 →
 //
 //	normalized；满 paperMaxAgeDays → age_7d。demo 行只累积不自动退；行缺席时 demo 跳过
-//	不误记。entry/last basis 列 NULL 诚实缺（fin_carry_universe 无 basis 数据，不臆造）。
-func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, now time.Time) (opened []string, exited int, err error) {
+//	不误记。
+//
+// D-410 S4：basis 接 fin_xasset_monitor 面——开仓 entry=XAssetMonitorRowNear（ts<=entry
+// 谓词，D-404 R1 已修同冻结锚同源）；每轮 last=LatestXAssetEntryGate 最新行（maxAge 陈旧闸
+// 行龄超限→NULL 诚实缺）；退出冻结 convergence=dir×(last−entry)×qty/1e4。monitor 行缺席 →
+// basis NULL 不臆造（可算不可毕业）。保底段先行：enabled∧非 simulated 白名单组合不套 net
+// 下限开仓（不占 PaperCfdMaxActive 槽），flap 冷却按 max(exit_ts) 重构，双 CEX 组合跳过，
+// 宇宙行缺席 warn 节流每轮至多一条。
+func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, now time.Time, opts PaperCfdOpts) (opened []string, exited int, err error) {
 	active, err := st.ListActivePaperSpotCarry(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("cfd paper step: list active: %w", err)
@@ -53,14 +72,90 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 		return nil, 0, fmt.Errorf("cfd paper step: list accrable: %w", err)
 	}
 	activeByKey := make(map[string]struct{}, len(active))
-	cfdActive := 0
 	for _, p := range active {
 		activeByKey[p.Venue+"|"+p.Symbol] = struct{}{}
-		if cfdStructures[p.Structure] {
+	}
+	// clean cfd 行索引（保底段与 top-N 段共用；D-345 suspect 行拒入同 top-N 口径）。
+	rowByKey := make(map[string]UniverseRow, len(rows))
+	for _, r := range rows {
+		if cfdStructures[r.Structure] && r.Note == "" {
+			rowByKey[r.MtVenue+"×"+r.CexVenue+"|"+r.Canonical] = r
+		}
+	}
+	// D-410 S4 钉死①开票顺序：保底段先行——enabled∧非 simulated 白名单组合不套 net 下限
+	// （衰减授权线的证据同样要记），不占 PaperCfdMaxActive 槽；top-N 段经 activeByKey 自动跳过。
+	combos, err := st.LoadXAssetAllowCombos(ctx, "real")
+	if err != nil {
+		return nil, 0, fmt.Errorf("cfd paper step: load allow combos: %w", err)
+	}
+	type authSlot struct{ key, venueCombo, symbol, mtVenue string }
+	slots := []authSlot{}
+	for _, c := range combos {
+		mtV, cexV, mtCanon, ok := cfdComboLegs(c)
+		if !ok {
+			// 钉死③：venue 对无 MT 腿（双 CEX 组合）→ 跳过保底+detail note（无映射意义不硬塞）
+			log.Printf("[cfd paper] 保底槽跳过双CEX组合 venue=%s/%s canon=%s/%s", c.VenueBuy, c.VenueSell, c.CanonicalBuy, c.CanonicalSell)
+			continue
+		}
+		symbol := NormalizeJoinKey(mtCanon)
+		if symbol == "" {
+			continue
+		}
+		slots = append(slots, authSlot{key: mtV + "×" + cexV + "|" + symbol, venueCombo: mtV + "×" + cexV, symbol: symbol, mtVenue: mtV})
+	}
+	authorized := make(map[string]struct{}, len(slots))
+	for _, sl := range slots {
+		authorized[sl.key] = struct{}{}
+	}
+	cfdActive, guaranteedActive := 0, 0
+	for _, p := range active {
+		if _, ok := authorized[p.Venue+"|"+p.Symbol]; ok {
+			guaranteedActive++
+		} else if cfdStructures[p.Structure] {
 			cfdActive++
 		}
 	}
-	// ① 开仓
+	var missing []string
+	for _, sl := range slots {
+		if _, ok := activeByKey[sl.key]; ok {
+			continue
+		}
+		if guaranteedActive >= opts.AuthorizedMaxActive {
+			break
+		}
+		// 钉死②flap 冷却：退出行 max(exit_ts) 重构窗，冷却内不重开（列已在表上零新表）——
+		// 衰减组合 LowStreak 退出→下轮即重开会反复记 est_fee，系统性高估费用冲刷证据流。
+		if opts.ReopenCooldown > 0 {
+			lastExit, err := st.LatestPaperExitTs(ctx, sl.venueCombo, sl.symbol)
+			if err != nil {
+				return opened, exited, fmt.Errorf("cfd paper step: exit ts %s: %w", sl.key, err)
+			}
+			if lastExit != nil && now.Sub(*lastExit) < opts.ReopenCooldown {
+				continue
+			}
+		}
+		r, ok := rowByKey[sl.key]
+		if !ok {
+			missing = append(missing, sl.key) // 宇宙行缺席：不开仓+warn 节流
+			continue
+		}
+		if err := insertCfdPaper(ctx, st, r, sl.mtVenue, sl.venueCombo, now, opts.CexFeeBps); err != nil {
+			if err == pgstore.ErrPaperExists {
+				continue
+			}
+			return opened, exited, fmt.Errorf("cfd paper step: open authorized %s: %w", sl.key, err)
+		}
+		activeByKey[sl.key] = struct{}{}
+		guaranteedActive++
+		opened = append(opened, r.Canonical)
+	}
+	if len(missing) > 0 {
+		// 宇宙行缺席 warn 节流：每轮至多一条聚合告警（禁 `_ =` 吞错）。
+		if err := st.InsertAlert(ctx, nil, "warn", "[cfd 纸面保底] 授权组合宇宙行缺席（无 funding/swap fact，本轮不开仓）: "+strings.Join(missing, ", ")); err != nil {
+			log.Printf("[cfd paper] authorized-miss alert: %v", err)
+		}
+	}
+	// ① 开仓（top-N 段）
 	type cfdCand struct {
 		venueCombo string
 		r          UniverseRow
@@ -80,38 +175,34 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 		cands = append(cands, cfdCand{venueCombo: venueCombo, r: r})
 	}
 	sort.Slice(cands, func(i, j int) bool { return cands[i].r.NetAnnual > cands[j].r.NetAnnual })
+	topN := 0
 	for _, c := range cands {
-		if cfdActive+len(opened) >= PaperCfdMaxActive {
+		if cfdActive+topN >= PaperCfdMaxActive { // 保底槽不占此额（钉死①）
 			break
 		}
-		side := "short_perp"
-		if c.r.Structure == "short_cfd_long_perp" {
-			side = "long_perp"
-		}
-		mv := c.r.MtVenue
-		r := &pgstore.PaperSpotCarry{
-			Venue: c.venueCombo, Symbol: c.r.Canonical, Side: side,
-			EntryFundingAnn: c.r.FundingAnn, QtyUSD: PaperQtyUSD,
-			Structure: c.r.Structure, MtVenue: &mv,
-		}
-		if err := st.InsertPaperSpotCarry(ctx, r); err != nil {
+		if err := insertCfdPaper(ctx, st, c.r, c.r.MtVenue, c.venueCombo, now, opts.CexFeeBps); err != nil {
 			if err == pgstore.ErrPaperExists {
 				continue
 			}
 			return opened, exited, fmt.Errorf("cfd paper step: open %s: %w", c.venueCombo, err)
 		}
+		topN++
 		opened = append(opened, c.r.Canonical)
 	}
 	// ② 累积 + ③ 退出（仅 cfd 行；spot 轨行不归本函数）
-	rowByKey := make(map[string]UniverseRow, len(rows))
-	for _, r := range rows {
-		if cfdStructures[r.Structure] && r.Note == "" {
-			rowByKey[r.MtVenue+"×"+r.CexVenue+"|"+r.Canonical] = r
-		}
-	}
 	for _, p := range accrable {
 		if !cfdStructures[p.Structure] {
 			continue
+		}
+		// D-410 S4：last_basis 每轮更 monitor 最新行（陈旧闸行龄超限→nil 诚实缺写 NULL）。
+		var lastBasis *float64
+		pair := paperCfdPairKey(p.Symbol)
+		entryBps, _, _, _, ok, err := st.LatestXAssetEntryGate(ctx, pair, paperCfdMonitorMaxAge)
+		if err != nil {
+			return opened, exited, fmt.Errorf("cfd paper step: monitor gate %s: %w", pair, err)
+		}
+		if ok {
+			lastBasis = &entryBps
 		}
 		r, ok := rowByKey[p.Venue+"|"+p.Symbol]
 		if !ok {
@@ -120,7 +211,7 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 			}
 			// active 行缺席=信号死：miss 计 streak 同轨，零累积（accruedAdd=0，时钟照走）
 			if p.LowStreak+1 >= paperExitStreakRounds {
-				if err := st.ExitPaperSpotCarry(ctx, p.ID, "normalized"); err != nil {
+				if err := st.ExitPaperSpotCarry(ctx, p.ID, "normalized", paperExitConvergence(p, lastBasis)); err != nil {
 					return opened, exited, fmt.Errorf("cfd paper step: exit miss %d: %w", p.ID, err)
 				}
 				exited++
@@ -130,7 +221,7 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 			if p.LastFundingAnn != nil {
 				prev = *p.LastFundingAnn
 			}
-			if err := st.AccruePaperSpotCarry(ctx, p.ID, prev, 0, p.LowStreak+1, nil); err != nil {
+			if err := st.AccruePaperSpotCarry(ctx, p.ID, prev, 0, p.LowStreak+1, lastBasis); err != nil {
 				return opened, exited, fmt.Errorf("cfd paper step: miss %d: %w", p.ID, err)
 			}
 			continue
@@ -152,26 +243,23 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 		}
 		if p.Status != "active" {
 			// demo 行只累积不自动退（同 spot 轨）
-			if err := st.AccruePaperSpotCarry(ctx, p.ID, r.FundingAnn, accruedAdd, p.LowStreak, nil); err != nil {
+			if err := st.AccruePaperSpotCarry(ctx, p.ID, r.FundingAnn, accruedAdd, p.LowStreak, lastBasis); err != nil {
 				return opened, exited, fmt.Errorf("cfd paper step: accrue demo %d: %w", p.ID, err)
 			}
 			continue
 		}
-		if streak >= paperExitStreakRounds {
-			if err := st.ExitPaperSpotCarry(ctx, p.ID, "normalized"); err != nil {
+		if streak >= paperExitStreakRounds || now.Sub(p.EntryTs).Hours()/24 >= paperMaxAgeDays {
+			reason := "normalized"
+			if streak < paperExitStreakRounds {
+				reason = "age_7d"
+			}
+			if err := st.ExitPaperSpotCarry(ctx, p.ID, reason, paperExitConvergence(p, lastBasis)); err != nil {
 				return opened, exited, fmt.Errorf("cfd paper step: exit %d: %w", p.ID, err)
 			}
 			exited++
 			continue
 		}
-		if now.Sub(p.EntryTs).Hours()/24 >= paperMaxAgeDays {
-			if err := st.ExitPaperSpotCarry(ctx, p.ID, "age_7d"); err != nil {
-				return opened, exited, fmt.Errorf("cfd paper step: exit age %d: %w", p.ID, err)
-			}
-			exited++
-			continue
-		}
-		if err := st.AccruePaperSpotCarry(ctx, p.ID, r.FundingAnn, accruedAdd, streak, nil); err != nil {
+		if err := st.AccruePaperSpotCarry(ctx, p.ID, r.FundingAnn, accruedAdd, streak, lastBasis); err != nil {
 			return opened, exited, fmt.Errorf("cfd paper step: accrue %d: %w", p.ID, err)
 		}
 	}

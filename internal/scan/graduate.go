@@ -46,6 +46,7 @@ func StepCarryGraduation(ctx context.Context, st GraduationStore, now time.Time)
 		if !graduationQualified(p, now) {
 			continue
 		}
+		net := netAllInUSD(p.AccruedUSD, p.EstRoundTripFeeUSD, p.ConvergenceUSD)
 		g := &pgstore.CarryGraduation{
 			PaperID:        p.ID,
 			Venue:          p.Venue,
@@ -55,6 +56,7 @@ func StepCarryGraduation(ctx context.Context, st GraduationStore, now time.Time)
 			AgeDays:        graduationAgeDays(p, now),
 			AccruedUSD:     p.AccruedUSD,
 			LastFundingAnn: p.LastFundingAnn,
+			NetAllInUSD:    &net, // D-410 S5：建议行透出全账净额（qualified 行双列非 NULL 已达）
 		}
 		inserted, err := st.InsertCarryGraduation(ctx, g)
 		if err != nil {
@@ -77,9 +79,15 @@ func StepCarryGraduation(ctx context.Context, st GraduationStore, now time.Time)
 }
 
 // graduationQualified 单行合格判定（S6 合格矩阵的全分支源头）。
+// D-410 S5：盈利判据从「carry 在跑」升「all-in 净额为正」——est_fee/convergence 任一
+// NULL → 拒（缺账不可毕业，KB validation-baseline-empty：首批毕业行不得由失真口径
+// 产生）；netAllIn = accrued − est_fee + convergence ≤ 0 → 拒。
 func graduationQualified(p pgstore.PaperSpotCarry, now time.Time) bool {
-	if p.AccruedUSD <= 0 {
-		return false // 未盈利=零证据（KB carry-rate-is-not-expectancy：速率再高不算数）
+	if p.EstRoundTripFeeUSD == nil || p.ConvergenceUSD == nil {
+		return false // 缺账不可毕业（展示侧 net 照算+partial 标注不隐瞒）
+	}
+	if netAllInUSD(p.AccruedUSD, p.EstRoundTripFeeUSD, p.ConvergenceUSD) <= 0 {
+		return false // 全账未盈利=零证据（KB carry-rate-is-not-expectancy：速率再高不算数）
 	}
 	switch p.Status {
 	case "active":
