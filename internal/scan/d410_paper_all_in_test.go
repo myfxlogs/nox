@@ -38,8 +38,8 @@ func d410SeedMonitor(t *testing.T, s *pgstore.Store, pair string, ts time.Time, 
 	if _, err := s.Pool().Exec(context.Background(), `
 		INSERT INTO fin_xasset_monitor (ts, pair, binance_bid, binance_ask, exness_bid, exness_ask,
 			entry_spread_bps, exit_spread_bps, entry_net_bps, funding_rate_8h, funding_annual_pct,
-			tracking_error_bps, equiv_annual_pct, noise_bps)
-		VALUES ($1,$2,4000,4001,3999,4000,$3,5,3,0.001,21.9,1.0,24.9,9)`,
+			tracking_error_bps, equiv_annual_pct, noise_bps, cex_venue, mt_venue)
+		VALUES ($1,$2,4000,4001,3999,4000,$3,5,3,0.001,21.9,1.0,24.9,9,'okx:perp','3001157:mt5')`, // D-423：venue 键=fixture 宇宙行 3001157×okx
 		ts, pair, entry); err != nil {
 		t.Fatalf("seed monitor %s: %v", pair, err)
 	}

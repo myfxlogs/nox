@@ -221,4 +221,6 @@ var (
 	AlertsPositionIDSQL string
 	//go:embed 0128_paper_all_in.sql
 	PaperAllInSQL string
+	//go:embed 0129_xasset_monitor_venue.sql
+	XassetMonitorVenueSQL string
 )

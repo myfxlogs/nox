@@ -1,4 +1,6 @@
 // D-335 S2：XASSET 入口安全边际闸读接口（monitor 单源：entry+noise 同行读）。
+// D-423：查询键三元组化（pair, cex_venue, mt_venue）——跨 venue 借用他所簿统计=伪安全
+// 边际/伪收割线；调用方按仓/机会的 venue 直查，查不到=诚实缺（fail-closed 不借用）。
 package pgstore
 
 import (
@@ -8,19 +10,18 @@ import (
 	"time"
 )
 
-// LatestXAssetEntryGate 读该 pair 最新行的 entry_spread_bps+noise_bps+harvest_floor_bps
-// （D-341 S1 扩展：收割线同行读；NULL→hasFloor=false）。
-// 无行、行龄>maxAge、noise_bps IS NULL（样本<12 未成噪）→ ok=false（调用方 fail-open）。
-// pair 键以 monitor 工具构造为准（现值 "XAUUSDT-XAU"）。
-func (s *Store) LatestXAssetEntryGate(ctx context.Context, pair string, maxAge time.Duration) (entryBps, noiseBps, harvestFloorBps float64, hasFloor, ok bool, err error) {
+// LatestXAssetEntryGate 读该 (pair,cexVenue,mtVenue) 最新行的 entry_spread_bps+
+// noise_bps+harvest_floor_bps（D-341 S1 扩展：收割线同行读；NULL→hasFloor=false）。
+// 无行、行龄>maxAge、noise_bps IS NULL（样本<12 未成噪）→ ok=false。
+func (s *Store) LatestXAssetEntryGate(ctx context.Context, pair, cexVenue, mtVenue string, maxAge time.Duration) (entryBps, noiseBps, harvestFloorBps float64, hasFloor, ok bool, err error) {
 	var entry, noise, floor *float64
 	var ts time.Time
 	err = s.pool.QueryRow(ctx, `
 		SELECT entry_spread_bps, noise_bps, harvest_floor_bps, ts
 		FROM fin_xasset_monitor
-		WHERE pair = $1
+		WHERE pair = $1 AND cex_venue = $2 AND mt_venue = $3
 		ORDER BY ts DESC
-		LIMIT 1`, pair).Scan(&entry, &noise, &floor, &ts)
+		LIMIT 1`, pair, cexVenue, mtVenue).Scan(&entry, &noise, &floor, &ts)
 	if err != nil {
 		if err.Error() == "no rows in result set" {
 			return 0, 0, 0, false, false, nil
@@ -41,14 +42,15 @@ func (s *Store) LatestXAssetEntryGate(ctx context.Context, pair string, maxAge t
 // EnsureEntryGateSnapshot 写自开仓时点之前最新行，capture 必须与该行同源配对；
 // |Δt| 最近行会取到开仓后样本=跨样本混配，498 实证 capture 转负→line 比锚宽误杀）。
 // 行龄>maxGap（opened_at−rowTs）/无行 → ok=false（调用方回退代理路径，不用错尺度）。
-func (s *Store) XAssetMonitorRowNear(ctx context.Context, pair string, ts time.Time, maxGap time.Duration) (entrySpreadBps float64, ok bool, err error) {
+// D-423：查询键三元组化（pair,cexVenue,mtVenue）。
+func (s *Store) XAssetMonitorRowNear(ctx context.Context, pair, cexVenue, mtVenue string, ts time.Time, maxGap time.Duration) (entrySpreadBps float64, ok bool, err error) {
 	var rowTs time.Time
 	err = s.pool.QueryRow(ctx, `
 		SELECT entry_spread_bps, ts
 		FROM fin_xasset_monitor
-		WHERE pair = $1 AND ts <= $2
+		WHERE pair = $1 AND cex_venue = $2 AND mt_venue = $3 AND ts <= $4
 		ORDER BY ts DESC
-		LIMIT 1`, pair, ts).Scan(&entrySpreadBps, &rowTs)
+		LIMIT 1`, pair, cexVenue, mtVenue, ts).Scan(&entrySpreadBps, &rowTs)
 	if err != nil {
 		if err.Error() == "no rows in result set" {
 			return 0, false, nil
@@ -64,8 +66,9 @@ func (s *Store) XAssetMonitorRowNear(ctx context.Context, pair string, ts time.T
 // EnsureEntryGateSnapshot D-341 S1：开仓学习样本锚——两写点（D-327 同位）后调用，
 // 读开仓时点 monitor 最新行落 positions.entry_noise_bps/entry_harvest_floor_bps（IS NULL 幂等）。
 // monitor 缺行/未成噪 → 不写（学习锚 NULL=诚实缺样本，收割出口走 NULL 不触发语义）。
-func (s *Store) EnsureEntryGateSnapshot(ctx context.Context, posID int64, pair string, maxAge time.Duration) error {
-	entry, noise, floor, hasFloor, ok, err := s.LatestXAssetEntryGate(ctx, pair, maxAge)
+// D-423：按 (pair,cexVenue,mtVenue) 三元组查——venue 键不可得传空串=自然 miss 不写。
+func (s *Store) EnsureEntryGateSnapshot(ctx context.Context, posID int64, pair, cexVenue, mtVenue string, maxAge time.Duration) error {
+	entry, noise, floor, hasFloor, ok, err := s.LatestXAssetEntryGate(ctx, pair, cexVenue, mtVenue, maxAge)
 	if err != nil || !ok {
 		return err
 	}

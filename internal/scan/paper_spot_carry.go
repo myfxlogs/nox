@@ -46,8 +46,8 @@ type PaperStore interface {
 	// D-410 S2：退出冻结收敛捕获（nil→列 NULL 诚实缺）。
 	ExitPaperSpotCarry(ctx context.Context, id int64, reason string, convergenceUSD *float64) error
 	// D-410 S4：cfd 轨 monitor basis 面与保底槽数据源（*pgstore.Store 原生实现）。
-	XAssetMonitorRowNear(ctx context.Context, pair string, ts time.Time, maxGap time.Duration) (entrySpreadBps float64, ok bool, err error)
-	LatestXAssetEntryGate(ctx context.Context, pair string, maxAge time.Duration) (entryBps, noiseBps, harvestFloorBps float64, hasFloor, ok bool, err error)
+	XAssetMonitorRowNear(ctx context.Context, pair, cexVenue, mtVenue string, ts time.Time, maxGap time.Duration) (entrySpreadBps float64, ok bool, err error)
+	LatestXAssetEntryGate(ctx context.Context, pair, cexVenue, mtVenue string, maxAge time.Duration) (entryBps, noiseBps, harvestFloorBps float64, hasFloor, ok bool, err error)
 	LoadXAssetAllowCombos(ctx context.Context, environment string) ([]pgstore.XAssetAllowRow, error)
 	LatestPaperExitTs(ctx context.Context, venue, symbol string) (*time.Time, error)
 	// D-410 S4：保底槽宇宙行缺席 warn 节流（禁 `_ =` 吞错，cashflow-write-error 同族条款）。

@@ -197,7 +197,13 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 		// D-410 S4：last_basis 每轮更 monitor 最新行（陈旧闸行龄超限→nil 诚实缺写 NULL）。
 		var lastBasis *float64
 		pair := paperCfdPairKey(p.Symbol)
-		entryBps, _, _, _, ok, err := st.LatestXAssetEntryGate(ctx, pair, paperCfdMonitorMaxAge)
+		// D-423：三元组 venue 键——Venue="mt×cex" 组合串拆回裸名再映射（mt 列备份拆分缺）。
+		mtV, cexV := "", ""
+		if i := strings.Index(p.Venue, "×"); i >= 0 {
+			mtV, cexV = p.Venue[:i], p.Venue[i+len("×"):]
+		}
+		cexVenue, mtVenue := monitorVenueKeys(cexV, mtV)
+		entryBps, _, _, _, ok, err := st.LatestXAssetEntryGate(ctx, pair, cexVenue, mtVenue, paperCfdMonitorMaxAge)
 		if err != nil {
 			return opened, exited, fmt.Errorf("cfd paper step: monitor gate %s: %w", pair, err)
 		}

@@ -106,7 +106,9 @@ func insertCfdPaper(ctx context.Context, st PaperStore, r UniverseRow, mtVenue, 
 		Structure: r.Structure, MtVenue: &mv,
 		EstRoundTripFeeUSD: paperEstFeeUSD(venueCombo, PaperQtyUSD, cexFeeBps),
 	}
-	if eb, ok, err := st.XAssetMonitorRowNear(ctx, paperCfdPairKey(r.Canonical), now, paperCfdMonitorMaxAge); err != nil {
+	// D-423：monitor 三元组——universe venue 裸名映射 venue 键（cex→+:perp，mt→+:mt5）。
+	cexVenue, mtVenueKey := monitorVenueKeys(r.CexVenue, mtVenue)
+	if eb, ok, err := st.XAssetMonitorRowNear(ctx, paperCfdPairKey(r.Canonical), cexVenue, mtVenueKey, now, paperCfdMonitorMaxAge); err != nil {
 		return fmt.Errorf("monitor entry basis: %w", err)
 	} else if ok {
 		p.EntryBasisBps, p.LastBasisBps = &eb, &eb
@@ -121,6 +123,19 @@ func paperExitConvergence(p pgstore.PaperSpotCarry, lastBasis *float64) *float64
 		lb = p.LastBasisBps
 	}
 	return paperConvergenceUSD(paperBasisDir(p.Side, p.Structure), p.EntryBasisBps, lb, p.QtyUSD)
+}
+
+// monitorVenueKeys D-423：universe 裸 venue 名（"okx"/"3001157"）→ monitor 行 venue 键
+// （cex→+:perp 与仓腿/机会 venue 形态对齐；mt→+:mt5；已带冒号原样=诚实不猜）。
+func monitorVenueKeys(cexV, mtV string) (cexVenue, mtVenue string) {
+	cexVenue, mtVenue = cexV, mtV
+	if cexVenue != "" && !strings.Contains(cexVenue, ":") {
+		cexVenue += ":perp"
+	}
+	if mtVenue != "" && !strings.Contains(mtVenue, ":") {
+		mtVenue += ":mt5"
+	}
+	return cexVenue, mtVenue
 }
 
 // cfdComboLegs D-410 钉死③venueCombo 映射：venue_buy/venue_sell 中带 ":mt4"/":mt5"

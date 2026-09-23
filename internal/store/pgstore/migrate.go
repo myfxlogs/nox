@@ -124,6 +124,7 @@ var migrationFiles = []struct {
 	{126, migrations.MarginGuardSQL},                   // D-405 S1：snapshot buffer_multiple + fin_venue_margin_status
 	{127, migrations.AlertsPositionIDSQL},              // D-411 S1：alerts.position_id 持仓级告警列
 	{128, migrations.PaperAllInSQL},                    // D-410 S1：纸面全账三列+存量费用回填
+	{129, migrations.XassetMonitorVenueSQL},            // D-423：fin_xasset_monitor cex/mt venue 三元组（存量=binance:perp×3001157:mt5）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
