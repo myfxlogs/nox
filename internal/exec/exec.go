@@ -75,6 +75,12 @@ type Executor interface {
 	CloseOrder(ctx context.Context, ref OrderRef) (Fill, error)
 }
 
+// OrderCanceler 可选撤单接口（D-427 I2）：rollback UNKNOWN+OrderID CEX 腿孤儿出证用。
+// ref.Symbol=venue 原生符号，ref.OrderID=venue 单号。
+type OrderCanceler interface {
+	CancelOrder(ctx context.Context, ref OrderRef) error
+}
+
 // Prechecker 可选预检接口（D-121）：pipeline.Execute 下单前对每条腿调 Precheck，
 // 任一腿预检失败 → 不建 position 不下单，直接返回错误（防 LEGGED）。
 // 实现者：CEXExecutor（gate perp 查合约存在性，testnet 部分合约缺失如 TRX_USDT）。

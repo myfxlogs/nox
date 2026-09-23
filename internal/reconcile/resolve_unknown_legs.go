@@ -90,17 +90,42 @@ func (r *Reconciler) resolveOneUnknownLeg(ctx context.Context, leg *pgstore.Posi
 	}
 }
 
-// resolveMTUnknownLeg MT 腿消解：OrderHistoryQuerier 按 ticket 查（D-073+/D-416 同面）。
+// resolveMTUnknownLeg MT 腿消解（D-427 I1 两证据序）：
+// 主证据=持仓在场（OpenedByVenueKey 按 ticket 命中 → OpenPrice/Volume 权威字段回填）；
+// 副证据=历史已开已平（OrderHistoryQuerier，OpenPrice 优先 ClosePrice 兜底）；
+// 双 miss/查询 err → unknownStuck（fail-closed 不动）。
 func (r *Reconciler) resolveMTUnknownLeg(ctx context.Context, leg *pgstore.PositionLeg) {
+	sub, cancel := r.withTimeout(ctx)
+	orders, err := r.OpenedByVenueKey(sub, leg.Venue)
+	cancel()
+	if err == nil {
+		for _, o := range orders {
+			if o.Ticket == leg.OrderID {
+				fee := o.Commission
+				if fee < 0 {
+					fee = -fee
+				}
+				r.applyLegResolved(ctx, leg, o.OpenPrice, o.Volume, fee)
+				return
+			}
+		}
+	}
 	q := r.findHistoryQuerier(leg.Venue)
 	if q == nil {
 		r.unknownStuck(ctx, leg, "no history querier for "+leg.Venue)
 		return
 	}
-	sub, cancel := r.withTimeout(ctx)
+	sub, cancel = r.withTimeout(ctx)
 	h, err := q.QueryOrderHistory(sub, leg.OrderID, 3)
 	cancel()
-	if err != nil || h == nil || h.ClosePrice <= 0 {
+	px := float64(0)
+	if h != nil {
+		px = h.OpenPrice
+		if px <= 0 {
+			px = h.ClosePrice // 开仓价缺场 → 收盘价如实兜底
+		}
+	}
+	if err != nil || h == nil || px <= 0 {
 		r.unknownStuck(ctx, leg, "history no hit")
 		return
 	}
@@ -108,7 +133,7 @@ func (r *Reconciler) resolveMTUnknownLeg(ctx context.Context, leg *pgstore.Posit
 	if fee < 0 {
 		fee = -fee
 	}
-	r.applyLegResolved(ctx, leg, h.ClosePrice, leg.EffectiveQty(), fee)
+	r.applyLegResolved(ctx, leg, px, leg.EffectiveQty(), fee)
 }
 
 // applyLegResolved 腿 FILLED 回填 + 仓态重评（CEX/MT 消解公共尾）。

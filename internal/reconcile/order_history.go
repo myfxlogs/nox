@@ -17,6 +17,7 @@ import (
 // ClosePrice=0/Profit=0 = venue 未返回（如实空，不伪造）。
 type HistoryOrder struct {
 	Ticket     string
+	OpenPrice  float64 // D-427 I1：开仓价（消解开仓 UNKNOWN 腿回填用；0=venue 未返回）
 	ClosePrice float64
 	Profit     float64
 	Swap       float64
@@ -65,6 +66,7 @@ func (q *MT5OrderHistoryQuerier) QueryOrderHistory(ctx context.Context, ticket s
 		if strconv.FormatInt(ord.GetTicket(), 10) == ticket {
 			return &HistoryOrder{
 				Ticket:     ticket,
+				OpenPrice:  ord.GetOpenPrice(),
 				ClosePrice: ord.GetClosePrice(),
 				Profit:     ord.GetProfit(),
 				Swap:       ord.GetSwap(),
@@ -108,6 +110,7 @@ func (q *MT4OrderHistoryQuerier) QueryOrderHistory(ctx context.Context, ticket s
 		if strconv.FormatInt(int64(ord.GetTicket()), 10) == ticket {
 			return &HistoryOrder{
 				Ticket:     ticket,
+				OpenPrice:  ord.GetOpenPrice(),
 				ClosePrice: ord.GetClosePrice(),
 				Profit:     ord.GetProfit(),
 				Swap:       ord.GetSwap(),

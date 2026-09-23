@@ -141,6 +141,8 @@ func TestD421BinancePartialKeepsPolling(t *testing.T) {
 				return
 			}
 			_, _ = io.WriteString(w, `{"status":"FILLED","executedQty":"1.0","avgPrice":"100"}`)
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/userTrades":
+			_, _ = io.WriteString(w, `[]`)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}

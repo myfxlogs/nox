@@ -102,3 +102,15 @@ func okxFeeToUSD(feeStr, feeCcy string) (float64, bool) {
 	}
 	return 0, false
 }
+
+// CancelOrder D-427 I2：rollback UNKNOWN+OrderID 孤儿出证——按 venue 分发撤单。
+// 调用方不判错误文案；随后终查 QueryOrderStatus 定真实成交量。
+func (e *CEXExecutor) CancelOrder(ctx context.Context, ref OrderRef) error {
+	switch e.venue {
+	case "okx":
+		return e.okxCancelOrder(ctx, ref.Symbol, ref.OrderID)
+	case "binance":
+		return e.binanceCancelOrder(ctx, ref.Symbol, ref.OrderID)
+	}
+	return fmt.Errorf("cancel unsupported venue %s", e.venue)
+}

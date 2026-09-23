@@ -171,8 +171,9 @@ func binanceOrderAvgPrice(body map[string]any, qty float64) float64 {
 	return 0
 }
 
-// signedBinanceRequest 发 Binance 签名请求（HMAC hex + X-MBX-APIKEY）。
-func (e *CEXExecutor) signedBinanceRequest(ctx context.Context, method, endpoint string, params url.Values) (map[string]any, error) {
+// signedBinanceRequestRaw 发 Binance 签名请求（HMAC hex + X-MBX-APIKEY）返回原始 body。
+// 签名/timestamp/Header/状态码检查公共核（D-427 I3：map/list 两解共享，不复制签名）。
+func (e *CEXExecutor) signedBinanceRequestRaw(ctx context.Context, method, endpoint string, params url.Values) ([]byte, error) {
 	params.Set("timestamp", strconv.FormatInt(time.Now().UnixMilli(), 10))
 	params.Set("recvWindow", "5000")
 
@@ -198,11 +199,59 @@ func (e *CEXExecutor) signedBinanceRequest(ctx context.Context, method, endpoint
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("http %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
 	}
+	return data, nil
+}
+
+// signedBinanceRequest 发 Binance 签名请求，响应解 map。
+func (e *CEXExecutor) signedBinanceRequest(ctx context.Context, method, endpoint string, params url.Values) (map[string]any, error) {
+	data, err := e.signedBinanceRequestRaw(ctx, method, endpoint, params)
+	if err != nil {
+		return nil, err
+	}
 	var m map[string]any
 	if err := json.Unmarshal(data, &m); err != nil {
 		return nil, fmt.Errorf("json: %w", err)
 	}
 	return m, nil
+}
+
+// signedBinanceRequestList 同上，响应解数组（/v1/userTrades 等列表端点，D-427 I3）。
+func (e *CEXExecutor) signedBinanceRequestList(ctx context.Context, method, endpoint string, params url.Values) ([]map[string]any, error) {
+	data, err := e.signedBinanceRequestRaw(ctx, method, endpoint, params)
+	if err != nil {
+		return nil, err
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return nil, fmt.Errorf("json: %w", err)
+	}
+	return rows, nil
+}
+
+// binanceUserTradesFeeUSD 聚合某订单 userTrades 的 USDT 手续费（D-427 I3）：
+// GET /fapi/v1/userTrades?symbol=&orderId=（perp；spot /api/v3/myTrades）。
+// commissionAsset=USDT 行累加，非 USDT 行跳过不计；realizedPnl 字段不计（费≠盈亏）。
+func (e *CEXExecutor) binanceUserTradesFeeUSD(ctx context.Context, symbol, ordID string) (float64, error) {
+	endpoint := "/api/v3/myTrades"
+	if e.venueType == "perp" {
+		endpoint = "/v1/userTrades"
+	}
+	params := url.Values{}
+	params.Set("symbol", symbol)
+	params.Set("orderId", ordID)
+	rows, err := e.signedBinanceRequestList(ctx, "GET", endpoint, params)
+	if err != nil {
+		return 0, err
+	}
+	var sum float64
+	for _, row := range rows {
+		if asString(row["commissionAsset"]) != "USDT" {
+			continue // 费币混杂如实缺（不猜换算）
+		}
+		c, _ := strconv.ParseFloat(asString(row["commission"]), 64)
+		sum += c
+	}
+	return sum, nil
 }
 
 // binanceSign HMAC-SHA256 hex 签名（与 reconcile 同法，各包独立实现——算法非事实，P3 不适用）。

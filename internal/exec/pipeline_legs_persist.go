@@ -62,7 +62,7 @@ func (p *Pipeline) persistOpenLegs(ctx context.Context, requestID string, posID 
 			return fmt.Errorf("leg persist: %w", err)
 		}
 		// D-422 §1.4：OPEN 腿费同点入账（入场费不再只挂腿行）——kind=commission 负值，
-		// 幂等键同日腿（重试 HasCashflowForLegDay 拦截不双计）。失败不阻断开仓，记 critical。
+		// 幂等键 event_key 精确匹配（重试 HasCashflowByEventKey 拦截不双计，D-422 R1）。失败不阻断开仓，记 critical。
 		if feeUSD != nil {
 			ts := now.UTC()
 			dayStart := time.Date(ts.Year(), ts.Month(), ts.Day(), 0, 0, 0, 0, time.UTC)
@@ -89,6 +89,10 @@ func (p *Pipeline) rollbackFilledLegs(ctx context.Context, posID int64, legs []L
 	_ = failedIdx // D-201 复审修正：保留签名兼容，实际回滚全部 results
 	for i := 0; i < len(results); i++ {
 		r := results[i]
+		if r.Status == "UNKNOWN" && r.OrderID != "" {
+			p.rollbackUnknownLeg(ctx, posID, i, legs[i], r)
+			continue
+		}
 		if r.Status != "FILLED" {
 			continue
 		}
@@ -101,29 +105,12 @@ func (p *Pipeline) rollbackFilledLegs(ctx context.Context, posID int64, legs []L
 		if isMTVenueKey(legs[i].VenueKey) {
 			_, closeErr = exe.CloseOrder(ctx, OrderRef{OrderID: r.OrderID, Venue: legs[i].VenueKey})
 		} else {
-			closeSide := "SELL"
-			if legs[i].Side == "SELL" {
-				closeSide = "BUY"
-			}
-			// D-249 S4 批3 第1项：回滚单补 PositionSide（对齐 placeCloseOrder/auto-flatten）。
-			// 审计 P1-1：回滚单不带 PositionSide → long_short_mode 账户回滚 long 会新开 short（双倍敞口）。
-			// PositionSide=原持仓侧（leg.Side 推导，与 placeCloseOrder 同款），CEX 适配器据此设 reduceOnly/posSide。
-			var positionSide string
-			switch legs[i].Side {
-			case "BUY":
-				positionSide = "long"
-			case "SELL":
-				positionSide = "short"
-			}
 			// D-311 R4：回滚单同执行器边界——:perp 腿合约数→基础币（不换算会 1/cs 倍超量回滚）。
 			orderQty, convErr := p.orderQtyFor(legs[i])
 			if convErr != nil {
 				closeErr = convErr
 			} else {
-				_, closeErr = exe.PlaceOrder(ctx, Order{
-					Symbol: legs[i].VenueSymbol, Side: closeSide, Qty: orderQty, Venue: legs[i].VenueKey,
-					PositionSide: positionSide,
-				})
+				closeErr = p.rollbackCEXPlace(ctx, exe, legs[i], orderQty)
 			}
 		}
 		if closeErr != nil {
@@ -134,4 +121,75 @@ func (p *Pipeline) rollbackFilledLegs(ctx context.Context, posID int64, legs []L
 			log.Printf("[exec] rollback ok pos=%d leg=%d venue=%s ticket=%s", posID, i, legs[i].VenueKey, r.OrderID)
 		}
 	}
+}
+
+// rollbackCEXPlace CEX 反向平仓单（FILLED 回滚与 UNKNOWN 部分成交回滚共用，D-427 I2）。
+// qty=基础币数量（调用方负责换算）；PositionSide=原持仓侧（leg.Side 推导，对齐 placeCloseOrder）。
+func (p *Pipeline) rollbackCEXPlace(ctx context.Context, exe Executor, leg LegSpec, qty float64) error {
+	closeSide := "SELL"
+	if leg.Side == "SELL" {
+		closeSide = "BUY"
+	}
+	positionSide := ""
+	switch leg.Side {
+	case "BUY":
+		positionSide = "long"
+	case "SELL":
+		positionSide = "short"
+	}
+	_, err := exe.PlaceOrder(ctx, Order{
+		Symbol: leg.VenueSymbol, Side: closeSide, Qty: qty, Venue: leg.VenueKey,
+		PositionSide: positionSide,
+	})
+	return err
+}
+
+// rollbackUnknownLeg D-427 I2：UNKNOWN+OrderID 腿孤儿出证。
+// CEX：cancel → 终查 QueryOrderStatus——qty>0=真实部分量走同一反向平仓路径；=0=确定未成交干净跳过；
+// cancel/终查失败 → log+critical（孤儿未证否留人工），不阻断主循环。
+// MT：消解器 owns（市价单无 cancel 语义），只 log 跳过。
+func (p *Pipeline) rollbackUnknownLeg(ctx context.Context, posID int64, i int, leg LegSpec, r LegResult) {
+	if isMTVenueKey(leg.VenueKey) {
+		log.Printf("[exec] rollback pos=%d leg=%d: MT UNKNOWN order=%s skip（消解器 owns）", posID, i, r.OrderID)
+		return
+	}
+	exe, ok := p.registry.Get(leg.VenueKey)
+	if !ok {
+		log.Printf("[exec] rollback pos=%d leg=%d: no executor for %s", posID, i, leg.VenueKey)
+		return
+	}
+	canceler, ok := exe.(OrderCanceler)
+	if !ok {
+		log.Printf("[exec] rollback pos=%d leg=%d venue=%s: executor 无 CancelOrder，孤儿单未出证", posID, i, leg.VenueKey)
+		return
+	}
+	fail := func(what string, err error) {
+		msg := fmt.Sprintf("rollback orphan pos=%d leg=%d venue=%s order=%s %s failed: %v（孤儿未证否）", posID, i, leg.VenueKey, r.OrderID, what, err)
+		log.Printf("[exec] %s", msg)
+		_ = p.store.InsertAlert(ctx, nil, "critical", msg)
+	}
+	if err := canceler.CancelOrder(ctx, OrderRef{OrderID: r.OrderID, Venue: leg.VenueKey, Symbol: leg.VenueSymbol}); err != nil {
+		fail("cancel", err)
+		return
+	}
+	qs, ok := exe.(OrderStatusQuerier)
+	if !ok {
+		fail("final-query", fmt.Errorf("executor 无 OrderStatusQuerier"))
+		return
+	}
+	_, qty, _, _, err := qs.QueryOrderStatus(ctx, r.OrderID, "", leg.VenueSymbol)
+	if err != nil {
+		fail("final-query", err)
+		return
+	}
+	if qty <= 0 {
+		log.Printf("[exec] rollback pos=%d leg=%d venue=%s order=%s canceled zero-fill（孤儿证否）", posID, i, leg.VenueKey, r.OrderID)
+		return
+	}
+	// 撤单前已部分成交 → 真实敞口走与 FILLED 同一反向平仓路径（qty 已为基础币）。
+	if err := p.rollbackCEXPlace(ctx, exe, leg, qty); err != nil {
+		fail("reverse-close", err)
+		return
+	}
+	log.Printf("[exec] rollback pos=%d leg=%d venue=%s order=%s partial qty=%.8g reversed", posID, i, leg.VenueKey, r.OrderID, qty)
 }

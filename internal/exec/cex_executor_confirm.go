@@ -142,14 +142,21 @@ func (e *CEXExecutor) okxConfirmFill(ctx context.Context, o Order, instID, ordID
 // evalBinanceStatus 单次查单结果求值（D-421 §1.3）：FILLED→Fill；
 // CANCELED/REJECTED/EXPIRED→终态 err（executedQty>0 按真实部分量如实出 Fill）；
 // PARTIALLY_FILLED/NEW 等 → done=false 继续轮询。
-func (e *CEXExecutor) evalBinanceStatus(o Order, ordID string, st binanceOrderStatusResult) (Fill, bool, error) {
+func (e *CEXExecutor) evalBinanceStatus(ctx context.Context, o Order, ordID string, st binanceOrderStatusResult) (Fill, bool, error) {
 	q, _ := strconv.ParseFloat(st.ExecutedQty, 64)
 	p, _ := strconv.ParseFloat(st.AvgPrice, 64)
+	fee := func() float64 { // D-427 I3：userTrades 实费聚合；查询失败→0 诚实缺省不阻断
+		f, err := e.binanceUserTradesFeeUSD(ctx, o.Symbol, ordID)
+		if err != nil {
+			return 0
+		}
+		return f
+	}
 	switch st.Status {
 	case "CANCELED", "REJECTED", "EXPIRED":
 		if q > 0 && p > 0 {
 			// 取消但已有部分成交 → 真实敞口如实入账（audit P2-3：少记=平仓少平=venue 残余）。
-			return Fill{OrderID: ordID, Price: p, Qty: q, Ts: time.Now()}, true, nil
+			return Fill{OrderID: ordID, Price: p, Qty: q, Ts: time.Now(), FeeUSD: fee()}, true, nil
 		}
 		msg := fmt.Sprintf("binance order %s: status=%s executedQty=%s（未成交，订单被取消/拒绝）",
 			ordID, st.Status, st.ExecutedQty)
@@ -157,7 +164,7 @@ func (e *CEXExecutor) evalBinanceStatus(o Order, ordID string, st binanceOrderSt
 		return Fill{}, true, fmt.Errorf("%s", msg)
 	case "FILLED":
 		if q > 0 && p > 0 {
-			return Fill{OrderID: ordID, Price: p, Qty: q, Ts: time.Now()}, true, nil
+			return Fill{OrderID: ordID, Price: p, Qty: q, Ts: time.Now(), FeeUSD: fee()}, true, nil
 		}
 	}
 	return Fill{}, false, nil
@@ -176,7 +183,7 @@ func (e *CEXExecutor) binanceConfirmFill(ctx context.Context, o Order, ordID str
 		}
 		st, err := e.binanceOrderStatus(ctx, o.Symbol, ordID, "")
 		if err == nil {
-			if f, done, ferr := e.evalBinanceStatus(o, ordID, st); done {
+			if f, done, ferr := e.evalBinanceStatus(ctx, o, ordID, st); done {
 				return f, ferr
 			}
 		}
@@ -192,7 +199,7 @@ func (e *CEXExecutor) binanceConfirmFill(ctx context.Context, o Order, ordID str
 	if err != nil {
 		return Fill{}, &ErrFillUnconfirmed{OrderID: ordID}
 	}
-	if f, done, ferr := e.evalBinanceStatus(o, ordID, st); done {
+	if f, done, ferr := e.evalBinanceStatus(ctx, o, ordID, st); done {
 		return f, ferr
 	}
 	return Fill{}, &ErrFillUnconfirmed{OrderID: ordID}
