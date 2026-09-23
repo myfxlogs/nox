@@ -71,10 +71,16 @@ func (r *Reconciler) autoFailOPENINGZombie(
 	if err != nil {
 		return fmt.Errorf("list legs: %w", err)
 	}
-	// 统计 phase=OPEN 有凭据腿在场情况（D-417：LegAtVenue 统一匹配，CEX 走 Symbol+Side）。
-	open, present := 0, 0
+	// 统计 phase=OPEN 腿在场情况（D-417：LegAtVenue 统一匹配，CEX 走 Symbol+Side）。
+	// total=全部 OPEN 腿；present 只对 OrderID≠"" 腿算——FAILED 无单号腿计 total 不计
+	// present（FILLED 在场+FAILED 无单号=LEGGED，不能当全腿齐推 OPEN）。
+	total, present := 0, 0
 	for _, leg := range legs {
-		if leg.Phase != "OPEN" || leg.OrderID == "" {
+		if leg.Phase != "OPEN" {
+			continue
+		}
+		total++
+		if leg.OrderID == "" {
 			continue
 		}
 		orders, ok := ordersByVenue[leg.Venue]
@@ -82,16 +88,15 @@ func (r *Reconciler) autoFailOPENINGZombie(
 			log.Printf("[reconcile] OPENING 僵尸 pos=%d 腿 venue=%s 本轮未成功查询，fail-closed 不推进", posID, leg.Venue)
 			return nil // venue 查询出错 → fail-closed（§1.3b）
 		}
-		open++
 		if exec.LegAtVenue(leg, orders) {
 			present++
 		}
 	}
 	target := ""
 	switch {
-	case open == 0, present == 0:
-		target = "FAILED" // 无有效凭据腿 / venue 全无 → 归档（旧路径语义）
-	case present == open:
+	case total == 0, present == 0:
+		target = "FAILED" // 无 OPEN 腿 / venue 全无 → 归档（旧路径语义）
+	case present == total:
 		target = "OPEN" // §1.3b：全腿在场=开仓已完成，恢复评估/平仓链
 	default:
 		target = "LEGGED" // §1.3b：部分在场=半成交，进 D-414 收编域
@@ -103,7 +108,7 @@ func (r *Reconciler) autoFailOPENINGZombie(
 	if target == "FAILED" {
 		msg = fmt.Sprintf("OPENING 僵尸自动归档 position #%d（超 24h 未完成开仓，转 FAILED）", posID)
 	} else {
-		msg = fmt.Sprintf("OPENING 僵尸 position #%d venue 证实 %d/%d 腿在场 → %s", posID, present, open, target)
+		msg = fmt.Sprintf("OPENING 僵尸 position #%d venue 证实 %d/%d 腿在场 → %s", posID, present, total, target)
 	}
 	r.insertAlertCtx(ctx, "warn", msg)
 	log.Printf("[reconcile] %s", msg)
@@ -149,8 +154,8 @@ func isOPENINGZombie(pos *pgstore.Position, legs []pgstore.PositionLeg, now time
 	return false
 }
 
-// autoFailLeggedZombie LEGGED 僵尸收编（超 24h）：FILLED 腿在 venue 有 → warn 不归档（交人工/下轮）；
-// 无 FILLED 腿在 venue → FAILED 归档 + warn（D-108 P2 T3，模式同 autoFailOPENINGZombie）。
+// autoFailLeggedZombie LEGGED 僵尸收编（超 24h）：任一 OrderID≠"" 腿在 venue 有 → warn 不归档（交人工/下轮）；
+// 无腿在 venue → FAILED 归档 + warn（D-108 P2 T3，模式同 autoFailOPENINGZombie）。
 // LEGGED = 部分成交持仓（一腿 FILLED 一腿 FAILED），超 24h 未恢复 → 需处置。
 func (r *Reconciler) autoFailLeggedZombie(
 	ctx context.Context,
@@ -164,9 +169,10 @@ func (r *Reconciler) autoFailLeggedZombie(
 	if err != nil {
 		return fmt.Errorf("list legs: %w", err)
 	}
-	// 查是否有 FILLED 腿在 venue 存在（LEGGED 至少一腿 FILLED）
+	// 查所有 OrderID≠"" 腿在 venue 是否存在——任一在场即 warn 不归档（FAILED/UNKNOWN
+	// 带单号腿也可能实际已挂/已成，漏查=误归档丢真仓位）。
 	for _, leg := range legs {
-		if leg.OrderID == "" || leg.Status != "FILLED" {
+		if leg.OrderID == "" {
 			continue
 		}
 		// D-417：venue 未成功查询 → fail-closed 不误杀；LegAtVenue 统一匹配（CEX=Symbol+Side）。
@@ -176,7 +182,7 @@ func (r *Reconciler) autoFailLeggedZombie(
 			return nil
 		}
 		if exec.LegAtVenue(leg, orders) {
-			// D-108 P2 T3：FILLED 腿在 venue 有 → 不置 FAILED（venue 真有持仓，误平风险），
+			// D-108 P2 T3：腿在 venue 有 → 不置 FAILED（venue 真有持仓，误平风险），
 			// 记录告警交人工/下轮对账处置（P1 A3 同语义）。
 			msg := fmt.Sprintf("LEGGED 僵尸 position #%d 腿 ticket=%s 在 venue 有持仓，不归档 FAILED（交人工/对账）", posID, leg.OrderID)
 			r.insertAlertCtx(ctx, "warn", msg)

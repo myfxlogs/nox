@@ -87,16 +87,16 @@ func TestD108P2_LeggedZombie_VenueMiss(t *testing.T) {
 	}
 }
 
-// TestD108P2_LeggedZombie_NoFilledLeg 无 FILLED 腿（全 FAILED）→ 未命中 → FAILED。
+// TestD108P2_LeggedZombie_NoFilledLeg 无 FILLED 腿（FAILED 带单号腿）venue 查空未命中 → FAILED。
+// （D-417 R1 语义修正：带单号腿在场才 warn 不归档；venue 无此单仍归档。）
 func TestD108P2_LeggedZombie_NoFilledLeg(t *testing.T) {
 	fs := newFakeStore()
 	pos := &pgstore.Position{ID: 302, Status: "LEGGED", OpportunityID: "SWAPARB:AUDJPY:vA:vB:1"}
 	fs.positions[302] = pos
-	// 全 FAILED 腿（无 FILLED）→ 循环跳过 → 未命中 → FAILED
 	fs.legs[302] = []*pgstore.PositionLeg{
 		{PositionID: 302, LegNo: 0, Phase: "OPEN", Venue: "vA:mt5", OrderID: "T302", Side: "BUY", Qty: 1.0, Status: "FAILED"},
 	}
-	orders := map[string][]exec.OpenedOrder{"vA:mt5": {{Ticket: "T302"}}}
+	orders := map[string][]exec.OpenedOrder{"vA:mt5": {}} // venue 查空 = 未命中
 
 	r := &Reconciler{store: fs, runTimeout: 5 * time.Second}
 	if err := r.autoFailLeggedZombie(context.Background(), pos, orders); err != nil {

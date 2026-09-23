@@ -113,6 +113,58 @@ func TestD417_OPENINGZombie_PartialLegs(t *testing.T) {
 	}
 }
 
+// TestD417R1_OPENINGZombie_FailedNoOrderLeg R1：FILLED 腿在场 + FAILED 无单号腿 → LEGGED
+// （FAILED 无单号腿计 total 不计 present，不能当全腿齐推 OPEN）。
+func TestD417R1_OPENINGZombie_FailedNoOrderLeg(t *testing.T) {
+	fs := newFakeStore()
+	pos := &pgstore.Position{ID: 305, Status: "OPENING"}
+	fs.positions[305] = pos
+	fs.legs[305] = []*pgstore.PositionLeg{
+		{PositionID: 305, LegNo: 0, Phase: "OPEN", Venue: "okx:perp", OrderID: "ord1",
+			Symbol: "XAUT-USDT-SWAP", Side: "BUY", Status: "FILLED"},
+		{PositionID: 305, LegNo: 1, Phase: "OPEN", Venue: "vB:mt5", OrderID: "",
+			Symbol: "XAUUSD", Side: "SELL", Status: "FAILED"},
+	}
+	orders := map[string][]exec.OpenedOrder{
+		"okx:perp": {{Ticket: "XAUT-USDT-SWAP", Symbol: "XAUT-USDT-SWAP", Side: "BUY", PosSide: "long"}},
+	}
+	if err := d417Recon(fs).autoFailOPENINGZombie(context.Background(), pos, orders); err != nil {
+		t.Fatalf("autoFailOPENINGZombie: %v", err)
+	}
+	if fs.statusCalls[305] != "LEGGED" {
+		t.Fatalf("FILLED 在场+FAILED 无单号 → want LEGGED, got %v", fs.statusCalls)
+	}
+}
+
+// TestD417R1_LeggedZombie_FailedLegAtVenue R1：FAILED 带单号腿在 venue 在场 → warn 不归档。
+func TestD417R1_LeggedZombie_FailedLegAtVenue(t *testing.T) {
+	fs := newFakeStore()
+	pos := &pgstore.Position{ID: 306, Status: "LEGGED"}
+	fs.positions[306] = pos
+	fs.legs[306] = []*pgstore.PositionLeg{
+		{PositionID: 306, LegNo: 0, Phase: "OPEN", Venue: "okx:perp", OrderID: "ord9",
+			Symbol: "XAUT-USDT-SWAP", Side: "BUY", Status: "FAILED"},
+	}
+	orders := map[string][]exec.OpenedOrder{
+		"okx:perp": {{Ticket: "XAUT-USDT-SWAP", Symbol: "XAUT-USDT-SWAP", Side: "BUY", PosSide: "long"}},
+	}
+	if err := d417Recon(fs).autoFailLeggedZombie(context.Background(), pos, orders); err != nil {
+		t.Fatalf("autoFailLeggedZombie: %v", err)
+	}
+	if len(fs.statusCalls) != 0 {
+		t.Fatalf("FAILED 腿在 venue 在场 → warn 不归档，got statusCalls=%v", fs.statusCalls)
+	}
+	found := false
+	for _, a := range fs.alerts {
+		if a.level == "warn" && strings.Contains(a.msg, "不归档 FAILED") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected warn '不归档 FAILED', got %v", fs.alerts)
+	}
+}
+
 // TestD417_OPENINGZombie_NoLegs 回归：venue 全无腿 → FAILED 归档（旧行为不破）。
 func TestD417_OPENINGZombie_NoLegs(t *testing.T) {
 	fs := newFakeStore()
