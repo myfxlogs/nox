@@ -121,6 +121,11 @@ type Config struct {
 	XAssetDisasterNoiseMult float64
 	XAssetDisasterDebounce  int
 	XAssetQuoteMaxAge       time.Duration // ≤0 = 不查新鲜度（回退旧行为）
+	// D-409 收割费用摊销门槛：XAssetFeeHoldMaxDays=estDays 上限+延迟时钟上限（天，
+	// ≤0→缺省 2.0 防呆）；XAssetCexFeeBps=fee_usd NULL 腿与平仓成本估算率（与 dashboard
+	// enrich 同源同值，禁第二费率口径）。
+	XAssetFeeHoldMaxDays float64
+	XAssetCexFeeBps      float64
 
 	// D-181 S2：probe 探测仓——无实测腿的首仓自动成为 probe，到期评估升级/拒绝。
 	// ProbeEnabled=false → 不标记不评估（向后兼容，默认 false）。

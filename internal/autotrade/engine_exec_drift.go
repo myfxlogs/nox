@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"strings"
 	"time"
 
 	"arb/internal/store/pgstore"
@@ -46,13 +45,9 @@ func (e *Engine) execDriftCheck(ctx context.Context, p *pgstore.Position) (bool,
 // 不用错尺度）；真腿路径确认后报价缺/超龄 → 本轮不判（fail-closed，不回退错尺度）。
 // monitor 缺行/floor NULL → 不触发（诚实空态）。pairKey=D-335 同款（CanonicalSell-TrimSuffix）。
 func (e *Engine) harvestCheck(ctx context.Context, p *pgstore.Position) (bool, string) {
-	pairKey := canonicalFromOppID(p.OpportunityID)
-	opp, err := e.store.GetOpportunity(ctx, p.OpportunityID)
-	if err != nil || opp == nil {
-		return false, ""
-	}
-	if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
-		pairKey = *opp.CanonicalSell + "-" + strings.TrimSuffix(opp.Canonical, "USD")
+	pairKey, ok := e.xassetPairKey(ctx, p)
+	if !ok || pairKey == "" {
+		return false, "" // opp 缺/查询失败（原 GetOpportunity err/nil 分支同语义）
 	}
 	if p.EntryHarvestFloorBps != nil && p.ExpectedEntrySpreadBps != nil && *p.ExpectedEntrySpreadBps != 0 && p.OpenedAt != nil {
 		if basis, line, capture, found, usable := e.xassetTrueLegLine(ctx, p, pairKey); found {

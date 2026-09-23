@@ -37,6 +37,18 @@ func (e *Engine) xassetExitCheck(ctx context.Context, p *pgstore.Position) (bool
 	if !shouldClose {
 		shouldHarvest, harvestReason = e.harvestCheck(ctx, p)
 	}
+	// D-409 S1：收割线命中后追加费用摊销门槛（仅真腿路径 anchor<0 域；净负+carry活+
+	// 摊平有望 → 延迟收割落 hold_fee_amortize；放行时 detail 标记位并入 reason）。
+	var feeHoldDetail string
+	if shouldHarvest {
+		pairKey, _ := e.xassetPairKey(ctx, p) // opp 缺时 pairKey=""；gate 内 monitor 行查询自然 miss → legacy_path
+		if hold, d := e.feeAmortizeGate(ctx, p, pairKey); hold {
+			shouldHarvest = false
+			feeHoldDetail = d
+		} else if d != "" {
+			harvestReason += "; fee_gate:" + d
+		}
+	}
 	shouldDrift, driftReason := false, ""
 	if !shouldClose && !shouldHarvest {
 		shouldDrift, driftReason = e.execDriftCheck(ctx, p)
@@ -47,8 +59,9 @@ func (e *Engine) xassetExitCheck(ctx context.Context, p *pgstore.Position) (bool
 		shouldDisaster, disasterReason, stale, staleAge = e.disasterCheckXAsset(ctx, p)
 	}
 	// D-406 S1：轮转第五闸（链尾——四闸全过且非 stale 才评；先保命再优化）。
+	// D-409：feeHold 延迟中不评轮转——收割意图在场，轮转出局会抵消摊销等待。
 	var rot *rotateOutcome
-	if !shouldClose && !shouldHarvest && !shouldDrift && !shouldDisaster && !stale {
+	if !shouldClose && !shouldHarvest && !shouldDrift && !shouldDisaster && !stale && feeHoldDetail == "" {
 		_, rot = e.rotateCheck(ctx, p) // triggered 在 rotateCheck 内置位
 	}
 
@@ -60,7 +73,8 @@ func (e *Engine) xassetExitCheck(ctx context.Context, p *pgstore.Position) (bool
 		drift: shouldDrift, driftReason: driftReason,
 		disaster: shouldDisaster, disasterReason: disasterReason,
 		stale: stale, staleAge: staleAge,
-		rotate: rot,
+		rotate:  rot,
+		feeHold: feeHoldDetail,
 	})
 
 	if shouldClose {
@@ -96,6 +110,9 @@ type xassetEvalOutcome struct {
 	staleAge         time.Duration
 	// rotate D-406：第五闸结果（nil=本轮未评——前四闸已触发/stale）。
 	rotate *rotateOutcome
+	// feeHold D-409：收割线命中但费用摊销门槛延迟（非空=detail 落行，
+	// decision=hold_fee_amortize；同时 as 延迟时钟首行锚）。
+	feeHold string
 }
 
 // recordXAssetEval D-377 S2：落观测行。basis=currentBasisBps 同函数复用（公式单点；
@@ -122,6 +139,10 @@ func (e *Engine) recordXAssetEval(ctx context.Context, p *pgstore.Position, out 
 			out.staleAge.Round(time.Second), e.cfg.XAssetQuoteMaxAge, fmtDisasterBand(e.cfg.XAssetDisasterBps, e.cfg.XAssetDisasterNoiseMult, p.EntryNoiseBps))
 	case out.disaster:
 		decision, detail = "disaster", out.disasterReason
+	case out.feeHold != "":
+		// D-409：收割线命中但全账净额为负且摊平有望 → 延迟收割观测行
+		// （首行 evaluated_at=延迟时钟起点，FirstFeeAmortizeEvalAt 重构）。
+		decision, detail = "hold_fee_amortize", out.feeHold
 	case !basisOK:
 		decision, detail = "fail_closed:no_basis", fmtDisasterBand(e.cfg.XAssetDisasterBps, e.cfg.XAssetDisasterNoiseMult, p.EntryNoiseBps)
 	case p.ExpectedEntrySpreadBps == nil:
