@@ -36,16 +36,18 @@ func (s *Store) LatestXAssetEntryGate(ctx context.Context, pair string, maxAge t
 	return *entry, *noise, 0, false, true, nil
 }
 
-// XAssetMonitorRowNear D-404 S1a：开仓时点 monitor 行回放——取 |行ts−ts| 最近行的
-// entry_spread_bps（venue 偏移实测用：代理尺度 floor 平移到真腿尺度须先实测开仓时点
-// monitor spread）。超 maxGap/无行 → ok=false（调用方回退代理路径，不用错尺度）。
+// XAssetMonitorRowNear D-404 S1a（R1 返修版）：开仓时点 monitor 行回放——取
+// **ts <= opened_at 的最新行**的 entry_spread_bps（冻结锚 floor/noise 由
+// EnsureEntryGateSnapshot 写自开仓时点之前最新行，capture 必须与该行同源配对；
+// |Δt| 最近行会取到开仓后样本=跨样本混配，498 实证 capture 转负→line 比锚宽误杀）。
+// 行龄>maxGap（opened_at−rowTs）/无行 → ok=false（调用方回退代理路径，不用错尺度）。
 func (s *Store) XAssetMonitorRowNear(ctx context.Context, pair string, ts time.Time, maxGap time.Duration) (entrySpreadBps float64, ok bool, err error) {
 	var rowTs time.Time
 	err = s.pool.QueryRow(ctx, `
 		SELECT entry_spread_bps, ts
 		FROM fin_xasset_monitor
-		WHERE pair = $1
-		ORDER BY ABS(EXTRACT(EPOCH FROM (ts - $2::timestamptz)))
+		WHERE pair = $1 AND ts <= $2
+		ORDER BY ts DESC
 		LIMIT 1`, pair, ts).Scan(&entrySpreadBps, &rowTs)
 	if err != nil {
 		if err.Error() == "no rows in result set" {
@@ -53,7 +55,7 @@ func (s *Store) XAssetMonitorRowNear(ctx context.Context, pair string, ts time.T
 		}
 		return 0, false, fmt.Errorf("xasset monitor row near: %w", err)
 	}
-	if d := rowTs.Sub(ts); d > maxGap || d < -maxGap {
+	if ts.Sub(rowTs) > maxGap {
 		return 0, false, nil
 	}
 	return entrySpreadBps, true, nil
