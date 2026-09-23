@@ -95,7 +95,7 @@ type Prechecker interface {
 // 语义=fail-closed：校验调用本身失败（RPC 超时/端点 5xx）→ 返 err 拒开
 // （真钱路径「证明不了能开就不开」，与 marginFloor 监控件 fail-open 刻意相反）。
 // 实现者：MT5Executor（RequiredMargin vs FreeMargin）+ CEXExecutor（okx perp
-// max-avail-size）；未实现接口的 executor → 跳过不拦（同 Prechecker 惯例，
+// max-size）；未实现接口的 executor → 跳过不拦（同 Prechecker 惯例，
 // venue 走拒单兜底）。o.Qty=该腿拟下单量（venue 原生单位换算由实现内做）。
 type MarginPrechecker interface {
 	MarginPrecheck(ctx context.Context, o Order) error
