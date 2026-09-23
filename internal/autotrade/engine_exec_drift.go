@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"arb/internal/store/pgstore"
 )
@@ -37,9 +38,13 @@ func (e *Engine) execDriftCheck(ctx context.Context, p *pgstore.Position) (bool,
 	return false, ""
 }
 
-// harvestCheck D-341 S1（自 engine_position.go 纯搬移）：XASSET 收敛止盈——spread_now ≤
-// harvest_floor（monitor 滚动 q25 分位数收割线，MIN_CAPTURE 防贴线 churn 由 monitor 计算侧保证）
-// → 带底收割。monitor 缺行/floor NULL → 不触发（诚实空态）。pairKey=D-335 同款（CanonicalSell-TrimSuffix）。
+// harvestCheck D-341 S1（自 engine_position.go 纯搬移）+ D-404 S1b 真腿化：XASSET 收敛
+// 止盈——仓内冻结锚三要素（entry_harvest_floor_bps/expected_entry_spread_bps/opened_at）
+// 齐 → 走真腿尺度：开仓时点 monitor 行回放实测 venue 偏移，capture=entry_spread−floor
+// （尺度不变量），收割线=|anchor|−capture，sign(anchor)·basis ≤ line 触发（过冲翻正同收）。
+// 三要素任一缺 / 开仓时点 monitor 行缺或超窗 → 原 monitor 代理路径整体回退（旧仓兼容，
+// 不用错尺度）；真腿路径确认后报价缺/超龄 → 本轮不判（fail-closed，不回退错尺度）。
+// monitor 缺行/floor NULL → 不触发（诚实空态）。pairKey=D-335 同款（CanonicalSell-TrimSuffix）。
 func (e *Engine) harvestCheck(ctx context.Context, p *pgstore.Position) (bool, string) {
 	pairKey := canonicalFromOppID(p.OpportunityID)
 	opp, err := e.store.GetOpportunity(ctx, p.OpportunityID)
@@ -48,6 +53,25 @@ func (e *Engine) harvestCheck(ctx context.Context, p *pgstore.Position) (bool, s
 	}
 	if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
 		pairKey = *opp.CanonicalSell + "-" + strings.TrimSuffix(opp.Canonical, "USD")
+	}
+	if p.EntryHarvestFloorBps != nil && p.ExpectedEntrySpreadBps != nil && *p.ExpectedEntrySpreadBps != 0 && p.OpenedAt != nil {
+		if entrySpread, ok, err := e.store.XAssetMonitorRowNear(ctx, pairKey, *p.OpenedAt, 15*time.Minute); err == nil && ok {
+			basis, quoteAge, okB := e.currentBasisBpsAged(p)
+			if !okB || (e.cfg.XAssetQuoteMaxAge > 0 && quoteAge > e.cfg.XAssetQuoteMaxAge) {
+				return false, ""
+			}
+			anchor := *p.ExpectedEntrySpreadBps
+			line := math.Abs(anchor) - (entrySpread - *p.EntryHarvestFloorBps)
+			sign := 1.0
+			if anchor < 0 {
+				sign = -1.0
+			}
+			if sign*basis <= line {
+				return true, fmt.Sprintf("harvest: basis %.2f sign-line %.2f (anchor %.2f capture %.2f)",
+					basis, sign*line, anchor, entrySpread-*p.EntryHarvestFloorBps)
+			}
+			return false, ""
+		}
 	}
 	entryBps, _, floor, hasFloor, ok, err := e.store.LatestXAssetEntryGate(ctx, pairKey, xassetEntryGateMaxAge)
 	if err != nil || !ok || !hasFloor {
