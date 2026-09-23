@@ -8,11 +8,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// trailing24hEntries 同 pair 最近 24h 已入库 entry_spread_bps 序列（S1 噪声半径样本）。
-func trailing24hEntries(ctx context.Context, pool *pgxpool.Pool, pair string) []float64 {
+// trailing24hEntries 同 (pair,cexVenue,mtVenue) 最近 24h 已入库 entry_spread_bps 序列
+// （S1 噪声半径样本；D-423 三元组隔离——跨 venue 簿不混算）。
+func trailing24hEntries(ctx context.Context, pool *pgxpool.Pool, pair, cexVenue, mtVenue string) []float64 {
 	rows, err := pool.Query(ctx, `
 		SELECT entry_spread_bps FROM fin_xasset_monitor
-		WHERE pair=$1 AND ts > now()-interval '24 hours'`, pair)
+		WHERE pair=$1 AND cex_venue=$2 AND mt_venue=$3 AND ts > now()-interval '24 hours'`,
+		pair, cexVenue, mtVenue)
 	if err != nil {
 		log.Printf("xasset-monitor: noise sample query pair=%s: %v (本次 NULL)", pair, err)
 		return nil
@@ -79,10 +81,13 @@ func computeHarvestFloor(vals []float64, entrySpread float64) *float64 {
 	return &floor
 }
 
-// trailingAllEntries D-341 S1：同 pair 全深 entry_spread 序列（收割线窗口=可用史全深，随积累变厚）。
-func trailingAllEntries(ctx context.Context, pool *pgxpool.Pool, pair string) []float64 {
+// trailingAllEntries D-341 S1：同 (pair,cexVenue,mtVenue) 全深 entry_spread 序列
+// （收割线窗口=可用史全深；D-423 三元组隔离）。
+func trailingAllEntries(ctx context.Context, pool *pgxpool.Pool, pair, cexVenue, mtVenue string) []float64 {
 	rows, err := pool.Query(ctx,
-		`SELECT entry_spread_bps FROM fin_xasset_monitor WHERE pair=$1 AND src='live'`, pair)
+		`SELECT entry_spread_bps FROM fin_xasset_monitor
+		 WHERE pair=$1 AND cex_venue=$2 AND mt_venue=$3 AND src='live'`,
+		pair, cexVenue, mtVenue)
 	if err != nil {
 		log.Printf("xasset-monitor: harvest sample query pair=%s: %v (本次 NULL)", pair, err)
 		return nil

@@ -97,7 +97,8 @@ func alignSpread(ticks []tickBucket, klines []kline) ([]float64, int) {
 }
 
 // RunBackfill D-341 S5 主流程：Exness ticks 桶化 × binance klines 对齐 → 逐行写 src='backfill'。
-func RunBackfill(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL, exnessVenue, sym, pair, exSym string, since time.Time) (int, error) {
+// D-423：cexVenue/mtVenue 显式落行（回填源=binance fapi 簿，venue 标签照实）。
+func RunBackfill(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL, exnessVenue, sym, pair, exSym, cexVenue, mtVenue string, since time.Time) (int, error) {
 	rows, err := st.Pool().Query(ctx,
 		`SELECT ts, (bid+ask)/2 FROM ticks WHERE venue=$1 AND symbol=$2 AND ts > $3 ORDER BY ts`, exnessVenue, exSym, since)
 	if err != nil {
@@ -127,7 +128,7 @@ func RunBackfill(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyU
 	esps, miss := alignSpread(ticks, klines)
 	written := 0
 	for _, esp := range esps {
-		rec := &pgstore.XassetMonitor{Pair: pair, EntrySpreadBps: esp, Src: "backfill"}
+		rec := &pgstore.XassetMonitor{Pair: pair, EntrySpreadBps: esp, Src: "backfill", CexVenue: cexVenue, MtVenue: mtVenue}
 		if err := st.InsertXassetMonitor(ctx, rec); err != nil {
 			return written, fmt.Errorf("insert backfill row: %w", err)
 		}
@@ -159,9 +160,13 @@ func runBackfillMode(ctx context.Context) error {
 	defer st.Close()
 	hc := httpx.Client()
 	since := time.Now().Add(-5 * 24 * time.Hour) // Exness ticks 保留窗（诚实边界）
+	mtVenue := exnessVenue + ":mt5"
 	var firstErr error
 	for _, p := range monitorPairs() {
-		if _, err := RunBackfill(ctx, st, hc, proxyURL, exnessVenue, p.sym, p.pair, p.exSym, since); err != nil {
+		if p.cexVenue != "binance:perp" {
+			continue // D-423：回填源=binance klines，非 binance 簿（okx）不回填
+		}
+		if _, err := RunBackfill(ctx, st, hc, proxyURL, exnessVenue, p.sym, p.pair, p.exSym, p.cexVenue, mtVenue, since); err != nil {
 			log.Printf("xasset-monitor backfill: pair=%s 失败: %v", p.pair, err)
 			if firstErr == nil {
 				firstErr = err

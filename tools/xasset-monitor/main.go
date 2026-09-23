@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"arb/internal/httpx" // SSOT：自动注入 CA + X-Proxy-Token
@@ -65,24 +66,14 @@ func run(ctx context.Context) error {
 	return runPairs(ctx, st, hc, proxyURL, exnessVenue, monitorPairs())
 }
 
-// monitorPair D-335R1 S1：三元素 {sym, pair, exSym}——每对取各自 Exness 腿报价（参数化）。
-type monitorPair struct{ sym, pair, exSym string }
-
-// monitorPairs 全监控对清单（S0 缺陷修复：旧版共享单一 XAUUSD 报价喂全部对 →
-// BTCUSDT-BTC 实为 binance BTC×XAU 顶替，esp=175348bps 垃圾行 14:20 实拍；
-// 事实核查=3001157 流内 BTC 符号=BTCUSDT）。
-func monitorPairs() []monitorPair {
-	return []monitorPair{
-		{"PAXGUSDT", "PAXG-XAU", "XAUUSD"},
-		{"XAUTUSDT", "XAUT-XAU", "XAUUSD"},
-		{"XAUUSDT", "XAUUSDT-XAU", "XAUUSD"},
-		{"BTCUSDT", "BTCUSDT-BTC", "BTCUSDT"}, // D-335 S0：业主批第四对（BTCUSDT×BTCUSDT，swap 免息，纳入观察）
-	}
-}
-
 // runPairs S2：逐对取各自 exSym 报价（无新鲜 tick → 该对 skip+warn 逐对 fail-open，
 // 9-16 业主并存裁定）——禁止任何腿顶替。返回首个 pair 失败错误（skip 非失败）。
+// D-423：mtVenueKey=exnessVenue+:mt5（已带冒号原样）；按 cexVenue 路由报价源。
 func runPairs(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL, exnessVenue string, pairs []monitorPair) error {
+	mtVenue := exnessVenue
+	if !strings.Contains(mtVenue, ":") {
+		mtVenue += ":mt5"
+	}
 	var firstErr error
 	for _, p := range pairs {
 		exBid, exAsk, err := latestExnessTick(ctx, st.Pool(), exnessVenue, p.exSym)
@@ -90,7 +81,7 @@ func runPairs(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL,
 			log.Printf("xasset-monitor: pair=%s skip (Exness 腿 %s 无新鲜 tick: %v)", p.pair, p.exSym, err)
 			continue // S2：逐对 skip，禁止顶替腿
 		}
-		if err := runPair(ctx, st, hc, proxyURL, p.sym, p.pair, exBid, exAsk); err != nil {
+		if err := runPair(ctx, st, hc, proxyURL, p, mtVenue, exBid, exAsk); err != nil {
 			log.Printf("xasset-monitor: pair=%s 失败: %v", p.pair, err)
 			if firstErr == nil {
 				firstErr = err
@@ -100,17 +91,28 @@ func runPairs(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL,
 	return firstErr
 }
 
-func runPair(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL, sym, pair string, exBid, exAsk float64) error {
-	bid, ask, fundingRate, err := fetchBinanceGoldFn(ctx, hc, proxyURL, sym)
-	if err != nil {
-		return fmt.Errorf("fetch binance %s: %w", sym, err)
-	}
-
-	// D-301a S2：funding 年化周期按 symbol 取真值（fundingInfo）——PAXG/XAUT 实为 4h→6 期/日，旧版 ×3 低估 2×。
-	periodsPerDay, err := fetchFundingPeriodsPerDayFn(ctx, hc, proxyURL, sym)
-	if err != nil {
-		log.Printf("xasset-monitor: pair=%s fundingInfo fetch failed, fallback 3/day: %v", pair, err)
-		periodsPerDay = 3 // D-079 禁静默回退
+func runPair(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL string, p monitorPair, mtVenue string, exBid, exAsk float64) error {
+	sym, pair := p.sym, p.pair
+	var bid, ask, fundingRate float64
+	var periodsPerDay int
+	var err error
+	if p.cexVenue == "okx:perp" {
+		// D-423：OKX 公开行情路由（api/v5/market/ticker + public/funding-rate，无鉴权不走 proxy）。
+		bid, ask, fundingRate, periodsPerDay, err = fetchOkxTickerFn(ctx, hc, sym)
+		if err != nil {
+			return fmt.Errorf("fetch okx %s: %w", sym, err)
+		}
+	} else {
+		bid, ask, fundingRate, err = fetchBinanceGoldFn(ctx, hc, proxyURL, sym)
+		if err != nil {
+			return fmt.Errorf("fetch binance %s: %w", sym, err)
+		}
+		// D-301a S2：funding 年化周期按 symbol 取真值（fundingInfo）——PAXG/XAUT 实为 4h→6 期/日，旧版 ×3 低估 2×。
+		periodsPerDay, err = fetchFundingPeriodsPerDayFn(ctx, hc, proxyURL, sym)
+		if err != nil {
+			log.Printf("xasset-monitor: pair=%s fundingInfo fetch failed, fallback 3/day: %v", pair, err)
+			periodsPerDay = 3 // D-079 禁静默回退
+		}
 	}
 
 	// 算指标（口径分离 D1）。
@@ -126,9 +128,10 @@ func runPair(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL, 
 	equivAnnual := entryNet/100 + fundingAnnualPct
 
 	// D-335 S1：noise_bps=trailing 24h 摆幅半径 (max−min)/2（含当前行；样本 <12 → NULL）。
-	noiseBps := computeNoiseBps(append(trailing24hEntries(ctx, st.Pool(), pair), entrySpread))
+	// D-423：样本按 (pair,cex_venue,mt_venue) 三元组隔离——跨 venue 簿统计=借用伪半径。
+	noiseBps := computeNoiseBps(append(trailing24hEntries(ctx, st.Pool(), pair, p.cexVenue, mtVenue), entrySpread))
 	// D-341 S1：harvest_floor=min(q25, entry−MIN_CAPTURE)——trailing 全深序列（含当前行）。
-	harvestFloor := computeHarvestFloor(append(trailingAllEntries(ctx, st.Pool(), pair), entrySpread), entrySpread)
+	harvestFloor := computeHarvestFloor(append(trailingAllEntries(ctx, st.Pool(), pair, p.cexVenue, mtVenue), entrySpread), entrySpread)
 
 	rec := &pgstore.XassetMonitor{
 		Pair:             pair,
@@ -146,6 +149,8 @@ func runPair(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL, 
 		NoiseBps:         noiseBps,
 		HarvestFloorBps:  harvestFloor,
 		Src:              "live",
+		CexVenue:         p.cexVenue,
+		MtVenue:          mtVenue,
 	}
 	if err := st.InsertXassetMonitor(ctx, rec); err != nil {
 		return fmt.Errorf("insert monitor: %w", err)
@@ -172,10 +177,12 @@ type binancePremiumIndex struct {
 	LastFundingRate string `json:"lastFundingRate"`
 }
 
-// fetchBinanceGoldFn/fetchFundingPeriodsPerDayFn 测试 seam（生产=真实现；T1/T2 stub 隔离 cex-proxy）。
+// fetchBinanceGoldFn/fetchFundingPeriodsPerDayFn/fetchOkxTickerFn 测试 seam
+// （生产=真实现；测试 stub 隔离 cex-proxy/公网）。
 var (
 	fetchBinanceGoldFn          = fetchBinanceGold
 	fetchFundingPeriodsPerDayFn = fetchFundingPeriodsPerDay
+	fetchOkxTickerFn            = fetchOkxTicker
 )
 
 func fetchBinanceGold(ctx context.Context, hc *http.Client, proxyURL, symbol string) (bid, ask, fundingRate float64, err error) {

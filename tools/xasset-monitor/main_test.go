@@ -37,24 +37,30 @@ func d335r1SeedTick(t *testing.T, s *pgstore.Store, venue, symbol string, bid, a
 	}
 }
 
-// d335r1StubFetches 隔离 cex-proxy：binance 价 stub+fundingInfo stub（真实现会发外网请求）。
+// d335r1StubFetches 隔离 cex-proxy/公网：binance 价 stub+fundingInfo stub+okx stub
+// （真实现会发外网请求；D-423 okx 路由同 seam 隔离）。
 func d335r1StubFetches(t *testing.T, bid, ask float64) {
 	t.Helper()
-	origGold, origPeriods := fetchBinanceGoldFn, fetchFundingPeriodsPerDayFn
+	origGold, origPeriods, origOkx := fetchBinanceGoldFn, fetchFundingPeriodsPerDayFn, fetchOkxTickerFn
 	fetchBinanceGoldFn = func(context.Context, *http.Client, string, string) (float64, float64, float64, error) {
 		return bid, ask, 0.0001, nil
 	}
 	fetchFundingPeriodsPerDayFn = func(context.Context, *http.Client, string, string) (int, error) {
 		return 6, nil
 	}
-	t.Cleanup(func() { fetchBinanceGoldFn, fetchFundingPeriodsPerDayFn = origGold, origPeriods })
+	fetchOkxTickerFn = func(context.Context, *http.Client, string) (float64, float64, float64, int, error) {
+		return bid, ask, 0.0001, 3, nil
+	}
+	t.Cleanup(func() {
+		fetchBinanceGoldFn, fetchFundingPeriodsPerDayFn, fetchOkxTickerFn = origGold, origPeriods, origOkx
+	})
 }
 
 func d335r1Count(t *testing.T, s *pgstore.Store, pair string) int {
 	t.Helper()
 	var n int
 	if err := s.Pool().QueryRow(context.Background(),
-		`SELECT count(*) FROM fin_xasset_monitor WHERE pair=$1`, pair).Scan(&n); err != nil {
+		`SELECT count(*) FROM fin_xasset_monitor WHERE pair=$1 AND cex_venue='binance:perp'`, pair).Scan(&n); err != nil {
 		t.Fatalf("count %s: %v", pair, err)
 	}
 	return n
@@ -112,6 +118,44 @@ func TestD335R1_TickFreshness(t *testing.T) {
 	}
 	if _, _, err := latestExnessTick(context.Background(), s.Pool(), "3001157", "XAUUSD"); err == nil {
 		t.Error("陈旧 tick（>10min）应报错 skip，got nil")
+	}
+}
+
+// TestD423_OkxVenueRow D-423 S1 锚：okx:perp 路由行落库带 venue 三元组
+// （cex_venue='okx:perp'/mt_venue='3001157:mt5'），与 binance 簿同 pair 隔离；
+// 且 fetchOkxTickerFn 被调（路由按 cexVenue 不走 binance fetch）。
+func TestD423_OkxVenueRow(t *testing.T) {
+	s := d335r1Store(t)
+	d335r1SeedTick(t, s, "3001157", "XAUUSD", 4354, 4355)
+	d335r1StubFetches(t, 4360, 4361)
+	okxCalled := false
+	orig := fetchOkxTickerFn
+	fetchOkxTickerFn = func(context.Context, *http.Client, string) (float64, float64, float64, int, error) {
+		okxCalled = true
+		return 4360, 4361, 0.0001, 3, nil
+	}
+	t.Cleanup(func() { fetchOkxTickerFn = orig })
+	if err := runPairs(context.Background(), s, http.DefaultClient, "", "3001157", monitorPairs()); err != nil {
+		t.Fatalf("runPairs: %v", err)
+	}
+	if !okxCalled {
+		t.Error("okx 行应走 fetchOkxTicker 路由")
+	}
+	var cex, mt string
+	var n int
+	if err := s.Pool().QueryRow(context.Background(),
+		`SELECT cex_venue, mt_venue, count(*) OVER () FROM fin_xasset_monitor
+		 WHERE pair='XAUUSDT-XAU' AND cex_venue='okx:perp'`).Scan(&cex, &mt, &n); err != nil {
+		t.Fatalf("okx venue 行应落库: %v", err)
+	}
+	if cex != "okx:perp" || mt != "3001157:mt5" {
+		t.Errorf("venue 三元组 want okx:perp×3001157:mt5, got %s×%s", cex, mt)
+	}
+	// 同 pair binance 簿行隔离不混：cex_venue='binance:perp' 行另计 1。
+	var bn int
+	if err := s.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM fin_xasset_monitor WHERE pair='XAUUSDT-XAU' AND cex_venue='binance:perp'`).Scan(&bn); err != nil || bn != 1 {
+		t.Errorf("binance 簿同 pair 行应独立存在 n=%d err=%v", bn, err)
 	}
 }
 
