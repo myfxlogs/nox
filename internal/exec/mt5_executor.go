@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 // MT5Executor 复用 MT5Adapter 的 gRPC 连接执行交易（§13.2）。
@@ -52,6 +55,10 @@ func (e *MT5Executor) MarginPrecheck(ctx context.Context, o Order) error {
 	rm, err := e.mt5.RequiredMargin(ctx, &mt5pb.RequiredMarginRequest{
 		Id: e.token, Symbol: o.Symbol, Lots: o.Qty, Type: &dealType,
 	})
+	if status.Code(err) == codes.Unimplemented {
+		// D-428：RequiredMargin 全节点缺席（能力缺席≠瞬态失败）→ 降级 venue 已服数据估算。
+		return e.marginPrecheckEstimate(ctx, o)
+	}
 	if err != nil {
 		return fmt.Errorf("mt5 required margin: %w", err)
 	}
@@ -157,4 +164,68 @@ func (e *MT5Executor) CloseOrder(ctx context.Context, ref OrderRef) (Fill, error
 		Commission: ord.GetCommission(),
 		Ts:         time.Now(),
 	}, nil
+}
+
+// marginPrecheckEstimate D-428 §1.2：RequiredMargin Unimplemented 时的降级估算——
+// requiredUSD = lots × ContractSize × price × (1/Leverage)，avail = FreeMargin×(1−reservePct)。
+// 证据源全部 venue 已服（GetQuote/SymbolParams/AccountSummary）；任一步失败 fail-closed。
+// marginCcy 闸：=="USD" 或（基币前缀命中且符号含 "USD"）才放行公式——第三货币/非 USD 计价
+// 报价（EURJPYm 型）单位破口拒开；lev≥1e6 哨兵→rate=0 退化为 FreeMargin 底线。
+func (e *MT5Executor) marginPrecheckEstimate(ctx context.Context, o Order) error {
+	sp, err := e.mt5.SymbolParams(ctx, &mt5pb.SymbolParamsRequest{Id: e.token, Symbol: o.Symbol})
+	if err != nil {
+		return fmt.Errorf("margin estimate symbol params: %w", err)
+	}
+	if err := sp.GetError(); err != nil {
+		return fmt.Errorf("margin estimate symbol params: [code=%s] %s", err.GetCode().String(), err.GetMessage())
+	}
+	info := sp.GetResult().GetSymbolInfo()
+	if info == nil {
+		return fmt.Errorf("margin estimate symbol params: nil SymbolInfo for %s", o.Symbol)
+	}
+	cs, mc := info.GetContractSize(), info.GetMarginCurrency()
+	if cs <= 0 {
+		return fmt.Errorf("margin estimate: contract size %.4g for %s", cs, o.Symbol)
+	}
+	if mc != "USD" && !(strings.HasPrefix(o.Symbol, mc) && strings.Contains(o.Symbol, "USD")) {
+		return fmt.Errorf("margin estimate: unsupported marginCcy %s for %s", mc, o.Symbol)
+	}
+	q, err := e.mt5.GetQuote(ctx, &mt5pb.GetQuoteRequest{Id: e.token, Symbol: o.Symbol})
+	if err != nil {
+		return fmt.Errorf("margin estimate quote: %w", err)
+	}
+	if err := q.GetError(); err != nil {
+		return fmt.Errorf("margin estimate quote: [code=%s] %s", err.GetCode().String(), err.GetMessage())
+	}
+	px := q.GetResult().GetAsk()
+	if o.Side == "SELL" {
+		px = q.GetResult().GetBid()
+	}
+	if px <= 0 {
+		return fmt.Errorf("margin estimate: quote px %.4g for %s", px, o.Symbol)
+	}
+	as, err := e.mt5.AccountSummary(ctx, &mt5pb.AccountSummaryRequest{Id: e.token})
+	if err != nil {
+		return fmt.Errorf("margin estimate account summary: %w", err)
+	}
+	if err := as.GetError(); err != nil {
+		return fmt.Errorf("margin estimate account summary: [code=%s] %s", err.GetCode().String(), err.GetMessage())
+	}
+	lev := as.GetResult().GetLeverage()
+	if lev <= 0 {
+		return fmt.Errorf("margin estimate: leverage %.4g", lev)
+	}
+	rate := 0.0
+	if lev < 1e6 {
+		rate = 1 / lev // 无限杠杆哨兵（Exness 实拍 2e9）→ rate=0 → requiredUSD=0，退化 FreeMargin 底线
+	}
+	requiredUSD := o.Qty * cs * px * rate
+	avail := as.GetResult().GetFreeMargin() * (1 - e.marginReservePct)
+	if requiredUSD > avail {
+		return fmt.Errorf("mt5 margin insufficient (estimate): required %.2f > avail %.2f (lots %.4g cs %.4g px %.4g lev %.0f rate %.6g freeMargin %.2f × %.2f)",
+			requiredUSD, avail, o.Qty, cs, px, lev, rate, as.GetResult().GetFreeMargin(), 1-e.marginReservePct)
+	}
+	log.Printf("[exec] mt5 margin estimate pass: %s %s qty=%.4g required=%.2f avail=%.2f (cs=%.4g px=%.4g lev=%.0f rate=%.6g marginCcy=%s)",
+		o.Side, o.Symbol, o.Qty, requiredUSD, avail, cs, px, lev, rate, mc)
+	return nil
 }
