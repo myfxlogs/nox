@@ -9,15 +9,16 @@ type monitorPair struct{ cexVenue, sym, pair, exSym string }
 // monitorPairs 全监控对清单（S0 缺陷修复：旧版共享单一 XAUUSD 报价喂全部对 →
 // BTCUSDT-BTC 实为 binance BTC×XAU 顶替，esp=175348bps 垃圾行 14:20 实拍；
 // 事实核查=3001157 流内 BTC 符号=BTCUSDT）。
-// D-423：加 okx:perp×XAUT-USDT-SWAP 行——真钱组合 pos 501（okx:perp×3001157:mt5,
-// XAU-USDT-SWAP×XAUUSDm）的 venue 簿；pair 键=消费端口径 CanonicalSell-TrimSuffix
-// （"XAUUSDT-XAU"），与 binance 行同 pair 不同 cex_venue=三元组隔离本意。
+// D-423：加 okx:perp×XAU-USDT-SWAP 行——真钱组合 pos 498/501（okx:perp×3001157:mt5,
+// XAU-USDT-SWAP×XAUUSDm）的 venue 簿（R1 返修：instId=XAU-USDT-SWAP，OKX instruments
+// API 与仓腿 symbol 双实证，XAUT-USDT-SWAP 为误写）；pair 键=消费端口径
+// CanonicalSell-TrimSuffix（"XAUUSDT-XAU"），与 binance 行同 pair 不同 cex_venue=三元组隔离本意。
 func monitorPairs() []monitorPair {
 	return []monitorPair{
 		{"binance:perp", "PAXGUSDT", "PAXG-XAU", "XAUUSD"},
 		{"binance:perp", "XAUTUSDT", "XAUT-XAU", "XAUUSD"},
 		{"binance:perp", "XAUUSDT", "XAUUSDT-XAU", "XAUUSD"},
-		{"binance:perp", "BTCUSDT", "BTCUSDT-BTC", "BTCUSDT"},   // D-335 S0：业主批第四对（BTCUSDT×BTCUSDT，swap 免息，纳入观察）
-		{"okx:perp", "XAUT-USDT-SWAP", "XAUUSDT-XAU", "XAUUSD"}, // D-423：OKX 黄金永续×Exness XAU（pos 501 组合）
+		{"binance:perp", "BTCUSDT", "BTCUSDT-BTC", "BTCUSDT"},  // D-335 S0：业主批第四对（BTCUSDT×BTCUSDT，swap 免息，纳入观察）
+		{"okx:perp", "XAU-USDT-SWAP", "XAUUSDT-XAU", "XAUUSD"}, // D-423 R1：OKX 黄金永续×Exness XAU（pos 498/501 组合）
 	}
 }
