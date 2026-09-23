@@ -67,11 +67,13 @@ func (p *Pipeline) executeLeg(ctx context.Context, leg LegSpec, clientOrderID st
 		ClientOrderID: clientOrderID, // D-195-B §4.3：确定性客户端订单号
 	})
 	if err != nil {
-		// D-159 W1a R2：MT 腿 OrderSend 超时/响应丢失 → UNKNOWN（不知成交与否，不能假 FAILED 平仓）。
+		// D-159 W1a R2：腿下单超时/响应丢失 → UNKNOWN（不知成交与否，不能假 FAILED 平仓）。
 		// context.DeadlineExceeded/Canceled = 网络超时/取消，订单可能已成交 → 标 UNKNOWN 待人工/对账确认。
+		// D-414 §1.6：判定不再限 MT——CEX 超时同样可能已成交，假 FAILED→LEGGED 会让自动收编
+		// 平可见腿后换腿裸奔。LEGGED 集合语义钉死为「另一腿确定未成交」=自动收编的安全前提。
 		// 其他错误（合约不存在/被拒/零成交）= 确定未成交 → FAILED。
-		if isMTVenueKey(leg.VenueKey) && isContextTimeoutErr(err) {
-			log.Printf("[exec] leg %s %s %s: MT timeout → UNKNOWN (order may have filled): %v", leg.VenueKey, leg.Side, leg.VenueSymbol, err)
+		if isContextTimeoutErr(err) {
+			log.Printf("[exec] leg %s %s %s: timeout → UNKNOWN (order may have filled): %v", leg.VenueKey, leg.Side, leg.VenueSymbol, err)
 			return LegResult{VenueKey: leg.VenueKey, Status: "UNKNOWN"}
 		}
 		log.Printf("[exec] leg %s %s %s: %v", leg.VenueKey, leg.Side, leg.VenueSymbol, err)

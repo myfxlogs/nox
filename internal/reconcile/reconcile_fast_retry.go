@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"arb/internal/exec"
+	"arb/internal/store/pgstore"
 )
 
 // fastRetryInterval 密集重试 tick（~30s；窗口内每 tick 扫一轮 CLOSING）。
@@ -38,10 +39,13 @@ func (r *Reconciler) StartFastRetryLoop(ctx context.Context) {
 	}
 }
 
-// fastRetrySweep 单轮：扫 CLOSING 仓，三条件全满足才 ResumeClose——
+// fastRetrySweep 单轮：扫 CLOSING ∪ LEGGED（D-414 扩域）仓。
+// CLOSING 三条件全满足才 ResumeClose——
 // ①closing_started_at 距今 < fastRetryWindow（窗外静默交还 30min 看护）
 // ②uncertainty_reason 为空（D-189 铁律：不确定单永不自动重试，盲平=反向开新仓）
 // ③venue 核验腿仍在由 ResumeClose 内部 checkResidualLegs 自带拦（不重复查）。
+// LEGGED 无 closing_started_at——先 ClaimClose（SQL COALESCE 写起算点）上车，
+// 之后生命周期落入同一台 CLOSING 重试/看护/告警机器（零新机器只加上车闸）。
 // ResumeClose 返 ErrCloseInFlight=另一调用方持锁执行中 → 可重入不告警不计数。
 // 返 nil → 清 venue 失败计数；其他 err → venue 计数+达阈升级告警。
 func (r *Reconciler) fastRetrySweep(ctx context.Context) {
@@ -50,12 +54,21 @@ func (r *Reconciler) fastRetrySweep(ctx context.Context) {
 	}
 	listCtx, listCancel := r.withTimeout(ctx)
 	closings, err := r.store.ListPositions(listCtx, "CLOSING", 50, 0)
+	leggeds, lerr := r.store.ListPositions(listCtx, "LEGGED", 50, 0)
 	listCancel()
 	if err != nil {
 		log.Printf("[reconcile] fast retry list CLOSING: %v", err)
+	}
+	if lerr != nil {
+		log.Printf("[reconcile] fast retry list LEGGED: %v", lerr)
+	}
+	if err != nil && lerr != nil {
 		return
 	}
 	now := r.now()
+	for i := range leggeds {
+		r.fastRetryLegged(ctx, &leggeds[i])
+	}
 	for i := range closings {
 		p := &closings[i]
 		if p.UncertaintyReason != nil && *p.UncertaintyReason != "" {
@@ -64,19 +77,51 @@ func (r *Reconciler) fastRetrySweep(ctx context.Context) {
 		if p.ClosingStartedAt == nil || now.Sub(*p.ClosingStartedAt) >= r.fastRetryWindow {
 			continue // ① 窗外/nil=异常态 → 交还 30min 看护（isClosingStuck 判 stuck）
 		}
-		venues := r.residualLegVenues(ctx, p.ID)
-		sub, cancel := r.withTimeout(ctx)
-		err := r.closer.ResumeClose(sub, p.ID)
-		cancel()
-		switch {
-		case err == nil:
-			r.fastRetryClear(venues)
-		case errors.Is(err, exec.ErrCloseInFlight):
-			// 单飞哨兵：快试/看护/手动三路之一持锁执行中——可重入，不告警不计数
-		default:
-			log.Printf("[reconcile] fast retry pos=%d failed: %v", p.ID, err)
-			r.fastRetryFail(ctx, venues)
-		}
+		r.fastRetryResume(ctx, p.ID)
+	}
+}
+
+// fastRetryLegged D-414 §1.1：LEGGED 单条上车闸——uncertainty 红线 → residualLegVenues
+// 归因 → ClaimClose（ErrClaimFailed=并发已收编仍走 ResumeClose 幂等；其他 err→计数下轮）
+// → ResumeClose（尾部与 CLOSING 同口径）。
+func (r *Reconciler) fastRetryLegged(ctx context.Context, p *pgstore.Position) {
+	if p.UncertaintyReason != nil && *p.UncertaintyReason != "" {
+		return // UNKNOWN 红线（LEGGED 语义=另一腿确定未成交；含疑即人工域）
+	}
+	venues := r.residualLegVenues(ctx, p.ID)
+	sub, cancel := r.withTimeout(ctx)
+	err := r.closer.ClaimClose(sub, p.ID)
+	cancel()
+	switch {
+	case err == nil, errors.Is(err, pgstore.ErrClaimFailed):
+		// 上车成功/已被收编 → 幂等 ResumeClose（首次成功才写 closing_started_at）
+	default:
+		log.Printf("[reconcile] fast retry legged pos=%d claim: %v", p.ID, err)
+		r.fastRetryFail(ctx, venues)
+		return
+	}
+	r.fastRetryResumeVenues(ctx, p.ID, venues)
+}
+
+// fastRetryResume CLOSING 分支 ResumeClose+计数尾部（venues 现算）。
+func (r *Reconciler) fastRetryResume(ctx context.Context, posID int64) {
+	r.fastRetryResumeVenues(ctx, posID, r.residualLegVenues(ctx, posID))
+}
+
+// fastRetryResumeVenues ResumeClose 尾部公共段：nil→清计数；ErrCloseInFlight→可重入
+// 不告警不计数；其他 err→log+venue 计数。
+func (r *Reconciler) fastRetryResumeVenues(ctx context.Context, posID int64, venues []string) {
+	sub, cancel := r.withTimeout(ctx)
+	err := r.closer.ResumeClose(sub, posID)
+	cancel()
+	switch {
+	case err == nil:
+		r.fastRetryClear(venues)
+	case errors.Is(err, exec.ErrCloseInFlight):
+		// 单飞哨兵：快试/看护/手动三路之一持锁执行中——可重入，不告警不计数
+	default:
+		log.Printf("[reconcile] fast retry pos=%d failed: %v", posID, err)
+		r.fastRetryFail(ctx, venues)
 	}
 }
 
