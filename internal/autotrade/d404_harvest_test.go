@@ -42,6 +42,11 @@ func d404XAssetPos(t *testing.T, s *pgstore.Store, anchor, floor *float64) *pgst
 		anchor, floor, posID); err != nil {
 		t.Fatalf("update anchors: %v", err)
 	}
+	// fin_xasset_monitor 不在 d311Truncate 清单（残留行会干扰 ts<=opened_at 选行）——
+	// 本 fixture 独占 pair='XPTUSDT-XPT'，按 pair 清。
+	if _, err := s.Pool().Exec(ctx, `DELETE FROM fin_xasset_monitor WHERE pair='XPTUSDT-XPT'`); err != nil {
+		t.Fatalf("clean monitor: %v", err)
+	}
 	// GetPosition 列不含 entry_noise/entry_harvest_floor——评估链读口=ListPositions
 	// （scanPositions 含两列，与生产 scanAndClose 同路径），须同口径取回。
 	rows, err := s.ListPositions(ctx, "OPEN", 10, 0)
@@ -82,7 +87,8 @@ func TestD404_HarvestRealLeg(t *testing.T) {
 		s := testAccumStore(t)
 		d311Truncate(t, s)
 		p := d404XAssetPos(t, s, d341fptr(-12.39), d341fptr(4.73))
-		d341SeedMonitorRow(t, s, d341fptr(7.73), d341fptr(9), d341fptr(4.73))
+		// R1 谓词=ts<=opened_at：行必须早于 opened_at（floor 源行同侧）
+		d404SeedMonitorRowAt(t, s, p.OpenedAt.Add(-5*time.Second), 7.73, 4.73)
 		e := d404Engine(s, d404Quotes(time.Now().UTC(), tc.buyBid, 4000, 0))
 		close, reason := e.harvestCheck(ctx, p)
 		if close != tc.wantTriggered {
@@ -101,7 +107,7 @@ func TestD404_HarvestPositiveAnchor(t *testing.T) {
 	s := testAccumStore(t)
 	d311Truncate(t, s)
 	p := d404XAssetPos(t, s, d341fptr(12.39), d341fptr(4.73))
-	d341SeedMonitorRow(t, s, d341fptr(7.73), d341fptr(9), d341fptr(4.73))
+	d404SeedMonitorRowAt(t, s, p.OpenedAt.Add(-5*time.Second), 7.73, 4.73)
 	e := d404Engine(s, d404Quotes(time.Now().UTC(), 4003.6, 4000, 0)) // basis=+9.0
 	if close, reason := e.harvestCheck(ctx, p); !close || !containsSub(reason, "harvest") {
 		t.Errorf("正锚 basis=+9.0 ≤ line 应触发, reason=%q", reason)
@@ -119,22 +125,23 @@ func TestD404_HarvestFallback(t *testing.T) {
 	s := testAccumStore(t)
 	d311Truncate(t, s)
 	p := d404XAssetPos(t, s, d341fptr(-12.39), nil)
-	d341SeedMonitorRow(t, s, d341fptr(5), d341fptr(9), d341fptr(9))
+	d404SeedMonitorRowAt(t, s, p.OpenedAt.Add(-5*time.Second), 5, 9)
 	e := d404Engine(s, d404Quotes(time.Now().UTC(), 3996.4, 4000, 0))
 	if close, reason := e.harvestCheck(ctx, p); !close || !containsSub(reason, "harvest") {
 		t.Errorf("floor NULL 回退 monitor entry≤floor 应触发, reason=%q", reason)
 	}
-	// 开仓时点 monitor 行超窗（opened_at=2h 前 vs 行 ts=now）→ 回退；
+	// 开仓时点 monitor 行超窗：opened_at=now−10min，最近 ≤opened_at 行 ts=now−26min
+	// （对 opened_at 行龄 16min>15min 窗 → 回退；对 now 26min<30min → latest 命中）。
 	// 回退后 entry=20>floor=9 → 不触发
 	s2 := testAccumStore(t)
 	d311Truncate(t, s2)
 	p2 := d404XAssetPos(t, s2, d341fptr(-12.39), d341fptr(4.73))
-	if _, err := s2.Pool().Exec(ctx, `UPDATE positions SET opened_at=now()-interval '2 hours' WHERE id=$1`, p2.ID); err != nil {
+	if _, err := s2.Pool().Exec(ctx, `UPDATE positions SET opened_at=now()-interval '10 minutes' WHERE id=$1`, p2.ID); err != nil {
 		t.Fatalf("update opened_at: %v", err)
 	}
 	rows2, _ := s2.ListPositions(ctx, "OPEN", 10, 0)
 	p2 = &rows2[0]
-	d341SeedMonitorRow(t, s2, d341fptr(20), d341fptr(9), d341fptr(9))
+	d404SeedMonitorRowAt(t, s2, time.Now().UTC().Add(-26*time.Minute), 20, 9)
 	e2 := d404Engine(s2, d404Quotes(time.Now().UTC(), 3996.4, 4000, 0))
 	if close, reason := e2.harvestCheck(ctx, p2); close {
 		t.Errorf("entryRow 超窗回退后 entry>floor 不应触发, reason=%q", reason)
@@ -143,15 +150,47 @@ func TestD404_HarvestFallback(t *testing.T) {
 	s3 := testAccumStore(t)
 	d311Truncate(t, s3)
 	p3 := d404XAssetPos(t, s3, d341fptr(-12.39), d341fptr(4.73))
-	if _, err := s3.Pool().Exec(ctx, `UPDATE positions SET opened_at=now()-interval '2 hours' WHERE id=$1`, p3.ID); err != nil {
+	if _, err := s3.Pool().Exec(ctx, `UPDATE positions SET opened_at=now()-interval '10 minutes' WHERE id=$1`, p3.ID); err != nil {
 		t.Fatalf("update opened_at: %v", err)
 	}
 	rows3, _ := s3.ListPositions(ctx, "OPEN", 10, 0)
 	p3 = &rows3[0]
-	d341SeedMonitorRow(t, s3, d341fptr(5), d341fptr(9), d341fptr(9))
+	d404SeedMonitorRowAt(t, s3, time.Now().UTC().Add(-26*time.Minute), 5, 9)
 	e3 := d404Engine(s3, d404Quotes(time.Now().UTC(), 3996.4, 4000, 0))
 	if close, reason := e3.harvestCheck(ctx, p3); !close || !containsSub(reason, "harvest") {
 		t.Errorf("entryRow 超窗回退后 entry≤floor 应触发, reason=%q", reason)
+	}
+}
+
+// d404SeedMonitorRowAt 带 ts 的 monitor 行（R1 回归：开仓前/后双行时序构造）。
+func d404SeedMonitorRowAt(t *testing.T, s *pgstore.Store, ts time.Time, entry, floor float64) {
+	t.Helper()
+	if _, err := s.Pool().Exec(context.Background(), `
+		INSERT INTO fin_xasset_monitor (ts, pair, binance_bid, binance_ask, exness_bid, exness_ask,
+			entry_spread_bps, exit_spread_bps, entry_net_bps, funding_rate_8h, funding_annual_pct,
+			tracking_error_bps, equiv_annual_pct, noise_bps, harvest_floor_bps)
+		VALUES ($1, 'XPTUSDT-XPT', 4000, 4001, 3999, 4000, $2, 5, 3, 0.001, 21.9, 1.0, 24.9, 9, $3)`,
+		ts, entry, floor); err != nil {
+		t.Fatalf("seed monitor at: %v", err)
+	}
+}
+
+// TestD404_HarvestRowPairing R1 回归：谓词=ts<=opened_at 最新行（与冻结锚同源配对）。
+// 498 事故形态复刻：开仓后 14s 的 monitor 行（entry=4.26）比开仓前 5min 行
+// （entry=7.73=floor 源行）离 opened_at 更近——旧 |Δt| 谓词选错行跨样本混配
+// （capture=4.26−4.73=−0.47 → line=12.86>锚，basis=−10 误判收割）；
+// 正确=选开仓前行（capture=3 → line=9.39，basis=−10 未收敛不触发）。
+func TestD404_HarvestRowPairing(t *testing.T) {
+	ctx := context.Background()
+	s := testAccumStore(t)
+	d311Truncate(t, s)
+	p := d404XAssetPos(t, s, d341fptr(-12.39), d341fptr(4.73))
+	openedAt := *p.OpenedAt
+	d404SeedMonitorRowAt(t, s, openedAt.Add(-5*time.Minute), 7.73, 4.73) // 开仓前最新行（floor 源行）
+	d404SeedMonitorRowAt(t, s, openedAt.Add(14*time.Second), 4.26, 4.73) // 开仓后行（混配陷阱）
+	e := d404Engine(s, d404Quotes(time.Now().UTC(), 3996.0, 4000, 0))    // basis=-10
+	if close, reason := e.harvestCheck(ctx, p); close {
+		t.Errorf("开仓后行不得入选：basis=-10 不应触发（错配行会造 line=12.86 误杀）, reason=%q", reason)
 	}
 }
 
@@ -161,7 +200,7 @@ func TestD404_HarvestQuoteGate(t *testing.T) {
 	s := testAccumStore(t)
 	d311Truncate(t, s)
 	p := d404XAssetPos(t, s, d341fptr(-12.39), d341fptr(4.73))
-	d341SeedMonitorRow(t, s, d341fptr(7.73), d341fptr(9), d341fptr(4.73))
+	d404SeedMonitorRowAt(t, s, p.OpenedAt.Add(-5*time.Second), 7.73, 4.73)
 	e := d404Engine(s, bus.New()) // 空 qbus=缺报价
 	if close, reason := e.harvestCheck(ctx, p); close {
 		t.Errorf("缺报价不应触发, reason=%q", reason)
