@@ -47,6 +47,36 @@ func TestGenerateClientOrderID_NormalCase(t *testing.T) {
 	}
 }
 
+// TestGenerateClientOrderID_VenueSafe D-413：499/500 实案——autotrade requestID 内嵌
+// opp.ID（含冒号）截断后产 "autotrade-1790157313864--499-1-1"（双横线），OKX 拒单
+// sCode=51000 → LEGGED 裸腿。断言：字符集全 [A-Za-z0-9_-]、无 "--"、后缀确定性保留。
+func TestGenerateClientOrderID_VenueSafe(t *testing.T) {
+	coid := generateClientOrderID("autotrade-1790157313864-XASSET_CARRY:XAUUSD:3001157:mt5:okx:perp", 499, 1, 1)
+	if len(coid) > 32 {
+		t.Errorf("len=%d, want <= 32", len(coid))
+	}
+	if strings.Contains(coid, "--") {
+		t.Errorf("coid=%s contains double dash", coid)
+	}
+	for _, r := range coid {
+		ok := r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' || r == '-'
+		if !ok {
+			t.Fatalf("coid=%s illegal char %q", coid, r)
+		}
+	}
+	if !strings.HasSuffix(coid, "-499-1-1") {
+		t.Errorf("coid=%s, want suffix -499-1-1", coid)
+	}
+}
+
+// TestGenerateClientOrderID_AllIllegalHead：requestID 全非法字符 → 消毒后空 → 兜 "x"。
+func TestGenerateClientOrderID_AllIllegalHead(t *testing.T) {
+	coid := generateClientOrderID(":::", 7, 0, 1)
+	if coid != "x-7-0-1" {
+		t.Errorf("coid=%s, want x-7-0-1", coid)
+	}
+}
+
 // TestPipeline_RequestIdReplay（§10.1.4）：request_id 重放不新增 intent。
 // 同 requestID 二次 Execute → 返回已有 positionID，不新建。
 func TestPipeline_RequestIdReplay(t *testing.T) {
