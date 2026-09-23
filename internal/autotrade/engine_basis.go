@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"arb/internal/spread"
 	"arb/internal/store/pgstore"
 )
 
@@ -63,7 +64,7 @@ func (e *Engine) currentBasisBpsAged(p *pgstore.Position) (float64, time.Duratio
 	if a := time.Since(sellQuote.Time); a > minQuoteAge {
 		minQuoteAge = a
 	}
-	// 基差 = 买入腿 bid − 卖出腿 ask（收敛收益的镜像：spread 越大=基差越大=亏损扩大）
+	// D-424：basis=清算侧价差（buyBid−sellAsk），PnL_bps=basis−anchor；与收敛判据（sellBid−buyAsk 剩余价差）是两量别混
 	spread := buyQuote.Bid - sellQuote.Ask
 	refPrice := buyQuote.Ask
 	if buyLeg.PriceActual != nil && *buyLeg.PriceActual > 0 {
@@ -107,13 +108,10 @@ func (e *Engine) currentNetBps(p *pgstore.Position) (float64, bool) {
 	if !ok1 || !ok2 {
 		return 0, false
 	}
-	spread := buyClose.Bid - sellClose.Ask
-	if spread <= 0 {
-		return 0, true
-	}
+	// D-424：剩余可捕捉价差 = sellBid − buyAsk（与入场口径同源；≤0=已过度收敛→平）
 	refPrice := buyClose.Ask
 	if buyLeg.PriceActual != nil && *buyLeg.PriceActual > 0 {
 		refPrice = *buyLeg.PriceActual
 	}
-	return spread / refPrice * 10000, true
+	return spread.RemainingBps(sellClose.Bid, buyClose.Ask, refPrice), true
 }
