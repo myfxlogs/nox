@@ -38,9 +38,12 @@ func appendPosID(ids []int64, id int64) []int64 {
 }
 
 // reconcileCEXAggregate 对拍 cexLocal（本地 CEX 腿聚合）vs cexVenue（venue 持仓聚合），
-// 返回不一致数。三态：venue-only=系统外单不追踪（维持原语义，外部/手工单不归本系统管）；
-// 差值≤tol=匹配静默；local>0 且超 tol（含 venue=0）=critical 告警含贡献腿 posIDs。
-func (r *Reconciler) reconcileCEXAggregate(ctx context.Context, cexLocal, cexVenue map[string]float64, cexLocalPos map[string][]int64) int {
+// 返回本轮已确认（达连续确认阈值）的不一致数。三态：venue-only=系统外单不追踪（维持原语义，
+// 外部/手工单不归本系统管）；差值≤tol=匹配静默；local>0 且超 tol（含 venue=0）须连续 3 轮确认
+// 才 critical（D-401：venue 侧瞬读不告警；episode 内单发），告警含贡献腿 posIDs。
+// D-401 失败读抑制：cexReadOK=本轮成功读取的 CEX venueKey 集——key 所属 venue 未读成功=未知
+// 而非零，本轮跳过（不计 mismatches，pending 冻结），仅 warn 日志不进 alerts。
+func (r *Reconciler) reconcileCEXAggregate(ctx context.Context, cexLocal, cexVenue map[string]float64, cexLocalPos map[string][]int64, cexReadOK map[string]bool) int {
 	keys := make(map[string]bool, len(cexLocal)+len(cexVenue))
 	for k := range cexLocal {
 		keys[k] = true
@@ -54,7 +57,19 @@ func (r *Reconciler) reconcileCEXAggregate(ctx context.Context, cexLocal, cexVen
 	}
 	sort.Strings(sorted)
 
+	// readOK 前缀扫（D-401 自审计钉死）：agg key 首冒号切出的 venue（"okx"）只是 venueKey
+	// （"okx:perp"）前缀，禁止拿解析值直查——对每个 key 扫 cexReadOK 键做 HasPrefix(k, vk+":")。
+	readOK := func(k string) bool {
+		for vk := range cexReadOK {
+			if strings.HasPrefix(k, vk+":") {
+				return true
+			}
+		}
+		return false
+	}
+
 	mismatches := 0
+	mismatchThisRound := make(map[string]bool) // 本轮处于不一致态的键（含 pending 观察），收尾清理用
 	for _, k := range sorted {
 		// key=venueKey:symbol:side（venueKey 本身含 ":" 如 okx:perp）——按首尾":"切三段。
 		venue, symbol, side := k, "", ""
@@ -62,6 +77,10 @@ func (r *Reconciler) reconcileCEXAggregate(ctx context.Context, cexLocal, cexVen
 			if j := strings.LastIndex(k, ":"); j > i {
 				venue, symbol, side = k[:i], k[i+1:j], k[j+1:]
 			}
+		}
+		if !readOK(k) {
+			log.Printf("[reconcile] CEX venue 查询失败/未读，key %s 本轮对拍跳过", k)
+			continue
 		}
 		local, venueQty := cexLocal[k], cexVenue[k]
 		switch {
@@ -71,11 +90,30 @@ func (r *Reconciler) reconcileCEXAggregate(ctx context.Context, cexLocal, cexVen
 		case local > 0 && math.Abs(venueQty-local) <= cexAggTol(venueQty, local):
 			// 匹配，静默
 		default:
-			mismatches++
-			msg := fmt.Sprintf("CEX 聚合持仓对拍不一致 venue=%s symbol=%s side=%s venue=%f local=%f posIDs=%v（人工定位）",
-				venue, symbol, side, venueQty, local, cexLocalPos[k])
-			r.insertAlertCtx(ctx, "critical", msg)
-			log.Printf("[reconcile] %s", msg)
+			mismatchThisRound[k] = true
+			r.cexAggPending[k]++ // 无界递增；==3 恰一次发 critical（episode 单发），>3 不再计
+			if r.cexAggPending[k] < 3 {
+				log.Printf("[reconcile] CEX 聚合持仓对拍不一致（待确认 %d/3）venue=%s symbol=%s side=%s venue=%f local=%f posIDs=%v",
+					r.cexAggPending[k], venue, symbol, side, venueQty, local, cexLocalPos[k])
+				continue
+			}
+			if r.cexAggPending[k] == 3 {
+				mismatches++
+				msg := fmt.Sprintf("CEX 聚合持仓对拍不一致 venue=%s symbol=%s side=%s venue=%f local=%f posIDs=%v（人工定位）",
+					venue, symbol, side, venueQty, local, cexLocalPos[k])
+				r.insertAlertCtx(ctx, "critical", msg)
+				log.Printf("[reconcile] %s", msg)
+			}
+		}
+	}
+	// D-401 收尾清理（自审计钉死）：按「本轮实际被评估且不再不一致」删——S3 跳过键=未评估，
+	// 冻结保留（未知≠缓解也≠恶化）；readOK 前缀命中且未进 mismatch 集才 delete。
+	for pk := range r.cexAggPending {
+		if mismatchThisRound[pk] {
+			continue
+		}
+		if readOK(pk) {
+			delete(r.cexAggPending, pk)
 		}
 	}
 	return mismatches

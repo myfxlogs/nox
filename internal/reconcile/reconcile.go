@@ -16,6 +16,9 @@ type Reconciler struct {
 	mu    sync.RWMutex
 	// D-245：CLOSING 告警分层的小时桶（posID→上次 warn 的整小时），进程重启最多重复 1 条（不落库）。
 	closingAlertHour map[int64]int64
+	// D-401：CEX 聚合对拍连续确认计数（agg key→连续不一致轮数，达 3 才 critical）。
+	// 仅 Run 路径串行读写，无锁；runTimeout 超时/查询失败的轮次冻结不计数。
+	cexAggPending map[string]int
 	// D-245：可注入时钟（测试假时钟；nil=time.Now）。
 	nowFn           func() time.Time
 	queriers        []VenueQuerier
@@ -34,6 +37,7 @@ func New(store Store, queriers ...VenueQuerier) *Reconciler {
 		runTimeout:       10 * time.Second,
 		initialDelay:     60 * time.Second,
 		closingAlertHour: map[int64]int64{},
+		cexAggPending:    map[string]int{},
 		nowFn:            time.Now,
 	}
 }

@@ -99,6 +99,7 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 	// D-159 W2a R3-7：venueOrders 也用 venue_key+":"+ticket 复合 key（与 localLegs 对齐）。
 	venueOrders := make(map[string]VenueOrder) // venue_key+":"+ticket → order
 	cexVenue := make(map[string]float64)       // D-385 S1：venueKey:symbol:side → venue 聚合量
+	cexReadOK := make(map[string]bool)         // D-401：本轮成功读取的 CEX venueKey（失败读≠零读）
 	for _, q := range r.snapshot() {
 		sub, cancel := r.withTimeout(ctx)
 		orders, err := q.QueryOpenedOrders(sub)
@@ -108,6 +109,9 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 			continue
 		}
 		isCEX := cexVenues[q.VenueKey()]
+		if isCEX {
+			cexReadOK[q.VenueKey()] = true
+		}
 		for _, o := range orders {
 			if isCEX {
 				cexVenue[cexAggKey(o.VenueKey, o.Symbol, o.Side)] += o.Volume
@@ -284,8 +288,8 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 		log.Printf("[reconcile] %s", msg)
 	}
 
-	// D-385 S1：CEX 聚合对拍（venue+symbol+side 粒度，loop2 之后）。
-	mismatches += r.reconcileCEXAggregate(ctx, cexLocal, cexVenue, cexLocalPos)
+	// D-385 S1：CEX 聚合对拍（venue+symbol+side 粒度，loop2 之后）；D-401：cexReadOK 供失败读抑制。
+	mismatches += r.reconcileCEXAggregate(ctx, cexLocal, cexVenue, cexLocalPos, cexReadOK)
 
 	if mismatches == 0 {
 		log.Printf("[reconcile] OK: %d local legs, %d venue orders, %d CEX 聚合键 all matched", len(localLegs), len(venueOrders), len(cexLocal))
