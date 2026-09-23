@@ -34,6 +34,8 @@ func accountToProto(a *reconcile.AccountInfo, online bool, now time.Time) *v1.Ac
 		Website:    a.Website,
 		UpdatedAt:  timestamppb.New(now),
 		Holdings:   a.Holdings,
+		// D-405 S2：CEX 距强平缓冲倍数（写时归一 equity/MMR；0=未采）
+		BufferMultiple: a.BufferMultiple,
 	}
 	return pb
 }

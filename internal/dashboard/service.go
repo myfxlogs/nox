@@ -81,6 +81,8 @@ type Service struct {
 	// nil = 未接线 → legContractSizeOf 对 :perp 腿报错（fail-closed，不猜 1.0）。
 	// main 接 fin_cex_universe.ct_val（gate=quanto_multiplier/okx=ctVal/binance=1.0）。
 	cexContractSize func(venue, venueSymbol string) (float64, bool)
+	// marginGuard D-405 S3：账户资金三档评估器（InitMarginGuard 装配；nil=未接线）。
+	marginGuard *MarginGuard
 	// maxLegImbalance 卖腿名义不平衡上限（百分比，默认 2，D-028/D-060 实施修正②）。
 	maxLegImbalance float64
 	// legMinLots MT 腿最小手数查询（D-061 量规格预检）：venueKey+venueSymbol → min lots。

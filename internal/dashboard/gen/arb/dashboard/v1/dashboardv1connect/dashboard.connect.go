@@ -346,6 +346,9 @@ const (
 	// DashboardServiceRejectCarryGraduationProcedure is the fully-qualified name of the
 	// DashboardService's RejectCarryGraduation RPC.
 	DashboardServiceRejectCarryGraduationProcedure = "/arb.dashboard.v1.DashboardService/RejectCarryGraduation"
+	// DashboardServiceListAccountMarginStatusProcedure is the fully-qualified name of the
+	// DashboardService's ListAccountMarginStatus RPC.
+	DashboardServiceListAccountMarginStatusProcedure = "/arb.dashboard.v1.DashboardService/ListAccountMarginStatus"
 )
 
 // DashboardServiceClient is a client for the arb.dashboard.v1.DashboardService service.
@@ -495,6 +498,9 @@ type DashboardServiceClient interface {
 	ListCarryGraduations(context.Context, *connect.Request[v1.ListCarryGraduationsRequest]) (*connect.Response[v1.ListCarryGraduationsResponse], error)
 	ApproveCarryGraduation(context.Context, *connect.Request[v1.ApproveCarryGraduationRequest]) (*connect.Response[v1.ApproveCarryGraduationResponse], error)
 	RejectCarryGraduation(context.Context, *connect.Request[v1.RejectCarryGraduationRequest]) (*connect.Response[v1.RejectCarryGraduationResponse], error)
+	// D-405 S6：账户资金与保证金卡（财务页下钻）——数据源 fin_venue_margin_status
+	// + snapshot 最新行 join；覆盖天数/建议补资金/档位全后端给，前端零计算。
+	ListAccountMarginStatus(context.Context, *connect.Request[v1.ListAccountMarginStatusRequest]) (*connect.Response[v1.ListAccountMarginStatusResponse], error)
 }
 
 // NewDashboardServiceClient constructs a client for the arb.dashboard.v1.DashboardService service.
@@ -1138,6 +1144,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("RejectCarryGraduation")),
 			connect.WithClientOptions(opts...),
 		),
+		listAccountMarginStatus: connect.NewClient[v1.ListAccountMarginStatusRequest, v1.ListAccountMarginStatusResponse](
+			httpClient,
+			baseURL+DashboardServiceListAccountMarginStatusProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListAccountMarginStatus")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1248,6 +1260,7 @@ type dashboardServiceClient struct {
 	listCarryGraduations      *connect.Client[v1.ListCarryGraduationsRequest, v1.ListCarryGraduationsResponse]
 	approveCarryGraduation    *connect.Client[v1.ApproveCarryGraduationRequest, v1.ApproveCarryGraduationResponse]
 	rejectCarryGraduation     *connect.Client[v1.RejectCarryGraduationRequest, v1.RejectCarryGraduationResponse]
+	listAccountMarginStatus   *connect.Client[v1.ListAccountMarginStatusRequest, v1.ListAccountMarginStatusResponse]
 }
 
 // ListLatestQuotes calls arb.dashboard.v1.DashboardService.ListLatestQuotes.
@@ -1775,6 +1788,11 @@ func (c *dashboardServiceClient) RejectCarryGraduation(ctx context.Context, req 
 	return c.rejectCarryGraduation.CallUnary(ctx, req)
 }
 
+// ListAccountMarginStatus calls arb.dashboard.v1.DashboardService.ListAccountMarginStatus.
+func (c *dashboardServiceClient) ListAccountMarginStatus(ctx context.Context, req *connect.Request[v1.ListAccountMarginStatusRequest]) (*connect.Response[v1.ListAccountMarginStatusResponse], error) {
+	return c.listAccountMarginStatus.CallUnary(ctx, req)
+}
+
 // DashboardServiceHandler is an implementation of the arb.dashboard.v1.DashboardService service.
 type DashboardServiceHandler interface {
 	// 快照类
@@ -1922,6 +1940,9 @@ type DashboardServiceHandler interface {
 	ListCarryGraduations(context.Context, *connect.Request[v1.ListCarryGraduationsRequest]) (*connect.Response[v1.ListCarryGraduationsResponse], error)
 	ApproveCarryGraduation(context.Context, *connect.Request[v1.ApproveCarryGraduationRequest]) (*connect.Response[v1.ApproveCarryGraduationResponse], error)
 	RejectCarryGraduation(context.Context, *connect.Request[v1.RejectCarryGraduationRequest]) (*connect.Response[v1.RejectCarryGraduationResponse], error)
+	// D-405 S6：账户资金与保证金卡（财务页下钻）——数据源 fin_venue_margin_status
+	// + snapshot 最新行 join；覆盖天数/建议补资金/档位全后端给，前端零计算。
+	ListAccountMarginStatus(context.Context, *connect.Request[v1.ListAccountMarginStatusRequest]) (*connect.Response[v1.ListAccountMarginStatusResponse], error)
 }
 
 // NewDashboardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -2561,6 +2582,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("RejectCarryGraduation")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceListAccountMarginStatusHandler := connect.NewUnaryHandler(
+		DashboardServiceListAccountMarginStatusProcedure,
+		svc.ListAccountMarginStatus,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListAccountMarginStatus")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/arb.dashboard.v1.DashboardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DashboardServiceListLatestQuotesProcedure:
@@ -2773,6 +2800,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceApproveCarryGraduationHandler.ServeHTTP(w, r)
 		case DashboardServiceRejectCarryGraduationProcedure:
 			dashboardServiceRejectCarryGraduationHandler.ServeHTTP(w, r)
+		case DashboardServiceListAccountMarginStatusProcedure:
+			dashboardServiceListAccountMarginStatusHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -3200,4 +3229,8 @@ func (UnimplementedDashboardServiceHandler) ApproveCarryGraduation(context.Conte
 
 func (UnimplementedDashboardServiceHandler) RejectCarryGraduation(context.Context, *connect.Request[v1.RejectCarryGraduationRequest]) (*connect.Response[v1.RejectCarryGraduationResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.RejectCarryGraduation is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListAccountMarginStatus(context.Context, *connect.Request[v1.ListAccountMarginStatusRequest]) (*connect.Response[v1.ListAccountMarginStatusResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListAccountMarginStatus is not implemented"))
 }
