@@ -138,6 +138,12 @@ type Service struct {
 	// 零值 = fail-closed（XASSET_CARRY 全拒）。
 	carryRegime exec.CarryRegimeConfig
 
+	// D-403 S3：验证毕业链依赖（nil-able setter 注入模式，New 已 20+ 参勿再加）。
+	gradStore            graduationStore                                         // 测试替身 seam；nil=回落 s.store
+	xassetReloader       XAssetReloader                                          // engine 热重载（nil=approve fail-closed 拒绝）
+	autoTradeAllowVenues map[string]bool                                         // cfg.AutoTradeAllowVenues 只读快照（venue gap 判定）
+	autoMapFn            func(ctx context.Context, venue string) (string, error) // AutoMap 摘要 seam（nil=真身 s.AutoMapBroker）
+
 	// D-159 W1a I6：environment/is_real 一致性检查（手动入口同源）。
 	// environment 空 = 未配置（不检查，回退旧行为）。
 	environment string
@@ -230,7 +236,7 @@ type FrontConfig struct {
 // commissionFor 为 per-venue 佣金解析器（D-111 收敛型实时 bps 成本扣除，nil = commissionBps=0）。
 // slippageBps 为滑点成本（D-111，slippageCost = slippageBps * 2）。
 func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64, fundingDropRatio float64, swapArbEquityUseRatio float64, swapArbBareCap float64, swapArbVenueExposureCap float64, priceTopic *bus.Topic[position.PositionPrice], oppTopic *bus.Topic[pgstore.Opportunity], orderTopic *bus.Topic[bus.OrderEvent], alertTopic *bus.Topic[pgstore.Alert], hedgeTopic *bus.Topic[struct{}], bpm *BrokerPositionMonitor, notionalUSD float64, acctMon *AccountMonitor, commissionFor func(string) float64, slippageBps float64, xassetCexFeeBps float64, kickFn func(string)) *Service {
-	return &Service{store: store, qbus: qbus, pipeline: pipeline, gateChecker: &storeGateChecker{store: store}, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, swapArbEquityUseRatio: swapArbEquityUseRatio, swapArbBareCap: swapArbBareCap, swapArbVenueExposureCap: swapArbVenueExposureCap, priceTopic: priceTopic, oppTopic: oppTopic, orderTopic: orderTopic, alertTopic: alertTopic, hedgeTopic: hedgeTopic, bpm: bpm, notionalUSD: notionalUSD, acctMon: acctMon, commissionFor: commissionFor, slippageBps: slippageBps, xassetCexFeeBps: xassetCexFeeBps, kickFn: kickFn}
+	return &Service{store: store, gradStore: store, qbus: qbus, pipeline: pipeline, gateChecker: &storeGateChecker{store: store}, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, swapArbEquityUseRatio: swapArbEquityUseRatio, swapArbBareCap: swapArbBareCap, swapArbVenueExposureCap: swapArbVenueExposureCap, priceTopic: priceTopic, oppTopic: oppTopic, orderTopic: orderTopic, alertTopic: alertTopic, hedgeTopic: hedgeTopic, bpm: bpm, notionalUSD: notionalUSD, acctMon: acctMon, commissionFor: commissionFor, slippageBps: slippageBps, xassetCexFeeBps: xassetCexFeeBps, kickFn: kickFn}
 }
 
 // Store 返回底层 store（D-070 autotrade engine 用）。

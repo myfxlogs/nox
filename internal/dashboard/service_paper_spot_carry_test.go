@@ -20,7 +20,7 @@ func paperBoardTestStore(t *testing.T) *pgstore.Store {
 	t.Helper()
 	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
 	if _, err := st.Pool().Exec(context.Background(),
-		`TRUNCATE paper_spot_carry, fin_cex_universe RESTART IDENTITY`); err != nil {
+		`TRUNCATE paper_spot_carry, fin_cex_universe, carry_graduations RESTART IDENTITY`); err != nil {
 		t.Fatalf("TRUNCATE: %v", err)
 	}
 	return st

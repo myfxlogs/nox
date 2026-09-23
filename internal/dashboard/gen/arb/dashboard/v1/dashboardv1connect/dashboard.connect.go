@@ -337,6 +337,15 @@ const (
 	// DashboardServiceGetCexFinanceProcedure is the fully-qualified name of the DashboardService's
 	// GetCexFinance RPC.
 	DashboardServiceGetCexFinanceProcedure = "/arb.dashboard.v1.DashboardService/GetCexFinance"
+	// DashboardServiceListCarryGraduationsProcedure is the fully-qualified name of the
+	// DashboardService's ListCarryGraduations RPC.
+	DashboardServiceListCarryGraduationsProcedure = "/arb.dashboard.v1.DashboardService/ListCarryGraduations"
+	// DashboardServiceApproveCarryGraduationProcedure is the fully-qualified name of the
+	// DashboardService's ApproveCarryGraduation RPC.
+	DashboardServiceApproveCarryGraduationProcedure = "/arb.dashboard.v1.DashboardService/ApproveCarryGraduation"
+	// DashboardServiceRejectCarryGraduationProcedure is the fully-qualified name of the
+	// DashboardService's RejectCarryGraduation RPC.
+	DashboardServiceRejectCarryGraduationProcedure = "/arb.dashboard.v1.DashboardService/RejectCarryGraduation"
 )
 
 // DashboardServiceClient is a client for the arb.dashboard.v1.DashboardService service.
@@ -482,6 +491,10 @@ type DashboardServiceClient interface {
 	GetCapitalCoverage(context.Context, *connect.Request[v1.GetCapitalCoverageRequest]) (*connect.Response[v1.GetCapitalCoverageResponse], error)
 	// D-365：CEX 财务页（账户级盘点全币种+进出/收益流水；后端算+占比，前端零计算）。
 	GetCexFinance(context.Context, *connect.Request[v1.GetCexFinanceRequest]) (*connect.Response[v1.GetCexFinanceResponse], error)
+	// D-403：验证毕业链——扫描→验证→实盘三段接通（建议列表/业主授权/拒绝）。
+	ListCarryGraduations(context.Context, *connect.Request[v1.ListCarryGraduationsRequest]) (*connect.Response[v1.ListCarryGraduationsResponse], error)
+	ApproveCarryGraduation(context.Context, *connect.Request[v1.ApproveCarryGraduationRequest]) (*connect.Response[v1.ApproveCarryGraduationResponse], error)
+	RejectCarryGraduation(context.Context, *connect.Request[v1.RejectCarryGraduationRequest]) (*connect.Response[v1.RejectCarryGraduationResponse], error)
 }
 
 // NewDashboardServiceClient constructs a client for the arb.dashboard.v1.DashboardService service.
@@ -1107,6 +1120,24 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("GetCexFinance")),
 			connect.WithClientOptions(opts...),
 		),
+		listCarryGraduations: connect.NewClient[v1.ListCarryGraduationsRequest, v1.ListCarryGraduationsResponse](
+			httpClient,
+			baseURL+DashboardServiceListCarryGraduationsProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListCarryGraduations")),
+			connect.WithClientOptions(opts...),
+		),
+		approveCarryGraduation: connect.NewClient[v1.ApproveCarryGraduationRequest, v1.ApproveCarryGraduationResponse](
+			httpClient,
+			baseURL+DashboardServiceApproveCarryGraduationProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ApproveCarryGraduation")),
+			connect.WithClientOptions(opts...),
+		),
+		rejectCarryGraduation: connect.NewClient[v1.RejectCarryGraduationRequest, v1.RejectCarryGraduationResponse](
+			httpClient,
+			baseURL+DashboardServiceRejectCarryGraduationProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("RejectCarryGraduation")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1214,6 +1245,9 @@ type dashboardServiceClient struct {
 	listPaperSpotCarry        *connect.Client[v1.ListPaperSpotCarryRequest, v1.ListPaperSpotCarryResponse]
 	getCapitalCoverage        *connect.Client[v1.GetCapitalCoverageRequest, v1.GetCapitalCoverageResponse]
 	getCexFinance             *connect.Client[v1.GetCexFinanceRequest, v1.GetCexFinanceResponse]
+	listCarryGraduations      *connect.Client[v1.ListCarryGraduationsRequest, v1.ListCarryGraduationsResponse]
+	approveCarryGraduation    *connect.Client[v1.ApproveCarryGraduationRequest, v1.ApproveCarryGraduationResponse]
+	rejectCarryGraduation     *connect.Client[v1.RejectCarryGraduationRequest, v1.RejectCarryGraduationResponse]
 }
 
 // ListLatestQuotes calls arb.dashboard.v1.DashboardService.ListLatestQuotes.
@@ -1726,6 +1760,21 @@ func (c *dashboardServiceClient) GetCexFinance(ctx context.Context, req *connect
 	return c.getCexFinance.CallUnary(ctx, req)
 }
 
+// ListCarryGraduations calls arb.dashboard.v1.DashboardService.ListCarryGraduations.
+func (c *dashboardServiceClient) ListCarryGraduations(ctx context.Context, req *connect.Request[v1.ListCarryGraduationsRequest]) (*connect.Response[v1.ListCarryGraduationsResponse], error) {
+	return c.listCarryGraduations.CallUnary(ctx, req)
+}
+
+// ApproveCarryGraduation calls arb.dashboard.v1.DashboardService.ApproveCarryGraduation.
+func (c *dashboardServiceClient) ApproveCarryGraduation(ctx context.Context, req *connect.Request[v1.ApproveCarryGraduationRequest]) (*connect.Response[v1.ApproveCarryGraduationResponse], error) {
+	return c.approveCarryGraduation.CallUnary(ctx, req)
+}
+
+// RejectCarryGraduation calls arb.dashboard.v1.DashboardService.RejectCarryGraduation.
+func (c *dashboardServiceClient) RejectCarryGraduation(ctx context.Context, req *connect.Request[v1.RejectCarryGraduationRequest]) (*connect.Response[v1.RejectCarryGraduationResponse], error) {
+	return c.rejectCarryGraduation.CallUnary(ctx, req)
+}
+
 // DashboardServiceHandler is an implementation of the arb.dashboard.v1.DashboardService service.
 type DashboardServiceHandler interface {
 	// 快照类
@@ -1869,6 +1918,10 @@ type DashboardServiceHandler interface {
 	GetCapitalCoverage(context.Context, *connect.Request[v1.GetCapitalCoverageRequest]) (*connect.Response[v1.GetCapitalCoverageResponse], error)
 	// D-365：CEX 财务页（账户级盘点全币种+进出/收益流水；后端算+占比，前端零计算）。
 	GetCexFinance(context.Context, *connect.Request[v1.GetCexFinanceRequest]) (*connect.Response[v1.GetCexFinanceResponse], error)
+	// D-403：验证毕业链——扫描→验证→实盘三段接通（建议列表/业主授权/拒绝）。
+	ListCarryGraduations(context.Context, *connect.Request[v1.ListCarryGraduationsRequest]) (*connect.Response[v1.ListCarryGraduationsResponse], error)
+	ApproveCarryGraduation(context.Context, *connect.Request[v1.ApproveCarryGraduationRequest]) (*connect.Response[v1.ApproveCarryGraduationResponse], error)
+	RejectCarryGraduation(context.Context, *connect.Request[v1.RejectCarryGraduationRequest]) (*connect.Response[v1.RejectCarryGraduationResponse], error)
 }
 
 // NewDashboardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -2490,6 +2543,24 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("GetCexFinance")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceListCarryGraduationsHandler := connect.NewUnaryHandler(
+		DashboardServiceListCarryGraduationsProcedure,
+		svc.ListCarryGraduations,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListCarryGraduations")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceApproveCarryGraduationHandler := connect.NewUnaryHandler(
+		DashboardServiceApproveCarryGraduationProcedure,
+		svc.ApproveCarryGraduation,
+		connect.WithSchema(dashboardServiceMethods.ByName("ApproveCarryGraduation")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceRejectCarryGraduationHandler := connect.NewUnaryHandler(
+		DashboardServiceRejectCarryGraduationProcedure,
+		svc.RejectCarryGraduation,
+		connect.WithSchema(dashboardServiceMethods.ByName("RejectCarryGraduation")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/arb.dashboard.v1.DashboardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DashboardServiceListLatestQuotesProcedure:
@@ -2696,6 +2767,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceGetCapitalCoverageHandler.ServeHTTP(w, r)
 		case DashboardServiceGetCexFinanceProcedure:
 			dashboardServiceGetCexFinanceHandler.ServeHTTP(w, r)
+		case DashboardServiceListCarryGraduationsProcedure:
+			dashboardServiceListCarryGraduationsHandler.ServeHTTP(w, r)
+		case DashboardServiceApproveCarryGraduationProcedure:
+			dashboardServiceApproveCarryGraduationHandler.ServeHTTP(w, r)
+		case DashboardServiceRejectCarryGraduationProcedure:
+			dashboardServiceRejectCarryGraduationHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -3111,4 +3188,16 @@ func (UnimplementedDashboardServiceHandler) GetCapitalCoverage(context.Context, 
 
 func (UnimplementedDashboardServiceHandler) GetCexFinance(context.Context, *connect.Request[v1.GetCexFinanceRequest]) (*connect.Response[v1.GetCexFinanceResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetCexFinance is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListCarryGraduations(context.Context, *connect.Request[v1.ListCarryGraduationsRequest]) (*connect.Response[v1.ListCarryGraduationsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListCarryGraduations is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ApproveCarryGraduation(context.Context, *connect.Request[v1.ApproveCarryGraduationRequest]) (*connect.Response[v1.ApproveCarryGraduationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ApproveCarryGraduation is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) RejectCarryGraduation(context.Context, *connect.Request[v1.RejectCarryGraduationRequest]) (*connect.Response[v1.RejectCarryGraduationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.RejectCarryGraduation is not implemented"))
 }
