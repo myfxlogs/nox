@@ -83,6 +83,18 @@ type Prechecker interface {
 	Precheck(ctx context.Context, o Order) error
 }
 
+// MarginPrechecker 可选开仓资金预检接口（D-415）：venue 原生保证金/可开量校验，
+// 只在开仓路径调用（平仓减风险无保证金语义，pipeline_resume 不调用）。
+// 任一腿返 err → 同 Precheck：不建 position、不下任何单、结构上不可能 LEGGED。
+// 语义=fail-closed：校验调用本身失败（RPC 超时/端点 5xx）→ 返 err 拒开
+// （真钱路径「证明不了能开就不开」，与 marginFloor 监控件 fail-open 刻意相反）。
+// 实现者：MT5Executor（RequiredMargin vs FreeMargin）+ CEXExecutor（okx perp
+// max-avail-size）；未实现接口的 executor → 跳过不拦（同 Prechecker 惯例，
+// venue 走拒单兜底）。o.Qty=该腿拟下单量（venue 原生单位换算由实现内做）。
+type MarginPrechecker interface {
+	MarginPrecheck(ctx context.Context, o Order) error
+}
+
 // OpenedOrder venue 侧在仓订单（D-077 修复⑩ G1 平仓后回读用）。
 type OpenedOrder struct {
 	Ticket  string

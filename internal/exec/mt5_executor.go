@@ -16,21 +16,63 @@ import (
 type MT5Executor struct {
 	venue    string
 	trading  mt5pb.TradingClient
+	mt5      mt5pb.MT5Client // D-415：RequiredMargin/AccountSummary 资金预检面
 	token    string
 	venueKey string // "venue:mt5"
+	// marginReservePct 可用保证金安全垫（D-415 ARB_MARGIN_RESERVE_PCT，缺省 0.20）。
+	marginReservePct float64
 }
 
-// NewMT5Executor 创建 MT5 执行器。
-func NewMT5Executor(venue, token string, trading mt5pb.TradingClient) *MT5Executor {
+// NewMT5Executor 创建 MT5 执行器。mt5=MT5Client 服务面（MarginPrecheck 用）。
+func NewMT5Executor(venue, token string, trading mt5pb.TradingClient, mt5 mt5pb.MT5Client) *MT5Executor {
 	return &MT5Executor{
-		venue:    venue,
-		trading:  trading,
-		token:    token,
-		venueKey: venue + ":mt5",
+		venue:            venue,
+		trading:          trading,
+		mt5:              mt5,
+		token:            token,
+		venueKey:         venue + ":mt5",
+		marginReservePct: defaultMarginReservePct,
 	}
 }
 
+// SetMarginReservePct 注入资金预检安全垫（cfg.MarginReservePct；不设=缺省 0.20）。
+func (e *MT5Executor) SetMarginReservePct(pct float64) { e.marginReservePct = pct }
+
 func (e *MT5Executor) Key() string { return e.venueKey }
+
+// MarginPrecheck D-415 §1.2：MT5 venue 原生资金校验——RequiredMargin(symbol,lots,
+// 市价 price=0) vs AccountSummary.FreeMargin×(1−reservePct)。required 超限或任一
+// RPC 失败 → 返 err 拒开（fail-closed：证明不了能开就不开）。
+func (e *MT5Executor) MarginPrecheck(ctx context.Context, o Order) error {
+	ctx = metadata.AppendToOutgoingContext(ctx, "id", e.token)
+	dealType := mt5pb.DealType_DealType_DealBuy
+	if o.Side == "SELL" {
+		dealType = mt5pb.DealType_DealType_DealSell
+	}
+	rm, err := e.mt5.RequiredMargin(ctx, &mt5pb.RequiredMarginRequest{
+		Id: e.token, Symbol: o.Symbol, Lots: o.Qty, Type: &dealType,
+	})
+	if err != nil {
+		return fmt.Errorf("mt5 required margin: %w", err)
+	}
+	if err := rm.GetError(); err != nil {
+		return fmt.Errorf("mt5 required margin: [code=%s] %s", err.GetCode().String(), err.GetMessage())
+	}
+	as, err := e.mt5.AccountSummary(ctx, &mt5pb.AccountSummaryRequest{Id: e.token})
+	if err != nil {
+		return fmt.Errorf("mt5 account summary: %w", err)
+	}
+	if err := as.GetError(); err != nil {
+		return fmt.Errorf("mt5 account summary: [code=%s] %s", err.GetCode().String(), err.GetMessage())
+	}
+	required := rm.GetResult()
+	avail := as.GetResult().GetFreeMargin() * (1 - e.marginReservePct)
+	if required > avail {
+		return fmt.Errorf("mt5 margin insufficient: required %.2f > avail %.2f (freeMargin %.2f × %.2f)",
+			required, avail, as.GetResult().GetFreeMargin(), 1-e.marginReservePct)
+	}
+	return nil
+}
 
 func (e *MT5Executor) PlaceOrder(ctx context.Context, o Order) (Fill, error) {
 	ctx = metadata.AppendToOutgoingContext(ctx, "id", e.token)

@@ -39,8 +39,13 @@ type CEXExecutor struct {
 	// D-125：okx perp 合约面值缓存已转包级共享 okxSwapSpecCache（D-311 R4，instId → ctVal/lotSz）。
 	// okx swap sz 单位=张数，o.Qty 是基础币数量 → sz=qty/ctVal。
 	// AlertFn 平仓被拒时 critical 告警（main 注入 store.InsertAlert；nil=不告警，测试用）。
-	AlertFn func(posID *int64, level, msg string)
+	AlertFn          func(posID *int64, level, msg string)
+	marginReservePct float64 // D-415 ARB_MARGIN_RESERVE_PCT 安全垫（缺省 0.20）
 }
+
+// defaultMarginReservePct D-415 §1.4：可用额安全垫缺省——只吃满 80%，留 20%
+// 缓冲防「开完即贴爆仓线」。cfg.MarginReservePct 经 SetMarginReservePct 覆盖。
+const defaultMarginReservePct = 0.20
 
 // NewCEXExecutor 创建 CEX 执行器。
 // baseURL 为 venue 根（binance 走代理 fapi 风格需已含 /demo 路径；okx 实盘域名）。
@@ -55,6 +60,8 @@ func NewCEXExecutor(venue, venueType, apiKey, apiSecret, passphrase, baseURL str
 		baseURL:    baseURL,
 		simulated:  simulated,
 		client:     httpx.Client(), // CA 信任 + X-Proxy-Token 注入（D-055）；OKX 公网忽略注入头
+
+		marginReservePct: defaultMarginReservePct,
 	}
 }
 

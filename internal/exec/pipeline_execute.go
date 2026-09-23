@@ -78,6 +78,22 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 				return nil, fmt.Errorf("precheck leg %s: %w", leg.VenueKey, err)
 			}
 		}
+		// D-415：venue 原生资金预检（MarginPrechecker，fail-closed）——与 Precheck
+		// 同位点同拒开语义：不建 position 不下单，结构上不可能 LEGGED。
+		if mp, ok := exe.(MarginPrechecker); ok {
+			orderQty, convErr := p.orderQtyFor(leg)
+			if convErr != nil {
+				return nil, fmt.Errorf("margin precheck leg %s: %w", leg.VenueKey, convErr)
+			}
+			if err := mp.MarginPrecheck(ctx, Order{
+				Symbol: leg.VenueSymbol,
+				Side:   leg.Side,
+				Qty:    orderQty,
+				Venue:  leg.VenueKey,
+			}); err != nil {
+				return nil, fmt.Errorf("margin precheck leg %s: %w", leg.VenueKey, err)
+			}
+		}
 	}
 
 	// 风控④：D-159 W1a R1 S2.3 SWAPARB 精确组合门禁——真实名义额检查。
