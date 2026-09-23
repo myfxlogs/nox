@@ -23,6 +23,9 @@ type CexExecutorManager struct {
 	marginReservePct float64
 	// alertFn D-108 P2 T1：平仓被拒时 critical 告警注入（main 传 store.InsertAlert）。
 	alertFn func(posID *int64, level, msg string)
+	// OrderStatusHook D-421 §1.5：exchange_configs 刷新后镜像订单级查单器集合
+	// → recon.SetOrderStatusQueriers（nil=未接线）。
+	OrderStatusHook func(map[string]exec.OrderStatusQuerier)
 
 	mu   sync.Mutex
 	keys map[string]bool // 上轮已注册的 venueKey（diff 用）
@@ -78,6 +81,7 @@ func (m *CexExecutorManager) sync(ctx context.Context) {
 	// =已注册执行器数，休眠 real 执行器使计数 +1（上限语义非白名单，可接受）。
 	winners := cexKeyWinners(cfgs)
 	seen := make(map[string]bool, len(cfgs))
+	osqs := make(map[string]exec.OrderStatusQuerier, len(cfgs)) // D-421 §1.5
 	for i := range cfgs {
 		c := &cfgs[i]
 		base := resolveExchangeBaseURL(*c)
@@ -88,6 +92,7 @@ func (m *CexExecutorManager) sync(ctx context.Context) {
 		exe.SetMarginReservePct(m.marginReservePct)
 		exe.AlertFn = m.alertFn // D-108 P2 T1：平仓被拒 critical 告警注入
 		m.reg.Register(exe)
+		osqs[vk] = exe // D-421：订单级查单面同生命周期镜像
 		if !m.keys[vk] {
 			log.Printf("[cex-exec] register %s (base=%s simulated=%v)", vk, base, c.Simulated)
 		}
@@ -101,4 +106,7 @@ func (m *CexExecutorManager) sync(ctx context.Context) {
 		}
 	}
 	m.keys = seen
+	if m.OrderStatusHook != nil {
+		m.OrderStatusHook(osqs)
+	}
 }
