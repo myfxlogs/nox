@@ -12,7 +12,7 @@ import (
 func New(cfg Config, store *pgstore.Store, service *dashboard.Service, oppTopic *bus.Topic[pgstore.Opportunity], quotes *bus.QuoteBus) *Engine {
 	cp := NewControlPlane(store)
 	cp.SetLiveGateChecker(cfg.LiveGateChecker) // D-195-C1：LIVE 导出门注入（nil 安全）
-	return &Engine{
+	e := &Engine{
 		cfg:              cfg,
 		store:            store,
 		service:          service,
@@ -28,4 +28,8 @@ func New(cfg Config, store *pgstore.Store, service *dashboard.Service, oppTopic 
 		revivalAlertSent: make(map[string]time.Time), // D-256-A S5：复活扳机告警去重
 		kickCh:           make(chan struct{}, 1),     // D-107 P4：buffered(1) 非阻塞 send = 事件合并
 	}
+	// D-403 S3：热重载指针初值=启动加载结果（cfg.XAssetAllowCombos，setup 期 xassetAllowFromTable 产出）。
+	initAllow := cfg.XAssetAllowCombos
+	e.xassetAllow.Store(&initAllow)
+	return e
 }

@@ -93,7 +93,7 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 		if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
 			sellCanonical = *opp.CanonicalSell
 		}
-		if xassetSpec = exec.MatchXAssetComboAllow(e.cfg.XAssetAllowCombos, opp.Canonical, sellCanonical, opp.VenueBuy, opp.VenueSell); xassetSpec == nil {
+		if xassetSpec = exec.MatchXAssetComboAllow(e.xassetSpecs(), opp.Canonical, sellCanonical, opp.VenueBuy, opp.VenueSell); xassetSpec == nil {
 			log.Printf("[autotrade] skip %s: XASSET_CARRY combo not in allowlist (%s/%s %s×%s)", opp.ID, opp.Canonical, sellCanonical, opp.VenueBuy, opp.VenueSell)
 			return
 		}

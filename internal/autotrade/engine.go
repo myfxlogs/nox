@@ -4,10 +4,12 @@ import (
 	"context"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"arb/internal/bus"
 	"arb/internal/dashboard"
+	"arb/internal/exec"
 	"arb/internal/safego"
 	"arb/internal/settlement"
 	"arb/internal/store/pgstore"
@@ -23,12 +25,16 @@ type ZeroSettlementDetector interface {
 
 // Engine 自动交易引擎：三 loop → gate → 执行 → 自动平仓 → 策略淘汰（D-070/D-072）。
 type Engine struct {
-	cfg      Config
-	store    *pgstore.Store
-	service  *dashboard.Service
-	oppTopic *bus.Topic[pgstore.Opportunity]
-	quotes   *bus.QuoteBus // 实时报价（D-070 均值回归平仓用）
-	gate     *Gate         // 统一开仓门禁（D-072）
+	cfg   Config
+	store *pgstore.Store
+	// D-403 S3：XASSET 白名单热重载读点（atomic 指针整体替换；初值=启动加载结果，
+	// approve RPC 后经 ReloadXAssetAllowCombos 免重启生效）。读侧 handleOpportunity
+	// 高频 vs 写侧 approve 低频——atomic Load/Store 无锁竞态安全（S6 race ×3 强制）。
+	xassetAllow atomic.Pointer[[]exec.XAssetComboAllowSpec]
+	service     *dashboard.Service
+	oppTopic    *bus.Topic[pgstore.Opportunity]
+	quotes      *bus.QuoteBus // 实时报价（D-070 均值回归平仓用）
+	gate        *Gate         // 统一开仓门禁（D-072）
 
 	// D-182 S1：零结算检测器（scanAndClose 周期对活跃仓检测恒零 → settled=0）。
 	// nil = 未注入（跳过零检测，向后兼容）。
