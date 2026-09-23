@@ -27,7 +27,7 @@ func TestWriteCloseCashflows_WriterFailure_ReturnsError(t *testing.T) {
 	p.cashflowWriter = func(ctx context.Context, c *pgstore.Cashflow) (bool, error) {
 		return false, errors.New("模拟现金流写入失败")
 	}
-	err := p.writeCloseCashflows(ctx, 1, 0, "vA:mt5", 0.5, 1.0, 1.0)
+	err := p.writeCloseCashflows(ctx, 1, 0, "vA:mt5", 0.5, 1.0, 0, 1.0)
 	if err == nil {
 		t.Fatal("cashflowWriter 失败时应返回 error")
 	}
@@ -117,7 +117,7 @@ func TestWriteCloseCashflows_D193A_FactFields(t *testing.T) {
 		return true, nil // 首次插入 won=true
 	}
 	// 写 swap cashflow（posID=1, legNo=0, venue="52993526:mt5"）；commission=0 只写 swap 一条
-	if err := p.writeCloseCashflows(ctx, 1, 0, "52993526:mt5", 0.5, 0, 1.0); err != nil {
+	if err := p.writeCloseCashflows(ctx, 1, 0, "52993526:mt5", 0.5, 0, 0, 1.0); err != nil {
 		t.Fatalf("writeCloseCashflows: %v", err)
 	}
 	if len(captured) != 1 {
@@ -132,9 +132,9 @@ func TestWriteCloseCashflows_D193A_FactFields(t *testing.T) {
 	if !strings.HasPrefix(*cf.EventKey, wantPrefix) {
 		t.Errorf("event_key=%s, want prefix %s", *cf.EventKey, wantPrefix)
 	}
-	// 决策 3：quality='estimated'
-	if cf.Quality == nil || *cf.Quality != "estimated" {
-		t.Errorf("quality=%v, want estimated", cf.Quality)
+	// D-425：fill/hp 实采值 → quality='actual'（公式回退才 'estimated'）
+	if cf.Quality == nil || *cf.Quality != "actual" {
+		t.Errorf("quality=%v, want actual（实采值，D-425）", cf.Quality)
 	}
 	// 决策 4：source='exec'
 	if cf.Source == nil || *cf.Source != "exec" {
@@ -152,7 +152,7 @@ func TestWriteCloseCashflows_D193A_FactFields(t *testing.T) {
 	p.cashflowWriter = func(ctx context.Context, c *pgstore.Cashflow) (bool, error) {
 		return false, nil // 幂等命中 won=false
 	}
-	if err := p.writeCloseCashflows(ctx, 1, 0, "52993526:mt5", 0.5, 0, 1.0); err != nil {
+	if err := p.writeCloseCashflows(ctx, 1, 0, "52993526:mt5", 0.5, 0, 0, 1.0); err != nil {
 		t.Fatalf("writeCloseCashflows replay: %v", err)
 	}
 }

@@ -18,6 +18,7 @@ type fakeFlattenExecutor struct {
 	venue      string
 	failOnSide string
 	placeCount *int32
+	feeUSD     float64 // D-422：CLOSE 腿 fee_usd 落库测试用
 }
 
 func (e *fakeFlattenExecutor) Key() string { return e.venue }
@@ -28,7 +29,7 @@ func (e *fakeFlattenExecutor) PlaceOrder(ctx context.Context, o Order) (Fill, er
 	if o.Side == e.failOnSide {
 		return Fill{}, fmt.Errorf("fake -1111 precision error (side=%s)", o.Side)
 	}
-	return Fill{OrderID: "fill-" + o.Side, Price: 100.0, Qty: o.Qty}, nil
+	return Fill{OrderID: "fill-" + o.Side, Price: 100.0, Qty: o.Qty, FeeUSD: e.feeUSD}, nil
 }
 func (e *fakeFlattenExecutor) CloseOrder(ctx context.Context, ref OrderRef) (Fill, error) {
 	return Fill{}, fmt.Errorf("cex: use PlaceOrder")

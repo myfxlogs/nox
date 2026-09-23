@@ -127,6 +127,11 @@ func (r *Reconciler) findHistoryQuerier(venueKey string) OrderHistoryQuerier {
 	return nil
 }
 
+// HasHistoryQuerier D-422：该 venue 是否有已注册历史查证器（含 D-416 DB 账户动态注册）。
+func (r *Reconciler) HasHistoryQuerier(venueKey string) bool {
+	return r.findHistoryQuerier(venueKey) != nil
+}
+
 // OpenedByVenueKey 按 venueKey 查该 venue 在仓订单（修复⑫：exec G1 回读门面）。
 // 未注册该 venue（含 CEX）→ error（调用方 fail-open 跳过）。锁语义对齐 snapshot()。
 func (r *Reconciler) OpenedByVenueKey(ctx context.Context, venueKey string) ([]VenueOrder, error) {

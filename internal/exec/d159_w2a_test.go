@@ -278,13 +278,14 @@ func TestAutoFlattenGoesThroughClosePosition(t *testing.T) {
 	}
 }
 
-// TestClosePosition_EstimatedMark D-159 W3a R4 A10 exec 侧：
-// ①calibrator 接线+部分校准失败（复用 fakePnLCalibrator 未全命中构造）→ ClosePosition 后 note 含 "pnl_estimated"
+// TestClosePosition_EstimatedMark D-159 W3a R4 A10 exec 侧 + D-422 语义更新：
+// ①calibrator 接线但纯 CEX 腿（无可校准腿，公式价即权威）→ ClosePosition 后 note 不含 "pnl_estimated"
 // ②calibrator nil → ClosePosition 后 note 不含 "pnl_estimated"（合法配置，用同步公式）
+// （MT 可校准腿 miss → 写 note 的路径由 TestD422_CalibrateMTMiss 覆盖）
 // 复用 W2a TestClosePosition_ResidualCheck_Fails 的 fake 基建（fakeFlattenExecutor+fakeVerifier）。
 // 反证：删 pipeline_legs.go else 分支的 SetPositionNote → 分支①红（note 不含 pnl_estimated）。
 func TestClosePosition_EstimatedMark(t *testing.T) {
-	// 分支①：calibrator 接线+部分失败 → note 含 pnl_estimated
+	// 分支①：calibrator 接线但纯 CEX 腿 → note 不含 pnl_estimated（D-422：公式价即权威）
 	t.Run("calibrated_partial_fail", func(t *testing.T) {
 		s := testStore(t)
 		ctx := context.Background()
@@ -327,8 +328,9 @@ func TestClosePosition_EstimatedMark(t *testing.T) {
 		if pos.Status != "CLOSED" {
 			t.Fatalf("期望 CLOSED（残量归零），实际 %s", pos.Status)
 		}
-		if !strings.Contains(pos.Note, "pnl_estimated") {
-			t.Errorf("calibrator 接线+部分失败 → note 应含 'pnl_estimated'，实际 note=%q", pos.Note)
+		// D-422：纯 CEX 腿无历史查证器=公式价即权威，非估算——不再写 pnl_estimated。
+		if strings.Contains(pos.Note, "pnl_estimated") {
+			t.Errorf("纯 CEX 仓（无可校准腿）→ note 不应含 'pnl_estimated'，实际 note=%q", pos.Note)
 		}
 	})
 

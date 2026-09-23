@@ -93,23 +93,22 @@ func TestD408_ResumeClose_EarlyLegPnL(t *testing.T) {
 	}
 }
 
-// TestD408_ResumeClose_CalibrateOverride 既有语义保留：calibrate 全腿命中仍覆盖。
+// TestD408_ResumeClose_CalibrateOverride D-422 混合校准：MT 腿权威命中覆盖，
+// CEX 腿公式价并入（okx 无查证器=非校准腿，(4000−3900)×1=+100）→ auth=−800+100=−700。
 func TestD408_ResumeClose_CalibrateOverride(t *testing.T) {
 	s := testStore(t)
 	d408Truncate(t, s)
 	posID := d408Seed498(t, s)
 	p := d408Pipeline(s)
-	// 双腿 ticket 均命中 → calibrate 全命中覆盖（auth=+1000−800=+200，与同步 +20 无关）。
 	p.SetPnLCalibrator(&fakePnLCalibrator{results: map[string]*HistoryPnL{
-		"okx:perp:okx-t1":   {Profit: 1000.0},
 		"3001157:mt5:mt-t2": {Profit: -800.0, ClosePrice: 4180.0},
 	}})
 	if err := p.ResumeClose(context.Background(), posID); err != nil {
 		t.Fatalf("ResumeClose: %v", err)
 	}
 	pos, _ := s.GetPosition(context.Background(), posID)
-	if pos.RealizedPnl == nil || math.Abs(*pos.RealizedPnl-200.0) > 0.01 {
-		t.Fatalf("calibrate 全命中应覆盖为 auth=+200, got %v", pos.RealizedPnl)
+	if pos.RealizedPnl == nil || math.Abs(*pos.RealizedPnl-(-700.0)) > 0.01 {
+		t.Fatalf("混合校准应覆盖为 auth=−800+100=−700, got %v", pos.RealizedPnl)
 	}
 }
 
