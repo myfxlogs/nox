@@ -25,7 +25,7 @@ func TestD341_EntryGateSnapshot(t *testing.T) {
 		VALUES ('XAUUSDT-XAU', 4355, 4356, 4354, 4355, 12, 5, 3, 0.001, 21.9, 1.0, 24.9, 9, 7)`); err != nil {
 		t.Fatalf("seed monitor: %v", err)
 	}
-	if err := s.EnsureEntryGateSnapshot(ctx, posID, "XAUUSDT-XAU", entryGateSnapshotMaxAge); err != nil {
+	if err := s.EnsureEntryGateSnapshot(ctx, posID, "XAUUSDT-XAU", "binance:perp", "3001157:mt5", entryGateSnapshotMaxAge); err != nil {
 		t.Fatalf("snapshot: %v", err)
 	}
 	var noise, floor *float64
@@ -40,7 +40,7 @@ func TestD341_EntryGateSnapshot(t *testing.T) {
 	if _, err := s.Pool().Exec(ctx, `UPDATE fin_xasset_monitor SET noise_bps=99`); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.EnsureEntryGateSnapshot(ctx, posID, "XAUUSDT-XAU", entryGateSnapshotMaxAge); err != nil {
+	if err := s.EnsureEntryGateSnapshot(ctx, posID, "XAUUSDT-XAU", "binance:perp", "3001157:mt5", entryGateSnapshotMaxAge); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Pool().QueryRow(ctx,
@@ -59,7 +59,7 @@ func TestD341_EntryGateSnapshot(t *testing.T) {
 	if _, err := s.Pool().Exec(ctx, `TRUNCATE fin_xasset_monitor`); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.EnsureEntryGateSnapshot(ctx, pos2, "XAUUSDT-XAU", entryGateSnapshotMaxAge); err != nil {
+	if err := s.EnsureEntryGateSnapshot(ctx, pos2, "XAUUSDT-XAU", "binance:perp", "3001157:mt5", entryGateSnapshotMaxAge); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Pool().QueryRow(ctx,
