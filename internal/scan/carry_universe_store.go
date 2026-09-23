@@ -40,3 +40,28 @@ func (p *PGStore) ReplaceCarryUniverse(ctx context.Context, rows []pgstore.Carry
 func (p *PGStore) FactsWindowStats(ctx context.Context, kind, venue, symbol string, window time.Duration) (float64, error) {
 	return p.S.FactsWindowStats(ctx, kind, venue, symbol, window)
 }
+
+// InsertIntraTrade D-425：日内轨透传（独立沙箱轨存取）。
+func (p *PGStore) InsertIntraTrade(ctx context.Context, r *pgstore.IntraTrade) (int64, error) {
+	return p.S.InsertIntraTrade(ctx, r)
+}
+
+// CloseIntraTrade D-425：日内轨出场透传。
+func (p *PGStore) CloseIntraTrade(ctx context.Context, id int64, exitPx float64, reason string, slippageBps, pnl float64) error {
+	return p.S.CloseIntraTrade(ctx, id, exitPx, reason, slippageBps, pnl)
+}
+
+// ListOpenIntraTrades D-425：日内轨在开仓透传。
+func (p *PGStore) ListOpenIntraTrades(ctx context.Context) ([]pgstore.IntraTrade, error) {
+	return p.S.ListOpenIntraTrades(ctx)
+}
+
+// IntraDayRealizedPnl D-425：日内已实现盈亏透传（熔断计账面）。
+func (p *PGStore) IntraDayRealizedPnl(ctx context.Context, day time.Time) (float64, error) {
+	return p.S.IntraDayRealizedPnl(ctx, day)
+}
+
+// TicksWindow D-425：ticks 窗口读面透传（信号与回放门数据源）。
+func (p *PGStore) TicksWindow(ctx context.Context, venue, symbol string, since time.Time) ([]pgstore.TickRow, error) {
+	return p.S.TicksWindow(ctx, venue, symbol, since)
+}

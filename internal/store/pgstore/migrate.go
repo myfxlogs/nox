@@ -128,6 +128,7 @@ var migrationFiles = []struct {
 	{130, migrations.CashflowsLegDayEventKeySQL},       // D-422 R1：腿日唯一索引含 event_key（OPEN费+CLOSE佣金分键）
 	{131, migrations.StrategyReasonD424SQL},            // D-424：收敛型退出腿序修正归因作废注记
 	{132, migrations.DataPlaneVenueSQL},                // D-420 S2/S3：fin_cex_depth+油族 CL 映射对齐
+	{133, migrations.PaperIntraTradesSQL},              // D-425 S1：日内单品高风险轨纸面表
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

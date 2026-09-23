@@ -229,4 +229,6 @@ var (
 	StrategyReasonD424SQL string
 	//go:embed 0132_data_plane_venue.sql
 	DataPlaneVenueSQL string
+	//go:embed 0133_paper_intra_trades.sql
+	PaperIntraTradesSQL string
 )
