@@ -127,7 +127,7 @@ var migrationFiles = []struct {
 	{129, migrations.XassetMonitorVenueSQL},            // D-423：fin_xasset_monitor cex/mt venue 三元组（存量=binance:perp×3001157:mt5）
 	{130, migrations.CashflowsLegDayEventKeySQL},       // D-422 R1：腿日唯一索引含 event_key（OPEN费+CLOSE佣金分键）
 	{131, migrations.StrategyReasonD424SQL},            // D-424：收敛型退出腿序修正归因作废注记
-	{131, migrations.DataPlaneVenueSQL},                // D-420 S2/S3：fin_cex_depth+油族 CL 映射对齐
+	{132, migrations.DataPlaneVenueSQL},                // D-420 S2/S3：fin_cex_depth+油族 CL 映射对齐
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
