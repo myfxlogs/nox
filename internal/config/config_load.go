@@ -33,7 +33,8 @@ func Load() *Config {
 		CommissionCEXTakerBps:       envFloat("ARB_COMMISSION_CEX_TAKER_BPS", 5.0), // D-145：binance/okx VIP0 taker 实测 0.05%=5bps（账户级真值待真金 key 后 commissionFor 精确化）
 		// D-159 W4a T6：CommissionTaker map 默认 5.0（与 CommissionCEXTakerBps 对齐，D-145 意图生效）。
 		// W0 T6 铁证：旧默认 10.0 使 CommissionCEXTakerBps 5.0 永不回退，opportunities 表 79 条 CEX×CEX commission_cost=20.0（10×2 腿）。
-		XAssetCexFeeBps: envFloat("ARB_XASSET_CEX_FEE_BPS", 5.0), // D-391：回本列「本」CEX fee NULL 回退估算率
+		XAssetCexFeeBps:  envFloat("ARB_XASSET_CEX_FEE_BPS", 5.0),  // D-391：回本列「本」CEX fee NULL 回退估算率
+		MarginReservePct: envFloat("ARB_MARGIN_RESERVE_PCT", 0.20), // D-415：开仓资金预检安全垫
 		CommissionTaker: map[string]float64{
 			"binance": envFloat("ARB_COMMISSION_TAKER_BINANCE", 5.0),
 			"okx":     envFloat("ARB_COMMISSION_TAKER_OKX", 5.0),

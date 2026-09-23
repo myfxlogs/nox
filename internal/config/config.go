@@ -38,6 +38,7 @@ type Config struct {
 	CommissionCEXTakerBps float64            // CEX taker 单腿回退默认
 	CommissionTaker       map[string]float64 // CEX 逐交易所 taker（binance/okx/gate）
 	XAssetCexFeeBps       float64            // D-391：回本「本」CEX fee 估算率（缺省 5.0），fee_usd NULL 回退
+	MarginReservePct      float64            // D-415：开仓资金预检可用额安全垫（缺省 0.20），venue 原生校验乘 (1−pct)
 
 	// === MT swap 采集（§3.6）===
 	SwapRefresh time.Duration // swap 轮询间隔（默认 1h，swap 变化慢）
