@@ -217,7 +217,16 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64) error {
 		return fmt.Errorf("residual legs after close: %s", strings.Join(residual, ", "))
 	}
 
-	// PnL 校准
+	// D-408 S1：realized_pnl=持久化 CLOSE 腿汇总（单一事实源=落库腿数据）——
+	// 循环内累加漏前次已平腿/回填腿（两条 continue 跳过，498 实证 −1.42→−12.36）。
+	// closeLegs 重读在循环后：回填腿已落库在此可见（内存 closeByLegNo 不含回填腿）。
+	closeLegs, err := p.store.ListPositionLegsByPhase(ctx, posID, "CLOSE")
+	if err != nil {
+		return fmt.Errorf("list close legs: %w", err)
+	}
+	totalPnL = p.sumClosedLegsPnL(ctx, posID, legs, closeLegs, fx)
+
+	// PnL 校准（D-159 R4 全命中才覆盖语义不动）
 	if p.pnlCalibrator != nil {
 		if authPnL, ok := p.calibratePnL(ctx, legs, fx); ok {
 			log.Printf("[exec] position %d PnL calibrated: sync=%.2f → auth=%.2f", posID, totalPnL, authPnL)
@@ -228,10 +237,6 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64) error {
 	}
 
 	// CLOSE leg 数量完整性校验
-	closeLegs, err := p.store.ListPositionLegsByPhase(ctx, posID, "CLOSE")
-	if err != nil {
-		return fmt.Errorf("list close legs: %w", err)
-	}
 	openFilled, closeFilled := 0, 0
 	for _, l := range legs {
 		if l.Phase == "OPEN" && l.Status == "FILLED" {

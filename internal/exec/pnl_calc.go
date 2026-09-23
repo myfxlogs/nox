@@ -2,6 +2,7 @@ package exec
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -27,6 +28,14 @@ func canonicalFromOppID(oppID string) string {
 // fx：计价币→USD 换算（D-105 T2）；fx=0（缺失）→ PnL=0（宁缺勿虚增，调用方发 critical alert）。
 // 开仓价缺失 → PnL=0（不猜，留对账纠偏）。
 func (p *Pipeline) calcLegPnL(leg pgstore.PositionLeg, fill Fill, fx float64) float64 {
+	// D-311 R6：EffectiveQty=成交口径——CEX=基础币（cs=1.0 两时代全对）、MT=手数（×cs）。
+	return p.legPricePnL(leg, fill.Price, leg.EffectiveQty(), fx)
+}
+
+// legPricePnL 价格差 PnL 核（D-408 提取共享：新平腿 fill 价与持久化 CLOSE 腿价同公式）。
+// 开仓价缺失 → 0（不猜，留对账纠偏）；fx=0 → 0（宁缺勿虚增，调用方发 critical alert）。
+// D-159 W3a R4：只算价格差 PnL，swap/commission 走 cashflows（双计拆除不动）。
+func (p *Pipeline) legPricePnL(leg pgstore.PositionLeg, closePrice, qty, fx float64) float64 {
 	if leg.PriceActual == nil {
 		return 0
 	}
@@ -40,12 +49,40 @@ func (p *Pipeline) calcLegPnL(leg pgstore.PositionLeg, fill Fill, fx float64) fl
 	if leg.Side == "SELL" {
 		dir = -1.0
 	}
-	// D-311 R6：EffectiveQty=成交口径——CEX=基础币（cs=1.0 两时代全对）、MT=手数（×cs）。
-	priceDiff := (fill.Price - *leg.PriceActual) * leg.EffectiveQty() * cs * dir
-	// D-159 W3a R4：双计拆除——calcLegPnL 只算价格差 PnL，swap/commission 走 cashflows
-	//（pipeline_legs.go 平仓写入）。settlement netPnl = realized_pnl（价格差）+ cashflowsNet（组件）
-	// = 净值一次合成（原 realized 含 swap/commission 再加 cashflowsNet = 双计）。
-	return priceDiff * fx
+	return (closePrice - *leg.PriceActual) * qty * cs * dir * fx
+}
+
+// sumClosedLegsPnL D-408 S1：realized_pnl=持久化 CLOSE 腿汇总（单一事实源=落库腿数据，
+// 初平/重试/回填三路径统一——循环内累加会漏前次已平腿与回填腿，498 实证 −1.42→−12.36）。
+// 每个 OPEN+FILLED 腿的全部 CLOSE FILLED 腿按各自 FilledQty 计（跨尝试部分成交天然覆盖，
+// D-311 R6 同单位）；CLOSE 腿缺 PriceActual → 该腿计 0 + critical alert（宁缺勿虚增）；
+// 无 CLOSE 腿的 OPEN 腿不累计（残腿校验随后拦阻，不静默虚增）。
+func (p *Pipeline) sumClosedLegsPnL(ctx context.Context, posID int64, legs, closeLegs []pgstore.PositionLeg, fx float64) float64 {
+	closesByLegNo := make(map[int16][]pgstore.PositionLeg)
+	for _, cl := range closeLegs {
+		if cl.Status == "FILLED" {
+			closesByLegNo[cl.LegNo] = append(closesByLegNo[cl.LegNo], cl)
+		}
+	}
+	var total float64
+	for _, leg := range legs {
+		if leg.Phase != "OPEN" || leg.Status != "FILLED" {
+			continue
+		}
+		for _, cl := range closesByLegNo[leg.LegNo] {
+			if cl.PriceActual == nil || *cl.PriceActual <= 0 {
+				_ = p.store.InsertAlert(ctx, &posID, "critical",
+					fmt.Sprintf("position %d leg %d CLOSE 腿缺成交价，PnL 计 0（宁缺勿虚增）", posID, leg.LegNo))
+				continue
+			}
+			qty := leg.EffectiveQty()
+			if cl.FilledQty != nil && *cl.FilledQty > 0 {
+				qty = *cl.FilledQty
+			}
+			total += p.legPricePnL(leg, *cl.PriceActual, qty, fx)
+		}
+	}
+	return total
 }
 
 // calibratePnL 回读校准：按 ticket 查历史单权威 PnL（D-077 修复⑪A M1 回读校准）。
