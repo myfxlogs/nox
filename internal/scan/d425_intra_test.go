@@ -153,23 +153,28 @@ func TestD425_R1_SessionGate(t *testing.T) {
 	}
 }
 
-// TestD425_R1_StopExitSlippage 止损滑点模型：跳空穿止损 → reason=stop+slippage_bps=穿口+pnl 负。
+// TestD425_R1_StopExitSlippage 止损滑点模型（R1 口径：带=0.8% 价格）：跳空 −1.2% 穿止损
+// → reason=stop+slippage_bps=穿口+pnl 负；−0.5% 带内不触发（对侧断言防修过头）。
 func TestD425_R1_StopExitSlippage(t *testing.T) {
 	now := time.Now().UTC()
-	series := append(monotonic(100, 1, 60, now.Add(-90*time.Minute)),
-		pgstore.TickRow{Ts: now, Venue: "binance", Symbol: "BTCUSDT", Bid: 98.0, Ask: 98.2}) // 跳空跌破 0.8% 止损带
-	f := &fakeIntraStore{
-		open: []pgstore.IntraTrade{{ID: 1, Baseline: "momentum_break", Symbol: "BTCUSDT", Venue: "binance", Side: "long", Status: "open",
-			EntryTs: now.Add(-2 * time.Hour), EntryPx: 159, Qty: 12.5, NotionalUSD: 2000, MarginUSD: 200, StopPx: 157.72}},
-		ticks: map[string][]pgstore.TickRow{"binance|BTCUSDT": series},
+	mk := func(gapPx float64) *fakeIntraStore {
+		series := append(monotonic(100, 0.05, 60, now.Add(-90*time.Minute)),
+			pgstore.TickRow{Ts: now, Venue: "binance", Symbol: "BTCUSDT", Bid: gapPx, Ask: gapPx + 0.2})
+		return &fakeIntraStore{
+			open: []pgstore.IntraTrade{{ID: 1, Baseline: "momentum_break", Symbol: "BTCUSDT", Venue: "binance", Side: "long", Status: "open",
+				EntryTs: now.Add(-2 * time.Hour), EntryPx: 100, Qty: 20, NotionalUSD: 2000, MarginUSD: 200, StopPx: 99.2}},
+			ticks: map[string][]pgstore.TickRow{"binance|BTCUSDT": series},
+		}
 	}
+	// ① 跳空 −1.2%（价格 98.8 < 止损 99.2）→ stop
+	f := mk(98.8)
 	eng := NewIntraEngine(f, d425Cfg(false))
 	eng.SetNow(func() time.Time { return now })
 	if _, err := eng.Step(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if len(f.closed) != 1 || f.closed[0].ExitReason != "stop" {
-		t.Fatalf("跳空穿止损应 reason=stop，got %+v", f.closed)
+		t.Fatalf("−1.2%% 穿 0.8%% 带应 reason=stop，got %+v", f.closed)
 	}
 	c := f.closed[0]
 	if c.SlippageBps == nil || *c.SlippageBps <= 0 {
@@ -177,6 +182,16 @@ func TestD425_R1_StopExitSlippage(t *testing.T) {
 	}
 	if c.PnlUSD == nil || *c.PnlUSD >= 0 {
 		t.Errorf("止损 pnl 应为负，got %v", c.PnlUSD)
+	}
+	// ② −0.5%（99.5 > 99.2 带内）→ 不触发
+	f = mk(99.5)
+	eng = NewIntraEngine(f, d425Cfg(false))
+	eng.SetNow(func() time.Time { return now })
+	if _, err := eng.Step(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.closed) != 0 {
+		t.Errorf("−0.5%% 带内不应止损，closed=%v", f.closes)
 	}
 }
 

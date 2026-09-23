@@ -103,7 +103,8 @@ func (e *IntraEngine) Step(ctx context.Context) (IntraStepReport, error) {
 		if t.Side == "short" {
 			loss = -loss
 		}
-		stopDist := IntraStopBudgetFrac * 0.10 // 价格带=0.8%×(10x 下保证金 10% 口径)
+		// R1 口径终裁：单位链=保证金 10% →10x 杠杆→1% 价格；止损带=预算 80%=0.8% 价格+0.2% 滑点余量。
+		stopDist := IntraStopBudgetFrac * 0.10 / IntraLeverage // 价格带=0.8%
 		if loss <= -stopDist {
 			if err := e.closeTrade(ctx, t, now, "stop", &rep); err != nil {
 				return rep, err
@@ -266,8 +267,8 @@ func (e *IntraEngine) closeTrade(ctx context.Context, t pgstore.IntraTrade, now 
 	return nil
 }
 
-// ReplayGate D-425 回放门（§1 双读之一·上线前）：历史 ticks dry-run 重放（零落库），
-// P100=最差单订单亏损/保证金（含双侧 taker 费）——≤10% 才准入纸面，不达标拒。
+// ReplayGate D-425 回放门（§1 双读之一·上线前）：历史 ticks dry-run 重放（零落库）；P100=最差单订单亏损/保证金
+// （含双侧 taker 费）阈值 0.10=保证金 10%（R1：10x 下=1% 价格带，>1% 案例拒）；runtime 门升 v2 真金前置硬条件（复审 §3）。
 // n=重放成交笔数（样本不足=门不可判，返回 ok=false 由调用方如实呈报）。
 func (e *IntraEngine) ReplayGate(ctx context.Context, venue, symbol, baseline string, since time.Time) (p100 float64, ok bool, n int, err error) {
 	ticks, err := e.st.TicksWindow(ctx, venue, symbol, since)

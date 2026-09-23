@@ -126,7 +126,8 @@ func simulate(baseline string, ticks []pgstore.TickRow, cfg IntraConfig, start t
 				}
 				continue
 			}
-			stopDist = math.Max(0.003, math.Min(0.40*rng, 0.015))
+			// R1：价格止损带上限=预算 80%×(保证金 10%/10x)=0.8% 价格（禁 8% 名义误读）
+			stopDist = math.Max(0.003, math.Min(0.40*rng, IntraStopBudgetFrac*0.10/IntraLeverage))
 			if mid > hi*(1+0.0005) && i-entryAllowGap(ticks, i) >= 0 {
 				out = append(out, simEvent{Enter: true, Baseline: baseline, Side: "long", Ts: tk.Ts, Px: tk.Ask, StopDist: stopDist, Note: fmt.Sprintf("break hi=%.4f", hi)})
 				inPos, side, entryPx = true, "long", tk.Ask
@@ -159,10 +160,10 @@ func simulate(baseline string, ticks []pgstore.TickRow, cfg IntraConfig, start t
 				continue
 			}
 			if z > 2 {
-				out = append(out, simEvent{Enter: true, Baseline: baseline, Side: "short", Ts: tk.Ts, Px: tk.Bid, StopDist: IntraStopBudgetFrac * 0.10, Note: fmt.Sprintf("z=%.2f", z)})
+				out = append(out, simEvent{Enter: true, Baseline: baseline, Side: "short", Ts: tk.Ts, Px: tk.Bid, StopDist: IntraStopBudgetFrac * 0.10 / IntraLeverage, Note: fmt.Sprintf("z=%.2f", z)})
 				inPos, side, entryPx = true, "short", tk.Bid
 			} else if z < -2 {
-				out = append(out, simEvent{Enter: true, Baseline: baseline, Side: "long", Ts: tk.Ts, Px: tk.Ask, StopDist: IntraStopBudgetFrac * 0.10, Note: fmt.Sprintf("z=%.2f", z)})
+				out = append(out, simEvent{Enter: true, Baseline: baseline, Side: "long", Ts: tk.Ts, Px: tk.Ask, StopDist: IntraStopBudgetFrac * 0.10 / IntraLeverage, Note: fmt.Sprintf("z=%.2f", z)})
 				inPos, side, entryPx = true, "long", tk.Ask
 			}
 		}
