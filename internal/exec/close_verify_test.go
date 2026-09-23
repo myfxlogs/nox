@@ -3,18 +3,37 @@ package exec
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 
 	"arb/internal/store/pgstore"
 )
 
 // fakeVerifier 测试用 PositionVerifier（D-077 修复⑩ G1）。
+// drainAfter>0：每 venue 前 drainAfter 次查询返回 orders、之后返回空——
+// 建模「平仓后 venue 已无该腿」（D-417：CEX 腿按 Symbol+Side 匹配残余，
+// 静态 orders 会被残余核验如实拦下）。
 type fakeVerifier struct {
-	orders map[string][]OpenedOrder // venueKey → 在仓订单
-	err    error
+	orders     map[string][]OpenedOrder // venueKey → 在仓订单
+	err        error
+	drainAfter int
+	mu         sync.Mutex
+	calls      map[string]int
 }
 
 func (f *fakeVerifier) QueryOpenedOrders(ctx context.Context, venueKey string) ([]OpenedOrder, error) {
+	if f.drainAfter > 0 {
+		f.mu.Lock()
+		if f.calls == nil {
+			f.calls = map[string]int{}
+		}
+		f.calls[venueKey]++
+		drain := f.calls[venueKey] > f.drainAfter
+		f.mu.Unlock()
+		if drain {
+			return nil, f.err
+		}
+	}
 	return f.orders[venueKey], f.err
 }
 
@@ -106,21 +125,17 @@ func TestCheckResidualLegs_NilVerifier(t *testing.T) {
 	}
 }
 
-// TestD120_CEXVenueSkipVerifier CEX venue verifier 报错 → 跳过不 fail-closed（D-120）。
-// CEX 交易所订单状态权威，ClosePosition 流程已确认平仓 FILLED=已平仓。
-func TestD120_CEXVenueSkipVerifier(t *testing.T) {
+// TestD120_CEXVenueFailClosed D-417：CEX venue verifier 报错 → fail-closed 返 err
+// （D-120 豁免已废——CEXPositionQuerier D-121 起在册，查询失败与 MT 同权）。
+func TestD120_CEXVenueFailClosed(t *testing.T) {
 	legs := []pgstore.PositionLeg{
 		{Phase: "OPEN", Status: "FILLED", Venue: "okx:perp", OrderID: "3869140637289013248"},
 		{Phase: "OPEN", Status: "FILLED", Venue: "binance:perp", OrderID: "16774225215"},
 	}
-	v := &fakeVerifier{err: fmt.Errorf("no querier for venue")}
+	v := &fakeVerifier{err: fmt.Errorf("venue 503")}
 	p := &Pipeline{verifier: v}
-	residual, err := p.checkResidualLegs(context.Background(), legs)
-	if err != nil {
-		t.Errorf("CEX venue skip: want nil err, got %v", err)
-	}
-	if len(residual) != 0 {
-		t.Errorf("CEX venue skip: want 0 residual, got %v", residual)
+	if _, err := p.checkResidualLegs(context.Background(), legs); err == nil {
+		t.Fatal("CEX venue query err must fail-closed, got nil")
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"arb/internal/exec"
 	"arb/internal/store/pgstore"
 )
 
@@ -22,10 +23,10 @@ func TestD108P2_LeggedZombie_VenueHit(t *testing.T) {
 		{PositionID: 300, LegNo: 1, Phase: "OPEN", Venue: "vB:mt5", OrderID: "", Side: "SELL", Qty: 1.0, Status: "FAILED"},
 	}
 	// D-159 W2a R3-7：复合 key（venue_key+":"+ticket）
-	venueOrders := map[string]VenueOrder{"vA:mt5:T300": {Ticket: "T300", VenueKey: "vA:mt5", Symbol: "AUDJPY", Side: "BUY", Volume: 1.0}}
+	orders := map[string][]exec.OpenedOrder{"vA:mt5": {{Ticket: "T300", Symbol: "AUDJPY", Side: "BUY", Volume: 1.0}}}
 
 	r := &Reconciler{store: fs, runTimeout: 5 * time.Second}
-	if err := r.autoFailLeggedZombie(context.Background(), pos, venueOrders); err != nil {
+	if err := r.autoFailLeggedZombie(context.Background(), pos, orders); err != nil {
 		t.Fatalf("autoFailLeggedZombie: %v", err)
 	}
 	// 不应置 FAILED
@@ -56,10 +57,10 @@ func TestD108P2_LeggedZombie_VenueMiss(t *testing.T) {
 		{PositionID: 301, LegNo: 0, Phase: "OPEN", Venue: "vA:mt5", OrderID: "T301", Side: "BUY", Qty: 1.0, Status: "FILLED"},
 		{PositionID: 301, LegNo: 1, Phase: "OPEN", Venue: "vB:mt5", OrderID: "", Side: "SELL", Qty: 1.0, Status: "FAILED"},
 	}
-	venueOrders := map[string]VenueOrder{} // 不含 T301 = 未命中
+	orders := map[string][]exec.OpenedOrder{"vA:mt5": {}} // venue 查空 = 未命中
 
 	r := &Reconciler{store: fs, runTimeout: 5 * time.Second}
-	if err := r.autoFailLeggedZombie(context.Background(), pos, venueOrders); err != nil {
+	if err := r.autoFailLeggedZombie(context.Background(), pos, orders); err != nil {
 		t.Fatalf("autoFailLeggedZombie: %v", err)
 	}
 	// 应置 FAILED
@@ -95,10 +96,10 @@ func TestD108P2_LeggedZombie_NoFilledLeg(t *testing.T) {
 	fs.legs[302] = []*pgstore.PositionLeg{
 		{PositionID: 302, LegNo: 0, Phase: "OPEN", Venue: "vA:mt5", OrderID: "T302", Side: "BUY", Qty: 1.0, Status: "FAILED"},
 	}
-	venueOrders := map[string]VenueOrder{"T302": {Ticket: "T302"}}
+	orders := map[string][]exec.OpenedOrder{"vA:mt5": {{Ticket: "T302"}}}
 
 	r := &Reconciler{store: fs, runTimeout: 5 * time.Second}
-	if err := r.autoFailLeggedZombie(context.Background(), pos, venueOrders); err != nil {
+	if err := r.autoFailLeggedZombie(context.Background(), pos, orders); err != nil {
 		t.Fatalf("autoFailLeggedZombie: %v", err)
 	}
 	found := false

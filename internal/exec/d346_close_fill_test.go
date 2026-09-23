@@ -41,7 +41,7 @@ func TestD346_CloseFill_PlaceOrderPath(t *testing.T) {
 	reg.Register(&fakeFlattenExecutor{venue: "okx:perp"}) // fill: Price=100.0, Qty=下单量
 	p := NewPipeline(reg, s, bus.New(), RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 100000, MaxLegImbalancePct: 50}, "demo")
 	// verifier：腿仍在仓（CEX 按 Symbol+Side 匹配；Ticket 异于 OPEN OrderID 防 residual 误报）
-	p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{
+	p.verifier = &fakeVerifier{drainAfter: 1, orders: map[string][]OpenedOrder{
 		"okx:perp": {{Symbol: "BTC-USDT-SWAP", Side: "BUY", Ticket: "broker-side-view"}},
 	}}
 

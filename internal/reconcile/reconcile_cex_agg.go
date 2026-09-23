@@ -13,6 +13,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"time"
 )
 
 // cexAggKey 聚合键单点收口（R0-B2）：position_legs.venue 与 querier VenueKey 同形
@@ -85,6 +86,15 @@ func (r *Reconciler) reconcileCEXAggregate(ctx context.Context, cexLocal, cexVen
 		local, venueQty := cexLocal[k], cexVenue[k]
 		switch {
 		case local == 0 && venueQty > 0:
+			// D-417 §1.4 降级实现：系统外单分支 log→warn 告警（同指纹 24h 冷却，宁可过警
+			// 不漏警——收编漏检残余/误杀后敞口原本仅 log 隐身）。择优实现（近 24h 终态腿
+			// 吻合才告警）需新 store 查询面>15 行，按 SSOT 降级条款取本方案。
+			if last, ok := r.cexForeignWarned[k]; !ok || r.nowFn().Sub(last) > 24*time.Hour {
+				r.cexForeignWarned[k] = r.nowFn()
+				r.insertAlertCtx(ctx, "warn",
+					fmt.Sprintf("venue %s 持仓 %s %s vol=%f 为系统外单（CEX 无 comment 源判别），不追踪——若为收编漏检残余请人工核查",
+						venue, symbol, side, venueQty))
+			}
 			log.Printf("[reconcile] venue %s 持仓 %s %s vol=%f 为系统外单（CEX 无 comment 源判别），不追踪",
 				venue, symbol, side, venueQty)
 		case local > 0 && math.Abs(venueQty-local) <= cexAggTol(venueQty, local):

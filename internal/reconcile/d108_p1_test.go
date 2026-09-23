@@ -5,14 +5,14 @@ package reconcile
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
+	"arb/internal/exec"
 	"arb/internal/store/pgstore"
 )
 
-// TestD108_AutoFailZombie_VenueHit 命中 venue → 不置 FAILED + warn 告警（交人工/对账）。
+// TestD108_AutoFailZombie_VenueHit 命中 venue（全腿在场）→ D-417 §1.3b 推进 OPEN。
 func TestD108_AutoFailZombie_VenueHit(t *testing.T) {
 	fs := newFakeStore()
 	pos := &pgstore.Position{ID: 200, Status: "OPENING", OpportunityID: "SWAPARB:AUDJPY:vA:vB:1"}
@@ -22,28 +22,15 @@ func TestD108_AutoFailZombie_VenueHit(t *testing.T) {
 		{PositionID: 200, LegNo: 0, Phase: "OPEN", Venue: "vA:mt5", OrderID: "T100", Side: "BUY", Qty: 1.0, Status: "FILLED"},
 	}
 	// D-159 W2a R3-7：复合 key（venue_key+":"+ticket）
-	venueOrders := map[string]VenueOrder{"vA:mt5:T100": {Ticket: "T100", VenueKey: "vA:mt5", Symbol: "AUDJPY", Side: "BUY", Volume: 1.0}}
+	orders := map[string][]exec.OpenedOrder{"vA:mt5": {{Ticket: "T100", Symbol: "AUDJPY", Side: "BUY", Volume: 1.0}}}
 
 	r := &Reconciler{store: fs, runTimeout: 5 * time.Second}
-	if err := r.autoFailOPENINGZombie(context.Background(), pos, venueOrders); err != nil {
+	if err := r.autoFailOPENINGZombie(context.Background(), pos, orders); err != nil {
 		t.Fatalf("autoFailOPENINGZombie: %v", err)
 	}
-	// 不应置 FAILED
-	for _, id := range fs.failedIDs {
-		if id == 200 {
-			t.Fatal("venue hit: position should NOT be FAILED, but was")
-		}
-	}
-	// 应有 warn 告警
-	found := false
-	for _, a := range fs.alerts {
-		if a.level == "warn" && strings.Contains(a.msg, "不归档 FAILED") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("venue hit: expected warn alert '不归档 FAILED', got: %v", fs.alerts)
+	// D-417 §1.3b：全腿在场 → 推进 OPEN（非 FAILED 非滞留）
+	if fs.statusCalls[200] != "OPEN" {
+		t.Fatalf("venue hit all legs: want OPEN, got statusCalls=%v", fs.statusCalls)
 	}
 }
 
@@ -56,10 +43,10 @@ func TestD108_AutoFailZombie_VenueMiss(t *testing.T) {
 	fs.legs[201] = []*pgstore.PositionLeg{
 		{PositionID: 201, LegNo: 0, Phase: "OPEN", Venue: "vA:mt5", OrderID: "T200", Side: "BUY", Qty: 1.0, Status: "FILLED"},
 	}
-	venueOrders := map[string]VenueOrder{} // 空 = 未命中
+	orders := map[string][]exec.OpenedOrder{"vA:mt5": {}} // venue 查空 = 未命中
 
 	r := &Reconciler{store: fs, runTimeout: 5 * time.Second}
-	if err := r.autoFailOPENINGZombie(context.Background(), pos, venueOrders); err != nil {
+	if err := r.autoFailOPENINGZombie(context.Background(), pos, orders); err != nil {
 		t.Fatalf("autoFailOPENINGZombie: %v", err)
 	}
 	// 应置 FAILED
@@ -84,10 +71,10 @@ func TestD108_AutoFailZombie_NoTicketLeg(t *testing.T) {
 	fs.legs[202] = []*pgstore.PositionLeg{
 		{PositionID: 202, LegNo: 0, Phase: "OPEN", Venue: "vA:mt5", OrderID: "", Side: "BUY", Qty: 1.0, Status: "FILLED"},
 	}
-	venueOrders := map[string]VenueOrder{"T999": {Ticket: "T999"}}
+	orders := map[string][]exec.OpenedOrder{"vA:mt5": {{Ticket: "T999"}}}
 
 	r := &Reconciler{store: fs, runTimeout: 5 * time.Second}
-	if err := r.autoFailOPENINGZombie(context.Background(), pos, venueOrders); err != nil {
+	if err := r.autoFailOPENINGZombie(context.Background(), pos, orders); err != nil {
 		t.Fatalf("autoFailOPENINGZombie: %v", err)
 	}
 	found := false

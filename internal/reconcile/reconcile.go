@@ -21,6 +21,8 @@ type Reconciler struct {
 	// D-401：CEX 聚合对拍连续确认计数（agg key→连续不一致轮数，达 3 才 critical）。
 	// 仅 Run 路径串行读写，无锁；runTimeout 超时/查询失败的轮次冻结不计数。
 	cexAggPending map[string]int
+	// D-417 §1.4：CEX 系统外单 warn 同指纹冷却（key→上次告警时刻，24h 单发）。
+	cexForeignWarned map[string]time.Time
 	// D-407 S1/S2：残腿密集重试（fast retry）。window=CLOSING 起算的密集重试窗口
 	// （窗外静默交还 30min 看护）；consecN=同 venue 连续失败升级阈；
 	// streak/times=venue 维度失败计数（内存态 v1，重启清零可接受——告警文本如实）。
@@ -51,6 +53,7 @@ func New(store Store, queriers ...VenueQuerier) *Reconciler {
 		initialDelay:     60 * time.Second,
 		closingAlertHour: map[int64]int64{},
 		cexAggPending:    map[string]int{},
+		cexForeignWarned: map[string]time.Time{},
 		nowFn:            time.Now,
 		fastRetryWindow:  10 * time.Minute,
 		fastRetryConsec:  3,
