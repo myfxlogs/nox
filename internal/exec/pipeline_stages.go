@@ -42,7 +42,21 @@ func (p *Pipeline) SetSwapArbComboAllow(allow []ComboAllowSpec, notionalUSD floa
 // SetXAssetComboAllow 注入 XASSET_CARRY 精确组合门禁 allowlist（D-311 S6）。
 // 零信任：posType=XASSET_CARRY 时无条件校验（空表=全拒）。
 func (p *Pipeline) SetXAssetComboAllow(allow []XAssetComboAllowSpec) {
-	p.xassetComboAllow = allow
+	p.xassetAllow.Store(&allow) // D-403 R2：热刷新写侧
+}
+
+// xassetAllowSpecs D-403 R2：热刷新读侧（atomic Load；nil=未接线=空集全拒，零信任不破）。
+func (p *Pipeline) xassetAllowSpecs() []XAssetComboAllowSpec {
+	if v := p.xassetAllow.Load(); v != nil {
+		return *v
+	}
+	return nil
+}
+
+// ReloadXAssetComboAllow D-403 R2：approve 三链扇出的 pipeline 写侧（整体替换快照，
+// 免重启生效；与执行读侧 checkXAssetComboAllow 的 Load 竞态安全）。
+func (p *Pipeline) ReloadXAssetComboAllow(specs []XAssetComboAllowSpec) {
+	p.xassetAllow.Store(&specs)
 }
 
 // LegSpec 是单腿下单规格。
@@ -176,7 +190,7 @@ func (p *Pipeline) checkXAssetComboAllow(ctx context.Context, opportunityID stri
 	if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
 		canonicalSell = *opp.CanonicalSell
 	}
-	spec := MatchXAssetComboAllow(p.xassetComboAllow, canonicalBuy, canonicalSell, venueBuy, venueSell)
+	spec := MatchXAssetComboAllow(p.xassetAllowSpecs(), canonicalBuy, canonicalSell, venueBuy, venueSell)
 	if spec == nil {
 		return fmt.Errorf("%w: %s/%s %s×%s", ErrXAssetComboNotAllowed, canonicalBuy, canonicalSell, venueBuy, venueSell)
 	}
@@ -228,3 +242,6 @@ func (p *Pipeline) checkXAssetComboAllow(ctx context.Context, opportunityID stri
 	}
 	return nil
 }
+
+// XAssetAllowSpecs D-403 R2：白名单快照公开读口（扇出后核对/测试用；语义同内部读侧）。
+func (p *Pipeline) XAssetAllowSpecs() []XAssetComboAllowSpec { return p.xassetAllowSpecs() }

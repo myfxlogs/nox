@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 
 	"arb/internal/bus"
 	"arb/internal/store/pgstore"
@@ -67,7 +68,9 @@ type Pipeline struct {
 
 	// D-311 S6：XASSET_CARRY 精确组合门禁——零信任显式白名单。
 	// posType=XASSET_CARRY 时无条件校验（空表=全拒），canonical_sell 从 opportunities 行解析。
-	xassetComboAllow []XAssetComboAllowSpec
+	// D-403 R2：atomic.Pointer 热刷新（approve 三链扇出写侧 vs 执行读侧竞态安全；
+	// Load nil=未接线=空集全拒，零信任语义与 nil slice 完全等价）。
+	xassetAllow atomic.Pointer[[]XAssetComboAllowSpec]
 
 	// D-189 P0-2 → D-193-A 扩包（决策 8）：现金流写入 seam——生产默认调 p.store.InsertCashflowFull，
 	// 测试注入失败函数验证显式错误处理。签名改 Full 形态（接收 *pgstore.Cashflow，返回 (won, err)）。

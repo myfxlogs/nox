@@ -119,21 +119,22 @@ func TestD311_CheckXAssetComboAllow(t *testing.T) {
 		{VenueKey: "gate:perp", VenueSymbol: "BTC_USDT", Side: "SELL", Qty: 4, PriceExpected: 100000},
 	}
 	resolvers := func() *Pipeline {
-		return &Pipeline{
-			store:            s,
-			xassetComboAllow: mkAllow(), // 每 case 独立 slice（case ④ 改 spec 不泄漏）
-			csResolver:       &fakeCSResolver{sizes: map[string]float64{"3001157:mt5:WTIUSD": 100, "gate:perp:BTC_USDT": 0.01}},
-			fxResolver:       fakeFxResolver{rates: map[string]float64{"USD": 1}, ok: true},
+		p := &Pipeline{
+			store:      s,
+			csResolver: &fakeCSResolver{sizes: map[string]float64{"3001157:mt5:WTIUSD": 100, "gate:perp:BTC_USDT": 0.01}},
+			fxResolver: fakeFxResolver{rates: map[string]float64{"USD": 1}, ok: true},
 		}
+		p.SetXAssetComboAllow(mkAllow()) // 每 case 独立 slice（case ④ 改 spec 不泄漏）
+		return p
 	}
 	// ① 空表全拒（零信任）
-	p := &Pipeline{store: s, xassetComboAllow: nil}
+	p := &Pipeline{store: s}
 	if err := p.checkXAssetComboAllow(ctx, oppID, legsOK); !errors.Is(err, ErrXAssetComboNotAllowed) {
 		t.Errorf("empty allowlist: want ErrXAssetComboNotAllowed, got %v", err)
 	}
 	// ② 组合不命中（canonical_sell 不匹配）
 	p = resolvers()
-	p.xassetComboAllow = []XAssetComboAllowSpec{{CanonicalBuy: "WTIUSD", CanonicalSell: "ETHUSDT", VenueBuy: "3001157:mt5", VenueSell: "gate:perp"}}
+	p.SetXAssetComboAllow([]XAssetComboAllowSpec{{CanonicalBuy: "WTIUSD", CanonicalSell: "ETHUSDT", VenueBuy: "3001157:mt5", VenueSell: "gate:perp"}})
 	if err := p.checkXAssetComboAllow(ctx, oppID, legsOK); !errors.Is(err, ErrXAssetComboNotAllowed) {
 		t.Errorf("mismatch canonical_sell: want ErrXAssetComboNotAllowed, got %v", err)
 	}
@@ -144,7 +145,7 @@ func TestD311_CheckXAssetComboAllow(t *testing.T) {
 	}
 	// ④ qty 上限（long 0.5 > MaxLongQty 0.4）
 	p = resolvers()
-	p.xassetComboAllow[0].MaxLongQty = 0.4
+	p.xassetAllowSpecs()[0].MaxLongQty = 0.4
 	if err := p.checkXAssetComboAllow(ctx, oppID, legsOK); !errors.Is(err, ErrQtyExceedsLimit) {
 		t.Errorf("long qty exceed: want ErrQtyExceedsLimit, got %v", err)
 	}
@@ -168,12 +169,10 @@ func TestD311_CheckXAssetComboAllow(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("seed same-canon opportunity: %v", err)
 	}
-	p = &Pipeline{
-		store: s,
-		xassetComboAllow: []XAssetComboAllowSpec{
-			{CanonicalBuy: "BTCUSDT", CanonicalSell: "BTCUSDT", VenueBuy: "binance:perp", VenueSell: "gate:perp"},
-		},
-	}
+	p = &Pipeline{store: s}
+	p.SetXAssetComboAllow([]XAssetComboAllowSpec{
+		{CanonicalBuy: "BTCUSDT", CanonicalSell: "BTCUSDT", VenueBuy: "binance:perp", VenueSell: "gate:perp"},
+	})
 	if err := p.checkXAssetComboAllow(ctx, sameCanonID, []LegSpec{
 		{VenueKey: "binance:perp", VenueSymbol: "BTCUSDT", Side: "BUY", Qty: 0.1, PriceExpected: 100000},
 		{VenueKey: "gate:perp", VenueSymbol: "BTC_USDT", Side: "SELL", Qty: 10, PriceExpected: 100000},
@@ -196,20 +195,23 @@ func TestD311_CheckXAssetComboAllow(t *testing.T) {
 		{VenueKey: "gate:perp", VenueSymbol: "XPT_USDT", Side: "BUY", Qty: 1, PriceExpected: 1000},
 		{VenueKey: "3001157:mt5", VenueSymbol: "PAXGUSD", Side: "SELL", Qty: 1, PriceExpected: 2500},
 	}
-	p = &Pipeline{store: s, xassetComboAllow: []XAssetComboAllowSpec{
+	p = &Pipeline{store: s}
+	p.SetXAssetComboAllow([]XAssetComboAllowSpec{
 		{CanonicalBuy: "XPTUSD", CanonicalSell: "PAXGUSDT", VenueBuy: "gate:perp", VenueSell: "3001157:mt5"},
-	}}
+	})
 	if err := p.checkXAssetComboAllow(ctx, swapOppID, swapLegs); err != nil {
 		t.Errorf("row-direction match: want nil, got %v", err)
 	}
-	p = &Pipeline{store: s, xassetComboAllow: []XAssetComboAllowSpec{
+	p = &Pipeline{store: s}
+	p.SetXAssetComboAllow([]XAssetComboAllowSpec{
 		{CanonicalBuy: "XPTUSD", CanonicalSell: "PAXGUSDT", VenueBuy: "3001157:mt5", VenueSell: "gate:perp"},
-	}}
+	})
 	if err := p.checkXAssetComboAllow(ctx, swapOppID, swapLegs); !errors.Is(err, ErrXAssetComboNotAllowed) {
 		t.Errorf("id-sorted direction only: want ErrXAssetComboNotAllowed, got %v", err)
 	}
 	// ⑨ 行缺失 fail-closed（返修：无机会行不得靠排序 ID 猜方向）
-	p = &Pipeline{store: s, xassetComboAllow: mkAllow()}
+	p = &Pipeline{store: s}
+	p.SetXAssetComboAllow(mkAllow())
 	if err := p.checkXAssetComboAllow(ctx, "XASSET_CARRY:ZZZ:gone:mt5:gone:perp", legsOK); !errors.Is(err, ErrXAssetComboNotAllowed) {
 		t.Errorf("missing opp row: want ErrXAssetComboNotAllowed, got %v", err)
 	}
@@ -243,21 +245,21 @@ func TestD311_CheckXAssetComboAllow_CexLegCS(t *testing.T) {
 	}
 	// ① CEX 腿 ct_val 命中（复合 resolver :perp 分支语义）→ gross $6000 < $300000 → 放行
 	p := &Pipeline{
-		store:            s,
-		xassetComboAllow: allow,
-		csResolver:       &fakeCSResolver{sizes: map[string]float64{"3001157:mt5:WTIUSD": 100, "gate:perp:BTC_USDT": 0.01}},
-		fxResolver:       fakeFxResolver{rates: map[string]float64{"USD": 1}, ok: true},
+		store:      s,
+		csResolver: &fakeCSResolver{sizes: map[string]float64{"3001157:mt5:WTIUSD": 100, "gate:perp:BTC_USDT": 0.01}},
+		fxResolver: fakeFxResolver{rates: map[string]float64{"USD": 1}, ok: true},
 	}
+	p.SetXAssetComboAllow(allow)
 	if err := p.checkXAssetComboAllow(ctx, oppID, legs); err != nil {
 		t.Errorf("cex leg ct_val hit: want nil, got %v", err)
 	}
 	// ② CEX 腿 ct_val 缺失（map 只留 MT 腿 CS）→ fail-closed 拒
 	p = &Pipeline{
-		store:            s,
-		xassetComboAllow: allow,
-		csResolver:       &fakeCSResolver{sizes: map[string]float64{"3001157:mt5:WTIUSD": 100}},
-		fxResolver:       fakeFxResolver{rates: map[string]float64{"USD": 1}, ok: true},
+		store:      s,
+		csResolver: &fakeCSResolver{sizes: map[string]float64{"3001157:mt5:WTIUSD": 100}},
+		fxResolver: fakeFxResolver{rates: map[string]float64{"USD": 1}, ok: true},
 	}
+	p.SetXAssetComboAllow(allow)
 	if err := p.checkXAssetComboAllow(ctx, oppID, legs); !errors.Is(err, ErrComboNotAllowed) {
 		t.Errorf("cex leg ct_val missing: want ErrComboNotAllowed, got %v", err)
 	}
