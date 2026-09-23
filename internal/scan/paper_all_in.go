@@ -7,6 +7,7 @@ package scan
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -123,6 +124,34 @@ func paperExitConvergence(p pgstore.PaperSpotCarry, lastBasis *float64) *float64
 		lb = p.LastBasisBps
 	}
 	return paperConvergenceUSD(paperBasisDir(p.Side, p.Structure), p.EntryBasisBps, lb, p.QtyUSD)
+}
+
+// authSlot D-410 S4 保底槽（D-419 S3 加 cexVenue 供 monitor 簿三元组哨兵）。
+type authSlot struct{ key, venueCombo, symbol, mtVenue, cexVenue string }
+
+// warnMonitorBookAbsent D-419 S3：授权组合 monitor 簿覆盖哨兵——簿三元组从未有过行
+// → basis 恒 NULL 不可毕业（与宇宙行缺席同型静默，收口为可归因 warn）。
+// 不阻断开仓（basis NULL 诚实缺语义保留）；查询失败 fail-open 跳过不误报；
+// 聚合节流每轮至多一条。
+func warnMonitorBookAbsent(ctx context.Context, st PaperStore, slots []authSlot) {
+	var noMonitor []string
+	for _, sl := range slots {
+		pair := paperCfdPairKey(sl.symbol)
+		cexV, mtV := monitorVenueKeys(sl.cexVenue, sl.mtVenue)
+		has, err := st.HasXAssetMonitorRow(ctx, pair, cexV, mtV)
+		if err != nil {
+			log.Printf("[cfd paper] monitor 簿查询 %s|%s|%s: %v（fail-open 跳过）", pair, cexV, mtV, err)
+			continue
+		}
+		if !has {
+			noMonitor = append(noMonitor, sl.key+"（簿:"+pair+"|"+cexV+"|"+mtV+"）")
+		}
+	}
+	if len(noMonitor) > 0 {
+		if err := st.InsertAlert(ctx, nil, "warn", "[cfd 纸面保底] 授权组合 monitor 簿缺席（basis 将恒 NULL 不可毕业，请补 monitorPairs）: "+strings.Join(noMonitor, ", ")); err != nil {
+			log.Printf("[cfd paper] monitor-book alert: %v", err)
+		}
+	}
 }
 
 // monitorVenueKeys D-423：universe 裸 venue 名（"okx"/"3001157"）→ monitor 行 venue 键

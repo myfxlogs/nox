@@ -76,10 +76,19 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 		activeByKey[p.Venue+"|"+p.Symbol] = struct{}{}
 	}
 	// clean cfd 行索引（保底段与 top-N 段共用；D-345 suspect 行拒入同 top-N 口径）。
+	// D-419 S2：dirtyByKey 并行索引——行在但 Note!=""（suspect/stale 剔除）记原因，
+	// 缺席 warn 分级归因（无行 vs 被剔）。
 	rowByKey := make(map[string]UniverseRow, len(rows))
+	dirtyByKey := make(map[string]string, len(rows))
 	for _, r := range rows {
-		if cfdStructures[r.Structure] && r.Note == "" {
-			rowByKey[r.MtVenue+"×"+r.CexVenue+"|"+r.Canonical] = r
+		if !cfdStructures[r.Structure] {
+			continue
+		}
+		key := r.MtVenue + "×" + r.CexVenue + "|" + r.Canonical
+		if r.Note == "" {
+			rowByKey[key] = r
+		} else {
+			dirtyByKey[key] = r.Note
 		}
 	}
 	// D-410 S4 钉死①开票顺序：保底段先行——enabled∧非 simulated 白名单组合不套 net 下限
@@ -88,7 +97,6 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 	if err != nil {
 		return nil, 0, fmt.Errorf("cfd paper step: load allow combos: %w", err)
 	}
-	type authSlot struct{ key, venueCombo, symbol, mtVenue string }
 	slots := []authSlot{}
 	for _, c := range combos {
 		mtV, cexV, mtCanon, ok := cfdComboLegs(c)
@@ -101,7 +109,7 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 		if symbol == "" {
 			continue
 		}
-		slots = append(slots, authSlot{key: mtV + "×" + cexV + "|" + symbol, venueCombo: mtV + "×" + cexV, symbol: symbol, mtVenue: mtV})
+		slots = append(slots, authSlot{key: mtV + "×" + cexV + "|" + symbol, venueCombo: mtV + "×" + cexV, symbol: symbol, mtVenue: mtV, cexVenue: cexV})
 	}
 	authorized := make(map[string]struct{}, len(slots))
 	for _, sl := range slots {
@@ -136,7 +144,12 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 		}
 		r, ok := rowByKey[sl.key]
 		if !ok {
-			missing = append(missing, sl.key) // 宇宙行缺席：不开仓+warn 节流
+			// D-419 S2：缺席分级归因——行在但被 Note 剔除 vs universe 未产行。
+			if note, dirty := dirtyByKey[sl.key]; dirty {
+				missing = append(missing, sl.key+"（行被剔除:"+note+"）")
+			} else {
+				missing = append(missing, sl.key+"（universe 未产行）")
+			}
 			continue
 		}
 		if err := insertCfdPaper(ctx, st, r, sl.mtVenue, sl.venueCombo, now, opts.CexFeeBps); err != nil {
@@ -150,11 +163,12 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 		opened = append(opened, r.Canonical)
 	}
 	if len(missing) > 0 {
-		// 宇宙行缺席 warn 节流：每轮至多一条聚合告警（禁 `_ =` 吞错）。
-		if err := st.InsertAlert(ctx, nil, "warn", "[cfd 纸面保底] 授权组合宇宙行缺席（无 funding/swap fact，本轮不开仓）: "+strings.Join(missing, ", ")); err != nil {
+		// 宇宙行缺席/被剔 warn 节流：每轮至多一条聚合告警（D-419 分级归因；禁 `_ =` 吞错）。
+		if err := st.InsertAlert(ctx, nil, "warn", "[cfd 纸面保底] 授权组合宇宙行缺席/被剔（本轮不开仓）: "+strings.Join(missing, ", ")); err != nil {
 			log.Printf("[cfd paper] authorized-miss alert: %v", err)
 		}
 	}
+	warnMonitorBookAbsent(ctx, st, slots) // D-419 S3：簿覆盖哨兵（不阻断开仓）
 	// ① 开仓（top-N 段）
 	type cfdCand struct {
 		venueCombo string
