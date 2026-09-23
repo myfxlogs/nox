@@ -227,4 +227,6 @@ var (
 	CashflowsLegDayEventKeySQL string
 	//go:embed 0131_strategy_reason_d424.sql
 	StrategyReasonD424SQL string
+	//go:embed 0132_data_plane_venue.sql
+	DataPlaneVenueSQL string
 )
