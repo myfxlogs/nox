@@ -36,6 +36,29 @@ func (s *Store) LatestXAssetEntryGate(ctx context.Context, pair string, maxAge t
 	return *entry, *noise, 0, false, true, nil
 }
 
+// XAssetMonitorRowNear D-404 S1a：开仓时点 monitor 行回放——取 |行ts−ts| 最近行的
+// entry_spread_bps（venue 偏移实测用：代理尺度 floor 平移到真腿尺度须先实测开仓时点
+// monitor spread）。超 maxGap/无行 → ok=false（调用方回退代理路径，不用错尺度）。
+func (s *Store) XAssetMonitorRowNear(ctx context.Context, pair string, ts time.Time, maxGap time.Duration) (entrySpreadBps float64, ok bool, err error) {
+	var rowTs time.Time
+	err = s.pool.QueryRow(ctx, `
+		SELECT entry_spread_bps, ts
+		FROM fin_xasset_monitor
+		WHERE pair = $1
+		ORDER BY ABS(EXTRACT(EPOCH FROM (ts - $2::timestamptz)))
+		LIMIT 1`, pair, ts).Scan(&entrySpreadBps, &rowTs)
+	if err != nil {
+		if err.Error() == "no rows in result set" {
+			return 0, false, nil
+		}
+		return 0, false, fmt.Errorf("xasset monitor row near: %w", err)
+	}
+	if d := rowTs.Sub(ts); d > maxGap || d < -maxGap {
+		return 0, false, nil
+	}
+	return entrySpreadBps, true, nil
+}
+
 // EnsureEntryGateSnapshot D-341 S1：开仓学习样本锚——两写点（D-327 同位）后调用，
 // 读开仓时点 monitor 最新行落 positions.entry_noise_bps/entry_harvest_floor_bps（IS NULL 幂等）。
 // monitor 缺行/未成噪 → 不写（学习锚 NULL=诚实缺样本，收割出口走 NULL 不触发语义）。
