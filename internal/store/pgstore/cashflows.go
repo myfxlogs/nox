@@ -88,6 +88,22 @@ func (s *Store) HasCashflowForLegDay(ctx context.Context, posID int64, legNo int
 	return false, fmt.Errorf("check cashflow for leg day: %w", err)
 }
 
+// HasCashflowByEventKey D-422 R1：按 event_key 精确匹配判重（幂等键粒度，
+// 替代 HasCashflowForLegDay 的腿日粗粒度——同日 OPEN 费与 CLOSE 佣金不同 event_key 不互吞）。
+func (s *Store) HasCashflowByEventKey(ctx context.Context, posID int64, eventKey string) (bool, error) {
+	var one int
+	err := s.pool.QueryRow(ctx,
+		`SELECT 1 FROM position_cashflows WHERE position_id = $1 AND event_key = $2 LIMIT 1`,
+		posID, eventKey).Scan(&one)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return false, fmt.Errorf("check cashflow by event_key: %w", err)
+}
+
 // SumCashflowsNet 返回指定持仓 swap+funding+commission 现金流的 USD 合计（D-127 P4 返修①）。
 // settlement.Settle 用此值算 net = realized + cashflowsNet，修正淘汰/复盘口径漏计息差/手续费的缺陷。
 // commission 写入时已带负号（pipeline_legs.go:190 -fill.Commission），SUM 自动减 → 等价 swap+funding−commission。

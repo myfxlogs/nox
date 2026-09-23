@@ -125,6 +125,7 @@ var migrationFiles = []struct {
 	{127, migrations.AlertsPositionIDSQL},              // D-411 S1：alerts.position_id 持仓级告警列
 	{128, migrations.PaperAllInSQL},                    // D-410 S1：纸面全账三列+存量费用回填
 	{129, migrations.XassetMonitorVenueSQL},            // D-423：fin_xasset_monitor cex/mt venue 三元组（存量=binance:perp×3001157:mt5）
+	{130, migrations.CashflowsLegDayEventKeySQL},       // D-422 R1：腿日唯一索引含 event_key（OPEN费+CLOSE佣金分键）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

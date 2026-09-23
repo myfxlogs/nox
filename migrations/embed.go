@@ -223,4 +223,6 @@ var (
 	PaperAllInSQL string
 	//go:embed 0129_xasset_monitor_venue.sql
 	XassetMonitorVenueSQL string
+	//go:embed 0130_cashflows_leg_day_eventkey.sql
+	CashflowsLegDayEventKeySQL string
 )
