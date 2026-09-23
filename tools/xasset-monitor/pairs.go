@@ -18,7 +18,8 @@ func monitorPairs() []monitorPair {
 		{"binance:perp", "PAXGUSDT", "PAXG-XAU", "XAUUSD"},
 		{"binance:perp", "XAUTUSDT", "XAUT-XAU", "XAUUSD"},
 		{"binance:perp", "XAUUSDT", "XAUUSDT-XAU", "XAUUSD"},
-		{"binance:perp", "BTCUSDT", "BTCUSDT-BTC", "BTCUSDT"},  // D-335 S0：业主批第四对（BTCUSDT×BTCUSDT，swap 免息，纳入观察）
-		{"okx:perp", "XAU-USDT-SWAP", "XAUUSDT-XAU", "XAUUSD"}, // D-423 R1：OKX 黄金永续×Exness XAU（pos 498/501 组合）
+		{"binance:perp", "BTCUSDT", "BTCUSDT-BTC", "BTCUSDT"},   // D-335 S0：业主批第四对（BTCUSDT×BTCUSDT，swap 免息，纳入观察）
+		{"okx:perp", "XAU-USDT-SWAP", "XAUUSDT-XAU", "XAUUSD"},  // D-423 R1：OKX 黄金永续×Exness XAU（pos 498/501 组合）
+		{"okx:perp", "BTC-USDT-SWAP", "BTCUSDT-BTC", "BTCUSDT"}, // D-419：真钱组合#10（okx:perp×3001157:mt5, BTC-USDT-SWAP×BTCUSDT）的 venue 簿
 	}
 }

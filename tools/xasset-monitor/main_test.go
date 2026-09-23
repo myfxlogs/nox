@@ -178,3 +178,23 @@ func TestD335R1_EntrySpreadMagnitude(t *testing.T) {
 	}
 	_ = esp
 }
+
+// TestD419_OkxBtcPairRow D-419 S1 锚：monitorPairs() 含 okx:perp BTC 簿行
+// {"okx:perp","BTC-USDT-SWAP","BTCUSDT-BTC","BTCUSDT"}——真钱组合#10 的 venue 簿
+// （pair 键与 binance BTC 行同款、cex_venue 不同=三元组隔离本意）。
+func TestD419_OkxBtcPairRow(t *testing.T) {
+	want := monitorPair{"okx:perp", "BTC-USDT-SWAP", "BTCUSDT-BTC", "BTCUSDT"}
+	found := false
+	for _, p := range monitorPairs() {
+		if p == want {
+			found = true
+		}
+		// 三元组隔离：okx BTC 行不得复用 binance venue 标签
+		if p.pair == "BTCUSDT-BTC" && p.cexVenue == "okx:perp" && p.sym != "BTC-USDT-SWAP" {
+			t.Errorf("okx BTC 行 instId 应为 BTC-USDT-SWAP, got %s", p.sym)
+		}
+	}
+	if !found {
+		t.Fatalf("monitorPairs() 缺 okx BTC 簿行 %+v", want)
+	}
+}
