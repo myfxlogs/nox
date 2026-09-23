@@ -34,8 +34,9 @@ func d335SeedMonitor(t *testing.T, s *pgstore.Store, pair string, entry, noise *
 	if _, err := s.Pool().Exec(ctx, `
 		INSERT INTO fin_xasset_monitor (pair, binance_bid, binance_ask, exness_bid, exness_ask,
 			entry_spread_bps, exit_spread_bps, entry_net_bps, funding_rate_8h, funding_annual_pct,
-			tracking_error_bps, equiv_annual_pct, noise_bps)
-		VALUES ($1, 4355, 4356, 4354, 4355, $2, 5, 3, 0.001, 21.9, 1.0, 24.9, $3)`,
+			tracking_error_bps, equiv_annual_pct, noise_bps, cex_venue, mt_venue)
+		VALUES ($1, 4355, 4356, 4354, 4355, $2, 5, 3, 0.001, 21.9, 1.0, 24.9, $3,
+			'binance:perp', '277842155:mt5')`, // D-423：venue 键=fixture 机会 venue
 		pair, entry, noise); err != nil {
 		t.Fatalf("seed monitor: %v", err)
 	}
@@ -107,25 +108,28 @@ func TestD335_EntryGate(t *testing.T) {
 		t.Errorf("T3a 逆价应 skip（红=现码无闸 csMiss=1）, got %v", e3.csMissCounts)
 	}
 
-	// T3b：无 monitor 行 → fail-open 放行到 sizing（csMiss=1）。
+	// T3b：无 monitor 行 → D-423 fail-closed 拒开（csMiss=0；借用他所簿=假安全边际废止）。
 	// 清表防前序子用例行残留（同仓 latest 行会串场）。
 	if _, err := s.Pool().Exec(ctx, `TRUNCATE fin_xasset_monitor`); err != nil {
 		t.Fatalf("truncate monitor: %v", err)
 	}
 	e4, opp4, ctx4 := d335Engine(s)
 	e4.handleOpportunity(ctx4, opp4, newComboAccumulator())
-	if e4.csMissCounts["277842155:mt5|XAUUSD"] != 1 {
-		t.Errorf("T3b 无数据应 fail-open 放行, got %v", e4.csMissCounts)
+	if e4.csMissCounts["277842155:mt5|XAUUSD"] != 0 {
+		t.Errorf("T3b 无 monitor 行应 fail-closed 拒开（D-423）, got %v", e4.csMissCounts)
+	}
+	if n := d330CountLogs(t, s, opp4.ID); n != 0 {
+		t.Errorf("T3b 不应产 intent, got %d 行", n)
 	}
 
-	// T3c：noise NULL → fail-open 放行（同上）
+	// T3c：noise NULL（未成噪）→ D-423 同 fail-closed 拒开
 	if _, err := s.Pool().Exec(ctx, `TRUNCATE fin_xasset_monitor`); err != nil {
 		t.Fatalf("truncate monitor: %v", err)
 	}
 	e5, opp5, ctx5 := d335Engine(s)
 	d335SeedMonitor(t, s, "XAUUSDT-XAU", floatPtr(5), nil)
 	e5.handleOpportunity(ctx5, opp5, newComboAccumulator())
-	if e5.csMissCounts["277842155:mt5|XAUUSD"] != 1 {
-		t.Errorf("T3c noise NULL 应 fail-open 放行, got %v", e5.csMissCounts)
+	if e5.csMissCounts["277842155:mt5|XAUUSD"] != 0 {
+		t.Errorf("T3c noise NULL 应 fail-closed 拒开（D-423）, got %v", e5.csMissCounts)
 	}
 }

@@ -44,15 +44,19 @@ func (e *Engine) execDriftCheck(ctx context.Context, p *pgstore.Position) (bool,
 // 三要素任一缺 / 开仓时点 monitor 行缺或超窗 → 原 monitor 代理路径整体回退（旧仓兼容，
 // 不用错尺度）；真腿路径确认后报价缺/超龄 → 本轮不判（fail-closed，不回退错尺度）。
 // monitor 缺行/floor NULL → 不触发（诚实空态）。pairKey=D-335 同款（CanonicalSell-TrimSuffix）。
+// D-423：查询键三元组化（pair,cexVenue,mtVenue，venue 取仓腿/机会字段不再拼串借用）；
+// 收割线双守卫——capture≤0（按其口径无可收割空间，开仓即收病）→hold_no_capture；
+// anchor≥0 倒挂域（D-409 域限定语义未定）→hold_anchor_nonneg；monitor 查不到→hold_no_monitor。
+// 三 reason 经 harvestReason 进 eval 决策串观测（不收割不触发）。
 func (e *Engine) harvestCheck(ctx context.Context, p *pgstore.Position) (bool, string) {
-	pairKey, ok := e.xassetPairKey(ctx, p)
+	pairKey, cexVenue, mtVenue, ok := e.xassetPairKey(ctx, p)
 	if !ok || pairKey == "" {
 		return false, "" // opp 缺/查询失败（原 GetOpportunity err/nil 分支同语义）
 	}
 	if p.EntryHarvestFloorBps != nil && p.ExpectedEntrySpreadBps != nil && *p.ExpectedEntrySpreadBps != 0 && p.OpenedAt != nil {
-		if basis, line, capture, found, usable := e.xassetTrueLegLine(ctx, p, pairKey); found {
+		if basis, line, capture, found, usable, reason := e.xassetTrueLegLine(ctx, p, pairKey, cexVenue, mtVenue); found {
 			if !usable {
-				return false, "" // 报价缺/超龄 → 本轮不判（fail-closed，不回退错尺度）
+				return false, reason // 报价缺/超龄→"" 本轮不判；守卫域→hold_* 观测
 			}
 			anchor := *p.ExpectedEntrySpreadBps
 			sign := 1.0
@@ -65,11 +69,11 @@ func (e *Engine) harvestCheck(ctx context.Context, p *pgstore.Position) (bool, s
 			}
 			return false, ""
 		}
-		// found=false（monitor 行缺/超窗）→ 落代理路径（旧仓兼容回退）
+		// found=false（monitor 行缺/超窗）→ 落代理路径（旧仓兼容回退，同按三元组查）
 	}
-	entryBps, _, floor, hasFloor, ok, err := e.store.LatestXAssetEntryGate(ctx, pairKey, xassetEntryGateMaxAge)
+	entryBps, _, floor, hasFloor, ok, err := e.store.LatestXAssetEntryGate(ctx, pairKey, cexVenue, mtVenue, xassetEntryGateMaxAge)
 	if err != nil || !ok || !hasFloor {
-		return false, ""
+		return false, "hold_no_monitor" // D-423：查不到=诚实缺不借用他所簿（fail-closed）
 	}
 	if entryBps <= floor {
 		return true, fmt.Sprintf("harvest: spread %.2f ≤ floor %.2f (+%.2f bps captured)", entryBps, floor, floor-entryBps)
@@ -81,15 +85,24 @@ func (e *Engine) harvestCheck(ctx context.Context, p *pgstore.Position) (bool, s
 // found=开仓时点 monitor 行在场（ts<=opened_at 最新行±15min）；usable=found 且报价新鲜可判。
 // line=|anchor|−capture；capture=开仓时点 entry_spread−floor（尺度不变量平移）。
 // 前置：调用方已确认三要素齐（floor/anchor≠0/opened_at 非 nil）。
-func (e *Engine) xassetTrueLegLine(ctx context.Context, p *pgstore.Position, pairKey string) (basis, line, capture float64, found, usable bool) {
-	entrySpread, ok, err := e.store.XAssetMonitorRowNear(ctx, pairKey, *p.OpenedAt, 15*time.Minute)
+// D-423：usable=false 带 reason——anchor≥0 倒挂域→hold_anchor_nonneg（D-409 域限定不套公式）；
+// capture≤0→hold_no_capture（无可收割空间，498 开仓即收病根；不回退代理——同尺度病）。
+// 报价缺/超龄 → usable=false reason=""（既有本轮不判语义）。
+func (e *Engine) xassetTrueLegLine(ctx context.Context, p *pgstore.Position, pairKey, cexVenue, mtVenue string) (basis, line, capture float64, found, usable bool, reason string) {
+	entrySpread, ok, err := e.store.XAssetMonitorRowNear(ctx, pairKey, cexVenue, mtVenue, *p.OpenedAt, 15*time.Minute)
 	if err != nil || !ok {
-		return 0, 0, 0, false, false
+		return 0, 0, 0, false, false, ""
 	}
 	basis, quoteAge, okB := e.currentBasisBpsAged(p)
 	if !okB || (e.cfg.XAssetQuoteMaxAge > 0 && quoteAge > e.cfg.XAssetQuoteMaxAge) {
-		return 0, 0, 0, true, false
+		return 0, 0, 0, true, false, ""
+	}
+	if *p.ExpectedEntrySpreadBps >= 0 {
+		return 0, 0, 0, true, false, "hold_anchor_nonneg"
 	}
 	capture = entrySpread - *p.EntryHarvestFloorBps
-	return basis, math.Abs(*p.ExpectedEntrySpreadBps) - capture, capture, true, true
+	if capture <= 0 {
+		return 0, 0, 0, true, false, "hold_no_capture"
+	}
+	return basis, math.Abs(*p.ExpectedEntrySpreadBps) - capture, capture, true, true, ""
 }

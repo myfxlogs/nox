@@ -55,13 +55,15 @@ func d341XAssetOPEN(t *testing.T, s *pgstore.Store, entryNoise *float64) *pgstor
 }
 
 // d341SeedMonitorRow monitor 行（entry/noise/floor 三值）。
+// D-423：venue 三元组显式写（fixture 仓腿=okx:perp×3001157:mt5）。
 func d341SeedMonitorRow(t *testing.T, s *pgstore.Store, entry, noise, floor *float64) {
 	t.Helper()
 	if _, err := s.Pool().Exec(context.Background(), `
 		INSERT INTO fin_xasset_monitor (pair, binance_bid, binance_ask, exness_bid, exness_ask,
 			entry_spread_bps, exit_spread_bps, entry_net_bps, funding_rate_8h, funding_annual_pct,
-			tracking_error_bps, equiv_annual_pct, noise_bps, harvest_floor_bps)
-		VALUES ('XPTUSDT-XPT', 4000, 4001, 3999, 4000, $1, 5, 3, 0.001, 21.9, 1.0, 24.9, $2, $3)`,
+			tracking_error_bps, equiv_annual_pct, noise_bps, harvest_floor_bps, cex_venue, mt_venue)
+		VALUES ('XPTUSDT-XPT', 4000, 4001, 3999, 4000, $1, 5, 3, 0.001, 21.9, 1.0, 24.9, $2, $3,
+			'okx:perp', '3001157:mt5')`,
 		entry, noise, floor); err != nil {
 		t.Fatalf("seed monitor: %v", err)
 	}

@@ -71,15 +71,11 @@ func (e *Engine) rotateCheck(ctx context.Context, p *pgstore.Position) (bool, *r
 	if !ok {
 		return fail("cur carry 数据缺（fail-closed）")
 	}
-	pairKey := canonicalFromOppID(p.OpportunityID)
-	if opp, oerr := e.store.GetOpportunity(ctx, p.OpportunityID); oerr == nil && opp != nil &&
-		opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
-		pairKey = *opp.CanonicalSell + "-" + strings.TrimSuffix(opp.Canonical, "USD")
-	}
+	pairKey, cexVenue, mtVenue, _ := e.xassetPairKey(ctx, p) // D-423 三元组单算点
 	var curEV float64
 	if p.EntryHarvestFloorBps != nil && p.ExpectedEntrySpreadBps != nil &&
 		*p.ExpectedEntrySpreadBps != 0 && p.OpenedAt != nil {
-		basis, line, _, found, usable := e.xassetTrueLegLine(ctx, p, pairKey)
+		basis, line, _, found, usable, _ := e.xassetTrueLegLine(ctx, p, pairKey, cexVenue, mtVenue)
 		if !found || !usable {
 			return fail("收割线/报价缺（剩余收敛不可算，fail-closed）")
 		}

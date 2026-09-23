@@ -421,6 +421,16 @@ func TestD311_HandleOpportunityXAssetPreIntercept(t *testing.T) {
 	}
 	// ③ 命中 → 过拦截（走到 computeBuyQty → USDPerLotForLeg 不可用 → recordCSMiss）。
 	// csMissCounts 递增=拦截已放行的直接证据；仍不落 REJECTED（CS-miss 是聚合告警非拒绝）。
+	// D-423 涟漪适配：白名单命中后须过 venue 三元组入口闸才到 sizing——种本组合
+	// （pair=BTCUSDT-WTI,cex=gate:perp,mt=3001157:mt5）顺价>noise 行。
+	if _, err := s.Pool().Exec(ctx, `
+		INSERT INTO fin_xasset_monitor (pair, binance_bid, binance_ask, exness_bid, exness_ask,
+			entry_spread_bps, exit_spread_bps, entry_net_bps, funding_rate_8h, funding_annual_pct,
+			tracking_error_bps, equiv_annual_pct, noise_bps, cex_venue, mt_venue)
+		VALUES ('BTCUSDT-WTI', 4355, 4356, 4354, 4355, 12, 5, 3, 0.001, 21.9, 1.0, 24.9, 9,
+			'gate:perp', '3001157:mt5')`); err != nil {
+		t.Fatalf("seed monitor: %v", err)
+	}
 	e = mkEngine([]exec.XAssetComboAllowSpec{
 		{CanonicalBuy: "WTIUSD", CanonicalSell: "BTCUSDT", VenueBuy: "3001157:mt5", VenueSell: "gate:perp", MaxLongQty: 1, MaxShortQty: 1000, MaxGrossUSD: 50000},
 	})

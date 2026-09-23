@@ -19,7 +19,7 @@ import (
 // feeAmortizeGate D-409 S1/§3.1：返回 hold=延迟收割；detail=观测行 detail 片段
 // （hold 时全值落行；放行时仅标记位 detail，并入 harvest reason）。
 // 调用前置：harvestCheck 已命中收割线（真腿路径）。
-func (e *Engine) feeAmortizeGate(ctx context.Context, p *pgstore.Position, pairKey string) (bool, string) {
+func (e *Engine) feeAmortizeGate(ctx context.Context, p *pgstore.Position, pairKey, cexVenue, mtVenue string) (bool, string) {
 	// 前置：anchor<0 域限定（anchor>=0 倒挂域语义未定不套公式）+ 三要素齐。
 	if p.ExpectedEntrySpreadBps == nil || *p.ExpectedEntrySpreadBps >= 0 ||
 		p.EntryHarvestFloorBps == nil || p.OpenedAt == nil {
@@ -28,7 +28,7 @@ func (e *Engine) feeAmortizeGate(ctx context.Context, p *pgstore.Position, pairK
 	anchor := *p.ExpectedEntrySpreadBps
 	// 真腿路径复核：monitor 行缺/超窗（found=false）=代理路径 → 不挂门槛；
 	// 报价缺/超龄（usable=false）时不延迟（收割线本不该命中，双保险 fail-open 放行）。
-	basis, _, _, found, usable := e.xassetTrueLegLine(ctx, p, pairKey)
+	basis, _, _, found, usable, _ := e.xassetTrueLegLine(ctx, p, pairKey, cexVenue, mtVenue)
 	if !found {
 		return false, "legacy_path"
 	}
@@ -153,15 +153,45 @@ func xassetAccruedCarryUSD(ctx context.Context, store *pgstore.Store, posID int6
 	return sum, nil
 }
 
-// xassetPairKey D-409：pairKey 解析（harvestCheck/rotateCheck 同款 CanonicalSell 优先）。
+// xassetPairKey D-409 + D-423 三元组化：pairKey 解析（CanonicalSell 优先）+
+// (cexVenue,mtVenue) 两维——venue 取仓 OPEN 腿（:mt4/:mt5 后缀判 MT 腿余为 CEX 腿），
+// 仓腿缺→机会 VenueBuy/VenueSell 补；非 MT 形态 mtVenue=""=查询自然 miss 诚实缺。
 // ok=false=opportunity 行缺/查询失败（harvestCheck 原 early-return 语义保留）。
-func (e *Engine) xassetPairKey(ctx context.Context, p *pgstore.Position) (string, bool) {
+func (e *Engine) xassetPairKey(ctx context.Context, p *pgstore.Position) (pair, cexVenue, mtVenue string, ok bool) {
 	opp, err := e.store.GetOpportunity(ctx, p.OpportunityID)
 	if err != nil || opp == nil {
-		return "", false
+		return "", "", "", false
 	}
 	if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
-		return *opp.CanonicalSell + "-" + strings.TrimSuffix(opp.Canonical, "USD"), true
+		pair = *opp.CanonicalSell + "-" + strings.TrimSuffix(opp.Canonical, "USD")
+	} else {
+		pair = canonicalFromOppID(p.OpportunityID)
 	}
-	return canonicalFromOppID(p.OpportunityID), true
+	cexVenue, mtVenue = xassetLegVenues(opp.VenueBuy, opp.VenueSell)
+	if legs, lerr := e.store.ListPositionLegs(ctx, p.ID); lerr == nil {
+		for _, l := range legs {
+			if l.Phase != "OPEN" {
+				continue
+			}
+			if isMTVenue(l.Venue) {
+				mtVenue = l.Venue
+			} else {
+				cexVenue = l.Venue
+			}
+		}
+	}
+	return pair, cexVenue, mtVenue, true
+}
+
+// xassetLegVenues D-423：机会 venue 两字段→(cexVenue,mtVenue)。:mt4/:mt5 后缀判 MT；
+// 无 MT 腿→mtVenue=""（CEX×CEX/反向形态 monitor 方向未定义，查询自然 miss=fail-closed）。
+func xassetLegVenues(buy, sell string) (cexVenue, mtVenue string) {
+	switch {
+	case isMTVenue(buy):
+		return sell, buy
+	case isMTVenue(sell):
+		return buy, sell
+	default:
+		return sell, ""
+	}
 }

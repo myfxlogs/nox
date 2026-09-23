@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"arb/internal/store/pgstore"
@@ -41,8 +42,8 @@ func (e *Engine) xassetExitCheck(ctx context.Context, p *pgstore.Position) (bool
 	// 摊平有望 → 延迟收割落 hold_fee_amortize；放行时 detail 标记位并入 reason）。
 	var feeHoldDetail string
 	if shouldHarvest {
-		pairKey, _ := e.xassetPairKey(ctx, p) // opp 缺时 pairKey=""；gate 内 monitor 行查询自然 miss → legacy_path
-		if hold, d := e.feeAmortizeGate(ctx, p, pairKey); hold {
+		pairKey, cexVenue, mtVenue, _ := e.xassetPairKey(ctx, p) // opp 缺时三元组空；gate 内 monitor 行查询自然 miss → legacy_path
+		if hold, d := e.feeAmortizeGate(ctx, p, pairKey, cexVenue, mtVenue); hold {
 			shouldHarvest = false
 			feeHoldDetail = d
 		} else if d != "" {
@@ -143,6 +144,9 @@ func (e *Engine) recordXAssetEval(ctx context.Context, p *pgstore.Position, out 
 		// D-409：收割线命中但全账净额为负且摊平有望 → 延迟收割观测行
 		// （首行 evaluated_at=延迟时钟起点，FirstFeeAmortizeEvalAt 重构）。
 		decision, detail = "hold_fee_amortize", out.feeHold
+	case strings.HasPrefix(out.harvestReason, "hold_"):
+		// D-423：收割线守卫域观测（hold_no_capture/hold_anchor_nonneg/hold_no_monitor）。
+		decision, detail = out.harvestReason, fmtDisasterBand(e.cfg.XAssetDisasterBps, e.cfg.XAssetDisasterNoiseMult, p.EntryNoiseBps)
 	case !basisOK:
 		decision, detail = "fail_closed:no_basis", fmtDisasterBand(e.cfg.XAssetDisasterBps, e.cfg.XAssetDisasterNoiseMult, p.EntryNoiseBps)
 	case p.ExpectedEntrySpreadBps == nil:

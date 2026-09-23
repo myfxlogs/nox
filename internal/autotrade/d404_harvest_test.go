@@ -100,8 +100,9 @@ func TestD404_HarvestRealLeg(t *testing.T) {
 	}
 }
 
-// TestD404_HarvestPositiveAnchor ③正锚对称：anchor=+12.39 → sign=+1，line=9.39，
-// basis≤+9.39 触发（倒挂入场收敛方向=basis 下行）。
+// TestD404_HarvestPositiveAnchor ③正锚域：D-423 守卫语义——anchor≥0 倒挂域 monitor 方向
+// 语义未定（D-409 域限定同判）→ 恒不收割，reason=hold_anchor_nonneg 观测。
+// （D-404 旧语义 sign=+1 对称公式已由 D-423 S2 守卫废止：倒挂域不套公式。）
 func TestD404_HarvestPositiveAnchor(t *testing.T) {
 	ctx := context.Background()
 	s := testAccumStore(t)
@@ -109,12 +110,12 @@ func TestD404_HarvestPositiveAnchor(t *testing.T) {
 	p := d404XAssetPos(t, s, d341fptr(12.39), d341fptr(4.73))
 	d404SeedMonitorRowAt(t, s, p.OpenedAt.Add(-5*time.Second), 7.73, 4.73)
 	e := d404Engine(s, d404Quotes(time.Now().UTC(), 4003.6, 4000, 0)) // basis=+9.0
-	if close, reason := e.harvestCheck(ctx, p); !close || !containsSub(reason, "harvest") {
-		t.Errorf("正锚 basis=+9.0 ≤ line 应触发, reason=%q", reason)
+	if close, reason := e.harvestCheck(ctx, p); close || reason != "hold_anchor_nonneg" {
+		t.Errorf("正锚守卫域应 hold_anchor_nonneg 不收割, close=%v reason=%q", close, reason)
 	}
 	e2 := d404Engine(s, d404Quotes(time.Now().UTC(), 4004.0, 4000, 0)) // basis=+10.0
-	if close, _ := e2.harvestCheck(ctx, p); close {
-		t.Error("正锚 basis=+10 > line=9.39 不应触发")
+	if close, reason := e2.harvestCheck(ctx, p); close || reason != "hold_anchor_nonneg" {
+		t.Errorf("正锚 basis=+10 同守卫域, close=%v reason=%q", close, reason)
 	}
 }
 
@@ -163,13 +164,15 @@ func TestD404_HarvestFallback(t *testing.T) {
 }
 
 // d404SeedMonitorRowAt 带 ts 的 monitor 行（R1 回归：开仓前/后双行时序构造）。
+// D-423：venue 三元组显式写（fixture 仓腿=okx:perp×3001157:mt5，默认 binance:perp 不中）。
 func d404SeedMonitorRowAt(t *testing.T, s *pgstore.Store, ts time.Time, entry, floor float64) {
 	t.Helper()
 	if _, err := s.Pool().Exec(context.Background(), `
 		INSERT INTO fin_xasset_monitor (ts, pair, binance_bid, binance_ask, exness_bid, exness_ask,
 			entry_spread_bps, exit_spread_bps, entry_net_bps, funding_rate_8h, funding_annual_pct,
-			tracking_error_bps, equiv_annual_pct, noise_bps, harvest_floor_bps)
-		VALUES ($1, 'XPTUSDT-XPT', 4000, 4001, 3999, 4000, $2, 5, 3, 0.001, 21.9, 1.0, 24.9, 9, $3)`,
+			tracking_error_bps, equiv_annual_pct, noise_bps, harvest_floor_bps, cex_venue, mt_venue)
+		VALUES ($1, 'XPTUSDT-XPT', 4000, 4001, 3999, 4000, $2, 5, 3, 0.001, 21.9, 1.0, 24.9, 9, $3,
+			'okx:perp', '3001157:mt5')`,
 		ts, entry, floor); err != nil {
 		t.Fatalf("seed monitor at: %v", err)
 	}

@@ -123,14 +123,26 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 	// 数据缺失/过期 fail-open + warn（期望值过滤非风险保护；止损链独立管命）。manual 路径不拦
 	//（advisory 管钱 vs D-328 risk-gate 管命，设计显式裁定，防未来误同步）。
 	if opp.Type == "XASSET_CARRY" {
+		// D-423：反向组合（CEX 为买腿/无 MT 腿）monitor 方向未定义 → 拒开（钉死防放行）。
+		cexVenue, mtVenue := xassetLegVenues(opp.VenueBuy, opp.VenueSell)
+		if mtVenue == "" || !isMTVenue(opp.VenueBuy) {
+			log.Printf("[autotrade] skip %s: 反向/无MT腿组合 monitor 方向未定义 (%s×%s，拒开)", opp.ID, opp.VenueBuy, opp.VenueSell)
+			return
+		}
 		// pair 键以 monitor 工具存储现值为准（"XAUUSDT-XAU"，S2 钉死）：第二段=canonical 去 USD 后缀。
 		pairKey := opp.Canonical
 		if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
 			pairKey = *opp.CanonicalSell + "-" + strings.TrimSuffix(opp.Canonical, "USD")
 		}
-		if entryBps, noiseBps, _, _, ok, err := e.store.LatestXAssetEntryGate(ctx, pairKey, xassetEntryGateMaxAge); err != nil {
-			log.Printf("[autotrade] safety margin: %s query: %v (fail-open)", pairKey, err)
-		} else if ok {
+		// D-423：查询键三元组化 + 反 fail-open——行缺/noise NULL/查询错 → 拒开
+		// （借用他所簿=假安全边际，498 实证开仓即收）。
+		if entryBps, noiseBps, _, _, ok, err := e.store.LatestXAssetEntryGate(ctx, pairKey, cexVenue, mtVenue, xassetEntryGateMaxAge); err != nil {
+			log.Printf("[autotrade] skip %s: safety margin query (%s,%s,%s): %v (fail-closed 拒开)", opp.ID, pairKey, cexVenue, mtVenue, err)
+			return
+		} else if !ok {
+			log.Printf("[autotrade] skip %s: no monitor data (%s,%s,%s) (fail-closed 拒开)", opp.ID, pairKey, cexVenue, mtVenue)
+			return
+		} else {
 			switch {
 			case entryBps <= 0:
 				log.Printf("[autotrade] skip %s: safety margin entry %.2fbps <= 0 (逆价不开)", opp.ID, entryBps)
@@ -139,8 +151,6 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 				log.Printf("[autotrade] skip %s: safety margin entry %.2fbps <= noise %.2fbps (摆幅内不开)", opp.ID, entryBps, noiseBps)
 				return
 			}
-		} else {
-			log.Printf("[autotrade] safety margin: no monitor data for %s (fail-open)", pairKey)
 		}
 	}
 

@@ -110,11 +110,11 @@ func TestD409_GateHold(t *testing.T) {
 	e.cfg.XAssetExecDriftBps = 100 // 漂移闸抬阈（fill=0 vs anchor −12.39 本例恒漂，非本票断言对象）
 
 	// gate 直测：hold + detail 五值齐
-	pairKey, ok := e.xassetPairKey(ctx, p)
+	pairKey, cexV, mtV, ok := e.xassetPairKey(ctx, p)
 	if !ok {
 		t.Fatal("pairKey")
 	}
-	hold, detail := e.feeAmortizeGate(ctx, p, pairKey)
+	hold, detail := e.feeAmortizeGate(ctx, p, pairKey, cexV, mtV)
 	if !hold {
 		t.Fatalf("gate want hold, detail=%q", detail)
 	}
@@ -148,7 +148,7 @@ func TestD409_GateHold(t *testing.T) {
 // TestD409_GateHarvestPaths 放行路径：net≥0/estDays 超/时钟超/carry死/legacy/anchor>0。
 func TestD409_GateHarvestPaths(t *testing.T) {
 	ctx := context.Background()
-	mk := func(t *testing.T, mutate func(s *pgstore.Store, p *pgstore.Position)) (*Engine, *pgstore.Position, string) {
+	mk := func(t *testing.T, mutate func(s *pgstore.Store, p *pgstore.Position)) (*Engine, *pgstore.Position, string, string, string) {
 		s := testAccumStore(t)
 		d409Truncate(t, s)
 		p := d409Seed498Like(t, s)
@@ -157,60 +157,60 @@ func TestD409_GateHarvestPaths(t *testing.T) {
 		e.cfg.XAssetCexFeeBps = 5.0
 		e.cfg.XAssetFeeHoldMaxDays = 2.0
 		e.cfg.XAssetExecDriftBps = 100
-		k, _ := e.xassetPairKey(ctx, p)
-		return e, p, k
+		k, cv, mv, _ := e.xassetPairKey(ctx, p)
+		return e, p, k, cv, mv
 	}
 	_ = ctx
 
 	// ①净额非负（fee 极小）→ harvest（gate 放行）
-	e, p, k := mk(t, func(s *pgstore.Store, p *pgstore.Position) {
+	e, p, k, cv, mv := mk(t, func(s *pgstore.Store, p *pgstore.Position) {
 		s.Pool().Exec(context.Background(), `UPDATE position_legs SET fee_usd=0.01 WHERE position_id=$1`, p.ID)
 	})
-	if hold, d := e.feeAmortizeGate(context.Background(), p, k); hold {
+	if hold, d := e.feeAmortizeGate(context.Background(), p, k, cv, mv); hold {
 		t.Errorf("①net≥0 应放行, detail=%q", d)
 	}
 
 	// ②estDays 超上限（巨额 fee）→ harvest est_days_over
-	e, p, k = mk(t, func(s *pgstore.Store, p *pgstore.Position) {
+	e, p, k, cv, mv = mk(t, func(s *pgstore.Store, p *pgstore.Position) {
 		s.Pool().Exec(context.Background(), `UPDATE position_legs SET fee_usd=500 WHERE position_id=$1`, p.ID)
 	})
-	if hold, d := e.feeAmortizeGate(context.Background(), p, k); hold || !containsSub(d, "est_days_over") {
+	if hold, d := e.feeAmortizeGate(context.Background(), p, k, cv, mv); hold || !containsSub(d, "est_days_over") {
 		t.Errorf("②应 est_days_over, hold=%v detail=%q", hold, d)
 	}
 
 	// ③延迟中超首行时钟 → harvest forced（先落 3 天前 hold_fee_amortize 行）
-	e, p, k = mk(t, func(s *pgstore.Store, p *pgstore.Position) {
+	e, p, k, cv, mv = mk(t, func(s *pgstore.Store, p *pgstore.Position) {
 		s.InsertPositionEval(context.Background(), pgstore.PositionEval{PositionID: p.ID, Decision: "hold_fee_amortize", Detail: "seed"})
 		s.Pool().Exec(context.Background(),
 			`UPDATE position_evals SET evaluated_at=now()-interval '3 days' WHERE position_id=$1`, p.ID)
 	})
-	if hold, d := e.feeAmortizeGate(context.Background(), p, k); hold || !containsSub(d, "forced") {
+	if hold, d := e.feeAmortizeGate(context.Background(), p, k, cv, mv); hold || !containsSub(d, "forced") {
 		t.Errorf("③应 forced, hold=%v detail=%q", hold, d)
 	}
 
 	// ④carry 死（funding 转负巨额）→ harvest
-	e, p, k = mk(t, func(s *pgstore.Store, p *pgstore.Position) {
+	e, p, k, cv, mv = mk(t, func(s *pgstore.Store, p *pgstore.Position) {
 		s.InsertFacts(context.Background(), []fact.Fact{
 			{Kind: fact.KindFunding, Venue: "okx", Symbol: "XPTUSDT", Value: -100, Unit: fact.UnitPctAnnualized, Ts: time.Now().UTC(), Src: "okx"},
 		})
 	})
-	if hold, d := e.feeAmortizeGate(context.Background(), p, k); hold || !containsSub(d, "carry_dead") {
+	if hold, d := e.feeAmortizeGate(context.Background(), p, k, cv, mv); hold || !containsSub(d, "carry_dead") {
 		t.Errorf("④应 carry_dead, hold=%v detail=%q", hold, d)
 	}
 
 	// ⑤代理路径（monitor 行缺 → found=false）→ 不挂门槛 legacy_path
-	e, p, k = mk(t, func(s *pgstore.Store, p *pgstore.Position) {
+	e, p, k, cv, mv = mk(t, func(s *pgstore.Store, p *pgstore.Position) {
 		s.Pool().Exec(context.Background(), `DELETE FROM fin_xasset_monitor WHERE pair='XPTUSDT-XPT'`)
 	})
-	if hold, d := e.feeAmortizeGate(context.Background(), p, k); hold || d != "legacy_path" {
+	if hold, d := e.feeAmortizeGate(context.Background(), p, k, cv, mv); hold || d != "legacy_path" {
 		t.Errorf("⑤应 legacy_path, hold=%v detail=%q", hold, d)
 	}
 
 	// ⑥anchor>0 域 → 不介入（detail 空）
-	e, p, k = mk(t, func(s *pgstore.Store, p *pgstore.Position) {
+	e, p, k, cv, mv = mk(t, func(s *pgstore.Store, p *pgstore.Position) {
 		p.ExpectedEntrySpreadBps = d341fptr(12.39) // 内存态同步（gate 读 p 字段非重查库）
 	})
-	if hold, d := e.feeAmortizeGate(context.Background(), p, k); hold || d != "" {
+	if hold, d := e.feeAmortizeGate(context.Background(), p, k, cv, mv); hold || d != "" {
 		t.Errorf("⑥anchor>0 不介入, hold=%v detail=%q", hold, d)
 	}
 
@@ -223,9 +223,9 @@ func TestD409_GateHarvestPaths(t *testing.T) {
 	e7.cfg.XAssetCexFeeBps = 5.0
 	e7.cfg.XAssetFeeHoldMaxDays = 2.0
 	e7.cfg.XAssetExecDriftBps = 100
-	k7, _ := e7.xassetPairKey(context.Background(), p7)
+	k7, cv7, mv7, _ := e7.xassetPairKey(context.Background(), p7)
 	// basis=+5bps：capture=(5−(−12.39))×4000/1e4=+6.96；net=2.79+6.96−4.36−4.0=+1.39≥0 → harvest
-	hold, d := e7.feeAmortizeGate(context.Background(), p7, k7)
+	hold, d := e7.feeAmortizeGate(context.Background(), p7, k7, cv7, mv7)
 	if hold || !containsSub(d, "net=") {
 		t.Errorf("⑦过冲 net≥0 应放行, hold=%v detail=%q", hold, d)
 	}

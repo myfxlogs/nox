@@ -97,18 +97,21 @@ func TestD328_HandleOpportunity_NonIncomeAndPass(t *testing.T) {
 		{CanonicalBuy: "CLUSDT", CanonicalSell: "CLUSDT", VenueBuy: "gate:perp", VenueSell: "3001157:mt5", MaxLongQty: 1, MaxShortQty: 1000, MaxGrossUSD: 50000},
 	}
 
-	// T1b：latest 归零（非收入腿）→ 豁免放行
+	// T1b：latest 归零（非收入腿）→ 豁免放行。
+	// D-423 涟漪适配：本 fixture 组合 VenueBuy=gate:perp（CEX 买腿）=反向形态，
+	// monitor 方向未定义在 regime 闸前即钉死拒开——断言语义改锚拒开（regime 豁免
+	// 判定仅对正向 MT×CEX 组合可达）。
 	d328SeedFunding(t, s, "gate", "CLUSDT", -17, -4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 	e := d328Engine(t, s, allow)
 	e.handleOpportunity(ctx, pgstore.Opportunity{
 		ID: "XASSET_CARRY:CLUSDT:gate:perp:3001157:mt5", Type: "XASSET_CARRY",
 		Canonical: "CLUSDT", VenueBuy: "gate:perp", VenueSell: "3001157:mt5", NetBps: 50,
 	}, newComboAccumulator())
-	if got := e.csMissCounts["gate:perp|CLUSDT"]; got != 1 {
-		t.Errorf("T1b 非收入腿豁免应放行到 sizing, csMiss=%d", got)
+	if got := e.csMissCounts["gate:perp|CLUSDT"]; got != 0 {
+		t.Errorf("T1b 反向组合（CEX 买腿）D-423 应拒开, csMiss=%d", got)
 	}
 
-	// T2：全程深负（min −25/max −8）→ 放行
+	// T2：全程深负（min −25/max −8）→ 同反向拒开（D-423）。
 	d311Truncate(t, s)
 	d328SeedFunding(t, s, "gate", "CLUSDT", -25, -20, -18, -15, -12, -11, -10, -10, -9, -9, -8.5, -8, -2)
 	e = d328Engine(t, s, allow)
@@ -116,8 +119,8 @@ func TestD328_HandleOpportunity_NonIncomeAndPass(t *testing.T) {
 		ID: "XASSET_CARRY:CLUSDT:gate:perp:3001157:mt5", Type: "XASSET_CARRY",
 		Canonical: "CLUSDT", VenueBuy: "gate:perp", VenueSell: "3001157:mt5", NetBps: 50,
 	}, newComboAccumulator())
-	if got := e.csMissCounts["gate:perp|CLUSDT"]; got != 1 {
-		t.Errorf("T2 全程深负应放行到 sizing, csMiss=%d", got)
+	if got := e.csMissCounts["gate:perp|CLUSDT"]; got != 0 {
+		t.Errorf("T2 反向组合（CEX 买腿）D-423 应拒开, csMiss=%d", got)
 	}
 }
 
@@ -138,7 +141,9 @@ func TestD328_HandleOpportunity_NoTrigger(t *testing.T) {
 		t.Errorf("SWAPARB 不应被 regime 闸拦截, csMiss=%v", e.csMissCounts)
 	}
 
-	// XASSET 双 MT 腿（无 :perp）→ 无 funding 收益源不约束 → 到 sizing（D-311 白名单需先放行）
+	// XASSET 双 MT 腿（无 :perp）→ D-423 涟漪适配：monitor 簿无 MT×MT venue 组合
+	// （三元组 mt_venue 键可得但 cex_venue=MT venue 无簿）→ 入口闸 fail-closed 拒开，
+	// regime 闸不达——断言改锚拒开（monitor 未定义域不放行）。
 	d328SeedFunding(t, s, "gate", "CLUSDT", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0) // 死窗也拦不到 MT 腿
 	e2 := d328Engine(t, s, []exec.XAssetComboAllowSpec{
 		{CanonicalBuy: "XAUUSD", CanonicalSell: "XAUUSD", VenueBuy: "3001157:mt5", VenueSell: "277842155:mt5", MaxLongQty: 1, MaxShortQty: 1000, MaxGrossUSD: 50000},
@@ -148,7 +153,7 @@ func TestD328_HandleOpportunity_NoTrigger(t *testing.T) {
 		Type: "XASSET_CARRY", Canonical: "XAUUSD",
 		VenueBuy: "3001157:mt5", VenueSell: "277842155:mt5", NetBps: 50,
 	}, newComboAccumulator())
-	if got := e2.csMissCounts["3001157:mt5|XAUUSD"]; got != 1 {
-		t.Errorf("双 MT 腿 XASSET 不应被 regime 闸拦截, csMiss=%v", e2.csMissCounts)
+	if got := e2.csMissCounts["3001157:mt5|XAUUSD"]; got != 0 {
+		t.Errorf("双 MT 腿 XASSET monitor 未定义域应 fail-closed 拒开（D-423）, csMiss=%v", e2.csMissCounts)
 	}
 }
