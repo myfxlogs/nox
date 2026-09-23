@@ -175,8 +175,9 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64) error {
 			PriceActual:   &closePrice,
 			OrderID:       fill.OrderID,
 			Status:        "FILLED",
-			FilledQty:     &closeQty,   // D-346：与 OPEN 腿同字段语义，realized 逐腿分解复核
-			AvgFillPrice:  &closePrice, // D-346：488/489/490 验尸=CLOSE 腿恒 NULL
+			FilledQty:     &closeQty,                   // D-346：与 OPEN 腿同字段语义，realized 逐腿分解复核
+			AvgFillPrice:  &closePrice,                 // D-346：488/489/490 验尸=CLOSE 腿恒 NULL
+			FeeUSD:        positiveFeePtr(fill.FeeUSD), // D-422：CEX 平仓实采 USD 费落库（0→NULL）
 		}); err != nil {
 			if errors.Is(err, pgstore.ErrTerminalState) {
 				log.Printf("[exec] resume close leg %d already persisted (concurrent), skip", leg.ID)
@@ -197,7 +198,7 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64) error {
 				log.Printf("[exec] pos %d alert write: %v", posID, err)
 			}
 		}
-		if err := p.writeCloseCashflows(ctx, posID, leg.LegNo, leg.Venue, fill.Swap, fill.Commission, fx); err != nil {
+		if err := p.writeCloseCashflows(ctx, posID, leg.LegNo, leg.Venue, fill.Swap, fill.Commission, fill.FeeUSD, fx); err != nil {
 			return fmt.Errorf("pos=%d leg=%d close cashflow: %w", posID, leg.LegNo, err)
 		}
 	}
@@ -238,12 +239,12 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64) error {
 	}
 	totalPnL = p.sumClosedLegsPnL(ctx, posID, legs, closeLegs, fx)
 
-	// PnL 校准（D-159 R4 全命中才覆盖语义不动）
+	// PnL 校准（D-422：est=有可校准腿但未全部命中才写 pnl_estimated；纯 CEX 仓不写）
 	if p.pnlCalibrator != nil {
-		if authPnL, ok := p.calibratePnL(ctx, legs, fx); ok {
+		if authPnL, ok, est := p.calibratePnL(ctx, legs, closeLegs, fx); ok {
 			log.Printf("[exec] position %d PnL calibrated: sync=%.2f → auth=%.2f", posID, totalPnL, authPnL)
 			totalPnL = authPnL
-		} else {
+		} else if est {
 			_ = p.store.SetPositionNote(ctx, posID, "pnl_estimated: partial or no calibration")
 		}
 	}

@@ -120,7 +120,7 @@ func (p *Pipeline) backfillCloseFromHistory(ctx context.Context, posID int64, le
 	}); err != nil && !errors.Is(err, pgstore.ErrTerminalState) {
 		return fmt.Errorf("backfill CLOSE leg: %w", err)
 	}
-	if err := p.writeCloseCashflows(ctx, posID, leg.LegNo, leg.Venue, hp.Swap, hp.Commission, fx); err != nil {
+	if err := p.writeCloseCashflows(ctx, posID, leg.LegNo, leg.Venue, hp.Swap, hp.Commission, 0, fx); err != nil {
 		return fmt.Errorf("backfill cashflow: %w", err)
 	}
 	return nil
@@ -138,7 +138,7 @@ func (p *Pipeline) backfillMissingCashflows(ctx context.Context, posID int64, le
 	if hp.Swap == 0 && hp.Commission == 0 {
 		return nil
 	}
-	return p.writeCloseCashflows(ctx, posID, leg.LegNo, leg.Venue, hp.Swap, hp.Commission, fx)
+	return p.writeCloseCashflows(ctx, posID, leg.LegNo, leg.Venue, hp.Swap, hp.Commission, 0, fx)
 }
 
 // ErrCloseInFlight D-407 S1：ResumeClose 单飞哨兵——同 posID 平仓执行中再次调用

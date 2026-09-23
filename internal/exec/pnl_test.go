@@ -171,7 +171,7 @@ func TestCalibratePnL_Authoritative(t *testing.T) {
 		"vB:mt5:2002": {Profit: -5.0, Swap: 0.3, Commission: 0.05},
 	}}
 	p := &Pipeline{pnlCalibrator: cal}
-	got, ok := p.calibratePnL(context.Background(), legs, 1.0)
+	got, ok, _ := p.calibratePnL(context.Background(), legs, nil, 1.0)
 	if !ok {
 		t.Fatal("want ok=true (calibrated)")
 	}
@@ -190,7 +190,7 @@ func TestCalibratePnL_NotFound(t *testing.T) {
 	}
 	cal := &fakePnLCalibrator{results: map[string]*HistoryPnL{}} // 空，查不到
 	p := &Pipeline{pnlCalibrator: cal}
-	_, ok := p.calibratePnL(context.Background(), legs, 1.0)
+	_, ok, _ := p.calibratePnL(context.Background(), legs, nil, 1.0)
 	if ok {
 		t.Error("not found want ok=false")
 	}
@@ -202,7 +202,7 @@ func TestCalibratePnL_NilCalibrator(t *testing.T) {
 		{Phase: "OPEN", Status: "FILLED", Venue: "vA:mt5", OrderID: "1001"},
 	}
 	p := &Pipeline{} // pnlCalibrator=nil
-	_, ok := p.calibratePnL(context.Background(), legs, 1.0)
+	_, ok, _ := p.calibratePnL(context.Background(), legs, nil, 1.0)
 	if ok {
 		t.Error("nil calibrator want ok=false")
 	}
@@ -219,7 +219,7 @@ func TestCalibratePnL_PartialHit(t *testing.T) {
 		// vB:2002 未找到
 	}}
 	p := &Pipeline{pnlCalibrator: cal}
-	_, ok := p.calibratePnL(context.Background(), legs, 1.0)
+	_, ok, _ := p.calibratePnL(context.Background(), legs, nil, 1.0)
 	if ok {
 		t.Fatal("partial hit want ok=false (partial calibration does not override, R4)")
 	}
@@ -285,7 +285,7 @@ func TestCalibratePnL_FxConversion(t *testing.T) {
 		"vB:mt5:2002": {Profit: -5.0, Swap: 0.3, Commission: 0.05},
 	}}
 	p := &Pipeline{pnlCalibrator: cal}
-	got, ok := p.calibratePnL(context.Background(), legs, 0.5)
+	got, ok, _ := p.calibratePnL(context.Background(), legs, nil, 0.5)
 	if !ok {
 		t.Fatal("want ok=true (calibrated)")
 	}
@@ -304,7 +304,7 @@ func TestCalibratePnL_FxMissingZero(t *testing.T) {
 		"vA:mt5:1001": {Profit: 10.0, Swap: 0, Commission: 0},
 	}}
 	p := &Pipeline{pnlCalibrator: cal}
-	got, ok := p.calibratePnL(context.Background(), legs, 0)
+	got, ok, _ := p.calibratePnL(context.Background(), legs, nil, 0)
 	if !ok {
 		t.Fatal("fx=0 still calibrated (ok=true), value should be 0")
 	}

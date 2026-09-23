@@ -12,12 +12,22 @@ import (
 	"arb/internal/store/pgstore"
 )
 
-// writeCloseCashflows 写入平仓 swap/commission 现金流（D-189 P0-2）。
+// writeCloseCashflows 写入平仓 swap/commission 现金流（D-189 P0-2；D-422 feeUSD 合并）。
 // 统一入口：pipeline_legs_close.go 与 autoFlattenLEGGED 共用，保证显式错误处理 + 幂等。
 // 任一查询/写入失败 → 返回 error（保持 CLOSING，禁止继续到 store.ClosePosition）；
 // 已存在（HasCashflowForLegDay=true）→ 跳过（ResumeClose 重复入账防护）。
-// fx 为计价币→USD 换算率（与 calcLegPnL 同口径）；amount 为 broker 返回的原始计价币值。
-func (p *Pipeline) writeCloseCashflows(ctx context.Context, posID int64, legNo int16, venue string, swap, commission, fx float64) error {
+// fx 为计价币→USD 换算率（与 calcLegPnL 同口径）；swap/commission 为 broker 返回的原始计价币值；
+// feeUSD 为 CEX 实采 USD 费（已是 USD，不做 fx 换算）——commissionUSD=commission*fx+feeUSD
+// 合并为单条 kind=commission 现金流（防双口径/幂等键互吞，D-422 §1.3）。
+// positiveFeePtr D-422：正费用 → *float64；≤0 → NULL（不写 0 冒充无费，同 persistOpenLegs 口径）。
+func positiveFeePtr(v float64) *float64 {
+	if v <= 0 {
+		return nil
+	}
+	return &v
+}
+
+func (p *Pipeline) writeCloseCashflows(ctx context.Context, posID int64, legNo int16, venue string, swap, commission, feeUSD, fx float64) error {
 	now := time.Now().UTC()
 	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	if swap != 0 {
@@ -25,9 +35,9 @@ func (p *Pipeline) writeCloseCashflows(ctx context.Context, posID int64, legNo i
 			return fmt.Errorf("pos=%d leg=%d swap cashflow: %w", posID, legNo, err)
 		}
 	}
-	if commission != 0 {
-		// commission 入库为负值（成本），与 pipeline_legs_close.go 原口径一致。
-		if err := p.insertCashflowIdempotent(ctx, posID, legNo, "commission", venue, -commission*fx, dayStart, now); err != nil {
+	if commissionUSD := commission*fx + feeUSD; commissionUSD != 0 {
+		// commission 入库为负值（成本）；CEX feeUSD 已是 USD 直接并入。
+		if err := p.insertCashflowIdempotent(ctx, posID, legNo, "commission", venue, -commissionUSD, dayStart, now); err != nil {
 			return fmt.Errorf("pos=%d leg=%d commission cashflow: %w", posID, legNo, err)
 		}
 	}

@@ -92,28 +92,55 @@ func (p *Pipeline) sumClosedLegsPnL(ctx context.Context, posID int64, legs, clos
 // 命中 HistoryOrder.Profit 时以其为权威覆盖同步路径公式结果。
 // D-159 W3a R4：权威值只用价格 PnL（Profit），Swap/Commission 走 cashflows（与 calcLegPnL 双计拆除对齐）。
 // D-105 T2：权威值 × fx（同一 canonical/fxResolver，计价币→USD）。
-// D-159 W3a R4 校准规则：应校准腿总数 = OPEN+FILLED+有 OrderID 的腿；
-// 所有应校准腿全部成功才返回 ok=true（部分成功不覆盖整仓，R4）。
-// calibrator 未接线/未全部命中 → 返回 ok=false（用同步路径公式结果）。
-func (p *Pipeline) calibratePnL(ctx context.Context, legs []pgstore.PositionLeg, fx float64) (float64, bool) {
+// D-159 W3a R4 + D-422 混合校准：应校准腿 = OPEN+FILLED+有 OrderID+venue 有历史查证器
+// （无查证器的 CEX 腿不计入——其公式价 PnL 并入总值，非估算）；可校准腿全部命中才 ok=true，
+// 有 miss → est=true（调用方写 pnl_estimated）；无可校准腿 → ok=false/est=false（纯 CEX 不写 note）。
+func (p *Pipeline) legCalibratable(venue string) bool {
 	if p.pnlCalibrator == nil {
-		return 0, false
+		return false
 	}
-	shouldCalibrate := 0
-	for _, leg := range legs {
-		if leg.Phase == "OPEN" && leg.Status == "FILLED" && leg.OrderID != "" {
-			shouldCalibrate++
+	// D-422：可校准性=该 venue 有历史查证器（reconcile 路由；calibrator 未暴露路由接口
+	// 时回退 isMTVenueKey——CEX 腿不再被计入应校准腿数）。
+	if hr, ok := p.pnlCalibrator.(interface {
+		HasHistoryQuerier(venue string) bool
+	}); ok {
+		return hr.HasHistoryQuerier(venue)
+	}
+	return isMTVenueKey(venue)
+}
+
+func (p *Pipeline) calibratePnL(ctx context.Context, legs, closeLegs []pgstore.PositionLeg, fx float64) (auth float64, ok bool, est bool) {
+	if p.pnlCalibrator == nil {
+		return 0, false, false
+	}
+	closesByLegNo := make(map[int16][]pgstore.PositionLeg)
+	for _, cl := range closeLegs {
+		if cl.Status == "FILLED" {
+			closesByLegNo[cl.LegNo] = append(closesByLegNo[cl.LegNo], cl)
 		}
 	}
-	if shouldCalibrate == 0 {
-		return 0, false
-	}
 	var totalPnL float64
-	calibrated := 0
+	should, calibrated := 0, 0
 	for _, leg := range legs {
 		if leg.Phase != "OPEN" || leg.Status != "FILLED" || leg.OrderID == "" {
 			continue
 		}
+		if !p.legCalibratable(leg.Venue) {
+			// D-422：CEX 等无查证器腿走公式价 PnL（与 sumClosedLegsPnL 同口径——
+			// 对该 venue 而言公式价即权威，非估算）。
+			for _, cl := range closesByLegNo[leg.LegNo] {
+				if cl.PriceActual == nil {
+					continue
+				}
+				qty := leg.EffectiveQty()
+				if cl.FilledQty != nil && *cl.FilledQty > 0 {
+					qty = *cl.FilledQty
+				}
+				totalPnL += p.legPricePnL(leg, *cl.PriceActual, qty, fx)
+			}
+			continue
+		}
+		should++
 		vctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		hp, err := p.pnlCalibrator.QueryHistoryPnL(vctx, leg.Venue, leg.OrderID, 3)
 		cancel()
@@ -121,12 +148,14 @@ func (p *Pipeline) calibratePnL(ctx context.Context, legs []pgstore.PositionLeg,
 			continue
 		}
 		// D-159 W3a R4：权威值只用价格 PnL（Profit）；Swap/Commission 由 cashflows 组件承载。
-		totalPnL += hp.Profit
+		totalPnL += hp.Profit * fx
 		calibrated++
 	}
-	// D-159 W3a R4：全部应校准腿成功才返回 true（部分成功不覆盖整仓）。
-	if calibrated != shouldCalibrate {
-		return 0, false
+	if should == 0 {
+		return 0, false, false
 	}
-	return totalPnL * fx, true
+	if calibrated != should {
+		return totalPnL, false, true
+	}
+	return totalPnL, true, false
 }
