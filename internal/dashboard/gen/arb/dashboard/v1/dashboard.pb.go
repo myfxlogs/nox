@@ -19842,7 +19842,8 @@ type CarryGraduationRow struct {
 	DecidedAt      string                 `protobuf:"bytes,12,opt,name=decided_at,json=decidedAt,proto3" json:"decided_at,omitempty"`
 	DecidedNote    string                 `protobuf:"bytes,13,opt,name=decided_note,json=decidedNote,proto3" json:"decided_note,omitempty"`
 	ComboId        *int64                 `protobuf:"varint,14,opt,name=combo_id,json=comboId,proto3,oneof" json:"combo_id,omitempty"`
-	VenueGaps      []string               `protobuf:"bytes,15,rep,name=venue_gaps,json=venueGaps,proto3" json:"venue_gaps,omitempty"` // approve 时算的 venue env 缺口（pending 即时算；decided 回读快照）
+	VenueGaps      []string               `protobuf:"bytes,15,rep,name=venue_gaps,json=venueGaps,proto3" json:"venue_gaps,omitempty"`                   // approve 时算的 venue env 缺口（pending 即时算；decided 回读快照）
+	NetAllInUsd    *float64               `protobuf:"fixed64,16,opt,name=net_all_in_usd,json=netAllInUsd,proto3,oneof" json:"net_all_in_usd,omitempty"` // D-410 S5：全账净额（accrued−est_fee+convergence；缺账行 NULL）
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -19980,6 +19981,13 @@ func (x *CarryGraduationRow) GetVenueGaps() []string {
 		return x.VenueGaps
 	}
 	return nil
+}
+
+func (x *CarryGraduationRow) GetNetAllInUsd() float64 {
+	if x != nil && x.NetAllInUsd != nil {
+		return *x.NetAllInUsd
+	}
+	return 0
 }
 
 type ListCarryGraduationsRequest struct {
@@ -22074,7 +22082,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\bholdings\x18\a \x03(\v2#.arb.dashboard.v1.CexFinanceHoldingR\bholdings\x126\n" +
 	"\x05flows\x18\b \x03(\v2 .arb.dashboard.v1.CexFinanceFlowR\x05flows\"X\n" +
 	"\x15GetCexFinanceResponse\x12?\n" +
-	"\baccounts\x18\x01 \x03(\v2#.arb.dashboard.v1.CexAccountFinanceR\baccounts\"\xfd\x03\n" +
+	"\baccounts\x18\x01 \x03(\v2#.arb.dashboard.v1.CexAccountFinanceR\baccounts\"\xba\x04\n" +
 	"\x12CarryGraduationRow\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x19\n" +
 	"\bpaper_id\x18\x02 \x01(\x03R\apaperId\x12\x14\n" +
@@ -22095,10 +22103,12 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\fdecided_note\x18\r \x01(\tR\vdecidedNote\x12\x1e\n" +
 	"\bcombo_id\x18\x0e \x01(\x03H\x02R\acomboId\x88\x01\x01\x12\x1d\n" +
 	"\n" +
-	"venue_gaps\x18\x0f \x03(\tR\tvenueGapsB\v\n" +
+	"venue_gaps\x18\x0f \x03(\tR\tvenueGaps\x12(\n" +
+	"\x0enet_all_in_usd\x18\x10 \x01(\x01H\x03R\vnetAllInUsd\x88\x01\x01B\v\n" +
 	"\t_mt_venueB\x13\n" +
 	"\x11_last_funding_annB\v\n" +
-	"\t_combo_id\"\x1d\n" +
+	"\t_combo_idB\x11\n" +
+	"\x0f_net_all_in_usd\"\x1d\n" +
 	"\x1bListCarryGraduationsRequest\"X\n" +
 	"\x1cListCarryGraduationsResponse\x128\n" +
 	"\x04rows\x18\x01 \x03(\v2$.arb.dashboard.v1.CarryGraduationRowR\x04rows\"\xfb\x01\n" +

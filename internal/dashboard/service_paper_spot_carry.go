@@ -130,11 +130,13 @@ func buildPaperSpotCarryBoard(ctx context.Context, src paperBoardSource, now tim
 		row.EntryBasisBps = p.EntryBasisBps
 		row.LastBasisBps = p.LastBasisBps
 		if p.EntryBasisBps != nil && p.LastBasisBps != nil {
-			diff := (*p.EntryBasisBps - *p.LastBasisBps) / 1e4
+			// D-410 S6：展示与结算同口径——dir×(last−entry)（原 entry−last 对
+			// long_perp/B 结构行符号反向）。dir：空腿=基差被减项→−1。
+			dir := -1.0
 			if p.Side == "long_perp" {
-				diff = -diff
+				dir = 1
 			}
-			basis := p.QtyUSD * diff
+			basis := p.QtyUSD * dir * (*p.LastBasisBps - *p.EntryBasisBps) / 1e4
 			row.BasisPnlUsd = &basis
 			total := p.AccruedUSD + basis - p.QtyUSD*paperTurnCostPct
 			row.TotalPnlUsd = &total

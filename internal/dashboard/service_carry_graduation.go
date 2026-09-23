@@ -69,9 +69,10 @@ func (s *Service) ListCarryGraduations(ctx context.Context, req *connect.Request
 			Id: g.ID, PaperId: g.PaperID, Venue: g.Venue, Symbol: g.Symbol,
 			Structure: g.Structure, MtVenue: g.MtVenue,
 			AgeDays: g.AgeDays, AccruedUsd: g.AccruedUSD, LastFundingAnn: g.LastFundingAnn,
-			Status:    g.Status,
-			CreatedAt: g.CreatedAt.Format(time.RFC3339),
-			ComboId:   g.ComboID,
+			NetAllInUsd: g.NetAllInUSD, // D-410 S5：全账净额透出（缺账行 NULL 诚实缺）
+			Status:      g.Status,
+			CreatedAt:   g.CreatedAt.Format(time.RFC3339),
+			ComboId:     g.ComboID,
 		}
 		if g.DecidedAt != nil {
 			row.DecidedAt = g.DecidedAt.Format(time.RFC3339)
