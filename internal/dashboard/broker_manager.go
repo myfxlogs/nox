@@ -84,6 +84,8 @@ type BrokerManager struct {
 	// symbolGroups TTL（D-045 §3.2.1）：由 config.SymbolsTTL 注入。
 	symbolGroupsTTL time.Duration
 
+	marginReservePct float64 // D-415 动态 MT5 executor 资金预检安全垫（cfg 注入）
+
 	// SwapKick swap 轮询唤醒（D-060 F2 boot 竞态修复）：新 venue attach / 映射增删后立即补一轮，
 	// 消灭「attach 晚于首轮 → 最长 Interval 无 swap 数据」盲窗。nil = 未接线（测试直接构造）。main 注入
 	// func() { scheduler.Kick("mt_swap") }。

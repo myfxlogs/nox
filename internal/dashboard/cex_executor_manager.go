@@ -19,6 +19,8 @@ type CexExecutorManager struct {
 	store    ExchangeStore
 	reg      *exec.Registry
 	interval time.Duration
+	// marginReservePct D-415：CEX executor 资金预检安全垫注入值（cfg.MarginReservePct）。
+	marginReservePct float64
 	// alertFn D-108 P2 T1：平仓被拒时 critical 告警注入（main 传 store.InsertAlert）。
 	alertFn func(posID *int64, level, msg string)
 
@@ -28,13 +30,14 @@ type CexExecutorManager struct {
 
 // NewCexExecutorManager 创建管理器。interval 复用 cfg.BrokerPosPollInterval（D-059 不新增 knob）。
 // alertFn D-108 P2 T1：平仓被拒 critical 告警（main 传 store.InsertAlert；nil=不告警）。
-func NewCexExecutorManager(s ExchangeStore, reg *exec.Registry, interval time.Duration, alertFn func(posID *int64, level, msg string)) *CexExecutorManager {
+func NewCexExecutorManager(s ExchangeStore, reg *exec.Registry, interval time.Duration, alertFn func(posID *int64, level, msg string), marginReservePct float64) *CexExecutorManager {
 	return &CexExecutorManager{
-		store:    s,
-		reg:      reg,
-		interval: interval,
-		alertFn:  alertFn,
-		keys:     make(map[string]bool),
+		store:            s,
+		reg:              reg,
+		interval:         interval,
+		alertFn:          alertFn,
+		marginReservePct: marginReservePct,
+		keys:             make(map[string]bool),
 	}
 }
 
@@ -82,6 +85,7 @@ func (m *CexExecutorManager) sync(ctx context.Context) {
 		seen[vk] = true
 		exe := exec.NewCEXExecutor(c.Venue, c.VenueType, c.APIKey, c.APISecret, c.Passphrase, base, c.Simulated)
 		exe.SetKeyOverride(vk)
+		exe.SetMarginReservePct(m.marginReservePct)
 		exe.AlertFn = m.alertFn // D-108 P2 T1：平仓被拒 critical 告警注入
 		m.reg.Register(exe)
 		if !m.keys[vk] {

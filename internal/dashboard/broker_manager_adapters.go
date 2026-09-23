@@ -92,6 +92,9 @@ func (m *BrokerManager) startMT4(ctx context.Context, a *pgstore.BrokerAccount) 
 	return nil
 }
 
+// SetMarginReservePct D-415：注入动态 MT5 executor 资金预检安全垫（cfg.MarginReservePct）。
+func (m *BrokerManager) SetMarginReservePct(pct float64) { m.marginReservePct = pct }
+
 // startMT5 启动 MT5 适配器。
 func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) error {
 	ad := adapter.NewMT5Adapter(a.Venue, a.Host, a.Server, int32(a.Port), a.User, a.Password)
@@ -225,7 +228,9 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 			m.qbus.Publish(q)
 		}
 	})
-	m.reg.Register(exec.NewMT5Executor(a.Venue, ad.Token(), ad.TradingClient()))
+	mt5Exe := exec.NewMT5Executor(a.Venue, ad.Token(), ad.TradingClient(), ad.MT5Client())
+	mt5Exe.SetMarginReservePct(m.marginReservePct)
+	m.reg.Register(mt5Exe)
 	q := reconcile.NewMT5Querier(a.Venue, ad.Token(), ad.MT5Client())
 
 	r := &running{
