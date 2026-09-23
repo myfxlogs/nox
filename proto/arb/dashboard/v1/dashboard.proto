@@ -181,6 +181,10 @@ service DashboardService {
   rpc ListCarryGraduations(ListCarryGraduationsRequest) returns (ListCarryGraduationsResponse);
   rpc ApproveCarryGraduation(ApproveCarryGraduationRequest) returns (ApproveCarryGraduationResponse);
   rpc RejectCarryGraduation(RejectCarryGraduationRequest) returns (RejectCarryGraduationResponse);
+
+  // D-405 S6：账户资金与保证金卡（财务页下钻）——数据源 fin_venue_margin_status
+  // + snapshot 最新行 join；覆盖天数/建议补资金/档位全后端给，前端零计算。
+  rpc ListAccountMarginStatus(ListAccountMarginStatusRequest) returns (ListAccountMarginStatusResponse);
 }
 
 // === Quote（§1.1）===
@@ -946,6 +950,33 @@ message AccountInfo {
   bool simulated = 15;     // CEX 模拟盘标记（OKX demo=true/binance 实盘=false；CFD 零值 false 无意义——CFD 实盘/模拟由 BrokerAccount.isReal 管）
   string website = 16;     // 官网（D-157 V3：CEX 从 ExchangeConfig.website 透传；CFD 从 BrokerAccount.website 透传；空 = 未设置）
   repeated Holding holdings = 17;  // 币种明细（D-273 S2：CEX 现货采集器保留明细不丢弃；只含 qty>0；CFD 空）
+  double buffer_multiple = 18;     // D-405 S2：CEX 距强平缓冲倍数=equity/MMR（写时归一；0=未采，CFD/spot 恒 0）
+}
+
+// === D-405 S6 账户资金与保证金 ===
+
+message ListAccountMarginStatusRequest {}
+
+// AccountMarginStatus 单账户保证金档位行（marginGuard 每轮评估 upsert 的 fin_venue_margin_status
+// + fin_venue_account_snapshot 最新行 join）。tier=normal/warn/urgent/data_stale；
+// coverage_days 为余粮覆盖天数（CEX 用 (equity−MMR)/日波动额 折算，0/负=不可算按 tier 呈现）。
+message AccountMarginStatus {
+  string venue = 1;
+  string venue_type = 2;              // mt5 / unified / perp / spot / funding / earn
+  string asset_type = 3;              // cfd / cex（venue_type 推导）
+  double balance = 4;
+  double equity = 5;
+  double margin_used = 6;             // 已用保证金（MT=equity−free_margin；CEX≈equity/buffer=MMR）
+  double free_margin = 7;             // 可用保证金（MT=free_margin_raw；CEX≈equity−MMR 头room）
+  double coverage_days = 8;           // 余粮天数（噪声自适应；<0=不适用）
+  double suggested_topup_usd = 9;     // 预警档缺口额（够档=0）
+  string tier = 10;
+  string currency = 11;
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+message ListAccountMarginStatusResponse {
+  repeated AccountMarginStatus rows = 1;
 }
 
 // 单账户币种明细持有（D-273 S2）。

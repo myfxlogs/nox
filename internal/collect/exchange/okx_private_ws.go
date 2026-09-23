@@ -257,7 +257,8 @@ func okxAccountPushRow(data map[string]any, now time.Time) (pgstore.VenueAccount
 		return pgstore.VenueAccountSnapshot{}, false
 	}
 	var d struct {
-		Details []struct {
+		MgnRatio string `json:"mgnRatio"` // D-405 S2：账户保证金率（百分数，越高越安全）
+		Details  []struct {
 			Ccy   string `json:"ccy"`
 			EqUsd string `json:"eqUsd"`
 		} `json:"details"`
@@ -274,9 +275,15 @@ func okxAccountPushRow(data map[string]any, now time.Time) (pgstore.VenueAccount
 			eq += usd
 		}
 	}
-	return pgstore.VenueAccountSnapshot{
+	row := pgstore.VenueAccountSnapshot{
 		Venue: "okx", VenueType: "unified",
 		BalanceRaw: eq, EquityRaw: eq,
 		Currency: "USDT", FetchedAt: now, Src: "okx_event",
-	}, true
+	}
+	// D-405 S2：buffer_multiple=mgnRatio/100（与 REST accountOKX 同口径写时归一）。
+	if mr, perr := strconv.ParseFloat(d.MgnRatio, 64); perr == nil && mr > 0 {
+		b := mr / 100
+		row.BufferMultiple = &b
+	}
+	return row, true
 }

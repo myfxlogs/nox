@@ -17,6 +17,9 @@ type Store struct {
 	// D-114：告警写入后回调（main.go 注入 alertTopic.Publish 触发实时推送）。
 	// nil = 未接线（测试直接构造 Store）→ 不回调，InsertAlert 仍正常写 DB。
 	alertHook func(a Alert)
+	// D-405 S3：venue 账户快照落库后钩子（marginGuard 事件驱动评估挂点）。
+	// nil = 未接线 → 不回调，InsertVenueAccountSnapshots 仍正常写 DB。
+	snapHook func(ctx context.Context, snaps []VenueAccountSnapshot)
 }
 
 // SetAlertPaused 暂停/恢复告警写入（D-069）。

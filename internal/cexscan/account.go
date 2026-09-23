@@ -23,7 +23,9 @@ type AccountSnapshot struct {
 	Currency   string // D-358：原币（MT 原币直传/CEX USDT，核证见 migration 0111 头注）
 	AssetType  string // D-360：cfd / cex（核证点①，reconcile_queriers.go:80 值域两值）
 	Simulated  bool   // D-360：CEX 模拟盘标记（D-156 V2 既有，映射曾丢弃）
-	Ts         time.Time
+	// BufferMultiple D-405 S2：CEX 距强平缓冲倍数=equity/MMR（<=0=未采）。
+	BufferMultiple float64
+	Ts             time.Time
 }
 
 // IsRealAccount D-360 S1：real 判定纯函数（证真才留）。
@@ -51,15 +53,16 @@ func ScanAccounts(s AccountSnapshotter) []AccountSnapshot {
 			continue
 		}
 		out = append(out, AccountSnapshot{
-			Venue:      info.Venue,
-			VenueType:  info.VenueType,
-			Balance:    info.Balance,
-			Equity:     info.Equity,
-			FreeMargin: info.FreeMargin,
-			Currency:   info.Currency,
-			AssetType:  info.AssetType,
-			Simulated:  info.Simulated,
-			Ts:         now,
+			Venue:          info.Venue,
+			VenueType:      info.VenueType,
+			Balance:        info.Balance,
+			Equity:         info.Equity,
+			FreeMargin:     info.FreeMargin,
+			Currency:       info.Currency,
+			AssetType:      info.AssetType,
+			Simulated:      info.Simulated,
+			BufferMultiple: info.BufferMultiple,
+			Ts:             now,
 		})
 	}
 	return out

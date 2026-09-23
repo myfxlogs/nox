@@ -121,6 +121,7 @@ var migrationFiles = []struct {
 	{123, migrations.RadarDigestStateSQL},              // D-389 S1：digest 边沿化集合 hash 状态表
 	{124, migrations.RadarDigestMemberSQL},             // D-392 S1：digest 成员级边沿（新入才推+flap TTL）
 	{125, migrations.CarryGraduationsSQL},              // D-403 S1：验证毕业链建议表
+	{126, migrations.MarginGuardSQL},                   // D-405 S1：snapshot buffer_multiple + fin_venue_margin_status
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

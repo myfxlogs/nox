@@ -200,11 +200,17 @@ func buildVenueSnapshotRows(snaps []AccountSnapshot, realKeys map[string]bool) [
 			continue
 		}
 		seen[key] = true
-		rows = append(rows, pgstore.VenueAccountSnapshot{
+		row := pgstore.VenueAccountSnapshot{
 			Venue: sn.Venue, VenueType: vt,
 			BalanceRaw: sn.Balance, EquityRaw: sn.Equity, FreeMarginRaw: sn.FreeMargin,
 			Currency: sn.Currency, FetchedAt: sn.Ts,
-		})
+		}
+		// D-405 S2：CEX buffer 写时归一透传（<=0=未采 → NULL 诚实缺省）。
+		if sn.BufferMultiple > 0 {
+			b := sn.BufferMultiple
+			row.BufferMultiple = &b
+		}
+		rows = append(rows, row)
 	}
 	return rows
 }
