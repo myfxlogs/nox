@@ -236,6 +236,29 @@ func TestD421LeggedPreflightFilledAborts(t *testing.T) {
 	}
 }
 
+// R1 锚定：FAILED 腿查单 canceled+qty>0（撤单前已部分成交）→ 走 filled 分支：
+// ResolveLegFill 回填 + reevalAfterResolve + return false 中止收编。
+func TestD421LeggedPreflightCanceledPartialAborts(t *testing.T) {
+	fs, c := d421SeedLegged("FAILED")
+	r := New(fs)
+	r.SetCloser(c)
+	r.SetOrderStatusQueriers(map[string]exec.OrderStatusQuerier{
+		"okx:perp": &d421OSQ{state: "canceled", qty: 0.05, px: 2990},
+	})
+	r.fastRetryLegged(context.Background(), fs.positions[3])
+
+	if len(c.calls) != 0 {
+		t.Fatalf("canceled+部分成交=真实持仓 → 必须中止收编，got closer calls=%v", c.calls)
+	}
+	l := fs.legs[3][1]
+	if l.Status != "FILLED" || *l.FilledQty != 0.05 {
+		t.Fatalf("腿应回填 FILLED qty=0.05，got %+v", l)
+	}
+	if fs.positions[3].Status != "OPEN" {
+		t.Fatalf("全腿齐应仓 OPEN，got %s", fs.positions[3].Status)
+	}
+}
+
 // T6b 查单零成交 → 继续既有收编（ClaimClose→ResumeClose）。
 func TestD421LeggedPreflightEmptyContinues(t *testing.T) {
 	fs, c := d421SeedLegged("FAILED")

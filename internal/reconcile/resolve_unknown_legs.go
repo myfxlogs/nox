@@ -213,8 +213,9 @@ func (r *Reconciler) preflightLeggedFailedLegs(ctx context.Context, p *pgstore.P
 				log.Printf("[reconcile] legged preflight pos=%d order=%s query: %v", p.ID, l.OrderID, qerr)
 			}
 			return false
-		case (state == "filled" || state == "partial") && qty > 0:
-			// 实际已成交 → 回填 FILLED + 仓态重评（全腿齐→OPEN），中止收编。
+		case (state == "filled" || state == "partial" || state == "canceled") && qty > 0:
+			// 实际已成交（含 canceled+部分成交：撤单前有量=真实持仓）→ 回填 FILLED +
+			// 仓态重评（全腿齐→OPEN），中止收编。
 			sub, cancel = r.withTimeout(ctx)
 			_ = r.store.ResolveLegFill(sub, l.ID, px, qty, fee)
 			cancel()
@@ -223,7 +224,7 @@ func (r *Reconciler) preflightLeggedFailedLegs(ctx context.Context, p *pgstore.P
 			r.reevalAfterResolve(ctx, p.ID)
 			return false
 		}
-		// canceled/零成交 → 确定未成交，继续收编。
+		// canceled+零成交 / 其余终态零量 → 确定未成交，继续收编。
 	}
 	return true
 }
