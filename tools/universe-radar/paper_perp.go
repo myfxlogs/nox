@@ -175,7 +175,7 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 			}
 			// miss streak++（行缺席=信号死，零累积时钟照走）
 			if p.LowStreak+1 >= perpExitStreakRounds {
-				if err := st.ExitPaperSpotCarry(ctx, p.ID, "normalized"); err != nil {
+				if err := st.ExitPaperSpotCarry(ctx, p.ID, "normalized", nil); err != nil {
 					return opened, exited, fmt.Errorf("perp paper step: exit miss %d: %w", p.ID, err)
 				}
 				exited++
@@ -214,14 +214,14 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 			continue
 		}
 		if streak >= perpExitStreakRounds {
-			if err := st.ExitPaperSpotCarry(ctx, p.ID, "normalized"); err != nil {
+			if err := st.ExitPaperSpotCarry(ctx, p.ID, "normalized", nil); err != nil {
 				return opened, exited, fmt.Errorf("perp paper step: exit %d: %w", p.ID, err)
 			}
 			exited++
 			continue
 		}
 		if now.Sub(p.EntryTs).Hours()/24 >= perpMaxAgeDays {
-			if err := st.ExitPaperSpotCarry(ctx, p.ID, "age_7d"); err != nil {
+			if err := st.ExitPaperSpotCarry(ctx, p.ID, "age_7d", nil); err != nil {
 				return opened, exited, fmt.Errorf("perp paper step: exit age %d: %w", p.ID, err)
 			}
 			exited++
