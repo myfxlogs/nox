@@ -30,6 +30,7 @@ type SymbolGroup struct {
 type running struct {
 	stop         func() // 停止报价订阅 + 适配器连接
 	querier      reconcile.VenueQuerier
+	histQuerier  reconcile.OrderHistoryQuerier                    // D-416：对账历史查证器（attach/detach 镜像注册）
 	symbols      func(ctx context.Context) ([]string, error)      // 拉取服务器符号表
 	symbolGroups func(ctx context.Context) ([]SymbolGroup, error) // 符号表 + 分组（仅服务 BrokerSymbols 展示，按需拉一次）
 	// volumeSpec 单符号最小手数（MT5 SymbolParams SymGroup.MinLots；MT4/未运行 = nil）。
@@ -58,6 +59,7 @@ type running struct {
 type staticQuerier struct {
 	venue string
 	q     reconcile.VenueQuerier
+	hq    reconcile.OrderHistoryQuerier                  // D-416：env 静态历史查证器
 	swap  func(ctx context.Context) ([]fact.Fact, error) // nil = 无 swap 源
 }
 
@@ -70,9 +72,10 @@ type BrokerManager struct {
 	mu      sync.Mutex
 	running map[string]*running // venue → running
 	static  []staticQuerier
-	cexQs   []reconcile.VenueQuerier       // D-121：CEX perp 持仓查询器（动态刷新）
-	onQ     func([]reconcile.VenueQuerier) // querier 集合变更回调
-	bpm     *BrokerPositionMonitor         // D-121：CEX 平仓需查 bpm 快照获取 side/volume（注入，nil=未接线）
+	cexQs   []reconcile.VenueQuerier              // D-121：CEX perp 持仓查询器（动态刷新）
+	onQ     func([]reconcile.VenueQuerier)        // querier 集合变更回调
+	onHQ    func([]reconcile.OrderHistoryQuerier) // D-416：历史查证器集合变更回调
+	bpm     *BrokerPositionMonitor                // D-121：CEX 平仓需查 bpm 快照获取 side/volume（注入，nil=未接线）
 
 	commMu     sync.Mutex
 	commission map[string]float64 // venue → 账号真实佣金（bps/腿，D-036）；缺省回退 config 默认
@@ -127,6 +130,11 @@ func (m *BrokerManager) SetQuerierHook(f func([]reconcile.VenueQuerier)) {
 	m.onQ = f
 }
 
+// SetHistQuerierHook 注册历史查证器集合变更回调（D-416：main 接 reconciler.SetOrderHistoryQueriers）。
+func (m *BrokerManager) SetHistQuerierHook(f func([]reconcile.OrderHistoryQuerier)) {
+	m.onHQ = f
+}
+
 // SetBPM D-121：注入 BrokerPositionMonitor（CEX 平仓需查快照获取 side/volume）。
 func (m *BrokerManager) SetBPM(bpm *BrokerPositionMonitor) { m.bpm = bpm }
 
@@ -139,23 +147,6 @@ func (m *BrokerManager) OrderHistoryScan(venue string) orderHistoryScan {
 		return r.orderHistoryScan
 	}
 	return nil
-}
-
-// AddStaticQuerier 登记环境变量适配器的 querier。
-func (m *BrokerManager) AddStaticQuerier(venue string, q reconcile.VenueQuerier) {
-	m.addStatic(venue, q, nil)
-}
-
-// AddStaticSwapSource 为环境变量适配器登记 swap 采集（§3.6，不留静默缺口）。
-func (m *BrokerManager) AddStaticSwapSource(venue string, swap func(ctx context.Context) ([]fact.Fact, error)) {
-	m.addStatic(venue, nil, swap)
-}
-
-func (m *BrokerManager) addStatic(venue string, q reconcile.VenueQuerier, swap func(ctx context.Context) ([]fact.Fact, error)) {
-	m.mu.Lock()
-	m.static = append(m.static, staticQuerier{venue: venue, q: q, swap: swap})
-	m.mu.Unlock()
-	m.syncQueriers()
 }
 
 // StartAll 启动 DB 中全部 status=connected 账号（boot 恢复）。
@@ -229,6 +220,7 @@ func (m *BrokerManager) stopAdapter(venue string) {
 		delete(m.commission, venue)
 		m.commMu.Unlock()
 		m.syncQueriers()
+		m.syncHistQueriers()
 	}
 }
 

@@ -79,6 +79,7 @@ func (m *BrokerManager) startMT4(ctx context.Context, a *pgstore.BrokerAccount) 
 	r := &running{
 		stop:             func() { cancel(); ad.Stop() },
 		querier:          q,
+		histQuerier:      reconcile.NewMT4OrderHistoryQuerier(a.Venue, ad.Token(), ad.MT4Client()), // D-416
 		symbols:          fetchSymbols,
 		symbolGroups:     fetchSymbolGroups,
 		setSymMap:        ad.SetSymbolMap,
@@ -236,6 +237,7 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 	r := &running{
 		stop:             func() { cancel(); ad.Stop() },
 		querier:          q,
+		histQuerier:      reconcile.NewMT5OrderHistoryQuerier(a.Venue, ad.Token(), ad.MT5Client()), // D-416
 		symbols:          fetchSymbols,
 		symbolGroups:     fetchSymbolGroups,
 		symbolParams:     fetchContract,

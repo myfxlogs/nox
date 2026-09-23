@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"arb/internal/exec"
+	"arb/internal/fact"
 	"arb/internal/reconcile"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
@@ -18,6 +19,7 @@ func (m *BrokerManager) attach(venue string, r *running) {
 	m.running[venue] = r
 	m.mu.Unlock()
 	m.syncQueriers()
+	m.syncHistQueriers()
 	m.kickSwap()
 }
 
@@ -34,13 +36,43 @@ func (m *BrokerManager) queriers() []reconcile.VenueQuerier {
 	defer m.mu.Unlock()
 	qs := make([]reconcile.VenueQuerier, 0, len(m.static)+len(m.running)+len(m.cexQs))
 	for _, s := range m.static {
-		qs = append(qs, s.q)
+		if s.q != nil {
+			qs = append(qs, s.q)
+		}
 	}
 	for _, r := range m.running {
-		qs = append(qs, r.querier)
+		if r.querier != nil {
+			qs = append(qs, r.querier)
+		}
 	}
 	qs = append(qs, m.cexQs...)
 	return qs
+}
+
+// AddStaticQuerier 登记环境变量适配器的 querier。
+func (m *BrokerManager) AddStaticQuerier(venue string, q reconcile.VenueQuerier) {
+	m.addStatic(venue, q, nil)
+}
+
+// AddStaticSwapSource 为环境变量适配器登记 swap 采集（§3.6，不留静默缺口）。
+func (m *BrokerManager) AddStaticSwapSource(venue string, swap func(ctx context.Context) ([]fact.Fact, error)) {
+	m.addStatic(venue, nil, swap)
+}
+
+func (m *BrokerManager) addStatic(venue string, q reconcile.VenueQuerier, swap func(ctx context.Context) ([]fact.Fact, error)) {
+	m.mu.Lock()
+	m.static = append(m.static, staticQuerier{venue: venue, q: q, swap: swap})
+	m.mu.Unlock()
+	m.syncQueriers()
+	m.syncHistQueriers()
+}
+
+// AddStaticHistoryQuerier 登记环境变量适配器的历史查证器（D-416：与动态 DB 账户同聚合）。
+func (m *BrokerManager) AddStaticHistoryQuerier(venue string, hq reconcile.OrderHistoryQuerier) {
+	m.mu.Lock()
+	m.static = append(m.static, staticQuerier{venue: venue, hq: hq})
+	m.mu.Unlock()
+	m.syncHistQueriers()
 }
 
 // SetCEXQueriers D-121：替换 CEX perp 持仓查询器集合（CexPositionManager 每轮刷新调用）。
@@ -50,6 +82,7 @@ func (m *BrokerManager) SetCEXQueriers(qs []reconcile.VenueQuerier) {
 	m.cexQs = qs
 	m.mu.Unlock()
 	m.syncQueriers()
+	m.syncHistQueriers()
 }
 
 // syncQueriers 汇总 querier 并触发回调（reconciler 刷新）。
@@ -60,6 +93,36 @@ func (m *BrokerManager) syncQueriers() {
 	m.mu.Unlock()
 	if onQ != nil {
 		onQ(qs)
+	}
+}
+
+// histQueriers 汇总 static + running 的历史查证器（D-416：镜像 queriers() 组合）。
+func (m *BrokerManager) histQueriers() []reconcile.OrderHistoryQuerier {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	qs := make([]reconcile.OrderHistoryQuerier, 0, len(m.static)+len(m.running))
+	for _, s := range m.static {
+		if s.hq != nil {
+			qs = append(qs, s.hq)
+		}
+	}
+	for _, r := range m.running {
+		if r.histQuerier != nil {
+			qs = append(qs, r.histQuerier)
+		}
+	}
+	return qs
+}
+
+// syncHistQueriers 汇总历史查证器并触发回调（D-416：reconciler.SetOrderHistoryQueriers 刷新）。
+// 与 syncQueriers 同点位调用——attach/detach/addStatic 任一变动即镜像。
+func (m *BrokerManager) syncHistQueriers() {
+	qs := m.histQueriers()
+	m.mu.Lock()
+	onHQ := m.onHQ
+	m.mu.Unlock()
+	if onHQ != nil {
+		onHQ(qs)
 	}
 }
 
