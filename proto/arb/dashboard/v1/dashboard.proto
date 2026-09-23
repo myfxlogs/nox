@@ -319,6 +319,7 @@ message Alert {
   string level = 5;            // info / warn / critical
   string message = 6;
   bool acked = 7;
+  optional int64 position_id = 8;  // D-411：持仓级告警关联，NULL=非持仓告警
 }
 
 message ListAlertsRequest {

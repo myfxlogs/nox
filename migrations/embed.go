@@ -217,4 +217,6 @@ var (
 	CarryGraduationsSQL string
 	//go:embed 0126_margin_guard.sql
 	MarginGuardSQL string
+	//go:embed 0127_alerts_position_id.sql
+	AlertsPositionIDSQL string
 )
