@@ -242,49 +242,12 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 	}
 	if qty <= 0 || avgPx <= 0 {
 		// 市价单 POST 响应可能先于撮合返回（accFillSz=0/avgPx 空，D-059 实施修正② 实测：
-		// 订单实际成交但响应无成交数据）→ 轮询订单状态拿真实成交，防生产记 0 qty 持仓。
-		origOrder := o // 保存原始 Order（循环内 o 被 okxOrderStatus 返回遮蔽）
-		for range 5 {
-			time.Sleep(100 * time.Millisecond)
-			st, err := e.okxOrderStatus(ctx, instID, d.OrdID)
-			if err != nil {
-				return Fill{}, err
-			}
-			if st.State == "canceled" || st.State == "rejected" || st.State == "mmp_canceled" {
-				// 订单未成交即被取消/拒绝 → 平仓失败，如实报错而非返回 qty=0 假装成交
-				// （D-059 实测：spot SELL 曾因模拟盘撮合取消，旧逻辑静默返回 0 致测试假绿）。
-				// cancelSourceReason 携带取消根因（如「滑超 best bid 5% 保护」），生产排障必读。
-				reason := strings.TrimSpace(st.CancelSourceReason)
-				if reason != "" {
-					reason = ": " + reason
-				}
-				msg := fmt.Sprintf("okx order %s: state=%s accFillSz=%s avgPx=%s（未成交，订单被取消/拒绝%s）",
-					d.OrdID, st.State, st.AccFillSz, st.AvgPx, reason)
-				e.alertCritical(origOrder, msg)
-				return Fill{}, fmt.Errorf("%s", msg)
-			}
-			if st.AccFillSz != "" && st.AvgPx != "" {
-				if q, err := strconv.ParseFloat(st.AccFillSz, 64); err == nil && q > 0 {
-					qty = q
-					if e.venueType == "perp" { // D-125：轮询拿到的也是张数 → 转基础币
-						qty *= ctVal
-					}
-				}
-				if p, err := strconv.ParseFloat(st.AvgPx, 64); err == nil && p > 0 {
-					avgPx = p
-				}
-				if qty > 0 && avgPx > 0 {
-					feeUSD, _ := okxFeeToUSD(st.Fee, st.FeeCcy) // D-391 S2：查单响应累计 fee（已在本轮 st 内，免再查）
-					return Fill{OrderID: d.OrdID, Price: avgPx, Qty: qty, FeeUSD: feeUSD, Ts: time.Now()}, nil
-				}
-			}
-		}
+		// 订单实际成交但响应无成交数据）→ 退避轮询 ≥3s；窗尽 cancel+终查双证；
+		// 仍不可判 → ErrFillUnconfirmed（D-421：受理未确认≠确定未成交，禁映 FAILED）。
+		return e.okxConfirmFill(ctx, o, instID, d.OrdID, ctVal)
 	}
-	// 超时仍未拿到成交：如实返回已下订单 + 当前已知 qty（可 0），不伪造。
 	var feeUSD float64
-	if qty > 0 {
-		feeUSD = e.okxOrderFeeUSD(ctx, instID, d.OrdID) // D-391 S2：补查 fee（fail-open 0→NULL）
-	}
+	feeUSD = e.okxOrderFeeUSD(ctx, instID, d.OrdID) // D-391 S2：补查 fee（fail-open 0→NULL）
 	return Fill{OrderID: d.OrdID, Price: avgPx, Qty: qty, FeeUSD: feeUSD, Ts: time.Now()}, nil
 }
 

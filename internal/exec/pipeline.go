@@ -38,6 +38,12 @@ var (
 	ErrGrossExposureExceeds  = errors.New("swaparb gross exposure exceeds allowlist limit")
 )
 
+// ErrFillUnconfirmed D-421：订单已受理（有 OrderID）但轮询窗内未达终态——
+// 既非成交也非未成交，禁止映射 FAILED（假未成交=换腿裸奔，审计 P1-3）。
+type ErrFillUnconfirmed struct{ OrderID string }
+
+func (e *ErrFillUnconfirmed) Error() string { return "fill unconfirmed: order " + e.OrderID }
+
 // Pipeline 是执行管线（§13.1）。
 type Pipeline struct {
 	registry *Registry

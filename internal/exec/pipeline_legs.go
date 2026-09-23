@@ -67,6 +67,13 @@ func (p *Pipeline) executeLeg(ctx context.Context, leg LegSpec, clientOrderID st
 		ClientOrderID: clientOrderID, // D-195-B §4.3：确定性客户端订单号
 	})
 	if err != nil {
+		// D-421：受理未确认（有 OrderID 未达终态）→ UNKNOWN 带 OrderID（消解凭据，
+		// 落库 legs.order_id；禁映 FAILED——假未成交会触发收编平另一腿换腿裸奔）。
+		var unconfirmed *ErrFillUnconfirmed
+		if errors.As(err, &unconfirmed) {
+			log.Printf("[exec] leg %s %s %s: fill unconfirmed order=%s → UNKNOWN", leg.VenueKey, leg.Side, leg.VenueSymbol, unconfirmed.OrderID)
+			return LegResult{VenueKey: leg.VenueKey, OrderID: unconfirmed.OrderID, Status: "UNKNOWN"}
+		}
 		// D-159 W1a R2：腿下单超时/响应丢失 → UNKNOWN（不知成交与否，不能假 FAILED 平仓）。
 		// context.DeadlineExceeded/Canceled = 网络超时/取消，订单可能已成交 → 标 UNKNOWN 待人工/对账确认。
 		// D-414 §1.6：判定不再限 MT——CEX 超时同样可能已成交，假 FAILED→LEGGED 会让自动收编

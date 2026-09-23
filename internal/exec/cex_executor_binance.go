@@ -85,31 +85,11 @@ func (e *CEXExecutor) placeBinance(ctx context.Context, o Order) (Fill, error) {
 
 	if e.venueType == "perp" && (qty <= 0 || avgPrice <= 0) {
 		// 合约市价单 POST 可能先于撮合返回（status=NEW/executedQty=0，demo-fapi 实测恒如此，
-		// 同 D-059 实施修正② 的 OKX 教训；spot 市价单响应同步成交，无需轮询）→ 轮询订单状态
-		// 拿真实成交，防生产记 0 qty 持仓。
-		for range 5 {
-			time.Sleep(100 * time.Millisecond)
-			st, err := e.binanceOrderStatus(ctx, o.Symbol, string(orderID))
-			if err != nil {
-				return Fill{}, err
-			}
-			if st.Status == "CANCELED" || st.Status == "REJECTED" || st.Status == "EXPIRED" {
-				// 未成交即被取消/拒绝 → 平仓失败，如实报错而非返回 qty=0 假装成交。
-				msg := fmt.Sprintf("binance order %s: status=%s executedQty=%s（未成交，订单被取消/拒绝）",
-					orderID, st.Status, st.ExecutedQty)
-				e.alertCritical(o, msg)
-				return Fill{}, fmt.Errorf("%s", msg)
-			}
-			if st.Status == "FILLED" || st.Status == "PARTIALLY_FILLED" {
-				q, perr := strconv.ParseFloat(st.ExecutedQty, 64)
-				p, aerr := strconv.ParseFloat(st.AvgPrice, 64)
-				if perr == nil && aerr == nil && q > 0 && p > 0 {
-					return Fill{OrderID: string(orderID), Price: p, Qty: q, Ts: time.Now()}, nil
-				}
-			}
-		}
+		// 同 D-059 实施修正② 的 OKX 教训；spot 市价单响应同步成交，无需轮询）→ 退避轮询
+		// 至 FILLED（D-421：PARTIALLY_FILLED 不提前返回——余量随后全成无记录=对冲失衡）；
+		// 窗尽 cancel+终查；仍不可判 → ErrFillUnconfirmed。
+		return e.binanceConfirmFill(ctx, o, string(orderID))
 	}
-	// 超时仍未拿到成交：如实返回已下订单 + 当前已知 qty（可 0），不伪造。
 	return Fill{
 		OrderID: string(orderID),
 		Price:   avgPrice,
@@ -118,12 +98,40 @@ func (e *CEXExecutor) placeBinance(ctx context.Context, o Order) (Fill, error) {
 	}, nil
 }
 
-// binanceOrderStatus 查询 Binance 订单成交（perp /fapi/v1/order；spot /api/v3/order，签名 GET）。
-func (e *CEXExecutor) binanceOrderStatus(ctx context.Context, symbol, ordID string) (struct {
+// binanceOrderStatusResult GET /fapi/v1/order（或 /api/v3/order）单条订单状态。
+type binanceOrderStatusResult struct {
 	Status      string `json:"status"`
 	ExecutedQty string `json:"executedQty"`
 	AvgPrice    string `json:"avgPrice"`
-}, error) {
+}
+
+// binanceOrderStatus 查询 Binance 订单成交（perp /fapi/v1/order；spot /api/v3/order，签名 GET）。
+// orderId 优先，空则 origClientOrderId 兜底（D-421 消解器按 clOrdId 查单凭据）。
+func (e *CEXExecutor) binanceOrderStatus(ctx context.Context, symbol, ordID, clOrdID string) (binanceOrderStatusResult, error) {
+	endpoint := "/api/v3/order"
+	if e.venueType == "perp" {
+		endpoint = "/v1/order"
+	}
+	params := url.Values{}
+	params.Set("symbol", symbol)
+	if ordID != "" {
+		params.Set("orderId", ordID)
+	} else {
+		params.Set("origClientOrderId", clOrdID)
+	}
+	body, err := e.signedBinanceRequest(ctx, "GET", endpoint, params)
+	if err != nil {
+		return binanceOrderStatusResult{}, err
+	}
+	return binanceOrderStatusResult{
+		Status:      asString(body["status"]),
+		ExecutedQty: asString(body["executedQty"]),
+		AvgPrice:    asString(body["avgPrice"]),
+	}, nil
+}
+
+// binanceCancelOrder 撤销单笔订单（DELETE /fapi/v1/order，D-421 窗尽双证技巧）。
+func (e *CEXExecutor) binanceCancelOrder(ctx context.Context, symbol, ordID string) error {
 	endpoint := "/api/v3/order"
 	if e.venueType == "perp" {
 		endpoint = "/v1/order"
@@ -131,19 +139,8 @@ func (e *CEXExecutor) binanceOrderStatus(ctx context.Context, symbol, ordID stri
 	params := url.Values{}
 	params.Set("symbol", symbol)
 	params.Set("orderId", ordID)
-	body, err := e.signedBinanceRequest(ctx, "GET", endpoint, params)
-	if err != nil {
-		return struct {
-			Status      string `json:"status"`
-			ExecutedQty string `json:"executedQty"`
-			AvgPrice    string `json:"avgPrice"`
-		}{}, err
-	}
-	return struct {
-		Status      string `json:"status"`
-		ExecutedQty string `json:"executedQty"`
-		AvgPrice    string `json:"avgPrice"`
-	}{Status: asString(body["status"]), ExecutedQty: asString(body["executedQty"]), AvgPrice: asString(body["avgPrice"])}, nil
+	_, err := e.signedBinanceRequest(ctx, "DELETE", endpoint, params)
+	return err
 }
 
 // binanceOrderAvgPrice 从 Binance 下单响应计算成交均价（D-059 实测：下单响应无 avgPrice 字段，

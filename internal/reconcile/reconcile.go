@@ -8,6 +8,8 @@ import (
 	"log"
 	"sync"
 	"time"
+
+	"arb/internal/exec"
 )
 
 // Reconciler 对账器：比对本地 OPEN legs 与 venue 实际持仓。
@@ -30,10 +32,14 @@ type Reconciler struct {
 	nowFn           func() time.Time
 	queriers        []VenueQuerier
 	historyQueriers []OrderHistoryQuerier
-	closer          Closer
-	settler         Settler       // D-087 §3.2：替换 statUpdater + verificationUpdater（统一结算入口）
-	runTimeout      time.Duration // 单次外部调用超时（缺陷1修复：默认 10s，防离线 venue 阻塞 loop）
-	initialDelay    time.Duration // 首轮延迟（缺陷2修复：默认 60s，等 adapter 就绪）
+	// D-421 §1.5：CEX 订单级查单器（消解器+收编前置守卫；venueKey→querier）。
+	orderStatusQs map[string]exec.OrderStatusQuerier
+	// D-421：消解不可判轮次计数（posID 粒度，消解/人工后清）。
+	unknownRounds map[int64]int
+	closer        Closer
+	settler       Settler       // D-087 §3.2：替换 statUpdater + verificationUpdater（统一结算入口）
+	runTimeout    time.Duration // 单次外部调用超时（缺陷1修复：默认 10s，防离线 venue 阻塞 loop）
+	initialDelay  time.Duration // 首轮延迟（缺陷2修复：默认 60s，等 adapter 就绪）
 }
 
 // New 创建对账器。
@@ -50,6 +56,7 @@ func New(store Store, queriers ...VenueQuerier) *Reconciler {
 		fastRetryConsec:  3,
 		fastRetryStreak:  map[string]int{},
 		fastRetryTimes:   map[string][]time.Time{},
+		unknownRounds:    map[int64]int{},
 	}
 }
 

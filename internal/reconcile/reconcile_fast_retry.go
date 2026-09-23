@@ -35,6 +35,7 @@ func (r *Reconciler) StartFastRetryLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			r.fastRetrySweep(ctx)
+			r.resolveUnknownLegs(ctx) // D-421 §1.5：UNKNOWN 消解 30s 同 tick
 		}
 	}
 }
@@ -87,6 +88,9 @@ func (r *Reconciler) fastRetrySweep(ctx context.Context) {
 func (r *Reconciler) fastRetryLegged(ctx context.Context, p *pgstore.Position) {
 	if p.UncertaintyReason != nil && *p.UncertaintyReason != "" {
 		return // UNKNOWN 红线（LEGGED 语义=另一腿确定未成交；含疑即人工域）
+	}
+	if !r.preflightLeggedFailedLegs(ctx, p) {
+		return // D-421 §1.6：FAILED 腿真实终态未定/实际已成交 → 本轮中止收编
 	}
 	venues := r.residualLegVenues(ctx, p.ID)
 	sub, cancel := r.withTimeout(ctx)

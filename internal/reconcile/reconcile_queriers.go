@@ -38,6 +38,11 @@ type Store interface {
 	SetPositionNote(ctx context.Context, id int64, note string) error
 	// D-159 W3a R4：auto_close 兜底分支补写 swap/commission cashflows（per-leg 幂等键带 LegNo）。
 	InsertCashflow(ctx context.Context, posID int64, legNo int16, kind, venue string, amount float64, ts time.Time) error
+	// D-421 §1.5：UNKNOWN 消解读写面。
+	ListUnknownLegs(ctx context.Context, limit int) ([]pgstore.PositionLeg, error)
+	ResolveLegFill(ctx context.Context, legID int64, price, qty, feeUSD float64) error
+	ResolveLegFail(ctx context.Context, legID int64) error
+	SetPositionUncertainty(ctx context.Context, id int64, reason string) error
 }
 
 // VenueOrder venue 侧的持仓记录。
