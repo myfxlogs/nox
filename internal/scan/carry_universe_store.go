@@ -3,6 +3,7 @@ package scan
 
 import (
 	"context"
+	"time"
 
 	"arb/internal/fact"
 	"arb/internal/store/pgstore"
@@ -33,4 +34,9 @@ func (p *PGStore) ListBrokerAccountStatuses(ctx context.Context) (map[string]str
 
 func (p *PGStore) ReplaceCarryUniverse(ctx context.Context, rows []pgstore.CarryUniverseRow) error {
 	return p.S.ReplaceCarryUniverse(ctx, rows)
+}
+
+// FactsWindowStats D-412 F3：窗口均值读口透传（swap 慢变量抗 flap）。
+func (p *PGStore) FactsWindowStats(ctx context.Context, kind, venue, symbol string, window time.Duration) (float64, error) {
+	return p.S.FactsWindowStats(ctx, kind, venue, symbol, window)
 }

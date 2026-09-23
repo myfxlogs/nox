@@ -83,8 +83,8 @@ func TestD382_A2_AllDisabledMarkerRow(t *testing.T) {
 func TestD382_A3_NoTradeMode_FailOpen(t *testing.T) {
 	rows := d382Run(t, d382Store()) // 无 trade_mode facts
 	r := d382Find(rows, "TRX")
-	if r == nil || r.MtVenue != "mtB" || r.NetAnnual != 14 {
-		t.Fatalf("A3: fail-open 行应正常存活（net=14 mtB）, got %+v", r)
+	if r == nil || r.MtVenue != "mtB" || r.NetAnnual != -9.25 {
+		t.Fatalf("A3: fail-open 行应正常存活（net=-9.25 mtB（D-412 F1 年化：swap −5bps_daily=−18.25%%/yr））, got %+v", r)
 	}
 }
 
@@ -145,7 +145,7 @@ func TestD382_A6_CloseOnly_Blocked(t *testing.T) {
 func TestD382_A7_StaleTradeMode_Pass(t *testing.T) {
 	rows := d382Run(t, d382Store(d382TM("mtA", 0, 48*time.Hour), d382TM("mtB", 0, 48*time.Hour)))
 	r := d382Find(rows, "TRX")
-	if r == nil || r.MtVenue != "mtB" || r.NetAnnual != 14 {
+	if r == nil || r.MtVenue != "mtB" || r.NetAnnual != -9.25 {
 		t.Fatalf("A7: 过期 trade_mode 应视同未知放行（fail-open）, got %+v", r)
 	}
 }

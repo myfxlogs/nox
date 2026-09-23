@@ -2,6 +2,7 @@ package pgstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -191,4 +192,26 @@ func (s *Store) LatestTickMid(ctx context.Context, symbol string) (float64, bool
 		return 0, false
 	}
 	return v, true
+}
+
+// ErrNoFactsInWindow D-412 F3：窗口内零样本（调用方 fail-closed 不产行——既有语义）。
+var ErrNoFactsInWindow = errors.New("facts: no samples in window")
+
+// FactsWindowStats D-412 F3：窗口均值读口（swap 慢变量抗 flap——点值判定=抛硬币，
+// 39050818 XAU 0/−1.4133 交替实证）。窗口内零样本 → ErrNoFactsInWindow。
+func (s *Store) FactsWindowStats(ctx context.Context, kind, venue, symbol string, window time.Duration) (float64, error) {
+	var mean *float64
+	var n int
+	err := s.pool.QueryRow(ctx, `
+		SELECT AVG(value), COUNT(*) FROM facts
+		WHERE kind = $1 AND venue = $2 AND symbol = $3
+		  AND ts >= now() - ($4::double precision * interval '1 second')`,
+		kind, venue, symbol, window.Seconds()).Scan(&mean, &n)
+	if err != nil {
+		return 0, fmt.Errorf("facts window stats: %w", err)
+	}
+	if n == 0 || mean == nil {
+		return 0, ErrNoFactsInWindow
+	}
+	return *mean, nil
 }

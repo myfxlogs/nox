@@ -12,12 +12,13 @@ import (
 
 // fakeScanStore 受控 store（facts 行+映射表+落库计数+universe 雷达表）。
 type fakeScanStore struct {
-	facts    []fact.Fact
-	mappings []pgstore.SymbolMapping
-	replaced []pgstore.CarryUniverseRow
-	alerts   []string
-	universe map[string]pgstore.CexUniverseRow
-	statuses map[string]string // D-388：venue→status（nil=fail-open 全放行）
+	facts       []fact.Fact
+	windowMeans map[string]float64 // D-412 F3：kind|venue|symbol → 7d 均值（未设回退点值）
+	mappings    []pgstore.SymbolMapping
+	replaced    []pgstore.CarryUniverseRow
+	alerts      []string
+	universe    map[string]pgstore.CexUniverseRow
+	statuses    map[string]string // D-388：venue→status（nil=fail-open 全放行）
 }
 
 func (f *fakeScanStore) LatestFacts(_ context.Context, kind, _, _ string) ([]fact.Fact, error) {
@@ -28,6 +29,20 @@ func (f *fakeScanStore) LatestFacts(_ context.Context, kind, _, _ string) ([]fac
 		}
 	}
 	return out, nil
+}
+
+// FactsWindowStats D-412 F3：窗口均值——windowMeans 显式覆盖优先；缺省回退点值
+// （真实 DB 中窗口内含最新行，均值≈点值的 fake 等价）；窗口内零样本=ErrNoFactsInWindow。
+func (f *fakeScanStore) FactsWindowStats(_ context.Context, kind, venue, symbol string, _ time.Duration) (float64, error) {
+	if v, ok := f.windowMeans[kind+"|"+venue+"|"+symbol]; ok {
+		return v, nil
+	}
+	for _, x := range f.facts {
+		if x.Kind == kind && x.Venue == venue && x.Symbol == symbol {
+			return x.Value, nil
+		}
+	}
+	return 0, pgstore.ErrNoFactsInWindow
 }
 func (f *fakeScanStore) ListSymbolMappings(_ context.Context, venue string) ([]pgstore.SymbolMapping, error) {
 	var out []pgstore.SymbolMapping
@@ -78,16 +93,20 @@ func TestD336_ScanJoinAndRank(t *testing.T) {
 	if len(res.Rows) != 3 {
 		t.Fatalf("rows=%d, want 3（红=现无此机制）: %+v", len(res.Rows), res.Rows)
 	}
-	// 排序：ETH 32 > BTC 6.65 > WTI 6
-	if res.Rows[0].Canonical != "ETH" || res.Rows[1].Canonical != "BTC" || res.Rows[2].Canonical != "WTI" {
+	// 排序（D-412 F1 年化口径）：BTC 6.65 > ETH 0（swap −30bps_daily=−109.5%/yr suspect 置零）> WTI −17.25（1−5×3.65）
+	if res.Rows[0].Canonical != "BTC" || res.Rows[1].Canonical != "ETH" || res.Rows[2].Canonical != "WTI" {
 		t.Errorf("排序错: %v", res.Rows)
 	}
 	// T1：BTC swap_free（swap 0/0）net≈funding
-	if !res.Rows[1].SwapFree {
+	if !res.Rows[0].SwapFree {
 		t.Error("BTC swap_long=0 应标记 swap_free")
 	}
-	if res.Rows[1].NetAnnual < 6.6 || res.Rows[1].NetAnnual > 6.7 {
-		t.Errorf("BTC net want ≈6.65, got %v", res.Rows[1].NetAnnual)
+	if res.Rows[0].NetAnnual < 6.6 || res.Rows[0].NetAnnual > 6.7 {
+		t.Errorf("BTC net want ≈6.65, got %v", res.Rows[0].NetAnnual)
+	}
+	// D-412 F1：ETH swap −30bps_daily=−109.5%/yr → suspect 置零（年化本义恢复）
+	if res.Rows[1].Note == "" || res.Rows[1].NetAnnual != 0 {
+		t.Errorf("ETH swap 年化 109.5%%>100 应 suspect 置零: %+v", res.Rows[1])
 	}
 	// 落库
 	if err := st.ReplaceCarryUniverse(context.Background(), toPgRows(res.Rows)); err != nil {
@@ -98,7 +117,8 @@ func TestD336_ScanJoinAndRank(t *testing.T) {
 	}
 }
 
-// TestD336_StructurePick T4：同 canonical 双 venue swap（−8.22 vs 0/0）→ 最优选 0/0（swap_free）。
+// TestD336_StructurePick T4（D-412 F2 语义更新）：同 canonical 双 venue swap（0 vs −8.22）
+// → 全叉积两行并存不再坍缩取最优；在跑线 277842155 swap_free 恒在监控视野（D-410 保底前提）。
 func TestD336_StructurePick(t *testing.T) {
 	st := &fakeScanStore{
 		facts: []fact.Fact{
@@ -116,13 +136,24 @@ func TestD336_StructurePick(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	if len(res.Rows) != 1 {
-		t.Fatalf("rows=%d skipped=%d, want 1: %+v", len(res.Rows), res.Skipped, res.Rows)
+	if len(res.Rows) != 2 {
+		t.Fatalf("rows=%d skipped=%d, want 2（F2 全叉积不坍缩）: %+v", len(res.Rows), res.Skipped, res.Rows)
 	}
-	r := res.Rows[0]
-	// 多 CFD 成本：0 优于 −8.22 → net=5−0=5（swap_free）
-	if r.MtVenue != "277842155" || !r.SwapFree {
-		t.Errorf("最优 venue 选 0/0（swap_free）, got %+v", r)
+	byVenue := map[string]UniverseRow{}
+	for _, r := range res.Rows {
+		if r.CexVenue != "binance" {
+			t.Errorf("cex venue 应忠实保留行源（binance），got %q", r.CexVenue)
+		}
+		byVenue[r.MtVenue] = r
+	}
+	r := byVenue["277842155"]
+	// 在跑线：swap=0 → net=5（swap_free），不因另一 venue 成本优而消失（D-410 保底锚）
+	if r.MtVenue == "" || !r.SwapFree || r.NetAnnual < 4.99 || r.NetAnnual > 5.01 {
+		t.Errorf("277842155 swap_free 行应恒在 net=5, got %+v", r)
+	}
+	// 次优 venue 行保留（年化口径：−8.22bps_daily=−30.00%/yr → net=5−30=−25）
+	if o := byVenue["591959217"]; o.MtVenue == "" || o.SwapFree || o.NetAnnual < -25.01 || o.NetAnnual > -24.99 {
+		t.Errorf("591959217 行应保留 net=−25（年化），got %+v", o)
 	}
 }
 
@@ -205,7 +236,7 @@ func TestD345_SuspectGate(t *testing.T) {
 			{Kind: "swap_long", Venue: "277842155", Symbol: "BTCUSD", Value: 0, Ts: time.Now()},
 			{Kind: "swap_short", Venue: "277842155", Symbol: "BTCUSD", Value: 0, Ts: time.Now()},
 			{Kind: "funding", Venue: "binance", Symbol: "DOTUSDT", Value: 12.0, Ts: time.Now()},
-			{Kind: "swap_long", Venue: "1314615", Symbol: "DOTUSDT", Value: -469.5, Ts: time.Now()}, // 脏源
+			{Kind: "swap_long", Venue: "1314615", Symbol: "DOTUSDT", Value: -128.63, Ts: time.Now()}, // 脏源（D-412 F1：facts 单位=bps_daily，−128.63×3.65≈−469.5%/yr）
 		},
 		mappings: []pgstore.SymbolMapping{
 			{Venue: "277842155", BrokerSymbol: "BTCUSD", Canonical: "BTC"},
