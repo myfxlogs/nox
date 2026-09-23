@@ -217,7 +217,7 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 		val := mean * 365 / 100
 		shortByCanon[canonical+"|"+f.Venue] = mtSwap{
 			venue: f.Venue, canonical: canonical, val: val, ts: f.Ts,
-			stale: sc.fundingMaxAge > 0 && time.Since(f.Ts) > sc.fundingMaxAge,
+			stale: sc.swapMaxAge > 0 && time.Since(f.Ts) > sc.swapMaxAge, // R1：swap 侧用 swap 闸（48h），修复误用 funding 闸
 		}
 	}
 	// CEX funding：symbol→canonical（去 USDT）；F2 同款 venue 全保留（每 venue 一行，

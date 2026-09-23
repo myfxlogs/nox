@@ -222,3 +222,36 @@ func TestD412_F1_SwapColumnAnnualized(t *testing.T) {
 		t.Errorf("net=30−36.5=−6.5（年化统一同口径），got %v", row.NetAnnual)
 	}
 }
+
+// TestD412_R1_ShortSide_StaleGate_Boundary R1-S2：short 侧 stale 闸边界对称矩阵（先红实证）。
+// ①swap_short 龄 30h（24–48h 带内）→ 行不 stale（修前误用 funding 闸 24h 会误 stale=红锚）；
+// ②swap_short 龄 49h（>48h）→ 行 stale ✓（防修过头的对侧断言）。
+func TestD412_R1_ShortSide_StaleGate_Boundary(t *testing.T) {
+	mk := func(ageHours float64) *fakeScanStore {
+		return &fakeScanStore{
+			facts: []fact.Fact{
+				{Kind: "funding", Venue: "binance", Symbol: "BTCUSDT", Value: 6.65, Ts: time.Now()},
+				{Kind: "swap_short", Venue: "277842155", Symbol: "BTCUSD", Value: 0.5, Ts: time.Now().Add(time.Duration(-ageHours * float64(time.Hour)))},
+			},
+			mappings: []pgstore.SymbolMapping{
+				{Venue: "277842155", BrokerSymbol: "BTCUSD", Canonical: "BTC"},
+			},
+		}
+	}
+	// ① 30h 带内：不 stale（short_cfd_long_perp 行 net=0.5−6.65=−6.15 保留）
+	res, err := d412Scanner(mk(30)).Run(context.Background(), time.Now().Add(-24*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0].Note == "stale" {
+		t.Fatalf("swap_short 龄 30h 带内不应 stale（24–48h 带=swap 闸），got %+v", res.Rows)
+	}
+	// ② 49h 超闸：stale（对侧断言防修过头）
+	res, err = d412Scanner(mk(49)).Run(context.Background(), time.Now().Add(-24*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0].Note != "stale" {
+		t.Fatalf("swap_short 龄 49h 应 stale，got %+v", res.Rows)
+	}
+}
