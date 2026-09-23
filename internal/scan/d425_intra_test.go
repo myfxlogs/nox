@@ -286,3 +286,30 @@ func TestD425_R1_Baselines_Observations(t *testing.T) {
 		}
 	}
 }
+
+// TestD425R2_MultiSignal_SingleOpen R2-A1：多对同拍信号 → 单步总开仓=Concurrency（硬限）。
+// 修前：步初快照 open 不回写 → 单步连开 3 仓（生产 16:36:50 同秒三笔实证）=红锚。
+func TestD425R2_MultiSignal_SingleOpen(t *testing.T) {
+	now := time.Now().UTC()
+	f := &fakeIntraStore{ticks: map[string][]pgstore.TickRow{
+		"binance|BTCUSDT": monotonic(100, 1, 90, now.Add(-90*time.Minute)),
+		"okx|BTCUSDT":     monotonic(100, 1, 90, now.Add(-90*time.Minute)),
+		"binance|ETHUSDT": monotonic(3000, 3, 90, now.Add(-90*time.Minute)),
+	}}
+	eng := NewIntraEngine(f, d425Cfg(false))
+	eng.SetNow(func() time.Time { return now })
+	rep, err := eng.Step(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.inserts) != 1 {
+		t.Fatalf("多信号单步 inserts=%d (rep.Opened=%d), want 1（Concurrency=1 硬限，修前=3 红）", len(f.inserts), rep.Opened)
+	}
+	if rep.Opened != 1 {
+		t.Errorf("rep.Opened=%d, want 1", rep.Opened)
+	}
+	// 计数回写语义：回写后循环对余下 pair 全部跳过（同拍信号全弃）
+	if len(f.open) != 1 {
+		t.Errorf("open 回写后 len=%d, want 1", len(f.open))
+	}
+}

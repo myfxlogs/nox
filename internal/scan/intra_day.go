@@ -149,25 +149,30 @@ func (e *IntraEngine) Step(ctx context.Context) (IntraStepReport, error) {
 		if e.cfg.SessionGate && !SessionAllows(pair.Crypto, now) {
 			continue
 		}
-		opened, err := e.tryOpen(ctx, pair, now, rep, open)
+		nt, err := e.tryOpen(ctx, pair, now, &rep, open)
 		if err != nil {
 			return rep, err
 		}
-		rep.Opened += opened
+		if nt != nil {
+			// D-425 R2 计数回写：新仓即时入快照——单步累计受 Concurrency 硬限（修前步初快照不回写=生产 open=3 实证）。
+			open = append(open, *nt)
+			rep.Opened++
+		}
 	}
 	return rep, nil
 }
 
 // tryOpen 单对信号判定+开仓（栅栏全过才成交；纸面成交=ticks 中价±半点差+taker 费）。
-func (e *IntraEngine) tryOpen(ctx context.Context, pair IntraPair, now time.Time, rep IntraStepReport, open []pgstore.IntraTrade) (int, error) {
-	for _, o := range open { // 同对已开仓不重复（并发=1 下天然满足，防御性保留）
+// 返回新开仓行（供调用方计数回写并发快照；无信号=nil）。rep 指针传递：Notes 随步上浮。
+func (e *IntraEngine) tryOpen(ctx context.Context, pair IntraPair, now time.Time, rep *IntraStepReport, open []pgstore.IntraTrade) (*pgstore.IntraTrade, error) {
+	for _, o := range open { // 同对已开仓不重复（含本步计数回写的新仓）
 		if o.Venue == pair.Venue && o.Symbol == pair.Symbol {
-			return 0, nil
+			return nil, nil
 		}
 	}
 	ticks, err := e.st.TicksWindow(ctx, pair.Venue, pair.Symbol, now.Add(-90*time.Minute))
 	if err != nil {
-		return 0, nil // 数据缺席静默跳过（同族惯例），WP1 由调用方日志兜底
+		return nil, nil // 数据缺席静默跳过（同族惯例），WP1 由调用方日志兜底
 	}
 	for _, baseline := range []string{"momentum_break", "meanrev"} {
 		events := simulate(baseline, ticks, e.cfg, now)
@@ -202,12 +207,12 @@ func (e *IntraEngine) tryOpen(ctx context.Context, pair IntraPair, now time.Time
 			MarginUSD: margin, StopPx: stopPx, SignalNote: lastEnter.Note,
 		}
 		if _, err := e.st.InsertIntraTrade(ctx, row); err != nil {
-			return 0, fmt.Errorf("intra open: %w", err)
+			return nil, fmt.Errorf("intra open: %w", err)
 		}
 		rep.Notes = append(rep.Notes, fmt.Sprintf("open %s %s %s @%.4f stop=%.4f (%s)", baseline, pair.Venue, pair.Symbol, entryPx, stopPx, lastEnter.Note))
-		return 1, nil
+		return row, nil
 	}
-	return 0, nil
+	return nil, nil
 }
 
 // signalExit 均值回归 z 回归零轴出（模拟器同口径）。
