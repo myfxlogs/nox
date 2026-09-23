@@ -26,6 +26,7 @@ func Load() *Config {
 		MarginRateAnnual:            envFloat("ARB_MARGIN_RATE_ANNUAL", 4.5),
 		OpportunityTTL:              envDur("ARB_OPPORTUNITY_TTL", 30*time.Second),
 		ScanThrottle:                envDur("ARB_SCAN_THROTTLE", 30*time.Second),
+		RotateMaxPerDay:             envInt("ARB_ROTATE_MAX_PER_DAY", 1),                 // D-406 轮转日限
 		CloseBpsThr:                 envFloat("ARB_CLOSE_BPS_THR", 0.5),                  // D-070 均值回归：价差回归到 0.5bps 内平仓
 		AlertResendInterval:         envDur("ARB_ALERT_RESEND_INTERVAL", 10*time.Minute), // D-072 铃铛治理：同 key 告警冷却
 		CommissionCFDBps:            envFloat("ARB_COMMISSION_CFD_BPS", 0.3),

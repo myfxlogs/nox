@@ -79,6 +79,7 @@ type Config struct {
 	// 补机会驱动路径零覆盖）。60min=打碎 stop→秒级重进毒环且容 detector 分钟级重评；
 	// 0 = 关闭检查（逃生阀，与 SwapArbReentryCooldownDays 语义对齐）。
 	StopReentryMinutes int
+	RotateMaxPerDay    int // D-406 轮转日限（ARB_ROTATE_MAX_PER_DAY，缺省 1；0=不启用）
 	// XAssetExecDriftBps XASSET 执行质量闸阈（ARB_XASSET_EXEC_DRIFT_BPS，缺省 8.0）。
 	// D-378a S2：|fill 口径−quote 锚|>thresh → exec_drift 平仓（双向都杀；entry_noise_bps 可抬阈）。
 	XAssetExecDriftBps float64

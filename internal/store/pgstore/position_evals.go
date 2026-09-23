@@ -4,6 +4,8 @@ package pgstore
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"arb/internal/errclass"
 )
@@ -26,4 +28,33 @@ func (s *Store) InsertPositionEval(ctx context.Context, e PositionEval) error {
 		VALUES ($1, $2, $3, $4, $5, $6)`,
 		e.PositionID, e.BasisBps, e.AnchorBps, e.FillBps, e.Decision, errclass.TruncateNote(e.Detail, 200))
 	return err
+}
+
+// RotateEvalCount D-406 S4：近 since 窗内 decision='rotate' 行数（日限持久计数，免新表）。
+func (s *Store) RotateEvalCount(ctx context.Context, since time.Time) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM position_evals WHERE decision='rotate' AND evaluated_at >= $1`, since).
+		Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("rotate eval count: %w", err)
+	}
+	return n, nil
+}
+
+// LastRotateAtForAlt D-406 S4：近 since 窗内 detail 含 `alt=<frag>` 的最近 rotate 行
+// （组合对 24h 冷却——轮转后同对不再评防乒乓）。无行 → ok=false。
+func (s *Store) LastRotateAtForAlt(ctx context.Context, altFrag string, since time.Time) (time.Time, bool, error) {
+	var ts *time.Time // 无行 → max()=NULL（scan 进 *time.Time 免 ErrNoRows 误判）
+	err := s.pool.QueryRow(ctx, `
+		SELECT max(evaluated_at) FROM position_evals
+		WHERE decision='rotate' AND evaluated_at >= $1 AND detail LIKE '%' || $2 || '%'`,
+		since, "alt="+altFrag).Scan(&ts)
+	if err != nil {
+		return time.Time{}, false, fmt.Errorf("last rotate for alt: %w", err)
+	}
+	if ts == nil {
+		return time.Time{}, false, nil
+	}
+	return *ts, true, nil
 }
