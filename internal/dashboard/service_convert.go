@@ -157,6 +157,9 @@ func alertToProto(a *pgstore.Alert) *v1.Alert {
 	if a.RuleID != nil {
 		pb.RuleId = a.RuleID
 	}
+	if a.PositionID != nil {
+		pb.PositionId = a.PositionID // D-411：持仓级告警透出（前端渲染不动，API 消费/联查用）
+	}
 	if !a.Ts.IsZero() {
 		pb.Ts = timestamppb.New(a.Ts)
 	}

@@ -25,7 +25,7 @@ type marginGuardStore interface {
 	TickVolatility24h(ctx context.Context, venue, venueType, symbol string) (float64, bool, error)
 	GetVenueMarginStatus(ctx context.Context, venue, venueType string) (*pgstore.VenueMarginStatus, bool, error)
 	UpsertVenueMarginStatus(ctx context.Context, r *pgstore.VenueMarginStatus) error
-	InsertAlert(ctx context.Context, posID *int64, level, msg string) error
+	InsertAlert(ctx context.Context, ruleID *int64, level, msg string) error
 }
 
 // MarginGuard 账户资金三档监控。

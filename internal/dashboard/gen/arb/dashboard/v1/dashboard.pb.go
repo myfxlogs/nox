@@ -1157,6 +1157,7 @@ type Alert struct {
 	Level         string                 `protobuf:"bytes,5,opt,name=level,proto3" json:"level,omitempty"` // info / warn / critical
 	Message       string                 `protobuf:"bytes,6,opt,name=message,proto3" json:"message,omitempty"`
 	Acked         bool                   `protobuf:"varint,7,opt,name=acked,proto3" json:"acked,omitempty"`
+	PositionId    *int64                 `protobuf:"varint,8,opt,name=position_id,json=positionId,proto3,oneof" json:"position_id,omitempty"` // D-411：持仓级告警关联，NULL=非持仓告警
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1238,6 +1239,13 @@ func (x *Alert) GetAcked() bool {
 		return x.Acked
 	}
 	return false
+}
+
+func (x *Alert) GetPositionId() int64 {
+	if x != nil && x.PositionId != nil {
+		return *x.PositionId
+	}
+	return 0
 }
 
 type ListAlertsRequest struct {
@@ -20431,7 +20439,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x0elast_sample_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\flastSampleAt\"\x1e\n" +
 	"\x1cListVerificationStatsRequest\"Y\n" +
 	"\x1dListVerificationStatsResponse\x128\n" +
-	"\x05stats\x18\x01 \x03(\v2\".arb.dashboard.v1.VerificationStatR\x05stats\"\xd0\x01\n" +
+	"\x05stats\x18\x01 \x03(\v2\".arb.dashboard.v1.VerificationStatR\x05stats\"\x86\x02\n" +
 	"\x05Alert\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1c\n" +
 	"\arule_id\x18\x02 \x01(\x03H\x00R\x06ruleId\x88\x01\x01\x12\x1b\n" +
@@ -20439,9 +20447,12 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x02ts\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12\x14\n" +
 	"\x05level\x18\x05 \x01(\tR\x05level\x12\x18\n" +
 	"\amessage\x18\x06 \x01(\tR\amessage\x12\x14\n" +
-	"\x05acked\x18\a \x01(\bR\x05ackedB\n" +
+	"\x05acked\x18\a \x01(\bR\x05acked\x12$\n" +
+	"\vposition_id\x18\b \x01(\x03H\x01R\n" +
+	"positionId\x88\x01\x01B\n" +
 	"\n" +
-	"\b_rule_id\"A\n" +
+	"\b_rule_idB\x0e\n" +
+	"\f_position_id\"A\n" +
 	"\x11ListAlertsRequest\x12\x14\n" +
 	"\x05limit\x18\x01 \x01(\x05R\x05limit\x12\x16\n" +
 	"\x06offset\x18\x02 \x01(\x05R\x06offset\"E\n" +
