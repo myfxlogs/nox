@@ -7,6 +7,7 @@ import (
 
 	"arb/internal/bus"
 	"arb/internal/combo"
+	spreadpkg "arb/internal/spread"
 	"arb/internal/store/pgstore"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
@@ -115,7 +116,7 @@ func computeCurrentBps(pb *v1.Position, openLegs []pgstore.PositionLeg, qbus *bu
 		if mid <= 0 {
 			return 0, false
 		}
-		grossBps := spread / mid * 10000
+		grossBps := spreadpkg.RemainingBps(qSell.Bid, qBuy.Ask, mid)
 		commissionBps := 0.0
 		if commissionFor != nil {
 			commissionBps = commissionFor(buyLeg.Venue) + commissionFor(sellLeg.Venue)
@@ -131,8 +132,7 @@ func computeCurrentBps(pb *v1.Position, openLegs []pgstore.PositionLeg, qbus *bu
 		if qBuy.Ask <= 0 {
 			return 0, false
 		}
-		bps := spread / qBuy.Ask * 10000
-		return bps, true
+		return spreadpkg.RemainingBps(qSell.Bid, qBuy.Ask, qBuy.Ask), true
 	default:
 		return 0, false
 	}
