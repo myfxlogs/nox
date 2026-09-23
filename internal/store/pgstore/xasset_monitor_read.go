@@ -63,6 +63,24 @@ func (s *Store) XAssetMonitorRowNear(ctx context.Context, pair, cexVenue, mtVenu
 	return entrySpreadBps, true, nil
 }
 
+// HasXAssetMonitorRow D-419 S3：该 (pair,cexVenue,mtVenue) 三元组是否曾有 monitor 行
+// （纯存在性无 maxAge——「簿从未有过行」与「簿陈旧」是不同事实，本哨兵只报前者；
+// 观测件调用方查询失败 fail-open 跳过不告警）。
+func (s *Store) HasXAssetMonitorRow(ctx context.Context, pair, cexVenue, mtVenue string) (bool, error) {
+	var n int
+	err := s.pool.QueryRow(ctx,
+		`SELECT 1 FROM fin_xasset_monitor
+		 WHERE pair=$1 AND cex_venue=$2 AND mt_venue=$3 LIMIT 1`,
+		pair, cexVenue, mtVenue).Scan(&n)
+	if err != nil {
+		if err.Error() == "no rows in result set" {
+			return false, nil
+		}
+		return false, fmt.Errorf("has xasset monitor row: %w", err)
+	}
+	return true, nil
+}
+
 // EnsureEntryGateSnapshot D-341 S1：开仓学习样本锚——两写点（D-327 同位）后调用，
 // 读开仓时点 monitor 最新行落 positions.entry_noise_bps/entry_harvest_floor_bps（IS NULL 幂等）。
 // monitor 缺行/未成噪 → 不写（学习锚 NULL=诚实缺样本，收割出口走 NULL 不触发语义）。
