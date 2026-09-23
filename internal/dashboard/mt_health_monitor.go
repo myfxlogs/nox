@@ -141,6 +141,15 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 			venueSet[v] = true
 		}
 	}
+	// D-400：stopped 账户排除出监控集——static querier 不随 DisableBroker 注销（broker_manager
+	// 只清 running/reg），径①收录的停用账户上游无报价永远 critical（ic52993526/ICR15032313 实证）。
+	// 放 venueSet 成型后统一过滤=三路收录径全盖（含未来新增径）；statuses err→nil map 零命中不排除
+	// （fail-open，监控集行为不变）；failed 不排（应连未连=告警语义正确），只排 stopped。
+	for v := range venueSet {
+		if statuses[v] == "stopped" {
+			delete(venueSet, v)
+		}
+	}
 
 	m.mu.Lock()
 	inGrace := m.bootGraceTicks > 0

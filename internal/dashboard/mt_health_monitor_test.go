@@ -985,3 +985,55 @@ func TestMTHealth_BootGracePeriod(t *testing.T) {
 		t.Errorf("tick4: want swap critical, got %s: %s", alerts[0].level, alerts[0].msg)
 	}
 }
+
+// TestMTHealth_D400_StaticQuerierStoppedNoAlert D-400：static querier 残留 + status=stopped → 排除出监控集。
+// 复刻生产形态（ic52993526/ICR15032313）：AddStaticQuerier 压入的 querier 不随 DisableBroker 注销
+// （broker_manager 只清 running/registry），账户 status=stopped——径① querier 收录必须被 status 过滤。
+// 旧代码：X 经 querier 径①无条件进 venueSet，无报价 quote crit（tick3 flash-miss 放行）→ 红。
+// 对照：venue Y=connected 无报价仍 critical（不许把 D-205 型真告警修没了）。
+func TestMTHealth_D400_StaticQuerierStoppedNoAlert(t *testing.T) {
+	log.SetOutput(os.NewFile(0, os.DevNull))
+	defer log.SetOutput(os.Stderr)
+
+	store := newFakeHealthStore()
+	store.accountStatuses = map[string]string{"X": "stopped", "Y": "connected"}
+	qbus := bus.New()
+	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "X:mt5"}}}
+	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+	now := wedUTC
+	mon.now = func() time.Time { return now.Add(time.Second) }
+	mon.bootGraceTicks = 1 // 测试用 1 tick 宽限（生产默认 3）
+
+	// tick1 宽限静默；tick2 flash-miss suppressed；tick3 计数满 3 放行
+	mon.poll(context.Background())
+	mon.poll(context.Background())
+	mon.poll(context.Background())
+
+	alerts := store.snapshot()
+	for _, a := range alerts {
+		if strings.Contains(a.msg, "mt-health X ") {
+			t.Errorf("stopped venue X 不应有任何告警，alerts=%v", alerts)
+		}
+	}
+	var yCrit int
+	for _, a := range alerts {
+		if strings.Contains(a.msg, "mt-health Y quote") && a.level == "critical" {
+			yCrit++
+		}
+	}
+	if yCrit != 1 {
+		t.Errorf("connected venue Y 无报价应恰 1 条 quote critical，got %d (alerts=%v)", yCrit, alerts)
+	}
+
+	mon.mu.Lock()
+	_, xIn := mon.states["X"]
+	_, yIn := mon.states["Y"]
+	mon.mu.Unlock()
+	if xIn {
+		t.Errorf("stopped venue X 不应入状态机，states 含 X")
+	}
+	if !yIn {
+		t.Errorf("connected venue Y 应入状态机")
+	}
+}
