@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"sync"
 	"time"
 
 	"arb/internal/notional"
@@ -18,13 +17,15 @@ import (
 // ResumeClose D-189 P0-4：重触发 CLOSING 持仓的平仓流程（reconcile 超时自动重试入口）。
 // 幂等：CLOSED/FAILED 直接返回 nil；只有 CLOSING 进入核心；其他状态返回 error。
 // 不调 ClaimClose（position 已是 CLOSING）；走与 ClosePosition 相同的 leg 处理 + 残量校验 + PnL 汇总 + CLOSED。
-// per-position close 锁：同进程并发只允许一个执行（ClosePosition/ResumeClose 共用）。
+// D-407 S1：per-position try-lock（锁挂本入口=三调用方统一收敛）；持锁中 → ErrCloseInFlight。
 func (p *Pipeline) ResumeClose(ctx context.Context, posID int64) error {
 	if p.store == nil {
 		return fmt.Errorf("pipeline store not wired")
 	}
-	// D-189 P0-4：per-position close 锁
-	unlock := p.lockClose(posID)
+	unlock, ok := p.tryLockClose(posID)
+	if !ok {
+		return fmt.Errorf("%w pos=%d", ErrCloseInFlight, posID)
+	}
 	defer unlock()
 
 	pos, err := p.store.GetPosition(ctx, posID)
@@ -43,24 +44,6 @@ func (p *Pipeline) ResumeClose(ctx context.Context, posID int64) error {
 		return fmt.Errorf("position %d status=%s not CLOSING (ResumeClose only for CLOSING)", posID, pos.Status)
 	}
 	return p.closePositionCore(ctx, posID)
-}
-
-// lockClose D-189 P0-4：per-position close 锁。返回 unlock 函数。
-// closeMu 保护 closeSem map；per-posID mutex 保证同 position 串行，不同 position 并行。
-// 零值 Pipeline（closing/closeSem nil）→ no-op（测试安全）。
-func (p *Pipeline) lockClose(posID int64) func() {
-	if p.closeSem == nil {
-		return func() {} // 零值 Pipeline 安全
-	}
-	p.closeMu.Lock()
-	mu, ok := p.closeSem[posID]
-	if !ok {
-		mu = &sync.Mutex{}
-		p.closeSem[posID] = mu
-	}
-	p.closeMu.Unlock()
-	mu.Lock()
-	return mu.Unlock
 }
 
 // closePositionCore D-189 P0-4：共享平仓核心（ClosePosition 与 ResumeClose 共用）。

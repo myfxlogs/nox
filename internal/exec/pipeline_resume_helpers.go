@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"arb/internal/store/pgstore"
@@ -133,4 +134,46 @@ func (p *Pipeline) backfillMissingCashflows(ctx context.Context, posID int64, le
 		return nil
 	}
 	return p.writeCloseCashflows(ctx, posID, leg.LegNo, leg.Venue, hp.Swap, hp.Commission, fx)
+}
+
+// ErrCloseInFlight D-407 S1：ResumeClose 单飞哨兵——同 posID 平仓执行中再次调用
+// 快速失败（原阻塞等待=快试驱动/30min 看护/手动 RPC 三路并发会排队双发平仓单）。
+// 调用方按可重入处理：log 不告警。
+var ErrCloseInFlight = errors.New("close already in flight")
+
+// closeMutex 取 posID 的 per-position mutex（closeMu 保护 closeSem map，惰性创建）。
+// 调用前须保证 closeSem 非 nil。
+func (p *Pipeline) closeMutex(posID int64) *sync.Mutex {
+	p.closeMu.Lock()
+	mu, ok := p.closeSem[posID]
+	if !ok {
+		mu = &sync.Mutex{}
+		p.closeSem[posID] = mu
+	}
+	p.closeMu.Unlock()
+	return mu
+}
+
+// lockClose D-189 P0-4：per-position close 锁（阻塞）。返回 unlock 函数。
+// 零值 Pipeline（closing/closeSem nil）→ no-op（测试安全）。
+func (p *Pipeline) lockClose(posID int64) func() {
+	if p.closeSem == nil {
+		return func() {} // 零值 Pipeline 安全
+	}
+	mu := p.closeMutex(posID)
+	mu.Lock()
+	return mu.Unlock
+}
+
+// tryLockClose D-407 S1：lockClose 的 try 变体——持锁中返回 (nil,false) 不阻塞。
+// 零值 Pipeline（closeSem nil）→ (noop, true)（测试安全，同 lockClose 语义）。
+func (p *Pipeline) tryLockClose(posID int64) (func(), bool) {
+	if p.closeSem == nil {
+		return func() {}, true
+	}
+	mu := p.closeMutex(posID)
+	if !mu.TryLock() {
+		return nil, false
+	}
+	return mu.Unlock, true
 }
