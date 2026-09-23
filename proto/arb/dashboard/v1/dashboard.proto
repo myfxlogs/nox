@@ -176,6 +176,11 @@ service DashboardService {
 
   // D-365：CEX 财务页（账户级盘点全币种+进出/收益流水；后端算+占比，前端零计算）。
   rpc GetCexFinance(GetCexFinanceRequest) returns (GetCexFinanceResponse);
+
+  // D-403：验证毕业链——扫描→验证→实盘三段接通（建议列表/业主授权/拒绝）。
+  rpc ListCarryGraduations(ListCarryGraduationsRequest) returns (ListCarryGraduationsResponse);
+  rpc ApproveCarryGraduation(ApproveCarryGraduationRequest) returns (ApproveCarryGraduationResponse);
+  rpc RejectCarryGraduation(RejectCarryGraduationRequest) returns (RejectCarryGraduationResponse);
 }
 
 // === Quote（§1.1）===
@@ -2181,3 +2186,34 @@ message CexAccountFinance {
 message GetCexFinanceResponse {
   repeated CexAccountFinance accounts = 1;
 }
+
+// —— D-403 验证毕业链 ——
+
+message CarryGraduationRow {
+  int64 id = 1; int64 paper_id = 2; string venue = 3; string symbol = 4;
+  string structure = 5; optional string mt_venue = 6;
+  double age_days = 7; double accrued_usd = 8; optional double last_funding_ann = 9;
+  string status = 10;                    // pending/approved/rejected
+  string created_at = 11; string decided_at = 12; string decided_note = 13;
+  optional int64 combo_id = 14;
+  repeated string venue_gaps = 15;       // approve 时算的 venue env 缺口（pending 即时算；decided 回读快照）
+}
+message ListCarryGraduationsRequest {}
+message ListCarryGraduationsResponse { repeated CarryGraduationRow rows = 1; }
+message ApproveCarryGraduationRequest {
+  int64 graduation_id = 1;
+  double max_long_qty = 2;   // 买腿 qty 上限（业主必填>0，禁默认；MT 腿=手数、CEX 腿=张数，语义跟 venue_buy 走）
+  double max_short_qty = 3;  // 卖腿 qty 上限（必填>0；同上跟 venue_sell 走）
+  double max_gross_usd = 4;  // 双腿名义上限（必填>0）
+  optional double notional_usd = 5;      // D-367 语义：显式<=0 会在加载期被剔除，禁传非正值
+  string note = 6;
+}
+message ApproveCarryGraduationResponse {
+  bool ok = 1; string error = 2;
+  optional int64 combo_id = 3;
+  repeated string venue_gaps = 4;        // 未在 ARB_AUTOTRADE_ALLOW_VENUES 的 venue_key（需业主 env 补录+重启）
+  string automap_summary = 5;            // "applied=N skipped=M conflicts=K"
+  string link_report = 6;                // 非 cfd 结构的体检报告文本
+}
+message RejectCarryGraduationRequest { int64 graduation_id = 1; string note = 2; }
+message RejectCarryGraduationResponse { bool ok = 1; string error = 2; }

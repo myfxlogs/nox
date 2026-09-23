@@ -18,7 +18,7 @@ func d350Store(t *testing.T) *pgstore.Store {
 	t.Helper()
 	s := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
 	if _, err := s.Pool().Exec(context.Background(),
-		`TRUNCATE fin_carry_universe, fin_cex_universe, paper_spot_carry RESTART IDENTITY`); err != nil {
+		`TRUNCATE fin_carry_universe, fin_cex_universe, paper_spot_carry, carry_graduations RESTART IDENTITY`); err != nil {
 		t.Fatalf("TRUNCATE: %v", err)
 	}
 	return s

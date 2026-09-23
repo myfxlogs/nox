@@ -213,4 +213,6 @@ var (
 	RadarDigestStateSQL string
 	//go:embed 0124_radar_digest_member.sql
 	RadarDigestMemberSQL string
+	//go:embed 0125_carry_graduations.sql
+	CarryGraduationsSQL string
 )

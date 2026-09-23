@@ -79,8 +79,8 @@ func TestD336R1_NormalizeJoinKey(t *testing.T) {
 		"ETHUSD":   "ETH",
 		"SPX500__": "SPX500_", // 只去一个尾部 _
 	} {
-		if got := normalizeJoinKey(in); got != want {
-			t.Errorf("normalizeJoinKey(%q)=%q, want %q", in, got, want)
+		if got := NormalizeJoinKey(in); got != want {
+			t.Errorf("NormalizeJoinKey(%q)=%q, want %q", in, got, want)
 		}
 	}
 }
