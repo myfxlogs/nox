@@ -150,7 +150,9 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64) error {
 		}
 		if fill.Qty <= 0 || fill.Price <= 0 {
 			msg := fmt.Sprintf("close leg %d invalid fill: qty=%.4f price=%.4f (skip, not faked)", leg.ID, fill.Qty, fill.Price)
-			_ = p.store.InsertAlert(ctx, &posID, "critical", msg)
+			if err := p.store.InsertPositionAlert(ctx, posID, "critical", msg); err != nil {
+				log.Printf("[exec] pos %d alert write: %v", posID, err)
+			}
 			log.Printf("[exec] %s", msg)
 			continue
 		}
@@ -182,14 +184,18 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64) error {
 			}
 			msg := fmt.Sprintf("close leg persist failed position=%d leg=%d venue=%s: %v", posID, leg.LegNo, leg.Venue, err)
 			log.Printf("[exec] %s", msg)
-			_ = p.store.InsertAlert(ctx, &posID, "critical", msg)
+			if err := p.store.InsertPositionAlert(ctx, posID, "critical", msg); err != nil {
+				log.Printf("[exec] pos %d alert write: %v", posID, err)
+			}
 			return fmt.Errorf("close leg persist: %w", err)
 		}
 		legPnL := p.calcLegPnL(leg, fill, fx)
 		totalPnL += legPnL
 		if fxMissing {
-			_ = p.store.InsertAlert(ctx, &posID, "critical",
-				fmt.Sprintf("pnl fx missing venue=%s symbol=%s quoteCcy=%s", leg.Venue, leg.Symbol, quoteCcy))
+			if err := p.store.InsertPositionAlert(ctx, posID, "critical",
+				fmt.Sprintf("pnl fx missing venue=%s symbol=%s quoteCcy=%s", leg.Venue, leg.Symbol, quoteCcy)); err != nil {
+				log.Printf("[exec] pos %d alert write: %v", posID, err)
+			}
 		}
 		if err := p.writeCloseCashflows(ctx, posID, leg.LegNo, leg.Venue, fill.Swap, fill.Commission, fx); err != nil {
 			return fmt.Errorf("pos=%d leg=%d close cashflow: %w", posID, leg.LegNo, err)
@@ -200,20 +206,26 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64) error {
 	if p.verifier == nil {
 		msg := fmt.Sprintf("verifier not wired, cannot verify close position=%d", posID)
 		log.Printf("[exec] %s", msg)
-		_ = p.store.InsertAlert(ctx, &posID, "critical", msg)
+		if err := p.store.InsertPositionAlert(ctx, posID, "critical", msg); err != nil {
+			log.Printf("[exec] pos %d alert write: %v", posID, err)
+		}
 		return fmt.Errorf("verifier not wired: position %d", posID)
 	}
 	residual, verifyErr := p.checkResidualLegs(ctx, legs)
 	if verifyErr != nil {
 		msg := fmt.Sprintf("verify residual failed position=%d: %v", posID, verifyErr)
 		log.Printf("[exec] %s", msg)
-		_ = p.store.InsertAlert(ctx, &posID, "critical", msg)
+		if err := p.store.InsertPositionAlert(ctx, posID, "critical", msg); err != nil {
+			log.Printf("[exec] pos %d alert write: %v", posID, err)
+		}
 		return fmt.Errorf("verify residual: %w", verifyErr)
 	}
 	if len(residual) > 0 {
 		msg := fmt.Sprintf("broker 残留腿 position=%d: %s", posID, strings.Join(residual, ", "))
 		log.Printf("[exec] %s", msg)
-		_ = p.store.InsertAlert(ctx, &posID, "critical", msg)
+		if err := p.store.InsertPositionAlert(ctx, posID, "critical", msg); err != nil {
+			log.Printf("[exec] pos %d alert write: %v", posID, err)
+		}
 		return fmt.Errorf("residual legs after close: %s", strings.Join(residual, ", "))
 	}
 
@@ -250,7 +262,9 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64) error {
 	}
 	if openFilled > closeFilled {
 		msg := fmt.Sprintf("position %d residual: %d OPEN FILLED legs but only %d CLOSE FILLED legs (not closing)", posID, openFilled, closeFilled)
-		_ = p.store.InsertAlert(ctx, &posID, "critical", msg)
+		if err := p.store.InsertPositionAlert(ctx, posID, "critical", msg); err != nil {
+			log.Printf("[exec] pos %d alert write: %v", posID, err)
+		}
 		log.Printf("[exec] %s", msg)
 		return fmt.Errorf("position %d residual legs not closed (%d/%d)", posID, closeFilled, openFilled)
 	}

@@ -377,8 +377,7 @@ func TestClose_UnknownNoAutoReverse(t *testing.T) {
 			t.Error("不应有 CLOSE leg（无效 fill 应跳过，不 fake）")
 		}
 	}
-	// 注：closePositionCore 调 InsertAlert(&posID) 但 alerts.rule_id 是 rules 表外键，
-	// posID 不在 rules 表 → 外键约束失败 → alert 未写入（已有行为，_ = 忽略错误）。
+	// 注：closePositionCore 调 InsertPositionAlert(posID)（D-411 起写 alerts.position_id）。
 	// 此测试只验证"不写 CLOSE leg"（不 fake 成交），alert 写入是 best-effort。
 }
 

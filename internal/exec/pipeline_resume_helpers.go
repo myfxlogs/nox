@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -92,13 +93,17 @@ func (p *Pipeline) placeCloseOrder(ctx context.Context, posID int64, leg pgstore
 func (p *Pipeline) backfillCloseFromHistory(ctx context.Context, posID int64, leg pgstore.PositionLeg, fx float64) error {
 	if p.pnlCalibrator == nil {
 		msg := fmt.Sprintf("broker 已无腿但无历史查证器 position=%d leg=%d venue=%s (fail-closed)", posID, leg.LegNo, leg.Venue)
-		_ = p.store.InsertAlert(ctx, &posID, "critical", msg)
+		if err := p.store.InsertPositionAlert(ctx, posID, "critical", msg); err != nil {
+			log.Printf("[exec] pos %d alert write: %v", posID, err)
+		}
 		return fmt.Errorf("no pnl calibrator for backfill")
 	}
 	hp, err := p.pnlCalibrator.QueryHistoryPnL(ctx, leg.Venue, leg.OrderID, 3)
 	if err != nil || hp == nil || hp.ClosePrice <= 0 {
 		msg := fmt.Sprintf("broker 已无腿且历史查证无命中 position=%d leg=%d venue=%s ticket=%s (fail-closed)", posID, leg.LegNo, leg.Venue, leg.OrderID)
-		_ = p.store.InsertAlert(ctx, &posID, "critical", msg)
+		if err := p.store.InsertPositionAlert(ctx, posID, "critical", msg); err != nil {
+			log.Printf("[exec] pos %d alert write: %v", posID, err)
+		}
 		return fmt.Errorf("no authoritative history for backfill")
 	}
 	closeSide := "SELL"

@@ -113,8 +113,7 @@ func (p *Pipeline) cashflowWriterOrStore() cashflowInserter {
 func (p *Pipeline) alertCashflowFailure(ctx context.Context, posID int64, legNo int16, kind, venue string, cause error) {
 	msg := fmt.Sprintf("cashflow write failed position=%d leg=%d kind=%s venue=%s: %v", posID, legNo, kind, venue, cause)
 	log.Printf("[exec] %s", msg)
-	pid := posID
-	if err := p.store.InsertAlert(ctx, &pid, "critical", msg); err != nil {
+	if err := p.store.InsertPositionAlert(ctx, posID, "critical", msg); err != nil {
 		log.Printf("[exec] cashflow alert insert also failed position=%d: %v", posID, err)
 	}
 }

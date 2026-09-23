@@ -185,8 +185,10 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 		if err := p.store.SetPositionUncertainty(ctx, posID, reason); err != nil {
 			log.Printf("[exec] position %d uncertainty write: %v", posID, err)
 		}
-		_ = p.store.InsertAlert(ctx, &posID, "critical",
-			fmt.Sprintf("position %d UNKNOWN: %s (manual verify required)", posID, reason))
+		if err := p.store.InsertPositionAlert(ctx, posID, "critical",
+			fmt.Sprintf("position %d UNKNOWN: %s (manual verify required)", posID, reason)); err != nil {
+			log.Printf("[exec] pos %d alert write: %v", posID, err)
+		}
 	}
 
 	if status == "LEGGED" {
@@ -204,21 +206,29 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 				// 走 close coordinator：ClaimClose + 写 CLOSE leg + 残量校验 + CLOSED
 				if err := p.ClosePosition(autoFlattenCtx, posID); err != nil {
 					log.Printf("[exec] position %d auto-flatten ClosePosition: %v", posID, err)
-					_ = p.store.InsertAlert(autoFlattenCtx, &posID, "critical",
-						fmt.Sprintf("position %d LEGGED auto-flatten close coordinator failed: %v", posID, err))
+					if err := p.store.InsertPositionAlert(autoFlattenCtx, posID, "critical",
+						fmt.Sprintf("position %d LEGGED auto-flatten close coordinator failed: %v", posID, err)); err != nil {
+						log.Printf("[exec] pos %d alert write: %v", posID, err)
+					}
 				} else {
-					_ = p.store.InsertAlert(autoFlattenCtx, &posID, "critical",
-						fmt.Sprintf("position %d LEGGED auto-flattened (open legs closed, root cause: partial fill)", posID))
+					if err := p.store.InsertPositionAlert(autoFlattenCtx, posID, "critical",
+						fmt.Sprintf("position %d LEGGED auto-flattened (open legs closed, root cause: partial fill)", posID)); err != nil {
+						log.Printf("[exec] pos %d alert write: %v", posID, err)
+					}
 					status = "CLOSED"
 				}
 			} else {
-				_ = p.store.InsertAlert(autoFlattenCtx, &posID, "critical",
-					fmt.Sprintf("position %d LEGGED: %d/%d legs filled, auto-flatten incomplete", posID, filled, len(legs)))
+				if err := p.store.InsertPositionAlert(autoFlattenCtx, posID, "critical",
+					fmt.Sprintf("position %d LEGGED: %d/%d legs filled, auto-flatten incomplete", posID, filled, len(legs))); err != nil {
+					log.Printf("[exec] pos %d alert write: %v", posID, err)
+				}
 			}
 		} else {
 			// critical 告警
-			_ = p.store.InsertAlert(ctx, nil, "critical",
-				fmt.Sprintf("position %d LEGGED: %d/%d legs filled", posID, filled, len(legs)))
+			if err := p.store.InsertAlert(ctx, nil, "critical",
+				fmt.Sprintf("position %d LEGGED: %d/%d legs filled", posID, filled, len(legs))); err != nil {
+				log.Printf("[exec] pos %d alert write: %v", posID, err)
+			}
 		}
 	}
 

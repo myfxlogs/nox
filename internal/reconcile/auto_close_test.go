@@ -85,8 +85,8 @@ func (f *fakeStore) UpdatePositionStatus(ctx context.Context, id int64, status s
 	return nil
 }
 
-func (f *fakeStore) InsertAlert(ctx context.Context, posID *int64, level, msg string) error {
-	f.alerts = append(f.alerts, fakeAlert{posID: posID, level: level, msg: msg})
+func (f *fakeStore) InsertAlert(ctx context.Context, ruleID *int64, level, msg string) error {
+	f.alerts = append(f.alerts, fakeAlert{posID: ruleID, level: level, msg: msg})
 	return nil
 }
 

@@ -143,27 +143,30 @@ func TestD408_SumClosedLegsPnL(t *testing.T) {
 	if math.Abs(got-(-30.0)) > 0.01 {
 		t.Errorf("②部分成交 want −30 got %.2f", got)
 	}
-	// ③CLOSE 腿缺 PriceActual → 该腿计 0 + critical alert，不 panic。
-	// （alerts.rule_id FK→rules：与既有调用方同约定传 posID，先种一条 rule 使告警可落）
-	var ruleID int64
-	if err := s.Pool().QueryRow(ctx,
-		`INSERT INTO rules (name, kind, cond, level) VALUES ('d408', 'sys', 'x', 'critical')
-		 ON CONFLICT (name) DO UPDATE SET name='d408' RETURNING id`).Scan(&ruleID); err != nil {
-		t.Fatalf("seed rule: %v", err)
+	// ③CLOSE 腿缺 PriceActual → 该腿计 0 + critical alert（position_id 列，D-411），不 panic。
+	posID3, err := s.CreatePosition(ctx, &pgstore.Position{
+		OpportunityID: "D408:test:missingprice", Type: "XASSET_CARRY", Status: "CLOSING"})
+	if err != nil {
+		t.Fatalf("create pos3: %v", err)
 	}
-	noPrice := pgstore.PositionLeg{PositionID: 1, LegNo: 1, Phase: "CLOSE", Status: "FILLED",
+	for i := range openLegs {
+		openLegs[i].PositionID = posID3
+	}
+	noPrice := pgstore.PositionLeg{PositionID: posID3, LegNo: 1, Phase: "CLOSE", Status: "FILLED",
 		FilledQty: &q1, Qty: q1}
-	got = p.sumClosedLegsPnL(ctx, ruleID, openLegs, []pgstore.PositionLeg{noPrice, mkClose(2, p4180, q1)}, 1.0)
+	c2 := mkClose(2, p4180, q1)
+	c2.PositionID = posID3
+	got = p.sumClosedLegsPnL(ctx, posID3, openLegs, []pgstore.PositionLeg{noPrice, c2}, 1.0)
 	if math.Abs(got-(-80.0)) > 0.01 {
 		t.Errorf("③缺价腿计 0 want −80 got %.2f", got)
 	}
 	var alertN int
 	if err := s.Pool().QueryRow(ctx,
-		`SELECT count(*) FROM alerts WHERE level='critical'`).Scan(&alertN); err != nil || alertN == 0 {
-		t.Errorf("③缺价应落 critical alert, n=%d err=%v", alertN, err)
+		`SELECT count(*) FROM alerts WHERE level='critical' AND position_id=$1`, posID3).Scan(&alertN); err != nil || alertN == 0 {
+		t.Errorf("③缺价应落 position_id 持仓告警, n=%d err=%v", alertN, err)
 	}
 	// ④OPEN 腿无 CLOSE → 不累计（残腿校验另行拦阻，不虚增）
-	got = p.sumClosedLegsPnL(ctx, 1, openLegs, []pgstore.PositionLeg{mkClose(2, p4180, q1)}, 1.0)
+	got = p.sumClosedLegsPnL(ctx, posID3, openLegs, []pgstore.PositionLeg{mkClose(2, p4180, q1)}, 1.0)
 	if math.Abs(got-(-80.0)) > 0.01 {
 		t.Errorf("④无 CLOSE 腿不计 want −80 got %.2f", got)
 	}
