@@ -44,6 +44,9 @@ type AccountMonitor struct {
 	// D-107 P2：margin 事件触发重采（OnOrderProfit → MarginSink → OrderProfitKick → Kick）。
 	kickCh   chan struct{}
 	lastPoll time.Time // 防抖基准：最近一次 kick 触发 poll 的时间（仅 kick 路径更新，ticker 不更新）
+
+	// D-445 S0：MT5 OnOrderUpdate 余额帧 tap（venueKey → 最近一帧；Refresh 失败兜底+加温）。
+	streamAccts sync.Map // venueKey → StreamAcct
 }
 
 // ExchangeStore 提供 CEX 交易所配置（pgstore.Store 满足）。

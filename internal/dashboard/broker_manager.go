@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"arb/internal/adapter"
 	"arb/internal/alertcool"
 	"arb/internal/bus"
 	"arb/internal/exec"
@@ -101,6 +102,10 @@ type BrokerManager struct {
 	// OrderEventSink 订单事件下沉注入（D-107 P1 事件驱动二阶段）：同 MarginSink 注入模式，
 	// wiring/main 注入（sink = 发布到 orderTopic）；startMT5 透传至 adapter（nil 安全）。
 	OrderEventSink func(bus.OrderEvent)
+
+	// AccountSink D-445 S0：OnOrderUpdate 余额帧下沉注入（同 OrderEventSink 模式；
+	// sink = acctMon.ObserveStreamAccount）。startMT5 透传至 adapter（nil 安全）。
+	AccountSink adapter.AcctFrameSink
 
 	// OrderProfitKick D-107 P2：margin 事件触发账户重采（OnOrderProfit → MarginSink closure →
 	// acctMon.Kick）。同 SwapKick 注入模式，main 注入（acctMon 创建后赋值），nil 安全。

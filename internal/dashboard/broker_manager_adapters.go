@@ -105,6 +105,8 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 	ad.MarginSink = m.MarginSink
 	// D-107 P1：OrderEventSink 须在 Connect 前注入（Connect 末尾 go runOrderEventSource 读此字段）。
 	ad.OrderEventSink = m.OrderEventSink
+	// D-445 S0：AccountSink 须在 Connect 前注入（runOrderEventSource 读此字段）。
+	ad.AccountSink = m.AccountSink
 	// D-104 P2 U2：AlertSink 须在 Connect 前注入（quoteReconnectBackoff 封顶档读此字段）。
 	ad.AlertSink = m.AlertSink
 	if err := ad.Connect(ctx); err != nil {
