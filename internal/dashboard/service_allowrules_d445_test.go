@@ -1,5 +1,5 @@
-// service_allowrules_d445_test.go —— D-445 T1/T1b：venue 行实时资金列透传（Refresh 主源）
-// +流帧较新者规则双向锚。需 ARB_TEST_PG_DSN。
+// service_allowrules_d445_test.go —— D-445 T1/T1b：venue 行实时资金列透传（Snapshot 主源，
+// D-447：同源 poll 产物，测试先 Refresh 一次暖缓存）+流帧较新者规则双向锚。需 ARB_TEST_PG_DSN。
 package dashboard
 
 import (
@@ -32,10 +32,11 @@ func d445Fixture(t *testing.T) (*Service, *AccountMonitor, *fakeAccountQuerier) 
 		Balance: 111.5, Equity: 222.25, Currency: "USD",
 	}}
 	mon, _, _ := newAcctMonTest(t, q)
+	mon.Refresh(ctx) // D-447：Snapshot 读 monitor cache——先跑一轮 poll 暖缓存
 	return &Service{store: st, acctMon: mon}, mon, q
 }
 
-// T1：venue 行透传 Refresh 值+has_account；canonical 行 has_account=false。
+// T1：venue 行透传快照值+has_account；canonical 行 has_account=false。
 func TestD445VenueMoneyColumns(t *testing.T) {
 	svc, _, _ := d445Fixture(t)
 	resp, err := svc.ListAutotradeAllowRules(context.Background(),
@@ -63,12 +64,12 @@ func TestD445VenueMoneyColumns(t *testing.T) {
 	}
 }
 
-// T1b：较新者双向锚——流帧老（now−10m）→取 Refresh 值；流帧新（now+1s）→取流值。
+// T1b：较新者双向锚——流帧老（now−10m）→取快照值；流帧新（now+1s）→取流值。
 func TestD445NewerSourceWins(t *testing.T) {
 	svc, mon, q := d445Fixture(t)
 	ctx := context.Background()
 
-	// ① 流帧老 → Refresh 值胜（updated_at≈now）
+	// ① 流帧老 → 快照值胜（updated_at≈now）
 	mon.ObserveStreamAccount("d445x:mt5", 999, 999, 0, 0, 0, 0, "EUR", time.Now().Add(-10*time.Minute))
 	resp, err := svc.ListAutotradeAllowRules(ctx, connect.NewRequest(&v1.ListAutotradeAllowRulesRequest{}))
 	if err != nil {
@@ -81,7 +82,7 @@ func TestD445NewerSourceWins(t *testing.T) {
 		}
 	}
 	if row == nil || row.Balance != 111.5 || row.Equity != 222.25 {
-		t.Fatalf("refresh should win: %+v", row)
+		t.Fatalf("snapshot should win: %+v", row)
 	}
 
 	// ② 流帧新（now+1s）→ 流值胜
@@ -99,9 +100,10 @@ func TestD445NewerSourceWins(t *testing.T) {
 		t.Fatalf("stream should win: %+v", row)
 	}
 
-	// ③ querier 失败（Refresh miss）→ 流帧兜底仍 has_account
+	// ③ querier 失败（快照空）→ 流帧兜底仍 has_account
 	q.err = context.DeadlineExceeded
 	mon2, _, _ := newAcctMonTest(t, q)
+	mon2.Refresh(ctx) // 暖缓存：querier err → cache 空，断言流兜底路径不变
 	mon2.ObserveStreamAccount("d445x:mt5", 777, 777, 0, 0, 0, 0, "USD", time.Now())
 	svc2 := &Service{store: svc.store, acctMon: mon2}
 	resp, err = svc2.ListAutotradeAllowRules(ctx, connect.NewRequest(&v1.ListAutotradeAllowRulesRequest{}))
