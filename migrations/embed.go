@@ -235,4 +235,6 @@ var (
 	AutotradeAllowRulesSQL string
 	//go:embed 0135_intra_events.sql
 	IntraEventsSQL string
+	//go:embed 0136_cex_private_events.sql
+	CexPrivateEventsSQL string
 )

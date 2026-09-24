@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 // Client 返回带 Binance 静态代理信任的 http.Client：
@@ -42,6 +44,29 @@ func Client() *http.Client {
 		c.Transport = tokenRT{base: tr, tok: tok}
 	}
 	return c
+}
+
+// WSDialer 返回与 Client() 同源的 websocket.Dialer（D-450）：CA 信任 + 令牌头同源注入。
+// 返回 dialer 与握手 header（X-Proxy-Token）；env 未配置时均可直连公网 WS。
+func WSDialer() (*websocket.Dialer, http.Header) {
+	d := &websocket.Dialer{HandshakeTimeout: 10 * time.Second}
+	header := http.Header{}
+	caPath, tok := os.Getenv("ARB_BINANCE_PROXY_CA"), os.Getenv("ARB_BINANCE_PROXY_TOKEN")
+	if caPath != "" {
+		if pem, err := os.ReadFile(caPath); err == nil {
+			pool, err := x509.SystemCertPool()
+			if err != nil {
+				pool = x509.NewCertPool()
+			}
+			if pool.AppendCertsFromPEM(pem) {
+				d.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
+			}
+		}
+	}
+	if tok != "" {
+		header.Set("X-Proxy-Token", tok)
+	}
+	return d, header
 }
 
 // tokenRT 给每个请求注入 X-Proxy-Token 头（代理防开放中继鉴权，D-055）。

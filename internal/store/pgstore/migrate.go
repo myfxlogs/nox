@@ -131,6 +131,7 @@ var migrationFiles = []struct {
 	{133, migrations.PaperIntraTradesSQL},              // D-425 S1：日内单品高风险轨纸面表
 	{134, migrations.AutotradeAllowRulesSQL},           // D-443 S1：autotrade venue/canonical 白名单表化+env seed
 	{135, migrations.IntraEventsSQL},                   // D-441 S2：日内轨栅栏事件表（0134撞D-443改135）
+	{136, migrations.CexPrivateEventsSQL},              // D-450 S4：CEX 私有 WS 事件审计表
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
