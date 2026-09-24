@@ -18,7 +18,7 @@ import (
 // 运行时直连 exchangeInfo 解析 LOT_SIZE.stepSize → 内存 map；硬编码表作 fallback；
 // 未知品种返回 0（fail-closed，由 P3 预检拒单）。
 
-// cexStepMeta 缓存 binance:perp 各 symbol 的 LOT_SIZE stepSize（运行时拉取 + fallback）。
+// cexStepMeta 缓存 binance:perp 各 symbol 的 LOT_SIZE stepSize（运行时拉取；D-466 撤硬编码 fallback）。
 // 仅 binance:perp 走此表（okx perp 已由 D-125 instruments lotSz 权威化，不动）。
 type cexStepMeta struct {
 	mu       sync.RWMutex
@@ -33,14 +33,12 @@ func NewCexStepMeta(infoURL string, ttl time.Duration) *cexStepMeta {
 	return &cexStepMeta{infoURL: infoURL, ttl: ttl}
 }
 
-// step 返回 symbol 的 stepSize。查表顺序：运行时表 → 硬编码 fallback → 0（未知，fail-closed）。
+// step 返回 symbol 的 stepSize。D-466：只查运行时表（venue 原生 exchangeInfo），
+// 硬编码 fallback 表已撤（业主令「不得硬编码」；未知→0 fail-closed 由预检拒单）。
 // symbol 可以是 binance 格式（BTCUSDT）或带后缀的 venue 格式（BTC-USDT-SWAP）——统一提取 base 后查。
 func (m *cexStepMeta) step(symbol string) float64 {
-	// 先查运行时表（按原始 symbol + base 两种 key）
-	if s, ok := m.rtLookup(symbol); ok && s > 0 {
-		return s
-	}
-	return cexStepSizeFallback(symbol)
+	s, _ := m.rtLookup(symbol)
+	return s
 }
 
 // rtLookup 查运行时表（RLock），尝试原始 symbol 和 base 两种 key。
@@ -144,50 +142,6 @@ func parseBinanceExchangeInfo(body []byte) (map[string]float64, error) {
 		}
 	}
 	return out, nil
-}
-
-// cexStepSizeFallback 硬编码 fallback 表（2026-08-28 官方 testnet exchangeInfo 实测对齐）。
-// 仅 binance:perp 走此表。未知品种返回 0（fail-closed）。
-func cexStepSizeFallback(symbol string) float64 {
-	base := cexBaseSymbol(symbol)
-	switch base {
-	case "BTC":
-		return 0.001 // qtyPrec=3
-	case "ETH":
-		return 0.001 // qtyPrec=3
-	case "SOL":
-		return 0.01 // qtyPrec=2
-	case "BNB":
-		return 0.01 // qtyPrec=2（探测 0.5 通过实证）
-	case "XRP":
-		return 0.1 // qtyPrec=1（旧表 1=过度取整，实测 0.1）
-	case "DOGE":
-		return 1 // qtyPrec=0
-	case "ADA":
-		return 1 // qtyPrec=0
-	case "DOT":
-		return 0.1 // qtyPrec=1（旧表 0.01 错误，#383 实证 0.1）
-	case "LINK":
-		return 0.01 // qtyPrec=2
-	case "LTC":
-		return 0.001 // qtyPrec=3
-	case "AVAX":
-		return 0.01 // qtyPrec=2
-	case "TRX":
-		return 1 // qtyPrec=0（D-125 实证）
-	case "NEAR":
-		return 0.01 // qtyPrec=2
-	case "ATOM":
-		return 0.01 // qtyPrec=2
-	case "FIL":
-		return 0.01 // qtyPrec=2
-	case "UNI":
-		return 0.01 // qtyPrec=2
-	case "AAVE":
-		return 0.01 // qtyPrec=2
-	default:
-		return 0 // 未知=0 → fail-closed（D-127 P2：删除「未知默认 0.01」猜测）
-	}
 }
 
 // cexBaseSymbol 提取基础币种（去 USDT/USD 后缀 + OKX -SWAP 后缀）。

@@ -61,7 +61,7 @@ func TestD337R1_CEXLegClockAndRate(t *testing.T) {
 	mon := NewBrokerPositionMonitor(bm, qb, time.Minute, time.Millisecond, time.Second,
 		bus.NewTopic[*v1.BrokerPositionSnapshot](), NewServerTZCache(time.Minute, func(context.Context, string) (float64, error) {
 			return 0, errors.New("n/a")
-		}), intervals)
+		}), intervals, nil)
 	mon.SetCEXFundingRate(func(_ context.Context, venue, symbol string) (float64, bool) {
 		if venue != "binance" || symbol != "XAUUSDT" {
 			return 0, false
@@ -114,7 +114,7 @@ func TestD337R1_CEXNoFactZero(t *testing.T) {
 	mon := NewBrokerPositionMonitor(bm, qb, time.Minute, time.Millisecond, time.Second,
 		bus.NewTopic[*v1.BrokerPositionSnapshot](), NewServerTZCache(time.Minute, func(context.Context, string) (float64, error) {
 			return 0, errors.New("n/a")
-		}), intervals)
+		}), intervals, nil)
 	mon.SetCEXFundingRate(func(_ context.Context, _, _ string) (float64, bool) { return 0, false }) // 无 facts 行
 	got := mon.Refresh(ctx)
 	if len(got) != 1 {

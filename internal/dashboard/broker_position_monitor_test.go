@@ -47,7 +47,7 @@ func newMonTestQ(t *testing.T, q reconcile.VenueQuerier) (*BrokerPositionMonitor
 	ch, _ := topic.Subscribe()
 	m := NewBrokerPositionMonitor(bm, qbus, time.Minute, time.Millisecond, time.Second, topic,
 		NewServerTZCache(time.Minute, func(context.Context, string) (float64, error) { return 0, errors.New("n/a") }),
-		exchange.NewFundingIntervalCache())
+		exchange.NewFundingIntervalCache(), nil)
 	return m, topic, ch
 }
 
@@ -61,7 +61,7 @@ func newMonTest(t *testing.T, q *fakeVenueQuerier) (*BrokerPositionMonitor, *bus
 	ch, _ := topic.Subscribe()
 	m := NewBrokerPositionMonitor(bm, qbus, time.Minute, time.Millisecond, time.Second, topic,
 		NewServerTZCache(time.Minute, func(context.Context, string) (float64, error) { return 0, errors.New("n/a") }),
-		exchange.NewFundingIntervalCache())
+		exchange.NewFundingIntervalCache(), nil)
 	return m, topic, ch
 }
 
@@ -429,7 +429,7 @@ func TestD337_BuildSwapChargeAt(t *testing.T) {
 		bus.NewTopic[*v1.BrokerPositionSnapshot](),
 		NewServerTZCache(time.Hour, func(_ context.Context, _ string) (float64, error) {
 			return 3, nil // EEST 形态
-		}), exchange.NewFundingIntervalCache())
+		}), exchange.NewFundingIntervalCache(), nil)
 	got := m.Refresh(ctx)
 	if len(got) != 2 {
 		t.Fatalf("want 2 positions, got %d", len(got))
@@ -451,7 +451,7 @@ func TestD337_BuildSwapChargeAt(t *testing.T) {
 		bus.NewTopic[*v1.BrokerPositionSnapshot](),
 		NewServerTZCache(time.Hour, func(_ context.Context, _ string) (float64, error) {
 			return 0, errors.New("rpc down")
-		}), exchange.NewFundingIntervalCache())
+		}), exchange.NewFundingIntervalCache(), nil)
 	got2 := m2.Refresh(ctx)
 	if len(got2) != 1 || got2[0].SwapChargeAt != nil {
 		t.Errorf("无时区 venue want nil, got %d/%v", len(got2), got2[0].SwapChargeAt)

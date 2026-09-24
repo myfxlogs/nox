@@ -239,14 +239,12 @@ func stepDecimals(step float64) int {
 	return len(s) - dot - 1
 }
 
-// cexStepSize 返回 CEX 品种的 stepSize（向下取整单位）。
-// D-127 P2：查 stepMeta（运行时表 → 硬编码 fallback）→ 未知返回 0（fail-closed）。
-// stepMeta nil = 仅用硬编码 fallback（测试场景）。
+// cexStepSize 返回 binance:perp 品种的 stepSize（向下取整单位）。
+// D-466：只吃 stepMeta 运行时表（venue 原生 exchangeInfo）——硬编码 fallback 表已撤
+// （业主令「不得硬编码」）；stepMeta nil/未命中 → 0（fail-closed，由 P3 预检拒单）。
 func (s *Service) cexStepSize(symbol string) float64 {
 	if s.stepMeta != nil {
-		if step := s.stepMeta.step(symbol); step > 0 {
-			return step
-		}
+		return s.stepMeta.step(symbol)
 	}
-	return cexStepSizeFallback(symbol)
+	return 0
 }

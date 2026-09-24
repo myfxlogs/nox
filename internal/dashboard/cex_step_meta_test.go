@@ -6,46 +6,8 @@ import (
 
 // D-127 P2：cexStepMeta + fallback + fail-closed 单测。
 
-func TestCexStepSizeFallback_KnownSymbols(t *testing.T) {
-	cases := []struct {
-		symbol string
-		want   float64
-	}{
-		{"BTCUSDT", 0.001},
-		{"ETHUSDT", 0.001},
-		{"DOTUSDT", 0.1},  // D-127 修正：旧表 0.01 → 实测 0.1
-		{"XRPUSDT", 0.1},  // D-127 修正：旧表 1 → 实测 0.1
-		{"TRXUSDT", 1},    // D-125 实证
-		{"BNBUSDT", 0.01}, // 探测实证
-		{"DOGEUSDT", 1},
-		{"SOLUSDT", 0.01},
-	}
-	for _, c := range cases {
-		if got := cexStepSizeFallback(c.symbol); got != c.want {
-			t.Errorf("cexStepSizeFallback(%s)=%v，期望 %v", c.symbol, got, c.want)
-		}
-	}
-}
-
-func TestCexStepSizeFallback_OKXFormat(t *testing.T) {
-	// OKX perp 格式 BTC-USDT-SWAP → base=BTC → 0.001
-	if got := cexStepSizeFallback("BTC-USDT-SWAP"); got != 0.001 {
-		t.Errorf("cexStepSizeFallback(BTC-USDT-SWAP)=%v，期望 0.001", got)
-	}
-	if got := cexStepSizeFallback("DOT-USDT-SWAP"); got != 0.1 {
-		t.Errorf("cexStepSizeFallback(DOT-USDT-SWAP)=%v，期望 0.1", got)
-	}
-}
-
-func TestCexStepSizeFallback_UnknownFailClosed(t *testing.T) {
-	// 未知品种 → 0（fail-closed，D-127 P2 删除「未知默认 0.01」猜测）
-	if got := cexStepSizeFallback("FOOBARUSDT"); got != 0 {
-		t.Errorf("cexStepSizeFallback(FOOBARUSDT)=%v，期望 0（fail-closed）", got)
-	}
-}
-
-func TestCexStepMeta_RuntimeOverridesFallback(t *testing.T) {
-	// 运行时表有值 → 优先于 fallback
+func TestCexStepMeta_RuntimeTable(t *testing.T) {
+	// D-466：运行时表是唯一源（硬编码 fallback 已撤）
 	m := NewCexStepMeta("http://unused", 0)
 	m.mu.Lock()
 	m.rt = map[string]float64{"BTCUSDT": 0.002}
@@ -59,16 +21,16 @@ func TestCexStepMeta_RuntimeOverridesFallback(t *testing.T) {
 	}
 }
 
-func TestCexStepMeta_FallbackWhenRuntimeEmpty(t *testing.T) {
-	// 运行时表空 → 回退到硬编码
+func TestCexStepMeta_RuntimeEmptyFailClosed(t *testing.T) {
+	// D-466：运行时表空 → 0（硬编码 fallback 已撤，fail-closed 由预检拒单）
 	m := NewCexStepMeta("http://unused", 0)
-	if got := m.step("DOTUSDT"); got != 0.1 {
-		t.Errorf("step(DOTUSDT) fallback=%v，期望 0.1", got)
+	if got := m.step("DOTUSDT"); got != 0 {
+		t.Errorf("step(DOTUSDT)=%v，期望 0（无 fallback）", got)
 	}
 }
 
 func TestCexStepMeta_UnknownReturnsZero(t *testing.T) {
-	// 运行时表 + fallback 均无 → 0（fail-closed）
+	// 运行时表无 → 0（fail-closed）
 	m := NewCexStepMeta("http://unused", 0)
 	if got := m.step("ZZZUSDT"); got != 0 {
 		t.Errorf("step(ZZZUSDT)=%v，期望 0（fail-closed）", got)
