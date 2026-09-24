@@ -334,6 +334,12 @@ const (
 	// DashboardServiceListPaperSpotCarryProcedure is the fully-qualified name of the DashboardService's
 	// ListPaperSpotCarry RPC.
 	DashboardServiceListPaperSpotCarryProcedure = "/arb.dashboard.v1.DashboardService/ListPaperSpotCarry"
+	// DashboardServiceListIntraTradesProcedure is the fully-qualified name of the DashboardService's
+	// ListIntraTrades RPC.
+	DashboardServiceListIntraTradesProcedure = "/arb.dashboard.v1.DashboardService/ListIntraTrades"
+	// DashboardServiceIntraTrackStatsProcedure is the fully-qualified name of the DashboardService's
+	// IntraTrackStats RPC.
+	DashboardServiceIntraTrackStatsProcedure = "/arb.dashboard.v1.DashboardService/IntraTrackStats"
 	// DashboardServiceGetCapitalCoverageProcedure is the fully-qualified name of the DashboardService's
 	// GetCapitalCoverage RPC.
 	DashboardServiceGetCapitalCoverageProcedure = "/arb.dashboard.v1.DashboardService/GetCapitalCoverage"
@@ -495,6 +501,9 @@ type DashboardServiceClient interface {
 	ListSpotCarryDemo(context.Context, *connect.Request[v1.ListSpotCarryDemoRequest]) (*connect.Response[v1.ListSpotCarryDemoResponse], error)
 	// D-352：纸面轨前端卡（持仓页第三卡）——active+demo+近 14 天 exited 三态。
 	ListPaperSpotCarry(context.Context, *connect.Request[v1.ListPaperSpotCarryRequest]) (*connect.Response[v1.ListPaperSpotCarryResponse], error)
+	// D-441：日内纸面轨（沙箱·D-425）观测面——成交列表+30天裁决统计。
+	ListIntraTrades(context.Context, *connect.Request[v1.ListIntraTradesRequest]) (*connect.Response[v1.ListIntraTradesResponse], error)
+	IntraTrackStats(context.Context, *connect.Request[v1.IntraTrackStatsRequest]) (*connect.Response[v1.IntraTrackStatsResponse], error)
 	// D-359：资金不眠覆盖率前端面板（口径 SSOT=D-356 §1.1；digest 段同源双实现，后端算前端零计算）。
 	GetCapitalCoverage(context.Context, *connect.Request[v1.GetCapitalCoverageRequest]) (*connect.Response[v1.GetCapitalCoverageResponse], error)
 	// D-365：CEX 财务页（账户级盘点全币种+进出/收益流水；后端算+占比，前端零计算）。
@@ -1125,6 +1134,18 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("ListPaperSpotCarry")),
 			connect.WithClientOptions(opts...),
 		),
+		listIntraTrades: connect.NewClient[v1.ListIntraTradesRequest, v1.ListIntraTradesResponse](
+			httpClient,
+			baseURL+DashboardServiceListIntraTradesProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListIntraTrades")),
+			connect.WithClientOptions(opts...),
+		),
+		intraTrackStats: connect.NewClient[v1.IntraTrackStatsRequest, v1.IntraTrackStatsResponse](
+			httpClient,
+			baseURL+DashboardServiceIntraTrackStatsProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("IntraTrackStats")),
+			connect.WithClientOptions(opts...),
+		),
 		getCapitalCoverage: connect.NewClient[v1.GetCapitalCoverageRequest, v1.GetCapitalCoverageResponse](
 			httpClient,
 			baseURL+DashboardServiceGetCapitalCoverageProcedure,
@@ -1267,6 +1288,8 @@ type dashboardServiceClient struct {
 	executeSpotCarryDemo      *connect.Client[v1.ExecuteSpotCarryDemoRequest, v1.ExecuteSpotCarryDemoResponse]
 	listSpotCarryDemo         *connect.Client[v1.ListSpotCarryDemoRequest, v1.ListSpotCarryDemoResponse]
 	listPaperSpotCarry        *connect.Client[v1.ListPaperSpotCarryRequest, v1.ListPaperSpotCarryResponse]
+	listIntraTrades           *connect.Client[v1.ListIntraTradesRequest, v1.ListIntraTradesResponse]
+	intraTrackStats           *connect.Client[v1.IntraTrackStatsRequest, v1.IntraTrackStatsResponse]
 	getCapitalCoverage        *connect.Client[v1.GetCapitalCoverageRequest, v1.GetCapitalCoverageResponse]
 	getCexFinance             *connect.Client[v1.GetCexFinanceRequest, v1.GetCexFinanceResponse]
 	listCarryGraduations      *connect.Client[v1.ListCarryGraduationsRequest, v1.ListCarryGraduationsResponse]
@@ -1780,6 +1803,16 @@ func (c *dashboardServiceClient) ListPaperSpotCarry(ctx context.Context, req *co
 	return c.listPaperSpotCarry.CallUnary(ctx, req)
 }
 
+// ListIntraTrades calls arb.dashboard.v1.DashboardService.ListIntraTrades.
+func (c *dashboardServiceClient) ListIntraTrades(ctx context.Context, req *connect.Request[v1.ListIntraTradesRequest]) (*connect.Response[v1.ListIntraTradesResponse], error) {
+	return c.listIntraTrades.CallUnary(ctx, req)
+}
+
+// IntraTrackStats calls arb.dashboard.v1.DashboardService.IntraTrackStats.
+func (c *dashboardServiceClient) IntraTrackStats(ctx context.Context, req *connect.Request[v1.IntraTrackStatsRequest]) (*connect.Response[v1.IntraTrackStatsResponse], error) {
+	return c.intraTrackStats.CallUnary(ctx, req)
+}
+
 // GetCapitalCoverage calls arb.dashboard.v1.DashboardService.GetCapitalCoverage.
 func (c *dashboardServiceClient) GetCapitalCoverage(ctx context.Context, req *connect.Request[v1.GetCapitalCoverageRequest]) (*connect.Response[v1.GetCapitalCoverageResponse], error) {
 	return c.getCapitalCoverage.CallUnary(ctx, req)
@@ -1951,6 +1984,9 @@ type DashboardServiceHandler interface {
 	ListSpotCarryDemo(context.Context, *connect.Request[v1.ListSpotCarryDemoRequest]) (*connect.Response[v1.ListSpotCarryDemoResponse], error)
 	// D-352：纸面轨前端卡（持仓页第三卡）——active+demo+近 14 天 exited 三态。
 	ListPaperSpotCarry(context.Context, *connect.Request[v1.ListPaperSpotCarryRequest]) (*connect.Response[v1.ListPaperSpotCarryResponse], error)
+	// D-441：日内纸面轨（沙箱·D-425）观测面——成交列表+30天裁决统计。
+	ListIntraTrades(context.Context, *connect.Request[v1.ListIntraTradesRequest]) (*connect.Response[v1.ListIntraTradesResponse], error)
+	IntraTrackStats(context.Context, *connect.Request[v1.IntraTrackStatsRequest]) (*connect.Response[v1.IntraTrackStatsResponse], error)
 	// D-359：资金不眠覆盖率前端面板（口径 SSOT=D-356 §1.1；digest 段同源双实现，后端算前端零计算）。
 	GetCapitalCoverage(context.Context, *connect.Request[v1.GetCapitalCoverageRequest]) (*connect.Response[v1.GetCapitalCoverageResponse], error)
 	// D-365：CEX 财务页（账户级盘点全币种+进出/收益流水；后端算+占比，前端零计算）。
@@ -2577,6 +2613,18 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("ListPaperSpotCarry")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceListIntraTradesHandler := connect.NewUnaryHandler(
+		DashboardServiceListIntraTradesProcedure,
+		svc.ListIntraTrades,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListIntraTrades")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceIntraTrackStatsHandler := connect.NewUnaryHandler(
+		DashboardServiceIntraTrackStatsProcedure,
+		svc.IntraTrackStats,
+		connect.WithSchema(dashboardServiceMethods.ByName("IntraTrackStats")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceGetCapitalCoverageHandler := connect.NewUnaryHandler(
 		DashboardServiceGetCapitalCoverageProcedure,
 		svc.GetCapitalCoverage,
@@ -2817,6 +2865,10 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceListSpotCarryDemoHandler.ServeHTTP(w, r)
 		case DashboardServiceListPaperSpotCarryProcedure:
 			dashboardServiceListPaperSpotCarryHandler.ServeHTTP(w, r)
+		case DashboardServiceListIntraTradesProcedure:
+			dashboardServiceListIntraTradesHandler.ServeHTTP(w, r)
+		case DashboardServiceIntraTrackStatsProcedure:
+			dashboardServiceIntraTrackStatsHandler.ServeHTTP(w, r)
 		case DashboardServiceGetCapitalCoverageProcedure:
 			dashboardServiceGetCapitalCoverageHandler.ServeHTTP(w, r)
 		case DashboardServiceGetCexFinanceProcedure:
@@ -3240,6 +3292,14 @@ func (UnimplementedDashboardServiceHandler) ListSpotCarryDemo(context.Context, *
 
 func (UnimplementedDashboardServiceHandler) ListPaperSpotCarry(context.Context, *connect.Request[v1.ListPaperSpotCarryRequest]) (*connect.Response[v1.ListPaperSpotCarryResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListPaperSpotCarry is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListIntraTrades(context.Context, *connect.Request[v1.ListIntraTradesRequest]) (*connect.Response[v1.ListIntraTradesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListIntraTrades is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) IntraTrackStats(context.Context, *connect.Request[v1.IntraTrackStatsRequest]) (*connect.Response[v1.IntraTrackStatsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.IntraTrackStats is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GetCapitalCoverage(context.Context, *connect.Request[v1.GetCapitalCoverageRequest]) (*connect.Response[v1.GetCapitalCoverageResponse], error) {
