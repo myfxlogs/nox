@@ -138,6 +138,10 @@ service DashboardService {
   rpc AppendAnalystNote(AppendAnalystNoteRequest) returns (AppendAnalystNoteResponse);
   // D-442 S4：KB 元分析报告手动补跑（周 ticker 之外的调试/验证入口）
   rpc GenerateKbReport(GenerateKbReportRequest) returns (GenerateKbReportResponse);
+  // D-457：系统复盘报告——手动触发 + 报告列表/正文读取（前端报告页）
+  rpc GenerateRetroReport(GenerateRetroReportRequest) returns (GenerateRetroReportResponse);
+  rpc ListReports(ListReportsRequest) returns (ListReportsResponse);
+  rpc GetReport(GetReportRequest) returns (GetReportResponse);
   // D-091 返修② R3：AI 配置 DB 化（前端可配，Get 掩码/Set 空 key 不覆盖）
   rpc GetAiSettings(GetAiSettingsRequest) returns (GetAiSettingsResponse);
   rpc SetAiSettings(SetAiSettingsRequest) returns (SetAiSettingsResponse);
@@ -1436,6 +1440,15 @@ message AppendAnalystNoteRequest { string question = 1; string summary = 2; repe
 message AppendAnalystNoteResponse { bool ok = 1; }
 message GenerateKbReportRequest {}
 message GenerateKbReportResponse { string path = 1; }
+
+// D-457：kind=daily|weekly
+message GenerateRetroReportRequest { string kind = 1; }
+message GenerateRetroReportResponse { string path = 1; }
+message ReportInfo { string name = 1; int64 size_bytes = 2; string modified_at = 3; }
+message ListReportsRequest {}
+message ListReportsResponse { repeated ReportInfo reports = 1; }
+message GetReportRequest { string name = 1; }
+message GetReportResponse { string name = 1; string content = 2; }
 
 // D-091 返修② R3：AI 配置 DB 化
 message GetAiSettingsRequest {}

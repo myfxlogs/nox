@@ -199,6 +199,7 @@ type Config struct {
 	AIAPIKey           string // ARB_AI_API_KEY（仅 .env，不进仓）
 	AIModel            string // ARB_AI_MODEL（如 glm-4.6）
 	AIPGDSN            string // ARB_AI_PG_DSN（arb_ro 只读角色 DSN）
+	RetroDisabled      bool   // ARB_RETRO_ENABLED=0/false 关复盘定时器（D-457）
 	AnalystRatePerHour int    // ARB_ANALYST_RATE_PER_HOUR（默认 20）
 	// MTData MT 数据采集稳定性加固参数（D-104 P0）。
 	MTData MTDataConfig

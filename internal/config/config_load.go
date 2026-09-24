@@ -100,6 +100,7 @@ func Load() *Config {
 		AIAPIKey:                   envStr("ARB_AI_API_KEY", ""),
 		AIModel:                    envStr("ARB_AI_MODEL", "glm-4.6"),
 		AIPGDSN:                    envStr("ARB_AI_PG_DSN", ""),
+		RetroDisabled:              envBool("ARB_RETRO_ENABLED", true) == false, // D-457：env=0 关复盘定时器
 		AnalystRatePerHour:         envInt("ARB_ANALYST_RATE_PER_HOUR", 20),
 		MTData:                     loadMTData(),
 		SwapReconcileDeviationPct:  envFloat("ARB_SWAP_RECONCILE_DEVIATION_PCT", 10.0), // D-110 P2
