@@ -79,9 +79,10 @@ func TestGenerateDaily(t *testing.T) {
 		OpenPos:     []pgstore.RetroOpenPos{{ID: 502, Type: "XASSET_CARRY", Venue: "gate", OpenedAt: time.Date(2026, 9, 20, 0, 0, 0, 0, time.UTC), CarryUSD: 1.03}},
 		OpenedToday: 1, ClosedToday: 0,
 		FundingActualUSD: 1.0313, FundingEstUSD: 1.15,
-		EvalDist:  map[string]int{"hold": 100, "fail_closed": 2},
-		AlertDist: map[string]int{"warn": 1},
-		AlertTop3: []string{"x"},
+		GraduationsToday: 2, // D-468 S4：毕业建议窗口计数渲染
+		EvalDist:         map[string]int{"hold": 100, "fail_closed": 2},
+		AlertDist:        map[string]int{"warn": 1},
+		AlertTop3:        []string{"x"},
 	}}
 	deps := testDeps(t, st, fakeRun(t, "funding_actual_today: $1.0313", "今日平稳，funding 实收达标。"))
 	path, err := GenerateDaily(context.Background(), deps)
@@ -99,7 +100,7 @@ func TestGenerateDaily(t *testing.T) {
 		}
 		last = i
 	}
-	for _, want := range []string{"pos502", "hold=100", "今日平稳", "D-457 系统周期复盘报告", "ws-api 待决策", "inbox_backlog_rows: 1", "git log 不可用", "昨日 UTC 全天"} {
+	for _, want := range []string{"pos502", "hold=100", "今日平稳", "D-457 系统周期复盘报告", "ws-api 待决策", "inbox_backlog_rows: 1", "git log 不可用", "昨日 UTC 全天", "graduations_today: 2"} {
 		if !strings.Contains(txt, want) {
 			t.Fatalf("report missing %q", want)
 		}

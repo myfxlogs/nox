@@ -64,6 +64,7 @@ func renderDailyStats(d *pgstore.RetroDaily, now time.Time) string {
 			p.ID, p.Type, p.Venue, now.Sub(p.OpenedAt).Round(time.Hour), p.CarryUSD)
 	}
 	fmt.Fprintf(&b, "opened_today: %d  closed_today: %d\n", d.OpenedToday, d.ClosedToday)
+	fmt.Fprintf(&b, "graduations_today: %d\n", d.GraduationsToday) // D-468 S4：毕业建议 新增=N
 	fmt.Fprintf(&b, "funding_actual_today: $%.4f  funding_estimated_today: $%.4f\n",
 		d.FundingActualUSD, d.FundingEstUSD)
 	b.WriteString("evals_today: " + joinDist(d.EvalDist) + "\n")
