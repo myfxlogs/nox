@@ -171,6 +171,10 @@ service DashboardService {
   // D-352：纸面轨前端卡（持仓页第三卡）——active+demo+近 14 天 exited 三态。
   rpc ListPaperSpotCarry(ListPaperSpotCarryRequest) returns (ListPaperSpotCarryResponse);
 
+  // D-441：日内纸面轨（沙箱·D-425）观测面——成交列表+30天裁决统计。
+  rpc ListIntraTrades(ListIntraTradesRequest) returns (ListIntraTradesResponse);
+  rpc IntraTrackStats(IntraTrackStatsRequest) returns (IntraTrackStatsResponse);
+
   // D-359：资金不眠覆盖率前端面板（口径 SSOT=D-356 §1.1；digest 段同源双实现，后端算前端零计算）。
   rpc GetCapitalCoverage(GetCapitalCoverageRequest) returns (GetCapitalCoverageResponse);
 
@@ -2154,6 +2158,58 @@ message PaperTrackSummary {
 message ListPaperSpotCarryResponse {
   repeated PaperSpotCarryRow rows = 1;   // active（net_now desc，null 殿后）→ demo → exited（exit_ts desc）
   repeated PaperTrackSummary tracks = 2; // D-393：轨级汇总（固定序四轨，未知 structure 尾追加）
+}
+
+// === D-441：日内纸面轨（沙箱·D-425）观测面 ===
+
+message ListIntraTradesRequest {
+  string baseline = 1; // ""=全部，momentum_break/meanrev
+  int32 limit = 2;
+}
+
+message IntraTradeRow {
+  int64 id = 1;
+  string baseline = 2;
+  string symbol = 3;
+  string venue = 4;
+  string side = 5;            // long / short
+  string status = 6;          // open / closed
+  int64 entry_ts = 7;         // unix
+  double entry_px = 8;
+  double qty = 9;
+  double notional_usd = 10;
+  double margin_usd = 11;
+  double stop_px = 12;
+  int64 exit_ts = 13;         // unix，0=未平
+  double exit_px = 14;
+  string exit_reason = 15;    // stop / signal / eod / circuit / kill
+  optional double slippage_bps = 16;
+  optional double pnl_usd = 17;
+}
+
+message ListIntraTradesResponse {
+  repeated IntraTradeRow trades = 1;
+}
+
+message IntraBaselineStat {
+  string baseline = 1;
+  int32 total = 2;
+  int32 open = 3;
+  int32 closed = 4;
+  double pnl_usd = 5;         // 已实现合计
+  int32 win_count = 6;
+  optional double slip_p90_bps = 7; // 无滑点样本→null（前端「—」）
+  int32 circuit_days = 8;     // intra_events kind=circuit 去重天数
+  int32 kill_count = 9;       // intra_events kind=kill 计数
+}
+
+message IntraTrackStatsRequest {}
+
+message IntraTrackStatsResponse {
+  repeated IntraBaselineStat baselines = 1;
+  int64 last_step_unix = 2;   // 步进心跳（0=未跑过）
+  int32 days_elapsed = 3;     // min(entry_ts)::date 距今天数（空表=0）
+  int32 days_to_gate = 4;     // max(0, 30-days_elapsed)
 }
 
 // === D-359：资金不眠覆盖率（口径 SSOT=D-356 §1.1；has_* 布尔对替代 0/nil 歧义）===

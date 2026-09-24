@@ -42,13 +42,16 @@ type IntraStore interface {
 	ListOpenIntraTrades(ctx context.Context) ([]pgstore.IntraTrade, error)
 	IntraDayRealizedPnl(ctx context.Context, day time.Time) (float64, error)
 	TicksWindow(ctx context.Context, venue, symbol string, since time.Time) ([]pgstore.TickRow, error)
+	InsertIntraEvent(ctx context.Context, kind, baseline, detail string) error // D-441 S3
+	HasIntraEventToday(ctx context.Context, kind string) (bool, error)         // D-441 S3 当日去重
 }
 
 // IntraEngine 日内轨引擎（无状态步进；仓态全在 DB=重启安全）。
 type IntraEngine struct {
-	st  IntraStore
-	cfg IntraConfig
-	now func() time.Time
+	st      IntraStore
+	cfg     IntraConfig
+	now     func() time.Time
+	alertFn func(ctx context.Context, level, msg string) // D-441 S3：critical 告警钩子（nil=不告警）
 }
 
 func NewIntraEngine(st IntraStore, cfg IntraConfig) *IntraEngine {
@@ -87,6 +90,7 @@ func (e *IntraEngine) Step(ctx context.Context) (IntraStepReport, error) {
 			rep.KillClosed++
 		}
 		rep.Notes = append(rep.Notes, "kill: all flat, entries blocked")
+		e.emitEvent(ctx, "kill", "kill: all flat, entries blocked") // D-441 S3
 		return rep, nil
 	}
 
@@ -134,6 +138,7 @@ func (e *IntraEngine) Step(ctx context.Context) (IntraStepReport, error) {
 	if realized <= dayBudget {
 		rep.CircuitHit = true
 		rep.Notes = append(rep.Notes, fmt.Sprintf("daily circuit: realized=%.2f ≤ %.2f（当日停新开）", realized, dayBudget))
+		e.emitEvent(ctx, "circuit", fmt.Sprintf("realized=%.2f ≤ %.2f", realized, dayBudget)) // D-441 S3
 		return rep, nil
 	}
 
@@ -216,65 +221,6 @@ func (e *IntraEngine) tryOpen(ctx context.Context, pair IntraPair, now time.Time
 }
 
 // signalExit 均值回归 z 回归零轴出（模拟器同口径）。
-func (e *IntraEngine) signalExit(ctx context.Context, t pgstore.IntraTrade, now time.Time, rep *IntraStepReport) bool {
-	ticks, err := e.st.TicksWindow(ctx, t.Venue, t.Symbol, now.Add(-40*time.Minute))
-	if err != nil || len(ticks) < 15 {
-		return false
-	}
-	mean, sd := meanStd(ticks[:len(ticks)-1])
-	if sd <= 0 {
-		return false
-	}
-	last := ticks[len(ticks)-1]
-	z := (midOf(last.Bid, last.Ask) - mean) / sd
-	if (t.Side == "long" && z >= 0) || (t.Side == "short" && z <= 0) {
-		if err := e.closeTrade(ctx, t, now, "signal", rep); err != nil {
-			rep.Notes = append(rep.Notes, "signal exit error: "+err.Error())
-			return false
-		}
-		rep.SignalXExit++
-		return true
-	}
-	return false
-}
-
-// closeTrade 出场落账（滑点=出场价对止损/信号参考价的穿口 bps；pnl 含双侧 taker 费）。
-func (e *IntraEngine) closeTrade(ctx context.Context, t pgstore.IntraTrade, now time.Time, reason string, rep *IntraStepReport) error {
-	ticks, err := e.st.TicksWindow(ctx, t.Venue, t.Symbol, now.Add(-10*time.Minute))
-	if err != nil {
-		return err
-	}
-	if len(ticks) == 0 {
-		rep.Notes = append(rep.Notes, fmt.Sprintf("trade#%d close skip：无 fresh tick（下轮重试）", t.ID))
-		return nil
-	}
-	last := ticks[len(ticks)-1]
-	execPx := exitPx(t.Side, last, reason == "stop")
-	var pnl float64
-	if t.Side == "long" {
-		pnl = (execPx - t.EntryPx) * t.Qty
-	} else {
-		pnl = (t.EntryPx - execPx) * t.Qty
-	}
-	pnl -= t.NotionalUSD * IntraTakerFeeBps / 10000
-	pnl -= execPx * t.Qty * IntraTakerFeeBps / 10000
-	ref := t.StopPx
-	if reason != "stop" {
-		ref = t.EntryPx
-	}
-	var slip float64
-	if ref > 0 {
-		slip = math.Abs(execPx-ref) / ref * 10000
-	}
-	if err := e.st.CloseIntraTrade(ctx, t.ID, execPx, reason, slip, pnl); err != nil {
-		return err
-	}
-	return nil
-}
-
-// ReplayGate D-425 回放门（§1 双读之一·上线前）：历史 ticks dry-run 重放（零落库）；P100=最差单订单亏损/保证金
-// （含双侧 taker 费）阈值 0.10=保证金 10%（R1：10x 下=1% 价格带，>1% 案例拒）；runtime 门升 v2 真金前置硬条件（复审 §3）。
-// n=重放成交笔数（样本不足=门不可判，返回 ok=false 由调用方如实呈报）。
 func (e *IntraEngine) ReplayGate(ctx context.Context, venue, symbol, baseline string, since time.Time) (p100 float64, ok bool, n int, err error) {
 	ticks, err := e.st.TicksWindow(ctx, venue, symbol, since)
 	if err != nil {
