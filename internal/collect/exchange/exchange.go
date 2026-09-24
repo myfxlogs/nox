@@ -117,6 +117,15 @@ func (b *BinanceFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
 			Ts:     time.Now(),
 			Src:    "binance_fapi",
 		})
+		// D-466 S1：venue 原生结算时刻/周期同帧发出（腿级真值源，去跨 venue 污染）。
+		if nft, ok := body["nextFundingTime"].(float64); ok && nft > 0 {
+			out = append(out, fact.Fact{Kind: fact.KindFundingNextSettle, Venue: VenueBinance,
+				Symbol: pair, Value: nft / 1000, Unit: fact.UnitUnixSec, Ts: time.Now(), Src: "binance_fapi"})
+		}
+		if b.intervals != nil {
+			out = append(out, fact.Fact{Kind: fact.KindFundingInterval, Venue: VenueBinance,
+				Symbol: pair, Value: 86400 / float64(periodsPerDay), Unit: fact.UnitSeconds, Ts: time.Now(), Src: "binance_fapi"})
+		}
 	}
 	return out, nil
 }
@@ -202,67 +211,15 @@ func (g *GateFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
 			Ts:     time.Now(),
 			Src:    "gate_v4",
 		})
-	}
-	return out, nil
-}
-
-// OKXFunding 采集 OKX funding rate（REST 轮询）。
-type OKXFunding struct {
-	cfg Config
-}
-
-func NewOKXFunding(cfg Config) *OKXFunding { return &OKXFunding{cfg: cfg} }
-
-func (o *OKXFunding) Kind() string { return fact.KindFunding }
-
-func (o *OKXFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
-	var out []fact.Fact
-	for _, sym := range o.syms() {
-		instID := sym + "-USDT-SWAP"
-		url := fmt.Sprintf("%s/api/v5/public/funding-rate?instId=%s", o.cfg.OKXBaseURL, instID)
-		body, err := getJSON(ctx, o.cfg.Client, url)
-		if err != nil {
-			fmt.Printf("[exchange:okx] funding %s: %v (skip)\n", instID, err)
-			continue
+		// D-466 S1：funding_next_apply（实测 unix 秒）+funding_interval 同帧发出。
+		if nfa, ok := body["funding_next_apply"].(float64); ok && nfa > 0 {
+			out = append(out, fact.Fact{Kind: fact.KindFundingNextSettle, Venue: VenueGate,
+				Symbol: sym + "USDT", Value: nfa, Unit: fact.UnitUnixSec, Ts: time.Now(), Src: "gate_v4"})
 		}
-		data, ok := body["data"].([]any)
-		if !ok || len(data) == 0 {
-			continue
+		if intervalSec > 0 {
+			out = append(out, fact.Fact{Kind: fact.KindFundingInterval, Venue: VenueGate,
+				Symbol: sym + "USDT", Value: intervalSec, Unit: fact.UnitSeconds, Ts: time.Now(), Src: "gate_v4"})
 		}
-		item, ok := data[0].(map[string]any)
-		if !ok {
-			continue
-		}
-		rate, ok := item["fundingRate"].(string)
-		if !ok {
-			continue
-		}
-		var f float64
-		fmt.Sscanf(rate, "%f", &f)
-		// D-079：OKX 返回 fundingTime（当前结算）+ nextFundingTime（下次结算）→ 间隔 = 差值。
-		// 旧版只用 fundingTime-now（剩余时间）当间隔 → 结算前年化爆炸（94.9% vs 真实 10.95%）。
-		var fundingMs, nextFundingMs float64
-		if ft, ok := item["fundingTime"].(string); ok {
-			fmt.Sscanf(ft, "%f", &fundingMs)
-		}
-		if nft, ok := item["nextFundingTime"].(string); ok {
-			fmt.Sscanf(nft, "%f", &nextFundingMs)
-		}
-		intervalMs := nextFundingMs - fundingMs
-		if intervalMs <= 0 {
-			fmt.Printf("[exchange:okx] %s funding interval missing (ft=%v nft=%v), fallback 3/day\n", sym+"USDT", fundingMs, nextFundingMs)
-		}
-		periodsPerDay := fundingPeriodsPerDay(intervalMs)
-		annualized := annualizeFunding(f, periodsPerDay)
-		out = append(out, fact.Fact{
-			Kind:   fact.KindFunding,
-			Venue:  VenueOKX,
-			Symbol: sym + "USDT",
-			Value:  annualized,
-			Unit:   fact.UnitPctAnnualized,
-			Ts:     time.Now(),
-			Src:    "okx_v5",
-		})
 	}
 	return out, nil
 }
