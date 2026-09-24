@@ -1,5 +1,5 @@
 // gate_private_ws.go —— D-450 S2：Gate futures 私有 WS 经 cex-proxy。
-// 订阅 futures.balances/positions/orders/usertrades（payload=[uid,"!all"] 形制，
+// 订阅 futures.balances/positions/orders/usertrades（payload 按频道分派：balances=[uid]、其余=[uid,"!all"]，
 // uid 由 REST GET /futures/usdt/accounts 取回 "user" 字段）。签名：
 // sign=hex(HMAC-SHA512(secret,"channel=<ch>&event=subscribe&time=<unix秒>"))。
 // 存活判定=ping 20s+pong 顺延读超时 60s+error 事件 fail-loud（订单/持仓频道无心跳，
@@ -29,7 +29,7 @@ import (
 
 const gatePrivateReadIdle = 60 * time.Second
 
-// gatePrivateChannels D-450 订阅面（payload=[uid,"!all"]）。
+// gatePrivateChannels D-450 订阅面（payload 形制见 subscribeFrame 按频道分派）。
 var gatePrivateChannels = []string{
 	"futures.balances",
 	"futures.positions",
@@ -149,15 +149,22 @@ func (g *GatePrivateWS) runOnce(ctx context.Context) error {
 	}
 }
 
-// subscribeFrame 组装带签名的订阅帧（payload=[uid,"!all"]；签名串不含 payload）。
+// subscribeFrame 组装带签名的订阅帧（签名串不含 payload）。
+// payload 形制按频道分派（生产实证矩阵 8 发全表：balances 双参报 "need 1 user id"，
+// positions/orders/usertrades 单参报 "need market param"）：
+// balances→[uid]，其余→[uid,"!all"]。
 func (g *GatePrivateWS) subscribeFrame(channel, uid string) map[string]any {
+	payload := []string{uid, "!all"}
+	if channel == "futures.balances" {
+		payload = []string{uid}
+	}
 	ts := g.now().Unix()
 	sign := gateWSSign(g.apiSecret, channel, ts)
 	return map[string]any{
 		"time":    ts,
 		"channel": channel,
 		"event":   "subscribe",
-		"payload": []string{uid, "!all"},
+		"payload": payload,
 		"auth": map[string]string{
 			"method": "api_key",
 			"KEY":    g.apiKey,

@@ -127,16 +127,13 @@ func wsURLFromHTTP(u string) string { return "ws" + strings.TrimPrefix(u, "http"
 
 // ---------- gate ----------
 
-// T-gate-1：订阅帧形制——channel/payload=[uid,"!all"]/auth 三字段+签名 hex64。
+// T-gate-1：订阅帧形制——channel/auth 三字段+签名 hex64；payload 按频道分派两形制
+// （生产实证矩阵：balances=[uid]、positions/orders/usertrades=[uid,"!all"]）。
 func TestGateSubscribeFrame(t *testing.T) {
 	g := &GatePrivateWS{apiKey: "K", apiSecret: "S", now: func() time.Time { return time.Unix(1700000000, 0) }}
 	f := g.subscribeFrame("futures.orders", "42")
 	if f["channel"] != "futures.orders" || f["event"] != "subscribe" {
 		t.Fatalf("frame head wrong: %v", f)
-	}
-	pl := f["payload"].([]string)
-	if pl[0] != "42" || pl[1] != "!all" {
-		t.Fatalf("payload wrong: %v", pl)
 	}
 	auth := f["auth"].(map[string]string)
 	if auth["method"] != "api_key" || auth["KEY"] != "K" {
@@ -148,6 +145,19 @@ func TestGateSubscribeFrame(t *testing.T) {
 	want := gateWSSign("S", "futures.orders", 1700000000)
 	if auth["SIGN"] != want {
 		t.Fatalf("sign mismatch")
+	}
+	// payload 两形制：balances 单参，其余双参。
+	cases := map[string][]string{
+		"futures.balances":   {"42"},
+		"futures.positions":  {"42", "!all"},
+		"futures.orders":     {"42", "!all"},
+		"futures.usertrades": {"42", "!all"},
+	}
+	for ch, want := range cases {
+		pl := g.subscribeFrame(ch, "42")["payload"].([]string)
+		if len(pl) != len(want) || pl[0] != want[0] || (len(want) == 2 && pl[1] != want[1]) {
+			t.Fatalf("%s payload=%v want %v", ch, pl, want)
+		}
 	}
 }
 
