@@ -109,6 +109,8 @@ func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error
 				CashBal  string `json:"cashBal"`  // 本币数量（总持有）
 				AvailBal string `json:"availBal"` // 可用余额
 				EqUsd    string `json:"eqUsd"`    // USD 等值
+				Mmr      string `json:"mmr"`      // D-434：本币 MMR（USD 口径，顶层空时 details 供值）
+				MgnRatio string `json:"mgnRatio"` // D-434：本币层保证金率回落
 			} `json:"details"`
 		} `json:"data"`
 	}
@@ -154,11 +156,33 @@ func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error
 			eq += usd
 		}
 	}
-	// D-405 S2：buffer_multiple=mgnRatio/100（官方口径百分数→倍数写时归一；
-	// 空/解析失败 → 0=未采，guard 判 data_stale；空仓账户 mgnRatio 空值同样落 0）。
+	// D-405 S2 + D-434 S3：buffer_multiple=equity/MMR 三层回落——pos502 实采实证本账户
+	// 口径下顶层 mgnRatio 空而 details[USDT] 供 mmr/mgnRatio（venue 已供未读字段）。
+	// ①Σdetails[USDT].mmr>0 → eq/Σmmr（与 binance 自算 marginBalance/maintMargin 同口径，
+	// 首选）②details[USDT].mgnRatio>0 → /100（venue 权威回落）③顶层 mgnRatio>0 → /100
+	// （原行为）④全空 → 0=未采 → guard 判 data_stale（诚实）。
 	var buffer float64
-	if mr, perr := strconv.ParseFloat(resp.Data[0].MgnRatio, 64); perr == nil && mr > 0 {
-		buffer = mr / 100
+	sumMMR, detailMgn := 0.0, 0.0
+	for _, d := range resp.Data[0].Details {
+		if d.Ccy != "USDT" {
+			continue
+		}
+		if v, perr := strconv.ParseFloat(d.Mmr, 64); perr == nil && v > 0 {
+			sumMMR += v
+		}
+		if v, perr := strconv.ParseFloat(d.MgnRatio, 64); perr == nil && v > 0 {
+			detailMgn = v
+		}
+	}
+	switch {
+	case sumMMR > 0 && eq > 0:
+		buffer = eq / sumMMR
+	case detailMgn > 0:
+		buffer = detailMgn / 100
+	default:
+		if mr, perr := strconv.ParseFloat(resp.Data[0].MgnRatio, 64); perr == nil && mr > 0 {
+			buffer = mr / 100
+		}
 	}
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
