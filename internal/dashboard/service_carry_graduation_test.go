@@ -27,6 +27,8 @@ type fakeGradDB struct {
 	comboErr     error
 	reloaded     int
 	alerts       int
+	flags        []pgstore.VenueSymbolFlag
+	list         []pgstore.CarryGraduation
 }
 
 func (f *fakeGradDB) GetCarryGraduation(context.Context, int64) (*pgstore.CarryGraduation, error) {
@@ -59,7 +61,7 @@ func (f *fakeGradDB) InsertAlert(context.Context, *int64, string, string) error 
 	return nil
 }
 func (f *fakeGradDB) ListCarryGraduations(context.Context) ([]pgstore.CarryGraduation, error) {
-	return nil, nil
+	return f.list, nil
 }
 
 func (f *fakeGradDB) LoadXAssetAllowCombos(_ context.Context, environment string) ([]pgstore.XAssetAllowRow, error) {
@@ -290,5 +292,44 @@ func TestD443_AllowVenuesSourceLive(t *testing.T) {
 	var s3 Service // nil 源 → 空集保守
 	if g := s3.allowVenuesNow(context.Background()); len(g) != 0 {
 		t.Errorf("nil 源→空集, got %v", g)
+	}
+}
+
+func (f *fakeGradDB) InsertFlag(_ context.Context, fl *pgstore.VenueSymbolFlag) error {
+	f.flags = append(f.flags, *fl)
+	return nil
+}
+
+// TestD463_RejectWriteFlag T3：reject write_flag=true → flags 表投影行（level/note 复用）；
+// 未勾选不写；flag_warn 透出 ListCarryGraduations 行。
+func TestD463_RejectWriteFlag(t *testing.T) {
+	f, s := gradFixture("spot_carry")
+	resp, err := s.RejectCarryGraduation(context.Background(), connect.NewRequest(&v1.RejectCarryGraduationRequest{
+		GraduationId: 5, Note: "XPD funding 字段语义坑", WriteFlag: true, FlagLevel: "blocked",
+	}))
+	if err != nil || !resp.Msg.Ok {
+		t.Fatalf("ok=%v err=%v", resp.Msg.Ok, err)
+	}
+	if len(f.flags) != 1 || f.flags[0].Level != "blocked" || f.flags[0].Reason != "XPD funding 字段语义坑" ||
+		f.flags[0].Venue != "1279967×gate" || f.flags[0].Symbol != "BTC" {
+		t.Fatalf("flags=%+v", f.flags)
+	}
+	// 未勾选 → 不写。
+	f2, s2 := gradFixture("spot_carry")
+	f2.grad.Status = "pending"
+	if _, err := s2.RejectCarryGraduation(context.Background(), connect.NewRequest(&v1.RejectCarryGraduationRequest{
+		GraduationId: 5, Note: "仅拒绝"})); err != nil {
+		t.Fatal(err)
+	}
+	if len(f2.flags) != 0 {
+		t.Fatal("write_flag=false 禁写旗标")
+	}
+	// flag_warn 透出 list 行。
+	warn := "⚠funding 语义待查"
+	f3, s3 := gradFixture("spot_carry")
+	f3.list = []pgstore.CarryGraduation{{ID: 7, PaperID: 1, Venue: "gate", Symbol: "XPD", Status: "pending", FlagWarn: &warn}}
+	lr, err := s3.ListCarryGraduations(context.Background(), connect.NewRequest(&v1.ListCarryGraduationsRequest{}))
+	if err != nil || len(lr.Msg.Rows) != 1 || lr.Msg.Rows[0].FlagWarn == nil || *lr.Msg.Rows[0].FlagWarn != warn {
+		t.Fatalf("rows=%+v err=%v", lr.Msg.Rows, err)
 	}
 }

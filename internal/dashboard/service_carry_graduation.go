@@ -38,6 +38,8 @@ type graduationStore interface {
 	LoadXAssetAllowCombos(ctx context.Context, environment string) ([]pgstore.XAssetAllowRow, error)
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
 	ListCarryGraduations(ctx context.Context) ([]pgstore.CarryGraduation, error)
+	// D-463 S4：reject 回写旗标投影表。
+	InsertFlag(ctx context.Context, f *pgstore.VenueSymbolFlag) error
 }
 
 // gradDB 存储取用：测试可注入 gradStore 替身，生产回落 s.store（单一真源）。
@@ -85,6 +87,7 @@ func (s *Service) ListCarryGraduations(ctx context.Context, req *connect.Request
 			Structure: g.Structure, MtVenue: g.MtVenue,
 			AgeDays: g.AgeDays, AccruedUsd: g.AccruedUSD, LastFundingAnn: g.LastFundingAnn,
 			NetAllInUsd: g.NetAllInUSD, // D-410 S5：全账净额透出（缺账行 NULL 诚实缺）
+			FlagWarn:    g.FlagWarn,    // D-463 S3：warn 旗标透出毕业卡
 			Status:      g.Status,
 			CreatedAt:   g.CreatedAt.Format(time.RFC3339),
 			ComboId:     g.ComboID,
@@ -248,6 +251,23 @@ func (s *Service) RejectCarryGraduation(ctx context.Context, req *connect.Reques
 	if err := db.UpdateCarryGraduationDecision(ctx, grad.ID, "rejected", nil, strings.TrimSpace(g.Note)); err != nil {
 		resp.Error = fmt.Sprintf("落账失败: %v", err)
 		return connect.NewResponse(resp), nil
+	}
+	// D-463 S4：拒绝理由回写旗标表（业主勾选时；同品种下次建议自动带旗/拦纸面）。
+	if g.WriteFlag {
+		level := strings.TrimSpace(g.FlagLevel)
+		if level != "blocked" {
+			level = "warn" // 未显式选 blocked 一律 warn（默认级保守）
+		}
+		reason := strings.TrimSpace(g.Note)
+		if reason == "" {
+			reason = "业主拒绝（无理由注记）"
+		}
+		if err := db.InsertFlag(ctx, &pgstore.VenueSymbolFlag{
+			Venue: grad.Venue, Symbol: grad.Symbol, Level: level, Reason: reason,
+		}); err != nil {
+			resp.Error = fmt.Sprintf("拒绝已落账但 flag 回写失败: %v", err)
+			return connect.NewResponse(resp), nil
+		}
 	}
 	s.insertGraduationAlert(ctx, grad, "已拒绝", "")
 	resp.Ok = true
