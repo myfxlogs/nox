@@ -204,8 +204,10 @@ func (t *resettler) run(ctx context.Context, posID int64, dry bool) {
 	}
 	// D-425：校准可达证明该仓现金流源自实采（hp/fill 路径）——存量 estimated 行是
 	// 误标（writeCloseCashflows 旧版硬编码 estimated），升 'actual' 过 stats 质量门。
+	// D-438：funding 实收由 income_events 入结算，公式投影行升 actual=错额入账
+	// （pos498 实证），kind='funding' 永久排除——本 UPDATE 只再服务 swap/commission 误标场景。
 	if _, err := t.store.Pool().Exec(ctx,
-		`UPDATE position_cashflows SET quality='actual' WHERE position_id=$1 AND quality='estimated'`, posID); err != nil {
+		`UPDATE position_cashflows SET quality='actual' WHERE position_id=$1 AND quality='estimated' AND kind != 'funding'`, posID); err != nil {
 		fmt.Printf("pos=%d: quality→actual err=%v, keep\n", posID, err)
 		return
 	}

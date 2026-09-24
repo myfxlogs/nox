@@ -66,6 +66,9 @@ func (d *settleDeps) SumCashflowsNet(ctx context.Context, posID int64) (float64,
 func (d *settleDeps) SumCashflowsNetWithQuality(ctx context.Context, posID int64) (float64, string, error) {
 	return d.store.SumCashflowsNetWithQuality(ctx, posID)
 }
+func (d *settleDeps) SumCashflowsNetForSettle(ctx context.Context, posID int64, hasFundingLeg, fundingDue bool) (float64, string, error) {
+	return d.store.SumCashflowsNetForSettle(ctx, posID, hasFundingLeg, fundingDue)
+}
 func (d *settleDeps) GetSettlementStatsStatus(ctx context.Context, posID int64) (string, error) {
 	return d.store.GetSettlementStatsStatus(ctx, posID)
 }
