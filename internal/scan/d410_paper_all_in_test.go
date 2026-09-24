@@ -104,7 +104,7 @@ func TestD410_SpotOpenFeeAndExitConvergence(t *testing.T) {
 		t.Fatalf("seed uni: %v", err)
 	}
 	es := eligibleStreak("binance|D410USDT")
-	opened, _, err := StepPaperSpotCarry(ctx, s, es, time.Now(), 5.0)
+	opened, _, err := StepPaperSpotCarry(ctx, s, es, time.Now(), 5.0, nil)
 	if err != nil || len(opened) != 1 {
 		t.Fatalf("open: %v opened=%v", err, opened)
 	}
@@ -125,7 +125,7 @@ func TestD410_SpotOpenFeeAndExitConvergence(t *testing.T) {
 		t.Fatalf("update uni: %v", err)
 	}
 	for i := 0; i < 2; i++ {
-		if _, _, err := StepPaperSpotCarry(ctx, s, NewEntryStreak(), time.Now(), 5.0); err != nil {
+		if _, _, err := StepPaperSpotCarry(ctx, s, NewEntryStreak(), time.Now(), 5.0, nil); err != nil {
 			t.Fatalf("step %d: %v", i, err)
 		}
 	}

@@ -102,7 +102,7 @@ func TestD350_PaperSpotCarryLifecycle(t *testing.T) {
 	// 开仓：两 symbol 各一行（side 按 funding 符号；R1 S3 opened=symbol 清单按 net 降序）
 	// D-383C：预灌满 streak 专注闸外机制，持续闸行为归 D-383 C 锚专测。
 	es := eligibleStreak("binance|GUSDT", "binance|NEGUSDT")
-	opened, exited, err := StepPaperSpotCarry(ctx, s, es, now, 5.0)
+	opened, exited, err := StepPaperSpotCarry(ctx, s, es, now, 5.0, nil)
 	if err != nil {
 		t.Fatalf("step open: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestD350_PaperSpotCarryLifecycle(t *testing.T) {
 		`UPDATE paper_spot_carry SET last_accrue_ts = $1, entry_ts = $1`, now.Add(-48*time.Hour)); err != nil {
 		t.Fatalf("rewind: %v", err)
 	}
-	opened, exited, err = StepPaperSpotCarry(ctx, s, es, now, 5.0)
+	opened, exited, err = StepPaperSpotCarry(ctx, s, es, now, 5.0, nil)
 	if err != nil || len(opened) != 0 || exited != 0 {
 		t.Fatalf("step accrue: opened=%v exited=%d err=%v", opened, exited, err)
 	}
@@ -151,7 +151,7 @@ func TestD350_PaperSpotCarryLifecycle(t *testing.T) {
 		`UPDATE paper_spot_carry SET low_streak = 1, last_accrue_ts = $1 WHERE symbol = 'GUSDT'`, now.Add(-48*time.Hour)); err != nil {
 		t.Fatalf("streak: %v", err)
 	}
-	_, exited, err = StepPaperSpotCarry(ctx, s, es, now, 5.0)
+	_, exited, err = StepPaperSpotCarry(ctx, s, es, now, 5.0, nil)
 	if err != nil {
 		t.Fatalf("step exit: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestD350_PaperSpotCarryLifecycle(t *testing.T) {
 		`UPDATE paper_spot_carry SET entry_ts = $1 WHERE symbol = 'NEGUSDT'`, now.Add(-8*24*time.Hour)); err != nil {
 		t.Fatalf("age: %v", err)
 	}
-	_, exited, err = StepPaperSpotCarry(ctx, s, es, now, 5.0)
+	_, exited, err = StepPaperSpotCarry(ctx, s, es, now, 5.0, nil)
 	if err != nil || exited != 1 {
 		t.Fatalf("step age exit: exited=%d err=%v", exited, err)
 	}
@@ -199,7 +199,7 @@ func TestD350R1_TR4_GatesAndCap(t *testing.T) {
 	for i := 0; i < 13; i++ {
 		keys = append(keys, fmt.Sprintf("binance|CAP%02dUSDT", i))
 	}
-	opened, exited, err := StepPaperSpotCarry(ctx, s, eligibleStreak(keys...), now, 5.0)
+	opened, exited, err := StepPaperSpotCarry(ctx, s, eligibleStreak(keys...), now, 5.0, nil)
 	if err != nil {
 		t.Fatalf("step: %v", err)
 	}
@@ -249,7 +249,7 @@ func TestD350R1_TR5_DemoRowAccrues(t *testing.T) {
 		`UPDATE paper_spot_carry SET last_accrue_ts = $1`, now.Add(-24*time.Hour)); err != nil {
 		t.Fatalf("rewind: %v", err)
 	}
-	opened, exited, err := StepPaperSpotCarry(ctx, s, NewEntryStreak(), now, 5.0) // D-383C：demo 行占位不开新仓，fresh streak 即可
+	opened, exited, err := StepPaperSpotCarry(ctx, s, NewEntryStreak(), now, 5.0, nil) // D-383C：demo 行占位不开新仓，fresh streak 即可
 	if err != nil || len(opened) != 0 || exited != 0 {
 		t.Fatalf("step: opened=%v exited=%d err=%v", opened, exited, err)
 	}
@@ -282,7 +282,7 @@ func TestD350R2_NetDescUnderCap(t *testing.T) {
 	for i := 0; i < 12; i++ {
 		r2keys = append(r2keys, fmt.Sprintf("binance|POS%02dUSDT", i))
 	}
-	opened, exited, err := StepPaperSpotCarry(ctx, s, eligibleStreak(r2keys...), now, 5.0)
+	opened, exited, err := StepPaperSpotCarry(ctx, s, eligibleStreak(r2keys...), now, 5.0, nil)
 	if err != nil {
 		t.Fatalf("step: %v", err)
 	}
@@ -313,7 +313,7 @@ func TestD350R1_TR2_PromotePaperToDemo(t *testing.T) {
 	s := d350Store(t)
 	ctx := context.Background()
 	seedUni(t, s, "binance", "GUSDT", "TRADING", "T3", 72*time.Hour, 92)
-	if _, _, err := StepPaperSpotCarry(ctx, s, eligibleStreak("binance|GUSDT"), time.Now().UTC(), 5.0); err != nil { // 锚=真实钟相对（同上跨日相撞修复）；D-383C 预灌满 streak
+	if _, _, err := StepPaperSpotCarry(ctx, s, eligibleStreak("binance|GUSDT"), time.Now().UTC(), 5.0, nil); err != nil { // 锚=真实钟相对（同上跨日相撞修复）；D-383C 预灌满 streak
 		t.Fatalf("open paper: %v", err)
 	}
 	pr := &pgstore.PaperSpotCarry{Venue: "binance", Symbol: "GUSDT", Side: "short_perp",
@@ -363,7 +363,7 @@ func TestD354_PaperBasisColumns(t *testing.T) {
 	} // NULLBASUSDT 保持 NULL
 
 	basES := eligibleStreak("binance|BASGUSDT", "binance|NULLBASUSDT") // D-383C：预灌满 streak
-	if _, _, err := StepPaperSpotCarry(ctx, s, basES, now, 5.0); err != nil {
+	if _, _, err := StepPaperSpotCarry(ctx, s, basES, now, 5.0, nil); err != nil {
 		t.Fatalf("step open: %v", err)
 	}
 	rows, _ := s.ListActivePaperSpotCarry(ctx)
@@ -385,7 +385,7 @@ func TestD354_PaperBasisColumns(t *testing.T) {
 		`UPDATE fin_cex_universe SET last_basis_bps = 30 WHERE symbol = 'BASGUSDT'`); err != nil {
 		t.Fatalf("upd basis: %v", err)
 	}
-	if _, _, err := StepPaperSpotCarry(ctx, s, basES, now.Add(time.Hour), 5.0); err != nil {
+	if _, _, err := StepPaperSpotCarry(ctx, s, basES, now.Add(time.Hour), 5.0, nil); err != nil {
 		t.Fatalf("step 2: %v", err)
 	}
 	rows, _ = s.ListActivePaperSpotCarry(ctx)

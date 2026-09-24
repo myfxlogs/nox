@@ -58,10 +58,11 @@ func TestD465_BestPair(t *testing.T) {
 
 // fakeMtmPaperStore PaperStore 最小实现（mt×mt 轨用到的方法集）。
 type fakeMtmPaperStore struct {
-	rows    map[int64]*pgstore.PaperSpotCarry
-	nextID  int64
-	ticks   map[string][]pgstore.TickRow // venue|symbol → ticks
-	accrues []struct {
+	rows     map[int64]*pgstore.PaperSpotCarry
+	nextID   int64
+	ticks    map[string][]pgstore.TickRow      // venue|symbol → ticks
+	universe map[string]pgstore.CexUniverseRow // D-463：spot 步进候选源
+	accrues  []struct {
 		id        int64
 		last, add float64
 		streak    int
@@ -77,7 +78,7 @@ func newFakeMtmPaperStore() *fakeMtmPaperStore {
 }
 
 func (f *fakeMtmPaperStore) ListCexUniverse(context.Context) (map[string]pgstore.CexUniverseRow, error) {
-	return nil, nil
+	return f.universe, nil
 }
 func (f *fakeMtmPaperStore) ListActivePaperSpotCarry(context.Context) ([]pgstore.PaperSpotCarry, error) {
 	var out []pgstore.PaperSpotCarry

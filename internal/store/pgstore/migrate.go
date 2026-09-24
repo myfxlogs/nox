@@ -133,6 +133,7 @@ var migrationFiles = []struct {
 	{135, migrations.IntraEventsSQL},                   // D-441 S2：日内轨栅栏事件表（0134撞D-443改135）
 	{136, migrations.CexPrivateEventsSQL},              // D-450 S4：CEX 私有 WS 事件审计表
 	{137, migrations.SymdigSQL},                        // D-464 S1/S2：fin_symbol_aliases + fin_symdig_findings
+	{138, migrations.VenueSymbolFlagsSQL},              // D-463 S1/S2：fin_venue_symbol_flags + carry_graduations.flag_warn
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

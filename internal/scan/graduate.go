@@ -35,7 +35,9 @@ type GraduationStore interface {
 //	（满龄正常退出且盈利=最强证据；promoted_demo/异常退出不算）。
 //
 // 每合格行插建议（paper_id UNIQUE 幂等，同行二次扫描不重复）；newCount>0 发一条聚合 info。
-func StepCarryGraduation(ctx context.Context, st GraduationStore, now time.Time) (int, error) {
+// flags：D-463 S2 KB→pipeline 投影——venue 段（×拆分含全串）任一 warn 命中 →
+// 建议行 flag_warn=拼接 reason 短串透出（blocked 理论到不了此层=纸面已拦，不另处理）。
+func StepCarryGraduation(ctx context.Context, st GraduationStore, now time.Time, flags map[string]pgstore.VenueSymbolFlag) (int, error) {
 	rows, err := st.ListPaperForGraduation(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("graduation: list paper: %w", err)
@@ -57,6 +59,7 @@ func StepCarryGraduation(ctx context.Context, st GraduationStore, now time.Time)
 			AccruedUSD:     p.AccruedUSD,
 			LastFundingAnn: p.LastFundingAnn,
 			NetAllInUSD:    &net, // D-410 S5：建议行透出全账净额（qualified 行双列非 NULL 已达）
+			FlagWarn:       graduationFlagWarn(p, flags),
 		}
 		inserted, err := st.InsertCarryGraduation(ctx, g)
 		if err != nil {
@@ -66,7 +69,11 @@ func StepCarryGraduation(ctx context.Context, st GraduationStore, now time.Time)
 		}
 		if inserted {
 			newCount++
-			labels = append(labels, p.Venue+"×"+p.Symbol)
+			label := p.Venue + "×" + p.Symbol
+			if g.FlagWarn != nil {
+				label += "(" + *g.FlagWarn + ")" // D-463 S2：红旗透出到告警文案
+			}
+			labels = append(labels, label)
 		}
 	}
 	if newCount > 0 {
@@ -168,4 +175,29 @@ func ResolveGraduationCanonicals(symbol, mtVenue string, platform int, mappings 
 		MtVenueKey:   mtVenue + ":" + pt,
 		CexCanonical: symbol + "USDT",
 	}, nil
+}
+
+// graduationFlagWarn D-463 S2：行 venue 段（×拆分含全串）+MtVenue 任一 warn 旗标
+// 命中 → "⚠"+reason 拼接串（多命中分号连；NULL=无旗）。blocked 不到此层（纸面已拦）。
+func graduationFlagWarn(p pgstore.PaperSpotCarry, flags map[string]pgstore.VenueSymbolFlag) *string {
+	if len(flags) == 0 {
+		return nil
+	}
+	venues := append([]string{p.Venue}, strings.Split(p.Venue, "×")...)
+	if p.MtVenue != nil && *p.MtVenue != "" {
+		venues = append(venues, *p.MtVenue)
+	}
+	var reasons []string
+	seen := map[string]bool{}
+	for _, v := range venues {
+		if f, ok := flags[pgstore.FlagKey(v, p.Symbol)]; ok && f.Level == "warn" && !seen[f.Reason] {
+			reasons = append(reasons, "⚠"+f.Reason)
+			seen[f.Reason] = true
+		}
+	}
+	if len(reasons) == 0 {
+		return nil
+	}
+	s := strings.Join(reasons, "; ")
+	return &s
 }

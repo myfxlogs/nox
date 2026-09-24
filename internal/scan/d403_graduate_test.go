@@ -78,7 +78,7 @@ func TestD403_Graduate_Matrix(t *testing.T) {
 	}
 	for _, tc := range cases {
 		fs := &fakeGradStore{rows: []pgstore.PaperSpotCarry{tc.row}, existing: map[int64]bool{}}
-		n, err := StepCarryGraduation(context.Background(), fs, now)
+		n, err := StepCarryGraduation(context.Background(), fs, now, nil)
 		if err != nil {
 			t.Fatalf("%s: %v", tc.name, err)
 		}
@@ -94,7 +94,7 @@ func TestD403_Graduate_AggregatedAlert_Once(t *testing.T) {
 		rows:     []pgstore.PaperSpotCarry{gradPaper(2, "active", 6, 0, 10, 0, ""), gradPaper(10, "active", 7, 0, 5, 0, "")},
 		existing: map[int64]bool{},
 	}
-	n, err := StepCarryGraduation(context.Background(), fs, time.Now())
+	n, err := StepCarryGraduation(context.Background(), fs, time.Now(), nil)
 	if err != nil || n != 2 {
 		t.Fatalf("newCount=%d err=%v, want 2/nil", n, err)
 	}
@@ -108,10 +108,10 @@ func TestD403_Graduate_AggregatedAlert_Once(t *testing.T) {
 
 func TestD403_Graduate_Idempotent_SecondScan(t *testing.T) {
 	fs := &fakeGradStore{rows: []pgstore.PaperSpotCarry{gradPaper(2, "active", 6, 0, 10, 0, "")}, existing: map[int64]bool{}}
-	if _, err := StepCarryGraduation(context.Background(), fs, time.Now()); err != nil {
+	if _, err := StepCarryGraduation(context.Background(), fs, time.Now(), nil); err != nil {
 		t.Fatal(err)
 	}
-	n, err := StepCarryGraduation(context.Background(), fs, time.Now()) // 同行二次扫描
+	n, err := StepCarryGraduation(context.Background(), fs, time.Now(), nil) // 同行二次扫描
 	if err != nil {
 		t.Fatal(err)
 	}

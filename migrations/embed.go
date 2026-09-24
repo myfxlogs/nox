@@ -239,4 +239,6 @@ var (
 	CexPrivateEventsSQL string
 	//go:embed 0137_symdig.sql
 	SymdigSQL string
+	//go:embed 0138_venue_symbol_flags.sql
+	VenueSymbolFlagsSQL string
 )
