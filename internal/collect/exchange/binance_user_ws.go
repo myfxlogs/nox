@@ -4,8 +4,8 @@
 // → wss 连接 → PUT 每 30min 续租（官方 60min 失效）→ 续租失败/读断 → 重新取 key
 // 重连（key 不可复用跨重连）。事件 ORDER_TRADE_UPDATE / ACCOUNT_UPDATE。
 // 订单/持仓频道无心跳——静默属正常态，存活判定=ping 20s+pong 顺延读超时 60s。
-// spot 端点={base}/api/v3/userDataStream——生产实证 410 Gone（端点已下线，
-// D-450 取证：双 /api 亦 410=端点死非路径错），装配层跳过 spot 行不启流。
+// spot 走 ws-api 支路（binance_user_ws_spot.go，D-459：REST userDataStream 410 下线，
+// session.logon 拒 HMAC key——实证改走 userDataStream.start/ping 免签名管理面）。
 package exchange
 
 import (
@@ -108,6 +108,9 @@ func (b *BinanceUserWS) Run(ctx context.Context) {
 }
 
 func (b *BinanceUserWS) runOnce(ctx context.Context) error {
+	if b.venueType == "spot" {
+		return b.runOnceSpot(ctx)
+	}
 	key, err := b.obtainListenKey(ctx)
 	if err != nil {
 		return fmt.Errorf("listenKey: %w", err)

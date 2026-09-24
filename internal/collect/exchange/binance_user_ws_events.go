@@ -31,6 +31,14 @@ func (b *BinanceUserWS) handleFrame(ctx context.Context, data []byte) (expired b
 	case "ACCOUNT_UPDATE":
 		b.onAudit(ctx, "account", env.A)
 		b.onAccountUpdate(ctx, env.A)
+	case "executionReport": // spot 订单更新（载荷=扁平字段，非 perp 的 o 包裹）
+		b.onAudit(ctx, "orders", data)
+		b.onSpotExecutionReport(data)
+	case "outboundAccountPosition": // spot 账户持仓全量快照
+		b.onAudit(ctx, "account", data)
+		b.onSpotAccountPosition(ctx, data)
+	case "balanceUpdate": // spot 余额增量——审计留痕即可（outboundAccountPosition 同帧带全量）
+		b.onAudit(ctx, "account", data)
 	case "listenKeyExpired":
 		// 官方显式失效事件——ping 保活不断流会掩盖死 key；关连接触发 runOnce 返回重取。
 		log.Printf("[binance-user-ws] listenKeyExpired event (reconnecting for fresh key)")
@@ -138,4 +146,69 @@ func (b *BinanceUserWS) onAccountUpdate(ctx context.Context, a json.RawMessage) 
 		})
 	}
 	b.posCache.PutPositions(b.venueKey, orders, now)
+}
+
+// onSpotExecutionReport spot executionReport → 订单事件缓存。
+// 字段：i=orderID、c=clOrdID、X=状态、z=累计成交量、L=最后成交价、n=手续费。
+func (b *BinanceUserWS) onSpotExecutionReport(data []byte) {
+	var ord struct {
+		I int64  `json:"i"`
+		C string `json:"c"`
+		X string `json:"X"`
+		Z string `json:"z"`
+		L string `json:"L"`
+		N string `json:"n"`
+	}
+	if err := json.Unmarshal(data, &ord); err != nil || ord.I == 0 {
+		return
+	}
+	state := "live"
+	switch ord.X {
+	case "FILLED":
+		state = "filled"
+	case "PARTIALLY_FILLED":
+		state = "partial"
+	case "CANCELED", "REJECTED", "EXPIRED":
+		state = "canceled"
+	}
+	qty, _ := strconv.ParseFloat(ord.Z, 64)
+	px, _ := strconv.ParseFloat(ord.L, 64)
+	fee, _ := strconv.ParseFloat(ord.N, 64)
+	b.orderCache.PutOrder(b.venueKey, strconv.FormatInt(ord.I, 10), ord.C, OrderEvent{
+		State: state, AccFillQty: qty, AvgPx: px, FeeUSD: fee, At: b.now(),
+	})
+}
+
+// onSpotAccountPosition outboundAccountPosition → B[{a,f,l}] USDT free+locked 落快照。
+// spot 无持仓概念——持仓缓存不动（订单侧由 executionReport 覆盖）。
+func (b *BinanceUserWS) onSpotAccountPosition(ctx context.Context, data []byte) {
+	var acct struct {
+		B []struct {
+			A string `json:"a"`
+			F string `json:"f"`
+			L string `json:"l"`
+		} `json:"B"`
+	}
+	if err := json.Unmarshal(data, &acct); err != nil {
+		return
+	}
+	if b.simulated {
+		return
+	}
+	for _, bal := range acct.B {
+		if bal.A != "USDT" {
+			continue
+		}
+		free, _ := strconv.ParseFloat(bal.F, 64)
+		locked, _ := strconv.ParseFloat(bal.L, 64)
+		eq := free + locked
+		row := pgstore.VenueAccountSnapshot{
+			Venue: "binance", VenueType: b.venueType,
+			BalanceRaw: eq, EquityRaw: eq,
+			Currency: "USDT", FetchedAt: b.now(), Src: "binance_event",
+		}
+		if err := b.sink.InsertVenueAccountSnapshots(ctx, []pgstore.VenueAccountSnapshot{row}); err != nil {
+			log.Printf("[binance-user-ws] insert spot snapshot: %v", err)
+		}
+	}
 }
