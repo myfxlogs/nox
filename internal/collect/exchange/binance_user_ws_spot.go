@@ -40,7 +40,7 @@ func (b *BinanceUserWS) wsapiURL() (string, error) {
 
 // wsapiCall 控制连接单次请求-响应（start/ping 共用形制：params 只放 apiKey+可选 listenKey）。
 func (b *BinanceUserWS) wsapiCall(conn *websocket.Conn, method string, params map[string]any) (json.RawMessage, error) {
-	if err := conn.WriteJSON(map[string]any{"id": method, "method": method, "params": params}); err != nil {
+	if err := conn.WriteJSON(map[string]any{"id": "arb-uds", "method": method, "params": params}); err != nil {
 		return nil, err
 	}
 	_ = conn.SetReadDeadline(b.now().Add(15 * time.Second))
