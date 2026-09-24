@@ -2177,6 +2177,13 @@ message AutotradeAllowRuleRow {
   bool enabled = 4;
   bool simulated = 5;   // live 引擎只读 simulated=false
   string note = 6;
+  // D-445：venue 实时资金列（余额=已结算实现钱；净值=余额+浮动）。
+  double balance = 7;                          // has_account=false 时 0 无意义
+  double equity = 8;
+  string currency = 9;
+  bool online = 10;                            // false=该 venue 本次查询失败/离线（前端置灰）
+  google.protobuf.Timestamp acct_updated_at = 11;
+  bool has_account = 12;                       // false=无账户数据（canonical/未知 venue）→ 前端「—」
 }
 
 message ListAutotradeAllowRulesRequest {}

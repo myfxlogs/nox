@@ -270,3 +270,81 @@ func TestOrderEventSource_SinkPanicNoCrash(t *testing.T) {
 		t.Fatalf("sink did not receive ticket=2 after panic recovery, got=%v", got)
 	}
 }
+
+// TestOrderEventSource_AcctSinkTap D-445 S0：OrderUpdateSummary 余额帧每帧下沉（含 Update==nil 纯余额帧），
+// 订单事件 sink 仍只在 Update!=nil 触发；六字段+收帧时刻正确；acct sink panic 不拉崩流循环。
+func TestOrderEventSource_AcctSinkTap(t *testing.T) {
+	client := &fakeMT5Client{}
+	a := &MT5Adapter{venue: "v10", mt5: client, subs: client, streams: client, token: "tok"}
+
+	frameCh := make(chan *mt5pb.OnOrderUpdateReply, 4)
+	// 帧1：Update==nil 纯余额帧 → acct sink 触发、order sink 不触发。
+	frameCh <- &mt5pb.OnOrderUpdateReply{Result: &mt5pb.OrderUpdateSummary{
+		Balance: 1000.5, Equity: 1100.25, Margin: 50, FreeMargin: 1050.25, Profit: 99.75, MarginLevel: 2200,
+	}}
+	// 帧2：acct sink panic → recover，流循环不崩。
+	frameCh <- &mt5pb.OnOrderUpdateReply{Result: &mt5pb.OrderUpdateSummary{Balance: 1}}
+	// 帧3：Update!=nil → 两 sink 各触发一次。
+	frameCh <- &mt5pb.OnOrderUpdateReply{Result: &mt5pb.OrderUpdateSummary{
+		Balance: 2000, Equity: 2100,
+		Update: &mt5pb.OrderUpdate{Order: &mt5pb.Order{Ticket: 777}},
+	}}
+	client.onOUStreams = []grpc.ServerStreamingClient[mt5pb.OnOrderUpdateReply]{
+		newFakeOrderUpdateStream(context.Background(), frameCh, nil),
+	}
+
+	src := &OrderEventSource{a: a}
+	type acctCall struct {
+		venue   string
+		bal, eq float64
+		ft      time.Time
+	}
+	var mu sync.Mutex
+	var calls []acctCall
+	before := time.Now()
+	src.SetAccountSink(func(vk string, balance, equity, margin, freeMargin, profit, marginLevel float64, currency string, frameTime time.Time) {
+		mu.Lock()
+		defer mu.Unlock()
+		if balance == 1 {
+			panic("simulated acct sink failure")
+		}
+		calls = append(calls, acctCall{vk, balance, equity, frameTime})
+	})
+
+	sinkCh, cleanup := startOrderEventSource(t, src)
+	defer cleanup()
+
+	// order sink 只收 ticket=777 一条（Update==nil 帧跳过）。
+	select {
+	case e := <-sinkCh:
+		if e.Ticket != 777 {
+			t.Fatalf("order event ticket=%d, want 777", e.Ticket)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("order event not received")
+	}
+
+	if !waitFor(t, 2*time.Second, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(calls) == 2
+	}) {
+		mu.Lock()
+		defer mu.Unlock()
+		t.Fatalf("acct calls=%v, want 2 (panic frame recovered, not counted)", calls)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	c0, c1 := calls[0], calls[1]
+	if c0.venue != "v10" || c0.bal != 1000.5 || c0.eq != 1100.25 {
+		t.Fatalf("frame1 call=%+v", c0)
+	}
+	if c1.bal != 2000 || c1.eq != 2100 {
+		t.Fatalf("frame3 call=%+v", c1)
+	}
+	for _, c := range calls {
+		if c.ft.Before(before) || c.ft.After(time.Now()) {
+			t.Fatalf("frameTime=%v not ≈recv now", c.ft)
+		}
+	}
+}

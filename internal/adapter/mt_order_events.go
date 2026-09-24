@@ -25,6 +25,11 @@ import (
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
 )
 
+// AcctFrameSink D-445 S0：OrderUpdateSummary 余额六字段帧下沉回调。
+// venueKey=adapter venue（"acct:mt5" 与 autotrade_allow_rules.value 同构）；
+// frameTime=收帧时刻（proto 无服务端时间戳，mt5.pb OrderUpdateSummary 无 ts 字段已核）。
+type AcctFrameSink func(venueKey string, balance, equity, margin, freeMargin, profit, marginLevel float64, currency string, frameTime time.Time)
+
 // OrderEventSource OnOrderUpdate 流消费源（D-107 P1）。
 // 每 venue 一个实例，由 MT5Adapter.runOrderEventSource 启动；OrderEventSink 由 main 经
 // BrokerManager 注入（MarginSink 同模式）。复用 a.streams / a.subs / a.withSessionMD /
@@ -33,7 +38,12 @@ type OrderEventSource struct {
 	a *MT5Adapter
 
 	reconIdx int // 流重连退避档位（成功消费一帧后重置）
+
+	acctSink AcctFrameSink // D-445 S0：余额帧下沉（nil=不接）
 }
+
+// SetAccountSink 注入余额帧 sink（可选；每帧含 Update==nil 纯余额帧都回调）。
+func (s *OrderEventSource) SetAccountSink(f AcctFrameSink) { s.acctSink = f }
 
 // Run 阻塞运行：OnOrderUpdate 事件流消费循环。ctx 取消退出。
 func (s *OrderEventSource) Run(ctx context.Context, sink func(bus.OrderEvent)) {
@@ -94,6 +104,11 @@ func (s *OrderEventSource) consumeStream(ctx context.Context, sink func(bus.Orde
 			log.Printf("[mt5:%s] order-events: first frame", a.venue)
 			firstFrame = false
 		}
+		// D-445 S0：余额六字段每帧下沉（含 Update==nil 纯余额帧——此前流数据过即弃）。
+		// OrderUpdateSummary 无 Currency 字段→传空串；frameTime=收帧时刻。
+		if res := resp.GetResult(); res != nil && s.acctSink != nil {
+			s.publishAcct(res)
+		}
 		// 帧解析：Update == nil → skip（非订单事件帧，如纯余额更新）。
 		upd := resp.GetResult().GetUpdate()
 		if upd == nil {
@@ -102,6 +117,17 @@ func (s *OrderEventSource) consumeStream(ctx context.Context, sink func(bus.Orde
 		s.publish(sink, bus.OrderEvent{Venue: a.venue, Ticket: orderUpdateTicket(upd)})
 		s.reconIdx = 0 // 成功消费一帧 → 重置重连退避档位
 	}
+}
+
+// publishAcct D-445 S0：余额帧下沉，同 publish recover 守卫（sink panic 不拉崩流循环）。
+func (s *OrderEventSource) publishAcct(res *mt5pb.OrderUpdateSummary) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[mt5:%s] order-events: acct sink panic: %v", s.a.venue, r)
+		}
+	}()
+	s.acctSink(s.a.venue, res.GetBalance(), res.GetEquity(), res.GetMargin(),
+		res.GetFreeMargin(), res.GetProfit(), res.GetMarginLevel(), "", time.Now())
 }
 
 // publish 调用 sink 并 recover panic（事件丢失可接受——各消费端有兜底，不应 panic 拉崩进程）。
@@ -133,7 +159,9 @@ func (a *MT5Adapter) runOrderEventSource(ctx context.Context) {
 	if a.OrderEventSink == nil {
 		return
 	}
-	(&OrderEventSource{a: a}).Run(ctx, a.OrderEventSink)
+	src := &OrderEventSource{a: a}
+	src.SetAccountSink(a.AccountSink) // D-445 S0（nil 安全）
+	src.Run(ctx, a.OrderEventSink)
 }
 
 // orderUpdateTicket 从 OrderUpdate 提取 ticket（优先 Order → OrderInternal；均 nil → 0 通用通知）。

@@ -53,6 +53,10 @@ type MT5Adapter struct {
 	// （MarginSink 同模式）。nil = 未注入（测试/未接线），runOrderEventSource 安全 no-op。
 	OrderEventSink func(bus.OrderEvent)
 
+	// AccountSink D-445 S0：OnOrderUpdate 帧余额六字段下沉（含 Update==nil 纯余额帧）；
+	// 注入链同 OrderEventSink（main→brokerMgr→ad）。nil = 未注入（no-op）。
+	AccountSink AcctFrameSink
+
 	// AlertSink 断流分级告警下沉（D-104 P2 U2，MarginSink 同模式三点注入链）。nil = 未注入（no-op）。
 	AlertSink func(level, msg string)
 
