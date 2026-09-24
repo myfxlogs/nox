@@ -2342,6 +2342,7 @@ message CarryGraduationRow {
   optional int64 combo_id = 14;
   repeated string venue_gaps = 15;       // approve 时算的 venue env 缺口（pending 即时算；decided 回读快照）
   optional double net_all_in_usd = 16;   // D-410 S5：全账净额（accrued−est_fee+convergence；缺账行 NULL）
+  optional string flag_warn = 17;        // D-463 S3：warn 旗标命中透出（⚠+reason；无旗=NULL）
 }
 message ListCarryGraduationsRequest {}
 message ListCarryGraduationsResponse { repeated CarryGraduationRow rows = 1; }
@@ -2360,5 +2361,9 @@ message ApproveCarryGraduationResponse {
   string automap_summary = 5;            // "applied=N skipped=M conflicts=K"
   string link_report = 6;                // 非 cfd 结构的体检报告文本
 }
-message RejectCarryGraduationRequest { int64 graduation_id = 1; string note = 2; }
+message RejectCarryGraduationRequest {
+  int64 graduation_id = 1; string note = 2;
+  bool write_flag = 3;                   // D-463 S4：拒绝理由回写 fin_venue_symbol_flags
+  string flag_level = 4;                 // warn（默认）/ blocked（业主显式二级）
+}
 message RejectCarryGraduationResponse { bool ok = 1; string error = 2; }

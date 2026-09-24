@@ -7,6 +7,7 @@ package scan
 import (
 	"context"
 	"fmt"
+	"log"
 	"math"
 	"sort"
 	"time"
@@ -65,7 +66,9 @@ type PaperStore interface {
 // normalized；满 7 天 → age_7d 强评——**仅 active**，demo 行只累积不自动退=人工/业主域）。
 // 返回本轮开仓 symbol 清单（wire 侧聚一条开仓事件告警，D-350R1 S3）与退出行数。
 // cexFeeBps：D-410 S3 开仓记账往返费用率源（=cfg.XAssetCexFeeBps，同源同值禁第二口径）。
-func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntryStreak, now time.Time, cexFeeBps float64) (opened []string, exited int, err error) {
+// flags：D-463 S2 KB→pipeline 投影旗标（wire 每轮开头 ListActiveFlags 一次传入；
+// level=blocked 命中 (venue|symbol) → 跳过+log；warn 不拦——纸面=免费复核通道）。
+func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntryStreak, now time.Time, cexFeeBps float64, flags map[string]pgstore.VenueSymbolFlag) (opened []string, exited int, err error) {
 	uni, err := st.ListCexUniverse(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("paper step: list cex universe: %w", err)
@@ -107,6 +110,12 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 			continue
 		}
 		if _, ok := activeByKey[key]; ok {
+			continue
+		}
+		// D-463 S2+返修R1：blocked 旗标硬拦——腿级展开查（venue 为组合串时单腿旗标同样命中）；
+		// warn 级不拦（纸面=免费复核通道）。
+		if f := blockedFlagHit(u.Venue, u.Symbol, nil, flags); f != nil {
+			log.Printf("[paper spot] blocked flag 拦截: %s（%s@%s|%s）", key, f.Reason, f.Venue, f.Symbol)
 			continue
 		}
 		cands = append(cands, cand{key: key, u: u, funding: *u.FundingAnn, net: net})
