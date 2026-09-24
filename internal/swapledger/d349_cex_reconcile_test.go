@@ -70,7 +70,7 @@ func TestD349_CEXLegIncomeReconcile(t *testing.T) {
 		ydaySnap:  pgstore.SwapSnapshot{ID: 1, SwapUSD: 0, Ts: day.Add(-2 * time.Hour)},
 		todaySnap: pgstore.SwapSnapshot{ID: 2, SwapUSD: 0, Ts: day}}
 	r := NewSwapReconciler(st, 10.0)
-	alerted, err := r.reconcileLegWithStore(context.Background(), 492, "XASSET_CARRY", "binance:perp", "XAUUSDT", day, day)
+	alerted, err := r.reconcileLegWithStore(context.Background(), pgstore.Position{ID: 492, Type: "XASSET_CARRY"}, "binance:perp", "XAUUSDT", day, day)
 	if err != nil {
 		t.Fatalf("reconcileLegWithStore: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestD349_CEXLegIncomeWithinThreshold(t *testing.T) {
 	day := time.Now().UTC()
 	st := &d349StubStore{formulaUSD: 1.0951, incomeUSD: 1.00, incomeRows: 1}
 	r := NewSwapReconciler(st, 10.0)
-	alerted, err := r.reconcileLegWithStore(context.Background(), 492, "XASSET_CARRY", "binance:perp", "XAUUSDT", day, day)
+	alerted, err := r.reconcileLegWithStore(context.Background(), pgstore.Position{ID: 492, Type: "XASSET_CARRY"}, "binance:perp", "XAUUSDT", day, day)
 	if err != nil {
 		t.Fatalf("reconcileLegWithStore: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestD349_CEXLegPastWindowZeroIncome(t *testing.T) {
 	now := time.Now().UTC()
 	st := &d349StubStore{formulaUSD: 1.0951, incomeRows: 0}
 	r := NewSwapReconciler(st, 10.0)
-	alerted, err := r.reconcileLegWithStore(context.Background(), 492, "XASSET_CARRY", "binance:perp", "XAUUSDT", yesterday, now)
+	alerted, err := r.reconcileLegWithStore(context.Background(), pgstore.Position{ID: 492, Type: "XASSET_CARRY"}, "binance:perp", "XAUUSDT", yesterday, now)
 	if err != nil {
 		t.Fatalf("reconcileLegWithStore: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestD349_MTLegSnapshotPathUnchanged(t *testing.T) {
 	td := pgstore.SwapSnapshot{ID: 2, SwapUSD: -0.55, Ts: day}
 	st := &d349StubStore{formulaUSD: -0.55, todaySnap: td, ydaySnap: y}
 	r := NewSwapReconciler(st, 10.0)
-	alerted, err := r.reconcileLegWithStore(context.Background(), 492, "XASSET_CARRY", "277842155:mt5", "XAUUSD247m", day, day)
+	alerted, err := r.reconcileLegWithStore(context.Background(), pgstore.Position{ID: 492, Type: "XASSET_CARRY"}, "277842155:mt5", "XAUUSD247m", day, day)
 	if err != nil {
 		t.Fatalf("reconcileLegWithStore: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestD349_MTLegSnapshotPathUnchanged(t *testing.T) {
 	// 偏差分支：快照差 0 vs 公式 −0.55 → 100% 告警（快照差路径原样保留）
 	st2 := &d349StubStore{formulaUSD: -0.55, todaySnap: pgstore.SwapSnapshot{ID: 3, SwapUSD: 0, Ts: day}, ydaySnap: y}
 	r2 := NewSwapReconciler(st2, 10.0)
-	alerted2, err := r2.reconcileLegWithStore(context.Background(), 492, "XASSET_CARRY", "277842155:mt5", "XAUUSD247m", day, day)
+	alerted2, err := r2.reconcileLegWithStore(context.Background(), pgstore.Position{ID: 492, Type: "XASSET_CARRY"}, "277842155:mt5", "XAUUSD247m", day, day)
 	if err != nil {
 		t.Fatalf("reconcileLegWithStore: %v", err)
 	}

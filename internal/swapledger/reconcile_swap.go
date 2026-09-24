@@ -124,17 +124,23 @@ func (r *SwapReconciler) reconcilePosition(ctx context.Context, pos pgstore.Posi
 		if leg.Phase != "OPEN" {
 			continue
 		}
-		// per-leg 预检查：该腿当日未记 → 跳过该腿（swapledger 未记，不误告警）
+		// per-leg 预检查：该腿比对日未记 → 跳过该腿（swapledger 未记，不误告警）
 		// D-314：kind per-leg 判定（XASSET_CARRY perp 腿=funding、MT 腿=swap）。
+		// D-437 S1：perp 腿比对日=昨日（income 多窗结算需完整日对平，日中部分窗对全日公式必误报）；
+		// MT 腿=当日不变（快照差天然含时长）。昨日无 cashflow（今日新开仓）→ 自然 skip 零特例。
+		cmpDay := day
+		if strings.HasSuffix(leg.Venue, ":perp") {
+			cmpDay = day.AddDate(0, 0, -1)
+		}
 		kind := cashflowKind(pos.Type, leg.Venue)
-		has, err := r.store.HasCashflowForLegDay(ctx, pos.ID, leg.LegNo, kind, day)
+		has, err := r.store.HasCashflowForLegDay(ctx, pos.ID, leg.LegNo, kind, cmpDay)
 		if err != nil {
 			return 0, fmt.Errorf("check cashflow: %w", err)
 		}
 		if !has {
 			continue
 		}
-		alerted, err := r.reconcileLegWithStore(ctx, pos.ID, pos.Type, leg.Venue, leg.Symbol, day, day)
+		alerted, err := r.reconcileLegWithStore(ctx, pos, leg.Venue, leg.Symbol, cmpDay, day)
 		if err != nil {
 			log.Printf("[swap-reconcile] leg posID=%d venue=%s: %v", pos.ID, leg.Venue, err)
 			continue
@@ -147,14 +153,16 @@ func (r *SwapReconciler) reconcilePosition(ctx context.Context, pos pgstore.Posi
 }
 
 // reconcileLegWithStore 取公式值+实际值后比对告警。
-// D-314：posType 入参供 per-leg kind 判定（XASSET_CARRY perp 腿公式值查 kind=funding）。
+// D-314：posType 由 pos 取供 per-leg kind 判定（XASSET_CARRY perp 腿公式值查 kind=funding）。
 // D-349 S1 腿型分流：CEX perp 腿（venue 带 ":perp" 后缀）实际值=income_events 日和——
 // binance positionRisk.Order.Swap 恒 0（funding 走 income API 独立结算不入持仓 swap 字段，
 // 快照差结构性恒 0=100% 假报实证 pos492）；MT 腿维持快照差路径不动。
-// now 独立入参供测试注入（生产调用方与 day 同源=time.Now()）。
-func (r *SwapReconciler) reconcileLegWithStore(ctx context.Context, posID int64, posType, venue, symbol string, day, now time.Time) (bool, error) {
-	kind := cashflowKind(posType, venue)
-	formulaUSD, err := r.store.SumCashflowsForDay(ctx, posID, kind, venue, day)
+// D-437：day=比对日（perp 调用方传昨日 cmpDay）；公式值按持仓时长折算（pos.OpenedAt
+// nil→heldFrac=1 legacy 安全）——同日开仓首日全日投影 vs 部分窗实收同根误报一并修。
+// now 独立入参供测试注入（生产调用方=time.Now()）。
+func (r *SwapReconciler) reconcileLegWithStore(ctx context.Context, pos pgstore.Position, venue, symbol string, day, now time.Time) (bool, error) {
+	kind := cashflowKind(pos.Type, venue)
+	formulaUSD, err := r.store.SumCashflowsForDay(ctx, pos.ID, kind, venue, day)
 	if err != nil {
 		return false, err
 	}
@@ -170,15 +178,19 @@ func (r *SwapReconciler) reconcileLegWithStore(ctx context.Context, posID int64,
 		if rows == 0 && formulaUSD > 0 && !cexSettleWindowPassed(day, now) {
 			return false, nil
 		}
-		deviation := math.Abs(formulaUSD - actualUSD)
-		denom := math.Max(math.Max(math.Abs(formulaUSD), math.Abs(actualUSD)), 0.01)
+		// D-437 S2：持仓时长折算——公式值是全日投影，比对前折到持仓占比
+		// （OpenedAt 在比对日内开仓 → heldFrac=(dayEnd−openedAt)/86400）。
+		expectUSD := formulaUSD * heldFracOfDay(pos.OpenedAt, day)
+		deviation := math.Abs(expectUSD - actualUSD)
+		denom := math.Max(math.Max(math.Abs(expectUSD), math.Abs(actualUSD)), 0.01)
 		deviationPct := deviation / denom * 100
 		level := alertLevel(deviationPct, r.deviationPct)
 		if level == "" {
 			return false, nil
 		}
-		msg := fmt.Sprintf("[swap-reconcile] position_id=%d venue=%s: 公式值=$%.4f 实际收入=$%.4f 偏差率=%.1f%% (阈值=%.1f%%)",
-			posID, venue, formulaUSD, actualUSD, deviationPct, r.deviationPct)
+		// D-437 S3：告警带比对日（cmpDay）自解释，防值班误判对的是哪天。
+		msg := fmt.Sprintf("[swap-reconcile] position_id=%d venue=%s day=%s: 公式值=$%.4f 实际收入=$%.4f 偏差率=%.1f%% (阈值=%.1f%%)",
+			pos.ID, venue, day.Format("2006-01-02"), expectUSD, actualUSD, deviationPct, r.deviationPct)
 		if err := r.store.InsertAlert(ctx, nil, level, msg); err != nil {
 			return false, fmt.Errorf("insert alert: %w", err)
 		}
@@ -186,13 +198,13 @@ func (r *SwapReconciler) reconcileLegWithStore(ctx context.Context, posID int64,
 		return true, nil
 	}
 
-	todaySnap, err := r.store.LatestSwapSnapshot(ctx, posID, venue)
+	todaySnap, err := r.store.LatestSwapSnapshot(ctx, pos.ID, venue)
 	if err != nil {
 		return false, nil // 无快照 → 跳过（fail-closed）
 	}
 
 	dayStart := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, time.UTC)
-	yesterdaySnap, err := r.store.LatestSwapSnapshotBefore(ctx, posID, venue, dayStart)
+	yesterdaySnap, err := r.store.LatestSwapSnapshotBefore(ctx, pos.ID, venue, dayStart)
 	if err != nil {
 		return false, nil // 无昨日快照 → 跳过
 	}
@@ -207,8 +219,8 @@ func (r *SwapReconciler) reconcileLegWithStore(ctx context.Context, posID int64,
 		return false, nil
 	}
 
-	msg := fmt.Sprintf("[swap-reconcile] position_id=%d venue=%s: 公式值=$%.4f 实际增量=$%.4f 偏差率=%.1f%% (阈值=%.1f%%)",
-		posID, venue, formulaUSD, todaySnap.SwapUSD-yesterdaySnap.SwapUSD, deviationPct, r.deviationPct)
+	msg := fmt.Sprintf("[swap-reconcile] position_id=%d venue=%s day=%s: 公式值=$%.4f 实际增量=$%.4f 偏差率=%.1f%% (阈值=%.1f%%)",
+		pos.ID, venue, day.Format("2006-01-02"), formulaUSD, todaySnap.SwapUSD-yesterdaySnap.SwapUSD, deviationPct, r.deviationPct)
 	if err := r.store.InsertAlert(ctx, nil, level, msg); err != nil {
 		return false, fmt.Errorf("insert alert: %w", err)
 	}
@@ -232,6 +244,23 @@ func reconcileLeg(formulaUSD float64, todaySnap, yesterdaySnap pgstore.SwapSnaps
 	denom := math.Max(math.Abs(formulaUSD), math.Abs(actualUSD))
 	denom = math.Max(denom, 0.01) // 防除零
 	return deviation / denom * 100, true
+}
+
+// heldFracOfDay D-437 S2：持仓在比对日内的时间占比 [0,1]。
+// openedAt nil → 1（legacy 安全）；openedAt 在日内 → (dayEnd−openedAt)/86400；
+// 日内开仓早于 dayStart（前日及更早持仓）→ clamp 至 1。
+func heldFracOfDay(openedAt *time.Time, day time.Time) float64 {
+	if openedAt == nil {
+		return 1.0
+	}
+	dayStart := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, time.UTC)
+	dayEnd := dayStart.AddDate(0, 0, 1)
+	start := dayStart
+	if openedAt.After(dayStart) {
+		start = *openedAt
+	}
+	frac := dayEnd.Sub(start).Seconds() / 86400
+	return math.Max(0, math.Min(1, frac))
 }
 
 // cexSettleWindowPassed D-349 S2 简化选择（提示词授权）：当日 23:59:59 UTC + 5min 容差。
