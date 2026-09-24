@@ -5,6 +5,7 @@ package pgstore
 import (
 	"context"
 	"math"
+	"sort"
 	"time"
 )
 
@@ -214,6 +215,7 @@ func (s *Store) RetroWeeklyStats(ctx context.Context, since, until time.Time) (*
 	for _, g := range typeAgg {
 		w.Groups = append(w.Groups, *g)
 	}
+	sort.Slice(w.Groups, func(i, j int) bool { return w.Groups[i].Type < w.Groups[j].Type })
 	if err := s.scanDist(ctx, &w.PaperSpot, `
 		SELECT exit_reason, count(*) FROM paper_spot_carry
 		WHERE exit_ts >= $1 AND exit_ts < $2 GROUP BY exit_reason`, since, until); err != nil {
