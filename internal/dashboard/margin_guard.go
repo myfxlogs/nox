@@ -23,6 +23,7 @@ import (
 type marginGuardStore interface {
 	ListOpenLegsForMargin(ctx context.Context) ([]pgstore.MarginOpenLeg, error)
 	TickVolatility24h(ctx context.Context, venue, venueType, symbol string) (float64, bool, error)
+	CanonicalByBrokerSymbol(ctx context.Context, venue, symbol string) (string, bool, error)
 	GetVenueMarginStatus(ctx context.Context, venue, venueType string) (*pgstore.VenueMarginStatus, bool, error)
 	UpsertVenueMarginStatus(ctx context.Context, r *pgstore.VenueMarginStatus) error
 	InsertAlert(ctx context.Context, ruleID *int64, level, msg string) error
@@ -92,6 +93,15 @@ func (g *MarginGuard) evaluate(ctx context.Context, sn *pgstore.VenueAccountSnap
 
 	dailyVol := 0.0
 	dataMissing := false
+	var tickKeyErr error
+	canonicalOf := func(venue, sym string) (string, bool) {
+		c, ok, err := g.store.CanonicalByBrokerSymbol(ctx, venue, sym)
+		if err != nil {
+			tickKeyErr = err
+			return "", false
+		}
+		return c, ok
+	}
 	for _, l := range legs {
 		lv, lt := legSnapshotVenue(l.Venue)
 		if lv != sn.Venue || lt != sn.VenueType {
@@ -103,7 +113,15 @@ func (g *MarginGuard) evaluate(ctx context.Context, sn *pgstore.VenueAccountSnap
 			dataMissing = true
 			continue
 		}
-		vol, vok, verr := g.store.TickVolatility24h(ctx, lv, lt, l.Symbol)
+		tv, tt, tsym, tok := legTickKey(l.Venue, l.Symbol, canonicalOf)
+		if tickKeyErr != nil {
+			return fmt.Errorf("tick key %s/%s: %w", l.Venue, l.Symbol, tickKeyErr)
+		}
+		if !tok {
+			dataMissing = true // MT 未映射/未知 suffix → 诚实 data_stale（D-430）
+			continue
+		}
+		vol, vok, verr := g.store.TickVolatility24h(ctx, tv, tt, tsym)
 		if verr != nil {
 			return fmt.Errorf("tick vol %s/%s: %w", l.Venue, l.Symbol, verr)
 		}
@@ -186,6 +204,28 @@ func legSnapshotVenue(venueKey string) (string, string) {
 		t = "unified"
 	}
 	return v, t
+}
+
+// legTickKey 腿 → ticks 域查询键（D-430）：venue_type=suffix 原样直通（ticks 写侧无归一，
+// 与 legSnapshotVenue 的快照域归一分域）；symbol=MT 腿经 canonicalOf（broker_symbol_map）
+// 转 canonical，CEX 腿经 cexCanonical 幂等归一。ok=false=MT 未映射/未知 suffix → 诚实 data_stale。
+func legTickKey(venueKey, symbol string, canonicalOf func(venue, brokerSymbol string) (string, bool)) (tv, tt, tsym string, ok bool) {
+	i := strings.LastIndex(venueKey, ":")
+	if i < 0 {
+		return "", "", "", false
+	}
+	v, suffix := venueKey[:i], venueKey[i+1:]
+	switch suffix {
+	case "mt4", "mt5":
+		c, ok := canonicalOf(v, symbol)
+		if !ok {
+			return "", "", "", false
+		}
+		return v, suffix, c, true
+	case "perp", "spot":
+		return v, suffix, cexCanonical(symbol), true
+	}
+	return "", "", "", false
 }
 
 // marginLegNotionalUSD 单腿名义 USD：qty(EffectiveQty)×usdPerLot（canonical 计价币换算

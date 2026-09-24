@@ -3,6 +3,7 @@ package dashboard
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -153,7 +154,7 @@ func d405Store(t *testing.T) *pgstore.Store {
 	ctx := context.Background()
 	for _, tbl := range []string{
 		"fin_venue_margin_status", "fin_venue_account_snapshot",
-		"position_legs", "positions", "ticks",
+		"position_legs", "positions", "ticks", "broker_symbol_map",
 	} {
 		if _, err := s.Pool().Exec(ctx, "TRUNCATE TABLE "+tbl+" RESTART IDENTITY CASCADE"); err != nil {
 			t.Fatalf("TRUNCATE %s: %v", tbl, err)
@@ -181,6 +182,12 @@ func d405SeedTicks(t *testing.T, s *pgstore.Store, venue, symbol string) {
 func d405SeedMTLeg(t *testing.T, s *pgstore.Store, venueKey, symbol, oppID string, qty, price float64) int64 {
 	t.Helper()
 	ctx := context.Background()
+	// D-430：MT 腿 tick 键经 broker_symbol_map 解析 canonical——测试腿符号本身即 canonical。
+	if err := s.UpsertSymbolMapping(ctx, &pgstore.SymbolMapping{
+		Venue: strings.Split(venueKey, ":")[0], BrokerSymbol: symbol, Canonical: symbol,
+	}); err != nil {
+		t.Fatalf("seed symbol map: %v", err)
+	}
 	posID, err := s.CreatePosition(ctx, &pgstore.Position{
 		OpportunityID: oppID, Type: "XASSET_CARRY", Status: "OPEN", Environment: "live",
 	})
