@@ -139,87 +139,9 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 		return int64(tf.Value), true
 	}
 	filteredCanonicals := map[string]bool{} // D-382 S2：有 swap fact 进入过滤评估的 canonical 集
-	// MT swap facts D-412 F1/F2/F3：单位归一（bps_daily×365/100→%/yr 单一换算点）+
-	// venue 全保留（F2 全叉积：归并键=canonical|mt_venue，同 canonical 多 venue 不再坍缩
-	// 取最优——授权在跑线必须恒在监控视野，D-410 保底槽三重键前提）+ 7d 窗口均值取值
-	// （F3 抗 flap：swap_free=|均值年化|<1%；点值判定=抛硬币 39050818 实证）。
-	type mtSwap struct {
-		venue, canonical string
-		val              float64 // 年化 %/yr（F1 换算后；F3 起为 7d 均值年化）
-		ts               time.Time
-		stale            bool // F4：fact 龄期超闸（>UniverseSwapMaxAge）
-	}
-	longByCanon := map[string]mtSwap{}
-	shortByCanon := map[string]mtSwap{}
-	for _, f := range mtSwapLong {
-		if f.Symbol == "" || f.Value > 0 {
-			continue // 正值=收息（多 CFD 不付息不可能）非候选；0=免息腿（swap_free 候选保留）
-		}
-		maps, err := sc.store.ListSymbolMappings(ctx, f.Venue)
-		if err != nil {
-			continue
-		}
-		canonical := ""
-		for _, m := range maps {
-			if m.BrokerSymbol == f.Symbol && m.Canonical != "" {
-				canonical = NormalizeJoinKey(m.Canonical) // D-336R1：双侧规范化后入键
-				break
-			}
-		}
-		if canonical == "" {
-			res.Skipped++
-			continue
-		}
-		// D-382 S1：可执行性过滤——买腿要求 mode∈{LongOnly,Full}；已知且禁 → skip 该 fact
-		// （fact 级过滤=最优 venue 被禁时归并自然落次优可交易 venue，canonical 存活不逃脱）。
-		if mode, known := tmKnown(f); known && !modeAllowed(mode, true) {
-			filteredCanonicals[canonical] = true
-			continue
-		}
-		mean, err := sc.store.FactsWindowStats(ctx, "swap_long", f.Venue, f.Symbol, swapWindowTTL)
-		if err != nil {
-			continue // F3：窗口零样本/读失败=不产行（既有 fail-closed 语义不变）
-		}
-		val := mean * 365 / 100
-		longByCanon[canonical+"|"+f.Venue] = mtSwap{
-			venue: f.Venue, canonical: canonical, val: val, ts: f.Ts,
-			stale: sc.swapMaxAge > 0 && time.Since(f.Ts) > sc.swapMaxAge,
-		}
-	}
-	for _, f := range mtSwapShort {
-		if f.Symbol == "" || f.Value < 0 {
-			continue // 负值=付息非候选；0=免息腿（swap_free 候选保留）
-		}
-		maps, err := sc.store.ListSymbolMappings(ctx, f.Venue)
-		if err != nil {
-			continue
-		}
-		canonical := ""
-		for _, m := range maps {
-			if m.BrokerSymbol == f.Symbol && m.Canonical != "" {
-				canonical = NormalizeJoinKey(m.Canonical) // D-336R1：双侧规范化后入键
-				break
-			}
-		}
-		if canonical == "" {
-			res.Skipped++
-			continue
-		}
-		// D-382 S1：卖腿要求 mode∈{ShortOnly,Full}（同 long 循环，fact 级过滤 venue 回退）。
-		if mode, known := tmKnown(f); known && !modeAllowed(mode, false) {
-			filteredCanonicals[canonical] = true
-			continue
-		}
-		mean, err := sc.store.FactsWindowStats(ctx, "swap_short", f.Venue, f.Symbol, swapWindowTTL)
-		if err != nil {
-			continue // F3：窗口零样本/读失败=不产行（既有 fail-closed 语义不变）
-		}
-		val := mean * 365 / 100
-		shortByCanon[canonical+"|"+f.Venue] = mtSwap{
-			venue: f.Venue, canonical: canonical, val: val, ts: f.Ts,
-			stale: sc.swapMaxAge > 0 && time.Since(f.Ts) > sc.swapMaxAge, // R1：swap 侧用 swap 闸（48h），修复误用 funding 闸
-		}
-	}
+	// MT swap facts D-412 F1/F2/F3：单位归一+venue 全保留+7d 窗口均值——收集逻辑
+	// 提取至 carry_universe_collect.go（D-451 S3 纯搬家，注释全文随块搬移见彼）。
+	longByCanon, shortByCanon := sc.collectMtSwaps(ctx, mtSwapLong, mtSwapShort, tmKnown, filteredCanonicals, &res)
 	// CEX funding：symbol→canonical（去 USDT）；F2 同款 venue 全保留（每 venue 一行，
 	// 不再 abs 取最优——cex argmax 会使授权组合在 funding 排名易主日假 warn+保底失明）。
 	// funding 符号定结构方向：>0=多 perp 付息→配空 CFD 收息；<0=反向。
