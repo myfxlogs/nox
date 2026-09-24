@@ -56,7 +56,7 @@ type BrokerPositionMonitor struct {
 	cexIntervals   *exchange.FundingIntervalCache
 	cexFundingRate func(ctx context.Context, venue, symbol string) (annualPct float64, ok bool)
 	// D-466 S3：腿级 venue 原生结算时刻/周期源（funding_next_settle+funding_interval
-	// facts）。返回零值=该腿无真值 fact（诚实缺→interval 边界→8h 回退）。
+	// facts）。返回零值=该腿无真值 fact（诚实缺→interval 边界→nil 空态+warn，D-466R1 禁 8h 兜底）。
 	cexNextSettle func(ctx context.Context, venue, symbol string) (nextSettle, factTs time.Time, interval time.Duration)
 }
 

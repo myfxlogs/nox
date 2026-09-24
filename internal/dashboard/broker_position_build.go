@@ -83,10 +83,11 @@ func (m *BrokerPositionMonitor) build(ctx context.Context) []*v1.BrokerPosition 
 			if o.InitialMargin > 0 {
 				margin = o.InitialMargin
 			}
-			// D-337 S2 + D-337R1 S2 + D-466 S3：下次计费/结算时刻——MT5=server 零点（tzCache）；
-			// CEX=腿级 venue 原生真值三级回退：funding_next_settle fact（stale 闸=龄>周期×2 失效）
-			// → venue 原生 interval 边界 → 8h+warn。FundingIntervalCache 仅 binance 腿合法回退
-			// （venue 原生数据）；跨 venue 查用即污染（OKX 腿吃 binance 4h 期实证）。未就绪→nil。
+			// D-337 S2 + D-337R1 S2 + D-466 S3/R1：下次计费/结算时刻——MT5=server 零点（tzCache）；
+			// CEX=腿级 venue 原生真值回退：funding_next_settle fact（stale 闸=龄>周期×2 失效）
+			// → venue 原生 interval 边界 → nil 诚实空态+warn（业主令禁 8h 兜底——猜的值
+			// 会看似合理但错）。FundingIntervalCache 仅 binance 腿合法回退（venue 原生
+			// 数据）；跨 venue 查用即污染（OKX 腿吃 binance 4h 期实证）。
 			var swapChargeAt *timestamppb.Timestamp
 			var periodicPct float64
 			if isCEXVenueKey(o.VenueKey) && canonical != "" {
@@ -107,19 +108,21 @@ func (m *BrokerPositionMonitor) build(ctx context.Context) []*v1.BrokerPosition 
 					swapChargeAt = timestamppb.New(NextFundingSettlementUTC(now.UTC(), periods))
 					log.Printf("[broker] cex settle fact %s|%s unusable (next=%v ts=%v, fallback venue interval %d/day)", venue, canonical, nextSettle, factTs, periods)
 				default:
-					// binance 腿可用自家 FundingIntervalCache（venue 原生合法回退）；
-					// 其余 venue 借它=跨 venue 污染（本票根因），只退 8h+warn。
+					// R1：binance 腿仅自家 FundingIntervalCache 命中可用（venue 原生合法
+					// 回退）；miss 与其余 venue 一律 nil 空态+warn——借它=跨 venue 污染
+					// （本票根因），8h 兜底=猜的值禁产（业主令）。
 					if venue == "binance" && m.cexIntervals != nil {
 						if pp, ok := m.cexIntervals.Lookup(canonical); ok {
 							periods = pp
+							swapChargeAt = timestamppb.New(NextFundingSettlementUTC(now.UTC(), periods))
 						}
 					}
-					if periods <= 0 {
-						log.Printf("[broker] cex settle %s|%s no venue fact/interval (fallback 8h boundary)", venue, canonical)
-						periods = 3
+					if swapChargeAt == nil {
+						log.Printf("[broker] cex settle %s|%s no venue-native fact/interval (nil honest-empty)", venue, canonical)
 					}
-					swapChargeAt = timestamppb.New(NextFundingSettlementUTC(now.UTC(), periods))
 				}
+				// R2：periodicPct 仅 venue 原生 periods（funding_interval fact / binance 自家
+				// 缓存命中）可算；非原生来源（默认/污染路径）→0 诚实空态。
 				if periods > 0 && m.cexFundingRate != nil {
 					if annual, ok2 := m.cexFundingRate(ctx, venue, canonical); ok2 {
 						periodicPct = annual / (365 * float64(periods))

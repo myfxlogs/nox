@@ -67,14 +67,15 @@ func TestD466_OKXLegVenueNativeSettle(t *testing.T) {
 	}
 }
 
-// T2：三级回退——①无 fact 非 binance 腿退 8h（不吃 binance 4h 表=污染回归锚）；
-// ②stale fact（龄>2×周期）退 venue interval 边界；③binance 腿无 fact 用自家缓存 4h。
+// T2（R1 终态=nil 禁 8h 兜底）：①无 fact 非 binance 腿→nil 空态+warn（不吃 binance
+// 4h 表=污染回归锚）；②stale fact（龄>2×周期）退 venue interval 边界；③binance 腿
+// 无 fact 用自家缓存 4h；④binance 缓存 miss→nil 空态。
 func TestD466_SettleFallbackChain(t *testing.T) {
 	ctx := context.Background()
 	intervals := d466Intervals(t, ctx)
 	now := time.Now().UTC()
 
-	// ① okx 腿零 fact → 8h 边界（旧码会给 binance 4h 边界=污染）
+	// ① okx 腿零 fact → nil 空态+warn（R1 禁 8h 兜底；旧码给 binance 4h 边界=污染）
 	q := &fakeCEXQuerier{key: "okx:perp", orders: []reconcile.VenueOrder{
 		{Venue: "okx", VenueKey: "okx:perp", Ticket: "T", Symbol: "XAU-USDT-SWAP", Side: "SELL", Volume: 1},
 	}}
@@ -82,10 +83,12 @@ func TestD466_SettleFallbackChain(t *testing.T) {
 		return time.Time{}, time.Time{}, 0
 	})
 	got := mon.Refresh(ctx)
-	want8 := NextFundingSettlementUTC(now, 3)
-	if got[0].SwapChargeAt == nil || got[0].SwapChargeAt.AsTime().Sub(want8).Abs() > 5*time.Second {
-		t.Fatalf("T2a okx 无 fact want 8h 边界 %v±5s, got %v（污染=4h 边界 %v）",
-			want8, got[0].SwapChargeAt.AsTime(), NextFundingSettlementUTC(now, 6))
+	if got[0].SwapChargeAt != nil {
+		t.Fatalf("T2a okx 无 fact want nil 空态, got %v（污染=4h 边界 %v；旧兜底=8h %v）",
+			got[0].SwapChargeAt.AsTime(), NextFundingSettlementUTC(now, 6), NextFundingSettlementUTC(now, 3))
+	}
+	if got[0].FundingRatePeriodicPct != 0 {
+		t.Fatalf("T2a R2 periodicPct 非原生来源 want 0, got %v", got[0].FundingRatePeriodicPct)
 	}
 
 	// ② stale fact（ts=now-17h > 2×8h）+ interval=8h → venue interval 边界（8h）；
@@ -110,6 +113,18 @@ func TestD466_SettleFallbackChain(t *testing.T) {
 	got3 := mon3.Refresh(ctx)
 	if got3[0].SwapChargeAt == nil || got3[0].SwapChargeAt.AsTime().Sub(want4).Abs() > 5*time.Second {
 		t.Fatalf("T2c binance 无 fact want 自家 4h 边界 %v±5s, got %v", want4, got3[0].SwapChargeAt.AsTime())
+	}
+
+	// ④ binance 腿缓存 miss → nil 空态（自家表亦无=诚实缺，不猜）
+	qc := &fakeCEXQuerier{key: "binance:perp", orders: []reconcile.VenueOrder{
+		{Venue: "binance", VenueKey: "binance:perp", Ticket: "T", Symbol: "ZZZUSDT", Side: "SELL", Volume: 1},
+	}}
+	mon4 := d466Mon(qc, intervals, func(context.Context, string, string) (time.Time, time.Time, time.Duration) {
+		return time.Time{}, time.Time{}, 0
+	})
+	got4 := mon4.Refresh(ctx)
+	if got4[0].SwapChargeAt != nil {
+		t.Fatalf("T2d binance 缓存 miss want nil, got %v", got4[0].SwapChargeAt.AsTime())
 	}
 }
 
