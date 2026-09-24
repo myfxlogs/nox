@@ -19337,6 +19337,7 @@ type AutotradeAllowRuleRow struct {
 	Online        bool                   `protobuf:"varint,10,opt,name=online,proto3" json:"online,omitempty"` // false=该 venue 本次查询失败/离线（前端置灰）
 	AcctUpdatedAt *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=acct_updated_at,json=acctUpdatedAt,proto3" json:"acct_updated_at,omitempty"`
 	HasAccount    bool                   `protobuf:"varint,12,opt,name=has_account,json=hasAccount,proto3" json:"has_account,omitempty"` // false=无账户数据（canonical/未知 venue）→ 前端「—」
+	AcctMode      string                 `protobuf:"bytes,13,opt,name=acct_mode,json=acctMode,proto3" json:"acct_mode,omitempty"`        // D-448："demo"/"real"/""（stream-only 无快照→空，前端显「—」不臆造）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -19453,6 +19454,13 @@ func (x *AutotradeAllowRuleRow) GetHasAccount() bool {
 		return x.HasAccount
 	}
 	return false
+}
+
+func (x *AutotradeAllowRuleRow) GetAcctMode() string {
+	if x != nil {
+		return x.AcctMode
+	}
+	return ""
 }
 
 type ListAutotradeAllowRulesRequest struct {
@@ -22906,7 +22914,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x14notional_holding_usd\x18\t \x01(\x01R\x12notionalHoldingUsd\"\x92\x01\n" +
 	"\x1aListPaperSpotCarryResponse\x127\n" +
 	"\x04rows\x18\x01 \x03(\v2#.arb.dashboard.v1.PaperSpotCarryRowR\x04rows\x12;\n" +
-	"\x06tracks\x18\x02 \x03(\v2#.arb.dashboard.v1.PaperTrackSummaryR\x06tracks\"\xe8\x02\n" +
+	"\x06tracks\x18\x02 \x03(\v2#.arb.dashboard.v1.PaperTrackSummaryR\x06tracks\"\x85\x03\n" +
 	"\x15AutotradeAllowRuleRow\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x14\n" +
@@ -22921,7 +22929,8 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	" \x01(\bR\x06online\x12B\n" +
 	"\x0facct_updated_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\racctUpdatedAt\x12\x1f\n" +
 	"\vhas_account\x18\f \x01(\bR\n" +
-	"hasAccount\" \n" +
+	"hasAccount\x12\x1b\n" +
+	"\tacct_mode\x18\r \x01(\tR\bacctMode\" \n" +
 	"\x1eListAutotradeAllowRulesRequest\"`\n" +
 	"\x1fListAutotradeAllowRulesResponse\x12=\n" +
 	"\x05rules\x18\x01 \x03(\v2'.arb.dashboard.v1.AutotradeAllowRuleRowR\x05rules\"c\n" +

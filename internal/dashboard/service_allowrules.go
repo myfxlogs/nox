@@ -59,6 +59,11 @@ func fillRuleAcct(row *v1.AutotradeAllowRuleRow, venueKey string, a *v1.AccountI
 		sa, hasStream = mon.StreamAccount(venueKey)
 	}
 	if a != nil {
+		// D-448：账号级 demo/real 为不变属性——a 在时恒取快照侧 mode（流帧无该信息）。
+		row.AcctMode = "real"
+		if a.GetSimulated() {
+			row.AcctMode = "demo"
+		}
 		// UpdatedAt nil→视为最旧（不 panic：AsTime nil-safe 得 epoch，但显式判断防误胜）。
 		updNil := a.GetUpdatedAt() == nil
 		if hasStream && (updNil || sa.FrameTime.After(a.GetUpdatedAt().AsTime())) {
@@ -81,6 +86,7 @@ func fillRuleAcct(row *v1.AutotradeAllowRuleRow, venueKey string, a *v1.AccountI
 	}
 	if hasStream {
 		// 快照全 miss（querier 未注册/冷却/boot 首 poll 前）→ 流帧兜底。
+		// acct_mode 恒 ""——demo 户被误标 real 比空危险，诚实空前端显「—」。
 		row.Balance, row.Equity, row.Currency = sa.Balance, sa.Equity, sa.Currency
 		row.Online = true
 		row.AcctUpdatedAt = timestamppb.New(sa.FrameTime)

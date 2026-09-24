@@ -29,7 +29,7 @@ func d445Fixture(t *testing.T) (*Service, *AccountMonitor, *fakeAccountQuerier) 
 	}
 	q := &fakeAccountQuerier{key: "d445x:mt5", acct: &reconcile.AccountInfo{
 		VenueKey: "d445x:mt5", Venue: "d445x", VenueType: "mt5", AssetType: "cfd",
-		Balance: 111.5, Equity: 222.25, Currency: "USD",
+		Balance: 111.5, Equity: 222.25, Currency: "USD", Simulated: true,
 	}}
 	mon, _, _ := newAcctMonTest(t, q)
 	mon.Refresh(ctx) // D-447：Snapshot 读 monitor cache——先跑一轮 poll 暖缓存
@@ -56,11 +56,11 @@ func TestD445VenueMoneyColumns(t *testing.T) {
 	if venue == nil || canon == nil {
 		t.Fatalf("rows missing: %+v", resp.Msg.Rules)
 	}
-	if !venue.HasAccount || venue.Balance != 111.5 || venue.Equity != 222.25 || venue.Currency != "USD" || !venue.Online {
+	if !venue.HasAccount || venue.Balance != 111.5 || venue.Equity != 222.25 || venue.Currency != "USD" || !venue.Online || venue.AcctMode != "demo" {
 		t.Fatalf("venue row=%+v", venue)
 	}
-	if canon.HasAccount {
-		t.Fatalf("canonical has_account must be false: %+v", canon)
+	if canon.HasAccount || canon.AcctMode != "" {
+		t.Fatalf("canonical has_account/acct_mode must be empty: %+v", canon)
 	}
 }
 
@@ -96,8 +96,8 @@ func TestD445NewerSourceWins(t *testing.T) {
 			row = r
 		}
 	}
-	if row == nil || row.Balance != 999 || row.Currency != "EUR" {
-		t.Fatalf("stream should win: %+v", row)
+	if row == nil || row.Balance != 999 || row.Currency != "EUR" || row.AcctMode != "demo" {
+		t.Fatalf("stream should win (acct_mode falls back to snapshot): %+v", row)
 	}
 
 	// ③ querier 失败（快照空）→ 流帧兜底仍 has_account
@@ -116,7 +116,7 @@ func TestD445NewerSourceWins(t *testing.T) {
 			row = r
 		}
 	}
-	if row == nil || !row.HasAccount || row.Balance != 777 {
-		t.Fatalf("stream fallback: %+v", row)
+	if row == nil || !row.HasAccount || row.Balance != 777 || row.AcctMode != "" {
+		t.Fatalf("stream fallback (acct_mode honest empty): %+v", row)
 	}
 }
