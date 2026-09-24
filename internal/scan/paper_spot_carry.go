@@ -112,9 +112,10 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 		if _, ok := activeByKey[key]; ok {
 			continue
 		}
-		// D-463 S2：blocked 旗标硬拦（warn 级不拦——纸面=免费复核通道）。
-		if f, hit := flags[pgstore.FlagKey(u.Venue, u.Symbol)]; hit && f.Level == "blocked" {
-			log.Printf("[paper spot] blocked flag 拦截: %s（%s）", key, f.Reason)
+		// D-463 S2+返修R1：blocked 旗标硬拦——腿级展开查（venue 为组合串时单腿旗标同样命中）；
+		// warn 级不拦（纸面=免费复核通道）。
+		if f := blockedFlagHit(u.Venue, u.Symbol, nil, flags); f != nil {
+			log.Printf("[paper spot] blocked flag 拦截: %s（%s@%s|%s）", key, f.Reason, f.Venue, f.Symbol)
 			continue
 		}
 		cands = append(cands, cand{key: key, u: u, funding: *u.FundingAnn, net: net})

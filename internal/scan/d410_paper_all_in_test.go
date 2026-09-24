@@ -151,7 +151,7 @@ func TestD410_CfdMonitorBasis(t *testing.T) {
 	pair := "D410CUSDT-D410C"
 	d410SeedMonitor(t, s, pair, time.Now().Add(-time.Minute), 12.0) // entry=+12
 	rows := []UniverseRow{d374Row("D410C", "3001157", "okx", "long_cfd_short_perp", 10.95, "")}
-	opened, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts())
+	opened, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil)
 	if err != nil || len(opened) != 1 {
 		t.Fatalf("open: %v opened=%v", err, opened)
 	}
@@ -165,7 +165,7 @@ func TestD410_CfdMonitorBasis(t *testing.T) {
 	}
 	// monitor 翻号到 −3 → 本轮 last_basis 更新
 	d410SeedMonitor(t, s, pair, time.Now(), -3.0)
-	if _, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts()); err != nil {
+	if _, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil); err != nil {
 		t.Fatalf("accrue: %v", err)
 	}
 	var last float64
@@ -177,7 +177,7 @@ func TestD410_CfdMonitorBasis(t *testing.T) {
 	}
 	// 宇宙行缺席两轮 → miss 退出，冻结收敛=−1×(−3−12)=+15bps → +$1.5
 	for i := 0; i < 2; i++ {
-		if _, exited, err := StepPaperCfdCarry(ctx, s, nil, time.Now(), d410Opts()); err != nil {
+		if _, exited, err := StepPaperCfdCarry(ctx, s, nil, time.Now(), d410Opts(), nil); err != nil {
 			t.Fatalf("miss step %d: %v", i, err)
 		} else if i == 1 && exited != 1 {
 			t.Fatalf("want exited=1, got %d", exited)
@@ -217,7 +217,7 @@ func TestD410_GuaranteedSlot(t *testing.T) {
 	for i, sym := range []string{"D410A", "D410B", "D410E", "D410F", "D410H", "D410I"} {
 		rows = append(rows, d374Row(sym, "277842155", "binance", "long_cfd_short_perp", 20.0-float64(i), ""))
 	}
-	opened, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts())
+	opened, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil)
 	if err != nil {
 		t.Fatalf("step: %v", err)
 	}
@@ -240,15 +240,15 @@ func TestD410_GuaranteedFlap(t *testing.T) {
 	d410SeedCombo(t, s, "D410FUSD", "3001157:mt5", "D410FUSDT", "okx:perp", false)
 	rows := []UniverseRow{d374Row("D410F", "3001157", "okx", "long_cfd_short_perp", 2.0, "")}
 	// 开 → 退（miss×2）→ 下轮保底在冷却内不得重开
-	if _, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts()); err != nil {
+	if _, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil); err != nil {
 		t.Fatalf("open: %v", err)
 	}
 	for i := 0; i < 2; i++ {
-		if _, _, err := StepPaperCfdCarry(ctx, s, nil, time.Now(), d410Opts()); err != nil {
+		if _, _, err := StepPaperCfdCarry(ctx, s, nil, time.Now(), d410Opts(), nil); err != nil {
 			t.Fatalf("exit %d: %v", i, err)
 		}
 	}
-	opened, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts())
+	opened, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil)
 	if err != nil {
 		t.Fatalf("reopen step: %v", err)
 	}
@@ -259,7 +259,7 @@ func TestD410_GuaranteedFlap(t *testing.T) {
 	if _, err := s.Pool().Exec(ctx, `UPDATE paper_spot_carry SET exit_ts=now()-interval '25 hours' WHERE symbol='D410F'`); err != nil {
 		t.Fatal(err)
 	}
-	opened, _, err = StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts())
+	opened, _, err = StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil)
 	if err != nil || len(opened) != 1 {
 		t.Fatalf("过窗应重开：opened=%v err=%v", opened, err)
 	}
@@ -270,7 +270,7 @@ func TestD410_GuaranteedDoubleCex(t *testing.T) {
 	s := d410Store(t)
 	ctx := context.Background()
 	d410SeedCombo(t, s, "D410DUSDT", "binance:perp", "D410DUSDT", "okx:perp", false)
-	opened, _, err := StepPaperCfdCarry(ctx, s, nil, time.Now(), d410Opts())
+	opened, _, err := StepPaperCfdCarry(ctx, s, nil, time.Now(), d410Opts(), nil)
 	if err != nil || len(opened) != 0 {
 		t.Fatalf("双 CEX 应跳过：opened=%v err=%v", opened, err)
 	}
@@ -283,7 +283,7 @@ func TestD410_GuaranteedMissWarn(t *testing.T) {
 	ctx := context.Background()
 	d410SeedCombo(t, s, "ZZZUSD", "3001157:mt5", "ZZZUSDT", "okx:perp", false)
 	for i := 0; i < 2; i++ {
-		if _, _, err := StepPaperCfdCarry(ctx, s, nil, time.Now(), d410Opts()); err != nil {
+		if _, _, err := StepPaperCfdCarry(ctx, s, nil, time.Now(), d410Opts(), nil); err != nil {
 			t.Fatalf("step %d: %v", i, err)
 		}
 	}

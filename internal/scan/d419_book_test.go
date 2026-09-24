@@ -37,7 +37,7 @@ func TestD419_MissGradingUniverseAbsent(t *testing.T) {
 	s := d410Store(t)
 	ctx := context.Background()
 	d410SeedCombo(t, s, "D419AUSD", "3001157:mt5", "D419AUSDT", "okx:perp", false)
-	if _, _, err := StepPaperCfdCarry(ctx, s, nil, time.Now(), d410Opts()); err != nil {
+	if _, _, err := StepPaperCfdCarry(ctx, s, nil, time.Now(), d410Opts(), nil); err != nil {
 		t.Fatalf("step: %v", err)
 	}
 	if n := d419AlertCount(t, s, "universe 未产行"); n != 1 {
@@ -54,7 +54,7 @@ func TestD419_MissGradingDirty(t *testing.T) {
 	ctx := context.Background()
 	d410SeedCombo(t, s, "D419BUSD", "3001157:mt5", "D419BUSDT", "okx:perp", false)
 	rows := []UniverseRow{d374Row("D419B", "3001157", "okx", "long_cfd_short_perp", 0, "suspect: funding 107.8%")}
-	opened, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts())
+	opened, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil)
 	if err != nil {
 		t.Fatalf("step: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestD419_MissGradingClean(t *testing.T) {
 	ctx := context.Background()
 	d410SeedCombo(t, s, "D419CUSD", "3001157:mt5", "D419CUSDT", "okx:perp", false)
 	rows := []UniverseRow{d374Row("D419C", "3001157", "okx", "long_cfd_short_perp", 2.0, "")}
-	opened, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts())
+	opened, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil)
 	if err != nil || len(opened) != 1 {
 		t.Fatalf("干净行应开仓：opened=%v err=%v", opened, err)
 	}
@@ -87,7 +87,7 @@ func TestD419_MonitorBookAbsent(t *testing.T) {
 	ctx := context.Background()
 	d410SeedCombo(t, s, "D419DUSD", "3001157:mt5", "D419DUSDT", "okx:perp", false)
 	rows := []UniverseRow{d374Row("D419D", "3001157", "okx", "long_cfd_short_perp", 2.0, "")}
-	opened, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts())
+	opened, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil)
 	if err != nil || len(opened) != 1 {
 		t.Fatalf("簿缺席不阻断开仓：opened=%v err=%v", opened, err)
 	}
@@ -104,7 +104,7 @@ func TestD419_MonitorBookPresent(t *testing.T) {
 	// pair 键=消费端口径 paperCfdPairKey("D419E")="D419EUSDT-D419E"；venue=okx:perp×3001157:mt5
 	d410SeedMonitor(t, s, "D419EUSDT-D419E", time.Now().Add(-time.Minute), 5.0)
 	rows := []UniverseRow{d374Row("D419E", "3001157", "okx", "long_cfd_short_perp", 2.0, "")}
-	if _, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts()); err != nil {
+	if _, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil); err != nil {
 		t.Fatalf("step: %v", err)
 	}
 	if n := d419AlertCount(t, s, "monitor 簿缺席"); n != 0 {
@@ -118,7 +118,7 @@ func TestD419_MonitorBookQueryErr(t *testing.T) {
 	ctx := context.Background()
 	d410SeedCombo(t, s, "D419FUSD", "3001157:mt5", "D419FUSDT", "okx:perp", false)
 	rows := []UniverseRow{d374Row("D419F", "3001157", "okx", "long_cfd_short_perp", 2.0, "")}
-	opened, _, err := StepPaperCfdCarry(ctx, d419ErrStore{s}, rows, time.Now(), d410Opts())
+	opened, _, err := StepPaperCfdCarry(ctx, d419ErrStore{s}, rows, time.Now(), d410Opts(), nil)
 	if err != nil || len(opened) != 1 {
 		t.Fatalf("查询错应 fail-open 且开仓仍进行：opened=%v err=%v", opened, err)
 	}

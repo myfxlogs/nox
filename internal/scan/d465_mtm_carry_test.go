@@ -189,12 +189,12 @@ func TestD465_StepOpenAccrueExit(t *testing.T) {
 	es := NewEntryStreak()
 	// 前两轮 streak 未满不开。
 	for i := 0; i < PaperEntryStreakRounds-1; i++ {
-		opened, _, err := sc.StepPaperMtmCarry(ctx, st, es, now)
+		opened, _, err := sc.StepPaperMtmCarry(ctx, st, es, now, nil)
 		if err != nil || len(opened) != 0 {
 			t.Fatalf("round %d opened=%v err=%v want none", i, opened, err)
 		}
 	}
-	opened, _, err := sc.StepPaperMtmCarry(ctx, st, es, now)
+	opened, _, err := sc.StepPaperMtmCarry(ctx, st, es, now, nil)
 	if err != nil || len(opened) != 1 {
 		t.Fatalf("open: opened=%v err=%v", opened, err)
 	}
@@ -214,7 +214,7 @@ func TestD465_StepOpenAccrueExit(t *testing.T) {
 	}
 	// 累积：下一轮（1 天后）net 仍 7.3 → accrued>0、streak=0。
 	later := now.Add(24 * time.Hour)
-	opened, exited, err := sc.StepPaperMtmCarry(ctx, st, es, later)
+	opened, exited, err := sc.StepPaperMtmCarry(ctx, st, es, later, nil)
 	if err != nil || exited != 0 {
 		t.Fatalf("accrue round exited=%d err=%v", exited, err)
 	}
@@ -232,7 +232,7 @@ func TestD465_StepOpenAccrueExit(t *testing.T) {
 		mappings: mtmFixture().mappings,
 	})
 	for i := 0; i < paperExitStreakRounds; i++ {
-		_, exited, err = sc2.StepPaperMtmCarry(ctx, st, NewEntryStreak(), later.Add(time.Duration(i)*time.Hour))
+		_, exited, err = sc2.StepPaperMtmCarry(ctx, st, NewEntryStreak(), later.Add(time.Duration(i)*time.Hour), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -252,7 +252,7 @@ func TestD465_StepNullAndCap(t *testing.T) {
 	es := NewEntryStreak()
 	var opened []string
 	for i := 0; i < PaperEntryStreakRounds; i++ {
-		o, _, err := sc.StepPaperMtmCarry(ctx, st, es, now)
+		o, _, err := sc.StepPaperMtmCarry(ctx, st, es, now, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -265,7 +265,7 @@ func TestD465_StepNullAndCap(t *testing.T) {
 		t.Fatal("tick 缺时 basis/fee 应双 NULL")
 	}
 	// 去重：同键 active 行在 → 再跑不开仓。
-	o, _, err := sc.StepPaperMtmCarry(ctx, st, es, now)
+	o, _, err := sc.StepPaperMtmCarry(ctx, st, es, now, nil)
 	if err != nil || len(o) != 0 {
 		t.Fatalf("dedupe: opened=%v err=%v", o, err)
 	}
@@ -277,7 +277,7 @@ func TestD465_StepNullAndCap(t *testing.T) {
 			Side: "long_a_short_b", Structure: "cfd_cfd", Status: "active", EntryTs: now,
 		}
 	}
-	o, _, err = sc.StepPaperMtmCarry(ctx, st2, NewEntryStreak(), now)
+	o, _, err = sc.StepPaperMtmCarry(ctx, st2, NewEntryStreak(), now, nil)
 	if err != nil || len(o) != 0 {
 		t.Fatalf("cap: opened=%v err=%v", o, err)
 	}
@@ -292,7 +292,7 @@ func TestD465_StepNullAndCap(t *testing.T) {
 		mappings: mtmFixture().mappings,
 	})
 	st3 := newFakeMtmPaperStore()
-	o, _, err = scFloor.StepPaperMtmCarry(ctx, st3, NewEntryStreak(), now)
+	o, _, err = scFloor.StepPaperMtmCarry(ctx, st3, NewEntryStreak(), now, nil)
 	if err != nil || len(o) != 0 || len(st3.rows) != 0 {
 		t.Fatalf("floor: opened=%v rows=%d err=%v", o, len(st3.rows), err)
 	}

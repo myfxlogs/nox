@@ -177,19 +177,39 @@ func ResolveGraduationCanonicals(symbol, mtVenue string, platform int, mappings 
 	}, nil
 }
 
+// flagVenueSet D-463返修：venue 字段腿级展开（全串+×拆分+mtVenue）——
+// blocked 闸与 warn 透出同一口径，腿级旗标在组合串上不致哑火。
+func flagVenueSet(venue string, mtVenue *string) []string {
+	venues := append([]string{venue}, strings.Split(venue, "×")...)
+	if mtVenue != nil && *mtVenue != "" {
+		venues = append(venues, *mtVenue)
+	}
+	return venues
+}
+
+// blockedFlagHit D-463返修：腿级展开任一 venue×symbol 命中 blocked → 返回该旗
+// （nil=无旗/未命中）。纸面三轨入口共用——KB 旗标以单腿 venue 落键，组合串必须展开查。
+func blockedFlagHit(venue, symbol string, mtVenue *string, flags map[string]pgstore.VenueSymbolFlag) *pgstore.VenueSymbolFlag {
+	if len(flags) == 0 {
+		return nil
+	}
+	for _, v := range flagVenueSet(venue, mtVenue) {
+		if f, ok := flags[pgstore.FlagKey(v, symbol)]; ok && f.Level == "blocked" {
+			return &f
+		}
+	}
+	return nil
+}
+
 // graduationFlagWarn D-463 S2：行 venue 段（×拆分含全串）+MtVenue 任一 warn 旗标
 // 命中 → "⚠"+reason 拼接串（多命中分号连；NULL=无旗）。blocked 不到此层（纸面已拦）。
 func graduationFlagWarn(p pgstore.PaperSpotCarry, flags map[string]pgstore.VenueSymbolFlag) *string {
 	if len(flags) == 0 {
 		return nil
 	}
-	venues := append([]string{p.Venue}, strings.Split(p.Venue, "×")...)
-	if p.MtVenue != nil && *p.MtVenue != "" {
-		venues = append(venues, *p.MtVenue)
-	}
 	var reasons []string
 	seen := map[string]bool{}
-	for _, v := range venues {
+	for _, v := range flagVenueSet(p.Venue, p.MtVenue) {
 		if f, ok := flags[pgstore.FlagKey(v, p.Symbol)]; ok && f.Level == "warn" && !seen[f.Reason] {
 			reasons = append(reasons, "⚠"+f.Reason)
 			seen[f.Reason] = true

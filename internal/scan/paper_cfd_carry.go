@@ -61,7 +61,9 @@ var cfdStructures = map[string]bool{"long_cfd_short_perp": true, "short_cfd_long
 // basis NULL 不臆造（可算不可毕业）。保底段先行：enabled∧非 simulated 白名单组合不套 net
 // 下限开仓（不占 PaperCfdMaxActive 槽），flap 冷却按 max(exit_ts) 重构，双 CEX 组合跳过，
 // 宇宙行缺席 warn 节流每轮至多一条。
-func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, now time.Time, opts PaperCfdOpts) (opened []string, exited int, err error) {
+// flags：D-463返修R2——blocked 旗标腿级展开硬拦全部入口（保底槽+top-N 同口径，
+// warn 不拦）；wire 每轮 ListActiveFlags 一次传入，nil=无旗放行。
+func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, now time.Time, opts PaperCfdOpts, flags map[string]pgstore.VenueSymbolFlag) (opened []string, exited int, err error) {
 	active, err := st.ListActivePaperSpotCarry(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("cfd paper step: list active: %w", err)
@@ -128,6 +130,10 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 		if _, ok := activeByKey[sl.key]; ok {
 			continue
 		}
+		if f := blockedFlagHit(sl.venueCombo, sl.symbol, &sl.mtVenue, flags); f != nil {
+			log.Printf("[cfd paper] blocked flag 拦截保底槽: %s（%s@%s|%s）", sl.key, f.Reason, f.Venue, f.Symbol)
+			continue
+		}
 		if guaranteedActive >= opts.AuthorizedMaxActive {
 			break
 		}
@@ -184,6 +190,10 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 		}
 		venueCombo := r.MtVenue + "×" + r.CexVenue
 		if _, ok := activeByKey[venueCombo+"|"+r.Canonical]; ok {
+			continue
+		}
+		if f := blockedFlagHit(venueCombo, r.Canonical, &r.MtVenue, flags); f != nil {
+			log.Printf("[cfd paper] blocked flag 拦截: %s|%s（%s@%s|%s）", venueCombo, r.Canonical, f.Reason, f.Venue, f.Symbol)
 			continue
 		}
 		cands = append(cands, cfdCand{venueCombo: venueCombo, r: r})

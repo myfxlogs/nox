@@ -8,6 +8,7 @@ package scan
 import (
 	"context"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"time"
@@ -135,8 +136,10 @@ func mtmTickLegs(p mtmPair) (lv, ls, sv, ss string) {
 // 键=venuePair|canonical ∧ 单键 active 去重 ∧ 独立 cap=10，候选按 net 降序）②累积
 // （每轮重算当前 net_ann 套 Accrue 同族公式）③退出（net<1% 连续 2 轮→normalized；
 // age≥7d→age_7d 强评；demo 行只累积不自动退）。wire_scan 在 cfd 步进后同轮串行调用。
+// flags：D-463返修R2——blocked 旗标腿级展开硬拦开仓入口（venue=A×B 双腿均在展开集）；
+// wire 每轮 ListActiveFlags 一次传入，nil=无旗放行。
 func (sc *CarryUniverseScanner) StepPaperMtmCarry(ctx context.Context, st PaperStore,
-	entryStreak *EntryStreak, now time.Time) (opened []string, exited int, err error) {
+	entryStreak *EntryStreak, now time.Time, flags map[string]pgstore.VenueSymbolFlag) (opened []string, exited int, err error) {
 	longF, shortF, tmKnown, aliases, err := sc.loadMtSwapInputs(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("mtm paper step: %w", err)
@@ -172,6 +175,10 @@ func (sc *CarryUniverseScanner) StepPaperMtmCarry(ctx context.Context, st PaperS
 			continue
 		}
 		if _, dup := activeByKey[p.venue()+"|"+c]; dup {
+			continue
+		}
+		if f := blockedFlagHit(p.venue(), c, nil, flags); f != nil {
+			log.Printf("[mtm paper] blocked flag 拦截: %s（%s@%s|%s）", p.key(), f.Reason, f.Venue, f.Symbol)
 			continue
 		}
 		pairs = append(pairs, p)
