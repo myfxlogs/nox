@@ -238,16 +238,19 @@ func TestWSRoutePrefixes(t *testing.T) {
 	fstream := srv("fstream")
 	demoFStream := srv("demofws")
 	spotWS := srv("spotws")
+	wsapi := srv("wsapi")
 	defer gateWS.Close()
 	defer fstream.Close()
 	defer demoFStream.Close()
 	defer spotWS.Close()
+	defer wsapi.Close()
 
 	cfg := Config{Upstreams: []Upstream{
 		{Prefix: "/ws", Target: fstream.URL},
 		{Prefix: "/v4/ws", Target: gateWS.URL},
 		{Prefix: "/demofws", Target: demoFStream.URL, StripPrefix: true},
 		{Prefix: "/spotws", Target: spotWS.URL, StripPrefix: true},
+		{Prefix: "/wsapi", Target: wsapi.URL, StripPrefix: true},
 		{Prefix: "/api", Target: fstream.URL}, // 干扰项：/ws 不得被 /api 抢
 	}}
 	h, err := newHandler("tok", cfg)
@@ -297,6 +300,13 @@ func TestWSRoutePrefixes(t *testing.T) {
 	if h := <-seen["spotws"]; h.path != "/ws/keyY" {
 		t.Fatalf("spotws 应 strip 为 /ws/<key>，got path=%q", h.path)
 	}
+	// spot 用户流 ws-api 控制面：strip /wsapi → /ws-api/v3。
+	if got := get("/wsapi/ws-api/v3"); got != "wsapi" {
+		t.Fatalf("/wsapi 应命中 ws-api 上游，got %q", got)
+	}
+	if h := <-seen["wsapi"]; h.path != "/ws-api/v3" {
+		t.Fatalf("wsapi 应 strip 为 /ws-api/v3，got path=%q", h.path)
+	}
 }
 
 // 默认配置包含 OKX + Gate + Binance 全上游。
@@ -323,6 +333,7 @@ func TestDefaultConfigHasAllCEX(t *testing.T) {
 		"/ws":      "https://fstream.binance.com",
 		"/demofws": "https://demo-fstream.binance.com",
 		"/spotws":  "https://stream.binance.com:9443",
+		"/wsapi":   "https://ws-api.binance.com",
 	} {
 		if prefixes[p] != want {
 			t.Errorf("默认配置缺 WS 路由 %s: got %q", p, prefixes[p])
