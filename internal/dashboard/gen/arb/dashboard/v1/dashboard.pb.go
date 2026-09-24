@@ -21054,6 +21054,7 @@ type CarryGraduationRow struct {
 	ComboId        *int64                 `protobuf:"varint,14,opt,name=combo_id,json=comboId,proto3,oneof" json:"combo_id,omitempty"`
 	VenueGaps      []string               `protobuf:"bytes,15,rep,name=venue_gaps,json=venueGaps,proto3" json:"venue_gaps,omitempty"`                   // approve 时算的 venue env 缺口（pending 即时算；decided 回读快照）
 	NetAllInUsd    *float64               `protobuf:"fixed64,16,opt,name=net_all_in_usd,json=netAllInUsd,proto3,oneof" json:"net_all_in_usd,omitempty"` // D-410 S5：全账净额（accrued−est_fee+convergence；缺账行 NULL）
+	FlagWarn       *string                `protobuf:"bytes,17,opt,name=flag_warn,json=flagWarn,proto3,oneof" json:"flag_warn,omitempty"`                // D-463 S3：warn 旗标命中透出（⚠+reason；无旗=NULL）
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -21198,6 +21199,13 @@ func (x *CarryGraduationRow) GetNetAllInUsd() float64 {
 		return *x.NetAllInUsd
 	}
 	return 0
+}
+
+func (x *CarryGraduationRow) GetFlagWarn() string {
+	if x != nil && x.FlagWarn != nil {
+		return *x.FlagWarn
+	}
+	return ""
 }
 
 type ListCarryGraduationsRequest struct {
@@ -21452,6 +21460,8 @@ type RejectCarryGraduationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	GraduationId  int64                  `protobuf:"varint,1,opt,name=graduation_id,json=graduationId,proto3" json:"graduation_id,omitempty"`
 	Note          string                 `protobuf:"bytes,2,opt,name=note,proto3" json:"note,omitempty"`
+	WriteFlag     bool                   `protobuf:"varint,3,opt,name=write_flag,json=writeFlag,proto3" json:"write_flag,omitempty"` // D-463 S4：拒绝理由回写 fin_venue_symbol_flags
+	FlagLevel     string                 `protobuf:"bytes,4,opt,name=flag_level,json=flagLevel,proto3" json:"flag_level,omitempty"`  // warn（默认）/ blocked（业主显式二级）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -21496,6 +21506,20 @@ func (x *RejectCarryGraduationRequest) GetGraduationId() int64 {
 func (x *RejectCarryGraduationRequest) GetNote() string {
 	if x != nil {
 		return x.Note
+	}
+	return ""
+}
+
+func (x *RejectCarryGraduationRequest) GetWriteFlag() bool {
+	if x != nil {
+		return x.WriteFlag
+	}
+	return false
+}
+
+func (x *RejectCarryGraduationRequest) GetFlagLevel() string {
+	if x != nil {
+		return x.FlagLevel
 	}
 	return ""
 }
@@ -23388,7 +23412,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\bholdings\x18\a \x03(\v2#.arb.dashboard.v1.CexFinanceHoldingR\bholdings\x126\n" +
 	"\x05flows\x18\b \x03(\v2 .arb.dashboard.v1.CexFinanceFlowR\x05flows\"X\n" +
 	"\x15GetCexFinanceResponse\x12?\n" +
-	"\baccounts\x18\x01 \x03(\v2#.arb.dashboard.v1.CexAccountFinanceR\baccounts\"\xba\x04\n" +
+	"\baccounts\x18\x01 \x03(\v2#.arb.dashboard.v1.CexAccountFinanceR\baccounts\"\xea\x04\n" +
 	"\x12CarryGraduationRow\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x19\n" +
 	"\bpaper_id\x18\x02 \x01(\x03R\apaperId\x12\x14\n" +
@@ -23410,11 +23434,14 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\bcombo_id\x18\x0e \x01(\x03H\x02R\acomboId\x88\x01\x01\x12\x1d\n" +
 	"\n" +
 	"venue_gaps\x18\x0f \x03(\tR\tvenueGaps\x12(\n" +
-	"\x0enet_all_in_usd\x18\x10 \x01(\x01H\x03R\vnetAllInUsd\x88\x01\x01B\v\n" +
+	"\x0enet_all_in_usd\x18\x10 \x01(\x01H\x03R\vnetAllInUsd\x88\x01\x01\x12 \n" +
+	"\tflag_warn\x18\x11 \x01(\tH\x04R\bflagWarn\x88\x01\x01B\v\n" +
 	"\t_mt_venueB\x13\n" +
 	"\x11_last_funding_annB\v\n" +
 	"\t_combo_idB\x11\n" +
-	"\x0f_net_all_in_usd\"\x1d\n" +
+	"\x0f_net_all_in_usdB\f\n" +
+	"\n" +
+	"_flag_warn\"\x1d\n" +
 	"\x1bListCarryGraduationsRequest\"X\n" +
 	"\x1cListCarryGraduationsResponse\x128\n" +
 	"\x04rows\x18\x01 \x03(\v2$.arb.dashboard.v1.CarryGraduationRowR\x04rows\"\xfb\x01\n" +
@@ -23436,10 +23463,14 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x0fautomap_summary\x18\x05 \x01(\tR\x0eautomapSummary\x12\x1f\n" +
 	"\vlink_report\x18\x06 \x01(\tR\n" +
 	"linkReportB\v\n" +
-	"\t_combo_id\"W\n" +
+	"\t_combo_id\"\x95\x01\n" +
 	"\x1cRejectCarryGraduationRequest\x12#\n" +
 	"\rgraduation_id\x18\x01 \x01(\x03R\fgraduationId\x12\x12\n" +
-	"\x04note\x18\x02 \x01(\tR\x04note\"E\n" +
+	"\x04note\x18\x02 \x01(\tR\x04note\x12\x1d\n" +
+	"\n" +
+	"write_flag\x18\x03 \x01(\bR\twriteFlag\x12\x1d\n" +
+	"\n" +
+	"flag_level\x18\x04 \x01(\tR\tflagLevel\"E\n" +
 	"\x1dRejectCarryGraduationResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error*z\n" +
