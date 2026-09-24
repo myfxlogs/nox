@@ -75,22 +75,26 @@ func (s *Store) ListVenueMarginStatus(ctx context.Context) ([]VenueMarginStatus,
 }
 
 // MarginOpenLeg marginGuard 波动求和粒度：OPEN 仓 OPEN phase 腿 + canonical 锚。
+// Qty/FilledQty 分域口径（D-434）：qty=请求口径（MT=手数 / CEX=合约张数），
+// filled_qty=成交口径（MT=手数 / CEX=基础币）——单位折叠在消费侧（marginLegNotionalUSD），
+// SQL 侧不再折叠（CEX filled 基础币 × ct_val perLot 曾致 ~1000x 低估）。
 type MarginOpenLeg struct {
 	PositionID int64
 	OppID      string // positions.opportunity_id（canonical 由 combo.FromOppID 派生）
 	Venue      string // leg.Venue=venueKey（"3001157:mt5"/"okx:perp"）
 	Symbol     string // venue_symbol（ticks 查询键）
 	Side       string
-	Qty        float64 // EffectiveQty 语义（filled_qty 优先由 SQL 侧折叠）
-	Price      float64 // avg_fill_price → price_expected 回落
+	Qty        float64  // l.qty 请求口径
+	FilledQty  *float64 // l.filled_qty 成交口径（nil=未记录）
+	Price      float64  // avg_fill_price → price_expected 回落
 }
 
 // ListOpenLegsForMargin 全部 OPEN 仓 OPEN phase 腿（marginGuard 波动求和输入）。
-// qty/price 折叠在 SQL 侧（COALESCE），应用层零判断。
+// price 折叠在 SQL 侧（COALESCE）；qty/filled_qty 两列原样出，折叠在消费侧（D-434）。
 func (s *Store) ListOpenLegsForMargin(ctx context.Context) ([]MarginOpenLeg, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT l.position_id, COALESCE(p.opportunity_id,''), l.venue, l.symbol, l.side,
-			COALESCE(NULLIF(l.filled_qty,0), l.qty),
+			l.qty, l.filled_qty,
 			COALESCE(NULLIF(l.avg_fill_price,0), NULLIF(l.price_expected,0), 0)
 		FROM position_legs l JOIN positions p ON p.id = l.position_id
 		WHERE p.status='OPEN' AND l.phase='OPEN'`)
@@ -101,7 +105,7 @@ func (s *Store) ListOpenLegsForMargin(ctx context.Context) ([]MarginOpenLeg, err
 	var out []MarginOpenLeg
 	for rows.Next() {
 		var l MarginOpenLeg
-		if err := rows.Scan(&l.PositionID, &l.OppID, &l.Venue, &l.Symbol, &l.Side, &l.Qty, &l.Price); err != nil {
+		if err := rows.Scan(&l.PositionID, &l.OppID, &l.Venue, &l.Symbol, &l.Side, &l.Qty, &l.FilledQty, &l.Price); err != nil {
 			return nil, err
 		}
 		out = append(out, l)
