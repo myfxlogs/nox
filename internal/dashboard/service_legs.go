@@ -201,6 +201,11 @@ func (s *Service) floorToStepQty(venueKey, symbol string, qty float64) float64 {
 		return 0
 	}
 	result := floorToStep(qty, step)
+	if qty > 0 && result <= 0 {
+		// D-433：请求量>0 被取整抹零——归因=qty<step 低于 venue 最小张数（非未知品种）。
+		log.Printf("[exec] floorToStepQty cex %s %s qty=%.6f step=%.6f → 0 (qty<step 抹零，低于venue最小张数)", venueKey, symbol, qty, step)
+		return 0
+	}
 	log.Printf("[exec] floorToStepQty cex %s %s qty=%.6f step=%.6f → %.6f", venueKey, symbol, qty, step, result)
 	return result
 }
