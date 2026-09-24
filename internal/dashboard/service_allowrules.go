@@ -64,7 +64,12 @@ func fillRuleAcct(row *v1.AutotradeAllowRuleRow, venueKey string, a *v1.AccountI
 		updNil := a.GetUpdatedAt() == nil
 		if hasStream && (updNil || sa.FrameTime.After(a.GetUpdatedAt().AsTime())) {
 			// 流帧较新（Refresh 失败期/轮询间隙）：流值填入，online=true（帧在流=连接活）。
-			row.Balance, row.Equity, row.Currency = sa.Balance, sa.Equity, sa.Currency
+			// currency 流帧恒空（OrderUpdateSummary 无该字段）→回落 Refresh 的账户级币种（不变属性）。
+			row.Balance, row.Equity = sa.Balance, sa.Equity
+			row.Currency = sa.Currency
+			if row.Currency == "" {
+				row.Currency = a.GetCurrency()
+			}
 			row.Online = true
 			row.AcctUpdatedAt = timestamppb.New(sa.FrameTime)
 		} else {
