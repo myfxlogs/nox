@@ -94,6 +94,7 @@ func (b *BinanceUserWS) onOrderUpdate(o json.RawMessage) {
 // onAccountUpdate ACCOUNT_UPDATE → a.B USDT wb 落快照（src=binance_event）+ a.P 持仓全量替换缓存。
 func (b *BinanceUserWS) onAccountUpdate(ctx context.Context, a json.RawMessage) {
 	var acct struct {
+		M string `json:"m"` // D-469a S3：事件原因（FUNDING_FEE/DEPOSIT/WITHDRAW/ORDER…）
 		B []struct {
 			A  string `json:"a"`
 			WB string `json:"wb"`
@@ -126,6 +127,13 @@ func (b *BinanceUserWS) onAccountUpdate(ctx context.Context, a json.RawMessage) 
 				log.Printf("[binance-user-ws] insert snapshot: %v", err)
 			}
 		}
+	}
+	// D-469a S3：事件原因分派——funding_fee kick income，出入账 kick io（a.m 缺省不 kick）。
+	if b.hooks.OnFundingFee != nil && acct.M == "FUNDING_FEE" {
+		b.hooks.OnFundingFee()
+	}
+	if b.hooks.OnIO != nil && (acct.M == "DEPOSIT" || acct.M == "WITHDRAW") {
+		b.hooks.OnIO()
 	}
 	if len(acct.P) == 0 {
 		return

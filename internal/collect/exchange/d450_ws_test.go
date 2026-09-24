@@ -319,7 +319,7 @@ func TestBinanceUserWSE2E(t *testing.T) {
 	wsSrv := newWSFakeServer(t)
 	dialed := make(chan string, 8)
 
-	b := NewBinanceUserWS("K", "S", rest.URL, "perp", "binance:perp", false, nil, nil, NewOrderEventCache(), NewPositionEventCache())
+	b := NewBinanceUserWS("K", "S", rest.URL, "perp", "binance:perp", false, nil, nil, NewOrderEventCache(), NewPositionEventCache(), BinanceUserHooks{})
 	evts := newFakeEventSink()
 	snaps := newFakeSnapSink()
 	b.events, b.sink = evts, snaps
@@ -536,7 +536,7 @@ func TestBinanceDemoSnapshotGuard(t *testing.T) {
 	defer rest.Close()
 	wsSrv := newWSFakeServer(t)
 
-	b := NewBinanceUserWS("K", "S", rest.URL, "perp", "binance:perp#25", true, nil, nil, NewOrderEventCache(), NewPositionEventCache())
+	b := NewBinanceUserWS("K", "S", rest.URL, "perp", "binance:perp#25", true, nil, nil, NewOrderEventCache(), NewPositionEventCache(), BinanceUserHooks{})
 	snaps := newFakeSnapSink()
 	evts := newFakeEventSink()
 	b.sink, b.events, b.rest = snaps, evts, rest.Client()
@@ -583,7 +583,7 @@ func TestBinanceListenKeyExpiredReconnect(t *testing.T) {
 	wsSrv := newWSFakeServer(t)
 	dialed := make(chan string, 8)
 
-	b := NewBinanceUserWS("K", "S", rest.URL, "perp", "binance:perp", false, nil, nil, NewOrderEventCache(), NewPositionEventCache())
+	b := NewBinanceUserWS("K", "S", rest.URL, "perp", "binance:perp", false, nil, nil, NewOrderEventCache(), NewPositionEventCache(), BinanceUserHooks{})
 	b.rest = rest.Client()
 	b.dial = func(ctx context.Context, wsURL string) (*websocket.Conn, error) {
 		dialed <- wsURL
