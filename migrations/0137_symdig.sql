@@ -8,10 +8,8 @@ CREATE TABLE IF NOT EXISTS fin_symbol_aliases (
 	note        text NOT NULL DEFAULT '',
 	created_at  timestamptz NOT NULL DEFAULT now()
 );
-INSERT INTO fin_symbol_aliases (alias, canonical, note) VALUES
-	('GOLD', 'XAU', 'seed-example'),
-	('GER40', 'DE30', 'seed-example')
-ON CONFLICT (alias) DO NOTHING;
+-- 别名数据=业主/运维域人工维护（D-464 R2：删除格式示例种子行——
+-- GOLD→XAU 等 seed 若误入生产语义会伪配；真实别名经复审入库）。
 
 -- fin_symdig_findings：每轮 diff 快照（run_ts 同轮同值）。klass∈
 -- {paired,unpaired,disabled,unmapped_unknown,mispaired}；payload=证据 JSONB。

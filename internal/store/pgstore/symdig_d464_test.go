@@ -10,12 +10,16 @@ import (
 func TestSymdigStore_D464(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	for _, tbl := range []string{"fin_symdig_findings", "fin_carry_universe"} {
+	for _, tbl := range []string{"fin_symdig_findings", "fin_carry_universe", "fin_symbol_aliases"} {
 		if _, err := s.pool.Exec(ctx, "TRUNCATE "+tbl+" CASCADE"); err != nil {
 			t.Fatal(err)
 		}
 	}
-	// alias 表含种子两行（GOLD/GER40 seed-example）——读出应含。
+	// R2：种子行已删——测内自插两行（GOLD→XAU + PLATINUM→XPT upsert）。
+	if _, err := s.pool.Exec(ctx,
+		`INSERT INTO fin_symbol_aliases (alias,canonical,note) VALUES ('GOLD','XAU','d464test')`); err != nil {
+		t.Fatal(err)
+	}
 	al, err := s.ListSymbolAliases(ctx)
 	if err != nil {
 		t.Fatal(err)
