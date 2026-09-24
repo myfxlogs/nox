@@ -54,6 +54,8 @@ type PaperStore interface {
 	LatestPaperExitTs(ctx context.Context, venue, symbol string) (*time.Time, error)
 	// D-410 S4：保底槽宇宙行缺席 warn 节流（禁 `_ =` 吞错，cashflow-write-error 同族条款）。
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
+	// D-465：mt×mt 轨 entry_basis/费用 tick 读面（*pgstore.Store 原生实现）。
+	TicksWindow(ctx context.Context, venue, symbol string, since time.Time) ([]pgstore.TickRow, error)
 }
 
 // StepPaperSpotCarry 每轮扫描后调用：①开仓（20≤net≤300 ∧ vol24h≥$10M ∧ 持续≥48h ∧
