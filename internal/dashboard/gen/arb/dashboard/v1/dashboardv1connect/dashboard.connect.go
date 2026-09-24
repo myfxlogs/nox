@@ -265,6 +265,9 @@ const (
 	// DashboardServiceAppendAnalystNoteProcedure is the fully-qualified name of the DashboardService's
 	// AppendAnalystNote RPC.
 	DashboardServiceAppendAnalystNoteProcedure = "/arb.dashboard.v1.DashboardService/AppendAnalystNote"
+	// DashboardServiceGenerateKbReportProcedure is the fully-qualified name of the DashboardService's
+	// GenerateKbReport RPC.
+	DashboardServiceGenerateKbReportProcedure = "/arb.dashboard.v1.DashboardService/GenerateKbReport"
 	// DashboardServiceGetAiSettingsProcedure is the fully-qualified name of the DashboardService's
 	// GetAiSettings RPC.
 	DashboardServiceGetAiSettingsProcedure = "/arb.dashboard.v1.DashboardService/GetAiSettings"
@@ -459,6 +462,8 @@ type DashboardServiceClient interface {
 	// 分析员（D-091 前端分析员，server streaming + 收件箱 append）
 	AskAnalyst(context.Context, *connect.Request[v1.AskAnalystRequest]) (*connect.ServerStreamForClient[v1.AskAnalystResponse], error)
 	AppendAnalystNote(context.Context, *connect.Request[v1.AppendAnalystNoteRequest]) (*connect.Response[v1.AppendAnalystNoteResponse], error)
+	// D-442 S4：KB 元分析报告手动补跑（周 ticker 之外的调试/验证入口）
+	GenerateKbReport(context.Context, *connect.Request[v1.GenerateKbReportRequest]) (*connect.Response[v1.GenerateKbReportResponse], error)
 	// D-091 返修② R3：AI 配置 DB 化（前端可配，Get 掩码/Set 空 key 不覆盖）
 	GetAiSettings(context.Context, *connect.Request[v1.GetAiSettingsRequest]) (*connect.Response[v1.GetAiSettingsResponse], error)
 	SetAiSettings(context.Context, *connect.Request[v1.SetAiSettingsRequest]) (*connect.Response[v1.SetAiSettingsResponse], error)
@@ -982,6 +987,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("AppendAnalystNote")),
 			connect.WithClientOptions(opts...),
 		),
+		generateKbReport: connect.NewClient[v1.GenerateKbReportRequest, v1.GenerateKbReportResponse](
+			httpClient,
+			baseURL+DashboardServiceGenerateKbReportProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("GenerateKbReport")),
+			connect.WithClientOptions(opts...),
+		),
 		getAiSettings: connect.NewClient[v1.GetAiSettingsRequest, v1.GetAiSettingsResponse](
 			httpClient,
 			baseURL+DashboardServiceGetAiSettingsProcedure,
@@ -1233,6 +1244,7 @@ type dashboardServiceClient struct {
 	setWatchlist              *connect.Client[v1.SetWatchlistRequest, v1.SetWatchlistResponse]
 	askAnalyst                *connect.Client[v1.AskAnalystRequest, v1.AskAnalystResponse]
 	appendAnalystNote         *connect.Client[v1.AppendAnalystNoteRequest, v1.AppendAnalystNoteResponse]
+	generateKbReport          *connect.Client[v1.GenerateKbReportRequest, v1.GenerateKbReportResponse]
 	getAiSettings             *connect.Client[v1.GetAiSettingsRequest, v1.GetAiSettingsResponse]
 	setAiSettings             *connect.Client[v1.SetAiSettingsRequest, v1.SetAiSettingsResponse]
 	getRepoConfig             *connect.Client[v1.GetRepoConfigRequest, v1.GetRepoConfigResponse]
@@ -1653,6 +1665,11 @@ func (c *dashboardServiceClient) AppendAnalystNote(ctx context.Context, req *con
 	return c.appendAnalystNote.CallUnary(ctx, req)
 }
 
+// GenerateKbReport calls arb.dashboard.v1.DashboardService.GenerateKbReport.
+func (c *dashboardServiceClient) GenerateKbReport(ctx context.Context, req *connect.Request[v1.GenerateKbReportRequest]) (*connect.Response[v1.GenerateKbReportResponse], error) {
+	return c.generateKbReport.CallUnary(ctx, req)
+}
+
 // GetAiSettings calls arb.dashboard.v1.DashboardService.GetAiSettings.
 func (c *dashboardServiceClient) GetAiSettings(ctx context.Context, req *connect.Request[v1.GetAiSettingsRequest]) (*connect.Response[v1.GetAiSettingsResponse], error) {
 	return c.getAiSettings.CallUnary(ctx, req)
@@ -1901,6 +1918,8 @@ type DashboardServiceHandler interface {
 	// 分析员（D-091 前端分析员，server streaming + 收件箱 append）
 	AskAnalyst(context.Context, *connect.Request[v1.AskAnalystRequest], *connect.ServerStream[v1.AskAnalystResponse]) error
 	AppendAnalystNote(context.Context, *connect.Request[v1.AppendAnalystNoteRequest]) (*connect.Response[v1.AppendAnalystNoteResponse], error)
+	// D-442 S4：KB 元分析报告手动补跑（周 ticker 之外的调试/验证入口）
+	GenerateKbReport(context.Context, *connect.Request[v1.GenerateKbReportRequest]) (*connect.Response[v1.GenerateKbReportResponse], error)
 	// D-091 返修② R3：AI 配置 DB 化（前端可配，Get 掩码/Set 空 key 不覆盖）
 	GetAiSettings(context.Context, *connect.Request[v1.GetAiSettingsRequest]) (*connect.Response[v1.GetAiSettingsResponse], error)
 	SetAiSettings(context.Context, *connect.Request[v1.SetAiSettingsRequest]) (*connect.Response[v1.SetAiSettingsResponse], error)
@@ -2420,6 +2439,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("AppendAnalystNote")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceGenerateKbReportHandler := connect.NewUnaryHandler(
+		DashboardServiceGenerateKbReportProcedure,
+		svc.GenerateKbReport,
+		connect.WithSchema(dashboardServiceMethods.ByName("GenerateKbReport")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceGetAiSettingsHandler := connect.NewUnaryHandler(
 		DashboardServiceGetAiSettingsProcedure,
 		svc.GetAiSettings,
@@ -2746,6 +2771,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceAskAnalystHandler.ServeHTTP(w, r)
 		case DashboardServiceAppendAnalystNoteProcedure:
 			dashboardServiceAppendAnalystNoteHandler.ServeHTTP(w, r)
+		case DashboardServiceGenerateKbReportProcedure:
+			dashboardServiceGenerateKbReportHandler.ServeHTTP(w, r)
 		case DashboardServiceGetAiSettingsProcedure:
 			dashboardServiceGetAiSettingsHandler.ServeHTTP(w, r)
 		case DashboardServiceSetAiSettingsProcedure:
@@ -3121,6 +3148,10 @@ func (UnimplementedDashboardServiceHandler) AskAnalyst(context.Context, *connect
 
 func (UnimplementedDashboardServiceHandler) AppendAnalystNote(context.Context, *connect.Request[v1.AppendAnalystNoteRequest]) (*connect.Response[v1.AppendAnalystNoteResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AppendAnalystNote is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) GenerateKbReport(context.Context, *connect.Request[v1.GenerateKbReportRequest]) (*connect.Response[v1.GenerateKbReportResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GenerateKbReport is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GetAiSettings(context.Context, *connect.Request[v1.GetAiSettingsRequest]) (*connect.Response[v1.GetAiSettingsResponse], error) {
