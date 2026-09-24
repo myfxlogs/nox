@@ -40,6 +40,10 @@ type fakeDeps struct {
 	markRetryableCount int                    // MarkSettlementStatsRetryable 调用次数
 	lastSettlementRow  *pgstore.SettlementRow // 捕获 InsertSettlement 收到的 row
 	insertAlertMsgs    []string               // D-268：InsertAlert 捕获的 level:message 列表（spy）
+	// D-438 字段
+	gotHasFundingLeg bool // SumCashflowsNetForSettle 收到的 hasFundingLeg
+	gotFundingDue    bool // SumCashflowsNetForSettle 收到的 fundingDue
+	forSettleCalls   int  // SumCashflowsNetForSettle 调用次数
 }
 
 func (f *fakeDeps) GetPosition(ctx context.Context, id int64) (*pgstore.Position, error) {
@@ -164,6 +168,15 @@ func (f *fakeDeps) SumCashflowsNetWithQuality(ctx context.Context, posID int64) 
 		}
 	}
 	return f.cashflowsNet, q, nil
+}
+
+// D-438：SumCashflowsNetForSettle 同预设语义 + 捕获 bool 入参/调用次数。
+func (f *fakeDeps) SumCashflowsNetForSettle(ctx context.Context, posID int64, hasFundingLeg, fundingDue bool) (float64, string, error) {
+	f.mu.Lock()
+	f.gotHasFundingLeg, f.gotFundingDue = hasFundingLeg, fundingDue
+	f.forSettleCalls++
+	f.mu.Unlock()
+	return f.SumCashflowsNetWithQuality(ctx, posID)
 }
 
 // D-193 审计 P0-1：GetSettlementStatsStatus 返回预设 statsStatus（空=继续 Settle）。

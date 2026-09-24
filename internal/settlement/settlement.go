@@ -50,6 +50,8 @@ type Deps interface {
 	SumCashflowsNet(ctx context.Context, posID int64) (float64, error)
 	// D-193-A：替代 SumCashflowsNet，返回 quality 供 completeness 判定。
 	SumCashflowsNetWithQuality(ctx context.Context, posID int64) (sum float64, quality string, err error)
+	// D-438：结算专用净额——funding 实收以 income_events 为准替换公式投影轨。
+	SumCashflowsNetForSettle(ctx context.Context, posID int64, hasFundingLeg, fundingDue bool) (sum float64, quality string, err error)
 	// D-193 审计 P0-1：查 settlement 行的 stats_status，用于短路判定。
 	// 不存在行 → 返回 ("", nil)（继续走 Settle 流程）。
 	// 存在行 → 返回 stats_status（applied/skipped 短路；pending/retryable 继续）。
@@ -142,7 +144,18 @@ func SettleAt(ctx context.Context, deps Deps, posID int64, elim Eliminator, fami
 	)
 	if skippedReason == "" {
 		// D-193-A：消除 fallback-to-zero。查询失败 → settlement 进入 unknown/retryable，不写 complete，不更新统计。
-		cashflowsNet, cfQuality, err = deps.SumCashflowsNetWithQuality(ctx, posID)
+		// D-438：funding 腿判据=FILLED OPEN 的 %:perp 腿（funding 经济上仅存于 perp 合约；
+		// 不复用 swapledger.isFundingLeg——其对非 XASSET 类型忽略 venue 直取 isFundingType，
+		// 会漏非 funding 型仓持 perp 腿实收的场景）。
+		hasFundingLeg := false
+		for _, l := range legs {
+			if l.Phase == "OPEN" && l.Status == "FILLED" && strings.HasSuffix(l.Venue, ":perp") {
+				hasFundingLeg = true
+				break
+			}
+		}
+		fundingDue := holdDays >= 0.5 // ≥12h 必跨≥1个 funding 窗（OKX 00/08/16 UTC，窗距8h）
+		cashflowsNet, cfQuality, err = deps.SumCashflowsNetForSettle(ctx, posID, hasFundingLeg, fundingDue)
 		if err != nil {
 			mv := 1
 			errRow := &pgstore.SettlementRow{
