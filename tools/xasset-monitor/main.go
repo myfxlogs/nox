@@ -102,6 +102,12 @@ func runPair(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL s
 		if err != nil {
 			return fmt.Errorf("fetch okx %s: %w", sym, err)
 		}
+	} else if p.cexVenue == "gate:perp" {
+		// D-462：Gate 公开行情路由（api/v4/futures/usdt tickers+contracts，无鉴权不走 proxy）。
+		bid, ask, fundingRate, periodsPerDay, err = fetchGateTickerFn(ctx, hc, sym)
+		if err != nil {
+			return fmt.Errorf("fetch gate %s: %w", sym, err)
+		}
 	} else {
 		bid, ask, fundingRate, err = fetchBinanceGoldFn(ctx, hc, proxyURL, sym)
 		if err != nil {
@@ -118,9 +124,11 @@ func runPair(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL s
 	// 算指标（口径分离 D1）。
 	entrySpread := (bid - exAsk) / exAsk * 10000
 	exitSpread := (ask - exBid) / exBid * 10000
-	const binanceMakerCostBps = 4.0
+	// D-462：三 venue VIP0 maker 费率同为 0.02%×2=4bps（binance 单 C 档；gate fee 表
+	// gate.com/announcements/article/101365 VIP0 maker 0.0200%）→ 常量化共享。
+	const cexMakerCostBps = 4.0
 	exnessSpread := (exAsk - exBid) / exAsk * 10000
-	entryNet := entrySpread - binanceMakerCostBps - exnessSpread // 开+平净价差（maker 0.04%×2+Exness 点差）
+	entryNet := entrySpread - cexMakerCostBps - exnessSpread // 开+平净价差（maker 0.04%×2+Exness 点差）
 	fundingAnnualPct := fundingRate * float64(periodsPerDay) * 365 * 100
 	tokenMid := (bid + ask) / 2
 	xauMid := (exBid + exAsk) / 2
@@ -183,6 +191,7 @@ var (
 	fetchBinanceGoldFn          = fetchBinanceGold
 	fetchFundingPeriodsPerDayFn = fetchFundingPeriodsPerDay
 	fetchOkxTickerFn            = fetchOkxTicker
+	fetchGateTickerFn           = fetchGateTicker
 )
 
 func fetchBinanceGold(ctx context.Context, hc *http.Client, proxyURL, symbol string) (bid, ask, fundingRate float64, err error) {

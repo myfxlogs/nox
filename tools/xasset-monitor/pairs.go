@@ -21,5 +21,8 @@ func monitorPairs() []monitorPair {
 		{"binance:perp", "BTCUSDT", "BTCUSDT-BTC", "BTCUSDT"},   // D-335 S0：业主批第四对（BTCUSDT×BTCUSDT，swap 免息，纳入观察）
 		{"okx:perp", "XAU-USDT-SWAP", "XAUUSDT-XAU", "XAUUSD"},  // D-423 R1：OKX 黄金永续×Exness XAU（pos 498/501 组合）
 		{"okx:perp", "BTC-USDT-SWAP", "BTCUSDT-BTC", "BTCUSDT"}, // D-419：真钱组合#10（okx:perp×3001157:mt5, BTC-USDT-SWAP×BTCUSDT）的 venue 簿
+		{"gate:perp", "XAU_USDT", "XAUUSDT-XAU", "XAUUSD"},      // D-462：gate futures 钱包已开，组合#12 真钱候选
+		{"gate:perp", "XPT_USDT", "XPTUSDT-XPT", "XPTUSD"},      // D-462：组合#13（funding regime 零样本另案）
+		{"gate:perp", "XPD_USDT", "XPDUSDT-XPD", "XPDUSD"},      // D-462：组合#14（同）
 	}
 }
