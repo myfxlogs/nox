@@ -18,6 +18,7 @@ type fakeIntraStore struct {
 	nextID  int64
 	inserts []pgstore.IntraTrade
 	closes  []string // id:reason
+	events  []string // D-441 T2：kind 序列
 }
 
 func (f *fakeIntraStore) InsertIntraTrade(_ context.Context, r *pgstore.IntraTrade) (int64, error) {
@@ -312,4 +313,17 @@ func TestD425R2_MultiSignal_SingleOpen(t *testing.T) {
 	if len(f.open) != 1 {
 		t.Errorf("open 回写后 len=%d, want 1", len(f.open))
 	}
+}
+
+func (f *fakeIntraStore) InsertIntraEvent(_ context.Context, kind, baseline, detail string) error {
+	f.events = append(f.events, kind)
+	return nil
+}
+func (f *fakeIntraStore) HasIntraEventToday(_ context.Context, kind string) (bool, error) {
+	for _, k := range f.events {
+		if k == kind {
+			return true, nil
+		}
+	}
+	return false, nil
 }

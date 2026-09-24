@@ -233,4 +233,6 @@ var (
 	PaperIntraTradesSQL string
 	//go:embed 0134_autotrade_allow_rules.sql
 	AutotradeAllowRulesSQL string
+	//go:embed 0135_intra_events.sql
+	IntraEventsSQL string
 )

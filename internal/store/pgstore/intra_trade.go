@@ -102,8 +102,8 @@ const intraCols = `id, baseline, symbol, venue, side, status, entry_ts, entry_px
 	notional_usd, margin_usd, stop_px, exit_ts, exit_px, exit_reason, slippage_bps, pnl_usd,
 	signal_note, trade_date`
 
-func (s *Store) scanIntraTrades(ctx context.Context, q string) ([]IntraTrade, error) {
-	rows, err := s.pool.Query(ctx, q)
+func (s *Store) scanIntraTrades(ctx context.Context, q string, args ...any) ([]IntraTrade, error) {
+	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -120,4 +120,114 @@ func (s *Store) scanIntraTrades(ctx context.Context, q string) ([]IntraTrade, er
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+// IntraEvent intra_events 一行（D-441 S2：kill/circuit 栅栏事件）。
+type IntraEvent struct {
+	ID       int64
+	Ts       time.Time
+	Kind     string // kill / circuit
+	Baseline string
+	Detail   string
+}
+
+// InsertIntraEvent 栅栏事件落库（kind: kill/circuit；baseline 由 Step 上下文给，kill=空串）。
+func (s *Store) InsertIntraEvent(ctx context.Context, kind, baseline, detail string) error {
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO intra_events (kind, baseline, detail) VALUES ($1,$2,$3)`,
+		kind, baseline, detail)
+	if err != nil {
+		return fmt.Errorf("insert intra event: %w", err)
+	}
+	return nil
+}
+
+// HasIntraEventToday D-441 S3：当日（UTC）同 kind 事件已存在？（引擎告警 episode 去重面）。
+func (s *Store) HasIntraEventToday(ctx context.Context, kind string) (bool, error) {
+	var n int
+	err := s.pool.QueryRow(ctx,
+		`SELECT COUNT(*)::int FROM intra_events WHERE kind=$1 AND ts::date = CURRENT_DATE`, kind).Scan(&n)
+	if err != nil {
+		return false, fmt.Errorf("has intra event today: %w", err)
+	}
+	return n > 0, nil
+}
+
+// ListIntraTrades D-441 S2：成交列表（id DESC LIMIT；baseline 空=全部）。
+func (s *Store) ListIntraTrades(ctx context.Context, baseline string, limit int) ([]IntraTrade, error) {
+	q := `SELECT id, baseline, symbol, venue, side, status, entry_ts, entry_px, qty,
+		notional_usd, margin_usd, stop_px, exit_ts, exit_px, exit_reason,
+		slippage_bps, pnl_usd, signal_note, trade_date
+		FROM paper_intra_trades`
+	args := []any{}
+	if baseline != "" {
+		q += ` WHERE baseline = $1`
+		args = append(args, baseline)
+	}
+	q += fmt.Sprintf(` ORDER BY id DESC LIMIT $%d`, len(args)+1)
+	args = append(args, limit)
+	return s.scanIntraTrades(ctx, q, args...)
+}
+
+// IntraBaselineStatRow IntraTrackStats 聚合行（D-441 S2）。
+type IntraBaselineStatRow struct {
+	Baseline    string
+	Total       int
+	Open        int
+	Closed      int
+	PnlUSD      float64
+	WinCount    int
+	SlipP90Bps  *float64
+	CircuitDays int
+	KillCount   int
+}
+
+// IntraTrackStatsQuery D-441 S2：按 baseline 聚合成交+事件统计（单 SQL）。
+// circuit_days=intra_events kind=circuit 去重天数；kill_count=kind=kill 计数；
+// 事件 baseline 空串（kill 事件）归入全部 baseline 行（Step kill 是轨级事件非单基线）。
+func (s *Store) IntraTrackStatsQuery(ctx context.Context) ([]IntraBaselineStatRow, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT t.baseline,
+			COUNT(*)::int AS total,
+			COUNT(*) FILTER (WHERE t.status='open')::int AS open,
+			COUNT(*) FILTER (WHERE t.status='closed')::int AS closed,
+			COALESCE(SUM(t.pnl_usd) FILTER (WHERE t.pnl_usd IS NOT NULL), 0) AS pnl_usd,
+			COUNT(*) FILTER (WHERE t.pnl_usd > 0)::int AS win_count,
+			percentile_cont(0.9) WITHIN GROUP (ORDER BY t.slippage_bps)
+				FILTER (WHERE t.slippage_bps IS NOT NULL) AS slip_p90,
+			(SELECT COUNT(DISTINCT ts::date) FROM intra_events
+				WHERE kind='circuit' AND (baseline='' OR baseline=t.baseline))::int AS circuit_days,
+			(SELECT COUNT(*) FROM intra_events
+				WHERE kind='kill' AND (baseline='' OR baseline=t.baseline))::int AS kill_count
+		FROM paper_intra_trades t
+		GROUP BY t.baseline
+		ORDER BY t.baseline`)
+	if err != nil {
+		return nil, fmt.Errorf("intra track stats: %w", err)
+	}
+	defer rows.Close()
+	var out []IntraBaselineStatRow
+	for rows.Next() {
+		var r IntraBaselineStatRow
+		if err := rows.Scan(&r.Baseline, &r.Total, &r.Open, &r.Closed, &r.PnlUSD,
+			&r.WinCount, &r.SlipP90Bps, &r.CircuitDays, &r.KillCount); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// IntraDaysElapsed D-441 S5：min(entry_ts)::date 距今天数（空表=0，天数差含首日）。
+func (s *Store) IntraDaysElapsed(ctx context.Context) (int, error) {
+	var d *int
+	err := s.pool.QueryRow(ctx,
+		`SELECT (CURRENT_DATE - MIN(entry_ts)::date)::int FROM paper_intra_trades`).Scan(&d)
+	if err != nil {
+		return 0, fmt.Errorf("intra days elapsed: %w", err)
+	}
+	if d == nil {
+		return 0, nil
+	}
+	return *d + 1, nil // 首日算第 1 天
 }

@@ -65,3 +65,13 @@ func (p *PGStore) IntraDayRealizedPnl(ctx context.Context, day time.Time) (float
 func (p *PGStore) TicksWindow(ctx context.Context, venue, symbol string, since time.Time) ([]pgstore.TickRow, error) {
 	return p.S.TicksWindow(ctx, venue, symbol, since)
 }
+
+// InsertIntraEvent D-441 S3：日内轨栅栏事件透传（kill/circuit 落库）。
+func (p *PGStore) InsertIntraEvent(ctx context.Context, kind, baseline, detail string) error {
+	return p.S.InsertIntraEvent(ctx, kind, baseline, detail)
+}
+
+// HasIntraEventToday D-441 S3：当日同 kind 去重透传（告警不重发面）。
+func (p *PGStore) HasIntraEventToday(ctx context.Context, kind string) (bool, error) {
+	return p.S.HasIntraEventToday(ctx, kind)
+}
