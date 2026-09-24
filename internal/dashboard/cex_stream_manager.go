@@ -2,8 +2,8 @@
 // 镜像 CexExecutorManager「DB 每轮重取」模式：exchange_configs 每轮读 →
 // gate:perp 行起 GatePrivateWS、binance 行起 BinanceUserWS（perp real/demo 各一条）；
 // 行消失→停流（cancel）；行不变→不重启。REST 轮询双轨保留不拆。
-// binance:spot 行跳过——REST userDataStream 端点 410 Gone 已下线（生产实证，
-// ws-api 替代协议属新设计域待决策），spot 数据面继续走 REST 轮询兜底。
+// binance:spot 行走 ws-api 支路（D-459：REST userDataStream 410 下线后实证
+// userDataStream.start/ping 免签名管理面可用；session.logon 拒 HMAC 不走）。
 package dashboard
 
 import (
@@ -117,13 +117,16 @@ func (m *CexStreamManager) sync(ctx context.Context) {
 	}
 }
 
-// streamable 哪些配置行起流：gate:perp + binance:perp（real/demo）。
-// binance:spot 跳过（REST userDataStream 端点 410 已下线，见文件头注）；gate 仅 perp（SSOT 边界）。
+// streamable 哪些配置行起流：gate:perp + binance:perp（real/demo）+ binance:spot（仅 real——
+// spot testnet ws-api 端点不在代理路由内，demo 行保持 REST 轮询兜底，D-459 实证结论）。
 func streamable(c pgstore.ExchangeConfig) bool {
 	switch c.Venue {
 	case "gate":
 		return c.VenueType == "perp" && c.BaseURL != "" // base 空=warn 跳过不直连（白名单语义）
 	case "binance":
+		if c.VenueType == "spot" {
+			return c.BaseURL != "" && !c.Simulated
+		}
 		return c.VenueType == "perp" && c.BaseURL != ""
 	}
 	return false
