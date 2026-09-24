@@ -231,4 +231,6 @@ var (
 	DataPlaneVenueSQL string
 	//go:embed 0133_paper_intra_trades.sql
 	PaperIntraTradesSQL string
+	//go:embed 0134_autotrade_allow_rules.sql
+	AutotradeAllowRulesSQL string
 )

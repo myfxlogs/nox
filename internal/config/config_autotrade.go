@@ -18,8 +18,8 @@ type AutotradeConfig struct {
 	AutoTradePollInterval time.Duration // OPEN 持仓扫描间隔（缺省 10s）
 
 	// D-072 §3.4 硬编码外部化（默认值=现行为，零迁移）
-	AutoTradeAllowVenues       map[string]bool // ARB_AUTOTRADE_ALLOW_VENUES（默认 277842155:mt5,REDACTED_MT_ACCT:mt5）
-	AutoTradeAllowCanonicals   map[string]bool // ARB_AUTOTRADE_ALLOW_CANONICALS（默认 NAS100,ETHUSDT,XAUUSD,BTCUSDT）
+	AutoTradeAllowVenues       map[string]bool // DEPRECATED D-443：已表化 autotrade_allow_rules，env 不再消费（字段保壳防编译面扩散）
+	AutoTradeAllowCanonicals   map[string]bool // DEPRECATED D-443：同上（canonical 空集=全放行语义已迁表，D-122）
 	AutoTradeExcludeCanonicals map[string]bool // ARB_AUTOTRADE_EXCLUDE_CANONICALS（默认 BRENT,WTI）
 	// D-159 W1a R1：精确组合门禁（SWAPARB 专用）。
 	// SwapArbAllowCombosRaw 原始字符串（分号分隔记录，每条 canonical|venueLong|venueShort|maxLongQty|maxShortQty|maxGrossExposureUSD）。
@@ -49,14 +49,13 @@ type AutotradeConfig struct {
 // loadAutotradeConfig 从环境变量加载自动交易子配置，未设置用默认值。
 func loadAutotradeConfig() *AutotradeConfig {
 	return &AutotradeConfig{
-		AutoTradeEnabled:           envBool("ARB_AUTOTRADE_ENABLED", false),
-		AutoTradeMaxNotional:       envFloat("ARB_AUTOTRADE_MAX_NOTIONAL", 1000),
-		AutoTradeMaxPositions:      envInt("ARB_AUTOTRADE_MAX_POSITIONS", 5),
-		AutoTradeMaxDailyLoss:      envFloat("ARB_AUTOTRADE_MAX_DAILY_LOSS", 100),
-		AutoTradeMinNetBps:         envFloat("ARB_AUTOTRADE_MIN_NET_BPS", 1.0), // D-070 均值回归：降低门槛让 277+591 波动价差通过
-		AutoTradePollInterval:      envDur("ARB_AUTOTRADE_POLL_INTERVAL", 10*time.Second),
-		AutoTradeAllowVenues:       envStringSet("ARB_AUTOTRADE_ALLOW_VENUES", "277842155:mt5,REDACTED_MT_ACCT:mt5"),
-		AutoTradeAllowCanonicals:   envStringSet("ARB_AUTOTRADE_ALLOW_CANONICALS", ""), // D-122：默认空=全放行（gate 层风控兜底）
+		AutoTradeEnabled:      envBool("ARB_AUTOTRADE_ENABLED", false),
+		AutoTradeMaxNotional:  envFloat("ARB_AUTOTRADE_MAX_NOTIONAL", 1000),
+		AutoTradeMaxPositions: envInt("ARB_AUTOTRADE_MAX_POSITIONS", 5),
+		AutoTradeMaxDailyLoss: envFloat("ARB_AUTOTRADE_MAX_DAILY_LOSS", 100),
+		AutoTradeMinNetBps:    envFloat("ARB_AUTOTRADE_MIN_NET_BPS", 1.0), // D-070 均值回归：降低门槛让 277+591 波动价差通过
+		AutoTradePollInterval: envDur("ARB_AUTOTRADE_POLL_INTERVAL", 10*time.Second),
+		// D-443：AutoTradeAllowVenues/AllowCanonicals 已表化 autotrade_allow_rules，env 停读不消费。
 		AutoTradeExcludeCanonicals: envStringSet("ARB_AUTOTRADE_EXCLUDE_CANONICALS", "BRENT,WTI"),
 		SwapArbAllowCombosRaw:      envStr("ARB_SWAPARB_ALLOW_COMBOS", ""),        // D-159 W1a R1：空=fail-closed
 		SwapArbMaxActiveCombos:     envInt("ARB_SWAPARB_MAX_ACTIVE_COMBOS", 1),    // D-138 单组合口径
