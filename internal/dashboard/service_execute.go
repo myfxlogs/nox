@@ -54,7 +54,9 @@ func (s *Service) checkFreezeGuard(buyCanonical, sellCanonical string, legs []ex
 func (s *Service) validateLegQtys(legs []exec.LegSpec) error {
 	for _, l := range legs {
 		if l.Qty <= 0 {
-			return fmt.Errorf("reject combo: leg %s %s qty invalid (%.6f≤0)", l.VenueKey, l.VenueSymbol, l.Qty)
+			// D-433：拒因显式化——LegSpec 无原始请求量字段，统一提示两态排查方向：
+			// 请求量>0 被 floor 抹零（低于 venue 最小步长）或上游产出即 0（未知品种/上游 bug）。
+			return fmt.Errorf("reject combo: leg %s %s qty invalid (%.6f≤0, 低于venue最小步长或未知品种——检查 notional_usd 是否低于该腿最小合约名义额)", l.VenueKey, l.VenueSymbol, l.Qty)
 		}
 	}
 	return nil
