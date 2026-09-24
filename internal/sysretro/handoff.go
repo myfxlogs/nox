@@ -24,8 +24,8 @@ func handoffBlock(deps Deps, now time.Time) string {
 	}
 	fmt.Fprintf(&b, "blocked_line: %s\n", blockedLine(string(stateData)))
 	fmt.Fprintf(&b, "inbox_backlog_rows: %d\n", inboxBacklog(deps.InboxPath))
-	b.WriteString("commits_today:\n")
-	b.WriteString(gitLogToday(deps.RepoDir, now))
+	b.WriteString("commits_yesterday:\n")
+	b.WriteString(gitLogOn(deps.RepoDir, now.AddDate(0, 0, -1).Format("2006-01-02")))
 	b.WriteString("```")
 	return b.String()
 }
@@ -79,11 +79,10 @@ func inboxBacklog(inboxPath string) int {
 	return n
 }
 
-// gitLogToday 当日（UTC）commit 列表；git 不可用/非仓库 → 降级标注。
-func gitLogToday(repoDir string, now time.Time) string {
-	day := now.Format("2006-01-02")
+// gitLogOn 指定 UTC 日期当日 commit 列表；git 不可用/非仓库 → 降级标注。
+func gitLogOn(repoDir, day string) string {
 	out, err := exec.Command("git", "-C", repoDir, "log",
-		"--since="+day+"T00:00:00Z", "--oneline", "--all").Output()
+		"--since="+day+"T00:00:00Z", "--until="+day+"T24:00:00Z", "--oneline", "--all").Output()
 	if err != nil {
 		return "  (git log 不可用)\n"
 	}

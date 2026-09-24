@@ -15,13 +15,16 @@ import (
 
 // fakeRetroStore 注入罐装统计 + 记录 alert。
 type fakeRetroStore struct {
-	daily  *pgstore.RetroDaily
-	weekly *pgstore.RetroWeekly
-	mu     sync.Mutex
-	alerts []string
+	daily      *pgstore.RetroDaily
+	weekly     *pgstore.RetroWeekly
+	mu         sync.Mutex
+	alerts     []string
+	dailySince time.Time
+	dailyUntil time.Time
 }
 
-func (f *fakeRetroStore) RetroDailyStats(context.Context, time.Time, time.Time) (*pgstore.RetroDaily, error) {
+func (f *fakeRetroStore) RetroDailyStats(_ context.Context, since, until time.Time) (*pgstore.RetroDaily, error) {
+	f.dailySince, f.dailyUntil = since, until
 	return f.daily, nil
 }
 func (f *fakeRetroStore) RetroWeeklyStats(context.Context, time.Time, time.Time) (*pgstore.RetroWeekly, error) {
@@ -96,13 +99,18 @@ func TestGenerateDaily(t *testing.T) {
 		}
 		last = i
 	}
-	for _, want := range []string{"pos502", "hold=100", "今日平稳", "D-457 系统周期复盘报告", "ws-api 待决策", "inbox_backlog_rows: 1", "git log 不可用"} {
+	for _, want := range []string{"pos502", "hold=100", "今日平稳", "D-457 系统周期复盘报告", "ws-api 待决策", "inbox_backlog_rows: 1", "git log 不可用", "昨日 UTC 全天"} {
 		if !strings.Contains(txt, want) {
 			t.Fatalf("report missing %q", want)
 		}
 	}
-	if !strings.HasSuffix(path, "sysretro-daily-2026-09-24.md") {
+	if !strings.HasSuffix(path, "sysretro-daily-2026-09-23.md") {
 		t.Fatalf("path=%s", path)
+	}
+	// R1：窗口=昨日 UTC 全天 [2026-09-23 00:00, 2026-09-24 00:00)。
+	if st.dailySince != time.Date(2026, 9, 23, 0, 0, 0, 0, time.UTC) ||
+		st.dailyUntil != time.Date(2026, 9, 24, 0, 0, 0, 0, time.UTC) {
+		t.Fatalf("window=[%v,%v)", st.dailySince, st.dailyUntil)
 	}
 	if len(st.alertRows()) != 1 || !strings.Contains(st.alertRows()[0], "info:") {
 		t.Fatalf("alerts=%v", st.alertRows())
