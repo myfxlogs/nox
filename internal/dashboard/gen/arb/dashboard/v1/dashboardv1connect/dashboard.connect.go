@@ -334,6 +334,12 @@ const (
 	// DashboardServiceListPaperSpotCarryProcedure is the fully-qualified name of the DashboardService's
 	// ListPaperSpotCarry RPC.
 	DashboardServiceListPaperSpotCarryProcedure = "/arb.dashboard.v1.DashboardService/ListPaperSpotCarry"
+	// DashboardServiceListAutotradeAllowRulesProcedure is the fully-qualified name of the
+	// DashboardService's ListAutotradeAllowRules RPC.
+	DashboardServiceListAutotradeAllowRulesProcedure = "/arb.dashboard.v1.DashboardService/ListAutotradeAllowRules"
+	// DashboardServiceSetAutotradeAllowRuleEnabledProcedure is the fully-qualified name of the
+	// DashboardService's SetAutotradeAllowRuleEnabled RPC.
+	DashboardServiceSetAutotradeAllowRuleEnabledProcedure = "/arb.dashboard.v1.DashboardService/SetAutotradeAllowRuleEnabled"
 	// DashboardServiceListIntraTradesProcedure is the fully-qualified name of the DashboardService's
 	// ListIntraTrades RPC.
 	DashboardServiceListIntraTradesProcedure = "/arb.dashboard.v1.DashboardService/ListIntraTrades"
@@ -501,6 +507,9 @@ type DashboardServiceClient interface {
 	ListSpotCarryDemo(context.Context, *connect.Request[v1.ListSpotCarryDemoRequest]) (*connect.Response[v1.ListSpotCarryDemoResponse], error)
 	// D-352：纸面轨前端卡（持仓页第三卡）——active+demo+近 14 天 exited 三态。
 	ListPaperSpotCarry(context.Context, *connect.Request[v1.ListPaperSpotCarryRequest]) (*connect.Response[v1.ListPaperSpotCarryResponse], error)
+	// D-444：autotrade venue/canonical 执行白名单启停（行只读列出+enabled 翻转；增删走业主 SQL）
+	ListAutotradeAllowRules(context.Context, *connect.Request[v1.ListAutotradeAllowRulesRequest]) (*connect.Response[v1.ListAutotradeAllowRulesResponse], error)
+	SetAutotradeAllowRuleEnabled(context.Context, *connect.Request[v1.SetAutotradeAllowRuleEnabledRequest]) (*connect.Response[v1.SetAutotradeAllowRuleEnabledResponse], error)
 	// D-441：日内纸面轨（沙箱·D-425）观测面——成交列表+30天裁决统计。
 	ListIntraTrades(context.Context, *connect.Request[v1.ListIntraTradesRequest]) (*connect.Response[v1.ListIntraTradesResponse], error)
 	IntraTrackStats(context.Context, *connect.Request[v1.IntraTrackStatsRequest]) (*connect.Response[v1.IntraTrackStatsResponse], error)
@@ -1134,6 +1143,18 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("ListPaperSpotCarry")),
 			connect.WithClientOptions(opts...),
 		),
+		listAutotradeAllowRules: connect.NewClient[v1.ListAutotradeAllowRulesRequest, v1.ListAutotradeAllowRulesResponse](
+			httpClient,
+			baseURL+DashboardServiceListAutotradeAllowRulesProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListAutotradeAllowRules")),
+			connect.WithClientOptions(opts...),
+		),
+		setAutotradeAllowRuleEnabled: connect.NewClient[v1.SetAutotradeAllowRuleEnabledRequest, v1.SetAutotradeAllowRuleEnabledResponse](
+			httpClient,
+			baseURL+DashboardServiceSetAutotradeAllowRuleEnabledProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("SetAutotradeAllowRuleEnabled")),
+			connect.WithClientOptions(opts...),
+		),
 		listIntraTrades: connect.NewClient[v1.ListIntraTradesRequest, v1.ListIntraTradesResponse](
 			httpClient,
 			baseURL+DashboardServiceListIntraTradesProcedure,
@@ -1187,115 +1208,117 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 
 // dashboardServiceClient implements DashboardServiceClient.
 type dashboardServiceClient struct {
-	listLatestQuotes          *connect.Client[v1.ListQuotesRequest, v1.ListQuotesResponse]
-	listLatestFacts           *connect.Client[v1.ListLatestFactsRequest, v1.ListLatestFactsResponse]
-	listOpportunities         *connect.Client[v1.ListOpportunitiesRequest, v1.ListOpportunitiesResponse]
-	listAlerts                *connect.Client[v1.ListAlertsRequest, v1.ListAlertsResponse]
-	listTriggerStates         *connect.Client[v1.ListTriggerStatesRequest, v1.ListTriggerStatesResponse]
-	listSourceHealth          *connect.Client[v1.ListSourceHealthRequest, v1.ListSourceHealthResponse]
-	listFacts                 *connect.Client[v1.ListFactsRequest, v1.ListFactsResponse]
-	ackAlert                  *connect.Client[v1.AckAlertRequest, v1.AckAlertResponse]
-	ackAll                    *connect.Client[v1.AckAllRequest, v1.AckAllResponse]
-	listUnacked               *connect.Client[v1.ListUnackedRequest, v1.ListUnackedResponse]
-	deleteAlerts              *connect.Client[v1.DeleteAlertsRequest, v1.DeleteAlertsResponse]
-	clearAckedAlerts          *connect.Client[v1.ClearAckedAlertsRequest, v1.ClearAckedAlertsResponse]
-	addLedgerEntry            *connect.Client[v1.AddLedgerEntryRequest, v1.AddLedgerEntryResponse]
-	listLedgerEntries         *connect.Client[v1.ListLedgerEntriesRequest, v1.ListLedgerEntriesResponse]
-	ledgerSummary             *connect.Client[v1.LedgerSummaryRequest, v1.LedgerSummaryResponse]
-	addInvestmentRecord       *connect.Client[v1.AddInvestmentRecordRequest, v1.AddInvestmentRecordResponse]
-	listInvestmentRecords     *connect.Client[v1.ListInvestmentRecordsRequest, v1.ListInvestmentRecordsResponse]
-	listKnowledgeEntries      *connect.Client[v1.ListKnowledgeEntriesRequest, v1.ListKnowledgeEntriesResponse]
-	executeOpportunity        *connect.Client[v1.ExecuteOpportunityRequest, v1.ExecuteOpportunityResponse]
-	closePosition             *connect.Client[v1.ClosePositionRequest, v1.ClosePositionResponse]
-	backfillSwapHistory       *connect.Client[v1.BackfillSwapHistoryRequest, v1.BackfillSwapHistoryReply]
-	getCNFIRadarSnapshot      *connect.Client[v1.GetCNFIRadarSnapshotRequest, v1.GetCNFIRadarSnapshotResponse]
-	getCNFIProgress           *connect.Client[v1.GetCNFIProgressRequest, v1.GetCNFIProgressResponse]
-	addCNFIHolding            *connect.Client[v1.AddCNFIHoldingRequest, v1.AddCNFIHoldingResponse]
-	addCNFIAction             *connect.Client[v1.AddCNFIActionRequest, v1.AddCNFIActionResponse]
-	listCNFIActions           *connect.Client[v1.ListCNFIActionsRequest, v1.ListCNFIActionsResponse]
-	listRepoOps               *connect.Client[v1.ListRepoOpsRequest, v1.ListRepoOpsResponse]
-	listPositions             *connect.Client[v1.ListPositionsRequest, v1.ListPositionsResponse]
-	listBrokerPositions       *connect.Client[v1.ListBrokerPositionsRequest, v1.ListBrokerPositionsResponse]
-	closeBrokerPosition       *connect.Client[v1.CloseBrokerPositionRequest, v1.CloseBrokerPositionResponse]
-	closeBrokerPositions      *connect.Client[v1.CloseBrokerPositionsRequest, v1.CloseBrokerPositionsResponse]
-	listAccounts              *connect.Client[v1.ListAccountsRequest, v1.ListAccountsResponse]
-	listPersonalPositions     *connect.Client[v1.ListPersonalPositionsRequest, v1.ListPersonalPositionsResponse]
-	getHedgeStructure         *connect.Client[v1.GetHedgeStructureRequest, v1.GetHedgeStructureResponse]
-	listHedgeFlow             *connect.Client[v1.ListHedgeFlowRequest, v1.ListHedgeFlowResponse]
-	trxAccountRefresh         *connect.Client[v1.TrxAccountRefreshRequest, v1.TrxAccountRefreshResponse]
-	getTrxYieldRadar          *connect.Client[v1.GetTrxYieldRadarRequest, v1.GetTrxYieldRadarResponse]
-	getTrxYieldCurve          *connect.Client[v1.GetTrxYieldCurveRequest, v1.GetTrxYieldCurveResponse]
-	getRepoRateRadar          *connect.Client[v1.GetRepoRateRadarRequest, v1.GetRepoRateRadarResponse]
-	addDailyIncome            *connect.Client[v1.AddDailyIncomeRequest, v1.AddDailyIncomeResponse]
-	listDailyIncome           *connect.Client[v1.ListDailyIncomeRequest, v1.ListDailyIncomeResponse]
-	getPnlAnchor              *connect.Client[v1.GetPnlAnchorRequest, v1.GetPnlAnchorResponse]
-	resetPnlAnchor            *connect.Client[v1.ResetPnlAnchorRequest, v1.ResetPnlAnchorResponse]
-	listKBEntries             *connect.Client[v1.ListKBEntriesRequest, v1.ListKBEntriesResponse]
-	getKBEntry                *connect.Client[v1.GetKBEntryRequest, v1.GetKBEntryResponse]
-	listVerificationStats     *connect.Client[v1.ListVerificationStatsRequest, v1.ListVerificationStatsResponse]
-	searchBroker              *connect.Client[v1.SearchBrokerRequest, v1.SearchBrokerResponse]
-	addBroker                 *connect.Client[v1.AddBrokerRequest, v1.AddBrokerResponse]
-	removeBroker              *connect.Client[v1.RemoveBrokerRequest, v1.RemoveBrokerResponse]
-	listBrokerAccounts        *connect.Client[v1.ListBrokerAccountsRequest, v1.ListBrokerAccountsResponse]
-	verifyAccount             *connect.Client[v1.VerifyAccountRequest, v1.VerifyAccountResponse]
-	listExchanges             *connect.Client[v1.ListExchangesRequest, v1.ListExchangesResponse]
-	addExchange               *connect.Client[v1.AddExchangeRequest, v1.AddExchangeResponse]
-	removeExchange            *connect.Client[v1.RemoveExchangeRequest, v1.RemoveExchangeResponse]
-	setExchangeLabel          *connect.Client[v1.SetExchangeLabelRequest, v1.SetExchangeLabelResponse]
-	setExchangeWebsite        *connect.Client[v1.SetExchangeWebsiteRequest, v1.SetExchangeWebsiteResponse]
-	brokerSymbols             *connect.Client[v1.BrokerSymbolsRequest, v1.BrokerSymbolsResponse]
-	setBrokerAccountAlias     *connect.Client[v1.SetBrokerAccountAliasRequest, v1.SetBrokerAccountAliasResponse]
-	setBrokerAccountIsReal    *connect.Client[v1.SetBrokerAccountIsRealRequest, v1.SetBrokerAccountIsRealResponse]
-	setBrokerDisabled         *connect.Client[v1.SetBrokerDisabledRequest, v1.SetBrokerDisabledResponse]
-	setBrokerCommission       *connect.Client[v1.SetBrokerCommissionRequest, v1.SetBrokerCommissionResponse]
-	setBrokerWebsite          *connect.Client[v1.SetBrokerWebsiteRequest, v1.SetBrokerWebsiteResponse]
-	listSymbolMappings        *connect.Client[v1.ListSymbolMappingsRequest, v1.ListSymbolMappingsResponse]
-	saveSymbolMapping         *connect.Client[v1.SaveSymbolMappingRequest, v1.SaveSymbolMappingResponse]
-	deleteSymbolMapping       *connect.Client[v1.DeleteSymbolMappingRequest, v1.DeleteSymbolMappingResponse]
-	listMappingSuggestions    *connect.Client[v1.ListMappingSuggestionsRequest, v1.ListMappingSuggestionsResponse]
-	listCanonicals            *connect.Client[v1.ListCanonicalsRequest, v1.ListCanonicalsResponse]
-	autoMapBroker             *connect.Client[v1.AutoMapBrokerRequest, v1.AutoMapBrokerResponse]
-	listSwapCombos            *connect.Client[v1.ListSwapCombosRequest, v1.ListSwapCombosResponse]
-	listMatrixUniverse        *connect.Client[v1.ListMatrixUniverseRequest, v1.ListMatrixUniverseResponse]
-	streamUpdates             *connect.Client[v1.StreamUpdatesRequest, v1.StreamUpdatesResponse]
-	health                    *connect.Client[v1.HealthRequest, v1.HealthResponse]
-	getFrontConfig            *connect.Client[v1.GetFrontConfigRequest, v1.GetFrontConfigResponse]
-	getStrategyLedger         *connect.Client[v1.GetStrategyLedgerRequest, v1.GetStrategyLedgerResponse]
-	getWatchlist              *connect.Client[v1.GetWatchlistRequest, v1.GetWatchlistResponse]
-	setWatchlist              *connect.Client[v1.SetWatchlistRequest, v1.SetWatchlistResponse]
-	askAnalyst                *connect.Client[v1.AskAnalystRequest, v1.AskAnalystResponse]
-	appendAnalystNote         *connect.Client[v1.AppendAnalystNoteRequest, v1.AppendAnalystNoteResponse]
-	generateKbReport          *connect.Client[v1.GenerateKbReportRequest, v1.GenerateKbReportResponse]
-	getAiSettings             *connect.Client[v1.GetAiSettingsRequest, v1.GetAiSettingsResponse]
-	setAiSettings             *connect.Client[v1.SetAiSettingsRequest, v1.SetAiSettingsResponse]
-	getRepoConfig             *connect.Client[v1.GetRepoConfigRequest, v1.GetRepoConfigResponse]
-	setRepoConfig             *connect.Client[v1.SetRepoConfigRequest, v1.SetRepoConfigResponse]
-	getCexScanSnapshot        *connect.Client[v1.GetCexScanSnapshotRequest, v1.GetCexScanSnapshotResponse]
-	recordRepoTrade           *connect.Client[v1.RecordRepoTradeRequest, v1.RecordRepoTradeResponse]
-	listRepoTrades            *connect.Client[v1.ListRepoTradesRequest, v1.ListRepoTradesResponse]
-	settleRepoTrade           *connect.Client[v1.SettleRepoTradeRequest, v1.SettleRepoTradeResponse]
-	deleteRepoTrade           *connect.Client[v1.DeleteRepoTradeRequest, v1.DeleteRepoTradeResponse]
-	getRepoStrategyValidation *connect.Client[v1.GetRepoStrategyValidationRequest, v1.GetRepoStrategyValidationResponse]
-	listPriceAlertRules       *connect.Client[v1.ListPriceAlertRulesRequest, v1.ListPriceAlertRulesResponse]
-	createPriceAlertRule      *connect.Client[v1.CreatePriceAlertRuleRequest, v1.CreatePriceAlertRuleResponse]
-	updatePriceAlertRule      *connect.Client[v1.UpdatePriceAlertRuleRequest, v1.UpdatePriceAlertRuleResponse]
-	deletePriceAlertRule      *connect.Client[v1.DeletePriceAlertRuleRequest, v1.DeletePriceAlertRuleResponse]
-	listEventJudgments        *connect.Client[v1.ListEventJudgmentsRequest, v1.ListEventJudgmentsResponse]
-	listPaperTrades           *connect.Client[v1.ListPaperTradesRequest, v1.ListPaperTradesResponse]
-	acceptJudgment            *connect.Client[v1.AcceptJudgmentRequest, v1.AcceptJudgmentResponse]
-	settlePaperTrade          *connect.Client[v1.SettlePaperTradeRequest, v1.SettlePaperTradeResponse]
-	getFinanceOverview        *connect.Client[v1.GetFinanceOverviewRequest, v1.GetFinanceOverviewResponse]
-	executeSpotCarryDemo      *connect.Client[v1.ExecuteSpotCarryDemoRequest, v1.ExecuteSpotCarryDemoResponse]
-	listSpotCarryDemo         *connect.Client[v1.ListSpotCarryDemoRequest, v1.ListSpotCarryDemoResponse]
-	listPaperSpotCarry        *connect.Client[v1.ListPaperSpotCarryRequest, v1.ListPaperSpotCarryResponse]
-	listIntraTrades           *connect.Client[v1.ListIntraTradesRequest, v1.ListIntraTradesResponse]
-	intraTrackStats           *connect.Client[v1.IntraTrackStatsRequest, v1.IntraTrackStatsResponse]
-	getCapitalCoverage        *connect.Client[v1.GetCapitalCoverageRequest, v1.GetCapitalCoverageResponse]
-	getCexFinance             *connect.Client[v1.GetCexFinanceRequest, v1.GetCexFinanceResponse]
-	listCarryGraduations      *connect.Client[v1.ListCarryGraduationsRequest, v1.ListCarryGraduationsResponse]
-	approveCarryGraduation    *connect.Client[v1.ApproveCarryGraduationRequest, v1.ApproveCarryGraduationResponse]
-	rejectCarryGraduation     *connect.Client[v1.RejectCarryGraduationRequest, v1.RejectCarryGraduationResponse]
-	listAccountMarginStatus   *connect.Client[v1.ListAccountMarginStatusRequest, v1.ListAccountMarginStatusResponse]
+	listLatestQuotes             *connect.Client[v1.ListQuotesRequest, v1.ListQuotesResponse]
+	listLatestFacts              *connect.Client[v1.ListLatestFactsRequest, v1.ListLatestFactsResponse]
+	listOpportunities            *connect.Client[v1.ListOpportunitiesRequest, v1.ListOpportunitiesResponse]
+	listAlerts                   *connect.Client[v1.ListAlertsRequest, v1.ListAlertsResponse]
+	listTriggerStates            *connect.Client[v1.ListTriggerStatesRequest, v1.ListTriggerStatesResponse]
+	listSourceHealth             *connect.Client[v1.ListSourceHealthRequest, v1.ListSourceHealthResponse]
+	listFacts                    *connect.Client[v1.ListFactsRequest, v1.ListFactsResponse]
+	ackAlert                     *connect.Client[v1.AckAlertRequest, v1.AckAlertResponse]
+	ackAll                       *connect.Client[v1.AckAllRequest, v1.AckAllResponse]
+	listUnacked                  *connect.Client[v1.ListUnackedRequest, v1.ListUnackedResponse]
+	deleteAlerts                 *connect.Client[v1.DeleteAlertsRequest, v1.DeleteAlertsResponse]
+	clearAckedAlerts             *connect.Client[v1.ClearAckedAlertsRequest, v1.ClearAckedAlertsResponse]
+	addLedgerEntry               *connect.Client[v1.AddLedgerEntryRequest, v1.AddLedgerEntryResponse]
+	listLedgerEntries            *connect.Client[v1.ListLedgerEntriesRequest, v1.ListLedgerEntriesResponse]
+	ledgerSummary                *connect.Client[v1.LedgerSummaryRequest, v1.LedgerSummaryResponse]
+	addInvestmentRecord          *connect.Client[v1.AddInvestmentRecordRequest, v1.AddInvestmentRecordResponse]
+	listInvestmentRecords        *connect.Client[v1.ListInvestmentRecordsRequest, v1.ListInvestmentRecordsResponse]
+	listKnowledgeEntries         *connect.Client[v1.ListKnowledgeEntriesRequest, v1.ListKnowledgeEntriesResponse]
+	executeOpportunity           *connect.Client[v1.ExecuteOpportunityRequest, v1.ExecuteOpportunityResponse]
+	closePosition                *connect.Client[v1.ClosePositionRequest, v1.ClosePositionResponse]
+	backfillSwapHistory          *connect.Client[v1.BackfillSwapHistoryRequest, v1.BackfillSwapHistoryReply]
+	getCNFIRadarSnapshot         *connect.Client[v1.GetCNFIRadarSnapshotRequest, v1.GetCNFIRadarSnapshotResponse]
+	getCNFIProgress              *connect.Client[v1.GetCNFIProgressRequest, v1.GetCNFIProgressResponse]
+	addCNFIHolding               *connect.Client[v1.AddCNFIHoldingRequest, v1.AddCNFIHoldingResponse]
+	addCNFIAction                *connect.Client[v1.AddCNFIActionRequest, v1.AddCNFIActionResponse]
+	listCNFIActions              *connect.Client[v1.ListCNFIActionsRequest, v1.ListCNFIActionsResponse]
+	listRepoOps                  *connect.Client[v1.ListRepoOpsRequest, v1.ListRepoOpsResponse]
+	listPositions                *connect.Client[v1.ListPositionsRequest, v1.ListPositionsResponse]
+	listBrokerPositions          *connect.Client[v1.ListBrokerPositionsRequest, v1.ListBrokerPositionsResponse]
+	closeBrokerPosition          *connect.Client[v1.CloseBrokerPositionRequest, v1.CloseBrokerPositionResponse]
+	closeBrokerPositions         *connect.Client[v1.CloseBrokerPositionsRequest, v1.CloseBrokerPositionsResponse]
+	listAccounts                 *connect.Client[v1.ListAccountsRequest, v1.ListAccountsResponse]
+	listPersonalPositions        *connect.Client[v1.ListPersonalPositionsRequest, v1.ListPersonalPositionsResponse]
+	getHedgeStructure            *connect.Client[v1.GetHedgeStructureRequest, v1.GetHedgeStructureResponse]
+	listHedgeFlow                *connect.Client[v1.ListHedgeFlowRequest, v1.ListHedgeFlowResponse]
+	trxAccountRefresh            *connect.Client[v1.TrxAccountRefreshRequest, v1.TrxAccountRefreshResponse]
+	getTrxYieldRadar             *connect.Client[v1.GetTrxYieldRadarRequest, v1.GetTrxYieldRadarResponse]
+	getTrxYieldCurve             *connect.Client[v1.GetTrxYieldCurveRequest, v1.GetTrxYieldCurveResponse]
+	getRepoRateRadar             *connect.Client[v1.GetRepoRateRadarRequest, v1.GetRepoRateRadarResponse]
+	addDailyIncome               *connect.Client[v1.AddDailyIncomeRequest, v1.AddDailyIncomeResponse]
+	listDailyIncome              *connect.Client[v1.ListDailyIncomeRequest, v1.ListDailyIncomeResponse]
+	getPnlAnchor                 *connect.Client[v1.GetPnlAnchorRequest, v1.GetPnlAnchorResponse]
+	resetPnlAnchor               *connect.Client[v1.ResetPnlAnchorRequest, v1.ResetPnlAnchorResponse]
+	listKBEntries                *connect.Client[v1.ListKBEntriesRequest, v1.ListKBEntriesResponse]
+	getKBEntry                   *connect.Client[v1.GetKBEntryRequest, v1.GetKBEntryResponse]
+	listVerificationStats        *connect.Client[v1.ListVerificationStatsRequest, v1.ListVerificationStatsResponse]
+	searchBroker                 *connect.Client[v1.SearchBrokerRequest, v1.SearchBrokerResponse]
+	addBroker                    *connect.Client[v1.AddBrokerRequest, v1.AddBrokerResponse]
+	removeBroker                 *connect.Client[v1.RemoveBrokerRequest, v1.RemoveBrokerResponse]
+	listBrokerAccounts           *connect.Client[v1.ListBrokerAccountsRequest, v1.ListBrokerAccountsResponse]
+	verifyAccount                *connect.Client[v1.VerifyAccountRequest, v1.VerifyAccountResponse]
+	listExchanges                *connect.Client[v1.ListExchangesRequest, v1.ListExchangesResponse]
+	addExchange                  *connect.Client[v1.AddExchangeRequest, v1.AddExchangeResponse]
+	removeExchange               *connect.Client[v1.RemoveExchangeRequest, v1.RemoveExchangeResponse]
+	setExchangeLabel             *connect.Client[v1.SetExchangeLabelRequest, v1.SetExchangeLabelResponse]
+	setExchangeWebsite           *connect.Client[v1.SetExchangeWebsiteRequest, v1.SetExchangeWebsiteResponse]
+	brokerSymbols                *connect.Client[v1.BrokerSymbolsRequest, v1.BrokerSymbolsResponse]
+	setBrokerAccountAlias        *connect.Client[v1.SetBrokerAccountAliasRequest, v1.SetBrokerAccountAliasResponse]
+	setBrokerAccountIsReal       *connect.Client[v1.SetBrokerAccountIsRealRequest, v1.SetBrokerAccountIsRealResponse]
+	setBrokerDisabled            *connect.Client[v1.SetBrokerDisabledRequest, v1.SetBrokerDisabledResponse]
+	setBrokerCommission          *connect.Client[v1.SetBrokerCommissionRequest, v1.SetBrokerCommissionResponse]
+	setBrokerWebsite             *connect.Client[v1.SetBrokerWebsiteRequest, v1.SetBrokerWebsiteResponse]
+	listSymbolMappings           *connect.Client[v1.ListSymbolMappingsRequest, v1.ListSymbolMappingsResponse]
+	saveSymbolMapping            *connect.Client[v1.SaveSymbolMappingRequest, v1.SaveSymbolMappingResponse]
+	deleteSymbolMapping          *connect.Client[v1.DeleteSymbolMappingRequest, v1.DeleteSymbolMappingResponse]
+	listMappingSuggestions       *connect.Client[v1.ListMappingSuggestionsRequest, v1.ListMappingSuggestionsResponse]
+	listCanonicals               *connect.Client[v1.ListCanonicalsRequest, v1.ListCanonicalsResponse]
+	autoMapBroker                *connect.Client[v1.AutoMapBrokerRequest, v1.AutoMapBrokerResponse]
+	listSwapCombos               *connect.Client[v1.ListSwapCombosRequest, v1.ListSwapCombosResponse]
+	listMatrixUniverse           *connect.Client[v1.ListMatrixUniverseRequest, v1.ListMatrixUniverseResponse]
+	streamUpdates                *connect.Client[v1.StreamUpdatesRequest, v1.StreamUpdatesResponse]
+	health                       *connect.Client[v1.HealthRequest, v1.HealthResponse]
+	getFrontConfig               *connect.Client[v1.GetFrontConfigRequest, v1.GetFrontConfigResponse]
+	getStrategyLedger            *connect.Client[v1.GetStrategyLedgerRequest, v1.GetStrategyLedgerResponse]
+	getWatchlist                 *connect.Client[v1.GetWatchlistRequest, v1.GetWatchlistResponse]
+	setWatchlist                 *connect.Client[v1.SetWatchlistRequest, v1.SetWatchlistResponse]
+	askAnalyst                   *connect.Client[v1.AskAnalystRequest, v1.AskAnalystResponse]
+	appendAnalystNote            *connect.Client[v1.AppendAnalystNoteRequest, v1.AppendAnalystNoteResponse]
+	generateKbReport             *connect.Client[v1.GenerateKbReportRequest, v1.GenerateKbReportResponse]
+	getAiSettings                *connect.Client[v1.GetAiSettingsRequest, v1.GetAiSettingsResponse]
+	setAiSettings                *connect.Client[v1.SetAiSettingsRequest, v1.SetAiSettingsResponse]
+	getRepoConfig                *connect.Client[v1.GetRepoConfigRequest, v1.GetRepoConfigResponse]
+	setRepoConfig                *connect.Client[v1.SetRepoConfigRequest, v1.SetRepoConfigResponse]
+	getCexScanSnapshot           *connect.Client[v1.GetCexScanSnapshotRequest, v1.GetCexScanSnapshotResponse]
+	recordRepoTrade              *connect.Client[v1.RecordRepoTradeRequest, v1.RecordRepoTradeResponse]
+	listRepoTrades               *connect.Client[v1.ListRepoTradesRequest, v1.ListRepoTradesResponse]
+	settleRepoTrade              *connect.Client[v1.SettleRepoTradeRequest, v1.SettleRepoTradeResponse]
+	deleteRepoTrade              *connect.Client[v1.DeleteRepoTradeRequest, v1.DeleteRepoTradeResponse]
+	getRepoStrategyValidation    *connect.Client[v1.GetRepoStrategyValidationRequest, v1.GetRepoStrategyValidationResponse]
+	listPriceAlertRules          *connect.Client[v1.ListPriceAlertRulesRequest, v1.ListPriceAlertRulesResponse]
+	createPriceAlertRule         *connect.Client[v1.CreatePriceAlertRuleRequest, v1.CreatePriceAlertRuleResponse]
+	updatePriceAlertRule         *connect.Client[v1.UpdatePriceAlertRuleRequest, v1.UpdatePriceAlertRuleResponse]
+	deletePriceAlertRule         *connect.Client[v1.DeletePriceAlertRuleRequest, v1.DeletePriceAlertRuleResponse]
+	listEventJudgments           *connect.Client[v1.ListEventJudgmentsRequest, v1.ListEventJudgmentsResponse]
+	listPaperTrades              *connect.Client[v1.ListPaperTradesRequest, v1.ListPaperTradesResponse]
+	acceptJudgment               *connect.Client[v1.AcceptJudgmentRequest, v1.AcceptJudgmentResponse]
+	settlePaperTrade             *connect.Client[v1.SettlePaperTradeRequest, v1.SettlePaperTradeResponse]
+	getFinanceOverview           *connect.Client[v1.GetFinanceOverviewRequest, v1.GetFinanceOverviewResponse]
+	executeSpotCarryDemo         *connect.Client[v1.ExecuteSpotCarryDemoRequest, v1.ExecuteSpotCarryDemoResponse]
+	listSpotCarryDemo            *connect.Client[v1.ListSpotCarryDemoRequest, v1.ListSpotCarryDemoResponse]
+	listPaperSpotCarry           *connect.Client[v1.ListPaperSpotCarryRequest, v1.ListPaperSpotCarryResponse]
+	listAutotradeAllowRules      *connect.Client[v1.ListAutotradeAllowRulesRequest, v1.ListAutotradeAllowRulesResponse]
+	setAutotradeAllowRuleEnabled *connect.Client[v1.SetAutotradeAllowRuleEnabledRequest, v1.SetAutotradeAllowRuleEnabledResponse]
+	listIntraTrades              *connect.Client[v1.ListIntraTradesRequest, v1.ListIntraTradesResponse]
+	intraTrackStats              *connect.Client[v1.IntraTrackStatsRequest, v1.IntraTrackStatsResponse]
+	getCapitalCoverage           *connect.Client[v1.GetCapitalCoverageRequest, v1.GetCapitalCoverageResponse]
+	getCexFinance                *connect.Client[v1.GetCexFinanceRequest, v1.GetCexFinanceResponse]
+	listCarryGraduations         *connect.Client[v1.ListCarryGraduationsRequest, v1.ListCarryGraduationsResponse]
+	approveCarryGraduation       *connect.Client[v1.ApproveCarryGraduationRequest, v1.ApproveCarryGraduationResponse]
+	rejectCarryGraduation        *connect.Client[v1.RejectCarryGraduationRequest, v1.RejectCarryGraduationResponse]
+	listAccountMarginStatus      *connect.Client[v1.ListAccountMarginStatusRequest, v1.ListAccountMarginStatusResponse]
 }
 
 // ListLatestQuotes calls arb.dashboard.v1.DashboardService.ListLatestQuotes.
@@ -1803,6 +1826,17 @@ func (c *dashboardServiceClient) ListPaperSpotCarry(ctx context.Context, req *co
 	return c.listPaperSpotCarry.CallUnary(ctx, req)
 }
 
+// ListAutotradeAllowRules calls arb.dashboard.v1.DashboardService.ListAutotradeAllowRules.
+func (c *dashboardServiceClient) ListAutotradeAllowRules(ctx context.Context, req *connect.Request[v1.ListAutotradeAllowRulesRequest]) (*connect.Response[v1.ListAutotradeAllowRulesResponse], error) {
+	return c.listAutotradeAllowRules.CallUnary(ctx, req)
+}
+
+// SetAutotradeAllowRuleEnabled calls
+// arb.dashboard.v1.DashboardService.SetAutotradeAllowRuleEnabled.
+func (c *dashboardServiceClient) SetAutotradeAllowRuleEnabled(ctx context.Context, req *connect.Request[v1.SetAutotradeAllowRuleEnabledRequest]) (*connect.Response[v1.SetAutotradeAllowRuleEnabledResponse], error) {
+	return c.setAutotradeAllowRuleEnabled.CallUnary(ctx, req)
+}
+
 // ListIntraTrades calls arb.dashboard.v1.DashboardService.ListIntraTrades.
 func (c *dashboardServiceClient) ListIntraTrades(ctx context.Context, req *connect.Request[v1.ListIntraTradesRequest]) (*connect.Response[v1.ListIntraTradesResponse], error) {
 	return c.listIntraTrades.CallUnary(ctx, req)
@@ -1984,6 +2018,9 @@ type DashboardServiceHandler interface {
 	ListSpotCarryDemo(context.Context, *connect.Request[v1.ListSpotCarryDemoRequest]) (*connect.Response[v1.ListSpotCarryDemoResponse], error)
 	// D-352：纸面轨前端卡（持仓页第三卡）——active+demo+近 14 天 exited 三态。
 	ListPaperSpotCarry(context.Context, *connect.Request[v1.ListPaperSpotCarryRequest]) (*connect.Response[v1.ListPaperSpotCarryResponse], error)
+	// D-444：autotrade venue/canonical 执行白名单启停（行只读列出+enabled 翻转；增删走业主 SQL）
+	ListAutotradeAllowRules(context.Context, *connect.Request[v1.ListAutotradeAllowRulesRequest]) (*connect.Response[v1.ListAutotradeAllowRulesResponse], error)
+	SetAutotradeAllowRuleEnabled(context.Context, *connect.Request[v1.SetAutotradeAllowRuleEnabledRequest]) (*connect.Response[v1.SetAutotradeAllowRuleEnabledResponse], error)
 	// D-441：日内纸面轨（沙箱·D-425）观测面——成交列表+30天裁决统计。
 	ListIntraTrades(context.Context, *connect.Request[v1.ListIntraTradesRequest]) (*connect.Response[v1.ListIntraTradesResponse], error)
 	IntraTrackStats(context.Context, *connect.Request[v1.IntraTrackStatsRequest]) (*connect.Response[v1.IntraTrackStatsResponse], error)
@@ -2613,6 +2650,18 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("ListPaperSpotCarry")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceListAutotradeAllowRulesHandler := connect.NewUnaryHandler(
+		DashboardServiceListAutotradeAllowRulesProcedure,
+		svc.ListAutotradeAllowRules,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListAutotradeAllowRules")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceSetAutotradeAllowRuleEnabledHandler := connect.NewUnaryHandler(
+		DashboardServiceSetAutotradeAllowRuleEnabledProcedure,
+		svc.SetAutotradeAllowRuleEnabled,
+		connect.WithSchema(dashboardServiceMethods.ByName("SetAutotradeAllowRuleEnabled")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceListIntraTradesHandler := connect.NewUnaryHandler(
 		DashboardServiceListIntraTradesProcedure,
 		svc.ListIntraTrades,
@@ -2865,6 +2914,10 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceListSpotCarryDemoHandler.ServeHTTP(w, r)
 		case DashboardServiceListPaperSpotCarryProcedure:
 			dashboardServiceListPaperSpotCarryHandler.ServeHTTP(w, r)
+		case DashboardServiceListAutotradeAllowRulesProcedure:
+			dashboardServiceListAutotradeAllowRulesHandler.ServeHTTP(w, r)
+		case DashboardServiceSetAutotradeAllowRuleEnabledProcedure:
+			dashboardServiceSetAutotradeAllowRuleEnabledHandler.ServeHTTP(w, r)
 		case DashboardServiceListIntraTradesProcedure:
 			dashboardServiceListIntraTradesHandler.ServeHTTP(w, r)
 		case DashboardServiceIntraTrackStatsProcedure:
@@ -3292,6 +3345,14 @@ func (UnimplementedDashboardServiceHandler) ListSpotCarryDemo(context.Context, *
 
 func (UnimplementedDashboardServiceHandler) ListPaperSpotCarry(context.Context, *connect.Request[v1.ListPaperSpotCarryRequest]) (*connect.Response[v1.ListPaperSpotCarryResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListPaperSpotCarry is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListAutotradeAllowRules(context.Context, *connect.Request[v1.ListAutotradeAllowRulesRequest]) (*connect.Response[v1.ListAutotradeAllowRulesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListAutotradeAllowRules is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) SetAutotradeAllowRuleEnabled(context.Context, *connect.Request[v1.SetAutotradeAllowRuleEnabledRequest]) (*connect.Response[v1.SetAutotradeAllowRuleEnabledResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetAutotradeAllowRuleEnabled is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListIntraTrades(context.Context, *connect.Request[v1.ListIntraTradesRequest]) (*connect.Response[v1.ListIntraTradesResponse], error) {
