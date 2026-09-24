@@ -94,27 +94,23 @@ const SPOT_CARRY_COST_PCT = 0.15
 // （瞬态上市窗 spike 不入，D-328 概念复用；GUSDT 9-16 起=3 天实证）。
 const spotCarryMinAge = 48 * time.Hour
 
-// Run 一轮扫描：facts 近 24h 双面→join→结构计算→排序。
-func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanResult, error) {
-	res := ScanResult{}
-	mtSwapLong, err := sc.store.LatestFacts(ctx, "swap_long", "", "")
+// loadMtSwapInputs D-465：MT 侧输入装载共享（Run 与 StepPaperMtmCarry 同口径）——
+// swap facts + venue status 过滤 + tmKnown；cex funding 侧由 Run 自载（mt×mt 不用）。
+func (sc *CarryUniverseScanner) loadMtSwapInputs(ctx context.Context) (longF, shortF []fact.Fact,
+	tmKnown func(fact.Fact) (int64, bool), err error) {
+	longF, err = sc.store.LatestFacts(ctx, "swap_long", "", "")
 	if err != nil {
-		return res, fmt.Errorf("swap_long facts: %w", err)
+		return nil, nil, nil, fmt.Errorf("swap_long facts: %w", err)
 	}
-	mtSwapShort, err := sc.store.LatestFacts(ctx, "swap_short", "", "")
+	shortF, err = sc.store.LatestFacts(ctx, "swap_short", "", "")
 	if err != nil {
-		return res, fmt.Errorf("swap_short facts: %w", err)
-	}
-	cexFunding, err := sc.store.LatestFacts(ctx, "funding", "", "")
-	if err != nil {
-		return res, fmt.Errorf("funding facts: %w", err)
+		return nil, nil, nil, fmt.Errorf("swap_short facts: %w", err)
 	}
 	// D-388 S1.3：broker 托管 venue 非 connected → facts 退出候选（停用即剔除，
 	// 不等 facts 过期；同 autotrade discoverSwapCombos 收口谓词，fail-open 同惯例）。
 	brokerStatuses := sc.activeVenueStatuses(ctx)
-	mtSwapLong = keepDiscoverableFacts(mtSwapLong, brokerStatuses)
-	mtSwapShort = keepDiscoverableFacts(mtSwapShort, brokerStatuses)
-	cexFunding = keepDiscoverableFacts(cexFunding, brokerStatuses)
+	longF = keepDiscoverableFacts(longF, brokerStatuses)
+	shortF = keepDiscoverableFacts(shortF, brokerStatuses)
 	// D-382 S1：trade_mode 消费——可执行性过滤数据源（facts 已在库零新数据源）。
 	// 读取失败 fail-open 视同全未知（发现层不因数据缺席误杀，F5 同惯例）。
 	tmFacts, err := sc.store.LatestFacts(ctx, fact.KindTradeMode, "", "")
@@ -128,7 +124,7 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 	}
 	// tmKnown trade_mode 已知且新鲜判定：超 tradeModeTTL 视同未知（venue 停报时陈旧
 	// mode=0 不得永久压死已解禁候选——「不逃脱」公理，A7 锚）。
-	tmKnown := func(f fact.Fact) (int64, bool) {
+	tmKnown = func(f fact.Fact) (int64, bool) {
 		tf, ok := tmByKey[f.Venue+":"+f.Symbol]
 		if !ok {
 			return 0, false
@@ -138,6 +134,22 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 		}
 		return int64(tf.Value), true
 	}
+	return longF, shortF, tmKnown, nil
+}
+
+// Run 一轮扫描：facts 近 24h 双面→join→结构计算→排序。
+func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanResult, error) {
+	res := ScanResult{}
+	mtSwapLong, mtSwapShort, tmKnown, err := sc.loadMtSwapInputs(ctx)
+	if err != nil {
+		return res, err
+	}
+	cexFunding, err := sc.store.LatestFacts(ctx, "funding", "", "")
+	if err != nil {
+		return res, fmt.Errorf("funding facts: %w", err)
+	}
+	brokerStatuses := sc.activeVenueStatuses(ctx)
+	cexFunding = keepDiscoverableFacts(cexFunding, brokerStatuses)
 	filteredCanonicals := map[string]bool{} // D-382 S2：有 swap fact 进入过滤评估的 canonical 集
 	// MT swap facts D-412 F1/F2/F3：单位归一+venue 全保留+7d 窗口均值——收集逻辑
 	// 提取至 carry_universe_collect.go（D-451 S3 纯搬家，注释全文随块搬移见彼）。

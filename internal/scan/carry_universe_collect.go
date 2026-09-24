@@ -16,6 +16,7 @@ import (
 // （F3 抗 flap：swap_free=|均值年化|<1%；点值判定=抛硬币 39050818 实证）。
 type mtSwap struct {
 	venue, canonical string
+	symbol           string  // broker 裸符号（D-465：mt×mt 轨取 tick 用）
 	val              float64 // 年化 %/yr（F1 换算后；F3 起为 7d 均值年化）
 	ts               time.Time
 	stale            bool // F4：fact 龄期超闸（>UniverseSwapMaxAge）
@@ -59,7 +60,7 @@ func (sc *CarryUniverseScanner) collectMtSwaps(ctx context.Context, long, short 
 				continue // F3：窗口零样本/读失败=不产行（既有 fail-closed 语义不变）
 			}
 			out[canonical+"|"+f.Venue] = mtSwap{
-				venue: f.Venue, canonical: canonical, val: mean * 365 / 100, ts: f.Ts,
+				venue: f.Venue, canonical: canonical, symbol: f.Symbol, val: mean * 365 / 100, ts: f.Ts,
 				stale: sc.swapMaxAge > 0 && time.Since(f.Ts) > sc.swapMaxAge, // R1：swap 侧用 swap 闸（48h），修复误用 funding 闸
 			}
 		}
