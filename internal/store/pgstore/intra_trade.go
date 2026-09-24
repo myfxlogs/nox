@@ -102,8 +102,8 @@ const intraCols = `id, baseline, symbol, venue, side, status, entry_ts, entry_px
 	notional_usd, margin_usd, stop_px, exit_ts, exit_px, exit_reason, slippage_bps, pnl_usd,
 	signal_note, trade_date`
 
-func (s *Store) scanIntraTrades(ctx context.Context, q string) ([]IntraTrade, error) {
-	rows, err := s.pool.Query(ctx, q)
+func (s *Store) scanIntraTrades(ctx context.Context, q string, args ...any) ([]IntraTrade, error) {
+	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -159,11 +159,14 @@ func (s *Store) ListIntraTrades(ctx context.Context, baseline string, limit int)
 		notional_usd, margin_usd, stop_px, exit_ts, exit_px, exit_reason,
 		slippage_bps, pnl_usd, signal_note, trade_date
 		FROM paper_intra_trades`
+	args := []any{}
 	if baseline != "" {
-		q += fmt.Sprintf(` WHERE baseline = '%s'`, baseline)
+		q += ` WHERE baseline = $1`
+		args = append(args, baseline)
 	}
-	q += fmt.Sprintf(` ORDER BY id DESC LIMIT %d`, limit)
-	return s.scanIntraTrades(ctx, q)
+	q += fmt.Sprintf(` ORDER BY id DESC LIMIT $%d`, len(args)+1)
+	args = append(args, limit)
+	return s.scanIntraTrades(ctx, q, args...)
 }
 
 // IntraBaselineStatRow IntraTrackStats 聚合行（D-441 S2）。

@@ -146,3 +146,28 @@ func TestD441IntraEventGuard(t *testing.T) {
 		t.Fatalf("empty rows=%d", len(rows))
 	}
 }
+
+// 返修①回归：baseline 参数化 $1——恶意串不外溢（' OR '1'='1 必须 0 行非全表）。
+func TestD441ListIntraTradesBaselineInjection(t *testing.T) {
+	s := d441Store(t)
+	ctx := context.Background()
+	d441Trade(s, t, "momentum_break", "closed", nil, f64(1))
+	d441Trade(s, t, "meanrev", "open", nil, nil)
+
+	rows, err := s.ListIntraTrades(ctx, `' OR '1'='1`, 100)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("injection rows=%d want 0（参数化生效证）", len(rows))
+	}
+	// 单引号合法串同样按字面匹配→0 行
+	rows, err = s.ListIntraTrades(ctx, "x'; DROP TABLE paper_intra_trades;--", 100)
+	if err != nil || len(rows) != 0 {
+		t.Fatalf("inject2 rows=%d err=%v", len(rows), err)
+	}
+	// 表仍在（DROP 未生效）
+	if _, err := s.pool.Exec(ctx, "SELECT 1 FROM paper_intra_trades LIMIT 1"); err != nil {
+		t.Fatalf("table dropped: %v", err)
+	}
+}
