@@ -173,6 +173,10 @@ service DashboardService {
   // D-352：纸面轨前端卡（持仓页第三卡）——active+demo+近 14 天 exited 三态。
   rpc ListPaperSpotCarry(ListPaperSpotCarryRequest) returns (ListPaperSpotCarryResponse);
 
+  // D-444：autotrade venue/canonical 执行白名单启停（行只读列出+enabled 翻转；增删走业主 SQL）
+  rpc ListAutotradeAllowRules(ListAutotradeAllowRulesRequest) returns (ListAutotradeAllowRulesResponse);
+  rpc SetAutotradeAllowRuleEnabled(SetAutotradeAllowRuleEnabledRequest) returns (SetAutotradeAllowRuleEnabledResponse);
+
   // D-441：日内纸面轨（沙箱·D-425）观测面——成交列表+30天裁决统计。
   rpc ListIntraTrades(ListIntraTradesRequest) returns (ListIntraTradesResponse);
   rpc IntraTrackStats(IntraTrackStatsRequest) returns (IntraTrackStatsResponse);
@@ -2162,6 +2166,33 @@ message PaperTrackSummary {
 message ListPaperSpotCarryResponse {
   repeated PaperSpotCarryRow rows = 1;   // active（net_now desc，null 殿后）→ demo → exited（exit_ts desc）
   repeated PaperTrackSummary tracks = 2; // D-393：轨级汇总（固定序四轨，未知 structure 尾追加）
+}
+
+// === D-444：autotrade 执行白名单启停（autotrade_allow_rules 读写面）===
+
+message AutotradeAllowRuleRow {
+  int64 id = 1;
+  string kind = 2;      // venue / canonical
+  string value = 3;     // venue_key 或 canonical symbol
+  bool enabled = 4;
+  bool simulated = 5;   // live 引擎只读 simulated=false
+  string note = 6;
+}
+
+message ListAutotradeAllowRulesRequest {}
+
+message ListAutotradeAllowRulesResponse {
+  repeated AutotradeAllowRuleRow rules = 1; // ORDER BY kind,value
+}
+
+message SetAutotradeAllowRuleEnabledRequest {
+  int64 id = 1;
+  bool enabled = 2;
+  string note = 3; // 非空才覆写 note
+}
+
+message SetAutotradeAllowRuleEnabledResponse {
+  bool ok = 1;
 }
 
 // === D-441：日内纸面轨（沙箱·D-425）观测面 ===
