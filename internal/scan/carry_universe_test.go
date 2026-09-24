@@ -19,6 +19,7 @@ type fakeScanStore struct {
 	alerts      []string
 	universe    map[string]pgstore.CexUniverseRow
 	statuses    map[string]string // D-388：venue→status（nil=fail-open 全放行）
+	aliases     map[string]string // D-464：alias→canonical
 }
 
 func (f *fakeScanStore) LatestFacts(_ context.Context, kind, _, _ string) ([]fact.Fact, error) {
@@ -56,6 +57,13 @@ func (f *fakeScanStore) ListSymbolMappings(_ context.Context, venue string) ([]p
 func (f *fakeScanStore) ReplaceCarryUniverse(_ context.Context, rows []pgstore.CarryUniverseRow) error {
 	f.replaced = rows
 	return nil
+}
+
+func (f *fakeScanStore) ListSymbolAliases(_ context.Context) (map[string]string, error) {
+	if f.aliases == nil {
+		return map[string]string{}, nil
+	}
+	return f.aliases, nil
 }
 
 func (f *fakeScanStore) ListCexUniverse(_ context.Context) (map[string]pgstore.CexUniverseRow, error) {

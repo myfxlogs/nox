@@ -237,4 +237,6 @@ var (
 	IntraEventsSQL string
 	//go:embed 0136_cex_private_events.sql
 	CexPrivateEventsSQL string
+	//go:embed 0137_symdig.sql
+	SymdigSQL string
 )

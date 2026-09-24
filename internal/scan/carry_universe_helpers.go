@@ -42,6 +42,43 @@ func NormalizeJoinKey(s string) string {
 	return s
 }
 
+// applyAlias D-464 S1：canonical 命中别名表→替换；否则原样（纯函数，map 一次载入传入）。
+func applyAlias(canonical string, aliases map[string]string) string {
+	if c, ok := aliases[canonical]; ok && c != "" {
+		return c
+	}
+	return canonical
+}
+
+// cleanAliases D-464 S1：载入时检测循环（A→B→A 或链回环）剔除并返回剔除清单（warn 用）。
+// 非循环链（A→B，B→C）允许逐级解析，深度上限=len(map)。
+func cleanAliases(in map[string]string) (map[string]string, []string) {
+	var dropped []string
+	out := map[string]string{}
+	for a, c := range in {
+		seen := map[string]bool{a: true}
+		cur, cyclic := c, false
+		for {
+			nxt, ok := in[cur]
+			if !ok {
+				break // cur=终 canonical（非 alias 键）
+			}
+			if seen[cur] {
+				cyclic = true
+				break
+			}
+			seen[cur] = true
+			cur = nxt
+		}
+		if cyclic || cur == "" {
+			dropped = append(dropped, a)
+			continue
+		}
+		out[a] = cur // 预解析到终 canonical
+	}
+	return out, dropped
+}
+
 func abs(v float64) float64 {
 	if v < 0 {
 		return -v

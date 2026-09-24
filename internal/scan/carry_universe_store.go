@@ -22,6 +22,11 @@ func (p *PGStore) ListSymbolMappings(ctx context.Context, venue string) ([]pgsto
 	return p.S.ListSymbolMappings(ctx, venue)
 }
 
+// ListSymbolAliases D-464 S1：别名表透传。
+func (p *PGStore) ListSymbolAliases(ctx context.Context) (map[string]string, error) {
+	return p.S.ListSymbolAliases(ctx)
+}
+
 // ListCexUniverse D-350：fin_cex_universe 雷达表（spot_carry 第三结构数据源）。
 func (p *PGStore) ListCexUniverse(ctx context.Context) (map[string]pgstore.CexUniverseRow, error) {
 	return p.S.ListCexUniverse(ctx)

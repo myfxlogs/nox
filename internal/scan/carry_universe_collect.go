@@ -26,6 +26,7 @@ type mtSwap struct {
 // modeAllowed 方向参。filtered/res.Skipped 为副作用参数（语义随原版保留）。
 func (sc *CarryUniverseScanner) collectMtSwaps(ctx context.Context, long, short []fact.Fact,
 	tmKnown func(fact.Fact) (int64, bool), filtered map[string]bool, res *ScanResult,
+	aliases map[string]string,
 ) (map[string]mtSwap, map[string]mtSwap) {
 	collect := func(facts []fact.Fact, kind string, isLong bool) map[string]mtSwap {
 		out := map[string]mtSwap{}
@@ -42,6 +43,14 @@ func (sc *CarryUniverseScanner) collectMtSwaps(ctx context.Context, long, short 
 				if m.BrokerSymbol == f.Symbol && m.Canonical != "" {
 					canonical = NormalizeJoinKey(m.Canonical) // D-336R1：双侧规范化后入键
 					break
+				}
+			}
+			// D-464 S1：别名双侧——映射 canonical 过别名；map miss 时仅别名命中才可直配
+			// （裸归一 raw symbol 不算映射线索，与 symdig 分类器同口径）。
+			canonical = applyAlias(canonical, aliases)
+			if canonical == "" {
+				if v, ok := aliases[NormalizeJoinKey(f.Symbol)]; ok {
+					canonical = v
 				}
 			}
 			if canonical == "" {

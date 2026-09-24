@@ -26,6 +26,8 @@ type Store interface {
 	ListBrokerAccountStatuses(ctx context.Context) (map[string]string, error)
 	// ListCexUniverse D-350：CEX 宇宙雷达表（spot_carry 第三结构数据源；first_seen 持续性闸锚）。
 	ListCexUniverse(ctx context.Context) (map[string]pgstore.CexUniverseRow, error)
+	// ListSymbolAliases D-464 S1：alias→canonical 语义别名表（Run 开头载一次）。
+	ListSymbolAliases(ctx context.Context) (map[string]string, error)
 }
 
 // UniverseRow 单 canonical×最优 venue 组合的净 carry 排名行。
@@ -138,10 +140,19 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 		}
 		return int64(tf.Value), true
 	}
+	// D-464 S1：语义别名表载入（一轮一次）；载入失败=报错不静默（同 ListCexUniverse 路径）。
+	rawAliases, err := sc.store.ListSymbolAliases(ctx)
+	if err != nil {
+		return res, fmt.Errorf("symbol aliases: %w", err)
+	}
+	aliases, dropped := cleanAliases(rawAliases)
+	if len(dropped) > 0 {
+		log.Printf("[scan] carry universe: %d alias 循环剔除: %v", len(dropped), dropped)
+	}
 	filteredCanonicals := map[string]bool{} // D-382 S2：有 swap fact 进入过滤评估的 canonical 集
 	// MT swap facts D-412 F1/F2/F3：单位归一+venue 全保留+7d 窗口均值——收集逻辑
 	// 提取至 carry_universe_collect.go（D-451 S3 纯搬家，注释全文随块搬移见彼）。
-	longByCanon, shortByCanon := sc.collectMtSwaps(ctx, mtSwapLong, mtSwapShort, tmKnown, filteredCanonicals, &res)
+	longByCanon, shortByCanon := sc.collectMtSwaps(ctx, mtSwapLong, mtSwapShort, tmKnown, filteredCanonicals, &res, aliases)
 	// CEX funding：symbol→canonical（去 USDT）；F2 同款 venue 全保留（每 venue 一行，
 	// 不再 abs 取最优——cex argmax 会使授权组合在 funding 排名易主日假 warn+保底失明）。
 	// funding 符号定结构方向：>0=多 perp 付息→配空 CFD 收息；<0=反向。
@@ -153,7 +164,7 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 	}
 	fundByCanon := map[string]cexF{}
 	for _, f := range cexFunding {
-		canonical := NormalizeJoinKey(cexCanonical(f.Symbol)) // D-336R1：双侧规范化后入键
+		canonical := applyAlias(NormalizeJoinKey(cexCanonical(f.Symbol)), aliases) // D-336R1+D-464：归一+别名
 		if canonical == "" {
 			res.Skipped++
 			continue
