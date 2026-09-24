@@ -8,6 +8,7 @@ import (
 	"log"
 	"time"
 
+	"arb/internal/collect/exchange"
 	"arb/internal/reconcile"
 )
 
@@ -16,6 +17,9 @@ type CexPositionManager struct {
 	bm       *BrokerManager
 	store    ExchangeStore
 	interval time.Duration
+	// PositionCache D-450 S6：私有 WS 持仓事件缓存——非 nil 时各 querier 包装
+	// CachedVenueQuerier（全量快照 fresh≤10s 直返，REST 真相源兜底不拆）。
+	PositionCache *exchange.PositionEventCache
 
 	keys map[string]bool // 上轮已注册的 venueKey（diff 日志用）
 }
@@ -68,7 +72,12 @@ func (m *CexPositionManager) sync(ctx context.Context) {
 		seen[vk] = true
 		q := reconcile.NewCEXPositionQuerier(c.Venue, c.VenueType, c.APIKey, c.APISecret, c.Passphrase, base, c.Simulated)
 		q.SetKeyOverride(vk)
-		qs = append(qs, q)
+		var vq reconcile.VenueQuerier = q
+		if m.PositionCache != nil {
+			// D-450：包装事件缓存加速层——REST 仍是真相源（miss/stale 回落）。
+			vq = exchange.NewCachedVenueQuerier(q, m.PositionCache)
+		}
+		qs = append(qs, vq)
 		if !m.keys[vk] {
 			log.Printf("[cex-pos] register %s (base=%s simulated=%v)", vk, base, c.Simulated)
 		}

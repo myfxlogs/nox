@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"arb/internal/collect/exchange"
 	"arb/internal/exec"
 	"arb/internal/reconcile"
 )
@@ -26,6 +27,9 @@ type CexExecutorManager struct {
 	// OrderStatusHook D-421 §1.5：exchange_configs 刷新后镜像订单级查单器集合
 	// → recon.SetOrderStatusQueriers（nil=未接线）。
 	OrderStatusHook func(map[string]exec.OrderStatusQuerier)
+	// OrderCache D-450 S6：私有 WS 订单事件缓存——非 nil 时 osqs 各键包装
+	// CachedOrderStatusQuerier（新鲜事件直返，REST 真相源兜底不拆）。
+	OrderCache *exchange.OrderEventCache
 
 	mu   sync.Mutex
 	keys map[string]bool // 上轮已注册的 venueKey（diff 用）
@@ -93,6 +97,10 @@ func (m *CexExecutorManager) sync(ctx context.Context) {
 		exe.AlertFn = m.alertFn // D-108 P2 T1：平仓被拒 critical 告警注入
 		m.reg.Register(exe)
 		osqs[vk] = exe // D-421：订单级查单面同生命周期镜像
+		if m.OrderCache != nil {
+			// D-450：包装事件缓存加速层——REST 仍是真相源（miss/stale 回落）。
+			osqs[vk] = exchange.NewCachedOrderStatusQuerier(vk, exe, m.OrderCache)
+		}
 		if !m.keys[vk] {
 			log.Printf("[cex-exec] register %s (base=%s simulated=%v)", vk, base, c.Simulated)
 		}
