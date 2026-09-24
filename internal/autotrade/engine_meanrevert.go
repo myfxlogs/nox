@@ -19,9 +19,10 @@ func (e *Engine) meanRevertLoop(ctx context.Context) {
 		log.Println("[autotrade] meanRevertLoop: no thresholds configured (ARB_MEANREVERT_THRESHOLDS empty)")
 		return
 	}
-	// venue 对从 AllowVenues 提取（前两个）
-	venues := make([]string, 0, len(e.cfg.AllowVenues))
-	for v := range e.cfg.AllowVenues {
+	// venue 对从 AllowVenues 提取（前两个；D-443 热读 holder，sort 确定性语义不变）
+	allow := e.allowVenues()
+	venues := make([]string, 0, len(allow))
+	for v := range allow {
 		venues = append(venues, v)
 	}
 	sort.Strings(venues)

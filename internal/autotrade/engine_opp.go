@@ -57,14 +57,9 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 		log.Printf("[autotrade] skip %s: exclude canonicals (%s)", opp.ID, opp.Canonical)
 		return
 	}
-	// D-072 §3.4：venue 白名单从 env 读取
-	if !e.cfg.AllowVenues[opp.VenueBuy] || !e.cfg.AllowVenues[opp.VenueSell] {
-		log.Printf("[autotrade] skip %s: venue not in allowlist (%s/%s)", opp.ID, opp.VenueBuy, opp.VenueSell)
-		return
-	}
-	// D-072 §3.4：symbol 白名单从 env 读取
-	if len(e.cfg.AllowCanonicals) > 0 && !e.cfg.AllowCanonicals[opp.Canonical] {
-		log.Printf("[autotrade] skip %s: canonical not in allowlist (%s)", opp.ID, opp.Canonical)
+	// D-072 §3.4：venue/symbol 白名单（D-443 表化热读 holder）
+	if reason := e.allowRuleReject(opp); reason != "" {
+		log.Printf("[autotrade] skip %s: %s", opp.ID, reason)
 		return
 	}
 	// D-159 W1a R1 + D-168 自动准入：SWAPARB 发现层组合过滤。

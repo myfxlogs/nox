@@ -31,10 +31,12 @@ type Engine struct {
 	// approve RPC 后经 ReloadXAssetAllowCombos 免重启生效）。读侧 handleOpportunity
 	// 高频 vs 写侧 approve 低频——atomic Load/Store 无锁竞态安全（S6 race ×3 强制）。
 	xassetAllow atomic.Pointer[[]exec.XAssetComboAllowSpec]
-	service     *dashboard.Service
-	oppTopic    *bus.Topic[pgstore.Opportunity]
-	quotes      *bus.QuoteBus // 实时报价（D-070 均值回归平仓用）
-	gate        *Gate         // 统一开仓门禁（D-072）
+	// D-443 S2：venue/canonical 执行白名单热读 holder（60s 周期重载免重启，同 xassetAllow 模式）。
+	allowRules atomic.Pointer[allowRules]
+	service    *dashboard.Service
+	oppTopic   *bus.Topic[pgstore.Opportunity]
+	quotes     *bus.QuoteBus // 实时报价（D-070 均值回归平仓用）
+	gate       *Gate         // 统一开仓门禁（D-072）
 
 	// D-182 S1：零结算检测器（scanAndClose 周期对活跃仓检测恒零 → settled=0）。
 	// nil = 未注入（跳过零检测，向后兼容）。
