@@ -108,42 +108,6 @@ type AccountQuerier interface {
 	VenueKey() string
 }
 
-// accountSummaryToInfo 从 MT5 AccountSummary 映射账户视图（D-053）。
-func accountSummaryToInfoMT5(venue, venueType string, sum *mt5pb.AccountSummary) *AccountInfo {
-	return &AccountInfo{
-		VenueKey:   venue + ":" + venueType,
-		Venue:      venue,
-		VenueType:  venueType,
-		AssetType:  "cfd",
-		Balance:    sum.GetBalance(),
-		Credit:     sum.GetCredit(),
-		Profit:     sum.GetProfit(),
-		Equity:     sum.GetEquity(),
-		Margin:     sum.GetMargin(),
-		FreeMargin: sum.GetFreeMargin(),
-		Leverage:   sum.GetLeverage(),
-		Currency:   sum.GetCurrency(),
-	}
-}
-
-// accountSummaryToInfoMT4 从 MT4 AccountSummary 映射账户视图（字段与 MT5 同形，生成类型不同）。
-func accountSummaryToInfoMT4(venue, venueType string, sum *mt4.AccountSummary) *AccountInfo {
-	return &AccountInfo{
-		VenueKey:   venue + ":" + venueType,
-		Venue:      venue,
-		VenueType:  venueType,
-		AssetType:  "cfd",
-		Balance:    sum.GetBalance(),
-		Credit:     sum.GetCredit(),
-		Profit:     sum.GetProfit(),
-		Equity:     sum.GetEquity(),
-		Margin:     sum.GetMargin(),
-		FreeMargin: sum.GetFreeMargin(),
-		Leverage:   sum.GetLeverage(),
-		Currency:   sum.GetCurrency(),
-	}
-}
-
 // isARBOrder 判断 broker 订单是否为当前 ARB 系统开出。
 // 当前 exec 下单 comment 统一为 exec.OrderComment（"arb"）→ 前缀匹配即 ARB 源。
 // 其余一律系统外单：遗留 ca_/cx_/tri_+hex 格式（旧系统 D-033）、手工单 UUID、空 comment。
