@@ -21,6 +21,7 @@
 | Binance 合约用户数据流 WS | `/ws` | `https://fstream.binance.com` | 否 |
 | Binance 模拟合约用户数据流 WS | `/demofws` | `https://demo-fstream.binance.com` | 是 |
 | Binance 现货用户数据流 WS | `/spotws` | `https://stream.binance.com:9443` | 是 |
+| Binance 现货用户数据流 ws-api 控制面 | `/wsapi` | `https://ws-api.binance.com` | 是 |
 
 WS 路由经 `httputil.ReverseProxy` Upgrade 透传，`tokenGate` 同护（WS 握手一样要 `X-Proxy-Token`）。
 `/ws` 是字符串前缀匹配非段匹配——保留给 fstream 用户流，勿新增 `/ws*` 其他路由。
@@ -35,6 +36,7 @@ WS 路由经 `httputil.ReverseProxy` Upgrade 透传，`tokenGate` 同护（WS �
 {
   "upstreams": [
     {"prefix": "/spotws", "target": "https://stream.binance.com:9443", "strip_prefix": true},
+    {"prefix": "/wsapi", "target": "https://ws-api.binance.com", "strip_prefix": true},
     {"prefix": "/api/v5", "target": "https://www.okx.com"},
     {"prefix": "/v4/ws", "target": "https://fx-ws.gateio.ws"},
     {"prefix": "/api/v4", "target": "https://api.gateio.ws"},

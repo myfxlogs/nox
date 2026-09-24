@@ -49,6 +49,7 @@ type Config struct {
 func defaultConfig() Config {
 	return Config{Upstreams: []Upstream{
 		{Prefix: "/spotws", Target: "https://stream.binance.com:9443", StripPrefix: true},
+		{Prefix: "/wsapi", Target: "https://ws-api.binance.com", StripPrefix: true},
 		{Prefix: "/api/v5", Target: "https://www.okx.com"},
 		{Prefix: "/v4/ws", Target: "https://fx-ws.gateio.ws"},
 		{Prefix: "/api/v4", Target: "https://api.gateio.ws"},
