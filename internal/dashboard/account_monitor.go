@@ -202,10 +202,19 @@ func (m *AccountMonitor) queriers(ctx context.Context) []reconcile.AccountQuerie
 }
 
 // poll 一次轮询：逐查询器 → 更新状态 → 构建视图 → 变更则广播。
+// D-460 S1 两阶段拆分（D-447 遗留 wart 真修）：无锁段跑网络 RPC，锁内只做内存
+// merge——旧实现持写锁跨逐 venue RPC 循环，Snapshot（ListAccounts 拉路径）全程排队。
 func (m *AccountMonitor) poll(ctx context.Context) {
 	// queriers() 内部取 m.mu.RLock——必须先于写锁获取（RWMutex 非重入，持写锁再读锁会自锁）。
 	qs := m.queriers(ctx)
-	m.mu.Lock()
+
+	// 无锁段：纯网络 RPC。cooldown 自带互斥（Skip/Record 均线程安全），不依赖 m.mu。
+	type pollRes struct {
+		vk   string
+		acct *reconcile.AccountInfo
+		err  error
+	}
+	results := make([]pollRes, 0, len(qs))
 	for _, q := range qs {
 		if q == nil {
 			continue
@@ -218,21 +227,27 @@ func (m *AccountMonitor) poll(ctx context.Context) {
 			continue
 		}
 		acct, err := q.Account(ctx)
-		m.cooldown.Record(vk, err)
-		st := m.states[vk]
-		if err != nil {
+		results = append(results, pollRes{vk: vk, acct: acct, err: err})
+	}
+
+	// 锁内段：纯内存 merge（cooldown Record + states 更新），零 RPC。
+	m.mu.Lock()
+	for _, r := range results {
+		m.cooldown.Record(r.vk, r.err)
+		st := m.states[r.vk]
+		if r.err != nil {
 			// 离线：保留最近成功快照（D-052 业主决策），不覆盖 acct。
 			if !st.online {
 				// 从未在线：也记录一次（CEX 首次配置失败曾静默无日志，难排障）
-				log.Printf("[account-mon] %s first-poll error: %v", vk, err)
+				log.Printf("[account-mon] %s first-poll error: %v", r.vk, r.err)
 				continue
 			}
 			st.online = false
-			m.states[vk] = st
-			log.Printf("[account-mon] %s offline: %v", vk, err)
+			m.states[r.vk] = st
+			log.Printf("[account-mon] %s offline: %v", r.vk, r.err)
 			continue
 		}
-		m.states[vk] = acctVenueState{online: true, acct: acct}
+		m.states[r.vk] = acctVenueState{online: true, acct: r.acct}
 	}
 	m.mu.Unlock()
 
