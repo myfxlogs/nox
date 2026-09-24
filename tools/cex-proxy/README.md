@@ -17,6 +17,13 @@
 | Binance 合约 | `/fapi` | `https://fapi.binance.com` | 否 |
 | Binance 模拟现货 | `/demo` | `https://demo-api.binance.com` | 是 |
 | Binance 模拟合约 | `/demofapi` | `https://demo-fapi.binance.com` | 是 |
+| Gate 合约 WS | `/v4/ws` | `https://fx-ws.gateio.ws` | 否 |
+| Binance 合约用户数据流 WS | `/ws` | `https://fstream.binance.com` | 否 |
+| Binance 模拟合约用户数据流 WS | `/demofws` | `https://demo-fstream.binance.com` | 是 |
+| Binance 现货用户数据流 WS | `/spotws` | `https://stream.binance.com:9443` | 是 |
+
+WS 路由经 `httputil.ReverseProxy` Upgrade 透传，`tokenGate` 同护（WS 握手一样要 `X-Proxy-Token`）。
+`/ws` 是字符串前缀匹配非段匹配——保留给 fstream 用户流，勿新增 `/ws*` 其他路由。
 
 最长前缀匹配：`/api/v5` 命中 OKX 先于 `/api` 命中 Binance，零冲突。
 
@@ -27,11 +34,16 @@
 ```json
 {
   "upstreams": [
+    {"prefix": "/spotws", "target": "https://stream.binance.com:9443", "strip_prefix": true},
     {"prefix": "/api/v5", "target": "https://www.okx.com"},
+    {"prefix": "/v4/ws", "target": "https://fx-ws.gateio.ws"},
     {"prefix": "/api/v4", "target": "https://api.gateio.ws"},
     {"prefix": "/demofapi", "target": "https://demo-fapi.binance.com", "strip_prefix": true},
+    {"prefix": "/demofws", "target": "https://demo-fstream.binance.com", "strip_prefix": true},
     {"prefix": "/demo", "target": "https://demo-api.binance.com", "strip_prefix": true},
     {"prefix": "/fapi", "target": "https://fapi.binance.com"},
+    {"prefix": "/sapi", "target": "https://api.binance.com"},
+    {"prefix": "/ws", "target": "https://fstream.binance.com"},
     {"prefix": "/api", "target": "https://api.binance.com"}
   ]
 }

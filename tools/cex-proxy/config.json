@@ -1,11 +1,15 @@
 {
   "upstreams": [
+    {"prefix": "/spotws", "target": "https://stream.binance.com:9443", "strip_prefix": true},
     {"prefix": "/api/v5", "target": "https://www.okx.com"},
+    {"prefix": "/v4/ws", "target": "https://fx-ws.gateio.ws"},
     {"prefix": "/api/v4", "target": "https://api.gateio.ws"},
     {"prefix": "/demofapi", "target": "https://demo-fapi.binance.com", "strip_prefix": true},
+    {"prefix": "/demofws", "target": "https://demo-fstream.binance.com", "strip_prefix": true},
     {"prefix": "/demo", "target": "https://demo-api.binance.com", "strip_prefix": true},
     {"prefix": "/fapi", "target": "https://fapi.binance.com"},
     {"prefix": "/sapi", "target": "https://api.binance.com"},
+    {"prefix": "/ws", "target": "https://fstream.binance.com"},
     {"prefix": "/api", "target": "https://api.binance.com"}
   ]
 }

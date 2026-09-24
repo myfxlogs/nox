@@ -48,12 +48,16 @@ type Config struct {
 // 无配置文件时使用此默认值，保证向后兼容。
 func defaultConfig() Config {
 	return Config{Upstreams: []Upstream{
+		{Prefix: "/spotws", Target: "https://stream.binance.com:9443", StripPrefix: true},
 		{Prefix: "/api/v5", Target: "https://www.okx.com"},
+		{Prefix: "/v4/ws", Target: "https://fx-ws.gateio.ws"},
 		{Prefix: "/api/v4", Target: "https://api.gateio.ws"},
 		{Prefix: "/demofapi", Target: "https://demo-fapi.binance.com", StripPrefix: true},
+		{Prefix: "/demofws", Target: "https://demo-fstream.binance.com", StripPrefix: true},
 		{Prefix: "/demo", Target: "https://demo-api.binance.com", StripPrefix: true},
 		{Prefix: "/fapi", Target: "https://fapi.binance.com"},
 		{Prefix: "/sapi", Target: "https://api.binance.com"},
+		{Prefix: "/ws", Target: "https://fstream.binance.com"},
 		{Prefix: "/api", Target: "https://api.binance.com"},
 	}}
 }

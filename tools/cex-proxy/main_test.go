@@ -222,6 +222,83 @@ func TestNoPrefixMatch404(t *testing.T) {
 	}
 }
 
+// WS 路由断言（D-450）：四条 WS 前缀命中正确上游，strip 行为正确。
+func TestWSRoutePrefixes(t *testing.T) {
+	type hit struct{ host, path string }
+	seen := make(map[string]chan hit)
+	srv := func(name string) *httptest.Server {
+		ch := make(chan hit, 1)
+		seen[name] = ch
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ch <- hit{r.Host, r.URL.Path}
+			io.WriteString(w, name)
+		}))
+	}
+	gateWS := srv("gatews")
+	fstream := srv("fstream")
+	demoFStream := srv("demofws")
+	spotWS := srv("spotws")
+	defer gateWS.Close()
+	defer fstream.Close()
+	defer demoFStream.Close()
+	defer spotWS.Close()
+
+	cfg := Config{Upstreams: []Upstream{
+		{Prefix: "/ws", Target: fstream.URL},
+		{Prefix: "/v4/ws", Target: gateWS.URL},
+		{Prefix: "/demofws", Target: demoFStream.URL, StripPrefix: true},
+		{Prefix: "/spotws", Target: spotWS.URL, StripPrefix: true},
+		{Prefix: "/api", Target: fstream.URL}, // 干扰项：/ws 不得被 /api 抢
+	}}
+	h, err := newHandler("tok", cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	get := func(path string) string {
+		req, _ := http.NewRequest(http.MethodGet, ts.URL+path, nil)
+		req.Header.Set("X-Proxy-Token", "tok")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		return string(body)
+	}
+
+	// gate WS：不 strip，上游收到原路径 /v4/ws/usdt。
+	if got := get("/v4/ws/usdt"); got != "gatews" {
+		t.Fatalf("/v4/ws 应命中 gate WS 上游，got %q", got)
+	}
+	if h := <-seen["gatews"]; h.path != "/v4/ws/usdt" {
+		t.Fatalf("gate WS 不应 strip，got path=%q", h.path)
+	}
+	// binance 合约用户流：/ws/<key> → fstream 不 strip。
+	if got := get("/ws/abc123key"); got != "fstream" {
+		t.Fatalf("/ws 应命中 fstream 上游，got %q", got)
+	}
+	if h := <-seen["fstream"]; h.path != "/ws/abc123key" {
+		t.Fatalf("fstream 不应 strip，got path=%q", h.path)
+	}
+	// demo 用户流：strip /demofws → /ws/<key>。
+	if got := get("/demofws/ws/keyX"); got != "demofws" {
+		t.Fatalf("/demofws 应命中 demo fstream，got %q", got)
+	}
+	if h := <-seen["demofws"]; h.path != "/ws/keyX" {
+		t.Fatalf("demofws 应 strip 为 /ws/<key>，got path=%q", h.path)
+	}
+	// spot 用户流：strip /spotws → /ws/<key>。
+	if got := get("/spotws/ws/keyY"); got != "spotws" {
+		t.Fatalf("/spotws 应命中 spot stream，got %q", got)
+	}
+	if h := <-seen["spotws"]; h.path != "/ws/keyY" {
+		t.Fatalf("spotws 应 strip 为 /ws/<key>，got path=%q", h.path)
+	}
+}
+
 // 默认配置包含 OKX + Gate + Binance 全上游。
 func TestDefaultConfigHasAllCEX(t *testing.T) {
 	cfg := defaultConfig()
@@ -240,5 +317,15 @@ func TestDefaultConfigHasAllCEX(t *testing.T) {
 	}
 	if prefixes["/fapi"] != "https://fapi.binance.com" {
 		t.Errorf("默认配置缺 Binance futures: got %q", prefixes["/fapi"])
+	}
+	for p, want := range map[string]string{
+		"/v4/ws":   "https://fx-ws.gateio.ws",
+		"/ws":      "https://fstream.binance.com",
+		"/demofws": "https://demo-fstream.binance.com",
+		"/spotws":  "https://stream.binance.com:9443",
+	} {
+		if prefixes[p] != want {
+			t.Errorf("默认配置缺 WS 路由 %s: got %q", p, prefixes[p])
+		}
 	}
 }
