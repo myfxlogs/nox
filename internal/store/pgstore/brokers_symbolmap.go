@@ -181,6 +181,24 @@ func (s *Store) ContractSizeByBrokerSymbol(ctx context.Context, venueKey, broker
 	return val, true, nil
 }
 
+// CanonicalByBrokerSymbol 按 (venue, broker_symbol) 反查 canonical（D-430 margin-guard
+// tick 键域：MT 腿 venue_symbol → ticks 存 canonical）。ok=false = 未映射（诚实 data_stale
+// 由调用方落地）；venue 为裸账户号（venueKey 前缀），行唯一由 (venue,broker_symbol) 唯一索引保证。
+func (s *Store) CanonicalByBrokerSymbol(ctx context.Context, venue, brokerSymbol string) (string, bool, error) {
+	var c string
+	err := s.pool.QueryRow(ctx, `
+		SELECT canonical FROM broker_symbol_map
+		WHERE venue = $1 AND broker_symbol = $2
+	`, venue, brokerSymbol).Scan(&c)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	return c, true, nil
+}
+
 // BackfillSymbolContracts 为 venue 下 contract_size 为 NULL 的既有映射补写权威合约
 // （broker 自取，D-042 后启动时回填；历史映射先于合约采集功能存在，NULL 使规格画像为空 →
 // 校验形同虚设）。未命中符号保持 NULL（合约未知，跳过校验，合法）。
