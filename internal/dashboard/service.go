@@ -118,7 +118,7 @@ type Service struct {
 	slippageBps float64
 	// D-391：回本列「本」口径 CEX 腿 fee_usd NULL 回退估算率（cfg.XAssetCexFeeBps，bps）。
 	xassetCexFeeBps float64
-	// D-127 P2：binance:perp stepSize 权威元数据（运行时 exchangeInfo + fallback）。nil = 仅用 fallback。
+	// D-127 P2 + D-466：binance:perp stepSize 权威元数据（运行时 exchangeInfo 唯一源，硬编码 fallback 已撤）。
 	stepMeta *cexStepMeta
 	// D-311 R4：okx:perp 腿最小张数 lotSz 查询（instId→lotSz，instruments 同源缓存）。
 	// nil = 未接线 → okx:perp step=0 fail-closed。

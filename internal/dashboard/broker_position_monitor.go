@@ -4,7 +4,6 @@ package dashboard
 import (
 	"context"
 	"log"
-	"maps"
 	"strconv"
 	"strings"
 	"sync"
@@ -56,23 +55,14 @@ type BrokerPositionMonitor struct {
 	tzCache        ServerTZCache
 	cexIntervals   *exchange.FundingIntervalCache
 	cexFundingRate func(ctx context.Context, venue, symbol string) (annualPct float64, ok bool)
+	// D-466 S3：腿级 venue 原生结算时刻/周期源（funding_next_settle+funding_interval
+	// facts）。返回零值=该腿无真值 fact（诚实缺→interval 边界→8h 回退）。
+	cexNextSettle func(ctx context.Context, venue, symbol string) (nextSettle, factTs time.Time, interval time.Duration)
 }
 
 // SetCEXFundingRate D-337R3 S1：注入 CEX 腿年化费率源（构造必选第 8 参之外的同 commit 接线面）。
 func (m *BrokerPositionMonitor) SetCEXFundingRate(fundingRate func(ctx context.Context, venue, symbol string) (float64, bool)) {
 	m.cexFundingRate = fundingRate
-}
-
-// SwapSnapshotStore D-110 P2 swap 快照采集依赖（setter 注入，避免 NewBrokerPositionMonitor 签名变更）。
-type SwapSnapshotStore interface {
-	InsertSwapSnapshot(ctx context.Context, posID int64, venue string, swapUSD float64, ts time.Time) error
-	PositionLegLister
-}
-
-// SetSwapSnapshotStore D-110 P2 注入 swap 快照采集依赖（boot 时调用）。
-func (m *BrokerPositionMonitor) SetSwapSnapshotStore(s SwapSnapshotStore) {
-	m.swapSnapStore = s
-	m.lastSwapByTicket = make(map[string]float64)
 }
 
 // SetAccountMonitor D-124 注入账户 monitor（方案 C 保证金分摊用）。boot 时调用。
@@ -92,21 +82,22 @@ func (m *BrokerPositionMonitor) SetSettlementProfileCollector(c *SettlementProfi
 // nil=CEX 腿诚实空态）——house rule：新依赖一律构造必选禁新增 Set*；拆分/新增任何
 // Set* 必须同 commit 接线并全树 grep 自证零遗漏（D-337R4 S2 补强）。
 // （setter 可忘=装配断链，D-337R1/R2/R3 三连教训；既有 Set* 仅存量兼容）。
-func NewBrokerPositionMonitor(bm *BrokerManager, qbus *bus.QuoteBus, freshTTL, interval, quoteTick time.Duration, topic *bus.Topic[*v1.BrokerPositionSnapshot], tzCache ServerTZCache, cexIntervals *exchange.FundingIntervalCache) *BrokerPositionMonitor {
+func NewBrokerPositionMonitor(bm *BrokerManager, qbus *bus.QuoteBus, freshTTL, interval, quoteTick time.Duration, topic *bus.Topic[*v1.BrokerPositionSnapshot], tzCache ServerTZCache, cexIntervals *exchange.FundingIntervalCache, cexNextSettle func(ctx context.Context, venue, symbol string) (time.Time, time.Time, time.Duration)) *BrokerPositionMonitor {
 	if quoteTick <= 0 {
 		quoteTick = time.Second
 	}
 	return &BrokerPositionMonitor{
-		bm:           bm,
-		tzCache:      tzCache,
-		cexIntervals: cexIntervals,
-		qbus:         qbus,
-		freshTTL:     freshTTL,
-		interval:     interval,
-		topic:        topic,
-		venues:       make(map[string]venueState),
-		quoteTick:    quoteTick,
-		kickCh:       make(chan struct{}, 1), // D-107 P2：buffered(1) 非阻塞 send = 事件合并
+		bm:            bm,
+		tzCache:       tzCache,
+		cexIntervals:  cexIntervals,
+		cexNextSettle: cexNextSettle,
+		qbus:          qbus,
+		freshTTL:      freshTTL,
+		interval:      interval,
+		topic:         topic,
+		venues:        make(map[string]venueState),
+		quoteTick:     quoteTick,
+		kickCh:        make(chan struct{}, 1), // D-107 P2：buffered(1) 非阻塞 send = 事件合并
 	}
 }
 
@@ -200,53 +191,6 @@ func (m *BrokerPositionMonitor) poll(ctx context.Context) {
 // collectSwapSnapshots D-110 P2：poll 后采集 swap 快照。
 // 锁外执行：复制 venues 快照 → 释放锁 → 构建 positionID 索引 → 遍历 orders 写快照。
 // 去重：lastSwapByTicket[ticket] == currentSwap → 跳过；变化或首次 → 写入。
-// swap=0 也写（B2 修订）：Exness swap 恒=0，首次写0后不再变化=去重不写新行，但至少有一条基准行。
-// D-180 S1：swap 值变化时检测跳变 → 收集 swapJump → poll 末尾聚合写 swap_settled facts。
-func (m *BrokerPositionMonitor) collectSwapSnapshots(ctx context.Context) {
-	if m.swapSnapStore == nil {
-		return
-	}
-	// 复制 venues 快照（锁内复制，锁外处理）
-	m.mu.RLock()
-	venues := maps.Clone(m.venues)
-	m.mu.RUnlock()
-
-	idx, _ := buildPositionIDIndex(ctx, m.swapSnapStore)
-	now := time.Now().UTC()
-	var jumps []swapJump // D-180 S1：本轮检测到的跳变
-	for _, vs := range venues {
-		if !vs.online {
-			continue
-		}
-		for _, o := range vs.orders {
-			posID := idx[o.VenueKey+"\x00"+o.Ticket]
-			if posID == 0 {
-				continue // 孤儿单/未关联
-			}
-			key := o.VenueKey + "\x00" + o.Ticket
-			prev, hasPrev := m.lastSwapByTicket[key]
-			if hasPrev && prev == o.Swap {
-				continue // 去重：swap 值未变化
-			}
-			if err := m.swapSnapStore.InsertSwapSnapshot(ctx, posID, o.VenueKey, o.Swap, now); err != nil {
-				log.Printf("[broker-mon] swap snapshot insert posID=%d venue=%s: %v", posID, o.VenueKey, err)
-				continue
-			}
-			// D-180 S1：跳变检测——有前值且值变化 → 记录跳变（首次写入无前值不算跳变）。
-			if hasPrev && prev != o.Swap && m.settlementCollector != nil {
-				if j, ok := detectRealtimeJump(m.swapSnapStore, posID, o, prev, now); ok {
-					jumps = append(jumps, j)
-				}
-			}
-			m.lastSwapByTicket[key] = o.Swap
-		}
-	}
-	// D-180 S1：聚合写 swap_settled facts（三倍日剔除+中位数+幂等）。
-	if m.settlementCollector != nil && len(jumps) > 0 {
-		m.settlementCollector.RecordJumps(ctx, jumps)
-	}
-}
-
 // requote F5：quote ticker 节流回调——只重算浮盈（用最新 qbus 报价）不查 venue。
 // 仓位增减/开平仓仍走 poll（不缩间隔）；此处仅价格与浮盈跳动。
 // 无持仓或无新鲜报价 → 静默跳过（不空广播）。

@@ -23,8 +23,12 @@ import (
 // d329LegsService 构造纯单元 Service：qbus + 双 CS/步长解析器（无 store——resolveLegs 不触库）。
 func d329LegsService(t *testing.T, qb *bus.QuoteBus, cs map[string]float64, steps map[string]float64) *Service {
 	t.Helper()
+	// D-466：binance step 只认运行时表（fallback 已撤）——fixture 注入等价 rt 值。
+	sm := NewCexStepMeta("http://unused", 0)
+	sm.rt = map[string]float64{"BTCUSDT": 0.001}
 	return &Service{
-		qbus: qb,
+		stepMeta: sm,
+		qbus:     qb,
 		cexContractSize: func(venue, venueSymbol string) (float64, bool) {
 			v, ok := cs[venue+":"+venueSymbol]
 			return v, ok
@@ -156,6 +160,10 @@ func TestD329_MeanRevertWithCap_SameHelper(t *testing.T) {
 	qb.Publish(bus.Quote{Symbol: "XAUUSD", Venue: "vB", VenueType: "mt5", Bid: 1000, Ask: 1000.2, Time: now, VenueSymbol: "B1"})
 	pipeline := exec.NewPipeline(exec.NewRegistry(), st, qb, exec.RiskLimits{}, "demo")
 	s := &Service{store: st, qbus: qb, pipeline: pipeline}
+	// D-466：binance step 只认运行时表（fallback 已撤）。
+	sm := NewCexStepMeta("http://unused", 0)
+	sm.rt = map[string]float64{"BTCUSDT": 0.001}
+	s.stepMeta = sm
 	s.SetLegContractSize(func(venueKey, venueSymbol string) (float64, bool) {
 		if venueKey == "vA:mt5" {
 			return 5, true
@@ -196,6 +204,10 @@ func TestD329R1_MeanRevertAsymmetricClampImbalanceRecheck(t *testing.T) {
 	qb.Publish(bus.Quote{Symbol: "XAUUSD", Venue: "binance", VenueType: "perp", Bid: 4355, Ask: 4355.2, Time: now, VenueSymbol: "BTCUSDT"})
 	pipeline := exec.NewPipeline(exec.NewRegistry(), st, qb, exec.RiskLimits{}, "demo")
 	s := &Service{store: st, qbus: qb, pipeline: pipeline}
+	// D-466：binance step 只认运行时表（fallback 已撤）。
+	sm := NewCexStepMeta("http://unused", 0)
+	sm.rt = map[string]float64{"BTCUSDT": 0.001}
+	s.stepMeta = sm
 	s.SetLegContractSize(func(venueKey, venueSymbol string) (float64, bool) {
 		if venueKey == "vA:mt5" {
 			return 100, true // CS=100oz/lot

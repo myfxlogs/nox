@@ -5,6 +5,7 @@ import (
 	"context"
 	"log"
 	"maps"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -82,25 +83,49 @@ func (m *BrokerPositionMonitor) build(ctx context.Context) []*v1.BrokerPosition 
 			if o.InitialMargin > 0 {
 				margin = o.InitialMargin
 			}
-			// D-337 S2 + D-337R1 S2：下次计费/结算时刻——MT5=server 零点（tzCache）；CEX=下次 funding
-			// 结算边界（周期缓存真值，回退 8h；binance 偶发结算漂移=显示级误差可忍）。未就绪→nil 诚实空态。
+			// D-337 S2 + D-337R1 S2 + D-466 S3：下次计费/结算时刻——MT5=server 零点（tzCache）；
+			// CEX=腿级 venue 原生真值三级回退：funding_next_settle fact（stale 闸=龄>周期×2 失效）
+			// → venue 原生 interval 边界 → 8h+warn。FundingIntervalCache 仅 binance 腿合法回退
+			// （venue 原生数据）；跨 venue 查用即污染（OKX 腿吃 binance 4h 期实证）。未就绪→nil。
 			var swapChargeAt *timestamppb.Timestamp
 			var periodicPct float64
-			if isCEXVenueKey(o.VenueKey) {
-				if m.cexIntervals != nil && canonical != "" {
-					periods, ok := m.cexIntervals.Lookup(canonical)
-					if !ok {
-						log.Printf("[broker] cex funding interval %s miss (fallback 8h boundary)", canonical)
+			if isCEXVenueKey(o.VenueKey) && canonical != "" {
+				var nextSettle, factTs time.Time
+				var ivl time.Duration
+				if m.cexNextSettle != nil {
+					nextSettle, factTs, ivl = m.cexNextSettle(ctx, venue, canonical)
+				}
+				periods := 0
+				if ivl > 0 {
+					periods = int(math.Round(86400 / ivl.Seconds()))
+				}
+				switch {
+				case !nextSettle.IsZero() && nextSettle.After(now) && (ivl <= 0 || now.Sub(factTs) <= 2*ivl):
+					swapChargeAt = timestamppb.New(nextSettle)
+				case periods > 0:
+					// fact 缺席/stale/过期 → venue 原生 interval 边界
+					swapChargeAt = timestamppb.New(NextFundingSettlementUTC(now.UTC(), periods))
+					log.Printf("[broker] cex settle fact %s|%s unusable (next=%v ts=%v, fallback venue interval %d/day)", venue, canonical, nextSettle, factTs, periods)
+				default:
+					// binance 腿可用自家 FundingIntervalCache（venue 原生合法回退）；
+					// 其余 venue 借它=跨 venue 污染（本票根因），只退 8h+warn。
+					if venue == "binance" && m.cexIntervals != nil {
+						if pp, ok := m.cexIntervals.Lookup(canonical); ok {
+							periods = pp
+						}
+					}
+					if periods <= 0 {
+						log.Printf("[broker] cex settle %s|%s no venue fact/interval (fallback 8h boundary)", venue, canonical)
 						periods = 3
 					}
 					swapChargeAt = timestamppb.New(NextFundingSettlementUTC(now.UTC(), periods))
-					if m.cexFundingRate != nil {
-						if annual, ok2 := m.cexFundingRate(ctx, venue, canonical); ok2 {
-							periodicPct = annual / (365 * float64(periods)) // 年化% → 周期%（12.35/(365×6)≈0.0056）
-						}
+				}
+				if periods > 0 && m.cexFundingRate != nil {
+					if annual, ok2 := m.cexFundingRate(ctx, venue, canonical); ok2 {
+						periodicPct = annual / (365 * float64(periods))
 					}
 				}
-			} else if m.tzCache.fetch != nil { // D-337R2：零值缓存=诚实空态（构造必选注入）
+			} else if m.tzCache.fetch != nil && !isCEXVenueKey(o.VenueKey) { // D-337R2：零值缓存=诚实空态（构造必选注入）
 				if tzLoc := m.tzCache.get(ctx, o.VenueKey); tzLoc != nil {
 					swapChargeAt = timestamppb.New(nextSwapChargeAtInLoc(now, tzLoc))
 				}

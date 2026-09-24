@@ -81,7 +81,7 @@ func TestStepDecimals(t *testing.T) {
 
 // D-311 R4：floorToStepQty CEX 分支 venueKey 分派回归——
 // gate:perp=1.0（整数张协议事实）；okx:perp=instId→lotSz（instruments 同源缓存）；
-// binance=stepMeta/fallback 不变；其余→0 fail-closed。
+// binance=stepMeta 运行时表（D-466 撤硬编码 fallback）；其余→0 fail-closed。
 func TestFloorToStepQty_CexVenueDispatch(t *testing.T) {
 	s := &Service{
 		okxLotSz: func(instID string) (float64, bool) {
@@ -104,9 +104,19 @@ func TestFloorToStepQty_CexVenueDispatch(t *testing.T) {
 	if got := s.floorToStepQty("okx:perp", "ZZZ-USDT-SWAP", 100); got != 0 {
 		t.Fatalf("okx:perp 未知 instId floorToStepQty=%v，期望 0", got)
 	}
-	// binance:perp → fallback 表不变（BTCUSDT step=0.001 → 1.2345→1.234）
+	// binance:perp → stepMeta 运行时表（D-466 撤 fallback；注入 rt 表）
+	sm := NewCexStepMeta("http://unused", 0)
+	sm.mu.Lock()
+	sm.rt = map[string]float64{"BTCUSDT": 0.001}
+	sm.mu.Unlock()
+	s.stepMeta = sm
 	if got := s.floorToStepQty("binance:perp", "BTCUSDT", 1.2345); got != 1.234 {
-		t.Fatalf("binance:perp floorToStepQty=%v，期望 1.234（fallback step=0.001）", got)
+		t.Fatalf("binance:perp floorToStepQty=%v，期望 1.234（runtime step=0.001）", got)
+	}
+	// stepMeta 未接线/未命中 → 0 fail-closed（硬编码表已撤）
+	s3 := &Service{}
+	if got := s3.floorToStepQty("binance:perp", "BTCUSDT", 1.5); got != 0 {
+		t.Fatalf("binance:perp 未接线 floorToStepQty=%v，期望 0", got)
 	}
 	// 未知 venue → 0 fail-closed（不再蹭 binance fallback 表）
 	if got := s.floorToStepQty("gate:spot", "BTC_USDT", 1.5); got != 0 {
