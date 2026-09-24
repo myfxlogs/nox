@@ -5,6 +5,7 @@ package dashboard
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"arb/internal/exec"
@@ -82,9 +83,11 @@ func gradFixture(structure string) (*fakeGradDB, *Service) {
 	}
 	s := &Service{
 		gradStore: f, xassetReloader: &fakeReloader{},
-		autoTradeAllowVenues: map[string]bool{"gate:perp": true},
-		xassetEnv:            "real",
-		pipeline:             exec.NewPipeline(exec.NewRegistry(), nil, nil, exec.RiskLimits{}, "real"),
+		allowVenuesSource: func(context.Context) (map[string]bool, error) {
+			return map[string]bool{"gate:perp": true}, nil
+		},
+		xassetEnv: "real",
+		pipeline:  exec.NewPipeline(exec.NewRegistry(), nil, nil, exec.RiskLimits{}, "real"),
 	}
 	s.autoMapFn = func(context.Context, string) (string, error) { return "applied=0 skipped=3 conflicts=0", nil }
 	return f, s
@@ -200,7 +203,9 @@ func TestD403_Approve_NonCfd_LinkReport_NoCombo(t *testing.T) {
 		grad:  &pgstore.CarryGraduation{ID: 6, PaperID: 43, Venue: "gate×okx", Symbol: "BTC", Structure: "perp_perp", Status: "pending"},
 		paper: &pgstore.PaperSpotCarry{ID: 43, Venue: "gate×okx", Structure: "perp_perp"},
 	}
-	s := &Service{gradStore: f, xassetReloader: &fakeReloader{}, autoTradeAllowVenues: map[string]bool{"gate:perp": true}}
+	s := &Service{gradStore: f, xassetReloader: &fakeReloader{}, allowVenuesSource: func(context.Context) (map[string]bool, error) {
+		return map[string]bool{"gate:perp": true}, nil
+	}}
 	resp, err := s.ApproveCarryGraduation(context.Background(), connect.NewRequest(&v1.ApproveCarryGraduationRequest{GraduationId: 6, MaxLongQty: 1, MaxShortQty: 1, MaxGrossUsd: 100}))
 	if err != nil || !resp.Msg.Ok {
 		t.Fatalf("ok=%v err=%v", resp.Msg.Ok, err)
@@ -261,4 +266,29 @@ func TestD403R2_FanOut_Race(t *testing.T) {
 		}
 	}
 	<-done
+}
+
+// TestD443_AllowVenuesSourceLive T5：venue gap 报告走活读 getter（源变化→gap 跟随），
+// error→空集保守=全缺口。
+func TestD443_AllowVenuesSourceLive(t *testing.T) {
+	allow := map[string]bool{"gate:perp": true}
+	s := &Service{allowVenuesSource: func(context.Context) (map[string]bool, error) { return allow, nil }}
+	g := s.allowVenuesNow(context.Background())
+	if !g["gate:perp"] {
+		t.Fatalf("活读应返回源集合, got %v", g)
+	}
+	allow = map[string]bool{"binance:perp": true} // 源变化（业主改行）
+	if g := s.allowVenuesNow(context.Background()); !g["binance:perp"] || g["gate:perp"] {
+		t.Errorf("gap 报告应跟随表实时态, got %v", g)
+	}
+	s2 := &Service{allowVenuesSource: func(context.Context) (map[string]bool, error) {
+		return nil, fmt.Errorf("db down")
+	}}
+	if g := s2.allowVenuesNow(context.Background()); len(g) != 0 {
+		t.Errorf("error→空集保守=全缺口, got %v", g)
+	}
+	var s3 Service // nil 源 → 空集保守
+	if g := s3.allowVenuesNow(context.Background()); len(g) != 0 {
+		t.Errorf("nil 源→空集, got %v", g)
+	}
 }

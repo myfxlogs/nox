@@ -69,7 +69,7 @@ func (s *Service) mtPlatformFor(ctx context.Context, mtVenue string) (int, error
 // pending 列表即时算与 approve 同函数复用（当前态信息，不落库）。
 func (s *Service) graduationVenueGaps(ctx context.Context, g *pgstore.CarryGraduation) []string {
 	if !isCfdStructure(g.Structure) {
-		return nonCfdVenueGaps(g.Venue, s.autoTradeAllowVenues)
+		return nonCfdVenueGaps(g.Venue, s.allowVenuesNow(ctx))
 	}
 	if g.MtVenue == nil || *g.MtVenue == "" {
 		return []string{"mt_venue 缺失（数据不一致）"}
@@ -89,10 +89,10 @@ func (s *Service) graduationVenueGaps(ctx context.Context, g *pgstore.CarryGradu
 	}
 	parts := strings.Split(g.Venue, "×")
 	cexVenueKey := parts[len(parts)-1] + ":perp"
-	return venueGapsOf(pair.MtVenueKey, cexVenueKey, s.autoTradeAllowVenues)
+	return venueGapsOf(pair.MtVenueKey, cexVenueKey, s.allowVenuesNow(ctx))
 }
 
-// venueGapsOf 两腿 venue_key 对 env 快照的缺口（顺序稳定：mt 腿在前）。
+// venueGapsOf 两腿 venue_key 对白名单集的缺口（顺序稳定：mt 腿在前）。
 func venueGapsOf(mtVenueKey, cexVenueKey string, allow map[string]bool) []string {
 	var gaps []string
 	for _, vk := range []string{mtVenueKey, cexVenueKey} {
@@ -103,7 +103,7 @@ func venueGapsOf(mtVenueKey, cexVenueKey string, allow map[string]bool) []string
 	return gaps
 }
 
-// nonCfdVenueGaps 非 cfd 结构的 venue 段缺口（裸名口径：× 分段任一不在 env 快照即报）。
+// nonCfdVenueGaps 非 cfd 结构的 venue 段缺口（裸名口径：× 分段任一不在白名单即报）。
 func nonCfdVenueGaps(paperVenue string, allow map[string]bool) []string {
 	var gaps []string
 	for _, seg := range strings.Split(paperVenue, "×") {
@@ -120,9 +120,9 @@ func nonCfdVenueGaps(paperVenue string, allow map[string]bool) []string {
 // nonCfdLinkReport 非 cfd 结构 approve 的链路体检报告文本（不写白名单）。
 func nonCfdLinkReport(structure string, gaps []string) string {
 	if len(gaps) == 0 {
-		return fmt.Sprintf("链路体检：该结构（%s）无组合白名单闸；venue env 齐，detector/执行路径已可达（perp_perp/spot_carry 的 detector 覆盖差异=Phase B 另议）。", structure)
+		return fmt.Sprintf("链路体检：该结构（%s）无组合白名单闸；venue 白名单齐，detector/执行路径已可达（perp_perp/spot_carry 的 detector 覆盖差异=Phase B 另议）。", structure)
 	}
-	return fmt.Sprintf("链路体检：该结构（%s）无组合白名单闸；venue env 缺口：%s（需业主补录 ARB_AUTOTRADE_ALLOW_VENUES+重启后链路可达）。", structure, strings.Join(gaps, ", "))
+	return fmt.Sprintf("链路体检：该结构（%s）无组合白名单闸；venue 白名单缺口：%s（需业主 autotrade_allow_rules 补行（≤60s 热生效）后链路可达，D-443）。", structure, strings.Join(gaps, ", "))
 }
 
 // autoMapBrokerSummary AutoMap 兜底（默认真身=s.AutoMapBroker RPC；autoMapFn 测试替身 seam）。

@@ -1,7 +1,7 @@
 // service_carry_graduation.go D-403 S3：验证毕业链 RPC——建议列表/业主授权/拒绝。
 // 授权=原子完成「写 xasset 白名单(simulated=false) + engine 热重载 + AutoMap 兜底 +
 // venue env 缺口报告」；非 cfd 结构无组合闸，approve=链路体检不写白名单（SSOT §1 边界）。
-// venue 级 ARB_AUTOTRADE_ALLOW_VENUES 保持 env 手工域：approve 只报告缺口不代写不重启。
+// venue 级白名单已表化 autotrade_allow_rules（D-443）：approve 活读报告缺口，补行仍业主 SQL 手工域。
 // 解析/缺口/体检 helpers 在 service_carry_graduation_helpers.go（check-lines 行数治理）。
 package dashboard
 
@@ -51,9 +51,24 @@ func (s *Service) gradDB() graduationStore {
 // SetXAssetReloader D-403 S3：热重载器接线（setup：engine 先构造，后接本 setter）。
 func (s *Service) SetXAssetReloader(r XAssetReloader) { s.xassetReloader = r }
 
-// SetAutoTradeAllowVenues D-403 S3：venue env 白名单只读快照注入（装配源=cfg.AutoTradeAllowVenues；
-// approve 只读判定缺口，绝不代写 env）。
-func (s *Service) SetAutoTradeAllowVenues(m map[string]bool) { s.autoTradeAllowVenues = m }
+// SetAllowVenuesSource D-443 S4：venue 白名单活读 getter 注入（装配源=autotrade_allow_rules
+// 表查询闭包；approve/列表每次调用取表实时态，非启动快照）。
+func (s *Service) SetAllowVenuesSource(fn func(ctx context.Context) (map[string]bool, error)) {
+	s.allowVenuesSource = fn
+}
+
+// allowVenuesNow venue 白名单活读（error/nil 源 → warn+空集保守=全缺口报告，fail-closed 方向）。
+func (s *Service) allowVenuesNow(ctx context.Context) map[string]bool {
+	if s.allowVenuesSource == nil {
+		return map[string]bool{}
+	}
+	m, err := s.allowVenuesSource(ctx)
+	if err != nil {
+		log.Printf("[graduation] allow venues source: %v (空集保守=全缺口)", err)
+		return map[string]bool{}
+	}
+	return m
+}
 
 // ListCarryGraduations 建议列表：pending 行 venue_gaps 即时算（当前态信息不落库）；
 // decided 行回读 decided_note 内的缺口快照。
@@ -204,8 +219,8 @@ func (s *Service) ApproveCarryGraduation(ctx context.Context, req *connect.Reque
 		summary = "automap 失败: " + automapErr.Error()
 	}
 	resp.AutomapSummary = summary
-	// ⑥ venue env 缺口报告（两腿 venue_key 对 cfg.AutoTradeAllowVenues 快照）
-	gaps := venueGapsOf(pair.MtVenueKey, cexVenueKey, s.autoTradeAllowVenues)
+	// ⑥ venue 缺口报告（两腿 venue_key 对 autotrade_allow_rules 表活读，D-443）
+	gaps := venueGapsOf(pair.MtVenueKey, cexVenueKey, s.allowVenuesNow(ctx))
 	resp.VenueGaps = gaps
 	// ⑦ 落账 approved+combo_id+note（含 gap 快照前缀）+info 告警
 	if err := db.UpdateCarryGraduationDecision(ctx, grad.ID, "approved", &comboID, gradNoteWithGaps(userNote, gaps)); err != nil {
