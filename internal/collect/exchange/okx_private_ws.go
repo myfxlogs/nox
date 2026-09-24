@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"time"
 
+	"arb/internal/reconcile"
 	"arb/internal/safego"
 	"arb/internal/store/pgstore"
 
@@ -257,11 +258,8 @@ func okxAccountPushRow(data map[string]any, now time.Time) (pgstore.VenueAccount
 		return pgstore.VenueAccountSnapshot{}, false
 	}
 	var d struct {
-		MgnRatio string `json:"mgnRatio"` // D-405 S2：账户保证金率（百分数，越高越安全）
-		Details  []struct {
-			Ccy   string `json:"ccy"`
-			EqUsd string `json:"eqUsd"`
-		} `json:"details"`
+		MgnRatio string                       `json:"mgnRatio"` // D-405 S2：账户保证金率（百分数，越高越安全）
+		Details  []reconcile.OKXBalanceDetail `json:"details"`  // D-434 R1：与 REST 同构 schema
 	}
 	if err := json.Unmarshal(raw, &d); err != nil {
 		return pgstore.VenueAccountSnapshot{}, false
@@ -280,9 +278,10 @@ func okxAccountPushRow(data map[string]any, now time.Time) (pgstore.VenueAccount
 		BalanceRaw: eq, EquityRaw: eq,
 		Currency: "USDT", FetchedAt: now, Src: "okx_event",
 	}
-	// D-405 S2：buffer_multiple=mgnRatio/100（与 REST accountOKX 同口径写时归一）。
-	if mr, perr := strconv.ParseFloat(d.MgnRatio, 64); perr == nil && mr > 0 {
-		b := mr / 100
+	// D-434 R1：buffer_multiple=与 REST accountOKX 同一共享函数三层回落（mmr→detail
+	// mgnRatio→顶层 mgnRatio；本账户口径顶层恒空，WS 推送 details 实供 mmr/mgnRatio）。
+	// <=0=未采 nil 语义保留（guard 诚实 data_stale）。
+	if b := reconcile.OKXBufferMultiple(eq, d.Details, d.MgnRatio); b > 0 {
 		row.BufferMultiple = &b
 	}
 	return row, true
