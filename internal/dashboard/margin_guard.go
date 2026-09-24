@@ -228,12 +228,15 @@ func legTickKey(venueKey, symbol string, canonicalOf func(venue, brokerSymbol st
 	return "", "", "", false
 }
 
-// marginLegNotionalUSD 单腿名义 USD：qty(EffectiveQty)×usdPerLot（canonical 计价币换算
+// marginLegNotionalUSD 单腿名义 USD：qty×usdPerLot（canonical 计价币换算
 // 复用 usdnotional.PerLot）。报价缺→回退 leg.Price（成交价锚）；CS/fx 缺→ok=false
 // （fail-closed 不计入；marginGuard/开户门槛两调用方共享口径）。
+// D-434 分域折叠：filled_qty 成交口径优先——CEX filled=基础币（cs=1，pnl_calc 同口径，
+// 禁 ct_val 二次换算）；MT filled=手数与 perLot 同单位 cs 不变；filled 缺 → qty 请求口径
+// （MT 手数/CEX 张数 × ct_val，回落同样正确）。
 func marginLegNotionalUSD(qbus *bus.QuoteBus, csOf func(string, string) (float64, error), l pgstore.MarginOpenLeg) (float64, bool) {
 	canonical := canonicalOfOppID(l.OppID)
-	if canonical == "" || l.Qty <= 0 {
+	if canonical == "" {
 		return 0, false
 	}
 	price := l.Price
@@ -247,11 +250,21 @@ func marginLegNotionalUSD(qbus *bus.QuoteBus, csOf func(string, string) (float64
 	if err != nil || cs <= 0 {
 		return 0, false
 	}
+	qty := l.Qty
+	if l.FilledQty != nil && *l.FilledQty > 0 {
+		qty = *l.FilledQty
+		if !isMTVenue(l.Venue) {
+			cs = 1.0
+		}
+	}
+	if qty <= 0 {
+		return 0, false
+	}
 	perLot, ok := usdnotional.PerLot(canonical, price, cs, qbus)
 	if !ok || perLot <= 0 {
 		return 0, false
 	}
-	return l.Qty * perLot, true
+	return qty * perLot, true
 }
 
 // canonicalOfOppID 从 opportunity_id 提取 canonical（"TYPE:CANONICAL:..." 第二段；
