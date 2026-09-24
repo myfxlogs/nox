@@ -164,7 +164,9 @@ func (b *BinanceUserWS) runOnce(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("read: %w", err)
 		}
-		b.handleFrame(ctx, data)
+		if b.handleFrame(ctx, data) {
+			return fmt.Errorf("listenKeyExpired")
+		}
 	}
 }
 

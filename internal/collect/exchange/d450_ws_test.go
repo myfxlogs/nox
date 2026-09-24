@@ -468,3 +468,146 @@ var (
 	_ exec.OrderStatusQuerier = (*CachedOrderStatusQuerier)(nil)
 	_ reconcile.VenueQuerier  = (*CachedVenueQuerier)(nil)
 )
+
+// ---------- 返修 R1：demo 流禁写快照 ----------
+
+// T-R1a：gate simulated=true → balances 帧不落快照（对齐 REST IsRealAccount 只收 real），审计行仍写。
+func TestGateDemoSnapshotGuard(t *testing.T) {
+	rest := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/futures/usdt/accounts") {
+			fmt.Fprint(w, `{"user":7,"total":"50"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer rest.Close()
+	wsSrv := newWSFakeServer(t)
+
+	g := NewGatePrivateWS("K", "S", rest.URL+"/api/v4", "gate:perp#9", true, nil, nil, NewOrderEventCache(), NewPositionEventCache())
+	snaps := newFakeSnapSink()
+	evts := newFakeEventSink()
+	g.sink, g.events, g.rest = snaps, evts, rest.Client()
+	g.dial = func(ctx context.Context, _ string) (*websocket.Conn, error) {
+		conn, _, err := (&websocket.Dialer{}).DialContext(ctx, wsURLFromHTTP(wsSrv.URL), nil)
+		return conn, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	go g.Run(ctx)
+	select {
+	case <-wsSrv.got:
+	case <-ctx.Done():
+		t.Fatal("no subscribe")
+	}
+	wsSrv.pushC <- json.RawMessage(`{"channel":"futures.balances","event":"update","result":[{"currency":"USDT","balance":"888"}]}`)
+	// 等审计行=帧已处理，然后断言快照为空。
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) && len(evts.snapshot()) == 0 {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(evts.snapshot()) == 0 {
+		t.Fatal("frame not processed (no audit row)")
+	}
+	time.Sleep(100 * time.Millisecond)
+	if got := snaps.snapshot(); len(got) != 0 {
+		t.Fatalf("demo stream wrote snapshots: %+v", got)
+	}
+}
+
+// T-R1b：binance simulated=true → ACCOUNT_UPDATE 不落快照，但持仓缓存仍更新。
+func TestBinanceDemoSnapshotGuard(t *testing.T) {
+	rest := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/v1/listenKey") {
+			fmt.Fprint(w, `{"listenKey":"D1"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer rest.Close()
+	wsSrv := newWSFakeServer(t)
+
+	b := NewBinanceUserWS("K", "S", rest.URL, "perp", "binance:perp#25", true, nil, nil, NewOrderEventCache(), NewPositionEventCache())
+	snaps := newFakeSnapSink()
+	evts := newFakeEventSink()
+	b.sink, b.events, b.rest = snaps, evts, rest.Client()
+	b.dial = func(ctx context.Context, _ string) (*websocket.Conn, error) {
+		conn, _, err := (&websocket.Dialer{}).DialContext(ctx, wsURLFromHTTP(wsSrv.URL), nil)
+		return conn, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	go b.Run(ctx)
+
+	wsSrv.pushC <- json.RawMessage(`{"e":"ACCOUNT_UPDATE","a":{"B":[{"a":"USDT","wb":"777"}],"P":[{"s":"BTCUSDT","pa":"0.2","ep":"64000","iw":"120","ps":"LONG"}]}}`)
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) && len(evts.snapshot()) == 0 {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(evts.snapshot()) == 0 {
+		t.Fatal("frame not processed")
+	}
+	time.Sleep(100 * time.Millisecond)
+	if got := snaps.snapshot(); len(got) != 0 {
+		t.Fatalf("demo stream wrote snapshots: %+v", got)
+	}
+	if orders, ok := b.posCache.get("binance:perp#25", PositionFreshTTL, b.now()); !ok || len(orders) != 1 {
+		t.Fatalf("pos cache wrong: %+v ok=%v", orders, ok)
+	}
+}
+
+// ---------- 返修 R2：listenKeyExpired 关连重取 ----------
+
+// T-R2：收到 listenKeyExpired 帧 → 关连接 → runOnce 返回 → Run 重取新 key 重拨。
+func TestBinanceListenKeyExpiredReconnect(t *testing.T) {
+	var posts atomic.Int32
+	keyN := atomic.Int32{}
+	rest := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/v1/listenKey") {
+			posts.Add(1)
+			fmt.Fprintf(w, `{"listenKey":"K%d"}`, keyN.Add(1))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer rest.Close()
+	wsSrv := newWSFakeServer(t)
+	dialed := make(chan string, 8)
+
+	b := NewBinanceUserWS("K", "S", rest.URL, "perp", "binance:perp", false, nil, nil, NewOrderEventCache(), NewPositionEventCache())
+	b.rest = rest.Client()
+	b.dial = func(ctx context.Context, wsURL string) (*websocket.Conn, error) {
+		dialed <- wsURL
+		conn, _, err := (&websocket.Dialer{}).DialContext(ctx, wsURLFromHTTP(wsSrv.URL), nil)
+		return conn, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	go b.Run(ctx)
+
+	select {
+	case u := <-dialed:
+		if !strings.HasSuffix(u, "/ws/K1") {
+			t.Fatalf("dial url wrong: %s", u)
+		}
+	case <-ctx.Done():
+		t.Fatal("no dial")
+	}
+	// 推 listenKeyExpired → 关连 → 重取 key。
+	wsSrv.pushC <- json.RawMessage(`{"e":"listenKeyExpired"}`)
+	// 重连退避=5s——deadline 放宽避免与退避擦线 flake。
+	deadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) && posts.Load() < 2 {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if posts.Load() < 2 {
+		t.Fatalf("listenKeyExpired did not trigger reacquire, posts=%d", posts.Load())
+	}
+	select {
+	case u := <-dialed:
+		if !strings.HasSuffix(u, "/ws/K2") {
+			t.Fatalf("redial url wrong: %s", u)
+		}
+	case <-time.After(8 * time.Second):
+		t.Fatal("no redial")
+	}
+}

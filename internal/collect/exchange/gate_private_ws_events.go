@@ -67,8 +67,12 @@ func gateEventKey(channel string, result json.RawMessage) string {
 }
 
 // onBalances futures.balances → USDT 行余额落快照（src=gate_event）。
+// demo 流禁写快照——REST 写面 IsRealAccount 只收 real（返修 R1）。
 // 字段名按 Gate 文档 {currency,balance,change,...}——生产首帧由日志/审计表原文复核。
 func (g *GatePrivateWS) onBalances(ctx context.Context, result json.RawMessage) {
+	if g.simulated {
+		return
+	}
 	var items []struct {
 		Currency string `json:"currency"`
 		Balance  string `json:"balance"`

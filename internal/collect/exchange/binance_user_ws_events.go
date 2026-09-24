@@ -14,14 +14,15 @@ import (
 )
 
 // handleFrame 用户流事件分派：先落审计表（失败 warn 仍更缓存，R3）再更新缓存/sink。
-func (b *BinanceUserWS) handleFrame(ctx context.Context, data []byte) {
+// 返回 true=帧要求关连接（listenKeyExpired）——调用方须结束 runOnce 让 Run 重取 key。
+func (b *BinanceUserWS) handleFrame(ctx context.Context, data []byte) (expired bool) {
 	var env struct {
 		E string          `json:"e"`
 		O json.RawMessage `json:"o"`
 		A json.RawMessage `json:"a"`
 	}
 	if err := json.Unmarshal(data, &env); err != nil {
-		return
+		return false
 	}
 	switch env.E {
 	case "ORDER_TRADE_UPDATE":
@@ -31,11 +32,11 @@ func (b *BinanceUserWS) handleFrame(ctx context.Context, data []byte) {
 		b.onAudit(ctx, "account", env.A)
 		b.onAccountUpdate(ctx, env.A)
 	case "listenKeyExpired":
-		// 官方显式失效事件——靠 read 断开自然触发重取；此处仅记录。
-		log.Printf("[binance-user-ws] listenKeyExpired event")
-	default:
-		return
+		// 官方显式失效事件——ping 保活不断流会掩盖死 key；关连接触发 runOnce 返回重取。
+		log.Printf("[binance-user-ws] listenKeyExpired event (reconnecting for fresh key)")
+		return true
 	}
+	return false
 }
 
 func (b *BinanceUserWS) onAudit(ctx context.Context, channel string, payload json.RawMessage) {
@@ -101,18 +102,21 @@ func (b *BinanceUserWS) onAccountUpdate(ctx context.Context, a json.RawMessage) 
 		return
 	}
 	now := b.now()
-	for _, bal := range acct.B {
-		if bal.A != "USDT" {
-			continue
-		}
-		eq, _ := strconv.ParseFloat(bal.WB, 64)
-		row := pgstore.VenueAccountSnapshot{
-			Venue: "binance", VenueType: b.venueType,
-			BalanceRaw: eq, EquityRaw: eq,
-			Currency: "USDT", FetchedAt: now, Src: "binance_event",
-		}
-		if err := b.sink.InsertVenueAccountSnapshots(ctx, []pgstore.VenueAccountSnapshot{row}); err != nil {
-			log.Printf("[binance-user-ws] insert snapshot: %v", err)
+	// demo 流禁写快照——REST 写面 IsRealAccount 只收 real（返修 R1），持仓/订单缓存仍更新。
+	if !b.simulated {
+		for _, bal := range acct.B {
+			if bal.A != "USDT" {
+				continue
+			}
+			eq, _ := strconv.ParseFloat(bal.WB, 64)
+			row := pgstore.VenueAccountSnapshot{
+				Venue: "binance", VenueType: b.venueType,
+				BalanceRaw: eq, EquityRaw: eq,
+				Currency: "USDT", FetchedAt: now, Src: "binance_event",
+			}
+			if err := b.sink.InsertVenueAccountSnapshots(ctx, []pgstore.VenueAccountSnapshot{row}); err != nil {
+				log.Printf("[binance-user-ws] insert snapshot: %v", err)
+			}
 		}
 	}
 	if len(acct.P) == 0 {
