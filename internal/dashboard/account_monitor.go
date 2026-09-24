@@ -82,7 +82,7 @@ func (m *AccountMonitor) AddStatic(q reconcile.AccountQuerier) {
 
 // accountKickDebounce D-107 P2：kick 触发 poll 防抖窗口（D-099 margin 防抖 5min 先例——
 // 静态数据防事件洪峰重复查库；ticker 兜底不受此限）。
-var accountKickDebounce = 5 * time.Minute
+var accountKickDebounce = 30 * time.Second // D-469a S5：事件化后 5min 防抖失去意义降 30s
 
 // Kick D-107 P2：margin 事件触发重采（非阻塞 send 到 buffered(1) chan——合并语义同 BrokerPositionMonitor）。
 func (m *AccountMonitor) Kick() {

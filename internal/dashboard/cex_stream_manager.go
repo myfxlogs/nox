@@ -25,7 +25,14 @@ type CexStreamSinks interface {
 }
 
 // CexStreamManager 管理 gate/binance 私有 WS 流。
+// CexStreamManager CEX 私有 WS 流管理器（D-450；D-469a 扩：余额 sink kick acctMon+
+// binance a.m hooks 注入——字段注入先例同 cexExecMgr.OrderCache，装配处零值=不 kick）。
 type CexStreamManager struct {
+	// AcctKick D-469a S3：余额快照落库后回调（目标=acctMon.Kick()，nil 安全）。
+	AcctKick func()
+	// BinanceHooks D-469a S3：a.m 事件原因回调（OnFundingFee→income/OnIO→cex-io，nil 安全）。
+	BinanceHooks exchange.BinanceUserHooks
+
 	store      ExchangeStore
 	sinks      CexStreamSinks
 	interval   time.Duration
@@ -104,12 +111,14 @@ func (m *CexStreamManager) sync(ctx context.Context) {
 		}
 		vk := reconcile.CexVenueKey(c.Venue, c.VenueType, c.ID, winners)
 		sctx, cancel := context.WithCancel(ctx)
+		// D-469a S3：余额快照 sink 包 kicking wrapper（落库成功→acctMon kick；写失败不 kick）。
+		snapSink := exchange.NewKickingSnapshotSink(m.sinks, m.AcctKick)
 		switch c.Venue {
 		case "gate":
-			ws := exchange.NewGatePrivateWS(c.APIKey, c.APISecret, c.BaseURL, vk, c.Simulated, m.sinks, m.sinks, m.orderCache, m.posCache)
+			ws := exchange.NewGatePrivateWS(c.APIKey, c.APISecret, c.BaseURL, vk, c.Simulated, snapSink, m.sinks, m.orderCache, m.posCache)
 			safego.Go("cex-stream:gate", func() { ws.Run(sctx) })
 		case "binance":
-			ws := exchange.NewBinanceUserWS(c.APIKey, c.APISecret, c.BaseURL, c.VenueType, vk, c.Simulated, m.sinks, m.sinks, m.orderCache, m.posCache)
+			ws := exchange.NewBinanceUserWS(c.APIKey, c.APISecret, c.BaseURL, c.VenueType, vk, c.Simulated, snapSink, m.sinks, m.orderCache, m.posCache, m.BinanceHooks)
 			safego.Go("cex-stream:binance", func() { ws.Run(sctx) })
 		}
 		m.streams[id] = cancel
