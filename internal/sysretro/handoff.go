@@ -1,0 +1,102 @@
+// handoff.go 日报 §5 交接面：纯 Go 机械装配（零 AI）——决策席 boot 输入。
+// 内容=STATE.md 在轨行摘要 + 阻塞/待决策块 + 收件箱积压行数 + 当日 git log。
+// 全部 best-effort 降级：文件/git 不可读时留空段标注，不炸报告。
+package sysretro
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"strings"
+	"time"
+)
+
+// handoffBlock 装配交接面 fenced 块内容。
+func handoffBlock(deps Deps, now time.Time) string {
+	var b strings.Builder
+	b.WriteString("```\n")
+	b.WriteString("in_flight_tasks:\n")
+	stateData, err := os.ReadFile(deps.StatePath)
+	if err != nil {
+		fmt.Fprintf(&b, "  (STATE.md 不可读: %v)\n", err)
+	} else {
+		b.WriteString(stateInFlight(string(stateData)))
+	}
+	fmt.Fprintf(&b, "blocked_line: %s\n", blockedLine(string(stateData)))
+	fmt.Fprintf(&b, "inbox_backlog_rows: %d\n", inboxBacklog(deps.InboxPath))
+	b.WriteString("commits_today:\n")
+	b.WriteString(gitLogToday(deps.RepoDir, now))
+	b.WriteString("```")
+	return b.String()
+}
+
+// stateInFlight 施工表在轨行摘要（🔄/📋 行 → `- D# 状态 owner` 压缩行）。
+func stateInFlight(state string) string {
+	var out strings.Builder
+	for _, ln := range strings.Split(state, "\n") {
+		if !strings.Contains(ln, "🔄") && !strings.Contains(ln, "📋") {
+			continue
+		}
+		// 行形如 `||| **D-450 xxx** | 状态...`——抽任务名。
+		name := ln
+		if i := strings.Index(ln, "**"); i >= 0 {
+			if j := strings.Index(ln[i+2:], "**"); j >= 0 {
+				name = strings.TrimSpace(ln[i+2 : i+2+j])
+			}
+		}
+		fmt.Fprintf(&out, "  - %s\n", name)
+	}
+	if out.Len() == 0 {
+		return "  (none)\n"
+	}
+	return out.String()
+}
+
+// blockedLine 交接负载「阻塞/待决策」行原文。
+func blockedLine(state string) string {
+	for _, ln := range strings.Split(state, "\n") {
+		if strings.Contains(ln, "阻塞") && strings.Contains(ln, "待决策") {
+			return strings.TrimSpace(strings.TrimPrefix(ln, "-"))
+		}
+	}
+	return "(none)"
+}
+
+// inboxBacklog 收件箱积压行数（表格数据行=`| ... |`，跳表头/分隔行）。
+func inboxBacklog(inboxPath string) int {
+	data, err := os.ReadFile(inboxPath)
+	if err != nil {
+		return -1
+	}
+	n := 0
+	for _, ln := range strings.Split(string(data), "\n") {
+		ln = strings.TrimSpace(ln)
+		if strings.HasPrefix(ln, "|") && !strings.Contains(ln, "---") &&
+			!strings.Contains(ln, "| 条目 |") && !strings.Contains(ln, "| 候选 |") {
+			n++
+		}
+	}
+	return n
+}
+
+// gitLogToday 当日（UTC）commit 列表；git 不可用/非仓库 → 降级标注。
+func gitLogToday(repoDir string, now time.Time) string {
+	day := now.Format("2006-01-02")
+	out, err := exec.Command("git", "-C", repoDir, "log",
+		"--since="+day+"T00:00:00Z", "--oneline", "--all").Output()
+	if err != nil {
+		return "  (git log 不可用)\n"
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	if len(lines) == 0 || (len(lines) == 1 && lines[0] == "") {
+		return "  (none)\n"
+	}
+	if len(lines) > 20 {
+		lines = lines[:20]
+	}
+	var b strings.Builder
+	for _, ln := range lines {
+		fmt.Fprintf(&b, "  %s\n", ln)
+	}
+	return b.String()
+}

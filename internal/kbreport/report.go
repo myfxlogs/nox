@@ -34,11 +34,12 @@ type Runner func(ctx context.Context, c *analyst.Client, tools analyst.ToolExecu
 type Deps struct {
 	Client     *analyst.Client
 	Tools      analyst.ToolExecutor
-	EntriesDir string           // 空=DefaultEntriesDir
-	ReportDir  string           // 空=DefaultReportDir
-	InboxPath  string           // 空=DefaultInboxPath
-	Run        Runner           // 空=analyst.RunWithSpecs
-	Now        func() time.Time // 空=time.Now（UTC date 文件名/陈旧度基准）
+	EntriesDir string                  // 空=DefaultEntriesDir
+	ReportDir  string                  // 空=DefaultReportDir
+	InboxPath  string                  // 空=DefaultInboxPath
+	Run        Runner                  // 空=analyst.RunWithSpecs
+	Now        func() time.Time        // 空=time.Now（UTC date 文件名/陈旧度基准）
+	Alert      func(level, msg string) // 空=静默（D-457 S5：fenced 解析异常 warn 通道）
 }
 
 func (d *Deps) fill() {
@@ -88,6 +89,9 @@ func reportToolSpecs() []analyst.ToolSpec {
 // candidatesRe 候选新条目 fenced 块（```kbmeta-candidates ... ```）。
 var candidatesRe = regexp.MustCompile("(?s)```kbmeta-candidates\\s*\n(.*?)```")
 
+// openCandidatesRe 未闭合 fenced 块定位（D-457 S5：sensenova 输出 EOF 截断容忍——缺闭合 ``` 时解析到文件尾）。
+var openCandidatesRe = regexp.MustCompile("(?s)```kbmeta-candidates\\s*\n(.*)$")
+
 // Generate 生成一期元分析报告。返回落档路径。
 func Generate(ctx context.Context, deps Deps) (string, error) {
 	deps.fill()
@@ -120,7 +124,11 @@ func Generate(ctx context.Context, deps Deps) (string, error) {
 		return "", fmt.Errorf("write report: %w", err)
 	}
 	// §候选新条目 → 追加待归纳-分析员.md 收件箱（AI 提议≠已验证知识，分诊在席位）。
-	if lines := parseCandidates(aiText.String()); len(lines) > 0 {
+	lines, malformed := parseCandidates(aiText.String())
+	if malformed && deps.Alert != nil {
+		deps.Alert("warn", "kbmeta report: candidates fenced 块未闭合（EOF 截断容忍解析）")
+	}
+	if len(lines) > 0 {
 		var block strings.Builder
 		for _, c := range lines {
 			fmt.Fprintf(&block, "| %s | source=kb-meta | %s | %s |\n",
@@ -151,15 +159,19 @@ func assemble(date, model, snapshot, aiText string) string {
 type candidate struct{ title, reason string }
 
 // parseCandidates 解 ```kbmeta-candidates 块（每行 `标题 | 理由`）。
-func parseCandidates(aiText string) []candidate {
-	m := candidatesRe.FindStringSubmatch(aiText)
-	if m == nil {
-		return nil
+// EOF 截断（缺闭合 ```）容忍解析并返回 malformed=true（调用方 warn alert）。
+func parseCandidates(aiText string) (out []candidate, malformed bool) {
+	body := ""
+	if m := candidatesRe.FindStringSubmatch(aiText); m != nil {
+		body = m[1]
+	} else if m := openCandidatesRe.FindStringSubmatch(aiText); m != nil {
+		body, malformed = m[1], true
+	} else {
+		return nil, false
 	}
-	var out []candidate
-	for _, ln := range strings.Split(m[1], "\n") {
+	for _, ln := range strings.Split(body, "\n") {
 		ln = strings.TrimSpace(ln)
-		if ln == "" {
+		if ln == "" || strings.HasPrefix(ln, "```") {
 			continue
 		}
 		title, reason, _ := strings.Cut(ln, "|")
@@ -169,7 +181,7 @@ func parseCandidates(aiText string) []candidate {
 		}
 		out = append(out, candidate{title: title, reason: strings.TrimSpace(reason)})
 	}
-	return out
+	return out, malformed
 }
 
 // cleanCell 落盘表格单元格清洗（同 dashboard cleanNoteField 零信任口径）。

@@ -232,3 +232,21 @@ func TestGenerateNoCandidates(t *testing.T) {
 		t.Errorf("inbox should not be created when no candidates")
 	}
 }
+
+// TestParseCandidatesUnclosed_D457：S5——sensenova EOF 截断未闭合块容忍解析+malformed 标记。
+func TestParseCandidatesUnclosed_D457(t *testing.T) {
+	// 闭合块正常解析。
+	c, mal := parseCandidates("## 候选新条目\n无\n```kbmeta-candidates\n甲 | 乙\n```\n")
+	if mal || len(c) != 1 || c[0].title != "甲" {
+		t.Fatalf("closed parse wrong: %v mal=%v", c, mal)
+	}
+	// 未闭合（EOF 截断）→ 容忍解析到尾 + malformed=true。
+	c, mal = parseCandidates("## 候选新条目\nx\n```kbmeta-candidates\n丙 | 丁\n戊 | 己")
+	if !mal || len(c) != 2 || c[1].title != "戊" {
+		t.Fatalf("unclosed parse wrong: %v mal=%v", c, mal)
+	}
+	// 完全无块。
+	if c, mal = parseCandidates("no block"); c != nil || mal {
+		t.Fatalf("no block wrong: %v %v", c, mal)
+	}
+}
