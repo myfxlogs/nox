@@ -268,6 +268,15 @@ const (
 	// DashboardServiceGenerateKbReportProcedure is the fully-qualified name of the DashboardService's
 	// GenerateKbReport RPC.
 	DashboardServiceGenerateKbReportProcedure = "/arb.dashboard.v1.DashboardService/GenerateKbReport"
+	// DashboardServiceGenerateRetroReportProcedure is the fully-qualified name of the
+	// DashboardService's GenerateRetroReport RPC.
+	DashboardServiceGenerateRetroReportProcedure = "/arb.dashboard.v1.DashboardService/GenerateRetroReport"
+	// DashboardServiceListReportsProcedure is the fully-qualified name of the DashboardService's
+	// ListReports RPC.
+	DashboardServiceListReportsProcedure = "/arb.dashboard.v1.DashboardService/ListReports"
+	// DashboardServiceGetReportProcedure is the fully-qualified name of the DashboardService's
+	// GetReport RPC.
+	DashboardServiceGetReportProcedure = "/arb.dashboard.v1.DashboardService/GetReport"
 	// DashboardServiceGetAiSettingsProcedure is the fully-qualified name of the DashboardService's
 	// GetAiSettings RPC.
 	DashboardServiceGetAiSettingsProcedure = "/arb.dashboard.v1.DashboardService/GetAiSettings"
@@ -476,6 +485,10 @@ type DashboardServiceClient interface {
 	AppendAnalystNote(context.Context, *connect.Request[v1.AppendAnalystNoteRequest]) (*connect.Response[v1.AppendAnalystNoteResponse], error)
 	// D-442 S4：KB 元分析报告手动补跑（周 ticker 之外的调试/验证入口）
 	GenerateKbReport(context.Context, *connect.Request[v1.GenerateKbReportRequest]) (*connect.Response[v1.GenerateKbReportResponse], error)
+	// D-457：系统复盘报告——手动触发 + 报告列表/正文读取（前端报告页）
+	GenerateRetroReport(context.Context, *connect.Request[v1.GenerateRetroReportRequest]) (*connect.Response[v1.GenerateRetroReportResponse], error)
+	ListReports(context.Context, *connect.Request[v1.ListReportsRequest]) (*connect.Response[v1.ListReportsResponse], error)
+	GetReport(context.Context, *connect.Request[v1.GetReportRequest]) (*connect.Response[v1.GetReportResponse], error)
 	// D-091 返修② R3：AI 配置 DB 化（前端可配，Get 掩码/Set 空 key 不覆盖）
 	GetAiSettings(context.Context, *connect.Request[v1.GetAiSettingsRequest]) (*connect.Response[v1.GetAiSettingsResponse], error)
 	SetAiSettings(context.Context, *connect.Request[v1.SetAiSettingsRequest]) (*connect.Response[v1.SetAiSettingsResponse], error)
@@ -1011,6 +1024,24 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("GenerateKbReport")),
 			connect.WithClientOptions(opts...),
 		),
+		generateRetroReport: connect.NewClient[v1.GenerateRetroReportRequest, v1.GenerateRetroReportResponse](
+			httpClient,
+			baseURL+DashboardServiceGenerateRetroReportProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("GenerateRetroReport")),
+			connect.WithClientOptions(opts...),
+		),
+		listReports: connect.NewClient[v1.ListReportsRequest, v1.ListReportsResponse](
+			httpClient,
+			baseURL+DashboardServiceListReportsProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListReports")),
+			connect.WithClientOptions(opts...),
+		),
+		getReport: connect.NewClient[v1.GetReportRequest, v1.GetReportResponse](
+			httpClient,
+			baseURL+DashboardServiceGetReportProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("GetReport")),
+			connect.WithClientOptions(opts...),
+		),
 		getAiSettings: connect.NewClient[v1.GetAiSettingsRequest, v1.GetAiSettingsResponse](
 			httpClient,
 			baseURL+DashboardServiceGetAiSettingsProcedure,
@@ -1287,6 +1318,9 @@ type dashboardServiceClient struct {
 	askAnalyst                   *connect.Client[v1.AskAnalystRequest, v1.AskAnalystResponse]
 	appendAnalystNote            *connect.Client[v1.AppendAnalystNoteRequest, v1.AppendAnalystNoteResponse]
 	generateKbReport             *connect.Client[v1.GenerateKbReportRequest, v1.GenerateKbReportResponse]
+	generateRetroReport          *connect.Client[v1.GenerateRetroReportRequest, v1.GenerateRetroReportResponse]
+	listReports                  *connect.Client[v1.ListReportsRequest, v1.ListReportsResponse]
+	getReport                    *connect.Client[v1.GetReportRequest, v1.GetReportResponse]
 	getAiSettings                *connect.Client[v1.GetAiSettingsRequest, v1.GetAiSettingsResponse]
 	setAiSettings                *connect.Client[v1.SetAiSettingsRequest, v1.SetAiSettingsResponse]
 	getRepoConfig                *connect.Client[v1.GetRepoConfigRequest, v1.GetRepoConfigResponse]
@@ -1716,6 +1750,21 @@ func (c *dashboardServiceClient) GenerateKbReport(ctx context.Context, req *conn
 	return c.generateKbReport.CallUnary(ctx, req)
 }
 
+// GenerateRetroReport calls arb.dashboard.v1.DashboardService.GenerateRetroReport.
+func (c *dashboardServiceClient) GenerateRetroReport(ctx context.Context, req *connect.Request[v1.GenerateRetroReportRequest]) (*connect.Response[v1.GenerateRetroReportResponse], error) {
+	return c.generateRetroReport.CallUnary(ctx, req)
+}
+
+// ListReports calls arb.dashboard.v1.DashboardService.ListReports.
+func (c *dashboardServiceClient) ListReports(ctx context.Context, req *connect.Request[v1.ListReportsRequest]) (*connect.Response[v1.ListReportsResponse], error) {
+	return c.listReports.CallUnary(ctx, req)
+}
+
+// GetReport calls arb.dashboard.v1.DashboardService.GetReport.
+func (c *dashboardServiceClient) GetReport(ctx context.Context, req *connect.Request[v1.GetReportRequest]) (*connect.Response[v1.GetReportResponse], error) {
+	return c.getReport.CallUnary(ctx, req)
+}
+
 // GetAiSettings calls arb.dashboard.v1.DashboardService.GetAiSettings.
 func (c *dashboardServiceClient) GetAiSettings(ctx context.Context, req *connect.Request[v1.GetAiSettingsRequest]) (*connect.Response[v1.GetAiSettingsResponse], error) {
 	return c.getAiSettings.CallUnary(ctx, req)
@@ -1987,6 +2036,10 @@ type DashboardServiceHandler interface {
 	AppendAnalystNote(context.Context, *connect.Request[v1.AppendAnalystNoteRequest]) (*connect.Response[v1.AppendAnalystNoteResponse], error)
 	// D-442 S4：KB 元分析报告手动补跑（周 ticker 之外的调试/验证入口）
 	GenerateKbReport(context.Context, *connect.Request[v1.GenerateKbReportRequest]) (*connect.Response[v1.GenerateKbReportResponse], error)
+	// D-457：系统复盘报告——手动触发 + 报告列表/正文读取（前端报告页）
+	GenerateRetroReport(context.Context, *connect.Request[v1.GenerateRetroReportRequest]) (*connect.Response[v1.GenerateRetroReportResponse], error)
+	ListReports(context.Context, *connect.Request[v1.ListReportsRequest]) (*connect.Response[v1.ListReportsResponse], error)
+	GetReport(context.Context, *connect.Request[v1.GetReportRequest]) (*connect.Response[v1.GetReportResponse], error)
 	// D-091 返修② R3：AI 配置 DB 化（前端可配，Get 掩码/Set 空 key 不覆盖）
 	GetAiSettings(context.Context, *connect.Request[v1.GetAiSettingsRequest]) (*connect.Response[v1.GetAiSettingsResponse], error)
 	SetAiSettings(context.Context, *connect.Request[v1.SetAiSettingsRequest]) (*connect.Response[v1.SetAiSettingsResponse], error)
@@ -2518,6 +2571,24 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("GenerateKbReport")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceGenerateRetroReportHandler := connect.NewUnaryHandler(
+		DashboardServiceGenerateRetroReportProcedure,
+		svc.GenerateRetroReport,
+		connect.WithSchema(dashboardServiceMethods.ByName("GenerateRetroReport")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceListReportsHandler := connect.NewUnaryHandler(
+		DashboardServiceListReportsProcedure,
+		svc.ListReports,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListReports")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceGetReportHandler := connect.NewUnaryHandler(
+		DashboardServiceGetReportProcedure,
+		svc.GetReport,
+		connect.WithSchema(dashboardServiceMethods.ByName("GetReport")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceGetAiSettingsHandler := connect.NewUnaryHandler(
 		DashboardServiceGetAiSettingsProcedure,
 		svc.GetAiSettings,
@@ -2870,6 +2941,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceAppendAnalystNoteHandler.ServeHTTP(w, r)
 		case DashboardServiceGenerateKbReportProcedure:
 			dashboardServiceGenerateKbReportHandler.ServeHTTP(w, r)
+		case DashboardServiceGenerateRetroReportProcedure:
+			dashboardServiceGenerateRetroReportHandler.ServeHTTP(w, r)
+		case DashboardServiceListReportsProcedure:
+			dashboardServiceListReportsHandler.ServeHTTP(w, r)
+		case DashboardServiceGetReportProcedure:
+			dashboardServiceGetReportHandler.ServeHTTP(w, r)
 		case DashboardServiceGetAiSettingsProcedure:
 			dashboardServiceGetAiSettingsHandler.ServeHTTP(w, r)
 		case DashboardServiceSetAiSettingsProcedure:
@@ -3257,6 +3334,18 @@ func (UnimplementedDashboardServiceHandler) AppendAnalystNote(context.Context, *
 
 func (UnimplementedDashboardServiceHandler) GenerateKbReport(context.Context, *connect.Request[v1.GenerateKbReportRequest]) (*connect.Response[v1.GenerateKbReportResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GenerateKbReport is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) GenerateRetroReport(context.Context, *connect.Request[v1.GenerateRetroReportRequest]) (*connect.Response[v1.GenerateRetroReportResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GenerateRetroReport is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListReports(context.Context, *connect.Request[v1.ListReportsRequest]) (*connect.Response[v1.ListReportsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListReports is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) GetReport(context.Context, *connect.Request[v1.GetReportRequest]) (*connect.Response[v1.GetReportResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetReport is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GetAiSettings(context.Context, *connect.Request[v1.GetAiSettingsRequest]) (*connect.Response[v1.GetAiSettingsResponse], error) {

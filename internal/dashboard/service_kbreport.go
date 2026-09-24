@@ -34,6 +34,9 @@ func (s *Service) GenerateKbReport(ctx context.Context, req *connect.Request[v1.
 		EntriesDir: filepath.Join(root, "docs/经验库/条目"),
 		ReportDir:  filepath.Join(root, "docs/报告"),
 		InboxPath:  filepath.Join(root, deps.notePath),
+		Alert: func(level, msg string) {
+			_ = s.store.InsertAlert(context.Background(), nil, level, msg)
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("generate kb report: %w", err)
