@@ -28,13 +28,17 @@ type GraduationStore interface {
 }
 
 // StepCarryGraduation 每轮 carry 扫描后调用（wire_scan 同轮串行单写者）：
-// 合格判据（双路径，SSOT S2 写死）——
+// 合格判据（双路径，D-403 S2/D-410 S5/D-468 §1 写死）——
 //
-//	active：age≥GradMinAgeDays ∧ accrued>0 ∧ low_streak==0（在轨持续盈利）；
+//	active：age≥GradMinAgeDays ∧ accrued>0 ∧ low_streak==0（在轨持续盈利），
+//	        收敛账=entry/last basis 现算（convergence_usd 列仅退出时写，active 不读列）；
 //	exited：exit_reason∈{normalized,age_7d} ∧ accrued>0 ∧ 持仓时长≥GradMinAgeDays ∧ 在 14d 窗口
-//	（满龄正常退出且盈利=最强证据；promoted_demo/异常退出不算）。
+//	        （满龄正常退出且盈利=最强证据；promoted_demo/异常退出不算），收敛账=退出冻结列值。
 //
+// 缺账闸（D-468 §1 语义）：「该有而没有」=拒（est_fee NULL/exited 列 NULL/basis 缺）；
+// 「尚未到产生时点」=按该时点口径现算（active 收敛）。demo 行=default 拒=人工域。
 // 每合格行插建议（paper_id UNIQUE 幂等，同行二次扫描不重复）；newCount>0 发一条聚合 info。
+// 每轮一行 scanned/qualified/new 拒绝遥测（零产出不再无声，D-468 S3）。
 // flags：D-463 S2 KB→pipeline 投影——venue 段（×拆分含全串）任一 warn 命中 →
 // 建议行 flag_warn=拼接 reason 短串透出（blocked 理论到不了此层=纸面已拦，不另处理）。
 func StepCarryGraduation(ctx context.Context, st GraduationStore, now time.Time, flags map[string]pgstore.VenueSymbolFlag) (int, error) {
@@ -43,12 +47,14 @@ func StepCarryGraduation(ctx context.Context, st GraduationStore, now time.Time,
 		return 0, fmt.Errorf("graduation: list paper: %w", err)
 	}
 	newCount := 0
+	qualified := 0
 	var labels []string
 	for _, p := range rows {
 		if !graduationQualified(p, now) {
 			continue
 		}
-		net := netAllInUSD(p.AccruedUSD, p.EstRoundTripFeeUSD, p.ConvergenceUSD)
+		qualified++
+		net := netAllInUSD(p.AccruedUSD, p.EstRoundTripFeeUSD, effectiveConvergenceUSD(p))
 		g := &pgstore.CarryGraduation{
 			PaperID:        p.ID,
 			Venue:          p.Venue,
@@ -58,7 +64,7 @@ func StepCarryGraduation(ctx context.Context, st GraduationStore, now time.Time,
 			AgeDays:        graduationAgeDays(p, now),
 			AccruedUSD:     p.AccruedUSD,
 			LastFundingAnn: p.LastFundingAnn,
-			NetAllInUSD:    &net, // D-410 S5：建议行透出全账净额（qualified 行双列非 NULL 已达）
+			NetAllInUSD:    &net, // D-410 S5/D-468 S1：建议行透出全账净额（qualified 行 effective 收敛非 nil 已达）
 			FlagWarn:       graduationFlagWarn(p, flags),
 		}
 		inserted, err := st.InsertCarryGraduation(ctx, g)
@@ -82,18 +88,34 @@ func StepCarryGraduation(ctx context.Context, st GraduationStore, now time.Time,
 			return newCount, fmt.Errorf("graduation alert: %w", err)
 		}
 	}
+	log.Printf("[graduation] scanned=%d qualified=%d new=%d", len(rows), qualified, newCount)
 	return newCount, nil
 }
 
+// effectiveConvergenceUSD D-468 S1：行的收敛账 effective 值——exited=退出冻结列值；
+// active=entry/last basis 现算。同一公式（paperConvergenceUSD）同一语义只差时间锚：
+// 退出冻结=退出时点 last，现算=当前 last_basis（accrue 每轮在更新）。helper 单点
+// 防「判据读一套、建议行透出另一套」的公式漂移。
+func effectiveConvergenceUSD(p pgstore.PaperSpotCarry) *float64 {
+	if p.Status != "active" {
+		return p.ConvergenceUSD
+	}
+	return paperConvergenceUSD(paperBasisDir(p.Side, p.Structure), p.EntryBasisBps, p.LastBasisBps, p.QtyUSD)
+}
+
 // graduationQualified 单行合格判定（S6 合格矩阵的全分支源头）。
-// D-410 S5：盈利判据从「carry 在跑」升「all-in 净额为正」——est_fee/convergence 任一
-// NULL → 拒（缺账不可毕业，KB validation-baseline-empty：首批毕业行不得由失真口径
-// 产生）；netAllIn = accrued − est_fee + convergence ≤ 0 → 拒。
+// D-410 S5：盈利判据从「carry 在跑」升「all-in 净额为正」；D-468 §1 缺账重定义：
+// 「该有而没有」=拒（est_fee NULL=开仓未记账、exited 收敛列 NULL=退出未冻结、active
+// basis 缺=现算不可得，KB validation-baseline-empty：首批毕业行不得由失真口径产生）；
+// 「尚未到产生时点」=现算（active 收敛——原「读列 NULL 即拒」自 D-410 起把 active
+// 毕业路径打成死代码）。netAllIn = accrued − est_fee + effective_convergence ≤ 0 →
+// 拒（KB carry-rate-is-not-expectancy：速率再高不算数）。
 func graduationQualified(p pgstore.PaperSpotCarry, now time.Time) bool {
-	if p.EstRoundTripFeeUSD == nil || p.ConvergenceUSD == nil {
+	conv := effectiveConvergenceUSD(p)
+	if p.EstRoundTripFeeUSD == nil || conv == nil {
 		return false // 缺账不可毕业（展示侧 net 照算+partial 标注不隐瞒）
 	}
-	if netAllInUSD(p.AccruedUSD, p.EstRoundTripFeeUSD, p.ConvergenceUSD) <= 0 {
+	if netAllInUSD(p.AccruedUSD, p.EstRoundTripFeeUSD, conv) <= 0 {
 		return false // 全账未盈利=零证据（KB carry-rate-is-not-expectancy：速率再高不算数）
 	}
 	switch p.Status {

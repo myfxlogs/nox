@@ -23,6 +23,7 @@ type RetroDaily struct {
 	OpenPos          []RetroOpenPos
 	OpenedToday      int
 	ClosedToday      int
+	GraduationsToday int     // D-468 S4：窗口内 carry_graduations.created_at 计数（毕业建议新增）
 	FundingActualUSD float64 // 当日 kind=funding quality=actual 实收
 	FundingEstUSD    float64 // 当日 kind=funding quality=estimated 预估口径
 	EvalDist         map[string]int
@@ -116,6 +117,12 @@ func (s *Store) RetroDailyStats(ctx context.Context, start, end time.Time) (*Ret
 		SELECT count(*) FILTER (WHERE opened_at >= $1 AND opened_at < $2),
 		       count(*) FILTER (WHERE closed_at >= $1 AND closed_at < $2)
 		FROM positions`, start, end).Scan(&d.OpenedToday, &d.ClosedToday); err != nil {
+		return nil, err
+	}
+	// D-468 S4：毕业建议窗口计数（持续零产出→次日日报可见）。
+	if err := s.pool.QueryRow(ctx, `
+		SELECT count(*) FROM carry_graduations WHERE created_at >= $1 AND created_at < $2`,
+		start, end).Scan(&d.GraduationsToday); err != nil {
 		return nil, err
 	}
 	if err := s.pool.QueryRow(ctx, `

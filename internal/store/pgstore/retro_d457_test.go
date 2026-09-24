@@ -45,6 +45,21 @@ func TestRetroStats_D457(t *testing.T) {
 	}
 	defer s.pool.Exec(ctx, `DELETE FROM position_evals WHERE position_id=$1`, posID)
 
+	// D-468 S4：毕业建议窗口计数——插 paper 行（FK 父）+ carry_graduations 行（created_at=now 入窗）。
+	if err := s.InsertPaperSpotCarry(ctx, &PaperSpotCarry{Venue: "gate", Symbol: "D468P", Side: "short_perp", EntryFundingAnn: 50, QtyUSD: 1000}); err != nil {
+		t.Fatal(err)
+	}
+	var paperID int64
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM paper_spot_carry WHERE symbol='D468P' LIMIT 1`).Scan(&paperID); err != nil {
+		t.Fatal(err)
+	}
+	defer s.pool.Exec(ctx, `DELETE FROM paper_spot_carry WHERE symbol='D468P'`) // 级联删建议行
+	// created_at 显式入窗：DEFAULT now()=事务时刻 ≥ 测试捕获的窗口上界 now（微秒差出窗）。
+	if _, err := s.pool.Exec(ctx, `INSERT INTO carry_graduations (paper_id, venue, symbol, structure, age_days, accrued_usd, created_at)
+		VALUES ($1,'gate','D468P','spot_carry',6,1,$2)`, paperID, now.Add(-time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+
 	d, err := s.RetroDailyStats(ctx, start, now)
 	if err != nil {
 		t.Fatal(err)
@@ -63,6 +78,9 @@ func TestRetroStats_D457(t *testing.T) {
 	}
 	if d.OpenedToday < 1 || d.FundingActualUSD < 1.0313 || d.EvalDist["hold"] < 1 {
 		t.Fatalf("daily stats wrong: %+v", d)
+	}
+	if d.GraduationsToday < 1 {
+		t.Fatalf("graduations_today want ≥1（D-468 S4 窗口计数），got %+v", d)
 	}
 
 	w, err := s.RetroWeeklyStats(ctx, now.Add(-7*24*time.Hour), now.Add(time.Minute))

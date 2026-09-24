@@ -4,7 +4,11 @@
 package scan
 
 import (
+	"bytes"
 	"context"
+	"log"
+	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -51,11 +55,20 @@ func gradPaper(id int64, status string, entryOffsetDays, exitOffsetDays float64,
 	if status == "exited" {
 		ts := now.Add(time.Duration(-exitOffsetDays*24) * time.Hour)
 		p.ExitTs = &ts
+		// D-468 S2 夹具矫正（KB api-response-fields-empirical）：convergence_usd 仅退出
+		// 时写——列值只给 exited 行，active 行不再撒谎塞退出时点才存在的列。
+		conv := 0.1
+		p.ConvergenceUSD = &conv
 	}
-	// D-410 S5：判据升 all-in 净额——fixture 默认账齐（fee=0.5/conv=0.1 → net=accrued−0.4，
-	// accrued≤0 仍拒、accrued>0 仍收），既有矩阵语义不变；NULL 拒毕业由 d410 测试覆盖。
-	fee, conv := 0.5, 0.1
-	p.EstRoundTripFeeUSD, p.ConvergenceUSD = &fee, &conv
+	if status == "active" {
+		// D-468 S2：active 行收敛账走 entry/last basis 现算（dir=−1：−1×(100−101)×1000/1e4
+		// =+0.1，与原夹具 conv=0.1 同值——既有矩阵 net=accrued−0.4 语义逐行不变）。
+		qty, eb, lb := 1000.0, 101.0, 100.0
+		p.QtyUSD, p.EntryBasisBps, p.LastBasisBps = qty, &eb, &lb
+	}
+	// D-410 S5：est_fee 开仓即记账（该有）——全行给；NULL 拒毕业由 d410 测试覆盖。
+	fee := 0.5
+	p.EstRoundTripFeeUSD = &fee
 	return p
 }
 
@@ -149,6 +162,93 @@ func TestD403_ResolveGraduationCanonicals(t *testing.T) {
 
 func contains(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || indexOf(s, sub) >= 0)
+}
+
+// TestD468_Graduate_ActiveConvergenceMatrix D-468 S2 对抗矩阵（先红后绿）：
+// active 行收敛账=entry/last basis 现算（不读 convergence_usd 列——该列仅退出时写，
+// active 读列恒 NULL=原缺账闸误杀）；basis 缺=真缺账如实拒；exited 列语义不动；
+// 盈利闸不放松（carry-rate-is-not-expectancy）。
+func TestD468_Graduate_ActiveConvergenceMatrix(t *testing.T) {
+	now := time.Now()
+	colNeg := -999.0
+	basis := func(p pgstore.PaperSpotCarry) pgstore.PaperSpotCarry {
+		qty, eb, lb := 1000.0, 101.0, 100.0 // dir=−1 → conv=−1×(100−101)×1000/1e4=+0.1
+		p.QtyUSD, p.EntryBasisBps, p.LastBasisBps = qty, &eb, &lb
+		return p
+	}
+	cases := []struct {
+		name string
+		row  pgstore.PaperSpotCarry
+		want bool
+	}{
+		{"active+列nil+basis可算→收（不读列）", basis(gradPaper(21, "active", 6, 0, 10, 0, "")), true},
+		{"active+列误值−999+basis可算→收（列被忽略）", func() pgstore.PaperSpotCarry {
+			p := basis(gradPaper(22, "active", 6, 0, 10, 0, ""))
+			p.ConvergenceUSD = &colNeg
+			return p
+		}(), true},
+		{"active+entry basis nil→拒（真缺账）", func() pgstore.PaperSpotCarry {
+			p := gradPaper(23, "active", 6, 0, 10, 0, "")
+			p.EntryBasisBps = nil
+			return p
+		}(), false},
+		{"active+last basis nil→拒（真缺账）", func() pgstore.PaperSpotCarry {
+			p := gradPaper(24, "active", 6, 0, 10, 0, "")
+			p.LastBasisBps = nil
+			return p
+		}(), false},
+		{"active+basis可算但netAllIn≤0→拒（盈利闸不动）", func() pgstore.PaperSpotCarry {
+			p := basis(gradPaper(25, "active", 6, 0, 10, 0, ""))
+			eb, lb := 100.0, 200.0 // conv=−1×(200−100)×1000/1e4=−10 → net=10−0.5−10=−0.5
+			p.EntryBasisBps, p.LastBasisBps = &eb, &lb
+			return p
+		}(), false},
+		{"exited+列nil→拒（原语义不动）", func() pgstore.PaperSpotCarry {
+			p := gradPaper(26, "exited", 7, 1, 10, 0, "normalized")
+			p.ConvergenceUSD = nil
+			return p
+		}(), false},
+	}
+	for _, tc := range cases {
+		fs := &fakeGradStore{rows: []pgstore.PaperSpotCarry{tc.row}, existing: map[int64]bool{}}
+		n, err := StepCarryGraduation(context.Background(), fs, now, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if (n == 1) != tc.want {
+			t.Errorf("%s: newCount=%d want=%v", tc.name, n, tc.want)
+		}
+		if tc.want && len(fs.inserted) == 1 {
+			// 收的两行：建议行 NetAllInUSD 透出=effective 现算值 9.6（accrued−fee+conv=10−0.5+0.1），
+			// 列值（含 −999 误值）不透出——钉死 StepCarryGraduation 与判据同源。
+			if fs.inserted[0].NetAllInUSD == nil || math.Abs(*fs.inserted[0].NetAllInUSD-9.6) > 1e-9 {
+				t.Errorf("%s: NetAllInUSD want 9.6（effective 现算），got %v", tc.name, fs.inserted[0].NetAllInUSD)
+			}
+		}
+	}
+}
+
+// TestD468_Graduate_SentinelLog D-468 S3：每轮一行 scanned/qualified/new 拒绝遥测——
+// 零产出从「空表无声」变「每轮一行实数」（对照 funding regime 闸拒绝日志先例）。
+func TestD468_Graduate_SentinelLog(t *testing.T) {
+	old := log.Writer()
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(old)
+	noBasis := gradPaper(33, "active", 6, 0, 10, 0, "")
+	noBasis.EntryBasisBps, noBasis.LastBasisBps = nil, nil // 真缺账行
+	fs := &fakeGradStore{rows: []pgstore.PaperSpotCarry{
+		gradPaper(31, "active", 6, 0, 10, 0, ""),
+		gradPaper(32, "active", 7, 0, 5, 0, ""),
+		noBasis,
+	}, existing: map[int64]bool{}}
+	n, err := StepCarryGraduation(context.Background(), fs, time.Now(), nil)
+	if err != nil || n != 2 {
+		t.Fatalf("newCount=%d err=%v, want 2/nil", n, err)
+	}
+	if !strings.Contains(buf.String(), "[graduation] scanned=3 qualified=2 new=2") {
+		t.Fatalf("哨兵行缺失或数值不符: %q", buf.String())
+	}
 }
 
 func indexOf(s, sub string) int {
