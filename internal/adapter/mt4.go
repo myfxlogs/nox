@@ -56,6 +56,16 @@ type MT4Adapter struct {
 	// D-104 P2 U2：封顶档 episode 告警去重（成功帧重置，连续封顶只告警一次）。
 	quoteAlerted bool
 
+	// D-432：OnQuote 零帧看门狗状态（同 MT5，zfMu 保护）。
+	zfMu              sync.Mutex
+	zfLastAnyFrameAt  time.Time
+	zfLastRealFrameAt time.Time
+	zfStartedAt       time.Time
+	zfAlerted         bool
+	zfReconnectAt     time.Time
+	zfPersistWarned   bool
+	zfCancelStream    context.CancelFunc
+
 	stopCtx    context.Context
 	stopCancel context.CancelFunc
 	mu         sync.Mutex
