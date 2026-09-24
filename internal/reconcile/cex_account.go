@@ -101,17 +101,9 @@ func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error
 		Code string `json:"code"`
 		Msg  string `json:"msg"`
 		Data []struct {
-			TotalEq  string `json:"totalEq"`  // 交易所权威 USD 总权益
-			MgnRatio string `json:"mgnRatio"` // D-405 S2：保证金率（百分数口径，越高越安全）
-			Details  []struct {
-				Ccy      string `json:"ccy"`
-				Eq       string `json:"eq"`       // 本币权益（2026-09-10 实采实证：币种计价，非 USD）
-				CashBal  string `json:"cashBal"`  // 本币数量（总持有）
-				AvailBal string `json:"availBal"` // 可用余额
-				EqUsd    string `json:"eqUsd"`    // USD 等值
-				Mmr      string `json:"mmr"`      // D-434：本币 MMR（USD 口径，顶层空时 details 供值）
-				MgnRatio string `json:"mgnRatio"` // D-434：本币层保证金率回落
-			} `json:"details"`
+			TotalEq  string             `json:"totalEq"`  // 交易所权威 USD 总权益
+			MgnRatio string             `json:"mgnRatio"` // D-405 S2：保证金率（百分数口径，越高越安全）
+			Details  []OKXBalanceDetail `json:"details"`  // D-434 R1：共享 schema（WS 同型）
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
@@ -161,29 +153,7 @@ func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error
 	// ①Σdetails[USDT].mmr>0 → eq/Σmmr（与 binance 自算 marginBalance/maintMargin 同口径，
 	// 首选）②details[USDT].mgnRatio>0 → /100（venue 权威回落）③顶层 mgnRatio>0 → /100
 	// （原行为）④全空 → 0=未采 → guard 判 data_stale（诚实）。
-	var buffer float64
-	sumMMR, detailMgn := 0.0, 0.0
-	for _, d := range resp.Data[0].Details {
-		if d.Ccy != "USDT" {
-			continue
-		}
-		if v, perr := strconv.ParseFloat(d.Mmr, 64); perr == nil && v > 0 {
-			sumMMR += v
-		}
-		if v, perr := strconv.ParseFloat(d.MgnRatio, 64); perr == nil && v > 0 {
-			detailMgn = v
-		}
-	}
-	switch {
-	case sumMMR > 0 && eq > 0:
-		buffer = eq / sumMMR
-	case detailMgn > 0:
-		buffer = detailMgn / 100
-	default:
-		if mr, perr := strconv.ParseFloat(resp.Data[0].MgnRatio, 64); perr == nil && mr > 0 {
-			buffer = mr / 100
-		}
-	}
+	buffer := OKXBufferMultiple(eq, resp.Data[0].Details, resp.Data[0].MgnRatio)
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
 		Balance: eq, Equity: eq, Currency: "USDT",
