@@ -136,6 +136,8 @@ service DashboardService {
   // 分析员（D-091 前端分析员，server streaming + 收件箱 append）
   rpc AskAnalyst(AskAnalystRequest) returns (stream AskAnalystResponse);
   rpc AppendAnalystNote(AppendAnalystNoteRequest) returns (AppendAnalystNoteResponse);
+  // D-442 S4：KB 元分析报告手动补跑（周 ticker 之外的调试/验证入口）
+  rpc GenerateKbReport(GenerateKbReportRequest) returns (GenerateKbReportResponse);
   // D-091 返修② R3：AI 配置 DB 化（前端可配，Get 掩码/Set 空 key 不覆盖）
   rpc GetAiSettings(GetAiSettingsRequest) returns (GetAiSettingsResponse);
   rpc SetAiSettings(SetAiSettingsRequest) returns (SetAiSettingsResponse);
@@ -1424,6 +1426,8 @@ message AnalystDone { bool grounded = 1; }                    // grounded=false=
 message AskAnalystResponse { oneof part { string delta = 1; AnalystCitation citation = 2; SuggestedFollowUps follow_ups = 3; AnalystDone done = 4; } }
 message AppendAnalystNoteRequest { string question = 1; string summary = 2; repeated AnalystCitation citations = 3; }
 message AppendAnalystNoteResponse { bool ok = 1; }
+message GenerateKbReportRequest {}
+message GenerateKbReportResponse { string path = 1; }
 
 // D-091 返修② R3：AI 配置 DB 化
 message GetAiSettingsRequest {}
