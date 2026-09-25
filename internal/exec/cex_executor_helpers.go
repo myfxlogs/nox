@@ -212,3 +212,41 @@ func OkxSwapSpec(ctx context.Context, client *http.Client, baseURL, instID strin
 func (e *CEXExecutor) okxContractVal(ctx context.Context, instID string) (ctVal, lotSz float64, err error) {
 	return OkxSwapSpec(ctx, e.client, e.baseURL, instID)
 }
+
+// okxSpotLotSz D-473（KB okx-perp-ctval-qty-conversion 同型修）：spot instruments
+// 的 lotSz/minSz（instType=SPOT，sz 单位=基础币）。取不到→err fail-closed
+// （不下未地板单——51121/最小金额拒单先例）。
+func (e *CEXExecutor) okxSpotLotSz(ctx context.Context, instID string) (lotSz, minSz float64, err error) {
+	if s, ok := okxSpotSpecCache.Load(instID); ok {
+		sp := s.(okxSpotSpec)
+		return sp.lotSz, sp.minSz, nil
+	}
+	body, err := e.get(ctx, e.baseURL+"/api/v5/public/instruments?instType=SPOT&instId="+url.QueryEscape(instID), nil)
+	if err != nil {
+		return 0, 0, fmt.Errorf("okx spot instruments %s: %w", instID, err)
+	}
+	var out struct {
+		Code string `json:"code"`
+		Data []struct {
+			LotSz string `json:"lotSz"`
+			MinSz string `json:"minSz"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return 0, 0, fmt.Errorf("okx spot instruments json: %w", err)
+	}
+	if out.Code != "0" || len(out.Data) == 0 {
+		return 0, 0, fmt.Errorf("okx spot instruments %s: code=%s data_len=%d", instID, out.Code, len(out.Data))
+	}
+	lotSz, err = strconv.ParseFloat(out.Data[0].LotSz, 64)
+	if err != nil || lotSz <= 0 {
+		return 0, 0, fmt.Errorf("okx spot instruments %s: lotSz=%q invalid", instID, out.Data[0].LotSz)
+	}
+	minSz, _ = strconv.ParseFloat(out.Data[0].MinSz, 64)
+	okxSpotSpecCache.Store(instID, okxSpotSpec{lotSz: lotSz, minSz: minSz})
+	return lotSz, minSz, nil
+}
+
+type okxSpotSpec struct{ lotSz, minSz float64 }
+
+var okxSpotSpecCache sync.Map
