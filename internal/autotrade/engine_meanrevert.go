@@ -31,24 +31,38 @@ func (e *Engine) meanRevertLoop(ctx context.Context) {
 		return
 	}
 	venueA, venueB := venues[0], venues[1]
-	ticker := time.NewTicker(5 * time.Second)
+	// D-469c S1：quote kick 主路（MeanRevertThresh canonical 帧→mrKick）+ticker 降 60s
+	// 断流兜底；1s 最小间隔节流防事件洪峰每帧全扫。
+	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
 	// D-080 R7：每 loop 一个长生命周期 accumulator——当日累计、轮末 flush 覆盖写；
 	// 日切由 accumulator 内部 pending 队列处理（零定时器，无共享竞态）。
 	acc := newComboAccumulator()
+	scan := func() {
+		// D-080 S4 N9 修订：判死策略停扫改为停提交——扫描+评估常开喂 rollup
+		e.scanMeanRevert(ctx, e.cfg.MeanRevertThresh, venueA, venueB, acc)
+		if err := acc.Flush(ctx, e.store); err != nil {
+			log.Printf("[autotrade] meanRevert rollup flush: %v", err)
+		}
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
-			// D-080 S4 N9 修订：判死策略停扫改为停提交——扫描+评估常开喂 rollup
-			e.scanMeanRevert(ctx, e.cfg.MeanRevertThresh, venueA, venueB, acc)
-			if err := acc.Flush(ctx, e.store); err != nil {
-				log.Printf("[autotrade] meanRevert rollup flush: %v", err)
+		case <-e.mrKick:
+			if time.Since(e.lastMRScan) < mrScanMinInterval {
+				continue // 洪峰节流（1s 最小间隔）
 			}
+			e.lastMRScan = time.Now()
+			scan()
+		case <-ticker.C:
+			scan()
 		}
 	}
 }
+
+// mrScanMinInterval D-469c S1：kick 路径最小扫描间隔（报价洪峰不放大全扫成本）。
+const mrScanMinInterval = time.Second
 
 // scanMeanRevert 扫描价差，超阈值则产 intent 走 gate（D-072：风控由 gate 统一）。
 // H4.1：满仓短路——CountOpenPositions >= MaxPositions 整轮跳过（省逐组合产 intent 撞 gate 的日志噪音）。

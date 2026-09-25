@@ -67,6 +67,12 @@ type Engine struct {
 	kickCh   chan struct{}
 	lastScan time.Time
 
+	// D-469c S1/S3：评估节拍事件化——mrKick=meanRevert 入场扫描 kick（独立 chan：
+	// 与 positionLoop 退出扫描语义不混）；factsKick=swapArb facts 写后 kick。
+	mrKick     chan struct{}
+	factsKick  chan struct{}
+	lastMRScan time.Time // mrScanMinInterval 节流基准（仅 meanRevertLoop goroutine 读写）
+
 	// D-140 S2：CS-miss 聚合告警——按 (venue,canonical) 计数，定期 flush info 告警。
 	csMissCounts map[string]int       // key=venue|canonical → 累计 miss 次数
 	csMissSent   map[string]time.Time // key → 最近一次告警时间（1h 去重）
@@ -129,6 +135,12 @@ func (e *Engine) Run(ctx context.Context) {
 
 	// 3. swap 套利循环（D-070：持有赚 swap）
 	safego.Go("engine:swapArbLoop", func() { e.swapArbLoop(ctx) })
+
+	// D-469c S1/S2：quote 事件分发——单订阅扇出两 kick chan（非阻塞 send 防洪峰；
+	// mr 过滤=MeanRevertThresh canonical 集，position kick 全订走 scanIfDue 节流合流）。
+	if e.quotes != nil {
+		safego.Go("engine:quoteKickDispatch", func() { e.quoteKickDispatch(ctx) })
+	}
 
 	// 4. 持仓扫描循环（自动平仓 + 状态机 tick）
 	e.positionLoop(ctx)
@@ -216,5 +228,42 @@ func (e *Engine) positionLoop(ctx context.Context) {
 		case <-csMissTick.C:
 			e.flushCSMissAlerts() // D-140 S2
 		}
+	}
+}
+
+// quoteKickDispatch D-469c S1/S2：qbus 全订 → 每帧非阻塞 send e.kickCh（positionLoop
+// scanIfDue 30s 节流合流）；canonical ∈ MeanRevertThresh 时另 send mrKick。
+func (e *Engine) quoteKickDispatch(ctx context.Context) {
+	ch, cancel := e.quotes.Subscribe("")
+	defer cancel()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case q, ok := <-ch:
+			if !ok {
+				return
+			}
+			e.Kick() // S2：positionLoop quote-kick（节流在 scanIfDue 侧）
+			if _, tracked := e.cfg.MeanRevertThresh[q.Symbol]; tracked {
+				e.KickMeanRevert() // S1：meanRevert 入场扫描 kick
+			}
+		}
+	}
+}
+
+// KickMeanRevert D-469c S1：quote 帧（MeanRevertThresh 覆盖 canonical）→ mrKick 非阻塞合并。
+func (e *Engine) KickMeanRevert() {
+	select {
+	case e.mrKick <- struct{}{}:
+	default:
+	}
+}
+
+// KickSwapArb D-469c S3：facts 写后（mt_swap/funding 三源）→ factsKick 非阻塞合并。
+func (e *Engine) KickSwapArb() {
+	select {
+	case e.factsKick <- struct{}{}:
+	default:
 	}
 }

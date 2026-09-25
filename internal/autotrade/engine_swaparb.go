@@ -18,19 +18,26 @@ func (e *Engine) swapArbLoop(ctx context.Context) {
 	if e.quotes == nil {
 		return
 	}
-	ticker := time.NewTicker(60 * time.Second)
+	// D-469c S3：facts 写后 kick 主路（mt_swap/funding 三源→factsKick 即到即评）+
+	// ticker 降 5min 断流兜底（facts 本身 5min-1h 刷新，盲扫 60s 无新数据）。
+	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 	acc := newComboAccumulator()
+	scan := func() {
+		// D-080 S4 N9 修订：判死策略停扫改为停提交——扫描+评估常开喂 rollup
+		e.scanSwapArb(ctx, acc)
+		if err := acc.Flush(ctx, e.store); err != nil {
+			log.Printf("[autotrade] swapArb rollup flush: %v", err)
+		}
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-e.factsKick:
+			scan()
 		case <-ticker.C:
-			// D-080 S4 N9 修订：判死策略停扫改为停提交——扫描+评估常开喂 rollup
-			e.scanSwapArb(ctx, acc)
-			if err := acc.Flush(ctx, e.store); err != nil {
-				log.Printf("[autotrade] swapArb rollup flush: %v", err)
-			}
+			scan()
 		}
 	}
 }

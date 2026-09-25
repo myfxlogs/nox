@@ -27,6 +27,8 @@ func New(cfg Config, store *pgstore.Store, service *dashboard.Service, oppTopic 
 		marginAlertSent:  make(map[string]time.Time), // D-144 ②：保证金告警去重
 		revivalAlertSent: make(map[string]time.Time), // D-256-A S5：复活扳机告警去重
 		kickCh:           make(chan struct{}, 1),     // D-107 P4：buffered(1) 非阻塞 send = 事件合并
+		mrKick:           make(chan struct{}, 1),     // D-469c S1
+		factsKick:        make(chan struct{}, 1),     // D-469c S3
 	}
 	// D-405 S4：开户门槛档——dashboard.MarginFloorCheck 注入（nil service=未接线不检查）。
 	if service != nil {
