@@ -95,7 +95,7 @@ func TestD478_PendingGateOrder(t *testing.T) {
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("rows=%d err=%v", len(rows), err)
 	}
-	if rows[0].WaitReason != "venue 未放行: 3001157:mt5" {
+	if rows[0].WaitReason != "通道未放行: 3001157:mt5" {
 		t.Fatalf("闸 1 reason=%q", rows[0].WaitReason)
 	}
 	// 闸 1 通过（补 venue 行）→ 闸 3 regime 未持续（无 facts）。
@@ -106,7 +106,7 @@ func TestD478_PendingGateOrder(t *testing.T) {
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("rows=%d err=%v", len(rows), err)
 	}
-	if rows[0].EntryKind != "XASSET_CARRY" || !stringsHas(rows[0].WaitReason, "regime 未持续") {
+	if rows[0].EntryKind != "XASSET_CARRY" || !stringsHas(rows[0].WaitReason, "息差环境未持续") {
 		t.Fatalf("闸 3 kind=%s reason=%q", rows[0].EntryKind, rows[0].WaitReason)
 	}
 
