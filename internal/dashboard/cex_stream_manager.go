@@ -135,7 +135,13 @@ func (m *CexStreamManager) sync(ctx context.Context) {
 		// D-469a S3：余额快照 sink 包 kicking wrapper（落库成功→acctMon kick；写失败不 kick）。
 		sinkKick := m.AcctKick
 		if m.TierKickFn != nil {
-			sinkKick = func() { m.AcctKick(); m.TierKickFn() } // D-478 S4：档位重算同事件驱动
+			// R4：AcctKick nil 守卫（TierKickFn 单独注入时 AcctKick 可能为 nil）。
+			sinkKick = func() {
+				if m.AcctKick != nil {
+					m.AcctKick()
+				}
+				m.TierKickFn()
+			}
 		}
 		snapSink := exchange.NewKickingSnapshotSink(m.sinks, sinkKick)
 		switch c.Venue {

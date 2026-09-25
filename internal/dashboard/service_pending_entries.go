@@ -130,11 +130,19 @@ func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow,
 	if kind == "" && strings.HasSuffix(c.VenueBuy, ":spot") && strings.HasSuffix(c.VenueSell, ":perp") {
 		kind = "FUNDING_HEDGE"
 	}
+	// R5：构型未覆盖（双 CEX/未知形态）→「构型未覆盖」短路，不走七闸（同所组合不产两型 opp）。
+	if kind == "" {
+		return kind, "构型未覆盖", false
+	}
 	// 闸 1：venue/canonical allow_rules（engine allowRuleReject 同判据，kind='venue'/'canonical' 值查表）。
-	if !venueAllow[c.VenueBuy] || !venueAllow[c.VenueSell] {
+	// R2：双腿分别点名实际未放行腿（原实现恒报 buy 腿=误导）。
+	if !venueAllow[c.VenueBuy] {
 		return kind, fmt.Sprintf("venue 未放行: %s", c.VenueBuy), false
 	}
-	if len(canonAllow) > 0 && (!canonAllow[c.CanonicalBuy]) {
+	if !venueAllow[c.VenueSell] {
+		return kind, fmt.Sprintf("venue 未放行: %s", c.VenueSell), false
+	}
+	if len(canonAllow) > 0 && !canonAllow[c.CanonicalBuy] {
 		return kind, fmt.Sprintf("canonical 未放行: %s", c.CanonicalBuy), false
 	}
 	// 闸 2：旗标投影（engine flagRuleReject 同源 flags；blocked/warn 均透出为拦路原因）。
@@ -190,7 +198,11 @@ func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow,
 			if capRow.CapUSD == 0 {
 				return kind, fmt.Sprintf("cap 冻结: venue %s 敞口闸冻结新批准（cap=0）", v), false
 			}
-			if sum := s.venueExposureSum(caps, v); sum > capRow.CapUSD {
+			sum, err := s.venueExposureSum(v)
+			if err != nil {
+				return kind, fmt.Sprintf("cap 查询失败: venue %s %v（fail-closed）", v, err), false
+			}
+			if sum > capRow.CapUSD {
 				return kind, fmt.Sprintf("cap 超限: venue %s Σ$%.0f > cap $%.0f", v, sum, capRow.CapUSD), false
 			}
 		}
@@ -244,11 +256,11 @@ func (s *Service) TierKickAll(ctx context.Context) {
 	if err != nil {
 		return
 	}
-	if s.tierState == nil {
-		s.tierState = map[string]tierState{}
-	}
 	s.tierMu.Lock()
 	defer s.tierMu.Unlock()
+	if s.tierState == nil {
+		s.tierState = map[string]tierState{} // R1：init 移入锁内（原锁外惰性 init=数据竞争）
+	}
 	now := time.Now()
 	for _, c := range combos {
 		if !c.Enabled {
@@ -280,11 +292,11 @@ type tierState struct {
 }
 
 // venueExposureSum 475a 同判据的 venue 已挂名义 Σ（enabled 组合 notional/MaxGross 回退）。
-func (s *Service) venueExposureSum(caps map[string]pgstore.VenueExposureCap, venue string) float64 {
-	_ = caps // caps 参与判定在外层；此 Σ 只算组合名义
+// err 传播=调用方 fail-closed 转「cap 查询失败」reason（R3：原吞 err 返 0=fail-open 误导）。
+func (s *Service) venueExposureSum(venue string) (float64, error) {
 	combos, err := s.store.ListXAssetAllowCombosAll(context.Background())
 	if err != nil {
-		return 0 // fail-closed：Σ 不可得=0 → 闸 6 不误拒（cap 判定仍由外层 row 比对）
+		return 0, err
 	}
 	sum := 0.0
 	for _, c := range combos {
@@ -300,7 +312,7 @@ func (s *Service) venueExposureSum(caps map[string]pgstore.VenueExposureCap, ven
 			sum += c.MaxGrossUSD
 		}
 	}
-	return sum
+	return sum, nil
 }
 
 // monitorPairKey / monitorLegKeys paper_all_in.go 同式镜像（pair=cexCanon+"-"+bare(mtCanon)）。
