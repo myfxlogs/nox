@@ -17,20 +17,24 @@ func Load() *Config {
 		FundingBaselinePct:          envFloat("ARB_FUNDING_BASELINE_PCT", 10.95), // D-084 同所基准费率扣除
 		CarryMinNetAnnualized:       envFloat("ARB_CARRY_MIN_NET_ANNUALIZED", 4.0),
 		PerpFundingMinNetAnnualized: envFloat("ARB_PERP_FUNDING_MIN_NET_ANNUALIZED", 2.0),
-		XassetEntryMinBps:           envFloat("ARB_XASSET_ENTRY_MIN_BPS", -20.0),    // D-300：容忍 ≤0.2% 逆价进场（evaluator 计入回本天数）
-		XassetMinNetAnnualPct:       envFloat("ARB_XASSET_MIN_NET_ANNUAL_PCT", 0.0), // D-300：净息差>0 即候选（margin 扣减在 evaluator）
-		XassetTrackingMaxBps:        envFloat("ARB_XASSET_TRACKING_MAX_BPS", 50.0),  // D-300 §5.3
-		GrabMinNetAnnualized:        envFloat("ARB_GRAB_MIN_NET_ANNUALIZED", 4.5),
-		DetectorFreshnessTTL:        envDur("ARB_DETECTOR_FRESHNESS_TTL", 120*time.Second), // D-070 均值回归：放宽 freshness 让低频报价 venue 配对
-		SlippageBps:                 envFloat("ARB_SLIPPAGE_BPS", 0.3),                     // D-070 均值回归：降低滑点假设（CFD 限价单）
-		MarginRateAnnual:            envFloat("ARB_MARGIN_RATE_ANNUAL", 4.5),
-		OpportunityTTL:              envDur("ARB_OPPORTUNITY_TTL", 30*time.Second),
-		ScanThrottle:                envDur("ARB_SCAN_THROTTLE", 30*time.Second),
-		RotateMaxPerDay:             envInt("ARB_ROTATE_MAX_PER_DAY", 1),                 // D-406 轮转日限
-		CloseBpsThr:                 envFloat("ARB_CLOSE_BPS_THR", 0.5),                  // D-070 均值回归：价差回归到 0.5bps 内平仓
-		AlertResendInterval:         envDur("ARB_ALERT_RESEND_INTERVAL", 10*time.Minute), // D-072 铃铛治理：同 key 告警冷却
-		CommissionCFDBps:            envFloat("ARB_COMMISSION_CFD_BPS", 0.3),
-		CommissionCEXTakerBps:       envFloat("ARB_COMMISSION_CEX_TAKER_BPS", 5.0), // D-145：binance/okx VIP0 taker 实测 0.05%=5bps（账户级真值待真金 key 后 commissionFor 精确化）
+		// D-479 S1：字段族折 config_xasset.go 嵌入——字面量改嵌套（promoted 字面量 go1.26 禁）。
+		XassetConfig: XassetConfig{
+			XassetEntryMinBps:      envFloat("ARB_XASSET_ENTRY_MIN_BPS", -20.0),    // D-300：容忍 ≤0.2% 逆价进场（evaluator 计入回本天数）
+			XassetMinNetAnnualPct:  envFloat("ARB_XASSET_MIN_NET_ANNUAL_PCT", 0.0), // D-300：净息差>0 即候选（margin 扣减在 evaluator）
+			XassetTrackingMaxBps:   envFloat("ARB_XASSET_TRACKING_MAX_BPS", 50.0),  // D-300 §5.3
+			XassetCarryMinNetStore: envFloat("ARB_XASSET_CARRY_MIN_NET_STORE", 0.0),
+		},
+		GrabMinNetAnnualized:  envFloat("ARB_GRAB_MIN_NET_ANNUALIZED", 4.5),
+		DetectorFreshnessTTL:  envDur("ARB_DETECTOR_FRESHNESS_TTL", 120*time.Second), // D-070 均值回归：放宽 freshness 让低频报价 venue 配对
+		SlippageBps:           envFloat("ARB_SLIPPAGE_BPS", 0.3),                     // D-070 均值回归：降低滑点假设（CFD 限价单）
+		MarginRateAnnual:      envFloat("ARB_MARGIN_RATE_ANNUAL", 4.5),
+		OpportunityTTL:        envDur("ARB_OPPORTUNITY_TTL", 30*time.Second),
+		ScanThrottle:          envDur("ARB_SCAN_THROTTLE", 30*time.Second),
+		RotateMaxPerDay:       envInt("ARB_ROTATE_MAX_PER_DAY", 1),                 // D-406 轮转日限
+		CloseBpsThr:           envFloat("ARB_CLOSE_BPS_THR", 0.5),                  // D-070 均值回归：价差回归到 0.5bps 内平仓
+		AlertResendInterval:   envDur("ARB_ALERT_RESEND_INTERVAL", 10*time.Minute), // D-072 铃铛治理：同 key 告警冷却
+		CommissionCFDBps:      envFloat("ARB_COMMISSION_CFD_BPS", 0.3),
+		CommissionCEXTakerBps: envFloat("ARB_COMMISSION_CEX_TAKER_BPS", 5.0), // D-145：binance/okx VIP0 taker 实测 0.05%=5bps（账户级真值待真金 key 后 commissionFor 精确化）
 		// D-159 W4a T6：CommissionTaker map 默认 5.0（与 CommissionCEXTakerBps 对齐，D-145 意图生效）。
 		// W0 T6 铁证：旧默认 10.0 使 CommissionCEXTakerBps 5.0 永不回退，opportunities 表 79 条 CEX×CEX commission_cost=20.0（10×2 腿）。
 		XAssetCexFeeBps:        envFloat("ARB_XASSET_CEX_FEE_BPS", 5.0),        // D-391：回本列「本」CEX fee NULL 回退估算率
@@ -77,7 +81,6 @@ func Load() *Config {
 		FundingHedgeMinNetStore:    envFloat("ARB_FUNDING_HEDGE_MIN_NET_STORE", 14.95), // D-085 息差家族净门槛（含基准 10.95+门槛 4）
 		PerpFundingMinNetStore:     envFloat("ARB_PERP_FUNDING_MIN_NET_STORE", 2.0),    // D-085
 		CarryMinNetStore:           envFloat("ARB_CARRY_MIN_NET_STORE", 4.0),           // D-085
-		XassetCarryMinNetStore:     envFloat("ARB_XASSET_CARRY_MIN_NET_STORE", 0.0),    // D-300 G5
 		VerifyWindowDays:           envInt("ARB_VERIFY_WINDOW_DAYS", 30),               // D-086 验证样本新鲜窗口
 		VerifyMinSamples:           envInt("ARB_VERIFY_MIN_SAMPLES", 2),                // D-086 V1 最低样本数
 		VerifyMinRatio:             envFloat("ARB_VERIFY_MIN_RATIO", 0.7),              // D-086 V1 最低 R
