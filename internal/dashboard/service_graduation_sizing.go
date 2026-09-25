@@ -188,8 +188,12 @@ func (s *Service) deriveAllocSizing(ctx context.Context, venueBuy, venueSell, ca
 // （D-367 加载期剔除=假授权）。errStr 非空=fail-closed 拒批文案。
 func allocModeInputs(g *v1.ApproveCarryGraduationRequest) (funding bool, errStr string) {
 	funding = g.FundingPct != nil || g.FundingUsd != nil
-	if funding && (g.MaxLongQty > 0 || g.MaxShortQty > 0 || g.MaxGrossUsd > 0 || g.NotionalUsd != nil) {
+	explicit := g.MaxLongQty > 0 || g.MaxShortQty > 0 || g.MaxGrossUsd > 0 || g.NotionalUsd != nil
+	if funding && explicit {
 		return true, "资金分配模式与显式上限互斥（funding_pct/funding_usd 不得与 max_*_qty/max_gross_usd/notional_usd 混传）"
+	}
+	if !funding && !explicit && g.DryRun {
+		return false, "" // D-492 R1：dry_run 裸探针豁免——无 sizing/显式入参放行回 gap 体检字段（零副作用）
 	}
 	if !funding {
 		if !(g.MaxLongQty > 0) || !(g.MaxShortQty > 0) || !(g.MaxGrossUsd > 0) {

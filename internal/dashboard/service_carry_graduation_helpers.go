@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -66,11 +67,13 @@ func (s *Service) mtPlatformFor(ctx context.Context, mtVenue string) (int, error
 	return 0, fmt.Errorf("MT 账号 %s 不在 broker_accounts（已删户？）", mtVenue)
 }
 
-// graduationVenueGaps 建议 venue 缺口：cfd=组合两腿 venue_key；非 cfd=venue 段裸名。
-// pending 列表即时算与 approve 同函数复用（当前态信息，不落库）。
+// graduationVenueGaps 建议 venue 缺口（venue_key 全形口径）：cfd=组合两腿 key；
+// 非 cfd=venue ×分段按结构映 key（D-492 R2：spot_carry 双腿 :spot+:perp；
+// perp_perp 双腿 :perp；数字 seg=MT 账号补探 :mt5）。pending 即时算与 approve
+// 同函数复用（当前态信息，不落库）。
 func (s *Service) graduationVenueGaps(ctx context.Context, g *pgstore.CarryGraduation) []string {
 	if !isCfdStructure(g.Structure) {
-		return nonCfdVenueGaps(g.Venue, s.allowVenuesNow(ctx))
+		return nonCfdGapKeys(g.Structure, g.Venue, s.allowVenuesNow(ctx))
 	}
 	if g.MtVenue == nil || *g.MtVenue == "" {
 		return []string{"mt_venue 缺失（数据不一致）"}
@@ -93,26 +96,36 @@ func (s *Service) graduationVenueGaps(ctx context.Context, g *pgstore.CarryGradu
 	return venueGapsOf(pair.MtVenueKey, cexVenueKey, s.allowVenuesNow(ctx))
 }
 
-// venueGapsOf 两腿 venue_key 对白名单集的缺口（顺序稳定：mt 腿在前）。
+// venueGapsOf 两腿 venue_key 对白名单集的缺口（顺序稳定：mt 腿在前；空键跳过）。
 func venueGapsOf(mtVenueKey, cexVenueKey string, allow map[string]bool) []string {
 	var gaps []string
 	for _, vk := range []string{mtVenueKey, cexVenueKey} {
-		if !allow[vk] {
+		if vk != "" && !allow[vk] {
 			gaps = append(gaps, vk)
 		}
 	}
 	return gaps
 }
 
-// nonCfdVenueGaps 非 cfd 结构的 venue 段缺口（裸名口径：× 分段任一不在白名单即报）。
-func nonCfdVenueGaps(paperVenue string, allow map[string]bool) []string {
+// numericVenueRe D-492 R2：venue 数字段=MT 账号主名（seg:mt5 键补探）。
+var numericVenueRe = regexp.MustCompile(`^[0-9]+$`)
+
+// nonCfdGapKeys 非 cfd 结构的 venue 缺口（venue_key 口径——前端补开钮直接可用）：
+// 数字 seg=MT 账号段 → seg:mt5；spot_carry=同所双腿 → seg:spot+seg:perp；
+// 其余（perp_perp）双腿恒 :perp。
+func nonCfdGapKeys(structure, paperVenue string, allow map[string]bool) []string {
 	var gaps []string
 	for _, seg := range strings.Split(paperVenue, "×") {
 		if seg == "" {
 			continue
 		}
-		if !allow[seg] && !allow[seg+":perp"] && !allow[seg+":spot"] {
-			gaps = append(gaps, seg)
+		switch {
+		case numericVenueRe.MatchString(seg):
+			gaps = append(gaps, venueGapsOf(seg+":mt5", "", allow)...)
+		case structure == "spot_carry":
+			gaps = append(gaps, venueGapsOf(seg+":spot", seg+":perp", allow)...)
+		default:
+			gaps = append(gaps, venueGapsOf(seg+":perp", "", allow)...)
 		}
 	}
 	return gaps
@@ -259,11 +272,7 @@ func (s *Service) approveNonCfd(ctx context.Context, resp *v1.ApproveCarryGradua
 	gaps := s.graduationVenueGaps(ctx, grad)
 	resp.VenueGaps = gaps
 	resp.LinkReport = nonCfdLinkReport(grad.Structure, gaps)
-	// D-492：裸名缺口段映射 venue_key（perp_perp 双腿恒 :perp）供前端补开钮。
-	resp.VenueGapKeys = make([]string, 0, len(gaps))
-	for _, seg := range gaps {
-		resp.VenueGapKeys = append(resp.VenueGapKeys, seg+":perp")
-	}
+	resp.VenueGapKeys = gaps // D-492 R2：graduationVenueGaps 已 venue_key 全形——直接透出供补开钮
 	// D-490 dry_run：体检回显不落账不发告警（零状态变更）。
 	if g.DryRun {
 		fillExplicitEst(resp, g.MaxLongQty, g.MaxShortQty, g.MaxGrossUsd, g.NotionalUsd)

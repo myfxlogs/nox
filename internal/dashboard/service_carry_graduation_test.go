@@ -330,8 +330,9 @@ func TestD403_Approve_NonCfd_LinkReport_NoCombo(t *testing.T) {
 	if resp.Msg.LinkReport == "" {
 		t.Error("非 cfd approve 应返回链路体检报告")
 	}
-	if len(resp.Msg.VenueGaps) != 1 || resp.Msg.VenueGaps[0] != "okx" {
-		t.Errorf("venue_gaps got %v, want [okx]", resp.Msg.VenueGaps)
+	// D-492 R2：缺口改 venue_key 全形口径（前端补开钮直接用）。
+	if len(resp.Msg.VenueGaps) != 1 || resp.Msg.VenueGaps[0] != "okx:perp" {
+		t.Errorf("venue_gaps got %v, want [okx:perp]", resp.Msg.VenueGaps)
 	}
 }
 

@@ -232,3 +232,46 @@ func TestD492_A7_VenueGapKeys(t *testing.T) {
 	}
 	_ = f
 }
+
+// R1/R2：dry_run 裸探针豁免——无 sizing/显式入参放行回 ok+venue_gap_keys。
+func TestD492_R1_BareProbeGapKeys(t *testing.T) {
+	// perp_perp：venue "gate×okx"，allow={gate:perp} → keys=[okx:perp]（R2 全形口径）。
+	fee, entryB, lastB := 0.5, 10.0, 12.0
+	f := &fakeGradDB{
+		grad: &pgstore.CarryGraduation{ID: 6, PaperID: 43, Venue: "gate×okx", Symbol: "BTC", Structure: "perp_perp", Status: "pending"},
+		paper: &pgstore.PaperSpotCarry{ID: 43, Venue: "gate×okx", Structure: "perp_perp",
+			Status: "active", AccruedUSD: 5.0, EntryTs: time.Now().Add(-6 * 24 * time.Hour),
+			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB},
+	}
+	s := &Service{gradStore: f, xassetReloader: &fakeReloader{}, allowVenuesSource: func(context.Context) (map[string]bool, error) {
+		return map[string]bool{"gate:perp": true}, nil
+	}}
+	resp, err := s.ApproveCarryGraduation(context.Background(), connect.NewRequest(&v1.ApproveCarryGraduationRequest{GraduationId: 6, DryRun: true}))
+	if err != nil || !resp.Msg.GetOk() {
+		t.Fatalf("perp_perp 裸探针 ok=%v err=%v msg=%q", resp.Msg.GetOk(), err, resp.Msg.GetError())
+	}
+	if keys := resp.Msg.GetVenueGapKeys(); len(keys) != 1 || keys[0] != "okx:perp" {
+		t.Fatalf("perp_perp keys=%v, want [okx:perp]", keys)
+	}
+	if f.combo != nil || f.decision != "" {
+		t.Error("dry_run 零副作用：combo/decision 均不得写")
+	}
+
+	// spot_carry：venue "binance" 双腿口径，allow={binance:perp} → keys=[binance:spot]。
+	f2 := &fakeGradDB{
+		grad: &pgstore.CarryGraduation{ID: 7, PaperID: 44, Venue: "binance", Symbol: "SKLUSDT", Structure: "spot_carry", Status: "pending"},
+		paper: &pgstore.PaperSpotCarry{ID: 44, Venue: "binance", Symbol: "SKLUSDT", Structure: "spot_carry",
+			Status: "active", AccruedUSD: 5.0, EntryTs: time.Now().Add(-6 * 24 * time.Hour),
+			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB},
+	}
+	s2 := &Service{gradStore: f2, xassetReloader: &fakeReloader{}, allowVenuesSource: func(context.Context) (map[string]bool, error) {
+		return map[string]bool{"binance:perp": true}, nil
+	}}
+	resp2, err := s2.ApproveCarryGraduation(context.Background(), connect.NewRequest(&v1.ApproveCarryGraduationRequest{GraduationId: 7, DryRun: true}))
+	if err != nil || !resp2.Msg.GetOk() {
+		t.Fatalf("spot_carry 裸探针 ok=%v err=%v msg=%q", resp2.Msg.GetOk(), err, resp2.Msg.GetError())
+	}
+	if keys := resp2.Msg.GetVenueGapKeys(); len(keys) != 1 || keys[0] != "binance:spot" {
+		t.Fatalf("spot_carry keys=%v, want [binance:spot]", keys)
+	}
+}
