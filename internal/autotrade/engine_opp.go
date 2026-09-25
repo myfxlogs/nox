@@ -62,6 +62,12 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 		log.Printf("[autotrade] skip %s: %s", opp.ID, reason)
 		return
 	}
+	// D-475a S2：旗标执行投影——blocked 拒开（全 opp 类型，旗标=venue 级真相）；
+	// warn 只 log 放行。
+	if reason := e.flagRuleReject(opp); reason != "" {
+		log.Printf("[autotrade] skip %s: %s", opp.ID, reason)
+		return
+	}
 	// D-159 W1a R1 + D-168 自动准入：SWAPARB 发现层组合过滤。
 	// autoAllow=true：跳过白名单过滤，所有组合产 intent 到 gate 层（由门禁栈兜底）。
 	// autoAllow=false：白名单外组合静默过滤（不产 intent 不落 REJECTED），空 allowlist 不过滤（gate 层 fail-closed）。

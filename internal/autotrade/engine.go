@@ -33,10 +33,13 @@ type Engine struct {
 	xassetAllow atomic.Pointer[[]exec.XAssetComboAllowSpec]
 	// D-443 S2：venue/canonical 执行白名单热读 holder（60s 周期重载免重启，同 xassetAllow 模式）。
 	allowRules atomic.Pointer[allowRules]
-	service    *dashboard.Service
-	oppTopic   *bus.Topic[pgstore.Opportunity]
-	quotes     *bus.QuoteBus // 实时报价（D-070 均值回归平仓用）
-	gate       *Gate         // 统一开仓门禁（D-072）
+	// D-475a S2：fin_venue_symbol_flags 执行层投影（同 allowRules 原子快照模式；
+	// nil=空集放行——旗标缺席=无风险信号，与 allowRules 空集全拒故意不对称）。
+	flags    atomic.Pointer[flagSnapshot]
+	service  *dashboard.Service
+	oppTopic *bus.Topic[pgstore.Opportunity]
+	quotes   *bus.QuoteBus // 实时报价（D-070 均值回归平仓用）
+	gate     *Gate         // 统一开仓门禁（D-072）
 
 	// D-182 S1：零结算检测器（scanAndClose 周期对活跃仓检测恒零 → settled=0）。
 	// nil = 未注入（跳过零检测，向后兼容）。

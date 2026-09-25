@@ -128,3 +128,14 @@ func main() {
 	fmt.Printf("after:  stats_status=%q has_settlement=%v\n", after, has)
 	fmt.Println("DONE（质量如实落库，幂等短路=applied/skipped 直接返回）")
 }
+
+// D-475a S7：预测-实测对照三委托。
+func (d *settleDeps) InsertFlag(ctx context.Context, f *pgstore.VenueSymbolFlag) error {
+	return d.store.InsertFlag(ctx, f)
+}
+func (d *settleDeps) ListActiveFlags(ctx context.Context) (map[string]pgstore.VenueSymbolFlag, error) {
+	return d.store.ListActiveFlags(ctx)
+}
+func (d *settleDeps) LatestPaperByLegs(ctx context.Context, canonical string, legVenues []string) (*pgstore.PaperSpotCarry, error) {
+	return d.store.LatestPaperByLegs(ctx, canonical, legVenues)
+}
