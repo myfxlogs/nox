@@ -111,5 +111,6 @@ func (s *Service) SetAutotradeAllowRuleEnabled(ctx context.Context, req *connect
 		fmt.Sprintf("[whitelist] autotrade rule #%d %s %s → enabled=%v%s", r.ID, r.Kind, r.Value, r.Enabled, noteSuffix)); aerr != nil {
 		slog.Warn("allow rule audit alert fail", "id", r.ID, "err", aerr) // best-effort 不回滚
 	}
+	s.kickConfig() // D-469b S5：allow rules 热载 kick
 	return connect.NewResponse(&v1.SetAutotradeAllowRuleEnabledResponse{Ok: true}), nil
 }

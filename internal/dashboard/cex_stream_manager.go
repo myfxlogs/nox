@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"arb/internal/bus"
+
 	"arb/internal/collect/exchange"
 	"arb/internal/reconcile"
 	"arb/internal/safego"
@@ -32,6 +34,12 @@ type CexStreamManager struct {
 	AcctKick func()
 	// BinanceHooks D-469a S3：a.m 事件原因回调（OnFundingFee→income/OnIO→cex-io，nil 安全）。
 	BinanceHooks exchange.BinanceUserHooks
+	// OKXHooks D-469b S1：OKX 四频道事件回调（funding_fee→okx income/account→acctMon/
+	// orders→bpMon，nil 安全）。
+	OKXHooks exchange.OKXPrivateHooks
+	// KickTopic D-469b S2：config 变更 kick（exchange RPC mutation → publish，sync 即到即跑；
+	// nil=纯 ticker）。chan 扇出用 bus.Topic——多 manager/热载器共享同一事件源。
+	KickTopic *bus.Topic[struct{}]
 
 	store      ExchangeStore
 	sinks      CexStreamSinks
@@ -57,6 +65,12 @@ func (m *CexStreamManager) Run(ctx context.Context) {
 	m.sync(ctx)
 	ticker := time.NewTicker(m.interval)
 	defer ticker.Stop()
+	var kickCh <-chan struct{}
+	var cancelSub func()
+	if m.KickTopic != nil {
+		kickCh, cancelSub = m.KickTopic.Subscribe()
+		defer cancelSub()
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -64,6 +78,8 @@ func (m *CexStreamManager) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			m.sync(ctx)
+		case <-kickCh:
+			m.sync(ctx) // D-469b S2：config mutation kick 即到即跑
 		}
 	}
 }
@@ -120,6 +136,10 @@ func (m *CexStreamManager) sync(ctx context.Context) {
 		case "binance":
 			ws := exchange.NewBinanceUserWS(c.APIKey, c.APISecret, c.BaseURL, c.VenueType, vk, c.Simulated, snapSink, m.sinks, m.orderCache, m.posCache, m.BinanceHooks)
 			safego.Go("cex-stream:binance", func() { ws.Run(sctx) })
+		case "okx":
+			// D-469b S1：OKX 私有流纳入 manager 生命周期（boot 一次性装配已移除）。
+			ws := exchange.NewOKXPrivateWS(c.APIKey, c.APISecret, c.Passphrase, c.Simulated, snapSink, vk, m.sinks, m.orderCache, m.posCache, m.OKXHooks)
+			safego.Go("cex-stream:okx", func() { ws.Run(sctx) })
 		}
 		m.streams[id] = cancel
 		log.Printf("[cex-stream] start cfg#%d %s:%s vk=%s simulated=%v", id, c.Venue, c.VenueType, vk, c.Simulated)
@@ -127,7 +147,8 @@ func (m *CexStreamManager) sync(ctx context.Context) {
 }
 
 // streamable 哪些配置行起流：gate:perp + binance:perp（real/demo）+ binance:spot（仅 real——
-// spot testnet ws-api 端点不在代理路由内，demo 行保持 REST 轮询兜底，D-459 实证结论）。
+// spot testnet ws-api 端点不在代理路由内，demo 行保持 REST 轮询兜底，D-459 实证结论）
+// + okx:perp（D-469b S1：凭据三件套齐 real/demo 同规则）。
 func streamable(c pgstore.ExchangeConfig) bool {
 	switch c.Venue {
 	case "gate":
@@ -137,6 +158,9 @@ func streamable(c pgstore.ExchangeConfig) bool {
 			return c.BaseURL != "" && !c.Simulated
 		}
 		return c.VenueType == "perp" && c.BaseURL != ""
+	case "okx":
+		// D-469b S1：okx:perp 凭据三件套齐即可起（simulated 行同规则可起——与 gate/binance 同）。
+		return c.VenueType == "perp" && c.APIKey != "" && c.APISecret != "" && c.Passphrase != ""
 	}
 	return false
 }

@@ -5,6 +5,7 @@
 package dashboard
 
 import (
+	"arb/internal/bus"
 	"context"
 	"log"
 	"sync"
@@ -33,6 +34,8 @@ type CexExecutorManager struct {
 
 	mu   sync.Mutex
 	keys map[string]bool // 上轮已注册的 venueKey（diff 用）
+	// KickTopic D-469b S2：config 变更 kick 即到即跑（nil=纯 ticker）。
+	KickTopic *bus.Topic[struct{}]
 }
 
 // NewCexExecutorManager 创建管理器。interval 复用 cfg.BrokerPosPollInterval（D-059 不新增 knob）。
@@ -53,12 +56,20 @@ func (m *CexExecutorManager) Run(ctx context.Context) {
 	m.sync(ctx)
 	ticker := time.NewTicker(m.interval)
 	defer ticker.Stop()
+	var kickCh <-chan struct{}
+	var cancelSub func()
+	if m.KickTopic != nil {
+		kickCh, cancelSub = m.KickTopic.Subscribe()
+		defer cancelSub()
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			m.sync(ctx)
+		case <-kickCh:
+			m.sync(ctx) // D-469b S2：config mutation kick 即到即跑
 		}
 	}
 }

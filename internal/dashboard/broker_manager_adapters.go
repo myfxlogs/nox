@@ -73,6 +73,9 @@ func (m *BrokerManager) startMT4(ctx context.Context, a *pgstore.BrokerAccount) 
 			m.qbus.Publish(q)
 		}
 	})
+	// D-469b S4：grpcurl 实证 mt4grpc.Subscriptions/Streams 订单流面实装——OnOrderUpdate→
+	// orderTopic（bpMon/engine），OnOrderProfit→acctMon.Kick；sink 双 nil 时 no-op。
+	safego.Go("broker_manager_adapters:mt4-order-events", func() { ad.RunOrderEventSource(ctx) })
 	m.reg.Register(exec.NewMT4Executor(a.Venue, ad.Token(), ad.TradingClient()))
 	q := reconcile.NewMT4Querier(a.Venue, ad.Token(), ad.MT4Client())
 
