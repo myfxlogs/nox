@@ -100,6 +100,8 @@ func TestCEXExecutor_BinancePerpPollsAsyncFill(t *testing.T) {
 	polled := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.URL.Path == "/api/v5/public/instruments":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"1","lotSz":"0.0001","minSz":"0.0001"}]}`)
 		case r.URL.Path == "/fapi/v1/order" && r.Method == http.MethodGet:
 			polled++
 			_, _ = io.WriteString(w, `{"symbol":"BTCUSDT","orderId":99,"status":"FILLED","executedQty":"0.0010","avgPrice":"71862.8"}`)
@@ -126,6 +128,8 @@ func TestCEXExecutor_BinancePerpPollsAsyncFill(t *testing.T) {
 func TestCEXExecutor_BinanceOrderTerminalCanceled(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.URL.Path == "/api/v5/public/instruments":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"1","lotSz":"0.0001","minSz":"0.0001"}]}`)
 		case r.URL.Path == "/fapi/v1/order" && r.Method == http.MethodGet:
 			_, _ = io.WriteString(w, `{"orderId":100,"status":"EXPIRED","executedQty":"0.0000","avgPrice":"0"}`)
 		default:
@@ -160,6 +164,10 @@ func TestCEXExecutor_OKXOrder(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/api/v5/public/instruments" {
+					_, _ = io.WriteString(w, `{"code":"0","data":[{"lotSz":"0.0001","minSz":"0.0001"}]}`)
+					return
+				}
 				if r.Method == http.MethodGet && r.URL.Path == "/api/v5/trade/order" {
 					_, _ = io.WriteString(w, `{"code":"0","data":[{"ordId":"312269865356374016","fee":"","feeCcy":""}]}`)
 					return
@@ -318,6 +326,8 @@ func TestCEXExecutor_OKXPerpPosSideOverride(t *testing.T) {
 func TestCEXExecutor_OKXOrderPollTerminalCanceled(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.URL.Path == "/api/v5/public/instruments":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"1","lotSz":"0.0001","minSz":"0.0001"}]}`)
 		case r.Method == http.MethodPost:
 			_, _ = io.WriteString(w, `{"code":"0","msg":"","data":[{"ordId":"999","sCode":"0"}]}`) // 无成交 → 轮询
 		case r.Method == http.MethodGet:

@@ -15,6 +15,8 @@ import (
 func TestD421OKXUnconfirmedReturnsSentinel(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.URL.Path == "/api/v5/public/instruments":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"1","lotSz":"0.0001","minSz":"0.0001"}]}`)
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v5/trade/order":
 			_, _ = io.WriteString(w, `{"code":"0","data":[{"ordId":"O421","sCode":"0","accFillSz":"","avgPx":""}]}`)
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/trade/order":
@@ -43,6 +45,8 @@ func TestD421OKXPollRetriesOnNetErr(t *testing.T) {
 	var gets int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.URL.Path == "/api/v5/public/instruments":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"1","lotSz":"0.0001","minSz":"0.0001"}]}`)
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v5/trade/order":
 			_, _ = io.WriteString(w, `{"code":"0","data":[{"ordId":"O422","sCode":"0","accFillSz":"","avgPx":""}]}`)
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/trade/order":
@@ -73,6 +77,8 @@ func TestD421OKXCancelRevealsFilled(t *testing.T) {
 	var calls int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.URL.Path == "/api/v5/public/instruments":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"1","lotSz":"0.0001","minSz":"0.0001"}]}`)
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v5/trade/order":
 			_, _ = io.WriteString(w, `{"code":"0","data":[{"ordId":"O423","sCode":"0","accFillSz":"","avgPx":""}]}`)
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/trade/order":
@@ -103,6 +109,8 @@ func TestD421OKXCancelRevealsFilled(t *testing.T) {
 func TestD421OKXCancelConfirmsZero(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.URL.Path == "/api/v5/public/instruments":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"1","lotSz":"0.0001","minSz":"0.0001"}]}`)
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v5/trade/order":
 			_, _ = io.WriteString(w, `{"code":"0","data":[{"ordId":"O424","sCode":"0","accFillSz":"","avgPx":""}]}`)
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/trade/order":
@@ -131,6 +139,8 @@ func TestD421BinancePartialKeepsPolling(t *testing.T) {
 	var gets int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.URL.Path == "/api/v5/public/instruments":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"1","lotSz":"0.0001","minSz":"0.0001"}]}`)
 		case r.URL.Path == "/v1/positionSide/dual":
 			_, _ = io.WriteString(w, `{"dualSidePosition":"true"}`)
 		case r.Method == http.MethodPost && r.URL.Path == "/v1/order":

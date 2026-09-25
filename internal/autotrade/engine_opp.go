@@ -89,13 +89,15 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 	// 环境门挡不住时白名单是 CEX 真单的最后闸）。canonical_sell nil/空→回退 canonical。
 	// D-330 S3：spec 捕获下传 H4.2（MaxLongQty 复用为 spec 核准可行量下限）。
 	var xassetSpec *exec.XAssetComboAllowSpec
-	if opp.Type == "XASSET_CARRY" {
+	// D-473 S1：FUNDING_HEDGE 同闸——spot_carry 双腿 canonical 同值，canonical_sell 回退
+	// canonical 与 allow_combos 行对齐；复用全栈（管理 UI/cap 闸/旗标投影）。
+	if opp.Type == "XASSET_CARRY" || opp.Type == "FUNDING_HEDGE" {
 		sellCanonical := opp.Canonical
 		if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
 			sellCanonical = *opp.CanonicalSell
 		}
 		if xassetSpec = exec.MatchXAssetComboAllow(e.xassetSpecs(), opp.Canonical, sellCanonical, opp.VenueBuy, opp.VenueSell); xassetSpec == nil {
-			log.Printf("[autotrade] skip %s: XASSET_CARRY combo not in allowlist (%s/%s %s×%s)", opp.ID, opp.Canonical, sellCanonical, opp.VenueBuy, opp.VenueSell)
+			log.Printf("[autotrade] skip %s: %s combo not in allowlist (%s/%s %s×%s)", opp.ID, opp.Type, opp.Canonical, sellCanonical, opp.VenueBuy, opp.VenueSell)
 			return
 		}
 	}
@@ -117,12 +119,32 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 			return
 		}
 	}
+	// D-473 S3：FUNDING_HEDGE 入场 regime 闸——v1 钉死正向（买现货+空 perp 收息，
+	// 反构型=perp 买腿→借货卖空路径直接拒不进入）。sign=+1 单腿判定（空 perp 收正
+	// funding），rows=FundingPredWindow 同 D-328 读法。
+	if opp.Type == "FUNDING_HEDGE" {
+		if !strings.HasSuffix(opp.VenueBuy, ":spot") || !strings.HasSuffix(opp.VenueSell, ":perp") {
+			log.Printf("[autotrade] skip %s: FUNDING_HEDGE v1 仅正构型 spot买×perp卖 (%s×%s 拒开)", opp.ID, opp.VenueBuy, opp.VenueSell)
+			return
+		}
+		perpVenue := strings.TrimSuffix(opp.VenueSell, ":perp")
+		rows, err := e.store.FundingPredWindow(ctx, perpVenue, opp.Canonical, time.Now().Add(-e.cfg.CarryRegime.Window))
+		if err != nil {
+			log.Printf("[autotrade] skip %s: funding window %s/%s query: %v (fail-closed)", opp.ID, perpVenue, opp.Canonical, err)
+			return
+		}
+		if gate, _, reason := exec.FundingRegimeOK(rows, +1, e.cfg.CarryRegime.FloorPct, e.cfg.CarryRegime.MinSamples, e.cfg.CarryRegime.PulsedAware); !gate {
+			log.Printf("[autotrade] skip %s: funding regime 未持续 (%s/%s %s)", opp.ID, perpVenue, opp.Canonical, reason)
+			return
+		}
+	}
 	log.Printf("[autotrade] pass filter opp=%s type=%s netBps=%.2f", opp.ID, opp.Type, opp.NetBps)
 
 	// D-335 v2：安全边际闸——顺价深度 ≤ 24h 摆幅半径 = 摆幅内开仓负期望（485/488 实证）。
 	// monitor 符号约定 entry_spread_bps=(binance bid−exness ask)/ask，本结构顺价=正值（单向判定无绝对值）。
 	// 数据缺失/过期 fail-open + warn（期望值过滤非风险保护；止损链独立管命）。manual 路径不拦
 	//（advisory 管钱 vs D-328 risk-gate 管命，设计显式裁定，防未来误同步）。
+	// D-473：FUNDING_HEDGE 不适用——monitor 安全边际语义专指 MT×CEX 顺价差。
 	if opp.Type == "XASSET_CARRY" {
 		// D-423：反向组合（CEX 为买腿/无 MT 腿）monitor 方向未定义 → 拒开（钉死防放行）。
 		cexVenue, mtVenue := xassetLegVenues(opp.VenueBuy, opp.VenueSell)
@@ -250,49 +272,4 @@ func xassetQtyFloor(spec *exec.XAssetComboAllowSpec, specQtyExecutable bool, per
 		return 0, 0, false
 	}
 	return spec.MaxLongQty, spec.MaxLongQty * perLot, true
-}
-
-// === D-140 S2：CS-miss 聚合告警 ===
-
-// csMissAlertInterval CS-miss 告警 flush 间隔（D-140 S2）。
-const csMissAlertInterval = 10 * time.Minute
-
-// recordCSMiss 记一次 CS-miss（D-140 S2）。按 (venue,canonical) 聚合，
-// 定期 flushCSMissAlerts 发 info 告警（同 key 去重 ≥1h）。
-func (e *Engine) recordCSMiss(venue, canonical string) {
-	key := venue + "|" + canonical
-	e.csMissMu.Lock()
-	e.csMissCounts[key]++
-	e.csMissMu.Unlock()
-}
-
-// flushCSMissAlerts 发出聚合 CS-miss 告警（D-140 S2）。
-// 由 positionLoop 定期调用（csMissAlertInterval）；同 key 去重 ≥1h。
-func (e *Engine) flushCSMissAlerts() {
-	e.csMissMu.Lock()
-	if len(e.csMissCounts) == 0 {
-		e.csMissMu.Unlock()
-		return
-	}
-	counts := e.csMissCounts
-	e.csMissCounts = make(map[string]int)
-	now := time.Now()
-	// 去重：跳过 1h 内已发过的 key
-	var lines []string
-	for key, n := range counts {
-		if last, ok := e.csMissSent[key]; ok && now.Sub(last) < time.Hour {
-			continue
-		}
-		e.csMissSent[key] = now
-		lines = append(lines, fmt.Sprintf("%s count=%d", key, n))
-	}
-	e.csMissMu.Unlock()
-	if len(lines) == 0 {
-		return
-	}
-	msg := "unmapped-or-no-CS: " + strings.Join(lines, "; ")
-	log.Printf("[autotrade] %s", msg)
-	if e.AlertSink != nil {
-		e.AlertSink("info", msg)
-	}
 }

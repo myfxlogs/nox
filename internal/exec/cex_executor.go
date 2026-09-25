@@ -19,15 +19,17 @@ import (
 // base64 HMAC + x-simulated-trading:1 模拟盘），venue 分派。
 // D-108 P2 T1：Binance perp 双仓探测缓存（dualSide/dualSideProbed）+ AlertFn 平仓被拒告警。
 type CEXExecutor struct {
-	venue       string
-	venueType   string // spot / perp
-	apiKey      string
-	apiSecret   string
-	passphrase  string // OKX 必填；Binance 空
-	baseURL     string // binance: proxy/demo 根；okx: www.okx.com
-	simulated   bool   // OKX 模拟盘：请求带 x-simulated-trading:1（demo key 必开，D-054 同款）
-	keyOverride string // D-362 S3：撞键非赢家注册键（"venue:type#<id>"；空=canonical）
-	client      *http.Client
+	venue     string
+	venueType string // spot / perp
+	// D-473 S2：spot 现金预检 taker 缓冲（SetSpotTakerBps 注入，缺省 0=不缓冲）。
+	spotTakerBps float64
+	apiKey       string
+	apiSecret    string
+	passphrase   string // OKX 必填；Binance 空
+	baseURL      string // binance: proxy/demo 根；okx: www.okx.com
+	simulated    bool   // OKX 模拟盘：请求带 x-simulated-trading:1（demo key 必开，D-054 同款）
+	keyOverride  string // D-362 S3：撞键非赢家注册键（"venue:type#<id>"；空=canonical）
+	client       *http.Client
 
 	// D-108 P2 T1：Binance perp 双仓模式探测缓存（per executor 实例，避免每单探测）。
 	dualSide       bool // true=hedge mode（双仓），false=one-way（单仓）
@@ -192,6 +194,17 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 	} else {
 		// spot 市价单：缺省买方向 sz=报价币金额（0.0001 当 0.0001 USDT → 51020 最小金额，实测）。
 		// 显式 tgtCcy=base_ccy 固定 sz=基础币数量，与 exec.Order.Qty 契约一致。
+		// D-473（KB okx-perp-ctval-qty-conversion 同型）：spot sz 同样须 lotSz 倍数
+		// 且 ≥minSz——取不到/不足 → fail-closed 拒单（不指望 venue 报错兜底）。
+		lotSz, minSz, err := e.okxSpotLotSz(ctx, instID)
+		if err != nil {
+			return Fill{}, fmt.Errorf("okx spot spec: %w", err)
+		}
+		qty := math.Floor(o.Qty/lotSz) * lotSz
+		if qty < minSz || qty < lotSz {
+			return Fill{}, fmt.Errorf("okx spot qty %.6f → lotSz 地板 %.6f < minSz %.6f（最小量）", o.Qty, qty, minSz)
+		}
+		sz = strconv.FormatFloat(qty, 'f', -1, 64)
 		// D-195-B §4.3：client_order_id 透传（OKX 支持 clOrdId）。
 		clOrdID := ""
 		if o.ClientOrderID != "" {

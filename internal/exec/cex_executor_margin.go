@@ -63,6 +63,9 @@ func (e *CEXExecutor) MarginPrecheck(ctx context.Context, o Order) error {
 		return e.binanceMarginPrecheck(ctx, o)
 	case e.venue == "gate" && e.venueType == "perp":
 		return e.gateMarginPrecheck(ctx, o)
+	case e.venueType == "spot":
+		// D-473 S2：现货腿全额现金占用预检（carry 场景 BUY 腿）；SELL 腿内部放行。
+		return e.spotCashPrecheck(ctx, o)
 	}
 	return nil
 }

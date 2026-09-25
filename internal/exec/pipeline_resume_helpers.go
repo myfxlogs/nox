@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -75,12 +76,16 @@ func (p *Pipeline) placeCloseOrder(ctx context.Context, posID int64, leg pgstore
 			return Fill{}, fmt.Errorf("precheck: %w", pcErr)
 		}
 	}
+	// D-473 S4：PositionSide 仅 perp 腿置位（驱动 reduceOnly）；:spot 腿无持仓概念
+	// 必须留空（下游 okx/binance spot 分支虽不消费，置空防语义混淆与误路由）。
 	var positionSide string
-	switch leg.Side {
-	case "BUY":
-		positionSide = "long"
-	case "SELL":
-		positionSide = "short"
+	if strings.HasSuffix(leg.Venue, ":perp") {
+		switch leg.Side {
+		case "BUY":
+			positionSide = "long"
+		case "SELL":
+			positionSide = "short"
+		}
 	}
 	return exe.PlaceOrder(ctx, Order{
 		Symbol: leg.Symbol, Side: closeSide, Qty: qty, Venue: leg.Venue,
