@@ -31,6 +31,8 @@ const (
 	perpExitStreakRounds = 2
 	// perpMaxAgeDays 满龄强评（天；与 scan paperMaxAgeDays 同语义，未导出故本地定义）。
 	perpMaxAgeDays = 7.0
+	// perpTickMaxAge D-474b S1：两腿 mark 价差 tick 新鲜闸（同 mtm 轨 paperMtmTickMaxAge=5min 口径）。
+	perpTickMaxAge = 5 * time.Minute
 )
 
 // isSuspectPair 病态尾部判定：任一腿 |funding|>paperPerpSuspectAnn 或 net>paperPerpSuspectAnn。
@@ -150,6 +152,10 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 			EntryFundingAnn: p.NetAnn, QtyUSD: scan.PaperQtyUSD, Structure: "perp_perp",
 			EstRoundTripFeeUSD: scan.PaperPerpPerpFeeUSD(p.ShortVenue, p.LongVenue, scan.PaperQtyUSD), // D-474a S2
 		}
+		// D-474b S1：开仓 basis=两腿 mark 价差（tick 缺/陈旧 → NULL 缺账诚实缺，不降级常数）。
+		if b := perpTickBasis(ctx, st, p.ShortVenue, p.ShortSym, p.LongVenue, p.LongSym, now); b != nil {
+			r.EntryBasisBps, r.LastBasisBps = b, b
+		}
 		if err := st.InsertPaperSpotCarry(ctx, r); err != nil {
 			if err == pgstore.ErrPaperExists {
 				continue
@@ -187,7 +193,7 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 			// S4：缺席不计入 normalized streak；连缺 → data_lost
 			miss := p.MissStreak + 1
 			if miss >= perpMissExitRounds {
-				if err := st.ExitPaperSpotCarry(ctx, p.ID, "data_lost", nil); err != nil {
+				if err := st.ExitPaperSpotCarry(ctx, p.ID, "data_lost", scan.PaperExitConvergence(p, nil)); err != nil {
 					return opened, exited, fmt.Errorf("perp paper step: exit miss %d: %w", p.ID, err)
 				}
 				exited++
@@ -204,6 +210,9 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 		}
 		signedNet := *fs - *fl          // 方向入场固定，重算可转负（反噬即衰减，诚实记账）
 		recalc := p.LastAccrueTs == nil // D-474a S1 存量回迁哨兵
+		// D-474b S1：每轮现算两腿 mark 价差 → last_basis（缺 tick→nil，accrue 写 NULL 诚实缺；
+		// 退出收敛=entry 对本轮 last 冻结，同 cfd 轨 paperExitConvergence 口径）。
+		lastBasis := perpTickBasis(ctx, st, shortVenue, shortSym, longVenue, longSym, now)
 		accruedAdd, settledTo, aok, aerr := scan.AccruePaperLegs(ctx, st, []scan.PaperLegAccrue{
 			{Kind: fact.KindFunding, Venue: shortVenue, Symbol: shortSym, SideFactor: +1, CurRate: *fs, CurOK: true},
 			{Kind: fact.KindFunding, Venue: longVenue, Symbol: longSym, SideFactor: -1, CurRate: *fl, CurOK: true},
@@ -228,34 +237,34 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 		}
 		if p.Status != "active" {
 			// demo 行只累积不自动退（同 spot/cfd 轨）
-			if err := st.AccruePaperSpotCarry(ctx, p.ID, signedNet, accruedAdd, p.LowStreak, 0, nil, accrueTo, recalc); err != nil {
+			if err := st.AccruePaperSpotCarry(ctx, p.ID, signedNet, accruedAdd, p.LowStreak, 0, lastBasis, accrueTo, recalc); err != nil {
 				return opened, exited, fmt.Errorf("perp paper step: accrue demo %d: %w", p.ID, err)
 			}
 			continue
 		}
 		// D-474a S3：signedNet 翻负 → 当轮退 adverse（不等 streak）。
 		if signedNet < 0 {
-			if err := st.ExitPaperSpotCarry(ctx, p.ID, "adverse", nil); err != nil {
+			if err := st.ExitPaperSpotCarry(ctx, p.ID, "adverse", scan.PaperExitConvergence(p, lastBasis)); err != nil {
 				return opened, exited, fmt.Errorf("perp paper step: exit adverse %d: %w", p.ID, err)
 			}
 			exited++
 			continue
 		}
 		if streak >= perpExitStreakRounds {
-			if err := st.ExitPaperSpotCarry(ctx, p.ID, "normalized", nil); err != nil {
+			if err := st.ExitPaperSpotCarry(ctx, p.ID, "normalized", scan.PaperExitConvergence(p, lastBasis)); err != nil {
 				return opened, exited, fmt.Errorf("perp paper step: exit %d: %w", p.ID, err)
 			}
 			exited++
 			continue
 		}
 		if now.Sub(p.EntryTs).Hours()/24 >= perpMaxAgeDays {
-			if err := st.ExitPaperSpotCarry(ctx, p.ID, "age_7d", nil); err != nil {
+			if err := st.ExitPaperSpotCarry(ctx, p.ID, "age_7d", scan.PaperExitConvergence(p, lastBasis)); err != nil {
 				return opened, exited, fmt.Errorf("perp paper step: exit age %d: %w", p.ID, err)
 			}
 			exited++
 			continue
 		}
-		if err := st.AccruePaperSpotCarry(ctx, p.ID, signedNet, accruedAdd, streak, 0, nil, accrueTo, recalc); err != nil {
+		if err := st.AccruePaperSpotCarry(ctx, p.ID, signedNet, accruedAdd, streak, 0, lastBasis, accrueTo, recalc); err != nil {
 			return opened, exited, fmt.Errorf("perp paper step: accrue %d: %w", p.ID, err)
 		}
 	}
