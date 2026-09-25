@@ -21,10 +21,15 @@ const GradMinAgeDays = 5.0
 const gradWindowExited = 14 * 24 * time.Hour
 
 // GraduationStore 毕业判定存储依赖（*pgstore.Store 原生实现；scan 不 import store 连接层）。
+// D-474b S3：pending 自动过期回查面（ListCarryGraduations+GetPaperSpotCarryByID+
+// UpdateCarryGraduationDecision——store 既有方法，接口扩列零新 SQL）。
 type GraduationStore interface {
 	ListPaperForGraduation(ctx context.Context) ([]pgstore.PaperSpotCarry, error)
 	InsertCarryGraduation(ctx context.Context, g *pgstore.CarryGraduation) (bool, error)
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
+	ListCarryGraduations(ctx context.Context) ([]pgstore.CarryGraduation, error)
+	GetPaperSpotCarryByID(ctx context.Context, id int64) (*pgstore.PaperSpotCarry, error)
+	UpdateCarryGraduationDecision(ctx context.Context, id int64, status string, comboID *int64, note string) error
 }
 
 // StepCarryGraduation 每轮 carry 扫描后调用（wire_scan 同轮串行单写者）：
@@ -88,6 +93,16 @@ func StepCarryGraduation(ctx context.Context, st GraduationStore, now time.Time,
 			return newCount, fmt.Errorf("graduation alert: %w", err)
 		}
 	}
+	// D-474b S3：pending 建议回查 paper 行——行已衰减（exited/不再 qualified）→
+	// status='stale' 终态（approve 守卫 status='pending' 天然拦），聚合 warn 每轮至多一条。
+	if staleN, serr := stalePendingGraduations(ctx, st, now); serr != nil {
+		return newCount, serr
+	} else if staleN > 0 {
+		if err := st.InsertAlert(ctx, nil, "warn",
+			fmt.Sprintf("[毕业链] %d 条 pending 建议证据衰减自动过期（status=stale，不可批）", staleN)); err != nil {
+			return newCount, fmt.Errorf("graduation stale alert: %w", err)
+		}
+	}
 	log.Printf("[graduation] scanned=%d qualified=%d new=%d", len(rows), qualified, newCount)
 	return newCount, nil
 }
@@ -111,31 +126,47 @@ func effectiveConvergenceUSD(p pgstore.PaperSpotCarry) *float64 {
 // 毕业路径打成死代码）。netAllIn = accrued − est_fee + effective_convergence ≤ 0 →
 // 拒（KB carry-rate-is-not-expectancy：速率再高不算数）。
 func graduationQualified(p pgstore.PaperSpotCarry, now time.Time) bool {
+	ok, _ := GraduationQualifiedReason(p, now)
+	return ok
+}
+
+// GraduationQualifiedReason D-474b S2：毕业合格判定导出带拒因（approve 复核闸复用——
+// 单判据源禁第二判据）。qualified=true 时 reason 空；否则 reason=拒因短串。
+func GraduationQualifiedReason(p pgstore.PaperSpotCarry, now time.Time) (bool, string) {
 	conv := effectiveConvergenceUSD(p)
 	if p.EstRoundTripFeeUSD == nil || conv == nil {
-		return false // 缺账不可毕业（展示侧 net 照算+partial 标注不隐瞒）
+		return false, "缺账（est_fee/basis NULL）" // 缺账不可毕业
 	}
 	if netAllInUSD(p.AccruedUSD, p.EstRoundTripFeeUSD, conv) <= 0 {
-		return false // 全账未盈利=零证据（KB carry-rate-is-not-expectancy：速率再高不算数）
+		return false, "全账净额非正" // 全账未盈利=零证据
 	}
 	switch p.Status {
 	case "active":
-		return now.Sub(p.EntryTs).Hours() >= GradMinAgeDays*24 && p.LowStreak == 0
+		if now.Sub(p.EntryTs).Hours() < GradMinAgeDays*24 {
+			return false, "验证天数不足"
+		}
+		if p.LowStreak != 0 {
+			return false, "低息衰减在轨（low_streak 未清零）"
+		}
+		return true, ""
 	case "exited":
 		if p.ExitTs == nil {
-			return false
+			return false, "退出时刻缺失"
 		}
 		// D-474a S3/S4：adverse 行保留毕业资格（净额仍正则逆向止血证据成立）；
 		// data_lost（失联截断）不在合格集=不得毕业。
 		if p.ExitReason != "normalized" && p.ExitReason != "age_7d" && p.ExitReason != "adverse" {
-			return false
+			return false, "退因不合格（" + p.ExitReason + "）"
 		}
 		if p.ExitTs.Before(now.Add(-gradWindowExited)) {
-			return false // 14d 窗口外=陈旧证据不进建议
+			return false, "退出超 14d 证据窗"
 		}
-		return p.ExitTs.Sub(p.EntryTs).Hours() >= GradMinAgeDays*24
+		if p.ExitTs.Sub(p.EntryTs).Hours() < GradMinAgeDays*24 {
+			return false, "持仓时长不足"
+		}
+		return true, ""
 	default:
-		return false // demo 行=人工域不自动毕业
+		return false, "demo 行=人工域不毕业" // demo 行=人工域不自动毕业
 	}
 }
 

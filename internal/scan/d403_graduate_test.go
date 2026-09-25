@@ -6,6 +6,7 @@ package scan
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"log"
 	"math"
 	"strings"
@@ -16,11 +17,13 @@ import (
 )
 
 type fakeGradStore struct {
-	rows     []pgstore.PaperSpotCarry
-	inserted []pgstore.CarryGraduation
-	existing map[int64]bool // paper_id → 已有建议（幂等模拟）
-	alerts   []string
-	failNext bool
+	rows      []pgstore.PaperSpotCarry
+	inserted  []pgstore.CarryGraduation
+	existing  map[int64]bool // paper_id → 已有建议（幂等模拟）
+	alerts    []string
+	failNext  bool
+	grads     []pgstore.CarryGraduation // D-474b S3：pending 建议存量
+	decisions map[int64]string          // id → 落账 status
 }
 
 func (f *fakeGradStore) ListPaperForGraduation(context.Context) ([]pgstore.PaperSpotCarry, error) {
@@ -42,6 +45,26 @@ func (f *fakeGradStore) InsertCarryGraduation(_ context.Context, g *pgstore.Carr
 
 func (f *fakeGradStore) InsertAlert(_ context.Context, _ *int64, level, message string) error {
 	f.alerts = append(f.alerts, level+"|"+message)
+	return nil
+}
+
+// D-474b S3：stale 回查面三件。
+func (f *fakeGradStore) ListCarryGraduations(context.Context) ([]pgstore.CarryGraduation, error) {
+	return f.grads, nil
+}
+func (f *fakeGradStore) GetPaperSpotCarryByID(_ context.Context, id int64) (*pgstore.PaperSpotCarry, error) {
+	for i := range f.rows {
+		if f.rows[i].ID == id {
+			return &f.rows[i], nil
+		}
+	}
+	return nil, fmt.Errorf("paper %d not found", id)
+}
+func (f *fakeGradStore) UpdateCarryGraduationDecision(_ context.Context, id int64, status string, _ *int64, _ string) error {
+	if f.decisions == nil {
+		f.decisions = map[int64]string{}
+	}
+	f.decisions[id] = status
 	return nil
 }
 
@@ -258,4 +281,52 @@ func indexOf(s, sub string) int {
 		}
 	}
 	return -1
+}
+
+// TestD474b_PendingStale A4：pending 建议指向已衰减行 → 每轮扫描自动翻 stale +聚合 warn 一条；
+// 仍合格行不动；exited 行（快照留档）不误动。
+func TestD474b_PendingStale(t *testing.T) {
+	now := time.Now()
+	degraded := gradPaper(1, "active", 9, 0, 10, 3, "") // low_streak=3 → 不再 qualified
+	fs := &fakeGradStore{
+		rows:     []pgstore.PaperSpotCarry{degraded},
+		existing: map[int64]bool{1: true}, // 已有建议→不重复插
+		grads: []pgstore.CarryGraduation{
+			{ID: 11, PaperID: 1, Status: "pending"},
+			{ID: 12, PaperID: 1, Status: "approved"}, // 已裁决不动
+			{ID: 13, PaperID: 99, Status: "pending"}, // 行读失败不动作
+		},
+	}
+	if _, err := StepCarryGraduation(context.Background(), fs, now, nil); err != nil {
+		t.Fatalf("step: %v", err)
+	}
+	if fs.decisions[11] != "stale" {
+		t.Fatalf("pending+衰减 → stale，got %q", fs.decisions[11])
+	}
+	if _, ok := fs.decisions[12]; ok {
+		t.Fatal("approved 行不得被 stale 触碰")
+	}
+	if _, ok := fs.decisions[13]; ok {
+		t.Fatal("行读失败不误过期（下轮重试）")
+	}
+	// 聚合 warn 至多一条。
+	warns := 0
+	for _, a := range fs.alerts {
+		if strings.HasPrefix(a, "warn|") {
+			warns++
+		}
+	}
+	if warns != 1 {
+		t.Fatalf("warn 聚合应恰 1 条，got %d: %v", warns, fs.alerts)
+	}
+	// 合格行不过期：低息清零后重跑不再 stale 新行。
+	fs.decisions = map[int64]string{}
+	fs.rows[0].LowStreak = 0
+	fs.grads = []pgstore.CarryGraduation{{ID: 14, PaperID: 1, Status: "pending"}}
+	if _, err := StepCarryGraduation(context.Background(), fs, now, nil); err != nil {
+		t.Fatalf("step2: %v", err)
+	}
+	if _, ok := fs.decisions[14]; ok {
+		t.Fatal("合格行不得 stale")
+	}
 }
