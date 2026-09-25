@@ -67,15 +67,15 @@ func (m *BrokerPositionMonitor) build(ctx context.Context) []*v1.BrokerPosition 
 			// binance TRXUSDT → TRXUSDT；okx TRX-USDT-SWAP → TRXUSDT（去 -SWAP + 替换 -）；gate CL_USDT → CLUSDT。
 			// 无映射则 qbus.Latest 查不到 → 现价显示「—」；派生后可查到实时报价。
 			if canonical == "" && isCEXVenueKey(o.VenueKey) {
-				canonical = cexCanonical(o.Symbol)
+				canonical = bus.CexSymbolKey(o.Symbol)
 			}
 			var price bus.Quote
 			hasPrice := false
-			if canonical != "" {
-				if q, ok := m.qbus.Latest(canonical, o.VenueKey); ok {
-					price = q
-					hasPrice = true
-				}
+			// D-481：腿级查找走 LatestLeg——CEX 以原生 symbol 归一键优先（canonical 派生
+			// 已与采集键同形时天然命中；canonical 为空/错位场景原生键兜底），MT canonical 直查。
+			if q, ok := m.qbus.LatestLeg(canonical, o.Symbol, o.VenueKey); ok {
+				price = q
+				hasPrice = true
 			}
 			// D-146 S5 微件③：CEX perp per-position margin 优先（venue 权威，替换 0=未知语义）；
 			// MT4/MT5 走 D-124 账户分摊（VenueOrder.InitialMargin=0）。
@@ -176,13 +176,4 @@ func allocateMargins(orders []reconcile.VenueOrder, accountMargin float64, csMap
 // CEX 无 symbol_mappings 记录，需从符号派生 canonical。
 func isCEXVenueKey(vk string) bool {
 	return strings.HasPrefix(vk, "binance:") || strings.HasPrefix(vk, "okx:") || strings.HasPrefix(vk, "gate:")
-}
-
-// cexCanonical 从 CEX 交易所符号派生 canonical（与采集器同构）：
-// binance TRXUSDT → TRXUSDT；okx TRX-USDT-SWAP → TRXUSDT（去 -SWAP + 替换 -）；
-// gate CL_USDT → CLUSDT（替换 _，镜像 canonicalFromGate=ReplaceAll("_","")，D-311 R6④）。
-func cexCanonical(symbol string) string {
-	s := strings.TrimSuffix(symbol, "-SWAP")
-	s = strings.ReplaceAll(s, "-", "")
-	return strings.ReplaceAll(s, "_", "")
 }

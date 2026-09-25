@@ -41,8 +41,10 @@ func (s *Service) quoteEntrySpreadBps(ctx context.Context, posID int64, canonica
 	if sellCanonical == "" {
 		return 0, false // 跨 canonical 解析不出 → fail-closed 不写锚（engine 同语义）
 	}
-	buyQ, ok1 := s.qbus.Latest(canonical, buyLeg.Venue)
-	sellQ, ok2 := s.qbus.Latest(sellCanonical, sellLeg.Venue)
+	// D-481：CEX 腿 qbus 键=原生 symbol 归一采集键（oppID canonical 错位永不命中），
+	// LatestLeg 原生键优先+canonical 兜底；MT 腿 canonical 直查。
+	buyQ, ok1 := s.qbus.LatestLeg(canonical, buyLeg.Symbol, buyLeg.Venue)
+	sellQ, ok2 := s.qbus.LatestLeg(sellCanonical, sellLeg.Symbol, sellLeg.Venue)
 	if !ok1 || !ok2 {
 		return 0, false // 任一腿 quote 缺失 → 不写锚（留 NULL=fail-closed 不决策）
 	}

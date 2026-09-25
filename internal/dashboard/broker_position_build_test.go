@@ -1,6 +1,10 @@
 package dashboard
 
-import "testing"
+import (
+	"testing"
+
+	"arb/internal/bus"
+)
 
 // TestCexCanonical D-311 R6④：CEX 符号→canonical 派生镜像采集器归一规则。
 // gate=ReplaceAll("_","")（CL_USDT→CLUSDT，修旧码漏剥 _ 致现价「—」）；
@@ -15,8 +19,8 @@ func TestCexCanonical(t *testing.T) {
 		{"TRXUSDT", "TRXUSDT"},
 	}
 	for _, c := range cases {
-		if got := cexCanonical(c.symbol); got != c.want {
-			t.Errorf("cexCanonical(%q)=%q, want %q", c.symbol, got, c.want)
+		if got := bus.CexSymbolKey(c.symbol); got != c.want {
+			t.Errorf("bus.CexSymbolKey(%q)=%q, want %q", c.symbol, got, c.want)
 		}
 	}
 }
