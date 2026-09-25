@@ -15,8 +15,9 @@ import (
 // Monitor 订阅 OPEN/LEGGED 持仓涉及的报价事件，实时重算平仓净收益。
 // 达阈值 → "建议平仓"告警；LEGGED 持仓告警未 Ack 则冷却重发（D-026 语义修订：持续→冷却，D-072 铃铛治理）。
 type Monitor struct {
-	bus   *bus.QuoteBus
-	store *pgstore.Store
+	kickTopic *bus.Topic[struct{}] // D-469b S3
+	bus       *bus.QuoteBus
+	store     *pgstore.Store
 
 	mu          sync.Mutex
 	positions   map[int64]*pgstore.Position // 缓存 OPEN/LEGGED 持仓
@@ -89,13 +90,29 @@ func mergeLoaded(positions map[int64]*pgstore.Position, loaded []pgstore.Positio
 	}
 }
 
+// KickTopic D-469b S3：positions 表变更事件订阅源（pgstore.OnPositionChange → topic.Publish；
+// nil=纯 5min ticker 兜底）。
+func (m *Monitor) SetKickTopic(t *bus.Topic[struct{}]) { m.kickTopic = t }
+
 func (m *Monitor) refreshLoop(ctx context.Context) {
-	ticker := time.NewTicker(30 * time.Second)
+	// D-469b S3：持仓变更事件主路（迁移点 OnPositionChange 即发即刷），ticker 降 5min
+	// 自愈兜底保留（防漏挂写点）。
+	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
+	var kickCh <-chan struct{}
+	var cancelSub func()
+	if m.kickTopic != nil {
+		kickCh, cancelSub = m.kickTopic.Subscribe()
+		defer cancelSub()
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-kickCh:
+			if err := m.loadPositions(ctx); err != nil {
+				log.Printf("[position-monitor] refresh: %v", err)
+			}
 		case <-ticker.C:
 			if err := m.loadPositions(ctx); err != nil {
 				log.Printf("[position-monitor] refresh: %v", err)
