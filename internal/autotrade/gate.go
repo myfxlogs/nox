@@ -28,6 +28,10 @@ type Gate struct {
 	lastDisabledLogMu sync.Mutex
 	// D-405 S4：开户门槛档检查器（dashboard.MarginFloorCheck 注入；nil=未接线不检查）。
 	marginFloor marginFloorChecker
+	// D-472 S3：资金拒单业主告警节流（per combo key ≥6h 至多一条 warn；内存态重启重置，
+	// autotrade_log 全量审计不受节流影响）。
+	lastMarginWarn   map[string]time.Time
+	lastMarginWarnMu sync.Mutex
 }
 
 // NewGate 创建门禁。
@@ -38,6 +42,7 @@ func NewGate(store *pgstore.Store, cfg Config, controlPlane *ControlPlane) *Gate
 		cfg:             cfg,
 		controlPlane:    controlPlane,
 		lastDisabledLog: make(map[string]time.Time),
+		lastMarginWarn:  make(map[string]time.Time),
 	}
 }
 
@@ -274,6 +279,7 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 		} else if action == errclass.Abort {
 			log.Printf("[autotrade] gate Abort %s: %s", intent.DedupKey, msg)
 		}
+		g.marginWarnThrottled(ctx, *intent, msg) // D-472 S3：资金拒单→业主 warn（≥6h 节流）
 	}
 	_ = g.store.InsertAutotradeLog(ctx, logEntry)
 
@@ -286,4 +292,36 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 				intent.Strategy, intent.Canonical, intent.NetBps, posID))
 	}
 	return GateResult{Status: status, Reason: logEntry.Reason, PosID: posID}
+}
+
+// marginWarnInterval D-472 S3：资金拒单业主告警节流窗（实测 XASSET FAILED 7天 8184 条
+// 单类重复数十次——无节流=告警疲劳=业主不看；≥6h 至多一条，重复仅计数落 autotrade_log）。
+const marginWarnInterval = 6 * time.Hour
+
+// marginWarnThrottled D-472 S3：FAILED msg 含资金/强平语义子串 → warn 告警（节流）。
+// 弃 errors.Is（B-005 P0：intent.Execute 返回字符串，err 对象已丢=哨兵在实现点必死），
+// 改 msg 子串匹配——executor 统一拒文约定含 "margin insufficient"（okx/mt5 现文案已含，
+// binance/gate 新写照此）；venue 原文 "Margin is insufficient" 与强平闸 "liq-distance"
+// 大小写不敏感同规则匹配。
+func (g *Gate) marginWarnThrottled(ctx context.Context, intent TradeIntent, msg string) {
+	low := strings.ToLower(msg)
+	if !strings.Contains(low, "margin insufficient") &&
+		!strings.Contains(low, "margin is insufficient") &&
+		!strings.Contains(low, "liq-distance") {
+		return
+	}
+	key := intent.Canonical + "|" + intent.VenueBuy + "|" + intent.VenueSell
+	g.lastMarginWarnMu.Lock()
+	now := time.Now()
+	if last, ok := g.lastMarginWarn[key]; ok && now.Sub(last) < marginWarnInterval {
+		g.lastMarginWarnMu.Unlock()
+		return // 节流窗内：仅 autotrade_log 留痕（上方已落库），不重发告警
+	}
+	g.lastMarginWarn[key] = now
+	g.lastMarginWarnMu.Unlock()
+	if err := g.store.InsertAlert(ctx, nil, "warn",
+		fmt.Sprintf("[资金拒单] %s %s net=%.1fbps: %s（≥6h 节流，重复见 autotrade_log）",
+			intent.Strategy, intent.Canonical, intent.NetBps, errclass.TruncateNote(msg, 120))); err != nil {
+		log.Printf("[autotrade] margin warn insert: %v", err)
+	}
 }

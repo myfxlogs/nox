@@ -41,11 +41,27 @@ type CEXExecutor struct {
 	// AlertFn 平仓被拒时 critical 告警（main 注入 store.InsertAlert；nil=不告警，测试用）。
 	AlertFn          func(posID *int64, level, msg string)
 	marginReservePct float64 // D-415 ARB_MARGIN_RESERVE_PCT 安全垫（缺省 0.20）
+
+	// D-472 S4：强平距离预检参数（SetLiqGuards 注入；缺省 0=关闸/0.5=cross 占比上限）。
+	minLiqDistPct          float64
+	crossNotionalEquityCap float64
+	// D-472 S2：gate venue 级缺省杠杆档（SetGateDefaultLeverage 注入；缺省 5）。
+	gateDefaultLeverage float64
+	// D-472 S4：binance tier-1 MMR 运行时缓存（leverageBracket 取不到=fail-closed）。
+	mmMu    sync.Mutex
+	mmCache map[string]float64
 }
 
 // defaultMarginReservePct D-415 §1.4：可用额安全垫缺省——只吃满 80%，留 20%
 // 缓冲防「开完即贴爆仓线」。cfg.MarginReservePct 经 SetMarginReservePct 覆盖。
 const defaultMarginReservePct = 0.20
+
+// D-472 S2/S4 缺省档：gate venue 级杠杆（B-003 两级第二档）、cross 名义/权益占比上限。
+// minLiqDistPct 零值=关闸（struct 零值即缺省，无需显式常量）。
+const (
+	DefaultGateDefaultLeverage    = 5.0 // D-472 S2：ARB_GATE_DEFAULT_LEVERAGE 缺省档（manager 构造共用）
+	DefaultCrossNotionalEquityCap = 0.5 // D-472 S4：ARB_CROSS_NOTIONAL_EQUITY_CAP 缺省档
+)
 
 // NewCEXExecutor 创建 CEX 执行器。
 // baseURL 为 venue 根（binance 走代理 fapi 风格需已含 /demo 路径；okx 实盘域名）。
@@ -61,7 +77,9 @@ func NewCEXExecutor(venue, venueType, apiKey, apiSecret, passphrase, baseURL str
 		simulated:  simulated,
 		client:     httpx.Client(), // CA 信任 + X-Proxy-Token 注入（D-055）；OKX 公网忽略注入头
 
-		marginReservePct: defaultMarginReservePct,
+		marginReservePct:       defaultMarginReservePct,
+		gateDefaultLeverage:    DefaultGateDefaultLeverage,
+		crossNotionalEquityCap: DefaultCrossNotionalEquityCap,
 	}
 }
 
