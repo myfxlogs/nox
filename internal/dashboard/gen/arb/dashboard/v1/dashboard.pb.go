@@ -22808,7 +22808,7 @@ type ApproveCarryGraduationResponse struct {
 	Ok             bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
 	Error          string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
 	ComboId        *int64                 `protobuf:"varint,3,opt,name=combo_id,json=comboId,proto3,oneof" json:"combo_id,omitempty"`
-	VenueGaps      []string               `protobuf:"bytes,4,rep,name=venue_gaps,json=venueGaps,proto3" json:"venue_gaps,omitempty"`                // 未在 ARB_AUTOTRADE_ALLOW_VENUES 的 venue_key（需业主 env 补录+重启）
+	VenueGaps      []string               `protobuf:"bytes,4,rep,name=venue_gaps,json=venueGaps,proto3" json:"venue_gaps,omitempty"`                // 未放行 venue_key（autotrade_allow_rules 表补行，≤60s 热生效，D-443）
 	AutomapSummary string                 `protobuf:"bytes,5,opt,name=automap_summary,json=automapSummary,proto3" json:"automap_summary,omitempty"` // "applied=N skipped=M conflicts=K"
 	LinkReport     string                 `protobuf:"bytes,6,opt,name=link_report,json=linkReport,proto3" json:"link_report,omitempty"`             // 非 cfd 结构的体检报告文本
 	unknownFields  protoimpl.UnknownFields
