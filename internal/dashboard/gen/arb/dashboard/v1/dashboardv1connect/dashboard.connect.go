@@ -370,6 +370,12 @@ const (
 	// DashboardServiceRejectCarryGraduationProcedure is the fully-qualified name of the
 	// DashboardService's RejectCarryGraduation RPC.
 	DashboardServiceRejectCarryGraduationProcedure = "/arb.dashboard.v1.DashboardService/RejectCarryGraduation"
+	// DashboardServiceListVenueExposureCapsProcedure is the fully-qualified name of the
+	// DashboardService's ListVenueExposureCaps RPC.
+	DashboardServiceListVenueExposureCapsProcedure = "/arb.dashboard.v1.DashboardService/ListVenueExposureCaps"
+	// DashboardServiceSetVenueExposureCapProcedure is the fully-qualified name of the
+	// DashboardService's SetVenueExposureCap RPC.
+	DashboardServiceSetVenueExposureCapProcedure = "/arb.dashboard.v1.DashboardService/SetVenueExposureCap"
 	// DashboardServiceListAccountMarginStatusProcedure is the fully-qualified name of the
 	// DashboardService's ListAccountMarginStatus RPC.
 	DashboardServiceListAccountMarginStatusProcedure = "/arb.dashboard.v1.DashboardService/ListAccountMarginStatus"
@@ -534,6 +540,9 @@ type DashboardServiceClient interface {
 	ListCarryGraduations(context.Context, *connect.Request[v1.ListCarryGraduationsRequest]) (*connect.Response[v1.ListCarryGraduationsResponse], error)
 	ApproveCarryGraduation(context.Context, *connect.Request[v1.ApproveCarryGraduationRequest]) (*connect.Response[v1.ApproveCarryGraduationResponse], error)
 	RejectCarryGraduation(context.Context, *connect.Request[v1.RejectCarryGraduationRequest]) (*connect.Response[v1.RejectCarryGraduationResponse], error)
+	// D-475a S6：venue 敞口闸（fin_venue_exposure_caps）读/写；Set→kickConfig 即时生效。
+	ListVenueExposureCaps(context.Context, *connect.Request[v1.ListVenueExposureCapsRequest]) (*connect.Response[v1.ListVenueExposureCapsResponse], error)
+	SetVenueExposureCap(context.Context, *connect.Request[v1.SetVenueExposureCapRequest]) (*connect.Response[v1.SetVenueExposureCapResponse], error)
 	// D-405 S6：账户资金与保证金卡（财务页下钻）——数据源 fin_venue_margin_status
 	// + snapshot 最新行 join；覆盖天数/建议补资金/档位全后端给，前端零计算。
 	ListAccountMarginStatus(context.Context, *connect.Request[v1.ListAccountMarginStatusRequest]) (*connect.Response[v1.ListAccountMarginStatusResponse], error)
@@ -1228,6 +1237,18 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("RejectCarryGraduation")),
 			connect.WithClientOptions(opts...),
 		),
+		listVenueExposureCaps: connect.NewClient[v1.ListVenueExposureCapsRequest, v1.ListVenueExposureCapsResponse](
+			httpClient,
+			baseURL+DashboardServiceListVenueExposureCapsProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListVenueExposureCaps")),
+			connect.WithClientOptions(opts...),
+		),
+		setVenueExposureCap: connect.NewClient[v1.SetVenueExposureCapRequest, v1.SetVenueExposureCapResponse](
+			httpClient,
+			baseURL+DashboardServiceSetVenueExposureCapProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("SetVenueExposureCap")),
+			connect.WithClientOptions(opts...),
+		),
 		listAccountMarginStatus: connect.NewClient[v1.ListAccountMarginStatusRequest, v1.ListAccountMarginStatusResponse](
 			httpClient,
 			baseURL+DashboardServiceListAccountMarginStatusProcedure,
@@ -1352,6 +1373,8 @@ type dashboardServiceClient struct {
 	listCarryGraduations         *connect.Client[v1.ListCarryGraduationsRequest, v1.ListCarryGraduationsResponse]
 	approveCarryGraduation       *connect.Client[v1.ApproveCarryGraduationRequest, v1.ApproveCarryGraduationResponse]
 	rejectCarryGraduation        *connect.Client[v1.RejectCarryGraduationRequest, v1.RejectCarryGraduationResponse]
+	listVenueExposureCaps        *connect.Client[v1.ListVenueExposureCapsRequest, v1.ListVenueExposureCapsResponse]
+	setVenueExposureCap          *connect.Client[v1.SetVenueExposureCapRequest, v1.SetVenueExposureCapResponse]
 	listAccountMarginStatus      *connect.Client[v1.ListAccountMarginStatusRequest, v1.ListAccountMarginStatusResponse]
 }
 
@@ -1921,6 +1944,16 @@ func (c *dashboardServiceClient) RejectCarryGraduation(ctx context.Context, req 
 	return c.rejectCarryGraduation.CallUnary(ctx, req)
 }
 
+// ListVenueExposureCaps calls arb.dashboard.v1.DashboardService.ListVenueExposureCaps.
+func (c *dashboardServiceClient) ListVenueExposureCaps(ctx context.Context, req *connect.Request[v1.ListVenueExposureCapsRequest]) (*connect.Response[v1.ListVenueExposureCapsResponse], error) {
+	return c.listVenueExposureCaps.CallUnary(ctx, req)
+}
+
+// SetVenueExposureCap calls arb.dashboard.v1.DashboardService.SetVenueExposureCap.
+func (c *dashboardServiceClient) SetVenueExposureCap(ctx context.Context, req *connect.Request[v1.SetVenueExposureCapRequest]) (*connect.Response[v1.SetVenueExposureCapResponse], error) {
+	return c.setVenueExposureCap.CallUnary(ctx, req)
+}
+
 // ListAccountMarginStatus calls arb.dashboard.v1.DashboardService.ListAccountMarginStatus.
 func (c *dashboardServiceClient) ListAccountMarginStatus(ctx context.Context, req *connect.Request[v1.ListAccountMarginStatusRequest]) (*connect.Response[v1.ListAccountMarginStatusResponse], error) {
 	return c.listAccountMarginStatus.CallUnary(ctx, req)
@@ -2085,6 +2118,9 @@ type DashboardServiceHandler interface {
 	ListCarryGraduations(context.Context, *connect.Request[v1.ListCarryGraduationsRequest]) (*connect.Response[v1.ListCarryGraduationsResponse], error)
 	ApproveCarryGraduation(context.Context, *connect.Request[v1.ApproveCarryGraduationRequest]) (*connect.Response[v1.ApproveCarryGraduationResponse], error)
 	RejectCarryGraduation(context.Context, *connect.Request[v1.RejectCarryGraduationRequest]) (*connect.Response[v1.RejectCarryGraduationResponse], error)
+	// D-475a S6：venue 敞口闸（fin_venue_exposure_caps）读/写；Set→kickConfig 即时生效。
+	ListVenueExposureCaps(context.Context, *connect.Request[v1.ListVenueExposureCapsRequest]) (*connect.Response[v1.ListVenueExposureCapsResponse], error)
+	SetVenueExposureCap(context.Context, *connect.Request[v1.SetVenueExposureCapRequest]) (*connect.Response[v1.SetVenueExposureCapResponse], error)
 	// D-405 S6：账户资金与保证金卡（财务页下钻）——数据源 fin_venue_margin_status
 	// + snapshot 最新行 join；覆盖天数/建议补资金/档位全后端给，前端零计算。
 	ListAccountMarginStatus(context.Context, *connect.Request[v1.ListAccountMarginStatusRequest]) (*connect.Response[v1.ListAccountMarginStatusResponse], error)
@@ -2775,6 +2811,18 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("RejectCarryGraduation")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceListVenueExposureCapsHandler := connect.NewUnaryHandler(
+		DashboardServiceListVenueExposureCapsProcedure,
+		svc.ListVenueExposureCaps,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListVenueExposureCaps")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceSetVenueExposureCapHandler := connect.NewUnaryHandler(
+		DashboardServiceSetVenueExposureCapProcedure,
+		svc.SetVenueExposureCap,
+		connect.WithSchema(dashboardServiceMethods.ByName("SetVenueExposureCap")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceListAccountMarginStatusHandler := connect.NewUnaryHandler(
 		DashboardServiceListAccountMarginStatusProcedure,
 		svc.ListAccountMarginStatus,
@@ -3009,6 +3057,10 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceApproveCarryGraduationHandler.ServeHTTP(w, r)
 		case DashboardServiceRejectCarryGraduationProcedure:
 			dashboardServiceRejectCarryGraduationHandler.ServeHTTP(w, r)
+		case DashboardServiceListVenueExposureCapsProcedure:
+			dashboardServiceListVenueExposureCapsHandler.ServeHTTP(w, r)
+		case DashboardServiceSetVenueExposureCapProcedure:
+			dashboardServiceSetVenueExposureCapHandler.ServeHTTP(w, r)
 		case DashboardServiceListAccountMarginStatusProcedure:
 			dashboardServiceListAccountMarginStatusHandler.ServeHTTP(w, r)
 		default:
@@ -3470,6 +3522,14 @@ func (UnimplementedDashboardServiceHandler) ApproveCarryGraduation(context.Conte
 
 func (UnimplementedDashboardServiceHandler) RejectCarryGraduation(context.Context, *connect.Request[v1.RejectCarryGraduationRequest]) (*connect.Response[v1.RejectCarryGraduationResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.RejectCarryGraduation is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListVenueExposureCaps(context.Context, *connect.Request[v1.ListVenueExposureCapsRequest]) (*connect.Response[v1.ListVenueExposureCapsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListVenueExposureCaps is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) SetVenueExposureCap(context.Context, *connect.Request[v1.SetVenueExposureCapRequest]) (*connect.Response[v1.SetVenueExposureCapResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetVenueExposureCap is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListAccountMarginStatus(context.Context, *connect.Request[v1.ListAccountMarginStatusRequest]) (*connect.Response[v1.ListAccountMarginStatusResponse], error) {

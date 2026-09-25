@@ -13,6 +13,7 @@ import (
 	"arb/internal/exec"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	"arb/internal/fact"
 	"arb/internal/store/pgstore"
 	"connectrpc.com/connect"
 )
@@ -31,6 +32,14 @@ type fakeGradDB struct {
 	alerts       int
 	flags        []pgstore.VenueSymbolFlag
 	list         []pgstore.CarryGraduation
+	// D-475a S3/S4：flag/caps/吊销/在管仓测试面。
+	activeFlags   map[string]pgstore.VenueSymbolFlag
+	caps          map[string]pgstore.VenueExposureCap
+	disabledCalls []string
+	disableRet    int64
+	openPos       map[string][]int64
+	allowRows     []pgstore.XAssetAllowRow
+	facts         map[string][]fact.Fact // venue|symbol → facts（S5 interval 活读）
 }
 
 func (f *fakeGradDB) GetCarryGraduation(context.Context, int64) (*pgstore.CarryGraduation, error) {
@@ -66,7 +75,42 @@ func (f *fakeGradDB) ListCarryGraduations(context.Context) ([]pgstore.CarryGradu
 	return f.list, nil
 }
 
+// D-475a S3/S4 扩面。
+func (f *fakeGradDB) ListActiveFlags(context.Context) (map[string]pgstore.VenueSymbolFlag, error) {
+	if f.activeFlags == nil {
+		return map[string]pgstore.VenueSymbolFlag{}, nil
+	}
+	return f.activeFlags, nil
+}
+func (f *fakeGradDB) ListVenueExposureCaps(context.Context) (map[string]pgstore.VenueExposureCap, error) {
+	if f.caps == nil {
+		return map[string]pgstore.VenueExposureCap{}, nil
+	}
+	return f.caps, nil
+}
+func (f *fakeGradDB) DisableCombosByFlag(_ context.Context, bareVenue, symbol string) (int64, error) {
+	f.disabledCalls = append(f.disabledCalls, bareVenue+"|"+symbol)
+	return f.disableRet, nil
+}
+func (f *fakeGradDB) CountOpenPositionsOnVenue(_ context.Context, bareVenue string) (int64, []int64, error) {
+	if f.openPos != nil {
+		if r, ok := f.openPos[bareVenue]; ok {
+			return int64(len(r)), r, nil
+		}
+	}
+	return 0, nil, nil
+}
+func (f *fakeGradDB) LatestFacts(_ context.Context, kind, venue, symbol string) ([]fact.Fact, error) {
+	if f.facts == nil {
+		return nil, nil
+	}
+	return f.facts[venue+"|"+symbol], nil
+}
+
 func (f *fakeGradDB) LoadXAssetAllowCombos(_ context.Context, environment string) ([]pgstore.XAssetAllowRow, error) {
+	if f.allowRows != nil {
+		return f.allowRows, nil
+	}
 	return []pgstore.XAssetAllowRow{{
 		CanonicalBuy: "BTCUSDT", CanonicalSell: "BTCUSD", VenueBuy: "gate:perp", VenueSell: "1279967:mt5",
 		MaxLongQty: 1000, MaxShortQty: 0.01, MaxGrossUSD: 5000,
@@ -150,9 +194,9 @@ func TestD403_Approve_LongCfd_ShortPerp_Direction(t *testing.T) {
 	if f.decision != "approved" {
 		t.Errorf("decision=%s", f.decision)
 	}
-	// venue gap：1279967:mt5 不在 env 快照 → 命中报告
-	if len(resp.Msg.VenueGaps) != 1 || resp.Msg.VenueGaps[0] != "1279967:mt5" {
-		t.Errorf("venue_gaps got %v, want [1279967:mt5]", resp.Msg.VenueGaps)
+	// venue gap：1279967:mt5 不在 env 快照 → 命中报告（D-475a 后另有敞口未设闸 warn）
+	if len(resp.Msg.VenueGaps) == 0 || resp.Msg.VenueGaps[0] != "1279967:mt5" {
+		t.Errorf("venue_gaps got %v, want 首条=[1279967:mt5]", resp.Msg.VenueGaps)
 	}
 }
 

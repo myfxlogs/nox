@@ -15,6 +15,7 @@ import (
 	"time"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	"arb/internal/fact"
 	"arb/internal/scan"
 	"arb/internal/store/pgstore"
 
@@ -40,6 +41,14 @@ type graduationStore interface {
 	ListCarryGraduations(ctx context.Context) ([]pgstore.CarryGraduation, error)
 	// D-463 S4：reject 回写旗标投影表。
 	InsertFlag(ctx context.Context, f *pgstore.VenueSymbolFlag) error
+	// D-475a S3：approve 双闸——flag 活读（分叉前）+敞口 caps 活读（cfd 分支内）。
+	ListActiveFlags(ctx context.Context) (map[string]pgstore.VenueSymbolFlag, error)
+	ListVenueExposureCaps(ctx context.Context) (map[string]pgstore.VenueExposureCap, error)
+	// D-475a S4：吊销编排存储面（裸 venue 段逐段停用+在管仓知情）。
+	DisableCombosByFlag(ctx context.Context, bareVenue, symbol string) (int64, error)
+	CountOpenPositionsOnVenue(ctx context.Context, bareVenue string) (int64, []int64, error)
+	// D-475a S5：funding_interval 活读（观测 expected_periods 用）。
+	LatestFacts(ctx context.Context, kind, venue, symbol string) ([]fact.Fact, error)
 }
 
 // gradDB 存储取用：测试可注入 gradStore 替身，生产回落 s.store（单一真源）。
@@ -99,6 +108,7 @@ func (s *Service) ListCarryGraduations(ctx context.Context, req *connect.Request
 		row.DecidedNote = userNote
 		if g.Status == "pending" {
 			row.VenueGaps = s.graduationVenueGaps(ctx, g)
+			s.graduationObservability(ctx, g, row) // D-475a S5：质量杆观测即时算
 		} else {
 			row.VenueGaps = gaps
 		}
@@ -138,6 +148,27 @@ func (s *Service) ApproveCarryGraduation(ctx context.Context, req *connect.Reque
 		return fail("纸面行 #%d 读取失败: %v", grad.PaperID, err)
 	}
 	userNote := strings.TrimSpace(g.Note)
+
+	// D-475a S3 flag 复核（分叉前双盖 cfd/非 cfd）：候选 venue 集=纸面 venue 组合串+
+	// '×'拆段+mtVenue（scan.FlagVenueSet 单口径——禁复制第二判据）。blocked→拒批；
+	// warn→放行但 decided_note 追加 flag_warn 前缀（业主知情）。
+	flags, err := db.ListActiveFlags(ctx)
+	if err != nil {
+		return fail("旗标活读失败: %v（fail-closed 不批钱）", err)
+	}
+	for _, v := range scan.FlagVenueSet(grad.Venue, grad.MtVenue) {
+		if f, ok := flags[pgstore.FlagKey(v, grad.Symbol)]; ok {
+			if f.Level == "blocked" {
+				return fail("venue %s 命中 blocked flag: %s（先解旗再批准）", v, f.Reason)
+			}
+			if f.Level == "warn" {
+				userNote = "flag_warn:" + f.Reason + " " + userNote
+			}
+		}
+		if f, ok := flags[pgstore.FlagKey(v, "*")]; ok && f.Level == "blocked" {
+			return fail("venue %s 命中 blocked 通配旗: %s（先解旗再批准）", v, f.Reason)
+		}
+	}
 
 	if !isCfdStructure(grad.Structure) {
 		// 非 cfd（perp_perp/spot_carry）：无组合白名单闸，approve=链路体检不写白名单（不越权）。
@@ -187,6 +218,11 @@ func (s *Service) ApproveCarryGraduation(ctx context.Context, req *connect.Reque
 	if ok, reason := scan.GraduationQualifiedReason(*paper, time.Now()); !ok {
 		return fail("毕业复核拒绝: 证据行 %s（建议行仍留 pending）", reason)
 	}
+	// D-475a S3 敞口闸（G5）：三态语义封装 service_venue_exposure.go exposureCapGate。
+	capWarns, capErr := s.exposureCapGate(ctx, []string{pair.MtVenueKey, cexVenueKey}, g.MaxGrossUsd, g.NotionalUsd)
+	if capErr != "" {
+		return fail("%s", capErr)
+	}
 	// ③ 按 structure 方向写 combo：canonical_buy/venue_buy 永远=买腿（cap 跟腿走）
 	combo := &pgstore.XAssetComboInsert{
 		MaxLongQty:  g.MaxLongQty,  // 买腿上限（MT 腿=手数、CEX 腿=张数，跟 venue_buy 走）
@@ -234,7 +270,7 @@ func (s *Service) ApproveCarryGraduation(ctx context.Context, req *connect.Reque
 	resp.AutomapSummary = summary
 	// ⑥ venue 缺口报告（两腿 venue_key 对 autotrade_allow_rules 表活读，D-443）
 	gaps := venueGapsOf(pair.MtVenueKey, cexVenueKey, s.allowVenuesNow(ctx))
-	resp.VenueGaps = gaps
+	resp.VenueGaps = append(gaps, capWarns...) // D-475a S3：敞口闸未设 venue 如实透出
 	// ⑦ 落账 approved+combo_id+note（含 gap 快照前缀）+info 告警
 	if err := db.UpdateCarryGraduationDecision(ctx, grad.ID, "approved", &comboID, gradNoteWithGaps(userNote, gaps)); err != nil {
 		return fail("落账失败: %v", err)
@@ -242,55 +278,4 @@ func (s *Service) ApproveCarryGraduation(ctx context.Context, req *connect.Reque
 	s.insertGraduationAlert(ctx, grad, "已授权", fmt.Sprintf("combo#%d %s|%s %s×%s", comboID, combo.CanonicalBuy, combo.CanonicalSell, combo.VenueBuy, combo.VenueSell))
 	resp.Ok = true
 	return connect.NewResponse(resp), nil
-}
-
-// RejectCarryGraduation pending→rejected（不可逆；note 留业主裁决记录）。
-func (s *Service) RejectCarryGraduation(ctx context.Context, req *connect.Request[v1.RejectCarryGraduationRequest]) (*connect.Response[v1.RejectCarryGraduationResponse], error) {
-	resp := &v1.RejectCarryGraduationResponse{}
-	g := req.Msg
-	db := s.gradDB()
-	grad, err := db.GetCarryGraduation(ctx, g.GraduationId)
-	if err != nil {
-		resp.Error = fmt.Sprintf("建议 #%d 不存在: %v", g.GraduationId, err)
-		return connect.NewResponse(resp), nil
-	}
-	if grad.Status != "pending" {
-		resp.Error = fmt.Sprintf("建议 #%d status=%s 非 pending", grad.ID, grad.Status)
-		return connect.NewResponse(resp), nil
-	}
-	if err := db.UpdateCarryGraduationDecision(ctx, grad.ID, "rejected", nil, strings.TrimSpace(g.Note)); err != nil {
-		resp.Error = fmt.Sprintf("落账失败: %v", err)
-		return connect.NewResponse(resp), nil
-	}
-	// D-463 S4：拒绝理由回写旗标表（业主勾选时；同品种下次建议自动带旗/拦纸面）。
-	if g.WriteFlag {
-		level := strings.TrimSpace(g.FlagLevel)
-		if level != "blocked" {
-			level = "warn" // 未显式选 blocked 一律 warn（默认级保守）
-		}
-		reason := strings.TrimSpace(g.Note)
-		if reason == "" {
-			reason = "业主拒绝（无理由注记）"
-		}
-		if err := db.InsertFlag(ctx, &pgstore.VenueSymbolFlag{
-			Venue: grad.Venue, Symbol: grad.Symbol, Level: level, Reason: reason,
-		}); err != nil {
-			resp.Error = fmt.Sprintf("拒绝已落账但 flag 回写失败: %v", err)
-			return connect.NewResponse(resp), nil
-		}
-	}
-	s.insertGraduationAlert(ctx, grad, "已拒绝", "")
-	resp.Ok = true
-	return connect.NewResponse(resp), nil
-}
-
-// insertGraduationAlert 毕业裁决 info 告警（feishu 投递走既有 pusher 链）。
-func (s *Service) insertGraduationAlert(ctx context.Context, g *pgstore.CarryGraduation, action, detail string) {
-	msg := fmt.Sprintf("[毕业链] %s×%s %s %s", g.Venue, g.Symbol, g.Structure, action)
-	if detail != "" {
-		msg += "：" + detail
-	}
-	if err := s.gradDB().InsertAlert(ctx, nil, "info", msg); err != nil {
-		log.Printf("[graduation] alert: %v", err)
-	}
 }
