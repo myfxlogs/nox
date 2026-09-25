@@ -264,9 +264,9 @@ func TestD350R1_TR5_DemoRowAccrues(t *testing.T) {
 	if r.Status != "demo" {
 		t.Errorf("status = %s, want demo（demo 行不被自动退出）", r.Status)
 	}
-	want := 92.0 / 100 / 365 * 1 * 1000 // 1 天
-	if diff := r.AccruedUSD - want; diff < -0.01 || diff > 0.01 {
-		t.Errorf("demo accrued = %v, want ≈%.4f（红=累积不含 demo 行）", r.AccruedUSD, want)
+	// D-474c S1：demo 行 accrue 改吃 income_events 实收——无事件窗 +0 不外推（旧模型公式断言退役）。
+	if r.AccruedUSD != 0 {
+		t.Errorf("demo accrued = %v, want 0（无 income_events 窗不外推；D-474c 实收口径）", r.AccruedUSD)
 	}
 }
 

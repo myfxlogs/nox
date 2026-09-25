@@ -163,6 +163,17 @@ func (s *Store) MarkPaperSpotCarryDemo(ctx context.Context, id int64, note strin
 	return nil
 }
 
+// AnnotatePaperNote D-474c S1：demo 行实收口径注记——marker 幂等追加（已含不叠注；
+// 行消失时静默=accrue 写刚成功、竞态删行边缘态不升级为错误）。
+func (s *Store) AnnotatePaperNote(ctx context.Context, id int64, marker string) error {
+	if _, err := s.pool.Exec(ctx, `
+		UPDATE paper_spot_carry SET note = note || ' | ' || $2
+		WHERE id = $1 AND position($2 in note) = 0`, id, marker); err != nil {
+		return fmt.Errorf("annotate paper note %d: %w", id, err)
+	}
+	return nil
+}
+
 // LatestPaperExitTs D-410 S4：该 venue|symbol 键最近退出时点（max(exit_ts)，保底槽 flap
 // 冷却重构源——列已在表上零新表；无退出行 → nil）。
 func (s *Store) LatestPaperExitTs(ctx context.Context, venue, symbol string) (*time.Time, error) {

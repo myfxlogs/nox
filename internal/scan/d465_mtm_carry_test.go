@@ -4,6 +4,7 @@ package scan
 import (
 	"context"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -135,6 +136,17 @@ func (f *fakeMtmPaperStore) AccruePaperSpotCarry(_ context.Context, id int64, la
 			ts := *accrueTo
 			r.LastAccrueTs = &ts
 		}
+	}
+	return nil
+}
+
+// D-474c：demo 实收读面（fake 无 income 源→缺席窗 +0 语义）。
+func (f *fakeMtmPaperStore) SumIncomeWindow(context.Context, string, string, time.Time, time.Time) (float64, int, error) {
+	return 0, 0, nil
+}
+func (f *fakeMtmPaperStore) AnnotatePaperNote(_ context.Context, id int64, marker string) error {
+	if r, ok := f.rows[id]; ok && !strings.Contains(r.Note, marker) {
+		r.Note += " | " + marker
 	}
 	return nil
 }

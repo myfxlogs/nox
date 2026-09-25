@@ -84,6 +84,23 @@ func (s *Store) SumIncomeForDay(ctx context.Context, venue, symbol string, day t
 	return sum, rows, nil
 }
 
+// SumIncomeWindow D-474c S1：demo 行 accrue 实收源——(venue,symbol) 窗口内
+// income_events.amount_usd 累加。归属粒度上限=venue+symbol（同所同币多仓会并账，
+// 调用方须 flag_warn 注记）；缺席窗返回 (0,0) 非错误（+0 不外推）；
+// 查询/扫描错误上抛（cashflow-write-error-silently-dropped KB：禁吞）。
+func (s *Store) SumIncomeWindow(ctx context.Context, venue, symbol string, from, to time.Time) (float64, int, error) {
+	var sum float64
+	var rows int
+	err := s.pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(amount_usd), 0), COUNT(*) FROM income_events
+		 WHERE venue = $1 AND symbol = $2 AND ts >= $3 AND ts < $4`,
+		venue, symbol, from, to).Scan(&sum, &rows)
+	if err != nil {
+		return 0, 0, fmt.Errorf("sum income window %s %s: %w", venue, symbol, err)
+	}
+	return sum, rows, nil
+}
+
 // MatchOpenLegForIncome income 行→OPEN 仓腿匹配：venue+symbol 在活跃仓（四态，同
 // positions_active_dedup_key_idx 口径）OPEN 腿中**唯一命中**才返回 (posID, legNo, 1)；
 // 零命中 → (0,0,0)；多义 → (last, hits>1)——调用方按 hits==1 才采信（不猜，venue 侧可重查）。
