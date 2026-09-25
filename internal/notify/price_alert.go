@@ -33,6 +33,7 @@ type PriceAlertStore interface {
 
 // PriceAlertService 价格提醒规则引擎。
 type PriceAlertService struct {
+	kickCh   <-chan struct{} // D-469b S5：nil 通道 select 阻塞安全=纯 ticker
 	bus      *bus.QuoteBus
 	store    PriceAlertStore
 	alertFn  AlertFn       // 复用 repo_reminder.go 的 AlertFn 类型（func(level, msg string)）
@@ -64,8 +65,16 @@ func NewPriceAlertService(bus *bus.QuoteBus, store PriceAlertStore, alertFn Aler
 	}
 }
 
+// SetKickChan D-469b S5：注入规则变更 kick 通道（装配=configKick 订阅端）。
+func (s *PriceAlertService) SetKickChan(ch <-chan struct{}) { s.kickCh = ch }
+
 // SetNow 替换当前时间函数（测试注入）。
 func (s *PriceAlertService) SetNow(fn func() time.Time) { s.now = fn }
+
+// Kick D-469b S5：规则 mutation RPC 成功路径 kick 通道（nil=纯 ticker 兜底）。
+// chan 而非 topic——PriceAlertService 无 bus 依赖先例，订阅解耦在装配侧。
+var _ = struct{}{} // 保持注释块独立
+// 字段声明于 struct（见 PriceAlertService.Kick）。
 
 // Run 启动监控。阻塞至 ctx 取消。
 // 订阅所有 symbol 的报价（"" = 全量订阅），按规则 symbol 过滤。
@@ -118,12 +127,17 @@ func (s *PriceAlertService) loadRules(ctx context.Context) error {
 }
 
 func (s *PriceAlertService) refreshLoop(ctx context.Context) {
-	ticker := time.NewTicker(30 * time.Second)
+	// D-469b S5：mutation RPC kick 主路+5min 兜底（带外 SQL 改行）。
+	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-s.kickCh:
+			if err := s.loadRules(ctx); err != nil {
+				log.Printf("[price_alert] refresh: %v", err)
+			}
 		case <-ticker.C:
 			if err := s.loadRules(ctx); err != nil {
 				log.Printf("[price_alert] refresh: %v", err)
