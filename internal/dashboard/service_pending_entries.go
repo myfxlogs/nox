@@ -163,19 +163,19 @@ func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow,
 	// 闸 1：venue/canonical allow_rules（engine allowRuleReject 同判据，kind='venue'/'canonical' 值查表）。
 	// R2：双腿分别点名实际未放行腿（原实现恒报 buy 腿=误导）。
 	if !venueAllow[c.VenueBuy] {
-		return kind, fmt.Sprintf("venue 未放行: %s", c.VenueBuy), 1, false
+		return kind, fmt.Sprintf("通道未放行: %s", c.VenueBuy), 1, false
 	}
 	if !venueAllow[c.VenueSell] {
-		return kind, fmt.Sprintf("venue 未放行: %s", c.VenueSell), 1, false
+		return kind, fmt.Sprintf("通道未放行: %s", c.VenueSell), 1, false
 	}
 	if len(canonAllow) > 0 && !canonAllow[c.CanonicalBuy] {
-		return kind, fmt.Sprintf("canonical 未放行: %s", c.CanonicalBuy), 1, false
+		return kind, fmt.Sprintf("标的未放行: %s", c.CanonicalBuy), 1, false
 	}
 	// 闸 2：旗标投影（engine flagRuleReject 同源 flags；blocked/warn 均透出为拦路原因）。
 	for _, v := range []string{bareVenueKey(c.VenueBuy), bareVenueKey(c.VenueSell)} {
 		for _, sym := range []string{c.CanonicalBuy, c.CanonicalSell, "*"} {
 			if f, ok := flags[pgstore.FlagKey(v, sym)]; ok {
-				return kind, fmt.Sprintf("旗标 %s: %s:%s %s", f.Level, v, sym, f.Reason), 2, false
+				return kind, fmt.Sprintf("风控旗标 %s: %s:%s %s", f.Level, v, sym, f.Reason), 2, false
 			}
 		}
 	}
@@ -186,17 +186,17 @@ func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow,
 	// 闸 3：regime 闸（两型分流，reason=各闸原输出）。
 	if kind == "XASSET_CARRY" {
 		if ok, r := exec.CarryFundingRegimeCheck(ctx, s.store, c.VenueBuy, c.VenueSell, c.CanonicalBuy, c.CanonicalSell, time.Now(), exec.CarryRegimeConfig{Window: 24 * time.Hour, FloorPct: 2.0, MinSamples: 12}); !ok {
-			return kind, "regime 未持续: " + r, 4, false
+			return kind, "息差环境未持续: " + r, 4, false
 		}
 	}
 	if kind == "FUNDING_HEDGE" {
 		perpVenue := strings.TrimSuffix(c.VenueSell, ":perp")
 		rows, err := s.store.FundingPredWindow(ctx, perpVenue, c.CanonicalBuy, time.Now().Add(-24*time.Hour))
 		if err != nil {
-			return kind, fmt.Sprintf("regime 窗口查询失败(fail-closed): %v", err), 4, false
+			return kind, fmt.Sprintf("息差数据查询失败（保守不放行）: %v", err), 4, false
 		}
 		if gate, _, r := exec.FundingRegimeOK(rows, +1, 2.0, 12, false); !gate {
-			return kind, "regime 未持续: " + r, 4, false
+			return kind, "息差环境未持续: " + r, 4, false
 		}
 	}
 	// 闸 4：双腿 tick 新鲜度（5min 窗，同档案判据；LatestTick(venue,venueType,symbol) 现成接口）。
@@ -207,7 +207,7 @@ func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow,
 		}
 		tr, ok, err := s.store.LatestTick(ctx, bareVenueKey(leg.venue), vt, sym)
 		if err != nil || !ok || time.Since(tr.Ts) > tickFreshWindow {
-			return kind, fmt.Sprintf("报价超窗: %s/%s（>5min 无 tick）", bareVenueKey(leg.venue), sym), 5, false
+			return kind, fmt.Sprintf("行情报价过期: %s/%s（超过5分钟无更新）", bareVenueKey(leg.venue), sym), 5, false
 		}
 	}
 	// 闸 5：XASSET 型监控簿 30min 闸（XAssetMonitorRowNear 现成接口；FUNDING_HEDGE 无簿概念跳过）。
@@ -215,21 +215,21 @@ func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow,
 		pair := monitorPairKey(c)
 		cexV, mtV := monitorLegKeys(c)
 		if _, ok, err := s.store.XAssetMonitorRowNear(ctx, pair, cexV, mtV, time.Now(), monitorFreshWindow); err != nil || !ok {
-			return kind, "监控簿过期", 6, false
+			return kind, "监控数据过期（超过30分钟无更新）", 6, false
 		}
 	}
 	// 闸 6：venue 敞口 cap（475a 三态同判据：cap=0 冻结 / Σ超限）。
 	for _, v := range []string{bareVenueKey(c.VenueBuy), bareVenueKey(c.VenueSell)} {
 		if capRow, ok := caps[v]; ok && capRow.Enabled {
 			if capRow.CapUSD == 0 {
-				return kind, fmt.Sprintf("cap 冻结: venue %s 敞口闸冻结新批准（cap=0）", v), 7, false
+				return kind, fmt.Sprintf("敞口上限冻结：账户 %s 上限设为0，暂停新入场", v), 7, false
 			}
 			sum, err := s.venueExposureSum(v)
 			if err != nil {
-				return kind, fmt.Sprintf("cap 查询失败: venue %s %v（fail-closed）", v, err), 7, false
+				return kind, fmt.Sprintf("敞口查询失败（保守不放行）: 账户 %s %v", v, err), 7, false
 			}
 			if sum > capRow.CapUSD {
-				return kind, fmt.Sprintf("cap 超限: venue %s Σ$%.0f > cap $%.0f", v, sum, capRow.CapUSD), 7, false
+				return kind, fmt.Sprintf("敞口超限：账户 %s 现有敞口 $%.0f 超过上限 $%.0f", v, sum, capRow.CapUSD), 7, false
 			}
 		}
 	}
