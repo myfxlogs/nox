@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/exec"
+	"arb/internal/httpx"
 
 	"arb/internal/collect/exchange"
 	"arb/internal/reconcile"
@@ -139,6 +141,13 @@ func (m *CexStreamManager) sync(ctx context.Context) {
 		case "okx":
 			// D-469b S1：OKX 私有流纳入 manager 生命周期（boot 一次性装配已移除）。
 			ws := exchange.NewOKXPrivateWS(c.APIKey, c.APISecret, c.Passphrase, c.Simulated, snapSink, vk, m.sinks, m.orderCache, m.posCache, m.OKXHooks)
+			// D-477 S3（GAP-B4）：ctValFor 注入——resolveExchangeBaseURL(c) 与 executor
+			// baseURL 同源（venue config/proxy 链），撤 www.okx.com 硬编码双源分叉。
+			okxBase := resolveExchangeBaseURL(c)
+			ws.SetCtValFor(func(ctx context.Context, instID string) (float64, error) {
+				ctVal, _, err := exec.OkxSwapSpec(ctx, httpx.Client(), okxBase, instID)
+				return ctVal, err
+			})
 			safego.Go("cex-stream:okx", func() { ws.Run(sctx) })
 		}
 		m.streams[id] = cancel
