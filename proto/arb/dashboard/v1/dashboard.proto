@@ -2468,7 +2468,7 @@ message ApproveCarryGraduationRequest {
 message ApproveCarryGraduationResponse {
   bool ok = 1; string error = 2;
   optional int64 combo_id = 3;
-  repeated string venue_gaps = 4;        // 未在 ARB_AUTOTRADE_ALLOW_VENUES 的 venue_key（需业主 env 补录+重启）
+  repeated string venue_gaps = 4;        // 未放行 venue_key（autotrade_allow_rules 表补行，≤60s 热生效，D-443）
   string automap_summary = 5;            // "applied=N skipped=M conflicts=K"
   string link_report = 6;                // 非 cfd 结构的体检报告文本
 }
