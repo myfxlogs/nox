@@ -2386,7 +2386,17 @@ message GraduationRiskReport {
   optional double roundtrip_fee_usd = 10;       // notional×往返费率口径注记
   repeated string min_executable = 11;          // 每腿最小单位折 usd 文案（lot filter 未采集如实标）
   repeated string gaps = 12;                    // 数据缺口逐项（价格过期/映射缺/费率缺等）
+  repeated FieldEvidence field_grades = 13;     // D-476a：每字段证据级别徽标（A实结/B实数据/C估算/D缺）
 }
+// D-476a：字段证据级别——A=服务侧结算/回执，B=venue 实数据，C=估算/假设，D=缺/不可用。
+enum EvidenceGrade {
+  EVIDENCE_GRADE_UNSPECIFIED = 0;
+  EVIDENCE_GRADE_A = 1;
+  EVIDENCE_GRADE_B = 2;
+  EVIDENCE_GRADE_C = 3;
+  EVIDENCE_GRADE_D = 4;
+}
+message FieldEvidence { string field = 1; EvidenceGrade grade = 2; }
 message ListXAssetAllowCombosRequest {}
 message XAssetAllowComboRow {
   int64 id = 1; string canonical_buy = 2; string venue_buy = 3;
