@@ -121,14 +121,17 @@ func (s *Service) comboInPosition(ctx context.Context, c pgstore.XAssetComboAdmi
 func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow, venueAllow, canonAllow map[string]bool, flags map[string]pgstore.VenueSymbolFlag, caps map[string]pgstore.VenueExposureCap) (kind, reason string, ready bool) {
 	buyMT := strings.HasSuffix(c.VenueBuy, ":mt4") || strings.HasSuffix(c.VenueBuy, ":mt5")
 	sellMT := strings.HasSuffix(c.VenueSell, ":mt4") || strings.HasSuffix(c.VenueSell, ":mt5")
+	// D-478 返修 R6：kind 推断=「恰好一条 MT 腿→XASSET_CARRY」（buy/sell 双向——原实现缺
+	// MT 卖腿分支，生产实证 row1 CLUSDT(gate:perp)×WTI(277842155:mt5) 误报「构型未覆盖」）；
+	// 死分支（VenueBuy=="" 空表值/重复 spot×perp 判）并入整理；perp×perp/spot×spot/双 MT
+	// →kind 留空=「构型未覆盖」如实。
 	switch {
-	case buyMT && !sellMT:
+	case buyMT != sellMT:
 		kind = "XASSET_CARRY"
-	case !buyMT && c.VenueBuy == "" || (!strings.Contains(c.VenueBuy, ":perp") && strings.HasSuffix(c.VenueSell, ":perp") && strings.HasSuffix(c.VenueBuy, ":spot")):
-		kind = "FUNDING_HEDGE"
-	}
-	if kind == "" && strings.HasSuffix(c.VenueBuy, ":spot") && strings.HasSuffix(c.VenueSell, ":perp") {
-		kind = "FUNDING_HEDGE"
+	case strings.HasSuffix(c.VenueBuy, ":spot") && strings.HasSuffix(c.VenueSell, ":perp"):
+		kind = "FUNDING_HEDGE" // 正向（spot 买×perp 卖）
+	case strings.HasSuffix(c.VenueBuy, ":perp") && strings.HasSuffix(c.VenueSell, ":spot"):
+		kind = "FUNDING_HEDGE" // 反构型（perp 买腿）→ 下方构型禁入分支接住（SSOT 标签不失义）
 	}
 	// R5：构型未覆盖（双 CEX/未知形态）→「构型未覆盖」短路，不走七闸（同所组合不产两型 opp）。
 	if kind == "" {
