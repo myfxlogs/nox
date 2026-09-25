@@ -89,6 +89,8 @@ func (o *OKXPrivateWS) onPositions(data []map[string]any) {
 			continue
 		}
 		avgPx, _ := strconv.ParseFloat(str(it["avgPx"]), 64)
+		upl, _ := strconv.ParseFloat(str(it["upl"]), 64) // 浮盈（REST querier 同字段同语义）
+		fee, _ := strconv.ParseFloat(str(it["fee"]), 64) // 累计手续费（负=成本，同 REST）
 		imr, _ := strconv.ParseFloat(str(it["imr"]), 64)
 		if imr == 0 {
 			imr, _ = strconv.ParseFloat(str(it["margin"]), 64)
@@ -102,11 +104,15 @@ func (o *OKXPrivateWS) onPositions(data []map[string]any) {
 		if o.simulated {
 			imr = 0
 		}
+		openedAt := now
+		if ctimeMs, _ := strconv.ParseInt(str(it["cTime"]), 10, 64); ctimeMs > 0 {
+			openedAt = time.UnixMilli(ctimeMs) // REST querier 同口径：cTime=开仓时刻
+		}
 		orders = append(orders, reconcile.VenueOrder{
 			Ticket: str(it["instId"]), Symbol: str(it["instId"]), Side: side,
-			Volume: pos, OpenPrice: avgPx, Profit: 0,
+			Volume: pos, OpenPrice: avgPx, Profit: upl, Commission: fee,
 			Venue: "okx", VenueKey: o.venueKey, PosSide: str(it["posSide"]),
-			InitialMargin: imr, MaintMargin: mmr, OpenedAt: now,
+			InitialMargin: imr, MaintMargin: mmr, OpenedAt: openedAt,
 		})
 	}
 	if o.posCache != nil {

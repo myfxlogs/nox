@@ -80,9 +80,18 @@ func TestD469a_OKXChannelDispatch(t *testing.T) {
 
 	o.handleData(ctx, "positions", nil, []map[string]any{{
 		"instId": "XAU-USDT-SWAP", "pos": "-1016", "avgPx": "4297.7", "posSide": "net",
+		"upl": "-12.34", "fee": "-0.56", "cTime": "1758663525994",
 	}})
-	if got, ok := pc.get("okx:perp", time.Minute, time.Now()); !ok || len(got) != 1 || got[0].Volume != -1016 {
+	got, ok := pc.get("okx:perp", time.Minute, time.Now())
+	if !ok || len(got) != 1 || got[0].Volume != -1016 {
 		t.Fatalf("posCache=%v ok=%v want 1 row vol=-1016", got, ok)
+	}
+	// 字段对拍（REST querier 同口径）：upl→Profit、fee→Commission、cTime→OpenedAt。
+	if got[0].Profit != -12.34 || got[0].Commission != -0.56 {
+		t.Fatalf("Profit=%v Commission=%v want -12.34/-0.56", got[0].Profit, got[0].Commission)
+	}
+	if got[0].OpenedAt.UnixMilli() != 1758663525994 {
+		t.Fatalf("OpenedAt=%v want cTime=1758663525994", got[0].OpenedAt)
 	}
 
 	o.handleData(ctx, "orders", nil, []map[string]any{{
