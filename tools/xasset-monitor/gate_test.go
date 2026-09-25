@@ -86,7 +86,9 @@ func TestGatePairKeys(t *testing.T) {
 		"XPD_USDT": {"XPDUSDT", "XPDUSD"},
 	}
 	seen := map[string]string{}
-	for _, p := range monitorPairs() {
+	// D-472 S5：清单改白名单派生后，本测改用生产形 fixture 派生（gate 三行语义不变）。
+	pairs, _ := deriveMonitorPairs(d472Combos(), d472Universe())
+	for _, p := range pairs {
 		if p.cexVenue == "gate:perp" {
 			seen[p.sym] = p.pair
 		}

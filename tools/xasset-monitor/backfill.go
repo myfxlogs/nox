@@ -162,7 +162,15 @@ func runBackfillMode(ctx context.Context) error {
 	since := time.Now().Add(-5 * 24 * time.Hour) // Exness ticks 保留窗（诚实边界）
 	mtVenue := exnessVenue + ":mt5"
 	var firstErr error
-	for _, p := range monitorPairs() {
+	combos, uni, err := loadDerivationInputs(ctx, st)
+	if err != nil {
+		return fmt.Errorf("monitor pairs inputs: %w", err)
+	}
+	pairs, uncovered := deriveMonitorPairs(combos, uni)
+	for _, u := range uncovered {
+		log.Printf("[monitor-pairs] warn: enabled 组合未被簿覆盖（一次性列名，B-008）: %s", u)
+	}
+	for _, p := range pairs {
 		if p.cexVenue != "binance:perp" {
 			continue // D-423：回填源=binance klines，非 binance 簿（okx）不回填
 		}

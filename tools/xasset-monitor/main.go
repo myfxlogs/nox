@@ -63,7 +63,55 @@ func run(ctx context.Context) error {
 
 	hc := httpx.Client()
 
-	return runPairs(ctx, st, hc, proxyURL, exnessVenue, monitorPairs())
+	// D-472 S5：监控簿白名单派生（硬编码清单退役）——enabled combos × universe 现查。
+	combos, uni, err := loadDerivationInputs(ctx, st)
+	if err != nil {
+		return fmt.Errorf("monitor pairs inputs: %w", err)
+	}
+	pairs, uncovered := deriveMonitorPairs(combos, uni)
+	for _, u := range uncovered {
+		log.Printf("[monitor-pairs] warn: enabled 组合未被簿覆盖（一次性列名，B-008）: %s", u)
+	}
+	return runPairs(ctx, st, hc, proxyURL, exnessVenue, pairs)
+}
+
+// loadDerivationInputs D-472 S5：派生入参两查询（enabled 组合行+TRADING universe 行）。
+func loadDerivationInputs(ctx context.Context, st *pgstore.Store) ([]allowComboRow, []universeRow, error) {
+	var combos []allowComboRow
+	rows, err := st.Pool().Query(ctx, `SELECT canonical_buy, venue_buy, canonical_sell, venue_sell
+		FROM xasset_allow_combos WHERE enabled = true ORDER BY id`)
+	if err != nil {
+		return nil, nil, fmt.Errorf("list combos: %w", err)
+	}
+	for rows.Next() {
+		var c allowComboRow
+		if err := rows.Scan(&c.canonicalBuy, &c.venueBuy, &c.canonicalSell, &c.venueSell); err != nil {
+			rows.Close()
+			return nil, nil, fmt.Errorf("scan combo: %w", err)
+		}
+		combos = append(combos, c)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, nil, fmt.Errorf("combos rows: %w", err)
+	}
+
+	var uni []universeRow
+	uniRows, err := st.Pool().Query(ctx, `SELECT venue, symbol, hedge_canonical
+		FROM fin_cex_universe WHERE status = 'TRADING'`)
+	if err != nil {
+		return nil, nil, fmt.Errorf("list universe: %w", err)
+	}
+	for uniRows.Next() {
+		var r universeRow
+		if err := uniRows.Scan(&r.venue, &r.symbol, &r.hedgeCanonical); err != nil {
+			uniRows.Close()
+			return nil, nil, fmt.Errorf("scan universe: %w", err)
+		}
+		uni = append(uni, r)
+	}
+	uniRows.Close()
+	return combos, uni, uniRows.Err()
 }
 
 // runPairs S2：逐对取各自 exSym 报价（无新鲜 tick → 该对 skip+warn 逐对 fail-open，
