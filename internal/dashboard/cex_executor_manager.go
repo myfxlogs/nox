@@ -27,6 +27,9 @@ type CexExecutorManager struct {
 	minLiqDistPct          float64
 	crossNotionalEquityCap float64
 	gateDefaultLeverage    float64
+	// D-473 S2：spot 现金预检 taker 缓冲注入值（SetSpotTakerBps；零值=不缓冲）。
+	spotTaker     map[string]float64
+	spotTakerDflt float64
 	// alertFn D-108 P2 T1：平仓被拒时 critical 告警注入（main 传 store.InsertAlert）。
 	alertFn func(posID *int64, level, msg string)
 	// OrderStatusHook D-421 §1.5：exchange_configs 刷新后镜像订单级查单器集合
@@ -68,6 +71,23 @@ func (m *CexExecutorManager) SetLiqGuards(minLiqDistPct, crossNotionalEquityCap 
 
 // SetGateDefaultLeverage D-472 S2：cfg 注入 gate venue 级缺省杠杆（ARB_GATE_DEFAULT_LEVERAGE）。
 func (m *CexExecutorManager) SetGateDefaultLeverage(lev float64) { m.gateDefaultLeverage = lev }
+
+// SetSpotTakerBps D-473 S2：cfg 注入 spot 腿 taker 费率表（cfg.CommissionTaker 逐所 +
+// CommissionCEXTakerBps 回退），现金预检缓冲用——与 evaluator commissionFor 同一取值源。
+func (m *CexExecutorManager) SetSpotTakerBps(perVenue map[string]float64, fallback float64) {
+	m.spotTaker = perVenue
+	m.spotTakerDflt = fallback
+}
+
+// spotTakerFor sync 内按 venue 取费率（map 命中优先，否则回退缺省）。
+func (m *CexExecutorManager) spotTakerFor(venue string) float64 {
+	if m.spotTaker != nil {
+		if bps, ok := m.spotTaker[venue]; ok {
+			return bps
+		}
+	}
+	return m.spotTakerDflt
+}
 
 // Run 轮询直至 ctx 取消。启动即 sync 一次（首个注册立即可用）。
 func (m *CexExecutorManager) Run(ctx context.Context) {
@@ -125,6 +145,7 @@ func (m *CexExecutorManager) sync(ctx context.Context) {
 		exe.SetMarginReservePct(m.marginReservePct)
 		exe.SetLiqGuards(m.minLiqDistPct, m.crossNotionalEquityCap) // D-472 S4
 		exe.SetGateDefaultLeverage(m.gateDefaultLeverage)           // D-472 S2
+		exe.SetSpotTakerBps(m.spotTakerFor(c.Venue))                // D-473 S2
 		exe.AlertFn = m.alertFn                                     // D-108 P2 T1：平仓被拒 critical 告警注入
 		m.reg.Register(exe)
 		osqs[vk] = exe // D-421：订单级查单面同生命周期镜像
