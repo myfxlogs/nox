@@ -30,6 +30,11 @@ type Service struct {
 	configKick func()
 	// reviewer 复盘触发（§13.6，D-034）。nil = 未接线（RPC 仍可用，仅触发不跑）。
 	reviewer func()
+	// D-478 S4：安全档位 cross 占比档（cfg.CrossNotionalEquityCap，SetCrossCap 注入）+
+	// 恶化告警 transition 状态（内存态重启重置，per combo|venue ≥6h 去重对齐 D-472）。
+	crossCap  float64
+	tierState map[string]tierState
+	tierMu    sync.Mutex
 	// settler 结算触发（D-087 §3.2，手动平仓后调）。nil = 未接线（RPC 仍可用，仅不结算）。
 	settler Settler
 	// freshTTL 报价陈旧 TTL（复用 config.DetectorFreshnessTTL，G3）——个人持仓快照展示路径拒绝陈旧帧。

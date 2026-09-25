@@ -34,6 +34,9 @@ type CexStreamSinks interface {
 type CexStreamManager struct {
 	// AcctKick D-469a S3：余额快照落库后回调（目标=acctMon.Kick()，nil 安全）。
 	AcctKick func()
+	// TierKickFn D-478 S4：余额快照落库后安全档位重算回调（目标=Service.TierKick(venue)，
+	// 恶化转移告警；nil 安全）。venue=bare 域（快照表键）。
+	TierKickFn func()
 	// BinanceHooks D-469a S3：a.m 事件原因回调（OnFundingFee→income/OnIO→cex-io，nil 安全）。
 	BinanceHooks exchange.BinanceUserHooks
 	// OKXHooks D-469b S1：OKX 四频道事件回调（funding_fee→okx income/account→acctMon/
@@ -130,7 +133,17 @@ func (m *CexStreamManager) sync(ctx context.Context) {
 		vk := reconcile.CexVenueKey(c.Venue, c.VenueType, c.ID, winners)
 		sctx, cancel := context.WithCancel(ctx)
 		// D-469a S3：余额快照 sink 包 kicking wrapper（落库成功→acctMon kick；写失败不 kick）。
-		snapSink := exchange.NewKickingSnapshotSink(m.sinks, m.AcctKick)
+		sinkKick := m.AcctKick
+		if m.TierKickFn != nil {
+			// R4：AcctKick nil 守卫（TierKickFn 单独注入时 AcctKick 可能为 nil）。
+			sinkKick = func() {
+				if m.AcctKick != nil {
+					m.AcctKick()
+				}
+				m.TierKickFn()
+			}
+		}
+		snapSink := exchange.NewKickingSnapshotSink(m.sinks, sinkKick)
 		switch c.Venue {
 		case "gate":
 			ws := exchange.NewGatePrivateWS(c.APIKey, c.APISecret, c.BaseURL, vk, c.Simulated, snapSink, m.sinks, m.orderCache, m.posCache)

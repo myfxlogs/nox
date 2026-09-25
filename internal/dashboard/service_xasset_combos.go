@@ -123,6 +123,7 @@ func (s *Service) UpsertXAssetAllowCombo(ctx context.Context, req *connect.Reque
 
 // comboWriteFinish 写后热重载三链（同 approve ⑤；任一失败如实报错）。
 func (s *Service) comboWriteFinish(ctx context.Context, resp *v1.UpsertXAssetAllowComboResponse) (*connect.Response[v1.UpsertXAssetAllowComboResponse], error) {
+	s.TierKickAll(ctx) // D-478 S4：组合写→档位重算（恶化转移告警）
 	if err := s.xassetReloader.ReloadXAssetAllowCombos(ctx); err != nil {
 		resp.Ok = false
 		resp.Error = "白名单已写入但引擎热重载失败（重启后生效）: " + err.Error()
