@@ -19289,10 +19289,12 @@ type PaperSpotCarryRow struct {
 	RetPct         float64  `protobuf:"fixed64,20,opt,name=ret_pct,json=retPct,proto3" json:"ret_pct,omitempty"`                                 // 累计收益率%=accrued/qty×100
 	RealizedAnnPct *float64 `protobuf:"fixed64,21,opt,name=realized_ann_pct,json=realizedAnnPct,proto3,oneof" json:"realized_ann_pct,omitempty"` // 实收年化%=accrued/qty×365/days×100（days=0→null）
 	// D-393：DB 列透出（scanPaperSpotCarry 空串→spot_carry 归一，服务层直接信任）。
-	Structure     string  `protobuf:"bytes,22,opt,name=structure,proto3" json:"structure,omitempty"`                  // spot_carry / perp_perp / long_cfd_short_perp / short_cfd_long_perp
-	MtVenue       *string `protobuf:"bytes,23,opt,name=mt_venue,json=mtVenue,proto3,oneof" json:"mt_venue,omitempty"` // cfd 行 MT 腿 venue；spot/perp_perp 恒 NULL（前端「—」）
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Structure string  `protobuf:"bytes,22,opt,name=structure,proto3" json:"structure,omitempty"`                  // spot_carry / perp_perp / long_cfd_short_perp / short_cfd_long_perp
+	MtVenue   *string `protobuf:"bytes,23,opt,name=mt_venue,json=mtVenue,proto3,oneof" json:"mt_venue,omitempty"` // cfd 行 MT 腿 venue；spot/perp_perp 恒 NULL（前端「—」）
+	// D-474b S1：往返费估计透出——perp_perp 存量行（est_fee IS NULL）前端徽标「观测轨」。
+	EstRoundTripFeeUsd *float64 `protobuf:"fixed64,24,opt,name=est_round_trip_fee_usd,json=estRoundTripFeeUsd,proto3,oneof" json:"est_round_trip_fee_usd,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *PaperSpotCarryRow) Reset() {
@@ -19484,6 +19486,13 @@ func (x *PaperSpotCarryRow) GetMtVenue() string {
 		return *x.MtVenue
 	}
 	return ""
+}
+
+func (x *PaperSpotCarryRow) GetEstRoundTripFeeUsd() float64 {
+	if x != nil && x.EstRoundTripFeeUsd != nil {
+		return *x.EstRoundTripFeeUsd
+	}
+	return 0
 }
 
 // D-393：轨级汇总（行源=卡片同批 papers，exited=同 14d 窗口行；零新查询）。
@@ -23232,7 +23241,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x18ListSpotCarryDemoRequest\"S\n" +
 	"\x19ListSpotCarryDemoResponse\x126\n" +
 	"\x04rows\x18\x01 \x03(\v2\".arb.dashboard.v1.SpotCarryDemoRowR\x04rows\"\x1b\n" +
-	"\x19ListPaperSpotCarryRequest\"\xf4\x06\n" +
+	"\x19ListPaperSpotCarryRequest\"\xc8\a\n" +
 	"\x11PaperSpotCarryRow\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x14\n" +
 	"\x05venue\x18\x02 \x01(\tR\x05venue\x12\x16\n" +
@@ -23259,7 +23268,8 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\aret_pct\x18\x14 \x01(\x01R\x06retPct\x12-\n" +
 	"\x10realized_ann_pct\x18\x15 \x01(\x01H\x06R\x0erealizedAnnPct\x88\x01\x01\x12\x1c\n" +
 	"\tstructure\x18\x16 \x01(\tR\tstructure\x12\x1e\n" +
-	"\bmt_venue\x18\x17 \x01(\tH\aR\amtVenue\x88\x01\x01B\x13\n" +
+	"\bmt_venue\x18\x17 \x01(\tH\aR\amtVenue\x88\x01\x01\x127\n" +
+	"\x16est_round_trip_fee_usd\x18\x18 \x01(\x01H\bR\x12estRoundTripFeeUsd\x88\x01\x01B\x13\n" +
 	"\x11_last_funding_annB\n" +
 	"\n" +
 	"\b_net_nowB\x12\n" +
@@ -23268,7 +23278,8 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x0e_basis_pnl_usdB\x10\n" +
 	"\x0e_total_pnl_usdB\x13\n" +
 	"\x11_realized_ann_pctB\v\n" +
-	"\t_mt_venue\"\xdb\x02\n" +
+	"\t_mt_venueB\x19\n" +
+	"\x17_est_round_trip_fee_usd\"\xdb\x02\n" +
 	"\x11PaperTrackSummary\x12\x1c\n" +
 	"\tstructure\x18\x01 \x01(\tR\tstructure\x12\x19\n" +
 	"\bactive_n\x18\x02 \x01(\x05R\aactiveN\x12\x15\n" +

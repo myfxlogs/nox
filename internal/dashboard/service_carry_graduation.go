@@ -162,6 +162,11 @@ func (s *Service) ApproveCarryGraduation(ctx context.Context, req *connect.Reque
 	if err != nil {
 		return fail("%v", err)
 	}
+	// D-474b S4：platform!=1 → MT4 已退役（D-470），不产 canonical、不写实盘白名单；
+	// 建议行留 pending 自然过期（S3 stale）——平台退役不写实盘授权。
+	if platform != 1 {
+		return fail("venue %s platform=%d 拒绝写白名单（MT4 已退役，D-470）", mtVenue, platform)
+	}
 	mappings, err := db.ListSymbolMappings(ctx, mtVenue)
 	if err != nil {
 		return fail("broker_symbol_map 读取失败: %v", err)
@@ -177,6 +182,11 @@ func (s *Service) ApproveCarryGraduation(ctx context.Context, req *connect.Reque
 		return fail("paper venue 组合串异常: %q", paper.Venue)
 	}
 	cexVenueKey := cexVenue + ":perp"
+	// D-474b S2：approve 复核闸——重读 paper 行当前态按同一判据现算（复用 scan 导出
+	// helper=单判据源）；建议行是历史快照，行中途恶化时快照会放行不再合格的组合。
+	if ok, reason := scan.GraduationQualifiedReason(*paper, time.Now()); !ok {
+		return fail("毕业复核拒绝: 证据行 %s（建议行仍留 pending）", reason)
+	}
 	// ③ 按 structure 方向写 combo：canonical_buy/venue_buy 永远=买腿（cap 跟腿走）
 	combo := &pgstore.XAssetComboInsert{
 		MaxLongQty:  g.MaxLongQty,  // 买腿上限（MT 腿=手数、CEX 腿=张数，跟 venue_buy 走）

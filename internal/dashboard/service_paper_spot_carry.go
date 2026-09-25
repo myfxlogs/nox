@@ -113,6 +113,8 @@ func buildPaperSpotCarryBoard(ctx context.Context, src paperBoardSource, now tim
 			Note:            p.Note,
 			Structure:       structure,
 			MtVenue:         p.MtVenue,
+			// D-474b S1：est_fee 透出——perp_perp 存量行（NULL）前端徽标「观测轨」。
+			EstRoundTripFeeUsd: p.EstRoundTripFeeUSD,
 		}
 		if p.ExitTs != nil {
 			row.ExitTs = p.ExitTs.Format(time.RFC3339)
