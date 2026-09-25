@@ -47,6 +47,12 @@ type MT4Adapter struct {
 	// AlertSink 断流分级告警下沉（D-104 P2 U2，同 MT5 三点注入链）。nil = 未注入（no-op）。
 	AlertSink func(level, msg string)
 
+	// OrderEventSink D-469b S4：OnOrderUpdate 订单事件下沉（MT5 同名字段先例；nil=no-op）。
+	OrderEventSink func(bus.OrderEvent)
+	// MarginKick D-469b S4：OnOrderProfit 帧 → acctMon.Kick（MT5 MarginSink→OrderProfitKick
+	// 同语义；MT4 margin 取数=REST 轮询域，事件只改唤醒时机）。nil=no-op。
+	MarginKick func()
+
 	// D-100：订阅集镜像（同 MT5，OnQuote 流重连后恢复订阅）。
 	subMu  sync.Mutex
 	subSet map[string]bool

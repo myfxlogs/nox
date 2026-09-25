@@ -20,6 +20,9 @@ type Store struct {
 	// D-405 S3：venue 账户快照落库后钩子（marginGuard 事件驱动评估挂点）。
 	// nil = 未接线 → 不回调，InsertVenueAccountSnapshots 仍正常写 DB。
 	snapHook func(ctx context.Context, snaps []VenueAccountSnapshot)
+	// OnPositionChange D-469b S3：positions 表状态迁移后回调（写路径成功后、事务提交后
+	// 触发，失败路径不发；nil=未接线）。消费方=position/personal monitor Kick。
+	OnPositionChange func()
 }
 
 // SetAlertPaused 暂停/恢复告警写入（D-069）。
@@ -68,4 +71,11 @@ func (s *Store) Close() {
 // Pool 暴露底层连接池（供需要直接操作的场景使用）。
 func (s *Store) Pool() *pgxpool.Pool {
 	return s.pool
+}
+
+// notifyPositionChange D-469b S3：持仓变更回调（nil 安全；调用方保证在写成功路径尾部调用）。
+func (s *Store) notifyPositionChange() {
+	if s.OnPositionChange != nil {
+		s.OnPositionChange()
+	}
 }

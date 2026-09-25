@@ -104,6 +104,7 @@ func (s *Store) CreatePosition(ctx context.Context, p *Position) (int64, error) 
 	if err != nil {
 		return 0, fmt.Errorf("create position: %w", err)
 	}
+	s.notifyPositionChange() // D-469b S3
 	return id, nil
 }
 
@@ -133,6 +134,7 @@ func (s *Store) UpdatePositionStatus(ctx context.Context, id int64, status strin
 	if ct.RowsAffected() == 0 {
 		return ErrTerminalState
 	}
+	s.notifyPositionChange() // D-469b S3
 	return nil
 }
 
@@ -149,6 +151,7 @@ func (s *Store) ClaimClose(ctx context.Context, id int64) error {
 	if ct.RowsAffected() == 0 {
 		return ErrClaimFailed
 	}
+	s.notifyPositionChange() // D-469b S3
 	return nil
 }
 
@@ -200,6 +203,7 @@ func (s *Store) ClosePosition(ctx context.Context, id int64, realizedPnl float64
 	if ct.RowsAffected() == 0 {
 		return ErrTerminalState
 	}
+	s.notifyPositionChange() // D-469b S3
 	return nil
 }
 
