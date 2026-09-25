@@ -68,6 +68,9 @@ type OKXPrivateWS struct {
 	hooks      OKXPrivateHooks
 	dialer     websocket.Dialer
 	now        func() time.Time
+	// ctValFor D-477 S3（GAP-B4）：okx 合约面值解析器注入——构造点经 resolveExchangeBaseURL
+	// 取与 executor 同一 baseURL 源（离线/代理拓扑下不再双源分叉）。nil=跳过换算保持张数+warn。
+	ctValFor func(ctx context.Context, instID string) (float64, error)
 }
 
 // NewOKXPrivateWS 创建采集器（凭据=REST querier 同源 exchange_configs，不新增 secret 配置项）。
@@ -83,6 +86,11 @@ func NewOKXPrivateWS(apiKey, apiSecret, passphrase string, simulated bool, sink 
 		},
 		now: time.Now,
 	}
+}
+
+// SetCtValFor D-477 S3：注入 ctVal 解析器（GAP-B4 单源化；nil=保持张数+warn 降级）。
+func (o *OKXPrivateWS) SetCtValFor(f func(ctx context.Context, instID string) (float64, error)) {
+	o.ctValFor = f
 }
 
 // Run 重连循环（5s 退避，仿 okx_ws 骨架）。阻塞至 ctx 取消。

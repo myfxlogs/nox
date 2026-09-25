@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"arb/internal/exec"
@@ -53,6 +54,11 @@ type GatePrivateWS struct {
 	rest   *http.Client                                                     // uid/quanto 查询（测试注入）
 	now    func() time.Time
 	quanto map[string]float64 // contract→quanto_multiplier（executor 同款 lazy 缓存）
+
+	// writeMu D-477：gorilla conn 单写者契约——ping goroutine（20s WriteMessage）与订阅
+	// 写（runOnce WriteJSON）共用 conn，无互斥=数据竞争（race×3 实证）；conn 写统一走
+	// g.writeConn 串行化。
+	writeMu sync.Mutex
 }
 
 // NewGatePrivateWS 创建采集器。baseURL 空→调用方跳过（不落默认直连：key 白名单语义要求显式走代理）。
@@ -117,7 +123,10 @@ func (g *GatePrivateWS) runOnce(ctx context.Context) error {
 		for {
 			select {
 			case <-ticker.C:
-				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				g.writeMu.Lock()
+				err := conn.WriteMessage(websocket.PingMessage, nil)
+				g.writeMu.Unlock()
+				if err != nil {
 					return
 				}
 			case <-done:
@@ -128,7 +137,10 @@ func (g *GatePrivateWS) runOnce(ctx context.Context) error {
 
 	// 逐频道签名订阅（每频道独立 auth 帧——签名含 channel 名）。
 	for _, ch := range gatePrivateChannels {
-		if err := conn.WriteJSON(g.subscribeFrame(ch, uid)); err != nil {
+		g.writeMu.Lock()
+		err := conn.WriteJSON(g.subscribeFrame(ch, uid))
+		g.writeMu.Unlock()
+		if err != nil {
 			return fmt.Errorf("subscribe %s: %w", ch, err)
 		}
 	}

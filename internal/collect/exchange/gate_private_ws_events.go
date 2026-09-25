@@ -9,6 +9,7 @@ import (
 	"log"
 	"math"
 	"strconv"
+	"time"
 
 	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
@@ -98,11 +99,21 @@ func (g *GatePrivateWS) onBalances(ctx context.Context, result json.RawMessage) 
 
 // onPositions futures.positions → 持仓全量快照替换缓存（推送帧本身即全量数组）。
 func (g *GatePrivateWS) onPositions(result json.RawMessage) {
+	// 字段名=REST 同 schema（cex_positions.go gate 结构体实名实证：unrealised_pnl/
+	// pnl_fund/maintenance_margin；cex_private_events 实帧暂无行=组合未持仓未触发推送，
+	// 部署后首帧 WarnUnconsumed 兜底核对）。
 	var items []struct {
-		Contract   string `json:"contract"`
-		Size       int64  `json:"size"`
-		EntryPrice string `json:"entry_price"`
-		Margin     string `json:"margin"`
+		Contract      string `json:"contract"`
+		Size          int64  `json:"size"`
+		EntryPrice    string `json:"entry_price"`
+		Margin        string `json:"margin"`
+		UnrealisedPnl string `json:"unrealised_pnl"`
+		PnlFund       string `json:"pnl_fund"`           // D-477 S2：funding P&L=carry 语义最高优先
+		MaintMargin   string `json:"maintenance_margin"` // D-477 S2
+		// open_time/update_time 帧形态未知（实帧表暂无行）→ any 宽容接（数字/字符串双容，
+		// 秒级 epoch；禁类型过严导致整帧解析失败）。
+		OpenTime   any `json:"open_time"`
+		UpdateTime any `json:"update_time"`
 	}
 	if err := json.Unmarshal(result, &items); err != nil {
 		return
@@ -112,6 +123,9 @@ func (g *GatePrivateWS) onPositions(result json.RawMessage) {
 	for _, it := range items {
 		ep, _ := strconv.ParseFloat(it.EntryPrice, 64)
 		mg, _ := strconv.ParseFloat(it.Margin, 64)
+		upl, _ := strconv.ParseFloat(it.UnrealisedPnl, 64)
+		fund, _ := strconv.ParseFloat(it.PnlFund, 64)
+		mm, _ := strconv.ParseFloat(it.MaintMargin, 64)
 		side, ps := "BUY", "long"
 		vol := float64(it.Size)
 		if it.Size < 0 {
@@ -120,10 +134,18 @@ func (g *GatePrivateWS) onPositions(result json.RawMessage) {
 		if q, err := g.gateQuanto(context.Background(), it.Contract); err == nil {
 			vol *= q
 		}
+		// D-477 S2：open_time 优先 update_time 回退（秒级 epoch；帧无 → now 兜底）。
+		opened := now
+		if sec := anyToSec(it.OpenTime); sec > 0 {
+			opened = time.Unix(int64(sec), 0)
+		} else if sec := anyToSec(it.UpdateTime); sec > 0 {
+			opened = time.Unix(int64(sec), 0)
+		}
 		orders = append(orders, reconcile.VenueOrder{
-			Symbol: it.Contract, Side: side, Volume: vol, OpenPrice: ep,
+			Ticket: it.Contract, Symbol: it.Contract, Side: side, Volume: vol, OpenPrice: ep,
+			Profit: upl, Swap: fund, MaintMargin: mm, // D-477 S2 GAP-B2 全量补消费
 			Venue: "gate", VenueKey: g.venueKey, PosSide: ps,
-			InitialMargin: mg, OpenedAt: now,
+			InitialMargin: mg, OpenedAt: opened,
 		})
 	}
 	g.posCache.PutPositions(g.venueKey, orders, now)
@@ -174,9 +196,24 @@ func (g *GatePrivateWS) onOrders(ctx context.Context, result json.RawMessage) {
 
 // D-475b S2 consumed 清单（契约对偶面）。
 var (
-	gatePositionsConsumed = []string{"contract", "size", "entry_price", "margin"}
+	gatePositionsConsumed = []string{"contract", "size", "entry_price", "margin", "unrealised_pnl", "pnl_fund", "maintenance_margin", "open_time", "update_time"} // D-477 S2：GAP-B2 全量补消费
 	gateOrdersConsumed    = []string{"id", "text", "contract", "status", "finish_as", "size", "left", "fill_price"}
 	gateBalancesConsumed  = []string{"currency", "balance"}
 )
 
 func abs64(v int64) int64 { return int64(math.Abs(float64(v))) }
+
+// anyToSec D-477 S2：json 数字/字符串 → 秒级 epoch float（无效/缺省返 0）。
+func anyToSec(v any) float64 {
+	switch x := v.(type) {
+	case float64:
+		return x
+	case json.Number:
+		f, _ := x.Float64()
+		return f
+	case string:
+		f, _ := strconv.ParseFloat(x, 64)
+		return f
+	}
+	return 0
+}

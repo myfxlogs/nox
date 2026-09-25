@@ -106,6 +106,7 @@ func (b *BinanceUserWS) onAccountUpdate(ctx context.Context, a json.RawMessage) 
 			EP string `json:"ep"`
 			IW string `json:"iw"`
 			PS string `json:"ps"`
+			UP string `json:"up"` // D-477 S1：未实现盈亏（GAP-B1 补消费——OKX upl→Profit 同语义）
 		} `json:"P"`
 	}
 	if err := json.Unmarshal(a, &acct); err != nil {
@@ -144,13 +145,15 @@ func (b *BinanceUserWS) onAccountUpdate(ctx context.Context, a json.RawMessage) 
 		pa, _ := strconv.ParseFloat(p.PA, 64)
 		ep, _ := strconv.ParseFloat(p.EP, 64)
 		iw, _ := strconv.ParseFloat(p.IW, 64)
+		up, _ := strconv.ParseFloat(p.UP, 64)
 		side := "BUY"
 		if pa < 0 {
 			side, pa = "SELL", -pa
 		}
 		orders = append(orders, reconcile.VenueOrder{
-			Symbol: p.S, Side: side, Volume: pa, OpenPrice: ep,
-			Venue: "binance", VenueKey: b.venueKey, PosSide: strings.ToLower(p.PS),
+			Ticket: p.S, Symbol: p.S, Side: side, Volume: pa, OpenPrice: ep,
+			Profit: up, // D-477 S1 GAP-B1：up→Profit（REST 基线 cex_positions.go 以 symbol 作 Ticket）
+			Venue:  "binance", VenueKey: b.venueKey, PosSide: strings.ToLower(p.PS),
 			InitialMargin: iw, OpenedAt: now,
 		})
 	}
@@ -193,7 +196,7 @@ func (b *BinanceUserWS) onSpotExecutionReport(data []byte) {
 // D-475b S2 consumed 清单（a.B/a.P 嵌套键同名展开——walkJSON 递归扫嵌套层）。
 var (
 	binanceOrderUpdateConsumed   = []string{"i", "c", "X", "z", "ap", "L", "n"}
-	binanceAccountUpdateConsumed = []string{"m", "B", "a", "wb", "P", "s", "pa", "ep", "iw", "ps"}
+	binanceAccountUpdateConsumed = []string{"m", "B", "a", "wb", "P", "s", "pa", "ep", "iw", "ps", "up"} // D-477 S1：+up→Profit
 	binanceExecReportConsumed    = []string{"i", "c", "X", "z", "L", "n"}
 	binanceSpotAcctPosConsumed   = []string{"B", "a", "f", "l"}
 )
