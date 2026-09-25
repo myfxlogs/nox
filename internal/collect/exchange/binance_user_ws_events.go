@@ -89,6 +89,7 @@ func (b *BinanceUserWS) onOrderUpdate(o json.RawMessage) {
 	b.orderCache.PutOrder(b.venueKey, ord.I.String(), ord.C, OrderEvent{
 		State: state, AccFillQty: qty, AvgPx: px, FeeUSD: fee, At: b.now(),
 	})
+	WarnUnconsumed("binance", "ORDER_TRADE_UPDATE", o, binanceOrderUpdateConsumed)
 }
 
 // onAccountUpdate ACCOUNT_UPDATE → a.B USDT wb 落快照（src=binance_event）+ a.P 持仓全量替换缓存。
@@ -154,6 +155,7 @@ func (b *BinanceUserWS) onAccountUpdate(ctx context.Context, a json.RawMessage) 
 		})
 	}
 	b.posCache.PutPositions(b.venueKey, orders, now)
+	WarnUnconsumed("binance", "ACCOUNT_UPDATE", a, binanceAccountUpdateConsumed)
 }
 
 // onSpotExecutionReport spot executionReport → 订单事件缓存。
@@ -185,7 +187,16 @@ func (b *BinanceUserWS) onSpotExecutionReport(data []byte) {
 	b.orderCache.PutOrder(b.venueKey, strconv.FormatInt(ord.I, 10), ord.C, OrderEvent{
 		State: state, AccFillQty: qty, AvgPx: px, FeeUSD: fee, At: b.now(),
 	})
+	WarnUnconsumed("binance", "executionReport", data, binanceExecReportConsumed)
 }
+
+// D-475b S2 consumed 清单（a.B/a.P 嵌套键同名展开——walkJSON 递归扫嵌套层）。
+var (
+	binanceOrderUpdateConsumed   = []string{"i", "c", "X", "z", "ap", "L", "n"}
+	binanceAccountUpdateConsumed = []string{"m", "B", "a", "wb", "P", "s", "pa", "ep", "iw", "ps"}
+	binanceExecReportConsumed    = []string{"i", "c", "X", "z", "L", "n"}
+	binanceSpotAcctPosConsumed   = []string{"B", "a", "f", "l"}
+)
 
 // onSpotAccountPosition outboundAccountPosition → B[{a,f,l}] USDT free+locked 落快照。
 // spot 无持仓概念——持仓缓存不动（订单侧由 executionReport 覆盖）。
@@ -219,4 +230,5 @@ func (b *BinanceUserWS) onSpotAccountPosition(ctx context.Context, data []byte) 
 			log.Printf("[binance-user-ws] insert spot snapshot: %v", err)
 		}
 	}
+	WarnUnconsumed("binance", "outboundAccountPosition", data, binanceSpotAcctPosConsumed)
 }

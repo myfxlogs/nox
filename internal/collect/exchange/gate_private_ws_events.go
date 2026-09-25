@@ -127,6 +127,7 @@ func (g *GatePrivateWS) onPositions(result json.RawMessage) {
 		})
 	}
 	g.posCache.PutPositions(g.venueKey, orders, now)
+	WarnUnconsumed("gate", "futures.positions", result, gatePositionsConsumed)
 }
 
 // onOrders futures.orders → 订单事件缓存（state 归一与 exec.OrderStatusQuerier 同域）。
@@ -168,6 +169,14 @@ func (g *GatePrivateWS) onOrders(ctx context.Context, result json.RawMessage) {
 			State: state, AccFillQty: qty, AvgPx: px, At: g.now(),
 		})
 	}
+	WarnUnconsumed("gate", "futures.orders", result, gateOrdersConsumed)
 }
+
+// D-475b S2 consumed 清单（契约对偶面）。
+var (
+	gatePositionsConsumed = []string{"contract", "size", "entry_price", "margin"}
+	gateOrdersConsumed    = []string{"id", "text", "contract", "status", "finish_as", "size", "left", "fill_price"}
+	gateBalancesConsumed  = []string{"currency", "balance"}
+)
 
 func abs64(v int64) int64 { return int64(math.Abs(float64(v))) }

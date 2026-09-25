@@ -118,6 +118,10 @@ func (o *OKXPrivateWS) onPositions(data []map[string]any) {
 	if o.posCache != nil {
 		o.posCache.PutPositions(o.venueKey, orders, now)
 	}
+	// D-475b S2：未消费关键字段观测（raw 重组——data 已解析）。
+	if raw, err := json.Marshal(data); err == nil {
+		WarnUnconsumed("okx", "positions", raw, okxPositionsConsumed)
+	}
 }
 
 // onOrders orders 频道 → 订单事件缓存（state 归一 exec.OrderStatusQuerier 同域；
@@ -158,6 +162,9 @@ func (o *OKXPrivateWS) onOrders(ctx context.Context, data []map[string]any) {
 	if o.hooks.OnOrderPush != nil {
 		o.hooks.OnOrderPush()
 	}
+	if raw, err := json.Marshal(data); err == nil {
+		WarnUnconsumed("okx", "orders", raw, okxOrdersConsumed)
+	}
 }
 
 // onBalPos balance_and_position → data[i].eventType 分派：funding_fee→kick；
@@ -168,7 +175,18 @@ func (o *OKXPrivateWS) onBalPos(data []map[string]any) {
 			o.hooks.OnFundingFee()
 		}
 	}
+	if raw, err := json.Marshal(data); err == nil {
+		WarnUnconsumed("okx", "balance_and_position", raw, okxBalPosConsumed)
+	}
 }
+
+// D-475b S2：各通道 consumed 键名清单（函数级 const——对拍契约的「已消费」声明，
+// 与契约测试 skipFields 对偶：两边都应是显式清单而非隐式事实）。
+var (
+	okxPositionsConsumed = []string{"instId", "pos", "posSide", "avgPx", "upl", "fee", "imr", "margin", "mmr", "cTime"}
+	okxOrdersConsumed    = []string{"instId", "ordId", "clOrdId", "state", "accFillSz", "avgPx", "fee", "feeCcy"}
+	okxBalPosConsumed    = []string{"eventType"}
+)
 
 func str(v any) string {
 	if s, ok := v.(string); ok {
