@@ -8,6 +8,7 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -79,7 +80,7 @@ func (s *Service) pendingEntries(ctx context.Context) ([]*v1.XAssetPendingEntryR
 	if err != nil {
 		return nil, connectErr(err)
 	}
-	out := make([]*v1.XAssetPendingEntryRow, 0, len(combos))
+	var scored []scoredRow
 	for _, c := range combos {
 		if !c.Enabled {
 			continue
@@ -88,15 +89,36 @@ func (s *Service) pendingEntries(ctx context.Context) ([]*v1.XAssetPendingEntryR
 		if s.comboInPosition(ctx, c) {
 			continue // 有 open/legged/closing 在持仓 → 归持仓区
 		}
-		kind, reason, ready := s.probeGates(ctx, c, venueAllow, canonAllow, flags, caps)
+		kind, reason, depth, ready := s.probeGates(ctx, c, venueAllow, canonAllow, flags, caps)
 		tier, detail, warn := s.comboTier(ctx, c, snaps)
-		out = append(out, &v1.XAssetPendingEntryRow{
-			ComboId: c.ID, ComboLabel: label, EntryKind: kind,
-			WaitReason: reason, Ready: ready,
-			Tier: tier, TierDetail: detail, TierWarn: warn,
+		scored = append(scored, scoredRow{
+			depth: depth,
+			row: &v1.XAssetPendingEntryRow{
+				ComboId: c.ID, ComboLabel: label, EntryKind: kind,
+				WaitReason: reason, Ready: ready,
+				Tier: tier, TierDetail: detail, TierWarn: warn,
+			},
 		})
 	}
+	// D-483 排序（服务端）：最可能入场的排最上——闸深降序（闯到越深的闸=越接近
+	// 入场，就绪 depth=7 天然置顶）；同深按 comboId 稳定序。
+	sort.SliceStable(scored, func(i, j int) bool {
+		if scored[i].depth != scored[j].depth {
+			return scored[i].depth > scored[j].depth
+		}
+		return scored[i].row.ComboId < scored[j].row.ComboId
+	})
+	out := make([]*v1.XAssetPendingEntryRow, 0, len(scored))
+	for _, sr := range scored {
+		out = append(out, sr.row)
+	}
 	return out, nil
+}
+
+// scoredRow D-483：排序中间态（depth 不透 proto——纯排序键，前端零信任不二次排序）。
+type scoredRow struct {
+	depth int
+	row   *v1.XAssetPendingEntryRow
 }
 
 // comboInPosition gate 防重同源：positions.opportunity_id × combo 包匹配（两个 canonical 变体都试）。
@@ -117,8 +139,9 @@ func (s *Service) comboInPosition(ctx context.Context, c pgstore.XAssetComboAdmi
 }
 
 // probeGates 七闸序（同 handleOpportunity 序）：venue 白名单→旗标→regime→tick→监控簿→cap→就绪。
-// 返回 kind/waitReason/ready。
-func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow, venueAllow, canonAllow map[string]bool, flags map[string]pgstore.VenueSymbolFlag, caps map[string]pgstore.VenueExposureCap) (kind, reason string, ready bool) {
+// 返回 kind/waitReason/depth/ready。depth=闯到的最深闸序（D-483 排序键：
+// 0=构型未覆盖 1=venue/canonical/构型禁入(配置型永阻) 2=旗标 4=regime 5=tick 6=监控簿 7=cap 8=就绪）。
+func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow, venueAllow, canonAllow map[string]bool, flags map[string]pgstore.VenueSymbolFlag, caps map[string]pgstore.VenueExposureCap) (kind, reason string, depth int, ready bool) {
 	buyMT := strings.HasSuffix(c.VenueBuy, ":mt4") || strings.HasSuffix(c.VenueBuy, ":mt5")
 	sellMT := strings.HasSuffix(c.VenueSell, ":mt4") || strings.HasSuffix(c.VenueSell, ":mt5")
 	// D-478 返修 R6：kind 推断=「恰好一条 MT 腿→XASSET_CARRY」（buy/sell 双向——原实现缺
@@ -135,45 +158,45 @@ func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow,
 	}
 	// R5：构型未覆盖（双 CEX/未知形态）→「构型未覆盖」短路，不走七闸（同所组合不产两型 opp）。
 	if kind == "" {
-		return kind, "构型未覆盖", false
+		return kind, "构型未覆盖", 0, false
 	}
 	// 闸 1：venue/canonical allow_rules（engine allowRuleReject 同判据，kind='venue'/'canonical' 值查表）。
 	// R2：双腿分别点名实际未放行腿（原实现恒报 buy 腿=误导）。
 	if !venueAllow[c.VenueBuy] {
-		return kind, fmt.Sprintf("venue 未放行: %s", c.VenueBuy), false
+		return kind, fmt.Sprintf("venue 未放行: %s", c.VenueBuy), 1, false
 	}
 	if !venueAllow[c.VenueSell] {
-		return kind, fmt.Sprintf("venue 未放行: %s", c.VenueSell), false
+		return kind, fmt.Sprintf("venue 未放行: %s", c.VenueSell), 1, false
 	}
 	if len(canonAllow) > 0 && !canonAllow[c.CanonicalBuy] {
-		return kind, fmt.Sprintf("canonical 未放行: %s", c.CanonicalBuy), false
+		return kind, fmt.Sprintf("canonical 未放行: %s", c.CanonicalBuy), 1, false
 	}
 	// 闸 2：旗标投影（engine flagRuleReject 同源 flags；blocked/warn 均透出为拦路原因）。
 	for _, v := range []string{bareVenueKey(c.VenueBuy), bareVenueKey(c.VenueSell)} {
 		for _, sym := range []string{c.CanonicalBuy, c.CanonicalSell, "*"} {
 			if f, ok := flags[pgstore.FlagKey(v, sym)]; ok {
-				return kind, fmt.Sprintf("旗标 %s: %s:%s %s", f.Level, v, sym, f.Reason), false
+				return kind, fmt.Sprintf("旗标 %s: %s:%s %s", f.Level, v, sym, f.Reason), 2, false
 			}
 		}
 	}
 	// 构型：FUNDING_HEDGE 反构型（perp 买腿）→ 构型禁入（D-473 v1 正向钉死）。
 	if kind == "FUNDING_HEDGE" && strings.HasSuffix(c.VenueBuy, ":perp") {
-		return kind, "构型禁入(v1 正向)", false
+		return kind, "构型禁入(v1 正向)", 1, false
 	}
 	// 闸 3：regime 闸（两型分流，reason=各闸原输出）。
 	if kind == "XASSET_CARRY" {
 		if ok, r := exec.CarryFundingRegimeCheck(ctx, s.store, c.VenueBuy, c.VenueSell, c.CanonicalBuy, c.CanonicalSell, time.Now(), exec.CarryRegimeConfig{Window: 24 * time.Hour, FloorPct: 2.0, MinSamples: 12}); !ok {
-			return kind, "regime 未持续: " + r, false
+			return kind, "regime 未持续: " + r, 4, false
 		}
 	}
 	if kind == "FUNDING_HEDGE" {
 		perpVenue := strings.TrimSuffix(c.VenueSell, ":perp")
 		rows, err := s.store.FundingPredWindow(ctx, perpVenue, c.CanonicalBuy, time.Now().Add(-24*time.Hour))
 		if err != nil {
-			return kind, fmt.Sprintf("regime 窗口查询失败(fail-closed): %v", err), false
+			return kind, fmt.Sprintf("regime 窗口查询失败(fail-closed): %v", err), 4, false
 		}
 		if gate, _, r := exec.FundingRegimeOK(rows, +1, 2.0, 12, false); !gate {
-			return kind, "regime 未持续: " + r, false
+			return kind, "regime 未持续: " + r, 4, false
 		}
 	}
 	// 闸 4：双腿 tick 新鲜度（5min 窗，同档案判据；LatestTick(venue,venueType,symbol) 现成接口）。
@@ -184,7 +207,7 @@ func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow,
 		}
 		tr, ok, err := s.store.LatestTick(ctx, bareVenueKey(leg.venue), vt, sym)
 		if err != nil || !ok || time.Since(tr.Ts) > tickFreshWindow {
-			return kind, fmt.Sprintf("报价超窗: %s/%s（>5min 无 tick）", bareVenueKey(leg.venue), sym), false
+			return kind, fmt.Sprintf("报价超窗: %s/%s（>5min 无 tick）", bareVenueKey(leg.venue), sym), 5, false
 		}
 	}
 	// 闸 5：XASSET 型监控簿 30min 闸（XAssetMonitorRowNear 现成接口；FUNDING_HEDGE 无簿概念跳过）。
@@ -192,26 +215,26 @@ func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow,
 		pair := monitorPairKey(c)
 		cexV, mtV := monitorLegKeys(c)
 		if _, ok, err := s.store.XAssetMonitorRowNear(ctx, pair, cexV, mtV, time.Now(), monitorFreshWindow); err != nil || !ok {
-			return kind, "监控簿过期", false
+			return kind, "监控簿过期", 6, false
 		}
 	}
 	// 闸 6：venue 敞口 cap（475a 三态同判据：cap=0 冻结 / Σ超限）。
 	for _, v := range []string{bareVenueKey(c.VenueBuy), bareVenueKey(c.VenueSell)} {
 		if capRow, ok := caps[v]; ok && capRow.Enabled {
 			if capRow.CapUSD == 0 {
-				return kind, fmt.Sprintf("cap 冻结: venue %s 敞口闸冻结新批准（cap=0）", v), false
+				return kind, fmt.Sprintf("cap 冻结: venue %s 敞口闸冻结新批准（cap=0）", v), 7, false
 			}
 			sum, err := s.venueExposureSum(v)
 			if err != nil {
-				return kind, fmt.Sprintf("cap 查询失败: venue %s %v（fail-closed）", v, err), false
+				return kind, fmt.Sprintf("cap 查询失败: venue %s %v（fail-closed）", v, err), 7, false
 			}
 			if sum > capRow.CapUSD {
-				return kind, fmt.Sprintf("cap 超限: venue %s Σ$%.0f > cap $%.0f", v, sum, capRow.CapUSD), false
+				return kind, fmt.Sprintf("cap 超限: venue %s Σ$%.0f > cap $%.0f", v, sum, capRow.CapUSD), 7, false
 			}
 		}
 	}
 	// 闸 7：全过 → 条件就绪·等机会（诚实区分：闸过但 detector 未产 opp=价差/息差未到阈）。
-	return kind, "条件就绪·等机会", true
+	return kind, "条件就绪·等机会", 8, true
 }
 
 // comboTier D-478 S4：安全档位（服务端算，前端只渲染）。
@@ -225,7 +248,7 @@ func (s *Service) comboTier(ctx context.Context, c pgstore.XAssetComboAdminRow, 
 	case c.MaxGrossUSD > 0:
 		needed = c.MaxGrossUSD
 	default:
-		return "unset", "档位:未设", false
+		return "unset", "未设仓位上限", false
 	}
 	cap := s.crossCap
 	if cap <= 0 {
@@ -235,13 +258,13 @@ func (s *Service) comboTier(ctx context.Context, c pgstore.XAssetComboAdminRow, 
 		v := bareVenueKey(leg.venue)
 		eq, at, found := venueEquity(snaps, v)
 		if !found || time.Since(at) > snapshotStaleWindow || eq <= 0 {
-			return "missing_data", fmt.Sprintf("档位:缺数据（%s 快照缺失/过期）", v), false
+			return "missing_data", fmt.Sprintf("无法判定：账户 %s 无近期权益数据（快照缺失或过期）", v), false
 		}
 		if needed > eq*cap {
-			return "over", fmt.Sprintf("超档: 名义$%.0f > 权益$%.0f×%.1f（%s）", needed, eq, cap, v), true
+			return "over", fmt.Sprintf("超出安全线：计划仓位 $%.0f > 账户 %s 权益 $%.0f 的 %.1f 倍上限", needed, v, eq, cap), true
 		}
 	}
-	return "ok", fmt.Sprintf("档位: 名义$%.0f ≤ 权益×%.1f", needed, cap), false
+	return "ok", fmt.Sprintf("在承受力内：计划仓位 $%.0f ≤ 账户权益 × %.1f 倍上限", needed, cap), false
 }
 
 // TierKickAll D-478 S4：恶化告警事件入口——CEX 账户 WS 余额事件（快照写成功）与组合行写
