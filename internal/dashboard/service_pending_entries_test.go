@@ -58,6 +58,33 @@ func ftoaD(f float64) string { return strconv.FormatFloat(f, 'f', -1, 64) }
 
 func stringsHas(s, sub string) bool { return strings.Contains(s, sub) }
 
+// TestD478_MTSellLegKind D-478 返修 R6：MT 卖腿组合 kind=XASSET_CARRY——
+// 生产实证 row1 CLUSDT(gate:perp)×WTI(277842155:mt5) 误报「构型未覆盖」（原推断缺 MT 卖腿分支）。
+func TestD478_MTSellLegKind(t *testing.T) {
+	svc, st := d478Svc(t)
+	ctx := context.Background()
+	if _, err := st.Pool().Exec(ctx, `INSERT INTO xasset_allow_combos
+		(id, canonical_buy, canonical_sell, venue_buy, venue_sell, max_long_qty, max_short_qty, max_gross_usd, enabled, simulated)
+		VALUES (904,'CL','WTI','gate:perp','277842155:mt5',1,1,1000,true,false)`); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = st.Pool().Exec(ctx, `DELETE FROM xasset_allow_combos WHERE id=904`) })
+	rows, err := svc.pendingEntries(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rows {
+		if r.ComboId != 904 {
+			continue
+		}
+		if r.EntryKind != "XASSET_CARRY" {
+			t.Fatalf("MT 卖腿组合 kind=%s，want XASSET_CARRY（R6）", r.EntryKind)
+		}
+		return
+	}
+	t.Fatal("id=904 行缺失")
+}
+
 func TestD478_PendingGateOrder(t *testing.T) {
 	svc, st := d478Svc(t)
 	ctx := context.Background()
