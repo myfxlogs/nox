@@ -379,6 +379,9 @@ const (
 	// DashboardServiceListXAssetAllowCombosProcedure is the fully-qualified name of the
 	// DashboardService's ListXAssetAllowCombos RPC.
 	DashboardServiceListXAssetAllowCombosProcedure = "/arb.dashboard.v1.DashboardService/ListXAssetAllowCombos"
+	// DashboardServiceListXAssetPendingEntriesProcedure is the fully-qualified name of the
+	// DashboardService's ListXAssetPendingEntries RPC.
+	DashboardServiceListXAssetPendingEntriesProcedure = "/arb.dashboard.v1.DashboardService/ListXAssetPendingEntries"
 	// DashboardServiceUpsertXAssetAllowComboProcedure is the fully-qualified name of the
 	// DashboardService's UpsertXAssetAllowCombo RPC.
 	DashboardServiceUpsertXAssetAllowComboProcedure = "/arb.dashboard.v1.DashboardService/UpsertXAssetAllowCombo"
@@ -554,6 +557,8 @@ type DashboardServiceClient interface {
 	SetVenueExposureCap(context.Context, *connect.Request[v1.SetVenueExposureCapRequest]) (*connect.Response[v1.SetVenueExposureCapResponse], error)
 	// D-471 S3：xasset 组合白名单管理面（不再裸 SQL）+ 加行前风险预览。
 	ListXAssetAllowCombos(context.Context, *connect.Request[v1.ListXAssetAllowCombosRequest]) (*connect.Response[v1.ListXAssetAllowCombosResponse], error)
+	// D-478 S3：待入场区——enabled 组合−在持仓=挂单集，按序探闸给第一个拦路原因+安全档位。
+	ListXAssetPendingEntries(context.Context, *connect.Request[v1.ListXAssetPendingEntriesRequest]) (*connect.Response[v1.ListXAssetPendingEntriesResponse], error)
 	UpsertXAssetAllowCombo(context.Context, *connect.Request[v1.UpsertXAssetAllowComboRequest]) (*connect.Response[v1.UpsertXAssetAllowComboResponse], error)
 	PreviewXAssetComboRisk(context.Context, *connect.Request[v1.PreviewXAssetComboRiskRequest]) (*connect.Response[v1.PreviewXAssetComboRiskResponse], error)
 	// D-405 S6：账户资金与保证金卡（财务页下钻）——数据源 fin_venue_margin_status
@@ -1268,6 +1273,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("ListXAssetAllowCombos")),
 			connect.WithClientOptions(opts...),
 		),
+		listXAssetPendingEntries: connect.NewClient[v1.ListXAssetPendingEntriesRequest, v1.ListXAssetPendingEntriesResponse](
+			httpClient,
+			baseURL+DashboardServiceListXAssetPendingEntriesProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListXAssetPendingEntries")),
+			connect.WithClientOptions(opts...),
+		),
 		upsertXAssetAllowCombo: connect.NewClient[v1.UpsertXAssetAllowComboRequest, v1.UpsertXAssetAllowComboResponse](
 			httpClient,
 			baseURL+DashboardServiceUpsertXAssetAllowComboProcedure,
@@ -1407,6 +1418,7 @@ type dashboardServiceClient struct {
 	listVenueExposureCaps        *connect.Client[v1.ListVenueExposureCapsRequest, v1.ListVenueExposureCapsResponse]
 	setVenueExposureCap          *connect.Client[v1.SetVenueExposureCapRequest, v1.SetVenueExposureCapResponse]
 	listXAssetAllowCombos        *connect.Client[v1.ListXAssetAllowCombosRequest, v1.ListXAssetAllowCombosResponse]
+	listXAssetPendingEntries     *connect.Client[v1.ListXAssetPendingEntriesRequest, v1.ListXAssetPendingEntriesResponse]
 	upsertXAssetAllowCombo       *connect.Client[v1.UpsertXAssetAllowComboRequest, v1.UpsertXAssetAllowComboResponse]
 	previewXAssetComboRisk       *connect.Client[v1.PreviewXAssetComboRiskRequest, v1.PreviewXAssetComboRiskResponse]
 	listAccountMarginStatus      *connect.Client[v1.ListAccountMarginStatusRequest, v1.ListAccountMarginStatusResponse]
@@ -1993,6 +2005,11 @@ func (c *dashboardServiceClient) ListXAssetAllowCombos(ctx context.Context, req 
 	return c.listXAssetAllowCombos.CallUnary(ctx, req)
 }
 
+// ListXAssetPendingEntries calls arb.dashboard.v1.DashboardService.ListXAssetPendingEntries.
+func (c *dashboardServiceClient) ListXAssetPendingEntries(ctx context.Context, req *connect.Request[v1.ListXAssetPendingEntriesRequest]) (*connect.Response[v1.ListXAssetPendingEntriesResponse], error) {
+	return c.listXAssetPendingEntries.CallUnary(ctx, req)
+}
+
 // UpsertXAssetAllowCombo calls arb.dashboard.v1.DashboardService.UpsertXAssetAllowCombo.
 func (c *dashboardServiceClient) UpsertXAssetAllowCombo(ctx context.Context, req *connect.Request[v1.UpsertXAssetAllowComboRequest]) (*connect.Response[v1.UpsertXAssetAllowComboResponse], error) {
 	return c.upsertXAssetAllowCombo.CallUnary(ctx, req)
@@ -2172,6 +2189,8 @@ type DashboardServiceHandler interface {
 	SetVenueExposureCap(context.Context, *connect.Request[v1.SetVenueExposureCapRequest]) (*connect.Response[v1.SetVenueExposureCapResponse], error)
 	// D-471 S3：xasset 组合白名单管理面（不再裸 SQL）+ 加行前风险预览。
 	ListXAssetAllowCombos(context.Context, *connect.Request[v1.ListXAssetAllowCombosRequest]) (*connect.Response[v1.ListXAssetAllowCombosResponse], error)
+	// D-478 S3：待入场区——enabled 组合−在持仓=挂单集，按序探闸给第一个拦路原因+安全档位。
+	ListXAssetPendingEntries(context.Context, *connect.Request[v1.ListXAssetPendingEntriesRequest]) (*connect.Response[v1.ListXAssetPendingEntriesResponse], error)
 	UpsertXAssetAllowCombo(context.Context, *connect.Request[v1.UpsertXAssetAllowComboRequest]) (*connect.Response[v1.UpsertXAssetAllowComboResponse], error)
 	PreviewXAssetComboRisk(context.Context, *connect.Request[v1.PreviewXAssetComboRiskRequest]) (*connect.Response[v1.PreviewXAssetComboRiskResponse], error)
 	// D-405 S6：账户资金与保证金卡（财务页下钻）——数据源 fin_venue_margin_status
@@ -2882,6 +2901,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("ListXAssetAllowCombos")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceListXAssetPendingEntriesHandler := connect.NewUnaryHandler(
+		DashboardServiceListXAssetPendingEntriesProcedure,
+		svc.ListXAssetPendingEntries,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListXAssetPendingEntries")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceUpsertXAssetAllowComboHandler := connect.NewUnaryHandler(
 		DashboardServiceUpsertXAssetAllowComboProcedure,
 		svc.UpsertXAssetAllowCombo,
@@ -3134,6 +3159,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceSetVenueExposureCapHandler.ServeHTTP(w, r)
 		case DashboardServiceListXAssetAllowCombosProcedure:
 			dashboardServiceListXAssetAllowCombosHandler.ServeHTTP(w, r)
+		case DashboardServiceListXAssetPendingEntriesProcedure:
+			dashboardServiceListXAssetPendingEntriesHandler.ServeHTTP(w, r)
 		case DashboardServiceUpsertXAssetAllowComboProcedure:
 			dashboardServiceUpsertXAssetAllowComboHandler.ServeHTTP(w, r)
 		case DashboardServicePreviewXAssetComboRiskProcedure:
@@ -3611,6 +3638,10 @@ func (UnimplementedDashboardServiceHandler) SetVenueExposureCap(context.Context,
 
 func (UnimplementedDashboardServiceHandler) ListXAssetAllowCombos(context.Context, *connect.Request[v1.ListXAssetAllowCombosRequest]) (*connect.Response[v1.ListXAssetAllowCombosResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListXAssetAllowCombos is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListXAssetPendingEntries(context.Context, *connect.Request[v1.ListXAssetPendingEntriesRequest]) (*connect.Response[v1.ListXAssetPendingEntriesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListXAssetPendingEntries is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) UpsertXAssetAllowCombo(context.Context, *connect.Request[v1.UpsertXAssetAllowComboRequest]) (*connect.Response[v1.UpsertXAssetAllowComboResponse], error) {
