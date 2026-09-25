@@ -153,39 +153,10 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 	// D-187：CARRY 合并 SWAPARB 统一门禁栈——comboAllowVerdict/gross split 对 CARRY 同样生效。
 	// gateDecision 已过（state=RUNNING、未禁用、未超仓、未超 notional、未 dedup）才进入此检查。
 	// 非 RUNNING 状态（CLOSE_ONLY 等）已在 gateDecision 拒绝，不会到此。
-	if intent.Strategy == "SWAPARB" || intent.Strategy == "CARRY" {
-		// D-179 S3：预扫活跃 SWAPARB/CARRY 仓 notional_usd NULL（combo_allow.go 纯函数不打日志，warn 在此调用点）。
-		for _, p := range activePositions {
-			if p.OpportunityID != "" && (strings.HasPrefix(p.OpportunityID, "SWAPARB:") || strings.HasPrefix(p.OpportunityID, "CARRY:")) && p.NotionalUSD == nil {
-				log.Printf("[autotrade] WARN position %d notional_usd NULL (backfill missing?) counted as 0", p.ID)
-			}
-		}
-		cv := comboAllowVerdict(g.cfg.SwapArbAllowCombos, g.cfg.SwapArbDenyCombos, g.cfg.SwapArbAutoAllow, g.cfg.MaxActiveCombos, g.cfg.SwapArbMaxGrossExposure, *intent, activePositions)
-		if !cv.Pass {
-			g.rejectLog(ctx, *intent, cv.Reason, false)
-			return GateResult{Status: "REJECTED", Reason: cv.Reason}
-		}
-		// D-168 超限折分：AdjustedNotional>0 表示需按剩余额度折分 qty
-		// D-179 S4：折分 qty 向下规整到 0.01 步长（FX min lot），<0.01 拒开（宁可不开不可超限）。
-		if cv.AdjustedNotional > 0 && intent.NotionalUSD > 0 {
-			ratio := cv.AdjustedNotional / intent.NotionalUSD
-			originalQty := intent.Qty
-			originalNotional := intent.NotionalUSD
-			splitQty := intent.Qty * ratio
-			flooredQty, reject := grossSplitFloor(splitQty)
-			if reject {
-				reason := fmt.Sprintf("gross adjusted qty %.4f below min lot floor", splitQty)
-				g.rejectLog(ctx, *intent, reason, false)
-				return GateResult{Status: "REJECTED", Reason: reason}
-			}
-			intent.Qty = flooredQty
-			// 重算 NotionalUSD 保持量价一致（规整后 qty 对应名义）
-			intent.NotionalUSD = cv.AdjustedNotional * flooredQty / splitQty
-			log.Printf("[autotrade] gate gross split: %s qty %.4f → %.4f, notional $%.2f → $%.2f (%s)",
-				intent.DedupKey, originalQty, intent.Qty, originalNotional, intent.NotionalUSD, cv.Reason)
-		}
+	// D-479 S1：判据族搬移——块体→gate_rules.go comboAllowGate（纯搬移零逻辑变更）。
+	if res, rejected := g.comboAllowGate(ctx, intent, activePositions); rejected {
+		return res
 	}
-
 	// D-159 W1a I6：environment/is_real 一致性检查（所有策略，gateDecision 后）。
 	// 校验 venue 的 broker_accounts.is_real 与 g.cfg.Environment 一致：
 	//   is_real=true ↔ environment='live' / is_real=false ↔ environment='demo'
