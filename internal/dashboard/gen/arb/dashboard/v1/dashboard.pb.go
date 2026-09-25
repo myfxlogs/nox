@@ -3264,6 +3264,8 @@ type Position struct {
 	LiveNetCarryPct       *float64               `protobuf:"fixed64,24,opt,name=live_net_carry_pct,json=liveNetCarryPct,proto3,oneof" json:"live_net_carry_pct,omitempty"`                     // D-340：OPEN 息差型当前净 carry（年化百分点；与引擎退出判定 recalcXAssetNetCarry 同源；缺省=facts 过期 fail-closed 或非息差型）
 	RealizedAnnualPct     *float64               `protobuf:"fixed64,25,opt,name=realized_annual_pct,json=realizedAnnualPct,proto3,oneof" json:"realized_annual_pct,omitempty"`                 // D-340：CLOSED 已实现年化（realized_pnl/(入场名义×持有天数)×365×100；缺省=名义/天数不可得）
 	SwapEstimatedUsd      *float64               `protobuf:"fixed64,35,opt,name=swap_estimated_usd,json=swapEstimatedUsd,proto3,oneof" json:"swap_estimated_usd,omitempty"`                    // D-375：息差预估参考（Σ position_cashflows quality='estimated' swap+funding 全腿公式计提；与「已收」实收两世界，前端「估」小字参考行；缺省=零计提）
+	CloseNowNetUsd        *float64               `protobuf:"fixed64,36,opt,name=close_now_net_usd,json=closeNowNetUsd,proto3,oneof" json:"close_now_net_usd,omitempty"`                        // D-480：此刻市价平仓到手净额=出口价浮动+swap实收+已付佣金−退出成本估（多腿bid/空腿ask；缺报价=NULL 不猜）
+	CloseExitCostsUsd     *float64               `protobuf:"fixed64,37,opt,name=close_exit_costs_usd,json=closeExitCostsUsd,proto3,oneof" json:"close_exit_costs_usd,omitempty"`               // D-480：退出成本估单列（CEX腿名义×takerBps 同473费率表；MT腿=0点差内嵌）
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -3476,6 +3478,20 @@ func (x *Position) GetRealizedAnnualPct() float64 {
 func (x *Position) GetSwapEstimatedUsd() float64 {
 	if x != nil && x.SwapEstimatedUsd != nil {
 		return *x.SwapEstimatedUsd
+	}
+	return 0
+}
+
+func (x *Position) GetCloseNowNetUsd() float64 {
+	if x != nil && x.CloseNowNetUsd != nil {
+		return *x.CloseNowNetUsd
+	}
+	return 0
+}
+
+func (x *Position) GetCloseExitCostsUsd() float64 {
+	if x != nil && x.CloseExitCostsUsd != nil {
+		return *x.CloseExitCostsUsd
 	}
 	return 0
 }
@@ -23054,7 +23070,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\border_id\x18\f \x01(\tR\aorderId\x12\x16\n" +
 	"\x06status\x18\r \x01(\tR\x06status\x12*\n" +
 	"\x02ts\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\x02tsB\x0f\n" +
-	"\r_price_actual\"\x92\f\n" +
+	"\r_price_actual\"\xa7\r\n" +
 	"\bPosition\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12%\n" +
 	"\x0eopportunity_id\x18\x02 \x01(\tR\ropportunityId\x12\x12\n" +
@@ -23083,7 +23099,9 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x17expected_breakeven_days\x18\x17 \x01(\x01H\rR\x15expectedBreakevenDays\x88\x01\x01\x120\n" +
 	"\x12live_net_carry_pct\x18\x18 \x01(\x01H\x0eR\x0fliveNetCarryPct\x88\x01\x01\x123\n" +
 	"\x13realized_annual_pct\x18\x19 \x01(\x01H\x0fR\x11realizedAnnualPct\x88\x01\x01\x121\n" +
-	"\x12swap_estimated_usd\x18# \x01(\x01H\x10R\x10swapEstimatedUsd\x88\x01\x01B\x0f\n" +
+	"\x12swap_estimated_usd\x18# \x01(\x01H\x10R\x10swapEstimatedUsd\x88\x01\x01\x12.\n" +
+	"\x11close_now_net_usd\x18$ \x01(\x01H\x11R\x0ecloseNowNetUsd\x88\x01\x01\x124\n" +
+	"\x14close_exit_costs_usd\x18% \x01(\x01H\x12R\x11closeExitCostsUsd\x88\x01\x01B\x0f\n" +
 	"\r_realized_pnlB\x16\n" +
 	"\x14_expected_annual_pctB\x1a\n" +
 	"\x18_expected_swap_bps_dailyB\x13\n" +
@@ -23101,7 +23119,9 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x18_expected_breakeven_daysB\x15\n" +
 	"\x13_live_net_carry_pctB\x16\n" +
 	"\x14_realized_annual_pctB\x15\n" +
-	"\x13_swap_estimated_usd\"\xcd\x01\n" +
+	"\x13_swap_estimated_usdB\x14\n" +
+	"\x12_close_now_net_usdB\x17\n" +
+	"\x15_close_exit_costs_usd\"\xcd\x01\n" +
 	"\x19ExecuteOpportunityRequest\x12%\n" +
 	"\x0eopportunity_id\x18\x01 \x01(\tR\ropportunityId\x12\x1d\n" +
 	"\n" +

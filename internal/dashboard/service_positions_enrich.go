@@ -133,6 +133,12 @@ func enrichOne(ctx context.Context, s *Service, pb *v1.Position, legs []pgstore.
 		net := floating + swapAccrued + commission
 		pb.NetPnlUsd = &net
 
+		// D-480：平仓净估——出口价浮动+实收+已付佣金−退出成本（缺报价→NULL 不猜）。
+		if cn, exitCost, ok := s.closeNowNet(ctx, pb, openLegs, brokerSnap, swapAccrued, commission, now); ok {
+			pb.CloseNowNetUsd = &cn
+			pb.CloseExitCostsUsd = &exitCost
+		}
+
 		// D-117→D-391：回本周期「本」口径重定义=入场摩擦成本（点差+手续费+佣金），
 		// 开仓即定不随行情漂；剩余洞=本−息差实收；≤0 → 0（已回本）；>0 → 剩余÷当前日息率。
 		// 净盈亏列口径不动（回答「现在平仓亏多少」，与回本互补）。
