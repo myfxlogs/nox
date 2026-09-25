@@ -80,6 +80,7 @@ func (s *Service) AddExchange(ctx context.Context, req *connect.Request[v1.AddEx
 		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+	s.kickConfig() // D-469b S2
 	return connect.NewResponse(&v1.AddExchangeResponse{Exchange: exchangeToProto(c)}), nil
 }
 
@@ -92,6 +93,7 @@ func (s *Service) RemoveExchange(ctx context.Context, req *connect.Request[v1.Re
 	if err := s.store.DeleteExchangeConfig(ctx, id); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+	s.kickConfig() // D-469b S2
 	return connect.NewResponse(&v1.RemoveExchangeResponse{}), nil
 }
 
@@ -104,6 +106,7 @@ func (s *Service) SetExchangeLabel(ctx context.Context, req *connect.Request[v1.
 	if err := s.store.SetExchangeLabel(ctx, id, req.Msg.GetLabel()); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+	s.kickConfig() // D-469b S2
 	return connect.NewResponse(&v1.SetExchangeLabelResponse{}), nil
 }
 
@@ -116,5 +119,6 @@ func (s *Service) SetExchangeWebsite(ctx context.Context, req *connect.Request[v
 	if err := s.store.SetExchangeWebsite(ctx, id, req.Msg.GetWebsite()); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+	s.kickConfig() // D-469b S2
 	return connect.NewResponse(&v1.SetExchangeWebsiteResponse{}), nil
 }

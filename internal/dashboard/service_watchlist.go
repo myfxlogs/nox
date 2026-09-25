@@ -123,6 +123,7 @@ func (s *Service) SetWatchlist(ctx context.Context, req *connect.Request[v1.SetW
 	s.watchlistSet = set
 	s.watchlistInitOnce = true
 
+	s.kickConfig() // D-469b S5
 	return connect.NewResponse(&v1.SetWatchlistResponse{Items: itemsToProto(items)}), nil
 }
 

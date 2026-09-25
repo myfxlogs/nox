@@ -25,6 +25,9 @@ type Service struct {
 	// dashboard.New 内部自建 storeGateChecker（直接查 execution_controls）。
 	gateChecker GateChecker
 	bm          *BrokerManager
+	// configKick D-469b S2/S5：config 类 mutation 成功路径回调（装配=bus.Topic.Publish；
+	// nil=未接线不 kick）。消费方=三 cex manager+白名单/自选/告警热载器。
+	configKick func()
 	// reviewer 复盘触发（§13.6，D-034）。nil = 未接线（RPC 仍可用，仅触发不跑）。
 	reviewer func()
 	// settler 结算触发（D-087 §3.2，手动平仓后调）。nil = 未接线（RPC 仍可用，仅不结算）。
@@ -208,6 +211,16 @@ type Service struct {
 	paperBoardCached   *v1.ListPaperSpotCarryResponse
 	paperBoardCachedAt time.Time
 	paperBoardSrc      paperBoardSource
+}
+
+// SetConfigKick D-469b S2：注入 config 变更 kick 回调（main 装配 bus.Topic.Publish）。
+func (s *Service) SetConfigKick(fn func()) { s.configKick = fn }
+
+// kickConfig D-469b：mutation 成功路径尾部调用（nil 安全）。
+func (s *Service) kickConfig() {
+	if s.configKick != nil {
+		s.configKick()
+	}
 }
 
 // FrontConfig 前端展示阈值（D-077 修复⑪B N7，后端 config 单一真相）。

@@ -111,6 +111,7 @@ func (s *Service) CreatePriceAlertRule(ctx context.Context, req *connect.Request
 	if err != nil {
 		return nil, fmt.Errorf("create price alert rule: %w", err)
 	}
+	s.kickConfig() // D-469b S5
 	return connect.NewResponse(&v1.CreatePriceAlertRuleResponse{
 		Ok:   true,
 		Rule: s.priceAlertRowToProto(r),
@@ -131,6 +132,7 @@ func (s *Service) UpdatePriceAlertRule(ctx context.Context, req *connect.Request
 	if err != nil {
 		return nil, fmt.Errorf("update price alert rule: %w", err)
 	}
+	s.kickConfig() // D-469b S5
 	return connect.NewResponse(&v1.UpdatePriceAlertRuleResponse{
 		Ok:   true,
 		Rule: s.priceAlertRowToProto(r),
@@ -150,5 +152,6 @@ func (s *Service) DeletePriceAlertRule(ctx context.Context, req *connect.Request
 	if !deleted {
 		return connect.NewResponse(&v1.DeletePriceAlertRuleResponse{Error: "规则不存在"}), nil
 	}
+	s.kickConfig() // D-469b S5
 	return connect.NewResponse(&v1.DeletePriceAlertRuleResponse{Ok: true}), nil
 }
