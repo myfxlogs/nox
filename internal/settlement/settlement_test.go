@@ -34,12 +34,16 @@ type fakeDeps struct {
 	lastNetPnl       float64    // D-127 P4：捕获传给 UpdateStrategyStat 的 net 值
 	mu               sync.Mutex // 并发安全计数
 	// D-193-A 字段
-	cashflowsQuality   string                 // SumCashflowsNetWithQuality 返回的 quality；空→按 cashflowsNet 推断
-	cashflowsQueryErr  error                  // SumCashflowsNetWithQuality 返回的 err（模拟查询失败）
-	statsStatus        string                 // GetSettlementStatsStatus 返回值（applied/skipped 短路）
-	markRetryableCount int                    // MarkSettlementStatsRetryable 调用次数
-	lastSettlementRow  *pgstore.SettlementRow // 捕获 InsertSettlement 收到的 row
-	insertAlertMsgs    []string               // D-268：InsertAlert 捕获的 level:message 列表（spy）
+	cashflowsQuality   string // SumCashflowsNetWithQuality 返回的 quality；空→按 cashflowsNet 推断
+	cashflowsQueryErr  error  // SumCashflowsNetWithQuality 返回的 err（模拟查询失败）
+	statsStatus        string // GetSettlementStatsStatus 返回值（applied/skipped 短路）
+	markRetryableCount int    // MarkSettlementStatsRetryable 调用次数
+	// D-475a S7：预测-实测对照 fake 面。
+	insertedFlags     []pgstore.VenueSymbolFlag // InsertFlag 捕获
+	activeFlags       map[string]pgstore.VenueSymbolFlag
+	papers            []*pgstore.PaperSpotCarry // LatestPaperByLegs 按序返回首行（测试种一行）
+	lastSettlementRow *pgstore.SettlementRow    // 捕获 InsertSettlement 收到的 row
+	insertAlertMsgs   []string                  // D-268：InsertAlert 捕获的 level:message 列表（spy）
 	// D-438 字段
 	gotHasFundingLeg bool // SumCashflowsNetForSettle 收到的 hasFundingLeg
 	gotFundingDue    bool // SumCashflowsNetForSettle 收到的 fundingDue
@@ -869,4 +873,27 @@ func TestD256A_S2_FamilyNilFallsBackToByEnvironment(t *testing.T) {
 	if d.disableStrategy != "CARRY" {
 		t.Errorf("disableStrategy=%q, want CARRY (ByEnvironment fallback)", d.disableStrategy)
 	}
+}
+
+// D-475a S7：fake 三法。
+func (f *fakeDeps) InsertFlag(ctx context.Context, fl *pgstore.VenueSymbolFlag) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.insertedFlags = append(f.insertedFlags, *fl)
+	return nil
+}
+func (f *fakeDeps) ListActiveFlags(ctx context.Context) (map[string]pgstore.VenueSymbolFlag, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.activeFlags, nil
+}
+func (f *fakeDeps) LatestPaperByLegs(ctx context.Context, canonical string, legVenues []string) (*pgstore.PaperSpotCarry, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, p := range f.papers {
+		if p.Symbol == canonical {
+			return p, nil
+		}
+	}
+	return nil, nil
 }

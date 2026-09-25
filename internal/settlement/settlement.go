@@ -58,6 +58,11 @@ type Deps interface {
 	GetSettlementStatsStatus(ctx context.Context, posID int64) (statsStatus string, err error)
 	// D-193 审计 P0-2：统计更新失败时改 stats_status=retryable，下轮重试。
 	MarkSettlementStatsRetryable(ctx context.Context, posID int64) error
+	// D-475a S7：预测-实测对照——warn flag 自动写+同键查重+纸面行回查。
+	InsertFlag(ctx context.Context, f *pgstore.VenueSymbolFlag) error
+	ListActiveFlags(ctx context.Context) (map[string]pgstore.VenueSymbolFlag, error)
+	// LatestPaperByLegs canonical+两腿裸名回查最近纸面行（venue 组合串含两腿裸名匹配）。
+	LatestPaperByLegs(ctx context.Context, canonical string, legVenues []string) (*pgstore.PaperSpotCarry, error)
 }
 
 // Eliminator 淘汰判定函数类型（从 autotrade.evaluateElimination 抽出，避免环依赖）。
@@ -276,22 +281,7 @@ func SettleAt(ctx context.Context, deps Deps, posID int64, elim Eliminator, fami
 
 	// 淘汰检查（D-261 S5：提取至 settlement_elim.go runElimination）。
 	runElimination(ctx, deps, p, elim, family)
+	// D-475a S7：XASSET_CARRY 预测-实测对照（观测面非钱闸——失败只 log 不阻塞）。
+	checkXassetPredictVsActual(ctx, deps, p, posID, cashflowsNet)
 	return nil
-}
-
-// Settle 兼容包装（D-194 §3.3：生产旧入口 = SettleAt(..., time.Now())）。
-func Settle(ctx context.Context, deps Deps, posID int64, elim Eliminator, family FamilyResolver) error {
-	return SettleAt(ctx, deps, posID, elim, family, time.Now())
-}
-
-// hasCashflowKinds D-193-A S7：判断该 position 是否应有现金流（SWAPARB/CARRY/FUNDING_HEDGE/PERP_FUNDING
-// 有 swap/funding；D-331 +XASSET_CARRY——perp 腿 funding 现金流缺失必须判 unknown→retryable，不静默 skipped）。
-// CROSS_VENUE/MEANREVERT 无 swap/funding 现金流 → no_cashflows 是正常状态，不判 unknown。
-func hasCashflowKinds(posType string) bool {
-	switch posType {
-	case "SWAPARB", "CARRY", "FUNDING_HEDGE", "PERP_FUNDING", "XASSET_CARRY":
-		return true
-	default:
-		return false
-	}
 }
