@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"arb/internal/bus"
@@ -17,16 +18,20 @@ type PerpFundingDetector struct {
 	FreshnessTTL     time.Duration
 	// D-154 S3：白名单拒绝首报去重——每 canonical 仅首报一次（进程生命周期；重启重报一次可接受）。
 	seenReject sync.Map
+	// D-491 S4：证据准入原子快照（评估器热更新；map[canonical]bool）。
+	// nil/未装载→admitted()=false 全拒——fail-closed 等价白名单外旧行为。
+	admission atomic.Value
 }
 
-// D-151 入场白名单：PERP_FUNDING 仅允许 BTC/ETH/TRX 三种 canonical 入场。
-// 依据 D-151 费率持续性判定——顺风期 1-2h≪结算窗，小币种磨损重尾风险高；
-// BTC/ETH 深度极好+TRX 实证可执行（D-120 #358/#359 双腿 FILLED）。
-// 非白名单 canonical 静默跳过（不产候选），首次命中日志注明 D-151。
-var perpFundingWhitelist = map[string]bool{
-	"BTCUSDT": true,
-	"ETHUSDT": true,
-	"TRXUSDT": true,
+// SetAdmissionSnapshot 评估器热更新入口（有效准入集，owner_override 已折算）。
+func (d *PerpFundingDetector) SetAdmissionSnapshot(m map[string]bool) {
+	d.admission.Store(m)
+}
+
+// admitted 证据准入谓词（D-491：白名单硬编码退役——admitted/owner_pinned 才 true）。
+func (d *PerpFundingDetector) admitted(canonical string) bool {
+	m, _ := d.admission.Load().(map[string]bool)
+	return m[canonical]
 }
 
 func (d *PerpFundingDetector) Type() OppType { return TypePerpFunding }
@@ -43,14 +48,14 @@ func (d *PerpFundingDetector) Scan(_ context.Context, snapshot map[string]map[st
 		realMap = fp.IsRealMap()
 	}
 	for canonical, venues := range snapshot {
-		// D-151 入场白名单 + D-369 S3 sim 试单通道：非白名单 canonical 不立即跳过——
+		// D-491 证据准入 + D-369 S3 sim 试单通道：未准入 canonical 不立即跳过——
 		// 收集 legs 后，若存在双腿均【已知 sim】（realMap 显式 false）的 venue 对 → 仅该
 		// sim 对产候选（demo 轨验证；real/混合对维持原拒）。无全 sim 对 → 维持原跳过
-		// +首报日志。白名单 canonical（BTC/ETH/TRX）行为完全不变。
-		simOnlyPair := !perpFundingWhitelist[canonical]
+		// +首报日志。已准入 canonical（admitted/owner_pinned）走 isRealPair 原路。
+		simOnlyPair := !d.admitted(canonical)
 		if simOnlyPair {
 			if _, loaded := d.seenReject.LoadOrStore(canonical, true); !loaded {
-				log.Printf("[perp_funding] D-151 白名单外 canonical=%s：仅双腿已知 sim 产候选（D-369 S3），首报", canonical)
+				log.Printf("[perp_funding] D-491 未准入 canonical=%s（证据评估 denied/pending）：仅双腿已知 sim 产候选（D-369 S3），首报", canonical)
 			}
 		}
 		// 收集所有 perp venue 的报价 + funding
@@ -81,9 +86,9 @@ func (d *PerpFundingDetector) Scan(_ context.Context, snapshot map[string]map[st
 					continue // 同所不算跨所
 				}
 				// D-178：is_real 配对检查（fail-open，gate 层兜底）。
-				// D-369 S3/D-371 S3：非白名单 canonical → 仅放行双腿均【已知 sim】的 venue 对
+				// D-369 S3/D-371 S3：未准入 canonical → 仅放行双腿均【已知 sim】的 venue 对
 				// （realMap venueKey 粒度=赢家 config simulated 位；nil=未知不放行 fail-closed）；
-				// 白名单 canonical 走 isRealPair（real 域维持 D-151/D-178 语义）。
+				// 已准入 canonical 走 isRealPair（real 域维持 D-491/D-178 语义）。
 				if simOnlyPair {
 					vkA := a.q.VenueKey()
 					vkB := b.q.VenueKey()
