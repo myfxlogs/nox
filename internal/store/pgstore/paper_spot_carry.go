@@ -40,6 +40,10 @@ type PaperSpotCarry struct {
 	// D-410 S1：全账口径（KB nullable-column：可空列全指针扫描）。
 	EstRoundTripFeeUSD *float64 // 开仓一次性记账往返费用估计（存正幅度；NULL=venue 未覆盖拒填行）
 	ConvergenceUSD     *float64 // 退出冻结收敛捕获 dir×(last−entry)×qty/1e4（active 行 NULL）
+	// D-475a S5 观测列：accrue_ticks=实结期数（结算对齐累积 UPDATE 每写一次+1）；
+	// min_accrued_usd=存续期 accrued 最低水位（回撤观测，NULL=未记账）。
+	AccrueTicks   int
+	MinAccruedUSD *float64
 }
 
 // InsertPaperSpotCarry 开纸面仓（同 venue+symbol 活跃行唯一由部分唯一索引兜底；
@@ -94,11 +98,15 @@ func (s *Store) ListPaperSpotCarryBoard(ctx context.Context, recentWindow time.D
 // 存量行回迁哨兵 NULL 或缺席轮不前推水位用）。
 // lastBasisBps：D-354 S2 每轮随 uni 更新（nil=当轮缺，保持 NULL）。
 // accruedReplace=true 时 accrued_usd 直接置 accruedAdd（D-474a S1 存量行重算覆盖写）。
+// D-475a S5：accrue_ticks 只在 accrueTo 非 nil（实结轮）+1；min_accrued_usd 随写取低水位。
 func (s *Store) AccruePaperSpotCarry(ctx context.Context, id int64, lastFundingAnn float64, accruedAdd float64, lowStreak, missStreak int, lastBasisBps *float64, accrueTo *time.Time, accruedReplace bool) error {
 	ct, err := s.pool.Exec(ctx, `
 		UPDATE paper_spot_carry
 		SET accrued_usd = CASE WHEN $8 THEN $2 ELSE accrued_usd + $2 END, last_funding_ann = $3,
-		    last_accrue_ts = COALESCE($7, last_accrue_ts), low_streak = $4, miss_streak = $6, last_basis_bps = $5
+		    last_accrue_ts = COALESCE($7, last_accrue_ts), low_streak = $4, miss_streak = $6, last_basis_bps = $5,
+		    accrue_ticks = accrue_ticks + CASE WHEN $7 IS NULL THEN 0 ELSE 1 END, -- 实结期数：缺席/哨兵轮（accrueTo=nil）不计
+		    min_accrued_usd = LEAST(COALESCE(min_accrued_usd, CASE WHEN $8 THEN $2 ELSE accrued_usd + $2 END),
+		                            CASE WHEN $8 THEN $2 ELSE accrued_usd + $2 END)
 		WHERE id = $1`, id, accruedAdd, lastFundingAnn, lowStreak, lastBasisBps, missStreak, accrueTo, accruedReplace)
 	if err != nil {
 		return fmt.Errorf("accrue paper spot carry %d: %w", id, err)
@@ -186,7 +194,29 @@ func (s *Store) ExitPaperSpotCarry(ctx context.Context, id int64, reason string,
 
 const paperSpotCarryCols = `id, venue, symbol, side, entry_funding_ann, entry_ts, qty_usd,
 	last_funding_ann, accrued_usd, last_accrue_ts, low_streak, miss_streak, exit_ts, exit_reason, status, note,
-	entry_basis_bps, last_basis_bps, structure, mt_venue, est_round_trip_fee_usd, convergence_usd`
+	entry_basis_bps, last_basis_bps, structure, mt_venue, est_round_trip_fee_usd, convergence_usd,
+	accrue_ticks, min_accrued_usd`
+
+// LatestPaperByLegs D-475a S7：canonical+两腿裸名回查最近纸面行——
+// venue 组合串（'3001157×okx'）含两腿裸名即匹配；无行→nil 非错误（调用方跳过）。
+func (s *Store) LatestPaperByLegs(ctx context.Context, canonical string, legVenues []string) (*PaperSpotCarry, error) {
+	if len(legVenues) == 0 {
+		return nil, nil
+	}
+	q := `SELECT ` + paperSpotCarryCols + ` FROM paper_spot_carry
+		WHERE symbol = $1 AND status IN ('active','demo','exited')`
+	args := []any{canonical}
+	for i, v := range legVenues {
+		q += fmt.Sprintf(` AND venue LIKE '%%'||$%d||'%%'`, i+2)
+		args = append(args, v)
+	}
+	q += ` ORDER BY id DESC LIMIT 1`
+	rows, err := s.scanPaperSpotCarry(ctx, q, args...)
+	if err != nil || len(rows) == 0 {
+		return nil, err
+	}
+	return &rows[0], nil
+}
 
 func (s *Store) scanPaperSpotCarry(ctx context.Context, q string, args ...any) ([]PaperSpotCarry, error) {
 	rows, err := s.pool.Query(ctx, q, args...)
@@ -201,7 +231,7 @@ func (s *Store) scanPaperSpotCarry(ctx context.Context, q string, args ...any) (
 			&r.QtyUSD, &r.LastFundingAnn, &r.AccruedUSD, &r.LastAccrueTs, &r.LowStreak, &r.MissStreak,
 			&r.ExitTs, &r.ExitReason, &r.Status, &r.Note,
 			&r.EntryBasisBps, &r.LastBasisBps, &r.Structure, &r.MtVenue,
-			&r.EstRoundTripFeeUSD, &r.ConvergenceUSD); err != nil {
+			&r.EstRoundTripFeeUSD, &r.ConvergenceUSD, &r.AccrueTicks, &r.MinAccruedUSD); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

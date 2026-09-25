@@ -243,4 +243,6 @@ var (
 	VenueSymbolFlagsSQL string
 	//go:embed 0139_paper_miss_streak.sql
 	PaperMissStreakSQL string
+	//go:embed 0140_venue_exposure_caps.sql
+	VenueExposureCapsSQL string
 )

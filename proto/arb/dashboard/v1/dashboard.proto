@@ -195,6 +195,9 @@ service DashboardService {
   rpc ListCarryGraduations(ListCarryGraduationsRequest) returns (ListCarryGraduationsResponse);
   rpc ApproveCarryGraduation(ApproveCarryGraduationRequest) returns (ApproveCarryGraduationResponse);
   rpc RejectCarryGraduation(RejectCarryGraduationRequest) returns (RejectCarryGraduationResponse);
+  // D-475a S6：venue 敞口闸（fin_venue_exposure_caps）读/写；Set→kickConfig 即时生效。
+  rpc ListVenueExposureCaps(ListVenueExposureCapsRequest) returns (ListVenueExposureCapsResponse);
+  rpc SetVenueExposureCap(SetVenueExposureCapRequest) returns (SetVenueExposureCapResponse);
 
   // D-405 S6：账户资金与保证金卡（财务页下钻）——数据源 fin_venue_margin_status
   // + snapshot 最新行 join；覆盖天数/建议补资金/档位全后端给，前端零计算。
@@ -2345,7 +2348,22 @@ message CarryGraduationRow {
   repeated string venue_gaps = 15;       // approve 时算的 venue env 缺口（pending 即时算；decided 回读快照）
   optional double net_all_in_usd = 16;   // D-410 S5：全账净额（accrued−est_fee+convergence；缺账行 NULL）
   optional string flag_warn = 17;        // D-463 S3：warn 旗标命中透出（⚠+reason；无旗=NULL）
+  // D-475a S5 质量杆观测（零拒批，先采数后定阈）：pending 行即时算不落库。
+  optional int64 accrue_ticks = 18;        // 实结期数（结算对齐累积写次数）
+  optional int64 expected_periods = 19;    // elapsed/funding_interval（interval 缺→NULL 诚实缺）
+  optional double coverage_ratio = 20;     // accrue_ticks/expected_periods（<0.8 黄 <0.5 红 徽标）
+  optional double min_accrued_usd = 21;    // 存续期 accrued 最低水位（回撤观测）
 }
+// D-475a S6：venue 敞口闸消息（cap=0=冻结新批准不动存量；enabled=false=闸停用行在档）。
+message VenueExposureCapRow {
+  string venue_key = 1; double cap_usd = 2; bool enabled = 3; string note = 4;
+  google.protobuf.Timestamp updated_at = 5;
+}
+message ListVenueExposureCapsRequest {}
+message ListVenueExposureCapsResponse { repeated VenueExposureCapRow rows = 1; }
+message SetVenueExposureCapRequest { string venue_key = 1; double cap_usd = 2; bool enabled = 3; string note = 4; }
+message SetVenueExposureCapResponse { bool ok = 1; string error = 2; }
+
 message ListCarryGraduationsRequest {}
 message ListCarryGraduationsResponse { repeated CarryGraduationRow rows = 1; }
 message ApproveCarryGraduationRequest {

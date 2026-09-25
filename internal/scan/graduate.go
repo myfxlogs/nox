@@ -232,9 +232,9 @@ func ResolveGraduationCanonicals(symbol, mtVenue string, platform int, mappings 
 	}, nil
 }
 
-// flagVenueSet D-463返修：venue 字段腿级展开（全串+×拆分+mtVenue）——
+// FlagVenueSet D-463返修：venue 字段腿级展开（全串+×拆分+mtVenue）——
 // blocked 闸与 warn 透出同一口径，腿级旗标在组合串上不致哑火。
-func flagVenueSet(venue string, mtVenue *string) []string {
+func FlagVenueSet(venue string, mtVenue *string) []string {
 	venues := append([]string{venue}, strings.Split(venue, "×")...)
 	if mtVenue != nil && *mtVenue != "" {
 		venues = append(venues, *mtVenue)
@@ -248,7 +248,7 @@ func blockedFlagHit(venue, symbol string, mtVenue *string, flags map[string]pgst
 	if len(flags) == 0 {
 		return nil
 	}
-	for _, v := range flagVenueSet(venue, mtVenue) {
+	for _, v := range FlagVenueSet(venue, mtVenue) {
 		if f, ok := flags[pgstore.FlagKey(v, symbol)]; ok && f.Level == "blocked" {
 			return &f
 		}
@@ -264,7 +264,7 @@ func graduationFlagWarn(p pgstore.PaperSpotCarry, flags map[string]pgstore.Venue
 	}
 	var reasons []string
 	seen := map[string]bool{}
-	for _, v := range flagVenueSet(p.Venue, p.MtVenue) {
+	for _, v := range FlagVenueSet(p.Venue, p.MtVenue) {
 		if f, ok := flags[pgstore.FlagKey(v, p.Symbol)]; ok && f.Level == "warn" && !seen[f.Reason] {
 			reasons = append(reasons, "⚠"+f.Reason)
 			seen[f.Reason] = true
