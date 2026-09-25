@@ -198,6 +198,10 @@ service DashboardService {
   // D-475a S6：venue 敞口闸（fin_venue_exposure_caps）读/写；Set→kickConfig 即时生效。
   rpc ListVenueExposureCaps(ListVenueExposureCapsRequest) returns (ListVenueExposureCapsResponse);
   rpc SetVenueExposureCap(SetVenueExposureCapRequest) returns (SetVenueExposureCapResponse);
+  // D-471 S3：xasset 组合白名单管理面（不再裸 SQL）+ 加行前风险预览。
+  rpc ListXAssetAllowCombos(ListXAssetAllowCombosRequest) returns (ListXAssetAllowCombosResponse);
+  rpc UpsertXAssetAllowCombo(UpsertXAssetAllowComboRequest) returns (UpsertXAssetAllowComboResponse);
+  rpc PreviewXAssetComboRisk(PreviewXAssetComboRiskRequest) returns (PreviewXAssetComboRiskResponse);
 
   // D-405 S6：账户资金与保证金卡（财务页下钻）——数据源 fin_venue_margin_status
   // + snapshot 最新行 join；覆盖天数/建议补资金/档位全后端给，前端零计算。
@@ -2353,6 +2357,65 @@ message CarryGraduationRow {
   optional int64 expected_periods = 19;    // elapsed/funding_interval（interval 缺→NULL 诚实缺）
   optional double coverage_ratio = 20;     // accrue_ticks/expected_periods（<0.8 黄 <0.5 红 徽标）
   optional double min_accrued_usd = 21;    // 存续期 accrued 最低水位（回撤观测）
+  // D-471：18/19 已被 475a 观测列占用→顺延 22/23。
+  optional GraduationRiskReport risk = 22; // S1 风险档案（pending 即时算；decided NULL）
+  string entry_window = 23;                // S2 open / closed:<reason>（pending 即时算）
+}
+
+// —— D-471 S1 风险档案 + S3 白名单管理面 ——
+// RiskReport 可缺字段全 optional（B-017：裸 double 零值=真 0 不可区分，前端渲染「缺」非 0）。
+message GraduationRiskLeg {
+  string venue_key = 1;                    // 例 "3001157:mt5" / "binance:perp" / "binance:spot"
+  string symbol = 2;                       // venue 原生符号（tick/fact 同键）
+  string role = 3;                         // buy / sell
+  optional double qty_native = 4;          // 手数/张数/基础币量
+  optional double qty_usd = 5;
+  optional double margin_usd = 6;          // 该腿资金需求（现货腿=全款）
+  string note = 7;
+}
+message GraduationRiskReport {
+  optional double notional_usd = 1;
+  string notional_source = 2;              // combo / paper
+  repeated GraduationRiskLeg legs = 3;
+  optional double capital_usd = 4;         // 双腿资金需求合计
+  double recommended_leverage = 5;         // min(5, venue 可得档)；未知档给 5+note
+  string leverage_note = 6;
+  optional double liq_distance_pct_est = 7;// (1/lev_rec − mmr_est)×100；mmr_est 缺=1% 标估算
+  optional double funding_flip_daily_usd = 8;   // funding 翻号单日成本
+  optional double adverse_basis_p95_usd = 9;    // monitor 簿 entry_spread_bps p95 折 usd（无簿=NULL）
+  optional double roundtrip_fee_usd = 10;       // notional×往返费率口径注记
+  repeated string min_executable = 11;          // 每腿最小单位折 usd 文案（lot filter 未采集如实标）
+  repeated string gaps = 12;                    // 数据缺口逐项（价格过期/映射缺/费率缺等）
+}
+message ListXAssetAllowCombosRequest {}
+message XAssetAllowComboRow {
+  int64 id = 1; string canonical_buy = 2; string venue_buy = 3;
+  string canonical_sell = 4; string venue_sell = 5;
+  double max_long_qty = 6; double max_short_qty = 7; double max_gross_usd = 8;
+  optional double notional_usd = 9; bool enabled = 10; optional bool simulated = 11; string note = 12;
+}
+message ListXAssetAllowCombosResponse { repeated XAssetAllowComboRow rows = 1; }
+message UpsertXAssetAllowComboRequest {
+  int64 id = 1;                            // 0=insert；>0=update caps/enabled/note（行锁）
+  string canonical_buy = 2; string venue_buy = 3;
+  string canonical_sell = 4; string venue_sell = 5;
+  double max_long_qty = 6; double max_short_qty = 7; double max_gross_usd = 8;
+  optional double notional_usd = 9; bool enabled = 10; optional bool simulated = 11; string note = 12;
+  bool confirm = 13;                       // 在持仓 toggle/caps 下调锁须知情确认
+}
+message UpsertXAssetAllowComboResponse {
+  bool ok = 1; string error = 2;
+  bool needs_confirm = 3;                  // 命中在持仓→前端二次确认（confirm=true 重发）
+  repeated int64 open_position_ids = 4;    // 知情文案锚点
+}
+message PreviewXAssetComboRiskRequest {
+  string canonical_buy = 1; string venue_buy = 2;
+  string canonical_sell = 3; string venue_sell = 4;
+  double notional_usd = 5;
+}
+message PreviewXAssetComboRiskResponse {
+  bool ok = 1; string error = 2;
+  optional GraduationRiskReport risk = 3;
 }
 // D-475a S6：venue 敞口闸消息（cap=0=冻结新批准不动存量；enabled=false=闸停用行在档）。
 message VenueExposureCapRow {
