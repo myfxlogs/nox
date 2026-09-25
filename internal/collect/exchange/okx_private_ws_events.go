@@ -9,8 +9,6 @@ import (
 	"strconv"
 	"time"
 
-	"arb/internal/exec"
-	"arb/internal/httpx"
 	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
 )
@@ -148,10 +146,16 @@ func (o *OKXPrivateWS) onOrders(ctx context.Context, data []map[string]any) {
 			}
 		}
 		instID := str(it["instId"])
-		if ctVal, _, err := exec.OkxSwapSpec(ctx, httpx.Client(), "https://www.okx.com", instID); err == nil && ctVal > 0 {
-			qty *= ctVal
-		} else if err != nil {
-			log.Printf("[okx-private-ws] orders ctVal %s: %v（accFillQty 以张计降级）", instID, err)
+		// D-477 S3（GAP-B4）：ctVal 解析器注入式单源（构造点 SetCtValFor，与 executor 同
+		// baseURL 源）；nil=跳过换算保持张数+warn（禁硬编码第二域名源）。
+		if o.ctValFor != nil {
+			if ctVal, err := o.ctValFor(ctx, instID); err == nil && ctVal > 0 {
+				qty *= ctVal
+			} else if err != nil {
+				log.Printf("[okx-private-ws] orders ctVal %s: %v（accFillQty 以张计降级）", instID, err)
+			}
+		} else {
+			log.Printf("[okx-private-ws] orders ctVal %s: ctValFor 未注入（accFillQty 以张计降级，GAP-B4 单源化待装配）", instID)
 		}
 		if o.orderCache != nil {
 			o.orderCache.PutOrder(o.venueKey, str(it["ordId"]), str(it["clOrdId"]), OrderEvent{
@@ -183,7 +187,9 @@ func (o *OKXPrivateWS) onBalPos(data []map[string]any) {
 // D-475b S2：各通道 consumed 键名清单（函数级 const——对拍契约的「已消费」声明，
 // 与契约测试 skipFields 对偶：两边都应是显式清单而非隐式事实）。
 var (
-	okxPositionsConsumed = []string{"instId", "pos", "posSide", "avgPx", "upl", "fee", "imr", "margin", "mmr", "cTime"}
+	// D-477 S4 B6：pnl（realized+unrealized 合并，已有 upl 覆盖浮盈）/liqPx/lever 在
+	// VenueOrder 无宿主字段 → ack 不建模（生产真帧实证 9-25）；新键仍会告警。
+	okxPositionsConsumed = []string{"instId", "pos", "posSide", "avgPx", "upl", "fee", "imr", "margin", "mmr", "cTime", "pnl", "liqPx", "lever"}
 	okxOrdersConsumed    = []string{"instId", "ordId", "clOrdId", "state", "accFillSz", "avgPx", "fee", "feeCcy"}
 	okxBalPosConsumed    = []string{"eventType"}
 )

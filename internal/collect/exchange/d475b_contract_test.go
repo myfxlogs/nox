@@ -10,10 +10,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"arb/internal/exec"
+	"arb/internal/httpx"
 	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
 )
@@ -117,22 +119,21 @@ func TestD475b_Contract_GatePositions(t *testing.T) {
 	}
 	pc := NewPositionEventCache()
 	g := &GatePrivateWS{baseURL: srv2.URL, venueKey: "gate:perp", posCache: pc, rest: srv2.Client(), now: d475bNow, quanto: map[string]float64{}}
-	g.onPositions(json.RawMessage(`[{"contract":"BTC_USDT","size":-2000,"entry_price":"60000","margin":"120"}]`))
+	// D-477 S2：帧补全 GAP-B2 字段（unrealised_pnl/pnl_fund/maintenance_margin/open_time）。
+	g.onPositions(json.RawMessage(`[{"contract":"BTC_USDT","size":-2000,"entry_price":"60000","margin":"120","unrealised_pnl":"-30","pnl_fund":"-1.2","maintenance_margin":"100","open_time":1790186326}]`))
 	ws, ok := pc.get("gate:perp", time.Hour, d475bNow())
 	if !ok || len(ws) != 1 {
 		t.Fatalf("ws cache: %v n=%d", ok, len(ws))
 	}
+	// D-477 S2：GAP-B2 字段全消费=skip 摘除转正断言；OpenedAt 保留 skip（REST gate 无
+	// 开仓时刻字段——WS=帧 open_time 秒级 epoch，与 REST now 不等属预期非回归）。
 	diffVenueOrder(t, "gate.positions", ws[0], rest[0], map[string]string{
-		"Ticket":      "GAP-B2: WS 处理器不置 Ticket（REST=contract）",
-		"Profit":      "GAP-B2: futures.positions 帧未消费 unrealised_pnl",
-		"Swap":        "GAP-B2: 未消费 pnl_fund（仓累计资金费）",
-		"MaintMargin": "GAP-B2: 未消费 maintenance_margin",
-		"OpenedAt":    "REST gate 无开仓时刻字段（两侧都取 now 不算映射回归）",
+		"OpenedAt": "REST gate 无开仓时刻字段（WS=帧 open_time，不等属预期）",
 	})
 }
 
 // TestD475b_Contract_BinancePositions binance ACCOUNT_UPDATE a.P 段对拍。
-// skip：up（浮盈）未消费=GAP-B1（OKX upl 失明同型坑，binance 侧同款缺漏）。
+// D-477 S1：up 已消费→Profit、Ticket=symbol——GAP-B1 两 skip 摘除转正断言。
 func TestD475b_Contract_BinancePositions(t *testing.T) {
 	srv := d475bREST(t, "binance", "", `[{"symbol":"BTCUSDT","positionAmt":"-0.5","entryPrice":"60000","unRealizedProfit":"-30","positionSide":"SHORT","marginType":"isolated","isolatedWallet":"100","leverage":"10","notional":"-30000"}]`)
 	defer srv.Close()
@@ -149,9 +150,8 @@ func TestD475b_Contract_BinancePositions(t *testing.T) {
 	if !ok || len(ws) != 1 {
 		t.Fatalf("ws cache: %v n=%d", ok, len(ws))
 	}
+	// OpenedAt 保留 skip：REST positionRisk 无开仓时刻字段（两侧语义不同源）。
 	diffVenueOrder(t, "binance.positions", ws[0], rest[0], map[string]string{
-		"Ticket":   "GAP-B1: WS 处理器不置 Ticket（REST=symbol）",
-		"Profit":   "GAP-B1: a.P 未消费 up（浮盈失明同型——OKX upl 实证同类坑）",
 		"OpenedAt": "REST positionRisk 无开仓时刻字段",
 	})
 }
@@ -164,11 +164,22 @@ func d475bOrderCacheGet(c *OrderEventCache, venueKey, orderID string) (OrderEven
 
 func TestD475b_Contract_OKXOrders(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"code":"0","data":[{"instId":"XAU-USDT-SWAP","ordId":"ord1","clOrdId":"cl1","state":"filled","accFillSz":"2","avgPx":"3900.5","fee":"-0.5","feeCcy":"USDT"}]}`))
+		switch {
+		case strings.Contains(r.URL.Path, "/api/v5/public/instruments"):
+			_, _ = w.Write([]byte(`{"code":"0","data":[{"ctVal":"0.01","lotSz":"0.01"}]}`))
+		default:
+			_, _ = w.Write([]byte(`{"code":"0","data":[{"instId":"XAU-USDT-SWAP","ordId":"ord1","clOrdId":"cl1","state":"filled","accFillSz":"2","avgPx":"3900.5","fee":"-0.5","feeCcy":"USDT"}]}`))
+		}
 	}))
 	defer srv.Close()
 	oc := NewOrderEventCache()
 	o := &OKXPrivateWS{venueKey: "okx:perp", orderCache: oc, now: d475bNow}
+	// D-477 S3（GAP-B4）：ctValFor 注入与 REST querier 同 baseURL 源——双源分叉撤除，
+	// qty 对拍由 skip 转正断言（accFillSz=2 张 × ctVal=0.01 = 0.02 base 两侧同值）。
+	o.SetCtValFor(func(ctx context.Context, instID string) (float64, error) {
+		ctVal, _, err := exec.OkxSwapSpec(ctx, httpx.Client(), srv.URL, instID)
+		return ctVal, err
+	})
 	o.onOrders(context.Background(), []map[string]any{{
 		"instId": "XAU-USDT-SWAP", "ordId": "ord1", "clOrdId": "cl1", "state": "filled",
 		"accFillSz": "2", "avgPx": "3900.5", "fee": "-0.5", "feeCcy": "USDT",
@@ -177,16 +188,17 @@ func TestD475b_Contract_OKXOrders(t *testing.T) {
 	if !ok {
 		t.Fatal("ws orderCache 无行")
 	}
-	// REST 基线=CEXExecutor.QueryOrderStatus（同 GET /api/v5/trade/order）。
-	// qty 对拍跳过：WS 侧 ctVal 走硬编码公共端点 vs REST e.baseURL——双 ctVal 源
-	// 在测试环境不可同夹具（GAP-B4 记录，生产两侧同源 okx.com 语义一致）。
+	// REST 基线=CEXExecutor.QueryOrderStatus（同 GET /api/v5/trade/order，同源 ctVal）。
 	ex := newOKXStatusQuerier(srv.URL)
-	st, _, px, fee, err := ex.QueryOrderStatus(context.Background(), "ord1", "cl1", "XAU-USDT-SWAP")
+	st, qty, px, fee, err := ex.QueryOrderStatus(context.Background(), "ord1", "cl1", "XAU-USDT-SWAP")
 	if err != nil {
 		t.Fatalf("rest order: %v", err)
 	}
 	if wsEv.State != st || wsEv.AvgPx != px || wsEv.FeeUSD != fee {
 		t.Fatalf("orders 对拍不等: WS=%+v REST=(%s,_,%v,%v)", wsEv, st, px, fee)
+	}
+	if wsEv.AccFillQty != qty {
+		t.Fatalf("单源断言：AccFillQty WS=%v REST=%v（同 ctVal 源应相等）", wsEv.AccFillQty, qty)
 	}
 }
 
@@ -207,12 +219,13 @@ func TestD475b_Contract_BinanceOrders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rest order: %v", err)
 	}
-	// FeeUSD 对拍跳过=GAP-B5：REST binanceOrderStatus 不解析手续费（返 0），WS 消费 n。
+	// FeeUSD 对拍跳过=B5 裁案（D-477 S4）：REST order-status 端点本身不回传手续费，
+	// 返 0=按设计非缺漏；fee 真值权威源=income 事件流（venue 原生）。
 	if wsEv.State != st || wsEv.AccFillQty != qty || wsEv.AvgPx != px {
 		t.Fatalf("orders 对拍不等: WS=%+v REST=(%s,%v,%v)", wsEv, st, qty, px)
 	}
 	if fee != 0 {
-		t.Logf("REST fee=%v（GAP-B5 若未来修复→本断言转严）", fee)
+		t.Logf("REST fee=%v（按设计=0；fee 真值=income 事件流，B5 裁案固化）", fee)
 	}
 }
 
