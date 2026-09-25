@@ -38,6 +38,9 @@ const (
 	paperMaxAgeDays = 7.0
 	// paperMissExitRounds D-474a S4：连续缺席轮次上限 → data_lost（缺席不计时不混 normalized）。
 	paperMissExitRounds = 3
+	// paperDemoIncomeNote D-474c S1：demo 行实收口径注记（幂等 marker；归属粒度上限
+	// =venue+symbol，同所同币多仓并账=上限估值，flag_warn 语义落 note 透出）。
+	paperDemoIncomeNote = "flag_warn: accrued=实收事件累计·归属=venue+symbol级(上限估值)"
 )
 
 // PaperStore D-350 阶段②：纸面轨存储依赖（*pgstore.Store 原生实现）。
@@ -47,6 +50,9 @@ type PaperStore interface {
 	ListAccrablePaperSpotCarry(ctx context.Context) ([]pgstore.PaperSpotCarry, error)
 	InsertPaperSpotCarry(ctx context.Context, r *pgstore.PaperSpotCarry) error
 	AccruePaperSpotCarry(ctx context.Context, id int64, lastFundingAnn, accruedAdd float64, lowStreak, missStreak int, lastBasisBps *float64, accrueTo *time.Time, accruedReplace bool) error
+	// D-474c S1：demo 行实收读面+口径注记（*pgstore.Store 原生实现）。
+	SumIncomeWindow(ctx context.Context, venue, symbol string, from, to time.Time) (float64, int, error)
+	AnnotatePaperNote(ctx context.Context, id int64, marker string) error
 	// D-474a S1：结算对齐累积 facts 读面（*pgstore.Store 原生实现）。
 	PaperFactSource
 	// D-410 S2：退出冻结收敛捕获（nil→列 NULL 诚实缺）。
@@ -170,11 +176,35 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 			base = *p.LastAccrueTs
 		}
 		u, ok := uni[p.Venue+"|"+p.Symbol]
+		if p.Status == "demo" {
+			// D-474c S1：demo=真仓行——accrue 改吃 income_events 实收（不走 474a 结算
+			// 对齐模型；纸面行照旧）。归属粒度上限=venue+symbol（同所同币多仓并账），
+			// 行 note 幂等注 flag_warn 语义；缺席窗 +0 不外推；err 上抛禁吞。
+			sum, _, ierr := st.SumIncomeWindow(ctx, p.Venue, p.Symbol, base, now)
+			if ierr != nil {
+				return opened, exited, fmt.Errorf("paper step: demo income %d: %w", p.ID, ierr)
+			}
+			demoLast := 0.0
+			if p.LastFundingAnn != nil {
+				demoLast = *p.LastFundingAnn
+			}
+			var demoBasis *float64
+			if ok && u.FundingAnn != nil {
+				demoLast = *u.FundingAnn
+				demoBasis = u.LastBasisBps
+			}
+			// last_accrue_ts 对 demo 行语义=「实收已计入至 now」（缺席窗照样前推——
+			// 实收口径下缺席=真 0 非缺数据，与纸面行「缺事实不前推」语义分家）。
+			if err := st.AccruePaperSpotCarry(ctx, p.ID, demoLast, sum, p.LowStreak, 0, demoBasis, &now, false); err != nil {
+				return opened, exited, fmt.Errorf("paper step: accrue demo %d: %w", p.ID, err)
+			}
+			if err := st.AnnotatePaperNote(ctx, p.ID, paperDemoIncomeNote); err != nil {
+				return opened, exited, fmt.Errorf("paper step: demo note %d: %w", p.ID, err)
+			}
+			continue
+		}
 		if !ok || u.FundingAnn == nil {
 			// D-474a S4：缺席轮不计时不 streak；连续缺席 ≥N 轮 → data_lost（仅 active）。
-			if p.Status != "active" {
-				continue // demo 行缺席：不误记
-			}
 			miss := p.MissStreak + 1
 			if miss >= paperMissExitRounds {
 				if err := st.ExitPaperSpotCarry(ctx, p.ID, "data_lost", paperExitConvergence(p, p.LastBasisBps)); err != nil {
@@ -223,13 +253,6 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 			streak = 0
 		}
 		lastBasis := u.LastBasisBps // D-354 S2：每轮随 uni 更新（map 既有加载，零新查询）
-		if p.Status != "active" {
-			// demo 行只累积不自动退（出场=人工/业主域，R1 S5）
-			if err := st.AccruePaperSpotCarry(ctx, p.ID, f, accruedAdd, p.LowStreak, 0, lastBasis, accrueTo, recalc); err != nil {
-				return opened, exited, fmt.Errorf("paper step: accrue demo %d: %w", p.ID, err)
-			}
-			continue
-		}
 		// D-474a S3：funding 翻号（方向收入转负）→ 当轮退 reason=adverse（不等 streak）。
 		if sideFactor*f < 0 {
 			if err := st.ExitPaperSpotCarry(ctx, p.ID, "adverse", paperExitConvergence(p, lastBasis)); err != nil {
