@@ -146,3 +146,27 @@ func TestD480_Enrich_RefreshColumn(t *testing.T) {
 		t.Error("未匹配仓 close_now_net 应缺省")
 	}
 }
+
+// TestD480_CloseNowNet_NativeSymbolKey R1：oppID canonical=XAU 与采集键 XAUUSDT 错位——
+// 腿原生 symbol（okx XAU-USDT-SWAP）去横线归一后命中报价（采集器产出权威键）。
+func TestD480_CloseNowNet_NativeSymbolKey(t *testing.T) {
+	qb := bus.New()
+	now := time.Now()
+	qb.Publish(bus.Quote{Symbol: "XAUUSDT", Venue: "okx", VenueType: "perp", Bid: 2399, Ask: 2401, Time: now}) // 采集器键=去横线原生
+	s := d480Svc(qb)
+	pb := &v1.Position{Id: 502, OpportunityId: "XASSET:XAU:3001157:okx", Status: "OPEN"} // canonical=XAU≠XAUUSDT
+	px := 2400.0
+	legs := []pgstore.PositionLeg{
+		{Phase: "OPEN", Venue: "3001157:mt5", Symbol: "XAUUSDm", Side: "BUY", Status: "FILLED", Qty: 0.01, PriceActual: &px, Ts: now},
+		{Phase: "OPEN", Venue: "okx:perp", Symbol: "XAU-USDT-SWAP", Side: "SELL", Status: "FILLED", Qty: 1, PriceActual: &px, Ts: now},
+	}
+	snap := []*v1.BrokerPosition{{VenueKey: "3001157:mt5", Symbol: "XAUUSDm", Pnl: 3.0, PositionId: 502}}
+	net, cost, ok := s.closeNowNet(context.Background(), pb, legs, snap, 0, 0, now)
+	if !ok {
+		t.Fatal("canonical 错位场景应命中原生 symbol 键（XAU-USDT-SWAP→XAUUSDT）")
+	}
+	// cex SELL: −(2401−2400)=−1；fee=2400×5bps=1.2；mt +3 → 3−1−1.2=0.8
+	if math.Abs(net-0.8) > 1e-9 || math.Abs(cost-1.2) > 1e-9 {
+		t.Errorf("net=%.4f cost=%.4f want 0.8/1.2", net, cost)
+	}
+}
