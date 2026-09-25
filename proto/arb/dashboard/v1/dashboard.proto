@@ -2459,11 +2459,14 @@ message ListCarryGraduationsRequest {}
 message ListCarryGraduationsResponse { repeated CarryGraduationRow rows = 1; }
 message ApproveCarryGraduationRequest {
   int64 graduation_id = 1;
-  double max_long_qty = 2;   // 买腿 qty 上限（业主必填>0，禁默认；MT 腿=手数、CEX 腿=张数，语义跟 venue_buy 走）
-  double max_short_qty = 3;  // 卖腿 qty 上限（必填>0；同上跟 venue_sell 走）
-  double max_gross_usd = 4;  // 双腿名义上限（必填>0）
+  double max_long_qty = 2;   // 买腿 qty 上限（显式模式必填>0，禁默认；MT 腿=手数、CEX 腿=张数，语义跟 venue_buy 走）
+  double max_short_qty = 3;  // 卖腿 qty 上限（同上跟 venue_sell 走）
+  double max_gross_usd = 4;  // 双腿名义上限
   optional double notional_usd = 5;      // D-367 语义：显式<=0 会在加载期被剔除，禁传非正值
   string note = 6;
+  optional double funding_pct = 7;   // D-490：净值占比输入（小数 0..1；与 funding_usd/显式四字段互斥）
+  optional double funding_usd = 8;   // D-490：分配金额直填 USD（同上互斥）
+  bool dry_run = 9;                  // D-490：试算不写库——回 est_* 折算+互算值+venue_gaps 体检，零状态变更
 }
 message ApproveCarryGraduationResponse {
   bool ok = 1; string error = 2;
@@ -2471,6 +2474,13 @@ message ApproveCarryGraduationResponse {
   repeated string venue_gaps = 4;        // 未放行 venue_key（autotrade_allow_rules 表补行，≤60s 热生效，D-443）
   string automap_summary = 5;            // "applied=N skipped=M conflicts=K"
   string link_report = 6;                // 非 cfd 结构的体检报告文本
+  double est_gross_usd = 7;              // D-490 折算回显：双腿总名义（=分配额 allocUSD）
+  double est_leg_notional_usd = 8;       // D-490：每腿名义（notional_usd 落值=alloc÷2）
+  double est_long_qty = 9;               // D-490：派生买腿 qty 上限（notional÷perLot×1.1）
+  double est_short_qty = 10;             // D-490：派生卖腿 qty 上限
+  double est_alloc_usd = 11;             // D-490 互算回显：分配额 USD（pct 输入时回显折算值）
+  double est_alloc_pct = 12;             // D-490 互算回显：占小池净值比（usd 输入时回显；小数口径）
+  repeated string sizing_notes = 13;     // D-490：池口径/币种/快照时间等审计注记
 }
 message RejectCarryGraduationRequest {
   int64 graduation_id = 1; string note = 2;
