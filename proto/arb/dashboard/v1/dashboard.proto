@@ -177,9 +177,12 @@ service DashboardService {
   // D-352：纸面轨前端卡（持仓页第三卡）——active+demo+近 14 天 exited 三态。
   rpc ListPaperSpotCarry(ListPaperSpotCarryRequest) returns (ListPaperSpotCarryResponse);
 
-  // D-444：autotrade venue/canonical 执行白名单启停（行只读列出+enabled 翻转；增删走业主 SQL）
+  // D-444：autotrade venue/canonical 执行白名单启停（行只读列出+enabled 翻转；D-492 起增删走 UI）
   rpc ListAutotradeAllowRules(ListAutotradeAllowRulesRequest) returns (ListAutotradeAllowRulesResponse);
   rpc SetAutotradeAllowRuleEnabled(SetAutotradeAllowRuleEnabledRequest) returns (SetAutotradeAllowRuleEnabledResponse);
+  // D-492：白名单增删 UI 管理——simulated 服务端推导（禁前端传）+幂等去重+审计+kickConfig 热载。
+  rpc AddAutotradeAllowRule(AddAutotradeAllowRuleRequest) returns (AddAutotradeAllowRuleResponse);
+  rpc DeleteAutotradeAllowRule(DeleteAutotradeAllowRuleRequest) returns (DeleteAutotradeAllowRuleResponse);
 
   // D-441：日内纸面轨（沙箱·D-425）观测面——成交列表+30天裁决统计。
   rpc ListIntraTrades(ListIntraTradesRequest) returns (ListIntraTradesResponse);
@@ -2234,6 +2237,22 @@ message SetAutotradeAllowRuleEnabledResponse {
   bool ok = 1;
 }
 
+// === D-492：执行白名单增删（simulated 服务端推导，note 必填审计） ===
+
+message AddAutotradeAllowRuleRequest {
+  string kind = 1;    // venue / canonical
+  string value = 2;   // venue: "binance:spot" / "3001157:mt5"；canonical: "SKLUSDT"
+  string note = 3;    // 必填非空（权限变更强制审计备注）
+}
+message AddAutotradeAllowRuleResponse {
+  bool ok = 1; string error = 2;
+  optional int64 id = 3;              // 新增或复用行的 id
+  bool reenabled_existing = 4;        // true=已存在 disabled 行被复用翻转（非新插）
+  string warning = 5;                 // advisory（如 canonical 无采集记录），不阻断
+}
+message DeleteAutotradeAllowRuleRequest { int64 id = 1; string note = 2; }
+message DeleteAutotradeAllowRuleResponse { bool ok = 1; string error = 2; }
+
 // === D-441：日内纸面轨（沙箱·D-425）观测面 ===
 
 message ListIntraTradesRequest {
@@ -2486,6 +2505,7 @@ message ApproveCarryGraduationResponse {
   double est_alloc_usd = 11;             // D-490 互算回显：分配额 USD（pct 输入时回显折算值）
   double est_alloc_pct = 12;             // D-490 互算回显：占小池净值比（usd 输入时回显；小数口径）
   repeated string sizing_notes = 13;     // D-490：池口径/币种/快照时间等审计注记
+  repeated string venue_gap_keys = 14;   // D-492：纯 venue_key 缺口列表（venue_gaps 混 capWarns 句串不可解析——双轨并存）
 }
 message RejectCarryGraduationRequest {
   int64 graduation_id = 1; string note = 2;
