@@ -21,7 +21,6 @@ import (
 	"strconv"
 	"time"
 
-	"arb/internal/reconcile"
 	"arb/internal/safego"
 	"arb/internal/store/pgstore"
 
@@ -45,25 +44,44 @@ type VenueSnapshotSink interface {
 	InsertVenueAccountSnapshots(ctx context.Context, snaps []pgstore.VenueAccountSnapshot) error
 }
 
-// OKXPrivateWS OKX 私有账户 channel 采集器。
+// OKXPrivateHooks D-469a S1：私有事件回调（nil 安全跳过）——
+// OnFundingFee=balance_and_position eventType=funding_fee（结算费到账 kick income）；
+// OnAccountPush=account 帧（余额变动 kick acctMon）；OnOrderPush=orders 帧。
+type OKXPrivateHooks struct {
+	OnFundingFee  func()
+	OnAccountPush func()
+	OnOrderPush   func()
+}
+
+// OKXPrivateWS OKX 私有 channel 采集器（D-469a 扩四频道：account/balance_and_position/
+// positions/orders，args 形制 S0 真户实证）。
 type OKXPrivateWS struct {
 	apiKey     string
 	apiSecret  string
 	passphrase string
 	simulated  bool
 	sink       VenueSnapshotSink
+	venueKey   string
+	events     PrivateEventSink
+	orderCache *OrderEventCache
+	posCache   *PositionEventCache
+	hooks      OKXPrivateHooks
 	dialer     websocket.Dialer
+	now        func() time.Time
 }
 
 // NewOKXPrivateWS 创建采集器（凭据=REST querier 同源 exchange_configs，不新增 secret 配置项）。
-func NewOKXPrivateWS(apiKey, apiSecret, passphrase string, simulated bool, sink VenueSnapshotSink) *OKXPrivateWS {
+// venueKey=撞键归一键（reconcile.CexVenueKey 同源，posCache/orderCache 键）；
+// events=审计表写口（nil 安全）；hooks nil 安全跳过。
+func NewOKXPrivateWS(apiKey, apiSecret, passphrase string, simulated bool, sink VenueSnapshotSink, venueKey string, events PrivateEventSink, oc *OrderEventCache, pc *PositionEventCache, hooks OKXPrivateHooks) *OKXPrivateWS {
 	return &OKXPrivateWS{
 		apiKey: apiKey, apiSecret: apiSecret, passphrase: passphrase, simulated: simulated,
-		sink: sink,
+		sink: sink, venueKey: venueKey, events: events, orderCache: oc, posCache: pc, hooks: hooks,
 		dialer: websocket.Dialer{
 			Proxy:            http.ProxyFromEnvironment,
 			HandshakeTimeout: 10 * time.Second,
 		},
+		now: time.Now,
 	}
 }
 
@@ -154,27 +172,25 @@ func (o *OKXPrivateWS) runOnce(ctx context.Context) error {
 		case "login":
 			log.Printf("[okx-private-ws] login ok (simulated=%v)", o.simulated)
 			if err := conn.WriteJSON(map[string]any{
-				"op":   "subscribe",
-				"args": []map[string]string{{"channel": "account", "ccy": "USDT"}},
+				"op": "subscribe",
+				// D-469a S0 真户实证形制：四频道单帧 args，各 ack 独立 event=subscribe。
+				"args": []map[string]string{
+					{"channel": "account", "ccy": "USDT"},
+					{"channel": "balance_and_position"},
+					{"channel": "positions", "instType": "SWAP"},
+					{"channel": "orders", "instType": "SWAP"},
+				},
 			}); err != nil {
 				return fmt.Errorf("subscribe: %w", err)
 			}
 		case "subscribe":
 			stale.touch(time.Now()) // 订阅成功=断流基准点（OKX account channel 订阅即推首帧）
-			log.Printf("[okx-private-ws] subscribed account channel")
+			log.Printf("[okx-private-ws] subscribed %s", msg.Arg.Channel)
 		case "":
-			// 数据推送。
+			// 数据推送——D-469a S1 按 arg.channel 分派（S0：positions/account eventType
+			// 在帧顶层；balance_and_position eventType 在 data[i] 内）。
 			stale.touch(time.Now())
-			if msg.Arg.Channel != "account" || len(msg.Data) == 0 {
-				continue
-			}
-			row, ok := okxAccountPushRow(msg.Data[0], time.Now())
-			if !ok {
-				continue
-			}
-			if err := o.sink.InsertVenueAccountSnapshots(ctx, []pgstore.VenueAccountSnapshot{row}); err != nil {
-				log.Printf("[okx-private-ws] insert snapshot: %v", err) // 写失败不杀读循环，下条推送重试
-			}
+			o.handleData(ctx, msg.Arg.Channel, data, msg.Data)
 		default:
 			continue
 		}
@@ -246,43 +262,4 @@ func okxPrivateLoginFrame(apiKey, passphrase, ts, sign string) map[string]any {
 			"sign":       sign,
 		}},
 	}
-}
-
-// okxAccountPushRow account channel 推送 → 快照行（纯函数）。
-// 口径=REST accountOKX 同源（D-364 S2）：equity=Σ details[USDT].eqUsd（解析失败跳该币），
-// balance=equity，currency=USDT，free_margin 不采（REST 同缺省）；details 无 USDT 行 →
-// eq=0 行照落（同 REST 不 panic 语义）。
-func okxAccountPushRow(data map[string]any, now time.Time) (pgstore.VenueAccountSnapshot, bool) {
-	raw, err := json.Marshal(data)
-	if err != nil {
-		return pgstore.VenueAccountSnapshot{}, false
-	}
-	var d struct {
-		MgnRatio string                       `json:"mgnRatio"` // D-405 S2：账户保证金率（百分数，越高越安全）
-		Details  []reconcile.OKXBalanceDetail `json:"details"`  // D-434 R1：与 REST 同构 schema
-	}
-	if err := json.Unmarshal(raw, &d); err != nil {
-		return pgstore.VenueAccountSnapshot{}, false
-	}
-	eq := 0.0
-	for _, det := range d.Details {
-		if det.Ccy != "USDT" {
-			continue
-		}
-		if usd, perr := strconv.ParseFloat(det.EqUsd, 64); perr == nil {
-			eq += usd
-		}
-	}
-	row := pgstore.VenueAccountSnapshot{
-		Venue: "okx", VenueType: "unified",
-		BalanceRaw: eq, EquityRaw: eq,
-		Currency: "USDT", FetchedAt: now, Src: "okx_event",
-	}
-	// D-434 R1：buffer_multiple=与 REST accountOKX 同一共享函数三层回落（mmr→detail
-	// mgnRatio→顶层 mgnRatio；本账户口径顶层恒空，WS 推送 details 实供 mmr/mgnRatio）。
-	// <=0=未采 nil 语义保留（guard 诚实 data_stale）。
-	if b := reconcile.OKXBufferMultiple(eq, d.Details, d.MgnRatio); b > 0 {
-		row.BufferMultiple = &b
-	}
-	return row, true
 }

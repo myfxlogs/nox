@@ -1,0 +1,211 @@
+// okx_private_ws_events.go —— D-469a S1：OKX 私有流四频道帧分派与缓存/sink 落点
+// （自 okx_private_ws.go 拆出，保 check-lines <300；account 行映射行为零变更）。
+package exchange
+
+import (
+	"context"
+	"encoding/json"
+	"log"
+	"strconv"
+	"time"
+
+	"arb/internal/exec"
+	"arb/internal/httpx"
+	"arb/internal/reconcile"
+	"arb/internal/store/pgstore"
+)
+
+// okxVenueType 审计行 venue_type：venueKey "okx:perp"/"okx:perp#3" 后缀段；无 → unified。
+func (o *OKXPrivateWS) okxVenueType() string {
+	k := o.venueKey
+	if i := lastIndexByte(k, '#'); i >= 0 {
+		k = k[:i]
+	}
+	for i := len(k) - 1; i >= 0; i-- {
+		if k[i] == ':' {
+			return k[i+1:]
+		}
+	}
+	return "unified"
+}
+
+func lastIndexByte(s string, c byte) int {
+	for i := len(s) - 1; i >= 0; i-- {
+		if s[i] == c {
+			return i
+		}
+	}
+	return -1
+}
+
+// handleData case "" 数据推送分派（S0 实证：positions/account 帧顶层 eventType，
+// balance_and_position 的 eventType 在 data[i] 元素内）。
+func (o *OKXPrivateWS) handleData(ctx context.Context, channel string, raw []byte, data []map[string]any) {
+	switch channel {
+	case "account":
+		if len(data) == 0 {
+			return
+		}
+		row, ok := okxAccountPushRow(data[0], o.now())
+		if !ok {
+			return
+		}
+		if err := o.sink.InsertVenueAccountSnapshots(ctx, []pgstore.VenueAccountSnapshot{row}); err != nil {
+			log.Printf("[okx-private-ws] insert snapshot: %v", err) // 写失败不杀读循环，下条推送重试
+		}
+		if o.hooks.OnAccountPush != nil {
+			o.hooks.OnAccountPush()
+		}
+	case "positions":
+		o.onAudit(ctx, "positions", raw)
+		o.onPositions(data)
+	case "orders":
+		o.onAudit(ctx, "orders", raw)
+		o.onOrders(ctx, data)
+	case "balance_and_position":
+		o.onAudit(ctx, "balance_and_position", raw)
+		o.onBalPos(data)
+	}
+}
+
+// onAudit 帧落审计表（binance onAudit 同型；events nil 安全）。
+func (o *OKXPrivateWS) onAudit(ctx context.Context, channel string, payload []byte) {
+	if o.events == nil || len(payload) == 0 {
+		return
+	}
+	if err := o.events.InsertCEXPrivateEvent(ctx, "okx", o.okxVenueType(), channel, "", payload); err != nil {
+		log.Printf("[okx-private-ws] audit insert %s: %v (cache update proceeds)", channel, err)
+	}
+}
+
+// onPositions positions 频道 → 持仓全量快照替换缓存（帧 data[] 即全量；
+// 字段映射与 REST accountOKX positions 同口径：pos=张数原值、posSide→side、imr→margin 回落）。
+func (o *OKXPrivateWS) onPositions(data []map[string]any) {
+	now := o.now()
+	orders := make([]reconcile.VenueOrder, 0, len(data))
+	for _, it := range data {
+		pos, _ := strconv.ParseFloat(str(it["pos"]), 64)
+		if pos == 0 {
+			continue
+		}
+		avgPx, _ := strconv.ParseFloat(str(it["avgPx"]), 64)
+		imr, _ := strconv.ParseFloat(str(it["imr"]), 64)
+		if imr == 0 {
+			imr, _ = strconv.ParseFloat(str(it["margin"]), 64)
+		}
+		mmr, _ := strconv.ParseFloat(str(it["mmr"]), 64)
+		side := "BUY"
+		if str(it["posSide"]) == "short" {
+			side = "SELL"
+		}
+		// sim 环境 imr 实证为恒定假值（REST querier 同口径置 0 宁缺毋假）。
+		if o.simulated {
+			imr = 0
+		}
+		orders = append(orders, reconcile.VenueOrder{
+			Ticket: str(it["instId"]), Symbol: str(it["instId"]), Side: side,
+			Volume: pos, OpenPrice: avgPx, Profit: 0,
+			Venue: "okx", VenueKey: o.venueKey, PosSide: str(it["posSide"]),
+			InitialMargin: imr, MaintMargin: mmr, OpenedAt: now,
+		})
+	}
+	if o.posCache != nil {
+		o.posCache.PutPositions(o.venueKey, orders, now)
+	}
+}
+
+// onOrders orders 频道 → 订单事件缓存（state 归一 exec.OrderStatusQuerier 同域；
+// accFillSz 张数→基础币须 ctVal（SWAP），查 instruments 公共端点缓存）。
+func (o *OKXPrivateWS) onOrders(ctx context.Context, data []map[string]any) {
+	for _, it := range data {
+		state := "live"
+		switch str(it["state"]) {
+		case "filled":
+			state = "filled"
+		case "partially_filled":
+			state = "partial"
+		case "canceled", "mmp_canceled":
+			state = "canceled"
+		}
+		qty, _ := strconv.ParseFloat(str(it["accFillSz"]), 64)
+		px, _ := strconv.ParseFloat(str(it["avgPx"]), 64)
+		fee, _ := strconv.ParseFloat(str(it["fee"]), 64)
+		feeUSD := 0.0
+		if ccy := str(it["feeCcy"]); fee != 0 && (ccy == "USDT" || ccy == "USD" || ccy == "USDC") {
+			feeUSD = -fee // okx fee 负值=支出（REST okxFeeToUSD 同口径取绝对值）
+			if feeUSD < 0 {
+				feeUSD = -feeUSD
+			}
+		}
+		instID := str(it["instId"])
+		if ctVal, _, err := exec.OkxSwapSpec(ctx, httpx.Client(), "https://www.okx.com", instID); err == nil && ctVal > 0 {
+			qty *= ctVal
+		} else if err != nil {
+			log.Printf("[okx-private-ws] orders ctVal %s: %v（accFillQty 以张计降级）", instID, err)
+		}
+		if o.orderCache != nil {
+			o.orderCache.PutOrder(o.venueKey, str(it["ordId"]), str(it["clOrdId"]), OrderEvent{
+				State: state, AccFillQty: qty, AvgPx: px, FeeUSD: feeUSD, At: o.now(),
+			})
+		}
+	}
+	if o.hooks.OnOrderPush != nil {
+		o.hooks.OnOrderPush()
+	}
+}
+
+// onBalPos balance_and_position → data[i].eventType 分派：funding_fee→kick；
+// 其余 eventType（snapshot/delivered/transferred 等）已落审计表不另动作。
+func (o *OKXPrivateWS) onBalPos(data []map[string]any) {
+	for _, it := range data {
+		if str(it["eventType"]) == "funding_fee" && o.hooks.OnFundingFee != nil {
+			o.hooks.OnFundingFee()
+		}
+	}
+}
+
+func str(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
+}
+
+// okxAccountPushRow account channel 推送 → 快照行（纯函数）。
+// 口径=REST accountOKX 同源（D-364 S2）：equity=Σ details[USDT].eqUsd（解析失败跳该币），
+// balance=equity，currency=USDT，free_margin 不采（REST 同缺省）；details 无 USDT 行 →
+// eq=0 行照落（同 REST 不 panic 语义）。
+func okxAccountPushRow(data map[string]any, now time.Time) (pgstore.VenueAccountSnapshot, bool) {
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return pgstore.VenueAccountSnapshot{}, false
+	}
+	var d struct {
+		MgnRatio string                       `json:"mgnRatio"` // D-405 S2：账户保证金率（百分数，越高越安全）
+		Details  []reconcile.OKXBalanceDetail `json:"details"`  // D-434 R1：与 REST 同构 schema
+	}
+	if err := json.Unmarshal(raw, &d); err != nil {
+		return pgstore.VenueAccountSnapshot{}, false
+	}
+	eq := 0.0
+	for _, det := range d.Details {
+		if det.Ccy != "USDT" {
+			continue
+		}
+		if usd, perr := strconv.ParseFloat(det.EqUsd, 64); perr == nil {
+			eq += usd
+		}
+	}
+	row := pgstore.VenueAccountSnapshot{
+		Venue: "okx", VenueType: "unified",
+		BalanceRaw: eq, EquityRaw: eq,
+		Currency: "USDT", FetchedAt: now, Src: "okx_event",
+	}
+	// D-434 R1：buffer_multiple=与 REST accountOKX 同一共享函数三层回落（mmr→detail
+	// mgnRatio→顶层 mgnRatio；本账户口径顶层恒空，WS 推送 details 实供 mmr/mgnRatio）。
+	// <=0=未采 nil 语义保留（guard 诚实 data_stale）。
+	if b := reconcile.OKXBufferMultiple(eq, d.Details, d.MgnRatio); b > 0 {
+		row.BufferMultiple = &b
+	}
+	return row, true
+}

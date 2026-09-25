@@ -69,7 +69,7 @@ func TestBinanceSpotWsapiE2E(t *testing.T) {
 	stream := newWSFakeServer(t)
 	dialed := make(chan string, 8)
 
-	b := NewBinanceUserWS("K", "S", "https://unused.invalid", "spot", "binance:spot", false, nil, nil, NewOrderEventCache(), NewPositionEventCache())
+	b := NewBinanceUserWS("K", "S", "https://unused.invalid", "spot", "binance:spot", false, nil, nil, NewOrderEventCache(), NewPositionEventCache(), BinanceUserHooks{})
 	evts := newFakeEventSink()
 	snaps := newFakeSnapSink()
 	b.events, b.sink = evts, snaps
@@ -171,7 +171,7 @@ func TestBinanceSpotWsapiE2E(t *testing.T) {
 func TestBinanceSpotWsapiStartFail(t *testing.T) {
 	wsapi := newWsapiFakeServer(t)
 	wsapi.failCode = 400
-	b := NewBinanceUserWS("K", "S", "https://unused.invalid", "spot", "binance:spot", false, nil, nil, NewOrderEventCache(), NewPositionEventCache())
+	b := NewBinanceUserWS("K", "S", "https://unused.invalid", "spot", "binance:spot", false, nil, nil, NewOrderEventCache(), NewPositionEventCache(), BinanceUserHooks{})
 	b.dial = func(ctx context.Context, wsURL string) (*websocket.Conn, error) {
 		d := websocket.Dialer{}
 		conn, _, err := d.DialContext(ctx, wsURLFromHTTP(wsapi.URL), nil)

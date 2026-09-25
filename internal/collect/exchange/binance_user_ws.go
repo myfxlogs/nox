@@ -37,6 +37,7 @@ type BinanceUserWS struct {
 	events     PrivateEventSink
 	orderCache *OrderEventCache
 	posCache   *PositionEventCache
+	hooks      BinanceUserHooks // D-469a S3：a.m 事件原因 kick 回调（nil 安全）
 
 	rest       *http.Client
 	dial       func(ctx context.Context, wsURL string) (*websocket.Conn, error)
@@ -45,10 +46,17 @@ type BinanceUserWS struct {
 }
 
 // NewBinanceUserWS 创建采集器。
-func NewBinanceUserWS(apiKey, apiSecret, baseURL, venueType, venueKey string, simulated bool, sink VenueSnapshotSink, events PrivateEventSink, oc *OrderEventCache, pc *PositionEventCache) *BinanceUserWS {
+// BinanceUserHooks D-469a S3：ACCOUNT_UPDATE a.m 事件原因回调（nil 安全）——
+// OnFundingFee=FUNDING_FEE（kick binance income）；OnIO=DEPOSIT/WITHDRAW（kick cex-io）。
+type BinanceUserHooks struct {
+	OnFundingFee func()
+	OnIO         func()
+}
+
+func NewBinanceUserWS(apiKey, apiSecret, baseURL, venueType, venueKey string, simulated bool, sink VenueSnapshotSink, events PrivateEventSink, oc *OrderEventCache, pc *PositionEventCache, hooks BinanceUserHooks) *BinanceUserWS {
 	b := &BinanceUserWS{
 		apiKey: apiKey, baseURL: baseURL, venueType: venueType, venueKey: venueKey,
-		simulated: simulated, sink: sink, events: events,
+		simulated: simulated, sink: sink, events: events, hooks: hooks,
 		orderCache: oc, posCache: pc,
 		rest: httpx.Client(), renewEvery: 30 * time.Minute, now: time.Now,
 	}

@@ -130,7 +130,7 @@ func TestD383B4_SnapshotSinkSignature(t *testing.T) {
 func TestD383B2R1_LoginFrameSignPinned(t *testing.T) {
 	const ts = "2026-09-22T00:00:00.000Z"
 	const want = "3johKPZs7sfE6CPMMnu8a8ISVSlHsubzTS5OovZf+qQ=" // secret=secret 离线预计算
-	o := NewOKXPrivateWS("my-key", "secret", "my-pass", false, nil)
+	o := NewOKXPrivateWS("my-key", "secret", "my-pass", false, nil, "okx:perp", nil, NewOrderEventCache(), NewPositionEventCache(), OKXPrivateHooks{})
 	frame := o.loginFrame(ts)
 	args, ok := frame["args"].([]map[string]string)
 	if !ok || len(args) != 1 {

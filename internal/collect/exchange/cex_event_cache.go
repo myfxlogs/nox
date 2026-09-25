@@ -11,6 +11,7 @@ import (
 
 	"arb/internal/exec"
 	"arb/internal/reconcile"
+	"arb/internal/store/pgstore"
 )
 
 // EventFreshTTL 订单事件新鲜窗（SSOT：≤5s 内命中直返）。
@@ -30,9 +31,14 @@ type OrderEvent struct {
 
 // OrderEventCache venueKey → orderKey → 最近事件。orderID 与 clOrdID 各立一键（双键同值写）。
 type OrderEventCache struct {
-	mu sync.RWMutex
-	m  map[string]map[string]OrderEvent
+	mu    sync.RWMutex
+	m     map[string]map[string]OrderEvent
+	onPut func(venueKey string) // D-469a S2：写面 kick 回调（setter 注入，nil 安全）
 }
+
+// SetOnPut D-469a S2：注入写面 kick 回调（先例=SwapSnapshotStore setter 注入，
+// 避免构造签名连锁变更）。回调在锁外触发。
+func (c *OrderEventCache) SetOnPut(fn func(venueKey string)) { c.onPut = fn }
 
 // NewOrderEventCache 创建共享缓存（进程级单例，由各 venue 流写、CachedOrderStatusQuerier 读）。
 func NewOrderEventCache() *OrderEventCache {
@@ -42,7 +48,6 @@ func NewOrderEventCache() *OrderEventCache {
 // PutOrder 写事件：orderID/clOrdID 非空各建一键（消费面两键都可能查）。
 func (c *OrderEventCache) PutOrder(venueKey, orderID, clOrdID string, ev OrderEvent) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	vm := c.m[venueKey]
 	if vm == nil {
 		vm = map[string]OrderEvent{}
@@ -53,6 +58,10 @@ func (c *OrderEventCache) PutOrder(venueKey, orderID, clOrdID string, ev OrderEv
 	}
 	if clOrdID != "" {
 		vm[clOrdID] = ev
+	}
+	c.mu.Unlock()
+	if c.onPut != nil {
+		c.onPut(venueKey)
 	}
 }
 
@@ -96,9 +105,13 @@ func (q *CachedOrderStatusQuerier) QueryOrderStatus(ctx context.Context, orderID
 
 // PositionEventCache venueKey → 最近一次持仓全量事件快照。
 type PositionEventCache struct {
-	mu sync.RWMutex
-	m  map[string]posSnapshot
+	mu    sync.RWMutex
+	m     map[string]posSnapshot
+	onPut func(venueKey string) // D-469a S2：写面 kick 回调（setter 注入，nil 安全）
 }
+
+// SetOnPut D-469a S2：注入写面 kick 回调（nil 安全，锁外触发）。
+func (c *PositionEventCache) SetOnPut(fn func(venueKey string)) { c.onPut = fn }
 
 type posSnapshot struct {
 	orders []reconcile.VenueOrder
@@ -114,9 +127,12 @@ func NewPositionEventCache() *PositionEventCache {
 // 不做增量合并——上次未出现的持仓按已平处理）。
 func (c *PositionEventCache) PutPositions(venueKey string, orders []reconcile.VenueOrder, at time.Time) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	cp := append([]reconcile.VenueOrder(nil), orders...)
 	c.m[venueKey] = posSnapshot{orders: cp, at: at}
+	c.mu.Unlock()
+	if c.onPut != nil {
+		c.onPut(venueKey)
+	}
 }
 
 // get 命中且新鲜 → 返回快照副本。
@@ -152,6 +168,25 @@ func (q *CachedVenueQuerier) QueryOpenedOrders(ctx context.Context) ([]reconcile
 		return orders, nil
 	}
 	return q.rest.QueryOpenedOrders(ctx)
+}
+
+// KickingSnapshotSink D-469a S3：余额快照 sink 包 kick wrapper——WS 推送落库透传后
+// 调 kick（目标=acctMon.Kick()，账户监控事件叫醒）。写失败不 kick（无新数据）。
+func NewKickingSnapshotSink(inner VenueSnapshotSink, kick func()) VenueSnapshotSink {
+	return &kickingSnapshotSink{inner: inner, kick: kick}
+}
+
+type kickingSnapshotSink struct {
+	inner VenueSnapshotSink
+	kick  func()
+}
+
+func (k *kickingSnapshotSink) InsertVenueAccountSnapshots(ctx context.Context, snaps []pgstore.VenueAccountSnapshot) error {
+	err := k.inner.InsertVenueAccountSnapshots(ctx, snaps)
+	if err == nil && k.kick != nil {
+		k.kick()
+	}
+	return err
 }
 
 // PrivateEventSink S4 审计表写口（*pgstore.Store 原生实现）。
