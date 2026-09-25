@@ -17,18 +17,21 @@ func TestRetroStats_D457(t *testing.T) {
 	defer s.Close()
 	ctx := context.Background()
 	now := time.Now().UTC()
-	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	// 窗口=相对 now（非历法午夜）：原 start=当日 00:00 UTC 与插入行 now-2h 在 UTC 00:00–02:00 段
+	// 跨日出窗→OpenedToday=0 假红（2026-09-25 00:55Z 机检实证）。测试目的=SQL 语法/语义冒烟，
+	// 窗口参数任意；相对窗使断言墙钟无关。
+	start := now.Add(-time.Hour)
 
 	// 最小行：1 OPEN 仓+腿+funding 实收行；1 CLOSED 仓（realized>0）。
 	var posID, closedID int64
 	if err := s.pool.QueryRow(ctx, `INSERT INTO positions (opportunity_id,type,status,expected_net_bps,opened_at)
-		VALUES ('d457-a','XASSET_CARRY','OPEN',10,$1) RETURNING id`, now.Add(-2*time.Hour)).Scan(&posID); err != nil {
+		VALUES ('d457-a','XASSET_CARRY','OPEN',10,$1) RETURNING id`, now.Add(-30*time.Minute)).Scan(&posID); err != nil {
 		t.Fatal(err)
 	}
 	defer s.pool.Exec(ctx, `DELETE FROM positions WHERE opportunity_id LIKE 'd457-%'`)
 	if err := s.pool.QueryRow(ctx, `INSERT INTO positions (opportunity_id,type,status,expected_net_bps,realized_pnl,opened_at,closed_at,notional_usd)
 		VALUES ('d457-b','XASSET_CARRY','CLOSED',10,1.5,$1,$2,1000) RETURNING id`,
-		now.Add(-3*24*time.Hour), now.Add(-time.Hour)).Scan(&closedID); err != nil {
+		now.Add(-3*24*time.Hour), now.Add(-30*time.Minute)).Scan(&closedID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.pool.Exec(ctx, `INSERT INTO position_legs (position_id,leg_no,phase,status,venue,account,symbol,side,qty,price_expected)

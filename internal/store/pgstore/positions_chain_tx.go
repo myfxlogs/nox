@@ -36,6 +36,7 @@ func (s *Store) CreatePositionWithLegs(ctx context.Context, p *Position, legs []
 	if err := tx.Commit(ctx); err != nil {
 		return 0, fmt.Errorf("create position with legs (commit): %w", err)
 	}
+	s.notifyPositionChange() // D-469b S3：commit 成功后触发（防终端态风暴=失败路径不发）
 	return id, nil
 }
 
