@@ -6,7 +6,9 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"arb/internal/exec"
 
@@ -77,9 +79,14 @@ func (f *fakeReloader) ReloadXAssetAllowCombos(context.Context) error { f.calls+
 
 func gradFixture(structure string) (*fakeGradDB, *Service) {
 	mt := "1279967"
+	// D-474b S2：approve 复核闸按同一判据现算——fixture paper 行必须是合格证据行
+	// （active≥5d+accrued>0+est_fee/basis 齐），否则旧用例全被复核闸拦。
+	fee, entryB, lastB := 0.5, 10.0, 12.0
 	f := &fakeGradDB{
-		grad:  &pgstore.CarryGraduation{ID: 5, PaperID: 42, Venue: "1279967×gate", Symbol: "BTC", Structure: structure, MtVenue: &mt, Status: "pending"},
-		paper: &pgstore.PaperSpotCarry{ID: 42, Venue: "1279967×gate", Symbol: "BTC", Structure: structure},
+		grad: &pgstore.CarryGraduation{ID: 5, PaperID: 42, Venue: "1279967×gate", Symbol: "BTC", Structure: structure, MtVenue: &mt, Status: "pending"},
+		paper: &pgstore.PaperSpotCarry{ID: 42, Venue: "1279967×gate", Symbol: "BTC", Structure: structure,
+			Status: "active", AccruedUSD: 5.0, EntryTs: time.Now().Add(-6 * 24 * time.Hour),
+			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB, Side: "long"},
 		maps:  []pgstore.SymbolMapping{{Venue: "1279967", BrokerSymbol: "BTCUSD", Canonical: "BTCUSD", IsPrimary: true}},
 		accts: []pgstore.BrokerAccount{{Venue: "1279967", Platform: 1}},
 	}
@@ -331,5 +338,59 @@ func TestD463_RejectWriteFlag(t *testing.T) {
 	lr, err := s3.ListCarryGraduations(context.Background(), connect.NewRequest(&v1.ListCarryGraduationsRequest{}))
 	if err != nil || len(lr.Msg.Rows) != 1 || lr.Msg.Rows[0].FlagWarn == nil || *lr.Msg.Rows[0].FlagWarn != warn {
 		t.Fatalf("rows=%+v err=%v", lr.Msg.Rows, err)
+	}
+}
+
+// TestD474b_ApproveDegradedReject A3：paper 行中途衰减（low_streak>0）→复核闸拒批，
+// 白名单零写入、建议行仍 pending（不落 approved）。
+func TestD474b_ApproveDegradedReject(t *testing.T) {
+	f, s := gradFixture("long_cfd_short_perp")
+	f.paper.LowStreak = 2 // 衰减：低息在轨 → GraduationQualifiedReason 拒
+	resp, err := s.ApproveCarryGraduation(context.Background(), approveReq())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Msg.Ok {
+		t.Fatal("衰减行不得批准")
+	}
+	if !strings.Contains(resp.Msg.Error, "毕业复核拒绝") {
+		t.Fatalf("error=%s", resp.Msg.Error)
+	}
+	if f.combo != nil {
+		t.Fatal("拒批禁写白名单")
+	}
+	if f.decision == "approved" {
+		t.Fatal("建议行不得落 approved")
+	}
+}
+
+// TestD474b_ApproveQualifiedPass 正向锚：合格行复核闸放行（防闸误伤主路）。
+func TestD474b_ApproveQualifiedPass(t *testing.T) {
+	f, s := gradFixture("long_cfd_short_perp")
+	resp, err := s.ApproveCarryGraduation(context.Background(), approveReq())
+	if err != nil || !resp.Msg.Ok {
+		t.Fatalf("ok=%v err=%v errstr=%s", resp.Msg.Ok, err, resp.Msg.Error)
+	}
+	if f.combo == nil {
+		t.Fatal("合格行应写白名单")
+	}
+}
+
+// TestD474b_ApproveMT4Reject S4：mt_venue platform=0（MT4 退役）→ 拒写白名单。
+func TestD474b_ApproveMT4Reject(t *testing.T) {
+	f, s := gradFixture("long_cfd_short_perp")
+	f.accts = []pgstore.BrokerAccount{{Venue: "1279967", Platform: 0}}
+	resp, err := s.ApproveCarryGraduation(context.Background(), approveReq())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Msg.Ok {
+		t.Fatal("MT4 venue 不得批准")
+	}
+	if !strings.Contains(resp.Msg.Error, "platform=0") {
+		t.Fatalf("error=%s", resp.Msg.Error)
+	}
+	if f.combo != nil {
+		t.Fatal("MT4 拒批禁写白名单")
 	}
 }
