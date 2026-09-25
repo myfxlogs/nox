@@ -62,6 +62,7 @@ type fakeMtmPaperStore struct {
 	nextID   int64
 	ticks    map[string][]pgstore.TickRow      // venue|symbol → ticks
 	universe map[string]pgstore.CexUniverseRow // D-463：spot 步进候选源
+	facts    map[string][]fact.Fact            // D-474a：kind|venue|symbol → 升序 facts
 	accrues  []struct {
 		id        int64
 		last, add float64
@@ -109,10 +110,12 @@ func (f *fakeMtmPaperStore) InsertPaperSpotCarry(_ context.Context, r *pgstore.P
 	cp.ID = f.nextID
 	cp.Status = "active"
 	cp.EntryTs = time.Now()
+	ts := cp.EntryTs
+	cp.LastAccrueTs = &ts // 与真库 insert last_accrue_ts=now() 同义（非回迁哨兵）
 	f.rows[cp.ID] = &cp
 	return nil
 }
-func (f *fakeMtmPaperStore) AccruePaperSpotCarry(_ context.Context, id int64, last, add float64, streak int, basis *float64) error {
+func (f *fakeMtmPaperStore) AccruePaperSpotCarry(_ context.Context, id int64, last, add float64, streak, miss int, basis *float64, accrueTo *time.Time, replace bool) error {
 	f.accrues = append(f.accrues, struct {
 		id        int64
 		last, add float64
@@ -120,17 +123,47 @@ func (f *fakeMtmPaperStore) AccruePaperSpotCarry(_ context.Context, id int64, la
 	}{id, last, add, streak})
 	if r, ok := f.rows[id]; ok {
 		r.LowStreak = streak
-		r.AccruedUSD += add
+		r.MissStreak = miss
+		if replace {
+			r.AccruedUSD = add
+		} else {
+			r.AccruedUSD += add
+		}
 		r.LastFundingAnn = &last
 		r.LastBasisBps = basis
+		if accrueTo != nil {
+			ts := *accrueTo
+			r.LastAccrueTs = &ts
+		}
 	}
 	return nil
+}
+
+// D-474a：facts 读面（测试注入 f.facts[kind|venue|symbol]）。
+func (f *fakeMtmPaperStore) LatestFacts(_ context.Context, kind, venue, symbol string) ([]fact.Fact, error) {
+	return f.facts[kind+"|"+venue+"|"+symbol], nil
+}
+func (f *fakeMtmPaperStore) FactsSince(_ context.Context, kind, venue, symbol string, since time.Time) ([]fact.Fact, error) {
+	var out []fact.Fact
+	for _, x := range f.facts[kind+"|"+venue+"|"+symbol] {
+		if !x.Ts.Before(since) {
+			out = append(out, x)
+		}
+	}
+	return out, nil
+}
+func (f *fakeMtmPaperStore) ListSymbolMappings(context.Context, string) ([]pgstore.SymbolMapping, error) {
+	return nil, nil
 }
 func (f *fakeMtmPaperStore) ExitPaperSpotCarry(_ context.Context, id int64, reason string, _ *float64) error {
 	f.exits = append(f.exits, struct {
 		id     int64
 		reason string
 	}{id, reason})
+	if r, ok := f.rows[id]; ok { // 冻结：退出行不再进 accrable
+		r.Status = "exited"
+		r.ExitReason = reason
+	}
 	return nil
 }
 func (f *fakeMtmPaperStore) TicksWindow(_ context.Context, venue, symbol string, since time.Time) ([]pgstore.TickRow, error) {
@@ -186,6 +219,13 @@ func TestD465_StepOpenAccrueExit(t *testing.T) {
 	now := time.Now()
 	st.ticks["mtA|XAUUSD.a"] = []pgstore.TickRow{{Ts: now.Add(-time.Minute), Venue: "mtA", Symbol: "XAUUSD.a", Bid: 100, Ask: 100.05}}
 	st.ticks["mtB|XAUUSD.b"] = []pgstore.TickRow{{Ts: now.Add(-time.Minute), Venue: "mtB", Symbol: "XAUUSD.b", Bid: 99.9, Ask: 99.95}}
+	// D-474a S1：结算对齐累积需双腿 facts 面（bps_daily 日率，UTC 日界）。
+	st.facts = map[string][]fact.Fact{
+		"swap_long|mtA|XAUUSD.a":  {{Kind: "swap_long", Venue: "mtA", Symbol: "XAUUSD.a", Value: -1, Ts: now}},
+		"swap_short|mtA|XAUUSD.a": {{Kind: "swap_short", Venue: "mtA", Symbol: "XAUUSD.a", Value: 0.5, Ts: now}},
+		"swap_long|mtB|XAUUSD.b":  {{Kind: "swap_long", Venue: "mtB", Symbol: "XAUUSD.b", Value: -2, Ts: now}},
+		"swap_short|mtB|XAUUSD.b": {{Kind: "swap_short", Venue: "mtB", Symbol: "XAUUSD.b", Value: 3, Ts: now}},
+	}
 	es := NewEntryStreak()
 	// 前两轮 streak 未满不开。
 	for i := 0; i < PaperEntryStreakRounds-1; i++ {
@@ -221,7 +261,8 @@ func TestD465_StepOpenAccrueExit(t *testing.T) {
 	if len(st.accrues) != 1 || st.accrues[0].add <= 0 || st.accrues[0].streak != 0 {
 		t.Fatalf("accrues=%+v", st.accrues)
 	}
-	// 退出：swap 利差塌 → net≈−0.15<floor 两轮 → normalized。
+	// 退出（D-474a S3）：swap 利差翻负 → net≈−2.92<0 当轮退 reason=adverse
+	// （不再等 low_streak 轮次）。net=(−1+0.2)bps/d×3.65=−2.92%/yr。
 	sc2 := NewCarryUniverseScanner(&fakeScanStore{
 		facts: []fact.Fact{
 			{Kind: "swap_long", Venue: "mtA", Symbol: "XAUUSD.a", Value: -1, Ts: now},
@@ -231,14 +272,12 @@ func TestD465_StepOpenAccrueExit(t *testing.T) {
 		},
 		mappings: mtmFixture().mappings,
 	})
-	for i := 0; i < paperExitStreakRounds; i++ {
-		_, exited, err = sc2.StepPaperMtmCarry(ctx, st, NewEntryStreak(), later.Add(time.Duration(i)*time.Hour), nil)
-		if err != nil {
-			t.Fatal(err)
-		}
+	_, exited, err = sc2.StepPaperMtmCarry(ctx, st, NewEntryStreak(), later, nil)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if exited != 1 || len(st.exits) != 1 || st.exits[0].reason != "normalized" {
-		t.Fatalf("exits=%+v want normalized", st.exits)
+	if exited != 1 || len(st.exits) != 1 || st.exits[0].reason != "adverse" {
+		t.Fatalf("exits=%+v want adverse（net<0 当轮退）", st.exits)
 	}
 }
 

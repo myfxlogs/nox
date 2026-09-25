@@ -33,7 +33,7 @@ func TestD463_BlockedFlagSkipsOpen(t *testing.T) {
 	flags := map[string]pgstore.VenueSymbolFlag{
 		pgstore.FlagKey("binance", "GUSDT"): {Venue: "binance", Symbol: "GUSDT", Level: "blocked", Reason: "GUSDT 字段语义坑待查"},
 	}
-	opened, _, err := StepPaperSpotCarry(ctx, st, eligibleStreak("binance|GUSDT"), now, 5.0, flags)
+	opened, _, err := StepPaperSpotCarry(ctx, st, eligibleStreak("binance|GUSDT"), now, flags)
 	if err != nil || len(opened) != 0 || len(st.rows) != 0 {
 		t.Fatalf("blocked: opened=%v rows=%d err=%v", opened, len(st.rows), err)
 	}
@@ -41,7 +41,7 @@ func TestD463_BlockedFlagSkipsOpen(t *testing.T) {
 	st2 := flagCand()
 	flags[pgstore.FlagKey("binance", "GUSDT")] = pgstore.VenueSymbolFlag{
 		Venue: "binance", Symbol: "GUSDT", Level: "warn", Reason: "funding 语义待查"}
-	opened, _, err = StepPaperSpotCarry(ctx, st2, eligibleStreak("binance|GUSDT"), now, 5.0, flags)
+	opened, _, err = StepPaperSpotCarry(ctx, st2, eligibleStreak("binance|GUSDT"), now, flags)
 	if err != nil || len(opened) != 1 {
 		t.Fatalf("warn: opened=%v err=%v", opened, err)
 	}
@@ -132,7 +132,7 @@ func TestD463_SpotLegFlagBlocks(t *testing.T) {
 	flags := map[string]pgstore.VenueSymbolFlag{
 		pgstore.FlagKey("gate", "GUSDT"): {Venue: "gate", Symbol: "GUSDT", Level: "blocked", Reason: "腿级旗标"},
 	}
-	opened, _, err := StepPaperSpotCarry(ctx, st, eligibleStreak("mt×gate|GUSDT"), now, 5.0, flags)
+	opened, _, err := StepPaperSpotCarry(ctx, st, eligibleStreak("mt×gate|GUSDT"), now, flags)
 	if err != nil || len(opened) != 0 || len(st.rows) != 0 {
 		t.Fatalf("leg blocked: opened=%v rows=%d err=%v", opened, len(st.rows), err)
 	}

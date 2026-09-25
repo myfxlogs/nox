@@ -62,6 +62,29 @@ func (s *Store) LatestFacts(ctx context.Context, kind, venue, symbol string) ([]
 	return out, rows.Err()
 }
 
+// FactsSince 返回某 (kind, venue, symbol) 自 since 起的 facts 历史行（ts 升序）。
+// D-474a S1：结算边界逐期实率取数面（funding_history / swap_long·short 窗内序列）。
+func (s *Store) FactsSince(ctx context.Context, kind, venue, symbol string, since time.Time) ([]fact.Fact, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT kind, venue, symbol, value, unit, ts, src
+		FROM facts
+		WHERE kind = $1 AND venue = $2 AND symbol = $3 AND ts >= $4
+		ORDER BY ts`, kind, venue, symbol, since)
+	if err != nil {
+		return nil, fmt.Errorf("facts since: %w", err)
+	}
+	defer rows.Close()
+	var out []fact.Fact
+	for rows.Next() {
+		var f fact.Fact
+		if err := rows.Scan(&f.Kind, &f.Venue, &f.Symbol, &f.Value, &f.Unit, &f.Ts, &f.Src); err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
 // QueryFacts 分页查询 facts 历史（§8.2 ListFacts）。
 func (s *Store) QueryFacts(ctx context.Context, kind, venue, symbol string, limit, offset int) ([]fact.Fact, error) {
 	if limit <= 0 {

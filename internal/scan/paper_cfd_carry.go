@@ -29,8 +29,7 @@ const (
 
 // PaperCfdOpts D-410 S4 装配参数（wire_scan 注入 cfg/env 值，scan 层不读 env）。
 type PaperCfdOpts struct {
-	// CexFeeBps 往返费率源（=cfg.XAssetCexFeeBps 同源同值）。
-	CexFeeBps float64
+	// D-474a S2：CexFeeBps 退役——费用改读 venue 真值表（paper_fees.go）。
 	// AuthorizedMaxActive 授权组合保底槽独立上限（env ARB_PAPER_AUTHORIZED_MAX_ACTIVE，默认 8）。
 	AuthorizedMaxActive int
 	// ReopenCooldown 保底槽 flap 冷却（env ARB_PAPER_AUTHORIZED_REOPEN_COOLDOWN_HOURS，默认 24h）。
@@ -158,7 +157,7 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 			}
 			continue
 		}
-		if err := insertCfdPaper(ctx, st, r, sl.mtVenue, sl.venueCombo, now, opts.CexFeeBps); err != nil {
+		if err := insertCfdPaper(ctx, st, r, sl.mtVenue, sl.venueCombo, now); err != nil {
 			if err == pgstore.ErrPaperExists {
 				continue
 			}
@@ -204,7 +203,7 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 		if cfdActive+topN >= PaperCfdMaxActive { // 保底槽不占此额（钉死①）
 			break
 		}
-		if err := insertCfdPaper(ctx, st, c.r, c.r.MtVenue, c.venueCombo, now, opts.CexFeeBps); err != nil {
+		if err := insertCfdPaper(ctx, st, c.r, c.r.MtVenue, c.venueCombo, now); err != nil {
 			if err == pgstore.ErrPaperExists {
 				continue
 			}
@@ -213,85 +212,11 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 		topN++
 		opened = append(opened, c.r.Canonical)
 	}
-	// ② 累积 + ③ 退出（仅 cfd 行；spot 轨行不归本函数）
-	for _, p := range accrable {
-		if !cfdStructures[p.Structure] {
-			continue
-		}
-		// D-410 S4：last_basis 每轮更 monitor 最新行（陈旧闸行龄超限→nil 诚实缺写 NULL）。
-		var lastBasis *float64
-		pair := paperCfdPairKey(p.Symbol)
-		// D-423：三元组 venue 键——Venue="mt×cex" 组合串拆回裸名再映射（mt 列备份拆分缺）。
-		mtV, cexV := "", ""
-		if i := strings.Index(p.Venue, "×"); i >= 0 {
-			mtV, cexV = p.Venue[:i], p.Venue[i+len("×"):]
-		}
-		cexVenue, mtVenue := monitorVenueKeys(cexV, mtV)
-		entryBps, _, _, _, ok, err := st.LatestXAssetEntryGate(ctx, pair, cexVenue, mtVenue, paperCfdMonitorMaxAge)
-		if err != nil {
-			return opened, exited, fmt.Errorf("cfd paper step: monitor gate %s: %w", pair, err)
-		}
-		if ok {
-			lastBasis = &entryBps
-		}
-		r, ok := rowByKey[p.Venue+"|"+p.Symbol]
-		if !ok {
-			if p.Status != "active" {
-				continue // demo 行缺席：无数据不误记
-			}
-			// active 行缺席=信号死：miss 计 streak 同轨，零累积（accruedAdd=0，时钟照走）
-			if p.LowStreak+1 >= paperExitStreakRounds {
-				if err := st.ExitPaperSpotCarry(ctx, p.ID, "normalized", paperExitConvergence(p, lastBasis)); err != nil {
-					return opened, exited, fmt.Errorf("cfd paper step: exit miss %d: %w", p.ID, err)
-				}
-				exited++
-				continue
-			}
-			prev := 0.0
-			if p.LastFundingAnn != nil {
-				prev = *p.LastFundingAnn
-			}
-			if err := st.AccruePaperSpotCarry(ctx, p.ID, prev, 0, p.LowStreak+1, lastBasis); err != nil {
-				return opened, exited, fmt.Errorf("cfd paper step: miss %d: %w", p.ID, err)
-			}
-			continue
-		}
-		base := p.EntryTs
-		if p.LastAccrueTs != nil {
-			base = *p.LastAccrueTs
-		}
-		days := now.Sub(base).Hours() / 24
-		if days < 0 {
-			days = 0
-		}
-		accruedAdd := r.NetAnnual / 100 / 365 * days * p.QtyUSD
-		streak := p.LowStreak
-		if r.NetAnnual < PaperCfdOpenNetPct {
-			streak++
-		} else {
-			streak = 0
-		}
-		if p.Status != "active" {
-			// demo 行只累积不自动退（同 spot 轨）
-			if err := st.AccruePaperSpotCarry(ctx, p.ID, r.FundingAnn, accruedAdd, p.LowStreak, lastBasis); err != nil {
-				return opened, exited, fmt.Errorf("cfd paper step: accrue demo %d: %w", p.ID, err)
-			}
-			continue
-		}
-		if streak >= paperExitStreakRounds || now.Sub(p.EntryTs).Hours()/24 >= paperMaxAgeDays {
-			reason := "normalized"
-			if streak < paperExitStreakRounds {
-				reason = "age_7d"
-			}
-			if err := st.ExitPaperSpotCarry(ctx, p.ID, reason, paperExitConvergence(p, lastBasis)); err != nil {
-				return opened, exited, fmt.Errorf("cfd paper step: exit %d: %w", p.ID, err)
-			}
-			exited++
-			continue
-		}
-		if err := st.AccruePaperSpotCarry(ctx, p.ID, r.FundingAnn, accruedAdd, streak, lastBasis); err != nil {
-			return opened, exited, fmt.Errorf("cfd paper step: accrue %d: %w", p.ID, err)
-		}
+	// ② 累积 + ③ 退出（仅 cfd 行；spot 轨行不归本函数）——D-474a 起拆至 paper_cfd_accrue.go。
+	n, err := accrueExitCfdPaper(ctx, st, accrable, rowByKey, now)
+	if err != nil {
+		return opened, exited, err
 	}
+	exited += n
 	return opened, exited, nil
 }

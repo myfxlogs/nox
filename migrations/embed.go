@@ -241,4 +241,6 @@ var (
 	SymdigSQL string
 	//go:embed 0138_venue_symbol_flags.sql
 	VenueSymbolFlagsSQL string
+	//go:embed 0139_paper_miss_streak.sql
+	PaperMissStreakSQL string
 )

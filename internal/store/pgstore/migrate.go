@@ -134,6 +134,7 @@ var migrationFiles = []struct {
 	{136, migrations.CexPrivateEventsSQL},              // D-450 S4：CEX 私有 WS 事件审计表
 	{137, migrations.SymdigSQL},                        // D-464 S1/S2：fin_symbol_aliases + fin_symdig_findings
 	{138, migrations.VenueSymbolFlagsSQL},              // D-463 S1/S2：fin_venue_symbol_flags + carry_graduations.flag_warn
+	{139, migrations.PaperMissStreakSQL},               // D-474a S4：paper_spot_carry.miss_streak 缺席独立计数
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

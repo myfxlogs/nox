@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"log"
 	"sort"
-	"strings"
 	"time"
 
 	"arb/internal/store/pgstore"
@@ -215,68 +214,12 @@ func (sc *CarryUniverseScanner) StepPaperMtmCarry(ctx context.Context, st PaperS
 		opened = append(opened, r.Venue+":"+r.Symbol)
 		entryStreak.Drop(p.key())
 	}
-	// ②累积 + ③退出（仅 cfd_cfd 行）
-	for _, p := range accrable {
-		if p.Structure != "cfd_cfd" {
-			continue
-		}
-		legs := strings.Split(p.Venue, "×")
-		if len(legs) != 2 {
-			continue
-		}
-		// 重算当前 net：long_a_short_b=swap_long[A]+swap_short[B]；short_a_long_b 对偶。
-		var lLeg, sLeg mtSwap
-		if p.Side == "long_a_short_b" {
-			lLeg, sLeg = longBook[p.Symbol+"|"+legs[0]], shortBook[p.Symbol+"|"+legs[1]]
-		} else {
-			sLeg, lLeg = shortBook[p.Symbol+"|"+legs[0]], longBook[p.Symbol+"|"+legs[1]]
-		}
-		lok := lLeg.symbol != "" && sLeg.symbol != "" && !lLeg.stale && !sLeg.stale
-		net, accruedAdd := 0.0, 0.0
-		var basis *float64
-		if lok {
-			net = lLeg.val + sLeg.val
-			basis, _ = mtmBasisFee(ctx, st, legsVenue(p, legs, true), lLeg.symbol, legsVenue(p, legs, false), sLeg.symbol, now)
-		}
-		base := p.EntryTs
-		if p.LastAccrueTs != nil {
-			base = *p.LastAccrueTs
-		}
-		days := now.Sub(base).Hours() / 24
-		if days < 0 {
-			days = 0
-		}
-		if lok {
-			accruedAdd = net / 100 / 365 * days * p.QtyUSD
-		}
-		streak := p.LowStreak
-		if !lok || net < paperMtmExitFloorPct {
-			streak++
-		} else {
-			streak = 0
-		}
-		if p.Status != "active" {
-			// demo 行只累积不自动退（出场=人工/业主域，同 spot/cfd 轨惯例）
-			if err := st.AccruePaperSpotCarry(ctx, p.ID, net, accruedAdd, p.LowStreak, basis); err != nil {
-				return opened, exited, fmt.Errorf("mtm paper step: accrue demo %d: %w", p.ID, err)
-			}
-			continue
-		}
-		if streak >= paperExitStreakRounds || now.Sub(p.EntryTs).Hours()/24 >= paperMaxAgeDays {
-			reason := "normalized"
-			if streak < paperExitStreakRounds {
-				reason = "age_7d"
-			}
-			if err := st.ExitPaperSpotCarry(ctx, p.ID, reason, paperExitConvergence(p, basis)); err != nil {
-				return opened, exited, fmt.Errorf("mtm paper step: exit %d: %w", p.ID, err)
-			}
-			exited++
-			continue
-		}
-		if err := st.AccruePaperSpotCarry(ctx, p.ID, net, accruedAdd, streak, basis); err != nil {
-			return opened, exited, fmt.Errorf("mtm paper step: accrue %d: %w", p.ID, err)
-		}
+	// ②累积 + ③退出（仅 cfd_cfd 行）——D-474a 起拆至 paper_mtm_accrue.go。
+	n, err := accrueExitMtmPaper(ctx, st, accrable, longBook, shortBook, now)
+	if err != nil {
+		return opened, exited, err
 	}
+	exited += n
 	return opened, exited, nil
 }
 

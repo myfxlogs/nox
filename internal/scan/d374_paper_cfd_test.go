@@ -8,6 +8,8 @@ import (
 	"math"
 	"testing"
 	"time"
+
+	"arb/internal/fact"
 )
 
 // d374Row 构造 cfd 结构 UniverseRow（note 默认 clean 空串）。
@@ -72,8 +74,8 @@ func TestD374_CfdOpen_Rejected(t *testing.T) {
 	}
 }
 
-// TestD374_CfdExit_MissStreak 锚B4：行从 res.Rows 消失两轮 → streak 1→2 → normalized 退出
-// （行在=信号在，消失=信号死；与 spot 轨 skip-on-miss 不同）。
+// TestD374_CfdExit_MissStreak 锚B4（D-474a S4 改写）：行从 res.Rows 消失 → miss_streak
+// 独立计数（low_streak 不受缺席污染），连缺 3 轮 → data_lost 退出（不混入 normalized）。
 func TestD374_CfdExit_MissStreak(t *testing.T) {
 	s := d350Store(t)
 	ctx := context.Background()
@@ -81,25 +83,27 @@ func TestD374_CfdExit_MissStreak(t *testing.T) {
 	if _, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil); err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	// miss#1：streak=1 未达退出线，行仍 active
-	_, exited1, err := StepPaperCfdCarry(ctx, s, nil, time.Now(), d410Opts(), nil)
+	// miss#1/2：miss_streak 递增、low_streak 恒 0，行仍 active 不退
+	for i := 1; i <= 2; i++ {
+		_, exited, err := StepPaperCfdCarry(ctx, s, nil, time.Now(), d410Opts(), nil)
+		if err != nil {
+			t.Fatalf("miss%d: %v", i, err)
+		}
+		if exited != 0 {
+			t.Fatalf("锚B4: miss#%d want 0 exited, got %d", i, exited)
+		}
+		active, _ := s.ListActivePaperSpotCarry(ctx)
+		if len(active) != 1 || active[0].LowStreak != 0 || active[0].MissStreak != i {
+			t.Fatalf("锚B4: miss#%d want 1 active low=0 miss=%d, got %+v", i, i, active)
+		}
+	}
+	// miss#3：达连缺线 → data_lost
+	_, exited3, err := StepPaperCfdCarry(ctx, s, nil, time.Now(), d410Opts(), nil)
 	if err != nil {
-		t.Fatalf("miss1: %v", err)
+		t.Fatalf("miss3: %v", err)
 	}
-	if exited1 != 0 {
-		t.Fatalf("锚B4: miss#1 want 0 exited, got %d", exited1)
-	}
-	active, _ := s.ListActivePaperSpotCarry(ctx)
-	if len(active) != 1 || active[0].LowStreak != 1 {
-		t.Fatalf("锚B4: miss#1 want 1 active streak=1, got %+v", active)
-	}
-	// miss#2：streak=2 → normalized
-	_, exited2, err := StepPaperCfdCarry(ctx, s, nil, time.Now(), d410Opts(), nil)
-	if err != nil {
-		t.Fatalf("miss2: %v", err)
-	}
-	if exited2 != 1 {
-		t.Fatalf("锚B4: miss#2 want 1 exited, got %d", exited2)
+	if exited3 != 1 {
+		t.Fatalf("锚B4: miss#3 want 1 exited, got %d", exited3)
 	}
 	board, err := s.ListPaperSpotCarryBoard(ctx, 24*time.Hour)
 	if err != nil {
@@ -109,8 +113,8 @@ func TestD374_CfdExit_MissStreak(t *testing.T) {
 	for _, p := range board {
 		if p.Symbol == "SOL" && p.Status == "exited" {
 			found = true
-			if p.ExitReason != "normalized" {
-				t.Fatalf("锚B4: exit_reason = %q, want normalized", p.ExitReason)
+			if p.ExitReason != "data_lost" {
+				t.Fatalf("锚B4: exit_reason = %q, want data_lost", p.ExitReason)
 			}
 		}
 	}
@@ -124,15 +128,28 @@ func TestD374_CfdExit_MissStreak(t *testing.T) {
 func TestD374_CfdAccrual(t *testing.T) {
 	s := d350Store(t)
 	ctx := context.Background()
+	now := time.Now()
 	rows := []UniverseRow{d374Row("SOL", "277842155", "binance", "long_cfd_short_perp", 10.95, "")}
-	if _, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil); err != nil {
+	// D-474a S1：结算对齐累积需双腿事实面——cex funding 边界+MT swap 边界+符号映射。
+	seedUni(t, s, "binance", "SOL", "TRADING", "T3", 72*time.Hour, 11.1)
+	seedSettleFacts(t, s, "binance", "SOL", now)
+	if _, err := s.Pool().Exec(ctx, `INSERT INTO broker_symbol_map (venue, broker_symbol, canonical, is_primary)
+		VALUES ('277842155','SOLUSD','SOL',true) ON CONFLICT DO NOTHING`); err != nil {
+		t.Fatalf("seed symbol map: %v", err)
+	}
+	if err := s.InsertFacts(ctx, []fact.Fact{
+		{Kind: "swap_long", Venue: "277842155", Symbol: "SOLUSD", Value: 0, Ts: now}, // swap-free 腿=0
+	}); err != nil {
+		t.Fatalf("seed swap facts: %v", err)
+	}
+	if _, _, err := StepPaperCfdCarry(ctx, s, rows, now, d410Opts(), nil); err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	// 回拨 last_accrue_ts 24h → 本轮恰 1 天
+	// 回拨 last_accrue_ts 24h → 本轮窗 (now−24h, now] 恰 3 个 8h 界
 	if _, err := s.Pool().Exec(ctx, `UPDATE paper_spot_carry SET last_accrue_ts = now() - interval '24 hours'`); err != nil {
 		t.Fatalf("rewind: %v", err)
 	}
-	if _, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil); err != nil {
+	if _, _, err := StepPaperCfdCarry(ctx, s, rows, now, d410Opts(), nil); err != nil {
 		t.Fatalf("accrue round: %v", err)
 	}
 	active, _ := s.ListActivePaperSpotCarry(ctx)
@@ -140,7 +157,9 @@ func TestD374_CfdAccrual(t *testing.T) {
 		t.Fatalf("锚B5: want 1 active, got %d", len(active))
 	}
 	p := active[0]
-	want := 10.95 / 100 / 365 * 1.0 * p.QtyUSD // = 0.30（NetAnnual 已=净额，无 sideFactor）
+	// 结算对齐：24h 窗恰 3 个 8h funding 界 × 当期率 11.1%/yr；MT 腿 swap=0。
+	// funding 腿金额 = 11.1/100 × 1000 × 3/1095（每界占年化 8h/8760h）。
+	want := 11.1 / 100 * p.QtyUSD * (3 * 8.0 / 8760.0)
 	if math.Abs(p.AccruedUSD-want) > 1e-6 {
 		t.Fatalf("锚B5: accrued = %v, want %v", p.AccruedUSD, want)
 	}

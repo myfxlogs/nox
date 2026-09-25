@@ -32,7 +32,7 @@ type GraduationStore interface {
 //
 //	active：age≥GradMinAgeDays ∧ accrued>0 ∧ low_streak==0（在轨持续盈利），
 //	        收敛账=entry/last basis 现算（convergence_usd 列仅退出时写，active 不读列）；
-//	exited：exit_reason∈{normalized,age_7d} ∧ accrued>0 ∧ 持仓时长≥GradMinAgeDays ∧ 在 14d 窗口
+//	exited：exit_reason∈{normalized,age_7d,adverse}（D-474a 加 adverse 排 data_lost）∧ accrued>0 ∧ 持仓时长≥GradMinAgeDays ∧ 在 14d 窗口
 //	        （满龄正常退出且盈利=最强证据；promoted_demo/异常退出不算），收敛账=退出冻结列值。
 //
 // 缺账闸（D-468 §1 语义）：「该有而没有」=拒（est_fee NULL/exited 列 NULL/basis 缺）；
@@ -125,7 +125,9 @@ func graduationQualified(p pgstore.PaperSpotCarry, now time.Time) bool {
 		if p.ExitTs == nil {
 			return false
 		}
-		if p.ExitReason != "normalized" && p.ExitReason != "age_7d" {
+		// D-474a S3/S4：adverse 行保留毕业资格（净额仍正则逆向止血证据成立）；
+		// data_lost（失联截断）不在合格集=不得毕业。
+		if p.ExitReason != "normalized" && p.ExitReason != "age_7d" && p.ExitReason != "adverse" {
 			return false
 		}
 		if p.ExitTs.Before(now.Add(-gradWindowExited)) {

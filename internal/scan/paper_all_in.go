@@ -18,34 +18,6 @@ import (
 // XAssetMonitorRowNear 的 maxGap 同值 15min，心跳报价糊弄不了 freshness 的隔壁同族）。
 const paperCfdMonitorMaxAge = 15 * time.Minute
 
-// paperCexVenueSet venue→往返费率常量表的覆盖集（=universe-radar CEX 源集）。
-// 往返费率=2×cexFeeBps（开+平两笔，与 cfg.XAssetCexFeeBps 同源同值——migration 0128
-// 回填 CASE 常量与本表同值，耦合钉死；env 改值须同步两处，测试断言一致）。
-var paperCexVenueSet = map[string]bool{"binance": true, "okx": true, "gate": true, "mexc": true}
-
-// paperRoundTripFeeBps venue→往返费率（bps）：覆盖集内返回 2×cexFeeBps；覆盖集外
-// （含映射不出 cex 腿的组合串）→ ok=false（拒填行保持 NULL=可算不可毕业）。
-func paperRoundTripFeeBps(venue string, cexFeeBps float64) (float64, bool) {
-	v := venue
-	if i := strings.LastIndex(v, "×"); i >= 0 {
-		v = v[i+len("×"):] // cfd 行 venue=mt×cex 组合串，费用只在 cex 腿侧
-	}
-	if !paperCexVenueSet[v] {
-		return 0, false
-	}
-	return 2 * cexFeeBps, true
-}
-
-// paperEstFeeUSD 开仓记账往返费用：qty×rate/1e4（venue 未覆盖 → nil 拒填）。
-func paperEstFeeUSD(venue string, qtyUSD, cexFeeBps float64) *float64 {
-	rate, ok := paperRoundTripFeeBps(venue, cexFeeBps)
-	if !ok {
-		return nil
-	}
-	fee := qtyUSD * rate / 1e4
-	return &fee
-}
-
 // paperConvergenceUSD 收敛捕获=dir×(last−entry)×qty/1e4（basis 双 NULL→nil 诚实缺）。
 func paperConvergenceUSD(dir float64, entry, last *float64, qtyUSD float64) *float64 {
 	if entry == nil || last == nil {
@@ -95,7 +67,7 @@ func netAllInUSD(accrued float64, estFee, convergence *float64) float64 {
 // insertCfdPaper cfd 纸面开仓（保底段与 top-N 段共用）：venue=mt×cex 组合串、
 // est_round_trip_fee 开仓记账（venue 未覆盖→NULL 拒填）、entry/last_basis 接 monitor 面
 // （XAssetMonitorRowNear ts<=entry_ts 谓词复用 D-404 R1 冻结锚同源；缺席→NULL 诚实缺）。
-func insertCfdPaper(ctx context.Context, st PaperStore, r UniverseRow, mtVenue, venueCombo string, now time.Time, cexFeeBps float64) error {
+func insertCfdPaper(ctx context.Context, st PaperStore, r UniverseRow, mtVenue, venueCombo string, now time.Time) error {
 	side := "short_perp"
 	if r.Structure == "short_cfd_long_perp" {
 		side = "long_perp"
@@ -105,15 +77,19 @@ func insertCfdPaper(ctx context.Context, st PaperStore, r UniverseRow, mtVenue, 
 		Venue: venueCombo, Symbol: r.Canonical, Side: side,
 		EntryFundingAnn: r.FundingAnn, QtyUSD: PaperQtyUSD,
 		Structure: r.Structure, MtVenue: &mv,
-		EstRoundTripFeeUSD: paperEstFeeUSD(venueCombo, PaperQtyUSD, cexFeeBps),
+		Note: "MT佣金未计（无常数实值）", // D-474a S2：分腿真费佣金项缺省注记
 	}
 	// D-423：monitor 三元组——universe venue 裸名映射 venue 键（cex→+:perp，mt→+:mt5）。
+	var spread *float64
 	cexVenue, mtVenueKey := monitorVenueKeys(r.CexVenue, mtVenue)
 	if eb, ok, err := st.XAssetMonitorRowNear(ctx, paperCfdPairKey(r.Canonical), cexVenue, mtVenueKey, now, paperCfdMonitorMaxAge); err != nil {
 		return fmt.Errorf("monitor entry basis: %w", err)
 	} else if ok {
 		p.EntryBasisBps, p.LastBasisBps = &eb, &eb
+		spread = &eb // D-474a S2：MT 腿费用=monitor 簿实算点差（同一行值）
 	}
+	// D-474a S2：cex 往返 2 笔 + MT 腿簿实算点差往返 + 佣金常数；簿缺→NULL 缺账。
+	p.EstRoundTripFeeUSD = paperCfdFeeUSD(r.CexVenue, PaperQtyUSD, spread)
 	return st.InsertPaperSpotCarry(ctx, p)
 }
 

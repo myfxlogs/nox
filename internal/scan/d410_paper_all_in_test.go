@@ -14,7 +14,7 @@ import (
 
 // d410Opts cfd 轨装配参数（缺省值同 wire：feeBps=5.0 与 cfg.XAssetCexFeeBps 缺省同源）。
 func d410Opts() PaperCfdOpts {
-	return PaperCfdOpts{CexFeeBps: 5.0, AuthorizedMaxActive: 8, ReopenCooldown: 24 * time.Hour}
+	return PaperCfdOpts{AuthorizedMaxActive: 8, ReopenCooldown: 24 * time.Hour}
 }
 
 // d410Store DSN 库+本票涉及表清空（alerts/xasset_allow_combos/fin_xasset_monitor 不在
@@ -104,7 +104,8 @@ func TestD410_SpotOpenFeeAndExitConvergence(t *testing.T) {
 		t.Fatalf("seed uni: %v", err)
 	}
 	es := eligibleStreak("binance|D410USDT")
-	opened, _, err := StepPaperSpotCarry(ctx, s, es, time.Now(), 5.0, nil)
+	seedSettleFacts(t, s, "binance", "D410USDT", time.Now()) // D-474a S1：结算事实面
+	opened, _, err := StepPaperSpotCarry(ctx, s, es, time.Now(), nil)
 	if err != nil || len(opened) != 1 {
 		t.Fatalf("open: %v opened=%v", err, opened)
 	}
@@ -113,8 +114,9 @@ func TestD410_SpotOpenFeeAndExitConvergence(t *testing.T) {
 		t.Fatalf("want 1 active, got %d", len(active))
 	}
 	p := active[0]
-	if p.EstRoundTripFeeUSD == nil || math.Abs(*p.EstRoundTripFeeUSD-1.0) > 1e-9 {
-		t.Fatalf("est_fee want 1.0（1000×10bps/1e4），got %v", p.EstRoundTripFeeUSD)
+	// D-474a S2 分腿真费：binance spot 2×10bps + perp 2×4.5bps = 29bps × $1000 = $2.9
+	if p.EstRoundTripFeeUSD == nil || math.Abs(*p.EstRoundTripFeeUSD-2.9) > 1e-9 {
+		t.Fatalf("est_fee want 2.9（1000×29bps/1e4 分腿真费），got %v", p.EstRoundTripFeeUSD)
 	}
 	if p.EntryBasisBps == nil || *p.EntryBasisBps != 10.0 {
 		t.Fatalf("entry_basis want 10, got %v", p.EntryBasisBps)
@@ -125,7 +127,7 @@ func TestD410_SpotOpenFeeAndExitConvergence(t *testing.T) {
 		t.Fatalf("update uni: %v", err)
 	}
 	for i := 0; i < 2; i++ {
-		if _, _, err := StepPaperSpotCarry(ctx, s, NewEntryStreak(), time.Now(), 5.0, nil); err != nil {
+		if _, _, err := StepPaperSpotCarry(ctx, s, NewEntryStreak(), time.Now(), nil); err != nil {
 			t.Fatalf("step %d: %v", i, err)
 		}
 	}
@@ -160,8 +162,9 @@ func TestD410_CfdMonitorBasis(t *testing.T) {
 	if p.EntryBasisBps == nil || *p.EntryBasisBps != 12.0 {
 		t.Fatalf("entry_basis want 12（monitor 面），got %v", p.EntryBasisBps)
 	}
-	if p.EstRoundTripFeeUSD == nil || math.Abs(*p.EstRoundTripFeeUSD-1.0) > 1e-9 {
-		t.Fatalf("est_fee want 1.0（组合串取 cex 段 okx），got %v", p.EstRoundTripFeeUSD)
+	// D-474a S2 分腿真费：okx perp 2×5bps=$1.0 + MT 簿点差往返 2×1000×12bps/1e4=$2.4 → $3.4
+	if p.EstRoundTripFeeUSD == nil || math.Abs(*p.EstRoundTripFeeUSD-3.4) > 1e-9 {
+		t.Fatalf("est_fee want 3.4（okx 往返 1.0 + MT 簿实算 2.4），got %v", p.EstRoundTripFeeUSD)
 	}
 	// monitor 翻号到 −3 → 本轮 last_basis 更新
 	d410SeedMonitor(t, s, pair, time.Now(), -3.0)
@@ -175,11 +178,11 @@ func TestD410_CfdMonitorBasis(t *testing.T) {
 	if last != -3.0 {
 		t.Fatalf("last_basis want -3, got %v", last)
 	}
-	// 宇宙行缺席两轮 → miss 退出，冻结收敛=−1×(−3−12)=+15bps → +$1.5
-	for i := 0; i < 2; i++ {
+	// 宇宙行缺席三轮 → data_lost 退出（D-474a S4），冻结收敛=−1×(−3−12)=+15bps → +$1.5
+	for i := 0; i < 3; i++ {
 		if _, exited, err := StepPaperCfdCarry(ctx, s, nil, time.Now(), d410Opts(), nil); err != nil {
 			t.Fatalf("miss step %d: %v", i, err)
-		} else if i == 1 && exited != 1 {
+		} else if i == 2 && exited != 1 {
 			t.Fatalf("want exited=1, got %d", exited)
 		}
 	}
@@ -239,11 +242,11 @@ func TestD410_GuaranteedFlap(t *testing.T) {
 	ctx := context.Background()
 	d410SeedCombo(t, s, "D410FUSD", "3001157:mt5", "D410FUSDT", "okx:perp", false)
 	rows := []UniverseRow{d374Row("D410F", "3001157", "okx", "long_cfd_short_perp", 2.0, "")}
-	// 开 → 退（miss×2）→ 下轮保底在冷却内不得重开
+	// 开 → 退（miss×3 → data_lost，D-474a S4 连缺阈值）→ 下轮保底在冷却内不得重开
 	if _, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil); err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 3; i++ {
 		if _, _, err := StepPaperCfdCarry(ctx, s, nil, time.Now(), d410Opts(), nil); err != nil {
 			t.Fatalf("exit %d: %v", i, err)
 		}
@@ -327,24 +330,6 @@ func TestD410_NullColumns(t *testing.T) {
 	p.ExitReason = "normalized"
 	if graduationQualified(p, now) {
 		t.Fatal("est_fee NULL 行应拒毕业（可算不可毕业）")
-	}
-}
-
-// TestD410_FeeRateConsistency venue 常量表与 cfg.XAssetCexFeeBps 同源同值
-// （migration 0128 回填 CASE 常量=2×5.0=10.0bps，耦合钉死注释在案）。
-func TestD410_FeeRateConsistency(t *testing.T) {
-	for _, v := range []string{"binance", "okx", "gate", "mexc"} {
-		rate, ok := paperRoundTripFeeBps(v, 5.0)
-		if !ok || rate != 10.0 {
-			t.Fatalf("venue %s want rate=10.0（2×XAssetCexFeeBps），got %v ok=%v", v, rate, ok)
-		}
-	}
-	// 组合串取 cex 段；未覆盖 venue → 拒填
-	if rate, ok := paperRoundTripFeeBps("3001157×okx", 5.0); !ok || rate != 10.0 {
-		t.Fatalf("组合串 cex 段 want 10.0, got %v ok=%v", rate, ok)
-	}
-	if _, ok := paperRoundTripFeeBps("kraken", 5.0); ok {
-		t.Fatal("未覆盖 venue 应拒填")
 	}
 }
 
