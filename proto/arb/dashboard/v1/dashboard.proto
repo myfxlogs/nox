@@ -200,6 +200,8 @@ service DashboardService {
   rpc SetVenueExposureCap(SetVenueExposureCapRequest) returns (SetVenueExposureCapResponse);
   // D-471 S3：xasset 组合白名单管理面（不再裸 SQL）+ 加行前风险预览。
   rpc ListXAssetAllowCombos(ListXAssetAllowCombosRequest) returns (ListXAssetAllowCombosResponse);
+  // D-478 S3：待入场区——enabled 组合−在持仓=挂单集，按序探闸给第一个拦路原因+安全档位。
+  rpc ListXAssetPendingEntries(ListXAssetPendingEntriesRequest) returns (ListXAssetPendingEntriesResponse);
   rpc UpsertXAssetAllowCombo(UpsertXAssetAllowComboRequest) returns (UpsertXAssetAllowComboResponse);
   rpc PreviewXAssetComboRisk(PreviewXAssetComboRiskRequest) returns (PreviewXAssetComboRiskResponse);
 
@@ -2407,6 +2409,20 @@ message XAssetAllowComboRow {
   optional double notional_usd = 9; bool enabled = 10; optional bool simulated = 11; string note = 12;
 }
 message ListXAssetAllowCombosResponse { repeated XAssetAllowComboRow rows = 1; }
+
+// D-478 S3：待入场区行（enabled 组合−在持仓=挂单集）。
+message ListXAssetPendingEntriesRequest {}
+message ListXAssetPendingEntriesResponse { repeated XAssetPendingEntryRow rows = 1; }
+message XAssetPendingEntryRow {
+  int64 combo_id = 1;
+  string combo_label = 2;   // canonical_buy(venue_buy)×canonical_sell(venue_sell)
+  string entry_kind = 3;    // XASSET_CARRY / FUNDING_HEDGE
+  string wait_reason = 4;   // 第一个拦路原因（闸 reason 原文）；全过=「条件就绪·等机会」
+  bool ready = 5;           // 七闸全过（等机会）
+  string tier = 6;          // 安全档位：ok / over / unset / missing_data
+  string tier_detail = 7;   // 档位明细（「超档: 名义$X>权益$Y×5.0」等）
+  bool tier_warn = 8;       // 任一腿超档
+}
 message UpsertXAssetAllowComboRequest {
   int64 id = 1;                            // 0=insert；>0=update caps/enabled/note（行锁）
   string canonical_buy = 2; string venue_buy = 3;
