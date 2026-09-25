@@ -158,10 +158,10 @@ func TestD478_TierBranches(t *testing.T) {
 		t.Fatalf("rows=%d err=%v", len(rows), err)
 	}
 	for _, r := range rows {
-		if r.ComboId == 902 && (r.Tier != "over" || !r.TierWarn || !stringsHas(r.TierDetail, "超档: 名义$1200 > 权益$100×0.5")) {
+		if r.ComboId == 902 && (r.Tier != "over" || !r.TierWarn || !stringsHas(r.TierDetail, "超出安全线：计划仓位 $1200 > 账户 gate 权益 $100 的 0.5 倍上限")) {
 			t.Fatalf("超档分支: tier=%s detail=%q warn=%v", r.Tier, r.TierDetail, r.TierWarn)
 		}
-		if r.ComboId == 903 && (r.Tier != "over" || !stringsHas(r.TierDetail, "名义$2000")) {
+		if r.ComboId == 903 && (r.Tier != "over" || !stringsHas(r.TierDetail, "计划仓位 $2000")) {
 			t.Fatalf("notional NULL→MaxGross 回退分支（2000>50 应 over），tier=%s detail=%q", r.Tier, r.TierDetail)
 		}
 	}
