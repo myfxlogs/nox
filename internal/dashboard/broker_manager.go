@@ -114,7 +114,6 @@ type BrokerManager struct {
 	// D-104 P2 U1：网关节点启动级 failover（main 从 config 注入，attach 时透传 adapter.SetGateway）。
 	MT5Gateway          string
 	MT5GatewayFallbacks []string
-	MT4Gateway          string
 
 	// AlertSink 断流分级告警下沉（D-104 P2 U2，MarginSink 同模式三点注入链）。
 	// main 注入 func(level, msg string) { _ = st.InsertAlert(ctx, nil, level, msg) }，nil 安全。
@@ -219,7 +218,6 @@ func (m *BrokerManager) stopAdapter(venue string) {
 
 	if r != nil {
 		r.stop()
-		m.reg.Unregister(venue + ":mt4")
 		m.reg.Unregister(venue + ":mt5")
 		m.commMu.Lock()
 		delete(m.commission, venue)

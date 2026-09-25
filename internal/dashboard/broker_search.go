@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/adapter/gen/mtapi/mt4"
 	"arb/internal/adapter/gen/mtapi/mt5"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
@@ -19,7 +18,6 @@ import (
 
 // mtapi 网关地址：与 internal/adapter 内现有适配器常量一致（MT4 实测 mt4grpc / MT5 mt5grpc3）。
 const (
-	mt4Gateway = "mt4grpc.mtapi.io:443"
 	mt5Gateway = "mt5grpc3.mtapi.io:443"
 )
 
@@ -32,8 +30,6 @@ func (s *Service) SearchBroker(ctx context.Context, req *connect.Request[v1.Sear
 	var companies []*v1.BrokerCompany
 	var err error
 	switch req.Msg.GetPlatform() {
-	case 0:
-		companies, err = searchMT4(ctx, company)
 	case 1:
 		companies, err = searchMT5(ctx, company)
 	default:
@@ -52,31 +48,6 @@ func dialMT(ctx context.Context, gateway string) (*grpc.ClientConn, error) {
 	return grpc.DialContext(ctx, gateway,
 		grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12})),
 	)
-}
-
-func searchMT4(ctx context.Context, company string) ([]*v1.BrokerCompany, error) {
-	conn, err := dialMT(ctx, mt4Gateway)
-	if err != nil {
-		return nil, fmt.Errorf("连接 MT4 网关失败: %w", err)
-	}
-	defer conn.Close()
-
-	reply, err := mt4.NewServiceClient(conn).Search(ctx, &mt4.SearchRequest{Company: company})
-	if err != nil {
-		return nil, fmt.Errorf("MT4 搜索失败: %w", err)
-	}
-	if e := reply.GetError(); e != nil {
-		return nil, fmt.Errorf("MT4 搜索错误: %s", e.GetMessage())
-	}
-	companies := make([]*v1.BrokerCompany, 0, len(reply.GetResult()))
-	for _, c := range reply.GetResult() {
-		servers := make([]*v1.BrokerServer, 0, len(c.GetResults()))
-		for _, r := range c.GetResults() {
-			servers = append(servers, &v1.BrokerServer{Name: r.GetName(), Access: firstAccess(r.GetAccess(), false)})
-		}
-		companies = append(companies, &v1.BrokerCompany{CompanyName: c.GetCompanyName(), Servers: servers})
-	}
-	return companies, nil
 }
 
 func searchMT5(ctx context.Context, company string) ([]*v1.BrokerCompany, error) {

@@ -12,7 +12,6 @@ import (
 	"arb/internal/safego"
 	"arb/internal/store/pgstore"
 
-	mt4pb "arb/internal/adapter/gen/mtapi/mt4"
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
 	"google.golang.org/grpc/metadata"
 )
@@ -20,77 +19,10 @@ import (
 // startAdapter 平台分发：构造适配器 → 连接 → 订阅 → 注册执行器/querier。
 func (m *BrokerManager) startAdapter(ctx context.Context, a *pgstore.BrokerAccount) error {
 	m.setCommission(a.Venue, a.CommissionBps)
-	if a.Platform == 0 {
-		return m.startMT4(ctx, a)
+	if a.Platform != 1 {
+		return fmt.Errorf("MT4 已退役：platform=%d 不再支持（仅 MT5）", a.Platform) // D-470
 	}
 	return m.startMT5(ctx, a)
-}
-
-// startMT4 启动 MT4 适配器并接入 QuoteBus / 执行器 / 对账。
-func (m *BrokerManager) startMT4(ctx context.Context, a *pgstore.BrokerAccount) error {
-	ad := adapter.NewMT4Adapter(a.Venue, a.Host, a.Server, int32(a.Port), a.User, a.Password)
-	// D-104 P2 U1：SetGateway 须在 Connect 前调（Connect dial 按序试 gateway+fallbacks）。
-	ad.SetGateway(m.MT4Gateway, nil)
-	// D-104 P2 U2：AlertSink 须在 Connect 前注入（quoteReconnectBackoff 封顶档读此字段）。
-	ad.AlertSink = m.AlertSink
-	if err := ad.Connect(ctx); err != nil {
-		return fmt.Errorf("mt4 connect: %w", err)
-	}
-	fetchSymbols := func(ctx context.Context) ([]string, error) {
-		resp, err := ad.MT4Client().Symbols(tokenCtx(ctx, ad.Token()), &mt4pb.SymbolsRequest{Id: ad.Token()})
-		if err != nil {
-			return nil, err
-		}
-		if e := resp.GetError(); e != nil {
-			return nil, fmt.Errorf("mt4 symbols: %s", e.GetMessage())
-		}
-		return resp.GetResult(), nil
-	}
-	// MT4 无 GroupName，降级 group 为空（前端仅模糊搜索，无分组 chips）；也无合约规格 → symbolParams=nil
-	//（零信任：MT4 未知合约跳过校验，不做无依据的判断）。
-	fetchSymbolGroups := func(ctx context.Context) ([]SymbolGroup, error) {
-		names, err := fetchSymbols(ctx)
-		if err != nil {
-			return nil, err
-		}
-		out := make([]SymbolGroup, 0, len(names))
-		for _, s := range names {
-			out = append(out, SymbolGroup{Symbol: s})
-		}
-		return out, nil
-	}
-	symMap, symbols, blocked, err := m.symbolPlan(ctx, a.Venue, fetchSymbolGroups)
-	if err != nil || len(symMap) == 0 {
-		log.Printf("[broker] %s symbol plan: %v", a.Venue, err)
-		symMap, symbols = identityMap(defaultSymbols)
-		blocked = nil
-	}
-	ad.SetSymbolMap(symMap)             // 全量（含 blocked 行）——native/variant fact 仍需（D-383 A2.3）
-	ad.SetCanonicalEmitBlocked(blocked) // D-383 A2.3：canonical 标签发射抑制集
-	ch, cancel := ad.Subscribe(symbols)
-	safego.Go("broker_manager_adapters:mt4-quote-pump", func() {
-		for q := range ch {
-			m.qbus.Publish(q)
-		}
-	})
-	m.reg.Register(exec.NewMT4Executor(a.Venue, ad.Token(), ad.TradingClient()))
-	q := reconcile.NewMT4Querier(a.Venue, ad.Token(), ad.MT4Client())
-
-	r := &running{
-		stop:             func() { cancel(); ad.Stop() },
-		querier:          q,
-		histQuerier:      reconcile.NewMT4OrderHistoryQuerier(a.Venue, ad.Token(), ad.MT4Client()), // D-416
-		symbols:          fetchSymbols,
-		symbolGroups:     fetchSymbolGroups,
-		setSymMap:        ad.SetSymbolMap,
-		setEmitBlocked:   ad.SetCanonicalEmitBlocked,
-		resubscribe:      ad.Resubscribe,
-		swap:             func(ctx context.Context) ([]fact.Fact, error) { return ad.SwapFacts(ctx, m.qbus) },
-		orderHistoryScan: mt4OrderHistoryScan(ad.MT4Client(), ad.Token()), // D-181 S1
-	}
-	m.attach(a.Venue, r)
-	log.Printf("[broker] %s (MT4) ready", a.Venue)
-	return nil
 }
 
 // SetMarginReservePct D-415：注入动态 MT5 executor 资金预检安全垫（cfg.MarginReservePct）。

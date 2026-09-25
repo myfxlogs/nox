@@ -1,5 +1,5 @@
 // D-181 S1：BackfillSwapHistory RPC——手动回溯 venue swap 历史→facts（src=order_history）。
-// 复用 BrokerManager 已连接的 MT5/MT4 adapter，通过 running.orderHistoryScan 闭包拉历史单。
+// 复用 BrokerManager 已连接的 MT5 adapter，通过 running.orderHistoryScan 闭包拉历史单。
 // RPC handler 在 service_backfill.go（拆分保 ≤300 行）。
 package dashboard
 
@@ -9,7 +9,6 @@ import (
 	"sort"
 	"time"
 
-	"arb/internal/adapter/gen/mtapi/mt4"
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
 	"arb/internal/fact"
 
@@ -108,60 +107,6 @@ func mt5OrderHistoryScan(client mt5pb.MT5Client, token string) orderHistoryScan 
 				Commission:  ord.GetCommission(),
 				Profit:      ord.GetProfit(),
 				OrderTicket: ord.GetTicket(),
-				ClosePrice:  ord.GetClosePrice(),
-			})
-		}
-		return all, nil
-	}
-}
-
-// mt4OrderHistoryScan 构造 MT4 全量扫描闭包（D-181 S1，无分页）。
-func mt4OrderHistoryScan(client mt4.MT4Client, token string) orderHistoryScan {
-	return func(ctx context.Context, from, to time.Time) ([]HistorySwapOrder, error) {
-		ctx = metadata.AppendToOutgoingContext(ctx, "id", token)
-		resp, err := client.OrderHistory(ctx, &mt4.OrderHistoryRequest{
-			Id:   token,
-			From: from.Format("2006-01-02T15:04:05"),
-			To:   to.Format("2006-01-02T15:04:05"),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("mt4 order history: %w", err)
-		}
-		if e := resp.GetError(); e != nil {
-			return nil, fmt.Errorf("mt4 order history: %s", e.GetMessage())
-		}
-		var all []HistorySwapOrder
-		for _, ord := range resp.GetResult() {
-			// D-427 I4：OrderType 白名单 fail-closed（Op_Balance/Op_Credit/未知跳过）。
-			switch ord.GetType() {
-			case mt4.Op_Op_Buy, mt4.Op_Op_Sell, mt4.Op_Op_BuyLimit,
-				mt4.Op_Op_SellLimit, mt4.Op_Op_BuyStop, mt4.Op_Op_SellStop:
-			default:
-				continue
-			}
-			closeTS := ord.GetCloseTime()
-			if closeTS == nil {
-				continue
-			}
-			openTS := ord.GetOpenTime()
-			if openTS == nil {
-				continue
-			}
-			side := "BUY"
-			if ord.GetType() == mt4.Op_Op_Sell {
-				side = "SELL"
-			}
-			all = append(all, HistorySwapOrder{
-				Symbol:      ord.GetSymbol(),
-				Side:        side,
-				Swap:        ord.GetSwap(),
-				Lots:        ord.GetLots(),
-				CloseLots:   ord.GetLots(), // MT4 无 CloseLots
-				OpenTime:    openTS.AsTime(),
-				CloseTime:   closeTS.AsTime(),
-				Commission:  ord.GetCommission(),
-				Profit:      ord.GetProfit(),
-				OrderTicket: int64(ord.GetTicket()),
 				ClosePrice:  ord.GetClosePrice(),
 			})
 		}

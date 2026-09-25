@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	mt4pb "arb/internal/adapter/gen/mtapi/mt4"
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
 
 	"google.golang.org/grpc"
@@ -153,16 +152,13 @@ func pingSortEndpoints(eps []endpoint, pingFn func(endpoint) (int32, error)) []e
 }
 
 // pingSortViaGateway 通过 mtapi 网关 PingHost 对端点做延迟预排序（D-142 ①）。
-// platform=0 MT4 走 mt4Gateway / 1 MT5 走 mt5Gateway。临时拨号即查即断（同 dialMT 模式）。
+// MT5 走 mt5Gateway（D-470：MT4 已退役，platform 仅认 1）。临时拨号即查即断（同 dialMT 模式）。
 // 网关不可达或全失败 → 返回原顺序（探测是优化不是依赖）。
 func pingSortViaGateway(ctx context.Context, platform int32, eps []endpoint) []endpoint {
 	if len(eps) <= 1 {
 		return eps
 	}
 	gateway := mt5Gateway
-	if platform == 0 {
-		gateway = mt4Gateway
-	}
 	conn, err := dialMT(ctx, gateway)
 	if err != nil {
 		log.Printf("[broker] ping dial %s: %v (skip pre-sort)", gateway, err)
@@ -179,20 +175,6 @@ func pingSortViaGateway(ctx context.Context, platform int32, eps []endpoint) []e
 // newPingFn 构造 PingHost 探测闭包（单端点 3s 超时）。nil = 未知 platform。
 func newPingFn(platform int32, conn *grpc.ClientConn) func(endpoint) (int32, error) {
 	switch platform {
-	case 0:
-		c := mt4pb.NewServiceClient(conn)
-		return func(ep endpoint) (int32, error) {
-			pctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			defer cancel()
-			reply, err := c.PingHost(pctx, &mt4pb.PingHostRequest{Host: ep.host, Port: ep.port})
-			if err != nil {
-				return 0, err
-			}
-			if e := reply.GetError(); e != nil {
-				return 0, fmt.Errorf("ping: %s", e.GetMessage())
-			}
-			return reply.GetResult(), nil
-		}
 	case 1:
 		c := mt5pb.NewServiceClient(conn)
 		return func(ep endpoint) (int32, error) {
