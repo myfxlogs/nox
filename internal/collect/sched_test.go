@@ -119,3 +119,37 @@ func TestSchedulerKickNonBlocking(t *testing.T) {
 		t.Errorf("polls = %d, want 0（未 Run 不轮询）", n)
 	}
 }
+
+// TestSchedulerAfterRun D-469c S3：poll+sink 成功后按源名回调；poll 失败不回调。
+func TestSchedulerAfterRun(t *testing.T) {
+	ok := &kickCollector{ch: make(chan struct{}, 4)}
+	fail := &failCollector{}
+	var got []string
+	s := &Scheduler{
+		Sources: []Named{
+			{Name: "mt_swap", Interval: time.Hour, Collector: ok},
+			{Name: "broken", Interval: time.Hour, Collector: fail},
+		},
+		Sink:     func(context.Context, []fact.Fact) error { return nil },
+		AfterRun: func(name string) { got = append(got, name) },
+	}
+	if err := s.pollOnce(context.Background(), s.Sources[0]); err != nil {
+		t.Fatalf("pollOnce ok: %v", err)
+	}
+	if len(got) != 1 || got[0] != "mt_swap" {
+		t.Fatalf("AfterRun got %v, want [mt_swap]", got)
+	}
+	if err := s.pollOnce(context.Background(), s.Sources[1]); err == nil {
+		t.Fatal("pollOnce fail should return error")
+	}
+	if len(got) != 1 {
+		t.Fatalf("AfterRun fired on failed poll: %v", got)
+	}
+}
+
+type failCollector struct{}
+
+func (c *failCollector) Kind() string { return "fail_test" }
+func (c *failCollector) Poll(context.Context) ([]fact.Fact, error) {
+	return nil, context.DeadlineExceeded
+}

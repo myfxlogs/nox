@@ -28,10 +28,13 @@ type Named struct {
 
 // Scheduler 每源一个 goroutine：独立间隔 + 抖动 + 重试退避。
 // 单源故障不影响其他源。Run 阻塞至 ctx 取消。
+// AfterRun 只挂成功路径——失败轮无新 facts，kick 无意义。
 type Scheduler struct {
 	Sources     []Named
 	Sink        Sink
 	PollTimeout time.Duration
+	// AfterRun D-469c S3：poll+sink 全成功后按源名回调（nil=不调；装配=facts 消费方 kick）。
+	AfterRun func(name string)
 
 	kickMu sync.Mutex
 	kicks  map[string]chan struct{} // name → kick 通道（缓冲 1，D-060 F2）
@@ -155,6 +158,9 @@ func (s *Scheduler) pollOnce(ctx context.Context, src Named) error {
 	}
 	if err := s.Sink(ctx, fs); err != nil {
 		return fmt.Errorf("sink: %w", err)
+	}
+	if s.AfterRun != nil {
+		s.AfterRun(src.Name) // D-469c S3：facts 写后通知（成功路径才发）
 	}
 	return nil
 }
