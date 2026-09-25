@@ -16,6 +16,7 @@ import (
 // 与 Monitor 的区别：Monitor 按 expected_net_bps 判建议平仓；personal 按价格阈值报警。
 // 两种无关语义不并入同一结构体（P3），同包并列独立类型（设计文档 §4.1）。
 type PersonalMonitor struct {
+	kickTopic *bus.Topic[struct{}] // D-469b S3
 	bus       *bus.QuoteBus
 	store     *pgstore.Store
 	mu        sync.Mutex
@@ -116,13 +117,27 @@ func (m *PersonalMonitor) loadPositions(ctx context.Context) error {
 	return nil
 }
 
+// SetKickTopic D-469b S3：positions 表变更事件订阅源（nil=纯 5min ticker 兜底）。
+func (m *PersonalMonitor) SetKickTopic(t *bus.Topic[struct{}]) { m.kickTopic = t }
+
 func (m *PersonalMonitor) refreshLoop(ctx context.Context) {
-	ticker := time.NewTicker(30 * time.Second)
+	// D-469b S3：持仓变更事件主路+5min 自愈兜底。
+	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
+	var kickCh <-chan struct{}
+	var cancelSub func()
+	if m.kickTopic != nil {
+		kickCh, cancelSub = m.kickTopic.Subscribe()
+		defer cancelSub()
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-kickCh:
+			if err := m.loadPositions(ctx); err != nil {
+				log.Printf("[personal-monitor] refresh: %v", err)
+			}
 		case <-ticker.C:
 			if err := m.loadPositions(ctx); err != nil {
 				log.Printf("[personal-monitor] refresh: %v", err)
