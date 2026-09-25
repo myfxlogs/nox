@@ -100,9 +100,9 @@ func computeCurrentBps(pb *v1.Position, openLegs []pgstore.PositionLeg, qbus *bu
 	if buyLeg == nil || sellLeg == nil {
 		return 0, false
 	}
-	// 取当前报价
-	qBuy, okBuy := qbus.Latest(canonical, buyLeg.Venue)
-	qSell, okSell := qbus.Latest(canonical, sellLeg.Venue)
+	// 取当前报价（D-481：CEX 腿原生 symbol 归一键优先——qbus 键=采集键非 oppID canonical）
+	qBuy, okBuy := qbus.LatestLeg(canonical, buyLeg.Symbol, buyLeg.Venue)
+	qSell, okSell := qbus.LatestLeg(canonical, sellLeg.Symbol, sellLeg.Venue)
 	if !okBuy || !okSell {
 		return 0, false
 	}

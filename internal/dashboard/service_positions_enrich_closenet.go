@@ -8,6 +8,7 @@ import (
 	"log"
 	"time"
 
+	"arb/internal/bus"
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 	"arb/internal/notional"
 	"arb/internal/store/pgstore"
@@ -34,18 +35,11 @@ func (s *Service) closeNowNet(ctx context.Context, pb *v1.Position, openLegs []p
 		if s.qbus == nil {
 			return 0, 0, false // CEX 腿缺报价源→整列 NULL
 		}
-		// D-480 R1：qbus 键=venue 原生 symbol 归一（采集器产出权威键，okx XAU-USDT-SWAP→XAUUSDT），
-		// 非 oppID canonical（mt×cex 型 canonical=XAU 永不命中）——原生键优先，canonical 兜底。
-		symKey := canonical
-		if nk := cexCanonical(l.Symbol); nk != "" {
-			symKey = nk
-		}
-		q, ok := s.qbus.Latest(symKey, l.Venue)
-		if !ok && symKey != canonical {
-			q, ok = s.qbus.Latest(canonical, l.Venue)
-		}
+		// D-480 R1→D-481：qbus 键=venue 原生 symbol 归一（采集器产出权威键，okx
+		// XAU-USDT-SWAP→XAUUSDT），非 oppID canonical（mt×cex 型永不命中）——LatestLeg 单源。
+		q, ok := s.qbus.LatestLeg(canonical, l.Symbol, l.Venue)
 		if !ok {
-			log.Printf("[enrich] pos=%d leg %s %s 报价缺（symKey=%s canonical=%s）→close_now_net NULL", pb.Id, l.Venue, l.Symbol, symKey, canonical)
+			log.Printf("[enrich] pos=%d leg %s %s 报价缺（nativeKey=%s canonical=%s）→close_now_net NULL", pb.Id, l.Venue, l.Symbol, bus.CexSymbolKey(l.Symbol), canonical)
 			return 0, 0, false // 报价缺→整列 NULL
 		}
 		if now.Sub(q.Time) <= s.freshTTL {

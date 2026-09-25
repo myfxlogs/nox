@@ -223,7 +223,7 @@ func legTickKey(venueKey, symbol string, canonicalOf func(venue, brokerSymbol st
 		}
 		return v, suffix, c, true
 	case "perp", "spot":
-		return v, suffix, cexCanonical(symbol), true
+		return v, suffix, bus.CexSymbolKey(symbol), true
 	}
 	return "", "", "", false
 }
@@ -240,7 +240,10 @@ func marginLegNotionalUSD(qbus *bus.QuoteBus, csOf func(string, string) (float64
 		return 0, false
 	}
 	price := l.Price
-	if q, ok := qbus.Latest(canonical, l.Venue); ok && q.Mid() > 0 {
+	// D-481：CEX 腿 qbus 键=原生 symbol 归一采集键（okx XAU-USDT-SWAP→XAUUSDT），
+	// oppID canonical（mt×cex 型=XAUUSD）错位永不命中——LatestLeg 原生键优先+canonical 兜底；
+	// MT 腿 canonical 直查（symbol map 发射即 canonical 本体）。
+	if q, ok := qbus.LatestLeg(canonical, l.Symbol, l.Venue); ok && q.Mid() > 0 {
 		price = q.Mid()
 	}
 	if price <= 0 {

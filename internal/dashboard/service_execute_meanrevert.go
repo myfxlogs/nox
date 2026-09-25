@@ -49,6 +49,9 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 	if maxNotional <= 0 {
 		maxNotional = 10000.0
 	}
+	// D-481 普查：本入口无腿原生 symbol——canonical 须即采集键：MT 通道 symbol map
+	// 发射键天然命中；若传 CEX venue，调用方须给采集键形 canonical（如 XAUUSDT），
+	// MT 形 canonical（XAUUSD）会 miss→quote unavailable（fail-closed 不猜价）。
 	qbuy, okBuy := s.qbus.Latest(canonical, venueBuy)
 	qsell, okSell := s.qbus.Latest(canonical, venueSell)
 	if !okBuy || !okSell {

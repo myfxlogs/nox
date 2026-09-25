@@ -55,6 +55,8 @@ func (s *Service) resolveLegs(found *pgstore.Opportunity, qty float64) ([]exec.L
 	if found.CanonicalSell != nil && *found.CanonicalSell != "" {
 		sellCanonical = *found.CanonicalSell
 	}
+	// D-481 普查：found.Canonical/CanonicalSell 即各侧 venue 采集键（detector 发射
+	// MtCanonical/CexCanonical 分腿命名空间），canonical 即采集键非错位点。
 	qbuy, okBuy := s.qbus.Latest(found.Canonical, found.VenueBuy)
 	qsell, okSell := s.qbus.Latest(sellCanonical, found.VenueSell)
 	if !okBuy || !okSell {

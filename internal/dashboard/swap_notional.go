@@ -12,6 +12,8 @@ import (
 // side="ask" 用买腿 ask 价，side="bid" 用卖腿 bid 价；fx 缺失 → ok=false fail-closed。
 // D-190：usdPerLot 逻辑迁移至 internal/usdnotional.PerLot（单一真相源，双拷贝清除）。
 func (s *Service) USDPerLotForLeg(canonical, venueKey, side string) (float64, bool) {
+	// D-481 普查：调用方为 swap 套利 MT 腿（trySwapArb），canonical=symbol map
+	// 发射键即采集键；CEX 腿传入须为采集键形 canonical。
 	q, ok := s.qbus.Latest(canonical, venueKey)
 	if !ok {
 		return 0, false
@@ -60,6 +62,7 @@ func (s *Service) AccountLeverage(venueKey string) (leverage float64, ok bool) {
 // usdPerLot 按计价币换算（JPY 对 ÷ USDJPY，USD 对直接乘）；fx 缺失 → ok=false fail-closed。
 // 返回 ok=false 表示报价/合约规格/fx 不可用。
 func (s *Service) SwapMinNotionalUSD(canonical, venueLong, venueShort string) (float64, bool) {
+	// D-481 普查：同 USDPerLotForLeg——swap 套利 MT 双腿，canonical=采集键，非错位点。
 	qLong, okL := s.qbus.Latest(canonical, venueLong)
 	qShort, okS := s.qbus.Latest(canonical, venueShort)
 	if !okL || !okS {
