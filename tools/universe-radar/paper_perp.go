@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"arb/internal/fact"
 	"arb/internal/scan"
 	"arb/internal/store/pgstore"
 )
@@ -23,6 +24,8 @@ const (
 	paperPerpSuspectAnn = 300.0
 	// paperPerpMaxActive perp×perp 活跃行硬上限（独立于 cfd 6/spot 12，各轨不互挤）。
 	paperPerpMaxActive = 8
+	// perpMissExitRounds D-474a S4：连续缺席轮次 → data_lost（与 scan 轨 paperMissExitRounds=3 同值口径）。
+	perpMissExitRounds = 3
 	// perpExitStreakRounds 连续低净/缺席轮数（与 internal/scan paperExitStreakRounds 同语义；
 	// 该常量 scan 包未导出 → 本地定义。radar 1h 轮 ×2 ≈ 2h，比 cfd 轨 8h 敏感——miss=数据死宁可早退）。
 	perpExitStreakRounds = 2
@@ -145,6 +148,7 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 		r := &pgstore.PaperSpotCarry{
 			Venue: p.ShortVenue + "×" + p.LongVenue, Symbol: p.Canon, Side: "perp_perp",
 			EntryFundingAnn: p.NetAnn, QtyUSD: scan.PaperQtyUSD, Structure: "perp_perp",
+			EstRoundTripFeeUSD: scan.PaperPerpPerpFeeUSD(p.ShortVenue, p.LongVenue, scan.PaperQtyUSD), // D-474a S2
 		}
 		if err := st.InsertPaperSpotCarry(ctx, r); err != nil {
 			if err == pgstore.ErrPaperExists {
@@ -155,7 +159,10 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 		opened = append(opened, p.Canon)
 	}
 	// ②③ 重算+退出（仅 perp_perp 行；spot/cfd 行各轨自理不触碰）
+	// D-474a S1：双腿各自结算边界逐期实率（共同前缀=min 水位）；S4：缺席不计时，
+	// 连缺 perpMissExitRounds 轮 → data_lost；S3：signedNet<0 → 当轮退 adverse。
 	fundByKey, symByVenueCanon := buildFundIndex(rows)
+	noFactWarn := 0
 	for _, p := range accrable {
 		if p.Structure != "perp_perp" {
 			continue
@@ -163,6 +170,10 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 		parts := strings.SplitN(p.Venue, "×", 2)
 		if len(parts) != 2 {
 			continue // 非法组合键防御（不猜方向）
+		}
+		base := p.EntryTs
+		if p.LastAccrueTs != nil {
+			base = *p.LastAccrueTs
 		}
 		shortVenue, longVenue := parts[0], parts[1]
 		shortSym := symByVenueCanon[shortVenue+"|"+p.Symbol]
@@ -173,9 +184,10 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 			if p.Status != "active" {
 				continue // demo 缺席：无数据不误记
 			}
-			// miss streak++（行缺席=信号死，零累积时钟照走）
-			if p.LowStreak+1 >= perpExitStreakRounds {
-				if err := st.ExitPaperSpotCarry(ctx, p.ID, "normalized", nil); err != nil {
+			// S4：缺席不计入 normalized streak；连缺 → data_lost
+			miss := p.MissStreak + 1
+			if miss >= perpMissExitRounds {
+				if err := st.ExitPaperSpotCarry(ctx, p.ID, "data_lost", nil); err != nil {
 					return opened, exited, fmt.Errorf("perp paper step: exit miss %d: %w", p.ID, err)
 				}
 				exited++
@@ -185,21 +197,29 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 			if p.LastFundingAnn != nil {
 				prev = *p.LastFundingAnn
 			}
-			if err := st.AccruePaperSpotCarry(ctx, p.ID, prev, 0, p.LowStreak+1, nil); err != nil {
+			if err := st.AccruePaperSpotCarry(ctx, p.ID, prev, 0, p.LowStreak, miss, nil, nil, false); err != nil {
 				return opened, exited, fmt.Errorf("perp paper step: miss %d: %w", p.ID, err)
 			}
 			continue
 		}
-		base := p.EntryTs
-		if p.LastAccrueTs != nil {
-			base = *p.LastAccrueTs
+		signedNet := *fs - *fl          // 方向入场固定，重算可转负（反噬即衰减，诚实记账）
+		recalc := p.LastAccrueTs == nil // D-474a S1 存量回迁哨兵
+		accruedAdd, settledTo, aok, aerr := scan.AccruePaperLegs(ctx, st, []scan.PaperLegAccrue{
+			{Kind: fact.KindFunding, Venue: shortVenue, Symbol: shortSym, SideFactor: +1, CurRate: *fs, CurOK: true},
+			{Kind: fact.KindFunding, Venue: longVenue, Symbol: longSym, SideFactor: -1, CurRate: *fl, CurOK: true},
+		}, base, now, p.QtyUSD)
+		if aerr != nil {
+			return opened, exited, fmt.Errorf("perp paper step: accrue legs %d: %w", p.ID, aerr)
 		}
-		days := now.Sub(base).Hours() / 24
-		if days < 0 {
-			days = 0
+		accrueTo := &settledTo
+		if !aok {
+			noFactWarn++
+			settledTo = base
+			accruedAdd = 0
+			if recalc {
+				accrueTo = nil // 「不全则留」：水位哨兵保留，下轮重试
+			}
 		}
-		signedNet := *fs - *fl // 方向入场固定，重算可转负（反噬即衰减，诚实记账）
-		accruedAdd := signedNet / 100 / 365 * days * p.QtyUSD
 		streak := p.LowStreak
 		if signedNet < divPct {
 			streak++
@@ -208,9 +228,17 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 		}
 		if p.Status != "active" {
 			// demo 行只累积不自动退（同 spot/cfd 轨）
-			if err := st.AccruePaperSpotCarry(ctx, p.ID, signedNet, accruedAdd, p.LowStreak, nil); err != nil {
+			if err := st.AccruePaperSpotCarry(ctx, p.ID, signedNet, accruedAdd, p.LowStreak, 0, nil, accrueTo, recalc); err != nil {
 				return opened, exited, fmt.Errorf("perp paper step: accrue demo %d: %w", p.ID, err)
 			}
+			continue
+		}
+		// D-474a S3：signedNet 翻负 → 当轮退 adverse（不等 streak）。
+		if signedNet < 0 {
+			if err := st.ExitPaperSpotCarry(ctx, p.ID, "adverse", nil); err != nil {
+				return opened, exited, fmt.Errorf("perp paper step: exit adverse %d: %w", p.ID, err)
+			}
+			exited++
 			continue
 		}
 		if streak >= perpExitStreakRounds {
@@ -227,9 +255,12 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 			exited++
 			continue
 		}
-		if err := st.AccruePaperSpotCarry(ctx, p.ID, signedNet, accruedAdd, streak, nil); err != nil {
+		if err := st.AccruePaperSpotCarry(ctx, p.ID, signedNet, accruedAdd, streak, 0, nil, accrueTo, recalc); err != nil {
 			return opened, exited, fmt.Errorf("perp paper step: accrue %d: %w", p.ID, err)
 		}
+	}
+	if noFactWarn > 0 {
+		fmt.Printf("[perp paper] 边界/率源缺 fail-closed 跳过 accrue: %d 行\n", noFactWarn)
 	}
 	return opened, exited, nil
 }
