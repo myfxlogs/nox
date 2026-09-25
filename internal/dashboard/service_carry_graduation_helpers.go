@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
@@ -175,4 +176,72 @@ func (s *Service) refreshXAssetSnapshots(ctx context.Context) error {
 	s.SetXAssetComboAllow(specs)
 	log.Printf("[whitelist] xasset fan-out: rows=%d dropped=%d（pipeline+手动链快照已刷新）", len(specs), dropped)
 	return nil
+}
+
+// approveNonCfd 非 cfd 结构授权分支（D-488 自 service_carry_graduation.go 拆出）：
+// spot_carry=组合写真金白名单（业主语义「授权即放行」；D-473 起 FUNDING_HEDGE 执行链全通，
+// 旧版只体检不写=假授权）；perp_perp 无组合闸=链路体检不写白名单（不越权）。
+func (s *Service) approveNonCfd(ctx context.Context, resp *v1.ApproveCarryGraduationResponse,
+	db graduationStore, g *v1.ApproveCarryGraduationRequest,
+	grad *pgstore.CarryGraduation, paper *pgstore.PaperSpotCarry, userNote string,
+) (*connect.Response[v1.ApproveCarryGraduationResponse], error) {
+	fail := func(format string, args ...any) (*connect.Response[v1.ApproveCarryGraduationResponse], error) {
+		resp.Ok = false
+		resp.Error = fmt.Sprintf(format, args...)
+		return connect.NewResponse(resp), nil
+	}
+	if grad.Structure == "spot_carry" {
+		// D-488：spot_carry 授权=组合进真金白名单（业主语义「授权即放行」；D-473 起
+		// FUNDING_HEDGE 执行链全通——旧版只体检不写白名单=假授权缺陷修复）。
+		// 方向定死=现货买×合约空（正 funding 收息形态）；canonical 双腿同值
+		//（engine FUNDING_HEDGE 闸 sellCanonical 回退 canonical 的匹配口径）。
+		venueSpot, venuePerp := grad.Venue+":spot", grad.Venue+":perp"
+		capWarns, capErr := s.exposureCapGate(ctx, []string{venueSpot, venuePerp}, g.MaxGrossUsd, g.NotionalUsd)
+		if capErr != "" {
+			return fail("%s", capErr)
+		}
+		if s.xassetReloader == nil {
+			return fail("重载器未接线（SetXAssetReloader 缺装配），fail-closed 拒绝授权")
+		}
+		combo := &pgstore.XAssetComboInsert{
+			CanonicalBuy: grad.Symbol, CanonicalSell: grad.Symbol,
+			VenueBuy: venueSpot, VenueSell: venuePerp,
+			MaxLongQty: g.MaxLongQty, MaxShortQty: g.MaxShortQty,
+			MaxGrossUSD: g.MaxGrossUsd, NotionalUSD: g.NotionalUsd,
+			Simulated: false,
+			Note:      "D-403毕业 paper#" + strconv.FormatInt(paper.ID, 10),
+		}
+		comboID, err := db.InsertXAssetAllowCombo(ctx, combo)
+		if err != nil {
+			if errors.Is(err, pgstore.ErrXAssetComboExists) {
+				return fail("已在白名单（唯一键撞 canonical×venue 对，无需重复授权）")
+			}
+			return fail("写白名单失败: %v", err)
+		}
+		resp.ComboId = &comboID
+		if err := s.xassetReloader.ReloadXAssetAllowCombos(ctx); err != nil {
+			return fail("白名单已写入但引擎热重载失败（重启后生效）: %v", err)
+		}
+		if err := s.refreshXAssetSnapshots(ctx); err != nil {
+			return fail("白名单已写入但 pipeline/手动链快照刷新失败（重启后生效）: %v", err)
+		}
+		gaps := append(venueGapsOf(venueSpot, venuePerp, s.allowVenuesNow(ctx)), capWarns...)
+		resp.VenueGaps = gaps
+		if err := db.UpdateCarryGraduationDecision(ctx, grad.ID, "approved", &comboID, gradNoteWithGaps(userNote, gaps)); err != nil {
+			return fail("落账失败: %v", err)
+		}
+		s.insertGraduationAlert(ctx, grad, "已授权", fmt.Sprintf("combo#%d %s %s×%s", comboID, grad.Symbol, venueSpot, venuePerp))
+		resp.Ok = true
+		return connect.NewResponse(resp), nil
+	}
+	// perp_perp：无组合白名单闸（PERP_FUNDING 走 venue/canonical 规则域），approve=链路体检不写白名单（不越权）。
+	gaps := s.graduationVenueGaps(ctx, grad)
+	resp.VenueGaps = gaps
+	resp.LinkReport = nonCfdLinkReport(grad.Structure, gaps)
+	if err := db.UpdateCarryGraduationDecision(ctx, grad.ID, "approved", nil, gradNoteWithGaps(userNote, gaps)); err != nil {
+		return fail("落账失败: %v", err)
+	}
+	s.insertGraduationAlert(ctx, grad, "已授权", "")
+	resp.Ok = true
+	return connect.NewResponse(resp), nil
 }

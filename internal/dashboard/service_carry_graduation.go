@@ -187,16 +187,8 @@ func (s *Service) ApproveCarryGraduation(ctx context.Context, req *connect.Reque
 	}
 
 	if !isCfdStructure(grad.Structure) {
-		// 非 cfd（perp_perp/spot_carry）：无组合白名单闸，approve=链路体检不写白名单（不越权）。
-		gaps := s.graduationVenueGaps(ctx, grad)
-		resp.VenueGaps = gaps
-		resp.LinkReport = nonCfdLinkReport(grad.Structure, gaps)
-		if err := db.UpdateCarryGraduationDecision(ctx, grad.ID, "approved", nil, gradNoteWithGaps(userNote, gaps)); err != nil {
-			return fail("落账失败: %v", err)
-		}
-		s.insertGraduationAlert(ctx, grad, "已授权", "")
-		resp.Ok = true
-		return connect.NewResponse(resp), nil
+		// 非 cfd 分支拆 helpers（D-488 起 spot_carry 也有组合闸——本文件行数治理）。
+		return s.approveNonCfd(ctx, resp, db, g, grad, paper, userNote)
 	}
 
 	// cfd 结构：mt_venue 必在（paper_cfd_carry 开仓即落列）

@@ -499,3 +499,45 @@ func TestD474b_ApproveMT4Reject(t *testing.T) {
 		t.Fatal("MT4 拒批禁写白名单")
 	}
 }
+
+// TestD488_Approve_SpotCarry_WritesCombo D-488：spot_carry 授权=组合进真金白名单
+// （venue_buy=同所:spot × venue_sell=同所:perp，canonical 双腿同值；venue gap 如实透出）。
+func TestD488_Approve_SpotCarry_WritesCombo(t *testing.T) {
+	fee, entryB, lastB := 0.5, 10.0, 12.0
+	f := &fakeGradDB{
+		grad: &pgstore.CarryGraduation{ID: 7, PaperID: 44, Venue: "binance", Symbol: "SKLUSDT", Structure: "spot_carry", Status: "pending"},
+		paper: &pgstore.PaperSpotCarry{ID: 44, Venue: "binance", Symbol: "SKLUSDT", Structure: "spot_carry",
+			Status: "active", AccruedUSD: 22.0, EntryTs: time.Now().Add(-6 * 24 * time.Hour),
+			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB},
+	}
+	reload := &fakeReloader{}
+	s := &Service{gradStore: f, xassetReloader: reload, xassetEnv: "real", allowVenuesSource: func(context.Context) (map[string]bool, error) {
+		return map[string]bool{"binance:perp": true}, nil // spot 腿未放行→gap 如实透出
+	}}
+	resp, err := s.ApproveCarryGraduation(context.Background(), connect.NewRequest(&v1.ApproveCarryGraduationRequest{GraduationId: 7, MaxLongQty: 10, MaxShortQty: 10, MaxGrossUsd: 500}))
+	if err != nil || !resp.Msg.Ok {
+		t.Fatalf("ok=%v err=%v errstr=%s", resp.Msg.Ok, err, resp.Msg.Error)
+	}
+	if f.combo == nil {
+		t.Fatal("spot_carry approve 应写组合白名单（业主语义：授权即放行）")
+	}
+	if f.combo.VenueBuy != "binance:spot" || f.combo.VenueSell != "binance:perp" {
+		t.Errorf("venue 对 = %s×%s, want binance:spot×binance:perp", f.combo.VenueBuy, f.combo.VenueSell)
+	}
+	if f.combo.CanonicalBuy != "SKLUSDT" || f.combo.CanonicalSell != "SKLUSDT" {
+		t.Errorf("canonical 对 = %s×%s, want SKLUSDT×SKLUSDT", f.combo.CanonicalBuy, f.combo.CanonicalSell)
+	}
+	if resp.Msg.ComboId == nil {
+		t.Error("combo_id 应回传")
+	}
+	if reload.calls == 0 {
+		t.Error("白名单写入后应热重载")
+	}
+	// gap 序：venue 缺口在前，D-475a 敞口闸未设 venue 如实透出在后。
+	if len(resp.Msg.VenueGaps) != 3 || resp.Msg.VenueGaps[0] != "binance:spot" {
+		t.Errorf("venue_gaps = %v, want [binance:spot cap未设×2]", resp.Msg.VenueGaps)
+	}
+	if f.decision != "approved" {
+		t.Errorf("落账 = %s, want approved", f.decision)
+	}
+}
