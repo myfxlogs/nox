@@ -19,7 +19,7 @@ import (
 )
 
 // MT5Adapter 通过 mtapi.io gRPC 网关连接 MT5 经纪商（§3.2）。
-// 与 MT4 严格隔离（独立 proto、独立生成代码、独立类）。
+// 与 MT4 严格隔离（独立 proto、独立生成代码、独立类；MT4 面已随 D-470 退役移除）。
 type MT5Adapter struct {
 	venue  string
 	host   string

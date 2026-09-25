@@ -97,28 +97,6 @@ func TestSwapUncoveredSummary_WP1(t *testing.T) {
 	})
 }
 
-func TestMT4SwapMode(t *testing.T) {
-	cases := []struct {
-		name      string
-		t, enable int32
-		long, srt float64
-		want      SwapMode
-	}{
-		{"停用+零 rates", 2, 0, 0, 0, SwapModeNone},
-		{"停用+非零 rates", 2, 0, 1, 0, SwapModeUncalibrated},
-		{"点数", 0, 1, 1, 1, SwapModeInPoints},
-		{"基准货币/手", 1, 1, 1, 1, SwapModePerLotCurrency},
-		{"保证金货币/手", 3, 1, 1, 1, SwapModePerLotCurrency},
-		{"年化%", 2, 1, 1, 1, SwapModeAnnualPct},
-		{"未知类型", 9, 1, 1, 1, SwapModeUncalibrated},
-	}
-	for _, c := range cases {
-		if got := mt4SwapMode(c.t, c.enable, c.long, c.srt); got != c.want {
-			t.Errorf("%s: mode = %v, want %v", c.name, got, c.want)
-		}
-	}
-}
-
 // TestMT5SwapMode9_InPointsNormalize D-092：mode 9（FxPro 扩展）标定为 InPoints 后，
 // 用 S1 真值手算断言归一化 bps。证据见 docs/油类SwapType9标定-施工提示词.md S1 表。
 // WTI: L=+5.50 S=-51.55 point=0.001 CS=1000 → point×CS=$1/点/手

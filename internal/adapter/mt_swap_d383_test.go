@@ -13,7 +13,6 @@ import (
 	"arb/internal/bus"
 	"arb/internal/fact"
 
-	mt4pb "arb/internal/adapter/gen/mtapi/mt4"
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
 )
 
@@ -122,33 +121,5 @@ func TestD383A4_ZeroPrimaryCanonicalDead(t *testing.T) {
 	}
 	if n := d325Count(fs, fact.KindSwapLong, "SYM1"); n != 1 {
 		t.Errorf("native swap_long SYM1 = %d 行, want 1（native 照发）", n)
-	}
-}
-
-// TestD383A7_MT4BlockedRowSkipped A7：MT4 无 native 双发——blocked 行整行跳过，
-// canonical 只由合格行供数。
-func TestD383A7_MT4BlockedRowSkipped(t *testing.T) {
-	q := bus.New()
-	now := time.Now()
-	q.Publish(bus.Quote{Symbol: "XAUUSD", Venue: "v4", VenueType: "mt4", Bid: 2400, Ask: 2400.1, Time: now})
-	ex := func(l, s float64) *mt4pb.SymbolInfoEx {
-		return &mt4pb.SymbolInfoEx{SwapType: 0, SwapEnable: 1, SwapLong: l, SwapShort: s, Point: 0.01, ContractSize: 100}
-	}
-	a := &MT4Adapter{venue: "v4", mt4: &fakeMT4Client{params: map[string]*mt4pb.SymbolParamsReply{
-		"GOLD":   {Result: &mt4pb.SymbolParams{Symbol: &mt4pb.SymbolInfo{Ex: ex(-1.413, 0.818)}}},
-		"GOLDM7": {Result: &mt4pb.SymbolParams{Symbol: &mt4pb.SymbolInfo{Ex: ex(0, 0)}}},
-	}}}
-	a.SetSymbolMap(map[string]string{"GOLD": "XAUUSD", "GOLDM7": "XAUUSD"})
-	a.SetCanonicalEmitBlocked(map[string]bool{"GOLDM7": true})
-
-	fs, err := a.SwapFacts(context.Background(), q)
-	if err != nil {
-		t.Fatalf("SwapFacts: %v", err)
-	}
-	if n := d325Count(fs, fact.KindSwapLong, "XAUUSD"); n != 1 {
-		t.Fatalf("canonical swap_long = %d 行, want 1（MT4 canonical 只由合格行供数）", n)
-	}
-	if n := d325Count(fs, fact.KindSwapLong, "GOLDM7"); n != 0 {
-		t.Errorf("GOLDM7 = %d 行, want 0（MT4 无 native，blocked 行整行跳过）", n)
 	}
 }

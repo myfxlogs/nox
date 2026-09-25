@@ -6,7 +6,6 @@
 //   - T3 SilentStreamNoAlert：完全静默（无帧）→ 不触发（传输问题归 Recv 路径，不误报）；
 //   - T4 Stage2SingleShot：死推持续 → 强制重连一次后不再自动重试 + persist warn；
 //     真帧恢复 → episode 清零可再告警；
-//   - T5 MT4同构锚：同 T1 逻辑 mt4pb 路径；
 //   - T6 WatchdogExitsOnCancel：ctx 取消 → 看门狗退出不泄漏（ch 关闭时序保证）。
 package adapter
 
@@ -20,10 +19,8 @@ import (
 	"testing"
 	"time"
 
-	mt4pb "arb/internal/adapter/gen/mtapi/mt4"
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 )
 
 // --- 测试辅助 ---
@@ -106,110 +103,6 @@ func realQuote5() *mt5pb.OnQuoteReply {
 	return &mt5pb.OnQuoteReply{Result: &mt5pb.Quote{Symbol: "XAUUSD", Bid: 2000, Ask: 2000.1}}
 }
 
-// --- MT4 fake（mt4pb 路径同构锚） ---
-
-// fakeMT4StreamClient 实现 MT4 报价流测试用到的 Subscriptions+Streams（同 fakeMT5Client 模式：
-// 内嵌接口，未覆盖方法调用 panic）。a.subs/a.streams 可同赋一个实例。
-type fakeMT4StreamClient struct {
-	mt4pb.MT4Client
-	mt4pb.SubscriptionsClient
-	mt4pb.StreamsClient
-	onQuoteMu      sync.Mutex
-	onQuoteCalls   int
-	onQuoteStreams []grpc.ServerStreamingClient[mt4pb.OnQuoteReply]
-	onQuoteIdx     int
-}
-
-func (f *fakeMT4StreamClient) Subscribe(_ context.Context, _ *mt4pb.SubscribeRequest, _ ...grpc.CallOption) (*mt4pb.SubscribeReply, error) {
-	return &mt4pb.SubscribeReply{}, nil
-}
-
-func (f *fakeMT4StreamClient) OnQuote(ctx context.Context, _ *mt4pb.OnQuoteRequest, _ ...grpc.CallOption) (grpc.ServerStreamingClient[mt4pb.OnQuoteReply], error) {
-	f.onQuoteMu.Lock()
-	f.onQuoteCalls++
-	var s grpc.ServerStreamingClient[mt4pb.OnQuoteReply]
-	if f.onQuoteIdx < len(f.onQuoteStreams) {
-		s = f.onQuoteStreams[f.onQuoteIdx]
-		f.onQuoteIdx++
-	}
-	f.onQuoteMu.Unlock()
-	if s != nil {
-		if fs, ok := s.(*fakeQuoteStream4); ok {
-			fs.ctx = ctx
-		}
-		return s, nil
-	}
-	return newFakeQuoteStream4(ctx, nil), nil
-}
-
-func (f *fakeMT4StreamClient) onQuoteCallsLoad() int {
-	f.onQuoteMu.Lock()
-	defer f.onQuoteMu.Unlock()
-	return f.onQuoteCalls
-}
-
-// fakeQuoteStream4 MT4 版可控 OnQuote 流（同 fakeQuoteStream 模式）。
-type fakeQuoteStream4 struct {
-	ctx    context.Context
-	frames chan *mt4pb.OnQuoteReply
-	hdr    metadata.MD
-	tr     metadata.MD
-}
-
-func newFakeQuoteStream4(ctx context.Context, frames chan *mt4pb.OnQuoteReply) *fakeQuoteStream4 {
-	if frames == nil {
-		frames = make(chan *mt4pb.OnQuoteReply, 4)
-	}
-	return &fakeQuoteStream4{ctx: ctx, frames: frames}
-}
-
-func (s *fakeQuoteStream4) Recv() (*mt4pb.OnQuoteReply, error) {
-	select {
-	case f, ok := <-s.frames:
-		if ok {
-			return f, nil
-		}
-	case <-s.ctx.Done():
-		return nil, s.ctx.Err()
-	}
-	<-s.ctx.Done()
-	return nil, s.ctx.Err()
-}
-
-func (s *fakeQuoteStream4) Header() (metadata.MD, error) { return s.hdr, nil }
-func (s *fakeQuoteStream4) Trailer() metadata.MD         { return s.tr }
-func (s *fakeQuoteStream4) CloseSend() error             { return nil }
-func (s *fakeQuoteStream4) Context() context.Context     { return s.ctx }
-func (s *fakeQuoteStream4) SendMsg(_ interface{}) error  { return nil }
-func (s *fakeQuoteStream4) RecvMsg(_ interface{}) error  { return nil }
-
-func feedMT4Frames(stop <-chan struct{}, frames chan<- *mt4pb.OnQuoteReply, mk func() *mt4pb.OnQuoteReply, period time.Duration) {
-	go func() {
-		t := time.NewTicker(period)
-		defer t.Stop()
-		for {
-			select {
-			case <-stop:
-				return
-			case <-t.C:
-				select {
-				case frames <- mk():
-				default:
-				}
-			}
-		}
-	}()
-}
-
-func newMT4QuoteTestAdapter(client *fakeMT4StreamClient) *MT4Adapter {
-	ctx, cancel := context.WithCancel(context.Background())
-	return &MT4Adapter{venue: "vq4", subs: client, streams: client, token: "tok", stopCtx: ctx, stopCancel: cancel}
-}
-
-// --- 单测 ---
-
-// TestZeroframe_HeartbeatsOnlyTriggersAlert T1：只吐 {} 心跳 → 过阈值 stage-1 warn，
-// 且 episode 去重（跨 stage-2 强制重连后仍只告警一次）。
 func TestZeroframe_HeartbeatsOnlyTriggersAlert(t *testing.T) {
 	defer withShortZeroFrame()()
 	restore := withShortQuoteBackoff(t, []time.Duration{1 * time.Millisecond, 1 * time.Millisecond, 1 * time.Millisecond})
@@ -366,46 +259,6 @@ func TestZeroframe_Stage2SingleShot(t *testing.T) {
 }
 
 // TestZeroframe_MT4HeartbeatsOnly T5：MT4 同构锚（同 T1 逻辑 mt4pb 路径）。
-func TestZeroframe_MT4HeartbeatsOnly(t *testing.T) {
-	defer withShortZeroFrame()()
-	restore := withShortQuoteBackoff(t, []time.Duration{1 * time.Millisecond, 1 * time.Millisecond, 1 * time.Millisecond})
-	defer restore()
-
-	client := &fakeMT4StreamClient{}
-	frames1 := make(chan *mt4pb.OnQuoteReply, 8)
-	client.onQuoteStreams = []grpc.ServerStreamingClient[mt4pb.OnQuoteReply]{
-		newFakeQuoteStream4(context.Background(), frames1),
-		newFakeQuoteStream4(context.Background(), nil),
-	}
-
-	stop := make(chan struct{})
-	defer close(stop)
-	feedMT4Frames(stop, frames1, func() *mt4pb.OnQuoteReply { return &mt4pb.OnQuoteReply{} }, 5*time.Millisecond)
-
-	a := newMT4QuoteTestAdapter(client)
-	rec := &alertRec{}
-	a.AlertSink = rec.sink
-	ch, cancel := a.Subscribe([]string{"XAUUSD"})
-	defer func() {
-		cancel()
-		select {
-		case _, ok := <-ch:
-			_ = ok
-		case <-time.After(3 * time.Second):
-			t.Errorf("mt4 ch not closed within 3s after cancel")
-		}
-	}()
-
-	if !waitFor(t, 3*time.Second, func() bool { return rec.count("zeroframe suspect") >= 1 }) {
-		t.Fatalf("mt4 stage-1 alert not fired; msgs=%v", rec.msgs)
-	}
-	if !strings.Contains(rec.msgs[0], "mt4:vq4") {
-		t.Errorf("alert msg missing mt4 venue prefix; got %q", rec.msgs[0])
-	}
-}
-
-// TestZeroframe_WatchdogExitsOnCancel T6：ctx 取消 → 看门狗退出不泄漏 goroutine。
-// runQuoteStream 收口序=zfDone→close(ch)：ch 关闭即看门狗已退出（时序保证，非 goroutine 计数）。
 func TestZeroframe_WatchdogExitsOnCancel(t *testing.T) {
 	defer withShortZeroFrame()()
 	restore := withShortQuoteBackoff(t, []time.Duration{1 * time.Millisecond, 1 * time.Millisecond, 1 * time.Millisecond})

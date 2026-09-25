@@ -25,18 +25,6 @@ func (a *MT5Adapter) SymbolMap() map[string]string {
 	return nil
 }
 
-// SymbolMap MT4 版（同上）。
-func (a *MT4Adapter) SymbolMap() map[string]string {
-	if m := a.symMap.Load(); m != nil {
-		cp := make(map[string]string, len(*m))
-		for k, v := range *m {
-			cp[k] = v
-		}
-		return cp
-	}
-	return nil
-}
-
 // mt5SkipReason 标定跳过原因（F1）：None+非零=矛盾数据，其余=未标定模式。
 func mt5SkipReason(brokerSym string, sg *mt5pb.SymGroup) string {
 	if sg.GetSwapType() == mt5pb.SwapType_SwapType_SwapNone {
@@ -264,15 +252,6 @@ func tripleSwapDayFact(venue, symbol string, weekday float64, src string) fact.F
 // mt5TripleSwapDay MT5 V3DaysSwap → Go time.Weekday（0=Sunday...6=Saturday，proto 与 Go 同序）。
 func mt5TripleSwapDay(v mt5pb.V3DaysSwap) float64 {
 	return float64(v)
-}
-
-// mt4TripleSwapDay MT4 SwapRollover3Days → Go time.Weekday。
-// **无现网实证**：MT4/MT5 同族枚举语义可能不同（MT5 0=Sunday）。
-// 假设 MT4 proto: 0=Monday...4=Friday（无周末）；Go: 0=Sunday...6=Saturday。
-// 映射假设：MT4 0(Mon)→1, 1(Tue)→2, 2(Wed)→3, 3(Thu)→4, 4(Fri)→5（+1 偏移）。
-// **首个 MT4 账户接入时必须实测对拍后核验**（比照 mt4SwapMode 标注风格）。
-func mt4TripleSwapDay(v int32) float64 {
-	return float64(v + 1)
 }
 
 // swapResult 汇总：全失败返回错误（Scheduler 退避重试），部分失败只记日志。

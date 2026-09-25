@@ -17,7 +17,6 @@ import (
 	"arb/internal/bus"
 	"arb/internal/fact"
 
-	mt4pb "arb/internal/adapter/gen/mtapi/mt4"
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
 	"google.golang.org/grpc"
 )
@@ -92,19 +91,6 @@ func (f *fakeMT5Client) AccountSummary(_ context.Context, _ *mt5pb.AccountSummar
 		return &mt5pb.AccountSummaryReply{}, nil
 	}
 	return &mt5pb.AccountSummaryReply{Result: &mt5pb.AccountSummary{Leverage: f.leverage}}, nil
-}
-
-// fakeMT4Client 只实现 SwapFacts 用到的 SymbolParams。
-type fakeMT4Client struct {
-	mt4pb.MT4Client
-	params map[string]*mt4pb.SymbolParamsReply
-}
-
-func (f *fakeMT4Client) SymbolParams(_ context.Context, req *mt4pb.SymbolParamsRequest, _ ...grpc.CallOption) (*mt4pb.SymbolParamsReply, error) {
-	if r, ok := f.params[req.GetSymbol()]; ok {
-		return r, nil
-	}
-	return nil, os.ErrNotExist
 }
 
 func captureLog(t *testing.T, fn func()) string {
@@ -206,53 +192,6 @@ func TestMT5SwapFactsSkipObservability(t *testing.T) {
 	}
 	if btcMode.Src != "mt5" || btcMode.Unit != fact.UnitMode || btcMode.Venue != "v5" || btcMode.Value != 0 {
 		t.Errorf("BTCUSDT trade_mode fact = %+v, want src=mt5 unit=mode venue=v5 value=0（Disabled 透传）", *btcMode)
-	}
-}
-
-func TestMT4SwapFactsSkipObservability(t *testing.T) {
-	q := bus.New()
-	q.Publish(bus.Quote{Symbol: "EURUSD", Venue: "v4", VenueType: "mt4", Bid: 1.1, Ask: 1.1001, Time: time.Now()})
-	ex := func(swapType, enable int32, l, s, point, cs float64) *mt4pb.SymbolInfoEx {
-		return &mt4pb.SymbolInfoEx{SwapType: swapType, SwapEnable: enable, SwapLong: l, SwapShort: s, Point: point, ContractSize: cs}
-	}
-	a := &MT4Adapter{venue: "v4", mt4: &fakeMT4Client{params: map[string]*mt4pb.SymbolParamsReply{
-		"EURUSD": {Result: &mt4pb.SymbolParams{Symbol: &mt4pb.SymbolInfo{Ex: ex(0, 1, 1, -1, 0.00001, 100000)}}}, // emit 点数
-		"BTCUSD": {Result: &mt4pb.SymbolParams{Symbol: &mt4pb.SymbolInfo{Ex: ex(0, 0, 0, 0, 0, 0)}}},             // emit0 停用+零
-		"WTI":    {Result: &mt4pb.SymbolParams{Symbol: &mt4pb.SymbolInfo{Ex: ex(9, 1, 5.5, -51.55, 0, 0)}}},      // skip 超界
-		"ETHUSD": {Result: &mt4pb.SymbolParams{Symbol: &mt4pb.SymbolInfo{Ex: ex(2, 0, 0.1, 0, 0, 0)}}},           // skip 停用+非零矛盾
-		"NILUSD": {},                                                                                             // skip result=nil
-	}}}
-	a.SetSymbolMap(map[string]string{
-		"EURUSD": "EURUSD", "BTCUSD": "BTCUSDT", "WTI": "WTI", "ETHUSD": "ETHUSDT", "NILUSD": "NILUSD",
-	})
-
-	var fs []fact.Fact
-	var err error
-	logOut := captureLog(t, func() {
-		fs, err = a.SwapFacts(context.Background(), q)
-	})
-	if err != nil {
-		t.Fatalf("SwapFacts: %v", err)
-	}
-	for _, want := range []string{
-		"[mt4:v4] swap poll: emit=1 emit0=1 skip=3",
-		"WTI: uncalibrated mode 9",
-		"ETHUSD: swap disabled with nonzero rates",
-		"NILUSD: result nil",
-		// WP1：未覆盖 SwapType 计数日志（WTI=9 + ETHUSD swap_type=2 disabled+非零矛盾）
-		"[mt4:v4] [swap] uncovered SwapType=2 count=1",
-		"[mt4:v4] [swap] uncovered SwapType=9 count=1",
-	} {
-		if !strings.Contains(logOut, want) {
-			t.Errorf("summary log missing %q; got:\n%s", want, logOut)
-		}
-	}
-	// MT4 无 TradeMode 字段 → 不产 trade_mode Fact（未知放行边界）。
-	if n := countFacts(fs, fact.KindTradeMode); n != 0 {
-		t.Errorf("trade_mode facts = %d, want 0（MT4 proto 无该字段）", n)
-	}
-	if n := countFacts(fs, fact.KindSwapShort); n != 2 {
-		t.Errorf("swap_short facts = %d, want 2（emit+emit0）", n)
 	}
 }
 

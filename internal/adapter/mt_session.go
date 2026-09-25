@@ -15,6 +15,7 @@ package adapter
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -180,4 +181,16 @@ func (c *sessionClient) AccountSummary(ctx context.Context, in *mt5pb.AccountSum
 
 func (c *sessionClient) OpenedOrders(ctx context.Context, in *mt5pb.OpenedOrdersRequest, opts ...grpc.CallOption) (*mt5pb.OpenedOrdersReply, error) {
 	return wrapCall(c, ctx, in, opts, c.MT5Client.OpenedOrders)
+}
+
+// sessionID/maskToken 原定义于已删 mt4.go，D-470 上移为 MT5 侧 helper。
+func sessionID(user int64) string {
+	return "mdgw-" + strconv.FormatInt(user, 10)
+}
+
+func maskToken(t string) string {
+	if len(t) <= 8 {
+		return "***"
+	}
+	return t[:4] + "..." + t[len(t)-4:]
 }

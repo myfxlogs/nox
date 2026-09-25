@@ -24,7 +24,6 @@ type MTDataConfig struct {
 	// D-104 P2 U1：网关节点启动级 failover（默认值=现硬编码）。
 	MT5Gateway          string   // ARB_MT5_GATEWAY（缺省 mt5grpc3.mtapi.io:443）
 	MT5GatewayFallbacks []string // ARB_MT5_GATEWAY_FALLBACKS（缺省 mt5grpc1,mt5grpc4,mt5grpc2 .mtapi.io:443）
-	MT4Gateway          string   // ARB_MT4_GATEWAY（缺省 mt4grpc.mtapi.io:443，无 fallback）
 }
 
 // loadMTData 从环境变量加载 MT 数据采集参数，未设置用默认值。
@@ -39,7 +38,6 @@ func loadMTData() MTDataConfig {
 		MarginFactMaxAge:    envDur("ARB_MARGIN_FACT_MAX_AGE", 2*time.Hour), // 预置（无挂点）
 		MT5Gateway:          envStr("ARB_MT5_GATEWAY", "mt5grpc3.mtapi.io:443"),
 		MT5GatewayFallbacks: envStringList("ARB_MT5_GATEWAY_FALLBACKS", "mt5grpc1.mtapi.io:443,mt5grpc4.mtapi.io:443,mt5grpc2.mtapi.io:443"),
-		MT4Gateway:          envStr("ARB_MT4_GATEWAY", "mt4grpc.mtapi.io:443"),
 	}
 }
 
