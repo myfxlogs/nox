@@ -231,3 +231,55 @@ func TestD376_PerpAccrual(t *testing.T) {
 		t.Fatalf("锚⑥: accrued = %v, want %v", active[0].AccruedUSD, want)
 	}
 }
+
+// 锚⑦ D-474b S1/A2：两腿有新鲜 perp tick → 新开行 entry_basis/last_basis 非 NULL +
+// est_fee>0；tick 缺席 → basis NULL 诚实缺（行照开，毕业判据自然拒）。
+func TestD474b_PerpBasisFeeOnOpen(t *testing.T) {
+	s := d376PerpStore(t)
+	ctx := context.Background()
+	now := time.Now()
+	if err := s.InsertTicks(ctx, []pgstore.TickRow{
+		{Ts: now, Venue: "binance", Symbol: "OPUSDT", Bid: 99, Ask: 101, VenueType: "perp"},
+		{Ts: now, Venue: "okx", Symbol: "OP-USDT-SWAP", Bid: 100, Ask: 100, VenueType: "perp"},
+	}); err != nil {
+		t.Fatalf("InsertTicks: %v", err)
+	}
+	if _, _, err := stepPaperPerpCarry(ctx, s, []divPair{d376OPPair()}, d376OPRows(), 20, now); err != nil {
+		t.Fatalf("step: %v", err)
+	}
+	active, _ := s.ListActivePaperSpotCarry(ctx)
+	if len(active) != 1 {
+		t.Fatalf("want 1 active, got %d", len(active))
+	}
+	p := active[0]
+	if p.EntryBasisBps == nil || p.LastBasisBps == nil {
+		t.Fatalf("两腿 tick 齐 → basis 非 NULL，got entry=%v last=%v", p.EntryBasisBps, p.LastBasisBps)
+	}
+	// short=binance mid=100，long=okx mid=100 → basis≈0（数值不限定，只锚非空+语义可算）
+	if p.EstRoundTripFeeUSD == nil || *p.EstRoundTripFeeUSD <= 0 {
+		t.Fatalf("est_fee 应 >0（binance 4.5+okx 5bps 往返），got %v", p.EstRoundTripFeeUSD)
+	}
+	// tick 缺席面：另一对不开 basis。
+	if _, _, err := stepPaperPerpCarry(ctx, s, []divPair{{
+		Canon: "ARB", ShortVenue: "binance", LongVenue: "gate",
+		ShortSym: "ARBUSDT", LongSym: "ARB_USDT", FundShort: 30, FundLong: 5, NetAnn: 25, VolMin: 1e7,
+	}}, nil, 20, now); err != nil {
+		t.Fatalf("step2: %v", err)
+	}
+	active, _ = s.ListActivePaperSpotCarry(ctx)
+	var arb *pgstore.PaperSpotCarry
+	for i := range active {
+		if active[i].Symbol == "ARB" {
+			arb = &active[i]
+		}
+	}
+	if arb == nil {
+		t.Fatal("ARB 行未开")
+	}
+	if arb.EntryBasisBps != nil {
+		t.Fatalf("tick 缺席 → basis NULL 诚实缺，got %v", *arb.EntryBasisBps)
+	}
+	if arb.EstRoundTripFeeUSD == nil || *arb.EstRoundTripFeeUSD <= 0 {
+		t.Fatal("est_fee 与 tick 无关应仍有值（venue 费率表覆盖时）")
+	}
+}
