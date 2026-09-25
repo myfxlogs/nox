@@ -112,6 +112,11 @@ func (p *Pipeline) executeLeg(ctx context.Context, leg LegSpec, clientOrderID st
 // D-311 R3：卖腿报价挂 canonicalSell 命名空间（XASSET 跨 canonical，调用方回退 canonical）；
 // XASSET_CARRY 收益是 carry 年化口径与瞬时价差不可比 → 并入新鲜度免检分支。
 func (p *Pipeline) Revalidate(canonical, canonicalSell, venueBuy, venueSell, oppType string, originalGrossBps float64) bool {
+	// D-481 普查：此处 canonical/canonicalSell 即采集键——detector 按 venue 侧发射
+	//（XASSET：买腿=MtCanonical/卖腿=CexCanonical=symbol+USDT 与采集键 XAUUSDT 同形；
+	// CEX 同 canonical 型（FUNDING_HEDGE spot+perp 同所）canonical=采集键；
+	// CROSS_VENUE MT 双侧 canonical=symbol map 发射键）。无腿原生 symbol 在手，
+	// 由调用方 canonical 形态保证，非错位点。
 	qbuy, ok1 := p.qbus.Latest(canonical, venueBuy)
 	qsell, ok2 := p.qbus.Latest(canonicalSell, venueSell)
 	if !ok1 || !ok2 {
