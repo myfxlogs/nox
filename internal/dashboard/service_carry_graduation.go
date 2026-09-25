@@ -138,12 +138,10 @@ func (s *Service) ApproveCarryGraduation(ctx context.Context, req *connect.Reque
 		resp.Error = fmt.Sprintf(format, args...)
 		return connect.NewResponse(resp), nil
 	}
-	// ① caps 必填>0（禁默认=防盲签）；notional 显式传禁非正（D-367 加载期会剔除=假授权）
-	if g.MaxLongQty <= 0 || g.MaxShortQty <= 0 || g.MaxGrossUsd <= 0 {
-		return fail("三 cap 必填且 >0（max_long_qty/max_short_qty/max_gross_usd，跟 venue_buy/venue_sell 腿走）")
-	}
-	if g.NotionalUsd != nil && *g.NotionalUsd <= 0 {
-		return fail("notional_usd 显式传值禁非正（D-367 加载期会整行剔除=假授权）")
+	// ① D-490 模式分流校验：资金分配（pct/usd 任一）与显式四字段互斥；显式模式走原校验（语义在 allocModeInputs）。
+	funding, modeErr := allocModeInputs(g)
+	if modeErr != "" {
+		return fail("%s", modeErr)
 	}
 	db := s.gradDB()
 	grad, err := db.GetCarryGraduation(ctx, g.GraduationId)
@@ -221,35 +219,50 @@ func (s *Service) ApproveCarryGraduation(ctx context.Context, req *connect.Reque
 		return fail("paper venue 组合串异常: %q", paper.Venue)
 	}
 	cexVenueKey := cexVenue + ":perp"
+	// ③ 按 structure 方向定买卖腿（canonical_buy/venue_buy 永远=买腿，cap 跟腿走；D-490 折算先定方向）。
+	canonBuy, canonSell := pair.MtCanonical, pair.CexCanonical
+	venueBuy, venueSell := pair.MtVenueKey, cexVenueKey
+	if grad.Structure == "short_cfd_long_perp" { // buy=CEX sell=MT（三轮自审计方向反转修）
+		canonBuy, canonSell = pair.CexCanonical, pair.MtCanonical
+		venueBuy, venueSell = cexVenueKey, pair.MtVenueKey
+	} else if grad.Structure != "long_cfd_short_perp" {
+		return fail("未知 cfd structure %q", grad.Structure)
+	}
+	// D-490 S3：资金分配模式→服务端折算四字段（快照固化绝对值）；显式模式=请求原值。
+	longQty, shortQty, grossUSD := g.MaxLongQty, g.MaxShortQty, g.MaxGrossUsd
+	notionalUSD := g.NotionalUsd
+	if funding {
+		var estr string
+		longQty, shortQty, grossUSD, notionalUSD, userNote, estr = s.allocApply(ctx, resp, venueBuy, venueSell, canonBuy, canonSell, g, userNote)
+		if estr != "" {
+			return fail("%s", estr)
+		}
+	}
 	// D-471 S2：复核闸已上移至 isCfdStructure 分叉前（全结构硬前置，B-013）——
 	// cfd 分支不再重复判（同判据源 scan.GraduationQualifiedReason）。
 	// D-475a S3 敞口闸（G5）：三态语义封装 service_venue_exposure.go exposureCapGate。
-	capWarns, capErr := s.exposureCapGate(ctx, []string{pair.MtVenueKey, cexVenueKey}, g.MaxGrossUsd, g.NotionalUsd)
+	capWarns, capErr := s.exposureCapGate(ctx, []string{venueBuy, venueSell}, grossUSD, notionalUSD)
 	if capErr != "" {
 		return fail("%s", capErr)
 	}
-	// ③ 按 structure 方向写 combo：canonical_buy/venue_buy 永远=买腿（cap 跟腿走）
-	combo := &pgstore.XAssetComboInsert{
-		MaxLongQty:  g.MaxLongQty,  // 买腿上限（MT 腿=手数、CEX 腿=张数，跟 venue_buy 走）
-		MaxShortQty: g.MaxShortQty, // 卖腿上限
-		MaxGrossUSD: g.MaxGrossUsd,
-		NotionalUSD: g.NotionalUsd,
-		Simulated:   false, // 真仓白名单；venue env 门仍是实际真钱闸（双层不矛盾）
-		Note:        "D-403毕业 paper#" + strconv.FormatInt(paper.ID, 10),
-	}
-	switch grad.Structure {
-	case "long_cfd_short_perp": // buy=MT sell=CEX
-		combo.CanonicalBuy, combo.CanonicalSell = pair.MtCanonical, pair.CexCanonical
-		combo.VenueBuy, combo.VenueSell = pair.MtVenueKey, cexVenueKey
-	case "short_cfd_long_perp": // buy=CEX sell=MT（三轮自审计方向反转修）
-		combo.CanonicalBuy, combo.CanonicalSell = pair.CexCanonical, pair.MtCanonical
-		combo.VenueBuy, combo.VenueSell = cexVenueKey, pair.MtVenueKey
-	default:
-		return fail("未知 cfd structure %q", grad.Structure)
+	// D-490 dry_run：试算回显零副作用（不写库/不落账/不重载），也不依赖 reloader 接线（前端试算逐键触发）。
+	if g.DryRun {
+		s.gradDryRunResp(ctx, resp, venueBuy, venueSell, capWarns, funding, longQty, shortQty, grossUSD, notionalUSD)
+		return connect.NewResponse(resp), nil
 	}
 	// fail-closed 前置：重载器未接线=写表也假通（approve 后引擎仍旧名单）
 	if s.xassetReloader == nil {
 		return fail("重载器未接线（SetXAssetReloader 缺装配），fail-closed 拒绝授权")
+	}
+	combo := &pgstore.XAssetComboInsert{
+		CanonicalBuy: canonBuy, CanonicalSell: canonSell,
+		VenueBuy: venueBuy, VenueSell: venueSell,
+		MaxLongQty:  longQty,  // 买腿上限（MT 腿=手数、CEX 腿=张数，跟 venue_buy 走）
+		MaxShortQty: shortQty, // 卖腿上限
+		MaxGrossUSD: grossUSD,
+		NotionalUSD: notionalUSD,
+		Simulated:   false, // 真仓白名单；venue env 门仍是实际真钱闸（双层不矛盾）
+		Note:        "D-403毕业 paper#" + strconv.FormatInt(paper.ID, 10),
 	}
 	comboID, err := db.InsertXAssetAllowCombo(ctx, combo)
 	if err != nil {
@@ -274,7 +287,7 @@ func (s *Service) ApproveCarryGraduation(ctx context.Context, req *connect.Reque
 	}
 	resp.AutomapSummary = summary
 	// ⑥ venue 缺口报告（两腿 venue_key 对 autotrade_allow_rules 表活读，D-443）
-	gaps := venueGapsOf(pair.MtVenueKey, cexVenueKey, s.allowVenuesNow(ctx))
+	gaps := venueGapsOf(venueBuy, venueSell, s.allowVenuesNow(ctx))
 	resp.VenueGaps = append(gaps, capWarns...) // D-475a S3：敞口闸未设 venue 如实透出
 	// ⑦ 落账 approved+combo_id+note（含 gap 快照前缀）+info 告警
 	if err := db.UpdateCarryGraduationDecision(ctx, grad.ID, "approved", &comboID, gradNoteWithGaps(userNote, gaps)); err != nil {

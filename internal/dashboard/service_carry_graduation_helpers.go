@@ -190,15 +190,31 @@ func (s *Service) approveNonCfd(ctx context.Context, resp *v1.ApproveCarryGradua
 		resp.Error = fmt.Sprintf(format, args...)
 		return connect.NewResponse(resp), nil
 	}
+	funding := g.FundingPct != nil || g.FundingUsd != nil
 	if grad.Structure == "spot_carry" {
 		// D-488：spot_carry 授权=组合进真金白名单（业主语义「授权即放行」；D-473 起
 		// FUNDING_HEDGE 执行链全通——旧版只体检不写白名单=假授权缺陷修复）。
 		// 方向定死=现货买×合约空（正 funding 收息形态）；canonical 双腿同值
 		//（engine FUNDING_HEDGE 闸 sellCanonical 回退 canonical 的匹配口径）。
 		venueSpot, venuePerp := grad.Venue+":spot", grad.Venue+":perp"
-		capWarns, capErr := s.exposureCapGate(ctx, []string{venueSpot, venuePerp}, g.MaxGrossUsd, g.NotionalUsd)
+		// D-490：同所双池（现货池现金×永续池保证金）资金分配折算——与 cfd 分支同模型。
+		longQty, shortQty, grossUSD := g.MaxLongQty, g.MaxShortQty, g.MaxGrossUsd
+		notionalUSD := g.NotionalUsd
+		if funding {
+			var estr string
+			longQty, shortQty, grossUSD, notionalUSD, userNote, estr = s.allocApply(ctx, resp, venueSpot, venuePerp, grad.Symbol, grad.Symbol, g, userNote)
+			if estr != "" {
+				return fail("%s", estr)
+			}
+		}
+		capWarns, capErr := s.exposureCapGate(ctx, []string{venueSpot, venuePerp}, grossUSD, notionalUSD)
 		if capErr != "" {
 			return fail("%s", capErr)
+		}
+		// D-490 dry_run：试算回显零副作用（不写库/不落账/不重载），不依赖 reloader 接线（前端试算逐键触发）。
+		if g.DryRun {
+			s.gradDryRunResp(ctx, resp, venueSpot, venuePerp, capWarns, funding, longQty, shortQty, grossUSD, notionalUSD)
+			return connect.NewResponse(resp), nil
 		}
 		if s.xassetReloader == nil {
 			return fail("重载器未接线（SetXAssetReloader 缺装配），fail-closed 拒绝授权")
@@ -206,8 +222,8 @@ func (s *Service) approveNonCfd(ctx context.Context, resp *v1.ApproveCarryGradua
 		combo := &pgstore.XAssetComboInsert{
 			CanonicalBuy: grad.Symbol, CanonicalSell: grad.Symbol,
 			VenueBuy: venueSpot, VenueSell: venuePerp,
-			MaxLongQty: g.MaxLongQty, MaxShortQty: g.MaxShortQty,
-			MaxGrossUSD: g.MaxGrossUsd, NotionalUSD: g.NotionalUsd,
+			MaxLongQty: longQty, MaxShortQty: shortQty,
+			MaxGrossUSD: grossUSD, NotionalUSD: notionalUSD,
 			Simulated: false,
 			Note:      "D-403毕业 paper#" + strconv.FormatInt(paper.ID, 10),
 		}
@@ -235,9 +251,19 @@ func (s *Service) approveNonCfd(ctx context.Context, resp *v1.ApproveCarryGradua
 		return connect.NewResponse(resp), nil
 	}
 	// perp_perp：无组合白名单闸（PERP_FUNDING 走 venue/canonical 规则域），approve=链路体检不写白名单（不越权）。
+	// D-490：该结构无 sizing 写库面——资金分配输入不适用（显式上限仍按旧校验走）。
+	if funding {
+		return fail("perp_perp 无组合闸，资金分配模式不适用——请用显式上限（qty/名义直填）")
+	}
 	gaps := s.graduationVenueGaps(ctx, grad)
 	resp.VenueGaps = gaps
 	resp.LinkReport = nonCfdLinkReport(grad.Structure, gaps)
+	// D-490 dry_run：体检回显不落账不发告警（零状态变更）。
+	if g.DryRun {
+		fillExplicitEst(resp, g.MaxLongQty, g.MaxShortQty, g.MaxGrossUsd, g.NotionalUsd)
+		resp.Ok = true
+		return connect.NewResponse(resp), nil
+	}
 	if err := db.UpdateCarryGraduationDecision(ctx, grad.ID, "approved", nil, gradNoteWithGaps(userNote, gaps)); err != nil {
 		return fail("落账失败: %v", err)
 	}

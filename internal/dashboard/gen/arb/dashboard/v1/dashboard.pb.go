@@ -22722,11 +22722,14 @@ func (x *ListCarryGraduationsResponse) GetRows() []*CarryGraduationRow {
 type ApproveCarryGraduationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	GraduationId  int64                  `protobuf:"varint,1,opt,name=graduation_id,json=graduationId,proto3" json:"graduation_id,omitempty"`
-	MaxLongQty    float64                `protobuf:"fixed64,2,opt,name=max_long_qty,json=maxLongQty,proto3" json:"max_long_qty,omitempty"`        // 买腿 qty 上限（业主必填>0，禁默认；MT 腿=手数、CEX 腿=张数，语义跟 venue_buy 走）
-	MaxShortQty   float64                `protobuf:"fixed64,3,opt,name=max_short_qty,json=maxShortQty,proto3" json:"max_short_qty,omitempty"`     // 卖腿 qty 上限（必填>0；同上跟 venue_sell 走）
-	MaxGrossUsd   float64                `protobuf:"fixed64,4,opt,name=max_gross_usd,json=maxGrossUsd,proto3" json:"max_gross_usd,omitempty"`     // 双腿名义上限（必填>0）
+	MaxLongQty    float64                `protobuf:"fixed64,2,opt,name=max_long_qty,json=maxLongQty,proto3" json:"max_long_qty,omitempty"`        // 买腿 qty 上限（显式模式必填>0，禁默认；MT 腿=手数、CEX 腿=张数，语义跟 venue_buy 走）
+	MaxShortQty   float64                `protobuf:"fixed64,3,opt,name=max_short_qty,json=maxShortQty,proto3" json:"max_short_qty,omitempty"`     // 卖腿 qty 上限（同上跟 venue_sell 走）
+	MaxGrossUsd   float64                `protobuf:"fixed64,4,opt,name=max_gross_usd,json=maxGrossUsd,proto3" json:"max_gross_usd,omitempty"`     // 双腿名义上限
 	NotionalUsd   *float64               `protobuf:"fixed64,5,opt,name=notional_usd,json=notionalUsd,proto3,oneof" json:"notional_usd,omitempty"` // D-367 语义：显式<=0 会在加载期被剔除，禁传非正值
 	Note          string                 `protobuf:"bytes,6,opt,name=note,proto3" json:"note,omitempty"`
+	FundingPct    *float64               `protobuf:"fixed64,7,opt,name=funding_pct,json=fundingPct,proto3,oneof" json:"funding_pct,omitempty"` // D-490：净值占比输入（小数 0..1；与 funding_usd/显式四字段互斥）
+	FundingUsd    *float64               `protobuf:"fixed64,8,opt,name=funding_usd,json=fundingUsd,proto3,oneof" json:"funding_usd,omitempty"` // D-490：分配金额直填 USD（同上互斥）
+	DryRun        bool                   `protobuf:"varint,9,opt,name=dry_run,json=dryRun,proto3" json:"dry_run,omitempty"`                    // D-490：试算不写库——回 est_* 折算+互算值+venue_gaps 体检，零状态变更
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -22803,16 +22806,44 @@ func (x *ApproveCarryGraduationRequest) GetNote() string {
 	return ""
 }
 
+func (x *ApproveCarryGraduationRequest) GetFundingPct() float64 {
+	if x != nil && x.FundingPct != nil {
+		return *x.FundingPct
+	}
+	return 0
+}
+
+func (x *ApproveCarryGraduationRequest) GetFundingUsd() float64 {
+	if x != nil && x.FundingUsd != nil {
+		return *x.FundingUsd
+	}
+	return 0
+}
+
+func (x *ApproveCarryGraduationRequest) GetDryRun() bool {
+	if x != nil {
+		return x.DryRun
+	}
+	return false
+}
+
 type ApproveCarryGraduationResponse struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Ok             bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
-	Error          string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
-	ComboId        *int64                 `protobuf:"varint,3,opt,name=combo_id,json=comboId,proto3,oneof" json:"combo_id,omitempty"`
-	VenueGaps      []string               `protobuf:"bytes,4,rep,name=venue_gaps,json=venueGaps,proto3" json:"venue_gaps,omitempty"`                // 未放行 venue_key（autotrade_allow_rules 表补行，≤60s 热生效，D-443）
-	AutomapSummary string                 `protobuf:"bytes,5,opt,name=automap_summary,json=automapSummary,proto3" json:"automap_summary,omitempty"` // "applied=N skipped=M conflicts=K"
-	LinkReport     string                 `protobuf:"bytes,6,opt,name=link_report,json=linkReport,proto3" json:"link_report,omitempty"`             // 非 cfd 结构的体检报告文本
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Ok                bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	Error             string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	ComboId           *int64                 `protobuf:"varint,3,opt,name=combo_id,json=comboId,proto3,oneof" json:"combo_id,omitempty"`
+	VenueGaps         []string               `protobuf:"bytes,4,rep,name=venue_gaps,json=venueGaps,proto3" json:"venue_gaps,omitempty"`                               // 未放行 venue_key（autotrade_allow_rules 表补行，≤60s 热生效，D-443）
+	AutomapSummary    string                 `protobuf:"bytes,5,opt,name=automap_summary,json=automapSummary,proto3" json:"automap_summary,omitempty"`                // "applied=N skipped=M conflicts=K"
+	LinkReport        string                 `protobuf:"bytes,6,opt,name=link_report,json=linkReport,proto3" json:"link_report,omitempty"`                            // 非 cfd 结构的体检报告文本
+	EstGrossUsd       float64                `protobuf:"fixed64,7,opt,name=est_gross_usd,json=estGrossUsd,proto3" json:"est_gross_usd,omitempty"`                     // D-490 折算回显：双腿总名义（=分配额 allocUSD）
+	EstLegNotionalUsd float64                `protobuf:"fixed64,8,opt,name=est_leg_notional_usd,json=estLegNotionalUsd,proto3" json:"est_leg_notional_usd,omitempty"` // D-490：每腿名义（notional_usd 落值=alloc÷2）
+	EstLongQty        float64                `protobuf:"fixed64,9,opt,name=est_long_qty,json=estLongQty,proto3" json:"est_long_qty,omitempty"`                        // D-490：派生买腿 qty 上限（notional÷perLot×1.1）
+	EstShortQty       float64                `protobuf:"fixed64,10,opt,name=est_short_qty,json=estShortQty,proto3" json:"est_short_qty,omitempty"`                    // D-490：派生卖腿 qty 上限
+	EstAllocUsd       float64                `protobuf:"fixed64,11,opt,name=est_alloc_usd,json=estAllocUsd,proto3" json:"est_alloc_usd,omitempty"`                    // D-490 互算回显：分配额 USD（pct 输入时回显折算值）
+	EstAllocPct       float64                `protobuf:"fixed64,12,opt,name=est_alloc_pct,json=estAllocPct,proto3" json:"est_alloc_pct,omitempty"`                    // D-490 互算回显：占小池净值比（usd 输入时回显；小数口径）
+	SizingNotes       []string               `protobuf:"bytes,13,rep,name=sizing_notes,json=sizingNotes,proto3" json:"sizing_notes,omitempty"`                        // D-490：池口径/币种/快照时间等审计注记
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *ApproveCarryGraduationResponse) Reset() {
@@ -22885,6 +22916,55 @@ func (x *ApproveCarryGraduationResponse) GetLinkReport() string {
 		return x.LinkReport
 	}
 	return ""
+}
+
+func (x *ApproveCarryGraduationResponse) GetEstGrossUsd() float64 {
+	if x != nil {
+		return x.EstGrossUsd
+	}
+	return 0
+}
+
+func (x *ApproveCarryGraduationResponse) GetEstLegNotionalUsd() float64 {
+	if x != nil {
+		return x.EstLegNotionalUsd
+	}
+	return 0
+}
+
+func (x *ApproveCarryGraduationResponse) GetEstLongQty() float64 {
+	if x != nil {
+		return x.EstLongQty
+	}
+	return 0
+}
+
+func (x *ApproveCarryGraduationResponse) GetEstShortQty() float64 {
+	if x != nil {
+		return x.EstShortQty
+	}
+	return 0
+}
+
+func (x *ApproveCarryGraduationResponse) GetEstAllocUsd() float64 {
+	if x != nil {
+		return x.EstAllocUsd
+	}
+	return 0
+}
+
+func (x *ApproveCarryGraduationResponse) GetEstAllocPct() float64 {
+	if x != nil {
+		return x.EstAllocPct
+	}
+	return 0
+}
+
+func (x *ApproveCarryGraduationResponse) GetSizingNotes() []string {
+	if x != nil {
+		return x.SizingNotes
+	}
+	return nil
 }
 
 type RejectCarryGraduationRequest struct {
@@ -25024,7 +25104,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x05error\x18\x02 \x01(\tR\x05error\"\x1d\n" +
 	"\x1bListCarryGraduationsRequest\"X\n" +
 	"\x1cListCarryGraduationsResponse\x128\n" +
-	"\x04rows\x18\x01 \x03(\v2$.arb.dashboard.v1.CarryGraduationRowR\x04rows\"\xfb\x01\n" +
+	"\x04rows\x18\x01 \x03(\v2$.arb.dashboard.v1.CarryGraduationRowR\x04rows\"\x80\x03\n" +
 	"\x1dApproveCarryGraduationRequest\x12#\n" +
 	"\rgraduation_id\x18\x01 \x01(\x03R\fgraduationId\x12 \n" +
 	"\fmax_long_qty\x18\x02 \x01(\x01R\n" +
@@ -25032,8 +25112,15 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\rmax_short_qty\x18\x03 \x01(\x01R\vmaxShortQty\x12\"\n" +
 	"\rmax_gross_usd\x18\x04 \x01(\x01R\vmaxGrossUsd\x12&\n" +
 	"\fnotional_usd\x18\x05 \x01(\x01H\x00R\vnotionalUsd\x88\x01\x01\x12\x12\n" +
-	"\x04note\x18\x06 \x01(\tR\x04noteB\x0f\n" +
-	"\r_notional_usd\"\xdc\x01\n" +
+	"\x04note\x18\x06 \x01(\tR\x04note\x12$\n" +
+	"\vfunding_pct\x18\a \x01(\x01H\x01R\n" +
+	"fundingPct\x88\x01\x01\x12$\n" +
+	"\vfunding_usd\x18\b \x01(\x01H\x02R\n" +
+	"fundingUsd\x88\x01\x01\x12\x17\n" +
+	"\adry_run\x18\t \x01(\bR\x06dryRunB\x0f\n" +
+	"\r_notional_usdB\x0e\n" +
+	"\f_funding_pctB\x0e\n" +
+	"\f_funding_usd\"\xe2\x03\n" +
 	"\x1eApproveCarryGraduationResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12\x1e\n" +
@@ -25042,7 +25129,16 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"venue_gaps\x18\x04 \x03(\tR\tvenueGaps\x12'\n" +
 	"\x0fautomap_summary\x18\x05 \x01(\tR\x0eautomapSummary\x12\x1f\n" +
 	"\vlink_report\x18\x06 \x01(\tR\n" +
-	"linkReportB\v\n" +
+	"linkReport\x12\"\n" +
+	"\rest_gross_usd\x18\a \x01(\x01R\vestGrossUsd\x12/\n" +
+	"\x14est_leg_notional_usd\x18\b \x01(\x01R\x11estLegNotionalUsd\x12 \n" +
+	"\fest_long_qty\x18\t \x01(\x01R\n" +
+	"estLongQty\x12\"\n" +
+	"\rest_short_qty\x18\n" +
+	" \x01(\x01R\vestShortQty\x12\"\n" +
+	"\rest_alloc_usd\x18\v \x01(\x01R\vestAllocUsd\x12\"\n" +
+	"\rest_alloc_pct\x18\f \x01(\x01R\vestAllocPct\x12!\n" +
+	"\fsizing_notes\x18\r \x03(\tR\vsizingNotesB\v\n" +
 	"\t_combo_id\"\x95\x01\n" +
 	"\x1cRejectCarryGraduationRequest\x12#\n" +
 	"\rgraduation_id\x18\x01 \x01(\x03R\fgraduationId\x12\x12\n" +
