@@ -136,6 +136,7 @@ var migrationFiles = []struct {
 	{138, migrations.VenueSymbolFlagsSQL},              // D-463 S1/S2：fin_venue_symbol_flags + carry_graduations.flag_warn
 	{139, migrations.PaperMissStreakSQL},               // D-474a S4：paper_spot_carry.miss_streak 缺席独立计数
 	{140, migrations.VenueExposureCapsSQL},             // D-475a S1+S5：敞口闸表+paper 质量杆观测两列
+	{141, migrations.PerpFundingAdmissionSQL},          // D-491 S1：PERP_FUNDING 证据准入表（白名单退役）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

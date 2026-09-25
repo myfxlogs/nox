@@ -16,14 +16,14 @@ type Config struct {
 	PerpFundingMinNetAnnualized float64 // perp×perp funding 差净年化门槛（%）——D-064
 	// === D-300 跨标的同质资产套利（XASSET_CARRY）—— 字段定义见 config_xasset.go（XassetConfig 嵌入，字段访问不变）===
 	XassetConfig
+	PfAdmitConfig                      // D-491 PERP_FUNDING 证据准入（config_pfadmission.go，同 D-479 嵌入先例）
 	GrabMinNetAnnualized float64       // grab 档门槛（%），替代 classify 硬编码 4.5（D-036）
 	DetectorFreshnessTTL time.Duration // 报价陈旧排除 TTL
 
 	// === 评估器成本（§6）===
-	SlippageBps      float64       // 单腿滑点（bps）
-	MarginRateAnnual float64       // 资金机会成本年化（%）——业主按实际资金状况设，D-036
-	OpportunityTTL   time.Duration // 机会过期 TTL
-	ScanThrottle     time.Duration // 引擎扫描节流（替代硬编码 30s，D-036）
+	SlippageBps                  float64       // 单腿滑点（bps）
+	MarginRateAnnual             float64       // 资金机会成本年化（%）——业主按实际资金状况设，D-036
+	OpportunityTTL, ScanThrottle time.Duration // 机会过期 TTL + 引擎扫描节流（替代硬编码 30s，D-036）
 
 	// === 持仓监控（§13.4）===
 	CloseBpsThr         float64       // 建议平仓：预期净收益 ≤ 该值（bps）
