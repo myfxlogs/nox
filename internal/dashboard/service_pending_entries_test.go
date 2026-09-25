@@ -158,7 +158,7 @@ func TestD478_TierBranches(t *testing.T) {
 		t.Fatalf("rows=%d err=%v", len(rows), err)
 	}
 	for _, r := range rows {
-		if r.ComboId == 902 && (r.Tier != "over" || !r.TierWarn || !stringsHas(r.TierDetail, "超出安全线：计划仓位 $1200 > 账户 gate 权益 $100 的 0.5 倍上限")) {
+		if r.ComboId == 902 && (r.Tier != "over" || !r.TierWarn || !stringsHas(r.TierDetail, "超出安全线：计划仓位 $1200 > 账户 gate 净值 $100 的 0.5 倍上限")) {
 			t.Fatalf("超档分支: tier=%s detail=%q warn=%v", r.Tier, r.TierDetail, r.TierWarn)
 		}
 		if r.ComboId == 903 && (r.Tier != "over" || !stringsHas(r.TierDetail, "计划仓位 $2000")) {

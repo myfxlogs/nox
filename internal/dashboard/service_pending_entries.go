@@ -158,7 +158,7 @@ func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow,
 	}
 	// R5：构型未覆盖（双 CEX/未知形态）→「构型未覆盖」短路，不走七闸（同所组合不产两型 opp）。
 	if kind == "" {
-		return kind, "构型未覆盖", 0, false
+		return kind, "组合形态暂不支持（两腿结构未接入任何策略）", 0, false
 	}
 	// 闸 1：venue/canonical allow_rules（engine allowRuleReject 同判据，kind='venue'/'canonical' 值查表）。
 	// R2：双腿分别点名实际未放行腿（原实现恒报 buy 腿=误导）。
@@ -181,7 +181,7 @@ func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow,
 	}
 	// 构型：FUNDING_HEDGE 反构型（perp 买腿）→ 构型禁入（D-473 v1 正向钉死）。
 	if kind == "FUNDING_HEDGE" && strings.HasSuffix(c.VenueBuy, ":perp") {
-		return kind, "构型禁入(v1 正向)", 1, false
+		return kind, "组合方向不支持：仅允许 现货买×合约空 结构", 1, false
 	}
 	// 闸 3：regime 闸（两型分流，reason=各闸原输出）。
 	if kind == "XASSET_CARRY" {
@@ -258,13 +258,13 @@ func (s *Service) comboTier(ctx context.Context, c pgstore.XAssetComboAdminRow, 
 		v := bareVenueKey(leg.venue)
 		eq, at, found := venueEquity(snaps, v)
 		if !found || time.Since(at) > snapshotStaleWindow || eq <= 0 {
-			return "missing_data", fmt.Sprintf("无法判定：账户 %s 无近期权益数据（快照缺失或过期）", v), false
+			return "missing_data", fmt.Sprintf("无法判定：账户 %s 暂无资金数据（未采集到净值）", v), false
 		}
 		if needed > eq*cap {
-			return "over", fmt.Sprintf("超出安全线：计划仓位 $%.0f > 账户 %s 权益 $%.0f 的 %.1f 倍上限", needed, v, eq, cap), true
+			return "over", fmt.Sprintf("超出安全线：计划仓位 $%.0f > 账户 %s 净值 $%.0f 的 %.1f 倍上限", needed, v, eq, cap), true
 		}
 	}
-	return "ok", fmt.Sprintf("在承受力内：计划仓位 $%.0f ≤ 账户权益 × %.1f 倍上限", needed, cap), false
+	return "ok", fmt.Sprintf("在承受力内：计划仓位 $%.0f ≤ 账户净值 × %.1f 倍上限", needed, cap), false
 }
 
 // TierKickAll D-478 S4：恶化告警事件入口——CEX 账户 WS 余额事件（快照写成功）与组合行写
