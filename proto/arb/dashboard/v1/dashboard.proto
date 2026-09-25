@@ -2161,6 +2161,8 @@ message PaperSpotCarryRow {
   // D-393：DB 列透出（scanPaperSpotCarry 空串→spot_carry 归一，服务层直接信任）。
   string structure = 22;                 // spot_carry / perp_perp / long_cfd_short_perp / short_cfd_long_perp
   optional string mt_venue = 23;         // cfd 行 MT 腿 venue；spot/perp_perp 恒 NULL（前端「—」）
+  // D-474b S1：往返费估计透出——perp_perp 存量行（est_fee IS NULL）前端徽标「观测轨」。
+  optional double est_round_trip_fee_usd = 24;
 }
 
 // D-393：轨级汇总（行源=卡片同批 papers，exited=同 14d 窗口行；零新查询）。

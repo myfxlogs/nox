@@ -93,6 +93,12 @@ func insertCfdPaper(ctx context.Context, st PaperStore, r UniverseRow, mtVenue, 
 	return st.InsertPaperSpotCarry(ctx, p)
 }
 
+// PaperExitConvergence D-474b S1：退出冻结收敛对外导出（universe-radar perp_perp 轨复用，
+// 单判据源防公式漂移）。
+func PaperExitConvergence(p pgstore.PaperSpotCarry, lastBasis *float64) *float64 {
+	return paperExitConvergence(p, lastBasis)
+}
+
 // paperExitConvergence 退出冻结收敛捕获：本轮 last 缺→回退行内 last，双缺→NULL 诚实缺。
 func paperExitConvergence(p pgstore.PaperSpotCarry, lastBasis *float64) *float64 {
 	lb := lastBasis
