@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/adapter/gen/mtapi/mt4"
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 	"arb/internal/exec"
@@ -121,67 +120,6 @@ func tsToTime(ts *timestamppb.Timestamp) time.Time {
 		return time.Time{}
 	}
 	return ts.AsTime()
-}
-
-// MT4Querier 通过 MT4 gRPC 查询持仓。
-type MT4Querier struct {
-	token string
-	mt4   mt4.MT4Client
-	venue string
-}
-
-func NewMT4Querier(venue, token string, mt4Client mt4.MT4Client) *MT4Querier {
-	return &MT4Querier{venue: venue, token: token, mt4: mt4Client}
-}
-
-func (q *MT4Querier) VenueKey() string { return q.venue + ":mt4" }
-
-// Account 查 MT4 账户资金（AccountSummary，D-053）。
-func (q *MT4Querier) Account(ctx context.Context) (*AccountInfo, error) {
-	ctx = metadata.AppendToOutgoingContext(ctx, "id", q.token)
-	resp, err := q.mt4.AccountSummary(ctx, &mt4.AccountSummaryRequest{Id: q.token})
-	if err != nil {
-		return nil, fmt.Errorf("mt4 account summary: %w", err)
-	}
-	if e := resp.GetError(); e != nil {
-		return nil, fmt.Errorf("mt4 account summary: %s", e.GetMessage())
-	}
-	return accountSummaryToInfoMT4(q.venue, "mt4", resp.GetResult()), nil
-}
-
-func (q *MT4Querier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error) {
-	ctx = metadata.AppendToOutgoingContext(ctx, "id", q.token)
-	resp, err := q.mt4.OpenedOrders(ctx, &mt4.OpenedOrdersRequest{Id: q.token})
-	if err != nil {
-		return nil, fmt.Errorf("mt4 opened orders: %w", err)
-	}
-	if e := resp.GetError(); e != nil {
-		return nil, fmt.Errorf("mt4 opened orders: %s", e.GetMessage())
-	}
-	var out []VenueOrder
-	for _, ord := range resp.GetResult() {
-		side := "BUY"
-		if ord.GetType() == mt4.Op_Op_Sell {
-			side = "SELL"
-		}
-		out = append(out, VenueOrder{
-			Ticket:     strconv.FormatInt(int64(ord.GetTicket()), 10),
-			Symbol:     ord.GetSymbol(),
-			Side:       side,
-			Volume:     ord.GetLots(),
-			OpenPrice:  ord.GetOpenPrice(),
-			Venue:      q.venue,
-			Comment:    ord.GetComment(),
-			VenueKey:   q.venue + ":mt4",
-			Profit:     ord.GetProfit(),
-			Swap:       ord.GetSwap(),
-			Commission: ord.GetCommission(),
-			OpenedAt:   tsToTime(ord.GetOpenTime()),
-			Magic:      int64(ord.GetMagicNumber()),
-			StopLoss:   ord.GetStopLoss(), // D-155：MT4 Order.StopLoss 透传
-		})
-	}
-	return out, nil
 }
 
 // MT5Querier 通过 MT5 gRPC 查询持仓。

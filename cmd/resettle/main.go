@@ -248,15 +248,12 @@ func (t *resettler) historyQuerier(ctx context.Context, venueKey string) (reconc
 		t.qerr[base] = fmt.Errorf("no broker account for %s", base)
 		return nil, false
 	}
+	if a.Platform != 1 {
+		t.qerr[base] = fmt.Errorf("MT4 已退役：%s platform=%d 不再支持", base, a.Platform) // D-470
+		return nil, false
+	}
 	var q reconcile.OrderHistoryQuerier
-	if a.Platform == 0 {
-		ad := adapter.NewMT4Adapter(a.Venue, a.Host, a.Server, int32(a.Port), a.User, a.Password)
-		if err := ad.Connect(ctx); err != nil {
-			t.qerr[base] = err
-			return nil, false
-		}
-		q = reconcile.NewMT4OrderHistoryQuerier(a.Venue, ad.Token(), ad.MT4Client())
-	} else {
+	{
 		ad := adapter.NewMT5Adapter(a.Venue, a.Host, a.Server, int32(a.Port), a.User, a.Password)
 		if err := ad.Connect(ctx); err != nil {
 			t.qerr[base] = err

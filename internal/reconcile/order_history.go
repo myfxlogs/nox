@@ -1,4 +1,4 @@
-// Package reconcile 对账自动收尾（D-073+）：OrderHistory 查证接口 + MT5/MT4 实现。
+// Package reconcile 对账自动收尾（D-073+）：OrderHistory 查证接口 + MT5 实现。
 package reconcile
 
 import (
@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"arb/internal/adapter/gen/mtapi/mt4"
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
 
 	"google.golang.org/grpc/metadata"
@@ -64,50 +63,6 @@ func (q *MT5OrderHistoryQuerier) QueryOrderHistory(ctx context.Context, ticket s
 	}
 	for _, ord := range resp.GetResult() {
 		if strconv.FormatInt(ord.GetTicket(), 10) == ticket {
-			return &HistoryOrder{
-				Ticket:     ticket,
-				OpenPrice:  ord.GetOpenPrice(),
-				ClosePrice: ord.GetClosePrice(),
-				Profit:     ord.GetProfit(),
-				Swap:       ord.GetSwap(),
-				Commission: ord.GetCommission(),
-				Symbol:     ord.GetSymbol(),
-			}, nil
-		}
-	}
-	return nil, nil // 未命中
-}
-
-// MT4OrderHistoryQuerier MT4 历史单查证器。
-type MT4OrderHistoryQuerier struct {
-	token string
-	mt4   mt4.MT4Client
-	venue string
-}
-
-func NewMT4OrderHistoryQuerier(venue, token string, mt4Client mt4.MT4Client) *MT4OrderHistoryQuerier {
-	return &MT4OrderHistoryQuerier{token: token, mt4: mt4Client, venue: venue}
-}
-
-func (q *MT4OrderHistoryQuerier) VenueKey() string { return q.venue + ":mt4" }
-
-func (q *MT4OrderHistoryQuerier) QueryOrderHistory(ctx context.Context, ticket string, fromDays int) (*HistoryOrder, error) {
-	ctx = metadata.AppendToOutgoingContext(ctx, "id", q.token)
-	from := time.Now().Add(-time.Duration(fromDays) * 24 * time.Hour).Format("2006-01-02T15:04:05")
-	to := time.Now().Format("2006-01-02T15:04:05")
-	resp, err := q.mt4.OrderHistory(ctx, &mt4.OrderHistoryRequest{
-		Id:   q.token,
-		From: from,
-		To:   to,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("mt4 order history: %w", err)
-	}
-	if e := resp.GetError(); e != nil {
-		return nil, fmt.Errorf("mt4 order history: %s", e.GetMessage())
-	}
-	for _, ord := range resp.GetResult() {
-		if strconv.FormatInt(int64(ord.GetTicket()), 10) == ticket {
 			return &HistoryOrder{
 				Ticket:     ticket,
 				OpenPrice:  ord.GetOpenPrice(),
