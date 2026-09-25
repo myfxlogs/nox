@@ -143,6 +143,20 @@ func (s *Service) autoMapBrokerSummary(ctx context.Context, venue string) (strin
 	return fmt.Sprintf("applied=%d skipped=%d conflicts=%d", resp.Msg.GetApplied(), resp.Msg.GetSkipped(), conflicts), nil
 }
 
+// fillPendingExtras D-471/D-475a：pending 行即时算区块——venue 缺口+质量杆观测+
+// 风险档案+入场窗口（行数 ≤O(百) 可承受；B-015 增长后须按 (venue,symbol) 缓存
+// 窗口结果一轮——事件驱动非轮询）。decided 行回读 decided_note 快照不重算。
+func (s *Service) fillPendingExtras(ctx context.Context, g *pgstore.CarryGraduation, row *v1.CarryGraduationRow) {
+	row.VenueGaps = s.graduationVenueGaps(ctx, g)
+	s.graduationObservability(ctx, g, row) // D-475a S5：质量杆观测即时算
+	if paper, err := s.gradDB().GetPaperSpotCarryByID(ctx, g.PaperID); err == nil {
+		row.Risk = s.gradDossier(ctx, g, paper)
+		row.EntryWindow = s.entryWindowOf(ctx, g, paper)
+	} else {
+		row.EntryWindow = "closed:paper 行读取失败"
+	}
+}
+
 // refreshXAssetSnapshots D-403 R2：approve 三链扇出的 pipeline/手动链快照刷新——
 // rows 单查一次→exec.XAssetSpecsFromRows 单源映射（D-367 剔除规则随源）→两处 atomic Store；
 // engine 链由 xassetReloader 自 reload（幂等），本函数只管另外两链。

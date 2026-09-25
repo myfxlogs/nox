@@ -376,6 +376,15 @@ const (
 	// DashboardServiceSetVenueExposureCapProcedure is the fully-qualified name of the
 	// DashboardService's SetVenueExposureCap RPC.
 	DashboardServiceSetVenueExposureCapProcedure = "/arb.dashboard.v1.DashboardService/SetVenueExposureCap"
+	// DashboardServiceListXAssetAllowCombosProcedure is the fully-qualified name of the
+	// DashboardService's ListXAssetAllowCombos RPC.
+	DashboardServiceListXAssetAllowCombosProcedure = "/arb.dashboard.v1.DashboardService/ListXAssetAllowCombos"
+	// DashboardServiceUpsertXAssetAllowComboProcedure is the fully-qualified name of the
+	// DashboardService's UpsertXAssetAllowCombo RPC.
+	DashboardServiceUpsertXAssetAllowComboProcedure = "/arb.dashboard.v1.DashboardService/UpsertXAssetAllowCombo"
+	// DashboardServicePreviewXAssetComboRiskProcedure is the fully-qualified name of the
+	// DashboardService's PreviewXAssetComboRisk RPC.
+	DashboardServicePreviewXAssetComboRiskProcedure = "/arb.dashboard.v1.DashboardService/PreviewXAssetComboRisk"
 	// DashboardServiceListAccountMarginStatusProcedure is the fully-qualified name of the
 	// DashboardService's ListAccountMarginStatus RPC.
 	DashboardServiceListAccountMarginStatusProcedure = "/arb.dashboard.v1.DashboardService/ListAccountMarginStatus"
@@ -543,6 +552,10 @@ type DashboardServiceClient interface {
 	// D-475a S6：venue 敞口闸（fin_venue_exposure_caps）读/写；Set→kickConfig 即时生效。
 	ListVenueExposureCaps(context.Context, *connect.Request[v1.ListVenueExposureCapsRequest]) (*connect.Response[v1.ListVenueExposureCapsResponse], error)
 	SetVenueExposureCap(context.Context, *connect.Request[v1.SetVenueExposureCapRequest]) (*connect.Response[v1.SetVenueExposureCapResponse], error)
+	// D-471 S3：xasset 组合白名单管理面（不再裸 SQL）+ 加行前风险预览。
+	ListXAssetAllowCombos(context.Context, *connect.Request[v1.ListXAssetAllowCombosRequest]) (*connect.Response[v1.ListXAssetAllowCombosResponse], error)
+	UpsertXAssetAllowCombo(context.Context, *connect.Request[v1.UpsertXAssetAllowComboRequest]) (*connect.Response[v1.UpsertXAssetAllowComboResponse], error)
+	PreviewXAssetComboRisk(context.Context, *connect.Request[v1.PreviewXAssetComboRiskRequest]) (*connect.Response[v1.PreviewXAssetComboRiskResponse], error)
 	// D-405 S6：账户资金与保证金卡（财务页下钻）——数据源 fin_venue_margin_status
 	// + snapshot 最新行 join；覆盖天数/建议补资金/档位全后端给，前端零计算。
 	ListAccountMarginStatus(context.Context, *connect.Request[v1.ListAccountMarginStatusRequest]) (*connect.Response[v1.ListAccountMarginStatusResponse], error)
@@ -1249,6 +1262,24 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("SetVenueExposureCap")),
 			connect.WithClientOptions(opts...),
 		),
+		listXAssetAllowCombos: connect.NewClient[v1.ListXAssetAllowCombosRequest, v1.ListXAssetAllowCombosResponse](
+			httpClient,
+			baseURL+DashboardServiceListXAssetAllowCombosProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListXAssetAllowCombos")),
+			connect.WithClientOptions(opts...),
+		),
+		upsertXAssetAllowCombo: connect.NewClient[v1.UpsertXAssetAllowComboRequest, v1.UpsertXAssetAllowComboResponse](
+			httpClient,
+			baseURL+DashboardServiceUpsertXAssetAllowComboProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("UpsertXAssetAllowCombo")),
+			connect.WithClientOptions(opts...),
+		),
+		previewXAssetComboRisk: connect.NewClient[v1.PreviewXAssetComboRiskRequest, v1.PreviewXAssetComboRiskResponse](
+			httpClient,
+			baseURL+DashboardServicePreviewXAssetComboRiskProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("PreviewXAssetComboRisk")),
+			connect.WithClientOptions(opts...),
+		),
 		listAccountMarginStatus: connect.NewClient[v1.ListAccountMarginStatusRequest, v1.ListAccountMarginStatusResponse](
 			httpClient,
 			baseURL+DashboardServiceListAccountMarginStatusProcedure,
@@ -1375,6 +1406,9 @@ type dashboardServiceClient struct {
 	rejectCarryGraduation        *connect.Client[v1.RejectCarryGraduationRequest, v1.RejectCarryGraduationResponse]
 	listVenueExposureCaps        *connect.Client[v1.ListVenueExposureCapsRequest, v1.ListVenueExposureCapsResponse]
 	setVenueExposureCap          *connect.Client[v1.SetVenueExposureCapRequest, v1.SetVenueExposureCapResponse]
+	listXAssetAllowCombos        *connect.Client[v1.ListXAssetAllowCombosRequest, v1.ListXAssetAllowCombosResponse]
+	upsertXAssetAllowCombo       *connect.Client[v1.UpsertXAssetAllowComboRequest, v1.UpsertXAssetAllowComboResponse]
+	previewXAssetComboRisk       *connect.Client[v1.PreviewXAssetComboRiskRequest, v1.PreviewXAssetComboRiskResponse]
 	listAccountMarginStatus      *connect.Client[v1.ListAccountMarginStatusRequest, v1.ListAccountMarginStatusResponse]
 }
 
@@ -1954,6 +1988,21 @@ func (c *dashboardServiceClient) SetVenueExposureCap(ctx context.Context, req *c
 	return c.setVenueExposureCap.CallUnary(ctx, req)
 }
 
+// ListXAssetAllowCombos calls arb.dashboard.v1.DashboardService.ListXAssetAllowCombos.
+func (c *dashboardServiceClient) ListXAssetAllowCombos(ctx context.Context, req *connect.Request[v1.ListXAssetAllowCombosRequest]) (*connect.Response[v1.ListXAssetAllowCombosResponse], error) {
+	return c.listXAssetAllowCombos.CallUnary(ctx, req)
+}
+
+// UpsertXAssetAllowCombo calls arb.dashboard.v1.DashboardService.UpsertXAssetAllowCombo.
+func (c *dashboardServiceClient) UpsertXAssetAllowCombo(ctx context.Context, req *connect.Request[v1.UpsertXAssetAllowComboRequest]) (*connect.Response[v1.UpsertXAssetAllowComboResponse], error) {
+	return c.upsertXAssetAllowCombo.CallUnary(ctx, req)
+}
+
+// PreviewXAssetComboRisk calls arb.dashboard.v1.DashboardService.PreviewXAssetComboRisk.
+func (c *dashboardServiceClient) PreviewXAssetComboRisk(ctx context.Context, req *connect.Request[v1.PreviewXAssetComboRiskRequest]) (*connect.Response[v1.PreviewXAssetComboRiskResponse], error) {
+	return c.previewXAssetComboRisk.CallUnary(ctx, req)
+}
+
 // ListAccountMarginStatus calls arb.dashboard.v1.DashboardService.ListAccountMarginStatus.
 func (c *dashboardServiceClient) ListAccountMarginStatus(ctx context.Context, req *connect.Request[v1.ListAccountMarginStatusRequest]) (*connect.Response[v1.ListAccountMarginStatusResponse], error) {
 	return c.listAccountMarginStatus.CallUnary(ctx, req)
@@ -2121,6 +2170,10 @@ type DashboardServiceHandler interface {
 	// D-475a S6：venue 敞口闸（fin_venue_exposure_caps）读/写；Set→kickConfig 即时生效。
 	ListVenueExposureCaps(context.Context, *connect.Request[v1.ListVenueExposureCapsRequest]) (*connect.Response[v1.ListVenueExposureCapsResponse], error)
 	SetVenueExposureCap(context.Context, *connect.Request[v1.SetVenueExposureCapRequest]) (*connect.Response[v1.SetVenueExposureCapResponse], error)
+	// D-471 S3：xasset 组合白名单管理面（不再裸 SQL）+ 加行前风险预览。
+	ListXAssetAllowCombos(context.Context, *connect.Request[v1.ListXAssetAllowCombosRequest]) (*connect.Response[v1.ListXAssetAllowCombosResponse], error)
+	UpsertXAssetAllowCombo(context.Context, *connect.Request[v1.UpsertXAssetAllowComboRequest]) (*connect.Response[v1.UpsertXAssetAllowComboResponse], error)
+	PreviewXAssetComboRisk(context.Context, *connect.Request[v1.PreviewXAssetComboRiskRequest]) (*connect.Response[v1.PreviewXAssetComboRiskResponse], error)
 	// D-405 S6：账户资金与保证金卡（财务页下钻）——数据源 fin_venue_margin_status
 	// + snapshot 最新行 join；覆盖天数/建议补资金/档位全后端给，前端零计算。
 	ListAccountMarginStatus(context.Context, *connect.Request[v1.ListAccountMarginStatusRequest]) (*connect.Response[v1.ListAccountMarginStatusResponse], error)
@@ -2823,6 +2876,24 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("SetVenueExposureCap")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceListXAssetAllowCombosHandler := connect.NewUnaryHandler(
+		DashboardServiceListXAssetAllowCombosProcedure,
+		svc.ListXAssetAllowCombos,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListXAssetAllowCombos")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceUpsertXAssetAllowComboHandler := connect.NewUnaryHandler(
+		DashboardServiceUpsertXAssetAllowComboProcedure,
+		svc.UpsertXAssetAllowCombo,
+		connect.WithSchema(dashboardServiceMethods.ByName("UpsertXAssetAllowCombo")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServicePreviewXAssetComboRiskHandler := connect.NewUnaryHandler(
+		DashboardServicePreviewXAssetComboRiskProcedure,
+		svc.PreviewXAssetComboRisk,
+		connect.WithSchema(dashboardServiceMethods.ByName("PreviewXAssetComboRisk")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceListAccountMarginStatusHandler := connect.NewUnaryHandler(
 		DashboardServiceListAccountMarginStatusProcedure,
 		svc.ListAccountMarginStatus,
@@ -3061,6 +3132,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceListVenueExposureCapsHandler.ServeHTTP(w, r)
 		case DashboardServiceSetVenueExposureCapProcedure:
 			dashboardServiceSetVenueExposureCapHandler.ServeHTTP(w, r)
+		case DashboardServiceListXAssetAllowCombosProcedure:
+			dashboardServiceListXAssetAllowCombosHandler.ServeHTTP(w, r)
+		case DashboardServiceUpsertXAssetAllowComboProcedure:
+			dashboardServiceUpsertXAssetAllowComboHandler.ServeHTTP(w, r)
+		case DashboardServicePreviewXAssetComboRiskProcedure:
+			dashboardServicePreviewXAssetComboRiskHandler.ServeHTTP(w, r)
 		case DashboardServiceListAccountMarginStatusProcedure:
 			dashboardServiceListAccountMarginStatusHandler.ServeHTTP(w, r)
 		default:
@@ -3530,6 +3607,18 @@ func (UnimplementedDashboardServiceHandler) ListVenueExposureCaps(context.Contex
 
 func (UnimplementedDashboardServiceHandler) SetVenueExposureCap(context.Context, *connect.Request[v1.SetVenueExposureCapRequest]) (*connect.Response[v1.SetVenueExposureCapResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetVenueExposureCap is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListXAssetAllowCombos(context.Context, *connect.Request[v1.ListXAssetAllowCombosRequest]) (*connect.Response[v1.ListXAssetAllowCombosResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListXAssetAllowCombos is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) UpsertXAssetAllowCombo(context.Context, *connect.Request[v1.UpsertXAssetAllowComboRequest]) (*connect.Response[v1.UpsertXAssetAllowComboResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.UpsertXAssetAllowCombo is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) PreviewXAssetComboRisk(context.Context, *connect.Request[v1.PreviewXAssetComboRiskRequest]) (*connect.Response[v1.PreviewXAssetComboRiskResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.PreviewXAssetComboRisk is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListAccountMarginStatus(context.Context, *connect.Request[v1.ListAccountMarginStatusRequest]) (*connect.Response[v1.ListAccountMarginStatusResponse], error) {

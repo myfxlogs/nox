@@ -40,6 +40,17 @@ type fakeGradDB struct {
 	openPos       map[string][]int64
 	allowRows     []pgstore.XAssetAllowRow
 	facts         map[string][]fact.Fact // venue|symbol → facts（S5 interval 活读）
+	// D-471 S1/S2/S3：dossier/复检/管理面测试面。
+	ticks      map[string]pgstore.TickRow // venue|venue_type|symbol → tick
+	universe   map[string]pgstore.CexUniverseRow
+	fundingWin map[string][]pgstore.FactPoint // venue|symbol → funding 预测流
+	p95        float64
+	p95OK      bool
+	adminRows  []pgstore.XAssetComboAdminRow
+	comboOpen  map[string][]int64 // canonicalBuy|venueBuy → 在持仓 posIDs
+	comboOpenN map[string]float64
+	updated    *pgstore.XAssetComboAdminRow
+	updateErr  error
 }
 
 func (f *fakeGradDB) GetCarryGraduation(context.Context, int64) (*pgstore.CarryGraduation, error) {
@@ -105,6 +116,48 @@ func (f *fakeGradDB) LatestFacts(_ context.Context, kind, venue, symbol string) 
 		return nil, nil
 	}
 	return f.facts[venue+"|"+symbol], nil
+}
+
+// —— D-471 fake 面 ——
+func (f *fakeGradDB) LatestTick(_ context.Context, venue, venueType, symbol string) (pgstore.TickRow, bool, error) {
+	if f.ticks == nil {
+		return pgstore.TickRow{}, false, nil
+	}
+	t, ok := f.ticks[venue+"|"+venueType+"|"+symbol]
+	return t, ok, nil
+}
+func (f *fakeGradDB) ListCexUniverse(context.Context) (map[string]pgstore.CexUniverseRow, error) {
+	if f.universe == nil {
+		return map[string]pgstore.CexUniverseRow{}, nil
+	}
+	return f.universe, nil
+}
+func (f *fakeGradDB) FundingPredWindow(_ context.Context, venue, symbol string, _ time.Time) ([]pgstore.FactPoint, error) {
+	if f.fundingWin == nil {
+		return nil, nil
+	}
+	return f.fundingWin[venue+"|"+symbol], nil
+}
+func (f *fakeGradDB) XAssetMonitorSpreadP95(context.Context, string, string) (float64, bool, error) {
+	return f.p95, f.p95OK, nil
+}
+func (f *fakeGradDB) ListXAssetAllowCombosAll(context.Context) ([]pgstore.XAssetComboAdminRow, error) {
+	return f.adminRows, nil
+}
+func (f *fakeGradDB) UpdateXAssetAllowCombo(_ context.Context, r *pgstore.XAssetComboAdminRow) (bool, error) {
+	if f.updateErr != nil {
+		return false, f.updateErr
+	}
+	cp := *r
+	f.updated = &cp
+	return true, nil
+}
+func (f *fakeGradDB) ListOpenPositionsForCombo(_ context.Context, cb, cs, vb, vs string) ([]int64, float64, error) {
+	if f.comboOpen == nil {
+		return nil, 0, nil
+	}
+	ids := f.comboOpen[cb+"|"+vb]
+	return ids, f.comboOpenN[cb+"|"+vb], nil
 }
 
 func (f *fakeGradDB) LoadXAssetAllowCombos(_ context.Context, environment string) ([]pgstore.XAssetAllowRow, error) {
@@ -252,9 +305,13 @@ func TestD403_Approve_Guards(t *testing.T) {
 }
 
 func TestD403_Approve_NonCfd_LinkReport_NoCombo(t *testing.T) {
+	// D-471 S2：非 cfd 亦走全结构硬前置——fixture 须合格（active≥5d+accrued>0+est_fee/basis 齐）。
+	fee, entryB, lastB := 0.5, 10.0, 12.0
 	f := &fakeGradDB{
-		grad:  &pgstore.CarryGraduation{ID: 6, PaperID: 43, Venue: "gate×okx", Symbol: "BTC", Structure: "perp_perp", Status: "pending"},
-		paper: &pgstore.PaperSpotCarry{ID: 43, Venue: "gate×okx", Structure: "perp_perp"},
+		grad: &pgstore.CarryGraduation{ID: 6, PaperID: 43, Venue: "gate×okx", Symbol: "BTC", Structure: "perp_perp", Status: "pending"},
+		paper: &pgstore.PaperSpotCarry{ID: 43, Venue: "gate×okx", Structure: "perp_perp",
+			Status: "active", AccruedUSD: 5.0, EntryTs: time.Now().Add(-6 * 24 * time.Hour),
+			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB},
 	}
 	s := &Service{gradStore: f, xassetReloader: &fakeReloader{}, allowVenuesSource: func(context.Context) (map[string]bool, error) {
 		return map[string]bool{"gate:perp": true}, nil
@@ -397,7 +454,7 @@ func TestD474b_ApproveDegradedReject(t *testing.T) {
 	if resp.Msg.Ok {
 		t.Fatal("衰减行不得批准")
 	}
-	if !strings.Contains(resp.Msg.Error, "毕业复核拒绝") {
+	if !strings.Contains(resp.Msg.Error, "证据已衰减") { // D-471：闸上移至分叉前，文案随改
 		t.Fatalf("error=%s", resp.Msg.Error)
 	}
 	if f.combo != nil {

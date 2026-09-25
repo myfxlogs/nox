@@ -49,6 +49,15 @@ type graduationStore interface {
 	CountOpenPositionsOnVenue(ctx context.Context, bareVenue string) (int64, []int64, error)
 	// D-475a S5：funding_interval 活读（观测 expected_periods 用）。
 	LatestFacts(ctx context.Context, kind, venue, symbol string) ([]fact.Fact, error)
+	// D-471 S1/S2：风险档案+入场复检读取面（ticks 5min 闸/universe/保证金率/funding 窗口/monitor p95）。
+	LatestTick(ctx context.Context, venue, venueType, symbol string) (pgstore.TickRow, bool, error)
+	ListCexUniverse(ctx context.Context) (map[string]pgstore.CexUniverseRow, error)
+	FundingPredWindow(ctx context.Context, venue, symbol string, since time.Time) ([]pgstore.FactPoint, error)
+	XAssetMonitorSpreadP95(ctx context.Context, cexVenue, mtVenue string) (float64, bool, error)
+	// D-471 S3：白名单管理面（全量行/行锁更新/在持仓查询）。
+	ListXAssetAllowCombosAll(ctx context.Context) ([]pgstore.XAssetComboAdminRow, error)
+	UpdateXAssetAllowCombo(ctx context.Context, r *pgstore.XAssetComboAdminRow) (bool, error)
+	ListOpenPositionsForCombo(ctx context.Context, canonicalBuy, canonicalSell, venueBuy, venueSell string) ([]int64, float64, error)
 }
 
 // gradDB 存储取用：测试可注入 gradStore 替身，生产回落 s.store（单一真源）。
@@ -107,8 +116,7 @@ func (s *Service) ListCarryGraduations(ctx context.Context, req *connect.Request
 		gaps, userNote := gradParseGaps(g.DecidedNote)
 		row.DecidedNote = userNote
 		if g.Status == "pending" {
-			row.VenueGaps = s.graduationVenueGaps(ctx, g)
-			s.graduationObservability(ctx, g, row) // D-475a S5：质量杆观测即时算
+			s.fillPendingExtras(ctx, g, row) // venue_gaps+观测+档案+入场窗即时算（helpers 拆分）
 		} else {
 			row.VenueGaps = gaps
 		}
@@ -148,6 +156,12 @@ func (s *Service) ApproveCarryGraduation(ctx context.Context, req *connect.Reque
 		return fail("纸面行 #%d 读取失败: %v", grad.PaperID, err)
 	}
 	userNote := strings.TrimSpace(g.Note)
+
+	// D-471 S2 全结构硬前置（B-013）：approve 前重读 paper 当前态，GraduationQualifiedReason
+	// 单判据源现算——证据衰减行 in-band 拒批（冻结值不作数）；非 cfd=复检+只记账不写白名单。
+	if ok, reason := scan.GraduationQualifiedReason(*paper, time.Now()); !ok {
+		return fail("证据已衰减：%s（冻结值不作数，建议行仍留 pending）", reason)
+	}
 
 	// D-475a S3 flag 复核（分叉前双盖 cfd/非 cfd）：候选 venue 集=纸面 venue 组合串+
 	// '×'拆段+mtVenue（scan.FlagVenueSet 单口径——禁复制第二判据）。blocked→拒批；
@@ -213,11 +227,8 @@ func (s *Service) ApproveCarryGraduation(ctx context.Context, req *connect.Reque
 		return fail("paper venue 组合串异常: %q", paper.Venue)
 	}
 	cexVenueKey := cexVenue + ":perp"
-	// D-474b S2：approve 复核闸——重读 paper 行当前态按同一判据现算（复用 scan 导出
-	// helper=单判据源）；建议行是历史快照，行中途恶化时快照会放行不再合格的组合。
-	if ok, reason := scan.GraduationQualifiedReason(*paper, time.Now()); !ok {
-		return fail("毕业复核拒绝: 证据行 %s（建议行仍留 pending）", reason)
-	}
+	// D-471 S2：复核闸已上移至 isCfdStructure 分叉前（全结构硬前置，B-013）——
+	// cfd 分支不再重复判（同判据源 scan.GraduationQualifiedReason）。
 	// D-475a S3 敞口闸（G5）：三态语义封装 service_venue_exposure.go exposureCapGate。
 	capWarns, capErr := s.exposureCapGate(ctx, []string{pair.MtVenueKey, cexVenueKey}, g.MaxGrossUsd, g.NotionalUsd)
 	if capErr != "" {
