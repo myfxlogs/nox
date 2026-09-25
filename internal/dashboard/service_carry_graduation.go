@@ -288,6 +288,7 @@ func (s *Service) ApproveCarryGraduation(ctx context.Context, req *connect.Reque
 	resp.AutomapSummary = summary
 	// ⑥ venue 缺口报告（两腿 venue_key 对 autotrade_allow_rules 表活读，D-443）
 	gaps := venueGapsOf(venueBuy, venueSell, s.allowVenuesNow(ctx))
+	resp.VenueGapKeys = gaps                   // D-492：纯 key 列表供前端补开钮
 	resp.VenueGaps = append(gaps, capWarns...) // D-475a S3：敞口闸未设 venue 如实透出
 	// ⑦ 落账 approved+combo_id+note（含 gap 快照前缀）+info 告警
 	if err := db.UpdateCarryGraduationDecision(ctx, grad.ID, "approved", &comboID, gradNoteWithGaps(userNote, gaps)); err != nil {

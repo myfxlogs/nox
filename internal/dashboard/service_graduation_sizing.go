@@ -216,7 +216,8 @@ func (s *Service) allocApply(ctx context.Context, resp *v1.ApproveCarryGraduatio
 // gradDryRunResp dry_run 共用回显组装：venue gaps + 敞口闸 warns + est_* ——纯响应
 // 组装零副作用（不写库/不落账/不热重载；前置校验已拒绝一切写路径依赖）。
 func (s *Service) gradDryRunResp(ctx context.Context, resp *v1.ApproveCarryGraduationResponse, venueBuy, venueSell string, capWarns []string, funding bool, longQty, shortQty, gross float64, notional *float64) {
-	resp.VenueGaps = append(venueGapsOf(venueBuy, venueSell, s.allowVenuesNow(ctx)), capWarns...)
+	resp.VenueGapKeys = venueGapsOf(venueBuy, venueSell, s.allowVenuesNow(ctx)) // D-492：纯 key 列表供补开钮
+	resp.VenueGaps = append(resp.VenueGapKeys, capWarns...)
 	if !funding {
 		fillExplicitEst(resp, longQty, shortQty, gross, notional)
 	}

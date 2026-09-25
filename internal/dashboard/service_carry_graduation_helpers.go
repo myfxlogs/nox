@@ -241,7 +241,8 @@ func (s *Service) approveNonCfd(ctx context.Context, resp *v1.ApproveCarryGradua
 		if err := s.refreshXAssetSnapshots(ctx); err != nil {
 			return fail("白名单已写入但 pipeline/手动链快照刷新失败（重启后生效）: %v", err)
 		}
-		gaps := append(venueGapsOf(venueSpot, venuePerp, s.allowVenuesNow(ctx)), capWarns...)
+		resp.VenueGapKeys = venueGapsOf(venueSpot, venuePerp, s.allowVenuesNow(ctx)) // D-492：纯 key 列表
+		gaps := append(resp.VenueGapKeys, capWarns...)
 		resp.VenueGaps = gaps
 		if err := db.UpdateCarryGraduationDecision(ctx, grad.ID, "approved", &comboID, gradNoteWithGaps(userNote, gaps)); err != nil {
 			return fail("落账失败: %v", err)
@@ -258,6 +259,11 @@ func (s *Service) approveNonCfd(ctx context.Context, resp *v1.ApproveCarryGradua
 	gaps := s.graduationVenueGaps(ctx, grad)
 	resp.VenueGaps = gaps
 	resp.LinkReport = nonCfdLinkReport(grad.Structure, gaps)
+	// D-492：裸名缺口段映射 venue_key（perp_perp 双腿恒 :perp）供前端补开钮。
+	resp.VenueGapKeys = make([]string, 0, len(gaps))
+	for _, seg := range gaps {
+		resp.VenueGapKeys = append(resp.VenueGapKeys, seg+":perp")
+	}
 	// D-490 dry_run：体检回显不落账不发告警（零状态变更）。
 	if g.DryRun {
 		fillExplicitEst(resp, g.MaxLongQty, g.MaxShortQty, g.MaxGrossUsd, g.NotionalUsd)

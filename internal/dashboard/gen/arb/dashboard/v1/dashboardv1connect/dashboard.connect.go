@@ -349,6 +349,12 @@ const (
 	// DashboardServiceSetAutotradeAllowRuleEnabledProcedure is the fully-qualified name of the
 	// DashboardService's SetAutotradeAllowRuleEnabled RPC.
 	DashboardServiceSetAutotradeAllowRuleEnabledProcedure = "/arb.dashboard.v1.DashboardService/SetAutotradeAllowRuleEnabled"
+	// DashboardServiceAddAutotradeAllowRuleProcedure is the fully-qualified name of the
+	// DashboardService's AddAutotradeAllowRule RPC.
+	DashboardServiceAddAutotradeAllowRuleProcedure = "/arb.dashboard.v1.DashboardService/AddAutotradeAllowRule"
+	// DashboardServiceDeleteAutotradeAllowRuleProcedure is the fully-qualified name of the
+	// DashboardService's DeleteAutotradeAllowRule RPC.
+	DashboardServiceDeleteAutotradeAllowRuleProcedure = "/arb.dashboard.v1.DashboardService/DeleteAutotradeAllowRule"
 	// DashboardServiceListIntraTradesProcedure is the fully-qualified name of the DashboardService's
 	// ListIntraTrades RPC.
 	DashboardServiceListIntraTradesProcedure = "/arb.dashboard.v1.DashboardService/ListIntraTrades"
@@ -547,9 +553,12 @@ type DashboardServiceClient interface {
 	ListSpotCarryDemo(context.Context, *connect.Request[v1.ListSpotCarryDemoRequest]) (*connect.Response[v1.ListSpotCarryDemoResponse], error)
 	// D-352：纸面轨前端卡（持仓页第三卡）——active+demo+近 14 天 exited 三态。
 	ListPaperSpotCarry(context.Context, *connect.Request[v1.ListPaperSpotCarryRequest]) (*connect.Response[v1.ListPaperSpotCarryResponse], error)
-	// D-444：autotrade venue/canonical 执行白名单启停（行只读列出+enabled 翻转；增删走业主 SQL）
+	// D-444：autotrade venue/canonical 执行白名单启停（行只读列出+enabled 翻转；D-492 起增删走 UI）
 	ListAutotradeAllowRules(context.Context, *connect.Request[v1.ListAutotradeAllowRulesRequest]) (*connect.Response[v1.ListAutotradeAllowRulesResponse], error)
 	SetAutotradeAllowRuleEnabled(context.Context, *connect.Request[v1.SetAutotradeAllowRuleEnabledRequest]) (*connect.Response[v1.SetAutotradeAllowRuleEnabledResponse], error)
+	// D-492：白名单增删 UI 管理——simulated 服务端推导（禁前端传）+幂等去重+审计+kickConfig 热载。
+	AddAutotradeAllowRule(context.Context, *connect.Request[v1.AddAutotradeAllowRuleRequest]) (*connect.Response[v1.AddAutotradeAllowRuleResponse], error)
+	DeleteAutotradeAllowRule(context.Context, *connect.Request[v1.DeleteAutotradeAllowRuleRequest]) (*connect.Response[v1.DeleteAutotradeAllowRuleResponse], error)
 	// D-441：日内纸面轨（沙箱·D-425）观测面——成交列表+30天裁决统计。
 	ListIntraTrades(context.Context, *connect.Request[v1.ListIntraTradesRequest]) (*connect.Response[v1.ListIntraTradesResponse], error)
 	IntraTrackStats(context.Context, *connect.Request[v1.IntraTrackStatsRequest]) (*connect.Response[v1.IntraTrackStatsResponse], error)
@@ -1226,6 +1235,18 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("SetAutotradeAllowRuleEnabled")),
 			connect.WithClientOptions(opts...),
 		),
+		addAutotradeAllowRule: connect.NewClient[v1.AddAutotradeAllowRuleRequest, v1.AddAutotradeAllowRuleResponse](
+			httpClient,
+			baseURL+DashboardServiceAddAutotradeAllowRuleProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("AddAutotradeAllowRule")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteAutotradeAllowRule: connect.NewClient[v1.DeleteAutotradeAllowRuleRequest, v1.DeleteAutotradeAllowRuleResponse](
+			httpClient,
+			baseURL+DashboardServiceDeleteAutotradeAllowRuleProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("DeleteAutotradeAllowRule")),
+			connect.WithClientOptions(opts...),
+		),
 		listIntraTrades: connect.NewClient[v1.ListIntraTradesRequest, v1.ListIntraTradesResponse](
 			httpClient,
 			baseURL+DashboardServiceListIntraTradesProcedure,
@@ -1439,6 +1460,8 @@ type dashboardServiceClient struct {
 	listPaperSpotCarry              *connect.Client[v1.ListPaperSpotCarryRequest, v1.ListPaperSpotCarryResponse]
 	listAutotradeAllowRules         *connect.Client[v1.ListAutotradeAllowRulesRequest, v1.ListAutotradeAllowRulesResponse]
 	setAutotradeAllowRuleEnabled    *connect.Client[v1.SetAutotradeAllowRuleEnabledRequest, v1.SetAutotradeAllowRuleEnabledResponse]
+	addAutotradeAllowRule           *connect.Client[v1.AddAutotradeAllowRuleRequest, v1.AddAutotradeAllowRuleResponse]
+	deleteAutotradeAllowRule        *connect.Client[v1.DeleteAutotradeAllowRuleRequest, v1.DeleteAutotradeAllowRuleResponse]
 	listIntraTrades                 *connect.Client[v1.ListIntraTradesRequest, v1.ListIntraTradesResponse]
 	intraTrackStats                 *connect.Client[v1.IntraTrackStatsRequest, v1.IntraTrackStatsResponse]
 	getCapitalCoverage              *connect.Client[v1.GetCapitalCoverageRequest, v1.GetCapitalCoverageResponse]
@@ -1989,6 +2012,16 @@ func (c *dashboardServiceClient) SetAutotradeAllowRuleEnabled(ctx context.Contex
 	return c.setAutotradeAllowRuleEnabled.CallUnary(ctx, req)
 }
 
+// AddAutotradeAllowRule calls arb.dashboard.v1.DashboardService.AddAutotradeAllowRule.
+func (c *dashboardServiceClient) AddAutotradeAllowRule(ctx context.Context, req *connect.Request[v1.AddAutotradeAllowRuleRequest]) (*connect.Response[v1.AddAutotradeAllowRuleResponse], error) {
+	return c.addAutotradeAllowRule.CallUnary(ctx, req)
+}
+
+// DeleteAutotradeAllowRule calls arb.dashboard.v1.DashboardService.DeleteAutotradeAllowRule.
+func (c *dashboardServiceClient) DeleteAutotradeAllowRule(ctx context.Context, req *connect.Request[v1.DeleteAutotradeAllowRuleRequest]) (*connect.Response[v1.DeleteAutotradeAllowRuleResponse], error) {
+	return c.deleteAutotradeAllowRule.CallUnary(ctx, req)
+}
+
 // ListIntraTrades calls arb.dashboard.v1.DashboardService.ListIntraTrades.
 func (c *dashboardServiceClient) ListIntraTrades(ctx context.Context, req *connect.Request[v1.ListIntraTradesRequest]) (*connect.Response[v1.ListIntraTradesResponse], error) {
 	return c.listIntraTrades.CallUnary(ctx, req)
@@ -2221,9 +2254,12 @@ type DashboardServiceHandler interface {
 	ListSpotCarryDemo(context.Context, *connect.Request[v1.ListSpotCarryDemoRequest]) (*connect.Response[v1.ListSpotCarryDemoResponse], error)
 	// D-352：纸面轨前端卡（持仓页第三卡）——active+demo+近 14 天 exited 三态。
 	ListPaperSpotCarry(context.Context, *connect.Request[v1.ListPaperSpotCarryRequest]) (*connect.Response[v1.ListPaperSpotCarryResponse], error)
-	// D-444：autotrade venue/canonical 执行白名单启停（行只读列出+enabled 翻转；增删走业主 SQL）
+	// D-444：autotrade venue/canonical 执行白名单启停（行只读列出+enabled 翻转；D-492 起增删走 UI）
 	ListAutotradeAllowRules(context.Context, *connect.Request[v1.ListAutotradeAllowRulesRequest]) (*connect.Response[v1.ListAutotradeAllowRulesResponse], error)
 	SetAutotradeAllowRuleEnabled(context.Context, *connect.Request[v1.SetAutotradeAllowRuleEnabledRequest]) (*connect.Response[v1.SetAutotradeAllowRuleEnabledResponse], error)
+	// D-492：白名单增删 UI 管理——simulated 服务端推导（禁前端传）+幂等去重+审计+kickConfig 热载。
+	AddAutotradeAllowRule(context.Context, *connect.Request[v1.AddAutotradeAllowRuleRequest]) (*connect.Response[v1.AddAutotradeAllowRuleResponse], error)
+	DeleteAutotradeAllowRule(context.Context, *connect.Request[v1.DeleteAutotradeAllowRuleRequest]) (*connect.Response[v1.DeleteAutotradeAllowRuleResponse], error)
 	// D-441：日内纸面轨（沙箱·D-425）观测面——成交列表+30天裁决统计。
 	ListIntraTrades(context.Context, *connect.Request[v1.ListIntraTradesRequest]) (*connect.Response[v1.ListIntraTradesResponse], error)
 	IntraTrackStats(context.Context, *connect.Request[v1.IntraTrackStatsRequest]) (*connect.Response[v1.IntraTrackStatsResponse], error)
@@ -2896,6 +2932,18 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("SetAutotradeAllowRuleEnabled")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceAddAutotradeAllowRuleHandler := connect.NewUnaryHandler(
+		DashboardServiceAddAutotradeAllowRuleProcedure,
+		svc.AddAutotradeAllowRule,
+		connect.WithSchema(dashboardServiceMethods.ByName("AddAutotradeAllowRule")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceDeleteAutotradeAllowRuleHandler := connect.NewUnaryHandler(
+		DashboardServiceDeleteAutotradeAllowRuleProcedure,
+		svc.DeleteAutotradeAllowRule,
+		connect.WithSchema(dashboardServiceMethods.ByName("DeleteAutotradeAllowRule")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceListIntraTradesHandler := connect.NewUnaryHandler(
 		DashboardServiceListIntraTradesProcedure,
 		svc.ListIntraTrades,
@@ -3212,6 +3260,10 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceListAutotradeAllowRulesHandler.ServeHTTP(w, r)
 		case DashboardServiceSetAutotradeAllowRuleEnabledProcedure:
 			dashboardServiceSetAutotradeAllowRuleEnabledHandler.ServeHTTP(w, r)
+		case DashboardServiceAddAutotradeAllowRuleProcedure:
+			dashboardServiceAddAutotradeAllowRuleHandler.ServeHTTP(w, r)
+		case DashboardServiceDeleteAutotradeAllowRuleProcedure:
+			dashboardServiceDeleteAutotradeAllowRuleHandler.ServeHTTP(w, r)
 		case DashboardServiceListIntraTradesProcedure:
 			dashboardServiceListIntraTradesHandler.ServeHTTP(w, r)
 		case DashboardServiceIntraTrackStatsProcedure:
@@ -3677,6 +3729,14 @@ func (UnimplementedDashboardServiceHandler) ListAutotradeAllowRules(context.Cont
 
 func (UnimplementedDashboardServiceHandler) SetAutotradeAllowRuleEnabled(context.Context, *connect.Request[v1.SetAutotradeAllowRuleEnabledRequest]) (*connect.Response[v1.SetAutotradeAllowRuleEnabledResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetAutotradeAllowRuleEnabled is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) AddAutotradeAllowRule(context.Context, *connect.Request[v1.AddAutotradeAllowRuleRequest]) (*connect.Response[v1.AddAutotradeAllowRuleResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AddAutotradeAllowRule is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) DeleteAutotradeAllowRule(context.Context, *connect.Request[v1.DeleteAutotradeAllowRuleRequest]) (*connect.Response[v1.DeleteAutotradeAllowRuleResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.DeleteAutotradeAllowRule is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListIntraTrades(context.Context, *connect.Request[v1.ListIntraTradesRequest]) (*connect.Response[v1.ListIntraTradesResponse], error) {

@@ -1,5 +1,5 @@
 // service_allowrules.go D-444 S3：autotrade venue/canonical 执行白名单启停双 RPC。
-// 行只读列出 + enabled 翻转（增删走业主 SQL=SSOT §2.1）；翻转写 info 审计告警
+// 行只读列出 + enabled 翻转（D-492 起增删走 UI，service_allowrules_admin.go）；翻转写 info 审计告警
 // （InsertAlert best-effort：告警失败不回滚已生效翻转，同毕业链 approve 先例）。
 package dashboard
 
