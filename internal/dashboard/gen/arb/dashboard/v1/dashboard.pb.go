@@ -74,6 +74,62 @@ func (MatrixState) EnumDescriptor() ([]byte, []int) {
 	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{0}
 }
 
+// D-476a：字段证据级别——A=服务侧结算/回执，B=venue 实数据，C=估算/假设，D=缺/不可用。
+type EvidenceGrade int32
+
+const (
+	EvidenceGrade_EVIDENCE_GRADE_UNSPECIFIED EvidenceGrade = 0
+	EvidenceGrade_EVIDENCE_GRADE_A           EvidenceGrade = 1
+	EvidenceGrade_EVIDENCE_GRADE_B           EvidenceGrade = 2
+	EvidenceGrade_EVIDENCE_GRADE_C           EvidenceGrade = 3
+	EvidenceGrade_EVIDENCE_GRADE_D           EvidenceGrade = 4
+)
+
+// Enum value maps for EvidenceGrade.
+var (
+	EvidenceGrade_name = map[int32]string{
+		0: "EVIDENCE_GRADE_UNSPECIFIED",
+		1: "EVIDENCE_GRADE_A",
+		2: "EVIDENCE_GRADE_B",
+		3: "EVIDENCE_GRADE_C",
+		4: "EVIDENCE_GRADE_D",
+	}
+	EvidenceGrade_value = map[string]int32{
+		"EVIDENCE_GRADE_UNSPECIFIED": 0,
+		"EVIDENCE_GRADE_A":           1,
+		"EVIDENCE_GRADE_B":           2,
+		"EVIDENCE_GRADE_C":           3,
+		"EVIDENCE_GRADE_D":           4,
+	}
+)
+
+func (x EvidenceGrade) Enum() *EvidenceGrade {
+	p := new(EvidenceGrade)
+	*p = x
+	return p
+}
+
+func (x EvidenceGrade) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (EvidenceGrade) Descriptor() protoreflect.EnumDescriptor {
+	return file_arb_dashboard_v1_dashboard_proto_enumTypes[1].Descriptor()
+}
+
+func (EvidenceGrade) Type() protoreflect.EnumType {
+	return &file_arb_dashboard_v1_dashboard_proto_enumTypes[1]
+}
+
+func (x EvidenceGrade) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use EvidenceGrade.Descriptor instead.
+func (EvidenceGrade) EnumDescriptor() ([]byte, []int) {
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{1}
+}
+
 type Quote struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Symbol        string                 `protobuf:"bytes,1,opt,name=symbol,proto3" json:"symbol,omitempty"` // canonical symbol（EURUSD / BTCUSDT）
@@ -21375,6 +21431,7 @@ type GraduationRiskReport struct {
 	RoundtripFeeUsd     *float64               `protobuf:"fixed64,10,opt,name=roundtrip_fee_usd,json=roundtripFeeUsd,proto3,oneof" json:"roundtrip_fee_usd,omitempty"`              // notional×往返费率口径注记
 	MinExecutable       []string               `protobuf:"bytes,11,rep,name=min_executable,json=minExecutable,proto3" json:"min_executable,omitempty"`                              // 每腿最小单位折 usd 文案（lot filter 未采集如实标）
 	Gaps                []string               `protobuf:"bytes,12,rep,name=gaps,proto3" json:"gaps,omitempty"`                                                                     // 数据缺口逐项（价格过期/映射缺/费率缺等）
+	FieldGrades         []*FieldEvidence       `protobuf:"bytes,13,rep,name=field_grades,json=fieldGrades,proto3" json:"field_grades,omitempty"`                                    // D-476a：每字段证据级别徽标（A实结/B实数据/C估算/D缺）
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -21493,6 +21550,65 @@ func (x *GraduationRiskReport) GetGaps() []string {
 	return nil
 }
 
+func (x *GraduationRiskReport) GetFieldGrades() []*FieldEvidence {
+	if x != nil {
+		return x.FieldGrades
+	}
+	return nil
+}
+
+type FieldEvidence struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Field         string                 `protobuf:"bytes,1,opt,name=field,proto3" json:"field,omitempty"`
+	Grade         EvidenceGrade          `protobuf:"varint,2,opt,name=grade,proto3,enum=arb.dashboard.v1.EvidenceGrade" json:"grade,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FieldEvidence) Reset() {
+	*x = FieldEvidence{}
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[314]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FieldEvidence) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FieldEvidence) ProtoMessage() {}
+
+func (x *FieldEvidence) ProtoReflect() protoreflect.Message {
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[314]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FieldEvidence.ProtoReflect.Descriptor instead.
+func (*FieldEvidence) Descriptor() ([]byte, []int) {
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{314}
+}
+
+func (x *FieldEvidence) GetField() string {
+	if x != nil {
+		return x.Field
+	}
+	return ""
+}
+
+func (x *FieldEvidence) GetGrade() EvidenceGrade {
+	if x != nil {
+		return x.Grade
+	}
+	return EvidenceGrade_EVIDENCE_GRADE_UNSPECIFIED
+}
+
 type ListXAssetAllowCombosRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -21501,7 +21617,7 @@ type ListXAssetAllowCombosRequest struct {
 
 func (x *ListXAssetAllowCombosRequest) Reset() {
 	*x = ListXAssetAllowCombosRequest{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[314]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[315]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -21513,7 +21629,7 @@ func (x *ListXAssetAllowCombosRequest) String() string {
 func (*ListXAssetAllowCombosRequest) ProtoMessage() {}
 
 func (x *ListXAssetAllowCombosRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[314]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[315]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -21526,7 +21642,7 @@ func (x *ListXAssetAllowCombosRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListXAssetAllowCombosRequest.ProtoReflect.Descriptor instead.
 func (*ListXAssetAllowCombosRequest) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{314}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{315}
 }
 
 type XAssetAllowComboRow struct {
@@ -21549,7 +21665,7 @@ type XAssetAllowComboRow struct {
 
 func (x *XAssetAllowComboRow) Reset() {
 	*x = XAssetAllowComboRow{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[315]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[316]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -21561,7 +21677,7 @@ func (x *XAssetAllowComboRow) String() string {
 func (*XAssetAllowComboRow) ProtoMessage() {}
 
 func (x *XAssetAllowComboRow) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[315]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[316]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -21574,7 +21690,7 @@ func (x *XAssetAllowComboRow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use XAssetAllowComboRow.ProtoReflect.Descriptor instead.
 func (*XAssetAllowComboRow) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{315}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{316}
 }
 
 func (x *XAssetAllowComboRow) GetId() int64 {
@@ -21670,7 +21786,7 @@ type ListXAssetAllowCombosResponse struct {
 
 func (x *ListXAssetAllowCombosResponse) Reset() {
 	*x = ListXAssetAllowCombosResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[316]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[317]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -21682,7 +21798,7 @@ func (x *ListXAssetAllowCombosResponse) String() string {
 func (*ListXAssetAllowCombosResponse) ProtoMessage() {}
 
 func (x *ListXAssetAllowCombosResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[316]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[317]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -21695,7 +21811,7 @@ func (x *ListXAssetAllowCombosResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListXAssetAllowCombosResponse.ProtoReflect.Descriptor instead.
 func (*ListXAssetAllowCombosResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{316}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{317}
 }
 
 func (x *ListXAssetAllowCombosResponse) GetRows() []*XAssetAllowComboRow {
@@ -21726,7 +21842,7 @@ type UpsertXAssetAllowComboRequest struct {
 
 func (x *UpsertXAssetAllowComboRequest) Reset() {
 	*x = UpsertXAssetAllowComboRequest{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[317]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[318]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -21738,7 +21854,7 @@ func (x *UpsertXAssetAllowComboRequest) String() string {
 func (*UpsertXAssetAllowComboRequest) ProtoMessage() {}
 
 func (x *UpsertXAssetAllowComboRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[317]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[318]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -21751,7 +21867,7 @@ func (x *UpsertXAssetAllowComboRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpsertXAssetAllowComboRequest.ProtoReflect.Descriptor instead.
 func (*UpsertXAssetAllowComboRequest) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{317}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{318}
 }
 
 func (x *UpsertXAssetAllowComboRequest) GetId() int64 {
@@ -21857,7 +21973,7 @@ type UpsertXAssetAllowComboResponse struct {
 
 func (x *UpsertXAssetAllowComboResponse) Reset() {
 	*x = UpsertXAssetAllowComboResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[318]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[319]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -21869,7 +21985,7 @@ func (x *UpsertXAssetAllowComboResponse) String() string {
 func (*UpsertXAssetAllowComboResponse) ProtoMessage() {}
 
 func (x *UpsertXAssetAllowComboResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[318]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[319]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -21882,7 +21998,7 @@ func (x *UpsertXAssetAllowComboResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpsertXAssetAllowComboResponse.ProtoReflect.Descriptor instead.
 func (*UpsertXAssetAllowComboResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{318}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{319}
 }
 
 func (x *UpsertXAssetAllowComboResponse) GetOk() bool {
@@ -21926,7 +22042,7 @@ type PreviewXAssetComboRiskRequest struct {
 
 func (x *PreviewXAssetComboRiskRequest) Reset() {
 	*x = PreviewXAssetComboRiskRequest{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[319]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[320]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -21938,7 +22054,7 @@ func (x *PreviewXAssetComboRiskRequest) String() string {
 func (*PreviewXAssetComboRiskRequest) ProtoMessage() {}
 
 func (x *PreviewXAssetComboRiskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[319]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[320]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -21951,7 +22067,7 @@ func (x *PreviewXAssetComboRiskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PreviewXAssetComboRiskRequest.ProtoReflect.Descriptor instead.
 func (*PreviewXAssetComboRiskRequest) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{319}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{320}
 }
 
 func (x *PreviewXAssetComboRiskRequest) GetCanonicalBuy() string {
@@ -22000,7 +22116,7 @@ type PreviewXAssetComboRiskResponse struct {
 
 func (x *PreviewXAssetComboRiskResponse) Reset() {
 	*x = PreviewXAssetComboRiskResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[320]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[321]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22012,7 +22128,7 @@ func (x *PreviewXAssetComboRiskResponse) String() string {
 func (*PreviewXAssetComboRiskResponse) ProtoMessage() {}
 
 func (x *PreviewXAssetComboRiskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[320]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[321]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22025,7 +22141,7 @@ func (x *PreviewXAssetComboRiskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PreviewXAssetComboRiskResponse.ProtoReflect.Descriptor instead.
 func (*PreviewXAssetComboRiskResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{320}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{321}
 }
 
 func (x *PreviewXAssetComboRiskResponse) GetOk() bool {
@@ -22063,7 +22179,7 @@ type VenueExposureCapRow struct {
 
 func (x *VenueExposureCapRow) Reset() {
 	*x = VenueExposureCapRow{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[321]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[322]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22075,7 +22191,7 @@ func (x *VenueExposureCapRow) String() string {
 func (*VenueExposureCapRow) ProtoMessage() {}
 
 func (x *VenueExposureCapRow) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[321]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[322]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22088,7 +22204,7 @@ func (x *VenueExposureCapRow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VenueExposureCapRow.ProtoReflect.Descriptor instead.
 func (*VenueExposureCapRow) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{321}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{322}
 }
 
 func (x *VenueExposureCapRow) GetVenueKey() string {
@@ -22134,7 +22250,7 @@ type ListVenueExposureCapsRequest struct {
 
 func (x *ListVenueExposureCapsRequest) Reset() {
 	*x = ListVenueExposureCapsRequest{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[322]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[323]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22146,7 +22262,7 @@ func (x *ListVenueExposureCapsRequest) String() string {
 func (*ListVenueExposureCapsRequest) ProtoMessage() {}
 
 func (x *ListVenueExposureCapsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[322]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[323]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22159,7 +22275,7 @@ func (x *ListVenueExposureCapsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListVenueExposureCapsRequest.ProtoReflect.Descriptor instead.
 func (*ListVenueExposureCapsRequest) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{322}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{323}
 }
 
 type ListVenueExposureCapsResponse struct {
@@ -22171,7 +22287,7 @@ type ListVenueExposureCapsResponse struct {
 
 func (x *ListVenueExposureCapsResponse) Reset() {
 	*x = ListVenueExposureCapsResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[323]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[324]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22183,7 +22299,7 @@ func (x *ListVenueExposureCapsResponse) String() string {
 func (*ListVenueExposureCapsResponse) ProtoMessage() {}
 
 func (x *ListVenueExposureCapsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[323]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[324]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22196,7 +22312,7 @@ func (x *ListVenueExposureCapsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListVenueExposureCapsResponse.ProtoReflect.Descriptor instead.
 func (*ListVenueExposureCapsResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{323}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{324}
 }
 
 func (x *ListVenueExposureCapsResponse) GetRows() []*VenueExposureCapRow {
@@ -22218,7 +22334,7 @@ type SetVenueExposureCapRequest struct {
 
 func (x *SetVenueExposureCapRequest) Reset() {
 	*x = SetVenueExposureCapRequest{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[324]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[325]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22230,7 +22346,7 @@ func (x *SetVenueExposureCapRequest) String() string {
 func (*SetVenueExposureCapRequest) ProtoMessage() {}
 
 func (x *SetVenueExposureCapRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[324]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[325]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22243,7 +22359,7 @@ func (x *SetVenueExposureCapRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetVenueExposureCapRequest.ProtoReflect.Descriptor instead.
 func (*SetVenueExposureCapRequest) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{324}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{325}
 }
 
 func (x *SetVenueExposureCapRequest) GetVenueKey() string {
@@ -22284,7 +22400,7 @@ type SetVenueExposureCapResponse struct {
 
 func (x *SetVenueExposureCapResponse) Reset() {
 	*x = SetVenueExposureCapResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[325]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[326]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22296,7 +22412,7 @@ func (x *SetVenueExposureCapResponse) String() string {
 func (*SetVenueExposureCapResponse) ProtoMessage() {}
 
 func (x *SetVenueExposureCapResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[325]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[326]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22309,7 +22425,7 @@ func (x *SetVenueExposureCapResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetVenueExposureCapResponse.ProtoReflect.Descriptor instead.
 func (*SetVenueExposureCapResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{325}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{326}
 }
 
 func (x *SetVenueExposureCapResponse) GetOk() bool {
@@ -22334,7 +22450,7 @@ type ListCarryGraduationsRequest struct {
 
 func (x *ListCarryGraduationsRequest) Reset() {
 	*x = ListCarryGraduationsRequest{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[326]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[327]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22346,7 +22462,7 @@ func (x *ListCarryGraduationsRequest) String() string {
 func (*ListCarryGraduationsRequest) ProtoMessage() {}
 
 func (x *ListCarryGraduationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[326]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[327]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22359,7 +22475,7 @@ func (x *ListCarryGraduationsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCarryGraduationsRequest.ProtoReflect.Descriptor instead.
 func (*ListCarryGraduationsRequest) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{326}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{327}
 }
 
 type ListCarryGraduationsResponse struct {
@@ -22371,7 +22487,7 @@ type ListCarryGraduationsResponse struct {
 
 func (x *ListCarryGraduationsResponse) Reset() {
 	*x = ListCarryGraduationsResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[327]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[328]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22383,7 +22499,7 @@ func (x *ListCarryGraduationsResponse) String() string {
 func (*ListCarryGraduationsResponse) ProtoMessage() {}
 
 func (x *ListCarryGraduationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[327]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[328]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22396,7 +22512,7 @@ func (x *ListCarryGraduationsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCarryGraduationsResponse.ProtoReflect.Descriptor instead.
 func (*ListCarryGraduationsResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{327}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{328}
 }
 
 func (x *ListCarryGraduationsResponse) GetRows() []*CarryGraduationRow {
@@ -22420,7 +22536,7 @@ type ApproveCarryGraduationRequest struct {
 
 func (x *ApproveCarryGraduationRequest) Reset() {
 	*x = ApproveCarryGraduationRequest{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[328]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[329]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22432,7 +22548,7 @@ func (x *ApproveCarryGraduationRequest) String() string {
 func (*ApproveCarryGraduationRequest) ProtoMessage() {}
 
 func (x *ApproveCarryGraduationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[328]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[329]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22445,7 +22561,7 @@ func (x *ApproveCarryGraduationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApproveCarryGraduationRequest.ProtoReflect.Descriptor instead.
 func (*ApproveCarryGraduationRequest) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{328}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{329}
 }
 
 func (x *ApproveCarryGraduationRequest) GetGraduationId() int64 {
@@ -22504,7 +22620,7 @@ type ApproveCarryGraduationResponse struct {
 
 func (x *ApproveCarryGraduationResponse) Reset() {
 	*x = ApproveCarryGraduationResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[329]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[330]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22516,7 +22632,7 @@ func (x *ApproveCarryGraduationResponse) String() string {
 func (*ApproveCarryGraduationResponse) ProtoMessage() {}
 
 func (x *ApproveCarryGraduationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[329]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[330]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22529,7 +22645,7 @@ func (x *ApproveCarryGraduationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApproveCarryGraduationResponse.ProtoReflect.Descriptor instead.
 func (*ApproveCarryGraduationResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{329}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{330}
 }
 
 func (x *ApproveCarryGraduationResponse) GetOk() bool {
@@ -22586,7 +22702,7 @@ type RejectCarryGraduationRequest struct {
 
 func (x *RejectCarryGraduationRequest) Reset() {
 	*x = RejectCarryGraduationRequest{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[330]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[331]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22598,7 +22714,7 @@ func (x *RejectCarryGraduationRequest) String() string {
 func (*RejectCarryGraduationRequest) ProtoMessage() {}
 
 func (x *RejectCarryGraduationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[330]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[331]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22611,7 +22727,7 @@ func (x *RejectCarryGraduationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RejectCarryGraduationRequest.ProtoReflect.Descriptor instead.
 func (*RejectCarryGraduationRequest) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{330}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{331}
 }
 
 func (x *RejectCarryGraduationRequest) GetGraduationId() int64 {
@@ -22652,7 +22768,7 @@ type RejectCarryGraduationResponse struct {
 
 func (x *RejectCarryGraduationResponse) Reset() {
 	*x = RejectCarryGraduationResponse{}
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[331]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[332]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -22664,7 +22780,7 @@ func (x *RejectCarryGraduationResponse) String() string {
 func (*RejectCarryGraduationResponse) ProtoMessage() {}
 
 func (x *RejectCarryGraduationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[331]
+	mi := &file_arb_dashboard_v1_dashboard_proto_msgTypes[332]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -22677,7 +22793,7 @@ func (x *RejectCarryGraduationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RejectCarryGraduationResponse.ProtoReflect.Descriptor instead.
 func (*RejectCarryGraduationResponse) Descriptor() ([]byte, []int) {
-	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{331}
+	return file_arb_dashboard_v1_dashboard_proto_rawDescGZIP(), []int{332}
 }
 
 func (x *RejectCarryGraduationResponse) GetOk() bool {
@@ -24586,7 +24702,7 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\v_qty_nativeB\n" +
 	"\n" +
 	"\b_qty_usdB\r\n" +
-	"\v_margin_usd\"\xb7\x05\n" +
+	"\v_margin_usd\"\xfb\x05\n" +
 	"\x14GraduationRiskReport\x12&\n" +
 	"\fnotional_usd\x18\x01 \x01(\x01H\x00R\vnotionalUsd\x88\x01\x01\x12'\n" +
 	"\x0fnotional_source\x18\x02 \x01(\tR\x0enotionalSource\x127\n" +
@@ -24601,13 +24717,17 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x11roundtrip_fee_usd\x18\n" +
 	" \x01(\x01H\x05R\x0froundtripFeeUsd\x88\x01\x01\x12%\n" +
 	"\x0emin_executable\x18\v \x03(\tR\rminExecutable\x12\x12\n" +
-	"\x04gaps\x18\f \x03(\tR\x04gapsB\x0f\n" +
+	"\x04gaps\x18\f \x03(\tR\x04gaps\x12B\n" +
+	"\ffield_grades\x18\r \x03(\v2\x1f.arb.dashboard.v1.FieldEvidenceR\vfieldGradesB\x0f\n" +
 	"\r_notional_usdB\x0e\n" +
 	"\f_capital_usdB\x17\n" +
 	"\x15_liq_distance_pct_estB\x19\n" +
 	"\x17_funding_flip_daily_usdB\x18\n" +
 	"\x16_adverse_basis_p95_usdB\x14\n" +
-	"\x12_roundtrip_fee_usd\"\x1e\n" +
+	"\x12_roundtrip_fee_usd\"\\\n" +
+	"\rFieldEvidence\x12\x14\n" +
+	"\x05field\x18\x01 \x01(\tR\x05field\x125\n" +
+	"\x05grade\x18\x02 \x01(\x0e2\x1f.arb.dashboard.v1.EvidenceGradeR\x05grade\"\x1e\n" +
 	"\x1cListXAssetAllowCombosRequest\"\xaf\x03\n" +
 	"\x13XAssetAllowComboRow\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12#\n" +
@@ -24721,7 +24841,13 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\x18MATRIX_STATE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15MATRIX_STATE_COMPLETE\x10\x01\x12\x18\n" +
 	"\x14MATRIX_STATE_PARTIAL\x10\x02\x12\x18\n" +
-	"\x14MATRIX_STATE_MISSING\x10\x032\xbac\n" +
+	"\x14MATRIX_STATE_MISSING\x10\x03*\x87\x01\n" +
+	"\rEvidenceGrade\x12\x1e\n" +
+	"\x1aEVIDENCE_GRADE_UNSPECIFIED\x10\x00\x12\x14\n" +
+	"\x10EVIDENCE_GRADE_A\x10\x01\x12\x14\n" +
+	"\x10EVIDENCE_GRADE_B\x10\x02\x12\x14\n" +
+	"\x10EVIDENCE_GRADE_C\x10\x03\x12\x14\n" +
+	"\x10EVIDENCE_GRADE_D\x10\x042\xbac\n" +
 	"\x10DashboardService\x12]\n" +
 	"\x10ListLatestQuotes\x12#.arb.dashboard.v1.ListQuotesRequest\x1a$.arb.dashboard.v1.ListQuotesResponse\x12f\n" +
 	"\x0fListLatestFacts\x12(.arb.dashboard.v1.ListLatestFactsRequest\x1a).arb.dashboard.v1.ListLatestFactsResponse\x12l\n" +
@@ -24858,744 +24984,748 @@ func file_arb_dashboard_v1_dashboard_proto_rawDescGZIP() []byte {
 	return file_arb_dashboard_v1_dashboard_proto_rawDescData
 }
 
-var file_arb_dashboard_v1_dashboard_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_arb_dashboard_v1_dashboard_proto_msgTypes = make([]protoimpl.MessageInfo, 332)
+var file_arb_dashboard_v1_dashboard_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_arb_dashboard_v1_dashboard_proto_msgTypes = make([]protoimpl.MessageInfo, 333)
 var file_arb_dashboard_v1_dashboard_proto_goTypes = []any{
 	(MatrixState)(0),                             // 0: arb.dashboard.v1.MatrixState
-	(*Quote)(nil),                                // 1: arb.dashboard.v1.Quote
-	(*ListQuotesRequest)(nil),                    // 2: arb.dashboard.v1.ListQuotesRequest
-	(*ListQuotesResponse)(nil),                   // 3: arb.dashboard.v1.ListQuotesResponse
-	(*Fact)(nil),                                 // 4: arb.dashboard.v1.Fact
-	(*ListLatestFactsRequest)(nil),               // 5: arb.dashboard.v1.ListLatestFactsRequest
-	(*ListLatestFactsResponse)(nil),              // 6: arb.dashboard.v1.ListLatestFactsResponse
-	(*ListFactsRequest)(nil),                     // 7: arb.dashboard.v1.ListFactsRequest
-	(*ListFactsResponse)(nil),                    // 8: arb.dashboard.v1.ListFactsResponse
-	(*Opportunity)(nil),                          // 9: arb.dashboard.v1.Opportunity
-	(*ListOpportunitiesRequest)(nil),             // 10: arb.dashboard.v1.ListOpportunitiesRequest
-	(*ListOpportunitiesResponse)(nil),            // 11: arb.dashboard.v1.ListOpportunitiesResponse
-	(*VerificationStat)(nil),                     // 12: arb.dashboard.v1.VerificationStat
-	(*ListVerificationStatsRequest)(nil),         // 13: arb.dashboard.v1.ListVerificationStatsRequest
-	(*ListVerificationStatsResponse)(nil),        // 14: arb.dashboard.v1.ListVerificationStatsResponse
-	(*Alert)(nil),                                // 15: arb.dashboard.v1.Alert
-	(*ListAlertsRequest)(nil),                    // 16: arb.dashboard.v1.ListAlertsRequest
-	(*ListAlertsResponse)(nil),                   // 17: arb.dashboard.v1.ListAlertsResponse
-	(*AckAlertRequest)(nil),                      // 18: arb.dashboard.v1.AckAlertRequest
-	(*AckAlertResponse)(nil),                     // 19: arb.dashboard.v1.AckAlertResponse
-	(*AckAllRequest)(nil),                        // 20: arb.dashboard.v1.AckAllRequest
-	(*AckAllResponse)(nil),                       // 21: arb.dashboard.v1.AckAllResponse
-	(*ListUnackedRequest)(nil),                   // 22: arb.dashboard.v1.ListUnackedRequest
-	(*ListUnackedResponse)(nil),                  // 23: arb.dashboard.v1.ListUnackedResponse
-	(*DeleteAlertsRequest)(nil),                  // 24: arb.dashboard.v1.DeleteAlertsRequest
-	(*DeleteAlertsResponse)(nil),                 // 25: arb.dashboard.v1.DeleteAlertsResponse
-	(*ClearAckedAlertsRequest)(nil),              // 26: arb.dashboard.v1.ClearAckedAlertsRequest
-	(*ClearAckedAlertsResponse)(nil),             // 27: arb.dashboard.v1.ClearAckedAlertsResponse
-	(*TriggerState)(nil),                         // 28: arb.dashboard.v1.TriggerState
-	(*ListTriggerStatesRequest)(nil),             // 29: arb.dashboard.v1.ListTriggerStatesRequest
-	(*ListTriggerStatesResponse)(nil),            // 30: arb.dashboard.v1.ListTriggerStatesResponse
-	(*SourceHealth)(nil),                         // 31: arb.dashboard.v1.SourceHealth
-	(*ListSourceHealthRequest)(nil),              // 32: arb.dashboard.v1.ListSourceHealthRequest
-	(*ListSourceHealthResponse)(nil),             // 33: arb.dashboard.v1.ListSourceHealthResponse
-	(*LedgerEntry)(nil),                          // 34: arb.dashboard.v1.LedgerEntry
-	(*AddLedgerEntryRequest)(nil),                // 35: arb.dashboard.v1.AddLedgerEntryRequest
-	(*AddLedgerEntryResponse)(nil),               // 36: arb.dashboard.v1.AddLedgerEntryResponse
-	(*ListLedgerEntriesRequest)(nil),             // 37: arb.dashboard.v1.ListLedgerEntriesRequest
-	(*ListLedgerEntriesResponse)(nil),            // 38: arb.dashboard.v1.ListLedgerEntriesResponse
-	(*LedgerSummaryRequest)(nil),                 // 39: arb.dashboard.v1.LedgerSummaryRequest
-	(*TierSummary)(nil),                          // 40: arb.dashboard.v1.TierSummary
-	(*LedgerSummaryResponse)(nil),                // 41: arb.dashboard.v1.LedgerSummaryResponse
-	(*InvestmentRecord)(nil),                     // 42: arb.dashboard.v1.InvestmentRecord
-	(*AddInvestmentRecordRequest)(nil),           // 43: arb.dashboard.v1.AddInvestmentRecordRequest
-	(*AddInvestmentRecordResponse)(nil),          // 44: arb.dashboard.v1.AddInvestmentRecordResponse
-	(*ListInvestmentRecordsRequest)(nil),         // 45: arb.dashboard.v1.ListInvestmentRecordsRequest
-	(*ListInvestmentRecordsResponse)(nil),        // 46: arb.dashboard.v1.ListInvestmentRecordsResponse
-	(*KnowledgeEntry)(nil),                       // 47: arb.dashboard.v1.KnowledgeEntry
-	(*ListKnowledgeEntriesRequest)(nil),          // 48: arb.dashboard.v1.ListKnowledgeEntriesRequest
-	(*ListKnowledgeEntriesResponse)(nil),         // 49: arb.dashboard.v1.ListKnowledgeEntriesResponse
-	(*PositionLeg)(nil),                          // 50: arb.dashboard.v1.PositionLeg
-	(*Position)(nil),                             // 51: arb.dashboard.v1.Position
-	(*ExecuteOpportunityRequest)(nil),            // 52: arb.dashboard.v1.ExecuteOpportunityRequest
-	(*ExecuteOpportunityResponse)(nil),           // 53: arb.dashboard.v1.ExecuteOpportunityResponse
-	(*ClosePositionRequest)(nil),                 // 54: arb.dashboard.v1.ClosePositionRequest
-	(*ClosePositionResponse)(nil),                // 55: arb.dashboard.v1.ClosePositionResponse
-	(*BackfillSwapHistoryRequest)(nil),           // 56: arb.dashboard.v1.BackfillSwapHistoryRequest
-	(*BackfillSwapHistoryReply)(nil),             // 57: arb.dashboard.v1.BackfillSwapHistoryReply
-	(*ListPositionsRequest)(nil),                 // 58: arb.dashboard.v1.ListPositionsRequest
-	(*ListPositionsResponse)(nil),                // 59: arb.dashboard.v1.ListPositionsResponse
-	(*BrokerPosition)(nil),                       // 60: arb.dashboard.v1.BrokerPosition
-	(*ListBrokerPositionsRequest)(nil),           // 61: arb.dashboard.v1.ListBrokerPositionsRequest
-	(*ListBrokerPositionsResponse)(nil),          // 62: arb.dashboard.v1.ListBrokerPositionsResponse
-	(*CloseBrokerPositionRequest)(nil),           // 63: arb.dashboard.v1.CloseBrokerPositionRequest
-	(*CloseBrokerPositionResponse)(nil),          // 64: arb.dashboard.v1.CloseBrokerPositionResponse
-	(*CloseBrokerPositionsRequest)(nil),          // 65: arb.dashboard.v1.CloseBrokerPositionsRequest
-	(*CloseBrokerPositionsResponse)(nil),         // 66: arb.dashboard.v1.CloseBrokerPositionsResponse
-	(*PersonalPosition)(nil),                     // 67: arb.dashboard.v1.PersonalPosition
-	(*ListPersonalPositionsRequest)(nil),         // 68: arb.dashboard.v1.ListPersonalPositionsRequest
-	(*ListPersonalPositionsResponse)(nil),        // 69: arb.dashboard.v1.ListPersonalPositionsResponse
-	(*HedgeStake)(nil),                           // 70: arb.dashboard.v1.HedgeStake
-	(*HedgeLegSpot)(nil),                         // 71: arb.dashboard.v1.HedgeLegSpot
-	(*HedgeLegShort)(nil),                        // 72: arb.dashboard.v1.HedgeLegShort
-	(*HedgeCarry)(nil),                           // 73: arb.dashboard.v1.HedgeCarry
-	(*HedgeAccounts)(nil),                        // 74: arb.dashboard.v1.HedgeAccounts
-	(*HedgeStructure)(nil),                       // 75: arb.dashboard.v1.HedgeStructure
-	(*GetHedgeStructureRequest)(nil),             // 76: arb.dashboard.v1.GetHedgeStructureRequest
-	(*GetHedgeStructureResponse)(nil),            // 77: arb.dashboard.v1.GetHedgeStructureResponse
-	(*HedgeFlowItem)(nil),                        // 78: arb.dashboard.v1.HedgeFlowItem
-	(*ListHedgeFlowRequest)(nil),                 // 79: arb.dashboard.v1.ListHedgeFlowRequest
-	(*ListHedgeFlowResponse)(nil),                // 80: arb.dashboard.v1.ListHedgeFlowResponse
-	(*PositionDailyIncome)(nil),                  // 81: arb.dashboard.v1.PositionDailyIncome
-	(*AddDailyIncomeRequest)(nil),                // 82: arb.dashboard.v1.AddDailyIncomeRequest
-	(*AddDailyIncomeResponse)(nil),               // 83: arb.dashboard.v1.AddDailyIncomeResponse
-	(*GetPnlAnchorRequest)(nil),                  // 84: arb.dashboard.v1.GetPnlAnchorRequest
-	(*GetPnlAnchorResponse)(nil),                 // 85: arb.dashboard.v1.GetPnlAnchorResponse
-	(*ResetPnlAnchorRequest)(nil),                // 86: arb.dashboard.v1.ResetPnlAnchorRequest
-	(*ResetPnlAnchorResponse)(nil),               // 87: arb.dashboard.v1.ResetPnlAnchorResponse
-	(*KBEntry)(nil),                              // 88: arb.dashboard.v1.KBEntry
-	(*ListKBEntriesRequest)(nil),                 // 89: arb.dashboard.v1.ListKBEntriesRequest
-	(*ListKBEntriesResponse)(nil),                // 90: arb.dashboard.v1.ListKBEntriesResponse
-	(*GetKBEntryRequest)(nil),                    // 91: arb.dashboard.v1.GetKBEntryRequest
-	(*GetKBEntryResponse)(nil),                   // 92: arb.dashboard.v1.GetKBEntryResponse
-	(*ListDailyIncomeRequest)(nil),               // 93: arb.dashboard.v1.ListDailyIncomeRequest
-	(*ListDailyIncomeResponse)(nil),              // 94: arb.dashboard.v1.ListDailyIncomeResponse
-	(*StreamUpdatesRequest)(nil),                 // 95: arb.dashboard.v1.StreamUpdatesRequest
-	(*PersonalPositionPrice)(nil),                // 96: arb.dashboard.v1.PersonalPositionPrice
-	(*StreamUpdatesResponse)(nil),                // 97: arb.dashboard.v1.StreamUpdatesResponse
-	(*HedgeRefreshNotice)(nil),                   // 98: arb.dashboard.v1.HedgeRefreshNotice
-	(*CMCWatchUpdate)(nil),                       // 99: arb.dashboard.v1.CMCWatchUpdate
-	(*PositionChangeNotice)(nil),                 // 100: arb.dashboard.v1.PositionChangeNotice
-	(*FundingNeedNotice)(nil),                    // 101: arb.dashboard.v1.FundingNeedNotice
-	(*BrokerPositionSnapshot)(nil),               // 102: arb.dashboard.v1.BrokerPositionSnapshot
-	(*AccountInfo)(nil),                          // 103: arb.dashboard.v1.AccountInfo
-	(*ListAccountMarginStatusRequest)(nil),       // 104: arb.dashboard.v1.ListAccountMarginStatusRequest
-	(*AccountMarginStatus)(nil),                  // 105: arb.dashboard.v1.AccountMarginStatus
-	(*ListAccountMarginStatusResponse)(nil),      // 106: arb.dashboard.v1.ListAccountMarginStatusResponse
-	(*Holding)(nil),                              // 107: arb.dashboard.v1.Holding
-	(*AccountSnapshot)(nil),                      // 108: arb.dashboard.v1.AccountSnapshot
-	(*ListAccountsRequest)(nil),                  // 109: arb.dashboard.v1.ListAccountsRequest
-	(*ListAccountsResponse)(nil),                 // 110: arb.dashboard.v1.ListAccountsResponse
-	(*Keepalive)(nil),                            // 111: arb.dashboard.v1.Keepalive
-	(*HealthRequest)(nil),                        // 112: arb.dashboard.v1.HealthRequest
-	(*HealthResponse)(nil),                       // 113: arb.dashboard.v1.HealthResponse
-	(*SearchBrokerRequest)(nil),                  // 114: arb.dashboard.v1.SearchBrokerRequest
-	(*BrokerServer)(nil),                         // 115: arb.dashboard.v1.BrokerServer
-	(*BrokerCompany)(nil),                        // 116: arb.dashboard.v1.BrokerCompany
-	(*SearchBrokerResponse)(nil),                 // 117: arb.dashboard.v1.SearchBrokerResponse
-	(*AddBrokerRequest)(nil),                     // 118: arb.dashboard.v1.AddBrokerRequest
-	(*AddBrokerResponse)(nil),                    // 119: arb.dashboard.v1.AddBrokerResponse
-	(*RemoveBrokerRequest)(nil),                  // 120: arb.dashboard.v1.RemoveBrokerRequest
-	(*RemoveBrokerResponse)(nil),                 // 121: arb.dashboard.v1.RemoveBrokerResponse
-	(*BrokerAccount)(nil),                        // 122: arb.dashboard.v1.BrokerAccount
-	(*ListBrokerAccountsRequest)(nil),            // 123: arb.dashboard.v1.ListBrokerAccountsRequest
-	(*ListBrokerAccountsResponse)(nil),           // 124: arb.dashboard.v1.ListBrokerAccountsResponse
-	(*ExchangeConfig)(nil),                       // 125: arb.dashboard.v1.ExchangeConfig
-	(*ListExchangesRequest)(nil),                 // 126: arb.dashboard.v1.ListExchangesRequest
-	(*ListExchangesResponse)(nil),                // 127: arb.dashboard.v1.ListExchangesResponse
-	(*AddExchangeRequest)(nil),                   // 128: arb.dashboard.v1.AddExchangeRequest
-	(*AddExchangeResponse)(nil),                  // 129: arb.dashboard.v1.AddExchangeResponse
-	(*RemoveExchangeRequest)(nil),                // 130: arb.dashboard.v1.RemoveExchangeRequest
-	(*RemoveExchangeResponse)(nil),               // 131: arb.dashboard.v1.RemoveExchangeResponse
-	(*SetExchangeLabelRequest)(nil),              // 132: arb.dashboard.v1.SetExchangeLabelRequest
-	(*SetExchangeLabelResponse)(nil),             // 133: arb.dashboard.v1.SetExchangeLabelResponse
-	(*SetExchangeWebsiteRequest)(nil),            // 134: arb.dashboard.v1.SetExchangeWebsiteRequest
-	(*SetExchangeWebsiteResponse)(nil),           // 135: arb.dashboard.v1.SetExchangeWebsiteResponse
-	(*VerifyAccountRequest)(nil),                 // 136: arb.dashboard.v1.VerifyAccountRequest
-	(*VerifyAccountResponse)(nil),                // 137: arb.dashboard.v1.VerifyAccountResponse
-	(*BrokerSymbolsRequest)(nil),                 // 138: arb.dashboard.v1.BrokerSymbolsRequest
-	(*SymbolEntry)(nil),                          // 139: arb.dashboard.v1.SymbolEntry
-	(*BrokerSymbolsResponse)(nil),                // 140: arb.dashboard.v1.BrokerSymbolsResponse
-	(*SetBrokerAccountAliasRequest)(nil),         // 141: arb.dashboard.v1.SetBrokerAccountAliasRequest
-	(*SetBrokerAccountAliasResponse)(nil),        // 142: arb.dashboard.v1.SetBrokerAccountAliasResponse
-	(*SetBrokerAccountIsRealRequest)(nil),        // 143: arb.dashboard.v1.SetBrokerAccountIsRealRequest
-	(*SetBrokerAccountIsRealResponse)(nil),       // 144: arb.dashboard.v1.SetBrokerAccountIsRealResponse
-	(*SetBrokerDisabledRequest)(nil),             // 145: arb.dashboard.v1.SetBrokerDisabledRequest
-	(*SetBrokerDisabledResponse)(nil),            // 146: arb.dashboard.v1.SetBrokerDisabledResponse
-	(*SetBrokerCommissionRequest)(nil),           // 147: arb.dashboard.v1.SetBrokerCommissionRequest
-	(*SetBrokerCommissionResponse)(nil),          // 148: arb.dashboard.v1.SetBrokerCommissionResponse
-	(*SetBrokerWebsiteRequest)(nil),              // 149: arb.dashboard.v1.SetBrokerWebsiteRequest
-	(*SetBrokerWebsiteResponse)(nil),             // 150: arb.dashboard.v1.SetBrokerWebsiteResponse
-	(*SymbolMapping)(nil),                        // 151: arb.dashboard.v1.SymbolMapping
-	(*ListSymbolMappingsRequest)(nil),            // 152: arb.dashboard.v1.ListSymbolMappingsRequest
-	(*ListSymbolMappingsResponse)(nil),           // 153: arb.dashboard.v1.ListSymbolMappingsResponse
-	(*SaveSymbolMappingRequest)(nil),             // 154: arb.dashboard.v1.SaveSymbolMappingRequest
-	(*SaveSymbolMappingResponse)(nil),            // 155: arb.dashboard.v1.SaveSymbolMappingResponse
-	(*DeleteSymbolMappingRequest)(nil),           // 156: arb.dashboard.v1.DeleteSymbolMappingRequest
-	(*DeleteSymbolMappingResponse)(nil),          // 157: arb.dashboard.v1.DeleteSymbolMappingResponse
-	(*ListMappingSuggestionsRequest)(nil),        // 158: arb.dashboard.v1.ListMappingSuggestionsRequest
-	(*SymbolMappingSuggestion)(nil),              // 159: arb.dashboard.v1.SymbolMappingSuggestion
-	(*ListMappingSuggestionsResponse)(nil),       // 160: arb.dashboard.v1.ListMappingSuggestionsResponse
-	(*ListCanonicalsRequest)(nil),                // 161: arb.dashboard.v1.ListCanonicalsRequest
-	(*ListCanonicalsResponse)(nil),               // 162: arb.dashboard.v1.ListCanonicalsResponse
-	(*ListMatrixUniverseRequest)(nil),            // 163: arb.dashboard.v1.ListMatrixUniverseRequest
-	(*MatrixSymbolAccount)(nil),                  // 164: arb.dashboard.v1.MatrixSymbolAccount
-	(*MatrixSymbolRow)(nil),                      // 165: arb.dashboard.v1.MatrixSymbolRow
-	(*MatrixGroupStat)(nil),                      // 166: arb.dashboard.v1.MatrixGroupStat
-	(*MatrixUniverse)(nil),                       // 167: arb.dashboard.v1.MatrixUniverse
-	(*ListMatrixUniverseResponse)(nil),           // 168: arb.dashboard.v1.ListMatrixUniverseResponse
-	(*AutoMapBrokerRequest)(nil),                 // 169: arb.dashboard.v1.AutoMapBrokerRequest
-	(*AutoMapBrokerResult)(nil),                  // 170: arb.dashboard.v1.AutoMapBrokerResult
-	(*AutoMapBrokerResponse)(nil),                // 171: arb.dashboard.v1.AutoMapBrokerResponse
-	(*ListSwapCombosRequest)(nil),                // 172: arb.dashboard.v1.ListSwapCombosRequest
-	(*SwapCombo)(nil),                            // 173: arb.dashboard.v1.SwapCombo
-	(*ListSwapCombosResponse)(nil),               // 174: arb.dashboard.v1.ListSwapCombosResponse
-	(*GetFrontConfigRequest)(nil),                // 175: arb.dashboard.v1.GetFrontConfigRequest
-	(*GetFrontConfigResponse)(nil),               // 176: arb.dashboard.v1.GetFrontConfigResponse
-	(*GetStrategyLedgerRequest)(nil),             // 177: arb.dashboard.v1.GetStrategyLedgerRequest
-	(*StrategyLedgerEntry)(nil),                  // 178: arb.dashboard.v1.StrategyLedgerEntry
-	(*GetStrategyLedgerResponse)(nil),            // 179: arb.dashboard.v1.GetStrategyLedgerResponse
-	(*WatchlistItem)(nil),                        // 180: arb.dashboard.v1.WatchlistItem
-	(*GetWatchlistRequest)(nil),                  // 181: arb.dashboard.v1.GetWatchlistRequest
-	(*GetWatchlistResponse)(nil),                 // 182: arb.dashboard.v1.GetWatchlistResponse
-	(*SetWatchlistRequest)(nil),                  // 183: arb.dashboard.v1.SetWatchlistRequest
-	(*SetWatchlistResponse)(nil),                 // 184: arb.dashboard.v1.SetWatchlistResponse
-	(*EntityRef)(nil),                            // 185: arb.dashboard.v1.EntityRef
-	(*ChatTurn)(nil),                             // 186: arb.dashboard.v1.ChatTurn
-	(*AskAnalystRequest)(nil),                    // 187: arb.dashboard.v1.AskAnalystRequest
-	(*AnalystCitation)(nil),                      // 188: arb.dashboard.v1.AnalystCitation
-	(*SuggestedFollowUps)(nil),                   // 189: arb.dashboard.v1.SuggestedFollowUps
-	(*AnalystDone)(nil),                          // 190: arb.dashboard.v1.AnalystDone
-	(*AskAnalystResponse)(nil),                   // 191: arb.dashboard.v1.AskAnalystResponse
-	(*AppendAnalystNoteRequest)(nil),             // 192: arb.dashboard.v1.AppendAnalystNoteRequest
-	(*AppendAnalystNoteResponse)(nil),            // 193: arb.dashboard.v1.AppendAnalystNoteResponse
-	(*GenerateKbReportRequest)(nil),              // 194: arb.dashboard.v1.GenerateKbReportRequest
-	(*GenerateKbReportResponse)(nil),             // 195: arb.dashboard.v1.GenerateKbReportResponse
-	(*GenerateRetroReportRequest)(nil),           // 196: arb.dashboard.v1.GenerateRetroReportRequest
-	(*GenerateRetroReportResponse)(nil),          // 197: arb.dashboard.v1.GenerateRetroReportResponse
-	(*ReportInfo)(nil),                           // 198: arb.dashboard.v1.ReportInfo
-	(*ListReportsRequest)(nil),                   // 199: arb.dashboard.v1.ListReportsRequest
-	(*ListReportsResponse)(nil),                  // 200: arb.dashboard.v1.ListReportsResponse
-	(*GetReportRequest)(nil),                     // 201: arb.dashboard.v1.GetReportRequest
-	(*GetReportResponse)(nil),                    // 202: arb.dashboard.v1.GetReportResponse
-	(*GetAiSettingsRequest)(nil),                 // 203: arb.dashboard.v1.GetAiSettingsRequest
-	(*GetAiSettingsResponse)(nil),                // 204: arb.dashboard.v1.GetAiSettingsResponse
-	(*SetAiSettingsRequest)(nil),                 // 205: arb.dashboard.v1.SetAiSettingsRequest
-	(*SetAiSettingsResponse)(nil),                // 206: arb.dashboard.v1.SetAiSettingsResponse
-	(*GetCNFIRadarSnapshotRequest)(nil),          // 207: arb.dashboard.v1.GetCNFIRadarSnapshotRequest
-	(*CnfiCurvePoint)(nil),                       // 208: arb.dashboard.v1.CnfiCurvePoint
-	(*CnfiDerivedMetric)(nil),                    // 209: arb.dashboard.v1.CnfiDerivedMetric
-	(*CnfiSignalState)(nil),                      // 210: arb.dashboard.v1.CnfiSignalState
-	(*GetCNFIRadarSnapshotResponse)(nil),         // 211: arb.dashboard.v1.GetCNFIRadarSnapshotResponse
-	(*GetCNFIProgressRequest)(nil),               // 212: arb.dashboard.v1.GetCNFIProgressRequest
-	(*CnfiLayerProgress)(nil),                    // 213: arb.dashboard.v1.CnfiLayerProgress
-	(*GetCNFIProgressResponse)(nil),              // 214: arb.dashboard.v1.GetCNFIProgressResponse
-	(*CnfiLayerCompare)(nil),                     // 215: arb.dashboard.v1.CnfiLayerCompare
-	(*CnfiFundCompare)(nil),                      // 216: arb.dashboard.v1.CnfiFundCompare
-	(*AddCNFIHoldingRequest)(nil),                // 217: arb.dashboard.v1.AddCNFIHoldingRequest
-	(*AddCNFIHoldingResponse)(nil),               // 218: arb.dashboard.v1.AddCNFIHoldingResponse
-	(*AddCNFIActionRequest)(nil),                 // 219: arb.dashboard.v1.AddCNFIActionRequest
-	(*AddCNFIActionResponse)(nil),                // 220: arb.dashboard.v1.AddCNFIActionResponse
-	(*CnfiActionRow)(nil),                        // 221: arb.dashboard.v1.CnfiActionRow
-	(*ListCNFIActionsRequest)(nil),               // 222: arb.dashboard.v1.ListCNFIActionsRequest
-	(*ListCNFIActionsResponse)(nil),              // 223: arb.dashboard.v1.ListCNFIActionsResponse
-	(*ListRepoOpsRequest)(nil),                   // 224: arb.dashboard.v1.ListRepoOpsRequest
-	(*RepoOpRow)(nil),                            // 225: arb.dashboard.v1.RepoOpRow
-	(*ListRepoOpsResponse)(nil),                  // 226: arb.dashboard.v1.ListRepoOpsResponse
-	(*TrxAccountRefreshRequest)(nil),             // 227: arb.dashboard.v1.TrxAccountRefreshRequest
-	(*TrxAccountRefreshResponse)(nil),            // 228: arb.dashboard.v1.TrxAccountRefreshResponse
-	(*GetTrxYieldRadarRequest)(nil),              // 229: arb.dashboard.v1.GetTrxYieldRadarRequest
-	(*GetTrxYieldRadarResponse)(nil),             // 230: arb.dashboard.v1.GetTrxYieldRadarResponse
-	(*GetTrxYieldCurveRequest)(nil),              // 231: arb.dashboard.v1.GetTrxYieldCurveRequest
-	(*TrxYieldCurvePoint)(nil),                   // 232: arb.dashboard.v1.TrxYieldCurvePoint
-	(*GetTrxYieldCurveResponse)(nil),             // 233: arb.dashboard.v1.GetTrxYieldCurveResponse
-	(*GetRepoRateRadarRequest)(nil),              // 234: arb.dashboard.v1.GetRepoRateRadarRequest
-	(*GetRepoRateRadarResponse)(nil),             // 235: arb.dashboard.v1.GetRepoRateRadarResponse
-	(*RepoRateSnapshot)(nil),                     // 236: arb.dashboard.v1.RepoRateSnapshot
-	(*GetRepoConfigRequest)(nil),                 // 237: arb.dashboard.v1.GetRepoConfigRequest
-	(*GetRepoConfigResponse)(nil),                // 238: arb.dashboard.v1.GetRepoConfigResponse
-	(*SetRepoConfigRequest)(nil),                 // 239: arb.dashboard.v1.SetRepoConfigRequest
-	(*SetRepoConfigResponse)(nil),                // 240: arb.dashboard.v1.SetRepoConfigResponse
-	(*GetCexScanSnapshotRequest)(nil),            // 241: arb.dashboard.v1.GetCexScanSnapshotRequest
-	(*GetCexScanSnapshotResponse)(nil),           // 242: arb.dashboard.v1.GetCexScanSnapshotResponse
-	(*CexEarnJudgmentRow)(nil),                   // 243: arb.dashboard.v1.CexEarnJudgmentRow
-	(*CexEarnAPRRow)(nil),                        // 244: arb.dashboard.v1.CexEarnAPRRow
-	(*CexSpreadRow)(nil),                         // 245: arb.dashboard.v1.CexSpreadRow
-	(*CexFundingRow)(nil),                        // 246: arb.dashboard.v1.CexFundingRow
-	(*CexBalanceRow)(nil),                        // 247: arb.dashboard.v1.CexBalanceRow
-	(*RecordRepoTradeRequest)(nil),               // 248: arb.dashboard.v1.RecordRepoTradeRequest
-	(*RecordRepoTradeResponse)(nil),              // 249: arb.dashboard.v1.RecordRepoTradeResponse
-	(*ListRepoTradesRequest)(nil),                // 250: arb.dashboard.v1.ListRepoTradesRequest
-	(*RepoTradeRow)(nil),                         // 251: arb.dashboard.v1.RepoTradeRow
-	(*ListRepoTradesResponse)(nil),               // 252: arb.dashboard.v1.ListRepoTradesResponse
-	(*SettleRepoTradeRequest)(nil),               // 253: arb.dashboard.v1.SettleRepoTradeRequest
-	(*SettleRepoTradeResponse)(nil),              // 254: arb.dashboard.v1.SettleRepoTradeResponse
-	(*DeleteRepoTradeRequest)(nil),               // 255: arb.dashboard.v1.DeleteRepoTradeRequest
-	(*DeleteRepoTradeResponse)(nil),              // 256: arb.dashboard.v1.DeleteRepoTradeResponse
-	(*GetRepoStrategyValidationRequest)(nil),     // 257: arb.dashboard.v1.GetRepoStrategyValidationRequest
-	(*GetRepoStrategyValidationResponse)(nil),    // 258: arb.dashboard.v1.GetRepoStrategyValidationResponse
-	(*PriceAlertRuleRow)(nil),                    // 259: arb.dashboard.v1.PriceAlertRuleRow
-	(*ListPriceAlertRulesRequest)(nil),           // 260: arb.dashboard.v1.ListPriceAlertRulesRequest
-	(*ListPriceAlertRulesResponse)(nil),          // 261: arb.dashboard.v1.ListPriceAlertRulesResponse
-	(*CreatePriceAlertRuleRequest)(nil),          // 262: arb.dashboard.v1.CreatePriceAlertRuleRequest
-	(*CreatePriceAlertRuleResponse)(nil),         // 263: arb.dashboard.v1.CreatePriceAlertRuleResponse
-	(*UpdatePriceAlertRuleRequest)(nil),          // 264: arb.dashboard.v1.UpdatePriceAlertRuleRequest
-	(*UpdatePriceAlertRuleResponse)(nil),         // 265: arb.dashboard.v1.UpdatePriceAlertRuleResponse
-	(*DeletePriceAlertRuleRequest)(nil),          // 266: arb.dashboard.v1.DeletePriceAlertRuleRequest
-	(*DeletePriceAlertRuleResponse)(nil),         // 267: arb.dashboard.v1.DeletePriceAlertRuleResponse
-	(*EventJudgmentRow)(nil),                     // 268: arb.dashboard.v1.EventJudgmentRow
-	(*PaperTradeRow)(nil),                        // 269: arb.dashboard.v1.PaperTradeRow
-	(*ListEventJudgmentsRequest)(nil),            // 270: arb.dashboard.v1.ListEventJudgmentsRequest
-	(*ListEventJudgmentsResponse)(nil),           // 271: arb.dashboard.v1.ListEventJudgmentsResponse
-	(*ListPaperTradesRequest)(nil),               // 272: arb.dashboard.v1.ListPaperTradesRequest
-	(*ListPaperTradesResponse)(nil),              // 273: arb.dashboard.v1.ListPaperTradesResponse
-	(*AcceptJudgmentRequest)(nil),                // 274: arb.dashboard.v1.AcceptJudgmentRequest
-	(*AcceptJudgmentResponse)(nil),               // 275: arb.dashboard.v1.AcceptJudgmentResponse
-	(*SettlePaperTradeRequest)(nil),              // 276: arb.dashboard.v1.SettlePaperTradeRequest
-	(*SettlePaperTradeResponse)(nil),             // 277: arb.dashboard.v1.SettlePaperTradeResponse
-	(*GetFinanceOverviewRequest)(nil),            // 278: arb.dashboard.v1.GetFinanceOverviewRequest
-	(*FinancePnlByEnv)(nil),                      // 279: arb.dashboard.v1.FinancePnlByEnv
-	(*FinanceIncomeRow)(nil),                     // 280: arb.dashboard.v1.FinanceIncomeRow
-	(*FinanceFlowRow)(nil),                       // 281: arb.dashboard.v1.FinanceFlowRow
-	(*GetFinanceOverviewResponse)(nil),           // 282: arb.dashboard.v1.GetFinanceOverviewResponse
-	(*ExecuteSpotCarryDemoRequest)(nil),          // 283: arb.dashboard.v1.ExecuteSpotCarryDemoRequest
-	(*SpotCarryDemoLeg)(nil),                     // 284: arb.dashboard.v1.SpotCarryDemoLeg
-	(*ExecuteSpotCarryDemoResponse)(nil),         // 285: arb.dashboard.v1.ExecuteSpotCarryDemoResponse
-	(*SpotCarryDemoRow)(nil),                     // 286: arb.dashboard.v1.SpotCarryDemoRow
-	(*ListSpotCarryDemoRequest)(nil),             // 287: arb.dashboard.v1.ListSpotCarryDemoRequest
-	(*ListSpotCarryDemoResponse)(nil),            // 288: arb.dashboard.v1.ListSpotCarryDemoResponse
-	(*ListPaperSpotCarryRequest)(nil),            // 289: arb.dashboard.v1.ListPaperSpotCarryRequest
-	(*PaperSpotCarryRow)(nil),                    // 290: arb.dashboard.v1.PaperSpotCarryRow
-	(*PaperTrackSummary)(nil),                    // 291: arb.dashboard.v1.PaperTrackSummary
-	(*ListPaperSpotCarryResponse)(nil),           // 292: arb.dashboard.v1.ListPaperSpotCarryResponse
-	(*AutotradeAllowRuleRow)(nil),                // 293: arb.dashboard.v1.AutotradeAllowRuleRow
-	(*ListAutotradeAllowRulesRequest)(nil),       // 294: arb.dashboard.v1.ListAutotradeAllowRulesRequest
-	(*ListAutotradeAllowRulesResponse)(nil),      // 295: arb.dashboard.v1.ListAutotradeAllowRulesResponse
-	(*SetAutotradeAllowRuleEnabledRequest)(nil),  // 296: arb.dashboard.v1.SetAutotradeAllowRuleEnabledRequest
-	(*SetAutotradeAllowRuleEnabledResponse)(nil), // 297: arb.dashboard.v1.SetAutotradeAllowRuleEnabledResponse
-	(*ListIntraTradesRequest)(nil),               // 298: arb.dashboard.v1.ListIntraTradesRequest
-	(*IntraTradeRow)(nil),                        // 299: arb.dashboard.v1.IntraTradeRow
-	(*ListIntraTradesResponse)(nil),              // 300: arb.dashboard.v1.ListIntraTradesResponse
-	(*IntraBaselineStat)(nil),                    // 301: arb.dashboard.v1.IntraBaselineStat
-	(*IntraTrackStatsRequest)(nil),               // 302: arb.dashboard.v1.IntraTrackStatsRequest
-	(*IntraTrackStatsResponse)(nil),              // 303: arb.dashboard.v1.IntraTrackStatsResponse
-	(*GetCapitalCoverageRequest)(nil),            // 304: arb.dashboard.v1.GetCapitalCoverageRequest
-	(*CapitalCoverageRow)(nil),                   // 305: arb.dashboard.v1.CapitalCoverageRow
-	(*GetCapitalCoverageResponse)(nil),           // 306: arb.dashboard.v1.GetCapitalCoverageResponse
-	(*GetCexFinanceRequest)(nil),                 // 307: arb.dashboard.v1.GetCexFinanceRequest
-	(*CexFinanceHolding)(nil),                    // 308: arb.dashboard.v1.CexFinanceHolding
-	(*CexFinanceFlow)(nil),                       // 309: arb.dashboard.v1.CexFinanceFlow
-	(*CexAccountFinance)(nil),                    // 310: arb.dashboard.v1.CexAccountFinance
-	(*GetCexFinanceResponse)(nil),                // 311: arb.dashboard.v1.GetCexFinanceResponse
-	(*CarryGraduationRow)(nil),                   // 312: arb.dashboard.v1.CarryGraduationRow
-	(*GraduationRiskLeg)(nil),                    // 313: arb.dashboard.v1.GraduationRiskLeg
-	(*GraduationRiskReport)(nil),                 // 314: arb.dashboard.v1.GraduationRiskReport
-	(*ListXAssetAllowCombosRequest)(nil),         // 315: arb.dashboard.v1.ListXAssetAllowCombosRequest
-	(*XAssetAllowComboRow)(nil),                  // 316: arb.dashboard.v1.XAssetAllowComboRow
-	(*ListXAssetAllowCombosResponse)(nil),        // 317: arb.dashboard.v1.ListXAssetAllowCombosResponse
-	(*UpsertXAssetAllowComboRequest)(nil),        // 318: arb.dashboard.v1.UpsertXAssetAllowComboRequest
-	(*UpsertXAssetAllowComboResponse)(nil),       // 319: arb.dashboard.v1.UpsertXAssetAllowComboResponse
-	(*PreviewXAssetComboRiskRequest)(nil),        // 320: arb.dashboard.v1.PreviewXAssetComboRiskRequest
-	(*PreviewXAssetComboRiskResponse)(nil),       // 321: arb.dashboard.v1.PreviewXAssetComboRiskResponse
-	(*VenueExposureCapRow)(nil),                  // 322: arb.dashboard.v1.VenueExposureCapRow
-	(*ListVenueExposureCapsRequest)(nil),         // 323: arb.dashboard.v1.ListVenueExposureCapsRequest
-	(*ListVenueExposureCapsResponse)(nil),        // 324: arb.dashboard.v1.ListVenueExposureCapsResponse
-	(*SetVenueExposureCapRequest)(nil),           // 325: arb.dashboard.v1.SetVenueExposureCapRequest
-	(*SetVenueExposureCapResponse)(nil),          // 326: arb.dashboard.v1.SetVenueExposureCapResponse
-	(*ListCarryGraduationsRequest)(nil),          // 327: arb.dashboard.v1.ListCarryGraduationsRequest
-	(*ListCarryGraduationsResponse)(nil),         // 328: arb.dashboard.v1.ListCarryGraduationsResponse
-	(*ApproveCarryGraduationRequest)(nil),        // 329: arb.dashboard.v1.ApproveCarryGraduationRequest
-	(*ApproveCarryGraduationResponse)(nil),       // 330: arb.dashboard.v1.ApproveCarryGraduationResponse
-	(*RejectCarryGraduationRequest)(nil),         // 331: arb.dashboard.v1.RejectCarryGraduationRequest
-	(*RejectCarryGraduationResponse)(nil),        // 332: arb.dashboard.v1.RejectCarryGraduationResponse
-	(*timestamppb.Timestamp)(nil),                // 333: google.protobuf.Timestamp
+	(EvidenceGrade)(0),                           // 1: arb.dashboard.v1.EvidenceGrade
+	(*Quote)(nil),                                // 2: arb.dashboard.v1.Quote
+	(*ListQuotesRequest)(nil),                    // 3: arb.dashboard.v1.ListQuotesRequest
+	(*ListQuotesResponse)(nil),                   // 4: arb.dashboard.v1.ListQuotesResponse
+	(*Fact)(nil),                                 // 5: arb.dashboard.v1.Fact
+	(*ListLatestFactsRequest)(nil),               // 6: arb.dashboard.v1.ListLatestFactsRequest
+	(*ListLatestFactsResponse)(nil),              // 7: arb.dashboard.v1.ListLatestFactsResponse
+	(*ListFactsRequest)(nil),                     // 8: arb.dashboard.v1.ListFactsRequest
+	(*ListFactsResponse)(nil),                    // 9: arb.dashboard.v1.ListFactsResponse
+	(*Opportunity)(nil),                          // 10: arb.dashboard.v1.Opportunity
+	(*ListOpportunitiesRequest)(nil),             // 11: arb.dashboard.v1.ListOpportunitiesRequest
+	(*ListOpportunitiesResponse)(nil),            // 12: arb.dashboard.v1.ListOpportunitiesResponse
+	(*VerificationStat)(nil),                     // 13: arb.dashboard.v1.VerificationStat
+	(*ListVerificationStatsRequest)(nil),         // 14: arb.dashboard.v1.ListVerificationStatsRequest
+	(*ListVerificationStatsResponse)(nil),        // 15: arb.dashboard.v1.ListVerificationStatsResponse
+	(*Alert)(nil),                                // 16: arb.dashboard.v1.Alert
+	(*ListAlertsRequest)(nil),                    // 17: arb.dashboard.v1.ListAlertsRequest
+	(*ListAlertsResponse)(nil),                   // 18: arb.dashboard.v1.ListAlertsResponse
+	(*AckAlertRequest)(nil),                      // 19: arb.dashboard.v1.AckAlertRequest
+	(*AckAlertResponse)(nil),                     // 20: arb.dashboard.v1.AckAlertResponse
+	(*AckAllRequest)(nil),                        // 21: arb.dashboard.v1.AckAllRequest
+	(*AckAllResponse)(nil),                       // 22: arb.dashboard.v1.AckAllResponse
+	(*ListUnackedRequest)(nil),                   // 23: arb.dashboard.v1.ListUnackedRequest
+	(*ListUnackedResponse)(nil),                  // 24: arb.dashboard.v1.ListUnackedResponse
+	(*DeleteAlertsRequest)(nil),                  // 25: arb.dashboard.v1.DeleteAlertsRequest
+	(*DeleteAlertsResponse)(nil),                 // 26: arb.dashboard.v1.DeleteAlertsResponse
+	(*ClearAckedAlertsRequest)(nil),              // 27: arb.dashboard.v1.ClearAckedAlertsRequest
+	(*ClearAckedAlertsResponse)(nil),             // 28: arb.dashboard.v1.ClearAckedAlertsResponse
+	(*TriggerState)(nil),                         // 29: arb.dashboard.v1.TriggerState
+	(*ListTriggerStatesRequest)(nil),             // 30: arb.dashboard.v1.ListTriggerStatesRequest
+	(*ListTriggerStatesResponse)(nil),            // 31: arb.dashboard.v1.ListTriggerStatesResponse
+	(*SourceHealth)(nil),                         // 32: arb.dashboard.v1.SourceHealth
+	(*ListSourceHealthRequest)(nil),              // 33: arb.dashboard.v1.ListSourceHealthRequest
+	(*ListSourceHealthResponse)(nil),             // 34: arb.dashboard.v1.ListSourceHealthResponse
+	(*LedgerEntry)(nil),                          // 35: arb.dashboard.v1.LedgerEntry
+	(*AddLedgerEntryRequest)(nil),                // 36: arb.dashboard.v1.AddLedgerEntryRequest
+	(*AddLedgerEntryResponse)(nil),               // 37: arb.dashboard.v1.AddLedgerEntryResponse
+	(*ListLedgerEntriesRequest)(nil),             // 38: arb.dashboard.v1.ListLedgerEntriesRequest
+	(*ListLedgerEntriesResponse)(nil),            // 39: arb.dashboard.v1.ListLedgerEntriesResponse
+	(*LedgerSummaryRequest)(nil),                 // 40: arb.dashboard.v1.LedgerSummaryRequest
+	(*TierSummary)(nil),                          // 41: arb.dashboard.v1.TierSummary
+	(*LedgerSummaryResponse)(nil),                // 42: arb.dashboard.v1.LedgerSummaryResponse
+	(*InvestmentRecord)(nil),                     // 43: arb.dashboard.v1.InvestmentRecord
+	(*AddInvestmentRecordRequest)(nil),           // 44: arb.dashboard.v1.AddInvestmentRecordRequest
+	(*AddInvestmentRecordResponse)(nil),          // 45: arb.dashboard.v1.AddInvestmentRecordResponse
+	(*ListInvestmentRecordsRequest)(nil),         // 46: arb.dashboard.v1.ListInvestmentRecordsRequest
+	(*ListInvestmentRecordsResponse)(nil),        // 47: arb.dashboard.v1.ListInvestmentRecordsResponse
+	(*KnowledgeEntry)(nil),                       // 48: arb.dashboard.v1.KnowledgeEntry
+	(*ListKnowledgeEntriesRequest)(nil),          // 49: arb.dashboard.v1.ListKnowledgeEntriesRequest
+	(*ListKnowledgeEntriesResponse)(nil),         // 50: arb.dashboard.v1.ListKnowledgeEntriesResponse
+	(*PositionLeg)(nil),                          // 51: arb.dashboard.v1.PositionLeg
+	(*Position)(nil),                             // 52: arb.dashboard.v1.Position
+	(*ExecuteOpportunityRequest)(nil),            // 53: arb.dashboard.v1.ExecuteOpportunityRequest
+	(*ExecuteOpportunityResponse)(nil),           // 54: arb.dashboard.v1.ExecuteOpportunityResponse
+	(*ClosePositionRequest)(nil),                 // 55: arb.dashboard.v1.ClosePositionRequest
+	(*ClosePositionResponse)(nil),                // 56: arb.dashboard.v1.ClosePositionResponse
+	(*BackfillSwapHistoryRequest)(nil),           // 57: arb.dashboard.v1.BackfillSwapHistoryRequest
+	(*BackfillSwapHistoryReply)(nil),             // 58: arb.dashboard.v1.BackfillSwapHistoryReply
+	(*ListPositionsRequest)(nil),                 // 59: arb.dashboard.v1.ListPositionsRequest
+	(*ListPositionsResponse)(nil),                // 60: arb.dashboard.v1.ListPositionsResponse
+	(*BrokerPosition)(nil),                       // 61: arb.dashboard.v1.BrokerPosition
+	(*ListBrokerPositionsRequest)(nil),           // 62: arb.dashboard.v1.ListBrokerPositionsRequest
+	(*ListBrokerPositionsResponse)(nil),          // 63: arb.dashboard.v1.ListBrokerPositionsResponse
+	(*CloseBrokerPositionRequest)(nil),           // 64: arb.dashboard.v1.CloseBrokerPositionRequest
+	(*CloseBrokerPositionResponse)(nil),          // 65: arb.dashboard.v1.CloseBrokerPositionResponse
+	(*CloseBrokerPositionsRequest)(nil),          // 66: arb.dashboard.v1.CloseBrokerPositionsRequest
+	(*CloseBrokerPositionsResponse)(nil),         // 67: arb.dashboard.v1.CloseBrokerPositionsResponse
+	(*PersonalPosition)(nil),                     // 68: arb.dashboard.v1.PersonalPosition
+	(*ListPersonalPositionsRequest)(nil),         // 69: arb.dashboard.v1.ListPersonalPositionsRequest
+	(*ListPersonalPositionsResponse)(nil),        // 70: arb.dashboard.v1.ListPersonalPositionsResponse
+	(*HedgeStake)(nil),                           // 71: arb.dashboard.v1.HedgeStake
+	(*HedgeLegSpot)(nil),                         // 72: arb.dashboard.v1.HedgeLegSpot
+	(*HedgeLegShort)(nil),                        // 73: arb.dashboard.v1.HedgeLegShort
+	(*HedgeCarry)(nil),                           // 74: arb.dashboard.v1.HedgeCarry
+	(*HedgeAccounts)(nil),                        // 75: arb.dashboard.v1.HedgeAccounts
+	(*HedgeStructure)(nil),                       // 76: arb.dashboard.v1.HedgeStructure
+	(*GetHedgeStructureRequest)(nil),             // 77: arb.dashboard.v1.GetHedgeStructureRequest
+	(*GetHedgeStructureResponse)(nil),            // 78: arb.dashboard.v1.GetHedgeStructureResponse
+	(*HedgeFlowItem)(nil),                        // 79: arb.dashboard.v1.HedgeFlowItem
+	(*ListHedgeFlowRequest)(nil),                 // 80: arb.dashboard.v1.ListHedgeFlowRequest
+	(*ListHedgeFlowResponse)(nil),                // 81: arb.dashboard.v1.ListHedgeFlowResponse
+	(*PositionDailyIncome)(nil),                  // 82: arb.dashboard.v1.PositionDailyIncome
+	(*AddDailyIncomeRequest)(nil),                // 83: arb.dashboard.v1.AddDailyIncomeRequest
+	(*AddDailyIncomeResponse)(nil),               // 84: arb.dashboard.v1.AddDailyIncomeResponse
+	(*GetPnlAnchorRequest)(nil),                  // 85: arb.dashboard.v1.GetPnlAnchorRequest
+	(*GetPnlAnchorResponse)(nil),                 // 86: arb.dashboard.v1.GetPnlAnchorResponse
+	(*ResetPnlAnchorRequest)(nil),                // 87: arb.dashboard.v1.ResetPnlAnchorRequest
+	(*ResetPnlAnchorResponse)(nil),               // 88: arb.dashboard.v1.ResetPnlAnchorResponse
+	(*KBEntry)(nil),                              // 89: arb.dashboard.v1.KBEntry
+	(*ListKBEntriesRequest)(nil),                 // 90: arb.dashboard.v1.ListKBEntriesRequest
+	(*ListKBEntriesResponse)(nil),                // 91: arb.dashboard.v1.ListKBEntriesResponse
+	(*GetKBEntryRequest)(nil),                    // 92: arb.dashboard.v1.GetKBEntryRequest
+	(*GetKBEntryResponse)(nil),                   // 93: arb.dashboard.v1.GetKBEntryResponse
+	(*ListDailyIncomeRequest)(nil),               // 94: arb.dashboard.v1.ListDailyIncomeRequest
+	(*ListDailyIncomeResponse)(nil),              // 95: arb.dashboard.v1.ListDailyIncomeResponse
+	(*StreamUpdatesRequest)(nil),                 // 96: arb.dashboard.v1.StreamUpdatesRequest
+	(*PersonalPositionPrice)(nil),                // 97: arb.dashboard.v1.PersonalPositionPrice
+	(*StreamUpdatesResponse)(nil),                // 98: arb.dashboard.v1.StreamUpdatesResponse
+	(*HedgeRefreshNotice)(nil),                   // 99: arb.dashboard.v1.HedgeRefreshNotice
+	(*CMCWatchUpdate)(nil),                       // 100: arb.dashboard.v1.CMCWatchUpdate
+	(*PositionChangeNotice)(nil),                 // 101: arb.dashboard.v1.PositionChangeNotice
+	(*FundingNeedNotice)(nil),                    // 102: arb.dashboard.v1.FundingNeedNotice
+	(*BrokerPositionSnapshot)(nil),               // 103: arb.dashboard.v1.BrokerPositionSnapshot
+	(*AccountInfo)(nil),                          // 104: arb.dashboard.v1.AccountInfo
+	(*ListAccountMarginStatusRequest)(nil),       // 105: arb.dashboard.v1.ListAccountMarginStatusRequest
+	(*AccountMarginStatus)(nil),                  // 106: arb.dashboard.v1.AccountMarginStatus
+	(*ListAccountMarginStatusResponse)(nil),      // 107: arb.dashboard.v1.ListAccountMarginStatusResponse
+	(*Holding)(nil),                              // 108: arb.dashboard.v1.Holding
+	(*AccountSnapshot)(nil),                      // 109: arb.dashboard.v1.AccountSnapshot
+	(*ListAccountsRequest)(nil),                  // 110: arb.dashboard.v1.ListAccountsRequest
+	(*ListAccountsResponse)(nil),                 // 111: arb.dashboard.v1.ListAccountsResponse
+	(*Keepalive)(nil),                            // 112: arb.dashboard.v1.Keepalive
+	(*HealthRequest)(nil),                        // 113: arb.dashboard.v1.HealthRequest
+	(*HealthResponse)(nil),                       // 114: arb.dashboard.v1.HealthResponse
+	(*SearchBrokerRequest)(nil),                  // 115: arb.dashboard.v1.SearchBrokerRequest
+	(*BrokerServer)(nil),                         // 116: arb.dashboard.v1.BrokerServer
+	(*BrokerCompany)(nil),                        // 117: arb.dashboard.v1.BrokerCompany
+	(*SearchBrokerResponse)(nil),                 // 118: arb.dashboard.v1.SearchBrokerResponse
+	(*AddBrokerRequest)(nil),                     // 119: arb.dashboard.v1.AddBrokerRequest
+	(*AddBrokerResponse)(nil),                    // 120: arb.dashboard.v1.AddBrokerResponse
+	(*RemoveBrokerRequest)(nil),                  // 121: arb.dashboard.v1.RemoveBrokerRequest
+	(*RemoveBrokerResponse)(nil),                 // 122: arb.dashboard.v1.RemoveBrokerResponse
+	(*BrokerAccount)(nil),                        // 123: arb.dashboard.v1.BrokerAccount
+	(*ListBrokerAccountsRequest)(nil),            // 124: arb.dashboard.v1.ListBrokerAccountsRequest
+	(*ListBrokerAccountsResponse)(nil),           // 125: arb.dashboard.v1.ListBrokerAccountsResponse
+	(*ExchangeConfig)(nil),                       // 126: arb.dashboard.v1.ExchangeConfig
+	(*ListExchangesRequest)(nil),                 // 127: arb.dashboard.v1.ListExchangesRequest
+	(*ListExchangesResponse)(nil),                // 128: arb.dashboard.v1.ListExchangesResponse
+	(*AddExchangeRequest)(nil),                   // 129: arb.dashboard.v1.AddExchangeRequest
+	(*AddExchangeResponse)(nil),                  // 130: arb.dashboard.v1.AddExchangeResponse
+	(*RemoveExchangeRequest)(nil),                // 131: arb.dashboard.v1.RemoveExchangeRequest
+	(*RemoveExchangeResponse)(nil),               // 132: arb.dashboard.v1.RemoveExchangeResponse
+	(*SetExchangeLabelRequest)(nil),              // 133: arb.dashboard.v1.SetExchangeLabelRequest
+	(*SetExchangeLabelResponse)(nil),             // 134: arb.dashboard.v1.SetExchangeLabelResponse
+	(*SetExchangeWebsiteRequest)(nil),            // 135: arb.dashboard.v1.SetExchangeWebsiteRequest
+	(*SetExchangeWebsiteResponse)(nil),           // 136: arb.dashboard.v1.SetExchangeWebsiteResponse
+	(*VerifyAccountRequest)(nil),                 // 137: arb.dashboard.v1.VerifyAccountRequest
+	(*VerifyAccountResponse)(nil),                // 138: arb.dashboard.v1.VerifyAccountResponse
+	(*BrokerSymbolsRequest)(nil),                 // 139: arb.dashboard.v1.BrokerSymbolsRequest
+	(*SymbolEntry)(nil),                          // 140: arb.dashboard.v1.SymbolEntry
+	(*BrokerSymbolsResponse)(nil),                // 141: arb.dashboard.v1.BrokerSymbolsResponse
+	(*SetBrokerAccountAliasRequest)(nil),         // 142: arb.dashboard.v1.SetBrokerAccountAliasRequest
+	(*SetBrokerAccountAliasResponse)(nil),        // 143: arb.dashboard.v1.SetBrokerAccountAliasResponse
+	(*SetBrokerAccountIsRealRequest)(nil),        // 144: arb.dashboard.v1.SetBrokerAccountIsRealRequest
+	(*SetBrokerAccountIsRealResponse)(nil),       // 145: arb.dashboard.v1.SetBrokerAccountIsRealResponse
+	(*SetBrokerDisabledRequest)(nil),             // 146: arb.dashboard.v1.SetBrokerDisabledRequest
+	(*SetBrokerDisabledResponse)(nil),            // 147: arb.dashboard.v1.SetBrokerDisabledResponse
+	(*SetBrokerCommissionRequest)(nil),           // 148: arb.dashboard.v1.SetBrokerCommissionRequest
+	(*SetBrokerCommissionResponse)(nil),          // 149: arb.dashboard.v1.SetBrokerCommissionResponse
+	(*SetBrokerWebsiteRequest)(nil),              // 150: arb.dashboard.v1.SetBrokerWebsiteRequest
+	(*SetBrokerWebsiteResponse)(nil),             // 151: arb.dashboard.v1.SetBrokerWebsiteResponse
+	(*SymbolMapping)(nil),                        // 152: arb.dashboard.v1.SymbolMapping
+	(*ListSymbolMappingsRequest)(nil),            // 153: arb.dashboard.v1.ListSymbolMappingsRequest
+	(*ListSymbolMappingsResponse)(nil),           // 154: arb.dashboard.v1.ListSymbolMappingsResponse
+	(*SaveSymbolMappingRequest)(nil),             // 155: arb.dashboard.v1.SaveSymbolMappingRequest
+	(*SaveSymbolMappingResponse)(nil),            // 156: arb.dashboard.v1.SaveSymbolMappingResponse
+	(*DeleteSymbolMappingRequest)(nil),           // 157: arb.dashboard.v1.DeleteSymbolMappingRequest
+	(*DeleteSymbolMappingResponse)(nil),          // 158: arb.dashboard.v1.DeleteSymbolMappingResponse
+	(*ListMappingSuggestionsRequest)(nil),        // 159: arb.dashboard.v1.ListMappingSuggestionsRequest
+	(*SymbolMappingSuggestion)(nil),              // 160: arb.dashboard.v1.SymbolMappingSuggestion
+	(*ListMappingSuggestionsResponse)(nil),       // 161: arb.dashboard.v1.ListMappingSuggestionsResponse
+	(*ListCanonicalsRequest)(nil),                // 162: arb.dashboard.v1.ListCanonicalsRequest
+	(*ListCanonicalsResponse)(nil),               // 163: arb.dashboard.v1.ListCanonicalsResponse
+	(*ListMatrixUniverseRequest)(nil),            // 164: arb.dashboard.v1.ListMatrixUniverseRequest
+	(*MatrixSymbolAccount)(nil),                  // 165: arb.dashboard.v1.MatrixSymbolAccount
+	(*MatrixSymbolRow)(nil),                      // 166: arb.dashboard.v1.MatrixSymbolRow
+	(*MatrixGroupStat)(nil),                      // 167: arb.dashboard.v1.MatrixGroupStat
+	(*MatrixUniverse)(nil),                       // 168: arb.dashboard.v1.MatrixUniverse
+	(*ListMatrixUniverseResponse)(nil),           // 169: arb.dashboard.v1.ListMatrixUniverseResponse
+	(*AutoMapBrokerRequest)(nil),                 // 170: arb.dashboard.v1.AutoMapBrokerRequest
+	(*AutoMapBrokerResult)(nil),                  // 171: arb.dashboard.v1.AutoMapBrokerResult
+	(*AutoMapBrokerResponse)(nil),                // 172: arb.dashboard.v1.AutoMapBrokerResponse
+	(*ListSwapCombosRequest)(nil),                // 173: arb.dashboard.v1.ListSwapCombosRequest
+	(*SwapCombo)(nil),                            // 174: arb.dashboard.v1.SwapCombo
+	(*ListSwapCombosResponse)(nil),               // 175: arb.dashboard.v1.ListSwapCombosResponse
+	(*GetFrontConfigRequest)(nil),                // 176: arb.dashboard.v1.GetFrontConfigRequest
+	(*GetFrontConfigResponse)(nil),               // 177: arb.dashboard.v1.GetFrontConfigResponse
+	(*GetStrategyLedgerRequest)(nil),             // 178: arb.dashboard.v1.GetStrategyLedgerRequest
+	(*StrategyLedgerEntry)(nil),                  // 179: arb.dashboard.v1.StrategyLedgerEntry
+	(*GetStrategyLedgerResponse)(nil),            // 180: arb.dashboard.v1.GetStrategyLedgerResponse
+	(*WatchlistItem)(nil),                        // 181: arb.dashboard.v1.WatchlistItem
+	(*GetWatchlistRequest)(nil),                  // 182: arb.dashboard.v1.GetWatchlistRequest
+	(*GetWatchlistResponse)(nil),                 // 183: arb.dashboard.v1.GetWatchlistResponse
+	(*SetWatchlistRequest)(nil),                  // 184: arb.dashboard.v1.SetWatchlistRequest
+	(*SetWatchlistResponse)(nil),                 // 185: arb.dashboard.v1.SetWatchlistResponse
+	(*EntityRef)(nil),                            // 186: arb.dashboard.v1.EntityRef
+	(*ChatTurn)(nil),                             // 187: arb.dashboard.v1.ChatTurn
+	(*AskAnalystRequest)(nil),                    // 188: arb.dashboard.v1.AskAnalystRequest
+	(*AnalystCitation)(nil),                      // 189: arb.dashboard.v1.AnalystCitation
+	(*SuggestedFollowUps)(nil),                   // 190: arb.dashboard.v1.SuggestedFollowUps
+	(*AnalystDone)(nil),                          // 191: arb.dashboard.v1.AnalystDone
+	(*AskAnalystResponse)(nil),                   // 192: arb.dashboard.v1.AskAnalystResponse
+	(*AppendAnalystNoteRequest)(nil),             // 193: arb.dashboard.v1.AppendAnalystNoteRequest
+	(*AppendAnalystNoteResponse)(nil),            // 194: arb.dashboard.v1.AppendAnalystNoteResponse
+	(*GenerateKbReportRequest)(nil),              // 195: arb.dashboard.v1.GenerateKbReportRequest
+	(*GenerateKbReportResponse)(nil),             // 196: arb.dashboard.v1.GenerateKbReportResponse
+	(*GenerateRetroReportRequest)(nil),           // 197: arb.dashboard.v1.GenerateRetroReportRequest
+	(*GenerateRetroReportResponse)(nil),          // 198: arb.dashboard.v1.GenerateRetroReportResponse
+	(*ReportInfo)(nil),                           // 199: arb.dashboard.v1.ReportInfo
+	(*ListReportsRequest)(nil),                   // 200: arb.dashboard.v1.ListReportsRequest
+	(*ListReportsResponse)(nil),                  // 201: arb.dashboard.v1.ListReportsResponse
+	(*GetReportRequest)(nil),                     // 202: arb.dashboard.v1.GetReportRequest
+	(*GetReportResponse)(nil),                    // 203: arb.dashboard.v1.GetReportResponse
+	(*GetAiSettingsRequest)(nil),                 // 204: arb.dashboard.v1.GetAiSettingsRequest
+	(*GetAiSettingsResponse)(nil),                // 205: arb.dashboard.v1.GetAiSettingsResponse
+	(*SetAiSettingsRequest)(nil),                 // 206: arb.dashboard.v1.SetAiSettingsRequest
+	(*SetAiSettingsResponse)(nil),                // 207: arb.dashboard.v1.SetAiSettingsResponse
+	(*GetCNFIRadarSnapshotRequest)(nil),          // 208: arb.dashboard.v1.GetCNFIRadarSnapshotRequest
+	(*CnfiCurvePoint)(nil),                       // 209: arb.dashboard.v1.CnfiCurvePoint
+	(*CnfiDerivedMetric)(nil),                    // 210: arb.dashboard.v1.CnfiDerivedMetric
+	(*CnfiSignalState)(nil),                      // 211: arb.dashboard.v1.CnfiSignalState
+	(*GetCNFIRadarSnapshotResponse)(nil),         // 212: arb.dashboard.v1.GetCNFIRadarSnapshotResponse
+	(*GetCNFIProgressRequest)(nil),               // 213: arb.dashboard.v1.GetCNFIProgressRequest
+	(*CnfiLayerProgress)(nil),                    // 214: arb.dashboard.v1.CnfiLayerProgress
+	(*GetCNFIProgressResponse)(nil),              // 215: arb.dashboard.v1.GetCNFIProgressResponse
+	(*CnfiLayerCompare)(nil),                     // 216: arb.dashboard.v1.CnfiLayerCompare
+	(*CnfiFundCompare)(nil),                      // 217: arb.dashboard.v1.CnfiFundCompare
+	(*AddCNFIHoldingRequest)(nil),                // 218: arb.dashboard.v1.AddCNFIHoldingRequest
+	(*AddCNFIHoldingResponse)(nil),               // 219: arb.dashboard.v1.AddCNFIHoldingResponse
+	(*AddCNFIActionRequest)(nil),                 // 220: arb.dashboard.v1.AddCNFIActionRequest
+	(*AddCNFIActionResponse)(nil),                // 221: arb.dashboard.v1.AddCNFIActionResponse
+	(*CnfiActionRow)(nil),                        // 222: arb.dashboard.v1.CnfiActionRow
+	(*ListCNFIActionsRequest)(nil),               // 223: arb.dashboard.v1.ListCNFIActionsRequest
+	(*ListCNFIActionsResponse)(nil),              // 224: arb.dashboard.v1.ListCNFIActionsResponse
+	(*ListRepoOpsRequest)(nil),                   // 225: arb.dashboard.v1.ListRepoOpsRequest
+	(*RepoOpRow)(nil),                            // 226: arb.dashboard.v1.RepoOpRow
+	(*ListRepoOpsResponse)(nil),                  // 227: arb.dashboard.v1.ListRepoOpsResponse
+	(*TrxAccountRefreshRequest)(nil),             // 228: arb.dashboard.v1.TrxAccountRefreshRequest
+	(*TrxAccountRefreshResponse)(nil),            // 229: arb.dashboard.v1.TrxAccountRefreshResponse
+	(*GetTrxYieldRadarRequest)(nil),              // 230: arb.dashboard.v1.GetTrxYieldRadarRequest
+	(*GetTrxYieldRadarResponse)(nil),             // 231: arb.dashboard.v1.GetTrxYieldRadarResponse
+	(*GetTrxYieldCurveRequest)(nil),              // 232: arb.dashboard.v1.GetTrxYieldCurveRequest
+	(*TrxYieldCurvePoint)(nil),                   // 233: arb.dashboard.v1.TrxYieldCurvePoint
+	(*GetTrxYieldCurveResponse)(nil),             // 234: arb.dashboard.v1.GetTrxYieldCurveResponse
+	(*GetRepoRateRadarRequest)(nil),              // 235: arb.dashboard.v1.GetRepoRateRadarRequest
+	(*GetRepoRateRadarResponse)(nil),             // 236: arb.dashboard.v1.GetRepoRateRadarResponse
+	(*RepoRateSnapshot)(nil),                     // 237: arb.dashboard.v1.RepoRateSnapshot
+	(*GetRepoConfigRequest)(nil),                 // 238: arb.dashboard.v1.GetRepoConfigRequest
+	(*GetRepoConfigResponse)(nil),                // 239: arb.dashboard.v1.GetRepoConfigResponse
+	(*SetRepoConfigRequest)(nil),                 // 240: arb.dashboard.v1.SetRepoConfigRequest
+	(*SetRepoConfigResponse)(nil),                // 241: arb.dashboard.v1.SetRepoConfigResponse
+	(*GetCexScanSnapshotRequest)(nil),            // 242: arb.dashboard.v1.GetCexScanSnapshotRequest
+	(*GetCexScanSnapshotResponse)(nil),           // 243: arb.dashboard.v1.GetCexScanSnapshotResponse
+	(*CexEarnJudgmentRow)(nil),                   // 244: arb.dashboard.v1.CexEarnJudgmentRow
+	(*CexEarnAPRRow)(nil),                        // 245: arb.dashboard.v1.CexEarnAPRRow
+	(*CexSpreadRow)(nil),                         // 246: arb.dashboard.v1.CexSpreadRow
+	(*CexFundingRow)(nil),                        // 247: arb.dashboard.v1.CexFundingRow
+	(*CexBalanceRow)(nil),                        // 248: arb.dashboard.v1.CexBalanceRow
+	(*RecordRepoTradeRequest)(nil),               // 249: arb.dashboard.v1.RecordRepoTradeRequest
+	(*RecordRepoTradeResponse)(nil),              // 250: arb.dashboard.v1.RecordRepoTradeResponse
+	(*ListRepoTradesRequest)(nil),                // 251: arb.dashboard.v1.ListRepoTradesRequest
+	(*RepoTradeRow)(nil),                         // 252: arb.dashboard.v1.RepoTradeRow
+	(*ListRepoTradesResponse)(nil),               // 253: arb.dashboard.v1.ListRepoTradesResponse
+	(*SettleRepoTradeRequest)(nil),               // 254: arb.dashboard.v1.SettleRepoTradeRequest
+	(*SettleRepoTradeResponse)(nil),              // 255: arb.dashboard.v1.SettleRepoTradeResponse
+	(*DeleteRepoTradeRequest)(nil),               // 256: arb.dashboard.v1.DeleteRepoTradeRequest
+	(*DeleteRepoTradeResponse)(nil),              // 257: arb.dashboard.v1.DeleteRepoTradeResponse
+	(*GetRepoStrategyValidationRequest)(nil),     // 258: arb.dashboard.v1.GetRepoStrategyValidationRequest
+	(*GetRepoStrategyValidationResponse)(nil),    // 259: arb.dashboard.v1.GetRepoStrategyValidationResponse
+	(*PriceAlertRuleRow)(nil),                    // 260: arb.dashboard.v1.PriceAlertRuleRow
+	(*ListPriceAlertRulesRequest)(nil),           // 261: arb.dashboard.v1.ListPriceAlertRulesRequest
+	(*ListPriceAlertRulesResponse)(nil),          // 262: arb.dashboard.v1.ListPriceAlertRulesResponse
+	(*CreatePriceAlertRuleRequest)(nil),          // 263: arb.dashboard.v1.CreatePriceAlertRuleRequest
+	(*CreatePriceAlertRuleResponse)(nil),         // 264: arb.dashboard.v1.CreatePriceAlertRuleResponse
+	(*UpdatePriceAlertRuleRequest)(nil),          // 265: arb.dashboard.v1.UpdatePriceAlertRuleRequest
+	(*UpdatePriceAlertRuleResponse)(nil),         // 266: arb.dashboard.v1.UpdatePriceAlertRuleResponse
+	(*DeletePriceAlertRuleRequest)(nil),          // 267: arb.dashboard.v1.DeletePriceAlertRuleRequest
+	(*DeletePriceAlertRuleResponse)(nil),         // 268: arb.dashboard.v1.DeletePriceAlertRuleResponse
+	(*EventJudgmentRow)(nil),                     // 269: arb.dashboard.v1.EventJudgmentRow
+	(*PaperTradeRow)(nil),                        // 270: arb.dashboard.v1.PaperTradeRow
+	(*ListEventJudgmentsRequest)(nil),            // 271: arb.dashboard.v1.ListEventJudgmentsRequest
+	(*ListEventJudgmentsResponse)(nil),           // 272: arb.dashboard.v1.ListEventJudgmentsResponse
+	(*ListPaperTradesRequest)(nil),               // 273: arb.dashboard.v1.ListPaperTradesRequest
+	(*ListPaperTradesResponse)(nil),              // 274: arb.dashboard.v1.ListPaperTradesResponse
+	(*AcceptJudgmentRequest)(nil),                // 275: arb.dashboard.v1.AcceptJudgmentRequest
+	(*AcceptJudgmentResponse)(nil),               // 276: arb.dashboard.v1.AcceptJudgmentResponse
+	(*SettlePaperTradeRequest)(nil),              // 277: arb.dashboard.v1.SettlePaperTradeRequest
+	(*SettlePaperTradeResponse)(nil),             // 278: arb.dashboard.v1.SettlePaperTradeResponse
+	(*GetFinanceOverviewRequest)(nil),            // 279: arb.dashboard.v1.GetFinanceOverviewRequest
+	(*FinancePnlByEnv)(nil),                      // 280: arb.dashboard.v1.FinancePnlByEnv
+	(*FinanceIncomeRow)(nil),                     // 281: arb.dashboard.v1.FinanceIncomeRow
+	(*FinanceFlowRow)(nil),                       // 282: arb.dashboard.v1.FinanceFlowRow
+	(*GetFinanceOverviewResponse)(nil),           // 283: arb.dashboard.v1.GetFinanceOverviewResponse
+	(*ExecuteSpotCarryDemoRequest)(nil),          // 284: arb.dashboard.v1.ExecuteSpotCarryDemoRequest
+	(*SpotCarryDemoLeg)(nil),                     // 285: arb.dashboard.v1.SpotCarryDemoLeg
+	(*ExecuteSpotCarryDemoResponse)(nil),         // 286: arb.dashboard.v1.ExecuteSpotCarryDemoResponse
+	(*SpotCarryDemoRow)(nil),                     // 287: arb.dashboard.v1.SpotCarryDemoRow
+	(*ListSpotCarryDemoRequest)(nil),             // 288: arb.dashboard.v1.ListSpotCarryDemoRequest
+	(*ListSpotCarryDemoResponse)(nil),            // 289: arb.dashboard.v1.ListSpotCarryDemoResponse
+	(*ListPaperSpotCarryRequest)(nil),            // 290: arb.dashboard.v1.ListPaperSpotCarryRequest
+	(*PaperSpotCarryRow)(nil),                    // 291: arb.dashboard.v1.PaperSpotCarryRow
+	(*PaperTrackSummary)(nil),                    // 292: arb.dashboard.v1.PaperTrackSummary
+	(*ListPaperSpotCarryResponse)(nil),           // 293: arb.dashboard.v1.ListPaperSpotCarryResponse
+	(*AutotradeAllowRuleRow)(nil),                // 294: arb.dashboard.v1.AutotradeAllowRuleRow
+	(*ListAutotradeAllowRulesRequest)(nil),       // 295: arb.dashboard.v1.ListAutotradeAllowRulesRequest
+	(*ListAutotradeAllowRulesResponse)(nil),      // 296: arb.dashboard.v1.ListAutotradeAllowRulesResponse
+	(*SetAutotradeAllowRuleEnabledRequest)(nil),  // 297: arb.dashboard.v1.SetAutotradeAllowRuleEnabledRequest
+	(*SetAutotradeAllowRuleEnabledResponse)(nil), // 298: arb.dashboard.v1.SetAutotradeAllowRuleEnabledResponse
+	(*ListIntraTradesRequest)(nil),               // 299: arb.dashboard.v1.ListIntraTradesRequest
+	(*IntraTradeRow)(nil),                        // 300: arb.dashboard.v1.IntraTradeRow
+	(*ListIntraTradesResponse)(nil),              // 301: arb.dashboard.v1.ListIntraTradesResponse
+	(*IntraBaselineStat)(nil),                    // 302: arb.dashboard.v1.IntraBaselineStat
+	(*IntraTrackStatsRequest)(nil),               // 303: arb.dashboard.v1.IntraTrackStatsRequest
+	(*IntraTrackStatsResponse)(nil),              // 304: arb.dashboard.v1.IntraTrackStatsResponse
+	(*GetCapitalCoverageRequest)(nil),            // 305: arb.dashboard.v1.GetCapitalCoverageRequest
+	(*CapitalCoverageRow)(nil),                   // 306: arb.dashboard.v1.CapitalCoverageRow
+	(*GetCapitalCoverageResponse)(nil),           // 307: arb.dashboard.v1.GetCapitalCoverageResponse
+	(*GetCexFinanceRequest)(nil),                 // 308: arb.dashboard.v1.GetCexFinanceRequest
+	(*CexFinanceHolding)(nil),                    // 309: arb.dashboard.v1.CexFinanceHolding
+	(*CexFinanceFlow)(nil),                       // 310: arb.dashboard.v1.CexFinanceFlow
+	(*CexAccountFinance)(nil),                    // 311: arb.dashboard.v1.CexAccountFinance
+	(*GetCexFinanceResponse)(nil),                // 312: arb.dashboard.v1.GetCexFinanceResponse
+	(*CarryGraduationRow)(nil),                   // 313: arb.dashboard.v1.CarryGraduationRow
+	(*GraduationRiskLeg)(nil),                    // 314: arb.dashboard.v1.GraduationRiskLeg
+	(*GraduationRiskReport)(nil),                 // 315: arb.dashboard.v1.GraduationRiskReport
+	(*FieldEvidence)(nil),                        // 316: arb.dashboard.v1.FieldEvidence
+	(*ListXAssetAllowCombosRequest)(nil),         // 317: arb.dashboard.v1.ListXAssetAllowCombosRequest
+	(*XAssetAllowComboRow)(nil),                  // 318: arb.dashboard.v1.XAssetAllowComboRow
+	(*ListXAssetAllowCombosResponse)(nil),        // 319: arb.dashboard.v1.ListXAssetAllowCombosResponse
+	(*UpsertXAssetAllowComboRequest)(nil),        // 320: arb.dashboard.v1.UpsertXAssetAllowComboRequest
+	(*UpsertXAssetAllowComboResponse)(nil),       // 321: arb.dashboard.v1.UpsertXAssetAllowComboResponse
+	(*PreviewXAssetComboRiskRequest)(nil),        // 322: arb.dashboard.v1.PreviewXAssetComboRiskRequest
+	(*PreviewXAssetComboRiskResponse)(nil),       // 323: arb.dashboard.v1.PreviewXAssetComboRiskResponse
+	(*VenueExposureCapRow)(nil),                  // 324: arb.dashboard.v1.VenueExposureCapRow
+	(*ListVenueExposureCapsRequest)(nil),         // 325: arb.dashboard.v1.ListVenueExposureCapsRequest
+	(*ListVenueExposureCapsResponse)(nil),        // 326: arb.dashboard.v1.ListVenueExposureCapsResponse
+	(*SetVenueExposureCapRequest)(nil),           // 327: arb.dashboard.v1.SetVenueExposureCapRequest
+	(*SetVenueExposureCapResponse)(nil),          // 328: arb.dashboard.v1.SetVenueExposureCapResponse
+	(*ListCarryGraduationsRequest)(nil),          // 329: arb.dashboard.v1.ListCarryGraduationsRequest
+	(*ListCarryGraduationsResponse)(nil),         // 330: arb.dashboard.v1.ListCarryGraduationsResponse
+	(*ApproveCarryGraduationRequest)(nil),        // 331: arb.dashboard.v1.ApproveCarryGraduationRequest
+	(*ApproveCarryGraduationResponse)(nil),       // 332: arb.dashboard.v1.ApproveCarryGraduationResponse
+	(*RejectCarryGraduationRequest)(nil),         // 333: arb.dashboard.v1.RejectCarryGraduationRequest
+	(*RejectCarryGraduationResponse)(nil),        // 334: arb.dashboard.v1.RejectCarryGraduationResponse
+	(*timestamppb.Timestamp)(nil),                // 335: google.protobuf.Timestamp
 }
 var file_arb_dashboard_v1_dashboard_proto_depIdxs = []int32{
-	333, // 0: arb.dashboard.v1.Quote.time:type_name -> google.protobuf.Timestamp
-	1,   // 1: arb.dashboard.v1.ListQuotesResponse.quotes:type_name -> arb.dashboard.v1.Quote
-	333, // 2: arb.dashboard.v1.Fact.ts:type_name -> google.protobuf.Timestamp
-	4,   // 3: arb.dashboard.v1.ListLatestFactsResponse.facts:type_name -> arb.dashboard.v1.Fact
-	4,   // 4: arb.dashboard.v1.ListFactsResponse.facts:type_name -> arb.dashboard.v1.Fact
-	333, // 5: arb.dashboard.v1.Opportunity.quote_time:type_name -> google.protobuf.Timestamp
-	333, // 6: arb.dashboard.v1.Opportunity.expires_at:type_name -> google.protobuf.Timestamp
-	333, // 7: arb.dashboard.v1.Opportunity.created_at:type_name -> google.protobuf.Timestamp
-	333, // 8: arb.dashboard.v1.Opportunity.updated_at:type_name -> google.protobuf.Timestamp
-	9,   // 9: arb.dashboard.v1.ListOpportunitiesResponse.opportunities:type_name -> arb.dashboard.v1.Opportunity
-	333, // 10: arb.dashboard.v1.VerificationStat.last_sample_at:type_name -> google.protobuf.Timestamp
-	12,  // 11: arb.dashboard.v1.ListVerificationStatsResponse.stats:type_name -> arb.dashboard.v1.VerificationStat
-	333, // 12: arb.dashboard.v1.Alert.ts:type_name -> google.protobuf.Timestamp
-	15,  // 13: arb.dashboard.v1.ListAlertsResponse.alerts:type_name -> arb.dashboard.v1.Alert
-	15,  // 14: arb.dashboard.v1.ListUnackedResponse.alerts:type_name -> arb.dashboard.v1.Alert
-	333, // 15: arb.dashboard.v1.TriggerState.since:type_name -> google.protobuf.Timestamp
-	28,  // 16: arb.dashboard.v1.ListTriggerStatesResponse.states:type_name -> arb.dashboard.v1.TriggerState
-	333, // 17: arb.dashboard.v1.SourceHealth.last_event_at:type_name -> google.protobuf.Timestamp
-	31,  // 18: arb.dashboard.v1.ListSourceHealthResponse.sources:type_name -> arb.dashboard.v1.SourceHealth
-	333, // 19: arb.dashboard.v1.LedgerEntry.date:type_name -> google.protobuf.Timestamp
-	333, // 20: arb.dashboard.v1.AddLedgerEntryRequest.date:type_name -> google.protobuf.Timestamp
-	34,  // 21: arb.dashboard.v1.ListLedgerEntriesResponse.entries:type_name -> arb.dashboard.v1.LedgerEntry
-	40,  // 22: arb.dashboard.v1.LedgerSummaryResponse.items:type_name -> arb.dashboard.v1.TierSummary
-	333, // 23: arb.dashboard.v1.InvestmentRecord.ts:type_name -> google.protobuf.Timestamp
-	42,  // 24: arb.dashboard.v1.ListInvestmentRecordsResponse.items:type_name -> arb.dashboard.v1.InvestmentRecord
-	333, // 25: arb.dashboard.v1.KnowledgeEntry.ts:type_name -> google.protobuf.Timestamp
-	333, // 26: arb.dashboard.v1.KnowledgeEntry.validated_at:type_name -> google.protobuf.Timestamp
-	47,  // 27: arb.dashboard.v1.ListKnowledgeEntriesResponse.entries:type_name -> arb.dashboard.v1.KnowledgeEntry
-	333, // 28: arb.dashboard.v1.PositionLeg.ts:type_name -> google.protobuf.Timestamp
-	333, // 29: arb.dashboard.v1.Position.opened_at:type_name -> google.protobuf.Timestamp
-	333, // 30: arb.dashboard.v1.Position.closed_at:type_name -> google.protobuf.Timestamp
-	50,  // 31: arb.dashboard.v1.Position.legs:type_name -> arb.dashboard.v1.PositionLeg
-	51,  // 32: arb.dashboard.v1.ListPositionsResponse.positions:type_name -> arb.dashboard.v1.Position
-	333, // 33: arb.dashboard.v1.BrokerPosition.opened_at:type_name -> google.protobuf.Timestamp
-	333, // 34: arb.dashboard.v1.BrokerPosition.swap_charge_at:type_name -> google.protobuf.Timestamp
-	60,  // 35: arb.dashboard.v1.ListBrokerPositionsResponse.positions:type_name -> arb.dashboard.v1.BrokerPosition
-	63,  // 36: arb.dashboard.v1.CloseBrokerPositionsRequest.items:type_name -> arb.dashboard.v1.CloseBrokerPositionRequest
-	64,  // 37: arb.dashboard.v1.CloseBrokerPositionsResponse.results:type_name -> arb.dashboard.v1.CloseBrokerPositionResponse
-	333, // 38: arb.dashboard.v1.PersonalPosition.opened_at:type_name -> google.protobuf.Timestamp
-	67,  // 39: arb.dashboard.v1.ListPersonalPositionsResponse.items:type_name -> arb.dashboard.v1.PersonalPosition
-	70,  // 40: arb.dashboard.v1.HedgeLegSpot.stake:type_name -> arb.dashboard.v1.HedgeStake
-	333, // 41: arb.dashboard.v1.HedgeLegSpot.vote_apr_ts:type_name -> google.protobuf.Timestamp
-	333, // 42: arb.dashboard.v1.HedgeAccounts.updated_at:type_name -> google.protobuf.Timestamp
-	71,  // 43: arb.dashboard.v1.HedgeStructure.leg_spot:type_name -> arb.dashboard.v1.HedgeLegSpot
-	72,  // 44: arb.dashboard.v1.HedgeStructure.leg_short:type_name -> arb.dashboard.v1.HedgeLegShort
-	73,  // 45: arb.dashboard.v1.HedgeStructure.carry:type_name -> arb.dashboard.v1.HedgeCarry
-	74,  // 46: arb.dashboard.v1.HedgeStructure.accts:type_name -> arb.dashboard.v1.HedgeAccounts
-	75,  // 47: arb.dashboard.v1.GetHedgeStructureResponse.structure:type_name -> arb.dashboard.v1.HedgeStructure
-	333, // 48: arb.dashboard.v1.HedgeFlowItem.ts:type_name -> google.protobuf.Timestamp
-	78,  // 49: arb.dashboard.v1.ListHedgeFlowResponse.txs:type_name -> arb.dashboard.v1.HedgeFlowItem
-	333, // 50: arb.dashboard.v1.GetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
-	333, // 51: arb.dashboard.v1.ResetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
-	88,  // 52: arb.dashboard.v1.ListKBEntriesResponse.entries:type_name -> arb.dashboard.v1.KBEntry
-	81,  // 53: arb.dashboard.v1.ListDailyIncomeResponse.items:type_name -> arb.dashboard.v1.PositionDailyIncome
-	1,   // 54: arb.dashboard.v1.StreamUpdatesResponse.quote:type_name -> arb.dashboard.v1.Quote
-	9,   // 55: arb.dashboard.v1.StreamUpdatesResponse.opportunity:type_name -> arb.dashboard.v1.Opportunity
-	15,  // 56: arb.dashboard.v1.StreamUpdatesResponse.alert:type_name -> arb.dashboard.v1.Alert
-	51,  // 57: arb.dashboard.v1.StreamUpdatesResponse.position:type_name -> arb.dashboard.v1.Position
-	31,  // 58: arb.dashboard.v1.StreamUpdatesResponse.source_health:type_name -> arb.dashboard.v1.SourceHealth
-	111, // 59: arb.dashboard.v1.StreamUpdatesResponse.keepalive:type_name -> arb.dashboard.v1.Keepalive
-	96,  // 60: arb.dashboard.v1.StreamUpdatesResponse.personal_position_price:type_name -> arb.dashboard.v1.PersonalPositionPrice
-	102, // 61: arb.dashboard.v1.StreamUpdatesResponse.broker_positions:type_name -> arb.dashboard.v1.BrokerPositionSnapshot
-	108, // 62: arb.dashboard.v1.StreamUpdatesResponse.accounts:type_name -> arb.dashboard.v1.AccountSnapshot
-	101, // 63: arb.dashboard.v1.StreamUpdatesResponse.funding_need:type_name -> arb.dashboard.v1.FundingNeedNotice
-	100, // 64: arb.dashboard.v1.StreamUpdatesResponse.position_change:type_name -> arb.dashboard.v1.PositionChangeNotice
-	98,  // 65: arb.dashboard.v1.StreamUpdatesResponse.hedge_refresh:type_name -> arb.dashboard.v1.HedgeRefreshNotice
-	99,  // 66: arb.dashboard.v1.StreamUpdatesResponse.cmc_update:type_name -> arb.dashboard.v1.CMCWatchUpdate
-	333, // 67: arb.dashboard.v1.CMCWatchUpdate.quote_time:type_name -> google.protobuf.Timestamp
-	333, // 68: arb.dashboard.v1.FundingNeedNotice.ts:type_name -> google.protobuf.Timestamp
-	60,  // 69: arb.dashboard.v1.BrokerPositionSnapshot.positions:type_name -> arb.dashboard.v1.BrokerPosition
-	333, // 70: arb.dashboard.v1.AccountInfo.updated_at:type_name -> google.protobuf.Timestamp
-	107, // 71: arb.dashboard.v1.AccountInfo.holdings:type_name -> arb.dashboard.v1.Holding
-	333, // 72: arb.dashboard.v1.AccountMarginStatus.updated_at:type_name -> google.protobuf.Timestamp
-	105, // 73: arb.dashboard.v1.ListAccountMarginStatusResponse.rows:type_name -> arb.dashboard.v1.AccountMarginStatus
-	103, // 74: arb.dashboard.v1.AccountSnapshot.accounts:type_name -> arb.dashboard.v1.AccountInfo
-	103, // 75: arb.dashboard.v1.ListAccountsResponse.accounts:type_name -> arb.dashboard.v1.AccountInfo
-	333, // 76: arb.dashboard.v1.Keepalive.ts:type_name -> google.protobuf.Timestamp
-	115, // 77: arb.dashboard.v1.BrokerCompany.servers:type_name -> arb.dashboard.v1.BrokerServer
-	116, // 78: arb.dashboard.v1.SearchBrokerResponse.companies:type_name -> arb.dashboard.v1.BrokerCompany
-	333, // 79: arb.dashboard.v1.BrokerAccount.created_at:type_name -> google.protobuf.Timestamp
-	122, // 80: arb.dashboard.v1.ListBrokerAccountsResponse.accounts:type_name -> arb.dashboard.v1.BrokerAccount
-	333, // 81: arb.dashboard.v1.ExchangeConfig.created_at:type_name -> google.protobuf.Timestamp
-	125, // 82: arb.dashboard.v1.ListExchangesResponse.exchanges:type_name -> arb.dashboard.v1.ExchangeConfig
-	125, // 83: arb.dashboard.v1.AddExchangeResponse.exchange:type_name -> arb.dashboard.v1.ExchangeConfig
-	139, // 84: arb.dashboard.v1.BrokerSymbolsResponse.symbols:type_name -> arb.dashboard.v1.SymbolEntry
-	151, // 85: arb.dashboard.v1.ListSymbolMappingsResponse.mappings:type_name -> arb.dashboard.v1.SymbolMapping
-	159, // 86: arb.dashboard.v1.ListMappingSuggestionsResponse.suggestions:type_name -> arb.dashboard.v1.SymbolMappingSuggestion
+	335, // 0: arb.dashboard.v1.Quote.time:type_name -> google.protobuf.Timestamp
+	2,   // 1: arb.dashboard.v1.ListQuotesResponse.quotes:type_name -> arb.dashboard.v1.Quote
+	335, // 2: arb.dashboard.v1.Fact.ts:type_name -> google.protobuf.Timestamp
+	5,   // 3: arb.dashboard.v1.ListLatestFactsResponse.facts:type_name -> arb.dashboard.v1.Fact
+	5,   // 4: arb.dashboard.v1.ListFactsResponse.facts:type_name -> arb.dashboard.v1.Fact
+	335, // 5: arb.dashboard.v1.Opportunity.quote_time:type_name -> google.protobuf.Timestamp
+	335, // 6: arb.dashboard.v1.Opportunity.expires_at:type_name -> google.protobuf.Timestamp
+	335, // 7: arb.dashboard.v1.Opportunity.created_at:type_name -> google.protobuf.Timestamp
+	335, // 8: arb.dashboard.v1.Opportunity.updated_at:type_name -> google.protobuf.Timestamp
+	10,  // 9: arb.dashboard.v1.ListOpportunitiesResponse.opportunities:type_name -> arb.dashboard.v1.Opportunity
+	335, // 10: arb.dashboard.v1.VerificationStat.last_sample_at:type_name -> google.protobuf.Timestamp
+	13,  // 11: arb.dashboard.v1.ListVerificationStatsResponse.stats:type_name -> arb.dashboard.v1.VerificationStat
+	335, // 12: arb.dashboard.v1.Alert.ts:type_name -> google.protobuf.Timestamp
+	16,  // 13: arb.dashboard.v1.ListAlertsResponse.alerts:type_name -> arb.dashboard.v1.Alert
+	16,  // 14: arb.dashboard.v1.ListUnackedResponse.alerts:type_name -> arb.dashboard.v1.Alert
+	335, // 15: arb.dashboard.v1.TriggerState.since:type_name -> google.protobuf.Timestamp
+	29,  // 16: arb.dashboard.v1.ListTriggerStatesResponse.states:type_name -> arb.dashboard.v1.TriggerState
+	335, // 17: arb.dashboard.v1.SourceHealth.last_event_at:type_name -> google.protobuf.Timestamp
+	32,  // 18: arb.dashboard.v1.ListSourceHealthResponse.sources:type_name -> arb.dashboard.v1.SourceHealth
+	335, // 19: arb.dashboard.v1.LedgerEntry.date:type_name -> google.protobuf.Timestamp
+	335, // 20: arb.dashboard.v1.AddLedgerEntryRequest.date:type_name -> google.protobuf.Timestamp
+	35,  // 21: arb.dashboard.v1.ListLedgerEntriesResponse.entries:type_name -> arb.dashboard.v1.LedgerEntry
+	41,  // 22: arb.dashboard.v1.LedgerSummaryResponse.items:type_name -> arb.dashboard.v1.TierSummary
+	335, // 23: arb.dashboard.v1.InvestmentRecord.ts:type_name -> google.protobuf.Timestamp
+	43,  // 24: arb.dashboard.v1.ListInvestmentRecordsResponse.items:type_name -> arb.dashboard.v1.InvestmentRecord
+	335, // 25: arb.dashboard.v1.KnowledgeEntry.ts:type_name -> google.protobuf.Timestamp
+	335, // 26: arb.dashboard.v1.KnowledgeEntry.validated_at:type_name -> google.protobuf.Timestamp
+	48,  // 27: arb.dashboard.v1.ListKnowledgeEntriesResponse.entries:type_name -> arb.dashboard.v1.KnowledgeEntry
+	335, // 28: arb.dashboard.v1.PositionLeg.ts:type_name -> google.protobuf.Timestamp
+	335, // 29: arb.dashboard.v1.Position.opened_at:type_name -> google.protobuf.Timestamp
+	335, // 30: arb.dashboard.v1.Position.closed_at:type_name -> google.protobuf.Timestamp
+	51,  // 31: arb.dashboard.v1.Position.legs:type_name -> arb.dashboard.v1.PositionLeg
+	52,  // 32: arb.dashboard.v1.ListPositionsResponse.positions:type_name -> arb.dashboard.v1.Position
+	335, // 33: arb.dashboard.v1.BrokerPosition.opened_at:type_name -> google.protobuf.Timestamp
+	335, // 34: arb.dashboard.v1.BrokerPosition.swap_charge_at:type_name -> google.protobuf.Timestamp
+	61,  // 35: arb.dashboard.v1.ListBrokerPositionsResponse.positions:type_name -> arb.dashboard.v1.BrokerPosition
+	64,  // 36: arb.dashboard.v1.CloseBrokerPositionsRequest.items:type_name -> arb.dashboard.v1.CloseBrokerPositionRequest
+	65,  // 37: arb.dashboard.v1.CloseBrokerPositionsResponse.results:type_name -> arb.dashboard.v1.CloseBrokerPositionResponse
+	335, // 38: arb.dashboard.v1.PersonalPosition.opened_at:type_name -> google.protobuf.Timestamp
+	68,  // 39: arb.dashboard.v1.ListPersonalPositionsResponse.items:type_name -> arb.dashboard.v1.PersonalPosition
+	71,  // 40: arb.dashboard.v1.HedgeLegSpot.stake:type_name -> arb.dashboard.v1.HedgeStake
+	335, // 41: arb.dashboard.v1.HedgeLegSpot.vote_apr_ts:type_name -> google.protobuf.Timestamp
+	335, // 42: arb.dashboard.v1.HedgeAccounts.updated_at:type_name -> google.protobuf.Timestamp
+	72,  // 43: arb.dashboard.v1.HedgeStructure.leg_spot:type_name -> arb.dashboard.v1.HedgeLegSpot
+	73,  // 44: arb.dashboard.v1.HedgeStructure.leg_short:type_name -> arb.dashboard.v1.HedgeLegShort
+	74,  // 45: arb.dashboard.v1.HedgeStructure.carry:type_name -> arb.dashboard.v1.HedgeCarry
+	75,  // 46: arb.dashboard.v1.HedgeStructure.accts:type_name -> arb.dashboard.v1.HedgeAccounts
+	76,  // 47: arb.dashboard.v1.GetHedgeStructureResponse.structure:type_name -> arb.dashboard.v1.HedgeStructure
+	335, // 48: arb.dashboard.v1.HedgeFlowItem.ts:type_name -> google.protobuf.Timestamp
+	79,  // 49: arb.dashboard.v1.ListHedgeFlowResponse.txs:type_name -> arb.dashboard.v1.HedgeFlowItem
+	335, // 50: arb.dashboard.v1.GetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
+	335, // 51: arb.dashboard.v1.ResetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
+	89,  // 52: arb.dashboard.v1.ListKBEntriesResponse.entries:type_name -> arb.dashboard.v1.KBEntry
+	82,  // 53: arb.dashboard.v1.ListDailyIncomeResponse.items:type_name -> arb.dashboard.v1.PositionDailyIncome
+	2,   // 54: arb.dashboard.v1.StreamUpdatesResponse.quote:type_name -> arb.dashboard.v1.Quote
+	10,  // 55: arb.dashboard.v1.StreamUpdatesResponse.opportunity:type_name -> arb.dashboard.v1.Opportunity
+	16,  // 56: arb.dashboard.v1.StreamUpdatesResponse.alert:type_name -> arb.dashboard.v1.Alert
+	52,  // 57: arb.dashboard.v1.StreamUpdatesResponse.position:type_name -> arb.dashboard.v1.Position
+	32,  // 58: arb.dashboard.v1.StreamUpdatesResponse.source_health:type_name -> arb.dashboard.v1.SourceHealth
+	112, // 59: arb.dashboard.v1.StreamUpdatesResponse.keepalive:type_name -> arb.dashboard.v1.Keepalive
+	97,  // 60: arb.dashboard.v1.StreamUpdatesResponse.personal_position_price:type_name -> arb.dashboard.v1.PersonalPositionPrice
+	103, // 61: arb.dashboard.v1.StreamUpdatesResponse.broker_positions:type_name -> arb.dashboard.v1.BrokerPositionSnapshot
+	109, // 62: arb.dashboard.v1.StreamUpdatesResponse.accounts:type_name -> arb.dashboard.v1.AccountSnapshot
+	102, // 63: arb.dashboard.v1.StreamUpdatesResponse.funding_need:type_name -> arb.dashboard.v1.FundingNeedNotice
+	101, // 64: arb.dashboard.v1.StreamUpdatesResponse.position_change:type_name -> arb.dashboard.v1.PositionChangeNotice
+	99,  // 65: arb.dashboard.v1.StreamUpdatesResponse.hedge_refresh:type_name -> arb.dashboard.v1.HedgeRefreshNotice
+	100, // 66: arb.dashboard.v1.StreamUpdatesResponse.cmc_update:type_name -> arb.dashboard.v1.CMCWatchUpdate
+	335, // 67: arb.dashboard.v1.CMCWatchUpdate.quote_time:type_name -> google.protobuf.Timestamp
+	335, // 68: arb.dashboard.v1.FundingNeedNotice.ts:type_name -> google.protobuf.Timestamp
+	61,  // 69: arb.dashboard.v1.BrokerPositionSnapshot.positions:type_name -> arb.dashboard.v1.BrokerPosition
+	335, // 70: arb.dashboard.v1.AccountInfo.updated_at:type_name -> google.protobuf.Timestamp
+	108, // 71: arb.dashboard.v1.AccountInfo.holdings:type_name -> arb.dashboard.v1.Holding
+	335, // 72: arb.dashboard.v1.AccountMarginStatus.updated_at:type_name -> google.protobuf.Timestamp
+	106, // 73: arb.dashboard.v1.ListAccountMarginStatusResponse.rows:type_name -> arb.dashboard.v1.AccountMarginStatus
+	104, // 74: arb.dashboard.v1.AccountSnapshot.accounts:type_name -> arb.dashboard.v1.AccountInfo
+	104, // 75: arb.dashboard.v1.ListAccountsResponse.accounts:type_name -> arb.dashboard.v1.AccountInfo
+	335, // 76: arb.dashboard.v1.Keepalive.ts:type_name -> google.protobuf.Timestamp
+	116, // 77: arb.dashboard.v1.BrokerCompany.servers:type_name -> arb.dashboard.v1.BrokerServer
+	117, // 78: arb.dashboard.v1.SearchBrokerResponse.companies:type_name -> arb.dashboard.v1.BrokerCompany
+	335, // 79: arb.dashboard.v1.BrokerAccount.created_at:type_name -> google.protobuf.Timestamp
+	123, // 80: arb.dashboard.v1.ListBrokerAccountsResponse.accounts:type_name -> arb.dashboard.v1.BrokerAccount
+	335, // 81: arb.dashboard.v1.ExchangeConfig.created_at:type_name -> google.protobuf.Timestamp
+	126, // 82: arb.dashboard.v1.ListExchangesResponse.exchanges:type_name -> arb.dashboard.v1.ExchangeConfig
+	126, // 83: arb.dashboard.v1.AddExchangeResponse.exchange:type_name -> arb.dashboard.v1.ExchangeConfig
+	140, // 84: arb.dashboard.v1.BrokerSymbolsResponse.symbols:type_name -> arb.dashboard.v1.SymbolEntry
+	152, // 85: arb.dashboard.v1.ListSymbolMappingsResponse.mappings:type_name -> arb.dashboard.v1.SymbolMapping
+	160, // 86: arb.dashboard.v1.ListMappingSuggestionsResponse.suggestions:type_name -> arb.dashboard.v1.SymbolMappingSuggestion
 	0,   // 87: arb.dashboard.v1.MatrixSymbolRow.state:type_name -> arb.dashboard.v1.MatrixState
-	164, // 88: arb.dashboard.v1.MatrixSymbolRow.accounts:type_name -> arb.dashboard.v1.MatrixSymbolAccount
-	166, // 89: arb.dashboard.v1.MatrixUniverse.group_stats:type_name -> arb.dashboard.v1.MatrixGroupStat
-	165, // 90: arb.dashboard.v1.MatrixUniverse.symbols:type_name -> arb.dashboard.v1.MatrixSymbolRow
-	122, // 91: arb.dashboard.v1.MatrixUniverse.accounts:type_name -> arb.dashboard.v1.BrokerAccount
-	167, // 92: arb.dashboard.v1.ListMatrixUniverseResponse.universe:type_name -> arb.dashboard.v1.MatrixUniverse
-	170, // 93: arb.dashboard.v1.AutoMapBrokerResponse.results:type_name -> arb.dashboard.v1.AutoMapBrokerResult
-	173, // 94: arb.dashboard.v1.ListSwapCombosResponse.combos:type_name -> arb.dashboard.v1.SwapCombo
-	178, // 95: arb.dashboard.v1.GetStrategyLedgerResponse.entries:type_name -> arb.dashboard.v1.StrategyLedgerEntry
-	180, // 96: arb.dashboard.v1.GetWatchlistResponse.items:type_name -> arb.dashboard.v1.WatchlistItem
-	180, // 97: arb.dashboard.v1.SetWatchlistRequest.items:type_name -> arb.dashboard.v1.WatchlistItem
-	180, // 98: arb.dashboard.v1.SetWatchlistResponse.items:type_name -> arb.dashboard.v1.WatchlistItem
-	185, // 99: arb.dashboard.v1.AskAnalystRequest.context:type_name -> arb.dashboard.v1.EntityRef
-	186, // 100: arb.dashboard.v1.AskAnalystRequest.history:type_name -> arb.dashboard.v1.ChatTurn
-	188, // 101: arb.dashboard.v1.AskAnalystResponse.citation:type_name -> arb.dashboard.v1.AnalystCitation
-	189, // 102: arb.dashboard.v1.AskAnalystResponse.follow_ups:type_name -> arb.dashboard.v1.SuggestedFollowUps
-	190, // 103: arb.dashboard.v1.AskAnalystResponse.done:type_name -> arb.dashboard.v1.AnalystDone
-	188, // 104: arb.dashboard.v1.AppendAnalystNoteRequest.citations:type_name -> arb.dashboard.v1.AnalystCitation
-	198, // 105: arb.dashboard.v1.ListReportsResponse.reports:type_name -> arb.dashboard.v1.ReportInfo
-	208, // 106: arb.dashboard.v1.GetCNFIRadarSnapshotResponse.points:type_name -> arb.dashboard.v1.CnfiCurvePoint
-	209, // 107: arb.dashboard.v1.GetCNFIRadarSnapshotResponse.metrics:type_name -> arb.dashboard.v1.CnfiDerivedMetric
-	210, // 108: arb.dashboard.v1.GetCNFIRadarSnapshotResponse.signals:type_name -> arb.dashboard.v1.CnfiSignalState
-	333, // 109: arb.dashboard.v1.GetCNFIRadarSnapshotResponse.generated_at:type_name -> google.protobuf.Timestamp
-	213, // 110: arb.dashboard.v1.GetCNFIProgressResponse.layers:type_name -> arb.dashboard.v1.CnfiLayerProgress
-	215, // 111: arb.dashboard.v1.GetCNFIProgressResponse.layer_compares:type_name -> arb.dashboard.v1.CnfiLayerCompare
-	216, // 112: arb.dashboard.v1.CnfiLayerCompare.funds:type_name -> arb.dashboard.v1.CnfiFundCompare
-	221, // 113: arb.dashboard.v1.ListCNFIActionsResponse.actions:type_name -> arb.dashboard.v1.CnfiActionRow
-	225, // 114: arb.dashboard.v1.ListRepoOpsResponse.ops:type_name -> arb.dashboard.v1.RepoOpRow
-	333, // 115: arb.dashboard.v1.TrxAccountRefreshResponse.fetched_at:type_name -> google.protobuf.Timestamp
-	333, // 116: arb.dashboard.v1.GetTrxYieldRadarResponse.updated_at:type_name -> google.protobuf.Timestamp
-	333, // 117: arb.dashboard.v1.TrxYieldCurvePoint.day:type_name -> google.protobuf.Timestamp
-	232, // 118: arb.dashboard.v1.GetTrxYieldCurveResponse.points:type_name -> arb.dashboard.v1.TrxYieldCurvePoint
-	236, // 119: arb.dashboard.v1.GetRepoRateRadarResponse.rates:type_name -> arb.dashboard.v1.RepoRateSnapshot
-	333, // 120: arb.dashboard.v1.GetRepoRateRadarResponse.updated_at:type_name -> google.protobuf.Timestamp
-	244, // 121: arb.dashboard.v1.GetCexScanSnapshotResponse.earn_aprs:type_name -> arb.dashboard.v1.CexEarnAPRRow
-	245, // 122: arb.dashboard.v1.GetCexScanSnapshotResponse.spreads:type_name -> arb.dashboard.v1.CexSpreadRow
-	246, // 123: arb.dashboard.v1.GetCexScanSnapshotResponse.fundings:type_name -> arb.dashboard.v1.CexFundingRow
-	247, // 124: arb.dashboard.v1.GetCexScanSnapshotResponse.balances:type_name -> arb.dashboard.v1.CexBalanceRow
-	243, // 125: arb.dashboard.v1.GetCexScanSnapshotResponse.judgments:type_name -> arb.dashboard.v1.CexEarnJudgmentRow
-	107, // 126: arb.dashboard.v1.CexBalanceRow.holdings:type_name -> arb.dashboard.v1.Holding
-	251, // 127: arb.dashboard.v1.ListRepoTradesResponse.trades:type_name -> arb.dashboard.v1.RepoTradeRow
-	259, // 128: arb.dashboard.v1.ListPriceAlertRulesResponse.rules:type_name -> arb.dashboard.v1.PriceAlertRuleRow
-	259, // 129: arb.dashboard.v1.CreatePriceAlertRuleResponse.rule:type_name -> arb.dashboard.v1.PriceAlertRuleRow
-	259, // 130: arb.dashboard.v1.UpdatePriceAlertRuleResponse.rule:type_name -> arb.dashboard.v1.PriceAlertRuleRow
-	268, // 131: arb.dashboard.v1.ListEventJudgmentsResponse.rows:type_name -> arb.dashboard.v1.EventJudgmentRow
-	269, // 132: arb.dashboard.v1.ListPaperTradesResponse.rows:type_name -> arb.dashboard.v1.PaperTradeRow
-	333, // 133: arb.dashboard.v1.FinanceFlowRow.ts:type_name -> google.protobuf.Timestamp
-	279, // 134: arb.dashboard.v1.GetFinanceOverviewResponse.pnl_by_env:type_name -> arb.dashboard.v1.FinancePnlByEnv
-	280, // 135: arb.dashboard.v1.GetFinanceOverviewResponse.income_by_kind:type_name -> arb.dashboard.v1.FinanceIncomeRow
-	281, // 136: arb.dashboard.v1.GetFinanceOverviewResponse.flows:type_name -> arb.dashboard.v1.FinanceFlowRow
-	284, // 137: arb.dashboard.v1.ExecuteSpotCarryDemoResponse.legs:type_name -> arb.dashboard.v1.SpotCarryDemoLeg
-	286, // 138: arb.dashboard.v1.ListSpotCarryDemoResponse.rows:type_name -> arb.dashboard.v1.SpotCarryDemoRow
-	290, // 139: arb.dashboard.v1.ListPaperSpotCarryResponse.rows:type_name -> arb.dashboard.v1.PaperSpotCarryRow
-	291, // 140: arb.dashboard.v1.ListPaperSpotCarryResponse.tracks:type_name -> arb.dashboard.v1.PaperTrackSummary
-	333, // 141: arb.dashboard.v1.AutotradeAllowRuleRow.acct_updated_at:type_name -> google.protobuf.Timestamp
-	293, // 142: arb.dashboard.v1.ListAutotradeAllowRulesResponse.rules:type_name -> arb.dashboard.v1.AutotradeAllowRuleRow
-	299, // 143: arb.dashboard.v1.ListIntraTradesResponse.trades:type_name -> arb.dashboard.v1.IntraTradeRow
-	301, // 144: arb.dashboard.v1.IntraTrackStatsResponse.baselines:type_name -> arb.dashboard.v1.IntraBaselineStat
-	305, // 145: arb.dashboard.v1.GetCapitalCoverageResponse.rows:type_name -> arb.dashboard.v1.CapitalCoverageRow
-	308, // 146: arb.dashboard.v1.CexAccountFinance.holdings:type_name -> arb.dashboard.v1.CexFinanceHolding
-	309, // 147: arb.dashboard.v1.CexAccountFinance.flows:type_name -> arb.dashboard.v1.CexFinanceFlow
-	310, // 148: arb.dashboard.v1.GetCexFinanceResponse.accounts:type_name -> arb.dashboard.v1.CexAccountFinance
-	314, // 149: arb.dashboard.v1.CarryGraduationRow.risk:type_name -> arb.dashboard.v1.GraduationRiskReport
-	313, // 150: arb.dashboard.v1.GraduationRiskReport.legs:type_name -> arb.dashboard.v1.GraduationRiskLeg
-	316, // 151: arb.dashboard.v1.ListXAssetAllowCombosResponse.rows:type_name -> arb.dashboard.v1.XAssetAllowComboRow
-	314, // 152: arb.dashboard.v1.PreviewXAssetComboRiskResponse.risk:type_name -> arb.dashboard.v1.GraduationRiskReport
-	333, // 153: arb.dashboard.v1.VenueExposureCapRow.updated_at:type_name -> google.protobuf.Timestamp
-	322, // 154: arb.dashboard.v1.ListVenueExposureCapsResponse.rows:type_name -> arb.dashboard.v1.VenueExposureCapRow
-	312, // 155: arb.dashboard.v1.ListCarryGraduationsResponse.rows:type_name -> arb.dashboard.v1.CarryGraduationRow
-	2,   // 156: arb.dashboard.v1.DashboardService.ListLatestQuotes:input_type -> arb.dashboard.v1.ListQuotesRequest
-	5,   // 157: arb.dashboard.v1.DashboardService.ListLatestFacts:input_type -> arb.dashboard.v1.ListLatestFactsRequest
-	10,  // 158: arb.dashboard.v1.DashboardService.ListOpportunities:input_type -> arb.dashboard.v1.ListOpportunitiesRequest
-	16,  // 159: arb.dashboard.v1.DashboardService.ListAlerts:input_type -> arb.dashboard.v1.ListAlertsRequest
-	29,  // 160: arb.dashboard.v1.DashboardService.ListTriggerStates:input_type -> arb.dashboard.v1.ListTriggerStatesRequest
-	32,  // 161: arb.dashboard.v1.DashboardService.ListSourceHealth:input_type -> arb.dashboard.v1.ListSourceHealthRequest
-	7,   // 162: arb.dashboard.v1.DashboardService.ListFacts:input_type -> arb.dashboard.v1.ListFactsRequest
-	18,  // 163: arb.dashboard.v1.DashboardService.AckAlert:input_type -> arb.dashboard.v1.AckAlertRequest
-	20,  // 164: arb.dashboard.v1.DashboardService.AckAll:input_type -> arb.dashboard.v1.AckAllRequest
-	22,  // 165: arb.dashboard.v1.DashboardService.ListUnacked:input_type -> arb.dashboard.v1.ListUnackedRequest
-	24,  // 166: arb.dashboard.v1.DashboardService.DeleteAlerts:input_type -> arb.dashboard.v1.DeleteAlertsRequest
-	26,  // 167: arb.dashboard.v1.DashboardService.ClearAckedAlerts:input_type -> arb.dashboard.v1.ClearAckedAlertsRequest
-	35,  // 168: arb.dashboard.v1.DashboardService.AddLedgerEntry:input_type -> arb.dashboard.v1.AddLedgerEntryRequest
-	37,  // 169: arb.dashboard.v1.DashboardService.ListLedgerEntries:input_type -> arb.dashboard.v1.ListLedgerEntriesRequest
-	39,  // 170: arb.dashboard.v1.DashboardService.LedgerSummary:input_type -> arb.dashboard.v1.LedgerSummaryRequest
-	43,  // 171: arb.dashboard.v1.DashboardService.AddInvestmentRecord:input_type -> arb.dashboard.v1.AddInvestmentRecordRequest
-	45,  // 172: arb.dashboard.v1.DashboardService.ListInvestmentRecords:input_type -> arb.dashboard.v1.ListInvestmentRecordsRequest
-	48,  // 173: arb.dashboard.v1.DashboardService.ListKnowledgeEntries:input_type -> arb.dashboard.v1.ListKnowledgeEntriesRequest
-	52,  // 174: arb.dashboard.v1.DashboardService.ExecuteOpportunity:input_type -> arb.dashboard.v1.ExecuteOpportunityRequest
-	54,  // 175: arb.dashboard.v1.DashboardService.ClosePosition:input_type -> arb.dashboard.v1.ClosePositionRequest
-	56,  // 176: arb.dashboard.v1.DashboardService.BackfillSwapHistory:input_type -> arb.dashboard.v1.BackfillSwapHistoryRequest
-	207, // 177: arb.dashboard.v1.DashboardService.GetCNFIRadarSnapshot:input_type -> arb.dashboard.v1.GetCNFIRadarSnapshotRequest
-	212, // 178: arb.dashboard.v1.DashboardService.GetCNFIProgress:input_type -> arb.dashboard.v1.GetCNFIProgressRequest
-	217, // 179: arb.dashboard.v1.DashboardService.AddCNFIHolding:input_type -> arb.dashboard.v1.AddCNFIHoldingRequest
-	219, // 180: arb.dashboard.v1.DashboardService.AddCNFIAction:input_type -> arb.dashboard.v1.AddCNFIActionRequest
-	222, // 181: arb.dashboard.v1.DashboardService.ListCNFIActions:input_type -> arb.dashboard.v1.ListCNFIActionsRequest
-	224, // 182: arb.dashboard.v1.DashboardService.ListRepoOps:input_type -> arb.dashboard.v1.ListRepoOpsRequest
-	58,  // 183: arb.dashboard.v1.DashboardService.ListPositions:input_type -> arb.dashboard.v1.ListPositionsRequest
-	61,  // 184: arb.dashboard.v1.DashboardService.ListBrokerPositions:input_type -> arb.dashboard.v1.ListBrokerPositionsRequest
-	63,  // 185: arb.dashboard.v1.DashboardService.CloseBrokerPosition:input_type -> arb.dashboard.v1.CloseBrokerPositionRequest
-	65,  // 186: arb.dashboard.v1.DashboardService.CloseBrokerPositions:input_type -> arb.dashboard.v1.CloseBrokerPositionsRequest
-	109, // 187: arb.dashboard.v1.DashboardService.ListAccounts:input_type -> arb.dashboard.v1.ListAccountsRequest
-	68,  // 188: arb.dashboard.v1.DashboardService.ListPersonalPositions:input_type -> arb.dashboard.v1.ListPersonalPositionsRequest
-	76,  // 189: arb.dashboard.v1.DashboardService.GetHedgeStructure:input_type -> arb.dashboard.v1.GetHedgeStructureRequest
-	79,  // 190: arb.dashboard.v1.DashboardService.ListHedgeFlow:input_type -> arb.dashboard.v1.ListHedgeFlowRequest
-	227, // 191: arb.dashboard.v1.DashboardService.TrxAccountRefresh:input_type -> arb.dashboard.v1.TrxAccountRefreshRequest
-	229, // 192: arb.dashboard.v1.DashboardService.GetTrxYieldRadar:input_type -> arb.dashboard.v1.GetTrxYieldRadarRequest
-	231, // 193: arb.dashboard.v1.DashboardService.GetTrxYieldCurve:input_type -> arb.dashboard.v1.GetTrxYieldCurveRequest
-	234, // 194: arb.dashboard.v1.DashboardService.GetRepoRateRadar:input_type -> arb.dashboard.v1.GetRepoRateRadarRequest
-	82,  // 195: arb.dashboard.v1.DashboardService.AddDailyIncome:input_type -> arb.dashboard.v1.AddDailyIncomeRequest
-	93,  // 196: arb.dashboard.v1.DashboardService.ListDailyIncome:input_type -> arb.dashboard.v1.ListDailyIncomeRequest
-	84,  // 197: arb.dashboard.v1.DashboardService.GetPnlAnchor:input_type -> arb.dashboard.v1.GetPnlAnchorRequest
-	86,  // 198: arb.dashboard.v1.DashboardService.ResetPnlAnchor:input_type -> arb.dashboard.v1.ResetPnlAnchorRequest
-	89,  // 199: arb.dashboard.v1.DashboardService.ListKBEntries:input_type -> arb.dashboard.v1.ListKBEntriesRequest
-	91,  // 200: arb.dashboard.v1.DashboardService.GetKBEntry:input_type -> arb.dashboard.v1.GetKBEntryRequest
-	13,  // 201: arb.dashboard.v1.DashboardService.ListVerificationStats:input_type -> arb.dashboard.v1.ListVerificationStatsRequest
-	114, // 202: arb.dashboard.v1.DashboardService.SearchBroker:input_type -> arb.dashboard.v1.SearchBrokerRequest
-	118, // 203: arb.dashboard.v1.DashboardService.AddBroker:input_type -> arb.dashboard.v1.AddBrokerRequest
-	120, // 204: arb.dashboard.v1.DashboardService.RemoveBroker:input_type -> arb.dashboard.v1.RemoveBrokerRequest
-	123, // 205: arb.dashboard.v1.DashboardService.ListBrokerAccounts:input_type -> arb.dashboard.v1.ListBrokerAccountsRequest
-	136, // 206: arb.dashboard.v1.DashboardService.VerifyAccount:input_type -> arb.dashboard.v1.VerifyAccountRequest
-	126, // 207: arb.dashboard.v1.DashboardService.ListExchanges:input_type -> arb.dashboard.v1.ListExchangesRequest
-	128, // 208: arb.dashboard.v1.DashboardService.AddExchange:input_type -> arb.dashboard.v1.AddExchangeRequest
-	130, // 209: arb.dashboard.v1.DashboardService.RemoveExchange:input_type -> arb.dashboard.v1.RemoveExchangeRequest
-	132, // 210: arb.dashboard.v1.DashboardService.SetExchangeLabel:input_type -> arb.dashboard.v1.SetExchangeLabelRequest
-	134, // 211: arb.dashboard.v1.DashboardService.SetExchangeWebsite:input_type -> arb.dashboard.v1.SetExchangeWebsiteRequest
-	138, // 212: arb.dashboard.v1.DashboardService.BrokerSymbols:input_type -> arb.dashboard.v1.BrokerSymbolsRequest
-	141, // 213: arb.dashboard.v1.DashboardService.SetBrokerAccountAlias:input_type -> arb.dashboard.v1.SetBrokerAccountAliasRequest
-	143, // 214: arb.dashboard.v1.DashboardService.SetBrokerAccountIsReal:input_type -> arb.dashboard.v1.SetBrokerAccountIsRealRequest
-	145, // 215: arb.dashboard.v1.DashboardService.SetBrokerDisabled:input_type -> arb.dashboard.v1.SetBrokerDisabledRequest
-	147, // 216: arb.dashboard.v1.DashboardService.SetBrokerCommission:input_type -> arb.dashboard.v1.SetBrokerCommissionRequest
-	149, // 217: arb.dashboard.v1.DashboardService.SetBrokerWebsite:input_type -> arb.dashboard.v1.SetBrokerWebsiteRequest
-	152, // 218: arb.dashboard.v1.DashboardService.ListSymbolMappings:input_type -> arb.dashboard.v1.ListSymbolMappingsRequest
-	154, // 219: arb.dashboard.v1.DashboardService.SaveSymbolMapping:input_type -> arb.dashboard.v1.SaveSymbolMappingRequest
-	156, // 220: arb.dashboard.v1.DashboardService.DeleteSymbolMapping:input_type -> arb.dashboard.v1.DeleteSymbolMappingRequest
-	158, // 221: arb.dashboard.v1.DashboardService.ListMappingSuggestions:input_type -> arb.dashboard.v1.ListMappingSuggestionsRequest
-	161, // 222: arb.dashboard.v1.DashboardService.ListCanonicals:input_type -> arb.dashboard.v1.ListCanonicalsRequest
-	169, // 223: arb.dashboard.v1.DashboardService.AutoMapBroker:input_type -> arb.dashboard.v1.AutoMapBrokerRequest
-	172, // 224: arb.dashboard.v1.DashboardService.ListSwapCombos:input_type -> arb.dashboard.v1.ListSwapCombosRequest
-	163, // 225: arb.dashboard.v1.DashboardService.ListMatrixUniverse:input_type -> arb.dashboard.v1.ListMatrixUniverseRequest
-	95,  // 226: arb.dashboard.v1.DashboardService.StreamUpdates:input_type -> arb.dashboard.v1.StreamUpdatesRequest
-	112, // 227: arb.dashboard.v1.DashboardService.Health:input_type -> arb.dashboard.v1.HealthRequest
-	175, // 228: arb.dashboard.v1.DashboardService.GetFrontConfig:input_type -> arb.dashboard.v1.GetFrontConfigRequest
-	177, // 229: arb.dashboard.v1.DashboardService.GetStrategyLedger:input_type -> arb.dashboard.v1.GetStrategyLedgerRequest
-	181, // 230: arb.dashboard.v1.DashboardService.GetWatchlist:input_type -> arb.dashboard.v1.GetWatchlistRequest
-	183, // 231: arb.dashboard.v1.DashboardService.SetWatchlist:input_type -> arb.dashboard.v1.SetWatchlistRequest
-	187, // 232: arb.dashboard.v1.DashboardService.AskAnalyst:input_type -> arb.dashboard.v1.AskAnalystRequest
-	192, // 233: arb.dashboard.v1.DashboardService.AppendAnalystNote:input_type -> arb.dashboard.v1.AppendAnalystNoteRequest
-	194, // 234: arb.dashboard.v1.DashboardService.GenerateKbReport:input_type -> arb.dashboard.v1.GenerateKbReportRequest
-	196, // 235: arb.dashboard.v1.DashboardService.GenerateRetroReport:input_type -> arb.dashboard.v1.GenerateRetroReportRequest
-	199, // 236: arb.dashboard.v1.DashboardService.ListReports:input_type -> arb.dashboard.v1.ListReportsRequest
-	201, // 237: arb.dashboard.v1.DashboardService.GetReport:input_type -> arb.dashboard.v1.GetReportRequest
-	203, // 238: arb.dashboard.v1.DashboardService.GetAiSettings:input_type -> arb.dashboard.v1.GetAiSettingsRequest
-	205, // 239: arb.dashboard.v1.DashboardService.SetAiSettings:input_type -> arb.dashboard.v1.SetAiSettingsRequest
-	237, // 240: arb.dashboard.v1.DashboardService.GetRepoConfig:input_type -> arb.dashboard.v1.GetRepoConfigRequest
-	239, // 241: arb.dashboard.v1.DashboardService.SetRepoConfig:input_type -> arb.dashboard.v1.SetRepoConfigRequest
-	241, // 242: arb.dashboard.v1.DashboardService.GetCexScanSnapshot:input_type -> arb.dashboard.v1.GetCexScanSnapshotRequest
-	248, // 243: arb.dashboard.v1.DashboardService.RecordRepoTrade:input_type -> arb.dashboard.v1.RecordRepoTradeRequest
-	250, // 244: arb.dashboard.v1.DashboardService.ListRepoTrades:input_type -> arb.dashboard.v1.ListRepoTradesRequest
-	253, // 245: arb.dashboard.v1.DashboardService.SettleRepoTrade:input_type -> arb.dashboard.v1.SettleRepoTradeRequest
-	255, // 246: arb.dashboard.v1.DashboardService.DeleteRepoTrade:input_type -> arb.dashboard.v1.DeleteRepoTradeRequest
-	257, // 247: arb.dashboard.v1.DashboardService.GetRepoStrategyValidation:input_type -> arb.dashboard.v1.GetRepoStrategyValidationRequest
-	260, // 248: arb.dashboard.v1.DashboardService.ListPriceAlertRules:input_type -> arb.dashboard.v1.ListPriceAlertRulesRequest
-	262, // 249: arb.dashboard.v1.DashboardService.CreatePriceAlertRule:input_type -> arb.dashboard.v1.CreatePriceAlertRuleRequest
-	264, // 250: arb.dashboard.v1.DashboardService.UpdatePriceAlertRule:input_type -> arb.dashboard.v1.UpdatePriceAlertRuleRequest
-	266, // 251: arb.dashboard.v1.DashboardService.DeletePriceAlertRule:input_type -> arb.dashboard.v1.DeletePriceAlertRuleRequest
-	270, // 252: arb.dashboard.v1.DashboardService.ListEventJudgments:input_type -> arb.dashboard.v1.ListEventJudgmentsRequest
-	272, // 253: arb.dashboard.v1.DashboardService.ListPaperTrades:input_type -> arb.dashboard.v1.ListPaperTradesRequest
-	274, // 254: arb.dashboard.v1.DashboardService.AcceptJudgment:input_type -> arb.dashboard.v1.AcceptJudgmentRequest
-	276, // 255: arb.dashboard.v1.DashboardService.SettlePaperTrade:input_type -> arb.dashboard.v1.SettlePaperTradeRequest
-	278, // 256: arb.dashboard.v1.DashboardService.GetFinanceOverview:input_type -> arb.dashboard.v1.GetFinanceOverviewRequest
-	283, // 257: arb.dashboard.v1.DashboardService.ExecuteSpotCarryDemo:input_type -> arb.dashboard.v1.ExecuteSpotCarryDemoRequest
-	287, // 258: arb.dashboard.v1.DashboardService.ListSpotCarryDemo:input_type -> arb.dashboard.v1.ListSpotCarryDemoRequest
-	289, // 259: arb.dashboard.v1.DashboardService.ListPaperSpotCarry:input_type -> arb.dashboard.v1.ListPaperSpotCarryRequest
-	294, // 260: arb.dashboard.v1.DashboardService.ListAutotradeAllowRules:input_type -> arb.dashboard.v1.ListAutotradeAllowRulesRequest
-	296, // 261: arb.dashboard.v1.DashboardService.SetAutotradeAllowRuleEnabled:input_type -> arb.dashboard.v1.SetAutotradeAllowRuleEnabledRequest
-	298, // 262: arb.dashboard.v1.DashboardService.ListIntraTrades:input_type -> arb.dashboard.v1.ListIntraTradesRequest
-	302, // 263: arb.dashboard.v1.DashboardService.IntraTrackStats:input_type -> arb.dashboard.v1.IntraTrackStatsRequest
-	304, // 264: arb.dashboard.v1.DashboardService.GetCapitalCoverage:input_type -> arb.dashboard.v1.GetCapitalCoverageRequest
-	307, // 265: arb.dashboard.v1.DashboardService.GetCexFinance:input_type -> arb.dashboard.v1.GetCexFinanceRequest
-	327, // 266: arb.dashboard.v1.DashboardService.ListCarryGraduations:input_type -> arb.dashboard.v1.ListCarryGraduationsRequest
-	329, // 267: arb.dashboard.v1.DashboardService.ApproveCarryGraduation:input_type -> arb.dashboard.v1.ApproveCarryGraduationRequest
-	331, // 268: arb.dashboard.v1.DashboardService.RejectCarryGraduation:input_type -> arb.dashboard.v1.RejectCarryGraduationRequest
-	323, // 269: arb.dashboard.v1.DashboardService.ListVenueExposureCaps:input_type -> arb.dashboard.v1.ListVenueExposureCapsRequest
-	325, // 270: arb.dashboard.v1.DashboardService.SetVenueExposureCap:input_type -> arb.dashboard.v1.SetVenueExposureCapRequest
-	315, // 271: arb.dashboard.v1.DashboardService.ListXAssetAllowCombos:input_type -> arb.dashboard.v1.ListXAssetAllowCombosRequest
-	318, // 272: arb.dashboard.v1.DashboardService.UpsertXAssetAllowCombo:input_type -> arb.dashboard.v1.UpsertXAssetAllowComboRequest
-	320, // 273: arb.dashboard.v1.DashboardService.PreviewXAssetComboRisk:input_type -> arb.dashboard.v1.PreviewXAssetComboRiskRequest
-	104, // 274: arb.dashboard.v1.DashboardService.ListAccountMarginStatus:input_type -> arb.dashboard.v1.ListAccountMarginStatusRequest
-	3,   // 275: arb.dashboard.v1.DashboardService.ListLatestQuotes:output_type -> arb.dashboard.v1.ListQuotesResponse
-	6,   // 276: arb.dashboard.v1.DashboardService.ListLatestFacts:output_type -> arb.dashboard.v1.ListLatestFactsResponse
-	11,  // 277: arb.dashboard.v1.DashboardService.ListOpportunities:output_type -> arb.dashboard.v1.ListOpportunitiesResponse
-	17,  // 278: arb.dashboard.v1.DashboardService.ListAlerts:output_type -> arb.dashboard.v1.ListAlertsResponse
-	30,  // 279: arb.dashboard.v1.DashboardService.ListTriggerStates:output_type -> arb.dashboard.v1.ListTriggerStatesResponse
-	33,  // 280: arb.dashboard.v1.DashboardService.ListSourceHealth:output_type -> arb.dashboard.v1.ListSourceHealthResponse
-	8,   // 281: arb.dashboard.v1.DashboardService.ListFacts:output_type -> arb.dashboard.v1.ListFactsResponse
-	19,  // 282: arb.dashboard.v1.DashboardService.AckAlert:output_type -> arb.dashboard.v1.AckAlertResponse
-	21,  // 283: arb.dashboard.v1.DashboardService.AckAll:output_type -> arb.dashboard.v1.AckAllResponse
-	23,  // 284: arb.dashboard.v1.DashboardService.ListUnacked:output_type -> arb.dashboard.v1.ListUnackedResponse
-	25,  // 285: arb.dashboard.v1.DashboardService.DeleteAlerts:output_type -> arb.dashboard.v1.DeleteAlertsResponse
-	27,  // 286: arb.dashboard.v1.DashboardService.ClearAckedAlerts:output_type -> arb.dashboard.v1.ClearAckedAlertsResponse
-	36,  // 287: arb.dashboard.v1.DashboardService.AddLedgerEntry:output_type -> arb.dashboard.v1.AddLedgerEntryResponse
-	38,  // 288: arb.dashboard.v1.DashboardService.ListLedgerEntries:output_type -> arb.dashboard.v1.ListLedgerEntriesResponse
-	41,  // 289: arb.dashboard.v1.DashboardService.LedgerSummary:output_type -> arb.dashboard.v1.LedgerSummaryResponse
-	44,  // 290: arb.dashboard.v1.DashboardService.AddInvestmentRecord:output_type -> arb.dashboard.v1.AddInvestmentRecordResponse
-	46,  // 291: arb.dashboard.v1.DashboardService.ListInvestmentRecords:output_type -> arb.dashboard.v1.ListInvestmentRecordsResponse
-	49,  // 292: arb.dashboard.v1.DashboardService.ListKnowledgeEntries:output_type -> arb.dashboard.v1.ListKnowledgeEntriesResponse
-	53,  // 293: arb.dashboard.v1.DashboardService.ExecuteOpportunity:output_type -> arb.dashboard.v1.ExecuteOpportunityResponse
-	55,  // 294: arb.dashboard.v1.DashboardService.ClosePosition:output_type -> arb.dashboard.v1.ClosePositionResponse
-	57,  // 295: arb.dashboard.v1.DashboardService.BackfillSwapHistory:output_type -> arb.dashboard.v1.BackfillSwapHistoryReply
-	211, // 296: arb.dashboard.v1.DashboardService.GetCNFIRadarSnapshot:output_type -> arb.dashboard.v1.GetCNFIRadarSnapshotResponse
-	214, // 297: arb.dashboard.v1.DashboardService.GetCNFIProgress:output_type -> arb.dashboard.v1.GetCNFIProgressResponse
-	218, // 298: arb.dashboard.v1.DashboardService.AddCNFIHolding:output_type -> arb.dashboard.v1.AddCNFIHoldingResponse
-	220, // 299: arb.dashboard.v1.DashboardService.AddCNFIAction:output_type -> arb.dashboard.v1.AddCNFIActionResponse
-	223, // 300: arb.dashboard.v1.DashboardService.ListCNFIActions:output_type -> arb.dashboard.v1.ListCNFIActionsResponse
-	226, // 301: arb.dashboard.v1.DashboardService.ListRepoOps:output_type -> arb.dashboard.v1.ListRepoOpsResponse
-	59,  // 302: arb.dashboard.v1.DashboardService.ListPositions:output_type -> arb.dashboard.v1.ListPositionsResponse
-	62,  // 303: arb.dashboard.v1.DashboardService.ListBrokerPositions:output_type -> arb.dashboard.v1.ListBrokerPositionsResponse
-	64,  // 304: arb.dashboard.v1.DashboardService.CloseBrokerPosition:output_type -> arb.dashboard.v1.CloseBrokerPositionResponse
-	66,  // 305: arb.dashboard.v1.DashboardService.CloseBrokerPositions:output_type -> arb.dashboard.v1.CloseBrokerPositionsResponse
-	110, // 306: arb.dashboard.v1.DashboardService.ListAccounts:output_type -> arb.dashboard.v1.ListAccountsResponse
-	69,  // 307: arb.dashboard.v1.DashboardService.ListPersonalPositions:output_type -> arb.dashboard.v1.ListPersonalPositionsResponse
-	77,  // 308: arb.dashboard.v1.DashboardService.GetHedgeStructure:output_type -> arb.dashboard.v1.GetHedgeStructureResponse
-	80,  // 309: arb.dashboard.v1.DashboardService.ListHedgeFlow:output_type -> arb.dashboard.v1.ListHedgeFlowResponse
-	228, // 310: arb.dashboard.v1.DashboardService.TrxAccountRefresh:output_type -> arb.dashboard.v1.TrxAccountRefreshResponse
-	230, // 311: arb.dashboard.v1.DashboardService.GetTrxYieldRadar:output_type -> arb.dashboard.v1.GetTrxYieldRadarResponse
-	233, // 312: arb.dashboard.v1.DashboardService.GetTrxYieldCurve:output_type -> arb.dashboard.v1.GetTrxYieldCurveResponse
-	235, // 313: arb.dashboard.v1.DashboardService.GetRepoRateRadar:output_type -> arb.dashboard.v1.GetRepoRateRadarResponse
-	83,  // 314: arb.dashboard.v1.DashboardService.AddDailyIncome:output_type -> arb.dashboard.v1.AddDailyIncomeResponse
-	94,  // 315: arb.dashboard.v1.DashboardService.ListDailyIncome:output_type -> arb.dashboard.v1.ListDailyIncomeResponse
-	85,  // 316: arb.dashboard.v1.DashboardService.GetPnlAnchor:output_type -> arb.dashboard.v1.GetPnlAnchorResponse
-	87,  // 317: arb.dashboard.v1.DashboardService.ResetPnlAnchor:output_type -> arb.dashboard.v1.ResetPnlAnchorResponse
-	90,  // 318: arb.dashboard.v1.DashboardService.ListKBEntries:output_type -> arb.dashboard.v1.ListKBEntriesResponse
-	92,  // 319: arb.dashboard.v1.DashboardService.GetKBEntry:output_type -> arb.dashboard.v1.GetKBEntryResponse
-	14,  // 320: arb.dashboard.v1.DashboardService.ListVerificationStats:output_type -> arb.dashboard.v1.ListVerificationStatsResponse
-	117, // 321: arb.dashboard.v1.DashboardService.SearchBroker:output_type -> arb.dashboard.v1.SearchBrokerResponse
-	119, // 322: arb.dashboard.v1.DashboardService.AddBroker:output_type -> arb.dashboard.v1.AddBrokerResponse
-	121, // 323: arb.dashboard.v1.DashboardService.RemoveBroker:output_type -> arb.dashboard.v1.RemoveBrokerResponse
-	124, // 324: arb.dashboard.v1.DashboardService.ListBrokerAccounts:output_type -> arb.dashboard.v1.ListBrokerAccountsResponse
-	137, // 325: arb.dashboard.v1.DashboardService.VerifyAccount:output_type -> arb.dashboard.v1.VerifyAccountResponse
-	127, // 326: arb.dashboard.v1.DashboardService.ListExchanges:output_type -> arb.dashboard.v1.ListExchangesResponse
-	129, // 327: arb.dashboard.v1.DashboardService.AddExchange:output_type -> arb.dashboard.v1.AddExchangeResponse
-	131, // 328: arb.dashboard.v1.DashboardService.RemoveExchange:output_type -> arb.dashboard.v1.RemoveExchangeResponse
-	133, // 329: arb.dashboard.v1.DashboardService.SetExchangeLabel:output_type -> arb.dashboard.v1.SetExchangeLabelResponse
-	135, // 330: arb.dashboard.v1.DashboardService.SetExchangeWebsite:output_type -> arb.dashboard.v1.SetExchangeWebsiteResponse
-	140, // 331: arb.dashboard.v1.DashboardService.BrokerSymbols:output_type -> arb.dashboard.v1.BrokerSymbolsResponse
-	142, // 332: arb.dashboard.v1.DashboardService.SetBrokerAccountAlias:output_type -> arb.dashboard.v1.SetBrokerAccountAliasResponse
-	144, // 333: arb.dashboard.v1.DashboardService.SetBrokerAccountIsReal:output_type -> arb.dashboard.v1.SetBrokerAccountIsRealResponse
-	146, // 334: arb.dashboard.v1.DashboardService.SetBrokerDisabled:output_type -> arb.dashboard.v1.SetBrokerDisabledResponse
-	148, // 335: arb.dashboard.v1.DashboardService.SetBrokerCommission:output_type -> arb.dashboard.v1.SetBrokerCommissionResponse
-	150, // 336: arb.dashboard.v1.DashboardService.SetBrokerWebsite:output_type -> arb.dashboard.v1.SetBrokerWebsiteResponse
-	153, // 337: arb.dashboard.v1.DashboardService.ListSymbolMappings:output_type -> arb.dashboard.v1.ListSymbolMappingsResponse
-	155, // 338: arb.dashboard.v1.DashboardService.SaveSymbolMapping:output_type -> arb.dashboard.v1.SaveSymbolMappingResponse
-	157, // 339: arb.dashboard.v1.DashboardService.DeleteSymbolMapping:output_type -> arb.dashboard.v1.DeleteSymbolMappingResponse
-	160, // 340: arb.dashboard.v1.DashboardService.ListMappingSuggestions:output_type -> arb.dashboard.v1.ListMappingSuggestionsResponse
-	162, // 341: arb.dashboard.v1.DashboardService.ListCanonicals:output_type -> arb.dashboard.v1.ListCanonicalsResponse
-	171, // 342: arb.dashboard.v1.DashboardService.AutoMapBroker:output_type -> arb.dashboard.v1.AutoMapBrokerResponse
-	174, // 343: arb.dashboard.v1.DashboardService.ListSwapCombos:output_type -> arb.dashboard.v1.ListSwapCombosResponse
-	168, // 344: arb.dashboard.v1.DashboardService.ListMatrixUniverse:output_type -> arb.dashboard.v1.ListMatrixUniverseResponse
-	97,  // 345: arb.dashboard.v1.DashboardService.StreamUpdates:output_type -> arb.dashboard.v1.StreamUpdatesResponse
-	113, // 346: arb.dashboard.v1.DashboardService.Health:output_type -> arb.dashboard.v1.HealthResponse
-	176, // 347: arb.dashboard.v1.DashboardService.GetFrontConfig:output_type -> arb.dashboard.v1.GetFrontConfigResponse
-	179, // 348: arb.dashboard.v1.DashboardService.GetStrategyLedger:output_type -> arb.dashboard.v1.GetStrategyLedgerResponse
-	182, // 349: arb.dashboard.v1.DashboardService.GetWatchlist:output_type -> arb.dashboard.v1.GetWatchlistResponse
-	184, // 350: arb.dashboard.v1.DashboardService.SetWatchlist:output_type -> arb.dashboard.v1.SetWatchlistResponse
-	191, // 351: arb.dashboard.v1.DashboardService.AskAnalyst:output_type -> arb.dashboard.v1.AskAnalystResponse
-	193, // 352: arb.dashboard.v1.DashboardService.AppendAnalystNote:output_type -> arb.dashboard.v1.AppendAnalystNoteResponse
-	195, // 353: arb.dashboard.v1.DashboardService.GenerateKbReport:output_type -> arb.dashboard.v1.GenerateKbReportResponse
-	197, // 354: arb.dashboard.v1.DashboardService.GenerateRetroReport:output_type -> arb.dashboard.v1.GenerateRetroReportResponse
-	200, // 355: arb.dashboard.v1.DashboardService.ListReports:output_type -> arb.dashboard.v1.ListReportsResponse
-	202, // 356: arb.dashboard.v1.DashboardService.GetReport:output_type -> arb.dashboard.v1.GetReportResponse
-	204, // 357: arb.dashboard.v1.DashboardService.GetAiSettings:output_type -> arb.dashboard.v1.GetAiSettingsResponse
-	206, // 358: arb.dashboard.v1.DashboardService.SetAiSettings:output_type -> arb.dashboard.v1.SetAiSettingsResponse
-	238, // 359: arb.dashboard.v1.DashboardService.GetRepoConfig:output_type -> arb.dashboard.v1.GetRepoConfigResponse
-	240, // 360: arb.dashboard.v1.DashboardService.SetRepoConfig:output_type -> arb.dashboard.v1.SetRepoConfigResponse
-	242, // 361: arb.dashboard.v1.DashboardService.GetCexScanSnapshot:output_type -> arb.dashboard.v1.GetCexScanSnapshotResponse
-	249, // 362: arb.dashboard.v1.DashboardService.RecordRepoTrade:output_type -> arb.dashboard.v1.RecordRepoTradeResponse
-	252, // 363: arb.dashboard.v1.DashboardService.ListRepoTrades:output_type -> arb.dashboard.v1.ListRepoTradesResponse
-	254, // 364: arb.dashboard.v1.DashboardService.SettleRepoTrade:output_type -> arb.dashboard.v1.SettleRepoTradeResponse
-	256, // 365: arb.dashboard.v1.DashboardService.DeleteRepoTrade:output_type -> arb.dashboard.v1.DeleteRepoTradeResponse
-	258, // 366: arb.dashboard.v1.DashboardService.GetRepoStrategyValidation:output_type -> arb.dashboard.v1.GetRepoStrategyValidationResponse
-	261, // 367: arb.dashboard.v1.DashboardService.ListPriceAlertRules:output_type -> arb.dashboard.v1.ListPriceAlertRulesResponse
-	263, // 368: arb.dashboard.v1.DashboardService.CreatePriceAlertRule:output_type -> arb.dashboard.v1.CreatePriceAlertRuleResponse
-	265, // 369: arb.dashboard.v1.DashboardService.UpdatePriceAlertRule:output_type -> arb.dashboard.v1.UpdatePriceAlertRuleResponse
-	267, // 370: arb.dashboard.v1.DashboardService.DeletePriceAlertRule:output_type -> arb.dashboard.v1.DeletePriceAlertRuleResponse
-	271, // 371: arb.dashboard.v1.DashboardService.ListEventJudgments:output_type -> arb.dashboard.v1.ListEventJudgmentsResponse
-	273, // 372: arb.dashboard.v1.DashboardService.ListPaperTrades:output_type -> arb.dashboard.v1.ListPaperTradesResponse
-	275, // 373: arb.dashboard.v1.DashboardService.AcceptJudgment:output_type -> arb.dashboard.v1.AcceptJudgmentResponse
-	277, // 374: arb.dashboard.v1.DashboardService.SettlePaperTrade:output_type -> arb.dashboard.v1.SettlePaperTradeResponse
-	282, // 375: arb.dashboard.v1.DashboardService.GetFinanceOverview:output_type -> arb.dashboard.v1.GetFinanceOverviewResponse
-	285, // 376: arb.dashboard.v1.DashboardService.ExecuteSpotCarryDemo:output_type -> arb.dashboard.v1.ExecuteSpotCarryDemoResponse
-	288, // 377: arb.dashboard.v1.DashboardService.ListSpotCarryDemo:output_type -> arb.dashboard.v1.ListSpotCarryDemoResponse
-	292, // 378: arb.dashboard.v1.DashboardService.ListPaperSpotCarry:output_type -> arb.dashboard.v1.ListPaperSpotCarryResponse
-	295, // 379: arb.dashboard.v1.DashboardService.ListAutotradeAllowRules:output_type -> arb.dashboard.v1.ListAutotradeAllowRulesResponse
-	297, // 380: arb.dashboard.v1.DashboardService.SetAutotradeAllowRuleEnabled:output_type -> arb.dashboard.v1.SetAutotradeAllowRuleEnabledResponse
-	300, // 381: arb.dashboard.v1.DashboardService.ListIntraTrades:output_type -> arb.dashboard.v1.ListIntraTradesResponse
-	303, // 382: arb.dashboard.v1.DashboardService.IntraTrackStats:output_type -> arb.dashboard.v1.IntraTrackStatsResponse
-	306, // 383: arb.dashboard.v1.DashboardService.GetCapitalCoverage:output_type -> arb.dashboard.v1.GetCapitalCoverageResponse
-	311, // 384: arb.dashboard.v1.DashboardService.GetCexFinance:output_type -> arb.dashboard.v1.GetCexFinanceResponse
-	328, // 385: arb.dashboard.v1.DashboardService.ListCarryGraduations:output_type -> arb.dashboard.v1.ListCarryGraduationsResponse
-	330, // 386: arb.dashboard.v1.DashboardService.ApproveCarryGraduation:output_type -> arb.dashboard.v1.ApproveCarryGraduationResponse
-	332, // 387: arb.dashboard.v1.DashboardService.RejectCarryGraduation:output_type -> arb.dashboard.v1.RejectCarryGraduationResponse
-	324, // 388: arb.dashboard.v1.DashboardService.ListVenueExposureCaps:output_type -> arb.dashboard.v1.ListVenueExposureCapsResponse
-	326, // 389: arb.dashboard.v1.DashboardService.SetVenueExposureCap:output_type -> arb.dashboard.v1.SetVenueExposureCapResponse
-	317, // 390: arb.dashboard.v1.DashboardService.ListXAssetAllowCombos:output_type -> arb.dashboard.v1.ListXAssetAllowCombosResponse
-	319, // 391: arb.dashboard.v1.DashboardService.UpsertXAssetAllowCombo:output_type -> arb.dashboard.v1.UpsertXAssetAllowComboResponse
-	321, // 392: arb.dashboard.v1.DashboardService.PreviewXAssetComboRisk:output_type -> arb.dashboard.v1.PreviewXAssetComboRiskResponse
-	106, // 393: arb.dashboard.v1.DashboardService.ListAccountMarginStatus:output_type -> arb.dashboard.v1.ListAccountMarginStatusResponse
-	275, // [275:394] is the sub-list for method output_type
-	156, // [156:275] is the sub-list for method input_type
-	156, // [156:156] is the sub-list for extension type_name
-	156, // [156:156] is the sub-list for extension extendee
-	0,   // [0:156] is the sub-list for field type_name
+	165, // 88: arb.dashboard.v1.MatrixSymbolRow.accounts:type_name -> arb.dashboard.v1.MatrixSymbolAccount
+	167, // 89: arb.dashboard.v1.MatrixUniverse.group_stats:type_name -> arb.dashboard.v1.MatrixGroupStat
+	166, // 90: arb.dashboard.v1.MatrixUniverse.symbols:type_name -> arb.dashboard.v1.MatrixSymbolRow
+	123, // 91: arb.dashboard.v1.MatrixUniverse.accounts:type_name -> arb.dashboard.v1.BrokerAccount
+	168, // 92: arb.dashboard.v1.ListMatrixUniverseResponse.universe:type_name -> arb.dashboard.v1.MatrixUniverse
+	171, // 93: arb.dashboard.v1.AutoMapBrokerResponse.results:type_name -> arb.dashboard.v1.AutoMapBrokerResult
+	174, // 94: arb.dashboard.v1.ListSwapCombosResponse.combos:type_name -> arb.dashboard.v1.SwapCombo
+	179, // 95: arb.dashboard.v1.GetStrategyLedgerResponse.entries:type_name -> arb.dashboard.v1.StrategyLedgerEntry
+	181, // 96: arb.dashboard.v1.GetWatchlistResponse.items:type_name -> arb.dashboard.v1.WatchlistItem
+	181, // 97: arb.dashboard.v1.SetWatchlistRequest.items:type_name -> arb.dashboard.v1.WatchlistItem
+	181, // 98: arb.dashboard.v1.SetWatchlistResponse.items:type_name -> arb.dashboard.v1.WatchlistItem
+	186, // 99: arb.dashboard.v1.AskAnalystRequest.context:type_name -> arb.dashboard.v1.EntityRef
+	187, // 100: arb.dashboard.v1.AskAnalystRequest.history:type_name -> arb.dashboard.v1.ChatTurn
+	189, // 101: arb.dashboard.v1.AskAnalystResponse.citation:type_name -> arb.dashboard.v1.AnalystCitation
+	190, // 102: arb.dashboard.v1.AskAnalystResponse.follow_ups:type_name -> arb.dashboard.v1.SuggestedFollowUps
+	191, // 103: arb.dashboard.v1.AskAnalystResponse.done:type_name -> arb.dashboard.v1.AnalystDone
+	189, // 104: arb.dashboard.v1.AppendAnalystNoteRequest.citations:type_name -> arb.dashboard.v1.AnalystCitation
+	199, // 105: arb.dashboard.v1.ListReportsResponse.reports:type_name -> arb.dashboard.v1.ReportInfo
+	209, // 106: arb.dashboard.v1.GetCNFIRadarSnapshotResponse.points:type_name -> arb.dashboard.v1.CnfiCurvePoint
+	210, // 107: arb.dashboard.v1.GetCNFIRadarSnapshotResponse.metrics:type_name -> arb.dashboard.v1.CnfiDerivedMetric
+	211, // 108: arb.dashboard.v1.GetCNFIRadarSnapshotResponse.signals:type_name -> arb.dashboard.v1.CnfiSignalState
+	335, // 109: arb.dashboard.v1.GetCNFIRadarSnapshotResponse.generated_at:type_name -> google.protobuf.Timestamp
+	214, // 110: arb.dashboard.v1.GetCNFIProgressResponse.layers:type_name -> arb.dashboard.v1.CnfiLayerProgress
+	216, // 111: arb.dashboard.v1.GetCNFIProgressResponse.layer_compares:type_name -> arb.dashboard.v1.CnfiLayerCompare
+	217, // 112: arb.dashboard.v1.CnfiLayerCompare.funds:type_name -> arb.dashboard.v1.CnfiFundCompare
+	222, // 113: arb.dashboard.v1.ListCNFIActionsResponse.actions:type_name -> arb.dashboard.v1.CnfiActionRow
+	226, // 114: arb.dashboard.v1.ListRepoOpsResponse.ops:type_name -> arb.dashboard.v1.RepoOpRow
+	335, // 115: arb.dashboard.v1.TrxAccountRefreshResponse.fetched_at:type_name -> google.protobuf.Timestamp
+	335, // 116: arb.dashboard.v1.GetTrxYieldRadarResponse.updated_at:type_name -> google.protobuf.Timestamp
+	335, // 117: arb.dashboard.v1.TrxYieldCurvePoint.day:type_name -> google.protobuf.Timestamp
+	233, // 118: arb.dashboard.v1.GetTrxYieldCurveResponse.points:type_name -> arb.dashboard.v1.TrxYieldCurvePoint
+	237, // 119: arb.dashboard.v1.GetRepoRateRadarResponse.rates:type_name -> arb.dashboard.v1.RepoRateSnapshot
+	335, // 120: arb.dashboard.v1.GetRepoRateRadarResponse.updated_at:type_name -> google.protobuf.Timestamp
+	245, // 121: arb.dashboard.v1.GetCexScanSnapshotResponse.earn_aprs:type_name -> arb.dashboard.v1.CexEarnAPRRow
+	246, // 122: arb.dashboard.v1.GetCexScanSnapshotResponse.spreads:type_name -> arb.dashboard.v1.CexSpreadRow
+	247, // 123: arb.dashboard.v1.GetCexScanSnapshotResponse.fundings:type_name -> arb.dashboard.v1.CexFundingRow
+	248, // 124: arb.dashboard.v1.GetCexScanSnapshotResponse.balances:type_name -> arb.dashboard.v1.CexBalanceRow
+	244, // 125: arb.dashboard.v1.GetCexScanSnapshotResponse.judgments:type_name -> arb.dashboard.v1.CexEarnJudgmentRow
+	108, // 126: arb.dashboard.v1.CexBalanceRow.holdings:type_name -> arb.dashboard.v1.Holding
+	252, // 127: arb.dashboard.v1.ListRepoTradesResponse.trades:type_name -> arb.dashboard.v1.RepoTradeRow
+	260, // 128: arb.dashboard.v1.ListPriceAlertRulesResponse.rules:type_name -> arb.dashboard.v1.PriceAlertRuleRow
+	260, // 129: arb.dashboard.v1.CreatePriceAlertRuleResponse.rule:type_name -> arb.dashboard.v1.PriceAlertRuleRow
+	260, // 130: arb.dashboard.v1.UpdatePriceAlertRuleResponse.rule:type_name -> arb.dashboard.v1.PriceAlertRuleRow
+	269, // 131: arb.dashboard.v1.ListEventJudgmentsResponse.rows:type_name -> arb.dashboard.v1.EventJudgmentRow
+	270, // 132: arb.dashboard.v1.ListPaperTradesResponse.rows:type_name -> arb.dashboard.v1.PaperTradeRow
+	335, // 133: arb.dashboard.v1.FinanceFlowRow.ts:type_name -> google.protobuf.Timestamp
+	280, // 134: arb.dashboard.v1.GetFinanceOverviewResponse.pnl_by_env:type_name -> arb.dashboard.v1.FinancePnlByEnv
+	281, // 135: arb.dashboard.v1.GetFinanceOverviewResponse.income_by_kind:type_name -> arb.dashboard.v1.FinanceIncomeRow
+	282, // 136: arb.dashboard.v1.GetFinanceOverviewResponse.flows:type_name -> arb.dashboard.v1.FinanceFlowRow
+	285, // 137: arb.dashboard.v1.ExecuteSpotCarryDemoResponse.legs:type_name -> arb.dashboard.v1.SpotCarryDemoLeg
+	287, // 138: arb.dashboard.v1.ListSpotCarryDemoResponse.rows:type_name -> arb.dashboard.v1.SpotCarryDemoRow
+	291, // 139: arb.dashboard.v1.ListPaperSpotCarryResponse.rows:type_name -> arb.dashboard.v1.PaperSpotCarryRow
+	292, // 140: arb.dashboard.v1.ListPaperSpotCarryResponse.tracks:type_name -> arb.dashboard.v1.PaperTrackSummary
+	335, // 141: arb.dashboard.v1.AutotradeAllowRuleRow.acct_updated_at:type_name -> google.protobuf.Timestamp
+	294, // 142: arb.dashboard.v1.ListAutotradeAllowRulesResponse.rules:type_name -> arb.dashboard.v1.AutotradeAllowRuleRow
+	300, // 143: arb.dashboard.v1.ListIntraTradesResponse.trades:type_name -> arb.dashboard.v1.IntraTradeRow
+	302, // 144: arb.dashboard.v1.IntraTrackStatsResponse.baselines:type_name -> arb.dashboard.v1.IntraBaselineStat
+	306, // 145: arb.dashboard.v1.GetCapitalCoverageResponse.rows:type_name -> arb.dashboard.v1.CapitalCoverageRow
+	309, // 146: arb.dashboard.v1.CexAccountFinance.holdings:type_name -> arb.dashboard.v1.CexFinanceHolding
+	310, // 147: arb.dashboard.v1.CexAccountFinance.flows:type_name -> arb.dashboard.v1.CexFinanceFlow
+	311, // 148: arb.dashboard.v1.GetCexFinanceResponse.accounts:type_name -> arb.dashboard.v1.CexAccountFinance
+	315, // 149: arb.dashboard.v1.CarryGraduationRow.risk:type_name -> arb.dashboard.v1.GraduationRiskReport
+	314, // 150: arb.dashboard.v1.GraduationRiskReport.legs:type_name -> arb.dashboard.v1.GraduationRiskLeg
+	316, // 151: arb.dashboard.v1.GraduationRiskReport.field_grades:type_name -> arb.dashboard.v1.FieldEvidence
+	1,   // 152: arb.dashboard.v1.FieldEvidence.grade:type_name -> arb.dashboard.v1.EvidenceGrade
+	318, // 153: arb.dashboard.v1.ListXAssetAllowCombosResponse.rows:type_name -> arb.dashboard.v1.XAssetAllowComboRow
+	315, // 154: arb.dashboard.v1.PreviewXAssetComboRiskResponse.risk:type_name -> arb.dashboard.v1.GraduationRiskReport
+	335, // 155: arb.dashboard.v1.VenueExposureCapRow.updated_at:type_name -> google.protobuf.Timestamp
+	324, // 156: arb.dashboard.v1.ListVenueExposureCapsResponse.rows:type_name -> arb.dashboard.v1.VenueExposureCapRow
+	313, // 157: arb.dashboard.v1.ListCarryGraduationsResponse.rows:type_name -> arb.dashboard.v1.CarryGraduationRow
+	3,   // 158: arb.dashboard.v1.DashboardService.ListLatestQuotes:input_type -> arb.dashboard.v1.ListQuotesRequest
+	6,   // 159: arb.dashboard.v1.DashboardService.ListLatestFacts:input_type -> arb.dashboard.v1.ListLatestFactsRequest
+	11,  // 160: arb.dashboard.v1.DashboardService.ListOpportunities:input_type -> arb.dashboard.v1.ListOpportunitiesRequest
+	17,  // 161: arb.dashboard.v1.DashboardService.ListAlerts:input_type -> arb.dashboard.v1.ListAlertsRequest
+	30,  // 162: arb.dashboard.v1.DashboardService.ListTriggerStates:input_type -> arb.dashboard.v1.ListTriggerStatesRequest
+	33,  // 163: arb.dashboard.v1.DashboardService.ListSourceHealth:input_type -> arb.dashboard.v1.ListSourceHealthRequest
+	8,   // 164: arb.dashboard.v1.DashboardService.ListFacts:input_type -> arb.dashboard.v1.ListFactsRequest
+	19,  // 165: arb.dashboard.v1.DashboardService.AckAlert:input_type -> arb.dashboard.v1.AckAlertRequest
+	21,  // 166: arb.dashboard.v1.DashboardService.AckAll:input_type -> arb.dashboard.v1.AckAllRequest
+	23,  // 167: arb.dashboard.v1.DashboardService.ListUnacked:input_type -> arb.dashboard.v1.ListUnackedRequest
+	25,  // 168: arb.dashboard.v1.DashboardService.DeleteAlerts:input_type -> arb.dashboard.v1.DeleteAlertsRequest
+	27,  // 169: arb.dashboard.v1.DashboardService.ClearAckedAlerts:input_type -> arb.dashboard.v1.ClearAckedAlertsRequest
+	36,  // 170: arb.dashboard.v1.DashboardService.AddLedgerEntry:input_type -> arb.dashboard.v1.AddLedgerEntryRequest
+	38,  // 171: arb.dashboard.v1.DashboardService.ListLedgerEntries:input_type -> arb.dashboard.v1.ListLedgerEntriesRequest
+	40,  // 172: arb.dashboard.v1.DashboardService.LedgerSummary:input_type -> arb.dashboard.v1.LedgerSummaryRequest
+	44,  // 173: arb.dashboard.v1.DashboardService.AddInvestmentRecord:input_type -> arb.dashboard.v1.AddInvestmentRecordRequest
+	46,  // 174: arb.dashboard.v1.DashboardService.ListInvestmentRecords:input_type -> arb.dashboard.v1.ListInvestmentRecordsRequest
+	49,  // 175: arb.dashboard.v1.DashboardService.ListKnowledgeEntries:input_type -> arb.dashboard.v1.ListKnowledgeEntriesRequest
+	53,  // 176: arb.dashboard.v1.DashboardService.ExecuteOpportunity:input_type -> arb.dashboard.v1.ExecuteOpportunityRequest
+	55,  // 177: arb.dashboard.v1.DashboardService.ClosePosition:input_type -> arb.dashboard.v1.ClosePositionRequest
+	57,  // 178: arb.dashboard.v1.DashboardService.BackfillSwapHistory:input_type -> arb.dashboard.v1.BackfillSwapHistoryRequest
+	208, // 179: arb.dashboard.v1.DashboardService.GetCNFIRadarSnapshot:input_type -> arb.dashboard.v1.GetCNFIRadarSnapshotRequest
+	213, // 180: arb.dashboard.v1.DashboardService.GetCNFIProgress:input_type -> arb.dashboard.v1.GetCNFIProgressRequest
+	218, // 181: arb.dashboard.v1.DashboardService.AddCNFIHolding:input_type -> arb.dashboard.v1.AddCNFIHoldingRequest
+	220, // 182: arb.dashboard.v1.DashboardService.AddCNFIAction:input_type -> arb.dashboard.v1.AddCNFIActionRequest
+	223, // 183: arb.dashboard.v1.DashboardService.ListCNFIActions:input_type -> arb.dashboard.v1.ListCNFIActionsRequest
+	225, // 184: arb.dashboard.v1.DashboardService.ListRepoOps:input_type -> arb.dashboard.v1.ListRepoOpsRequest
+	59,  // 185: arb.dashboard.v1.DashboardService.ListPositions:input_type -> arb.dashboard.v1.ListPositionsRequest
+	62,  // 186: arb.dashboard.v1.DashboardService.ListBrokerPositions:input_type -> arb.dashboard.v1.ListBrokerPositionsRequest
+	64,  // 187: arb.dashboard.v1.DashboardService.CloseBrokerPosition:input_type -> arb.dashboard.v1.CloseBrokerPositionRequest
+	66,  // 188: arb.dashboard.v1.DashboardService.CloseBrokerPositions:input_type -> arb.dashboard.v1.CloseBrokerPositionsRequest
+	110, // 189: arb.dashboard.v1.DashboardService.ListAccounts:input_type -> arb.dashboard.v1.ListAccountsRequest
+	69,  // 190: arb.dashboard.v1.DashboardService.ListPersonalPositions:input_type -> arb.dashboard.v1.ListPersonalPositionsRequest
+	77,  // 191: arb.dashboard.v1.DashboardService.GetHedgeStructure:input_type -> arb.dashboard.v1.GetHedgeStructureRequest
+	80,  // 192: arb.dashboard.v1.DashboardService.ListHedgeFlow:input_type -> arb.dashboard.v1.ListHedgeFlowRequest
+	228, // 193: arb.dashboard.v1.DashboardService.TrxAccountRefresh:input_type -> arb.dashboard.v1.TrxAccountRefreshRequest
+	230, // 194: arb.dashboard.v1.DashboardService.GetTrxYieldRadar:input_type -> arb.dashboard.v1.GetTrxYieldRadarRequest
+	232, // 195: arb.dashboard.v1.DashboardService.GetTrxYieldCurve:input_type -> arb.dashboard.v1.GetTrxYieldCurveRequest
+	235, // 196: arb.dashboard.v1.DashboardService.GetRepoRateRadar:input_type -> arb.dashboard.v1.GetRepoRateRadarRequest
+	83,  // 197: arb.dashboard.v1.DashboardService.AddDailyIncome:input_type -> arb.dashboard.v1.AddDailyIncomeRequest
+	94,  // 198: arb.dashboard.v1.DashboardService.ListDailyIncome:input_type -> arb.dashboard.v1.ListDailyIncomeRequest
+	85,  // 199: arb.dashboard.v1.DashboardService.GetPnlAnchor:input_type -> arb.dashboard.v1.GetPnlAnchorRequest
+	87,  // 200: arb.dashboard.v1.DashboardService.ResetPnlAnchor:input_type -> arb.dashboard.v1.ResetPnlAnchorRequest
+	90,  // 201: arb.dashboard.v1.DashboardService.ListKBEntries:input_type -> arb.dashboard.v1.ListKBEntriesRequest
+	92,  // 202: arb.dashboard.v1.DashboardService.GetKBEntry:input_type -> arb.dashboard.v1.GetKBEntryRequest
+	14,  // 203: arb.dashboard.v1.DashboardService.ListVerificationStats:input_type -> arb.dashboard.v1.ListVerificationStatsRequest
+	115, // 204: arb.dashboard.v1.DashboardService.SearchBroker:input_type -> arb.dashboard.v1.SearchBrokerRequest
+	119, // 205: arb.dashboard.v1.DashboardService.AddBroker:input_type -> arb.dashboard.v1.AddBrokerRequest
+	121, // 206: arb.dashboard.v1.DashboardService.RemoveBroker:input_type -> arb.dashboard.v1.RemoveBrokerRequest
+	124, // 207: arb.dashboard.v1.DashboardService.ListBrokerAccounts:input_type -> arb.dashboard.v1.ListBrokerAccountsRequest
+	137, // 208: arb.dashboard.v1.DashboardService.VerifyAccount:input_type -> arb.dashboard.v1.VerifyAccountRequest
+	127, // 209: arb.dashboard.v1.DashboardService.ListExchanges:input_type -> arb.dashboard.v1.ListExchangesRequest
+	129, // 210: arb.dashboard.v1.DashboardService.AddExchange:input_type -> arb.dashboard.v1.AddExchangeRequest
+	131, // 211: arb.dashboard.v1.DashboardService.RemoveExchange:input_type -> arb.dashboard.v1.RemoveExchangeRequest
+	133, // 212: arb.dashboard.v1.DashboardService.SetExchangeLabel:input_type -> arb.dashboard.v1.SetExchangeLabelRequest
+	135, // 213: arb.dashboard.v1.DashboardService.SetExchangeWebsite:input_type -> arb.dashboard.v1.SetExchangeWebsiteRequest
+	139, // 214: arb.dashboard.v1.DashboardService.BrokerSymbols:input_type -> arb.dashboard.v1.BrokerSymbolsRequest
+	142, // 215: arb.dashboard.v1.DashboardService.SetBrokerAccountAlias:input_type -> arb.dashboard.v1.SetBrokerAccountAliasRequest
+	144, // 216: arb.dashboard.v1.DashboardService.SetBrokerAccountIsReal:input_type -> arb.dashboard.v1.SetBrokerAccountIsRealRequest
+	146, // 217: arb.dashboard.v1.DashboardService.SetBrokerDisabled:input_type -> arb.dashboard.v1.SetBrokerDisabledRequest
+	148, // 218: arb.dashboard.v1.DashboardService.SetBrokerCommission:input_type -> arb.dashboard.v1.SetBrokerCommissionRequest
+	150, // 219: arb.dashboard.v1.DashboardService.SetBrokerWebsite:input_type -> arb.dashboard.v1.SetBrokerWebsiteRequest
+	153, // 220: arb.dashboard.v1.DashboardService.ListSymbolMappings:input_type -> arb.dashboard.v1.ListSymbolMappingsRequest
+	155, // 221: arb.dashboard.v1.DashboardService.SaveSymbolMapping:input_type -> arb.dashboard.v1.SaveSymbolMappingRequest
+	157, // 222: arb.dashboard.v1.DashboardService.DeleteSymbolMapping:input_type -> arb.dashboard.v1.DeleteSymbolMappingRequest
+	159, // 223: arb.dashboard.v1.DashboardService.ListMappingSuggestions:input_type -> arb.dashboard.v1.ListMappingSuggestionsRequest
+	162, // 224: arb.dashboard.v1.DashboardService.ListCanonicals:input_type -> arb.dashboard.v1.ListCanonicalsRequest
+	170, // 225: arb.dashboard.v1.DashboardService.AutoMapBroker:input_type -> arb.dashboard.v1.AutoMapBrokerRequest
+	173, // 226: arb.dashboard.v1.DashboardService.ListSwapCombos:input_type -> arb.dashboard.v1.ListSwapCombosRequest
+	164, // 227: arb.dashboard.v1.DashboardService.ListMatrixUniverse:input_type -> arb.dashboard.v1.ListMatrixUniverseRequest
+	96,  // 228: arb.dashboard.v1.DashboardService.StreamUpdates:input_type -> arb.dashboard.v1.StreamUpdatesRequest
+	113, // 229: arb.dashboard.v1.DashboardService.Health:input_type -> arb.dashboard.v1.HealthRequest
+	176, // 230: arb.dashboard.v1.DashboardService.GetFrontConfig:input_type -> arb.dashboard.v1.GetFrontConfigRequest
+	178, // 231: arb.dashboard.v1.DashboardService.GetStrategyLedger:input_type -> arb.dashboard.v1.GetStrategyLedgerRequest
+	182, // 232: arb.dashboard.v1.DashboardService.GetWatchlist:input_type -> arb.dashboard.v1.GetWatchlistRequest
+	184, // 233: arb.dashboard.v1.DashboardService.SetWatchlist:input_type -> arb.dashboard.v1.SetWatchlistRequest
+	188, // 234: arb.dashboard.v1.DashboardService.AskAnalyst:input_type -> arb.dashboard.v1.AskAnalystRequest
+	193, // 235: arb.dashboard.v1.DashboardService.AppendAnalystNote:input_type -> arb.dashboard.v1.AppendAnalystNoteRequest
+	195, // 236: arb.dashboard.v1.DashboardService.GenerateKbReport:input_type -> arb.dashboard.v1.GenerateKbReportRequest
+	197, // 237: arb.dashboard.v1.DashboardService.GenerateRetroReport:input_type -> arb.dashboard.v1.GenerateRetroReportRequest
+	200, // 238: arb.dashboard.v1.DashboardService.ListReports:input_type -> arb.dashboard.v1.ListReportsRequest
+	202, // 239: arb.dashboard.v1.DashboardService.GetReport:input_type -> arb.dashboard.v1.GetReportRequest
+	204, // 240: arb.dashboard.v1.DashboardService.GetAiSettings:input_type -> arb.dashboard.v1.GetAiSettingsRequest
+	206, // 241: arb.dashboard.v1.DashboardService.SetAiSettings:input_type -> arb.dashboard.v1.SetAiSettingsRequest
+	238, // 242: arb.dashboard.v1.DashboardService.GetRepoConfig:input_type -> arb.dashboard.v1.GetRepoConfigRequest
+	240, // 243: arb.dashboard.v1.DashboardService.SetRepoConfig:input_type -> arb.dashboard.v1.SetRepoConfigRequest
+	242, // 244: arb.dashboard.v1.DashboardService.GetCexScanSnapshot:input_type -> arb.dashboard.v1.GetCexScanSnapshotRequest
+	249, // 245: arb.dashboard.v1.DashboardService.RecordRepoTrade:input_type -> arb.dashboard.v1.RecordRepoTradeRequest
+	251, // 246: arb.dashboard.v1.DashboardService.ListRepoTrades:input_type -> arb.dashboard.v1.ListRepoTradesRequest
+	254, // 247: arb.dashboard.v1.DashboardService.SettleRepoTrade:input_type -> arb.dashboard.v1.SettleRepoTradeRequest
+	256, // 248: arb.dashboard.v1.DashboardService.DeleteRepoTrade:input_type -> arb.dashboard.v1.DeleteRepoTradeRequest
+	258, // 249: arb.dashboard.v1.DashboardService.GetRepoStrategyValidation:input_type -> arb.dashboard.v1.GetRepoStrategyValidationRequest
+	261, // 250: arb.dashboard.v1.DashboardService.ListPriceAlertRules:input_type -> arb.dashboard.v1.ListPriceAlertRulesRequest
+	263, // 251: arb.dashboard.v1.DashboardService.CreatePriceAlertRule:input_type -> arb.dashboard.v1.CreatePriceAlertRuleRequest
+	265, // 252: arb.dashboard.v1.DashboardService.UpdatePriceAlertRule:input_type -> arb.dashboard.v1.UpdatePriceAlertRuleRequest
+	267, // 253: arb.dashboard.v1.DashboardService.DeletePriceAlertRule:input_type -> arb.dashboard.v1.DeletePriceAlertRuleRequest
+	271, // 254: arb.dashboard.v1.DashboardService.ListEventJudgments:input_type -> arb.dashboard.v1.ListEventJudgmentsRequest
+	273, // 255: arb.dashboard.v1.DashboardService.ListPaperTrades:input_type -> arb.dashboard.v1.ListPaperTradesRequest
+	275, // 256: arb.dashboard.v1.DashboardService.AcceptJudgment:input_type -> arb.dashboard.v1.AcceptJudgmentRequest
+	277, // 257: arb.dashboard.v1.DashboardService.SettlePaperTrade:input_type -> arb.dashboard.v1.SettlePaperTradeRequest
+	279, // 258: arb.dashboard.v1.DashboardService.GetFinanceOverview:input_type -> arb.dashboard.v1.GetFinanceOverviewRequest
+	284, // 259: arb.dashboard.v1.DashboardService.ExecuteSpotCarryDemo:input_type -> arb.dashboard.v1.ExecuteSpotCarryDemoRequest
+	288, // 260: arb.dashboard.v1.DashboardService.ListSpotCarryDemo:input_type -> arb.dashboard.v1.ListSpotCarryDemoRequest
+	290, // 261: arb.dashboard.v1.DashboardService.ListPaperSpotCarry:input_type -> arb.dashboard.v1.ListPaperSpotCarryRequest
+	295, // 262: arb.dashboard.v1.DashboardService.ListAutotradeAllowRules:input_type -> arb.dashboard.v1.ListAutotradeAllowRulesRequest
+	297, // 263: arb.dashboard.v1.DashboardService.SetAutotradeAllowRuleEnabled:input_type -> arb.dashboard.v1.SetAutotradeAllowRuleEnabledRequest
+	299, // 264: arb.dashboard.v1.DashboardService.ListIntraTrades:input_type -> arb.dashboard.v1.ListIntraTradesRequest
+	303, // 265: arb.dashboard.v1.DashboardService.IntraTrackStats:input_type -> arb.dashboard.v1.IntraTrackStatsRequest
+	305, // 266: arb.dashboard.v1.DashboardService.GetCapitalCoverage:input_type -> arb.dashboard.v1.GetCapitalCoverageRequest
+	308, // 267: arb.dashboard.v1.DashboardService.GetCexFinance:input_type -> arb.dashboard.v1.GetCexFinanceRequest
+	329, // 268: arb.dashboard.v1.DashboardService.ListCarryGraduations:input_type -> arb.dashboard.v1.ListCarryGraduationsRequest
+	331, // 269: arb.dashboard.v1.DashboardService.ApproveCarryGraduation:input_type -> arb.dashboard.v1.ApproveCarryGraduationRequest
+	333, // 270: arb.dashboard.v1.DashboardService.RejectCarryGraduation:input_type -> arb.dashboard.v1.RejectCarryGraduationRequest
+	325, // 271: arb.dashboard.v1.DashboardService.ListVenueExposureCaps:input_type -> arb.dashboard.v1.ListVenueExposureCapsRequest
+	327, // 272: arb.dashboard.v1.DashboardService.SetVenueExposureCap:input_type -> arb.dashboard.v1.SetVenueExposureCapRequest
+	317, // 273: arb.dashboard.v1.DashboardService.ListXAssetAllowCombos:input_type -> arb.dashboard.v1.ListXAssetAllowCombosRequest
+	320, // 274: arb.dashboard.v1.DashboardService.UpsertXAssetAllowCombo:input_type -> arb.dashboard.v1.UpsertXAssetAllowComboRequest
+	322, // 275: arb.dashboard.v1.DashboardService.PreviewXAssetComboRisk:input_type -> arb.dashboard.v1.PreviewXAssetComboRiskRequest
+	105, // 276: arb.dashboard.v1.DashboardService.ListAccountMarginStatus:input_type -> arb.dashboard.v1.ListAccountMarginStatusRequest
+	4,   // 277: arb.dashboard.v1.DashboardService.ListLatestQuotes:output_type -> arb.dashboard.v1.ListQuotesResponse
+	7,   // 278: arb.dashboard.v1.DashboardService.ListLatestFacts:output_type -> arb.dashboard.v1.ListLatestFactsResponse
+	12,  // 279: arb.dashboard.v1.DashboardService.ListOpportunities:output_type -> arb.dashboard.v1.ListOpportunitiesResponse
+	18,  // 280: arb.dashboard.v1.DashboardService.ListAlerts:output_type -> arb.dashboard.v1.ListAlertsResponse
+	31,  // 281: arb.dashboard.v1.DashboardService.ListTriggerStates:output_type -> arb.dashboard.v1.ListTriggerStatesResponse
+	34,  // 282: arb.dashboard.v1.DashboardService.ListSourceHealth:output_type -> arb.dashboard.v1.ListSourceHealthResponse
+	9,   // 283: arb.dashboard.v1.DashboardService.ListFacts:output_type -> arb.dashboard.v1.ListFactsResponse
+	20,  // 284: arb.dashboard.v1.DashboardService.AckAlert:output_type -> arb.dashboard.v1.AckAlertResponse
+	22,  // 285: arb.dashboard.v1.DashboardService.AckAll:output_type -> arb.dashboard.v1.AckAllResponse
+	24,  // 286: arb.dashboard.v1.DashboardService.ListUnacked:output_type -> arb.dashboard.v1.ListUnackedResponse
+	26,  // 287: arb.dashboard.v1.DashboardService.DeleteAlerts:output_type -> arb.dashboard.v1.DeleteAlertsResponse
+	28,  // 288: arb.dashboard.v1.DashboardService.ClearAckedAlerts:output_type -> arb.dashboard.v1.ClearAckedAlertsResponse
+	37,  // 289: arb.dashboard.v1.DashboardService.AddLedgerEntry:output_type -> arb.dashboard.v1.AddLedgerEntryResponse
+	39,  // 290: arb.dashboard.v1.DashboardService.ListLedgerEntries:output_type -> arb.dashboard.v1.ListLedgerEntriesResponse
+	42,  // 291: arb.dashboard.v1.DashboardService.LedgerSummary:output_type -> arb.dashboard.v1.LedgerSummaryResponse
+	45,  // 292: arb.dashboard.v1.DashboardService.AddInvestmentRecord:output_type -> arb.dashboard.v1.AddInvestmentRecordResponse
+	47,  // 293: arb.dashboard.v1.DashboardService.ListInvestmentRecords:output_type -> arb.dashboard.v1.ListInvestmentRecordsResponse
+	50,  // 294: arb.dashboard.v1.DashboardService.ListKnowledgeEntries:output_type -> arb.dashboard.v1.ListKnowledgeEntriesResponse
+	54,  // 295: arb.dashboard.v1.DashboardService.ExecuteOpportunity:output_type -> arb.dashboard.v1.ExecuteOpportunityResponse
+	56,  // 296: arb.dashboard.v1.DashboardService.ClosePosition:output_type -> arb.dashboard.v1.ClosePositionResponse
+	58,  // 297: arb.dashboard.v1.DashboardService.BackfillSwapHistory:output_type -> arb.dashboard.v1.BackfillSwapHistoryReply
+	212, // 298: arb.dashboard.v1.DashboardService.GetCNFIRadarSnapshot:output_type -> arb.dashboard.v1.GetCNFIRadarSnapshotResponse
+	215, // 299: arb.dashboard.v1.DashboardService.GetCNFIProgress:output_type -> arb.dashboard.v1.GetCNFIProgressResponse
+	219, // 300: arb.dashboard.v1.DashboardService.AddCNFIHolding:output_type -> arb.dashboard.v1.AddCNFIHoldingResponse
+	221, // 301: arb.dashboard.v1.DashboardService.AddCNFIAction:output_type -> arb.dashboard.v1.AddCNFIActionResponse
+	224, // 302: arb.dashboard.v1.DashboardService.ListCNFIActions:output_type -> arb.dashboard.v1.ListCNFIActionsResponse
+	227, // 303: arb.dashboard.v1.DashboardService.ListRepoOps:output_type -> arb.dashboard.v1.ListRepoOpsResponse
+	60,  // 304: arb.dashboard.v1.DashboardService.ListPositions:output_type -> arb.dashboard.v1.ListPositionsResponse
+	63,  // 305: arb.dashboard.v1.DashboardService.ListBrokerPositions:output_type -> arb.dashboard.v1.ListBrokerPositionsResponse
+	65,  // 306: arb.dashboard.v1.DashboardService.CloseBrokerPosition:output_type -> arb.dashboard.v1.CloseBrokerPositionResponse
+	67,  // 307: arb.dashboard.v1.DashboardService.CloseBrokerPositions:output_type -> arb.dashboard.v1.CloseBrokerPositionsResponse
+	111, // 308: arb.dashboard.v1.DashboardService.ListAccounts:output_type -> arb.dashboard.v1.ListAccountsResponse
+	70,  // 309: arb.dashboard.v1.DashboardService.ListPersonalPositions:output_type -> arb.dashboard.v1.ListPersonalPositionsResponse
+	78,  // 310: arb.dashboard.v1.DashboardService.GetHedgeStructure:output_type -> arb.dashboard.v1.GetHedgeStructureResponse
+	81,  // 311: arb.dashboard.v1.DashboardService.ListHedgeFlow:output_type -> arb.dashboard.v1.ListHedgeFlowResponse
+	229, // 312: arb.dashboard.v1.DashboardService.TrxAccountRefresh:output_type -> arb.dashboard.v1.TrxAccountRefreshResponse
+	231, // 313: arb.dashboard.v1.DashboardService.GetTrxYieldRadar:output_type -> arb.dashboard.v1.GetTrxYieldRadarResponse
+	234, // 314: arb.dashboard.v1.DashboardService.GetTrxYieldCurve:output_type -> arb.dashboard.v1.GetTrxYieldCurveResponse
+	236, // 315: arb.dashboard.v1.DashboardService.GetRepoRateRadar:output_type -> arb.dashboard.v1.GetRepoRateRadarResponse
+	84,  // 316: arb.dashboard.v1.DashboardService.AddDailyIncome:output_type -> arb.dashboard.v1.AddDailyIncomeResponse
+	95,  // 317: arb.dashboard.v1.DashboardService.ListDailyIncome:output_type -> arb.dashboard.v1.ListDailyIncomeResponse
+	86,  // 318: arb.dashboard.v1.DashboardService.GetPnlAnchor:output_type -> arb.dashboard.v1.GetPnlAnchorResponse
+	88,  // 319: arb.dashboard.v1.DashboardService.ResetPnlAnchor:output_type -> arb.dashboard.v1.ResetPnlAnchorResponse
+	91,  // 320: arb.dashboard.v1.DashboardService.ListKBEntries:output_type -> arb.dashboard.v1.ListKBEntriesResponse
+	93,  // 321: arb.dashboard.v1.DashboardService.GetKBEntry:output_type -> arb.dashboard.v1.GetKBEntryResponse
+	15,  // 322: arb.dashboard.v1.DashboardService.ListVerificationStats:output_type -> arb.dashboard.v1.ListVerificationStatsResponse
+	118, // 323: arb.dashboard.v1.DashboardService.SearchBroker:output_type -> arb.dashboard.v1.SearchBrokerResponse
+	120, // 324: arb.dashboard.v1.DashboardService.AddBroker:output_type -> arb.dashboard.v1.AddBrokerResponse
+	122, // 325: arb.dashboard.v1.DashboardService.RemoveBroker:output_type -> arb.dashboard.v1.RemoveBrokerResponse
+	125, // 326: arb.dashboard.v1.DashboardService.ListBrokerAccounts:output_type -> arb.dashboard.v1.ListBrokerAccountsResponse
+	138, // 327: arb.dashboard.v1.DashboardService.VerifyAccount:output_type -> arb.dashboard.v1.VerifyAccountResponse
+	128, // 328: arb.dashboard.v1.DashboardService.ListExchanges:output_type -> arb.dashboard.v1.ListExchangesResponse
+	130, // 329: arb.dashboard.v1.DashboardService.AddExchange:output_type -> arb.dashboard.v1.AddExchangeResponse
+	132, // 330: arb.dashboard.v1.DashboardService.RemoveExchange:output_type -> arb.dashboard.v1.RemoveExchangeResponse
+	134, // 331: arb.dashboard.v1.DashboardService.SetExchangeLabel:output_type -> arb.dashboard.v1.SetExchangeLabelResponse
+	136, // 332: arb.dashboard.v1.DashboardService.SetExchangeWebsite:output_type -> arb.dashboard.v1.SetExchangeWebsiteResponse
+	141, // 333: arb.dashboard.v1.DashboardService.BrokerSymbols:output_type -> arb.dashboard.v1.BrokerSymbolsResponse
+	143, // 334: arb.dashboard.v1.DashboardService.SetBrokerAccountAlias:output_type -> arb.dashboard.v1.SetBrokerAccountAliasResponse
+	145, // 335: arb.dashboard.v1.DashboardService.SetBrokerAccountIsReal:output_type -> arb.dashboard.v1.SetBrokerAccountIsRealResponse
+	147, // 336: arb.dashboard.v1.DashboardService.SetBrokerDisabled:output_type -> arb.dashboard.v1.SetBrokerDisabledResponse
+	149, // 337: arb.dashboard.v1.DashboardService.SetBrokerCommission:output_type -> arb.dashboard.v1.SetBrokerCommissionResponse
+	151, // 338: arb.dashboard.v1.DashboardService.SetBrokerWebsite:output_type -> arb.dashboard.v1.SetBrokerWebsiteResponse
+	154, // 339: arb.dashboard.v1.DashboardService.ListSymbolMappings:output_type -> arb.dashboard.v1.ListSymbolMappingsResponse
+	156, // 340: arb.dashboard.v1.DashboardService.SaveSymbolMapping:output_type -> arb.dashboard.v1.SaveSymbolMappingResponse
+	158, // 341: arb.dashboard.v1.DashboardService.DeleteSymbolMapping:output_type -> arb.dashboard.v1.DeleteSymbolMappingResponse
+	161, // 342: arb.dashboard.v1.DashboardService.ListMappingSuggestions:output_type -> arb.dashboard.v1.ListMappingSuggestionsResponse
+	163, // 343: arb.dashboard.v1.DashboardService.ListCanonicals:output_type -> arb.dashboard.v1.ListCanonicalsResponse
+	172, // 344: arb.dashboard.v1.DashboardService.AutoMapBroker:output_type -> arb.dashboard.v1.AutoMapBrokerResponse
+	175, // 345: arb.dashboard.v1.DashboardService.ListSwapCombos:output_type -> arb.dashboard.v1.ListSwapCombosResponse
+	169, // 346: arb.dashboard.v1.DashboardService.ListMatrixUniverse:output_type -> arb.dashboard.v1.ListMatrixUniverseResponse
+	98,  // 347: arb.dashboard.v1.DashboardService.StreamUpdates:output_type -> arb.dashboard.v1.StreamUpdatesResponse
+	114, // 348: arb.dashboard.v1.DashboardService.Health:output_type -> arb.dashboard.v1.HealthResponse
+	177, // 349: arb.dashboard.v1.DashboardService.GetFrontConfig:output_type -> arb.dashboard.v1.GetFrontConfigResponse
+	180, // 350: arb.dashboard.v1.DashboardService.GetStrategyLedger:output_type -> arb.dashboard.v1.GetStrategyLedgerResponse
+	183, // 351: arb.dashboard.v1.DashboardService.GetWatchlist:output_type -> arb.dashboard.v1.GetWatchlistResponse
+	185, // 352: arb.dashboard.v1.DashboardService.SetWatchlist:output_type -> arb.dashboard.v1.SetWatchlistResponse
+	192, // 353: arb.dashboard.v1.DashboardService.AskAnalyst:output_type -> arb.dashboard.v1.AskAnalystResponse
+	194, // 354: arb.dashboard.v1.DashboardService.AppendAnalystNote:output_type -> arb.dashboard.v1.AppendAnalystNoteResponse
+	196, // 355: arb.dashboard.v1.DashboardService.GenerateKbReport:output_type -> arb.dashboard.v1.GenerateKbReportResponse
+	198, // 356: arb.dashboard.v1.DashboardService.GenerateRetroReport:output_type -> arb.dashboard.v1.GenerateRetroReportResponse
+	201, // 357: arb.dashboard.v1.DashboardService.ListReports:output_type -> arb.dashboard.v1.ListReportsResponse
+	203, // 358: arb.dashboard.v1.DashboardService.GetReport:output_type -> arb.dashboard.v1.GetReportResponse
+	205, // 359: arb.dashboard.v1.DashboardService.GetAiSettings:output_type -> arb.dashboard.v1.GetAiSettingsResponse
+	207, // 360: arb.dashboard.v1.DashboardService.SetAiSettings:output_type -> arb.dashboard.v1.SetAiSettingsResponse
+	239, // 361: arb.dashboard.v1.DashboardService.GetRepoConfig:output_type -> arb.dashboard.v1.GetRepoConfigResponse
+	241, // 362: arb.dashboard.v1.DashboardService.SetRepoConfig:output_type -> arb.dashboard.v1.SetRepoConfigResponse
+	243, // 363: arb.dashboard.v1.DashboardService.GetCexScanSnapshot:output_type -> arb.dashboard.v1.GetCexScanSnapshotResponse
+	250, // 364: arb.dashboard.v1.DashboardService.RecordRepoTrade:output_type -> arb.dashboard.v1.RecordRepoTradeResponse
+	253, // 365: arb.dashboard.v1.DashboardService.ListRepoTrades:output_type -> arb.dashboard.v1.ListRepoTradesResponse
+	255, // 366: arb.dashboard.v1.DashboardService.SettleRepoTrade:output_type -> arb.dashboard.v1.SettleRepoTradeResponse
+	257, // 367: arb.dashboard.v1.DashboardService.DeleteRepoTrade:output_type -> arb.dashboard.v1.DeleteRepoTradeResponse
+	259, // 368: arb.dashboard.v1.DashboardService.GetRepoStrategyValidation:output_type -> arb.dashboard.v1.GetRepoStrategyValidationResponse
+	262, // 369: arb.dashboard.v1.DashboardService.ListPriceAlertRules:output_type -> arb.dashboard.v1.ListPriceAlertRulesResponse
+	264, // 370: arb.dashboard.v1.DashboardService.CreatePriceAlertRule:output_type -> arb.dashboard.v1.CreatePriceAlertRuleResponse
+	266, // 371: arb.dashboard.v1.DashboardService.UpdatePriceAlertRule:output_type -> arb.dashboard.v1.UpdatePriceAlertRuleResponse
+	268, // 372: arb.dashboard.v1.DashboardService.DeletePriceAlertRule:output_type -> arb.dashboard.v1.DeletePriceAlertRuleResponse
+	272, // 373: arb.dashboard.v1.DashboardService.ListEventJudgments:output_type -> arb.dashboard.v1.ListEventJudgmentsResponse
+	274, // 374: arb.dashboard.v1.DashboardService.ListPaperTrades:output_type -> arb.dashboard.v1.ListPaperTradesResponse
+	276, // 375: arb.dashboard.v1.DashboardService.AcceptJudgment:output_type -> arb.dashboard.v1.AcceptJudgmentResponse
+	278, // 376: arb.dashboard.v1.DashboardService.SettlePaperTrade:output_type -> arb.dashboard.v1.SettlePaperTradeResponse
+	283, // 377: arb.dashboard.v1.DashboardService.GetFinanceOverview:output_type -> arb.dashboard.v1.GetFinanceOverviewResponse
+	286, // 378: arb.dashboard.v1.DashboardService.ExecuteSpotCarryDemo:output_type -> arb.dashboard.v1.ExecuteSpotCarryDemoResponse
+	289, // 379: arb.dashboard.v1.DashboardService.ListSpotCarryDemo:output_type -> arb.dashboard.v1.ListSpotCarryDemoResponse
+	293, // 380: arb.dashboard.v1.DashboardService.ListPaperSpotCarry:output_type -> arb.dashboard.v1.ListPaperSpotCarryResponse
+	296, // 381: arb.dashboard.v1.DashboardService.ListAutotradeAllowRules:output_type -> arb.dashboard.v1.ListAutotradeAllowRulesResponse
+	298, // 382: arb.dashboard.v1.DashboardService.SetAutotradeAllowRuleEnabled:output_type -> arb.dashboard.v1.SetAutotradeAllowRuleEnabledResponse
+	301, // 383: arb.dashboard.v1.DashboardService.ListIntraTrades:output_type -> arb.dashboard.v1.ListIntraTradesResponse
+	304, // 384: arb.dashboard.v1.DashboardService.IntraTrackStats:output_type -> arb.dashboard.v1.IntraTrackStatsResponse
+	307, // 385: arb.dashboard.v1.DashboardService.GetCapitalCoverage:output_type -> arb.dashboard.v1.GetCapitalCoverageResponse
+	312, // 386: arb.dashboard.v1.DashboardService.GetCexFinance:output_type -> arb.dashboard.v1.GetCexFinanceResponse
+	330, // 387: arb.dashboard.v1.DashboardService.ListCarryGraduations:output_type -> arb.dashboard.v1.ListCarryGraduationsResponse
+	332, // 388: arb.dashboard.v1.DashboardService.ApproveCarryGraduation:output_type -> arb.dashboard.v1.ApproveCarryGraduationResponse
+	334, // 389: arb.dashboard.v1.DashboardService.RejectCarryGraduation:output_type -> arb.dashboard.v1.RejectCarryGraduationResponse
+	326, // 390: arb.dashboard.v1.DashboardService.ListVenueExposureCaps:output_type -> arb.dashboard.v1.ListVenueExposureCapsResponse
+	328, // 391: arb.dashboard.v1.DashboardService.SetVenueExposureCap:output_type -> arb.dashboard.v1.SetVenueExposureCapResponse
+	319, // 392: arb.dashboard.v1.DashboardService.ListXAssetAllowCombos:output_type -> arb.dashboard.v1.ListXAssetAllowCombosResponse
+	321, // 393: arb.dashboard.v1.DashboardService.UpsertXAssetAllowCombo:output_type -> arb.dashboard.v1.UpsertXAssetAllowComboResponse
+	323, // 394: arb.dashboard.v1.DashboardService.PreviewXAssetComboRisk:output_type -> arb.dashboard.v1.PreviewXAssetComboRiskResponse
+	107, // 395: arb.dashboard.v1.DashboardService.ListAccountMarginStatus:output_type -> arb.dashboard.v1.ListAccountMarginStatusResponse
+	277, // [277:396] is the sub-list for method output_type
+	158, // [158:277] is the sub-list for method input_type
+	158, // [158:158] is the sub-list for extension type_name
+	158, // [158:158] is the sub-list for extension extendee
+	0,   // [0:158] is the sub-list for field type_name
 }
 
 func init() { file_arb_dashboard_v1_dashboard_proto_init() }
@@ -25656,18 +25786,18 @@ func file_arb_dashboard_v1_dashboard_proto_init() {
 	file_arb_dashboard_v1_dashboard_proto_msgTypes[311].OneofWrappers = []any{}
 	file_arb_dashboard_v1_dashboard_proto_msgTypes[312].OneofWrappers = []any{}
 	file_arb_dashboard_v1_dashboard_proto_msgTypes[313].OneofWrappers = []any{}
-	file_arb_dashboard_v1_dashboard_proto_msgTypes[315].OneofWrappers = []any{}
-	file_arb_dashboard_v1_dashboard_proto_msgTypes[317].OneofWrappers = []any{}
-	file_arb_dashboard_v1_dashboard_proto_msgTypes[320].OneofWrappers = []any{}
-	file_arb_dashboard_v1_dashboard_proto_msgTypes[328].OneofWrappers = []any{}
+	file_arb_dashboard_v1_dashboard_proto_msgTypes[316].OneofWrappers = []any{}
+	file_arb_dashboard_v1_dashboard_proto_msgTypes[318].OneofWrappers = []any{}
+	file_arb_dashboard_v1_dashboard_proto_msgTypes[321].OneofWrappers = []any{}
 	file_arb_dashboard_v1_dashboard_proto_msgTypes[329].OneofWrappers = []any{}
+	file_arb_dashboard_v1_dashboard_proto_msgTypes[330].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arb_dashboard_v1_dashboard_proto_rawDesc), len(file_arb_dashboard_v1_dashboard_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   332,
+			NumEnums:      2,
+			NumMessages:   333,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

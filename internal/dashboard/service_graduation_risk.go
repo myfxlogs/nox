@@ -13,7 +13,6 @@ import (
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 	"arb/internal/fact"
-	"arb/internal/scan"
 	"arb/internal/store/pgstore"
 )
 
@@ -27,107 +26,13 @@ type riskLegSpec struct {
 
 // gradRiskLegs 结构→双腿解析（B-011：按 :mt 后缀分 MT/CEX 腿，不假设「一 MT 一 CEX」；
 // venue 组合串方向：cfd=mt×cex 由 structure 定向；perp_perp=shortV×longV；cfd_cfd=MtVenue=short 腿）。
-func gradRiskLegs(g *pgstore.CarryGraduation, p *pgstore.PaperSpotCarry, mtPair *scan.ResolvedCfdPair) ([]riskLegSpec, error) {
-	switch g.Structure {
-	case "long_cfd_short_perp": // buy=MT sell=CEX
-		return []riskLegSpec{
-			{mtPair.MtVenueKey, mtPair.MtCanonical, "buy"},
-			{cexVenueKeyOf(g.Venue), mtPair.CexCanonical, "sell"},
-		}, nil
-	case "short_cfd_long_perp": // buy=CEX sell=MT
-		return []riskLegSpec{
-			{cexVenueKeyOf(g.Venue), mtPair.CexCanonical, "buy"},
-			{mtPair.MtVenueKey, mtPair.MtCanonical, "sell"},
-		}, nil
-	case "spot_carry": // 双腿同所：perp 腿+spot 腿；Side 定 funding 方向
-		v := strings.Split(g.Venue, "×")[0]
-		perpRole, spotRole := "sell", "buy"
-		if p != nil && p.Side == "long_perp" {
-			perpRole, spotRole = "buy", "sell"
-		}
-		return []riskLegSpec{
-			{v + ":perp", g.Symbol, perpRole},
-			{v + ":spot", g.Symbol, spotRole},
-		}, nil
-	case "perp_perp": // venue=shortV×longV（方向在键，radar 轨）
-		parts := strings.Split(g.Venue, "×")
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("perp_perp venue 组合串异常 %q", g.Venue)
-		}
-		return []riskLegSpec{
-			{parts[1] + ":perp", g.Symbol, "buy"},
-			{parts[0] + ":perp", g.Symbol, "sell"},
-		}, nil
-	case "cfd_cfd": // mt×mt：MtVenue=short 腿（paper_mtm 插入约定），另一腿=buy
-		parts := strings.Split(g.Venue, "×")
-		if len(parts) != 2 || g.MtVenue == nil {
-			return nil, fmt.Errorf("cfd_cfd venue/mt_venue 异常 %q", g.Venue)
-		}
-		short, long := *g.MtVenue, parts[0]
-		if short == parts[0] {
-			long = parts[1]
-		}
-		return []riskLegSpec{
-			{long + ":mt5", g.Symbol, "buy"},
-			{short + ":mt5", g.Symbol, "sell"},
-		}, nil
-	}
-	return nil, fmt.Errorf("未知 structure %q", g.Structure)
-}
-
-// cexVenueKeyOf mt×cex 组合串尾段→cex:perp 键（与 approve 同口径）。
-func cexVenueKeyOf(paperVenue string) string {
-	parts := strings.Split(paperVenue, "×")
-	return parts[len(parts)-1] + ":perp"
-}
-
-// resolveLegSymbol 腿 spec 的 venue 原生 symbol 解析：
-// MT 腿=broker_symbol_map（canonical→primary 行）；CEX 腿=fin_cex_universe（hedge_canonical→symbol）；
-// spot 腿/universe 无映射→canonical 本身（tick 同键多数同形，miss 走 gaps 如实标）。
-func (s *Service) resolveLegSymbol(ctx context.Context, leg *riskLegSpec, gaps *[]string) {
-	vk := leg.venueKey
-	i := strings.LastIndex(vk, ":")
-	bare, vt := vk[:i], vk[i+1:]
-	switch vt {
-	case "mt4", "mt5":
-		mappings, err := s.gradDB().ListSymbolMappings(ctx, bare)
-		if err != nil {
-			*gaps = append(*gaps, vk+" symbol_map 读取失败: "+err.Error())
-			return
-		}
-		var pick *pgstore.SymbolMapping
-		for i := range mappings {
-			m := &mappings[i]
-			if m.Canonical == leg.symbol && (pick == nil || m.IsPrimary) {
-				pick = m
-			}
-		}
-		if pick == nil {
-			*gaps = append(*gaps, vk+" canonical "+leg.symbol+" 无映射行")
-			return
-		}
-		leg.symbol = pick.BrokerSymbol
-	case "perp":
-		uni, err := s.gradDB().ListCexUniverse(ctx)
-		if err != nil {
-			*gaps = append(*gaps, vk+" universe 读取失败: "+err.Error())
-			return
-		}
-		want := scan.NormalizeJoinKey(leg.symbol)
-		for _, r := range uni {
-			if r.Venue == bare && (r.HedgeCanonical == leg.symbol || scan.NormalizeJoinKey(r.HedgeCanonical) == want) {
-				leg.symbol = r.Symbol
-				return
-			}
-		}
-		// universe 无 hedge 映射→symbol=canonical 直用（tick 键同形，缺则 gaps 标）。
-	}
-}
-
-// graduationRiskReport S1 档案主函数。notional 优先序=combo spec>paper.QtyUSD（B-010）。
 // previewNotional 供 PreviewXAssetComboRisk 直接给定名义（>0 已校验）。
 func (s *Service) graduationRiskReport(ctx context.Context, legs []riskLegSpec, notional float64, notionalSrc string, paper *pgstore.PaperSpotCarry) *v1.GraduationRiskReport {
 	rep := &v1.GraduationRiskReport{NotionalUsd: &notional, NotionalSource: notionalSrc}
+	// D-476a：字段证据级别在各自计算同点产出（A实结/B实数据/C估算/D缺）。
+	eg := func(f string, g v1.EvidenceGrade) {
+		rep.FieldGrades = append(rep.FieldGrades, &v1.FieldEvidence{Field: f, Grade: g})
+	}
 	var gaps []string
 	var capital float64
 	capitalOK := true
@@ -204,13 +109,40 @@ func (s *Service) graduationRiskReport(ctx context.Context, legs []riskLegSpec, 
 		}
 		rep.Legs = append(rep.Legs, out)
 	}
+	eg("notional_usd", v1.EvidenceGrade_EVIDENCE_GRADE_B)
+	eg("legs", v1.EvidenceGrade_EVIDENCE_GRADE_B)
 	rep.RecommendedLeverage = 5
 	rep.LeverageNote = "min(5, venue 可得档)；可得档未采集按 5 给"
-	// 强平距离估算：mmr_est 缺取 1% 标估算（SSOT §3：禁伪造精确值）。
+	// 可得档未采集回落 5+note→C；采集实档→B。
+	levG := v1.EvidenceGrade_EVIDENCE_GRADE_B
+	if rep.LeverageNote != "" {
+		levG = v1.EvidenceGrade_EVIDENCE_GRADE_C
+	}
+	eg("recommended_leverage", levG)
+	// 强平距离估算：mmr_est 缺取 1% 标估算（SSOT §3：禁伪造精确值）；账户实采 buffer_multiple→B。
+	liqG := v1.EvidenceGrade_EVIDENCE_GRADE_C
+	if snaps, err := s.gradDB().LatestVenueAccountSnapshots(ctx); err == nil {
+		bufSet := make(map[string]bool, len(snaps))
+		for _, sn := range snaps {
+			if sn.BufferMultiple != nil {
+				bufSet[sn.Venue+":"+sn.VenueType] = true
+			}
+		}
+		for _, leg := range legs {
+			if bufSet[leg.venueKey] {
+				liqG = v1.EvidenceGrade_EVIDENCE_GRADE_B
+				break
+			}
+		}
+	}
 	liq := (1.0/5 - 0.01) * 100
 	rep.LiqDistancePctEst = &liq
+	eg("liq_distance_pct_est", liqG)
 	if capitalOK && capital > 0 {
 		rep.CapitalUsd = &capital
+		eg("capital_usd", v1.EvidenceGrade_EVIDENCE_GRADE_B)
+	} else {
+		eg("capital_usd", v1.EvidenceGrade_EVIDENCE_GRADE_D)
 	}
 	// 最坏场景：funding 翻号单日成本=notional×|worst_ann|/365（窗口 worst 缺→last_funding_ann）。
 	worstAnn := 0.0
@@ -238,8 +170,10 @@ func (s *Service) graduationRiskReport(ctx context.Context, legs []riskLegSpec, 
 	if worstAnn > 0 {
 		f := notional * worstAnn / 100 / 365
 		rep.FundingFlipDailyUsd = &f
+		eg("funding_flip_daily_usd", v1.EvidenceGrade_EVIDENCE_GRADE_C) // worst_ann 假设源恒 C
 	} else {
 		gaps = append(gaps, "funding 窗口无样本（翻号成本未知）")
+		eg("funding_flip_daily_usd", v1.EvidenceGrade_EVIDENCE_GRADE_D)
 	}
 	// adverse_basis_p95：monitor 簿 venue 对 p95 折 usd（无簿→NULL+gap）。
 	var cexV, mtV string
@@ -258,21 +192,31 @@ func (s *Service) graduationRiskReport(ctx context.Context, legs []riskLegSpec, 
 				v = -v
 			}
 			rep.AdverseBasisP95Usd = &v
+			eg("adverse_basis_p95_usd", v1.EvidenceGrade_EVIDENCE_GRADE_B)
 		} else {
 			gaps = append(gaps, "monitor 簿无 "+cexV+"×"+mtV+" 样本（p95 缺）")
+			eg("adverse_basis_p95_usd", v1.EvidenceGrade_EVIDENCE_GRADE_D)
 		}
 	} else {
 		gaps = append(gaps, "非 mt×cex 结构无 monitor 簿锚（p95 缺）")
+		eg("adverse_basis_p95_usd", v1.EvidenceGrade_EVIDENCE_GRADE_D)
 	}
 	// roundtrip_fee：paper 真费优先（D-474a 分腿真值）；缺→NULL 标缺（禁常数费）。
 	if paper != nil && paper.EstRoundTripFeeUSD != nil {
 		f := *paper.EstRoundTripFeeUSD
 		rep.RoundtripFeeUsd = &f
+		eg("roundtrip_fee_usd", v1.EvidenceGrade_EVIDENCE_GRADE_B)
 	} else {
 		gaps = append(gaps, "est_round_trip_fee 缺（往返费未知）")
+		eg("roundtrip_fee_usd", v1.EvidenceGrade_EVIDENCE_GRADE_D)
 	}
 	for _, leg := range rep.Legs {
 		rep.MinExecutable = append(rep.MinExecutable, leg.VenueKey+": "+leg.Note)
+		mg := v1.EvidenceGrade_EVIDENCE_GRADE_B
+		if strings.Contains(leg.Note, "lot filter 未采集") {
+			mg = v1.EvidenceGrade_EVIDENCE_GRADE_D // 该腿 lot filter 未采
+		}
+		eg("min_executable:"+leg.VenueKey, mg)
 	}
 	rep.Gaps = gaps
 	return rep

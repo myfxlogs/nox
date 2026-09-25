@@ -46,6 +46,7 @@ type fakeGradDB struct {
 	fundingWin map[string][]pgstore.FactPoint // venue|symbol → funding 预测流
 	p95        float64
 	p95OK      bool
+	snaps      []pgstore.VenueAccountLatest
 	adminRows  []pgstore.XAssetComboAdminRow
 	comboOpen  map[string][]int64 // canonicalBuy|venueBuy → 在持仓 posIDs
 	comboOpenN map[string]float64
@@ -140,6 +141,9 @@ func (f *fakeGradDB) FundingPredWindow(_ context.Context, venue, symbol string, 
 }
 func (f *fakeGradDB) XAssetMonitorSpreadP95(context.Context, string, string) (float64, bool, error) {
 	return f.p95, f.p95OK, nil
+}
+func (f *fakeGradDB) LatestVenueAccountSnapshots(context.Context) ([]pgstore.VenueAccountLatest, error) {
+	return f.snaps, nil
 }
 func (f *fakeGradDB) ListXAssetAllowCombosAll(context.Context) ([]pgstore.XAssetComboAdminRow, error) {
 	return f.adminRows, nil
