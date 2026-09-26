@@ -10,6 +10,7 @@ import (
 
 	v1 "arb/internal/gen/dashboardv1"
 
+	"arb/internal/collect/exchange"
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -110,7 +111,22 @@ func (s *Service) ListTriggerStates(ctx context.Context, req *connect.Request[v1
 }
 
 func (s *Service) ListSourceHealth(ctx context.Context, req *connect.Request[v1.ListSourceHealthRequest]) (*connect.Response[v1.ListSourceHealthResponse], error) {
-	return connect.NewResponse(&v1.ListSourceHealthResponse{}), nil
+	resp := &v1.ListSourceHealthResponse{}
+	// D-512 T4：WS 重连计量透出（SnapshotReconnects 只读聚合，前端只渲染不算）。
+	for _, snap := range exchange.SnapshotReconnects() {
+		row := &v1.SourceHealth{
+			Venue:          snap.URL,
+			State:          "ws",
+			Source:         snap.URL,
+			ReconnectCount: snap.TotalReconns,
+			LastEventUnix:  0,
+		}
+		if !snap.LastWarn.IsZero() {
+			row.LastEventUnix = snap.LastWarn.Unix()
+		}
+		resp.Sources = append(resp.Sources, row)
+	}
+	return connect.NewResponse(resp), nil
 }
 
 func (s *Service) ListFacts(ctx context.Context, req *connect.Request[v1.ListFactsRequest]) (*connect.Response[v1.ListFactsResponse], error) {
