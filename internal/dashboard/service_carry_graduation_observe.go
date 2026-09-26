@@ -4,11 +4,11 @@ package dashboard
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 	"arb/internal/fact"
+	"arb/internal/keydomain"
 	"arb/internal/scan"
 	"arb/internal/store/pgstore"
 )
@@ -31,10 +31,7 @@ func (s *Service) graduationObservability(ctx context.Context, g *pgstore.CarryG
 	elapsed := time.Since(p.EntryTs)
 	var ivl float64
 	for _, v := range scan.FlagVenueSet(p.Venue, p.MtVenue) {
-		bare := v
-		if i := strings.Index(bare, ":"); i >= 0 { // venue_key→裸名（facts 键=裸 venue）
-			bare = bare[:i]
-		}
+		bare := keydomain.BareOf(v) // venue_key→裸名（facts 键=裸 venue）
 		for _, sym := range []string{p.Symbol, p.Symbol + "USDT", p.Symbol + "-USDT-SWAP"} {
 			fs, err := s.gradDB().LatestFacts(ctx, fact.KindFundingInterval, bare, sym)
 			if err != nil || len(fs) == 0 {
