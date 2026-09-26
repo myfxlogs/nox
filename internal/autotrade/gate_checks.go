@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"strings"
 	"time"
 
 	"arb/internal/fact"
+	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 	"arb/internal/usdnotional"
 )
@@ -88,8 +88,8 @@ func (g *Gate) liveGateCheck(ctx context.Context, intent TradeIntent) GateVerdic
 //   - 无匹配持仓/无 DailySwapAccrued/无 facts→放行（首次开仓走 S3）。
 //   - 查询失败→fail-closed 拒绝。
 func (g *Gate) swapDeviationGateCheck(ctx context.Context, intent TradeIntent, activePositions []pgstore.Position) GateVerdict {
-	intentBuyBare, _, _ := strings.Cut(intent.VenueBuy, ":")
-	intentSellBare, _, _ := strings.Cut(intent.VenueSell, ":")
+	intentBuyBare := keydomain.BareOf(intent.VenueBuy)
+	intentSellBare := keydomain.BareOf(intent.VenueSell)
 	canonical := intent.Canonical
 
 	// 取 facts 规格值（同 recalcNetSwap 逻辑）
@@ -111,7 +111,7 @@ func (g *Gate) swapDeviationGateCheck(ctx context.Context, intent TradeIntent, a
 			if leg.Phase != "OPEN" {
 				continue
 			}
-			legBare, _, _ := strings.Cut(leg.Venue, ":")
+			legBare := keydomain.BareOf(leg.Venue)
 			// 只检查与 intent venue 匹配的腿
 			if legBare != intentBuyBare && legBare != intentSellBare {
 				continue

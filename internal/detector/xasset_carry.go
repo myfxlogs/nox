@@ -4,7 +4,6 @@ import (
 	"arb/internal/keydomain"
 	"context"
 	"math"
-	"strings"
 	"time"
 
 	"arb/internal/bus"
@@ -148,10 +147,7 @@ func (d *XAssetCarryDetector) Scan(ctx context.Context, snapshot map[string]map[
 
 // bareVenue venue_key 前段 → 裸 venue（funding/swap fact 表键=裸 venue，tryPair 经 entry.Venue 查）。
 func bareVenue(venueKey string) string {
-	if i := strings.IndexByte(venueKey, ':'); i >= 0 {
-		return venueKey[:i]
-	}
-	return venueKey
+	return keydomain.BareOf(venueKey)
 }
 
 // mtVenueTypeOf venue_key 后缀 → MT venueType（tryPair 的 swapAnnualPct 只认 mt4/mt5）。

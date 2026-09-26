@@ -4,7 +4,6 @@ import (
 	"arb/internal/keydomain"
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"arb/internal/store/pgstore"
@@ -85,7 +84,7 @@ func isMTVenueKey(venueKey string) bool {
 
 // isCEXVenueKey D-195-C2：判断 venueKey 是否为 CEX（与 isMTVenueKey 对称）。
 func isCEXVenueKey(venueKey string) bool {
-	venue, _, _ := strings.Cut(venueKey, ":")
+	venue := keydomain.BareOf(venueKey)
 	return isCEXVenue(venue)
 }
 
