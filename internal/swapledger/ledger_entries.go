@@ -16,15 +16,15 @@ import (
 // D-159 W3a R5：loadFacts 返回 map[factKey]fact.Fact（保留完整 Fact，含 Ts 供 TTL 检查；
 // 原实现只存 float64 丢 Ts → 过期 Fact 无法识别）。
 func (l *Ledger) loadFacts(ctx context.Context) (map[factKey]fact.Fact, map[factKey]fact.Fact, map[factKey]fact.Fact, error) {
-	longFacts, err := l.store.LatestFacts(ctx, fact.KindSwapLong, "", "")
+	longFacts, err := l.store.LatestFactsByKind(ctx, fact.KindSwapLong)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	shortFacts, err := l.store.LatestFacts(ctx, fact.KindSwapShort, "", "")
+	shortFacts, err := l.store.LatestFactsByKind(ctx, fact.KindSwapShort)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	fundingFacts, err := l.store.LatestFacts(ctx, fact.KindFunding, "", "")
+	fundingFacts, err := l.store.LatestFactsByKind(ctx, fact.KindFunding)
 	if err != nil {
 		return nil, nil, nil, err
 	}

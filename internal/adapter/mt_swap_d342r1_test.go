@@ -41,6 +41,10 @@ func (s *d342StubStore) InsertCashflowFull(_ context.Context, c *pgstore.Cashflo
 	s.cfs = append(s.cfs, c)
 	return true, nil
 }
+func (s *d342StubStore) LatestFactsByKind(ctx context.Context, kind string) ([]fact.Fact, error) {
+	return s.LatestFacts(ctx, kind, "", "")
+}
+
 func (s *d342StubStore) LatestFacts(_ context.Context, kind, _, _ string) ([]fact.Fact, error) {
 	var out []fact.Fact
 	for _, f := range s.facts {
