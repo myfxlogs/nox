@@ -3635,6 +3635,7 @@ func (x *ExecuteOpportunityResponse) GetMessage() string {
 type ClosePositionRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PositionId    int64                  `protobuf:"varint,1,opt,name=position_id,json=positionId,proto3" json:"position_id,omitempty"`
+	Force         bool                   `protobuf:"varint,2,opt,name=force,proto3" json:"force,omitempty"` // D-495：显式逃逸门——腿无可交易行情时仍强制平仓（默认 false）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3674,6 +3675,13 @@ func (x *ClosePositionRequest) GetPositionId() int64 {
 		return x.PositionId
 	}
 	return 0
+}
+
+func (x *ClosePositionRequest) GetForce() bool {
+	if x != nil {
+		return x.Force
+	}
+	return false
 }
 
 type ClosePositionResponse struct {
@@ -24046,10 +24054,11 @@ const file_arb_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\vposition_id\x18\x01 \x01(\x03R\n" +
 	"positionId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x18\n" +
-	"\amessage\x18\x03 \x01(\tR\amessage\"7\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\"M\n" +
 	"\x14ClosePositionRequest\x12\x1f\n" +
 	"\vposition_id\x18\x01 \x01(\x03R\n" +
-	"positionId\"I\n" +
+	"positionId\x12\x14\n" +
+	"\x05force\x18\x02 \x01(\bR\x05force\"I\n" +
 	"\x15ClosePositionResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"2\n" +

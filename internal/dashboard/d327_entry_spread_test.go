@@ -97,6 +97,20 @@ func TestD327_ExecuteInternal_EntrySpreadBackfilled(t *testing.T) {
 	})
 	svc.SetCarryRegime(exec.CarryRegimeConfig{Window: 24 * time.Hour, FloorPct: 2.0, MinSamples: 12})
 
+	// D-495：Execute 预检环腿可平性闸——双腿播亮 ticks（gate CL_USDT→CLUSDT 归一键 /
+	// 3001157 USOILm 原生名）。
+	if err := st.EnsureMonthPartition(ctx, now.Year(), int(now.Month())); err != nil {
+		t.Fatalf("partition: %v", err)
+	}
+	if err := st.InsertTicks(ctx, []pgstore.TickRow{
+		{Ts: now.Add(-2 * time.Minute), Venue: "gate", Symbol: "CLUSDT", Bid: 60.00, Ask: 60.02, VenueType: "cex"},
+		{Ts: now, Venue: "gate", Symbol: "CLUSDT", Bid: 60.05, Ask: 60.07, VenueType: "cex"},
+		{Ts: now.Add(-2 * time.Minute), Venue: "3001157", Symbol: "USOILm", Bid: 60.00, Ask: 60.02, VenueType: "mt5"},
+		{Ts: now, Venue: "3001157", Symbol: "USOILm", Bid: 60.04, Ask: 60.06, VenueType: "mt5"},
+	}); err != nil {
+		t.Fatalf("seed ticks: %v", err)
+	}
+
 	status, msg, posID := svc.ExecuteOpportunityInternal(ctx, oppID, "d327-t1", 1.0)
 	// 成功态=pipeline 透传 "OPEN"（result.Status，非字面 EXECUTED）
 	if posID == 0 || status == "FAILED" {
