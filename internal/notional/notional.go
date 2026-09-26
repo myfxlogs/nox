@@ -13,9 +13,7 @@ import (
 // broker_symbol_map.venue 存裸账号，腿存全键 → 查 CS 前必须归一（D-087 §3.1 CS 单点修复）。
 func VenueAccount(venueKey string) string {
 	if keydomain.IsMTKey(venueKey) {
-		if i := strings.LastIndex(venueKey, ":"); i > 0 {
-			return venueKey[:i]
-		}
+		return keydomain.Parse(venueKey).Venue
 	}
 	return venueKey
 }

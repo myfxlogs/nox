@@ -156,12 +156,7 @@ func monitorVenueKeys(cexV, mtV string) (cexVenue, mtVenue string) {
 // 后缀（双 CEX）→ ok=false 跳过保底。
 func cfdComboLegs(c pgstore.XAssetAllowRow) (mtVenue, cexVenue, mtCanon string, ok bool) {
 	isMt := func(v string) bool { return keydomain.IsMTKey(v) }
-	strip := func(v string) string {
-		if i := strings.LastIndex(v, ":"); i >= 0 {
-			return v[:i]
-		}
-		return v
-	}
+	strip := keydomain.BareOf
 	switch {
 	case isMt(c.VenueBuy) && !isMt(c.VenueSell):
 		return strip(c.VenueBuy), strip(c.VenueSell), c.CanonicalBuy, true
