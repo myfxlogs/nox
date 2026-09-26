@@ -9,7 +9,7 @@ import (
 func TestExchangeConfigsCRUD(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	if _, err := s.pool.Exec(ctx, `TRUNCATE exchange_configs RESTART IDENTITY`); err != nil {
+	if _, err := s.pool.Exec(ctx, `TRUNCATE exchange_configs RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 

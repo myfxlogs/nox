@@ -45,9 +45,9 @@ func d438Income(t *testing.T, s *Store, posID int64, amt float64) {
 	t.Helper()
 	ctx := context.Background()
 	if _, err := s.Pool().Exec(ctx,
-		`INSERT INTO income_events (venue, venue_type, symbol, income_type, amount_usd, tran_id, ts, position_id)
-		 VALUES ('okx','perp','XAU-USDT-SWAP','FUNDING_FEE', $1, $2, now(), $3)`,
-		amt, time.Now().UnixNano(), posID); err != nil {
+		`INSERT INTO income_events (venue, venue_type, exchange_config_id, symbol, income_type, amount_usd, tran_id, ts, position_id)
+		 VALUES ('okx','perp',$4,'XAU-USDT-SWAP','FUNDING_FEE', $1, $2, now(), $3)`,
+		amt, time.Now().UnixNano(), posID, seedExchangeConfigID(t, s, "okx", "perp", false)); err != nil {
 		t.Fatalf("insert income: %v", err)
 	}
 }

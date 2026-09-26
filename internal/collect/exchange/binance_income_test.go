@@ -26,7 +26,7 @@ type fakeIncomeSink struct {
 	inserted []pgstore.IncomeEvent
 }
 
-func (f *fakeIncomeSink) MaxIncomeEventTS(_ context.Context, _, _ string) (time.Time, bool, error) {
+func (f *fakeIncomeSink) MaxIncomeEventTS(_ context.Context, _ string, _ int64) (time.Time, bool, error) {
 	return f.maxTS, f.hasMax, nil
 }
 func (f *fakeIncomeSink) MatchOpenLegForIncome(_ context.Context, venue, symbol, env string) (int64, int16, int, error) {
@@ -144,11 +144,19 @@ func TestD334ab_BinanceIncome_IdempotentDSN(t *testing.T) {
 	if _, err := st.Pool().Exec(ctx, `TRUNCATE income_events`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
+	var cfgID int64
+	if err := st.Pool().QueryRow(ctx,
+		`INSERT INTO exchange_configs (venue, venue_type, label, api_key, api_secret, simulated)
+		 VALUES ('binance','perp','t','k','s',false)
+		 ON CONFLICT (venue, venue_type, simulated) DO UPDATE SET label=EXCLUDED.label
+		 RETURNING id`).Scan(&cfgID); err != nil {
+		t.Fatalf("seed exchange config: %v", err)
+	}
 
 	srv := httptest.NewServer(incomeMockHandler(t, "test-key"))
 	defer srv.Close()
 	col := NewBinanceIncomeCollector(Config{Client: srv.Client()}, st, func() []BinanceIncomeAccount {
-		return []BinanceIncomeAccount{{ID: 25, APIKey: "test-key", APISecret: "test-secret", BaseURL: srv.URL}}
+		return []BinanceIncomeAccount{{ID: cfgID, APIKey: "test-key", APISecret: "test-secret", BaseURL: srv.URL}}
 	})
 
 	n1, err := col.RunOnce(ctx)
@@ -171,7 +179,7 @@ func TestD334ab_BinanceIncome_IdempotentDSN(t *testing.T) {
 	}
 	// sink 级直插双写（不经 RunOnce 的逐账户 fail-open 错误吞噬）：幂等=第二插 err=nil 且 0 行；
 	// 红=摘 DO NOTHING → 唯一约束报错；摘唯一约束 → 第二插写成功 n=1。
-	ev := []pgstore.IncomeEvent{{Venue: "binance", VenueType: "perp", Symbol: "XAUUSDT", IncomeType: "FUNDING_FEE", AmountUSD: 1.0, TranID: 999001, Ts: time.Now()}}
+	ev := []pgstore.IncomeEvent{{Venue: "binance", VenueType: "perp", ConfigID: cfgID, Symbol: "XAUUSDT", IncomeType: "FUNDING_FEE", AmountUSD: 1.0, TranID: 999001, Ts: time.Now()}}
 	if n, err := st.InsertIncomeEvents(ctx, ev); err != nil || n != 1 {
 		t.Fatalf("sink first insert: n=%d err=%v, want 1/nil", n, err)
 	}

@@ -159,6 +159,10 @@ ALTER TABLE carry_graduations ADD CONSTRAINT cg_venue_type_chk
 ALTER TABLE ticks ADD COLUMN venue_key text
     GENERATED ALWAYS AS (CASE WHEN venue_type = '' THEN venue ELSE venue || ':' || venue_type END) STORED;
 ALTER TABLE ticks ADD CONSTRAINT ticks_venue_bare_chk CHECK (venue NOT LIKE '%:%');
+-- F4：CHECK 前先归一越界 venue_type（历史/陈旧测试库脏值；生产实拍零行=no-op）——
+-- 数字 venue（MT 账号号）→mt5，其余（CEX 行情行）→perp。
+UPDATE ticks SET venue_type = CASE WHEN venue ~ '^[0-9]+$' THEN 'mt5' ELSE 'perp' END
+    WHERE venue_type NOT IN ('mt4','mt5','perp','spot');
 ALTER TABLE ticks ADD CONSTRAINT ticks_venue_type_chk
     CHECK (venue_type IN ('mt4','mt5','perp','spot'));
 COMMENT ON COLUMN ticks.venue IS 'R1 裸端点（本表本就合规范式）';
@@ -187,6 +191,7 @@ ALTER TABLE facts ADD CONSTRAINT facts_symbol_chk CHECK (symbol IS NULL OR symbo
 ALTER TABLE facts ADD COLUMN venue_key text
     GENERATED ALWAYS AS (CASE WHEN venue_type = '' THEN venue ELSE venue || ':' || venue_type END) STORED;
 CREATE INDEX facts_venue_kind_symbol_ts_idx ON facts (venue, kind, symbol, ts);
+CREATE INDEX facts_venuekey_kind_symbol_ts_idx ON facts (venue_key, kind, symbol, ts); -- F5：venue_key 查询面索引
 COMMENT ON COLUMN facts.symbol IS 'R4 原生品种名；NULL=账号级/非品种域 fact';
 
 -- ============ broker_symbol_map：FK→注册处（1314615 无审计删除案的结构性修复）============
@@ -195,7 +200,9 @@ ALTER TABLE broker_symbol_map ADD CONSTRAINT broker_symbol_map_venue_fk
     FOREIGN KEY (venue) REFERENCES broker_accounts (venue);
 ALTER TABLE broker_symbol_map ADD CONSTRAINT bsm_venue_bare_chk CHECK (venue NOT LIKE '%:%');
 
--- ============ income_events：删 account_id 数值域→(venue,venue_type) 反解回填 ============
+-- ============ income_events：account_id→exchange_config_id（FK 回注册处）+(venue,venue_type) 反解 ============
+-- R5：账户身份归 exchange_configs 外键（同 venue 多账户域下游标/唯一键按 config 行区分，
+-- 不归 (venue,venue_type)——venue_type 仅为 R2 通道型标注）。
 ALTER TABLE income_events ADD COLUMN venue_type text;
 UPDATE income_events ie SET venue_type = ec.venue_type
     FROM exchange_configs ec WHERE ie.account_id = ec.id;
@@ -203,8 +210,10 @@ UPDATE income_events SET venue_type = '' WHERE venue_type IS NULL;
 ALTER TABLE income_events ALTER COLUMN venue_type SET NOT NULL;
 ALTER TABLE income_events ALTER COLUMN venue_type SET DEFAULT '';
 ALTER TABLE income_events DROP CONSTRAINT income_events_tran_uniq;
-ALTER TABLE income_events DROP COLUMN account_id;
-ALTER TABLE income_events ADD CONSTRAINT income_events_tran_uniq UNIQUE (venue, venue_type, tran_id);
+ALTER TABLE income_events RENAME COLUMN account_id TO exchange_config_id;
+ALTER TABLE income_events ADD CONSTRAINT income_events_config_fk
+    FOREIGN KEY (exchange_config_id) REFERENCES exchange_configs (id);
+ALTER TABLE income_events ADD CONSTRAINT income_events_tran_uniq UNIQUE (exchange_config_id, tran_id);
 ALTER TABLE income_events ADD CONSTRAINT income_events_venue_bare_chk CHECK (venue NOT LIKE '%:%');
 ALTER TABLE income_events ADD CONSTRAINT income_events_venue_type_chk
     CHECK (venue_type IN ('mt4','mt5','perp','spot','funding','earn','option','unified',''));
@@ -302,6 +311,7 @@ COMMENT ON COLUMN ticks.venue_type IS 'R2 通道型';
 COMMENT ON COLUMN facts.venue IS 'R1 裸端点';
 COMMENT ON COLUMN facts.venue_type IS 'R2 通道型（''=非通道如 cmc）';
 COMMENT ON COLUMN facts.venue_key IS 'R3 生成投影';
+COMMENT ON COLUMN income_events.exchange_config_id IS 'R5 账户身份外键→exchange_configs.id（同 venue 多账户域下游标/唯一键按配置行区分）';
 COMMENT ON COLUMN income_events.venue IS 'R1 裸端点（CEX 交易所名）';
 COMMENT ON COLUMN income_events.venue_type IS 'R2 通道型';
 COMMENT ON COLUMN income_events.venue_key IS 'R3 生成投影';

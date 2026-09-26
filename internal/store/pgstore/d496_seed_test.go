@@ -17,3 +17,18 @@ func seedBrokerVenue(t *testing.T, s *Store, venues ...string) {
 		}
 	}
 }
+
+// seedExchangeConfigID 落 exchange_configs 配置行并返回 id（income_events FK 父行）。
+func seedExchangeConfigID(t *testing.T, s *Store, venue, venueType string, simulated bool) int64 {
+	t.Helper()
+	var id int64
+	err := s.pool.QueryRow(context.Background(),
+		`INSERT INTO exchange_configs (venue, venue_type, label, api_key, api_secret, simulated)
+		 VALUES ($1,$2,'t','k','s',$3)
+		 ON CONFLICT (venue, venue_type, simulated) DO UPDATE SET label=EXCLUDED.label
+		 RETURNING id`, venue, venueType, simulated).Scan(&id)
+	if err != nil {
+		t.Fatalf("seed exchange config %s:%s: %v", venue, venueType, err)
+	}
+	return id
+}

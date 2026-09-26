@@ -46,13 +46,16 @@ func (s *Store) DeleteFactsBySrc(ctx context.Context, src, venue string) error {
 }
 
 // LatestFacts 返回每 (kind, venue, symbol) 的最新事实（§8.2 ListLatestFacts）。
+// D-496 F2 两族契约：symbol 严格相等——品种级 fact（symbol 非 NULL）与账号级 fact
+// （symbol IS NULL，R4 归位）是两类事实，显式 symbol 查询不混入账号级行；
+// 账号级取数走 symbol=” 通配分支（$3=” 命中全部，含 NULL 行）或专用裸 venue 查询。
 func (s *Store) LatestFacts(ctx context.Context, kind, venue, symbol string) ([]fact.Fact, error) {
 	q := `SELECT DISTINCT ON (kind, venue, symbol)
 			kind, venue, COALESCE(symbol,'') AS symbol, value, unit, ts, src
 		FROM facts
 		WHERE ($1 = '' OR kind = $1)
 		  AND ($2 = '' OR venue_key = $2 OR venue = $2)
-		  AND ($3 = '' OR symbol = $3 OR symbol IS NULL)
+		  AND ($3 = '' OR symbol = $3)
 		ORDER BY kind, venue, symbol, ts DESC`
 	rows, err := s.pool.Query(ctx, q, kind, venue, symbol)
 	if err != nil {
@@ -94,6 +97,7 @@ func (s *Store) FactsSince(ctx context.Context, kind, venue, symbol string, sinc
 }
 
 // QueryFacts 分页查询 facts 历史（§8.2 ListFacts）。
+// F2：symbol 严格相等（两族契约同 LatestFacts——显式 symbol 不混账号级 NULL 行）。
 func (s *Store) QueryFacts(ctx context.Context, kind, venue, symbol string, limit, offset int) ([]fact.Fact, error) {
 	if limit <= 0 {
 		limit = 100
@@ -102,7 +106,7 @@ func (s *Store) QueryFacts(ctx context.Context, kind, venue, symbol string, limi
 		FROM facts
 		WHERE ($1 = '' OR kind = $1)
 		  AND ($2 = '' OR venue_key = $2 OR venue = $2)
-		  AND ($3 = '' OR symbol = $3 OR symbol IS NULL)
+		  AND ($3 = '' OR symbol = $3)
 		ORDER BY ts DESC
 		LIMIT $4 OFFSET $5`
 	rows, err := s.pool.Query(ctx, q, kind, venue, symbol, limit, offset)

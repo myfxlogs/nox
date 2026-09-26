@@ -12,10 +12,12 @@ import (
 )
 
 // IncomeEvent income_events 行（PositionID/LegNo=匹配命中才非 nil）。
-// D-496：account_id 数值域删除，通道身份=(Venue,VenueType) 两列。
+// D-496 F1：账户身份=exchange_config_id（FK→exchange_configs.id，同 venue 多账户区分）；
+// (Venue,VenueType) 为 R1/R2 通道型标注列。
 type IncomeEvent struct {
 	Venue      string
 	VenueType  string
+	ConfigID   int64 // exchange_configs.id（0=历史/未知账户行）
 	Symbol     string
 	IncomeType string
 	AmountUSD  float64
@@ -25,12 +27,13 @@ type IncomeEvent struct {
 	LegNo      *int32
 }
 
-// MaxIncomeEventTS 采集游标：该 (venue,venue_type) 已入账最大 ts（表内派生零新状态，重启安全）。
+// MaxIncomeEventTS 采集游标：该 (venue,exchange_config_id) 账户已入账最大 ts
+// （表内派生零新状态，重启安全；F1 恢复 config_id 粒度——同 venue 多账户域下游标不共享）。
 // 空表 → (零值,false,nil)。
-func (s *Store) MaxIncomeEventTS(ctx context.Context, venue, venueType string) (time.Time, bool, error) {
+func (s *Store) MaxIncomeEventTS(ctx context.Context, venue string, configID int64) (time.Time, bool, error) {
 	var ts *time.Time
 	err := s.pool.QueryRow(ctx,
-		`SELECT MAX(ts) FROM income_events WHERE venue = $1 AND venue_type = $2`, venue, venueType).Scan(&ts)
+		`SELECT MAX(ts) FROM income_events WHERE venue = $1 AND exchange_config_id = $2`, venue, configID).Scan(&ts)
 	if err != nil {
 		return time.Time{}, false, fmt.Errorf("max income ts: %w", err)
 	}
@@ -40,7 +43,7 @@ func (s *Store) MaxIncomeEventTS(ctx context.Context, venue, venueType string) (
 	return *ts, true, nil
 }
 
-// InsertIncomeEvents 批量幂等写入（唯一键 (venue,venue_type,tran_id) 冲突 DO NOTHING）。
+// InsertIncomeEvents 批量幂等写入（唯一键 (exchange_config_id,tran_id) 冲突 DO NOTHING）。
 // 返回实插行数（幂等重跑=0）。
 func (s *Store) InsertIncomeEvents(ctx context.Context, evs []IncomeEvent) (int64, error) {
 	if len(evs) == 0 {
@@ -49,10 +52,10 @@ func (s *Store) InsertIncomeEvents(ctx context.Context, evs []IncomeEvent) (int6
 	batch := &pgx.Batch{}
 	for _, e := range evs {
 		batch.Queue(`
-			INSERT INTO income_events (venue, venue_type, symbol, income_type, amount_usd, tran_id, ts, position_id, leg_no)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-			ON CONFLICT (venue, venue_type, tran_id) DO NOTHING`,
-			e.Venue, e.VenueType, e.Symbol, e.IncomeType, e.AmountUSD, e.TranID, e.Ts, e.PositionID, e.LegNo)
+			INSERT INTO income_events (venue, venue_type, exchange_config_id, symbol, income_type, amount_usd, tran_id, ts, position_id, leg_no)
+			VALUES ($1, $2, NULLIF($3,0), $4, $5, $6, $7, $8, $9, $10)
+			ON CONFLICT (exchange_config_id, tran_id) DO NOTHING`,
+			e.Venue, e.VenueType, e.ConfigID, e.Symbol, e.IncomeType, e.AmountUSD, e.TranID, e.Ts, e.PositionID, e.LegNo)
 	}
 	br := s.pool.SendBatch(ctx, batch)
 	defer br.Close()

@@ -32,11 +32,19 @@ func seedDemoRow(t *testing.T, s *pgstore.Store, venue, symbol string, base time
 	return pr
 }
 
-// seedIncome 写 income_events 行（tran_id 唯一幂等键=venue+account+tranId）。
+// seedIncome 写 income_events 行（tran_id 唯一幂等键=exchange_config_id+tranId，D-496 F1）。
 func seedIncome(t *testing.T, s *pgstore.Store, venue, symbol string, amount float64, ts time.Time, tranID int64) {
 	t.Helper()
+	var cfgID int64
+	if err := s.Pool().QueryRow(context.Background(),
+		`INSERT INTO exchange_configs (venue, venue_type, label, api_key, api_secret, simulated)
+		 VALUES ($1,'perp','t','k','s',true)
+		 ON CONFLICT (venue, venue_type, simulated) DO UPDATE SET label=EXCLUDED.label
+		 RETURNING id`, venue).Scan(&cfgID); err != nil {
+		t.Fatalf("seed exchange config: %v", err)
+	}
 	if _, err := s.InsertIncomeEvents(context.Background(), []pgstore.IncomeEvent{{
-		Venue: venue, VenueType: "perp", Symbol: symbol, IncomeType: "FUNDING_FEE",
+		Venue: venue, VenueType: "perp", ConfigID: cfgID, Symbol: symbol, IncomeType: "FUNDING_FEE",
 		AmountUSD: amount, TranID: tranID, Ts: ts,
 	}}); err != nil {
 		t.Fatalf("seed income: %v", err)

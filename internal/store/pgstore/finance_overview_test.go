@@ -30,9 +30,9 @@ func TestFinanceFlows_IncomeSimMarker(t *testing.T) {
 	}
 	now := time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)
 	if _, err := s.pool.Exec(ctx, `
-		INSERT INTO income_events (venue, venue_type, symbol, income_type, amount_usd, tran_id, ts)
-		VALUES ('binance', 'perp', 'XAUUSDT', 'FUNDING_FEE', -1.5, 1, $1),
-		       ('okx', 'perp', 'XAUUSDT', 'FUNDING_FEE', -0.5, 2, $1)`, now); err != nil {
+		INSERT INTO income_events (venue, venue_type, exchange_config_id, symbol, income_type, amount_usd, tran_id, ts)
+		VALUES ('binance', 'perp', (SELECT id FROM exchange_configs WHERE venue='binance' AND venue_type='perp' AND simulated), 'XAUUSDT', 'FUNDING_FEE', -1.5, 1, $1),
+		       ('okx', 'perp', (SELECT id FROM exchange_configs WHERE venue='okx' AND venue_type='perp' AND NOT simulated), 'XAUUSDT', 'FUNDING_FEE', -0.5, 2, $1)`, now); err != nil {
 		t.Fatalf("seed income events: %v", err)
 	}
 

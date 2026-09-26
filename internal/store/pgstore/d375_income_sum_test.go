@@ -35,9 +35,9 @@ func d375SeedLeg(t *testing.T, s *Store, posID int64, legNo int16, phase, venue 
 func d375SeedIncome(t *testing.T, s *Store, posID *int64, legNo *int16, amount float64, tranID int64) {
 	t.Helper()
 	if _, err := s.pool.Exec(context.Background(),
-		`INSERT INTO income_events (venue, venue_type, symbol, income_type, amount_usd, tran_id, ts, position_id, leg_no)
-		 VALUES ('binance', 'perp', 'SOLUSDT', 'FUNDING_FEE', $1, $2, now(), $3, $4)`,
-		amount, tranID, posID, legNo); err != nil {
+		`INSERT INTO income_events (venue, venue_type, exchange_config_id, symbol, income_type, amount_usd, tran_id, ts, position_id, leg_no)
+		 VALUES ('binance', 'perp', $5, 'SOLUSDT', 'FUNDING_FEE', $1, $2, now(), $3, $4)`,
+		amount, tranID, posID, legNo, seedExchangeConfigID(t, s, "binance", "perp", false)); err != nil {
 		t.Fatalf("seed income: %v", err)
 	}
 }
