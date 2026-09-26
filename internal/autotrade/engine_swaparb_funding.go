@@ -39,5 +39,6 @@ func (e *Engine) maybePublishFundingNeed(canonical, venueLong, venueShort, reaso
 		AliasLong:  e.aliasOrKey(venueLong),
 		AliasShort: e.aliasOrKey(venueShort),
 	})
+	dedupCapHalf(e.fundingNeedSent) // D-508 S5：无界去重集封顶
 	e.fundingNeedSent[key] = today
 }

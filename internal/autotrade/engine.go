@@ -275,3 +275,22 @@ func (e *Engine) KickSwapArb() {
 	default:
 	}
 }
+
+// dedupCapHalf D-508 S5：告警去重集无界 map 上限（fundingNeedSent/marginAlertSent/
+// revivalAlertSent/nonSettleBare）——满 10k 任删一半。去重语义弱保证：误删最坏=
+// 同告警提前重发一次（内存去重，重启本就重置），可接受。
+const alertDedupCap = 10000
+
+func dedupCapHalf[T any](m map[string]T) {
+	if len(m) < alertDedupCap {
+		return
+	}
+	n := 0
+	for k := range m {
+		if n >= alertDedupCap/2 {
+			break
+		}
+		delete(m, k)
+		n++
+	}
+}

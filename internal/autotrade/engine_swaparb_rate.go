@@ -186,6 +186,7 @@ func (e *Engine) nonSettleBareVenues() map[string]bool {
 				if e.nonSettleBare == nil {
 					e.nonSettleBare = make(map[string]bool)
 				}
+				dedupCapHalf(e.nonSettleBare) // D-508 S5：封顶（本有界于 cfg 列表，防御一致化）
 				e.nonSettleBare[bare] = true
 			}
 		}

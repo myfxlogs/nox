@@ -251,6 +251,7 @@ func (e *Engine) maybeRevivalAlert(ck, strategy string, netSwapBps float64, swap
 	if last, ok := e.revivalAlertSent[ck]; ok && now.Sub(last) < time.Hour {
 		return
 	}
+	dedupCapHalf(e.revivalAlertSent) // D-508 S5：无界去重集封顶
 	e.revivalAlertSent[ck] = now
 	msg := fmt.Sprintf("[revival] %s %s: netSwap=%.4f bps >= %.2f (settled) — 复活评估触发，需业主/决策席复审",
 		strategy, ck, netSwapBps, e.cfg.SwapArbRevivalBps)

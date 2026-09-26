@@ -46,6 +46,7 @@ func (e *Engine) shouldMarginAlert(key string) bool {
 	if last, ok := e.marginAlertSent[key]; ok && time.Since(last) < marginAlertDedupInterval {
 		return false
 	}
+	dedupCapHalf(e.marginAlertSent) // D-508 S5：无界去重集封顶
 	e.marginAlertSent[key] = time.Now()
 	return true
 }

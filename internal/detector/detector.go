@@ -6,6 +6,7 @@ import (
 	"context"
 	"sort"
 	"strings"
+	"time"
 
 	"arb/internal/bus"
 	"arb/internal/fact"
@@ -70,7 +71,8 @@ type Detector interface {
 
 // ScanAll 对全部检测器执行扫描并合并候选。
 func ScanAll(detectors []Detector, snapshot map[string]map[string]bus.Quote, fp FactProvider) []Candidate {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second) // D-508 S5
+	defer cancel()
 	var all []Candidate
 	for _, d := range detectors {
 		all = append(all, d.Scan(ctx, snapshot, fp)...)
