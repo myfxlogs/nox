@@ -18,6 +18,7 @@ import (
 // Store 扫描依赖（pgstore.Store 实现；LatestFacts 返回 fact.Fact 含 venue/symbol/value）。
 type Store interface {
 	LatestFacts(ctx context.Context, kind, venue, symbol string) ([]fact.Fact, error)
+	LatestFactsByKind(ctx context.Context, kind string) ([]fact.Fact, error) // D-508 S3：kind-only 无 OR 专用查询
 	// FactsWindowStats D-412 F3：窗口均值读口（swap 慢变量抗 flap；无样本=ErrNoFactsInWindow）。
 	FactsWindowStats(ctx context.Context, kind, venue, symbol string, window time.Duration) (float64, error)
 	ListSymbolMappings(ctx context.Context, venue string) ([]pgstore.SymbolMapping, error)
@@ -101,11 +102,11 @@ const spotCarryMinAge = 48 * time.Hour
 // cex funding 侧由 Run 自载（mt×mt 不用）。
 func (sc *CarryUniverseScanner) loadMtSwapInputs(ctx context.Context) (longF, shortF []fact.Fact,
 	tmKnown func(fact.Fact) (int64, bool), aliases map[string]string, err error) {
-	longF, err = sc.store.LatestFacts(ctx, "swap_long", "", "")
+	longF, err = sc.store.LatestFactsByKind(ctx, "swap_long")
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("swap_long facts: %w", err)
 	}
-	shortF, err = sc.store.LatestFacts(ctx, "swap_short", "", "")
+	shortF, err = sc.store.LatestFactsByKind(ctx, "swap_short")
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("swap_short facts: %w", err)
 	}
@@ -116,7 +117,7 @@ func (sc *CarryUniverseScanner) loadMtSwapInputs(ctx context.Context) (longF, sh
 	shortF = keepDiscoverableFacts(shortF, brokerStatuses)
 	// D-382 S1：trade_mode 消费——可执行性过滤数据源（facts 已在库零新数据源）。
 	// 读取失败 fail-open 视同全未知（发现层不因数据缺席误杀，F5 同惯例）。
-	tmFacts, err := sc.store.LatestFacts(ctx, fact.KindTradeMode, "", "")
+	tmFacts, err := sc.store.LatestFactsByKind(ctx, fact.KindTradeMode)
 	if err != nil {
 		log.Printf("[scan] carry universe: trade_mode facts: %v（视同全未知放行）", err)
 		tmFacts = nil
@@ -156,7 +157,7 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 	if err != nil {
 		return res, err
 	}
-	cexFunding, err := sc.store.LatestFacts(ctx, "funding", "", "")
+	cexFunding, err := sc.store.LatestFactsByKind(ctx, "funding")
 	if err != nil {
 		return res, fmt.Errorf("funding facts: %w", err)
 	}

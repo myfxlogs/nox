@@ -8,6 +8,15 @@ import (
 	"time"
 )
 
+// PruneCexEarnAPR D-508 S3：fin_cex_earn_apr 30d 滚动清理（照 PruneCexRadar 同款，janitor 日轮挂）。
+func (s *Store) PruneCexEarnAPR(ctx context.Context, keepDays int) error {
+	cutoff := time.Now().Add(-time.Duration(keepDays) * 24 * time.Hour)
+	if _, err := s.pool.Exec(ctx, `DELETE FROM fin_cex_earn_apr WHERE ts < $1`, cutoff); err != nil {
+		return fmt.Errorf("prune cex_earn_apr: %w", err)
+	}
+	return nil
+}
+
 // CexEarnAPR fin_cex_earn_apr 行。
 type CexEarnAPR struct {
 	ID          int64

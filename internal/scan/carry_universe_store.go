@@ -18,6 +18,10 @@ func (p *PGStore) LatestFacts(ctx context.Context, kind, venue, symbol string) (
 	return p.S.LatestFacts(ctx, kind, venue, symbol)
 }
 
+func (p *PGStore) LatestFactsByKind(ctx context.Context, kind string) ([]fact.Fact, error) {
+	return p.S.LatestFactsByKind(ctx, kind)
+}
+
 func (p *PGStore) ListSymbolMappings(ctx context.Context, venue string) ([]pgstore.SymbolMapping, error) {
 	return p.S.ListSymbolMappings(ctx, venue)
 }

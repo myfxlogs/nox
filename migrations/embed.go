@@ -260,4 +260,7 @@ var (
 
 	//go:embed 0146_drop_binance_demo_config.sql
 	DropBinanceDemoConfigSQL string
+
+	//go:embed 0147_facts_kind_index_and_pgstat.sql
+	FactsKindIndexPgstatSQL string
 )

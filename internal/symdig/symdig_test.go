@@ -28,6 +28,10 @@ type fakeStore struct {
 	alerts   []string
 }
 
+func (f *fakeStore) LatestFactsByKind(ctx context.Context, kind string) ([]fact.Fact, error) {
+	return f.LatestFacts(ctx, kind, "", "")
+}
+
 func (f *fakeStore) LatestFacts(_ context.Context, kind, _, _ string) ([]fact.Fact, error) {
 	var out []fact.Fact
 	for _, x := range f.facts {
