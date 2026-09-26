@@ -312,6 +312,7 @@ message Opportunity {
   optional double settle_net_usd = 32;   // D-318：同上 USD 口径（net_usd 同 notional 派生）。
   optional int32  settle_samples = 33;   // D-318：参与均值的期数（两腿取小）。
   bool has_open_position = 34;  // D-331：该机会 id 已有活跃仓位（OPENING/OPEN/LEGGED/CLOSING）
+  double cost_bps = 35;         // D-508 S8：总成本 bps=Σ(spread+commission+slippage+swap)——前端不再自加四项
 }
 
 message ListOpportunitiesRequest {
@@ -571,6 +572,10 @@ message Position {
   optional double swap_estimated_usd = 35;   // D-375：息差预估参考（Σ position_cashflows quality='estimated' swap+funding 全腿公式计提；与「已收」实收两世界，前端「估」小字参考行；缺省=零计提）
   optional double close_now_net_usd = 36;    // D-480：此刻市价平仓到手净额=出口价浮动+swap实收+已付佣金−退出成本估（多腿bid/空腿ask；缺报价=NULL 不猜）
   optional double close_exit_costs_usd = 37; // D-480：退出成本估单列（CEX腿名义×takerBps 同473费率表；MT腿=0点差内嵌）
+  optional string attainment_tone = 38;    // D-508 S8：达成/收敛色阶终值（"pos"/"neg"/""；阈值判定在后端，前端只映射 class）
+  optional double remaining_net_bps = 39;  // D-508 S8：收敛型剩余收敛 bps=expected−current（前端不再做减法）
+  optional string break_even_tone = 40;    // D-508 S8：回本列色阶（实测0=已回本→"pos"；缺省不填）
+  optional bool break_even_suppressed = 41; // D-508 S8：回本抑制终值（实测=0 但 close_now_net<0 → 亮「账面回本·净估<0」非标绿）
 }
 
 message ExecuteOpportunityRequest {
@@ -654,6 +659,8 @@ message ListBrokerPositionsRequest {
 
 message ListBrokerPositionsResponse {
   repeated BrokerPosition positions = 1;
+  optional double pnl_sum_usd = 2;       // D-508 S8：Σ pnl（无持仓/全零=缺省，前端「—」不聚合）
+  optional double net_sum_usd = 3;       // D-508 S8：Σ (pnl+swap+commission) 净值口径
 }
 
 message CloseBrokerPositionRequest {
@@ -841,6 +848,9 @@ message GetPnlAnchorRequest {}
 message GetPnlAnchorResponse {
   google.protobuf.Timestamp anchor = 1;  // 累计已实现口径起点（closed_at >= anchor）
   double realized_since_anchor = 2;      // SUM(realized_pnl) WHERE closed_at >= anchor（后端口径）
+  double realized_today = 3;             // D-508 S8：当日已实现（closed_at>=当日零点，DB 时钟口径；前端直读不再聚合）
+  double floating_net_usd = 4;           // D-508 S8：Σ broker 持仓 (pnl+swap+commission) venue 权威净值
+  bool floating_available = 5;           // D-508 S8：false=broker 离线无数据 → 前端「—」不冒充 0
 }
 message ResetPnlAnchorRequest {}
 message ResetPnlAnchorResponse {
@@ -962,6 +972,8 @@ message FundingNeedNotice {
 // Broker 实持仓全量快照（D-052）：monitor 变更时广播，含离线 venue 的最近快照；前端全量替换。
 message BrokerPositionSnapshot {
   repeated BrokerPosition positions = 1;
+  optional double pnl_sum_usd = 2;    // D-508 S8：Σ pnl（与 ListBrokerPositionsResponse 同口径，推送侧同步下发）
+  optional double net_sum_usd = 3;    // D-508 S8：Σ (pnl+swap+commission)
 }
 
 // === 账户资产（D-053）===
@@ -1804,6 +1816,7 @@ message CexSpreadRow {
   double price_sell = 5;
   double spread_bps = 6;
   string ts = 7;
+  string verdict = 8;    // D-508 S8：色阶终值（spread_bps>=50→"opportunity" 否则 "not_opportunity"；阈值后端裁决）
 }
 
 message CexFundingRow {
@@ -1811,6 +1824,7 @@ message CexFundingRow {
   string symbol = 2;
   double rate = 3;        // 小数年化
   string ts = 4;
+  string verdict = 5;     // D-508 S8：色阶终值（年化>=10%→"opportunity" 否则 "not_opportunity"；阈值后端裁决）
 }
 
 message CexBalanceRow {
@@ -2120,6 +2134,7 @@ message GetFinanceOverviewResponse {
   repeated FinancePnlByEnv pnl_by_env = 4;
   repeated FinanceIncomeRow income_by_kind = 5;
   repeated FinanceFlowRow flows = 6;  // ts 倒序 LIMIT 200
+  double total_realized_usd = 7;      // D-508 S8：Σ pnl_by_env.realized_pnl（前端直读不再聚合）
 }
 
 // === Spot-carry demo 手动实测（D-350 阶段③；无 auto——发现≠授权，auto 化待经验另立 D#）===
@@ -2311,6 +2326,8 @@ message IntraBaselineStat {
   optional double slip_p90_bps = 7; // 无滑点样本→null（前端「—」）
   int32 circuit_days = 8;     // intra_events kind=circuit 去重天数
   int32 kill_count = 9;       // intra_events kind=kill 计数
+  optional double win_rate_pct = 10;  // D-508 S8：胜率%=win/closed×100（closed=0→缺省，前端不除法）
+  string win_tone = 11;               // D-508 S8：胜率色阶（>=50→"ok"/<50→"part"；缺数据=""）
 }
 
 message IntraTrackStatsRequest {}
@@ -2523,6 +2540,19 @@ message ApproveCarryGraduationResponse {
   double est_alloc_pct = 12;             // D-490 互算回显：占小池净值比（usd 输入时回显；小数口径）
   repeated string sizing_notes = 13;     // D-490：池口径/币种/快照时间等审计注记
   repeated string venue_gap_keys = 14;   // D-492：纯 venue_key 缺口列表（venue_gaps 混 capWarns 句串不可解析——双轨并存）
+  repeated GradLegPoolRow leg_pools = 15;  // D-508 S8：dry_run 腿→资金池映射（后端推导 venue_key+回退链终值，前端删镜像）
+}
+
+// GradLegPoolRow D-508 S8：腿 venue_key → 资金池快照行（allocPoolOf 回退链终值直传）。
+message GradLegPoolRow {
+  string venue_key = 1;               // 腿 venue_key（后端推导，前端零镜像）
+  bool found = 2;                     // false=该 venue 无任何非空净值快照行（未采）
+  string pool_venue = 3;              // 实际命中行 venue（unified/perp 回退时如实反映口径）
+  string pool_venue_type = 4;
+  double equity = 5;
+  string currency = 6;
+  google.protobuf.Timestamp updated_at = 7;
+  bool is_min = 8;                    // 双池较小者=绑定约束（后端判定，前端不比较）
 }
 message RejectCarryGraduationRequest {
   int64 graduation_id = 1; string note = 2;
