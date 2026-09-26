@@ -103,8 +103,8 @@ func TestD327_ExecuteInternal_EntrySpreadBackfilled(t *testing.T) {
 		t.Fatalf("partition: %v", err)
 	}
 	if err := st.InsertTicks(ctx, []pgstore.TickRow{
-		{Ts: now.Add(-2 * time.Minute), Venue: "gate", Symbol: "CLUSDT", Bid: 60.00, Ask: 60.02, VenueType: "cex"},
-		{Ts: now, Venue: "gate", Symbol: "CLUSDT", Bid: 60.05, Ask: 60.07, VenueType: "cex"},
+		{Ts: now.Add(-2 * time.Minute), Venue: "gate", Symbol: "CLUSDT", Bid: 60.00, Ask: 60.02, VenueType: "perp"},
+		{Ts: now, Venue: "gate", Symbol: "CLUSDT", Bid: 60.05, Ask: 60.07, VenueType: "perp"},
 		{Ts: now.Add(-2 * time.Minute), Venue: "3001157", Symbol: "USOILm", Bid: 60.00, Ask: 60.02, VenueType: "mt5"},
 		{Ts: now, Venue: "3001157", Symbol: "USOILm", Bid: 60.04, Ask: 60.06, VenueType: "mt5"},
 	}); err != nil {
