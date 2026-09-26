@@ -4,7 +4,7 @@ package arb.dashboard.v1;
 
 import "google/protobuf/timestamp.proto";
 
-option go_package = "arb/internal/dashboard/gen/arb/dashboard/v1;dashboardv1";
+option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
 
 // DashboardService — Web 仪表盘 ConnectRPC 服务（架构设计 §8.2）。
 // 写 RPC 仅限：告警确认/台账/经验复核/执行确认；无策略管理、无自动开仓入口。

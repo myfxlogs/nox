@@ -21,9 +21,9 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/exec"
 	"arb/internal/httpx"
 	"arb/internal/safego"
+	"arb/internal/signutil"
 
 	"github.com/gorilla/websocket"
 )
@@ -239,7 +239,7 @@ func (g *GatePrivateWS) gateQuanto(ctx context.Context, contract string) (float6
 // get 签名 GET（exec.GateSign 与 REST 路径同口径：urlPath=/api/v4+endpoint）。
 func (g *GatePrivateWS) get(ctx context.Context, endpoint string, ts int64) ([]byte, error) {
 	urlPath := "/api/v4" + endpoint
-	sign := exec.GateSign(g.apiSecret, "GET", urlPath, "", "", ts)
+	sign := signutil.GateSign(g.apiSecret, "GET", urlPath, "", "", ts)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, g.baseURL+endpoint, nil)
 	if err != nil {
 		return nil, err
