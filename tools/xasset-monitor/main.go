@@ -14,9 +14,9 @@ import (
 	"math"
 	"net/http"
 	"os"
-	"strings"
 
 	"arb/internal/httpx" // SSOT：自动注入 CA + X-Proxy-Token
+	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 )
 
@@ -74,8 +74,8 @@ func run(ctx context.Context) error {
 // D-423：mtVenueKey=exnessVenue+:mt5（已带冒号原样）；按 cexVenue 路由报价源。
 func runPairs(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL, exnessVenue string, pairs []monitorPair) error {
 	mtVenue := exnessVenue
-	if !strings.Contains(mtVenue, ":") {
-		mtVenue += ":mt5"
+	if keydomain.Parse(mtVenue).Type == "" {
+		mtVenue = keydomain.Join(mtVenue, "mt5")
 	}
 	var firstErr error
 	for _, p := range pairs {

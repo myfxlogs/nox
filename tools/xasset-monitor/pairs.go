@@ -6,7 +6,11 @@
 // 白名单加行≤5min（cron 轮重查表）簿覆盖自动跟上，零代码触碰。
 package main
 
-import "strings"
+import (
+	"arb/internal/keydomain"
+
+	"strings"
+)
 
 // monitorPair D-335R1 S1 + D-423 venue 化：{cexVenue, sym, pair, exSym}——
 // cexVenue 路由 CEX 报价源（binance:perp=经 cex-proxy fapi；okx:perp=OKX 公开行情），
@@ -50,7 +54,7 @@ func deriveMonitorPairs(combos []allowComboRow, uni []universeRow) (pairs []moni
 		}
 		symsByVenue[r.venue][r.symbol] = true
 	}
-	isMT := func(v string) bool { return strings.HasSuffix(v, ":mt4") || strings.HasSuffix(v, ":mt5") }
+	isMT := keydomain.IsMTKey
 	bareOf := func(c string) string {
 		if b := strings.TrimSuffix(c, "USDT"); b != c {
 			return b
@@ -60,10 +64,7 @@ func deriveMonitorPairs(combos []allowComboRow, uni []universeRow) (pairs []moni
 	// cexSymFor：universe 命中（venue+hedge_canonical）→ miss 按 venue 约定构造+回查
 	// 存在性 → 仍 miss=false（fail-closed 不静默丢，调用方 skip+warn）。
 	cexSymFor := func(cexVenueKey, mtCanonical, bare string) (string, bool) {
-		v := cexVenueKey
-		if i := strings.Index(v, ":"); i >= 0 {
-			v = v[:i]
-		}
+		v := keydomain.BareOf(cexVenueKey)
 		if s, ok := byKey[v+"|"+mtCanonical]; ok {
 			return s, true
 		}
