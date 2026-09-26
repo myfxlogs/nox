@@ -34,14 +34,14 @@ func TestD341_CycleRealrateView(t *testing.T) {
 		amt  float64
 	}{{"swap", 1.53}, {"funding", 2.0}} {
 		if _, err := s.Pool().Exec(ctx,
-			`INSERT INTO position_cashflows (position_id, leg_no, kind, venue, amount_usd, ts)
-			 VALUES ($1, 1, $2, 'binance:perp', $3, now())`, posID, cf.kind, cf.amt); err != nil {
+			`INSERT INTO position_cashflows (position_id, leg_no, kind, venue, venue_type, amount_usd, ts)
+			 VALUES ($1, 1, $2, 'binance','perp', $3, now())`, posID, cf.kind, cf.amt); err != nil {
 			t.Fatalf("seed cf: %v", err)
 		}
 	}
 	if _, err := s.Pool().Exec(ctx,
-		`INSERT INTO income_events (venue, account_id, symbol, income_type, amount_usd, tran_id, ts, position_id)
-		 VALUES ('binance', 25, 'XAUUSDT', 'FUNDING_FEE', 4.0, 777001, now(), $1)`, posID); err != nil {
+		`INSERT INTO income_events (venue, venue_type, symbol, income_type, amount_usd, tran_id, ts, position_id)
+		 VALUES ('binance', 'perp', 'XAUUSDT', 'FUNDING_FEE', 4.0, 777001, now(), $1)`, posID); err != nil {
 		t.Fatalf("seed income: %v", err)
 	}
 	if _, err := s.Pool().Exec(ctx,

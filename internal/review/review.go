@@ -104,7 +104,7 @@ func Run(ctx context.Context, st Store, cfg Config) error {
 			deviationBps, realized, notional, expectedHoldingBps, holdingDays)
 		if _, err := st.UpsertKnowledgeEntry(ctx, &pgstore.KnowledgeEntry{
 			Signature: fmt.Sprintf("review:pos:%d", p.ID),
-			Venue:     buyVenue,
+			VenueKeys: []string{buyVenue},
 			Symbol:    buySymbol,
 			Verdict:   verdict,
 			Rationale: rationale,

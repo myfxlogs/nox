@@ -1,6 +1,7 @@
 package swapledger
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"fmt"
 	"log"
@@ -90,7 +91,7 @@ func cashflowKind(posType, venue string) string {
 // XASSET_CARRY: CEX perp 腿=funding，MT 腿=swap；其他类型按 posType（向后兼容）。
 func isFundingLeg(posType, venue string) bool {
 	if posType == "XASSET_CARRY" {
-		return strings.HasSuffix(venue, ":perp")
+		return keydomain.IsType(venue, "perp")
 	}
 	return isFundingType(posType)
 }

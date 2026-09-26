@@ -5,6 +5,7 @@
 package settlement
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"fmt"
 	"log"
@@ -154,7 +155,7 @@ func SettleAt(ctx context.Context, deps Deps, posID int64, elim Eliminator, fami
 		// 会漏非 funding 型仓持 perp 腿实收的场景）。
 		hasFundingLeg := false
 		for _, l := range legs {
-			if l.Phase == "OPEN" && l.Status == "FILLED" && strings.HasSuffix(l.Venue, ":perp") {
+			if l.Phase == "OPEN" && l.Status == "FILLED" && keydomain.IsType(l.Venue, "perp") {
 				hasFundingLeg = true
 				break
 			}

@@ -6,11 +6,11 @@
 package swapledger
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"fmt"
 	"log"
 	"math"
-	"strings"
 	"time"
 
 	"arb/internal/safego"
@@ -129,7 +129,7 @@ func (r *SwapReconciler) reconcilePosition(ctx context.Context, pos pgstore.Posi
 		// D-437 S1：perp 腿比对日=昨日（income 多窗结算需完整日对平，日中部分窗对全日公式必误报）；
 		// MT 腿=当日不变（快照差天然含时长）。昨日无 cashflow（今日新开仓）→ 自然 skip 零特例。
 		cmpDay := day
-		if strings.HasSuffix(leg.Venue, ":perp") {
+		if keydomain.IsType(leg.Venue, "perp") {
 			cmpDay = day.AddDate(0, 0, -1)
 		}
 		kind := cashflowKind(pos.Type, leg.Venue)
@@ -167,7 +167,7 @@ func (r *SwapReconciler) reconcileLegWithStore(ctx context.Context, pos pgstore.
 		return false, err
 	}
 
-	if strings.HasSuffix(venue, ":perp") {
+	if keydomain.IsType(venue, "perp") {
 		// CEX perp 腿：实际值=income 当日实收日和（venue 剥 :perp 后缀=income_events.venue 口径）。
 		actualUSD, rows, err := r.store.SumIncomeForDay(ctx, venueFromKey(venue), symbol, day)
 		if err != nil {
