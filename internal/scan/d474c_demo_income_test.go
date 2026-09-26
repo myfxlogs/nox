@@ -17,7 +17,7 @@ import (
 // seedDemoRow 插 demo 实测行（last_accrue_ts 回拨 base 使 income 窗可控）。
 func seedDemoRow(t *testing.T, s *pgstore.Store, venue, symbol string, base time.Time) *pgstore.PaperSpotCarry {
 	t.Helper()
-	pr := &pgstore.PaperSpotCarry{Venue: venue, Symbol: symbol, Side: "short_perp",
+	pr := &pgstore.PaperSpotCarry{VenueA: venue, Symbol: symbol, Side: "short_perp",
 		EntryFundingAnn: 90, QtyUSD: 1000, Note: "spot=x perp=y"}
 	if err := s.InsertPaperSpotCarry(context.Background(), pr); err != nil {
 		t.Fatalf("seed paper row: %v", err)

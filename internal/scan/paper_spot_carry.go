@@ -10,6 +10,7 @@ import (
 	"log"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"arb/internal/fact"
@@ -63,7 +64,7 @@ type PaperStore interface {
 	// D-419 S3：授权组合 monitor 簿存在性哨兵（纯存在性无 maxAge）。
 	HasXAssetMonitorRow(ctx context.Context, pair, cexVenue, mtVenue string) (bool, error)
 	LoadXAssetAllowCombos(ctx context.Context, environment string) ([]pgstore.XAssetAllowRow, error)
-	LatestPaperExitTs(ctx context.Context, venue, symbol string) (*time.Time, error)
+	LatestPaperExitTs(ctx context.Context, venueA, venueB, symbol string) (*time.Time, error)
 	// D-410 S4：保底槽宇宙行缺席 warn 节流（禁 `_ =` 吞错，cashflow-write-error 同族条款）。
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
 	// D-465：mt×mt 轨 entry_basis/费用 tick 读面（*pgstore.Store 原生实现）。
@@ -96,12 +97,14 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 	}
 	activeByKey := make(map[string]struct{}, len(active))
 	for _, p := range active {
-		activeByKey[p.Venue+"|"+p.Symbol] = struct{}{}
+		activeByKey[p.VenuePair()+"|"+p.Symbol] = struct{}{}
 	}
 	// ①开仓（band+vol+cap v1.1；候选按 net 降序）
 	type cand struct {
 		key     string
 		u       pgstore.CexUniverseRow
+		venueA  string
+		venueB  string
 		funding float64
 		net     float64
 	}
@@ -125,11 +128,12 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 		}
 		// D-463 S2+返修R1：blocked 旗标硬拦——腿级展开查（venue 为组合串时单腿旗标同样命中）；
 		// warn 级不拦（纸面=免费复核通道）。
-		if f := blockedFlagHit(u.Venue, u.Symbol, nil, flags); f != nil {
+		va, vb, _ := strings.Cut(u.Venue, "×") // universe venue 仍配对串域（未拆列）——切双段喂腿级旗标与双列
+		if f := blockedFlagHit(va, vb, u.Symbol, nil, flags); f != nil {
 			log.Printf("[paper spot] blocked flag 拦截: %s（%s@%s|%s）", key, f.Reason, f.Venue, f.Symbol)
 			continue
 		}
-		cands = append(cands, cand{key: key, u: u, funding: *u.FundingAnn, net: net})
+		cands = append(cands, cand{key: key, u: u, venueA: va, venueB: vb, funding: *u.FundingAnn, net: net})
 	}
 	// D-383C 进场持续闸：连续 PaperEntryStreakRounds 轮全条件达标才放行——任一条件失败/
 	// 候选从 uni 消失由 Step 清零（键=venue|symbol）；streak 未满的键不进开仓排序。
@@ -154,7 +158,7 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 			side = "long_perp"
 		}
 		r := &pgstore.PaperSpotCarry{
-			Venue: c.u.Venue, Symbol: c.u.Symbol, Side: side,
+			VenueA: c.venueA, VenueB: c.venueB, Symbol: c.u.Symbol, Side: side,
 			EntryFundingAnn: c.funding, QtyUSD: PaperQtyUSD,
 			EntryBasisBps: c.u.LastBasisBps, LastBasisBps: c.u.LastBasisBps, // D-354 S2：开仓基差快照（NULL 传播）
 			EstRoundTripFeeUSD: paperSpotCarryFeeUSD(c.u.Venue, PaperQtyUSD), // D-474a S2：分腿真费四笔（venue 未覆盖→NULL 拒填）
@@ -175,12 +179,17 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 		if p.LastAccrueTs != nil {
 			base = *p.LastAccrueTs
 		}
-		u, ok := uni[p.Venue+"|"+p.Symbol]
+		u, ok := uni[p.VenuePair()+"|"+p.Symbol]
 		if p.Status == "demo" {
 			// D-474c S1：demo=真仓行——accrue 改吃 income_events 实收（不走 474a 结算
 			// 对齐模型；纸面行照旧）。归属粒度上限=venue+symbol（同所同币多仓并账），
 			// 行 note 幂等注 flag_warn 语义；缺席窗 +0 不外推；err 上抛禁吞。
-			sum, _, ierr := st.SumIncomeWindow(ctx, p.Venue, p.Symbol, base, now)
+			// D-498：income 归属=CEX 臂（venue_b 空=spot 单臂取 venue_a）
+			incomeVenue := p.VenueB
+			if incomeVenue == "" {
+				incomeVenue = p.VenueA
+			}
+			sum, _, ierr := st.SumIncomeWindow(ctx, incomeVenue, p.Symbol, base, now)
 			if ierr != nil {
 				return opened, exited, fmt.Errorf("paper step: demo income %d: %w", p.ID, ierr)
 			}
@@ -231,7 +240,7 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 		// recalc=存量行回迁哨兵（0139 置 NULL）：全生命周期重算+覆盖写；覆盖不全→留旧值下轮重试。
 		recalc := p.LastAccrueTs == nil
 		accruedAdd, settledTo, aok, aerr := AccruePaperLegs(ctx, st, []PaperLegAccrue{{
-			Kind: fact.KindFunding, Venue: p.Venue, Symbol: p.Symbol,
+			Kind: fact.KindFunding, Venue: p.VenueA, Symbol: p.Symbol,
 			SideFactor: sideFactor, CurRate: f, CurOK: true,
 		}}, base, now, p.QtyUSD)
 		if aerr != nil {

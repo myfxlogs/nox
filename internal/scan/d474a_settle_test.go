@@ -173,7 +173,7 @@ func TestD474A_SpotAdverseExit(t *testing.T) {
 	now := time.Now()
 	entry := now.Add(-48 * time.Hour)
 	st.rows[1] = &pgstore.PaperSpotCarry{
-		ID: 1, Venue: "binance", Symbol: "BTCUSDT", Side: "short_perp",
+		ID: 1, VenueA: "binance", Symbol: "BTCUSDT", Side: "short_perp",
 		Status: "active", EntryTs: entry, QtyUSD: 1000, EntryFundingAnn: 50,
 	}
 	// FundingAnn 翻负（short_perp 收息转付息）→ 当轮退
@@ -223,7 +223,7 @@ func TestD474A_SpotMissDataLost(t *testing.T) {
 	st.facts = map[string][]fact.Fact{}
 	now := time.Now()
 	st.rows[1] = &pgstore.PaperSpotCarry{
-		ID: 1, Venue: "binance", Symbol: "BTCUSDT", Side: "short_perp",
+		ID: 1, VenueA: "binance", Symbol: "BTCUSDT", Side: "short_perp",
 		Status: "active", EntryTs: now.Add(-48 * time.Hour), QtyUSD: 1000,
 	}
 	st.universe = map[string]pgstore.CexUniverseRow{} // 行缺席

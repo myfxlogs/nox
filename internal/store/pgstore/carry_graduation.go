@@ -23,7 +23,9 @@ var ErrXAssetComboExists = errors.New("xasset allow combo: already exists")
 type CarryGraduation struct {
 	ID             int64
 	PaperID        int64
-	Venue          string
+	Venue          string // D-498：展示性配对投影（generated 列；语义键用 VenueA/VenueB）
+	VenueA         string
+	VenueB         string
 	Symbol         string
 	Structure      string
 	MtVenue        *string // cfd 行 MT 腿 venue（raw id）；非 cfd NULL
@@ -51,11 +53,11 @@ func (s *Store) ListPaperForGraduation(ctx context.Context) ([]PaperSpotCarry, e
 // 返回是否新插（false=已存在建议行，调用方不计 newCount）。
 func (s *Store) InsertCarryGraduation(ctx context.Context, g *CarryGraduation) (bool, error) {
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO carry_graduations (paper_id, venue, symbol, structure, mt_venue, age_days, accrued_usd, last_funding_ann, net_all_in_usd, flag_warn)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+		INSERT INTO carry_graduations (paper_id, venue_a, venue_b, symbol, structure, mt_venue, age_days, accrued_usd, last_funding_ann, net_all_in_usd, flag_warn)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 		ON CONFLICT (paper_id) DO NOTHING
 		RETURNING id`,
-		g.PaperID, g.Venue, g.Symbol, g.Structure, g.MtVenue, g.AgeDays, g.AccruedUSD, g.LastFundingAnn, g.NetAllInUSD, g.FlagWarn).Scan(&g.ID)
+		g.PaperID, g.VenueA, g.VenueB, g.Symbol, g.Structure, g.MtVenue, g.AgeDays, g.AccruedUSD, g.LastFundingAnn, g.NetAllInUSD, g.FlagWarn).Scan(&g.ID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return false, nil
@@ -66,9 +68,18 @@ func (s *Store) InsertCarryGraduation(ctx context.Context, g *CarryGraduation) (
 }
 
 // GetCarryGraduation 单条建议（approve/reject 前置读取+pending 守卫）。
+// VenuePair 配对展示串（venue_b 空→venue_a；否则 'a×b'）——与 venue 生成列同构，
+// 语义键取 VenueA/VenueB 字段，禁回解析本串。
+func (g CarryGraduation) VenuePair() string {
+	if g.VenueB == "" {
+		return g.VenueA
+	}
+	return g.VenueA + "×" + g.VenueB
+}
+
 func (s *Store) GetCarryGraduation(ctx context.Context, id int64) (*CarryGraduation, error) {
 	row := s.pool.QueryRow(ctx, `
-		SELECT id, paper_id, venue, symbol, structure, mt_venue, age_days, accrued_usd,
+		SELECT id, paper_id, venue, venue_a, venue_b, symbol, structure, mt_venue, age_days, accrued_usd,
 		       last_funding_ann, net_all_in_usd, status, created_at, decided_at, decided_note, combo_id, flag_warn
 		FROM carry_graduations WHERE id = $1`, id)
 	return scanCarryGraduation(row)
@@ -77,7 +88,7 @@ func (s *Store) GetCarryGraduation(ctx context.Context, id int64) (*CarryGraduat
 // ListCarryGraduations 全量建议（前端毕业小节行源；created_at 倒序新建议在前）。
 func (s *Store) ListCarryGraduations(ctx context.Context) ([]CarryGraduation, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, paper_id, venue, symbol, structure, mt_venue, age_days, accrued_usd,
+		SELECT id, paper_id, venue, venue_a, venue_b, symbol, structure, mt_venue, age_days, accrued_usd,
 		       last_funding_ann, net_all_in_usd, status, created_at, decided_at, decided_note, combo_id, flag_warn
 		FROM carry_graduations ORDER BY created_at DESC, id DESC`)
 	if err != nil {
@@ -87,7 +98,7 @@ func (s *Store) ListCarryGraduations(ctx context.Context) ([]CarryGraduation, er
 	var out []CarryGraduation
 	for rows.Next() {
 		var g CarryGraduation
-		if err := rows.Scan(&g.ID, &g.PaperID, &g.Venue, &g.Symbol, &g.Structure, &g.MtVenue,
+		if err := rows.Scan(&g.ID, &g.PaperID, &g.Venue, &g.VenueA, &g.VenueB, &g.Symbol, &g.Structure, &g.MtVenue,
 			&g.AgeDays, &g.AccruedUSD, &g.LastFundingAnn, &g.NetAllInUSD, &g.Status, &g.CreatedAt,
 			&g.DecidedAt, &g.DecidedNote, &g.ComboID, &g.FlagWarn); err != nil {
 			return nil, err
@@ -187,7 +198,7 @@ func (s *Store) ListCfdCarryUniverseClean(ctx context.Context) ([]CarryUniverseR
 
 func scanCarryGraduation(row pgx.Row) (*CarryGraduation, error) {
 	var g CarryGraduation
-	err := row.Scan(&g.ID, &g.PaperID, &g.Venue, &g.Symbol, &g.Structure, &g.MtVenue,
+	err := row.Scan(&g.ID, &g.PaperID, &g.Venue, &g.VenueA, &g.VenueB, &g.Symbol, &g.Structure, &g.MtVenue,
 		&g.AgeDays, &g.AccruedUSD, &g.LastFundingAnn, &g.NetAllInUSD, &g.Status, &g.CreatedAt,
 		&g.DecidedAt, &g.DecidedNote, &g.ComboID, &g.FlagWarn)
 	if err != nil {

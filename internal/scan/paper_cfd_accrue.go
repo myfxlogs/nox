@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"arb/internal/fact"
@@ -61,11 +60,8 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 		// D-410 S4：last_basis 每轮更 monitor 最新行（陈旧闸行龄超限→nil 诚实缺写 NULL）。
 		var lastBasis *float64
 		pair := paperCfdPairKey(p.Symbol)
-		// D-423：三元组 venue 键——Venue="mt×cex" 组合串拆回裸名再映射（mt 列备份拆分缺）。
-		mtV, cexV := "", ""
-		if i := strings.Index(p.Venue, "×"); i >= 0 {
-			mtV, cexV = p.Venue[:i], p.Venue[i+len("×"):]
-		}
+		// D-423：三元组 venue 键——D-498 直读配对双列（venue_a=MT 臂、venue_b=CEX 臂）。
+		mtV, cexV := p.VenueA, p.VenueB
 		cexVenue, mtVenue := monitorVenueKeys(cexV, mtV)
 		entryBps, _, _, _, ok, err := st.LatestXAssetEntryGate(ctx, pair, cexVenue, mtVenue, paperCfdMonitorMaxAge)
 		if err != nil {
@@ -74,7 +70,7 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 		if ok {
 			lastBasis = &entryBps
 		}
-		r, ok := rowByKey[p.Venue+"|"+p.Symbol]
+		r, ok := rowByKey[p.VenuePair()+"|"+p.Symbol]
 		if !ok {
 			if p.Status != "active" {
 				continue // demo 行缺席：无数据不误记

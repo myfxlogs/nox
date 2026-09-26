@@ -26,7 +26,7 @@ func d403Store(t *testing.T) *Store {
 
 func d403InsertPaper(t *testing.T, s *Store, venue, symbol, status string, structure string, exitReason string) int64 {
 	t.Helper()
-	r := &PaperSpotCarry{Venue: venue, Symbol: symbol, Structure: structure, AccruedUSD: 10}
+	r := &PaperSpotCarry{VenueA: venue, Symbol: symbol, Structure: structure, AccruedUSD: 10}
 	if err := s.InsertPaperSpotCarry(context.Background(), r); err != nil {
 		t.Fatalf("insert paper: %v", err)
 	}
@@ -69,12 +69,12 @@ func TestD403_InsertCarryGraduation_Idempotent(t *testing.T) {
 	ctx := context.Background()
 	paperID := d403InsertPaper(t, s, "v1×gate", "BTC", "active", "long_cfd_short_perp", "")
 	mt := "1279967"
-	g := &CarryGraduation{PaperID: paperID, Venue: "v1×gate", Symbol: "BTC", Structure: "long_cfd_short_perp", MtVenue: &mt, AgeDays: 6, AccruedUSD: 10}
+	g := &CarryGraduation{PaperID: paperID, VenueA: "v1", VenueB: "gate", Symbol: "BTC", Structure: "long_cfd_short_perp", MtVenue: &mt, AgeDays: 6, AccruedUSD: 10}
 	inserted, err := s.InsertCarryGraduation(ctx, g)
 	if err != nil || !inserted {
 		t.Fatalf("first insert inserted=%v err=%v", inserted, err)
 	}
-	inserted2, err := s.InsertCarryGraduation(ctx, &CarryGraduation{PaperID: paperID, Venue: "v1×gate", Symbol: "BTC", Structure: "long_cfd_short_perp", AgeDays: 7, AccruedUSD: 12})
+	inserted2, err := s.InsertCarryGraduation(ctx, &CarryGraduation{PaperID: paperID, VenueA: "v1", VenueB: "gate", Symbol: "BTC", Structure: "long_cfd_short_perp", AgeDays: 7, AccruedUSD: 12})
 	if err != nil {
 		t.Fatal(err)
 	}

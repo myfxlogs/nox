@@ -63,7 +63,8 @@ func StepCarryGraduation(ctx context.Context, st GraduationStore, now time.Time,
 		net := netAllInUSD(p.AccruedUSD, p.EstRoundTripFeeUSD, effectiveConvergenceUSD(p))
 		g := &pgstore.CarryGraduation{
 			PaperID:        p.ID,
-			Venue:          p.Venue,
+			VenueA:         p.VenueA,
+			VenueB:         p.VenueB,
 			Symbol:         p.Symbol,
 			Structure:      p.Structure,
 			MtVenue:        p.MtVenue,
@@ -81,7 +82,7 @@ func StepCarryGraduation(ctx context.Context, st GraduationStore, now time.Time,
 		}
 		if inserted {
 			newCount++
-			label := p.Venue + "×" + p.Symbol
+			label := p.VenuePair() + "×" + p.Symbol
 			if g.FlagWarn != nil {
 				label += "(" + *g.FlagWarn + ")" // D-463 S2：红旗透出到告警文案
 			}
@@ -233,10 +234,18 @@ func ResolveGraduationCanonicals(symbol, mtVenue string, platform int, mappings 
 	}, nil
 }
 
-// FlagVenueSet D-463返修：venue 字段腿级展开（全串+×拆分+mtVenue）——
+// FlagVenueSet D-463返修：venue 字段腿级展开（配对串+A/B 臂+mtVenue）——
 // blocked 闸与 warn 透出同一口径，腿级旗标在组合串上不致哑火。
-func FlagVenueSet(venue string, mtVenue *string) []string {
-	venues := append([]string{venue}, strings.Split(venue, "×")...)
+// D-498：入参改配对双列直读（venue_b=”=单臂行），配对串展开职责收敛到本函数。
+func FlagVenueSet(venueA, venueB string, mtVenue *string) []string {
+	pair := venueA
+	if venueB != "" {
+		pair = venueA + "×" + venueB
+	}
+	venues := []string{pair, venueA}
+	if venueB != "" {
+		venues = append(venues, venueB)
+	}
 	if mtVenue != nil && *mtVenue != "" {
 		venues = append(venues, *mtVenue)
 	}
@@ -245,11 +254,11 @@ func FlagVenueSet(venue string, mtVenue *string) []string {
 
 // blockedFlagHit D-463返修：腿级展开任一 venue×symbol 命中 blocked → 返回该旗
 // （nil=无旗/未命中）。纸面三轨入口共用——KB 旗标以单腿 venue 落键，组合串必须展开查。
-func blockedFlagHit(venue, symbol string, mtVenue *string, flags map[string]pgstore.VenueSymbolFlag) *pgstore.VenueSymbolFlag {
+func blockedFlagHit(venueA, venueB, symbol string, mtVenue *string, flags map[string]pgstore.VenueSymbolFlag) *pgstore.VenueSymbolFlag {
 	if len(flags) == 0 {
 		return nil
 	}
-	for _, v := range FlagVenueSet(venue, mtVenue) {
+	for _, v := range FlagVenueSet(venueA, venueB, mtVenue) {
 		if f, ok := flags[pgstore.FlagKey(v, symbol)]; ok && f.Level == "blocked" {
 			return &f
 		}
@@ -265,7 +274,7 @@ func graduationFlagWarn(p pgstore.PaperSpotCarry, flags map[string]pgstore.Venue
 	}
 	var reasons []string
 	seen := map[string]bool{}
-	for _, v := range FlagVenueSet(p.Venue, p.MtVenue) {
+	for _, v := range FlagVenueSet(p.VenueA, p.VenueB, p.MtVenue) {
 		if f, ok := flags[pgstore.FlagKey(v, p.Symbol)]; ok && f.Level == "warn" && !seen[f.Reason] {
 			reasons = append(reasons, "⚠"+f.Reason)
 			seen[f.Reason] = true

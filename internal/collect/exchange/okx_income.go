@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"time"
 
+	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 )
 
@@ -110,7 +111,7 @@ func (c *OKXIncomeCollector) RunOnce(ctx context.Context) (int64, error) {
 				Ts: time.UnixMilli(tsMs),
 			}
 			// 匹配 OPEN 腿唯一命中才挂 position_id/leg_no（零/多义留 NULL，照抄 binance 语义）。
-			posID, legNo, hits, err := c.sink.MatchOpenLegForIncome(ctx, VenueOKX+":perp", r.InstID, env)
+			posID, legNo, hits, err := c.sink.MatchOpenLegForIncome(ctx, keydomain.Join(VenueOKX, "perp"), r.InstID, env)
 			if err != nil || hits != 1 {
 				posID, legNo = 0, 0 // R0-B3：hits≠1 显式清零（MatchOpenLegForIncome 多义时仍返回末条，不依赖返回值防误挂）
 			}

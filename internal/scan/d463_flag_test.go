@@ -107,7 +107,8 @@ func TestD463_BlockedFlagHitLegs(t *testing.T) {
 		{"nil放行", "1314615×gate", "BTC", nil, nil, false},
 	}
 	for _, tc := range cases {
-		if got := blockedFlagHit(tc.venue, tc.symbol, tc.mtVenue, tc.flags); (got != nil) != tc.wantHit {
+		va, vb, _ := strings.Cut(tc.venue, "×")
+		if got := blockedFlagHit(va, vb, tc.symbol, tc.mtVenue, tc.flags); (got != nil) != tc.wantHit {
 			t.Fatalf("%s: hit=%v want=%v", tc.name, got != nil, tc.wantHit)
 		}
 	}

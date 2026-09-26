@@ -1,7 +1,7 @@
 // paper_mtm_carry.go D-465：cfd×cfd（mt×mt）同品种跨商纸面轨。
 // 收益来源=两商同品种 swap 利差（如长 A 付 −x%/yr + 空 B 收 +y%/yr）+跨商报价差。
 // 纯纸面零执行：mt×mt 真钱需第二真户（业主域）+approve 执行面无 mt×mt 语义（不接）。
-// 行形态复用 paper_spot_carry：Venue="mtA×mtB"，Structure="cfd_cfd"，
+// 行形态复用 paper_spot_carry：VenueA×VenueB="mtA×mtB"，Structure="cfd_cfd"，
 // MtVenue=short 腿 venue（D-465 钉死：mt_venue 列只放一腿，毕业行读此约定）。
 package scan
 
@@ -160,7 +160,7 @@ func (sc *CarryUniverseScanner) StepPaperMtmCarry(ctx context.Context, st PaperS
 			continue
 		}
 		mtmActive++
-		activeByKey[p.Venue+"|"+p.Symbol] = struct{}{}
+		activeByKey[p.VenuePair()+"|"+p.Symbol] = struct{}{}
 	}
 	// ①开仓：每 canonical 取最优配对（stale 腿不入配对）
 	canonicals := map[string]struct{}{}
@@ -176,7 +176,7 @@ func (sc *CarryUniverseScanner) StepPaperMtmCarry(ctx context.Context, st PaperS
 		if _, dup := activeByKey[p.venue()+"|"+c]; dup {
 			continue
 		}
-		if f := blockedFlagHit(p.venue(), c, nil, flags); f != nil {
+		if f := blockedFlagHit(p.venueA, p.venueB, c, nil, flags); f != nil {
 			log.Printf("[mtm paper] blocked flag 拦截: %s（%s@%s|%s）", p.key(), f.Reason, f.Venue, f.Symbol)
 			continue
 		}
@@ -199,7 +199,7 @@ func (sc *CarryUniverseScanner) StepPaperMtmCarry(ctx context.Context, st PaperS
 		basis, fee := mtmBasisFee(ctx, st, lv, ls, sv, ss, now)
 		shortLegVenue := sv
 		r := &pgstore.PaperSpotCarry{
-			Venue: p.venue(), Symbol: p.canonical,
+			VenueA: p.venueA, VenueB: p.venueB, Symbol: p.canonical,
 			Side: p.side, EntryFundingAnn: p.net, QtyUSD: PaperQtyUSD,
 			EntryBasisBps: basis, LastBasisBps: basis,
 			EstRoundTripFeeUSD: fee,
@@ -211,7 +211,7 @@ func (sc *CarryUniverseScanner) StepPaperMtmCarry(ctx context.Context, st PaperS
 			}
 			return opened, exited, fmt.Errorf("mtm paper step: open %s: %w", p.key(), err)
 		}
-		opened = append(opened, r.Venue+":"+r.Symbol)
+		opened = append(opened, r.VenuePair()+":"+r.Symbol)
 		entryStreak.Drop(p.key())
 	}
 	// ②累积 + ③退出（仅 cfd_cfd 行）——D-474a 起拆至 paper_mtm_accrue.go。
@@ -223,16 +223,16 @@ func (sc *CarryUniverseScanner) StepPaperMtmCarry(ctx context.Context, st PaperS
 	return opened, exited, nil
 }
 
-// legsVenue 行 venue 串拆回长/短腿 venue（long=true→长腿）。
-func legsVenue(p pgstore.PaperSpotCarry, legs []string, long bool) string {
+// legsVenue 行配对双列取长/短腿 venue（long=true→长腿；D-498 直读 VenueA/VenueB）。
+func legsVenue(p pgstore.PaperSpotCarry, long bool) string {
 	if p.Side == "long_a_short_b" {
 		if long {
-			return legs[0]
+			return p.VenueA
 		}
-		return legs[1]
+		return p.VenueB
 	}
 	if long {
-		return legs[1]
+		return p.VenueB
 	}
-	return legs[0]
+	return p.VenueA
 }
