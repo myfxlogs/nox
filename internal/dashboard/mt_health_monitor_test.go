@@ -32,6 +32,10 @@ func newFakeHealthStore() *fakeHealthStore {
 	return &fakeHealthStore{facts: make(map[string][]fact.Fact), aliases: make(map[string]string)}
 }
 
+func (s *fakeHealthStore) LatestFactsByKind(ctx context.Context, kind string) ([]fact.Fact, error) {
+	return s.LatestFacts(ctx, kind, "", "")
+}
+
 func (s *fakeHealthStore) LatestFacts(_ context.Context, kind, _, _ string) ([]fact.Fact, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

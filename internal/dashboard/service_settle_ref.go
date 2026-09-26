@@ -70,7 +70,7 @@ func (s *Service) predRates(ctx context.Context) (map[string]map[string]float64,
 	if s.settleRef.pred != nil && time.Since(s.settleRef.predAt) < predTTL {
 		return s.settleRef.pred, nil
 	}
-	facts, err := s.store.LatestFacts(ctx, "funding", "", "")
+	facts, err := s.store.LatestFactsByKind(ctx, "funding")
 	if err != nil {
 		return nil, err
 	}

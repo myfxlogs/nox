@@ -20,6 +20,7 @@ import (
 // HealthFactStore 健康监控所需的 fact 查询接口（pgstore.Store 满足）。
 type HealthFactStore interface {
 	LatestFacts(ctx context.Context, kind, venue, symbol string) ([]fact.Fact, error)
+	LatestFactsByKind(ctx context.Context, kind string) ([]fact.Fact, error) // D-508 S3：kind-only 无 OR 专用查询
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
 	ListAccountAliases(ctx context.Context) (map[string]string, error)
 	ListBrokerAccountStatuses(ctx context.Context) (map[string]string, error) // D-216：venue→status，收紧 venueSet
@@ -223,11 +224,11 @@ func (m *MTHealthMonitor) collectFactAges(ctx context.Context, now time.Time) (s
 	if m.store == nil {
 		return
 	}
-	swapLongs, err := m.store.LatestFacts(ctx, fact.KindSwapLong, "", "")
+	swapLongs, err := m.store.LatestFactsByKind(ctx, fact.KindSwapLong)
 	if err != nil {
 		log.Printf("[mt-health] swap_long facts: %v", err)
 	}
-	swapShorts, err := m.store.LatestFacts(ctx, fact.KindSwapShort, "", "")
+	swapShorts, err := m.store.LatestFactsByKind(ctx, fact.KindSwapShort)
 	if err != nil {
 		log.Printf("[mt-health] swap_short facts: %v", err)
 	}
@@ -252,7 +253,7 @@ func (m *MTHealthMonitor) collectFactAges(ctx context.Context, now time.Time) (s
 		swapAges[v] = now.Sub(t)
 	}
 	// margin
-	margins, err := m.store.LatestFacts(ctx, fact.KindInitMarginRate, "", "")
+	margins, err := m.store.LatestFactsByKind(ctx, fact.KindInitMarginRate)
 	if err != nil {
 		log.Printf("[mt-health] margin facts: %v", err)
 	}

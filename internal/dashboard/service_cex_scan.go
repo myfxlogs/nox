@@ -58,7 +58,7 @@ func (s *Service) GetCexScanSnapshot(ctx context.Context, req *connect.Request[v
 	}
 
 	// Funding（读库）
-	facts, err := s.store.LatestFacts(ctx, "funding", "", "")
+	facts, err := s.store.LatestFactsByKind(ctx, "funding")
 	if err != nil {
 		return nil, fmt.Errorf("latest funding facts: %w", err)
 	}
