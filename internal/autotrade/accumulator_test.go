@@ -38,13 +38,13 @@ func testAccumStore(t *testing.T) *pgstore.Store {
 func seedDemoAccounts(t *testing.T, s *pgstore.Store, venues ...string) {
 	t.Helper()
 	ctx := context.Background()
-	if _, err := s.Pool().Exec(ctx, `TRUNCATE broker_accounts`); err != nil {
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE broker_accounts CASCADE`); err != nil {
 		t.Fatalf("truncate broker_accounts: %v", err)
 	}
 	for _, v := range venues {
 		if _, err := s.Pool().Exec(ctx,
-			`INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, server, status, is_real)
-			 VALUES ($1, 1, 'h', 443, 1, 'p', 's', 'connected', false)`, v); err != nil {
+			`INSERT INTO broker_accounts (venue, venue_type, host, port, password, server, status, is_real)
+			 VALUES ($1, 'mt5', 'h', 443, 'p', 's', 'connected', false)`, v); err != nil {
 			t.Fatalf("seedDemoAccounts %s: %v", v, err)
 		}
 	}

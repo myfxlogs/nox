@@ -33,6 +33,14 @@ func d330Setup(t *testing.T) *pgstore.Store {
 	if _, err := s.Pool().Exec(ctx, `INSERT INTO autotrade_state (state, reason, halted_on) VALUES ('RUNNING', '', NULL)`); err != nil {
 		t.Fatalf("insert RUNNING: %v", err)
 	}
+	if _, err := s.Pool().Exec(ctx, `
+		INSERT INTO fin_xasset_monitor (pair, binance_bid, binance_ask, exness_bid, exness_ask,
+			entry_spread_bps, exit_spread_bps, entry_net_bps, funding_rate_8h, funding_annual_pct,
+			tracking_error_bps, equiv_annual_pct, noise_bps, harvest_floor_bps, cex_venue, mt_venue)
+		VALUES ('XAUUSDT-XAU', 4355, 4356, 4354, 4355, 12, 5, 3, 0.001, 21.9, 1.0, 24.9, 9, 4.73,
+			'binance:perp','277842155:mt5')`); err != nil {
+		t.Fatalf("seed monitor: %v", err)
+	}
 	return s
 }
 

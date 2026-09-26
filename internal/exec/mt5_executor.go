@@ -1,6 +1,7 @@
 package exec
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"fmt"
 	"log"
@@ -33,7 +34,7 @@ func NewMT5Executor(venue, token string, trading mt5pb.TradingClient, mt5 mt5pb.
 		trading:          trading,
 		mt5:              mt5,
 		token:            token,
-		venueKey:         venue + ":mt5",
+		venueKey:         keydomain.Join(venue, "mt5"),
 		marginReservePct: defaultMarginReservePct,
 	}
 }

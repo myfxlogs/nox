@@ -1,6 +1,7 @@
 package reconcile
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"fmt"
 	"strconv"
@@ -138,7 +139,7 @@ func NewMT5Querier(venue, token string, mt5Client mt5pb.MT5Client) *MT5Querier {
 	return &MT5Querier{venue: venue, token: token, mt5: mt5Client}
 }
 
-func (q *MT5Querier) VenueKey() string { return q.venue + ":mt5" }
+func (q *MT5Querier) VenueKey() string { return keydomain.Join(q.venue, "mt5") }
 
 // Account 查 MT5 账户资金（AccountSummary，D-053）。
 func (q *MT5Querier) Account(ctx context.Context) (*AccountInfo, error) {
@@ -189,7 +190,7 @@ func (q *MT5Querier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error
 			OpenPrice:  ord.GetOpenPrice(),
 			Venue:      q.venue,
 			Comment:    ord.GetComment(),
-			VenueKey:   q.venue + ":mt5",
+			VenueKey:   keydomain.Join(q.venue, "mt5"),
 			Profit:     ord.GetProfit(),
 			Swap:       ord.GetSwap(),
 			Commission: ord.GetCommission(),

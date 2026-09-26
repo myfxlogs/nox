@@ -1,6 +1,7 @@
 package detector
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"math"
 	"strings"
@@ -155,7 +156,7 @@ func bareVenue(venueKey string) string {
 
 // mtVenueTypeOf venue_key 后缀 → MT venueType（tryPair 的 swapAnnualPct 只认 mt4/mt5）。
 func mtVenueTypeOf(venueKey string) string {
-	if strings.HasSuffix(venueKey, ":mt4") {
+	if keydomain.IsType(venueKey, "mt4") {
 		return "mt4"
 	}
 	return "mt5"

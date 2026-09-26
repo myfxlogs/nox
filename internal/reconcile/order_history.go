@@ -2,6 +2,7 @@
 package reconcile
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"fmt"
 	"strconv"
@@ -43,7 +44,7 @@ func NewMT5OrderHistoryQuerier(venue, token string, mt5Client mt5pb.MT5Client) *
 	return &MT5OrderHistoryQuerier{token: token, mt5: mt5Client, venue: venue}
 }
 
-func (q *MT5OrderHistoryQuerier) VenueKey() string { return q.venue + ":mt5" }
+func (q *MT5OrderHistoryQuerier) VenueKey() string { return keydomain.Join(q.venue, "mt5") }
 
 func (q *MT5OrderHistoryQuerier) QueryOrderHistory(ctx context.Context, ticket string, fromDays int) (*HistoryOrder, error) {
 	ctx = metadata.AppendToOutgoingContext(ctx, "id", q.token)

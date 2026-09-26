@@ -1,6 +1,7 @@
 package autotrade
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"fmt"
 	"log"
@@ -123,11 +124,11 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 	// 反构型=perp 买腿→借货卖空路径直接拒不进入）。sign=+1 单腿判定（空 perp 收正
 	// funding），rows=FundingPredWindow 同 D-328 读法。
 	if opp.Type == "FUNDING_HEDGE" {
-		if !strings.HasSuffix(opp.VenueBuy, ":spot") || !strings.HasSuffix(opp.VenueSell, ":perp") {
+		if !keydomain.IsType(opp.VenueBuy, "spot") || !keydomain.IsType(opp.VenueSell, "perp") {
 			log.Printf("[autotrade] skip %s: FUNDING_HEDGE v1 仅正构型 spot买×perp卖 (%s×%s 拒开)", opp.ID, opp.VenueBuy, opp.VenueSell)
 			return
 		}
-		perpVenue := strings.TrimSuffix(opp.VenueSell, ":perp")
+		perpVenue := keydomain.BareOf(opp.VenueSell)
 		rows, err := e.store.FundingPredWindow(ctx, perpVenue, opp.Canonical, time.Now().Add(-e.cfg.CarryRegime.Window))
 		if err != nil {
 			log.Printf("[autotrade] skip %s: funding window %s/%s query: %v (fail-closed)", opp.ID, perpVenue, opp.Canonical, err)
@@ -229,7 +230,7 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 
 // isMTVenue 判断 venueKey 是否为 MT5/MT4 venue（D-135 sizing CS fail-closed 用）。
 func isMTVenue(venue string) bool {
-	return strings.HasSuffix(venue, ":mt5") || strings.HasSuffix(venue, ":mt4")
+	return keydomain.IsMTKey(venue)
 }
 
 // effectiveNotionalUSD D-367 S4：有效名义额=组合级 spec 列优先，NULL（行缺列或 env 来源）

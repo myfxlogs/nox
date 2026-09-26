@@ -34,7 +34,7 @@ func d377SeedXAsset(t *testing.T) (*pgstore.Store, int64, *Engine) {
 		t.Fatalf("truncate: %v", err)
 	}
 	if _, err := st.Pool().Exec(ctx,
-		`INSERT INTO broker_symbol_map (venue, broker_symbol, canonical) VALUES ('binance','PAXGUSDT','PAXGUSDT') ON CONFLICT DO NOTHING`); err != nil {
+		`INSERT INTO broker_accounts (venue, venue_type, host, port, password) VALUES ('binance','mt5','h',443,'p') ON CONFLICT (venue) DO NOTHING; INSERT INTO broker_symbol_map (venue, broker_symbol, canonical) VALUES ('binance','PAXGUSDT','PAXGUSDT') ON CONFLICT DO NOTHING`); err != nil {
 		t.Fatalf("seed symbol map: %v", err)
 	}
 	var posID int64
@@ -44,9 +44,9 @@ func d377SeedXAsset(t *testing.T) (*pgstore.Store, int64, *Engine) {
 		t.Fatalf("seed position: %v", err)
 	}
 	if _, err := st.Pool().Exec(ctx,
-		`INSERT INTO position_legs (position_id, leg_no, phase, venue, account, symbol, side, qty, price_expected, price_actual, status)
-		 VALUES ($1,1,'OPEN','277842155:mt5','a','XAUUSD','BUY',1,100,100.05,'FILLED'),
-		        ($1,2,'OPEN','binance:perp','b','PAXGUSDT','SELL',1,100,100.00,'FILLED')`, posID); err != nil {
+		`INSERT INTO position_legs (position_id, leg_no, phase, venue, venue_type, symbol, side, qty, price_expected, price_actual, status)
+		 VALUES ($1,1,'OPEN','277842155','mt5','XAUUSD','BUY',1,100,100.05,'FILLED'),
+		        ($1,2,'OPEN','binance','perp','PAXGUSDT','SELL',1,100,100.00,'FILLED')`, posID); err != nil {
 		t.Fatalf("seed legs: %v", err)
 	}
 	return st, posID, &Engine{store: st, quotes: bus.New(), cfg: Config{BasisStopBps: 6.9}}

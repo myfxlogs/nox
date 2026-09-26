@@ -1,6 +1,7 @@
 package exec
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"fmt"
 	"strings"
@@ -79,7 +80,7 @@ func LegAtVenue(leg pgstore.PositionLeg, orders []OpenedOrder) bool {
 
 // isMTVenueKey 判断 venueKey 是否为 MT5/MT4 venue（D-120：CEX venue 平仓验证跳过用）。
 func isMTVenueKey(venueKey string) bool {
-	return strings.HasSuffix(venueKey, ":mt5") || strings.HasSuffix(venueKey, ":mt4")
+	return keydomain.IsMTKey(venueKey)
 }
 
 // isCEXVenueKey D-195-C2：判断 venueKey 是否为 CEX（与 isMTVenueKey 对称）。

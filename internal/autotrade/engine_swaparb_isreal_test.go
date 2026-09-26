@@ -23,7 +23,7 @@ func insertIsRealTestFacts(t *testing.T, s *pgstore.Store, facts []fact.Fact, re
 	if _, err := s.Pool().Exec(ctx, `TRUNCATE facts`); err != nil {
 		t.Fatalf("truncate facts: %v", err)
 	}
-	if _, err := s.Pool().Exec(ctx, `TRUNCATE broker_accounts`); err != nil {
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE broker_accounts CASCADE`); err != nil {
 		t.Fatalf("truncate broker_accounts: %v", err)
 	}
 	if err := s.InsertFacts(ctx, facts); err != nil {
@@ -31,8 +31,8 @@ func insertIsRealTestFacts(t *testing.T, s *pgstore.Store, facts []fact.Fact, re
 	}
 	insert := func(v string, isReal interface{}) {
 		if _, err := s.Pool().Exec(ctx,
-			`INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, server, status, is_real)
-			 VALUES ($1, 1, 'h', 443, 1, 'p', 's', 'connected', $2) ON CONFLICT DO NOTHING`, v, isReal); err != nil {
+			`INSERT INTO broker_accounts (venue, venue_type, host, port, password, server, status, is_real)
+			 VALUES ($1, 'mt5', 'h', 443, 'p', 's', 'connected', $2) ON CONFLICT DO NOTHING`, v, isReal); err != nil {
 			t.Fatalf("insert broker_account %s: %v", v, err)
 		}
 	}

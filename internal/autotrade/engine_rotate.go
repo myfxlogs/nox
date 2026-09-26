@@ -6,10 +6,10 @@
 package autotrade
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"fmt"
 	"math"
-	"strings"
 	"time"
 
 	"arb/internal/combo"
@@ -202,7 +202,7 @@ func (e *Engine) rotateSwitchCostUSD(venueBuy, venueSell string, notional float6
 				return v
 			}
 		}
-		if strings.HasSuffix(vk, ":perp") {
+		if keydomain.IsType(vk, "perp") {
 			return rotateCexFeeBpsDflt
 		}
 		return rotateMtFeeBpsDflt

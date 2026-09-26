@@ -172,7 +172,7 @@ func d404SeedMonitorRowAt(t *testing.T, s *pgstore.Store, ts time.Time, entry, f
 			entry_spread_bps, exit_spread_bps, entry_net_bps, funding_rate_8h, funding_annual_pct,
 			tracking_error_bps, equiv_annual_pct, noise_bps, harvest_floor_bps, cex_venue, mt_venue)
 		VALUES ($1, 'XPTUSDT-XPT', 4000, 4001, 3999, 4000, $2, 5, 3, 0.001, 21.9, 1.0, 24.9, 9, $3,
-			'okx:perp', '3001157:mt5')`,
+			'okx:perp','3001157:mt5')`,
 		ts, entry, floor); err != nil {
 		t.Fatalf("seed monitor at: %v", err)
 	}

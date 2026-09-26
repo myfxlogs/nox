@@ -2,9 +2,9 @@
 package autotrade
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"fmt"
-	"strings"
 
 	"arb/internal/fact"
 )
@@ -13,8 +13,8 @@ import (
 // 有非零 swap 历史→返回拒绝原因（fail-closed）。facts!=0 或无非零历史→放行（空串）。
 // 查询失败→返回 fail-closed 原因。venueLong/venueShort 是 venueKey（含 :mt5 后缀），取冒号前 bare venue。
 func (e *Engine) swapFactsZeroCheck(ctx context.Context, canonical, venueLong, venueShort string) string {
-	longBare := strings.Split(venueLong, ":")[0]
-	shortBare := strings.Split(venueShort, ":")[0]
+	longBare := keydomain.BareOf(venueLong)
+	shortBare := keydomain.BareOf(venueShort)
 	longFacts, err := e.store.LatestFacts(ctx, fact.KindSwapLong, "", canonical)
 	if err != nil {
 		return fmt.Sprintf("swap facts zero check: long facts query failed (fail-closed): %v", err)

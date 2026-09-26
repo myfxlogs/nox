@@ -28,9 +28,9 @@ func setupGateAlertStore(t *testing.T) *pgstore.Store {
 	}
 	// demo 账户（is_real=false）→ LiveTrade=false 也能通过 LIVE gate
 	if _, err := s.Pool().Exec(ctx,
-		`INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, server, status, is_real)
-		 VALUES ('vA', 1, 'h', 443, 1, 'p', 's', 'connected', false),
-		        ('vB', 1, 'h', 443, 1, 'p', 's', 'connected', false)`); err != nil {
+		`INSERT INTO broker_accounts (venue, venue_type, host, port, password, server, status, is_real)
+		 VALUES ('vA', 'mt5', 'h', 443, 'p', 's', 'connected', false),
+		        ('vB', 'mt5', 'h', 443, 'p', 's', 'connected', false)`); err != nil {
 		t.Fatalf("insert broker_accounts: %v", err)
 	}
 	return s

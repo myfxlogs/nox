@@ -75,7 +75,7 @@ func TestD423_VenueTripleIsolation(t *testing.T) {
 			entry_spread_bps, exit_spread_bps, entry_net_bps, funding_rate_8h, funding_annual_pct,
 			tracking_error_bps, equiv_annual_pct, noise_bps, harvest_floor_bps, cex_venue, mt_venue)
 		VALUES ($1, 'XPTUSDT-XPT', 4000, 4001, 3999, 4000, 7.73, 5, 3, 0.001, 21.9, 1.0, 24.9, 9, 4.73,
-			'binance:perp', '3001157:mt5')`,
+			'binance:perp','3001157:mt5')`,
 		p.OpenedAt.Add(-5*time.Second)); err != nil {
 		t.Fatalf("seed wrong-venue monitor: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestD423_EntryGateFailClosed(t *testing.T) {
 			entry_spread_bps, exit_spread_bps, entry_net_bps, funding_rate_8h, funding_annual_pct,
 			tracking_error_bps, equiv_annual_pct, noise_bps, cex_venue, mt_venue)
 		VALUES ('XAUUSDT-XAU', 4355, 4356, 4354, 4355, 12, 5, 3, 0.001, 21.9, 1.0, 24.9, 9,
-			'okx:perp', '277842155:mt5')`); err != nil {
+			'okx:perp','277842155:mt5')`); err != nil {
 		t.Fatalf("seed wrong-venue: %v", err)
 	}
 	e.handleOpportunity(ctx, opp, newComboAccumulator())

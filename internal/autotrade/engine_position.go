@@ -1,6 +1,7 @@
 package autotrade
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"fmt"
 	"log"
@@ -110,8 +111,8 @@ func (e *Engine) recalcNetSwap(ctx context.Context, p *pgstore.Position) (float6
 	if buyVenue == "" || sellVenue == "" {
 		return 0, false
 	}
-	buyBare := strings.Split(buyVenue, ":")[0]
-	sellBare := strings.Split(sellVenue, ":")[0]
+	buyBare := keydomain.BareOf(buyVenue)
+	sellBare := keydomain.BareOf(sellVenue)
 	// D-180 S2：swapRateFor 三态（settled 优先 → spec 兜底 → none fail-closed）。
 	// 止损用原值（不应用折扣——防误杀存量仓）。
 	longBps, longSrc := e.swapRateFor(ctx, buyBare, canonical, "BUY")
@@ -195,7 +196,7 @@ func (e *Engine) brokerActualNetSwapBps(ctx context.Context, p *pgstore.Position
 		if leg.Phase != "OPEN" {
 			continue
 		}
-		legBare := strings.Split(leg.Venue, ":")[0]
+		legBare := keydomain.BareOf(leg.Venue)
 		// D-190：notional 改 usdnotional.PerLot（USD 统一换算）。
 		price := 0.0
 		if leg.PriceActual != nil {

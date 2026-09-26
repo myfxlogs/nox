@@ -1,6 +1,7 @@
 package exec
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"errors"
 	"fmt"
@@ -28,7 +29,7 @@ func isContextTimeoutErr(err error) bool {
 // （gate quanto/okx ctVal/binance 1.0，缺失 fail-closed——qty 单位断裂曾致名义放大 1/cs 倍）。
 // :spot=基础币、MT=手数，原样不换算。
 func (p *Pipeline) orderQtyFor(leg LegSpec) (float64, error) {
-	if !strings.HasSuffix(leg.VenueKey, ":perp") {
+	if !keydomain.IsType(leg.VenueKey, "perp") {
 		return leg.Qty, nil
 	}
 	if p.csResolver == nil {

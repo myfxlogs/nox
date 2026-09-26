@@ -31,9 +31,9 @@ func setupSwapDeviationStore(t *testing.T, factsSwapBps, actualSwapUSD float64) 
 	}
 	// broker_accounts（demo）
 	if _, err := s.Pool().Exec(ctx,
-		`INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, server, status, is_real)
-		 VALUES ('vA', 1, 'h', 443, 1, 'p', 's', 'connected', false),
-		        ('vB', 1, 'h', 443, 1, 'p', 's', 'connected', false)`); err != nil {
+		`INSERT INTO broker_accounts (venue, venue_type, host, port, password, server, status, is_real)
+		 VALUES ('vA', 'mt5', 'h', 443, 'p', 's', 'connected', false),
+		        ('vB', 'mt5', 'h', 443, 'p', 's', 'connected', false)`); err != nil {
 		t.Fatalf("insert broker_accounts: %v", err)
 	}
 	// 已有 OPEN 持仓（同 venue vA）
@@ -48,9 +48,9 @@ func setupSwapDeviationStore(t *testing.T, factsSwapBps, actualSwapUSD float64) 
 	// legs：BUY vA:mt5 + SELL vB:mt5
 	priceA := 100.0
 	if _, err := s.Pool().Exec(ctx,
-		`INSERT INTO position_legs (position_id, leg_no, phase, venue, account, symbol, side, qty, price_expected, price_actual, status, ts)
-		 VALUES ($1, 0, 'OPEN', 'vA:mt5', 'vA', 'AUDJPY', 'BUY', 0.01, 100, $2, 'FILLED', $3),
-		        ($1, 1, 'OPEN', 'vB:mt5', 'vB', 'AUDJPY', 'SELL', 0.01, 100, $2, 'FILLED', $3)`,
+		`INSERT INTO position_legs (position_id, leg_no, phase, venue, venue_type, symbol, side, qty, price_expected, price_actual, status, ts)
+		 VALUES ($1, 0, 'OPEN', 'vA','mt5', 'AUDJPY', 'BUY', 0.01, 100, $2, 'FILLED', $3),
+		        ($1, 1, 'OPEN', 'vB','mt5', 'AUDJPY', 'SELL', 0.01, 100, $2, 'FILLED', $3)`,
 		posID, priceA, now); err != nil {
 		t.Fatalf("insert legs: %v", err)
 	}
@@ -58,7 +58,7 @@ func setupSwapDeviationStore(t *testing.T, factsSwapBps, actualSwapUSD float64) 
 	// D-189 P0-1：快照 venue 必须是完整 venueKey（与生产写入口径一致，legs.Venue 同口径）。
 	yesterday := now.AddDate(0, 0, -1)
 	if _, err := s.Pool().Exec(ctx,
-		`INSERT INTO position_swap_snapshots (position_id, venue, swap_usd, ts) VALUES ($1, 'vA:mt5', 0, $2), ($1, 'vA:mt5', $3, $4)`,
+		`INSERT INTO position_swap_snapshots (position_id, venue, venue_type, swap_usd, ts) VALUES ($1, 'vA','mt5', 0, $2), ($1, 'vA','mt5', $3, $4)`,
 		posID, yesterday, actualSwapUSD, now); err != nil {
 		t.Fatalf("insert swap snapshots: %v", err)
 	}
@@ -148,9 +148,9 @@ func TestSwapDeviationGate_NoHistory_Pass(t *testing.T) {
 		t.Fatalf("insert autotrade_state: %v", err)
 	}
 	if _, err := s.Pool().Exec(ctx,
-		`INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, server, status, is_real)
-		 VALUES ('vA', 1, 'h', 443, 1, 'p', 's', 'connected', false),
-		        ('vB', 1, 'h', 443, 1, 'p', 's', 'connected', false)`); err != nil {
+		`INSERT INTO broker_accounts (venue, venue_type, host, port, password, server, status, is_real)
+		 VALUES ('vA', 'mt5', 'h', 443, 'p', 's', 'connected', false),
+		        ('vB', 'mt5', 'h', 443, 'p', 's', 'connected', false)`); err != nil {
 		t.Fatalf("insert broker_accounts: %v", err)
 	}
 	// 无 positions → 无历史持仓

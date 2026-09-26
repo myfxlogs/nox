@@ -50,9 +50,9 @@ func d378aDriftPos(t *testing.T, st *pgstore.Store, noise *float64) int64 {
 		t.Fatalf("seed position: %v", err)
 	}
 	if _, err := st.Pool().Exec(ctx,
-		`INSERT INTO position_legs (position_id, leg_no, phase, venue, account, symbol, side, qty, price_expected, price_actual, status)
-		 VALUES ($1,1,'OPEN','277842155:mt5','a','XAUUSD','BUY',1,100,100.053,'FILLED'),
-		        ($1,2,'OPEN','binance:perp','b','PAXGUSDT','SELL',1,100,100.00,'FILLED')`, posID); err != nil {
+		`INSERT INTO position_legs (position_id, leg_no, phase, venue, venue_type, symbol, side, qty, price_expected, price_actual, status)
+		 VALUES ($1,1,'OPEN','277842155','mt5','XAUUSD','BUY',1,100,100.053,'FILLED'),
+		        ($1,2,'OPEN','binance','perp','PAXGUSDT','SELL',1,100,100.00,'FILLED')`, posID); err != nil {
 		t.Fatalf("seed legs: %v", err)
 	}
 	return posID

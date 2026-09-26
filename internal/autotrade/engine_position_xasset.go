@@ -5,9 +5,9 @@
 package autotrade
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"log"
-	"strings"
 	"time"
 
 	"arb/internal/fact"
@@ -65,9 +65,9 @@ func (e *Engine) recalcXAssetNetCarry(ctx context.Context, p *pgstore.Position) 
 // :mt4/:mt5 → swapRateFor（settled/spec/none，spec 源另过 xassetSpecFactFresh）×3.65 年化。
 // 任一源缺/不新鲜/未知 venue 型 → ok=false（fail-closed）。
 func (e *Engine) xassetLegCarryAnnual(ctx context.Context, venueKey, canonical, side string, maxAge time.Duration) (float64, bool) {
-	bare := strings.Split(venueKey, ":")[0]
+	bare := keydomain.BareOf(venueKey)
 	switch {
-	case strings.HasSuffix(venueKey, ":perp"):
+	case keydomain.IsType(venueKey, "perp"):
 		rate, ts, ok := e.fundingRateForVenue(ctx, bare, canonical)
 		if !ok {
 			log.Printf("[autotrade] carry: funding fact missing venue=%s canonical=%s (fail-closed)", bare, canonical)
@@ -82,7 +82,7 @@ func (e *Engine) xassetLegCarryAnnual(ctx context.Context, venueKey, canonical, 
 			return -rate, true
 		}
 		return rate, true
-	case strings.HasSuffix(venueKey, ":mt5"), strings.HasSuffix(venueKey, ":mt4"):
+	case keydomain.IsType(venueKey, "mt5"), keydomain.IsType(venueKey, "mt4"):
 		bps, src := e.swapRateFor(ctx, bare, canonical, side)
 		if src == swapSrcNone {
 			log.Printf("[autotrade] carry: swapRateFor none venue=%s canonical=%s side=%s (fail-closed)", bare, canonical, side)
@@ -146,7 +146,7 @@ func (e *Engine) xassetSellCanonical(ctx context.Context, p *pgstore.Position, l
 	}
 	for i := range legs {
 		if legs[i].Phase == "OPEN" && legs[i].Side != "BUY" {
-			bare := strings.Split(legs[i].Venue, ":")[0]
+			bare := keydomain.BareOf(legs[i].Venue)
 			maps, err := e.store.ListSymbolMappings(ctx, bare)
 			if err != nil {
 				return ""

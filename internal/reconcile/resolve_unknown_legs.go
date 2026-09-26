@@ -12,10 +12,10 @@
 package reconcile
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"fmt"
 	"log"
-	"strings"
 
 	"arb/internal/exec"
 	"arb/internal/store/pgstore"
@@ -256,5 +256,5 @@ func (r *Reconciler) preflightLeggedFailedLegs(ctx context.Context, p *pgstore.P
 
 // isMTVenueKeyR venueKey 尾缀判 MT（exec.isMTVenueKey 未导出，本包局部判据同形）。
 func isMTVenueKeyR(v string) bool {
-	return strings.HasSuffix(v, ":mt5") || strings.HasSuffix(v, ":mt4")
+	return keydomain.IsMTKey(v)
 }

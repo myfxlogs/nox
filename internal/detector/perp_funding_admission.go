@@ -7,6 +7,7 @@
 package detector
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"fmt"
 	"log"
@@ -141,8 +142,8 @@ func (e *PerpFundingAdmissionEvaluator) Evaluate(ctx context.Context) error {
 	}
 	realVenues := make(map[string]bool)
 	for key, v := range realMap {
-		if v != nil && *v && strings.HasSuffix(key, ":perp") {
-			realVenues[strings.TrimSuffix(key, ":perp")] = true
+		if v != nil && *v && keydomain.IsType(key, "perp") {
+			realVenues[keydomain.BareOf(key)] = true
 		}
 	}
 	legStats, err := e.st.FundingWindowLegStats(ctx, since)

@@ -18,7 +18,7 @@ import (
 func d388Seed(t *testing.T, s *pgstore.Store, longStatus, shortStatus string) {
 	t.Helper()
 	ctx := context.Background()
-	for _, q := range []string{`TRUNCATE facts`, `TRUNCATE broker_accounts`} {
+	for _, q := range []string{`TRUNCATE facts`, `TRUNCATE broker_accounts CASCADE`} {
 		if _, err := s.Pool().Exec(ctx, q); err != nil {
 			t.Fatalf("truncate: %v", err)
 		}
@@ -32,8 +32,8 @@ func d388Seed(t *testing.T, s *pgstore.Store, longStatus, shortStatus string) {
 	}
 	for v, st := range map[string]string{"vA": longStatus, "vB": shortStatus} {
 		if _, err := s.Pool().Exec(ctx,
-			`INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, server, status, is_real)
-			 VALUES ($1, 1, 'h', 443, 1, 'p', 's', $2, false)`, v, st); err != nil {
+			`INSERT INTO broker_accounts (venue, venue_type, host, port, password, server, status, is_real)
+			 VALUES ($1, 'mt5', 'h', 443, 'p', 's', $2, false)`, v, st); err != nil {
 			t.Fatalf("seed %s: %v", v, err)
 		}
 	}

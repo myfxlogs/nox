@@ -7,9 +7,9 @@
 package autotrade
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"log"
-	"strings"
 	"time"
 
 	"arb/internal/store/pgstore"
@@ -35,10 +35,10 @@ func (e *Engine) recalcNetFunding(ctx context.Context, p *pgstore.Position) (flo
 	hasPerp := false
 	for i := range legs {
 		leg := legs[i]
-		if leg.Phase != "OPEN" || !strings.HasSuffix(leg.Venue, ":perp") {
+		if leg.Phase != "OPEN" || !keydomain.IsType(leg.Venue, "perp") {
 			continue
 		}
-		bare := strings.Split(leg.Venue, ":")[0]
+		bare := keydomain.BareOf(leg.Venue)
 		rate, ts, ok := e.fundingRateForVenue(ctx, bare, canonical)
 		if !ok {
 			log.Printf("[autotrade] exit pos=%d: funding fact missing venue=%s canonical=%s (fail-closed)", p.ID, bare, canonical)

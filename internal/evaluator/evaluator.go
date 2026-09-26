@@ -3,8 +3,8 @@
 package evaluator
 
 import (
+	"arb/internal/keydomain"
 	"fmt"
-	"strings"
 	"time"
 
 	"arb/internal/detector"
@@ -247,7 +247,7 @@ var cexSlipBpsByVenueCanonical = map[string]float64{
 
 // slipBpsForCEX 返回 CEX 品种的单腿滑点 bps（venue 分级→品种分级→cexSlipDefaultBps）。
 func slipBpsForCEX(venueKey, canonical string) float64 {
-	venue := strings.SplitN(venueKey, ":", 2)[0]
+	venue := keydomain.BareOf(venueKey)
 	if v, ok := cexSlipBpsByVenueCanonical[venue+":"+canonical]; ok {
 		return v
 	}
@@ -260,7 +260,7 @@ func slipBpsForCEX(venueKey, canonical string) float64 {
 // slipForLeg 按腿 venueKey 后缀判定滑点：MT（:mt4/:mt5）→ cfg.SlippageBps；CEX（:perp/:spot 等）→ slipBpsForCEX。
 // 纯 MT 组合两腿均走 cfg.SlippageBps（0.3×2 回归锚，观察期铁证）。
 func slipForLeg(venueKey, canonical string, mtSlipBps float64) float64 {
-	if strings.HasSuffix(venueKey, ":mt4") || strings.HasSuffix(venueKey, ":mt5") {
+	if keydomain.IsMTKey(venueKey) {
 		return mtSlipBps
 	}
 	return slipBpsForCEX(venueKey, canonical)

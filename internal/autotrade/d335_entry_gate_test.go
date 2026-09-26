@@ -36,7 +36,7 @@ func d335SeedMonitor(t *testing.T, s *pgstore.Store, pair string, entry, noise *
 			entry_spread_bps, exit_spread_bps, entry_net_bps, funding_rate_8h, funding_annual_pct,
 			tracking_error_bps, equiv_annual_pct, noise_bps, cex_venue, mt_venue)
 		VALUES ($1, 4355, 4356, 4354, 4355, $2, 5, 3, 0.001, 21.9, 1.0, 24.9, $3,
-			'binance:perp', '277842155:mt5')`, // D-423：venue 键=fixture 机会 venue
+			'binance:perp','277842155:mt5')`, // D-423：venue 键=fixture 机会 venue
 		pair, entry, noise); err != nil {
 		t.Fatalf("seed monitor: %v", err)
 	}

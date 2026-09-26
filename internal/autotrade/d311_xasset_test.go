@@ -256,6 +256,10 @@ func TestD311_XAssetSellCanonical_MapFallback(t *testing.T) {
 	s := testAccumStore(t)
 	d311Truncate(t, s)
 	ctx := context.Background()
+	if _, err := s.Pool().Exec(ctx,
+		`INSERT INTO broker_accounts (venue, venue_type, host, port, password) VALUES ('okx','mt5','h',443,'p') ON CONFLICT (venue) DO NOTHING`); err != nil {
+		t.Fatalf("seed broker: %v", err)
+	}
 	if err := s.UpsertSymbolMapping(ctx, &pgstore.SymbolMapping{
 		Venue: "okx", BrokerSymbol: "XPT-USDT-SWAP", Canonical: "XPTUSDT", Source: "manual",
 	}); err != nil {
@@ -315,8 +319,8 @@ func TestD311_VenueIsRealGate_CEXAndMT(t *testing.T) {
 	ctx := context.Background()
 	// MT demo 账户 + CEX：gate=实盘（simulated=f）、okx=模拟（simulated=t）。
 	if _, err := s.Pool().Exec(ctx,
-		`INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, server, status, is_real)
-		 VALUES ('vD', 1, 'h', 443, 1, 'p', 's', 'connected', false)`); err != nil {
+		`INSERT INTO broker_accounts (venue, venue_type, host, port, password, server, status, is_real)
+		 VALUES ('vD', 'mt5', 'h', 443, 'p', 's', 'connected', false)`); err != nil {
 		t.Fatalf("seed broker: %v", err)
 	}
 	for _, row := range []struct {
@@ -428,7 +432,7 @@ func TestD311_HandleOpportunityXAssetPreIntercept(t *testing.T) {
 			entry_spread_bps, exit_spread_bps, entry_net_bps, funding_rate_8h, funding_annual_pct,
 			tracking_error_bps, equiv_annual_pct, noise_bps, cex_venue, mt_venue)
 		VALUES ('BTCUSDT-WTI', 4355, 4356, 4354, 4355, 12, 5, 3, 0.001, 21.9, 1.0, 24.9, 9,
-			'gate:perp', '3001157:mt5')`); err != nil {
+			'gate:perp','3001157:mt5')`); err != nil {
 		t.Fatalf("seed monitor: %v", err)
 	}
 	e = mkEngine([]exec.XAssetComboAllowSpec{

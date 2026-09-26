@@ -7,9 +7,9 @@ package exec
 // 仅约束收入腿、支出腿豁免），窗口内任一样本破 floor 即拒，样本不足 fail-closed。
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"arb/internal/store/pgstore"
@@ -97,10 +97,10 @@ func CarryFundingRegimeCheck(ctx context.Context, q FundingWindowQuerier, venueB
 		{venueSell, sellSym, +1},
 	}
 	for _, leg := range legs {
-		if !strings.HasSuffix(leg.venueKey, ":perp") {
+		if !keydomain.IsType(leg.venueKey, "perp") {
 			continue // 非 perp 腿无 funding 收益源，不约束（T5）
 		}
-		rows, err := q.FundingPredWindow(ctx, strings.TrimSuffix(leg.venueKey, ":perp"), leg.symbol, now.Add(-cfg.Window))
+		rows, err := q.FundingPredWindow(ctx, keydomain.BareOf(leg.venueKey), leg.symbol, now.Add(-cfg.Window))
 		if err != nil {
 			return false, fmt.Sprintf("%s/%s query: %v (fail-closed)", leg.venueKey, leg.symbol, err)
 		}

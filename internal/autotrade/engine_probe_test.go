@@ -45,8 +45,8 @@ func setupProbeStore(t *testing.T, openedAtDaysAgo int, legs []probeLegSeed, sna
 	}
 	for i, leg := range legs {
 		if _, err := s.Pool().Exec(ctx,
-			`INSERT INTO position_legs (position_id, leg_no, phase, venue, account, symbol, side, qty, price_expected, status)
-			 VALUES ($1, $2, 'OPEN', $3, 'acct', 'AUDJPY', $4, $5, 100, 'FILLED')`,
+			`INSERT INTO position_legs (position_id, leg_no, phase, venue, venue_type, symbol, side, qty, price_expected, status)
+			 VALUES ($1, $2, 'OPEN', split_part($3,':',1), split_part($3,':',2), 'AUDJPY', $4, $5, 100, 'FILLED')`,
 			posID, i, leg.venue, leg.side, leg.qty); err != nil {
 			t.Fatalf("insert position_leg %d: %v", i, err)
 		}
