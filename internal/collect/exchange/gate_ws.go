@@ -32,6 +32,10 @@ const (
 type GateWebSocket struct {
 	cfg    Config
 	dialer websocket.Dialer
+	// D-507：时距字段化（默认=ws_keepalive.go 常量族；测试覆写缩小观察窗）。
+	readIdle         time.Duration
+	pingEvery        time.Duration
+	reconnectBackoff time.Duration
 }
 
 // NewGateWebSocket 创建 Gate WS 采集器。
@@ -40,7 +44,8 @@ func NewGateWebSocket(cfg Config) *GateWebSocket {
 		Proxy:            http.ProxyFromEnvironment,
 		HandshakeTimeout: 10 * time.Second,
 	}
-	return &GateWebSocket{cfg: cfg, dialer: d}
+	return &GateWebSocket{cfg: cfg, dialer: d,
+		readIdle: quoteWSReadIdle, pingEvery: quoteWSPingEvery, reconnectBackoff: quoteWSReconnectBackoff}
 }
 
 // Run 连接 Gate spot + futures WS 并持续推送报价到 publish。阻塞至 ctx 取消。
@@ -84,12 +89,14 @@ func (g *GateWebSocket) subscribeChannel(c *websocket.Conn, channel string, pair
 
 // runLoop 单连接重连循环。
 func (g *GateWebSocket) runLoop(ctx context.Context, url string, channel string, handle func([]byte, func(bus.Quote)), publish func(bus.Quote)) {
+	meter := newReconnectMeter(url, g.cfg.AlertFn)
 	for {
 		if err := g.runOnce(ctx, url, channel, handle, publish); err != nil {
+			meter.record()
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(5 * time.Second):
+			case <-time.After(g.reconnectBackoff):
 				log.Printf("[gate-ws] %s reconnect after error: %v", url, err)
 			}
 		}
@@ -120,10 +127,13 @@ func (g *GateWebSocket) runOnce(ctx context.Context, url string, channel string,
 	if err := subscribeAll(); err != nil {
 		return fmt.Errorf("subscribe: %w", err)
 	}
+	// D-507：读限保活收编——订阅成功后设一次+pong 续期（私有流先例形态）；
+	// 读循环不再逐读设绝对读限（安静行情窗 pong 不触读循环会误断=重连风暴病灶）。
+	wsKeepalive(conn, g.readIdle)
 
 	done := make(chan struct{})
 	safego.Go("gate_ws:ping", func() {
-		ticker := time.NewTicker(20 * time.Second)
+		ticker := time.NewTicker(g.pingEvery)
 		defer ticker.Stop()
 		for {
 			select {
@@ -159,7 +169,6 @@ func (g *GateWebSocket) runOnce(ctx context.Context, url string, channel string,
 		default:
 		}
 
-		conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 		_, data, err := conn.ReadMessage()
 		if err != nil {
 			close(done)

@@ -54,6 +54,8 @@ type Config struct {
 	GateBaseURL    string
 	OKXBaseURL     string
 	Client         *http.Client
+	// AlertFn 可选告警通道（D-507 重连风暴 fail-loud）；nil=静默跳过（测试默认）。
+	AlertFn func(level, msg string)
 }
 
 // DefaultConfig 返回默认配置。

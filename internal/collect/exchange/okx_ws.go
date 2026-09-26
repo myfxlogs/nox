@@ -17,10 +17,18 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// okxPublicWSURL OKX 公共 WS 端点（spot+perp tickers 同连接）。
+const okxPublicWSURL = "wss://ws.okx.com:8443/ws/v5/public"
+
 // OKXWebSocket 订阅 OKX tickers 频道（spot + perp）。
 type OKXWebSocket struct {
 	cfg    Config
 	dialer websocket.Dialer
+	wsURL  string // 默认 okxPublicWSURL；测试覆写指向 fake server
+	// D-507：时距字段化（默认=ws_keepalive.go 常量族；测试覆写缩小观察窗）。
+	readIdle         time.Duration
+	pingEvery        time.Duration
+	reconnectBackoff time.Duration
 }
 
 // NewOKXWebSocket 创建 OKX WS 采集器。
@@ -29,17 +37,20 @@ func NewOKXWebSocket(cfg Config) *OKXWebSocket {
 		Proxy:            http.ProxyFromEnvironment,
 		HandshakeTimeout: 10 * time.Second,
 	}
-	return &OKXWebSocket{cfg: cfg, dialer: d}
+	return &OKXWebSocket{cfg: cfg, dialer: d, wsURL: okxPublicWSURL,
+		readIdle: quoteWSReadIdle, pingEvery: quoteWSPingEvery, reconnectBackoff: quoteWSReconnectBackoff}
 }
 
 // Run 连接 OKX WS 并持续推送报价到 publish 回调。阻塞至 ctx 取消。
 func (o *OKXWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
+	meter := newReconnectMeter(o.wsURL, o.cfg.AlertFn)
 	for {
 		if err := o.runOnce(ctx, publish); err != nil {
+			meter.record()
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(5 * time.Second):
+			case <-time.After(o.reconnectBackoff):
 				log.Printf("[okx-ws] reconnect after error: %v", err)
 			}
 		}
@@ -47,8 +58,7 @@ func (o *OKXWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 }
 
 func (o *OKXWebSocket) runOnce(ctx context.Context, publish func(bus.Quote)) error {
-	url := "wss://ws.okx.com:8443/ws/v5/public"
-	conn, _, err := o.dialer.DialContext(ctx, url, nil)
+	conn, _, err := o.dialer.DialContext(ctx, o.wsURL, nil)
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
 	}
@@ -77,11 +87,14 @@ func (o *OKXWebSocket) runOnce(ctx context.Context, publish func(bus.Quote)) err
 	if err := conn.WriteJSON(sub); err != nil {
 		return fmt.Errorf("subscribe: %w", err)
 	}
+	// D-507：读限保活收编——订阅成功后设一次+pong 续期（私有流先例形态）；
+	// 读循环不再逐读设绝对读限（安静行情窗 pong 不触读循环会误断=重连风暴病灶）。
+	wsKeepalive(conn, o.readIdle)
 
 	// 启动 ping 保活 + 差集增量订阅（provider 符号集变化时；服务端拒则读报错走重连）
 	done := make(chan struct{})
 	safego.Go("okx_ws:ping", func() {
-		ticker := time.NewTicker(20 * time.Second)
+		ticker := time.NewTicker(o.pingEvery)
 		defer ticker.Stop()
 		for {
 			select {
@@ -106,7 +119,6 @@ func (o *OKXWebSocket) runOnce(ctx context.Context, publish func(bus.Quote)) err
 		default:
 		}
 
-		conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 		_, data, err := conn.ReadMessage()
 		if err != nil {
 			close(done)

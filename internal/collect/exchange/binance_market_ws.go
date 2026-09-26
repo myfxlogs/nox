@@ -78,8 +78,10 @@ func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
 
 // runLoop 单连接重连循环（5s 退避，mirror gate_ws.runLoop）。
 func (b *BinanceMarketWS) runLoop(ctx context.Context, url, venueType string, publish func(bus.Quote)) {
+	meter := newReconnectMeter(venueType+":"+url, b.cfg.AlertFn) // D-507 S2 扩：同款风暴告警
 	for {
 		if err := b.runOnce(ctx, url, venueType, publish); err != nil {
+			meter.record()
 			select {
 			case <-ctx.Done():
 				return
