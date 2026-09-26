@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"arb/internal/collect/cnfi"
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 // RankByReturnDesc 按收益率降序名次（并列=先到先得，稳定序；N=参与排名数）。

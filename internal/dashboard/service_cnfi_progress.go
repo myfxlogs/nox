@@ -11,7 +11,7 @@ import (
 
 	"connectrpc.com/connect"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 var cnfiLayers = []string{"liquidity", "coupon", "locked", "opportunity"}

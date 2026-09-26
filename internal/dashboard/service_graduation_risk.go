@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 	"arb/internal/fact"
+	v1 "arb/internal/gen/dashboardv1"
 	"arb/internal/store/pgstore"
 )
 

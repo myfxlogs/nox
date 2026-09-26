@@ -8,7 +8,7 @@ import (
 	"arb/internal/testutil/storetest"
 	"path/filepath"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 	"math"
 	"runtime"
 	"strconv"

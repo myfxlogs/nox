@@ -10,7 +10,7 @@ import (
 	"arb/internal/store/pgstore"
 	"connectrpc.com/connect"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 // TestGetHedgeStructure_VoteAprPassthrough 验证 ④卡片三字段透传：

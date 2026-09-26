@@ -34,7 +34,7 @@ type CexExecutorManager struct {
 	alertFn func(posID *int64, level, msg string)
 	// OrderStatusHook D-421 §1.5：exchange_configs 刷新后镜像订单级查单器集合
 	// → recon.SetOrderStatusQueriers（nil=未接线）。
-	OrderStatusHook func(map[string]exec.OrderStatusQuerier)
+	OrderStatusHook func(map[string]reconcile.OrderStatusQuerier)
 	// OrderCache D-450 S6：私有 WS 订单事件缓存——非 nil 时 osqs 各键包装
 	// CachedOrderStatusQuerier（新鲜事件直返，REST 真相源兜底不拆）。
 	OrderCache *exchange.OrderEventCache
@@ -134,7 +134,7 @@ func (m *CexExecutorManager) sync(ctx context.Context) {
 	// =已注册执行器数，休眠 real 执行器使计数 +1（上限语义非白名单，可接受）。
 	winners := cexKeyWinners(cfgs)
 	seen := make(map[string]bool, len(cfgs))
-	osqs := make(map[string]exec.OrderStatusQuerier, len(cfgs)) // D-421 §1.5
+	osqs := make(map[string]reconcile.OrderStatusQuerier, len(cfgs)) // D-421 §1.5
 	for i := range cfgs {
 		c := &cfgs[i]
 		base := resolveExchangeBaseURL(*c)

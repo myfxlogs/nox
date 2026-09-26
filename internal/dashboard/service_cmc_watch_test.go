@@ -15,7 +15,7 @@ import (
 	"arb/internal/collect/cmc"
 	"arb/internal/store/pgstore"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 // TestCMCWatchTopicPublishSubscribe D-234：cmcWatchTopic Publish → 订阅者收到 *CMCWatchUpdate（case 13 数据源）。

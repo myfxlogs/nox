@@ -9,7 +9,7 @@ import (
 
 	"arb/internal/testutil/storetest"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 // P3 四层进度与录入校验（DSN 门控 D-207；金额为合成测试值，非个人数据）。

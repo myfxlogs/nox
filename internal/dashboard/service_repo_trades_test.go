@@ -10,7 +10,7 @@ import (
 
 	"arb/internal/testutil/storetest"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 // repoTradesSvcTest 连接 ARB_TEST_PG_DSN，构造 Service + 清表。

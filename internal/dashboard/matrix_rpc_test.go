@@ -3,7 +3,7 @@ package dashboard
 import (
 	"testing"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 	"arb/internal/store/pgstore"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )

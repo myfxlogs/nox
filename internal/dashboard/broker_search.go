@@ -10,7 +10,7 @@ import (
 
 	"arb/internal/adapter/gen/mtapi/mt5"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 	"connectrpc.com/connect"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"

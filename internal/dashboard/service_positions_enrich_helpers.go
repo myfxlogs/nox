@@ -10,7 +10,7 @@ import (
 	spreadpkg "arb/internal/spread"
 	"arb/internal/store/pgstore"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 // holdDaysToNow (now − opened_at)/24h；opened_at NULL → min(OPEN FILLED 腿 ts)。

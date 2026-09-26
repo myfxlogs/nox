@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 	"arb/internal/exec"
+	v1 "arb/internal/gen/dashboardv1"
 	"arb/internal/keydomain"
 	"arb/internal/scan"
 	"arb/internal/store/pgstore"

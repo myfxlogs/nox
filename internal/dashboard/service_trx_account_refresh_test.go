@@ -14,7 +14,7 @@ import (
 
 	"connectrpc.com/connect"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 // TestD254_TrxAccountRefresh_DoubleKickAndReturn 验证 handler 双踢 trx_account+trx_apr 后返回最新 fin_trx_account 全字段。

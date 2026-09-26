@@ -7,7 +7,7 @@ import (
 	"math"
 	"testing"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 // TestAnnotateCEXSwapWithMap_CEXAggregated CEX 仓 position_id>0 + cashflow map 有值 → swap 被覆盖。

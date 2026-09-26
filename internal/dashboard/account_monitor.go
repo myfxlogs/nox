@@ -17,7 +17,7 @@ import (
 	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 // acctVenueState 单个账户查询源的状态（在线 + 最近成功快照）。

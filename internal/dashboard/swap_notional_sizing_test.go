@@ -11,7 +11,7 @@ import (
 	"arb/internal/exec"
 	"arb/internal/reconcile"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 // TestSwapArbNotionalSizing D-097 R2 表驱动四 case：

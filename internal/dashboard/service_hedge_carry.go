@@ -5,7 +5,7 @@ import (
 	"context"
 	"time"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 // computeHedgeCarry 计算 carry 统计（近 7 日 + 累计 + 年化）。

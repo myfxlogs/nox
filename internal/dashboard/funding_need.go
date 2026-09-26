@@ -1,28 +1,16 @@
 package dashboard
 
 import (
-	"time"
-
 	"arb/internal/bus"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// FundingNeedNotice 资金注入提醒事件（D-072）：swap 套利余额不足时发布 → StreamUpdates case 10 → 前端弹窗。
-// 不入 alerts 表、不走 alertPaused；断线错过不回放（实时弹窗语义）。
-// D-154 返修②：AliasLong/AliasShort 由 engine aliasOrKey 填充（后端权威直给，前端零拼 map）。
-type FundingNeedNotice struct {
-	Canonical  string
-	VenueLong  string
-	VenueShort string
-	Reason     string  // SwapArbNotional 返回的 reason（含具体数值）
-	NeedUSD    float64 // minNotional − min(equity)；非余额原因（venue 离线/币种不符）= 0
-	Ts         time.Time
-	AliasLong  string // 买腿别名（aliasOrKey 填充，空=无别名）
-	AliasShort string // 卖腿别名（aliasOrKey 填充，空=无别名）
-}
+// FundingNeedNotice 已迁 internal/bus（D-508 S7b：autotrade 窄接口解逆向依赖，
+// 事件类型居中立叶子包；别名填充语义不变——D-154 返修② aliasOrKey 后端权威）。
+type FundingNeedNotice = bus.FundingNeedNotice // 别名兼容存量引用面
 
 // SetFundingNeedTopic 注入资金注入提醒广播 topic（D-072）。main 创建后注入；nil = 未接线（测试直接构造 Service）。
 func (s *Service) SetFundingNeedTopic(t *bus.Topic[FundingNeedNotice]) {

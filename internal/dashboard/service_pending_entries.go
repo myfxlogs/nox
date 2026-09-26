@@ -16,7 +16,7 @@ import (
 	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 	"connectrpc.com/connect"
 )
 

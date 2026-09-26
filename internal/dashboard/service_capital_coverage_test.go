@@ -12,7 +12,7 @@ import (
 	"arb/internal/bus"
 	"arb/internal/store/pgstore"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 // covTestStore 覆盖率测试夹具库：TRUNCATE 本包触面全部源表（其余测试同库隔离）。

@@ -13,7 +13,7 @@ import (
 	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 // fakeAccountQuerier 受控账户查询器（D-053 monitor 测试）：acct/err 可随时切换。

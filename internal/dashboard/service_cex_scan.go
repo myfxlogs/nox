@@ -10,7 +10,7 @@ import (
 
 	"connectrpc.com/connect"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 // GetCexScanSnapshot 返回 CEX 只读扫描器快照（理财 APR + 跨所价差 + funding + 余额）。

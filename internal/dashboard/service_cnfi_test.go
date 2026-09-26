@@ -9,7 +9,7 @@ import (
 
 	"arb/internal/testutil/storetest"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 // DSN 门控（D-207）；哨兵日期 2098/2099 避免与真实/回填数据撞车（共享库 B-1 债）。

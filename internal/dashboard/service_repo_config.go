@@ -9,7 +9,7 @@ import (
 
 	"connectrpc.com/connect"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 // GetRepoConfig 读逆回购提醒配置（DB cnfi_repo_config id=1）。

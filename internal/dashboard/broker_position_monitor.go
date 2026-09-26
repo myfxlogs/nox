@@ -13,7 +13,7 @@ import (
 	"arb/internal/collect/exchange"
 	"arb/internal/reconcile"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 // venueState 单个 venue 的持仓视图状态（在线 + 最近成功快照）。

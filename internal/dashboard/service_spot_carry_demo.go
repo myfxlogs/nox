@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 	"arb/internal/exec"
+	v1 "arb/internal/gen/dashboardv1"
 	"arb/internal/httpx"
 	"arb/internal/store/pgstore"
 

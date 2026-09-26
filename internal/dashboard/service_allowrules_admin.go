@@ -15,7 +15,7 @@ import (
 
 	"connectrpc.com/connect"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 // D-492 value 硬校验（venue_key 全形唯一口径，禁裸 venue——KB swap-snapshot-venuekey-mismatch）：

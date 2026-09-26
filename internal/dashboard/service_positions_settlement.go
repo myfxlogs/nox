@@ -6,7 +6,7 @@ import (
 
 	"arb/internal/store/pgstore"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 // enrichSettlements D-106：批量 join position_settlements 填充 Position 的

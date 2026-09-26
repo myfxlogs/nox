@@ -9,7 +9,7 @@ import (
 	"arb/internal/reconcile"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 // accountToProto 账户视图 → proto（D-053）。

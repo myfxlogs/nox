@@ -15,7 +15,7 @@ import (
 
 	"connectrpc.com/connect"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 func settleRefSetup(t *testing.T) (*Service, *pgstore.Store) {

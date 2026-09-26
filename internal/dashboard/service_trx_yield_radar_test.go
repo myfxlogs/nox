@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
-	"arb/internal/dashboard/gen/arb/dashboard/v1/dashboardv1connect"
+	v1 "arb/internal/gen/dashboardv1"
+	"arb/internal/gen/dashboardv1/dashboardv1connect"
 
 	"arb/internal/bus"
 	"arb/internal/store/pgstore"

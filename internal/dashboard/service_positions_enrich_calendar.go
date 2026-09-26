@@ -10,7 +10,7 @@ import (
 	"arb/internal/fact"
 	"arb/internal/store/pgstore"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 // prefetchTripleSwapDays D-118：从活跃持仓的 OPEN legs 提取 venue 列表，批量查 facts 表 triple_swap_day。
