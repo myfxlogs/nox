@@ -588,6 +588,7 @@ message ExecuteOpportunityResponse {
 
 message ClosePositionRequest {
   int64 position_id = 1;
+  bool force = 2;              // D-495：显式逃逸门——腿无可交易行情时仍强制平仓（默认 false）
 }
 
 message ClosePositionResponse {
