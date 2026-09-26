@@ -7,6 +7,8 @@ package exchange
 
 import (
 	"fmt"
+	"sort"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -36,6 +38,7 @@ type reconnectMeter struct {
 	now        func() time.Time
 	reconnects []time.Time
 	lastWarn   time.Time
+	totalCount int64 // D-512 T4：累计重连（registry 透出用，与滑窗计数分离）
 }
 
 const (
@@ -45,8 +48,13 @@ const (
 )
 
 func newReconnectMeter(url string, alertFn func(level, msg string)) *reconnectMeter {
-	return &reconnectMeter{url: url, alertFn: alertFn, now: time.Now}
+	m := &reconnectMeter{url: url, alertFn: alertFn, now: time.Now}
+	registerMeter(m) // D-512 T4：构造时自注册 registry
+	return m
 }
+
+// totalReconns 累计重连数（registry 快照用）。
+func (m *reconnectMeter) totalReconns() int64 { return m.totalCount }
 
 // record 记一次重连事件；滑窗计数达阈即发 warn（rewarn 间隔内不重复）。
 func (m *reconnectMeter) record() {
@@ -68,4 +76,43 @@ func (m *reconnectMeter) record() {
 		m.alertFn("warn", fmt.Sprintf("[ws-storm] %s 1小时内重连≥%d次（读限/pong/链路异常）", m.url, reconnectMeterThreshold))
 		m.lastWarn = now
 	}
+	m.totalCount++
+
+}
+
+// ===== D-512 T4：meter 注册面（自建轻量 registry）=====
+// Claude 会签①：D-507 实况无 registry——meter 为 runLoop 局部实例。本节补构造时
+// 自注册的包级 registry + SnapshotReconnects() 聚合口（观测透出用，只读）。
+
+// ReconnectSnapshot 单 WS 源重连计量快照（url/累计重连/末次警告）。
+type ReconnectSnapshot struct {
+	URL          string
+	TotalReconns int64
+	LastWarn     time.Time // 零值=从未达风暴阈
+}
+
+var (
+	meterRegMu    sync.Mutex
+	meterRegistry = map[string]*reconnectMeter{} // url → meter（构造时自注册）
+)
+
+// registerMeter 构造时自注册（newReconnectMeter 调用；同 url 复用实例防重复计数）。
+func registerMeter(m *reconnectMeter) {
+	meterRegMu.Lock()
+	if _, ok := meterRegistry[m.url]; !ok {
+		meterRegistry[m.url] = m
+	}
+	meterRegMu.Unlock()
+}
+
+// SnapshotReconnects 全源重连计量快照（dashboard 取数渲染；只读聚合）。
+func SnapshotReconnects() []ReconnectSnapshot {
+	meterRegMu.Lock()
+	defer meterRegMu.Unlock()
+	out := make([]ReconnectSnapshot, 0, len(meterRegistry))
+	for _, m := range meterRegistry {
+		out = append(out, ReconnectSnapshot{URL: m.url, TotalReconns: m.totalReconns(), LastWarn: m.lastWarn})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].URL < out[j].URL })
+	return out
 }
