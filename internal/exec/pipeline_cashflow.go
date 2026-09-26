@@ -9,6 +9,7 @@ import (
 	"log"
 	"time"
 
+	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 )
 
@@ -99,17 +100,15 @@ func (p *Pipeline) insertCashflowIdempotent(ctx context.Context, posID int64, le
 // venue 格式如 "52993526:mt5" → 52993526；解析失败→nil（不猜）。
 func parseVenueAccountIDExec(venue string) *int64 {
 	// 复用 swapledger 同逻辑；独立函数避免跨包依赖。
-	for i := 0; i < len(venue); i++ {
-		if venue[i] == ':' {
-			var id int64
-			_, err := fmt.Sscanf(venue[:i], "%d", &id)
-			if err != nil {
-				return nil
-			}
-			return &id
-		}
+	k := keydomain.Parse(venue)
+	if k.Type == "" {
+		return nil
 	}
-	return nil
+	var id int64
+	if _, err := fmt.Sscanf(k.Venue, "%d", &id); err != nil {
+		return nil
+	}
+	return &id
 }
 
 // cashflowWriterOrStore 返回 cashflowWriter seam（D-189 P0-2），nil 时回退 p.store（零值 Pipeline 安全）。

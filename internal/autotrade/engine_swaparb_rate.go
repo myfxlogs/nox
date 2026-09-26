@@ -7,7 +7,6 @@ import (
 	"context"
 	"log"
 	"sort"
-	"strings"
 	"time"
 
 	"arb/internal/fact"
@@ -173,10 +172,7 @@ func swapSrcDiscount(netBps float64, source string, discount float64) float64 {
 // swapSrcFromVenueKey 提取 bare venue（venueKey="venue:mt5" → "venue"）。
 // 共用 helper（discoverSwapCombos/recalcNetSwap 调用 swapRateFor 时用）。
 func swapSrcFromVenueKey(venueKey string) string {
-	if idx := strings.Index(venueKey, ":"); idx > 0 {
-		return venueKey[:idx]
-	}
-	return venueKey
+	return keydomain.BareOf(venueKey)
 }
 
 // nonSettleBareVenues D-256-A S1：lazy 构建 non-settle venue 的 bare 集合（sync.Once 一次）。

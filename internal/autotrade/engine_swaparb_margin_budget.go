@@ -6,10 +6,10 @@ package autotrade
 // 无限杠杆（2e9 哨兵）→ 保证金≈0，不告警。
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"fmt"
 	"math"
-	"strings"
 	"time"
 )
 
@@ -24,10 +24,7 @@ func (e *Engine) aliasOrKey(venueKey string) string {
 	if err != nil {
 		return venueKey
 	}
-	venue := venueKey
-	if idx := strings.Index(venueKey, ":"); idx > 0 {
-		venue = venueKey[:idx]
-	}
+	venue := keydomain.BareOf(venueKey)
 	if a, ok := aliasMap[venue]; ok && a != "" {
 		return a
 	}

@@ -4,8 +4,8 @@ package autotrade
 // 独立文件避免 engine_swaparb.go 超 300 行。
 
 import (
+	"arb/internal/keydomain"
 	"context"
-	"strings"
 )
 
 // SwapComboPublic D-140 S3：公开 swap 组合条目（供 dashboard RPC 展示，无内部字段）。
@@ -45,9 +45,6 @@ func (e *Engine) DiscoverSwapCombosPublic(ctx context.Context) []SwapComboPublic
 // aliasForVenueKey D-144 ③：从 venueKey="{venue}:{src}" 提取 venue 查 alias。
 // venueKey 无冒号 → 整串当 venue 查；alias 空 → 返回空（前端回退 venueKey）。
 func aliasForVenueKey(aliasMap map[string]string, venueKey string) string {
-	venue := venueKey
-	if idx := strings.Index(venueKey, ":"); idx > 0 {
-		venue = venueKey[:idx]
-	}
+	venue := keydomain.BareOf(venueKey)
 	return aliasMap[venue]
 }
