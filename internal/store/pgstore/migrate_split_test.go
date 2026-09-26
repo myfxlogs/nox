@@ -1,38 +1,48 @@
 package pgstore
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
 
-// TestSplitStatements（D-072 复审补充）：0034 起 migration 含 DO $$ ... $$ 块，
-// 块内分号不得分割（施工期扩展 splitStatements 的回归保护）。
-func TestSplitStatements(t *testing.T) {
-	sql := `CREATE TABLE a (id int);
+// TestMigration_MultiStmtAndDOBlock（D-508 S6 改造）：分割器拆除后，pgx simple
+// protocol 整批执行仍须正确处理含 `;` 的 `--` 注释、'...' 字符串与 DO $$ 块——
+// 解析责任移交 PostgreSQL 本体（比自研分割器更正确），本测试钉死回归面。
+func TestMigration_MultiStmtAndDOBlock(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			version     INTEGER PRIMARY KEY,
+			applied_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+		)`); err != nil {
+		t.Fatalf("schema_migrations: %v", err)
+	}
+	sql := `-- 注释内含分号;不得截断
+CREATE TABLE IF NOT EXISTS d508_split_probe (id int, note text);
+INSERT INTO d508_split_probe (id, note) VALUES (1, 'semi;colon');
 DO $$ DECLARE c text; BEGIN
-  FOR c IN SELECT conname FROM pg_constraint LOOP
-    EXECUTE format('ALTER TABLE a DROP CONSTRAINT %I', c); END LOOP;
+  FOR c IN SELECT conname FROM pg_constraint WHERE conrelid='d508_split_probe'::regclass LOOP
+    EXECUTE format('x;%s', c);
+  END LOOP;
 END $$;
-INSERT INTO a VALUES (1)`
-	stmts := splitStatements(sql)
-	if len(stmts) != 3 {
-		t.Fatalf("want 3 statements, got %d: %q", len(stmts), stmts)
+UPDATE d508_split_probe SET note='done' WHERE id=1;`
+	if err := s.applyMigrationTx(ctx, 99991, sql); err != nil {
+		t.Fatalf("多语句+DO$$ 迁移应整体成功: %v", err)
 	}
-	if !strings.HasPrefix(strings.TrimSpace(stmts[1]), "DO $$") {
-		t.Errorf("stmt[1] should be the DO block, got %q", stmts[1])
+	t.Cleanup(func() {
+		_, _ = s.pool.Exec(context.Background(), `DROP TABLE IF EXISTS d508_split_probe`)
+	})
+	var note string
+	if err := s.pool.QueryRow(ctx, `SELECT note FROM d508_split_probe WHERE id=1`).Scan(&note); err != nil || note != "done" {
+		t.Fatalf("尾语句未生效: note=%q err=%v", note, err)
 	}
-	if !strings.Contains(stmts[1], "END LOOP") {
-		t.Errorf("DO block body was split (internal semicolons leaked): %q", stmts[1])
+	var recorded bool
+	if err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=99991)`).Scan(&recorded); err != nil || !recorded {
+		t.Fatalf("版本未记录: %v", err)
 	}
-}
-
-// TestSplitStatementsPlain 既有无块迁移不受影响（分号分割 + 尾部无分号语句保留）。
-func TestSplitStatementsPlain(t *testing.T) {
-	stmts := splitStatements("UPDATE a SET x=1;\nUPDATE b SET y=2")
-	if len(stmts) != 2 {
-		t.Fatalf("want 2 statements, got %d: %q", len(stmts), stmts)
-	}
-	if strings.TrimSpace(stmts[0]) != "UPDATE a SET x=1" {
-		t.Errorf("stmt[0] mismatch: %q", stmts[0])
+	if !strings.Contains(sql, "DO $$") {
+		t.Fatal("fixture 自检")
 	}
 }
