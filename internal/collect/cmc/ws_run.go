@@ -59,7 +59,7 @@ func (w *WsClient) runOnce(ctx context.Context) error {
 	// 4. heartbeat goroutine
 	done := make(chan struct{})
 	defer close(done)
-	go func() {
+	safego.Go("cmc-ws:heartbeat", func() {
 		ticker := time.NewTicker(wsHeartbeatInterval)
 		defer ticker.Stop()
 		for {
@@ -73,7 +73,7 @@ func (w *WsClient) runOnce(ctx context.Context) error {
 				}
 			}
 		}
-	}()
+	})
 	// 5. D-225 v2.1：5s 首帧兜底定时器
 	safego.Go("cmc-ws:seedFallback", func() {
 		select {
