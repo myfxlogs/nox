@@ -16,6 +16,7 @@ package exec
 // binance /api/v3/ticker/price → price；gate /api/v4/spot/tickers?currency_pair → last。
 
 import (
+	"arb/internal/signutil"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -191,7 +192,7 @@ func (e *CEXExecutor) spotQuoteAvail(ctx context.Context, quote string) (float64
 		headers := http.Header{
 			"KEY":       {e.apiKey},
 			"Timestamp": {strconv.FormatInt(ts, 10)},
-			"SIGN":      {GateSign(e.apiSecret, "GET", urlPath, "currency="+url.QueryEscape(quote), "", ts)},
+			"SIGN":      {signutil.GateSign(e.apiSecret, "GET", urlPath, "currency="+url.QueryEscape(quote), "", ts)},
 		}
 		body, err := e.get(ctx, e.baseURL+endpoint, headers)
 		if err != nil {

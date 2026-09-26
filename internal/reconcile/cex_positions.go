@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/exec"
+	"arb/internal/signutil"
 )
 
 // === OKX ===
@@ -113,7 +113,7 @@ func (q *CEXPositionQuerier) gatePositions(ctx context.Context) ([]VenueOrder, e
 	const endpoint = "/futures/usdt/positions"
 	urlPath := "/api/v4" + endpoint
 	ts := time.Now().Unix()
-	sign := exec.GateSign(q.apiSecret, "GET", urlPath, "", "", ts)
+	sign := signutil.GateSign(q.apiSecret, "GET", urlPath, "", "", ts)
 	headers := http.Header{
 		"KEY":       {q.apiKey},
 		"Timestamp": {strconv.FormatInt(ts, 10)},

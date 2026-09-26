@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 // post 发起 POST 并读回 body（非 200 → 错误带响应体；binance sapi 类 POST+query 签名端点用）。

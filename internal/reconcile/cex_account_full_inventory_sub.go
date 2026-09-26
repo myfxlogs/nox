@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 // fullInventoryBinanceFunding binance 资金钱包盘点：POST /sapi/v1/asset/get-funding-asset

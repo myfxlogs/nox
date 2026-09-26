@@ -6,7 +6,6 @@ import (
 	"errors"
 	"testing"
 
-	"arb/internal/exec"
 	"arb/internal/store/pgstore"
 )
 
@@ -99,7 +98,7 @@ func d421SeedUnknown() (*fakeStore, *pgstore.Position, *pgstore.PositionLeg) {
 func TestD421ResolveUnknownLegFilled(t *testing.T) {
 	fs, _, leg := d421SeedUnknown()
 	r := New(fs)
-	r.SetOrderStatusQueriers(map[string]exec.OrderStatusQuerier{
+	r.SetOrderStatusQueriers(map[string]OrderStatusQuerier{
 		"okx:perp": &d421OSQ{state: "filled", qty: 0.1, px: 3000, fee: 0.05},
 	})
 	r.resolveUnknownLegs(context.Background())
@@ -120,7 +119,7 @@ func TestD421ResolveUnknownLegFilled(t *testing.T) {
 func TestD421ResolveUnknownLegCanceled(t *testing.T) {
 	fs, _, leg := d421SeedUnknown()
 	r := New(fs)
-	r.SetOrderStatusQueriers(map[string]exec.OrderStatusQuerier{
+	r.SetOrderStatusQueriers(map[string]OrderStatusQuerier{
 		"okx:perp": &d421OSQ{state: "canceled", qty: 0},
 	})
 	r.resolveUnknownLegs(context.Background())
@@ -137,7 +136,7 @@ func TestD421ResolveUnknownLegCanceled(t *testing.T) {
 func TestD421ResolveUnknownLegStuckCritical(t *testing.T) {
 	fs, _, leg := d421SeedUnknown()
 	r := New(fs)
-	r.SetOrderStatusQueriers(map[string]exec.OrderStatusQuerier{
+	r.SetOrderStatusQueriers(map[string]OrderStatusQuerier{
 		"okx:perp": &d421OSQ{state: "live"},
 	})
 	for range 10 {
@@ -220,7 +219,7 @@ func TestD421LeggedPreflightFilledAborts(t *testing.T) {
 	fs, c := d421SeedLegged("FAILED")
 	r := New(fs)
 	r.SetCloser(c)
-	r.SetOrderStatusQueriers(map[string]exec.OrderStatusQuerier{
+	r.SetOrderStatusQueriers(map[string]OrderStatusQuerier{
 		"okx:perp": &d421OSQ{state: "filled", qty: 0.1, px: 3000},
 	})
 	r.fastRetryLegged(context.Background(), fs.positions[3])
@@ -242,7 +241,7 @@ func TestD421LeggedPreflightCanceledPartialAborts(t *testing.T) {
 	fs, c := d421SeedLegged("FAILED")
 	r := New(fs)
 	r.SetCloser(c)
-	r.SetOrderStatusQueriers(map[string]exec.OrderStatusQuerier{
+	r.SetOrderStatusQueriers(map[string]OrderStatusQuerier{
 		"okx:perp": &d421OSQ{state: "canceled", qty: 0.05, px: 2990},
 	})
 	r.fastRetryLegged(context.Background(), fs.positions[3])
@@ -264,7 +263,7 @@ func TestD421LeggedPreflightEmptyContinues(t *testing.T) {
 	fs, c := d421SeedLegged("FAILED")
 	r := New(fs)
 	r.SetCloser(c)
-	r.SetOrderStatusQueriers(map[string]exec.OrderStatusQuerier{
+	r.SetOrderStatusQueriers(map[string]OrderStatusQuerier{
 		"okx:perp": &d421OSQ{state: "canceled", qty: 0},
 	})
 	r.fastRetryLegged(context.Background(), fs.positions[3])
@@ -278,7 +277,7 @@ func TestD421LeggedPreflightErrFailsClosed(t *testing.T) {
 	fs, c := d421SeedLegged("FAILED")
 	r := New(fs)
 	r.SetCloser(c)
-	r.SetOrderStatusQueriers(map[string]exec.OrderStatusQuerier{
+	r.SetOrderStatusQueriers(map[string]OrderStatusQuerier{
 		"okx:perp": &d421OSQ{err: errors.New("net err")},
 	})
 	r.fastRetryLegged(context.Background(), fs.positions[3])

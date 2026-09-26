@@ -9,8 +9,8 @@ import (
 	"time"
 
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 	"arb/internal/exec"
+	v1 "arb/internal/gen/dashboardv1"
 	"arb/internal/store/pgstore"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/timestamppb"

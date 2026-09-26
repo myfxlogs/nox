@@ -1,12 +1,11 @@
 package autotrade
 
 import (
+	"arb/internal/bus"
 	"context"
 	"fmt"
 	"log"
 	"time"
-
-	"arb/internal/dashboard"
 )
 
 // maybePublishFundingNeed 发布资金注入提醒（D-072）：每日每组合至多 1 条（内存节流）。
@@ -29,7 +28,7 @@ func (e *Engine) maybePublishFundingNeed(canonical, venueLong, venueShort, reaso
 		return
 	}
 	needUSD, _ := e.service.SwapArbFundingNeedUSD(canonical, venueLong, venueShort)
-	e.service.PublishFundingNeed(dashboard.FundingNeedNotice{
+	e.service.PublishFundingNeed(bus.FundingNeedNotice{
 		Canonical:  canonical,
 		VenueLong:  venueLong,
 		VenueShort: venueShort,

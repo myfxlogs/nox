@@ -17,21 +17,27 @@ import (
 	"fmt"
 	"log"
 
-	"arb/internal/exec"
 	"arb/internal/store/pgstore"
 )
 
 // unknownMaxRounds 消解累计上限（≥10 轮不可判→critical 留人工，SSOT §1.5）。
 const unknownMaxRounds = 10
 
+// OrderStatusQuerier D-421 §1.5 + D-508 S7c：订单级查单接口定义下沉消费方
+// （exec.CEXExecutor/exchange.CachedOrderStatusQuerier 结构满足，正向注入）。
+// state 归一值：filled / partial / canceled / live；accFillQty 已转基础币。
+type OrderStatusQuerier interface {
+	QueryOrderStatus(ctx context.Context, orderID, clOrdID, symbol string) (state string, accFillQty, avgPx, feeUSD float64, err error)
+}
+
 // SetOrderStatusQueriers 注册 CEX 订单级查单器集合（venueKey→querier，镜像 SetCEXQueriers）。
-func (r *Reconciler) SetOrderStatusQueriers(qs map[string]exec.OrderStatusQuerier) {
+func (r *Reconciler) SetOrderStatusQueriers(qs map[string]OrderStatusQuerier) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.orderStatusQs = qs
 }
 
-func (r *Reconciler) orderStatusQuerier(venueKey string) exec.OrderStatusQuerier {
+func (r *Reconciler) orderStatusQuerier(venueKey string) OrderStatusQuerier {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.orderStatusQs[venueKey]

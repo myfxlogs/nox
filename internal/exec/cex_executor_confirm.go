@@ -13,14 +13,10 @@ import (
 // fillConfirmMaxWait 成交确认轮询总窗（D-421 ≥3s；起步 100ms 指数退避）。
 const fillConfirmMaxWait = 3 * time.Second
 
-// OrderStatusQuerier D-421 §1.5：按订单查证 venue 订单终态（消解器+收编前置守卫用）。
-// 订单级查询（ordId/clOrdId），与持仓级匹配严格分层（KB cex-position-order-identity-mismatch）。
+// QueryOrderStatus CEXExecutor 订单级查单实现（D-421 §1.5；okx/binance perp+spot）。
+// 接口定义已下沉消费方（D-508 S7c）：reconcile.OrderStatusQuerier / exchange.OrderStatusQuerier。
 // state 归一值：filled / partial / canceled / live；accFillQty 已转基础币。
-type OrderStatusQuerier interface {
-	QueryOrderStatus(ctx context.Context, orderID, clOrdID, symbol string) (state string, accFillQty, avgPx, feeUSD float64, err error)
-}
-
-// QueryOrderStatus CEXExecutor 实现 OrderStatusQuerier（okx/binance perp+spot）。
+// 订单级查询（ordId/clOrdId），与持仓级匹配严格分层（KB cex-position-order-identity-mismatch）。
 func (e *CEXExecutor) QueryOrderStatus(ctx context.Context, orderID, clOrdID, symbol string) (string, float64, float64, float64, error) {
 	switch e.venue {
 	case "okx":

@@ -4,12 +4,11 @@ import (
 	"time"
 
 	"arb/internal/bus"
-	"arb/internal/dashboard"
 	"arb/internal/store/pgstore"
 )
 
 // New 创建自动交易引擎（从 engine.go 提取避免超 300 行）。
-func New(cfg Config, store *pgstore.Store, service *dashboard.Service, oppTopic *bus.Topic[pgstore.Opportunity], quotes *bus.QuoteBus) *Engine {
+func New(cfg Config, store *pgstore.Store, service engineService, oppTopic *bus.Topic[pgstore.Opportunity], quotes *bus.QuoteBus) *Engine {
 	cp := NewControlPlane(store)
 	cp.SetLiveGateChecker(cfg.LiveGateChecker) // D-195-C1：LIVE 导出门注入（nil 安全）
 	e := &Engine{

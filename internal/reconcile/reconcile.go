@@ -8,8 +8,6 @@ import (
 	"log"
 	"sync"
 	"time"
-
-	"arb/internal/exec"
 )
 
 // Reconciler 对账器：比对本地 OPEN legs 与 venue 实际持仓。
@@ -35,7 +33,7 @@ type Reconciler struct {
 	queriers        []VenueQuerier
 	historyQueriers []OrderHistoryQuerier
 	// D-421 §1.5：CEX 订单级查单器（消解器+收编前置守卫；venueKey→querier）。
-	orderStatusQs map[string]exec.OrderStatusQuerier
+	orderStatusQs map[string]OrderStatusQuerier
 	// D-421：消解不可判轮次计数（posID 粒度，消解/人工后清）。
 	unknownRounds map[int64]int
 	closer        Closer

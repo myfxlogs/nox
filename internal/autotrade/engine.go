@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"arb/internal/bus"
-	"arb/internal/dashboard"
 	"arb/internal/exec"
 	"arb/internal/safego"
 	"arb/internal/settlement"
@@ -36,7 +35,7 @@ type Engine struct {
 	// D-475a S2：fin_venue_symbol_flags 执行层投影（同 allowRules 原子快照模式；
 	// nil=空集放行——旗标缺席=无风险信号，与 allowRules 空集全拒故意不对称）。
 	flags    atomic.Pointer[flagSnapshot]
-	service  *dashboard.Service
+	service  engineService // D-508 S7b：窄接口注入，解 *dashboard.Service 逆向绑定
 	oppTopic *bus.Topic[pgstore.Opportunity]
 	quotes   *bus.QuoteBus // 实时报价（D-070 均值回归平仓用）
 	gate     *Gate         // 统一开仓门禁（D-072）

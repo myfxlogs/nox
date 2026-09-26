@@ -1,6 +1,7 @@
 package exec
 
 import (
+	"arb/internal/signutil"
 	"context"
 	"crypto/hmac"
 	"crypto/sha512"
@@ -35,9 +36,10 @@ func TestGateSignKnownVector(t *testing.T) {
 		body   = `{"contract":"BTC_USDT","size":1,"price":"0","tif":"ioc","text":"t-arb"}`
 		ts     = int64(1724476800)
 	)
-	got := GateSign(secret, method, url, query, body, ts)
+	got := signutil.GateSign(secret, method, url, query, body, ts)
 	// 独立手算预期值（与 GateSign 实现无关，防实现回归）
-	payloadHash := hexSHA512(body)
+	sum := sha512.Sum512([]byte(body))
+	payloadHash := hex.EncodeToString(sum[:])
 	signString := method + "\n" + url + "\n" + query + "\n" + payloadHash + "\n" + "1724476800"
 	mac := hmac.New(sha512.New, []byte(secret))
 	mac.Write([]byte(signString))
@@ -49,13 +51,16 @@ func TestGateSignKnownVector(t *testing.T) {
 
 // TestGateSignEmptyBody GET 无 body 时 payloadHash = hex(SHA512(""))，与有 body 不同。
 func TestGateSignEmptyBody(t *testing.T) {
-	gotEmpty := GateSign("s", "GET", "/api/v4/futures/usdt/accounts", "", "", 1000)
-	gotBody := GateSign("s", "GET", "/api/v4/futures/usdt/accounts", "", "{}", 1000)
+	gotEmpty := signutil.GateSign("s", "GET", "/api/v4/futures/usdt/accounts", "", "", 1000)
+	gotBody := signutil.GateSign("s", "GET", "/api/v4/futures/usdt/accounts", "", "{}", 1000)
 	if gotEmpty == gotBody {
 		t.Error("空 body 与非空 body 签名应不同（payloadHash 不同）")
 	}
 	// 空 body 签名应匹配 hex(SHA512("")) 作为 payloadHash
-	want := gateSignManual("s", "GET", "/api/v4/futures/usdt/accounts", "", hexSHA512(""), 1000)
+	want := func() string {
+		sum := sha512.Sum512([]byte(""))
+		return gateSignManual("s", "GET", "/api/v4/futures/usdt/accounts", "", hex.EncodeToString(sum[:]), 1000)
+	}()
 	if gotEmpty != want {
 		t.Errorf("空 body GateSign = %q, want %q", gotEmpty, want)
 	}
@@ -115,7 +120,7 @@ func TestCEXExecutor_GateOrderFinished(t *testing.T) {
 		gotBody = string(raw)
 		ts := r.Header.Get("Timestamp")
 		tsInt := parseTs(t, ts)
-		wantSign := GateSign(secret, "POST", "/api/v4"+r.URL.Path, "", string(raw), tsInt)
+		wantSign := signutil.GateSign(secret, "POST", "/api/v4"+r.URL.Path, "", string(raw), tsInt)
 		if r.Header.Get("SIGN") != wantSign {
 			t.Errorf("SIGN mismatch: got %q, want %q", r.Header.Get("SIGN"), wantSign)
 		}
@@ -438,7 +443,7 @@ func TestCEXExecutor_GateAccountBookFund(t *testing.T) {
 		gotQuery = r.URL.RawQuery
 		// 独立验证签名（query 进 sign_string 第三段）
 		ts := parseTs(t, r.Header.Get("Timestamp"))
-		wantSign := GateSign("s", "GET", "/api/v4/futures/usdt/account_book", gotQuery, "", ts)
+		wantSign := signutil.GateSign("s", "GET", "/api/v4/futures/usdt/account_book", gotQuery, "", ts)
 		if r.Header.Get("SIGN") != wantSign {
 			t.Errorf("SIGN query 签名不匹配：got %s want %s", r.Header.Get("SIGN"), wantSign)
 		}

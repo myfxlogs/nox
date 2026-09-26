@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
-	"arb/internal/exec"
+	v1 "arb/internal/gen/dashboardv1"
 	"arb/internal/httpx"
 	"arb/internal/keydomain"
+	"arb/internal/signutil"
 )
 
 // CEXAccountQuerier 查 CEX 账户资金（D-053）。只读余额，不执行。
@@ -186,7 +186,7 @@ func (q *CEXAccountQuerier) accountGate(ctx context.Context) (*AccountInfo, erro
 	const endpoint = "/futures/usdt/accounts"
 	urlPath := "/api/v4" + endpoint
 	ts := time.Now().Unix()
-	sign := exec.GateSign(q.apiSecret, "GET", urlPath, "", "", ts)
+	sign := signutil.GateSign(q.apiSecret, "GET", urlPath, "", "", ts)
 	headers := http.Header{
 		"KEY":       {q.apiKey},
 		"Timestamp": {strconv.FormatInt(ts, 10)},

@@ -1,6 +1,7 @@
 package exec
 
 import (
+	"arb/internal/signutil"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -64,7 +65,7 @@ func (e *CEXExecutor) placeGateRaw(ctx context.Context, o Order) ([]byte, Fill, 
 	const endpoint = "/futures/usdt/orders"
 	urlPath := "/api/v4" + endpoint
 	ts := time.Now().Unix()
-	sign := GateSign(e.apiSecret, "POST", urlPath, "", bodyStr, ts)
+	sign := signutil.GateSign(e.apiSecret, "POST", urlPath, "", bodyStr, ts)
 	headers := http.Header{
 		"KEY":          {e.apiKey},
 		"Timestamp":    {strconv.FormatInt(ts, 10)},
@@ -126,7 +127,7 @@ func (e *CEXExecutor) gateOrderStatus(ctx context.Context, orderID string) (gate
 	endpoint := "/futures/usdt/orders/" + orderID
 	urlPath := "/api/v4" + endpoint
 	ts := time.Now().Unix()
-	sign := GateSign(e.apiSecret, "GET", urlPath, "", "", ts)
+	sign := signutil.GateSign(e.apiSecret, "GET", urlPath, "", "", ts)
 	headers := http.Header{
 		"KEY":       {e.apiKey},
 		"Timestamp": {strconv.FormatInt(ts, 10)},
@@ -166,7 +167,7 @@ func (e *CEXExecutor) GatePositionsRaw(ctx context.Context, contract string) ([]
 	endpoint := "/futures/usdt/positions/" + contract
 	urlPath := "/api/v4" + endpoint
 	ts := time.Now().Unix()
-	sign := GateSign(e.apiSecret, "GET", urlPath, "", "", ts)
+	sign := signutil.GateSign(e.apiSecret, "GET", urlPath, "", "", ts)
 	headers := http.Header{
 		"KEY":       {e.apiKey},
 		"Timestamp": {strconv.FormatInt(ts, 10)},
@@ -226,7 +227,7 @@ func (e *CEXExecutor) GateAccountBookFund(ctx context.Context, contract string) 
 	query := "type=fund&contract=" + contract
 	urlPath := "/api/v4" + endpoint
 	ts := time.Now().Unix()
-	sign := GateSign(e.apiSecret, "GET", urlPath, query, "", ts)
+	sign := signutil.GateSign(e.apiSecret, "GET", urlPath, query, "", ts)
 	headers := http.Header{
 		"KEY":       {e.apiKey},
 		"Timestamp": {strconv.FormatInt(ts, 10)},
@@ -263,7 +264,7 @@ func (e *CEXExecutor) gateContractSize(ctx context.Context, contract string, qty
 	endpoint := "/futures/usdt/contracts/" + contract
 	urlPath := "/api/v4" + endpoint
 	ts := time.Now().Unix()
-	sign := GateSign(e.apiSecret, "GET", urlPath, "", "", ts)
+	sign := signutil.GateSign(e.apiSecret, "GET", urlPath, "", "", ts)
 	headers := http.Header{
 		"KEY":       {e.apiKey},
 		"Timestamp": {strconv.FormatInt(ts, 10)},

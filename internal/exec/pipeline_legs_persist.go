@@ -9,6 +9,12 @@ import (
 	"arb/internal/store/pgstore"
 )
 
+// orderStatusQuerier D-508 S7c：接口定义下沉消费方（reconcile.OrderStatusQuerier
+// 为规范名）——exec 是实现的宿主，此处仅留结构断言用未导出窄口。
+type orderStatusQuerier interface {
+	QueryOrderStatus(ctx context.Context, orderID, clOrdID, symbol string) (state string, accFillQty, avgPx, feeUSD float64, err error)
+}
+
 // persistOpenLegs D-195-B：OPEN leg 写入循环（从 Pipeline.Execute 提取，避免 pipeline.go 超 300 行）。
 // D-108 A1 fail-closed：腿写库失败 → error+critical 告警，孤儿不可留。
 // D-195-B §4.3：client_order_id 确定性编码 + attempt 字段填充。
@@ -172,7 +178,7 @@ func (p *Pipeline) rollbackUnknownLeg(ctx context.Context, posID int64, i int, l
 		fail("cancel", err)
 		return
 	}
-	qs, ok := exe.(OrderStatusQuerier)
+	qs, ok := exe.(orderStatusQuerier)
 	if !ok {
 		fail("final-query", fmt.Errorf("executor 无 OrderStatusQuerier"))
 		return

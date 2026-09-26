@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/exec"
+	"arb/internal/signutil"
 )
 
 // gateQuantoMultiplier D-121：查 Gate 合约规格 quanto_multiplier（每张合约代表的基础币数量）。
@@ -21,7 +21,7 @@ func gateQuantoMultiplier(ctx context.Context, client *http.Client, baseURL, api
 	endpoint := "/futures/usdt/contracts/" + contract
 	urlPath := "/api/v4" + endpoint
 	ts := time.Now().Unix()
-	sign := exec.GateSign(apiSecret, "GET", urlPath, "", "", ts)
+	sign := signutil.GateSign(apiSecret, "GET", urlPath, "", "", ts)
 	headers := http.Header{
 		"KEY":       {apiKey},
 		"Timestamp": {strconv.FormatInt(ts, 10)},

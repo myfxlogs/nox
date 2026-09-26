@@ -2,6 +2,7 @@
 package exec
 
 import (
+	"arb/internal/signutil"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -14,7 +15,7 @@ func (e *CEXExecutor) gateMarginPrecheck(ctx context.Context, o Order) error {
 	endpoint := "/futures/usdt/accounts"
 	urlPath := "/api/v4" + endpoint
 	ts := time.Now().Unix()
-	sign := GateSign(e.apiSecret, "GET", urlPath, "", "", ts)
+	sign := signutil.GateSign(e.apiSecret, "GET", urlPath, "", "", ts)
 	headers := http.Header{
 		"KEY":       {e.apiKey},
 		"Timestamp": {strconv.FormatInt(ts, 10)},
@@ -65,7 +66,7 @@ func (e *CEXExecutor) gateMarkPrice(ctx context.Context, contract string) (float
 	endpoint := "/futures/usdt/contracts/" + contract
 	urlPath := "/api/v4" + endpoint
 	ts := time.Now().Unix()
-	sign := GateSign(e.apiSecret, "GET", urlPath, "", "", ts)
+	sign := signutil.GateSign(e.apiSecret, "GET", urlPath, "", "", ts)
 	headers := http.Header{
 		"KEY":       {e.apiKey},
 		"Timestamp": {strconv.FormatInt(ts, 10)},
