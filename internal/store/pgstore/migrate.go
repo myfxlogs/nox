@@ -142,6 +142,8 @@ var migrationFiles = []struct {
 	{145, migrations.ExecControlBrokerScopeSQL},        // D-493：execution_control_events scope_type 补 'broker' 审计域
 	{146, migrations.DropBinanceDemoConfigSQL},         // D-504：删 binance demofapi demo 配置行
 	{147, migrations.FactsKindIndexPgstatSQL},          // D-508 S3：facts (kind,venue,symbol,ts desc) 索引+pg_stat_statements
+	{148, migrations.PositionsLegacyDemoSQL},           // D-512 T8：positions.environment NULL→legacy_demo（纯 UPDATE）
+	{149, migrations.SettlementIncidentAttributedSQL},  // D-512 T9：settlements 事故归因列+存量按同判据回填
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

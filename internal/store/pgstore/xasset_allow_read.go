@@ -6,6 +6,7 @@ package pgstore
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -44,6 +45,15 @@ func (s *Store) LoadXAssetAllowCombos(ctx context.Context, environment string) (
 		}
 		out = append(out, r)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// D-512 T9：冷却叠加层（clean 保留 / cooling 拒入 / expired 自动复资格）。
+	kept, _, err := s.ApplyComboCooldown(ctx, out, time.Now())
+	if err != nil {
+		return nil, fmt.Errorf("combo cooldown: %w", err)
+	}
+	return kept, nil
 	return out, rows.Err()
 }
 

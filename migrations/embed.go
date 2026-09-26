@@ -263,4 +263,8 @@ var (
 
 	//go:embed 0147_facts_kind_index_and_pgstat.sql
 	FactsKindIndexPgstatSQL string
+	//go:embed 0148_positions_legacy_demo.sql
+	PositionsLegacyDemoSQL string
+	//go:embed 0149_settlement_incident_attributed.sql
+	SettlementIncidentAttributedSQL string
 )
