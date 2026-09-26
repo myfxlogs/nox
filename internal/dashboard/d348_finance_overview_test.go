@@ -58,8 +58,10 @@ func seedFinanceFixtures(t *testing.T, s *pgstore.Store) {
 		       (1, 'commission', '277842155','mt5', 1, '2026-08-29T14:00:00Z', NULL),
 		       (1, 'funding', 'binance','perp', 10, '2026-09-19T00:00:00Z', 'estimated')`)
 	// income_events（binance 结算轨）：ts 最新（9-18）→ flows 首行
-	mustExec(t, s, `INSERT INTO income_events (venue, venue_type, symbol, income_type, amount_usd, tran_id, ts)
-		VALUES ('binance', 'perp', 'BTCUSDT', 'FUNDING_FEE', 0.5, 1001, '2026-09-18T08:00:00Z')`)
+	mustExec(t, s, `INSERT INTO exchange_configs (venue, venue_type, label, api_key, api_secret, simulated)
+		VALUES ('binance','perp','t','k','s',false) ON CONFLICT DO NOTHING`)
+	mustExec(t, s, `INSERT INTO income_events (venue, venue_type, exchange_config_id, symbol, income_type, amount_usd, tran_id, ts)
+		VALUES ('binance', 'perp', (SELECT id FROM exchange_configs WHERE venue='binance' AND venue_type='perp' AND NOT simulated), 'BTCUSDT', 'FUNDING_FEE', 0.5, 1001, '2026-09-18T08:00:00Z')`)
 }
 
 // TestD348_FinanceOverview_Aggregate T1：三数/分层/收入构成/流水数值锚。
@@ -152,8 +154,10 @@ func TestD348_FinanceOverview_FlowsNullTrackAndNoDoubleCount(t *testing.T) {
 		VALUES (1, 'funding', 'binance','perp', 111, '2026-08-29T12:00:00Z', NULL),
 		       (1, 'funding', 'binance','perp', 999, '2026-09-19T00:00:00Z', 'estimated'),
 		       (1, 'funding', 'okx','perp', 222, '2026-08-30T12:00:00Z', NULL)`)
-	mustExec(t, s, `INSERT INTO income_events (venue, venue_type, symbol, income_type, amount_usd, tran_id, ts)
-		VALUES ('binance', 'perp', 'BTCUSDT', 'FUNDING_FEE', 0.5, 1001, '2026-09-18T08:00:00Z')`)
+	mustExec(t, s, `INSERT INTO exchange_configs (venue, venue_type, label, api_key, api_secret, simulated)
+		VALUES ('binance','perp','t','k','s',false) ON CONFLICT DO NOTHING`)
+	mustExec(t, s, `INSERT INTO income_events (venue, venue_type, exchange_config_id, symbol, income_type, amount_usd, tran_id, ts)
+		VALUES ('binance', 'perp', (SELECT id FROM exchange_configs WHERE venue='binance' AND venue_type='perp' AND NOT simulated), 'BTCUSDT', 'FUNDING_FEE', 0.5, 1001, '2026-09-18T08:00:00Z')`)
 	svc := &Service{store: s, qbus: bus.New(), freshTTL: time.Minute, liqMMR: 0.005}
 	resp, err := svc.GetFinanceOverview(ctx, connect.NewRequest(&v1.GetFinanceOverviewRequest{}))
 	if err != nil {

@@ -177,8 +177,13 @@ func TestD375_AnnotateCEXSwap_IncomeSource(t *testing.T) {
 		tran   int64
 	}{{0.5, 201}, {0.6458, 202}} {
 		if _, err := st.Pool().Exec(ctx,
-			`INSERT INTO income_events (venue, venue_type, symbol, income_type, amount_usd, tran_id, ts, position_id, leg_no)
-			 VALUES ('binance','perp','SOLUSDT','FUNDING_FEE',$1,$2,now(),$3,$4)`,
+			`INSERT INTO exchange_configs (venue, venue_type, label, api_key, api_secret, simulated)
+			 VALUES ('binance','perp','t','k','s',false) ON CONFLICT DO NOTHING`); err != nil {
+			t.Fatalf("seed config: %v", err)
+		}
+		if _, err := st.Pool().Exec(ctx,
+			`INSERT INTO income_events (venue, venue_type, exchange_config_id, symbol, income_type, amount_usd, tran_id, ts, position_id, leg_no)
+			 VALUES ('binance','perp',(SELECT id FROM exchange_configs WHERE venue='binance' AND venue_type='perp' AND NOT simulated),'SOLUSDT','FUNDING_FEE',$1,$2,now(),$3,$4)`,
 			tc.amount, tc.tran, &posID, &one); err != nil {
 			t.Fatalf("seed income: %v", err)
 		}

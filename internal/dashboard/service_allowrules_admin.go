@@ -151,8 +151,8 @@ func (s *Service) deriveRuleSimulated(ctx context.Context, kind, value string, w
 		}
 		// CEX：exchange_configs (venue,venue_type,simulated=wantSim) 显式过滤——
 		// 无匹配行=该环境无配置拒（同 venue:type 双配置并存按 env 取对应行）。
-		parts := strings.SplitN(value, ":", 2)
-		ok, err := s.store.ExchangeConfigHasRow(ctx, parts[0], parts[1], wantSim)
+		vk := keydomain.Parse(value)
+		ok, err := s.store.ExchangeConfigHasRow(ctx, vk.Venue, vk.Type, wantSim)
 		if err != nil {
 			return false, "配置查询失败: " + err.Error()
 		}

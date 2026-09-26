@@ -6,7 +6,8 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
+
+	"arb/internal/keydomain"
 	"time"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
@@ -91,15 +92,15 @@ func (s *Service) BackfillSwapHistory(ctx context.Context, req *connect.Request[
 // splitVenueKey 解析 "venue:mt5"/"venue:mt4" → (bareVenue, platform, ok)。
 // platform: 0=MT4, 1=MT5。ok=false = 格式错误。
 func splitVenueKey(venueKey string) (venue string, platform int, ok bool) {
-	parts := strings.SplitN(venueKey, ":", 2)
-	if len(parts) != 2 {
+	vk := keydomain.Parse(venueKey)
+	if vk.Type == "" {
 		return "", 0, false
 	}
-	switch parts[1] {
+	switch vk.Type {
 	case "mt5":
-		return parts[0], 1, true
+		return vk.Venue, 1, true
 	case "mt4":
-		return parts[0], 0, true
+		return vk.Venue, 0, true
 	}
 	return "", 0, false
 }
