@@ -17,10 +17,14 @@ import (
 func d444Store(t *testing.T) *pgstore.Store {
 	t.Helper()
 	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
+	// D-512 T7 连带：双 DELETE 拆两条（共享池 prepared 复用上报 08P01 偶发）。
 	if _, err := st.Pool().Exec(context.Background(),
-		`DELETE FROM autotrade_allow_rules WHERE value LIKE 'd444svc%';
-		 DELETE FROM alerts WHERE message LIKE '%d444svc%'`); err != nil {
-		t.Fatalf("clean: %v", err)
+		`DELETE FROM autotrade_allow_rules WHERE value LIKE 'd444svc%'`); err != nil {
+		t.Fatalf("clean rules: %v", err)
+	}
+	if _, err := st.Pool().Exec(context.Background(),
+		`DELETE FROM alerts WHERE message LIKE '%d444svc%'`); err != nil {
+		t.Fatalf("clean alerts: %v", err)
 	}
 	return st
 }
