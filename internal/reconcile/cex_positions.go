@@ -64,28 +64,50 @@ func (q *CEXPositionQuerier) okxPositions(ctx context.Context) ([]VenueOrder, er
 	}
 	var out []VenueOrder
 	for _, p := range resp.Data {
-		pos, _ := strconv.ParseFloat(p.Pos, 64)
+		pos, perr := f64z(p.Pos)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "p.Pos", p.Pos, perr)
+		}
 		if pos == 0 {
 			continue
 		}
-		avgPx, _ := strconv.ParseFloat(p.AvgPx, 64)
-		upl, _ := strconv.ParseFloat(p.Upl, 64)
-		fee, _ := strconv.ParseFloat(p.Fee, 64)
+		avgPx, perr := f64z(p.AvgPx)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "p.AvgPx", p.AvgPx, perr)
+		}
+		upl, perr := f64z(p.Upl)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "p.Upl", p.Upl, perr)
+		}
+		fee, perr := f64z(p.Fee)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "p.Fee", p.Fee, perr)
+		}
 		side := "BUY"
 		if p.PosSide == "short" {
 			side = "SELL"
 		}
 		ctimeMs, _ := strconv.ParseInt(p.CTime, 10, 64)
 		openedAt := time.UnixMilli(ctimeMs)
-		initMargin, _ := strconv.ParseFloat(p.Imr, 64) // D-146 S5：imr（初始保证金）优先，margin 回落
+		initMargin, perr := f64z(p.Imr)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "p.Imr", p.Imr, perr)
+		} // D-146 S5：imr（初始保证金）优先，margin 回落
 		if initMargin == 0 {
-			initMargin, _ = strconv.ParseFloat(p.Margin, 64)
+			if pv, perr := f64z(p.Margin); perr != nil {
+				return nil, fmt.Errorf("parse %s=%q: %w", "p.Margin", p.Margin, perr)
+			} else {
+				initMargin = pv
+			}
 		}
 		// sim 环境 imr 实证为恒定假值（$1 名义也占 ~$333）——demo 置 0 宁缺毋假，真金自然恢复。
 		if q.simulated {
 			initMargin = 0
 		}
-		maintMargin, _ := strconv.ParseFloat(p.Mmr, 64)
+		maintMargin, perr := f64z(p.Mmr)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "p.Mmr", p.Mmr, perr)
+		}
 		out = append(out, VenueOrder{
 			Ticket:        p.InstID, // CEX 聚合仓位无单一 ticket → 用 symbol
 			Symbol:        p.InstID,
@@ -143,9 +165,18 @@ func (q *CEXPositionQuerier) gatePositions(ctx context.Context) ([]VenueOrder, e
 		if p.Size == 0 {
 			continue
 		}
-		entryPx, _ := strconv.ParseFloat(p.EntryPrice, 64)
-		upl, _ := strconv.ParseFloat(p.UnrealisedPnl, 64)
-		funding, _ := strconv.ParseFloat(p.PnlFund, 64)
+		entryPx, perr := f64z(p.EntryPrice)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "p.EntryPrice", p.EntryPrice, perr)
+		}
+		upl, perr := f64z(p.UnrealisedPnl)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "p.UnrealisedPnl", p.UnrealisedPnl, perr)
+		}
+		funding, perr := f64z(p.PnlFund)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "p.PnlFund", p.PnlFund, perr)
+		}
 		side, posSide := "BUY", "long" // D-195-C2：Gate size>0=long/BUY, <0=short/SELL
 		vol := float64(p.Size)
 		if p.Size < 0 {
@@ -156,12 +187,22 @@ func (q *CEXPositionQuerier) gatePositions(ctx context.Context) ([]VenueOrder, e
 			quanto = gateQuantoMultiplier(ctx, q.client, q.baseURL, q.apiKey, q.apiSecret, p.Contract)
 			quantoCache[p.Contract] = quanto
 		}
-		vol = vol * quanto                                       // 合约数 × quanto = 基础币数量
-		initMargin, _ := strconv.ParseFloat(p.InitialMargin, 64) // R8③：initial_margin 优先，margin 回落
+		vol = vol * quanto // 合约数 × quanto = 基础币数量
+		initMargin, perr := f64z(p.InitialMargin)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "p.InitialMargin", p.InitialMargin, perr)
+		} // R8③：initial_margin 优先，margin 回落
 		if initMargin == 0 {
-			initMargin, _ = strconv.ParseFloat(p.Margin, 64)
+			if pv, perr := f64z(p.Margin); perr != nil {
+				return nil, fmt.Errorf("parse %s=%q: %w", "p.Margin", p.Margin, perr)
+			} else {
+				initMargin = pv
+			}
 		}
-		maintMargin, _ := strconv.ParseFloat(p.MaintMargin, 64)
+		maintMargin, perr := f64z(p.MaintMargin)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "p.MaintMargin", p.MaintMargin, perr)
+		}
 		out = append(out, VenueOrder{
 			Ticket:        p.Contract, // CEX 聚合仓位 → 用 symbol
 			Symbol:        p.Contract,
@@ -221,12 +262,21 @@ func (q *CEXPositionQuerier) binancePositions(ctx context.Context) ([]VenueOrder
 	}
 	var out []VenueOrder
 	for _, p := range positions {
-		amt, _ := strconv.ParseFloat(p.PositionAmt, 64)
+		amt, perr := f64z(p.PositionAmt)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "p.PositionAmt", p.PositionAmt, perr)
+		}
 		if amt == 0 {
 			continue
 		}
-		entryPx, _ := strconv.ParseFloat(p.EntryPrice, 64)
-		upl, _ := strconv.ParseFloat(p.UnRealizedProfit, 64)
+		entryPx, perr := f64z(p.EntryPrice)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "p.EntryPrice", p.EntryPrice, perr)
+		}
+		upl, perr := f64z(p.UnRealizedProfit)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "p.UnRealizedProfit", p.UnRealizedProfit, perr)
+		}
 		side, posSide := "BUY", "long" // D-195-C2：Binance amt>0=long/BUY, <0=short/SELL
 		vol := amt
 		if amt < 0 {
@@ -235,10 +285,21 @@ func (q *CEXPositionQuerier) binancePositions(ctx context.Context) ([]VenueOrder
 		// D-146 S5 微件③ 返修：逐仓→isolatedWallet；全仓→notional/leverage
 		var initMargin float64
 		if p.MarginType == "isolated" {
-			initMargin, _ = strconv.ParseFloat(p.IsolatedWallet, 64)
+			if pv, perr := f64z(p.IsolatedWallet); perr != nil {
+				return nil, fmt.Errorf("parse %s=%q: %w", "p.IsolatedWallet", p.IsolatedWallet, perr)
+			} else {
+				initMargin = pv
+			}
 		} else {
-			notional, _ := strconv.ParseFloat(p.Notional, 64)
-			if lev, _ := strconv.ParseFloat(p.Leverage, 64); lev > 0 {
+			notional, perr := f64z(p.Notional)
+			if perr != nil {
+				return nil, fmt.Errorf("parse %s=%q: %w", "p.Notional", p.Notional, perr)
+			}
+			lev, perr := f64z(p.Leverage)
+			if perr != nil {
+				return nil, fmt.Errorf("parse %s=%q: %w", "p.Leverage", p.Leverage, perr)
+			}
+			if lev > 0 {
 				initMargin = math.Abs(notional) / lev // D-343：空头腿 notional 负值→Abs（符号坑，负 margin 被下游 >0 守卫拒）
 			}
 		}

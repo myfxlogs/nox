@@ -133,7 +133,10 @@ func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error
 		if perr != nil || qty <= 0 {
 			continue
 		}
-		usd, _ := strconv.ParseFloat(d.EqUsd, 64)
+		usd, perr := f64z(d.EqUsd)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "d.EqUsd", d.EqUsd, perr)
+		}
 		holdings = append(holdings, &v1.Holding{Ccy: d.Ccy, Qty: qty, UsdtValue: usd})
 	}
 	// D-364 S2：equity 只计 USDT 标（业主令）——eq=Σ details[USDT].EqUsd（USDT eqUsd=
@@ -202,7 +205,10 @@ func (q *CEXAccountQuerier) accountGate(ctx context.Context) (*AccountInfo, erro
 	if err := json.Unmarshal(body, &acc); err != nil {
 		return nil, fmt.Errorf("gate account json: %w", err)
 	}
-	eq, _ := strconv.ParseFloat(acc.Total, 64)
+	eq, perr := f64z(acc.Total)
+	if perr != nil {
+		return nil, fmt.Errorf("parse %s=%q: %w", "acc.Total", acc.Total, perr)
+	}
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
 		Balance: eq, Equity: eq, Currency: "USDT",

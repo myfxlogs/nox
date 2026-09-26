@@ -42,8 +42,14 @@ func (q *CEXAccountQuerier) fullInventoryBinanceFunding(ctx context.Context) (*F
 	}
 	inv := &FullInventory{}
 	for _, r := range rows {
-		free, _ := strconv.ParseFloat(r.Free, 64)
-		locked, _ := strconv.ParseFloat(r.Locked, 64)
+		free, perr := f64z(r.Free)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "r.Free", r.Free, perr)
+		}
+		locked, perr := f64z(r.Locked)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "r.Locked", r.Locked, perr)
+		}
 		qty := free + locked
 		if qty <= 0 {
 			continue

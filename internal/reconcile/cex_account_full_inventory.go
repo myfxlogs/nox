@@ -90,8 +90,14 @@ func (q *CEXAccountQuerier) fullInventoryBinanceSpot(ctx context.Context) (*Full
 	}
 	inv := &FullInventory{}
 	for _, b := range acc.Balances {
-		free, _ := strconv.ParseFloat(b.Free, 64)
-		locked, _ := strconv.ParseFloat(b.Locked, 64)
+		free, perr := f64z(b.Free)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "b.Free", b.Free, perr)
+		}
+		locked, perr := f64z(b.Locked)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "b.Locked", b.Locked, perr)
+		}
 		qty := free + locked
 		if qty <= 0 {
 			continue
@@ -139,7 +145,10 @@ func (q *CEXAccountQuerier) fullInventoryBinancePerp(ctx context.Context) (*Full
 	if err := json.Unmarshal(body, &acc); err != nil {
 		return nil, fmt.Errorf("binance perp full inventory json: %w", err)
 	}
-	eq, _ := strconv.ParseFloat(acc.TotalWalletBalance, 64)
+	eq, perr := f64z(acc.TotalWalletBalance)
+	if perr != nil {
+		return nil, fmt.Errorf("parse %s=%q: %w", "acc.TotalWalletBalance", acc.TotalWalletBalance, perr)
+	}
 	return &FullInventory{
 		UsdtEquity: eq, InventoryUSD: eq,
 		Holdings: []*v1.Holding{{Ccy: "USDT", Qty: eq, UsdtValue: eq}},
@@ -185,7 +194,10 @@ func (q *CEXAccountQuerier) fullInventoryOkxTrading(ctx context.Context) (*FullI
 		// UsdtValue=eqUsd。eq 缺失/解析失败 → qty=0 保留（估值仍诚实）。
 		// D-365-R3：Qty=eq（ccy 本位真数量——R0 缺陷曾塞 eqUsd 美元值=同类不一致）；
 		// UsdtValue=eqUsd。eq 缺失/解析失败 → qty=0 保留（估值仍诚实）。
-		eq, _ := strconv.ParseFloat(d.Eq, 64)
+		eq, perr := f64z(d.Eq)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "d.Eq", d.Eq, perr)
+		}
 		usd, perr := strconv.ParseFloat(d.EqUsd, 64)
 		if perr != nil || usd == 0 {
 			continue

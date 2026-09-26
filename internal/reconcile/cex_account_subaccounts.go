@@ -97,8 +97,14 @@ func (q *CEXAccountQuerier) accountBinanceFunding(ctx context.Context) (*Account
 		if r.Asset != "USDT" {
 			continue // USDT-only：DOGE/USDC 等不读取不统计
 		}
-		free, _ := strconv.ParseFloat(r.Free, 64)
-		locked, _ := strconv.ParseFloat(r.Locked, 64)
+		free, perr := f64z(r.Free)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "r.Free", r.Free, perr)
+		}
+		locked, perr := f64z(r.Locked)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "r.Locked", r.Locked, perr)
+		}
 		eq = free + locked
 		holdings = append(holdings, &v1.Holding{Ccy: "USDT", Qty: eq, UsdtValue: eq})
 	}

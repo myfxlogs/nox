@@ -57,8 +57,14 @@ func (q *CEXAccountQuerier) accountBinance(ctx context.Context) (*AccountInfo, e
 	total := 0.0
 	var holdings []*v1.Holding
 	for _, b := range acc.Balances {
-		free, _ := strconv.ParseFloat(b.Free, 64)
-		locked, _ := strconv.ParseFloat(b.Locked, 64)
+		free, perr := f64z(b.Free)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "b.Free", b.Free, perr)
+		}
+		locked, perr := f64z(b.Locked)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "b.Locked", b.Locked, perr)
+		}
 		qty := free + locked
 		if qty <= 0 {
 			continue
@@ -101,13 +107,24 @@ func (q *CEXAccountQuerier) accountBinancePerp(ctx context.Context) (*AccountInf
 	if err := json.Unmarshal(body, &acc); err != nil {
 		return nil, fmt.Errorf("binance perp account json: %w", err)
 	}
-	eq, _ := strconv.ParseFloat(acc.TotalWalletBalance, 64)
+	eq, perr := f64z(acc.TotalWalletBalance)
+	if perr != nil {
+		return nil, fmt.Errorf("parse %s=%q: %w", "acc.TotalWalletBalance", acc.TotalWalletBalance, perr)
+	}
 	// D-405 S2：buffer_multiple=marginBalance/maintMargin（写时归一 equity/MMR；
 	// maintMargin<=0 无仓 → 不采 0=未采语义，marginGuard 按 data_stale 处理需区分——
 	// 空仓账户 MMR=0 实际缓冲无穷大，此处落 0 由 guard 判「无仓恒 normal」）。
 	var buffer float64
-	if mb, _ := strconv.ParseFloat(acc.MarginBalance, 64); mb > 0 {
-		if mm, _ := strconv.ParseFloat(acc.MaintMargin, 64); mm > 0 {
+	mb, perr := f64z(acc.MarginBalance)
+	if perr != nil {
+		return nil, fmt.Errorf("parse %s=%q: %w", "acc.MarginBalance", acc.MarginBalance, perr)
+	}
+	if mb > 0 {
+		mm, perr := f64z(acc.MaintMargin)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "acc.MaintMargin", acc.MaintMargin, perr)
+		}
+		if mm > 0 {
 			buffer = mb / mm
 		}
 	}
