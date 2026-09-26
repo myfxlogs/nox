@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
+	"arb/internal/keydomain"
 	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
 )
@@ -16,24 +18,13 @@ import (
 // okxVenueType 审计行 venue_type：venueKey "okx:perp"/"okx:perp#3" 后缀段；无 → unified。
 func (o *OKXPrivateWS) okxVenueType() string {
 	k := o.venueKey
-	if i := lastIndexByte(k, '#'); i >= 0 {
+	if i := strings.LastIndexByte(k, '#'); i >= 0 { // #<configID> 撞键后缀非键域（D-362）
 		k = k[:i]
 	}
-	for i := len(k) - 1; i >= 0; i-- {
-		if k[i] == ':' {
-			return k[i+1:]
-		}
+	if t := keydomain.Parse(k).Type; t != "" {
+		return t
 	}
 	return "unified"
-}
-
-func lastIndexByte(s string, c byte) int {
-	for i := len(s) - 1; i >= 0; i-- {
-		if s[i] == c {
-			return i
-		}
-	}
-	return -1
 }
 
 // handleData case "" 数据推送分派（S0 实证：positions/account 帧顶层 eventType，
