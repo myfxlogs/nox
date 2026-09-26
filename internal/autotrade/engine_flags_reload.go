@@ -7,8 +7,8 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 
+	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 )
 
@@ -21,10 +21,7 @@ type flagSnapshot struct {
 // bareVenue venue_key→裸名归一（'3001157:mt5'→'3001157'、'okx:perp'→'okx'，
 // 与旗标 venue 口径对齐——0138 迁移注释钉裸名）。
 func bareVenue(venueKey string) string {
-	if i := strings.Index(venueKey, ":"); i >= 0 {
-		return venueKey[:i]
-	}
-	return venueKey
+	return keydomain.BareOf(venueKey)
 }
 
 // flagRuleReject 旗标闸（allowRuleReject 后调用；返回非空=拒因）。

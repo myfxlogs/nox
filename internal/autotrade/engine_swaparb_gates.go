@@ -13,6 +13,7 @@ import (
 
 	"arb/internal/bus"
 	"arb/internal/combo"
+	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 )
 
@@ -189,10 +190,7 @@ func (e *Engine) concentrationGate(ctx context.Context, canonical, venueLong, ve
 // legVenueBare 提取 leg.Venue 的 bare venue（冒号前）。
 // leg.Venue 格式="venue:mt5"（与 venueKey 一致）；无冒号=原值。
 func legVenueBare(venue string) string {
-	if idx := strings.Index(venue, ":"); idx > 0 {
-		return venue[:idx]
-	}
-	return venue
+	return keydomain.BareOf(venue)
 }
 
 // --- D-261 S3：以下从 engine_swaparb.go 搬入（纯搬家：冷却集 + 止损计数 + 复活告警） ---
