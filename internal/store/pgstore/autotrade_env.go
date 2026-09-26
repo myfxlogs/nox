@@ -24,6 +24,7 @@ func (s *Store) AggregateStrategyStatsByEnvironment(ctx context.Context, strateg
 				JOIN positions p ON p.id = s.position_id
 				WHERE p.type = $1 AND p.closed_at IS NOT NULL AND p.realized_pnl IS NOT NULL
 				  AND COALESCE(s.stats_status, 'applied') = 'applied'
+				  AND p.environment IS NOT NULL
 				  AND ($2 = '' OR p.environment = $2)
 			) t
 		) agg`, strategy, environment).Scan(&st.Total, &st.Wins, &st.AvgPnl, &st.MedianPnl)
@@ -42,7 +43,8 @@ func (s *Store) DailyRealizedPnlByEnvironment(ctx context.Context, environment s
 		FROM positions p
 		LEFT JOIN position_settlements s ON s.position_id = p.id
 		WHERE p.status = 'CLOSED' AND p.closed_at >= date_trunc('day', now())
-		  AND ($1 = '' OR p.environment = $1)`).Scan(&sum)
+		  AND p.environment IS NOT NULL
+		  AND ($1 = '' OR p.environment = $1)`, environment).Scan(&sum)
 	if err != nil {
 		return 0, fmt.Errorf("daily realized pnl by env: %w", err)
 	}

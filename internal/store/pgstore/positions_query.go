@@ -191,11 +191,13 @@ type EnvNotional struct {
 // D-360 S4：仅 live（demo/纸面=噪声不入覆盖率面板，PositionsPage 纸面区不动）。
 // 零活跃仓 → 空切片（调用方出「零持仓」行）。
 func (s *Store) ActiveNotionalByEnv(ctx context.Context) ([]EnvNotional, error) {
+	// D-512 T8：旧 NULL 行标 legacy_demo（0148）后，聚合显式只认 live——
+	// COALESCE 回退值改 legacy_demo（NULL 行不再静默计入 live 覆盖率面板）。
 	rows, err := s.pool.Query(ctx, `
-		SELECT COALESCE(environment, 'live'), COALESCE(SUM(notional_usd), 0)
+		SELECT COALESCE(environment, 'legacy_demo'), COALESCE(SUM(notional_usd), 0)
 		FROM positions
 		WHERE status IN ('OPENING', 'OPEN', 'LEGGED', 'CLOSING')
-		  AND COALESCE(environment, 'live') = 'live'
+		  AND COALESCE(environment, 'legacy_demo') = 'live'
 		GROUP BY 1`)
 	if err != nil {
 		return nil, fmt.Errorf("active notional by env: %w", err)
