@@ -4,6 +4,7 @@ package pgstore
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"arb/internal/fact"
@@ -65,4 +66,18 @@ func (s *Store) PruneFacts(ctx context.Context) (int64, error) {
 		return total, fmt.Errorf("prune facts default window: %w", err)
 	}
 	return total + tag.RowsAffected(), nil
+}
+
+// PruneTicks D-508 S4：ticks 72h retention 入应用（原 ops_ticks_retention.sh cron 逻辑；
+// 唯一读侧 USDPer 七直盘 24h 窗，72h=3 倍余量）。DELETE 返回删行数；VACUUM ANALYZE
+// 防死元组堆积（独立于 DELETE 成败各自留痕）。
+func (s *Store) PruneTicks(ctx context.Context) (int64, error) {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM ticks WHERE ts < now() - interval '72 hours'`)
+	if err != nil {
+		return 0, fmt.Errorf("prune ticks: %w", err)
+	}
+	if _, err := s.pool.Exec(ctx, `VACUUM ANALYZE ticks`); err != nil {
+		log.Printf("[retention] ticks vacuum: %v", err) // 留痕不吞；DELETE 成果不因此作废
+	}
+	return tag.RowsAffected(), nil
 }
