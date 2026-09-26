@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"arb/internal/notional"
@@ -43,15 +42,17 @@ func (p *Pipeline) ResumeClose(ctx context.Context, posID int64) error {
 	default:
 		return fmt.Errorf("position %d status=%s not CLOSING (ResumeClose only for CLOSING)", posID, pos.Status)
 	}
-	return p.closePositionCore(ctx, posID)
+	return p.closePositionCore(ctx, posID, false)
 }
 
 // closePositionCore D-189 P0-4：共享平仓核心（ClosePosition 与 ResumeClose 共用）。
+// D-495：force=true（ClosePositionForce 唯一来源）跳过 per-leg 可平性检查——
+// 逃逸门语义=明知单腿裸露也要平，per-leg 跳过只在非 force 路径生效。
 // 职责：leg 处理（发平仓单/历史回填）→ 残量校验 → PnL 校准 → 现金流完整性 → CLOSED。
 // legNo 去重：closeByLegNo map（废弃 closedTickets[OrderID]）。
 // broker preflight：对无 CLOSE leg 的 OPEN 腿查 verifier；broker 已无腿则历史回填，无历史则 fail-closed。
 // 现金流完整性：已有 CLOSE leg 的腿检查 cashflows 缺失，从权威历史补回。
-func (p *Pipeline) closePositionCore(ctx context.Context, posID int64) error {
+func (p *Pipeline) closePositionCore(ctx context.Context, posID int64, force bool) error {
 	legs, err := p.store.ListPositionLegs(ctx, posID)
 	if err != nil {
 		return fmt.Errorf("list legs: %w", err)
@@ -89,6 +90,9 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64) error {
 	}
 
 	var totalPnL float64
+	// D-495 S4：await_session 跟踪——不可行动腿跳过发单（不写 CLOSE leg、不 error 中断），
+	// token 合并写 note；残留校验命中全为 await 腿时降级 warn（关市常态非异常）。
+	var awaited []pgstore.PositionLeg
 	for _, leg := range legs {
 		if leg.Phase != "OPEN" || leg.Status != "FILLED" {
 			continue
@@ -112,6 +116,13 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64) error {
 			// D-311 R6：比对同单位——filled_qty 与 EffectiveQty 均为成交口径（CEX=基础币）。
 			log.Printf("[exec] resume close leg %d partial fill: openQty=%.4f closeFilledQty=%.4f remaining=%.4f",
 				leg.ID, leg.EffectiveQty(), closeFilledQty, leg.EffectiveQty()-closeFilledQty)
+		}
+		// D-495 S4：逐腿可平性闸——不可行动腿跳过发单（不写 CLOSE leg、不 error 中断，
+		// ResumeClose 周期重试自愈=pos502 型休市残腿开市自动补平；其余腿善后照常）。
+		if ok, why := legActionableUnlessForce(ctx, p.store, leg, force); !ok {
+			log.Printf("[exec] resume close leg %d await_session %s@%s: %s", leg.ID, leg.Symbol, leg.Venue, why)
+			awaited = append(awaited, leg)
+			continue
 		}
 		// D-189 P0-4 S4-2：broker preflight——查 verifier 确认腿是否仍在仓。
 		stillOpen, fill, err := p.brokerPreflight(ctx, posID, leg)
@@ -203,31 +214,13 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64) error {
 		}
 	}
 
+	// D-495 S4：await_session token 合并写（SetPositionNote=整字段覆盖，
+	// mergeNoteToken 保 settle_failed:/pnl_estimated:/PROBE 等异类 token）。
+	newAwait := p.writeAwaitSessionNote(ctx, posID, &pos.Note, awaited)
+
 	// 残量校验（复用 checkResidualLegs）
-	if p.verifier == nil {
-		msg := fmt.Sprintf("verifier not wired, cannot verify close position=%d", posID)
-		log.Printf("[exec] %s", msg)
-		if err := p.store.InsertPositionAlert(ctx, posID, "critical", msg); err != nil {
-			log.Printf("[exec] pos %d alert write: %v", posID, err)
-		}
-		return fmt.Errorf("verifier not wired: position %d", posID)
-	}
-	residual, verifyErr := p.checkResidualLegs(ctx, legs)
-	if verifyErr != nil {
-		msg := fmt.Sprintf("verify residual failed position=%d: %v", posID, verifyErr)
-		log.Printf("[exec] %s", msg)
-		if err := p.store.InsertPositionAlert(ctx, posID, "critical", msg); err != nil {
-			log.Printf("[exec] pos %d alert write: %v", posID, err)
-		}
-		return fmt.Errorf("verify residual: %w", verifyErr)
-	}
-	if len(residual) > 0 {
-		msg := fmt.Sprintf("broker 残留腿 position=%d: %s", posID, strings.Join(residual, ", "))
-		log.Printf("[exec] %s", msg)
-		if err := p.store.InsertPositionAlert(ctx, posID, "critical", msg); err != nil {
-			log.Printf("[exec] pos %d alert write: %v", posID, err)
-		}
-		return fmt.Errorf("residual legs after close: %s", strings.Join(residual, ", "))
+	if err := p.verifyResidualOrErr(ctx, posID, legs, awaited, newAwait); err != nil {
+		return err
 	}
 
 	// D-408 S1：realized_pnl=持久化 CLOSE 腿汇总（单一事实源=落库腿数据）——

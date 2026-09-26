@@ -59,6 +59,11 @@ type Engine struct {
 	disasterMu     sync.Mutex    // D-378b：disasterBreach 锁（独立于 fundingMu——异判定域不互斥）
 	fundingMu      sync.Mutex
 
+	// D-495 S3：腿可平性 suspend 转场去重——key=posID，值=当前是否处于 suspend。
+	// 只在 suspend 进/出转场各记一条 warn（关市是常态非异常，恢复后同型免再报）。
+	legSuspend   map[int64]bool
+	legSuspendMu sync.Mutex
+
 	// D-087 §3.2：settlement.Settle 依赖 + 淘汰判定函数（main 装配后调 SetSettleDeps）。
 	settleDeps settlement.Deps
 	eliminator settlement.Eliminator

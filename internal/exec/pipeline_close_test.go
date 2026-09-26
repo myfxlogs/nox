@@ -142,7 +142,7 @@ func TestClose_PartialFillRemaining(t *testing.T) {
 	}
 
 	// closePositionCore → 检测部分成交 → 对 remaining=0.001 发单
-	if err := p.closePositionCore(ctx, posID); err != nil {
+	if err := p.closePositionCore(ctx, posID, false); err != nil {
 		// 残量校验可能因 fake verifier 返回仍持仓而报错，但 placeCloseOrder 应已调用
 		t.Logf("closePositionCore err (expected, residual check): %v", err)
 	}
@@ -199,7 +199,7 @@ func TestClose_PartialFillCompleteSkip(t *testing.T) {
 
 	// closePositionCore → filled_qty >= OPEN qty → 跳过发单（backfill cashflows 后 continue）
 	// 残量校验：verifier 返回空 → 无残留 → 应 CLOSED
-	if err := p.closePositionCore(ctx, posID); err != nil {
+	if err := p.closePositionCore(ctx, posID, false); err != nil {
 		t.Fatalf("closePositionCore: %v", err)
 	}
 	if exe.placeCount > 0 {
@@ -235,7 +235,7 @@ func TestClose_MTTicketQueryFail(t *testing.T) {
 		t.Fatalf("seed leg: %v", err)
 	}
 
-	err := p.closePositionCore(ctx, posID)
+	err := p.closePositionCore(ctx, posID, false)
 	if err == nil {
 		t.Fatal("期望 error（MT ticket 查询失败），实际 nil")
 	}
@@ -316,7 +316,7 @@ func TestClose_LeggedReducing(t *testing.T) {
 	}
 
 	// closePositionCore → leg0 成功，leg1 失败（log + continue）→ 残量校验发现 binance 仍在仓 → error
-	err := p.closePositionCore(ctx, posID)
+	err := p.closePositionCore(ctx, posID, false)
 	if err == nil {
 		t.Log("closePositionCore 返回 nil（残量校验可能未触发），检查 leg0 是否已平")
 	}
@@ -370,7 +370,7 @@ func TestClose_UnknownNoAutoReverse(t *testing.T) {
 	}
 
 	// closePositionCore → 无效 fill → 跳过（不写 CLOSE leg）→ 残量校验仍持仓 → error
-	_ = p.closePositionCore(ctx, posID)
+	_ = p.closePositionCore(ctx, posID, false)
 	legs, _ := s.ListPositionLegs(ctx, posID)
 	for _, l := range legs {
 		if l.Phase == "CLOSE" {
@@ -439,7 +439,7 @@ func TestClose_EffectiveQtyResidual_NewRow(t *testing.T) {
 		t.Fatalf("seed CLOSE leg: %v", err)
 	}
 
-	if err := p.closePositionCore(ctx, posID); err != nil {
+	if err := p.closePositionCore(ctx, posID, false); err != nil {
 		t.Logf("closePositionCore err (expected, residual check): %v", err)
 	}
 	if exe.placeCount == 0 {
@@ -485,7 +485,7 @@ func TestClose_EffectiveQtyFull_NewRow(t *testing.T) {
 		t.Fatalf("seed OPEN leg: %v", err)
 	}
 
-	if err := p.closePositionCore(ctx, posID); err != nil {
+	if err := p.closePositionCore(ctx, posID, false); err != nil {
 		t.Logf("closePositionCore err (expected): %v", err)
 	}
 	if exe.placeCount == 0 {
@@ -528,7 +528,7 @@ func TestResume_BackfillCloseUsesEffectiveQty(t *testing.T) {
 		t.Fatalf("seed OPEN leg: %v", err)
 	}
 
-	if err := p.closePositionCore(ctx, posID); err != nil {
+	if err := p.closePositionCore(ctx, posID, false); err != nil {
 		t.Logf("closePositionCore err (expected): %v", err)
 	}
 	legs, err := s.ListPositionLegs(ctx, posID)

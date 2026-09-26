@@ -1,0 +1,225 @@
+// leg_actionable.go —— D-495 S2：腿可平性谓词（双腿异时市可平性闸的唯一实现，
+// 决策层/执行层/入场预检三处共用，禁第二份——KB same-name-helper-opposite-fail-semantics）。
+//
+// 判据本体（KB heartbeat-quote-fools-freshness-gate，8-30 #464 开仓侧同型前科）：
+// 可交易 = 窗口内该 symbol 的 bid 值发生过变化（DISTINCT bid ≥ 2）。
+// 窗口内单值（含重启冷启动首见）→ 不可判可交易；tick 时间戳新鲜/有帧 ≠ 可交易。
+//
+// 键域映射（D-495 实测钉死，KB cross-domain-key-reuse-silent-miss）：
+// ticks.venue = 裸账号/交易所名（"3001157"/"okx"），腿侧 VenueKey 是键形
+// （"3001157:mt5"/"okx:perp"）→ keydomain.BareOf 取裸键（D-496/D-497 键域单源收编）。
+// MT 腿 symbol=venue 原生名直查（ticks.symbol 存原生名非 canonical）；CEX 腿走
+// bus.CexSymbolKey 归一键（XAU-USDT-SWAP→XAUUSDT）。禁 canonical、禁兄弟品种代查
+// （symbol 归属律，D-466 同律推广）。
+package exec
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log"
+	"os"
+	"strings"
+	"time"
+
+	"arb/internal/bus"
+	"arb/internal/fact"
+	"arb/internal/keydomain"
+	"arb/internal/store/pgstore"
+)
+
+// ErrLegNotActionable D-495 S4：腿不可平性哨兵（ClaimClose 前置闸拒平信号，
+// 调用方 errors.Is 识别后透传可读文案/前端 confirm 逃逸门）。
+var ErrLegNotActionable = errors.New("leg not actionable")
+
+// LegNotActionableError 带结构的拒平原因（venue/symbol/reason 透出供文案）。
+type LegNotActionableError struct {
+	VenueKey string
+	Symbol   string
+	Reason   string
+}
+
+func (e *LegNotActionableError) Error() string {
+	return fmt.Sprintf("%s: %s@%s %s", ErrLegNotActionable, e.Symbol, e.VenueKey, e.Reason)
+}
+
+func (e *LegNotActionableError) Is(target error) bool { return target == ErrLegNotActionable }
+
+// legActionableStore LegActionable 依赖面（*pgstore.Store 天然实现；测试可 mock）。
+type legActionableStore interface {
+	TicksPriceChanged(ctx context.Context, venue, symbol string, window time.Duration) (changed bool, n int, err error)
+	LatestFacts(ctx context.Context, kind, venue, symbol string) ([]fact.Fact, error)
+}
+
+// LegActionable 判定 venueKey×nativeSymbol 此刻是否有可交易行情。
+// 返回 (true, "") 可行动；(false, reason) 不可行动（reason 供告警/错误文案）。
+// 缺数据/查询失败一律 fail-closed 返回不可行动（exit-condition-missing-facts-fail-closed 同律）。
+func LegActionable(ctx context.Context, st legActionableStore, venueKey, nativeSymbol string) (bool, string) {
+	if st == nil {
+		return false, "store not wired"
+	}
+	tickVenue := keydomain.BareOf(venueKey)
+	tickSymbol := nativeSymbol
+	if bus.IsCexVenueKey(venueKey) {
+		tickSymbol = bus.CexSymbolKey(nativeSymbol)
+	}
+	if tickVenue == "" || tickSymbol == "" {
+		return false, fmt.Sprintf("empty tick key venue=%q symbol=%q", tickVenue, tickSymbol)
+	}
+
+	// trade_mode=0(DISABLED) 叠加否决（D-495 §1.1：4=FULL 周末照发不可信，只做否决项）。
+	// facts 键=裸 venue×原生 symbol（MT 采集双发 canonical+brokerSym，D-325）；查询失败放行——
+	// DISABLED 是加强否决不是主判据，facts 缺席不放大阻断面。
+	if tmFacts, err := st.LatestFacts(ctx, fact.KindTradeMode, tickVenue, tickSymbol); err == nil {
+		for _, f := range tmFacts {
+			if int64(f.Value) == fact.TradeModeDisabled {
+				return false, fmt.Sprintf("%s@%s trade_mode=disabled", tickSymbol, tickVenue)
+			}
+		}
+	}
+
+	window := legTickWindow()
+	changed, n, err := st.TicksPriceChanged(ctx, tickVenue, tickSymbol, window)
+	if err != nil {
+		return false, fmt.Sprintf("%s@%s tick query: %v", tickSymbol, tickVenue, err)
+	}
+	if !changed {
+		return false, fmt.Sprintf("%s@%s 窗口 %s 内 bid 无变化(n=%d)：休市/断流/冻结报价",
+			tickSymbol, tickVenue, window, n)
+	}
+	return true, ""
+}
+
+// checkLegsActionable D-495 S4：position 全部 OPEN+FILLED 腿的 ClosePosition 前置闸。
+// store 查询失败=普通错误（瞬时不进逃逸门语义）；腿不可行动=LegNotActionableError。
+func (p *Pipeline) checkLegsActionable(ctx context.Context, posID int64) error {
+	legs, err := p.store.ListPositionLegs(ctx, posID)
+	if err != nil {
+		return fmt.Errorf("leg actionable list legs %d: %w", posID, err)
+	}
+	for _, leg := range legs {
+		if leg.Phase != "OPEN" || leg.Status != "FILLED" {
+			continue
+		}
+		if ok, why := LegActionable(ctx, p.store, leg.Venue, leg.Symbol); !ok {
+			return &LegNotActionableError{VenueKey: leg.Venue, Symbol: leg.Symbol, Reason: why}
+		}
+	}
+	return nil
+}
+
+// mergeNoteToken D-495 S4：position.note 合并写助手——SetPositionNote 是整字段覆盖
+// （positions.go:259），裸写会吞 settle_failed:/pnl_estimated:/PROBE 等异类 token。
+// 按 "; " 切分丢旧同 key 追加新 "key:value"；CLOSED 后 token 残留=历史痕迹不清理。
+func mergeNoteToken(existing, key, value string) string {
+	var kept []string
+	for _, tok := range strings.Split(existing, "; ") {
+		tok = strings.TrimSpace(tok)
+		if tok == "" || strings.HasPrefix(tok, key+":") {
+			continue // 丢旧同 key（幂等重写）
+		}
+		kept = append(kept, tok)
+	}
+	kept = append(kept, key+":"+value)
+	return strings.Join(kept, "; ")
+}
+
+// legActionableUnlessForce force 逃逸门短路（force=true 不查 ticks 直接可行动）。
+func legActionableUnlessForce(ctx context.Context, st legActionableStore, leg pgstore.PositionLeg, force bool) (bool, string) {
+	if force {
+		return true, ""
+	}
+	return LegActionable(ctx, st, leg.Venue, leg.Symbol)
+}
+
+// allResidualAwaited 残留条目是否全部对应本轮 await_session 跳过腿
+// （残留串形="venueKey ticket=orderID"，与 pipeline_legs_verify.go 产出对齐）。
+func allResidualAwaited(residual []string, awaited []pgstore.PositionLeg) bool {
+	set := make(map[string]bool, len(awaited))
+	for _, l := range awaited {
+		set[fmt.Sprintf("%s ticket=%s", l.Venue, l.OrderID)] = true
+	}
+	for _, r := range residual {
+		if !set[r] {
+			return false
+		}
+	}
+	return true
+}
+
+// writeAwaitSessionNote await_session token 合并写（值=逗号连 venue:symbol 列表）。
+// 返回是否产生新转场（note 变化=首报面）。写失败记日志不阻断平仓主路径。
+func (p *Pipeline) writeAwaitSessionNote(ctx context.Context, posID int64, note *string, awaited []pgstore.PositionLeg) (newAwait bool) {
+	if len(awaited) == 0 {
+		return false
+	}
+	var toks []string
+	for _, l := range awaited {
+		toks = append(toks, l.Venue+":"+l.Symbol)
+	}
+	newNote := mergeNoteToken(*note, "await_session", strings.Join(toks, ","))
+	if newNote == *note {
+		return false
+	}
+	if err := p.store.SetPositionNote(ctx, posID, newNote); err != nil {
+		log.Printf("[exec] pos %d await_session note write: %v", posID, err)
+		return false
+	}
+	*note = newNote
+	return true
+}
+
+// emitResidualAlert D-495 §1.3：broker 残留告警分级——残留全为已知 await_session
+// 腿 → warn 且只在首次转场发（每周期 critical 刷屏禁令）；混入未知残留维持 critical。
+func (p *Pipeline) emitResidualAlert(ctx context.Context, posID int64, residual []string, awaited []pgstore.PositionLeg, newAwait bool) {
+	msg := fmt.Sprintf("broker 残留腿 position=%d: %s", posID, strings.Join(residual, ", "))
+	log.Printf("[exec] %s", msg)
+	level, emit := "critical", true
+	if len(awaited) > 0 && allResidualAwaited(residual, awaited) {
+		level, emit = "warn", newAwait
+	}
+	if !emit {
+		return
+	}
+	if err := p.store.InsertPositionAlert(ctx, posID, level, msg); err != nil {
+		log.Printf("[exec] pos %d alert write: %v", posID, err)
+	}
+}
+
+// verifyResidualOrErr 平仓后残量校验段（自 pipeline_resume.go 提取压行）：
+// verifier 未接线/查询失败=fail-closed error；残留>0 → emitResidualAlert 分级后报错。
+func (p *Pipeline) verifyResidualOrErr(ctx context.Context, posID int64, legs, awaited []pgstore.PositionLeg, newAwait bool) error {
+	if p.verifier == nil {
+		msg := fmt.Sprintf("verifier not wired, cannot verify close position=%d", posID)
+		log.Printf("[exec] %s", msg)
+		if err := p.store.InsertPositionAlert(ctx, posID, "critical", msg); err != nil {
+			log.Printf("[exec] pos %d alert write: %v", posID, err)
+		}
+		return fmt.Errorf("verifier not wired: position %d", posID)
+	}
+	residual, verifyErr := p.checkResidualLegs(ctx, legs)
+	if verifyErr != nil {
+		msg := fmt.Sprintf("verify residual failed position=%d: %v", posID, verifyErr)
+		log.Printf("[exec] %s", msg)
+		if err := p.store.InsertPositionAlert(ctx, posID, "critical", msg); err != nil {
+			log.Printf("[exec] pos %d alert write: %v", posID, err)
+		}
+		return fmt.Errorf("verify residual: %w", verifyErr)
+	}
+	if len(residual) > 0 {
+		p.emitResidualAlert(ctx, posID, residual, awaited, newAwait)
+		return fmt.Errorf("residual legs after close: %s", strings.Join(residual, ", "))
+	}
+	return nil
+}
+
+// legTickWindow 可平性判定窗口（默认 30min，ARB_LEG_TICK_WINDOW 可调）。
+// 采样器 60s 节流按事件写入——冻结报价产生同 bid 行，DISTINCT 判据天然识别。
+func legTickWindow() time.Duration {
+	if v := os.Getenv("ARB_LEG_TICK_WINDOW"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			return d
+		}
+	}
+	return 30 * time.Minute
+}

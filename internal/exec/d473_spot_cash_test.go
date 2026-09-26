@@ -239,7 +239,7 @@ func TestD473_FundingHedgeCloseLegs(t *testing.T) {
 	}
 
 	// closePositionCore：两腿 broker 仍在仓 → 发平仓单（残量/终态校验报错不敏感，单已发）
-	if err := p.closePositionCore(ctx, posID); err != nil {
+	if err := p.closePositionCore(ctx, posID, false); err != nil {
 		t.Logf("closePositionCore err (收尾校验可报): %v", err)
 	}
 	// spot 腿：BUY 开 → SELL 平，PositionSide 空（现货无 posSide）

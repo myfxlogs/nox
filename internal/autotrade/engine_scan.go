@@ -3,8 +3,10 @@ package autotrade
 
 import (
 	"context"
+	"fmt"
 	"log"
 
+	"arb/internal/exec"
 	"arb/internal/settlement"
 
 	"arb/internal/store/pgstore"
@@ -28,6 +30,15 @@ func (e *Engine) scanAndClose(ctx context.Context) {
 		if probeRes.upgraded {
 			_ = e.store.SetPositionNote(ctx, p.ID, "") // 升级常规仓，清 PROBE note
 			continue                                   // 升级后本轮跳过止损检查（下一轮走常规路径）
+		}
+		// D-495 S3：双腿异时市可平性闸——任一 OPEN/FILLED 腿无可交易行情（休市/断流）
+		// → 本轮整体 suspend：不走 probe/exit 平仓（两路径共用此闸）、不 ClaimClose 翻
+		// CLOSING、不动 fundingBreach 去抖计数（pos502 周六单腿事故根因=时机盲）。
+		if ok, why := e.allLegsActionable(ctx, p.ID); !ok {
+			e.markLegSuspend(ctx, p.ID, why)
+			continue
+		} else {
+			e.clearLegSuspend(p.ID)
 		}
 		if probeRes.shouldClose {
 			log.Printf("[autotrade] auto-close pos=%d type=%s: %s", p.ID, p.Type, probeRes.reason)
@@ -63,6 +74,51 @@ func (e *Engine) scanAndClose(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// allLegsActionable D-495 S3：position 全部 OPEN+FILLED 腿过 LegActionable。
+// leg.Venue=venueKey、leg.Symbol=venue 原生 symbol（persist 口径，D-495 SSOT §1.1）。
+func (e *Engine) allLegsActionable(ctx context.Context, posID int64) (bool, string) {
+	legs, err := e.store.ListPositionLegs(ctx, posID)
+	if err != nil {
+		return false, fmt.Sprintf("list legs: %v", err) // 缺数据不动作（fail-closed 同律）
+	}
+	for _, leg := range legs {
+		if leg.Phase != "OPEN" || leg.Status != "FILLED" {
+			continue
+		}
+		if ok, why := exec.LegActionable(ctx, e.store, leg.Venue, leg.Symbol); !ok {
+			return false, why
+		}
+	}
+	return true, ""
+}
+
+// markLegSuspend suspend 转场单条 warn（恢复后同型免再报；关市常态非异常，
+// 区别于 fail-closed critical——§1.3 文案定稿）。
+func (e *Engine) markLegSuspend(ctx context.Context, posID int64, why string) {
+	e.legSuspendMu.Lock()
+	if e.legSuspend == nil {
+		e.legSuspend = make(map[int64]bool) // 测试直接构造 &Engine{} 兜底
+	}
+	first := !e.legSuspend[posID]
+	e.legSuspend[posID] = true
+	e.legSuspendMu.Unlock()
+	log.Printf("[autotrade] pos=%d leg-actionable suspend: %s", posID, why)
+	if !first {
+		return
+	}
+	msg := fmt.Sprintf("品种 %s 当前无可交易行情（休市/断流），平仓挂起，行情恢复自动续平", why)
+	if err := e.store.InsertPositionAlert(ctx, posID, "warn", msg); err != nil {
+		log.Printf("[autotrade] pos %d suspend alert write: %v", posID, err)
+	}
+}
+
+// clearLegSuspend 行情恢复出 suspend 态（下轮同型可再报）。
+func (e *Engine) clearLegSuspend(posID int64) {
+	e.legSuspendMu.Lock()
+	delete(e.legSuspend, posID)
+	e.legSuspendMu.Unlock()
 }
 
 // logCloseTrigger D-245 缺口2：平仓触发源持久化（481 实证 stdout 随容器重建丢失）。
