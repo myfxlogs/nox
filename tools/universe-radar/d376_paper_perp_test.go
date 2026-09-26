@@ -60,8 +60,8 @@ func TestD376_PerpOpen_ComboKey(t *testing.T) {
 		t.Fatalf("锚①: want 1 active, got %d", len(active))
 	}
 	p := active[0]
-	if p.Venue != "binance×okx" || p.Symbol != "OP" || p.Side != "perp_perp" || p.Structure != "perp_perp" {
-		t.Fatalf("锚①: venue/symbol/side/structure = %s/%s/%s/%s, want binance×okx/OP/perp_perp/perp_perp", p.Venue, p.Symbol, p.Side, p.Structure)
+	if p.VenuePair() != "binance×okx" || p.Symbol != "OP" || p.Side != "perp_perp" || p.Structure != "perp_perp" {
+		t.Fatalf("锚①: venue/symbol/side/structure = %s/%s/%s/%s, want binance×okx/OP/perp_perp/perp_perp", p.VenuePair(), p.Symbol, p.Side, p.Structure)
 	}
 	if math.Abs(p.EntryFundingAnn-24.5) > 1e-9 {
 		t.Fatalf("锚①: entry_funding_ann = %v, want 24.5（net 已含方向）", p.EntryFundingAnn)
@@ -131,7 +131,7 @@ func TestD376_PerpReversalExit(t *testing.T) {
 		t.Fatalf("锚③: 反向重开 opened=%v err=%v, want [OP]", opened, err)
 	}
 	active, _ := s.ListActivePaperSpotCarry(ctx)
-	if len(active) != 1 || active[0].Venue != "okx×binance" {
+	if len(active) != 1 || active[0].VenuePair() != "okx×binance" {
 		t.Fatalf("锚③: 反向行 want okx×binance active, got %+v", active)
 	}
 }

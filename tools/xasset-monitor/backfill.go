@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"arb/internal/httpx"
+	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 )
 
@@ -160,7 +161,7 @@ func runBackfillMode(ctx context.Context) error {
 	defer st.Close()
 	hc := httpx.Client()
 	since := time.Now().Add(-5 * 24 * time.Hour) // Exness ticks 保留窗（诚实边界）
-	mtVenue := exnessVenue + ":mt5"
+	mtVenue := keydomain.Join(exnessVenue, "mt5")
 	var firstErr error
 	combos, uni, err := loadDerivationInputs(ctx, st)
 	if err != nil {
