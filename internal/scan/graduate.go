@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 )
 
@@ -227,7 +228,7 @@ func ResolveGraduationCanonicals(symbol, mtVenue string, platform int, mappings 
 	}
 	return ResolvedCfdPair{
 		MtCanonical:  mtCanon,
-		MtVenueKey:   mtVenue + ":" + pt,
+		MtVenueKey:   keydomain.Join(mtVenue, pt),
 		CexCanonical: symbol + "USDT",
 	}, nil
 }

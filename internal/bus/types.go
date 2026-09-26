@@ -1,6 +1,10 @@
 package bus
 
-import "time"
+import (
+	"time"
+
+	"arb/internal/keydomain"
+)
 
 // Quote 是 CFD 和加密行情的公共抽象（§1.1）。
 // 热路径用 float64，无 decimal 分配。
@@ -16,7 +20,7 @@ type Quote struct {
 
 // VenueKey 返回复合键 "{venue}:{venue_type}"（D-028）。
 func (q Quote) VenueKey() string {
-	return q.Venue + ":" + q.VenueType
+	return keydomain.Join(q.Venue, q.VenueType)
 }
 
 // Mid 返回中间价 (bid+ask)/2。

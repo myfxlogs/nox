@@ -141,10 +141,10 @@ func warnMonitorBookAbsent(ctx context.Context, st PaperStore, slots []authSlot)
 // （cex→+:perp 与仓腿/机会 venue 形态对齐；mt→+:mt5；已带冒号原样=诚实不猜）。
 func monitorVenueKeys(cexV, mtV string) (cexVenue, mtVenue string) {
 	cexVenue, mtVenue = cexV, mtV
-	if cexVenue != "" && !strings.Contains(cexVenue, ":") {
+	if cexVenue != "" && keydomain.Parse(cexVenue).Type == "" {
 		cexVenue = keydomain.Join(cexVenue, "perp")
 	}
-	if mtVenue != "" && !strings.Contains(mtVenue, ":") {
+	if mtVenue != "" && keydomain.Parse(mtVenue).Type == "" {
 		mtVenue = keydomain.Join(mtVenue, "mt5")
 	}
 	return cexVenue, mtVenue

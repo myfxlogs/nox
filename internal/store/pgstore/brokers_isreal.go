@@ -79,7 +79,7 @@ func (s *Store) ListVenueIsReal(ctx context.Context) (map[string]*bool, error) {
 			continue
 		}
 		isReal := !simulated
-		m[venue+":"+vt] = &isReal
+		m[keydomain.Join(venue, vt)] = &isReal
 	}
 	return m, cexRows.Err()
 }

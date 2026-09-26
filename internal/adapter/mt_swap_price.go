@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"arb/internal/bus"
+	"arb/internal/keydomain"
 )
 
 // summarizeMissingSyms 缺报价符号名单摘要：前 10 个 + 超出计 "…+N"（D-104 P0 返修③ R-c2）。
@@ -36,7 +37,7 @@ func venuePrice(snap map[string]map[string]bus.Quote, canonical, venue, venueTyp
 	if !ok {
 		return 0
 	}
-	if v, ok2 := venues[venue+":"+venueType]; ok2 && v.Bid > 0 {
+	if v, ok2 := venues[keydomain.Join(venue, venueType)]; ok2 && v.Bid > 0 {
 		return v.Bid
 	}
 	for _, v := range venues {

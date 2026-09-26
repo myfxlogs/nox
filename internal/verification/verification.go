@@ -7,6 +7,7 @@
 package verification
 
 import (
+	"arb/internal/keydomain"
 	"math"
 	"strings"
 )
@@ -98,8 +99,8 @@ func VkeyFromOppID(oppID string) string {
 		return ""
 	}
 	typ := parts[0]
-	venueBuy := parts[2] + ":" + parts[3]
-	venueSell := parts[4] + ":" + parts[5]
+	venueBuy := keydomain.Join(parts[2], parts[3])
+	venueSell := keydomain.Join(parts[4], parts[5])
 	return Vkey(typ, venueBuy, venueSell)
 }
 
