@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"arb/internal/httpx"
+	"arb/internal/keydomain"
 )
 
 // CEXExecutor 是 Binance/OKX REST 签名下单执行器（§13.2）。
@@ -99,7 +100,7 @@ func (e *CEXExecutor) Key() string {
 	if e.keyOverride != "" {
 		return e.keyOverride
 	}
-	return e.venue + ":" + e.venueType
+	return keydomain.Join(e.venue, e.venueType)
 }
 
 // SetKeyOverride D-362 S3：设置撞键归一后的注册键（由 reconcile.CexVenueKey 计算）。

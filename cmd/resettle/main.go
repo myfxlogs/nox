@@ -138,7 +138,7 @@ func (t *resettler) run(ctx context.Context, posID int64, dry bool) {
 	var calibratable []pgstore.PositionLeg
 	for _, l := range legs {
 		if l.Phase == "OPEN" && l.Status == "FILLED" && l.OrderID != "" &&
-			(strings.HasSuffix(l.Venue, ":mt4") || strings.HasSuffix(l.Venue, ":mt5")) {
+			keydomain.IsMTKey(l.Venue) {
 			calibratable = append(calibratable, l)
 		}
 	}
@@ -175,7 +175,7 @@ func (t *resettler) run(ctx context.Context, posID int64, dry bool) {
 	}
 	for _, l := range legs {
 		if l.Phase != "OPEN" || l.Status != "FILLED" ||
-			(strings.HasSuffix(l.Venue, ":mt4") || strings.HasSuffix(l.Venue, ":mt5")) {
+			keydomain.IsMTKey(l.Venue) {
 			continue
 		}
 		cl := closeByLeg[l.LegNo]

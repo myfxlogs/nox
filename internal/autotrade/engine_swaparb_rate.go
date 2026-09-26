@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"arb/internal/fact"
+	"arb/internal/keydomain"
 	"arb/internal/usdnotional"
 )
 
@@ -98,7 +99,7 @@ func (e *Engine) notionalPerLotForRate(venue, symbol string) (float64, bool) {
 	// 此处 venue 是 bare，需遍历 quotes 找匹配 venue 前缀的报价。
 	// 简化：尝试 mt5 后缀（MT5 是主战场），未命中再尝试 mt4。
 	for _, suffix := range []string{"mt5", "mt4", "spot", "perp"} {
-		venueKey := venue + ":" + suffix
+		venueKey := keydomain.Join(venue, suffix)
 		if q, ok := e.quotes.Latest(symbol, venueKey); ok {
 			mid := (q.Bid + q.Ask) / 2
 			if mid <= 0 {

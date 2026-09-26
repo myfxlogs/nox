@@ -97,12 +97,12 @@ func (d *XAssetCarryDetector) Scan(ctx context.Context, snapshot map[string]map[
 				for j := i + 1; j < len(canons); j++ {
 					ca, cb := canons[i], canons[j]
 					for _, ea := range byCanon[ca] {
-						qa, ok := snapshot[ca][ea.Venue+":"+ea.VenueType]
+						qa, ok := snapshot[ca][keydomain.Join(ea.Venue, ea.VenueType)]
 						if !ok {
 							continue
 						}
 						for _, eb := range byCanon[cb] {
-							qb, ok := snapshot[cb][eb.Venue+":"+eb.VenueType]
+							qb, ok := snapshot[cb][keydomain.Join(eb.Venue, eb.VenueType)]
 							if !ok {
 								continue
 							}
