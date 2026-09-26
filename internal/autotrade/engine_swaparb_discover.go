@@ -18,11 +18,11 @@ import (
 // 候选枚举仍用 spec facts（swap_long/short）作 venue×symbol 索引——settled facts 不覆盖全 venue
 // （冷启动 venue 无画像），spec 是"已知可配对 venue"的完整索引；净 swap 值由 swapRateFor 重算。
 func (e *Engine) discoverSwapCombos(ctx context.Context) []swapComboCandidate {
-	longFacts, err := e.store.LatestFacts(ctx, fact.KindSwapLong, "", "")
+	longFacts, err := e.store.LatestFactsByKind(ctx, fact.KindSwapLong)
 	if err != nil || len(longFacts) == 0 {
 		return nil
 	}
-	shortFacts, err := e.store.LatestFacts(ctx, fact.KindSwapShort, "", "")
+	shortFacts, err := e.store.LatestFactsByKind(ctx, fact.KindSwapShort)
 	if err != nil || len(shortFacts) == 0 {
 		return nil
 	}
