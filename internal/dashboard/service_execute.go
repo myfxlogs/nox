@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -103,10 +104,24 @@ func (s *Service) ClosePosition(ctx context.Context, req *connect.Request[v1.Clo
 		}), nil
 	}
 	s.logCloseTrigger(ctx, req.Msg.GetPositionId(), "manual_rpc") // D-245 触发源持久化
-	if err := s.pipeline.ClosePosition(ctx, req.Msg.GetPositionId()); err != nil {
+	// D-495 S5：force=true=业主显式逃逸门（前端 confirm 后重发）；ErrLegNotActionable
+	// 透传 §1.3 定稿文案+leg_not_actionable 标记（前端据标记弹 confirm，不做判定）。
+	var closeErr error
+	if req.Msg.GetForce() {
+		closeErr = s.pipeline.ClosePositionForce(ctx, req.Msg.GetPositionId())
+	} else {
+		closeErr = s.pipeline.ClosePosition(ctx, req.Msg.GetPositionId())
+	}
+	if closeErr != nil {
+		msg := closeErr.Error()
+		var lae *exec.LegNotActionableError
+		if errors.As(closeErr, &lae) {
+			msg = fmt.Sprintf("leg_not_actionable: 品种 %s@%s 当前无可交易行情（休市或断流），强制平仓将导致单腿裸露——如确需平仓请勾选强制",
+				lae.Symbol, lae.VenueKey)
+		}
 		return connect.NewResponse(&v1.ClosePositionResponse{
 			Status:  "FAILED",
-			Message: err.Error(),
+			Message: msg,
 		}), nil
 	}
 	// D-087 §3.2：手动平仓 → settlement.Settle（fire-and-forget，不阻塞 RPC）
