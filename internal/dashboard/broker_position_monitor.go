@@ -179,7 +179,9 @@ func (m *BrokerPositionMonitor) poll(ctx context.Context) {
 
 	if changed {
 		if m.topic != nil {
-			m.topic.Publish(&v1.BrokerPositionSnapshot{Positions: view})
+			s := &v1.BrokerPositionSnapshot{Positions: view}
+			s.PnlSumUsd, s.NetSumUsd = brokerSums(view) // D-508 S8
+			m.topic.Publish(s)
 		}
 		log.Printf("[broker-mon] snapshot changed: %d positions", len(view))
 	}
@@ -214,7 +216,9 @@ func (m *BrokerPositionMonitor) requote(ctx context.Context) {
 	m.mu.Unlock()
 
 	if changed && m.topic != nil {
-		m.topic.Publish(&v1.BrokerPositionSnapshot{Positions: view})
+		s := &v1.BrokerPositionSnapshot{Positions: view}
+		s.PnlSumUsd, s.NetSumUsd = brokerSums(view) // D-508 S8
+		m.topic.Publish(s)
 	}
 }
 

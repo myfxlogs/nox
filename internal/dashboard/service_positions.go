@@ -232,38 +232,6 @@ func (s *Service) ListDailyIncome(ctx context.Context, req *connect.Request[v1.L
 	return connect.NewResponse(&v1.ListDailyIncomeResponse{Items: items}), nil
 }
 
-// --- 盈亏统计起点（F4：anchor 重置，业主选 A「不删历史」） ---
-
-// GetPnlAnchor 返回盈亏统计起点 + 累计已实现（closed_at >= anchor 后端口径）。
-// 前端「累计已实现」改用此后端口径（替代前端全量聚合，支持 anchor 重置）。
-// 「今日已实现」不受 anchor 影响（当日口径，前端聚合不变）。
-func (s *Service) GetPnlAnchor(ctx context.Context, req *connect.Request[v1.GetPnlAnchorRequest]) (*connect.Response[v1.GetPnlAnchorResponse], error) {
-	anchor, err := s.store.GetPnlAnchor(ctx)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	realized, err := s.store.RealizedPnlSinceAnchor(ctx)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	return connect.NewResponse(&v1.GetPnlAnchorResponse{
-		Anchor:              timestamppb.New(anchor),
-		RealizedSinceAnchor: realized,
-	}), nil
-}
-
-// ResetPnlAnchor 重置盈亏统计起点为 now()（业主点「清零」→ anchor=now()）。
-// 历史 CLOSED 持仓不删除（业主选 A「不删历史」）；今日口径与停机状态不变。
-func (s *Service) ResetPnlAnchor(ctx context.Context, req *connect.Request[v1.ResetPnlAnchorRequest]) (*connect.Response[v1.ResetPnlAnchorResponse], error) {
-	anchor, err := s.store.ResetPnlAnchor(ctx)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	return connect.NewResponse(&v1.ResetPnlAnchorResponse{
-		Anchor: timestamppb.New(anchor),
-	}), nil
-}
-
 // dailyIncomeToProto 组装单条每日收益：income_usd = energy×price + voting×price + interest（price 无值按 0）。
 func dailyIncomeToProto(d *pgstore.DailyIncome) *v1.PositionDailyIncome {
 	pb := &v1.PositionDailyIncome{

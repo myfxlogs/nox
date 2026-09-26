@@ -223,6 +223,9 @@ func enrichOne(ctx context.Context, s *Service, pb *v1.Position, legs []pgstore.
 			pb.ExpectedBreakevenDays = o.BreakevenDays
 		}
 	}
+
+	// 5. D-508 S8 前端零信任收编——阈值/抑制/兜底终值全部后端下发（实现=helpers 同文件域）。
+	enrichDisplayTerminals(pb, openLegs, now)
 }
 
 // entryFrictionUSD D-391 R1：回本列「本」=入场摩擦成本（USD，开仓即定不随行情漂）。

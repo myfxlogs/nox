@@ -137,3 +137,40 @@ func computeCurrentBps(pb *v1.Position, openLegs []pgstore.PositionLeg, qbus *bu
 		return 0, false
 	}
 }
+
+// enrichDisplayTerminals D-508 S8：展示终值统一下发——hold_days（活跃行 now−opened_at）、
+// attainment_tone（<50 neg / >=100 pos / 收敛型 cur>=exp pos）、remaining_net_bps（exp−cur）、
+// break_even_tone/suppressed（实测0且净估<0→suppress 亮「账面回本·净估<0」，否则 0→pos）。
+// 阈值判据全在后端，前端只映射 class。
+func enrichDisplayTerminals(pb *v1.Position, openLegs []pgstore.PositionLeg, now time.Time) {
+	if pb.HoldDays == nil {
+		if d := holdDaysToNow(pb, openLegs, now); d > 0 {
+			pb.HoldDays = &d
+		}
+	}
+	if pb.AttainmentPct != nil {
+		tone := ""
+		if *pb.AttainmentPct < 50 {
+			tone = "neg"
+		} else if *pb.AttainmentPct >= 100 {
+			tone = "pos"
+		}
+		pb.AttainmentTone = &tone
+	} else if convergentTypes[pb.Type] && pb.CurrentNetBps != nil {
+		rem := pb.ExpectedNetBps - *pb.CurrentNetBps
+		pb.RemainingNetBps = &rem
+		if *pb.CurrentNetBps-pb.ExpectedNetBps >= 0 {
+			tone := "pos"
+			pb.AttainmentTone = &tone
+		}
+	}
+	if pb.BreakEvenDays != nil && *pb.BreakEvenDays == 0 {
+		if pb.CloseNowNetUsd != nil && *pb.CloseNowNetUsd < 0 {
+			t := true
+			pb.BreakEvenSuppressed = &t
+		} else {
+			tone := "pos"
+			pb.BreakEvenTone = &tone
+		}
+	}
+}

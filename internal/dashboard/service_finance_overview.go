@@ -69,11 +69,14 @@ func (s *Service) buildFinanceOverview(ctx context.Context) (*v1.GetFinanceOverv
 		TotalEquityUsd: equity,
 		NetPnlUsd:      equity - deposited,
 	}
+	var totalRealized float64
 	for _, r := range pnls {
+		totalRealized += r.RealizedPnl // D-508 S8：前端零聚合
 		resp.PnlByEnv = append(resp.PnlByEnv, &v1.FinancePnlByEnv{
 			Environment: r.Environment, RealizedPnl: r.RealizedPnl, Closed: int32(r.Closed),
 		})
 	}
+	resp.TotalRealizedUsd = totalRealized
 	for _, r := range incomes {
 		resp.IncomeByKind = append(resp.IncomeByKind, &v1.FinanceIncomeRow{
 			Kind: r.Kind, TotalUsd: r.TotalUSD, Rows: int32(r.Rows),

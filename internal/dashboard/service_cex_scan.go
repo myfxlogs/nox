@@ -13,6 +13,21 @@ import (
 	v1 "arb/internal/gen/dashboardv1"
 )
 
+// spreadVerdict/fundingVerdict D-508 S8：原前端硬编码阈值（50bps / 年化10%）后端收编。
+func spreadVerdict(bps float64) string {
+	if bps >= 50 {
+		return "opportunity"
+	}
+	return "not_opportunity"
+}
+
+func fundingVerdict(rate float64) string {
+	if rate*100 >= 10 {
+		return "opportunity"
+	}
+	return "not_opportunity"
+}
+
 // GetCexScanSnapshot 返回 CEX 只读扫描器快照（理财 APR + 跨所价差 + funding + 余额）。
 func (s *Service) GetCexScanSnapshot(ctx context.Context, req *connect.Request[v1.GetCexScanSnapshotRequest]) (*connect.Response[v1.GetCexScanSnapshotResponse], error) {
 	if s.store == nil {
@@ -54,6 +69,8 @@ func (s *Service) GetCexScanSnapshot(ctx context.Context, req *connect.Request[v
 			PriceSell: sp.PriceSell,
 			SpreadBps: sp.SpreadBps,
 			Ts:        sp.Ts.Format("2006-01-02T15:04:05Z07:00"),
+			// D-508 S8：色阶阈值后端裁决（>=50bps=opportunity，前端只映射 VERDICT_COLOR）。
+			Verdict: spreadVerdict(sp.SpreadBps),
 		})
 	}
 
@@ -69,6 +86,8 @@ func (s *Service) GetCexScanSnapshot(ctx context.Context, req *connect.Request[v
 			Symbol: f.Symbol,
 			Rate:   f.Value,
 			Ts:     f.Ts.Format("2006-01-02T15:04:05Z07:00"),
+			// D-508 S8：年化>=10% 标 opportunity（阈值由前端迁入，单一判据源）。
+			Verdict: fundingVerdict(f.Value),
 		})
 	}
 

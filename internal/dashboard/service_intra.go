@@ -73,6 +73,17 @@ func (s *Service) IntraTrackStats(ctx context.Context, _ *connect.Request[v1.Int
 			SlipP90Bps: r.SlipP90Bps, CircuitDays: int32(r.CircuitDays),
 			KillCount: int32(r.KillCount),
 		})
+		// D-508 S8：胜率+色阶后端下发（前端零除法零阈值）。
+		if r.Closed > 0 {
+			pct := float64(r.WinCount) / float64(r.Closed) * 100
+			b := resp.Baselines[len(resp.Baselines)-1]
+			b.WinRatePct = &pct
+			if pct >= 50 {
+				b.WinTone = "ok"
+			} else {
+				b.WinTone = "part"
+			}
+		}
 	}
 	return connect.NewResponse(resp), nil
 }

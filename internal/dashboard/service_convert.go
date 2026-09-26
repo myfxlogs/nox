@@ -76,6 +76,7 @@ func (s *Service) oppToProto(ctx context.Context, o *pgstore.Opportunity) *v1.Op
 	// D-062 显示层 USD 派生（存储不动）。gap_usd_per_unit 无 CS 依赖恒填；
 	// per-lot 字段依赖 venue_buy 侧 CS（D-061 对称桶保证跨 venue 一致），缺失/≤0 → 全 0（前端回退 bps）。
 	pb.GapUsdPerUnit = o.PriceSell - o.PriceBuy
+	pb.CostBps = o.SpreadCost + o.CommissionCost + o.SlippageCost + o.SwapCost // D-508 S8
 	if s.oppContractSize != nil {
 		if cs, ok := s.oppContractSize(o.Canonical, o.VenueBuy); ok && cs > 0 && o.PriceBuy > 0 {
 			totalCost := o.SpreadCost + o.CommissionCost + o.SlippageCost + o.SwapCost

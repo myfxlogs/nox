@@ -235,3 +235,58 @@ func TestD490_PerpPerpFundingRejected(t *testing.T) {
 		t.Error("拒批不得落账")
 	}
 }
+
+// TestD508_DryRunLegPools S8：dry_run 回 leg_pools 腿→池映射终值（venue_key 后端推导 +
+// allocPoolOf 回退链 + is_min 小池标记；前端镜像链已删）。
+func TestD508_DryRunLegPools(t *testing.T) {
+	f, s := d490Fixture(d490Snaps(2000, 1000, "USD", time.Minute), 0.01)
+	resp, err := s.ApproveCarryGraduation(context.Background(), connect.NewRequest(&v1.ApproveCarryGraduationRequest{
+		GraduationId: 5, FundingUsd: d490f(200), DryRun: true,
+	}))
+	if err != nil || !resp.Msg.Ok {
+		t.Fatalf("dry_run ok=%v err=%s", resp.Msg.Ok, resp.Msg.Error)
+	}
+	if len(resp.Msg.LegPools) != 2 {
+		t.Fatalf("leg_pools want 2, got %+v", resp.Msg.LegPools)
+	}
+	lp := resp.Msg.LegPools
+	// venue_buy=mt 腿、venue_sell=cex 腿（d490Fixture structure 决定），小池=CEX $1000。
+	if !lp[0].Found || !lp[1].Found {
+		t.Fatalf("leg_pools found=false: %+v", lp)
+	}
+	if lp[0].PoolVenue == "" || lp[0].PoolVenueType == "" || lp[1].PoolVenue == "" || lp[1].PoolVenueType == "" {
+		t.Errorf("pool venue/type 未回传: %+v", lp)
+	}
+	minN := 0
+	for _, p := range lp {
+		if p.IsMin {
+			minN++
+			if p.Equity != 1000 {
+				t.Errorf("is_min 应标小池 $1000, got equity=%.1f", p.Equity)
+			}
+		}
+	}
+	if minN != 1 {
+		t.Errorf("is_min 恰一腿, got %d", minN)
+	}
+	if f.combo != nil {
+		t.Error("dry_run 零副作用破坏")
+	}
+}
+
+// TestD508_DryRunLegPoolsUnfetched 腿池无快照行 → found=false 如实下发（前端显「未采」）。
+func TestD508_DryRunLegPoolsUnfetched(t *testing.T) {
+	f, s := d490Fixture(nil, 0.01)
+	f.snaps = []pgstore.VenueAccountLatest{} // 无任何行
+	resp, err := s.ApproveCarryGraduation(context.Background(), connect.NewRequest(&v1.ApproveCarryGraduationRequest{
+		GraduationId: 5, MaxLongQty: 0.01, MaxShortQty: 1000, MaxGrossUsd: 5000, DryRun: true,
+	}))
+	if err != nil || !resp.Msg.Ok {
+		t.Fatalf("显式 dry_run ok=%v err=%s", resp.Msg.Ok, resp.Msg.Error)
+	}
+	for _, p := range resp.Msg.LegPools {
+		if p.Found {
+			t.Errorf("无快照应 found=false: %+v", p)
+		}
+	}
+}

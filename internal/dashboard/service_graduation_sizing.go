@@ -224,6 +224,11 @@ func (s *Service) gradDryRunResp(ctx context.Context, resp *v1.ApproveCarryGradu
 	if !funding {
 		fillExplicitEst(resp, longQty, shortQty, gross, notional)
 	}
+	// D-508 S8：腿→资金池映射随 dry_run 回传（allocPoolOf 回退链终值，前端删镜像+
+	// 免 listAccountMarginStatus 独立查询）。快照读失败→空列表（前端如实显「未采」降级）。
+	if snaps, err := s.gradDB().LatestVenueAccountSnapshots(ctx); err == nil {
+		resp.LegPools = gradLegPools(snaps, []string{venueBuy, venueSell})
+	}
 	resp.Ok = true
 }
 

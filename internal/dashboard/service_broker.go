@@ -39,7 +39,27 @@ func (s *Service) ListBrokerPositions(ctx context.Context, req *connect.Request[
 	annotateAccountAlias(ctx, s.store, out)
 	// D-152 微件①：CEX 腿按 (position_id, venue) 聚合 cashflows 填 swap（MT 不动）
 	annotateCEXSwap(ctx, s.store, out)
-	return connect.NewResponse(&v1.ListBrokerPositionsResponse{Positions: out}), nil
+	resp := &v1.ListBrokerPositionsResponse{Positions: out}
+	resp.PnlSumUsd, resp.NetSumUsd = brokerSums(out) // D-508 S8：统计条聚合后端下发
+	return connect.NewResponse(resp), nil
+}
+
+// brokerSums D-508 S8：统计条 Σ pnl / Σ(pnl+swap+commission)（RPC 与流推送同口径；
+// 全零/无持仓=nil 缺省 → 前端「—」诚实降级不冒充 0）。
+func brokerSums(out []*v1.BrokerPosition) (pnlSum, netSum *float64) {
+	var ps, ns float64
+	var hasData bool
+	for _, p := range out {
+		ps += p.Pnl
+		ns += p.Pnl + p.Swap + p.Commission
+		if p.Pnl != 0 || p.Swap != 0 || p.Commission != 0 {
+			hasData = true
+		}
+	}
+	if !hasData {
+		return nil, nil
+	}
+	return &ps, &ns
 }
 
 // PositionLegLister 查询 OPEN positions + legs 的接口（buildPositionIDIndex 依赖）。

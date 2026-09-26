@@ -30,7 +30,13 @@ func enrichSettlements(ctx context.Context, store settlementQuerier, pbPositions
 	for _, pb := range pbPositions {
 		sr, ok := settlements[pb.Id]
 		if !ok {
-			continue // 无结算行 → 留缺省
+			// D-508 S8：CLOSED 无结算行回退 closed_at−opened_at（前端 holdDaysFallback 下沉；
+			// 活跃行 hold_days 由 enrichOne 填 now−opened_at）。
+			if pb.Status == "CLOSED" && pb.OpenedAt != nil && pb.ClosedAt != nil && pb.ClosedAt.AsTime().After(pb.OpenedAt.AsTime()) {
+				d := pb.ClosedAt.AsTime().Sub(pb.OpenedAt.AsTime()).Hours() / 24
+				pb.HoldDays = &d
+			}
+			continue
 		}
 		pb.SettledRealizedUsd = &sr.RealizedUsd
 		if sr.NotionalUsd != nil {
