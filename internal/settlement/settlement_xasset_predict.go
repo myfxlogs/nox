@@ -11,6 +11,7 @@ import (
 	"math"
 	"strings"
 
+	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 )
 
@@ -67,12 +68,7 @@ func parseXassetDedupKey(key string) (string, []string) {
 	}
 	rest := parts[2:]
 	half := len(rest) / 2
-	bare := func(vk string) string { // venue_key→裸名（paper venue 组合串=裸名×裸名）
-		if i := strings.Index(vk, ":"); i >= 0 {
-			return vk[:i]
-		}
-		return vk
-	}
+	bare := keydomain.BareOf // venue_key→裸名（paper venue 组合串=裸名×裸名）
 	return parts[1], []string{
 		bare(strings.Join(rest[:half], ":")),
 		bare(strings.Join(rest[half:], ":")),
