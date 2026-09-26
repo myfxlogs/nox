@@ -6,6 +6,7 @@
 package dashboard
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"fmt"
 	"strings"
@@ -84,7 +85,7 @@ func (s *Service) graduationRiskReport(ctx context.Context, legs []riskLegSpec, 
 			// 腿资金需求：MT=notional×init_margin_rate；CEX perp=notional/lev_rec；spot=全款。
 			switch vt {
 			case "mt4", "mt5":
-				imr, err := s.gradDB().LatestFacts(ctx, fact.KindInitMarginRate, bare, bare)
+				imr, err := s.gradDB().LatestFacts(ctx, fact.KindInitMarginRate, bare, "")
 				if err == nil && len(imr) > 0 && imr[0].Value > 0 {
 					m := notional * imr[0].Value
 					out.MarginUsd = &m
@@ -147,10 +148,10 @@ func (s *Service) graduationRiskReport(ctx context.Context, legs []riskLegSpec, 
 	// 最坏场景：funding 翻号单日成本=notional×|worst_ann|/365（窗口 worst 缺→last_funding_ann）。
 	worstAnn := 0.0
 	for _, leg := range legs {
-		if !strings.HasSuffix(leg.venueKey, ":perp") {
+		if !keydomain.IsType(leg.venueKey, "perp") {
 			continue
 		}
-		bare := strings.TrimSuffix(leg.venueKey, ":perp")
+		bare := keydomain.BareOf(leg.venueKey)
 		rows, err := s.gradDB().FundingPredWindow(ctx, bare, leg.symbol, now.Add(-s.carryRegime.Window))
 		if err != nil || len(rows) == 0 {
 			continue
@@ -178,10 +179,10 @@ func (s *Service) graduationRiskReport(ctx context.Context, legs []riskLegSpec, 
 	// adverse_basis_p95：monitor 簿 venue 对 p95 折 usd（无簿→NULL+gap）。
 	var cexV, mtV string
 	for _, leg := range legs {
-		if strings.HasSuffix(leg.venueKey, ":perp") {
+		if keydomain.IsType(leg.venueKey, "perp") {
 			cexV = leg.venueKey
 		}
-		if strings.HasSuffix(leg.venueKey, ":mt5") {
+		if keydomain.IsType(leg.venueKey, "mt5") {
 			mtV = leg.venueKey
 		}
 	}

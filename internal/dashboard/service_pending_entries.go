@@ -6,6 +6,7 @@
 package dashboard
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"fmt"
 	"sort"
@@ -142,8 +143,8 @@ func (s *Service) comboInPosition(ctx context.Context, c pgstore.XAssetComboAdmi
 // 返回 kind/waitReason/depth/ready。depth=闯到的最深闸序（D-483 排序键：
 // 0=构型未覆盖 1=venue/canonical/构型禁入(配置型永阻) 2=旗标 4=regime 5=tick 6=监控簿 7=cap 8=就绪）。
 func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow, venueAllow, canonAllow map[string]bool, flags map[string]pgstore.VenueSymbolFlag, caps map[string]pgstore.VenueExposureCap) (kind, reason string, depth int, ready bool) {
-	buyMT := strings.HasSuffix(c.VenueBuy, ":mt4") || strings.HasSuffix(c.VenueBuy, ":mt5")
-	sellMT := strings.HasSuffix(c.VenueSell, ":mt4") || strings.HasSuffix(c.VenueSell, ":mt5")
+	buyMT := keydomain.IsMTKey(c.VenueBuy)
+	sellMT := keydomain.IsMTKey(c.VenueSell)
 	// D-478 返修 R6：kind 推断=「恰好一条 MT 腿→XASSET_CARRY」（buy/sell 双向——原实现缺
 	// MT 卖腿分支，生产实证 row1 CLUSDT(gate:perp)×WTI(277842155:mt5) 误报「构型未覆盖」）；
 	// 死分支（VenueBuy=="" 空表值/重复 spot×perp 判）并入整理；perp×perp/spot×spot/双 MT
@@ -151,9 +152,9 @@ func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow,
 	switch {
 	case buyMT != sellMT:
 		kind = "XASSET_CARRY"
-	case strings.HasSuffix(c.VenueBuy, ":spot") && strings.HasSuffix(c.VenueSell, ":perp"):
+	case keydomain.IsType(c.VenueBuy, "spot") && keydomain.IsType(c.VenueSell, "perp"):
 		kind = "FUNDING_HEDGE" // 正向（spot 买×perp 卖）
-	case strings.HasSuffix(c.VenueBuy, ":perp") && strings.HasSuffix(c.VenueSell, ":spot"):
+	case keydomain.IsType(c.VenueBuy, "perp") && keydomain.IsType(c.VenueSell, "spot"):
 		kind = "FUNDING_HEDGE" // 反构型（perp 买腿）→ 下方构型禁入分支接住（SSOT 标签不失义）
 	}
 	// R5：构型未覆盖（双 CEX/未知形态）→「构型未覆盖」短路，不走七闸（同所组合不产两型 opp）。
@@ -180,7 +181,7 @@ func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow,
 		}
 	}
 	// 构型：FUNDING_HEDGE 反构型（perp 买腿）→ 构型禁入（D-473 v1 正向钉死）。
-	if kind == "FUNDING_HEDGE" && strings.HasSuffix(c.VenueBuy, ":perp") {
+	if kind == "FUNDING_HEDGE" && keydomain.IsType(c.VenueBuy, "perp") {
 		return kind, "组合方向不支持：仅允许 现货买×合约空 结构", 1, false
 	}
 	// 闸 3：regime 闸（两型分流，reason=各闸原输出）。
@@ -190,7 +191,7 @@ func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow,
 		}
 	}
 	if kind == "FUNDING_HEDGE" {
-		perpVenue := strings.TrimSuffix(c.VenueSell, ":perp")
+		perpVenue := keydomain.BareOf(c.VenueSell)
 		rows, err := s.store.FundingPredWindow(ctx, perpVenue, c.CanonicalBuy, time.Now().Add(-24*time.Hour))
 		if err != nil {
 			return kind, fmt.Sprintf("息差数据查询失败（保守不放行）: %v", err), 4, false
@@ -345,7 +346,7 @@ func (s *Service) venueExposureSum(venue string) (float64, error) {
 func monitorPairKey(c pgstore.XAssetComboAdminRow) string {
 	mtCanon := c.CanonicalBuy
 	cexCanon := c.CanonicalSell
-	if strings.HasSuffix(c.VenueSell, ":mt4") || strings.HasSuffix(c.VenueSell, ":mt5") {
+	if keydomain.IsMTKey(c.VenueSell) {
 		mtCanon, cexCanon = c.CanonicalSell, c.CanonicalBuy
 	}
 	bare := strings.TrimSuffix(mtCanon, "USDT")
@@ -356,7 +357,7 @@ func monitorPairKey(c pgstore.XAssetComboAdminRow) string {
 }
 
 func monitorLegKeys(c pgstore.XAssetComboAdminRow) (cexVenue, mtVenue string) {
-	if strings.HasSuffix(c.VenueSell, ":mt4") || strings.HasSuffix(c.VenueSell, ":mt5") {
+	if keydomain.IsMTKey(c.VenueSell) {
 		return legBare(c.VenueBuy, "perp"), legBare(c.VenueSell, "mt5")
 	}
 	return legBare(c.VenueSell, "perp"), legBare(c.VenueBuy, "mt5")
@@ -373,13 +374,13 @@ func legBare(venueKey, suffix string) string {
 // cex perp/spot 腿 symbol=canonical（tick 源=采集器原生符号，缺=不设闸）。
 func legMarket(venueKey, canonical string) (vt, sym string) {
 	switch {
-	case strings.HasSuffix(venueKey, ":mt5"):
+	case keydomain.IsType(venueKey, "mt5"):
 		return "mt5", canonical
-	case strings.HasSuffix(venueKey, ":mt4"):
+	case keydomain.IsType(venueKey, "mt4"):
 		return "mt4", canonical
-	case strings.HasSuffix(venueKey, ":perp"):
+	case keydomain.IsType(venueKey, "perp"):
 		return "perp", canonical
-	case strings.HasSuffix(venueKey, ":spot"):
+	case keydomain.IsType(venueKey, "spot"):
 		return "spot", canonical
 	}
 	return "", ""

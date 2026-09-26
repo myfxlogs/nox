@@ -145,12 +145,7 @@ func (c *SettlementProfileCollector) isTripleSwapDay(ctx context.Context, venue,
 	if len(facts) > 0 {
 		return int(facts[0].Value) == int(day.UTC().Weekday())
 	}
-	// 2. venue 级（symbol=venue）
-	facts, _ = c.store.LatestFacts(ctx, fact.KindTripleSwapDay, venue, venue)
-	if len(facts) > 0 {
-		return int(facts[0].Value) == int(day.UTC().Weekday())
-	}
-	// 3. 不限 symbol 兜底
+	// 2. 不限 symbol 兜底（D-496：账号级 fact symbol=NULL，本步天然命中 venue 级行）
 	facts, _ = c.store.LatestFacts(ctx, fact.KindTripleSwapDay, venue, "")
 	if len(facts) > 0 {
 		return int(facts[0].Value) == int(day.UTC().Weekday())

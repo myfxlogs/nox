@@ -32,6 +32,10 @@ func d383SeedMap(t *testing.T, st *pgstore.Store, rows []struct {
 	t.Helper()
 	for _, r := range rows {
 		if _, err := st.Pool().Exec(context.Background(),
+			`INSERT INTO broker_accounts (venue, venue_type, host, port, password) VALUES ($1,'mt5','h',443,'p') ON CONFLICT (venue) DO NOTHING`, r.venue); err != nil {
+			t.Fatalf("seed broker %s: %v", r.venue, err)
+		}
+		if _, err := st.Pool().Exec(context.Background(),
 			`INSERT INTO broker_symbol_map (venue, broker_symbol, canonical, is_primary) VALUES ($1,$2,$3,$4)`,
 			r.venue, r.sym, r.canon, r.primary); err != nil {
 			t.Fatalf("seed %s.%s: %v", r.venue, r.sym, err)
@@ -142,6 +146,10 @@ func TestD383A6_AutoMapMultiRowDeadGroup(t *testing.T) {
 		{"other", "XAUUSD247m", "XAUUSD", false},
 		{"other", "EURUSD", "EURUSD", true},
 	})
+	if _, err := st.Pool().Exec(context.Background(),
+		`INSERT INTO broker_accounts (venue, venue_type, host, port, password) VALUES ('fresh','mt5','h',443,'p') ON CONFLICT (venue) DO NOTHING`); err != nil {
+		t.Fatalf("seed fresh account: %v", err)
+	}
 	m := NewBrokerManager(st, nil, nil, time.Minute)
 	var alerts []string
 	m.AlertSink = func(level, msg string) { alerts = append(alerts, level+"|"+msg) }

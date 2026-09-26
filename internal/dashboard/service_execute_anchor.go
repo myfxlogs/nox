@@ -6,8 +6,8 @@
 package dashboard
 
 import (
+	"arb/internal/keydomain"
 	"context"
-	"strings"
 
 	"arb/internal/store/pgstore"
 )
@@ -62,7 +62,7 @@ func (s *Service) xassetSellCanonicalFor(ctx context.Context, opp *pgstore.Oppor
 	if opp != nil && opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
 		return *opp.CanonicalSell
 	}
-	bare := strings.Split(sellLeg.Venue, ":")[0]
+	bare := keydomain.BareOf(sellLeg.Venue)
 	maps, err := s.store.ListSymbolMappings(ctx, bare)
 	if err != nil {
 		return ""

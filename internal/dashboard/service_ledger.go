@@ -140,7 +140,7 @@ func (s *Service) ListKnowledgeEntries(ctx context.Context, req *connect.Request
 		pe := &v1.KnowledgeEntry{
 			Id:             e.ID,
 			Signature:      e.Signature,
-			Venue:          e.Venue,
+			Venue:          strings.Join(e.VenueKeys, ","),
 			Symbol:         e.Symbol,
 			Verdict:        e.Verdict,
 			Rationale:      e.Rationale,

@@ -20,8 +20,8 @@ func setupLiveGateServiceStore(t *testing.T, venueLong, venueShort string, longR
 	}
 	insert := func(venue string, isReal bool) {
 		if _, err := s.Pool().Exec(ctx,
-			`INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, server, status, is_real)
-			 VALUES ($1, 1, 'h', 443, 1, 'p', 's', 'connected', $2) ON CONFLICT DO NOTHING`,
+			`INSERT INTO broker_accounts (venue, venue_type, host, port, password, server, status, is_real)
+			 VALUES ($1, 'mt5', 'h', 443, 'p', 's', 'connected', $2) ON CONFLICT DO NOTHING`,
 			venue, isReal); err != nil {
 			t.Fatalf("insert broker_account %s: %v", venue, err)
 		}

@@ -49,7 +49,7 @@ func TestD327_ExecuteInternal_EntrySpreadBackfilled(t *testing.T) {
 	}
 	// D-378a S1：quote 锚需卖腿 canonical 反查（3001157 venue 裸名 × 卖腿 symbol）
 	if _, err := st.Pool().Exec(ctx,
-		`INSERT INTO broker_symbol_map (venue, broker_symbol, canonical) VALUES ('3001157','USOILm','CLUSDT') ON CONFLICT DO NOTHING`); err != nil {
+		`INSERT INTO broker_accounts (venue, venue_type, host, port, password) VALUES ('3001157','mt5','h',443,'p') ON CONFLICT (venue) DO NOTHING; INSERT INTO broker_symbol_map (venue, broker_symbol, canonical) VALUES ('3001157','USOILm','CLUSDT') ON CONFLICT DO NOTHING`); err != nil {
 		t.Fatalf("seed symbol map: %v", err)
 	}
 	oppID := "XASSET_CARRY:CLUSDT:gate:perp:3001157:mt5"

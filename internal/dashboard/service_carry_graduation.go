@@ -6,6 +6,7 @@
 package dashboard
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"errors"
 	"fmt"
@@ -218,7 +219,7 @@ func (s *Service) ApproveCarryGraduation(ctx context.Context, req *connect.Reque
 	if cexVenue == "" {
 		return fail("paper venue 组合串异常: %q", paper.Venue)
 	}
-	cexVenueKey := cexVenue + ":perp"
+	cexVenueKey := keydomain.Join(cexVenue, "perp")
 	// ③ 按 structure 方向定买卖腿（canonical_buy/venue_buy 永远=买腿，cap 跟腿走；D-490 折算先定方向）。
 	canonBuy, canonSell := pair.MtCanonical, pair.CexCanonical
 	venueBuy, venueSell := pair.MtVenueKey, cexVenueKey

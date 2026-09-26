@@ -2,8 +2,8 @@
 package dashboard
 
 import (
+	"arb/internal/keydomain"
 	"context"
-	"strings"
 	"time"
 
 	"arb/internal/reconcile"
@@ -32,7 +32,7 @@ func detectRealtimeJump(store PositionLegLister, posID int64, o reconcile.VenueO
 	if jumpUSD == 0 {
 		return swapJump{}, false
 	}
-	bareVenue := strings.Split(o.VenueKey, ":")[0]
+	bareVenue := keydomain.BareOf(o.VenueKey)
 	return swapJump{
 		venue:         bareVenue,
 		symbol:        leg.Symbol,
@@ -62,7 +62,7 @@ func detectJumpsFromSnapshots(snaps []pgstore.SwapSnapshot, legs []pgstore.Posit
 	if leg == nil || leg.Qty <= 0 {
 		return nil
 	}
-	bareVenue := strings.Split(venueKey, ":")[0]
+	bareVenue := keydomain.BareOf(venueKey)
 	var jumps []swapJump
 	for i := 1; i < len(snaps); i++ {
 		jumpUSD := snaps[i].SwapUSD - snaps[i-1].SwapUSD

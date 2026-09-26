@@ -25,7 +25,7 @@ func d388Service(t *testing.T) *Service {
 		t.Fatalf("pgstore.New: %v", err)
 	}
 	t.Cleanup(s.Close)
-	if _, err := s.Pool().Exec(context.Background(), `TRUNCATE broker_accounts`); err != nil {
+	if _, err := s.Pool().Exec(context.Background(), `TRUNCATE broker_accounts CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	return &Service{store: s, bm: &BrokerManager{store: s}}
@@ -78,8 +78,8 @@ func TestD388_SetBrokerDisabled_WireE2E(t *testing.T) {
 	svc := d388Service(t)
 	ctx := context.Background()
 	if _, err := svc.store.Pool().Exec(ctx,
-		`INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, server, status)
-		 VALUES ('vE2E', 1, 'h', 443, 1, 'p', 's', 'connected')`); err != nil {
+		`INSERT INTO broker_accounts (venue, venue_type, host, port, password, server, status)
+		 VALUES ('vE2E', 'mt5', 'h', 443, 'p', 's', 'connected')`); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	_, h := dashboardv1connect.NewDashboardServiceHandler(svc)

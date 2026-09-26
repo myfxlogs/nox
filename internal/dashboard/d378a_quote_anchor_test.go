@@ -33,8 +33,8 @@ func d378aSeedXAssetPos(t *testing.T, st *pgstore.Store) int64 {
 	seedLeg := func(legNo int, side, venue, symbol string, price float64) {
 		t.Helper()
 		if _, err := st.Pool().Exec(ctx,
-			`INSERT INTO position_legs (position_id, leg_no, phase, venue, account, symbol, side, qty, price_expected, price_actual, status)
-			 VALUES ($1,$2,'OPEN',$3,'acct',$4,$5,1,100,$6,'FILLED')`,
+			`INSERT INTO position_legs (position_id, leg_no, phase, venue, venue_type, symbol, side, qty, price_expected, price_actual, status)
+			 VALUES ($1,$2,'OPEN',split_part($3,':',1), split_part($3,':',2),$4,$5,1,100,$6,'FILLED')`,
 			posID, legNo, venue, symbol, side, price); err != nil {
 			t.Fatalf("seed leg %s: %v", venue, err)
 		}
@@ -102,7 +102,7 @@ func TestD378a_SellCanonicalFallback(t *testing.T) {
 	ctx := context.Background()
 	posID := d378aSeedXAssetPos(t, st)
 	if _, err := st.Pool().Exec(ctx,
-		`INSERT INTO broker_symbol_map (venue, broker_symbol, canonical) VALUES ('binance','PAXGUSDT','PAXGUSDT') ON CONFLICT DO NOTHING`); err != nil {
+		`INSERT INTO broker_accounts (venue, venue_type, host, port, password) VALUES ('binance','mt5','h',443,'p') ON CONFLICT (venue) DO NOTHING; INSERT INTO broker_symbol_map (venue, broker_symbol, canonical) VALUES ('binance','PAXGUSDT','PAXGUSDT') ON CONFLICT DO NOTHING`); err != nil {
 		t.Fatalf("seed mapping: %v", err)
 	}
 	qb := bus.New()

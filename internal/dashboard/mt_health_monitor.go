@@ -5,6 +5,7 @@
 package dashboard
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"log"
 	"strings"
@@ -128,7 +129,7 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 		if v != "" {
 			venueSet[v] = true
 			mtSet[v] = true
-			if strings.HasSuffix(vk, ":mt5") {
+			if keydomain.IsType(vk, "mt5") {
 				mt5Set[v] = true
 			}
 		}

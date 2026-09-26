@@ -53,7 +53,7 @@ func TestD476a_Grades_Baseline(t *testing.T) {
 // TestD476a_CapitalMissingIMR_GradeD：imr 缺→capital NULL+级 D。
 func TestD476a_CapitalMissingIMR_GradeD(t *testing.T) {
 	f := d471Fixture()
-	delete(f.facts, "3001157|3001157")
+	delete(f.facts, "3001157|")
 	rep := d476aSvc(f).gradDossier(context.Background(), f.grad, f.paper)
 	if rep.CapitalUsd != nil {
 		t.Fatal("imr 缺→capital 应 NULL")

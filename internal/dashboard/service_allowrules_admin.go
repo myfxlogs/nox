@@ -6,6 +6,7 @@
 package dashboard
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"fmt"
 	"log/slog"
@@ -132,7 +133,7 @@ func (s *Service) deriveRuleSimulated(ctx context.Context, kind, value string, w
 		if mtVenueKeyRe.MatchString(value) {
 			// MT：broker_accounts venue=数字主名 + platform=1（mt5）；is_real 三态
 			// nil=未知拒（未知实盘属性禁入真规则域）；推导与环境不匹配拒。
-			venue := strings.SplitN(value, ":", 2)[0]
+			venue := keydomain.BareOf(value)
 			isReal, err := s.store.BrokerAccountIsReal(ctx, venue, 1)
 			if err != nil {
 				return false, "账号查询失败: " + err.Error()

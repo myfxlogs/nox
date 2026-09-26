@@ -183,8 +183,14 @@ func d405SeedMTLeg(t *testing.T, s *pgstore.Store, venueKey, symbol, oppID strin
 	t.Helper()
 	ctx := context.Background()
 	// D-430：MT 腿 tick 键经 broker_symbol_map 解析 canonical——测试腿符号本身即 canonical。
+	parts := strings.Split(venueKey, ":")
+	if _, err := s.Pool().Exec(ctx,
+		`INSERT INTO broker_accounts (venue, venue_type, host, port, password) VALUES ($1,$2,'h',443,'p') ON CONFLICT (venue) DO NOTHING`,
+		parts[0], parts[1]); err != nil {
+		t.Fatalf("seed broker account: %v", err)
+	}
 	if err := s.UpsertSymbolMapping(ctx, &pgstore.SymbolMapping{
-		Venue: strings.Split(venueKey, ":")[0], BrokerSymbol: symbol, Canonical: symbol,
+		Venue: parts[0], BrokerSymbol: symbol, Canonical: symbol,
 	}); err != nil {
 		t.Fatalf("seed symbol map: %v", err)
 	}

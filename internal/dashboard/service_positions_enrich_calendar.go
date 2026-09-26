@@ -32,11 +32,11 @@ func (s *Service) prefetchTripleSwapDays(ctx context.Context, pbPositions []*v1.
 			}
 		}
 	}
-	// 逐 venue 查 triple_swap_day（venue 级，symbol=venue 名）
+	// 逐 venue 查 triple_swap_day（venue 级，D-496 起账号级 fact symbol=NULL，传 '' wildcard 命中）
 	// facts 表 venue 存纯数字名（如 "REDACTED_MT_ACCT"），legs venue 存 "REDACTED_MT_ACCT:mt5" → 去后缀查
 	for venueKey := range venues {
 		venueName := venueFromKey(venueKey)
-		facts, err := s.store.LatestFacts(ctx, fact.KindTripleSwapDay, venueName, venueName)
+		facts, err := s.store.LatestFacts(ctx, fact.KindTripleSwapDay, venueName, "")
 		if err == nil && len(facts) > 0 {
 			out[venueKey] = time.Weekday(int(facts[0].Value))
 		}

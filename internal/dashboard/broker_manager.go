@@ -3,6 +3,7 @@
 package dashboard
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"fmt"
 	"log"
@@ -218,7 +219,7 @@ func (m *BrokerManager) stopAdapter(venue string) {
 
 	if r != nil {
 		r.stop()
-		m.reg.Unregister(venue + ":mt5")
+		m.reg.Unregister(keydomain.Join(venue, "mt5"))
 		m.commMu.Lock()
 		delete(m.commission, venue)
 		m.commMu.Unlock()

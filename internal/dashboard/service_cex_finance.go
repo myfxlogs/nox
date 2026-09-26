@@ -74,7 +74,7 @@ func (s *Service) GetCexFinance(ctx context.Context, req *connect.Request[v1.Get
 				Ccy: h.Ccy, Qty: h.Qty, UsdtValue: h.UsdtValue, WeightPct: w,
 			})
 		}
-		blk.Flows = s.cexFinanceFlows(ctx, c.Venue, c.ID)
+		blk.Flows = s.cexFinanceFlows(ctx, c.Venue, c.ID, c.VenueType)
 		resp.Accounts = append(resp.Accounts, blk)
 	}
 	// 账户块按 inventory 降序（大账户在前）
@@ -127,7 +127,7 @@ func cexFinanceKey(c *pgstore.ExchangeConfig, winners map[string]int64) string {
 }
 
 // cexFinanceFlows 进出（fin_venue_io）+收益（income_events）合并，ts 倒序，各 50 上限。
-func (s *Service) cexFinanceFlows(ctx context.Context, venue string, configID int64) []*v1.CexFinanceFlow {
+func (s *Service) cexFinanceFlows(ctx context.Context, venue string, configID int64, venueType string) []*v1.CexFinanceFlow {
 	var flows []*v1.CexFinanceFlow
 	if ios, err := s.store.RecentVenueIO(ctx, venue, configID, 50); err == nil {
 		for _, r := range ios {
@@ -139,7 +139,7 @@ func (s *Service) cexFinanceFlows(ctx context.Context, venue string, configID in
 	} else {
 		log.Printf("[cex-finance] io %s#%d: %v", venue, configID, err)
 	}
-	if inc, err := s.store.RecentIncomeByConfig(ctx, venue, configID, 50); err == nil {
+	if inc, err := s.store.RecentIncomeByConfig(ctx, venue, venueType, 50); err == nil {
 		for _, e := range inc {
 			flows = append(flows, &v1.CexFinanceFlow{
 				Ts: e.Ts.Format(time.RFC3339), Kind: e.IncomeType, Ccy: e.Symbol,
@@ -147,7 +147,7 @@ func (s *Service) cexFinanceFlows(ctx context.Context, venue string, configID in
 			})
 		}
 	} else {
-		log.Printf("[cex-finance] income %s#%d: %v", venue, configID, err)
+		log.Printf("[cex-finance] income %s:%s: %v", venue, venueType, err)
 	}
 	sort.Slice(flows, func(a, b int) bool { return flows[a].Ts > flows[b].Ts })
 	if len(flows) > 100 {

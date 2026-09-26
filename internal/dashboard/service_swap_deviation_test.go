@@ -45,8 +45,8 @@ func setupSwapDeviationServiceStore(t *testing.T, venueLong, venueShort string, 
 	vS, _, _ := strings.Cut(venueShort, ":")
 	for _, v := range []string{vL, vS} {
 		if _, err := s.Pool().Exec(ctx,
-			`INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, server, status, is_real)
-			 VALUES ($1, 1, 'h', 443, 1, 'p', 's', 'connected', false) ON CONFLICT DO NOTHING`, v); err != nil {
+			`INSERT INTO broker_accounts (venue, venue_type, host, port, password, server, status, is_real)
+			 VALUES ($1, 'mt5', 'h', 443, 'p', 's', 'connected', false) ON CONFLICT DO NOTHING`, v); err != nil {
 			t.Fatalf("insert broker_account %s: %v", v, err)
 		}
 	}
@@ -66,8 +66,8 @@ func setupSwapDeviationServiceStore(t *testing.T, venueLong, venueShort string, 
 	}
 	price := posPrice
 	if _, err := s.Pool().Exec(ctx,
-		`INSERT INTO position_legs (position_id, leg_no, phase, venue, account, symbol, side, qty, price_expected, price_actual, status)
-		 VALUES ($1, 1, 'OPEN', $2, 'acct', 'AUDJPY', 'BUY', $3, $4, $4, 'FILLED')`,
+		`INSERT INTO position_legs (position_id, leg_no, phase, venue, venue_type, symbol, side, qty, price_expected, price_actual, status)
+		 VALUES ($1, 1, 'OPEN', split_part($2,':',1), split_part($2,':',2), 'AUDJPY', 'BUY', $3, $4, $4, 'FILLED')`,
 		posID, venueLong, posQty, price); err != nil {
 		t.Fatalf("insert position_leg: %v", err)
 	}

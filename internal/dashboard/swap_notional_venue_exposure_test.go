@@ -184,8 +184,8 @@ func TestSwapArbVenueExposureOK_CexLegBaseQty(t *testing.T) {
 	}
 	// okx TRX-USDT-SWAP ct_val=1000：2950 基础币 ≈ 2.95 张，qty 存基础币。
 	if _, err := st.Pool().Exec(ctx,
-		`INSERT INTO position_legs (position_id, leg_no, phase, venue, account, symbol, side, qty, price_expected, status)
-		 VALUES ($1, 1, 'OPEN', 'okx:perp', 'acct', 'TRX-USDT-SWAP', 'BUY', 2950, 0.10, 'FILLED')`, posID); err != nil {
+		`INSERT INTO position_legs (position_id, leg_no, phase, venue, venue_type, symbol, side, qty, price_expected, status)
+		 VALUES ($1, 1, 'OPEN', 'okx','perp','TRX-USDT-SWAP', 'BUY', 2950, 0.10, 'FILLED')`, posID); err != nil {
 		t.Fatalf("insert leg: %v", err)
 	}
 
@@ -228,8 +228,8 @@ func TestSwapArbVenueExposureOK_CexLegFilledQty(t *testing.T) {
 	}
 	// 新时代行：qty=1012 张（LegSpec 请求合约数），filled_qty=10.12 成交基础币。
 	if _, err := st.Pool().Exec(ctx,
-		`INSERT INTO position_legs (position_id, leg_no, phase, venue, account, symbol, side, qty, filled_qty, price_expected, status)
-		 VALUES ($1, 1, 'OPEN', 'gate:perp', 'acct', 'CL_USDT', 'BUY', 1012, 10.12, 63.5, 'FILLED')`, posID); err != nil {
+		`INSERT INTO position_legs (position_id, leg_no, phase, venue, venue_type, symbol, side, qty, filled_qty, price_expected, status)
+		 VALUES ($1, 1, 'OPEN', 'gate','perp','CL_USDT', 'BUY', 1012, 10.12, 63.5, 'FILLED')`, posID); err != nil {
 		t.Fatalf("insert leg: %v", err)
 	}
 

@@ -30,6 +30,10 @@ func TestBackfillRuleMappings_MockSymbolsSource(t *testing.T) {
 	venue := "test_d142_backfill"
 	// 清理可能残留
 	st.Pool().Exec(ctx, `DELETE FROM broker_symbol_map WHERE venue = $1`, venue)
+	if _, err := st.Pool().Exec(ctx,
+		`INSERT INTO broker_accounts (venue, venue_type, host, port, password) VALUES ($1,'mt5','h',443,'p') ON CONFLICT (venue) DO NOTHING`, venue); err != nil {
+		t.Fatalf("seed broker account: %v", err)
+	}
 	defer st.Pool().Exec(ctx, `DELETE FROM broker_symbol_map WHERE venue = $1`, venue)
 
 	// BrokerManager with mock running adapter（mock symbols 源）

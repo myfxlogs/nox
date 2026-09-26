@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"arb/internal/keydomain"
 	"errors"
 	"fmt"
 	"log"
@@ -24,7 +25,7 @@ func (s *Service) checkTradability(found *pgstore.Opportunity) error {
 		venueKey string
 		buy      bool
 	}{{found.VenueBuy, true}, {found.VenueSell, false}} {
-		if !strings.HasSuffix(leg.venueKey, ":mt5") && !strings.HasSuffix(leg.venueKey, ":mt4") {
+		if !keydomain.IsMTKey(leg.venueKey) {
 			continue // CEX 腿：trade_mode 仅 MT 语义
 		}
 		mode, ok := s.tradeModes(found.Canonical, leg.venueKey)
@@ -71,7 +72,7 @@ func (s *Service) resolveLegs(found *pgstore.Opportunity, qty float64) ([]exec.L
 			{found.VenueBuy, found.Canonical, qbuy.VenueSymbol},
 			{found.VenueSell, sellCanonical, qsell.VenueSymbol},
 		} {
-			if !strings.HasSuffix(leg.venueKey, ":mt5") && !strings.HasSuffix(leg.venueKey, ":mt4") {
+			if !keydomain.IsMTKey(leg.venueKey) {
 				continue // CEX 腿无 broker_symbol_map 语义
 			}
 			primary, err := s.primarySymbol(leg.venueKey, leg.canonical)
@@ -113,7 +114,7 @@ func (s *Service) resolveLegs(found *pgstore.Opportunity, qty float64) ([]exec.L
 // checkLegVolume D-061 量规格预检：qty < venue 最小手数 → 拒（下单前，防单腿被拒 LEGGED）。
 // CEX 腿跳过；解析器未接线/未知 → 放行（服务端拒单兜底）。
 func (s *Service) checkLegVolume(venueKey, venueSymbol string, qty float64) error {
-	if !strings.HasSuffix(venueKey, ":mt5") && !strings.HasSuffix(venueKey, ":mt4") {
+	if !keydomain.IsMTKey(venueKey) {
 		return nil
 	}
 	if s.legMinLots == nil {
@@ -132,7 +133,7 @@ func (s *Service) checkLegVolume(venueKey, venueSymbol string, qty float64) erro
 // 注入查询（main 接 broker_symbol_map.contract_size，D-042 backfilled）。缺失/未接线 →
 // 报错拒不猜（fail-safe，防 position #2 形态复发）。
 func (s *Service) legContractSizeOf(venueKey, venueSymbol string) (float64, error) {
-	if strings.HasSuffix(venueKey, ":perp") {
+	if keydomain.IsType(venueKey, "perp") {
 		if s.cexContractSize == nil {
 			return 0, errors.New("cex contract size resolver not wired")
 		}
@@ -143,7 +144,7 @@ func (s *Service) legContractSizeOf(venueKey, venueSymbol string) (float64, erro
 		}
 		return cs, nil
 	}
-	if !strings.HasSuffix(venueKey, ":mt5") && !strings.HasSuffix(venueKey, ":mt4") {
+	if !keydomain.IsMTKey(venueKey) {
 		return 1.0, nil
 	}
 	if s.legContractSize == nil {
@@ -158,7 +159,7 @@ func (s *Service) legContractSizeOf(venueKey, venueSymbol string) (float64, erro
 
 // isMTVenue 判断是否为 MT5/MT4 venue。
 func isMTVenue(venue string) bool {
-	return strings.HasSuffix(venue, ":mt5") || strings.HasSuffix(venue, ":mt4")
+	return keydomain.IsMTKey(venue)
 }
 
 // floorToStepQtyMin 返回 MT5 品种的最小可交易量（1 个 volume step）。

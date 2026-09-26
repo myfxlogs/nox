@@ -48,9 +48,9 @@ func seedBoardPaper(t *testing.T, st *pgstore.Store, venue, symbol, side, status
 		reason = "normalized"
 	}
 	if _, err := st.Pool().Exec(context.Background(), `
-		INSERT INTO paper_spot_carry (venue, symbol, side, entry_funding_ann, qty_usd, accrued_usd,
+		INSERT INTO paper_spot_carry (venue_a, venue_b, symbol, side, entry_funding_ann, qty_usd, accrued_usd,
 			entry_ts, last_accrue_ts, status, exit_ts, exit_reason)
-		VALUES ($1,$2,$3,$4,$5,$6, now()-($7::double precision * interval '1 second'),
+		VALUES (split_part($1,'×',1),split_part($1,'×',2),$2,$3,$4,$5,$6, now()-($7::double precision * interval '1 second'),
 			now()-($7::double precision * interval '1 second'), $8, $9, $10)`,
 		venue, symbol, side, entryFunding, qty, accrued,
 		entryAge.Seconds(), status, exitArg, reason); err != nil {

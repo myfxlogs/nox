@@ -122,17 +122,17 @@ func TestD492_A3_NoConfigRowReject(t *testing.T) {
 func TestD492_A4_MTVenueDerive(t *testing.T) {
 	st, svc, _ := d492Store(t)
 	ctx := context.Background()
-	seed := func(venue string, platform int, isReal *bool) {
+	seed := func(venue, venueType string, isReal *bool) {
 		if _, err := st.Pool().Exec(ctx, `
-			INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, is_real)
-			VALUES ($1,$2,'h',1,1,'p',$3)`, venue, platform, isReal); err != nil {
+			INSERT INTO broker_accounts (venue, venue_type, host, port, password, is_real)
+			VALUES ($1,$2,'h',1,'p',$3)`, venue, venueType, isReal); err != nil {
 			t.Fatalf("seed account %s: %v", venue, err)
 		}
 	}
 	tr, fa := true, false
-	seed("49200001", 1, &tr)
-	seed("49200002", 0, &fa) // 仅 MT4 账号
-	seed("49200003", 1, nil) // is_real 未知
+	seed("49200001", "mt5", &tr)
+	seed("49200002", "mt4", &fa) // 仅 MT4 账号
+	seed("49200003", "mt5", nil) // is_real 未知
 
 	if r, _ := svc.AddAutotradeAllowRule(ctx, addReq("venue", "49200001:mt5", "实盘MT5")); !r.Msg.GetOk() {
 		t.Fatalf("实盘 MT5 账号应放行, err=%q", r.Msg.GetError())

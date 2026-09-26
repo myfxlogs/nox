@@ -38,7 +38,7 @@ func d471Fixture() *fakeGradDB {
 			"binance|XAUUSDT": {Venue: "binance", Symbol: "XAUUSDT", HedgeCanonical: "XAU", CtVal: &ctVal},
 		},
 		facts: map[string][]fact.Fact{
-			"3001157|3001157": {{Kind: fact.KindInitMarginRate, Value: 0.2}},
+			"3001157|": {{Kind: fact.KindInitMarginRate, Value: 0.2}},
 		},
 		p95: 25, p95OK: true,
 	}
@@ -95,7 +95,7 @@ func TestD471_Dossier_CfdLegs(t *testing.T) {
 func TestD471_Dossier_Gaps(t *testing.T) {
 	f := d471Fixture()
 	f.ticks["binance|perp|XAUUSDT"] = pgstore.TickRow{Ts: time.Now().Add(-10 * time.Minute), Bid: 2400, Ask: 2401}
-	delete(f.facts, "3001157|3001157") // imr 缺
+	delete(f.facts, "3001157|") // imr 缺
 	s := &Service{gradStore: f}
 	s.SetCarryRegime(exec.CarryRegimeConfig{Window: 24 * time.Hour, FloorPct: 2.0, MinSamples: 12})
 	rep := s.gradDossier(context.Background(), f.grad, f.paper)

@@ -6,8 +6,8 @@
 package dashboard
 
 import (
+	"arb/internal/keydomain"
 	"context"
-	"strings"
 	"sync"
 	"time"
 
@@ -118,10 +118,10 @@ func (s *Service) fillSettleRef(ctx context.Context, pb *v1.Opportunity, o *pgst
 		{o.VenueBuy, -1, buySymbol},
 		{o.VenueSell, 1, sellSymbol},
 	} {
-		if !strings.HasSuffix(lg.key, ":perp") {
+		if !keydomain.IsType(lg.key, "perp") {
 			continue
 		}
-		bare := strings.TrimSuffix(lg.key, ":perp")
+		bare := keydomain.BareOf(lg.key)
 		pr, ok := pred[bare][lg.symbol]
 		if !ok {
 			return

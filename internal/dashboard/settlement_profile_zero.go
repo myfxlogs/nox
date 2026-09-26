@@ -5,6 +5,7 @@
 package dashboard
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"log"
 	"strings"
@@ -64,7 +65,7 @@ func DetectZeroSettlementFacts(snaps []pgstore.SwapSnapshot, legs []pgstore.Posi
 	if span < zeroSettlementMinSpan {
 		return nil
 	}
-	bareVenue := strings.Split(venueKey, ":")[0]
+	bareVenue := keydomain.BareOf(venueKey)
 	kind := fact.KindSwapSettledLong
 	if leg.Side != "BUY" {
 		kind = fact.KindSwapSettledShort

@@ -52,14 +52,14 @@ func seedFinanceFixtures(t *testing.T, s *pgstore.Store) {
 		       ('PERP:X:okx:perp::t2', 'PERP_FUNDING', 'CLOSED', NOW(), NULL, -300),
 		       ('PERP:X:okx:perp::t3', 'PERP_FUNDING', 'CLOSED', NOW(), 'real', 50)`)
 	// cashflows：NULL 实数轨 3 行（funding 2 / swap 3 / commission 1）+ estimated 预测轨 1 行（funding 10，不入 flows）
-	mustExec(t, s, `INSERT INTO position_cashflows (position_id, kind, venue, amount_usd, ts, quality)
-		VALUES (1, 'funding', 'okx:perp', 2, '2026-08-29T12:00:00Z', NULL),
-		       (1, 'swap', '277842155:mt5', 3, '2026-08-29T13:00:00Z', NULL),
-		       (1, 'commission', '277842155:mt5', 1, '2026-08-29T14:00:00Z', NULL),
-		       (1, 'funding', 'binance:perp', 10, '2026-09-19T00:00:00Z', 'estimated')`)
+	mustExec(t, s, `INSERT INTO position_cashflows (position_id, kind, venue, venue_type, amount_usd, ts, quality)
+		VALUES (1, 'funding', 'okx','perp', 2, '2026-08-29T12:00:00Z', NULL),
+		       (1, 'swap', '277842155','mt5', 3, '2026-08-29T13:00:00Z', NULL),
+		       (1, 'commission', '277842155','mt5', 1, '2026-08-29T14:00:00Z', NULL),
+		       (1, 'funding', 'binance','perp', 10, '2026-09-19T00:00:00Z', 'estimated')`)
 	// income_events（binance 结算轨）：ts 最新（9-18）→ flows 首行
-	mustExec(t, s, `INSERT INTO income_events (venue, account_id, symbol, income_type, amount_usd, tran_id, ts)
-		VALUES ('binance', 1, 'BTCUSDT', 'FUNDING_FEE', 0.5, 1001, '2026-09-18T08:00:00Z')`)
+	mustExec(t, s, `INSERT INTO income_events (venue, venue_type, symbol, income_type, amount_usd, tran_id, ts)
+		VALUES ('binance', 'perp', 'BTCUSDT', 'FUNDING_FEE', 0.5, 1001, '2026-09-18T08:00:00Z')`)
 }
 
 // TestD348_FinanceOverview_Aggregate T1：三数/分层/收入构成/流水数值锚。
@@ -148,12 +148,12 @@ func TestD348_FinanceOverview_FlowsNullTrackAndNoDoubleCount(t *testing.T) {
 	ctx := context.Background()
 	mustExec(t, s, `INSERT INTO positions (opportunity_id, type, status, opened_at)
 		VALUES ('PERP:X:okx:perp::t2', 'PERP_FUNDING', 'CLOSED', NOW()) RETURNING id`)
-	mustExec(t, s, `INSERT INTO position_cashflows (position_id, kind, venue, amount_usd, ts, quality)
-		VALUES (1, 'funding', 'binance:perp', 111, '2026-08-29T12:00:00Z', NULL),
-		       (1, 'funding', 'binance:perp', 999, '2026-09-19T00:00:00Z', 'estimated'),
-		       (1, 'funding', 'okx:perp', 222, '2026-08-30T12:00:00Z', NULL)`)
-	mustExec(t, s, `INSERT INTO income_events (venue, account_id, symbol, income_type, amount_usd, tran_id, ts)
-		VALUES ('binance', 1, 'BTCUSDT', 'FUNDING_FEE', 0.5, 1001, '2026-09-18T08:00:00Z')`)
+	mustExec(t, s, `INSERT INTO position_cashflows (position_id, kind, venue, venue_type, amount_usd, ts, quality)
+		VALUES (1, 'funding', 'binance','perp', 111, '2026-08-29T12:00:00Z', NULL),
+		       (1, 'funding', 'binance','perp', 999, '2026-09-19T00:00:00Z', 'estimated'),
+		       (1, 'funding', 'okx','perp', 222, '2026-08-30T12:00:00Z', NULL)`)
+	mustExec(t, s, `INSERT INTO income_events (venue, venue_type, symbol, income_type, amount_usd, tran_id, ts)
+		VALUES ('binance', 'perp', 'BTCUSDT', 'FUNDING_FEE', 0.5, 1001, '2026-09-18T08:00:00Z')`)
 	svc := &Service{store: s, qbus: bus.New(), freshTTL: time.Minute, liqMMR: 0.005}
 	resp, err := svc.GetFinanceOverview(ctx, connect.NewRequest(&v1.GetFinanceOverviewRequest{}))
 	if err != nil {

@@ -3,6 +3,7 @@
 package dashboard
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"time"
 
@@ -117,7 +118,7 @@ func (s *Service) ensureEntryGateSnapshot(ctx context.Context, posID int64, foun
 	pairKey := sellCanon + "-" + strings.TrimSuffix(found.Canonical, "USD")
 	cexVenue, mtVenue := "", ""
 	for _, v := range [2]string{found.VenueBuy, found.VenueSell} {
-		if strings.HasSuffix(v, ":mt5") || strings.HasSuffix(v, ":mt4") {
+		if keydomain.IsMTKey(v) {
 			mtVenue = v
 		} else {
 			cexVenue = v

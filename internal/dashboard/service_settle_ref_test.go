@@ -63,7 +63,7 @@ func TestFillSettleRef_SignMath(t *testing.T) {
 	))
 	o := &pgstore.Opportunity{
 		Type: "FUNDING_HEDGE", Canonical: "BTCUSDT",
-		VenueBuy: "mt5:x", VenueSell: "binance:perp", NetBps: 10,
+		VenueBuy: "x:mt5", VenueSell: "binance:perp", NetBps: 10,
 	}
 	pb := s.oppToProto(ctx, o)
 	if pb.SettleNetBps == nil || math.Abs(*pb.SettleNetBps-16) > 1e-9 {
@@ -146,9 +146,9 @@ func TestListOpportunities_SettleFields(t *testing.T) {
 		fact.Fact{Kind: "funding_history", Venue: "binance", Symbol: "BTCUSDT", Value: 5},
 	))
 	opp := &pgstore.Opportunity{
-		ID:   "FUNDING_HEDGE:BTCUSDT:mt5:x:binance:perp",
+		ID:   "FUNDING_HEDGE:BTCUSDT:x:mt5:binance:perp",
 		Type: "FUNDING_HEDGE", Canonical: "BTCUSDT",
-		VenueBuy: "mt5:x", VenueSell: "binance:perp", NetBps: 10,
+		VenueBuy: "x:mt5", VenueSell: "binance:perp", NetBps: 10,
 		ExpiresAt: time.Now().UTC().Add(time.Hour), // ListOpportunities 只回未过期行（§8.2）
 	}
 	if _, err := st.UpsertOpportunity(ctx, opp); err != nil {

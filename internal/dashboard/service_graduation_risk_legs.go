@@ -4,6 +4,7 @@
 package dashboard
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"fmt"
 	"strings"
@@ -31,8 +32,8 @@ func gradRiskLegs(g *pgstore.CarryGraduation, p *pgstore.PaperSpotCarry, mtPair 
 			perpRole, spotRole = "buy", "sell"
 		}
 		return []riskLegSpec{
-			{v + ":perp", g.Symbol, perpRole},
-			{v + ":spot", g.Symbol, spotRole},
+			{keydomain.Join(v, "perp"), g.Symbol, perpRole},
+			{keydomain.Join(v, "spot"), g.Symbol, spotRole},
 		}, nil
 	case "perp_perp": // venue=shortV×longV（方向在键，radar 轨）
 		parts := strings.Split(g.Venue, "×")
@@ -40,8 +41,8 @@ func gradRiskLegs(g *pgstore.CarryGraduation, p *pgstore.PaperSpotCarry, mtPair 
 			return nil, fmt.Errorf("perp_perp venue 组合串异常 %q", g.Venue)
 		}
 		return []riskLegSpec{
-			{parts[1] + ":perp", g.Symbol, "buy"},
-			{parts[0] + ":perp", g.Symbol, "sell"},
+			{keydomain.Join(parts[1], "perp"), g.Symbol, "buy"},
+			{keydomain.Join(parts[0], "perp"), g.Symbol, "sell"},
 		}, nil
 	case "cfd_cfd": // mt×mt：MtVenue=short 腿（paper_mtm 插入约定），另一腿=buy
 		parts := strings.Split(g.Venue, "×")
@@ -53,8 +54,8 @@ func gradRiskLegs(g *pgstore.CarryGraduation, p *pgstore.PaperSpotCarry, mtPair 
 			long = parts[1]
 		}
 		return []riskLegSpec{
-			{long + ":mt5", g.Symbol, "buy"},
-			{short + ":mt5", g.Symbol, "sell"},
+			{keydomain.Join(long, "mt5"), g.Symbol, "buy"},
+			{keydomain.Join(short, "mt5"), g.Symbol, "sell"},
 		}, nil
 	}
 	return nil, fmt.Errorf("未知 structure %q", g.Structure)
