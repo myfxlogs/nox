@@ -14,6 +14,7 @@ import (
 	"time"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 )
 
@@ -50,7 +51,7 @@ func allocPoolOf(snaps []pgstore.VenueAccountLatest, venueKey string) (allocPool
 	pick := func(wantType string) (allocPool, bool) {
 		for _, r := range snaps {
 			if r.Venue == bare && r.VenueType == wantType && r.EquityRaw != nil {
-				return allocPool{key: bare + ":" + r.VenueType, equity: *r.EquityRaw, currency: r.Currency, at: r.FetchedAt}, true
+				return allocPool{key: keydomain.Join(bare, r.VenueType), equity: *r.EquityRaw, currency: r.Currency, at: r.FetchedAt}, true
 			}
 		}
 		return allocPool{}, false
@@ -62,7 +63,7 @@ func allocPoolOf(snaps []pgstore.VenueAccountLatest, venueKey string) (allocPool
 	}
 	for _, r := range snaps {
 		if r.Venue == bare && r.EquityRaw != nil {
-			return allocPool{key: bare + ":" + r.VenueType, equity: *r.EquityRaw, currency: r.Currency, at: r.FetchedAt}, true
+			return allocPool{key: keydomain.Join(bare, r.VenueType), equity: *r.EquityRaw, currency: r.Currency, at: r.FetchedAt}, true
 		}
 	}
 	return allocPool{}, false
