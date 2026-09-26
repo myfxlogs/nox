@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"arb/internal/safego"
-
 	"github.com/fbsobreira/gotron-sdk/pkg/account"
 )
 
@@ -247,8 +246,7 @@ func (s *Scheduler) doRebalance(ctx context.Context) {
 	s.executor.Alert("warn", formatRebalanceAlert(txHash, decision, currentVotes))
 }
 
-// convertVotes 将 map[string]int64（gotron-sdk Votes，TRX 单位）转为 []VoteEntry。
-// TRON 链上 vote_count 单位是 TRX（1 TRX = 1 vote），gotron-sdk 未做转换，已是 TRX。
+// convertVotes 将 map[string]int64（gotron-sdk Votes，TRX 单位）转为 []VoteEntry（链上 vote_count 已是 TRX 无需换算）。
 func convertVotes(votes map[string]int64) []VoteEntry {
 	out := make([]VoteEntry, 0, len(votes))
 	for addr, v := range votes {
