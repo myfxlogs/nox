@@ -34,7 +34,7 @@ func d475aDeps(cashflows float64, accrued float64) *fakeDeps {
 		insertWon:    true,
 		cashflowsNet: cashflows,
 		papers: []*pgstore.PaperSpotCarry{{
-			ID: 7, Venue: "3001157×okx", Symbol: "XAUUSD", AccruedUSD: accrued, Status: "exited",
+			ID: 7, VenueA: "3001157", VenueB: "okx", Symbol: "XAUUSD", AccruedUSD: accrued, Status: "exited",
 		}},
 	}
 }

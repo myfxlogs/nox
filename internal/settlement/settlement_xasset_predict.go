@@ -41,20 +41,20 @@ func checkXassetPredictVsActual(ctx context.Context, deps Deps, p *pgstore.Posit
 	}
 	// 同键已有 active 旗→跳过（SkipDuplicates 语义，不刷屏）。
 	if flags, ferr := deps.ListActiveFlags(ctx); ferr == nil {
-		if _, ok := flags[pgstore.FlagKey(paper.Venue, paper.Symbol)]; ok {
+		if _, ok := flags[pgstore.FlagKey(paper.VenuePair(), paper.Symbol)]; ok {
 			return
 		}
 	}
 	reason := fmt.Sprintf("实测偏离预测 %.0f%% pos#%d（cashflows_net=%.2f vs paper accrued=%.2f）",
 		deviation*100, posID, cashflowsNet, paper.AccruedUSD)
 	if err := deps.InsertFlag(ctx, &pgstore.VenueSymbolFlag{
-		Venue: paper.Venue, Symbol: paper.Symbol, Level: "warn", Reason: reason,
+		Venue: paper.VenuePair(), Symbol: paper.Symbol, Level: "warn", Reason: reason,
 	}); err != nil {
 		log.Printf("[settlement] pos=%d predict-check flag: %v", posID, err)
 		return
 	}
 	if err := deps.InsertAlert(ctx, nil, "warn",
-		fmt.Sprintf("[校准回流] %s×%s %s", paper.Venue, paper.Symbol, reason)); err != nil {
+		fmt.Sprintf("[校准回流] %s×%s %s", paper.VenuePair(), paper.Symbol, reason)); err != nil {
 		log.Printf("[settlement] pos=%d predict-check alert: %v", posID, err)
 	}
 }
