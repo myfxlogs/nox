@@ -9,10 +9,10 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"arb/internal/fact"
+	"arb/internal/keydomain"
 	"arb/internal/scan"
 	"arb/internal/store/pgstore"
 )
@@ -53,7 +53,7 @@ func absAnn(v float64) float64 {
 // venue+":perp"——真(true)/未知(缺行或 nil) → 真腿处理（digest 化+纸面）；确证 sim(false) → 既有
 // event 路径。simMap 空（查询失败）→ 全部当真腿（保守，不冒充 sim）。
 func venueIsRealOrUnknown(simMap map[string]*bool, venue string) bool {
-	b, ok := simMap[venue+":perp"]
+	b, ok := simMap[keydomain.Join(venue, "perp")]
 	return !ok || b == nil || *b
 }
 
@@ -125,7 +125,7 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 	activeByKey := make(map[string]struct{}, len(active))
 	perpActive := 0
 	for _, p := range active {
-		activeByKey[p.Venue+"|"+p.Symbol] = struct{}{}
+		activeByKey[p.VenuePair()+"|"+p.Symbol] = struct{}{}
 		if p.Structure == "perp_perp" {
 			perpActive++
 		}
@@ -148,7 +148,7 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 			break
 		}
 		r := &pgstore.PaperSpotCarry{
-			Venue: p.ShortVenue + "×" + p.LongVenue, Symbol: p.Canon, Side: "perp_perp",
+			VenueA: p.ShortVenue, VenueB: p.LongVenue, Symbol: p.Canon, Side: "perp_perp",
 			EntryFundingAnn: p.NetAnn, QtyUSD: scan.PaperQtyUSD, Structure: "perp_perp",
 			EstRoundTripFeeUSD: scan.PaperPerpPerpFeeUSD(p.ShortVenue, p.LongVenue, scan.PaperQtyUSD), // D-474a S2
 		}
@@ -160,7 +160,7 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 			if err == pgstore.ErrPaperExists {
 				continue
 			}
-			return opened, exited, fmt.Errorf("perp paper step: open %s: %w", r.Venue, err)
+			return opened, exited, fmt.Errorf("perp paper step: open %s: %w", r.VenuePair(), err)
 		}
 		opened = append(opened, p.Canon)
 	}
@@ -173,15 +173,14 @@ func stepPaperPerpCarry(ctx context.Context, st *pgstore.Store, pairs []divPair,
 		if p.Structure != "perp_perp" {
 			continue
 		}
-		parts := strings.SplitN(p.Venue, "×", 2)
-		if len(parts) != 2 {
-			continue // 非法组合键防御（不猜方向）
+		if p.VenueA == "" || p.VenueB == "" {
+			continue // 非双腿配对行防御（不猜方向）
 		}
 		base := p.EntryTs
 		if p.LastAccrueTs != nil {
 			base = *p.LastAccrueTs
 		}
-		shortVenue, longVenue := parts[0], parts[1]
+		shortVenue, longVenue := p.VenueA, p.VenueB
 		shortSym := symByVenueCanon[shortVenue+"|"+p.Symbol]
 		longSym := symByVenueCanon[longVenue+"|"+p.Symbol]
 		fs, okS := fundByKey[shortVenue+"|"+shortSym]
