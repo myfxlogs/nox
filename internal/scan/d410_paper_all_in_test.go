@@ -305,7 +305,7 @@ func TestD410_NullColumns(t *testing.T) {
 	s := d410Store(t)
 	ctx := context.Background()
 	// venue 不在覆盖集（kraken）→ est_fee 拒填 NULL
-	r := &pgstore.PaperSpotCarry{Venue: "kraken", Symbol: "D410K", Side: "short_perp", EntryFundingAnn: 50, QtyUSD: 1000}
+	r := &pgstore.PaperSpotCarry{VenueA: "kraken", Symbol: "D410K", Side: "short_perp", EntryFundingAnn: 50, QtyUSD: 1000}
 	if err := s.InsertPaperSpotCarry(ctx, r); err != nil {
 		t.Fatalf("insert: %v", err)
 	}

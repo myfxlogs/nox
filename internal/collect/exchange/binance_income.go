@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"time"
 
+	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 )
 
@@ -93,7 +94,7 @@ func (c *BinanceIncomeCollector) RunOnce(ctx context.Context) (int64, error) {
 			if acc.Simulated {
 				env = "demo"
 			}
-			posID, legNo, hits, err := c.sink.MatchOpenLegForIncome(ctx, VenueBinance+":perp", r.Symbol, env)
+			posID, legNo, hits, err := c.sink.MatchOpenLegForIncome(ctx, keydomain.Join(VenueBinance, "perp"), r.Symbol, env)
 			switch {
 			case err != nil:
 				fmt.Printf("[income] match %s: %v (leave NULL)\n", r.Symbol, err)

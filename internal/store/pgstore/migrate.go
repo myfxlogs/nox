@@ -138,6 +138,7 @@ var migrationFiles = []struct {
 	{140, migrations.VenueExposureCapsSQL},             // D-475a S1+S5：敞口闸表+paper 质量杆观测两列
 	{141, migrations.PerpFundingAdmissionSQL},          // D-491 S1：PERP_FUNDING 证据准入表（白名单退役）
 	{142, migrations.KeydomainConstitutionSQL},         // D-496：键域宪法全库归一（venue/venue_type/venue_key generated）
+	{143, migrations.CarryGraduationPairColsSQL},       // D-498：carry_graduations venue_a/venue_b 源列+venue 展示投影
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

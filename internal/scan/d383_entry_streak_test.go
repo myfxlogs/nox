@@ -199,7 +199,7 @@ func TestD383C5_KeyIsolationByVenue(t *testing.T) {
 		t.Fatalf("r3 opened=%v, want [AAUSDT]（binance 达标放行；B 中断不影响 A）", opened)
 	}
 	rows, err := s.ListActivePaperSpotCarry(ctx)
-	if err != nil || len(rows) != 1 || rows[0].Venue != "binance" {
+	if err != nil || len(rows) != 1 || rows[0].VenuePair() != "binance" {
 		t.Fatalf("active=%v err=%v, want 仅 binance 一行（键级隔离）", rows, err)
 	}
 	// r4/r5：okx 独立重计，连续第 3 轮（r5）开仓——同 symbol 不同 venue 不串扰、binance 不重开

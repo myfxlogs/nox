@@ -71,7 +71,7 @@ func (f *fakeGradStore) UpdateCarryGraduationDecision(_ context.Context, id int6
 func gradPaper(id int64, status string, entryOffsetDays, exitOffsetDays float64, accrued float64, lowStreak int, exitReason string) pgstore.PaperSpotCarry {
 	now := time.Now()
 	p := pgstore.PaperSpotCarry{
-		ID: id, Venue: "1314615×gate", Symbol: "BTC", Structure: "long_cfd_short_perp",
+		ID: id, VenueA: "1314615", VenueB: "gate", Symbol: "BTC", Structure: "long_cfd_short_perp",
 		Status: status, AccruedUSD: accrued, LowStreak: lowStreak, ExitReason: exitReason,
 		EntryTs: now.Add(time.Duration(-entryOffsetDays*24) * time.Hour),
 	}

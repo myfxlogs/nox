@@ -74,7 +74,7 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 	}
 	activeByKey := make(map[string]struct{}, len(active))
 	for _, p := range active {
-		activeByKey[p.Venue+"|"+p.Symbol] = struct{}{}
+		activeByKey[p.VenuePair()+"|"+p.Symbol] = struct{}{}
 	}
 	// clean cfd 行索引（保底段与 top-N 段共用；D-345 suspect 行拒入同 top-N 口径）。
 	// D-419 S2：dirtyByKey 并行索引——行在但 Note!=""（suspect/stale 剔除）记原因，
@@ -118,7 +118,7 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 	}
 	cfdActive, guaranteedActive := 0, 0
 	for _, p := range active {
-		if _, ok := authorized[p.Venue+"|"+p.Symbol]; ok {
+		if _, ok := authorized[p.VenuePair()+"|"+p.Symbol]; ok {
 			guaranteedActive++
 		} else if cfdStructures[p.Structure] {
 			cfdActive++
@@ -129,7 +129,7 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 		if _, ok := activeByKey[sl.key]; ok {
 			continue
 		}
-		if f := blockedFlagHit(sl.venueCombo, sl.symbol, &sl.mtVenue, flags); f != nil {
+		if f := blockedFlagHit(sl.mtVenue, sl.cexVenue, sl.symbol, &sl.mtVenue, flags); f != nil {
 			log.Printf("[cfd paper] blocked flag 拦截保底槽: %s（%s@%s|%s）", sl.key, f.Reason, f.Venue, f.Symbol)
 			continue
 		}
@@ -139,7 +139,7 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 		// 钉死②flap 冷却：退出行 max(exit_ts) 重构窗，冷却内不重开（列已在表上零新表）——
 		// 衰减组合 LowStreak 退出→下轮即重开会反复记 est_fee，系统性高估费用冲刷证据流。
 		if opts.ReopenCooldown > 0 {
-			lastExit, err := st.LatestPaperExitTs(ctx, sl.venueCombo, sl.symbol)
+			lastExit, err := st.LatestPaperExitTs(ctx, sl.mtVenue, sl.cexVenue, sl.symbol)
 			if err != nil {
 				return opened, exited, fmt.Errorf("cfd paper step: exit ts %s: %w", sl.key, err)
 			}
@@ -157,7 +157,7 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 			}
 			continue
 		}
-		if err := insertCfdPaper(ctx, st, r, sl.mtVenue, sl.venueCombo, now); err != nil {
+		if err := insertCfdPaper(ctx, st, r, sl.mtVenue, sl.cexVenue, now); err != nil {
 			if err == pgstore.ErrPaperExists {
 				continue
 			}
@@ -191,7 +191,7 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 		if _, ok := activeByKey[venueCombo+"|"+r.Canonical]; ok {
 			continue
 		}
-		if f := blockedFlagHit(venueCombo, r.Canonical, &r.MtVenue, flags); f != nil {
+		if f := blockedFlagHit(r.MtVenue, r.CexVenue, r.Canonical, &r.MtVenue, flags); f != nil {
 			log.Printf("[cfd paper] blocked flag 拦截: %s|%s（%s@%s|%s）", venueCombo, r.Canonical, f.Reason, f.Venue, f.Symbol)
 			continue
 		}
@@ -203,7 +203,7 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 		if cfdActive+topN >= PaperCfdMaxActive { // 保底槽不占此额（钉死①）
 			break
 		}
-		if err := insertCfdPaper(ctx, st, c.r, c.r.MtVenue, c.venueCombo, now); err != nil {
+		if err := insertCfdPaper(ctx, st, c.r, c.r.MtVenue, c.r.CexVenue, now); err != nil {
 			if err == pgstore.ErrPaperExists {
 				continue
 			}

@@ -102,7 +102,7 @@ func (f *fakeMtmPaperStore) ListAccrablePaperSpotCarry(context.Context) ([]pgsto
 }
 func (f *fakeMtmPaperStore) InsertPaperSpotCarry(_ context.Context, r *pgstore.PaperSpotCarry) error {
 	for _, x := range f.rows {
-		if x.Venue == r.Venue && x.Symbol == r.Symbol && (x.Status == "active" || x.Status == "demo") {
+		if x.VenueA == r.VenueA && x.VenueB == r.VenueB && x.Symbol == r.Symbol && (x.Status == "active" || x.Status == "demo") {
 			return pgstore.ErrPaperExists
 		}
 	}
@@ -201,7 +201,7 @@ func (f *fakeMtmPaperStore) HasXAssetMonitorRow(context.Context, string, string,
 func (f *fakeMtmPaperStore) LoadXAssetAllowCombos(context.Context, string) ([]pgstore.XAssetAllowRow, error) {
 	return nil, nil
 }
-func (f *fakeMtmPaperStore) LatestPaperExitTs(context.Context, string, string) (*time.Time, error) {
+func (f *fakeMtmPaperStore) LatestPaperExitTs(context.Context, string, string, string) (*time.Time, error) {
 	return nil, nil
 }
 func (f *fakeMtmPaperStore) InsertAlert(context.Context, *int64, string, string) error { return nil }
@@ -252,7 +252,7 @@ func TestD465_StepOpenAccrueExit(t *testing.T) {
 	}
 	row := st.rows[1]
 	// 最优对：long_a_short_b A×B net=−3.65+10.95=7.3。
-	if row.Venue != "mtA×mtB" || row.Symbol != "XAU" || row.Structure != "cfd_cfd" || row.Side != "long_a_short_b" {
+	if row.VenuePair() != "mtA×mtB" || row.Symbol != "XAU" || row.Structure != "cfd_cfd" || row.Side != "long_a_short_b" {
 		t.Fatalf("row=%+v", row)
 	}
 	if math.Abs(row.EntryFundingAnn-7.3) > 0.01 {
@@ -324,7 +324,7 @@ func TestD465_StepNullAndCap(t *testing.T) {
 	st2 := newFakeMtmPaperStore()
 	for i := 0; i < PaperMtmMaxActive; i++ {
 		st2.rows[int64(i+1)] = &pgstore.PaperSpotCarry{
-			ID: int64(i + 1), Venue: "x×y", Symbol: string(rune('A' + i)),
+			ID: int64(i + 1), VenueA: "x", VenueB: "y", Symbol: string(rune('A' + i)),
 			Side: "long_a_short_b", Structure: "cfd_cfd", Status: "active", EntryTs: now,
 		}
 	}

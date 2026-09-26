@@ -39,8 +39,8 @@ func TestD374_CfdOpen_ComboVenue(t *testing.T) {
 		t.Fatalf("锚B1: want 1 active row, got %d", len(active))
 	}
 	p := active[0]
-	if p.Venue != "277842155×binance" || p.Symbol != "SOL" {
-		t.Fatalf("锚B1: venue/symbol = %q|%q, want 277842155×binance|SOL", p.Venue, p.Symbol)
+	if p.VenuePair() != "277842155×binance" || p.Symbol != "SOL" {
+		t.Fatalf("锚B1: venue/symbol = %q|%q, want 277842155×binance|SOL", p.VenuePair(), p.Symbol)
 	}
 	if p.Structure != "long_cfd_short_perp" || p.Side != "short_perp" {
 		t.Fatalf("锚B1: structure/side = %q/%q, want long_cfd_short_perp/short_perp", p.Structure, p.Side)

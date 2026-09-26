@@ -240,7 +240,7 @@ func TestD350R1_TR5_DemoRowAccrues(t *testing.T) {
 	now := time.Now().UTC() // 锚=真实钟相对（原冻结 2026-09-19 与 seed 真实钟 48h 闸跨日相撞，9-21 起翻红）
 	seedUni(t, s, "binance", "GUSDT", "TRADING", "T3", 72*time.Hour, 92)
 	seedSettleFacts(t, s, "binance", "GUSDT", now)
-	pr := &pgstore.PaperSpotCarry{Venue: "binance", Symbol: "GUSDT", Side: "short_perp",
+	pr := &pgstore.PaperSpotCarry{VenueA: "binance", Symbol: "GUSDT", Side: "short_perp",
 		EntryFundingAnn: 92, QtyUSD: 1000, Note: "spot=x perp=y"}
 	if err := s.InsertPaperSpotCarry(ctx, pr); err != nil {
 		t.Fatalf("seed demo row: %v", err)
@@ -319,9 +319,9 @@ func TestD350R1_TR2_PromotePaperToDemo(t *testing.T) {
 	if _, _, err := StepPaperSpotCarry(ctx, s, eligibleStreak("binance|GUSDT"), time.Now().UTC(), nil); err != nil { // 锚=真实钟相对（同上跨日相撞修复）；D-383C 预灌满 streak
 		t.Fatalf("open paper: %v", err)
 	}
-	pr := &pgstore.PaperSpotCarry{Venue: "binance", Symbol: "GUSDT", Side: "short_perp",
+	pr := &pgstore.PaperSpotCarry{VenueA: "binance", Symbol: "GUSDT", Side: "short_perp",
 		EntryFundingAnn: 90, QtyUSD: 500, Note: "spot=o1 perp=o2"}
-	if err := s.PromotePaperToDemo(ctx, "binance", "GUSDT", pr); err != nil {
+	if err := s.PromotePaperToDemo(ctx, "binance", "", "GUSDT", pr); err != nil {
 		t.Fatalf("promote: %v", err)
 	}
 	if pr.ID == 0 || pr.Status != "demo" {
@@ -344,7 +344,7 @@ func TestD350R1_TR2_PromotePaperToDemo(t *testing.T) {
 		t.Errorf("新行 = %s/note=%q, want demo/双腿回执", dstatus, note)
 	}
 	// 无 active 行（已 demo）→ 明确错误
-	err := s.PromotePaperToDemo(ctx, "binance", "GUSDT", &pgstore.PaperSpotCarry{Side: "short_perp", QtyUSD: 1})
+	err := s.PromotePaperToDemo(ctx, "binance", "", "GUSDT", &pgstore.PaperSpotCarry{Side: "short_perp", QtyUSD: 1})
 	if err == nil || err != pgstore.ErrPaperPromoteNoActive {
 		t.Errorf("重复 promote err = %v, want ErrPaperPromoteNoActive", err)
 	}

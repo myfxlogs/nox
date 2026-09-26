@@ -54,12 +54,12 @@ func TestVenueSymbolFlags_D463(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, "TRUNCATE carry_graduations, paper_spot_carry CASCADE"); err != nil {
 		t.Fatal(err)
 	}
-	p := &PaperSpotCarry{Venue: "gate", Symbol: "XPD", Side: "short_perp", EntryFundingAnn: 5, QtyUSD: 100}
+	p := &PaperSpotCarry{VenueA: "gate", Symbol: "XPD", Side: "short_perp", EntryFundingAnn: 5, QtyUSD: 100}
 	if err := s.InsertPaperSpotCarry(ctx, p); err != nil {
 		t.Fatal(err)
 	}
 	warn := "⚠funding 语义待查"
-	g := &CarryGraduation{PaperID: p.ID, Venue: "gate", Symbol: "XPD", Structure: "spot_carry",
+	g := &CarryGraduation{PaperID: p.ID, VenueA: "gate", Symbol: "XPD", Structure: "spot_carry",
 		AgeDays: 6, AccruedUSD: 3, FlagWarn: &warn}
 	if _, err := s.InsertCarryGraduation(ctx, g); err != nil {
 		t.Fatal(err)

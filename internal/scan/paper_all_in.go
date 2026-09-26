@@ -68,14 +68,14 @@ func netAllInUSD(accrued float64, estFee, convergence *float64) float64 {
 // insertCfdPaper cfd 纸面开仓（保底段与 top-N 段共用）：venue=mt×cex 组合串、
 // est_round_trip_fee 开仓记账（venue 未覆盖→NULL 拒填）、entry/last_basis 接 monitor 面
 // （XAssetMonitorRowNear ts<=entry_ts 谓词复用 D-404 R1 冻结锚同源；缺席→NULL 诚实缺）。
-func insertCfdPaper(ctx context.Context, st PaperStore, r UniverseRow, mtVenue, venueCombo string, now time.Time) error {
+func insertCfdPaper(ctx context.Context, st PaperStore, r UniverseRow, mtVenue, cexVenue string, now time.Time) error {
 	side := "short_perp"
 	if r.Structure == "short_cfd_long_perp" {
 		side = "long_perp"
 	}
 	mv := mtVenue
 	p := &pgstore.PaperSpotCarry{
-		Venue: venueCombo, Symbol: r.Canonical, Side: side,
+		VenueA: mtVenue, VenueB: cexVenue, Symbol: r.Canonical, Side: side,
 		EntryFundingAnn: r.FundingAnn, QtyUSD: PaperQtyUSD,
 		Structure: r.Structure, MtVenue: &mv,
 		Note: "MT佣金未计（无常数实值）", // D-474a S2：分腿真费佣金项缺省注记

@@ -249,4 +249,6 @@ var (
 	PerpFundingAdmissionSQL string
 	//go:embed 0142_keydomain_constitution.sql
 	KeydomainConstitutionSQL string
+	//go:embed 0143_carry_graduation_pair_cols.sql
+	CarryGraduationPairColsSQL string
 )

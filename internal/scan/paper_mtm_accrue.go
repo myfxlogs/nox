@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"arb/internal/fact"
@@ -24,9 +23,8 @@ func accrueExitMtmPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 		if p.Structure != "cfd_cfd" {
 			continue
 		}
-		legs := strings.Split(p.Venue, "×")
-		if len(legs) != 2 {
-			continue
+		if p.VenueA == "" || p.VenueB == "" {
+			continue // 非双腿配对行防御（不猜方向）
 		}
 		base := p.EntryTs
 		if p.LastAccrueTs != nil {
@@ -35,16 +33,16 @@ func accrueExitMtmPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 		// 重算当前 net：long_a_short_b=swap_long[A]+swap_short[B]；short_a_long_b 对偶。
 		var lLeg, sLeg mtSwap
 		if p.Side == "long_a_short_b" {
-			lLeg, sLeg = longBook[p.Symbol+"|"+legs[0]], shortBook[p.Symbol+"|"+legs[1]]
+			lLeg, sLeg = longBook[p.Symbol+"|"+p.VenueA], shortBook[p.Symbol+"|"+p.VenueB]
 		} else {
-			sLeg, lLeg = shortBook[p.Symbol+"|"+legs[0]], longBook[p.Symbol+"|"+legs[1]]
+			sLeg, lLeg = shortBook[p.Symbol+"|"+p.VenueA], longBook[p.Symbol+"|"+p.VenueB]
 		}
 		lok := lLeg.symbol != "" && sLeg.symbol != "" && !lLeg.stale && !sLeg.stale
 		net := 0.0
 		var basis *float64
 		if lok {
 			net = lLeg.val + sLeg.val
-			basis, _ = mtmBasisFee(ctx, st, legsVenue(p, legs, true), lLeg.symbol, legsVenue(p, legs, false), sLeg.symbol, now)
+			basis, _ = mtmBasisFee(ctx, st, legsVenue(p, true), lLeg.symbol, legsVenue(p, false), sLeg.symbol, now)
 		}
 		// D-474a S4：腿缺/陈旧=缺席轮——不计时不 streak；连续缺席 ≥N 轮 → data_lost。
 		if !lok {
@@ -69,7 +67,7 @@ func accrueExitMtmPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 			continue
 		}
 		// S1：双 MT 腿日界逐期 swap 实率（facts 键=broker 裸符号=lLeg/sLeg.symbol）。
-		longV, shortV := legsVenue(p, legs, true), legsVenue(p, legs, false)
+		longV, shortV := legsVenue(p, true), legsVenue(p, false)
 		recalc := p.LastAccrueTs == nil // D-474a S1 存量回迁哨兵（0139 置 NULL）
 		accruedAdd, settledTo, aok, aerr := AccruePaperLegs(ctx, st, []PaperLegAccrue{
 			{Kind: fact.KindSwapLong, Venue: longV, Symbol: lLeg.symbol, SideFactor: 1},

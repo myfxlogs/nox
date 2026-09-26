@@ -45,7 +45,7 @@ func TestD475a_PaperAccrueObsColumns(t *testing.T) {
 		t.Fatalf("clean: %v", err)
 	}
 	row := &PaperSpotCarry{
-		Venue: "3001157×okx", Symbol: "XAUUSD", Structure: "long_cfd_short_perp",
+		VenueA: "3001157", VenueB: "okx", Symbol: "XAUUSD", Structure: "long_cfd_short_perp",
 		Side: "long", QtyUSD: 1000, EntryFundingAnn: 0.01,
 	}
 	if err := s.InsertPaperSpotCarry(ctx, row); err != nil {
