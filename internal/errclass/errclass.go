@@ -4,7 +4,11 @@
 // 不做自动重试——Retry/RetryFresh 留触发条件，待执行失败分类数据积累后评估）。
 package errclass
 
-import "strings"
+import (
+	"strings"
+
+	"arb/internal/keydomain"
+)
 
 // Action 分类调用方应如何响应 MT4/MT5 错误。
 type Action int32
@@ -70,9 +74,9 @@ func ClassifyMT4(code string) Action {
 // code 为错误码字符串（executors 从 ErrorCode.String() 提取）。
 func Classify(venueKey, code string) Action {
 	switch {
-	case strings.Contains(venueKey, ":mt5"):
+	case keydomain.IsType(venueKey, "mt5"):
 		return ClassifyMT5(code)
-	case strings.Contains(venueKey, ":mt4"):
+	case keydomain.IsType(venueKey, "mt4"):
 		return ClassifyMT4(code)
 	default:
 		return Abort // CEX 无标准码表，Abort 兜底

@@ -11,6 +11,7 @@ import (
 	"arb/internal/config"
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 	"arb/internal/httpx"
+	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 )
 
@@ -195,7 +196,7 @@ func buildVenueSnapshotRows(snaps []AccountSnapshot, realKeys map[string]bool) [
 			continue
 		}
 		vt := normalizeVenueType(sn.AssetType, sn.Venue, sn.VenueType)
-		key := sn.Venue + ":" + vt
+		key := keydomain.Join(sn.Venue, vt)
 		if seen[key] {
 			continue
 		}
