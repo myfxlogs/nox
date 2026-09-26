@@ -68,7 +68,7 @@ var errDemoRowExists = errors.New("spot-carry demo: demo row already exists")
 // demoPaperStore demo 在册窄接口（三方法，*pgstore.Store 原生满足；单测 fake 注入走三分支）。
 type demoPaperStore interface {
 	InsertPaperSpotCarry(ctx context.Context, r *pgstore.PaperSpotCarry) error
-	PromotePaperToDemo(ctx context.Context, venue, symbol string, r *pgstore.PaperSpotCarry) error
+	PromotePaperToDemo(ctx context.Context, venueA, venueB, symbol string, r *pgstore.PaperSpotCarry) error
 	MarkPaperSpotCarryDemo(ctx context.Context, id int64, note string) error
 }
 
@@ -86,7 +86,7 @@ func registerSpotCarryDemoRow(ctx context.Context, st demoPaperStore, venue, sym
 	case err != pgstore.ErrPaperExists:
 		return fmt.Errorf("insert paper row: %w", err)
 	}
-	perr := st.PromotePaperToDemo(ctx, venue, symbol, pr)
+	perr := st.PromotePaperToDemo(ctx, venue, "", symbol, pr)
 	switch {
 	case perr == nil:
 		return nil
@@ -173,7 +173,7 @@ func (s *Service) ExecuteSpotCarryDemo(ctx context.Context, req *connect.Request
 	// Insert 后立即 Mark demo 化；active 在册 → Promote 支路（R1 S2）；demo 在册 → already_exists。
 	note := fmt.Sprintf("spot=%s@%.6g perp=%s@%.6g", spotFill.OrderID, spotPrice, perpFill.OrderID, perpPrice)
 	pr := &pgstore.PaperSpotCarry{
-		Venue: in.Venue, Symbol: in.Symbol, Side: in.Side,
+		VenueA: in.Venue, Symbol: in.Symbol, Side: in.Side,
 		EntryFundingAnn: 0, QtyUSD: in.QtyUsd, Note: note,
 	}
 	if err := registerSpotCarryDemoRow(ctx, s.store, in.Venue, in.Symbol, note, pr); err != nil {
@@ -204,11 +204,11 @@ func (s *Service) ListSpotCarryDemo(ctx context.Context, req *connect.Request[v1
 	resp := &v1.ListSpotCarryDemoResponse{}
 	for _, r := range rows {
 		last := 0.0
-		if u, ok := uni[r.Venue+"|"+r.Symbol]; ok && u.FundingAnn != nil {
+		if u, ok := uni[r.VenuePair()+"|"+r.Symbol]; ok && u.FundingAnn != nil {
 			last = *u.FundingAnn
 		}
 		resp.Rows = append(resp.Rows, &v1.SpotCarryDemoRow{
-			PaperId: r.ID, Venue: r.Venue, Symbol: r.Symbol, Side: r.Side,
+			PaperId: r.ID, Venue: r.VenuePair(), Symbol: r.Symbol, Side: r.Side,
 			QtyUsd: r.QtyUSD, EntryFundingAnn: r.EntryFundingAnn, LastFundingAnn: last,
 			AccruedUsd: r.AccruedUSD, EntryTs: r.EntryTs.Format(time.RFC3339), Note: r.Note,
 		})

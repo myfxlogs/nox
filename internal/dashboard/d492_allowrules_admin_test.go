@@ -238,8 +238,8 @@ func TestD492_R1_BareProbeGapKeys(t *testing.T) {
 	// perp_perp：venue "gate×okx"，allow={gate:perp} → keys=[okx:perp]（R2 全形口径）。
 	fee, entryB, lastB := 0.5, 10.0, 12.0
 	f := &fakeGradDB{
-		grad: &pgstore.CarryGraduation{ID: 6, PaperID: 43, Venue: "gate×okx", Symbol: "BTC", Structure: "perp_perp", Status: "pending"},
-		paper: &pgstore.PaperSpotCarry{ID: 43, Venue: "gate×okx", Structure: "perp_perp",
+		grad: &pgstore.CarryGraduation{ID: 6, PaperID: 43, VenueA: "gate", VenueB: "okx", Symbol: "BTC", Structure: "perp_perp", Status: "pending"},
+		paper: &pgstore.PaperSpotCarry{ID: 43, VenueA: "gate", VenueB: "okx", Structure: "perp_perp",
 			Status: "active", AccruedUSD: 5.0, EntryTs: time.Now().Add(-6 * 24 * time.Hour),
 			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB},
 	}
@@ -259,8 +259,8 @@ func TestD492_R1_BareProbeGapKeys(t *testing.T) {
 
 	// spot_carry：venue "binance" 双腿口径，allow={binance:perp} → keys=[binance:spot]。
 	f2 := &fakeGradDB{
-		grad: &pgstore.CarryGraduation{ID: 7, PaperID: 44, Venue: "binance", Symbol: "SKLUSDT", Structure: "spot_carry", Status: "pending"},
-		paper: &pgstore.PaperSpotCarry{ID: 44, Venue: "binance", Symbol: "SKLUSDT", Structure: "spot_carry",
+		grad: &pgstore.CarryGraduation{ID: 7, PaperID: 44, VenueA: "binance", Symbol: "SKLUSDT", Structure: "spot_carry", Status: "pending"},
+		paper: &pgstore.PaperSpotCarry{ID: 44, VenueA: "binance", Symbol: "SKLUSDT", Structure: "spot_carry",
 			Status: "active", AccruedUSD: 5.0, EntryTs: time.Now().Add(-6 * 24 * time.Hour),
 			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB},
 	}

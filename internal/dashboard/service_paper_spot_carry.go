@@ -101,7 +101,7 @@ func buildPaperSpotCarryBoard(ctx context.Context, src paperBoardSource, now tim
 		}
 		row := &v1.PaperSpotCarryRow{
 			Id:              p.ID,
-			Venue:           p.Venue,
+			Venue:           p.VenuePair(),
 			Symbol:          p.Symbol,
 			Side:            p.Side,
 			Status:          p.Status,
@@ -121,7 +121,7 @@ func buildPaperSpotCarryBoard(ctx context.Context, src paperBoardSource, now tim
 		}
 		row.ExitReason = p.ExitReason
 		// join fin_cex_universe（venue|symbol 键，与纸面步进同款）；缺行→null（fail-closed 传播）
-		if u, ok := uni[p.Venue+"|"+p.Symbol]; ok && u.FundingAnn != nil {
+		if u, ok := uni[p.VenuePair()+"|"+p.Symbol]; ok && u.FundingAnn != nil {
 			last := *u.FundingAnn
 			row.LastFundingAnn = &last
 			net := math.Abs(last) - paperSpotCostPct
