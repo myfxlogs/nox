@@ -82,7 +82,7 @@ func TestD249_ClosePositionCore_ClosedLogWritten(t *testing.T) {
 	p.SetPnLCalibrator(&fakePnLCalibrator{results: map[string]*HistoryPnL{
 		"okx:perp:open-1": {Profit: 5.0, ClosePrice: 101.0, Swap: 0, Commission: 0},
 	}})
-	if err := p.closePositionCore(ctx, posID); err != nil {
+	if err := p.closePositionCore(ctx, posID, false); err != nil {
 		t.Fatalf("closePositionCore: %v", err)
 	}
 	reasons := queryClosedLogs(t, s, ctx, posID)
@@ -114,11 +114,11 @@ func TestD249_ClosePositionCore_ClosedLogIdempotent(t *testing.T) {
 		"okx:perp:open-1": {Profit: 5.0, ClosePrice: 101.0, Swap: 0, Commission: 0},
 	}})
 	// 第一次：成功 CLOSED → 写一行
-	if err := p.closePositionCore(ctx, posID); err != nil {
+	if err := p.closePositionCore(ctx, posID, false); err != nil {
 		t.Fatalf("first closePositionCore: %v", err)
 	}
 	// 第二次：已 CLOSED → ErrTerminalState 分支返回 nil → 不写 CLOSED log
-	if err := p.closePositionCore(ctx, posID); err != nil {
+	if err := p.closePositionCore(ctx, posID, false); err != nil {
 		t.Fatalf("second closePositionCore (idempotent): %v", err)
 	}
 	reasons := queryClosedLogs(t, s, ctx, posID)

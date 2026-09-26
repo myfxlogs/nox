@@ -21,6 +21,7 @@ func New(cfg Config, store *pgstore.Store, service *dashboard.Service, oppTopic 
 		gate:             NewGate(store, cfg, cp),
 		fundingNeedSent:  make(map[string]string),
 		fundingBreach:    make(map[int64]int),  // D-133 T1：PERP_FUNDING 去抖计数
+		legSuspend:       make(map[int64]bool), // D-495 S3：腿可平性 suspend 转场去重
 		disasterBreach:   make(map[int64]int),  // D-378b S1：灾难带去抖计数
 		csMissCounts:     make(map[string]int), // D-140 S2：CS-miss 聚合
 		csMissSent:       make(map[string]time.Time),

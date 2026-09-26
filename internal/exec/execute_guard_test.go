@@ -3,8 +3,11 @@ package exec
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
+	"arb/internal/bus"
 	"arb/internal/store/pgstore"
 	"arb/internal/testutil"
 	"github.com/jackc/pgx/v5"
@@ -27,7 +30,47 @@ func testStore(t *testing.T) *pgstore.Store {
 	if err := s.Migrate(ctx); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
+	seedActionableTicks(t, s, execTestTickPairs...)
 	return s
+}
+
+// execTestTickPairs D-495：Execute/ClosePosition 的可平性闸要求腿 venue×symbol
+// 窗口内有 ≥2 种 bid。测试统一播种常用组合为「活」；单测要暗腿须用未播种的 symbol。
+var execTestTickPairs = [][2]string{
+	{"okx:perp", "BTC-USDT-SWAP"}, {"okx:perp", "XAU-USDT-SWAP"}, {"okx:perp", "XPT-USDT-SWAP"},
+	{"okx:perp", "SKL-USDT-SWAP"}, {"okx:perp", "SKL-USDT"},
+	{"okx:spot", "BTC-USDT"}, {"okx:spot", "BTCUSDT"},
+	{"binance:perp", "BTCUSDT"}, {"binance:perp", "TRXUSDT"},
+	{"gate:perp", "BTC_USDT"}, {"gate:perp", "TRX_USDT"}, {"gate:perp", "CL_USDT"},
+	{"vA:mt5", "EURUSD"}, {"vA:mt5", "XAUUSDm"}, {"vB:mt5", "XAUUSDm"},
+	{"vB:perp", "BTC-USDT-SWAP"}, {"3001157:mt5", "XAUUSDm"}, {"277842155:mt5", "XPTUSD"},
+	{"vA:mt5", "AUDJPY"}, {"vA:mt5", "X"}, {"vB:mt5", "X"}, {"vB:mt5", "EURUSD"},
+	{"3001157:mt5", "XPTUSD"},
+}
+
+// seedActionableTicks 按 LegActionable 键域映射播两条不同 bid（亮腿）。
+// pairs = (venueKey, venue 原生 symbol)。
+func seedActionableTicks(t *testing.T, s *pgstore.Store, pairs ...[2]string) {
+	t.Helper()
+	ctx := context.Background()
+	if err := s.EnsureMonthPartition(ctx, time.Now().Year(), int(time.Now().Month())); err != nil {
+		t.Fatalf("ensure ticks partition: %v", err)
+	}
+	now := time.Now()
+	var rows []pgstore.TickRow
+	for _, pr := range pairs {
+		venue := strings.SplitN(pr[0], ":", 2)[0]
+		sym := pr[1]
+		if bus.IsCexVenueKey(pr[0]) {
+			sym = bus.CexSymbolKey(sym)
+		}
+		rows = append(rows,
+			pgstore.TickRow{Ts: now.Add(-2 * time.Minute), Venue: venue, Symbol: sym, Bid: 100.0, Ask: 100.1, VenueType: "test"},
+			pgstore.TickRow{Ts: now, Venue: venue, Symbol: sym, Bid: 100.5, Ask: 100.6, VenueType: "test"})
+	}
+	if err := s.InsertTicks(ctx, rows); err != nil {
+		t.Fatalf("seed actionable ticks: %v", err)
+	}
 }
 
 // seedConn 用直连 pgx 播种 positions（exec 测试种子 SQL，绕过 Store 未导出的 pool）。
