@@ -13,17 +13,17 @@ import (
 	"connectrpc.com/connect"
 )
 
-// revokeCombosForFlag D-475a S4 吊销编排（单点）：旗标 venue 按 '×' 拆段逐段
+// revokeCombosForFlag D-475a S4 吊销编排（单点）：旗标 venue 双源列逐段
 // DisableCombosByFlag → 停用行数>0 则引擎热重载+快照刷新+warn 告警列数；
 // 受影响 venue 在管仓命中→warn 列 posID 知情（不自动平仓，blocked=禁新开非强平）。
 // **契约：任何 blocked flag 写口（reject/KB 投影/S7 升级/手工后补 RPC）必须走
 // 本编排——InsertFlag 保持纯写语义，吊销是可审计服务层动作。**
 // 复活=人工（flag resolve 不自动复活 combo）。
-func (s *Service) revokeCombosForFlag(ctx context.Context, venue, symbol string) {
+func (s *Service) revokeCombosForFlag(ctx context.Context, venueA, venueB, symbol string) {
 	db := s.gradDB()
 	total := int64(0)
 	seenVenues := map[string]bool{}
-	for _, bare := range strings.Split(venue, "×") { // 组合串拆段（'3001157×okx'→两段各自 venue_key 前缀吊销）
+	for _, bare := range []string{venueA, venueB} { // 双源列直读（'3001157'/'okx' 各查 venue_key 前缀吊销）
 		if bare == "" || seenVenues[bare] {
 			continue
 		}
@@ -55,7 +55,12 @@ func (s *Service) revokeCombosForFlag(ctx context.Context, venue, symbol string)
 		log.Printf("[graduation] flag revoke snapshot refresh: %v", err)
 	}
 	s.insertGraduationAlertLevel(ctx, "warn",
-		fmt.Sprintf("blocked flag %s×%s 吊销 %d 条白名单组合", venue, symbol, total))
+		fmt.Sprintf("blocked flag %s×%s 吊销 %d 条白名单组合", func() string {
+			if venueB == "" {
+				return venueA
+			}
+			return venueA + "×" + venueB
+		}(), symbol, total))
 }
 
 // insertGraduationAlertLevel 指定级别告警（revoke warn 与裁决 info 分用）。
@@ -94,7 +99,7 @@ func (s *Service) RejectCarryGraduation(ctx context.Context, req *connect.Reques
 			reason = "业主拒绝（无理由注记）"
 		}
 		if err := db.InsertFlag(ctx, &pgstore.VenueSymbolFlag{
-			Venue: grad.VenuePair(), Symbol: grad.Symbol, Level: level, Reason: reason,
+			VenueA: grad.VenueA, VenueB: grad.VenueB, Symbol: grad.Symbol, Level: level, Reason: reason,
 		}); err != nil {
 			resp.Error = fmt.Sprintf("拒绝已落账但 flag 回写失败: %v", err)
 			return connect.NewResponse(resp), nil
@@ -103,7 +108,7 @@ func (s *Service) RejectCarryGraduation(ctx context.Context, req *connect.Reques
 		// 契约=任何旗标 mutation RPC 成功路径必须 kickConfig（含未来 ResolveFlag 解旗）。
 		s.kickConfig()
 		if level == "blocked" {
-			s.revokeCombosForFlag(ctx, grad.VenuePair(), grad.Symbol)
+			s.revokeCombosForFlag(ctx, grad.VenueA, grad.VenueB, grad.Symbol)
 		}
 	}
 	s.insertGraduationAlert(ctx, grad, "已拒绝", "")

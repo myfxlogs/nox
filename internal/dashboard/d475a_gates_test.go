@@ -132,7 +132,7 @@ func TestD475a_A4_Revoke(t *testing.T) {
 	}
 	// warn 级不吊销不踢后的再写幂等（重复 disable 调用无副作用——fake 计数即可）。
 	f.disableRet = 0
-	s.revokeCombosForFlag(context.Background(), "1279967×gate", "BTC")
+	s.revokeCombosForFlag(context.Background(), "1279967", "gate", "BTC")
 	if len(f.disabledCalls) != 4 { // 再调两段仍各一次（幂等=重复 disable 无害）
 		t.Fatalf("幂等重放应仍走两段调用，got %v", f.disabledCalls)
 	}
