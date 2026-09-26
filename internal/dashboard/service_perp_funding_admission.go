@@ -76,6 +76,7 @@ func (s *Service) SetPerpFundingAdmissionOverride(ctx context.Context, req *conn
 			slog.Warn("pf-admission refresh after override fail", "canonical", g.Canonical, "err", err) // best-effort 不回滚
 		}
 	}
+	s.PublishDataRefresh(RefreshPFAdmission)
 	resp.Ok = true
 	return connect.NewResponse(resp), nil
 }
@@ -91,6 +92,7 @@ func (s *Service) ReevaluatePerpFundingAdmission(ctx context.Context, _ *connect
 		resp.Error = err.Error()
 		return connect.NewResponse(resp), nil
 	}
+	s.PublishDataRefresh(RefreshPFAdmission)
 	resp.Ok = true
 	return connect.NewResponse(resp), nil
 }

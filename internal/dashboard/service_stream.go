@@ -80,6 +80,9 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 	// D-234：CMC 看盘实时帧（cmcWatchTopic → case 13）。nil=不订阅。
 	cmcWatchCh, cmcWatchCancel := s.subscribeCMCWatchTopic()
 	defer cmcWatchCancel()
+	// D-508 S9：域数据刷新通知（refreshTopic → case 14）。nil=不订阅。
+	refreshCh, refreshCancel := s.subscribeRefreshTopic()
+	defer refreshCancel()
 	ticker := time.NewTicker(30 * time.Second) // keepalive 每 30s（§8.2 D-027）
 	defer ticker.Stop()
 	// D-090 自选报价条：case 1 蓄压 flush ticker（默认 1s，测试可注 10ms）。per (venueKey|symbol) 蓄压只推最新一帧。
@@ -89,21 +92,9 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 	}
 	flushTicker := time.NewTicker(flushInterval)
 	defer flushTicker.Stop()
-	// D-090：流启动初始化——缓存未初始化则先查库填缓存。首帧快照：AllLatest 按 watchlist 过滤逐条 Send。
-	if err := s.ensureWatchlistLoaded(ctx); err != nil {
-		return fmt.Errorf("stream init watchlist: %w", err)
-	}
-	for _, q := range s.qbus.AllLatest() {
-		if !s.watchlistHitQuote(q) {
-			continue
-		}
-		if err := stream.Send(&v1.StreamUpdatesResponse{
-			Update: &v1.StreamUpdatesResponse_Quote{
-				Quote: quoteToProto(q),
-			},
-		}); err != nil {
-			return err
-		}
+	// D-090：流启动初始化——首帧快照（AllLatest 按 watchlist 过滤逐条 Send）。D-508 S9 拆 streamInitQuotes。
+	if err := s.streamInitQuotes(ctx, stream); err != nil {
+		return err
 	}
 	pending := make(map[string]bus.Quote) // D-090：每连接独立，key=venueKey|symbol，覆盖式=自动最新值
 	for {
@@ -224,6 +215,14 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 			}
 			// D-231 S5：空消息→前端 getHedgeStructure 重取（复用 case 11 模式）。
 			if err := stream.Send(&v1.StreamUpdatesResponse{Update: &v1.StreamUpdatesResponse_HedgeRefresh{HedgeRefresh: &v1.HedgeRefreshNotice{}}}); err != nil {
+				return err
+			}
+		case topic, ok := <-refreshCh:
+			// D-508 S9：topic 透传——前端按订阅 topic 集重取对应 RPC（复用 case 11 通知→重取模式）。
+			if !ok {
+				return nil
+			}
+			if err := stream.Send(&v1.StreamUpdatesResponse{Update: &v1.StreamUpdatesResponse_DataRefresh{DataRefresh: &v1.DataRefreshNotice{Topic: topic}}}); err != nil {
 				return err
 			}
 		case v, ok := <-cmcWatchCh:

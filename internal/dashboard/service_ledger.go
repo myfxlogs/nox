@@ -34,6 +34,7 @@ func (s *Service) AddLedgerEntry(ctx context.Context, req *connect.Request[v1.Ad
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+	s.PublishDataRefresh(RefreshFinance)
 	return connect.NewResponse(&v1.AddLedgerEntryResponse{Id: id}), nil
 }
 
@@ -94,6 +95,7 @@ func (s *Service) AddInvestmentRecord(ctx context.Context, req *connect.Request[
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+	s.PublishDataRefresh(RefreshFinance)
 	return connect.NewResponse(&v1.AddInvestmentRecordResponse{Id: id}), nil
 }
 

@@ -57,6 +57,7 @@ func (s *Service) SetVenueExposureCap(ctx context.Context, req *connect.Request[
 		resp.Error = fmt.Sprintf("已写入但审计告警失败: %v", err)
 		return connect.NewResponse(resp), nil
 	}
+	s.PublishDataRefresh(RefreshAllowRules)
 	resp.Ok = true
 	return connect.NewResponse(resp), nil
 }

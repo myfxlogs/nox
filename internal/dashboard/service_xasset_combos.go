@@ -116,6 +116,7 @@ func (s *Service) comboWriteFinish(ctx context.Context, resp *v1.UpsertXAssetAll
 		resp.Error = "白名单已写入但 pipeline/手动链快照刷新失败（重启后生效）: " + err.Error()
 		return connect.NewResponse(resp), nil
 	}
+	s.PublishDataRefresh(RefreshAllowRules)
 	return connect.NewResponse(resp), nil
 }
 

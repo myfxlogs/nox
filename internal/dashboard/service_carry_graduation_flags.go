@@ -122,6 +122,8 @@ func (s *Service) insertGraduationAlert(ctx context.Context, g *pgstore.CarryGra
 	if detail != "" {
 		msg += "：" + detail
 	}
+	// D-508 S9：裁决路径=建议/白名单双域已落账→前端重取（blocked 旗可撤 combo）。
+	s.PublishDataRefresh(RefreshGraduation, RefreshAllowRules)
 	if err := s.gradDB().InsertAlert(ctx, nil, "info", msg); err != nil {
 		log.Printf("[graduation] alert: %v", err)
 	}

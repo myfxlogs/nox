@@ -128,5 +128,6 @@ func (s *Service) SetAutotradeAllowRuleEnabled(ctx context.Context, req *connect
 		slog.Warn("allow rule audit alert fail", "id", r.ID, "err", aerr) // best-effort 不回滚
 	}
 	s.kickConfig() // D-469b S5：allow rules 热载 kick
+	s.PublishDataRefresh(RefreshAllowRules)
 	return connect.NewResponse(&v1.SetAutotradeAllowRuleEnabledResponse{Ok: true}), nil
 }

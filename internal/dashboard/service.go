@@ -68,6 +68,8 @@ type Service struct {
 	hedgeTopic *bus.Topic[struct{}]
 	// D-234：CMC 看盘实时帧 topic（帧钩子→1s 蓄压→computeCMCWatchUpdate→Publish→StreamUpdates case 13）。nil=未接线→不订阅。
 	cmcWatchTopic *bus.Topic[*v1.CMCWatchUpdate]
+	// D-508 S9：域数据刷新通知 topic（写源 Publish(topic) → StreamUpdates case 14）。nil=未接线→不订阅。
+	refreshTopic *bus.Topic[string]
 	// D-208 v2：CMC 数据源（nil = 不支持 CMC 行，走老路径）。
 	cmcSource position.CMCSource
 	// bpm Broker 实持仓 monitor（D-052）：ListBrokerPositions 拉 + StreamUpdates case 8 推同源。nil = 未接线（测试直接构造 Service）。

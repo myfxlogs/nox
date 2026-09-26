@@ -82,3 +82,32 @@ func TestHedgeTopicNilSafe(t *testing.T) {
 		t.Fatal("hedgeTopic should be nil by default")
 	}
 }
+
+// TestRefreshTopicPublishSubscribe D-508 S9：refreshTopic.Subscribe() 收到域刷新通知（case 14 数据源，同款验证）。
+func TestRefreshTopicPublishSubscribe(t *testing.T) {
+	topic := bus.NewTopic[string]()
+	ch, cancel := topic.Subscribe()
+	defer cancel()
+
+	s := &Service{}
+	s.SetRefreshTopic(topic)
+	s.PublishDataRefresh(RefreshAllowRules)
+
+	select {
+	case got := <-ch:
+		if got != RefreshAllowRules {
+			t.Fatalf("topic mismatch: got %q want %q", got, RefreshAllowRules)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for data refresh notice")
+	}
+}
+
+// TestRefreshTopicNilSafe D-508 S9：refreshTopic 未接线 → PublishDataRefresh 静默不 panic。
+func TestRefreshTopicNilSafe(t *testing.T) {
+	s := &Service{}
+	s.PublishDataRefresh(RefreshAllowRules) // nil topic → no panic
+	if s.refreshTopic != nil {
+		t.Fatal("refreshTopic should be nil by default")
+	}
+}
