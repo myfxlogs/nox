@@ -9,10 +9,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
-	"arb/internal/bus"
 	"arb/internal/fact"
 )
 
@@ -128,44 +126,6 @@ func (b *BinanceFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
 		}
 	}
 	return out, nil
-}
-
-// BinanceTicker 采集 Binance best bid/ask（REST 轮询，§3.3）。
-type BinanceTicker struct{ cfg Config }
-
-func NewBinanceTicker(cfg Config) *BinanceTicker { return &BinanceTicker{cfg: cfg} }
-
-func (b *BinanceTicker) PollQuotes(ctx context.Context) ([]bus.Quote, error) {
-	var out []bus.Quote
-	spotBase := strings.Replace(b.cfg.BinanceBaseURL, "fapi", "api", 1)
-	for _, sym := range b.syms() {
-		pair := sym + "USDT"
-		spotURL := fmt.Sprintf("%s/api/v3/ticker/bookTicker?symbol=%s", spotBase, pair)
-		if q, err := fetchBinanceBookTicker(ctx, b.cfg.Client, spotURL, pair, VenueBinance, "spot"); err == nil {
-			out = append(out, q)
-		}
-		perpURL := fmt.Sprintf("%s/fapi/v1/ticker/bookTicker?symbol=%s", b.cfg.BinanceBaseURL, pair)
-		if q, err := fetchBinanceBookTicker(ctx, b.cfg.Client, perpURL, pair, VenueBinance, "perp"); err == nil {
-			out = append(out, q)
-		}
-	}
-	return out, nil
-}
-
-func fetchBinanceBookTicker(ctx context.Context, client *http.Client, url, symbol, venue, venueType string) (bus.Quote, error) {
-	body, err := getJSON(ctx, client, url)
-	if err != nil {
-		return bus.Quote{}, err
-	}
-	bid, _ := body["bidPrice"].(string)
-	ask, _ := body["askPrice"].(string)
-	var bidF, askF float64
-	fmt.Sscanf(bid, "%f", &bidF)
-	fmt.Sscanf(ask, "%f", &askF)
-	return bus.Quote{
-		Symbol: symbol, Venue: venue, VenueType: venueType, VenueSymbol: symbol,
-		Bid: bidF, Ask: askF, Time: time.Now(),
-	}, nil
 }
 
 // GateFunding 采集 Gate.io funding rate（REST 轮询，§3.3）。

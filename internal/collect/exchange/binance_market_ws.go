@@ -5,7 +5,7 @@
 // 双 payload 形制（D-505 决策席实测钉死）：perp 带 e/T/E 包裹、spot 裸 u/s/b/B/a/A——
 // 统一取 s/b/B/a/A；时间戳取帧内 T（perp）否则本地 now。
 // 鉴权：x-proxy-token 握口头必带（无→HTTP 403；httpx.WSDialer 同源注入）。
-// 发布键形与 pollBinanceQuotes 逐字一致（venue=binance、VenueType=perp/spot、Symbol=pair）。
+// 发布键形与原 REST poll 逐字一致（venue=binance、VenueType=perp/spot、Symbol=pair；D-508 S14 起单轨 WS）。
 package exchange
 
 import (
@@ -98,7 +98,7 @@ func (b *BinanceMarketWS) runOnce(ctx context.Context, url, venueType string, pu
 	}
 	defer conn.Close()
 
-	// 符号源与 pollBinanceQuotes 同源（b.syms()=effectiveSymbols：env ∪ SymProvider
+	// 符号源与原 ticker 同源（effectiveSymbols：env ∪ SymProvider
 	// 动态 watchlist）；watchlist 新增符号随下次重连订阅生效，60s REST 兜底补窗。
 	syms := b.cfg.effectiveSymbols()
 	params := make([]string, 0, len(syms))

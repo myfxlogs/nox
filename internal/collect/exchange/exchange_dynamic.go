@@ -38,9 +38,6 @@ func (c Config) effectiveSymbols() []string {
 // syms D-369 S2：binance 采集器符号集（env ∪ provider 动态集）。
 func (b *BinanceFunding) syms() []string { return b.cfg.effectiveSymbols() }
 
-// syms D-369 S2：binance ticker 符号集。
-func (b *BinanceTicker) syms() []string { return b.cfg.effectiveSymbols() }
-
 // syms D-369 S2：gate/okx funding 符号集（env ∪ provider 动态集）。
 func (g *GateFunding) syms() []string { return g.cfg.effectiveSymbols() }
 
