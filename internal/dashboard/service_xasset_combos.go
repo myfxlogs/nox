@@ -1,5 +1,6 @@
 // service_xasset_combos.go D-471 S3：xasset_allow_combos 管理面 RPC（白名单不再裸 SQL）。
-// List=全量行（含禁用）；Upsert=insert（id=0）/update（id>0，事务+行锁 B-016）；
+// List=全量行（含禁用）；Upsert=update（id>0，事务+行锁 B-016）；D-500 S2 起 insert
+// 分支关闭（路B）——唯一入闸=毕业 approve 链。
 // 写后必走 xassetReloader+refreshXAssetSnapshots（reloader==nil→fail-closed 拒写）。
 // 在持仓知情：禁用/caps 下调命中 open|legged|closing 持仓→needs_confirm（confirm=true 放行）；
 // caps 下调至 <在持名义→拒改（B-020 防业主把自己锁死）。禁用只闸入场不伤在持仓退出评估
@@ -8,7 +9,6 @@ package dashboard
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
@@ -68,22 +68,9 @@ func (s *Service) UpsertXAssetAllowCombo(ctx context.Context, req *connect.Reque
 	}
 	db := s.gradDB()
 	if m.Id == 0 {
-		// insert 分支（同 approve 写路径）
-		id, err := db.InsertXAssetAllowCombo(ctx, &pgstore.XAssetComboInsert{
-			CanonicalBuy: m.CanonicalBuy, CanonicalSell: m.CanonicalSell,
-			VenueBuy: m.VenueBuy, VenueSell: m.VenueSell,
-			MaxLongQty: m.MaxLongQty, MaxShortQty: m.MaxShortQty, MaxGrossUSD: m.MaxGrossUsd,
-			NotionalUSD: m.NotionalUsd, Simulated: m.Simulated != nil && *m.Simulated, Note: m.Note,
-		})
-		if err != nil {
-			if errors.Is(err, pgstore.ErrXAssetComboExists) {
-				return fail("已在白名单（唯一键撞 canonical×venue 对）")
-			}
-			return fail("写白名单失败: %v", err)
-		}
-		resp.Ok = true
-		_ = id
-		return s.comboWriteFinish(ctx, resp)
+		// D-500 S2 路B关闭：管理面手工加行拒插——唯一入闸=纸面→毕业→approve 链
+		// （approve 走 db.InsertXAssetAllowCombo store 层不受本拒影响）。
+		return fail("白名单行仅经毕业授权写入（D-500 业主令：路B已关闭）")
 	}
 	// update 分支：行锁（store 内 tx）；先查在持仓知情。
 	posIDs, openNotional, err := db.ListOpenPositionsForCombo(ctx, m.CanonicalBuy, m.CanonicalSell, m.VenueBuy, m.VenueSell)

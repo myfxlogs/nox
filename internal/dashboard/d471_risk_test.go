@@ -183,14 +183,14 @@ func TestD471_UpsertCombo(t *testing.T) {
 	if resp.Msg.Ok || !strings.Contains(resp.Msg.Error, "后缀非法") {
 		t.Errorf("非法 venue 后缀应拒，got %s", resp.Msg.Error)
 	}
-	// insert 正常（fake Insert 捕获即放行）
+	// D-500 DS2：id=0 管理面插入=路B已关闭——拒写提示走毕业授权（fake Insert 零调用）。
 	f = &fakeGradDB{}
 	s = newSvc(f)
 	resp, _ = s.UpsertXAssetAllowCombo(ctx, connect.NewRequest(&v1.UpsertXAssetAllowComboRequest{
 		CanonicalBuy: "XAUUSD", CanonicalSell: "XAUUSDT", VenueBuy: "3001157:mt5", VenueSell: "binance:perp",
 		MaxLongQty: 0.01, MaxShortQty: 5, MaxGrossUsd: 5000, Enabled: true}))
-	if !resp.Msg.Ok {
-		t.Fatalf("insert 应放行，got %s", resp.Msg.Error)
+	if resp.Msg.Ok || !strings.Contains(resp.Msg.Error, "毕业授权") {
+		t.Fatalf("路B insert 应拒，got ok=%v err=%s", resp.Msg.Ok, resp.Msg.Error)
 	}
 	// update：无在持仓→直接执行
 	f = &fakeGradDB{adminRows: []pgstore.XAssetComboAdminRow{{ID: 3}}}
