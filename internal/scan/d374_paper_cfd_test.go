@@ -76,6 +76,8 @@ func TestD374_CfdOpen_Rejected(t *testing.T) {
 
 // TestD374_CfdExit_MissStreak 锚B4（D-474a S4 改写）：行从 res.Rows 消失 → miss_streak
 // 独立计数（low_streak 不受缺席污染），连缺 3 轮 → data_lost 退出（不混入 normalized）。
+// D-500：真 miss 语义=venue 有产出但该配对缺席——keepAlive 脏行保 venue 非静默（
+// venue 整轮零产出走 suspend 冻 miss_streak，见 TestD500_*）。
 func TestD374_CfdExit_MissStreak(t *testing.T) {
 	s := d350Store(t)
 	ctx := context.Background()
@@ -83,9 +85,10 @@ func TestD374_CfdExit_MissStreak(t *testing.T) {
 	if _, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil); err != nil {
 		t.Fatalf("open: %v", err)
 	}
+	keepAlive := []UniverseRow{d374Row("KA374", "277842155", "binance", "long_cfd_short_perp", 0, "suspect")}
 	// miss#1/2：miss_streak 递增、low_streak 恒 0，行仍 active 不退
 	for i := 1; i <= 2; i++ {
-		_, exited, err := StepPaperCfdCarry(ctx, s, nil, time.Now(), d410Opts(), nil)
+		_, exited, err := StepPaperCfdCarry(ctx, s, keepAlive, time.Now(), d410Opts(), nil)
 		if err != nil {
 			t.Fatalf("miss%d: %v", i, err)
 		}
@@ -98,7 +101,7 @@ func TestD374_CfdExit_MissStreak(t *testing.T) {
 		}
 	}
 	// miss#3：达连缺线 → data_lost
-	_, exited3, err := StepPaperCfdCarry(ctx, s, nil, time.Now(), d410Opts(), nil)
+	_, exited3, err := StepPaperCfdCarry(ctx, s, keepAlive, time.Now(), d410Opts(), nil)
 	if err != nil {
 		t.Fatalf("miss3: %v", err)
 	}

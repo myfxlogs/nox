@@ -179,8 +179,10 @@ func TestD410_CfdMonitorBasis(t *testing.T) {
 		t.Fatalf("last_basis want -3, got %v", last)
 	}
 	// 宇宙行缺席三轮 → data_lost 退出（D-474a S4），冻结收敛=−1×(−3−12)=+15bps → +$1.5
+	// D-500：真 miss=venue 有产出配对缺席——keepAlive 脏行保 venue 非静默。
+	keepAlive := []UniverseRow{d374Row("KA410", "3001157", "okx", "long_cfd_short_perp", 0, "suspect")}
 	for i := 0; i < 3; i++ {
-		if _, exited, err := StepPaperCfdCarry(ctx, s, nil, time.Now(), d410Opts(), nil); err != nil {
+		if _, exited, err := StepPaperCfdCarry(ctx, s, keepAlive, time.Now(), d410Opts(), nil); err != nil {
 			t.Fatalf("miss step %d: %v", i, err)
 		} else if i == 2 && exited != 1 {
 			t.Fatalf("want exited=1, got %d", exited)
@@ -246,8 +248,9 @@ func TestD410_GuaranteedFlap(t *testing.T) {
 	if _, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil); err != nil {
 		t.Fatalf("open: %v", err)
 	}
+	keepAlive := []UniverseRow{d374Row("KA410F", "3001157", "okx", "long_cfd_short_perp", 0, "suspect")}
 	for i := 0; i < 3; i++ {
-		if _, _, err := StepPaperCfdCarry(ctx, s, nil, time.Now(), d410Opts(), nil); err != nil {
+		if _, _, err := StepPaperCfdCarry(ctx, s, keepAlive, time.Now(), d410Opts(), nil); err != nil {
 			t.Fatalf("exit %d: %v", i, err)
 		}
 	}
@@ -285,8 +288,10 @@ func TestD410_GuaranteedMissWarn(t *testing.T) {
 	s := d410Store(t)
 	ctx := context.Background()
 	d410SeedCombo(t, s, "ZZZUSD", "3001157:mt5", "ZZZUSDT", "okx:perp", false)
+	// D-500：venue 零产出=静默不 warn——keepAlive 脏行保 venue 非静默后测「真缺席」warn。
+	keepAlive := []UniverseRow{d374Row("KA410W", "3001157", "okx", "long_cfd_short_perp", 0, "suspect")}
 	for i := 0; i < 2; i++ {
-		if _, _, err := StepPaperCfdCarry(ctx, s, nil, time.Now(), d410Opts(), nil); err != nil {
+		if _, _, err := StepPaperCfdCarry(ctx, s, keepAlive, time.Now(), d410Opts(), nil); err != nil {
 			t.Fatalf("step %d: %v", i, err)
 		}
 	}

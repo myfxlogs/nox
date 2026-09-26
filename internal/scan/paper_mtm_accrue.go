@@ -16,7 +16,7 @@ import (
 // accrueExitMtmPaper cfd_cfd 行累积与退出（返回本轮退出数）。
 // longBook/shortBook=本轮 MT swap 簿（key=canonical|venue，含 raw symbol 与 stale 标）。
 func accrueExitMtmPaper(ctx context.Context, st PaperStore, accrable []pgstore.PaperSpotCarry,
-	longBook, shortBook map[string]mtSwap, now time.Time) (int, error) {
+	longBook, shortBook map[string]mtSwap, silentMt map[string]bool, now time.Time) (int, error) {
 	exited := 0
 	noFactWarn := 0
 	for _, p := range accrable {
@@ -48,6 +48,17 @@ func accrueExitMtmPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 		if !lok {
 			if p.Status != "active" {
 				continue // demo 行缺席：不误记
+			}
+			// D-500 S1 suspend：任 MT 腿 venue 整轮零产出（休市/断供）→ session 关闭非
+			// 机会消失——不计 miss_streak、不写 accrue；仅留 age_7d 墙钟出口防僵尸。
+			if silentMt[p.VenueA] || silentMt[p.VenueB] {
+				if now.Sub(p.EntryTs).Hours()/24 >= paperMaxAgeDays {
+					if err := st.ExitPaperSpotCarry(ctx, p.ID, "age_7d", paperExitConvergence(p, p.LastBasisBps)); err != nil {
+						return exited, fmt.Errorf("mtm paper step: exit age suspend %d: %w", p.ID, err)
+					}
+					exited++
+				}
+				continue
 			}
 			miss := p.MissStreak + 1
 			if miss >= paperMissExitRounds {

@@ -37,7 +37,9 @@ func TestD419_MissGradingUniverseAbsent(t *testing.T) {
 	s := d410Store(t)
 	ctx := context.Background()
 	d410SeedCombo(t, s, "D419AUSD", "3001157:mt5", "D419AUSDT", "okx:perp", false)
-	if _, _, err := StepPaperCfdCarry(ctx, s, nil, time.Now(), d410Opts(), nil); err != nil {
+	// D-500：venue 零产出=静默不 warn——keepAlive 脏行保 venue 非静默后测「universe 未产行」。
+	keepAlive := []UniverseRow{d374Row("KA419A", "3001157", "okx", "long_cfd_short_perp", 0, "suspect")}
+	if _, _, err := StepPaperCfdCarry(ctx, s, keepAlive, time.Now(), d410Opts(), nil); err != nil {
 		t.Fatalf("step: %v", err)
 	}
 	if n := d419AlertCount(t, s, "universe 未产行"); n != 1 {
