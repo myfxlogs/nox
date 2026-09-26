@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"time"
 )
 
@@ -57,7 +56,10 @@ func fetchSRList(ctx context.Context, base string) ([]SRInfo, error) {
 	}
 	out := make([]SRInfo, 0, len(rows))
 	for i, r := range rows {
-		rate, _ := strconv.ParseFloat(r.AnnualizedRate, 64) // 字符串→float，解析失败=0
+		rate, perr := f64z(r.AnnualizedRate)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "r.AnnualizedRate", r.AnnualizedRate, perr)
+		} // 字符串→float，解析失败=0
 		out = append(out, SRInfo{
 			Address:        r.Address,
 			Name:           r.Name,
