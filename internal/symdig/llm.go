@@ -107,8 +107,35 @@ var symdigInboxMu sync.Mutex
 
 // appendInbox 提案进收件箱（| date | source | title | reason | action | 行，同 sysretro 口径）。
 func appendInbox(path, date, source string, props []proposal) error {
-	var b strings.Builder
+	// D-508 S13：conf=0.00 提案直接不入箱；同 symbol 当日 pending 提案已存在则抑制（收件箱去重）。
+	var kept []proposal
 	for _, p := range props {
+		if p.Confidence <= 0 {
+			continue
+		}
+		kept = append(kept, p)
+	}
+	if len(kept) == 0 {
+		return nil
+	}
+	existing := map[string]bool{}
+	if data, err := os.ReadFile(path); err == nil {
+		for _, ln := range strings.Split(string(data), "\n") {
+			cells := strings.Split(ln, "|")
+			if len(cells) >= 4 && strings.TrimSpace(cells[1]) == date && strings.TrimSpace(cells[2]) == source {
+				title := strings.TrimSpace(cells[3])
+				if i := strings.Index(title, "→"); i > 0 {
+					existing[title[:i]] = true
+				}
+			}
+		}
+	}
+	var b strings.Builder
+	for _, p := range kept {
+		if existing[p.Symbol] {
+			continue
+		}
+		existing[p.Symbol] = true
 		fmt.Fprintf(&b, "| %s | %s | %s→%s@%s | %s | 人工核对后落 fin_symbol_aliases/broker_symbol_map |\n",
 			date, source, cleanCell(p.Symbol), cleanCell(p.ProposedCanonical), cleanCell(p.Venue),
 			cleanCell(fmt.Sprintf("%s conf=%.2f", p.Evidence, p.Confidence)))

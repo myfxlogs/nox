@@ -225,14 +225,15 @@ func (s *Store) FundingPredWindow(ctx context.Context, venue, symbol string, sin
 	return out, rows.Err()
 }
 
-// LatestTickMid 指定 symbol 最近 bid/ask 中间价（D-359 TRX USD 价三级 fallback 末级）。
+// LatestTickMid 指定 venue+symbol 最近 bid/ask 中间价（D-359 TRX USD 价三级 fallback 末级）。
+// D-508 S13：补 venue 过滤——同 canonical 多 venue 并行采样时取错 venue 价即脏锚。
 // 无行/非正价 → false（诚实缺，不猜）。
-func (s *Store) LatestTickMid(ctx context.Context, symbol string) (float64, bool) {
+func (s *Store) LatestTickMid(ctx context.Context, venue, symbol string) (float64, bool) {
 	var v float64
 	err := s.pool.QueryRow(ctx, `
 		SELECT (bid + ask) / 2 FROM ticks
-		WHERE symbol = $1 AND bid > 0 AND ask > 0
-		ORDER BY ts DESC LIMIT 1`, symbol).Scan(&v)
+		WHERE venue = $1 AND symbol = $2 AND bid > 0 AND ask > 0
+		ORDER BY ts DESC LIMIT 1`, venue, symbol).Scan(&v)
 	if err != nil || v <= 0 {
 		return 0, false
 	}

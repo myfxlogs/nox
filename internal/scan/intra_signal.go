@@ -39,6 +39,8 @@ type IntraPair struct {
 }
 
 // IntraPairs v1 白名单（腿与依据见 SSOT §2；XPT/XPD 点差 22-46bps 排除）。
+// D-508 S13 豁免：venue=MT 账号号（1314615/3001157）为设计冻结宇宙——v1 深度优先禁长尾，
+// 扩宇宙=新 D# 票（改名单须同步 SSOT §2 依据）。
 var IntraPairs = []IntraPair{
 	{Venue: "binance", Symbol: "BTCUSDT", Crypto: true},
 	{Venue: "okx", Symbol: "BTCUSDT", Crypto: true},
