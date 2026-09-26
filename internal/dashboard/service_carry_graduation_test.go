@@ -424,7 +424,7 @@ func TestD463_RejectWriteFlag(t *testing.T) {
 		t.Fatalf("ok=%v err=%v", resp.Msg.Ok, err)
 	}
 	if len(f.flags) != 1 || f.flags[0].Level != "blocked" || f.flags[0].Reason != "XPD funding 字段语义坑" ||
-		f.flags[0].Venue != "1279967×gate" || f.flags[0].Symbol != "BTC" {
+		f.flags[0].VenueA != "1279967" || f.flags[0].VenueB != "gate" || f.flags[0].Symbol != "BTC" {
 		t.Fatalf("flags=%+v", f.flags)
 	}
 	// 未勾选 → 不写。
