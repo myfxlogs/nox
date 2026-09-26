@@ -28,6 +28,8 @@ import (
 	"net/url"
 	"os"
 	"strings"
+
+	"arb/internal/keydomain"
 	"time"
 
 	"arb/internal/adapter"
@@ -236,7 +238,7 @@ func (t *resettler) run(ctx context.Context, posID int64, dry bool) {
 
 // historyQuerier 懒建 venue 历史查证器（broker_accounts → adapter.Connect → OrderHistoryQuerier）。
 func (t *resettler) historyQuerier(ctx context.Context, venueKey string) (reconcile.OrderHistoryQuerier, bool) {
-	base := strings.TrimSuffix(strings.TrimSuffix(venueKey, ":mt5"), ":mt4")
+	base := keydomain.BareOf(venueKey)
 	if q, ok := t.queriers[base]; ok {
 		return q, true
 	}
