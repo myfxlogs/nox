@@ -79,11 +79,17 @@ func (e *CEXExecutor) OKXPositions(ctx context.Context, instID string) ([]OKXPos
 		if d.InstID != instID {
 			continue
 		}
-		p, _ := strconv.ParseFloat(d.Pos, 64)
+		p, err := f64z(d.Pos)
+		if err != nil {
+			return nil, fmt.Errorf("okx positions %s pos=%q: %w", d.InstID, d.Pos, err)
+		}
 		if p == 0 {
 			continue
 		}
-		a, _ := strconv.ParseFloat(d.AvgPx, 64)
+		a, err := f64z(d.AvgPx)
+		if err != nil {
+			return nil, fmt.Errorf("okx positions %s avgPx=%q: %w", d.InstID, d.AvgPx, err)
+		}
 		out = append(out, OKXPosition{InstID: d.InstID, PosSide: d.PosSide, Pos: p, AvgPx: a})
 	}
 	return out, nil
@@ -194,11 +200,11 @@ func OkxSwapSpec(ctx context.Context, client *http.Client, baseURL, instID strin
 	if out.Code != "0" || len(out.Data) == 0 {
 		return 0, 0, fmt.Errorf("okx instruments %s: code=%s data_len=%d", instID, out.Code, len(out.Data))
 	}
-	ctVal, err = strconv.ParseFloat(out.Data[0].CtVal, 64)
+	ctVal, err = f64z(out.Data[0].CtVal)
 	if err != nil || ctVal <= 0 {
 		return 0, 0, fmt.Errorf("okx instruments %s: ctVal=%q invalid", instID, out.Data[0].CtVal)
 	}
-	lotSz, err = strconv.ParseFloat(out.Data[0].LotSz, 64)
+	lotSz, err = f64z(out.Data[0].LotSz)
 	if err != nil || lotSz <= 0 {
 		return 0, 0, fmt.Errorf("okx instruments %s: lotSz=%q invalid", instID, out.Data[0].LotSz)
 	}
@@ -238,11 +244,13 @@ func (e *CEXExecutor) okxSpotLotSz(ctx context.Context, instID string) (lotSz, m
 	if out.Code != "0" || len(out.Data) == 0 {
 		return 0, 0, fmt.Errorf("okx spot instruments %s: code=%s data_len=%d", instID, out.Code, len(out.Data))
 	}
-	lotSz, err = strconv.ParseFloat(out.Data[0].LotSz, 64)
+	lotSz, err = f64z(out.Data[0].LotSz)
 	if err != nil || lotSz <= 0 {
 		return 0, 0, fmt.Errorf("okx spot instruments %s: lotSz=%q invalid", instID, out.Data[0].LotSz)
 	}
-	minSz, _ = strconv.ParseFloat(out.Data[0].MinSz, 64)
+	if minSz, err = f64z(out.Data[0].MinSz); err != nil {
+		return 0, 0, fmt.Errorf("okx spot instruments %s: minSz=%q invalid: %w", instID, out.Data[0].MinSz, err)
+	}
 	okxSpotSpecCache.Store(instID, okxSpotSpec{lotSz: lotSz, minSz: minSz})
 	return lotSz, minSz, nil
 }
@@ -250,3 +258,12 @@ func (e *CEXExecutor) okxSpotLotSz(ctx context.Context, instID string) (lotSz, m
 type okxSpotSpec struct{ lotSz, minSz float64 }
 
 var okxSpotSpecCache sync.Map
+
+// f64z 交易所字符串数值解析（D-508 S2）：""=字段缺席→0（venue 对未成数字段返空串是
+// 正常语义，如 okx 未成交单 accFillSz=""）；非空脏串 error 上抛不静默归零。
+func f64z(s string) (float64, error) {
+	if s == "" {
+		return 0, nil
+	}
+	return strconv.ParseFloat(s, 64)
+}

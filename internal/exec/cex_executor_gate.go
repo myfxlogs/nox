@@ -103,7 +103,10 @@ func (e *CEXExecutor) placeGateRaw(ctx context.Context, o Order) ([]byte, Fill, 
 			last = st
 		}
 		// 5 次轮询仍 open → fallthrough 守卫（防 0-qty 假成交，okx 教训，M2）
-		qty, price := gateFilled(last)
+		qty, price, ferr := gateFilled(last)
+		if ferr != nil {
+			return rawBody, Fill{}, ferr
+		}
 		if qty <= 0 || price <= 0 {
 			return rawBody, Fill{}, fmt.Errorf("gate order %d: 5 次轮询仍 open 且无成交（qty=%v price=%v left=%d）",
 				ord.ID, qty, price, last.Left)
@@ -186,9 +189,18 @@ func (e *CEXExecutor) GatePositionsRaw(ctx context.Context, contract string) ([]
 	if p.Size == 0 {
 		return body, nil, nil // 无仓不误报
 	}
-	ep, _ := strconv.ParseFloat(p.EntryPrice, 64)
-	mp, _ := strconv.ParseFloat(p.MarkPrice, 64)
-	fd, _ := strconv.ParseFloat(p.Funding, 64)
+	ep, err := f64z(p.EntryPrice)
+	if err != nil {
+		return body, nil, fmt.Errorf("gate position %s entry_price=%q: %w", p.Contract, p.EntryPrice, err)
+	}
+	mp, err := f64z(p.MarkPrice)
+	if err != nil {
+		return body, nil, fmt.Errorf("gate position %s mark_price=%q: %w", p.Contract, p.MarkPrice, err)
+	}
+	fd, err := f64z(p.Funding)
+	if err != nil {
+		return body, nil, fmt.Errorf("gate position %s funding=%q: %w", p.Contract, p.Funding, err)
+	}
 	return body, []GatePosition{{
 		Contract: p.Contract, Size: p.Size,
 		EntryPrice: ep, MarkPrice: mp, Funding: fd,
@@ -267,7 +279,7 @@ func (e *CEXExecutor) gateContractSize(ctx context.Context, contract string, qty
 	if err := json.Unmarshal(body, &spec); err != nil {
 		return 0, 0, fmt.Errorf("gate contract spec json: %w", err)
 	}
-	q, err := strconv.ParseFloat(spec.QuantoMultiplier, 64)
+	q, err := f64z(spec.QuantoMultiplier)
 	if err != nil || q <= 0 {
 		return 0, 0, fmt.Errorf("gate contract %s quanto_multiplier=%q invalid", contract, spec.QuantoMultiplier)
 	}

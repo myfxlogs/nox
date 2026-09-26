@@ -120,16 +120,20 @@ func (e *CEXExecutor) liqDistanceGuard(ctx context.Context, o Order, in liqInput
 // /fapi/v1/leverageBracket，per-symbol 缓存）。运行时取值 fail-closed——不硬编码常量
 // （2026-09-25 生产密钥实测 -2015 Invalid API-key/IP/permissions，取错方向=静默失效）。
 // jsonNum JSON number/string → float64（binance 响应数值字段 string/number 混形）。
-func jsonNum(v any) float64 {
+// D-508：解析失败 error 上抛——保证金预检路径脏字段不得静默归零。
+func jsonNum(v any) (float64, error) {
 	switch x := v.(type) {
 	case float64:
-		return x
+		return x, nil
 	case json.Number:
-		f, _ := x.Float64()
-		return f
+		return x.Float64()
 	case string:
-		f, _ := strconv.ParseFloat(x, 64)
-		return f
+		if x == "" {
+			return 0, nil // ""=字段缺席（同 f64z 语义）
+		}
+		return strconv.ParseFloat(x, 64)
+	case nil:
+		return 0, nil // 字段缺席=0（binance 可选字段缺省语义保留）
 	}
-	return 0
+	return 0, fmt.Errorf("jsonNum: unexpected type %T", v)
 }

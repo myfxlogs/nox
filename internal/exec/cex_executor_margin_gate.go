@@ -32,8 +32,14 @@ func (e *CEXExecutor) gateMarginPrecheck(ctx context.Context, o Order) error {
 	if err := json.Unmarshal(body, &acc); err != nil {
 		return fmt.Errorf("gate margin precheck %s json: %w", o.Symbol, err)
 	}
-	avail, _ := strconv.ParseFloat(acc.Available, 64)
-	equity, _ := strconv.ParseFloat(acc.Total, 64)
+	avail, err := f64z(acc.Available)
+	if err != nil {
+		return fmt.Errorf("gate margin precheck %s avail=%q: %w", o.Symbol, acc.Available, err)
+	}
+	equity, err := f64z(acc.Total)
+	if err != nil {
+		return fmt.Errorf("gate margin precheck %s equity=%q: %w", o.Symbol, acc.Total, err)
+	}
 	lev := acc.Leverage
 	if lev <= 0 {
 		lev = e.gateDefaultLeverage // 两级第二档：venue 级 env 缺省（不得 error，B-003）
@@ -75,7 +81,7 @@ func (e *CEXExecutor) gateMarkPrice(ctx context.Context, contract string) (float
 	if err := json.Unmarshal(body, &c); err != nil {
 		return 0, fmt.Errorf("contracts json: %w", err)
 	}
-	mark, err := strconv.ParseFloat(c.MarkPrice, 64)
+	mark, err := f64z(c.MarkPrice)
 	if err != nil || mark <= 0 {
 		return 0, fmt.Errorf("contracts %s: mark_price=%q invalid", contract, c.MarkPrice)
 	}

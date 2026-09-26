@@ -6,7 +6,6 @@ package exec
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -29,7 +28,10 @@ func (e *CEXExecutor) QueryOrderStatus(ctx context.Context, orderID, clOrdID, sy
 		if err != nil {
 			return "", 0, 0, 0, err
 		}
-		qty, _ := strconv.ParseFloat(st.AccFillSz, 64)
+		qty, perr := f64z(st.AccFillSz)
+		if perr != nil {
+			return "", 0, 0, 0, fmt.Errorf("okx status %s accFillSz=%q: %w", orderID, st.AccFillSz, perr)
+		}
 		if e.venueType == "perp" && qty > 0 {
 			ctVal, _, cerr := e.okxContractVal(ctx, symbol)
 			if cerr != nil {
@@ -37,8 +39,11 @@ func (e *CEXExecutor) QueryOrderStatus(ctx context.Context, orderID, clOrdID, sy
 			}
 			qty *= ctVal // KB ctval-qty-conversion：张数→基础币
 		}
-		px, _ := strconv.ParseFloat(st.AvgPx, 64)
-		fee, _ := okxFeeToUSD(st.Fee, st.FeeCcy)
+		px, perr := f64z(st.AvgPx)
+		if perr != nil {
+			return "", 0, 0, 0, fmt.Errorf("okx status %s avgPx=%q: %w", orderID, st.AvgPx, perr)
+		}
+		fee, _ := okxFeeToUSD(st.Fee, st.FeeCcy) // D-391 fail-open 语义保留：非 USD 稳定币→0 不猜换算
 		state := "live"
 		switch st.State {
 		case "filled":
@@ -54,8 +59,14 @@ func (e *CEXExecutor) QueryOrderStatus(ctx context.Context, orderID, clOrdID, sy
 		if err != nil {
 			return "", 0, 0, 0, err
 		}
-		qty, _ := strconv.ParseFloat(st.ExecutedQty, 64)
-		px, _ := strconv.ParseFloat(st.AvgPrice, 64)
+		qty, perr := f64z(st.ExecutedQty)
+		if perr != nil {
+			return "", 0, 0, 0, fmt.Errorf("binance status %s executedQty=%q: %w", orderID, st.ExecutedQty, perr)
+		}
+		px, perr2 := f64z(st.AvgPrice)
+		if perr2 != nil {
+			return "", 0, 0, 0, fmt.Errorf("binance status %s avgPrice=%q: %w", orderID, st.AvgPrice, perr2)
+		}
 		state := "live"
 		switch st.Status {
 		case "FILLED":
@@ -89,8 +100,14 @@ func (e *CEXExecutor) evalOKXStatus(origOrder Order, ordID string, st okxOrderSt
 	if st.AccFillSz == "" || st.AvgPx == "" {
 		return Fill{}, false, nil
 	}
-	qty, _ := strconv.ParseFloat(st.AccFillSz, 64)
-	px, _ := strconv.ParseFloat(st.AvgPx, 64)
+	qty, perr := f64z(st.AccFillSz)
+	if perr != nil {
+		return Fill{}, false, fmt.Errorf("okx status accFillSz=%q: %w", st.AccFillSz, perr)
+	}
+	px, perr2 := f64z(st.AvgPx)
+	if perr2 != nil {
+		return Fill{}, false, fmt.Errorf("okx status avgPx=%q: %w", st.AvgPx, perr2)
+	}
 	if qty <= 0 || px <= 0 {
 		return Fill{}, false, nil
 	}
@@ -147,8 +164,14 @@ func (e *CEXExecutor) okxConfirmFill(ctx context.Context, o Order, instID, ordID
 // CANCELED/REJECTED/EXPIRED→终态 err（executedQty>0 按真实部分量如实出 Fill）；
 // PARTIALLY_FILLED/NEW 等 → done=false 继续轮询。
 func (e *CEXExecutor) evalBinanceStatus(ctx context.Context, o Order, ordID string, st binanceOrderStatusResult) (Fill, bool, error) {
-	q, _ := strconv.ParseFloat(st.ExecutedQty, 64)
-	p, _ := strconv.ParseFloat(st.AvgPrice, 64)
+	q, perr := f64z(st.ExecutedQty)
+	if perr != nil {
+		return Fill{}, false, fmt.Errorf("binance status executedQty=%q: %w", st.ExecutedQty, perr)
+	}
+	p, perr2 := f64z(st.AvgPrice)
+	if perr2 != nil {
+		return Fill{}, false, fmt.Errorf("binance status avgPrice=%q: %w", st.AvgPrice, perr2)
+	}
 	fee := func() float64 { // D-427 I3：userTrades 实费聚合；查询失败→0 诚实缺省不阻断
 		f, err := e.binanceUserTradesFeeUSD(ctx, o.Symbol, ordID)
 		if err != nil {

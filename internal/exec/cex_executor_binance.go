@@ -80,8 +80,14 @@ func (e *CEXExecutor) placeBinance(ctx context.Context, o Order) (Fill, error) {
 		}
 	}
 
-	qty, _ := strconv.ParseFloat(execType, 64)
-	avgPrice := binanceOrderAvgPrice(body, qty)
+	qty, perr := f64z(execType)
+	if perr != nil {
+		return Fill{}, fmt.Errorf("binance order %s executedQty=%q: %w", o.Symbol, execType, perr)
+	}
+	avgPrice, aerr := binanceOrderAvgPrice(body, qty)
+	if aerr != nil {
+		return Fill{}, aerr
+	}
 
 	if e.venueType == "perp" && (qty <= 0 || avgPrice <= 0) {
 		// 合约市价单 POST 可能先于撮合返回（status=NEW/executedQty=0，demo-fapi 实测恒如此，
@@ -146,7 +152,7 @@ func (e *CEXExecutor) binanceCancelOrder(ctx context.Context, symbol, ordID stri
 // binanceOrderAvgPrice 从 Binance 下单响应计算成交均价（D-059 实测：下单响应无 avgPrice 字段，
 // 只有 fills 数组 + cummulativeQuoteQty；price 字段 MARKET 单恒 0。均价 = Σ(fill.price×qty)/Σqty，
 // 无 fills 时回退 cummulativeQuoteQty/executedQty）。
-func binanceOrderAvgPrice(body map[string]any, qty float64) float64 {
+func binanceOrderAvgPrice(body map[string]any, qty float64) (float64, error) {
 	if fills, ok := body["fills"].([]any); ok && len(fills) > 0 {
 		var sumQty, sumVal float64
 		for _, f := range fills {
@@ -154,21 +160,27 @@ func binanceOrderAvgPrice(body map[string]any, qty float64) float64 {
 			if !ok {
 				continue
 			}
-			p, _ := strconv.ParseFloat(asString(m["price"]), 64)
-			q, _ := strconv.ParseFloat(asString(m["qty"]), 64)
+			p, perr := f64z(asString(m["price"]))
+			if perr != nil {
+				return 0, fmt.Errorf("binance fill price=%q: %w", asString(m["price"]), perr)
+			}
+			q, qerr := f64z(asString(m["qty"]))
+			if qerr != nil {
+				return 0, fmt.Errorf("binance fill qty=%q: %w", asString(m["qty"]), qerr)
+			}
 			sumVal += p * q
 			sumQty += q
 		}
 		if sumQty > 0 {
-			return sumVal / sumQty
+			return sumVal / sumQty, nil
 		}
 	}
 	if cqqStr, ok := body["cummulativeQuoteQty"].(string); ok && qty > 0 {
-		if cqq, err := strconv.ParseFloat(cqqStr, 64); err == nil {
-			return cqq / qty
+		if cqq, err := f64z(cqqStr); err == nil {
+			return cqq / qty, nil
 		}
 	}
-	return 0
+	return 0, nil
 }
 
 // signedBinanceRequestRaw 发 Binance 签名请求（HMAC hex + X-MBX-APIKEY）返回原始 body。
@@ -248,7 +260,10 @@ func (e *CEXExecutor) binanceUserTradesFeeUSD(ctx context.Context, symbol, ordID
 		if asString(row["commissionAsset"]) != "USDT" {
 			continue // 费币混杂如实缺（不猜换算）
 		}
-		c, _ := strconv.ParseFloat(asString(row["commission"]), 64)
+		c, cerr := f64z(asString(row["commission"]))
+		if cerr != nil {
+			return 0, fmt.Errorf("binance commission=%q: %w", asString(row["commission"]), cerr)
+		}
 		sum += c
 	}
 	return sum, nil

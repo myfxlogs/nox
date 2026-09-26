@@ -14,7 +14,10 @@ func (e *CEXExecutor) binanceMarginPrecheck(ctx context.Context, o Order) error 
 	if err != nil {
 		return fmt.Errorf("binance margin precheck %s: %w", o.Symbol, err)
 	}
-	avail := jsonNum(acc["availableBalance"])
+	avail, aerr := jsonNum(acc["availableBalance"])
+	if aerr != nil {
+		return fmt.Errorf("binance margin precheck %s availableBalance: %w", o.Symbol, aerr)
+	}
 	if avail < 0 {
 		return fmt.Errorf("binance margin precheck %s: availableBalance invalid", o.Symbol)
 	}
@@ -47,7 +50,11 @@ func (e *CEXExecutor) binanceMarginPrecheck(ctx context.Context, o Order) error 
 			continue
 		}
 		// hedge 精确侧命中；one-way/未探测=BOTH 行
-		lev = jsonNum(pm["leverage"])
+		lv, lerr := jsonNum(pm["leverage"])
+		if lerr != nil {
+			return fmt.Errorf("binance leverage parse: %w", lerr)
+		}
+		lev = lv
 		iso, _ := pm["isolated"].(bool)
 		isolated = iso
 		found = true
@@ -69,7 +76,11 @@ func (e *CEXExecutor) binanceMarginPrecheck(ctx context.Context, o Order) error 
 		return fmt.Errorf("binance margin insufficient: need %.2f > avail %.2f × %.2f (lev %.0f mark %.4g)",
 			required, avail, 1-e.marginReservePct, lev, mark)
 	}
-	return e.liqDistanceGuard(ctx, o, liqInput{venue: "binance", isolated: isolated, leverage: lev, mark: mark, equity: jsonNum(acc["totalMarginBalance"])})
+	eq, eqerr := jsonNum(acc["totalMarginBalance"])
+	if eqerr != nil {
+		return fmt.Errorf("binance totalMarginBalance: %w", eqerr)
+	}
+	return e.liqDistanceGuard(ctx, o, liqInput{venue: "binance", isolated: isolated, leverage: lev, mark: mark, equity: eq})
 }
 
 // binanceMarkPrice D-472 S1：公开 premiumIndex 标记价（baseURL 已含 /fapi 段，免签名路径）。
@@ -116,7 +127,10 @@ func (e *CEXExecutor) binanceMMRTier1(ctx context.Context, symbol string) (float
 			break
 		}
 		b0, _ := brs[0].(map[string]any)
-		mmr := jsonNum(b0["mmr"])
+		mmr, merr := jsonNum(b0["mmr"])
+		if merr != nil {
+			return 0, fmt.Errorf("binance leverageBracket mmr: %w", merr)
+		}
 		if mmr <= 0 {
 			break
 		}

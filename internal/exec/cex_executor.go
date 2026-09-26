@@ -266,8 +266,14 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 	if d.SCode != "" && d.SCode != "0" {
 		return Fill{}, fmt.Errorf("okx order: sCode=%s sMsg=%s", d.SCode, d.SMsg)
 	}
-	qty, _ := strconv.ParseFloat(d.AccFillSz, 64)
-	avgPx, _ := strconv.ParseFloat(d.AvgPx, 64)
+	qty, err := f64z(d.AccFillSz)
+	if err != nil {
+		return Fill{}, fmt.Errorf("okx order %s accFillSz=%q: %w", d.OrdID, d.AccFillSz, err)
+	}
+	avgPx, err := f64z(d.AvgPx)
+	if err != nil {
+		return Fill{}, fmt.Errorf("okx order %s avgPx=%q: %w", d.OrdID, d.AvgPx, err)
+	}
 	// D-125：okx perp accFillSz 是张数，转回基础币数量 = 张数 × ctVal。
 	if e.venueType == "perp" {
 		qty *= ctVal

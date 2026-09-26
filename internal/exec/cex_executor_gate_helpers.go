@@ -46,7 +46,10 @@ func hexSHA512(body string) string {
 // okx 教训：IOC 零成交（finished+finish_as=ioc+left=size）旧逻辑落入 fallthrough 返
 // Fill{Qty:0,Price:0},nil → executeLeg 记 FILLED 0-qty 腿。本函数守卫 qty==0 → error。
 func gateFinishFill(o gateOrderResponse) (Fill, error) {
-	qty, price := gateFilled(o)
+	qty, price, err := gateFilled(o)
+	if err != nil {
+		return Fill{}, err
+	}
 	id := strconv.FormatInt(o.ID, 10)
 	if o.FinishAs == "filled" {
 		return Fill{OrderID: id, Price: price, Qty: qty, Ts: time.Now()}, nil
@@ -60,9 +63,13 @@ func gateFinishFill(o gateOrderResponse) (Fill, error) {
 }
 
 // gateFilled 从订单对象计算已成交 qty（|size-left|）与均价（fill_price）。
-func gateFilled(o gateOrderResponse) (float64, float64) {
+// D-508：fill_price 解析失败=脏成交数据，error 上抛不静默归零（下单路径）。
+func gateFilled(o gateOrderResponse) (float64, float64, error) {
 	filled := o.Size - o.Left // 带符号，绝对值即成交合约数
 	qty := math.Abs(float64(filled))
-	price, _ := strconv.ParseFloat(o.FillPrice, 64)
-	return qty, price
+	price, err := f64z(o.FillPrice)
+	if err != nil {
+		return 0, 0, fmt.Errorf("gate order %d fill_price=%q: %w", o.ID, o.FillPrice, err)
+	}
+	return qty, price, nil
 }
