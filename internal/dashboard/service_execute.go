@@ -129,9 +129,13 @@ func (s *Service) ClosePosition(ctx context.Context, req *connect.Request[v1.Clo
 	if s.settler != nil {
 		safego.Go("service_execute:settle", func() {
 			posID := req.Msg.GetPositionId()
-			if err := s.settler.Settle(context.Background(), posID); err != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second) // D-508 S5：fire-and-forget 加 deadline 防悬挂
+			defer cancel()
+			if err := s.settler.Settle(ctx, posID); err != nil {
 				log.Printf("[dashboard] settle pos=%d failed (retry next round): %v", posID, err)
-				_ = s.store.SetPositionNote(context.Background(), posID, "settle_failed: "+err.Error())
+				nctx, ncancel := context.WithTimeout(context.Background(), 10*time.Second)
+				_ = s.store.SetPositionNote(nctx, posID, "settle_failed: "+err.Error()) // audit-noreturn-ok note 回写失败由 settle_failed 状态自证
+				ncancel()
 			}
 		})
 	}

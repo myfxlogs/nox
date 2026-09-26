@@ -70,7 +70,9 @@ func (g *MarginGuard) OnSnapshots(ctx context.Context, snaps []pgstore.VenueAcco
 		seen[key] = true
 		row := sn
 		safego.Go("margin_guard:"+key, func() {
-			if err := g.evaluate(context.Background(), &row); err != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second) // D-508 S5
+			defer cancel()
+			if err := g.evaluate(ctx, &row); err != nil {
 				log.Printf("[margin-guard] %s/%s: %v", row.Venue, row.VenueType, err)
 			}
 		})
