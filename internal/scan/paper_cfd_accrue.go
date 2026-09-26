@@ -17,7 +17,7 @@ import (
 // accrueExitCfdPaper cfd 行累积与退出（返回本轮退出数）。rowByKey=本轮 universe
 // clean cfd 行索引（key=mtV×cexV|canonical）；accrable=active+demo 行全集。
 func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.PaperSpotCarry,
-	rowByKey map[string]UniverseRow, now time.Time) (int, error) {
+	rowByKey map[string]UniverseRow, dirtyByKey map[string]string, silentMt map[string]bool, now time.Time) (int, error) {
 	exited := 0
 	// D-474a S2：cex 腿 canonical→raw symbol 索引（funding 边界事实键=venue+raw symbol；
 	// HedgeCanonical/Symbol 双路归一键——取 universe 行 Symbol 为 raw）。
@@ -70,10 +70,22 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 		if ok {
 			lastBasis = &entryBps
 		}
-		r, ok := rowByKey[p.VenuePair()+"|"+p.Symbol]
+		key := p.VenuePair() + "|" + p.Symbol
+		r, ok := rowByKey[key]
 		if !ok {
 			if p.Status != "active" {
 				continue // demo 行缺席：无数据不误记
+			}
+			// D-500 S1 suspend：venue 整轮零产出（休市/断供）或行被质量剔除 → session 关闭
+			// 非机会消失——不计 miss_streak、不写 accrue；仅留 age_7d 墙钟出口防僵尸。
+			if _, dirty := dirtyByKey[key]; silentMt[mtV] || dirty {
+				if now.Sub(p.EntryTs).Hours()/24 >= paperMaxAgeDays {
+					if err := st.ExitPaperSpotCarry(ctx, p.ID, "age_7d", paperExitConvergence(p, lastBasis)); err != nil {
+						return exited, fmt.Errorf("cfd paper step: exit age suspend %d: %w", p.ID, err)
+					}
+					exited++
+				}
+				continue
 			}
 			// D-474a S4：缺席不计时不 streak；连续缺席 ≥N 轮 → data_lost（不混 normalized）。
 			miss := p.MissStreak + 1

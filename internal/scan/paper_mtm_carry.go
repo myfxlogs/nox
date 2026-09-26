@@ -214,8 +214,28 @@ func (sc *CarryUniverseScanner) StepPaperMtmCarry(ctx context.Context, st PaperS
 		opened = append(opened, r.VenuePair()+":"+r.Symbol)
 		entryStreak.Drop(p.key())
 	}
+	// D-500 S1：venue 静默探测——accrable cfd_cfd 行任 MT 腿 venue 在本轮 swap 簿零条目
+	// → 休市/断供非机会消失；供 accrue 段 suspend 冻结 miss_streak（pos502 同病灶）。
+	seenMtVenue := make(map[string]bool)
+	for _, s := range longBook {
+		seenMtVenue[s.venue] = true
+	}
+	for _, s := range shortBook {
+		seenMtVenue[s.venue] = true
+	}
+	silentMt := make(map[string]bool)
+	for _, p := range accrable {
+		if p.Structure != "cfd_cfd" {
+			continue
+		}
+		for _, v := range []string{p.VenueA, p.VenueB} {
+			if v != "" && !seenMtVenue[v] {
+				silentMt[v] = true
+			}
+		}
+	}
 	// ②累积 + ③退出（仅 cfd_cfd 行）——D-474a 起拆至 paper_mtm_accrue.go。
-	n, err := accrueExitMtmPaper(ctx, st, accrable, longBook, shortBook, now)
+	n, err := accrueExitMtmPaper(ctx, st, accrable, longBook, shortBook, silentMt, now)
 	if err != nil {
 		return opened, exited, err
 	}

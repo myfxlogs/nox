@@ -124,10 +124,32 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 			cfdActive++
 		}
 	}
+	// D-500 S1：venue 静默探测先行（保底 warn 分级要用）——accrable cfd 行的 MT 臂 venue
+	// 在本轮 rows 零 cfd 产出行（含 dirty）→ 休市/断供非机会消失。
+	mtCfdCount := make(map[string]int)
+	for _, r := range rows {
+		if cfdStructures[r.Structure] {
+			mtCfdCount[r.MtVenue]++
+		}
+	}
+	silentMt := make(map[string]bool)
+	for _, p := range accrable {
+		if cfdStructures[p.Structure] && p.VenueA != "" && mtCfdCount[p.VenueA] == 0 {
+			silentMt[p.VenueA] = true
+		}
+	}
+	for _, sl := range slots {
+		if mtCfdCount[sl.mtVenue] == 0 {
+			silentMt[sl.mtVenue] = true
+		}
+	}
 	var missing []string
 	for _, sl := range slots {
 		if _, ok := activeByKey[sl.key]; ok {
 			continue
+		}
+		if silentMt[sl.mtVenue] {
+			continue // D-500：venue 静默=休市常态非异常，不 warn
 		}
 		if f := blockedFlagHit(sl.mtVenue, sl.cexVenue, sl.symbol, &sl.mtVenue, flags); f != nil {
 			log.Printf("[cfd paper] blocked flag 拦截保底槽: %s（%s@%s|%s）", sl.key, f.Reason, f.Venue, f.Symbol)
@@ -213,7 +235,7 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 		opened = append(opened, c.r.Canonical)
 	}
 	// ② 累积 + ③ 退出（仅 cfd 行；spot 轨行不归本函数）——D-474a 起拆至 paper_cfd_accrue.go。
-	n, err := accrueExitCfdPaper(ctx, st, accrable, rowByKey, now)
+	n, err := accrueExitCfdPaper(ctx, st, accrable, rowByKey, dirtyByKey, silentMt, now)
 	if err != nil {
 		return opened, exited, err
 	}
