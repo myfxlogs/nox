@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"log"
 	"strconv"
-	"strings"
+
+	"arb/internal/keydomain"
 	"time"
 
 	"arb/internal/fact"
@@ -146,11 +147,7 @@ func (l *Ledger) accountPosition(ctx context.Context, pos pgstore.Position, day 
 // parseVenueAccountID D-193-A 扩包（决策 6）：从 venue key 前缀解析 account_id。
 // venue 格式如 "52993526:mt5" → 52993526；解析失败→nil（不猜）。
 func parseVenueAccountID(venue string) *int64 {
-	parts := strings.SplitN(venue, ":", 2)
-	if len(parts) == 0 {
-		return nil
-	}
-	id, err := strconv.ParseInt(parts[0], 10, 64)
+	id, err := strconv.ParseInt(keydomain.BareOf(venue), 10, 64)
 	if err != nil {
 		return nil
 	}

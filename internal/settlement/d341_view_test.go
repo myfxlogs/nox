@@ -40,8 +40,13 @@ func TestD341_CycleRealrateView(t *testing.T) {
 		}
 	}
 	if _, err := s.Pool().Exec(ctx,
-		`INSERT INTO income_events (venue, venue_type, symbol, income_type, amount_usd, tran_id, ts, position_id)
-		 VALUES ('binance', 'perp', 'XAUUSDT', 'FUNDING_FEE', 4.0, 777001, now(), $1)`, posID); err != nil {
+		`INSERT INTO exchange_configs (venue, venue_type, label, api_key, api_secret, simulated)
+		 VALUES ('binance','perp','t','k','s',false) ON CONFLICT DO NOTHING`); err != nil {
+		t.Fatalf("seed config: %v", err)
+	}
+	if _, err := s.Pool().Exec(ctx,
+		`INSERT INTO income_events (venue, venue_type, exchange_config_id, symbol, income_type, amount_usd, tran_id, ts, position_id)
+		 VALUES ('binance', 'perp', (SELECT id FROM exchange_configs WHERE venue='binance' AND venue_type='perp' AND NOT simulated), 'XAUUSDT', 'FUNDING_FEE', 4.0, 777001, now(), $1)`, posID); err != nil {
 		t.Fatalf("seed income: %v", err)
 	}
 	if _, err := s.Pool().Exec(ctx,
