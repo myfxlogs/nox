@@ -113,6 +113,40 @@ func (s *Store) SetBrokerAccountAlias(ctx context.Context, venue, alias string) 
 	return err
 }
 
+// VenueSymbolMapCounts D-493 S5：venue→broker_symbol_map 映射条数（账户卡片删除知情确认透出用）。
+func (s *Store) VenueSymbolMapCounts(ctx context.Context) (map[string]int, error) {
+	rows, err := s.pool.Query(ctx, `SELECT venue, COUNT(*) FROM broker_symbol_map GROUP BY venue`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	m := make(map[string]int)
+	for rows.Next() {
+		var venue string
+		var n int
+		if err := rows.Scan(&venue, &n); err != nil {
+			return nil, err
+		}
+		m[venue] = n
+	}
+	return m, rows.Err()
+}
+
+// UpdateBrokerCredentials D-493 S4：凭据编辑——空串/0 = 不改动。password 只允许写、永不回读。
+func (s *Store) UpdateBrokerCredentials(ctx context.Context, venue, host string, port int, server, password string) error {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE broker_accounts
+		SET host = COALESCE(NULLIF($2, ''), host),
+		    port = COALESCE(NULLIF($3, 0), port),
+		    server = COALESCE(NULLIF($4, ''), server),
+		    password = COALESCE(NULLIF($5, ''), password)
+		WHERE venue = $1`, venue, host, port, server, password)
+	if err == nil && tag.RowsAffected() == 0 {
+		err = fmt.Errorf("%w: %s", ErrBrokerAccountNotFound, venue)
+	}
+	return err
+}
+
 // SetBrokerWebsite 设置 broker 官网；空串 = 清除（D-157 V3.1）。
 func (s *Store) SetBrokerWebsite(ctx context.Context, venue, website string) error {
 	tag, err := s.pool.Exec(ctx, `UPDATE broker_accounts SET website = $1 WHERE venue = $2`, website, venue)

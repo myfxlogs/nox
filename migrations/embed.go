@@ -254,4 +254,7 @@ var (
 
 	//go:embed 0144_carry_graduation_type_drop_and_flag_pair_cols.sql
 	D499TailColsSQL string
+
+	//go:embed 0145_execution_control_events_broker_scope.sql
+	ExecControlBrokerScopeSQL string
 )

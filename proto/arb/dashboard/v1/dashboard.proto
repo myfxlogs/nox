@@ -88,6 +88,7 @@ service DashboardService {
   rpc SearchBroker(SearchBrokerRequest) returns (SearchBrokerResponse);
   rpc AddBroker(AddBrokerRequest) returns (AddBrokerResponse);
   rpc RemoveBroker(RemoveBrokerRequest) returns (RemoveBrokerResponse);
+  rpc UpdateBrokerCredentials(UpdateBrokerCredentialsRequest) returns (UpdateBrokerCredentialsResponse); // D-493 S4
   rpc ListBrokerAccounts(ListBrokerAccountsRequest) returns (ListBrokerAccountsResponse);
   rpc VerifyAccount(VerifyAccountRequest) returns (VerifyAccountResponse);
 
@@ -1085,9 +1086,21 @@ message AddBrokerResponse {}
 
 message RemoveBrokerRequest {
   string venue = 1;
+  string reason = 2;    // D-493 S5：删除原因（UI 传入），写 execution_control_events 审计
 }
 
 message RemoveBrokerResponse {}
+
+// D-493 S4：凭据编辑——空串/0 = 不改动；password 永不回传。
+message UpdateBrokerCredentialsRequest {
+  string venue = 1;
+  string host = 2;
+  int32 port = 3;
+  string server = 4;
+  string password = 5;
+}
+
+message UpdateBrokerCredentialsResponse {}
 
 message BrokerAccount {
   string venue = 1;     // CFD：登录账号号（D-033）
@@ -1104,6 +1117,9 @@ message BrokerAccount {
   optional bool is_real = 12;   // D-144 ① 三态：true=实盘, false=demo, 缺省=未知
   string server_group = 13;    // D-150 ② 平台分组键=server 首段（首个 '-' 前，后端算好下发）
   string website = 14;    // broker 官网（D-157 V3：DB 存储，业主自助管理；空 = 未设置）
+  double last_quote_age_sec = 15;  // D-493 S1：末次报价距今秒数；-1 = 无报价样本
+  string feed_state = 16;   // D-493 S1：live / stale / dark（复用 MT 健康报价阈值）
+  int32 symbol_map_count = 17;     // D-493 S5：该账号符号映射条数（删除知情确认用）
 }
 
 message ListBrokerAccountsRequest {}
