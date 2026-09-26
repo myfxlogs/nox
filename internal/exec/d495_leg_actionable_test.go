@@ -141,8 +141,8 @@ func seedD495Ticks(t *testing.T, s *pgstore.Store) {
 		t.Fatalf("partition: %v", err)
 	}
 	if err := s.InsertTicks(ctx, []pgstore.TickRow{
-		{Ts: time.Now().Add(-2 * time.Minute), Venue: "okx", Symbol: "XAUUSDT", Bid: 4200.0, Ask: 4200.1, VenueType: "cex"},
-		{Ts: time.Now(), Venue: "okx", Symbol: "XAUUSDT", Bid: 4200.5, Ask: 4200.6, VenueType: "cex"},
+		{Ts: time.Now().Add(-2 * time.Minute), Venue: "okx", Symbol: "XAUUSDT", Bid: 4200.0, Ask: 4200.1, VenueType: "perp"},
+		{Ts: time.Now(), Venue: "okx", Symbol: "XAUUSDT", Bid: 4200.5, Ask: 4200.6, VenueType: "perp"},
 	}); err != nil {
 		t.Fatalf("seed ticks: %v", err)
 	}

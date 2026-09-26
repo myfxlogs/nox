@@ -7,7 +7,7 @@
 //
 // 键域映射（D-495 实测钉死，KB cross-domain-key-reuse-silent-miss）：
 // ticks.venue = 裸账号/交易所名（"3001157"/"okx"），腿侧 VenueKey 是键形
-// （"3001157:mt5"/"okx:perp"）→ SplitN 取裸键（仓内同款 dashboard/settlement_profile_zero.go:67）。
+// （"3001157:mt5"/"okx:perp"）→ keydomain.BareOf 取裸键（D-496/D-497 键域单源收编）。
 // MT 腿 symbol=venue 原生名直查（ticks.symbol 存原生名非 canonical）；CEX 腿走
 // bus.CexSymbolKey 归一键（XAU-USDT-SWAP→XAUUSDT）。禁 canonical、禁兄弟品种代查
 // （symbol 归属律，D-466 同律推广）。
@@ -24,6 +24,7 @@ import (
 
 	"arb/internal/bus"
 	"arb/internal/fact"
+	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 )
 
@@ -57,7 +58,7 @@ func LegActionable(ctx context.Context, st legActionableStore, venueKey, nativeS
 	if st == nil {
 		return false, "store not wired"
 	}
-	tickVenue := strings.SplitN(venueKey, ":", 2)[0]
+	tickVenue := keydomain.BareOf(venueKey)
 	tickSymbol := nativeSymbol
 	if bus.IsCexVenueKey(venueKey) {
 		tickSymbol = bus.CexSymbolKey(nativeSymbol)

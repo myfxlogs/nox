@@ -3,11 +3,11 @@ package exec
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 	"arb/internal/testutil"
 	"github.com/jackc/pgx/v5"
@@ -59,14 +59,14 @@ func seedActionableTicks(t *testing.T, s *pgstore.Store, pairs ...[2]string) {
 	now := time.Now()
 	var rows []pgstore.TickRow
 	for _, pr := range pairs {
-		venue := strings.SplitN(pr[0], ":", 2)[0]
+		venue := keydomain.BareOf(pr[0])
 		sym := pr[1]
 		if bus.IsCexVenueKey(pr[0]) {
 			sym = bus.CexSymbolKey(sym)
 		}
 		rows = append(rows,
-			pgstore.TickRow{Ts: now.Add(-2 * time.Minute), Venue: venue, Symbol: sym, Bid: 100.0, Ask: 100.1, VenueType: "test"},
-			pgstore.TickRow{Ts: now, Venue: venue, Symbol: sym, Bid: 100.5, Ask: 100.6, VenueType: "test"})
+			pgstore.TickRow{Ts: now.Add(-2 * time.Minute), Venue: venue, VenueType: keydomain.TypeOf(pr[0]), Symbol: sym, Bid: 100.0, Ask: 100.1},
+			pgstore.TickRow{Ts: now, Venue: venue, VenueType: keydomain.TypeOf(pr[0]), Symbol: sym, Bid: 100.5, Ask: 100.6})
 	}
 	if err := s.InsertTicks(ctx, rows); err != nil {
 		t.Fatalf("seed actionable ticks: %v", err)
