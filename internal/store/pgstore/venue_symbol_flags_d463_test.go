@@ -13,14 +13,14 @@ func TestVenueSymbolFlags_D463(t *testing.T) {
 		t.Fatal(err)
 	}
 	kb := "条目/xpd-funding-semantics.md"
-	f := &VenueSymbolFlag{Venue: "gate", Symbol: "XPD", Level: "warn", Reason: "funding 字段语义坑待查", KbRef: &kb}
+	f := &VenueSymbolFlag{VenueA: "gate", Symbol: "XPD", Level: "warn", Reason: "funding 字段语义坑待查", KbRef: &kb}
 	if err := s.InsertFlag(ctx, f); err != nil {
 		t.Fatal(err)
 	}
 	if f.ID == 0 {
 		t.Fatal("insert 未回填 id")
 	}
-	b := &VenueSymbolFlag{Venue: "gate", Symbol: "XPT", Level: "blocked", Reason: "blocked 级行"}
+	b := &VenueSymbolFlag{VenueA: "gate", Symbol: "XPT", Level: "blocked", Reason: "blocked 级行"}
 	if err := s.InsertFlag(ctx, b); err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +32,7 @@ func TestVenueSymbolFlags_D463(t *testing.T) {
 		t.Fatalf("flag row=%+v", flags[FlagKey("gate", "XPD")])
 	}
 	// level CHECK 约束：非法级拒插。
-	if err := s.InsertFlag(ctx, &VenueSymbolFlag{Venue: "x", Symbol: "y", Level: "info", Reason: "r"}); err == nil {
+	if err := s.InsertFlag(ctx, &VenueSymbolFlag{VenueA: "x", Symbol: "y", Level: "info", Reason: "r"}); err == nil {
 		t.Fatal("非法 level 应被 CHECK 拒")
 	}
 	// resolve 软删：resolved 行不再返回。

@@ -114,8 +114,8 @@ func TestD463_BlockedFlagHitLegs(t *testing.T) {
 	}
 }
 
-// TestD463_SpotLegFlagBlocks 返修 R1：spot 入口腿级命中——universe venue 组合串
-// "mt×gate"，旗标只挂 gate|GUSDT 单腿（旧码查全串哑火，展开后拦下）。
+// TestD463_SpotLegFlagBlocks 返修 R1：spot 入口腿级命中——universe venue 裸域单列
+// （D-499 生产实证 2350 行零 ×，配对假设不成立），旗标挂 gate|GUSDT 拦下。
 func TestD463_SpotLegFlagBlocks(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
@@ -124,8 +124,8 @@ func TestD463_SpotLegFlagBlocks(t *testing.T) {
 		rows:  map[int64]*pgstore.PaperSpotCarry{},
 		ticks: map[string][]pgstore.TickRow{},
 		universe: map[string]pgstore.CexUniverseRow{
-			"mt×gate|GUSDT": {
-				Venue: "mt×gate", Symbol: "GUSDT", Status: "TRADING", Tier: "T1",
+			"gate|GUSDT": {
+				Venue: "gate", Symbol: "GUSDT", Status: "TRADING", Tier: "T1",
 				FundingAnn: &funding, Vol24h: &vol, FirstSeen: now.Add(-72 * time.Hour),
 			},
 		},
@@ -133,7 +133,7 @@ func TestD463_SpotLegFlagBlocks(t *testing.T) {
 	flags := map[string]pgstore.VenueSymbolFlag{
 		pgstore.FlagKey("gate", "GUSDT"): {Venue: "gate", Symbol: "GUSDT", Level: "blocked", Reason: "腿级旗标"},
 	}
-	opened, _, err := StepPaperSpotCarry(ctx, st, eligibleStreak("mt×gate|GUSDT"), now, flags)
+	opened, _, err := StepPaperSpotCarry(ctx, st, eligibleStreak("gate|GUSDT"), now, flags)
 	if err != nil || len(opened) != 0 || len(st.rows) != 0 {
 		t.Fatalf("leg blocked: opened=%v rows=%d err=%v", opened, len(st.rows), err)
 	}

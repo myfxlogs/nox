@@ -139,6 +139,7 @@ var migrationFiles = []struct {
 	{141, migrations.PerpFundingAdmissionSQL},          // D-491 S1：PERP_FUNDING 证据准入表（白名单退役）
 	{142, migrations.KeydomainConstitutionSQL},         // D-496：键域宪法全库归一（venue/venue_type/venue_key generated）
 	{143, migrations.CarryGraduationPairColsSQL},       // D-498：carry_graduations venue_a/venue_b 源列+venue 展示投影
+	{144, migrations.D499TailColsSQL},                  // D-499：carry venue_type 拆除+flags 配对域拆列
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
