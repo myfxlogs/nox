@@ -57,7 +57,7 @@ func (s *Store) UpsertKnowledgeEntry(ctx context.Context, e *KnowledgeEntry) (in
 	var id int64
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO knowledge_entries (signature, venue_keys, symbol, verdict, rationale, source)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		VALUES ($1, COALESCE($2::text[], '{}'::text[]), $3, $4, $5, $6)
 		ON CONFLICT (signature) DO UPDATE SET
 			verdict = EXCLUDED.verdict,
 			rationale = EXCLUDED.rationale,
