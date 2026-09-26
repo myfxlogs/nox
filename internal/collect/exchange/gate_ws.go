@@ -2,8 +2,8 @@
 // spot + futures 各一条独立连接（URL 不同），订阅 tickers 频道实时推送 bid/ask 到 QuoteBus。
 // 与 okx_ws.go 结构对齐：Run 循环 + 断线重连 + ping 保活。
 //
-// Binance 不做 WS：直连被地理封锁（451/403），且 CF/Render 代理不做 WebSocket 升级
-// （实测 Upgrade 请求返回 200 非 101），故 Binance 保持 REST 轮询（pollBinanceQuotes）。
+// Binance 公开报价已 WS 流化（D-505：现行代理 192.229.85.35:8443 实证 WS 升级正常，
+// 原「200 非 101」系已退役 CF/Render 代理的陈旧结论）；REST 轮询保留为降级兜底 60s。
 package exchange
 
 import (
