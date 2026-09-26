@@ -3,6 +3,7 @@ package pgstore
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -67,9 +68,12 @@ func (s *Store) UpsertExecutionControl(ctx context.Context, c *ExecutionControl,
 	}
 	defer tx.Rollback(ctx)
 
-	// 读取当前 mode（用于事件 from_mode）
+	// 读取当前 mode（用于事件 from_mode）。D-508 写路径审计契约：fail-stop——
+	// ErrNoRows=新行首插合法空值，其余错误一律上抛（资金/审计写通道禁静默吞错）。
 	var fromMode string
-	_ = tx.QueryRow(ctx, `SELECT mode FROM execution_controls WHERE scope_type=$1 AND scope_key=$2`, c.ScopeType, c.ScopeKey).Scan(&fromMode)
+	if serr := tx.QueryRow(ctx, `SELECT mode FROM execution_controls WHERE scope_type=$1 AND scope_key=$2`, c.ScopeType, c.ScopeKey).Scan(&fromMode); serr != nil && !errors.Is(serr, pgx.ErrNoRows) {
+		return fmt.Errorf("read current mode: %w", serr)
+	}
 
 	_, err = tx.Exec(ctx, `
 		INSERT INTO execution_controls (scope_type, scope_key, mode, enabled, approved_by, confirmed_at, expires_at, revoked_at, reason, config_digest, updated_at)
