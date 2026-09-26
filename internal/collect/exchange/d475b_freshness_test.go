@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/exec"
 	"arb/internal/reconcile"
 )
 
@@ -120,5 +119,5 @@ func TestD475b_OrderCache_TTLFallback(t *testing.T) {
 	if rest.calls != 1 || st != "filled" {
 		t.Fatalf("超窗应回落 REST, calls=%d state=%s", rest.calls, st)
 	}
-	var _ exec.OrderStatusQuerier = rest // 接口断言：fake 实现同签名
+	var _ OrderStatusQuerier = rest // 接口断言：fake 实现同签名
 }

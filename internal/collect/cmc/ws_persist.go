@@ -185,11 +185,13 @@ func (w *WsClient) flushPositions() {
 		}
 		dbPositions = append(dbPositions, dp)
 	}
-	if err := w.store.InsertCMCPositions(context.Background(), w.accountID, dbPositions); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second) // D-508 S5
+	defer cancel()
+	if err := w.store.InsertCMCPositions(ctx, w.accountID, dbPositions); err != nil {
 		log.Printf("[cmc-ws] insert positions: %v", err)
 		return
 	}
-	w.emitFact(context.Background(), []fact.Fact{{Kind: fact.KindCMCAccount, Venue: "cmc",
+	w.emitFact(ctx, []fact.Fact{{Kind: fact.KindCMCAccount, Venue: "cmc",
 		Symbol: "positions", Value: 0, Unit: fact.UnitUSD, Ts: now, Src: "cmc_ws"}})
 }
 

@@ -1,0 +1,439 @@
+syntax = "proto3";
+
+package arb.dashboard.v1;
+
+option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
+
+
+import "google/protobuf/timestamp.proto";
+import "dashboardv1/account.proto";
+
+// ==== trx_cnfi.proto —— D-508 S10 自 dashboard.proto 按域拆出（纯搬家：消息名/字段号/RPC 契约零漂移）。 ====
+
+// --- CN-FI 固收雷达（D-226/D-237；D-230 F7：无金额字段，快照语义） ---
+
+message GetCNFIRadarSnapshotRequest {}
+
+message CnfiCurvePoint {
+  string series = 1;      // cgb / ig_aaa / bank_aaa
+  string tenor = 2;       // 3m/1y/3y/5y/10y/30y
+  double value_bp = 3;    // 收盘到期收益率，bp
+  string as_of = 4;       // 中国市场业务日 YYYY-MM-DD
+  string source = 5;      // chinabond / manual:*
+  string quality = 6;     // ok / stale / missing
+}
+
+message CnfiDerivedMetric {
+  string key = 1;         // term_spread_10y2y / credit_spread_3y（P2 增 pctile 键）
+  double value = 2;       // bp 或百分位(0-100)
+  string unit = 3;        // bp / pctile
+  int32 sample_n = 4;     // 窗口内有效观测数
+  string as_of = 5;
+  string quality = 6;     // ok / reduced / N / stale / missing
+}
+
+message CnfiSignalState {
+  string key = 1;
+  string observed_state = 2;  // observe / armed / fired（observe-only 期一律 observe）
+  string message = 3;         // 事实陈述+观察性提示（禁动作词，服务端校验）
+  string as_of = 4;
+  string evidence_ref = 5;
+}
+
+message GetCNFIRadarSnapshotResponse {
+  repeated CnfiCurvePoint points = 1;
+  repeated CnfiDerivedMetric metrics = 2;
+  repeated CnfiSignalState signals = 3;
+  string snapshot_as_of = 4;                     // = 全部 ok 点的 max(as_of)（D-230 F7 钉死）
+  google.protobuf.Timestamp generated_at = 5;    // UTC
+}
+
+message GetCNFIProgressRequest {}
+
+message CnfiLayerProgress {
+  string layer = 1;       // liquidity / coupon / locked / opportunity
+  double target_pct = 2;  // 目标比例（signal_config layer_targets；未配置=0）
+  double actual_pct = 3;  // 实际比例（市值口径，服务端计算）
+  int32 holdings = 4;     // 该层持仓笔数
+  double expected_annual_pct = 5;   // 预期年化%（公开市场参数，D-242）
+  double expected_annual_cny = 6;   // 预期年化金额（服务端按市值算，运行时个人数据）
+  double market_value_cny = 7;      // 该层当前市值（运行时个人数据）
+}
+
+message GetCNFIProgressResponse {
+  repeated CnfiLayerProgress layers = 1;
+  string valued_as_of = 2;  // 估值基准（最新 NAV 日）
+  repeated CnfiLayerCompare layer_compares = 3;  // D-247：候选池对比（每层一张）
+}
+
+message CnfiLayerCompare {
+  string layer = 1;                        // liquidity/coupon/locked/opportunity
+  repeated CnfiFundCompare funds = 2;      // 层内候选（按区间收益降序）
+}
+
+message CnfiFundCompare {
+  string code = 1;
+  string name = 2;
+  optional double ret_7d = 3;              // %（LJJZ 口径；缺=源/断点缺失，前端「—」）
+  optional double ret_1m = 4;
+  optional double ret_3m = 5;
+  optional double ret_1y = 6;
+  optional double max_drawdown_3m = 7;     // %
+  optional int32 rank = 8;                 // 层内名次（按 ret_1y，缺失回退 ret_3m）
+  optional int32 n = 9;                    // 层内有效样本数
+  bool passes_screen = 10;                 // R3 三门（v1 冻结名单恒 true；P2 由 signal_config 驱动）
+  optional bool is_break = 11;             // caliber_break_date 命中
+  optional bool is_held = 12;              // P2 预留（持仓高亮）
+}
+
+message AddCNFIHoldingRequest {
+  string code = 1;
+  string layer = 2;
+  double qty = 3;
+  double cost_value = 4;
+  string opened_date = 5;
+  string note = 6;
+}
+
+message AddCNFIHoldingResponse {
+  bool ok = 1;
+  string error = 2;
+}
+
+message AddCNFIActionRequest {
+  string code = 1;
+  string layer = 2;       // liquidity/coupon/locked/opportunity/none
+  string action_type = 3; // buy/sell/dividend/note
+  double qty = 4;
+  double amount_cny = 5;
+  string rationale = 6;   // 投资笔记（buy/sell 必填，服务端校验）
+  string action_date = 7;
+  optional double rate_pct = 8; // D-270：逆回购操作利率（liquidity 层专用，其他层可空）
+}
+
+message AddCNFIActionResponse {
+  bool ok = 1;
+  string error = 2;
+}
+
+message CnfiActionRow {
+  int64 id = 1;
+  string code = 2;
+  string layer = 3;
+  string action_type = 4;
+  double qty = 5;
+  double amount_cny = 6;
+  string rationale = 7;
+  string action_date = 8;
+  string signal_snapshot = 9; // 行动时点信号快照（json 字符串）
+  optional double rate_pct = 10; // D-270：逆回购操作利率（liquidity 层专用）
+}
+
+message ListCNFIActionsRequest { int32 limit = 1; }
+
+message ListCNFIActionsResponse { repeated CnfiActionRow actions = 1; }
+
+// D-270：逆回购操作记录列表（周四操作闭环审计）。
+message ListRepoOpsRequest { int32 limit = 1; }
+
+message RepoOpRow {
+  int64 id = 1;
+  string opportunity_week = 2;
+  string instrument_code = 3;
+  string instrument_name = 4;
+  string status = 5;          // pending/operated/skipped
+  double trigger_rate_pct = 6;
+  double expected_return_cny = 7;
+  int32 holding_days = 8;
+  string signal_snapshot = 9;
+  int32 reminder_count = 10;
+  string skip_reason = 11;
+  double operation_amount_cny = 12;
+  double operation_rate_pct = 13;
+  string created_at = 14;
+  string updated_at = 15;
+}
+
+message ListRepoOpsResponse { repeated RepoOpRow ops = 1; }
+
+// D-254：TrxAccountRefresh——手动刷新按钮+on-open 双踢 trx_account+trx_apr 后返回最新 fin_trx_account 全字段快照。
+// Q3 裁定：sun 单位 ÷1e6 转 double（对齐 HedgeAccounts 口径，前端零换算）；votes_total 用 double（对齐 HedgeAccounts.votes）。
+// Q1 裁定：全 11 字段透出（unfrozen/sr_address 是 TronLink 展示集合，数据面一次到位，渲染扩展挂账）。
+message TrxAccountRefreshRequest {}
+
+message TrxAccountRefreshResponse {
+  int64 id = 1;                    // fin_trx_account.id（内部主键，透出为完整性）
+  string address = 2;              // 钱包地址
+  string sr_address = 3;           // 投票 SR 地址（nil=空字符串）
+  double trx_balance = 4;          // balance_sun ÷ 1e6（TRX）
+  double trx_allowance = 5;        // reward_num_sun ÷ 1e6（D-285 链上真值，与 GetHedgeStructure.hedge_accounts.trx_allowance 同源）
+  double energy_delegated = 6;     // energy_delegated ÷ 1e6（TRX）
+  double bandwidth_staked = 7;     // bandwidth_staked ÷ 1e6（TRX）
+  double net_limit = 8;            // 带宽上限（BP，链上原值透传）
+  double votes = 9;                // votes_total（票数，对齐 HedgeAccounts.votes 不除 1e6）
+  string unfrozen = 10;            // JSONB 透传（nil=空字符串，在途解押）
+  google.protobuf.Timestamp fetched_at = 11;  // 采集时间
+  // D-278 S5：地址资源显示（剩余带宽/能量）
+  double net_used = 12;            // 已用带宽（BP，链上原值透传）
+  double free_net_used = 13;       // 免费已用带宽（BP，链上原值透传）
+  double free_net_limit = 14;      // 免费带宽上限（BP，链上原值透传）
+  double energy_limit = 15;        // 能量上限（Energy，链上原值透传）
+  double energy_used = 16;         // 已用能量（Energy，链上原值透传）
+  string bandwidth_status = 17;   // 带宽状态 normal/yellow/red（后端算，阈值=trxvote 常量同源）
+}
+
+// D-258 S3：收益率雷达——后端算好，前端零计算（D-043 前端零信任）。
+// 能量=实收年化（rental_income÷在押）；投票=SR APR（D-233 对拍口径）。
+message GetTrxYieldRadarRequest {}
+
+message GetTrxYieldRadarResponse {
+  double energy_apr_7d = 1;     // 7d 能量租金年化 %
+  double energy_apr_30d = 2;    // 30d 能量租金年化 %
+  double vote_apr_current = 3;  // 当前投票 APR %（最新 fin_trx_vote_apr.current_rate）
+  double vote_apr_30d_avg = 4; // 30d 投票 APR 均值 %
+  double floor_pct = 5;        // floor 告警阈值 %（ARB_TRX_ENERGY_RATE_FLOOR_PCT）
+  int32 sample_days_7d = 6;     // 7d 实际样本天数（冷启动 <7 时前端显示「样本不足」）
+  int32 sample_days_30d = 7;   // 30d 实际样本天数
+  google.protobuf.Timestamp updated_at = 8;  // 数据更新时间
+  bool transition = 9;  // 扩容过渡期（7d 窗内 energy_delegated 变化>20%）：读数=旧租金÷新在押，floor 判定无效（9-9 B' 教训）
+  // D-288：投票市场最高 APR（从 fin_trx_vote_apr 同行透传，消除 TrxHedgeCard 投票年化行重复）
+  double vote_apr_max = 10;      // 市场最高 APR %（producer=true 降序第一）
+  string vote_apr_max_sr = 11;   // 最高 APR SR 名
+  double vote_apr_spread = 12;   // max−current 差值（pp）
+}
+
+// D-278 S1：净收益率日曲线——后端聚合三成分日序列+滚动年化，前端零计算（D-043 前端零信任）。
+// 数据源=position_daily_income（rollup 日序列）+ fin_cmc_positions.evaluation_bid_price（现价）。
+// 分母=$36.5K 池口径常量（与底稿可比，AF4）；S4 敞口并入响应。
+message GetTrxYieldCurveRequest {
+  int32 days = 1;  // 返回天数（≤0=默认 30）
+}
+
+message TrxYieldCurvePoint {
+  google.protobuf.Timestamp day = 1;  // UTC 日期
+  double energy_trx = 2;               // 当日能量租金收入（TRX）
+  double voting_trx = 3;               // 当日投票收入（TRX）
+  double interest_usd = 4;             // 当日空单隔夜息（USD）
+  double price = 5;                     // 当日 TRX 价格（TRXUSDT，nil=无报价）
+  double daily_total_usd = 6;          // 当日合计收益 USD =（energy+voting）×price+interest
+}
+
+message GetTrxYieldCurveResponse {
+  repeated TrxYieldCurvePoint points = 1;  // 日序列（按 day ASC）
+  double annualized_7d = 2;                 // 7d 滚动合成年化 %
+  double annualized_30d = 3;                // 30d 滚动合成年化 %
+  double current_price = 4;                 // 现价（fin_cmc_prices REST mid，LastCMCPriceMidWithTime，D-278 AF3）
+  double pool_principal_usd = 5;             // 池本金 $36.5K（分母口径常量）
+  int32 sample_days_7d = 6;                  // 7d 实际样本天数
+  int32 sample_days_30d = 7;                 // 30d 实际样本天数
+  // D-278 S4：收益敞口计量（累积未对冲 TRX 收益折 USD + 对冲比例漂移）
+  double cumulative_unhedged_income_trx = 8;  // 累积未对冲 TRX 收益（rental+vote_claim 累计）
+  double cumulative_unhedged_income_usd = 9;  // × 现价折 USD
+  double hedge_ratio_drift_pct = 10;         // 对冲比例漂移 %（现货含奖励 vs 空单名义）
+  bool hedge_ratio_drift_warn = 11;          // 偏离>2% 提醒
+}
+
+// D-266 S3：逆回购利率雷达——后端算好，前端零计算（D-043 前端零信任）。
+// 4 品种最新利率 + GC007 30d 均值基线 + GC007 当日 OHLC + 窗口提醒 + 更新时间。
+message GetRepoRateRadarRequest {}
+
+message GetRepoRateRadarResponse {
+  repeated RepoRateSnapshot rates = 1;       // 4 品种最新利率（GC001/GC007/GC014/GC028）
+  double gc007_30d_avg = 2;                   // GC007 30d 均值（基线）
+  double gc007_open = 3;                     // GC007 当日开盘
+  double gc007_close = 4;                    // GC007 当日收盘
+  double gc007_high = 5;                     // GC007 当日最高
+  double gc007_low = 6;                      // GC007 当日最低
+  bool window_alert = 7;                     // 窗口提醒（季末/年末/节前 3 交易日）
+  string window_label = 8;                   // 窗口标签（前端展示用）
+  google.protobuf.Timestamp updated_at = 9;  // 数据更新时间
+}
+
+// RepoRateSnapshot 是单个品种的最新利率快照。
+message RepoRateSnapshot {
+  string code = 1;      // "204001" / "204007" / "204014" / "204028"
+  string name = 2;      // "GC001" / "GC007" / ...
+  double rate_pct = 3;  // 年化利率%
+  optional double change_pct = 4; // 涨跌幅%（可空，缺失=—，真实零=0.00%）
+}
+
+// D-270 R2：逆回购提醒配置（DB 化，前端可改免重启）
+message GetRepoConfigRequest {}
+message GetRepoConfigResponse {
+  double idle_cny = 1;        // 闲置 CNY 金额（0=禁用）
+  double min_return_cny = 2;  // 最小预期收益（元）
+  int32 reminder_hour = 3;   // 提醒时段（0-23，北京时间）
+  bool enabled = 4;           // 总开关
+}
+
+message SetRepoConfigRequest {
+  double idle_cny = 1;
+  double min_return_cny = 2;
+  int32 reminder_hour = 3;
+  bool enabled = 4;
+}
+message SetRepoConfigResponse { bool ok = 1; }
+
+// D-271：CEX 只读扫描器快照
+message GetCexScanSnapshotRequest {}
+message GetCexScanSnapshotResponse {
+  repeated CexEarnAPRRow earn_aprs = 1;
+  repeated CexSpreadRow spreads = 2;
+  repeated CexFundingRow fundings = 3;
+  repeated CexBalanceRow balances = 4;
+  repeated CexEarnJudgmentRow judgments = 5;  // D-273：earn APR 判断结果
+}
+
+// earn APR 判断结果行（D-273 S6）。
+message CexEarnJudgmentRow {
+  string venue = 1;
+  string ccy = 2;
+  string product_type = 3;
+  double apr = 4;         // 小数年化（0.035=3.5%）
+  string category = 5;    // stable / token
+  string verdict = 6;     // opportunity / not_opportunity / trap
+  repeated string reasons = 7;
+}
+
+message CexEarnAPRRow {
+  string venue = 1;
+  string ccy = 2;
+  string product_type = 3;
+  double apr = 4;         // 小数年化（0.035=3.5%）
+  optional string tier_apr = 5;
+  string ts = 6;          // RFC3339
+}
+
+message CexSpreadRow {
+  string symbol = 1;
+  string venue_buy = 2;
+  string venue_sell = 3;
+  double price_buy = 4;
+  double price_sell = 5;
+  double spread_bps = 6;
+  string ts = 7;
+  string verdict = 8;    // D-508 S8：色阶终值（spread_bps>=50→"opportunity" 否则 "not_opportunity"；阈值后端裁决）
+}
+
+message CexFundingRow {
+  string venue = 1;
+  string symbol = 2;
+  double rate = 3;        // 小数年化
+  string ts = 4;
+  string verdict = 5;     // D-508 S8：色阶终值（年化>=10%→"opportunity" 否则 "not_opportunity"；阈值后端裁决）
+}
+
+message CexBalanceRow {
+  string venue = 1;
+  string venue_type = 2;
+  double balance = 3;
+  double equity = 4;
+  double free_margin = 5;
+  string venue_key = 6;           // D-273：稳定 React key（P2-6）
+  repeated Holding holdings = 7;  // D-273：币种明细展开（P3-1）
+}
+
+// === D-272 逆回购操作记录+策略验证闭环 ===
+
+message RecordRepoTradeRequest {
+  string instrument_code = 1;    // "204001" (GC001)
+  string trade_date = 2;         // 操作日期 YYYY-MM-DD
+  int32 holding_days = 3;        // 利息天数（GC001周四=3）
+  double principal_cny = 4;      // 本金（实际操作金额）
+  double actual_rate_pct = 5;    // 实际成交利率%（年化，百分数 1.45=1.45%）
+  string rationale = 6;          // 操作笔记（可选）
+  optional int64 repo_op_id = 7; // 关联 cnfi_repo_ops.id（可选）
+  optional string maturity_date = 8; // 资金可用日（可选，空=后端默认；业主可覆盖）
+}
+
+message RecordRepoTradeResponse {
+  bool ok = 1;
+  string error = 2;
+  int64 id = 3;                     // 新建的 trade id
+  optional double theoretical_rate_pct = 4;     // 系统抓取的理论利率（回显，NULL=非交易时段未采集）
+  optional double theoretical_return_by_idle = 5; // 系统建议收益（回显）
+  optional double theoretical_return_cny = 6;   // 同金额理论收益（回显）
+  string maturity_date = 7;         // 到期日（回显：业主覆盖值，未提供时后端默认）
+  optional double deviation_rate_bps = 8;       // 利率偏差（回显，NULL=理论利率为空）
+  double deviation_principal_cny = 9;           // 金额偏差（回显）
+  double fee_cny = 10;                          // D-276 手续费（成交金额×品种佣金率）
+  optional double net_theoretical_return_cny = 11; // D-276 净理论收益（毛理论−费用，NULL=理论为空）
+}
+
+message ListRepoTradesRequest {
+  int32 limit = 1;               // 默认 50，上限 200
+  optional string status = 2;    // 筛选状态 open/settled（空=全部）
+}
+
+message RepoTradeRow {
+  int64 id = 1;
+  string instrument_code = 2;
+  string instrument_name = 3;       // 后端从 code 映射（"204001"→"GC001"），非 DB 列
+  string trade_date = 4;
+  string maturity_date = 5;
+  int32 holding_days = 6;
+  double principal_cny = 7;
+  double actual_rate_pct = 8;
+  optional double theoretical_rate_pct = 9;
+  optional double theoretical_return_by_idle = 10;
+  optional double theoretical_return_cny = 11;
+  optional double idle_cny_at_record = 12;
+  optional double actual_return_cny = 13;
+  optional string settled_at = 14;
+  optional double deviation_rate_bps = 15;
+  optional double deviation_principal_cny = 16;
+  optional double deviation_return_cny = 17;
+  optional double deviation_return_pct = 18;
+  string status = 19;
+  string entry_source = 20;
+  string rationale = 21;
+  optional double fee_cny = 22;                    // D-276 手续费
+  optional double net_theoretical_return_cny = 23; // D-276 净理论收益（后端派生）
+}
+
+message ListRepoTradesResponse {
+  repeated RepoTradeRow trades = 1;
+}
+
+message SettleRepoTradeRequest {
+  int64 id = 1;
+  double actual_return_cny = 2;  // 实际到账收益
+}
+
+message SettleRepoTradeResponse {
+  bool ok = 1;
+  string error = 2;
+  optional double deviation_return_cny = 3;   // 结算后偏差（回显，NULL=理论收益为空）
+  optional double deviation_return_pct = 4;   // 结算后偏差率（回显，NULL=理论收益为空）
+}
+
+message DeleteRepoTradeRequest {
+  int64 id = 1;
+}
+
+message DeleteRepoTradeResponse {
+  bool ok = 1;
+  string error = 2;
+}
+
+message GetRepoStrategyValidationRequest {}
+
+message GetRepoStrategyValidationResponse {
+  // 累计统计（仅 settled）
+  int32 total_trades = 1;
+  int32 settled_trades = 2;
+  int32 open_trades = 3;
+  double total_principal_cny = 4;          // 累计本金（settled）
+  double total_theoretical_return_cny = 5; // 累计同金额理论收益（settled）
+  double total_actual_return_cny = 6;      // 累计实际收益（settled）
+  double total_deviation_cny = 7;          // 累计收益偏差（settled）
+  double total_deviation_pct = 8;          // 累计收益偏差率（settled）
+  double avg_rate_deviation_bps = 9;       // 平均利率偏差（settled，仅 theoretical_rate 非空行）
+  double avg_principal_deviation_cny = 10; // 平均金额偏差（settled）
+  // 在途持仓
+  double open_principal_cny = 11;          // 在途本金
+  double open_theoretical_return_cny = 12; // 在途同金额理论收益
+  // D-276 手续费聚合
+  double total_fee_cny = 13;                   // 累计手续费（settled）
+  double total_net_theoretical_return_cny = 14; // 累计净理论收益（毛理论−费用，settled）
+}

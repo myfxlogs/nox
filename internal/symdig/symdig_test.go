@@ -28,6 +28,10 @@ type fakeStore struct {
 	alerts   []string
 }
 
+func (f *fakeStore) LatestFactsByKind(ctx context.Context, kind string) ([]fact.Fact, error) {
+	return f.LatestFacts(ctx, kind, "", "")
+}
+
 func (f *fakeStore) LatestFacts(_ context.Context, kind, _, _ string) ([]fact.Fact, error) {
 	var out []fact.Fact
 	for _, x := range f.facts {
@@ -203,5 +207,29 @@ func TestSymdigLLMUnclosed(t *testing.T) {
 	props, malformed := parseProposals("前言\n```symdig-proposals\n[{\"symbol\":\"GOLD\",\"venue\":\"v1\",\"proposed_canonical\":\"XAU\",\"evidence\":\"e\",\"confidence\":0.5}")
 	if len(props) != 1 || props[0].ProposedCanonical != "XAU" || !malformed {
 		t.Fatalf("props=%v malformed=%v", props, malformed)
+	}
+}
+
+// D-508 S13：conf=0.00 不入箱 + 同 symbol 当日 pending 去重。
+func TestSymdigInboxDedup(t *testing.T) {
+	dir := t.TempDir()
+	inbox := filepath.Join(dir, "inbox.md")
+	props := []proposal{
+		{Symbol: "GOLD", Venue: "v1", ProposedCanonical: "XAU", Evidence: "e", Confidence: 0.9},
+		{Symbol: "ZERO", Venue: "v1", ProposedCanonical: "Z", Evidence: "e", Confidence: 0.0},
+	}
+	if err := appendInbox(inbox, "2026-09-27", "symdig_alias", props); err != nil {
+		t.Fatal(err)
+	}
+	// 当日重投同 symbol → 抑制
+	if err := appendInbox(inbox, "2026-09-27", "symdig_alias", props); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(inbox)
+	if strings.Count(string(data), "GOLD→XAU") != 1 {
+		t.Fatalf("GOLD 应只入箱一次: %s", data)
+	}
+	if strings.Contains(string(data), "ZERO→") {
+		t.Fatalf("conf=0 提案不应入箱: %s", data)
 	}
 }

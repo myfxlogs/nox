@@ -1,0 +1,229 @@
+syntax = "proto3";
+
+package arb.dashboard.v1;
+
+option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
+
+import "dashboardv1/account.proto";
+import "dashboardv1/alerting_events.proto";
+import "dashboardv1/broker_admin.proto";
+import "dashboardv1/graduation.proto";
+import "dashboardv1/market.proto";
+import "dashboardv1/ops.proto";
+import "dashboardv1/position.proto";
+import "dashboardv1/stream.proto";
+import "dashboardv1/trx_cnfi.proto";
+import "dashboardv1/watchlist_analyst.proto";
+
+// DashboardService — Web 仪表盘 ConnectRPC 服务（架构设计 §8.2）。
+// 写 RPC 仅限：告警确认/台账/经验复核/执行确认；无策略管理、无自动开仓入口。
+// 全部 RPC 经认证 interceptor（§13.5）；执行类 RPC 额外校验风控上限。
+service DashboardService {
+  // 快照类
+  rpc ListLatestQuotes(ListQuotesRequest) returns (ListQuotesResponse);
+  rpc ListLatestFacts(ListLatestFactsRequest) returns (ListLatestFactsResponse);
+  rpc ListOpportunities(ListOpportunitiesRequest) returns (ListOpportunitiesResponse);
+  rpc ListAlerts(ListAlertsRequest) returns (ListAlertsResponse);
+  rpc ListTriggerStates(ListTriggerStatesRequest) returns (ListTriggerStatesResponse);
+  rpc ListSourceHealth(ListSourceHealthRequest) returns (ListSourceHealthResponse);
+  rpc ListFacts(ListFactsRequest) returns (ListFactsResponse);
+
+  // 告警确认
+  rpc AckAlert(AckAlertRequest) returns (AckAlertResponse);
+  rpc AckAll(AckAllRequest) returns (AckAllResponse);
+  rpc ListUnacked(ListUnackedRequest) returns (ListUnackedResponse);
+  // 告警删除
+  rpc DeleteAlerts(DeleteAlertsRequest) returns (DeleteAlertsResponse);
+  rpc ClearAckedAlerts(ClearAckedAlertsRequest) returns (ClearAckedAlertsResponse);
+
+  // 台账
+  rpc AddLedgerEntry(AddLedgerEntryRequest) returns (AddLedgerEntryResponse);
+  rpc ListLedgerEntries(ListLedgerEntriesRequest) returns (ListLedgerEntriesResponse);
+  rpc LedgerSummary(LedgerSummaryRequest) returns (LedgerSummaryResponse);
+
+  // 记账（财务线工作项 2：结构化投资记录，决定/教训/观察）
+  rpc AddInvestmentRecord(AddInvestmentRecordRequest) returns (AddInvestmentRecordResponse);
+  rpc ListInvestmentRecords(ListInvestmentRecordsRequest) returns (ListInvestmentRecordsResponse);
+
+  // 经验库
+  rpc ListKnowledgeEntries(ListKnowledgeEntriesRequest) returns (ListKnowledgeEntriesResponse);
+
+  // 执行（认证后，§13）
+  rpc ExecuteOpportunity(ExecuteOpportunityRequest) returns (ExecuteOpportunityResponse);
+  rpc ClosePosition(ClosePositionRequest) returns (ClosePositionResponse);
+  rpc BackfillSwapHistory(BackfillSwapHistoryRequest) returns (BackfillSwapHistoryReply); // D-181 S1：手动回溯 venue swap 历史→facts
+  // CN-FI 固收雷达快照（D-226/D-237；只读快照，无流式——日频数据不接 streamUpdates）
+  rpc GetCNFIRadarSnapshot(GetCNFIRadarSnapshotRequest) returns (GetCNFIRadarSnapshotResponse);
+  // CN-FI 四层进度（P3；比例+工具名，响应零金额字段——D-047：金额只在运行时 DB）
+  rpc GetCNFIProgress(GetCNFIProgressRequest) returns (GetCNFIProgressResponse);
+  // CN-FI 手动持仓录入（P3；L2 人工确认铁律，系统永不下单）
+  rpc AddCNFIHolding(AddCNFIHoldingRequest) returns (AddCNFIHoldingResponse);
+  // CN-FI 操作日志/投资笔记（D-242；金额=运行时个人数据，L2 人工）
+  rpc AddCNFIAction(AddCNFIActionRequest) returns (AddCNFIActionResponse);
+  rpc ListCNFIActions(ListCNFIActionsRequest) returns (ListCNFIActionsResponse);
+  // D-270：逆回购操作记录列表（周四操作闭环审计）
+  rpc ListRepoOps(ListRepoOpsRequest) returns (ListRepoOpsResponse);
+  rpc ListPositions(ListPositionsRequest) returns (ListPositionsResponse);
+
+  // Broker 实持仓（D-051 WP3：MT5/MT4 实际持仓统一视图，实时查不落库）
+  rpc ListBrokerPositions(ListBrokerPositionsRequest) returns (ListBrokerPositionsResponse);
+  rpc CloseBrokerPosition(CloseBrokerPositionRequest) returns (CloseBrokerPositionResponse);
+  rpc CloseBrokerPositions(CloseBrokerPositionsRequest) returns (CloseBrokerPositionsResponse);
+  rpc ListAccounts(ListAccountsRequest) returns (ListAccountsResponse);
+
+  // 个人持仓（财务线 TRX 持仓接入，D-046）+ 实账化（财务线工作项 3）
+  rpc ListPersonalPositions(ListPersonalPositionsRequest) returns (ListPersonalPositionsResponse);
+  rpc GetHedgeStructure(GetHedgeStructureRequest) returns (GetHedgeStructureResponse);  // D-212 对冲工作台
+  rpc ListHedgeFlow(ListHedgeFlowRequest) returns (ListHedgeFlowResponse);  // D-212 统一流水卡
+  rpc TrxAccountRefresh(TrxAccountRefreshRequest) returns (TrxAccountRefreshResponse);  // D-254：手动刷新按钮+on-open 双踢 trx_account+trx_apr，返回最新 fin_trx_account 全字段快照
+  rpc GetTrxYieldRadar(GetTrxYieldRadarRequest) returns (GetTrxYieldRadarResponse);  // D-258 S3：收益率雷达（能量 7d/30d + 投票 APR + floor）
+  rpc GetTrxYieldCurve(GetTrxYieldCurveRequest) returns (GetTrxYieldCurveResponse);  // D-278 S1：净收益率日曲线（三成分日序列+7d/30d 滚动年化+S4 敞口）
+  rpc GetRepoRateRadar(GetRepoRateRadarRequest) returns (GetRepoRateRadarResponse);  // D-266 S3：逆回购利率雷达（4 品种 + GC007 30d 均值 + OHLC + 窗口提醒）
+  rpc AddDailyIncome(AddDailyIncomeRequest) returns (AddDailyIncomeResponse);
+  rpc ListDailyIncome(ListDailyIncomeRequest) returns (ListDailyIncomeResponse);
+
+  // 盈亏统计起点（F4：anchor 重置，业主选 A「不删历史」）
+  rpc GetPnlAnchor(GetPnlAnchorRequest) returns (GetPnlAnchorResponse);
+  rpc ResetPnlAnchor(ResetPnlAnchorRequest) returns (ResetPnlAnchorResponse);
+
+  // 经验库只读浏览（F8：读 docs/经验库/索引.md + 条目全文）
+  rpc ListKBEntries(ListKBEntriesRequest) returns (ListKBEntriesResponse);
+  rpc GetKBEntry(GetKBEntryRequest) returns (GetKBEntryResponse);
+
+  // 验证统计（D-086 V-Ladder：机会验证阶梯，面板徽章+折叠区）
+  rpc ListVerificationStats(ListVerificationStatsRequest) returns (ListVerificationStatsResponse);
+
+  // Broker 管理（认证后，运行时 MT4/MT5 连接管理）
+  rpc SearchBroker(SearchBrokerRequest) returns (SearchBrokerResponse);
+  rpc AddBroker(AddBrokerRequest) returns (AddBrokerResponse);
+  rpc RemoveBroker(RemoveBrokerRequest) returns (RemoveBrokerResponse);
+  rpc UpdateBrokerCredentials(UpdateBrokerCredentialsRequest) returns (UpdateBrokerCredentialsResponse); // D-493 S4
+  rpc ListBrokerAccounts(ListBrokerAccountsRequest) returns (ListBrokerAccountsResponse);
+  rpc VerifyAccount(VerifyAccountRequest) returns (VerifyAccountResponse);
+
+  // CEX 交易所管理（D-054：后台增删，运行时生效，对齐 broker 账户管理）
+  rpc ListExchanges(ListExchangesRequest) returns (ListExchangesResponse);
+  rpc AddExchange(AddExchangeRequest) returns (AddExchangeResponse);
+  rpc RemoveExchange(RemoveExchangeRequest) returns (RemoveExchangeResponse);
+  rpc SetExchangeLabel(SetExchangeLabelRequest) returns (SetExchangeLabelResponse); // D-157 V3：交易所别名编辑
+  rpc SetExchangeWebsite(SetExchangeWebsiteRequest) returns (SetExchangeWebsiteResponse); // D-157 V3.1：交易所官网编辑
+  rpc BrokerSymbols(BrokerSymbolsRequest) returns (BrokerSymbolsResponse);
+  rpc SetBrokerAccountAlias(SetBrokerAccountAliasRequest) returns (SetBrokerAccountAliasResponse);
+  rpc SetBrokerAccountIsReal(SetBrokerAccountIsRealRequest) returns (SetBrokerAccountIsRealResponse); // D-144 ①
+  rpc SetBrokerDisabled(SetBrokerDisabledRequest) returns (SetBrokerDisabledResponse);
+  rpc SetBrokerCommission(SetBrokerCommissionRequest) returns (SetBrokerCommissionResponse);
+  rpc SetBrokerWebsite(SetBrokerWebsiteRequest) returns (SetBrokerWebsiteResponse); // D-157 V3.1：broker 官网编辑
+
+  // Symbol 映射（brokerSymbol -> canonical）
+  rpc ListSymbolMappings(ListSymbolMappingsRequest) returns (ListSymbolMappingsResponse);
+  rpc SaveSymbolMapping(SaveSymbolMappingRequest) returns (SaveSymbolMappingResponse);
+  rpc DeleteSymbolMapping(DeleteSymbolMappingRequest) returns (DeleteSymbolMappingResponse);
+  rpc ListMappingSuggestions(ListMappingSuggestionsRequest) returns (ListMappingSuggestionsResponse);
+  rpc ListCanonicals(ListCanonicalsRequest) returns (ListCanonicalsResponse);
+  rpc AutoMapBroker(AutoMapBrokerRequest) returns (AutoMapBrokerResponse);
+  // D-140 S3：swap 组合列表（basis_bps 只展示不动排序）
+  rpc ListSwapCombos(ListSwapCombosRequest) returns (ListSwapCombosResponse);
+
+  // Matrix 全景（D-045：全符号跨全账号映射/报价巡检）
+  rpc ListMatrixUniverse(ListMatrixUniverseRequest) returns (ListMatrixUniverseResponse);
+
+  // 实时推送（server streaming，D-026）
+  rpc StreamUpdates(StreamUpdatesRequest) returns (stream StreamUpdatesResponse);
+
+  // 健康
+  rpc Health(HealthRequest) returns (HealthResponse);
+
+  // 前端配置同源（D-077 修复⑪B N7）：返回后端 config 阈值供前端展示。
+  rpc GetFrontConfig(GetFrontConfigRequest) returns (GetFrontConfigResponse);
+
+  // 理论 vs 实际对账（D-080 S5）：策略聚合卡——承诺年化 vs 实际年化。
+  rpc GetStrategyLedger(GetStrategyLedgerRequest) returns (GetStrategyLedgerResponse);
+
+  // 总览自选报价条（D-090）：业主自选 canonical 清单，服务端按此过滤 StreamUpdates case 1。
+  rpc GetWatchlist(GetWatchlistRequest) returns (GetWatchlistResponse);
+  rpc SetWatchlist(SetWatchlistRequest) returns (SetWatchlistResponse);
+
+  // 分析员（D-091 前端分析员，server streaming + 收件箱 append）
+  rpc AskAnalyst(AskAnalystRequest) returns (stream AskAnalystResponse);
+  rpc AppendAnalystNote(AppendAnalystNoteRequest) returns (AppendAnalystNoteResponse);
+  // D-442 S4：KB 元分析报告手动补跑（周 ticker 之外的调试/验证入口）
+  rpc GenerateKbReport(GenerateKbReportRequest) returns (GenerateKbReportResponse);
+  // D-457：系统复盘报告——手动触发 + 报告列表/正文读取（前端报告页）
+  rpc GenerateRetroReport(GenerateRetroReportRequest) returns (GenerateRetroReportResponse);
+  rpc ListReports(ListReportsRequest) returns (ListReportsResponse);
+  rpc GetReport(GetReportRequest) returns (GetReportResponse);
+  // D-091 返修② R3：AI 配置 DB 化（前端可配，Get 掩码/Set 空 key 不覆盖）
+  rpc GetAiSettings(GetAiSettingsRequest) returns (GetAiSettingsResponse);
+  rpc SetAiSettings(SetAiSettingsRequest) returns (SetAiSettingsResponse);
+  // D-270 R2：逆回购提醒配置 DB 化（前端可改免重启）
+  rpc GetRepoConfig(GetRepoConfigRequest) returns (GetRepoConfigResponse);
+  rpc SetRepoConfig(SetRepoConfigRequest) returns (SetRepoConfigResponse);
+  // D-271：CEX 只读扫描器快照（理财 APR + 跨所价差 + funding + 余额）
+  rpc GetCexScanSnapshot(GetCexScanSnapshotRequest) returns (GetCexScanSnapshotResponse);
+  // D-272：逆回购操作记录+策略验证闭环
+  rpc RecordRepoTrade(RecordRepoTradeRequest) returns (RecordRepoTradeResponse);
+  rpc ListRepoTrades(ListRepoTradesRequest) returns (ListRepoTradesResponse);
+  rpc SettleRepoTrade(SettleRepoTradeRequest) returns (SettleRepoTradeResponse);
+  rpc DeleteRepoTrade(DeleteRepoTradeRequest) returns (DeleteRepoTradeResponse);
+  rpc GetRepoStrategyValidation(GetRepoStrategyValidationRequest) returns (GetRepoStrategyValidationResponse);
+  // D-292：价格提醒规则前端管理（CRUD；引擎 30s 重载自动生效，无通知机制）
+  rpc ListPriceAlertRules(ListPriceAlertRulesRequest) returns (ListPriceAlertRulesResponse);
+  rpc CreatePriceAlertRule(CreatePriceAlertRuleRequest) returns (CreatePriceAlertRuleResponse);
+  rpc UpdatePriceAlertRule(UpdatePriceAlertRuleRequest) returns (UpdatePriceAlertRuleResponse);
+  rpc DeletePriceAlertRule(DeletePriceAlertRuleRequest) returns (DeletePriceAlertRuleResponse);
+
+  // D-274：事件驱动研判引擎（S8）
+  rpc ListEventJudgments(ListEventJudgmentsRequest) returns (ListEventJudgmentsResponse);
+  rpc ListPaperTrades(ListPaperTradesRequest) returns (ListPaperTradesResponse);
+  rpc AcceptJudgment(AcceptJudgmentRequest) returns (AcceptJudgmentResponse);
+  rpc SettlePaperTrade(SettlePaperTradeRequest) returns (SettlePaperTradeResponse);
+
+  // D-348：财务总览聚合（三个数+收益分解+统一流水；后端算，前端零信任零计算）。
+  rpc GetFinanceOverview(GetFinanceOverviewRequest) returns (GetFinanceOverviewResponse);
+
+  // D-350 阶段③：spot-carry demo 手动实测（双腿原子：先现货后永续，失败回滚已成交腿）。
+  rpc ExecuteSpotCarryDemo(ExecuteSpotCarryDemoRequest) returns (ExecuteSpotCarryDemoResponse);
+  rpc ListSpotCarryDemo(ListSpotCarryDemoRequest) returns (ListSpotCarryDemoResponse);
+  // D-352：纸面轨前端卡（持仓页第三卡）——active+demo+近 14 天 exited 三态。
+  rpc ListPaperSpotCarry(ListPaperSpotCarryRequest) returns (ListPaperSpotCarryResponse);
+
+  // D-444：autotrade venue/canonical 执行白名单启停（行只读列出+enabled 翻转；D-492 起增删走 UI）
+  rpc ListAutotradeAllowRules(ListAutotradeAllowRulesRequest) returns (ListAutotradeAllowRulesResponse);
+  rpc SetAutotradeAllowRuleEnabled(SetAutotradeAllowRuleEnabledRequest) returns (SetAutotradeAllowRuleEnabledResponse);
+  // D-492：白名单增删 UI 管理——simulated 服务端推导（禁前端传）+幂等去重+审计+kickConfig 热载。
+  rpc AddAutotradeAllowRule(AddAutotradeAllowRuleRequest) returns (AddAutotradeAllowRuleResponse);
+  rpc DeleteAutotradeAllowRule(DeleteAutotradeAllowRuleRequest) returns (DeleteAutotradeAllowRuleResponse);
+
+  // D-441：日内纸面轨（沙箱·D-425）观测面——成交列表+30天裁决统计。
+  rpc ListIntraTrades(ListIntraTradesRequest) returns (ListIntraTradesResponse);
+  rpc IntraTrackStats(IntraTrackStatsRequest) returns (IntraTrackStatsResponse);
+
+  // D-359：资金不眠覆盖率前端面板（口径 SSOT=D-356 §1.1；digest 段同源双实现，后端算前端零计算）。
+  rpc GetCapitalCoverage(GetCapitalCoverageRequest) returns (GetCapitalCoverageResponse);
+
+  // D-365：CEX 财务页（账户级盘点全币种+进出/收益流水；后端算+占比，前端零计算）。
+  rpc GetCexFinance(GetCexFinanceRequest) returns (GetCexFinanceResponse);
+
+  // D-403：验证毕业链——扫描→验证→实盘三段接通（建议列表/业主授权/拒绝）。
+  rpc ListCarryGraduations(ListCarryGraduationsRequest) returns (ListCarryGraduationsResponse);
+  rpc ApproveCarryGraduation(ApproveCarryGraduationRequest) returns (ApproveCarryGraduationResponse);
+  rpc RejectCarryGraduation(RejectCarryGraduationRequest) returns (RejectCarryGraduationResponse);
+  // D-475a S6：venue 敞口闸（fin_venue_exposure_caps）读/写；Set→kickConfig 即时生效。
+  rpc ListVenueExposureCaps(ListVenueExposureCapsRequest) returns (ListVenueExposureCapsResponse);
+  rpc SetVenueExposureCap(SetVenueExposureCapRequest) returns (SetVenueExposureCapResponse);
+  // D-471 S3：xasset 组合白名单管理面（不再裸 SQL）+ 加行前风险预览。
+  rpc ListXAssetAllowCombos(ListXAssetAllowCombosRequest) returns (ListXAssetAllowCombosResponse);
+  // D-478 S3：待入场区——enabled 组合−在持仓=挂单集，按序探闸给第一个拦路原因+安全档位。
+  rpc ListXAssetPendingEntries(ListXAssetPendingEntriesRequest) returns (ListXAssetPendingEntriesResponse);
+  rpc UpsertXAssetAllowCombo(UpsertXAssetAllowComboRequest) returns (UpsertXAssetAllowComboResponse);
+  rpc PreviewXAssetComboRisk(PreviewXAssetComboRiskRequest) returns (PreviewXAssetComboRiskResponse);
+
+  // D-405 S6：账户资金与保证金卡（财务页下钻）——数据源 fin_venue_margin_status
+  // + snapshot 最新行 join；覆盖天数/建议补资金/档位全后端给，前端零计算。
+  rpc ListAccountMarginStatus(ListAccountMarginStatusRequest) returns (ListAccountMarginStatusResponse);
+
+  // D-491 S6：PERP_FUNDING 证据准入——全行透出/业主钉死三态/手动复估。
+  rpc ListPerpFundingAdmission(ListPerpFundingAdmissionRequest) returns (ListPerpFundingAdmissionResponse);
+  rpc SetPerpFundingAdmissionOverride(SetPerpFundingAdmissionOverrideRequest) returns (SetPerpFundingAdmissionOverrideResponse);
+  rpc ReevaluatePerpFundingAdmission(ReevaluatePerpFundingAdmissionRequest) returns (ReevaluatePerpFundingAdmissionResponse);
+}

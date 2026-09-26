@@ -15,7 +15,6 @@ import (
 	"log"
 	"net/http"
 	"sort"
-	"strconv"
 	"sync"
 	"time"
 
@@ -102,7 +101,10 @@ func (c *AprCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	var maxRate float64
 	var maxSrName string
 	for _, w := range witnessRows {
-		rate, _ := strconv.ParseFloat(w.AnnualizedRate, 64)
+		rate, perr := f64z(w.AnnualizedRate)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "w.AnnualizedRate", w.AnnualizedRate, perr)
+		}
 		if rate <= 0 {
 			continue // 畸形行跳过（年化为空/0/非数字）
 		}
@@ -192,7 +194,10 @@ func (c *AprCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 		if !w.Producer {
 			continue
 		}
-		rate, _ := strconv.ParseFloat(w.AnnualizedRate, 64)
+		rate, perr := f64z(w.AnnualizedRate)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "w.AnnualizedRate", w.AnnualizedRate, perr)
+		}
 		if rate <= 0 {
 			continue
 		}

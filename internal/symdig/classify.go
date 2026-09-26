@@ -23,7 +23,7 @@ const (
 
 // classify 全量分类：trade_mode facts 逐 venue×symbol 归类 + 映射校验段。
 func classify(ctx context.Context, st Store) (*Summary, error) {
-	tmFacts, err := st.LatestFacts(ctx, fact.KindTradeMode, "", "")
+	tmFacts, err := st.LatestFactsByKind(ctx, fact.KindTradeMode)
 	if err != nil {
 		return nil, fmt.Errorf("trade_mode facts: %w", err)
 	}
@@ -36,7 +36,7 @@ func classify(ctx context.Context, st Store) (*Summary, error) {
 		return nil, fmt.Errorf("universe pairs: %w", err)
 	}
 	cexCanon := map[string]bool{} // CEX funding canonical 集（unpaired 归因用）
-	fundFacts, err := st.LatestFacts(ctx, fact.KindFunding, "", "")
+	fundFacts, err := st.LatestFactsByKind(ctx, fact.KindFunding)
 	if err != nil {
 		return nil, fmt.Errorf("funding facts: %w", err)
 	}

@@ -63,8 +63,8 @@ func TestMigrate_PerMigrationTx_HalfFailureReentry(t *testing.T) {
 
 	// 先红证据：旧代码路径（直接 pool.Exec 逐语句）下，第一条会残留。
 	t.Run("red_old_autocommit_leaves_residue", func(t *testing.T) {
-		// 逐语句 autocommit（模拟旧 migrate.go 行为）。
-		for _, stmt := range splitStatements(halfFailSQL) {
+		// 逐语句 autocommit（模拟旧 migrate.go 行为；D-508 S6 分割器拆除后测试内联 Split）。
+		for _, stmt := range strings.Split(halfFailSQL, ";") {
 			stmt = strings.TrimSpace(stmt)
 			if stmt == "" {
 				continue

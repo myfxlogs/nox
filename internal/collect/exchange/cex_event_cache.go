@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/exec"
 	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
 )
@@ -22,7 +21,7 @@ const PositionFreshTTL = 10 * time.Second
 
 // OrderEvent 订单终态/中间态事件快照（gate futures.orders / binance ORDER_TRADE_UPDATE 归一）。
 type OrderEvent struct {
-	State      string // filled / partial / canceled / live（与 exec.OrderStatusQuerier 归一值同域）
+	State      string // filled / partial / canceled / live（与 OrderStatusQuerier 归一值同域）
 	AccFillQty float64
 	AvgPx      float64
 	FeeUSD     float64
@@ -81,21 +80,27 @@ func (c *OrderEventCache) get(venueKey, orderID, clOrdID string, ttl time.Durati
 	return OrderEvent{}, false
 }
 
+// OrderStatusQuerier D-508 S7c：接口定义在消费方——缓存包装层收的是「订单级查单
+// 能力」非 exec 具体型（exec.CEXExecutor/reconcile 同名接口结构满足，正向注入）。
+type OrderStatusQuerier interface {
+	QueryOrderStatus(ctx context.Context, orderID, clOrdID, symbol string) (state string, accFillQty, avgPx, feeUSD float64, err error)
+}
+
 // CachedOrderStatusQuerier 包装 REST querier：新鲜事件命中直返，miss/stale 回落 REST。
 type CachedOrderStatusQuerier struct {
 	venueKey string
-	rest     exec.OrderStatusQuerier
+	rest     OrderStatusQuerier
 	cache    *OrderEventCache
 	ttl      time.Duration // 测试可缩短；默认 EventFreshTTL
 	now      func() time.Time
 }
 
 // NewCachedOrderStatusQuerier 创建包装查询器（rest=真相源兜底，不得 nil）。
-func NewCachedOrderStatusQuerier(venueKey string, rest exec.OrderStatusQuerier, cache *OrderEventCache) *CachedOrderStatusQuerier {
+func NewCachedOrderStatusQuerier(venueKey string, rest OrderStatusQuerier, cache *OrderEventCache) *CachedOrderStatusQuerier {
 	return &CachedOrderStatusQuerier{venueKey: venueKey, rest: rest, cache: cache, ttl: EventFreshTTL, now: time.Now}
 }
 
-// QueryOrderStatus 实现 exec.OrderStatusQuerier：缓存=加速器，REST=真相源。
+// QueryOrderStatus 实现 OrderStatusQuerier：缓存=加速器，REST=真相源。
 func (q *CachedOrderStatusQuerier) QueryOrderStatus(ctx context.Context, orderID, clOrdID, symbol string) (string, float64, float64, float64, error) {
 	if ev, ok := q.cache.get(q.venueKey, orderID, clOrdID, q.ttl, q.now()); ok {
 		return ev.State, ev.AccFillQty, ev.AvgPx, ev.FeeUSD, nil

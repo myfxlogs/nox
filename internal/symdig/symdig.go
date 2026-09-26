@@ -18,6 +18,7 @@ import (
 // Store symdig 依赖面（pgstore.Store 实现；测试 fake）。
 type Store interface {
 	LatestFacts(ctx context.Context, kind, venue, symbol string) ([]fact.Fact, error)
+	LatestFactsByKind(ctx context.Context, kind string) ([]fact.Fact, error) // D-508 S3：kind-only 无 OR 专用查询
 	ListSymbolMappings(ctx context.Context, venue string) ([]pgstore.SymbolMapping, error)
 	ListSymbolAliases(ctx context.Context) (map[string]string, error)
 	ListCarryUniversePairs(ctx context.Context) (map[string]bool, error)

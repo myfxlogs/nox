@@ -268,6 +268,24 @@ func (s *Store) RealizedPnlSinceAnchor(ctx context.Context) (float64, error) {
 	return *sum, nil
 }
 
+// RealizedPnlToday 当日已实现（closed_at>=DB 当日零点，与 RealizedPnlSinceAnchor 同三级
+// COALESCE 口径；D-508 S8 前端聚合下沉——「今日」口径以 DB 时钟为准不再依赖浏览器时区）。
+func (s *Store) RealizedPnlToday(ctx context.Context) (float64, error) {
+	var sum *float64
+	err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(COALESCE(s.net_realized_usd, s.realized_usd, p.realized_pnl)), 0)
+		FROM positions p
+		LEFT JOIN position_settlements s ON s.position_id = p.id
+		WHERE p.status = 'CLOSED' AND p.closed_at >= date_trunc('day', now())`).Scan(&sum)
+	if err != nil {
+		return 0, fmt.Errorf("realized pnl today: %w", err)
+	}
+	if sum == nil {
+		return 0, nil
+	}
+	return *sum, nil
+}
+
 // ResetPnlAnchor 重置盈亏统计起点为 now()（F4，业主点「清零」→ anchor=now()）。
 // 返回重置后的 anchor。历史 CLOSED 持仓不删除（业主选 A「不删历史」）。
 func (s *Store) ResetPnlAnchor(ctx context.Context) (time.Time, error) {

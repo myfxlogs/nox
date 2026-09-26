@@ -22,6 +22,10 @@ type fakeScanStore struct {
 	aliases     map[string]string // D-464：alias→canonical
 }
 
+func (f *fakeScanStore) LatestFactsByKind(ctx context.Context, kind string) ([]fact.Fact, error) {
+	return f.LatestFacts(ctx, kind, "", "")
+}
+
 func (f *fakeScanStore) LatestFacts(_ context.Context, kind, _, _ string) ([]fact.Fact, error) {
 	var out []fact.Fact
 	for _, f := range f.facts {

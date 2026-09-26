@@ -66,7 +66,10 @@ func (c *CexIOCollector) fetchBinance(ctx context.Context, acc CexIOAccount, dir
 			return nil, err
 		}
 		for _, r := range rows {
-			amt, _ := strconv.ParseFloat(r.Amount, 64)
+			amt, perr := f64z(r.Amount)
+			if perr != nil {
+				return nil, fmt.Errorf("parse %s=%q: %w", "r.Amount", r.Amount, perr)
+			}
 			out = append(out, pgstore.VenueIO{
 				Venue: "binance", ConfigID: acc.ID, Direction: "deposit",
 				Ccy: r.Coin, Amount: amt, Status: strconv.Itoa(r.Status),
@@ -80,8 +83,14 @@ func (c *CexIOCollector) fetchBinance(ctx context.Context, acc CexIOAccount, dir
 			return nil, err
 		}
 		for _, r := range rows {
-			amt, _ := strconv.ParseFloat(r.Amount, 64)
-			fee, _ := strconv.ParseFloat(r.TransactionFee, 64)
+			amt, perr := f64z(r.Amount)
+			if perr != nil {
+				return nil, fmt.Errorf("parse %s=%q: %w", "r.Amount", r.Amount, perr)
+			}
+			fee, perr := f64z(r.TransactionFee)
+			if perr != nil {
+				return nil, fmt.Errorf("parse %s=%q: %w", "r.TransactionFee", r.TransactionFee, perr)
+			}
 			// D-365-R5 S1：applyTime 是 "2006-01-02 15:04:05" 字符串（UTC），非 ms int64
 			//（真探 9-21 实证："2026-09-10 16:04:44"）；解析失败 fail-closed 报错不断言。
 			ts, terr := time.Parse("2006-01-02 15:04:05", r.ApplyTime)
@@ -135,7 +144,10 @@ func (c *CexIOCollector) fetchOkx(ctx context.Context, acc CexIOAccount, directi
 		if hasWM && !ts.After(watermark) {
 			continue // 客户端水位过滤（核证点①）
 		}
-		amt, _ := strconv.ParseFloat(r.Amt, 64)
+		amt, perr := f64z(r.Amt)
+		if perr != nil {
+			return nil, fmt.Errorf("parse %s=%q: %w", "r.Amt", r.Amt, perr)
+		}
 		extID := r.DepID
 		if direction == "withdraw" {
 			extID = r.WdID // 核证点④：字段名 wdId 实证
@@ -149,7 +161,10 @@ func (c *CexIOCollector) fetchOkx(ctx context.Context, acc CexIOAccount, directi
 			TxID: r.TxID, ExternalID: extID, Ts: ts,
 		}
 		if direction == "withdraw" {
-			fee, _ := strconv.ParseFloat(r.Fee, 64)
+			fee, perr := f64z(r.Fee)
+			if perr != nil {
+				return nil, fmt.Errorf("parse %s=%q: %w", "r.Fee", r.Fee, perr)
+			}
 			row.Fee = &fee
 		}
 		out = append(out, row)

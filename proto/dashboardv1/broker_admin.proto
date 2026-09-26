@@ -1,0 +1,413 @@
+syntax = "proto3";
+
+package arb.dashboard.v1;
+
+option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
+
+
+import "google/protobuf/timestamp.proto";
+
+// ==== broker_admin.proto —— D-508 S10 自 dashboard.proto 按域拆出（纯搬家：消息名/字段号/RPC 契约零漂移）。 ====
+
+// === Health ===
+
+message HealthRequest {}
+
+message HealthResponse {
+  bool ok = 1;
+  bool db_ok = 2;
+  string version = 3;
+}
+
+// === Broker 管理（docs/broker管理器实现方案.md）===
+
+message SearchBrokerRequest {
+  string company = 1;   // 经纪商关键词（如 "OctaFX", "RoboForex"）
+  int32 platform = 2;   // 0=MT4, 1=MT5
+}
+
+message BrokerServer {
+  string name = 1;      // 服务器名称（如 "RoboForex-Demo"）
+  string access = 2;    // host:port（如 "78.140.180.198:443"，可能逗号分隔多个端点）
+}
+
+message BrokerCompany {
+  string company_name = 1;
+  repeated BrokerServer servers = 2;
+}
+
+message SearchBrokerResponse {
+  repeated BrokerCompany companies = 1;
+}
+
+message AddBrokerRequest {
+  string venue = 1;     // 适配器标识（Quote.Venue / 执行器路由键，全局唯一）——CFD 侧为登录账号号（D-033）
+  int32 platform = 2;   // 0=MT4, 1=MT5
+  string host = 3;
+  int32 port = 4;
+  int64 user = 5;
+  string password = 6;  // 明文存储（个人使用）
+  string server = 7;    // 服务器名称
+  reserved 8;           // 曾为 company（D-033 移除）
+  optional double commission_bps = 9; // 账号类型真实佣金（bps/腿，D-036）；缺省 = 回退 config 默认
+  optional bool is_real = 10;   // D-144 ① 三态：true=实盘, false=demo, 缺省=未知（不配对）
+  string website = 11;    // broker 官网（D-157 V3：CFD 添加表单传；空 = 不设置）
+}
+
+message AddBrokerResponse {}
+
+message RemoveBrokerRequest {
+  string venue = 1;
+  string reason = 2;    // D-493 S5：删除原因（UI 传入），写 execution_control_events 审计
+}
+
+message RemoveBrokerResponse {}
+
+// D-493 S4：凭据编辑——空串/0 = 不改动；password 永不回传。
+message UpdateBrokerCredentialsRequest {
+  string venue = 1;
+  string host = 2;
+  int32 port = 3;
+  string server = 4;
+  string password = 5;
+}
+
+message UpdateBrokerCredentialsResponse {}
+
+message BrokerAccount {
+  string venue = 1;     // CFD：登录账号号（D-033）
+  int32 platform = 2;   // 0=MT4, 1=MT5
+  string host = 3;
+  int32 port = 4;
+  int64 user = 5;
+  string server = 6;    // 服务器名称
+  reserved 7;           // 曾为 company（D-033 移除）
+  string alias = 8;     // 别名；空 = 未设置
+  string status = 9;    // connected / failed / stopped
+  google.protobuf.Timestamp created_at = 10;
+  optional double commission_bps = 11; // 账号真实佣金（bps/腿，D-036）；未设置 = 回退默认
+  optional bool is_real = 12;   // D-144 ① 三态：true=实盘, false=demo, 缺省=未知
+  string server_group = 13;    // D-150 ② 平台分组键=server 首段（首个 '-' 前，后端算好下发）
+  string website = 14;    // broker 官网（D-157 V3：DB 存储，业主自助管理；空 = 未设置）
+  double last_quote_age_sec = 15;  // D-493 S1：末次报价距今秒数；-1 = 无报价样本
+  string feed_state = 16;   // D-493 S1：live / stale / dark（复用 MT 健康报价阈值）
+  int32 symbol_map_count = 17;     // D-493 S5：该账号符号映射条数（删除知情确认用）
+}
+
+message ListBrokerAccountsRequest {}
+
+message ListBrokerAccountsResponse {
+  repeated BrokerAccount accounts = 1;
+}
+
+// CEX 交易所配置（D-054）。secret 永不回传（列表只掩码 api_key）。
+message ExchangeConfig {
+  string id = 1;
+  string venue = 2;        // binance / okx / 未来其他
+  string venue_type = 3;   // spot 等
+  string label = 4;        // 别名；空 = 未设置
+  string api_key = 5;      // 列表掩码（前 4 + ***）
+  string base_url = 6;     // 空 = venue 默认（binance=代理、okx=实盘）
+  google.protobuf.Timestamp created_at = 7;
+  bool simulated = 8;      // OKX 模拟盘：实盘域名 + 请求头 x-simulated-trading:1（demo key 必开，D-054）
+  string website = 9;     // 交易所官网（D-157 V3：DB 存储；空 = 未设置）
+}
+
+message ListExchangesRequest {}
+
+message ListExchangesResponse {
+  repeated ExchangeConfig exchanges = 1;
+}
+
+message AddExchangeRequest {
+  string venue = 1;        // binance / okx
+  string venue_type = 2;   // spot（默认）
+  string label = 3;        // 别名；可选
+  string api_key = 4;
+  string api_secret = 5;   // 明文提交，仅存后端（D-043 前端零信任）
+  string passphrase = 6;   // OKX；其他交易所留空
+  string base_url = 7;     // 可选；空 = venue 默认
+  bool simulated = 8;      // OKX 模拟盘（x-simulated-trading:1）；demo key 必开
+  string website = 9;     // 交易所官网（D-157 V3：CEX 添加表单传；空 = 不设置）
+}
+
+message AddExchangeResponse {
+  ExchangeConfig exchange = 1;
+}
+
+message RemoveExchangeRequest {
+  string id = 1;
+}
+
+message RemoveExchangeResponse {}
+
+message SetExchangeLabelRequest {  // D-157 V3：交易所别名编辑
+  string id = 1;       // ExchangeConfig.id
+  string label = 2;    // 新别名；空串 = 清除
+}
+
+message SetExchangeLabelResponse {}
+
+message SetExchangeWebsiteRequest {  // D-157 V3.1：交易所官网编辑
+  string id = 1;       // ExchangeConfig.id
+  string website = 2;  // 新官网；空串 = 清除
+}
+
+message SetExchangeWebsiteResponse {}
+
+message VerifyAccountRequest {
+  int32 platform = 1;   // 0=MT4, 1=MT5
+  string host = 2;
+  int32 port = 3;
+  int64 user = 4;
+  string password = 5;
+  string server = 6;
+  optional bool is_real = 7;  // D-144 ① 三态：透传 AddBroker 流程，VerifyAccount 本身不持久化
+}
+
+message VerifyAccountResponse {
+  double balance = 1;
+  double equity = 2;
+  string currency = 3;
+  int32 leverage = 4;
+  string host = 5; // D-141 S5：多端点 failover 胜出 host（回传前端展示/落库）
+  int32 port = 6;  // D-141 S5：胜出端点端口
+  int32 latency_ms = 7; // D-142：PingHost 延迟预排序胜出端点延迟（ms，0=未探测/MT4 无 PingHost）
+}
+
+message BrokerSymbolsRequest {
+  string venue = 1;     // 已连接适配器的 venue
+}
+
+message SymbolEntry {
+  string symbol = 1;    // 服务器真实符号
+  string group = 2;     // broker 分组（MT5 SymGroup.GroupName 顶层段，如 Forex；MT4 降级空串）
+  double contract_size = 3; // 服务器真实合约规格（MT5 SymbolInfo.ContractSize；MT4/未知 = 0）
+}
+
+message BrokerSymbolsResponse {
+  repeated SymbolEntry symbols = 1;
+}
+
+message SetBrokerAccountAliasRequest {
+  string venue = 1;
+  string alias = 2;     // 新别名；空串 = 清除
+}
+
+message SetBrokerAccountAliasResponse {}
+
+message SetBrokerAccountIsRealRequest {  // D-144 ① 三态
+  string venue = 1;
+  optional bool is_real = 2;  // true=实盘, false=demo, 缺省=清除回未知(NULL)
+}
+
+message SetBrokerAccountIsRealResponse {}
+
+message SetBrokerDisabledRequest {
+  string venue = 1;
+  bool disabled = 2;    // true=停用（停适配器+status=stopped），false=启用（重连+status=connected）
+}
+
+message SetBrokerDisabledResponse {}
+
+message SetBrokerCommissionRequest {
+  string venue = 1;
+  optional double commission_bps = 2; // 新佣金（bps/腿）；不传/null = 清除回退默认；显式 0 = 免佣金账号
+}
+
+message SetBrokerCommissionResponse {}
+
+message SetBrokerWebsiteRequest {  // D-157 V3.1：broker 官网编辑
+  string venue = 1;
+  string website = 2;  // 新官网；空串 = 清除
+}
+
+message SetBrokerWebsiteResponse {}
+
+// === Symbol 映射 ===
+
+message SymbolMapping {
+  string venue = 1;
+  string broker_symbol = 2;
+  string canonical = 3;
+  optional double contract_size = 4; // 该 broker 符号真实合约规格；缺省 = 未知
+}
+
+message ListSymbolMappingsRequest {
+  string venue = 1;     // 空 = 全部
+}
+
+message ListSymbolMappingsResponse {
+  repeated SymbolMapping mappings = 1;
+}
+
+// 合约规格由后端自 broker 权威获取（零信任，前端不可传值）；override 仅人工确认时置真。
+message SaveSymbolMappingRequest {
+  string venue = 1;
+  string broker_symbol = 2;
+  string canonical = 3;
+  optional bool override = 5;        // 合约规格不符时仍强制保存（人工确认；默认拒绝，防假映射）
+}
+
+message SaveSymbolMappingResponse {}
+
+message DeleteSymbolMappingRequest {
+  string venue = 1;
+  string broker_symbol = 2;
+}
+
+message DeleteSymbolMappingResponse {}
+
+// ListMappingSuggestions — 名字匹配既有 canonical 但合约规格不符（或尚可采纳）的建议映射。
+// canonical 数量用户自定（从 broker 真实符号策展），新 broker 自动映射名字+合约匹配者；
+// 这里返回名字匹配但未入库的候选：status=auto（合约一致，一键采纳）/
+// conflict（合约不符，待确认，采纳需 override）。D-042。
+message ListMappingSuggestionsRequest {
+  string venue = 1;     // 已连接适配器的 venue
+}
+
+message SymbolMappingSuggestion {
+  string broker_symbol = 1;
+  string group = 2;
+  double contract_size = 3;   // 0 = 未知
+  string canonical = 4;       // 建议映射到的既有 canonical
+  string status = 5;          // auto / conflict
+  string reason = 6;          // conflict 时说明不符原因；auto 可为空
+}
+
+message ListMappingSuggestionsResponse {
+  repeated SymbolMappingSuggestion suggestions = 1;
+}
+
+// ListCanonicals — 既有 canonical 全集（默认种子 ∪ 全部已映射 canonical，去重排序），
+// 供前端 canonical 下拉选项。选项由后端计算（零信任，前端仅渲染）。
+message ListCanonicalsRequest {}
+
+message ListCanonicalsResponse {
+  repeated string canonicals = 1;
+}
+
+// === Matrix 全景（D-045）===
+
+message ListMatrixUniverseRequest {}
+
+enum MatrixState {
+  MATRIX_STATE_UNSPECIFIED = 0;
+  MATRIX_STATE_COMPLETE = 1;   // 应配齐集全配
+  MATRIX_STATE_PARTIAL = 2;    // ≥1 缺
+  MATRIX_STATE_MISSING = 3;    // 0 映射
+}
+
+message MatrixSymbolAccount {          // 单账号对该符号的存在与映射（后端 join）
+  string venue = 1;                   // 登录账号号（D-033）
+  optional string canonical = 2;      // 该账号已映射 canonical；null = 缺
+  double contract_size = 3;           // 该账号权威合约规格；0 = 未知（MT4）
+  string raw_symbol = 4;              // 该账号映射前的原始 broker 符号（归并行逐账号不同）
+  string group = 5;                   // 该账号原生符号所属 broker 分组（归并行逐账号原生分组，如 Forex/Metals）
+}
+
+message MatrixSymbolRow {              // 跨账号去重后的符号行
+  string symbol = 1;                  // 展示名：已配齐 canonical 归并行为 canonical，其余为 broker 原生符号
+  string group = 2;                   // broker 分组；"" = 未分组（MT4）；归并行 = 跨组商品
+  int32 coverage_total = 3;           // 应配齐集大小 = connected 账号中存在 (symbol,group) 者
+  int32 coverage_mapped = 4;          // 其中已映射数量
+  MatrixState state = 5;              // 后端按 coverage 计算
+  double contract_min = 6;            // 跨账号合约区间（0=全未知）
+  double contract_max = 7;
+  repeated string mapped_canonicals = 8;  // 去重映射到的 canonical（通常 1 个；>1 = 冲突信号）
+  repeated MatrixSymbolAccount accounts = 9; // 逐账号详情（详情面板直读，前端零聚合）
+}
+
+message MatrixGroupStat {
+  string group = 1;
+  int32 total = 2;
+  int32 complete = 3;
+  int32 partial = 4;
+  int32 missing = 5;
+}
+
+message MatrixUniverse {
+  repeated string groups = 1;         // 分组并集（稳定序：账号序首现；含 ""→前端渲染「未分组」）
+  repeated MatrixGroupStat group_stats = 2;
+  repeated MatrixSymbolRow symbols = 3;   // 去重符号行全集
+  repeated BrokerAccount accounts = 4;    // 复用 BrokerAccount（含 status/alias/server）
+  repeated string canonicals = 5;     // 既有 canonical 全集（补映射下拉，复用 ListCanonicals 逻辑）
+}
+
+message ListMatrixUniverseResponse {
+  MatrixUniverse universe = 1;
+}
+
+// AutoMapBroker — 一键自动映射（D-066）。
+// 用生产 alias 表 + 合约众数门禁自动识别+映射 broker symbol。
+// 只自动应用 auto 状态（名字+合约匹配）；conflict/multi_hit/trade_disabled 不自动应用。
+message AutoMapBrokerRequest {
+  string venue = 1;
+}
+
+message AutoMapBrokerResult {
+  string broker_symbol = 1;
+  string canonical = 2;      // 匹配到的 canonical（no_match 时为空）
+  string group = 3;
+  double contract_size = 4;
+  string status = 5;         // auto / conflict / multi_hit / trade_disabled / no_match / already_mapped
+  string reason = 6;         // 跳过原因
+}
+
+message AutoMapBrokerResponse {
+  repeated AutoMapBrokerResult results = 1;
+  int32 applied = 2;         // auto 状态已写入数
+  int32 skipped = 3;         // 跳过数
+}
+
+// === SwapCombos（D-140 S3：basis_bps 只展示不动排序）===
+
+message ListSwapCombosRequest {}
+
+message SwapCombo {
+  string canonical = 1;
+  string venue_long = 2;     // "{venue}:{src}"
+  string venue_short = 3;
+  double net_swap_bps = 4;   // 净 swap bps（排序键，D-138 观察期不动）
+  double basis_bps = 5;      // 跨 venue 基差 bps（只展示不动排序/门槛/触发）
+  string alias_long = 6;     // D-144 ③：买腿别名（空=回退 venue_long）
+  string alias_short = 7;    // D-144 ③：卖腿别名（空=回退 venue_short）
+}
+
+message ListSwapCombosResponse {
+  repeated SwapCombo combos = 1;
+}
+
+// === FrontConfig（D-077 修复⑪B N7）===
+
+message GetFrontConfigRequest {}
+
+message GetFrontConfigResponse {
+  double notify_min_net_bps = 1;     // ARB_NOTIFY_MIN_NET_BPS（机会推送提醒门槛 bps）
+  int32  freshness_ttl_sec = 2;     // ARB_DETECTOR_FRESHNESS_TTL（报价陈旧排除 TTL 秒）
+  double entry_spread_min_bps = 3;  // ARB_SWAPARB_ENTRY_SPREAD_MIN_BPS（入场成本容忍 bps）
+  double min_net_swap_bps = 4;      // ARB_AUTOTRADE_MIN_NET_SWAP_BPS（swap 套利最低净 swap bps）
+  double revalidate_abs_bps = 5;    // ARB_REVALIDATE_ABS_BPS（复核劣化绝对阈值 bps）
+  double revalidate_rel_pct = 6;    // ARB_REVALIDATE_REL_PCT（复核劣化相对阈值 %）
+}
+
+// === StrategyLedger（D-080 S5：理论 vs 实际对账）===
+
+message GetStrategyLedgerRequest {
+  // 筛选：空=全策略；指定=单策略聚合
+  string strategy = 1;
+}
+
+message StrategyLedgerEntry {
+  string strategy = 1;              // SWAPARB / CARRY / FUNDING_HEDGE / PERP_FUNDING / CROSS_VENUE / MEANREVERT
+  int32  total_positions = 2;       // 总持仓数（含已平）
+  int32  open_positions = 3;        // 活跃持仓数
+  double promised_annual_pct = 4;   // 承诺年化%（活跃持仓 expected_annual_pct 均值）
+  double realized_pnl_usd = 5;      // 累计已实现盈亏（CLOSED 持仓 SUM(realized_pnl)）
+  double avg_hold_days = 6;         // 平均持仓天数（CLOSED 持仓 closed_at-opened_at 均值）
+  double actual_annual_pct = 7;     // 实际年化（realized_pnl / notional / hold_days × 365，估算）
+}
+
+message GetStrategyLedgerResponse {
+  repeated StrategyLedgerEntry entries = 1;
+}

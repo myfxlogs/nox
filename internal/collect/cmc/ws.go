@@ -253,6 +253,6 @@ func (w *WsClient) kickHistoryDebounced() {
 	defer w.kickMu.Unlock()
 	if time.Since(w.lastKickTime) >= wsKickDebounce {
 		w.lastKickTime = time.Now()
-		go w.kickHistory()
+		safego.Go("cmc-ws:kickHistory", w.kickHistory)
 	}
 }

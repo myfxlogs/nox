@@ -50,11 +50,16 @@ func (s *Store) DeleteFactsBySrc(ctx context.Context, src, venue string) error {
 // （symbol IS NULL，R4 归位）是两类事实，显式 symbol 查询不混入账号级行；
 // 账号级取数走 symbol=” 通配分支（$3=” 命中全部，含 NULL 行）或专用裸 venue 查询。
 func (s *Store) LatestFacts(ctx context.Context, kind, venue, symbol string) ([]fact.Fact, error) {
+	// D-508 S3：venue/venue_key OR 分支拆两路——按入参键形选单列谓词，planner 可命中前缀索引。
+	venuePred := `($2 = '' OR venue = $2)`
+	if venue != "" && keydomain.Parse(venue).Type != "" {
+		venuePred = `venue_key = $2`
+	}
 	q := `SELECT DISTINCT ON (kind, venue, symbol)
 			kind, venue, COALESCE(symbol,'') AS symbol, value, unit, ts, src
 		FROM facts
 		WHERE ($1 = '' OR kind = $1)
-		  AND ($2 = '' OR venue_key = $2 OR venue = $2)
+		  AND ` + venuePred + `
 		  AND ($3 = '' OR symbol = $3)
 		ORDER BY kind, venue, symbol, ts DESC`
 	rows, err := s.pool.Query(ctx, q, kind, venue, symbol)
@@ -220,14 +225,15 @@ func (s *Store) FundingPredWindow(ctx context.Context, venue, symbol string, sin
 	return out, rows.Err()
 }
 
-// LatestTickMid 指定 symbol 最近 bid/ask 中间价（D-359 TRX USD 价三级 fallback 末级）。
+// LatestTickMid 指定 venue+symbol 最近 bid/ask 中间价（D-359 TRX USD 价三级 fallback 末级）。
+// D-508 S13：补 venue 过滤——同 canonical 多 venue 并行采样时取错 venue 价即脏锚。
 // 无行/非正价 → false（诚实缺，不猜）。
-func (s *Store) LatestTickMid(ctx context.Context, symbol string) (float64, bool) {
+func (s *Store) LatestTickMid(ctx context.Context, venue, symbol string) (float64, bool) {
 	var v float64
 	err := s.pool.QueryRow(ctx, `
 		SELECT (bid + ask) / 2 FROM ticks
-		WHERE symbol = $1 AND bid > 0 AND ask > 0
-		ORDER BY ts DESC LIMIT 1`, symbol).Scan(&v)
+		WHERE venue = $1 AND symbol = $2 AND bid > 0 AND ask > 0
+		ORDER BY ts DESC LIMIT 1`, venue, symbol).Scan(&v)
 	if err != nil || v <= 0 {
 		return 0, false
 	}

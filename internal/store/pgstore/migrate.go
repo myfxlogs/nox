@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"arb/migrations"
 	"github.com/jackc/pgx/v5"
@@ -142,6 +141,7 @@ var migrationFiles = []struct {
 	{144, migrations.D499TailColsSQL},                  // D-499：carry venue_type 拆除+flags 配对域拆列
 	{145, migrations.ExecControlBrokerScopeSQL},        // D-493：execution_control_events scope_type 补 'broker' 审计域
 	{146, migrations.DropBinanceDemoConfigSQL},         // D-504：删 binance demofapi demo 配置行
+	{147, migrations.FactsKindIndexPgstatSQL},          // D-508 S3：facts (kind,venue,symbol,ts desc) 索引+pg_stat_statements
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
@@ -187,14 +187,10 @@ func (s *Store) applyMigrationTx(ctx context.Context, version int, sql string) e
 	}
 	defer tx.Rollback(ctx) // commit 后 no-op
 
-	for _, stmt := range splitStatements(sql) {
-		stmt = strings.TrimSpace(stmt)
-		if stmt == "" {
-			continue
-		}
-		if _, err := tx.Exec(ctx, stmt); err != nil {
-			return fmt.Errorf("migrate v%d: %w\nstatement: %s", version, err, truncate(stmt, 200))
-		}
+	// D-508 S6：自研分割器拆除——pgx simple protocol 原生支持多语句批
+	// （tx 内仍原子：整批在同一事务执行，半途失败整体回滚）。
+	if _, err := tx.Exec(ctx, sql, pgx.QueryExecModeSimpleProtocol); err != nil {
+		return fmt.Errorf("migrate v%d: %w\nsql: %s", version, err, truncate(sql, 200))
 	}
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING`, version,
@@ -218,33 +214,6 @@ func (s *Store) isApplied(ctx context.Context, version int) (bool, error) {
 		return false, nil
 	}
 	return false, fmt.Errorf("check migration v%d: %w", version, err)
-}
-
-// splitStatements 按分号分割 SQL 语句，但跳过 $$ ... $$ 引号块内的分号
-// （D-072 migration 0034 使用 DO $$ ... $$; 块，简单 Split 会破坏函数体）。
-func splitStatements(sql string) []string {
-	var stmts []string
-	var buf strings.Builder
-	inDollar := false
-	for i := 0; i < len(sql); i++ {
-		if i+1 < len(sql) && sql[i] == '$' && sql[i+1] == '$' {
-			inDollar = !inDollar
-			buf.WriteByte('$')
-			buf.WriteByte('$')
-			i++
-			continue
-		}
-		if sql[i] == ';' && !inDollar {
-			stmts = append(stmts, buf.String())
-			buf.Reset()
-			continue
-		}
-		buf.WriteByte(sql[i])
-	}
-	if buf.Len() > 0 {
-		stmts = append(stmts, buf.String())
-	}
-	return stmts
 }
 
 func truncate(s string, n int) string {

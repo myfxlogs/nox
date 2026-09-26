@@ -80,12 +80,29 @@ func (b *BinanceUserWS) onOrderUpdate(o json.RawMessage) {
 	case "CANCELED", "REJECTED", "EXPIRED":
 		state = "canceled"
 	}
-	qty, _ := strconv.ParseFloat(ord.Z, 64)
-	px, _ := strconv.ParseFloat(ord.AP, 64)
-	if px == 0 {
-		px, _ = strconv.ParseFloat(ord.L, 64) // ap 缺省回落最后成交价
+	qty, perr := f64z(ord.Z)
+	if perr != nil {
+		log.Printf("[binance-ws] drop field Z: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+		return
 	}
-	fee, _ := strconv.ParseFloat(ord.N, 64)
+	px, perr := f64z(ord.AP)
+	if perr != nil {
+		log.Printf("[binance-ws] drop field AP: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+		return
+	}
+	if px == 0 {
+		if pv, perr := f64z(ord.L); perr != nil {
+			log.Printf("[binance-ws] drop field L: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+			return
+		} else {
+			px = pv // ap 缺省回落最后成交价
+		}
+	}
+	fee, perr := f64z(ord.N)
+	if perr != nil {
+		log.Printf("[binance-ws] drop field N: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+		return
+	}
 	b.orderCache.PutOrder(b.venueKey, ord.I.String(), ord.C, OrderEvent{
 		State: state, AccFillQty: qty, AvgPx: px, FeeUSD: fee, At: b.now(),
 	})
@@ -119,7 +136,11 @@ func (b *BinanceUserWS) onAccountUpdate(ctx context.Context, a json.RawMessage) 
 			if bal.A != "USDT" {
 				continue
 			}
-			eq, _ := strconv.ParseFloat(bal.WB, 64)
+			eq, perr := f64z(bal.WB)
+			if perr != nil {
+				log.Printf("[binance-ws] drop field WB: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+				return
+			}
 			row := pgstore.VenueAccountSnapshot{
 				Venue: "binance", VenueType: b.venueType,
 				BalanceRaw: eq, EquityRaw: eq,
@@ -142,10 +163,26 @@ func (b *BinanceUserWS) onAccountUpdate(ctx context.Context, a json.RawMessage) 
 	}
 	orders := make([]reconcile.VenueOrder, 0, len(acct.P))
 	for _, p := range acct.P {
-		pa, _ := strconv.ParseFloat(p.PA, 64)
-		ep, _ := strconv.ParseFloat(p.EP, 64)
-		iw, _ := strconv.ParseFloat(p.IW, 64)
-		up, _ := strconv.ParseFloat(p.UP, 64)
+		pa, perr := f64z(p.PA)
+		if perr != nil {
+			log.Printf("[binance-ws] drop field PA: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+			return
+		}
+		ep, perr := f64z(p.EP)
+		if perr != nil {
+			log.Printf("[binance-ws] drop field EP: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+			return
+		}
+		iw, perr := f64z(p.IW)
+		if perr != nil {
+			log.Printf("[binance-ws] drop field IW: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+			return
+		}
+		up, perr := f64z(p.UP)
+		if perr != nil {
+			log.Printf("[binance-ws] drop field UP: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+			return
+		}
 		side := "BUY"
 		if pa < 0 {
 			side, pa = "SELL", -pa
@@ -184,9 +221,21 @@ func (b *BinanceUserWS) onSpotExecutionReport(data []byte) {
 	case "CANCELED", "REJECTED", "EXPIRED":
 		state = "canceled"
 	}
-	qty, _ := strconv.ParseFloat(ord.Z, 64)
-	px, _ := strconv.ParseFloat(ord.L, 64)
-	fee, _ := strconv.ParseFloat(ord.N, 64)
+	qty, perr := f64z(ord.Z)
+	if perr != nil {
+		log.Printf("[binance-ws] drop field Z: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+		return
+	}
+	px, perr := f64z(ord.L)
+	if perr != nil {
+		log.Printf("[binance-ws] drop field L: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+		return
+	}
+	fee, perr := f64z(ord.N)
+	if perr != nil {
+		log.Printf("[binance-ws] drop field N: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+		return
+	}
 	b.orderCache.PutOrder(b.venueKey, strconv.FormatInt(ord.I, 10), ord.C, OrderEvent{
 		State: state, AccFillQty: qty, AvgPx: px, FeeUSD: fee, At: b.now(),
 	})
@@ -221,8 +270,16 @@ func (b *BinanceUserWS) onSpotAccountPosition(ctx context.Context, data []byte) 
 		if bal.A != "USDT" {
 			continue
 		}
-		free, _ := strconv.ParseFloat(bal.F, 64)
-		locked, _ := strconv.ParseFloat(bal.L, 64)
+		free, perr := f64z(bal.F)
+		if perr != nil {
+			log.Printf("[binance-ws] drop field F: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+			return
+		}
+		locked, perr := f64z(bal.L)
+		if perr != nil {
+			log.Printf("[binance-ws] drop field L: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+			return
+		}
 		eq := free + locked
 		row := pgstore.VenueAccountSnapshot{
 			Venue: "binance", VenueType: b.venueType,

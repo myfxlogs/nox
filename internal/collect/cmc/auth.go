@@ -271,8 +271,13 @@ func parseExp(jwt string) (time.Time, error) {
 }
 
 // parseFloat 是 strconv.ParseFloat 的简写（JSON 数值字段全为字符串编码，需转换）。
+// D-508 S2b：脏值告警留痕+归零——CMC 面为监控快照 facts，全量上抛需改 ~30 处签名，
+// 豁免列为报审项；loudly log 优于原无声归零，消费方另有 freshness/合理性判据。
 func parseFloat(s string) float64 {
-	v, _ := strconv.ParseFloat(s, 64)
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil && s != "" {
+		log.Printf("[cmc] parse float %q dirty: %v", s, err)
+	}
 	return v
 }
 

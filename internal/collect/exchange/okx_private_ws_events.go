@@ -73,18 +73,47 @@ func (o *OKXPrivateWS) onPositions(data []map[string]any) {
 	now := o.now()
 	orders := make([]reconcile.VenueOrder, 0, len(data))
 	for _, it := range data {
-		pos, _ := strconv.ParseFloat(str(it["pos"]), 64)
+		pos, perr := f64z(str(it["pos"]))
+		if perr != nil {
+			log.Printf("[okx-ws] drop field pos: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+			return
+		}
 		if pos == 0 {
 			continue
 		}
-		avgPx, _ := strconv.ParseFloat(str(it["avgPx"]), 64)
-		upl, _ := strconv.ParseFloat(str(it["upl"]), 64) // 浮盈（REST querier 同字段同语义）
-		fee, _ := strconv.ParseFloat(str(it["fee"]), 64) // 累计手续费（负=成本，同 REST）
-		imr, _ := strconv.ParseFloat(str(it["imr"]), 64)
-		if imr == 0 {
-			imr, _ = strconv.ParseFloat(str(it["margin"]), 64)
+		avgPx, perr := f64z(str(it["avgPx"]))
+		if perr != nil {
+			log.Printf("[okx-ws] drop field avgPx: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+			return
 		}
-		mmr, _ := strconv.ParseFloat(str(it["mmr"]), 64)
+		upl, perr := f64z(str(it["upl"]))
+		if perr != nil {
+			log.Printf("[okx-ws] drop field upl: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+			return
+		} // 浮盈（REST querier 同字段同语义）
+		fee, perr := f64z(str(it["fee"]))
+		if perr != nil {
+			log.Printf("[okx-ws] drop field fee: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+			return
+		} // 累计手续费（负=成本，同 REST）
+		imr, perr := f64z(str(it["imr"]))
+		if perr != nil {
+			log.Printf("[okx-ws] drop field imr: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+			return
+		}
+		if imr == 0 {
+			if pv, perr := f64z(str(it["margin"])); perr != nil {
+				log.Printf("[okx-ws] drop field margin: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+				return
+			} else {
+				imr = pv
+			}
+		}
+		mmr, perr := f64z(str(it["mmr"]))
+		if perr != nil {
+			log.Printf("[okx-ws] drop field mmr: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+			return
+		}
 		side := "BUY"
 		if str(it["posSide"]) == "short" {
 			side = "SELL"
@@ -126,9 +155,21 @@ func (o *OKXPrivateWS) onOrders(ctx context.Context, data []map[string]any) {
 		case "canceled", "mmp_canceled":
 			state = "canceled"
 		}
-		qty, _ := strconv.ParseFloat(str(it["accFillSz"]), 64)
-		px, _ := strconv.ParseFloat(str(it["avgPx"]), 64)
-		fee, _ := strconv.ParseFloat(str(it["fee"]), 64)
+		qty, perr := f64z(str(it["accFillSz"]))
+		if perr != nil {
+			log.Printf("[okx-ws] drop field accFillSz: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+			return
+		}
+		px, perr := f64z(str(it["avgPx"]))
+		if perr != nil {
+			log.Printf("[okx-ws] drop field avgPx: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+			return
+		}
+		fee, perr := f64z(str(it["fee"]))
+		if perr != nil {
+			log.Printf("[okx-ws] drop field fee: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+			return
+		}
 		feeUSD := 0.0
 		if ccy := str(it["feeCcy"]); fee != 0 && (ccy == "USDT" || ccy == "USD" || ccy == "USDC") {
 			feeUSD = -fee // okx fee 负值=支出（REST okxFeeToUSD 同口径取绝对值）

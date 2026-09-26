@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/exec"
 	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
 
@@ -475,8 +474,8 @@ func (f fakeVenueQuerier) QueryOpenedOrders(context.Context) ([]reconcile.VenueO
 
 // 编译期断言：包装器实现目标接口。
 var (
-	_ exec.OrderStatusQuerier = (*CachedOrderStatusQuerier)(nil)
-	_ reconcile.VenueQuerier  = (*CachedVenueQuerier)(nil)
+	_ OrderStatusQuerier     = (*CachedOrderStatusQuerier)(nil)
+	_ reconcile.VenueQuerier = (*CachedVenueQuerier)(nil)
 )
 
 // ---------- 返修 R1：demo 流禁写快照 ----------
