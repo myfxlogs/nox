@@ -31,11 +31,7 @@ func NewFactKey(canonical, venue string) FactKey {
 
 // venueFromKey 从 venueKey（格式 "venueName:mt5"）提取 venue 名。
 func venueFromKey(venueKey string) string {
-	idx := strings.Index(venueKey, ":")
-	if idx < 0 {
-		return venueKey
-	}
-	return venueKey[:idx]
+	return keydomain.BareOf(venueKey)
 }
 
 // canonicalFromOppID 从 opportunity_id 解析 canonical（格式 PREFIX:SYMBOL:...）。
