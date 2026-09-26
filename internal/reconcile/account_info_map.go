@@ -5,12 +5,13 @@ import (
 	"strings"
 
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
+	"arb/internal/keydomain"
 )
 
 // accountSummaryToInfo 从 MT5 AccountSummary 映射账户视图（D-053）。
 func accountSummaryToInfoMT5(venue, venueType string, sum *mt5pb.AccountSummary) *AccountInfo {
 	return &AccountInfo{
-		VenueKey:   venue + ":" + venueType,
+		VenueKey:   keydomain.Join(venue, venueType),
 		Venue:      venue,
 		VenueType:  venueType,
 		AssetType:  "cfd",

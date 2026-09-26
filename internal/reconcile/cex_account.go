@@ -16,6 +16,7 @@ import (
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 	"arb/internal/exec"
 	"arb/internal/httpx"
+	"arb/internal/keydomain"
 )
 
 // CEXAccountQuerier 查 CEX 账户资金（D-053）。只读余额，不执行。
@@ -50,7 +51,7 @@ func (q *CEXAccountQuerier) VenueKey() string {
 	if q.keyOverride != "" {
 		return q.keyOverride
 	}
-	return q.venue + ":" + q.venueType
+	return keydomain.Join(q.venue, q.venueType)
 }
 
 // SetKeyOverride D-362 S2：设置撞键归一后的注册键（由 reconcile.CexVenueKey 计算）。

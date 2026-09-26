@@ -8,13 +8,15 @@ package reconcile
 import (
 	"fmt"
 	"time"
+
+	"arb/internal/keydomain"
 )
 
 // CexVenueKey 撞键归一：winners 为 "venue:type" → 赢家 configID（created_at 最大者，
 // 由调用方从同一 config 列表计算并三处共用）。非赢家 → "venue:type#<cfgID>"；
 // 赢家/无撞键（winners 无该组）→ "venue:type"。# 不进 venue:type 分割路径（SSOT §6C）。
 func CexVenueKey(venue, venueType string, cfgID int64, winners map[string]int64) string {
-	k := venue + ":" + venueType
+	k := keydomain.Join(venue, venueType)
 	if id, collide := winners[k]; collide && id != cfgID {
 		return fmt.Sprintf("%s#%d", k, cfgID)
 	}
@@ -28,7 +30,7 @@ func CexKeyWinners(cfgs []WinnersConfig) map[string]int64 {
 	winners := make(map[string]int64, len(cfgs))
 	bestCreated := make(map[string]time.Time, len(cfgs))
 	for _, c := range cfgs {
-		k := c.Venue + ":" + c.VenueType
+		k := keydomain.Join(c.Venue, c.VenueType)
 		prev, seen := bestCreated[k]
 		if !seen || c.CreatedAt.After(prev) || (c.CreatedAt.Equal(prev) && c.ID > winners[k]) {
 			bestCreated[k] = c.CreatedAt

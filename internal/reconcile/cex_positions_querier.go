@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"arb/internal/httpx"
+	"arb/internal/keydomain"
 )
 
 // CEXPositionQuerier 查询 CEX perp 持仓（实现 VenueQuerier）；字段同 CEXAccountQuerier（复用签名逻辑），但查持仓而非余额。
@@ -43,7 +44,7 @@ func (q *CEXPositionQuerier) VenueKey() string {
 	if q.keyOverride != "" {
 		return q.keyOverride
 	}
-	return q.venue + ":" + q.venueType
+	return keydomain.Join(q.venue, q.venueType)
 }
 
 // SetKeyOverride D-362 S2b：设置撞键归一后的注册键（由 reconcile.CexVenueKey 计算）。

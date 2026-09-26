@@ -10,6 +10,7 @@ import (
 	"arb/internal/bus"
 	"arb/internal/detector"
 	"arb/internal/evaluator"
+	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 )
 
@@ -260,7 +261,7 @@ func findQuote(snapshot map[string]map[string]bus.Quote, canonical, venueKey str
 	}
 	// venueKey 格式 "{venue}:{venueType}"
 	for _, q := range venues {
-		if q.Venue+":"+q.VenueType == venueKey {
+		if keydomain.Join(q.Venue, q.VenueType) == venueKey {
 			return &q
 		}
 	}
