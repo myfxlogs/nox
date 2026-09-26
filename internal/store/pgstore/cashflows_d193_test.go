@@ -134,7 +134,7 @@ func TestListCashflows_LegacyNullTolerant(t *testing.T) {
 	posID := d193InsertPosition(t, s)
 	// 直接插 legacy 行（无新字段）
 	if _, err := s.Pool().Exec(ctx,
-		`INSERT INTO position_cashflows (position_id, kind, venue, amount_usd, ts) VALUES ($1, 'swap', '529:mt5', 2.0, now())`,
+		`INSERT INTO position_cashflows (position_id, kind, venue, venue_type, amount_usd, ts) VALUES ($1, 'swap', '529', 'mt5', 2.0, now())`,
 		posID); err != nil {
 		t.Fatalf("insert legacy cashflow: %v", err)
 	}
@@ -163,8 +163,8 @@ func d193InsertCashflowRow(t *testing.T, s *Store, posID int64, kind string, amo
 	ctx := context.Background()
 	ek := kind + ":" + string(rune('A'+int(posID%26))) + ":" + quality + ":" + time.Now().Format("150405.000000")
 	if _, err := s.Pool().Exec(ctx,
-		`INSERT INTO position_cashflows (position_id, kind, venue, amount_usd, ts, quality, event_key)
-		 VALUES ($1, $2, '529:mt5', $3, now(), $4, $5)`,
+		`INSERT INTO position_cashflows (position_id, kind, venue, venue_type, amount_usd, ts, quality, event_key)
+		 VALUES ($1, $2, '529', 'mt5', $3, now(), $4, $5)`,
 		posID, kind, amount, quality, ek); err != nil {
 		t.Fatalf("insert cashflow row %s/%s: %v", kind, quality, err)
 	}

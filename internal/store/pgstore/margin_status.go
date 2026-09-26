@@ -93,7 +93,7 @@ type MarginOpenLeg struct {
 // price 折叠在 SQL 侧（COALESCE）；qty/filled_qty 两列原样出，折叠在消费侧（D-434）。
 func (s *Store) ListOpenLegsForMargin(ctx context.Context) ([]MarginOpenLeg, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT l.position_id, COALESCE(p.opportunity_id,''), l.venue, l.symbol, l.side,
+		SELECT l.position_id, COALESCE(p.opportunity_id,''), l.venue_key AS venue, l.symbol, l.side,
 			l.qty, l.filled_qty,
 			COALESCE(NULLIF(l.avg_fill_price,0), NULLIF(l.price_expected,0), 0)
 		FROM position_legs l JOIN positions p ON p.id = l.position_id

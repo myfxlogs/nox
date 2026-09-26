@@ -25,8 +25,8 @@ func d375SeedPosition(t *testing.T, s *Store, oppID string) int64 {
 func d375SeedLeg(t *testing.T, s *Store, posID int64, legNo int16, phase, venue string) {
 	t.Helper()
 	if _, err := s.pool.Exec(context.Background(),
-		`INSERT INTO position_legs (position_id, leg_no, phase, venue, account, symbol, side, qty, price_expected, status)
-		 VALUES ($1,$2,$3,$4,'acct','SOLUSDT','BUY',1,100,'FILLED')`, posID, legNo, phase, venue); err != nil {
+		`INSERT INTO position_legs (position_id, leg_no, phase, venue, venue_type, symbol, side, qty, price_expected, status)
+		 VALUES ($1,$2,$3,split_part($4,':',1),split_part($4,':',2),'SOLUSDT','BUY',1,100,'FILLED')`, posID, legNo, phase, venue); err != nil {
 		t.Fatalf("seed leg: %v", err)
 	}
 }
@@ -35,8 +35,8 @@ func d375SeedLeg(t *testing.T, s *Store, posID int64, legNo int16, phase, venue 
 func d375SeedIncome(t *testing.T, s *Store, posID *int64, legNo *int16, amount float64, tranID int64) {
 	t.Helper()
 	if _, err := s.pool.Exec(context.Background(),
-		`INSERT INTO income_events (venue, account_id, symbol, income_type, amount_usd, tran_id, ts, position_id, leg_no)
-		 VALUES ('binance', 1, 'SOLUSDT', 'FUNDING_FEE', $1, $2, now(), $3, $4)`,
+		`INSERT INTO income_events (venue, venue_type, symbol, income_type, amount_usd, tran_id, ts, position_id, leg_no)
+		 VALUES ('binance', 'perp', 'SOLUSDT', 'FUNDING_FEE', $1, $2, now(), $3, $4)`,
 		amount, tranID, posID, legNo); err != nil {
 		t.Fatalf("seed income: %v", err)
 	}
@@ -90,8 +90,8 @@ func TestSumEstimatedCashflowsByPos(t *testing.T) {
 	seed := func(kind, quality string, amount float64) {
 		t.Helper()
 		if _, err := s.pool.Exec(ctx,
-			`INSERT INTO position_cashflows (position_id, venue, kind, amount_usd, quality, ts)
-			 VALUES ($1,'binance:perp',$2,$3,$4,now())`, pos1, kind, amount, quality); err != nil {
+			`INSERT INTO position_cashflows (position_id, venue, venue_type, kind, amount_usd, quality, ts)
+			 VALUES ($1,'binance','perp',$2,$3,$4,now())`, pos1, kind, amount, quality); err != nil {
 			t.Fatalf("seed cashflow %s/%s: %v", kind, quality, err)
 		}
 	}

@@ -7,30 +7,86 @@ import (
 	"time"
 
 	"arb/internal/fact"
+	"arb/internal/keydomain"
 
 	"github.com/jackc/pgx/v5"
 )
 
 // InsertFacts 批量写入 facts（§2.2）。
+// D-496 键域宪法落地（R1/R2/R4）：venue 复合键拆 (venue,venue_type) 两列；
+// 裸 venue 按域推导类型（MT 账号号→注册处 venue_type 反解；CEX 名→perp；cmc→”非通道）；
+// symbol=” 或与 venue 同值（历史账号级挪用）→ NULL=非品种域。
 func (s *Store) InsertFacts(ctx context.Context, facts []fact.Fact) error {
 	if len(facts) == 0 {
 		return nil
 	}
-	_, err := s.pool.CopyFrom(ctx,
+	mtTypes, err := s.mtVenueTypes(ctx)
+	if err != nil {
+		return fmt.Errorf("insert facts: load venue types: %w", err)
+	}
+	_, err = s.pool.CopyFrom(ctx,
 		pgx.Identifier{"facts"},
-		[]string{"kind", "venue", "symbol", "value", "unit", "ts", "src"},
-		pgx.CopyFromRows(pgxCopyFromFacts(facts)))
+		[]string{"kind", "venue", "symbol", "value", "unit", "ts", "src", "venue_type"},
+		pgx.CopyFromRows(pgxCopyFromFacts(facts, mtTypes)))
 	if err != nil {
 		return fmt.Errorf("insert facts: %w", err)
 	}
 	return nil
 }
 
+// mtVenueTypes broker_accounts venue→venue_type（facts 裸账号号的通道型反解表；
+// broker_accounts 小表 ~12 行，COPY 批次一次查询可忽略成本）。
+func (s *Store) mtVenueTypes(ctx context.Context) (map[string]string, error) {
+	rows, err := s.pool.Query(ctx, `SELECT venue, venue_type FROM broker_accounts`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[string]string)
+	for rows.Next() {
+		var v, t string
+		if err := rows.Scan(&v, &t); err != nil {
+			return nil, err
+		}
+		out[v] = t
+	}
+	return out, rows.Err()
+}
+
+// factsVenueType D-496 R2：裸 venue → venue_type 推导（与迁移 0142 回填规则同表）。
+func factsVenueType(vk keydomain.VenueKey, mtTypes map[string]string) string {
+	if vk.Type != "" {
+		return vk.Type // 生产方传复合键（如 deribit:option）→ 后缀即类型
+	}
+	if isDigits(vk.Venue) {
+		if t, ok := mtTypes[vk.Venue]; ok {
+			return t
+		}
+		return "mt5" // 注册处缺号 → mt5（既有默认语义，fail-open 仅类型列）
+	}
+	if vk.Venue == "cmc" {
+		return "" // 行情数据源非交易通道
+	}
+	return "perp" // CEX 裸名 fact 域=perp（funding/swap_settled 实拍 kind 闭集）
+}
+
+func isDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 // DeleteFactsBySrc D-181 S1：删除指定 src + venue 的所有 facts（幂等重写用）。
 // BackfillSwapHistory 重跑前清旧 order_history facts，避免叠加。
 func (s *Store) DeleteFactsBySrc(ctx context.Context, src, venue string) error {
 	_, err := s.pool.Exec(ctx,
-		`DELETE FROM facts WHERE src = $1 AND venue = $2`, src, venue)
+		`DELETE FROM facts WHERE src = $1 AND (venue = $2 OR venue_key = $2)`, src, venue)
 	if err != nil {
 		return fmt.Errorf("delete facts by src: %w", err)
 	}
@@ -40,11 +96,11 @@ func (s *Store) DeleteFactsBySrc(ctx context.Context, src, venue string) error {
 // LatestFacts 返回每 (kind, venue, symbol) 的最新事实（§8.2 ListLatestFacts）。
 func (s *Store) LatestFacts(ctx context.Context, kind, venue, symbol string) ([]fact.Fact, error) {
 	q := `SELECT DISTINCT ON (kind, venue, symbol)
-			kind, venue, symbol, value, unit, ts, src
+			kind, venue, COALESCE(symbol,'') AS symbol, value, unit, ts, src
 		FROM facts
 		WHERE ($1 = '' OR kind = $1)
-		  AND ($2 = '' OR venue = $2)
-		  AND ($3 = '' OR symbol = $3)
+		  AND ($2 = '' OR venue_key = $2 OR venue = $2)
+		  AND ($3 = '' OR symbol = $3 OR symbol IS NULL)
 		ORDER BY kind, venue, symbol, ts DESC`
 	rows, err := s.pool.Query(ctx, q, kind, venue, symbol)
 	if err != nil {
@@ -66,9 +122,9 @@ func (s *Store) LatestFacts(ctx context.Context, kind, venue, symbol string) ([]
 // D-474a S1：结算边界逐期实率取数面（funding_history / swap_long·short 窗内序列）。
 func (s *Store) FactsSince(ctx context.Context, kind, venue, symbol string, since time.Time) ([]fact.Fact, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT kind, venue, symbol, value, unit, ts, src
+		SELECT kind, venue, COALESCE(symbol,'') AS symbol, value, unit, ts, src
 		FROM facts
-		WHERE kind = $1 AND venue = $2 AND symbol = $3 AND ts >= $4
+		WHERE kind = $1 AND (venue_key = $2 OR venue = $2) AND symbol IS NOT DISTINCT FROM NULLIF($3,'') AND ts >= $4
 		ORDER BY ts`, kind, venue, symbol, since)
 	if err != nil {
 		return nil, fmt.Errorf("facts since: %w", err)
@@ -90,11 +146,11 @@ func (s *Store) QueryFacts(ctx context.Context, kind, venue, symbol string, limi
 	if limit <= 0 {
 		limit = 100
 	}
-	q := `SELECT kind, venue, symbol, value, unit, ts, src
+	q := `SELECT kind, venue, COALESCE(symbol,'') AS symbol, value, unit, ts, src
 		FROM facts
 		WHERE ($1 = '' OR kind = $1)
-		  AND ($2 = '' OR venue = $2)
-		  AND ($3 = '' OR symbol = $3)
+		  AND ($2 = '' OR venue_key = $2 OR venue = $2)
+		  AND ($3 = '' OR symbol = $3 OR symbol IS NULL)
 		ORDER BY ts DESC
 		LIMIT $4 OFFSET $5`
 	rows, err := s.pool.Query(ctx, q, kind, venue, symbol, limit, offset)
@@ -113,11 +169,16 @@ func (s *Store) QueryFacts(ctx context.Context, kind, venue, symbol string, limi
 	return out, rows.Err()
 }
 
-// pgxCopyFromFacts 返回 pgx.CopyFromSource 的行迭代器。
-func pgxCopyFromFacts(facts []fact.Fact) [][]any {
+// pgxCopyFromFacts 返回 pgx.CopyFromSource 的行迭代器（D-496：键域拆分+R4 symbol NULL 归位）。
+func pgxCopyFromFacts(facts []fact.Fact, mtTypes map[string]string) [][]any {
 	rows := make([][]any, len(facts))
 	for i, f := range facts {
-		rows[i] = []any{f.Kind, f.Venue, f.Symbol, f.Value, f.Unit, f.Ts, f.Src}
+		vk := keydomain.Parse(f.Venue)
+		var sym any = f.Symbol
+		if f.Symbol == "" || f.Symbol == vk.Venue {
+			sym = nil // R4：非品种域/历史 symbol=venue 挪用 → NULL
+		}
+		rows[i] = []any{f.Kind, vk.Venue, sym, f.Value, f.Unit, f.Ts, f.Src, factsVenueType(vk, mtTypes)}
 	}
 	return rows
 }
@@ -186,7 +247,7 @@ type FactPoint struct {
 func (s *Store) FundingPredWindow(ctx context.Context, venue, symbol string, since time.Time) ([]FactPoint, error) {
 	rows, err := s.pool.Query(ctx,
 		`SELECT ts, value FROM facts
-		 WHERE kind='funding' AND venue=$1 AND symbol=$2 AND ts>=$3 ORDER BY ts`,
+		 WHERE kind='funding' AND (venue_key=$1 OR venue=$1) AND symbol IS NOT DISTINCT FROM NULLIF($2,'') AND ts>=$3 ORDER BY ts`,
 		venue, symbol, since)
 	if err != nil {
 		return nil, fmt.Errorf("funding pred window: %w", err)
@@ -227,7 +288,7 @@ func (s *Store) FactsWindowStats(ctx context.Context, kind, venue, symbol string
 	var n int
 	err := s.pool.QueryRow(ctx, `
 		SELECT AVG(value), COUNT(*) FROM facts
-		WHERE kind = $1 AND venue = $2 AND symbol = $3
+		WHERE kind = $1 AND (venue_key = $2 OR venue = $2) AND symbol IS NOT DISTINCT FROM NULLIF($3,'')
 		  AND ts >= now() - ($4::double precision * interval '1 second')`,
 		kind, venue, symbol, window.Seconds()).Scan(&mean, &n)
 	if err != nil {

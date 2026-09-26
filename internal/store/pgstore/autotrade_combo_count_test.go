@@ -54,8 +54,8 @@ func TestCountComboStopLosses_WindowExpiry(t *testing.T) {
 	now := time.Now().UTC()
 	opp := "SWAPARB:AUDJPY:52993526:mt5:277842155:mt5"
 	// InsertAutotradeLog 不写 ts（默认 now()），窗口外历史行用原生 SQL 带 ts
-	if _, err := s.pool.Exec(ctx, `INSERT INTO autotrade_logs (ts, opportunity_id, position_id, strategy, canonical, venue_buy, venue_sell, qty, status, reason, net_bps)
-		VALUES ($1, $2, 9902, 'SWAPARB', 'AUDJPY', '52993526:mt5', '277842155:mt5', 0, 'CLOSE_TRIGGER', 'exit: basis loss -5.0 bps', 0)`,
+	if _, err := s.pool.Exec(ctx, `INSERT INTO autotrade_logs (ts, opportunity_id, position_id, strategy, canonical, venue_buy, venue_type_buy, venue_sell, venue_type_sell, qty, status, reason, net_bps)
+		VALUES ($1, $2, 9902, 'SWAPARB', 'AUDJPY', '52993526', 'mt5', '277842155', 'mt5', 0, 'CLOSE_TRIGGER', 'exit: basis loss -5.0 bps', 0)`,
 		now.Add(-40*24*time.Hour), opp); err != nil {
 		t.Fatalf("insert: %v", err)
 	}

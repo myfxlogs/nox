@@ -28,7 +28,7 @@ type XAssetAllowRow struct {
 
 func (s *Store) LoadXAssetAllowCombos(ctx context.Context, environment string) ([]XAssetAllowRow, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT canonical_buy, canonical_sell, venue_buy, venue_sell, max_long_qty, max_short_qty, max_gross_usd, notional_usd, note
+		SELECT canonical_buy, canonical_sell, venue_key_buy AS venue_buy, venue_key_sell AS venue_sell, max_long_qty, max_short_qty, max_gross_usd, notional_usd, note
 		FROM xasset_allow_combos
 		WHERE enabled AND (simulated IS NULL OR simulated = ($1='demo'))`, environment)
 	if err != nil {

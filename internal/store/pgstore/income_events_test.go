@@ -11,8 +11,8 @@ import (
 func insertLeg(t *testing.T, s *Store, posID int64, venue, symbol string, legNo int16) {
 	t.Helper()
 	_, err := s.pool.Exec(context.Background(),
-		`INSERT INTO position_legs (position_id, leg_no, phase, venue, account, symbol, side, qty, price_expected, status)
-		 VALUES ($1, $2, 'OPEN', $3, 'acc', $4, 'BUY', 1.0, 1.0, 'FILLED')`,
+		`INSERT INTO position_legs (position_id, leg_no, phase, venue, venue_type, symbol, side, qty, price_expected, status)
+		 VALUES ($1, $2, 'OPEN', split_part($3,':',1), split_part($3,':',2), $4, 'BUY', 1.0, 1.0, 'FILLED')`,
 		posID, legNo, venue, symbol)
 	if err != nil {
 		t.Fatalf("insert leg %s/%s: %v", venue, symbol, err)

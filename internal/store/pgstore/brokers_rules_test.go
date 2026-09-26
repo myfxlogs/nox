@@ -17,6 +17,7 @@ func TestUpsertCSOnlyFillsNull(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, `TRUNCATE broker_symbol_map RESTART IDENTITY`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
+	seedBrokerVenue(t, s, "test", "v1", "backfill test")
 	// 插入 CS=NULL 行
 	if err := s.UpsertSymbolMapping(ctx, &SymbolMapping{
 		Venue: "test", BrokerSymbol: "AUDJPY", Canonical: "AUDJPY", ContractSize: nil, Source: "manual",
@@ -57,6 +58,7 @@ func TestUpsertCSOnlyInsertsMeta(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, `TRUNCATE broker_symbol_map RESTART IDENTITY`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
+	seedBrokerVenue(t, s, "test", "v1", "backfill test")
 	filled, inserted, err := s.UpsertSymbolMappingCSOnly(ctx, "test", "NEWUSD", 50000)
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
@@ -86,6 +88,7 @@ func TestSymbolCoverageFourStates(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, `TRUNCATE broker_symbol_map RESTART IDENTITY`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
+	seedBrokerVenue(t, s, "test", "v1", "backfill test")
 	// mapped+CS
 	cs1 := 100000.0
 	s.UpsertSymbolMapping(ctx, &SymbolMapping{Venue: "v1", BrokerSymbol: "A", Canonical: "AUDJPY", ContractSize: &cs1, Source: "manual"})
@@ -125,6 +128,7 @@ func TestBackfillRuleMappings_RejectStockSymbols(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, `TRUNCATE broker_symbol_map RESTART IDENTITY`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
+	seedBrokerVenue(t, s, "test", "v1", "backfill test")
 	eng := normalize.NewRuleEngine()
 	inserted, err := s.BackfillRuleMappings(ctx, "test", []string{"CLNE.NAS", "EURUSD"}, eng)
 	if err != nil {

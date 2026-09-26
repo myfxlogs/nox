@@ -16,6 +16,7 @@ func TestListProductGroupsSamePass(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, `TRUNCATE broker_symbol_map RESTART IDENTITY`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
+	seedBrokerVenue(t, s, "529", "277", "fxpro", "pxbt", "v1")
 	// 两 venue 同 canonical AUDJPY，product_group=fx
 	if err := s.UpsertSymbolMapping(ctx, &SymbolMapping{Venue: "529", BrokerSymbol: "AUDJPYm", Canonical: "AUDJPY", Source: "manual"}); err != nil {
 		t.Fatalf("upsert 529: %v", err)
@@ -56,6 +57,7 @@ func TestListProductGroups470Filtered(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, `TRUNCATE broker_symbol_map RESTART IDENTITY`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
+	seedBrokerVenue(t, s, "529", "277", "fxpro", "pxbt", "v1")
 	// FxPro BRENT → cfd_spot
 	if err := s.UpsertSymbolMapping(ctx, &SymbolMapping{Venue: "fxpro", BrokerSymbol: "BRENT", Canonical: "BRENT", Source: "manual"}); err != nil {
 		t.Fatalf("upsert fxpro: %v", err)
@@ -96,6 +98,7 @@ func TestListProductGroupsModeAggregation(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, `TRUNCATE broker_symbol_map RESTART IDENTITY`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
+	seedBrokerVenue(t, s, "529", "277", "fxpro", "pxbt", "v1")
 	// 同 venue+canonical 三行：两行 cfd_spot、一行 cfd_leverage → 众数 cfd_spot
 	for _, bs := range []string{"BRENT.a", "BRENT.b", "BRENT.c"} {
 		if err := s.UpsertSymbolMapping(ctx, &SymbolMapping{Venue: "v1", BrokerSymbol: bs, Canonical: "BRENT", Source: "manual"}); err != nil {

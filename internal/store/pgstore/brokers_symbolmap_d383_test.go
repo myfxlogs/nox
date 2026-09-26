@@ -25,6 +25,7 @@ func d383MapStore(t *testing.T) *Store {
 }
 
 func d383MapSeed(t *testing.T, s *Store, venue, sym, canon string, primary bool) {
+	seedBrokerVenue(t, s, venue) // D-496：FK 父行
 	t.Helper()
 	if _, err := s.pool.Exec(context.Background(),
 		`INSERT INTO broker_symbol_map (venue, broker_symbol, canonical, is_primary) VALUES ($1,$2,$3,$4)`,
@@ -84,7 +85,7 @@ func TestD383A5_MigrationIdempotentAndUniqueIndex(t *testing.T) {
 	}
 	d383MapSeed(t, s, "v", "A", "CAN", true)
 	if _, err := s.pool.Exec(ctx,
-		`INSERT INTO broker_symbol_map (venue, broker_symbol, canonical, is_primary) VALUES ('v','B','CAN',true)`); err == nil {
+		`INSERT INTO broker_accounts (venue, venue_type, host, port, password) VALUES ('v','mt5','h',443,'p') ON CONFLICT (venue) DO NOTHING; INSERT INTO broker_symbol_map (venue, broker_symbol, canonical, is_primary) VALUES ('v','B','CAN',true)`); err == nil {
 		t.Fatal("同 (venue,canonical) 第二个 primary 应被部分唯一索引拒绝（红=索引缺失/域错）")
 	}
 	// 空 canonical 行：双 primary 放行（索引 WHERE canonical <> ''）

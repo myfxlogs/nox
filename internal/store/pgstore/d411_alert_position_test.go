@@ -36,14 +36,15 @@ func TestD411_PositionAlert(t *testing.T) {
 		t.Fatalf("create pos: %v", err)
 	}
 
-	// 红锚（缺陷复现）：旧路径把 posID 塞 rule_id → FK→rules 违规 → error。
-	// 生产上该 error 被 `_ =` 吞净 = 告警静默丢失（981 行 rule_id 全 NULL 实证）。
-	if err := s.InsertAlert(ctx, &posID, "critical", "old-path-posid-as-ruleid"); err == nil {
-		t.Fatal("旧路径应 FK 违规返回 error（无对应 rules 行）")
+	// D-496：rules 表与 alerts.rule_id 列已删——旧路径参数忽略、行照常落库
+	// （rule_id 语义不再存在，曾经的静默丢告警病灶由 schema 层根治）。
+	if err := s.InsertAlert(ctx, &posID, "critical", "old-path-posid-as-ruleid"); err != nil {
+		t.Fatalf("旧路径不再依赖 rules FK，应成功: %v", err)
 	}
 	var n int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM alerts`).Scan(&n); err != nil || n != 0 {
-		t.Fatalf("旧路径不应落行, n=%d err=%v", n, err)
+	if err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM alerts WHERE position_id IS NULL AND message='old-path-posid-as-ruleid'`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("旧路径应落行且 position_id=NULL, n=%d err=%v", n, err)
 	}
 
 	// 新写口：position_id=持仓、rule_id IS NULL。
@@ -52,20 +53,26 @@ func TestD411_PositionAlert(t *testing.T) {
 	}
 	var gotPos, gotRule *int64
 	if err := s.pool.QueryRow(ctx,
-		`SELECT position_id, rule_id FROM alerts WHERE message='pos-alert'`).Scan(&gotPos, &gotRule); err != nil {
+		`SELECT position_id, NULL::bigint FROM alerts WHERE message='pos-alert'`).Scan(&gotPos, &gotRule); err != nil {
 		t.Fatalf("query alert: %v", err)
 	}
 	if gotPos == nil || *gotPos != posID || gotRule != nil {
 		t.Fatalf("position_id=%v rule_id=%v want posID=%d/nil", gotPos, gotRule, posID)
 	}
 
-	// ListAlerts 读口透出 position_id。
+	// ListAlerts 读口透出 position_id（旧路径行+持仓行共 2 条）。
 	rows, err := s.ListAlerts(ctx, 10, 0)
-	if err != nil || len(rows) != 1 {
+	if err != nil || len(rows) != 2 {
 		t.Fatalf("ListAlerts: %d %v", len(rows), err)
 	}
-	if rows[0].PositionID == nil || *rows[0].PositionID != posID || rows[0].RuleID != nil {
-		t.Fatalf("ListAlerts row: posID=%v ruleID=%v", rows[0].PositionID, rows[0].RuleID)
+	var posRow *Alert
+	for i := range rows {
+		if rows[i].Message == "pos-alert" {
+			posRow = &rows[i]
+		}
+	}
+	if posRow == nil || posRow.PositionID == nil || *posRow.PositionID != posID || posRow.RuleID != nil {
+		t.Fatalf("ListAlerts pos-alert row missing/misbound")
 	}
 
 	// 系统级告警（rule_id=nil 语义）行为不变回归。
@@ -74,7 +81,7 @@ func TestD411_PositionAlert(t *testing.T) {
 	}
 	var sysPos, sysRule *int64
 	if err := s.pool.QueryRow(ctx,
-		`SELECT position_id, rule_id FROM alerts WHERE message='sys-alert'`).Scan(&sysPos, &sysRule); err != nil {
+		`SELECT position_id, NULL::bigint FROM alerts WHERE message='sys-alert'`).Scan(&sysPos, &sysRule); err != nil {
 		t.Fatalf("query sys: %v", err)
 	}
 	if sysPos != nil || sysRule != nil {

@@ -145,7 +145,7 @@ func TestCreatePositionWithLegs_Atomicity(t *testing.T) {
 	}
 	dupLegB := &PositionLeg{
 		LegNo: 0, Phase: "OPEN", AttemptNo: 1, // 同 (leg_no, phase, attempt_no) → 冲突
-		Venue: "test:cex", Symbol: "EURUSDT", Side: "SELL",
+		Venue: "test:spot", Symbol: "EURUSDT", Side: "SELL",
 		Qty: 0.1, PriceExpected: 1.1, Status: "FILLED",
 	}
 
@@ -177,7 +177,7 @@ func TestCreatePositionWithLegs_Atomicity(t *testing.T) {
 
 	// 绿证：position_legs 行不应存在。
 	err = s.pool.QueryRow(ctx,
-		`SELECT count(*) FROM position_legs WHERE venue IN ('test:mt5','test:cex')`).Scan(&count)
+		`SELECT count(*) FROM position_legs WHERE venue_key IN ('test:mt5','test:spot')`).Scan(&count)
 	if err != nil {
 		t.Fatalf("query leg count: %v", err)
 	}
@@ -197,7 +197,7 @@ func TestCreatePositionWithLegs_Success(t *testing.T) {
 	legs := []*PositionLeg{
 		{LegNo: 0, Phase: "OPEN", AttemptNo: 1, Venue: "test:mt5", Symbol: "EURUSD",
 			Side: "BUY", Qty: 0.1, PriceExpected: 1.1, Status: "FILLED"},
-		{LegNo: 1, Phase: "OPEN", AttemptNo: 1, Venue: "test:cex", Symbol: "EURUSDT",
+		{LegNo: 1, Phase: "OPEN", AttemptNo: 1, Venue: "test:spot", Symbol: "EURUSDT",
 			Side: "SELL", Qty: 0.1, PriceExpected: 1.1, Status: "FILLED"},
 	}
 	pos := &Position{

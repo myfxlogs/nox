@@ -43,12 +43,13 @@ func (s *Store) insertAlert(ctx context.Context, ruleID, posID *int64, level, me
 	if s.alertPaused {
 		return nil
 	}
-	q := `INSERT INTO alerts (rule_id, position_id, level, message) VALUES ($1, $2, $3, $4)
+	// D-496：rules/rule_id 已删——ruleID 参数保留签名兼容、恒不落库。
+	q := `INSERT INTO alerts (position_id, level, message) VALUES ($1, $2, $3)
 		RETURNING id, ts, level, message, acked`
 	var a Alert
 	a.RuleID = ruleID
 	a.PositionID = posID
-	err := s.pool.QueryRow(ctx, q, ruleID, posID, level, message).Scan(&a.ID, &a.Ts, &a.Level, &a.Message, &a.Acked)
+	err := s.pool.QueryRow(ctx, q, posID, level, message).Scan(&a.ID, &a.Ts, &a.Level, &a.Message, &a.Acked)
 	if err != nil {
 		return fmt.Errorf("insert alert: %w", err)
 	}
@@ -65,8 +66,8 @@ func (s *Store) ListAlerts(ctx context.Context, limit, offset int) ([]Alert, err
 	if limit <= 0 {
 		limit = 100
 	}
-	q := `SELECT a.id, a.rule_id, a.position_id, COALESCE(r.name, ''), a.ts, a.level, a.message, a.acked
-		FROM alerts a LEFT JOIN rules r ON a.rule_id = r.id
+	q := `SELECT a.id, NULL::bigint, a.position_id, '', a.ts, a.level, a.message, a.acked
+		FROM alerts a
 		ORDER BY a.ts DESC LIMIT $1 OFFSET $2`
 	rows, err := s.pool.Query(ctx, q, limit, offset)
 	if err != nil {
@@ -144,8 +145,8 @@ func (s *Store) ClearAckedAlerts(ctx context.Context) (int64, error) {
 
 // ListUnacked 返回未读告警 + 计数。
 func (s *Store) ListUnacked(ctx context.Context) ([]Alert, int, error) {
-	q := `SELECT a.id, a.rule_id, a.position_id, COALESCE(r.name, ''), a.ts, a.level, a.message, a.acked
-		FROM alerts a LEFT JOIN rules r ON a.rule_id = r.id
+	q := `SELECT a.id, NULL::bigint, a.position_id, '', a.ts, a.level, a.message, a.acked
+		FROM alerts a
 		WHERE a.acked = false ORDER BY a.ts DESC`
 	rows, err := s.pool.Query(ctx, q)
 	if err != nil {

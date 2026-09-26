@@ -166,7 +166,7 @@ func (s *Store) ExchangeConfigHasRow(ctx context.Context, venue, venueType strin
 func (s *Store) BrokerAccountIsReal(ctx context.Context, venue string, platform int) (*bool, error) {
 	var isReal *bool
 	err := s.pool.QueryRow(ctx, `
-		SELECT is_real FROM broker_accounts WHERE venue=$1 AND platform=$2
+		SELECT is_real FROM broker_accounts WHERE venue=$1 AND venue_type=(CASE $2::int WHEN 0 THEN 'mt4' ELSE 'mt5' END)
 		ORDER BY id DESC LIMIT 1`, venue, platform).Scan(&isReal)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

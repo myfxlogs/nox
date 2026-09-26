@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"arb/internal/fact"
+	"arb/internal/keydomain"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -25,9 +26,10 @@ type SwapSnapshot struct {
 // D-189 P0-1：venue 必须是完整 venueKey（如 "vA:mt5"），与 position_legs.venue 同口径；
 // facts.venue 是 bare venue，两者不可混用。
 func (s *Store) InsertSwapSnapshot(ctx context.Context, posID int64, venue string, swapUSD float64, ts time.Time) error {
+	vk := keydomain.Parse(venue) // D-496：venueKey 拆裸键+通道型
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO position_swap_snapshots (position_id, venue, swap_usd, ts) VALUES ($1, $2, $3, $4)`,
-		posID, venue, swapUSD, ts)
+		`INSERT INTO position_swap_snapshots (position_id, venue, venue_type, swap_usd, ts) VALUES ($1, $2, $3, $4, $5)`,
+		posID, vk.Venue, vk.Type, swapUSD, ts)
 	return err
 }
 
@@ -36,9 +38,9 @@ func (s *Store) InsertSwapSnapshot(ctx context.Context, posID int64, venue strin
 func (s *Store) LatestSwapSnapshot(ctx context.Context, posID int64, venue string) (SwapSnapshot, error) {
 	var snap SwapSnapshot
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, position_id, venue, swap_usd, ts
+		`SELECT id, position_id, venue_key AS venue, swap_usd, ts
 		 FROM position_swap_snapshots
-		 WHERE position_id = $1 AND venue = $2
+		 WHERE position_id = $1 AND venue_key = $2
 		 ORDER BY ts DESC LIMIT 1`,
 		posID, venue).Scan(&snap.ID, &snap.PositionID, &snap.Venue, &snap.SwapUSD, &snap.Ts)
 	if err != nil {
@@ -55,9 +57,9 @@ func (s *Store) LatestSwapSnapshot(ctx context.Context, posID int64, venue strin
 func (s *Store) LatestSwapSnapshotBefore(ctx context.Context, posID int64, venue string, before time.Time) (SwapSnapshot, error) {
 	var snap SwapSnapshot
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, position_id, venue, swap_usd, ts
+		`SELECT id, position_id, venue_key AS venue, swap_usd, ts
 		 FROM position_swap_snapshots
-		 WHERE position_id = $1 AND venue = $2 AND ts < $3
+		 WHERE position_id = $1 AND venue_key = $2 AND ts < $3
 		 ORDER BY ts DESC LIMIT 1`,
 		posID, venue, before).Scan(&snap.ID, &snap.PositionID, &snap.Venue, &snap.SwapUSD, &snap.Ts)
 	if err != nil {
@@ -100,7 +102,7 @@ func (s *Store) DailySwapAccrued(ctx context.Context, posID int64, venue string,
 func (s *Store) HasNonZeroSwapHistory(ctx context.Context, venue string) (bool, error) {
 	var has bool
 	err := s.pool.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM position_swap_snapshots WHERE venue = $1 AND swap_usd != 0)`,
+		`SELECT EXISTS(SELECT 1 FROM position_swap_snapshots WHERE venue_key = $1 AND swap_usd != 0)`,
 		venue).Scan(&has)
 	if err != nil {
 		return false, fmt.Errorf("has non-zero swap history: %w", err)
@@ -111,7 +113,7 @@ func (s *Store) HasNonZeroSwapHistory(ctx context.Context, venue string) (bool, 
 // ListSwapSnapshotsByPosID D-182 S1：列指定持仓的全部 swap 快照（按 venue, ts 排序）。
 // scanAndClose 周期零检测用——按 posID 拉序列，避免全量扫描。
 func (s *Store) ListSwapSnapshotsByPosID(ctx context.Context, posID int64) ([]SwapSnapshot, error) {
-	q := `SELECT id, position_id, venue, swap_usd, ts
+	q := `SELECT id, position_id, venue_key AS venue, swap_usd, ts
 	      FROM position_swap_snapshots
 	      WHERE position_id = $1
 	      ORDER BY venue, ts`
@@ -133,9 +135,9 @@ func (s *Store) ListSwapSnapshotsByPosID(ctx context.Context, posID int64) ([]Sw
 
 // ListAllSwapSnapshots D-180 S1：列全部 swap 快照（按 position_id, venue, ts 排序），boot 存量回溯用。
 func (s *Store) ListAllSwapSnapshots(ctx context.Context) ([]SwapSnapshot, error) {
-	q := `SELECT id, position_id, venue, swap_usd, ts
+	q := `SELECT id, position_id, venue_key AS venue, swap_usd, ts
 	      FROM position_swap_snapshots
-	      ORDER BY position_id, venue, ts`
+	      ORDER BY position_id, venue_key, ts`
 	rows, err := s.pool.Query(ctx, q)
 	if err != nil {
 		return nil, fmt.Errorf("list all swap snapshots: %w", err)
@@ -156,7 +158,8 @@ func (s *Store) ListAllSwapSnapshots(ctx context.Context) ([]SwapSnapshot, error
 func (s *Store) FactExistsAt(ctx context.Context, kind, venue, symbol string, ts time.Time) (bool, error) {
 	var exists bool
 	err := s.pool.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM facts WHERE kind = $1 AND venue = $2 AND symbol = $3 AND ts = $4)`,
+		// D-496 R4：symbol NULL=非品种域；传 '' 匹配 NULL 行（NOT DISTINCT FROM）。
+		`SELECT EXISTS(SELECT 1 FROM facts WHERE kind = $1 AND (venue_key = $2 OR venue = $2) AND symbol IS NOT DISTINCT FROM NULLIF($3,'') AND ts = $4)`,
 		kind, venue, symbol, ts).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("fact exists at: %w", err)
@@ -166,11 +169,11 @@ func (s *Store) FactExistsAt(ctx context.Context, kind, venue, symbol string, ts
 
 // FactsWithin D-180 S2：查指定 kind+venue+symbol 在 since 之后的全部 facts（swapRateFor 7d 窗口用）。
 func (s *Store) FactsWithin(ctx context.Context, kind, venue, symbol string, since time.Time) ([]fact.Fact, error) {
-	q := `SELECT kind, venue, symbol, value, unit, ts, src
+	q := `SELECT kind, venue, COALESCE(symbol,'') AS symbol, value, unit, ts, src
 	      FROM facts
 	      WHERE ($1 = '' OR kind = $1)
-	        AND ($2 = '' OR venue = $2)
-	        AND ($3 = '' OR symbol = $3)
+	        AND ($2 = '' OR venue_key = $2 OR venue = $2)
+	        AND ($3 = '' OR symbol = $3 OR symbol IS NULL)
 	        AND ts >= $4
 	      ORDER BY ts DESC`
 	rows, err := s.pool.Query(ctx, q, kind, venue, symbol, since)
@@ -197,7 +200,7 @@ func (s *Store) SumCashflowsForDay(ctx context.Context, posID int64, kind, venue
 	var sum float64
 	err := s.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(amount_usd), 0) FROM position_cashflows
-		 WHERE position_id = $1 AND kind = $2 AND venue = $3 AND ts >= $4 AND ts < $5`,
+		 WHERE position_id = $1 AND kind = $2 AND (venue_key = $3 OR venue = $3) AND ts >= $4 AND ts < $5`,
 		posID, kind, venue, start, end).Scan(&sum)
 	if err != nil {
 		return 0, fmt.Errorf("sum cashflows for day: %w", err)

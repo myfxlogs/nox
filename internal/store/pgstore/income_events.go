@@ -12,9 +12,10 @@ import (
 )
 
 // IncomeEvent income_events 行（PositionID/LegNo=匹配命中才非 nil）。
+// D-496：account_id 数值域删除，通道身份=(Venue,VenueType) 两列。
 type IncomeEvent struct {
 	Venue      string
-	AccountID  int64
+	VenueType  string
 	Symbol     string
 	IncomeType string
 	AmountUSD  float64
@@ -24,12 +25,12 @@ type IncomeEvent struct {
 	LegNo      *int32
 }
 
-// MaxIncomeEventTS 采集游标：该 venue 账户已入账最大 ts（表内派生零新状态，重启安全）。
+// MaxIncomeEventTS 采集游标：该 (venue,venue_type) 已入账最大 ts（表内派生零新状态，重启安全）。
 // 空表 → (零值,false,nil)。
-func (s *Store) MaxIncomeEventTS(ctx context.Context, venue string, accountID int64) (time.Time, bool, error) {
+func (s *Store) MaxIncomeEventTS(ctx context.Context, venue, venueType string) (time.Time, bool, error) {
 	var ts *time.Time
 	err := s.pool.QueryRow(ctx,
-		`SELECT MAX(ts) FROM income_events WHERE venue = $1 AND account_id = $2`, venue, accountID).Scan(&ts)
+		`SELECT MAX(ts) FROM income_events WHERE venue = $1 AND venue_type = $2`, venue, venueType).Scan(&ts)
 	if err != nil {
 		return time.Time{}, false, fmt.Errorf("max income ts: %w", err)
 	}
@@ -39,7 +40,7 @@ func (s *Store) MaxIncomeEventTS(ctx context.Context, venue string, accountID in
 	return *ts, true, nil
 }
 
-// InsertIncomeEvents 批量幂等写入（唯一键 (venue,account_id,tran_id) 冲突 DO NOTHING）。
+// InsertIncomeEvents 批量幂等写入（唯一键 (venue,venue_type,tran_id) 冲突 DO NOTHING）。
 // 返回实插行数（幂等重跑=0）。
 func (s *Store) InsertIncomeEvents(ctx context.Context, evs []IncomeEvent) (int64, error) {
 	if len(evs) == 0 {
@@ -48,10 +49,10 @@ func (s *Store) InsertIncomeEvents(ctx context.Context, evs []IncomeEvent) (int6
 	batch := &pgx.Batch{}
 	for _, e := range evs {
 		batch.Queue(`
-			INSERT INTO income_events (venue, account_id, symbol, income_type, amount_usd, tran_id, ts, position_id, leg_no)
+			INSERT INTO income_events (venue, venue_type, symbol, income_type, amount_usd, tran_id, ts, position_id, leg_no)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-			ON CONFLICT (venue, account_id, tran_id) DO NOTHING`,
-			e.Venue, e.AccountID, e.Symbol, e.IncomeType, e.AmountUSD, e.TranID, e.Ts, e.PositionID, e.LegNo)
+			ON CONFLICT (venue, venue_type, tran_id) DO NOTHING`,
+			e.Venue, e.VenueType, e.Symbol, e.IncomeType, e.AmountUSD, e.TranID, e.Ts, e.PositionID, e.LegNo)
 	}
 	br := s.pool.SendBatch(ctx, batch)
 	defer br.Close()
@@ -76,7 +77,7 @@ func (s *Store) SumIncomeForDay(ctx context.Context, venue, symbol string, day t
 	var rows int
 	err := s.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(amount_usd), 0), COUNT(*) FROM income_events
-		 WHERE venue = $1 AND symbol = $2 AND ts >= $3 AND ts < $4`,
+		 WHERE (venue = $1 OR venue_key = $1) AND symbol = $2 AND ts >= $3 AND ts < $4`,
 		venue, symbol, start, end).Scan(&sum, &rows)
 	if err != nil {
 		return 0, 0, fmt.Errorf("sum income for day: %w", err)
@@ -93,7 +94,7 @@ func (s *Store) SumIncomeWindow(ctx context.Context, venue, symbol string, from,
 	var rows int
 	err := s.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(amount_usd), 0), COUNT(*) FROM income_events
-		 WHERE venue = $1 AND symbol = $2 AND ts >= $3 AND ts < $4`,
+		 WHERE (venue = $1 OR venue_key = $1) AND symbol = $2 AND ts >= $3 AND ts < $4`,
 		venue, symbol, from, to).Scan(&sum, &rows)
 	if err != nil {
 		return 0, 0, fmt.Errorf("sum income window %s %s: %w", venue, symbol, err)
@@ -111,7 +112,7 @@ func (s *Store) MatchOpenLegForIncome(ctx context.Context, venue, symbol, env st
 		SELECT p.id, l.leg_no
 		FROM position_legs l
 		JOIN positions p ON p.id = l.position_id
-		WHERE l.venue = $1 AND l.symbol = $2 AND l.phase = 'OPEN'
+		WHERE l.venue_key = $1 AND l.symbol = $2 AND l.phase = 'OPEN'
 		  AND p.status IN ('OPENING','OPEN','LEGGED','CLOSING')
 		  AND COALESCE(p.environment, 'live') = $3`, venue, symbol, env)
 	if err != nil {
@@ -134,7 +135,7 @@ func (s *Store) OpenLegSymbols(ctx context.Context, venue string) ([]string, err
 		SELECT DISTINCT l.symbol
 		FROM position_legs l
 		JOIN positions p ON p.id = l.position_id
-		WHERE l.venue = $1 AND l.phase = 'OPEN'
+		WHERE l.venue_key = $1 AND l.phase = 'OPEN'
 		  AND p.status IN ('OPENING','OPEN','LEGGED','CLOSING')`, venue)
 	if err != nil {
 		return nil, fmt.Errorf("open leg symbols: %w", err)
@@ -162,11 +163,11 @@ func (s *Store) SumIncomeByPosVenue(ctx context.Context, posIDs []int64) (map[st
 		return out, nil
 	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT ie.position_id, l.venue, COALESCE(SUM(ie.amount_usd), 0)
+		SELECT ie.position_id, l.venue_key, COALESCE(SUM(ie.amount_usd), 0)
 		FROM income_events ie
 		JOIN position_legs l ON l.position_id = ie.position_id AND l.leg_no = ie.leg_no AND l.phase = 'OPEN'
 		WHERE ie.position_id = ANY($1)
-		GROUP BY ie.position_id, l.venue`,
+		GROUP BY ie.position_id, l.venue_key`,
 		posIDs)
 	if err != nil {
 		return nil, fmt.Errorf("sum income by pos venue: %w", err)

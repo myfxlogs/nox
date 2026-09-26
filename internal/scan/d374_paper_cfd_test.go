@@ -133,7 +133,7 @@ func TestD374_CfdAccrual(t *testing.T) {
 	// D-474a S1：结算对齐累积需双腿事实面——cex funding 边界+MT swap 边界+符号映射。
 	seedUni(t, s, "binance", "SOL", "TRADING", "T3", 72*time.Hour, 11.1)
 	seedSettleFacts(t, s, "binance", "SOL", now)
-	if _, err := s.Pool().Exec(ctx, `INSERT INTO broker_symbol_map (venue, broker_symbol, canonical, is_primary)
+	if _, err := s.Pool().Exec(ctx, `INSERT INTO broker_accounts (venue, venue_type, host, port, password) VALUES ('277842155','mt5','h',443,'p') ON CONFLICT (venue) DO NOTHING; INSERT INTO broker_symbol_map (venue, broker_symbol, canonical, is_primary)
 		VALUES ('277842155','SOLUSD','SOL',true) ON CONFLICT DO NOTHING`); err != nil {
 		t.Fatalf("seed symbol map: %v", err)
 	}

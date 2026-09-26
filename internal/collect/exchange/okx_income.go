@@ -64,7 +64,7 @@ func (c *OKXIncomeCollector) RunOnce(ctx context.Context) (int64, error) {
 			continue // 无凭据/端点行跳过（配置驱动）
 		}
 		var cursor time.Time
-		if maxTS, ok, err := c.sink.MaxIncomeEventTS(ctx, VenueOKX, acc.ID); err != nil {
+		if maxTS, ok, err := c.sink.MaxIncomeEventTS(ctx, VenueOKX, "perp"); err != nil {
 			fmt.Printf("[income] okx #%d cursor: %v (first page only)\n", acc.ID, err)
 		} else if ok {
 			cursor = maxTS
@@ -105,7 +105,7 @@ func (c *OKXIncomeCollector) RunOnce(ctx context.Context) (int64, error) {
 			amt, _ := strconv.ParseFloat(r.BalChg, 64)
 			tsMs, _ := strconv.ParseInt(r.Ts, 10, 64)
 			ev := pgstore.IncomeEvent{
-				Venue: VenueOKX, AccountID: acc.ID, Symbol: r.InstID,
+				Venue: VenueOKX, VenueType: "perp", Symbol: r.InstID,
 				IncomeType: "FUNDING_FEE", AmountUSD: amt, TranID: tranID,
 				Ts: time.UnixMilli(tsMs),
 			}

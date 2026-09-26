@@ -18,11 +18,11 @@ func TestD338_LoadXAssetAllowCombos(t *testing.T) {
 		t.Fatalf("truncate: %v", err)
 	}
 	if _, err := s.Pool().Exec(ctx, `
-		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_sell, max_long_qty, max_short_qty, max_gross_usd, enabled, simulated, note) VALUES
-		('A','B','va:perp','vb:mt5',1,1,100,true,true,'demo only'),
-		('A','C','va:perp','vb:mt5',1,1,100,true,false,'real only'),
-		('A','D','va:perp','vb:mt5',1,1,100,true,NULL,'both'),
-		('A','E','va:perp','vb:mt5',1,1,100,false,true,'disabled')`); err != nil {
+		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell, max_long_qty, max_short_qty, max_gross_usd, enabled, simulated, note) VALUES
+		('A','B','va','perp','vb','mt5',1,1,100,true,true,'demo only'),
+		('A','C','va','perp','vb','mt5',1,1,100,true,false,'real only'),
+		('A','D','va','perp','vb','mt5',1,1,100,true,NULL,'both'),
+		('A','E','va','perp','vb','mt5',1,1,100,false,true,'disabled')`); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	demo, err := s.LoadXAssetAllowCombos(ctx, "demo")
@@ -63,60 +63,13 @@ func TestD338_LoadXAssetAllowCombos(t *testing.T) {
 func TestD338_MigrationSeed(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	// 0105 幂等（IF NOT EXISTS+ON CONFLICT）：TRUNCATE 后重放 migration 原文（embed 逐字）——
-	// 防 T1 串场且验证播种 SQL 文件本身的逐字性（改文件即破锚）。
+	// D-496：0105 种子值为旧复合域（venue_buy='gate:perp'），0142 键域宪法后重放
+	// 必被裸域 CHECK 拒绝——重放失败本身即契约生效的证据；种子域校验改在 0142 干跑。
 	if _, err := s.Pool().Exec(ctx, `TRUNCATE xasset_allow_combos`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
-	if _, err := s.Pool().Exec(ctx, migrations.XassetAllowCombosSQL); err != nil {
-		t.Fatalf("replay 0105: %v", err)
-	}
-	rows, err := s.Pool().Query(ctx, `
-		SELECT canonical_buy, canonical_sell, venue_buy, venue_sell, max_long_qty, max_short_qty, max_gross_usd, simulated
-		FROM xasset_allow_combos ORDER BY id`)
-	if err != nil {
-		t.Fatalf("query: %v（红=migration 0105 未落）", err)
-	}
-	defer rows.Close()
-	want := [][7]any{
-		{"CLUSDT", "WTI", "gate:perp", "277842155:mt5", "2000", "0.05", "2500"},
-		{"XAUUSD", "XAUUSDT", "277842155:mt5", "gate:perp", "0.01", "10000", "10000"},
-		{"XAUUSD", "XAUUSDT", "277842155:mt5", "binance:perp", "0.01", "5", "10000"},
-		{"XAUUSD", "PAXGUSDT", "277842155:mt5", "binance:perp", "0.01", "5", "10000"},
-	}
-	i := 0
-	for rows.Next() {
-		var cb, cs, vb, vs string
-		var ml, ms, mg float64
-		var sim *bool
-		if err := rows.Scan(&cb, &cs, &vb, &vs, &ml, &ms, &mg, &sim); err != nil {
-			t.Fatalf("scan: %v", err)
-		}
-		if i >= len(want) {
-			t.Fatalf("播种行数超 4")
-		}
-		w := want[i]
-		got := []string{cb, cs, vb, vs}
-		exp := []string{w[0].(string), w[1].(string), w[2].(string), w[3].(string)}
-		for j := range exp {
-			if got[j] != exp[j] {
-				t.Errorf("row%d col%d: got %q want %q（.env:27 逐字）", i, j, got[j], exp[j])
-			}
-		}
-		wants := []float64{mustF(t, w[4].(string)), mustF(t, w[5].(string)), mustF(t, w[6].(string))}
-		gots := []float64{ml, ms, mg}
-		for j := range wants {
-			if gots[j] != wants[j] {
-				t.Errorf("row%d qty%d: got %v want %v", i, j, gots[j], wants[j])
-			}
-		}
-		if sim == nil || !*sim {
-			t.Errorf("row%d simulated want true（四行均 demo seed）", i)
-		}
-		i++
-	}
-	if i != 4 {
-		t.Errorf("播种行数=%d, want 4", i)
+	if _, err := s.Pool().Exec(ctx, migrations.XassetAllowCombosSQL); err == nil {
+		t.Fatal("0105 复合域种子在新 schema 下应被 CHECK 拒绝（宪法生效证据）")
 	}
 }
 

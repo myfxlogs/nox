@@ -44,16 +44,17 @@ type BrokerAccount struct {
 // IsReal *bool：nil=未知(NULL), &true=实盘, &false=demo（D-144 ① 三态）。
 func (s *Store) InsertBrokerAccount(ctx context.Context, a *BrokerAccount) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, server, alias, status, commission_bps, is_real, website)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, '', $8, $9, $10, $11)
-	`, a.Venue, a.Platform, a.Host, a.Port, a.User, a.Password, a.Server, a.Status, a.CommissionBps, a.IsReal, a.Website)
+		INSERT INTO broker_accounts (venue, venue_type, host, port, password, server, alias, status, commission_bps, is_real, website)
+		VALUES ($1, CASE $2::int WHEN 0 THEN 'mt4' ELSE 'mt5' END, $3, $4, $5, $6, '', $7, $8, $9, $10)
+	`, a.Venue, a.Platform, a.Host, a.Port, a.Password, a.Server, a.Status, a.CommissionBps, a.IsReal, a.Website)
 	return err
 }
 
 // ListBrokerAccounts 全量账号列表。
 func (s *Store) ListBrokerAccounts(ctx context.Context) ([]BrokerAccount, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT venue, platform, host, port, user_id, password, server, alias, status, commission_bps, is_real, created_at, website
+		SELECT venue, CASE venue_type WHEN 'mt4' THEN 0 ELSE 1 END AS platform, host, port,
+		       venue::bigint AS user_id, password, server, alias, status, commission_bps, is_real, created_at, website
 		FROM broker_accounts ORDER BY created_at
 	`)
 	if err != nil {
@@ -76,7 +77,8 @@ func (s *Store) ListBrokerAccounts(ctx context.Context) ([]BrokerAccount, error)
 func (s *Store) GetBrokerAccount(ctx context.Context, venue string) (*BrokerAccount, error) {
 	var a BrokerAccount
 	err := s.pool.QueryRow(ctx, `
-		SELECT venue, platform, host, port, user_id, password, server, alias, status, commission_bps, is_real, created_at, website
+		SELECT venue, CASE venue_type WHEN 'mt4' THEN 0 ELSE 1 END AS platform, host, port,
+		       venue::bigint AS user_id, password, server, alias, status, commission_bps, is_real, created_at, website
 		FROM broker_accounts WHERE venue = $1
 	`, venue).Scan(&a.Venue, &a.Platform, &a.Host, &a.Port, &a.User, &a.Password,
 		&a.Server, &a.Alias, &a.Status, &a.CommissionBps, &a.IsReal, &a.CreatedAt, &a.Website)

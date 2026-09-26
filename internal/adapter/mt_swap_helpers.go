@@ -140,7 +140,8 @@ func collectTripleSwapDayFacts(src, venue string, tripleDays map[string]float64)
 	if allSame {
 		// 一致 → venue 级 Fact（现行为）
 		logTripleSwapDay(src, venue, first)
-		return []fact.Fact{tripleSwapDayFact(venue, venue, first, src)}
+		// D-496 R4：账号级 fact symbol=NULL（存侧 ''→NULL 归位），不再挪用 symbol=venue。
+		return []fact.Fact{tripleSwapDayFact(venue, "", first, src)}
 	}
 	// 不一致 → per-symbol Fact + warn 差异告警
 	log.Printf("[%s:%s] [swap] triple swap day per-symbol differs (archive 实证坐实):", src, venue)

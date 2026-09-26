@@ -5,6 +5,7 @@
 package scan
 
 import (
+	"arb/internal/keydomain"
 	"context"
 	"fmt"
 	"log"
@@ -141,10 +142,10 @@ func warnMonitorBookAbsent(ctx context.Context, st PaperStore, slots []authSlot)
 func monitorVenueKeys(cexV, mtV string) (cexVenue, mtVenue string) {
 	cexVenue, mtVenue = cexV, mtV
 	if cexVenue != "" && !strings.Contains(cexVenue, ":") {
-		cexVenue += ":perp"
+		cexVenue = keydomain.Join(cexVenue, "perp")
 	}
 	if mtVenue != "" && !strings.Contains(mtVenue, ":") {
-		mtVenue += ":mt5"
+		mtVenue = keydomain.Join(mtVenue, "mt5")
 	}
 	return cexVenue, mtVenue
 }
@@ -154,7 +155,7 @@ func monitorVenueKeys(cexV, mtV string) (cexVenue, mtVenue string) {
 // mtCanonical=MT 腿 canonical（symbol 键经 NormalizeJoinKey 规范化）。双腿皆无 MT
 // 后缀（双 CEX）→ ok=false 跳过保底。
 func cfdComboLegs(c pgstore.XAssetAllowRow) (mtVenue, cexVenue, mtCanon string, ok bool) {
-	isMt := func(v string) bool { return strings.HasSuffix(v, ":mt4") || strings.HasSuffix(v, ":mt5") }
+	isMt := func(v string) bool { return keydomain.IsMTKey(v) }
 	strip := func(v string) string {
 		if i := strings.LastIndex(v, ":"); i >= 0 {
 			return v[:i]

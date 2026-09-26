@@ -16,24 +16,23 @@ func TestFinanceFlows_IncomeSimMarker(t *testing.T) {
 		`TRUNCATE income_events, position_cashflows, ledger, exchange_configs RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
-	// exchange_configs：sim（后建恒赢槽位）+real 双配置（核证点③真值表，SSOT §0）。
-	// id 为 IDENTITY 列 → RETURNING 捕获真 id 作 income_events.account_id 对号。
-	var simID, realID int64
-	if err := s.pool.QueryRow(ctx, `
+	// exchange_configs：sim/real 分通道两配置（D-496：account_id 域已删，
+	// sim 标识按 (venue,venue_type) 归属判定——sim=binance:perp，real=okx:perp）。
+	if _, err := s.pool.Exec(ctx, `
 		INSERT INTO exchange_configs (venue, venue_type, label, api_key, api_secret, simulated)
-		VALUES ('binance', 'perp', 'sim', 'k25', 's25', true) RETURNING id`).Scan(&simID); err != nil {
+		VALUES ('binance', 'perp', 'sim', 'k25', 's25', true)`); err != nil {
 		t.Fatalf("seed sim config: %v", err)
 	}
-	if err := s.pool.QueryRow(ctx, `
+	if _, err := s.pool.Exec(ctx, `
 		INSERT INTO exchange_configs (venue, venue_type, label, api_key, api_secret, simulated)
-		VALUES ('binance', 'perp', 'real', 'k20', 's20', false) RETURNING id`).Scan(&realID); err != nil {
+		VALUES ('okx', 'perp', 'real', 'k20', 's20', false)`); err != nil {
 		t.Fatalf("seed real config: %v", err)
 	}
 	now := time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)
 	if _, err := s.pool.Exec(ctx, `
-		INSERT INTO income_events (venue, account_id, symbol, income_type, amount_usd, tran_id, ts)
-		VALUES ('binance', $1, 'XAUUSDT', 'FUNDING_FEE', -1.5, 1, $2),
-		       ('binance', $3, 'XAUUSDT', 'FUNDING_FEE', -0.5, 2, $2)`, simID, now, realID); err != nil {
+		INSERT INTO income_events (venue, venue_type, symbol, income_type, amount_usd, tran_id, ts)
+		VALUES ('binance', 'perp', 'XAUUSDT', 'FUNDING_FEE', -1.5, 1, $1),
+		       ('okx', 'perp', 'XAUUSDT', 'FUNDING_FEE', -0.5, 2, $1)`, now); err != nil {
 		t.Fatalf("seed income events: %v", err)
 	}
 
@@ -54,10 +53,10 @@ func TestFinanceFlows_IncomeSimMarker(t *testing.T) {
 			}
 		}
 		if f.AmountUSD == -0.5 {
-			if f.Source == "binance" {
+			if f.Source == "okx" {
 				realPlain++
 			} else {
-				t.Errorf("real 配置行 source = %q, want binance（原值无标识）", f.Source)
+				t.Errorf("real 配置行 source = %q, want okx（原值无标识）", f.Source)
 			}
 		}
 	}

@@ -31,7 +31,7 @@ type BinanceIncomeAccount struct {
 
 // IncomeEventSink income_events 落库/游标/匹配依赖（pgstore.Store 实现；单测用 fake）。
 type IncomeEventSink interface {
-	MaxIncomeEventTS(ctx context.Context, venue string, accountID int64) (time.Time, bool, error)
+	MaxIncomeEventTS(ctx context.Context, venue, venueType string) (time.Time, bool, error) // D-496：(venue,venue_type) 键域
 	// D-362 S5：venue 传全形（"binance:perp"=腿 venue 口径，修 "binance" 格式不匹配的
 	// 结构性死匹配）；env=demo/live 配置环境一致性过滤。
 	MatchOpenLegForIncome(ctx context.Context, venue, symbol, env string) (posID int64, legNo int16, hits int, err error)
@@ -71,7 +71,7 @@ func (c *BinanceIncomeCollector) RunOnce(ctx context.Context) (int64, error) {
 			continue // 无凭据/端点行跳过（配置驱动）
 		}
 		start := time.Now().Add(-24 * time.Hour) // 空表首拉窗口
-		if maxTS, ok, err := c.sink.MaxIncomeEventTS(ctx, VenueBinance, acc.ID); err != nil {
+		if maxTS, ok, err := c.sink.MaxIncomeEventTS(ctx, VenueBinance, "perp"); err != nil {
 			fmt.Printf("[income] binance #%d cursor: %v (fallback 24h window)\n", acc.ID, err)
 		} else if ok {
 			start = maxTS.Add(time.Millisecond)
@@ -84,7 +84,7 @@ func (c *BinanceIncomeCollector) RunOnce(ctx context.Context) (int64, error) {
 		evs := make([]pgstore.IncomeEvent, 0, len(rows))
 		for _, r := range rows {
 			ev := pgstore.IncomeEvent{
-				Venue: VenueBinance, AccountID: acc.ID, Symbol: r.Symbol,
+				Venue: VenueBinance, VenueType: "perp", Symbol: r.Symbol,
 				IncomeType: r.IncomeType, AmountUSD: r.Income, TranID: r.TranID, Ts: r.Ts,
 			}
 			// D-362 S5：venue 全形（腿口径）+ 环境一致性（sim 配置事件只配 demo 腿，

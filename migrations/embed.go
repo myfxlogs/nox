@@ -247,4 +247,6 @@ var (
 	VenueExposureCapsSQL string
 	//go:embed 0141_perp_funding_admission.sql
 	PerpFundingAdmissionSQL string
+	//go:embed 0142_keydomain_constitution.sql
+	KeydomainConstitutionSQL string
 )

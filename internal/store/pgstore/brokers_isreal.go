@@ -3,6 +3,8 @@ package pgstore
 import (
 	"context"
 	"fmt"
+
+	"arb/internal/keydomain"
 )
 
 // D-144 ① 三态：实盘/demo/未知 标记 store 方法（从 brokers.go 拆出控行数）。
@@ -45,23 +47,18 @@ func (s *Store) ListAccountIsReal(ctx context.Context) (map[string]*bool, error)
 func (s *Store) ListVenueIsReal(ctx context.Context) (map[string]*bool, error) {
 	m := make(map[string]*bool)
 	// MT 半边：broker_accounts（key=venue:platform 映射）
-	mtRows, err := s.pool.Query(ctx, `SELECT venue, platform, is_real FROM broker_accounts`)
+	mtRows, err := s.pool.Query(ctx, `SELECT venue, venue_type, is_real FROM broker_accounts`)
 	if err != nil {
 		return nil, err
 	}
 	defer mtRows.Close()
 	for mtRows.Next() {
-		var venue string
-		var platform int
+		var venue, vt string
 		var isReal *bool
-		if err := mtRows.Scan(&venue, &platform, &isReal); err != nil {
+		if err := mtRows.Scan(&venue, &vt, &isReal); err != nil {
 			return nil, err
 		}
-		vt := "mt5"
-		if platform == 0 {
-			vt = "mt4"
-		}
-		m[venue+":"+vt] = isReal
+		m[keydomain.New(venue, vt).String()] = isReal
 	}
 	if err := mtRows.Err(); err != nil {
 		return nil, err
@@ -92,7 +89,7 @@ func (s *Store) ListVenueIsReal(ctx context.Context) (map[string]*bool, error) {
 // 快照写时过滤用（证真才留）；查询失败由调用方 fail-closed 处置。
 func (s *Store) BrokerRealAccountKeys(ctx context.Context) (map[string]bool, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT user_id::text FROM broker_accounts WHERE is_real AND user_id IS NOT NULL`)
+		`SELECT venue FROM broker_accounts WHERE is_real`)
 	if err != nil {
 		return nil, fmt.Errorf("broker real account keys: %w", err)
 	}

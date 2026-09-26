@@ -17,7 +17,7 @@ func (s *Store) DisableCombosByFlag(ctx context.Context, bareVenue, symbol strin
 		UPDATE xasset_allow_combos
 		SET enabled=false, note=note||' [flag吊销:'||$1||']', updated_at=now()
 		WHERE enabled
-		  AND (venue_buy LIKE $2||':%' OR venue_sell LIKE $2||':%')
+		  AND (venue_buy = $2 OR venue_sell = $2)
 		  AND ($3='*' OR canonical_buy=$3 OR canonical_sell=$3)`,
 		bareVenue, bareVenue, symbol)
 	if err != nil {
@@ -34,7 +34,7 @@ func (s *Store) CountOpenPositionsOnVenue(ctx context.Context, bareVenue string)
 	err := s.pool.QueryRow(ctx, `
 		SELECT count(DISTINCT p.id), array_agg(DISTINCT p.id)
 		FROM positions p JOIN position_legs l ON l.position_id = p.id
-		WHERE p.status IN ('OPEN','LEGGED','CLOSING') AND l.venue LIKE $1||':%'`,
+		WHERE p.status IN ('OPEN','LEGGED','CLOSING') AND l.venue_key = $1`,
 		bareVenue).Scan(&n, &ids)
 	if err != nil {
 		return 0, nil, fmt.Errorf("count open positions on %s: %w", bareVenue, err)

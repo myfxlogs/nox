@@ -60,7 +60,7 @@ func (a *MT5Adapter) marginPollOnce(ctx context.Context) (fact.Fact, bool) {
 	if lev >= 1e6 { // Exness 无限杠杆哨兵实证（2e9）：零保证金账号发 0 值（SwapModeNone 先例）
 		rate = 0
 	}
-	return marginFact(fact.KindInitMarginRate, a.venue, a.venue, rate, "mt5"), true
+	return marginFact(fact.KindInitMarginRate, a.venue, "", rate, "mt5"), true // D-496 R4：账号级 symbol=NULL
 }
 
 // MarginFactSource 事件驱动 margin 采集源（实现 collect.FactSource，D-099）。

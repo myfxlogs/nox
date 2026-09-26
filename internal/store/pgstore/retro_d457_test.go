@@ -34,12 +34,12 @@ func TestRetroStats_D457(t *testing.T) {
 		now.Add(-3*24*time.Hour), now.Add(-30*time.Minute)).Scan(&closedID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, `INSERT INTO position_legs (position_id,leg_no,phase,status,venue,account,symbol,side,qty,price_expected)
-		VALUES ($1,1,'OPEN','FILLED','gate','a','XAU','SELL',1,1)`, posID); err != nil {
+	if _, err := s.pool.Exec(ctx, `INSERT INTO position_legs (position_id,leg_no,phase,status,venue,venue_type,symbol,side,qty,price_expected)
+		VALUES ($1,1,'OPEN','FILLED','gate','perp','XAU','SELL',1,1)`, posID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, `INSERT INTO position_cashflows (position_id,kind,venue,amount_usd,ts,quality)
-		VALUES ($1,'funding','gate',1.0313,$2,'actual')`, posID, now.Add(-time.Minute)); err != nil {
+	if _, err := s.pool.Exec(ctx, `INSERT INTO position_cashflows (position_id,kind,venue,venue_type,amount_usd,ts,quality)
+		VALUES ($1,'funding','gate','perp',1.0313,$2,'actual')`, posID, now.Add(-time.Minute)); err != nil {
 		t.Fatal(err)
 	}
 	defer s.pool.Exec(ctx, `DELETE FROM position_cashflows WHERE position_id IN ($1,$2)`, posID, closedID)
@@ -71,7 +71,7 @@ func TestRetroStats_D457(t *testing.T) {
 	for _, p := range d.OpenPos {
 		if p.ID == posID {
 			found = true
-			if p.Venue != "gate" || p.CarryUSD != 1.0313 {
+			if p.Venue != "gate:perp" || p.CarryUSD != 1.0313 {
 				t.Fatalf("open pos row wrong: %+v", p)
 			}
 		}

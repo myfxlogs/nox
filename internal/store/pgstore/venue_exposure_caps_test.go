@@ -41,7 +41,7 @@ func TestD475a_VenueExposureCaps(t *testing.T) {
 func TestD475a_PaperAccrueObsColumns(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	if _, err := s.Pool().Exec(ctx, `DELETE FROM paper_spot_carry WHERE venue = '3001157×okx'`); err != nil {
+	if _, err := s.Pool().Exec(ctx, `DELETE FROM paper_spot_carry WHERE venue_a = '3001157' AND venue_b = 'okx'`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
 	row := &PaperSpotCarry{

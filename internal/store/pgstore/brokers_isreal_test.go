@@ -15,15 +15,15 @@ func TestListVenueIsReal(t *testing.T) {
 	}
 
 	// CFD venue：is_real=true
-	if _, err := s.pool.Exec(ctx, `INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, is_real) VALUES ('1314615', 1, 'h', 443, 1314615, 'p', true)`); err != nil {
+	if _, err := s.pool.Exec(ctx, `INSERT INTO broker_accounts (venue, venue_type, host, port, password, is_real) VALUES ('1314615', 'mt5', 'h', 443, 'p', true)`); err != nil {
 		t.Fatalf("insert cfd real: %v", err)
 	}
 	// CFD venue：is_real=false（demo）
-	if _, err := s.pool.Exec(ctx, `INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, is_real) VALUES ('5208379', 0, 'h', 443, 5208379, 'p', false)`); err != nil {
+	if _, err := s.pool.Exec(ctx, `INSERT INTO broker_accounts (venue, venue_type, host, port, password, is_real) VALUES ('5208379', 'mt4', 'h', 443, 'p', false)`); err != nil {
 		t.Fatalf("insert cfd demo: %v", err)
 	}
 	// CFD venue：is_real=NULL（未知）
-	if _, err := s.pool.Exec(ctx, `INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, is_real) VALUES ('9999999', 1, 'h', 443, 9999999, 'p', NULL)`); err != nil {
+	if _, err := s.pool.Exec(ctx, `INSERT INTO broker_accounts (venue, venue_type, host, port, password, is_real) VALUES ('9999999', 'mt5', 'h', 443, 'p', NULL)`); err != nil {
 		t.Fatalf("insert cfd null: %v", err)
 	}
 	// CEX venue：simulated=true → is_real=false
@@ -91,8 +91,8 @@ func TestBrokerRealAccountKeys(t *testing.T) {
 		{"9999999", 9999999, nil},
 	} {
 		if _, err := s.pool.Exec(ctx,
-			`INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, is_real)
-			 VALUES ($1, 1, 'h', 443, $2, 'p', $3)`, r.venue, r.userID, r.real); err != nil {
+			`INSERT INTO broker_accounts (venue, venue_type, host, port, password, is_real)
+			 VALUES ($1, 'mt5', 'h', 443, 'p', $2)`, r.venue, r.real); err != nil {
 			t.Fatalf("insert %s: %v", r.venue, err)
 		}
 	}

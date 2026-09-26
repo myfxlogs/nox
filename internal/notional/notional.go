@@ -4,12 +4,15 @@
 // 三个纯函数无外部依赖，调用方（pgstore/settlement/回填脚本）按需组合。
 package notional
 
-import "strings"
+import (
+	"arb/internal/keydomain"
+	"strings"
+)
 
 // VenueAccount 归一 venue 键：仅当后缀为 mt4/mt5 时剥去（"277842155:mt5"→"277842155"；CEX 键原样）。
 // broker_symbol_map.venue 存裸账号，腿存全键 → 查 CS 前必须归一（D-087 §3.1 CS 单点修复）。
 func VenueAccount(venueKey string) string {
-	if strings.HasSuffix(venueKey, ":mt4") || strings.HasSuffix(venueKey, ":mt5") {
+	if keydomain.IsMTKey(venueKey) {
 		if i := strings.LastIndex(venueKey, ":"); i > 0 {
 			return venueKey[:i]
 		}

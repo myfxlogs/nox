@@ -80,8 +80,8 @@ func TestD471_ComboAdmin(t *testing.T) {
 	}
 	defer pool.Exec(ctx, `DELETE FROM positions WHERE id=$1`, posID)
 	for i, l := range []struct{ side, venue string }{{"BUY", "a:perp"}, {"SELL", "b:perp"}} {
-		if _, err := pool.Exec(ctx, `INSERT INTO position_legs (position_id, leg_no, phase, venue, account, symbol, side, qty, price_expected, status)
-			VALUES ($1,$2,'OPEN',$3,'acc','SYM',$4,1,1,'FILLED')`, posID, i+1, l.venue, l.side); err != nil {
+		if _, err := pool.Exec(ctx, `INSERT INTO position_legs (position_id, leg_no, phase, venue, venue_type, symbol, side, qty, price_expected, status)
+			VALUES ($1,$2,'OPEN',split_part($3,':',1),split_part($3,':',2),'SYM',$4,1,1,'FILLED')`, posID, i+1, l.venue, l.side); err != nil {
 			t.Fatal(err)
 		}
 	}

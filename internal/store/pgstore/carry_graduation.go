@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"time"
 
+	"arb/internal/keydomain"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -141,12 +143,13 @@ type XAssetComboInsert struct {
 // 仍是实际真钱闸，双层不矛盾）。撞唯一键 → ErrXAssetComboExists（调用方报「已在白名单」）。
 func (s *Store) InsertXAssetAllowCombo(ctx context.Context, r *XAssetComboInsert) (int64, error) {
 	var id int64
+	vb, vs := keydomain.Parse(r.VenueBuy), keydomain.Parse(r.VenueSell) // D-496 复合键拆两列
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_sell,
+		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell,
 			max_long_qty, max_short_qty, max_gross_usd, notional_usd, enabled, simulated, note)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,true,$9,$10)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,$11,$12)
 		RETURNING id`,
-		r.CanonicalBuy, r.CanonicalSell, r.VenueBuy, r.VenueSell,
+		r.CanonicalBuy, r.CanonicalSell, vb.Venue, vb.Type, vs.Venue, vs.Type,
 		r.MaxLongQty, r.MaxShortQty, r.MaxGrossUSD, r.NotionalUSD, r.Simulated, r.Note).Scan(&id)
 	if err != nil {
 		var pgErr *pgconn.PgError

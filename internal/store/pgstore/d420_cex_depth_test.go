@@ -42,6 +42,7 @@ func TestD420_CLMappingSeed(t *testing.T) {
 	// 同包既有测试（brokers_symbolmap_d383 等）TRUNCATE broker_symbol_map，种子行有清表
 	// 顺序耦合——本测试自愈式重放 0132 种子段（幂等 ON CONFLICT），既验证真实迁移 SQL
 	// 语义又不依赖执行序。
+	seedBrokerVenue(t, s, "277842155", "3001157", "39050818", "59892915", "591959217") // D-496：0132 种子含 bsm 行须先有 FK 父行
 	if _, err := s.pool.Exec(ctx, migrations.DataPlaneVenueSQL); err != nil {
 		t.Fatalf("replay 0132: %v", err)
 	}

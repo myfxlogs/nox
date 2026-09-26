@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"arb/internal/keydomain"
+
 	"github.com/jackc/pgx/v5"
 )
 
@@ -211,14 +213,15 @@ func (s *Store) ClosePosition(ctx context.Context, id int64, realizedPnl float64
 // ON CONFLICT (position_id, leg_no, phase) DO NOTHING：并发对账+手动平仓重复写 CLOSE leg 时
 // 只第一次生效（返回 ErrTerminalState 表示已存在），防重复 CLOSE leg + 重复 cashflow。
 func (s *Store) CreatePositionLeg(ctx context.Context, leg *PositionLeg) error {
-	q := `INSERT INTO position_legs (position_id, leg_no, phase, attempt_no, venue, account, symbol, side, qty,
+	vk := keydomain.Parse(leg.Venue) // D-496：leg.Venue 携复合键，落库拆裸键+通道型
+	q := `INSERT INTO position_legs (position_id, leg_no, phase, attempt_no, venue, venue_type, symbol, side, qty,
 		price_expected, price_actual, order_id, status,
 		parent_attempt_id, client_order_id, requested_qty, filled_qty, avg_fill_price,
 		fee_raw, fee_usd, submitted_at, uncertain_at)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
 		ON CONFLICT (position_id, leg_no, phase, attempt_no) DO NOTHING`
 	ct, err := s.pool.Exec(ctx, q,
-		leg.PositionID, leg.LegNo, leg.Phase, leg.AttemptNo, leg.Venue, leg.Account, leg.Symbol, leg.Side,
+		leg.PositionID, leg.LegNo, leg.Phase, leg.AttemptNo, vk.Venue, vk.Type, leg.Symbol, leg.Side,
 		leg.Qty, leg.PriceExpected, leg.PriceActual, leg.OrderID, leg.Status,
 		leg.ParentAttemptID, leg.ClientOrderID, leg.RequestedQty, leg.FilledQty, leg.AvgFillPrice,
 		leg.FeeRaw, leg.FeeUSD, leg.SubmittedAt, leg.UncertainAt)

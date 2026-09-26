@@ -1,6 +1,9 @@
 package bus
 
-import "strings"
+import (
+	"arb/internal/keydomain"
+	"strings"
+)
 
 // CexSymbolKey venue 原生 CEX symbol → qbus 采集键归一（与采集器产出同构=权威键，D-481）：
 // binance TRXUSDT → TRXUSDT；okx TRX-USDT-SWAP → TRXUSDT（去 -SWAP + 替换 -）；
@@ -15,7 +18,7 @@ func CexSymbolKey(symbol string) string {
 // IsCexVenueKey venueKey 后缀判定 CEX 通道（:perp/:spot）。
 // MT 键（:mt4/:mt5）的 qbus 键=canonical 本体（symbol map 发射），不适用原生键优先。
 func IsCexVenueKey(venueKey string) bool {
-	return strings.HasSuffix(venueKey, ":perp") || strings.HasSuffix(venueKey, ":spot")
+	return keydomain.IsType(venueKey, "perp") || keydomain.IsType(venueKey, "spot")
 }
 
 // LatestLeg 腿级报价查找（D-481）：CEX 腿先查原生 symbol 归一键（采集器权威产出，

@@ -14,7 +14,7 @@ type KnowledgeEntry struct {
 	ID             int64
 	Ts             time.Time
 	Signature      string
-	Venue          string
+	VenueKeys      []string // D-496：venue_keys text[]（元素 venue_key 域）；旧 venue 列删除
 	Symbol         string
 	Verdict        string
 	Rationale      string
@@ -30,7 +30,7 @@ func (s *Store) ListKnowledgeEntries(ctx context.Context, status string, limit, 
 		limit = 100
 	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, ts, signature, venue, symbol, verdict, rationale, source, status, validated_at, validation_note
+		SELECT id, ts, signature, venue_keys, symbol, verdict, rationale, source, status, validated_at, validation_note
 		FROM knowledge_entries
 		WHERE ($1 = '' OR status = $1)
 		ORDER BY ts DESC, id DESC
@@ -43,7 +43,7 @@ func (s *Store) ListKnowledgeEntries(ctx context.Context, status string, limit, 
 	var out []KnowledgeEntry
 	for rows.Next() {
 		var e KnowledgeEntry
-		if err := rows.Scan(&e.ID, &e.Ts, &e.Signature, &e.Venue, &e.Symbol, &e.Verdict,
+		if err := rows.Scan(&e.ID, &e.Ts, &e.Signature, &e.VenueKeys, &e.Symbol, &e.Verdict,
 			&e.Rationale, &e.Source, &e.Status, &e.ValidatedAt, &e.ValidationNote); err != nil {
 			return nil, err
 		}
@@ -56,7 +56,7 @@ func (s *Store) ListKnowledgeEntries(ctx context.Context, status string, limit, 
 func (s *Store) UpsertKnowledgeEntry(ctx context.Context, e *KnowledgeEntry) (int64, error) {
 	var id int64
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO knowledge_entries (signature, venue, symbol, verdict, rationale, source)
+		INSERT INTO knowledge_entries (signature, venue_keys, symbol, verdict, rationale, source)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (signature) DO UPDATE SET
 			verdict = EXCLUDED.verdict,
@@ -65,7 +65,7 @@ func (s *Store) UpsertKnowledgeEntry(ctx context.Context, e *KnowledgeEntry) (in
 			validated_at = NULL,
 			validation_note = ''
 		RETURNING id
-	`, e.Signature, e.Venue, e.Symbol, e.Verdict, e.Rationale, e.Source).Scan(&id)
+	`, e.Signature, e.VenueKeys, e.Symbol, e.Verdict, e.Rationale, e.Source).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("upsert knowledge entry: %w", err)
 	}

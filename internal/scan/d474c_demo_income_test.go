@@ -36,7 +36,7 @@ func seedDemoRow(t *testing.T, s *pgstore.Store, venue, symbol string, base time
 func seedIncome(t *testing.T, s *pgstore.Store, venue, symbol string, amount float64, ts time.Time, tranID int64) {
 	t.Helper()
 	if _, err := s.InsertIncomeEvents(context.Background(), []pgstore.IncomeEvent{{
-		Venue: venue, AccountID: 99001, Symbol: symbol, IncomeType: "FUNDING_FEE",
+		Venue: venue, VenueType: "perp", Symbol: symbol, IncomeType: "FUNDING_FEE",
 		AmountUSD: amount, TranID: tranID, Ts: ts,
 	}}); err != nil {
 		t.Fatalf("seed income: %v", err)

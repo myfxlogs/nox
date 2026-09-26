@@ -25,10 +25,10 @@ func d383Store(t *testing.T) *pgstore.Store {
 	}
 	// 证真键集来自真库（BrokerRealAccountKeys 读 broker_accounts）——播种两 real 账户。
 	if _, err := s.Pool().Exec(context.Background(), `
-		TRUNCATE broker_accounts;
-		INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, server, status, is_real) VALUES
-			('3001157', 1, 'h', 1, 3001157, 'p', 's', 'connected', true),
-			('15032313', 1, 'h', 2, 15032313, 'p', 's', 'connected', true)`); err != nil {
+		TRUNCATE broker_accounts CASCADE;
+		INSERT INTO broker_accounts (venue, venue_type, host, port, password, server, status, is_real) VALUES
+			('3001157', 'mt5', 'h', 1, 'p', 's', 'connected', true),
+			('15032313', 'mt5', 'h', 2, 'p', 's', 'connected', true)`); err != nil {
 		t.Fatalf("seed broker_accounts: %v", err)
 	}
 	return s

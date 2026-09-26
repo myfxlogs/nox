@@ -206,8 +206,8 @@ func TestMarginSource_EventTriggersFetch(t *testing.T) {
 		if f.Value != 0.002 {
 			t.Errorf("value = %v, want 0.002 (1/500)", f.Value)
 		}
-		if f.Symbol != "v6" || f.Venue != "v6" {
-			t.Errorf("Symbol=%q Venue=%q, want v6/v6 (账户标识)", f.Symbol, f.Venue)
+		if f.Symbol != "" || f.Venue != "v6" {
+			t.Errorf("Symbol=%q Venue=%q, want v6/'' (D-496 R4 账号级 symbol=NULL)", f.Symbol, f.Venue)
 		}
 		if f.Unit != fact.UnitRatio || f.Src != "mt5" {
 			t.Errorf("Unit=%q Src=%q, want ratio/mt5", f.Unit, f.Src)
@@ -280,8 +280,8 @@ func TestMarginSource_FirstPollRetry(t *testing.T) {
 		if f.Value != 0.002 {
 			t.Errorf("value = %v, want 0.002 (1/500 after retry)", f.Value)
 		}
-		if f.Symbol != "v6" {
-			t.Errorf("Symbol = %q, want v6", f.Symbol)
+		if f.Symbol != "" {
+			t.Errorf("Symbol = %q, want ''", f.Symbol)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("first-poll retry fact not received within 2s")

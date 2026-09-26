@@ -26,7 +26,7 @@ type fakeIncomeSink struct {
 	inserted []pgstore.IncomeEvent
 }
 
-func (f *fakeIncomeSink) MaxIncomeEventTS(_ context.Context, _ string, _ int64) (time.Time, bool, error) {
+func (f *fakeIncomeSink) MaxIncomeEventTS(_ context.Context, _, _ string) (time.Time, bool, error) {
 	return f.maxTS, f.hasMax, nil
 }
 func (f *fakeIncomeSink) MatchOpenLegForIncome(_ context.Context, venue, symbol, env string) (int64, int16, int, error) {
@@ -100,8 +100,8 @@ func TestD334ab_BinanceIncome_RunOnce(t *testing.T) {
 	if first.PositionID != nil || first.LegNo != nil {
 		t.Errorf("unmatched row must leave position/leg NULL, got %+v", first)
 	}
-	if first.AccountID != 25 {
-		t.Errorf("account_id want 25, got %v", first.AccountID)
+	if first.VenueType != "perp" {
+		t.Errorf("venue_type want perp, got %v", first.VenueType)
 	}
 }
 
@@ -171,7 +171,7 @@ func TestD334ab_BinanceIncome_IdempotentDSN(t *testing.T) {
 	}
 	// sink 级直插双写（不经 RunOnce 的逐账户 fail-open 错误吞噬）：幂等=第二插 err=nil 且 0 行；
 	// 红=摘 DO NOTHING → 唯一约束报错；摘唯一约束 → 第二插写成功 n=1。
-	ev := []pgstore.IncomeEvent{{Venue: "binance", AccountID: 25, Symbol: "XAUUSDT", IncomeType: "FUNDING_FEE", AmountUSD: 1.0, TranID: 999001, Ts: time.Now()}}
+	ev := []pgstore.IncomeEvent{{Venue: "binance", VenueType: "perp", Symbol: "XAUUSDT", IncomeType: "FUNDING_FEE", AmountUSD: 1.0, TranID: 999001, Ts: time.Now()}}
 	if n, err := st.InsertIncomeEvents(ctx, ev); err != nil || n != 1 {
 		t.Fatalf("sink first insert: n=%d err=%v, want 1/nil", n, err)
 	}

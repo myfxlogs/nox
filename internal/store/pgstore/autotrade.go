@@ -3,6 +3,8 @@ package pgstore
 import (
 	"context"
 	"fmt"
+
+	"arb/internal/keydomain"
 	"time"
 )
 
@@ -24,10 +26,11 @@ type AutotradeLog struct {
 
 // InsertAutotradeLog 记录一笔自动交易（成败均记）。
 func (s *Store) InsertAutotradeLog(ctx context.Context, l *AutotradeLog) error {
+	vb, vs := keydomain.Parse(l.VenueBuy), keydomain.Parse(l.VenueSell) // D-496 复合键拆两列
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO autotrade_logs (opportunity_id, position_id, strategy, canonical, venue_buy, venue_sell, qty, status, reason, net_bps)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-		l.OpportunityID, l.PositionID, l.Strategy, l.Canonical, l.VenueBuy, l.VenueSell, l.Qty, l.Status, l.Reason, l.NetBps)
+		INSERT INTO autotrade_logs (opportunity_id, position_id, strategy, canonical, venue_buy, venue_type_buy, venue_sell, venue_type_sell, qty, status, reason, net_bps)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+		l.OpportunityID, l.PositionID, l.Strategy, l.Canonical, vb.Venue, vb.Type, vs.Venue, vs.Type, l.Qty, l.Status, l.Reason, l.NetBps)
 	if err != nil {
 		return fmt.Errorf("insert autotrade log: %w", err)
 	}

@@ -14,6 +14,7 @@ func TestMigration0051_CleanPollution(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, `TRUNCATE broker_symbol_map RESTART IDENTITY`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
+	seedBrokerVenue(t, s, "v1") // D-496：FK 父行
 	// 污染行（应被删除）
 	pollution := []struct {
 		venue, brokerSymbol, canonical, source string

@@ -181,6 +181,7 @@ func TestMigration0100_T1Promotion(t *testing.T) {
 	if err := s.pool.QueryRow(ctx, `SELECT 1 FROM schema_migrations WHERE version = 100`).Scan(&one); err != nil {
 		t.Fatalf("schema_migrations version=100 missing: %v", err)
 	}
+	seedBrokerVenue(t, s, "3001157") // D-496：0100 重放含 bsm 行须先有 FK 父行
 	if _, err := s.pool.Exec(ctx, migrations.T1PromotionSQL); err != nil {
 		t.Fatalf("replay 0100: %v", err)
 	}

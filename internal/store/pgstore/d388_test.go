@@ -19,7 +19,7 @@ func d388Store(t *testing.T) *Store {
 		t.Fatalf("pgstore.New: %v", err)
 	}
 	t.Cleanup(s.Close)
-	if _, err := s.pool.Exec(context.Background(), `TRUNCATE broker_accounts`); err != nil {
+	if _, err := s.pool.Exec(context.Background(), `TRUNCATE broker_accounts CASCADE`); err != nil {
 		t.Fatalf("TRUNCATE broker_accounts: %v", err)
 	}
 	return s
@@ -53,8 +53,8 @@ func TestD388_BrokerSetters_ExistOK(t *testing.T) {
 	s := d388Store(t)
 	ctx := context.Background()
 	if _, err := s.pool.Exec(ctx,
-		`INSERT INTO broker_accounts (venue, platform, host, port, user_id, password, server, status)
-		 VALUES ('vX', 1, 'h', 443, 1, 'p', 's', 'connected')`); err != nil {
+		`INSERT INTO broker_accounts (venue, venue_type, host, port, password, server, status)
+		 VALUES ('vX', 'mt5', 'h', 443, 'p', 's', 'connected')`); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	bps := 1.5

@@ -89,7 +89,7 @@ type RetroWeekly struct {
 func (s *Store) RetroDailyStats(ctx context.Context, start, end time.Time) (*RetroDaily, error) {
 	d := &RetroDaily{EvalDist: map[string]int{}, AlertDist: map[string]int{}}
 	rows, err := s.pool.Query(ctx, `
-		SELECT p.id, p.type, COALESCE(l.venue,''), p.opened_at,
+		SELECT p.id, p.type, COALESCE(l.venue_key,''), p.opened_at,
 		       COALESCE((SELECT sum(amount_usd) FROM position_cashflows c WHERE c.position_id=p.id AND quality='actual'),0)
 		FROM positions p
 		LEFT JOIN position_legs l ON l.position_id=p.id AND l.phase='OPEN' AND l.leg_no=1

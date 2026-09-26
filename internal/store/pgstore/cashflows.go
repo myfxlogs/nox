@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"arb/internal/keydomain"
+
 	"github.com/jackc/pgx/v5"
 )
 
@@ -37,16 +39,17 @@ type Cashflow struct {
 // D-159 W3a R5：加 legNo 参数（per-leg 幂等键前置）。
 // legNo 是 position_legs.leg_no（int16，从 0 开始，0 是有效第一腿，写 0 不是 NULL）。
 func (s *Store) InsertCashflow(ctx context.Context, posID int64, legNo int16, kind, venue string, amount float64, ts time.Time) error {
-	q := `INSERT INTO position_cashflows (position_id, leg_no, kind, venue, amount_usd, ts)
-		VALUES ($1, $2, $3, $4, $5, $6)`
-	_, err := s.pool.Exec(ctx, q, posID, legNo, kind, venue, amount, ts)
+	vk := keydomain.Parse(venue) // D-496：venue 传 venueKey 复合键，落库拆两列
+	q := `INSERT INTO position_cashflows (position_id, leg_no, kind, venue, venue_type, amount_usd, ts)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)`
+	_, err := s.pool.Exec(ctx, q, posID, legNo, kind, vk.Venue, vk.Type, amount, ts)
 	return err
 }
 
 // ListCashflows 返回指定持仓的现金流（§13.7 复盘合算：realized_pnl + Σcashflows）。
 // D-193-A：扫描新事实身份字段（指针容错 legacy 行 NULL）。
 func (s *Store) ListCashflows(ctx context.Context, posID int64) ([]Cashflow, error) {
-	q := `SELECT id, position_id, leg_no, kind, venue, amount_usd, ts,
+	q := `SELECT id, position_id, leg_no, kind, venue_key AS venue, amount_usd, ts,
 			account_id, raw_currency, raw_amount, fx_rate, fx_source, event_key,
 			external_event_id, source, quality, source_ts, received_ts, occurred_at
 		FROM position_cashflows WHERE position_id = $1 ORDER BY ts`
@@ -134,16 +137,17 @@ func (s *Store) SumCashflowsNet(ctx context.Context, posID int64) (float64, erro
 // commission 按实付（负=支出，与现有 pipeline_legs.go:190 -fill.Commission 口径一致）。
 // 调用方传入的 amount_usd 必须已带正确正负号，本函数不做符号翻转。
 func (s *Store) InsertCashflowFull(ctx context.Context, c *Cashflow) (won bool, err error) {
+	vk := keydomain.Parse(c.Venue) // D-496：复合键拆两列
 	var id int64
 	err = s.pool.QueryRow(ctx, `
 		INSERT INTO position_cashflows
-			(position_id, leg_no, kind, venue, amount_usd, ts,
+			(position_id, leg_no, kind, venue, venue_type, amount_usd, ts,
 			 account_id, raw_currency, raw_amount, fx_rate, fx_source, event_key,
 			 external_event_id, source, quality, source_ts, received_ts, occurred_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 		ON CONFLICT (event_key) WHERE event_key IS NOT NULL DO NOTHING
 		RETURNING id`,
-		c.PositionID, c.LegNo, c.Kind, c.Venue, c.AmountUSD, c.Ts,
+		c.PositionID, c.LegNo, c.Kind, vk.Venue, vk.Type, c.AmountUSD, c.Ts,
 		c.AccountID, c.RawCurrency, c.RawAmount, c.FXRate, c.FXSource, c.EventKey,
 		c.ExternalEventID, c.Source, c.Quality, c.SourceTs, c.ReceivedTs, c.OccurredAt).Scan(&id)
 	if err != nil {

@@ -30,8 +30,8 @@ func TestMarginPollOnce_ValueFromLeverage(t *testing.T) {
 	if f.Value != 0.002 {
 		t.Errorf("value = %v, want 0.002 (1/500)", f.Value)
 	}
-	if f.Symbol != "v6" || f.Venue != "v6" {
-		t.Errorf("Symbol=%q Venue=%q, want v6/v6 (账户标识非符号)", f.Symbol, f.Venue)
+	if f.Symbol != "" || f.Venue != "v6" {
+		t.Errorf("Symbol=%q Venue=%q, want v6/'' (D-496 R4 账号级 symbol=NULL)", f.Symbol, f.Venue)
 	}
 	if f.Unit != fact.UnitRatio {
 		t.Errorf("Unit = %q, want %q", f.Unit, fact.UnitRatio)

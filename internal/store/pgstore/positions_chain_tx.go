@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"arb/internal/keydomain"
+
 	"github.com/jackc/pgx/v5"
 )
 
@@ -67,14 +69,15 @@ func createPositionInTx(ctx context.Context, tx pgx.Tx, p *Position) (int64, err
 // createPositionLegInTx 在给定事务内写单腿记录（CreatePositionLeg 的事务化内核）。
 // 语义与 CreatePositionLeg 一致：ON CONFLICT DO NOTHING + 0 行→ErrTerminalState。
 func createPositionLegInTx(ctx context.Context, tx pgx.Tx, leg *PositionLeg) error {
-	q := `INSERT INTO position_legs (position_id, leg_no, phase, attempt_no, venue, account, symbol, side, qty,
+	vk := keydomain.Parse(leg.Venue) // D-496：复合键拆裸键+通道型落库
+	q := `INSERT INTO position_legs (position_id, leg_no, phase, attempt_no, venue, venue_type, symbol, side, qty,
 		price_expected, price_actual, order_id, status,
 		parent_attempt_id, client_order_id, requested_qty, filled_qty, avg_fill_price,
 		fee_raw, fee_usd, submitted_at, uncertain_at)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
 		ON CONFLICT (position_id, leg_no, phase, attempt_no) DO NOTHING`
 	ct, err := tx.Exec(ctx, q,
-		leg.PositionID, leg.LegNo, leg.Phase, leg.AttemptNo, leg.Venue, leg.Account, leg.Symbol, leg.Side,
+		leg.PositionID, leg.LegNo, leg.Phase, leg.AttemptNo, vk.Venue, vk.Type, leg.Symbol, leg.Side,
 		leg.Qty, leg.PriceExpected, leg.PriceActual, leg.OrderID, leg.Status,
 		leg.ParentAttemptID, leg.ClientOrderID, leg.RequestedQty, leg.FilledQty, leg.AvgFillPrice,
 		leg.FeeRaw, leg.FeeUSD, leg.SubmittedAt, leg.UncertainAt)

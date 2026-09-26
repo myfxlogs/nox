@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -54,12 +55,13 @@ func (s *Store) InsertPaperSpotCarry(ctx context.Context, r *PaperSpotCarry) err
 	if r.Structure == "" {
 		r.Structure = "spot_carry"
 	}
+	va, vb := splitPairVenue(r.Venue) // D-496：'a×b' 拆裸域两列
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO paper_spot_carry (venue, symbol, side, entry_funding_ann, qty_usd, last_funding_ann, last_accrue_ts, entry_basis_bps, last_basis_bps, structure, mt_venue, est_round_trip_fee_usd, note)
-		VALUES ($1,$2,$3,$4,$5,$6,now(),$7,$7,$8,$9,$10,$11)
-		ON CONFLICT (venue, symbol) WHERE status IN ('active','demo') DO NOTHING
+		INSERT INTO paper_spot_carry (venue_a, venue_b, symbol, side, entry_funding_ann, qty_usd, last_funding_ann, last_accrue_ts, entry_basis_bps, last_basis_bps, structure, mt_venue, est_round_trip_fee_usd, note)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,now(),$8,$8,$9,$10,$11,$12)
+		ON CONFLICT (venue_a, venue_b, symbol) WHERE status IN ('active','demo') DO NOTHING
 		RETURNING id, status`,
-		r.Venue, r.Symbol, r.Side, r.EntryFundingAnn, r.QtyUSD, r.EntryFundingAnn, r.EntryBasisBps, r.Structure, r.MtVenue, r.EstRoundTripFeeUSD, r.Note).Scan(&r.ID, &r.Status)
+		va, vb, r.Symbol, r.Side, r.EntryFundingAnn, r.QtyUSD, r.EntryFundingAnn, r.EntryBasisBps, r.Structure, r.MtVenue, r.EstRoundTripFeeUSD, r.Note).Scan(&r.ID, &r.Status)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return ErrPaperExists
@@ -129,9 +131,10 @@ func (s *Store) PromotePaperToDemo(ctx context.Context, venue, symbol string, r 
 		return fmt.Errorf("promote begin: %w", err)
 	}
 	defer tx.Rollback(context.WithoutCancel(ctx)) //nolint:errcheck // 显式 Commit；失败路径 rollback
+	va, vb := splitPairVenue(venue)
 	ct, err := tx.Exec(ctx, `
 		UPDATE paper_spot_carry SET status = 'exited', exit_ts = now(), exit_reason = 'promoted_demo'
-		WHERE venue = $1 AND symbol = $2 AND status = 'active'`, venue, symbol)
+		WHERE venue_a = $1 AND venue_b = $2 AND symbol = $3 AND status = 'active'`, va, vb, symbol)
 	if err != nil {
 		return fmt.Errorf("promote close active: %w", err)
 	}
@@ -140,10 +143,10 @@ func (s *Store) PromotePaperToDemo(ctx context.Context, venue, symbol string, r 
 	}
 	r.Status = "demo"
 	err = tx.QueryRow(ctx, `
-		INSERT INTO paper_spot_carry (venue, symbol, side, entry_funding_ann, qty_usd, last_funding_ann, status, note)
-		VALUES ($1,$2,$3,$4,$5,$6,'demo',$7)
+		INSERT INTO paper_spot_carry (venue_a, venue_b, symbol, side, entry_funding_ann, qty_usd, last_funding_ann, status, note)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,'demo',$8)
 		RETURNING id`,
-		venue, symbol, r.Side, r.EntryFundingAnn, r.QtyUSD, r.EntryFundingAnn, r.Note).Scan(&r.ID)
+		va, vb, symbol, r.Side, r.EntryFundingAnn, r.QtyUSD, r.EntryFundingAnn, r.Note).Scan(&r.ID)
 	if err != nil {
 		return fmt.Errorf("promote insert demo: %w", err)
 	}
@@ -178,9 +181,10 @@ func (s *Store) AnnotatePaperNote(ctx context.Context, id int64, marker string) 
 // 冷却重构源——列已在表上零新表；无退出行 → nil）。
 func (s *Store) LatestPaperExitTs(ctx context.Context, venue, symbol string) (*time.Time, error) {
 	var ts *time.Time
+	va, vb := splitPairVenue(venue)
 	err := s.pool.QueryRow(ctx, `
 		SELECT max(exit_ts) FROM paper_spot_carry
-		WHERE venue = $1 AND symbol = $2 AND exit_ts IS NOT NULL`, venue, symbol).Scan(&ts)
+		WHERE venue_a = $1 AND venue_b = $2 AND symbol = $3 AND exit_ts IS NOT NULL`, va, vb, symbol).Scan(&ts)
 	if err != nil {
 		return nil, fmt.Errorf("latest paper exit ts %s|%s: %w", venue, symbol, err)
 	}
@@ -203,7 +207,8 @@ func (s *Store) ExitPaperSpotCarry(ctx context.Context, id int64, reason string,
 	return nil
 }
 
-const paperSpotCarryCols = `id, venue, symbol, side, entry_funding_ann, entry_ts, qty_usd,
+// D-496：venue 'a×b' 组合串拆 venue_a/venue_b 两列落库；读出仍投影组合串（调用方零改动）。
+const paperSpotCarryCols = `id, CASE WHEN venue_b = '' THEN venue_a ELSE venue_a || '×' || venue_b END AS venue, symbol, side, entry_funding_ann, entry_ts, qty_usd,
 	last_funding_ann, accrued_usd, last_accrue_ts, low_streak, miss_streak, exit_ts, exit_reason, status, note,
 	entry_basis_bps, last_basis_bps, structure, mt_venue, est_round_trip_fee_usd, convergence_usd,
 	accrue_ticks, min_accrued_usd`
@@ -218,7 +223,7 @@ func (s *Store) LatestPaperByLegs(ctx context.Context, canonical string, legVenu
 		WHERE symbol = $1 AND status IN ('active','demo','exited')`
 	args := []any{canonical}
 	for i, v := range legVenues {
-		q += fmt.Sprintf(` AND venue LIKE '%%'||$%d||'%%'`, i+2)
+		q += fmt.Sprintf(` AND (venue_a = $%d OR venue_b = $%d)`, i+2, i+2)
 		args = append(args, v)
 	}
 	q += ` ORDER BY id DESC LIMIT 1`
@@ -248,4 +253,10 @@ func (s *Store) scanPaperSpotCarry(ctx context.Context, q string, args ...any) (
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+// splitPairVenue D-496：'a×b' 配对串→裸域两列（无 '×' → b=”）。
+func splitPairVenue(v string) (a, b string) {
+	a, b, _ = strings.Cut(v, "×")
+	return a, b
 }

@@ -90,17 +90,17 @@ func (s *Store) RecentVenueIO(ctx context.Context, venue string, configID int64,
 	return out, rows.Err()
 }
 
-// RecentIncomeByConfig 财务页收益流水：该 venue+config（account_id）最近 N 条 income
+// RecentIncomeByConfig 财务页收益流水：该 (venue,venue_type) 通道最近 N 条 income
 // （funding fee/earn 利息等实收，D-365 S4 并入账户块）。
-func (s *Store) RecentIncomeByConfig(ctx context.Context, venue string, configID int64, limit int) ([]IncomeEvent, error) {
+func (s *Store) RecentIncomeByConfig(ctx context.Context, venue, venueType string, limit int) ([]IncomeEvent, error) {
 	if limit <= 0 {
 		limit = 50
 	}
 	rows, err := s.pool.Query(ctx, `
 		SELECT income_type, amount_usd, symbol, ts
 		FROM income_events
-		WHERE venue = $1 AND account_id = $2
-		ORDER BY ts DESC LIMIT $3`, venue, configID, limit)
+		WHERE venue = $1 AND venue_type = $2
+		ORDER BY ts DESC LIMIT $3`, venue, venueType, limit)
 	if err != nil {
 		return nil, fmt.Errorf("recent income by config: %w", err)
 	}

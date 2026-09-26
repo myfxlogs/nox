@@ -30,7 +30,7 @@ type XAssetComboAdminRow struct {
 // ListXAssetAllowCombosAll 全量行（含禁用；管理面渲染用，不过滤 env/enabled）。
 func (s *Store) ListXAssetAllowCombosAll(ctx context.Context) ([]XAssetComboAdminRow, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, canonical_buy, canonical_sell, venue_buy, venue_sell,
+		SELECT id, canonical_buy, canonical_sell, venue_key_buy AS venue_buy, venue_key_sell AS venue_sell,
 		       max_long_qty, max_short_qty, max_gross_usd, notional_usd, enabled, simulated, note
 		FROM xasset_allow_combos ORDER BY id`)
 	if err != nil {
@@ -83,8 +83,8 @@ func (s *Store) ListOpenPositionsForCombo(ctx context.Context, canonicalBuy, can
 	rows, err := s.pool.Query(ctx, `
 		SELECT DISTINCT p.id, COALESCE(p.notional_usd,0) FROM positions p
 		WHERE p.status IN ('OPEN','LEGGED','CLOSING')
-		  AND EXISTS (SELECT 1 FROM position_legs b WHERE b.position_id=p.id AND b.side='BUY' AND b.venue=$3)
-		  AND EXISTS (SELECT 1 FROM position_legs sl WHERE sl.position_id=p.id AND sl.side='SELL' AND sl.venue=$4)
+		  AND EXISTS (SELECT 1 FROM position_legs b WHERE b.position_id=p.id AND b.side='BUY' AND b.venue_key=$3)
+		  AND EXISTS (SELECT 1 FROM position_legs sl WHERE sl.position_id=p.id AND sl.side='SELL' AND sl.venue_key=$4)
 		  AND (p.dedup_key LIKE '%:'||$1||':%' OR p.dedup_key LIKE 'XASSET:'||$1||'%'
 		       OR ($2 <> '' AND (p.dedup_key LIKE '%:'||$2||':%' OR p.dedup_key LIKE 'XASSET:'||$2||'%')))`,
 		canonicalBuy, canonicalSell, venueBuy, venueSell)

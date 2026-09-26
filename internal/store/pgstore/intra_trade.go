@@ -82,7 +82,7 @@ func (s *Store) IntraDayRealizedPnl(ctx context.Context, day time.Time) (float64
 func (s *Store) TicksWindow(ctx context.Context, venue, symbol string, since time.Time) ([]TickRow, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT ts, venue, symbol, bid, ask, venue_type FROM ticks
-		WHERE venue = $1 AND symbol = $2 AND ts >= $3 ORDER BY ts`, venue, symbol, since)
+		WHERE (venue = $1 OR venue_key = $1) AND symbol = $2 AND ts >= $3 ORDER BY ts`, venue, symbol, since)
 	if err != nil {
 		return nil, fmt.Errorf("ticks window: %w", err)
 	}

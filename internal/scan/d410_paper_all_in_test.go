@@ -199,9 +199,9 @@ func TestD410_CfdMonitorBasis(t *testing.T) {
 func d410SeedCombo(t *testing.T, s *pgstore.Store, canonBuy, venueBuy, canonSell, venueSell string, simulated bool) {
 	t.Helper()
 	if _, err := s.Pool().Exec(context.Background(), `
-		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_sell,
+		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell,
 			max_long_qty, max_short_qty, max_gross_usd, enabled, simulated)
-		VALUES ($1,$2,$3,$4,1,1,10000,true,$5)`,
+		VALUES ($1,$2,split_part($3,':',1),split_part($3,':',2),split_part($4,':',1),split_part($4,':',2),1,1,10000,true,$5)`,
 		canonBuy, canonSell, venueBuy, venueSell, simulated); err != nil {
 		t.Fatalf("seed combo: %v", err)
 	}
@@ -227,12 +227,12 @@ func TestD410_GuaranteedSlot(t *testing.T) {
 	if len(opened) != 7 {
 		t.Fatalf("保底不占 top-N 槽：want opened=7（6 topN+1 保底），got %v", opened)
 	}
-	var venue string
-	if err := s.Pool().QueryRow(ctx, `SELECT venue FROM paper_spot_carry WHERE symbol='D410G'`).Scan(&venue); err != nil {
+	var va, vb string
+	if err := s.Pool().QueryRow(ctx, `SELECT venue_a, venue_b FROM paper_spot_carry WHERE symbol='D410G'`).Scan(&va, &vb); err != nil {
 		t.Fatalf("guaranteed row missing: %v", err)
 	}
-	if venue != "3001157×okx" {
-		t.Fatalf("venue want 3001157×okx, got %s", venue)
+	if va != "3001157" || vb != "okx" {
+		t.Fatalf("venue want 3001157×okx, got %s×%s", va, vb)
 	}
 }
 
