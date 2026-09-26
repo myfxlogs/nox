@@ -27,6 +27,22 @@ func (s *Service) ListAutotradeAllowRules(ctx context.Context, _ *connect.Reques
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+	// D-504 S2：demo 域残留收管理面——venue 规则指向 is_real=false 户则不列
+	// （物理行留库；canonical 规则无 venue 属性不受滤；is_real 未知=nil 保守列出；
+	// 执行侧 LoadAutotradeAllowRules 语义不动——live env 检查本已拦 demo venue）。
+	isReal, rerr := s.store.ListVenueIsReal(ctx)
+	if rerr == nil {
+		filtered := rules[:0]
+		for _, r := range rules {
+			if r.Kind == "venue" {
+				if v, ok := isReal[r.Value]; ok && v != nil && !*v {
+					continue
+				}
+			}
+			filtered = append(filtered, r)
+		}
+		rules = filtered
+	}
 	accts := map[string]*v1.AccountInfo{}
 	if s.acctMon != nil {
 		for _, a := range s.acctMon.Snapshot() {
