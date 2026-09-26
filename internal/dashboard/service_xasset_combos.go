@@ -10,24 +10,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 
 	"connectrpc.com/connect"
 )
 
-var comboVenueSuffixes = map[string]bool{":mt4": true, ":mt5": true, ":perp": true, ":spot": true}
+var comboVenueTypes = map[string]bool{"mt4": true, "mt5": true, "perp": true, "spot": true}
 
-// comboVenueOK venue_key 后缀校验（fail-closed 枚举：B-016.4 非法后缀拒写）。
+// comboVenueOK venue_key 通道型校验（fail-closed 枚举：B-016.4 非法后缀拒写）。
 func comboVenueOK(v string) bool {
-	for suf := range comboVenueSuffixes {
-		if strings.HasSuffix(v, suf) {
-			return true
-		}
-	}
-	return false
+	return comboVenueTypes[keydomain.Parse(v).Type]
 }
 
 func (s *Service) ListXAssetAllowCombos(ctx context.Context, _ *connect.Request[v1.ListXAssetAllowCombosRequest]) (*connect.Response[v1.ListXAssetAllowCombosResponse], error) {

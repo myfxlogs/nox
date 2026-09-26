@@ -113,7 +113,7 @@ func (s *Service) entryWindowOf(ctx context.Context, g *pgstore.CarryGraduation,
 		}
 		mappings, err := s.gradDB().ListSymbolMappings(ctx, *g.MtVenue)
 		if err != nil {
-			return "closed:symbol_map 读取失败"
+			return "closed:broker_symbol_map 读取失败"
 		}
 		pair, err := scan.ResolveGraduationCanonicals(g.Symbol, *g.MtVenue, platform, symbolMapEntries(mappings))
 		if err != nil {

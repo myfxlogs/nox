@@ -126,7 +126,7 @@ func (s *Service) graduationRiskReport(ctx context.Context, legs []riskLegSpec, 
 		bufSet := make(map[string]bool, len(snaps))
 		for _, sn := range snaps {
 			if sn.BufferMultiple != nil {
-				bufSet[sn.Venue+":"+sn.VenueType] = true
+				bufSet[keydomain.Join(sn.Venue, sn.VenueType)] = true
 			}
 		}
 		for _, leg := range legs {

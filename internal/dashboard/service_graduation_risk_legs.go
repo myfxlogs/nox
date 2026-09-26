@@ -78,7 +78,7 @@ func (s *Service) resolveLegSymbol(ctx context.Context, leg *riskLegSpec, gaps *
 	case "mt4", "mt5":
 		mappings, err := s.gradDB().ListSymbolMappings(ctx, bare)
 		if err != nil {
-			*gaps = append(*gaps, vk+" symbol_map 读取失败: "+err.Error())
+			*gaps = append(*gaps, vk+" broker_symbol_map 读取失败: "+err.Error())
 			return
 		}
 		var pick *pgstore.SymbolMapping

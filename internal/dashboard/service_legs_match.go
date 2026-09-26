@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"strings"
 
 	"arb/internal/bus"
+	"arb/internal/keydomain"
 )
 
 // legStepQty 单腿最小步长（pass-2 粗腿锚定用；floorToStepQty 的 step 分派下沉复用）：
@@ -34,7 +34,7 @@ func (s *Service) legStepQty(venueKey, symbol string) float64 {
 				return l
 			}
 		}
-	case strings.HasPrefix(venueKey, "binance:"):
+	case keydomain.BareOf(venueKey) == "binance":
 		return s.cexStepSize(symbol)
 	}
 	return 0

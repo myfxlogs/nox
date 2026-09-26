@@ -14,6 +14,7 @@ import (
 
 	"arb/internal/bus"
 	"arb/internal/combo"
+	"arb/internal/keydomain"
 	"arb/internal/safego"
 	"arb/internal/store/pgstore"
 	"arb/internal/usdnotional"
@@ -145,7 +146,7 @@ func (g *MarginGuard) evaluate(ctx context.Context, sn *pgstore.VenueAccountSnap
 		return fmt.Errorf("get margin status: %w", perr)
 	}
 	now := time.Now()
-	key := sn.Venue + ":" + sn.VenueType
+	key := keydomain.Join(sn.Venue, sn.VenueType)
 	g.mu.Lock()
 	if out.Tier == "urgent" {
 		g.urgentStreak[key]++
