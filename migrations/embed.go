@@ -251,4 +251,7 @@ var (
 	KeydomainConstitutionSQL string
 	//go:embed 0143_carry_graduation_pair_cols.sql
 	CarryGraduationPairColsSQL string
+
+	//go:embed 0144_carry_graduation_type_drop_and_flag_pair_cols.sql
+	D499TailColsSQL string
 )

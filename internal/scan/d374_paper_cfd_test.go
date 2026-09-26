@@ -128,7 +128,20 @@ func TestD374_CfdExit_MissStreak(t *testing.T) {
 func TestD374_CfdAccrual(t *testing.T) {
 	s := d350Store(t)
 	ctx := context.Background()
-	now := time.Now()
+	// D-499 L3 确定性钉：参数钟钉 UTC 当日午夜+5min——funding 网=8h 纪元网格
+	// (00/08/16 UTC)，settledTo=min(午夜,午夜)=当日 00:00，窗 (昨00:05,今00:00]
+	// 恒含 08/16/00 三界=3 确定性（原 time.Now() 界数随时刻漂 1~2 致基线红）。
+	now := time.Now().UTC().Truncate(24 * time.Hour).Add(5 * time.Minute)
+	// 共享测试库 facts 历史行会盖过本次种子（LatestFacts 取 max ts）——钉钟语义下
+	// 先清本测试用键，隔离旧 run 残留。
+	for _, q := range []string{
+		`DELETE FROM facts WHERE venue='binance' AND symbol='SOL'`,
+		`DELETE FROM facts WHERE venue='277842155' AND symbol='SOLUSD'`,
+	} {
+		if _, err := s.Pool().Exec(ctx, q); err != nil {
+			t.Fatalf("facts clean: %v", err)
+		}
+	}
 	rows := []UniverseRow{d374Row("SOL", "277842155", "binance", "long_cfd_short_perp", 10.95, "")}
 	// D-474a S1：结算对齐累积需双腿事实面——cex funding 边界+MT swap 边界+符号映射。
 	seedUni(t, s, "binance", "SOL", "TRADING", "T3", 72*time.Hour, 11.1)
@@ -146,7 +159,8 @@ func TestD374_CfdAccrual(t *testing.T) {
 		t.Fatalf("open: %v", err)
 	}
 	// 回拨 last_accrue_ts 24h → 本轮窗 (now−24h, now] 恰 3 个 8h 界
-	if _, err := s.Pool().Exec(ctx, `UPDATE paper_spot_carry SET last_accrue_ts = now() - interval '24 hours'`); err != nil {
+	// D-499 L3：绑参 $1=now−24h（原 DB wall-clock now() 与参数钟脱钩）。
+	if _, err := s.Pool().Exec(ctx, `UPDATE paper_spot_carry SET last_accrue_ts = $1`, now.Add(-24*time.Hour)); err != nil {
 		t.Fatalf("rewind: %v", err)
 	}
 	if _, _, err := StepPaperCfdCarry(ctx, s, rows, now, d410Opts(), nil); err != nil {

@@ -10,7 +10,6 @@ import (
 	"log"
 	"math"
 	"sort"
-	"strings"
 	"time"
 
 	"arb/internal/fact"
@@ -104,7 +103,6 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 		key     string
 		u       pgstore.CexUniverseRow
 		venueA  string
-		venueB  string
 		funding float64
 		net     float64
 	}
@@ -128,12 +126,12 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 		}
 		// D-463 S2+返修R1：blocked 旗标硬拦——腿级展开查（venue 为组合串时单腿旗标同样命中）；
 		// warn 级不拦（纸面=免费复核通道）。
-		va, vb, _ := strings.Cut(u.Venue, "×") // universe venue 仍配对串域（未拆列）——切双段喂腿级旗标与双列
-		if f := blockedFlagHit(va, vb, u.Symbol, nil, flags); f != nil {
+		// D-499：fin_cex_universe.venue 生产零 × 裸域单列实证——spot 轨 venueA 直读，配对假设不成立。
+		if f := blockedFlagHit(u.Venue, "", u.Symbol, nil, flags); f != nil {
 			log.Printf("[paper spot] blocked flag 拦截: %s（%s@%s|%s）", key, f.Reason, f.Venue, f.Symbol)
 			continue
 		}
-		cands = append(cands, cand{key: key, u: u, venueA: va, venueB: vb, funding: *u.FundingAnn, net: net})
+		cands = append(cands, cand{key: key, u: u, venueA: u.Venue, funding: *u.FundingAnn, net: net})
 	}
 	// D-383C 进场持续闸：连续 PaperEntryStreakRounds 轮全条件达标才放行——任一条件失败/
 	// 候选从 uni 消失由 Step 清零（键=venue|symbol）；streak 未满的键不进开仓排序。
@@ -158,7 +156,7 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 			side = "long_perp"
 		}
 		r := &pgstore.PaperSpotCarry{
-			VenueA: c.venueA, VenueB: c.venueB, Symbol: c.u.Symbol, Side: side,
+			VenueA: c.venueA, Symbol: c.u.Symbol, Side: side,
 			EntryFundingAnn: c.funding, QtyUSD: PaperQtyUSD,
 			EntryBasisBps: c.u.LastBasisBps, LastBasisBps: c.u.LastBasisBps, // D-354 S2：开仓基差快照（NULL 传播）
 			EstRoundTripFeeUSD: paperSpotCarryFeeUSD(c.u.Venue, PaperQtyUSD), // D-474a S2：分腿真费四笔（venue 未覆盖→NULL 拒填）
