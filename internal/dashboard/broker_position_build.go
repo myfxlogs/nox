@@ -7,7 +7,6 @@ import (
 	"maps"
 	"math"
 	"sort"
-	"strings"
 	"time"
 
 	"arb/internal/bus"
@@ -15,6 +14,7 @@ import (
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 
+	"arb/internal/keydomain"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -175,5 +175,9 @@ func allocateMargins(orders []reconcile.VenueOrder, accountMargin float64, csMap
 // isCEXVenueKey 判断 venueKey 是否为 CEX（binance/okx/gate 的 spot/perp）。
 // CEX 无 symbol_mappings 记录，需从符号派生 canonical。
 func isCEXVenueKey(vk string) bool {
-	return strings.HasPrefix(vk, "binance:") || strings.HasPrefix(vk, "okx:") || strings.HasPrefix(vk, "gate:")
+	switch keydomain.BareOf(vk) {
+	case "binance", "okx", "gate":
+		return true
+	}
+	return false
 }

@@ -364,10 +364,10 @@ func monitorLegKeys(c pgstore.XAssetComboAdminRow) (cexVenue, mtVenue string) {
 }
 
 func legBare(venueKey, suffix string) string {
-	if i := strings.Index(venueKey, ":"); i >= 0 {
-		return venueKey[:i]
+	if strings.Contains(venueKey, ":") {
+		return keydomain.BareOf(venueKey)
 	}
-	return venueKey + ":" + suffix
+	return keydomain.Join(venueKey, suffix)
 }
 
 // legMarket 腿市场形态 → (venue_type, symbol)：MT 腿 ticks=mt4/mt5+canonical；
@@ -388,10 +388,7 @@ func legMarket(venueKey, canonical string) (vt, sym string) {
 
 // bareVenueKey venue 键剥 :后缀（flags/caps/快照 bare 域对齐 engine bareVenue）。
 func bareVenueKey(venueKey string) string {
-	if i := strings.Index(venueKey, ":"); i >= 0 {
-		return venueKey[:i]
-	}
-	return venueKey
+	return keydomain.BareOf(venueKey)
 }
 
 // venueEquity 快照按 bare venue 取权益（优先 perp/unified 行）。

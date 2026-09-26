@@ -196,11 +196,8 @@ func (g *MarginGuard) evaluate(ctx context.Context, sn *pgstore.VenueAccountSnap
 // legSnapshotVenue 腿 venueKey → snapshot (venue,venue_type) 键：
 // "3001157:mt5"→(3001157,mt5)；"okx:perp"→(okx,unified)（写侧归一同 cexscan.normalizeVenueType）。
 func legSnapshotVenue(venueKey string) (string, string) {
-	i := strings.LastIndex(venueKey, ":")
-	if i < 0 {
-		return venueKey, ""
-	}
-	v, t := venueKey[:i], venueKey[i+1:]
+	k := keydomain.Parse(venueKey)
+	v, t := k.Venue, k.Type
 	if v == "okx" && (t == "spot" || t == "perp") {
 		t = "unified"
 	}
@@ -211,11 +208,11 @@ func legSnapshotVenue(venueKey string) (string, string) {
 // 与 legSnapshotVenue 的快照域归一分域）；symbol=MT 腿经 canonicalOf（broker_symbol_map）
 // 转 canonical，CEX 腿经 cexCanonical 幂等归一。ok=false=MT 未映射/未知 suffix → 诚实 data_stale。
 func legTickKey(venueKey, symbol string, canonicalOf func(venue, brokerSymbol string) (string, bool)) (tv, tt, tsym string, ok bool) {
-	i := strings.LastIndex(venueKey, ":")
-	if i < 0 {
+	k := keydomain.Parse(venueKey)
+	if k.Type == "" {
 		return "", "", "", false
 	}
-	v, suffix := venueKey[:i], venueKey[i+1:]
+	v, suffix := k.Venue, k.Type
 	switch suffix {
 	case "mt4", "mt5":
 		c, ok := canonicalOf(v, symbol)

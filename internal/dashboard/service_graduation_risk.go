@@ -43,8 +43,8 @@ func (s *Service) graduationRiskReport(ctx context.Context, legs []riskLegSpec, 
 		s.resolveLegSymbol(ctx, leg, &gaps)
 		out := &v1.GraduationRiskLeg{VenueKey: leg.venueKey, Symbol: leg.symbol, Role: leg.role}
 		vk := leg.venueKey
-		ci := strings.LastIndex(vk, ":")
-		bare, vt := vk[:ci], vk[ci+1:]
+		k := keydomain.Parse(vk)
+		bare, vt := k.Venue, k.Type
 		// 价格源：ticks 最新 mid，staleness ≤5min 超龄→NULL+gaps。
 		var mid float64
 		t, ok, err := s.gradDB().LatestTick(ctx, bare, vt, leg.symbol)

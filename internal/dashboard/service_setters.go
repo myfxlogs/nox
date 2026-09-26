@@ -4,11 +4,11 @@ package dashboard
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"arb/internal/collect/cmc"
 	"arb/internal/exec"
+	"arb/internal/keydomain"
 	"arb/internal/position"
 )
 
@@ -139,11 +139,7 @@ func (s *Service) aliasForVenueKey(venueKey string) string {
 	if m == nil {
 		return ""
 	}
-	venue := venueKey
-	if idx := strings.Index(venueKey, ":"); idx > 0 {
-		venue = venueKey[:idx]
-	}
-	return m[venue]
+	return m[keydomain.BareOf(venueKey)]
 }
 
 // SetXAssetCarryLive D-340 S3：注入引擎当前净 carry 公开包装（autotrade.XAssetNetCarryPublic，

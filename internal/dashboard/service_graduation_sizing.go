@@ -44,10 +44,8 @@ type allocPool struct {
 // 仍无=未采（false）。同所双池语义：spot×perp 组合两腿各取各自池行（现货花 spot 现金，
 // 永续占 perp 保证金）——bare venue 折叠是漏行（D-358fix 同判）。
 func allocPoolOf(snaps []pgstore.VenueAccountLatest, venueKey string) (allocPool, bool) {
-	bare, vt := bareVenueKey(venueKey), ""
-	if i := strings.Index(venueKey, ":"); i >= 0 {
-		vt = venueKey[i+1:]
-	}
+	k := keydomain.Parse(venueKey)
+	bare, vt := k.Venue, k.Type
 	pick := func(wantType string) (allocPool, bool) {
 		for _, r := range snaps {
 			if r.Venue == bare && r.VenueType == wantType && r.EquityRaw != nil {
@@ -233,8 +231,8 @@ func (s *Service) gradDryRunResp(ctx context.Context, resp *v1.ApproveCarryGradu
 // usd 侧「分配$X(直填=P%×净值池$N)」；业主 note 保留在前（本函数返回拼接后整串）。
 func allocNoteMarker(userNote string, res allocSizing, pctInput bool) string {
 	poolType := res.MinPoolKey
-	if i := strings.Index(poolType, ":"); i >= 0 {
-		poolType = poolType[i+1:]
+	if t := keydomain.Parse(poolType).Type; t != "" {
+		poolType = t
 	}
 	marker := fmt.Sprintf("分配$%.1f(直填=%.1f%%×净值池$%.0f)", res.AllocUSD, res.AllocPct*100, res.MinPoolUSD)
 	if pctInput {

@@ -72,8 +72,8 @@ func cexVenueKeyOf(paperVenue string) string {
 // spot 腿/universe 无映射→canonical 本身（tick 同键多数同形，miss 走 gaps 如实标）。
 func (s *Service) resolveLegSymbol(ctx context.Context, leg *riskLegSpec, gaps *[]string) {
 	vk := leg.venueKey
-	i := strings.LastIndex(vk, ":")
-	bare, vt := vk[:i], vk[i+1:]
+	k := keydomain.Parse(vk)
+	bare, vt := k.Venue, k.Type
 	switch vt {
 	case "mt4", "mt5":
 		mappings, err := s.gradDB().ListSymbolMappings(ctx, bare)
