@@ -123,7 +123,7 @@ func (lg *LiveGateChecker) Check(ctx context.Context, accountKey, strategy, envi
 		result.HypothesisApproved = true
 	}
 
-	// 第 7 条：未达到 5%/8%/10% 回撤阈值
+	// 第 7 条：回撤 ≥5% 即拦（8%/10% 档级语义在 capital.ComputeDrawdown WarningLevel，本闸单一 5% 阈值）。
 	// 回撤从 capital_snapshots 表计算（capital_drawdowns 表不存在）
 	drawdownPct, err := lg.store.GetLatestOverallDrawdownPct(ctx, "overall", "")
 	if err != nil {

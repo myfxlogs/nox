@@ -197,6 +197,7 @@ func genID(c detector.Candidate, qt time.Time) string {
 // ETH 0.02 / BNB 0.73 / DOT 0.60 / AVAX 2.04 / TRX 3.84 / FIL 1.98 / ATOM 3.36 / NEAR 7.81
 // 分级保守取整（一线深度极好→1.0；二线→3.0；三线小币种→8.0；未知→3.0）。
 // cfg.SlippageBps（0.3）保持 MT 路径专用，改它会穿透 SWAPARB 判定（违反观察期纪律）。
+// D-508 S13 豁免：本表=venue×品种实测标定（非可推导配置），改值/扩行须带新观测证据走 D# 票。
 const cexSlipDefaultBps = 3.0 // 未知 CEX 品种回落值（独立于 cfg.SlippageBps）
 
 var cexSlipBpsByCanonical = map[string]float64{
