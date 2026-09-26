@@ -64,7 +64,7 @@ func gradRiskLegs(g *pgstore.CarryGraduation, p *pgstore.PaperSpotCarry, mtPair 
 // cexVenueKeyOf mt×cex 组合串尾段→cex:perp 键（与 approve 同口径）。
 func cexVenueKeyOf(paperVenue string) string {
 	parts := strings.Split(paperVenue, "×")
-	return parts[len(parts)-1] + ":perp"
+	return keydomain.Join(parts[len(parts)-1], "perp")
 }
 
 // resolveLegSymbol 腿 spec 的 venue 原生 symbol 解析：
