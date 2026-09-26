@@ -544,7 +544,7 @@ func TestD236_v15_HedgedSecondWindow(t *testing.T) {
 // 断言⑮b：proto HedgeCarry 含 hedged_annualized_pct 字段。
 func TestD236_v15_ProtoHedgedFields(t *testing.T) {
 	_, testFile, _, _ := runtime.Caller(0)
-	path := filepath.Join(filepath.Dir(testFile), "..", "..", "proto", "dashboardv1", "dashboard.proto")
+	path := filepath.Join(filepath.Dir(testFile), "..", "..", "proto", "dashboardv1", "position.proto") // D-508 S10：域拆分后 HedgeCarry 居 position.proto
 	src := readFile(t, path)
 	if !strings.Contains(src, "hedged_annualized_pct") {
 		t.Errorf("proto 缺 hedged_annualized_pct（变更15）")
