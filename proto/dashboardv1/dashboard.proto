@@ -916,12 +916,19 @@ message StreamUpdatesResponse {
     PositionChangeNotice position_change = 11;          // 持仓变更通知（D-107 P3，只含通知不含数据）
     HedgeRefreshNotice hedge_refresh = 12;              // 对冲结构刷新通知（D-231 S5，空消息→前端重取）
     CMCWatchUpdate cmc_update = 13;                     // CMC 看盘实时帧（D-234，后端现算载荷→前端 merge 渲染）
+    DataRefreshNotice data_refresh = 14;                // 域数据刷新通知（D-508 S9，空载荷+topic→前端重取）
   }
 }
 
 // HedgeRefreshNotice（D-231 S5）：TRX 投票/质押/余额变化 → 对冲结构卡刷新通知。
 // 空消息——前端零信任：收到→调 getHedgeStructure 重取（复用 case 11 通知→重取模式）。
 message HedgeRefreshNotice {}
+
+// DataRefreshNotice（D-508 S9）：域数据刷新通知——topic 标域（allow_rules/carry_graduation/paper_carry/
+// intra_track/perp_funding_admission/finance/trx），前端按订阅 topic 集重取对应 RPC。
+message DataRefreshNotice {
+  string topic = 1;
+}
 
 // CMCWatchUpdate（D-234）：CMC 看盘实时帧——后端 1s 蓄压后现算载荷，前端按字段 merge 渲染（不全量 load）。
 // 公式与 GetHedgeStructure 同源（mid=REST mid、ask=ForSide Sell、bid=持仓 EvaluationBidPrice、
