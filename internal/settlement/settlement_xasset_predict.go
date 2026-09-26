@@ -48,7 +48,7 @@ func checkXassetPredictVsActual(ctx context.Context, deps Deps, p *pgstore.Posit
 	reason := fmt.Sprintf("实测偏离预测 %.0f%% pos#%d（cashflows_net=%.2f vs paper accrued=%.2f）",
 		deviation*100, posID, cashflowsNet, paper.AccruedUSD)
 	if err := deps.InsertFlag(ctx, &pgstore.VenueSymbolFlag{
-		Venue: paper.VenuePair(), Symbol: paper.Symbol, Level: "warn", Reason: reason,
+		VenueA: paper.VenueA, VenueB: paper.VenueB, Symbol: paper.Symbol, Level: "warn", Reason: reason,
 	}); err != nil {
 		log.Printf("[settlement] pos=%d predict-check flag: %v", posID, err)
 		return

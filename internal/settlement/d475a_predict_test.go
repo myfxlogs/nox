@@ -46,7 +46,7 @@ func TestD475a_S7_DeviationOver50_WarnFlag(t *testing.T) {
 		t.Fatalf("Settle: %v", err)
 	}
 	if len(d.insertedFlags) != 1 || d.insertedFlags[0].Level != "warn" ||
-		d.insertedFlags[0].Venue != "3001157×okx" || d.insertedFlags[0].Symbol != "XAUUSD" {
+		d.insertedFlags[0].VenueA != "3001157" || d.insertedFlags[0].VenueB != "okx" || d.insertedFlags[0].Symbol != "XAUUSD" {
 		t.Fatalf("flags=%+v", d.insertedFlags)
 	}
 	if len(d.insertAlertMsgs) == 0 {
