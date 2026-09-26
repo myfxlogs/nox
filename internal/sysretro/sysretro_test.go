@@ -100,7 +100,7 @@ func TestGenerateDaily(t *testing.T) {
 		}
 		last = i
 	}
-	for _, want := range []string{"pos502", "hold=100", "今日平稳", "D-457 系统周期复盘报告", "ws-api 待决策", "inbox_backlog_rows: 1", "git log 不可用", "昨日 UTC 全天", "graduations_today: 2"} {
+	for _, want := range []string{"pos502", "hold=100", "今日平稳", "D-457 系统周期复盘报告", "ws-api 待决策", "inbox_backlog_rows: 1", "git log 不可用", "北京时间全天", "graduations_today: 2"} {
 		if !strings.Contains(txt, want) {
 			t.Fatalf("report missing %q", want)
 		}
@@ -108,9 +108,10 @@ func TestGenerateDaily(t *testing.T) {
 	if !strings.HasSuffix(path, "sysretro-daily-2026-09-23.md") {
 		t.Fatalf("path=%s", path)
 	}
-	// R1：窗口=昨日 UTC 全天 [2026-09-23 00:00, 2026-09-24 00:00)。
-	if st.dailySince != time.Date(2026, 9, 23, 0, 0, 0, 0, time.UTC) ||
-		st.dailyUntil != time.Date(2026, 9, 24, 0, 0, 0, 0, time.UTC) {
+	// R1（D-510）：窗口=昨日北京时间全天。Now=UTC 9-24 12:00（BJ 20:00）→「昨日 BJ 历日」=9-23
+	// → 窗=[BJ 9-23 00:00, BJ 9-24 00:00)=[UTC 9-22 16:00, 9-23 16:00)。
+	if !st.dailySince.Equal(time.Date(2026, 9, 22, 16, 0, 0, 0, time.UTC)) ||
+		!st.dailyUntil.Equal(time.Date(2026, 9, 23, 16, 0, 0, 0, time.UTC)) {
 		t.Fatalf("window=[%v,%v)", st.dailySince, st.dailyUntil)
 	}
 	if len(st.alertRows()) != 1 || !strings.Contains(st.alertRows()[0], "info:") {
@@ -178,24 +179,63 @@ KB 有新增。
 	}
 }
 
-// T3：delayUntilRetro 两档对齐（daily 00:30 / weekly 周一 01:00）。
+// T3（D-510 重写）：NextDelay 两档 BJ 锚点（daily 00:30 BJ / weekly 周一 00:30 BJ）。
+// 含 SSOT 验收锚：16:30 UTC 恰界用例（BJ 次日 00:30=UTC 16:30）+BJ 历日窗口对拍
+// （BJ 周一 00:30 触发的日报窗=UTC 周日 16:00→周一 16:00）。
 func TestDelayUntilRetro(t *testing.T) {
-	// 2026-09-24 是周四。
+	bj := BJTime
+	// 2026-09-24 是周四。UTC 12:00 = BJ 20:00 → 距 BJ 周五 00:30 = 4.5h。
 	thu := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
-	if d := NextDelay(thu, "daily"); d != 12*time.Hour+30*time.Minute {
-		t.Fatalf("daily delay=%v", d)
+	if d := NextDelay(thu, "daily"); d != 4*time.Hour+30*time.Minute {
+		t.Fatalf("daily delay=%v want 4h30m（BJ 20:00→次日 00:30）", d)
 	}
-	early := time.Date(2026, 9, 24, 0, 15, 0, 0, time.UTC)
-	if d := NextDelay(early, "daily"); d != 15*time.Minute {
-		t.Fatalf("daily early delay=%v", d)
+	// BJ 恰界：UTC 16:20 = BJ 00:20（次日历日内早于 00:30）→ 10 分钟后触发。
+	early := time.Date(2026, 9, 24, 16, 20, 0, 0, time.UTC)
+	if d := NextDelay(early, "daily"); d != 10*time.Minute {
+		t.Fatalf("daily early delay=%v want 10m（BJ 00:20→00:30）", d)
 	}
-	if d := NextDelay(thu, "weekly"); time.Until(thu.Add(d).UTC()) <= 0 ||
-		thu.Add(d).Weekday() != time.Monday || thu.Add(d).Hour() != 1 {
-		t.Fatalf("weekly delay=%v lands %v", d, thu.Add(d))
+	// SSOT 锚：UTC 16:30 恰界 = BJ 9-25 00:30 整点 → 恰过取下一周期=BJ 9-26 00:30。
+	atEdge := time.Date(2026, 9, 24, 16, 30, 0, 0, time.UTC)
+	d := NextDelay(atEdge, "daily")
+	landBJ := atEdge.Add(d).In(bj)
+	if landBJ.Day() != 26 || landBJ.Hour() != 0 || landBJ.Minute() != 30 || d != 24*time.Hour {
+		t.Fatalf("16:30 UTC 恰界应恰 24h 落 BJ 9-26 00:30，got d=%v land=%v", d, landBJ)
 	}
-	mon := time.Date(2026, 9, 28, 1, 0, 0, 0, time.UTC) // 周一 01:00 整点 → 下周一
-	if d := NextDelay(mon, "weekly"); mon.Add(d).Day() != 5 {
-		t.Fatalf("weekly at-exact delay=%v lands %v", d, mon.Add(d))
+	// weekly：周四 UTC 12:00（BJ 20:00）→ 下周一 BJ 00:30 = UTC 周日 16:30。
+	if d := NextDelay(thu, "weekly"); time.Until(thu.Add(d).UTC()) <= 0 {
+		t.Fatalf("weekly delay 非未来: %v", d)
+	} else if land := thu.Add(d).In(bj); land.Weekday() != time.Monday || land.Hour() != 0 || land.Minute() != 30 {
+		t.Fatalf("weekly 应落 BJ 周一 00:30，got %v", land)
+	}
+	// weekly 恰界：BJ 周一 00:30 整点（UTC 周日 16:30）→ 下周一。
+	monBJ := time.Date(2026, 9, 28, 0, 30, 0, 0, bj) // BJ 周一 00:30
+	if d := NextDelay(monBJ, "weekly"); monBJ.Add(d).In(bj).Day() != 5 {
+		t.Fatalf("weekly at-exact 应落 10-05（下周一），got %v", monBJ.Add(d).In(bj))
+	}
+}
+
+// TestD510_DailyWindow_BJCalendar SSOT 验收：BJ 历日窗口对拍——BJ 周一 00:30 触发的
+// 日报窗=[BJ 周日 00:00, BJ 周一 00:00)=[UTC 周日 16:00, 周一 16:00)，与 funding 8h 结算
+// 边界（UTC 16:00 起）严丝合缝装 3 个完整结算窗。
+func TestD510_DailyWindow_BJCalendar(t *testing.T) {
+	trigger := time.Date(2026, 9, 28, 0, 30, 0, 0, BJTime) // BJ 周一 00:30
+	nowBJ := trigger.In(BJTime)
+	dayEnd := time.Date(nowBJ.Year(), nowBJ.Month(), nowBJ.Day(), 0, 0, 0, 0, BJTime)
+	dayStart := dayEnd.AddDate(0, 0, -1)
+	// 「昨日 BJ 历日」=9-27 → 窗=[UTC 9-26 16:00, 9-27 16:00)（funding 结算边界起）。
+	if got := dayStart.UTC().Format("2006-01-02 15:04"); got != "2026-09-26 16:00" {
+		t.Fatalf("窗口起点=UTC %s，want 2026-09-26 16:00（funding 结算边界）", got)
+	}
+	if got := dayEnd.UTC().Format("2006-01-02 15:04"); got != "2026-09-27 16:00" {
+		t.Fatalf("窗口终点=UTC %s，want 2026-09-27 16:00", got)
+	}
+	// 3 个完整 8h 结算窗（16:00/00:00/08:00 UTC 起算）。
+	windows := 0
+	for ts := dayStart; ts.Before(dayEnd); ts = ts.Add(8 * time.Hour) {
+		windows++
+	}
+	if windows != 3 {
+		t.Fatalf("BJ 历日窗应装 3 个 8h 结算窗，got %d", windows)
 	}
 }
 

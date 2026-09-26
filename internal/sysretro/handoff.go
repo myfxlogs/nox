@@ -79,10 +79,10 @@ func inboxBacklog(inboxPath string) int {
 	return n
 }
 
-// gitLogOn 指定 UTC 日期当日 commit 列表；git 不可用/非仓库 → 降级标注。
+// gitLogOn 指定北京历日当日 commit 列表（D-510 S3：日界 +08:00）；git 不可用/非仓库 → 降级标注。
 func gitLogOn(repoDir, day string) string {
 	out, err := exec.Command("git", "-C", repoDir, "log",
-		"--since="+day+"T00:00:00Z", "--until="+day+"T24:00:00Z", "--oneline", "--all").Output()
+		"--since="+day+"T00:00:00+08:00", "--until="+day+"T23:59:59+08:00", "--oneline", "--all").Output()
 	if err != nil {
 		return "  (git log 不可用)\n"
 	}

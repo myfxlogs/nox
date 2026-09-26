@@ -27,7 +27,8 @@ const weeklySystemPrompt = `你是 ARB 系统的周复盘员。用户消息里 f
 「改进建议」≤5 条，每条一行「标题|理由|建议动作」；本节之后必须紧跟一个 ` + "```sysretro-suggestions" + ` fenced 块重复同样的行（供程序解析进收件箱，块外文字不进收件箱）。
 注意：预估 vs 实收的差是口径差不是错误（pos502 先例）；原因归因而非裁决——淘汰走既有毕业链。`
 
-// GenerateWeekly 生成周报。窗口=[now-7d, now)。落档 sysretro-weekly-YYYY-MM-DD.md。
+// GenerateWeekly 生成周报。窗口=[now-7d, now)（D-510 S4：7d 滚动窗无历日歧义不改；
+// 触发点随 S1 移至周一 00:30 北京时间，表头/prompt 注明北京口径）。落档 sysretro-weekly-YYYY-MM-DD.md。
 func GenerateWeekly(ctx context.Context, deps Deps) (string, error) {
 	deps.fill()
 	if deps.Store == nil {

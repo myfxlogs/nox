@@ -16,8 +16,9 @@ import (
 const dailySystemPrompt = `你是 ARB 系统的日结员。用户消息里 fenced 块中的数字由 Go 确定性计算——禁止改动、重算或复述时写错。
 只输出一段「今日小结」正文（3-5 句，无标题无列表）：值得记的事、异常、明日关注点。不输出其他任何内容。`
 
-// GenerateDaily 生成日报。窗口=昨日 UTC 全天 [昨00:00, 今00:00)（00:30 触发时昨日数据已齐）。
-// 返回落档路径 docs/报告/sysretro-daily-YYYY-MM-DD.md（文件名=昨日日期，同日幂等覆盖）。
+// GenerateDaily 生成日报。窗口=昨日北京时间全天 [BJ 00:00, BJ 24:00)（D-510：00:30 BJ 触发
+// 时昨日数据已齐；BJ 00:00=UTC 16:00=binance 8h funding 结算边界，accrual 归因零漂移）。
+// 返回落档路径 docs/报告/sysretro-daily-YYYY-MM-DD.md（文件名=昨日北京日期，同日幂等覆盖）。
 func GenerateDaily(ctx context.Context, deps Deps) (string, error) {
 	deps.fill()
 	if deps.Store == nil {
@@ -26,17 +27,17 @@ func GenerateDaily(ctx context.Context, deps Deps) (string, error) {
 	if deps.Client == nil {
 		return "", fmt.Errorf("sysretro: client 未配置")
 	}
-	now := deps.Now().UTC()
-	dayEnd := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	nowBJ := deps.Now().In(BJTime)
+	dayEnd := time.Date(nowBJ.Year(), nowBJ.Month(), nowBJ.Day(), 0, 0, 0, 0, BJTime)
 	dayStart := dayEnd.AddDate(0, 0, -1)
 	day := dayStart.Format("2006-01-02")
 	st, err := deps.Store.RetroDailyStats(ctx, dayStart, dayEnd)
 	if err != nil {
 		return "", fmt.Errorf("daily stats: %w", err)
 	}
-	statsBlock := renderDailyStats(st, now)
+	statsBlock := renderDailyStats(st, deps.Now())
 
-	prompt := fmt.Sprintf("以下是 %s 昨日（UTC 全天）运行统计（Go 确定性计算）：\n\n```\n%s```\n\n请输出今日小结。",
+	prompt := fmt.Sprintf("以下是 %s 昨日（北京时间全天）运行统计（Go 确定性计算）：\n\n```\n%s```\n\n请输出今日小结。",
 		day, statsBlock)
 	var aiText strings.Builder
 	_, err = deps.Run(ctx, deps.Client, deps.Tools, retroToolSpecs(), dailySystemPrompt,
@@ -46,7 +47,7 @@ func GenerateDaily(ctx context.Context, deps Deps) (string, error) {
 		return "", fmt.Errorf("analyst run: %w", err)
 	}
 
-	report := assembleDaily(now, day, st, statsBlock, strings.TrimSpace(aiText.String()), deps)
+	report := assembleDaily(deps.Now(), day, st, statsBlock, strings.TrimSpace(aiText.String()), deps)
 	path, err := writeReport(deps.ReportDir, "sysretro-daily-"+day+".md", report)
 	if err != nil {
 		return "", err
@@ -76,10 +77,10 @@ func renderDailyStats(d *pgstore.RetroDaily, now time.Time) string {
 	return b.String()
 }
 
-// assembleDaily 五节契约拼装（§1-3 Go 表 → §4 AI → §5 交接面 Go）。day=昨日 UTC 日期。
+// assembleDaily 五节契约拼装（§1-3 Go 表 → §4 AI → §5 交接面 Go）。day=昨日北京历日日期。
 func assembleDaily(now time.Time, day string, d *pgstore.RetroDaily, stats, aiText string, deps Deps) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "# 系统日结 %s\n\n> 数字=Go 确定性计算（昨日 UTC 全天 [00:00,24:00)）；§今日小结=AI 生成未经独立复审。\n\n", day)
+	fmt.Fprintf(&b, "# 系统日结 %s\n\n> 数字=Go 确定性计算（昨日北京时间全天 [00:00,24:00)）；§今日小结=AI 生成未经独立复审。\n\n", day)
 	b.WriteString("## 今日盘面\n\n```\n" + stats + "```\n\n")
 	b.WriteString("## 今日决策轨\n\n" + "```\n" + joinDist(d.EvalDist) + "\n```\n\n")
 	b.WriteString("## 今日事件\n\n```\n" + joinDist(d.AlertDist) + "\n")
