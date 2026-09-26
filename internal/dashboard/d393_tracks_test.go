@@ -24,26 +24,26 @@ func TestD393_TrackAggregation(t *testing.T) {
 	exitPP := now.Add(-6 * time.Hour) // entry 2d 前 → 存活 1.75d
 	fake := &fakePaperBoardSource{rows: []pgstore.PaperSpotCarry{
 		// spot_carry 轨：active2 + demo1 + exited3
-		{ID: 1, Venue: "binance", Symbol: "A1", Side: "short_perp", Status: "active",
+		{ID: 1, VenueA: "binance", Symbol: "A1", Side: "short_perp", Status: "active",
 			QtyUSD: 1000, EntryTs: now.Add(-36 * time.Hour), AccruedUSD: 10},
-		{ID: 2, Venue: "binance", Symbol: "A2", Side: "short_perp", Status: "active",
+		{ID: 2, VenueA: "binance", Symbol: "A2", Side: "short_perp", Status: "active",
 			QtyUSD: 500, EntryTs: now.Add(-24 * time.Hour), AccruedUSD: 5},
-		{ID: 3, Venue: "binance", Symbol: "D1", Side: "short_perp", Status: "demo",
+		{ID: 3, VenueA: "binance", Symbol: "D1", Side: "short_perp", Status: "demo",
 			QtyUSD: 200, EntryTs: now.Add(-12 * time.Hour), AccruedUSD: 1},
 		// exited：total_pnl 优先分支——accrued 负但 total 正 → win
-		{ID: 4, Venue: "binance", Symbol: "W1", Side: "short_perp", Status: "exited",
+		{ID: 4, VenueA: "binance", Symbol: "W1", Side: "short_perp", Status: "exited",
 			QtyUSD: 1000, EntryTs: now.Add(-5 * 24 * time.Hour), ExitTs: &exitA, AccruedUSD: -1,
 			EntryBasisBps: boardF64(60), LastBasisBps: boardF64(10)}, // total=−1+5−3=+1 → win
 		// accrued 兜底分支——无基差 → win=accrued：+2 → win
-		{ID: 5, Venue: "binance", Symbol: "W2", Side: "short_perp", Status: "exited",
+		{ID: 5, VenueA: "binance", Symbol: "W2", Side: "short_perp", Status: "exited",
 			QtyUSD: 1000, EntryTs: now.Add(-6 * 24 * time.Hour), ExitTs: &exitB, AccruedUSD: 2},
 		// accrued 兜底亏：−0.5 → lose
-		{ID: 6, Venue: "binance", Symbol: "L1", Side: "short_perp", Status: "exited",
+		{ID: 6, VenueA: "binance", Symbol: "L1", Side: "short_perp", Status: "exited",
 			QtyUSD: 1000, EntryTs: now.Add(-3 * 24 * time.Hour), ExitTs: &exitC, AccruedUSD: -0.5},
 		// perp_perp 轨：active1 + exited1（accrued 兜底亏）
-		{ID: 7, Venue: "okx", Symbol: "P1", Side: "short_perp", Status: "active",
+		{ID: 7, VenueA: "okx", Symbol: "P1", Side: "short_perp", Status: "active",
 			QtyUSD: 800, EntryTs: now.Add(-24 * time.Hour), AccruedUSD: 3, Structure: "perp_perp"},
-		{ID: 8, Venue: "okx", Symbol: "P2", Side: "long_perp", Status: "exited",
+		{ID: 8, VenueA: "okx", Symbol: "P2", Side: "long_perp", Status: "exited",
 			QtyUSD: 800, EntryTs: now.Add(-2 * 24 * time.Hour), ExitTs: &exitPP, AccruedUSD: -0.2, Structure: "perp_perp"},
 	}}
 	resp, err := buildPaperSpotCarryBoard(context.Background(), fake, now)
@@ -93,11 +93,11 @@ func TestD393_RowFields(t *testing.T) {
 	now := d393Now()
 	mt := "mt5-live"
 	fake := &fakePaperBoardSource{rows: []pgstore.PaperSpotCarry{
-		{ID: 1, Venue: "binance", Symbol: "S1", Side: "short_perp", Status: "active",
+		{ID: 1, VenueA: "binance", Symbol: "S1", Side: "short_perp", Status: "active",
 			QtyUSD: 1000, EntryTs: now.Add(-24 * time.Hour)}, // Structure="" 历史行
-		{ID: 2, Venue: "mt5", Symbol: "C1", Side: "long_cfd_short_perp", Status: "active",
+		{ID: 2, VenueA: "mt5", Symbol: "C1", Side: "long_cfd_short_perp", Status: "active",
 			QtyUSD: 1000, EntryTs: now.Add(-24 * time.Hour), Structure: "long_cfd_short_perp", MtVenue: &mt},
-		{ID: 3, Venue: "okx", Symbol: "P1", Side: "short_perp", Status: "active",
+		{ID: 3, VenueA: "okx", Symbol: "P1", Side: "short_perp", Status: "active",
 			QtyUSD: 1000, EntryTs: now.Add(-24 * time.Hour), Structure: "perp_perp"}, // MtVenue nil
 	}}
 	resp, err := buildPaperSpotCarryBoard(context.Background(), fake, now)
@@ -126,9 +126,9 @@ func TestD393_ExitedDaysHeld(t *testing.T) {
 	now := d393Now()
 	exit := now.Add(-48 * time.Hour) // entry 7d 前、exit 2d 前 → 存活恰 5d
 	fake := &fakePaperBoardSource{rows: []pgstore.PaperSpotCarry{
-		{ID: 1, Venue: "binance", Symbol: "X1", Side: "short_perp", Status: "exited",
+		{ID: 1, VenueA: "binance", Symbol: "X1", Side: "short_perp", Status: "exited",
 			QtyUSD: 1000, EntryTs: now.Add(-7 * 24 * time.Hour), ExitTs: &exit, AccruedUSD: 5},
-		{ID: 2, Venue: "binance", Symbol: "Y1", Side: "short_perp", Status: "active",
+		{ID: 2, VenueA: "binance", Symbol: "Y1", Side: "short_perp", Status: "active",
 			QtyUSD: 1000, EntryTs: now.Add(-7 * 24 * time.Hour), AccruedUSD: 5},
 	}}
 	resp, err := buildPaperSpotCarryBoard(context.Background(), fake, now)

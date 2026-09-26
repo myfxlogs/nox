@@ -7,7 +7,6 @@ import (
 	"arb/internal/keydomain"
 	"context"
 	"fmt"
-	"strings"
 
 	"arb/internal/scan"
 	"arb/internal/store/pgstore"
@@ -18,15 +17,15 @@ func gradRiskLegs(g *pgstore.CarryGraduation, p *pgstore.PaperSpotCarry, mtPair 
 	case "long_cfd_short_perp": // buy=MT sell=CEX
 		return []riskLegSpec{
 			{mtPair.MtVenueKey, mtPair.MtCanonical, "buy"},
-			{cexVenueKeyOf(g.Venue), mtPair.CexCanonical, "sell"},
+			{cexVenueKeyOf(g.VenueB), mtPair.CexCanonical, "sell"},
 		}, nil
 	case "short_cfd_long_perp": // buy=CEX sell=MT
 		return []riskLegSpec{
-			{cexVenueKeyOf(g.Venue), mtPair.CexCanonical, "buy"},
+			{cexVenueKeyOf(g.VenueB), mtPair.CexCanonical, "buy"},
 			{mtPair.MtVenueKey, mtPair.MtCanonical, "sell"},
 		}, nil
 	case "spot_carry": // 双腿同所：perp 腿+spot 腿；Side 定 funding 方向
-		v := strings.Split(g.Venue, "×")[0]
+		v := g.VenueA
 		perpRole, spotRole := "sell", "buy"
 		if p != nil && p.Side == "long_perp" {
 			perpRole, spotRole = "buy", "sell"
@@ -36,22 +35,20 @@ func gradRiskLegs(g *pgstore.CarryGraduation, p *pgstore.PaperSpotCarry, mtPair 
 			{keydomain.Join(v, "spot"), g.Symbol, spotRole},
 		}, nil
 	case "perp_perp": // venue=shortV×longV（方向在键，radar 轨）
-		parts := strings.Split(g.Venue, "×")
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("perp_perp venue 组合串异常 %q", g.Venue)
+		if g.VenueA == "" || g.VenueB == "" {
+			return nil, fmt.Errorf("perp_perp venue 配对臂缺失 %q", g.VenuePair())
 		}
 		return []riskLegSpec{
-			{keydomain.Join(parts[1], "perp"), g.Symbol, "buy"},
-			{keydomain.Join(parts[0], "perp"), g.Symbol, "sell"},
+			{keydomain.Join(g.VenueB, "perp"), g.Symbol, "buy"},
+			{keydomain.Join(g.VenueA, "perp"), g.Symbol, "sell"},
 		}, nil
 	case "cfd_cfd": // mt×mt：MtVenue=short 腿（paper_mtm 插入约定），另一腿=buy
-		parts := strings.Split(g.Venue, "×")
-		if len(parts) != 2 || g.MtVenue == nil {
-			return nil, fmt.Errorf("cfd_cfd venue/mt_venue 异常 %q", g.Venue)
+		if g.VenueA == "" || g.VenueB == "" || g.MtVenue == nil {
+			return nil, fmt.Errorf("cfd_cfd venue/mt_venue 异常 %q", g.VenuePair())
 		}
-		short, long := *g.MtVenue, parts[0]
-		if short == parts[0] {
-			long = parts[1]
+		short, long := *g.MtVenue, g.VenueA
+		if short == g.VenueA {
+			long = g.VenueB
 		}
 		return []riskLegSpec{
 			{keydomain.Join(long, "mt5"), g.Symbol, "buy"},
@@ -61,10 +58,9 @@ func gradRiskLegs(g *pgstore.CarryGraduation, p *pgstore.PaperSpotCarry, mtPair 
 	return nil, fmt.Errorf("未知 structure %q", g.Structure)
 }
 
-// cexVenueKeyOf mt×cex 组合串尾段→cex:perp 键（与 approve 同口径）。
-func cexVenueKeyOf(paperVenue string) string {
-	parts := strings.Split(paperVenue, "×")
-	return keydomain.Join(parts[len(parts)-1], "perp")
+// cexVenueKeyOf CEX 臂裸名→cex:perp 键（与 approve 同口径；D-498 直读 venue_b 不再拆串）。
+func cexVenueKeyOf(cexVenue string) string {
+	return keydomain.Join(cexVenue, "perp")
 }
 
 // resolveLegSymbol 腿 spec 的 venue 原生 symbol 解析：

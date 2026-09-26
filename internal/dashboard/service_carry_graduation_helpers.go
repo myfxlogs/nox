@@ -13,6 +13,7 @@ import (
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 	"arb/internal/exec"
+	"arb/internal/keydomain"
 	"arb/internal/scan"
 	"arb/internal/store/pgstore"
 
@@ -73,7 +74,7 @@ func (s *Service) mtPlatformFor(ctx context.Context, mtVenue string) (int, error
 // 同函数复用（当前态信息，不落库）。
 func (s *Service) graduationVenueGaps(ctx context.Context, g *pgstore.CarryGraduation) []string {
 	if !isCfdStructure(g.Structure) {
-		return nonCfdGapKeys(g.Structure, g.Venue, s.allowVenuesNow(ctx))
+		return nonCfdGapKeys(g.Structure, g.VenueA, g.VenueB, s.allowVenuesNow(ctx))
 	}
 	if g.MtVenue == nil || *g.MtVenue == "" {
 		return []string{"mt_venue 缺失（数据不一致）"}
@@ -91,8 +92,7 @@ func (s *Service) graduationVenueGaps(ctx context.Context, g *pgstore.CarryGradu
 	if err != nil {
 		return []string{"symbol 映射缺失: " + err.Error()}
 	}
-	parts := strings.Split(g.Venue, "×")
-	cexVenueKey := parts[len(parts)-1] + ":perp"
+	cexVenueKey := keydomain.Join(g.VenueB, "perp") // D-498：CEX 臂直读 venue_b
 	return venueGapsOf(pair.MtVenueKey, cexVenueKey, s.allowVenuesNow(ctx))
 }
 
@@ -113,19 +113,19 @@ var numericVenueRe = regexp.MustCompile(`^[0-9]+$`)
 // nonCfdGapKeys 非 cfd 结构的 venue 缺口（venue_key 口径——前端补开钮直接可用）：
 // 数字 seg=MT 账号段 → seg:mt5；spot_carry=同所双腿 → seg:spot+seg:perp；
 // 其余（perp_perp）双腿恒 :perp。
-func nonCfdGapKeys(structure, paperVenue string, allow map[string]bool) []string {
+func nonCfdGapKeys(structure, venueA, venueB string, allow map[string]bool) []string {
 	var gaps []string
-	for _, seg := range strings.Split(paperVenue, "×") {
+	for _, seg := range []string{venueA, venueB} { // D-498：直读配对双列不再拆组合串
 		if seg == "" {
 			continue
 		}
 		switch {
 		case numericVenueRe.MatchString(seg):
-			gaps = append(gaps, venueGapsOf(seg+":mt5", "", allow)...)
+			gaps = append(gaps, venueGapsOf(keydomain.Join(seg, "mt5"), "", allow)...)
 		case structure == "spot_carry":
-			gaps = append(gaps, venueGapsOf(seg+":spot", seg+":perp", allow)...)
+			gaps = append(gaps, venueGapsOf(keydomain.Join(seg, "spot"), keydomain.Join(seg, "perp"), allow)...)
 		default:
-			gaps = append(gaps, venueGapsOf(seg+":perp", "", allow)...)
+			gaps = append(gaps, venueGapsOf(keydomain.Join(seg, "perp"), "", allow)...)
 		}
 	}
 	return gaps
@@ -209,7 +209,7 @@ func (s *Service) approveNonCfd(ctx context.Context, resp *v1.ApproveCarryGradua
 		// FUNDING_HEDGE 执行链全通——旧版只体检不写白名单=假授权缺陷修复）。
 		// 方向定死=现货买×合约空（正 funding 收息形态）；canonical 双腿同值
 		//（engine FUNDING_HEDGE 闸 sellCanonical 回退 canonical 的匹配口径）。
-		venueSpot, venuePerp := grad.Venue+":spot", grad.Venue+":perp"
+		venueSpot, venuePerp := keydomain.Join(grad.VenueA, "spot"), keydomain.Join(grad.VenueA, "perp")
 		// D-490：同所双池（现货池现金×永续池保证金）资金分配折算——与 cfd 分支同模型。
 		longQty, shortQty, grossUSD := g.MaxLongQty, g.MaxShortQty, g.MaxGrossUsd
 		notionalUSD := g.NotionalUsd

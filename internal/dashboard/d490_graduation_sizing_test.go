@@ -216,8 +216,8 @@ func TestD490_ExplicitModeDryRun(t *testing.T) {
 func TestD490_PerpPerpFundingRejected(t *testing.T) {
 	fee, entryB, lastB := 0.5, 10.0, 12.0
 	f := &fakeGradDB{
-		grad: &pgstore.CarryGraduation{ID: 6, PaperID: 43, Venue: "gate×okx", Symbol: "BTC", Structure: "perp_perp", Status: "pending"},
-		paper: &pgstore.PaperSpotCarry{ID: 43, Venue: "gate×okx", Structure: "perp_perp",
+		grad: &pgstore.CarryGraduation{ID: 6, PaperID: 43, VenueA: "gate", VenueB: "okx", Symbol: "BTC", Structure: "perp_perp", Status: "pending"},
+		paper: &pgstore.PaperSpotCarry{ID: 43, VenueA: "gate", VenueB: "okx", Structure: "perp_perp",
 			Status: "active", AccruedUSD: 5.0, EntryTs: time.Now().Add(-6 * 24 * time.Hour),
 			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB},
 	}

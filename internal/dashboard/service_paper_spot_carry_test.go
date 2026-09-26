@@ -142,9 +142,9 @@ func TestD352_ListPaperSpotCarry_ThreeStatesAndJoin(t *testing.T) {
 func TestD352_BuildBoard_NumericAnchors(t *testing.T) {
 	now := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
 	fake := &fakePaperBoardSource{rows: []pgstore.PaperSpotCarry{
-		{ID: 1, Venue: "binance", Symbol: "A", Side: "short_perp", Status: "active",
+		{ID: 1, VenueA: "binance", Symbol: "A", Side: "short_perp", Status: "active",
 			QtyUSD: 1000, EntryFundingAnn: 92, EntryTs: now.Add(-36 * time.Hour), AccruedUSD: 1.23},
-		{ID: 2, Venue: "binance", Symbol: "B", Side: "long_perp", Status: "demo",
+		{ID: 2, VenueA: "binance", Symbol: "B", Side: "long_perp", Status: "demo",
 			QtyUSD: 1000, EntryFundingAnn: -30, EntryTs: now.Add(-48 * time.Hour), AccruedUSD: -0.5},
 	}}
 	fake.uni = map[string]pgstore.CexUniverseRow{
@@ -209,13 +209,13 @@ func (f *fakePaperBoardSource) ListCexUniverse(_ context.Context) (map[string]pg
 func TestD354_PnlNumbers(t *testing.T) {
 	now := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
 	fake := &fakePaperBoardSource{rows: []pgstore.PaperSpotCarry{
-		{ID: 1, Venue: "binance", Symbol: "SHORTOK", Side: "short_perp", Status: "active",
+		{ID: 1, VenueA: "binance", Symbol: "SHORTOK", Side: "short_perp", Status: "active",
 			QtyUSD: 1000, EntryFundingAnn: 92, EntryTs: now.Add(-2 * 24 * time.Hour), AccruedUSD: 2.6,
 			EntryBasisBps: boardF64(50), LastBasisBps: boardF64(30)}, // 基差回落 50→30 → +$2
-		{ID: 2, Venue: "binance", Symbol: "LONGOK", Side: "long_perp", Status: "active",
+		{ID: 2, VenueA: "binance", Symbol: "LONGOK", Side: "long_perp", Status: "active",
 			QtyUSD: 1000, EntryFundingAnn: -30, EntryTs: now.Add(-2 * 24 * time.Hour), AccruedUSD: 2.6,
 			EntryBasisBps: boardF64(50), LastBasisBps: boardF64(30)}, // 多侧基差回落 50→30：short 语义=+2，long 反号=−2（亏损——变异摘符号则变 +2 可观测）
-		{ID: 3, Venue: "okx", Symbol: "AKE", Side: "short_perp", Status: "active",
+		{ID: 3, VenueA: "okx", Symbol: "AKE", Side: "short_perp", Status: "active",
 			QtyUSD: 1000, EntryFundingAnn: 25, EntryTs: now.Add(-2 * 24 * time.Hour), AccruedUSD: 1.0}, // 无基差
 	}}
 	resp, err := buildPaperSpotCarryBoard(context.Background(), fake, now)

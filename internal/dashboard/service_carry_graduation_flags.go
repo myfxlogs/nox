@@ -94,7 +94,7 @@ func (s *Service) RejectCarryGraduation(ctx context.Context, req *connect.Reques
 			reason = "业主拒绝（无理由注记）"
 		}
 		if err := db.InsertFlag(ctx, &pgstore.VenueSymbolFlag{
-			Venue: grad.Venue, Symbol: grad.Symbol, Level: level, Reason: reason,
+			Venue: grad.VenuePair(), Symbol: grad.Symbol, Level: level, Reason: reason,
 		}); err != nil {
 			resp.Error = fmt.Sprintf("拒绝已落账但 flag 回写失败: %v", err)
 			return connect.NewResponse(resp), nil
@@ -103,7 +103,7 @@ func (s *Service) RejectCarryGraduation(ctx context.Context, req *connect.Reques
 		// 契约=任何旗标 mutation RPC 成功路径必须 kickConfig（含未来 ResolveFlag 解旗）。
 		s.kickConfig()
 		if level == "blocked" {
-			s.revokeCombosForFlag(ctx, grad.Venue, grad.Symbol)
+			s.revokeCombosForFlag(ctx, grad.VenuePair(), grad.Symbol)
 		}
 	}
 	s.insertGraduationAlert(ctx, grad, "已拒绝", "")
@@ -113,7 +113,7 @@ func (s *Service) RejectCarryGraduation(ctx context.Context, req *connect.Reques
 
 // insertGraduationAlert 毕业裁决 info 告警（feishu 投递走既有 pusher 链）。
 func (s *Service) insertGraduationAlert(ctx context.Context, g *pgstore.CarryGraduation, action, detail string) {
-	msg := fmt.Sprintf("[毕业链] %s×%s %s %s", g.Venue, g.Symbol, g.Structure, action)
+	msg := fmt.Sprintf("[毕业链] %s×%s %s %s", g.VenuePair(), g.Symbol, g.Structure, action)
 	if detail != "" {
 		msg += "：" + detail
 	}

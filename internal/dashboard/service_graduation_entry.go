@@ -5,11 +5,11 @@ package dashboard
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
 	"arb/internal/exec"
+	"arb/internal/keydomain"
 	"arb/internal/scan"
 	"arb/internal/store/pgstore"
 )
@@ -83,7 +83,7 @@ func (s *Service) entryWindowOf(ctx context.Context, g *pgstore.CarryGraduation,
 		if p.Side == "long_perp" {
 			sign = -1
 		}
-		bare := strings.Split(g.Venue, "×")[0]
+		bare := g.VenueA
 		rows, err := s.gradDB().FundingPredWindow(ctx, bare, g.Symbol, now.Add(-cfg.Window))
 		if err != nil {
 			return "closed:funding 查询失败 " + err.Error()
@@ -93,11 +93,11 @@ func (s *Service) entryWindowOf(ctx context.Context, g *pgstore.CarryGraduation,
 		}
 		return "open"
 	case "perp_perp":
-		parts := strings.Split(g.Venue, "×")
-		if len(parts) != 2 {
-			return "closed:venue 组合串异常"
+		if g.VenueA == "" || g.VenueB == "" {
+			return "closed:venue 配对臂缺失"
 		}
-		if ok, reason := exec.CarryFundingRegimeCheck(ctx, s.gradDB(), parts[1]+":perp", parts[0]+":perp", g.Symbol, g.Symbol, now, cfg); !ok {
+		// venue=shortV×longV（方向在键）：buy=venue_b 长腿 sell=venue_a 短腿。
+		if ok, reason := exec.CarryFundingRegimeCheck(ctx, s.gradDB(), keydomain.Join(g.VenueB, "perp"), keydomain.Join(g.VenueA, "perp"), g.Symbol, g.Symbol, now, cfg); !ok {
 			return "closed:" + reason
 		}
 		return "open"
@@ -119,7 +119,7 @@ func (s *Service) entryWindowOf(ctx context.Context, g *pgstore.CarryGraduation,
 		if err != nil {
 			return "closed:" + err.Error()
 		}
-		vb, vs := pair.MtVenueKey, cexVenueKeyOf(g.Venue)
+		vb, vs := pair.MtVenueKey, cexVenueKeyOf(g.VenueB)
 		cb, cs := pair.MtCanonical, pair.CexCanonical
 		if g.Structure == "short_cfd_long_perp" {
 			vb, vs = vs, vb

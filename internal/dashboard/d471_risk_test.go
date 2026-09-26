@@ -22,9 +22,9 @@ func d471Fixture() *fakeGradDB {
 	ctVal := 0.01
 	mt := "3001157"
 	return &fakeGradDB{
-		grad: &pgstore.CarryGraduation{ID: 7, PaperID: 50, Venue: "3001157×binance", Symbol: "XAU",
+		grad: &pgstore.CarryGraduation{ID: 7, PaperID: 50, VenueA: "3001157", VenueB: "binance", Symbol: "XAU",
 			Structure: "long_cfd_short_perp", MtVenue: &mt, Status: "pending"},
-		paper: &pgstore.PaperSpotCarry{ID: 50, Venue: "3001157×binance", Symbol: "XAU",
+		paper: &pgstore.PaperSpotCarry{ID: 50, VenueA: "3001157", VenueB: "binance", Symbol: "XAU",
 			Structure: "long_cfd_short_perp", MtVenue: &mt, QtyUSD: 1000,
 			Status: "active", AccruedUSD: 5, EntryTs: time.Now().Add(-6 * 24 * time.Hour),
 			EstRoundTripFeeUSD: &[]float64{3.4}[0], EntryBasisBps: &[]float64{10}[0], LastBasisBps: &[]float64{12}[0]},
@@ -115,8 +115,8 @@ func TestD471_Dossier_Gaps(t *testing.T) {
 func TestD471_Approve_NonCfd_DecayedReject(t *testing.T) {
 	fee, entryB, lastB := 0.5, 10.0, 12.0
 	f := &fakeGradDB{
-		grad: &pgstore.CarryGraduation{ID: 8, PaperID: 60, Venue: "binance", Symbol: "SKLUSDT", Structure: "spot_carry", Status: "pending"},
-		paper: &pgstore.PaperSpotCarry{ID: 60, Venue: "binance", Structure: "spot_carry", Side: "short_perp",
+		grad: &pgstore.CarryGraduation{ID: 8, PaperID: 60, VenueA: "binance", Symbol: "SKLUSDT", Structure: "spot_carry", Status: "pending"},
+		paper: &pgstore.PaperSpotCarry{ID: 60, VenueA: "binance", Structure: "spot_carry", Side: "short_perp",
 			Status: "active", AccruedUSD: 5, EntryTs: time.Now().Add(-6 * 24 * time.Hour),
 			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB, LowStreak: 1},
 	}
@@ -133,9 +133,9 @@ func TestD471_Approve_NonCfd_DecayedReject(t *testing.T) {
 // TestD471_EntryWindow_SpotCarry spot_carry 复检=perp 腿 FundingRegimeOK 按 Side 定号。
 func TestD471_EntryWindow_SpotCarry(t *testing.T) {
 	fee, entryB, lastB := 0.5, 10.0, 12.0
-	paper := &pgstore.PaperSpotCarry{ID: 61, Venue: "binance", Symbol: "SKLUSDT", Structure: "spot_carry", Side: "short_perp",
+	paper := &pgstore.PaperSpotCarry{ID: 61, VenueA: "binance", Symbol: "SKLUSDT", Structure: "spot_carry", Side: "short_perp",
 		Status: "active", EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB}
-	grad := &pgstore.CarryGraduation{ID: 9, PaperID: 61, Venue: "binance", Symbol: "SKLUSDT", Structure: "spot_carry", Status: "pending"}
+	grad := &pgstore.CarryGraduation{ID: 9, PaperID: 61, VenueA: "binance", Symbol: "SKLUSDT", Structure: "spot_carry", Status: "pending"}
 	f := &fakeGradDB{}
 	s := &Service{gradStore: f}
 	s.SetCarryRegime(exec.CarryRegimeConfig{Window: 24 * time.Hour, FloorPct: 2.0, MinSamples: 12})

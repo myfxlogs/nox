@@ -30,9 +30,9 @@ func (f *fakeDemoPaperStore) InsertPaperSpotCarry(_ context.Context, r *pgstore.
 	return nil
 }
 
-func (f *fakeDemoPaperStore) PromotePaperToDemo(_ context.Context, venue, symbol string, r *pgstore.PaperSpotCarry) error {
+func (f *fakeDemoPaperStore) PromotePaperToDemo(_ context.Context, venueA, venueB, symbol string, r *pgstore.PaperSpotCarry) error {
 	f.promoted = true
-	f.promoteArgs = [2]string{venue, symbol}
+	f.promoteArgs = [2]string{venueA + venueB, symbol}
 	if f.promoteErr != nil {
 		return f.promoteErr
 	}
@@ -50,7 +50,7 @@ func (f *fakeDemoPaperStore) MarkPaperSpotCarryDemo(_ context.Context, id int64,
 // 误作用+实际 qty 污染纸面账）。
 func TestD350R2_RegisterFreshBranch(t *testing.T) {
 	f := &fakeDemoPaperStore{}
-	pr := &pgstore.PaperSpotCarry{Venue: "binance", Symbol: "GUSDT", Side: "short_perp", QtyUSD: 1000}
+	pr := &pgstore.PaperSpotCarry{VenueA: "binance", Symbol: "GUSDT", Side: "short_perp", QtyUSD: 1000}
 	if err := registerSpotCarryDemoRow(context.Background(), f, "binance", "GUSDT", "spot=o1@1.5 perp=o2@1.6", pr); err != nil {
 		t.Fatalf("fresh: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestD350R2_RegisterFreshBranch(t *testing.T) {
 // TestD350R2_RegisterActiveBranch active 行在：Insert 撞 ErrPaperExists → Promote（现行为保留）。
 func TestD350R2_RegisterActiveBranch(t *testing.T) {
 	f := &fakeDemoPaperStore{insertErr: pgstore.ErrPaperExists}
-	pr := &pgstore.PaperSpotCarry{Venue: "binance", Symbol: "GUSDT", Side: "long_perp", QtyUSD: 1000}
+	pr := &pgstore.PaperSpotCarry{VenueA: "binance", Symbol: "GUSDT", Side: "long_perp", QtyUSD: 1000}
 	if err := registerSpotCarryDemoRow(context.Background(), f, "binance", "GUSDT", "note", pr); err != nil {
 		t.Fatalf("active: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestD350R2_RegisterActiveBranch(t *testing.T) {
 func TestD350R2_RegisterDemoBranch(t *testing.T) {
 	f := &fakeDemoPaperStore{insertErr: pgstore.ErrPaperExists, promoteErr: pgstore.ErrPaperPromoteNoActive}
 	err := registerSpotCarryDemoRow(context.Background(), f, "binance", "GUSDT", "note",
-		&pgstore.PaperSpotCarry{Venue: "binance", Symbol: "GUSDT", Side: "short_perp"})
+		&pgstore.PaperSpotCarry{VenueA: "binance", Symbol: "GUSDT", Side: "short_perp"})
 	if err != errDemoRowExists {
 		t.Errorf("demo 分支 err = %v, want errDemoRowExists（透传）", err)
 	}

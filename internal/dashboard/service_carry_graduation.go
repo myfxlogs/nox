@@ -104,7 +104,7 @@ func (s *Service) ListCarryGraduations(ctx context.Context, req *connect.Request
 	for i := range rows {
 		g := &rows[i]
 		row := &v1.CarryGraduationRow{
-			Id: g.ID, PaperId: g.PaperID, Venue: g.Venue, Symbol: g.Symbol,
+			Id: g.ID, PaperId: g.PaperID, Venue: g.VenuePair(), Symbol: g.Symbol,
 			Structure: g.Structure, MtVenue: g.MtVenue,
 			AgeDays: g.AgeDays, AccruedUsd: g.AccruedUSD, LastFundingAnn: g.LastFundingAnn,
 			NetAllInUsd: g.NetAllInUSD, // D-410 S5：全账净额透出（缺账行 NULL 诚实缺）
@@ -171,7 +171,7 @@ func (s *Service) ApproveCarryGraduation(ctx context.Context, req *connect.Reque
 	if err != nil {
 		return fail("旗标活读失败: %v（fail-closed 不批钱）", err)
 	}
-	for _, v := range scan.FlagVenueSet(grad.Venue, grad.MtVenue) {
+	for _, v := range scan.FlagVenueSet(grad.VenueA, grad.VenueB, grad.MtVenue) {
 		if f, ok := flags[pgstore.FlagKey(v, grad.Symbol)]; ok {
 			if f.Level == "blocked" {
 				return fail("venue %s 命中 blocked flag: %s（先解旗再批准）", v, f.Reason)
@@ -213,11 +213,10 @@ func (s *Service) ApproveCarryGraduation(ctx context.Context, req *connect.Reque
 	if err != nil {
 		return fail("%v（需先在 Symbol 映射页补映射或点「自动映射全部账号」）", err)
 	}
-	// cex 腿 venue 取 paper venue 组合串尾段（D-374 venue=mt×cex）
-	parts := strings.Split(paper.Venue, "×")
-	cexVenue := parts[len(parts)-1]
+	// cex 腿 venue=配对 B 臂（D-498 直读 venue_b，不再拆组合串）
+	cexVenue := paper.VenueB
 	if cexVenue == "" {
-		return fail("paper venue 组合串异常: %q", paper.Venue)
+		return fail("paper venue 配对 B 臂缺失: %q", paper.VenuePair())
 	}
 	cexVenueKey := keydomain.Join(cexVenue, "perp")
 	// ③ 按 structure 方向定买卖腿（canonical_buy/venue_buy 永远=买腿，cap 跟腿走；D-490 折算先定方向）。

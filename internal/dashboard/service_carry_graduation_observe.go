@@ -30,7 +30,7 @@ func (s *Service) graduationObservability(ctx context.Context, g *pgstore.CarryG
 	// cfd/perp_perp=×拆段 venue×symbol 两形态）。
 	elapsed := time.Since(p.EntryTs)
 	var ivl float64
-	for _, v := range scan.FlagVenueSet(p.Venue, p.MtVenue) {
+	for _, v := range scan.FlagVenueSet(p.VenueA, p.VenueB, p.MtVenue) {
 		bare := keydomain.BareOf(v) // venue_key→裸名（facts 键=裸 venue）
 		for _, sym := range []string{p.Symbol, p.Symbol + "USDT", p.Symbol + "-USDT-SWAP"} {
 			fs, err := s.gradDB().LatestFacts(ctx, fact.KindFundingInterval, bare, sym)

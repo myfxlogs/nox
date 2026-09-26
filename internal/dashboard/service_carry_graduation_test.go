@@ -184,8 +184,8 @@ func gradFixture(structure string) (*fakeGradDB, *Service) {
 	// （active≥5d+accrued>0+est_fee/basis 齐），否则旧用例全被复核闸拦。
 	fee, entryB, lastB := 0.5, 10.0, 12.0
 	f := &fakeGradDB{
-		grad: &pgstore.CarryGraduation{ID: 5, PaperID: 42, Venue: "1279967×gate", Symbol: "BTC", Structure: structure, MtVenue: &mt, Status: "pending"},
-		paper: &pgstore.PaperSpotCarry{ID: 42, Venue: "1279967×gate", Symbol: "BTC", Structure: structure,
+		grad: &pgstore.CarryGraduation{ID: 5, PaperID: 42, VenueA: "1279967", VenueB: "gate", Symbol: "BTC", Structure: structure, MtVenue: &mt, Status: "pending"},
+		paper: &pgstore.PaperSpotCarry{ID: 42, VenueA: "1279967", VenueB: "gate", Symbol: "BTC", Structure: structure,
 			Status: "active", AccruedUSD: 5.0, EntryTs: time.Now().Add(-6 * 24 * time.Hour),
 			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB, Side: "long"},
 		maps:  []pgstore.SymbolMapping{{Venue: "1279967", BrokerSymbol: "BTCUSD", Canonical: "BTCUSD", IsPrimary: true}},
@@ -312,8 +312,8 @@ func TestD403_Approve_NonCfd_LinkReport_NoCombo(t *testing.T) {
 	// D-471 S2：非 cfd 亦走全结构硬前置——fixture 须合格（active≥5d+accrued>0+est_fee/basis 齐）。
 	fee, entryB, lastB := 0.5, 10.0, 12.0
 	f := &fakeGradDB{
-		grad: &pgstore.CarryGraduation{ID: 6, PaperID: 43, Venue: "gate×okx", Symbol: "BTC", Structure: "perp_perp", Status: "pending"},
-		paper: &pgstore.PaperSpotCarry{ID: 43, Venue: "gate×okx", Structure: "perp_perp",
+		grad: &pgstore.CarryGraduation{ID: 6, PaperID: 43, VenueA: "gate", VenueB: "okx", Symbol: "BTC", Structure: "perp_perp", Status: "pending"},
+		paper: &pgstore.PaperSpotCarry{ID: 43, VenueA: "gate", VenueB: "okx", Structure: "perp_perp",
 			Status: "active", AccruedUSD: 5.0, EntryTs: time.Now().Add(-6 * 24 * time.Hour),
 			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB},
 	}
@@ -440,7 +440,7 @@ func TestD463_RejectWriteFlag(t *testing.T) {
 	// flag_warn 透出 list 行。
 	warn := "⚠funding 语义待查"
 	f3, s3 := gradFixture("spot_carry")
-	f3.list = []pgstore.CarryGraduation{{ID: 7, PaperID: 1, Venue: "gate", Symbol: "XPD", Status: "pending", FlagWarn: &warn}}
+	f3.list = []pgstore.CarryGraduation{{ID: 7, PaperID: 1, VenueA: "gate", Symbol: "XPD", Status: "pending", FlagWarn: &warn}}
 	lr, err := s3.ListCarryGraduations(context.Background(), connect.NewRequest(&v1.ListCarryGraduationsRequest{}))
 	if err != nil || len(lr.Msg.Rows) != 1 || lr.Msg.Rows[0].FlagWarn == nil || *lr.Msg.Rows[0].FlagWarn != warn {
 		t.Fatalf("rows=%+v err=%v", lr.Msg.Rows, err)
@@ -506,8 +506,8 @@ func TestD474b_ApproveMT4Reject(t *testing.T) {
 func TestD488_Approve_SpotCarry_WritesCombo(t *testing.T) {
 	fee, entryB, lastB := 0.5, 10.0, 12.0
 	f := &fakeGradDB{
-		grad: &pgstore.CarryGraduation{ID: 7, PaperID: 44, Venue: "binance", Symbol: "SKLUSDT", Structure: "spot_carry", Status: "pending"},
-		paper: &pgstore.PaperSpotCarry{ID: 44, Venue: "binance", Symbol: "SKLUSDT", Structure: "spot_carry",
+		grad: &pgstore.CarryGraduation{ID: 7, PaperID: 44, VenueA: "binance", Symbol: "SKLUSDT", Structure: "spot_carry", Status: "pending"},
+		paper: &pgstore.PaperSpotCarry{ID: 44, VenueA: "binance", Symbol: "SKLUSDT", Structure: "spot_carry",
 			Status: "active", AccruedUSD: 22.0, EntryTs: time.Now().Add(-6 * 24 * time.Hour),
 			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB},
 	}
