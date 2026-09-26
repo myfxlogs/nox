@@ -56,7 +56,7 @@ func (p *Pipeline) persistOpenLegs(ctx context.Context, requestID string, posID 
 		}); err != nil {
 			msg := fmt.Sprintf("leg persist failed position=%d leg=%d venue=%s: %v", posID, i, legs[i].VenueKey, err)
 			log.Printf("[exec] %s", msg)
-			_ = p.store.InsertAlert(ctx, nil, "critical", msg)
+			p.alertCrit(ctx, msg)
 			// D-201：补偿回滚已 FILLED 腿（0~i），best-effort（回滚失败只 log+alert，不阻断返回原 error）。
 			p.rollbackFilledLegs(ctx, posID, legs, results, i)
 			return fmt.Errorf("leg persist: %w", err)
@@ -70,7 +70,7 @@ func (p *Pipeline) persistOpenLegs(ctx context.Context, requestID string, posID 
 			// quality='actual'（Fill/Commission 实采，D-425）。
 			if err := p.insertCashflowIdempotent(ctx, posID, int16(i), "commission", legs[i].VenueKey, -*feeUSD, "actual", dayStart, ts, "open"); err != nil {
 				log.Printf("[exec] pos=%d leg=%d open fee cashflow: %v", posID, i, err)
-				_ = p.store.InsertAlert(ctx, nil, "critical",
+				p.alertCrit(ctx,
 					fmt.Sprintf("position %d leg %d open fee cashflow write failed: %v", posID, i, err))
 			}
 		}
@@ -116,7 +116,7 @@ func (p *Pipeline) rollbackFilledLegs(ctx context.Context, posID int64, legs []L
 		if closeErr != nil {
 			rmsg := fmt.Sprintf("rollback failed pos=%d leg=%d venue=%s: %v", posID, i, legs[i].VenueKey, closeErr)
 			log.Printf("[exec] %s", rmsg)
-			_ = p.store.InsertAlert(ctx, nil, "critical", rmsg)
+			p.alertCrit(ctx, rmsg)
 		} else {
 			log.Printf("[exec] rollback ok pos=%d leg=%d venue=%s ticket=%s", posID, i, legs[i].VenueKey, r.OrderID)
 		}
@@ -166,7 +166,7 @@ func (p *Pipeline) rollbackUnknownLeg(ctx context.Context, posID int64, i int, l
 	fail := func(what string, err error) {
 		msg := fmt.Sprintf("rollback orphan pos=%d leg=%d venue=%s order=%s %s failed: %v（孤儿未证否）", posID, i, leg.VenueKey, r.OrderID, what, err)
 		log.Printf("[exec] %s", msg)
-		_ = p.store.InsertAlert(ctx, nil, "critical", msg)
+		p.alertCrit(ctx, msg)
 	}
 	if err := canceler.CancelOrder(ctx, OrderRef{OrderID: r.OrderID, Venue: leg.VenueKey, Symbol: leg.VenueSymbol}); err != nil {
 		fail("cancel", err)
@@ -192,4 +192,11 @@ func (p *Pipeline) rollbackUnknownLeg(ctx context.Context, posID int64, i int, l
 		return
 	}
 	log.Printf("[exec] rollback pos=%d leg=%d venue=%s order=%s partial qty=%.8g reversed", posID, i, leg.VenueKey, r.OrderID, qty)
+}
+
+// alertCrit D-508 审计契约：critical 告警写——写失败只落 log 防递归（不得再告警）。
+func (p *Pipeline) alertCrit(ctx context.Context, msg string) {
+	if err := p.store.InsertAlert(ctx, nil, "critical", msg); err != nil {
+		log.Printf("[exec] alert write failed: %v | original: %s", err, msg)
+	}
 }

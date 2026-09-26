@@ -40,14 +40,14 @@ func (g *Gate) haltStrategy(ctx context.Context, intent TradeIntent, reason stri
 		log.Printf("[autotrade] halt DisableStrategy %s: %v", intent.Strategy, err)
 	}
 	alertMsg := fmt.Sprintf("strategy %s HALTED: %s", intent.Strategy, reason)
-	_ = g.store.InsertAlert(ctx, nil, "critical", alertMsg)
+	alertWrite(ctx, g.store, "critical", alertMsg)
 	log.Printf("[autotrade] HALT %s: %s", intent.Strategy, reason)
 }
 
 // rejectLog 拒绝路径统一落库 + 日志（fail-closed 检查失败与规则拒绝共用）。
 // D-154 S3：disabled=true 时 stdout 1h 去重（per-strategy），DB 落库保留全量（审计完整性不动）。
 func (g *Gate) rejectLog(ctx context.Context, intent TradeIntent, reason string, disabled bool) {
-	_ = g.store.InsertAutotradeLog(ctx, &pgstore.AutotradeLog{
+	auditWarn(ctx, g.store, "InsertAutotradeLog rejectLog", g.store.InsertAutotradeLog(ctx, &pgstore.AutotradeLog{
 		OpportunityID: intent.DedupKey,
 		Strategy:      intent.Strategy,
 		Canonical:     intent.Canonical,
@@ -57,7 +57,7 @@ func (g *Gate) rejectLog(ctx context.Context, intent TradeIntent, reason string,
 		Status:        "REJECTED",
 		Reason:        reason,
 		NetBps:        intent.NetBps,
-	})
+	}))
 	if disabled {
 		// stdout 1h 去重（per-strategy）；DB 已全量落库
 		g.lastDisabledLogMu.Lock()

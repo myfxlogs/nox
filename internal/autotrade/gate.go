@@ -252,13 +252,14 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 		}
 		g.marginWarnThrottled(ctx, *intent, msg) // D-472 S3：资金拒单→业主 warn（≥6h 节流）
 	}
-	_ = g.store.InsertAutotradeLog(ctx, logEntry)
+	// D-508 写路径审计契约：审计落库失败 fail-open+声张（log+warn 告警）。
+	auditWarn(ctx, g.store, "InsertAutotradeLog gate result", g.store.InsertAutotradeLog(ctx, logEntry))
 
 	if status == "FAILED" {
 		log.Printf("[autotrade] gate FAILED %s: %s", intent.DedupKey, logEntry.Reason)
 	} else {
 		log.Printf("[autotrade] gate EXECUTED %s posID=%d", intent.DedupKey, posID)
-		_ = g.store.InsertAlert(ctx, nil, "warn",
+		alertWrite(ctx, g.store, "warn",
 			fmt.Sprintf("[机会执行] %s %s net=%.1fbps posID=%d",
 				intent.Strategy, intent.Canonical, intent.NetBps, posID))
 	}

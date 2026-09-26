@@ -128,9 +128,13 @@ func (e *CEXExecutor) okxConfirmFill(ctx context.Context, o Order, instID, ordID
 	}
 	// 窗尽 → cancel-order 后终查（cancel 成功/「已成交」报错均为确定性证据；
 	// 错误文案因 venue 而异不依赖串匹配——终查 accFillSz/avgPx 是唯一事实源）。
-	_ = e.okxCancelOrder(ctx, instID, ordID)
+	// D-508：cancel/终查失败 → critical（订单可能孤儿在簿）。
+	if cerr := e.okxCancelOrder(ctx, instID, ordID); cerr != nil {
+		e.alertCritical(o, fmt.Sprintf("okx cancel %s post-window failed: %v（订单可能孤儿在簿）", ordID, cerr))
+	}
 	st, err := e.okxOrderStatus(ctx, instID, ordID, "")
 	if err != nil {
+		e.alertCritical(o, fmt.Sprintf("okx order status final check %s failed: %v（订单可能孤儿在簿）", ordID, err))
 		return Fill{}, &ErrFillUnconfirmed{OrderID: ordID}
 	}
 	if f, done, ferr := e.evalOKXStatus(o, ordID, st, ctVal); done {
@@ -194,9 +198,12 @@ func (e *CEXExecutor) binanceConfirmFill(ctx context.Context, o Order, ordID str
 			break
 		}
 	}
-	_ = e.binanceCancelOrder(ctx, o.Symbol, ordID)
+	if cerr := e.binanceCancelOrder(ctx, o.Symbol, ordID); cerr != nil {
+		e.alertCritical(o, fmt.Sprintf("binance cancel %s post-window failed: %v（订单可能孤儿在簿）", ordID, cerr))
+	}
 	st, err := e.binanceOrderStatus(ctx, o.Symbol, ordID, "")
 	if err != nil {
+		e.alertCritical(o, fmt.Sprintf("binance order status final check %s failed: %v（订单可能孤儿在簿）", ordID, err))
 		return Fill{}, &ErrFillUnconfirmed{OrderID: ordID}
 	}
 	if f, done, ferr := e.evalBinanceStatus(ctx, o, ordID, st); done {
