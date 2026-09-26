@@ -271,9 +271,8 @@ func parseExp(jwt string) (time.Time, error) {
 }
 
 // parseFloat 是 strconv.ParseFloat 的简写（JSON 数值字段全为字符串编码，需转换）。
-// D-508 S2b：脏值从「静默归零」升级为「告警留痕+归零」——CMC 面为监控快照（账户/持仓/
-// 报价 facts），全量上抛需改 ~30 处调用签名，豁免列为报审项；脏值 loudly log 后仍可被
-// 消费方 freshness/合理性判据剔除，优于原来无声归零。
+// D-508 S2b：脏值告警留痕+归零——CMC 面为监控快照 facts，全量上抛需改 ~30 处签名，
+// 豁免列为报审项；loudly log 优于原无声归零，消费方另有 freshness/合理性判据。
 func parseFloat(s string) float64 {
 	v, err := strconv.ParseFloat(s, 64)
 	if err != nil && s != "" {
