@@ -257,4 +257,7 @@ var (
 
 	//go:embed 0145_execution_control_events_broker_scope.sql
 	ExecControlBrokerScopeSQL string
+
+	//go:embed 0146_drop_binance_demo_config.sql
+	DropBinanceDemoConfigSQL string
 )

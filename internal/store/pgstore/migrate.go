@@ -141,6 +141,7 @@ var migrationFiles = []struct {
 	{143, migrations.CarryGraduationPairColsSQL},       // D-498：carry_graduations venue_a/venue_b 源列+venue 展示投影
 	{144, migrations.D499TailColsSQL},                  // D-499：carry venue_type 拆除+flags 配对域拆列
 	{145, migrations.ExecControlBrokerScopeSQL},        // D-493：execution_control_events scope_type 补 'broker' 审计域
+	{146, migrations.DropBinanceDemoConfigSQL},         // D-504：删 binance demofapi demo 配置行
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

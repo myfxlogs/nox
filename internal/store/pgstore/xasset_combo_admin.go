@@ -28,11 +28,13 @@ type XAssetComboAdminRow struct {
 }
 
 // ListXAssetAllowCombosAll 全量行（含禁用；管理面渲染用，不过滤 env/enabled）。
+// D-504 S1：demo 域残留收管理面——simulated=t 死行不列（物理行留库=授权痕迹；
+// 列可空 NULL 视同非 demo 行）。
 func (s *Store) ListXAssetAllowCombosAll(ctx context.Context) ([]XAssetComboAdminRow, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, canonical_buy, canonical_sell, venue_key_buy AS venue_buy, venue_key_sell AS venue_sell,
 		       max_long_qty, max_short_qty, max_gross_usd, notional_usd, enabled, simulated, note
-		FROM xasset_allow_combos ORDER BY id`)
+		FROM xasset_allow_combos WHERE simulated IS NULL OR simulated = false ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("list xasset combos all: %w", err)
 	}
