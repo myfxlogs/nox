@@ -9,6 +9,8 @@ import (
 	"log"
 	"time"
 
+	"arb/internal/safego"
+
 	"github.com/fbsobreira/gotron-sdk/pkg/account"
 )
 
@@ -68,7 +70,7 @@ func (s *Scheduler) SetNow(fn func() time.Time) { s.now = fn }
 
 // Run 启动改投 tick（每 30min，boot 后等 5min 首次执行）。
 func (s *Scheduler) Run(ctx context.Context) {
-	go s.rebalanceLoop(ctx)
+	safego.Go("trxvote:rebalance", func() { s.rebalanceLoop(ctx) })
 }
 
 // rebalanceLoop 每 TickInterval 执行改投决策。
