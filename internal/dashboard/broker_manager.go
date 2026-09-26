@@ -275,6 +275,23 @@ func (m *BrokerManager) DisableBroker(ctx context.Context, venue string) error {
 	return nil
 }
 
+// UpdateBrokerCredentials D-493 S4：凭据编辑（空串/0=不改动）。更新行后重启运行中适配器
+// 使新凭据生效——connected/failed 复用 EnableBroker 通路（失败回写 failed）；stopped 不启动。
+func (m *BrokerManager) UpdateBrokerCredentials(ctx context.Context, venue, host string, port int, server, password string) error {
+	a, err := m.store.GetBrokerAccount(ctx, venue)
+	if err != nil {
+		return fmt.Errorf("get broker %s: %w", venue, err)
+	}
+	if err := m.store.UpdateBrokerCredentials(ctx, venue, host, port, server, password); err != nil {
+		return fmt.Errorf("update broker credentials: %w", err)
+	}
+	m.stopAdapter(venue)
+	if a.Status == "stopped" {
+		return nil
+	}
+	return m.EnableBroker(ctx, venue)
+}
+
 // EnableBroker 启用账号：读取凭据重新启动适配器，status=connected（失败回写 failed）。
 func (m *BrokerManager) EnableBroker(ctx context.Context, venue string) error {
 	a, err := m.store.GetBrokerAccount(ctx, venue)

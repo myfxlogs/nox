@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"arb/internal/store/pgstore"
 
@@ -57,11 +58,36 @@ func (s *Service) AddBroker(ctx context.Context, req *connect.Request[v1.AddBrok
 }
 
 // RemoveBroker 停止适配器并删除账号。
+// D-493 S5：删除前写 execution_control_events 审计（scope_type='broker', actor='ui', reason 来自 UI）。
 func (s *Service) RemoveBroker(ctx context.Context, req *connect.Request[v1.RemoveBrokerRequest]) (*connect.Response[v1.RemoveBrokerResponse], error) {
-	if err := s.bm.RemoveBroker(ctx, req.Msg.GetVenue()); err != nil {
+	venue := req.Msg.GetVenue()
+	fromMode := ""
+	if a, err := s.store.GetBrokerAccount(ctx, venue); err == nil && a != nil {
+		fromMode = a.Status
+	}
+	if err := s.store.AppendExecutionControlEvent(ctx, &pgstore.ExecutionControlEvent{
+		ScopeType: "broker",
+		ScopeKey:  venue,
+		FromMode:  fromMode,
+		ToMode:    "removed",
+		Actor:     "ui",
+		Reason:    req.Msg.GetReason(),
+		EventKey:  fmt.Sprintf("broker-remove-%s-%d", venue, time.Now().UnixNano()),
+	}); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("write remove audit: %w", err))
+	}
+	if err := s.bm.RemoveBroker(ctx, venue); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(&v1.RemoveBrokerResponse{}), nil
+}
+
+// UpdateBrokerCredentials D-493 S4：凭据编辑（空串/0=不改动；password 永不回传）。
+func (s *Service) UpdateBrokerCredentials(ctx context.Context, req *connect.Request[v1.UpdateBrokerCredentialsRequest]) (*connect.Response[v1.UpdateBrokerCredentialsResponse], error) {
+	if err := s.bm.UpdateBrokerCredentials(ctx, req.Msg.GetVenue(), req.Msg.GetHost(), int(req.Msg.GetPort()), req.Msg.GetServer(), req.Msg.GetPassword()); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&v1.UpdateBrokerCredentialsResponse{}), nil
 }
 
 // ListBrokerAccounts 返回全部已配置账号。
@@ -70,21 +96,32 @@ func (s *Service) ListBrokerAccounts(ctx context.Context, req *connect.Request[v
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+	// D-493 S1：报价健康透出（qbus 同源，无新轮询）；查询失败回退空表不阻断列表。
+	quoteAges := quoteAgeByVenue(s.qbus, time.Now())
+	mapCounts, err := s.store.VenueSymbolMapCounts(ctx)
+	if err != nil {
+		log.Printf("[broker] symbol map counts: %v", err)
+		mapCounts = nil
+	}
 	out := make([]*v1.BrokerAccount, 0, len(accounts))
 	for _, a := range accounts {
+		feedState, quoteAgeSec := feedStateOf(quoteAges[a.Venue])
 		acct := &v1.BrokerAccount{
-			Venue:       a.Venue,
-			Platform:    int32(a.Platform),
-			Host:        a.Host,
-			Port:        int32(a.Port),
-			User:        a.User,
-			Server:      a.Server,
-			Alias:       a.Alias,
-			Status:      a.Status,
-			CreatedAt:   timestamppb.New(a.CreatedAt),
-			IsReal:      a.IsReal,              // D-144 ① 三态：*bool（nil=未知）
-			ServerGroup: serverGroup(a.Server), // D-150 ② 平台分组键后端算好下发
-			Website:     a.Website,             // D-157 V3：broker 官网
+			Venue:           a.Venue,
+			Platform:        int32(a.Platform),
+			Host:            a.Host,
+			Port:            int32(a.Port),
+			User:            a.User,
+			Server:          a.Server,
+			Alias:           a.Alias,
+			Status:          a.Status,
+			CreatedAt:       timestamppb.New(a.CreatedAt),
+			IsReal:          a.IsReal,              // D-144 ① 三态：*bool（nil=未知）
+			ServerGroup:     serverGroup(a.Server), // D-150 ② 平台分组键后端算好下发
+			Website:         a.Website,             // D-157 V3：broker 官网
+			FeedState:       feedState,
+			LastQuoteAgeSec: quoteAgeSec,
+			SymbolMapCount:  int32(mapCounts[a.Venue]),
 		}
 		// 账号真实佣金（bps/腿，D-036）；nil = 未设置回退默认
 		acct.CommissionBps = a.CommissionBps

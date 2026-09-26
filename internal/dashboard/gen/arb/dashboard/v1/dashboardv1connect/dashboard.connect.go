@@ -179,6 +179,9 @@ const (
 	// DashboardServiceRemoveBrokerProcedure is the fully-qualified name of the DashboardService's
 	// RemoveBroker RPC.
 	DashboardServiceRemoveBrokerProcedure = "/arb.dashboard.v1.DashboardService/RemoveBroker"
+	// DashboardServiceUpdateBrokerCredentialsProcedure is the fully-qualified name of the
+	// DashboardService's UpdateBrokerCredentials RPC.
+	DashboardServiceUpdateBrokerCredentialsProcedure = "/arb.dashboard.v1.DashboardService/UpdateBrokerCredentials"
 	// DashboardServiceListBrokerAccountsProcedure is the fully-qualified name of the DashboardService's
 	// ListBrokerAccounts RPC.
 	DashboardServiceListBrokerAccountsProcedure = "/arb.dashboard.v1.DashboardService/ListBrokerAccounts"
@@ -477,6 +480,7 @@ type DashboardServiceClient interface {
 	SearchBroker(context.Context, *connect.Request[v1.SearchBrokerRequest]) (*connect.Response[v1.SearchBrokerResponse], error)
 	AddBroker(context.Context, *connect.Request[v1.AddBrokerRequest]) (*connect.Response[v1.AddBrokerResponse], error)
 	RemoveBroker(context.Context, *connect.Request[v1.RemoveBrokerRequest]) (*connect.Response[v1.RemoveBrokerResponse], error)
+	UpdateBrokerCredentials(context.Context, *connect.Request[v1.UpdateBrokerCredentialsRequest]) (*connect.Response[v1.UpdateBrokerCredentialsResponse], error)
 	ListBrokerAccounts(context.Context, *connect.Request[v1.ListBrokerAccountsRequest]) (*connect.Response[v1.ListBrokerAccountsResponse], error)
 	VerifyAccount(context.Context, *connect.Request[v1.VerifyAccountRequest]) (*connect.Response[v1.VerifyAccountResponse], error)
 	// CEX 交易所管理（D-054：后台增删，运行时生效，对齐 broker 账户管理）
@@ -891,6 +895,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			httpClient,
 			baseURL+DashboardServiceRemoveBrokerProcedure,
 			connect.WithSchema(dashboardServiceMethods.ByName("RemoveBroker")),
+			connect.WithClientOptions(opts...),
+		),
+		updateBrokerCredentials: connect.NewClient[v1.UpdateBrokerCredentialsRequest, v1.UpdateBrokerCredentialsResponse](
+			httpClient,
+			baseURL+DashboardServiceUpdateBrokerCredentialsProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("UpdateBrokerCredentials")),
 			connect.WithClientOptions(opts...),
 		),
 		listBrokerAccounts: connect.NewClient[v1.ListBrokerAccountsRequest, v1.ListBrokerAccountsResponse](
@@ -1403,6 +1413,7 @@ type dashboardServiceClient struct {
 	searchBroker                    *connect.Client[v1.SearchBrokerRequest, v1.SearchBrokerResponse]
 	addBroker                       *connect.Client[v1.AddBrokerRequest, v1.AddBrokerResponse]
 	removeBroker                    *connect.Client[v1.RemoveBrokerRequest, v1.RemoveBrokerResponse]
+	updateBrokerCredentials         *connect.Client[v1.UpdateBrokerCredentialsRequest, v1.UpdateBrokerCredentialsResponse]
 	listBrokerAccounts              *connect.Client[v1.ListBrokerAccountsRequest, v1.ListBrokerAccountsResponse]
 	verifyAccount                   *connect.Client[v1.VerifyAccountRequest, v1.VerifyAccountResponse]
 	listExchanges                   *connect.Client[v1.ListExchangesRequest, v1.ListExchangesResponse]
@@ -1724,6 +1735,11 @@ func (c *dashboardServiceClient) AddBroker(ctx context.Context, req *connect.Req
 // RemoveBroker calls arb.dashboard.v1.DashboardService.RemoveBroker.
 func (c *dashboardServiceClient) RemoveBroker(ctx context.Context, req *connect.Request[v1.RemoveBrokerRequest]) (*connect.Response[v1.RemoveBrokerResponse], error) {
 	return c.removeBroker.CallUnary(ctx, req)
+}
+
+// UpdateBrokerCredentials calls arb.dashboard.v1.DashboardService.UpdateBrokerCredentials.
+func (c *dashboardServiceClient) UpdateBrokerCredentials(ctx context.Context, req *connect.Request[v1.UpdateBrokerCredentialsRequest]) (*connect.Response[v1.UpdateBrokerCredentialsResponse], error) {
+	return c.updateBrokerCredentials.CallUnary(ctx, req)
 }
 
 // ListBrokerAccounts calls arb.dashboard.v1.DashboardService.ListBrokerAccounts.
@@ -2178,6 +2194,7 @@ type DashboardServiceHandler interface {
 	SearchBroker(context.Context, *connect.Request[v1.SearchBrokerRequest]) (*connect.Response[v1.SearchBrokerResponse], error)
 	AddBroker(context.Context, *connect.Request[v1.AddBrokerRequest]) (*connect.Response[v1.AddBrokerResponse], error)
 	RemoveBroker(context.Context, *connect.Request[v1.RemoveBrokerRequest]) (*connect.Response[v1.RemoveBrokerResponse], error)
+	UpdateBrokerCredentials(context.Context, *connect.Request[v1.UpdateBrokerCredentialsRequest]) (*connect.Response[v1.UpdateBrokerCredentialsResponse], error)
 	ListBrokerAccounts(context.Context, *connect.Request[v1.ListBrokerAccountsRequest]) (*connect.Response[v1.ListBrokerAccountsResponse], error)
 	VerifyAccount(context.Context, *connect.Request[v1.VerifyAccountRequest]) (*connect.Response[v1.VerifyAccountResponse], error)
 	// CEX 交易所管理（D-054：后台增删，运行时生效，对齐 broker 账户管理）
@@ -2588,6 +2605,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		DashboardServiceRemoveBrokerProcedure,
 		svc.RemoveBroker,
 		connect.WithSchema(dashboardServiceMethods.ByName("RemoveBroker")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceUpdateBrokerCredentialsHandler := connect.NewUnaryHandler(
+		DashboardServiceUpdateBrokerCredentialsProcedure,
+		svc.UpdateBrokerCredentials,
+		connect.WithSchema(dashboardServiceMethods.ByName("UpdateBrokerCredentials")),
 		connect.WithHandlerOptions(opts...),
 	)
 	dashboardServiceListBrokerAccountsHandler := connect.NewUnaryHandler(
@@ -3146,6 +3169,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceAddBrokerHandler.ServeHTTP(w, r)
 		case DashboardServiceRemoveBrokerProcedure:
 			dashboardServiceRemoveBrokerHandler.ServeHTTP(w, r)
+		case DashboardServiceUpdateBrokerCredentialsProcedure:
+			dashboardServiceUpdateBrokerCredentialsHandler.ServeHTTP(w, r)
 		case DashboardServiceListBrokerAccountsProcedure:
 			dashboardServiceListBrokerAccountsHandler.ServeHTTP(w, r)
 		case DashboardServiceVerifyAccountProcedure:
@@ -3501,6 +3526,10 @@ func (UnimplementedDashboardServiceHandler) AddBroker(context.Context, *connect.
 
 func (UnimplementedDashboardServiceHandler) RemoveBroker(context.Context, *connect.Request[v1.RemoveBrokerRequest]) (*connect.Response[v1.RemoveBrokerResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.RemoveBroker is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) UpdateBrokerCredentials(context.Context, *connect.Request[v1.UpdateBrokerCredentialsRequest]) (*connect.Response[v1.UpdateBrokerCredentialsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.UpdateBrokerCredentials is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListBrokerAccounts(context.Context, *connect.Request[v1.ListBrokerAccountsRequest]) (*connect.Response[v1.ListBrokerAccountsResponse], error) {
