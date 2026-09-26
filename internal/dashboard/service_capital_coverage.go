@@ -97,7 +97,7 @@ func trxUSDPrice(ctx context.Context, s *Service) (float64, bool) {
 	if mid, _, err := s.store.LastCMCPriceMidWithTime(ctx, "X-AFQUL"); err == nil && mid > 0 {
 		return mid, true
 	}
-	return s.store.LatestTickMid(ctx, "TRXUSDT")
+	return s.store.LatestTickMid(ctx, "binance", "TRXUSDT") // D-359：TRXUSD 价锚=binance 现货腿报价
 }
 
 // cmcPoolRow ②CMC：余额=LastCMCAccountSummary.TotalAccountValue；
