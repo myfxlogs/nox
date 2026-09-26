@@ -1,0 +1,195 @@
+syntax = "proto3";
+
+package arb.dashboard.v1;
+
+option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
+
+
+import "google/protobuf/timestamp.proto";
+
+// ==== graduation.proto —— D-508 S10 自 dashboard.proto 按域拆出（纯搬家：消息名/字段号/RPC 契约零漂移）。 ====
+
+// —— D-403 验证毕业链 ——
+
+message CarryGraduationRow {
+  int64 id = 1; int64 paper_id = 2; string venue = 3; string symbol = 4;
+  string structure = 5; optional string mt_venue = 6;
+  double age_days = 7; double accrued_usd = 8; optional double last_funding_ann = 9;
+  string status = 10;                    // pending/approved/rejected
+  string created_at = 11; string decided_at = 12; string decided_note = 13;
+  optional int64 combo_id = 14;
+  repeated string venue_gaps = 15;       // approve 时算的 venue env 缺口（pending 即时算；decided 回读快照）
+  optional double net_all_in_usd = 16;   // D-410 S5：全账净额（accrued−est_fee+convergence；缺账行 NULL）
+  optional string flag_warn = 17;        // D-463 S3：warn 旗标命中透出（⚠+reason；无旗=NULL）
+  // D-475a S5 质量杆观测（零拒批，先采数后定阈）：pending 行即时算不落库。
+  optional int64 accrue_ticks = 18;        // 实结期数（结算对齐累积写次数）
+  optional int64 expected_periods = 19;    // elapsed/funding_interval（interval 缺→NULL 诚实缺）
+  optional double coverage_ratio = 20;     // accrue_ticks/expected_periods（<0.8 黄 <0.5 红 徽标）
+  optional double min_accrued_usd = 21;    // 存续期 accrued 最低水位（回撤观测）
+  // D-471：18/19 已被 475a 观测列占用→顺延 22/23。
+  optional GraduationRiskReport risk = 22; // S1 风险档案（pending 即时算；decided NULL）
+  string entry_window = 23;                // S2 open / closed:<reason>（pending 即时算）
+}
+
+// —— D-471 S1 风险档案 + S3 白名单管理面 ——
+// RiskReport 可缺字段全 optional（B-017：裸 double 零值=真 0 不可区分，前端渲染「缺」非 0）。
+message GraduationRiskLeg {
+  string venue_key = 1;                    // 例 "3001157:mt5" / "binance:perp" / "binance:spot"
+  string symbol = 2;                       // venue 原生符号（tick/fact 同键）
+  string role = 3;                         // buy / sell
+  optional double qty_native = 4;          // 手数/张数/基础币量
+  optional double qty_usd = 5;
+  optional double margin_usd = 6;          // 该腿资金需求（现货腿=全款）
+  string note = 7;
+}
+message GraduationRiskReport {
+  optional double notional_usd = 1;
+  string notional_source = 2;              // combo / paper
+  repeated GraduationRiskLeg legs = 3;
+  optional double capital_usd = 4;         // 双腿资金需求合计
+  double recommended_leverage = 5;         // min(5, venue 可得档)；未知档给 5+note
+  string leverage_note = 6;
+  optional double liq_distance_pct_est = 7;// (1/lev_rec − mmr_est)×100；mmr_est 缺=1% 标估算
+  optional double funding_flip_daily_usd = 8;   // funding 翻号单日成本
+  optional double adverse_basis_p95_usd = 9;    // monitor 簿 entry_spread_bps p95 折 usd（无簿=NULL）
+  optional double roundtrip_fee_usd = 10;       // notional×往返费率口径注记
+  repeated string min_executable = 11;          // 每腿最小单位折 usd 文案（lot filter 未采集如实标）
+  repeated string gaps = 12;                    // 数据缺口逐项（价格过期/映射缺/费率缺等）
+  repeated FieldEvidence field_grades = 13;     // D-476a：每字段证据级别徽标（A实结/B实数据/C估算/D缺）
+}
+// D-476a：字段证据级别——A=服务侧结算/回执，B=venue 实数据，C=估算/假设，D=缺/不可用。
+enum EvidenceGrade {
+  EVIDENCE_GRADE_UNSPECIFIED = 0;
+  EVIDENCE_GRADE_A = 1;
+  EVIDENCE_GRADE_B = 2;
+  EVIDENCE_GRADE_C = 3;
+  EVIDENCE_GRADE_D = 4;
+}
+message FieldEvidence { string field = 1; EvidenceGrade grade = 2; }
+message ListXAssetAllowCombosRequest {}
+message XAssetAllowComboRow {
+  int64 id = 1; string canonical_buy = 2; string venue_buy = 3;
+  string canonical_sell = 4; string venue_sell = 5;
+  double max_long_qty = 6; double max_short_qty = 7; double max_gross_usd = 8;
+  optional double notional_usd = 9; bool enabled = 10; optional bool simulated = 11; string note = 12;
+}
+message ListXAssetAllowCombosResponse { repeated XAssetAllowComboRow rows = 1; }
+
+// D-478 S3：待入场区行（enabled 组合−在持仓=挂单集）。
+message ListXAssetPendingEntriesRequest {}
+message ListXAssetPendingEntriesResponse { repeated XAssetPendingEntryRow rows = 1; }
+message XAssetPendingEntryRow {
+  int64 combo_id = 1;
+  string combo_label = 2;   // canonical_buy(venue_buy)×canonical_sell(venue_sell)
+  string entry_kind = 3;    // XASSET_CARRY / FUNDING_HEDGE
+  string wait_reason = 4;   // 第一个拦路原因（闸 reason 原文）；全过=「条件就绪·等机会」
+  bool ready = 5;           // 七闸全过（等机会）
+  string tier = 6;          // 安全档位：ok / over / unset / missing_data
+  string tier_detail = 7;   // 档位明细（「超档: 名义$X>权益$Y×5.0」等）
+  bool tier_warn = 8;       // 任一腿超档
+}
+message UpsertXAssetAllowComboRequest {
+  int64 id = 1;                            // 0=insert；>0=update caps/enabled/note（行锁）
+  string canonical_buy = 2; string venue_buy = 3;
+  string canonical_sell = 4; string venue_sell = 5;
+  double max_long_qty = 6; double max_short_qty = 7; double max_gross_usd = 8;
+  optional double notional_usd = 9; bool enabled = 10; optional bool simulated = 11; string note = 12;
+  bool confirm = 13;                       // 在持仓 toggle/caps 下调锁须知情确认
+}
+message UpsertXAssetAllowComboResponse {
+  bool ok = 1; string error = 2;
+  bool needs_confirm = 3;                  // 命中在持仓→前端二次确认（confirm=true 重发）
+  repeated int64 open_position_ids = 4;    // 知情文案锚点
+}
+message PreviewXAssetComboRiskRequest {
+  string canonical_buy = 1; string venue_buy = 2;
+  string canonical_sell = 3; string venue_sell = 4;
+  double notional_usd = 5;
+}
+message PreviewXAssetComboRiskResponse {
+  bool ok = 1; string error = 2;
+  optional GraduationRiskReport risk = 3;
+}
+// D-475a S6：venue 敞口闸消息（cap=0=冻结新批准不动存量；enabled=false=闸停用行在档）。
+message VenueExposureCapRow {
+  string venue_key = 1; double cap_usd = 2; bool enabled = 3; string note = 4;
+  google.protobuf.Timestamp updated_at = 5;
+}
+message ListVenueExposureCapsRequest {}
+message ListVenueExposureCapsResponse { repeated VenueExposureCapRow rows = 1; }
+message SetVenueExposureCapRequest { string venue_key = 1; double cap_usd = 2; bool enabled = 3; string note = 4; }
+message SetVenueExposureCapResponse { bool ok = 1; string error = 2; }
+
+message ListCarryGraduationsRequest {}
+message ListCarryGraduationsResponse { repeated CarryGraduationRow rows = 1; }
+message ApproveCarryGraduationRequest {
+  int64 graduation_id = 1;
+  double max_long_qty = 2;   // 买腿 qty 上限（显式模式必填>0，禁默认；MT 腿=手数、CEX 腿=张数，语义跟 venue_buy 走）
+  double max_short_qty = 3;  // 卖腿 qty 上限（同上跟 venue_sell 走）
+  double max_gross_usd = 4;  // 双腿名义上限
+  optional double notional_usd = 5;      // D-367 语义：显式<=0 会在加载期被剔除，禁传非正值
+  string note = 6;
+  optional double funding_pct = 7;   // D-490：净值占比输入（小数 0..1；与 funding_usd/显式四字段互斥）
+  optional double funding_usd = 8;   // D-490：分配金额直填 USD（同上互斥）
+  bool dry_run = 9;                  // D-490：试算不写库——回 est_* 折算+互算值+venue_gaps 体检，零状态变更
+}
+message ApproveCarryGraduationResponse {
+  bool ok = 1; string error = 2;
+  optional int64 combo_id = 3;
+  repeated string venue_gaps = 4;        // 未放行 venue_key（autotrade_allow_rules 表补行，≤60s 热生效，D-443）
+  string automap_summary = 5;            // "applied=N skipped=M conflicts=K"
+  string link_report = 6;                // 非 cfd 结构的体检报告文本
+  double est_gross_usd = 7;              // D-490 折算回显：双腿总名义（=分配额 allocUSD）
+  double est_leg_notional_usd = 8;       // D-490：每腿名义（notional_usd 落值=alloc÷2）
+  double est_long_qty = 9;               // D-490：派生买腿 qty 上限（notional÷perLot×1.1）
+  double est_short_qty = 10;             // D-490：派生卖腿 qty 上限
+  double est_alloc_usd = 11;             // D-490 互算回显：分配额 USD（pct 输入时回显折算值）
+  double est_alloc_pct = 12;             // D-490 互算回显：占小池净值比（usd 输入时回显；小数口径）
+  repeated string sizing_notes = 13;     // D-490：池口径/币种/快照时间等审计注记
+  repeated string venue_gap_keys = 14;   // D-492：纯 venue_key 缺口列表（venue_gaps 混 capWarns 句串不可解析——双轨并存）
+  repeated GradLegPoolRow leg_pools = 15;  // D-508 S8：dry_run 腿→资金池映射（后端推导 venue_key+回退链终值，前端删镜像）
+}
+
+// GradLegPoolRow D-508 S8：腿 venue_key → 资金池快照行（allocPoolOf 回退链终值直传）。
+message GradLegPoolRow {
+  string venue_key = 1;               // 腿 venue_key（后端推导，前端零镜像）
+  bool found = 2;                     // false=该 venue 无任何非空净值快照行（未采）
+  string pool_venue = 3;              // 实际命中行 venue（unified/perp 回退时如实反映口径）
+  string pool_venue_type = 4;
+  double equity = 5;
+  string currency = 6;
+  google.protobuf.Timestamp updated_at = 7;
+  bool is_min = 8;                    // 双池较小者=绑定约束（后端判定，前端不比较）
+}
+message RejectCarryGraduationRequest {
+  int64 graduation_id = 1; string note = 2;
+  bool write_flag = 3;                   // D-463 S4：拒绝理由回写 fin_venue_symbol_flags
+  string flag_level = 4;                 // warn（默认）/ blocked（业主显式二级）
+}
+message RejectCarryGraduationResponse { bool ok = 1; string error = 2; }
+
+// === D-491 S6：PERP_FUNDING 证据准入（白名单退役） ===
+
+message PerpFundingAdmissionRow {
+  string canonical = 1;                  // 例 XAUUSDT（原文符号不译）
+  string status = 2;                     // admitted/pending_depth/review/denied（评估器裁决）
+  string best_pair = 3;                  // 'binance↔okx' 最优 real-real 对
+  double mean_spread = 4;                // 7d 均值差（年化百分点）
+  double spread_sd = 5;                  // pair 差 σ
+  double dir_consistency = 6;            // 0..1 同向占比
+  optional double depth_min_usd = 7;     // 两腿顶档深度较小者；null=未验
+  int32 samples = 8;                     // 最优对两腿样本数较小值
+  string owner_override = 9;             // ''/pinned/denied——业主钉死优先于评估
+  string note = 10;                      // 判据原因（中文）
+  google.protobuf.Timestamp evaluated_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+}
+message ListPerpFundingAdmissionRequest {}
+message ListPerpFundingAdmissionResponse { repeated PerpFundingAdmissionRow rows = 1; }
+message SetPerpFundingAdmissionOverrideRequest {
+  string canonical = 1;
+  string override = 2;                   // ''=清除 / pinned=钉死准入 / denied=钉死拒绝
+}
+message SetPerpFundingAdmissionOverrideResponse { bool ok = 1; string error = 2; }
+message ReevaluatePerpFundingAdmissionRequest {}
+message ReevaluatePerpFundingAdmissionResponse { bool ok = 1; string error = 2; }

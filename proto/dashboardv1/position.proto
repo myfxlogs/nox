@@ -1,0 +1,301 @@
+syntax = "proto3";
+
+package arb.dashboard.v1;
+
+option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
+
+
+import "google/protobuf/timestamp.proto";
+
+// ==== position.proto —— D-508 S10 自 dashboard.proto 按域拆出（纯搬家：消息名/字段号/RPC 契约零漂移）。 ====
+
+// === Position（§2.11 + §13）===
+
+message PositionLeg {
+  int64 id = 1;
+  int64 position_id = 2;
+  int32 leg_no = 3;
+  string phase = 4;            // OPEN / CLOSE
+  string venue = 5;            // {venue}:{venue_type}
+  string account = 6;
+  string symbol = 7;
+  string side = 8;             // BUY / SELL
+  double qty = 9;
+  double price_expected = 10;
+  optional double price_actual = 11;
+  string order_id = 12;
+  string status = 13;          // PENDING / SUBMITTED / FILLED / FAILED / UNKNOWN
+  google.protobuf.Timestamp ts = 14;
+}
+
+message Position {
+  int64 id = 1;
+  string opportunity_id = 2;
+  string type = 3;             // CROSS_VENUE / CARRY / FUNDING_HEDGE
+  string status = 4;           // OPENING / OPEN / LEGGED / CLOSING / CLOSED / FAILED
+  double expected_net_bps = 5;
+  optional double realized_pnl = 6;
+  google.protobuf.Timestamp opened_at = 7;
+  google.protobuf.Timestamp closed_at = 8;
+  string note = 9;
+  repeated PositionLeg legs = 10;
+  optional double expected_annual_pct = 11;  // D-080 S3：承诺年化%（funding 直存/SWAPARB·CARRY 换算/收敛型缺省）
+  optional double expected_swap_bps_daily = 12;  // D-095：SWAPARB 日 swap bps（typed 列透传，D-087 已建库未上 proto）
+  optional double floating_pnl_usd        = 13;  // D-095：浮动（broker profit 匹配和；未匹配=缺省）
+  optional double swap_accrued_usd        = 14;  // D-095：已收息差（broker swap 匹配和）
+  optional double net_pnl_usd             = 15;  // D-095：净盈亏=13+14
+  optional double expected_swap_usd_to_date = 16; // D-095：预期应得（SWAPARB/CARRY）
+  optional double attainment_pct          = 17;  // D-095：达成率 16 vs 14（息差型）
+  optional double current_net_bps         = 18;  // D-095：收敛型当前 bps（rollup 最新）
+  optional double settled_realized_usd    = 19;  // D-106：结算口径 realized_usd（position_settlements join；无结算行=缺省）
+  optional double settled_notional_usd    = 20;  // D-106：结算口径 notional_usd（同上）
+  optional double hold_days               = 21;  // D-106：持有天数（结算行 hold_days 优先；否则 closed_at−opened_at）
+  optional double break_even_days         = 22;  // D-117：回本周期（净值<0÷日均实际swap；≥0=0已回本；日均swap≤0=缺省）
+  optional double expected_breakeven_days = 23;  // D-311 R10：预期回本（opp.breakeven_days 透传，实测缺省时回落显示）
+  optional double live_net_carry_pct = 24;   // D-340：OPEN 息差型当前净 carry（年化百分点；与引擎退出判定 recalcXAssetNetCarry 同源；缺省=facts 过期 fail-closed 或非息差型）
+  optional double realized_annual_pct = 25;  // D-340：CLOSED 已实现年化（realized_pnl/(入场名义×持有天数)×365×100；缺省=名义/天数不可得）
+  optional double swap_estimated_usd = 35;   // D-375：息差预估参考（Σ position_cashflows quality='estimated' swap+funding 全腿公式计提；与「已收」实收两世界，前端「估」小字参考行；缺省=零计提）
+  optional double close_now_net_usd = 36;    // D-480：此刻市价平仓到手净额=出口价浮动+swap实收+已付佣金−退出成本估（多腿bid/空腿ask；缺报价=NULL 不猜）
+  optional double close_exit_costs_usd = 37; // D-480：退出成本估单列（CEX腿名义×takerBps 同473费率表；MT腿=0点差内嵌）
+  optional string attainment_tone = 38;    // D-508 S8：达成/收敛色阶终值（"pos"/"neg"/""；阈值判定在后端，前端只映射 class）
+  optional double remaining_net_bps = 39;  // D-508 S8：收敛型剩余收敛 bps=expected−current（前端不再做减法）
+  optional string break_even_tone = 40;    // D-508 S8：回本列色阶（实测0=已回本→"pos"；缺省不填）
+  optional bool break_even_suppressed = 41; // D-508 S8：回本抑制终值（实测=0 但 close_now_net<0 → 亮「账面回本·净估<0」非标绿）
+}
+
+message ExecuteOpportunityRequest {
+  string opportunity_id = 1;
+  string request_id = 2;       // 客户端生成，幂等
+  string venue_buy_account = 3;   // 买腿账户名
+  string venue_sell_account = 4;  // 卖腿账户名
+  double qty = 5;              // 买腿数量（卖腿服务端反算，D-028）
+}
+
+message ExecuteOpportunityResponse {
+  int64 position_id = 1;
+  string status = 2;           // OPENING / FAILED
+  string message = 3;          // 失败原因（风控拒绝/劣化超阈等）
+}
+
+message ClosePositionRequest {
+  int64 position_id = 1;
+  bool force = 2;              // D-495：显式逃逸门——腿无可交易行情时仍强制平仓（默认 false）
+}
+
+message ClosePositionResponse {
+  string status = 1;           // CLOSING / FAILED
+  string message = 2;
+}
+
+// D-181 S1：BackfillSwapHistory——手动回溯 venue swap 历史→facts（src=order_history）。
+message BackfillSwapHistoryRequest {
+  string venue = 1;            // venueKey 如 "61585565:mt5"
+}
+message BackfillSwapHistoryReply {
+  int32 orders_scanned = 1;    // 扫描的已平仓订单数
+  int32 facts_written = 2;     // 写入的 swap_settled facts 数
+  string summary = 3;          // 人类可读摘要（含空历史/降级提示）
+}
+
+message ListPositionsRequest {
+  string status = 1;  // 空 = 全部；"ACTIVE" = OPEN/OPENING/LEGGED/CLOSING 任一（在仓 Tab，D-106）；其余 = 单一状态
+  int32 limit = 2;    // ≤0 = 默认 50
+  int32 offset = 3;
+}
+
+message ListPositionsResponse {
+  repeated Position positions = 1;
+  int32 total = 2;  // D-069：符合筛选条件的总数（分页控件用）
+}
+
+// === Broker 持仓（MT5/MT4 实际持仓统一视图，D-051 WP3）===
+
+message BrokerPosition {
+  string venue = 1;            // 裸 venue 名
+  string venue_key = 2;        // "{venue}:{venueType}"
+  string ticket = 3;           // venue 订单号（字符串，可能超 JS 安全整数）
+  string symbol = 4;           // venue 原生符号
+  string canonical = 5;        // 解析后的 canonical；未映射 → ""（诚实空态）
+  string side = 6;             // BUY / SELL
+  double volume = 7;
+  double open_price = 8;
+  double current_price = 9;    // 0 + fresh=false = 无报价（诚实空态）
+  bool fresh = 10;
+  double pnl = 11;             // venue 权威浮盈（Order.Profit，后端透传，前端不自算 D-043）
+  double swap = 12;
+  double commission = 13;
+  string comment = 14;
+  bool is_arb = 15;            // comment 前缀 = exec.OrderComment("arb") → ARB 源订单
+  google.protobuf.Timestamp opened_at = 16;
+  int64 magic = 17;            // MT5 ExpertId / MT4 MagicNumber；0 = 无（手动单）
+  bool venue_online = 18;      // venue 在线状态；false = 最近快照（离线，非实时）
+  int64 position_id = 19;      // S4：关联持仓组合 ID；0 = 未关联（孤儿订单）
+  string account_alias = 20;   // F3：账号别名（broker_accounts.alias）；空 = 未设别名，前端回落 venue
+  double margin = 21;          // D-124：分摊保证金 USD（方案 C）；0=未知/CEX/无账户数据
+  string order_id = 22;        // S4：关联持仓 OPEN 腿的 order_id（position_legs.order_id 透出）；空=未关联/孤儿
+  double sl = 23;              // D-155：broker 端止损 SL 值透传（MT5 Order.StopLoss / MT4 Order.StopLoss；0=未设/CEX 无概念）；D-146 S1 灾难 SL 生产验证闭环基础设施
+  google.protobuf.Timestamp swap_charge_at = 24;  // D-337R1 语义：下次计费/结算时刻（MT5=server 零点 swap，venue 时区换算 UTC；CEX=下次 funding 结算 UTC）；nil=时区/周期未知（诚实空态）
+  double funding_rate_periodic_pct = 25;  // D-337R1：CEX 周期费率 %（=年化/(365×periods)，零信任后端换算）；0=未知诚实空态
+}
+
+message ListBrokerPositionsRequest {
+  bool refresh = 1;   // true = 强制触发一次 venue 轮询后返回（前端「刷新」/平仓后立即刷新）
+}
+
+message ListBrokerPositionsResponse {
+  repeated BrokerPosition positions = 1;
+  optional double pnl_sum_usd = 2;       // D-508 S8：Σ pnl（无持仓/全零=缺省，前端「—」不聚合）
+  optional double net_sum_usd = 3;       // D-508 S8：Σ (pnl+swap+commission) 净值口径
+}
+
+message CloseBrokerPositionRequest {
+  string venue_key = 1;
+  string ticket = 2;
+}
+
+message CloseBrokerPositionResponse {
+  string status = 1;   // CLOSED / FAILED
+  string message = 2;
+}
+
+message CloseBrokerPositionsRequest {
+  repeated CloseBrokerPositionRequest items = 1;
+}
+
+message CloseBrokerPositionsResponse {
+  repeated CloseBrokerPositionResponse results = 1;   // 逐条 CLOSED/FAILED（单条失败不阻断后续）
+}
+
+// === PersonalPosition（财务线 TRX 持仓接入，D-046）===
+
+message PersonalPosition {
+  int64 id = 1;
+  string asset = 2;
+  string kind = 3;             // staking / short_hedge / other
+  string price_symbol = 4;     // 监控价格源 canonical（'TRXUSDT'）
+  double price = 5;            // 当前 mid（后端算；0 = 无报价）
+  double warn_high = 6;        // 0 = 未设
+  double crit_high = 7;        // 0 = 未设（semantic = 强平价，权威值待业主回填）
+  string level = 8;            // 'ok'|'warn'|'crit'（后端算；空 = 无报价）
+  string note = 9;
+  string status = 10;          // OPEN / CLOSED
+  double qty = 11;             // 持仓数量；0 = 未填
+  double entry_price = 12;     // 开仓价；0 = 未填
+  int32 leverage = 13;         // 杠杆倍数；0 = 未填
+  google.protobuf.Timestamp opened_at = 14;  // 开仓时间；null = 未填
+  double pnl_usd = 15;         // 浮动盈亏（空单腿，后端算）；0 = 非空单腿/无报价
+  double liq_price = 16;       // 强平价：crit_high 优先，否则理论值；0 = 算不出
+  double dist_to_liq_pct = 17; // 距强平 % = (liq−现价)/现价；负数 = 已破线；算不出 = 0
+  double accrued_interest_usd = 18;  // 累计利息 = SUM(position_daily_income.interest_usd)，后端算
+}
+
+message ListPersonalPositionsRequest {}
+
+message ListPersonalPositionsResponse {
+  repeated PersonalPosition items = 1;
+}
+
+// === D-212 对冲工作台：结构卡 + 统一流水卡（替换旧 ListCMCAccount/ListTRXAccount）===
+
+message HedgeStake {
+  double energy = 1;     // 能量质押（TRX，fin_trx_account.energy_delegated ÷ 1e6）
+  double bandwidth = 2;  // 带宽自押（TRX，fin_trx_account.bandwidth_staked ÷ 1e6）
+}
+
+message HedgeLegSpot {
+  string label = 1;          // "质押现货"
+  double qty_staked = 2;     // 质押数量（v1.2：fin_trx_account.votes_total=18070，禁 personal_positions 静态）
+  double qty_liquid = 3;     // 流动余额（fin_trx_account.balance_sun ÷ 1e6）
+  double pnl_vs_base = 4;    // 对冲镜像=−空单平台自报 PnL（现货购价未知，镜像近似）
+  HedgeStake stake = 5;      // 质押明细 energy+bandwidth
+  // D-231 S3：投票收益率（fin_trx_vote_apr 最新行透传，只渲染不运算）
+  double vote_apr_current = 6;    // 当前投票票数加权平均年化 %
+  double vote_apr_max = 7;        // 市场最高年化 %（producer=true 降序第一）
+  string vote_apr_max_sr = 8;     // 最高年化 SR 名
+  double vote_apr_spread = 9;     // max−current 差值（pp）
+  google.protobuf.Timestamp vote_apr_ts = 10;  // fin_trx_vote_apr.fetched_at
+}
+
+message HedgeLegShort {
+  string label = 1;           // "CMC 空单"
+  double qty = 2;             // 空单数量（fin_cmc_positions.quantity=18100）
+  double pnl_vs_base = 3;     // 计算值 (baseline−mid)×qty（镜像腿，恒和=0）
+  int32 lev = 4;              // 杠杆（1/margin_percentage 推导）
+  double liq = 5;             // 强平价（fin_cmc_account_summary.closeout_price）
+  double dist_pct = 6;        // 距强平%（distance_to_closeout_pct）
+  double broker_unrealised = 7;  // broker 权威浮盈（fin_cmc_positions.unrealised_pnl，参考展示不做镜像源）
+}
+
+message HedgeCarry {
+  double trx_rental_7d_trx = 1;   // 近 7 日能量租金（SumDailyIncomeByRange energy_trx）
+  double trx_vote_7d_trx = 2;     // 近 7 日投票收益（SumDailyIncomeByRange voting_trx）
+  double cmc_overnight_7d_usd = 3; // 近 7 日隔夜息（SumCMCOvernightByRange）
+  double cum_usd = 4;             // 累计收益 USD（全量 energy×price+voting×price+interest）
+  double annualized_pct = 5;      // 年化 %（cum_usd / (qty×mid) × 365）
+  double hedged_cum_usd = 6;        // D-236 变更15：对冲后累计（窗口=[hedgeStart,now]）
+  double hedged_annualized_pct = 7; // D-236 变更15：对冲后年化（时间感知，days=max(1,now−hedgeStart)）
+  double mtd_net_usd = 8;        // D-260 S2：月至今净额 USD（月窗 energy×mid+voting×mid+interest）
+  int32 mtd_sample_days = 9;     // D-260 S2：月内 rollup 行数（0=月初冷启动，前端显示「—」）
+}
+
+message HedgeAccounts {
+  double trx_balance = 1;        // fin_trx_account.balance_sun ÷ 1e6
+  double trx_allowance = 2;      // fin_trx_account.allowance_sun ÷ 1e6
+  double energy_delegated = 3;   // fin_trx_account.energy_delegated ÷ 1e6
+  double votes = 4;              // fin_trx_account.votes_total
+  double cmc_cash = 5;           // fin_cmc_account_summary.total_cash_balance
+  double cmc_equity = 6;         // fin_cmc_account_summary.total_account_value
+  google.protobuf.Timestamp updated_at = 7;  // 最近更新时间（取 TRX/CMC 较新者）
+  // D-278 S5：地址资源显示（剩余带宽/能量，后端算好前端零计算）
+  double net_limit = 8;          // 带宽上限（BP，链上 sun 原值直接透传，不 ÷1e6）
+  double net_used = 9;           // 已用带宽（BP，链上 sun 原值直接透传）
+  double free_net_limit = 10;    // 免费带宽上限（BP，链上 sun 原值直接透传）
+  double free_net_used = 11;     // 免费已用带宽（BP，链上 sun 原值直接透传）
+  double energy_limit = 12;      // 能量上限（Energy，链上原值直接透传，不 ÷1e6）
+  double energy_used = 13;       // 已用能量（Energy，链上原值直接透传）
+  string bandwidth_status = 14; // 带宽状态 normal/yellow/red（后端算，阈值=trxvote 常量同源引用禁双写）
+}
+
+message HedgeStructure {
+  double baseline_price = 1;   // fin_cmc_positions.entry_price（基准=空单开仓价，现货购价未知）
+  double mid = 2;              // fin_cmc_prices 最近 mid（两腿共用同一 mid=镜像成立）
+  HedgeLegSpot leg_spot = 3;
+  HedgeLegShort leg_short = 4;
+  double net_exposure_trx = 5;  // v1.2 真实计算 (balance+staked−short_qty)
+  double net_exposure_usd = 6;  // net_exposure_trx × mid
+  HedgeCarry carry = 7;
+  HedgeAccounts accts = 8;
+  bool ws_connected = 9;  // cmc ws 事件驱动健康（true=绿/false=黄，兜底中）
+  string closeout_source = 10;       // D-225 v2.2：强平价口径（"platform_rule_50"=平台 50% 规则）
+  string platform_alert_state = 11;  // D-225 v2.1：平台预警状态 normal/warning/breach（F13 alerts 直读）
+  string platform_alerts = 12;       // D-225 v2.1：alerts 原文 JSON 透传（前端只渲染）
+  double closeout_level_usd = 13;    // D-225 v2.2：平台强平净值 = totalMarginAmount × 50%
+  double warning_level_usd = 14;    // D-225 v2.2：平台预警净值 = totalMarginAmount × 80%
+  double ask = 15;                  // D-234 R-V S3：现价=ask（ForSide Sell 口径=强平/PnL 同源，业主批 A）
+}
+
+message GetHedgeStructureRequest {}
+
+message GetHedgeStructureResponse {
+  HedgeStructure structure = 1;  // 空表容忍=nil（前端显示「数据未就绪」）
+}
+
+message HedgeFlowItem {
+  string source = 1;           // trx|cmc
+  google.protobuf.Timestamp ts = 2;
+  string kind = 3;             // 归一 8 类：rental_income|vote_claim|deposit|withdraw|stake|unstake|overnight|other
+  double amount_value = 4;     // 原生单位数值（TRX 笔=TRX 数；CMC 笔=USD）
+  string amount_unit = 5;      // TRX|USD
+  string counterparty = 6;     // TRX=对手方地址；CMC=空
+  string tx_id = 7;            // TRX=tx_id；CMC=transaction_id
+}
+
+message ListHedgeFlowRequest {
+  string source_filter = 1;    // ""=全部；trx=单源；cmc=单源
+  int32 limit = 2;
+  int32 offset = 3;
+}
+
+message ListHedgeFlowResponse {
+  repeated HedgeFlowItem txs = 1;
+}

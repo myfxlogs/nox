@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package arb.dashboard.v1;
+
+option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
+
+
+// ==== watchlist_analyst.proto —— D-508 S10 自 dashboard.proto 按域拆出（纯搬家：消息名/字段号/RPC 契约零漂移）。 ====
+
+// === Watchlist（D-090 自选报价条）===
+
+// WatchlistItem D-090 返修包① R1：自选清单双维项（canonical + venues）。
+// venues 空 = 全部源；非空 = 仅该 venueKey（"{venue}:{venueType}"）集合。
+message WatchlistItem {
+  string canonical = 1;
+  repeated string venues = 2;  // venueKey 集合，空=全部源
+}
+
+message GetWatchlistRequest {}
+
+message GetWatchlistResponse {
+  repeated WatchlistItem items = 1;
+}
+
+message SetWatchlistRequest {
+  repeated WatchlistItem items = 1;  // 全量替换，顺序即 sort
+}
+
+message SetWatchlistResponse {
+  repeated WatchlistItem items = 1;  // 生效清单回显
+}
+
+// === Analyst（D-091 前端分析员，server streaming）===
+
+message EntityRef { string type = 1; string id = 2; }        // position / opportunity / stat-vkey
+message ChatTurn { bool user = 1; string text = 2; }
+message AskAnalystRequest { string question = 1; repeated EntityRef context = 2; string page = 3; repeated ChatTurn history = 4; }
+message AnalystCitation { string kind = 1; string ref = 2; string excerpt = 3; } // sql / kb / decision / code / entity
+message SuggestedFollowUps { repeated string follow_ups = 1; }
+message AnalystDone { bool grounded = 1; }                    // grounded=false=全程零引用
+message AskAnalystResponse { oneof part { string delta = 1; AnalystCitation citation = 2; SuggestedFollowUps follow_ups = 3; AnalystDone done = 4; } }
+message AppendAnalystNoteRequest { string question = 1; string summary = 2; repeated AnalystCitation citations = 3; }
+message AppendAnalystNoteResponse { bool ok = 1; }
+message GenerateKbReportRequest {}
+message GenerateKbReportResponse { string path = 1; }
+
+// D-457：kind=daily|weekly
+message GenerateRetroReportRequest { string kind = 1; }
+message GenerateRetroReportResponse { string path = 1; }
+message ReportInfo { string name = 1; int64 size_bytes = 2; string modified_at = 3; }
+message ListReportsRequest {}
+message ListReportsResponse { repeated ReportInfo reports = 1; }
+message GetReportRequest { string name = 1; }
+message GetReportResponse { string name = 1; string content = 2; }
+
+// D-091 返修② R3：AI 配置 DB 化
+message GetAiSettingsRequest {}
+message GetAiSettingsResponse {
+  string base_url = 1;
+  string model = 2;
+  string api_key_masked = 3;  // 尾 4 位掩码（如 "****a1b2"），空=未设
+  bool enabled = 4;
+}
+message SetAiSettingsRequest {
+  string base_url = 1;
+  string model = 2;
+  string api_key = 3;   // 空=不改动原值
+  bool enabled = 4;
+}
+message SetAiSettingsResponse { bool ok = 1; }

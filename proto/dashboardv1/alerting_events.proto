@@ -1,0 +1,161 @@
+syntax = "proto3";
+
+package arb.dashboard.v1;
+
+option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
+
+
+// ==== alerting_events.proto —— D-508 S10 自 dashboard.proto 按域拆出（纯搬家：消息名/字段号/RPC 契约零漂移）。 ====
+
+// === D-292 价格提醒规则前端管理 ===
+
+// PriceAlertRuleRow 对应 price_alerts 表一行（管理面视图）。
+message PriceAlertRuleRow {
+  int64 id = 1;
+  string symbol = 2;        // 规范化大写，如 TRXUSDT
+  string op = 3;            // ">=" | "<="
+  double threshold = 4;
+  string level = 5;         // info|warn|critical
+  string message = 6;
+  bool enabled = 7;
+  string last_alert_at = 8; // RFC3339，空=从未触发
+  bool source_matched = 9;  // 后端填：symbol 是否在 QuoteBus 已订阅集合（防 typo 永不触发）
+}
+
+message ListPriceAlertRulesRequest {}
+
+message ListPriceAlertRulesResponse {
+  repeated PriceAlertRuleRow rules = 1;
+}
+
+message CreatePriceAlertRuleRequest {
+  string symbol = 1;
+  string op = 2;
+  double threshold = 3;
+  string level = 4;
+  string message = 5;
+}
+
+message CreatePriceAlertRuleResponse {
+  bool ok = 1;
+  string error = 2;          // 校验失败文案（前端原样展示）
+  PriceAlertRuleRow rule = 3; // 成功时回显新建行（含 id/source_matched）
+}
+
+message UpdatePriceAlertRuleRequest {
+  int64 id = 1;
+  string symbol = 2;
+  string op = 3;
+  double threshold = 4;
+  string level = 5;
+  string message = 6;
+  bool enabled = 7;
+}
+
+message UpdatePriceAlertRuleResponse {
+  bool ok = 1;
+  string error = 2;
+  PriceAlertRuleRow rule = 3; // 回显更新后行
+}
+
+message DeletePriceAlertRuleRequest {
+  int64 id = 1;
+}
+
+message DeletePriceAlertRuleResponse {
+  bool ok = 1;
+  string error = 2;
+}
+
+// === D-274 事件驱动研判引擎（S8）===
+
+message EventJudgmentRow {
+  int64 id = 1;
+  optional int64 alert_id = 2;
+  string code = 3;
+  string market = 4;
+  string event_type = 5;
+  string announce_date = 6;       // YYYY-MM-DD
+  optional double offer_price = 7;
+  optional string currency = 8;
+  optional double pre_price = 9;
+  optional int32 lot_size = 10;
+  optional string lot_size_source = 11;
+  optional double premium_pct = 12;
+  optional string offer_type = 13;
+  optional string proration = 14;
+  optional string conditions = 15;  // JSON 数组字符串
+  optional string acquirer_strength = 16;
+  optional string risk_signal = 17;
+  optional int32 score = 18;
+  optional int32 suggested_qty = 19;
+  string outcome = 20;              // success/failed/withdrawn/pending
+  optional string settle_date = 21;
+  optional double settle_price = 22;
+  optional double fail_drawdown_pct = 23;
+  optional int32 holding_days = 24;
+  optional string source_url = 25;
+  string created_at = 26;           // RFC3339
+}
+
+message PaperTradeRow {
+  int64 id = 1;
+  int32 case_id = 2;
+  optional int64 alert_id = 3;
+  string source_type = 4;
+  string code = 5;
+  string market = 6;
+  string direction = 7;
+  optional int32 suggested_qty = 8;
+  optional double suggested_price = 9;
+  optional double actual_price = 10;
+  string status = 11;               // suggested/settled/expired
+  string confidence = 12;
+  optional int32 sample_size = 13;
+  optional string rationale = 14;
+  optional double model_net_return_pct = 15;
+  optional double model_fail_drawdown_pct = 16;
+  optional double model_success_rate = 17;
+  optional int32 holding_period_days = 18;
+  optional double actual_net_return_pct = 19;
+  optional string actual_outcome = 20;
+  string created_at = 21;
+  optional string settled_at = 22;
+}
+
+message ListEventJudgmentsRequest {
+  int32 limit = 1;                  // 0=默认 100
+}
+
+message ListEventJudgmentsResponse {
+  repeated EventJudgmentRow rows = 1;
+}
+
+message ListPaperTradesRequest {
+  string status = 1;                 // ""=全部，suggested/settled/expired
+  int32 limit = 2;
+}
+
+message ListPaperTradesResponse {
+  repeated PaperTradeRow rows = 1;
+}
+
+message AcceptJudgmentRequest {
+  int64 event_case_id = 1;
+}
+
+message AcceptJudgmentResponse {
+  int64 paper_trade_id = 1;
+}
+
+message SettlePaperTradeRequest {
+  int64 paper_trade_id = 1;
+  string actual_outcome = 2;         // success/failed
+  double actual_price = 3;           // 可选（0=未填）
+}
+
+message SettlePaperTradeResponse {
+  bool ok = 1;
+  string error = 2;
+  optional double actual_net_return_pct = 3;
+}
