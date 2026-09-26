@@ -6,16 +6,10 @@ import (
 	"context"
 	"strconv"
 	"testing"
-
-	"arb/internal/testutil"
 )
 
 func TestD512_T8_LegacyDemoNotInLiveAggregates(t *testing.T) {
-	st, err := New(context.Background(), testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer st.Close()
+	st := sharedTestStore(t) // 全量 Migrate 同态 schema（含 0148/0149）
 	ctx := context.Background()
 	if _, err := st.Pool().Exec(ctx, `TRUNCATE positions, position_settlements RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatal(err)

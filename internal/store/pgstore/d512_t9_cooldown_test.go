@@ -7,16 +7,10 @@ import (
 	"context"
 	"testing"
 	"time"
-
-	"arb/internal/testutil"
 )
 
 func TestD512_T9_ComboCooldown(t *testing.T) {
-	st, err := New(context.Background(), testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer st.Close()
+	st := sharedTestStore(t) // 全量 Migrate 同态 schema（裸 New 不含 0148/0149 新迁移）
 	ctx := context.Background()
 	if _, err := st.Pool().Exec(ctx, `TRUNCATE positions, position_legs, position_settlements, xasset_allow_combos RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatal(err)

@@ -77,7 +77,8 @@ func klassOf(rows []pgstore.SymdigFinding, venue, sym string) (string, string) {
 
 // T2：四分类各一 + mispaired（同 venue 同 canonical 双 is_primary）。
 func TestSymdigClassify(t *testing.T) {
-	now := time.Now()
+	now := time.Now().UTC() // D-512 T7 归档连带修：Round 内 runTS=Now().UTC()，测试时钟快照
+	// 必须同为 UTC——本地 +08:00 在 23:5x 起评时 UTC 已跨日→报告文件名错位（KB test-seed-wallclock-leak 同族：墙钟依赖）。
 	st := &fakeStore{
 		facts: []fact.Fact{
 			{Kind: fact.KindTradeMode, Venue: "v1", Symbol: "XAUUSDm", Value: fact.TradeModeFull, Ts: now},
