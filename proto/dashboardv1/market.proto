@@ -206,6 +206,10 @@ message SourceHealth {
   string venue = 1;          // {venue}:{venue_type}
   string state = 2;          // up / idle / down
   google.protobuf.Timestamp last_event_at = 3;
+  // D-512 T4：WS 重连计量透出（只渲染不算）。
+  string source = 4;          // WS 源标识（url 段，如 "perp:wss://…"）
+  int64 reconnect_count = 5;  // 累计重连次数
+  int64 last_event_unix = 6;  // 末次警告 unix 秒（0=从未达风暴阈）
 }
 
 message ListSourceHealthRequest {}

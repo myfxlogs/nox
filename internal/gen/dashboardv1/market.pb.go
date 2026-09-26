@@ -1857,12 +1857,16 @@ func (x *ListTriggerStatesResponse) GetStates() []*TriggerState {
 }
 
 type SourceHealth struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Venue         string                 `protobuf:"bytes,1,opt,name=venue,proto3" json:"venue,omitempty"` // {venue}:{venue_type}
-	State         string                 `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"` // up / idle / down
-	LastEventAt   *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=last_event_at,json=lastEventAt,proto3" json:"last_event_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Venue       string                 `protobuf:"bytes,1,opt,name=venue,proto3" json:"venue,omitempty"` // {venue}:{venue_type}
+	State       string                 `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"` // up / idle / down
+	LastEventAt *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=last_event_at,json=lastEventAt,proto3" json:"last_event_at,omitempty"`
+	// D-512 T4：WS 重连计量透出（只渲染不算）。
+	Source         string `protobuf:"bytes,4,opt,name=source,proto3" json:"source,omitempty"`                                        // WS 源标识（url 段，如 "perp:wss://…"）
+	ReconnectCount int64  `protobuf:"varint,5,opt,name=reconnect_count,json=reconnectCount,proto3" json:"reconnect_count,omitempty"` // 累计重连次数
+	LastEventUnix  int64  `protobuf:"varint,6,opt,name=last_event_unix,json=lastEventUnix,proto3" json:"last_event_unix,omitempty"`  // 末次警告 unix 秒（0=从未达风暴阈）
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *SourceHealth) Reset() {
@@ -1914,6 +1918,27 @@ func (x *SourceHealth) GetLastEventAt() *timestamppb.Timestamp {
 		return x.LastEventAt
 	}
 	return nil
+}
+
+func (x *SourceHealth) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *SourceHealth) GetReconnectCount() int64 {
+	if x != nil {
+		return x.ReconnectCount
+	}
+	return 0
+}
+
+func (x *SourceHealth) GetLastEventUnix() int64 {
+	if x != nil {
+		return x.LastEventUnix
+	}
+	return 0
 }
 
 type ListSourceHealthRequest struct {
@@ -2146,11 +2171,14 @@ const file_dashboardv1_market_proto_rawDesc = "" +
 	"\v_last_value\"\x1a\n" +
 	"\x18ListTriggerStatesRequest\"S\n" +
 	"\x19ListTriggerStatesResponse\x126\n" +
-	"\x06states\x18\x01 \x03(\v2\x1e.arb.dashboard.v1.TriggerStateR\x06states\"z\n" +
+	"\x06states\x18\x01 \x03(\v2\x1e.arb.dashboard.v1.TriggerStateR\x06states\"\xe3\x01\n" +
 	"\fSourceHealth\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x14\n" +
 	"\x05state\x18\x02 \x01(\tR\x05state\x12>\n" +
-	"\rlast_event_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\vlastEventAt\"\x19\n" +
+	"\rlast_event_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\vlastEventAt\x12\x16\n" +
+	"\x06source\x18\x04 \x01(\tR\x06source\x12'\n" +
+	"\x0freconnect_count\x18\x05 \x01(\x03R\x0ereconnectCount\x12&\n" +
+	"\x0flast_event_unix\x18\x06 \x01(\x03R\rlastEventUnix\"\x19\n" +
 	"\x17ListSourceHealthRequest\"T\n" +
 	"\x18ListSourceHealthResponse\x128\n" +
 	"\asources\x18\x01 \x03(\v2\x1e.arb.dashboard.v1.SourceHealthR\asourcesB*Z(arb/internal/gen/dashboardv1;dashboardv1b\x06proto3"
