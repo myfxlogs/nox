@@ -137,7 +137,7 @@ func (s *Service) legContractSizeOf(venueKey, venueSymbol string) (float64, erro
 		if s.cexContractSize == nil {
 			return 0, errors.New("cex contract size resolver not wired")
 		}
-		venue, _, _ := strings.Cut(venueKey, ":")
+		venue := keydomain.BareOf(venueKey)
 		cs, ok := s.cexContractSize(venue, venueSymbol)
 		if !ok || cs <= 0 {
 			return 0, fmt.Errorf("contract size unknown for %s %s (reject: notional derivation unavailable)", venueKey, venueSymbol)

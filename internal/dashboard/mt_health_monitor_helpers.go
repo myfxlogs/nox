@@ -2,8 +2,9 @@ package dashboard
 
 import (
 	"context"
-	"strings"
 	"time"
+
+	"arb/internal/keydomain"
 )
 
 // classifyAge 按阈值分类三态。age<=0（无数据）→ crit（从未采集=异常）。
@@ -22,10 +23,7 @@ func classifyAge(age time.Duration, warn, crit time.Duration) mtHealthMetric {
 
 // venueFromKey 从 "{venue}:{venueType}" 提取 venue 部分。
 func venueFromKey(vk string) string {
-	if i := strings.IndexByte(vk, ':'); i >= 0 {
-		return vk[:i]
-	}
-	return vk
+	return keydomain.BareOf(vk)
 }
 
 // durStr 时间格式化（<1s 显示秒精度，否则分钟级）。

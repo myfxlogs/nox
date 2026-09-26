@@ -5,14 +5,13 @@ package dashboard
 import (
 	"context"
 	"log"
-	"strings"
 	"time"
 
 	v1 "arb/internal/dashboard/gen/arb/dashboard/v1"
+	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
-	"google.golang.org/protobuf/types/known/timestamppb"
-
 	"connectrpc.com/connect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // financeOverviewTTL 聚合缓存 TTL（D-331 ActiveOpportunityIDs 15s 先例——聚合查询防热路径重压）。
@@ -125,7 +124,7 @@ func (s *Service) equityTotalUSD(ctx context.Context) (total float64, skippedNon
 			}
 			continue
 		}
-		venue, _, _ := strings.Cut(a.VenueKey, ":")
+		venue := keydomain.BareOf(a.VenueKey)
 		b, ok := byVenue[venue]
 		if !ok || b.IsReal == nil || !*b.IsReal || b.Status == "stopped" {
 			continue // nil=未知（未知≠实盘）/demo/stopped 一律不计

@@ -7,10 +7,10 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"strings"
 	"time"
 
 	"arb/internal/fact"
+	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 	"arb/internal/usdnotional"
 )
@@ -47,8 +47,8 @@ func (s *Service) checkSwapDeviationGate(ctx context.Context, canonical, venueBu
 	if s.swapDeviationGatePct <= 0 {
 		return "" // 禁用
 	}
-	intentBuyBare, _, _ := strings.Cut(venueBuy, ":")
-	intentSellBare, _, _ := strings.Cut(venueSell, ":")
+	intentBuyBare := keydomain.BareOf(venueBuy)
+	intentSellBare := keydomain.BareOf(venueSell)
 
 	// 取 facts 规格值（同 recalcNetSwap 逻辑）
 	longFacts, err := s.store.LatestFacts(ctx, fact.KindSwapLong, "", canonical)
@@ -74,7 +74,7 @@ func (s *Service) checkSwapDeviationGate(ctx context.Context, canonical, venueBu
 			if leg.Phase != "OPEN" {
 				continue
 			}
-			legBare, _, _ := strings.Cut(leg.Venue, ":")
+			legBare := keydomain.BareOf(leg.Venue)
 			if legBare != intentBuyBare && legBare != intentSellBare {
 				continue
 			}
