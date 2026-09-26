@@ -211,6 +211,11 @@ ALTER TABLE income_events ALTER COLUMN venue_type SET NOT NULL;
 ALTER TABLE income_events ALTER COLUMN venue_type SET DEFAULT '';
 ALTER TABLE income_events DROP CONSTRAINT income_events_tran_uniq;
 ALTER TABLE income_events RENAME COLUMN account_id TO exchange_config_id;
+-- F7：身份列可空——历史/未归属行（无匹配 exchange_configs 记录）归 NULL 而非违例。
+ALTER TABLE income_events ALTER COLUMN exchange_config_id DROP NOT NULL;
+UPDATE income_events SET exchange_config_id = NULL
+    WHERE exchange_config_id IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM exchange_configs ec WHERE ec.id = income_events.exchange_config_id);
 ALTER TABLE income_events ADD CONSTRAINT income_events_config_fk
     FOREIGN KEY (exchange_config_id) REFERENCES exchange_configs (id);
 ALTER TABLE income_events ADD CONSTRAINT income_events_tran_uniq UNIQUE (exchange_config_id, tran_id);
@@ -311,7 +316,7 @@ COMMENT ON COLUMN ticks.venue_type IS 'R2 通道型';
 COMMENT ON COLUMN facts.venue IS 'R1 裸端点';
 COMMENT ON COLUMN facts.venue_type IS 'R2 通道型（''=非通道如 cmc）';
 COMMENT ON COLUMN facts.venue_key IS 'R3 生成投影';
-COMMENT ON COLUMN income_events.exchange_config_id IS 'R5 账户身份外键→exchange_configs.id（同 venue 多账户域下游标/唯一键按配置行区分）';
+COMMENT ON COLUMN income_events.exchange_config_id IS 'R5 账户身份外键→exchange_configs.id（同 venue 多账户域下游标/唯一键按配置行区分）；NULL=历史遗留或账户未归属 exchange_configs 行';
 COMMENT ON COLUMN income_events.venue IS 'R1 裸端点（CEX 交易所名）';
 COMMENT ON COLUMN income_events.venue_type IS 'R2 通道型';
 COMMENT ON COLUMN income_events.venue_key IS 'R3 生成投影';
