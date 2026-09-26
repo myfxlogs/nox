@@ -54,7 +54,6 @@ func (s *Store) LoadXAssetAllowCombos(ctx context.Context, environment string) (
 		return nil, fmt.Errorf("combo cooldown: %w", err)
 	}
 	return kept, nil
-	return out, rows.Err()
 }
 
 // CarryUniverseRow fin_carry_universe 行（D-336 S2 扫描快照）。
