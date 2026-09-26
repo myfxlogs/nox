@@ -48,7 +48,7 @@ func TestD247_FrontendCompareCard(t *testing.T) {
 
 // 断言⑰e：cnfiprobe 注册 -backfill-nav 模式。
 func TestD247_BackfillFlag(t *testing.T) {
-	src := d247Source(t, "cmd/cnfiprobe/main.go")
+	src := d247Source(t, "tools/cnfiprobe/main.go")
 	if !strings.Contains(src, "-backfill-nav") {
 		t.Errorf("cnfiprobe 缺 -backfill-nav 回填模式")
 	}
