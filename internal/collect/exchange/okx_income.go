@@ -103,7 +103,10 @@ func (c *OKXIncomeCollector) RunOnce(ctx context.Context) (int64, error) {
 				fmt.Printf("[income] okx #%d bill %s ccy=%q non-USDT (drop)\n", acc.ID, r.BillID, r.Ccy)
 				continue
 			}
-			amt, _ := strconv.ParseFloat(r.BalChg, 64)
+			amt, perr := f64z(r.BalChg)
+			if perr != nil {
+				return 0, fmt.Errorf("parse %s=%q: %w", "r.BalChg", r.BalChg, perr)
+			}
 			tsMs, _ := strconv.ParseInt(r.Ts, 10, 64)
 			ev := pgstore.IncomeEvent{
 				Venue: VenueOKX, VenueType: "perp", ConfigID: acc.ID, Symbol: r.InstID,

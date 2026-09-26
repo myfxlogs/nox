@@ -93,13 +93,13 @@ func fetchDepth(ctx context.Context, cfg Config, venue, base string) (DepthQuote
 	return DepthQuote{}, fmt.Errorf("unknown venue %q", venue)
 }
 
-// parseNum 数字字符串解析（三所盘口条目均为 [price,size,...] 字符串数组；脏值=0）。
-func parseNum(parts []string) float64 {
-	if len(parts) == 0 {
-		return 0
+// parseNum 数字字符串解析（三所盘口条目均为 [price,size,...] 字符串数组；
+// D-508 S2b：脏值上抛——盘口脏条目=该 symbol 本轮无深度，不进报价面）。
+func parseNum(parts []string) (float64, error) {
+	if len(parts) == 0 || parts[0] == "" {
+		return 0, nil
 	}
-	v, _ := strconv.ParseFloat(parts[0], 64)
-	return v
+	return strconv.ParseFloat(parts[0], 64)
 }
 
 // getJSONInto GET→JSON 解析进 dst（深度端点形状各所异构，类型化解析）。
@@ -122,19 +122,33 @@ func getJSONInto(ctx context.Context, client *http.Client, url string, dst any) 
 // depthRow 取最优档（max bid / min ask——对所内排序序不敏感）；空侧=错误。
 func depthRow(venue, symbol string, bids, asks [][]string) (DepthQuote, error) {
 	dq := DepthQuote{Venue: venue, Symbol: symbol}
+	pnum := func(parts []string, idx int) (float64, error) {
+		if len(parts) <= idx {
+			return 0, nil
+		}
+		return parseNum(parts[idx:])
+	}
 	for _, b := range bids {
-		p, q := parseNum(b), 0.0
-		if len(b) > 1 {
-			q = parseNum([]string{b[1]})
+		p, perr := pnum(b, 0)
+		if perr != nil {
+			return DepthQuote{}, fmt.Errorf("depth bid %v: %w", b, perr)
+		}
+		q, qerr := pnum(b, 1)
+		if qerr != nil {
+			return DepthQuote{}, fmt.Errorf("depth bid qty %v: %w", b, qerr)
 		}
 		if p > dq.Bid1 {
 			dq.Bid1, dq.BidQty = p, q
 		}
 	}
 	for _, a := range asks {
-		p, q := parseNum(a), 0.0
-		if len(a) > 1 {
-			q = parseNum([]string{a[1]})
+		p, perr := pnum(a, 0)
+		if perr != nil {
+			return DepthQuote{}, fmt.Errorf("depth ask %v: %w", a, perr)
+		}
+		q, qerr := pnum(a, 1)
+		if qerr != nil {
+			return DepthQuote{}, fmt.Errorf("depth ask qty %v: %w", a, qerr)
 		}
 		if dq.Ask1 == 0 || p < dq.Ask1 {
 			dq.Ask1, dq.AskQty = p, q

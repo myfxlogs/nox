@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"strconv"
 	"time"
 
 	"arb/internal/reconcile"
@@ -85,7 +84,11 @@ func (g *GatePrivateWS) onBalances(ctx context.Context, result json.RawMessage) 
 		if it.Currency != "USDT" {
 			continue
 		}
-		eq, _ := strconv.ParseFloat(it.Balance, 64)
+		eq, perr := f64z(it.Balance)
+		if perr != nil {
+			log.Printf("[gate-ws] drop field Balance: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+			return
+		}
 		row := pgstore.VenueAccountSnapshot{
 			Venue: "gate", VenueType: "perp",
 			BalanceRaw: eq, EquityRaw: eq,
@@ -121,11 +124,31 @@ func (g *GatePrivateWS) onPositions(result json.RawMessage) {
 	now := g.now()
 	orders := make([]reconcile.VenueOrder, 0, len(items))
 	for _, it := range items {
-		ep, _ := strconv.ParseFloat(it.EntryPrice, 64)
-		mg, _ := strconv.ParseFloat(it.Margin, 64)
-		upl, _ := strconv.ParseFloat(it.UnrealisedPnl, 64)
-		fund, _ := strconv.ParseFloat(it.PnlFund, 64)
-		mm, _ := strconv.ParseFloat(it.MaintMargin, 64)
+		ep, perr := f64z(it.EntryPrice)
+		if perr != nil {
+			log.Printf("[gate-ws] drop field EntryPrice: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+			return
+		}
+		mg, perr := f64z(it.Margin)
+		if perr != nil {
+			log.Printf("[gate-ws] drop field Margin: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+			return
+		}
+		upl, perr := f64z(it.UnrealisedPnl)
+		if perr != nil {
+			log.Printf("[gate-ws] drop field UnrealisedPnl: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+			return
+		}
+		fund, perr := f64z(it.PnlFund)
+		if perr != nil {
+			log.Printf("[gate-ws] drop field PnlFund: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+			return
+		}
+		mm, perr := f64z(it.MaintMargin)
+		if perr != nil {
+			log.Printf("[gate-ws] drop field MaintMargin: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+			return
+		}
 		side, ps := "BUY", "long"
 		vol := float64(it.Size)
 		if it.Size < 0 {
@@ -182,7 +205,11 @@ func (g *GatePrivateWS) onOrders(ctx context.Context, result json.RawMessage) {
 			}
 		}
 		filledContracts := abs64(it.Size - it.Left)
-		px, _ := strconv.ParseFloat(it.FillPrice, 64)
+		px, perr := f64z(it.FillPrice)
+		if perr != nil {
+			log.Printf("[gate-ws] drop field FillPrice: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+			return
+		}
 		qty := float64(filledContracts)
 		if q, err := g.gateQuanto(ctx, it.Contract); err == nil {
 			qty *= q // 合约数→基础币（与 executor Fill.Qty 契约一致）
@@ -212,7 +239,11 @@ func anyToSec(v any) float64 {
 		f, _ := x.Float64()
 		return f
 	case string:
-		f, _ := strconv.ParseFloat(x, 64)
+		f, perr := f64z(x)
+		if perr != nil {
+			log.Printf("[gate-ws] anyToSec dirty %q: %v", x, perr)
+			return 0
+		}
 		return f
 	}
 	return 0
