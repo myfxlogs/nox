@@ -118,6 +118,9 @@ func (o *OKXPrivateWS) runOnce(ctx context.Context) error {
 	var conn *websocket.Conn
 	var err error
 	for _, u := range o.wsURLs {
+		if ctx.Err() != nil {
+			break // D-519 M1：shutdown 即停不逐候选空试（wsrunner.go:112 同款）
+		}
 		conn, _, err = o.dialer.DialContext(ctx, u, header)
 		if err == nil {
 			break

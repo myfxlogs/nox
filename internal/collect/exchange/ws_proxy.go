@@ -6,7 +6,9 @@
 package exchange
 
 import (
+	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -37,6 +39,11 @@ func cexWSBases() []string {
 			bases = append(bases, b)
 		}
 	}
+	// D-519 M4：主空+备置错配——候选 URL 会走无 token native dialer 必败；
+	// warn 一行不 fail（保留 env 自由度）。
+	if os.Getenv("ARB_CEX_WS_BASE") == "" && len(bases) > 0 {
+		log.Printf("[ws-proxy] warn: ARB_CEX_WS_BASE 空但 ARB_CEX_WS_BASE_BACKUP 置位——备端候选无 token 直连必败")
+	}
 	return bases
 }
 
@@ -59,6 +66,25 @@ func wsViaProxyURLs(proxyPath, native string) []string {
 		urls[i] = b + proxyPath
 	}
 	return urls
+}
+
+// swapURLHost 把 raw URL 的 host 换成 backupEnv 指向基址的 host（scheme/path/query 不变）；
+// env 空/任一侧非法 → ""（=无备用候选，调用方零行为变化）。D-519 D4：gate 私有流复用。
+func swapURLHost(raw, backupEnv string) string {
+	back := strings.TrimSpace(os.Getenv(backupEnv))
+	if back == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	bu, err := url.Parse(back)
+	if err != nil || bu.Host == "" {
+		return ""
+	}
+	u.Host = bu.Host
+	return u.String()
 }
 
 // wsDialer 代理模式 → httpx.WSDialer（CA 信任+X-Proxy-Token 头，D-450 同源）；

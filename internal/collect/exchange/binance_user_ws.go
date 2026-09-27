@@ -16,8 +16,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
-	"strings"
 	"time"
 
 	"arb/internal/httpx"
@@ -121,21 +119,9 @@ func (b *BinanceUserWS) dialFailover(ctx context.Context, wsURL string) (*websoc
 }
 
 // backupWSURL wsURL host → BINANCE_PROXY_URL_BACKUP host（空/非法 → ""=无备用候选）。
+// D-519：host 换段收敛共享件 swapURLHost（gate 私有同法）。
 func (b *BinanceUserWS) backupWSURL(wsURL string) string {
-	back := strings.TrimSpace(os.Getenv("BINANCE_PROXY_URL_BACKUP"))
-	if back == "" {
-		return ""
-	}
-	u, err := url.Parse(wsURL)
-	if err != nil {
-		return ""
-	}
-	bu, err := url.Parse(back)
-	if err != nil || bu.Host == "" {
-		return ""
-	}
-	u.Host = bu.Host
-	return u.String()
+	return swapURLHost(wsURL, "BINANCE_PROXY_URL_BACKUP")
 }
 
 // Run 重连循环（5s 退避）。每次迭代取新 listenKey——失效不复用（官方语义）。

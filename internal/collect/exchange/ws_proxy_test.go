@@ -1,6 +1,15 @@
 package exchange
 
-import "testing"
+import (
+	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/gorilla/websocket"
+)
 
 // ARB_CEX_WS_BASE 置位 → 三所端点改经 cex-proxy 前缀路径。
 func TestWSViaProxy_Proxied(t *testing.T) {
@@ -143,5 +152,38 @@ func TestBinanceUserWS_BackupWSURL(t *testing.T) {
 	t.Setenv("BINANCE_PROXY_URL_BACKUP", "")
 	if b.backupWSURL("wss://proxy-a:8443/ws/x") != "" {
 		t.Fatal("backup 空应无候选")
+	}
+}
+
+// D-519 A5（D4）：gate 私有流主端拨失败 → host 换 ARB_CEX_WS_BASE_BACKUP 重试一次；
+// env 空 → 单 dial 零额外尝试（计数断言=零行为变化面）。
+func TestGatePrivateWS_DialFailover(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"user":"1"}`))
+	}))
+	defer srv.Close()
+
+	g := NewGatePrivateWS("k", "s", srv.URL+"/api/v4", "gate:perp", false, nil, nil, nil, nil)
+	var tried []string
+	g.dial = func(_ context.Context, u string) (*websocket.Conn, error) {
+		tried = append(tried, u)
+		return nil, errors.New("refused")
+	}
+
+	t.Setenv("ARB_CEX_WS_BASE_BACKUP", "wss://proxy-b:8443")
+	if err := g.runOnce(context.Background()); err == nil {
+		t.Fatal("双端全拒应上抛 dial err")
+	}
+	main := strings.Replace(srv.URL, "http://", "ws://", 1) + "/v4/ws/usdt"
+	if len(tried) != 2 || tried[0] != main || tried[1] != "ws://proxy-b:8443/v4/ws/usdt" {
+		t.Fatalf("tried=%v want [%s ws://proxy-b:8443/v4/ws/usdt]", tried, main)
+	}
+
+	// 备 env 空 → 单 dial。
+	t.Setenv("ARB_CEX_WS_BASE_BACKUP", "")
+	tried = nil
+	_ = g.runOnce(context.Background())
+	if len(tried) != 1 {
+		t.Fatalf("备 env 空应单 dial, tried=%v", tried)
 	}
 }
