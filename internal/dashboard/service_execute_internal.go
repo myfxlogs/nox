@@ -76,8 +76,8 @@ func (s *Service) ExecuteOpportunityInternal(ctx context.Context, oppID, request
 	}
 	// D-159 W1a R1：SWAPARB 精确组合门禁（手动入口同源，pipeline.Execute 前拦截）。
 	// swapArbComboAllow 非 nil 时检查；nil = 未接线（gate 层兜底）。
-	if found.Type == "SWAPARB" && len(s.swapArbComboAllow) > 0 {
-		if exec.MatchComboAllow(s.swapArbComboAllow, found.Canonical, found.VenueBuy, found.VenueSell) == nil {
+	if found.Type == "SWAPARB" && len(s.swapArbAllowSpecs()) > 0 {
+		if exec.MatchComboAllow(s.swapArbAllowSpecs(), found.Canonical, found.VenueBuy, found.VenueSell) == nil {
 			return "FAILED", fmt.Sprintf("combo not in allowlist: %s %s×%s", found.Canonical, found.VenueBuy, found.VenueSell), 0
 		}
 	}

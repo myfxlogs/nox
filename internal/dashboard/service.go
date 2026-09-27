@@ -141,7 +141,8 @@ type Service struct {
 	// swapArbComboAllow 为 nil = 未接线（gate 层 fail-closed 兜底，手动入口不重复检查）。
 	// 非 nil 时 ExecuteOpportunityInternal/ExecuteMeanRevertWithCap(SWAPARB) 在 pipeline.Execute 前检查。
 	// ComboAllowSpec 定义在 exec 包（最底层无依赖，dashboard/autotrade 复用）。
-	swapArbComboAllow []exec.ComboAllowSpec
+	// D-515 S5：表化热读——atomic 快照（reloader 推入，与 xassetAllow 同模式）。
+	swapArbComboAllow atomic.Pointer[[]exec.ComboAllowSpec]
 
 	// D-311 S6：XASSET_CARRY 精确组合门禁（手动入口同源）——零信任显式白名单。
 	// 与 SWAPARB 不同：无条件检查（空表=全拒），XASSET_CARRY 唯一放行闸。

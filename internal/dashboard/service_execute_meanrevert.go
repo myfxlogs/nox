@@ -127,8 +127,8 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 		return "FAILED", err.Error(), 0
 	}
 	// D-159 W1a R1：SWAPARB 精确组合门禁（手动入口同源，pipeline.Execute 前拦截）。
-	if strategyType == "SWAPARB" && len(s.swapArbComboAllow) > 0 {
-		if exec.MatchComboAllow(s.swapArbComboAllow, canonical, venueBuy, venueSell) == nil {
+	if strategyType == "SWAPARB" && len(s.swapArbAllowSpecs()) > 0 {
+		if exec.MatchComboAllow(s.swapArbAllowSpecs(), canonical, venueBuy, venueSell) == nil {
 			return "FAILED", fmt.Sprintf("combo not in allowlist: %s %s×%s", canonical, venueBuy, venueSell), 0
 		}
 	}

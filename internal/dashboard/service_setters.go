@@ -85,7 +85,17 @@ func (s *Service) SetOkxLotSz(f func(instID string) (float64, bool)) { s.okxLotS
 
 // SetSwapArbComboAllow 注入 SWAPARB 精确组合门禁 allowlist（D-159 W1a R1，手动入口同源）。
 // nil/空 = 未接线（gate 层 fail-closed 兜底，手动入口不重复检查）。
-func (s *Service) SetSwapArbComboAllow(allow []exec.ComboAllowSpec) { s.swapArbComboAllow = allow }
+func (s *Service) SetSwapArbComboAllow(allow []exec.ComboAllowSpec) {
+	s.swapArbComboAllow.Store(&allow) // D-515 S5：热刷新写侧
+}
+
+// swapArbAllowSpecs 热读读侧（nil=未接线——gate 层兜底语义不动）。
+func (s *Service) swapArbAllowSpecs() []exec.ComboAllowSpec {
+	if v := s.swapArbComboAllow.Load(); v != nil {
+		return *v
+	}
+	return nil
+}
 
 // SetXAssetComboAllow 注入 XASSET_CARRY 精确组合门禁 allowlist（D-311 S6，手动入口同源）。
 // 零信任：空表 = 全拒（不是 SWAPARB 的 nil=未接线语义）。
