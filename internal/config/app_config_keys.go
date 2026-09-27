@@ -4,124 +4,155 @@
 package config
 
 import (
+	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
 
-func f64(g func(*Config) *float64) func(*Config, string) error {
-	return func(c *Config, v string) error {
-		x, err := strconv.ParseFloat(v, 64)
-		if err != nil {
-			return err
-		}
-		*g(c) = x
-		return nil
-	}
-}
-func intv(g func(*Config) *int) func(*Config, string) error {
-	return func(c *Config, v string) error {
-		x, err := strconv.Atoi(v)
-		if err != nil {
-			return err
-		}
-		*g(c) = x
-		return nil
-	}
-}
-func boolv(g func(*Config) *bool) func(*Config, string) error {
-	return func(c *Config, v string) error {
-		x, err := strconv.ParseBool(v)
-		if err != nil {
-			return err
-		}
-		*g(c) = x
-		return nil
-	}
-}
-func durv(g func(*Config) *time.Duration) func(*Config, string) error {
-	return func(c *Config, v string) error {
-		x, err := time.ParseDuration(v)
-		if err != nil {
-			return err
-		}
-		*g(c) = x
-		return nil
-	}
-}
-func strv(g func(*Config) *string) func(*Config, string) error {
-	return func(c *Config, v string) error { *g(c) = v; return nil }
-}
-func listv(g func(*Config) *[]string) func(*Config, string) error {
-	return func(c *Config, v string) error { *g(c) = parseCSV(v); return nil }
-}
-func setv(g func(*Config) *map[string]bool) func(*Config, string) error {
-	return func(c *Config, v string) error { *g(c) = parseSet(v); return nil }
-}
-func fmapv(g func(*Config) *map[string]float64) func(*Config, string) error {
-	return func(c *Config, v string) error { *g(c) = parseFloatMap(v); return nil }
+// AppCfgMeta 键元数据：typ=前端控件型（bool|number|string）+set=typed setter+get=字段格式化回读。
+type AppCfgMeta struct {
+	Typ string
+	Set func(*Config, string) error
+	Get func(*Config) string
 }
 
-var appConfigKeys = map[string]func(*Config, string) error{
-	"ARB_ALERT_PAUSED":                 boolv(func(c *Config) *bool { return &c.AlertPaused }),
-	"ARB_ALERT_RESEND_INTERVAL":        durv(func(c *Config) *time.Duration { return &c.AlertResendInterval }),
-	"ARB_ANALYST_RATE_PER_HOUR":        intv(func(c *Config) *int { return &c.AnalystRatePerHour }),
-	"ARB_AUTOTRADE_ENABLED":            boolv(func(c *Config) *bool { return &c.AutoTradeEnabled }),
-	"ARB_AUTOTRADE_EXCLUDE_CANONICALS": setv(func(c *Config) *map[string]bool { return &c.AutoTradeExcludeCanonicals }),
-	"ARB_AUTOTRADE_MAX_DAILY_LOSS":     f64(func(c *Config) *float64 { return &c.AutoTradeMaxDailyLoss }),
-	"ARB_AUTOTRADE_MAX_NOTIONAL":       f64(func(c *Config) *float64 { return &c.AutoTradeMaxNotional }),
-	"ARB_AUTOTRADE_MAX_POSITIONS":      intv(func(c *Config) *int { return &c.AutoTradeMaxPositions }),
-	"ARB_AUTOTRADE_MIN_NET_BPS":        f64(func(c *Config) *float64 { return &c.AutoTradeMinNetBps }),
-	"ARB_AUTOTRADE_MIN_NET_SWAP_BPS":   f64(func(c *Config) *float64 { return &c.AutoTradeMinNetSwapBps }),
-	"ARB_AUTOTRADE_POLL_INTERVAL":      durv(func(c *Config) *time.Duration { return &c.AutoTradePollInterval }),
-	"ARB_BINANCE_FUTURES_INFO_URL":     strv(func(c *Config) *string { return &c.BinanceFuturesInfoURL }),
-	"ARB_BROKER_POS_POLL_MS":           durv(func(c *Config) *time.Duration { return &c.BrokerPosPollInterval }),
-	"ARB_CAPITAL_SNAPSHOT_TTL":         durv(func(c *Config) *time.Duration { return &c.CapitalSnapshotTTL }),
-	"ARB_CARRY_MIN_NET_ANNUALIZED":     f64(func(c *Config) *float64 { return &c.CarryMinNetAnnualized }),
-	"ARB_CARRY_MIN_NET_STORE":          f64(func(c *Config) *float64 { return &c.CarryMinNetStore }),
-	"ARB_CARRY_REGIME_FLOOR_PCT":       f64(func(c *Config) *float64 { return &c.CarryRegimeFloorPct }),
-	"ARB_CARRY_REGIME_MIN_SAMPLES":     intv(func(c *Config) *int { return &c.CarryRegimeMinSamples }),
-	"ARB_CARRY_REGIME_WINDOW_H":        f64(func(c *Config) *float64 { return &c.CarryRegimeWindowH }),
-	"ARB_CEX_SCAN_INTERVAL":            durv(func(c *Config) *time.Duration { return &c.CexScanInterval }),
-	"ARB_CEX_SCAN_SYMBOLS":             listv(func(c *Config) *[]string { return &c.CexScanSymbols }),
-	"ARB_CLOSE_BPS_THR":                f64(func(c *Config) *float64 { return &c.CloseBpsThr }),
-	"ARB_COMBO_LOSS_LIMIT":             intv(func(c *Config) *int { return &c.ComboLossLimit }),
-	"ARB_COMBO_LOSS_WINDOW_H":          intv(func(c *Config) *int { return &c.ComboLossWindowH }),
-	"ARB_COMMISSION_CEX_TAKER_BPS":     f64(func(c *Config) *float64 { return &c.CommissionCEXTakerBps }),
-	"ARB_COMMISSION_CFD_BPS":           f64(func(c *Config) *float64 { return &c.CommissionCFDBps }),
-	"ARB_COMMISSION_TAKER_BINANCE": func(c *Config, v string) error {
-		f, err := strconv.ParseFloat(v, 64)
-		if err != nil {
-			return err
-		}
-		if c.CommissionTaker == nil {
-			c.CommissionTaker = map[string]float64{}
-		}
-		c.CommissionTaker["binance"] = f
-		return nil
-	},
-	"ARB_COMMISSION_TAKER_GATE": func(c *Config, v string) error {
-		f, err := strconv.ParseFloat(v, 64)
-		if err != nil {
-			return err
-		}
-		if c.CommissionTaker == nil {
-			c.CommissionTaker = map[string]float64{}
-		}
-		c.CommissionTaker["gate"] = f
-		return nil
-	},
-	"ARB_COMMISSION_TAKER_OKX": func(c *Config, v string) error {
-		f, err := strconv.ParseFloat(v, 64)
-		if err != nil {
-			return err
-		}
-		if c.CommissionTaker == nil {
-			c.CommissionTaker = map[string]float64{}
-		}
-		c.CommissionTaker["okx"] = f
-		return nil
-	},
+func f64(g func(*Config) *float64) AppCfgMeta {
+	return AppCfgMeta{"number",
+		func(c *Config, v string) error {
+			x, err := strconv.ParseFloat(v, 64)
+			if err != nil {
+				return err
+			}
+			*g(c) = x
+			return nil
+		},
+		func(c *Config) string { return strconv.FormatFloat(*g(c), 'g', -1, 64) }}
+}
+func intv(g func(*Config) *int) AppCfgMeta {
+	return AppCfgMeta{"number",
+		func(c *Config, v string) error {
+			x, err := strconv.Atoi(v)
+			if err != nil {
+				return err
+			}
+			*g(c) = x
+			return nil
+		},
+		func(c *Config) string { return strconv.Itoa(*g(c)) }}
+}
+func boolv(g func(*Config) *bool) AppCfgMeta {
+	return AppCfgMeta{"bool",
+		func(c *Config, v string) error {
+			x, err := strconv.ParseBool(v)
+			if err != nil {
+				return err
+			}
+			*g(c) = x
+			return nil
+		},
+		func(c *Config) string { return strconv.FormatBool(*g(c)) }}
+}
+func durv(g func(*Config) *time.Duration) AppCfgMeta {
+	return AppCfgMeta{"string",
+		func(c *Config, v string) error {
+			x, err := time.ParseDuration(v)
+			if err != nil {
+				return err
+			}
+			*g(c) = x
+			return nil
+		},
+		func(c *Config) string { return g(c).String() }}
+}
+func strv(g func(*Config) *string) AppCfgMeta {
+	return AppCfgMeta{"string",
+		func(c *Config, v string) error { *g(c) = v; return nil },
+		func(c *Config) string { return *g(c) }}
+}
+func listv(g func(*Config) *[]string) AppCfgMeta {
+	return AppCfgMeta{"string",
+		func(c *Config, v string) error { *g(c) = parseCSV(v); return nil },
+		func(c *Config) string { return strings.Join(*g(c), ",") }}
+}
+func setv(g func(*Config) *map[string]bool) AppCfgMeta {
+	return AppCfgMeta{"string",
+		func(c *Config, v string) error { *g(c) = parseSet(v); return nil },
+		func(c *Config) string {
+			ks := make([]string, 0, len(*g(c)))
+			for k := range *g(c) {
+				ks = append(ks, k)
+			}
+			sort.Strings(ks)
+			return strings.Join(ks, ",")
+		}}
+}
+func fmapv(g func(*Config) *map[string]float64) AppCfgMeta {
+	return AppCfgMeta{"string",
+		func(c *Config, v string) error { *g(c) = parseFloatMap(v); return nil },
+		func(c *Config) string {
+			ks := make([]string, 0, len(*g(c)))
+			for k := range *g(c) {
+				ks = append(ks, k)
+			}
+			sort.Strings(ks)
+			var sb strings.Builder
+			for i, k := range ks {
+				if i > 0 {
+					sb.WriteByte(',')
+				}
+				fmt.Fprintf(&sb, "%s:%s", k, strconv.FormatFloat((*g(c))[k], 'g', -1, 64))
+			}
+			return sb.String()
+		}}
+}
+func takerG(venue string) AppCfgMeta { // ARB_COMMISSION_TAKER_*：venue 键位映射特例
+	return AppCfgMeta{"number",
+		func(c *Config, v string) error {
+			f, err := strconv.ParseFloat(v, 64)
+			if err != nil {
+				return err
+			}
+			if c.CommissionTaker == nil {
+				c.CommissionTaker = map[string]float64{}
+			}
+			c.CommissionTaker[venue] = f
+			return nil
+		},
+		func(c *Config) string { return strconv.FormatFloat(c.CommissionTaker[venue], 'g', -1, 64) }}
+}
+
+var appConfigKeys = map[string]AppCfgMeta{
+	"ARB_ALERT_PAUSED":                    boolv(func(c *Config) *bool { return &c.AlertPaused }),
+	"ARB_ALERT_RESEND_INTERVAL":           durv(func(c *Config) *time.Duration { return &c.AlertResendInterval }),
+	"ARB_ANALYST_RATE_PER_HOUR":           intv(func(c *Config) *int { return &c.AnalystRatePerHour }),
+	"ARB_AUTOTRADE_ENABLED":               boolv(func(c *Config) *bool { return &c.AutoTradeEnabled }),
+	"ARB_AUTOTRADE_EXCLUDE_CANONICALS":    setv(func(c *Config) *map[string]bool { return &c.AutoTradeExcludeCanonicals }),
+	"ARB_AUTOTRADE_MAX_DAILY_LOSS":        f64(func(c *Config) *float64 { return &c.AutoTradeMaxDailyLoss }),
+	"ARB_AUTOTRADE_MAX_NOTIONAL":          f64(func(c *Config) *float64 { return &c.AutoTradeMaxNotional }),
+	"ARB_AUTOTRADE_MAX_POSITIONS":         intv(func(c *Config) *int { return &c.AutoTradeMaxPositions }),
+	"ARB_AUTOTRADE_MIN_NET_BPS":           f64(func(c *Config) *float64 { return &c.AutoTradeMinNetBps }),
+	"ARB_AUTOTRADE_MIN_NET_SWAP_BPS":      f64(func(c *Config) *float64 { return &c.AutoTradeMinNetSwapBps }),
+	"ARB_AUTOTRADE_POLL_INTERVAL":         durv(func(c *Config) *time.Duration { return &c.AutoTradePollInterval }),
+	"ARB_BINANCE_FUTURES_INFO_URL":        strv(func(c *Config) *string { return &c.BinanceFuturesInfoURL }),
+	"ARB_BROKER_POS_POLL_MS":              durv(func(c *Config) *time.Duration { return &c.BrokerPosPollInterval }),
+	"ARB_CAPITAL_SNAPSHOT_TTL":            durv(func(c *Config) *time.Duration { return &c.CapitalSnapshotTTL }),
+	"ARB_CARRY_MIN_NET_ANNUALIZED":        f64(func(c *Config) *float64 { return &c.CarryMinNetAnnualized }),
+	"ARB_CARRY_MIN_NET_STORE":             f64(func(c *Config) *float64 { return &c.CarryMinNetStore }),
+	"ARB_CARRY_REGIME_FLOOR_PCT":          f64(func(c *Config) *float64 { return &c.CarryRegimeFloorPct }),
+	"ARB_CARRY_REGIME_MIN_SAMPLES":        intv(func(c *Config) *int { return &c.CarryRegimeMinSamples }),
+	"ARB_CARRY_REGIME_WINDOW_H":           f64(func(c *Config) *float64 { return &c.CarryRegimeWindowH }),
+	"ARB_CEX_SCAN_INTERVAL":               durv(func(c *Config) *time.Duration { return &c.CexScanInterval }),
+	"ARB_CEX_SCAN_SYMBOLS":                listv(func(c *Config) *[]string { return &c.CexScanSymbols }),
+	"ARB_CLOSE_BPS_THR":                   f64(func(c *Config) *float64 { return &c.CloseBpsThr }),
+	"ARB_COMBO_LOSS_LIMIT":                intv(func(c *Config) *int { return &c.ComboLossLimit }),
+	"ARB_COMBO_LOSS_WINDOW_H":             intv(func(c *Config) *int { return &c.ComboLossWindowH }),
+	"ARB_COMMISSION_CEX_TAKER_BPS":        f64(func(c *Config) *float64 { return &c.CommissionCEXTakerBps }),
+	"ARB_COMMISSION_CFD_BPS":              f64(func(c *Config) *float64 { return &c.CommissionCFDBps }),
+	"ARB_COMMISSION_TAKER_BINANCE":        takerG("binance"),
+	"ARB_COMMISSION_TAKER_GATE":           takerG("gate"),
+	"ARB_COMMISSION_TAKER_OKX":            takerG("okx"),
 	"ARB_CROSS_MIN_GROSS_BPS_CEX":         f64(func(c *Config) *float64 { return &c.CrossVenueMinGrossBpsCEX }),
 	"ARB_CROSS_MIN_GROSS_BPS_CFD":         f64(func(c *Config) *float64 { return &c.CrossVenueMinGrossBpsCFD }),
 	"ARB_CROSS_NOTIONAL_EQUITY_CAP":       f64(func(c *Config) *float64 { return &c.CrossNotionalEquityCap }),
@@ -177,14 +208,16 @@ var appConfigKeys = map[string]func(*Config, string) error{
 	"ARB_REPO_REMINDER_HOUR":              intv(func(c *Config) *int { return &c.RepoReminderHour }),
 	"ARB_REPO_SPIKE_CRITICAL_PCT":         f64(func(c *Config) *float64 { return &c.RepoSpikeCriticalPct }),
 	"ARB_REPO_SPIKE_WARN_PCT":             f64(func(c *Config) *float64 { return &c.RepoSpikeWarnPct }),
-	"ARB_RETRO_ENABLED": func(c *Config, v string) error {
-		b, err := strconv.ParseBool(v)
-		if err != nil {
-			return err
-		}
-		c.RetroDisabled = !b
-		return nil
-	},
+	"ARB_RETRO_ENABLED": {"bool",
+		func(c *Config, v string) error {
+			b, err := strconv.ParseBool(v)
+			if err != nil {
+				return err
+			}
+			c.RetroDisabled = !b
+			return nil
+		},
+		func(c *Config) string { return strconv.FormatBool(!c.RetroDisabled) }},
 	"ARB_REVALIDATE_ABS_BPS":             f64(func(c *Config) *float64 { return &c.RevalidateAbsBps }),
 	"ARB_REVALIDATE_REL_PCT":             f64(func(c *Config) *float64 { return &c.RevalidateRelPct }),
 	"ARB_REVIEW_CARRY_BIAS_ANNUAL_PCT":   f64(func(c *Config) *float64 { return &c.ReviewCarryBiasAnnualPct }),

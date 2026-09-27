@@ -4,6 +4,7 @@ package arb.dashboard.v1;
 
 option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
 
+import "dashboardv1/app_config.proto";
 import "dashboardv1/account.proto";
 import "dashboardv1/alerting_events.proto";
 import "dashboardv1/broker_admin.proto";
@@ -226,4 +227,9 @@ service DashboardService {
   rpc ListPerpFundingAdmission(ListPerpFundingAdmissionRequest) returns (ListPerpFundingAdmissionResponse);
   rpc SetPerpFundingAdmissionOverride(SetPerpFundingAdmissionOverrideRequest) returns (SetPerpFundingAdmissionOverrideResponse);
   rpc ReevaluatePerpFundingAdmission(ReevaluatePerpFundingAdmissionRequest) returns (ReevaluatePerpFundingAdmissionResponse);
+
+  // D-523：app_config 键管理面（SettingsPage）+自杀重启生效通道。
+  rpc ListAppConfig(ListAppConfigRequest) returns (ListAppConfigResponse);
+  rpc UpdateAppConfig(UpdateAppConfigRequest) returns (UpdateAppConfigResponse);
+  rpc SelfRestart(SelfRestartRequest) returns (SelfRestartResponse);
 }
