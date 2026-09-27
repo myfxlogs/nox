@@ -157,7 +157,7 @@ func resolveExchangeBaseURL(c pgstore.ExchangeConfig) string {
 				base = "https://fapi.binance.com" // 无代理直连；451 由部署负责
 			}
 		case "okx":
-			base = "https://www.okx.com" // 实盘域名；模拟盘走 x-simulated-trading:1（D-054）
+			base = "https://www.okx.com" // 实盘域名（x-simulated 支路 D-516 删除）
 		}
 	}
 	if c.Venue == "binance" && c.VenueType == "spot" && !strings.Contains(base, "/api/") {
