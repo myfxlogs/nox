@@ -10,7 +10,7 @@
 //   - 自签 CA + 服务器证书首次运行自动生成到 ./certs/（私钥不落 git）
 //   - GET /ca-cert 返回 CA PEM，供客户端一次性信任（bootstrap）
 //   - 令牌鉴权（-token，缺省自动生成并打印）：客户端须带 X-Proxy-Token
-//   - strip_prefix 选项：剥离路径前缀后再转发（如 /demofapi/fapi/... → /fapi/...，D-516 起 demo 路由已摘）
+//   - strip_prefix 选项：剥离路径前缀后再转发（D-516 起 demo 路由已摘，实盘前缀透传为主）
 //
 // 用法：cex-proxy -listen=:8443 [-config=config.json] [-token=xxx] [-sans=192.229.85.35]
 // 自建基础设施，仅用于访问自家账户数据，绕开 CEX 对特定地区 IP 的限制。
