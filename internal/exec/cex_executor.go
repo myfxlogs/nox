@@ -17,7 +17,7 @@ import (
 
 // CEXExecutor 是 Binance/OKX REST 签名下单执行器（§13.2）。
 // 每个市场一个实例（spot/perp 是不同实例）。D-059：补 OKX 下单（OK-ACCESS-* 四头 +
-// base64 HMAC + x-simulated-trading:1 模拟盘），venue 分派。
+// base64 HMAC），venue 分派。
 // D-108 P2 T1：Binance perp 双仓探测缓存（dualSide/dualSideProbed）+ AlertFn 平仓被拒告警。
 type CEXExecutor struct {
 	venue     string
@@ -27,8 +27,8 @@ type CEXExecutor struct {
 	apiKey       string
 	apiSecret    string
 	passphrase   string // OKX 必填；Binance 空
-	baseURL      string // binance: proxy/demo 根；okx: www.okx.com
-	simulated    bool   // OKX 模拟盘：请求带 x-simulated-trading:1（demo key 必开，D-054 同款）
+	baseURL      string // binance: proxy 根；okx: www.okx.com
+	simulated    bool   // D-516：demo 域收编后纯标记位——构造期 fail-closed 闸用，不再改请求
 	keyOverride  string // D-362 S3：撞键非赢家注册键（"venue:type#<id>"；空=canonical）
 	client       *http.Client
 
@@ -134,7 +134,6 @@ func (e *CEXExecutor) PlaceOrder(ctx context.Context, o Order) (Fill, error) {
 
 // placeOKX 下单：POST /api/v5/trade/order（OK-ACCESS-* 四头，SIGN=base64(HMAC-SHA256(secret,
 // ts+method+path+body))）。spot tdMode=cash；perp tdMode=cross（代码保留，本次不验证）。
-// 模拟盘带 x-simulated-trading:1（OKX demo key 必开，D-054 同款）。
 func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 	side := "buy"
 	if o.Side == "SELL" {
@@ -148,7 +147,7 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 			instID = instID + "-SWAP" // OKX perp instId 形如 BTC-USDT-SWAP
 		}
 	}
-	sz := strconv.FormatFloat(o.Qty, 'f', -1, 64)
+	var sz string // perp/spot 两分支各自赋值（D-516：初值 dead write 清 staticcheck）
 	var bodyStr string
 	var ctVal float64 // D-125：okx perp 合约面值（perp 分支赋值，Fill 处用）
 	if e.venueType == "perp" {
@@ -227,9 +226,6 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 		"OK-ACCESS-PASSPHRASE": {e.passphrase},
 		"Content-Type":         {"application/json"},
 	}
-	if e.simulated {
-		headers.Set("x-simulated-trading", "1")
-	}
 
 	body, err := e.post(ctx, e.baseURL+path, bodyStr, headers)
 	if err != nil {
@@ -284,8 +280,7 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 		// 仍不可判 → ErrFillUnconfirmed（D-421：受理未确认≠确定未成交，禁映 FAILED）。
 		return e.okxConfirmFill(ctx, o, instID, d.OrdID, ctVal)
 	}
-	var feeUSD float64
-	feeUSD = e.okxOrderFeeUSD(ctx, instID, d.OrdID) // D-391 S2：补查 fee（fail-open 0→NULL）
+	feeUSD := e.okxOrderFeeUSD(ctx, instID, d.OrdID) // D-391 S2：补查 fee（fail-open 0→NULL）
 	return Fill{OrderID: d.OrdID, Price: avgPx, Qty: qty, FeeUSD: feeUSD, Ts: time.Now()}, nil
 }
 
