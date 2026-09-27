@@ -13,11 +13,12 @@ import (
 
 // fakeRadarStore 成员级注入面（radarStore 接口）。
 type fakeRadarStore struct {
-	members   map[string]map[string]pgstore.RadarDigestMember
-	touches   []alertTouch
-	applyErr  error
-	applied   bool // ApplyRadarDigestRun 是否被调
-	sentLines []string
+	watchUpserts []string // D-532 S2：watchlist 写侧捕获（symbol|venues|reason）
+	members      map[string]map[string]pgstore.RadarDigestMember
+	touches      []alertTouch
+	applyErr     error
+	applied      bool // ApplyRadarDigestRun 是否被调
+	sentLines    []string
 }
 
 func newFakeRadarStore() *fakeRadarStore {
@@ -25,7 +26,8 @@ func newFakeRadarStore() *fakeRadarStore {
 }
 
 func (f *fakeRadarStore) FeishuChatID(context.Context) (string, error) { return "oc_test", nil }
-func (f *fakeRadarStore) UpsertRadarWatchlist(context.Context, string, []string, string) error {
+func (f *fakeRadarStore) UpsertRadarWatchlist(_ context.Context, sym string, venues []string, reason string) error {
+	f.watchUpserts = append(f.watchUpserts, sym+"|"+strings.Join(venues, ",")+"|"+reason)
 	return nil
 }
 func (f *fakeRadarStore) TouchCexUniverseAlert(_ context.Context, v, s string, _ time.Time) error {
