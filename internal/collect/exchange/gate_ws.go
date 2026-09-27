@@ -76,15 +76,6 @@ func subscribePayload(channel string, payload []string) map[string]any {
 	}
 }
 
-// spotSymbols 返回 spot 交易对（BTC_USDT）。
-func (g *GateWebSocket) spotSymbols() []string {
-	out := make([]string, 0, len(g.syms()))
-	for _, s := range g.syms() {
-		out = append(out, s+"_USDT")
-	}
-	return out
-}
-
 // subscribeChannel 写初始订阅帧（全量符号）。
 func (g *GateWebSocket) subscribeChannel(c *websocket.Conn, channel string, pairs []string) error {
 	return c.WriteJSON(subscribePayload(channel, pairs))

@@ -108,9 +108,13 @@ func (b *BinanceMarketWS) runOnce(ctx context.Context, url, venueType string, pu
 	// 符号源与原 ticker 同源（effectiveSymbols：env ∪ SymProvider
 	// 动态 watchlist）；watchlist 新增符号随下次重连订阅生效，60s REST 兜底补窗。
 	syms := b.cfg.effectiveSymbols()
-	params := make([]string, 0, len(syms))
+	params := make([]string, 0, len(syms)*2)
 	for _, sym := range syms {
 		params = append(params, strings.ToLower(sym+"usdt")+"@bookTicker")
+		if venueType == "perp" {
+			// D-509 S2：markPrice 同连接同帧订阅（funding 是 perp 语义，spot 连接不加）。
+			params = append(params, strings.ToLower(sym+"usdt")+"@markPrice")
+		}
 	}
 	if err := conn.WriteJSON(map[string]any{
 		"method": "SUBSCRIBE", "params": params, "id": 1,
@@ -150,6 +154,9 @@ func (b *BinanceMarketWS) runOnce(ctx context.Context, url, venueType string, pu
 		_ = conn.SetReadDeadline(b.now().Add(binanceMktReadIdle))
 		if isSubscribeAck(data) {
 			continue // {result:null,id:1} ack；{result:…,error} 已在 isSubscribeAck 记日志
+		}
+		if venueType == "perp" && b.handleMarkPrice(ctx, data) {
+			continue // markPriceUpdate 帧已消费
 		}
 		b.handleBookTicker(data, venueType, publish)
 	}
@@ -210,6 +217,55 @@ func (b *BinanceMarketWS) handleBookTicker(data []byte, venueType string, publis
 		Symbol: f.S, Venue: VenueBinance, VenueType: venueType, VenueSymbol: f.S,
 		Bid: bidF, Ask: askF, Time: ts,
 	})
+}
+
+// handleMarkPrice D-509 S2：markPriceUpdate 帧→funding 三 fact（rate 年化走
+// FundingIntervalCache 真值、T=nextFundingTime ms→NextSettle、interval 同帧发）。
+// 字段：e=markPriceUpdate、s=symbol、r=funding rate（string）、T=nextFundingTime ms。
+// 返回是否已消费（非 markPrice 帧/缺关键字段/无 emitFacts → false 交给 bookTicker 面）。
+func (b *BinanceMarketWS) handleMarkPrice(ctx context.Context, data []byte) bool {
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		return false
+	}
+	if e, _ := m["e"].(string); e != "markPriceUpdate" {
+		return false
+	}
+	if b.emitFacts == nil {
+		return true // 是 markPrice 帧但无发射口（测试/未装配）——已消费不泄漏给行情面
+	}
+	sym, _ := m["s"].(string)
+	rateS, _ := m["r"].(string)
+	if sym == "" || rateS == "" {
+		return true // 缺关键字段：该 symbol funding 缺省不造（venue 禁借用律）
+	}
+	var rate float64
+	if _, err := fmt.Sscanf(rateS, "%f", &rate); err != nil {
+		log.Printf("[binance-mkt-ws] markPrice funding rate %q dirty: %v", rateS, err)
+		return true
+	}
+	nftMs, _ := m["T"].(float64)
+	periodsPerDay := fundingPeriodsPerDay(0)
+	if b.intervals != nil {
+		periodsPerDay = b.intervals.PeriodsPerDay(sym)
+	}
+	now := b.now()
+	fs := []fact.Fact{
+		{Kind: fact.KindFunding, Venue: VenueBinance, Symbol: sym,
+			Value: annualizeFunding(rate, periodsPerDay), Unit: fact.UnitPctAnnualized,
+			Ts: now, Src: "binance_ws_markprice"},
+	}
+	if nftMs > 0 {
+		fs = append(fs,
+			fact.Fact{Kind: fact.KindFundingNextSettle, Venue: VenueBinance, Symbol: sym,
+				Value: nftMs / 1000, Unit: fact.UnitUnixSec, Ts: now, Src: "binance_ws_markprice"},
+			fact.Fact{Kind: fact.KindFundingInterval, Venue: VenueBinance, Symbol: sym,
+				Value: 86400 / float64(periodsPerDay), Unit: fact.UnitSeconds, Ts: now, Src: "binance_ws_markprice"})
+	}
+	if err := b.emitFacts(ctx, fs); err != nil {
+		log.Printf("[binance-mkt-ws] funding emit %s: %v", sym, err)
+	}
+	return true
 }
 
 // isSubscribeAck 订阅 ack/错误帧判定：{result:…,id} 形（数据帧无 result 字段）。

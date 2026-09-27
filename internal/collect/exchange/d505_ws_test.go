@@ -10,6 +10,8 @@ import (
 	"net/http/httptest"
 
 	"arb/internal/bus"
+	"arb/internal/fact"
+	"math"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -110,4 +112,46 @@ func TestD507_NilAlertFnNoPanic(t *testing.T) {
 	go g.runLoop(ctx, url, "spot.tickers", g.handleSpot, func(q bus.Quote) {})
 	time.Sleep(d507Observe)
 	cancel()
+}
+
+// TestD509_BinanceMarkPriceFunding markPriceUpdate→funding 三 fact（D-509 S2）。
+func TestD509_BinanceMarkPriceFunding(t *testing.T) {
+	var got []fact.Fact
+	ws := &BinanceMarketWS{now: time.Now}
+	ws.emitFacts = func(_ context.Context, fs []fact.Fact) error { got = append(got, fs...); return nil }
+	// 实测帧形制（binance perp markPrice）：e/s/E/T/r/p/i/P
+	ok := ws.handleMarkPrice(context.Background(), []byte(
+		`{"e":"markPriceUpdate","E":1790467392,"s":"PAXGUSDT","p":"4000.1","i":"4000.2","P":"3999.9","r":"0.0001","T":1790496000000}`))
+	if !ok {
+		t.Fatal("markPriceUpdate 帧未消费")
+	}
+	if len(got) != 3 {
+		t.Fatalf("facts=%d want 3（funding+next_settle+interval）", len(got))
+	}
+	if got[0].Kind != fact.KindFunding || got[0].Venue != "binance" || got[0].Symbol != "PAXGUSDT" ||
+		got[0].Src != "binance_ws_markprice" {
+		t.Fatalf("funding fact 键形错: %+v", got[0])
+	}
+	want := 0.0001 * 3 * 365 * 100 // 回退 3/天（intervals 未注入）
+	if math.Abs(got[0].Value-want) > 1e-9 {
+		t.Fatalf("annualized=%v want %v", got[0].Value, want)
+	}
+	if got[1].Kind != fact.KindFundingNextSettle || got[1].Value != 1790496000 {
+		t.Fatalf("nextSettle: %+v", got[1])
+	}
+	if got[2].Kind != fact.KindFundingInterval || got[2].Value != 28800 {
+		t.Fatalf("interval: %+v", got[2])
+	}
+	// 缺 r → 缺省不造
+	got = nil
+	if !ws.handleMarkPrice(context.Background(), []byte(`{"e":"markPriceUpdate","s":"BTCUSDT","T":1}`)) {
+		t.Fatal("markPrice 帧应消费")
+	}
+	if len(got) != 0 {
+		t.Fatalf("缺 rate 应缺省不造, got %d", len(got))
+	}
+	// 非 markPrice 帧 → 不消费
+	if ws.handleMarkPrice(context.Background(), []byte(`{"s":"BTCUSDT","b":"1","a":"2"}`)) {
+		t.Fatal("非 markPrice 帧不应消费")
+	}
 }
