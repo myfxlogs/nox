@@ -103,7 +103,7 @@ var appConfigKeys = map[string]AppCfgMeta{
 			c.RetroDisabled = !b
 			return nil
 		},
-		func(c *Config) string { return strconv.FormatBool(!c.RetroDisabled) }},
+		func(c *Config) string { return strconv.FormatBool(!c.RetroDisabled) }, ""},
 	"ARB_REVALIDATE_ABS_BPS":             f64(func(c *Config) *float64 { return &c.RevalidateAbsBps }),
 	"ARB_REVALIDATE_REL_PCT":             f64(func(c *Config) *float64 { return &c.RevalidateRelPct }),
 	"ARB_REVIEW_CARRY_BIAS_ANNUAL_PCT":   f64(func(c *Config) *float64 { return &c.ReviewCarryBiasAnnualPct }),

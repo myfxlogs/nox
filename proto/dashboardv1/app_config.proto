@@ -20,6 +20,8 @@ message AppConfigKey {
   bool pending_restart = 9;    // db 生效值≠runningValue（实差徽标；重启后清零）
   string note = 10;            // 审计事由
   google.protobuf.Timestamp updated_at = 11;
+  string desc = 12;            // D-526：中文一句话说明（键注册表单源）
+  string group_label = 13;     // D-526：组中文标签冗余（前端零映射）
 }
 
 message ListAppConfigRequest {}
