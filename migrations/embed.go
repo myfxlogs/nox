@@ -270,4 +270,7 @@ var (
 
 	//go:embed 0150_explorer_shell.sql
 	ExplorerShellSQL string
+
+	//go:embed 0151_config_to_pg.sql
+	ConfigToPgSQL string
 )
