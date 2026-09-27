@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"arb/internal/fact"
@@ -115,6 +116,8 @@ type OKXFundingHistory struct {
 	// 旧码每轮 ~100+ 符号各探一次 ≈ 半数 HTTP 浪费（长尾饿死同因）。
 	// 无竞态依据：sched 每源单 goroutine 串行 Poll（Scheduler.runSource），普通 map 安全。
 	periods map[string]okxPeriodEntry
+	// catalog D-524：instruments 存在性闸（watchlist 方言符号归一化后过目录，不伪造）。
+	catalog *okxInstCatalog
 }
 
 type okxPeriodEntry struct {
@@ -125,7 +128,8 @@ type okxPeriodEntry struct {
 const okxPeriodCacheTTL = 24 * time.Hour
 
 func NewOKXFundingHistory(cfg Config, r HistoryStartResolver) *OKXFundingHistory {
-	return &OKXFundingHistory{cfg: cfg, resolve: r, periods: map[string]okxPeriodEntry{}}
+	return &OKXFundingHistory{cfg: cfg, resolve: r, periods: map[string]okxPeriodEntry{},
+		catalog: newOKXInstCatalog(cfg)}
 }
 
 func (o *OKXFundingHistory) Kind() string { return fact.KindFundingHistory }
@@ -167,16 +171,24 @@ func (o *OKXFundingHistory) okxFundingPeriodsPerDay(ctx context.Context, instID 
 
 func (o *OKXFundingHistory) Poll(ctx context.Context) ([]fact.Fact, error) {
 	var out []fact.Fact
+	o.catalog.ensure(ctx)
 symLoop:
 	for _, sym := range o.syms() {
-		pair := sym + "USDT"
+		_, perpID := okxSubCandidates(sym) // D-524：方言归一化
+		if perpID == "" {
+			continue
+		}
+		_, instID := o.catalog.pick("", perpID)
+		if instID == "" {
+			continue // 目录内无此 SWAP（spot-only/无腿符号本就无 funding；未加载则透传）
+		}
+		pair := strings.ReplaceAll(strings.TrimSuffix(instID, "-SWAP"), "-", "")
 		start, err := startTS(ctx, o.resolve, VenueOKX, pair)
 		if err != nil {
 			// D-308 S1：逐符号 fail-open（同 Binance）——部分页数据弃置，出参只带成功符号。
 			fmt.Printf("[exchange:okx] funding_history %s: %v (skip)\n", pair, err)
 			continue
 		}
-		instID := sym + "-USDT-SWAP"
 		periods := o.okxFundingPeriodsPerDay(ctx, instID) // D-321 S2：per-symbol 周期真值
 		// D-321 S1：watermark 放 before（取更新方向）。旧码塞 after（OKX 语义=取更早）→
 		// 每轮只重取已知历史，dedup 零新增零报错，watermark 冻结（KB pagination-direction-silent-freeze）。

@@ -32,6 +32,8 @@ type OKXWebSocket struct {
 	reconnectBackoff time.Duration
 	// emitFacts D-509：funding fact 发射口（FactEmitter 去重节流；nil=不 emit）。
 	emitFacts func(ctx context.Context, fs []fact.Fact) error
+	// catalog D-524：instruments 存在性闸（watchlist 方言符号归一化后过目录，不伪造）。
+	catalog *okxInstCatalog
 }
 
 // NewOKXWebSocket 创建 OKX WS 采集器（ARB_CEX_WS_BASE 置位→经 cex-proxy /okxws 前缀）。
@@ -40,7 +42,8 @@ func NewOKXWebSocket(cfg Config) *OKXWebSocket {
 	d, h := wsDialer(proxied)
 	return &OKXWebSocket{cfg: cfg, dialer: d, header: h,
 		wsURLs:   wsViaProxyURLs("/okxws/ws/v5/public", okxPublicWSURL),
-		readIdle: quoteWSReadIdle, pingEvery: quoteWSPingEvery, reconnectBackoff: quoteWSReconnectBackoff}
+		readIdle: quoteWSReadIdle, pingEvery: quoteWSPingEvery, reconnectBackoff: quoteWSReconnectBackoff,
+		catalog: newOKXInstCatalog(cfg)}
 }
 
 // Run 连接 OKX WS 并持续推送报价到 publish 回调。阻塞至 ctx 取消。
@@ -49,43 +52,63 @@ func (o *OKXWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 	meter := newReconnectMeter(o.wsURLs[0], o.cfg.AlertFn)
 	// subscribed 差集表为每连接状态——OnConnect 每拨号重置（重连全量重订阅语义不变）。
 	var subscribed map[string]bool
-	// 订阅 spot + perp tickers（D-369 S2：subscribed 集跟踪，ping 期差集增量订阅）
-	subscribeArgs := func(syms []string) []map[string]string {
-		var args []map[string]string
-		for _, sym := range syms {
-			instID := sym + "-USDT"
-			perpID := sym + "-USDT-SWAP"
-			key := instID + "|" + perpID
-			if subscribed[key] {
-				continue
-			}
-			subscribed[key] = true
-			args = append(args,
-				map[string]string{"channel": "tickers", "instId": instID},
-				map[string]string{"channel": "tickers", "instId": perpID},
-				// D-509 S4：funding-rate 公共频道（SWAP 实例）同订阅件，
-				// ping 期差集增量覆盖 watchlist 新增。
-				map[string]string{"channel": "funding-rate", "instId": perpID},
-			)
-		}
-		return args
-	}
+	// quarantined 隔离表进程级（重连不重置）——目录判决对同符号稳定，逐符号只记一行。
+	quarantined := map[string]bool{}
 	RunWS(ctx, WSSpec{
 		Name: "okx-ws", URLs: o.wsURLs, Dialer: o.dialer, Header: o.header,
 		ReadIdle: o.readIdle, PingEvery: o.pingEvery, ReconnectBackoff: o.reconnectBackoff,
 		OnConnect: func() { subscribed = map[string]bool{} },
 		InitialSubs: func() []any {
-			return []any{map[string]any{"op": "subscribe", "args": subscribeArgs(o.syms())}}
+			return []any{map[string]any{"op": "subscribe", "args": o.subscribeArgs(ctx, o.syms(), subscribed, quarantined)}}
 		},
 		// D-369 S2：provider 符号集变化 → ping tick 差集补订（服务端拒则读报错走重连）
 		OnAliveTick: func(s Sender) {
-			if args := subscribeArgs(o.syms()); len(args) > 0 {
+			if args := o.subscribeArgs(ctx, o.syms(), subscribed, quarantined); len(args) > 0 {
 				_ = s.Send(map[string]any{"op": "subscribe", "args": args})
 			}
 		},
 		OnFrame:     func(data []byte) { o.handleMessage(ctx, data, publish) },
 		OnReconnect: meter.record,
 	})
+}
+
+// subscribeArgs 构造订阅 args（D-369 S2：subscribed 集跟踪，ping 期差集增量订阅；
+// D-524：watchlist 方言归一化 + instruments 目录存在性闸——不存在 instId 跳过不伪造；
+// quarantined 进程级隔离表：目录判决对同符号稳定，逐符号只记一行日志）。
+func (o *OKXWebSocket) subscribeArgs(ctx context.Context, syms []string, subscribed, quarantined map[string]bool) []map[string]string {
+	o.catalog.ensure(ctx)
+	var args []map[string]string
+	for _, sym := range syms {
+		spotID, perpID := okxSubCandidates(sym)
+		if spotID == "" {
+			continue
+		}
+		spotID, perpID = o.catalog.pick(spotID, perpID)
+		if spotID == "" && perpID == "" {
+			if o.catalog.loaded() && !quarantined[sym] {
+				quarantined[sym] = true
+				log.Printf("[okx-ws] %s 不在 okx instruments 目录，跳过订阅", sym)
+			}
+			continue
+		}
+		key := spotID + "|" + perpID
+		if subscribed[key] {
+			continue
+		}
+		subscribed[key] = true
+		if spotID != "" {
+			args = append(args, map[string]string{"channel": "tickers", "instId": spotID})
+		}
+		if perpID != "" {
+			args = append(args,
+				map[string]string{"channel": "tickers", "instId": perpID},
+				// D-509 S4：funding-rate 公共频道（SWAP 实例）同订阅件，
+				// ping 期差集增量覆盖 watchlist 新增。
+				map[string]string{"channel": "funding-rate", "instId": perpID},
+			)
+		}
+	}
+	return args
 }
 
 func (o *OKXWebSocket) handleMessage(ctx context.Context, data []byte, publish func(bus.Quote)) {

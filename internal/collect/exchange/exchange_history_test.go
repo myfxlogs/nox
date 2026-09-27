@@ -63,11 +63,28 @@ func TestBinanceFundingHistory_Poll(t *testing.T) {
 	}
 }
 
+// okxInstLive D-524：假服务端 instruments 目录应答——listed ids 全 state=live，
+// true=已处理（handler 首行调用；缺应答则旧 funding 假 data 混入目录判空全剔）。
+func okxInstLive(w http.ResponseWriter, r *http.Request, ids ...string) bool {
+	if r.URL.Path != "/api/v5/public/instruments" {
+		return false
+	}
+	data := make([]map[string]any, len(ids))
+	for i, id := range ids {
+		data[i] = map[string]any{"instId": id, "state": "live"}
+	}
+	json.NewEncoder(w).Encode(map[string]any{"code": "0", "data": data})
+	return true
+}
+
 // TestOKXFundingHistory_Poll 解析 OKX funding-rate-history 响应并年化。
 // 响应形状：{data:[{fundingRate(string), fundingTime(ms string)}]}。
 // D-321 S2：mock 补 funding-rate 周期探测端点（8h 差值 → ×3，值断言 10.95 不变）。
 func TestOKXFundingHistory_Poll(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if okxInstLive(w, r, "BTC-USDT-SWAP") {
+			return
+		}
 		if r.URL.Path == "/api/v5/public/funding-rate" {
 			json.NewEncoder(w).Encode(map[string]any{"code": "0", "data": []map[string]any{
 				{"fundingRate": "0.0001", "fundingTime": "1788163200000", "nextFundingTime": "1788192000000"},
@@ -194,6 +211,9 @@ func TestFundingHistoryFailOpen(t *testing.T) {
 	// S4 向前游标下翻页才会真正发生。
 	pgfailReqs := 0
 	okxSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if okxInstLive(w, r, "COPPER-USDT-SWAP", "PGFAIL-USDT-SWAP", "BTC-USDT-SWAP") {
+			return
+		}
 		q := r.URL.Query()
 		switch q.Get("instId") {
 		case "COPPER-USDT-SWAP":
@@ -266,6 +286,9 @@ type okxPageReq struct{ before, after string }
 // 周期探测端点回 8h 差值（与方向断言无关）。
 func okxRealSemanticsHandler(recs []map[string]any, reqs *[]okxPageReq) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if okxInstLive(w, r, "BTC-USDT-SWAP") {
+			return
+		}
 		if r.URL.Path == "/api/v5/public/funding-rate" {
 			json.NewEncoder(w).Encode(map[string]any{"code": "0", "data": []map[string]any{
 				{"fundingTime": "1788998400000", "nextFundingTime": "1789027200000"},
@@ -426,6 +449,9 @@ func TestOKXFundingHistory_PeriodsProbe(t *testing.T) {
 
 	t.Run("probe4h", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if okxInstLive(w, r, "BTC-USDT-SWAP") {
+				return
+			}
 			if r.URL.Path == "/api/v5/public/funding-rate" { // CL-USDT-SWAP 实测形态：4h 结算
 				json.NewEncoder(w).Encode(map[string]any{"code": "0", "data": []map[string]any{
 					{"fundingTime": "1789027200000", "nextFundingTime": "1789041600000"},
@@ -453,6 +479,9 @@ func TestOKXFundingHistory_PeriodsProbe(t *testing.T) {
 
 	t.Run("probeFail", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if okxInstLive(w, r, "BTC-USDT-SWAP") {
+				return
+			}
 			if r.URL.Path == "/api/v5/public/funding-rate" {
 				w.WriteHeader(http.StatusBadRequest)
 				return
@@ -490,6 +519,9 @@ func TestOKXFundingHistory_NoProgressGuard(t *testing.T) {
 	}
 	var calls int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if okxInstLive(w, r, "BTC-USDT-SWAP") {
+			return
+		}
 		if r.URL.Path == "/api/v5/public/funding-rate" {
 			json.NewEncoder(w).Encode(map[string]any{"code": "0", "data": []map[string]any{
 				{"fundingTime": "1788998400000", "nextFundingTime": "1789027200000"},
@@ -525,6 +557,9 @@ func TestOKXFundingHistory_NoProgressGuard(t *testing.T) {
 func TestOKXFundingHistory_PeriodCache(t *testing.T) {
 	var probes atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if okxInstLive(w, r, "BTC-USDT-SWAP") {
+			return
+		}
 		if r.URL.Path == "/api/v5/public/funding-rate" {
 			probes.Add(1)
 			json.NewEncoder(w).Encode(map[string]any{"code": "0", "data": []map[string]any{
