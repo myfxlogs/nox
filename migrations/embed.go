@@ -273,4 +273,7 @@ var (
 
 	//go:embed 0151_config_to_pg.sql
 	ConfigToPgSQL string
+
+	//go:embed 0152_macro_tables.sql
+	MacroTablesSQL string
 )

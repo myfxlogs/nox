@@ -16,7 +16,7 @@ import (
 func IsAppSecretKey(k string) bool {
 	if strings.HasPrefix(k, "ARB_FEISHU_") || strings.HasPrefix(k, "ARB_AI_") ||
 		strings.HasPrefix(k, "LONGBRIDGE_") || strings.HasPrefix(k, "CMC_") ||
-		strings.HasPrefix(k, "ARB_CMC_") {
+		strings.HasPrefix(k, "ARB_CMC_") || strings.HasPrefix(k, "ARB_FRED_") {
 		return true
 	}
 	switch k {
@@ -32,6 +32,7 @@ var appSecretSeedKeys = []string{
 	"ARB_AI_BASE_URL", "ARB_AI_API_KEY", "ARB_AI_MODEL", "ARB_AI_PG_DSN",
 	"LONGBRIDGE_APP_KEY", "LONGBRIDGE_APP_SECRET", "LONGBRIDGE_ACCESS_TOKEN",
 	"CMC_EMAIL", "CMC_PASSWORD", "ARB_CMC_CREATE_TPL",
+	"ARB_FRED_API_KEY",
 	"TRX_VOTE_PRIVATE_KEY", "TRONGRID_API_KEY",
 }
 
