@@ -41,8 +41,8 @@ func BJLoc() *time.Location { return bjLoc }
 // ImportanceCN 影响级中文（notify 工具渲染共用）。
 func ImportanceCN(imp string) string { return importanceCN[imp] }
 
-// CnSymbol 品种中文名（notify 工具渲染共用）。
-func CnSymbol(symbol string) string { return cnName(symbol) }
+// CnSymbol 品种显示名（notify 工具渲染共用；未命中回退英文名+warn 一次）。
+func CnSymbol(symbol string) string { return DisplayName(symbol) }
 
 // CategoryCN COT 类别中文（notify 工具渲染共用）。
 func CategoryCN(cat string) string { return categoryCN[cat] }
@@ -111,7 +111,7 @@ func RenderCotCN(rows []pgstore.CotPosition) string {
 				conv = fmt.Sprintf("%.2f", *r.Conviction)
 			}
 			fmt.Fprintf(&b, "\n%s %s %s | 净持仓 %s | 周变动 %s | 百分位 %s | 动量 %s | 信念分 %s",
-				cnName(r.Instrument), categoryCN[r.Category], dirCN[r.Direction],
+				DisplayName(r.Instrument), categoryCN[r.Category], dirCN[r.Direction],
 				comma(r.NetPosition), signed(r.NetChange), pct, mom, conv)
 		}
 	}

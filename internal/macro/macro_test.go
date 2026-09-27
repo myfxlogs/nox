@@ -192,6 +192,29 @@ func TestD528_RenderCotCN(t *testing.T) {
 	}
 }
 
+// TestD528_DisplayNameFallback 业主 9-28 S5 增补：24 合约全谱系中文名+未命中回退英文名（warn 一次）。
+func TestD528_DisplayNameFallback(t *testing.T) {
+	if got := DisplayName("6J"); got != "日元" {
+		t.Fatalf("在表品种应回中文: got %q", got)
+	}
+	if len(cotContracts) != 24 {
+		t.Fatalf("映射表应覆盖 24 合约, got %d", len(cotContracts))
+	}
+	for _, c := range cotContracts {
+		if cnName(c.Symbol) == "" {
+			t.Errorf("合约 %s 缺中文名", c.Symbol)
+		}
+	}
+	// 未注册品种：无中文名无注册行→回退 symbol 本身（可见不静默）。
+	if got := DisplayName("XXTEST"); got != "XXTEST" {
+		t.Fatalf("未注册品种应回退 symbol 本身, got %q", got)
+	}
+	// 注册表内但缺中文名的品种（构造：临时注册不可行——用覆盖断言兜底，见上）。
+	if got := DisplayName("GC"); got != "黄金" {
+		t.Fatalf("GC 应回黄金, got %q", got)
+	}
+}
+
 // TestD528_RenderCalendarCN BJ 换算+高低影响过滤（A4 锚：UTC 01:30 → BJ 09:30 同日）。
 func TestD528_RenderCalendarCN(t *testing.T) {
 	now := time.Date(2026, 9, 30, 2, 0, 0, 0, bjLoc) // BJ 09-30 02:00

@@ -4,7 +4,11 @@
 // 与 cex-proxy token 通道零耦合）；http.Client 30s 超时自建，不复用 cfg.Client（那是 cex-proxy 通道）。
 package macro
 
-import "strings"
+import (
+	"log"
+	"strings"
+	"sync"
+)
 
 // CotContract CFTC 合约注册行（code=CFTC 合约码；report=TFF|DISAGGREGATED；sector=渲染分区）。
 type CotContract struct {
@@ -78,6 +82,44 @@ func ResolveInstrument(in string) string {
 		return hits[0]
 	}
 	return ""
+}
+
+// displayNameWarned 未命中回退告警去重（每 symbol 只 warn 一次，进程级）。
+var (
+	displayNameMu     sync.Mutex
+	displayNameWarned = map[string]bool{}
+)
+
+// DisplayName 品种显示名：中文名表命中返回中文；未命中回退 CFTC 英文名并 warn 一次
+// （新品种可见不静默，业主 9-28 增补 S5）。
+func DisplayName(symbol string) string {
+	if cn := cnName(symbol); cn != "" {
+		return cn
+	}
+	displayNameMu.Lock()
+	if !displayNameWarned[symbol] {
+		displayNameWarned[symbol] = true
+		if c, ok := cotByCodeLookup(symbol); ok {
+			log.Printf("[macro] instrument %q missing CN name, fallback to %q", symbol, c.Name)
+		} else {
+			log.Printf("[macro] instrument %q missing CN name and registry entry", symbol)
+		}
+	}
+	displayNameMu.Unlock()
+	if c, ok := cotByCodeLookup(symbol); ok {
+		return c.Name
+	}
+	return symbol
+}
+
+// cotByCodeLookup symbol→合约注册行。
+func cotByCodeLookup(symbol string) (CotContract, bool) {
+	for _, c := range cotContracts {
+		if c.Symbol == symbol {
+			return c, true
+		}
+	}
+	return CotContract{}, false
 }
 
 // cnName 品种中文名（渲染与别名匹配共用；键=Symbol）。
