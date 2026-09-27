@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"syscall"
+	"time"
 
 	"arb/internal/config"
 	dashv1 "arb/internal/gen/dashboardv1"
@@ -141,7 +143,24 @@ func (s *Service) UpdateAppConfig(ctx context.Context, req *connect.Request[dash
 	return connect.NewResponse(&dashv1.UpdateAppConfigResponse{Key: v}), nil
 }
 
-// SelfRestart D-523 S2 占位（S2 实装自杀延迟件）。
+// SetSelfRestart 注入自杀件（测试换 fake；装配位 nil=默认 syscall.Kill+2s）。
+// 禁 os.Exit（绕过 defer 清理）——SIGTERM 复用既有优雅退出链，compose unless-stopped 拉起。
+func (s *Service) SetSelfRestart(kill func(int, syscall.Signal) error, delay time.Duration) {
+	s.selfKill, s.selfDelay = kill, delay
+}
+
+// SelfRestart：响应先回（RPC 200 已发出）→ delay 后 SIGTERM 自杀。
 func (s *Service) SelfRestart(ctx context.Context, _ *connect.Request[dashv1.SelfRestartRequest]) (*connect.Response[dashv1.SelfRestartResponse], error) {
+	kill, delay := s.selfKill, s.selfDelay
+	if kill == nil {
+		kill = syscall.Kill
+	}
+	if delay == 0 {
+		delay = 2 * time.Second
+	}
+	go func() {
+		time.Sleep(delay)
+		_ = kill(syscall.Getpid(), syscall.SIGTERM)
+	}()
 	return connect.NewResponse(&dashv1.SelfRestartResponse{}), nil
 }

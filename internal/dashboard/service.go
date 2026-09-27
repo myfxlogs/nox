@@ -5,6 +5,7 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"arb/internal/bus"
@@ -40,6 +41,8 @@ type Service struct {
 	acRunning  *config.Config
 	acDefaults *config.Config
 	acEnvSnap  map[string]string
+	selfKill   func(int, syscall.Signal) error
+	selfDelay  time.Duration
 	// settler 结算触发（D-087 §3.2，手动平仓后调）。nil = 未接线（RPC 仍可用，仅不结算）。
 	settler Settler
 	// freshTTL 报价陈旧 TTL（复用 config.DetectorFreshnessTTL，G3）——个人持仓快照展示路径拒绝陈旧帧。
