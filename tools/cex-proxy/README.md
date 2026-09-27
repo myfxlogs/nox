@@ -15,11 +15,8 @@
 | Gate | `/api/v4` | `https://api.gateio.ws` | 否 |
 | Binance 现货 | `/api` | `https://api.binance.com` | 否 |
 | Binance 合约 | `/fapi` | `https://fapi.binance.com` | 否 |
-| Binance 模拟现货 | `/demo` | `https://demo-api.binance.com` | 是 |
-| Binance 模拟合约 | `/demofapi` | `https://demo-fapi.binance.com` | 是 |
 | Gate 合约 WS | `/v4/ws` | `https://fx-ws.gateio.ws` | 否 |
 | Binance 合约用户数据流 WS | `/ws` | `https://fstream.binance.com` | 否 |
-| Binance 模拟合约用户数据流 WS | `/demofws` | `https://demo-fstream.binance.com` | 是 |
 | Binance 现货用户数据流 WS | `/spotws` | `https://stream.binance.com:9443` | 是 |
 | Binance 现货用户数据流 ws-api 控制面 | `/wsapi` | `https://ws-api.binance.com` | 是 |
 
@@ -40,9 +37,6 @@ WS 路由经 `httputil.ReverseProxy` Upgrade 透传，`tokenGate` 同护（WS �
     {"prefix": "/api/v5", "target": "https://www.okx.com"},
     {"prefix": "/v4/ws", "target": "https://fx-ws.gateio.ws"},
     {"prefix": "/api/v4", "target": "https://api.gateio.ws"},
-    {"prefix": "/demofapi", "target": "https://demo-fapi.binance.com", "strip_prefix": true},
-    {"prefix": "/demofws", "target": "https://demo-fstream.binance.com", "strip_prefix": true},
-    {"prefix": "/demo", "target": "https://demo-api.binance.com", "strip_prefix": true},
     {"prefix": "/fapi", "target": "https://fapi.binance.com"},
     {"prefix": "/sapi", "target": "https://api.binance.com"},
     {"prefix": "/ws", "target": "https://fstream.binance.com"},

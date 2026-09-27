@@ -13,8 +13,6 @@ func TestHandlerRoutingAndTokenGate(t *testing.T) {
 	gateSeen := make(chan string, 1)
 	apiSeen := make(chan string, 1)
 	fapiSeen := make(chan string, 1)
-	demoSeen := make(chan string, 1)
-	demofapiSeen := make(chan string, 1)
 
 	okxSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		okxSeen <- r.Host + r.URL.Path
@@ -36,24 +34,11 @@ func TestHandlerRoutingAndTokenGate(t *testing.T) {
 		io.WriteString(w, "fapi-ok")
 	}))
 	defer fapiSrv.Close()
-	demoSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		demoSeen <- r.Host + r.URL.Path
-		io.WriteString(w, "demo-ok")
-	}))
-	defer demoSrv.Close()
-	demofapiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		demofapiSeen <- r.Host + r.URL.Path
-		io.WriteString(w, "demofapi-ok")
-	}))
-	defer demofapiSrv.Close()
-
 	// 故意乱序排列——最长前缀匹配必须自行排序，不依赖配置顺序。
 	cfg := Config{Upstreams: []Upstream{
 		{Prefix: "/api", Target: apiSrv.URL},
-		{Prefix: "/demofapi", Target: demofapiSrv.URL, StripPrefix: true},
 		{Prefix: "/api/v5", Target: okxSrv.URL},
 		{Prefix: "/fapi", Target: fapiSrv.URL},
-		{Prefix: "/demo", Target: demoSrv.URL, StripPrefix: true},
 		{Prefix: "/api/v4", Target: gateSrv.URL},
 	}}
 
@@ -138,37 +123,18 @@ func TestHandlerRoutingAndTokenGate(t *testing.T) {
 		t.Fatalf("fapi Host/路径错误，got %q", got)
 	}
 
-	// 6. /demo → demo 上游，strip_prefix 剥离 /demo
-	req, _ = http.NewRequest(http.MethodGet, ts.URL+"/demo/api/v3/account", nil)
-	req.Header.Set("X-Proxy-Token", "secret-token")
-	resp, err = http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	body, _ = io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if string(body) != "demo-ok" {
-		t.Fatalf("/demo 应命中 demo 上游，got %q", body)
-	}
-	if got := <-demoSeen; got != demoSrv.Listener.Addr().String()+"/api/v3/account" {
-		t.Fatalf("demo 应剥离 /demo 前缀且改写 Host，got %q", got)
-	}
-
-	// 7. /demofapi → demofapi 上游，strip_prefix 剥离 /demofapi
-	//    须先于 /demo 匹配——最长前缀排序保证 /demofapi(9) > /demo(5)。
-	req, _ = http.NewRequest(http.MethodGet, ts.URL+"/demofapi/fapi/v1/balance", nil)
-	req.Header.Set("X-Proxy-Token", "secret-token")
-	resp, err = http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	body, _ = io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if string(body) != "demofapi-ok" {
-		t.Fatalf("/demofapi 应命中 demofapi 上游，got %q", body)
-	}
-	if got := <-demofapiSeen; got != demofapiSrv.Listener.Addr().String()+"/fapi/v1/balance" {
-		t.Fatalf("demofapi 应剥离 /demofapi 前缀且改写 Host，got %q", got)
+	// 6./7. D-516：demo 三路由删除——/demo、/demofapi 无前缀命中 → 404（无匹配兜底）。
+	for _, p := range []string{"/demo/api/v3/account", "/demofapi/fapi/v1/balance"} {
+		req, _ = http.NewRequest(http.MethodGet, ts.URL+p, nil)
+		req.Header.Set("X-Proxy-Token", "secret-token")
+		resp, err = http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("%s 应 404（demo 路由已摘 D-516），got %d", p, resp.StatusCode)
+		}
 	}
 }
 
@@ -236,19 +202,19 @@ func TestWSRoutePrefixes(t *testing.T) {
 	}
 	gateWS := srv("gatews")
 	fstream := srv("fstream")
-	demoFStream := srv("demofws")
 	spotWS := srv("spotws")
 	wsapi := srv("wsapi")
 	defer gateWS.Close()
 	defer fstream.Close()
-	defer demoFStream.Close()
 	defer spotWS.Close()
 	defer wsapi.Close()
 
 	cfg := Config{Upstreams: []Upstream{
 		{Prefix: "/ws", Target: fstream.URL},
 		{Prefix: "/v4/ws", Target: gateWS.URL},
-		{Prefix: "/demofws", Target: demoFStream.URL, StripPrefix: true},
+		{Prefix: "/public", Target: fstream.URL},
+		{Prefix: "/market", Target: fstream.URL},
+		{Prefix: "/private", Target: fstream.URL},
 		{Prefix: "/spotws", Target: spotWS.URL, StripPrefix: true},
 		{Prefix: "/wsapi", Target: wsapi.URL, StripPrefix: true},
 		{Prefix: "/api", Target: fstream.URL}, // 干扰项：/ws 不得被 /api 抢
@@ -286,12 +252,14 @@ func TestWSRoutePrefixes(t *testing.T) {
 	if h := <-seen["fstream"]; h.path != "/ws/abc123key" {
 		t.Fatalf("fstream 不应 strip，got path=%q", h.path)
 	}
-	// demo 用户流：strip /demofws → /ws/<key>。
-	if got := get("/demofws/ws/keyX"); got != "demofws" {
-		t.Fatalf("/demofws 应命中 demo fstream，got %q", got)
-	}
-	if h := <-seen["demofws"]; h.path != "/ws/keyX" {
-		t.Fatalf("demofws 应 strip 为 /ws/<key>，got path=%q", h.path)
+	// D-517 三路由：/public /market /private → fstream 不 strip（D-516：demofws 删除）。
+	for _, p := range []string{"/public/ws", "/market/ws", "/private/ws/keyZ"} {
+		if got := get(p); got != "fstream" {
+			t.Fatalf("%s 应命中 fstream 上游，got %q", p, got)
+		}
+		if h := <-seen["fstream"]; h.path != p {
+			t.Fatalf("%s 不应 strip，got path=%q", p, h.path)
+		}
 	}
 	// spot 用户流：strip /spotws → /ws/<key>。
 	if got := get("/spotws/ws/keyY"); got != "spotws" {
@@ -331,7 +299,9 @@ func TestDefaultConfigHasAllCEX(t *testing.T) {
 	for p, want := range map[string]string{
 		"/v4/ws":   "https://fx-ws.gateio.ws",
 		"/ws":      "https://fstream.binance.com",
-		"/demofws": "https://demo-fstream.binance.com",
+		"/public":  "https://fstream.binance.com",
+		"/market":  "https://fstream.binance.com",
+		"/private": "https://fstream.binance.com",
 		"/spotws":  "https://stream.binance.com:9443",
 		"/wsapi":   "https://ws-api.binance.com",
 	} {

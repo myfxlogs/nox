@@ -10,7 +10,7 @@
 //   - 自签 CA + 服务器证书首次运行自动生成到 ./certs/（私钥不落 git）
 //   - GET /ca-cert 返回 CA PEM，供客户端一次性信任（bootstrap）
 //   - 令牌鉴权（-token，缺省自动生成并打印）：客户端须带 X-Proxy-Token
-//   - strip_prefix 选项：剥离路径前缀后再转发（如 /demo/api/v3/... → /api/v3/...）
+//   - strip_prefix 选项：剥离路径前缀后再转发（如 /demofapi/fapi/... → /fapi/...，D-516 起 demo 路由已摘）
 //
 // 用法：cex-proxy -listen=:8443 [-config=config.json] [-token=xxx] [-sans=192.229.85.35]
 // 自建基础设施，仅用于访问自家账户数据，绕开 CEX 对特定地区 IP 的限制。
@@ -53,11 +53,11 @@ func defaultConfig() Config {
 		{Prefix: "/api/v5", Target: "https://www.okx.com"},
 		{Prefix: "/v4/ws", Target: "https://fx-ws.gateio.ws"},
 		{Prefix: "/api/v4", Target: "https://api.gateio.ws"},
-		{Prefix: "/demofapi", Target: "https://demo-fapi.binance.com", StripPrefix: true},
-		{Prefix: "/demofws", Target: "https://demo-fstream.binance.com", StripPrefix: true},
-		{Prefix: "/demo", Target: "https://demo-api.binance.com", StripPrefix: true},
 		{Prefix: "/fapi", Target: "https://fapi.binance.com"},
 		{Prefix: "/sapi", Target: "https://api.binance.com"},
+		{Prefix: "/public", Target: "https://fstream.binance.com"}, // D-517 三路由
+		{Prefix: "/market", Target: "https://fstream.binance.com"},
+		{Prefix: "/private", Target: "https://fstream.binance.com"},
 		{Prefix: "/ws", Target: "https://fstream.binance.com"},
 		{Prefix: "/api", Target: "https://api.binance.com"},
 	}}
