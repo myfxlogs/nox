@@ -16,6 +16,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -30,13 +31,13 @@ import (
 
 // BinanceMarketWS Binance 公开行情 WS（D-517：fstream 端点拆分三连接订阅）。
 type BinanceMarketWS struct {
-	cfg       Config
-	publicURL string // perp bookTicker → /public/ws（D-517 fstream 拆分：高频盘口类）
-	marketURL string // perp markPrice → /market/ws（常规行情类）
-	spotURL   string
-	dialer    *websocket.Dialer
-	header    http.Header
-	now       func() time.Time
+	cfg        Config
+	publicURLs []string // perp bookTicker → /public/ws（D-517 fstream 拆分：高频盘口类）；有序候选
+	marketURLs []string // perp markPrice → /market/ws（常规行情类）；同上
+	spotURLs   []string // 同上
+	dialer     *websocket.Dialer
+	header     http.Header
+	now        func() time.Time
 	// emitFacts D-509：funding fact 发射口（FactEmitter 去重节流；nil=不 emit）。
 	emitFacts func(ctx context.Context, fs []fact.Fact) error
 	// intervals D-509 S2：funding 周期缓存（fundingInfo 真值；nil=回退 3/天）。
@@ -55,12 +56,22 @@ func NewBinanceMarketWS(cfg Config) *BinanceMarketWS {
 		scheme = "ws"
 	}
 	d, h := httpx.WSDialer()
+	publicURLs := []string{scheme + "://" + u.Host + "/public/ws"}
+	marketURLs := []string{scheme + "://" + u.Host + "/market/ws"}
+	spotURLs := []string{scheme + "://" + u.Host + "/spotws/ws"}
+	// cex-proxy 双端点 failover：BINANCE_PROXY_URL_BACKUP 置位→备用基址追加为第二候选
+	//（同路径后缀映射；主端恢复后每连接尝试自主端起=自动回主）。
+	// D-519 D6：备端 scheme 与 normWSBase 同语义归一（https→wss/http→ws/ws·wss 原样——
+	// 内网明文备端 ws:// 不得被升 wss）。
+	if b := normWSBase(os.Getenv("BINANCE_PROXY_URL_BACKUP")); b != "" {
+		publicURLs = append(publicURLs, b+"/public/ws")
+		marketURLs = append(marketURLs, b+"/market/ws")
+		spotURLs = append(spotURLs, b+"/spotws/ws")
+	}
 	return &BinanceMarketWS{
-		cfg:       cfg,
-		publicURL: scheme + "://" + u.Host + "/public/ws",
-		marketURL: scheme + "://" + u.Host + "/market/ws",
-		spotURL:   scheme + "://" + u.Host + "/spotws/ws",
-		dialer:    d, header: h, now: time.Now,
+		cfg:        cfg,
+		publicURLs: publicURLs, marketURLs: marketURLs, spotURLs: spotURLs,
+		dialer: d, header: h, now: time.Now,
 	}
 }
 
@@ -74,15 +85,15 @@ func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
 	wg.Add(3)
 	safego.Go("binance_market_ws:perp-public", func() {
 		defer wg.Done()
-		b.runLoop(ctx, b.publicURL, "perp", "bookTicker", publish)
+		b.runLoop(ctx, b.publicURLs, "perp", "bookTicker", publish)
 	})
 	safego.Go("binance_market_ws:perp-market", func() {
 		defer wg.Done()
-		b.runLoop(ctx, b.marketURL, "perp", "markPrice", publish)
+		b.runLoop(ctx, b.marketURLs, "perp", "markPrice", publish)
 	})
 	safego.Go("binance_market_ws:spot", func() {
 		defer wg.Done()
-		b.runLoop(ctx, b.spotURL, "spot", "bookTicker", publish)
+		b.runLoop(ctx, b.spotURLs, "spot", "bookTicker", publish)
 	})
 	wg.Wait()
 }
@@ -91,10 +102,10 @@ func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
 // （分批 SUBSCRIBE 帧集/ack 分流/markPrice→bookTicker 分发/显式 token 头）。
 // D-517 R1：kind=连接流类别（bookTicker|markPrice），venueType 恒喂 QuoteBus
 // perp/spot——连接身份与 venue 语义分离（venueType 污染=QuoteBus 键断供）。
-func (b *BinanceMarketWS) runLoop(ctx context.Context, url, venueType, kind string, publish func(bus.Quote)) {
-	meter := newReconnectMeter(venueType+":"+kind+":"+url, b.cfg.AlertFn) // D-507 S2 扩：同款风暴告警
+func (b *BinanceMarketWS) runLoop(ctx context.Context, urls []string, venueType, kind string, publish func(bus.Quote)) {
+	meter := newReconnectMeter(venueType+":"+kind+":"+urls[0], b.cfg.AlertFn) // D-507 S2 扩：同款风暴告警
 	RunWS(ctx, WSSpec{
-		Name: "binance-mkt-ws:" + venueType + ":" + kind, URL: url, Dialer: b.dialer, Header: b.header,
+		Name: "binance-mkt-ws:" + venueType + ":" + kind, URLs: urls, Dialer: b.dialer, Header: b.header,
 		InitialSubs: func() []any {
 			// 符号源与原 ticker 同源（effectiveSymbols：env ∪ SymProvider
 			// 动态 watchlist）；watchlist 新增符号随下次重连订阅生效，60s REST 兜底补窗。

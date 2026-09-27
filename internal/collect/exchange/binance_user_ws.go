@@ -103,6 +103,27 @@ func (b *BinanceUserWS) WSURL(listenKey string) (string, error) {
 	return fmt.Sprintf("%s://%s%s", scheme, u.Host, path), nil
 }
 
+// dialFailover cex-proxy 双端点回退：主 URL dial 失败 → BINANCE_PROXY_URL_BACKUP 置位时
+// 换 host 重试（路径/key 不变）；每连接尝试自主端起——主端恢复即自动回主（无粘滞）。
+func (b *BinanceUserWS) dialFailover(ctx context.Context, wsURL string) (*websocket.Conn, error) {
+	conn, err := b.dial(ctx, wsURL)
+	if err == nil || ctx.Err() != nil {
+		return conn, err
+	}
+	alt := b.backupWSURL(wsURL)
+	if alt == "" {
+		return conn, err
+	}
+	log.Printf("[binance-user-ws] dial %s failed: %v（试备用端点 %s）", wsURL, err, alt)
+	return b.dial(ctx, alt)
+}
+
+// backupWSURL wsURL host → BINANCE_PROXY_URL_BACKUP host（空/非法 → ""=无备用候选）。
+// D-519：host 换段收敛共享件 swapURLHost（gate 私有同法）。
+func (b *BinanceUserWS) backupWSURL(wsURL string) string {
+	return swapURLHost(wsURL, "BINANCE_PROXY_URL_BACKUP")
+}
+
 // Run 重连循环（5s 退避）。每次迭代取新 listenKey——失效不复用（官方语义）。
 func (b *BinanceUserWS) Run(ctx context.Context) {
 	for {
@@ -132,7 +153,7 @@ func (b *BinanceUserWS) runOnce(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	conn, err := b.dial(ctx, wsURL)
+	conn, err := b.dialFailover(ctx, wsURL)
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
 	}
