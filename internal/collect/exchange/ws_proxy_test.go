@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -185,5 +186,20 @@ func TestGatePrivateWS_DialFailover(t *testing.T) {
 	_ = g.runOnce(context.Background())
 	if len(tried) != 1 {
 		t.Fatalf("备 env 空应单 dial, tried=%v", tried)
+	}
+}
+
+// D-519 R2 A8（F1 实证）：预取消 ctx 进 runOnce——候选循环 ctx 守卫在拨号后，
+// 必须返回 error 而非 nil-conn 落穿 panic（守卫在循环顶时 conn=nil/err=nil 穿透）。
+func TestOKXPrivateWS_PreCanceledCtxNoPanic(t *testing.T) {
+	o := &OKXPrivateWS{
+		wsURLs: []string{"ws://127.0.0.1:1/x"},
+		dialer: websocket.DefaultDialer,
+		now:    time.Now,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := o.runOnce(ctx); err == nil {
+		t.Fatal("预取消 ctx 应返回 error（nil conn 落穿=panic 缺陷形态）")
 	}
 }

@@ -118,12 +118,12 @@ func (o *OKXPrivateWS) runOnce(ctx context.Context) error {
 	var conn *websocket.Conn
 	var err error
 	for _, u := range o.wsURLs {
-		if ctx.Err() != nil {
-			break // D-519 M1：shutdown 即停不逐候选空试（wsrunner.go:112 同款）
-		}
 		conn, _, err = o.dialer.DialContext(ctx, u, header)
 		if err == nil {
 			break
+		}
+		if ctx.Err() != nil {
+			break // D-519 M1/R2：守卫须在拨号后——循环顶查会让预取消 ctx 零拨号带 nil conn 落穿（dial 错误检查放行→WriteJSON nil panic，复审探针实证）
 		}
 		log.Printf("[okx-private-ws] dial %s failed: %v（尝试下一候选）", u, err)
 	}

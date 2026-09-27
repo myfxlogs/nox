@@ -161,7 +161,7 @@ func (f failoverRT) RoundTrip(r *http.Request) (*http.Response, error) {
 		}
 	}
 	r2 := r.Clone(r.Context())
-	u2 := *r.URL // D-519 D1：URL 值拷贝——请求不可变契约（Clone 浅拷共享 URL 指针；go1.26 无 URL.Clone）
+	u2 := *r.URL // D-519 D1：URL 值拷贝等价 Clone——请求不可变契约（Clone 浅拷共享 URL 指针；本模块 go directive 门槛下 URL.Clone 不可用）
 	r2.URL = &u2
 	if r.GetBody != nil {
 		r2.Body, _ = r.GetBody() // 上支已验 berr==nil
