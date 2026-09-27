@@ -55,7 +55,11 @@ type okxInstCatalog struct {
 }
 
 func newOKXInstCatalog(cfg Config) *okxInstCatalog {
-	return &okxInstCatalog{client: cfg.Client, base: strings.TrimRight(cfg.OKXBaseURL, "/")}
+	c := cfg.Client
+	if c == nil { // 测试/裸构造允许空 Client——生产 DefaultConfig 恒带 10s client
+		c = http.DefaultClient
+	}
+	return &okxInstCatalog{client: c, base: strings.TrimRight(cfg.OKXBaseURL, "/")}
 }
 
 // ensure 目录未载/过期则同步拉取（TTL 内零开销；调用方一次 REST 往返上限=cfg.Client 超时）。
