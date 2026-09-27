@@ -274,5 +274,5 @@ func (b *BinanceMarketWS) SetFactEmit(fn func(ctx context.Context, fs []fact.Fac
 	b.emitFacts = fn
 }
 
-// SetFundingIntervals 注入 funding 周期缓存（与 BinanceFunding 共用 D-301a boot 真值）。
+// SetFundingIntervals 注入 funding 周期缓存（D-301a boot 真值；BinanceFundingHistory 同源）。
 func (b *BinanceMarketWS) SetFundingIntervals(c *FundingIntervalCache) { b.intervals = c }
