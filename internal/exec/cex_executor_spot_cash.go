@@ -142,9 +142,6 @@ func (e *CEXExecutor) spotQuoteAvail(ctx context.Context, quote string) (float64
 			"OK-ACCESS-TIMESTAMP":  {ts},
 			"OK-ACCESS-PASSPHRASE": {e.passphrase},
 		}
-		if e.simulated {
-			headers.Set("x-simulated-trading", "1")
-		}
 		body, err := e.get(ctx, e.baseURL+path, headers)
 		if err != nil {
 			return 0, fmt.Errorf("balance: %w", err)

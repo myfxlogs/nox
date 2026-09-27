@@ -29,7 +29,7 @@ type CEXAccountQuerier struct {
 	apiSecret   string
 	passphrase  string // OKX 必填；Binance 空
 	baseURL     string // spot base（binance 走代理；okx www.okx.com）
-	simulated   bool   // OKX 模拟盘：请求带 x-simulated-trading:1（demo key 必开，D-054）
+	simulated   bool   // D-516：demo 域收编后纯标记位（透出 AccountInfo.Simulated），不改请求
 	website     string // D-157 V3：交易所官网（从 ExchangeConfig.website 透传）
 	keyOverride string // D-362 S2：撞键非赢家的注册键覆盖（"venue:type#<id>"；空=canonical）
 	client      *http.Client
@@ -89,10 +89,6 @@ func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error
 		"OK-ACCESS-TIMESTAMP":  {ts},
 		"OK-ACCESS-PASSPHRASE": {q.passphrase},
 		"Content-Type":         {"application/json"},
-	}
-	// 模拟盘：OKX demo key 必须对实盘域名带 x-simulated-trading:1（独立 demo 域名不存在，D-054）。
-	if q.simulated {
-		headers.Set("x-simulated-trading", "1")
 	}
 	body, err := q.get(ctx, q.baseURL+path, headers)
 	if err != nil {

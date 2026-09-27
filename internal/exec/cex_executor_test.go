@@ -156,9 +156,9 @@ func TestCEXExecutor_OKXOrder(t *testing.T) {
 	cases := []struct {
 		name      string
 		simulated bool
-		wantSimH  string // x-simulated-trading 期望值（"" = 不应存在）
+		wantSimH  string // x-simulated-trading 期望值（"" = 不应存在；D-516 起两域都不带——支路删除）
 	}{
-		{"demo", true, "1"},
+		{"demo", true, ""},
 		{"live", false, ""},
 	}
 	for _, tc := range cases {

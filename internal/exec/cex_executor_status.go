@@ -44,9 +44,6 @@ func (e *CEXExecutor) okxOrderStatus(ctx context.Context, instID, ordID, clOrdID
 		"OK-ACCESS-TIMESTAMP":  {ts},
 		"OK-ACCESS-PASSPHRASE": {e.passphrase},
 	}
-	if e.simulated {
-		headers.Set("x-simulated-trading", "1")
-	}
 	body, err := e.get(ctx, e.baseURL+path, headers)
 	if err != nil {
 		return out, err
@@ -77,9 +74,6 @@ func (e *CEXExecutor) okxCancelOrder(ctx context.Context, instID, ordID string) 
 		"OK-ACCESS-TIMESTAMP":  {ts},
 		"OK-ACCESS-PASSPHRASE": {e.passphrase},
 		"Content-Type":         {"application/json"},
-	}
-	if e.simulated {
-		headers.Set("x-simulated-trading", "1")
 	}
 	_, err := e.post(ctx, e.baseURL+path, bodyStr, headers)
 	return err

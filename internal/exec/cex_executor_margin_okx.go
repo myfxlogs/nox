@@ -31,9 +31,6 @@ func (e *CEXExecutor) okxMarginPrecheck(ctx context.Context, o Order) error {
 		"OK-ACCESS-TIMESTAMP":  {ts},
 		"OK-ACCESS-PASSPHRASE": {e.passphrase},
 	}
-	if e.simulated {
-		headers.Set("x-simulated-trading", "1")
-	}
 	body, err := e.get(ctx, e.baseURL+path, headers)
 	if err != nil {
 		return fmt.Errorf("okx max-size %s: %w", instID, err)
@@ -96,9 +93,6 @@ func (e *CEXExecutor) okxMarkAndEquity(ctx context.Context, symbol string) (mark
 		"OK-ACCESS-SIGN":       {okxSign(e.apiSecret, ts+"GET"+path)},
 		"OK-ACCESS-TIMESTAMP":  {ts},
 		"OK-ACCESS-PASSPHRASE": {e.passphrase},
-	}
-	if e.simulated {
-		headers.Set("x-simulated-trading", "1")
 	}
 	body, err = e.get(ctx, e.baseURL+path, headers)
 	if err != nil {

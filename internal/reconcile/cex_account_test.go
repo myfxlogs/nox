@@ -115,7 +115,8 @@ func TestCEXAccount_OKX(t *testing.T) {
 	}
 }
 
-// TestCEXAccount_OKXSimulated：OKX 模拟盘请求必须带 x-simulated-trading:1（demo key 环境匹配，D-054）。
+// TestCEXAccount_OKXSimulated：D-516 起 simulated=t 不再注入 x-simulated-trading
+// （demo 端点支路删除；querier 层 simulated 纯标记位，fail-closed 闸在消费侧）。
 func TestCEXAccount_OKXSimulated(t *testing.T) {
 	var gotSimulated string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -132,8 +133,8 @@ func TestCEXAccount_OKXSimulated(t *testing.T) {
 	if _, err := q.Account(context.Background()); err != nil {
 		t.Fatalf("okx simulated account: %v", err)
 	}
-	if gotSimulated != "1" {
-		t.Errorf("simulated 请求应带 x-simulated-trading:1，got %q", gotSimulated)
+	if gotSimulated != "" {
+		t.Errorf("simulated 请求不应带 x-simulated-trading（D-516 支路删除），got %q", gotSimulated)
 	}
 }
 

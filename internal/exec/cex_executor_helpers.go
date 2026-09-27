@@ -39,7 +39,7 @@ type OKXPosition struct {
 }
 
 // OKXPositions 查询 OKX 指定 instId 的当前持仓（long_short_mode 下 long/short 分列）。
-// 供平仓核对 / demo 测试自愈清理（旧 bug 残留的双向持仓要能关掉），签名四头 + simulated 头。
+// 供平仓核对 / 残留双向持仓清理，签名四头。
 func (e *CEXExecutor) OKXPositions(ctx context.Context, instID string) ([]OKXPosition, error) {
 	path := "/api/v5/account/positions?instId=" + url.QueryEscape(instID)
 	ts := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
@@ -50,9 +50,6 @@ func (e *CEXExecutor) OKXPositions(ctx context.Context, instID string) ([]OKXPos
 		"OK-ACCESS-SIGN":       {sign},
 		"OK-ACCESS-TIMESTAMP":  {ts},
 		"OK-ACCESS-PASSPHRASE": {e.passphrase},
-	}
-	if e.simulated {
-		headers.Set("x-simulated-trading", "1")
 	}
 	body, err := e.get(ctx, e.baseURL+path, headers)
 	if err != nil {
