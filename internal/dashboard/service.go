@@ -5,12 +5,10 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"arb/internal/bus"
 	"arb/internal/collect/cmc"
-	"arb/internal/config"
 	"arb/internal/exec"
 	"arb/internal/position"
 	"arb/internal/store/pgstore"
@@ -37,12 +35,8 @@ type Service struct {
 	crossCap  float64
 	tierState map[string]tierState
 	tierMu    sync.Mutex
-	// D-523：app_config 键视图三快照 + 自杀重启注入（测试可换 fake）。
-	acRunning  *config.Config
-	acDefaults *config.Config
-	acEnvSnap  map[string]string
-	selfKill   func(int, syscall.Signal) error
-	selfDelay  time.Duration
+	acv       appConfigView // D-523：键视图快照+自杀重启注入（定义 service_appconfig.go）
+
 	// settler 结算触发（D-087 §3.2，手动平仓后调）。nil = 未接线（RPC 仍可用，仅不结算）。
 	settler Settler
 	// freshTTL 报价陈旧 TTL（复用 config.DetectorFreshnessTTL，G3）——个人持仓快照展示路径拒绝陈旧帧。

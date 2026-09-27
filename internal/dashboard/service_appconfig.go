@@ -19,8 +19,16 @@ import (
 
 // SetAppConfigView 注入键视图三快照（boot 装配位调用）：running=已 overlay 的进程内 cfg；
 // defaults=纯默认 cfg（LoadSansAppConfigKeys）；envSnap=overlay 注入前 env 值表。
+// appConfigView D-523 键视图快照 + SelfRestart 注入件。
+type appConfigView struct {
+	running, defaults *config.Config
+	envSnap           map[string]string
+	kill              func(int, syscall.Signal) error
+	delay             time.Duration
+}
+
 func (s *Service) SetAppConfigView(running, defaults *config.Config, envSnap map[string]string) {
-	s.acRunning, s.acDefaults, s.acEnvSnap = running, defaults, envSnap
+	s.acv.running, s.acv.defaults, s.acv.envSnap = running, defaults, envSnap
 }
 
 func (s *Service) appConfigView(ctx context.Context, key string, db map[string]pgstore.AppConfigRow) (*dashv1.AppConfigKey, error) {
@@ -29,7 +37,7 @@ func (s *Service) appConfigView(ctx context.Context, key string, db map[string]p
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("key %s not whitelisted", key))
 	}
 	row, hasDB := db[key]
-	envV, hasEnv := s.acEnvSnap[key]
+	envV, hasEnv := s.acv.envSnap[key]
 	out := &dashv1.AppConfigKey{
 		Key: key, Type: meta.Typ, Group: config.AppConfigGroup(key),
 		EnvValue: envV,
@@ -42,8 +50,8 @@ func (s *Service) appConfigView(ctx context.Context, key string, db map[string]p
 	if envPass {
 		running = os.Getenv(key) // boot overlay 已把 DB 值注入 env——进程内生效值即 env 现值
 	} else {
-		running = meta.Get(s.acRunning)
-		def = meta.Get(s.acDefaults)
+		running = meta.Get(s.acv.running)
+		def = meta.Get(s.acv.defaults)
 	}
 	out.RunningValue, out.DefaultValue = running, def
 
@@ -68,7 +76,7 @@ func (s *Service) appConfigView(ctx context.Context, key string, db map[string]p
 	if envPass {
 		out.PendingRestart = eff != running
 	} else {
-		c2 := *s.acRunning // 浅拷足矣：setter 只写自身字段/换指针
+		c2 := *s.acv.running // 浅拷足矣：setter 只写自身字段/换指针
 		if err := meta.Set(&c2, eff); err == nil {
 			out.PendingRestart = meta.Get(&c2) != running
 		}
@@ -120,7 +128,7 @@ func (s *Service) UpdateAppConfig(ctx context.Context, req *connect.Request[dash
 		}
 	}
 	if !envPass { // 用真 setter 再验一遍（durv/setv 等的解析域严于外形）
-		c2 := *s.acRunning
+		c2 := *s.acv.running
 		if err := meta.Set(&c2, val); err != nil {
 			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid value: %v", err))
 		}
@@ -146,12 +154,12 @@ func (s *Service) UpdateAppConfig(ctx context.Context, req *connect.Request[dash
 // SetSelfRestart 注入自杀件（测试换 fake；装配位 nil=默认 syscall.Kill+2s）。
 // 禁 os.Exit（绕过 defer 清理）——SIGTERM 复用既有优雅退出链，compose unless-stopped 拉起。
 func (s *Service) SetSelfRestart(kill func(int, syscall.Signal) error, delay time.Duration) {
-	s.selfKill, s.selfDelay = kill, delay
+	s.acv.kill, s.acv.delay = kill, delay
 }
 
 // SelfRestart：响应先回（RPC 200 已发出）→ delay 后 SIGTERM 自杀。
 func (s *Service) SelfRestart(ctx context.Context, _ *connect.Request[dashv1.SelfRestartRequest]) (*connect.Response[dashv1.SelfRestartResponse], error) {
-	kill, delay := s.selfKill, s.selfDelay
+	kill, delay := s.acv.kill, s.acv.delay
 	if kill == nil {
 		kill = syscall.Kill
 	}
