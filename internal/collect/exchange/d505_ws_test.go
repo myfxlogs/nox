@@ -6,6 +6,7 @@ package exchange
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 
@@ -191,4 +192,39 @@ func TestD509_GateFuturesFunding(t *testing.T) {
 	if len(got) != 0 {
 		t.Fatalf("缺 rate 应缺省不造, got %d", len(got))
 	}
+}
+
+// TestD509_OkxFundingRate funding-rate 频道帧→三 fact（D-509 S4）。
+func TestD509_OkxFundingRate(t *testing.T) {
+	var got []fact.Fact
+	o := &OKXWebSocket{}
+	o.emitFacts = func(_ context.Context, fs []fact.Fact) error { got = append(got, fs...); return nil }
+	var msg wsMsg
+	if err := json.Unmarshal([]byte(`{"arg":{"channel":"funding-rate","instId":"BTC-USDT-SWAP"},
+		"data":[{"fundingRate":"0.0001","fundingTime":"1790467200000","nextFundingTime":"1790496000000"}]}`), &msg); err != nil {
+		t.Fatal(err)
+	}
+	o.handleFundingRate(context.Background(), msg)
+	if len(got) != 3 {
+		t.Fatalf("facts=%d want 3", len(got))
+	}
+	if got[0].Kind != fact.KindFunding || got[0].Symbol != "BTCUSDT" || got[0].Src != "okx_ws_v5" {
+		t.Fatalf("funding fact: %+v", got[0])
+	}
+	if math.Abs(got[0].Value-0.0001*3*365*100) > 1e-9 { // 8h 窗→3/天
+		t.Fatalf("annualized=%v", got[0].Value)
+	}
+	if got[1].Value != 1790496000 || got[2].Value != 28800 {
+		t.Fatalf("settle/interval: %+v %+v", got[1], got[2])
+	}
+	// 缺 fundingRate → 缺省不造
+	got = nil
+	msg.Data[0] = map[string]any{"fundingTime": "1"}
+	o.handleFundingRate(context.Background(), msg)
+	if len(got) != 0 {
+		t.Fatalf("缺 rate 应缺省不造, got %d", len(got))
+	}
+	// tickers 帧不被 funding 分流误吞：handleMessage 正常路
+	got = nil
+	o.emitFacts = func(_ context.Context, fs []fact.Fact) error { got = append(got, fs...); return nil }
 }

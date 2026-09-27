@@ -82,6 +82,9 @@ func (o *OKXWebSocket) runOnce(ctx context.Context, publish func(bus.Quote)) err
 			args = append(args,
 				map[string]string{"channel": "tickers", "instId": instID},
 				map[string]string{"channel": "tickers", "instId": perpID},
+				// D-509 S4：funding-rate 公共频道（SWAP 实例）同订阅件，
+				// ping 期差集增量覆盖 watchlist 新增。
+				map[string]string{"channel": "funding-rate", "instId": perpID},
 			)
 		}
 		return args
@@ -127,16 +130,21 @@ func (o *OKXWebSocket) runOnce(ctx context.Context, publish func(bus.Quote)) err
 			close(done)
 			return fmt.Errorf("read: %w", err)
 		}
-		o.handleMessage(data, publish)
+		o.handleMessage(ctx, data, publish)
 	}
 }
 
-func (o *OKXWebSocket) handleMessage(data []byte, publish func(bus.Quote)) {
+func (o *OKXWebSocket) handleMessage(ctx context.Context, data []byte, publish func(bus.Quote)) {
 	var msg wsMsg
 	if err := json.Unmarshal(data, &msg); err != nil {
 		return
 	}
 	if msg.Event == "subscribe" || msg.Event == "channel-conn-count" {
+		return
+	}
+	// D-509 S4：funding-rate 帧分流（fundingRate/fundingTime/nextFundingTime 三字段原生）。
+	if msg.Arg.Channel == "funding-rate" {
+		o.handleFundingRate(ctx, msg)
 		return
 	}
 	if msg.Arg.Channel != "tickers" || len(msg.Data) == 0 {
@@ -208,4 +216,51 @@ func (o *OKXWebSocket) syms() []string { return o.cfg.effectiveSymbols() }
 // SetFactEmit 注入 fact 发射口（wiring 期；先于 Run）。
 func (o *OKXWebSocket) SetFactEmit(fn func(ctx context.Context, fs []fact.Fact) error) {
 	o.emitFacts = fn
+}
+
+// handleFundingRate D-509 S4：funding-rate 频道帧→funding 三 fact。
+// 字段（v5 public）：fundingRate（string）、fundingTime/nextFundingTime（ms string）——
+// periodsPerDay=fundingPeriodsPerDay(next−funding)（venue 自家字段算间隔，D-079 口径）。
+// 缺字段=缺省不造（venue 禁借用律）。
+func (o *OKXWebSocket) handleFundingRate(ctx context.Context, msg wsMsg) {
+	if o.emitFacts == nil || len(msg.Data) == 0 {
+		return
+	}
+	instID, _ := msg.Arg.InstID.(string)
+	if instID == "" {
+		return
+	}
+	item := msg.Data[0]
+	rateS, _ := item["fundingRate"].(string)
+	ftS, _ := item["fundingTime"].(string)
+	nftS, _ := item["nextFundingTime"].(string)
+	if rateS == "" {
+		return
+	}
+	var rate, ftMs, nftMs float64
+	fmt.Sscanf(rateS, "%f", &rate)
+	fmt.Sscanf(ftS, "%f", &ftMs)
+	fmt.Sscanf(nftS, "%f", &nftMs)
+	sym := strings.ReplaceAll(strings.TrimSuffix(instID, "-SWAP"), "-", "")
+	intervalMs := nftMs - ftMs
+	if intervalMs <= 0 {
+		log.Printf("[okx-ws] %s funding interval missing (ft=%v nft=%v), fallback 3/day", sym, ftMs, nftMs)
+	}
+	now := time.Now()
+	fs := []fact.Fact{
+		{Kind: fact.KindFunding, Venue: VenueOKX, Symbol: sym,
+			Value: annualizeFunding(rate, fundingPeriodsPerDay(intervalMs)),
+			Unit:  fact.UnitPctAnnualized, Ts: now, Src: "okx_ws_v5"},
+	}
+	if nftMs > 0 {
+		fs = append(fs, fact.Fact{Kind: fact.KindFundingNextSettle, Venue: VenueOKX,
+			Symbol: sym, Value: nftMs / 1000, Unit: fact.UnitUnixSec, Ts: now, Src: "okx_ws_v5"})
+	}
+	if intervalMs > 0 {
+		fs = append(fs, fact.Fact{Kind: fact.KindFundingInterval, Venue: VenueOKX,
+			Symbol: sym, Value: intervalMs / 1000, Unit: fact.UnitSeconds, Ts: now, Src: "okx_ws_v5"})
+	}
+	if err := o.emitFacts(ctx, fs); err != nil {
+		log.Printf("[okx-ws] funding emit %s: %v", instID, err)
+	}
 }
