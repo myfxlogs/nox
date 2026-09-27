@@ -85,6 +85,7 @@ var appConfigDescs = map[string]string{
 	"ARB_OPP_NOTIONAL_USD":                       "机会默认名义额（USD）",
 	"ARB_PAPER_AUTHORIZED_MAX_ACTIVE":            "纸面授权盘最大在仓数（env-passthrough 键）",
 	"ARB_PAPER_AUTHORIZED_REOPEN_COOLDOWN_HOURS": "纸面授权盘重开冷却（小时；env-passthrough 键）",
+	"ARB_SYMDIG_MAX_TOKENS":                      "品种深挖 LLM 单轮 max_tokens 上限（缺省 8192；env-passthrough 键）",
 	"ARB_PERPFUNDING_EXIT_DEBOUNCE":              "永续资金费退出防抖次数（连续命中才退出）",
 	"ARB_PERPFUNDING_MIN_HOLD":                   "永续资金费最短持仓时长",
 	"ARB_PERP_FUNDING_MIN_NET_ANNUALIZED":        "永续资金费净年化入场门槛（%）",

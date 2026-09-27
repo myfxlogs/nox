@@ -8,6 +8,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"strconv"
 	"time"
 
 	"arb/internal/analyst"
@@ -35,6 +37,7 @@ type Deps struct {
 	Now       func() time.Time
 	ReportDir string
 	InboxPath string
+	MaxTokens int // D-530：LLM 单轮输出上限；0=ARB_SYMDIG_MAX_TOKENS env，再缺省 8192
 }
 
 // analystRunner 复用 sysretro/kbreport 同形态 runner seam（analyst.RunWithSpecs）。
@@ -45,8 +48,19 @@ func (d *Deps) fill() {
 	if d.Now == nil {
 		d.Now = func() time.Time { return time.Now().UTC() }
 	}
+	if d.MaxTokens <= 0 {
+		if n, err := strconv.Atoi(os.Getenv("ARB_SYMDIG_MAX_TOKENS")); err == nil && n > 0 {
+			d.MaxTokens = n
+		} else {
+			d.MaxTokens = 8192
+		}
+	}
 	if d.Run == nil {
-		d.Run = analyst.RunWithSpecs
+		mt := d.MaxTokens
+		d.Run = func(ctx context.Context, c *analyst.Client, t analyst.ToolExecutor,
+			specs []analyst.ToolSpec, system string, msgs []analyst.Message, cb analyst.LoopCallbacks) (analyst.LoopResult, error) {
+			return analyst.RunWithSpecsMaxTokens(ctx, c, t, specs, system, msgs, cb, mt)
+		}
 	}
 }
 
