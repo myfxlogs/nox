@@ -5,7 +5,10 @@ package pgstore
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
+
+	"arb/internal/cryptoutil"
 
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -36,9 +39,12 @@ func (s *Store) InsertExchangeConfig(ctx context.Context, c *ExchangeConfig) err
 }
 
 // ListExchangeConfigs 全量交易所配置（按创建时间序）。
+// D-515：enc 列存在 → 解密回填 APIKey/APISecret/Passphrase（读面全走解密，明文列恒空）；
+// enc 行存在但 ARB_MASTER_KEY 缺失/解失败 → error 上抛（fail-closed，调用方 boot fatal）。
 func (s *Store) ListExchangeConfigs(ctx context.Context) ([]ExchangeConfig, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, venue, venue_type, label, api_key, api_secret, passphrase, base_url, simulated, created_at, website
+		SELECT id, venue, venue_type, label, api_key, api_secret, passphrase, base_url, simulated, created_at, website,
+		       api_key_enc, api_secret_enc, passphrase_enc
 		FROM exchange_configs ORDER BY created_at
 	`)
 	if err != nil {
@@ -46,15 +52,117 @@ func (s *Store) ListExchangeConfigs(ctx context.Context) ([]ExchangeConfig, erro
 	}
 	defer rows.Close()
 	var out []ExchangeConfig
+	var key []byte
+	keyReady := false
 	for rows.Next() {
 		var c ExchangeConfig
+		var kEnc, sEnc, pEnc []byte
 		if err := rows.Scan(&c.ID, &c.Venue, &c.VenueType, &c.Label,
-			&c.APIKey, &c.APISecret, &c.Passphrase, &c.BaseURL, &c.Simulated, &c.CreatedAt, &c.Website); err != nil {
+			&c.APIKey, &c.APISecret, &c.Passphrase, &c.BaseURL, &c.Simulated, &c.CreatedAt, &c.Website,
+			&kEnc, &sEnc, &pEnc); err != nil {
 			return nil, err
+		}
+		if kEnc != nil || sEnc != nil || pEnc != nil {
+			if !keyReady {
+				key, keyReady = cryptoutil.MasterKey()
+			}
+			if !keyReady {
+				return nil, fmt.Errorf("exchange_configs enc rows present but ARB_MASTER_KEY missing (fail-closed)")
+			}
+			if c.APIKey, err = openOrEmpty(key, kEnc); err != nil {
+				return nil, fmt.Errorf("exchange_config %d api_key: %w", c.ID, err)
+			}
+			if c.APISecret, err = openOrEmpty(key, sEnc); err != nil {
+				return nil, fmt.Errorf("exchange_config %d api_secret: %w", c.ID, err)
+			}
+			if c.Passphrase, err = openOrEmpty(key, pEnc); err != nil {
+				return nil, fmt.Errorf("exchange_config %d passphrase: %w", c.ID, err)
+			}
 		}
 		out = append(out, c)
 	}
 	return out, rows.Err()
+}
+
+// openOrEmpty enc=NULL → ""；非空 → Open。
+func openOrEmpty(key, blob []byte) (string, error) {
+	if blob == nil {
+		return "", nil
+	}
+	return cryptoutil.Open(key, blob)
+}
+
+// SealExchangeKeys boot 自封（D-515 §2）：明文列非空且 enc 空 → 加密写回+明文置 ”
+// （T8 审计留痕=列保留）。幂等：enc 已置位行跳过；enc 空且明文空=未配凭据跳过。
+// MASTER_KEY 缺失且存在需封行 → error（调用方 boot fatal）。
+func (s *Store) SealExchangeKeys(ctx context.Context) (sealed int, err error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, api_key, api_secret, passphrase FROM exchange_configs
+		WHERE (api_key <> '' AND api_key_enc IS NULL)
+		   OR (api_secret <> '' AND api_secret_enc IS NULL)
+		   OR (COALESCE(passphrase,'') <> '' AND passphrase_enc IS NULL)`)
+	if err != nil {
+		return 0, fmt.Errorf("seal scan: %w", err)
+	}
+	type row struct {
+		id      int64
+		k, s, p string
+	}
+	var pending []row
+	for rows.Next() {
+		var r row
+		var pass *string
+		if err := rows.Scan(&r.id, &r.k, &r.s, &pass); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		if pass != nil {
+			r.p = *pass
+		}
+		pending = append(pending, r)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	if len(pending) == 0 {
+		return 0, nil
+	}
+	key, ok := cryptoutil.MasterKey()
+	if !ok {
+		return 0, fmt.Errorf("%d exchange_configs rows need sealing but ARB_MASTER_KEY missing (fail-closed)", len(pending))
+	}
+	seal := func(plain string) ([]byte, error) {
+		if plain == "" {
+			return nil, nil
+		}
+		return cryptoutil.Seal(key, plain)
+	}
+	for _, r := range pending {
+		kEnc, err := seal(r.k)
+		if err != nil {
+			return sealed, err
+		}
+		sEnc, err := seal(r.s)
+		if err != nil {
+			return sealed, err
+		}
+		pEnc, err := seal(r.p)
+		if err != nil {
+			return sealed, err
+		}
+		if _, err := s.pool.Exec(ctx, `
+			UPDATE exchange_configs SET
+				api_key_enc = COALESCE(api_key_enc, $2),
+				api_secret_enc = COALESCE(api_secret_enc, $3),
+				passphrase_enc = COALESCE(passphrase_enc, $4),
+				api_key = '', api_secret = '', passphrase = ''
+			WHERE id = $1`, r.id, kEnc, sEnc, pEnc); err != nil {
+			return sealed, fmt.Errorf("seal id=%d: %w", r.id, err)
+		}
+		sealed++
+	}
+	return sealed, nil
 }
 
 // DeleteExchangeConfig 按 id 删除。
