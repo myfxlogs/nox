@@ -76,8 +76,9 @@ func (b *BinanceUserWS) listenKeyEndpoint() string {
 	return b.baseURL + "/v1/listenKey"
 }
 
-// WSURL listenKey → WS 地址（三路穷举映射写死：real perp→/ws、demo perp→/demofws、spot→/spotws；
+// WSURL listenKey → WS 地址（D-517 S3 fstream 迁移后映射：real perp→/private/ws、demo perp→/demofws、spot→/spotws；
 // baseURL 只取 scheme+host，路径段不继承——demofapi/fapi 的 REST 段不得进 WS URL）。
+// demo（demofws）与 spot 暂无迁移证据——保留原路径（代码注释+报审写明结论依据）。
 func (b *BinanceUserWS) WSURL(listenKey string) (string, error) {
 	u, err := url.Parse(b.baseURL)
 	if err != nil {
@@ -90,11 +91,11 @@ func (b *BinanceUserWS) WSURL(listenKey string) (string, error) {
 	var path string
 	switch {
 	case b.venueType == "perp" && !b.simulated:
-		path = "/ws/" + listenKey
+		path = "/private/ws/" + listenKey // D-517 S3：旧 /ws → /private（fstream 端点拆分迁移）
 	case b.venueType == "perp" && b.simulated:
-		path = "/demofws/ws/" + listenKey
+		path = "/demofws/ws/" + listenKey // demo env 迁移证据缺失——暂留原路径
 	case b.venueType == "spot":
-		path = "/spotws/ws/" + listenKey
+		path = "/spotws/ws/" + listenKey // spot 独立 host，不在本次 fstream 迁移面
 	default:
 		return "", fmt.Errorf("binance user ws: unsupported venueType=%q simulated=%v", b.venueType, b.simulated)
 	}
