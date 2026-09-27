@@ -109,7 +109,7 @@ message ExchangeConfig {
   string api_key = 5;      // 列表掩码（前 4 + ***）
   string base_url = 6;     // 空 = venue 默认（binance=代理、okx=实盘）
   google.protobuf.Timestamp created_at = 7;
-  bool simulated = 8;      // OKX 模拟盘：实盘域名 + 请求头 x-simulated-trading:1（demo key 必开，D-054）
+  bool simulated = 8;      // 模拟盘标记位（D-516：demo 域收编，fail-closed 不连接）
   string website = 9;     // 交易所官网（D-157 V3：DB 存储；空 = 未设置）
 }
 
@@ -127,7 +127,7 @@ message AddExchangeRequest {
   string api_secret = 5;   // 明文提交，仅存后端（D-043 前端零信任）
   string passphrase = 6;   // OKX；其他交易所留空
   string base_url = 7;     // 可选；空 = venue 默认
-  bool simulated = 8;      // OKX 模拟盘（x-simulated-trading:1）；demo key 必开
+  bool simulated = 8;      // 模拟盘标记位（D-516：demo 域收编，fail-closed 不连接）
   string website = 9;     // 交易所官网（D-157 V3：CEX 添加表单传；空 = 不设置）
 }
 

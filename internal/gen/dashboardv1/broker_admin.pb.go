@@ -977,7 +977,7 @@ type ExchangeConfig struct {
 	ApiKey        string                 `protobuf:"bytes,5,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`          // 列表掩码（前 4 + ***）
 	BaseUrl       string                 `protobuf:"bytes,6,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`       // 空 = venue 默认（binance=代理、okx=实盘）
 	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	Simulated     bool                   `protobuf:"varint,8,opt,name=simulated,proto3" json:"simulated,omitempty"` // OKX 模拟盘：实盘域名 + 请求头 x-simulated-trading:1（demo key 必开，D-054）
+	Simulated     bool                   `protobuf:"varint,8,opt,name=simulated,proto3" json:"simulated,omitempty"` // 模拟盘标记位（D-516：demo 域收编，fail-closed 不连接）
 	Website       string                 `protobuf:"bytes,9,opt,name=website,proto3" json:"website,omitempty"`      // 交易所官网（D-157 V3：DB 存储；空 = 未设置）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1165,7 +1165,7 @@ type AddExchangeRequest struct {
 	ApiSecret     string                 `protobuf:"bytes,5,opt,name=api_secret,json=apiSecret,proto3" json:"api_secret,omitempty"` // 明文提交，仅存后端（D-043 前端零信任）
 	Passphrase    string                 `protobuf:"bytes,6,opt,name=passphrase,proto3" json:"passphrase,omitempty"`                // OKX；其他交易所留空
 	BaseUrl       string                 `protobuf:"bytes,7,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`       // 可选；空 = venue 默认
-	Simulated     bool                   `protobuf:"varint,8,opt,name=simulated,proto3" json:"simulated,omitempty"`                 // OKX 模拟盘（x-simulated-trading:1）；demo key 必开
+	Simulated     bool                   `protobuf:"varint,8,opt,name=simulated,proto3" json:"simulated,omitempty"`                 // 模拟盘标记位（D-516：demo 域收编，fail-closed 不连接）
 	Website       string                 `protobuf:"bytes,9,opt,name=website,proto3" json:"website,omitempty"`                      // 交易所官网（D-157 V3：CEX 添加表单传；空 = 不设置）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

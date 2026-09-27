@@ -20,7 +20,7 @@ type ExchangeConfig struct {
 	APISecret  string
 	Passphrase string
 	BaseURL    string
-	Simulated  bool   // OKX 模拟盘：实盘域名 + x-simulated-trading:1（demo key 必开，D-054）
+	Simulated  bool   // 模拟盘标记位（D-516：demo 域收编后仅存数据语义——消费端 fail-closed 跳过）
 	Website    string // D-157 V3：交易所官网（DB 存储；空 = 未设置）
 	CreatedAt  time.Time
 }

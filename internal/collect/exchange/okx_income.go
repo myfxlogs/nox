@@ -28,7 +28,7 @@ type OKXIncomeAccount struct {
 	APISecret  string
 	Passphrase string
 	BaseURL    string
-	Simulated  bool // demo 账户带 x-simulated-trading:1，匹配 env=demo 腿（D-362 S5 环境一致性）
+	Simulated  bool // 纯标记位（env=demo 腿匹配，D-362 S5）；D-516 起 sim 行 wiring 层已剔除
 }
 
 // OKXIncomeCollector okx bills 采集器（15min 固定轮询由 wiring 驱动，弃结算对齐——
