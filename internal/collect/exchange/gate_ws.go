@@ -1,9 +1,6 @@
 // Gate.io WebSocket 行情采集（§3.3 后续迭代）。
-// spot + futures 各一条独立连接（URL 不同），订阅 tickers 频道实时推送 bid/ask 到 QuoteBus。
-// 与 okx_ws.go 结构对齐：Run 循环 + 断线重连 + ping 保活。
-//
-// Binance 公开报价已 WS 流化（D-505：现行代理 192.229.85.35:8443 实证 WS 升级正常，
-// 原「200 非 101」系已退役 CF/Render 代理的陈旧结论）；REST 轮询保留为降级兜底 60s。
+// spot + futures 各一条独立连接（URL 不同），订阅 tickers 频道实时推送 bid/ask 到 QuoteBus；
+// 与 okx_ws.go 结构对齐（Run 循环+断线重连+ping 保活）。funding 三件套亦走本帧（D-509 S3）。
 package exchange
 
 import (
