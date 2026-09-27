@@ -118,6 +118,7 @@ func Load() *Config {
 		AnalystRatePerHour:         envInt("ARB_ANALYST_RATE_PER_HOUR", 20),
 		ExplorerEnabled:            envBool("ARB_EXPLORER_ENABLED", false), // D-513：壳上线默认关
 		ExplorerRatePerHour:        envInt("ARB_EXPLORER_RATE_PER_HOUR", 10),
+		MacroEnabled:               envBool("ARB_MACRO_ENABLED", false), // D-528：宏观采集默认关
 		MTData:                     loadMTData(),
 		SwapReconcileDeviationPct:  envFloat("ARB_SWAP_RECONCILE_DEVIATION_PCT", 10.0), // D-110 P2
 		MTDisasterSlPct:            envFloat("ARB_MT_DISASTER_SL_PCT", 2.0),            // D-146 S1 broker 端灾难 SL

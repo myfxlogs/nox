@@ -65,8 +65,7 @@ type Config struct {
 	// SwapArbEquityUseRatio 名义额资金使用率系数（ARB_SWAPARB_EQUITY_USE_RATIO，缺省 0.5）：notional=min(equityLong,equityShort)×ratio；ratio=1=旧行为，不限额=无上限。
 	SwapArbEquityUseRatio float64
 	// SwapArbBareCap swap 套利单腿裸露上限系数（ARB_SWAPARB_BARE_CAP，缺省 1.0）。
-	// D-097 R2：notional = minEq×ratio，若 > minEq×BareCap 则 cap 到 minEq×BareCap（只 cap 不 skip）。
-	// 语义=单腿名义≤BareCap 倍权益，防大权益+高 ratio 放大裸露。1.0=单腿名义≤1 倍权益。
+	// D-097 R2：notional=minEq×ratio，>minEq×BareCap 则 cap 之（只 cap 不 skip）——单腿名义≤BareCap 倍权益。
 	SwapArbBareCap float64
 	// SwapArbReentryCooldownDays 组合平仓后重入冷却天数（ARB_SWAPARB_REENTRY_COOLDOWN_DAYS，缺省 7）。
 	// 该 ComboKey 存在 CLOSED 持仓且 closed_at > now() − N 天 → 跳过（不尝试/不弹窗/不落 REJECTED 噪音）。
@@ -201,6 +200,7 @@ type Config struct {
 	AnalystRatePerHour  int    // ARB_ANALYST_RATE_PER_HOUR（默认 20）
 	ExplorerEnabled     bool   // ARB_EXPLORER_ENABLED 缺省 false——探矿员壳总闸（D-513：关=零行为变化）
 	ExplorerRatePerHour int    // ARB_EXPLORER_RATE_PER_HOUR（默认 10，独立令牌桶）
+	MacroEnabled        bool   // ARB_MACRO_ENABLED 缺省 false——宏观采集层总闸（D-528：关=零行为变化）
 	// MTData MT 数据采集稳定性加固参数（D-104 P0）。
 	MTData MTDataConfig
 

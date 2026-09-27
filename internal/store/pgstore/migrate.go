@@ -146,6 +146,7 @@ var migrationFiles = []struct {
 	{149, migrations.SettlementIncidentAttributedSQL},  // D-512 T9：settlements 事故归因列+存量按同判据回填
 	{150, migrations.ExplorerShellSQL},                 // D-513 S2：explorer_proposals/explorer_state 记分板骨架双表
 	{151, migrations.ConfigToPgSQL},                    // D-515：app_secrets+swaparb_allow_combos+exchange enc 三列
+	{152, migrations.MacroTablesSQL},                   // D-528：macro_event+cot_position+fred_observation 三表
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
