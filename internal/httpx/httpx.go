@@ -124,11 +124,16 @@ func (f failoverRT) RoundTrip(r *http.Request) (*http.Response, error) {
 	if r.Body != nil && r.GetBody == nil {
 		return resp, err // body 不可重放
 	}
-	r2 := r.Clone(r.Context())
 	if r.GetBody != nil {
-		if body, berr := r.GetBody(); berr == nil {
-			r2.Body = body
+		if _, berr := r.GetBody(); berr != nil {
+			return resp, err // D-519 D2：body 重放失败=不回退，原错上抛（勿发空 body 给备端）
 		}
+	}
+	r2 := r.Clone(r.Context())
+	u2 := *r.URL // D-519 D1：URL 值拷贝——请求不可变契约（Clone 浅拷共享 URL 指针；go1.26 无 URL.Clone）
+	r2.URL = &u2
+	if r.GetBody != nil {
+		r2.Body, _ = r.GetBody() // 上支已验 berr==nil
 	}
 	r2.URL.Scheme = f.backupScheme
 	r2.URL.Host = f.backupHost

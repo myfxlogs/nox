@@ -124,6 +124,12 @@ func TestBinanceMarketWS_BackupCandidates(t *testing.T) {
 	if len(b.publicURLs) != 1 || len(b.marketURLs) != 1 || len(b.spotURLs) != 1 {
 		t.Fatalf("backup 空应单候选: %v %v %v", b.publicURLs, b.marketURLs, b.spotURLs)
 	}
+	// D-519 A6（D6）：ws:// 明文备端不被升 wss（内网备端场景）。
+	t.Setenv("BINANCE_PROXY_URL_BACKUP", "ws://proxy-c:8080")
+	b = NewBinanceMarketWS(Config{BinanceBaseURL: "https://proxy-a:8443/fapi"})
+	if b.publicURLs[1] != "ws://proxy-c:8080/public/ws" {
+		t.Fatalf("ws:// 备端被错升 wss: %v", b.publicURLs)
+	}
 }
 
 // binance_user_ws backupWSURL：host 换备端、路径/key 不变；env 空/非法→无候选。

@@ -34,6 +34,52 @@ func TestFailoverRT_PrimaryDownFallsBack(t *testing.T) {
 	}
 }
 
+// D-519 A1（D1）：回退成功且**原请求 URL 不被改写**（Clone 浅拷共享 URL 指针=契约违反）。
+func TestFailoverRT_OriginalURLUnchanged(t *testing.T) {
+	var backHost string
+	back := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		backHost = r.Host
+	}))
+	defer back.Close()
+	t.Setenv("BINANCE_PROXY_URL", "http://127.0.0.1:1")
+	t.Setenv("BINANCE_PROXY_URL_BACKUP", back.URL)
+	t.Setenv("ARB_BINANCE_PROXY_TOKEN", "tok-fb")
+
+	req, _ := http.NewRequest(http.MethodGet, "http://127.0.0.1:1/fapi/v1/x", nil)
+	resp, err := Client().Do(req)
+	if err != nil {
+		t.Fatalf("failover 应成功: %v", err)
+	}
+	resp.Body.Close()
+	if req.URL.Host != "127.0.0.1:1" {
+		t.Fatalf("原请求 URL 被改写成 %s（应仍为主端）", req.URL.Host)
+	}
+	if backHost == "" {
+		t.Fatal("备端未收到回退请求")
+	}
+}
+
+// D-519 A2（D2）：GetBody 出错 → 不回退（备端零命中），原传输错上抛。
+func TestFailoverRT_GetBodyErrNoFallback(t *testing.T) {
+	var backHits int
+	back := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		backHits++
+	}))
+	defer back.Close()
+	t.Setenv("BINANCE_PROXY_URL", "http://127.0.0.1:1")
+	t.Setenv("BINANCE_PROXY_URL_BACKUP", back.URL)
+	t.Setenv("ARB_BINANCE_PROXY_TOKEN", "tok-fb")
+
+	req, _ := http.NewRequest(http.MethodGet, "http://127.0.0.1:1/x", strings.NewReader("b"))
+	req.GetBody = func() (io.ReadCloser, error) { return nil, io.ErrClosedPipe }
+	if _, err := Client().Do(req); err == nil {
+		t.Fatal("GetBody 错应上抛原传输错")
+	}
+	if backHits != 0 {
+		t.Fatalf("GetBody 错不应回退备端: %d hits", backHits)
+	}
+}
+
 // 主端回 500（业务错）不触发回退；非主 host 的传输错也不触发。
 func TestFailoverRT_NoFallbackOn5xxOrForeignHost(t *testing.T) {
 	var backHits int

@@ -61,16 +61,12 @@ func NewBinanceMarketWS(cfg Config) *BinanceMarketWS {
 	spotURLs := []string{scheme + "://" + u.Host + "/spotws/ws"}
 	// cex-proxy 双端点 failover：BINANCE_PROXY_URL_BACKUP 置位→备用基址追加为第二候选
 	//（同路径后缀映射；主端恢复后每连接尝试自主端起=自动回主）。
-	if b := strings.TrimSpace(os.Getenv("BINANCE_PROXY_URL_BACKUP")); b != "" {
-		if bu, berr := url.Parse(b); berr == nil && bu.Host != "" {
-			bs := "wss"
-			if bu.Scheme == "http" {
-				bs = "ws"
-			}
-			publicURLs = append(publicURLs, bs+"://"+bu.Host+"/public/ws")
-			marketURLs = append(marketURLs, bs+"://"+bu.Host+"/market/ws")
-			spotURLs = append(spotURLs, bs+"://"+bu.Host+"/spotws/ws")
-		}
+	// D-519 D6：备端 scheme 与 normWSBase 同语义归一（https→wss/http→ws/ws·wss 原样——
+	// 内网明文备端 ws:// 不得被升 wss）。
+	if b := normWSBase(os.Getenv("BINANCE_PROXY_URL_BACKUP")); b != "" {
+		publicURLs = append(publicURLs, b+"/public/ws")
+		marketURLs = append(marketURLs, b+"/market/ws")
+		spotURLs = append(spotURLs, b+"/spotws/ws")
 	}
 	return &BinanceMarketWS{
 		cfg:        cfg,
