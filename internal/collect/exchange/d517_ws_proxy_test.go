@@ -62,13 +62,9 @@ func TestD517_BinanceWSURL_PrivatePath(t *testing.T) {
 	if url2 != "wss://192.229.85.35:8443/spotws/ws/spotKey" {
 		t.Errorf("spot WSURL = %s", url2)
 	}
-	// demo 不迁移。
+	// D-516 S2：demo 支路删除——simulated=t fail-closed error。
 	b3 := &BinanceUserWS{baseURL: "https://192.229.85.35:8443", venueType: "perp", simulated: true}
-	url3, err := b3.WSURL("demoKey")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if url3 != "wss://192.229.85.35:8443/demofws/ws/demoKey" {
-		t.Errorf("demo WSURL = %s", url3)
+	if url3, err := b3.WSURL("demoKey"); err == nil || url3 != "" {
+		t.Errorf("demo WSURL = %s err=%v want fail-closed error", url3, err)
 	}
 }

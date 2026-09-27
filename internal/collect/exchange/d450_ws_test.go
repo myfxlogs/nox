@@ -274,7 +274,6 @@ func TestBinanceWSURLMap(t *testing.T) {
 		want      string
 	}{
 		{"https://p:8443/fapi", "perp", false, "wss://p:8443/private/ws/KEY1"}, // D-517 S3：fstream /private 迁移
-		{"https://p:8443/demofapi/fapi", "perp", true, "wss://p:8443/demofws/ws/KEY1"},
 		{"https://p:8443/api", "spot", false, "wss://p:8443/spotws/ws/KEY1"},
 	}
 	for _, c := range cases {
@@ -283,6 +282,11 @@ func TestBinanceWSURLMap(t *testing.T) {
 		if err != nil || got != c.want {
 			t.Fatalf("base=%s type=%s sim=%v → %s err=%v want %s", c.base, c.venueType, c.sim, got, err, c.want)
 		}
+	}
+	// D-516 S2：simulated=t fail-closed（/demofws 支路删除，绝不拨 demo 端点）。
+	b := &BinanceUserWS{baseURL: "https://p:8443/demofapi/fapi", venueType: "perp", simulated: true}
+	if got, err := b.WSURL("KEY1"); err == nil || got != "" {
+		t.Fatalf("simulated WSURL = %q err=%v want fail-closed error", got, err)
 	}
 }
 
@@ -523,44 +527,30 @@ func TestGateDemoSnapshotGuard(t *testing.T) {
 	}
 }
 
-// T-R1b：binance simulated=true → ACCOUNT_UPDATE 不落快照，但持仓缓存仍更新。
+// T-R1b：binance simulated=true → D-516 起 fail-closed：Run 不取 key 不拨连接
+// （demo 端点支路删除；事件层 !simulated 快照守卫保留为防御位）。
 func TestBinanceDemoSnapshotGuard(t *testing.T) {
+	var posts atomic.Int32
 	rest := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/v1/listenKey") {
+			posts.Add(1)
 			fmt.Fprint(w, `{"listenKey":"D1"}`)
 			return
 		}
 		http.NotFound(w, r)
 	}))
 	defer rest.Close()
-	wsSrv := newWSFakeServer(t)
-
+	var dials atomic.Int32
 	b := NewBinanceUserWS("K", "S", rest.URL, "perp", "binance:perp#25", true, nil, nil, NewOrderEventCache(), NewPositionEventCache(), BinanceUserHooks{})
-	snaps := newFakeSnapSink()
-	evts := newFakeEventSink()
-	b.sink, b.events, b.rest = snaps, evts, rest.Client()
 	b.dial = func(ctx context.Context, _ string) (*websocket.Conn, error) {
-		conn, _, err := (&websocket.Dialer{}).DialContext(ctx, wsURLFromHTTP(wsSrv.URL), nil)
-		return conn, err
+		dials.Add(1)
+		return nil, fmt.Errorf("should not dial")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
-	go b.Run(ctx)
-
-	wsSrv.pushC <- json.RawMessage(`{"e":"ACCOUNT_UPDATE","a":{"B":[{"a":"USDT","wb":"777"}],"P":[{"s":"BTCUSDT","pa":"0.2","ep":"64000","iw":"120","ps":"LONG"}]}}`)
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) && len(evts.snapshot()) == 0 {
-		time.Sleep(10 * time.Millisecond)
-	}
-	if len(evts.snapshot()) == 0 {
-		t.Fatal("frame not processed")
-	}
-	time.Sleep(100 * time.Millisecond)
-	if got := snaps.snapshot(); len(got) != 0 {
-		t.Fatalf("demo stream wrote snapshots: %+v", got)
-	}
-	if orders, ok := b.posCache.get("binance:perp#25", PositionFreshTTL, b.now()); !ok || len(orders) != 1 {
-		t.Fatalf("pos cache wrong: %+v ok=%v", orders, ok)
+	b.Run(ctx)
+	if posts.Load() != 0 || dials.Load() != 0 {
+		t.Fatalf("simulated config dialed: listenKey posts=%d dials=%d", posts.Load(), dials.Load())
 	}
 }
 
