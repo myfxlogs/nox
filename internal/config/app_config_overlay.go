@@ -33,7 +33,7 @@ func ApplyAppConfigOverlay(cfg *Config, rows map[string]string) {
 			continue
 		}
 		v := rows[k]
-		if err := setter(cfg, v); err != nil {
+		if err := setter.Set(cfg, v); err != nil {
 			log.Printf("[config] %s: invalid app_config value %q ignored (env/default kept): %v", k, v, err)
 			continue
 		}

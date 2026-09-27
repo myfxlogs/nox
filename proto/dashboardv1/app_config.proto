@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package arb.dashboard.v1;
+
+option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
+
+import "google/protobuf/timestamp.proto";
+
+// ==== app_config.proto —— D-523：app_config 白名单键管理面（SettingsPage 数据源）。 ====
+
+message AppConfigKey {
+  string key = 1;              // env 键名（白名单成员）
+  string type = 2;             // bool|number|string（前端控件选型）
+  string group = 3;            // AUTOTRADE|CARRY|EXPLORER|ANALYST|FUNDING|OTHER
+  string db_value = 4;         // app_config 行值（缺行空）
+  string env_value = 5;        // boot 期 env 快照值（未置空）
+  string default_value = 6;    // 纯默认（无 env 无 DB 的 Load() 结果；env-passthrough 键无内联默认→空）
+  string running_value = 7;    // 进程内当前生效值
+  string value_source = 8;     // db|env|default（boot overlay 优先级链）
+  bool pending_restart = 9;    // db 生效值≠runningValue（实差徽标；重启后清零）
+  string note = 10;            // 审计事由
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+message ListAppConfigRequest {}
+message ListAppConfigResponse {
+  repeated AppConfigKey keys = 1;
+}
+
+message UpdateAppConfigRequest {
+  string key = 1;    // 白名单 fail-closed（未知键 400）
+  string value = 2;  // 严格类型校验（bool=true|false、number=strconv 可解析、string 非空）
+  string note = 3;   // 必填——事由即审计
+}
+message UpdateAppConfigResponse {
+  AppConfigKey key = 1;  // 更新后键视图
+}
+
+// SelfRestart：响应返回后 ~2s SIGTERM 自杀（compose unless-stopped 拉起）——重启生效通道。
+message SelfRestartRequest {}
+message SelfRestartResponse {}

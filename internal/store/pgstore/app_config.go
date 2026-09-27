@@ -6,6 +6,7 @@ package pgstore
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 // LoadAppConfig 全表读出 KV（量级小，无需分页）。返回 map[key]value。
@@ -51,4 +52,30 @@ func (s *Store) InsertAppConfigIfAbsent(ctx context.Context, key, value string) 
 	_, err := s.pool.Exec(ctx,
 		`INSERT INTO app_config (key, value) VALUES ($1,$2) ON CONFLICT (key) DO NOTHING`, key, value)
 	return err
+}
+
+// AppConfigRow 全列行（D-523 键视图：note/updated_at 透出审计）。
+type AppConfigRow struct {
+	Key       string
+	Value     string
+	Note      string
+	UpdatedAt time.Time
+}
+
+// ListAppConfigRows 全列读出（管理面用；LoadAppConfig 是 boot 轻量面不动）。
+func (s *Store) ListAppConfigRows(ctx context.Context) ([]AppConfigRow, error) {
+	rows, err := s.pool.Query(ctx, `SELECT key, value, note, updated_at FROM app_config ORDER BY key`)
+	if err != nil {
+		return nil, fmt.Errorf("list app config rows: %w", err)
+	}
+	defer rows.Close()
+	var out []AppConfigRow
+	for rows.Next() {
+		var r AppConfigRow
+		if err := rows.Scan(&r.Key, &r.Value, &r.Note, &r.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }

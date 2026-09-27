@@ -409,6 +409,15 @@ const (
 	// DashboardServiceReevaluatePerpFundingAdmissionProcedure is the fully-qualified name of the
 	// DashboardService's ReevaluatePerpFundingAdmission RPC.
 	DashboardServiceReevaluatePerpFundingAdmissionProcedure = "/arb.dashboard.v1.DashboardService/ReevaluatePerpFundingAdmission"
+	// DashboardServiceListAppConfigProcedure is the fully-qualified name of the DashboardService's
+	// ListAppConfig RPC.
+	DashboardServiceListAppConfigProcedure = "/arb.dashboard.v1.DashboardService/ListAppConfig"
+	// DashboardServiceUpdateAppConfigProcedure is the fully-qualified name of the DashboardService's
+	// UpdateAppConfig RPC.
+	DashboardServiceUpdateAppConfigProcedure = "/arb.dashboard.v1.DashboardService/UpdateAppConfig"
+	// DashboardServiceSelfRestartProcedure is the fully-qualified name of the DashboardService's
+	// SelfRestart RPC.
+	DashboardServiceSelfRestartProcedure = "/arb.dashboard.v1.DashboardService/SelfRestart"
 )
 
 // DashboardServiceClient is a client for the arb.dashboard.v1.DashboardService service.
@@ -590,6 +599,10 @@ type DashboardServiceClient interface {
 	ListPerpFundingAdmission(context.Context, *connect.Request[dashboardv1.ListPerpFundingAdmissionRequest]) (*connect.Response[dashboardv1.ListPerpFundingAdmissionResponse], error)
 	SetPerpFundingAdmissionOverride(context.Context, *connect.Request[dashboardv1.SetPerpFundingAdmissionOverrideRequest]) (*connect.Response[dashboardv1.SetPerpFundingAdmissionOverrideResponse], error)
 	ReevaluatePerpFundingAdmission(context.Context, *connect.Request[dashboardv1.ReevaluatePerpFundingAdmissionRequest]) (*connect.Response[dashboardv1.ReevaluatePerpFundingAdmissionResponse], error)
+	// D-523：app_config 键管理面（SettingsPage）+自杀重启生效通道。
+	ListAppConfig(context.Context, *connect.Request[dashboardv1.ListAppConfigRequest]) (*connect.Response[dashboardv1.ListAppConfigResponse], error)
+	UpdateAppConfig(context.Context, *connect.Request[dashboardv1.UpdateAppConfigRequest]) (*connect.Response[dashboardv1.UpdateAppConfigResponse], error)
+	SelfRestart(context.Context, *connect.Request[dashboardv1.SelfRestartRequest]) (*connect.Response[dashboardv1.SelfRestartResponse], error)
 }
 
 // NewDashboardServiceClient constructs a client for the arb.dashboard.v1.DashboardService service.
@@ -1359,6 +1372,24 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("ReevaluatePerpFundingAdmission")),
 			connect.WithClientOptions(opts...),
 		),
+		listAppConfig: connect.NewClient[dashboardv1.ListAppConfigRequest, dashboardv1.ListAppConfigResponse](
+			httpClient,
+			baseURL+DashboardServiceListAppConfigProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListAppConfig")),
+			connect.WithClientOptions(opts...),
+		),
+		updateAppConfig: connect.NewClient[dashboardv1.UpdateAppConfigRequest, dashboardv1.UpdateAppConfigResponse](
+			httpClient,
+			baseURL+DashboardServiceUpdateAppConfigProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("UpdateAppConfig")),
+			connect.WithClientOptions(opts...),
+		),
+		selfRestart: connect.NewClient[dashboardv1.SelfRestartRequest, dashboardv1.SelfRestartResponse](
+			httpClient,
+			baseURL+DashboardServiceSelfRestartProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("SelfRestart")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1490,6 +1521,9 @@ type dashboardServiceClient struct {
 	listPerpFundingAdmission        *connect.Client[dashboardv1.ListPerpFundingAdmissionRequest, dashboardv1.ListPerpFundingAdmissionResponse]
 	setPerpFundingAdmissionOverride *connect.Client[dashboardv1.SetPerpFundingAdmissionOverrideRequest, dashboardv1.SetPerpFundingAdmissionOverrideResponse]
 	reevaluatePerpFundingAdmission  *connect.Client[dashboardv1.ReevaluatePerpFundingAdmissionRequest, dashboardv1.ReevaluatePerpFundingAdmissionResponse]
+	listAppConfig                   *connect.Client[dashboardv1.ListAppConfigRequest, dashboardv1.ListAppConfigResponse]
+	updateAppConfig                 *connect.Client[dashboardv1.UpdateAppConfigRequest, dashboardv1.UpdateAppConfigResponse]
+	selfRestart                     *connect.Client[dashboardv1.SelfRestartRequest, dashboardv1.SelfRestartResponse]
 }
 
 // ListLatestQuotes calls arb.dashboard.v1.DashboardService.ListLatestQuotes.
@@ -2125,6 +2159,21 @@ func (c *dashboardServiceClient) ReevaluatePerpFundingAdmission(ctx context.Cont
 	return c.reevaluatePerpFundingAdmission.CallUnary(ctx, req)
 }
 
+// ListAppConfig calls arb.dashboard.v1.DashboardService.ListAppConfig.
+func (c *dashboardServiceClient) ListAppConfig(ctx context.Context, req *connect.Request[dashboardv1.ListAppConfigRequest]) (*connect.Response[dashboardv1.ListAppConfigResponse], error) {
+	return c.listAppConfig.CallUnary(ctx, req)
+}
+
+// UpdateAppConfig calls arb.dashboard.v1.DashboardService.UpdateAppConfig.
+func (c *dashboardServiceClient) UpdateAppConfig(ctx context.Context, req *connect.Request[dashboardv1.UpdateAppConfigRequest]) (*connect.Response[dashboardv1.UpdateAppConfigResponse], error) {
+	return c.updateAppConfig.CallUnary(ctx, req)
+}
+
+// SelfRestart calls arb.dashboard.v1.DashboardService.SelfRestart.
+func (c *dashboardServiceClient) SelfRestart(ctx context.Context, req *connect.Request[dashboardv1.SelfRestartRequest]) (*connect.Response[dashboardv1.SelfRestartResponse], error) {
+	return c.selfRestart.CallUnary(ctx, req)
+}
+
 // DashboardServiceHandler is an implementation of the arb.dashboard.v1.DashboardService service.
 type DashboardServiceHandler interface {
 	// 快照类
@@ -2304,6 +2353,10 @@ type DashboardServiceHandler interface {
 	ListPerpFundingAdmission(context.Context, *connect.Request[dashboardv1.ListPerpFundingAdmissionRequest]) (*connect.Response[dashboardv1.ListPerpFundingAdmissionResponse], error)
 	SetPerpFundingAdmissionOverride(context.Context, *connect.Request[dashboardv1.SetPerpFundingAdmissionOverrideRequest]) (*connect.Response[dashboardv1.SetPerpFundingAdmissionOverrideResponse], error)
 	ReevaluatePerpFundingAdmission(context.Context, *connect.Request[dashboardv1.ReevaluatePerpFundingAdmissionRequest]) (*connect.Response[dashboardv1.ReevaluatePerpFundingAdmissionResponse], error)
+	// D-523：app_config 键管理面（SettingsPage）+自杀重启生效通道。
+	ListAppConfig(context.Context, *connect.Request[dashboardv1.ListAppConfigRequest]) (*connect.Response[dashboardv1.ListAppConfigResponse], error)
+	UpdateAppConfig(context.Context, *connect.Request[dashboardv1.UpdateAppConfigRequest]) (*connect.Response[dashboardv1.UpdateAppConfigResponse], error)
+	SelfRestart(context.Context, *connect.Request[dashboardv1.SelfRestartRequest]) (*connect.Response[dashboardv1.SelfRestartResponse], error)
 }
 
 // NewDashboardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -3069,6 +3122,24 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("ReevaluatePerpFundingAdmission")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceListAppConfigHandler := connect.NewUnaryHandler(
+		DashboardServiceListAppConfigProcedure,
+		svc.ListAppConfig,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListAppConfig")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceUpdateAppConfigHandler := connect.NewUnaryHandler(
+		DashboardServiceUpdateAppConfigProcedure,
+		svc.UpdateAppConfig,
+		connect.WithSchema(dashboardServiceMethods.ByName("UpdateAppConfig")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceSelfRestartHandler := connect.NewUnaryHandler(
+		DashboardServiceSelfRestartProcedure,
+		svc.SelfRestart,
+		connect.WithSchema(dashboardServiceMethods.ByName("SelfRestart")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/arb.dashboard.v1.DashboardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DashboardServiceListLatestQuotesProcedure:
@@ -3323,6 +3394,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceSetPerpFundingAdmissionOverrideHandler.ServeHTTP(w, r)
 		case DashboardServiceReevaluatePerpFundingAdmissionProcedure:
 			dashboardServiceReevaluatePerpFundingAdmissionHandler.ServeHTTP(w, r)
+		case DashboardServiceListAppConfigProcedure:
+			dashboardServiceListAppConfigHandler.ServeHTTP(w, r)
+		case DashboardServiceUpdateAppConfigProcedure:
+			dashboardServiceUpdateAppConfigHandler.ServeHTTP(w, r)
+		case DashboardServiceSelfRestartProcedure:
+			dashboardServiceSelfRestartHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -3834,4 +3911,16 @@ func (UnimplementedDashboardServiceHandler) SetPerpFundingAdmissionOverride(cont
 
 func (UnimplementedDashboardServiceHandler) ReevaluatePerpFundingAdmission(context.Context, *connect.Request[dashboardv1.ReevaluatePerpFundingAdmissionRequest]) (*connect.Response[dashboardv1.ReevaluatePerpFundingAdmissionResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ReevaluatePerpFundingAdmission is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListAppConfig(context.Context, *connect.Request[dashboardv1.ListAppConfigRequest]) (*connect.Response[dashboardv1.ListAppConfigResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListAppConfig is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) UpdateAppConfig(context.Context, *connect.Request[dashboardv1.UpdateAppConfigRequest]) (*connect.Response[dashboardv1.UpdateAppConfigResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.UpdateAppConfig is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) SelfRestart(context.Context, *connect.Request[dashboardv1.SelfRestartRequest]) (*connect.Response[dashboardv1.SelfRestartResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SelfRestart is not implemented"))
 }
