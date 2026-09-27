@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/fact"
 	"arb/internal/safego"
 
 	"github.com/gorilla/websocket"
@@ -29,6 +30,8 @@ type OKXWebSocket struct {
 	readIdle         time.Duration
 	pingEvery        time.Duration
 	reconnectBackoff time.Duration
+	// emitFacts D-509：funding fact 发射口（FactEmitter 去重节流；nil=不 emit）。
+	emitFacts func(ctx context.Context, fs []fact.Fact) error
 }
 
 // NewOKXWebSocket 创建 OKX WS 采集器。
@@ -201,3 +204,8 @@ type wsMsg struct {
 
 // syms D-369 S2：okx WS 订阅符号集（env ∪ provider 动态集，连接期可增量）。
 func (o *OKXWebSocket) syms() []string { return o.cfg.effectiveSymbols() }
+
+// SetFactEmit 注入 fact 发射口（wiring 期；先于 Run）。
+func (o *OKXWebSocket) SetFactEmit(fn func(ctx context.Context, fs []fact.Fact) error) {
+	o.emitFacts = fn
+}

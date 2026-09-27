@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/fact"
 	"arb/internal/httpx"
 	"arb/internal/safego"
 
@@ -36,6 +37,10 @@ type BinanceMarketWS struct {
 	now     func() time.Time
 	// writeMu gorilla conn 单写者契约：ping goroutine 与 SUBSCRIBE 写共用 conn。
 	writeMu sync.Mutex
+	// emitFacts D-509：funding fact 发射口（FactEmitter 去重节流；nil=不 emit）。
+	emitFacts func(ctx context.Context, fs []fact.Fact) error
+	// intervals D-509 S2：funding 周期缓存（fundingInfo 真值；nil=回退 3/天）。
+	intervals *FundingIntervalCache
 }
 
 // NewBinanceMarketWS 创建采集器（host 取 cfg.BinanceBaseURL scheme+host）。
@@ -226,3 +231,11 @@ func isSubscribeAck(data []byte) bool {
 
 // binanceMktReadIdle 读空闲判定窗（pong/push 均续期；超时→runLoop 重连）。
 const binanceMktReadIdle = 60 * time.Second
+
+// SetFactEmit 注入 fact 发射口（wiring 期；先于 Run）。
+func (b *BinanceMarketWS) SetFactEmit(fn func(ctx context.Context, fs []fact.Fact) error) {
+	b.emitFacts = fn
+}
+
+// SetFundingIntervals 注入 funding 周期缓存（与 BinanceFunding 共用 D-301a boot 真值）。
+func (b *BinanceMarketWS) SetFundingIntervals(c *FundingIntervalCache) { b.intervals = c }

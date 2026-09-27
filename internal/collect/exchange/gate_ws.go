@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/fact"
 	"arb/internal/safego"
 
 	"github.com/gorilla/websocket"
@@ -36,6 +37,8 @@ type GateWebSocket struct {
 	readIdle         time.Duration
 	pingEvery        time.Duration
 	reconnectBackoff time.Duration
+	// emitFacts D-509：funding fact 发射口（FactEmitter 去重节流；nil=不 emit）。
+	emitFacts func(ctx context.Context, fs []fact.Fact) error
 }
 
 // NewGateWebSocket 创建 Gate WS 采集器。
@@ -271,4 +274,9 @@ func pairsD369(syms []string, suffix string) []string {
 		out = append(out, s+suffix)
 	}
 	return out
+}
+
+// SetFactEmit 注入 fact 发射口（wiring 期；先于 Run）。
+func (g *GateWebSocket) SetFactEmit(fn func(ctx context.Context, fs []fact.Fact) error) {
+	g.emitFacts = fn
 }
