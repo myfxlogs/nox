@@ -54,25 +54,55 @@ func llmDig(ctx context.Context, deps Deps, sum *Summary, runTS time.Time) error
 	if len(picks) == 0 {
 		return nil
 	}
-	payload, _ := json.Marshal(picks)
-	var aiText strings.Builder
-	_, err := deps.Run(ctx, deps.Client, nil, nil, symdigSystemPrompt,
-		[]analyst.Message{analyst.TextContent("user", "未配对/错配品种清单：\n```json\n"+string(payload)+"\n```")},
-		analyst.LoopCallbacks{OnDelta: func(t string) { aiText.WriteString(t) }})
-	if err != nil {
-		return fmt.Errorf("analyst run: %w", err)
+	// D-530：max_tokens 且未闭合 → 剩余未覆盖子集再调一轮（上限两轮防循环，合并提案）；
+	// 第二轮仍截断 → 告警升级 error；正常闭合输出保持单轮。
+	var all []proposal
+	covered := map[string]bool{}
+	truncated := false
+	for round := 0; round < 2 && len(picks) > 0; round++ {
+		payload, _ := json.Marshal(picks)
+		var aiText strings.Builder
+		res, err := deps.Run(ctx, deps.Client, nil, nil, symdigSystemPrompt,
+			[]analyst.Message{analyst.TextContent("user", "未配对/错配品种清单：\n```json\n"+string(payload)+"\n```")},
+			analyst.LoopCallbacks{OnDelta: func(t string) { aiText.WriteString(t) }})
+		if err != nil {
+			return fmt.Errorf("analyst run: %w", err)
+		}
+		props, malformed := parseProposals(aiText.String())
+		all = append(all, props...)
+		for _, p := range props {
+			covered[p.Symbol] = true
+		}
+		truncated = res.StopReason == "max_tokens" && malformed
+		if !truncated {
+			if malformed {
+				log.Printf("[symdig] proposals fenced 未闭合（EOF 容忍解析）")
+				if deps.Store != nil {
+					_ = deps.Store.InsertAlert(ctx, nil, "warn", "[symdig] proposals fenced 块未闭合（EOF 截断容忍解析）")
+				}
+			}
+			break
+		}
+		var rest []pgstore.SymdigFinding
+		for _, r := range picks {
+			if !covered[r.Symbol] {
+				rest = append(rest, r)
+			}
+		}
+		log.Printf("[symdig] 第 %d 轮 max_tokens 截断，剩余 %d 品种进第 %d 轮", round+1, len(rest), round+2)
+		picks = rest
 	}
-	props, malformed := parseProposals(aiText.String())
-	if malformed {
-		log.Printf("[symdig] proposals fenced 未闭合（EOF 容忍解析）")
+	if truncated {
+		msg := fmt.Sprintf("[symdig] proposals 二轮后仍 max_tokens 截断（覆盖 %d/%d 品种，提案集不完整）", len(covered), len(sum.Rows))
+		log.Print(msg)
 		if deps.Store != nil {
-			_ = deps.Store.InsertAlert(ctx, nil, "warn", "[symdig] proposals fenced 块未闭合（EOF 截断容忍解析）")
+			_ = deps.Store.InsertAlert(ctx, nil, "error", msg)
 		}
 	}
-	if len(props) == 0 {
+	if len(all) == 0 {
 		return nil
 	}
-	return appendInbox(deps.InboxPath, runTS.Format("2006-01-02"), "symdig_alias", props)
+	return appendInbox(deps.InboxPath, runTS.Format("2006-01-02"), "symdig_alias", all)
 }
 
 // parseProposals 提取 fenced JSON 数组（未闭合块 EOF 容忍）。

@@ -23,7 +23,8 @@ type LoopCallbacks struct {
 
 // LoopResult 循环结果。
 type LoopResult struct {
-	Grounded bool // 全程零工具调用=false
+	Grounded   bool   // 全程零工具调用=false
+	StopReason string // D-530：末轮 stop_reason（end_turn/max_tokens/...，symdig 截断检测消费）
 }
 
 // Run 执行 agent 循环（硬编码 ToolSpecs()+SystemPrompt）。
@@ -37,11 +38,17 @@ func Run(ctx context.Context, c *Client, tools ToolExecutor, msgs []Message, cb 
 // RunWithSpecs 执行 agent 循环（toolSpecs/systemPrompt 由调用方注入）。
 // D-284：飞书查询用专用工具+提示词，不复用前端分析员的 ToolSpecs/SystemPrompt。
 func RunWithSpecs(ctx context.Context, c *Client, tools ToolExecutor, toolSpecs []ToolSpec, systemPrompt string, msgs []Message, cb LoopCallbacks) (LoopResult, error) {
+	return RunWithSpecsMaxTokens(ctx, c, tools, toolSpecs, systemPrompt, msgs, cb, 2048)
+}
+
+// RunWithSpecsMaxTokens 同 RunWithSpecs，maxTokens 显式可调（D-530 symdig 8192 缺省）。
+func RunWithSpecsMaxTokens(ctx context.Context, c *Client, tools ToolExecutor, toolSpecs []ToolSpec, systemPrompt string, msgs []Message, cb LoopCallbacks, maxTokens int) (LoopResult, error) {
 	grounded := false
+	lastStop := ""
 	for round := 0; round < MaxToolRounds; round++ {
 		req := &MessageRequest{
 			Model:     c.Model,
-			MaxTokens: 2048,
+			MaxTokens: maxTokens,
 			System:    systemPrompt,
 			Messages:  msgs,
 			Stream:    true,
@@ -75,6 +82,7 @@ func RunWithSpecs(ctx context.Context, c *Client, tools ToolExecutor, toolSpecs 
 		if len(toolCalls) > 0 {
 			grounded = true
 		}
+		lastStop = stopReason
 		if stopReason != "tool_use" || len(toolCalls) == 0 {
 			// end_turn / max_tokens / stop_sequence → 结束
 			break
@@ -108,7 +116,7 @@ func RunWithSpecs(ctx context.Context, c *Client, tools ToolExecutor, toolSpecs 
 			cb.OnFollowUps(fu)
 		}
 	}
-	return LoopResult{Grounded: grounded}, nil
+	return LoopResult{Grounded: grounded, StopReason: lastStop}, nil
 }
 
 // parseFollowUps 从末条 assistant 文本中尝试解析 follow_ups（best-effort，非硬要求）。
