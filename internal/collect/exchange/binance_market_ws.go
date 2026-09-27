@@ -1,6 +1,7 @@
 // binance_market_ws.go —— D-505 S1：Binance 公开报价 WS 流化（替代 REST 轮询主路径）。
-// 双连接：perp wss://{host}/ws、spot wss://{host}/spotws/ws（host=cfg.BinanceBaseURL 的
-// scheme+host，同 BinanceUserWS.WSURL 取法——REST 路径段不进 WS URL）。
+// D-517 fstream 端点拆分三连接：perp bookTicker→/public/ws、perp markPrice→/market/ws、
+// spot→/spotws/ws（host=cfg.BinanceBaseURL 的 scheme+host，同 BinanceUserWS.WSURL 取法——
+// REST 路径段不进 WS URL；旧 /ws 单端点 4-23 退役=ack 成功+迁移流零帧静默断流）。
 // 单连接多流：连上即发 SUBSCRIBE ["{sym}usdt@bookTicker",…]（流名小写），等 ack {result:null}。
 // 双 payload 形制（D-505 决策席实测钉死）：perp 带 e/T/E 包裹、spot 裸 u/s/b/B/a/A——
 // 统一取 s/b/B/a/A；时间戳取帧内 T（perp）否则本地 now。
@@ -27,14 +28,15 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// BinanceMarketWS Binance 公开行情 WS（bookTicker 双连接订阅）。
+// BinanceMarketWS Binance 公开行情 WS（D-517：fstream 端点拆分三连接订阅）。
 type BinanceMarketWS struct {
-	cfg     Config
-	perpURL string
-	spotURL string
-	dialer  *websocket.Dialer
-	header  http.Header
-	now     func() time.Time
+	cfg       Config
+	publicURL string // perp bookTicker → /public/ws（D-517 fstream 拆分：高频盘口类）
+	marketURL string // perp markPrice → /market/ws（常规行情类）
+	spotURL   string
+	dialer    *websocket.Dialer
+	header    http.Header
+	now       func() time.Time
 	// emitFacts D-509：funding fact 发射口（FactEmitter 去重节流；nil=不 emit）。
 	emitFacts func(ctx context.Context, fs []fact.Fact) error
 	// intervals D-509 S2：funding 周期缓存（fundingInfo 真值；nil=回退 3/天）。
@@ -54,48 +56,54 @@ func NewBinanceMarketWS(cfg Config) *BinanceMarketWS {
 	}
 	d, h := httpx.WSDialer()
 	return &BinanceMarketWS{
-		cfg:     cfg,
-		perpURL: scheme + "://" + u.Host + "/ws",
-		spotURL: scheme + "://" + u.Host + "/spotws/ws",
-		dialer:  d, header: h, now: time.Now,
+		cfg:       cfg,
+		publicURL: scheme + "://" + u.Host + "/public/ws",
+		marketURL: scheme + "://" + u.Host + "/market/ws",
+		spotURL:   scheme + "://" + u.Host + "/spotws/ws",
+		dialer:    d, header: h, now: time.Now,
 	}
 }
 
-// Run 双连接并行（perp+spot），阻塞至 ctx 取消（mirror gate_ws.Run）。
+// Run 三连接并行（D-517：perp bookTicker→public、perp markPrice→market、spot→spotws），
+// 阻塞至 ctx 取消（mirror gate_ws.Run）。
 func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
 	if b == nil {
 		return // baseURL 解析失败静默（REST 兜底在跑）
 	}
 	var wg sync.WaitGroup
-	wg.Add(2)
-	safego.Go("binance_market_ws:perp", func() {
+	wg.Add(3)
+	safego.Go("binance_market_ws:perp-public", func() {
 		defer wg.Done()
-		b.runLoop(ctx, b.perpURL, "perp", publish)
+		b.runLoop(ctx, b.publicURL, "perp", "bookTicker", publish)
+	})
+	safego.Go("binance_market_ws:perp-market", func() {
+		defer wg.Done()
+		b.runLoop(ctx, b.marketURL, "perp", "markPrice", publish)
 	})
 	safego.Go("binance_market_ws:spot", func() {
 		defer wg.Done()
-		b.runLoop(ctx, b.spotURL, "spot", publish)
+		b.runLoop(ctx, b.spotURL, "spot", "bookTicker", publish)
 	})
 	wg.Wait()
 }
 
 // runLoop 单连接重连循环——D-511 S4：骨架收编 RunWS，本函数只装配协议钩子
 // （分批 SUBSCRIBE 帧集/ack 分流/markPrice→bookTicker 分发/显式 token 头）。
-func (b *BinanceMarketWS) runLoop(ctx context.Context, url, venueType string, publish func(bus.Quote)) {
-	meter := newReconnectMeter(venueType+":"+url, b.cfg.AlertFn) // D-507 S2 扩：同款风暴告警
+// D-517 R1：kind=连接流类别（bookTicker|markPrice），venueType 恒喂 QuoteBus
+// perp/spot——连接身份与 venue 语义分离（venueType 污染=QuoteBus 键断供）。
+func (b *BinanceMarketWS) runLoop(ctx context.Context, url, venueType, kind string, publish func(bus.Quote)) {
+	meter := newReconnectMeter(venueType+":"+kind+":"+url, b.cfg.AlertFn) // D-507 S2 扩：同款风暴告警
 	RunWS(ctx, WSSpec{
-		Name: "binance-mkt-ws:" + venueType, URL: url, Dialer: b.dialer, Header: b.header,
+		Name: "binance-mkt-ws:" + venueType + ":" + kind, URL: url, Dialer: b.dialer, Header: b.header,
 		InitialSubs: func() []any {
 			// 符号源与原 ticker 同源（effectiveSymbols：env ∪ SymProvider
 			// 动态 watchlist）；watchlist 新增符号随下次重连订阅生效，60s REST 兜底补窗。
 			syms := b.cfg.effectiveSymbols()
-			params := make([]string, 0, len(syms)*2)
+			params := make([]string, 0, len(syms))
 			for _, sym := range syms {
-				params = append(params, strings.ToLower(sym+"usdt")+"@bookTicker")
-				if venueType == "perp" {
-					// D-509 S2：markPrice 同连接同帧订阅（funding 是 perp 语义，spot 连接不加）。
-					params = append(params, strings.ToLower(sym+"usdt")+"@markPrice")
-				}
+				// D-517：按 kind 出订阅参数——bookTicker→public 路由、markPrice→market
+				// 路由（funding 是 perp 语义，spot 连接恒 bookTicker 不进此分支）。
+				params = append(params, strings.ToLower(sym+"usdt")+"@"+strings.ToLower(kind))
 			}
 			// D-509 merge 面修复：单帧 SUBSCRIBE 超服务端解析上限（实拍 1008 +
 			// "Invalid JSON …column 4096"）→ 分批多帧订阅（RunWS 逐帧发送语义已兼容）。
@@ -113,8 +121,8 @@ func (b *BinanceMarketWS) runLoop(ctx context.Context, url, venueType string, pu
 			if isSubscribeAck(data) {
 				return // {result:null,id:1} ack；{result:…,error} 已在 isSubscribeAck 记日志
 			}
-			if venueType == "perp" && b.handleMarkPrice(ctx, data) {
-				return // markPriceUpdate 帧已消费
+			if kind == "markPrice" && b.handleMarkPrice(ctx, data) {
+				return // markPriceUpdate 帧已消费（market 连接先 markPrice 后 bookTicker 兜底）
 			}
 			b.handleBookTicker(data, venueType, publish)
 		},
