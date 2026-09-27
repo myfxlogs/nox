@@ -116,10 +116,16 @@ func (b *BinanceMarketWS) runOnce(ctx context.Context, url, venueType string, pu
 			params = append(params, strings.ToLower(sym+"usdt")+"@markPrice")
 		}
 	}
-	if err := conn.WriteJSON(map[string]any{
-		"method": "SUBSCRIBE", "params": params, "id": 1,
-	}); err != nil {
-		return fmt.Errorf("subscribe: %w", err)
+	// D-509 merge 面修复：单帧 SUBSCRIBE 超服务端解析上限（实拍 1008 + "Invalid JSON …column 4096"）
+	// → 分批多帧订阅（同连接合法，binance 逐帧回 ack）。
+	for i, id := 0, 1; i < len(params); i += binanceMktSubChunk {
+		end := min(i+binanceMktSubChunk, len(params))
+		if err := conn.WriteJSON(map[string]any{
+			"method": "SUBSCRIBE", "params": params[i:end], "id": id,
+		}); err != nil {
+			return fmt.Errorf("subscribe: %w", err)
+		}
+		id++
 	}
 
 	_ = conn.SetReadDeadline(b.now().Add(binanceMktReadIdle))
@@ -287,6 +293,9 @@ func isSubscribeAck(data []byte) bool {
 
 // binanceMktReadIdle 读空闲判定窗（pong/push 均续期；超时→runLoop 重连）。
 const binanceMktReadIdle = 60 * time.Second
+
+// binanceMktSubChunk SUBSCRIBE 单帧参数上限（服务端单帧解析上限约 4KB，实拍 column 4096 截断）。
+const binanceMktSubChunk = 120
 
 // SetFactEmit 注入 fact 发射口（wiring 期；先于 Run）。
 func (b *BinanceMarketWS) SetFactEmit(fn func(ctx context.Context, fs []fact.Fact) error) {
