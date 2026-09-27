@@ -6,6 +6,8 @@ package notify
 import (
 	"context"
 	"time"
+
+	"arb/internal/store/pgstore"
 )
 
 // FeishuQueryStore 飞书查询数据源接口（pgstore 适配器实现）。
@@ -18,6 +20,9 @@ type FeishuQueryStore interface {
 	SumTodayIncome(ctx context.Context) (energyTrx, votingTrx, interestUSD float64, err error)
 	SumTRXTxRentalAll(ctx context.Context) (float64, error)
 	SumTRXTxVoteClaimAll(ctx context.Context) (float64, error)
+	// D-528 S6：宏观两工具数据面（返回 pgstore 行类型，零复制）。
+	MacroEventsBetween(ctx context.Context, from, to time.Time) ([]pgstore.MacroEvent, error)
+	LatestCot(ctx context.Context, instrument string, limit int) ([]pgstore.CotPosition, error)
 }
 
 // TRXAccountSummary TRX 账户快照（notify 包本地，sun→TRX 已换算）。

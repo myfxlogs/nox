@@ -29,7 +29,9 @@ const feishuQuerySystemPrompt = `你是 ARB 套利系统的飞书查询助手。
 - query_trx_price：查 TRX 当前价格（CMC 平台 X-AFQUL 合约中间价）
 - query_trx_account：查 TRX 账户（余额/质押/待领取奖励/能量/带宽/票数）
 - query_cmc_position：查 CMC 空单持仓（数量/开仓价/浮盈/强平价/距强平%）
-- query_today_income：查今日收益（能量租金+投票奖励+隔夜息，USD）`
+- query_today_income：查今日收益（能量租金+投票奖励+隔夜息，USD）
+- query_macro_events：查未来 N 日宏观经济事件（财历：非农/CPI/议息等）
+- query_cot_latest：查 CFTC COT 最新持仓（按品种：日元/黄金/标普等）`
 
 // AISettingsReader 读 ai_settings 表（*pgstore.Store 实现）。
 type AISettingsReader interface {
@@ -159,11 +161,15 @@ const trxInstrument = "X-AFQUL"
 
 func feishuQueryToolSpecs() []analyst.ToolSpec {
 	empty := json.RawMessage(`{"type":"object","properties":{}}`)
+	macroDays := json.RawMessage(`{"type":"object","properties":{"days_ahead":{"type":"integer","description":"向前看 N 天，缺省 7"}}}`)
+	cotInstr := json.RawMessage(`{"type":"object","properties":{"instrument":{"type":"string","description":"品种关键词（日元/黄金/6J 等），缺省=返回品种指南"}}}`)
 	return []analyst.ToolSpec{
 		{Name: "query_trx_price", Description: "查 TRX 当前价格（CMC 平台 X-AFQUL 合约中间价）", InputSchema: empty},
 		{Name: "query_trx_account", Description: "查 TRX 账户（余额/质押/待领取奖励/能量/带宽/票数）", InputSchema: empty},
 		{Name: "query_cmc_position", Description: "查 CMC 空单持仓（数量/开仓价/浮盈/强平价/距强平%）", InputSchema: empty},
 		{Name: "query_today_income", Description: "查今日收益（能量租金+投票奖励+隔夜息，USD）", InputSchema: empty},
+		{Name: "query_macro_events", Description: "查未来 N 日宏观经济事件（财历：非农/CPI/议息等）", InputSchema: macroDays},
+		{Name: "query_cot_latest", Description: "查 CFTC COT 最新持仓（按品种：日元/黄金/标普等）", InputSchema: cotInstr},
 	}
 }
 
@@ -172,7 +178,8 @@ type feishuQueryTools struct {
 }
 
 func (t *feishuQueryTools) Names() []string {
-	return []string{"query_trx_price", "query_trx_account", "query_cmc_position", "query_today_income"}
+	return []string{"query_trx_price", "query_trx_account", "query_cmc_position", "query_today_income",
+		"query_macro_events", "query_cot_latest"}
 }
 
 func (t *feishuQueryTools) Execute(ctx context.Context, call analyst.ToolCall) (analyst.ToolResult, []analyst.Citation, error) {
@@ -185,6 +192,10 @@ func (t *feishuQueryTools) Execute(ctx context.Context, call analyst.ToolCall) (
 		return t.execCmcPosition(ctx, call)
 	case "query_today_income":
 		return t.execTodayIncome(ctx, call)
+	case "query_macro_events":
+		return t.execMacroEvents(ctx, call)
+	case "query_cot_latest":
+		return t.execCotLatest(ctx, call)
 	default:
 		return analyst.ToolResult{ToolUseID: call.ID, Content: "未知工具: " + call.Name, IsError: true}, nil, nil
 	}

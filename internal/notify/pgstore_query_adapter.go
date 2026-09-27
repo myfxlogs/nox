@@ -99,5 +99,14 @@ func (a *PgStoreQueryAdapter) SumTodayIncome(ctx context.Context) (energyTrx, vo
 	return float64(rentalSun) / 1e6, float64(voteSun) / 1e6, interestUSD, nil
 }
 
+// D-528 S6：宏观两工具数据面直通（pgstore 行类型零转换）。
+func (a *PgStoreQueryAdapter) MacroEventsBetween(ctx context.Context, from, to time.Time) ([]pgstore.MacroEvent, error) {
+	return a.Store.MacroEventsBetween(ctx, from, to)
+}
+
+func (a *PgStoreQueryAdapter) LatestCot(ctx context.Context, instrument string, limit int) ([]pgstore.CotPosition, error) {
+	return a.Store.LatestCot(ctx, instrument, limit)
+}
+
 // compile-time: *PgStoreQueryAdapter 实现 FeishuQueryStore 接口。
 var _ FeishuQueryStore = (*PgStoreQueryAdapter)(nil)
