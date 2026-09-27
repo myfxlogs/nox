@@ -52,3 +52,17 @@ func (s *Store) UpsertAppSecret(ctx context.Context, key string, valueEnc []byte
 		key, valueEnc, note)
 	return err
 }
+
+// AppSecretsEmpty 表空判定（D-515 S4 播种闸）。
+func (s *Store) AppSecretsEmpty(ctx context.Context) (bool, error) {
+	var empty bool
+	err := s.pool.QueryRow(ctx, `SELECT NOT EXISTS (SELECT 1 FROM app_secrets)`).Scan(&empty)
+	return empty, err
+}
+
+// InsertAppSecretIfAbsent 播种写入（ON CONFLICT DO NOTHING）。
+func (s *Store) InsertAppSecretIfAbsent(ctx context.Context, key string, valueEnc []byte) error {
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO app_secrets (key, value_enc) VALUES ($1,$2) ON CONFLICT (key) DO NOTHING`, key, valueEnc)
+	return err
+}

@@ -136,8 +136,8 @@ func TestD513_Migration0150(t *testing.T) {
 	if err := s.pool.QueryRow(ctx, `SELECT max(version) FROM schema_migrations WHERE version < 90000`).Scan(&v); err != nil {
 		t.Fatalf("max version: %v", err)
 	}
-	if v != 150 {
-		t.Fatalf("max(version<90000)=%d, want 150", v) // 99991=哨兵行不计
+	if v < 150 {
+		t.Fatalf("max(version<90000)=%d, want >=150", v) // 99991=哨兵行不计；151+=D-515 后续迁移
 	}
 	for _, tbl := range []string{"explorer_proposals", "explorer_state"} {
 		var n int

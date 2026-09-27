@@ -16,11 +16,10 @@ func TestLoad_AutotradeDefaults(t *testing.T) {
 	os.Unsetenv("ARB_FUNDING_EXIT_NET_PCT")
 
 	c := Load()
-	if !c.AutoTradeAllowVenues["277842155:mt5"] || !c.AutoTradeAllowVenues["REDACTED_MT_ACCT:mt5"] {
-		t.Errorf("default AllowVenues missing: %v", c.AutoTradeAllowVenues)
-	}
-	if len(c.AutoTradeAllowCanonicals) != 0 {
-		t.Errorf("default AllowCanonicals should be empty (all-allow), got %v", c.AutoTradeAllowCanonicals)
+	// D-443：AllowVenues/AllowCanonicals 已表化 autotrade_allow_rules，env 停读——断言零消费语义。
+	if len(c.AutoTradeAllowVenues) != 0 || len(c.AutoTradeAllowCanonicals) != 0 {
+		t.Errorf("D-443: AllowVenues/AllowCanonicals env 已停读，应空 map，got %v/%v",
+			c.AutoTradeAllowVenues, c.AutoTradeAllowCanonicals)
 	}
 	if !c.AutoTradeExcludeCanonicals["BRENT"] || !c.AutoTradeExcludeCanonicals["WTI"] {
 		t.Errorf("default ExcludeCanonicals missing: %v", c.AutoTradeExcludeCanonicals)
@@ -41,16 +40,13 @@ func TestLoad_AutotradeDefaults(t *testing.T) {
 
 // TestLoad_AutotradeEnvOverride env 覆盖校验。
 func TestLoad_AutotradeEnvOverride(t *testing.T) {
-	t.Setenv("ARB_AUTOTRADE_ALLOW_VENUES", "111:mt5,222:mt5")
+	t.Setenv("ARB_AUTOTRADE_ALLOW_VENUES", "111:mt5,222:mt5") // D-443：env 已停读——断言不生效
 	t.Setenv("ARB_MEANREVERT_THRESHOLDS", "BTCUSDT:100,ETHUSDT:50")
 	t.Setenv("ARB_AUTOTRADE_MIN_NET_SWAP_BPS", "0.5")
 
 	c := Load()
-	if !c.AutoTradeAllowVenues["111:mt5"] || !c.AutoTradeAllowVenues["222:mt5"] {
-		t.Errorf("env AllowVenues override failed: %v", c.AutoTradeAllowVenues)
-	}
-	if c.AutoTradeAllowVenues["277842155:mt5"] {
-		t.Error("default venue should be replaced, not merged")
+	if len(c.AutoTradeAllowVenues) != 0 {
+		t.Errorf("D-443: AllowVenues env 不应再消费, got %v", c.AutoTradeAllowVenues)
 	}
 	if c.MeanRevertThresholds["BTCUSDT"] != 100 {
 		t.Errorf("env MeanRevertThresholds override failed: %v", c.MeanRevertThresholds)

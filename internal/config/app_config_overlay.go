@@ -8,77 +8,7 @@ import (
 	"log"
 	"os"
 	"sort"
-	"strconv"
 )
-
-// appConfigKeys D-368 Bucket B 白名单（八键；秘密/安全开关键刻意不注册——§1 分桶）。
-// value=typed setter；非法 DB 值 → setter 返回 err → warn+保留 env/默认。
-var appConfigKeys = map[string]func(*Config, string) error{
-	"ARB_OPP_NOTIONAL_USD": func(c *Config, v string) error {
-		f, err := strconv.ParseFloat(v, 64)
-		if err != nil {
-			return err
-		}
-		c.OpportunityNotionalUSD = f
-		return nil
-	},
-	"ARB_AUTOTRADE_MAX_NOTIONAL": func(c *Config, v string) error {
-		f, err := strconv.ParseFloat(v, 64)
-		if err != nil {
-			return err
-		}
-		c.AutoTradeMaxNotional = f
-		return nil
-	},
-	"ARB_AUTOTRADE_MAX_POSITIONS": func(c *Config, v string) error {
-		n, err := strconv.Atoi(v)
-		if err != nil {
-			return err
-		}
-		c.AutoTradeMaxPositions = n
-		return nil
-	},
-	"ARB_AUTOTRADE_MIN_NET_SWAP_BPS": func(c *Config, v string) error {
-		f, err := strconv.ParseFloat(v, 64)
-		if err != nil {
-			return err
-		}
-		c.AutoTradeMinNetSwapBps = f
-		return nil
-	},
-	"ARB_CARRY_REGIME_FLOOR_PCT": func(c *Config, v string) error {
-		f, err := strconv.ParseFloat(v, 64)
-		if err != nil {
-			return err
-		}
-		c.CarryRegimeFloorPct = f
-		return nil
-	},
-	"ARB_FUNDING_MAX_BREAKEVEN_DAYS": func(c *Config, v string) error {
-		f, err := strconv.ParseFloat(v, 64)
-		if err != nil {
-			return err
-		}
-		c.FundingMaxBreakevenDays = f
-		return nil
-	},
-	"ARB_CROSS_MIN_GROSS_BPS_CFD": func(c *Config, v string) error {
-		f, err := strconv.ParseFloat(v, 64)
-		if err != nil {
-			return err
-		}
-		c.CrossVenueMinGrossBpsCFD = f
-		return nil
-	},
-	"ARB_CLOSE_BPS_THR": func(c *Config, v string) error {
-		f, err := strconv.ParseFloat(v, 64)
-		if err != nil {
-			return err
-		}
-		c.CloseBpsThr = f
-		return nil
-	},
-}
 
 // ApplyAppConfigOverlay DB 行覆盖 cfg（boot overlay：DB>env>default）。
 // 白名单键命中 → typed set + S4 env 残值告警 + S5 source 审计行；DB 无行 → env fallback
@@ -123,4 +53,29 @@ func ApplyAppConfigOverlay(cfg *Config, rows map[string]string) {
 		}
 		log.Printf("[config] %s (source=%s)", k, source)
 	}
+}
+
+// ApplyAppConfigEnvOverlay 无 Config 字段的标量键 env 注入（D-515 S4 passthrough）。
+// 只处理 appConfigEnvKeys 白名单；须在 env 直读消费点（wire_*）之前调用。
+func ApplyAppConfigEnvOverlay(rows map[string]string) {
+	for _, k := range appConfigEnvKeys {
+		v, ok := rows[k]
+		if !ok {
+			continue
+		}
+		if err := os.Setenv(k, v); err != nil {
+			log.Printf("[config] %s: setenv failed: %v", k, err)
+			continue
+		}
+		log.Printf("[config] %s=%s (source=app_config env)", k, v)
+	}
+}
+
+// AppConfigSeedKeys 播种键表=白名单 typed 键 + env passthrough 键（D-515 S4）。
+func AppConfigSeedKeys() []string {
+	keys := make([]string, 0, len(appConfigKeys)+len(appConfigEnvKeys))
+	for k := range appConfigKeys {
+		keys = append(keys, k)
+	}
+	return append(keys, appConfigEnvKeys...)
 }

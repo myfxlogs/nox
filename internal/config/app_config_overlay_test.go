@@ -86,3 +86,45 @@ func TestApplyAppConfigOverlay(t *testing.T) {
 		t.Logf("int 非法值: MaxPositions=%d（overlay continue 语义）", cfg6.AutoTradeMaxPositions)
 	}
 }
+
+// D-515 S4 A5：新白名单类型面 + env passthrough + 密键隔离。
+func TestD515Overlay_TypedKeys(t *testing.T) {
+	cfg := &Config{}
+	ApplyAppConfigOverlay(cfg, map[string]string{
+		"ARB_SWAP_REFRESH":             "2h",              // dur
+		"ARB_AUTOTRADE_ENABLED":        "true",            // bool
+		"ARB_VERIFY_MIN_SAMPLES":       "7",               // int
+		"ARB_BINANCE_FUTURES_INFO_URL": "https://x/y",     // str
+		"ARB_SWAP_NON_SETTLE_VENUES":   "a:mt5,b:mt5",     // list
+		"ARB_MEANREVERT_THRESHOLDS":    "NAS100:1.5,BAD",  // floatmap 坏对跳过
+		"ARB_COMMISSION_TAKER_OKX":     "9.9",             // map 子键
+		"ARB_RETRO_ENABLED":            "0",               // 反转 bool
+		"ARB_MT5_GATEWAY":              "mt5.example:443", // MTData 嵌套
+	})
+	if cfg.SwapRefresh != 2*60*60*1e9 || !cfg.AutoTradeEnabled || cfg.VerifyMinSamples != 7 ||
+		cfg.BinanceFuturesInfoURL != "https://x/y" || len(cfg.SwapNonSettleVenues) != 2 ||
+		cfg.MeanRevertThresholds["NAS100"] != 1.5 || cfg.CommissionTaker["okx"] != 9.9 ||
+		!cfg.RetroDisabled || cfg.MTData.MT5Gateway != "mt5.example:443" {
+		t.Fatalf("typed overlay mismatch: %+v", cfg)
+	}
+	// 密键不进 app_config 白名单（双轨隔离）。
+	cfg2 := &Config{}
+	ApplyAppConfigOverlay(cfg2, map[string]string{"ARB_AI_API_KEY": "leak"})
+	if cfg2.AIAPIKey != "" {
+		t.Fatal("secret key must not reach app_config whitelist")
+	}
+}
+
+// D-515 S4：passthrough env 注入（无字段标量）。
+func TestD515Overlay_EnvPassthrough(t *testing.T) {
+	t.Setenv("ARB_INTRA_BUDGET_USD", "")
+	ApplyAppConfigEnvOverlay(map[string]string{"ARB_INTRA_BUDGET_USD": "777"})
+	if os.Getenv("ARB_INTRA_BUDGET_USD") != "777" {
+		t.Fatal("passthrough inject failed")
+	}
+	// 非白名单 passthrough 键不注入。
+	ApplyAppConfigEnvOverlay(map[string]string{"ARB_NOT_A_KEY_X": "1"})
+	if os.Getenv("ARB_NOT_A_KEY_X") != "" {
+		t.Fatal("non-whitelist passthrough injected")
+	}
+}
