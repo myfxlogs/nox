@@ -129,6 +129,25 @@ func TestD513_IdleFunds(t *testing.T) {
 	}
 }
 
+// A1：迁移 0150 双接线——Migrate 后 max(version)=150 且双表存在。
+func TestD513_Migration0150(t *testing.T) {
+	s, ctx := d513Store(t)
+	var v int
+	if err := s.pool.QueryRow(ctx, `SELECT max(version) FROM schema_migrations WHERE version < 90000`).Scan(&v); err != nil {
+		t.Fatalf("max version: %v", err)
+	}
+	if v != 150 {
+		t.Fatalf("max(version<90000)=%d, want 150", v) // 99991=哨兵行不计
+	}
+	for _, tbl := range []string{"explorer_proposals", "explorer_state"} {
+		var n int
+		if err := s.pool.QueryRow(ctx,
+			`SELECT count(*) FROM information_schema.tables WHERE table_name=$1`, tbl).Scan(&n); err != nil || n != 1 {
+			t.Fatalf("table %s missing: n=%d err=%v", tbl, n, err)
+		}
+	}
+}
+
 func TestD513_StateAndProposalDedupe(t *testing.T) {
 	s, ctx := d513Store(t)
 	if _, ok, err := s.ExplorerStateGet(ctx, "d513_missing"); err != nil || ok {
