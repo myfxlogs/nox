@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"arb/internal/analyst"
+	"arb/internal/inboxfmt"
 	"arb/internal/store/pgstore"
 )
 
@@ -159,12 +160,12 @@ func RunDaily(ctx context.Context, deps Deps) (*DailyResult, error) {
 	}
 	res.Proposals = n
 	if len(rows) > 0 {
-		var ib []inboxRow
+		var ib []inboxfmt.Row
 		for _, r := range rows {
-			ib = append(ib, inboxRow{source: "explorer", title: r.Canonical,
-				reason: r.Rationale, action: r.Direction + " " + r.BestPair})
+			ib = append(ib, inboxfmt.Row{Source: inboxfmt.SrcExplorer, Title: r.Canonical,
+				Reason: r.Rationale, Action: r.Direction + " " + r.BestPair})
 		}
-		if err := appendInbox(deps.InboxPath, res.ScanDate.Format("2006-01-02"), ib); err != nil {
+		if err := inboxfmt.Append(deps.InboxPath, res.ScanDate.Format("2006-01-02"), ib); err != nil {
 			deps.alert(ctx, "warn", "explorer inbox append failed: "+err.Error())
 		}
 	}
@@ -236,11 +237,11 @@ func buildDailyPrompt(day time.Time, disp []pgstore.ExplorerDispersion,
 	}
 	b.WriteString("\n## denied_admissions（canonical/best_pair/note）\n")
 	for _, r := range denied {
-		fmt.Fprintf(&b, "%s %s note=%s\n", r.Canonical, r.BestPair, cleanCell(r.Note))
+		fmt.Fprintf(&b, "%s %s note=%s\n", r.Canonical, r.BestPair, inboxfmt.CleanCell(r.Note))
 	}
 	b.WriteString("\n## announcements_24h\n")
 	for _, e := range events {
-		b.WriteString(cleanCell(e) + "\n")
+		b.WriteString(inboxfmt.CleanCell(e) + "\n")
 	}
 	b.WriteString("\n## idle_funds（venue/venue_type/balance/free_margin/income30d/idle/below_floor）\n")
 	for _, p := range flagged {

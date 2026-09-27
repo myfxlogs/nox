@@ -13,6 +13,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	explorerv1 "arb/internal/gen/arb/explorer/v1"
+	"arb/internal/inboxfmt"
 	"arb/internal/store/pgstore"
 )
 
@@ -75,7 +76,7 @@ func validateProposals(b *explorerv1.ProposalBatch, known map[string]bool) (rows
 			Canonical: canonical,
 			BestPair:  bp,
 			Direction: dir,
-			Rationale: cleanCell(p.GetRationale()),
+			Rationale: inboxfmt.CleanCell(p.GetRationale()),
 			Evidence:  ev,
 		})
 	}
