@@ -1,0 +1,35 @@
+// explorer.proto —— D-513 探矿员壳：LLM 结构化提案输出 schema（protojson 严格模式解析，
+// DiscardUnknown=false——大小写敏感+未知字段拒收，D-505「b 价被 B 量覆盖」族风险构造性消除）。
+// 仅供进程内 JSON 契约用（非 RPC 服务）；生成链=buf.gen.explorer.yaml（protoc-gen-go 单件，
+// 不进 dashboard/Connect/TS 面）。
+syntax = "proto3";
+
+package arb.explorer.v1;
+
+option go_package = "arb/internal/gen/explorerv1;explorerv1";
+
+import "google/protobuf/struct.proto";
+
+// ProposalBatch LLM 一次主调用输出：叙事摘要 + 提案数组（单次 ≤10 条，校验层截断丢弃）。
+message ProposalBatch {
+  // narrative 叙事摘要（≤300 字，入收件箱行/日志）。
+  string narrative = 1;
+  // proposals 提案数组。
+  repeated Proposal proposals = 2;
+}
+
+// Proposal 单条提案（与 explorer_proposals 表列对齐；D-513 设计稿 §4）。
+message Proposal {
+  // canonical 规范符号键（须命中已知 canonical 集，否则行丢弃）。
+  string canonical = 1;
+  // best_pair 最优腿对（venue_a×venue_b 键形；空=无配对）。
+  string best_pair = 2;
+  // direction 方向（≤16 字，如 long_perp/short_perp/watch）。
+  string direction = 3;
+  // rationale 一行理由。
+  string rationale = 4;
+  // anchor 所据数字段名（限输入五段字段名——防 LLM 自算数字，cross-venue 借用红线）。
+  string anchor = 5;
+  // evidence 佐证数字（键=输入段字段名→值）。
+  google.protobuf.Struct evidence = 6;
+}
