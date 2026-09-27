@@ -30,9 +30,6 @@ func (q *CEXPositionQuerier) okxPositions(ctx context.Context) ([]VenueOrder, er
 		"OK-ACCESS-PASSPHRASE": {q.passphrase},
 		"Content-Type":         {"application/json"},
 	}
-	if q.simulated {
-		headers.Set("x-simulated-trading", "1")
-	}
 	body, err := cexGet(ctx, q.client, q.baseURL+path, headers)
 	if err != nil {
 		return nil, fmt.Errorf("okx positions: %w", err)

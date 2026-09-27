@@ -84,8 +84,8 @@ func (q *CEXAccountQuerier) accountBinance(ctx context.Context) (*AccountInfo, e
 }
 
 // accountBinancePerp 合约账户权益：GET /fapi/v2/account，totalWalletBalance 为权威 USDT 权益
-// （模拟盘合约在 demo-fapi.binance.com，D-059 实施修正② 复核实测：demo key 对 USDT-M 合约
-// 同 key 有效，-1109 已解；baseURL 由调用方给到 demofapi 代理前缀，此处直接拼 /fapi 路径）。
+// （D-059 实施修正② 复核实测：模拟盘合约曾在独立子域 demo-fapi.binance.com——
+// demo 支路 D-516 收编删除，baseURL 由调用方给到 fapi 前缀，此处直接拼 /fapi 路径）。
 func (q *CEXAccountQuerier) accountBinancePerp(ctx context.Context) (*AccountInfo, error) {
 	params := url.Values{}
 	params.Set("timestamp", strconv.FormatInt(time.Now().UnixMilli(), 10))
