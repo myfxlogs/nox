@@ -267,4 +267,7 @@ var (
 	PositionsLegacyDemoSQL string
 	//go:embed 0149_settlement_incident_attributed.sql
 	SettlementIncidentAttributedSQL string
+
+	//go:embed 0150_explorer_shell.sql
+	ExplorerShellSQL string
 )

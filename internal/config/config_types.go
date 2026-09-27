@@ -62,9 +62,7 @@ type Config struct {
 	FundingDropRatio float64
 
 	// === Swap 套利风控（S6/B）===
-	// SwapArbEquityUseRatio swap 套利名义额资金使用率系数（ARB_SWAPARB_EQUITY_USE_RATIO，缺省 0.5）。
-	// notional = min(equityLong, equityShort) × ratio；保留抗单余地（单腿裸露承受力）。
-	// ratio=1 等价旧行为（100% 资金使用率）；不限额=无绝对上限，ratio=单组合资金使用率。
+	// SwapArbEquityUseRatio 名义额资金使用率系数（ARB_SWAPARB_EQUITY_USE_RATIO，缺省 0.5）：notional=min(equityLong,equityShort)×ratio；ratio=1=旧行为，不限额=无上限。
 	SwapArbEquityUseRatio float64
 	// SwapArbBareCap swap 套利单腿裸露上限系数（ARB_SWAPARB_BARE_CAP，缺省 1.0）。
 	// D-097 R2：notional = minEq×ratio，若 > minEq×BareCap 则 cap 到 minEq×BareCap（只 cap 不 skip）。
@@ -195,12 +193,14 @@ type Config struct {
 
 	// === 前端分析员（D-091）===
 	// AIBaseURL/Key/Model/PGDSN 四 env + RatePerHour 限流；空 Key=未配置（RPC 返回 failed_precondition）。
-	AIBaseURL          string // ARB_AI_BASE_URL（如 https://open.bigmodel.cn/api/paas/v4）
-	AIAPIKey           string // ARB_AI_API_KEY（仅 .env，不进仓）
-	AIModel            string // ARB_AI_MODEL（如 glm-4.6）
-	AIPGDSN            string // ARB_AI_PG_DSN（arb_ro 只读角色 DSN）
-	RetroDisabled      bool   // ARB_RETRO_ENABLED=0/false 关复盘定时器（D-457）
-	AnalystRatePerHour int    // ARB_ANALYST_RATE_PER_HOUR（默认 20）
+	AIBaseURL           string // ARB_AI_BASE_URL（如 https://open.bigmodel.cn/api/paas/v4）
+	AIAPIKey            string // ARB_AI_API_KEY（仅 .env，不进仓）
+	AIModel             string // ARB_AI_MODEL（如 glm-4.6）
+	AIPGDSN             string // ARB_AI_PG_DSN（arb_ro 只读角色 DSN）
+	RetroDisabled       bool   // ARB_RETRO_ENABLED=0/false 关复盘定时器（D-457）
+	AnalystRatePerHour  int    // ARB_ANALYST_RATE_PER_HOUR（默认 20）
+	ExplorerEnabled     bool   // ARB_EXPLORER_ENABLED 缺省 false——探矿员壳总闸（D-513：关=零行为变化）
+	ExplorerRatePerHour int    // ARB_EXPLORER_RATE_PER_HOUR（默认 10，独立令牌桶）
 	// MTData MT 数据采集稳定性加固参数（D-104 P0）。
 	MTData MTDataConfig
 

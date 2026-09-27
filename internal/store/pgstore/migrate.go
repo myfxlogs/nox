@@ -144,6 +144,7 @@ var migrationFiles = []struct {
 	{147, migrations.FactsKindIndexPgstatSQL},          // D-508 S3：facts (kind,venue,symbol,ts desc) 索引+pg_stat_statements
 	{148, migrations.PositionsLegacyDemoSQL},           // D-512 T8：positions.environment NULL→legacy_demo（纯 UPDATE）
 	{149, migrations.SettlementIncidentAttributedSQL},  // D-512 T9：settlements 事故归因列+存量按同判据回填
+	{150, migrations.ExplorerShellSQL},                 // D-513 S2：explorer_proposals/explorer_state 记分板骨架双表
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
