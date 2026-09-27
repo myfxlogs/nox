@@ -17,6 +17,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -82,18 +84,24 @@ func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
 		return // baseURL 解析失败静默（REST 兜底在跑）
 	}
 	var wg sync.WaitGroup
-	wg.Add(3)
-	safego.Go("binance_market_ws:perp-public", func() {
-		defer wg.Done()
-		b.runLoop(ctx, b.publicURLs, "perp", "bookTicker", publish)
-	})
+	wg.Add(4)
+	// D-529：perp bookTicker=907 符号最高帧率流，CF 收编链路+1 跳后被上游按
+	// 「高帧率慢消费」杀连（15-30s 周期 1006 EOF 风暴）——订阅集排序对半拆 2
+	// 连接降帧，meter 键带序号防告警身份合流。
+	for i := 0; i < 2; i++ {
+		i := i
+		safego.Go(fmt.Sprintf("binance_market_ws:perp-public:%d", i), func() {
+			defer wg.Done()
+			b.runLoop(ctx, b.publicURLs, "perp", "bookTicker", i, publish)
+		})
+	}
 	safego.Go("binance_market_ws:perp-market", func() {
 		defer wg.Done()
-		b.runLoop(ctx, b.marketURLs, "perp", "markPrice", publish)
+		b.runLoop(ctx, b.marketURLs, "perp", "markPrice", -1, publish)
 	})
 	safego.Go("binance_market_ws:spot", func() {
 		defer wg.Done()
-		b.runLoop(ctx, b.spotURLs, "spot", "bookTicker", publish)
+		b.runLoop(ctx, b.spotURLs, "spot", "bookTicker", -1, publish)
 	})
 	wg.Wait()
 }
@@ -102,14 +110,22 @@ func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
 // （分批 SUBSCRIBE 帧集/ack 分流/markPrice→bookTicker 分发/显式 token 头）。
 // D-517 R1：kind=连接流类别（bookTicker|markPrice），venueType 恒喂 QuoteBus
 // perp/spot——连接身份与 venue 语义分离（venueType 污染=QuoteBus 键断供）。
-func (b *BinanceMarketWS) runLoop(ctx context.Context, urls []string, venueType, kind string, publish func(bus.Quote)) {
-	meter := newReconnectMeter(venueType+":"+kind+":"+urls[0], b.cfg.AlertFn) // D-507 S2 扩：同款风暴告警
+// shard≥0 时只订阅 effectiveSymbols 排序后的第 shard 段（两半对分；D-529）。
+func (b *BinanceMarketWS) runLoop(ctx context.Context, urls []string, venueType, kind string, shard int, publish func(bus.Quote)) {
+	meterKey := venueType + ":" + kind + ":" + urls[0]
+	if shard >= 0 {
+		meterKey = venueType + ":" + kind + ":" + strconv.Itoa(shard) + ":" + urls[0]
+	}
+	meter := newReconnectMeter(meterKey, b.cfg.AlertFn) // D-507 S2 扩：同款风暴告警
 	RunWS(ctx, WSSpec{
 		Name: "binance-mkt-ws:" + venueType + ":" + kind, URLs: urls, Dialer: b.dialer, Header: b.header,
 		InitialSubs: func() []any {
 			// 符号源与原 ticker 同源（effectiveSymbols：env ∪ SymProvider
 			// 动态 watchlist）；watchlist 新增符号随下次重连订阅生效，60s REST 兜底补窗。
 			syms := b.cfg.effectiveSymbols()
+			if shard >= 0 {
+				syms = shardSymbols(syms, shard)
+			}
 			params := make([]string, 0, len(syms))
 			for _, sym := range syms {
 				// D-517：按 kind 出订阅参数——bookTicker→public 路由、markPrice→market
@@ -276,3 +292,15 @@ func (b *BinanceMarketWS) SetFactEmit(fn func(ctx context.Context, fs []fact.Fac
 
 // SetFundingIntervals 注入 funding 周期缓存（D-301a boot 真值；BinanceFundingHistory 同源）。
 func (b *BinanceMarketWS) SetFundingIntervals(c *FundingIntervalCache) { b.intervals = c }
+
+// shardSymbols D-529：符号集排序后对半分桶（确定性——同输入同分桶，重连订阅集稳定）。
+// shard∈{0,1}；0 取前半（奇数时多一个），1 取后半。
+func shardSymbols(syms []string, shard int) []string {
+	sorted := slices.Clone(syms)
+	slices.Sort(sorted)
+	half := (len(sorted) + 1) / 2
+	if shard == 0 {
+		return sorted[:half]
+	}
+	return sorted[half:]
+}
