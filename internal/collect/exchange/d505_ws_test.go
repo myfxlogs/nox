@@ -6,10 +6,13 @@ package exchange
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 
 	"arb/internal/bus"
+	"arb/internal/fact"
+	"math"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -110,4 +113,118 @@ func TestD507_NilAlertFnNoPanic(t *testing.T) {
 	go g.runLoop(ctx, url, "spot.tickers", g.handleSpot, func(q bus.Quote) {})
 	time.Sleep(d507Observe)
 	cancel()
+}
+
+// TestD509_BinanceMarkPriceFunding markPriceUpdate→funding 三 fact（D-509 S2）。
+func TestD509_BinanceMarkPriceFunding(t *testing.T) {
+	var got []fact.Fact
+	ws := &BinanceMarketWS{now: time.Now}
+	ws.emitFacts = func(_ context.Context, fs []fact.Fact) error { got = append(got, fs...); return nil }
+	// 实测帧形制（binance perp markPrice）：e/s/E/T/r/p/i/P
+	ok := ws.handleMarkPrice(context.Background(), []byte(
+		`{"e":"markPriceUpdate","E":1790467392,"s":"PAXGUSDT","p":"4000.1","i":"4000.2","P":"3999.9","r":"0.0001","T":1790496000000}`))
+	if !ok {
+		t.Fatal("markPriceUpdate 帧未消费")
+	}
+	if len(got) != 3 {
+		t.Fatalf("facts=%d want 3（funding+next_settle+interval）", len(got))
+	}
+	if got[0].Kind != fact.KindFunding || got[0].Venue != "binance" || got[0].Symbol != "PAXGUSDT" ||
+		got[0].Src != "binance_ws_markprice" {
+		t.Fatalf("funding fact 键形错: %+v", got[0])
+	}
+	want := 0.0001 * 3 * 365 * 100 // 回退 3/天（intervals 未注入）
+	if math.Abs(got[0].Value-want) > 1e-9 {
+		t.Fatalf("annualized=%v want %v", got[0].Value, want)
+	}
+	if got[1].Kind != fact.KindFundingNextSettle || got[1].Value != 1790496000 {
+		t.Fatalf("nextSettle: %+v", got[1])
+	}
+	if got[2].Kind != fact.KindFundingInterval || got[2].Value != 28800 {
+		t.Fatalf("interval: %+v", got[2])
+	}
+	// 缺 r → 缺省不造
+	got = nil
+	if !ws.handleMarkPrice(context.Background(), []byte(`{"e":"markPriceUpdate","s":"BTCUSDT","T":1}`)) {
+		t.Fatal("markPrice 帧应消费")
+	}
+	if len(got) != 0 {
+		t.Fatalf("缺 rate 应缺省不造, got %d", len(got))
+	}
+	// 非 markPrice 帧 → 不消费
+	if ws.handleMarkPrice(context.Background(), []byte(`{"s":"BTCUSDT","b":"1","a":"2"}`)) {
+		t.Fatal("非 markPrice 帧不应消费")
+	}
+}
+
+// TestD509_GateFuturesFunding gate futures.tickers 帧内 funding 字段→fact（D-509 S3；
+// 帧样本=2026-09-27 fx-ws.gateio.ws 实测字段集）。
+func TestD509_GateFuturesFunding(t *testing.T) {
+	var got []fact.Fact
+	var quotes []bus.Quote
+	g := &GateWebSocket{}
+	g.emitFacts = func(_ context.Context, fs []fact.Fact) error { got = append(got, fs...); return nil }
+	g.handleFutures(context.Background(), []byte(`{"event":"update","result":[{
+		"contract":"BTC_USDT","mark_price":"84334.6","t":1790467392692,
+		"funding_rate":"-0.000014","funding_next_apply":1790496000,"funding_interval":28800}]}`),
+		func(q bus.Quote) { quotes = append(quotes, q) })
+	if len(quotes) != 1 || quotes[0].Symbol != "BTCUSDT" || quotes[0].Venue != "gate" {
+		t.Fatalf("quote 面回归: %+v", quotes)
+	}
+	if len(got) != 2 {
+		t.Fatalf("facts=%d want 2（funding+next_settle）", len(got))
+	}
+	if got[0].Kind != fact.KindFunding || got[0].Symbol != "BTCUSDT" || got[0].Src != "gate_ws_futures" {
+		t.Fatalf("funding fact: %+v", got[0])
+	}
+	want := -0.000014 * 3 * 365 * 100 // interval=28800s→3/天（8h）
+	if math.Abs(got[0].Value-want) > 1e-9 {
+		t.Fatalf("annualized=%v want %v", got[0].Value, want)
+	}
+	if got[1].Kind != fact.KindFundingNextSettle || got[1].Value != 1790496000 {
+		t.Fatalf("nextSettle: %+v", got[1])
+	}
+	// 缺 funding_rate → 不造 fact（行情 quote 照发）
+	got = nil
+	g.handleFutures(context.Background(), []byte(`{"event":"update","result":[{
+		"contract":"ETH_USDT","mark_price":"3000","t":1790467392692}]}`),
+		func(q bus.Quote) { quotes = append(quotes, q) })
+	if len(got) != 0 {
+		t.Fatalf("缺 rate 应缺省不造, got %d", len(got))
+	}
+}
+
+// TestD509_OkxFundingRate funding-rate 频道帧→三 fact（D-509 S4）。
+func TestD509_OkxFundingRate(t *testing.T) {
+	var got []fact.Fact
+	o := &OKXWebSocket{}
+	o.emitFacts = func(_ context.Context, fs []fact.Fact) error { got = append(got, fs...); return nil }
+	var msg wsMsg
+	if err := json.Unmarshal([]byte(`{"arg":{"channel":"funding-rate","instId":"BTC-USDT-SWAP"},
+		"data":[{"fundingRate":"0.0001","fundingTime":"1790467200000","nextFundingTime":"1790496000000"}]}`), &msg); err != nil {
+		t.Fatal(err)
+	}
+	o.handleFundingRate(context.Background(), msg)
+	if len(got) != 3 {
+		t.Fatalf("facts=%d want 3", len(got))
+	}
+	if got[0].Kind != fact.KindFunding || got[0].Symbol != "BTCUSDT" || got[0].Src != "okx_ws_v5" {
+		t.Fatalf("funding fact: %+v", got[0])
+	}
+	if math.Abs(got[0].Value-0.0001*3*365*100) > 1e-9 { // 8h 窗→3/天
+		t.Fatalf("annualized=%v", got[0].Value)
+	}
+	if got[1].Value != 1790496000 || got[2].Value != 28800 {
+		t.Fatalf("settle/interval: %+v %+v", got[1], got[2])
+	}
+	// 缺 fundingRate → 缺省不造
+	got = nil
+	msg.Data[0] = map[string]any{"fundingTime": "1"}
+	o.handleFundingRate(context.Background(), msg)
+	if len(got) != 0 {
+		t.Fatalf("缺 rate 应缺省不造, got %d", len(got))
+	}
+	// tickers 帧不被 funding 分流误吞：handleMessage 正常路
+	got = nil
+	o.emitFacts = func(_ context.Context, fs []fact.Fact) error { got = append(got, fs...); return nil }
 }
