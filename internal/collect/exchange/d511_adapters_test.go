@@ -61,7 +61,7 @@ type d511DynSyms struct {
 	syms []string
 }
 
-func (d *d511DynSyms) Symbols() []string {
+func (d *d511DynSyms) Symbols(string) []string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return append([]string(nil), d.syms...)

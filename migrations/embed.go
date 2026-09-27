@@ -276,4 +276,7 @@ var (
 
 	//go:embed 0152_macro_tables.sql
 	MacroTablesSQL string
+
+	//go:embed 0153_radar_watchlist_canonical.sql
+	RadarWatchlistCanonicalSQL string
 )

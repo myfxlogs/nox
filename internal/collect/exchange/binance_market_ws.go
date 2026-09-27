@@ -122,7 +122,7 @@ func (b *BinanceMarketWS) runLoop(ctx context.Context, urls []string, venueType,
 		InitialSubs: func() []any {
 			// 符号源与原 ticker 同源（effectiveSymbols：env ∪ SymProvider
 			// 动态 watchlist）；watchlist 新增符号随下次重连订阅生效，60s REST 兜底补窗。
-			syms := b.cfg.effectiveSymbols()
+			syms := b.cfg.effectiveSymbols("binance")
 			if shard >= 0 {
 				syms = shardSymbols(syms, shard)
 			}

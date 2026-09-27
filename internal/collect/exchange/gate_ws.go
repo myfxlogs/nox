@@ -229,7 +229,7 @@ func canonicalFromGate(pair string) string {
 }
 
 // syms D-369 S2：gate WS 订阅符号集（env ∪ provider 动态集，连接期可增量）。
-func (g *GateWebSocket) syms() []string { return g.cfg.effectiveSymbols() }
+func (g *GateWebSocket) syms() []string { return g.cfg.effectiveSymbols("gate") }
 
 // pairs 符号→gate 交易对后缀拼接（BTC → BTC_USDT）。
 func pairsD369(syms []string, suffix string) []string {

@@ -269,7 +269,7 @@ func getJSONArray(ctx context.Context, client *http.Client, url string) ([]any, 
 }
 
 // syms D-369 S2：binance funding history 符号集（env ∪ provider 动态集）。
-func (b *BinanceFundingHistory) syms() []string { return b.cfg.effectiveSymbols() }
+func (b *BinanceFundingHistory) syms() []string { return b.cfg.effectiveSymbols("binance") }
 
 // syms D-369 S2：okx funding history 符号集。
-func (o *OKXFundingHistory) syms() []string { return o.cfg.effectiveSymbols() }
+func (o *OKXFundingHistory) syms() []string { return o.cfg.effectiveSymbols("okx") }
