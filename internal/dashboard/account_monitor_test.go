@@ -161,9 +161,10 @@ func (f *fakeExchangeStore) ListExchangeConfigs(context.Context) ([]pgstore.Exch
 	return f.cfgs, nil
 }
 
-// TestAccountMonitor_CollisionKeys D-362-R1 S2 锚：双 binance/perp config（id20 real 先建
-// +id25 sim 后建）→ monitor states 现 binance:perp（sim 赢家 canonical）+binance:perp#20
-// （real 输家后缀）两键；AccountInfo 数据字段 Venue/VenueType 保持原值、Simulated 徽标区分。
+// TestAccountMonitor_CollisionKeys D-362-R1 S2 锚：双 binance/perp config（id20 先建
+// +id25 后建）→ monitor states 现 binance:perp（后建赢家 canonical）+binance:perp#20
+// （输家后缀）两键；AccountInfo 数据字段 Venue/VenueType 保持原值。
+// D-516：原 sim 赢家场景改写为双 real 行（simulated=t 行 fail-closed 跳过不入 querier）。
 // 旧代码（R0 queriers() 未接线）红=states 仅 1 键后写覆盖。
 func TestAccountMonitor_CollisionKeys(t *testing.T) {
 	ctx := context.Background()
@@ -177,7 +178,10 @@ func TestAccountMonitor_CollisionKeys(t *testing.T) {
 		{ID: 20, Venue: "binance", VenueType: "perp", APIKey: "k20", APISecret: "s20",
 			BaseURL: srv.URL, Simulated: false, CreatedAt: t0},
 		{ID: 25, Venue: "binance", VenueType: "perp", APIKey: "k25", APISecret: "s25",
-			BaseURL: srv.URL, Simulated: true, CreatedAt: t0.Add(time.Hour)},
+			BaseURL: srv.URL, Simulated: false, CreatedAt: t0.Add(time.Hour)},
+		// D-516：sim 行 fail-closed——不建 querier、不入 states、也不抢 canonical 键。
+		{ID: 30, Venue: "binance", VenueType: "perp", APIKey: "k30", APISecret: "s30",
+			BaseURL: srv.URL, Simulated: true, CreatedAt: t0.Add(2 * time.Hour)},
 	}})
 	got := m.Refresh(ctx)
 	if len(got) != 2 {
@@ -203,16 +207,11 @@ func TestAccountMonitor_CollisionKeys(t *testing.T) {
 		if a.Equity != 345.72 {
 			t.Errorf("equity = %v, want 345.72", a.Equity)
 		}
-		wantKey := "binance:perp"
-		wantSim := true
-		if a.Simulated == false {
-			wantKey, wantSim = "binance:perp#20", false
+		if a.Simulated {
+			t.Errorf("D-516 起 simulated 行不入 querier——不应出现 Simulated 账户")
 		}
-		if a.Simulated != wantSim {
-			t.Errorf("Simulated = %v, want %v (key %s)", a.Simulated, wantSim, wantKey)
-		}
-		if a.VenueKey != wantKey {
-			t.Errorf("VenueKey = %q, want %q（键带后缀/数据字段原值）", a.VenueKey, wantKey)
+		if a.VenueKey != "binance:perp" && a.VenueKey != "binance:perp#20" {
+			t.Errorf("VenueKey = %q, want canonical 或 #20 后缀键", a.VenueKey)
 		}
 	}
 }

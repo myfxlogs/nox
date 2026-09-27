@@ -25,6 +25,8 @@ var (
 	cexFinanceMu       sync.Mutex
 	cexFinanceCached   *v1.GetCexFinanceResponse
 	cexFinanceCachedAt time.Time
+	// cexFinanceSimWarned D-516：sim 行 warn-once（cexFinanceMu 保护）。
+	cexFinanceSimWarned map[int64]bool
 )
 
 // GetCexFinance 每 real CEX 配置一块：usdt_equity+全币种 holdings（带占比）+进出/收益流水。
@@ -41,8 +43,12 @@ func (s *Service) GetCexFinance(ctx context.Context, req *connect.Request[v1.Get
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	winners := cexKeyWinners(cfgs)
-	finCfgs := dedupOkxTradingConfigs(cfgs) // R2 S2 接线：循环必须遍历去重后清单（防纯函数绿但没接线）
+	// D-516：sim 行先于撞键归一剔除（不占 canonical 键；过滤后与 R2 去重同口径）。
+	cexFinanceMu.Lock()
+	live := realOnlyConfigs(cfgs, &cexFinanceSimWarned, "cex-finance")
+	cexFinanceMu.Unlock()
+	winners := cexKeyWinners(live)
+	finCfgs := dedupOkxTradingConfigs(live) // R2 S2 接线：循环必须遍历去重后清单（防纯函数绿但没接线）
 	resp := &v1.GetCexFinanceResponse{}
 	for i := range finCfgs {
 		c := &finCfgs[i]
