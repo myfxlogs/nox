@@ -25,7 +25,7 @@ func (g *GateContractMeta) Kind() string { return fact.KindFundingInterval }
 // Poll 逐符号拉 contract detail → KindFundingInterval（venue 原生 funding_interval 秒）。
 func (g *GateContractMeta) Poll(ctx context.Context) ([]fact.Fact, error) {
 	var out []fact.Fact
-	for _, sym := range g.cfg.effectiveSymbols() {
+	for _, sym := range g.cfg.effectiveSymbols("gate") {
 		contract := sym + "_USDT"
 		url := fmt.Sprintf("%s/api/v4/futures/usdt/contracts/%s", g.cfg.GateBaseURL, contract)
 		body, err := getJSON(ctx, g.cfg.Client, url)

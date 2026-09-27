@@ -10,8 +10,10 @@ package exchange
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -170,7 +172,9 @@ func runWSOnce(ctx context.Context, spec WSSpec) error {
 				// 数据帧看门狗：pong 续期证明 TCP/WS 控制面活着，但数据帧
 				// 长期缺席=订阅态丢失/上游静默（readIdle 被 pong 遮蔽兜不住）——
 				// Close 使读循环报错，走既有退避重连。
-				if time.Since(time.Unix(0, lastDataAt.Load())) > dataIdle {
+				if elapsed := time.Since(time.Unix(0, lastDataAt.Load())); elapsed > dataIdle {
+					// D-532 S3：kill 归因——与「对端 1006/readIdle 读超时」日志可区分。
+					log.Printf("[%s] data watchdog: no data frames for %v (>%v), closing to force reconnect", spec.Name, elapsed, dataIdle)
 					_ = conn.Close()
 					return
 				}
@@ -191,6 +195,12 @@ func runWSOnce(ctx context.Context, spec WSSpec) error {
 		}
 		_, data, err := conn.ReadMessage()
 		if err != nil {
+			// D-532 S3：readIdle 到期=net timeout 显式标注（与 data watchdog/对端
+			// close 帧三类死因日志可区分）。
+			var ne net.Error
+			if errors.As(err, &ne) && ne.Timeout() {
+				return fmt.Errorf("read idle >%v: %w", readIdle, err)
+			}
 			return fmt.Errorf("read: %w", err)
 		}
 		_ = conn.SetReadDeadline(time.Now().Add(readIdle))

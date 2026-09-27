@@ -194,7 +194,7 @@ type wsMsg struct {
 }
 
 // syms D-369 S2：okx WS 订阅符号集（env ∪ provider 动态集，连接期可增量）。
-func (o *OKXWebSocket) syms() []string { return o.cfg.effectiveSymbols() }
+func (o *OKXWebSocket) syms() []string { return o.cfg.effectiveSymbols("okx") }
 
 // SetFactEmit 注入 fact 发射口（wiring 期；先于 Run）。
 func (o *OKXWebSocket) SetFactEmit(fn func(ctx context.Context, fs []fact.Fact) error) {

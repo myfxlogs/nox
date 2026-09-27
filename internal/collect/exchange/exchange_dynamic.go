@@ -5,16 +5,17 @@
 package exchange
 
 // SymbolProvider D-369 S2：动态符号集供给（radar_watchlist provider 实现；nil 安全）。
+// D-532 S1：Symbols(venue) venue 作用域——venues 列含该 venue ∪ venues 空（全所适用）。
 type SymbolProvider interface {
-	Symbols() []string
+	Symbols(venue string) []string
 }
 
 // effectiveSymbols env 基础集 ∪ provider 动态集（去重；provider nil/空集 → env 原样）。
-func (c Config) effectiveSymbols() []string {
+func (c Config) effectiveSymbols(venue string) []string {
 	if c.SymProvider == nil {
 		return c.Symbols
 	}
-	extra := c.SymProvider.Symbols()
+	extra := c.SymProvider.Symbols(venue)
 	if len(extra) == 0 {
 		return c.Symbols
 	}

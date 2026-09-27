@@ -91,4 +91,4 @@ func (g *GateFundingHistory) Poll(ctx context.Context) ([]fact.Fact, error) {
 }
 
 // syms D-369 S2：gate funding history 符号集。
-func (g *GateFundingHistory) syms() []string { return g.cfg.effectiveSymbols() }
+func (g *GateFundingHistory) syms() []string { return g.cfg.effectiveSymbols("gate") }
