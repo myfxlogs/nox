@@ -39,8 +39,9 @@ func (s *Service) appConfigView(ctx context.Context, key string, db map[string]p
 	row, hasDB := db[key]
 	envV, hasEnv := s.acv.envSnap[key]
 	out := &dashv1.AppConfigKey{
-		Key: key, Type: meta.Typ, Group: config.AppConfigGroup(key),
-		EnvValue: envV,
+		Key: key, Type: meta.Typ, Group: config.AppConfigGroup(key), Desc: meta.Desc,
+		GroupLabel: config.AppConfigGroupLabel(config.AppConfigGroup(key)),
+		EnvValue:   envV,
 	}
 	if hasDB {
 		out.DbValue, out.Note = row.Value, row.Note
