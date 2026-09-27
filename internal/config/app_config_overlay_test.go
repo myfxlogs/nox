@@ -2,7 +2,9 @@
 package config
 
 import (
+	"log"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -126,5 +128,27 @@ func TestD515Overlay_EnvPassthrough(t *testing.T) {
 	ApplyAppConfigEnvOverlay(map[string]string{"ARB_NOT_A_KEY_X": "1"})
 	if os.Getenv("ARB_NOT_A_KEY_X") != "" {
 		t.Fatal("non-whitelist passthrough injected")
+	}
+}
+
+// env-passthrough 键走 ApplyAppConfigEnvOverlay，ApplyAppConfigOverlay 不应误报 not-whitelisted。
+// （回归：9-27 生产日志实证 ARB_CEX_SYMBOLS 等 passthrough 键每 boot 打 warn 噪音）。
+func TestOverlay_EnvKeyNoFalseWarn(t *testing.T) {
+	var buf strings.Builder
+	old := log.Writer()
+	log.SetOutput(&buf)
+	defer log.SetOutput(old)
+
+	cfg := &Config{}
+	ApplyAppConfigOverlay(cfg, map[string]string{
+		"ARB_CEX_WS_BASE":  "wss://x", // env-passthrough 白名单键
+		"ARB_NOT_A_KEY_YZ": "1",       // 真未白名单键
+	})
+	out := buf.String()
+	if strings.Contains(out, "ARB_CEX_WS_BASE") && strings.Contains(out, "not whitelisted") {
+		t.Fatal("env-passthrough key false-warned as not whitelisted")
+	}
+	if !strings.Contains(out, "ARB_NOT_A_KEY_YZ") || !strings.Contains(out, "not whitelisted") {
+		t.Fatal("真未白名单键应仍打 warn")
 	}
 }
