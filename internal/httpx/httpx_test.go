@@ -20,7 +20,7 @@ func TestFailoverRT_PrimaryDownFallsBack(t *testing.T) {
 	t.Setenv("BINANCE_PROXY_URL_BACKUP", back.URL)
 	t.Setenv("ARB_BINANCE_PROXY_TOKEN", "tok-fb")
 
-	resp, err := Client().Post("http://127.0.0.1:1/fapi/v1/x", "text/plain", strings.NewReader("b"))
+	resp, err := Client().Get("http://127.0.0.1:1/fapi/v1/x")
 	if err != nil {
 		t.Fatalf("failover 应成功: %v", err)
 	}
@@ -31,6 +31,29 @@ func TestFailoverRT_PrimaryDownFallsBack(t *testing.T) {
 	}
 	if gotTok != "tok-fb" {
 		t.Fatalf("备份重试未带 token: %q", gotTok)
+	}
+}
+
+// D-519 A3（D3 方法门控）：POST/PUT/DELETE/PATCH 传输错不回退（备端零命中）——
+// bodyless-POST 同签名重放=二次下单窗口（风控优先裁定）；GET 仍回退（上测已钉）。
+func TestFailoverRT_NonIdempotentNoFallback(t *testing.T) {
+	var backHits int
+	back := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		backHits++
+	}))
+	defer back.Close()
+	t.Setenv("BINANCE_PROXY_URL", "http://127.0.0.1:1")
+	t.Setenv("BINANCE_PROXY_URL_BACKUP", back.URL)
+	t.Setenv("ARB_BINANCE_PROXY_TOKEN", "tok-fb")
+
+	for _, m := range []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch} {
+		req, _ := http.NewRequest(m, "http://127.0.0.1:1/fapi/v1/order", nil)
+		if _, err := Client().Do(req); err == nil {
+			t.Fatalf("%s 主端拒连应上抛传输错", m)
+		}
+	}
+	if backHits != 0 {
+		t.Fatalf("非幂等方法不应回退备端: %d hits", backHits)
 	}
 }
 

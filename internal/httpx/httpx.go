@@ -121,6 +121,14 @@ func (f failoverRT) RoundTrip(r *http.Request) (*http.Response, error) {
 	if err == nil || r.URL.Host != f.primaryHost || r.Context().Err() != nil {
 		return resp, err
 	}
+	// D-519 D3（裁定=方法门控，§1 风控优先）：非幂等方法不回退——binance 签名请求
+	// body=nil、参数+签名全在 query，recvWindow 内同签名重放对 venue 有效；主端错误若
+	// 发生在「已转发、响应回传途中」回退即二次下单（venue clientOrderId 幂等未实证，
+	// 不作安全依据）。已知代价（记录在案）：主端死时 listenKey create/keepalive
+	//（POST /v1/listenKey）不回退→binance user stream 停供至主端恢复。
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		return resp, err
+	}
 	if r.Body != nil && r.GetBody == nil {
 		return resp, err // body 不可重放
 	}
