@@ -155,3 +155,40 @@ func TestD509_BinanceMarkPriceFunding(t *testing.T) {
 		t.Fatal("非 markPrice 帧不应消费")
 	}
 }
+
+// TestD509_GateFuturesFunding gate futures.tickers 帧内 funding 字段→fact（D-509 S3；
+// 帧样本=2026-09-27 fx-ws.gateio.ws 实测字段集）。
+func TestD509_GateFuturesFunding(t *testing.T) {
+	var got []fact.Fact
+	var quotes []bus.Quote
+	g := &GateWebSocket{}
+	g.emitFacts = func(_ context.Context, fs []fact.Fact) error { got = append(got, fs...); return nil }
+	g.handleFutures(context.Background(), []byte(`{"event":"update","result":[{
+		"contract":"BTC_USDT","mark_price":"84334.6","t":1790467392692,
+		"funding_rate":"-0.000014","funding_next_apply":1790496000,"funding_interval":28800}]}`),
+		func(q bus.Quote) { quotes = append(quotes, q) })
+	if len(quotes) != 1 || quotes[0].Symbol != "BTCUSDT" || quotes[0].Venue != "gate" {
+		t.Fatalf("quote 面回归: %+v", quotes)
+	}
+	if len(got) != 2 {
+		t.Fatalf("facts=%d want 2（funding+next_settle）", len(got))
+	}
+	if got[0].Kind != fact.KindFunding || got[0].Symbol != "BTCUSDT" || got[0].Src != "gate_ws_futures" {
+		t.Fatalf("funding fact: %+v", got[0])
+	}
+	want := -0.000014 * 3 * 365 * 100 // interval=28800s→3/天（8h）
+	if math.Abs(got[0].Value-want) > 1e-9 {
+		t.Fatalf("annualized=%v want %v", got[0].Value, want)
+	}
+	if got[1].Kind != fact.KindFundingNextSettle || got[1].Value != 1790496000 {
+		t.Fatalf("nextSettle: %+v", got[1])
+	}
+	// 缺 funding_rate → 不造 fact（行情 quote 照发）
+	got = nil
+	g.handleFutures(context.Background(), []byte(`{"event":"update","result":[{
+		"contract":"ETH_USDT","mark_price":"3000","t":1790467392692}]}`),
+		func(q bus.Quote) { quotes = append(quotes, q) })
+	if len(got) != 0 {
+		t.Fatalf("缺 rate 应缺省不造, got %d", len(got))
+	}
+}

@@ -82,7 +82,7 @@ func (g *GateWebSocket) subscribeChannel(c *websocket.Conn, channel string, pair
 }
 
 // runLoop 单连接重连循环。
-func (g *GateWebSocket) runLoop(ctx context.Context, url string, channel string, handle func([]byte, func(bus.Quote)), publish func(bus.Quote)) {
+func (g *GateWebSocket) runLoop(ctx context.Context, url string, channel string, handle func(context.Context, []byte, func(bus.Quote)), publish func(bus.Quote)) {
 	meter := newReconnectMeter(url, g.cfg.AlertFn)
 	for {
 		if err := g.runOnce(ctx, url, channel, handle, publish); err != nil {
@@ -100,7 +100,7 @@ func (g *GateWebSocket) runLoop(ctx context.Context, url string, channel string,
 // runOnce 单次连接：dial → subscribe（全量符号）→ ping 保活+差集增量订阅 → 读循环。
 // D-369 S2：provider 符号集变化 → 对新符号差集发一次 subscribe payload（服务端拒则读
 // 报错走 runLoop 重连 fallback）。
-func (g *GateWebSocket) runOnce(ctx context.Context, url string, channel string, handle func([]byte, func(bus.Quote)), publish func(bus.Quote)) error {
+func (g *GateWebSocket) runOnce(ctx context.Context, url string, channel string, handle func(context.Context, []byte, func(bus.Quote)), publish func(bus.Quote)) error {
 	conn, _, err := g.dialer.DialContext(ctx, url, nil)
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
@@ -168,7 +168,7 @@ func (g *GateWebSocket) runOnce(ctx context.Context, url string, channel string,
 			close(done)
 			return fmt.Errorf("read: %w", err)
 		}
-		handle(data, publish)
+		handle(ctx, data, publish)
 	}
 }
 
@@ -183,7 +183,7 @@ type gateSpotUpdate struct {
 }
 
 // handleSpot 解析 spot.tickers 更新并发布报价。
-func (g *GateWebSocket) handleSpot(data []byte, publish func(bus.Quote)) {
+func (g *GateWebSocket) handleSpot(_ context.Context, data []byte, publish func(bus.Quote)) {
 	var msg gateSpotUpdate
 	if err := json.Unmarshal(data, &msg); err != nil || msg.Event != "update" {
 		return
@@ -210,17 +210,23 @@ func (g *GateWebSocket) handleSpot(data []byte, publish func(bus.Quote)) {
 }
 
 // gateFuturesUpdate futures.tickers 推送：result 为数组，无 bid/ask，用 mark_price 近似。
+// D-509 S3 实测字段（fx-ws 公共帧）：funding_rate/funding_next_apply(unix s)/
+// funding_interval(s) 原生在帧——funding 三件套自帧内取（rate+next_apply），interval
+// fact 归日轮 gate_contract_meta（S5 起唯一职责=元数据；帧内 funding_interval 仍用于年化折算）。
 type gateFuturesUpdate struct {
 	Event  string `json:"event"`
 	Result []struct {
-		Contract  string `json:"contract"`
-		MarkPrice string `json:"mark_price"`
-		T         int64  `json:"t"` // unix ms
+		Contract         string  `json:"contract"`
+		MarkPrice        string  `json:"mark_price"`
+		T                int64   `json:"t"` // unix ms
+		FundingRate      string  `json:"funding_rate"`
+		FundingNextApply float64 `json:"funding_next_apply"` // unix s
+		FundingInterval  float64 `json:"funding_interval"`   // s
 	} `json:"result"`
 }
 
 // handleFutures 解析 futures.tickers 更新并发布报价。
-func (g *GateWebSocket) handleFutures(data []byte, publish func(bus.Quote)) {
+func (g *GateWebSocket) handleFutures(ctx context.Context, data []byte, publish func(bus.Quote)) {
 	var msg gateFuturesUpdate
 	if err := json.Unmarshal(data, &msg); err != nil || msg.Event != "update" {
 		return
@@ -247,6 +253,28 @@ func (g *GateWebSocket) handleFutures(data []byte, publish func(bus.Quote)) {
 			Ask:         mark,
 			Time:        ts,
 		})
+		// D-509 S3：帧内原生 funding 字段→fact（缺字段=缺省不造，venue 禁借用律）。
+		if g.emitFacts != nil && item.FundingRate != "" {
+			var rate float64
+			if _, err := fmt.Sscanf(item.FundingRate, "%f", &rate); err != nil {
+				log.Printf("[gate-ws] funding rate %q dirty: %v", item.FundingRate, err)
+				continue
+			}
+			sym := canonicalFromGate(item.Contract)                      // BTCUSDT 形（与 REST 键 sym+USDT 同形）
+			periods := fundingPeriodsPerDay(item.FundingInterval * 1000) // 帧内原生 interval
+			fs := []fact.Fact{
+				{Kind: fact.KindFunding, Venue: VenueGate, Symbol: sym,
+					Value: annualizeFunding(rate, periods), Unit: fact.UnitPctAnnualized,
+					Ts: ts, Src: "gate_ws_futures"},
+			}
+			if item.FundingNextApply > 0 {
+				fs = append(fs, fact.Fact{Kind: fact.KindFundingNextSettle, Venue: VenueGate,
+					Symbol: sym, Value: item.FundingNextApply, Unit: fact.UnitUnixSec, Ts: ts, Src: "gate_ws_futures"})
+			}
+			if err := g.emitFacts(ctx, fs); err != nil {
+				log.Printf("[gate-ws] funding emit %s: %v", item.Contract, err)
+			}
+		}
 	}
 }
 
