@@ -48,6 +48,7 @@ type WSSpec struct {
 	InitialSubs func() []any      // 首连+重连订阅帧集（每帧经 Sender.Send 逐条发出）
 	OnFrame     func(data []byte) // 数据帧分发（ack/无关帧由实现方自滤）
 	OnAliveTick func(s Sender)    // 可选：每 ping tick 回调（okx 增量订阅差集补订走此；nil=无）
+	OnReconnect func()            // 可选：重连错误回调（reconnectMeter.record 走此；nil=无）
 }
 
 // RunWS 公共骨架入口：dial→InitialSubs→ping 保活→读循环→5s 退避重连→阻塞至 ctx 取消。
