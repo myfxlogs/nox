@@ -116,3 +116,19 @@ func TestD523_A4_PendingRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// A2（D-526）：List 键条目带中文 desc + 中文组标签（冗余字段前端零映射）。
+func TestD526_A2_DescAndGroupLabel(t *testing.T) {
+	svc := d523Svc(t)
+	resp, err := svc.ListAppConfig(context.Background(), connect.NewRequest(&dashv1.ListAppConfigRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	k := d523Find(resp.Msg, "ARB_EXPLORER_ENABLED")
+	if k == nil {
+		t.Fatal("key missing")
+	}
+	if k.Desc == "" || k.GroupLabel != "探矿" {
+		t.Fatalf("want 中文 desc+探矿 label, got desc=%q label=%q", k.Desc, k.GroupLabel)
+	}
+}
