@@ -23,21 +23,6 @@
       "target": "https://api.gateio.ws"
     },
     {
-      "prefix": "/demofapi",
-      "target": "https://demo-fapi.binance.com",
-      "strip_prefix": true
-    },
-    {
-      "prefix": "/demofws",
-      "target": "https://demo-fstream.binance.com",
-      "strip_prefix": true
-    },
-    {
-      "prefix": "/demo",
-      "target": "https://demo-api.binance.com",
-      "strip_prefix": true
-    },
-    {
       "prefix": "/fapi",
       "target": "https://fapi.binance.com"
     },
