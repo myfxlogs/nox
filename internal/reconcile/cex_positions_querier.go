@@ -34,7 +34,7 @@ func NewCEXPositionQuerier(venue, venueType, apiKey, apiSecret, passphrase, base
 		passphrase: passphrase,
 		baseURL:    baseURL,
 		simulated:  simulated,
-		client:     httpx.Client(), // CA 信任 + X-Proxy-Token（Binance demo-fapi 自签证书，D-055 同款）
+		client:     httpx.Client(), // CA 信任 + X-Proxy-Token（cex-proxy 自签证书，D-055 同款）
 	}
 }
 

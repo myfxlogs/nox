@@ -90,7 +90,7 @@ func (e *CEXExecutor) placeBinance(ctx context.Context, o Order) (Fill, error) {
 	}
 
 	if e.venueType == "perp" && (qty <= 0 || avgPrice <= 0) {
-		// 合约市价单 POST 可能先于撮合返回（status=NEW/executedQty=0，demo-fapi 实测恒如此，
+		// 合约市价单 POST 可能先于撮合返回（status=NEW/executedQty=0，实测恒如此，
 		// 同 D-059 实施修正② 的 OKX 教训；spot 市价单响应同步成交，无需轮询）→ 退避轮询
 		// 至 FILLED（D-421：PARTIALLY_FILLED 不提前返回——余量随后全成无记录=对冲失衡）；
 		// 窗尽 cancel+终查；仍不可判 → ErrFillUnconfirmed。
