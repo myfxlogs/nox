@@ -183,9 +183,7 @@ func (m *AccountMonitor) queriers(ctx context.Context) []reconcile.AccountQuerie
 		if err != nil {
 			log.Printf("[account-mon] list exchanges: %v", err)
 		} else {
-			// D-362 S2/R1：撞键归一——同 venue:type 多 config 时赢家保 canonical、
-			// 非赢家键加 #<id>（reconcile.CexVenueKey，与 executor/持仓查询器同源调用）。
-			// AccountInfo.Venue/VenueType 保持原值，后缀只在键（前端 Simulated 徽标区分）。
+			// D-362 S2/R1：撞键归一（赢家 canonical/输家 #id，与 executor/持仓同源）。
 			// D-516：sim 行先于归一剔除——不占 canonical、不建查询器。
 			m.mu.Lock()
 			live := realOnlyConfigs(cfgs, &m.simWarned, "account")
