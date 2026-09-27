@@ -137,3 +137,37 @@ func TestFailoverRT_DisabledWhenBackupEmpty(t *testing.T) {
 		t.Fatal("backup 空不应装 failoverRT")
 	}
 }
+
+// D-519 A4（D5 host 对表化）：ARB_OKX_PROXY_URL 与 ARB_CEX_WS_BASE host 的传输错
+// 均回退 ARB_CEX_WS_BASE_BACKUP；ws:// 基址 env 归一 http 匹配口径。
+func TestFailoverRT_HostTable(t *testing.T) {
+	var backHits int
+	back := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		backHits++
+	}))
+	defer back.Close()
+	bu := strings.TrimPrefix(back.URL, "http://")
+	t.Setenv("BINANCE_PROXY_URL", "")
+	t.Setenv("BINANCE_PROXY_URL_BACKUP", "")
+	t.Setenv("ARB_OKX_PROXY_URL", "https://127.0.0.1:1")
+	t.Setenv("ARB_CEX_WS_BASE", "wss://127.0.0.1:2")     // ws 基址 env（REST 走 http 口径匹配 host）
+	t.Setenv("ARB_CEX_WS_BASE_BACKUP", "http://"+bu)
+	t.Setenv("ARB_BINANCE_PROXY_TOKEN", "tok-fb")
+
+	if resp, err := Client().Get("https://127.0.0.1:1/api/v5/account"); err != nil {
+		t.Fatalf("okx host 应回退成功: %v", err)
+	} else {
+		resp.Body.Close()
+	}
+	if backHits != 1 {
+		t.Fatalf("okx host 传输错应回退备端 1 次, got %d", backHits)
+	}
+	if resp, err := Client().Get("http://127.0.0.1:2/gatespotws/x"); err != nil {
+		t.Fatalf("cex base host 应回退成功: %v", err)
+	} else {
+		resp.Body.Close()
+	}
+	if backHits != 2 {
+		t.Fatalf("cex base host 传输错应回退备端, got %d", backHits)
+	}
+}

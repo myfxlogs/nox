@@ -87,38 +87,61 @@ func (t tokenRT) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 
 // failoverRT cex-proxy 双端点 REST 回退（D-301b 预留槽实现）：
-// 仅当请求目标 host == BINANCE_PROXY_URL 主端 host 且 RoundTrip 出**传输层错误**时，
-// 把请求改发 BINANCE_PROXY_URL_BACKUP host 重试一次（X-Proxy-Token 由内层 tokenRT 重注）。
+// 仅当请求目标 host 命中主端对表（D-519 D5 三对 env 映射）且 RoundTrip 出**传输层错误**时，
+// 把请求改发对应备端 host 重试一次（X-Proxy-Token 由内层 tokenRT 重注）。
 // 4xx/5xx 是 venue 业务语义不触发；body 不可重放（Body 非 nil 且无 GetBody）不触发。
 // 每请求自主端起——主端恢复即自动回主（无粘滞/无探针）。
 type failoverRT struct {
-	base                     http.RoundTripper
-	primaryHost              string
-	backupScheme, backupHost string
+	base http.RoundTripper
+	// targets D-519 D5：主 host→备 {scheme,host} 对表（构造期收集，host:port 精确匹配，
+	// 同 host 去重）。覆盖三对：binance 代理、cex 公共基址（gate 亦经此）、okx 代理
+	// （无独立 okx 备 env，同 VPS2 语义挂 ARB_CEX_WS_BASE_BACKUP）。
+	targets map[string]failoverTarget
+}
+
+type failoverTarget struct{ scheme, host string }
+
+// hostEnvURL 解析基址 env：ws/wss scheme 归一 http/https（REST 请求 host 匹配口径）；
+// 无 scheme 补 https://。
+func hostEnvURL(v string) *url.URL {
+	v = strings.TrimSpace(v)
+	v = strings.Replace(v, "wss://", "https://", 1)
+	v = strings.Replace(v, "ws://", "http://", 1)
+	if !strings.Contains(v, "://") {
+		v = "https://" + v
+	}
+	u, err := url.Parse(v)
+	if err != nil || u.Host == "" {
+		return nil
+	}
+	return u
 }
 
 func newFailoverRT(base http.RoundTripper) http.RoundTripper {
-	back := strings.TrimSpace(os.Getenv("BINANCE_PROXY_URL_BACKUP"))
-	if back == "" {
+	targets := map[string]failoverTarget{}
+	add := func(primEnv, backEnv string) {
+		bu := hostEnvURL(os.Getenv(backEnv))
+		pu := hostEnvURL(os.Getenv(primEnv))
+		if bu == nil || pu == nil {
+			return
+		}
+		if _, ok := targets[pu.Host]; !ok {
+			targets[pu.Host] = failoverTarget{bu.Scheme, bu.Host}
+		}
+	}
+	add("BINANCE_PROXY_URL", "BINANCE_PROXY_URL_BACKUP")
+	add("ARB_CEX_WS_BASE", "ARB_CEX_WS_BASE_BACKUP")
+	add("ARB_OKX_PROXY_URL", "ARB_CEX_WS_BASE_BACKUP")
+	if len(targets) == 0 {
 		return nil
 	}
-	bu, err := url.Parse(back)
-	if err != nil || bu.Host == "" {
-		return nil
-	}
-	var primaryHost string
-	if pu, err := url.Parse(strings.TrimSpace(os.Getenv("BINANCE_PROXY_URL"))); err == nil {
-		primaryHost = pu.Host
-	}
-	if primaryHost == "" {
-		return nil
-	}
-	return failoverRT{base: base, primaryHost: primaryHost, backupScheme: bu.Scheme, backupHost: bu.Host}
+	return failoverRT{base: base, targets: targets}
 }
 
 func (f failoverRT) RoundTrip(r *http.Request) (*http.Response, error) {
 	resp, err := f.base.RoundTrip(r)
-	if err == nil || r.URL.Host != f.primaryHost || r.Context().Err() != nil {
+	t, hit := f.targets[r.URL.Host]
+	if err == nil || !hit || r.Context().Err() != nil {
 		return resp, err
 	}
 	// D-519 D3（裁定=方法门控，§1 风控优先）：非幂等方法不回退——binance 签名请求
@@ -143,8 +166,8 @@ func (f failoverRT) RoundTrip(r *http.Request) (*http.Response, error) {
 	if r.GetBody != nil {
 		r2.Body, _ = r.GetBody() // 上支已验 berr==nil
 	}
-	r2.URL.Scheme = f.backupScheme
-	r2.URL.Host = f.backupHost
+	r2.URL.Scheme = t.scheme
+	r2.URL.Host = t.host
 	r2.Host = ""
 	return f.base.RoundTrip(r2)
 }
