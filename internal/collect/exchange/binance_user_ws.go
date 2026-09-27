@@ -1,6 +1,6 @@
 // binance_user_ws.go —— D-450 S5：Binance 用户数据流经 cex-proxy。
 // listenKey 生命周期：POST {base}/v1/listenKey 取 key（base 已含 /fapi 段——
-// DB 实拍 real=proxy/fapi、demo=proxy/demofapi/fapi；审计 R1 修订，勿再拼 /fapi）
+// DB 实拍 real=proxy/fapi（demofapi 支路 D-516 收编删除）；审计 R1 修订，勿再拼 /fapi）
 // → wss 连接 → PUT 每 30min 续租（官方 60min 失效）→ 续租失败/读断 → 重新取 key
 // 重连（key 不可复用跨重连）。事件 ORDER_TRADE_UPDATE / ACCOUNT_UPDATE。
 // 订单/持仓频道无心跳——静默属正常态，存活判定=ping 20s+pong 顺延读超时 60s。
@@ -76,10 +76,13 @@ func (b *BinanceUserWS) listenKeyEndpoint() string {
 	return b.baseURL + "/v1/listenKey"
 }
 
-// WSURL listenKey → WS 地址（D-517 S3 fstream 迁移后映射：real perp→/private/ws、demo perp→/demofws、spot→/spotws；
-// baseURL 只取 scheme+host，路径段不继承——demofapi/fapi 的 REST 段不得进 WS URL）。
-// demo（demofws）与 spot 暂无迁移证据——保留原路径（代码注释+报审写明结论依据）。
+// WSURL listenKey → WS 地址（D-517 S3 fstream 迁移后映射：real perp→/private/ws、spot→/spotws；
+// baseURL 只取 scheme+host，路径段不继承——fapi 的 REST 段不得进 WS URL）。
+// D-516 S2：demo（demofws）支路删除——simulated=t 一律 fail-closed error，绝不拨 demo 端点。
 func (b *BinanceUserWS) WSURL(listenKey string) (string, error) {
+	if b.simulated {
+		return "", fmt.Errorf("binance user ws: simulated config refused (demo 域已收编 D-516)")
+	}
 	u, err := url.Parse(b.baseURL)
 	if err != nil {
 		return "", fmt.Errorf("parse baseURL: %w", err)
@@ -89,15 +92,13 @@ func (b *BinanceUserWS) WSURL(listenKey string) (string, error) {
 		scheme = "ws"
 	}
 	var path string
-	switch {
-	case b.venueType == "perp" && !b.simulated:
+	switch b.venueType {
+	case "perp":
 		path = "/private/ws/" + listenKey // D-517 S3：旧 /ws → /private（fstream 端点拆分迁移）
-	case b.venueType == "perp" && b.simulated:
-		path = "/demofws/ws/" + listenKey // demo env 迁移证据缺失——暂留原路径
-	case b.venueType == "spot":
+	case "spot":
 		path = "/spotws/ws/" + listenKey // spot 独立 host，不在本次 fstream 迁移面
 	default:
-		return "", fmt.Errorf("binance user ws: unsupported venueType=%q simulated=%v", b.venueType, b.simulated)
+		return "", fmt.Errorf("binance user ws: unsupported venueType=%q", b.venueType)
 	}
 	return fmt.Sprintf("%s://%s%s", scheme, u.Host, path), nil
 }
@@ -117,6 +118,9 @@ func (b *BinanceUserWS) Run(ctx context.Context) {
 }
 
 func (b *BinanceUserWS) runOnce(ctx context.Context) error {
+	if b.simulated {
+		return fmt.Errorf("binance user ws: simulated config refused (demo 域已收编 D-516)")
+	}
 	if b.venueType == "spot" {
 		return b.runOnceSpot(ctx)
 	}

@@ -110,14 +110,11 @@ func (o *OKXPrivateWS) Run(ctx context.Context) {
 }
 
 func (o *OKXPrivateWS) runOnce(ctx context.Context) error {
-	header := o.proxyHeader.Clone()
 	if o.simulated {
-		// 模拟盘：与 REST 同语义（demo key 对实盘域名带 x-simulated-trading:1，D-054）。
-		if header == nil {
-			header = http.Header{}
-		}
-		header.Set("x-simulated-trading", "1")
+		// D-516 S3：demo 支路删除——simulated=t 一律 fail-closed，绝不拨 demo 端点。
+		return fmt.Errorf("okx private ws: simulated config refused (demo 域已收编 D-516)")
 	}
+	header := o.proxyHeader.Clone()
 	conn, _, err := o.dialer.DialContext(ctx, o.wsURL, header)
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)

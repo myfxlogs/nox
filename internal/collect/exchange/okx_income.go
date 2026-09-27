@@ -28,7 +28,7 @@ type OKXIncomeAccount struct {
 	APISecret  string
 	Passphrase string
 	BaseURL    string
-	Simulated  bool // demo 账户带 x-simulated-trading:1，匹配 env=demo 腿（D-362 S5 环境一致性）
+	Simulated  bool // 纯标记位（env=demo 腿匹配，D-362 S5）；D-516 起 sim 行 wiring 层已剔除
 }
 
 // OKXIncomeCollector okx bills 采集器（15min 固定轮询由 wiring 驱动，弃结算对齐——
@@ -200,9 +200,9 @@ func (c *OKXIncomeCollector) fetchBills(ctx context.Context, acc OKXIncomeAccoun
 	return out, nil
 }
 
-// signedGet okx 签名 GET（OK-ACCESS 四头 + sim 账户 x-simulated-trading:1）。
+// signedGet okx 签名 GET（OK-ACCESS 四头）。
 // 签名 prehash 含 path?query 全串（KB okx-post-signature-includes-body）。
-// 与 cex_io.signedOkxGet 同法但带 simulated 头（cex_io 只采 real 行无此需求，不共享改它）。
+// 与 cex_io.signedOkxGet 同法（D-516：x-simulated-trading 支路删除——demo 域已收编）。
 func (c *OKXIncomeCollector) signedGet(ctx context.Context, acc OKXIncomeAccount, pathWithQuery string) ([]byte, error) {
 	ts := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 	sign := okxHMACBase64(acc.APISecret, ts+"GET"+pathWithQuery)
@@ -215,9 +215,6 @@ func (c *OKXIncomeCollector) signedGet(ctx context.Context, acc OKXIncomeAccount
 	req.Header.Set("OK-ACCESS-TIMESTAMP", ts)
 	req.Header.Set("OK-ACCESS-PASSPHRASE", acc.Passphrase)
 	req.Header.Set("Content-Type", "application/json")
-	if acc.Simulated {
-		req.Header.Set("x-simulated-trading", "1")
-	}
 	resp, err := c.cfg.Client.Do(req)
 	if err != nil {
 		return nil, err

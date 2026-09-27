@@ -15,7 +15,7 @@ import (
 )
 
 // okxBillsHandler 回 3 行 bill：173 支出 + 174 收入 + 非 funding subType（须被过滤）。
-func okxBillsHandler(t *testing.T, apiKey, passphrase string, wantSim bool) http.HandlerFunc {
+func okxBillsHandler(t *testing.T, apiKey, passphrase string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("OK-ACCESS-KEY"); got != apiKey {
 			t.Errorf("OK-ACCESS-KEY = %q, want %q", got, apiKey)
@@ -25,9 +25,6 @@ func okxBillsHandler(t *testing.T, apiKey, passphrase string, wantSim bool) http
 		}
 		if got := r.Header.Get("OK-ACCESS-PASSPHRASE"); got != passphrase {
 			t.Errorf("OK-ACCESS-PASSPHRASE = %q, want %q", got, passphrase)
-		}
-		if wantSim && r.Header.Get("x-simulated-trading") != "1" {
-			t.Error("simulated account must carry x-simulated-trading:1")
 		}
 		if r.URL.Path != "/api/v5/account/bills" && r.URL.Path != "/api/v5/account/bills-archive" {
 			t.Errorf("unexpected path %q", r.URL.Path)
@@ -56,7 +53,7 @@ func okxBillsHandler(t *testing.T, apiKey, passphrase string, wantSim bool) http
 // TestD385_OKXIncome_RunOnce T1：一轮落 2 事件（173/174），subType 过滤、
 // 非数值 billId 丢弃、字段换算对（balChg 符号直写、ts ms→time、billId→tran_id）。
 func TestD385_OKXIncome_RunOnce(t *testing.T) {
-	srv := httptest.NewServer(okxBillsHandler(t, "test-key", "test-pass", false))
+	srv := httptest.NewServer(okxBillsHandler(t, "test-key", "test-pass"))
 	defer srv.Close()
 
 	sink := &fakeIncomeSink{}
@@ -89,9 +86,9 @@ func TestD385_OKXIncome_RunOnce(t *testing.T) {
 }
 
 // TestD385_OKXIncome_SimEnv T1b（锚 C）：simulated 账户的 bill 行 env=demo 匹配，
-// 唯一命中挂 demo 仓腿；请求带 x-simulated-trading:1。
+// 唯一命中挂 demo 仓腿（D-516：x-simulated-trading 支路删除，只验 env 标记语义）。
 func TestD385_OKXIncome_SimEnv(t *testing.T) {
-	srv := httptest.NewServer(okxBillsHandler(t, "k", "p", true))
+	srv := httptest.NewServer(okxBillsHandler(t, "k", "p"))
 	defer srv.Close()
 
 	var gotVenue, gotEnv string

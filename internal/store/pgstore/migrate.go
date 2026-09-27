@@ -140,7 +140,7 @@ var migrationFiles = []struct {
 	{143, migrations.CarryGraduationPairColsSQL},       // D-498：carry_graduations venue_a/venue_b 源列+venue 展示投影
 	{144, migrations.D499TailColsSQL},                  // D-499：carry venue_type 拆除+flags 配对域拆列
 	{145, migrations.ExecControlBrokerScopeSQL},        // D-493：execution_control_events scope_type 补 'broker' 审计域
-	{146, migrations.DropBinanceDemoConfigSQL},         // D-504：删 binance demofapi demo 配置行
+	{146, migrations.DropBinanceDemoConfigSQL},         // D-504：删 binance demo 配置行
 	{147, migrations.FactsKindIndexPgstatSQL},          // D-508 S3：facts (kind,venue,symbol,ts desc) 索引+pg_stat_statements
 	{148, migrations.PositionsLegacyDemoSQL},           // D-512 T8：positions.environment NULL→legacy_demo（纯 UPDATE）
 	{149, migrations.SettlementIncidentAttributedSQL},  // D-512 T9：settlements 事故归因列+存量按同判据回填
