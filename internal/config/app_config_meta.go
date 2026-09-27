@@ -40,14 +40,33 @@ func AppConfigAllKeys() []string {
 	return out
 }
 
+// AppConfigGroupLabel D-526：组代码→中文标签（设置页组条渲染；键条目冗余下发）。
+func AppConfigGroupLabel(group string) string {
+	switch group {
+	case "AUTOTRADE":
+		return "自动交易"
+	case "CARRY":
+		return "套息"
+	case "EXPLORER":
+		return "探矿"
+	case "ANALYST":
+		return "分析"
+	case "FUNDING":
+		return "资金费"
+	default:
+		return "其他"
+	}
+}
+
 // AppConfigKeyMeta 键元数据：typed 键返 (meta,false,true)；env-passthrough 返 ({"string",nil,nil},true,true)；未知 false。
 func AppConfigKeyMeta(key string) (AppCfgMeta, bool, bool) {
 	if m, ok := appConfigKeys[key]; ok {
+		m.Desc = appConfigDescs[key]
 		return m, false, true
 	}
 	for _, k := range appConfigEnvKeys {
 		if k == key {
-			return AppCfgMeta{Typ: "string"}, true, true
+			return AppCfgMeta{Typ: "string", Desc: appConfigDescs[key]}, true, true
 		}
 	}
 	return AppCfgMeta{}, false, false

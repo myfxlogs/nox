@@ -35,6 +35,8 @@ type AppConfigKey struct {
 	PendingRestart bool                   `protobuf:"varint,9,opt,name=pending_restart,json=pendingRestart,proto3" json:"pending_restart,omitempty"` // db 生效值≠runningValue（实差徽标；重启后清零）
 	Note           string                 `protobuf:"bytes,10,opt,name=note,proto3" json:"note,omitempty"`                                           // 审计事由
 	UpdatedAt      *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Desc           string                 `protobuf:"bytes,12,opt,name=desc,proto3" json:"desc,omitempty"`                               // D-526：中文一句话说明（键注册表单源）
+	GroupLabel     string                 `protobuf:"bytes,13,opt,name=group_label,json=groupLabel,proto3" json:"group_label,omitempty"` // D-526：组中文标签冗余（前端零映射）
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -144,6 +146,20 @@ func (x *AppConfigKey) GetUpdatedAt() *timestamppb.Timestamp {
 		return x.UpdatedAt
 	}
 	return nil
+}
+
+func (x *AppConfigKey) GetDesc() string {
+	if x != nil {
+		return x.Desc
+	}
+	return ""
+}
+
+func (x *AppConfigKey) GetGroupLabel() string {
+	if x != nil {
+		return x.GroupLabel
+	}
+	return ""
 }
 
 type ListAppConfigRequest struct {
@@ -407,7 +423,7 @@ var File_dashboardv1_app_config_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_app_config_proto_rawDesc = "" +
 	"\n" +
-	"\x1cdashboardv1/app_config.proto\x12\x10arb.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xe7\x02\n" +
+	"\x1cdashboardv1/app_config.proto\x12\x10arb.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9c\x03\n" +
 	"\fAppConfigKey\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x14\n" +
@@ -421,7 +437,10 @@ const file_dashboardv1_app_config_proto_rawDesc = "" +
 	"\x04note\x18\n" +
 	" \x01(\tR\x04note\x129\n" +
 	"\n" +
-	"updated_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x16\n" +
+	"updated_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x12\n" +
+	"\x04desc\x18\f \x01(\tR\x04desc\x12\x1f\n" +
+	"\vgroup_label\x18\r \x01(\tR\n" +
+	"groupLabel\"\x16\n" +
 	"\x14ListAppConfigRequest\"K\n" +
 	"\x15ListAppConfigResponse\x122\n" +
 	"\x04keys\x18\x01 \x03(\v2\x1e.arb.dashboard.v1.AppConfigKeyR\x04keys\"T\n" +
