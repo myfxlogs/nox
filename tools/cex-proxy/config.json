@@ -46,6 +46,18 @@
       "target": "https://api.binance.com"
     },
     {
+      "prefix": "/public",
+      "target": "https://fstream.binance.com"
+    },
+    {
+      "prefix": "/market",
+      "target": "https://fstream.binance.com"
+    },
+    {
+      "prefix": "/private",
+      "target": "https://fstream.binance.com"
+    },
+    {
       "prefix": "/ws",
       "target": "https://fstream.binance.com"
     },
