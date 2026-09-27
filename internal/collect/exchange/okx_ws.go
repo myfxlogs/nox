@@ -25,7 +25,7 @@ type OKXWebSocket struct {
 	cfg    Config
 	dialer *websocket.Dialer
 	header http.Header // 代理模式=X-Proxy-Token 握口头；直连=nil
-	wsURL  string      // 默认 okxPublicWSURL；测试覆写指向 fake server
+	wsURLs []string    // 有序候选（cex-proxy 双端点 failover；[0]=主端）；测试覆写指向 fake server
 	// D-507：时距字段化（默认=ws_keepalive.go 常量族；测试覆写缩小观察窗）。
 	readIdle         time.Duration
 	pingEvery        time.Duration
@@ -39,14 +39,14 @@ func NewOKXWebSocket(cfg Config) *OKXWebSocket {
 	proxied := cexWSBase() != ""
 	d, h := wsDialer(proxied)
 	return &OKXWebSocket{cfg: cfg, dialer: d, header: h,
-		wsURL:    wsViaProxy("/okxws/ws/v5/public", okxPublicWSURL),
+		wsURLs:   wsViaProxyURLs("/okxws/ws/v5/public", okxPublicWSURL),
 		readIdle: quoteWSReadIdle, pingEvery: quoteWSPingEvery, reconnectBackoff: quoteWSReconnectBackoff}
 }
 
 // Run 连接 OKX WS 并持续推送报价到 publish 回调。阻塞至 ctx 取消。
 // D-511 S2：骨架收编 RunWS——dial/保活/读循环/退避一处钉死，本文件只留协议钩子。
 func (o *OKXWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
-	meter := newReconnectMeter(o.wsURL, o.cfg.AlertFn)
+	meter := newReconnectMeter(o.wsURLs[0], o.cfg.AlertFn)
 	// subscribed 差集表为每连接状态——OnConnect 每拨号重置（重连全量重订阅语义不变）。
 	var subscribed map[string]bool
 	// 订阅 spot + perp tickers（D-369 S2：subscribed 集跟踪，ping 期差集增量订阅）
@@ -71,7 +71,7 @@ func (o *OKXWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 		return args
 	}
 	RunWS(ctx, WSSpec{
-		Name: "okx-ws", URL: o.wsURL, Dialer: o.dialer, Header: o.header,
+		Name: "okx-ws", URLs: o.wsURLs, Dialer: o.dialer, Header: o.header,
 		ReadIdle: o.readIdle, PingEvery: o.pingEvery, ReconnectBackoff: o.reconnectBackoff,
 		OnConnect: func() { subscribed = map[string]bool{} },
 		InitialSubs: func() []any {

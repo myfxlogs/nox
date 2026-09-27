@@ -47,8 +47,11 @@ func (s *wsSender) SendRaw(messageType int, data []byte) error {
 
 // WSSpec 公共行情 WS 规格（venue 差异收敛为钩子）。
 type WSSpec struct {
-	Name   string            // meter/log 标（如 "okx-ws"/"gate-ws:url"）
-	URL    string            // 完整 wss:// 路由（适配层已过 wsViaProxy）
+	Name string // meter/log 标（如 "okx-ws"/"gate-ws:url"）
+	URL  string // 完整 wss:// 路由（适配层已过 wsViaProxy）
+	// URLs 有序候选地址表（cex-proxy 双端点 failover）：非空时代替 URL 字段逐序试拨——
+	// 每次连接尝试都从首元素起（主端优先，回切无粘滞=主端恢复即自动回主）。
+	URLs   []string
 	Dialer *websocket.Dialer // 适配层供给（wsDialer/httpx.WSDialer）；nil=裸默认直连
 	Header http.Header       // 显式握手鉴权头（binance=x-proxy-token；nil=显式无头）
 
@@ -92,9 +95,26 @@ func runWSOnce(ctx context.Context, spec WSSpec) error {
 	if dialer == nil {
 		dialer = &websocket.Dialer{Proxy: http.ProxyFromEnvironment, HandshakeTimeout: 10 * time.Second}
 	}
-	conn, _, err := dialer.DialContext(ctx, spec.URL, spec.Header)
+	urls := spec.URLs
+	if len(urls) == 0 {
+		urls = []string{spec.URL}
+	}
+	var conn *websocket.Conn
+	var err error
+	var lastURL string
+	for _, u := range urls {
+		lastURL = u
+		conn, _, err = dialer.DialContext(ctx, u, spec.Header)
+		if err == nil {
+			break
+		}
+		if ctx.Err() != nil {
+			break // ctx 取消——不再试下一候选
+		}
+		log.Printf("[%s] dial %s failed: %v（尝试下一候选）", spec.Name, u, err)
+	}
 	if err != nil {
-		return fmt.Errorf("dial: %w", err)
+		return fmt.Errorf("dial %s: %w", lastURL, err)
 	}
 	defer conn.Close()
 

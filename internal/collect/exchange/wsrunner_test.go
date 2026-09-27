@@ -180,3 +180,61 @@ func TestD511_NilHeaderNoToken(t *testing.T) {
 		t.Fatalf("spec.Header nil 仍带 token 头: %q", authHeader)
 	}
 }
+
+// URLs 有序候选：主端拒连 → 自动落到备用端点（dial 期 failover）。
+func TestWSRunner_FailoverToBackup(t *testing.T) {
+	backURL, backUp := wsRunnerServer(t, false, make(chan []byte, 8))
+	spec := wsRunnerSpec(backURL, make(chan []byte, 8))
+	spec.URLs = []string{"ws://127.0.0.1:1/dead", backURL} // 主端拒连→备用
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go RunWS(ctx, spec)
+	deadline := time.Now().Add(2 * time.Second)
+	for backUp.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if backUp.Load() != 1 {
+		t.Fatalf("备用端点未被接入: upgrades=%d", backUp.Load())
+	}
+}
+
+// 回切语义：每次连接尝试都自主端起——主端恢复即自动回主（无粘滞）。
+func TestWSRunner_FailbackToPrimary(t *testing.T) {
+	frames := make(chan []byte, 8)
+	backURL, _ := wsRunnerServer(t, true, frames) // 吞 ping=死对端→读限断开
+	// 第一轮：主端死→落备用（备用为死对端→读断返回）。
+	spec := wsRunnerSpec(backURL, frames)
+	spec.URLs = []string{"ws://127.0.0.1:1/dead", backURL}
+	spec.ReadIdle = 150 * time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := runWSOnce(ctx, spec); err == nil {
+		t.Fatal("首轮应经备用连接且读断")
+	}
+	// 第二轮：主端复活→候选表首元素重得主端。
+	primURL, primUp := wsRunnerServer(t, false, frames)
+	spec.URLs = []string{primURL, backURL}
+	spec.ReadIdle = 3 * time.Second
+	go func() {
+		_ = runWSOnce(ctx, spec)
+	}()
+	deadline := time.Now().Add(2 * time.Second)
+	for primUp.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if primUp.Load() != 1 {
+		t.Fatalf("主端恢复后未回主: primUp=%d", primUp.Load())
+	}
+}
+
+// ctx 取消即停——不再逐候选试拨；报错含首候选 URL。
+func TestWSRunner_CtxCancelStopsCandidates(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	spec := wsRunnerSpec("ws://127.0.0.1:1/a", nil)
+	spec.URLs = []string{"ws://127.0.0.1:1/a", "ws://127.0.0.1:2/b"}
+	err := runWSOnce(ctx, spec)
+	if err == nil || !strings.Contains(err.Error(), "127.0.0.1:1") {
+		t.Fatalf("ctx 取消应停在首候选: %v", err)
+	}
+}

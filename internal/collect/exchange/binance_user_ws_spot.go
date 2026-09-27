@@ -71,7 +71,7 @@ func (b *BinanceUserWS) runOnceSpot(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	ctrl, err := b.dial(ctx, wsapi)
+	ctrl, err := b.dialFailover(ctx, wsapi)
 	if err != nil {
 		return fmt.Errorf("dial ws-api: %w", err)
 	}
@@ -90,7 +90,7 @@ func (b *BinanceUserWS) runOnceSpot(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	conn, err := b.dial(ctx, wsURL)
+	conn, err := b.dialFailover(ctx, wsURL)
 	if err != nil {
 		return fmt.Errorf("dial stream: %w", err)
 	}

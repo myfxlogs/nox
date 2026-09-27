@@ -6,7 +6,9 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -42,6 +44,9 @@ func Client() *http.Client {
 	c.Transport = tr
 	if tok != "" {
 		c.Transport = tokenRT{base: tr, tok: tok}
+	}
+	if fb := newFailoverRT(c.Transport); fb != nil {
+		c.Transport = fb
 	}
 	return c
 }
@@ -79,4 +84,54 @@ func (t tokenRT) RoundTrip(r *http.Request) (*http.Response, error) {
 	r2 := r.Clone(r.Context())
 	r2.Header.Set("X-Proxy-Token", t.tok)
 	return t.base.RoundTrip(r2)
+}
+
+// failoverRT cex-proxy 双端点 REST 回退（D-301b 预留槽实现）：
+// 仅当请求目标 host == BINANCE_PROXY_URL 主端 host 且 RoundTrip 出**传输层错误**时，
+// 把请求改发 BINANCE_PROXY_URL_BACKUP host 重试一次（X-Proxy-Token 由内层 tokenRT 重注）。
+// 4xx/5xx 是 venue 业务语义不触发；body 不可重放（Body 非 nil 且无 GetBody）不触发。
+// 每请求自主端起——主端恢复即自动回主（无粘滞/无探针）。
+type failoverRT struct {
+	base                     http.RoundTripper
+	primaryHost              string
+	backupScheme, backupHost string
+}
+
+func newFailoverRT(base http.RoundTripper) http.RoundTripper {
+	back := strings.TrimSpace(os.Getenv("BINANCE_PROXY_URL_BACKUP"))
+	if back == "" {
+		return nil
+	}
+	bu, err := url.Parse(back)
+	if err != nil || bu.Host == "" {
+		return nil
+	}
+	var primaryHost string
+	if pu, err := url.Parse(strings.TrimSpace(os.Getenv("BINANCE_PROXY_URL"))); err == nil {
+		primaryHost = pu.Host
+	}
+	if primaryHost == "" {
+		return nil
+	}
+	return failoverRT{base: base, primaryHost: primaryHost, backupScheme: bu.Scheme, backupHost: bu.Host}
+}
+
+func (f failoverRT) RoundTrip(r *http.Request) (*http.Response, error) {
+	resp, err := f.base.RoundTrip(r)
+	if err == nil || r.URL.Host != f.primaryHost || r.Context().Err() != nil {
+		return resp, err
+	}
+	if r.Body != nil && r.GetBody == nil {
+		return resp, err // body 不可重放
+	}
+	r2 := r.Clone(r.Context())
+	if r.GetBody != nil {
+		if body, berr := r.GetBody(); berr == nil {
+			r2.Body = body
+		}
+	}
+	r2.URL.Scheme = f.backupScheme
+	r2.URL.Host = f.backupHost
+	r2.Host = ""
+	return f.base.RoundTrip(r2)
 }

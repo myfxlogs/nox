@@ -28,11 +28,11 @@ const (
 
 // GateWebSocket 订阅 Gate spot + futures tickers。
 type GateWebSocket struct {
-	cfg        Config
-	dialer     *websocket.Dialer
-	header     http.Header // 代理模式=X-Proxy-Token 握口头；直连=nil
-	spotURL    string      // 默认 gateSpotWSURL
-	futuresURL string      // 默认 gateFuturesWSURL
+	cfg         Config
+	dialer      *websocket.Dialer
+	header      http.Header // 代理模式=X-Proxy-Token 握口头；直连=nil
+	spotURLs    []string    // 有序候选（cex-proxy 双端点 failover；[0]=主端）
+	futuresURLs []string    // 同上
 	// D-507：时距字段化（默认=ws_keepalive.go 常量族；测试覆写缩小观察窗）。
 	readIdle         time.Duration
 	pingEvery        time.Duration
@@ -46,9 +46,9 @@ func NewGateWebSocket(cfg Config) *GateWebSocket {
 	proxied := cexWSBase() != ""
 	d, h := wsDialer(proxied)
 	return &GateWebSocket{cfg: cfg, dialer: d, header: h,
-		spotURL:    wsViaProxy("/gatespotws/ws/v4/", gateSpotWSURL),
-		futuresURL: wsViaProxy("/v4/ws/usdt", gateFuturesWSURL),
-		readIdle:   quoteWSReadIdle, pingEvery: quoteWSPingEvery, reconnectBackoff: quoteWSReconnectBackoff}
+		spotURLs:    wsViaProxyURLs("/gatespotws/ws/v4/", gateSpotWSURL),
+		futuresURLs: wsViaProxyURLs("/v4/ws/usdt", gateFuturesWSURL),
+		readIdle:    quoteWSReadIdle, pingEvery: quoteWSPingEvery, reconnectBackoff: quoteWSReconnectBackoff}
 }
 
 // Run 连接 Gate spot + futures WS 并持续推送报价到 publish。阻塞至 ctx 取消。
@@ -57,11 +57,11 @@ func (g *GateWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 	wg.Add(2)
 	safego.Go("gate_ws:spot-loop", func() {
 		defer wg.Done()
-		g.runLoop(ctx, g.spotURL, "spot.tickers", g.handleSpot, publish)
+		g.runLoop(ctx, g.spotURLs, "spot.tickers", g.handleSpot, publish)
 	})
 	safego.Go("gate_ws:futures-loop", func() {
 		defer wg.Done()
-		g.runLoop(ctx, g.futuresURL, "futures.tickers", g.handleFutures, publish)
+		g.runLoop(ctx, g.futuresURLs, "futures.tickers", g.handleFutures, publish)
 	})
 	wg.Wait()
 }
@@ -83,12 +83,12 @@ func (g *GateWebSocket) subscribeChannel(s Sender, channel string, pairs []strin
 
 // runLoop 单连接重连循环——D-511 S3：骨架收编 RunWS（dial/保活/读循环/退避一处钉死），
 // 本函数只装配协议钩子（URL=构造期 wsViaProxy 过的值、header=g.header 显式供给——R4/R3）。
-func (g *GateWebSocket) runLoop(ctx context.Context, url string, channel string, handle func(context.Context, []byte, func(bus.Quote)), publish func(bus.Quote)) {
-	meter := newReconnectMeter(url, g.cfg.AlertFn)
+func (g *GateWebSocket) runLoop(ctx context.Context, urls []string, channel string, handle func(context.Context, []byte, func(bus.Quote)), publish func(bus.Quote)) {
+	meter := newReconnectMeter(urls[0], g.cfg.AlertFn)
 	// subscribed 差集表为每连接状态——OnConnect 每拨号重置（重连全量重订阅语义不变）。
 	var subscribed map[string]bool
 	RunWS(ctx, WSSpec{
-		Name: "gate-ws:" + url, URL: url, Dialer: g.dialer, Header: g.header,
+		Name: "gate-ws:" + urls[0], URLs: urls, Dialer: g.dialer, Header: g.header,
 		ReadIdle: g.readIdle, PingEvery: g.pingEvery, ReconnectBackoff: g.reconnectBackoff,
 		OnConnect: func() { subscribed = map[string]bool{} },
 		InitialSubs: func() []any {

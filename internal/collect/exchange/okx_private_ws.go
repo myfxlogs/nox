@@ -68,7 +68,7 @@ type OKXPrivateWS struct {
 	hooks       OKXPrivateHooks
 	dialer      *websocket.Dialer
 	proxyHeader http.Header // 代理模式=X-Proxy-Token 握口头；直连=nil
-	wsURL       string      // 默认 okxPrivateWSURL（ARB_CEX_WS_BASE 置位→经 cex-proxy /okxws）
+	wsURLs      []string    // 有序候选（cex-proxy 双端点 failover；[0]=主端，ARB_CEX_WS_BASE 置位→经 /okxws）
 	now         func() time.Time
 	// ctValFor D-477 S3（GAP-B4）：okx 合约面值解析器注入——构造点经 resolveExchangeBaseURL
 	// 取与 executor 同一 baseURL 源（离线/代理拓扑下不再双源分叉）。nil=跳过换算保持张数+warn。
@@ -85,8 +85,8 @@ func NewOKXPrivateWS(apiKey, apiSecret, passphrase string, simulated bool, sink 
 		apiKey: apiKey, apiSecret: apiSecret, passphrase: passphrase, simulated: simulated,
 		sink: sink, venueKey: venueKey, events: events, orderCache: oc, posCache: pc, hooks: hooks,
 		dialer: d, proxyHeader: h,
-		wsURL: wsViaProxy("/okxws/ws/v5/private", okxPrivateWSURL),
-		now:   time.Now,
+		wsURLs: wsViaProxyURLs("/okxws/ws/v5/private", okxPrivateWSURL),
+		now:    time.Now,
 	}
 }
 
@@ -115,7 +115,15 @@ func (o *OKXPrivateWS) runOnce(ctx context.Context) error {
 		return fmt.Errorf("okx private ws: simulated config refused (demo 域已收编 D-516)")
 	}
 	header := o.proxyHeader.Clone()
-	conn, _, err := o.dialer.DialContext(ctx, o.wsURL, header)
+	var conn *websocket.Conn
+	var err error
+	for _, u := range o.wsURLs {
+		conn, _, err = o.dialer.DialContext(ctx, u, header)
+		if err == nil {
+			break
+		}
+		log.Printf("[okx-private-ws] dial %s failed: %v（尝试下一候选）", u, err)
+	}
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
 	}

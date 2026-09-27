@@ -63,7 +63,7 @@ func TestD507_GateQuietFeedStaysAlive(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	g := d507GateWS()
-	go g.runLoop(ctx, url, "spot.tickers", g.handleSpot, func(q bus.Quote) {})
+	go g.runLoop(ctx, []string{url}, "spot.tickers", g.handleSpot, func(q bus.Quote) {})
 	time.Sleep(d507Observe)
 	cancel()
 	if got := n.Load(); got != 1 {
@@ -78,7 +78,7 @@ func TestD507_GateDeadPeerStillReconnects(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	g := d507GateWS()
-	go g.runLoop(ctx, url, "spot.tickers", g.handleSpot, func(q bus.Quote) {})
+	go g.runLoop(ctx, []string{url}, "spot.tickers", g.handleSpot, func(q bus.Quote) {})
 	time.Sleep(d507Observe)
 	cancel()
 	if got := n.Load(); got < 2 {
@@ -92,7 +92,7 @@ func TestD507_OkxQuietFeedStaysAlive(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	o := NewOKXWebSocket(Config{})
-	o.wsURL = url
+	o.wsURLs = []string{url}
 	o.readIdle = 300 * time.Millisecond
 	o.pingEvery = 100 * time.Millisecond
 	o.reconnectBackoff = 50 * time.Millisecond
@@ -110,7 +110,7 @@ func TestD507_NilAlertFnNoPanic(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	g := d507GateWS() // AlertFn 缺省 nil
-	go g.runLoop(ctx, url, "spot.tickers", g.handleSpot, func(q bus.Quote) {})
+	go g.runLoop(ctx, []string{url}, "spot.tickers", g.handleSpot, func(q bus.Quote) {})
 	time.Sleep(d507Observe)
 	cancel()
 }

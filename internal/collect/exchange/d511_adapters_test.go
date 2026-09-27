@@ -1,5 +1,5 @@
 // d511_adapters_test.go —— D-511 R7 返修：适配层行为保真断言。
-// ①gate Run 路径必须真用 g.spotURL/g.futuresURL（wsViaProxy 过的字段值）——R4 钉死，
+// ①gate Run 路径必须真用 g.spotURLs/g.futuresURLs（wsViaProxy 过的字段值）——R4 钉死，
 // 防「字段是摆设、Run 回常量直连」回归（GFW RST 断供事故形态）；
 // ②okx 差集补订：watchlist 新增符号 → 下个 alive tick 只补新符号帧（D-369 S2 语义保留）。
 package exchange
@@ -16,7 +16,7 @@ import (
 )
 
 // TestD511_GateRunUsesSpecURLs gate.Run 双连接落 spot/futures 两 fake server——
-// URL 取自 g.spotURL/g.futuresURL（非常量直连），订阅 channel 各自正确。
+// URL 取自 g.spotURLs/g.futuresURLs（非常量直连），订阅 channel 各自正确。
 func TestD511_GateRunUsesSpecURLs(t *testing.T) {
 	spotFrames := make(chan []byte, 4)
 	futFrames := make(chan []byte, 4)
@@ -24,7 +24,7 @@ func TestD511_GateRunUsesSpecURLs(t *testing.T) {
 	futURL, futUp := wsRunnerServer(t, false, futFrames)
 
 	g := NewGateWebSocket(Config{Symbols: []string{"BTC"}})
-	g.spotURL, g.futuresURL = spotURL, futURL // 覆写=代理路由形态；Run 必须走字段值
+	g.spotURLs, g.futuresURLs = []string{spotURL}, []string{futURL} // 覆写=代理路由形态；Run 必须走字段值
 	g.readIdle, g.pingEvery, g.reconnectBackoff = 300*time.Millisecond, 100*time.Millisecond, 50*time.Millisecond
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -75,7 +75,7 @@ func TestD511_OkxDeltaResubscribe(t *testing.T) {
 	url, _ := wsRunnerServer(t, false, frames)
 	dyn := &d511DynSyms{}
 	o := NewOKXWebSocket(Config{Symbols: []string{"BTC"}, SymProvider: dyn})
-	o.wsURL = url
+	o.wsURLs = []string{url}
 	o.readIdle, o.pingEvery, o.reconnectBackoff = 400*time.Millisecond, 60*time.Millisecond, 40*time.Millisecond
 
 	ctx, cancel := context.WithCancel(context.Background())
