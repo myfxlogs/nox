@@ -103,7 +103,9 @@ func (b *BinanceMarketWS) runLoop(ctx context.Context, url, venueType, kind stri
 			for _, sym := range syms {
 				// D-517：按 kind 出订阅参数——bookTicker→public 路由、markPrice→market
 				// 路由（funding 是 perp 语义，spot 连接恒 bookTicker 不进此分支）。
-				params = append(params, strings.ToLower(sym+"usdt")+"@"+strings.ToLower(kind))
+				// kind 不 lowercase：新端点流名大小写敏感（实证 btcusdt@markprice
+				// /bookticker 全小写=ack 成功+零帧静默断流，与旧端点退役同形态）。
+				params = append(params, strings.ToLower(sym+"usdt")+"@"+kind)
 			}
 			// D-509 merge 面修复：单帧 SUBSCRIBE 超服务端解析上限（实拍 1008 +
 			// "Invalid JSON …column 4096"）→ 分批多帧订阅（RunWS 逐帧发送语义已兼容）。
