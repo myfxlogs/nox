@@ -1,5 +1,6 @@
 // Package exchange 实现 CEX 行情采集（§3.3）。
-// 当前阶段实现 REST 轮询 funding + ticker（后续迭代升级 WS）。
+// funding 三所原生 WS 流为唯一 fact 源（D-509 流化、D-518 REST 兜底退役）；
+// 本文件保留共享 helper（结算周期/年化口径）+ history 回填与 WS 适配共用基础件。
 // 产出 Fact（funding）+ Quote（ticker），分别经 FactSink 和 QuoteBus。
 package exchange
 
@@ -10,8 +11,6 @@ import (
 	"io"
 	"net/http"
 	"time"
-
-	"arb/internal/fact"
 )
 
 // Venue 常量。
@@ -67,124 +66,8 @@ func DefaultConfig(symbols []string) Config {
 	}
 }
 
-// BinanceFunding 采集 Binance funding rate（REST 轮询，§3.3）。
-// BinanceBaseURL 可指向 Cloudflare Worker 代理以绕过 451 地区限制。
-// D-301a S2：intervals 注入 per-symbol 结算周期真值（fundingInfo fundingIntervalHours），
-// nil → 回退 3（8h×3，D-079 禁静默）。
-type BinanceFunding struct {
-	cfg       Config
-	intervals *FundingIntervalCache
-}
-
-func NewBinanceFunding(cfg Config) *BinanceFunding { return &BinanceFunding{cfg: cfg} }
-
-// SetFundingIntervals 注入 funding 周期缓存（D-301a S2）。
-func (b *BinanceFunding) SetFundingIntervals(c *FundingIntervalCache) { b.intervals = c }
-
-func (b *BinanceFunding) Kind() string { return fact.KindFunding }
-
-func (b *BinanceFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
-	var out []fact.Fact
-	for _, sym := range b.syms() {
-		pair := sym + "USDT"
-		url := fmt.Sprintf("%s/fapi/v1/premiumIndex?symbol=%s", b.cfg.BinanceBaseURL, pair)
-		body, err := getJSON(ctx, b.cfg.Client, url)
-		if err != nil {
-			// D-300 S2：单符号失败跳过——新链（PAXG）故障不拖累既有主链。
-			fmt.Printf("[exchange:binance] funding %s: %v (skip)\n", pair, err)
-			continue
-		}
-		rate, ok := body["lastFundingRate"].(string)
-		if !ok {
-			continue
-		}
-		var f float64
-		fmt.Sscanf(rate, "%f", &f)
-		// D-301a S2：per-symbol 结算周期真值（fundingInfo fundingIntervalHours）；
-		// D-079：Binance premiumIndex 不返回 prevFundingTime → 旧版固定回退 3/天（8h）。
-		// PAXG/XAUT 实为 4h 结算 → 6/天，旧版低估 2×。
-		periodsPerDay := fundingPeriodsPerDay(0) // 回退 3/天
-		if b.intervals != nil {
-			periodsPerDay = b.intervals.PeriodsPerDay(pair)
-		}
-		annualized := annualizeFunding(f, periodsPerDay)
-		out = append(out, fact.Fact{
-			Kind:   fact.KindFunding,
-			Venue:  VenueBinance,
-			Symbol: pair,
-			Value:  annualized,
-			Unit:   fact.UnitPctAnnualized,
-			Ts:     time.Now(),
-			Src:    "binance_fapi",
-		})
-		// D-466 S1：venue 原生结算时刻/周期同帧发出（腿级真值源，去跨 venue 污染）。
-		if nft, ok := body["nextFundingTime"].(float64); ok && nft > 0 {
-			out = append(out, fact.Fact{Kind: fact.KindFundingNextSettle, Venue: VenueBinance,
-				Symbol: pair, Value: nft / 1000, Unit: fact.UnitUnixSec, Ts: time.Now(), Src: "binance_fapi"})
-		}
-		if b.intervals != nil {
-			out = append(out, fact.Fact{Kind: fact.KindFundingInterval, Venue: VenueBinance,
-				Symbol: pair, Value: 86400 / float64(periodsPerDay), Unit: fact.UnitSeconds, Ts: time.Now(), Src: "binance_fapi"})
-		}
-	}
-	return out, nil
-}
-
-// GateFunding 采集 Gate.io funding rate（REST 轮询，§3.3）。
-type GateFunding struct {
-	cfg Config
-}
-
-// NewGateFunding 创建 Gate.io funding 采集器。
-func NewGateFunding(cfg Config) *GateFunding { return &GateFunding{cfg: cfg} }
-
-func (g *GateFunding) Kind() string { return fact.KindFunding }
-
-func (g *GateFunding) Poll(ctx context.Context) ([]fact.Fact, error) {
-	var out []fact.Fact
-	for _, sym := range g.syms() {
-		contract := sym + "_USDT"
-		url := fmt.Sprintf("%s/api/v4/futures/usdt/contracts/%s", g.cfg.GateBaseURL, contract)
-		body, err := getJSON(ctx, g.cfg.Client, url)
-		if err != nil {
-			fmt.Printf("[exchange:gate] funding %s: %v (skip)\n", contract, err)
-			continue
-		}
-		rate, ok := body["funding_rate"].(string)
-		if !ok {
-			continue
-		}
-		var f float64
-		fmt.Sscanf(rate, "%f", &f)
-		// D-301a S2：Gate contracts 接口返回 funding_interval（秒）→ per-symbol 真值；
-		// D-079：旧版固定回退 3/天（8h），4h 结算币种低估 2×。
-		var intervalSec float64
-		if v, ok := body["funding_interval"].(float64); ok {
-			intervalSec = v
-		}
-		periodsPerDay := fundingPeriodsPerDay(intervalSec * 1000) // intervalMs
-		annualized := annualizeFunding(f, periodsPerDay)
-		out = append(out, fact.Fact{
-			Kind:   fact.KindFunding,
-			Venue:  VenueGate,
-			Symbol: sym + "USDT",
-			Value:  annualized,
-			Unit:   fact.UnitPctAnnualized,
-			Ts:     time.Now(),
-			Src:    "gate_v4",
-		})
-		// D-466 S1：funding_next_apply（实测 unix 秒）+funding_interval 同帧发出。
-		if nfa, ok := body["funding_next_apply"].(float64); ok && nfa > 0 {
-			out = append(out, fact.Fact{Kind: fact.KindFundingNextSettle, Venue: VenueGate,
-				Symbol: sym + "USDT", Value: nfa, Unit: fact.UnitUnixSec, Ts: time.Now(), Src: "gate_v4"})
-		}
-		if intervalSec > 0 {
-			out = append(out, fact.Fact{Kind: fact.KindFundingInterval, Venue: VenueGate,
-				Symbol: sym + "USDT", Value: intervalSec, Unit: fact.UnitSeconds, Ts: time.Now(), Src: "gate_v4"})
-		}
-	}
-	return out, nil
-}
+// BinanceFunding/GateFunding/OKXFunding REST 轮询采集器已退役（D-518 S3：
+// 三所 WS 原生流实证后删码；事实源=binance_ws_markprice/okx_ws_v5/gate_ws_futures）。
 
 func getJSON(ctx context.Context, client *http.Client, url string) (map[string]any, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)

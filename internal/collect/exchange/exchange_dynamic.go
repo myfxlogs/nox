@@ -35,11 +35,5 @@ func (c Config) effectiveSymbols() []string {
 	return out
 }
 
-// syms D-369 S2：binance 采集器符号集（env ∪ provider 动态集）。
-func (b *BinanceFunding) syms() []string { return b.cfg.effectiveSymbols() }
-
-// syms D-369 S2：gate/okx funding 符号集（env ∪ provider 动态集）。
-func (g *GateFunding) syms() []string { return g.cfg.effectiveSymbols() }
-
-// syms D-369 S2：okx funding 符号集。
-func (o *OKXFunding) syms() []string { return o.cfg.effectiveSymbols() }
+// syms D-369 S2：binance/gate/okx REST funding 采集器符号集（D-518 随类型退役删除；
+// history/WS 各类型保有自有 syms()）。
