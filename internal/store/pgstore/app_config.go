@@ -64,7 +64,7 @@ type AppConfigRow struct {
 
 // ListAppConfigRows 全列读出（管理面用；LoadAppConfig 是 boot 轻量面不动）。
 func (s *Store) ListAppConfigRows(ctx context.Context) ([]AppConfigRow, error) {
-	rows, err := s.pool.Query(ctx, `SELECT key, value, note, updated_at FROM app_config ORDER BY key`)
+	rows, err := s.pool.Query(ctx, `SELECT key, value, COALESCE(note, ''), updated_at FROM app_config ORDER BY key`)
 	if err != nil {
 		return nil, fmt.Errorf("list app config rows: %w", err)
 	}
