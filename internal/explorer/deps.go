@@ -29,7 +29,7 @@ type Store interface {
 	ExplorerStateGet(ctx context.Context, key string) (json.RawMessage, bool, error)
 	ExplorerStatePut(ctx context.Context, key string, val json.RawMessage) error
 	ExplorerProposalInsert(ctx context.Context, ps []pgstore.ExplorerProposal) (int, error)
-	ListRadarWatchlist(ctx context.Context) ([]pgstore.RadarWatchlistRow, error)
+	LoadRadarWatchlist(ctx context.Context) ([]pgstore.RadarWatchlistRow, error)
 	ListSymbolMappings(ctx context.Context, venue string) ([]pgstore.SymbolMapping, error)
 	ListPerpFundingAdmission(ctx context.Context) ([]pgstore.PerpFundingAdmissionRow, error)
 	ListAlerts(ctx context.Context, limit, offset int) ([]pgstore.Alert, error)
@@ -43,14 +43,17 @@ type Runner func(ctx context.Context, c *analyst.Client, tools analyst.ToolExecu
 
 // Deps 探矿员依赖（wire_explorer 装配；测试注入）。
 type Deps struct {
-	Store       Store
-	Client      *analyst.Client
-	Tools       analyst.ToolExecutor
-	Run         Runner           // 空=analyst.RunWithSpecs
-	Now         func() time.Time // 空=time.Now
-	Rate        *analyst.RateLimiter
-	InboxPath   string // 空=DefaultInboxPath
-	ResearchDir string // 空=DefaultResearchDir
+	Store  Store
+	Client *analyst.Client
+	Tools  analyst.ToolExecutor
+	Run    Runner           // 空=analyst.RunWithSpecs
+	Now    func() time.Time // 空=time.Now
+	Rate   *analyst.RateLimiter
+	// ResolveClient wire 注入（kbreport.ResolveClient 口径，每次触发重解析 DB 优先）；
+	// nil=直接用静态 Client 字段。
+	ResolveClient func(ctx context.Context) (*analyst.Client, error)
+	InboxPath     string // 空=DefaultInboxPath
+	ResearchDir   string // 空=DefaultResearchDir
 }
 
 func (d *Deps) fill() {

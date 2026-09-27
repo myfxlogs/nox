@@ -33,6 +33,14 @@ func Run(ctx context.Context, deps Deps, tickHook func(kind string)) {
 		if tickHook != nil {
 			tickHook(kind)
 		}
+		if deps.ResolveClient != nil {
+			c, err := deps.ResolveClient(ctx)
+			if err != nil {
+				log.Printf("[explorer] resolve client: %v", err)
+				continue
+			}
+			deps.Client = c
+		}
 		switch kind {
 		case "weekly":
 			res, err := RunWeekly(ctx, deps)

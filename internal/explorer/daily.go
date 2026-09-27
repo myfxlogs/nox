@@ -120,7 +120,7 @@ func RunDaily(ctx context.Context, deps Deps) (*DailyResult, error) {
 	for _, s2 := range newSyms {
 		known[s2] = true
 	}
-	wl, _ := deps.Store.ListRadarWatchlist(ctx)
+	wl, _ := deps.Store.LoadRadarWatchlist(ctx)
 	for _, w := range wl {
 		known[w.Symbol] = true
 	}
@@ -174,7 +174,7 @@ func RunDaily(ctx context.Context, deps Deps) (*DailyResult, error) {
 // d513DiffSymbols ②快照 diff：昨快照（explorer_state）vs 当前 watchlist 符号集。
 // 快照缺失（首跑）→ 全新=零 diff 噪声不告警形态：返回 nil 新增但仍写快照。
 func d513DiffSymbols(ctx context.Context, deps Deps, now time.Time) ([]string, error) {
-	wl, err := deps.Store.ListRadarWatchlist(ctx)
+	wl, err := deps.Store.LoadRadarWatchlist(ctx)
 	if err != nil {
 		return nil, err
 	}
