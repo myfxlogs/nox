@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"arb/internal/analyst"
+	"arb/internal/inboxfmt"
 	"arb/internal/kbreport"
 	"arb/internal/store/pgstore"
 	"gopkg.in/yaml.v3"
@@ -71,7 +72,11 @@ func GenerateWeekly(ctx context.Context, deps Deps) (string, error) {
 		deps.alert(ctx, "warn", "sysretro weekly: suggestions fenced 块未闭合（EOF 截断容忍解析）")
 	}
 	if len(suggs) > 0 {
-		if err := appendInbox(deps.InboxPath, date, "sysretro-weekly", suggs); err != nil {
+		rows := make([]inboxfmt.Row, 0, len(suggs))
+		for _, sg := range suggs {
+			rows = append(rows, inboxfmt.Row{Source: inboxfmt.SrcSysretroWeekly, Title: sg.title, Reason: sg.reason, Action: sg.action})
+		}
+		if err := inboxfmt.Append(deps.InboxPath, date, rows); err != nil {
 			return path, fmt.Errorf("append inbox: %w", err)
 		}
 	}

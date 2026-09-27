@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"arb/internal/inboxfmt"
 )
 
 // handoffBlock 装配交接面 fenced 块内容。
@@ -62,22 +64,8 @@ func blockedLine(state string) string {
 	return "(none)"
 }
 
-// inboxBacklog 收件箱积压行数（表格数据行=`| ... |`，跳表头/分隔行）。
-func inboxBacklog(inboxPath string) int {
-	data, err := os.ReadFile(inboxPath)
-	if err != nil {
-		return -1
-	}
-	n := 0
-	for _, ln := range strings.Split(string(data), "\n") {
-		ln = strings.TrimSpace(ln)
-		if strings.HasPrefix(ln, "|") && !strings.Contains(ln, "---") &&
-			!strings.Contains(ln, "| 条目 |") && !strings.Contains(ln, "| 候选 |") {
-			n++
-		}
-	}
-	return n
-}
+// inboxBacklog 收件箱未分诊行数（D-534 语义改未分诊=pending∪旧无 status 行；实现= inboxfmt.Backlog）。
+func inboxBacklog(inboxPath string) int { return inboxfmt.Backlog(inboxPath) }
 
 // gitLogOn 指定北京历日当日 commit 列表（D-510 S3：日界 +08:00）；git 不可用/非仓库 → 降级标注。
 func gitLogOn(repoDir, day string) string {

@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
 
 	"arb/internal/analyst"
 )
@@ -78,31 +77,4 @@ func parseSuggestions(aiText string) (out []suggestion, malformed bool) {
 		out = append(out, s)
 	}
 	return out, malformed
-}
-
-var inboxMu sync.Mutex
-
-// appendInbox 并发安全追加收件箱（| date | source | title | reason | action | 行）。
-func appendInbox(path, date, source string, suggs []suggestion) error {
-	var block strings.Builder
-	for _, s := range suggs {
-		fmt.Fprintf(&block, "| %s | %s | %s | %s | %s |\n",
-			date, source, cleanCell(s.title), cleanCell(s.reason), cleanCell(s.action))
-	}
-	inboxMu.Lock()
-	defer inboxMu.Unlock()
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	_, err = f.WriteString(block.String())
-	return err
-}
-
-// cleanCell 落盘表格单元格清洗（同 kbreport cleanCell 口径）。
-func cleanCell(s string) string {
-	s = strings.ReplaceAll(s, "\r", " ")
-	s = strings.ReplaceAll(s, "\n", " ")
-	return strings.ReplaceAll(s, "|", "\\|")
 }
