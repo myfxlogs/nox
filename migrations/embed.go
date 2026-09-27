@@ -279,4 +279,7 @@ var (
 
 	//go:embed 0153_radar_watchlist_canonical.sql
 	RadarWatchlistCanonicalSQL string
+
+	//go:embed 0155_idle_floor_streak.sql
+	IdleFloorStreakSQL string
 )

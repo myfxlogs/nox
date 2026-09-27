@@ -10,10 +10,11 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"sync"
+
 	"time"
 
 	"arb/internal/analyst"
+	"arb/internal/inboxfmt"
 	"arb/internal/store/pgstore"
 )
 
@@ -133,9 +134,7 @@ func parseProposals(aiText string) ([]proposal, bool) {
 	return props, unclosed
 }
 
-var symdigInboxMu sync.Mutex
-
-// appendInbox 提案进收件箱（| date | source | title | reason | action | 行，同 sysretro 口径）。
+// appendInbox 提案进收件箱（v2 行走 inboxfmt；本函数保留 conf 过滤+当日同 symbol 去重）。
 func appendInbox(path, date, source string, props []proposal) error {
 	// D-508 S13：conf=0.00 提案直接不入箱；同 symbol 当日 pending 提案已存在则抑制（收件箱去重）。
 	var kept []proposal
@@ -160,29 +159,17 @@ func appendInbox(path, date, source string, props []proposal) error {
 			}
 		}
 	}
-	var b strings.Builder
+	var rows []inboxfmt.Row
 	for _, p := range kept {
 		if existing[p.Symbol] {
 			continue
 		}
 		existing[p.Symbol] = true
-		fmt.Fprintf(&b, "| %s | %s | %s→%s@%s | %s | 人工核对后落 fin_symbol_aliases/broker_symbol_map |\n",
-			date, source, cleanCell(p.Symbol), cleanCell(p.ProposedCanonical), cleanCell(p.Venue),
-			cleanCell(fmt.Sprintf("%s conf=%.2f", p.Evidence, p.Confidence)))
+		rows = append(rows, inboxfmt.Row{
+			Source: source, Title: p.Symbol + "→" + p.ProposedCanonical + "@" + p.Venue,
+			Reason: fmt.Sprintf("%s conf=%.2f", p.Evidence, p.Confidence),
+			Action: "人工核对后落 fin_symbol_aliases/broker_symbol_map",
+		})
 	}
-	symdigInboxMu.Lock()
-	defer symdigInboxMu.Unlock()
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	_, err = f.WriteString(b.String())
-	return err
-}
-
-func cleanCell(s string) string {
-	s = strings.ReplaceAll(s, "\r", " ")
-	s = strings.ReplaceAll(s, "\n", " ")
-	return strings.ReplaceAll(s, "|", "\\|")
+	return inboxfmt.Append(path, date, rows)
 }
