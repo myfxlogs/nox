@@ -14,6 +14,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"arb/internal/safego"
@@ -65,6 +66,11 @@ type WSSpec struct {
 	ReadIdle         time.Duration
 	PingEvery        time.Duration
 	ReconnectBackoff time.Duration
+	// DataIdle 数据帧级看门狗（区别于 ReadIdle 的 ping/pong 层判死）：
+	// 控制面存活（pong 正常）但零数据帧持续超此窗 → 强制断开走重连——
+	// 补「订阅态丢失/上游静默」僵尸连接的兜底，安静行情窗由较短 pong 判死先兜，
+	// 本窗须 >> ReadIdle 才不误杀安静窗（默认 quoteWSDataIdle）。
+	DataIdle time.Duration
 }
 
 // RunWS 公共骨架入口：dial→OnConnect→InitialSubs→ping 保活→读循环→退避重连→阻塞至 ctx 取消。
@@ -139,6 +145,13 @@ func runWSOnce(ctx context.Context, spec WSSpec) error {
 	// D-507：订阅成功后设一次+pong 续期（wsKeepalive 同件，读循环不设逐读绝对读限）。
 	wsKeepalive(conn, readIdle)
 
+	dataIdle := spec.DataIdle
+	if dataIdle == 0 {
+		dataIdle = quoteWSDataIdle
+	}
+	var lastDataAt atomic.Int64             // unixnano；数据帧到达即更新，ping goroutine 判读
+	lastDataAt.Store(time.Now().UnixNano()) // 连接起点=订阅完成时刻，防握手窗误杀
+
 	pingEvery := spec.PingEvery
 	if pingEvery == 0 {
 		pingEvery = quoteWSPingEvery
@@ -152,6 +165,13 @@ func runWSOnce(ctx context.Context, spec WSSpec) error {
 			select {
 			case <-ticker.C:
 				if err := sender.SendRaw(websocket.PingMessage, nil); err != nil {
+					return
+				}
+				// 数据帧看门狗：pong 续期证明 TCP/WS 控制面活着，但数据帧
+				// 长期缺席=订阅态丢失/上游静默（readIdle 被 pong 遮蔽兜不住）——
+				// Close 使读循环报错，走既有退避重连。
+				if time.Since(time.Unix(0, lastDataAt.Load())) > dataIdle {
+					_ = conn.Close()
 					return
 				}
 				if spec.OnAliveTick != nil {
@@ -174,6 +194,7 @@ func runWSOnce(ctx context.Context, spec WSSpec) error {
 			return fmt.Errorf("read: %w", err)
 		}
 		_ = conn.SetReadDeadline(time.Now().Add(readIdle))
+		lastDataAt.Store(time.Now().UnixNano())
 		if spec.OnFrame != nil {
 			spec.OnFrame(data)
 		}

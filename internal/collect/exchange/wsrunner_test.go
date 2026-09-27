@@ -238,3 +238,26 @@ func TestWSRunner_CtxCancelStopsCandidates(t *testing.T) {
 		t.Fatalf("ctx 取消应停在首候选: %v", err)
 	}
 }
+
+// TestWSRunner_DataIdleWatchdog 数据帧看门狗：对端存活（pong 正常）但零数据帧
+// 超 DataIdle → 强制断连走重连。覆写 DataIdle/ReadIdle 缩小观察窗（读限被 pong
+// 遮蔽不触发——本测正是钉死「控制面活/数据面死」的僵尸连接兜底）。
+func TestWSRunner_DataIdleWatchdog(t *testing.T) {
+	frames := make(chan []byte, 8)
+	url, upgrades := wsRunnerServer(t, false, frames) // dead=false：回 pong 但不发数据
+	spec := wsRunnerSpec(url, frames)
+	spec.ReadIdle = 300 * time.Millisecond // pong 续期保活，读限永不触发
+	spec.PingEvery = 60 * time.Millisecond
+	spec.DataIdle = 450 * time.Millisecond // >ReadIdle：安静窗不误杀、僵尸窗必断
+	spec.ReconnectBackoff = 40 * time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go RunWS(ctx, spec)
+	deadline := time.Now().Add(3 * time.Second)
+	for upgrades.Load() < 2 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if got := upgrades.Load(); got < 2 {
+		t.Fatalf("数据缺席未被看门狗断开重连: upgrades=%d want ≥2", got)
+	}
+}

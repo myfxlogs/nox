@@ -7,6 +7,7 @@ package config
 import (
 	"log"
 	"os"
+	"slices"
 	"sort"
 )
 
@@ -25,7 +26,10 @@ func ApplyAppConfigOverlay(cfg *Config, rows map[string]string) {
 	for _, k := range keys {
 		setter, ok := appConfigKeys[k]
 		if !ok {
-			log.Printf("[config] app_config key %s not whitelisted, ignored", k)
+			// env-passthrough 键由 ApplyAppConfigEnvOverlay 处理，不算未白名单（防误报 warn）。
+			if !slices.Contains(appConfigEnvKeys, k) {
+				log.Printf("[config] app_config key %s not whitelisted, ignored", k)
+			}
 			continue
 		}
 		v := rows[k]

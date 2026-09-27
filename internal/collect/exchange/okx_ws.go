@@ -96,6 +96,12 @@ func (o *OKXWebSocket) handleMessage(ctx context.Context, data []byte, publish f
 	if msg.Event == "subscribe" || msg.Event == "channel-conn-count" {
 		return
 	}
+	// 服务端拒绝帧（error/login 失败等）必须留痕——静默吞帧=僵尸连接难查
+	// （实证：订阅被拒后 pong 续期遮读限、零日志断流 18min）。
+	if msg.Event == "error" {
+		log.Printf("[okx-ws] 服务端 error 帧: %s", data)
+		return
+	}
 	// D-509 S4：funding-rate 帧分流（fundingRate/fundingTime/nextFundingTime 三字段原生）。
 	if msg.Arg.Channel == "funding-rate" {
 		o.handleFundingRate(ctx, msg)

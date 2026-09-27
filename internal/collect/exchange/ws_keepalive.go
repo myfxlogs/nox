@@ -19,6 +19,12 @@ const (
 	quoteWSReadIdle         = 60 * time.Second // 读空闲判死窗（对齐私有流 60s 常量族）
 	quoteWSPingEvery        = 20 * time.Second // 客户端 ping 周期（不变）
 	quoteWSReconnectBackoff = 5 * time.Second  // 断线退避（不变）
+	// quoteWSDataIdle 数据帧级判死窗（WSSpec.DataIdle 默认）——须 >> ReadIdle：
+	// pong 续期会遮蔽 ReadIdle，此处专门兜「控制面活/数据面死」僵尸连接
+	// （D-5xx：mihomo 重启切流后 okx-ws 控制帧畅通但数据帧零达 18min 零日志实证）。
+	// 10min 仍远小于安静市场可容忍窗？——不，对多符号 tickers 聚合流 10min
+	// 全静默即异常；安静窗由 ReadIdle+pong 语义承接，本窗只判数据帧缺席。
+	quoteWSDataIdle = 10 * time.Minute
 )
 
 // wsKeepalive 连接期调用一次：设初始读限 + pong 到达即续期。
