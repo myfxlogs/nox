@@ -76,100 +76,45 @@ func subscribePayload(channel string, payload []string) map[string]any {
 	}
 }
 
-// subscribeChannel 写初始订阅帧（全量符号）。
-func (g *GateWebSocket) subscribeChannel(c *websocket.Conn, channel string, pairs []string) error {
-	return c.WriteJSON(subscribePayload(channel, pairs))
+// subscribeChannel 写订阅帧（全量或差集 pairs），经 Sender 单写者锁。
+func (g *GateWebSocket) subscribeChannel(s Sender, channel string, pairs []string) error {
+	return s.Send(subscribePayload(channel, pairs))
 }
 
-// runLoop 单连接重连循环。
+// runLoop 单连接重连循环——D-511 S3：骨架收编 RunWS（dial/保活/读循环/退避一处钉死），
+// 本函数只装配协议钩子（URL=构造期 wsViaProxy 过的值、header=g.header 显式供给——R4/R3）。
 func (g *GateWebSocket) runLoop(ctx context.Context, url string, channel string, handle func(context.Context, []byte, func(bus.Quote)), publish func(bus.Quote)) {
 	meter := newReconnectMeter(url, g.cfg.AlertFn)
-	for {
-		if err := g.runOnce(ctx, url, channel, handle, publish); err != nil {
-			meter.record()
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(g.reconnectBackoff):
-				log.Printf("[gate-ws] %s reconnect after error: %v", url, err)
+	// subscribed 差集表为每连接状态——OnConnect 每拨号重置（重连全量重订阅语义不变）。
+	var subscribed map[string]bool
+	RunWS(ctx, WSSpec{
+		Name: "gate-ws:" + url, URL: url, Dialer: g.dialer, Header: g.header,
+		ReadIdle: g.readIdle, PingEvery: g.pingEvery, ReconnectBackoff: g.reconnectBackoff,
+		OnConnect: func() { subscribed = map[string]bool{} },
+		InitialSubs: func() []any {
+			pairs := pairsD369(g.syms(), "_USDT")
+			for _, p := range pairs {
+				subscribed[p] = true
 			}
-		}
-	}
-}
-
-// runOnce 单次连接：dial → subscribe（全量符号）→ ping 保活+差集增量订阅 → 读循环。
-// D-369 S2：provider 符号集变化 → 对新符号差集发一次 subscribe payload（服务端拒则读
-// 报错走 runLoop 重连 fallback）。
-func (g *GateWebSocket) runOnce(ctx context.Context, url string, channel string, handle func(context.Context, []byte, func(bus.Quote)), publish func(bus.Quote)) error {
-	conn, _, err := g.dialer.DialContext(ctx, url, g.header)
-	if err != nil {
-		return fmt.Errorf("dial: %w", err)
-	}
-	defer conn.Close()
-
-	subscribed := map[string]bool{}
-	subscribeAll := func() error {
-		pairs := pairsD369(g.syms(), "_USDT")
-		if err := g.subscribeChannel(conn, channel, pairs); err != nil {
-			return err
-		}
-		for _, p := range pairs {
-			subscribed[p] = true
-		}
-		return nil
-	}
-	if err := subscribeAll(); err != nil {
-		return fmt.Errorf("subscribe: %w", err)
-	}
-	// D-507：读限保活收编——订阅成功后设一次+pong 续期（私有流先例形态）；
-	// 读循环不再逐读设绝对读限（安静行情窗 pong 不触读循环会误断=重连风暴病灶）。
-	wsKeepalive(conn, g.readIdle)
-
-	done := make(chan struct{})
-	safego.Go("gate_ws:ping", func() {
-		ticker := time.NewTicker(g.pingEvery)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-					return
+			return []any{subscribePayload(channel, pairs)}
+		},
+		// D-369 S2：provider 符号集变化 → ping tick 差集补订（新符号 only；服务端拒则读报错走重连）
+		OnAliveTick: func(s Sender) {
+			var newPairs []string
+			for _, p := range pairsD369(g.syms(), "_USDT") {
+				if !subscribed[p] {
+					newPairs = append(newPairs, p)
 				}
-				// D-369 S2：差集增量订阅（新符号 only；差集为空不动）
-				var newPairs []string
-				for _, p := range pairsD369(g.syms(), "_USDT") {
-					if !subscribed[p] {
-						newPairs = append(newPairs, p)
-					}
-				}
-				if len(newPairs) > 0 {
-					if err := g.subscribeChannel(conn, channel, newPairs); err == nil {
-						for _, p := range newPairs {
-							subscribed[p] = true
-						}
-					}
-				}
-			case <-done:
-				return
 			}
-		}
+			if len(newPairs) > 0 && g.subscribeChannel(s, channel, newPairs) == nil {
+				for _, p := range newPairs {
+					subscribed[p] = true
+				}
+			}
+		},
+		OnFrame:     func(data []byte) { handle(ctx, data, publish) },
+		OnReconnect: meter.record,
 	})
-
-	for {
-		select {
-		case <-ctx.Done():
-			close(done)
-			return nil
-		default:
-		}
-
-		_, data, err := conn.ReadMessage()
-		if err != nil {
-			close(done)
-			return fmt.Errorf("read: %w", err)
-		}
-		handle(ctx, data, publish)
-	}
 }
 
 // gateSpotUpdate spot.tickers 推送：result 为单对象，含 best bid/ask。

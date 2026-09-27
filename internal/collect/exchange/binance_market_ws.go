@@ -35,8 +35,6 @@ type BinanceMarketWS struct {
 	dialer  *websocket.Dialer
 	header  http.Header
 	now     func() time.Time
-	// writeMu gorilla conn 单写者契约：ping goroutine 与 SUBSCRIBE 写共用 conn。
-	writeMu sync.Mutex
 	// emitFacts D-509：funding fact 发射口（FactEmitter 去重节流；nil=不 emit）。
 	emitFacts func(ctx context.Context, fs []fact.Fact) error
 	// intervals D-509 S2：funding 周期缓存（fundingInfo 真值；nil=回退 3/天）。
@@ -81,91 +79,47 @@ func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
 	wg.Wait()
 }
 
-// runLoop 单连接重连循环（5s 退避，mirror gate_ws.runLoop）。
+// runLoop 单连接重连循环——D-511 S4：骨架收编 RunWS，本函数只装配协议钩子
+// （分批 SUBSCRIBE 帧集/ack 分流/markPrice→bookTicker 分发/显式 token 头）。
 func (b *BinanceMarketWS) runLoop(ctx context.Context, url, venueType string, publish func(bus.Quote)) {
 	meter := newReconnectMeter(venueType+":"+url, b.cfg.AlertFn) // D-507 S2 扩：同款风暴告警
-	for {
-		if err := b.runOnce(ctx, url, venueType, publish); err != nil {
-			meter.record()
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(5 * time.Second):
-				log.Printf("[binance-mkt-ws] %s reconnect after error: %v", venueType, err)
-			}
-		}
-	}
-}
-
-// runOnce 单次连接：dial（带 token 头）→ SUBSCRIBE 全量符号 → 等 ack → 读循环分发。
-func (b *BinanceMarketWS) runOnce(ctx context.Context, url, venueType string, publish func(bus.Quote)) error {
-	conn, _, err := b.dialer.DialContext(ctx, url, b.header)
-	if err != nil {
-		return fmt.Errorf("dial: %w", err)
-	}
-	defer conn.Close()
-
-	// 符号源与原 ticker 同源（effectiveSymbols：env ∪ SymProvider
-	// 动态 watchlist）；watchlist 新增符号随下次重连订阅生效，60s REST 兜底补窗。
-	syms := b.cfg.effectiveSymbols()
-	params := make([]string, 0, len(syms)*2)
-	for _, sym := range syms {
-		params = append(params, strings.ToLower(sym+"usdt")+"@bookTicker")
-		if venueType == "perp" {
-			// D-509 S2：markPrice 同连接同帧订阅（funding 是 perp 语义，spot 连接不加）。
-			params = append(params, strings.ToLower(sym+"usdt")+"@markPrice")
-		}
-	}
-	// D-509 merge 面修复：单帧 SUBSCRIBE 超服务端解析上限（实拍 1008 + "Invalid JSON …column 4096"）
-	// → 分批多帧订阅（同连接合法，binance 逐帧回 ack）。
-	for i, id := 0, 1; i < len(params); i += binanceMktSubChunk {
-		end := min(i+binanceMktSubChunk, len(params))
-		if err := conn.WriteJSON(map[string]any{
-			"method": "SUBSCRIBE", "params": params[i:end], "id": id,
-		}); err != nil {
-			return fmt.Errorf("subscribe: %w", err)
-		}
-		id++
-	}
-
-	_ = conn.SetReadDeadline(b.now().Add(binanceMktReadIdle))
-	conn.SetPongHandler(func(string) error {
-		return conn.SetReadDeadline(b.now().Add(binanceMktReadIdle))
-	})
-	done := make(chan struct{})
-	defer close(done)
-	safego.Go("binance_market_ws:ping", func() {
-		ticker := time.NewTicker(20 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				b.writeMu.Lock()
-				err := conn.WriteMessage(websocket.PingMessage, nil)
-				b.writeMu.Unlock()
-				if err != nil {
-					return
+	RunWS(ctx, WSSpec{
+		Name: "binance-mkt-ws:" + venueType, URL: url, Dialer: b.dialer, Header: b.header,
+		InitialSubs: func() []any {
+			// 符号源与原 ticker 同源（effectiveSymbols：env ∪ SymProvider
+			// 动态 watchlist）；watchlist 新增符号随下次重连订阅生效，60s REST 兜底补窗。
+			syms := b.cfg.effectiveSymbols()
+			params := make([]string, 0, len(syms)*2)
+			for _, sym := range syms {
+				params = append(params, strings.ToLower(sym+"usdt")+"@bookTicker")
+				if venueType == "perp" {
+					// D-509 S2：markPrice 同连接同帧订阅（funding 是 perp 语义，spot 连接不加）。
+					params = append(params, strings.ToLower(sym+"usdt")+"@markPrice")
 				}
-			case <-done:
-				return
 			}
-		}
+			// D-509 merge 面修复：单帧 SUBSCRIBE 超服务端解析上限（实拍 1008 +
+			// "Invalid JSON …column 4096"）→ 分批多帧订阅（RunWS 逐帧发送语义已兼容）。
+			var frames []any
+			for i, id := 0, 1; i < len(params); i += binanceMktSubChunk {
+				end := min(i+binanceMktSubChunk, len(params))
+				frames = append(frames, map[string]any{
+					"method": "SUBSCRIBE", "params": params[i:end], "id": id,
+				})
+				id++
+			}
+			return frames
+		},
+		OnFrame: func(data []byte) {
+			if isSubscribeAck(data) {
+				return // {result:null,id:1} ack；{result:…,error} 已在 isSubscribeAck 记日志
+			}
+			if venueType == "perp" && b.handleMarkPrice(ctx, data) {
+				return // markPriceUpdate 帧已消费
+			}
+			b.handleBookTicker(data, venueType, publish)
+		},
+		OnReconnect: meter.record,
 	})
-
-	for {
-		_, data, err := conn.ReadMessage()
-		if err != nil {
-			return fmt.Errorf("read: %w", err)
-		}
-		_ = conn.SetReadDeadline(b.now().Add(binanceMktReadIdle))
-		if isSubscribeAck(data) {
-			continue // {result:null,id:1} ack；{result:…,error} 已在 isSubscribeAck 记日志
-		}
-		if venueType == "perp" && b.handleMarkPrice(ctx, data) {
-			continue // markPriceUpdate 帧已消费
-		}
-		b.handleBookTicker(data, venueType, publish)
-	}
 }
 
 // bookTickerFrame 双形制统一投影（perp 带 e/T/E 包裹、spot 裸 u/s/b/B/a/A——取交集字段）。
@@ -290,9 +244,6 @@ func isSubscribeAck(data []byte) bool {
 	}
 	return probe.ID != 0
 }
-
-// binanceMktReadIdle 读空闲判定窗（pong/push 均续期；超时→runLoop 重连）。
-const binanceMktReadIdle = 60 * time.Second
 
 // binanceMktSubChunk SUBSCRIBE 单帧参数上限（服务端单帧解析上限约 4KB，实拍 column 4096 截断）。
 const binanceMktSubChunk = 120

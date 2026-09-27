@@ -13,7 +13,6 @@ import (
 
 	"arb/internal/bus"
 	"arb/internal/fact"
-	"arb/internal/safego"
 
 	"github.com/gorilla/websocket"
 )
@@ -45,30 +44,12 @@ func NewOKXWebSocket(cfg Config) *OKXWebSocket {
 }
 
 // Run 连接 OKX WS 并持续推送报价到 publish 回调。阻塞至 ctx 取消。
+// D-511 S2：骨架收编 RunWS——dial/保活/读循环/退避一处钉死，本文件只留协议钩子。
 func (o *OKXWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 	meter := newReconnectMeter(o.wsURL, o.cfg.AlertFn)
-	for {
-		if err := o.runOnce(ctx, publish); err != nil {
-			meter.record()
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(o.reconnectBackoff):
-				log.Printf("[okx-ws] reconnect after error: %v", err)
-			}
-		}
-	}
-}
-
-func (o *OKXWebSocket) runOnce(ctx context.Context, publish func(bus.Quote)) error {
-	conn, _, err := o.dialer.DialContext(ctx, o.wsURL, o.header)
-	if err != nil {
-		return fmt.Errorf("dial: %w", err)
-	}
-	defer conn.Close()
-
+	// subscribed 差集表为每连接状态——OnConnect 每拨号重置（重连全量重订阅语义不变）。
+	var subscribed map[string]bool
 	// 订阅 spot + perp tickers（D-369 S2：subscribed 集跟踪，ping 期差集增量订阅）
-	subscribed := map[string]bool{}
 	subscribeArgs := func(syms []string) []map[string]string {
 		var args []map[string]string
 		for _, sym := range syms {
@@ -89,49 +70,22 @@ func (o *OKXWebSocket) runOnce(ctx context.Context, publish func(bus.Quote)) err
 		}
 		return args
 	}
-	sub := map[string]any{"op": "subscribe", "args": subscribeArgs(o.syms())}
-	if err := conn.WriteJSON(sub); err != nil {
-		return fmt.Errorf("subscribe: %w", err)
-	}
-	// D-507：读限保活收编——订阅成功后设一次+pong 续期（私有流先例形态）；
-	// 读循环不再逐读设绝对读限（安静行情窗 pong 不触读循环会误断=重连风暴病灶）。
-	wsKeepalive(conn, o.readIdle)
-
-	// 启动 ping 保活 + 差集增量订阅（provider 符号集变化时；服务端拒则读报错走重连）
-	done := make(chan struct{})
-	safego.Go("okx_ws:ping", func() {
-		ticker := time.NewTicker(o.pingEvery)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-					return
-				}
-				if args := subscribeArgs(o.syms()); len(args) > 0 {
-					_ = conn.WriteJSON(map[string]any{"op": "subscribe", "args": args})
-				}
-			case <-done:
-				return
+	RunWS(ctx, WSSpec{
+		Name: "okx-ws", URL: o.wsURL, Dialer: o.dialer, Header: o.header,
+		ReadIdle: o.readIdle, PingEvery: o.pingEvery, ReconnectBackoff: o.reconnectBackoff,
+		OnConnect: func() { subscribed = map[string]bool{} },
+		InitialSubs: func() []any {
+			return []any{map[string]any{"op": "subscribe", "args": subscribeArgs(o.syms())}}
+		},
+		// D-369 S2：provider 符号集变化 → ping tick 差集补订（服务端拒则读报错走重连）
+		OnAliveTick: func(s Sender) {
+			if args := subscribeArgs(o.syms()); len(args) > 0 {
+				_ = s.Send(map[string]any{"op": "subscribe", "args": args})
 			}
-		}
+		},
+		OnFrame:     func(data []byte) { o.handleMessage(ctx, data, publish) },
+		OnReconnect: meter.record,
 	})
-
-	for {
-		select {
-		case <-ctx.Done():
-			close(done)
-			return nil
-		default:
-		}
-
-		_, data, err := conn.ReadMessage()
-		if err != nil {
-			close(done)
-			return fmt.Errorf("read: %w", err)
-		}
-		o.handleMessage(ctx, data, publish)
-	}
 }
 
 func (o *OKXWebSocket) handleMessage(ctx context.Context, data []byte, publish func(bus.Quote)) {
