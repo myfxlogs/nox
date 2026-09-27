@@ -75,8 +75,11 @@ func d369RouteFundingEvents(ctx context.Context, st radarStore, rows []normRow,
 		if ev.row.HedgeCanonical == "" {
 			continue // leg=无：结构性不可执行，不入 watchlist（D-369 D1）
 		}
-		if err := st.UpsertRadarWatchlist(ctx, ev.row.Symbol, []string{ev.row.Venue}, "band_with_leg"); err != nil {
-			log.Printf("universe-radar: watchlist upsert %s: %v", ev.row.Symbol, err)
+		// D-532 S2：写 canonical 基名（ev.row.Canonical=canonicalOf(normBase)，与 divergence
+		// 写侧同方言；HedgeCanonical=对冲腿 canonical 不可作本行 symbol）。原 ev.row.Symbol
+		// 为 venue 原生形态（-USDT-SWAP/_USDT/USDT 尾缀混写已致方言分裂）。
+		if err := st.UpsertRadarWatchlist(ctx, ev.row.Canonical, []string{ev.row.Venue}, "band_with_leg"); err != nil {
+			log.Printf("universe-radar: watchlist upsert %s: %v", ev.row.Canonical, err)
 		}
 	}
 }
