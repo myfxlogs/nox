@@ -2,6 +2,7 @@ package exchange
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -25,5 +26,21 @@ func TestShardSymbols(t *testing.T) {
 	}
 	if len(shardSymbols([]string{"BTC"}, 1)) != 0 {
 		t.Fatal("单元素 shard1 应空")
+	}
+}
+
+// D-531 A1：WSSpec.Name 分片——两 bookTicker shard 名不同，shard<0 保原名。
+func TestD531_NameShard(t *testing.T) {
+	a, b := mktWSName("perp", "bookTicker", 0), mktWSName("perp", "bookTicker", 1)
+	if a == b || !strings.HasSuffix(a, ":0") || !strings.HasSuffix(b, ":1") {
+		t.Fatalf("shard 名应不同: %q vs %q", a, b)
+	}
+	if n := mktWSName("perp", "markPrice", -1); n != "binance-mkt-ws:perp:markPrice" {
+		t.Fatalf("shard<0 应保原名: %q", n)
+	}
+	// 与生产二半分桶同规校验：sort 后前半 ceil —— probe shardOf 同输入同输出注释约定。
+	sy := []string{"C", "A", "B"}
+	if got := shardSymbols(sy, 0); slices.Equal(got, []string{"A", "B"}) == false {
+		t.Fatalf("shard0 前半: %v", got)
 	}
 }

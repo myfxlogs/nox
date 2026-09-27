@@ -118,7 +118,7 @@ func (b *BinanceMarketWS) runLoop(ctx context.Context, urls []string, venueType,
 	}
 	meter := newReconnectMeter(meterKey, b.cfg.AlertFn) // D-507 S2 扩：同款风暴告警
 	RunWS(ctx, WSSpec{
-		Name: "binance-mkt-ws:" + venueType + ":" + kind, URLs: urls, Dialer: b.dialer, Header: b.header,
+		Name: mktWSName(venueType, kind, shard), URLs: urls, Dialer: b.dialer, Header: b.header,
 		InitialSubs: func() []any {
 			// 符号源与原 ticker 同源（effectiveSymbols：env ∪ SymProvider
 			// 动态 watchlist）；watchlist 新增符号随下次重连订阅生效，60s REST 兜底补窗。
@@ -292,6 +292,15 @@ func (b *BinanceMarketWS) SetFactEmit(fn func(ctx context.Context, fs []fact.Fac
 
 // SetFundingIntervals 注入 funding 周期缓存（D-301a boot 真值；BinanceFundingHistory 同源）。
 func (b *BinanceMarketWS) SetFundingIntervals(c *FundingIntervalCache) { b.intervals = c }
+
+// mktWSName D-531 S1：日志身份含 shard 序号（shard<0 保原名），判别哪条连接被杀。
+func mktWSName(venueType, kind string, shard int) string {
+	name := "binance-mkt-ws:" + venueType + ":" + kind
+	if shard >= 0 {
+		name += ":" + strconv.Itoa(shard)
+	}
+	return name
+}
 
 // shardSymbols D-529：符号集排序后对半分桶（确定性——同输入同分桶，重连订阅集稳定）。
 // shard∈{0,1}；0 取前半（奇数时多一个），1 取后半。
