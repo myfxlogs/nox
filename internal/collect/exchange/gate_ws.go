@@ -30,22 +30,25 @@ const (
 
 // GateWebSocket 订阅 Gate spot + futures tickers。
 type GateWebSocket struct {
-	cfg    Config
-	dialer websocket.Dialer
+	cfg        Config
+	dialer     *websocket.Dialer
+	header     http.Header // 代理模式=X-Proxy-Token 握口头；直连=nil
+	spotURL    string      // 默认 gateSpotWSURL
+	futuresURL string      // 默认 gateFuturesWSURL
 	// D-507：时距字段化（默认=ws_keepalive.go 常量族；测试覆写缩小观察窗）。
 	readIdle         time.Duration
 	pingEvery        time.Duration
 	reconnectBackoff time.Duration
 }
 
-// NewGateWebSocket 创建 Gate WS 采集器。
+// NewGateWebSocket 创建 Gate WS 采集器（ARB_CEX_WS_BASE 置位→经 cex-proxy /gatespotws 与 /v4/ws 前缀）。
 func NewGateWebSocket(cfg Config) *GateWebSocket {
-	d := websocket.Dialer{
-		Proxy:            http.ProxyFromEnvironment,
-		HandshakeTimeout: 10 * time.Second,
-	}
-	return &GateWebSocket{cfg: cfg, dialer: d,
-		readIdle: quoteWSReadIdle, pingEvery: quoteWSPingEvery, reconnectBackoff: quoteWSReconnectBackoff}
+	proxied := cexWSBase() != ""
+	d, h := wsDialer(proxied)
+	return &GateWebSocket{cfg: cfg, dialer: d, header: h,
+		spotURL:    wsViaProxy("/gatespotws/ws/v4/", gateSpotWSURL),
+		futuresURL: wsViaProxy("/v4/ws/usdt", gateFuturesWSURL),
+		readIdle:   quoteWSReadIdle, pingEvery: quoteWSPingEvery, reconnectBackoff: quoteWSReconnectBackoff}
 }
 
 // Run 连接 Gate spot + futures WS 并持续推送报价到 publish。阻塞至 ctx 取消。
@@ -54,11 +57,11 @@ func (g *GateWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 	wg.Add(2)
 	safego.Go("gate_ws:spot-loop", func() {
 		defer wg.Done()
-		g.runLoop(ctx, gateSpotWSURL, "spot.tickers", g.handleSpot, publish)
+		g.runLoop(ctx, g.spotURL, "spot.tickers", g.handleSpot, publish)
 	})
 	safego.Go("gate_ws:futures-loop", func() {
 		defer wg.Done()
-		g.runLoop(ctx, gateFuturesWSURL, "futures.tickers", g.handleFutures, publish)
+		g.runLoop(ctx, g.futuresURL, "futures.tickers", g.handleFutures, publish)
 	})
 	wg.Wait()
 }
@@ -71,15 +74,6 @@ func subscribePayload(channel string, payload []string) map[string]any {
 		"event":   "subscribe",
 		"payload": payload,
 	}
-}
-
-// spotSymbols 返回 spot 交易对（BTC_USDT）。
-func (g *GateWebSocket) spotSymbols() []string {
-	out := make([]string, 0, len(g.syms()))
-	for _, s := range g.syms() {
-		out = append(out, s+"_USDT")
-	}
-	return out
 }
 
 // subscribeChannel 写初始订阅帧（全量符号）。
@@ -107,7 +101,7 @@ func (g *GateWebSocket) runLoop(ctx context.Context, url string, channel string,
 // D-369 S2：provider 符号集变化 → 对新符号差集发一次 subscribe payload（服务端拒则读
 // 报错走 runLoop 重连 fallback）。
 func (g *GateWebSocket) runOnce(ctx context.Context, url string, channel string, handle func([]byte, func(bus.Quote)), publish func(bus.Quote)) error {
-	conn, _, err := g.dialer.DialContext(ctx, url, nil)
+	conn, _, err := g.dialer.DialContext(ctx, url, g.header)
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
 	}

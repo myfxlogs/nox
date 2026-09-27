@@ -56,18 +56,20 @@ type OKXPrivateHooks struct {
 // OKXPrivateWS OKX 私有 channel 采集器（D-469a 扩四频道：account/balance_and_position/
 // positions/orders，args 形制 S0 真户实证）。
 type OKXPrivateWS struct {
-	apiKey     string
-	apiSecret  string
-	passphrase string
-	simulated  bool
-	sink       VenueSnapshotSink
-	venueKey   string
-	events     PrivateEventSink
-	orderCache *OrderEventCache
-	posCache   *PositionEventCache
-	hooks      OKXPrivateHooks
-	dialer     websocket.Dialer
-	now        func() time.Time
+	apiKey      string
+	apiSecret   string
+	passphrase  string
+	simulated   bool
+	sink        VenueSnapshotSink
+	venueKey    string
+	events      PrivateEventSink
+	orderCache  *OrderEventCache
+	posCache    *PositionEventCache
+	hooks       OKXPrivateHooks
+	dialer      *websocket.Dialer
+	proxyHeader http.Header // 代理模式=X-Proxy-Token 握口头；直连=nil
+	wsURL       string      // 默认 okxPrivateWSURL（ARB_CEX_WS_BASE 置位→经 cex-proxy /okxws）
+	now         func() time.Time
 	// ctValFor D-477 S3（GAP-B4）：okx 合约面值解析器注入——构造点经 resolveExchangeBaseURL
 	// 取与 executor 同一 baseURL 源（离线/代理拓扑下不再双源分叉）。nil=跳过换算保持张数+warn。
 	ctValFor func(ctx context.Context, instID string) (float64, error)
@@ -77,14 +79,14 @@ type OKXPrivateWS struct {
 // venueKey=撞键归一键（reconcile.CexVenueKey 同源，posCache/orderCache 键）；
 // events=审计表写口（nil 安全）；hooks nil 安全跳过。
 func NewOKXPrivateWS(apiKey, apiSecret, passphrase string, simulated bool, sink VenueSnapshotSink, venueKey string, events PrivateEventSink, oc *OrderEventCache, pc *PositionEventCache, hooks OKXPrivateHooks) *OKXPrivateWS {
+	proxied := cexWSBase() != ""
+	d, h := wsDialer(proxied)
 	return &OKXPrivateWS{
 		apiKey: apiKey, apiSecret: apiSecret, passphrase: passphrase, simulated: simulated,
 		sink: sink, venueKey: venueKey, events: events, orderCache: oc, posCache: pc, hooks: hooks,
-		dialer: websocket.Dialer{
-			Proxy:            http.ProxyFromEnvironment,
-			HandshakeTimeout: 10 * time.Second,
-		},
-		now: time.Now,
+		dialer: d, proxyHeader: h,
+		wsURL: wsViaProxy("/okxws/ws/v5/private", okxPrivateWSURL),
+		now:   time.Now,
 	}
 }
 
@@ -108,12 +110,15 @@ func (o *OKXPrivateWS) Run(ctx context.Context) {
 }
 
 func (o *OKXPrivateWS) runOnce(ctx context.Context) error {
-	header := http.Header{}
+	header := o.proxyHeader.Clone()
 	if o.simulated {
 		// 模拟盘：与 REST 同语义（demo key 对实盘域名带 x-simulated-trading:1，D-054）。
+		if header == nil {
+			header = http.Header{}
+		}
 		header.Set("x-simulated-trading", "1")
 	}
-	conn, _, err := o.dialer.DialContext(ctx, okxPrivateWSURL, header)
+	conn, _, err := o.dialer.DialContext(ctx, o.wsURL, header)
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
 	}

@@ -23,21 +23,21 @@ const okxPublicWSURL = "wss://ws.okx.com:8443/ws/v5/public"
 // OKXWebSocket 订阅 OKX tickers 频道（spot + perp）。
 type OKXWebSocket struct {
 	cfg    Config
-	dialer websocket.Dialer
-	wsURL  string // 默认 okxPublicWSURL；测试覆写指向 fake server
+	dialer *websocket.Dialer
+	header http.Header // 代理模式=X-Proxy-Token 握口头；直连=nil
+	wsURL  string      // 默认 okxPublicWSURL；测试覆写指向 fake server
 	// D-507：时距字段化（默认=ws_keepalive.go 常量族；测试覆写缩小观察窗）。
 	readIdle         time.Duration
 	pingEvery        time.Duration
 	reconnectBackoff time.Duration
 }
 
-// NewOKXWebSocket 创建 OKX WS 采集器。
+// NewOKXWebSocket 创建 OKX WS 采集器（ARB_CEX_WS_BASE 置位→经 cex-proxy /okxws 前缀）。
 func NewOKXWebSocket(cfg Config) *OKXWebSocket {
-	d := websocket.Dialer{
-		Proxy:            http.ProxyFromEnvironment,
-		HandshakeTimeout: 10 * time.Second,
-	}
-	return &OKXWebSocket{cfg: cfg, dialer: d, wsURL: okxPublicWSURL,
+	proxied := cexWSBase() != ""
+	d, h := wsDialer(proxied)
+	return &OKXWebSocket{cfg: cfg, dialer: d, header: h,
+		wsURL:    wsViaProxy("/okxws/ws/v5/public", okxPublicWSURL),
 		readIdle: quoteWSReadIdle, pingEvery: quoteWSPingEvery, reconnectBackoff: quoteWSReconnectBackoff}
 }
 
@@ -58,7 +58,7 @@ func (o *OKXWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 }
 
 func (o *OKXWebSocket) runOnce(ctx context.Context, publish func(bus.Quote)) error {
-	conn, _, err := o.dialer.DialContext(ctx, o.wsURL, nil)
+	conn, _, err := o.dialer.DialContext(ctx, o.wsURL, o.header)
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
 	}
