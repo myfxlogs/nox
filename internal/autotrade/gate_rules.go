@@ -19,7 +19,8 @@ func (g *Gate) comboAllowGate(ctx context.Context, intent *TradeIntent, activePo
 				log.Printf("[autotrade] WARN position %d notional_usd NULL (backfill missing?) counted as 0", p.ID)
 			}
 		}
-		cv := comboAllowVerdict(g.cfg.SwapArbAllowCombos, g.cfg.SwapArbDenyCombos, g.cfg.SwapArbAutoAllow, g.cfg.MaxActiveCombos, g.cfg.SwapArbMaxGrossExposure, *intent, activePositions)
+		allowSpecs, denySpecs := g.swapArbLists() // D-515 S5：表热读快照（带外 SQL 改行 ≤60s 生效）
+		cv := comboAllowVerdict(allowSpecs, denySpecs, g.cfg.SwapArbAutoAllow, g.cfg.MaxActiveCombos, g.cfg.SwapArbMaxGrossExposure, *intent, activePositions)
 		if !cv.Pass {
 			g.rejectLog(ctx, *intent, cv.Reason, false)
 			return GateResult{Status: "REJECTED", Reason: cv.Reason}, true

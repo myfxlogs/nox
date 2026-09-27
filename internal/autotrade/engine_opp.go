@@ -72,15 +72,15 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 	// D-159 W1a R1 + D-168 自动准入：SWAPARB 发现层组合过滤。
 	// autoAllow=true：跳过白名单过滤，所有组合产 intent 到 gate 层（由门禁栈兜底）。
 	// autoAllow=false：白名单外组合静默过滤（不产 intent 不落 REJECTED），空 allowlist 不过滤（gate 层 fail-closed）。
-	if opp.Type == "SWAPARB" && !e.cfg.SwapArbAutoAllow && len(e.cfg.SwapArbAllowCombos) > 0 {
-		if exec.MatchComboAllow(e.cfg.SwapArbAllowCombos, opp.Canonical, opp.VenueBuy, opp.VenueSell) == nil {
+	if opp.Type == "SWAPARB" && !e.cfg.SwapArbAutoAllow && len(e.swapArbAllowList()) > 0 {
+		if exec.MatchComboAllow(e.swapArbAllowList(), opp.Canonical, opp.VenueBuy, opp.VenueSell) == nil {
 			log.Printf("[autotrade] skip %s: SWAPARB combo not in allowlist (%s %s×%s)", opp.ID, opp.Canonical, opp.VenueBuy, opp.VenueSell)
 			return
 		}
 	}
 	// D-168 黑名单：发现层静默过滤（deny 组合不产 intent）
-	if opp.Type == "SWAPARB" && len(e.cfg.SwapArbDenyCombos) > 0 {
-		if exec.MatchComboAllow(e.cfg.SwapArbDenyCombos, opp.Canonical, opp.VenueBuy, opp.VenueSell) != nil {
+	if opp.Type == "SWAPARB" && len(e.swapArbDenyList()) > 0 {
+		if exec.MatchComboAllow(e.swapArbDenyList(), opp.Canonical, opp.VenueBuy, opp.VenueSell) != nil {
 			log.Printf("[autotrade] skip %s: SWAPARB combo in denylist (%s %s×%s)", opp.ID, opp.Canonical, opp.VenueBuy, opp.VenueSell)
 			return
 		}

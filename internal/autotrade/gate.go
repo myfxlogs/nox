@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"arb/internal/combo"
@@ -14,8 +15,7 @@ import (
 )
 
 // Gate 统一开仓门禁（D-072 §3.1）。三 goroutine 串行化。
-// D-080 R1：防重改 DB 实时派生——删内存 openCombos 集，每次 Submit 实时查 ListActivePositions
-// 派生组合键匹配。治手动路径旁路（service.go 直接调 pipeline.Execute 不经 gate 的开仓也能被防重）。
+// D-080 R1：防重改 DB 实时派生——每次 Submit 实时查 ListActivePositions 派生组合键（治手动旁路）。
 type Gate struct {
 	mu    sync.Mutex
 	store *pgstore.Store
@@ -32,6 +32,7 @@ type Gate struct {
 	// autotrade_log 全量审计不受节流影响）。
 	lastMarginWarn   map[string]time.Time
 	lastMarginWarnMu sync.Mutex
+	swapArb          *atomic.Pointer[swapArbComboSnapshot] // D-515 S5：表热读快照共享指针（nil=回退 cfg）
 }
 
 // NewGate 创建门禁。

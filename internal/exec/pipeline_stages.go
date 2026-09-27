@@ -35,8 +35,16 @@ func (p *Pipeline) SetFxResolver(r FxResolver) { p.fxResolver = r }
 // SetSwapArbComboAllow 注入 SWAPARB 精确组合门禁 allowlist + notionalUSD（D-159 W1a R1 S2.3）。
 // nil/空 = 未接线（gate 层 + dashboard 手动入口兜底，pipeline 不重复检查）。
 func (p *Pipeline) SetSwapArbComboAllow(allow []ComboAllowSpec, notionalUSD float64) {
-	p.swapArbComboAllow = allow
+	p.swapArbComboAllow.Store(&allow) // D-515 S5：热刷新写侧（同 xassetAllow 模式）
 	p.notionalUSD = notionalUSD
+}
+
+// swapArbAllowSpecs 热读读侧（nil=未接线——gate 层 fail-closed 兜底语义不动）。
+func (p *Pipeline) swapArbAllowSpecs() []ComboAllowSpec {
+	if v := p.swapArbComboAllow.Load(); v != nil {
+		return *v
+	}
+	return nil
 }
 
 // SetXAssetComboAllow 注入 XASSET_CARRY 精确组合门禁 allowlist（D-311 S6）。
@@ -114,7 +122,7 @@ func (p *Pipeline) checkSwapArbComboAllow(ctx context.Context, opportunityID str
 	if venueBuy == "" || venueSell == "" {
 		return fmt.Errorf("%w: legs missing BUY/SELL venue for %q (fail-closed)", ErrComboNotAllowed, opportunityID)
 	}
-	spec := MatchComboAllow(p.swapArbComboAllow, canonical, venueBuy, venueSell)
+	spec := MatchComboAllow(p.swapArbAllowSpecs(), canonical, venueBuy, venueSell)
 	if spec == nil {
 		return fmt.Errorf("%w: %s %s×%s", ErrComboNotAllowed, canonical, venueBuy, venueSell)
 	}
@@ -245,3 +253,8 @@ func (p *Pipeline) checkXAssetComboAllow(ctx context.Context, opportunityID stri
 
 // XAssetAllowSpecs D-403 R2：白名单快照公开读口（扇出后核对/测试用；语义同内部读侧）。
 func (p *Pipeline) XAssetAllowSpecs() []XAssetComboAllowSpec { return p.xassetAllowSpecs() }
+
+// ReloadSwapArbComboAllow D-515 S5：表化热刷新写侧（整体替换快照；notionalUSD 不动）。
+func (p *Pipeline) ReloadSwapArbComboAllow(allow []ComboAllowSpec) {
+	p.swapArbComboAllow.Store(&allow)
+}

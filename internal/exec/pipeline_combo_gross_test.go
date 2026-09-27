@@ -3,6 +3,7 @@ package exec
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -38,7 +39,7 @@ func TestCheckSwapArbComboAllow_GrossRealNotional(t *testing.T) {
 
 	// case 1: CS 缺失 → fail-closed
 	p := &Pipeline{
-		swapArbComboAllow: allow,
+		swapArbComboAllow: testSwapArbSnap(allow),
 		csResolver:        &fakeCSResolver{sizes: map[string]float64{}}, // 无 CS
 		fxResolver:        fakeFxResolver{rates: map[string]float64{"USD": 1}, ok: true},
 	}
@@ -57,7 +58,7 @@ func TestCheckSwapArbComboAllow_GrossRealNotional(t *testing.T) {
 		{Canonical: "XAUJPY", VenueLong: "A:mt5", VenueShort: "B:mt5", MaxGrossExposureUSD: 10000},
 	}
 	p = &Pipeline{
-		swapArbComboAllow: jpyAllow,
+		swapArbComboAllow: testSwapArbSnap(jpyAllow),
 		csResolver:        &fakeCSResolver{sizes: map[string]float64{"A:mt5:XAUJPY": 100, "B:mt5:XAUJPY": 100}},
 		fxResolver:        fakeFxResolver{ok: false}, // FX 不可得
 	}
@@ -68,7 +69,7 @@ func TestCheckSwapArbComboAllow_GrossRealNotional(t *testing.T) {
 
 	// case 3: 真实名义额超限 → ErrGrossExposureExceeds
 	p = &Pipeline{
-		swapArbComboAllow: allow,
+		swapArbComboAllow: testSwapArbSnap(allow),
 		csResolver:        &fakeCSResolver{sizes: map[string]float64{"A:mt5:XAUUSD": 100, "B:mt5:XAUUSD": 100}},
 		fxResolver:        fakeFxResolver{rates: map[string]float64{"USD": 1}, ok: true},
 	}
@@ -82,7 +83,7 @@ func TestCheckSwapArbComboAllow_GrossRealNotional(t *testing.T) {
 		{Canonical: "XAUUSD", VenueLong: "A:mt5", VenueShort: "B:mt5", MaxGrossExposureUSD: 50000},
 	}
 	p = &Pipeline{
-		swapArbComboAllow: passAllow,
+		swapArbComboAllow: testSwapArbSnap(passAllow),
 		csResolver:        &fakeCSResolver{sizes: map[string]float64{"A:mt5:XAUUSD": 100, "B:mt5:XAUUSD": 100}},
 		fxResolver:        fakeFxResolver{rates: map[string]float64{"USD": 1}, ok: true},
 	}
@@ -98,7 +99,7 @@ func TestCheckSwapArbComboAllow_CSResolverNotWired(t *testing.T) {
 		{Canonical: "XAUUSD", VenueLong: "A:mt5", VenueShort: "B:mt5", MaxGrossExposureUSD: 10000},
 	}
 	p := &Pipeline{
-		swapArbComboAllow: allow,
+		swapArbComboAllow: testSwapArbSnap(allow),
 		// csResolver nil
 	}
 	err := p.checkSwapArbComboAllow(context.Background(), "SWAPARB:XAUUSD:A:mt5:B:mt5",
@@ -120,16 +121,22 @@ func TestCheckSwapArbComboAllow_VenueOrderFromLegs(t *testing.T) {
 		{VenueKey: "B:mt5", VenueSymbol: "XAUUSD", Side: "BUY", Qty: 0.06, PriceExpected: 2500},
 		{VenueKey: "A:mt5", VenueSymbol: "XAUUSD", Side: "SELL", Qty: 0.06, PriceExpected: 2500},
 	}
-	p := &Pipeline{swapArbComboAllow: []ComboAllowSpec{
+	p := &Pipeline{swapArbComboAllow: testSwapArbSnap([]ComboAllowSpec{
 		{Canonical: "XAUUSD", VenueLong: "B:mt5", VenueShort: "A:mt5"},
-	}}
+	})}
 	if err := p.checkSwapArbComboAllow(context.Background(), "SWAPARB:XAUUSD:A:mt5:B:mt5", legs); err != nil {
 		t.Errorf("legs-direction match: want nil, got %v", err)
 	}
-	p = &Pipeline{swapArbComboAllow: []ComboAllowSpec{
+	p = &Pipeline{swapArbComboAllow: testSwapArbSnap([]ComboAllowSpec{
 		{Canonical: "XAUUSD", VenueLong: "A:mt5", VenueShort: "B:mt5"},
-	}}
+	})}
 	if err := p.checkSwapArbComboAllow(context.Background(), "SWAPARB:XAUUSD:A:mt5:B:mt5", legs); !errors.Is(err, ErrComboNotAllowed) {
 		t.Errorf("id-sorted direction only: want ErrComboNotAllowed, got %v", err)
 	}
+}
+
+// testSwapArbSnap 包内表化快照夹具（atomic.Pointer 形态）。
+func testSwapArbSnap(allow []ComboAllowSpec) (p atomic.Pointer[[]ComboAllowSpec]) {
+	p.Store(&allow)
+	return
 }

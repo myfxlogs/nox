@@ -69,7 +69,8 @@ type Pipeline struct {
 	// D-159 W1a R1 S2.3：SWAPARB 精确组合门禁——真实名义额检查。
 	// swapArbComboAllow 非 nil 且 posType=SWAPARB 时，建 position 前校验组合允许+名义额+gross。
 	// nil = 未接线（gate 层 + dashboard 手动入口兜底，pipeline 不重复检查）。
-	swapArbComboAllow []ComboAllowSpec
+	// D-515 S5：表化热读——atomic 快照（带外 SQL 改行 ≤60s 生效，同 xassetAllow 模式）。
+	swapArbComboAllow atomic.Pointer[[]ComboAllowSpec]
 	notionalUSD       float64
 
 	// D-311 S6：XASSET_CARRY 精确组合门禁——零信任显式白名单。

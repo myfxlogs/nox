@@ -108,7 +108,7 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 	//   2. 双腿名义额 ≤ spec.MaxLongQty/MaxShortQty（>0 才校验）
 	//   3. 双腿名义额合计 USD ≤ spec.MaxGrossExposureUSD（>0 才校验）
 	// nil/空 = 未接线（gate 层 + dashboard 手动入口兜底）。
-	if posType == "SWAPARB" && len(p.swapArbComboAllow) > 0 {
+	if posType == "SWAPARB" && len(p.swapArbAllowSpecs()) > 0 {
 		if err := p.checkSwapArbComboAllow(ctx, opportunityID, legs); err != nil {
 			return nil, err
 		}

@@ -30,6 +30,8 @@ type Engine struct {
 	// approve RPC 后经 ReloadXAssetAllowCombos 免重启生效）。读侧 handleOpportunity
 	// 高频 vs 写侧 approve 低频——atomic Load/Store 无锁竞态安全（S6 race ×3 强制）。
 	xassetAllow atomic.Pointer[[]exec.XAssetComboAllowSpec]
+	// D-515 S5：swaparb_allow_combos 表热读快照（allow/deny 双轨整体替换；nil→cfg 启动值回退）。
+	swapArb atomic.Pointer[swapArbComboSnapshot]
 	// D-443 S2：venue/canonical 执行白名单热读 holder（60s 周期重载免重启，同 xassetAllow 模式）。
 	allowRules atomic.Pointer[allowRules]
 	// D-475a S2：fin_venue_symbol_flags 执行层投影（同 allowRules 原子快照模式；

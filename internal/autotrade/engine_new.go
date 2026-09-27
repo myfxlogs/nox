@@ -37,6 +37,9 @@ func New(cfg Config, store *pgstore.Store, service engineService, oppTopic *bus.
 	// D-403 S3：热重载指针初值=启动加载结果（cfg.XAssetAllowCombos，setup 期 xassetAllowFromTable 产出）。
 	initAllow := cfg.XAssetAllowCombos
 	e.xassetAllow.Store(&initAllow)
+	// D-515 S5：swaparb 快照初值=boot 表加载结果（setup 期 swapArbAllowFromTable 产出）。
+	e.swapArb.Store(&swapArbComboSnapshot{allow: cfg.SwapArbAllowCombos, deny: cfg.SwapArbDenyCombos})
+	e.gate.SetSwapArbSnapshot(&e.swapArb)
 	// D-443 S2：初值=setup 表加载结果（allowRulesFromTable 产出，同 xasset 装配序）。
 	e.allowRules.Store(&allowRules{venues: cfg.AllowVenues, canonicals: cfg.AllowCanonicals})
 	return e
