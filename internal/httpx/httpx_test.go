@@ -150,7 +150,7 @@ func TestFailoverRT_HostTable(t *testing.T) {
 	t.Setenv("BINANCE_PROXY_URL", "")
 	t.Setenv("BINANCE_PROXY_URL_BACKUP", "")
 	t.Setenv("ARB_OKX_PROXY_URL", "https://127.0.0.1:1")
-	t.Setenv("ARB_CEX_WS_BASE", "wss://127.0.0.1:2")     // ws 基址 env（REST 走 http 口径匹配 host）
+	t.Setenv("ARB_CEX_WS_BASE", "wss://127.0.0.1:2") // ws 基址 env（REST 走 http 口径匹配 host）
 	t.Setenv("ARB_CEX_WS_BASE_BACKUP", "http://"+bu)
 	t.Setenv("ARB_BINANCE_PROXY_TOKEN", "tok-fb")
 
