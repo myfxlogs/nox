@@ -47,6 +47,9 @@ type AccountMonitor struct {
 
 	// D-445 S0：MT5 OnOrderUpdate 余额帧 tap（venueKey → 最近一帧；Refresh 失败兜底+加温）。
 	streamAccts sync.Map // venueKey → StreamAcct
+
+	// simWarned D-516：simulated=t 配置行 fail-closed warn-once（queriers 每轮询重跑防刷屏）。
+	simWarned map[int64]bool
 }
 
 // ExchangeStore 提供 CEX 交易所配置（pgstore.Store 满足）。
@@ -157,14 +160,13 @@ func resolveExchangeBaseURL(c pgstore.ExchangeConfig) string {
 				base = "https://fapi.binance.com" // 无代理直连；451 由部署负责
 			}
 		case "okx":
-			base = "https://www.okx.com" // 实盘域名；模拟盘走 x-simulated-trading:1（D-054）
+			base = "https://www.okx.com" // 实盘域名
 		}
 	}
 	if c.Venue == "binance" && c.VenueType == "spot" && !strings.Contains(base, "/api/") {
 		// 与采集一致：仅 spot 需从 fapi 风格代理 base 推导 spot base。
-		// binance:perp 不能 replace——其 base_url 形如 …/demofapi，含 "fapi" 子串，
-		// naive replace 会错改成 demoapi（D-059 实施修正② 复核实测：模拟盘合约在
-		// 独立子域 demo-fapi.binance.com，同 key 有效）。
+		// naive replace 按首命中换段——仅 spot 走此推导（perp base 含 fapi 段原样保留，
+		// 历史 demo 形前缀同样不被错改；D-516 起 sim 行上游 fail-closed 不入此路径）。
 		base = strings.Replace(base, "fapi", "api", 1)
 	}
 	return base
@@ -181,12 +183,14 @@ func (m *AccountMonitor) queriers(ctx context.Context) []reconcile.AccountQuerie
 		if err != nil {
 			log.Printf("[account-mon] list exchanges: %v", err)
 		} else {
-			// D-362 S2/R1：撞键归一——同 venue:type 多 config 时赢家保 canonical、
-			// 非赢家键加 #<id>（reconcile.CexVenueKey，与 executor/持仓查询器同源调用）。
-			// AccountInfo.Venue/VenueType 保持原值，后缀只在键（前端 Simulated 徽标区分）。
-			winners := cexKeyWinners(cfgs)
-			for i := range cfgs {
-				c := &cfgs[i]
+			// D-362 S2/R1：撞键归一（赢家 canonical/输家 #id，与 executor/持仓同源）。
+			// D-516：sim 行先于归一剔除——不占 canonical、不建查询器。
+			m.mu.Lock()
+			live := realOnlyConfigs(cfgs, &m.simWarned, "account")
+			m.mu.Unlock()
+			winners := cexKeyWinners(live)
+			for i := range live {
+				c := &live[i]
 				base := resolveExchangeBaseURL(*c)
 				q := reconcile.NewCEXAccountQuerier(c.Venue, c.VenueType, c.APIKey, c.APISecret, c.Passphrase, base, c.Website, c.Simulated)
 				q.SetKeyOverride(reconcile.CexVenueKey(c.Venue, c.VenueType, c.ID, winners))

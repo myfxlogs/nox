@@ -22,7 +22,8 @@ type CexPositionManager struct {
 	// CachedVenueQuerier（全量快照 fresh≤10s 直返，REST 真相源兜底不拆）。
 	PositionCache *exchange.PositionEventCache
 
-	keys map[string]bool // 上轮已注册的 venueKey（diff 日志用）
+	keys      map[string]bool // 上轮已注册的 venueKey（diff 日志用）
+	simWarned map[int64]bool  // D-516：simulated=t 行 fail-closed warn-once
 	// KickTopic D-469b S2：config 变更 kick 即到即跑（nil=纯 ticker）。
 	KickTopic *bus.Topic[struct{}]
 }
@@ -67,14 +68,16 @@ func (m *CexPositionManager) sync(ctx context.Context) {
 		log.Printf("[cex-pos] list exchanges: %v", err)
 		return
 	}
-	// D-362 S2b：撞键归一（同 S1 函数同源调用）——binance:perp 双配置下赢家（sim，后建）
-	// 保 canonical（demo 持仓视图不变），真盘 querier 键=binance:perp#20（真仓在持仓视图
-	// 独立现形；BrokerPosition.VenueKey 随querier键带后缀=SSOT §2b）。
-	winners := cexKeyWinners(cfgs)
-	seen := make(map[string]bool, len(cfgs))
+	// D-362 S2b：撞键归一（同 S1 函数同源调用）——同 venue:type 多 config 赢家保
+	// canonical、输家键带 #id 后缀（BrokerPosition.VenueKey 随 querier 键=SSOT §2b）。
+	// D-516：sim 行先于归一剔除（不占 canonical、不建查询器）。sync 仅 Run 单协程驱动，
+	// simWarned 无并发面。
+	live := realOnlyConfigs(cfgs, &m.simWarned, "cex-pos")
+	winners := cexKeyWinners(live)
+	seen := make(map[string]bool, len(live))
 	var qs []reconcile.VenueQuerier
-	for i := range cfgs {
-		c := &cfgs[i]
+	for i := range live {
+		c := &live[i]
 		if c.VenueType != "perp" {
 			continue // spot 无持仓查询
 		}

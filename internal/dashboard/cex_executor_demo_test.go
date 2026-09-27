@@ -59,6 +59,9 @@ func TestDemoRealOrder(t *testing.T) {
 	ran := false
 	for i := range cfgs {
 		c := &cfgs[i]
+		if !c.Simulated {
+			continue // D-516：demo 域收编——real 行严禁下真单（历史安全闸：本测试只验 demo key）
+		}
 		ran = true
 		t.Run(c.Venue+":"+c.VenueType, func(t *testing.T) {
 			sym, qty := demoSymQty(c.Venue, c.VenueType)

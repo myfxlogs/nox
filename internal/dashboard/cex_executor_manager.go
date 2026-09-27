@@ -31,7 +31,8 @@ type CexExecutorManager struct {
 	spotTaker     map[string]float64
 	spotTakerDflt float64
 	// alertFn D-108 P2 T1：平仓被拒时 critical 告警注入（main 传 store.InsertAlert）。
-	alertFn func(posID *int64, level, msg string)
+	alertFn   func(posID *int64, level, msg string)
+	simWarned map[int64]bool // D-516：simulated=t 行 fail-closed warn-once
 	// OrderStatusHook D-421 §1.5：exchange_configs 刷新后镜像订单级查单器集合
 	// → recon.SetOrderStatusQueriers（nil=未接线）。
 	OrderStatusHook func(map[string]reconcile.OrderStatusQuerier)
@@ -123,20 +124,23 @@ func (m *CexExecutorManager) sync(ctx context.Context) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// D-362 S3：撞键归一（同 S1 函数同源调用）——binance:perp 赢家（sim）保 canonical：
-	// allowlist 流量仍打 sim 执行器=零路由变更（D-158 安全语义保持，SSOT §1 案 C）；
-	// 真盘 binance:perp#20 注册但无人调用=休眠可见。gate:perp 单 config 无撞键键不变。
+	// D-362 S3：撞键归一（同 S1 函数同源调用）——同 venue:type 多 config 赢家保 canonical、
+	// 输家键带 #id 后缀：allowlist/pipeline 路由只命中 canonical 键（D-158 安全语义保持，
+	// SSOT §1 案 C）；输家执行器注册但无人调用=休眠可见。gate:perp 单 config 无撞键键不变。
+	// D-516：sim 行不入集（realOnlyConfigs）——canonical 恒归 real 赢家。
 	// D-362 S4① 核证：ARB_AUTOTRADE_ALLOW_VENUES 匹配在 engine_opp.go:61 用 opp 腿
 	// venue（canonical 形），#id 后缀键天然不命中 allowlist 条目=安全。
 	// D-362 S4② 核证：pipeline 执行路由 reg.Get(leg.VenueKey)（pipeline_execute.go:62 等）
 	// 用仓腿 venue（canonical 形）→ 永不路由到 #id 后缀执行器=休眠不可达。
 	// D-362 S4⑤ 核证：readiness executor_ready 消费 reg.Len()（exec.go:162）——计数语义
 	// =已注册执行器数，休眠 real 执行器使计数 +1（上限语义非白名单，可接受）。
-	winners := cexKeyWinners(cfgs)
-	seen := make(map[string]bool, len(cfgs))
-	osqs := make(map[string]reconcile.OrderStatusQuerier, len(cfgs)) // D-421 §1.5
-	for i := range cfgs {
-		c := &cfgs[i]
+	// D-516：sim 行先于撞键归一剔除——不占 canonical 键也不注册执行器（绝不拨 demo 端点）。
+	live := realOnlyConfigs(cfgs, &m.simWarned, "cex-exec")
+	winners := cexKeyWinners(live)
+	seen := make(map[string]bool, len(live))
+	osqs := make(map[string]reconcile.OrderStatusQuerier, len(live)) // D-421 §1.5
+	for i := range live {
+		c := &live[i]
 		base := resolveExchangeBaseURL(*c)
 		vk := reconcile.CexVenueKey(c.Venue, c.VenueType, c.ID, winners)
 		seen[vk] = true

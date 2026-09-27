@@ -48,6 +48,7 @@ type CexStreamManager struct {
 
 	store      ExchangeStore
 	sinks      CexStreamSinks
+	simWarned  map[int64]bool // D-516：simulated=t 行 fail-closed warn-once（config 轮动防刷屏）
 	interval   time.Duration
 	orderCache *exchange.OrderEventCache
 	posCache   *exchange.PositionEventCache
@@ -105,13 +106,14 @@ func (m *CexStreamManager) sync(ctx context.Context) {
 		log.Printf("[cex-stream] list exchanges: %v", err)
 		return
 	}
-	winners := cexKeyWinners(cfgs)
-
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// D-516：sim 行先于撞键归一剔除——不占 canonical 键也不起流。
+	live := realOnlyConfigs(cfgs, &m.simWarned, "cex-stream")
+	winners := cexKeyWinners(live)
 	want := map[int64]pgstore.ExchangeConfig{}
-	for i := range cfgs {
-		c := cfgs[i]
+	for i := range live {
+		c := live[i]
 		if !streamable(c) {
 			continue
 		}
