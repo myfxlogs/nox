@@ -273,7 +273,7 @@ func TestBinanceWSURLMap(t *testing.T) {
 		sim       bool
 		want      string
 	}{
-		{"https://p:8443/fapi", "perp", false, "wss://p:8443/ws/KEY1"},
+		{"https://p:8443/fapi", "perp", false, "wss://p:8443/private/ws/KEY1"}, // D-517 S3：fstream /private 迁移
 		{"https://p:8443/demofapi/fapi", "perp", true, "wss://p:8443/demofws/ws/KEY1"},
 		{"https://p:8443/api", "spot", false, "wss://p:8443/spotws/ws/KEY1"},
 	}
