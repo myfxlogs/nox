@@ -137,6 +137,10 @@ func (s *Service) UpdateAppConfig(ctx context.Context, req *connect.Request[dash
 	if err := s.store.UpsertAppConfig(ctx, key, val, note); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+	// D-545：ARB_MACRO_ENABLED 借密钥轨热推——写库成功即同步 resolver，当班闸即效免重启。
+	if key == "ARB_MACRO_ENABLED" && s.secRes != nil {
+		s.secRes.Set(key, val)
+	}
 	rows, err := s.store.ListAppConfigRows(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)

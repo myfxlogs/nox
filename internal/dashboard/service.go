@@ -9,6 +9,7 @@ import (
 
 	"arb/internal/bus"
 	"arb/internal/collect/cmc"
+	"arb/internal/config"
 	"arb/internal/exec"
 	"arb/internal/position"
 	"arb/internal/reconcile"
@@ -45,6 +46,8 @@ type Service struct {
 	liveSimWarned  map[int64]bool
 	liveRestTTLDur time.Duration
 	acv            appConfigView // D-523：键视图快照+自杀重启注入（定义 service_appconfig.go）
+	// D-545：密钥热读缓存（SetSecretResolver 注入；nil=未装配→Update 仅写库，热读点 fail-closed）。
+	secRes *config.SecretResolver
 
 	// settler 结算触发（D-087 §3.2，手动平仓后调）。nil = 未接线（RPC 仍可用，仅不结算）。
 	settler Settler
