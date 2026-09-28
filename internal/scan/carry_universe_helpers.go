@@ -27,6 +27,15 @@ func cexCanonical(symbol string) string {
 	return ""
 }
 
+// cexFactSymbol universe raw symbol → funding facts 键（与各 venue collector 发射键同构：
+// gate BTC_USDT→BTCUSDT、okx XAU-USDT-SWAP→XAUUSDT、binance BTCUSDT 原样即 canonical）。
+// D-550：raw 键直查 facts 零命中→边界 fail-closed→accrued 恒 0 的根修。
+func cexFactSymbol(raw string) string {
+	s := strings.ReplaceAll(raw, "_", "")
+	s = strings.ReplaceAll(s, "-", "")
+	return strings.TrimSuffix(s, "SWAP")
+}
+
 // NormalizeJoinKey D-336R1：join 键双侧规范化（D-403 起导出：毕业链 approve 解析与 detector hint 适配共用，禁两处各写）——canonical 双形分裂（MT map 侧
 // XAUUSD vs CEX 侧 XAU）永不相等致黄金/BTC/PAXG 全 join 失败的层内根修
 // （系统级两形并存=既有债不动）。去尾部 _、依次尝试去 USDT/USD 后缀
