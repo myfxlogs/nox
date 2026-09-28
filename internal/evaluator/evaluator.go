@@ -3,6 +3,7 @@
 package evaluator
 
 import (
+	"arb/internal/calib"
 	"arb/internal/keydomain"
 	"fmt"
 	"time"
@@ -246,13 +247,21 @@ var cexSlipBpsByVenueCanonical = map[string]float64{
 	"okx:JP225USDT":   8.0,
 }
 
-// slipBpsForCEX 返回 CEX 品种的单腿滑点 bps（venue 分级→品种分级→cexSlipDefaultBps）。
+// slipBpsForCEX 返回 CEX 品种的单腿滑点 bps（calib active→venue 分级→品种分级→
+// cexSlipDefaultBps→calib default）。D-533 S5：calib 命中覆盖分级表（D-508 证据纪律
+// 正式接管位）；纯计算热路径走 calib.Lookup 进程缓存（签名链零改动，复审注记）。
 func slipBpsForCEX(venueKey, canonical string) float64 {
 	venue := keydomain.BareOf(venueKey)
+	if v := calib.Lookup("cex_slip_bps", venue, canonical, calib.LookupMiss); v != calib.LookupMiss {
+		return v
+	}
 	if v, ok := cexSlipBpsByVenueCanonical[venue+":"+canonical]; ok {
 		return v
 	}
 	if v, ok := cexSlipBpsByCanonical[canonical]; ok {
+		return v
+	}
+	if v := calib.Lookup("cex_slip_default_bps", "", "", calib.LookupMiss); v != calib.LookupMiss {
 		return v
 	}
 	return cexSlipDefaultBps
