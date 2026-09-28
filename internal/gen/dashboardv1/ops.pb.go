@@ -2196,6 +2196,286 @@ func (x *GetCapitalCoverageResponse) GetCaliberNote() string {
 	return ""
 }
 
+type GetCapitalMapRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetCapitalMapRequest) Reset() {
+	*x = GetCapitalMapRequest{}
+	mi := &file_dashboardv1_ops_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetCapitalMapRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetCapitalMapRequest) ProtoMessage() {}
+
+func (x *GetCapitalMapRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_ops_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetCapitalMapRequest.ProtoReflect.Descriptor instead.
+func (*GetCapitalMapRequest) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{28}
+}
+
+type CapitalMapNode struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Label         string                 `protobuf:"bytes,1,opt,name=label,proto3" json:"label,omitempty"`                  // 节点名（如 binance:spot free / binance 理财活期）
+	Amount        float64                `protobuf:"fixed64,2,opt,name=amount,proto3" json:"amount,omitempty"`              // 原币金额（未采=0，配合 note）
+	Currency      string                 `protobuf:"bytes,3,opt,name=currency,proto3" json:"currency,omitempty"`            // 原币种
+	HasUsd        bool                   `protobuf:"varint,4,opt,name=has_usd,json=hasUsd,proto3" json:"has_usd,omitempty"` // false=未折算/未采 → 前端渲染「—」
+	AmountUsd     float64                `protobuf:"fixed64,5,opt,name=amount_usd,json=amountUsd,proto3" json:"amount_usd,omitempty"`
+	Source        string                 `protobuf:"bytes,6,opt,name=source,proto3" json:"source,omitempty"`                        // 来源注记（ws/rest/快照/simple-earn/dapi/eapi）
+	UpdatedAt     string                 `protobuf:"bytes,7,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"` // RFC3339（空=未采）
+	Note          string                 `protobuf:"bytes,8,opt,name=note,proto3" json:"note,omitempty"`                            // 语义注记（折算价/降级原因/未采原因）
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CapitalMapNode) Reset() {
+	*x = CapitalMapNode{}
+	mi := &file_dashboardv1_ops_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CapitalMapNode) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CapitalMapNode) ProtoMessage() {}
+
+func (x *CapitalMapNode) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_ops_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CapitalMapNode.ProtoReflect.Descriptor instead.
+func (*CapitalMapNode) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *CapitalMapNode) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *CapitalMapNode) GetAmount() float64 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
+func (x *CapitalMapNode) GetCurrency() string {
+	if x != nil {
+		return x.Currency
+	}
+	return ""
+}
+
+func (x *CapitalMapNode) GetHasUsd() bool {
+	if x != nil {
+		return x.HasUsd
+	}
+	return false
+}
+
+func (x *CapitalMapNode) GetAmountUsd() float64 {
+	if x != nil {
+		return x.AmountUsd
+	}
+	return 0
+}
+
+func (x *CapitalMapNode) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *CapitalMapNode) GetUpdatedAt() string {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return ""
+}
+
+func (x *CapitalMapNode) GetNote() string {
+	if x != nil {
+		return x.Note
+	}
+	return ""
+}
+
+type CapitalMapTier struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tier          string                 `protobuf:"bytes,1,opt,name=tier,proto3" json:"tier,omitempty"` // 立即可用/可转可用/锁定慢动
+	Nodes         []*CapitalMapNode      `protobuf:"bytes,2,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	HasUsd        bool                   `protobuf:"varint,3,opt,name=has_usd,json=hasUsd,proto3" json:"has_usd,omitempty"`
+	TotalUsd      float64                `protobuf:"fixed64,4,opt,name=total_usd,json=totalUsd,proto3" json:"total_usd,omitempty"` // 仅计已折算节点
+	Note          string                 `protobuf:"bytes,5,opt,name=note,proto3" json:"note,omitempty"`                           // 立即可用档=「=sizing 基准口径」注记
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CapitalMapTier) Reset() {
+	*x = CapitalMapTier{}
+	mi := &file_dashboardv1_ops_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CapitalMapTier) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CapitalMapTier) ProtoMessage() {}
+
+func (x *CapitalMapTier) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_ops_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CapitalMapTier.ProtoReflect.Descriptor instead.
+func (*CapitalMapTier) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *CapitalMapTier) GetTier() string {
+	if x != nil {
+		return x.Tier
+	}
+	return ""
+}
+
+func (x *CapitalMapTier) GetNodes() []*CapitalMapNode {
+	if x != nil {
+		return x.Nodes
+	}
+	return nil
+}
+
+func (x *CapitalMapTier) GetHasUsd() bool {
+	if x != nil {
+		return x.HasUsd
+	}
+	return false
+}
+
+func (x *CapitalMapTier) GetTotalUsd() float64 {
+	if x != nil {
+		return x.TotalUsd
+	}
+	return 0
+}
+
+func (x *CapitalMapTier) GetNote() string {
+	if x != nil {
+		return x.Note
+	}
+	return ""
+}
+
+type GetCapitalMapResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tiers         []*CapitalMapTier      `protobuf:"bytes,1,rep,name=tiers,proto3" json:"tiers,omitempty"`
+	GeneratedAt   string                 `protobuf:"bytes,2,opt,name=generated_at,json=generatedAt,proto3" json:"generated_at,omitempty"` // RFC3339
+	CaliberNote   string                 `protobuf:"bytes,3,opt,name=caliber_note,json=caliberNote,proto3" json:"caliber_note,omitempty"` // 口径注记
+	Degraded      bool                   `protobuf:"varint,4,opt,name=degraded,proto3" json:"degraded,omitempty"`                         // 任一面采集失败/未折算=true（诚实降级）
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetCapitalMapResponse) Reset() {
+	*x = GetCapitalMapResponse{}
+	mi := &file_dashboardv1_ops_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetCapitalMapResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetCapitalMapResponse) ProtoMessage() {}
+
+func (x *GetCapitalMapResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_ops_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetCapitalMapResponse.ProtoReflect.Descriptor instead.
+func (*GetCapitalMapResponse) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *GetCapitalMapResponse) GetTiers() []*CapitalMapTier {
+	if x != nil {
+		return x.Tiers
+	}
+	return nil
+}
+
+func (x *GetCapitalMapResponse) GetGeneratedAt() string {
+	if x != nil {
+		return x.GeneratedAt
+	}
+	return ""
+}
+
+func (x *GetCapitalMapResponse) GetCaliberNote() string {
+	if x != nil {
+		return x.CaliberNote
+	}
+	return ""
+}
+
+func (x *GetCapitalMapResponse) GetDegraded() bool {
+	if x != nil {
+		return x.Degraded
+	}
+	return false
+}
+
 type GetCexFinanceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -2204,7 +2484,7 @@ type GetCexFinanceRequest struct {
 
 func (x *GetCexFinanceRequest) Reset() {
 	*x = GetCexFinanceRequest{}
-	mi := &file_dashboardv1_ops_proto_msgTypes[28]
+	mi := &file_dashboardv1_ops_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2216,7 +2496,7 @@ func (x *GetCexFinanceRequest) String() string {
 func (*GetCexFinanceRequest) ProtoMessage() {}
 
 func (x *GetCexFinanceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_ops_proto_msgTypes[28]
+	mi := &file_dashboardv1_ops_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2229,7 +2509,7 @@ func (x *GetCexFinanceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCexFinanceRequest.ProtoReflect.Descriptor instead.
 func (*GetCexFinanceRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{28}
+	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{32}
 }
 
 type CexFinanceHolding struct {
@@ -2244,7 +2524,7 @@ type CexFinanceHolding struct {
 
 func (x *CexFinanceHolding) Reset() {
 	*x = CexFinanceHolding{}
-	mi := &file_dashboardv1_ops_proto_msgTypes[29]
+	mi := &file_dashboardv1_ops_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2256,7 +2536,7 @@ func (x *CexFinanceHolding) String() string {
 func (*CexFinanceHolding) ProtoMessage() {}
 
 func (x *CexFinanceHolding) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_ops_proto_msgTypes[29]
+	mi := &file_dashboardv1_ops_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2269,7 +2549,7 @@ func (x *CexFinanceHolding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CexFinanceHolding.ProtoReflect.Descriptor instead.
 func (*CexFinanceHolding) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{29}
+	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *CexFinanceHolding) GetCcy() string {
@@ -2314,7 +2594,7 @@ type CexFinanceFlow struct {
 
 func (x *CexFinanceFlow) Reset() {
 	*x = CexFinanceFlow{}
-	mi := &file_dashboardv1_ops_proto_msgTypes[30]
+	mi := &file_dashboardv1_ops_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2326,7 +2606,7 @@ func (x *CexFinanceFlow) String() string {
 func (*CexFinanceFlow) ProtoMessage() {}
 
 func (x *CexFinanceFlow) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_ops_proto_msgTypes[30]
+	mi := &file_dashboardv1_ops_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2339,7 +2619,7 @@ func (x *CexFinanceFlow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CexFinanceFlow.ProtoReflect.Descriptor instead.
 func (*CexFinanceFlow) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{30}
+	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *CexFinanceFlow) GetTs() string {
@@ -2400,7 +2680,7 @@ type CexAccountFinance struct {
 
 func (x *CexAccountFinance) Reset() {
 	*x = CexAccountFinance{}
-	mi := &file_dashboardv1_ops_proto_msgTypes[31]
+	mi := &file_dashboardv1_ops_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2412,7 +2692,7 @@ func (x *CexAccountFinance) String() string {
 func (*CexAccountFinance) ProtoMessage() {}
 
 func (x *CexAccountFinance) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_ops_proto_msgTypes[31]
+	mi := &file_dashboardv1_ops_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2425,7 +2705,7 @@ func (x *CexAccountFinance) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CexAccountFinance.ProtoReflect.Descriptor instead.
 func (*CexAccountFinance) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{31}
+	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *CexAccountFinance) GetVenue() string {
@@ -2493,7 +2773,7 @@ type GetCexFinanceResponse struct {
 
 func (x *GetCexFinanceResponse) Reset() {
 	*x = GetCexFinanceResponse{}
-	mi := &file_dashboardv1_ops_proto_msgTypes[32]
+	mi := &file_dashboardv1_ops_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2505,7 +2785,7 @@ func (x *GetCexFinanceResponse) String() string {
 func (*GetCexFinanceResponse) ProtoMessage() {}
 
 func (x *GetCexFinanceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_ops_proto_msgTypes[32]
+	mi := &file_dashboardv1_ops_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2518,7 +2798,7 @@ func (x *GetCexFinanceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCexFinanceResponse.ProtoReflect.Descriptor instead.
 func (*GetCexFinanceResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{32}
+	return file_dashboardv1_ops_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *GetCexFinanceResponse) GetAccounts() []*CexAccountFinance {
@@ -2748,6 +3028,29 @@ const file_dashboardv1_ops_proto_rawDesc = "" +
 	"hasSummary\x12!\n" +
 	"\fhas_weighted\x18\a \x01(\bR\vhasWeighted\x12!\n" +
 	"\fcaliber_note\x18\b \x01(\tR\vcaliberNote\"\x16\n" +
+	"\x14GetCapitalMapRequest\"\xdd\x01\n" +
+	"\x0eCapitalMapNode\x12\x14\n" +
+	"\x05label\x18\x01 \x01(\tR\x05label\x12\x16\n" +
+	"\x06amount\x18\x02 \x01(\x01R\x06amount\x12\x1a\n" +
+	"\bcurrency\x18\x03 \x01(\tR\bcurrency\x12\x17\n" +
+	"\ahas_usd\x18\x04 \x01(\bR\x06hasUsd\x12\x1d\n" +
+	"\n" +
+	"amount_usd\x18\x05 \x01(\x01R\tamountUsd\x12\x16\n" +
+	"\x06source\x18\x06 \x01(\tR\x06source\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\a \x01(\tR\tupdatedAt\x12\x12\n" +
+	"\x04note\x18\b \x01(\tR\x04note\"\xa6\x01\n" +
+	"\x0eCapitalMapTier\x12\x12\n" +
+	"\x04tier\x18\x01 \x01(\tR\x04tier\x126\n" +
+	"\x05nodes\x18\x02 \x03(\v2 .arb.dashboard.v1.CapitalMapNodeR\x05nodes\x12\x17\n" +
+	"\ahas_usd\x18\x03 \x01(\bR\x06hasUsd\x12\x1b\n" +
+	"\ttotal_usd\x18\x04 \x01(\x01R\btotalUsd\x12\x12\n" +
+	"\x04note\x18\x05 \x01(\tR\x04note\"\xb1\x01\n" +
+	"\x15GetCapitalMapResponse\x126\n" +
+	"\x05tiers\x18\x01 \x03(\v2 .arb.dashboard.v1.CapitalMapTierR\x05tiers\x12!\n" +
+	"\fgenerated_at\x18\x02 \x01(\tR\vgeneratedAt\x12!\n" +
+	"\fcaliber_note\x18\x03 \x01(\tR\vcaliberNote\x12\x1a\n" +
+	"\bdegraded\x18\x04 \x01(\bR\bdegraded\"\x16\n" +
 	"\x14GetCexFinanceRequest\"u\n" +
 	"\x11CexFinanceHolding\x12\x10\n" +
 	"\x03ccy\x18\x01 \x01(\tR\x03ccy\x12\x10\n" +
@@ -2789,7 +3092,7 @@ func file_dashboardv1_ops_proto_rawDescGZIP() []byte {
 	return file_dashboardv1_ops_proto_rawDescData
 }
 
-var file_dashboardv1_ops_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
+var file_dashboardv1_ops_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
 var file_dashboardv1_ops_proto_goTypes = []any{
 	(*ExecuteSpotCarryDemoRequest)(nil),          // 0: arb.dashboard.v1.ExecuteSpotCarryDemoRequest
 	(*SpotCarryDemoLeg)(nil),                     // 1: arb.dashboard.v1.SpotCarryDemoLeg
@@ -2819,31 +3122,37 @@ var file_dashboardv1_ops_proto_goTypes = []any{
 	(*GetCapitalCoverageRequest)(nil),            // 25: arb.dashboard.v1.GetCapitalCoverageRequest
 	(*CapitalCoverageRow)(nil),                   // 26: arb.dashboard.v1.CapitalCoverageRow
 	(*GetCapitalCoverageResponse)(nil),           // 27: arb.dashboard.v1.GetCapitalCoverageResponse
-	(*GetCexFinanceRequest)(nil),                 // 28: arb.dashboard.v1.GetCexFinanceRequest
-	(*CexFinanceHolding)(nil),                    // 29: arb.dashboard.v1.CexFinanceHolding
-	(*CexFinanceFlow)(nil),                       // 30: arb.dashboard.v1.CexFinanceFlow
-	(*CexAccountFinance)(nil),                    // 31: arb.dashboard.v1.CexAccountFinance
-	(*GetCexFinanceResponse)(nil),                // 32: arb.dashboard.v1.GetCexFinanceResponse
-	(*timestamppb.Timestamp)(nil),                // 33: google.protobuf.Timestamp
+	(*GetCapitalMapRequest)(nil),                 // 28: arb.dashboard.v1.GetCapitalMapRequest
+	(*CapitalMapNode)(nil),                       // 29: arb.dashboard.v1.CapitalMapNode
+	(*CapitalMapTier)(nil),                       // 30: arb.dashboard.v1.CapitalMapTier
+	(*GetCapitalMapResponse)(nil),                // 31: arb.dashboard.v1.GetCapitalMapResponse
+	(*GetCexFinanceRequest)(nil),                 // 32: arb.dashboard.v1.GetCexFinanceRequest
+	(*CexFinanceHolding)(nil),                    // 33: arb.dashboard.v1.CexFinanceHolding
+	(*CexFinanceFlow)(nil),                       // 34: arb.dashboard.v1.CexFinanceFlow
+	(*CexAccountFinance)(nil),                    // 35: arb.dashboard.v1.CexAccountFinance
+	(*GetCexFinanceResponse)(nil),                // 36: arb.dashboard.v1.GetCexFinanceResponse
+	(*timestamppb.Timestamp)(nil),                // 37: google.protobuf.Timestamp
 }
 var file_dashboardv1_ops_proto_depIdxs = []int32{
 	1,  // 0: arb.dashboard.v1.ExecuteSpotCarryDemoResponse.legs:type_name -> arb.dashboard.v1.SpotCarryDemoLeg
 	3,  // 1: arb.dashboard.v1.ListSpotCarryDemoResponse.rows:type_name -> arb.dashboard.v1.SpotCarryDemoRow
 	7,  // 2: arb.dashboard.v1.ListPaperSpotCarryResponse.rows:type_name -> arb.dashboard.v1.PaperSpotCarryRow
 	8,  // 3: arb.dashboard.v1.ListPaperSpotCarryResponse.tracks:type_name -> arb.dashboard.v1.PaperTrackSummary
-	33, // 4: arb.dashboard.v1.AutotradeAllowRuleRow.acct_updated_at:type_name -> google.protobuf.Timestamp
+	37, // 4: arb.dashboard.v1.AutotradeAllowRuleRow.acct_updated_at:type_name -> google.protobuf.Timestamp
 	10, // 5: arb.dashboard.v1.ListAutotradeAllowRulesResponse.rules:type_name -> arb.dashboard.v1.AutotradeAllowRuleRow
 	20, // 6: arb.dashboard.v1.ListIntraTradesResponse.trades:type_name -> arb.dashboard.v1.IntraTradeRow
 	22, // 7: arb.dashboard.v1.IntraTrackStatsResponse.baselines:type_name -> arb.dashboard.v1.IntraBaselineStat
 	26, // 8: arb.dashboard.v1.GetCapitalCoverageResponse.rows:type_name -> arb.dashboard.v1.CapitalCoverageRow
-	29, // 9: arb.dashboard.v1.CexAccountFinance.holdings:type_name -> arb.dashboard.v1.CexFinanceHolding
-	30, // 10: arb.dashboard.v1.CexAccountFinance.flows:type_name -> arb.dashboard.v1.CexFinanceFlow
-	31, // 11: arb.dashboard.v1.GetCexFinanceResponse.accounts:type_name -> arb.dashboard.v1.CexAccountFinance
-	12, // [12:12] is the sub-list for method output_type
-	12, // [12:12] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	29, // 9: arb.dashboard.v1.CapitalMapTier.nodes:type_name -> arb.dashboard.v1.CapitalMapNode
+	30, // 10: arb.dashboard.v1.GetCapitalMapResponse.tiers:type_name -> arb.dashboard.v1.CapitalMapTier
+	33, // 11: arb.dashboard.v1.CexAccountFinance.holdings:type_name -> arb.dashboard.v1.CexFinanceHolding
+	34, // 12: arb.dashboard.v1.CexAccountFinance.flows:type_name -> arb.dashboard.v1.CexFinanceFlow
+	35, // 13: arb.dashboard.v1.GetCexFinanceResponse.accounts:type_name -> arb.dashboard.v1.CexAccountFinance
+	14, // [14:14] is the sub-list for method output_type
+	14, // [14:14] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_dashboardv1_ops_proto_init() }
@@ -2861,7 +3170,7 @@ func file_dashboardv1_ops_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dashboardv1_ops_proto_rawDesc), len(file_dashboardv1_ops_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   33,
+			NumMessages:   37,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

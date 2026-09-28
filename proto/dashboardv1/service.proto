@@ -204,6 +204,9 @@ service DashboardService {
   // D-359：资金不眠覆盖率前端面板（口径 SSOT=D-356 §1.1；digest 段同源双实现，后端算前端零计算）。
   rpc GetCapitalCoverage(GetCapitalCoverageRequest) returns (GetCapitalCoverageResponse);
 
+  // D-546：资金全景账三档树（binance 六面钱包；只读全景面，sizing 基准不动）。
+  rpc GetCapitalMap(GetCapitalMapRequest) returns (GetCapitalMapResponse);
+
   // D-365：CEX 财务页（账户级盘点全币种+进出/收益流水；后端算+占比，前端零计算）。
   rpc GetCexFinance(GetCexFinanceRequest) returns (GetCexFinanceResponse);
 

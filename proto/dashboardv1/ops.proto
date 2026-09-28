@@ -239,6 +239,36 @@ message GetCapitalCoverageResponse {
   string caliber_note   = 8;  // 口径注记（与 digest 段注记同文本）
 }
 
+// === D-546：资金全景账（binance 六面钱包树+可用性三档；只读全景面，sizing 基准不动）===
+
+message GetCapitalMapRequest {}
+
+message CapitalMapNode {
+  string label      = 1;  // 节点名（如 binance:spot free / binance 理财活期）
+  double amount     = 2;  // 原币金额（未采=0，配合 note）
+  string currency   = 3;  // 原币种
+  bool   has_usd    = 4;  // false=未折算/未采 → 前端渲染「—」
+  double amount_usd = 5;
+  string source     = 6;  // 来源注记（ws/rest/快照/simple-earn/dapi/eapi）
+  string updated_at = 7;  // RFC3339（空=未采）
+  string note       = 8;  // 语义注记（折算价/降级原因/未采原因）
+}
+
+message CapitalMapTier {
+  string tier                   = 1;  // 立即可用/可转可用/锁定慢动
+  repeated CapitalMapNode nodes = 2;
+  bool   has_usd                = 3;
+  double total_usd              = 4;  // 仅计已折算节点
+  string note                   = 5;  // 立即可用档=「=sizing 基准口径」注记
+}
+
+message GetCapitalMapResponse {
+  repeated CapitalMapTier tiers = 1;
+  string generated_at = 2;  // RFC3339
+  string caliber_note = 3;  // 口径注记
+  bool   degraded     = 4;  // 任一面采集失败/未折算=true（诚实降级）
+}
+
 // === D-365：CEX 财务页（账户级盘点+流水）===
 
 message GetCexFinanceRequest {}
