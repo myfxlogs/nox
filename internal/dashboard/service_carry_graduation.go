@@ -55,6 +55,8 @@ type graduationStore interface {
 	ListCexUniverse(ctx context.Context) (map[string]pgstore.CexUniverseRow, error)
 	FundingPredWindow(ctx context.Context, venue, symbol string, since time.Time) ([]pgstore.FactPoint, error)
 	XAssetMonitorSpreadP95(ctx context.Context, cexVenue, mtVenue string) (float64, bool, error)
+	// D-544：非 mt×cex 结构 ticks 簿锚（ASOF 双腿对齐 adverse 成本 p95）。
+	TickAdverseBasisP95(ctx context.Context, buyVenueKey, buySym, sellVenueKey, sellSym string, since time.Time) (float64, bool, error)
 	// D-476a：buffer_multiple 账户快照（liq_distance B 级升级判据）。
 	LatestVenueAccountSnapshots(ctx context.Context) ([]pgstore.VenueAccountLatest, error)
 	// D-471 S3：白名单管理面（全量行/行锁更新/在持仓查询）。
