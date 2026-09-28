@@ -36,6 +36,7 @@ func New(cfg Config, store *pgstore.Store, service engineService, oppTopic *bus.
 		e.gate.SetMarginFloorChecker(service)
 		e.gate.SetCapitalView(service.CapitalView())
 	}
+	e.gate.SetVenueAlias(nil) // D-556：缺省无别名（main SetGateVenueAlias 装配闭包）
 	// D-403 S3：热重载指针初值=启动加载结果（cfg.XAssetAllowCombos，setup 期 xassetAllowFromTable 产出）。
 	initAllow := cfg.XAssetAllowCombos
 	e.xassetAllow.Store(&initAllow)
@@ -45,4 +46,10 @@ func New(cfg Config, store *pgstore.Store, service engineService, oppTopic *bus.
 	// D-443 S2：初值=setup 表加载结果（allowRulesFromTable 产出，同 xasset 装配序）。
 	e.allowRules.Store(&allowRules{venues: cfg.AllowVenues, canonicals: cfg.AllowCanonicals})
 	return e
+}
+
+// SetGateVenueAlias D-556：透传 gate 账号别名闭包（资金拒单白话文案用；装配面，
+// main setup 启动时 ListAccountAliases 一把加载注入）。
+func (e *Engine) SetGateVenueAlias(aliasOf func(vk string) string) {
+	e.gate.SetVenueAlias(aliasOf)
 }

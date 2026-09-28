@@ -30,6 +30,22 @@ func (g *Gate) SetMarginFloorChecker(c marginFloorChecker) { g.marginFloor = c }
 // 与 dashboard 共享一实例——REST 校准单飞语义；nil=未接线跳过 Src 闸）。
 func (g *Gate) SetCapitalView(v *capitalview.View) { g.capView = v }
 
+// SetVenueAlias D-556：注入账号别名读口（main 启动时 ListAccountAliases 一把加载闭包；
+// 别名中途更新沿用 D-175 语义重启生效；nil=回落 bare 键）。
+func (g *Gate) SetVenueAlias(aliasOf func(vk string) string) { g.venueAlias = aliasOf }
+
+// marginFloorGateInfo 资金不足拒的白话化径由（与 Src 闸 info 严格分域——
+// 资金拒=业主注资指引走 warn 节流；Src 闸=数据通道故障走 info，两类绝不混淆）。
+func (g *Gate) marginFloorGateWarn(ctx context.Context, intent TradeIntent, vk, detail string) {
+	msg := fmt.Sprintf("开户门槛：venue %s 可用保证金不足（%s）——新仓被拒，建议补资金", vk, detail)
+	plain := fundingAlertText(intent, msg, g.venueAlias)
+	if plain == "" {
+		plain = fmt.Sprintf("【请加保证金】%s 套利开仓被拦下（%s）\n%s 可用保证金不足以再开新仓（%s）。请补充资金或等现有仓位释放。\n※ 同一组合+账户 6 小时内只提醒一次",
+			intent.Canonical, intent.Strategy, accountLabel(vk, g.venueAlias), detail)
+	}
+	g.warnThrottled(ctx, intent, vk, plain)
+}
+
 // marginFloorGateCheck 开户门槛：intent 双腿 venue 各查一次（去重）。
 // CEX venue 先过 capitalview Src 闸（ws/rest 方可用；snap=fail-closed 拒开，
 // 检查器不进）；任一 venue 可用额不足/资金源陈旧 → 拒 + info 告警（SSOT §1 三档动作表）。
@@ -55,10 +71,9 @@ func (g *Gate) marginFloorGateCheck(ctx context.Context, intent TradeIntent) Gat
 		}
 		ok, detail := g.marginFloor.MarginFloorCheck(ctx, vk, intent.NotionalUSD)
 		if !ok {
+			// D-556：资金拒单=业主注资指引，改走节流 warn 通路（飞书可达；原 info 静默拒单收口）。
 			msg := fmt.Sprintf("开户门槛：venue %s 可用保证金不足（%s）——新仓被拒，建议补资金", vk, detail)
-			if err := g.store.InsertAlert(ctx, nil, "info", msg); err != nil {
-				log.Printf("[autotrade] margin floor alert insert: %v", err)
-			}
+			g.marginFloorGateWarn(ctx, intent, vk, detail)
 			return GateVerdict{Pass: false, Reason: msg}
 		}
 	}
@@ -81,7 +96,21 @@ func (g *Gate) marginWarnThrottled(ctx context.Context, intent TradeIntent, msg 
 		!strings.Contains(low, "liq-distance") {
 		return
 	}
-	key := intent.Canonical + "|" + intent.VenueBuy + "|" + intent.VenueSell
+	// D-556：节流键追加解析出的腿 venue——同组合不同账户各提醒（业主要知道给谁注资）。
+	leg := alertLeg(msg, intent.VenueBuy, intent.VenueSell)
+	if plain := fundingAlertText(intent, msg, g.venueAlias); plain != "" {
+		g.warnThrottled(ctx, intent, leg, plain)
+		return
+	}
+	g.warnThrottled(ctx, intent, leg,
+		fmt.Sprintf("[资金拒单] %s %s net=%.1fbps: %s（≥6h 节流，重复见 autotrade_log）",
+			intent.Strategy, intent.Canonical, intent.NetBps, errclass.TruncateNote(msg, 120)))
+}
+
+// warnThrottled D-472 节流本体（D-556 起 key=canonical|buy|sell|leg venue）：
+// ≥6h 至多一条 warn；重复仅 autotrade_log 留痕（上方已落库）。
+func (g *Gate) warnThrottled(ctx context.Context, intent TradeIntent, legVK, plain string) {
+	key := intent.Canonical + "|" + intent.VenueBuy + "|" + intent.VenueSell + "|" + legVK
 	g.lastMarginWarnMu.Lock()
 	now := time.Now()
 	if last, ok := g.lastMarginWarn[key]; ok && now.Sub(last) < marginWarnInterval {
@@ -90,9 +119,7 @@ func (g *Gate) marginWarnThrottled(ctx context.Context, intent TradeIntent, msg 
 	}
 	g.lastMarginWarn[key] = now
 	g.lastMarginWarnMu.Unlock()
-	if err := g.store.InsertAlert(ctx, nil, "warn",
-		fmt.Sprintf("[资金拒单] %s %s net=%.1fbps: %s（≥6h 节流，重复见 autotrade_log）",
-			intent.Strategy, intent.Canonical, intent.NetBps, errclass.TruncateNote(msg, 120))); err != nil {
+	if err := g.store.InsertAlert(ctx, nil, "warn", plain); err != nil {
 		log.Printf("[autotrade] margin warn insert: %v", err)
 	}
 }

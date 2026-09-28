@@ -18,13 +18,13 @@ func TestD472_MarginWarnThrottled(t *testing.T) {
 	}
 	defer st.Close()
 	ctx := context.Background()
-	if _, err := st.Pool().Exec(ctx, `DELETE FROM alerts WHERE message LIKE '[资金拒单]%'`); err != nil {
+	if _, err := st.Pool().Exec(ctx, `DELETE FROM alerts WHERE message LIKE '[资金拒单]%' OR message LIKE '%【请加保证金】%'`); err != nil {
 		t.Fatal(err)
 	}
-	defer st.Pool().Exec(ctx, `DELETE FROM alerts WHERE message LIKE '[资金拒单]%'`)
+	defer st.Pool().Exec(ctx, `DELETE FROM alerts WHERE message LIKE '[资金拒单]%' OR message LIKE '%【请加保证金】%'`)
 	count := func() int {
 		var n int
-		if err := st.Pool().QueryRow(ctx, `SELECT count(*) FROM alerts WHERE level='warn' AND message LIKE '[资金拒单]%'`).Scan(&n); err != nil {
+		if err := st.Pool().QueryRow(ctx, `SELECT count(*) FROM alerts WHERE level='warn' AND (message LIKE '[资金拒单]%' OR message LIKE '%【请加保证金】%')`).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		return n
@@ -35,7 +35,7 @@ func TestD472_MarginWarnThrottled(t *testing.T) {
 
 	// 锚 A3：同一 margin 拒绝连续 10 次 → alerts 仅 1 行 warn（≥6h 节流）。
 	for i := 0; i < 10; i++ {
-		g.marginWarnThrottled(ctx, intent, "Abort: binance margin insufficient: need 20.00 > avail 8.00 × 0.80")
+		g.marginWarnThrottled(ctx, intent, "Abort: gate margin insufficient: need 20.00 > avail 8.00 × 0.80")
 	}
 	if n := count(); n != 1 {
 		t.Fatalf("10 连拒应恰 1 条 warn（≥6h 节流锚），got %d", n)

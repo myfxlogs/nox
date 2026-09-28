@@ -31,6 +31,8 @@ type Gate struct {
 	// D-549 R1：执行面统一资金读口（与 dashboard 共享一实例；nil=未接线跳过 Src 闸——
 	// dashboard 侧 marginFloorEval 仍保有 CEX 执行面 fail-closed 兜底）。
 	capView *capitalview.View
+	// D-556：账号别名读口（main 装配 ListAccountAliases 闭包；nil=回落 bare 键）。
+	venueAlias func(vk string) string
 	// D-472 S3：资金拒单业主告警节流（per combo key ≥6h 至多一条 warn；内存态重启重置，
 	// autotrade_log 全量审计不受节流影响）。
 	lastMarginWarn   map[string]time.Time
