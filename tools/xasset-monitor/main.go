@@ -35,25 +35,30 @@ func main() {
 	}
 }
 
-func run(ctx context.Context) error {
+func run(ctx context.Context) (err error) {
 	dsn := os.Getenv("DB_DSN")
 	if dsn == "" {
 		return fmt.Errorf("DB_DSN 未设置")
 	}
-	proxyURL := os.Getenv("BINANCE_PROXY_URL")
-	if proxyURL == "" {
-		return fmt.Errorf("BINANCE_PROXY_URL 未设置")
-	}
-	exnessVenue := os.Getenv("ARB_XASSET_EXNESS_VENUE")
-	if exnessVenue == "" {
-		exnessVenue = "3001157"
-	}
-
 	st, err := pgstore.New(ctx, dsn)
 	if err != nil {
 		return fmt.Errorf("connect pg: %w", err)
 	}
 	defer st.Close()
+	// D-558 S2：named-return defer 单点捕获——启动/执行致命错统一进 reportFatal
+	// （alerts critical + app_secrets 飞书直推 + 30min 去重；pair skip 不进此通道）。
+	defer func() { reportFatal(ctx, st, err) }()
+
+	// D-558 S1：BINANCE_PROXY_URL 与 core 同源——store→LoadAppConfig→
+	// ApplyAppConfigEnvOverlay（DB>env），与 backfill 入口共用 binanceProxyURL()。
+	proxyURL, err := binanceProxyURL(ctx, st)
+	if err != nil {
+		return err
+	}
+	exnessVenue := os.Getenv("ARB_XASSET_EXNESS_VENUE")
+	if exnessVenue == "" {
+		exnessVenue = "3001157"
+	}
 
 	hc := httpx.Client()
 
