@@ -19,14 +19,16 @@ import (
 func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.PaperSpotCarry,
 	rowByKey map[string]UniverseRow, dirtyByKey map[string]string, silentMt map[string]bool, now time.Time) (int, error) {
 	exited := 0
-	// D-474a S2：cex 腿 canonical→raw symbol 索引（funding 边界事实键=venue+raw symbol；
-	// HedgeCanonical/Symbol 双路归一键——取 universe 行 Symbol 为 raw）。
+	// D-474a S2：cex 腿 canonical→facts symbol 索引（funding 边界事实键=venue+collector
+	// canonical 形=cexFactSymbol(Symbol)，gate XAU_USDT→XAUUSDT、okx XAU-USDT-SWAP→XAUUSDT；
+	// HedgeCanonical/Symbol 双路归一键）。D-550：原样回 raw 键（US30_USDT）直查 facts 零命中
+	// →边界 fail-closed→gate/okx 纸面 accrued 恒 0。
 	cexRawByCanon := map[string]string{}
 	if uniRows, uerr := st.ListCexUniverse(ctx); uerr == nil {
 		for _, ur := range uniRows {
 			for _, canon := range []string{ur.HedgeCanonical, ur.Symbol} {
 				if k := ur.Venue + "|" + NormalizeJoinKey(canon); canon != "" {
-					cexRawByCanon[k] = ur.Symbol
+					cexRawByCanon[k] = cexFactSymbol(ur.Symbol)
 				}
 			}
 		}

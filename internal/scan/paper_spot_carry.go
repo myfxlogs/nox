@@ -238,7 +238,7 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 		// recalc=存量行回迁哨兵（0139 置 NULL）：全生命周期重算+覆盖写；覆盖不全→留旧值下轮重试。
 		recalc := p.LastAccrueTs == nil
 		accruedAdd, settledTo, aok, aerr := AccruePaperLegs(ctx, st, []PaperLegAccrue{{
-			Kind: fact.KindFunding, Venue: p.VenueA, Symbol: p.Symbol,
+			Kind: fact.KindFunding, Venue: p.VenueA, Symbol: cexFactSymbol(p.Symbol), // D-550：p.Symbol=universe raw（gate BTC_USDT/okx -SWAP），facts 键=canonical 紧凑形
 			SideFactor: sideFactor, CurRate: f, CurOK: true,
 		}}, base, now, p.QtyUSD)
 		if aerr != nil {
