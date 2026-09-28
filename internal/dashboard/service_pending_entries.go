@@ -18,6 +18,7 @@ import (
 
 	v1 "arb/internal/gen/dashboardv1"
 	"connectrpc.com/connect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // 档位判据常量（D-478 S4）。
@@ -80,6 +81,7 @@ func (s *Service) pendingEntries(ctx context.Context) ([]*v1.XAssetPendingEntryR
 	if err != nil {
 		return nil, connectErr(err)
 	}
+	rejects := s.fundingRejectFacts(ctx) // D-560 S2b：近6h资金拒批量透出（禁N+1）
 	var scored []scoredRow
 	for _, c := range combos {
 		if !c.Enabled {
@@ -91,14 +93,22 @@ func (s *Service) pendingEntries(ctx context.Context) ([]*v1.XAssetPendingEntryR
 		}
 		kind, reason, depth, ready := s.probeGates(ctx, c, venueAllow, canonAllow, flags, caps)
 		tier, detail, warn := s.comboTier(ctx, c, snaps)
-		scored = append(scored, scoredRow{
-			depth: depth,
-			row: &v1.XAssetPendingEntryRow{
-				ComboId: c.ID, ComboLabel: label, EntryKind: kind,
-				WaitReason: reason, Ready: ready,
-				Tier: tier, TierDetail: detail, TierWarn: warn,
-			},
-		})
+		row := &v1.XAssetPendingEntryRow{
+			ComboId: c.ID, ComboLabel: label, EntryKind: kind,
+			WaitReason: reason, Ready: ready,
+			Tier: tier, TierDetail: detail, TierWarn: warn,
+		}
+		if r, ok := fundingRejectFor(rejects, c.CanonicalBuy, c.CanonicalSell, c.VenueBuy, c.VenueSell); ok {
+			row.RecentFundingReject = true
+			row.RecentRejectReason = rejectReasonText(r)
+		}
+		if be := s.breakerFor(c); be != nil { // D-560 S3：熔断态透出
+			row.BreakerPaused = true
+			row.BreakerClass = be.Class
+			row.BreakerResumeAt = timestamppb.New(be.ResumeAt)
+			row.BreakerCount = int32(be.Count)
+		}
+		scored = append(scored, scoredRow{depth: depth, row: row})
 	}
 	// D-483 排序（服务端）：最可能入场的排最上——闸深降序（闯到越深的闸=越接近
 	// 入场，就绪 depth=7 天然置顶）；同深按 comboId 稳定序。

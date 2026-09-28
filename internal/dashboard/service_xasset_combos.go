@@ -34,6 +34,7 @@ func (s *Service) ListXAssetAllowCombos(ctx context.Context, _ *connect.Request[
 	}
 	// D-547 S3④：在仓金额聚合 + 双腿池可用 + 闸冲突（缺一腿池/可用<notional×2=结构性锁死红标）。
 	snaps, _ := s.gradDB().LatestVenueAccountSnapshots(ctx)
+	rejects := s.fundingRejectFacts(ctx) // D-560 S2b：近6h资金拒批量透出（禁N+1）
 	out := make([]*v1.XAssetAllowComboRow, 0, len(rows))
 	for _, r := range rows {
 		row := &v1.XAssetAllowComboRow{
@@ -76,6 +77,16 @@ func (s *Service) ListXAssetAllowCombos(ctx context.Context, _ *connect.Request[
 			if avail < need {
 				conflict = true
 			}
+		}
+		if rr, ok := fundingRejectFor(rejects, r.CanonicalBuy, r.CanonicalSell, r.VenueBuy, r.VenueSell); ok {
+			row.RecentFundingReject = true
+			row.RecentRejectReason = rejectReasonText(rr)
+		}
+		if be := s.breakerFor(r); be != nil { // D-560 S3：熔断态透出
+			row.BreakerPaused = true
+			row.BreakerClass = be.Class
+			row.BreakerResumeAt = timestamppb.New(be.ResumeAt)
+			row.BreakerCount = int32(be.Count)
 		}
 		row.CapConflict = conflict
 		row.PoolSource = src
@@ -191,6 +202,37 @@ func (s *Service) PreviewXAssetComboRisk(ctx context.Context, req *connect.Reque
 		{m.VenueSell, cs, "sell"},
 	}
 	resp.Risk = s.graduationRiskReport(ctx, legs, m.NotionalUsd, "combo", nil)
+	resp.Ok = true
+	return connect.NewResponse(resp), nil
+}
+
+// ResumeXAssetCombo D-560 S3：熔断暂停「我已处理·立即重试」——清该组合 dedupKey
+// 前缀命中的全部熔断条目（RejectBreakerReader 接口注入；未接线 fail-closed 返错）。
+func (s *Service) ResumeXAssetCombo(ctx context.Context, req *connect.Request[v1.ResumeXAssetComboRequest]) (*connect.Response[v1.ResumeXAssetComboResponse], error) {
+	resp := &v1.ResumeXAssetComboResponse{}
+	if s.rejectBreaker == nil {
+		resp.Error = "熔断读口未接线（rejectBreaker nil）"
+		return connect.NewResponse(resp), nil
+	}
+	var found *pgstore.XAssetComboAdminRow
+	rows, err := s.gradDB().ListXAssetAllowCombosAll(ctx)
+	if err != nil {
+		resp.Error = "combos read: " + err.Error()
+		return connect.NewResponse(resp), nil
+	}
+	for i := range rows {
+		if rows[i].ID == req.Msg.ComboId {
+			found = &rows[i]
+			break
+		}
+	}
+	if found == nil {
+		resp.Error = fmt.Sprintf("combo #%d 不存在", req.Msg.ComboId)
+		return connect.NewResponse(resp), nil
+	}
+	for _, dk := range breakerDedupKeys(*found) {
+		resp.Cleared += int32(s.rejectBreaker.ResumeBreaker(dk))
+	}
 	resp.Ok = true
 	return connect.NewResponse(resp), nil
 }

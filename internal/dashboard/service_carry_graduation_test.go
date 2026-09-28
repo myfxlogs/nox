@@ -58,6 +58,7 @@ type fakeGradDB struct {
 	updated         *pgstore.XAssetComboAdminRow
 	updateErr       error
 	allowRules      []pgstore.AutotradeAllowRule // D-557：venue 规则 join 测试面
+	failedLogs      []pgstore.AutotradeLog       // D-560：近窗 FAILED autotrade_logs 测试面
 }
 
 func (f *fakeGradDB) GetCarryGraduation(context.Context, int64) (*pgstore.CarryGraduation, error) {
@@ -169,6 +170,9 @@ func (f *fakeGradDB) ListExchangeConfigs(context.Context) ([]pgstore.ExchangeCon
 
 func (f *fakeGradDB) ListAutotradeAllowRulesAll(context.Context) ([]pgstore.AutotradeAllowRule, error) {
 	return f.allowRules, nil
+}
+func (f *fakeGradDB) ListRecentFailedAutotradeLogs(context.Context, time.Duration) ([]pgstore.AutotradeLog, error) {
+	return f.failedLogs, nil // D-560：拒事实透出测试面
 }
 func (f *fakeGradDB) ListXAssetAllowCombosAll(context.Context) ([]pgstore.XAssetComboAdminRow, error) {
 	return f.adminRows, nil

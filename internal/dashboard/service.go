@@ -189,6 +189,7 @@ type Service struct {
 	pfAdmissionControl pfAdmissionControl                                      // D-491 S6：准入评估器注入（nil=RPC 降级报错）
 	allowVenuesSource  func(ctx context.Context) (map[string]bool, error)      // D-443 S4：venue 白名单表活读 getter（nil=空集保守全缺口）
 	autoMapFn          func(ctx context.Context, venue string) (string, error) // AutoMap 摘要 seam（nil=真身 s.AutoMapBroker）
+	rejectBreaker      RejectBreakerReader                                     // D-560 S3：拒单熔断快照/恢复（nil=无透出）
 
 	// D-159 W1a I6：environment/is_real 一致性检查（手动入口同源）。
 	// environment 空 = 未配置（不检查，回退旧行为）。

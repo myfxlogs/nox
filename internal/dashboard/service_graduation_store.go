@@ -46,6 +46,8 @@ type graduationStore interface {
 	ListXAssetAllowCombosAll(ctx context.Context) ([]pgstore.XAssetComboAdminRow, error)
 	UpdateXAssetAllowCombo(ctx context.Context, r *pgstore.XAssetComboAdminRow) (bool, error)
 	ListOpenPositionsForCombo(ctx context.Context, canonicalBuy, canonicalSell, venueBuy, venueSell string) ([]int64, float64, error)
+	// D-560 S2b：近窗 FAILED autotrade_logs 批量面（拒事实透出，禁 N+1）。
+	ListRecentFailedAutotradeLogs(ctx context.Context, window time.Duration) ([]pgstore.AutotradeLog, error)
 	// D-544：非 mt×cex 结构 ticks 簿锚（ASOF 双腿对齐 adverse 成本 p95）。
 	TickAdverseBasisP95(ctx context.Context, buyVenueKey, buySym, sellVenueKey, sellSym string, since time.Time) (float64, bool, error)
 }
