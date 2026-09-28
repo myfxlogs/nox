@@ -28,7 +28,7 @@ type TxsCollector struct {
 	address      string
 	store        *pgstore.Store
 	base         string
-	apiKey       string
+	apiKey       func() string
 	tronscanBase string          // D-279：TronScan cheatStatus 查询基址（默认 DefaultTronscanBase，空=跳过）
 	rentalPayers map[string]bool // TRX_RENTAL_PAYERS env 解析集
 	// D-258 S2：能量租金率 floor 告警（ARB_TRX_ENERGY_RATE_FLOOR_PCT，默认 8.0；0=禁用）。
@@ -45,7 +45,7 @@ type TxsCollector struct {
 
 // NewTxsCollector 创建交易流采集器。rentalPayers 为付款方地址集（env 解析）。
 // floorPct=能量租金率 floor 告警阈值（0=禁用）。tronscanBase 空=DefaultTronscanBase（D-296 S3 参数化）。
-func NewTxsCollector(address string, store *pgstore.Store, base, apiKey, tronscanBase string, rentalPayers []string, floorPct float64) *TxsCollector {
+func NewTxsCollector(address string, store *pgstore.Store, base string, apiKey func() string, tronscanBase string, rentalPayers []string, floorPct float64) *TxsCollector {
 	if base == "" {
 		base = DefaultBase
 	}
@@ -65,7 +65,7 @@ func NewTxsCollector(address string, store *pgstore.Store, base, apiKey, tronsca
 // 2026-09-15 业主报「—」修复：原始交易 parameter 仅 owner_address，链上权威值在 TXINFO withdraw_amount。
 // 失败/缺字段=0（不阻断采集；UpsertTRXTx 按 tx_id 幂等，下轮 Poll 重试）。
 func (c *TxsCollector) fetchWithdrawAmount(ctx context.Context, txID string) int64 {
-	body, err := tronPost(ctx, c.base, c.apiKey, "/wallet/gettransactioninfobyid",
+	body, err := tronPost(ctx, c.base, c.apiKey(), "/wallet/gettransactioninfobyid",
 		fmt.Sprintf(`{"value":"%s","visible":true}`, txID))
 	if err != nil {
 		return 0
@@ -118,7 +118,7 @@ func (c *TxsCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 		if fingerprint != "" {
 			url += "&fingerprint=" + fingerprint
 		}
-		body, err := tronGet(ctx, c.base, c.apiKey, url)
+		body, err := tronGet(ctx, c.base, c.apiKey(), url)
 		if err != nil {
 			return nil, fmt.Errorf("trx txs fetch (page %d): %w", page, err)
 		}

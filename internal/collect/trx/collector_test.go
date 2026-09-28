@@ -67,7 +67,7 @@ func TestAccountCollector_Poll_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, "")
+	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, func() string { return "" })
 	facts, err := c.Poll(context.Background())
 	if err != nil {
 		t.Fatalf("Poll: %v", err)
@@ -130,7 +130,7 @@ func TestAccountCollector_Poll_EnergySelfStake(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, "")
+	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, func() string { return "" })
 	if _, err := c.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestAccountCollector_Poll_RESTFail(t *testing.T) {
 		w.WriteHeader(500)
 	}))
 	defer srv.Close()
-	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, "")
+	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, func() string { return "" })
 	if _, err := c.Poll(context.Background()); err == nil {
 		t.Fatal("Poll should fail on 500")
 	}
@@ -195,7 +195,7 @@ func TestTxsCollector_Poll_Classify(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewTxsCollector(monitorAddr, st, srv.URL, "", "", []string{rentalPayer}, 0)
+	c := NewTxsCollector(monitorAddr, st, srv.URL, func() string { return "" }, "", []string{rentalPayer}, 0)
 	c.tronscanBase = "" // D-279：跳过 TronScan cheatStatus 查询（测试用 mock）
 	if _, err := c.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll: %v", err)
@@ -253,7 +253,7 @@ func TestTxsCollector_Poll_Pagination(t *testing.T) {
 	}))
 	defer srv2.Close()
 
-	c := NewTxsCollector(monitorAddr, st, srv2.URL, "", "", nil, 0)
+	c := NewTxsCollector(monitorAddr, st, srv2.URL, func() string { return "" }, "", nil, 0)
 	c.tronscanBase = "" // D-279：跳过 TronScan
 	if _, err := c.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll: %v", err)
@@ -279,7 +279,7 @@ func TestTxsCollector_Poll_Idempotent(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewTxsCollector(monitorAddr, st, srv.URL, "", "", nil, 0)
+	c := NewTxsCollector(monitorAddr, st, srv.URL, func() string { return "" }, "", nil, 0)
 	c.tronscanBase = "" // D-279：跳过 TronScan
 	// 第一次 poll
 	if _, err := c.Poll(context.Background()); err != nil {
@@ -331,7 +331,7 @@ func TestTxsCollector_Poll_R5GapBackfill(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewTxsCollector(monitorAddr, st, srv.URL, "", "", nil, 0)
+	c := NewTxsCollector(monitorAddr, st, srv.URL, func() string { return "" }, "", nil, 0)
 	c.tronscanBase = "" // D-279：跳过 TronScan
 	if _, err := c.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll: %v", err)
@@ -369,7 +369,7 @@ func TestWitnessCollector_Poll_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewWitnessCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, "")
+	c := NewWitnessCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, func() string { return "" })
 	if _, err := c.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
@@ -723,7 +723,7 @@ func TestAccountCollector_Poll_MultiSR_VotesTotalSum(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, "")
+	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, func() string { return "" })
 	if _, err := c.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
@@ -791,7 +791,7 @@ func TestTxsCollector_FetchCheatStatuses(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewTxsCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", nil, "", "", "", nil, 0)
+	c := NewTxsCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", nil, "", func() string { return "" }, "", nil, 0)
 	c.tronscanBase = srv.URL
 	m := c.fetchCheatStatuses(context.Background(), 200)
 	if m == nil {
@@ -807,7 +807,7 @@ func TestTxsCollector_FetchCheatStatuses(t *testing.T) {
 
 // TestTxsCollector_FetchCheatStatuses_EmptyBase D-279：tronscanBase 空=跳过返回 nil。
 func TestTxsCollector_FetchCheatStatuses_EmptyBase(t *testing.T) {
-	c := NewTxsCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", nil, "", "", "", nil, 0)
+	c := NewTxsCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", nil, "", func() string { return "" }, "", nil, 0)
 	c.tronscanBase = ""
 	m := c.fetchCheatStatuses(context.Background(), 200)
 	if m != nil {
@@ -834,7 +834,7 @@ func TestTxsCollector_Poll_CheatStatusPersisted(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewTxsCollector(monitorAddr, st, srv.URL, "", "", nil, 0)
+	c := NewTxsCollector(monitorAddr, st, srv.URL, func() string { return "" }, "", nil, 0)
 	c.tronscanBase = srv.URL // D-279：指向 mock
 	if _, err := c.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll: %v", err)
@@ -901,7 +901,7 @@ func TestFetchWithdrawAmount(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	defer srv.Close()
-	c := NewTxsCollector("addr", nil, srv.URL, "", "", nil, -1)
+	c := NewTxsCollector("addr", nil, srv.URL, func() string { return "" }, "", nil, -1)
 	if got := c.fetchWithdrawAmount(context.Background(), "f4d079ed"); got != 12030015 {
 		t.Errorf("withdraw_amount = %d, want 12030015", got)
 	}
@@ -913,12 +913,12 @@ func TestFetchWithdrawAmount_ZeroOnMissing(t *testing.T) {
 		fmt.Fprint(w, `{}`) // 无 withdraw_amount
 	}))
 	defer srv.Close()
-	c := NewTxsCollector("addr", nil, srv.URL, "", "", nil, -1)
+	c := NewTxsCollector("addr", nil, srv.URL, func() string { return "" }, "", nil, -1)
 	if got := c.fetchWithdrawAmount(context.Background(), "tx"); got != 0 {
 		t.Errorf("missing withdraw_amount should be 0, got %d", got)
 	}
 	// 网络失败同样归 0
-	c2 := NewTxsCollector("addr", nil, "http://127.0.0.1:1", "", "", nil, -1)
+	c2 := NewTxsCollector("addr", nil, "http://127.0.0.1:1", func() string { return "" }, "", nil, -1)
 	if got := c2.fetchWithdrawAmount(context.Background(), "tx"); got != 0 {
 		t.Errorf("network fail should be 0, got %d", got)
 	}

@@ -18,11 +18,11 @@ type WitnessCollector struct {
 	address string
 	store   *pgstore.Store
 	base    string
-	apiKey  string
+	apiKey  func() string
 }
 
 // NewWitnessCollector 创建见证人采集器。address 用于取投票 SR 地址。
-func NewWitnessCollector(address string, store *pgstore.Store, base, apiKey string) *WitnessCollector {
+func NewWitnessCollector(address string, store *pgstore.Store, base string, apiKey func() string) *WitnessCollector {
 	if base == "" {
 		base = DefaultBase
 	}
@@ -34,7 +34,7 @@ func (c *WitnessCollector) Kind() string { return "trx_witness" }
 
 // Poll 采集 listwitnesses 并只存 isJobs 行（在任 SR）。
 func (c *WitnessCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
-	body, err := tronPost(ctx, c.base, c.apiKey, "/wallet/getaccount",
+	body, err := tronPost(ctx, c.base, c.apiKey(), "/wallet/getaccount",
 		fmt.Sprintf(`{"address":"%s","visible":true}`, c.address))
 	if err != nil {
 		return nil, fmt.Errorf("trx witness getaccount: %w", err)
@@ -47,7 +47,7 @@ func (c *WitnessCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 		return nil, nil // 无投票
 	}
 
-	body2, err := tronPost(ctx, c.base, c.apiKey, "/wallet/listwitnesses", "{}")
+	body2, err := tronPost(ctx, c.base, c.apiKey(), "/wallet/listwitnesses", "{}")
 	if err != nil {
 		return nil, fmt.Errorf("trx listwitnesses: %w", err)
 	}

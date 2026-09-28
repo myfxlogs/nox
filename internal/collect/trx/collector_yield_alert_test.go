@@ -40,7 +40,7 @@ func TestMaybeAlertEnergyRate_BelowFloor(t *testing.T) {
 	st := newTestStore(t)
 	ctx := context.Background()
 	seedRentalAndAccount(t, st, 1000000, 17270000000) // 1 TRX/day, 17270 TRX staked
-	c := NewTxsCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, "", "", "", nil, 8.0)
+	c := NewTxsCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, "", func() string { return "" }, "", nil, 8.0)
 	c.maybeAlertEnergyRate(ctx)
 	alerts, err := st.ListAlerts(ctx, 10, 0)
 	if err != nil {
@@ -63,7 +63,7 @@ func TestMaybeAlertEnergyRate_AboveFloor(t *testing.T) {
 		t.Fatalf("cleanup alerts: %v", err)
 	}
 	seedRentalAndAccount(t, st, 5000000, 17270000000) // 5 TRX/day, 17270 TRX staked
-	c := NewTxsCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, "", "", "", nil, 8.0)
+	c := NewTxsCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, "", func() string { return "" }, "", nil, 8.0)
 	c.maybeAlertEnergyRate(ctx)
 	alerts, err := st.ListAlerts(ctx, 10, 0)
 	if err != nil {
@@ -97,7 +97,7 @@ func TestMaybeAlertEnergyRate_ColdStart(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("InsertTRXAccount: %v", err)
 	}
-	c := NewTxsCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, "", "", "", nil, 8.0)
+	c := NewTxsCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, "", func() string { return "" }, "", nil, 8.0)
 	c.maybeAlertEnergyRate(ctx)
 	alerts, err := st.ListAlerts(ctx, 10, 0)
 	if err != nil {
@@ -113,7 +113,7 @@ func TestMaybeAlertEnergyRate_DailyThrottle(t *testing.T) {
 	st := newTestStore(t)
 	ctx := context.Background()
 	seedRentalAndAccount(t, st, 1000000, 17270000000) // below floor
-	c := NewTxsCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, "", "", "", nil, 8.0)
+	c := NewTxsCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, "", func() string { return "" }, "", nil, 8.0)
 	c.maybeAlertEnergyRate(ctx)
 	c.maybeAlertEnergyRate(ctx) // 第二次，应节流
 	alerts, err := st.ListAlerts(ctx, 10, 0)
@@ -133,7 +133,7 @@ func TestMaybeAlertEnergyRate_FloorDisabled(t *testing.T) {
 		t.Fatalf("cleanup alerts: %v", err)
 	}
 	seedRentalAndAccount(t, st, 1000000, 17270000000) // below floor but floor=0
-	c := NewTxsCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, "", "", "", nil, 0)
+	c := NewTxsCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, "", func() string { return "" }, "", nil, 0)
 	c.maybeAlertEnergyRate(ctx)
 	alerts, err := st.ListAlerts(ctx, 10, 0)
 	if err != nil {

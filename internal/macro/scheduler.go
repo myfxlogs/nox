@@ -34,12 +34,24 @@ type Notifier interface {
 }
 
 // Deps 调度依赖（Now 测试注入；ChatID=feishu_target 绑定推送目标）。
+// D-545 热读化：FredKey/Enabled 改 getter——FredKey 每班现取（密钥热更即效）；
+// Enabled 每班唤醒首判（ARB_MACRO_ENABLED 热闸：false=当班跳过不杀 goroutine；nil=恒开）。
 type Deps struct {
 	Store   Store
 	Notify  Notifier
 	ChatID  string
-	FredKey string
+	FredKey func() string
+	Enabled func() bool
 	Now     func() time.Time
+}
+
+// enabled 当班闸（nil=恒开保持旧语义；false=当班跳过）。
+func (d Deps) enabled(name string) bool {
+	if d.Enabled != nil && !d.Enabled() {
+		log.Printf("[macro:%s] disabled 当班跳过", name)
+		return false
+	}
+	return true
 }
 
 // Run 阻塞至 ctx 取消（三路子 goroutine 经 safego 托管，panic 不拖垮 core）。
@@ -61,6 +73,9 @@ func cotLoop(ctx context.Context, d Deps, client *http.Client) {
 		next := nextWeeklyBJ(d.Now(), time.Saturday, 5, 0)
 		if !sleepUntil(ctx, next) {
 			return
+		}
+		if !d.enabled("cot") {
+			continue
 		}
 		baseline, err := d.Store.MaxCotReportDate(ctx)
 		if err != nil {
@@ -98,6 +113,9 @@ func calendarLoop(ctx context.Context, d Deps, client *http.Client) {
 	refresh := time.NewTicker(4 * time.Hour)
 	defer refresh.Stop()
 	fetchAndLog := func(why string) {
+		if !d.enabled("calendar") {
+			return
+		}
 		if err := fetchCalendarWeeks(ctx, d, client); err != nil {
 			log.Printf("[macro:calendar] %s: %v", why, err)
 		}
@@ -120,6 +138,9 @@ func calendarLoop(ctx context.Context, d Deps, client *http.Client) {
 		}
 		if !sleepUntil(ctx, nextDailyBJ(d.Now(), 7, 30)) {
 			return
+		}
+		if !d.enabled("calendar") {
+			continue
 		}
 		sendDailyReport(ctx, d)
 	}
@@ -161,7 +182,14 @@ func fredLoop(ctx context.Context, d Deps, client *http.Client) {
 		if !sleepUntil(ctx, nextDailyBJ(d.Now(), 8, 0)) {
 			return
 		}
-		rows, err := FetchFred(ctx, client, d.FredKey, 10)
+		if !d.enabled("fred") {
+			continue
+		}
+		key := ""
+		if d.FredKey != nil {
+			key = d.FredKey()
+		}
+		rows, err := FetchFred(ctx, client, key, 10)
 		if err != nil {
 			log.Printf("[macro:fred] fetch: %v", err)
 			continue
@@ -206,8 +234,9 @@ func maxReportDate(rows []pgstore.CotPosition) time.Time {
 	return max
 }
 
-// sleepUntil ctx 感知睡眠（到点=true；取消=false）。
-func sleepUntil(ctx context.Context, t time.Time) bool {
+// sleepUntil ctx 感知睡眠（到点=true；取消=false）。var=测试注入点（同 fredURL 先例：
+// D-545 当班闸测假睡眠速过当班，生产零改动）。
+var sleepUntil = func(ctx context.Context, t time.Time) bool {
 	d := time.Until(t)
 	if d < 0 {
 		d = 0
