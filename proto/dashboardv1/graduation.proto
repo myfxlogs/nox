@@ -129,6 +129,10 @@ message VenueExposureCapRow {
   string live_source = 10;                 // ws|rest|snap|""（池缺取=空）
   google.protobuf.Timestamp live_updated_at = 11;
   bool over_cap = 12;                      // allocated>cap（静态闸已过载，红标警示）
+  // D-557 S1：通道白名单 join（合并单表用）——kind=venue 规则按 venue_key 命中；
+  // sim/real 双行并存取 real 优先。0=无规则行（前端显「未开通」）。
+  int64 allow_rule_id = 13;
+  bool allow_enabled = 14;
 }
 message ListVenueExposureCapsRequest {}
 message ListVenueExposureCapsResponse { repeated VenueExposureCapRow rows = 1; }

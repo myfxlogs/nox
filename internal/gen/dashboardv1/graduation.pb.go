@@ -1388,8 +1388,12 @@ type VenueExposureCapRow struct {
 	LiveSource       string                 `protobuf:"bytes,10,opt,name=live_source,json=liveSource,proto3" json:"live_source,omitempty"` // ws|rest|snap|""（池缺取=空）
 	LiveUpdatedAt    *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=live_updated_at,json=liveUpdatedAt,proto3" json:"live_updated_at,omitempty"`
 	OverCap          bool                   `protobuf:"varint,12,opt,name=over_cap,json=overCap,proto3" json:"over_cap,omitempty"` // allocated>cap（静态闸已过载，红标警示）
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// D-557 S1：通道白名单 join（合并单表用）——kind=venue 规则按 venue_key 命中；
+	// sim/real 双行并存取 real 优先。0=无规则行（前端显「未开通」）。
+	AllowRuleId   int64 `protobuf:"varint,13,opt,name=allow_rule_id,json=allowRuleId,proto3" json:"allow_rule_id,omitempty"`
+	AllowEnabled  bool  `protobuf:"varint,14,opt,name=allow_enabled,json=allowEnabled,proto3" json:"allow_enabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *VenueExposureCapRow) Reset() {
@@ -1502,6 +1506,20 @@ func (x *VenueExposureCapRow) GetLiveUpdatedAt() *timestamppb.Timestamp {
 func (x *VenueExposureCapRow) GetOverCap() bool {
 	if x != nil {
 		return x.OverCap
+	}
+	return false
+}
+
+func (x *VenueExposureCapRow) GetAllowRuleId() int64 {
+	if x != nil {
+		return x.AllowRuleId
+	}
+	return 0
+}
+
+func (x *VenueExposureCapRow) GetAllowEnabled() bool {
+	if x != nil {
+		return x.AllowEnabled
 	}
 	return false
 }
@@ -2890,7 +2908,7 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12?\n" +
 	"\x04risk\x18\x03 \x01(\v2&.arb.dashboard.v1.GraduationRiskReportH\x00R\x04risk\x88\x01\x01B\a\n" +
-	"\x05_risk\"\xc5\x03\n" +
+	"\x05_risk\"\x8e\x04\n" +
 	"\x13VenueExposureCapRow\x12\x1b\n" +
 	"\tvenue_key\x18\x01 \x01(\tR\bvenueKey\x12\x17\n" +
 	"\acap_usd\x18\x02 \x01(\x01R\x06capUsd\x12\x18\n" +
@@ -2906,7 +2924,9 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	" \x01(\tR\n" +
 	"liveSource\x12B\n" +
 	"\x0flive_updated_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\rliveUpdatedAt\x12\x19\n" +
-	"\bover_cap\x18\f \x01(\bR\aoverCap\"\x1e\n" +
+	"\bover_cap\x18\f \x01(\bR\aoverCap\x12\"\n" +
+	"\rallow_rule_id\x18\r \x01(\x03R\vallowRuleId\x12#\n" +
+	"\rallow_enabled\x18\x0e \x01(\bR\fallowEnabled\"\x1e\n" +
 	"\x1cListVenueExposureCapsRequest\"Z\n" +
 	"\x1dListVenueExposureCapsResponse\x129\n" +
 	"\x04rows\x18\x01 \x03(\v2%.arb.dashboard.v1.VenueExposureCapRowR\x04rows\"\x80\x01\n" +
