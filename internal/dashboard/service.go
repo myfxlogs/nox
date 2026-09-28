@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/capitalview"
 	"arb/internal/collect/cmc"
 	"arb/internal/config"
 	"arb/internal/exec"
@@ -41,6 +42,7 @@ type Service struct {
 	// nil=未装配→腿池直走快照兜底）。liveMu=校准单飞；liveQuerierFor=测试注入点；
 	// liveRestTTLDur 测试可缩短校准缓存。
 	balLedger      *bus.BalanceLedger
+	capView        *capitalview.View // D-549 S1：统一资金读口（capitalView() 惰性装配）
 	liveMu         sync.Mutex
 	liveQuerierFor func(ctx context.Context, venueKey string) (reconcile.AccountQuerier, string, bool)
 	liveSimWarned  map[int64]bool

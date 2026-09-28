@@ -110,6 +110,10 @@ func TestD434_MarginFloorEval_CEX(t *testing.T) {
 		store: s, qbus: bus.New(),
 		cexContractSize: func(venue, symbol string) (float64, bool) { return 0.001, true },
 	}
+	// D-549：CEX 执行链资金数=活账本/REST 实拉——喂 ws 活值（快照行只留 buffer 锚）。
+	led := bus.NewBalanceLedger()
+	svc.SetBalanceLedger(led)
+	led.Put("okx:unified", 1498.45, 1515.9, "USD", "ws", time.Now())
 	ok, known, detail := svc.marginFloorEval(ctx, "okx:perp", 4366)
 	if !ok || !known {
 		t.Fatalf("addNotional=$4366: ok=%v known=%v detail=%s（红=名义低估→隐含率虚高过度拦）", ok, known, detail)

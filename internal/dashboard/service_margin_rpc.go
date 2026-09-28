@@ -7,8 +7,9 @@ import (
 	"context"
 	"log"
 
+	"arb/internal/capitalview"
 	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/store/pgstore"
+	"arb/internal/keydomain"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -21,14 +22,13 @@ func (s *Service) ListAccountMarginStatus(ctx context.Context, _ *connect.Reques
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+	// D-549：展示列走统一读口 capitalview.Live（CEX=活账本/REST 实拉；快照兜底带龄注记）；
+	// 批量预取快照面省每行一查；资金列缺=如实空（不毁 RPC）。
 	snaps, err := s.store.LatestVenueAccountSnapshots(ctx)
 	if err != nil {
-		log.Printf("[margin-status] latest snapshots: %v", err) // 快照缺仅少展示列，不毁 RPC
+		log.Printf("[margin-status] latest snapshots: %v", err)
 	}
-	snapMap := make(map[string]pgstore.VenueAccountLatest, len(snaps))
-	for _, sn := range snaps {
-		snapMap[sn.Venue+"|"+sn.VenueType] = sn
-	}
+	cv := s.capitalView()
 	out := make([]*v1.AccountMarginStatus, 0, len(rows))
 	for _, r := range rows {
 		row := &v1.AccountMarginStatus{
@@ -45,31 +45,40 @@ func (s *Service) ListAccountMarginStatus(ctx context.Context, _ *connect.Reques
 		if r.SuggestedTopupUSD != nil {
 			row.SuggestedTopupUsd = *r.SuggestedTopupUSD
 		}
-		if sn, ok := snapMap[r.Venue+"|"+r.VenueType]; ok {
-			row.Currency = sn.Currency
-			if sn.BalanceRaw != nil {
-				row.Balance = *sn.BalanceRaw
+		f, ok := cv.LiveSnaps(ctx, keydomain.Join(r.Venue, r.VenueType), snaps)
+		if !ok {
+			out = append(out, row)
+			continue
+		}
+		row.Currency = f.Currency
+		row.Equity = f.Equity
+		row.Balance = f.Equity // proto 口径 CEX 余额=总权益；快照行有 balance_raw 时覆盖为实采
+		if f.HasBalance {
+			row.Balance = f.Balance
+		}
+		switch marginVenueClass(r.VenueType) {
+		case "cfd":
+			if f.HasAvailable {
+				row.FreeMargin = f.Available
+				row.MarginUsed = f.Equity - f.Available
 			}
-			if sn.EquityRaw != nil {
-				row.Equity = *sn.EquityRaw
-			}
-			switch marginVenueClass(r.VenueType) {
-			case "cfd":
-				if sn.FreeMarginRaw != nil {
-					row.FreeMargin = *sn.FreeMarginRaw
-					if sn.EquityRaw != nil {
-						row.MarginUsed = *sn.EquityRaw - *sn.FreeMarginRaw
-					}
+		case "cex":
+			if f.HasAvailable {
+				row.FreeMargin = f.Available
+				row.MarginUsed = f.Equity - f.Available
+				if row.MarginUsed < 0 {
+					row.MarginUsed = 0
 				}
-			case "cex":
-				// 可用头room≈equity−MMR；已用≈MMR（IMR 未采，如实近似）
-				if sn.EquityRaw != nil && sn.BufferMultiple != nil && *sn.BufferMultiple > 0 {
-					mmr := *sn.EquityRaw / *sn.BufferMultiple
-					row.MarginUsed = mmr
-					row.FreeMargin = *sn.EquityRaw - mmr
-					if row.FreeMargin < 0 {
-						row.FreeMargin = 0
-					}
+				break
+			}
+			// 可用未采：头room≈equity−MMR（IMR 未采，如实近似；buffer 仅快照面有）。
+			if sn, sok := capitalview.SnapPick(snaps, keydomain.Join(r.Venue, r.VenueType)); sok &&
+				sn.EquityRaw != nil && sn.BufferMultiple != nil && *sn.BufferMultiple > 0 {
+				mmr := *sn.EquityRaw / *sn.BufferMultiple
+				row.MarginUsed = mmr
+				row.FreeMargin = *sn.EquityRaw - mmr
+				if row.FreeMargin < 0 {
+					row.FreeMargin = 0
 				}
 			}
 		}

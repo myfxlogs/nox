@@ -5,6 +5,9 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"arb/internal/capitalview"
+	"arb/internal/store/pgstore"
 )
 
 // InitMarginGuard 装配保证金三档评估器：注册 snapshot 写口钩子（事件驱动评估，
@@ -42,28 +45,43 @@ func (s *Service) marginFloorEval(ctx context.Context, venueKey string, addNotio
 	if marginVenueClass(vt) == "nonMargin" {
 		return true, true, "non-margin venue" // 现货/资金账户无保证金概念（SSOT §1）——确定放行
 	}
-	snap, ok, err := s.store.LatestVenueAccountSnapshot(ctx, venue, vt)
+	// D-549 §5 安全裁定：CEX 执行链资金数=活账本/REST 实拉（capitalview.Live）；
+	// REST 校准失败 fail-closed 拒开——不降级用陈旧快照开真金仓（快照兜底仅限展示面）。
+	// MT venue 快照即其数据面（无私有流通道），原语义不变。
+	cexLive := capitalview.IsCEXVenue(venueKey)
+	var liveEq, liveAvail *float64
+	if cexLive {
+		f, ok := s.capitalView().Live(ctx, venueKey)
+		if !ok || !f.Live {
+			return false, true, fmt.Sprintf("venue %s 活资金不可得（活账本/REST 双败，执行面禁快照兜底，fail-closed 拒开）", venueKey)
+		}
+		liveEq = &f.Equity
+		if f.HasAvailable {
+			liveAvail = &f.Available
+		}
+	}
+	snap, ok, err := s.latestVenueSnapshotSafe(ctx, venue, vt)
 	if err != nil {
+		if cexLive {
+			return true, false, "buffer_multiple 快照行查询失败（隐含率锚缺）" // live 资金已得；隐含率不可算同 fail-open
+		}
 		return true, false, fmt.Sprintf("snapshot query err %v（fail-open）", err)
+	}
+	if cexLive {
+		// buffer_multiple 仅快照面有（隐含率锚，非资金数）——缺则同原 fail-open。
+		if ok && snap.BufferMultiple != nil && *snap.BufferMultiple > 0 {
+			return s.marginFloorCexEval(ctx, venue, vt, *liveEq, liveAvail, *snap.BufferMultiple, addNotionalUSD)
+		}
+		return true, false, "buffer_multiple not collected（live 资金已得，隐含率锚缺）"
 	}
 	if !ok || snap.EquityRaw == nil {
 		return true, false, "no account snapshot" // 未采 venue 无从判定
 	}
-	legs, err := s.store.ListOpenLegsForMargin(ctx)
+	sumNotional, hasLegs, err := s.marginOpenNotional(ctx, venue, vt)
 	if err != nil {
 		return true, false, fmt.Sprintf("open legs err %v（fail-open）", err)
 	}
-	var sumNotional float64
-	for _, l := range legs {
-		lv, lt := legSnapshotVenue(l.Venue)
-		if lv != venue || lt != vt {
-			continue
-		}
-		if n, nok := marginLegNotionalUSD(s.qbus, s.legContractSizeOf, l); nok {
-			sumNotional += n
-		}
-	}
-	if sumNotional <= 0 {
+	if !hasLegs {
 		return true, false, "no open legs (implied margin rate unknown)"
 	}
 	var avail, used float64
@@ -81,6 +99,56 @@ func (s *Service) marginFloorEval(ctx context.Context, venueKey string, addNotio
 		avail = *snap.EquityRaw - mmr
 		used = mmr // IMR 未知，以 MMR 为隐含率锚（保守：MMR≤IMR → 低估所需=偏放行，监控件口径）
 	}
+	return marginFloorJudge(avail, used, sumNotional, addNotionalUSD)
+}
+
+// marginFloorCexEval CEX 执行链判定（D-549）：equity/avail=live 实拉值；
+// 隐含率锚 mmr=liveEquity/buffer_multiple（buffer 仅快照面——隐含率元数据非资金数）。
+// avail=live 实采可用优先；缺→liveEquity−mmr 近似（同原快照口径）。
+func (s *Service) marginFloorCexEval(ctx context.Context, venue, vt string, equity float64, liveAvail *float64, bufferMultiple, addNotionalUSD float64) (bool, bool, string) {
+	sumNotional, hasLegs, err := s.marginOpenNotional(ctx, venue, vt)
+	if err != nil {
+		return true, false, fmt.Sprintf("open legs err %v（fail-open）", err)
+	}
+	if !hasLegs {
+		return true, false, "no open legs (implied margin rate unknown)"
+	}
+	used := equity / bufferMultiple // IMR 未知，以 MMR 为隐含率锚（保守同原口径）
+	avail := equity - used
+	if liveAvail != nil {
+		avail = *liveAvail // live 实采可用优先（venue 权威口径）
+	}
+	return marginFloorJudge(avail, used, sumNotional, addNotionalUSD)
+}
+
+// marginOpenNotional venue OPEN 腿名义 Σ（隐含率分母）。
+func (s *Service) marginOpenNotional(ctx context.Context, venue, vt string) (float64, bool, error) {
+	legs, err := s.store.ListOpenLegsForMargin(ctx)
+	if err != nil {
+		return 0, false, err
+	}
+	var sum float64
+	for _, l := range legs {
+		lv, lt := legSnapshotVenue(l.Venue)
+		if lv != venue || lt != vt {
+			continue
+		}
+		if n, nok := marginLegNotionalUSD(s.qbus, s.legContractSizeOf, l); nok {
+			sum += n
+		}
+	}
+	return sum, sum > 0, nil
+}
+
+// latestVenueSnapshotSafe 快照行查询（nil store 安全——部分构造 Service）。
+func (s *Service) latestVenueSnapshotSafe(ctx context.Context, venue, vt string) (*pgstore.VenueAccountLatest, bool, error) {
+	if s.store == nil {
+		return nil, false, nil
+	}
+	return s.store.LatestVenueAccountSnapshot(ctx, venue, vt)
+}
+
+func marginFloorJudge(avail, used, sumNotional, addNotionalUSD float64) (bool, bool, string) {
 	if used <= 0 {
 		return true, false, "used margin <=0 (implied rate unknown)"
 	}

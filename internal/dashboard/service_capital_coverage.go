@@ -10,6 +10,7 @@ import (
 	"time"
 
 	v1 "arb/internal/gen/dashboardv1"
+	"arb/internal/keydomain"
 
 	"connectrpc.com/connect"
 )
@@ -188,24 +189,39 @@ func venueAccountRows(ctx context.Context, s *Service) []*v1.CapitalCoverageRow 
 	if err != nil || len(lates) == 0 {
 		return nil
 	}
+	cv := s.capitalView()
 	out := make([]*v1.CapitalCoverageRow, 0, len(lates))
 	for _, l := range lates {
 		r := covRow("venue账户 " + l.Venue + "/" + l.VenueType)
 		r.Status = "有数"
-		age := time.Since(l.FetchedAt)
-		ageNote := fmt.Sprintf("%s 快照 %dh 前", l.VenueType, int(age.Hours()))
-		if age > 24*time.Hour {
-			ageNote += "（陈旧）"
+		// D-549：资金值走统一读口（CEX 活账本/REST 实拉）；快照行仅作枚举面+兜底值。
+		f, ok := cv.LiveSnaps(ctx, keydomain.Join(l.Venue, l.VenueType), lates)
+		eq, ccy, note := l.EquityRaw, l.Currency, ""
+		if ok {
+			eq = &f.Equity
+			ccy = f.Currency
+			if f.Live {
+				note = fmt.Sprintf("%s 活账本·%s", l.VenueType, f.Src)
+			} else {
+				note = f.Note // 快照兜底龄注记（禁静默）
+			}
 		}
-		if l.EquityRaw != nil && (l.Currency == "USDT" || l.Currency == "USD") { // D-361 S1：USDT/USD 同视 1:1
-			r.BalanceUsd = *l.EquityRaw
+		if note == "" { // 三径全空：快照龄如实标
+			age := time.Since(l.FetchedAt)
+			note = fmt.Sprintf("%s 快照 %dh 前", l.VenueType, int(age.Hours()))
+			if age > 24*time.Hour {
+				note += "（陈旧）"
+			}
+		}
+		if eq != nil && (ccy == "USDT" || ccy == "USD") { // D-361 S1：USDT/USD 同视 1:1
+			r.BalanceUsd = *eq
 			r.HasBalance = true
 			r.RealMoney = true
-			r.Note = ageNote
-		} else if l.EquityRaw != nil {
-			r.Note = fmt.Sprintf("%s，equity %.2f %s（非 USDT/USD 不折算）", ageNote, *l.EquityRaw, l.Currency)
+			r.Note = note
+		} else if eq != nil {
+			r.Note = fmt.Sprintf("%s，equity %.2f %s（非 USDT/USD 不折算）", note, *eq, ccy)
 		} else {
-			r.Note = ageNote + "，equity 空"
+			r.Note = note + "，equity 空"
 		}
 		out = append(out, r)
 	}

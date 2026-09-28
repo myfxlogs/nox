@@ -12,7 +12,6 @@ import (
 
 	"arb/internal/fact"
 	"arb/internal/keydomain"
-	"arb/internal/store/pgstore"
 )
 
 // allocPool 腿资金池快照行（equity 原币+currency+fetched_at；D-540 补 free_margin）。
@@ -25,34 +24,6 @@ type allocPool struct {
 	at       time.Time
 	live     bool   // D-542：实拉活账本/REST 校准源（非快照）
 	src      string // "ws"=私有流 / "rest"=实拉校准 / ""=快照兜底
-}
-
-// allocPoolOf 腿 venue_key→资金池快照行（SSOT §2 poolOf）：先精确 (venue,冒号后缀type)
-// 行；缺行/NULL equity 回退 (venue,unified)→(venue,perp)→该 venue 任意非空 equity 行；
-// 仍无=未采（false）。同所双池语义：spot×perp 组合两腿各取各自池行（现货花 spot 现金，
-// 永续占 perp 保证金）——bare venue 折叠是漏行（D-358fix 同判）。
-func allocPoolOf(snaps []pgstore.VenueAccountLatest, venueKey string) (allocPool, bool) {
-	k := keydomain.Parse(venueKey)
-	bare, vt := k.Venue, k.Type
-	pick := func(wantType string) (allocPool, bool) {
-		for _, r := range snaps {
-			if r.Venue == bare && r.VenueType == wantType && r.EquityRaw != nil {
-				return allocPool{key: keydomain.Join(bare, r.VenueType), equity: *r.EquityRaw, free: r.FreeMarginRaw, currency: r.Currency, at: r.FetchedAt}, true
-			}
-		}
-		return allocPool{}, false
-	}
-	for _, t := range []string{vt, "unified", "perp"} {
-		if p, ok := pick(t); ok {
-			return p, true
-		}
-	}
-	for _, r := range snaps {
-		if r.Venue == bare && r.EquityRaw != nil {
-			return allocPool{key: keydomain.Join(bare, r.VenueType), equity: *r.EquityRaw, free: r.FreeMarginRaw, currency: r.Currency, at: r.FetchedAt}, true
-		}
-	}
-	return allocPool{}, false
 }
 
 // allocUsable 池可用资金：free_margin 优先（venue 实采可用口径），缺 free → equity 回退。

@@ -15,7 +15,12 @@ import (
 )
 
 // SetBalanceLedger D-542：注入活账本（与 cex 私有流同实例；装配一次，nil 安全）。
-func (s *Service) SetBalanceLedger(l *bus.BalanceLedger) { s.balLedger = l }
+func (s *Service) SetBalanceLedger(l *bus.BalanceLedger) {
+	s.liveMu.Lock()
+	defer s.liveMu.Unlock()
+	s.balLedger = l
+	s.capView = nil // D-549：读口重建（账本实例变更）
+}
 
 // SetCapitalGapFetcher D-546：注入三缺口实拉器（生产=RPC 内自装配；测试注入计数 fake）。
 func (s *Service) SetCapitalGapFetcher(f CapitalGapFetcher) { s.capGaps = f }

@@ -6,15 +6,16 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
+	"arb/internal/capitalview"
 	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 )
 
 // comboTier D-478 S4：安全档位（服务端算，前端只渲染）。
 // needed=notional_usd（NULL→MaxGrossUSD 回退，仍缺→unset）；vs 腿 venue 权益×crossCap；
-// 权益源=fin_venue_account_snapshot 最新行（>5min=缺数据不猜）；任一腿超档即 warn。
+// 权益源=capitalview.Live 统一读口（D-549：活账本→REST 校准→快照兜底带龄注记，
+// 「快照+5min 墙钟窗」判定根除——D-542 漏改点的 missing_data flapping 根修）；任一腿超档即 warn。
 func (s *Service) comboTier(ctx context.Context, c pgstore.XAssetComboAdminRow, snaps []pgstore.VenueAccountLatest) (tier, detail string, warn bool) {
 	needed := 0.0
 	switch {
@@ -30,13 +31,17 @@ func (s *Service) comboTier(ctx context.Context, c pgstore.XAssetComboAdminRow, 
 		cap = defaultCrossCap
 	}
 	for _, leg := range []struct{ venue string }{{c.VenueBuy}, {c.VenueSell}} {
-		v := bareVenueKey(leg.venue)
-		eq, at, found := venueEquity(snaps, v)
-		if !found || time.Since(at) > snapshotStaleWindow || eq <= 0 {
-			return "missing_data", fmt.Sprintf("无法判定：账户 %s 暂无资金数据（未采集到净值）", v), false
+		bv := bareVenueKey(leg.venue)
+		f, found := s.capitalView().LiveSnaps(ctx, leg.venue, snaps)
+		if !found || f.Equity <= 0 {
+			return "missing_data", fmt.Sprintf("无法判定：账户 %s 暂无资金数据（活账本/REST/快照三径全空）", bv), false
 		}
-		if needed > eq*cap {
-			return "over", fmt.Sprintf("超出安全线：计划仓位 $%.0f > 账户 %s 净值 $%.0f 的 %.1f 倍上限", needed, v, eq, cap), true
+		src := ""
+		if f.Src == capitalview.SrcSnap {
+			src = "，" + f.Note // 快照兜底龄注记透出（禁静默）
+		}
+		if needed > f.Equity*cap {
+			return "over", fmt.Sprintf("超出安全线：计划仓位 $%.0f > 账户 %s 净值 $%.0f 的 %.1f 倍上限%s", needed, bv, f.Equity, cap, src), true
 		}
 	}
 	return "ok", fmt.Sprintf("在承受力内：计划仓位 $%.0f ≤ 账户净值 × %.1f 倍上限", needed, cap), false
@@ -113,25 +118,4 @@ func legMarket(venueKey, canonical string) (vt, sym string) {
 // bareVenueKey venue 键剥 :后缀（flags/caps/快照 bare 域对齐 engine bareVenue）。
 func bareVenueKey(venueKey string) string {
 	return keydomain.BareOf(venueKey)
-}
-
-// venueEquity 快照按 bare venue 取权益（优先 perp/unified 行）。
-func venueEquity(snaps []pgstore.VenueAccountLatest, venue string) (eq float64, at time.Time, ok bool) {
-	for _, r := range snaps {
-		if r.Venue != venue {
-			continue
-		}
-		if r.EquityRaw == nil {
-			continue
-		}
-		if r.VenueType == "perp" || r.VenueType == "unified" {
-			return *r.EquityRaw, r.FetchedAt, true
-		}
-	}
-	for _, r := range snaps {
-		if r.Venue == venue && r.EquityRaw != nil {
-			return *r.EquityRaw, r.FetchedAt, true
-		}
-	}
-	return 0, time.Time{}, false
 }
