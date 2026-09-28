@@ -150,6 +150,8 @@ var migrationFiles = []struct {
 	{153, migrations.RadarWatchlistCanonicalSQL},       // D-532 S2：watchlist symbol 方言归一（venues[1] 后缀反推）
 	{154, migrations.CalibTablesSQL},                   // D-533：calib_scoreboard+calib_params 两表+种值四行
 	{155, migrations.IdleFloorStreakSQL},               // D-534 B4：睡钱触发层连续天数状态表
+	{156, migrations.EndpointFossilSeedSQL},            // 化石批 691544b2 落了文件漏注册——D-543 补登（WHERE 守卫幂等，生产零行为变化）
+	{157, migrations.ExposureCapsSeedSQL},              // D-543：fin_venue_exposure_caps 种子五行（幂等）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

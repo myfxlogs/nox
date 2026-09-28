@@ -284,4 +284,8 @@ var (
 	CalibTablesSQL string
 	//go:embed 0155_idle_floor_streak.sql
 	IdleFloorStreakSQL string
+	//go:embed 0156_exchange_configs_seed_endpoint_fossil.sql
+	EndpointFossilSeedSQL string // D-543 补登：691544b2 只落文件未注册（从未应用）
+	//go:embed 0157_exposure_caps_seed.sql
+	ExposureCapsSeedSQL string
 )
