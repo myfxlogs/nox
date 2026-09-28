@@ -27,6 +27,7 @@ service DashboardService {
   rpc ListAlerts(ListAlertsRequest) returns (ListAlertsResponse);
   rpc ListTriggerStates(ListTriggerStatesRequest) returns (ListTriggerStatesResponse);
   rpc ListSourceHealth(ListSourceHealthRequest) returns (ListSourceHealthResponse);
+  rpc ListCalibScoreboard(ListCalibScoreboardRequest) returns (ListCalibScoreboardResponse);
   rpc ListFacts(ListFactsRequest) returns (ListFactsResponse);
 
   // 告警确认

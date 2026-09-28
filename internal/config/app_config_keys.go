@@ -45,6 +45,7 @@ var appConfigKeys = map[string]AppCfgMeta{
 	"ARB_DETECTOR_FRESHNESS_TTL":          durv(func(c *Config) *time.Duration { return &c.DetectorFreshnessTTL }),
 	"ARB_EXPLORER_ENABLED":                boolv(func(c *Config) *bool { return &c.ExplorerEnabled }),
 	"ARB_MACRO_ENABLED":                   boolv(func(c *Config) *bool { return &c.MacroEnabled }),
+	"ARB_CALIB_ENABLED":                   boolv(func(c *Config) *bool { return &c.CalibEnabled }),
 	"ARB_EXPLORER_RATE_PER_HOUR":          intv(func(c *Config) *int { return &c.ExplorerRatePerHour }),
 	"ARB_FREEZE_GUARD":                    durv(func(c *Config) *time.Duration { return &c.FreezeGuard }),
 	"ARB_FUNDING_BASELINE_PCT":            f64(func(c *Config) *float64 { return &c.FundingBaselinePct }),

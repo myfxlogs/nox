@@ -7,6 +7,7 @@ import (
 	"math"
 	"time"
 
+	"arb/internal/calib"
 	"arb/internal/store/pgstore"
 )
 
@@ -50,8 +51,9 @@ func (e *IntraEngine) closeTrade(ctx context.Context, t pgstore.IntraTrade, now 
 	} else {
 		pnl = (t.EntryPx - execPx) * t.Qty
 	}
-	pnl -= t.NotionalUSD * IntraTakerFeeBps / 10000
-	pnl -= execPx * t.Qty * IntraTakerFeeBps / 10000
+	feeBps := calib.Lookup("intra_taker_fee_bps", "", "", IntraTakerFeeBps) // D-533 S5：calib active 覆盖
+	pnl -= t.NotionalUSD * feeBps / 10000
+	pnl -= execPx * t.Qty * feeBps / 10000
 	ref := t.StopPx
 	if reason != "stop" {
 		ref = t.EntryPx

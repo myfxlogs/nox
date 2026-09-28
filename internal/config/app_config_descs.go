@@ -45,6 +45,7 @@ var appConfigDescs = map[string]string{
 	"ARB_EXPLORER_ENABLED":                       "true=开：探矿员每日 06:47+周日 07:13（北京时间）扫描机会",
 	"ARB_EXPLORER_RATE_PER_HOUR":                 "探矿员 LLM 调用速率上限（次/小时）",
 	"ARB_MACRO_ENABLED":                          "true=开：宏观采集层（COT 周六 05:00/财历每日 07:20/FRED 每日 08:00，北京时间）",
+	"ARB_CALIB_ENABLED":                          "true=开：校准计分板月度 job（BJ 每月 1 日 08:00 跑上月 MAE/bias，提案入收件箱）",
 	"ARB_FREEZE_GUARD":                           "冻结保护时长（风控冻结后冷却窗）",
 	"ARB_FUNDING_BASELINE_PCT":                   "资金费基线百分比（偏离度计算基准）",
 	"ARB_FUNDING_DROP_RATIO":                     "资金费骤降比例阈值（触发退出的下跌比）",

@@ -279,4 +279,7 @@ var (
 
 	//go:embed 0153_radar_watchlist_canonical.sql
 	RadarWatchlistCanonicalSQL string
+
+	//go:embed 0154_calib_tables.sql
+	CalibTablesSQL string
 )
