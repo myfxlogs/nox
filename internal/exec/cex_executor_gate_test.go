@@ -24,6 +24,20 @@ func gateMockContractSpec(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
+// gateMockLeverage D-563 S1：accounts（in_dual_mode）+ SET leverage 端点 mock——
+// PlaceOrder 链现经 ensureGateLeverage fail-closed 闸，测试夹具必须喂两路响应。
+func gateMockLeverage(w http.ResponseWriter, r *http.Request) bool {
+	switch {
+	case r.URL.Path == "/futures/usdt/accounts":
+		io.WriteString(w, `{"in_dual_mode":false}`)
+		return true
+	case strings.HasPrefix(r.URL.Path, "/futures/usdt/positions/") && strings.HasSuffix(r.URL.Path, "/leverage"):
+		io.WriteString(w, `{"leverage":"10"}`)
+		return true
+	}
+	return false
+}
+
 // TestGateSignKnownVector 固定向量验证 GateSign（HMAC-SHA512 hex，D-098 G1）。
 // 手算对拍：sign_string = method\nurl\nquery\npayloadHash\ntimestamp，
 // SIGN = hex(HMAC-SHA512(secret, sign_string))。payloadHash = hex(SHA512(body))。
@@ -66,6 +80,13 @@ func TestGateSignEmptyBody(t *testing.T) {
 	}
 }
 
+// newGatePerpExec D-563 S1：测试 executor 预注目标杠杆（配置=推送条款 fail-closed 前置）。
+func newGatePerpExec(key, secret, proxy, baseURL string, live bool) *CEXExecutor {
+	e := NewCEXExecutor("gate", "perp", key, secret, proxy, baseURL, live)
+	e.SetGateDefaultLeverage(10)
+	return e
+}
+
 // gateSignManual 独立计算 Gate 签名（与 GateSign 实现解耦，测试对拍用）。
 func gateSignManual(secret, method, urlPath, query, payloadHash string, ts int64) string {
 	signString := method + "\n" + urlPath + "\n" + query + "\n" + payloadHash + "\n" + intToStr(ts)
@@ -99,6 +120,9 @@ func TestCEXExecutor_GateOrderFinished(t *testing.T) {
 		if gateMockContractSpec(w, r) {
 			return
 		}
+		if gateMockLeverage(w, r) {
+			return
+		}
 		if r.URL.Path != "/futures/usdt/orders" {
 			t.Errorf("want path /futures/usdt/orders, got %s", r.URL.Path)
 		}
@@ -129,7 +153,7 @@ func TestCEXExecutor_GateOrderFinished(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	e := NewCEXExecutor("gate", "perp", key, secret, "", srv.URL, true)
+	e := newGatePerpExec(key, secret, "", srv.URL, true)
 	fill, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTC_USDT", Side: "BUY", Qty: 1})
 	if err != nil {
 		t.Fatalf("PlaceOrder: %v", err)
@@ -162,13 +186,16 @@ func TestCEXExecutor_GateOrderSellSizeNegative(t *testing.T) {
 		if gateMockContractSpec(w, r) {
 			return
 		}
+		if gateMockLeverage(w, r) {
+			return
+		}
 		raw, _ := io.ReadAll(r.Body)
 		gotBody = string(raw)
 		_, _ = io.WriteString(w, `{"id":7,"status":"finished","finish_as":"filled","size":-2,"left":0,"fill_price":"60000"}`)
 	}))
 	defer srv.Close()
 
-	e := NewCEXExecutor("gate", "perp", "k", "s", "", srv.URL, true)
+	e := newGatePerpExec("k", "s", "", srv.URL, true)
 	if _, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTC_USDT", Side: "SELL", Qty: 2}); err != nil {
 		t.Fatalf("PlaceOrder: %v", err)
 	}
@@ -185,6 +212,9 @@ func TestCEXExecutor_GateOrderPollsFill(t *testing.T) {
 		if gateMockContractSpec(w, r) {
 			return
 		}
+		if gateMockLeverage(w, r) {
+			return
+		}
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/futures/usdt/orders":
 			_, _ = io.WriteString(w, `{"id":888,"status":"open","size":1,"left":1,"fill_price":"0"}`)
@@ -197,7 +227,7 @@ func TestCEXExecutor_GateOrderPollsFill(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	e := NewCEXExecutor("gate", "perp", "k", "s", "", srv.URL, true)
+	e := newGatePerpExec("k", "s", "", srv.URL, true)
 	fill, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTC_USDT", Side: "BUY", Qty: 1})
 	if err != nil {
 		t.Fatalf("PlaceOrder: %v", err)
@@ -218,12 +248,15 @@ func TestCEXExecutor_GateOrderZeroFillIOC(t *testing.T) {
 		if gateMockContractSpec(w, r) {
 			return
 		}
+		if gateMockLeverage(w, r) {
+			return
+		}
 		// IOC 市价单无对手盘 → 立即 finished + finish_as=ioc + left=size（零成交）
 		_, _ = io.WriteString(w, `{"id":999,"status":"finished","finish_as":"ioc","size":1,"left":1,"fill_price":"0"}`)
 	}))
 	defer srv.Close()
 
-	e := NewCEXExecutor("gate", "perp", "k", "s", "", srv.URL, true)
+	e := newGatePerpExec("k", "s", "", srv.URL, true)
 	fill, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTC_USDT", Side: "BUY", Qty: 1})
 	if err == nil {
 		t.Fatalf("零成交 IOC 应报错，got Fill=%+v（okx 教训：防记 0 qty 假成交）", fill)
@@ -243,12 +276,15 @@ func TestCEXExecutor_GateOrderPartialFillIOC(t *testing.T) {
 		if gateMockContractSpec(w, r) {
 			return
 		}
+		if gateMockLeverage(w, r) {
+			return
+		}
 		// IOC 部分成交：finish_as=ioc，size=5 left=1 → 成交 4
 		_, _ = io.WriteString(w, `{"id":55,"status":"finished","finish_as":"ioc","size":5,"left":1,"fill_price":"60000"}`)
 	}))
 	defer srv.Close()
 
-	e := NewCEXExecutor("gate", "perp", "k", "s", "", srv.URL, true)
+	e := newGatePerpExec("k", "s", "", srv.URL, true)
 	fill, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTC_USDT", Side: "BUY", Qty: 5})
 	if err != nil {
 		t.Fatalf("部分成交不应报错: %v", err)
@@ -277,13 +313,16 @@ func TestD120_GateContractSizeQuanto(t *testing.T) {
 			_, _ = io.WriteString(w, `{"quanto_multiplier":"0.01"}`)
 			return
 		}
+		if gateMockLeverage(w, r) {
+			return
+		}
 		raw, _ := io.ReadAll(r.Body)
 		gotBody = string(raw)
 		_, _ = io.WriteString(w, `{"id":100,"status":"finished","finish_as":"filled","size":40,"left":0,"fill_price":"2500"}`)
 	}))
 	defer srv.Close()
 
-	e := NewCEXExecutor("gate", "perp", "k", "s", "", srv.URL, true)
+	e := newGatePerpExec("k", "s", "", srv.URL, true)
 	fill, err := e.PlaceOrder(context.Background(), Order{Symbol: "ETH_USDT", Side: "BUY", Qty: 0.4})
 	if err != nil {
 		t.Fatalf("PlaceOrder: %v", err)
@@ -305,13 +344,16 @@ func TestD121_GateOpenNoReduceOnly(t *testing.T) {
 		if gateMockContractSpec(w, r) {
 			return
 		}
+		if gateMockLeverage(w, r) {
+			return
+		}
 		raw, _ := io.ReadAll(r.Body)
 		gotBody = string(raw)
 		_, _ = io.WriteString(w, `{"id":1,"status":"finished","finish_as":"filled","size":1,"left":0,"fill_price":"50000"}`)
 	}))
 	defer srv.Close()
 
-	e := NewCEXExecutor("gate", "perp", "k", "s", "", srv.URL, true)
+	e := newGatePerpExec("k", "s", "", srv.URL, true)
 	_, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTC_USDT", Side: "BUY", Qty: 1})
 	if err != nil {
 		t.Fatalf("PlaceOrder: %v", err)
@@ -328,13 +370,16 @@ func TestD121_GateCloseReduceOnly(t *testing.T) {
 		if gateMockContractSpec(w, r) {
 			return
 		}
+		if gateMockLeverage(w, r) {
+			return
+		}
 		raw, _ := io.ReadAll(r.Body)
 		gotBody = string(raw)
 		_, _ = io.WriteString(w, `{"id":2,"status":"finished","finish_as":"filled","size":-1,"left":0,"fill_price":"50000"}`)
 	}))
 	defer srv.Close()
 
-	e := NewCEXExecutor("gate", "perp", "k", "s", "", srv.URL, true)
+	e := newGatePerpExec("k", "s", "", srv.URL, true)
 	_, err := e.PlaceOrder(context.Background(), Order{Symbol: "BTC_USDT", Side: "SELL", Qty: 1, PositionSide: "long"})
 	if err != nil {
 		t.Fatalf("PlaceOrder: %v", err)
@@ -359,7 +404,7 @@ func TestCEXExecutor_GatePositions(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	e := NewCEXExecutor("gate", "perp", "k", "s", "", srv.URL, true)
+	e := newGatePerpExec("k", "s", "", srv.URL, true)
 	poss, err := e.GatePositions(context.Background(), "BTC_USDT")
 	if err != nil {
 		t.Fatalf("GatePositions: %v", err)
@@ -387,7 +432,7 @@ func TestCEXExecutor_GatePositionsEmpty(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	e := NewCEXExecutor("gate", "perp", "k", "s", "", srv.URL, true)
+	e := newGatePerpExec("k", "s", "", srv.URL, true)
 	poss, err := e.GatePositions(context.Background(), "BTC_USDT")
 	if err != nil {
 		t.Fatalf("GatePositions: %v", err)
@@ -421,7 +466,7 @@ func TestCEXExecutor_GatePositionsRaw(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	e := NewCEXExecutor("gate", "perp", "k", "s", "", srv.URL, true)
+	e := newGatePerpExec("k", "s", "", srv.URL, true)
 	raw, poss, err := e.GatePositionsRaw(context.Background(), "BTC_USDT")
 	if err != nil {
 		t.Fatalf("GatePositionsRaw: %v", err)
@@ -451,7 +496,7 @@ func TestCEXExecutor_GateAccountBookFund(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	e := NewCEXExecutor("gate", "perp", "k", "s", "", srv.URL, true)
+	e := newGatePerpExec("k", "s", "", srv.URL, true)
 	raw, entries, err := e.GateAccountBookFund(context.Background(), "BTC_USDT")
 	if err != nil {
 		t.Fatalf("GateAccountBookFund: %v", err)

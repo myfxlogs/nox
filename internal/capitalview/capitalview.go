@@ -151,26 +151,36 @@ func SnapFundsOf(r pgstore.VenueAccountLatest, now time.Time) Funds {
 // Live 统一读口：CEX→活账本直读（干净零 REST）→脏/空一发 REST 校准回写→
 // REST 败快照兜底（带龄注记）；MT/未装配→快照直通（MT 快照即其数据面）。
 func (v *View) Live(ctx context.Context, venueKey string) (Funds, bool) {
-	return v.live(ctx, venueKey, nil)
+	return v.live(ctx, venueKey, nil, false)
+}
+
+// LiveFresh D-563 S4c：决策面读口——ws 实推仍直读，REST 校准值不享 restTTL
+// 复用（TTL 内 rest 条目对开仓判定=变相快照）→ 强制 REST 实拉；展示面走 Live/LiveSnaps。
+func (v *View) LiveFresh(ctx context.Context, venueKey string) (Funds, bool) {
+	return v.live(ctx, venueKey, nil, true)
 }
 
 // LiveSnaps 同 Live，快照兜底用调用方预取面（批量消费点省每行一查）。
 func (v *View) LiveSnaps(ctx context.Context, venueKey string, snaps []pgstore.VenueAccountLatest) (Funds, bool) {
-	return v.live(ctx, venueKey, snaps)
+	return v.live(ctx, venueKey, snaps, false)
 }
 
-func (v *View) live(ctx context.Context, venueKey string, snaps []pgstore.VenueAccountLatest) (Funds, bool) {
+func (v *View) live(ctx context.Context, venueKey string, snaps []pgstore.VenueAccountLatest, force bool) (Funds, bool) {
 	if IsCEXVenue(venueKey) {
 		k := keydomain.Parse(venueKey)
 		if v.d.Ledger != nil {
 			for _, key := range PoolKeys(k.Venue, k.Type) {
 				if e, ok := v.d.Ledger.Get(key, v.restTTL(), time.Now()); ok {
-					return liveFunds(e), true
+					// D-563 S4c：force=决策面拒收 rest TTL 内校准值（变相快照）；
+					// ws 实推条目非缓存语义——仍认 live 直读。
+					if !force || e.Src != SrcRest {
+						return liveFunds(e), true
+					}
 				}
 			}
 		}
 		// 账本未装配也走 REST 校准（执行面裁定：REST 败才 fail-closed，不因账本缺席直落快照）。
-		if f, ok := v.calibrate(ctx, venueKey); ok {
+		if f, ok := v.calibrate(ctx, venueKey, force); ok {
 			return f, true
 		}
 	}
@@ -192,15 +202,18 @@ func (v *View) live(ctx context.Context, venueKey string, snaps []pgstore.VenueA
 
 // calibrate 脏/空路径：单飞互斥下一发 REST 校准（复用 CEXAccountQuerier 经代理）→
 // 回写账本 src=rest（RestTTL 内复用）。败→false 走快照兜底。
-func (v *View) calibrate(ctx context.Context, venueKey string) (Funds, bool) {
+func (v *View) calibrate(ctx context.Context, venueKey string, force bool) (Funds, bool) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	// 获锁后复查——并发腿可能刚校准过同池（spot×perp 两腿同 venue 常见）。
+	// D-563 S4c：force=决策面实拉跳过复用（TTL 缓存对决策=变相快照）。
 	k := keydomain.Parse(venueKey)
 	if v.d.Ledger != nil {
 		for _, key := range PoolKeys(k.Venue, k.Type) {
 			if e, ok := v.d.Ledger.Get(key, v.restTTL(), time.Now()); ok {
-				return liveFunds(e), true
+				if !force || e.Src != SrcRest {
+					return liveFunds(e), true
+				}
 			}
 		}
 	}

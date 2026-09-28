@@ -45,11 +45,18 @@ func d335SeedMonitor(t *testing.T, s *pgstore.Store, pair string, entry, noise *
 func floatPtr(f float64) *float64 { return &f }
 
 // d335Engine 仿 d311 mkEngine（白名单命中+regime 配置；strategy disabled 由用例自seed）。
-func d335Engine(s *pgstore.Store) (*Engine, pgstore.Opportunity, context.Context) {
+// d335Engine（D-563 S4a 涟漪适配：entry 价差=双腿实时报价现算，monitor 行只供 noise）；
+// entryBps 参数驱动 cex bid=mtAsk×(1+bps/1e4) 报价播种。
+func d335Engine(s *pgstore.Store, entryBps float64) (*Engine, pgstore.Opportunity, context.Context) {
 	ctx := context.Background()
-	svc := dashboard.New(nil, bus.New(), nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, nil, nil, nil, 0, nil, nil, 0, 0, nil)
+	qb := bus.New()
+	qb.Publish(bus.Quote{Symbol: "XAUUSD", Venue: "277842155", VenueType: "mt5",
+		Bid: 4354, Ask: 4355, Time: time.Now()})
+	qb.Publish(bus.Quote{Symbol: "XAUUSDT", Venue: "binance", VenueType: "perp",
+		Bid: 4355 * (1 + entryBps/1e4), Ask: 4355*(1+entryBps/1e4) + 0.5, Time: time.Now()})
+	svc := dashboard.New(nil, qb, nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, nil, nil, nil, 0, nil, nil, 0, 0, nil)
 	e := &Engine{
-		store: s, service: svc, quotes: bus.New(), gate: NewGate(s, Config{}, nil),
+		store: s, service: svc, quotes: qb, gate: NewGate(s, Config{}, nil),
 		csMissCounts: map[string]int{}, csMissSent: map[string]time.Time{},
 		cfg: Config{
 			MinNetBps:   0,
@@ -81,45 +88,55 @@ func TestD335_EntryGate(t *testing.T) {
 	d335SeedRegime(t, s)
 	d330SeedDisabled(t, s) // 复用 D-331 helper：gate check2 早拒=intent 产出观测点
 
-	// D-562 S2 重写：安全边际闸=qbus 双腿实时报价（monitor 簿退位统计面——三禁令②③）。
-	// T1：实时顺价 ≤0（cex bid < mt ask 逆价）→ 闸拦（csMiss=0，不产 intent）。
-	// monitor 簿种顺价行也不得影响判定（簿值被无视=禁令锚）。
-	e, opp, ctx := d335Engine(s)
-	d335SeedMonitor(t, s, "XAUUSDT-XAU", floatPtr(12), floatPtr(9)) // 簿值顺价 12——仍须被无视
-	e.quotes.Publish(bus.Quote{Symbol: "XAUUSDT", Venue: "binance", VenueType: "perp", VenueSymbol: "XAUUSDT", Bid: 4350, Ask: 4351, Time: time.Now()})
-	e.quotes.Publish(bus.Quote{Symbol: "XAUUSD", Venue: "277842155", VenueType: "mt5", VenueSymbol: "XAUUSD", Bid: 4354, Ask: 4355, Time: time.Now()})
+	// T1：entry=5 ≤ noise=9 → 闸拦（不产 intent）；红=现码无闸穿到 sizing（csMiss=1）
+	e, opp, ctx := d335Engine(s, 5)
+	d335SeedMonitor(t, s, "XAUUSDT-XAU", floatPtr(5), floatPtr(9))
 	e.handleOpportunity(ctx, opp, newComboAccumulator())
 	if e.csMissCounts["277842155:mt5|XAUUSD"] != 0 {
-		t.Errorf("T1 实时逆价（4350<4355）应闸拦，monitor 簿顺价被无视（三禁令锚）, got %v", e.csMissCounts)
+		t.Errorf("T1 噪声带内应 skip 于 sizing 前（红=现码无闸 csMiss=1）, got %v", e.csMissCounts)
 	}
 	if n := d330CountLogs(t, s, opp.ID); n != 0 {
 		t.Errorf("T1 不应产 intent, got %d 行", n)
 	}
 
-	// T2：实时顺价>0（binance bid 4360 > mt ask 4355 → +11.48bps）→ 放行到 sizing（csMiss=1）。
-	e2, opp2, ctx2 := d335Engine(s)
-	e2.quotes.Publish(bus.Quote{Symbol: "XAUUSDT", Venue: "binance", VenueType: "perp", VenueSymbol: "XAUUSDT", Bid: 4360, Ask: 4361, Time: time.Now()})
-	e2.quotes.Publish(bus.Quote{Symbol: "XAUUSD", Venue: "277842155", VenueType: "mt5", VenueSymbol: "XAUUSD", Bid: 4354, Ask: 4355, Time: time.Now()})
+	// T2：entry=12 > noise=9 → 不被本闸拦（走到 sizing 既有 fail-closed=csMiss 1；pass-through 锚）
+	e2, opp2, ctx2 := d335Engine(s, 12)
+	d335SeedMonitor(t, s, "XAUUSDT-XAU", floatPtr(12), floatPtr(9))
 	e2.handleOpportunity(ctx2, opp2, newComboAccumulator())
 	if e2.csMissCounts["277842155:mt5|XAUUSD"] != 1 {
-		t.Errorf("T2 实时顺价应放行到 sizing（csMiss=1）, got %v", e2.csMissCounts)
+		t.Errorf("T2 顺价>noise 应放行到 sizing（csMiss=1）, got %v", e2.csMissCounts)
 	}
 
-	// T3a：双腿报价缺（qbus 空）→ fail-closed 拒开（csMiss=0；缺实时证据不判——禁令③）。
-	e4, opp4, ctx4 := d335Engine(s)
+	// T3a：entry=−3 逆价 → skip（csMiss=0）
+	e3, opp3, ctx3 := d335Engine(s, -3)
+	d335SeedMonitor(t, s, "XAUUSDT-XAU", floatPtr(-3), floatPtr(9))
+	e3.handleOpportunity(ctx3, opp3, newComboAccumulator())
+	if e3.csMissCounts["277842155:mt5|XAUUSD"] != 0 {
+		t.Errorf("T3a 逆价应 skip（红=现码无闸 csMiss=1）, got %v", e3.csMissCounts)
+	}
+
+	// T3b：无 monitor 行 → D-423 fail-closed 拒开（csMiss=0；借用他所簿=假安全边际废止）。
+	// 清表防前序子用例行残留（同仓 latest 行会串场）。
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE fin_xasset_monitor`); err != nil {
+		t.Fatalf("truncate monitor: %v", err)
+	}
+	e4, opp4, ctx4 := d335Engine(s, 5)
 	e4.handleOpportunity(ctx4, opp4, newComboAccumulator())
 	if e4.csMissCounts["277842155:mt5|XAUUSD"] != 0 {
-		t.Errorf("T3a 无实时报价应 fail-closed 拒开, got %v", e4.csMissCounts)
+		t.Errorf("T3b 无 monitor 行应 fail-closed 拒开（D-423）, got %v", e4.csMissCounts)
 	}
 	if n := d330CountLogs(t, s, opp4.ID); n != 0 {
-		t.Errorf("T3a 不应产 intent, got %d 行", n)
+		t.Errorf("T3b 不应产 intent, got %d 行", n)
 	}
 
-	// T3b：monitor 簿行在场但报价缺 → 仍拒（簿不得补位=禁令②锚）。
-	d335SeedMonitor(t, s, "XAUUSDT-XAU", floatPtr(12), floatPtr(9))
-	e5, opp5, ctx5 := d335Engine(s)
+	// T3c：noise NULL（未成噪）→ D-423 同 fail-closed 拒开
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE fin_xasset_monitor`); err != nil {
+		t.Fatalf("truncate monitor: %v", err)
+	}
+	e5, opp5, ctx5 := d335Engine(s, 5)
+	d335SeedMonitor(t, s, "XAUUSDT-XAU", floatPtr(5), nil)
 	e5.handleOpportunity(ctx5, opp5, newComboAccumulator())
 	if e5.csMissCounts["277842155:mt5|XAUUSD"] != 0 {
-		t.Errorf("T3b 簿在场报价缺仍应拒（禁令②），got %v", e5.csMissCounts)
+		t.Errorf("T3c noise NULL 应 fail-closed 拒开（D-423）, got %v", e5.csMissCounts)
 	}
 }

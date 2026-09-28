@@ -395,9 +395,14 @@ func TestD311_HandleOpportunityXAssetPreIntercept(t *testing.T) {
 	}
 	mkEngine := func(allow []exec.XAssetComboAllowSpec) *Engine {
 		// dashboard.New 注入空 QuoteBus（裸 &Service{} 的 nil qbus 会在 USDPerLotForLeg panic）。
-		svc := dashboard.New(nil, bus.New(), nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, nil, nil, nil, 0, nil, nil, 0, 0, nil)
+		// D-563 S4a 涟漪适配：同一 qb 供 svc 定尺寸+engine 实时价差闸——
+		// 双腿新鲜报价 + cex bid 60.5 vs mt ask 60（entry≈83bps > monitor noise 9）。
+		qb := bus.New()
+		qb.Publish(bus.Quote{Symbol: "WTIUSD", Venue: "3001157", VenueType: "mt5", Bid: 59.9, Ask: 60.0, Time: time.Now()})
+		qb.Publish(bus.Quote{Symbol: "BTCUSDT", Venue: "gate", VenueType: "perp", Bid: 60.5, Ask: 60.6, Time: time.Now()})
+		svc := dashboard.New(nil, qb, nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, nil, nil, nil, 0, nil, nil, 0, 0, nil)
 		return &Engine{
-			store: s, service: svc, quotes: bus.New(), // D-562 S2：入场闸吃实时报价——夹具补 qbus
+			store: s, service: svc, quotes: qb,
 			csMissCounts: map[string]int{}, csMissSent: map[string]time.Time{},
 			cfg: Config{
 				MinNetBps:         0,
@@ -425,13 +430,19 @@ func TestD311_HandleOpportunityXAssetPreIntercept(t *testing.T) {
 	}
 	// ③ 命中 → 过拦截（走到 computeBuyQty → USDPerLotForLeg 不可用 → recordCSMiss）。
 	// csMissCounts 递增=拦截已放行的直接证据；仍不落 REJECTED（CS-miss 是聚合告警非拒绝）。
-	// D-423 涟漪适配 + D-562 S2 重锚：白名单命中后须过 venue 三元组入口闸才到 sizing——
-	// 入场闸=qbus 双腿实时报价（monitor 簿退位），喂顺价双腿（gate bid 101 > mt ask 100）。
+	// D-423 涟漪适配：白名单命中后须过 venue 三元组入口闸才到 sizing——种本组合
+	// （pair=BTCUSDT-WTI,cex=gate:perp,mt=3001157:mt5）顺价>noise 行。
+	if _, err := s.Pool().Exec(ctx, `
+		INSERT INTO fin_xasset_monitor (pair, binance_bid, binance_ask, exness_bid, exness_ask,
+			entry_spread_bps, exit_spread_bps, entry_net_bps, funding_rate_8h, funding_annual_pct,
+			tracking_error_bps, equiv_annual_pct, noise_bps, cex_venue, mt_venue)
+		VALUES ('BTCUSDT-WTI', 4355, 4356, 4354, 4355, 12, 5, 3, 0.001, 21.9, 1.0, 24.9, 9,
+			'gate:perp','3001157:mt5')`); err != nil {
+		t.Fatalf("seed monitor: %v", err)
+	}
 	e = mkEngine([]exec.XAssetComboAllowSpec{
 		{CanonicalBuy: "WTIUSD", CanonicalSell: "BTCUSDT", VenueBuy: "3001157:mt5", VenueSell: "gate:perp", MaxLongQty: 1, MaxShortQty: 1000, MaxGrossUSD: 50000},
 	})
-	e.quotes.Publish(bus.Quote{Symbol: "BTCUSDT", Venue: "gate", VenueType: "perp", VenueSymbol: "BTCUSDT", Bid: 101, Ask: 101.5, Time: time.Now()})
-	e.quotes.Publish(bus.Quote{Symbol: "WTIUSD", Venue: "3001157", VenueType: "mt5", VenueSymbol: "WTIUSD", Bid: 100, Ask: 100.2, Time: time.Now()})
 	e.handleOpportunity(ctx, opp, newComboAccumulator())
 	if e.csMissCounts["3001157:mt5|WTIUSD"] != 1 {
 		t.Errorf("白名单命中应过拦截进入下游（csMiss=1）, got %v", e.csMissCounts)

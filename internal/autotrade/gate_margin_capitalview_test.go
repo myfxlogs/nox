@@ -41,6 +41,11 @@ func capViewFor(t *testing.T, src string) *capitalview.View {
 		Ledger:  lg,
 		RestTTL: func() time.Duration { return 30 * time.Second },
 		QuerierFor: func(ctx context.Context, venueKey string) (reconcile.AccountQuerier, string, bool) {
+			// D-563 S4c 涟漪：LiveFresh 对 rest TTL 内校准值强制实拉——
+			// src=rest 用例须供真 REST 通道（回执与 Put 同值模拟 venue 真实响应）。
+			if src == "rest" {
+				return &d549r1FakeQuerier{acct: &reconcile.AccountInfo{Equity: 110, FreeMargin: 100, Currency: "USDT"}}, "binance:perp", true
+			}
 			return nil, "", false // REST 校准通道缺——snap 态走快照兜底
 		},
 		Snapshots: func(ctx context.Context) ([]pgstore.VenueAccountLatest, error) {
@@ -52,6 +57,14 @@ func capViewFor(t *testing.T, src string) *capitalview.View {
 		},
 	})
 }
+
+// d549r1FakeQuerier 静态账户 querier（LiveFresh 强制实拉用例喂 REST 通道）。
+type d549r1FakeQuerier struct{ acct *reconcile.AccountInfo }
+
+func (f *d549r1FakeQuerier) Account(context.Context) (*reconcile.AccountInfo, error) {
+	return f.acct, nil
+}
+func (f *d549r1FakeQuerier) VenueKey() string { return "binance:perp" }
 
 func capTestGate(t *testing.T, v *capitalview.View) (*Gate, *fakeMarginFloor) {
 	t.Helper()

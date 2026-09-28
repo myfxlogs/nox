@@ -57,6 +57,13 @@ func (e *CEXExecutor) placeGateRaw(ctx context.Context, o Order) ([]byte, Fill, 
 	if o.Side == "SELL" {
 		size = -size
 	}
+	// D-563 S1：开仓单先显式 SET 合约杠杆（venue 无读回端点=推不设读；SET 败/回显
+	// 不符 → fail-closed 不落单）。平仓（PositionSide!=""）跳过不动既有平仓杠杆。
+	if o.PositionSide == "" {
+		if err := e.ensureGateLeverage(ctx, o.Symbol, o.Side == "SELL"); err != nil {
+			return nil, Fill{}, err
+		}
+	}
 	// D-121：平仓（PositionSide!=""）带 reduce_only=true → gate 不要求保证金（只减仓不新开）。
 	// 开仓（PositionSide=""）不带 → 正常开仓。与 OKX/Binance reduceOnly 逻辑对齐（D-108/D-120）。
 	bodyStr := fmt.Sprintf(`{"contract":%q,"size":%d,"price":"0","tif":"ioc","text":"t-arb","reduce_only":%t}`,
@@ -153,9 +160,8 @@ type GatePosition struct {
 	Funding    float64 // 累计已结算 funding（正=支付，负=收取；验证结算真实性读它）
 }
 
-// GatePositions 查询 Gate 指定 contract 的当前持仓（GET /futures/usdt/positions/{contract}，签名 GET）。
-// 返修包① M3 对拍 gateapi-go：GetPosition 返回**单个 Position 对象**（非数组，ListPositions 才是数组），
-// 旧代码 unmarshal 到 []struct 对真实 API 恒失败。改为单对象；size==0 → 返回空切片不误报。
+// GatePositions 查当前持仓（GET /futures/usdt/positions/{contract}）。
+// M3 对拍：GetPosition 返单对象非数组（旧 []struct 恒失败）；size==0 → 空切片。
 func (e *CEXExecutor) GatePositions(ctx context.Context, contract string) ([]GatePosition, error) {
 	_, poss, err := e.GatePositionsRaw(ctx, contract)
 	return poss, err
@@ -208,11 +214,7 @@ func (e *CEXExecutor) GatePositionsRaw(ctx context.Context, contract string) ([]
 	}}, nil
 }
 
-// GateAccountBookEntry Gate USDT 本位合约资金账本一行（D-098 返修② 探针结算真实性证据）。
-// GET /futures/usdt/account_book?type=fund&contract={c} 返回真实结算行：
-// type=fund 枚举=资金费率结算，change=资金变动（字符串），time=unix 秒（float64 带小数），
-// trade_id=关联交易 ID（真实响应无 refid 字段，D-098 返修③ C2 对拍官方模型）。
-// 生产零消费方（仅探针用），不复用 GatePosition.Funding（SDK/文档双证据指向不存在）。
+// GateAccountBookEntry gate 资金账本行（D-098 探针证据；生产零消费方仅探针用）。
 type GateAccountBookEntry struct {
 	Time    float64 `json:"time"`     // unix 秒（float64 带小数，对拍官方模型 FuturesAccountBook.Time=float64，真实响应样本 1682294400.123456）
 	Change  string  `json:"change"`   // 资金变动（字符串，负=支付/正=收取）
@@ -244,11 +246,9 @@ func (e *CEXExecutor) GateAccountBookFund(ctx context.Context, contract string) 
 	return body, entries, nil
 }
 
-// gateContractSize 查合约规格换算合约数（D-120）。
-// gate futures size 单位=合约数，o.Qty 是基础币数量 → size=round(qty/quanto_multiplier)。
-// 公开端点 GET /futures/usdt/contracts/{contract} 无需认证，但走签名头无害且复用 e.get。
-// 缓存 per-executor（quanto_multiplier 不变），避免每单查。
-// 返回 (size, quanto_multiplier, error)——quanto 供调用方回填 Fill.Qty 为基础币数量。
+// gateContractSize 查合约规格换算合约数（D-120）：size=round(qty/quanto_multiplier)。
+// 公开端点 GET /futures/usdt/contracts/{contract}（签名头复用 e.get）；
+// quanto per-executor 缓存；返回 (size, quanto, error)——quanto 回填 Fill.Qty 基础币量。
 func (e *CEXExecutor) gateContractSize(ctx context.Context, contract string, qty float64) (int64, float64, error) {
 	// 缓存命中
 	if e.gateQuanto != nil {

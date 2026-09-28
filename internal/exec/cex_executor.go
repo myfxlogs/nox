@@ -48,8 +48,13 @@ type CEXExecutor struct {
 	// D-472 S4：强平距离预检参数（SetLiqGuards 注入；缺省 0=关闸/0.5=cross 占比上限）。
 	minLiqDistPct          float64
 	crossNotionalEquityCap float64
-	// D-472 S2：gate venue 级缺省杠杆档（SetGateDefaultLeverage 注入；缺省 5）。
+	// D-563 S1：gate 合约目标杠杆（SetGateDefaultLeverage 注入；零值=未配置→开仓
+	// fail-closed，不兜底）。venue 无杠杆读回端点——开仓前 ensureGateLeverage 显式 SET，
+	// set-mark 防重复（contract|side 键）；gateDualMode=accounts in_dual_mode 探测缓存。
 	gateDefaultLeverage float64
+	gateLevMu           sync.Mutex
+	gateLeverageSet     map[string]bool
+	gateDualMode        *bool
 	// D-472 S4：binance tier-1 MMR 运行时缓存（leverageBracket 取不到=fail-closed）。
 	mmMu    sync.Mutex
 	mmCache map[string]float64
@@ -59,12 +64,9 @@ type CEXExecutor struct {
 // 缓冲防「开完即贴爆仓线」。cfg.MarginReservePct 经 SetMarginReservePct 覆盖。
 const defaultMarginReservePct = 0.20
 
-// D-472 S2/S4 缺省档：gate venue 级杠杆（B-003 两级第二档）、cross 名义/权益占比上限。
-// minLiqDistPct 零值=关闸（struct 零值即缺省，无需显式常量）。
-const (
-	DefaultGateDefaultLeverage    = 5.0 // D-472 S2：ARB_GATE_DEFAULT_LEVERAGE 缺省档（manager 构造共用）
-	DefaultCrossNotionalEquityCap = 0.5 // D-472 S4：ARB_CROSS_NOTIONAL_EQUITY_CAP 缺省档
-)
+// D-472 S4 缺省档：cross 名义/权益占比上限。minLiqDistPct 零值=关闸（struct 零值即缺省）。
+// D-563 S1：gate 杠杆无缺省——缺失/非正=fail-closed 拒开（phantom 杠杆静默兜底=违规）。
+const DefaultCrossNotionalEquityCap = 0.5 // D-472 S4：ARB_CROSS_NOTIONAL_EQUITY_CAP 缺省档
 
 // NewCEXExecutor 创建 CEX 执行器。
 // baseURL 为 venue 根（binance 走代理 fapi 风格需已含 /demo 路径；okx 实盘域名）。
@@ -81,8 +83,8 @@ func NewCEXExecutor(venue, venueType, apiKey, apiSecret, passphrase, baseURL str
 		client:     httpx.Client(), // CA 信任 + X-Proxy-Token 注入（D-055）；OKX 公网忽略注入头
 
 		marginReservePct:       defaultMarginReservePct,
-		gateDefaultLeverage:    DefaultGateDefaultLeverage,
 		crossNotionalEquityCap: DefaultCrossNotionalEquityCap,
+		gateLeverageSet:        map[string]bool{},
 	}
 }
 
