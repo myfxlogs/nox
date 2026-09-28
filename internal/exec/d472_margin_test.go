@@ -158,11 +158,20 @@ func ftoa(f float64) string {
 
 // d472GateRT gate fake（/futures/usdt/accounts + /futures/usdt/contracts/{c}）。
 type d472GateRT struct {
-	accounts string // ""=500
-	mark     string
+	accounts    string // ""=500
+	mark        string
+	postLeverKV bool     // D-562：true=POST /positions/{c}/leverage 返回 500（设定失败）
+	posts       []string // D-562：收到的 POST path 记录
 }
 
 func (rt *d472GateRT) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.Method == "POST" {
+		rt.posts = append(rt.posts, req.URL.Path)
+		if rt.postLeverKV && strings.Contains(req.URL.Path, "/leverage") {
+			return &http.Response{StatusCode: 500, Body: io.NopCloser(strings.NewReader("set lev fail")), Header: make(http.Header), Request: req}, nil
+		}
+		return &http.Response{StatusCode: 201, Body: io.NopCloser(strings.NewReader("{}")), Header: make(http.Header), Request: req}, nil
+	}
 	var body string
 	switch {
 	case strings.Contains(req.URL.Path, "/futures/usdt/accounts"):
@@ -231,5 +240,38 @@ func TestD472_GateCrossLiqGuard(t *testing.T) {
 	err := e.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"})
 	if err == nil || !strings.Contains(err.Error(), "gate liq-distance cross notional/equity=10.000 > cap=0.300") {
 		t.Fatalf("cross 占比闸应拒: %v", err)
+	}
+}
+
+// TestD562_GateLeveragePushNotRead 三禁令①锚：账户响应无 leverage 字段=
+// 推不设读（POST 设定+用配置值），POST 失败=fail-closed；字段在=零 POST。
+func TestD562_GateLeveragePushNotRead(t *testing.T) {
+	// ① 无 leverage 字段：POST 设定成功 → 用配置档 5 → need=200 ≤ 250×0.8=200 放行，且 POST 恰一次。
+	rt := &d472GateRT{accounts: `{"available":"250","total":"250"}`, mark: "1000"}
+	e := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
+	e.client = &http.Client{Transport: rt}
+	if err := e.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"}); err != nil {
+		t.Fatalf("推不设读：POST 设定成功应放行, got %v", err)
+	}
+	if len(rt.posts) != 1 || !strings.Contains(rt.posts[0], "/positions/XPT_USDT/leverage") {
+		t.Fatalf("应恰一次 POST positions/{c}/leverage, got %v", rt.posts)
+	}
+	// ② POST 设定失败 → fail-closed 拒开（禁静默兜底——phantom lev 病灶根除）。
+	rt2 := &d472GateRT{accounts: `{"available":"250","total":"250"}`, mark: "1000", postLeverKV: true}
+	e2 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
+	e2.client = &http.Client{Transport: rt2}
+	err := e2.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"})
+	if err == nil || !strings.Contains(err.Error(), "fail-closed") {
+		t.Fatalf("POST 设定失败应 fail-closed 拒开, got %v", err)
+	}
+	// ③ 账户 leverage 字段在=实时读数生效，零 POST（推不设读只兜"读不回"场景）。
+	rt3 := &d472GateRT{accounts: `{"available":"500","total":"500","leverage":10}`, mark: "1000"}
+	e3 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
+	e3.client = &http.Client{Transport: rt3}
+	if err := e3.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"}); err != nil {
+		t.Fatalf("leverage=10 应直接放行: %v", err)
+	}
+	if len(rt3.posts) != 0 {
+		t.Fatalf("字段在不得 POST, got %v", rt3.posts)
 	}
 }
