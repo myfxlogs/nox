@@ -17,6 +17,7 @@ var (
 	zeroFrameHeartbeatTTL  = 30 * time.Second // lastAnyFrame 新鲜窗（心跳仍在=流活）
 	zeroFrameSuspectTTL    = 90 * time.Second // 无真帧超此值+心跳活=疑似终端推送死
 	zeroFrameRecoveryTTL   = 60 * time.Second // stage-2 重连后真帧恢复观察窗
+	resubscribeCallTimeout = 5 * time.Second  // D-563 S5：resubscribeAll 逐符号超时上限
 )
 
 // saveSubSet 初始化订阅集镜像（Subscribe 时调用，覆盖写）。
@@ -52,24 +53,26 @@ func (a *MT5Adapter) snapshotSubSet() []string {
 	return out
 }
 
-// resubscribeAll 用当前订阅集全量重订阅（OnQuote 流重连后调用，恢复网关侧订阅状态）。
-// mtapi Subscribe 幂等，全量重订阅安全。
+// resubscribeAll 全量重订阅（开流后异步执行+逐符号超时挡楔死，D-563 S5；幂等安全）。
 func (a *MT5Adapter) resubscribeAll(sctx context.Context) {
 	for _, sym := range a.snapshotSubSet() {
-		if _, err := a.subs.Subscribe(sctx, &mt5pb.SubscribeRequest{
+		sc, cancel := context.WithTimeout(sctx, resubscribeCallTimeout) // 逐符号超时
+		_, err := a.subs.Subscribe(sc, &mt5pb.SubscribeRequest{
 			Id:     a.getToken(),
 			Symbol: sym,
-		}); err != nil {
+		})
+		cancel()
+		if err != nil {
 			log.Printf("[mt5:%s] resubscribe %s: %v", a.venue, sym, err)
 		}
 	}
 }
 
-// runQuoteStream OnQuote 流消费外层循环：开流 → 消费帧 → 断流退避重开，直到 ctx 取消。
-// ch 仅在此 defer close——重连不关 ch，下游 broker_manager_adapters 的 for-range 持续接收。
+// runQuoteStream 外层循环：开流 → 消费帧 → 断流退避重开直到 ctx 取消；
+// ch 仅在此 defer close——重连不关 ch，下游 for-range 持续接收。
 func (a *MT5Adapter) runQuoteStream(ctx context.Context, ch chan<- bus.Quote) {
-	// D-432：零帧看门狗随 runQuoteStream 生命周期（episode 跨流重连续存）。
-	// zfDone 先于 close(ch) 收口——ch 关闭即看门狗已退出（T6 不泄漏语义由此保证）。
+	// D-432：看门狗随 runQuoteStream 生命周期（episode 跨重连续存）；
+	// zfDone 先于 close(ch) 收口（T6 不泄漏语义由此保证）。
 	a.zfReset()
 	zfDone := make(chan struct{})
 	safego.Go("mt5:zeroframeWatchdog", func() { defer close(zfDone); a.zeroframeWatchdog(ctx) })
@@ -80,7 +83,6 @@ func (a *MT5Adapter) runQuoteStream(ctx context.Context, ch chan<- bus.Quote) {
 		}
 		sctx, streamCancel := context.WithCancel(a.withSessionMD(ctx))
 		a.zfSetCancel(streamCancel)
-		a.resubscribeAll(sctx)
 		stream, err := a.streams.OnQuote(sctx, &mt5pb.OnQuoteRequest{Id: a.getToken()})
 		if err != nil {
 			streamCancel()
@@ -92,6 +94,8 @@ func (a *MT5Adapter) runQuoteStream(ctx context.Context, ch chan<- bus.Quote) {
 			a.quoteReconnectBackoff(ctx)
 			continue
 		}
+		// D-563 S5：重订阅挪开流后异步执行——订阅楔形不再阻塞流建立（逐符号失败只记日志）。
+		safego.Go("mt5:resubscribe", func() { a.resubscribeAll(sctx) })
 		ok := a.consumeQuoteFrames(ctx, stream, ch)
 		streamCancel()
 		a.zfSetCancel(nil)
@@ -253,27 +257,33 @@ func (a *MT5Adapter) zfCheck() {
 	var alert string
 	var cancel context.CancelFunc
 	var persist bool
-	// 心跳活（lastAny 新鲜）才进判定；流静止=传输/连接问题归 Recv error 路径，不误报
-	//（周末休市特征=心跳也停，同落本行）。
-	if !a.zfLastAnyFrameAt.IsZero() && now.Sub(a.zfLastAnyFrameAt) <= zeroFrameHeartbeatTTL {
-		realBase := a.zfLastRealFrameAt
-		if realBase.IsZero() {
-			realBase = a.zfStartedAt // 从未收真帧：从看门狗基线起算
+	// 判定两型（stage-2 公共段合一）：
+	// ①零帧——整流无一帧（lastAny 恒零，含心跳也无）自基线 >TTL → 流开不出/订阅楔死
+	//   疑似（D-563 S5，D6 实证盲孔：lastAny 恒零使判定块整段跳过=静默死）；
+	// ②心跳活但真帧死 >TTL → 终端推送死疑似（周末休市=心跳停→lastAny 陈旧不入②不误报）。
+	zeroFrame := a.zfLastAnyFrameAt.IsZero() && now.Sub(a.zfStartedAt) > zeroFrameSuspectTTL
+	heartbeatDead := !a.zfLastAnyFrameAt.IsZero() && now.Sub(a.zfLastAnyFrameAt) <= zeroFrameHeartbeatTTL
+	realBase := a.zfLastRealFrameAt
+	if realBase.IsZero() {
+		realBase = a.zfStartedAt // 从未收真帧：从看门狗基线起算
+	}
+	if zeroFrame || (heartbeatDead && now.Sub(realBase) > zeroFrameSuspectTTL) {
+		if !a.zfAlerted {
+			a.zfAlerted = true
+			if zeroFrame {
+				alert = fmt.Sprintf("mt5:%s quote stream zeroframe suspect: no frame at all since watchdog start %s（流开不出/订阅楔死疑似，KB: mtapi-onquote-zeroframe-terminal-dead）", a.venue, now.Sub(a.zfStartedAt).Round(time.Second))
+			} else {
+				alert = fmt.Sprintf("mt5:%s quote stream zeroframe suspect: heartbeats alive, no real frame for %s（终端推送死疑似，KB: mtapi-onquote-zeroframe-terminal-dead）", a.venue, now.Sub(realBase).Round(time.Second))
+			}
 		}
-		if realAge := now.Sub(realBase); realAge > zeroFrameSuspectTTL {
-			if !a.zfAlerted {
-				a.zfAlerted = true
-				alert = fmt.Sprintf("mt5:%s quote stream zeroframe suspect: heartbeats alive, no real frame for %s（终端推送死疑似，KB: mtapi-onquote-zeroframe-terminal-dead）", a.venue, realAge.Round(time.Second))
-			}
-			if a.zfReconnectAt.IsZero() {
-				// stage-2 单发：取消当前流 → consume Recv 返 Canceled → 外层循环重开
-				//（不重建 session）。本 episode 仅此一次，防重连风暴。
-				a.zfReconnectAt = now
-				cancel = a.zfCancelStream
-			} else if !a.zfPersistWarned && now.Sub(a.zfReconnectAt) > zeroFrameRecoveryTTL {
-				a.zfPersistWarned = true
-				persist = true
-			}
+		if a.zfReconnectAt.IsZero() {
+			// stage-2 单发：取消当前流 → consume Recv 返 Canceled → 外层循环重开
+			//（不重建 session）。本 episode 仅此一次，防重连风暴。
+			a.zfReconnectAt = now
+			cancel = a.zfCancelStream
+		} else if !a.zfPersistWarned && now.Sub(a.zfReconnectAt) > zeroFrameRecoveryTTL {
+			a.zfPersistWarned = true
+			persist = true
 		}
 	}
 	a.zfMu.Unlock()

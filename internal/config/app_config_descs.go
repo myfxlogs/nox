@@ -54,7 +54,7 @@ var appConfigDescs = map[string]string{
 	"ARB_FUNDING_HEDGE_MIN_NET_STORE":            "资金费对冲净收益入库门槛（%）",
 	"ARB_FUNDING_MAX_BREAKEVEN_DAYS":             "资金费策略回本天数上限（超出不开仓）",
 	"ARB_FUNDING_MIN_NET_ANNUALIZED":             "资金费策略净年化入场门槛（%）",
-	"ARB_GATE_DEFAULT_LEVERAGE":                  "Gate 默认杠杆倍数（下单缺省值）",
+	"ARB_GATE_DEFAULT_LEVERAGE":                  "Gate 合约目标杠杆（开仓前系统显式 SET；venue 无读回端点，配置=推送条款；缺失=拒开）",
 	"ARB_GRAB_MIN_NET_ANNUALIZED":                "抢单策略净年化入场门槛（%）",
 	"ARB_JUDGE_BALANCE_HKD":                      "HKD 币种资金判别下限（账户识别阈值）",
 	"ARB_JUDGE_BALANCE_USD":                      "USD 币种资金判别下限（账户识别阈值）",

@@ -9,7 +9,7 @@ import (
 
 func TestD560_FundingOptionsTextGate(t *testing.T) {
 	msg := "gate margin insufficient: need 830.00 > avail 1000.00 × 0.80 (lev 5 mark 4350.12)"
-	got := FundingOptionsText(msg)
+	got := FundingOptionsText(msg, "gate")
 	for _, want := range []string{"解法：", "向gate账户补可用资金 ≥$50", "杠杆 5× 调至 ≥6×", "单笔开仓金额降至 ≤$4000"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("want %q in %q", want, got)
@@ -19,7 +19,7 @@ func TestD560_FundingOptionsTextGate(t *testing.T) {
 
 func TestD560_FundingOptionsTextMT5(t *testing.T) {
 	msg := "mt5 margin insufficient: required 500.00 > avail 400.00 (freeMargin 500.00 × 0.80)"
-	got := FundingOptionsText(msg)
+	got := FundingOptionsText(msg, "")
 	if !strings.Contains(got, "向该账户补可用资金 ≥$200") || !strings.Contains(got, "单笔开仓数量调小") {
 		t.Errorf("mt5 应出①③（无杠杆项）, got %q", got)
 	}
@@ -30,7 +30,7 @@ func TestD560_FundingOptionsTextMT5(t *testing.T) {
 
 func TestD560_FundingOptionsTextOKX(t *testing.T) {
 	msg := "okx margin insufficient: sz 1.5000 张 > avail 1.2000 张 × 0.80 (BTC-USDT-SWAP)"
-	got := FundingOptionsText(msg)
+	got := FundingOptionsText(msg, "okx")
 	if !strings.Contains(got, "补可用资金") || !strings.Contains(got, "单笔开仓数量调小") {
 		t.Errorf("okx 张数拒文应出①③文字形式, got %q", got)
 	}
@@ -45,9 +45,20 @@ func TestD560_FundingOptionsTextNonFunding(t *testing.T) {
 		"gate margin insufficient: need > avail (lev)", // 字段缺 → ""
 		"quote venue symbol XAUUSD247m != primary",     // variant 拒文非资金拒
 	} {
-		if got := FundingOptionsText(msg); got != "" {
+		if got := FundingOptionsText(msg, "gate"); got != "" {
 			t.Errorf("msg=%q 应返空, got %q", msg, got)
 		}
+	}
+}
+
+// D-563 S5 锚：调用方传入 acct（别名已解析）；""→该账户——修 rejectVenueRe 锚 "^\S+? margin" 错抓 "execute:"。
+func TestD563_FundingOptionsTextAcct(t *testing.T) {
+	msg := "execute: gate margin insufficient: need 830.00 > avail 1000.00 × 0.80 (lev 5 mark 1)"
+	if got := FundingOptionsText(msg, "Gate合约"); !strings.Contains(got, "向Gate合约账户补可用资金 ≥$50") {
+		t.Errorf("acct 参数应取别名标签, got %q", got)
+	}
+	if got := FundingOptionsText(msg, ""); !strings.Contains(got, "向该账户补可用资金") {
+		t.Errorf("acct 空应「该账户」兜底, got %q", got)
 	}
 }
 
