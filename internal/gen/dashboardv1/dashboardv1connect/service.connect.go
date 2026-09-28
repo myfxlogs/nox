@@ -370,6 +370,9 @@ const (
 	// DashboardServiceGetCapitalCoverageProcedure is the fully-qualified name of the DashboardService's
 	// GetCapitalCoverage RPC.
 	DashboardServiceGetCapitalCoverageProcedure = "/arb.dashboard.v1.DashboardService/GetCapitalCoverage"
+	// DashboardServiceGetCapitalMapProcedure is the fully-qualified name of the DashboardService's
+	// GetCapitalMap RPC.
+	DashboardServiceGetCapitalMapProcedure = "/arb.dashboard.v1.DashboardService/GetCapitalMap"
 	// DashboardServiceGetCexFinanceProcedure is the fully-qualified name of the DashboardService's
 	// GetCexFinance RPC.
 	DashboardServiceGetCexFinanceProcedure = "/arb.dashboard.v1.DashboardService/GetCexFinance"
@@ -581,6 +584,8 @@ type DashboardServiceClient interface {
 	IntraTrackStats(context.Context, *connect.Request[dashboardv1.IntraTrackStatsRequest]) (*connect.Response[dashboardv1.IntraTrackStatsResponse], error)
 	// D-359：资金不眠覆盖率前端面板（口径 SSOT=D-356 §1.1；digest 段同源双实现，后端算前端零计算）。
 	GetCapitalCoverage(context.Context, *connect.Request[dashboardv1.GetCapitalCoverageRequest]) (*connect.Response[dashboardv1.GetCapitalCoverageResponse], error)
+	// D-546：资金全景账三档树（binance 六面钱包；只读全景面，sizing 基准不动）。
+	GetCapitalMap(context.Context, *connect.Request[dashboardv1.GetCapitalMapRequest]) (*connect.Response[dashboardv1.GetCapitalMapResponse], error)
 	// D-365：CEX 财务页（账户级盘点全币种+进出/收益流水；后端算+占比，前端零计算）。
 	GetCexFinance(context.Context, *connect.Request[dashboardv1.GetCexFinanceRequest]) (*connect.Response[dashboardv1.GetCexFinanceResponse], error)
 	// D-403：验证毕业链——扫描→验证→实盘三段接通（建议列表/业主授权/拒绝）。
@@ -1298,6 +1303,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("GetCapitalCoverage")),
 			connect.WithClientOptions(opts...),
 		),
+		getCapitalMap: connect.NewClient[dashboardv1.GetCapitalMapRequest, dashboardv1.GetCapitalMapResponse](
+			httpClient,
+			baseURL+DashboardServiceGetCapitalMapProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("GetCapitalMap")),
+			connect.WithClientOptions(opts...),
+		),
 		getCexFinance: connect.NewClient[dashboardv1.GetCexFinanceRequest, dashboardv1.GetCexFinanceResponse](
 			httpClient,
 			baseURL+DashboardServiceGetCexFinanceProcedure,
@@ -1518,6 +1529,7 @@ type dashboardServiceClient struct {
 	listIntraTrades                 *connect.Client[dashboardv1.ListIntraTradesRequest, dashboardv1.ListIntraTradesResponse]
 	intraTrackStats                 *connect.Client[dashboardv1.IntraTrackStatsRequest, dashboardv1.IntraTrackStatsResponse]
 	getCapitalCoverage              *connect.Client[dashboardv1.GetCapitalCoverageRequest, dashboardv1.GetCapitalCoverageResponse]
+	getCapitalMap                   *connect.Client[dashboardv1.GetCapitalMapRequest, dashboardv1.GetCapitalMapResponse]
 	getCexFinance                   *connect.Client[dashboardv1.GetCexFinanceRequest, dashboardv1.GetCexFinanceResponse]
 	listCarryGraduations            *connect.Client[dashboardv1.ListCarryGraduationsRequest, dashboardv1.ListCarryGraduationsResponse]
 	approveCarryGraduation          *connect.Client[dashboardv1.ApproveCarryGraduationRequest, dashboardv1.ApproveCarryGraduationResponse]
@@ -2103,6 +2115,11 @@ func (c *dashboardServiceClient) GetCapitalCoverage(ctx context.Context, req *co
 	return c.getCapitalCoverage.CallUnary(ctx, req)
 }
 
+// GetCapitalMap calls arb.dashboard.v1.DashboardService.GetCapitalMap.
+func (c *dashboardServiceClient) GetCapitalMap(ctx context.Context, req *connect.Request[dashboardv1.GetCapitalMapRequest]) (*connect.Response[dashboardv1.GetCapitalMapResponse], error) {
+	return c.getCapitalMap.CallUnary(ctx, req)
+}
+
 // GetCexFinance calls arb.dashboard.v1.DashboardService.GetCexFinance.
 func (c *dashboardServiceClient) GetCexFinance(ctx context.Context, req *connect.Request[dashboardv1.GetCexFinanceRequest]) (*connect.Response[dashboardv1.GetCexFinanceResponse], error) {
 	return c.getCexFinance.CallUnary(ctx, req)
@@ -2348,6 +2365,8 @@ type DashboardServiceHandler interface {
 	IntraTrackStats(context.Context, *connect.Request[dashboardv1.IntraTrackStatsRequest]) (*connect.Response[dashboardv1.IntraTrackStatsResponse], error)
 	// D-359：资金不眠覆盖率前端面板（口径 SSOT=D-356 §1.1；digest 段同源双实现，后端算前端零计算）。
 	GetCapitalCoverage(context.Context, *connect.Request[dashboardv1.GetCapitalCoverageRequest]) (*connect.Response[dashboardv1.GetCapitalCoverageResponse], error)
+	// D-546：资金全景账三档树（binance 六面钱包；只读全景面，sizing 基准不动）。
+	GetCapitalMap(context.Context, *connect.Request[dashboardv1.GetCapitalMapRequest]) (*connect.Response[dashboardv1.GetCapitalMapResponse], error)
 	// D-365：CEX 财务页（账户级盘点全币种+进出/收益流水；后端算+占比，前端零计算）。
 	GetCexFinance(context.Context, *connect.Request[dashboardv1.GetCexFinanceRequest]) (*connect.Response[dashboardv1.GetCexFinanceResponse], error)
 	// D-403：验证毕业链——扫描→验证→实盘三段接通（建议列表/业主授权/拒绝）。
@@ -3061,6 +3080,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("GetCapitalCoverage")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceGetCapitalMapHandler := connect.NewUnaryHandler(
+		DashboardServiceGetCapitalMapProcedure,
+		svc.GetCapitalMap,
+		connect.WithSchema(dashboardServiceMethods.ByName("GetCapitalMap")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServiceGetCexFinanceHandler := connect.NewUnaryHandler(
 		DashboardServiceGetCexFinanceProcedure,
 		svc.GetCexFinance,
@@ -3391,6 +3416,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceIntraTrackStatsHandler.ServeHTTP(w, r)
 		case DashboardServiceGetCapitalCoverageProcedure:
 			dashboardServiceGetCapitalCoverageHandler.ServeHTTP(w, r)
+		case DashboardServiceGetCapitalMapProcedure:
+			dashboardServiceGetCapitalMapHandler.ServeHTTP(w, r)
 		case DashboardServiceGetCexFinanceProcedure:
 			dashboardServiceGetCexFinanceHandler.ServeHTTP(w, r)
 		case DashboardServiceListCarryGraduationsProcedure:
@@ -3884,6 +3911,10 @@ func (UnimplementedDashboardServiceHandler) IntraTrackStats(context.Context, *co
 
 func (UnimplementedDashboardServiceHandler) GetCapitalCoverage(context.Context, *connect.Request[dashboardv1.GetCapitalCoverageRequest]) (*connect.Response[dashboardv1.GetCapitalCoverageResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetCapitalCoverage is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) GetCapitalMap(context.Context, *connect.Request[dashboardv1.GetCapitalMapRequest]) (*connect.Response[dashboardv1.GetCapitalMapResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.GetCapitalMap is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GetCexFinance(context.Context, *connect.Request[dashboardv1.GetCexFinanceRequest]) (*connect.Response[dashboardv1.GetCexFinanceResponse], error) {
