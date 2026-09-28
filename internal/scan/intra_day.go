@@ -9,6 +9,7 @@ import (
 	"math"
 	"time"
 
+	"arb/internal/calib"
 	"arb/internal/store/pgstore"
 )
 
@@ -227,7 +228,7 @@ func (e *IntraEngine) ReplayGate(ctx context.Context, venue, symbol, baseline st
 		return 0, false, 0, fmt.Errorf("replay ticks: %w", err)
 	}
 	events := simulate(baseline, ticks, e.cfg, since)
-	feeFrac := 2 * IntraTakerFeeBps / 10000 // 双侧 taker 费（名义分数）；loss/margin=×IntraLeverage
+	feeFrac := 2 * calib.Lookup("intra_taker_fee_bps", "", "", IntraTakerFeeBps) / 10000 // 双侧 taker 费（D-533 calib 覆盖）；loss/margin=×IntraLeverage
 	worst := 0.0
 	for i := 0; i+1 < len(events); i++ {
 		en, ex := events[i], events[i+1]

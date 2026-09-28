@@ -65,11 +65,10 @@ type Config struct {
 	// SwapArbEquityUseRatio 名义额资金使用率系数（ARB_SWAPARB_EQUITY_USE_RATIO，缺省 0.5）：notional=min(equityLong,equityShort)×ratio；ratio=1=旧行为，不限额=无上限。
 	SwapArbEquityUseRatio float64
 	// SwapArbBareCap swap 套利单腿裸露上限系数（ARB_SWAPARB_BARE_CAP，缺省 1.0）。
-	// D-097 R2：notional=minEq×ratio，>minEq×BareCap 则 cap 之（只 cap 不 skip）——单腿名义≤BareCap 倍权益。
+	// D-097 R2：notional=minEq×ratio，超 BareCap×minEq 则 cap 之（只 cap 不 skip），单腿名义≤BareCap 倍权益。
 	SwapArbBareCap float64
 	// SwapArbReentryCooldownDays 组合平仓后重入冷却天数（ARB_SWAPARB_REENTRY_COOLDOWN_DAYS，缺省 7）。
-	// 该 ComboKey 存在 CLOSED 持仓且 closed_at > now() − N 天 → 跳过（不尝试/不弹窗/不落 REJECTED 噪音）。
-	// 冷却外或无 CLOSED 记录 → 放行；0 = 关闭冷却（始终放行）。
+	// 该 ComboKey 存在 CLOSED 且 closed_at > now()−N 天 → 跳过（不弹窗/不落 REJECTED 噪音）；冷却外或无记录放行；0 = 关闭。
 	SwapArbReentryCooldownDays int
 	// StopReentryMinutes gate 止损重进冷却分钟数（ARB_STOP_REENTRY_MINUTES，缺省 60）。
 	// D-372：同 ComboKey stop/manual 平仓后 N 分钟内 gate 拒绝自动重进（全策略统一，
@@ -99,8 +98,8 @@ type Config struct {
 	// ComboLossWindowH 止损计数回看窗口小时（ARB_COMBO_LOSS_WINDOW_H，缺省 24）；0 = 关闭。
 	ComboLossWindowH int
 	// SwapArbVenueExposureCap 单 venue SWAPARB 合计裸露上限系数（ARB_SWAPARB_VENUE_EXPOSURE_CAP，缺省 2.0）。
-	// D-132 T1：新开仓时若任一腿 venue 现有 SWAPARB 活仓合计名义 + 新仓名义 > venue equity × cap → skip。
-	// 语义=单 venue SWAPARB 裸露 ≤ cap 倍权益；注资后各档自动满足，组合数失控时硬顶。0 = 不启用。
+	// D-132 T1：新开仓时任一腿 venue 现有 SWAPARB 活仓名义+新仓名义 > venue equity×cap → skip
+	// （单 venue 裸露 ≤ cap 倍权益；注资后各档自动满足，组合数失控时硬顶）。0 = 不启用。
 	SwapArbVenueExposureCap float64
 	// SwapArbMarginBudgetPct 组合保证金预算告警阈值（ARB_SWAPARB_MARGIN_BUDGET_PCT，缺省 0.8）——D-142 ④。
 	// 双腿合计保证金 / min(equity) > 此值 → 观察版 warn 告警（只告警不拦截）。
@@ -201,6 +200,7 @@ type Config struct {
 	ExplorerEnabled     bool   // ARB_EXPLORER_ENABLED 缺省 false——探矿员壳总闸（D-513：关=零行为变化）
 	ExplorerRatePerHour int    // ARB_EXPLORER_RATE_PER_HOUR（默认 10，独立令牌桶）
 	MacroEnabled        bool   // ARB_MACRO_ENABLED 缺省 false——宏观采集层总闸（D-528：关=零行为变化）
+	CalibEnabled        bool   // ARB_CALIB_ENABLED 缺省 true——校准计分板总闸（D-533：只读计分+写自表）
 	// MTData MT 数据采集稳定性加固参数（D-104 P0）。
 	MTData MTDataConfig
 

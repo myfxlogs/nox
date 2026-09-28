@@ -148,7 +148,8 @@ var migrationFiles = []struct {
 	{151, migrations.ConfigToPgSQL},                    // D-515：app_secrets+swaparb_allow_combos+exchange enc 三列
 	{152, migrations.MacroTablesSQL},                   // D-528：macro_event+cot_position+fred_observation 三表
 	{153, migrations.RadarWatchlistCanonicalSQL},       // D-532 S2：watchlist symbol 方言归一（venues[1] 后缀反推）
-	{155, migrations.IdleFloorStreakSQL},               // D-534 B4：睡钱触发层连续天数状态表（0154=D-533 预留）
+	{154, migrations.CalibTablesSQL},                   // D-533：calib_scoreboard+calib_params 两表+种值四行
+	{155, migrations.IdleFloorStreakSQL},               // D-534 B4：睡钱触发层连续天数状态表
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
