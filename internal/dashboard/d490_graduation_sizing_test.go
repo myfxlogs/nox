@@ -72,8 +72,8 @@ func TestD490_PctHappyPath(t *testing.T) {
 		math.Abs(resp.Msg.EstLegNotionalUsd-50) > 1e-9 {
 		t.Errorf("est_* 回显错: %+v", resp.Msg)
 	}
-	// note 审计标记：pct 侧「分配$X(=P%×净值池$Nperp)」（行首另有 [gaps:] 前缀）
-	if !strings.Contains(f.decisionNote, "首批") || !strings.Contains(f.decisionNote, "分配$100.0(=10.0%×净值池$1000perp)") {
+	// note 审计标记：pct 侧「分配$X(=P%×可用基准$Nperp)」（行首另有 [gaps:] 前缀）
+	if !strings.Contains(f.decisionNote, "首批") || !strings.Contains(f.decisionNote, "分配$100.0(=10.0%×可用基准$1000perp)") {
 		t.Errorf("decisionNote 缺分配标记: %q", f.decisionNote)
 	}
 	if len(resp.Msg.SizingNotes) == 0 {
@@ -97,8 +97,8 @@ func TestD490_UsdHappyAndEcho(t *testing.T) {
 		t.Errorf("est usd/gross 错: %+v", resp.Msg)
 	}
 	// 双池 min：usd=200 > 小池? 1000 内 → 过；若错绑大池 2000 口径 pct 会算成 0.1。
-	// usd 侧标记「直填=P%×净值池$N」
-	if !strings.Contains(f.decisionNote, "分配$200.0(直填=20.0%×净值池$1000)") {
+	// usd 侧标记「直填=P%×可用基准$N」
+	if !strings.Contains(f.decisionNote, "分配$200.0(直填=20.0%×可用基准$1000)") {
 		t.Errorf("decisionNote 缺直填标记: %q", f.decisionNote)
 	}
 	// usd > minPool → 拒批不写库

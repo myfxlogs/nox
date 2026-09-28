@@ -1,5 +1,5 @@
 // service_graduation_sizing.go D-490 S2：毕业授权资金分配额折算器。
-// 业主语义=「这个组合用多少资金」——funding_pct（小池净值占比，小数口径）或
+// 业主语义=「这个组合用多少资金」——funding_pct（可用基准占比，小数口径，D-540 业主令改）或
 // funding_usd（直填金额）由服务端折算成四字段绝对值（max_long_qty/max_short_qty/
 // max_gross_usd/notional_usd），approve 快照固化写库，引擎/schema 零改动。
 // fail-closed 链（SSOT §3）：互斥 → 池缺/equity≤0/快照>5min/币种非USD系 →
@@ -15,13 +15,12 @@ import (
 
 	v1 "arb/internal/gen/dashboardv1"
 	"arb/internal/keydomain"
-	"arb/internal/store/pgstore"
 )
 
 // allocSizing 资金分配折算结果（写库值+互算回显+审计注记单源产出）。
 type allocSizing struct {
-	AllocUSD    float64  // 分配额 USD（pct 输入=minPool×pct；usd 输入=直填值）
-	AllocPct    float64  // 占小池净值比（usd 输入的回显侧=allocUSD÷minPool；小数口径）
+	AllocUSD    float64  // 分配额 USD（pct 输入=base×pct 可用基准口径；usd 输入=直填值）
+	AllocPct    float64  // 占可用基准比（D-540：allocUSD÷base；回显口径，小数）
 	GrossUSD    float64  // 双腿名义总闸 = AllocUSD（=max_gross_usd 落值）
 	LegNotional float64  // 每腿名义 = AllocUSD÷2（L=1 最坏占用口径，落 notional_usd）
 	LongQty     float64  // 买腿 qty 上限 = LegNotional÷perLotBuy(ask)×1.1（漂移余量）
@@ -29,51 +28,13 @@ type allocSizing struct {
 	MinPoolUSD  float64  // 绑定小池净值（note 审计标记用）
 	MinPoolKey  string   // 绑定小池实际取到的 venue:type 键（如 "binance:perp"）
 	Notes       []string // sizing_notes 回显注记（池口径/币种/快照时点）
-}
-
-// allocPool 腿资金池快照行（equity 原币+currency+fetched_at）。
-type allocPool struct {
-	key      string // 实际取到的 venue:venue_type 行键（unified 回退时如实反映口径）
-	equity   float64
-	currency string
-	at       time.Time
-}
-
-// allocPoolOf 腿 venue_key→资金池快照行（SSOT §2 poolOf）：先精确 (venue,冒号后缀type)
-// 行；缺行/NULL equity 回退 (venue,unified)→(venue,perp)→该 venue 任意非空 equity 行；
-// 仍无=未采（false）。同所双池语义：spot×perp 组合两腿各取各自池行（现货花 spot 现金，
-// 永续占 perp 保证金）——bare venue 折叠是漏行（D-358fix 同判）。
-func allocPoolOf(snaps []pgstore.VenueAccountLatest, venueKey string) (allocPool, bool) {
-	k := keydomain.Parse(venueKey)
-	bare, vt := k.Venue, k.Type
-	pick := func(wantType string) (allocPool, bool) {
-		for _, r := range snaps {
-			if r.Venue == bare && r.VenueType == wantType && r.EquityRaw != nil {
-				return allocPool{key: keydomain.Join(bare, r.VenueType), equity: *r.EquityRaw, currency: r.Currency, at: r.FetchedAt}, true
-			}
-		}
-		return allocPool{}, false
-	}
-	for _, t := range []string{vt, "unified", "perp"} {
-		if p, ok := pick(t); ok {
-			return p, true
-		}
-	}
-	for _, r := range snaps {
-		if r.Venue == bare && r.EquityRaw != nil {
-			return allocPool{key: keydomain.Join(bare, r.VenueType), equity: *r.EquityRaw, currency: r.Currency, at: r.FetchedAt}, true
-		}
-	}
-	return allocPool{}, false
-}
-
-// allocPoolUSDLike 池币种白名单（SSOT §3-4：UST/USDT→USD=1 既定口径，其他币种不猜汇率）。
-func allocPoolUSDLike(ccy string) bool {
-	switch strings.ToUpper(strings.TrimSpace(ccy)) {
-	case "USD", "USDT", "UST":
-		return true
-	}
-	return false
+	// D-540：可用基准+风险位+建议额（栏内联动/红字数据源）。
+	AllocBaseUSD   float64  // 可用基准=min(双池可用)；缺 free_margin 回退 equity
+	AllocBaseNote  string   // 基准来源注记（free_margin/净值回退 逐池标）
+	AllocBaseKey   string   // 基准绑定池键（note 审计标记用）
+	RiskLevel      string   // ok / insufficient / liquidation
+	SuggestedAlloc float64  // 建议分配额（risk≠ok 时给）
+	RiskReasons    []string // 风险理由逐项
 }
 
 // deriveAllocSizing D-490 S3 共用折算器（approveNonCfd+cfd 两分支同源）：
@@ -124,23 +85,32 @@ func (s *Service) deriveAllocSizing(ctx context.Context, venueBuy, venueSell, ca
 	if poolSell.equity < poolBuy.equity {
 		bind = poolSell
 	}
+	// D-540：可用资金基准（min 双池可用，free_margin 优先缺省回退净值）——业主令 % 基准。
+	base, baseBindKey, baseNote := allocBaseEval(poolBuy, poolSell)
 	// ③ 分配额归一 USD + 安全线闸（crossCap cfg 注入缺省 0.5，同待入场区档位判据）
 	var allocUSD float64
 	if pct != nil {
-		allocUSD = minPool * *pct
+		if !(base > 0) {
+			return res, "可用基准非正（free_margin 未采/为零），%% 口径不可折算——直填 $ 或等快照"
+		}
+		allocUSD = base * *pct // D-540：% 基准=可用资金（业主令；旧净值口径随动）
 	} else {
 		allocUSD = *usd
 		if allocUSD > minPool {
 			return res, fmt.Sprintf("分配额 $%.0f 超过小池 %s 净值 $%.0f（必然超档，拒）", allocUSD, bind.key, minPool)
 		}
 	}
-	allocPct := allocUSD / minPool // minPool>0 已由池闸保证
+	allocPct := 0.0
+	if base > 0 {
+		allocPct = allocUSD / base // D-540：回显侧同基准（占可用资金比，小数口径）
+	}
 	cap := s.crossCap
 	if cap <= 0 {
 		cap = defaultCrossCap
 	}
-	if allocPct > cap {
-		return res, fmt.Sprintf("占小池净值 %.1f%% 超安全线（上限 %.0f%%，同待入场区档位判据 ARB_CROSS_NOTIONAL_EQUITY_CAP；逃生=显式上限模式）", allocPct*100, cap*100)
+	// 安全线闸口径不变——占小池净值比（equity 口径；与回显的可用基准比分轨）。
+	if equityPct := allocUSD / minPool; equityPct > cap {
+		return res, fmt.Sprintf("占小池净值 %.1f%% 超安全线（上限 %.0f%%，同待入场区档位判据 ARB_CROSS_NOTIONAL_EQUITY_CAP；逃生=显式上限模式）", equityPct*100, cap*100)
 	}
 	// ④ perLot 折算（USDPerLotForLeg 复用；报价/CS/FX 缺 → fail-closed）
 	notional := allocUSD / 2 // L=1 最坏占用：两腿资金占用上界≈2×腿名义
@@ -172,12 +142,17 @@ func (s *Service) deriveAllocSizing(ctx context.Context, venueBuy, venueSell, ca
 		GrossUSD: allocUSD, LegNotional: notional,
 		LongQty: qtyBuy * 1.1, ShortQty: qtySell * 1.1,
 		MinPoolUSD: minPool, MinPoolKey: bind.key,
+		AllocBaseUSD:  base,
+		AllocBaseNote: baseNote,
+		AllocBaseKey:  baseBindKey,
 		Notes: []string{
 			fmt.Sprintf("买腿池 %s 净值 $%.0f %s（快照 %d 秒前）", poolBuy.key, poolBuy.equity, poolBuy.currency, int(time.Since(poolBuy.at).Seconds())),
 			fmt.Sprintf("卖腿池 %s 净值 $%.0f %s（快照 %d 秒前）", poolSell.key, poolSell.equity, poolSell.currency, int(time.Since(poolSell.at).Seconds())),
 			fmt.Sprintf("绑定约束=小池 %s $%.0f（双池取 min）", bind.key, minPool),
+			fmt.Sprintf("可用基准 $%.0f（%s）", base, baseNote),
 		},
 	}
+	res.RiskLevel, res.RiskReasons, res.SuggestedAlloc = s.allocRisk(ctx, res, venueBuy, venueSell, poolBuy, poolSell)
 	return res, ""
 }
 
@@ -228,20 +203,26 @@ func (s *Service) gradDryRunResp(ctx context.Context, resp *v1.ApproveCarryGradu
 	// 免 listAccountMarginStatus 独立查询）。快照读失败→空列表（前端如实显「未采」降级）。
 	if snaps, err := s.gradDB().LatestVenueAccountSnapshots(ctx); err == nil {
 		resp.LegPools = gradLegPools(snaps, []string{venueBuy, venueSell})
+		// D-540：可用基准随 dry_run 常回（裸探针无 sizing 入参也要——前端栏内联动基准；
+		// 池缺/币种不符→不回传，前端如实显「未采」）。
+		if b, n, ok := allocBaseFromSnaps(snaps, venueBuy, venueSell); ok {
+			resp.AllocBaseUsd, resp.AllocBaseNote = b, n
+		}
 	}
 	resp.Ok = true
 }
 
-// allocNoteMarker D-490 §4：decided_note 审计标记——pct 侧「分配$X(=P%×净值池$Ntype)」、
-// usd 侧「分配$X(直填=P%×净值池$N)」；业主 note 保留在前（本函数返回拼接后整串）。
+// allocNoteMarker D-490 §4：decided_note 审计标记——pct 侧「分配$X(=P%×可用基准$Ntype)」、
+// usd 侧「分配$X(直填=P%×可用基准$N)」；业主 note 保留在前（本函数返回拼接后整串）。
+// D-540：基准=可用资金（free_margin 优先缺省回退净值），标记同口径不残留净值字样。
 func allocNoteMarker(userNote string, res allocSizing, pctInput bool) string {
-	poolType := res.MinPoolKey
+	poolType := res.AllocBaseKey
 	if t := keydomain.Parse(poolType).Type; t != "" {
 		poolType = t
 	}
-	marker := fmt.Sprintf("分配$%.1f(直填=%.1f%%×净值池$%.0f)", res.AllocUSD, res.AllocPct*100, res.MinPoolUSD)
+	marker := fmt.Sprintf("分配$%.1f(直填=%.1f%%×可用基准$%.0f)", res.AllocUSD, res.AllocPct*100, res.AllocBaseUSD)
 	if pctInput {
-		marker = fmt.Sprintf("分配$%.1f(=%.1f%%×净值池$%.0f%s)", res.AllocUSD, res.AllocPct*100, res.MinPoolUSD, poolType)
+		marker = fmt.Sprintf("分配$%.1f(=%.1f%%×可用基准$%.0f%s)", res.AllocUSD, res.AllocPct*100, res.AllocBaseUSD, poolType)
 	}
 	return strings.TrimSpace(userNote + " " + marker)
 }
@@ -255,6 +236,12 @@ func fillSizingEst(resp *v1.ApproveCarryGraduationResponse, res allocSizing) {
 	resp.EstAllocUsd = res.AllocUSD
 	resp.EstAllocPct = res.AllocPct
 	resp.SizingNotes = res.Notes
+	// D-540：可用基准+风险位+建议额随试算/批准同径透出。
+	resp.AllocBaseUsd = res.AllocBaseUSD
+	resp.AllocBaseNote = res.AllocBaseNote
+	resp.RiskLevel = res.RiskLevel
+	resp.SuggestedAllocUsd = res.SuggestedAlloc
+	resp.RiskReasons = res.RiskReasons
 }
 
 // fillExplicitEst 显式模式 dry_run 回显（无折算——回显业主将写入的原值；
