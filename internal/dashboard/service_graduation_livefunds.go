@@ -39,6 +39,10 @@ func (s *Service) capitalView() *capitalview.View {
 	return s.capView
 }
 
+// CapitalView D-549 R1：统一资金读口透出（autotrade gate_margin 执行面 Src 闸用；
+// 与 dashboard 内部共享同一实例——REST 校准单飞语义）。
+func (s *Service) CapitalView() *capitalview.View { return s.capitalView() }
+
 // legPool 单腿池求值（D-542 统一入口 → D-549 起经 capitalview.Live）：
 // CEX 腿→活账本（干净直读→脏/空 REST 校准）；MT 腿/校准失败 → 快照兜底
 // （带龄注记；调用方快照龄闸只对非 live 池生效）。snaps=调用方预取面（nil=自取）。
