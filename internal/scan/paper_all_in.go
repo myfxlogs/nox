@@ -165,3 +165,23 @@ func cfdComboLegs(c pgstore.XAssetAllowRow) (mtVenue, cexVenue, mtCanon string, 
 	}
 	return "", "", "", false
 }
+
+// cexSpotPerpComboLegs D-555 S1：cfdComboLegs 对偶件——双CEX spot×perp 同 canonical 构型解析。
+// combo 行双腿为 venue_key（typed keys，LoadXAssetAllowCombos 投影 venue_key_*）：
+// 恰一 :spot+恰一 :perp 且 canonical_buy==canonical_sell（FUNDING_HEDGE 同 canonical 构型）
+// → (spotBare, perpBare, canonical, spotType, perpType)——a/b 序按腿型归一（行序无关）。
+// 其余构型（双腿 MT / 双 perp / 跨 canonical）→ ok=false（mt×cex 归 cfdComboLegs，余不管）。
+func cexSpotPerpComboLegs(c pgstore.XAssetAllowRow) (spotBare, perpBare, canonical, spotType, perpType string, ok bool) {
+	if c.CanonicalBuy != c.CanonicalSell || c.CanonicalBuy == "" {
+		return
+	}
+	buy := keydomain.Parse(c.VenueBuy)
+	sell := keydomain.Parse(c.VenueSell)
+	switch {
+	case buy.Type == "spot" && sell.Type == "perp":
+		return buy.Venue, sell.Venue, c.CanonicalBuy, buy.Type, sell.Type, true
+	case sell.Type == "spot" && buy.Type == "perp":
+		return sell.Venue, buy.Venue, c.CanonicalBuy, sell.Type, buy.Type, true
+	}
+	return
+}

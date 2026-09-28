@@ -1,0 +1,178 @@
+// paper_cex_carry.go —— D-555 S1：双CEX（FUNDING_HEDGE spot买×perp卖）纸面轨步进——保底槽+发现槽。
+// 业主令（方向锚）：所有组合必须走统一漏斗（纸面→毕业→授权）；候选源=detector.FundingHedgeDetector.Scan
+// 纯函数枚举（cmd/core 转换直传，P3 单源禁重写枚举逻辑）。行 shape：
+// structure='long_spot_short_perp'（正构型 v1 策略钉，engine regime 闸同一钉）、
+// venue_a/b=裸 venue、venue_type_a/b=spot/perp（D-496 拆列惯例，venue_key 生成列投影键域）、
+// mt_venue=NULL、side='short_perp'（perp 腿做空收正 funding）。
+// S1 范围=开仓生产；计费/basis/结息/退出=S2（行 est_fee/basis NULL 诚实缺，不臆造）。
+package scan
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"time"
+
+	"arb/internal/keydomain"
+	"arb/internal/store/pgstore"
+)
+
+// PaperCexMaxActive 发现槽 canonical 多样性上限（mirror PaperCfdMaxActive 同防挤占语义；
+// 保底槽不占此额同 D-410 S4）。
+const PaperCexMaxActive = 6
+
+// PaperCexOpts 装配参数（cmd/core 注入；env 与 cfd 保底槽同源同值——保底语义与 mt×cex 同）。
+type PaperCexOpts struct {
+	AuthorizedMaxActive int           // 保底槽独立上限
+	ReopenCooldown      time.Duration // 保底 flap 冷却（退出行 max(exit_ts) 窗）
+	MaxActive           int           // 发现槽上限（<=0 取 PaperCexMaxActive）
+}
+
+// CexPaperCand 双CEX 候选（cmd/core 由 detector.Candidate Type==FUNDING_HEDGE 转换直传）。
+type CexPaperCand struct {
+	Canonical    string
+	SpotVenueKey string  // "{venue}:{venue_type}"（detector 原样透传）
+	PerpVenueKey string  // 同上
+	FundingAnn   float64 // perp 腿 funding 年化（百分点口径，与 universe FundingAnn 同源同单位）
+}
+
+// StepPaperCexCarry 每轮引擎扫描后调用（FUNDING_HEDGE 候选直传；零候选零 DB 开销）：
+// ①保底段：enabled∧非 simulated 白名单组合（spot×perp 同 canonical 构型）不套 net 下限
+//
+//	自动开纸面（候选缺席=数据缺席不开——同 mt×cex「universe 未产行」语义）；
+//
+// ②发现段：其余候选 funding 阈已由 detector 前置过滤（本步零复判=P3 单源），按
+//
+//	canonical 多样性上限开到 cap。
+//
+// blocked 旗标腿级拦截（同 D-463 口径）；flap 冷却按退出行 max(exit_ts)（保底段同 mt×cex）。
+func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand, now time.Time, opts PaperCexOpts, flags map[string]pgstore.VenueSymbolFlag) (opened []string, err error) {
+	if len(cands) == 0 {
+		return nil, nil
+	}
+	maxActive := opts.MaxActive
+	if maxActive <= 0 {
+		maxActive = PaperCexMaxActive
+	}
+	active, err := st.ListActivePaperSpotCarry(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("cex paper step: list active: %w", err)
+	}
+	// 活跃行键（键域口径：venue_key_a×venue_key_b|symbol——type 列参与键，与 mt×cex
+	// 裸域键天然不撞）；本轨 diversity 槽仅计本 structure 行（D-548 口径）。
+	cexRowKey := func(p pgstore.PaperSpotCarry) string {
+		return keydomain.Join(p.VenueA, p.VenueTypeA) + "×" + keydomain.Join(p.VenueB, p.VenueTypeB) + "|" + p.Symbol
+	}
+	activeByKey := make(map[string]struct{}, len(active))
+	slotKeys := make(map[string]struct{}, len(active))
+	for _, p := range active {
+		if p.Structure != "long_spot_short_perp" {
+			continue
+		}
+		activeByKey[cexRowKey(p)] = struct{}{}
+		slotKeys["long_spot_short_perp|"+p.Symbol] = struct{}{}
+	}
+	cexActive := len(slotKeys)
+	candByKey := make(map[string]CexPaperCand, len(cands))
+	for _, c := range cands {
+		candByKey[c.SpotVenueKey+"×"+c.PerpVenueKey+"|"+c.Canonical] = c
+	}
+	openCand := func(c CexPaperCand, key string) bool {
+		if f := blockedFlagHit(keydomain.BareOf(c.SpotVenueKey), keydomain.BareOf(c.PerpVenueKey), c.Canonical, nil, flags); f != nil {
+			log.Printf("[cex paper] blocked flag 拦截: %s（%s@%s|%s）", key, f.Reason, f.Venue, f.Symbol)
+			return false
+		}
+		sp := keydomain.Parse(c.SpotVenueKey)
+		pp := keydomain.Parse(c.PerpVenueKey)
+		p := &pgstore.PaperSpotCarry{
+			VenueA: sp.Venue, VenueTypeA: sp.Type,
+			VenueB: pp.Venue, VenueTypeB: pp.Type,
+			Symbol: c.Canonical, Side: "short_perp",
+			EntryFundingAnn: c.FundingAnn, QtyUSD: PaperQtyUSD,
+			Structure: "long_spot_short_perp",
+		}
+		if err := st.InsertPaperSpotCarry(ctx, p); err != nil {
+			if err == pgstore.ErrPaperExists {
+				return false
+			}
+			// 单行失败不炸整轮（paper 轨惯例），WP1 禁静默：日志留痕续跑。
+			log.Printf("[cex paper] insert %s: %v", key, err)
+			return false
+		}
+		activeByKey[key] = struct{}{}
+		slotKeys["long_spot_short_perp|"+c.Canonical] = struct{}{}
+		opened = append(opened, c.Canonical)
+		return true
+	}
+	// ① 保底段：enabled∧非 simulated 组合先行（不占发现槽额）。
+	combos, err := st.LoadXAssetAllowCombos(ctx, "real")
+	if err != nil {
+		return nil, fmt.Errorf("cex paper step: load allow combos: %w", err)
+	}
+	authorizedKeys := make(map[string]struct{}, len(combos))
+	guaranteedActive := 0
+	for _, c := range combos {
+		sp, pp, canon, spType, ppType, ok := cexSpotPerpComboLegs(c)
+		if !ok {
+			continue // 非 spot×perp 同 canonical 构型（mt×cex 归 cfd 轨；余者不进本轨）
+		}
+		key := keydomain.Join(sp, spType) + "×" + keydomain.Join(pp, ppType) + "|" + canon
+		authorizedKeys[key] = struct{}{}
+	}
+	for k := range activeByKey {
+		if _, ok := authorizedKeys[k]; ok {
+			guaranteedActive++
+		}
+	}
+	for _, c := range combos {
+		sp, pp, canon, spType, ppType, ok := cexSpotPerpComboLegs(c)
+		if !ok {
+			continue
+		}
+		key := keydomain.Join(sp, spType) + "×" + keydomain.Join(pp, ppType) + "|" + canon
+		if _, isActive := activeByKey[key]; isActive {
+			continue
+		}
+		if guaranteedActive >= opts.AuthorizedMaxActive {
+			continue
+		}
+		// flap 冷却：退出行 max(exit_ts) 窗内不重开（同 D-410 钉死②——防衰减组合反复记费）。
+		if opts.ReopenCooldown > 0 {
+			lastExit, err := st.LatestPaperExitTs(ctx, sp, pp, canon)
+			if err != nil {
+				return opened, fmt.Errorf("cex paper step: exit ts %s: %w", key, err)
+			}
+			if lastExit != nil && now.Sub(*lastExit) < opts.ReopenCooldown {
+				continue
+			}
+		}
+		cand, ok := candByKey[key]
+		if !ok {
+			continue // 候选缺席=本轮无 funding/报价面（数据缺席不开，同 universe 未产行）
+		}
+		if openCand(cand, key) {
+			guaranteedActive++
+		}
+	}
+	// ② 发现段：其余候选（funding 阈=detector 前置已滤；canonical 多样性上限）。
+	topN := 0
+	for _, c := range cands {
+		key := c.SpotVenueKey + "×" + c.PerpVenueKey + "|" + c.Canonical
+		if _, isActive := activeByKey[key]; isActive {
+			continue
+		}
+		if _, authorized := authorizedKeys[key]; authorized {
+			continue // 保底段已裁决（冷却/上限跳过态不重复计入发现段）
+		}
+		slotKey := "long_spot_short_perp|" + c.Canonical
+		_, occupied := slotKeys[slotKey]
+		if !occupied && cexActive+topN >= maxActive {
+			// 新 canonical 无槽——不 break（同 canonical 复行不占槽仍可开）
+			continue
+		}
+		if openCand(c, key) && !occupied {
+			topN++
+		}
+	}
+	return opened, nil
+}

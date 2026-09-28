@@ -290,4 +290,6 @@ var (
 	ExposureCapsSeedSQL string
 	//go:embed 0159_exposure_cap_truth_fix.sql
 	ExposureCapTruthFixSQL string // D-547：组合帽对齐+okx 幽灵键重键名
+	//go:embed 0160_paper_dual_cex_columns.sql
+	PaperDualCexColumnsSQL string // D-555 S1：paper_spot_carry/carry_graduations venue_type+venue_key 列
 )

@@ -108,7 +108,12 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 	for _, c := range combos {
 		mtV, cexV, mtCanon, ok := cfdComboLegs(c)
 		if !ok {
-			// 钉死③：venue 对无 MT 腿（双 CEX 组合）→ 跳过保底+detail note（无映射意义不硬塞）
+			if _, _, _, _, _, dual := cexSpotPerpComboLegs(c); dual {
+				// D-555 S1：双CEX spot×perp 同 canonical 构型=cex 纸面轨（StepPaperCexCarry）接管，
+				// 此处静默跳过（「保底槽跳过双CEX组合」告警对本构型消失=A1 锚）。
+				continue
+			}
+			// 钉死③：venue 对无 MT 腿且非 spot×perp 构型（双 perp 等）→ 跳过保底+note
 			log.Printf("[cfd paper] 保底槽跳过双CEX组合 venue=%s/%s canon=%s/%s", c.VenueBuy, c.VenueSell, c.CanonicalBuy, c.CanonicalSell)
 			continue
 		}

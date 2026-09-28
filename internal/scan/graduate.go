@@ -65,6 +65,8 @@ func StepCarryGraduation(ctx context.Context, st GraduationStore, now time.Time,
 			PaperID:        p.ID,
 			VenueA:         p.VenueA,
 			VenueB:         p.VenueB,
+			VenueTypeA:     p.VenueTypeA, // D-555：type 列透传（数据模型；判据零改动=S3 锚）
+			VenueTypeB:     p.VenueTypeB,
 			Symbol:         p.Symbol,
 			Structure:      p.Structure,
 			MtVenue:        p.MtVenue,

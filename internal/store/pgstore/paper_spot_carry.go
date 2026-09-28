@@ -21,6 +21,8 @@ type PaperSpotCarry struct {
 	// VenuePair() 产出，消费端禁回解析。
 	VenueA          string
 	VenueB          string
+	VenueTypeA      string // D-555：A 臂 venue_type（双CEX spot 腿=spot；mt×cex/存量行=''，venue_key 生成列投影裸域）
+	VenueTypeB      string // D-555：B 臂 venue_type（双CEX perp 腿=perp；同上）
 	Symbol          string
 	Side            string // short_perp / long_perp
 	EntryFundingAnn float64
@@ -59,11 +61,11 @@ func (s *Store) InsertPaperSpotCarry(ctx context.Context, r *PaperSpotCarry) err
 		r.Structure = "spot_carry"
 	}
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO paper_spot_carry (venue_a, venue_b, symbol, side, entry_funding_ann, qty_usd, last_funding_ann, last_accrue_ts, entry_basis_bps, last_basis_bps, structure, mt_venue, est_round_trip_fee_usd, note)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,now(),$8,$8,$9,$10,$11,$12)
+		INSERT INTO paper_spot_carry (venue_a, venue_b, venue_type_a, venue_type_b, symbol, side, entry_funding_ann, qty_usd, last_funding_ann, last_accrue_ts, entry_basis_bps, last_basis_bps, structure, mt_venue, est_round_trip_fee_usd, note)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$7,now(),$9,$9,$10,$11,$12,$13)
 		ON CONFLICT (venue_a, venue_b, symbol) WHERE status IN ('active','demo') DO NOTHING
 		RETURNING id, status`,
-		r.VenueA, r.VenueB, r.Symbol, r.Side, r.EntryFundingAnn, r.QtyUSD, r.EntryFundingAnn, r.EntryBasisBps, r.Structure, r.MtVenue, r.EstRoundTripFeeUSD, r.Note).Scan(&r.ID, &r.Status)
+		r.VenueA, r.VenueB, r.VenueTypeA, r.VenueTypeB, r.Symbol, r.Side, r.EntryFundingAnn, r.QtyUSD, r.EntryBasisBps, r.Structure, r.MtVenue, r.EstRoundTripFeeUSD, r.Note).Scan(&r.ID, &r.Status)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return ErrPaperExists
@@ -208,7 +210,7 @@ func (s *Store) ExitPaperSpotCarry(ctx context.Context, id int64, reason string,
 }
 
 // D-498：venue_a/venue_b 直出（删 '×' 合成臂——配对展示串由 VenuePair() 产出，Go 侧断解析）。
-const paperSpotCarryCols = `id, venue_a, venue_b, symbol, side, entry_funding_ann, entry_ts, qty_usd,
+const paperSpotCarryCols = `id, venue_a, venue_b, venue_type_a, venue_type_b, symbol, side, entry_funding_ann, entry_ts, qty_usd,
 	last_funding_ann, accrued_usd, last_accrue_ts, low_streak, miss_streak, exit_ts, exit_reason, status, note,
 	entry_basis_bps, last_basis_bps, structure, mt_venue, est_round_trip_fee_usd, convergence_usd,
 	accrue_ticks, min_accrued_usd`
@@ -243,7 +245,7 @@ func (s *Store) scanPaperSpotCarry(ctx context.Context, q string, args ...any) (
 	var out []PaperSpotCarry
 	for rows.Next() {
 		var r PaperSpotCarry
-		if err := rows.Scan(&r.ID, &r.VenueA, &r.VenueB, &r.Symbol, &r.Side, &r.EntryFundingAnn, &r.EntryTs,
+		if err := rows.Scan(&r.ID, &r.VenueA, &r.VenueB, &r.VenueTypeA, &r.VenueTypeB, &r.Symbol, &r.Side, &r.EntryFundingAnn, &r.EntryTs,
 			&r.QtyUSD, &r.LastFundingAnn, &r.AccruedUSD, &r.LastAccrueTs, &r.LowStreak, &r.MissStreak,
 			&r.ExitTs, &r.ExitReason, &r.Status, &r.Note,
 			&r.EntryBasisBps, &r.LastBasisBps, &r.Structure, &r.MtVenue,
