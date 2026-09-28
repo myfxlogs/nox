@@ -11,6 +11,7 @@ import (
 	"arb/internal/collect/cmc"
 	"arb/internal/exec"
 	"arb/internal/position"
+	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
 
 	v1 "arb/internal/gen/dashboardv1"
@@ -35,7 +36,15 @@ type Service struct {
 	crossCap  float64
 	tierState map[string]tierState
 	tierMu    sync.Mutex
-	acv       appConfigView // D-523：键视图快照+自杀重启注入（定义 service_appconfig.go）
+	// D-542：CEX 账户可用资金活账本（私有流主源+REST 校准回写，SetBalanceLedger 注入；
+	// nil=未装配→腿池直走快照兜底）。liveMu=校准单飞；liveQuerierFor=测试注入点；
+	// liveRestTTLDur 测试可缩短校准缓存。
+	balLedger      *bus.BalanceLedger
+	liveMu         sync.Mutex
+	liveQuerierFor func(ctx context.Context, venueKey string) (reconcile.AccountQuerier, string, bool)
+	liveSimWarned  map[int64]bool
+	liveRestTTLDur time.Duration
+	acv            appConfigView // D-523：键视图快照+自杀重启注入（定义 service_appconfig.go）
 
 	// settler 结算触发（D-087 §3.2，手动平仓后调）。nil = 未接线（RPC 仍可用，仅不结算）。
 	settler Settler
@@ -269,26 +278,8 @@ func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *
 	return &Service{store: store, gradStore: store, qbus: qbus, pipeline: pipeline, gateChecker: &storeGateChecker{store: store}, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, swapArbEquityUseRatio: swapArbEquityUseRatio, swapArbBareCap: swapArbBareCap, swapArbVenueExposureCap: swapArbVenueExposureCap, priceTopic: priceTopic, oppTopic: oppTopic, orderTopic: orderTopic, alertTopic: alertTopic, hedgeTopic: hedgeTopic, bpm: bpm, notionalUSD: notionalUSD, acctMon: acctMon, commissionFor: commissionFor, slippageBps: slippageBps, xassetCexFeeBps: xassetCexFeeBps, kickFn: kickFn}
 }
 
-// Store 返回底层 store（D-070 autotrade engine 用）。
-func (s *Service) Store() *pgstore.Store { return s.store }
-
-// AutoClosePosition 平仓（D-070 autotrade engine 自动平仓用，区别于 RPC ClosePosition）。
-func (s *Service) AutoClosePosition(ctx context.Context, posID int64) error {
-	return s.pipeline.ClosePosition(ctx, posID)
-}
-
-// ResumeClose D-189 P0-4：重触发 CLOSING 持仓平仓（reconcile 超时自动重试入口）。
-// 只转发 pipeline.ResumeClose，不复制执行逻辑。
-func (s *Service) ResumeClose(ctx context.Context, posID int64) error {
-	return s.pipeline.ResumeClose(ctx, posID)
-}
-
-// ClaimClose D-189 R1：转发 store.ClaimClose（OPEN/LEGGED→CLOSING 原子领取）。
-// reconcile auto_close step c 先 ClaimClose 再 ResumeClose，修复 position 仍 OPEN 时
-// ResumeClose 拒绝非 CLOSING 导致永久卡死。
-func (s *Service) ClaimClose(ctx context.Context, posID int64) error {
-	return s.store.ClaimClose(ctx, posID)
-}
+// SetBalanceLedger/Store/AutoClosePosition/ResumeClose/ClaimClose 转发与注入面
+// 见 service_setters.go（控行数拆出）。
 
 // Settler 结算接口（D-087 §3.2，settlement.Settle 的注入面，dashboard 不依赖 settlement 包避免循环）。
 type Settler interface {

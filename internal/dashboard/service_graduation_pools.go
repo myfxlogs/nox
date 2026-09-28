@@ -7,23 +7,26 @@ import (
 
 	v1 "arb/internal/gen/dashboardv1"
 	"arb/internal/keydomain"
-	"arb/internal/store/pgstore"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// gradLegPools 双腿资金池映射组装（D-508 S8）：逐腿 allocPoolOf 终值 + 小池标记。
-func gradLegPools(snaps []pgstore.VenueAccountLatest, legKeys []string) []*v1.GradLegPoolRow {
+// gradLegPoolsOf 池行组装（D-542：与 legPool 求值解耦——调用方先取池再渲染，
+// source 透出 ws/rest 实拉与 snap 快照兜底，前端「实拉/快照」标签数据源）。
+func gradLegPoolsOf(legKeys []string, pools []allocPool, oks []bool) []*v1.GradLegPoolRow {
 	rows := make([]*v1.GradLegPoolRow, 0, len(legKeys))
-	pools := make([]allocPool, len(legKeys))
 	minEq := math.Inf(1)
 	for i, vk := range legKeys {
-		p, ok := allocPoolOf(snaps, vk)
-		row := &v1.GradLegPoolRow{VenueKey: vk, Found: ok}
-		if ok {
+		p := pools[i]
+		row := &v1.GradLegPoolRow{VenueKey: vk, Found: oks[i]}
+		if oks[i] {
 			k := keydomain.Parse(p.key)
 			row.PoolVenue, row.PoolVenueType = k.Venue, k.Type
 			row.Equity, row.Currency = p.equity, p.currency
+			row.Source = "snap"
+			if p.live {
+				row.Source = p.src // ws=私有流实拉 / rest=实拉校准
+			}
 			if !p.at.IsZero() {
 				row.UpdatedAt = timestamppb.New(p.at)
 			}
@@ -31,7 +34,6 @@ func gradLegPools(snaps []pgstore.VenueAccountLatest, legKeys []string) []*v1.Gr
 				minEq = p.equity
 			}
 		}
-		pools[i] = p
 		rows = append(rows, row)
 	}
 	for i, p := range pools {

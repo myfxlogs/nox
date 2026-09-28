@@ -45,6 +45,8 @@ type CexStreamManager struct {
 	// KickTopic D-469b S2：config 变更 kick（exchange RPC mutation → publish，sync 即到即跑；
 	// nil=纯 ticker）。chan 扇出用 bus.Topic——多 manager/热载器共享同一事件源。
 	KickTopic *bus.Topic[struct{}]
+	// BalLedger D-542：可用资金活账本（透传各私有流——事件喂入+重连标脏；nil 安全）。
+	BalLedger *bus.BalanceLedger
 
 	store      ExchangeStore
 	sinks      CexStreamSinks
@@ -149,9 +151,11 @@ func (m *CexStreamManager) sync(ctx context.Context) {
 		switch c.Venue {
 		case "gate":
 			ws := exchange.NewGatePrivateWS(c.APIKey, c.APISecret, c.BaseURL, vk, c.Simulated, snapSink, m.sinks, m.orderCache, m.posCache)
+			ws.SetBalanceLedger(m.BalLedger)
 			safego.Go("cex-stream:gate", func() { ws.Run(sctx) })
 		case "binance":
 			ws := exchange.NewBinanceUserWS(c.APIKey, c.APISecret, c.BaseURL, c.VenueType, vk, c.Simulated, snapSink, m.sinks, m.orderCache, m.posCache, m.BinanceHooks)
+			ws.SetBalanceLedger(m.BalLedger)
 			safego.Go("cex-stream:binance", func() { ws.Run(sctx) })
 		case "okx":
 			// D-469b S1：OKX 私有流纳入 manager 生命周期（boot 一次性装配已移除）。
@@ -163,6 +167,7 @@ func (m *CexStreamManager) sync(ctx context.Context) {
 				ctVal, _, err := exec.OkxSwapSpec(ctx, httpx.Client(), okxBase, instID)
 				return ctVal, err
 			})
+			ws.SetBalanceLedger(m.BalLedger)
 			safego.Go("cex-stream:okx", func() { ws.Run(sctx) })
 		}
 		m.streams[id] = cancel

@@ -47,6 +47,7 @@ type fakeGradDB struct {
 	p95        float64
 	p95OK      bool
 	snaps      []pgstore.VenueAccountLatest
+	exchCfgs   []pgstore.ExchangeConfig // D-542：实拉校准配置源测试面
 	adminRows  []pgstore.XAssetComboAdminRow
 	comboOpen  map[string][]int64 // canonicalBuy|venueBuy → 在持仓 posIDs
 	comboOpenN map[string]float64
@@ -144,6 +145,9 @@ func (f *fakeGradDB) XAssetMonitorSpreadP95(context.Context, string, string) (fl
 }
 func (f *fakeGradDB) LatestVenueAccountSnapshots(context.Context) ([]pgstore.VenueAccountLatest, error) {
 	return f.snaps, nil
+}
+func (f *fakeGradDB) ListExchangeConfigs(context.Context) ([]pgstore.ExchangeConfig, error) {
+	return f.exchCfgs, nil
 }
 func (f *fakeGradDB) ListXAssetAllowCombosAll(context.Context) ([]pgstore.XAssetComboAdminRow, error) {
 	return f.adminRows, nil
@@ -300,7 +304,7 @@ func TestD403_Approve_Guards(t *testing.T) {
 		t.Error("重载器未接线应 fail-closed 且不写库")
 	}
 	// notional 显式非正
-	f, s = gradFixture("long_cfd_short_perp")
+	_, s = gradFixture("long_cfd_short_perp")
 	neg := -1.0
 	resp, _ = s.ApproveCarryGraduation(context.Background(), connect.NewRequest(&v1.ApproveCarryGraduationRequest{GraduationId: 5, MaxLongQty: 1, MaxShortQty: 1, MaxGrossUsd: 100, NotionalUsd: &neg}))
 	if resp.Msg.Ok {

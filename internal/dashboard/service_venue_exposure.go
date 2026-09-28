@@ -5,6 +5,7 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	v1 "arb/internal/gen/dashboardv1"
@@ -14,7 +15,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// ListVenueExposureCaps 闸表全量透传（前端「敞口上限」小节行源）。
+// ListVenueExposureCaps 闸表全量透传 + D-542 S3②：已配置账户但闸表无行的 venue_key
+// 合成 unset 占位行（显式提示未设闸——binance:spot/perp 类缺闸 venue 不再隐身）。
 func (s *Service) ListVenueExposureCaps(ctx context.Context, _ *connect.Request[v1.ListVenueExposureCapsRequest]) (*connect.Response[v1.ListVenueExposureCapsResponse], error) {
 	caps, err := s.store.ListVenueExposureCaps(ctx)
 	if err != nil {
@@ -27,7 +29,61 @@ func (s *Service) ListVenueExposureCaps(ctx context.Context, _ *connect.Request[
 			UpdatedAt: timestamppb.New(c.UpdatedAt),
 		})
 	}
+	for _, key := range s.unsetCapKeys(ctx, caps) {
+		out = append(out, &v1.VenueExposureCapRow{
+			VenueKey: key, Unset: true, Note: "未设闸（approve 放行+warn；建议显式设上限）",
+		})
+	}
 	return connect.NewResponse(&v1.ListVenueExposureCapsResponse{Rows: out}), nil
+}
+
+// unsetCapKeys 已配置账户面但闸表无行的 venue_key 集（CEX=exchange_configs live 行
+// venue:venue_type；MT=broker_accounts user:mt4|mt5——与 approve 腿 venue_key 同键域）。
+func (s *Service) unsetCapKeys(ctx context.Context, caps map[string]pgstore.VenueExposureCap) []string {
+	want := map[string]bool{}
+	if cfgs, err := s.store.ListExchangeConfigs(ctx); err == nil {
+		for _, c := range cfgs {
+			if c.Simulated {
+				continue
+			}
+			want[c.Venue+":"+c.VenueType] = true
+		}
+	}
+	if accts, err := s.store.ListBrokerAccounts(ctx); err == nil {
+		for _, a := range accts {
+			want[a.Venue+":"+brokerVenueType(a.Platform)] = true
+		}
+	}
+	keys := make([]string, 0, len(want))
+	for k := range want {
+		keys = append(keys, k)
+	}
+	return unsetCapKeysOf(keys, caps)
+}
+
+// unsetCapKeysOf 账户键集 − 闸表键集 = 未设闸键序（纯函数，D-542 A4 锚测点）。
+func unsetCapKeysOf(want []string, caps map[string]pgstore.VenueExposureCap) []string {
+	out := make([]string, 0, len(want))
+	seen := map[string]bool{}
+	for _, k := range want {
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		if _, ok := caps[k]; !ok {
+			out = append(out, k)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// brokerVenueType platform int → venue_type 段（0=mt4 1=mt5；其他如实回传不猜）。
+func brokerVenueType(platform int) string {
+	if platform == 1 {
+		return "mt5"
+	}
+	return "mt4"
 }
 
 // SetVenueExposureCap 写/改闸：venue_key 非空+cap_usd>=0（负值 DB CHECK 也拒，

@@ -16,12 +16,15 @@ import (
 )
 
 // allocPool 腿资金池快照行（equity 原币+currency+fetched_at；D-540 补 free_margin）。
+// D-542：live+src——实拉活账本/REST 校准池（live=true）免快照龄闸；src 供池行/基准注记透出。
 type allocPool struct {
 	key      string // 实际取到的 venue:venue_type 行键（unified 回退时如实反映口径）
 	equity   float64
 	free     *float64 // free_margin_raw；nil=未采→可用回退 equity
 	currency string
 	at       time.Time
+	live     bool   // D-542：实拉活账本/REST 校准源（非快照）
+	src      string // "ws"=私有流 / "rest"=实拉校准 / ""=快照兜底
 }
 
 // allocPoolOf 腿 venue_key→资金池快照行（SSOT §2 poolOf）：先精确 (venue,冒号后缀type)
@@ -70,25 +73,19 @@ func allocBaseEval(poolBuy, poolSell allocPool) (base float64, bindKey, note str
 	if uS < uB {
 		base, bind = uS, poolSell
 	}
-	src := func(f bool) string {
+	src := func(p allocPool, f bool) string {
+		if p.live {
+			if p.src == "rest" {
+				return "实拉校准"
+			}
+			return "实拉"
+		}
 		if f {
 			return "free_margin"
 		}
 		return "净值回退"
 	}
-	return base, bind.key, fmt.Sprintf("%s=%s %s=%s；绑定 %s", poolBuy.key, src(fB), poolSell.key, src(fS), bind.key)
-}
-
-// allocBaseFromSnaps 裸探针路径的可用基准（D-540）：双腿池均可取且币种 USD 系→
-// 基准+注记；缺池/币种不符→false（前端「未采」降级，不猜）。
-func allocBaseFromSnaps(snaps []pgstore.VenueAccountLatest, venueBuy, venueSell string) (float64, string, bool) {
-	pB, okB := allocPoolOf(snaps, venueBuy)
-	pS, okS := allocPoolOf(snaps, venueSell)
-	if !okB || !okS || !allocPoolUSDLike(pB.currency) || !allocPoolUSDLike(pS.currency) {
-		return 0, "", false
-	}
-	base, _, note := allocBaseEval(pB, pS)
-	return base, note, true
+	return base, bind.key, fmt.Sprintf("%s=%s %s=%s；绑定 %s", poolBuy.key, src(poolBuy, fB), poolSell.key, src(poolSell, fS), bind.key)
 }
 
 // allocPoolUSDLike 池币种白名单（SSOT §3-4：UST/USDT→USD=1 既定口径，其他币种不猜汇率）。

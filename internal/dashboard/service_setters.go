@@ -6,11 +6,37 @@ import (
 	"context"
 	"time"
 
+	"arb/internal/bus"
 	"arb/internal/collect/cmc"
 	"arb/internal/exec"
 	"arb/internal/keydomain"
 	"arb/internal/position"
+	"arb/internal/store/pgstore"
 )
+
+// SetBalanceLedger D-542：注入活账本（与 cex 私有流同实例；装配一次，nil 安全）。
+func (s *Service) SetBalanceLedger(l *bus.BalanceLedger) { s.balLedger = l }
+
+// Store 返回底层 store（D-070 autotrade engine 用）。
+func (s *Service) Store() *pgstore.Store { return s.store }
+
+// AutoClosePosition 平仓（D-070 autotrade engine 自动平仓用，区别于 RPC ClosePosition）。
+func (s *Service) AutoClosePosition(ctx context.Context, posID int64) error {
+	return s.pipeline.ClosePosition(ctx, posID)
+}
+
+// ResumeClose D-189 P0-4：重触发 CLOSING 持仓平仓（reconcile 超时自动重试入口）。
+// 只转发 pipeline.ResumeClose，不复制执行逻辑。
+func (s *Service) ResumeClose(ctx context.Context, posID int64) error {
+	return s.pipeline.ResumeClose(ctx, posID)
+}
+
+// ClaimClose D-189 R1：转发 store.ClaimClose（OPEN/LEGGED→CLOSING 原子领取）。
+// reconcile auto_close step c 先 ClaimClose 再 ResumeClose，修复 position 仍 OPEN 时
+// ResumeClose 拒绝非 CLOSING 导致永久卡死。
+func (s *Service) ClaimClose(ctx context.Context, posID int64) error {
+	return s.store.ClaimClose(ctx, posID)
+}
 
 // SetSettler 注入结算器（D-087 §3.2，手动平仓后调）。nil = 未接线（RPC 仍可用，仅不结算）。
 func (s *Service) SetSettler(st Settler) { s.settler = st }

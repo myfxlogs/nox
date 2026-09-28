@@ -15,6 +15,7 @@ import (
 
 	v1 "arb/internal/gen/dashboardv1"
 	"arb/internal/keydomain"
+	"arb/internal/store/pgstore"
 )
 
 // allocSizing 资金分配折算结果（写库值+互算回显+审计注记单源产出）。
@@ -57,21 +58,23 @@ func (s *Service) deriveAllocSizing(ctx context.Context, venueBuy, venueSell, ca
 	if usd != nil && !(*usd > 0) {
 		return res, "funding_usd 必须 >0（NaN/非正同拒）"
 	}
-	// ② 双池快照：缺行/equity≤0/过期/币种——USD 直填也要池数据（安全线+互算回显都要）
+	// ② 双池求值：CEX 腿→实拉活账本（D-542：干净直读/脏空 REST 校准）；
+	// MT 腿与 REST 双败 → 快照兜底（快照龄闸只作用于非 live 池）。
+	// 缺行/equity≤0/过期/币种——USD 直填也要池数据（安全线+互算回显都要）
 	snaps, err := s.gradDB().LatestVenueAccountSnapshots(ctx)
 	if err != nil {
 		return res, fmt.Sprintf("账户快照读取失败: %v（fail-closed 不批钱）", err)
 	}
 	pools := map[string]allocPool{}
 	for _, vk := range []string{venueBuy, venueSell} {
-		p, ok := allocPoolOf(snaps, vk)
+		p, ok := s.legPool(ctx, snaps, vk)
 		if !ok {
-			return res, fmt.Sprintf("腿池 %s 无资金快照（equity 未采集，fail-closed 不猜）", vk)
+			return res, fmt.Sprintf("腿池 %s 无资金数据（活账本/REST/快照三径全空，fail-closed 不猜）", vk)
 		}
 		if p.equity <= 0 {
 			return res, fmt.Sprintf("腿池 %s 净值非正（$%.2f），拒绝折算", p.key, p.equity)
 		}
-		if time.Since(p.at) > snapshotStaleWindow {
+		if !p.live && time.Since(p.at) > snapshotStaleWindow {
 			return res, fmt.Sprintf("腿池 %s 快照过期（%s，>5min 未更新不猜）", p.key, p.at.Format("15:04:05"))
 		}
 		if !allocPoolUSDLike(p.currency) {
@@ -146,8 +149,8 @@ func (s *Service) deriveAllocSizing(ctx context.Context, venueBuy, venueSell, ca
 		AllocBaseNote: baseNote,
 		AllocBaseKey:  baseBindKey,
 		Notes: []string{
-			fmt.Sprintf("买腿池 %s 净值 $%.0f %s（快照 %d 秒前）", poolBuy.key, poolBuy.equity, poolBuy.currency, int(time.Since(poolBuy.at).Seconds())),
-			fmt.Sprintf("卖腿池 %s 净值 $%.0f %s（快照 %d 秒前）", poolSell.key, poolSell.equity, poolSell.currency, int(time.Since(poolSell.at).Seconds())),
+			fmt.Sprintf("买腿池 %s 净值 $%.0f %s（%s）", poolBuy.key, poolBuy.equity, poolBuy.currency, poolSrcNote(poolBuy)),
+			fmt.Sprintf("卖腿池 %s 净值 $%.0f %s（%s）", poolSell.key, poolSell.equity, poolSell.currency, poolSrcNote(poolSell)),
 			fmt.Sprintf("绑定约束=小池 %s $%.0f（双池取 min）", bind.key, minPool),
 			fmt.Sprintf("可用基准 $%.0f（%s）", base, baseNote),
 		},
@@ -199,17 +202,49 @@ func (s *Service) gradDryRunResp(ctx context.Context, resp *v1.ApproveCarryGradu
 	if !funding {
 		fillExplicitEst(resp, longQty, shortQty, gross, notional)
 	}
-	// D-508 S8：腿→资金池映射随 dry_run 回传（allocPoolOf 回退链终值，前端删镜像+
-	// 免 listAccountMarginStatus 独立查询）。快照读失败→空列表（前端如实显「未采」降级）。
+	// D-508 S8 + D-542：腿→资金池映射随 dry_run 回传——CEX 腿先走实拉活账本
+	// （裸探针=弹窗开，脏/空触发一发 REST 校准+30s 缓存）；REST 双败快照兜底。
+	// 快照读失败→空列表（前端如实显「未采」降级）。
 	if snaps, err := s.gradDB().LatestVenueAccountSnapshots(ctx); err == nil {
-		resp.LegPools = gradLegPools(snaps, []string{venueBuy, venueSell})
+		var poolB, poolS allocPool
+		var okB, okS bool
+		resp.LegPools, poolB, okB, poolS, okS = s.gradLiveLegPools(ctx, snaps, []string{venueBuy, venueSell})
 		// D-540：可用基准随 dry_run 常回（裸探针无 sizing 入参也要——前端栏内联动基准；
 		// 池缺/币种不符→不回传，前端如实显「未采」）。
-		if b, n, ok := allocBaseFromSnaps(snaps, venueBuy, venueSell); ok {
+		if okB && okS && allocPoolUSDLike(poolB.currency) && allocPoolUSDLike(poolS.currency) {
+			b, _, n := allocBaseEval(poolB, poolS)
 			resp.AllocBaseUsd, resp.AllocBaseNote = b, n
 		}
 	}
 	resp.Ok = true
+}
+
+// gradLiveLegPools 双腿池行组装（D-542：gradLegPools 实拉版——同回退链但 CEX 腿先活账本）。
+func (s *Service) gradLiveLegPools(ctx context.Context, snaps []pgstore.VenueAccountLatest, legKeys []string) (rows []*v1.GradLegPoolRow, poolB allocPool, okB bool, poolS allocPool, okS bool) {
+	pools := make([]allocPool, len(legKeys))
+	oks := make([]bool, len(legKeys))
+	for i, vk := range legKeys {
+		pools[i], oks[i] = s.legPool(ctx, snaps, vk)
+	}
+	rows = gradLegPoolsOf(legKeys, pools, oks)
+	if len(pools) > 0 {
+		poolB, okB = pools[0], oks[0]
+	}
+	if len(pools) > 1 {
+		poolS, okS = pools[1], oks[1]
+	}
+	return rows, poolB, okB, poolS, okS
+}
+
+// poolSrcNote 池来源注记（sizing_notes 透出——实拉/校准 vs 快照龄）。
+func poolSrcNote(p allocPool) string {
+	if p.live {
+		if p.src == "rest" {
+			return fmt.Sprintf("实拉校准 %d 秒前", int(time.Since(p.at).Seconds()))
+		}
+		return "实拉"
+	}
+	return fmt.Sprintf("快照 %d 秒前（快照兜底）", int(time.Since(p.at).Seconds()))
 }
 
 // allocNoteMarker D-490 §4：decided_note 审计标记——pct 侧「分配$X(=P%×可用基准$Ntype)」、
