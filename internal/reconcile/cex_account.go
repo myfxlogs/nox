@@ -57,7 +57,9 @@ func (q *CEXAccountQuerier) VenueKey() string {
 // SetKeyOverride D-362 S2：设置撞键归一后的注册键（由 reconcile.CexVenueKey 计算）。
 func (q *CEXAccountQuerier) SetKeyOverride(k string) { q.keyOverride = k }
 
-// Account 查询账户余额/权益。CEX 的 Margin/FreeMargin/Credit/Profit=0（无对应概念）。
+// Account 查询账户余额/权益。CEX 的 Margin/Credit/Profit=0（无对应概念）；
+// D-542：FreeMargin 实采——binance spot=Σ USDT 标 free / perp=availableBalance /
+// okx=Σ details[USDT].availBal / gate=available（缺字段回退 equity 不猜负）。
 func (q *CEXAccountQuerier) Account(ctx context.Context) (*AccountInfo, error) {
 	// D-363 S2：资金（funding）/理财（earn）子账户先于交易账户分派（同函数签名零新管道）。
 	if q.venueType == "funding" || q.venueType == "earn" {
@@ -140,12 +142,16 @@ func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error
 	// 旧 TotalEq=统一账户全币总权益（含 DOGE/PENGU 类杂币折算），不再采用。
 	// holdings 明细不动（全币展示保留，D-273 S2）。
 	eq := 0.0
+	avail := 0.0 // D-542：free_margin=Σ details[USDT].availBal（统一账户可用，USDT 1:1）
 	for _, d := range resp.Data[0].Details {
 		if d.Ccy != "USDT" {
 			continue
 		}
 		if usd, perr := strconv.ParseFloat(d.EqUsd, 64); perr == nil {
 			eq += usd
+		}
+		if a, perr := strconv.ParseFloat(d.AvailBal, 64); perr == nil {
+			avail += a
 		}
 	}
 	// D-405 S2 + D-434 S3：buffer_multiple=equity/MMR 三层回落——pos502 实采实证本账户
@@ -156,7 +162,7 @@ func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error
 	buffer := OKXBufferMultiple(eq, resp.Data[0].Details, resp.Data[0].MgnRatio)
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
-		Balance: eq, Equity: eq, Currency: "USDT",
+		Balance: eq, Equity: eq, FreeMargin: avail, Currency: "USDT",
 		Simulated: q.simulated, Website: q.website, Holdings: holdings,
 		BufferMultiple: buffer,
 	}, nil
@@ -196,7 +202,8 @@ func (q *CEXAccountQuerier) accountGate(ctx context.Context) (*AccountInfo, erro
 		return nil, fmt.Errorf("gate account: %w", err)
 	}
 	var acc struct {
-		Total string `json:"total"` // USDT 总权益（字符串）
+		Total     string `json:"total"`     // USDT 总权益（字符串）
+		Available string `json:"available"` // D-542：可用余额（free_margin 真源）
 	}
 	if err := json.Unmarshal(body, &acc); err != nil {
 		return nil, fmt.Errorf("gate account json: %w", err)
@@ -205,9 +212,13 @@ func (q *CEXAccountQuerier) accountGate(ctx context.Context) (*AccountInfo, erro
 	if perr != nil {
 		return nil, fmt.Errorf("parse %s=%q: %w", "acc.Total", acc.Total, perr)
 	}
+	avail := eq // 缺 available 字段按净值回退（不猜负）
+	if a, perr := f64z(acc.Available); perr == nil && a > 0 {
+		avail = a
+	}
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
-		Balance: eq, Equity: eq, Currency: "USDT",
+		Balance: eq, Equity: eq, FreeMargin: avail, Currency: "USDT",
 		Simulated: q.simulated, Website: q.website,
 	}, nil
 }

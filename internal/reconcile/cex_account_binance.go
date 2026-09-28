@@ -55,6 +55,7 @@ func (q *CEXAccountQuerier) accountBinance(ctx context.Context) (*AccountInfo, e
 	// 不发 ticker 定价请求（~90 个 LD* 杂币每轮省 ~90 次 ticker 调用）。
 	// D-361 LD 计价链（binanceUsdtPrice 兜底序）随「不读取」不可达，整段删除（史实在 git）。
 	total := 0.0
+	freeTotal := 0.0 // D-542：free_margin=Σ USDT 标 free（弹窗实拉校准+快照列真值）
 	var holdings []*v1.Holding
 	for _, b := range acc.Balances {
 		free, perr := f64z(b.Free)
@@ -74,11 +75,12 @@ func (q *CEXAccountQuerier) accountBinance(ctx context.Context) (*AccountInfo, e
 		}
 		// USDT/LDUSDT 皆 1:1 计 qty，无需价
 		total += qty
+		freeTotal += free
 		holdings = append(holdings, &v1.Holding{Ccy: b.Asset, Qty: qty, UsdtValue: qty})
 	}
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
-		Balance: total, Equity: total, Currency: "USDT",
+		Balance: total, Equity: total, FreeMargin: freeTotal, Currency: "USDT",
 		Simulated: q.simulated, Website: q.website, Holdings: holdings,
 	}, nil
 }
@@ -103,6 +105,7 @@ func (q *CEXAccountQuerier) accountBinancePerp(ctx context.Context) (*AccountInf
 		TotalWalletBalance string `json:"totalWalletBalance"`
 		MarginBalance      string `json:"totalMarginBalance"` // D-405 S2：钱包余额+未实现盈亏（equity）
 		MaintMargin        string `json:"totalMaintMargin"`   // D-405 S2：账户级维持保证金（MMR）
+		AvailableBalance   string `json:"availableBalance"`   // D-542：venue 权威可用余额（free_margin 真源）
 	}
 	if err := json.Unmarshal(body, &acc); err != nil {
 		return nil, fmt.Errorf("binance perp account json: %w", err)
@@ -128,9 +131,15 @@ func (q *CEXAccountQuerier) accountBinancePerp(ctx context.Context) (*AccountInf
 			buffer = mb / mm
 		}
 	}
+	// D-542：availableBalance 是 venue 权威可用（wb−占用保证金−冻结，含全仓）——
+	// 缺失/解析失败按 equity 回退（不猜负值）。
+	avail := eq
+	if ab, perr := f64z(acc.AvailableBalance); perr == nil && ab > 0 {
+		avail = ab
+	}
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
-		Balance: eq, Equity: eq, Currency: "USDT",
+		Balance: eq, Equity: eq, FreeMargin: avail, Currency: "USDT",
 		Simulated: q.simulated, Website: q.website, BufferMultiple: buffer,
 	}, nil
 }
