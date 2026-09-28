@@ -10,7 +10,7 @@
 > **当前部署形态（9-28 校正——下文若与本节冲突以此为准）**：公网入口=
 > `https://cex.myfxlogs.org`（CF 隧道→代理机 loopback:8443，D-522 收编）；
 > 裸 IP:8443 已被代理机 iptables 对外 DROP（仅 lo 放行，9-27 加固）。
-> **客户端禁写裸 IP**——D-538 化石端点教训：写死 `192.229.85.35:8443` 的调用方
+> **客户端禁写裸 IP**——D-538 化石端点教训：写死 `192.229.85.35:8443` 的调用方（fossil-allow：引证化石本体）
 > 全线 EOF。TLS 由 CF 边缘终结走系统 CA 链，`ARB_BINANCE_PROXY_CA` pin 仅
 > 无 CF 裸连场景需要。
 
@@ -79,7 +79,7 @@ WS 路由经 `httputil.ReverseProxy` Upgrade 透传，`tokenGate` 同护（WS �
 
 2. 把 `cex-proxy` 二进制和 `config.json` 拷到固定目录（如 `/opt/cex-proxy/`）。
 
-3. 首次运行：
+3. 首次运行（IP 为历史形态示例 fossil-allow）：
    ```
    cd /opt/cex-proxy
    ./cex-proxy -listen=:8443 -sans=192.229.85.35
@@ -88,7 +88,7 @@ WS 路由经 `httputil.ReverseProxy` Upgrade 透传，`tokenGate` 同护（WS �
 
 4. **放行端口**（防火墙 + 云安全组放行 `8443/TCP`）。
 
-5. **确认从公网可达**：
+5. **确认从公网可达**（IP 为历史形态示例 fossil-allow）：
    ```
    curl -k https://192.229.85.35:8443/ca-cert
    ```
@@ -103,7 +103,7 @@ WS 路由经 `httputil.ReverseProxy` Upgrade 透传，`tokenGate` 同护（WS �
    [Service]
    Type=simple
    WorkingDirectory=/opt/cex-proxy
-   ExecStart=/opt/cex-proxy/cex-proxy -listen=:8443 -sans=192.229.85.35
+   ExecStart=/opt/cex-proxy/cex-proxy -listen=:8443 -sans=192.229.85.35  # 历史形态示例 fossil-allow
    Restart=always
    RestartSec=5
    NoNewPrivileges=true
