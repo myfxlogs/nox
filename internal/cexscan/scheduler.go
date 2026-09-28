@@ -53,6 +53,9 @@ func NewScanner(cfg *config.Config, store *pgstore.Store, am AccountSnapshotter,
 }
 
 // Run 启动即扫一次 → ticker(cfg.CexScanInterval) → scanOnce。
+// D-562 S3 三禁令③注记：本扫描面（earn APR/spread 快照）=统计参考面——earn 利率无 WS 流
+// （venue 无推送），低频拉取合法但不作即时开仓判据（FUNDING_HEDGE 判定链=funding regime
+// facts+实时双腿报价，不经本表）。
 func (s *Scanner) Run(ctx context.Context) {
 	// 启动即扫一次
 	if err := s.scanOnce(ctx); err != nil {
