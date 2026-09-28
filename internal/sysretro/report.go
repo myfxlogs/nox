@@ -106,3 +106,15 @@ func cleanCell(s string) string {
 	s = strings.ReplaceAll(s, "\n", " ")
 	return strings.ReplaceAll(s, "|", "\\|")
 }
+
+// InboxRow D-533 导出调用面（appendInbox 合流重构留 D-534，本票只调用不新增实现）。
+type InboxRow struct{ Title, Reason, Action string }
+
+// AppendInbox 并发安全追加收件箱行（| date | source | title | reason | action |）。
+func AppendInbox(path, date, source string, rows []InboxRow) error {
+	suggs := make([]suggestion, len(rows))
+	for i, r := range rows {
+		suggs[i] = suggestion{title: r.Title, reason: r.Reason, action: r.Action}
+	}
+	return appendInbox(path, date, source, suggs)
+}
