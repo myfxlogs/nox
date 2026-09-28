@@ -59,6 +59,8 @@ type Engine struct {
 	// 双用途——执行层排除 + 检测层排除，P3 单一真相）。nil/空 = 不排除（测试默认）。
 	// 命中时机会不入库（TTL 自然过期不适用——根本不产），从源头消除 BRENT/WTI 假机会（1314615 报价偏高 $3，D-068 实证）。
 	excludeCanonicals map[string]bool
+	// D-555 S1：双CEX 纸面轨候选钩子（FUNDING_HEDGE 候选直传；nil=未接线零开销）。
+	cexPaperHook func(context.Context, []detector.Candidate)
 	// disabledStrategies 自动淘汰策略集合（§1 自动淘汰闭环）：strategy_stats.disabled=true 的策略名。
 	// disabled 策略产出的机会不入库——系统已自证亏损，展示假机会误导。定期刷新（main goroutine），
 	// 与 onQuote 并发 → disabledMu 保护。nil/空 = 不排除（测试默认）。
@@ -97,35 +99,6 @@ func New(b *bus.QuoteBus, detectors []detector.Detector, cfg evaluator.Config, s
 		xassetCarryMinNetStore:  xassetCarryMinNetStore,
 		lastScan:                make(map[string]time.Time),
 	}
-}
-
-// SetAssetEquiv 注入标的等价类视图（D-300 裁 5 单实例共享）。
-// nil=关闭跨标的功能——快照不扩展，存量 detector 行为不变。
-func (e *Engine) SetAssetEquiv(v AssetEquivView) {
-	e.assetEquiv = v
-}
-
-// SetExcludeCanonicals 注入检测产出排除集合（D-072 资金提醒弹窗提示词 B1）。
-// 复用 ARB_AUTOTRADE_EXCLUDE_CANONICALS（执行层+检测层双用途，P3 单一真相）；nil/空 = 不排除。
-// main 在 config 加载后注入；命中 canonical 的机会不入库（从源头消除假机会）。
-func (e *Engine) SetExcludeCanonicals(set map[string]bool) {
-	e.excludeCanonicals = set
-}
-
-// SetDisabledStrategies 注入自动淘汰策略集合（§1 自动淘汰闭环）。
-// strategy_stats.disabled=true 的策略产出的机会不入库——系统已自证亏损，展示假机会误导。
-// main 定期刷新（淘汰判定在运行时触发）；nil/空 = 不排除。
-func (e *Engine) SetDisabledStrategies(set map[string]bool) {
-	e.disabledMu.Lock()
-	e.disabledStrategies = set
-	e.disabledMu.Unlock()
-}
-
-// isStrategyDisabled 线程安全读取 disabledStrategies。
-func (e *Engine) isStrategyDisabled(strategy string) bool {
-	e.disabledMu.RLock()
-	defer e.disabledMu.RUnlock()
-	return e.disabledStrategies[strategy]
 }
 
 // Run 订阅 QuoteBus 并驱动检测→评估→存储循环。阻塞至 ctx 取消。
@@ -171,6 +144,19 @@ func (e *Engine) onQuote(ctx context.Context, q bus.Quote) {
 	}
 	snapshot := e.bus.Snapshot(ctx, symbols)
 	candidates := detector.ScanAll(e.detectors, snapshot, e.facts)
+	// D-555 S1：双CEX 纸面轨发现槽——FUNDING_HEDGE 候选直传消费（P3 单源禁重写枚举）；
+	// hook nil=未接线零开销。
+	if len(candidates) > 0 && e.cexPaperHook != nil {
+		var fhs []detector.Candidate
+		for _, c := range candidates {
+			if c.Type == detector.TypeFundingHedge {
+				fhs = append(fhs, c)
+			}
+		}
+		if len(fhs) > 0 {
+			e.cexPaperHook(ctx, fhs)
+		}
+	}
 
 	for _, c := range candidates {
 		result := e.evaluate(ctx, c, snapshot)
