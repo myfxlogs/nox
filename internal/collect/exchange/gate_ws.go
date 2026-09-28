@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -37,6 +38,10 @@ type GateWebSocket struct {
 	// spot.tickers 对任一非法 pair 静默拒整批——订阅前必须滤。
 	spotWL    *gatePairWhitelist
 	futuresWL *gatePairWhitelist
+	// D-541 S3：proxied=代理模式（候选表追加 native 直连兜底位）；directDialer=
+	// 兜底位裸拨号件（token 不泄原生域）。非代理模式单 native 候选无兜底。
+	proxied      bool
+	directDialer *websocket.Dialer
 	// D-507：时距字段化（默认=ws_keepalive.go 常量族；测试覆写缩小观察窗）。
 	readIdle         time.Duration
 	pingEvery        time.Duration
@@ -46,14 +51,24 @@ type GateWebSocket struct {
 }
 
 // NewGateWebSocket 创建 Gate WS 采集器（ARB_CEX_WS_BASE 置位→经 cex-proxy /gatespotws 与 /v4/ws 前缀）。
+// D-541 S0：ARB_GATE_WS_MODE=direct→强制原生直连（per-venue 止血开关，缺省 proxy=现行，
+// 切回=env 还原；不动 okx/binance 装配）。
 func NewGateWebSocket(cfg Config) *GateWebSocket {
-	proxied := cexWSBase() != ""
+	direct := os.Getenv("ARB_GATE_WS_MODE") == "direct"
+	proxied := cexWSBase() != "" && !direct
 	d, h := wsDialer(proxied)
 	spotWL, futuresWL := newGatePairWhitelists(cfg)
+	spotURLs := wsViaProxyURLs("/gatespotws/ws/v4/", gateSpotWSURL)
+	futuresURLs := wsViaProxyURLs("/v4/ws/usdt", gateFuturesWSURL)
+	if direct {
+		spotURLs = []string{gateSpotWSURL}
+		futuresURLs = []string{gateFuturesWSURL}
+	}
+	dd, _ := wsDialer(false) // D-541 S3：直连兜底位裸拨号件+nil header
 	return &GateWebSocket{cfg: cfg, dialer: d, header: h,
-		spotURLs:    wsViaProxyURLs("/gatespotws/ws/v4/", gateSpotWSURL),
-		futuresURLs: wsViaProxyURLs("/v4/ws/usdt", gateFuturesWSURL),
-		spotWL:      spotWL, futuresWL: futuresWL,
+		spotURLs: spotURLs, futuresURLs: futuresURLs,
+		spotWL: spotWL, futuresWL: futuresWL,
+		proxied: proxied, directDialer: dd,
 		readIdle: quoteWSReadIdle, pingEvery: quoteWSPingEvery, reconnectBackoff: quoteWSReconnectBackoff}
 }
 
@@ -69,13 +84,27 @@ func (g *GateWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 	wg.Add(2)
 	safego.Go("gate_ws:spot-loop", func() {
 		defer wg.Done()
-		g.runLoop(ctx, g.spotURLs, "spot.tickers", g.spotWL, g.handleSpot, publish)
+		g.runLoop(ctx, g.spotURLs, "spot.tickers", gateSpotWSURL, g.spotWL, g.handleSpot, publish)
 	})
 	safego.Go("gate_ws:futures-loop", func() {
 		defer wg.Done()
-		g.runLoop(ctx, g.futuresURLs, "futures.tickers", g.futuresWL, g.handleFutures, publish)
+		g.runLoop(ctx, g.futuresURLs, "futures.tickers", gateFuturesWSURL, g.futuresWL, g.handleFutures, publish)
 	})
 	wg.Wait()
+}
+
+// candidates D-541 S3：候选表=[代理路由…, native 直连兜底位]——兜底位裸
+// dialer+nil Header（X-Proxy-Token 不泄 api.gateio.ws 原生域）；非代理模式=
+// urls 原样（单 native 候选，冷却机制同构无害）。
+func (g *GateWebSocket) candidates(urls []string, native string) []WSCandidate {
+	cands := make([]WSCandidate, 0, len(urls)+1)
+	for _, u := range urls {
+		cands = append(cands, WSCandidate{URL: u, Dialer: g.dialer, Header: g.header})
+	}
+	if g.proxied {
+		cands = append(cands, WSCandidate{URL: native, Dialer: g.directDialer, Header: nil})
+	}
+	return cands
 }
 
 // subscribePayload 构造 Gate 订阅请求体（须带 time=unix 秒）。
@@ -94,13 +123,13 @@ func (g *GateWebSocket) subscribeChannel(s Sender, channel string, pairs []strin
 }
 
 // runLoop 单连接重连循环——D-511 S3：骨架收编 RunWS（dial/保活/读循环/退避一处钉死），
-// 本函数只装配协议钩子（URL=构造期 wsViaProxy 过的值、header=g.header 显式供给——R4/R3）。
-func (g *GateWebSocket) runLoop(ctx context.Context, urls []string, channel string, wl *gatePairWhitelist, handle func(context.Context, []byte, func(bus.Quote)), publish func(bus.Quote)) {
+// 本函数只装配协议钩子（候选=urls 代理件+proxied 时 native 直连兜底位——R4/R3）。
+func (g *GateWebSocket) runLoop(ctx context.Context, urls []string, channel, native string, wl *gatePairWhitelist, handle func(context.Context, []byte, func(bus.Quote)), publish func(bus.Quote)) {
 	meter := newReconnectMeter(urls[0], g.cfg.AlertFn)
 	// subscribed 差集表为每连接状态——OnConnect 每拨号重置（重连全量重订阅语义不变）。
 	var subscribed map[string]bool
 	RunWS(ctx, WSSpec{
-		Name: "gate-ws:" + urls[0], URLs: urls, Dialer: g.dialer, Header: g.header,
+		Name: "gate-ws:" + urls[0], Candidates: g.candidates(urls, native),
 		ReadIdle: g.readIdle, PingEvery: g.pingEvery, ReconnectBackoff: g.reconnectBackoff,
 		OnConnect: func() { subscribed = map[string]bool{} },
 		InitialSubs: func() []any {
