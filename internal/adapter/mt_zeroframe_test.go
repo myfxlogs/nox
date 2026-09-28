@@ -3,7 +3,8 @@
 //   - T1 HeartbeatsOnlyTriggersAlert：fake 流只吐 {} 心跳 → anyFrame 新鲜+realFrame 死
 //     → 过阈值 stage-1 warn（AlertSink 断言一次不重复，跨 stage-2 重连仍去重）；
 //   - T2 RealFramesNoAlert：真帧+心跳混合 → 不触发；
-//   - T3 SilentStreamNoAlert：完全静默（无帧）→ 不触发（传输问题归 Recv 路径，不误报）；
+//   - T3 SilentStreamStage2（D-563 改义）：整流零帧（含心跳也无）>TTL → suspect 告警+
+//     stage-2 强重连（D6 实证盲孔：lastAny 恒零原被整段跳过=静默死）；
 //   - T4 Stage2SingleShot：死推持续 → 强制重连一次后不再自动重试 + persist warn；
 //     真帧恢复 → episode 清零可再告警；
 //   - T6 WatchdogExitsOnCancel：ctx 取消 → 看门狗退出不泄漏（ch 关闭时序保证）。
@@ -172,15 +173,17 @@ func TestZeroframe_RealFramesNoAlert(t *testing.T) {
 	}
 }
 
-// TestZeroframe_SilentStreamNoAlert T3：完全静默（无帧）→ 不触发（流静止归 Recv 路径）。
-func TestZeroframe_SilentStreamNoAlert(t *testing.T) {
+// TestZeroframe_SilentStreamStage2 T3（D-563 改义）：整流零帧（阻塞流无一帧、
+// lastAny 恒零）>suspectTTL → suspect 告警 + stage-2 取消流强重连（第 2 条流开）。
+// 原义「静默=传输问题归 Recv 路径」被 D6 实证推翻：生产楔死正此形态（盲孔静默死）。
+func TestZeroframe_SilentStreamStage2(t *testing.T) {
 	defer withShortZeroFrame()()
 	restore := withShortQuoteBackoff(t, []time.Duration{1 * time.Millisecond, 1 * time.Millisecond, 1 * time.Millisecond})
 	defer restore()
 
 	client := &fakeMT5Client{}
-	// 阻塞流（无帧无错，阻塞于 ctx）。
 	client.onQuoteStreams = []grpc.ServerStreamingClient[mt5pb.OnQuoteReply]{
+		newFakeQuoteStream(context.Background(), nil, nil),
 		newFakeQuoteStream(context.Background(), nil, nil),
 	}
 
@@ -190,9 +193,11 @@ func TestZeroframe_SilentStreamNoAlert(t *testing.T) {
 	_, cleanup := startQuoteStream(t, a, []string{"XAUUSD"})
 	defer cleanup()
 
-	time.Sleep(5 * zeroFrameSuspectTTL)
-	if n := rec.count("zeroframe suspect"); n != 0 {
-		t.Errorf("alert count=%d, want 0（流静止不误报）", n)
+	if !waitFor(t, 3*time.Second, func() bool { return rec.count("zeroframe suspect") >= 1 }) {
+		t.Fatalf("零帧 suspect 告警未发; msgs=%v", rec.msgs)
+	}
+	if !waitFor(t, 3*time.Second, func() bool { return client.onQuoteCallsLoad() >= 2 }) {
+		t.Fatalf("onQuoteCalls=%d, want >=2（stage-2 强重连）", client.onQuoteCallsLoad())
 	}
 }
 

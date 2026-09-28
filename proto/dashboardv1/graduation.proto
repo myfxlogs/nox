@@ -87,6 +87,7 @@ message XAssetAllowComboRow {
   string breaker_class = 22;               // variant/funding/liq-distance/other
   google.protobuf.Timestamp breaker_resume_at = 23;
   int32 breaker_count = 24;                // 本窗已抑制尝试数（徽标 ×N）
+  string pool_verdict = 25;                // D-563 S3 池判定：ok/conflict/unknown（待定黄标）
 }
 message ListXAssetAllowCombosResponse { repeated XAssetAllowComboRow rows = 1; }
 

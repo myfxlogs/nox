@@ -651,6 +651,7 @@ type XAssetAllowComboRow struct {
 	BreakerClass    string                 `protobuf:"bytes,22,opt,name=breaker_class,json=breakerClass,proto3" json:"breaker_class,omitempty"`     // variant/funding/liq-distance/other
 	BreakerResumeAt *timestamppb.Timestamp `protobuf:"bytes,23,opt,name=breaker_resume_at,json=breakerResumeAt,proto3" json:"breaker_resume_at,omitempty"`
 	BreakerCount    int32                  `protobuf:"varint,24,opt,name=breaker_count,json=breakerCount,proto3" json:"breaker_count,omitempty"` // 本窗已抑制尝试数（徽标 ×N）
+	PoolVerdict     string                 `protobuf:"bytes,25,opt,name=pool_verdict,json=poolVerdict,proto3" json:"pool_verdict,omitempty"`     // D-563 S3 池判定：ok/conflict/unknown（待定黄标）
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -851,6 +852,13 @@ func (x *XAssetAllowComboRow) GetBreakerCount() int32 {
 		return x.BreakerCount
 	}
 	return 0
+}
+
+func (x *XAssetAllowComboRow) GetPoolVerdict() string {
+	if x != nil {
+		return x.PoolVerdict
+	}
+	return ""
 }
 
 type ListXAssetAllowCombosResponse struct {
@@ -3031,7 +3039,7 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\rFieldEvidence\x12\x14\n" +
 	"\x05field\x18\x01 \x01(\tR\x05field\x125\n" +
 	"\x05grade\x18\x02 \x01(\x0e2\x1f.arb.dashboard.v1.EvidenceGradeR\x05grade\"\x1e\n" +
-	"\x1cListXAssetAllowCombosRequest\"\xcc\a\n" +
+	"\x1cListXAssetAllowCombosRequest\"\xef\a\n" +
 	"\x13XAssetAllowComboRow\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12#\n" +
 	"\rcanonical_buy\x18\x02 \x01(\tR\fcanonicalBuy\x12\x1b\n" +
@@ -3061,7 +3069,8 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x0ebreaker_paused\x18\x15 \x01(\bR\rbreakerPaused\x12#\n" +
 	"\rbreaker_class\x18\x16 \x01(\tR\fbreakerClass\x12F\n" +
 	"\x11breaker_resume_at\x18\x17 \x01(\v2\x1a.google.protobuf.TimestampR\x0fbreakerResumeAt\x12#\n" +
-	"\rbreaker_count\x18\x18 \x01(\x05R\fbreakerCountB\x0f\n" +
+	"\rbreaker_count\x18\x18 \x01(\x05R\fbreakerCount\x12!\n" +
+	"\fpool_verdict\x18\x19 \x01(\tR\vpoolVerdictB\x0f\n" +
 	"\r_notional_usdB\f\n" +
 	"\n" +
 	"_simulated\"Z\n" +

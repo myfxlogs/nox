@@ -16,7 +16,8 @@ var (
 	rejectAvailRe = regexp.MustCompile(`(?i)avail ([\d.]+)`)
 	rejectRatioRe = regexp.MustCompile(`× ([\d.]+)`)
 	rejectLevRe   = regexp.MustCompile(`(?i)lev ([\d.]+)`)
-	rejectVenueRe = regexp.MustCompile(`(?i)^\s*(\S+?)\s+margin`)
+	// RejectLegRe D-563 S5：拒文腿键提取（"leg gate:perp:"）——调用方解析账户名用。
+	RejectLegRe = regexp.MustCompile(`(?i)\bleg (\S+?):`)
 )
 
 func rejectNum(re *regexp.Regexp, msg string) (float64, bool) {
@@ -37,7 +38,9 @@ func ceil50(v float64) int64 { return int64(math.Ceil(v/50) * 50) }
 // 三选项：①补资金（need−avail×R，$50 档向上取整——档位本身即余量）
 // ②调杠杆（need×lev/(avail×R)，仅 lev 可解析）③调小名义（avail×R×lev）。
 // okx 张数拒文无 $ 额 → ①③ 文字形式；mt5 无 lev → ③ 改述数量调小。
-func FundingOptionsText(msg string) string {
+// acct=调用方已解析账户标签（D-563 S5：原 ^\S+? margin 锚会错抓 "execute:"）；
+// acct="" → 「该账户」兜底。
+func FundingOptionsText(msg, acct string) string {
 	if !IsFundingRejectMsg(msg) {
 		return ""
 	}
@@ -46,8 +49,8 @@ func FundingOptionsText(msg string) string {
 	ratio, rOK := rejectNum(rejectRatioRe, msg)
 	lev, lOK := rejectNum(rejectLevRe, msg)
 	account := "该账户"
-	if m := rejectVenueRe.FindStringSubmatch(msg); m != nil && m[1] != "mt5" {
-		account = m[1] + "账户"
+	if acct != "" {
+		account = acct + "账户"
 	}
 	var opts []string
 	switch {
