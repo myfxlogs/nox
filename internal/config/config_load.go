@@ -62,7 +62,7 @@ func Load() *Config {
 		ReviewCrossBiasBps:         envFloat("ARB_REVIEW_CROSS_BIAS_BPS", 1.0),
 		ReviewCarryBiasAnnualPct:   envFloat("ARB_REVIEW_CARRY_BIAS_ANNUAL_PCT", 1.0),
 		SymbolsTTL:                 envDur("ARB_SYMBOLS_TTL", 5*time.Minute),
-		BinanceFuturesInfoURL:      envStr("ARB_BINANCE_FUTURES_INFO_URL", "https://192.229.85.35:8443/fapi/v1/exchangeInfo"), // D-127 P2；走 cex-proxy 避免 451
+		BinanceFuturesInfoURL:      envStr("ARB_BINANCE_FUTURES_INFO_URL", "https://fapi.binance.com/fapi/v1/exchangeInfo"), // D-127 P2；默认官方端点，CN 部署经 env/DB 覆盖指向 cex-proxy 域名避 451
 		LiqMMR:                     envFloat("ARB_LIQ_MMR", 0.005),
 		FundingDropRatio:           envFloat("ARB_FUNDING_DROP_RATIO", 0.5),
 		SwapArbEquityUseRatio:      envFloat("ARB_SWAPARB_EQUITY_USE_RATIO", 0.5),

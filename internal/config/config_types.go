@@ -54,7 +54,7 @@ type Config struct {
 	SymbolsTTL time.Duration // symbolGroups per-venue 缓存 TTL
 
 	// === CEX step 元数据（D-127 P2）===
-	BinanceFuturesInfoURL string // binance perp exchangeInfo 直连 URL（默认 testnet；真盘改 fapi.binance.com）
+	BinanceFuturesInfoURL string // binance perp exchangeInfo URL（默认 fapi.binance.com 官方端点；CN 部署经 ARB_BINANCE_FUTURES_INFO_URL 覆盖指向 cex-proxy 域名）
 
 	// === 个人持仓实账（财务线工作项 3）===
 	LiqMMR float64 // 理论强平维持保证金率（强平价 = entry × (1 + 1/leverage − MMR)；缺省 0.5%）

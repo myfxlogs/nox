@@ -1,6 +1,6 @@
 // binance_user_ws_spot.go —— D-459：Binance spot 用户数据流 ws-api 支路。
 // REST userDataStream 端点 410 Gone 已下线（D-450 取证）；ws-api 实证（D-459 S0，
-// 外部代理机 192.229.85.35 实测）：
+// 外部代理机 cex-proxy 实测）：
 //   - session.logon 拒 HMAC key（-2028，仅收 Ed25519）→ 不走 logon/subscribe
 //   - userDataStream.start params={apiKey}（免签名）→ 200 + 60 位 listenKey
 //   - userDataStream.ping/stop params={apiKey,listenKey} → 200
