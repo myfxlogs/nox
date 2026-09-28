@@ -34,6 +34,8 @@ type CexPaperCand struct {
 	SpotVenueKey string  // "{venue}:{venue_type}"（detector 原样透传）
 	PerpVenueKey string  // 同上
 	FundingAnn   float64 // perp 腿 funding 年化（百分点口径，与 universe FundingAnn 同源同单位）
+	SpotAsk      float64 // D-555 S2：spot 腿卖价（detector PriceBuy 原样——basis/est 基础）
+	PerpBid      float64 // D-555 S2：perp 腿买价（detector PriceSell 原样）
 }
 
 // StepPaperCexCarry 每轮引擎扫描后调用（FUNDING_HEDGE 候选直传；零候选零 DB 开销）：
@@ -46,17 +48,21 @@ type CexPaperCand struct {
 //	canonical 多样性上限开到 cap。
 //
 // blocked 旗标腿级拦截（同 D-463 口径）；flap 冷却按退出行 max(exit_ts)（保底段同 mt×cex）。
-func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand, now time.Time, opts PaperCexOpts, flags map[string]pgstore.VenueSymbolFlag) (opened []string, err error) {
-	if len(cands) == 0 {
-		return nil, nil
-	}
+func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand, now time.Time, opts PaperCexOpts, flags map[string]pgstore.VenueSymbolFlag) (opened []string, exited int, err error) {
+	// 零候选不早退：在库行仍需 miss_streak 计数/退出判定（data_lost 语义依赖每轮步进）——
+	// 开仓段零候选自然零产出。
 	maxActive := opts.MaxActive
 	if maxActive <= 0 {
 		maxActive = PaperCexMaxActive
 	}
 	active, err := st.ListActivePaperSpotCarry(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("cex paper step: list active: %w", err)
+		return nil, 0, fmt.Errorf("cex paper step: list active: %w", err)
+	}
+	// ②累积+③退出先行（本轮新开行次轮起算——同 spot/cfd 轨 R1 教训）。
+	accrable, err := st.ListAccrablePaperSpotCarry(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("cex paper step: list accrable: %w", err)
 	}
 	// 活跃行键（键域口径：venue_key_a×venue_key_b|symbol——type 列参与键，与 mt×cex
 	// 裸域键天然不撞）；本轨 diversity 槽仅计本 structure 行（D-548 口径）。
@@ -91,6 +97,14 @@ func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand,
 			EntryFundingAnn: c.FundingAnn, QtyUSD: PaperQtyUSD,
 			Structure: "long_spot_short_perp",
 		}
+		// D-555 S2：est_fee=两腿 CEX 真费（spot 往返+perp 往返，paper_fees 真值表；
+		// venue 未覆盖→NULL 诚实缺拒填——同 spot/cfd 轨口径）；basis=perp−spot 腿间
+		// 溢价 bps（qbus 双腿报价直取，禁 monitor 簿——FUNDING_HEDGE 本就豁免 D-335 闸）。
+		p.EstRoundTripFeeUSD = PaperSpotPerpFeeUSD(sp.Venue, pp.Venue, PaperQtyUSD)
+		if c.SpotAsk > 0 && c.PerpBid > 0 {
+			bps := (c.PerpBid - c.SpotAsk) / c.SpotAsk * 1e4
+			p.EntryBasisBps, p.LastBasisBps = &bps, &bps
+		}
 		if err := st.InsertPaperSpotCarry(ctx, p); err != nil {
 			if err == pgstore.ErrPaperExists {
 				return false
@@ -107,7 +121,7 @@ func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand,
 	// ① 保底段：enabled∧非 simulated 组合先行（不占发现槽额）。
 	combos, err := st.LoadXAssetAllowCombos(ctx, "real")
 	if err != nil {
-		return nil, fmt.Errorf("cex paper step: load allow combos: %w", err)
+		return opened, 0, fmt.Errorf("cex paper step: load allow combos: %w", err)
 	}
 	authorizedKeys := make(map[string]struct{}, len(combos))
 	guaranteedActive := 0
@@ -140,7 +154,7 @@ func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand,
 		if opts.ReopenCooldown > 0 {
 			lastExit, err := st.LatestPaperExitTs(ctx, sp, pp, canon)
 			if err != nil {
-				return opened, fmt.Errorf("cex paper step: exit ts %s: %w", key, err)
+				return opened, exited, fmt.Errorf("cex paper step: exit ts %s: %w", key, err)
 			}
 			if lastExit != nil && now.Sub(*lastExit) < opts.ReopenCooldown {
 				continue
@@ -174,5 +188,11 @@ func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand,
 			topN++
 		}
 	}
-	return opened, nil
+	// ②累积+③退出（S2）。
+	n, aerr := accrueExitCexPaper(ctx, st, accrable, candByKey, now)
+	if aerr != nil {
+		return opened, exited, aerr
+	}
+	exited += n
+	return opened, exited, nil
 }

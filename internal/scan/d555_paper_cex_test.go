@@ -40,7 +40,7 @@ func TestD555_A1_GuaranteedSlot(t *testing.T) {
 	ctx := context.Background()
 	d555SeedCombo(t, s, "XAUUSD", "gate:spot", "XAUUSD", "gate:perp")
 	cands := []CexPaperCand{d555Cand("XAUUSD", "gate:spot", "gate:perp", 12.5)}
-	opened, err := StepPaperCexCarry(ctx, s, cands, time.Now(), d555Opts(), nil)
+	opened, _, err := StepPaperCexCarry(ctx, s, cands, time.Now(), d555Opts(), nil)
 	if err != nil {
 		t.Fatalf("step: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestD555_A1_GuaranteedSlot(t *testing.T) {
 		t.Fatalf("A1: venue_key = %s×%s, want gate:spot×gate:perp", ka, kb)
 	}
 	// 二轮幂等：active 唯一索引兜底不重复开。
-	if _, err := StepPaperCexCarry(ctx, s, cands, time.Now(), d555Opts(), nil); err != nil {
+	if _, _, err := StepPaperCexCarry(ctx, s, cands, time.Now(), d555Opts(), nil); err != nil {
 		t.Fatalf("A1 rerun: %v", err)
 	}
 	active2, _ := s.ListActivePaperSpotCarry(ctx)
@@ -88,7 +88,7 @@ func TestD555_A1_GuaranteedNeedsCandidate(t *testing.T) {
 	s := d555Store(t)
 	ctx := context.Background()
 	d555SeedCombo(t, s, "XAUUSD", "gate:spot", "XAUUSD", "gate:perp")
-	opened, err := StepPaperCexCarry(ctx, s, nil, time.Now(), d555Opts(), nil)
+	opened, _, err := StepPaperCexCarry(ctx, s, nil, time.Now(), d555Opts(), nil)
 	if err != nil || len(opened) != 0 {
 		t.Fatalf("A1 缺候选: opened=%v err=%v", opened, err)
 	}
@@ -104,7 +104,7 @@ func TestD555_A2_DiscoverySlot(t *testing.T) {
 		d555Cand("PONS", "okx:spot", "gate:perp", 65), // 同 canonical 第二 venue 对
 		d555Cand("BTW", "gate:spot", "okx:perp", 43),
 	}
-	opened, err := StepPaperCexCarry(ctx, s, cands, time.Now(), d555Opts(), nil)
+	opened, _, err := StepPaperCexCarry(ctx, s, cands, time.Now(), d555Opts(), nil)
 	if err != nil {
 		t.Fatalf("A2: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestD555_A2_DiscoverySlot(t *testing.T) {
 	if _, err := s.Pool().Exec(ctx, `TRUNCATE paper_spot_carry, carry_graduations RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("A2 truncate: %v", err)
 	}
-	opened2, err := StepPaperCexCarry(ctx, s, cands, time.Now(), small, nil)
+	opened2, _, err := StepPaperCexCarry(ctx, s, cands, time.Now(), small, nil)
 	if err != nil || len(opened2) != 2 {
 		t.Fatalf("A2 cap: opened=%v err=%v, want 2（PONS 两 venue 对；BTW 被上限挤出）", opened2, err)
 	}
