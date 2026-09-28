@@ -23,6 +23,11 @@
       "target": "https://api.gateio.ws"
     },
     {
+      "prefix": "/gatespotws",
+      "target": "https://api.gateio.ws",
+      "strip_prefix": true
+    },
+    {
       "prefix": "/fapi",
       "target": "https://fapi.binance.com"
     },

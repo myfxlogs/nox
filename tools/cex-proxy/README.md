@@ -6,16 +6,24 @@
 >
 > 前身 `tools/binance-proxy`（Binance 专用）已升级为配置驱动的通用 CEX 代理。
 > 加新 CEX = `config.json` 加一行 + DB 设 base_url + 白名单加 IP，不改代码不重新编译。
+>
+> **当前部署形态（9-28 校正——下文若与本节冲突以此为准）**：公网入口=
+> `https://cex.myfxlogs.org`（CF 隧道→代理机 loopback:8443，D-522 收编）；
+> 裸 IP:8443 已被代理机 iptables 对外 DROP（仅 lo 放行，9-27 加固）。
+> **客户端禁写裸 IP**——D-538 化石端点教训：写死 `192.229.85.35:8443` 的调用方
+> 全线 EOF。TLS 由 CF 边缘终结走系统 CA 链，`ARB_BINANCE_PROXY_CA` pin 仅
+> 无 CF 裸连场景需要。
 
 ## 支持的 CEX
 
 | CEX | 路径前缀 | 上游 | strip_prefix |
 |-----|---------|------|-------------|
 | OKX | `/api/v5` | `https://www.okx.com` | 否 |
-| Gate | `/api/v4` | `https://api.gateio.ws` | 否 |
-| Binance 现货 | `/api` | `https://api.binance.com` | 否 |
-| Binance 合约 | `/fapi` | `https://fapi.binance.com` | 否 |
+| Gate REST（spot+futures） | `/api/v4` | `https://api.gateio.ws` | 否 |
+| Gate 现货 WS | `/gatespotws` | `https://api.gateio.ws` | 是 |
 | Gate 合约 WS | `/v4/ws` | `https://fx-ws.gateio.ws` | 否 |
+| Binance 现货 REST | `/api` `/sapi` | `https://api.binance.com` | 否 |
+| Binance 合约 REST | `/fapi` `/public` `/market` `/private` | `https://fapi.binance.com` | 否 |
 | Binance 合约用户数据流 WS | `/ws` | `https://fstream.binance.com` | 否 |
 | Binance 现货用户数据流 WS | `/spotws` | `https://stream.binance.com:9443` | 是 |
 | Binance 现货用户数据流 ws-api 控制面 | `/wsapi` | `https://ws-api.binance.com` | 是 |
@@ -37,7 +45,11 @@ WS 路由经 `httputil.ReverseProxy` Upgrade 透传，`tokenGate` 同护（WS �
     {"prefix": "/api/v5", "target": "https://www.okx.com"},
     {"prefix": "/v4/ws", "target": "https://fx-ws.gateio.ws"},
     {"prefix": "/api/v4", "target": "https://api.gateio.ws"},
+    {"prefix": "/gatespotws", "target": "https://api.gateio.ws", "strip_prefix": true},
     {"prefix": "/fapi", "target": "https://fapi.binance.com"},
+    {"prefix": "/public", "target": "https://fstream.binance.com"},
+    {"prefix": "/market", "target": "https://fstream.binance.com"},
+    {"prefix": "/private", "target": "https://fstream.binance.com"},
     {"prefix": "/sapi", "target": "https://api.binance.com"},
     {"prefix": "/ws", "target": "https://fstream.binance.com"},
     {"prefix": "/api", "target": "https://api.binance.com"}
@@ -52,6 +64,10 @@ WS 路由经 `httputil.ReverseProxy` Upgrade 透传，`tokenGate` 同护（WS �
 ```
 
 ## 部署步骤（Linux 服务器）
+
+> 注：本节描述**无 CF 的裸 IP 拓扑**（历史形态，`-sans` 自签证书场景）。
+> 现网拓扑=CF 前置：代理只绑 loopback:8443（iptables 对外 DROP），公网经
+> `cex.myfxlogs.org` 域名进。裸 IP 部署仍适用于无 CF 场景，客户端须配自签 CA。
 
 1. **预检**（确认代理机能到各 CEX API）：
    ```
@@ -99,21 +115,24 @@ WS 路由经 `httputil.ReverseProxy` Upgrade 透传，`tokenGate` 同护（WS �
 
 ## 客户端（arb 侧）配套配置
 
-- `.env` 追加：
+- `.env` 权威键（appConfig 白名单可管，**禁脚本/代码硬编码覆盖**——D-538 教训）：
   ```
-  ARB_BINANCE_PROXY_CA=/opt/arb/cex-proxy-ca.pem
   ARB_BINANCE_PROXY_TOKEN=<代理令牌>
+  BINANCE_PROXY_URL=https://cex.myfxlogs.org
+  ARB_OKX_PROXY_URL=https://cex.myfxlogs.org
+  ARB_CEX_WS_BASE=wss://cex.myfxlogs.org     # 三所 WS 统一代理基址（+_BACKUP 可选）
+  # ARB_BINANCE_PROXY_CA=/opt/arb/...       # 仅自签裸连场景需要；CF 域名走系统 CA
   ```
-- `exchange_configs` 中各 CEX 的 `base_url` 设为代理地址：
-  - Binance spot: `https://192.229.85.35:8443/api`
-  - Binance perp: `https://192.229.85.35:8443/fapi`
-  - OKX spot/perp: `https://192.229.85.35:8443`（OKX 签名用 `/api/v5/...`，代理透传）
-  - Gate spot/perp: `https://192.229.85.35:8443`（Gate 签名用 `/api/v4/...`，代理透传）
-- 各 CEX key 白名单加代理机 IP（如 `192.229.85.35`）。
+- `exchange_configs.base_url` 同样只写域名（生产现值）：binance=
+  `https://cex.myfxlogs.org/fapi` 与 `/api`；okx=`https://cex.myfxlogs.org`；
+  gate=`https://cex.myfxlogs.org/api/v4`。
+- 各 CEX key 白名单加**代理机出口 IP**（交易所只见代理 IP——固定 IP 之本意；
+  域名只是 arb→代理机这一段的外衣）。
 
 ## 安全说明
 
 - 自签证书私钥只存于代理机 `certs/`，不进 git。
 - `X-Proxy-Token` 鉴权防开放中继——**务必设令牌**。
 - 请求带各 CEX 的 API key 头；密钥 HMAC 永不离开 arb 侧。
-- 不代理 WebSocket（CEX 私有 API 全是 REST；公开行情 WS 不需白名单）。
+- WS 同代理（9-27 止血起三所 WS 全经本代理；握手一样过 `X-Proxy-Token` 闸——
+  token 不泄往 CEX 原生域，见 D-541 止血约束）。

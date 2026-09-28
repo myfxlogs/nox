@@ -53,6 +53,7 @@ func defaultConfig() Config {
 		{Prefix: "/api/v5", Target: "https://www.okx.com"},
 		{Prefix: "/v4/ws", Target: "https://fx-ws.gateio.ws"},
 		{Prefix: "/api/v4", Target: "https://api.gateio.ws"},
+		{Prefix: "/gatespotws", Target: "https://api.gateio.ws", StripPrefix: true}, // gate 现货 WS（9-27 止血路由，仓内补登对齐生产）
 		{Prefix: "/fapi", Target: "https://fapi.binance.com"},
 		{Prefix: "/sapi", Target: "https://api.binance.com"},
 		{Prefix: "/public", Target: "https://fstream.binance.com"}, // D-517 三路由
