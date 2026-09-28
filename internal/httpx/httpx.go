@@ -95,7 +95,7 @@ type failoverRT struct {
 	base http.RoundTripper
 	// targets D-519 D5：主 host→备 {scheme,host} 对表（构造期收集，host:port 精确匹配，
 	// 同 host 去重）。覆盖三对：binance 代理、cex 公共基址（gate 亦经此）、okx 代理
-	// （无独立 okx 备 env，同 VPS2 语义挂 ARB_CEX_WS_BASE_BACKUP）。
+	// （无独立 okx 备 env，统一挂 ARB_CEX_WS_BASE_BACKUP）。
 	targets map[string]failoverTarget
 }
 

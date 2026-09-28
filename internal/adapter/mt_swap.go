@@ -1,7 +1,7 @@
 package adapter
 
 // MT swap 归一化（§3.6，D-036）。
-// 语义沿用归档系统生产实证（/opt/arb-archive/internal/evaluator/swap.go，D-058）：
+// 语义沿用归档系统生产实证（/opt/arb-archive/internal/evaluator/swap.go，D-058；归档未随迁已佚——fossil-allow 出处引证）：
 //   - 百分比模式为年化% → 每日 bps 与价格无关（S/100/365×10⁴）；
 //   - mode 0 真停用发 0 值 Fact（零息 venue 是 carry 最佳对手，必须可配对）；
 //   - mode 0 却带非零 rates = 矛盾 broker 数据（PXB 事故实证）→ 跳过，宁丢机会不交易不可信经济性；
