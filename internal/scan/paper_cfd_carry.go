@@ -23,8 +23,14 @@ const (
 	PaperCfdOpenNetPct = 8.0
 	// PaperCfdMaxNetPct 开仓上限（band 上限同 spot 语义：≥300% 为长尾区）。
 	PaperCfdMaxNetPct = 300.0
-	// PaperCfdMaxActive 活跃 cfd 纸面行硬上限（保底槽不占此额，D-410 S4）。
+	// PaperCfdMaxActive 活跃 cfd 纸面「品种多样性」上限——D-548 S1 起按
+	// structure+symbol(canonical) 去重计数（同 canonical 多 MT 账户行只占 1 槽，
+	// 观察面每账户行照常开/应计/退——US30 六账户吃光 6 槽病灶的根修；
+	// 保底槽不占此额同 D-410 S4）。
 	PaperCfdMaxActive = 6
+	// paperZeroAccrualStaleHours D-548 S2：零收益僵尸槽判据之二——入场超 24h
+	// （swap/funding 真 accrue 一个结算日应有量；US30 六行入场 24h+ accrued=$0.00 实证）。
+	paperZeroAccrualStaleHours = 24
 )
 
 // PaperCfdOpts D-410 S4 装配参数（wire_scan 注入 cfg/env 值，scan 层不读 env）。
@@ -116,14 +122,18 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 	for _, sl := range slots {
 		authorized[sl.key] = struct{}{}
 	}
-	cfdActive, guaranteedActive := 0, 0
+	guaranteedActive := 0
+	// D-548 S1：槽额=canonical 去重计数（structure|symbol）——同 canonical 多账户行
+	// 合占 1 槽；保底槽不计（authorized 先行判）。
+	slotKeys := make(map[string]struct{}, len(active))
 	for _, p := range active {
 		if _, ok := authorized[p.VenuePair()+"|"+p.Symbol]; ok {
 			guaranteedActive++
 		} else if cfdStructures[p.Structure] {
-			cfdActive++
+			slotKeys[p.Structure+"|"+p.Symbol] = struct{}{}
 		}
 	}
+	cfdActive := len(slotKeys)
 	// D-500 S1：venue 静默探测先行（保底 warn 分级要用）——accrable cfd 行的 MT 臂 venue
 	// 在本轮 rows 零 cfd 产出行（含 dirty）→ 休市/断供非机会消失。
 	mtCfdCount := make(map[string]int)
@@ -222,8 +232,12 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 	sort.Slice(cands, func(i, j int) bool { return cands[i].r.NetAnnual > cands[j].r.NetAnnual })
 	topN := 0
 	for _, c := range cands {
-		if cfdActive+topN >= PaperCfdMaxActive { // 保底槽不占此额（钉死①）
-			break
+		slotKey := c.r.Structure + "|" + c.r.Canonical
+		_, occupied := slotKeys[slotKey]
+		if !occupied && cfdActive+topN >= PaperCfdMaxActive {
+			// 新 canonical 无槽——不 break（同 canonical 复行不占槽仍可开，
+			// 观察面每账户一份语义不变）。
+			continue
 		}
 		if err := insertCfdPaper(ctx, st, c.r, c.r.MtVenue, c.r.CexVenue, now); err != nil {
 			if err == pgstore.ErrPaperExists {
@@ -231,7 +245,10 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 			}
 			return opened, exited, fmt.Errorf("cfd paper step: open %s: %w", c.venueCombo, err)
 		}
-		topN++
+		if !occupied {
+			slotKeys[slotKey] = struct{}{}
+			topN++
+		}
 		opened = append(opened, c.r.Canonical)
 	}
 	// ② 累积 + ③ 退出（仅 cfd 行；spot 轨行不归本函数）——D-474a 起拆至 paper_cfd_accrue.go。

@@ -155,6 +155,22 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 			exited++
 			continue
 		}
+		// D-548 S2：零收益僵尸槽——三判据全中当轮退（accrued 仍 $0 + 入场超 24h +
+		// 本轮同源行 net<开仓下限）。判据 net 取同轮 rowByKey 行（防跨窗比较）；
+		// note 记三判据值留档（AnnotatePaperNote 幂等追加）；已在带零收益行不杀。
+		if p.Status == "active" && p.AccruedUSD+accruedAdd == 0 &&
+			now.Sub(p.EntryTs) >= paperZeroAccrualStaleHours*time.Hour && r.NetAnnual < PaperCfdOpenNetPct {
+			if err := st.ExitPaperSpotCarry(ctx, p.ID, "zero_accrual_stale", paperExitConvergence(p, lastBasis)); err != nil {
+				return exited, fmt.Errorf("cfd paper step: exit zero_accrual %d: %w", p.ID, err)
+			}
+			marker := fmt.Sprintf("zero_accrual_stale 判据: accrued=$%.2f age=%.1fh net=%.2f<thr=%.1f",
+				p.AccruedUSD+accruedAdd, now.Sub(p.EntryTs).Hours(), r.NetAnnual, PaperCfdOpenNetPct)
+			if err := st.AnnotatePaperNote(ctx, p.ID, marker); err != nil {
+				log.Printf("[cfd paper] zero_accrual note %d: %v", p.ID, err)
+			}
+			exited++
+			continue
+		}
 		if streak >= paperExitStreakRounds || now.Sub(p.EntryTs).Hours()/24 >= paperMaxAgeDays {
 			reason := "normalized"
 			if streak < paperExitStreakRounds {
