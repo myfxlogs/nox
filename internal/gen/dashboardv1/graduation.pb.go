@@ -1805,6 +1805,12 @@ type ApproveCarryGraduationResponse struct {
 	SizingNotes       []string               `protobuf:"bytes,13,rep,name=sizing_notes,json=sizingNotes,proto3" json:"sizing_notes,omitempty"`                        // D-490：池口径/币种/快照时间等审计注记
 	VenueGapKeys      []string               `protobuf:"bytes,14,rep,name=venue_gap_keys,json=venueGapKeys,proto3" json:"venue_gap_keys,omitempty"`                   // D-492：纯 venue_key 缺口列表（venue_gaps 混 capWarns 句串不可解析——双轨并存）
 	LegPools          []*GradLegPoolRow      `protobuf:"bytes,15,rep,name=leg_pools,json=legPools,proto3" json:"leg_pools,omitempty"`                                 // D-508 S8：dry_run 腿→资金池映射（后端推导 venue_key+回退链终值，前端删镜像）
+	// D-540：可用资金基准+风险位+建议额（栏内联动基准/红字数据源；服务端权威，前端只渲染）。
+	AllocBaseUsd      float64  `protobuf:"fixed64,16,opt,name=alloc_base_usd,json=allocBaseUsd,proto3" json:"alloc_base_usd,omitempty"`                // 可用基准=min(双池可用)；缺 free_margin 回退 equity
+	RiskLevel         string   `protobuf:"bytes,17,opt,name=risk_level,json=riskLevel,proto3" json:"risk_level,omitempty"`                             // ok / insufficient（请求额>基准）/ liquidation（保证金估后缓冲<安全垫）
+	SuggestedAllocUsd float64  `protobuf:"fixed64,18,opt,name=suggested_alloc_usd,json=suggestedAllocUsd,proto3" json:"suggested_alloc_usd,omitempty"` // 建议分配额（risk≠ok 时给；insufficient=基准全额，liquidation=缓冲反推）
+	RiskReasons       []string `protobuf:"bytes,19,rep,name=risk_reasons,json=riskReasons,proto3" json:"risk_reasons,omitempty"`                       // 风险理由逐项（红字逐条展示）
+	AllocBaseNote     string   `protobuf:"bytes,20,opt,name=alloc_base_note,json=allocBaseNote,proto3" json:"alloc_base_note,omitempty"`               // 基准来源注记（free_margin/净值回退 逐池标）
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -1942,6 +1948,41 @@ func (x *ApproveCarryGraduationResponse) GetLegPools() []*GradLegPoolRow {
 		return x.LegPools
 	}
 	return nil
+}
+
+func (x *ApproveCarryGraduationResponse) GetAllocBaseUsd() float64 {
+	if x != nil {
+		return x.AllocBaseUsd
+	}
+	return 0
+}
+
+func (x *ApproveCarryGraduationResponse) GetRiskLevel() string {
+	if x != nil {
+		return x.RiskLevel
+	}
+	return ""
+}
+
+func (x *ApproveCarryGraduationResponse) GetSuggestedAllocUsd() float64 {
+	if x != nil {
+		return x.SuggestedAllocUsd
+	}
+	return 0
+}
+
+func (x *ApproveCarryGraduationResponse) GetRiskReasons() []string {
+	if x != nil {
+		return x.RiskReasons
+	}
+	return nil
+}
+
+func (x *ApproveCarryGraduationResponse) GetAllocBaseNote() string {
+	if x != nil {
+		return x.AllocBaseNote
+	}
+	return ""
 }
 
 // GradLegPoolRow D-508 S8：腿 venue_key → 资金池快照行（allocPoolOf 回退链终值直传）。
@@ -2764,7 +2805,7 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\adry_run\x18\t \x01(\bR\x06dryRunB\x0f\n" +
 	"\r_notional_usdB\x0e\n" +
 	"\f_funding_pctB\x0e\n" +
-	"\f_funding_usd\"\xc7\x04\n" +
+	"\f_funding_usd\"\x87\x06\n" +
 	"\x1eApproveCarryGraduationResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12\x1e\n" +
@@ -2784,7 +2825,13 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\rest_alloc_pct\x18\f \x01(\x01R\vestAllocPct\x12!\n" +
 	"\fsizing_notes\x18\r \x03(\tR\vsizingNotes\x12$\n" +
 	"\x0evenue_gap_keys\x18\x0e \x03(\tR\fvenueGapKeys\x12=\n" +
-	"\tleg_pools\x18\x0f \x03(\v2 .arb.dashboard.v1.GradLegPoolRowR\blegPoolsB\v\n" +
+	"\tleg_pools\x18\x0f \x03(\v2 .arb.dashboard.v1.GradLegPoolRowR\blegPools\x12$\n" +
+	"\x0ealloc_base_usd\x18\x10 \x01(\x01R\fallocBaseUsd\x12\x1d\n" +
+	"\n" +
+	"risk_level\x18\x11 \x01(\tR\triskLevel\x12.\n" +
+	"\x13suggested_alloc_usd\x18\x12 \x01(\x01R\x11suggestedAllocUsd\x12!\n" +
+	"\frisk_reasons\x18\x13 \x03(\tR\vriskReasons\x12&\n" +
+	"\x0falloc_base_note\x18\x14 \x01(\tR\rallocBaseNoteB\v\n" +
 	"\t_combo_id\"\x90\x02\n" +
 	"\x0eGradLegPoolRow\x12\x1b\n" +
 	"\tvenue_key\x18\x01 \x01(\tR\bvenueKey\x12\x14\n" +

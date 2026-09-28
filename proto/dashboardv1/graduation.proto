@@ -129,7 +129,7 @@ message ApproveCarryGraduationRequest {
   double max_gross_usd = 4;  // 双腿名义上限
   optional double notional_usd = 5;      // D-367 语义：显式<=0 会在加载期被剔除，禁传非正值
   string note = 6;
-  optional double funding_pct = 7;   // D-490：净值占比输入（小数 0..1；与 funding_usd/显式四字段互斥）
+  optional double funding_pct = 7;   // D-490/D-540：可用基准占比输入（小数 0..1；与 funding_usd/显式四字段互斥）
   optional double funding_usd = 8;   // D-490：分配金额直填 USD（同上互斥）
   bool dry_run = 9;                  // D-490：试算不写库——回 est_* 折算+互算值+venue_gaps 体检，零状态变更
 }
@@ -144,10 +144,16 @@ message ApproveCarryGraduationResponse {
   double est_long_qty = 9;               // D-490：派生买腿 qty 上限（notional÷perLot×1.1）
   double est_short_qty = 10;             // D-490：派生卖腿 qty 上限
   double est_alloc_usd = 11;             // D-490 互算回显：分配额 USD（pct 输入时回显折算值）
-  double est_alloc_pct = 12;             // D-490 互算回显：占小池净值比（usd 输入时回显；小数口径）
+  double est_alloc_pct = 12;             // D-490 互算回显：占可用基准比（D-540：usd 输入时回显；小数口径）
   repeated string sizing_notes = 13;     // D-490：池口径/币种/快照时间等审计注记
   repeated string venue_gap_keys = 14;   // D-492：纯 venue_key 缺口列表（venue_gaps 混 capWarns 句串不可解析——双轨并存）
   repeated GradLegPoolRow leg_pools = 15;  // D-508 S8：dry_run 腿→资金池映射（后端推导 venue_key+回退链终值，前端删镜像）
+  // D-540：可用资金基准+风险位+建议额（栏内联动基准/红字数据源；服务端权威，前端只渲染）。
+  double alloc_base_usd = 16;          // 可用基准=min(双池可用)；缺 free_margin 回退 equity
+  string risk_level = 17;              // ok / insufficient（请求额>基准）/ liquidation（保证金估后缓冲<安全垫）
+  double suggested_alloc_usd = 18;     // 建议分配额（risk≠ok 时给；insufficient=基准全额，liquidation=缓冲反推）
+  repeated string risk_reasons = 19;   // 风险理由逐项（红字逐条展示）
+  string alloc_base_note = 20;         // 基准来源注记（free_margin/净值回退 逐池标）
 }
 
 // GradLegPoolRow D-508 S8：腿 venue_key → 资金池快照行（allocPoolOf 回退链终值直传）。
