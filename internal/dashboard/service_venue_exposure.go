@@ -18,16 +18,34 @@ import (
 // ListVenueExposureCaps 闸表全量透传 + D-542 S3②：已配置账户但闸表无行的 venue_key
 // 合成 unset 占位行（显式提示未设闸——binance:spot/perp 类缺闸 venue 不再隐身）。
 func (s *Service) ListVenueExposureCaps(ctx context.Context, _ *connect.Request[v1.ListVenueExposureCapsRequest]) (*connect.Response[v1.ListVenueExposureCapsResponse], error) {
-	caps, err := s.store.ListVenueExposureCaps(ctx)
+	caps, err := s.gradDB().ListVenueExposureCaps(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+	// D-547 S3①：live 面值——allocated=Σ白名单金额（口径同 exposureCapGate），
+	// 池面=legPool 链（live 账本/REST 校准/快照兜底；缺取 source=空如实透出）。
+	snaps, _ := s.gradDB().LatestVenueAccountSnapshots(ctx)
+	existing, _ := s.gradDB().LoadXAssetAllowCombos(ctx, "live")
+	allocated := exposureSumOf(existing)
 	out := make([]*v1.VenueExposureCapRow, 0, len(caps))
 	for _, c := range caps {
-		out = append(out, &v1.VenueExposureCapRow{
+		row := &v1.VenueExposureCapRow{
 			VenueKey: c.VenueKey, CapUsd: c.CapUSD, Enabled: c.Enabled, Note: c.Note,
-			UpdatedAt: timestamppb.New(c.UpdatedAt),
-		})
+			UpdatedAt:    timestamppb.New(c.UpdatedAt),
+			AllocatedUsd: allocated[c.VenueKey],
+			OverCap:      c.Enabled && c.CapUSD > 0 && allocated[c.VenueKey] > c.CapUSD,
+		}
+		if p, ok := s.legPool(ctx, snaps, c.VenueKey); ok {
+			avail := p.equity
+			if p.free != nil {
+				avail = *p.free
+			}
+			row.LiveAvailableUsd = avail
+			row.LiveEquityUsd = p.equity
+			row.LiveSource = poolSource(p)
+			row.LiveUpdatedAt = timestamppb.New(p.at)
+		}
+		out = append(out, row)
 	}
 	for _, key := range s.unsetCapKeys(ctx, caps) {
 		out = append(out, &v1.VenueExposureCapRow{
@@ -41,7 +59,7 @@ func (s *Service) ListVenueExposureCaps(ctx context.Context, _ *connect.Request[
 // venue:venue_type；MT=broker_accounts user:mt4|mt5——与 approve 腿 venue_key 同键域）。
 func (s *Service) unsetCapKeys(ctx context.Context, caps map[string]pgstore.VenueExposureCap) []string {
 	want := map[string]bool{}
-	if cfgs, err := s.store.ListExchangeConfigs(ctx); err == nil {
+	if cfgs, err := s.gradDB().ListExchangeConfigs(ctx); err == nil {
 		for _, c := range cfgs {
 			if c.Simulated {
 				continue
@@ -49,7 +67,7 @@ func (s *Service) unsetCapKeys(ctx context.Context, caps map[string]pgstore.Venu
 			want[c.Venue+":"+c.VenueType] = true
 		}
 	}
-	if accts, err := s.store.ListBrokerAccounts(ctx); err == nil {
+	if accts, err := s.gradDB().ListBrokerAccounts(ctx); err == nil {
 		for _, a := range accts {
 			want[a.Venue+":"+brokerVenueType(a.Platform)] = true
 		}
@@ -132,15 +150,7 @@ func (s *Service) exposureCapGate(ctx context.Context, legKeys []string, grossUS
 	if err != nil {
 		return nil, fmt.Sprintf("白名单敞口汇总失败: %v", err)
 	}
-	sum := map[string]float64{} // venue_key→已挂敞口（双腿向 buy/sell 两键同记=保守高估）
-	for _, r := range existing {
-		exp := r.MaxGrossUSD
-		if r.NotionalUSD != nil {
-			exp = *r.NotionalUSD
-		}
-		sum[r.VenueBuy] += exp
-		sum[r.VenueSell] += exp
-	}
+	sum := exposureSumOf(existing)
 	proposed := grossUSD
 	if notionalUSD != nil {
 		proposed = *notionalUSD
@@ -164,4 +174,44 @@ func (s *Service) exposureCapGate(ctx context.Context, legKeys []string, grossUS
 		}
 	}
 	return warns, ""
+}
+
+// exposureSumOf venue_key→已挂敞口汇总（双腿向 buy/sell 两键同记=保守高估）；
+// NotionalUSD 优先，缺→MaxGrossUSD——与 approve 闸消费口径同公式（D-547 S3① 闸表透出复用）。
+func exposureSumOf(existing []pgstore.XAssetAllowRow) map[string]float64 {
+	sum := map[string]float64{}
+	for _, r := range existing {
+		exp := r.MaxGrossUSD
+		if r.NotionalUSD != nil {
+			exp = *r.NotionalUSD
+		}
+		sum[r.VenueBuy] += exp
+		sum[r.VenueSell] += exp
+	}
+	return sum
+}
+
+// ghostCapKeys 闸表键 − 账户面键 = 幽灵键序（D-547 T2：caps 键域须 ⊆ 账户面键域——
+// 不在 exchange_configs/broker_accounts 键域的闸行保护不了任何真腿）。纯函数锚点。
+func ghostCapKeys(caps map[string]pgstore.VenueExposureCap, accountKeys []string) []string {
+	want := map[string]bool{}
+	for _, k := range accountKeys {
+		want[k] = true
+	}
+	var out []string
+	for k := range caps {
+		if !want[k] {
+			out = append(out, k)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// poolSource 池来源透出标签（live 账本/REST 校准/快照兜底）。
+func poolSource(p allocPool) string {
+	if p.src != "" {
+		return p.src
+	}
+	return "snap"
 }

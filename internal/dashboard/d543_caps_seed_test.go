@@ -15,7 +15,7 @@ var d543SeedKeys = map[string]float64{
 	"binance:perp":    1300,
 	"binance:funding": 1000,
 	"gate:perp":       100,
-	"okx:unified":     1500,
+	"okx:perp":        1500, // D-547 0159 重键名（okx:unified 幽灵键→配置域 okx:perp）
 }
 
 // A1/A2① 种子行经迁移落库：五键在场、enabled、cap 值=稿定取整；二跑迁移幂等零变化。
@@ -47,7 +47,7 @@ func TestD543_SeededCapsNoWarn(t *testing.T) {
 	for key, cap := range d543SeedKeys {
 		f.caps[key] = pgstore.VenueExposureCap{VenueKey: key, CapUSD: cap, Enabled: true}
 	}
-	warns, rej := s.exposureCapGate(context.Background(), []string{"binance:spot", "okx:unified"}, 100, nil)
+	warns, rej := s.exposureCapGate(context.Background(), []string{"binance:spot", "okx:perp"}, 100, nil)
 	if rej != "" {
 		t.Fatalf("种子行在场不应拒: %s", rej)
 	}

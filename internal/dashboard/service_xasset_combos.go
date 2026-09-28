@@ -10,12 +10,14 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"time"
 
 	v1 "arb/internal/gen/dashboardv1"
 	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 
 	"connectrpc.com/connect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var comboVenueTypes = map[string]bool{"mt4": true, "mt5": true, "perp": true, "spot": true}
@@ -30,14 +32,57 @@ func (s *Service) ListXAssetAllowCombos(ctx context.Context, _ *connect.Request[
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+	// D-547 S3④：在仓金额聚合 + 双腿池可用 + 闸冲突（缺一腿池/可用<notional×2=结构性锁死红标）。
+	snaps, _ := s.gradDB().LatestVenueAccountSnapshots(ctx)
 	out := make([]*v1.XAssetAllowComboRow, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, &v1.XAssetAllowComboRow{
+		row := &v1.XAssetAllowComboRow{
 			Id: r.ID, CanonicalBuy: r.CanonicalBuy, VenueBuy: r.VenueBuy,
 			CanonicalSell: r.CanonicalSell, VenueSell: r.VenueSell,
 			MaxLongQty: r.MaxLongQty, MaxShortQty: r.MaxShortQty, MaxGrossUsd: r.MaxGrossUSD,
 			NotionalUsd: r.NotionalUSD, Enabled: r.Enabled, Simulated: r.Simulated, Note: r.Note,
-		})
+		}
+		_, notional, _ := s.gradDB().ListOpenPositionsForCombo(ctx, r.CanonicalBuy, r.CanonicalSell, r.VenueBuy, r.VenueSell)
+		row.ActiveNotionalUsd = notional
+		conflict := false
+		var src string
+		var latest time.Time
+		for i, vk := range [2]string{r.VenueBuy, r.VenueSell} {
+			p, ok := s.legPool(ctx, snaps, vk)
+			if !ok {
+				conflict = true
+				continue
+			}
+			avail := p.equity
+			if p.free != nil {
+				avail = *p.free
+			}
+			if i == 0 {
+				row.BuyPoolUsd = avail
+			} else {
+				row.SellPoolUsd = avail
+			}
+			if poolSource(p) != "" {
+				src = poolSource(p)
+			}
+			if p.at.After(latest) {
+				latest = p.at
+			}
+			// 池可用覆盖不了本组合名义双腿需求=结构冲突（approve 侧同判据先例）。
+			need := r.MaxGrossUSD
+			if r.NotionalUSD != nil {
+				need = 2 * *r.NotionalUSD
+			}
+			if avail < need {
+				conflict = true
+			}
+		}
+		row.CapConflict = conflict
+		row.PoolSource = src
+		if !latest.IsZero() {
+			row.PoolUpdatedAt = timestamppb.New(latest)
+		}
+		out = append(out, row)
 	}
 	return connect.NewResponse(&v1.ListXAssetAllowCombosResponse{Rows: out}), nil
 }
