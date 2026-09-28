@@ -33,6 +33,10 @@ type GateWebSocket struct {
 	header      http.Header // 代理模式=X-Proxy-Token 握口头；直连=nil
 	spotURLs    []string    // 有序候选（cex-proxy 双端点 failover；[0]=主端）
 	futuresURLs []string    // 同上
+	// D-537：订阅边界合法 pair 白名单（spot/futures 各持本 channel 集不混）；
+	// spot.tickers 对任一非法 pair 静默拒整批——订阅前必须滤。
+	spotWL    *gatePairWhitelist
+	futuresWL *gatePairWhitelist
 	// D-507：时距字段化（默认=ws_keepalive.go 常量族；测试覆写缩小观察窗）。
 	readIdle         time.Duration
 	pingEvery        time.Duration
@@ -45,23 +49,31 @@ type GateWebSocket struct {
 func NewGateWebSocket(cfg Config) *GateWebSocket {
 	proxied := cexWSBase() != ""
 	d, h := wsDialer(proxied)
+	spotWL, futuresWL := newGatePairWhitelists(cfg)
 	return &GateWebSocket{cfg: cfg, dialer: d, header: h,
 		spotURLs:    wsViaProxyURLs("/gatespotws/ws/v4/", gateSpotWSURL),
 		futuresURLs: wsViaProxyURLs("/v4/ws/usdt", gateFuturesWSURL),
-		readIdle:    quoteWSReadIdle, pingEvery: quoteWSPingEvery, reconnectBackoff: quoteWSReconnectBackoff}
+		spotWL:      spotWL, futuresWL: futuresWL,
+		readIdle: quoteWSReadIdle, pingEvery: quoteWSPingEvery, reconnectBackoff: quoteWSReconnectBackoff}
 }
 
 // Run 连接 Gate spot + futures WS 并持续推送报价到 publish。阻塞至 ctx 取消。
 func (g *GateWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
+	// D-537：启动同步首拉白名单（失败=不过滤，单次拉取上限 10s），随后后台 1h 刷新。
+	g.spotWL.refresh(ctx)
+	g.futuresWL.refresh(ctx)
+	safego.Go("gate_ws:pair-wl-refresh", func() {
+		refreshGateWhitelists(ctx, g.spotWL, g.futuresWL)
+	})
 	var wg sync.WaitGroup
 	wg.Add(2)
 	safego.Go("gate_ws:spot-loop", func() {
 		defer wg.Done()
-		g.runLoop(ctx, g.spotURLs, "spot.tickers", g.handleSpot, publish)
+		g.runLoop(ctx, g.spotURLs, "spot.tickers", g.spotWL, g.handleSpot, publish)
 	})
 	safego.Go("gate_ws:futures-loop", func() {
 		defer wg.Done()
-		g.runLoop(ctx, g.futuresURLs, "futures.tickers", g.handleFutures, publish)
+		g.runLoop(ctx, g.futuresURLs, "futures.tickers", g.futuresWL, g.handleFutures, publish)
 	})
 	wg.Wait()
 }
@@ -83,7 +95,7 @@ func (g *GateWebSocket) subscribeChannel(s Sender, channel string, pairs []strin
 
 // runLoop 单连接重连循环——D-511 S3：骨架收编 RunWS（dial/保活/读循环/退避一处钉死），
 // 本函数只装配协议钩子（URL=构造期 wsViaProxy 过的值、header=g.header 显式供给——R4/R3）。
-func (g *GateWebSocket) runLoop(ctx context.Context, urls []string, channel string, handle func(context.Context, []byte, func(bus.Quote)), publish func(bus.Quote)) {
+func (g *GateWebSocket) runLoop(ctx context.Context, urls []string, channel string, wl *gatePairWhitelist, handle func(context.Context, []byte, func(bus.Quote)), publish func(bus.Quote)) {
 	meter := newReconnectMeter(urls[0], g.cfg.AlertFn)
 	// subscribed 差集表为每连接状态——OnConnect 每拨号重置（重连全量重订阅语义不变）。
 	var subscribed map[string]bool
@@ -92,7 +104,12 @@ func (g *GateWebSocket) runLoop(ctx context.Context, urls []string, channel stri
 		ReadIdle: g.readIdle, PingEvery: g.pingEvery, ReconnectBackoff: g.reconnectBackoff,
 		OnConnect: func() { subscribed = map[string]bool{} },
 		InitialSubs: func() []any {
-			pairs := pairsD369(g.syms(), "_USDT")
+			// D-537：订阅前白名单过滤——spot.tickers 对任一非法 pair 静默拒整批。
+			all := pairsD369(g.syms(), "_USDT")
+			pairs := wl.filter(all)
+			if dropped := len(all) - len(pairs); dropped > 0 {
+				log.Printf("[gate-ws] 订阅对过滤 dropped=%d/%d（非gate合法pair）", dropped, len(all))
+			}
 			for _, p := range pairs {
 				subscribed[p] = true
 			}
@@ -101,7 +118,8 @@ func (g *GateWebSocket) runLoop(ctx context.Context, urls []string, channel stri
 		// D-369 S2：provider 符号集变化 → ping tick 差集补订（新符号 only；服务端拒则读报错走重连）
 		OnAliveTick: func(s Sender) {
 			var newPairs []string
-			for _, p := range pairsD369(g.syms(), "_USDT") {
+			// D-537：差集同过白名单——非法 pair 不进 subscribed 不发帧（防静默拒批+重试循环）。
+			for _, p := range wl.filter(pairsD369(g.syms(), "_USDT")) {
 				if !subscribed[p] {
 					newPairs = append(newPairs, p)
 				}
