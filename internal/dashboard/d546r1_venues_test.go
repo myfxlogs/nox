@@ -119,3 +119,26 @@ func TestD546R1_MissingVenue(t *testing.T) {
 		}
 	}
 }
+
+// R2 锚：REST 答了真 $0 须出诚实零节点（has_usd=true），非误标三径全空。
+func TestD546R1_RestPresentZero(t *testing.T) {
+	s := covTestStore(t)
+	svc := covTestService(s)
+	svc.SetVenueAvailFor(func(_ context.Context, venue string) (venueAvailFetcher, bool) {
+		if venue != "gate" {
+			return &fakeVenueAvail{ret: &reconcile.VenueAvailability{}}, true
+		}
+		return &fakeVenueAvail{ret: &reconcile.VenueAvailability{Nodes: []*reconcile.AvailabilityNode{
+			{Wallet: "spot", AvailableUSD: 0, At: time.Now().UTC()}, // 真 $0、无 Detail
+		}}}, true
+	})
+	resp := capMapResponse(context.Background(), t, svc)
+	n := capNodeByLabel(capTier(resp, "立即可用"), "gate:spot available")
+	if n == nil || !n.HasUsd || n.AmountUsd != 0 {
+		t.Fatalf("REST 真$0 应出诚实零节点: %+v", n)
+	}
+	// 面败 Detail+全零 仍须标缺（对照锚）。
+	if n := capNodeByLabel(capTier(resp, "锁定/慢动"), "gate:futures 保证金占用"); n == nil || n.HasUsd {
+		t.Fatalf("面未出应标缺: %+v", n)
+	}
+}

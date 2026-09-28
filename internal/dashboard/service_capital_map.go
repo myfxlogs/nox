@@ -110,12 +110,7 @@ func (s *Service) buildCapitalMap(ctx context.Context) *v1.GetCapitalMapResponse
 	gateVA := s.venueAvailability(ctx, "gate")
 
 	// ⑨ okx 立即可用=统一账户 trading available（活账本 okx:unified 优先，REST 回退）。
-	var okxAvail float64
-	var okxAt time.Time
-	if tr := availWallet(okxVA, "trading"); tr != nil {
-		okxAvail, okxAt = tr.AvailableUSD, tr.At
-	}
-	avail.Nodes = append(avail.Nodes, s.availLiveNode(ctx, snaps, "okx:unified", "okx:unified available", okxAvail, okxAt))
+	avail.Nodes = append(avail.Nodes, s.availLiveNode(ctx, snaps, "okx:unified", "okx:unified available", availWallet(okxVA, "trading"), "/api/v5/account/balance"))
 	// ⑩ okx 锁定慢动=trading 占用/冻结（availBal−availEq+frozenBal）。
 	locked.Nodes = append(locked.Nodes, walletLocked(okxVA, "trading", "okx:unified 占用/冻结", "/api/v5/account/balance"))
 	// ⑪ okx 可转可用=资金钱包+活期理财（资产↔交易划转 T+0）。
@@ -123,16 +118,8 @@ func (s *Service) buildCapitalMap(ctx context.Context) *v1.GetCapitalMapResponse
 	transfer.Nodes = append(transfer.Nodes, walletTransfer(okxVA, "earn", "okx 活期理财", "/api/v5/finance/savings/balance"))
 
 	// ⑫ gate 立即可用=futures available（活账本 gate:perp 优先）+spot available（REST）。
-	var gfAvail, gsAvail float64
-	var gfAt, gsAt time.Time
-	if fu := availWallet(gateVA, "futures"); fu != nil {
-		gfAvail, gfAt = fu.AvailableUSD, fu.At
-	}
-	if sp := availWallet(gateVA, "spot"); sp != nil {
-		gsAvail, gsAt = sp.AvailableUSD, sp.At
-	}
-	avail.Nodes = append(avail.Nodes, s.availLiveNode(ctx, snaps, "gate:perp", "gate:perp available", gfAvail, gfAt))
-	avail.Nodes = append(avail.Nodes, s.availLiveNode(ctx, snaps, "", "gate:spot available", gsAvail, gsAt))
+	avail.Nodes = append(avail.Nodes, s.availLiveNode(ctx, snaps, "gate:perp", "gate:perp available", availWallet(gateVA, "futures"), "/api/v4/futures/usdt/accounts"))
+	avail.Nodes = append(avail.Nodes, s.availLiveNode(ctx, snaps, "", "gate:spot available", availWallet(gateVA, "spot"), "/api/v4/spot/accounts"))
 	// ⑬ gate 锁定慢动=spot locked+futures 保证金占用+earn 出借中。
 	locked.Nodes = append(locked.Nodes, walletLocked(gateVA, "spot", "gate:spot locked", "/api/v4/spot/accounts"))
 	locked.Nodes = append(locked.Nodes, walletLocked(gateVA, "futures", "gate:futures 保证金占用", "/api/v4/futures/usdt/accounts"))

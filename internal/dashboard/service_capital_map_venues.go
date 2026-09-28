@@ -103,17 +103,21 @@ func availWallet(va *reconcile.VenueAvailability, wallet string) *reconcile.Avai
 
 // availLiveNode 立即可用节点：venueKey 非空=优先活账本 legPool（sizing 同源）；
 // venueKey 空=纯 REST 面（gate:spot 无私有流且腿池键回退会串到 gate:perp 错池，
-// 禁走 legPool）。账本空回退 REST 面 AvailableUSD。
-func (s *Service) availLiveNode(ctx context.Context, snaps []pgstore.VenueAccountLatest, venueKey, label string, restAvail float64, restAt time.Time) *v1.CapitalMapNode {
+// 禁走 legPool）。账本空回退 REST 面——判据按 wallet 节点存在性（REST 答了
+// 真 $0 须出诚实零节点，非误标三径全空；面败 Detail+全零=标缺，同 walletLocked）。
+func (s *Service) availLiveNode(ctx context.Context, snaps []pgstore.VenueAccountLatest, venueKey, label string, restNode *reconcile.AvailabilityNode, restSrc string) *v1.CapitalMapNode {
 	if venueKey != "" {
 		if p, ok := s.legPool(ctx, snaps, venueKey); ok && p.free != nil {
 			return capNode(label, *p.free, p.currency, capSrcNote(p), p.at)
 		}
 	}
-	if restAvail > 0 {
-		return capNode(label, restAvail, "USDT", "REST 实拉（无私有流）", restAt)
+	if restNode == nil {
+		return capMissing(label, "活账本/REST/快照三径全空（面未出 "+restSrc+"）")
 	}
-	return capMissing(label, "活账本/REST/快照三径全空")
+	if restNode.Detail != "" && restNode.AvailableUSD == 0 && restNode.TransferableUSD == 0 && restNode.LockedUSD == 0 {
+		return capMissing(label, restNode.Detail)
+	}
+	return capNode(label, restNode.AvailableUSD, "USDT", restSrc, restNode.At)
 }
 
 // walletLocked 锁定节点（面败 Detail 透出为缺因；零值仍出诚实节点）。
