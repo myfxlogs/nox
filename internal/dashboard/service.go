@@ -35,9 +35,12 @@ type Service struct {
 	reviewer func()
 	// D-478 S4：安全档位 cross 占比档（cfg.CrossNotionalEquityCap，SetCrossCap 注入）+
 	// 恶化告警 transition 状态（内存态重启重置，per combo|venue ≥6h 去重对齐 D-472）。
-	crossCap  float64
-	tierState map[string]tierState
-	tierMu    sync.Mutex
+	crossCap float64
+	// D-563 S1/S3：gate 合约目标杠杆（cfg.GateDefaultLeverage；零值=未配置→杠杆感知判据
+	// 落 unknown 待定，不兜底）。S1 开仓 SET 与 S3 池判定同源同值。
+	gateTargetLev float64
+	tierState     map[string]tierState
+	tierMu        sync.Mutex
 	// D-542：CEX 账户可用资金活账本（私有流主源+REST 校准回写，SetBalanceLedger 注入；
 	// nil=未装配→腿池直走快照兜底）。liveMu=校准单飞；liveQuerierFor=测试注入点；
 	// liveRestTTLDur 测试可缩短校准缓存。
@@ -184,12 +187,13 @@ type Service struct {
 	carryRegime exec.CarryRegimeConfig
 
 	// D-403 S3：验证毕业链依赖（nil-able setter 注入模式，New 已 20+ 参勿再加）。
-	gradStore          graduationStore                                         // 测试替身 seam；nil=回落 s.store
-	xassetReloader     XAssetReloader                                          // engine 热重载（nil=approve fail-closed 拒绝）
-	pfAdmissionControl pfAdmissionControl                                      // D-491 S6：准入评估器注入（nil=RPC 降级报错）
-	allowVenuesSource  func(ctx context.Context) (map[string]bool, error)      // D-443 S4：venue 白名单表活读 getter（nil=空集保守全缺口）
-	autoMapFn          func(ctx context.Context, venue string) (string, error) // AutoMap 摘要 seam（nil=真身 s.AutoMapBroker）
-	rejectBreaker      RejectBreakerReader                                     // D-560 S3：拒单熔断快照/恢复（nil=无透出）
+	gradStore          graduationStore                                                      // 测试替身 seam；nil=回落 s.store
+	xassetReloader     XAssetReloader                                                       // engine 热重载（nil=approve fail-closed 拒绝）
+	pfAdmissionControl pfAdmissionControl                                                   // D-491 S6：准入评估器注入（nil=RPC 降级报错）
+	allowVenuesSource  func(ctx context.Context) (map[string]bool, error)                   // D-443 S4：venue 白名单表活读 getter（nil=空集保守全缺口）
+	autoMapFn          func(ctx context.Context, venue string) (string, error)              // AutoMap 摘要 seam（nil=真身 s.AutoMapBroker）
+	rejectBreaker      RejectBreakerReader                                                  // D-560 S3：拒单熔断快照/恢复（nil=无透出）
+	mtSummaryFn        func(ctx context.Context, venueKey string) (float64, float64, error) // D-563 S4b：MT 实时资金缝（nil=bm 真身）
 
 	// D-159 W1a I6：environment/is_real 一致性检查（手动入口同源）。
 	// environment 空 = 未配置（不检查，回退旧行为）。

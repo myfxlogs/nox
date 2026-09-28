@@ -38,6 +38,22 @@ func (s *Service) MarginFloorKnown(ctx context.Context, venueKey string, addNoti
 	return s.marginFloorEval(ctx, venueKey, addNotionalUSD)
 }
 
+// SetMTSummaryFunc D-563 S4b：测试注入 MT 实时资金缝（nil=回落 bm.MTAccountSummary 真身）。
+func (s *Service) SetMTSummaryFunc(fn func(ctx context.Context, venueKey string) (float64, float64, error)) {
+	s.mtSummaryFn = fn
+}
+
+// mtAcctSummary D-563 S4b：MT 实时资金缝（测试注入 mtSummaryFn；nil=回落 bm 真身）。
+func (s *Service) mtAcctSummary(ctx context.Context, venueKey string) (float64, float64, error) {
+	if s.mtSummaryFn != nil {
+		return s.mtSummaryFn(ctx, venueKey)
+	}
+	if s.bm == nil {
+		return 0, 0, fmt.Errorf("BrokerManager 未接线")
+	}
+	return s.bm.MTAccountSummary(ctx, venueKey)
+}
+
 // marginFloorEval 判定本体：ok=可用额≥所需；known=判定建立在采集数据上
 // （false=任一 fail-open 分支：无快照/字段未采/隐含率不可算/查询错）。
 func (s *Service) marginFloorEval(ctx context.Context, venueKey string, addNotionalUSD float64) (bool, bool, string) {
@@ -51,7 +67,7 @@ func (s *Service) marginFloorEval(ctx context.Context, venueKey string, addNotio
 	cexLive := capitalview.IsCEXVenue(venueKey)
 	var liveEq, liveAvail *float64
 	if cexLive {
-		f, ok := s.capitalView().Live(ctx, venueKey)
+		f, ok := s.capitalView().LiveFresh(ctx, venueKey) // D-563 S4c：决策面强制实拉
 		if !ok || !f.Live {
 			return false, true, fmt.Sprintf("venue %s 活资金不可得（活账本/REST 双败，执行面禁快照兜底，fail-closed 拒开）", venueKey)
 		}
@@ -59,6 +75,22 @@ func (s *Service) marginFloorEval(ctx context.Context, venueKey string, addNotio
 		if f.HasAvailable {
 			liveAvail = &f.Available
 		}
+	}
+	// D-563 S4b：MT 腿判定时刻资金=AccountSummary 实时 RPC（快照退决策面）；
+	// RPC 败/超时（≤10s）→ fail-closed「MT 实时资金不可得」。无需快照行在档。
+	if marginVenueClass(vt) == "cfd" {
+		eq, fm, serr := s.mtAcctSummary(ctx, venueKey)
+		if serr != nil {
+			return false, true, fmt.Sprintf("MT 实时资金不可得（%v）fail-closed 拒开", serr)
+		}
+		sumNotional, hasLegs, err := s.marginOpenNotional(ctx, venue, vt)
+		if err != nil {
+			return true, false, fmt.Sprintf("open legs err %v（fail-open）", err)
+		}
+		if !hasLegs {
+			return true, false, "no open legs (implied margin rate unknown)"
+		}
+		return marginFloorJudge(fm, eq-fm, sumNotional, addNotionalUSD)
 	}
 	snap, ok, err := s.latestVenueSnapshotSafe(ctx, venue, vt)
 	if err != nil {
@@ -85,20 +117,12 @@ func (s *Service) marginFloorEval(ctx context.Context, venueKey string, addNotio
 		return true, false, "no open legs (implied margin rate unknown)"
 	}
 	var avail, used float64
-	if marginVenueClass(vt) == "cfd" {
-		if snap.FreeMarginRaw == nil {
-			return true, false, "free_margin not collected"
-		}
-		avail = *snap.FreeMarginRaw
-		used = *snap.EquityRaw - avail
-	} else {
-		if snap.BufferMultiple == nil || *snap.BufferMultiple <= 0 {
-			return true, false, "buffer_multiple not collected"
-		}
-		mmr := *snap.EquityRaw / *snap.BufferMultiple
-		avail = *snap.EquityRaw - mmr
-		used = mmr // IMR 未知，以 MMR 为隐含率锚（保守：MMR≤IMR → 低估所需=偏放行，监控件口径）
+	if snap.BufferMultiple == nil || *snap.BufferMultiple <= 0 {
+		return true, false, "buffer_multiple not collected"
 	}
+	mmr := *snap.EquityRaw / *snap.BufferMultiple
+	avail = *snap.EquityRaw - mmr
+	used = mmr // IMR 未知，以 MMR 为隐含率锚（保守：MMR≤IMR → 低估所需=偏放行，监控件口径）
 	return marginFloorJudge(avail, used, sumNotional, addNotionalUSD)
 }
 

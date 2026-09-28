@@ -139,6 +139,7 @@ func TestD547_T5_ComboRowsLiveConflict(t *testing.T) {
 		{Venue: "gate", VenueType: "perp", EquityRaw: f64p(80), Currency: "USDT", FetchedAt: time.Now()},
 		{Venue: "3001157", VenueType: "mt5", EquityRaw: f64p(9000), Currency: "USD", FetchedAt: time.Now()},
 	}
+	s.SetGateTargetLeverage(10) // D-563 S3：杠杆感知判据（need=名义×1/lev=175 > 池 80 → conflict）
 	resp, err := s.ListXAssetAllowCombos(context.Background(), connect.NewRequest(&v1.ListXAssetAllowCombosRequest{}))
 	if err != nil {
 		t.Fatalf("list: %v", err)
@@ -151,7 +152,7 @@ func TestD547_T5_ComboRowsLiveConflict(t *testing.T) {
 		t.Fatalf("active_notional=%v", r.ActiveNotionalUsd)
 	}
 	if !r.CapConflict {
-		t.Fatalf("cap_conflict 应真（gate 池 80 < need 3500）: %+v", r)
+		t.Fatalf("cap_conflict 应真（gate 池 80 < 保证金需求 175）: %+v", r)
 	}
 	if r.BuyPoolUsd != 80 || r.PoolSource != "snap" {
 		t.Fatalf("buy_pool=%v src=%q", r.BuyPoolUsd, r.PoolSource)

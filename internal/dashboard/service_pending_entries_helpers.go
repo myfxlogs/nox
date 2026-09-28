@@ -92,9 +92,11 @@ func monitorLegKeys(c pgstore.XAssetComboAdminRow) (cexVenue, mtVenue string) {
 	return legBare(c.VenueSell, "perp"), legBare(c.VenueBuy, "mt5")
 }
 
+// legBare D-563 S2：带域键即监控表键原样返回（剥域=查裸键恒 miss 假阳性实证）；
+// 裸 venue → 补域后缀。
 func legBare(venueKey, suffix string) string {
-	if strings.Contains(venueKey, ":") {
-		return keydomain.BareOf(venueKey)
+	if venueKey == "" || strings.Contains(venueKey, ":") {
+		return venueKey
 	}
 	return keydomain.Join(venueKey, suffix)
 }

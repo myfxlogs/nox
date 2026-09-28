@@ -1,0 +1,145 @@
+package dashboard
+
+// D-563 锚测：T2 legBare 剥域 / T3 comboPoolVerdict 三态矩阵（杠杆感知腿级保证金）/
+// T5 MT 腿资金 AccountSummary 实时化（RPC 败 fail-closed、快照在场仍拒）。
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+	"time"
+
+	"arb/internal/bus"
+	"arb/internal/fact"
+	"arb/internal/reconcile"
+	"arb/internal/store/pgstore"
+	"arb/internal/testutil/storetest"
+)
+
+// ---- T2 legBare 剥域 ----
+func TestD563_LegBare(t *testing.T) {
+	for _, c := range []struct{ in, suffix, want string }{
+		{"3001157:mt5", "mt5", "3001157:mt5"}, // 带域键原样（剥域=监控键恒 miss 假阳性病灶）
+		{"gate", "perp", "gate:perp"},
+		{"", "perp", ""},
+	} {
+		if got := legBare(c.in, c.suffix); got != c.want {
+			t.Errorf("legBare(%q,%q)=%q want %q", c.in, c.suffix, got, c.want)
+		}
+	}
+}
+
+// ---- T3 comboPoolVerdict 三态矩阵 ----
+
+// d563VerdictSvc gate 池=活账本 ledger 命中（零 REST）；MT 池=快照行；
+// gradDB.facts 供 init_margin_rate。
+func d563VerdictSvc(t *testing.T, gateAvail, gateEq float64) *Service {
+	t.Helper()
+	s := &Service{}
+	l := bus.NewBalanceLedger()
+	s.SetBalanceLedger(l)
+	l.Put("gate:perp", gateAvail, gateEq, "USD", "ws", time.Now())
+	s.liveQuerierFor = func(context.Context, string) (reconcile.AccountQuerier, string, bool) {
+		return &fakeAcctQ{err: errors.New("REST 不应被调（live 命中）")}, "gate:perp", true
+	}
+	s.gateTargetLev = 10
+	s.gradStore = &fakeGradDB{}
+	return s
+}
+
+func d563MtSnap(equity, free float64) pgstore.VenueAccountLatest {
+	return pgstore.VenueAccountLatest{
+		Venue: "3001157", VenueType: "mt5",
+		EquityRaw: &equity, FreeMarginRaw: &free,
+		Currency: "USD", FetchedAt: time.Now(),
+	}
+}
+
+func TestD563_ComboPoolVerdict(t *testing.T) {
+	ctx := context.Background()
+	s := d563VerdictSvc(t, 1000, 1000)
+	f, _ := s.gradStore.(*fakeGradDB)
+	f.facts = map[string][]fact.Fact{
+		"3001157|": {{Kind: fact.KindInitMarginRate, Venue: "3001157", Value: 0.02, Ts: time.Now()}},
+	}
+	notional := 4300.0
+	c := pgstore.XAssetComboAdminRow{
+		VenueBuy: "gate:perp", VenueSell: "3001157:mt5", NotionalUSD: &notional,
+	}
+	snaps := []pgstore.VenueAccountLatest{d563MtSnap(5000, 4000)}
+
+	// 池 1000+notional 4300+lev10 → need=430 ≤ 1000；MT 需 86 ≤ 4000 → ok。
+	if v, d := s.comboPoolVerdict(ctx, c, snaps); v != "ok" {
+		t.Fatalf("池足应 ok, got %s (%s)", v, d)
+	}
+	// 池 100 → 430 > 100 → conflict。
+	l2 := bus.NewBalanceLedger()
+	l2.Put("gate:perp", 100, 100, "USD", "ws", time.Now())
+	s2 := d563VerdictSvc(t, 0, 0)
+	s2.SetBalanceLedger(l2)
+	s2.gateTargetLev = 10
+	s2.liveQuerierFor = s.liveQuerierFor
+	if v, _ := s2.comboPoolVerdict(ctx, c, snaps); v != "conflict" {
+		t.Fatalf("池缺应 conflict, got %s", v)
+	}
+	// MT init_margin_rate 缺 → unknown（待定不谎报锁死）。
+	f.facts = nil
+	if v, d := s.comboPoolVerdict(ctx, c, snaps); v != "unknown" || !strings.Contains(d, "init_margin_rate") {
+		t.Fatalf("MT rate 缺应 unknown, got %s (%s)", v, d)
+	}
+	// gate 目标杠杆未配置 → unknown（不谎报）。
+	s.gateTargetLev = 0
+	f.facts = map[string][]fact.Fact{
+		"3001157|": {{Kind: fact.KindInitMarginRate, Venue: "3001157", Value: 0.02, Ts: time.Now()}},
+	}
+	if v, _ := s.comboPoolVerdict(ctx, c, snaps); v != "unknown" {
+		t.Fatalf("杠杆未配置应 unknown, got %s", v)
+	}
+}
+
+// ---- T5 MT 腿资金实时化 ----
+
+func TestD563_MarginFloorMTRealtime(t *testing.T) {
+	st := storetest.SharedStore(t, "ARB_TEST_PG_SERVICE_DSN")
+	ctx := context.Background()
+	if _, err := st.Pool().Exec(ctx, `TRUNCATE positions, position_legs RESTART IDENTITY CASCADE`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	var posID int64
+	if err := st.Pool().QueryRow(ctx,
+		`INSERT INTO positions (opportunity_id, type, status, expected_net_bps) VALUES ('XASSET_CARRY:XAUUSD:a:b','XASSET_CARRY','OPEN',0) RETURNING id`).Scan(&posID); err != nil {
+		t.Fatalf("seed pos: %v", err)
+	}
+	if _, err := st.Pool().Exec(ctx,
+		`INSERT INTO position_legs (position_id, leg_no, phase, venue, venue_type, symbol, side, qty, price_expected, status)
+		 VALUES ($1,0,'OPEN','3001157','mt5','XAUUSDm','BUY',10,2000,'FILLED')`, posID); err != nil {
+		t.Fatalf("seed leg: %v", err)
+	}
+
+	s := &Service{store: st, qbus: bus.New()}
+	s.SetLegContractSize(func(string, string) (float64, bool) { return 1, true })
+	// ① RPC 死 + 快照行在档 → 仍 fail-closed（快照退决策面实证）。
+	if _, err := st.Pool().Exec(ctx,
+		`INSERT INTO fin_venue_account_snapshot (venue, venue_type, equity_raw, free_margin_raw, currency, fetched_at)
+		 VALUES ('3001157','mt5',99999,99999,'USD',now())`); err != nil {
+		t.Fatalf("seed snap: %v", err)
+	}
+	s.mtSummaryFn = func(context.Context, string) (float64, float64, error) {
+		return 0, 0, errors.New("rpc dead")
+	}
+	if ok, _, d := s.marginFloorEval(ctx, "3001157:mt5", 0); ok || !strings.Contains(d, "MT 实时资金不可得") {
+		t.Fatalf("RPC 死应 fail-closed, got ok=%v %s", ok, d)
+	}
+	// ② RPC 活：eq=1000 fm=500（used=500）、open notional=10×2000=20000 →
+	// implied=500/20000=0.025；add=4000→req 100≤avail 500 放行；add=40000→req 1000>500 拒。
+	s.mtSummaryFn = func(context.Context, string) (float64, float64, error) {
+		return 1000, 500, nil
+	}
+	if ok, known, d := s.marginFloorEval(ctx, "3001157:mt5", 4000); !ok || !known {
+		t.Fatalf("可用足应放行, got ok=%v known=%v %s", ok, known, d)
+	}
+	if ok, _, d := s.marginFloorEval(ctx, "3001157:mt5", 40000); ok || !strings.Contains(d, "avail") {
+		t.Fatalf("超 floor 应拒, got ok=%v %s", ok, d)
+	}
+}

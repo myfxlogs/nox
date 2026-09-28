@@ -1,8 +1,6 @@
 // service_pending_entries.go D-478 S3/S4：待入场区 RPC + 安全档位。
-// 语义钉死：本票是「透出既有闸的当前结论」，不是新闸——reason 串直接复用各闸原输出
-// （P3：透出层不是第二判据源）；闸序=engine_opp.handleOpportunity 同序防口径分裂。
-// 覆盖口径：只覆盖 xasset_allow_combos 消费的两型=XASSET_CARRY+FUNDING_HEDGE
-// （SWAPARB 走 env SwapArbAllowCombos 独立面，engine_opp.go 分派实证，不在本区）。
+// 透出既有闸结论非新闸（P3：reason 复用各闸原输出；闸序=engine_opp.handleOpportunity）。
+// 覆盖=xasset_allow_combos 两型 XASSET_CARRY+FUNDING_HEDGE（SWAPARB 走独立面）。
 package dashboard
 
 import (
@@ -46,6 +44,9 @@ func connectErr(err error) error {
 
 // SetCrossCap D-478 S4：注入 cross 占比档（cfg.CrossNotionalEquityCap；未注入=缺省 0.5）。
 func (s *Service) SetCrossCap(cap float64) { s.crossCap = cap }
+
+// SetGateTargetLeverage D-563 S3：注入 gate 目标杠杆（零值=未知→池判定落待定）。
+func (s *Service) SetGateTargetLeverage(lev float64) { s.gateTargetLev = lev }
 
 // pendingEntries 七闸序推导主逻辑（供 RPC 与测试共用）。
 func (s *Service) pendingEntries(ctx context.Context) ([]*v1.XAssetPendingEntryRow, error) {
@@ -91,7 +92,7 @@ func (s *Service) pendingEntries(ctx context.Context) ([]*v1.XAssetPendingEntryR
 		if s.comboInPosition(ctx, c) {
 			continue // 有 open/legged/closing 在持仓 → 归持仓区
 		}
-		kind, reason, depth, ready := s.probeGates(ctx, c, venueAllow, canonAllow, flags, caps)
+		kind, reason, depth, ready := s.probeGates(ctx, c, venueAllow, canonAllow, flags, caps, snaps)
 		tier, detail, warn := s.comboTier(ctx, c, snaps)
 		row := &v1.XAssetPendingEntryRow{
 			ComboId: c.ID, ComboLabel: label, EntryKind: kind,
@@ -111,7 +112,7 @@ func (s *Service) pendingEntries(ctx context.Context) ([]*v1.XAssetPendingEntryR
 		scored = append(scored, scoredRow{depth: depth, row: row})
 	}
 	// D-483 排序（服务端）：最可能入场的排最上——闸深降序（闯到越深的闸=越接近
-	// 入场，就绪 depth=7 天然置顶）；同深按 comboId 稳定序。
+	// 入场，就绪天然置顶）；同深按 comboId 稳定序。
 	sort.SliceStable(scored, func(i, j int) bool {
 		if scored[i].depth != scored[j].depth {
 			return scored[i].depth > scored[j].depth
@@ -148,16 +149,13 @@ func (s *Service) comboInPosition(ctx context.Context, c pgstore.XAssetComboAdmi
 	return false
 }
 
-// probeGates 七闸序（同 handleOpportunity 序）：venue 白名单→旗标→regime→tick→监控簿→cap→就绪。
-// 返回 kind/waitReason/depth/ready。depth=闯到的最深闸序（D-483 排序键：
-// 0=构型未覆盖 1=venue/canonical/构型禁入(配置型永阻) 2=旗标 4=regime 5=tick 6=监控簿 7=cap 8=就绪）。
-func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow, venueAllow, canonAllow map[string]bool, flags map[string]pgstore.VenueSymbolFlag, caps map[string]pgstore.VenueExposureCap) (kind, reason string, depth int, ready bool) {
+// probeGates 闸序（同 handleOpportunity 序）→ kind/waitReason/depth/ready。
+// depth=D-483 排序键：0 未覆盖/1 配置禁入/2 旗标/4 regime/5 tick/6 监控簿/7 cap/8 腿池/9 就绪。
+func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow, venueAllow, canonAllow map[string]bool, flags map[string]pgstore.VenueSymbolFlag, caps map[string]pgstore.VenueExposureCap, snaps []pgstore.VenueAccountLatest) (kind, reason string, depth int, ready bool) {
 	buyMT := keydomain.IsMTKey(c.VenueBuy)
 	sellMT := keydomain.IsMTKey(c.VenueSell)
-	// D-478 返修 R6：kind 推断=「恰好一条 MT 腿→XASSET_CARRY」（buy/sell 双向——原实现缺
-	// MT 卖腿分支，生产实证 row1 CLUSDT(gate:perp)×WTI(277842155:mt5) 误报「构型未覆盖」）；
-	// 死分支（VenueBuy=="" 空表值/重复 spot×perp 判）并入整理；perp×perp/spot×spot/双 MT
-	// →kind 留空=「构型未覆盖」如实。
+	// D-478 返修 R6：kind 推断=「恰好一条 MT 腿→XASSET_CARRY」（buy/sell 双向）；
+	// perp×perp/spot×spot/双 MT/空 → kind 留空=「构型未覆盖」如实。
 	switch {
 	case buyMT != sellMT:
 		kind = "XASSET_CARRY"
@@ -243,8 +241,12 @@ func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow,
 			}
 		}
 	}
-	// 闸 7：全过 → 条件就绪·等机会（诚实区分：闸过但 detector 未产 opp=价差/息差未到阈）。
-	return kind, "条件就绪·等机会", 8, true
+	// D-563 S3 腿池闸（杠杆感知保证金需求；同判据 comboPoolVerdict）：conflict=锁死/unknown=待定。
+	if verdict, detail := s.comboPoolVerdict(ctx, c, snaps); verdict != "ok" {
+		return kind, detail, 8, false
+	}
+	return kind, "条件就绪·等机会", 9, true // 闸过·等 detector 产 opp（价差未到阈）
+
 }
 
 // TierKickAll D-478 S4：恶化告警事件入口——CEX 账户 WS 余额事件（快照写成功）与组合行写

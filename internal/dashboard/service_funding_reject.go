@@ -87,5 +87,9 @@ func fundingRejectFor(facts map[string]string, canonicalBuy, canonicalSell, venu
 
 // rejectReasonText 透出文案=拒文截断+解法行（命中才追加，非资金拒文 FundingOptionsText 自返 ""）。
 func rejectReasonText(reason string) string {
-	return errclass.TruncateNote(reason, 120) + errclass.FundingOptionsText(reason)
+	acct := "" // D-563 S5：账户名=拒文腿键裸名（无别名表在 dashboard 域）
+	if m := errclass.RejectLegRe.FindStringSubmatch(reason); m != nil {
+		acct = m[1]
+	}
+	return errclass.TruncateNote(reason, 120) + errclass.FundingOptionsText(reason, acct)
 }

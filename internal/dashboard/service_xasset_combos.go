@@ -45,13 +45,11 @@ func (s *Service) ListXAssetAllowCombos(ctx context.Context, _ *connect.Request[
 		}
 		_, notional, _ := s.gradDB().ListOpenPositionsForCombo(ctx, r.CanonicalBuy, r.CanonicalSell, r.VenueBuy, r.VenueSell)
 		row.ActiveNotionalUsd = notional
-		conflict := false
 		var src string
 		var latest time.Time
 		for i, vk := range [2]string{r.VenueBuy, r.VenueSell} {
 			p, ok := s.legPool(ctx, snaps, vk)
 			if !ok {
-				conflict = true
 				continue
 			}
 			avail := p.equity
@@ -69,15 +67,12 @@ func (s *Service) ListXAssetAllowCombos(ctx context.Context, _ *connect.Request[
 			if p.at.After(latest) {
 				latest = p.at
 			}
-			// 池可用覆盖不了本组合名义双腿需求=结构冲突（approve 侧同判据先例）。
-			need := r.MaxGrossUSD
-			if r.NotionalUSD != nil {
-				need = 2 * *r.NotionalUSD
-			}
-			if avail < need {
-				conflict = true
-			}
 		}
+		// D-563 S3：闸冲突改腿级保证金需求判据（comboPoolVerdict 与待入场同源 P3）；
+		// verdict: conflict=锁死红 / unknown=杠杆数据缺待定黄 / ok=够。
+		verdict, _ := s.comboPoolVerdict(ctx, r, snaps)
+		row.PoolVerdict = verdict
+		conflict := verdict == "conflict"
 		if rr, ok := fundingRejectFor(rejects, r.CanonicalBuy, r.CanonicalSell, r.VenueBuy, r.VenueSell); ok {
 			row.RecentFundingReject = true
 			row.RecentRejectReason = rejectReasonText(rr)

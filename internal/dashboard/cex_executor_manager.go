@@ -59,7 +59,7 @@ func NewCexExecutorManager(s ExchangeStore, reg *exec.Registry, interval time.Du
 		// D-472 S2/S4：构造缺省（cfg setter 未调用时仍保有语义正确的档位——
 		// cross cap 零值注入会静默关闸，故缺省=包级常量非零值）。
 		crossNotionalEquityCap: exec.DefaultCrossNotionalEquityCap,
-		gateDefaultLeverage:    exec.DefaultGateDefaultLeverage,
+		gateDefaultLeverage:    0, // D-563 S1：零值=未配置→开仓 fail-closed（显式注入，无兜底）
 		keys:                   make(map[string]bool),
 	}
 }
