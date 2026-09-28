@@ -180,7 +180,8 @@ func d495Pipeline(s *pgstore.Store, placeCount *int32, orders map[string][]Opene
 
 // fakeMT5CloseExecutor MT 腿 CloseOrder fake。
 type fakeMT5CloseExecutor struct {
-	venue string
+	venue      string
+	placeCount *int32 // D-539：CloseOrder 调用计数（零发单断言）
 }
 
 func (e *fakeMT5CloseExecutor) Key() string { return e.venue }
@@ -188,6 +189,9 @@ func (e *fakeMT5CloseExecutor) PlaceOrder(ctx context.Context, o Order) (Fill, e
 	return Fill{OrderID: "mt-fill", Price: 100, Qty: o.Qty}, nil
 }
 func (e *fakeMT5CloseExecutor) CloseOrder(ctx context.Context, ref OrderRef) (Fill, error) {
+	if e.placeCount != nil {
+		atomic.AddInt32(e.placeCount, 1)
+	}
 	return Fill{OrderID: "mt-close-" + ref.OrderID, Price: 100, Qty: 0.01}, nil
 }
 
@@ -237,8 +241,9 @@ func TestD495_CloseGating_DarkLegBlocks(t *testing.T) {
 	}
 }
 
-// T3 ResumeClose 暗腿跳过：不写 CLOSE leg、note 合并 await_session、
-// 残留降级 warn（首转场报一次），二次调用幂等不再报。
+// T3 ResumeClose 暗腿（D-539 改判）：全腿前置闸在腿循环前整仓拦截——
+// 不写 CLOSE leg、零发单、ErrLegNotActionable 哨兵、note 合并 await_session
+// （异类 token 不吞），二次调用幂等不漂移。残留降级 warn 锚由闸前返回不再触发。
 func TestD495_ResumeClose_DarkLegAwaitSession(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
@@ -258,8 +263,8 @@ func TestD495_ResumeClose_DarkLegAwaitSession(t *testing.T) {
 	p := d495Pipeline(s, &placed, orders, 0)
 
 	err := p.ResumeClose(ctx, posID)
-	if err == nil || !strings.Contains(err.Error(), "residual") {
-		t.Fatalf("暗腿仓 ResumeClose 应残留报错, got %v", err)
+	if !errors.Is(err, ErrLegNotActionable) {
+		t.Fatalf("暗腿仓 ResumeClose 应 ErrLegNotActionable, got %v", err)
 	}
 	if atomic.LoadInt32(&placed) != 0 {
 		t.Fatal("暗腿不得发平仓单")
@@ -269,32 +274,34 @@ func TestD495_ResumeClose_DarkLegAwaitSession(t *testing.T) {
 		t.Fatalf("暗腿不得写 CLOSE leg, got %d", len(closeLegs))
 	}
 	pos, _ := s.GetPosition(ctx, posID)
+	if pos.Status != "CLOSING" {
+		t.Fatalf("仓应保持 CLOSING 等下轮, got %s", pos.Status)
+	}
 	if !strings.Contains(pos.Note, "await_session:okx:perp:D495A-USDT-SWAP") {
 		t.Fatalf("note 应含 await_session token: %q", pos.Note)
 	}
 	if !strings.Contains(pos.Note, "settle_failed: keepme") {
 		t.Fatalf("note 合并写不得吞异类 token: %q", pos.Note)
 	}
-	// 残留告警：全 await 腿 → warn（首转场），且只一条
-	var warnN, critN int
+	// D-539：闸前返回不产生残留告警（观测面=note+哨兵日志）。
+	var alertN int
 	if err := s.Pool().QueryRow(ctx,
-		`SELECT COUNT(*) FILTER (WHERE level='warn'), COUNT(*) FILTER (WHERE level='critical')
-		 FROM alerts WHERE position_id=$1`, posID).Scan(&warnN, &critN); err != nil {
+		`SELECT COUNT(*) FROM alerts WHERE position_id=$1`, posID).Scan(&alertN); err != nil {
 		t.Fatalf("alerts count: %v", err)
 	}
-	if warnN != 1 || critN != 0 {
-		t.Fatalf("首转场应 warn×1 critical×0, got warn=%d crit=%d", warnN, critN)
+	if alertN != 0 {
+		t.Fatalf("前置闸轮不应产生告警, got %d", alertN)
 	}
-	// 幂等：第二次 ResumeClose note 不变、无新告警
-	if err := p.ResumeClose(ctx, posID); err == nil {
-		t.Fatal("二次 ResumeClose 仍应残留报错")
+	// 幂等：第二次 ResumeClose 同哨兵返回、note 不变、仍无告警
+	if err := p.ResumeClose(ctx, posID); !errors.Is(err, ErrLegNotActionable) {
+		t.Fatalf("二次 ResumeClose 应仍 ErrLegNotActionable, got %v", err)
 	}
 	if err := s.Pool().QueryRow(ctx,
-		`SELECT COUNT(*) FROM alerts WHERE position_id=$1`, posID).Scan(&warnN); err != nil {
+		`SELECT COUNT(*) FROM alerts WHERE position_id=$1`, posID).Scan(&alertN); err != nil {
 		t.Fatalf("alerts recount: %v", err)
 	}
-	if warnN != 1 {
-		t.Fatalf("已知 await_session 态不得重复告警, total=%d", warnN)
+	if alertN != 0 {
+		t.Fatalf("幂等轮仍不应产生告警, total=%d", alertN)
 	}
 	pos2, _ := s.GetPosition(ctx, posID)
 	if pos2.Note != pos.Note {

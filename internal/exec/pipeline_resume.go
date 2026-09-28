@@ -89,6 +89,13 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64, force boo
 		}
 	}
 
+	// D-539：全腿前置闸——任一腿不可行动本轮整仓零发单（pos502 形态根治），force 逃逸门全绕。
+	if !force {
+		if err := p.legsActionableGate(ctx, posID, legs, &pos.Note); err != nil {
+			return err
+		}
+	}
+
 	var totalPnL float64
 	// D-495 S4：await_session 跟踪——不可行动腿跳过发单（不写 CLOSE leg、不 error 中断），
 	// token 合并写 note；残留校验命中全为 await 腿时降级 warn（关市常态非异常）。

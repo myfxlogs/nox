@@ -131,6 +131,30 @@ func mergeNoteToken(existing, key, value string) string {
 	return strings.Join(kept, "; ")
 }
 
+// legsActionableGate D-539：平仓执行核心全腿前置闸——任一 OPEN+FILLED 腿不可行动 →
+// LegNotActionableError 哨兵（本轮整仓零发单，保持对冲持有；pos502 形态根治：旧语义
+// 腿循环内逐腿跳过会先平亮腿、暗腿裸露一周末）+ await_session note 透出观测面。
+// 判据复用 LegActionable 单源（与 checkLegsActionable 差别：本闸收集全部暗腿写 note
+// 观测，后者首败即返=触发层拒平）；供 reconciler 下轮重试。调用方按 !force 调用。
+func (p *Pipeline) legsActionableGate(ctx context.Context, posID int64, legs []pgstore.PositionLeg, note *string) error {
+	var blocked []pgstore.PositionLeg
+	for _, leg := range legs {
+		if leg.Phase != "OPEN" || leg.Status != "FILLED" {
+			continue
+		}
+		if ok, why := LegActionable(ctx, p.store, leg.Venue, leg.Symbol); !ok {
+			blocked = append(blocked, leg)
+			log.Printf("[exec] pos %d leg-actionable gate block %s@%s: %s", posID, leg.Symbol, leg.Venue, why)
+		}
+	}
+	if len(blocked) == 0 {
+		return nil
+	}
+	p.writeAwaitSessionNote(ctx, posID, note, blocked)
+	b := blocked[0]
+	return &LegNotActionableError{VenueKey: b.Venue, Symbol: b.Symbol, Reason: "gate: 全腿前置闸，本轮整仓不发"}
+}
+
 // legActionableUnlessForce force 逃逸门短路（force=true 不查 ticks 直接可行动）。
 func legActionableUnlessForce(ctx context.Context, st legActionableStore, leg pgstore.PositionLeg, force bool) (bool, string) {
 	if force {
