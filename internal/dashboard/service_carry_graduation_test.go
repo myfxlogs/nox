@@ -30,6 +30,7 @@ type fakeGradDB struct {
 	comboErr     error
 	reloaded     int
 	alerts       int
+	alertMsgs    []string // D-554：告警文案捕获面（状态机锚断言）
 	flags        []pgstore.VenueSymbolFlag
 	list         []pgstore.CarryGraduation
 	// D-475a S3/S4：flag/caps/吊销/在管仓测试面。
@@ -83,8 +84,9 @@ func (f *fakeGradDB) UpdateCarryGraduationDecision(_ context.Context, _ int64, s
 	f.decisionNote = note
 	return nil
 }
-func (f *fakeGradDB) InsertAlert(context.Context, *int64, string, string) error {
+func (f *fakeGradDB) InsertAlert(_ context.Context, _ *int64, _ string, msg string) error {
 	f.alerts++
+	f.alertMsgs = append(f.alertMsgs, msg)
 	return nil
 }
 func (f *fakeGradDB) ListCarryGraduations(context.Context) ([]pgstore.CarryGraduation, error) {
