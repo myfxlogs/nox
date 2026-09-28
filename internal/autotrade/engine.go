@@ -220,7 +220,7 @@ func (e *Engine) positionLoop(ctx context.Context) {
 	e.stateMachineTick(ctx)
 	e.lastScan = time.Now()
 
-	fallback := time.NewTicker(e.fallbackInterval()) // D-378a S3：节拍配置化
+	fallback := time.NewTicker(e.fallbackInterval()) // D-378a S3：节拍配置化（D-562 注记：事件驱动 kick 主路+本 ticker=评估饥荒兜底节拍，退出判定消费 qbus 实时报价非轮询快照——判定证据实时合规）
 	defer fallback.Stop()
 	csMissTick := time.NewTicker(csMissAlertInterval) // D-140 S2：CS-miss 聚合告警
 	defer csMissTick.Stop()

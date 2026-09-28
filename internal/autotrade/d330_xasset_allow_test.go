@@ -82,6 +82,8 @@ func d330GoldenOpp() pgstore.Opportunity {
 func d330XAUService(cs float64, ask float64) (*dashboard.Service, *bus.QuoteBus) {
 	qb := bus.New()
 	qb.Publish(bus.Quote{Symbol: "XAUUSD", Venue: "277842155", VenueType: "mt5", Bid: ask - 0.5, Ask: ask, Time: time.Now(), VenueSymbol: "XAUUSDm"})
+	// D-562 S2：入场闸吃双腿实时报价——卖腿（binance:perp）报价补喂（顺价>0：bid>mt ask）。
+	qb.Publish(bus.Quote{Symbol: "XAUUSDT", Venue: "binance", VenueType: "perp", Bid: ask + 5, Ask: ask + 6, Time: time.Now(), VenueSymbol: "XAUUSDT"})
 	svc := dashboard.New(nil, qb, nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, nil, nil, nil, 0, nil, nil, 0, 0, nil)
 	svc.SetLegContractSize(func(venueKey, venueSymbol string) (float64, bool) {
 		if venueKey == "277842155:mt5" {

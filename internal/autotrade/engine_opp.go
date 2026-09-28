@@ -1,11 +1,11 @@
 package autotrade
 
 import (
+	"arb/internal/bus"
 	"arb/internal/keydomain"
 	"context"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"arb/internal/exec"
@@ -141,41 +141,39 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 	}
 	log.Printf("[autotrade] pass filter opp=%s type=%s netBps=%.2f", opp.ID, opp.Type, opp.NetBps)
 
-	// D-335 v2：安全边际闸——顺价深度 ≤ 24h 摆幅半径 = 摆幅内开仓负期望（485/488 实证）。
-	// monitor 符号约定 entry_spread_bps=(binance bid−exness ask)/ask，本结构顺价=正值（单向判定无绝对值）。
-	// 数据缺失/过期 fail-open + warn（期望值过滤非风险保护；止损链独立管命）。manual 路径不拦
-	//（advisory 管钱 vs D-328 risk-gate 管命，设计显式裁定，防未来误同步）。
-	// D-473：FUNDING_HEDGE 不适用——monitor 安全边际语义专指 MT×CEX 顺价差。
+	// D-335 v2 安全边际闸（D-562 S2 三禁令②③清洗：判定只吃实时证据）——
+	// spread=qbus 双腿实时报价现算（符号约定沿 monitor：(cex bid−mt ask)/mt ask，顺价=正值
+	// 单向判定无绝对值）；双腿任一缺报价=fail-closed 拒开（禁轮询簿当即时判据）。
+	// noise_bps（24h 摆幅统计）退位=统计/出仓管理面（paper 轨退出判定与 dossier 最坏场景
+	// 继续消费 monitor 行——展示/统计合法），入场判定不再比较摆幅半径（实时顺价>0 即入：
+	// 「现在能不能安全进」本该看瞬时；摆幅统计归噪声管理，出仓才需要）。
+	// manual 路径不拦（advisory 管钱 vs D-328 risk-gate 管命，设计显式裁定，防未来误同步）。
+	// D-473：FUNDING_HEDGE 不适用——安全边际语义专指 MT×CEX 顺价差。
 	if opp.Type == "XASSET_CARRY" {
-		// D-423：反向组合（CEX 为买腿/无 MT 腿）monitor 方向未定义 → 拒开（钉死防放行）。
-		cexVenue, mtVenue := xassetLegVenues(opp.VenueBuy, opp.VenueSell)
+		// D-423：反向组合（CEX 为买腿/无 MT 腿）方向未定义 → 拒开（钉死防放行）。
+		_, mtVenue := xassetLegVenues(opp.VenueBuy, opp.VenueSell)
 		if mtVenue == "" || !isMTVenue(opp.VenueBuy) {
-			log.Printf("[autotrade] skip %s: 反向/无MT腿组合 monitor 方向未定义 (%s×%s，拒开)", opp.ID, opp.VenueBuy, opp.VenueSell)
+			log.Printf("[autotrade] skip %s: 反向/无MT腿组合 方向未定义 (%s×%s，拒开)", opp.ID, opp.VenueBuy, opp.VenueSell)
 			return
 		}
-		// pair 键以 monitor 工具存储现值为准（"XAUUSDT-XAU"，S2 钉死）：第二段=canonical 去 USD 后缀。
-		pairKey := opp.Canonical
-		if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
-			pairKey = *opp.CanonicalSell + "-" + strings.TrimSuffix(opp.Canonical, "USD")
+		cexBid, okC := bus.Quote{}, false
+		mtAsk, okM := bus.Quote{}, false
+		if e.quotes != nil { // quotes 未装配（部分构造测试）=无实时证据→fail-closed 同缺报价
+			// 卖腿 canonical（opp.CanonicalSell 回退 canonical）与买腿 canonical 各查各腿
+			// （跨 canonical 对——D-300 同构；键=symbol×venueKey）。
+			cexBid, okC = e.quotes.Latest(sellCanonicalForGate(opp), opp.VenueSell)
+			mtAsk, okM = e.quotes.Latest(opp.Canonical, opp.VenueBuy)
 		}
-		// D-423：查询键三元组化 + 反 fail-open——行缺/noise NULL/查询错 → 拒开
-		// （借用他所簿=假安全边际，498 实证开仓即收）。
-		if entryBps, noiseBps, _, _, ok, err := e.store.LatestXAssetEntryGate(ctx, pairKey, cexVenue, mtVenue, xassetEntryGateMaxAge); err != nil {
-			log.Printf("[autotrade] skip %s: safety margin query (%s,%s,%s): %v (fail-closed 拒开)", opp.ID, pairKey, cexVenue, mtVenue, err)
+		if !okC || !okM || cexBid.Bid <= 0 || mtAsk.Ask <= 0 {
+			log.Printf("[autotrade] skip %s: 实时报价缺 (%s=%v %s=%v) (fail-closed 拒开，D-562 禁轮询簿判入场)", opp.ID, opp.VenueSell, okC, opp.VenueBuy, okM)
 			return
-		} else if !ok {
-			log.Printf("[autotrade] skip %s: no monitor data (%s,%s,%s) (fail-closed 拒开)", opp.ID, pairKey, cexVenue, mtVenue)
-			return
-		} else {
-			switch {
-			case entryBps <= 0:
-				log.Printf("[autotrade] skip %s: safety margin entry %.2fbps <= 0 (逆价不开)", opp.ID, entryBps)
-				return
-			case entryBps <= noiseBps:
-				log.Printf("[autotrade] skip %s: safety margin entry %.2fbps <= noise %.2fbps (摆幅内不开)", opp.ID, entryBps, noiseBps)
-				return
-			}
 		}
+		entryBps := (cexBid.Bid - mtAsk.Ask) / mtAsk.Ask * 1e4
+		if entryBps <= 0 {
+			log.Printf("[autotrade] skip %s: safety margin entry %.2fbps <= 0 (逆价不开，实时双腿)", opp.ID, entryBps)
+			return
+		}
+		log.Printf("[autotrade] pass safety margin opp=%s entry=%.2fbps (实时双腿 cexBid=%.4g mtAsk=%.4g)", opp.ID, entryBps, cexBid.Bid, mtAsk.Ask)
 	}
 
 	notionalUSD := effectiveNotionalUSD(e.cfg.NotionalUSD, xassetSpec) // D-367 S4
@@ -255,6 +253,14 @@ func computeBuyQty(opp pgstore.Opportunity, notionalUSD float64, usdPerLot func(
 		return 0, 0, true
 	}
 	return notionalUSD / perLot, perLot, false
+}
+
+// sellCanonicalForGate 卖腿 canonical（nil/空回退 canonical——与 pairKey 拼装同约定）。
+func sellCanonicalForGate(opp pgstore.Opportunity) string {
+	if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
+		return *opp.CanonicalSell
+	}
+	return opp.Canonical
 }
 
 // xassetEntryGateMaxAge D-335：monitor 行龄上限（5min 采集节奏的 6 倍容差）；过期 fail-open。
