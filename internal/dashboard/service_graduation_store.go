@@ -44,6 +44,8 @@ type graduationStore interface {
 	ListXAssetAllowCombosAll(ctx context.Context) ([]pgstore.XAssetComboAdminRow, error)
 	UpdateXAssetAllowCombo(ctx context.Context, r *pgstore.XAssetComboAdminRow) (bool, error)
 	ListOpenPositionsForCombo(ctx context.Context, canonicalBuy, canonicalSell, venueBuy, venueSell string) ([]int64, float64, error)
+	// D-544：非 mt×cex 结构 ticks 簿锚（ASOF 双腿对齐 adverse 成本 p95）。
+	TickAdverseBasisP95(ctx context.Context, buyVenueKey, buySym, sellVenueKey, sellSym string, since time.Time) (float64, bool, error)
 }
 
 // gradDB 存储取用：测试可注入 gradStore 替身，生产回落 s.store（单一真源）。

@@ -20,6 +20,10 @@ import (
 // riskTickMaxAge dossier 价格源 staleness 闸（B-012：与 paperCfdMonitorMaxAge 同口径 5min）。
 const riskTickMaxAge = 5 * time.Minute
 
+// riskBasisP95Window D-544：ticks 簿 adverse basis p95 尾部窗（≈monitor 簿实深 +
+// 约束扫描成本——ticks 按小时分区，7d 成本可控）。
+const riskBasisP95Window = 7 * 24 * time.Hour
+
 // riskLegSpec 腿级输入（venue_key + venue 原生 symbol + 方向）。
 type riskLegSpec struct {
 	venueKey, symbol, role string // role=buy|sell
@@ -199,8 +203,36 @@ func (s *Service) graduationRiskReport(ctx context.Context, legs []riskLegSpec, 
 			eg("adverse_basis_p95_usd", v1.EvidenceGrade_EVIDENCE_GRADE_D)
 		}
 	} else {
-		gaps = append(gaps, "非 mt×cex 结构无 monitor 簿锚（p95 缺）")
-		eg("adverse_basis_p95_usd", v1.EvidenceGrade_EVIDENCE_GRADE_D)
+		// D-544：非 mt×cex 结构改走 ticks 簿实算锚（monitor 簿 schema 硬绑 mt×cex，
+		// 而 ticks venue_type∈{mt5,perp,spot} 三型全流=等效簿）。
+		var buyLeg, sellLeg *riskLegSpec
+		for i := range legs {
+			switch legs[i].role {
+			case "buy":
+				buyLeg = &legs[i]
+			case "sell":
+				sellLeg = &legs[i]
+			}
+		}
+		if buyLeg == nil || sellLeg == nil {
+			gaps = append(gaps, "非 mt×cex 结构无 monitor 簿锚（p95 缺）")
+			eg("adverse_basis_p95_usd", v1.EvidenceGrade_EVIDENCE_GRADE_D)
+		} else if p95, ok, err := s.gradDB().TickAdverseBasisP95(ctx,
+			buyLeg.venueKey, buyLeg.symbol, sellLeg.venueKey, sellLeg.symbol,
+			now.Add(-riskBasisP95Window)); err == nil && ok {
+			// 语义差注记（与 monitor 簿值口径不同=设计内）：monitor p95=离散采样点
+			// 入场价差；tick 路径=连续 adverse 成本序列（含双腿 spread crossing）
+			// →更保守，恰合 adverse anchor 用途；数据为实算仍 B 级。
+			v := p95 * notional / 1e4
+			if v < 0 {
+				v = -v
+			}
+			rep.AdverseBasisP95Usd = &v
+			eg("adverse_basis_p95_usd", v1.EvidenceGrade_EVIDENCE_GRADE_B)
+		} else {
+			gaps = append(gaps, fmt.Sprintf("ticks 簿无 %s×%s 对齐样本（p95 缺）", buyLeg.venueKey, sellLeg.venueKey))
+			eg("adverse_basis_p95_usd", v1.EvidenceGrade_EVIDENCE_GRADE_D)
+		}
 	}
 	// roundtrip_fee：paper 真费优先（D-474a 分腿真值）；缺→NULL 标缺（禁常数费）。
 	if paper != nil && paper.EstRoundTripFeeUSD != nil {

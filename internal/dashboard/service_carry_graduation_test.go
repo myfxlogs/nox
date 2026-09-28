@@ -41,18 +41,21 @@ type fakeGradDB struct {
 	allowRows     []pgstore.XAssetAllowRow
 	facts         map[string][]fact.Fact // venue|symbol → facts（S5 interval 活读）
 	// D-471 S1/S2/S3：dossier/复检/管理面测试面。
-	ticks      map[string]pgstore.TickRow // venue|venue_type|symbol → tick
-	universe   map[string]pgstore.CexUniverseRow
-	fundingWin map[string][]pgstore.FactPoint // venue|symbol → funding 预测流
-	p95        float64
-	p95OK      bool
-	snaps      []pgstore.VenueAccountLatest
-	exchCfgs   []pgstore.ExchangeConfig // D-542：实拉校准配置源测试面
-	adminRows  []pgstore.XAssetComboAdminRow
-	comboOpen  map[string][]int64 // canonicalBuy|venueBuy → 在持仓 posIDs
-	comboOpenN map[string]float64
-	updated    *pgstore.XAssetComboAdminRow
-	updateErr  error
+	ticks           map[string]pgstore.TickRow // venue|venue_type|symbol → tick
+	universe        map[string]pgstore.CexUniverseRow
+	fundingWin      map[string][]pgstore.FactPoint // venue|symbol → funding 预测流
+	p95             float64
+	p95OK           bool
+	tickP95         map[string]float64 // D-544：buyVK|buySym|sellVK|sellSym → p95
+	tickP95Calls    int                // T3 回归锚：tick 路径调用计数
+	monitorP95Calls int                // T3 回归锚：monitor 路径调用计数
+	snaps           []pgstore.VenueAccountLatest
+	exchCfgs        []pgstore.ExchangeConfig // D-542：实拉校准配置源测试面
+	adminRows       []pgstore.XAssetComboAdminRow
+	comboOpen       map[string][]int64 // canonicalBuy|venueBuy → 在持仓 posIDs
+	comboOpenN      map[string]float64
+	updated         *pgstore.XAssetComboAdminRow
+	updateErr       error
 }
 
 func (f *fakeGradDB) GetCarryGraduation(context.Context, int64) (*pgstore.CarryGraduation, error) {
@@ -141,7 +144,18 @@ func (f *fakeGradDB) FundingPredWindow(_ context.Context, venue, symbol string, 
 	return f.fundingWin[venue+"|"+symbol], nil
 }
 func (f *fakeGradDB) XAssetMonitorSpreadP95(context.Context, string, string) (float64, bool, error) {
+	f.monitorP95Calls++
 	return f.p95, f.p95OK, nil
+}
+
+// D-544 fake 面：ticks 簿 p95（键=buyVK|sellVK → (p95, ok)）。
+func (f *fakeGradDB) TickAdverseBasisP95(_ context.Context, buyVenueKey, buySym, sellVenueKey, sellSym string, _ time.Time) (float64, bool, error) {
+	f.tickP95Calls++
+	if f.tickP95 == nil {
+		return 0, false, nil
+	}
+	v, ok := f.tickP95[buyVenueKey+"|"+buySym+"|"+sellVenueKey+"|"+sellSym]
+	return v, ok, nil
 }
 func (f *fakeGradDB) LatestVenueAccountSnapshots(context.Context) ([]pgstore.VenueAccountLatest, error) {
 	return f.snaps, nil
@@ -303,7 +317,7 @@ func TestD403_Approve_Guards(t *testing.T) {
 	if resp.Msg.Ok || f.combo != nil {
 		t.Error("重载器未接线应 fail-closed 且不写库")
 	}
-	// notional 显式非正
+	// notional 显式非正（此处只验 s 拒绝路径，f 无断言面→_ 接收防 SA4006）
 	_, s = gradFixture("long_cfd_short_perp")
 	neg := -1.0
 	resp, _ = s.ApproveCarryGraduation(context.Background(), connect.NewRequest(&v1.ApproveCarryGraduationRequest{GraduationId: 5, MaxLongQty: 1, MaxShortQty: 1, MaxGrossUsd: 100, NotionalUsd: &neg}))
