@@ -57,6 +57,7 @@ type fakeGradDB struct {
 	comboOpenN      map[string]float64
 	updated         *pgstore.XAssetComboAdminRow
 	updateErr       error
+	allowRules      []pgstore.AutotradeAllowRule // D-557：venue 规则 join 测试面
 }
 
 func (f *fakeGradDB) GetCarryGraduation(context.Context, int64) (*pgstore.CarryGraduation, error) {
@@ -164,6 +165,10 @@ func (f *fakeGradDB) LatestVenueAccountSnapshots(context.Context) ([]pgstore.Ven
 }
 func (f *fakeGradDB) ListExchangeConfigs(context.Context) ([]pgstore.ExchangeConfig, error) {
 	return f.exchCfgs, nil
+}
+
+func (f *fakeGradDB) ListAutotradeAllowRulesAll(context.Context) ([]pgstore.AutotradeAllowRule, error) {
+	return f.allowRules, nil
 }
 func (f *fakeGradDB) ListXAssetAllowCombosAll(context.Context) ([]pgstore.XAssetComboAdminRow, error) {
 	return f.adminRows, nil

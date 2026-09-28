@@ -40,6 +40,8 @@ type graduationStore interface {
 	LatestVenueAccountSnapshots(ctx context.Context) ([]pgstore.VenueAccountLatest, error)
 	// D-542：实拉校准配置源（livePoolQuerier 经代理链建 CEXAccountQuerier）。
 	ListExchangeConfigs(ctx context.Context) ([]pgstore.ExchangeConfig, error)
+	// D-557 S1：venue 行 join 通道白名单（allow_rule_id/enabled 透出）。
+	ListAutotradeAllowRulesAll(ctx context.Context) ([]pgstore.AutotradeAllowRule, error)
 	// D-471 S3：白名单管理面（全量行/行锁更新/在持仓查询）。
 	ListXAssetAllowCombosAll(ctx context.Context) ([]pgstore.XAssetComboAdminRow, error)
 	UpdateXAssetAllowCombo(ctx context.Context, r *pgstore.XAssetComboAdminRow) (bool, error)

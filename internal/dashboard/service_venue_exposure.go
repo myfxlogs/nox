@@ -27,6 +27,25 @@ func (s *Service) ListVenueExposureCaps(ctx context.Context, _ *connect.Request[
 	snaps, _ := s.gradDB().LatestVenueAccountSnapshots(ctx)
 	existing, _ := s.gradDB().LoadXAssetAllowCombos(ctx, "live")
 	allocated := exposureSumOf(existing)
+	// D-557 S1：venue_key→通道白名单规则 join（同 venue 规则 sim/real 双行取 real 优先；
+	// 读失败降级空 map 不拖垮闸表透出——join 面非执法面）。
+	venueRules := map[string]pgstore.AutotradeAllowRule{}
+	if rules, rerr := s.gradDB().ListAutotradeAllowRulesAll(ctx); rerr == nil {
+		for _, r := range rules {
+			if r.Kind != "venue" {
+				continue
+			}
+			if prev, ok := venueRules[r.Value]; !ok || (prev.Simulated && !r.Simulated) {
+				venueRules[r.Value] = r
+			}
+		}
+	}
+	joinRule := func(row *v1.VenueExposureCapRow) {
+		if r, ok := venueRules[row.VenueKey]; ok {
+			row.AllowRuleId = r.ID
+			row.AllowEnabled = r.Enabled
+		}
+	}
 	out := make([]*v1.VenueExposureCapRow, 0, len(caps))
 	for _, c := range caps {
 		row := &v1.VenueExposureCapRow{
@@ -45,12 +64,15 @@ func (s *Service) ListVenueExposureCaps(ctx context.Context, _ *connect.Request[
 			row.LiveSource = poolSource(p)
 			row.LiveUpdatedAt = timestamppb.New(p.at)
 		}
+		joinRule(row)
 		out = append(out, row)
 	}
 	for _, key := range s.unsetCapKeys(ctx, caps) {
-		out = append(out, &v1.VenueExposureCapRow{
+		row := &v1.VenueExposureCapRow{
 			VenueKey: key, Unset: true, Note: "未设闸（approve 放行+warn；建议显式设上限）",
-		})
+		}
+		joinRule(row)
+		out = append(out, row)
 	}
 	return connect.NewResponse(&v1.ListVenueExposureCapsResponse{Rows: out}), nil
 }
