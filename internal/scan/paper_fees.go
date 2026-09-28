@@ -38,6 +38,21 @@ func paperPerpLegRoundTripUSD(venue string, qtyUSD float64) *float64 {
 	return &v
 }
 
+// PaperSpotPerpFeeUSD D-555 S2：双CEX spot×perp 四笔往返费（spot 进+出+perp 开+平；
+// 任一 venue 未覆盖→nil 拒填）。导出与 PaperPerpPerpFeeUSD 同族（同表单源）。
+func PaperSpotPerpFeeUSD(spotVenue, perpVenue string, qtyUSD float64) *float64 {
+	fs, ok := venueTakerBps[spotVenue]
+	if !ok {
+		return nil
+	}
+	fp, ok2 := venueTakerBps[perpVenue]
+	if !ok2 {
+		return nil
+	}
+	v := qtyUSD * (2*fs.spot + 2*fp.perp) / 1e4
+	return &v
+}
+
 // PaperPerpPerpFeeUSD perp×perp 四笔：两所各往返（任一 venue 未覆盖→nil 拒填）。
 // （导出：tools/universe-radar 轨复用，D-474a S2）。
 func PaperPerpPerpFeeUSD(shortVenue, longVenue string, qtyUSD float64) *float64 {
