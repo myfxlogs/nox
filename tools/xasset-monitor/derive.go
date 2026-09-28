@@ -19,7 +19,10 @@ import (
 // loadDerivationInputs D-472 S5：派生入参两查询（enabled 组合行+TRADING universe 行）。
 func loadDerivationInputs(ctx context.Context, st *pgstore.Store) ([]allowComboRow, []universeRow, error) {
 	var combos []allowComboRow
-	rows, err := st.Pool().Query(ctx, `SELECT canonical_buy, venue_buy, canonical_sell, venue_sell
+	// D-552 S1：SELECT venue_key_* 生成列（D-496 键域权威口径）——裸列 venue_buy/sell
+	// 在拆列后=裸号/裸名（"3001157"/"gate"），IsMTKey 全 false → mt×cex 组合误判同所
+	// 拒采 → monitor 簿停写 49h（回归实证见 derive_test T3）。
+	rows, err := st.Pool().Query(ctx, `SELECT canonical_buy, venue_key_buy, canonical_sell, venue_key_sell
 		FROM xasset_allow_combos WHERE enabled = true ORDER BY id`)
 	if err != nil {
 		return nil, nil, fmt.Errorf("list combos: %w", err)
