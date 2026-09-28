@@ -48,6 +48,13 @@ type Service struct {
 	acv            appConfigView // D-523：键视图快照+自杀重启注入（定义 service_appconfig.go）
 	// D-545：密钥热读缓存（SetSecretResolver 注入；nil=未装配→Update 仅写库，热读点 fail-closed）。
 	secRes *config.SecretResolver
+	// D-546：资金全景三缺口实拉（CapitalMap 树用；60s 进程缓存=页面开即实拉、窗口内零
+	// REST——A4 计数锚）。缺省 RPC 内自装配 binance real spot 行；测试注入计数 fake。
+	capGaps       CapitalGapFetcher
+	capGapsMu     sync.Mutex
+	capGapsCache  *reconcile.CapitalGaps
+	capGapsAt     time.Time
+	capGapsTTLDur time.Duration
 
 	// settler 结算触发（D-087 §3.2，手动平仓后调）。nil = 未接线（RPC 仍可用，仅不结算）。
 	settler Settler
