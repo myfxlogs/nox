@@ -421,6 +421,12 @@ const (
 	// DashboardServiceSelfRestartProcedure is the fully-qualified name of the DashboardService's
 	// SelfRestart RPC.
 	DashboardServiceSelfRestartProcedure = "/arb.dashboard.v1.DashboardService/SelfRestart"
+	// DashboardServiceListAppSecretsProcedure is the fully-qualified name of the DashboardService's
+	// ListAppSecrets RPC.
+	DashboardServiceListAppSecretsProcedure = "/arb.dashboard.v1.DashboardService/ListAppSecrets"
+	// DashboardServiceUpdateAppSecretProcedure is the fully-qualified name of the DashboardService's
+	// UpdateAppSecret RPC.
+	DashboardServiceUpdateAppSecretProcedure = "/arb.dashboard.v1.DashboardService/UpdateAppSecret"
 )
 
 // DashboardServiceClient is a client for the arb.dashboard.v1.DashboardService service.
@@ -607,6 +613,9 @@ type DashboardServiceClient interface {
 	ListAppConfig(context.Context, *connect.Request[dashboardv1.ListAppConfigRequest]) (*connect.Response[dashboardv1.ListAppConfigResponse], error)
 	UpdateAppConfig(context.Context, *connect.Request[dashboardv1.UpdateAppConfigRequest]) (*connect.Response[dashboardv1.UpdateAppConfigResponse], error)
 	SelfRestart(context.Context, *connect.Request[dashboardv1.SelfRestartRequest]) (*connect.Response[dashboardv1.SelfRestartResponse], error)
+	// D-545：app_secrets 密钥管理面（值永不回传；Update 空值=删行+热更同步）。
+	ListAppSecrets(context.Context, *connect.Request[dashboardv1.ListAppSecretsRequest]) (*connect.Response[dashboardv1.ListAppSecretsResponse], error)
+	UpdateAppSecret(context.Context, *connect.Request[dashboardv1.UpdateAppSecretRequest]) (*connect.Response[dashboardv1.UpdateAppSecretResponse], error)
 }
 
 // NewDashboardServiceClient constructs a client for the arb.dashboard.v1.DashboardService service.
@@ -1400,6 +1409,18 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("SelfRestart")),
 			connect.WithClientOptions(opts...),
 		),
+		listAppSecrets: connect.NewClient[dashboardv1.ListAppSecretsRequest, dashboardv1.ListAppSecretsResponse](
+			httpClient,
+			baseURL+DashboardServiceListAppSecretsProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ListAppSecrets")),
+			connect.WithClientOptions(opts...),
+		),
+		updateAppSecret: connect.NewClient[dashboardv1.UpdateAppSecretRequest, dashboardv1.UpdateAppSecretResponse](
+			httpClient,
+			baseURL+DashboardServiceUpdateAppSecretProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("UpdateAppSecret")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1535,6 +1556,8 @@ type dashboardServiceClient struct {
 	listAppConfig                   *connect.Client[dashboardv1.ListAppConfigRequest, dashboardv1.ListAppConfigResponse]
 	updateAppConfig                 *connect.Client[dashboardv1.UpdateAppConfigRequest, dashboardv1.UpdateAppConfigResponse]
 	selfRestart                     *connect.Client[dashboardv1.SelfRestartRequest, dashboardv1.SelfRestartResponse]
+	listAppSecrets                  *connect.Client[dashboardv1.ListAppSecretsRequest, dashboardv1.ListAppSecretsResponse]
+	updateAppSecret                 *connect.Client[dashboardv1.UpdateAppSecretRequest, dashboardv1.UpdateAppSecretResponse]
 }
 
 // ListLatestQuotes calls arb.dashboard.v1.DashboardService.ListLatestQuotes.
@@ -2190,6 +2213,16 @@ func (c *dashboardServiceClient) SelfRestart(ctx context.Context, req *connect.R
 	return c.selfRestart.CallUnary(ctx, req)
 }
 
+// ListAppSecrets calls arb.dashboard.v1.DashboardService.ListAppSecrets.
+func (c *dashboardServiceClient) ListAppSecrets(ctx context.Context, req *connect.Request[dashboardv1.ListAppSecretsRequest]) (*connect.Response[dashboardv1.ListAppSecretsResponse], error) {
+	return c.listAppSecrets.CallUnary(ctx, req)
+}
+
+// UpdateAppSecret calls arb.dashboard.v1.DashboardService.UpdateAppSecret.
+func (c *dashboardServiceClient) UpdateAppSecret(ctx context.Context, req *connect.Request[dashboardv1.UpdateAppSecretRequest]) (*connect.Response[dashboardv1.UpdateAppSecretResponse], error) {
+	return c.updateAppSecret.CallUnary(ctx, req)
+}
+
 // DashboardServiceHandler is an implementation of the arb.dashboard.v1.DashboardService service.
 type DashboardServiceHandler interface {
 	// 快照类
@@ -2374,6 +2407,9 @@ type DashboardServiceHandler interface {
 	ListAppConfig(context.Context, *connect.Request[dashboardv1.ListAppConfigRequest]) (*connect.Response[dashboardv1.ListAppConfigResponse], error)
 	UpdateAppConfig(context.Context, *connect.Request[dashboardv1.UpdateAppConfigRequest]) (*connect.Response[dashboardv1.UpdateAppConfigResponse], error)
 	SelfRestart(context.Context, *connect.Request[dashboardv1.SelfRestartRequest]) (*connect.Response[dashboardv1.SelfRestartResponse], error)
+	// D-545：app_secrets 密钥管理面（值永不回传；Update 空值=删行+热更同步）。
+	ListAppSecrets(context.Context, *connect.Request[dashboardv1.ListAppSecretsRequest]) (*connect.Response[dashboardv1.ListAppSecretsResponse], error)
+	UpdateAppSecret(context.Context, *connect.Request[dashboardv1.UpdateAppSecretRequest]) (*connect.Response[dashboardv1.UpdateAppSecretResponse], error)
 }
 
 // NewDashboardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -3163,6 +3199,18 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("SelfRestart")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceListAppSecretsHandler := connect.NewUnaryHandler(
+		DashboardServiceListAppSecretsProcedure,
+		svc.ListAppSecrets,
+		connect.WithSchema(dashboardServiceMethods.ByName("ListAppSecrets")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dashboardServiceUpdateAppSecretHandler := connect.NewUnaryHandler(
+		DashboardServiceUpdateAppSecretProcedure,
+		svc.UpdateAppSecret,
+		connect.WithSchema(dashboardServiceMethods.ByName("UpdateAppSecret")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/arb.dashboard.v1.DashboardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DashboardServiceListLatestQuotesProcedure:
@@ -3425,6 +3473,10 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceUpdateAppConfigHandler.ServeHTTP(w, r)
 		case DashboardServiceSelfRestartProcedure:
 			dashboardServiceSelfRestartHandler.ServeHTTP(w, r)
+		case DashboardServiceListAppSecretsProcedure:
+			dashboardServiceListAppSecretsHandler.ServeHTTP(w, r)
+		case DashboardServiceUpdateAppSecretProcedure:
+			dashboardServiceUpdateAppSecretHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -3952,4 +4004,12 @@ func (UnimplementedDashboardServiceHandler) UpdateAppConfig(context.Context, *co
 
 func (UnimplementedDashboardServiceHandler) SelfRestart(context.Context, *connect.Request[dashboardv1.SelfRestartRequest]) (*connect.Response[dashboardv1.SelfRestartResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SelfRestart is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ListAppSecrets(context.Context, *connect.Request[dashboardv1.ListAppSecretsRequest]) (*connect.Response[dashboardv1.ListAppSecretsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListAppSecrets is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) UpdateAppSecret(context.Context, *connect.Request[dashboardv1.UpdateAppSecretRequest]) (*connect.Response[dashboardv1.UpdateAppSecretResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.UpdateAppSecret is not implemented"))
 }

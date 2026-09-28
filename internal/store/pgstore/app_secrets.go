@@ -5,6 +5,7 @@ package pgstore
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"arb/internal/cryptoutil"
 )
@@ -50,6 +51,37 @@ func (s *Store) UpsertAppSecret(ctx context.Context, key string, valueEnc []byte
 		`INSERT INTO app_secrets (key, value_enc, note) VALUES ($1,$2,$3)
 		 ON CONFLICT (key) DO UPDATE SET value_enc=EXCLUDED.value_enc, note=EXCLUDED.note, updated_at=now()`,
 		key, valueEnc, note)
+	return err
+}
+
+// AppSecretRow app_secrets 行元数据（值永不透出——管理面只画 has_value/note/updated_at）。
+type AppSecretRow struct {
+	Key       string
+	Note      string
+	UpdatedAt time.Time
+}
+
+// ListAppSecretRows 全表行元数据（D-545 ListAppSecrets 数据源；value_enc 不出库）。
+func (s *Store) ListAppSecretRows(ctx context.Context) ([]AppSecretRow, error) {
+	rows, err := s.pool.Query(ctx, `SELECT key, note, updated_at FROM app_secrets`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []AppSecretRow
+	for rows.Next() {
+		var r AppSecretRow
+		if err := rows.Scan(&r.Key, &r.Note, &r.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// DeleteAppSecret 删行（D-545 UpdateAppSecret 空值=清除语义）。
+func (s *Store) DeleteAppSecret(ctx context.Context, key string) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM app_secrets WHERE key=$1`, key)
 	return err
 }
 

@@ -28,7 +28,7 @@ func TestAccountCollector_HookPanicRecover(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, "")
+	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, func() string { return "" })
 	panicked := false
 	c.SetOnAccountFetched(func(ctx context.Context, rewardNumSun int64) {
 		panicked = true
@@ -63,7 +63,7 @@ func TestAccountCollector_HookCalled(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, "")
+	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, func() string { return "" })
 	var gotReward int64
 	c.SetOnAccountFetched(func(ctx context.Context, rewardNumSun int64) {
 		gotReward = rewardNumSun
@@ -101,7 +101,7 @@ func TestAccountCollector_TrionscanFailCarryPrevReward(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, "")
+	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, func() string { return "" })
 
 	// 第一次 Poll：tronscan 成功，rewardNum=15000000。
 	if _, err := c.Poll(context.Background()); err != nil {
@@ -147,7 +147,7 @@ func TestAccountCollector_RewardChangeFiresOnChange(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, "")
+	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, func() string { return "" })
 	fired := 0
 	c.SetOnChange(func() { fired++ })
 

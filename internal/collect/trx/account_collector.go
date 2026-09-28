@@ -15,18 +15,19 @@ import (
 
 // AccountCollector 采集账户快照：getaccount + getaccountresource 拼合质押量。
 type AccountCollector struct {
-	address, base, apiKey, tronscanBase string
-	store                               *pgstore.Store
-	onChange                            func() // D-231 S5：指纹变化回调（nil=未接线）
-	lastFingerprint                     string
-	firstPoll                           bool // D-231 S5：首轮不触发（指纹未知）
+	address, base, tronscanBase string
+	apiKey                      func() string
+	store                       *pgstore.Store
+	onChange                    func() // D-231 S5：指纹变化回调（nil=未接线）
+	lastFingerprint             string
+	firstPoll                   bool // D-231 S5：首轮不触发（指纹未知）
 	// D-293 S2：领奖条件触发 hook——每轮采到 rewardNumSun 后调用（nil=未接线）。
 	// hook panic 由调用方 recover 包裹，不得拖垮采集主循环。
 	onAccountFetched func(ctx context.Context, rewardNumSun int64)
 }
 
 // NewAccountCollector 创建账户快照采集器。address 为 base58 监控地址。
-func NewAccountCollector(address string, store *pgstore.Store, base, tronscanBase, apiKey string) *AccountCollector {
+func NewAccountCollector(address string, store *pgstore.Store, base, tronscanBase string, apiKey func() string) *AccountCollector {
 	if base == "" {
 		base = DefaultBase
 	}
@@ -50,7 +51,7 @@ func (c *AccountCollector) Kind() string { return "trx_account" }
 
 // Poll 采集账户快照并写入 fin_trx_account。返回 nil facts（P2-1）。
 func (c *AccountCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
-	body, err := tronPost(ctx, c.base, c.apiKey, "/wallet/getaccount",
+	body, err := tronPost(ctx, c.base, c.apiKey(), "/wallet/getaccount",
 		fmt.Sprintf(`{"address":"%s","visible":true}`, c.address))
 	if err != nil {
 		return nil, fmt.Errorf("trx getaccount: %w", err)
@@ -60,7 +61,7 @@ func (c *AccountCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 		return nil, fmt.Errorf("trx getaccount unmarshal: %w", err)
 	}
 
-	body2, err := tronPost(ctx, c.base, c.apiKey, "/wallet/getaccountresource",
+	body2, err := tronPost(ctx, c.base, c.apiKey(), "/wallet/getaccountresource",
 		fmt.Sprintf(`{"address":"%s","visible":true}`, c.address))
 	if err != nil {
 		return nil, fmt.Errorf("trx getaccountresource: %w", err)

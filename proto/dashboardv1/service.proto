@@ -5,6 +5,7 @@ package arb.dashboard.v1;
 option go_package = "arb/internal/gen/dashboardv1;dashboardv1";
 
 import "dashboardv1/app_config.proto";
+import "dashboardv1/app_secrets.proto";
 import "dashboardv1/account.proto";
 import "dashboardv1/alerting_events.proto";
 import "dashboardv1/broker_admin.proto";
@@ -233,4 +234,8 @@ service DashboardService {
   rpc ListAppConfig(ListAppConfigRequest) returns (ListAppConfigResponse);
   rpc UpdateAppConfig(UpdateAppConfigRequest) returns (UpdateAppConfigResponse);
   rpc SelfRestart(SelfRestartRequest) returns (SelfRestartResponse);
+
+  // D-545：app_secrets 密钥管理面（值永不回传；Update 空值=删行+热更同步）。
+  rpc ListAppSecrets(ListAppSecretsRequest) returns (ListAppSecretsResponse);
+  rpc UpdateAppSecret(UpdateAppSecretRequest) returns (UpdateAppSecretResponse);
 }

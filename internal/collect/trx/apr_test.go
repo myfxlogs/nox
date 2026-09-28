@@ -263,7 +263,7 @@ func TestAccountCollector_FingerprintOnChange(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, "")
+	c := NewAccountCollector("TWsbXR6SPvvXPxUtPMQvEj7AMH55555555", st, srv.URL, srv.URL, func() string { return "" })
 	c.SetOnChange(func() { onChangeCalled = true; callCount++ })
 
 	// 首轮：firstPoll=true → 不触发（指纹未知，下轮自然恢复比较）
