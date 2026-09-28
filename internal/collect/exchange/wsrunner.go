@@ -57,6 +57,14 @@ type WSSpec struct {
 	URLs   []string
 	Dialer *websocket.Dialer // 适配层供给（wsDialer/httpx.WSDialer）；nil=裸默认直连
 	Header http.Header       // 显式握手鉴权头（binance=x-proxy-token；nil=显式无头）
+	// Candidates 候选级装配（D-541 S3）：非空时代替 URLs/URL+Dialer/Header——
+	// 每候选独立拨号件（直连兜底位=裸 dialer+nil header）。
+	Candidates []WSCandidate
+	// 冷却降级（D-541 S3，测试可覆写）：同候选连续 CooldownKills 次数据看门狗杀
+	// →冷却 CooldownWindow（冷却期 dial 跳过该候选）；到期自动回主——主端恒优先，
+	// 兜底只在主端僵尸期顶位。零值=默认 2 次/30min。
+	CooldownKills  int
+	CooldownWindow time.Duration
 
 	InitialSubs func() []any      // 首连+每重连订阅帧集（逐帧经 Sender.Send 发出）
 	OnFrame     func(data []byte) // 数据帧分发（ack/无关帧由实现方自滤）
@@ -82,8 +90,10 @@ func RunWS(ctx context.Context, spec WSSpec) {
 	if backoff == 0 {
 		backoff = quoteWSReconnectBackoff
 	}
+	st := &wsCandState{} // 冷却记忆跨重连持久（D-541 S3）
+	st.cur.Store(-1)
 	for {
-		if err := runWSOnce(ctx, spec); err != nil {
+		if err := runWSOnceSt(ctx, spec, st); err != nil {
 			if spec.OnReconnect != nil {
 				spec.OnReconnect() // D-507 meter fail-loud（每连接一 meter，单 goroutine 持有）
 			}
@@ -97,29 +107,39 @@ func RunWS(ctx context.Context, spec WSSpec) {
 	}
 }
 
-// runWSOnce 单次连接：dial（显式 header）→OnConnect→逐帧发 InitialSubs→ping 保活→读循环。
+// runWSOnce 单次连接（无记忆：测试直调——新建冷却态等价语义）。
 func runWSOnce(ctx context.Context, spec WSSpec) error {
-	dialer := spec.Dialer
-	if dialer == nil {
-		dialer = &websocket.Dialer{Proxy: http.ProxyFromEnvironment, HandshakeTimeout: 10 * time.Second}
-	}
-	urls := spec.URLs
-	if len(urls) == 0 {
-		urls = []string{spec.URL}
-	}
+	st := &wsCandState{}
+	st.cur.Store(-1)
+	return runWSOnceSt(ctx, spec, st)
+}
+
+// runWSOnceSt 单次连接：dial（候选级，冷却序选+逐候选拨号件）→OnConnect→
+// 逐帧发 InitialSubs→ping 保活（数据看门狗杀记候选冷却/早候选到期回主）→读循环。
+func runWSOnceSt(ctx context.Context, spec WSSpec, st *wsCandState) error {
+	cands := specCandidates(spec)
 	var conn *websocket.Conn
 	var err error
 	var lastURL string
-	for _, u := range urls {
-		lastURL = u
-		conn, _, err = dialer.DialContext(ctx, u, spec.Header)
+	st.cur.Store(-1)
+	st.dataKil.Store(false)
+	defer st.noteExit(spec) // 归因只在主流程这一处写
+	for _, i := range st.dialOrder(len(cands)) {
+		c := cands[i]
+		lastURL = c.URL
+		dialer := c.Dialer
+		if dialer == nil {
+			dialer = &websocket.Dialer{Proxy: http.ProxyFromEnvironment, HandshakeTimeout: 10 * time.Second}
+		}
+		conn, _, err = dialer.DialContext(ctx, c.URL, c.Header)
 		if err == nil {
+			st.cur.Store(int32(i))
 			break
 		}
 		if ctx.Err() != nil {
 			break // ctx 取消——不再试下一候选
 		}
-		log.Printf("[%s] dial %s failed: %v（尝试下一候选）", spec.Name, u, err)
+		log.Printf("[%s] dial %s failed: %v（尝试下一候选）", spec.Name, c.URL, err)
 	}
 	if err != nil {
 		return fmt.Errorf("dial %s: %w", lastURL, err)
@@ -175,6 +195,13 @@ func runWSOnce(ctx context.Context, spec WSSpec) error {
 				if elapsed := time.Since(time.Unix(0, lastDataAt.Load())); elapsed > dataIdle {
 					// D-532 S3：kill 归因——与「对端 1006/readIdle 读超时」日志可区分。
 					log.Printf("[%s] data watchdog: no data frames for %v (>%v), closing to force reconnect", spec.Name, elapsed, dataIdle)
+					st.dataKil.Store(true) // D-541 S3：僵尸杀归当前候选（连续达阈→冷却）
+					_ = conn.Close()
+					return
+				}
+				// D-541 S3 回主：兜底连接在服而早候选冷却已到期→断连重拨（主端恒优先）。
+				if st.cur.Load() > 0 && st.earlierReady() {
+					log.Printf("[%s] 早候选冷却到期——断开兜底连接回主", spec.Name)
 					_ = conn.Close()
 					return
 				}
