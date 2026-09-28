@@ -37,7 +37,10 @@ type Gate struct {
 	// autotrade_log 全量审计不受节流影响）。
 	lastMarginWarn   map[string]time.Time
 	lastMarginWarnMu sync.Mutex
-	swapArb          *atomic.Pointer[swapArbComboSnapshot] // D-515 S5：表热读快照共享指针（nil=回退 cfg）
+	// D-560 S3：拒单签名熔断（key=dedupKey|class；内存态重启重置可接受）。
+	breaker   map[string]*rejectEntry
+	breakerMu sync.Mutex
+	swapArb   *atomic.Pointer[swapArbComboSnapshot] // D-515 S5：表热读快照共享指针（nil=回退 cfg）
 }
 
 // NewGate 创建门禁。
@@ -236,6 +239,14 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 		return GateResult{Status: "REJECTED", Reason: rv.Reason}
 	}
 
+	// D-560 S3：签名熔断——活动窗内只跳执行（上方闸检查已照跑，fail-closed 不破），
+	// 每窗只写 1 行 PAUSED 审计行（洪峰归零）。
+	if be := g.breakerCheck(intent.DedupKey); be != nil {
+		g.breakerLogOnce(ctx, intent, be)
+		log.Printf("[autotrade] breaker skip %s class=%s resume=%s", intent.DedupKey, be.Class, be.ResumeAt.Format("15:04"))
+		return GateResult{Status: "REJECTED", Reason: "breaker " + be.Class}
+	}
+
 	// 执行
 	status, msg, posID := intent.Execute(ctx)
 
@@ -257,6 +268,9 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 			log.Printf("[autotrade] gate Abort %s: %s", intent.DedupKey, msg)
 		}
 		g.marginWarnThrottled(ctx, *intent, msg) // D-472 S3：资金拒单→业主 warn（≥6h 节流）
+		g.breakerNote(intent.DedupKey, msg)      // D-560 S3：签名熔断记账
+	} else if status == "EXECUTED" {
+		g.breakerPass(intent.DedupKey) // D-560 S3：探测成功=复位清态
 	}
 	// D-508 写路径审计契约：审计落库失败 fail-open+声张（log+warn 告警）。
 	auditWarn(ctx, g.store, "InsertAutotradeLog gate result", g.store.InsertAutotradeLog(ctx, logEntry))

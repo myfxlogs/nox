@@ -10,7 +10,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"arb/internal/capitalview"
@@ -90,21 +89,21 @@ const marginWarnInterval = 6 * time.Hour
 // binance/gate 新写照此）；venue 原文 "Margin is insufficient" 与强平闸 "liq-distance"
 // 大小写不敏感同规则匹配。
 func (g *Gate) marginWarnThrottled(ctx context.Context, intent TradeIntent, msg string) {
-	low := strings.ToLower(msg)
-	if !strings.Contains(low, "margin insufficient") &&
-		!strings.Contains(low, "margin is insufficient") &&
-		!strings.Contains(low, "liq-distance") {
+	if !errclass.IsFundingRejectMsg(msg) { // D-560：判据提为 errclass 共享件（透出块同调）
 		return
 	}
 	// D-556：节流键追加解析出的腿 venue——同组合不同账户各提醒（业主要知道给谁注资）。
 	leg := alertLeg(msg, intent.VenueBuy, intent.VenueSell)
+	// D-560 S2a：warn 尾部追加可行解法行（D-556 白话文/泛化文双路同追加，
+	// 全部由拒文实数推导，非资金拒文/字段缺=""）。
 	if plain := fundingAlertText(intent, msg, g.venueAlias); plain != "" {
-		g.warnThrottled(ctx, intent, leg, plain)
+		g.warnThrottled(ctx, intent, leg, plain+errclass.FundingOptionsText(msg))
 		return
 	}
 	g.warnThrottled(ctx, intent, leg,
-		fmt.Sprintf("[资金拒单] %s %s net=%.1fbps: %s（≥6h 节流，重复见 autotrade_log）",
-			intent.Strategy, intent.Canonical, intent.NetBps, errclass.TruncateNote(msg, 120)))
+		fmt.Sprintf("[资金拒单] %s %s net=%.1fbps: %s（≥6h 节流，重复见 autotrade_log）%s",
+			intent.Strategy, intent.Canonical, intent.NetBps, errclass.TruncateNote(msg, 120),
+			errclass.FundingOptionsText(msg)))
 }
 
 // warnThrottled D-472 节流本体（D-556 起 key=canonical|buy|sell|leg venue）：

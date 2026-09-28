@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/errclass"
 	"arb/internal/exec"
 	"arb/internal/safego"
 	"arb/internal/settlement"
@@ -275,6 +276,17 @@ func (e *Engine) KickSwapArb() {
 	case e.factsKick <- struct{}{}:
 	default:
 	}
+}
+
+// BreakerSnapshot D-560 S3：拒单熔断只读快照透出（dashboard pending/combos 三字段源）。
+// key=dedupKey|class；返回在活动窗条目。
+func (e *Engine) BreakerSnapshot() map[string]errclass.RejectBreakerInfo {
+	return e.gate.BreakerSnapshot()
+}
+
+// ResumeBreaker D-560 S3：ResumeXAssetCombo 行为=清该 dedupKey 全部熔断态。
+func (e *Engine) ResumeBreaker(dedupKey string) int {
+	return e.gate.ResumeBreaker(dedupKey)
 }
 
 // dedupCapHalf D-508 S5：告警去重集无界 map 上限（fundingNeedSent/marginAlertSent/
