@@ -31,17 +31,24 @@ import (
 
 // BinanceMarketWS Binance 公开行情 WS（D-517：fstream 端点拆分三连接订阅）。
 type BinanceMarketWS struct {
-	cfg        Config
-	publicURLs []string // perp bookTicker → /public/ws（D-517 fstream 拆分：高频盘口类）；有序候选
-	marketURLs []string // perp markPrice → /market/ws（常规行情类）；同上
-	spotURLs   []string // 同上
-	dialer     *websocket.Dialer
-	header     http.Header
-	now        func() time.Time
+	cfg         Config
+	publicCands []WSCandidate // perp bookTicker → /public/ws（D-517 fstream 拆分：高频盘口类）；有序候选
+	marketCands []WSCandidate // perp markPrice → /market/ws（常规行情类）；同上
+	spotCands   []WSCandidate // 同上
+	dialer      *websocket.Dialer
+	header      http.Header
+	now         func() time.Time
 	// emitFacts D-509：funding fact 发射口（FactEmitter 去重节流；nil=不 emit）。
 	emitFacts func(ctx context.Context, fs []fact.Fact) error
 	// intervals D-509 S2：funding 周期缓存（fundingInfo 真值；nil=回退 3/天）。
 	intervals *FundingIntervalCache
+	// D-551 S2 现货订阅过滤面：infoURL=exchangeInfo 端点（默认 vision 公开域）；client
+	// 按 host 收敛 token（代理=cfg.Client/原生=裸）；validSpot=有效符号缓存（nil=fail-open）。
+	spotInfoURL    string
+	spotInfoClient *http.Client
+	validSpot      map[string]struct{}
+	infoOnce       sync.Once
+	spotInfoFetch  func(ctx context.Context, url string) (map[string]struct{}, error) // 测试注入点；nil=实拉 spotInfoURL
 }
 
 // NewBinanceMarketWS 创建采集器（host 取 cfg.BinanceBaseURL scheme+host）。
@@ -63,15 +70,55 @@ func NewBinanceMarketWS(cfg Config) *BinanceMarketWS {
 	//（同路径后缀映射；主端恢复后每连接尝试自主端起=自动回主）。
 	// D-519 D6：备端 scheme 与 normWSBase 同语义归一（https→wss/http→ws/ws·wss 原样——
 	// 内网明文备端 ws:// 不得被升 wss）。
+	proxyHosts := map[string]bool{u.Host: true}
 	if b := normWSBase(os.Getenv("BINANCE_PROXY_URL_BACKUP")); b != "" {
 		publicURLs = append(publicURLs, b+"/public/ws")
 		marketURLs = append(marketURLs, b+"/market/ws")
 		spotURLs = append(spotURLs, b+"/spotws/ws")
+		if bu, err := url.Parse(b); err == nil {
+			proxyHosts[bu.Host] = true
+		}
+	}
+	// D-551 S1 逐流 env 覆盖：置位=env URL 前插首选候选，派生代理降候选#2；
+	// 未置位=全量现行为零默认变更。
+	if v := strings.TrimSpace(os.Getenv("ARB_BINANCE_PERP_PUBLIC_WS_URL")); v != "" {
+		publicURLs = append([]string{v}, publicURLs...)
+	}
+	if v := strings.TrimSpace(os.Getenv("ARB_BINANCE_PERP_MARKET_WS_URL")); v != "" {
+		marketURLs = append([]string{v}, marketURLs...)
+	}
+	if v := strings.TrimSpace(os.Getenv("ARB_BINANCE_SPOT_WS_URL")); v != "" {
+		spotURLs = append([]string{v}, spotURLs...)
+	}
+	// D-551 S1 token 收敛：X-Proxy-Token 仅对代理 host 发出（币安原生端点空头）。
+	toCands := func(urls []string) []WSCandidate {
+		cs := make([]WSCandidate, len(urls))
+		for i, raw := range urls {
+			var hdr http.Header
+			if pu, err := url.Parse(raw); err == nil && proxyHosts[pu.Host] {
+				hdr = h
+			}
+			cs[i] = WSCandidate{URL: raw, Dialer: d, Header: hdr}
+		}
+		return cs
+	}
+	spotInfoURL := cfg.BinanceSpotInfoURL
+	if spotInfoURL == "" {
+		spotInfoURL = os.Getenv("ARB_BINANCE_SPOT_INFO_URL")
+	}
+	if spotInfoURL == "" {
+		spotInfoURL = "https://data-api.binance.vision/api/v3/exchangeInfo"
+	}
+	// D-551 S2 token 收敛（REST 同裁定）：infoURL 指币安原生域换裸客户端防泄；
+	// 指回代理 host 仍须 token+自签 CA（cfg.Client 同源）。
+	spotInfoClient := cfg.Client
+	if pu, err := url.Parse(spotInfoURL); err == nil && !proxyHosts[pu.Host] {
+		spotInfoClient = &http.Client{Timeout: 10 * time.Second}
 	}
 	return &BinanceMarketWS{
-		cfg:        cfg,
-		publicURLs: publicURLs, marketURLs: marketURLs, spotURLs: spotURLs,
-		dialer: d, header: h, now: time.Now,
+		cfg:         cfg,
+		publicCands: toCands(publicURLs), marketCands: toCands(marketURLs), spotCands: toCands(spotURLs),
+		dialer: d, header: h, now: time.Now, spotInfoURL: spotInfoURL, spotInfoClient: spotInfoClient,
 	}
 }
 
@@ -88,15 +135,16 @@ func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
 	// 单订阅存活 ≥10min 零断；D-529 双拆随聚合流天然单连接退役。
 	safego.Go("binance_market_ws:perp-public", func() {
 		defer wg.Done()
-		b.runLoop(ctx, b.publicURLs, "perp", "bookTicker", publish)
+		b.runLoop(ctx, b.publicCands, "perp", "bookTicker", publish)
 	})
 	safego.Go("binance_market_ws:perp-market", func() {
 		defer wg.Done()
-		b.runLoop(ctx, b.marketURLs, "perp", "markPrice", publish)
+		b.runLoop(ctx, b.marketCands, "perp", "markPrice", publish)
 	})
 	safego.Go("binance_market_ws:spot", func() {
 		defer wg.Done()
-		b.runLoop(ctx, b.spotURLs, "spot", "bookTicker", publish)
+		b.ensureSpotInfo(ctx) // D-551 S2：首连前建立现货有效符号缓存
+		b.runLoop(ctx, b.spotCands, "spot", "bookTicker", publish)
 	})
 	wg.Wait()
 }
@@ -106,10 +154,10 @@ func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
 // D-517 R1：kind=连接流类别（bookTicker|markPrice），venueType 恒喂 QuoteBus
 // perp/spot——连接身份与 venue 语义分离（venueType 污染=QuoteBus 键断供）。
 // D-535：perp bookTicker 订阅单帧 "!bookTicker" 聚合流（全市场同事件格式直转下游）。
-func (b *BinanceMarketWS) runLoop(ctx context.Context, urls []string, venueType, kind string, publish func(bus.Quote)) {
-	meter := newReconnectMeter(venueType+":"+kind+":"+urls[0], b.cfg.AlertFn) // D-507 S2 扩：同款风暴告警
+func (b *BinanceMarketWS) runLoop(ctx context.Context, cands []WSCandidate, venueType, kind string, publish func(bus.Quote)) {
+	meter := newReconnectMeter(venueType+":"+kind+":"+cands[0].URL, b.cfg.AlertFn) // D-507 S2 扩：同款风暴告警
 	RunWS(ctx, WSSpec{
-		Name: "binance-mkt-ws:" + venueType + ":" + kind, URLs: urls, Dialer: b.dialer, Header: b.header,
+		Name: "binance-mkt-ws:" + venueType + ":" + kind, Candidates: cands,
 		InitialSubs: func() []any {
 			var params []string
 			if venueType == "perp" && kind == "bookTicker" {
@@ -121,6 +169,9 @@ func (b *BinanceMarketWS) runLoop(ctx context.Context, urls []string, venueType,
 				syms := b.cfg.effectiveSymbols("binance")
 				params = make([]string, 0, len(syms))
 				for _, sym := range syms {
+					if venueType == "spot" && !b.spotOK(sym) {
+						continue // D-551 S2：现货不存在符号不订（白占上游突发宽度）
+					}
 					// D-517：按 kind 出订阅参数——bookTicker→public 路由、markPrice→market
 					// 路由（funding 是 perp 语义，spot 连接恒 bookTicker 不进此分支）。
 					// kind 不 lowercase：新端点流名大小写敏感（实证 btcusdt@markprice
@@ -151,50 +202,6 @@ func (b *BinanceMarketWS) runLoop(ctx context.Context, urls []string, venueType,
 		},
 		OnReconnect: meter.record,
 	})
-}
-
-// bookTickerFrame 双形制统一投影（perp 带 e/T/E 包裹、spot 裸 u/s/b/B/a/A——取交集字段）。
-// bookTickerFrame 手工取键：载荷同时含 b(价)/B(量)、a(价)/A(量)——Go json tag
-// 大小写不敏感回退会令 "B" 覆盖 "b" 绑定（实测 bid=2.5=量），禁 struct tag 直解。
-type bookTickerFrame struct {
-	S  string
-	B  string // bid 价（小写 b）
-	A  string // ask 价（小写 a）
-	BQ string // bid 量（大写 B）
-	AQ string // ask 量（大写 A）
-	T  int64  // perp 有；spot 零值→本地 now
-}
-
-func parseBookTicker(data []byte) (bookTickerFrame, bool) {
-	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
-		return bookTickerFrame{}, false
-	}
-	// D-535：!bookTicker 聚合流帧带 {"stream","data"} 包裹层——下钻到 data；
-	// 裸帧（spot/逐符号形制）无 data 键原样透用，双形兼容。
-	if d, ok := m["data"].(map[string]any); ok {
-		m = d
-	}
-	f := bookTickerFrame{}
-	if v, ok := m["s"].(string); ok {
-		f.S = v
-	}
-	if v, ok := m["b"].(string); ok {
-		f.B = v
-	}
-	if v, ok := m["a"].(string); ok {
-		f.A = v
-	}
-	if v, ok := m["B"].(string); ok {
-		f.BQ = v
-	}
-	if v, ok := m["A"].(string); ok {
-		f.AQ = v
-	}
-	if v, ok := m["T"].(float64); ok {
-		f.T = int64(v)
-	}
-	return f, f.S != "" && f.B != "" && f.A != ""
 }
 
 func (b *BinanceMarketWS) handleBookTicker(data []byte, venueType string, publish func(bus.Quote)) {
