@@ -27,6 +27,12 @@ func d406Engine(s *pgstore.Store, qb *bus.QuoteBus, maxPerDay int) *Engine {
 	svc := dashboard.New(s, qb, nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, nil, nil, nil, 0, nil, nil, 0, 0, nil)
 	svc.SetLegContractSize(func(_, _ string) (float64, bool) { return 100, true })
 	svc.SetCexContractSize(func(_, _ string) (float64, bool) { return 1.0, true })
+	// D-549：CEX 执行链资金数=活账本/REST 实拉（快照兜底禁用）——喂 ws 活值
+	// （快照行仍留 buffer_multiple 隐含率锚 + MT 腿净值/free_margin）。
+	led := bus.NewBalanceLedger()
+	svc.SetBalanceLedger(led)
+	led.Put("binance:perp", 1500, 2000, "USD", "ws", time.Now())
+	led.Put("okx:unified", 1500, 2000, "USD", "ws", time.Now())
 	return &Engine{
 		store: s, service: svc, quotes: qb,
 		fundingBreach:  map[int64]int{},
