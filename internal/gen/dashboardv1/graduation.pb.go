@@ -636,8 +636,15 @@ type XAssetAllowComboRow struct {
 	Enabled       bool                   `protobuf:"varint,10,opt,name=enabled,proto3" json:"enabled,omitempty"`
 	Simulated     *bool                  `protobuf:"varint,11,opt,name=simulated,proto3,oneof" json:"simulated,omitempty"`
 	Note          string                 `protobuf:"bytes,12,opt,name=note,proto3" json:"note,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// D-547 S3④：实时字段——在仓敞口/双腿池可用/闸冲突。
+	ActiveNotionalUsd float64                `protobuf:"fixed64,13,opt,name=active_notional_usd,json=activeNotionalUsd,proto3" json:"active_notional_usd,omitempty"` // Σ在仓金额（同 approve 闸口径）
+	BuyPoolUsd        float64                `protobuf:"fixed64,14,opt,name=buy_pool_usd,json=buyPoolUsd,proto3" json:"buy_pool_usd,omitempty"`                      // 买腿池可用（live 账本/校准/快照链）
+	SellPoolUsd       float64                `protobuf:"fixed64,15,opt,name=sell_pool_usd,json=sellPoolUsd,proto3" json:"sell_pool_usd,omitempty"`                   // 卖腿池可用
+	PoolSource        string                 `protobuf:"bytes,16,opt,name=pool_source,json=poolSource,proto3" json:"pool_source,omitempty"`                          // ws|rest|snap|""（池缺取=空）
+	PoolUpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,17,opt,name=pool_updated_at,json=poolUpdatedAt,proto3" json:"pool_updated_at,omitempty"`
+	CapConflict       bool                   `protobuf:"varint,18,opt,name=cap_conflict,json=capConflict,proto3" json:"cap_conflict,omitempty"` // 任一腿池缺/可用<notional×2 → 结构冲突红标
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *XAssetAllowComboRow) Reset() {
@@ -752,6 +759,48 @@ func (x *XAssetAllowComboRow) GetNote() string {
 		return x.Note
 	}
 	return ""
+}
+
+func (x *XAssetAllowComboRow) GetActiveNotionalUsd() float64 {
+	if x != nil {
+		return x.ActiveNotionalUsd
+	}
+	return 0
+}
+
+func (x *XAssetAllowComboRow) GetBuyPoolUsd() float64 {
+	if x != nil {
+		return x.BuyPoolUsd
+	}
+	return 0
+}
+
+func (x *XAssetAllowComboRow) GetSellPoolUsd() float64 {
+	if x != nil {
+		return x.SellPoolUsd
+	}
+	return 0
+}
+
+func (x *XAssetAllowComboRow) GetPoolSource() string {
+	if x != nil {
+		return x.PoolSource
+	}
+	return ""
+}
+
+func (x *XAssetAllowComboRow) GetPoolUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.PoolUpdatedAt
+	}
+	return nil
+}
+
+func (x *XAssetAllowComboRow) GetCapConflict() bool {
+	if x != nil {
+		return x.CapConflict
+	}
+	return false
 }
 
 type ListXAssetAllowCombosResponse struct {
@@ -1325,15 +1374,22 @@ func (x *PreviewXAssetComboRiskResponse) GetRisk() *GraduationRiskReport {
 
 // D-475a S6：venue 敞口闸消息（cap=0=冻结新批准不动存量；enabled=false=闸停用行在档）。
 type VenueExposureCapRow struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	VenueKey      string                 `protobuf:"bytes,1,opt,name=venue_key,json=venueKey,proto3" json:"venue_key,omitempty"`
-	CapUsd        float64                `protobuf:"fixed64,2,opt,name=cap_usd,json=capUsd,proto3" json:"cap_usd,omitempty"`
-	Enabled       bool                   `protobuf:"varint,3,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	Note          string                 `protobuf:"bytes,4,opt,name=note,proto3" json:"note,omitempty"`
-	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	Unset         bool                   `protobuf:"varint,6,opt,name=unset,proto3" json:"unset,omitempty"` // D-542：合成占位行——已配置账户但闸表无行（显式提示未设闸，非冻结语义）
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	VenueKey  string                 `protobuf:"bytes,1,opt,name=venue_key,json=venueKey,proto3" json:"venue_key,omitempty"`
+	CapUsd    float64                `protobuf:"fixed64,2,opt,name=cap_usd,json=capUsd,proto3" json:"cap_usd,omitempty"`
+	Enabled   bool                   `protobuf:"varint,3,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Note      string                 `protobuf:"bytes,4,opt,name=note,proto3" json:"note,omitempty"`
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Unset     bool                   `protobuf:"varint,6,opt,name=unset,proto3" json:"unset,omitempty"` // D-542：合成占位行——已配置账户但闸表无行（显式提示未设闸，非冻结语义）
+	// D-547 S3①：闸真相——live 金额面值（allocated=Σ在仓金额，口径同 approve 闸）。
+	AllocatedUsd     float64                `protobuf:"fixed64,7,opt,name=allocated_usd,json=allocatedUsd,proto3" json:"allocated_usd,omitempty"`
+	LiveAvailableUsd float64                `protobuf:"fixed64,8,opt,name=live_available_usd,json=liveAvailableUsd,proto3" json:"live_available_usd,omitempty"` // 池可用余额（live 账本/校准/快照链）
+	LiveEquityUsd    float64                `protobuf:"fixed64,9,opt,name=live_equity_usd,json=liveEquityUsd,proto3" json:"live_equity_usd,omitempty"`
+	LiveSource       string                 `protobuf:"bytes,10,opt,name=live_source,json=liveSource,proto3" json:"live_source,omitempty"` // ws|rest|snap|""（池缺取=空）
+	LiveUpdatedAt    *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=live_updated_at,json=liveUpdatedAt,proto3" json:"live_updated_at,omitempty"`
+	OverCap          bool                   `protobuf:"varint,12,opt,name=over_cap,json=overCap,proto3" json:"over_cap,omitempty"` // allocated>cap（静态闸已过载，红标警示）
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *VenueExposureCapRow) Reset() {
@@ -1404,6 +1460,48 @@ func (x *VenueExposureCapRow) GetUpdatedAt() *timestamppb.Timestamp {
 func (x *VenueExposureCapRow) GetUnset() bool {
 	if x != nil {
 		return x.Unset
+	}
+	return false
+}
+
+func (x *VenueExposureCapRow) GetAllocatedUsd() float64 {
+	if x != nil {
+		return x.AllocatedUsd
+	}
+	return 0
+}
+
+func (x *VenueExposureCapRow) GetLiveAvailableUsd() float64 {
+	if x != nil {
+		return x.LiveAvailableUsd
+	}
+	return 0
+}
+
+func (x *VenueExposureCapRow) GetLiveEquityUsd() float64 {
+	if x != nil {
+		return x.LiveEquityUsd
+	}
+	return 0
+}
+
+func (x *VenueExposureCapRow) GetLiveSource() string {
+	if x != nil {
+		return x.LiveSource
+	}
+	return ""
+}
+
+func (x *VenueExposureCapRow) GetLiveUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LiveUpdatedAt
+	}
+	return nil
+}
+
+func (x *VenueExposureCapRow) GetOverCap() bool {
+	if x != nil {
+		return x.OverCap
 	}
 	return false
 }
@@ -2710,7 +2808,7 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\rFieldEvidence\x12\x14\n" +
 	"\x05field\x18\x01 \x01(\tR\x05field\x125\n" +
 	"\x05grade\x18\x02 \x01(\x0e2\x1f.arb.dashboard.v1.EvidenceGradeR\x05grade\"\x1e\n" +
-	"\x1cListXAssetAllowCombosRequest\"\xaf\x03\n" +
+	"\x1cListXAssetAllowCombosRequest\"\xad\x05\n" +
 	"\x13XAssetAllowComboRow\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12#\n" +
 	"\rcanonical_buy\x18\x02 \x01(\tR\fcanonicalBuy\x12\x1b\n" +
@@ -2726,7 +2824,15 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\aenabled\x18\n" +
 	" \x01(\bR\aenabled\x12!\n" +
 	"\tsimulated\x18\v \x01(\bH\x01R\tsimulated\x88\x01\x01\x12\x12\n" +
-	"\x04note\x18\f \x01(\tR\x04noteB\x0f\n" +
+	"\x04note\x18\f \x01(\tR\x04note\x12.\n" +
+	"\x13active_notional_usd\x18\r \x01(\x01R\x11activeNotionalUsd\x12 \n" +
+	"\fbuy_pool_usd\x18\x0e \x01(\x01R\n" +
+	"buyPoolUsd\x12\"\n" +
+	"\rsell_pool_usd\x18\x0f \x01(\x01R\vsellPoolUsd\x12\x1f\n" +
+	"\vpool_source\x18\x10 \x01(\tR\n" +
+	"poolSource\x12B\n" +
+	"\x0fpool_updated_at\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\rpoolUpdatedAt\x12!\n" +
+	"\fcap_conflict\x18\x12 \x01(\bR\vcapConflictB\x0f\n" +
 	"\r_notional_usdB\f\n" +
 	"\n" +
 	"_simulated\"Z\n" +
@@ -2784,7 +2890,7 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12?\n" +
 	"\x04risk\x18\x03 \x01(\v2&.arb.dashboard.v1.GraduationRiskReportH\x00R\x04risk\x88\x01\x01B\a\n" +
-	"\x05_risk\"\xca\x01\n" +
+	"\x05_risk\"\xc5\x03\n" +
 	"\x13VenueExposureCapRow\x12\x1b\n" +
 	"\tvenue_key\x18\x01 \x01(\tR\bvenueKey\x12\x17\n" +
 	"\acap_usd\x18\x02 \x01(\x01R\x06capUsd\x12\x18\n" +
@@ -2792,7 +2898,15 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x04note\x18\x04 \x01(\tR\x04note\x129\n" +
 	"\n" +
 	"updated_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x14\n" +
-	"\x05unset\x18\x06 \x01(\bR\x05unset\"\x1e\n" +
+	"\x05unset\x18\x06 \x01(\bR\x05unset\x12#\n" +
+	"\rallocated_usd\x18\a \x01(\x01R\fallocatedUsd\x12,\n" +
+	"\x12live_available_usd\x18\b \x01(\x01R\x10liveAvailableUsd\x12&\n" +
+	"\x0flive_equity_usd\x18\t \x01(\x01R\rliveEquityUsd\x12\x1f\n" +
+	"\vlive_source\x18\n" +
+	" \x01(\tR\n" +
+	"liveSource\x12B\n" +
+	"\x0flive_updated_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\rliveUpdatedAt\x12\x19\n" +
+	"\bover_cap\x18\f \x01(\bR\aoverCap\"\x1e\n" +
 	"\x1cListVenueExposureCapsRequest\"Z\n" +
 	"\x1dListVenueExposureCapsResponse\x129\n" +
 	"\x04rows\x18\x01 \x03(\v2%.arb.dashboard.v1.VenueExposureCapRowR\x04rows\"\x80\x01\n" +
@@ -2965,22 +3079,24 @@ var file_dashboardv1_graduation_proto_depIdxs = []int32{
 	2,  // 1: arb.dashboard.v1.GraduationRiskReport.legs:type_name -> arb.dashboard.v1.GraduationRiskLeg
 	4,  // 2: arb.dashboard.v1.GraduationRiskReport.field_grades:type_name -> arb.dashboard.v1.FieldEvidence
 	0,  // 3: arb.dashboard.v1.FieldEvidence.grade:type_name -> arb.dashboard.v1.EvidenceGrade
-	6,  // 4: arb.dashboard.v1.ListXAssetAllowCombosResponse.rows:type_name -> arb.dashboard.v1.XAssetAllowComboRow
-	10, // 5: arb.dashboard.v1.ListXAssetPendingEntriesResponse.rows:type_name -> arb.dashboard.v1.XAssetPendingEntryRow
-	3,  // 6: arb.dashboard.v1.PreviewXAssetComboRiskResponse.risk:type_name -> arb.dashboard.v1.GraduationRiskReport
-	34, // 7: arb.dashboard.v1.VenueExposureCapRow.updated_at:type_name -> google.protobuf.Timestamp
-	15, // 8: arb.dashboard.v1.ListVenueExposureCapsResponse.rows:type_name -> arb.dashboard.v1.VenueExposureCapRow
-	1,  // 9: arb.dashboard.v1.ListCarryGraduationsResponse.rows:type_name -> arb.dashboard.v1.CarryGraduationRow
-	24, // 10: arb.dashboard.v1.ApproveCarryGraduationResponse.leg_pools:type_name -> arb.dashboard.v1.GradLegPoolRow
-	34, // 11: arb.dashboard.v1.GradLegPoolRow.updated_at:type_name -> google.protobuf.Timestamp
-	34, // 12: arb.dashboard.v1.PerpFundingAdmissionRow.evaluated_at:type_name -> google.protobuf.Timestamp
-	34, // 13: arb.dashboard.v1.PerpFundingAdmissionRow.updated_at:type_name -> google.protobuf.Timestamp
-	27, // 14: arb.dashboard.v1.ListPerpFundingAdmissionResponse.rows:type_name -> arb.dashboard.v1.PerpFundingAdmissionRow
-	15, // [15:15] is the sub-list for method output_type
-	15, // [15:15] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	34, // 4: arb.dashboard.v1.XAssetAllowComboRow.pool_updated_at:type_name -> google.protobuf.Timestamp
+	6,  // 5: arb.dashboard.v1.ListXAssetAllowCombosResponse.rows:type_name -> arb.dashboard.v1.XAssetAllowComboRow
+	10, // 6: arb.dashboard.v1.ListXAssetPendingEntriesResponse.rows:type_name -> arb.dashboard.v1.XAssetPendingEntryRow
+	3,  // 7: arb.dashboard.v1.PreviewXAssetComboRiskResponse.risk:type_name -> arb.dashboard.v1.GraduationRiskReport
+	34, // 8: arb.dashboard.v1.VenueExposureCapRow.updated_at:type_name -> google.protobuf.Timestamp
+	34, // 9: arb.dashboard.v1.VenueExposureCapRow.live_updated_at:type_name -> google.protobuf.Timestamp
+	15, // 10: arb.dashboard.v1.ListVenueExposureCapsResponse.rows:type_name -> arb.dashboard.v1.VenueExposureCapRow
+	1,  // 11: arb.dashboard.v1.ListCarryGraduationsResponse.rows:type_name -> arb.dashboard.v1.CarryGraduationRow
+	24, // 12: arb.dashboard.v1.ApproveCarryGraduationResponse.leg_pools:type_name -> arb.dashboard.v1.GradLegPoolRow
+	34, // 13: arb.dashboard.v1.GradLegPoolRow.updated_at:type_name -> google.protobuf.Timestamp
+	34, // 14: arb.dashboard.v1.PerpFundingAdmissionRow.evaluated_at:type_name -> google.protobuf.Timestamp
+	34, // 15: arb.dashboard.v1.PerpFundingAdmissionRow.updated_at:type_name -> google.protobuf.Timestamp
+	27, // 16: arb.dashboard.v1.ListPerpFundingAdmissionResponse.rows:type_name -> arb.dashboard.v1.PerpFundingAdmissionRow
+	17, // [17:17] is the sub-list for method output_type
+	17, // [17:17] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_dashboardv1_graduation_proto_init() }

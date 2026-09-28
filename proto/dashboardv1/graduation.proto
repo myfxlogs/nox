@@ -72,6 +72,13 @@ message XAssetAllowComboRow {
   string canonical_sell = 4; string venue_sell = 5;
   double max_long_qty = 6; double max_short_qty = 7; double max_gross_usd = 8;
   optional double notional_usd = 9; bool enabled = 10; optional bool simulated = 11; string note = 12;
+  // D-547 S3④：实时字段——在仓敞口/双腿池可用/闸冲突。
+  double active_notional_usd = 13;         // Σ在仓金额（同 approve 闸口径）
+  double buy_pool_usd = 14;                // 买腿池可用（live 账本/校准/快照链）
+  double sell_pool_usd = 15;               // 卖腿池可用
+  string pool_source = 16;                 // ws|rest|snap|""（池缺取=空）
+  google.protobuf.Timestamp pool_updated_at = 17;
+  bool cap_conflict = 18;                  // 任一腿池缺/可用<notional×2 → 结构冲突红标
 }
 message ListXAssetAllowCombosResponse { repeated XAssetAllowComboRow rows = 1; }
 
@@ -115,6 +122,13 @@ message VenueExposureCapRow {
   string venue_key = 1; double cap_usd = 2; bool enabled = 3; string note = 4;
   google.protobuf.Timestamp updated_at = 5;
   bool unset = 6;  // D-542：合成占位行——已配置账户但闸表无行（显式提示未设闸，非冻结语义）
+  // D-547 S3①：闸真相——live 金额面值（allocated=Σ在仓金额，口径同 approve 闸）。
+  double allocated_usd = 7;
+  double live_available_usd = 8;           // 池可用余额（live 账本/校准/快照链）
+  double live_equity_usd = 9;
+  string live_source = 10;                 // ws|rest|snap|""（池缺取=空）
+  google.protobuf.Timestamp live_updated_at = 11;
+  bool over_cap = 12;                      // allocated>cap（静态闸已过载，红标警示）
 }
 message ListVenueExposureCapsRequest {}
 message ListVenueExposureCapsResponse { repeated VenueExposureCapRow rows = 1; }

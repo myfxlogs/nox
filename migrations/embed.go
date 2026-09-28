@@ -288,4 +288,6 @@ var (
 	EndpointFossilSeedSQL string // D-543 补登：691544b2 只落文件未注册（从未应用）
 	//go:embed 0157_exposure_caps_seed.sql
 	ExposureCapsSeedSQL string
+	//go:embed 0159_exposure_cap_truth_fix.sql
+	ExposureCapTruthFixSQL string // D-547：组合帽对齐+okx 幽灵键重键名
 )

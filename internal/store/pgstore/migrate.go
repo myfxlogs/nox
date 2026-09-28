@@ -152,6 +152,7 @@ var migrationFiles = []struct {
 	{155, migrations.IdleFloorStreakSQL},               // D-534 B4：睡钱触发层连续天数状态表
 	{156, migrations.EndpointFossilSeedSQL},            // 化石批 691544b2 落了文件漏注册——D-543 补登（WHERE 守卫幂等，生产零行为变化）
 	{157, migrations.ExposureCapsSeedSQL},              // D-543：fin_venue_exposure_caps 种子五行（幂等）
+	{159, migrations.ExposureCapTruthFixSQL},           // D-547：组合帽对齐 2×notional+okx:unified→okx:perp 重键名
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
