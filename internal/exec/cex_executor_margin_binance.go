@@ -103,9 +103,9 @@ func (e *CEXExecutor) binanceMarkPrice(ctx context.Context, symbol string) (floa
 }
 
 // gateMarginPrecheck D-472 S2：gate perp 资金预检（原空实现返 nil 补实）。
-// signed GET /futures/usdt/accounts → available/total；杠杆两级（B-003）：账户级
-// leverage 字段 → venue 级缺省档（gateDefaultLeverage，缺省 5），不得 error——
-// 首仓必拒会让防线对未持仓组合永久失效（组合 13/14 实证尚未持仓）。
+// signed GET /futures/usdt/accounts → available/total；杠杆=venue 级目标档
+// （gateDefaultLeverage，D-563 S1 起零缺省 fail-closed——accounts 响应无 leverage
+// 字段，旧"账户级读回"路径是 phantom 杠杆兜底已删）。
 // requiredIM = o.Qty(base) × mark / leverage（quanto 已含在 price 定义内，禁二次乘）。
 func (e *CEXExecutor) binanceMMRTier1(ctx context.Context, symbol string) (float64, error) {
 	e.mmMu.Lock()

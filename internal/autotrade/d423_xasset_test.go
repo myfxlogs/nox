@@ -97,7 +97,7 @@ func TestD423_EntryGateFailClosed(t *testing.T) {
 	}
 	d335SeedRegime(t, s)
 	d330SeedDisabled(t, s)
-	e, opp, ctx := d335Engine(s) // opp=277842155:mt5×binance:perp
+	e, opp, ctx := d335Engine(s, 12) // opp=277842155:mt5×binance:perp
 	// 只种错 venue 行（okx:perp×277842155:mt5）——pair 同但 cex_venue 不同不得命中。
 	if _, err := s.Pool().Exec(ctx, `
 		INSERT INTO fin_xasset_monitor (pair, binance_bid, binance_ask, exness_bid, exness_ask,
@@ -127,7 +127,7 @@ func TestD423_ReverseComboRejected(t *testing.T) {
 	}
 	d335SeedRegime(t, s)
 	d330SeedDisabled(t, s)
-	e, opp, ctx := d335Engine(s)
+	e, opp, ctx := d335Engine(s, 12)
 	// 反向：买腿=binance:perp（CEX），卖腿=277842155:mt5（MT）——方向未定义拒开。
 	opp.VenueBuy, opp.VenueSell = "binance:perp", "277842155:mt5"
 	opp.ID = "XASSET_CARRY:XAUUSD:binance:perp:277842155:mt5"

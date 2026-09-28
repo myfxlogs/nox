@@ -395,9 +395,14 @@ func TestD311_HandleOpportunityXAssetPreIntercept(t *testing.T) {
 	}
 	mkEngine := func(allow []exec.XAssetComboAllowSpec) *Engine {
 		// dashboard.New 注入空 QuoteBus（裸 &Service{} 的 nil qbus 会在 USDPerLotForLeg panic）。
-		svc := dashboard.New(nil, bus.New(), nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, nil, nil, nil, 0, nil, nil, 0, 0, nil)
+		// D-563 S4a 涟漪适配：同一 qb 供 svc 定尺寸+engine 实时价差闸——
+		// 双腿新鲜报价 + cex bid 60.5 vs mt ask 60（entry≈83bps > monitor noise 9）。
+		qb := bus.New()
+		qb.Publish(bus.Quote{Symbol: "WTIUSD", Venue: "3001157", VenueType: "mt5", Bid: 59.9, Ask: 60.0, Time: time.Now()})
+		qb.Publish(bus.Quote{Symbol: "BTCUSDT", Venue: "gate", VenueType: "perp", Bid: 60.5, Ask: 60.6, Time: time.Now()})
+		svc := dashboard.New(nil, qb, nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, nil, nil, nil, 0, nil, nil, 0, 0, nil)
 		return &Engine{
-			store: s, service: svc,
+			store: s, service: svc, quotes: qb,
 			csMissCounts: map[string]int{}, csMissSent: map[string]time.Time{},
 			cfg: Config{
 				MinNetBps:         0,

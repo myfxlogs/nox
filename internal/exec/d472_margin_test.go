@@ -178,34 +178,46 @@ func (rt *d472GateRT) RoundTrip(req *http.Request) (*http.Response, error) {
 	return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: req}, nil
 }
 
-// TestD472_GateMargin 两级杠杆（B-003）+量纲锚（quanto 不二次乘）。
+// TestD472_GateMargin 目标杠杆注入档（D-563 S1：lev=venue 级配置唯一源，
+// accounts.leverage 字段不再读、无兜底缺省——未配置 fail-closed）+量纲锚（quanto 不二次乘）。
 // XPT_USDT quanto=0.001 实证：qty=1.0 base、mark=1000、lev=10 → need=100.00；
 // 若实现 qty×quanto×mark=0.1 即量纲错 0.001 倍，need 断言抓住。
 func TestD472_GateMargin(t *testing.T) {
-	// 第一级：accounts.leverage=10 → need=1×1000/10=100 ≤ 500×0.8=400 放行
+	// lev=10 → need=1×1000/10=100 ≤ 500×0.8=400 放行
 	e := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
-	e.client = &http.Client{Transport: &d472GateRT{accounts: `{"available":"500","total":"500","leverage":10}`, mark: "1000"}}
+	e.client = &http.Client{Transport: &d472GateRT{accounts: `{"available":"500","total":"500"}`, mark: "1000"}}
+	e.SetGateDefaultLeverage(10)
 	if err := e.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"}); err != nil {
 		t.Fatalf("lev=10 need=100 ≤ 400 应放行: %v", err)
 	}
 	// 量纲+拒：available=50 → need=100 > 40 拒，need 断言=100.00（非 0.1）
 	e2 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
-	e2.client = &http.Client{Transport: &d472GateRT{accounts: `{"available":"50","total":"50","leverage":10}`, mark: "1000"}}
+	e2.client = &http.Client{Transport: &d472GateRT{accounts: `{"available":"50","total":"50"}`, mark: "1000"}}
+	e2.SetGateDefaultLeverage(10)
 	err := e2.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"})
 	if err == nil || !strings.Contains(err.Error(), "gate margin insufficient") || !strings.Contains(err.Error(), "need 100.00") {
 		t.Fatalf("量纲锚 need=100.00（quanto 禁二次乘），got %v", err)
 	}
-	// 第二级：accounts 无 leverage 字段 → env 缺省档 5（不得 error）→ need=1×1000/5=200
+	// lev=5 → need=1×1000/5=200 ≤ 250×0.8=200 放行
 	e3 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e3.client = &http.Client{Transport: &d472GateRT{accounts: `{"available":"250","total":"250"}`, mark: "1000"}}
+	e3.SetGateDefaultLeverage(5)
 	if err := e3.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"}); err != nil {
-		t.Fatalf("账户级缺失应落 env 缺省档 lev=5（need=200 ≤ 200）放行: %v", err)
+		t.Fatalf("lev=5（need=200 ≤ 200）放行: %v", err)
 	}
 	e4 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e4.client = &http.Client{Transport: &d472GateRT{accounts: `{"available":"100","total":"100"}`, mark: "1000"}}
+	e4.SetGateDefaultLeverage(5)
 	err = e4.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"})
 	if err == nil || !strings.Contains(err.Error(), "lev 5") {
-		t.Fatalf("第二级缺省档 lev=5 应生效（need=200 > 80 拒），got %v", err)
+		t.Fatalf("lev=5 应生效（need=200 > 80 拒），got %v", err)
+	}
+	// 未配置 → fail-closed（零缺省，不兜底 5）
+	e7 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
+	e7.client = &http.Client{Transport: &d472GateRT{accounts: `{"available":"250","total":"250"}`, mark: "1000"}}
+	if err := e7.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"}); err == nil ||
+		!strings.Contains(err.Error(), "未配置") {
+		t.Fatalf("目标杠杆未配置应 fail-closed, got %v", err)
 	}
 	// SetGateDefaultLeverage 覆盖：lev=20 → need=50 ≤ 100×0.8=80 放行
 	e5 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
@@ -217,6 +229,7 @@ func TestD472_GateMargin(t *testing.T) {
 	// API err → fail-closed
 	e6 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e6.client = &http.Client{Transport: &d472GateRT{accounts: "", mark: "1000"}}
+	e6.SetGateDefaultLeverage(10)
 	if err := e6.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"}); err == nil {
 		t.Fatal("accounts 5xx 应 fail-closed 拒开")
 	}
@@ -225,7 +238,8 @@ func TestD472_GateMargin(t *testing.T) {
 // TestD472_GateCrossLiqGuard S4：gate 恒 cross → 占比闸（notional/equity）。
 func TestD472_GateCrossLiqGuard(t *testing.T) {
 	e := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
-	e.client = &http.Client{Transport: &d472GateRT{accounts: `{"available":"500","total":"100","leverage":10}`, mark: "1000"}}
+	e.client = &http.Client{Transport: &d472GateRT{accounts: `{"available":"500","total":"100"}`, mark: "1000"}}
+	e.SetGateDefaultLeverage(10)
 	e.SetLiqGuards(0.05, 0.3)
 	// qty=1 base、mark=1000 → notional=1000；equity=100 → ratio=10 > 0.3 拒
 	err := e.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"})

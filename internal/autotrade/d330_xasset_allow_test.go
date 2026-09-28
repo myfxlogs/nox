@@ -92,6 +92,12 @@ func d330XAUService(cs float64, ask float64) (*dashboard.Service, *bus.QuoteBus)
 	return svc, qb
 }
 
+// d330CexFreshQuote D-563 S4a：入场安全边际=双腿实时报价现算——cex 腿新鲜报价
+// （≈21bps > monitor noise 9），达 sizing 需显式播种（夹具不预播防串场）。
+func d330CexFreshQuote(qb *bus.QuoteBus, ask float64) {
+	qb.Publish(bus.Quote{Symbol: "XAUUSDT", Venue: "binance", VenueType: "perp", Bid: ask * 1.002, Ask: ask*1.002 + 0.5, Time: time.Now()})
+}
+
 // d330Engine T5/T7 公共 engine：real gate（RUNNING 库）+ 白名单 spec + regime 配置。
 func d330Engine(s *pgstore.Store, svc *dashboard.Service, qb *bus.QuoteBus, spec exec.XAssetComboAllowSpec) *Engine {
 	return &Engine{
@@ -141,6 +147,7 @@ func TestD330_XassetQtyFloorFromComboSpec(t *testing.T) {
 		VenueBuy: "277842155:mt5", VenueSell: "binance:perp",
 		MaxLongQty: 0.01, MaxShortQty: 5, MaxGrossUSD: 10000,
 	}
+	d330CexFreshQuote(qb, 4355)
 	opp := d330GoldenOpp()
 	e := d330Engine(s, svc, qb, spec)
 	e.handleOpportunity(ctx, opp, newComboAccumulator())
@@ -165,6 +172,7 @@ func TestD330_XassetQtyFloor_GrossCapFallback(t *testing.T) {
 		VenueBuy: "277842155:mt5", VenueSell: "binance:perp",
 		MaxLongQty: 0.01, MaxShortQty: 5, MaxGrossUSD: 5000, // 2×0.01×435500=8710 > 5000
 	}
+	d330CexFreshQuote(qb, 4355)
 	opp := d330GoldenOpp()
 	e := d330Engine(s, svc, qb, spec)
 	e.handleOpportunity(ctx, opp, newComboAccumulator())
@@ -218,6 +226,7 @@ func TestD330_NormalPathIgnoresSpecMaxLongQty(t *testing.T) {
 		VenueBuy: "277842155:mt5", VenueSell: "binance:perp",
 		MaxLongQty: 9999, MaxShortQty: 5, MaxGrossUSD: 100000,
 	}
+	d330CexFreshQuote(qb, 96.6)
 	opp := d330GoldenOpp()
 	e := d330Engine(s, svc, qb, spec)
 	e.handleOpportunity(ctx, opp, newComboAccumulator())

@@ -45,11 +45,18 @@ func d335SeedMonitor(t *testing.T, s *pgstore.Store, pair string, entry, noise *
 func floatPtr(f float64) *float64 { return &f }
 
 // d335Engine 仿 d311 mkEngine（白名单命中+regime 配置；strategy disabled 由用例自seed）。
-func d335Engine(s *pgstore.Store) (*Engine, pgstore.Opportunity, context.Context) {
+// d335Engine（D-563 S4a 涟漪适配：entry 价差=双腿实时报价现算，monitor 行只供 noise）；
+// entryBps 参数驱动 cex bid=mtAsk×(1+bps/1e4) 报价播种。
+func d335Engine(s *pgstore.Store, entryBps float64) (*Engine, pgstore.Opportunity, context.Context) {
 	ctx := context.Background()
-	svc := dashboard.New(nil, bus.New(), nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, nil, nil, nil, 0, nil, nil, 0, 0, nil)
+	qb := bus.New()
+	qb.Publish(bus.Quote{Symbol: "XAUUSD", Venue: "277842155", VenueType: "mt5",
+		Bid: 4354, Ask: 4355, Time: time.Now()})
+	qb.Publish(bus.Quote{Symbol: "XAUUSDT", Venue: "binance", VenueType: "perp",
+		Bid: 4355 * (1 + entryBps/1e4), Ask: 4355*(1+entryBps/1e4) + 0.5, Time: time.Now()})
+	svc := dashboard.New(nil, qb, nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, nil, nil, nil, 0, nil, nil, 0, 0, nil)
 	e := &Engine{
-		store: s, service: svc, quotes: bus.New(), gate: NewGate(s, Config{}, nil),
+		store: s, service: svc, quotes: qb, gate: NewGate(s, Config{}, nil),
 		csMissCounts: map[string]int{}, csMissSent: map[string]time.Time{},
 		cfg: Config{
 			MinNetBps:   0,
@@ -82,7 +89,7 @@ func TestD335_EntryGate(t *testing.T) {
 	d330SeedDisabled(t, s) // 复用 D-331 helper：gate check2 早拒=intent 产出观测点
 
 	// T1：entry=5 ≤ noise=9 → 闸拦（不产 intent）；红=现码无闸穿到 sizing（csMiss=1）
-	e, opp, ctx := d335Engine(s)
+	e, opp, ctx := d335Engine(s, 5)
 	d335SeedMonitor(t, s, "XAUUSDT-XAU", floatPtr(5), floatPtr(9))
 	e.handleOpportunity(ctx, opp, newComboAccumulator())
 	if e.csMissCounts["277842155:mt5|XAUUSD"] != 0 {
@@ -93,7 +100,7 @@ func TestD335_EntryGate(t *testing.T) {
 	}
 
 	// T2：entry=12 > noise=9 → 不被本闸拦（走到 sizing 既有 fail-closed=csMiss 1；pass-through 锚）
-	e2, opp2, ctx2 := d335Engine(s)
+	e2, opp2, ctx2 := d335Engine(s, 12)
 	d335SeedMonitor(t, s, "XAUUSDT-XAU", floatPtr(12), floatPtr(9))
 	e2.handleOpportunity(ctx2, opp2, newComboAccumulator())
 	if e2.csMissCounts["277842155:mt5|XAUUSD"] != 1 {
@@ -101,7 +108,7 @@ func TestD335_EntryGate(t *testing.T) {
 	}
 
 	// T3a：entry=−3 逆价 → skip（csMiss=0）
-	e3, opp3, ctx3 := d335Engine(s)
+	e3, opp3, ctx3 := d335Engine(s, -3)
 	d335SeedMonitor(t, s, "XAUUSDT-XAU", floatPtr(-3), floatPtr(9))
 	e3.handleOpportunity(ctx3, opp3, newComboAccumulator())
 	if e3.csMissCounts["277842155:mt5|XAUUSD"] != 0 {
@@ -113,7 +120,7 @@ func TestD335_EntryGate(t *testing.T) {
 	if _, err := s.Pool().Exec(ctx, `TRUNCATE fin_xasset_monitor`); err != nil {
 		t.Fatalf("truncate monitor: %v", err)
 	}
-	e4, opp4, ctx4 := d335Engine(s)
+	e4, opp4, ctx4 := d335Engine(s, 5)
 	e4.handleOpportunity(ctx4, opp4, newComboAccumulator())
 	if e4.csMissCounts["277842155:mt5|XAUUSD"] != 0 {
 		t.Errorf("T3b 无 monitor 行应 fail-closed 拒开（D-423）, got %v", e4.csMissCounts)
@@ -126,7 +133,7 @@ func TestD335_EntryGate(t *testing.T) {
 	if _, err := s.Pool().Exec(ctx, `TRUNCATE fin_xasset_monitor`); err != nil {
 		t.Fatalf("truncate monitor: %v", err)
 	}
-	e5, opp5, ctx5 := d335Engine(s)
+	e5, opp5, ctx5 := d335Engine(s, 5)
 	d335SeedMonitor(t, s, "XAUUSDT-XAU", floatPtr(5), nil)
 	e5.handleOpportunity(ctx5, opp5, newComboAccumulator())
 	if e5.csMissCounts["277842155:mt5|XAUUSD"] != 0 {

@@ -26,9 +26,8 @@ func (e *CEXExecutor) gateMarginPrecheck(ctx context.Context, o Order) error {
 		return fmt.Errorf("gate margin precheck %s: %w", o.Symbol, err)
 	}
 	var acc struct {
-		Available string  `json:"available"`
-		Total     string  `json:"total"`
-		Leverage  float64 `json:"leverage"`
+		Available string `json:"available"`
+		Total     string `json:"total"`
 	}
 	if err := json.Unmarshal(body, &acc); err != nil {
 		return fmt.Errorf("gate margin precheck %s json: %w", o.Symbol, err)
@@ -41,12 +40,11 @@ func (e *CEXExecutor) gateMarginPrecheck(ctx context.Context, o Order) error {
 	if err != nil {
 		return fmt.Errorf("gate margin precheck %s equity=%q: %w", o.Symbol, acc.Total, err)
 	}
-	lev := acc.Leverage
-	if lev <= 0 {
-		lev = e.gateDefaultLeverage // 两级第二档：venue 级 env 缺省（不得 error，B-003）
-	}
+	// D-563 S1：accounts 响应无 leverage 字段（实探为空）——phantom 杠杆静默兜底已删；
+	// 杠杆=venue 级目标配置（开仓前系统显式 SET，配置=推送条款）。缺失/非正 fail-closed。
+	lev := e.gateDefaultLeverage
 	if lev <= 0 || avail < 0 {
-		return fmt.Errorf("gate margin precheck %s: lev=%.2g avail=%.2g invalid", o.Symbol, lev, avail)
+		return fmt.Errorf("gate margin precheck %s: gate 目标杠杆未配置（ARB_GATE_DEFAULT_LEVERAGE）fail-closed 拒开（lev=%.2g avail=%.2g）", o.Symbol, lev, avail)
 	}
 
 	mark, err := e.gateMarkPrice(ctx, o.Symbol)

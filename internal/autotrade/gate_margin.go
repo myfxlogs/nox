@@ -59,7 +59,7 @@ func (g *Gate) marginFloorGateCheck(ctx context.Context, intent TradeIntent) Gat
 		}
 		seen[vk] = true
 		if g.capView != nil && capitalview.IsCEXVenue(vk) {
-			f, ok := g.capView.Live(ctx, vk)
+			f, ok := g.capView.LiveFresh(ctx, vk) // D-563 S4c：执行闸决策面强制实拉
 			if !ok || (f.Src != capitalview.SrcWS && f.Src != capitalview.SrcRest) {
 				msg := fmt.Sprintf("开户门槛：venue %s 资金源非实拉（快照兜底/无数据）——执行面禁用陈旧快照，fail-closed 拒开；建议检查私有流/REST 凭据", vk)
 				if err := g.store.InsertAlert(ctx, nil, "info", msg); err != nil {
@@ -94,16 +94,18 @@ func (g *Gate) marginWarnThrottled(ctx context.Context, intent TradeIntent, msg 
 	}
 	// D-556：节流键追加解析出的腿 venue——同组合不同账户各提醒（业主要知道给谁注资）。
 	leg := alertLeg(msg, intent.VenueBuy, intent.VenueSell)
+	// D-563 S5：解法行账户名=别名已解析腿标签（原 rejectVenueRe 锚错抓 execute:）。
+	acct := accountLabel(leg, g.venueAlias)
 	// D-560 S2a：warn 尾部追加可行解法行（D-556 白话文/泛化文双路同追加，
 	// 全部由拒文实数推导，非资金拒文/字段缺=""）。
 	if plain := fundingAlertText(intent, msg, g.venueAlias); plain != "" {
-		g.warnThrottled(ctx, intent, leg, plain+errclass.FundingOptionsText(msg))
+		g.warnThrottled(ctx, intent, leg, plain+errclass.FundingOptionsText(msg, acct))
 		return
 	}
 	g.warnThrottled(ctx, intent, leg,
 		fmt.Sprintf("[资金拒单] %s %s net=%.1fbps: %s（≥6h 节流，重复见 autotrade_log）%s",
 			intent.Strategy, intent.Canonical, intent.NetBps, errclass.TruncateNote(msg, 120),
-			errclass.FundingOptionsText(msg)))
+			errclass.FundingOptionsText(msg, acct)))
 }
 
 // warnThrottled D-472 节流本体（D-556 起 key=canonical|buy|sell|leg venue）：

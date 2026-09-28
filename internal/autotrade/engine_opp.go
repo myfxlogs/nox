@@ -158,15 +158,32 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 		if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
 			pairKey = *opp.CanonicalSell + "-" + strings.TrimSuffix(opp.Canonical, "USD")
 		}
-		// D-423：查询键三元组化 + 反 fail-open——行缺/noise NULL/查询错 → 拒开
-		// （借用他所簿=假安全边际，498 实证开仓即收）。
-		if entryBps, noiseBps, _, _, ok, err := e.store.LatestXAssetEntryGate(ctx, pairKey, cexVenue, mtVenue, xassetEntryGateMaxAge); err != nil {
+		// D-563 S4a：判定时刻价差改双腿实时报价现算（monitor 簿 5min 轮询退出决策面；
+		// 簿内只留 noise_bps 统计阈值）。公式同 monitor 写入：entry=(cexBid−mtAsk)/mtAsk。
+		// 双腿任一报价缺/超龄（>5min 同 tickFreshWindow 口径）→ fail-closed 拒开。
+		if _, noiseBps, _, _, ok, err := e.store.LatestXAssetEntryGate(ctx, pairKey, cexVenue, mtVenue, xassetEntryGateMaxAge); err != nil {
 			log.Printf("[autotrade] skip %s: safety margin query (%s,%s,%s): %v (fail-closed 拒开)", opp.ID, pairKey, cexVenue, mtVenue, err)
 			return
 		} else if !ok {
 			log.Printf("[autotrade] skip %s: no monitor data (%s,%s,%s) (fail-closed 拒开)", opp.ID, pairKey, cexVenue, mtVenue)
 			return
+		} else if e.quotes == nil {
+			log.Printf("[autotrade] skip %s: quote bus 未接线（实时报价不可得）fail-closed 拒开", opp.ID)
+			return
 		} else {
+			mtQ, ok1 := e.quotes.Latest(opp.Canonical, opp.VenueBuy)
+			cexCanon := opp.Canonical
+			if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
+				cexCanon = *opp.CanonicalSell
+			}
+			cexQ, ok2 := e.quotes.Latest(cexCanon, opp.VenueSell)
+			if !ok1 || !ok2 || mtQ.Ask <= 0 || cexQ.Bid <= 0 ||
+				time.Since(mtQ.Time) > 5*time.Minute || time.Since(cexQ.Time) > 5*time.Minute {
+				log.Printf("[autotrade] skip %s: 实时报价缺（mt@%s ok=%v cex@%s ok=%v）fail-closed 拒开",
+					opp.ID, opp.VenueBuy, ok1, opp.VenueSell, ok2)
+				return
+			}
+			entryBps := (cexQ.Bid - mtQ.Ask) / mtQ.Ask * 1e4
 			switch {
 			case entryBps <= 0:
 				log.Printf("[autotrade] skip %s: safety margin entry %.2fbps <= 0 (逆价不开)", opp.ID, entryBps)
