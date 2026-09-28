@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"time"
 
+	"arb/internal/bus"
 	"arb/internal/safego"
 	"arb/internal/store/pgstore"
 
@@ -56,15 +57,17 @@ type OKXPrivateHooks struct {
 // OKXPrivateWS OKX 私有 channel 采集器（D-469a 扩四频道：account/balance_and_position/
 // positions/orders，args 形制 S0 真户实证）。
 type OKXPrivateWS struct {
-	apiKey      string
-	apiSecret   string
-	passphrase  string
-	simulated   bool
-	sink        VenueSnapshotSink
-	venueKey    string
-	events      PrivateEventSink
-	orderCache  *OrderEventCache
-	posCache    *PositionEventCache
+	apiKey     string
+	apiSecret  string
+	passphrase string
+	simulated  bool
+	sink       VenueSnapshotSink
+	venueKey   string
+	events     PrivateEventSink
+	orderCache *OrderEventCache
+	posCache   *PositionEventCache
+	// balLedger D-542：可用资金活账本（account 频道 availBal 喂入；每轮重连标脏）。nil 安全。
+	balLedger   *bus.BalanceLedger
 	hooks       OKXPrivateHooks
 	dialer      *websocket.Dialer
 	proxyHeader http.Header // 代理模式=X-Proxy-Token 握口头；直连=nil
@@ -90,6 +93,9 @@ func NewOKXPrivateWS(apiKey, apiSecret, passphrase string, simulated bool, sink 
 	}
 }
 
+// SetBalanceLedger D-542：注入活账本（装配一次；nil 安全）。
+func (o *OKXPrivateWS) SetBalanceLedger(l *bus.BalanceLedger) { o.balLedger = l }
+
 // SetCtValFor D-477 S3：注入 ctVal 解析器（GAP-B4 单源化；nil=保持张数+warn 降级）。
 func (o *OKXPrivateWS) SetCtValFor(f func(ctx context.Context, instID string) (float64, error)) {
 	o.ctValFor = f
@@ -110,6 +116,7 @@ func (o *OKXPrivateWS) Run(ctx context.Context) {
 }
 
 func (o *OKXPrivateWS) runOnce(ctx context.Context) error {
+	o.balLedger.MarkDirty("okx:unified") // D-542：重连即标脏——死链期不读尸值（统一账户口径）
 	if o.simulated {
 		// D-516 S3：demo 支路删除——simulated=t 一律 fail-closed，绝不拨 demo 端点。
 		return fmt.Errorf("okx private ws: simulated config refused (demo 域已收编 D-516)")

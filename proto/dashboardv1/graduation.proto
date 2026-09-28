@@ -114,6 +114,7 @@ message PreviewXAssetComboRiskResponse {
 message VenueExposureCapRow {
   string venue_key = 1; double cap_usd = 2; bool enabled = 3; string note = 4;
   google.protobuf.Timestamp updated_at = 5;
+  bool unset = 6;  // D-542：合成占位行——已配置账户但闸表无行（显式提示未设闸，非冻结语义）
 }
 message ListVenueExposureCapsRequest {}
 message ListVenueExposureCapsResponse { repeated VenueExposureCapRow rows = 1; }
@@ -166,6 +167,7 @@ message GradLegPoolRow {
   string currency = 6;
   google.protobuf.Timestamp updated_at = 7;
   bool is_min = 8;                    // 双池较小者=绑定约束（后端判定，前端不比较）
+  string source = 9;                  // D-542：资金来源——ws=私有流实拉 / rest=实拉校准 / snap=快照兜底
 }
 message RejectCarryGraduationRequest {
   int64 graduation_id = 1; string note = 2;

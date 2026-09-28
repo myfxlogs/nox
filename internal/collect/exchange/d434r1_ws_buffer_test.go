@@ -11,7 +11,7 @@ import (
 
 func d434r1Buffer(t *testing.T, data map[string]any) *float64 {
 	t.Helper()
-	row, ok := okxAccountPushRow(data, time.Now())
+	row, _, ok := okxAccountPushRow(data, time.Now())
 	if !ok {
 		t.Fatal("合法推送应解析成功")
 	}

@@ -242,7 +242,7 @@ func TestD475b_Contract_Accounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("okx account rest: %v", err)
 	}
-	row, ok := okxAccountPushRow(map[string]any{"mgnRatio": "", "details": []any{
+	row, _, ok := okxAccountPushRow(map[string]any{"mgnRatio": "", "details": []any{
 		map[string]any{"ccy": "USDT", "eqUsd": "1000.5", "cashBal": "1000.5", "availBal": "900"}}}, d475bNow())
 	if !ok {
 		t.Fatal("okxAccountPushRow false")

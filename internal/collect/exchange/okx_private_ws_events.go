@@ -35,10 +35,11 @@ func (o *OKXPrivateWS) handleData(ctx context.Context, channel string, raw []byt
 		if len(data) == 0 {
 			return
 		}
-		row, ok := okxAccountPushRow(data[0], o.now())
+		row, avail, ok := okxAccountPushRow(data[0], o.now())
 		if !ok {
 			return
 		}
+		o.balLedger.Put("okx:unified", avail, row.EquityRaw, "USDT", "ws", row.FetchedAt) // D-542 S1
 		if err := o.sink.InsertVenueAccountSnapshots(ctx, []pgstore.VenueAccountSnapshot{row}); err != nil {
 			log.Printf("[okx-private-ws] insert snapshot: %v", err) // 写失败不杀读循环，下条推送重试
 		}
@@ -237,25 +238,30 @@ func str(v any) string {
 // 口径=REST accountOKX 同源（D-364 S2）：equity=Σ details[USDT].eqUsd（解析失败跳该币），
 // balance=equity，currency=USDT，free_margin 不采（REST 同缺省）；details 无 USDT 行 →
 // eq=0 行照落（同 REST 不 panic 语义）。
-func okxAccountPushRow(data map[string]any, now time.Time) (pgstore.VenueAccountSnapshot, bool) {
+// D-542 S1：返回 avail=Σdetails[USDT].availBal（活账本可用源；解析失败跳该币同 eq 口径）。
+func okxAccountPushRow(data map[string]any, now time.Time) (pgstore.VenueAccountSnapshot, float64, bool) {
 	raw, err := json.Marshal(data)
 	if err != nil {
-		return pgstore.VenueAccountSnapshot{}, false
+		return pgstore.VenueAccountSnapshot{}, 0, false
 	}
 	var d struct {
 		MgnRatio string                       `json:"mgnRatio"` // D-405 S2：账户保证金率（百分数，越高越安全）
 		Details  []reconcile.OKXBalanceDetail `json:"details"`  // D-434 R1：与 REST 同构 schema
 	}
 	if err := json.Unmarshal(raw, &d); err != nil {
-		return pgstore.VenueAccountSnapshot{}, false
+		return pgstore.VenueAccountSnapshot{}, 0, false
 	}
 	eq := 0.0
+	avail := 0.0
 	for _, det := range d.Details {
 		if det.Ccy != "USDT" {
 			continue
 		}
 		if usd, perr := strconv.ParseFloat(det.EqUsd, 64); perr == nil {
 			eq += usd
+		}
+		if a, perr := strconv.ParseFloat(det.AvailBal, 64); perr == nil {
+			avail += a // USDT 1:1（REST calibration 同口径）
 		}
 	}
 	row := pgstore.VenueAccountSnapshot{
@@ -269,5 +275,5 @@ func okxAccountPushRow(data map[string]any, now time.Time) (pgstore.VenueAccount
 	if b := reconcile.OKXBufferMultiple(eq, d.Details, d.MgnRatio); b > 0 {
 		row.BufferMultiple = &b
 	}
-	return row, true
+	return row, avail, true
 }

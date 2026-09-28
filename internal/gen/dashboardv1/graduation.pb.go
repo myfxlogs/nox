@@ -1331,6 +1331,7 @@ type VenueExposureCapRow struct {
 	Enabled       bool                   `protobuf:"varint,3,opt,name=enabled,proto3" json:"enabled,omitempty"`
 	Note          string                 `protobuf:"bytes,4,opt,name=note,proto3" json:"note,omitempty"`
 	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Unset         bool                   `protobuf:"varint,6,opt,name=unset,proto3" json:"unset,omitempty"` // D-542：合成占位行——已配置账户但闸表无行（显式提示未设闸，非冻结语义）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1398,6 +1399,13 @@ func (x *VenueExposureCapRow) GetUpdatedAt() *timestamppb.Timestamp {
 		return x.UpdatedAt
 	}
 	return nil
+}
+
+func (x *VenueExposureCapRow) GetUnset() bool {
+	if x != nil {
+		return x.Unset
+	}
+	return false
 }
 
 type ListVenueExposureCapsRequest struct {
@@ -1688,7 +1696,7 @@ type ApproveCarryGraduationRequest struct {
 	MaxGrossUsd   float64                `protobuf:"fixed64,4,opt,name=max_gross_usd,json=maxGrossUsd,proto3" json:"max_gross_usd,omitempty"`     // 双腿名义上限
 	NotionalUsd   *float64               `protobuf:"fixed64,5,opt,name=notional_usd,json=notionalUsd,proto3,oneof" json:"notional_usd,omitempty"` // D-367 语义：显式<=0 会在加载期被剔除，禁传非正值
 	Note          string                 `protobuf:"bytes,6,opt,name=note,proto3" json:"note,omitempty"`
-	FundingPct    *float64               `protobuf:"fixed64,7,opt,name=funding_pct,json=fundingPct,proto3,oneof" json:"funding_pct,omitempty"` // D-490：净值占比输入（小数 0..1；与 funding_usd/显式四字段互斥）
+	FundingPct    *float64               `protobuf:"fixed64,7,opt,name=funding_pct,json=fundingPct,proto3,oneof" json:"funding_pct,omitempty"` // D-490/D-540：可用基准占比输入（小数 0..1；与 funding_usd/显式四字段互斥）
 	FundingUsd    *float64               `protobuf:"fixed64,8,opt,name=funding_usd,json=fundingUsd,proto3,oneof" json:"funding_usd,omitempty"` // D-490：分配金额直填 USD（同上互斥）
 	DryRun        bool                   `protobuf:"varint,9,opt,name=dry_run,json=dryRun,proto3" json:"dry_run,omitempty"`                    // D-490：试算不写库——回 est_* 折算+互算值+venue_gaps 体检，零状态变更
 	unknownFields protoimpl.UnknownFields
@@ -1801,7 +1809,7 @@ type ApproveCarryGraduationResponse struct {
 	EstLongQty        float64                `protobuf:"fixed64,9,opt,name=est_long_qty,json=estLongQty,proto3" json:"est_long_qty,omitempty"`                        // D-490：派生买腿 qty 上限（notional÷perLot×1.1）
 	EstShortQty       float64                `protobuf:"fixed64,10,opt,name=est_short_qty,json=estShortQty,proto3" json:"est_short_qty,omitempty"`                    // D-490：派生卖腿 qty 上限
 	EstAllocUsd       float64                `protobuf:"fixed64,11,opt,name=est_alloc_usd,json=estAllocUsd,proto3" json:"est_alloc_usd,omitempty"`                    // D-490 互算回显：分配额 USD（pct 输入时回显折算值）
-	EstAllocPct       float64                `protobuf:"fixed64,12,opt,name=est_alloc_pct,json=estAllocPct,proto3" json:"est_alloc_pct,omitempty"`                    // D-490 互算回显：占小池净值比（usd 输入时回显；小数口径）
+	EstAllocPct       float64                `protobuf:"fixed64,12,opt,name=est_alloc_pct,json=estAllocPct,proto3" json:"est_alloc_pct,omitempty"`                    // D-490 互算回显：占可用基准比（D-540：usd 输入时回显；小数口径）
 	SizingNotes       []string               `protobuf:"bytes,13,rep,name=sizing_notes,json=sizingNotes,proto3" json:"sizing_notes,omitempty"`                        // D-490：池口径/币种/快照时间等审计注记
 	VenueGapKeys      []string               `protobuf:"bytes,14,rep,name=venue_gap_keys,json=venueGapKeys,proto3" json:"venue_gap_keys,omitempty"`                   // D-492：纯 venue_key 缺口列表（venue_gaps 混 capWarns 句串不可解析——双轨并存）
 	LegPools          []*GradLegPoolRow      `protobuf:"bytes,15,rep,name=leg_pools,json=legPools,proto3" json:"leg_pools,omitempty"`                                 // D-508 S8：dry_run 腿→资金池映射（后端推导 venue_key+回退链终值，前端删镜像）
@@ -1996,6 +2004,7 @@ type GradLegPoolRow struct {
 	Currency      string                 `protobuf:"bytes,6,opt,name=currency,proto3" json:"currency,omitempty"`
 	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	IsMin         bool                   `protobuf:"varint,8,opt,name=is_min,json=isMin,proto3" json:"is_min,omitempty"` // 双池较小者=绑定约束（后端判定，前端不比较）
+	Source        string                 `protobuf:"bytes,9,opt,name=source,proto3" json:"source,omitempty"`             // D-542：资金来源——ws=私有流实拉 / rest=实拉校准 / snap=快照兜底
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2084,6 +2093,13 @@ func (x *GradLegPoolRow) GetIsMin() bool {
 		return x.IsMin
 	}
 	return false
+}
+
+func (x *GradLegPoolRow) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
 }
 
 type RejectCarryGraduationRequest struct {
@@ -2768,14 +2784,15 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12?\n" +
 	"\x04risk\x18\x03 \x01(\v2&.arb.dashboard.v1.GraduationRiskReportH\x00R\x04risk\x88\x01\x01B\a\n" +
-	"\x05_risk\"\xb4\x01\n" +
+	"\x05_risk\"\xca\x01\n" +
 	"\x13VenueExposureCapRow\x12\x1b\n" +
 	"\tvenue_key\x18\x01 \x01(\tR\bvenueKey\x12\x17\n" +
 	"\acap_usd\x18\x02 \x01(\x01R\x06capUsd\x12\x18\n" +
 	"\aenabled\x18\x03 \x01(\bR\aenabled\x12\x12\n" +
 	"\x04note\x18\x04 \x01(\tR\x04note\x129\n" +
 	"\n" +
-	"updated_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x1e\n" +
+	"updated_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x14\n" +
+	"\x05unset\x18\x06 \x01(\bR\x05unset\"\x1e\n" +
 	"\x1cListVenueExposureCapsRequest\"Z\n" +
 	"\x1dListVenueExposureCapsResponse\x129\n" +
 	"\x04rows\x18\x01 \x03(\v2%.arb.dashboard.v1.VenueExposureCapRowR\x04rows\"\x80\x01\n" +
@@ -2832,7 +2849,7 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x13suggested_alloc_usd\x18\x12 \x01(\x01R\x11suggestedAllocUsd\x12!\n" +
 	"\frisk_reasons\x18\x13 \x03(\tR\vriskReasons\x12&\n" +
 	"\x0falloc_base_note\x18\x14 \x01(\tR\rallocBaseNoteB\v\n" +
-	"\t_combo_id\"\x90\x02\n" +
+	"\t_combo_id\"\xa8\x02\n" +
 	"\x0eGradLegPoolRow\x12\x1b\n" +
 	"\tvenue_key\x18\x01 \x01(\tR\bvenueKey\x12\x14\n" +
 	"\x05found\x18\x02 \x01(\bR\x05found\x12\x1d\n" +
@@ -2843,7 +2860,8 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\bcurrency\x18\x06 \x01(\tR\bcurrency\x129\n" +
 	"\n" +
 	"updated_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x15\n" +
-	"\x06is_min\x18\b \x01(\bR\x05isMin\"\x95\x01\n" +
+	"\x06is_min\x18\b \x01(\bR\x05isMin\x12\x16\n" +
+	"\x06source\x18\t \x01(\tR\x06source\"\x95\x01\n" +
 	"\x1cRejectCarryGraduationRequest\x12#\n" +
 	"\rgraduation_id\x18\x01 \x01(\x03R\fgraduationId\x12\x12\n" +
 	"\x04note\x18\x02 \x01(\tR\x04note\x12\x1d\n" +

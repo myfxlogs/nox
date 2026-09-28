@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"arb/internal/bus"
 	"arb/internal/httpx"
 	"arb/internal/safego"
 	"arb/internal/signutil"
@@ -49,6 +50,8 @@ type GatePrivateWS struct {
 	events     PrivateEventSink
 	orderCache *OrderEventCache
 	posCache   *PositionEventCache
+	// balLedger D-542：可用资金活账本（futures.balances 喂入；每轮重连标脏）。nil 安全。
+	balLedger *bus.BalanceLedger
 
 	dial   func(ctx context.Context, wsURL string) (*websocket.Conn, error) // 测试注入
 	rest   *http.Client                                                     // uid/quanto 查询（测试注入）
@@ -78,6 +81,9 @@ func NewGatePrivateWS(apiKey, apiSecret, baseURL, venueKey string, simulated boo
 	return g
 }
 
+// SetBalanceLedger D-542：注入活账本（装配一次；nil 安全）。
+func (g *GatePrivateWS) SetBalanceLedger(l *bus.BalanceLedger) { g.balLedger = l }
+
 // WSURL base_url → WS 端点派生（SSOT：TrimSuffix "/api/v4" + "/v4/ws/usdt"；https→wss/http→ws）。
 func (g *GatePrivateWS) WSURL() string {
 	u := strings.TrimSuffix(g.baseURL, "/api/v4") + "/v4/ws/usdt"
@@ -101,6 +107,7 @@ func (g *GatePrivateWS) Run(ctx context.Context) {
 }
 
 func (g *GatePrivateWS) runOnce(ctx context.Context) error {
+	g.balLedger.MarkDirty("gate:perp") // D-542：重连即标脏——死链期不读尸值
 	uid, err := g.fetchUID(ctx)
 	if err != nil {
 		return fmt.Errorf("fetch uid: %w", err)

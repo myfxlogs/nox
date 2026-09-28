@@ -74,8 +74,9 @@ func (g *GatePrivateWS) onBalances(ctx context.Context, result json.RawMessage) 
 		return
 	}
 	var items []struct {
-		Currency string `json:"currency"`
-		Balance  string `json:"balance"`
+		Currency  string `json:"currency"`
+		Balance   string `json:"balance"`
+		Available string `json:"available"`
 	}
 	if err := json.Unmarshal(result, &items); err != nil {
 		return
@@ -89,6 +90,17 @@ func (g *GatePrivateWS) onBalances(ctx context.Context, result json.RawMessage) 
 			log.Printf("[gate-ws] drop field Balance: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
 			return
 		}
+		// D-542 S1：可用=available（缺字段回退 balance——不猜负值；脏字段整帧不采同 fail-closed）。
+		avail := eq
+		if it.Available != "" {
+			a2, aerr := f64z(it.Available)
+			if aerr != nil {
+				log.Printf("[gate-ws] drop field Available: %v", aerr)
+				return
+			}
+			avail = a2
+		}
+		g.balLedger.Put("gate:perp", avail, eq, "USDT", "ws", g.now())
 		row := pgstore.VenueAccountSnapshot{
 			Venue: "gate", VenueType: "perp",
 			BalanceRaw: eq, EquityRaw: eq,
@@ -98,6 +110,7 @@ func (g *GatePrivateWS) onBalances(ctx context.Context, result json.RawMessage) 
 			log.Printf("[gate-ws] insert snapshot: %v", err)
 		}
 	}
+	WarnUnconsumed("gate", "futures.balances", result, gateBalancesConsumed)
 }
 
 // onPositions futures.positions → 持仓全量快照替换缓存（推送帧本身即全量数组）。
@@ -225,7 +238,7 @@ func (g *GatePrivateWS) onOrders(ctx context.Context, result json.RawMessage) {
 var (
 	gatePositionsConsumed = []string{"contract", "size", "entry_price", "margin", "unrealised_pnl", "pnl_fund", "maintenance_margin", "open_time", "update_time"} // D-477 S2：GAP-B2 全量补消费
 	gateOrdersConsumed    = []string{"id", "text", "contract", "status", "finish_as", "size", "left", "fill_price"}
-	gateBalancesConsumed  = []string{"currency", "balance"}
+	gateBalancesConsumed  = []string{"currency", "balance", "available"} // D-542：+available=可用余额
 )
 
 func abs64(v int64) int64 { return int64(math.Abs(float64(v))) }

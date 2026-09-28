@@ -57,7 +57,7 @@ func TestD383B2_PushRowMapping(t *testing.T) {
 			{"ccy": "DOGE", "eq": "900", "eqUsd": "1134.0"},
 		},
 	}
-	row, ok := okxAccountPushRow(data, now)
+	row, _, ok := okxAccountPushRow(data, now)
 	if !ok {
 		t.Fatal("合法推送应解析成功")
 	}
@@ -76,12 +76,12 @@ func TestD383B2_PushRowMapping(t *testing.T) {
 	}
 
 	// details 无 USDT 行 → eq=0 行照落（REST 同不 panic 语义）
-	row, ok = okxAccountPushRow(map[string]any{"details": []map[string]any{{"ccy": "DOGE", "eqUsd": "5"}}}, now)
+	row, _, ok = okxAccountPushRow(map[string]any{"details": []map[string]any{{"ccy": "DOGE", "eqUsd": "5"}}}, now)
 	if !ok || row.EquityRaw != 0 {
 		t.Fatalf("无 USDT 行: ok=%v eq=%v, want true/0", ok, row.EquityRaw)
 	}
 	// eqUsd 解析失败跳该币不整行弃
-	row, ok = okxAccountPushRow(map[string]any{"details": []map[string]any{
+	row, _, ok = okxAccountPushRow(map[string]any{"details": []map[string]any{
 		{"ccy": "USDT", "eqUsd": "oops"},
 		{"ccy": "USDT", "eqUsd": "7.25"},
 	}}, now)

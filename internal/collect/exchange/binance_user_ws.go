@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"time"
 
+	"arb/internal/bus"
 	"arb/internal/httpx"
 	"arb/internal/safego"
 
@@ -39,10 +40,21 @@ type BinanceUserWS struct {
 	posCache   *PositionEventCache
 	hooks      BinanceUserHooks // D-469a S3：a.m 事件原因 kick 回调（nil 安全）
 
+	// balLedger D-542：可用资金活账本（ACCOUNT_UPDATE/outboundAccountPosition 喂入；
+	// 每轮重连标脏，dashboard 弹窗脏/空走 REST 校准）。nil 安全。
+	balLedger  *bus.BalanceLedger
 	rest       *http.Client
 	dial       func(ctx context.Context, wsURL string) (*websocket.Conn, error)
 	renewEvery time.Duration // 续租周期（默认 30min；测试注入缩短）
 	now        func() time.Time
+}
+
+// SetBalanceLedger D-542：注入活账本（装配一次；nil 安全）。
+func (b *BinanceUserWS) SetBalanceLedger(l *bus.BalanceLedger) { b.balLedger = l }
+
+// balPoolKey 活账本键=裸 canonical 池键（venueKey 撞键 #id 不进账本——账户级口径）。
+func (b *BinanceUserWS) balPoolKey() string {
+	return "binance:" + b.venueType
 }
 
 // NewBinanceUserWS 创建采集器。
@@ -139,6 +151,7 @@ func (b *BinanceUserWS) Run(ctx context.Context) {
 }
 
 func (b *BinanceUserWS) runOnce(ctx context.Context) error {
+	b.balLedger.MarkDirty(b.balPoolKey()) // D-542：重连即标脏——死链期不读尸值
 	if b.simulated {
 		return fmt.Errorf("binance user ws: simulated config refused (demo 域已收编 D-516)")
 	}

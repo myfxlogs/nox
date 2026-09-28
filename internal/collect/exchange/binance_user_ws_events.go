@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"math"
 	"strconv"
 	"strings"
 
@@ -130,6 +131,7 @@ func (b *BinanceUserWS) onAccountUpdate(ctx context.Context, a json.RawMessage) 
 		return
 	}
 	now := b.now()
+	wbUSDT := math.NaN()
 	// demo 流禁写快照——REST 写面 IsRealAccount 只收 real（返修 R1），持仓/订单缓存仍更新。
 	if !b.simulated {
 		for _, bal := range acct.B {
@@ -141,6 +143,7 @@ func (b *BinanceUserWS) onAccountUpdate(ctx context.Context, a json.RawMessage) 
 				log.Printf("[binance-ws] drop field WB: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
 				return
 			}
+			wbUSDT = eq
 			row := pgstore.VenueAccountSnapshot{
 				Venue: "binance", VenueType: b.venueType,
 				BalanceRaw: eq, EquityRaw: eq,
@@ -159,9 +162,11 @@ func (b *BinanceUserWS) onAccountUpdate(ctx context.Context, a json.RawMessage) 
 		b.hooks.OnIO()
 	}
 	if len(acct.P) == 0 {
+		b.balPut(wbUSDT, 0, now)
 		return
 	}
 	orders := make([]reconcile.VenueOrder, 0, len(acct.P))
+	iwSum := 0.0
 	for _, p := range acct.P {
 		pa, perr := f64z(p.PA)
 		if perr != nil {
@@ -187,6 +192,7 @@ func (b *BinanceUserWS) onAccountUpdate(ctx context.Context, a json.RawMessage) 
 		if pa < 0 {
 			side, pa = "SELL", -pa
 		}
+		iwSum += iw
 		orders = append(orders, reconcile.VenueOrder{
 			Ticket: p.S, Symbol: p.S, Side: side, Volume: pa, OpenPrice: ep,
 			Profit: up, // D-477 S1 GAP-B1：up→Profit（REST 基线 cex_positions.go 以 symbol 作 Ticket）
@@ -195,8 +201,11 @@ func (b *BinanceUserWS) onAccountUpdate(ctx context.Context, a json.RawMessage) 
 		})
 	}
 	b.posCache.PutPositions(b.venueKey, orders, now)
+	b.balPut(wbUSDT, iwSum, now)
 	WarnUnconsumed("binance", "ACCOUNT_UPDATE", a, binanceAccountUpdateConsumed)
 }
+
+// balPut/onSpotAccountPosition D-542 活账本写口与 spot 余额帧处理见 binance_user_ws_balance.go。
 
 // onSpotExecutionReport spot executionReport → 订单事件缓存。
 // 字段：i=orderID、c=clOrdID、X=状态、z=累计成交量、L=最后成交价、n=手续费。
@@ -250,45 +259,4 @@ var (
 	binanceSpotAcctPosConsumed   = []string{"B", "a", "f", "l"}
 )
 
-// onSpotAccountPosition outboundAccountPosition → B[{a,f,l}] USDT free+locked 落快照。
-// spot 无持仓概念——持仓缓存不动（订单侧由 executionReport 覆盖）。
-func (b *BinanceUserWS) onSpotAccountPosition(ctx context.Context, data []byte) {
-	var acct struct {
-		B []struct {
-			A string `json:"a"`
-			F string `json:"f"`
-			L string `json:"l"`
-		} `json:"B"`
-	}
-	if err := json.Unmarshal(data, &acct); err != nil {
-		return
-	}
-	if b.simulated {
-		return
-	}
-	for _, bal := range acct.B {
-		if bal.A != "USDT" {
-			continue
-		}
-		free, perr := f64z(bal.F)
-		if perr != nil {
-			log.Printf("[binance-ws] drop field F: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
-			return
-		}
-		locked, perr := f64z(bal.L)
-		if perr != nil {
-			log.Printf("[binance-ws] drop field L: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
-			return
-		}
-		eq := free + locked
-		row := pgstore.VenueAccountSnapshot{
-			Venue: "binance", VenueType: b.venueType,
-			BalanceRaw: eq, EquityRaw: eq,
-			Currency: "USDT", FetchedAt: b.now(), Src: "binance_event",
-		}
-		if err := b.sink.InsertVenueAccountSnapshots(ctx, []pgstore.VenueAccountSnapshot{row}); err != nil {
-			log.Printf("[binance-user-ws] insert spot snapshot: %v", err)
-		}
-	}
-	WarnUnconsumed("binance", "outboundAccountPosition", data, binanceSpotAcctPosConsumed)
-}
+// onSpotAccountPosition 见 binance_user_ws_balance.go（D-542 析出控行数）。
