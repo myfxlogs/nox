@@ -49,6 +49,7 @@ func (e *LegNotActionableError) Is(target error) bool { return target == ErrLegN
 type legActionableStore interface {
 	TicksPriceChanged(ctx context.Context, venue, symbol string, window time.Duration) (changed bool, n int, err error)
 	LatestFacts(ctx context.Context, kind, venue, symbol string) ([]fact.Fact, error)
+	CanonicalByBrokerSymbol(ctx context.Context, venue, brokerSymbol string) (string, bool, error)
 }
 
 // LegActionable 判定 venueKey×nativeSymbol 此刻是否有可交易行情。
@@ -60,9 +61,15 @@ func LegActionable(ctx context.Context, st legActionableStore, venueKey, nativeS
 	}
 	tickVenue := keydomain.BareOf(venueKey)
 	tickSymbol := nativeSymbol
+	factSymbol := nativeSymbol // facts 键=原生名（双发 brokerSym 键，D-325）——与 tick 键域分离
 	if bus.IsCexVenueKey(venueKey) {
 		tickSymbol = bus.CexSymbolKey(nativeSymbol)
+		factSymbol = tickSymbol
+	} else if canon, ok, err := st.CanonicalByBrokerSymbol(ctx, tickVenue, nativeSymbol); err == nil && ok {
+		tickSymbol = canon // D-536：ticks 键域=canonical（写侧 tick_sampler 用 q.Symbol=canonical）
 	}
+	// err!=nil 或 ok=false：保留 nativeSymbol 走原路径——fail-closed 结局不变
+	//（映射查不到→ticks 同键也查不到→照旧判死，行为不放大）。
 	if tickVenue == "" || tickSymbol == "" {
 		return false, fmt.Sprintf("empty tick key venue=%q symbol=%q", tickVenue, tickSymbol)
 	}
@@ -70,7 +77,7 @@ func LegActionable(ctx context.Context, st legActionableStore, venueKey, nativeS
 	// trade_mode=0(DISABLED) 叠加否决（D-495 §1.1：4=FULL 周末照发不可信，只做否决项）。
 	// facts 键=裸 venue×原生 symbol（MT 采集双发 canonical+brokerSym，D-325）；查询失败放行——
 	// DISABLED 是加强否决不是主判据，facts 缺席不放大阻断面。
-	if tmFacts, err := st.LatestFacts(ctx, fact.KindTradeMode, tickVenue, tickSymbol); err == nil {
+	if tmFacts, err := st.LatestFacts(ctx, fact.KindTradeMode, tickVenue, factSymbol); err == nil {
 		for _, f := range tmFacts {
 			if int64(f.Value) == fact.TradeModeDisabled {
 				return false, fmt.Sprintf("%s@%s trade_mode=disabled", tickSymbol, tickVenue)

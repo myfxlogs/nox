@@ -21,12 +21,15 @@ import (
 // --- T1：LegActionable 单元（mock store） ---
 
 type d495FakeStore struct {
-	changed  bool
-	n        int
-	err      error
-	tmValue  *float64 // nil=无 trade_mode fact
-	gotVenue string
-	gotSym   string
+	changed    bool
+	n          int
+	err        error
+	tmValue    *float64 // nil=无 trade_mode fact
+	gotVenue   string
+	gotSym     string
+	gotFactSym string
+	canonMap   map[string]string // D-536：(venue+"|"+brokerSym)→canonical；nil/未命中=ok false
+	canonCalls int
 }
 
 func (f *d495FakeStore) TicksPriceChanged(_ context.Context, venue, symbol string, _ time.Duration) (bool, int, error) {
@@ -34,10 +37,16 @@ func (f *d495FakeStore) TicksPriceChanged(_ context.Context, venue, symbol strin
 	return f.changed, f.n, f.err
 }
 func (f *d495FakeStore) LatestFacts(_ context.Context, kind, venue, symbol string) ([]fact.Fact, error) {
+	f.gotFactSym = symbol
 	if kind != fact.KindTradeMode || f.tmValue == nil {
 		return nil, nil
 	}
 	return []fact.Fact{{Kind: kind, Venue: venue, Symbol: symbol, Value: *f.tmValue}}, nil
+}
+func (f *d495FakeStore) CanonicalByBrokerSymbol(_ context.Context, venue, brokerSymbol string) (string, bool, error) {
+	f.canonCalls++
+	c, ok := f.canonMap[venue+"|"+brokerSymbol]
+	return c, ok, nil
 }
 
 func TestD495_LegActionable_KeyMapping(t *testing.T) {
@@ -83,6 +92,55 @@ func TestD495_LegActionable_KeyMapping(t *testing.T) {
 	bad := &d495FakeStore{err: fmt.Errorf("db down")}
 	if ok, _ := LegActionable(ctx, bad, "okx:perp", "XAU-USDT-SWAP"); ok {
 		t.Fatal("tick 查询失败应 fail-closed")
+	}
+}
+
+// TestD536_LegActionable_CanonicalTickKey D-536 键域死锁修复：MT 分支
+// brokerSymbol→canonical 映射只作用于 TicksPriceChanged（ticks 写侧 canonical 键）。
+func TestD536_LegActionable_CanonicalTickKey(t *testing.T) {
+	ctx := context.Background()
+	mk := func(changed bool, n int) *d495FakeStore {
+		return &d495FakeStore{changed: changed, n: n,
+			canonMap: map[string]string{"3001157|XAUUSDm": "XAUUSD"}}
+	}
+
+	// 主用例：XAUUSDm→XAUUSD 映射命中 → tick 查询键=canonical，亮腿放行。
+	mt := mk(true, 29)
+	ok, _ := LegActionable(ctx, mt, "3001157:mt5", "XAUUSDm")
+	if !ok {
+		t.Fatal("canonical 键命中+亮腿应可行动")
+	}
+	if mt.gotVenue != "3001157" || mt.gotSym != "XAUUSD" {
+		t.Fatalf("tick 键应为 canonical: venue=%q symbol=%q", mt.gotVenue, mt.gotSym)
+	}
+	if mt.gotFactSym != "XAUUSDm" {
+		t.Fatalf("facts 键应保持原生名: %q", mt.gotFactSym)
+	}
+
+	// 对抗用例：映射在但 ticks 窗口 distinct<2 → 仍拦（键对而市场真关≠放行）。
+	dark := mk(false, 1)
+	if ok, _ := LegActionable(ctx, dark, "3001157:mt5", "XAUUSDm"); ok {
+		t.Fatal("市场真关不应为放行而放行")
+	}
+	if dark.gotSym != "XAUUSD" {
+		t.Fatalf("映射命中但 tick 键应仍 canonical: %q", dark.gotSym)
+	}
+
+	// 回归 a：映射未命中 → symbol 保持原生名，行为不变（照旧判死域）。
+	nomap := &d495FakeStore{changed: true, n: 3, canonMap: map[string]string{}}
+	ok, _ = LegActionable(ctx, nomap, "3001157:mt5", "XAUUSDm")
+	if !ok || nomap.gotSym != "XAUUSDm" {
+		t.Fatalf("未命中应保持原生名: ok=%v sym=%q", ok, nomap.gotSym)
+	}
+
+	// 回归 b：CEX 分支仍走 CexSymbolKey，不调用 CanonicalByBrokerSymbol。
+	cex := &d495FakeStore{changed: true, n: 2}
+	ok, _ = LegActionable(ctx, cex, "okx:perp", "BTC-USDT-SWAP")
+	if !ok || cex.gotSym != "BTCUSDT" {
+		t.Fatalf("CEX 分支应走 CexSymbolKey: ok=%v sym=%q", ok, cex.gotSym)
+	}
+	if cex.canonCalls != 0 {
+		t.Fatalf("CEX 分支不应调 CanonicalByBrokerSymbol: %d", cex.canonCalls)
 	}
 }
 
