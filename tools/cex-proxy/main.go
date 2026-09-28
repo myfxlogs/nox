@@ -12,7 +12,7 @@
 //   - 令牌鉴权（-token，缺省自动生成并打印）：客户端须带 X-Proxy-Token
 //   - strip_prefix 选项：剥离路径前缀后再转发（D-516 起 demo 路由已摘，实盘前缀透传为主）
 //
-// 用法：cex-proxy -listen=:8443 [-config=config.json] [-token=xxx] [-sans=192.229.85.35]
+// 用法：cex-proxy -listen=:8443 [-config=config.json] [-token=xxx] [-sans=<公网IP或域名，仅自签裸连场景>]
 // 自建基础设施，仅用于访问自家账户数据，绕开 CEX 对特定地区 IP 的限制。
 package main
 
@@ -50,10 +50,11 @@ func defaultConfig() Config {
 	return Config{Upstreams: []Upstream{
 		{Prefix: "/spotws", Target: "https://stream.binance.com:9443", StripPrefix: true},
 		{Prefix: "/wsapi", Target: "https://ws-api.binance.com", StripPrefix: true},
+		{Prefix: "/okxws", Target: "https://ws.okx.com", StripPrefix: true}, // OKX public+private WS（生产代理已带此路由 9-28 探针实证，仓内补登）
 		{Prefix: "/api/v5", Target: "https://www.okx.com"},
 		{Prefix: "/v4/ws", Target: "https://fx-ws.gateio.ws"},
 		{Prefix: "/api/v4", Target: "https://api.gateio.ws"},
-		{Prefix: "/gatespotws", Target: "https://api.gateio.ws", StripPrefix: true}, // gate 现货 WS（9-27 止血路由，仓内补登对齐生产）
+		{Prefix: "/gatespotws", Target: "https://api.gateio.ws", StripPrefix: true}, // gate 现货 WS（设计目标态；现网代理机缺此路由时走直连兜底，fossil-allow）
 		{Prefix: "/fapi", Target: "https://fapi.binance.com"},
 		{Prefix: "/sapi", Target: "https://api.binance.com"},
 		{Prefix: "/public", Target: "https://fstream.binance.com"}, // D-517 三路由

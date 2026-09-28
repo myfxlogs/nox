@@ -11,6 +11,11 @@
       "strip_prefix": true
     },
     {
+      "prefix": "/okxws",
+      "target": "https://ws.okx.com",
+      "strip_prefix": true
+    },
+    {
       "prefix": "/api/v5",
       "target": "https://www.okx.com"
     },

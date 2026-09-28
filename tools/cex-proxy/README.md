@@ -18,7 +18,8 @@
 
 | CEX | 路径前缀 | 上游 | strip_prefix |
 |-----|---------|------|-------------|
-| OKX | `/api/v5` | `https://www.okx.com` | 否 |
+| OKX REST | `/api/v5` | `https://www.okx.com` | 否 |
+| OKX WS（public+private） | `/okxws` | `https://ws.okx.com` | 是 |
 | Gate REST（spot+futures） | `/api/v4` | `https://api.gateio.ws` | 否 |
 | Gate 现货 WS | `/gatespotws` | `https://api.gateio.ws` | 是 |
 | Gate 合约 WS | `/v4/ws` | `https://fx-ws.gateio.ws` | 否 |
@@ -42,6 +43,7 @@ WS 路由经 `httputil.ReverseProxy` Upgrade 透传，`tokenGate` 同护（WS �
   "upstreams": [
     {"prefix": "/spotws", "target": "https://stream.binance.com:9443", "strip_prefix": true},
     {"prefix": "/wsapi", "target": "https://ws-api.binance.com", "strip_prefix": true},
+    {"prefix": "/okxws", "target": "https://ws.okx.com", "strip_prefix": true},
     {"prefix": "/api/v5", "target": "https://www.okx.com"},
     {"prefix": "/v4/ws", "target": "https://fx-ws.gateio.ws"},
     {"prefix": "/api/v4", "target": "https://api.gateio.ws"},
