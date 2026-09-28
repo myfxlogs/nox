@@ -222,6 +222,8 @@ service DashboardService {
   // D-478 S3：待入场区——enabled 组合−在持仓=挂单集，按序探闸给第一个拦路原因+安全档位。
   rpc ListXAssetPendingEntries(ListXAssetPendingEntriesRequest) returns (ListXAssetPendingEntriesResponse);
   rpc UpsertXAssetAllowCombo(UpsertXAssetAllowComboRequest) returns (UpsertXAssetAllowComboResponse);
+  // D-560 S3：熔断暂停「我已处理·立即重试」——清该组合全部熔断态。
+  rpc ResumeXAssetCombo(ResumeXAssetComboRequest) returns (ResumeXAssetComboResponse);
   rpc PreviewXAssetComboRisk(PreviewXAssetComboRiskRequest) returns (PreviewXAssetComboRiskResponse);
 
   // D-405 S6：账户资金与保证金卡（财务页下钻）——数据源 fin_venue_margin_status

@@ -79,6 +79,14 @@ message XAssetAllowComboRow {
   string pool_source = 16;                 // ws|rest|snap|""（池缺取=空）
   google.protobuf.Timestamp pool_updated_at = 17;
   bool cap_conflict = 18;                  // 任一腿池缺/可用<notional×2 → 结构冲突红标
+  // D-560 S2b：近6h资金拒事实透出（autotrade_logs FAILED×IsFundingRejectMsg 批量查）。
+  bool recent_funding_reject = 19;
+  string recent_reject_reason = 20;        // 拒文截断+「解法：」行（可行解法透出）
+  // D-560 S3：拒单熔断态透出（活动窗在档才置位）。
+  bool breaker_paused = 21;                // 签名熔断活动窗（含 funding 暂停态）
+  string breaker_class = 22;               // variant/funding/liq-distance/other
+  google.protobuf.Timestamp breaker_resume_at = 23;
+  int32 breaker_count = 24;                // 本窗已抑制尝试数（徽标 ×N）
 }
 message ListXAssetAllowCombosResponse { repeated XAssetAllowComboRow rows = 1; }
 
@@ -94,6 +102,14 @@ message XAssetPendingEntryRow {
   string tier = 6;          // 安全档位：ok / over / unset / missing_data
   string tier_detail = 7;   // 档位明细（「超档: 名义$X>权益$Y×5.0」等）
   bool tier_warn = 8;       // 任一腿超档
+  // D-560 S2b：近6h资金拒事实透出（与 XAssetAllowComboRow 同字段同源）。
+  bool recent_funding_reject = 9;
+  string recent_reject_reason = 10;
+  // D-560 S3：拒单熔断态透出（与 XAssetAllowComboRow 同字段同源）。
+  bool breaker_paused = 11;
+  string breaker_class = 12;
+  google.protobuf.Timestamp breaker_resume_at = 13;
+  int32 breaker_count = 14;                // 本窗已抑制尝试数（徽标 ×N）
 }
 message UpsertXAssetAllowComboRequest {
   int64 id = 1;                            // 0=insert；>0=update caps/enabled/note（行锁）
@@ -108,6 +124,9 @@ message UpsertXAssetAllowComboResponse {
   bool needs_confirm = 3;                  // 命中在持仓→前端二次确认（confirm=true 重发）
   repeated int64 open_position_ids = 4;    // 知情文案锚点
 }
+// D-560 S3：熔断恢复（清 dedupKey 前缀命中的全部熔断条目）。
+message ResumeXAssetComboRequest { int64 combo_id = 1; }
+message ResumeXAssetComboResponse { bool ok = 1; string error = 2; int32 cleared = 3; }
 message PreviewXAssetComboRiskRequest {
   string canonical_buy = 1; string venue_buy = 2;
   string canonical_sell = 3; string venue_sell = 4;

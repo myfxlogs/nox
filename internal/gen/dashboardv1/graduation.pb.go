@@ -643,8 +643,16 @@ type XAssetAllowComboRow struct {
 	PoolSource        string                 `protobuf:"bytes,16,opt,name=pool_source,json=poolSource,proto3" json:"pool_source,omitempty"`                          // ws|rest|snap|""（池缺取=空）
 	PoolUpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,17,opt,name=pool_updated_at,json=poolUpdatedAt,proto3" json:"pool_updated_at,omitempty"`
 	CapConflict       bool                   `protobuf:"varint,18,opt,name=cap_conflict,json=capConflict,proto3" json:"cap_conflict,omitempty"` // 任一腿池缺/可用<notional×2 → 结构冲突红标
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// D-560 S2b：近6h资金拒事实透出（autotrade_logs FAILED×IsFundingRejectMsg 批量查）。
+	RecentFundingReject bool   `protobuf:"varint,19,opt,name=recent_funding_reject,json=recentFundingReject,proto3" json:"recent_funding_reject,omitempty"`
+	RecentRejectReason  string `protobuf:"bytes,20,opt,name=recent_reject_reason,json=recentRejectReason,proto3" json:"recent_reject_reason,omitempty"` // 拒文截断+「解法：」行（可行解法透出）
+	// D-560 S3：拒单熔断态透出（活动窗在档才置位）。
+	BreakerPaused   bool                   `protobuf:"varint,21,opt,name=breaker_paused,json=breakerPaused,proto3" json:"breaker_paused,omitempty"` // 签名熔断活动窗（含 funding 暂停态）
+	BreakerClass    string                 `protobuf:"bytes,22,opt,name=breaker_class,json=breakerClass,proto3" json:"breaker_class,omitempty"`     // variant/funding/liq-distance/other
+	BreakerResumeAt *timestamppb.Timestamp `protobuf:"bytes,23,opt,name=breaker_resume_at,json=breakerResumeAt,proto3" json:"breaker_resume_at,omitempty"`
+	BreakerCount    int32                  `protobuf:"varint,24,opt,name=breaker_count,json=breakerCount,proto3" json:"breaker_count,omitempty"` // 本窗已抑制尝试数（徽标 ×N）
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *XAssetAllowComboRow) Reset() {
@@ -803,6 +811,48 @@ func (x *XAssetAllowComboRow) GetCapConflict() bool {
 	return false
 }
 
+func (x *XAssetAllowComboRow) GetRecentFundingReject() bool {
+	if x != nil {
+		return x.RecentFundingReject
+	}
+	return false
+}
+
+func (x *XAssetAllowComboRow) GetRecentRejectReason() string {
+	if x != nil {
+		return x.RecentRejectReason
+	}
+	return ""
+}
+
+func (x *XAssetAllowComboRow) GetBreakerPaused() bool {
+	if x != nil {
+		return x.BreakerPaused
+	}
+	return false
+}
+
+func (x *XAssetAllowComboRow) GetBreakerClass() string {
+	if x != nil {
+		return x.BreakerClass
+	}
+	return ""
+}
+
+func (x *XAssetAllowComboRow) GetBreakerResumeAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.BreakerResumeAt
+	}
+	return nil
+}
+
+func (x *XAssetAllowComboRow) GetBreakerCount() int32 {
+	if x != nil {
+		return x.BreakerCount
+	}
+	return 0
+}
+
 type ListXAssetAllowCombosResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Rows          []*XAssetAllowComboRow `protobuf:"bytes,1,rep,name=rows,proto3" json:"rows,omitempty"`
@@ -929,17 +979,25 @@ func (x *ListXAssetPendingEntriesResponse) GetRows() []*XAssetPendingEntryRow {
 }
 
 type XAssetPendingEntryRow struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ComboId       int64                  `protobuf:"varint,1,opt,name=combo_id,json=comboId,proto3" json:"combo_id,omitempty"`
-	ComboLabel    string                 `protobuf:"bytes,2,opt,name=combo_label,json=comboLabel,proto3" json:"combo_label,omitempty"` // canonical_buy(venue_buy)×canonical_sell(venue_sell)
-	EntryKind     string                 `protobuf:"bytes,3,opt,name=entry_kind,json=entryKind,proto3" json:"entry_kind,omitempty"`    // XASSET_CARRY / FUNDING_HEDGE
-	WaitReason    string                 `protobuf:"bytes,4,opt,name=wait_reason,json=waitReason,proto3" json:"wait_reason,omitempty"` // 第一个拦路原因（闸 reason 原文）；全过=「条件就绪·等机会」
-	Ready         bool                   `protobuf:"varint,5,opt,name=ready,proto3" json:"ready,omitempty"`                            // 七闸全过（等机会）
-	Tier          string                 `protobuf:"bytes,6,opt,name=tier,proto3" json:"tier,omitempty"`                               // 安全档位：ok / over / unset / missing_data
-	TierDetail    string                 `protobuf:"bytes,7,opt,name=tier_detail,json=tierDetail,proto3" json:"tier_detail,omitempty"` // 档位明细（「超档: 名义$X>权益$Y×5.0」等）
-	TierWarn      bool                   `protobuf:"varint,8,opt,name=tier_warn,json=tierWarn,proto3" json:"tier_warn,omitempty"`      // 任一腿超档
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	ComboId    int64                  `protobuf:"varint,1,opt,name=combo_id,json=comboId,proto3" json:"combo_id,omitempty"`
+	ComboLabel string                 `protobuf:"bytes,2,opt,name=combo_label,json=comboLabel,proto3" json:"combo_label,omitempty"` // canonical_buy(venue_buy)×canonical_sell(venue_sell)
+	EntryKind  string                 `protobuf:"bytes,3,opt,name=entry_kind,json=entryKind,proto3" json:"entry_kind,omitempty"`    // XASSET_CARRY / FUNDING_HEDGE
+	WaitReason string                 `protobuf:"bytes,4,opt,name=wait_reason,json=waitReason,proto3" json:"wait_reason,omitempty"` // 第一个拦路原因（闸 reason 原文）；全过=「条件就绪·等机会」
+	Ready      bool                   `protobuf:"varint,5,opt,name=ready,proto3" json:"ready,omitempty"`                            // 七闸全过（等机会）
+	Tier       string                 `protobuf:"bytes,6,opt,name=tier,proto3" json:"tier,omitempty"`                               // 安全档位：ok / over / unset / missing_data
+	TierDetail string                 `protobuf:"bytes,7,opt,name=tier_detail,json=tierDetail,proto3" json:"tier_detail,omitempty"` // 档位明细（「超档: 名义$X>权益$Y×5.0」等）
+	TierWarn   bool                   `protobuf:"varint,8,opt,name=tier_warn,json=tierWarn,proto3" json:"tier_warn,omitempty"`      // 任一腿超档
+	// D-560 S2b：近6h资金拒事实透出（与 XAssetAllowComboRow 同字段同源）。
+	RecentFundingReject bool   `protobuf:"varint,9,opt,name=recent_funding_reject,json=recentFundingReject,proto3" json:"recent_funding_reject,omitempty"`
+	RecentRejectReason  string `protobuf:"bytes,10,opt,name=recent_reject_reason,json=recentRejectReason,proto3" json:"recent_reject_reason,omitempty"`
+	// D-560 S3：拒单熔断态透出（与 XAssetAllowComboRow 同字段同源）。
+	BreakerPaused   bool                   `protobuf:"varint,11,opt,name=breaker_paused,json=breakerPaused,proto3" json:"breaker_paused,omitempty"`
+	BreakerClass    string                 `protobuf:"bytes,12,opt,name=breaker_class,json=breakerClass,proto3" json:"breaker_class,omitempty"`
+	BreakerResumeAt *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=breaker_resume_at,json=breakerResumeAt,proto3" json:"breaker_resume_at,omitempty"`
+	BreakerCount    int32                  `protobuf:"varint,14,opt,name=breaker_count,json=breakerCount,proto3" json:"breaker_count,omitempty"` // 本窗已抑制尝试数（徽标 ×N）
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *XAssetPendingEntryRow) Reset() {
@@ -1026,6 +1084,48 @@ func (x *XAssetPendingEntryRow) GetTierWarn() bool {
 		return x.TierWarn
 	}
 	return false
+}
+
+func (x *XAssetPendingEntryRow) GetRecentFundingReject() bool {
+	if x != nil {
+		return x.RecentFundingReject
+	}
+	return false
+}
+
+func (x *XAssetPendingEntryRow) GetRecentRejectReason() string {
+	if x != nil {
+		return x.RecentRejectReason
+	}
+	return ""
+}
+
+func (x *XAssetPendingEntryRow) GetBreakerPaused() bool {
+	if x != nil {
+		return x.BreakerPaused
+	}
+	return false
+}
+
+func (x *XAssetPendingEntryRow) GetBreakerClass() string {
+	if x != nil {
+		return x.BreakerClass
+	}
+	return ""
+}
+
+func (x *XAssetPendingEntryRow) GetBreakerResumeAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.BreakerResumeAt
+	}
+	return nil
+}
+
+func (x *XAssetPendingEntryRow) GetBreakerCount() int32 {
+	if x != nil {
+		return x.BreakerCount
+	}
+	return 0
 }
 
 type UpsertXAssetAllowComboRequest struct {
@@ -1236,6 +1336,111 @@ func (x *UpsertXAssetAllowComboResponse) GetOpenPositionIds() []int64 {
 	return nil
 }
 
+// D-560 S3：熔断恢复（清 dedupKey 前缀命中的全部熔断条目）。
+type ResumeXAssetComboRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ComboId       int64                  `protobuf:"varint,1,opt,name=combo_id,json=comboId,proto3" json:"combo_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResumeXAssetComboRequest) Reset() {
+	*x = ResumeXAssetComboRequest{}
+	mi := &file_dashboardv1_graduation_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResumeXAssetComboRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResumeXAssetComboRequest) ProtoMessage() {}
+
+func (x *ResumeXAssetComboRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_graduation_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResumeXAssetComboRequest.ProtoReflect.Descriptor instead.
+func (*ResumeXAssetComboRequest) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ResumeXAssetComboRequest) GetComboId() int64 {
+	if x != nil {
+		return x.ComboId
+	}
+	return 0
+}
+
+type ResumeXAssetComboResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	Cleared       int32                  `protobuf:"varint,3,opt,name=cleared,proto3" json:"cleared,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResumeXAssetComboResponse) Reset() {
+	*x = ResumeXAssetComboResponse{}
+	mi := &file_dashboardv1_graduation_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResumeXAssetComboResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResumeXAssetComboResponse) ProtoMessage() {}
+
+func (x *ResumeXAssetComboResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_dashboardv1_graduation_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResumeXAssetComboResponse.ProtoReflect.Descriptor instead.
+func (*ResumeXAssetComboResponse) Descriptor() ([]byte, []int) {
+	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ResumeXAssetComboResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *ResumeXAssetComboResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *ResumeXAssetComboResponse) GetCleared() int32 {
+	if x != nil {
+		return x.Cleared
+	}
+	return 0
+}
+
 type PreviewXAssetComboRiskRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	CanonicalBuy  string                 `protobuf:"bytes,1,opt,name=canonical_buy,json=canonicalBuy,proto3" json:"canonical_buy,omitempty"`
@@ -1249,7 +1454,7 @@ type PreviewXAssetComboRiskRequest struct {
 
 func (x *PreviewXAssetComboRiskRequest) Reset() {
 	*x = PreviewXAssetComboRiskRequest{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[12]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1261,7 +1466,7 @@ func (x *PreviewXAssetComboRiskRequest) String() string {
 func (*PreviewXAssetComboRiskRequest) ProtoMessage() {}
 
 func (x *PreviewXAssetComboRiskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[12]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1274,7 +1479,7 @@ func (x *PreviewXAssetComboRiskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PreviewXAssetComboRiskRequest.ProtoReflect.Descriptor instead.
 func (*PreviewXAssetComboRiskRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{12}
+	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *PreviewXAssetComboRiskRequest) GetCanonicalBuy() string {
@@ -1323,7 +1528,7 @@ type PreviewXAssetComboRiskResponse struct {
 
 func (x *PreviewXAssetComboRiskResponse) Reset() {
 	*x = PreviewXAssetComboRiskResponse{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[13]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1335,7 +1540,7 @@ func (x *PreviewXAssetComboRiskResponse) String() string {
 func (*PreviewXAssetComboRiskResponse) ProtoMessage() {}
 
 func (x *PreviewXAssetComboRiskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[13]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1348,7 +1553,7 @@ func (x *PreviewXAssetComboRiskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PreviewXAssetComboRiskResponse.ProtoReflect.Descriptor instead.
 func (*PreviewXAssetComboRiskResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{13}
+	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *PreviewXAssetComboRiskResponse) GetOk() bool {
@@ -1398,7 +1603,7 @@ type VenueExposureCapRow struct {
 
 func (x *VenueExposureCapRow) Reset() {
 	*x = VenueExposureCapRow{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[14]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1410,7 +1615,7 @@ func (x *VenueExposureCapRow) String() string {
 func (*VenueExposureCapRow) ProtoMessage() {}
 
 func (x *VenueExposureCapRow) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[14]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1423,7 +1628,7 @@ func (x *VenueExposureCapRow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VenueExposureCapRow.ProtoReflect.Descriptor instead.
 func (*VenueExposureCapRow) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{14}
+	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *VenueExposureCapRow) GetVenueKey() string {
@@ -1532,7 +1737,7 @@ type ListVenueExposureCapsRequest struct {
 
 func (x *ListVenueExposureCapsRequest) Reset() {
 	*x = ListVenueExposureCapsRequest{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[15]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1544,7 +1749,7 @@ func (x *ListVenueExposureCapsRequest) String() string {
 func (*ListVenueExposureCapsRequest) ProtoMessage() {}
 
 func (x *ListVenueExposureCapsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[15]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1557,7 +1762,7 @@ func (x *ListVenueExposureCapsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListVenueExposureCapsRequest.ProtoReflect.Descriptor instead.
 func (*ListVenueExposureCapsRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{15}
+	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{17}
 }
 
 type ListVenueExposureCapsResponse struct {
@@ -1569,7 +1774,7 @@ type ListVenueExposureCapsResponse struct {
 
 func (x *ListVenueExposureCapsResponse) Reset() {
 	*x = ListVenueExposureCapsResponse{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[16]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1581,7 +1786,7 @@ func (x *ListVenueExposureCapsResponse) String() string {
 func (*ListVenueExposureCapsResponse) ProtoMessage() {}
 
 func (x *ListVenueExposureCapsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[16]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1594,7 +1799,7 @@ func (x *ListVenueExposureCapsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListVenueExposureCapsResponse.ProtoReflect.Descriptor instead.
 func (*ListVenueExposureCapsResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{16}
+	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ListVenueExposureCapsResponse) GetRows() []*VenueExposureCapRow {
@@ -1616,7 +1821,7 @@ type SetVenueExposureCapRequest struct {
 
 func (x *SetVenueExposureCapRequest) Reset() {
 	*x = SetVenueExposureCapRequest{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[17]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1628,7 +1833,7 @@ func (x *SetVenueExposureCapRequest) String() string {
 func (*SetVenueExposureCapRequest) ProtoMessage() {}
 
 func (x *SetVenueExposureCapRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[17]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1641,7 +1846,7 @@ func (x *SetVenueExposureCapRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetVenueExposureCapRequest.ProtoReflect.Descriptor instead.
 func (*SetVenueExposureCapRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{17}
+	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *SetVenueExposureCapRequest) GetVenueKey() string {
@@ -1682,7 +1887,7 @@ type SetVenueExposureCapResponse struct {
 
 func (x *SetVenueExposureCapResponse) Reset() {
 	*x = SetVenueExposureCapResponse{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[18]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1694,7 +1899,7 @@ func (x *SetVenueExposureCapResponse) String() string {
 func (*SetVenueExposureCapResponse) ProtoMessage() {}
 
 func (x *SetVenueExposureCapResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[18]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1707,7 +1912,7 @@ func (x *SetVenueExposureCapResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetVenueExposureCapResponse.ProtoReflect.Descriptor instead.
 func (*SetVenueExposureCapResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{18}
+	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *SetVenueExposureCapResponse) GetOk() bool {
@@ -1732,7 +1937,7 @@ type ListCarryGraduationsRequest struct {
 
 func (x *ListCarryGraduationsRequest) Reset() {
 	*x = ListCarryGraduationsRequest{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[19]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1744,7 +1949,7 @@ func (x *ListCarryGraduationsRequest) String() string {
 func (*ListCarryGraduationsRequest) ProtoMessage() {}
 
 func (x *ListCarryGraduationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[19]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1757,7 +1962,7 @@ func (x *ListCarryGraduationsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCarryGraduationsRequest.ProtoReflect.Descriptor instead.
 func (*ListCarryGraduationsRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{19}
+	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{21}
 }
 
 type ListCarryGraduationsResponse struct {
@@ -1769,7 +1974,7 @@ type ListCarryGraduationsResponse struct {
 
 func (x *ListCarryGraduationsResponse) Reset() {
 	*x = ListCarryGraduationsResponse{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[20]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1781,7 +1986,7 @@ func (x *ListCarryGraduationsResponse) String() string {
 func (*ListCarryGraduationsResponse) ProtoMessage() {}
 
 func (x *ListCarryGraduationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[20]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1794,7 +1999,7 @@ func (x *ListCarryGraduationsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCarryGraduationsResponse.ProtoReflect.Descriptor instead.
 func (*ListCarryGraduationsResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{20}
+	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ListCarryGraduationsResponse) GetRows() []*CarryGraduationRow {
@@ -1821,7 +2026,7 @@ type ApproveCarryGraduationRequest struct {
 
 func (x *ApproveCarryGraduationRequest) Reset() {
 	*x = ApproveCarryGraduationRequest{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[21]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1833,7 +2038,7 @@ func (x *ApproveCarryGraduationRequest) String() string {
 func (*ApproveCarryGraduationRequest) ProtoMessage() {}
 
 func (x *ApproveCarryGraduationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[21]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1846,7 +2051,7 @@ func (x *ApproveCarryGraduationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApproveCarryGraduationRequest.ProtoReflect.Descriptor instead.
 func (*ApproveCarryGraduationRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{21}
+	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ApproveCarryGraduationRequest) GetGraduationId() int64 {
@@ -1941,7 +2146,7 @@ type ApproveCarryGraduationResponse struct {
 
 func (x *ApproveCarryGraduationResponse) Reset() {
 	*x = ApproveCarryGraduationResponse{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[22]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1953,7 +2158,7 @@ func (x *ApproveCarryGraduationResponse) String() string {
 func (*ApproveCarryGraduationResponse) ProtoMessage() {}
 
 func (x *ApproveCarryGraduationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[22]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1966,7 +2171,7 @@ func (x *ApproveCarryGraduationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApproveCarryGraduationResponse.ProtoReflect.Descriptor instead.
 func (*ApproveCarryGraduationResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{22}
+	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ApproveCarryGraduationResponse) GetOk() bool {
@@ -2127,7 +2332,7 @@ type GradLegPoolRow struct {
 
 func (x *GradLegPoolRow) Reset() {
 	*x = GradLegPoolRow{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[23]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2139,7 +2344,7 @@ func (x *GradLegPoolRow) String() string {
 func (*GradLegPoolRow) ProtoMessage() {}
 
 func (x *GradLegPoolRow) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[23]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2152,7 +2357,7 @@ func (x *GradLegPoolRow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GradLegPoolRow.ProtoReflect.Descriptor instead.
 func (*GradLegPoolRow) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{23}
+	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *GradLegPoolRow) GetVenueKey() string {
@@ -2230,7 +2435,7 @@ type RejectCarryGraduationRequest struct {
 
 func (x *RejectCarryGraduationRequest) Reset() {
 	*x = RejectCarryGraduationRequest{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[24]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2242,7 +2447,7 @@ func (x *RejectCarryGraduationRequest) String() string {
 func (*RejectCarryGraduationRequest) ProtoMessage() {}
 
 func (x *RejectCarryGraduationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[24]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2255,7 +2460,7 @@ func (x *RejectCarryGraduationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RejectCarryGraduationRequest.ProtoReflect.Descriptor instead.
 func (*RejectCarryGraduationRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{24}
+	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *RejectCarryGraduationRequest) GetGraduationId() int64 {
@@ -2296,7 +2501,7 @@ type RejectCarryGraduationResponse struct {
 
 func (x *RejectCarryGraduationResponse) Reset() {
 	*x = RejectCarryGraduationResponse{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[25]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2308,7 +2513,7 @@ func (x *RejectCarryGraduationResponse) String() string {
 func (*RejectCarryGraduationResponse) ProtoMessage() {}
 
 func (x *RejectCarryGraduationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[25]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2321,7 +2526,7 @@ func (x *RejectCarryGraduationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RejectCarryGraduationResponse.ProtoReflect.Descriptor instead.
 func (*RejectCarryGraduationResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{25}
+	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *RejectCarryGraduationResponse) GetOk() bool {
@@ -2358,7 +2563,7 @@ type PerpFundingAdmissionRow struct {
 
 func (x *PerpFundingAdmissionRow) Reset() {
 	*x = PerpFundingAdmissionRow{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[26]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2370,7 +2575,7 @@ func (x *PerpFundingAdmissionRow) String() string {
 func (*PerpFundingAdmissionRow) ProtoMessage() {}
 
 func (x *PerpFundingAdmissionRow) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[26]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2383,7 +2588,7 @@ func (x *PerpFundingAdmissionRow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PerpFundingAdmissionRow.ProtoReflect.Descriptor instead.
 func (*PerpFundingAdmissionRow) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{26}
+	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *PerpFundingAdmissionRow) GetCanonical() string {
@@ -2478,7 +2683,7 @@ type ListPerpFundingAdmissionRequest struct {
 
 func (x *ListPerpFundingAdmissionRequest) Reset() {
 	*x = ListPerpFundingAdmissionRequest{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[27]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2490,7 +2695,7 @@ func (x *ListPerpFundingAdmissionRequest) String() string {
 func (*ListPerpFundingAdmissionRequest) ProtoMessage() {}
 
 func (x *ListPerpFundingAdmissionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[27]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2503,7 +2708,7 @@ func (x *ListPerpFundingAdmissionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPerpFundingAdmissionRequest.ProtoReflect.Descriptor instead.
 func (*ListPerpFundingAdmissionRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{27}
+	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{29}
 }
 
 type ListPerpFundingAdmissionResponse struct {
@@ -2515,7 +2720,7 @@ type ListPerpFundingAdmissionResponse struct {
 
 func (x *ListPerpFundingAdmissionResponse) Reset() {
 	*x = ListPerpFundingAdmissionResponse{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[28]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2527,7 +2732,7 @@ func (x *ListPerpFundingAdmissionResponse) String() string {
 func (*ListPerpFundingAdmissionResponse) ProtoMessage() {}
 
 func (x *ListPerpFundingAdmissionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[28]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2540,7 +2745,7 @@ func (x *ListPerpFundingAdmissionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPerpFundingAdmissionResponse.ProtoReflect.Descriptor instead.
 func (*ListPerpFundingAdmissionResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{28}
+	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ListPerpFundingAdmissionResponse) GetRows() []*PerpFundingAdmissionRow {
@@ -2560,7 +2765,7 @@ type SetPerpFundingAdmissionOverrideRequest struct {
 
 func (x *SetPerpFundingAdmissionOverrideRequest) Reset() {
 	*x = SetPerpFundingAdmissionOverrideRequest{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[29]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2572,7 +2777,7 @@ func (x *SetPerpFundingAdmissionOverrideRequest) String() string {
 func (*SetPerpFundingAdmissionOverrideRequest) ProtoMessage() {}
 
 func (x *SetPerpFundingAdmissionOverrideRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[29]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2585,7 +2790,7 @@ func (x *SetPerpFundingAdmissionOverrideRequest) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use SetPerpFundingAdmissionOverrideRequest.ProtoReflect.Descriptor instead.
 func (*SetPerpFundingAdmissionOverrideRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{29}
+	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *SetPerpFundingAdmissionOverrideRequest) GetCanonical() string {
@@ -2612,7 +2817,7 @@ type SetPerpFundingAdmissionOverrideResponse struct {
 
 func (x *SetPerpFundingAdmissionOverrideResponse) Reset() {
 	*x = SetPerpFundingAdmissionOverrideResponse{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[30]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2624,7 +2829,7 @@ func (x *SetPerpFundingAdmissionOverrideResponse) String() string {
 func (*SetPerpFundingAdmissionOverrideResponse) ProtoMessage() {}
 
 func (x *SetPerpFundingAdmissionOverrideResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[30]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2637,7 +2842,7 @@ func (x *SetPerpFundingAdmissionOverrideResponse) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use SetPerpFundingAdmissionOverrideResponse.ProtoReflect.Descriptor instead.
 func (*SetPerpFundingAdmissionOverrideResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{30}
+	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *SetPerpFundingAdmissionOverrideResponse) GetOk() bool {
@@ -2662,7 +2867,7 @@ type ReevaluatePerpFundingAdmissionRequest struct {
 
 func (x *ReevaluatePerpFundingAdmissionRequest) Reset() {
 	*x = ReevaluatePerpFundingAdmissionRequest{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[31]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2674,7 +2879,7 @@ func (x *ReevaluatePerpFundingAdmissionRequest) String() string {
 func (*ReevaluatePerpFundingAdmissionRequest) ProtoMessage() {}
 
 func (x *ReevaluatePerpFundingAdmissionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[31]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2687,7 +2892,7 @@ func (x *ReevaluatePerpFundingAdmissionRequest) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use ReevaluatePerpFundingAdmissionRequest.ProtoReflect.Descriptor instead.
 func (*ReevaluatePerpFundingAdmissionRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{31}
+	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{33}
 }
 
 type ReevaluatePerpFundingAdmissionResponse struct {
@@ -2700,7 +2905,7 @@ type ReevaluatePerpFundingAdmissionResponse struct {
 
 func (x *ReevaluatePerpFundingAdmissionResponse) Reset() {
 	*x = ReevaluatePerpFundingAdmissionResponse{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[32]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2712,7 +2917,7 @@ func (x *ReevaluatePerpFundingAdmissionResponse) String() string {
 func (*ReevaluatePerpFundingAdmissionResponse) ProtoMessage() {}
 
 func (x *ReevaluatePerpFundingAdmissionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[32]
+	mi := &file_dashboardv1_graduation_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2725,7 +2930,7 @@ func (x *ReevaluatePerpFundingAdmissionResponse) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use ReevaluatePerpFundingAdmissionResponse.ProtoReflect.Descriptor instead.
 func (*ReevaluatePerpFundingAdmissionResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{32}
+	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ReevaluatePerpFundingAdmissionResponse) GetOk() bool {
@@ -2826,7 +3031,7 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\rFieldEvidence\x12\x14\n" +
 	"\x05field\x18\x01 \x01(\tR\x05field\x125\n" +
 	"\x05grade\x18\x02 \x01(\x0e2\x1f.arb.dashboard.v1.EvidenceGradeR\x05grade\"\x1e\n" +
-	"\x1cListXAssetAllowCombosRequest\"\xad\x05\n" +
+	"\x1cListXAssetAllowCombosRequest\"\xcc\a\n" +
 	"\x13XAssetAllowComboRow\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12#\n" +
 	"\rcanonical_buy\x18\x02 \x01(\tR\fcanonicalBuy\x12\x1b\n" +
@@ -2850,7 +3055,13 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\vpool_source\x18\x10 \x01(\tR\n" +
 	"poolSource\x12B\n" +
 	"\x0fpool_updated_at\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\rpoolUpdatedAt\x12!\n" +
-	"\fcap_conflict\x18\x12 \x01(\bR\vcapConflictB\x0f\n" +
+	"\fcap_conflict\x18\x12 \x01(\bR\vcapConflict\x122\n" +
+	"\x15recent_funding_reject\x18\x13 \x01(\bR\x13recentFundingReject\x120\n" +
+	"\x14recent_reject_reason\x18\x14 \x01(\tR\x12recentRejectReason\x12%\n" +
+	"\x0ebreaker_paused\x18\x15 \x01(\bR\rbreakerPaused\x12#\n" +
+	"\rbreaker_class\x18\x16 \x01(\tR\fbreakerClass\x12F\n" +
+	"\x11breaker_resume_at\x18\x17 \x01(\v2\x1a.google.protobuf.TimestampR\x0fbreakerResumeAt\x12#\n" +
+	"\rbreaker_count\x18\x18 \x01(\x05R\fbreakerCountB\x0f\n" +
 	"\r_notional_usdB\f\n" +
 	"\n" +
 	"_simulated\"Z\n" +
@@ -2858,7 +3069,7 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x04rows\x18\x01 \x03(\v2%.arb.dashboard.v1.XAssetAllowComboRowR\x04rows\"!\n" +
 	"\x1fListXAssetPendingEntriesRequest\"_\n" +
 	" ListXAssetPendingEntriesResponse\x12;\n" +
-	"\x04rows\x18\x01 \x03(\v2'.arb.dashboard.v1.XAssetPendingEntryRowR\x04rows\"\xfb\x01\n" +
+	"\x04rows\x18\x01 \x03(\v2'.arb.dashboard.v1.XAssetPendingEntryRowR\x04rows\"\x9a\x04\n" +
 	"\x15XAssetPendingEntryRow\x12\x19\n" +
 	"\bcombo_id\x18\x01 \x01(\x03R\acomboId\x12\x1f\n" +
 	"\vcombo_label\x18\x02 \x01(\tR\n" +
@@ -2871,7 +3082,14 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x04tier\x18\x06 \x01(\tR\x04tier\x12\x1f\n" +
 	"\vtier_detail\x18\a \x01(\tR\n" +
 	"tierDetail\x12\x1b\n" +
-	"\ttier_warn\x18\b \x01(\bR\btierWarn\"\xd3\x03\n" +
+	"\ttier_warn\x18\b \x01(\bR\btierWarn\x122\n" +
+	"\x15recent_funding_reject\x18\t \x01(\bR\x13recentFundingReject\x120\n" +
+	"\x14recent_reject_reason\x18\n" +
+	" \x01(\tR\x12recentRejectReason\x12%\n" +
+	"\x0ebreaker_paused\x18\v \x01(\bR\rbreakerPaused\x12#\n" +
+	"\rbreaker_class\x18\f \x01(\tR\fbreakerClass\x12F\n" +
+	"\x11breaker_resume_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\x0fbreakerResumeAt\x12#\n" +
+	"\rbreaker_count\x18\x0e \x01(\x05R\fbreakerCount\"\xd3\x03\n" +
 	"\x1dUpsertXAssetAllowComboRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12#\n" +
 	"\rcanonical_buy\x18\x02 \x01(\tR\fcanonicalBuy\x12\x1b\n" +
@@ -2896,7 +3114,13 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12#\n" +
 	"\rneeds_confirm\x18\x03 \x01(\bR\fneedsConfirm\x12*\n" +
-	"\x11open_position_ids\x18\x04 \x03(\x03R\x0fopenPositionIds\"\xca\x01\n" +
+	"\x11open_position_ids\x18\x04 \x03(\x03R\x0fopenPositionIds\"5\n" +
+	"\x18ResumeXAssetComboRequest\x12\x19\n" +
+	"\bcombo_id\x18\x01 \x01(\x03R\acomboId\"[\n" +
+	"\x19ResumeXAssetComboResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\x12\x18\n" +
+	"\acleared\x18\x03 \x01(\x05R\acleared\"\xca\x01\n" +
 	"\x1dPreviewXAssetComboRiskRequest\x12#\n" +
 	"\rcanonical_buy\x18\x01 \x01(\tR\fcanonicalBuy\x12\x1b\n" +
 	"\tvenue_buy\x18\x02 \x01(\tR\bvenueBuy\x12%\n" +
@@ -3056,7 +3280,7 @@ func file_dashboardv1_graduation_proto_rawDescGZIP() []byte {
 }
 
 var file_dashboardv1_graduation_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_dashboardv1_graduation_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
+var file_dashboardv1_graduation_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
 var file_dashboardv1_graduation_proto_goTypes = []any{
 	(EvidenceGrade)(0),                              // 0: arb.dashboard.v1.EvidenceGrade
 	(*CarryGraduationRow)(nil),                      // 1: arb.dashboard.v1.CarryGraduationRow
@@ -3071,52 +3295,56 @@ var file_dashboardv1_graduation_proto_goTypes = []any{
 	(*XAssetPendingEntryRow)(nil),                   // 10: arb.dashboard.v1.XAssetPendingEntryRow
 	(*UpsertXAssetAllowComboRequest)(nil),           // 11: arb.dashboard.v1.UpsertXAssetAllowComboRequest
 	(*UpsertXAssetAllowComboResponse)(nil),          // 12: arb.dashboard.v1.UpsertXAssetAllowComboResponse
-	(*PreviewXAssetComboRiskRequest)(nil),           // 13: arb.dashboard.v1.PreviewXAssetComboRiskRequest
-	(*PreviewXAssetComboRiskResponse)(nil),          // 14: arb.dashboard.v1.PreviewXAssetComboRiskResponse
-	(*VenueExposureCapRow)(nil),                     // 15: arb.dashboard.v1.VenueExposureCapRow
-	(*ListVenueExposureCapsRequest)(nil),            // 16: arb.dashboard.v1.ListVenueExposureCapsRequest
-	(*ListVenueExposureCapsResponse)(nil),           // 17: arb.dashboard.v1.ListVenueExposureCapsResponse
-	(*SetVenueExposureCapRequest)(nil),              // 18: arb.dashboard.v1.SetVenueExposureCapRequest
-	(*SetVenueExposureCapResponse)(nil),             // 19: arb.dashboard.v1.SetVenueExposureCapResponse
-	(*ListCarryGraduationsRequest)(nil),             // 20: arb.dashboard.v1.ListCarryGraduationsRequest
-	(*ListCarryGraduationsResponse)(nil),            // 21: arb.dashboard.v1.ListCarryGraduationsResponse
-	(*ApproveCarryGraduationRequest)(nil),           // 22: arb.dashboard.v1.ApproveCarryGraduationRequest
-	(*ApproveCarryGraduationResponse)(nil),          // 23: arb.dashboard.v1.ApproveCarryGraduationResponse
-	(*GradLegPoolRow)(nil),                          // 24: arb.dashboard.v1.GradLegPoolRow
-	(*RejectCarryGraduationRequest)(nil),            // 25: arb.dashboard.v1.RejectCarryGraduationRequest
-	(*RejectCarryGraduationResponse)(nil),           // 26: arb.dashboard.v1.RejectCarryGraduationResponse
-	(*PerpFundingAdmissionRow)(nil),                 // 27: arb.dashboard.v1.PerpFundingAdmissionRow
-	(*ListPerpFundingAdmissionRequest)(nil),         // 28: arb.dashboard.v1.ListPerpFundingAdmissionRequest
-	(*ListPerpFundingAdmissionResponse)(nil),        // 29: arb.dashboard.v1.ListPerpFundingAdmissionResponse
-	(*SetPerpFundingAdmissionOverrideRequest)(nil),  // 30: arb.dashboard.v1.SetPerpFundingAdmissionOverrideRequest
-	(*SetPerpFundingAdmissionOverrideResponse)(nil), // 31: arb.dashboard.v1.SetPerpFundingAdmissionOverrideResponse
-	(*ReevaluatePerpFundingAdmissionRequest)(nil),   // 32: arb.dashboard.v1.ReevaluatePerpFundingAdmissionRequest
-	(*ReevaluatePerpFundingAdmissionResponse)(nil),  // 33: arb.dashboard.v1.ReevaluatePerpFundingAdmissionResponse
-	(*timestamppb.Timestamp)(nil),                   // 34: google.protobuf.Timestamp
+	(*ResumeXAssetComboRequest)(nil),                // 13: arb.dashboard.v1.ResumeXAssetComboRequest
+	(*ResumeXAssetComboResponse)(nil),               // 14: arb.dashboard.v1.ResumeXAssetComboResponse
+	(*PreviewXAssetComboRiskRequest)(nil),           // 15: arb.dashboard.v1.PreviewXAssetComboRiskRequest
+	(*PreviewXAssetComboRiskResponse)(nil),          // 16: arb.dashboard.v1.PreviewXAssetComboRiskResponse
+	(*VenueExposureCapRow)(nil),                     // 17: arb.dashboard.v1.VenueExposureCapRow
+	(*ListVenueExposureCapsRequest)(nil),            // 18: arb.dashboard.v1.ListVenueExposureCapsRequest
+	(*ListVenueExposureCapsResponse)(nil),           // 19: arb.dashboard.v1.ListVenueExposureCapsResponse
+	(*SetVenueExposureCapRequest)(nil),              // 20: arb.dashboard.v1.SetVenueExposureCapRequest
+	(*SetVenueExposureCapResponse)(nil),             // 21: arb.dashboard.v1.SetVenueExposureCapResponse
+	(*ListCarryGraduationsRequest)(nil),             // 22: arb.dashboard.v1.ListCarryGraduationsRequest
+	(*ListCarryGraduationsResponse)(nil),            // 23: arb.dashboard.v1.ListCarryGraduationsResponse
+	(*ApproveCarryGraduationRequest)(nil),           // 24: arb.dashboard.v1.ApproveCarryGraduationRequest
+	(*ApproveCarryGraduationResponse)(nil),          // 25: arb.dashboard.v1.ApproveCarryGraduationResponse
+	(*GradLegPoolRow)(nil),                          // 26: arb.dashboard.v1.GradLegPoolRow
+	(*RejectCarryGraduationRequest)(nil),            // 27: arb.dashboard.v1.RejectCarryGraduationRequest
+	(*RejectCarryGraduationResponse)(nil),           // 28: arb.dashboard.v1.RejectCarryGraduationResponse
+	(*PerpFundingAdmissionRow)(nil),                 // 29: arb.dashboard.v1.PerpFundingAdmissionRow
+	(*ListPerpFundingAdmissionRequest)(nil),         // 30: arb.dashboard.v1.ListPerpFundingAdmissionRequest
+	(*ListPerpFundingAdmissionResponse)(nil),        // 31: arb.dashboard.v1.ListPerpFundingAdmissionResponse
+	(*SetPerpFundingAdmissionOverrideRequest)(nil),  // 32: arb.dashboard.v1.SetPerpFundingAdmissionOverrideRequest
+	(*SetPerpFundingAdmissionOverrideResponse)(nil), // 33: arb.dashboard.v1.SetPerpFundingAdmissionOverrideResponse
+	(*ReevaluatePerpFundingAdmissionRequest)(nil),   // 34: arb.dashboard.v1.ReevaluatePerpFundingAdmissionRequest
+	(*ReevaluatePerpFundingAdmissionResponse)(nil),  // 35: arb.dashboard.v1.ReevaluatePerpFundingAdmissionResponse
+	(*timestamppb.Timestamp)(nil),                   // 36: google.protobuf.Timestamp
 }
 var file_dashboardv1_graduation_proto_depIdxs = []int32{
 	3,  // 0: arb.dashboard.v1.CarryGraduationRow.risk:type_name -> arb.dashboard.v1.GraduationRiskReport
 	2,  // 1: arb.dashboard.v1.GraduationRiskReport.legs:type_name -> arb.dashboard.v1.GraduationRiskLeg
 	4,  // 2: arb.dashboard.v1.GraduationRiskReport.field_grades:type_name -> arb.dashboard.v1.FieldEvidence
 	0,  // 3: arb.dashboard.v1.FieldEvidence.grade:type_name -> arb.dashboard.v1.EvidenceGrade
-	34, // 4: arb.dashboard.v1.XAssetAllowComboRow.pool_updated_at:type_name -> google.protobuf.Timestamp
-	6,  // 5: arb.dashboard.v1.ListXAssetAllowCombosResponse.rows:type_name -> arb.dashboard.v1.XAssetAllowComboRow
-	10, // 6: arb.dashboard.v1.ListXAssetPendingEntriesResponse.rows:type_name -> arb.dashboard.v1.XAssetPendingEntryRow
-	3,  // 7: arb.dashboard.v1.PreviewXAssetComboRiskResponse.risk:type_name -> arb.dashboard.v1.GraduationRiskReport
-	34, // 8: arb.dashboard.v1.VenueExposureCapRow.updated_at:type_name -> google.protobuf.Timestamp
-	34, // 9: arb.dashboard.v1.VenueExposureCapRow.live_updated_at:type_name -> google.protobuf.Timestamp
-	15, // 10: arb.dashboard.v1.ListVenueExposureCapsResponse.rows:type_name -> arb.dashboard.v1.VenueExposureCapRow
-	1,  // 11: arb.dashboard.v1.ListCarryGraduationsResponse.rows:type_name -> arb.dashboard.v1.CarryGraduationRow
-	24, // 12: arb.dashboard.v1.ApproveCarryGraduationResponse.leg_pools:type_name -> arb.dashboard.v1.GradLegPoolRow
-	34, // 13: arb.dashboard.v1.GradLegPoolRow.updated_at:type_name -> google.protobuf.Timestamp
-	34, // 14: arb.dashboard.v1.PerpFundingAdmissionRow.evaluated_at:type_name -> google.protobuf.Timestamp
-	34, // 15: arb.dashboard.v1.PerpFundingAdmissionRow.updated_at:type_name -> google.protobuf.Timestamp
-	27, // 16: arb.dashboard.v1.ListPerpFundingAdmissionResponse.rows:type_name -> arb.dashboard.v1.PerpFundingAdmissionRow
-	17, // [17:17] is the sub-list for method output_type
-	17, // [17:17] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	36, // 4: arb.dashboard.v1.XAssetAllowComboRow.pool_updated_at:type_name -> google.protobuf.Timestamp
+	36, // 5: arb.dashboard.v1.XAssetAllowComboRow.breaker_resume_at:type_name -> google.protobuf.Timestamp
+	6,  // 6: arb.dashboard.v1.ListXAssetAllowCombosResponse.rows:type_name -> arb.dashboard.v1.XAssetAllowComboRow
+	10, // 7: arb.dashboard.v1.ListXAssetPendingEntriesResponse.rows:type_name -> arb.dashboard.v1.XAssetPendingEntryRow
+	36, // 8: arb.dashboard.v1.XAssetPendingEntryRow.breaker_resume_at:type_name -> google.protobuf.Timestamp
+	3,  // 9: arb.dashboard.v1.PreviewXAssetComboRiskResponse.risk:type_name -> arb.dashboard.v1.GraduationRiskReport
+	36, // 10: arb.dashboard.v1.VenueExposureCapRow.updated_at:type_name -> google.protobuf.Timestamp
+	36, // 11: arb.dashboard.v1.VenueExposureCapRow.live_updated_at:type_name -> google.protobuf.Timestamp
+	17, // 12: arb.dashboard.v1.ListVenueExposureCapsResponse.rows:type_name -> arb.dashboard.v1.VenueExposureCapRow
+	1,  // 13: arb.dashboard.v1.ListCarryGraduationsResponse.rows:type_name -> arb.dashboard.v1.CarryGraduationRow
+	26, // 14: arb.dashboard.v1.ApproveCarryGraduationResponse.leg_pools:type_name -> arb.dashboard.v1.GradLegPoolRow
+	36, // 15: arb.dashboard.v1.GradLegPoolRow.updated_at:type_name -> google.protobuf.Timestamp
+	36, // 16: arb.dashboard.v1.PerpFundingAdmissionRow.evaluated_at:type_name -> google.protobuf.Timestamp
+	36, // 17: arb.dashboard.v1.PerpFundingAdmissionRow.updated_at:type_name -> google.protobuf.Timestamp
+	29, // 18: arb.dashboard.v1.ListPerpFundingAdmissionResponse.rows:type_name -> arb.dashboard.v1.PerpFundingAdmissionRow
+	19, // [19:19] is the sub-list for method output_type
+	19, // [19:19] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_dashboardv1_graduation_proto_init() }
@@ -3129,17 +3357,17 @@ func file_dashboardv1_graduation_proto_init() {
 	file_dashboardv1_graduation_proto_msgTypes[2].OneofWrappers = []any{}
 	file_dashboardv1_graduation_proto_msgTypes[5].OneofWrappers = []any{}
 	file_dashboardv1_graduation_proto_msgTypes[10].OneofWrappers = []any{}
-	file_dashboardv1_graduation_proto_msgTypes[13].OneofWrappers = []any{}
-	file_dashboardv1_graduation_proto_msgTypes[21].OneofWrappers = []any{}
-	file_dashboardv1_graduation_proto_msgTypes[22].OneofWrappers = []any{}
-	file_dashboardv1_graduation_proto_msgTypes[26].OneofWrappers = []any{}
+	file_dashboardv1_graduation_proto_msgTypes[15].OneofWrappers = []any{}
+	file_dashboardv1_graduation_proto_msgTypes[23].OneofWrappers = []any{}
+	file_dashboardv1_graduation_proto_msgTypes[24].OneofWrappers = []any{}
+	file_dashboardv1_graduation_proto_msgTypes[28].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dashboardv1_graduation_proto_rawDesc), len(file_dashboardv1_graduation_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   33,
+			NumMessages:   35,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

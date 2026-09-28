@@ -400,6 +400,9 @@ const (
 	// DashboardServiceUpsertXAssetAllowComboProcedure is the fully-qualified name of the
 	// DashboardService's UpsertXAssetAllowCombo RPC.
 	DashboardServiceUpsertXAssetAllowComboProcedure = "/arb.dashboard.v1.DashboardService/UpsertXAssetAllowCombo"
+	// DashboardServiceResumeXAssetComboProcedure is the fully-qualified name of the DashboardService's
+	// ResumeXAssetCombo RPC.
+	DashboardServiceResumeXAssetComboProcedure = "/arb.dashboard.v1.DashboardService/ResumeXAssetCombo"
 	// DashboardServicePreviewXAssetComboRiskProcedure is the fully-qualified name of the
 	// DashboardService's PreviewXAssetComboRisk RPC.
 	DashboardServicePreviewXAssetComboRiskProcedure = "/arb.dashboard.v1.DashboardService/PreviewXAssetComboRisk"
@@ -606,6 +609,8 @@ type DashboardServiceClient interface {
 	// D-478 S3：待入场区——enabled 组合−在持仓=挂单集，按序探闸给第一个拦路原因+安全档位。
 	ListXAssetPendingEntries(context.Context, *connect.Request[dashboardv1.ListXAssetPendingEntriesRequest]) (*connect.Response[dashboardv1.ListXAssetPendingEntriesResponse], error)
 	UpsertXAssetAllowCombo(context.Context, *connect.Request[dashboardv1.UpsertXAssetAllowComboRequest]) (*connect.Response[dashboardv1.UpsertXAssetAllowComboResponse], error)
+	// D-560 S3：熔断暂停「我已处理·立即重试」——清该组合全部熔断态。
+	ResumeXAssetCombo(context.Context, *connect.Request[dashboardv1.ResumeXAssetComboRequest]) (*connect.Response[dashboardv1.ResumeXAssetComboResponse], error)
 	PreviewXAssetComboRisk(context.Context, *connect.Request[dashboardv1.PreviewXAssetComboRiskRequest]) (*connect.Response[dashboardv1.PreviewXAssetComboRiskResponse], error)
 	// D-405 S6：账户资金与保证金卡（财务页下钻）——数据源 fin_venue_margin_status
 	// + snapshot 最新行 join；覆盖天数/建议补资金/档位全后端给，前端零计算。
@@ -1372,6 +1377,12 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("UpsertXAssetAllowCombo")),
 			connect.WithClientOptions(opts...),
 		),
+		resumeXAssetCombo: connect.NewClient[dashboardv1.ResumeXAssetComboRequest, dashboardv1.ResumeXAssetComboResponse](
+			httpClient,
+			baseURL+DashboardServiceResumeXAssetComboProcedure,
+			connect.WithSchema(dashboardServiceMethods.ByName("ResumeXAssetCombo")),
+			connect.WithClientOptions(opts...),
+		),
 		previewXAssetComboRisk: connect.NewClient[dashboardv1.PreviewXAssetComboRiskRequest, dashboardv1.PreviewXAssetComboRiskResponse](
 			httpClient,
 			baseURL+DashboardServicePreviewXAssetComboRiskProcedure,
@@ -1560,6 +1571,7 @@ type dashboardServiceClient struct {
 	listXAssetAllowCombos           *connect.Client[dashboardv1.ListXAssetAllowCombosRequest, dashboardv1.ListXAssetAllowCombosResponse]
 	listXAssetPendingEntries        *connect.Client[dashboardv1.ListXAssetPendingEntriesRequest, dashboardv1.ListXAssetPendingEntriesResponse]
 	upsertXAssetAllowCombo          *connect.Client[dashboardv1.UpsertXAssetAllowComboRequest, dashboardv1.UpsertXAssetAllowComboResponse]
+	resumeXAssetCombo               *connect.Client[dashboardv1.ResumeXAssetComboRequest, dashboardv1.ResumeXAssetComboResponse]
 	previewXAssetComboRisk          *connect.Client[dashboardv1.PreviewXAssetComboRiskRequest, dashboardv1.PreviewXAssetComboRiskResponse]
 	listAccountMarginStatus         *connect.Client[dashboardv1.ListAccountMarginStatusRequest, dashboardv1.ListAccountMarginStatusResponse]
 	listPerpFundingAdmission        *connect.Client[dashboardv1.ListPerpFundingAdmissionRequest, dashboardv1.ListPerpFundingAdmissionResponse]
@@ -2188,6 +2200,11 @@ func (c *dashboardServiceClient) UpsertXAssetAllowCombo(ctx context.Context, req
 	return c.upsertXAssetAllowCombo.CallUnary(ctx, req)
 }
 
+// ResumeXAssetCombo calls arb.dashboard.v1.DashboardService.ResumeXAssetCombo.
+func (c *dashboardServiceClient) ResumeXAssetCombo(ctx context.Context, req *connect.Request[dashboardv1.ResumeXAssetComboRequest]) (*connect.Response[dashboardv1.ResumeXAssetComboResponse], error) {
+	return c.resumeXAssetCombo.CallUnary(ctx, req)
+}
+
 // PreviewXAssetComboRisk calls arb.dashboard.v1.DashboardService.PreviewXAssetComboRisk.
 func (c *dashboardServiceClient) PreviewXAssetComboRisk(ctx context.Context, req *connect.Request[dashboardv1.PreviewXAssetComboRiskRequest]) (*connect.Response[dashboardv1.PreviewXAssetComboRiskResponse], error) {
 	return c.previewXAssetComboRisk.CallUnary(ctx, req)
@@ -2414,6 +2431,8 @@ type DashboardServiceHandler interface {
 	// D-478 S3：待入场区——enabled 组合−在持仓=挂单集，按序探闸给第一个拦路原因+安全档位。
 	ListXAssetPendingEntries(context.Context, *connect.Request[dashboardv1.ListXAssetPendingEntriesRequest]) (*connect.Response[dashboardv1.ListXAssetPendingEntriesResponse], error)
 	UpsertXAssetAllowCombo(context.Context, *connect.Request[dashboardv1.UpsertXAssetAllowComboRequest]) (*connect.Response[dashboardv1.UpsertXAssetAllowComboResponse], error)
+	// D-560 S3：熔断暂停「我已处理·立即重试」——清该组合全部熔断态。
+	ResumeXAssetCombo(context.Context, *connect.Request[dashboardv1.ResumeXAssetComboRequest]) (*connect.Response[dashboardv1.ResumeXAssetComboResponse], error)
 	PreviewXAssetComboRisk(context.Context, *connect.Request[dashboardv1.PreviewXAssetComboRiskRequest]) (*connect.Response[dashboardv1.PreviewXAssetComboRiskResponse], error)
 	// D-405 S6：账户资金与保证金卡（财务页下钻）——数据源 fin_venue_margin_status
 	// + snapshot 最新行 join；覆盖天数/建议补资金/档位全后端给，前端零计算。
@@ -3176,6 +3195,12 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("UpsertXAssetAllowCombo")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dashboardServiceResumeXAssetComboHandler := connect.NewUnaryHandler(
+		DashboardServiceResumeXAssetComboProcedure,
+		svc.ResumeXAssetCombo,
+		connect.WithSchema(dashboardServiceMethods.ByName("ResumeXAssetCombo")),
+		connect.WithHandlerOptions(opts...),
+	)
 	dashboardServicePreviewXAssetComboRiskHandler := connect.NewUnaryHandler(
 		DashboardServicePreviewXAssetComboRiskProcedure,
 		svc.PreviewXAssetComboRisk,
@@ -3484,6 +3509,8 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceListXAssetPendingEntriesHandler.ServeHTTP(w, r)
 		case DashboardServiceUpsertXAssetAllowComboProcedure:
 			dashboardServiceUpsertXAssetAllowComboHandler.ServeHTTP(w, r)
+		case DashboardServiceResumeXAssetComboProcedure:
+			dashboardServiceResumeXAssetComboHandler.ServeHTTP(w, r)
 		case DashboardServicePreviewXAssetComboRiskProcedure:
 			dashboardServicePreviewXAssetComboRiskHandler.ServeHTTP(w, r)
 		case DashboardServiceListAccountMarginStatusProcedure:
@@ -4003,6 +4030,10 @@ func (UnimplementedDashboardServiceHandler) ListXAssetPendingEntries(context.Con
 
 func (UnimplementedDashboardServiceHandler) UpsertXAssetAllowCombo(context.Context, *connect.Request[dashboardv1.UpsertXAssetAllowComboRequest]) (*connect.Response[dashboardv1.UpsertXAssetAllowComboResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.UpsertXAssetAllowCombo is not implemented"))
+}
+
+func (UnimplementedDashboardServiceHandler) ResumeXAssetCombo(context.Context, *connect.Request[dashboardv1.ResumeXAssetComboRequest]) (*connect.Response[dashboardv1.ResumeXAssetComboResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ResumeXAssetCombo is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) PreviewXAssetComboRisk(context.Context, *connect.Request[dashboardv1.PreviewXAssetComboRiskRequest]) (*connect.Response[dashboardv1.PreviewXAssetComboRiskResponse], error) {

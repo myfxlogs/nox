@@ -83,6 +83,15 @@ func Classify(venueKey, code string) Action {
 	}
 }
 
+// IsFundingRejectMsg D-560：资金拒文判据（autotrade marginWarnThrottled 三子串提为
+// 共享件，透出块/dashboard 同调=P3 单源）。liq-distance=强平闸同归资金语义类。
+func IsFundingRejectMsg(msg string) bool {
+	low := strings.ToLower(msg)
+	return strings.Contains(low, "margin insufficient") ||
+		strings.Contains(low, "margin is insufficient") ||
+		strings.Contains(low, "liq-distance")
+}
+
 // TruncateNote 截断 note 到 maxLen 字符（arbcn 同款，防 reason 列超长）。
 func TruncateNote(note string, maxLen int) string {
 	if maxLen <= 0 {

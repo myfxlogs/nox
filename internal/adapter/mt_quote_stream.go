@@ -102,6 +102,16 @@ func (a *MT5Adapter) runQuoteStream(ctx context.Context, ch chan<- bus.Quote) {
 	}
 }
 
+// publishSymbol D-560 S1：emitBlocked 命中（多行组非 primary 变体/零 primary 歧义组
+// 成员）→ 降格 brokerSym 原生键发布；否则 canonical 原样。blocked=nil→原样。
+// 照 D-383「native 照发」裁定：变体 tick 不丢，只禁占 canonical 槽。
+func publishSymbol(brokerSym, canon string, blocked map[string]bool) string {
+	if blocked[brokerSym] {
+		return brokerSym
+	}
+	return canon
+}
+
 // consumeQuoteFrames 内层 Recv 循环。返回 false = ctx 取消（外层退出）；true = 流断需重连。
 // 流断时若 IsSessionLost → 复用 S1 reconnectSession 重建 account 会话（margin 流同模式）。
 func (a *MT5Adapter) consumeQuoteFrames(ctx context.Context, stream mt5pb.Streams_OnQuoteClient, ch chan<- bus.Quote) bool {
@@ -137,7 +147,9 @@ func (a *MT5Adapter) consumeQuoteFrames(ctx context.Context, stream mt5pb.Stream
 		// freshness TTL（60s）毫秒级误差可忽略。
 		ts := time.Now()
 		ch <- bus.Quote{
-			Symbol:      a.canonical(brokerSym),
+			// D-560 S1：报价槽 primary 钉住——emitBlocked 变体/歧义组成员降格
+			// 原生键发布，canonical 槽恒 primary（last-write-wins 占槽拒单根因）。
+			Symbol:      publishSymbol(brokerSym, a.canonical(brokerSym), a.emitBlockedSet()),
 			Venue:       a.venue,
 			VenueSymbol: brokerSym,
 			VenueType:   "mt5",
