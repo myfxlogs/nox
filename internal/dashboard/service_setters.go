@@ -17,6 +17,9 @@ import (
 // SetBalanceLedger D-542：注入活账本（与 cex 私有流同实例；装配一次，nil 安全）。
 func (s *Service) SetBalanceLedger(l *bus.BalanceLedger) { s.balLedger = l }
 
+// SetCapitalGapFetcher D-546：注入三缺口实拉器（生产=RPC 内自装配；测试注入计数 fake）。
+func (s *Service) SetCapitalGapFetcher(f CapitalGapFetcher) { s.capGaps = f }
+
 // Store 返回底层 store（D-070 autotrade engine 用）。
 func (s *Service) Store() *pgstore.Store { return s.store }
 
