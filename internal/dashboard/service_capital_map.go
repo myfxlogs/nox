@@ -24,7 +24,7 @@ type CapitalGapFetcher interface {
 }
 
 // capitalMapCaliberNote 口径注记（面板尾注）。
-const capitalMapCaliberNote = "口径：binance 六面全景（现货/资金钱包/U 本位/币本位/期权/理财）×三档可用性——立即可用=活账本/快照既有流（与 sizing 基准同源，sizing 实取各池最小值，全景不改基准）；可转可用=理财活期（T+0 赎回）+现货 locked（Equity−Available 推得）；锁定慢动=理财定期+币本位+期权权益。USDT/LDUSDT 1:1 同视 USD；币本位/期权杂币用 binance <币>USDT tick mid 折算，缺价如实标「未折算」不猜。三缺口面（理财/币本位/期权）=页面开实拉+60s 进程缓存；采集失败/未配置=节点如实标缺不猜零。"
+const capitalMapCaliberNote = "口径：binance 六面全景（现货/资金钱包/U 本位/币本位/期权/理财）+okx 统一账户三面（trading/funding/earn）+gate 两面并读（spot/futures/earn）×三档可用性——立即可用=活账本/快照既有流（与 sizing 基准同源，sizing 实取各池最小值，全景不改基准）；可转可用=理财活期（T+0 赎回）+现货 locked（Equity−Available 推得）+okx 资金钱包/活期理财；锁定慢动=理财定期+币本位+期权权益+okx 占用冻结+gate spot locked/futures 保证金/earn 出借。USDT/LDUSDT 1:1 同视 USD；杂币经 venue 指数价/tick mid 折算，缺价如实标「未折算」不猜。gap/availability 面=页面开实拉+60s 进程缓存；采集失败/未配置/权限缺席=节点如实标缺不猜零。"
 
 // GetCapitalMap D-546：三档全景树（后端算，前端零计算）。
 func (s *Service) GetCapitalMap(ctx context.Context, req *connect.Request[v1.GetCapitalMapRequest]) (*connect.Response[v1.GetCapitalMapResponse], error) {
@@ -104,6 +104,26 @@ func (s *Service) buildCapitalMap(ctx context.Context) *v1.GetCapitalMapResponse
 	default:
 		locked.Nodes = append(locked.Nodes, capCoinOptNodes(ctx, s, "binance 期权权益 ", "eapi/v1/account", gaps.FetchedAt, optionsRows(gaps))...)
 	}
+
+	// ===== D-546 R1 扩面：okx（unified 子账本拆分）+gate（spot/futures 并读）=====
+	okxVA := s.venueAvailability(ctx, "okx")
+	gateVA := s.venueAvailability(ctx, "gate")
+
+	// ⑨ okx 立即可用=统一账户 trading available（活账本 okx:unified 优先，REST 回退）。
+	avail.Nodes = append(avail.Nodes, s.availLiveNode(ctx, snaps, "okx:unified", "okx:unified available", availWallet(okxVA, "trading"), "/api/v5/account/balance"))
+	// ⑩ okx 锁定慢动=trading 占用/冻结（availBal−availEq+frozenBal）。
+	locked.Nodes = append(locked.Nodes, walletLocked(okxVA, "trading", "okx:unified 占用/冻结", "/api/v5/account/balance"))
+	// ⑪ okx 可转可用=资金钱包+活期理财（资产↔交易划转 T+0）。
+	transfer.Nodes = append(transfer.Nodes, walletTransfer(okxVA, "funding", "okx 资金钱包", "/api/v5/asset/balances"))
+	transfer.Nodes = append(transfer.Nodes, walletTransfer(okxVA, "earn", "okx 活期理财", "/api/v5/finance/savings/balance"))
+
+	// ⑫ gate 立即可用=futures available（活账本 gate:perp 优先）+spot available（REST）。
+	avail.Nodes = append(avail.Nodes, s.availLiveNode(ctx, snaps, "gate:perp", "gate:perp available", availWallet(gateVA, "futures"), "/api/v4/futures/usdt/accounts"))
+	avail.Nodes = append(avail.Nodes, s.availLiveNode(ctx, snaps, "", "gate:spot available", availWallet(gateVA, "spot"), "/api/v4/spot/accounts"))
+	// ⑬ gate 锁定慢动=spot locked+futures 保证金占用+earn 出借中。
+	locked.Nodes = append(locked.Nodes, walletLocked(gateVA, "spot", "gate:spot locked", "/api/v4/spot/accounts"))
+	locked.Nodes = append(locked.Nodes, walletLocked(gateVA, "futures", "gate:futures 保证金占用", "/api/v4/futures/usdt/accounts"))
+	locked.Nodes = append(locked.Nodes, walletLocked(gateVA, "earn", "gate 理财出借中", "/api/v4/earn/uni/lends"))
 
 	capTierSum(avail)
 	capTierSum(transfer)

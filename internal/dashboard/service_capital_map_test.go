@@ -54,6 +54,25 @@ func capMapFixture(t *testing.T) (*Service, *fakeCapGaps) {
 		FetchedAt: now,
 	}}
 	svc.SetCapitalGapFetcher(fake)
+	// D-546 R1：okx/gate 面 stub（值非零防标缺扰 degraded 锚；树归属断言见 d546r1）。
+	svc.SetVenueAvailFor(func(_ context.Context, venue string) (venueAvailFetcher, bool) {
+		var va *reconcile.VenueAvailability
+		switch venue {
+		case "okx":
+			va = &reconcile.VenueAvailability{Nodes: []*reconcile.AvailabilityNode{
+				{Wallet: "trading", AvailableUSD: 100, LockedUSD: 5, At: now},
+				{Wallet: "funding", TransferableUSD: 1, At: now},
+				{Wallet: "earn", TransferableUSD: 2, At: now},
+			}}
+		default:
+			va = &reconcile.VenueAvailability{Nodes: []*reconcile.AvailabilityNode{
+				{Wallet: "spot", AvailableUSD: 10, LockedUSD: 1, At: now},
+				{Wallet: "futures", AvailableUSD: 5, At: now},
+				{Wallet: "earn", LockedUSD: 3, At: now},
+			}}
+		}
+		return &fakeVenueAvail{ret: va}, true
+	})
 	return svc, fake
 }
 
@@ -119,8 +138,8 @@ func TestD546_CapitalMapTree(t *testing.T) {
 	if n := capNodeByLabel(avail, "binance:funding 余额"); n == nil || n.AmountUsd != 5 {
 		t.Errorf("funding 节点错: %+v", capNodeByLabel(avail, "binance:funding 余额"))
 	}
-	if !avail.HasUsd || avail.TotalUsd != 155 {
-		t.Errorf("立即可用合计=%v (has=%v), want 155", avail.TotalUsd, avail.HasUsd)
+	if !avail.HasUsd || avail.TotalUsd != 270 {
+		t.Errorf("立即可用合计=%v (has=%v), want 270（binance 155+okx 100+gate 15）", avail.TotalUsd, avail.HasUsd)
 	}
 	if !strings.Contains(avail.Note, "sizing 基准口径") {
 		t.Errorf("立即可用档注记缺 sizing 标注: %q", avail.Note)
@@ -137,8 +156,8 @@ func TestD546_CapitalMapTree(t *testing.T) {
 	if n := capNodeByLabel(transfer, "binance 理财活期"); n == nil || n.AmountUsd != 30 || !n.HasUsd {
 		t.Errorf("理财活期节点错: %+v", n)
 	}
-	if transfer.TotalUsd != 40 {
-		t.Errorf("可转合计=%v, want 40", transfer.TotalUsd)
+	if transfer.TotalUsd != 43 {
+		t.Errorf("可转合计=%v, want 43（binance 40+okx 3）", transfer.TotalUsd)
 	}
 
 	// 锁定档：理财定期=7 + 币本位 BTC 0.05×50001=2500.05 + 期权 617.77（USDT 1:1）。

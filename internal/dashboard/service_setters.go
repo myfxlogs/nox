@@ -25,6 +25,11 @@ func (s *Service) SetBalanceLedger(l *bus.BalanceLedger) {
 // SetCapitalGapFetcher D-546：注入三缺口实拉器（生产=RPC 内自装配；测试注入计数 fake）。
 func (s *Service) SetCapitalGapFetcher(f CapitalGapFetcher) { s.capGaps = f }
 
+// SetVenueAvailFor D-546 R1：注入 venue 钱包树实拉缝（测试 stub；nil=生产 querier 装配）。
+func (s *Service) SetVenueAvailFor(f func(ctx context.Context, venue string) (venueAvailFetcher, bool)) {
+	s.capAvailFor = f
+}
+
 // Store 返回底层 store（D-070 autotrade engine 用）。
 func (s *Service) Store() *pgstore.Store { return s.store }
 
