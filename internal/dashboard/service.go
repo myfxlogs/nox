@@ -57,6 +57,11 @@ type Service struct {
 	capGapsCache  *reconcile.CapitalGaps
 	capGapsAt     time.Time
 	capGapsTTLDur time.Duration
+	// D-546 R1：okx/gate 钱包树可用性（venueAvailability 60s 缓存+测试缝 capAvailFor）。
+	capAvailMu    sync.Mutex
+	capAvailCache map[string]*reconcile.VenueAvailability
+	capAvailAt    map[string]time.Time
+	capAvailFor   func(ctx context.Context, venue string) (venueAvailFetcher, bool)
 
 	// settler 结算触发（D-087 §3.2，手动平仓后调）。nil = 未接线（RPC 仍可用，仅不结算）。
 	settler Settler
