@@ -15,6 +15,7 @@ var appConfigDescs = map[string]string{
 	"ARB_AUTOTRADE_MIN_NET_SWAP_BPS":             "自动执行净互换收益门槛（bps；swap 腿专项下限）",
 	"ARB_AUTOTRADE_POLL_INTERVAL":                "自动交易机会评估轮询周期",
 	"ARB_BINANCE_FUTURES_INFO_URL":               "Binance 合约信息端点覆盖（留空=官方默认）",
+	"ARB_BINANCE_SPOT_INFO_URL":                  "Binance 现货信息端点覆盖（默认 data-api.binance.vision）",
 	"ARB_BROKER_POS_POLL_MS":                     "CFD 经纪商持仓轮询周期（毫秒级时长，如 5s）",
 	"ARB_CAPITAL_SNAPSHOT_TTL":                   "资金快照有效期（超时强制重拉账户资金）",
 	"ARB_CARRY_MIN_NET_ANNUALIZED":               "套息净年化入场门槛（%；低于此不建仓）",

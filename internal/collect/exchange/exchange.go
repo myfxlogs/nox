@@ -48,9 +48,12 @@ type Config struct {
 	Symbols        []string       // 基础币种 BTC/ETH/TRX
 	SymProvider    SymbolProvider // D-369 S2：动态符号集（radar_watchlist ∪ env；nil=仅 env）
 	BinanceBaseURL string         // Binance fapi base，可指向 CF Worker 代理
-	GateBaseURL    string
-	OKXBaseURL     string
-	Client         *http.Client
+	// BinanceSpotInfoURL D-551 S2：现货 exchangeInfo 端点（spot 订阅有效性过滤）；
+	// 空=env ARB_BINANCE_SPOT_INFO_URL→默认 data-api.binance.vision 公开域。
+	BinanceSpotInfoURL string
+	GateBaseURL        string
+	OKXBaseURL         string
+	Client             *http.Client
 	// AlertFn 可选告警通道（D-507 重连风暴 fail-loud）；nil=静默跳过（测试默认）。
 	AlertFn func(level, msg string)
 }

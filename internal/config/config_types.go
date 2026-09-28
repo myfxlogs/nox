@@ -53,13 +53,13 @@ type Config struct {
 	// === Broker 符号表缓存（D-045 §3.2.1）===
 	SymbolsTTL time.Duration // symbolGroups per-venue 缓存 TTL
 
-	// === CEX step 元数据（D-127 P2）===
+	// === CEX step 元数据（D-127 P2）===（D-551 S2：SpotInfoURL=spot exchangeInfo 端点）
 	BinanceFuturesInfoURL string // binance perp exchangeInfo URL（默认 fapi.binance.com 官方端点；CN 部署经 ARB_BINANCE_FUTURES_INFO_URL 覆盖指向 cex-proxy 域名）
+	BinanceSpotInfoURL    string // D-551 S2：spot exchangeInfo URL（默认 data-api.binance.vision 公开域）
 
 	// === 个人持仓实账（财务线工作项 3）===
-	LiqMMR float64 // 理论强平维持保证金率（强平价 = entry × (1 + 1/leverage − MMR)；缺省 0.5%）
-	// FundingDropRatio 资金费急降预警比例（今日 < 比例×前日 触发；缺省 0.5）——§11 收益侧方向证伪。
-	FundingDropRatio float64
+	LiqMMR           float64 // 理论强平维持保证金率（强平价 = entry × (1 + 1/leverage − MMR)；缺省 0.5%）
+	FundingDropRatio float64 // 资金费急降预警比例（今日 < 比例×前日 触发；缺省 0.5）——§11 收益侧方向证伪
 
 	// === Swap 套利风控（S6/B）===
 	// SwapArbEquityUseRatio 名义额资金使用率系数（ARB_SWAPARB_EQUITY_USE_RATIO，缺省 0.5）：notional=min(equityLong,equityShort)×ratio；ratio=1=旧行为，不限额=无上限。

@@ -120,25 +120,33 @@ func TestWSConstructors_BackupCandidates(t *testing.T) {
 }
 
 // binance_market_ws：BINANCE_PROXY_URL_BACKUP 置位→perp/spot 各追加备端候选；
-// 空→单候选（行为不变）。
+// 空→单候选（行为不变）。D-551 起候选升 WSCandidate 级（URL 字段断言同义）。
 func TestBinanceMarketWS_BackupCandidates(t *testing.T) {
+	urls := func(cs []WSCandidate) []string {
+		us := make([]string, len(cs))
+		for i, c := range cs {
+			us[i] = c.URL
+		}
+		return us
+	}
 	t.Setenv("BINANCE_PROXY_URL_BACKUP", "https://proxy-b:8443")
 	b := NewBinanceMarketWS(Config{BinanceBaseURL: "https://proxy-a:8443/fapi"})
-	if len(b.publicURLs) != 2 || b.publicURLs[1] != "wss://proxy-b:8443/public/ws" ||
-		len(b.marketURLs) != 2 || b.marketURLs[1] != "wss://proxy-b:8443/market/ws" ||
-		len(b.spotURLs) != 2 || b.spotURLs[1] != "wss://proxy-b:8443/spotws/ws" {
-		t.Fatalf("public=%v market=%v spot=%v", b.publicURLs, b.marketURLs, b.spotURLs)
+	pub, mkt, spt := urls(b.publicCands), urls(b.marketCands), urls(b.spotCands)
+	if len(pub) != 2 || pub[1] != "wss://proxy-b:8443/public/ws" ||
+		len(mkt) != 2 || mkt[1] != "wss://proxy-b:8443/market/ws" ||
+		len(spt) != 2 || spt[1] != "wss://proxy-b:8443/spotws/ws" {
+		t.Fatalf("public=%v market=%v spot=%v", pub, mkt, spt)
 	}
 	t.Setenv("BINANCE_PROXY_URL_BACKUP", "")
 	b = NewBinanceMarketWS(Config{BinanceBaseURL: "https://proxy-a:8443/fapi"})
-	if len(b.publicURLs) != 1 || len(b.marketURLs) != 1 || len(b.spotURLs) != 1 {
-		t.Fatalf("backup 空应单候选: %v %v %v", b.publicURLs, b.marketURLs, b.spotURLs)
+	if len(b.publicCands) != 1 || len(b.marketCands) != 1 || len(b.spotCands) != 1 {
+		t.Fatalf("backup 空应单候选: %v %v %v", b.publicCands, b.marketCands, b.spotCands)
 	}
 	// D-519 A6（D6）：ws:// 明文备端不被升 wss（内网备端场景）。
 	t.Setenv("BINANCE_PROXY_URL_BACKUP", "ws://proxy-c:8080")
 	b = NewBinanceMarketWS(Config{BinanceBaseURL: "https://proxy-a:8443/fapi"})
-	if b.publicURLs[1] != "ws://proxy-c:8080/public/ws" {
-		t.Fatalf("ws:// 备端被错升 wss: %v", b.publicURLs)
+	if b.publicCands[1].URL != "ws://proxy-c:8080/public/ws" {
+		t.Fatalf("ws:// 备端被错升 wss: %v", b.publicCands)
 	}
 }
 

@@ -62,7 +62,8 @@ func Load() *Config {
 		ReviewCrossBiasBps:         envFloat("ARB_REVIEW_CROSS_BIAS_BPS", 1.0),
 		ReviewCarryBiasAnnualPct:   envFloat("ARB_REVIEW_CARRY_BIAS_ANNUAL_PCT", 1.0),
 		SymbolsTTL:                 envDur("ARB_SYMBOLS_TTL", 5*time.Minute),
-		BinanceFuturesInfoURL:      envStr("ARB_BINANCE_FUTURES_INFO_URL", "https://fapi.binance.com/fapi/v1/exchangeInfo"), // D-127 P2；默认官方端点，CN 部署经 env/DB 覆盖指向 cex-proxy 域名避 451
+		BinanceFuturesInfoURL:      envStr("ARB_BINANCE_FUTURES_INFO_URL", "https://fapi.binance.com/fapi/v1/exchangeInfo"),    // D-127 P2；默认官方端点，CN 部署经 env/DB 覆盖指向 cex-proxy 域名避 451
+		BinanceSpotInfoURL:         envStr("ARB_BINANCE_SPOT_INFO_URL", "https://data-api.binance.vision/api/v3/exchangeInfo"), // D-551 S2：默认免墙公开域；可覆盖指 cex-proxy
 		LiqMMR:                     envFloat("ARB_LIQ_MMR", 0.005),
 		FundingDropRatio:           envFloat("ARB_FUNDING_DROP_RATIO", 0.5),
 		SwapArbEquityUseRatio:      envFloat("ARB_SWAPARB_EQUITY_USE_RATIO", 0.5),
@@ -114,7 +115,7 @@ func Load() *Config {
 		AIAPIKey:                   envStr("ARB_AI_API_KEY", ""),
 		AIModel:                    envStr("ARB_AI_MODEL", "glm-4.6"),
 		AIPGDSN:                    envStr("ARB_AI_PG_DSN", ""),
-		RetroDisabled:              envBool("ARB_RETRO_ENABLED", true) == false, // D-457：env=0 关复盘定时器
+		RetroDisabled:              !envBool("ARB_RETRO_ENABLED", true), // D-457：env=0 关复盘定时器
 		AnalystRatePerHour:         envInt("ARB_ANALYST_RATE_PER_HOUR", 20),
 		ExplorerEnabled:            envBool("ARB_EXPLORER_ENABLED", false), // D-513：壳上线默认关
 		ExplorerRatePerHour:        envInt("ARB_EXPLORER_RATE_PER_HOUR", 10),
