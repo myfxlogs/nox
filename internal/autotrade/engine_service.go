@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"arb/internal/bus"
+	"arb/internal/capitalview"
 	"arb/internal/store/pgstore"
 )
 
@@ -21,6 +22,7 @@ type engineService interface {
 	SwapArbVenueExposureOK(ctx context.Context, venueLong, venueShort string, newNotional float64) bool
 	MarginFloorKnown(ctx context.Context, venueKey string, addNotionalUSD float64) (ok, known bool, detail string)
 	MarginFloorCheck(ctx context.Context, venueKey string, addNotionalUSD float64) (ok bool, detail string) // Gate 开户门槛档
+	CapitalView() *capitalview.View                                                                         // D-549 R1：统一资金读口（gate_margin 执行面 Src 闸）
 	VenueCommissionBps(venueKey string) float64
 	AccountLeverage(venueKey string) (leverage float64, ok bool)
 	AccountEquityUSD(venueKey string) (value float64, currency string, ok bool)

@@ -31,8 +31,10 @@ func New(cfg Config, store *pgstore.Store, service engineService, oppTopic *bus.
 		factsKick:        make(chan struct{}, 1),     // D-469c S3
 	}
 	// D-405 S4：开户门槛档——dashboard.MarginFloorCheck 注入（nil service=未接线不检查）。
+	// D-549 R1：同点注入统一资金读口（gate_margin CEX Src 闸；与 dashboard 共享一实例）。
 	if service != nil {
 		e.gate.SetMarginFloorChecker(service)
+		e.gate.SetCapitalView(service.CapitalView())
 	}
 	// D-403 S3：热重载指针初值=启动加载结果（cfg.XAssetAllowCombos，setup 期 xassetAllowFromTable 产出）。
 	initAllow := cfg.XAssetAllowCombos
