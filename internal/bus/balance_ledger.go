@@ -26,8 +26,19 @@ func (e BalanceEntry) Dirty() bool { return e.dirty }
 
 // BalanceLedger venue_key→账户池内存态（三 venue 同构一通道）。
 type BalanceLedger struct {
-	mu sync.RWMutex
-	m  map[string]BalanceEntry
+	mu    sync.RWMutex
+	m     map[string]BalanceEntry
+	onPut func(venueKey string) // D-568：写面通知回调（SetOnPut 注入，锁外调）
+}
+
+// SetOnPut D-568：注入写面通知回调（dashboard/cmd→bus 方向，bus 不知 dashboard；nil 安全）。
+func (l *BalanceLedger) SetOnPut(fn func(venueKey string)) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	l.onPut = fn
+	l.mu.Unlock()
 }
 
 // NewBalanceLedger 创建活账本。
@@ -40,7 +51,12 @@ func (l *BalanceLedger) Put(venueKey string, avail, equity float64, ccy, src str
 	}
 	l.mu.Lock()
 	l.m[venueKey] = BalanceEntry{VenueKey: venueKey, Available: avail, Equity: equity, Currency: ccy, At: at, Src: src}
+	onPut := l.onPut
 	l.mu.Unlock()
+	// 锁外回调——回调方会再进 ledger/下游锁，持锁调=重入死锁（D-568）。
+	if onPut != nil {
+		onPut(venueKey)
+	}
 }
 
 // MarkDirty 标脏（私有流每轮重连前调用——死流/断链期读取方走 REST 校准不读尸值）。
