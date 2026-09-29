@@ -96,6 +96,7 @@ func (s *Service) pendingEntries(ctx context.Context) ([]*v1.XAssetPendingEntryR
 			WaitReason: reason, Ready: ready,
 			Tier: tier, TierDetail: detail, TierWarn: warn,
 		}
+		s.fillWaitCondition(ctx, c, row, ready) // D-580：等待条件透出（等什么+当前多少+还差多少）
 		if r, ok := fundingRejectFor(rejects, c.CanonicalBuy, c.CanonicalSell, c.VenueBuy, c.VenueSell); ok {
 			row.RecentFundingReject = true
 			row.RecentRejectReason = rejectReasonText(r)

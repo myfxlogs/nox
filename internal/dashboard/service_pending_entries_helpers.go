@@ -6,10 +6,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"arb/internal/capitalview"
 	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
+
+	v1 "arb/internal/gen/dashboardv1"
 )
 
 // comboTier D-478 S4：安全档位（服务端算，前端只渲染）。
@@ -115,6 +118,43 @@ func legMarket(venueKey, canonical string) (vt, sym string) {
 		return "spot", canonical
 	}
 	return "", ""
+}
+
+// fillWaitCondition D-580：XASSET_CARRY 七闸全过时 WaitReason 人话整串+三字段透出。
+func (s *Service) fillWaitCondition(ctx context.Context, c pgstore.XAssetComboAdminRow, row *v1.XAssetPendingEntryRow, ready bool) {
+	if !ready || row.EntryKind != "XASSET_CARRY" {
+		return
+	}
+	if cur, thr, ok := s.waitEntryBps(ctx, c); ok {
+		gap := thr - cur
+		row.WaitReason = fmt.Sprintf("等待：入场价差 > %.1fbps（24h摆幅）｜当前 %.1fbps｜还差 %.1fbps", thr, cur, gap)
+		row.WaitCurrentBps, row.WaitThresholdBps, row.WaitGapBps = &cur, &thr, &gap
+	} else {
+		row.WaitReason += "（实况价差不可得）" // 诚实不猜（报价缺/超龄/monitor 无行）
+	}
+}
+
+// waitEntryBps D-580：待入场等待条件实况——展示值与决策面（engine_opp 安全边际闸）
+// 同公式同源：entryBps=(cexBid−mtAsk)/mtAsk×1e4 双腿 qbus 实时现算；
+// 阈值=LatestXAssetEntryGate noise_bps（同接口同窗）。反向构型（MT 卖腿）monitor
+// 方向未定义（engine 拒开同判）/qbus 未接线/报价缺或超 5min/monitor 无行或查询败
+// → ok=false，调用方留空+诚实后缀不猜。
+func (s *Service) waitEntryBps(ctx context.Context, c pgstore.XAssetComboAdminRow) (cur, thr float64, ok bool) {
+	if !keydomain.IsMTKey(c.VenueBuy) || s.qbus == nil {
+		return 0, 0, false
+	}
+	cexV, mtV := monitorLegKeys(c)
+	_, noiseBps, _, _, gateOK, err := s.store.LatestXAssetEntryGate(ctx, monitorPairKey(c), cexV, mtV, monitorFreshWindow)
+	if err != nil || !gateOK {
+		return 0, 0, false
+	}
+	mtQ, ok1 := s.qbus.Latest(c.CanonicalBuy, c.VenueBuy)
+	cexQ, ok2 := s.qbus.Latest(c.CanonicalSell, c.VenueSell)
+	if !ok1 || !ok2 || mtQ.Ask <= 0 || cexQ.Bid <= 0 ||
+		time.Since(mtQ.Time) > tickFreshWindow || time.Since(cexQ.Time) > tickFreshWindow {
+		return 0, 0, false
+	}
+	return (cexQ.Bid - mtQ.Ask) / mtQ.Ask * 1e4, noiseBps, true
 }
 
 // bareVenueKey venue 键剥 :后缀（flags/caps/快照 bare 域对齐 engine bareVenue）。
