@@ -49,16 +49,18 @@ func (f *fakeSnapSink) snapshot() []pgstore.VenueAccountSnapshot {
 }
 
 type fakeEventSink struct {
-	ch   chan string
-	lk   sync.Mutex
-	rows []string
+	ch       chan string
+	lk       sync.Mutex
+	rows     []string
+	payloads []string // D-569 包B A13：载荷实录（margin_call 全帧断言）
 }
 
 func newFakeEventSink() *fakeEventSink { return &fakeEventSink{ch: make(chan string, 64)} }
 
-func (f *fakeEventSink) InsertCEXPrivateEvent(_ context.Context, venue, venueType, channel, key string, _ []byte) error {
+func (f *fakeEventSink) InsertCEXPrivateEvent(_ context.Context, venue, venueType, channel, key string, payload []byte) error {
 	f.lk.Lock()
 	f.rows = append(f.rows, fmt.Sprintf("%s:%s:%s:%s", venue, venueType, channel, key))
+	f.payloads = append(f.payloads, string(payload))
 	f.lk.Unlock()
 	select {
 	case f.ch <- channel:
@@ -296,10 +298,7 @@ func TestBinanceListenKeyEndpoint(t *testing.T) {
 	if got := b.listenKeyEndpoint(); got != "https://p:8443/fapi/v1/listenKey" {
 		t.Fatalf("perp endpoint wrong: %s", got)
 	}
-	b.venueType, b.baseURL = "spot", "https://p:8443/api"
-	if got := b.listenKeyEndpoint(); got != "https://p:8443/api/api/v3/userDataStream" {
-		t.Fatalf("spot endpoint wrong: %s", got)
-	}
+	// D-569 包B S7 顺带清理：spot REST listenKey 死分支已删（spot 恒走 ws-api，runOnceSpot 路径）。
 }
 
 // T-bnc-3：端到端——REST 发 key→WS dial URL 正确→ORDER_TRADE_UPDATE→缓存+审计→断线重取新 key。

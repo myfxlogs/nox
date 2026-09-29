@@ -17,21 +17,24 @@ import (
 // handleFrame 用户流事件分派：先落审计表（失败 warn 仍更缓存，R3）再更新缓存/sink。
 // 返回 true=帧要求关连接（listenKeyExpired）——调用方须结束 runOnce 让 Run 重取 key。
 func (b *BinanceUserWS) handleFrame(ctx context.Context, data []byte) (expired bool) {
-	var env struct {
-		E string          `json:"e"`
-		O json.RawMessage `json:"o"`
-		A json.RawMessage `json:"a"`
-	}
+	// D-569 包B S7：map 精确键查表——原 struct 解包在真帧 "E"(eventTime 数字) 撞
+	// env.E(tag "e" string) 大小写不敏感匹配报类型错早退（全帧静默丢=隐形 bug）。
+	var env map[string]json.RawMessage
 	if err := json.Unmarshal(data, &env); err != nil {
 		return false
 	}
-	switch env.E {
+	var envE string
+	if eRaw, ok := env["e"]; !ok || json.Unmarshal(eRaw, &envE) != nil {
+		return false
+	}
+	envO, envA := env["o"], env["a"]
+	switch envE {
 	case "ORDER_TRADE_UPDATE":
-		b.onAudit(ctx, "orders", env.O)
-		b.onOrderUpdate(env.O)
+		b.onAudit(ctx, "orders", envO)
+		b.onOrderUpdate(envO)
 	case "ACCOUNT_UPDATE":
-		b.onAudit(ctx, "account", env.A)
-		b.onAccountUpdate(ctx, env.A)
+		b.onAudit(ctx, "account", envA)
+		b.onAccountUpdate(ctx, envA)
 	case "executionReport": // spot 订单更新（载荷=扁平字段，非 perp 的 o 包裹）
 		b.onAudit(ctx, "orders", data)
 		b.onSpotExecutionReport(data)
@@ -40,10 +43,19 @@ func (b *BinanceUserWS) handleFrame(ctx context.Context, data []byte) (expired b
 		b.onSpotAccountPosition(ctx, data)
 	case "balanceUpdate": // spot 余额增量——审计留痕即可（outboundAccountPosition 同帧带全量）
 		b.onAudit(ctx, "account", data)
+	case "MARGIN_CALL":
+		// D-569 包B S7：MARGIN_CALL schema 官方四路不可得——payload=全帧 data 整帧转发（api-response-fields-empirical）。
+		b.onAudit(ctx, "margin_call", data)
+		if b.hooks.OnMarginCall != nil {
+			b.hooks.OnMarginCall(data)
+		}
 	case "listenKeyExpired":
 		// 官方显式失效事件——ping 保活不断流会掩盖死 key；关连接触发 runOnce 返回重取。
 		log.Printf("[binance-user-ws] listenKeyExpired event (reconnecting for fresh key)")
 		return true
+	default:
+		// D-569 包B S7：未知事件类型留痕一行（新事件静默吞=黑盒）。
+		log.Printf("[binance-user-ws] unhandled event e=%q venueType=%s", envE, b.venueType)
 	}
 	return false
 }

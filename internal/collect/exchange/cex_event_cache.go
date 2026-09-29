@@ -80,6 +80,12 @@ func (c *OrderEventCache) get(venueKey, orderID, clOrdID string, ttl time.Durati
 	return OrderEvent{}, false
 }
 
+// PeekOrder D-569 包B S4：订单事件薄包装读口（EventFreshTTL 复用，miss/stale→false）。
+// 签名钉死——D-566/D-570 包B 复用本定义，禁改。
+func (c *OrderEventCache) PeekOrder(venueKey, orderID string) (OrderEvent, bool) {
+	return c.get(venueKey, orderID, "", EventFreshTTL, time.Now())
+}
+
 // OrderStatusQuerier D-508 S7c：接口定义在消费方——缓存包装层收的是「订单级查单
 // 能力」非 exec 具体型（exec.CEXExecutor/reconcile 同名接口结构满足，正向注入）。
 type OrderStatusQuerier interface {

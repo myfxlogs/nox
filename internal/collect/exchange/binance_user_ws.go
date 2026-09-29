@@ -63,6 +63,8 @@ func (b *BinanceUserWS) balPoolKey() string {
 type BinanceUserHooks struct {
 	OnFundingFee func()
 	OnIO         func()
+	// D-569 包B S7：MARGIN_CALL 整帧转发（payload=全帧 data；schema 官方不可得故不解析）。
+	OnMarginCall func(payload []byte)
 }
 
 func NewBinanceUserWS(apiKey, apiSecret, baseURL, venueType, venueKey string, simulated bool, sink VenueSnapshotSink, events PrivateEventSink, oc *OrderEventCache, pc *PositionEventCache, hooks BinanceUserHooks) *BinanceUserWS {
@@ -80,11 +82,10 @@ func NewBinanceUserWS(apiKey, apiSecret, baseURL, venueType, venueKey string, si
 	return b
 }
 
-// listenKeyEndpoint REST 端点（审计 R1 修订版：perp=base+/v1/listenKey；spot=base+/api/v3/userDataStream）。
+// listenKeyEndpoint REST 端点（perp=base+/v1/listenKey）。
+// D-569 包B S7 顺带清理：spot 死分支删除——runOnce:159 spot 恒走 runOnceSpot（ws-api 控制连接），
+// REST listenKey 路径 spot 不可达（生产 ws-api connected 日志实证）；spot REST userDataStream 已 410。
 func (b *BinanceUserWS) listenKeyEndpoint() string {
-	if b.venueType == "spot" {
-		return b.baseURL + "/api/v3/userDataStream"
-	}
 	return b.baseURL + "/v1/listenKey"
 }
 
