@@ -117,9 +117,19 @@ func TestOKXSubscribeArgs_Filtered(t *testing.T) {
 	args := o.subscribeArgs(context.Background(),
 		[]string{"BTC", "XAU-USDT-SWAP", "ATOMUSDT", "牛来"}, subscribed, quarantined)
 	// BTC→2+1 funding 共3 arg；XAU-USDT-SWAP→perp 2 arg（spot 目录无）；
-	// ATOMUSDT→目录无=隔离零 arg；牛来→零 arg。合计 5。
-	if len(args) != 5 {
-		t.Fatalf("args len=%d want 5: %v", len(args), args)
+	// ATOMUSDT→目录无=隔离零 arg；牛来→零 arg；D-566 包B S6-d 连接级
+	// instruments SWAP+SPOT 各一 arg。合计 7。
+	if len(args) != 7 {
+		t.Fatalf("args len=%d want 7: %v", len(args), args)
+	}
+	var instArgs int
+	for _, a := range args {
+		if a["channel"] == "instruments" {
+			instArgs++
+		}
+	}
+	if instArgs != 2 {
+		t.Fatalf("instruments args=%d want 2（SWAP+SPOT 各一）", instArgs)
 	}
 	if !quarantined["ATOMUSDT"] || !quarantined["牛来"] {
 		t.Fatalf("quarantine missing: %v", quarantined)

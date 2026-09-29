@@ -55,6 +55,9 @@ func (o *OKXPrivateWS) handleData(ctx context.Context, channel string, raw []byt
 	case "balance_and_position":
 		o.onAudit(ctx, "balance_and_position", raw)
 		o.onBalPos(data)
+	case "liquidation-warning":
+		o.onAudit(ctx, "liquidation-warning", raw)
+		o.onLiqWarning(data)
 	}
 }
 
@@ -181,7 +184,9 @@ func (o *OKXPrivateWS) onOrders(ctx context.Context, data []map[string]any) {
 		instID := str(it["instId"])
 		// D-477 S3（GAP-B4）：ctVal 解析器注入式单源（构造点 SetCtValFor，与 executor 同
 		// baseURL 源）；nil=跳过换算保持张数+warn（禁硬编码第二域名源）。
-		if o.ctValFor != nil {
+		// D-566 包B 现态修正③：SPOT instId（如 BTC-USDT）accFillSz 原生即基础币，
+		// ctValFor 只查 SWAP instruments 端点必报错→每帧 warn 噪音；非 -SWAP 后缀直接跳过。
+		if o.ctValFor != nil && strings.HasSuffix(instID, "-SWAP") {
 			if ctVal, err := o.ctValFor(ctx, instID); err == nil && ctVal > 0 {
 				qty *= ctVal
 			} else if err != nil {

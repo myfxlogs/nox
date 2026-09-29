@@ -52,6 +52,8 @@ type OKXPrivateHooks struct {
 	OnFundingFee  func()
 	OnAccountPush func()
 	OnOrderPush   func()
+	// OnLiqWarning D-566 包B S7：liquidation-warning 帧 → 三键透传（缺席空串）。
+	OnLiqWarning func(instID, posSide, mgnRatio string)
 }
 
 // OKXPrivateWS OKX 私有 channel 采集器（D-469a 扩四频道：account/balance_and_position/
@@ -200,14 +202,8 @@ func (o *OKXPrivateWS) runOnce(ctx context.Context) error {
 		case "login":
 			log.Printf("[okx-private-ws] login ok (simulated=%v)", o.simulated)
 			if err := conn.WriteJSON(map[string]any{
-				"op": "subscribe",
-				// D-469a S0 真户实证形制：四频道单帧 args，各 ack 独立 event=subscribe。
-				"args": []map[string]string{
-					{"channel": "account", "ccy": "USDT"},
-					{"channel": "balance_and_position"},
-					{"channel": "positions", "instType": "SWAP"},
-					{"channel": "orders", "instType": "SWAP"},
-				},
+				"op":   "subscribe",
+				"args": okxPrivateSubscribeArgs(),
 			}); err != nil {
 				return fmt.Errorf("subscribe: %w", err)
 			}

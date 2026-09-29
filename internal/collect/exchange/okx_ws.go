@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/exec"
 	"arb/internal/fact"
 
 	"github.com/gorilla/websocket"
@@ -78,6 +79,15 @@ func (o *OKXWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 func (o *OKXWebSocket) subscribeArgs(ctx context.Context, syms []string, subscribed, quarantined map[string]bool) []map[string]string {
 	o.catalog.ensure(ctx)
 	var args []map[string]string
+	// D-566 包B S6-d：instruments 目录变更推送（SWAP+SPOT 各一 arg）——连接级合成键
+	// 走既有差集去重，不随符号增减；重连 subscribed 重置全量重发语义不变。
+	for _, instType := range []string{"SWAP", "SPOT"} {
+		key := "instruments:" + instType
+		if !subscribed[key] {
+			subscribed[key] = true
+			args = append(args, map[string]string{"channel": "instruments", "instType": instType})
+		}
+	}
 	for _, sym := range syms {
 		spotID, perpID := okxSubCandidates(sym)
 		if spotID == "" {
@@ -128,6 +138,11 @@ func (o *OKXWebSocket) handleMessage(ctx context.Context, data []byte, publish f
 	// D-509 S4：funding-rate 帧分流（fundingRate/fundingTime/nextFundingTime 三字段原生）。
 	if msg.Arg.Channel == "funding-rate" {
 		o.handleFundingRate(ctx, msg)
+		return
+	}
+	// D-566 包B S6-d：instruments 变更帧 → 逐 instId 失效规格缓存（事件主失效通道）。
+	if msg.Arg.Channel == "instruments" {
+		o.handleInstruments(msg)
 		return
 	}
 	if msg.Arg.Channel != "tickers" || len(msg.Data) == 0 {
@@ -247,3 +262,25 @@ func (o *OKXWebSocket) handleFundingRate(ctx context.Context, msg wsMsg) {
 		log.Printf("[okx-ws] funding emit %s: %v", instID, err)
 	}
 }
+
+// handleInstruments D-566 包B S6-d：instruments 目录变更帧 → data[].instId 逐个
+// exec.OKXSpecInvalidate（一次 log 收敛）；未知字段 WarnUnconsumed 同既有模式。
+func (o *OKXWebSocket) handleInstruments(msg wsMsg) {
+	instIDs := make([]string, 0, len(msg.Data))
+	for _, it := range msg.Data {
+		if v, _ := it["instId"].(string); v != "" {
+			instIDs = append(instIDs, v)
+			exec.OKXSpecInvalidate(v)
+		}
+	}
+	if len(instIDs) > 0 {
+		log.Printf("[okx-ws] instruments 变更 %d 条，规格缓存已失效: %v", len(instIDs), instIDs)
+	}
+	if raw, err := json.Marshal(msg.Data); err == nil {
+		WarnUnconsumed("okx", "instruments", raw, okxInstrumentsConsumed)
+	}
+}
+
+// okxInstrumentsConsumed instruments data[] 已消费字段白名单（§2.6.1 字段集起步，
+// 实采首帧告警即补全）。
+var okxInstrumentsConsumed = []string{"instId"}
