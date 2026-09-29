@@ -212,6 +212,13 @@ func TestD570_A4_RequestExpiredResign(t *testing.T) {
 	if d := seen[1] - seen[0]; d < 80 || d > 100 {
 		t.Fatalf("重发 ts 偏移应≈90s, got %d", d)
 	}
+	// A4-R2 F-1：重发后 exptime 随校时 delta 偏移（删 delta 应用必红）——
+	// 第二次 POST 的 X-Gate-Exptime 应≈本地钟+90s+15s（≈now+105s）。
+	hd := f.lastHeaders.Load().(http.Header)
+	exp, _ := strconv.ParseInt(hd.Get("X-Gate-Exptime"), 10, 64)
+	if want := time.Now().UnixMilli() + 105000; exp < want-2000 || exp > want+2000 {
+		t.Fatalf("重发 exptime 应随 delta 偏移≈now+105s: got diff=%dms", exp-want)
+	}
 	// 恒 REQUEST_EXPIRED：重发一次后上抛。
 	var calls2 atomic.Int32
 	h2 := map[string]func(http.ResponseWriter, *http.Request){

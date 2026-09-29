@@ -92,11 +92,13 @@ func (e *CEXExecutor) gateSignedPost(ctx context.Context, endpoint, urlPath, bod
 		ts := gateNow()
 		sign := signutil.GateSign(e.apiSecret, "POST", urlPath, "", bodyStr, ts)
 		headers := http.Header{
-			"KEY":            {e.apiKey},
-			"Timestamp":      {strconv.FormatInt(ts, 10)},
-			"SIGN":           {sign},
-			"Content-Type":   {"application/json"},
-			"X-Gate-Exptime": {strconv.FormatInt(time.Now().Add(15*time.Second).UnixMilli(), 10)},
+			"KEY":          {e.apiKey},
+			"Timestamp":    {strconv.FormatInt(ts, 10)},
+			"SIGN":         {sign},
+			"Content-Type": {"application/json"},
+			// D-570 包A-R2 F-1：exptime 走校时钟（本地毫秒+delta 秒×1000+15s）——REQUEST_EXPIRED
+			// 重发场景下本地钟戳仍过期=校时链自挫；无校时态 delta=0 与本地钟等价。
+			"X-Gate-Exptime": {strconv.FormatInt(time.Now().UnixMilli()+gateClockOffset.Load()*1000+15000, 10)},
 		}
 		return e.post(ctx, e.baseURL+endpoint, bodyStr, headers)
 	}
