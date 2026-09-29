@@ -36,6 +36,8 @@ func (s *Service) capitalView() *capitalview.View {
 			}
 			return s.gradDB().LatestVenueAccountSnapshots(ctx)
 		},
+		MTFrames:   s.mtFrameAt,                                         // D-572 S2：MT 键流帧读口
+		MTFrameTTL: func() time.Duration { return snapshotStaleWindow }, // 帧龄窗=快照龄闸同值
 	})
 	return s.capView
 }
@@ -69,6 +71,22 @@ func (s *Service) liveRestTTL() time.Duration {
 		return s.liveRestTTLDur
 	}
 	return capitalview.DefaultRestTTL
+}
+
+// mtFrameAt D-572 S2：MT 键流帧读口包装（AccountMonitor.StreamAccount → capitalview.MTFrame；
+// 帧币种流帧恒空→如实空串，快照兜底层不因此误胜）。acctMon nil=未接线→miss 落快照。
+func (s *Service) mtFrameAt(venueKey string) (capitalview.MTFrame, bool) {
+	if s.acctMon == nil {
+		return capitalview.MTFrame{}, false
+	}
+	sa, ok := s.acctMon.StreamAccount(venueKey)
+	if !ok {
+		return capitalview.MTFrame{}, false
+	}
+	return capitalview.MTFrame{
+		Equity: sa.Equity, Available: sa.FreeMargin,
+		Currency: sa.Currency, At: sa.FrameTime,
+	}, true
 }
 
 // livePoolQuerier 腿 venue → CEXAccountQuerier（复用 account-monitor 同链：

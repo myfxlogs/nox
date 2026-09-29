@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/exec"
 	"arb/internal/fact"
 	"arb/internal/store/pgstore"
 )
@@ -126,5 +127,40 @@ func TestD572_A4_MTUntouched(t *testing.T) {
 	}
 	if calls.Load() == 0 {
 		t.Fatalf("perp 腿应经 venueLeverage（空 sym 传通）")
+	}
+}
+
+// A5（R2 S2 增补）：MT 腿池接实时帧——帧命中且≤5min→live Src=mt_frame（龄闸不触发不黄）；
+// 帧超窗→回落快照；facts 路径零扰动。
+func TestD572_A5_MTFrameLive(t *testing.T) {
+	ctx := context.Background()
+	s, _ := d572Svc(t, 5000, 10, nil)
+	mon := NewAccountMonitor(NewBrokerManager(nil, bus.New(), exec.NewRegistry(), time.Minute), time.Millisecond, nil)
+	s.acctMon = mon
+
+	// ① 帧新鲜（fm=2000）+ 快照陈旧（free=1 若误用必 conflict）→ ok，帧路径实证。
+	mon.ObserveStreamAccount("3001157:mt5", 5000, 5000, 0, 2000, 0, 0, "USD", time.Now())
+	stale := d563MtSnap(5000, 1)
+	stale.FetchedAt = time.Now().Add(-8 * time.Minute) // 超龄快照（旧码→unknown 黄标）
+	c, _ := d572Combo()
+	if v, d := s.comboPoolVerdict(ctx, c, []pgstore.VenueAccountLatest{stale}); v != "ok" {
+		t.Fatalf("帧命中应 live 不黄: %s %s", v, d)
+	}
+	if p, ok := s.legPool(ctx, nil, "3001157:mt5"); !ok || !p.live || p.src != "mt_frame" {
+		t.Fatalf("池源应 mt_frame live: %+v", p)
+	}
+	// facts 零扰动：frac 仍 0.02（facts 路径）。
+	if frac, _, known := s.legMarginNeedFrac(ctx, "3001157:mt5", "", true); !known || frac != 0.02 {
+		t.Fatalf("facts 路径扰动: %v %v", frac, known)
+	}
+
+	// ② 帧超窗（6min）→回落快照——快照新鲜即快照 live=false 判定面成立。
+	mon.ObserveStreamAccount("3001157:mt5", 5000, 5000, 0, 2000, 0, 0, "USD", time.Now().Add(-6*time.Minute))
+	if p, ok := s.legPool(ctx, []pgstore.VenueAccountLatest{d563MtSnap(5000, 4000)}, "3001157:mt5"); !ok || p.live {
+		t.Fatalf("超窗帧应回落快照（live=false）: %+v", p)
+	}
+	// 超窗帧+超龄快照 → unknown 黄标保留（龄闸不被帧残留骗过）。
+	if v, d := s.comboPoolVerdict(ctx, c, []pgstore.VenueAccountLatest{stale}); v != "unknown" || !strings.Contains(d, "池快照过期") {
+		t.Fatalf("帧超窗+快照超龄应 unknown: %s %s", v, d)
 	}
 }
