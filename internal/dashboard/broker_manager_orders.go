@@ -166,7 +166,10 @@ func (m *BrokerManager) venueOrderResults(ctx context.Context) []VenueOrderResul
 			continue
 		}
 		vk := q.VenueKey()
-		orders, err := q.QueryOpenedOrders(ctx)
+		// D-575：querier 级 per-call 10s 界——venue RPC 挂死不再冻结 Run 循环（循环内显式 cancel 禁 defer 累积）。
+		qctx, cancel := monitorCallCtx(ctx)
+		orders, err := q.QueryOpenedOrders(qctx)
+		cancel()
 		if err != nil {
 			log.Printf("[broker] query venue orders %s: %v", vk, err)
 		}
@@ -182,7 +185,10 @@ func (m *BrokerManager) venueOrders(ctx context.Context, venueKey string) VenueO
 		if q == nil || q.VenueKey() != venueKey {
 			continue
 		}
-		orders, err := q.QueryOpenedOrders(ctx)
+		// D-575：同上 per-call 10s 界。
+		qctx, cancel := monitorCallCtx(ctx)
+		orders, err := q.QueryOpenedOrders(qctx)
+		cancel()
 		if err != nil {
 			log.Printf("[broker] query venue orders %s: %v", venueKey, err)
 		}

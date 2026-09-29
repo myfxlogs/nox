@@ -26,6 +26,9 @@ func (m *BrokerPositionMonitor) collectSwapSnapshots(ctx context.Context) {
 	if m.swapSnapStore == nil {
 		return
 	}
+	// D-575：DB 批量写整体界——下游 InsertSwapSnapshot/buildPositionIDIndex/RecordJumps 自动继承。
+	ctx, cancel := context.WithTimeout(ctx, bpFlushBound)
+	defer cancel()
 	// 复制 venues 快照（锁内复制，锁外处理）
 	m.mu.RLock()
 	venues := maps.Clone(m.venues)

@@ -27,7 +27,12 @@ var acctFlushDelay = 200 * time.Millisecond
 func (m *AccountMonitor) dirtyLocked(vk string) {
 	m.dirty[vk] = struct{}{}
 	if m.flushT == nil {
-		m.flushT = time.AfterFunc(acctFlushDelay, func() { m.flush(context.Background()) })
+		bound := bpFlushBound // D-575：调度时刻同步取值（镜像 bpMon dirtyLocked）
+		m.flushT = time.AfterFunc(acctFlushDelay, func() {
+			ctx, cancel := context.WithTimeout(context.Background(), bound)
+			defer cancel()
+			m.flush(ctx)
+		})
 	}
 }
 
