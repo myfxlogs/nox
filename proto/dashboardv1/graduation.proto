@@ -111,6 +111,10 @@ message XAssetPendingEntryRow {
   string breaker_class = 12;
   google.protobuf.Timestamp breaker_resume_at = 13;
   int32 breaker_count = 14;                // 本窗已抑制尝试数（徽标 ×N）
+  // D-580：等待条件结构化透出（XASSET_CARRY 且七闸全过时填充；其余形态/数据缺=留空）。
+  optional double wait_current_bps = 15;   // 实况入场价差 bps（双腿 qbus 现算，同 engine_opp 公式）
+  optional double wait_threshold_bps = 16; // 入场阈值 bps（monitor noise_bps 24h 摆幅）
+  optional double wait_gap_bps = 17;       // 阈值−当前（正=还差多少）
 }
 message UpsertXAssetAllowComboRequest {
   int64 id = 1;                            // 0=insert；>0=update caps/enabled/note（行锁）
