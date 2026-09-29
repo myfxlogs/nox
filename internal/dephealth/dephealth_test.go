@@ -91,3 +91,35 @@ func TestD579_T1c_EmptyKey(t *testing.T) {
 		t.Fatalf("空 key 不应记账, got %d", n)
 	}
 }
+
+// TestD579_T6_OnChangeKick R3 F-3a：状态变迁才扇出 OnChange（锁外调、天然去重）。
+// unknown→healthy 踢、连败 degraded→healthy 踢、healthy→healthy 不踢、degraded 内续败不踢。
+func TestD579_T6_OnChangeKick(t *testing.T) {
+	resetForTest()
+	defer resetForTest()
+	var kicks int
+	OnChange = func() { kicks++ }
+
+	Mark("k:ws", true, nil) // unknown→healthy
+	if kicks != 1 {
+		t.Fatalf("unknown→healthy 应踢 1, got %d", kicks)
+	}
+	Mark("k:ws", true, nil) // healthy→healthy 零踢
+	if kicks != 1 {
+		t.Fatalf("healthy→healthy 不应踢, got %d", kicks)
+	}
+	for i := 0; i < 3; i++ {
+		Mark("k:ws", false, errors.New("x")) // healthy→suspect(踢1)→suspect(不踢)→degraded(踢1)
+	}
+	if kicks != 3 {
+		t.Fatalf("healthy→suspect→degraded 应再踢 2, got %d", kicks)
+	}
+	Mark("k:ws", false, errors.New("x")) // degraded 内续败不踢
+	if kicks != 3 {
+		t.Fatalf("degraded 续败不应踢, got %d", kicks)
+	}
+	Mark("k:ws", true, nil) // degraded→healthy 踢
+	if kicks != 4 {
+		t.Fatalf("degraded→healthy 应踢, got %d", kicks)
+	}
+}
