@@ -12,6 +12,7 @@ import (
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
 	"arb/internal/bus"
 	"arb/internal/fact"
+	"arb/internal/reconcile"
 	"arb/internal/safego"
 
 	"google.golang.org/grpc"
@@ -56,6 +57,15 @@ type MT5Adapter struct {
 	// AccountSink D-445 S0：OnOrderUpdate 帧余额六字段下沉（含 Update==nil 纯余额帧）；
 	// 注入链同 OrderEventSink（main→brokerMgr→ad）。nil = 未注入（no-op）。
 	AccountSink AcctFrameSink
+
+	// PositionsSink D-571 包A：OnOrderProfit 帧 Orders 逐仓载荷下沉
+	// （main→brokerMgr→ad 同模式；venueKey=keydomain.Join(venue,"mt5")）。nil = 不消费。
+	PositionsSink func(venueKey string, orders []reconcile.VenueOrder)
+
+	// StreamStateSink D-571 包A：venue 流状态事件透出（OnOrderProfit 持仓载流
+	// 首帧→true，recv error→false；venue_online 改由此承担，不再由 poll 成败猜）。
+	// nil = 不透出。
+	StreamStateSink func(venueKey string, online bool)
 
 	// AlertSink 断流分级告警下沉（D-104 P2 U2，MarginSink 同模式三点注入链）。nil = 未注入（no-op）。
 	AlertSink func(level, msg string)

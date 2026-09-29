@@ -42,7 +42,25 @@ message StreamUpdatesResponse {
     HedgeRefreshNotice hedge_refresh = 12;              // 对冲结构刷新通知（D-231 S5，空消息→前端重取）
     CMCWatchUpdate cmc_update = 13;                     // CMC 看盘实时帧（D-234，后端现算载荷→前端 merge 渲染）
     DataRefreshNotice data_refresh = 14;                // 域数据刷新通知（D-508 S9，空载荷+topic→前端重取）
+    BrokerPositionEvent broker_position_event = 15;     // Broker 实持仓逐仓事件（D-571 包A：upsert/remove+聚合随发）
   }
+}
+
+// BrokerPositionEvent D-571：逐仓 delta 事件（替代 case 8 全量快照的实时通道）。
+// 载荷=该仓完整显示态（复用 BrokerPosition 全字段，后端算好前端零信任）。
+message BrokerPositionEvent {
+  oneof kind {
+    BrokerPosition upsert = 1;          // 新增/任一显示字段变更
+    BrokerPositionRef remove = 2;       // 持仓消失（仅权威路径可发）
+  }
+  double pnl_sum_usd = 3;               // 每次事件顺带最新聚合
+  double net_sum_usd = 4;
+}
+
+// BrokerPositionRef 逐仓删除事件的键。
+message BrokerPositionRef {
+  string venue_key = 1;
+  string ticket = 2;
 }
 
 // HedgeRefreshNotice（D-231 S5）：TRX 投票/质押/余额变化 → 对冲结构卡刷新通知。

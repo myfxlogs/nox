@@ -24,6 +24,8 @@ import (
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
 	"arb/internal/collect"
 	"arb/internal/fact"
+	"arb/internal/keydomain"
+	"arb/internal/reconcile"
 )
 
 // marginDebounce 事件触发防抖窗口（静态数据，防事件洪峰重复查库）。
@@ -136,6 +138,7 @@ func (s *MarginFactSource) consumeStream(ctx context.Context, sink func(fact.Fac
 		s.reconnectBackoff(ctx)
 		return
 	}
+	onlineReported := false
 	for {
 		if ctx.Err() != nil {
 			return
@@ -146,6 +149,7 @@ func (s *MarginFactSource) consumeStream(ctx context.Context, sink func(fact.Fac
 				return
 			}
 			log.Printf("[mt5:%s] margin: stream recv: %v", a.venue, err)
+			s.emitStreamState(false)
 			if IsSessionLost(err) {
 				if rerr := a.reconnectSession(ctx); rerr != nil {
 					log.Printf("[mt5:%s] margin: reconnect: %v", a.venue, rerr)
@@ -154,8 +158,17 @@ func (s *MarginFactSource) consumeStream(ctx context.Context, sink func(fact.Fac
 			s.reconnectBackoff(ctx)
 			return // 外层循环重订阅 + 重开流
 		}
-		// 事件帧到达 = 账户活跃/会话活着 → 触发 margin 补采（流内字段不消费）。
-		_ = resp // 仅当触发器，不读 Result 字段
+		// 首帧证明流真活 → 透出 online（每轮流只报一次；venue_online 由此承担，D-571 包A）。
+		if !onlineReported {
+			s.emitStreamState(true)
+			onlineReported = true
+		}
+		// D-571 包A：帧内 Orders 逐仓载荷下沉（此前过即弃）——patch 语义，
+		// 帧外仓不动不删（缺仓只 REST 权威裁决），映射与 QueryOpenedOrders 同源。
+		if orders := resp.GetResult().GetOrders(); len(orders) > 0 {
+			s.publishPositions(orders)
+		}
+		// 事件帧到达 = 账户活跃/会话活着 → 触发 margin 补采（Margin/Balance/Equity/Profit 不消费）。
 		// 防抖：距上次成功采集 <5min 直接 skip（静态数据，防事件洪峰重复查库）。
 		if time.Since(s.lastSuccess) < marginDebounce {
 			continue
@@ -169,6 +182,33 @@ func (s *MarginFactSource) consumeStream(ctx context.Context, sink func(fact.Fac
 			log.Printf("[mt5:%s] margin: event-triggered poll failed", a.venue)
 		}
 	}
+}
+
+// publishPositions D-571 包A：帧内 Orders → VenueOrder（MT5OrdersToVenueOrders 单一映射点）
+// → PositionsSink。recover 守卫同 order-events publish（sink panic 不拉崩流循环）。
+func (s *MarginFactSource) publishPositions(orders []*mt5pb.Order) {
+	if s.a.PositionsSink == nil {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[mt5:%s] margin: positions sink panic: %v", s.a.venue, r)
+		}
+	}()
+	s.a.PositionsSink(keydomain.Join(s.a.venue, "mt5"), reconcile.MT5OrdersToVenueOrders(s.a.venue, orders))
+}
+
+// emitStreamState D-571 包A：流状态透出（nil 安全 + recover 守卫，同 publish 模式）。
+func (s *MarginFactSource) emitStreamState(online bool) {
+	if s.a.StreamStateSink == nil {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[mt5:%s] margin: stream-state sink panic: %v", s.a.venue, r)
+		}
+	}()
+	s.a.StreamStateSink(keydomain.Join(s.a.venue, "mt5"), online)
 }
 
 // reconnectBackoff 流重连退避（1s/5s/30s 有界，封顶后保持末档）。ctx 取消立即返回。
