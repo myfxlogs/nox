@@ -81,7 +81,7 @@ func NewCEXExecutor(venue, venueType, apiKey, apiSecret, passphrase, baseURL str
 		passphrase: passphrase,
 		baseURL:    baseURL,
 		simulated:  simulated,
-		client:     httpx.Client(), // CA 信任 + X-Proxy-Token 注入（D-055）；OKX 公网忽略注入头
+		client:     wrapDepHealth(venue, venueType, httpx.Client()), // CA 信任 + X-Proxy-Token 注入（D-055）；OKX 公网忽略注入头；D-579 dephealth 记账 RT
 
 		marginReservePct:       defaultMarginReservePct,
 		crossNotionalEquityCap: DefaultCrossNotionalEquityCap,
