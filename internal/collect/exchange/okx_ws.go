@@ -57,6 +57,7 @@ func (o *OKXWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 	quarantined := map[string]bool{}
 	RunWS(ctx, WSSpec{
 		Name: "okx-ws", URLs: o.wsURLs, Dialer: o.dialer, Header: o.header,
+		DepKey:   "okx:ws-market", // D-579：dephealth 记账键
 		ReadIdle: o.readIdle, PingEvery: o.pingEvery, ReconnectBackoff: o.reconnectBackoff,
 		OnConnect: func() { subscribed = map[string]bool{} },
 		InitialSubs: func() []any {

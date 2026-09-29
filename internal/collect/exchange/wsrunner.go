@@ -19,6 +19,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"arb/internal/dephealth"
 	"arb/internal/safego"
 
 	"github.com/gorilla/websocket"
@@ -71,6 +72,8 @@ type WSSpec struct {
 	OnConnect   func()            // 可选：每连接拨号成功后回调（差集表等每连接状态重置走此）
 	OnAliveTick func(s Sender)    // 可选：每 ping tick 回调（okx/gate 差集补订走此）
 	OnReconnect func()            // 可选：重连错误事件（reconnectMeter.record 走此）
+	// DepKey D-579 S2：dephealth 记账键（"venue:ws-频道族"）；空=不记（向后兼容）。
+	DepKey string
 
 	// 时距（零值=ws_keepalive.go 常量族；测试覆写缩小观察窗，对齐 D-507 字段化先例）。
 	ReadIdle         time.Duration
@@ -94,6 +97,7 @@ func RunWS(ctx context.Context, spec WSSpec) {
 	st.cur.Store(-1)
 	for {
 		if err := runWSOnceSt(ctx, spec, st); err != nil {
+			dephealth.Mark(spec.DepKey, false, err) // D-579：应用层成败事实记账
 			if spec.OnReconnect != nil {
 				spec.OnReconnect() // D-507 meter fail-loud（每连接一 meter，单 goroutine 持有）
 			}
@@ -145,6 +149,8 @@ func runWSOnceSt(ctx context.Context, spec WSSpec, st *wsCandState) error {
 		return fmt.Errorf("dial %s: %w", lastURL, err)
 	}
 	defer conn.Close()
+
+	dephealth.Mark(spec.DepKey, true, nil) // D-579：拨号成功标 ok（进入读循环前防 half-open 假绿）
 
 	if spec.OnConnect != nil {
 		spec.OnConnect()

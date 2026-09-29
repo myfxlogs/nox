@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/dephealth"
 	"arb/internal/httpx"
 	"arb/internal/safego"
 
@@ -107,6 +108,7 @@ func (g *GatePrivateWS) WSURL() string {
 func (g *GatePrivateWS) Run(ctx context.Context) {
 	for {
 		if err := g.runOnce(ctx); err != nil {
+			dephealth.Mark("gate:ws-private", false, err) // D-579 R2：私有流经 runOnce 不经 RunWS 骨架，自挂点
 			log.Printf("[gate-ws] reconnect after error: %v", err)
 		}
 		select {
@@ -170,6 +172,7 @@ func (g *GatePrivateWS) runOnce(ctx context.Context) error {
 			return fmt.Errorf("subscribe %s: %w", ch, err)
 		}
 	}
+	dephealth.Mark("gate:ws-private", true, nil) // D-579 R2：逐频道签名订阅帧全部发出=就绪点
 
 	for {
 		select {
