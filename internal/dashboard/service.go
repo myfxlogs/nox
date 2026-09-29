@@ -184,13 +184,14 @@ type Service struct {
 	carryRegime exec.CarryRegimeConfig
 
 	// D-403 S3：验证毕业链依赖（nil-able setter 注入模式，New 已 20+ 参勿再加）。
-	gradStore          graduationStore                                                      // 测试替身 seam；nil=回落 s.store
-	xassetReloader     XAssetReloader                                                       // engine 热重载（nil=approve fail-closed 拒绝）
-	pfAdmissionControl pfAdmissionControl                                                   // D-491 S6：准入评估器注入（nil=RPC 降级报错）
-	allowVenuesSource  func(ctx context.Context) (map[string]bool, error)                   // D-443 S4：venue 白名单表活读 getter（nil=空集保守全缺口）
-	autoMapFn          func(ctx context.Context, venue string) (string, error)              // AutoMap 摘要 seam（nil=真身 s.AutoMapBroker）
-	rejectBreaker      RejectBreakerReader                                                  // D-560 S3：拒单熔断快照/恢复（nil=无透出）
-	mtSummaryFn        func(ctx context.Context, venueKey string) (float64, float64, error) // D-563 S4b：MT 实时资金缝（nil=bm 真身）
+	gradStore          graduationStore                                                                   // 测试替身 seam；nil=回落 s.store
+	xassetReloader     XAssetReloader                                                                    // engine 热重载（nil=approve fail-closed 拒绝）
+	pfAdmissionControl pfAdmissionControl                                                                // D-491 S6：准入评估器注入（nil=RPC 降级报错）
+	allowVenuesSource  func(ctx context.Context) (map[string]bool, error)                                // D-443 S4：venue 白名单表活读 getter（nil=空集保守全缺口）
+	autoMapFn          func(ctx context.Context, venue string) (string, error)                           // AutoMap 摘要 seam（nil=真身 s.AutoMapBroker）
+	rejectBreaker      RejectBreakerReader                                                               // D-560 S3：拒单熔断快照/恢复（nil=无透出）
+	mtSummaryFn        func(ctx context.Context, venueKey string) (float64, float64, string, error)      // D-563 S4b：MT 实时资金缝（equity/freeMargin/currency；nil=bm 真身）
+	venueLeverageFn    func(ctx context.Context, venueKey, symbol string, sellLeg bool) (float64, error) // D-565 S2：venue 杠杆实读缝（nil=venueLeverageExec 真身）
 
 	// D-159 W1a I6：environment/is_real 一致性检查（手动入口同源）。
 	// environment 空 = 未配置（不检查，回退旧行为）。

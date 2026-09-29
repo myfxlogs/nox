@@ -53,7 +53,9 @@ func TestD434_Evaluate_CEX_FilledNotional(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("create leg: %v", err)
 	}
-	g := NewMarginGuard(s, bus.New(), d434CS, time.Minute, time.Minute)
+	qb := bus.New() // D-565 S6：腿级实时报价（存价回退已删）
+	qb.Publish(bus.Quote{Symbol: "XAUUSDT", Venue: "okx", VenueType: "perp", Bid: 4297, Ask: 4297.1})
+	g := NewMarginGuard(s, qb, d434CS, time.Minute, time.Minute)
 	sn := &pgstore.VenueAccountSnapshot{
 		Venue: "okx", VenueType: "unified", EquityRaw: 10000, BufferMultiple: f64p(5),
 		Currency: "USD", FetchedAt: time.Now(),
@@ -106,8 +108,10 @@ func TestD434_MarginFloorEval_CEX(t *testing.T) {
 	}}); err != nil {
 		t.Fatalf("insert snapshot: %v", err)
 	}
+	qb2 := bus.New() // D-565 S6：腿级实时报价（存价回退已删）
+	qb2.Publish(bus.Quote{Symbol: "XAUUSDT", Venue: "okx", VenueType: "perp", Bid: 4297, Ask: 4297.1})
 	svc := &Service{
-		store: s, qbus: bus.New(),
+		store: s, qbus: qb2,
 		cexContractSize: func(venue, symbol string) (float64, bool) { return 0.001, true },
 	}
 	// D-549：CEX 执行链资金数=活账本/REST 实拉——喂 ws 活值（快照行只留 buffer 锚）。

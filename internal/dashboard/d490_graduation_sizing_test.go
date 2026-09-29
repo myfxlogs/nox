@@ -1,8 +1,7 @@
 package dashboard
 
-// D-490 断言锚：毕业授权资金分配 sizing（净值快照折算）。
-// 覆盖：pct/usd 双输入 happy+互算回显 / 双池 min 绑定 / 六路 fail-closed /
-// dry_run 零副作用 / 显式模式回归（既有 TestD403_* 续绿）。
+// D-490 断言锚：毕业授权资金分配 sizing（净值快照折算）。覆盖：pct/usd 双输入
+// happy+互算回显 / 双池 min 绑定 / fail-closed 矩阵 / dry_run 零副作用 / 显式模式回归。
 
 import (
 	"context"
@@ -19,8 +18,7 @@ import (
 )
 
 // d490Fixture：gradFixture(structure) + qbus 双腿报价 + CS/step 解析器 + 池快照。
-// perLot：MT 腿=50000×0.001=50；gate perp=50000×0.01=500。
-// 池：1279967:mt5 $2000 USD × gate:perp $1000 USDT → minPool=1000（小池绑定）。
+// perLot：MT 腿=50000×0.001=50；gate perp=50000×0.01=500。池 min 绑定 1279967:mt5×gate:perp。
 func d490Fixture(snaps []pgstore.VenueAccountLatest, mtStep float64) (*fakeGradDB, *Service) {
 	return d490FixtureStruct("long_cfd_short_perp", snaps, mtStep)
 }
@@ -36,14 +34,17 @@ func d490FixtureStruct(structure string, snaps []pgstore.VenueAccountLatest, mtS
 	s.legContractSize = func(_, _ string) (float64, bool) { return 0.001, true }
 	s.cexContractSize = func(_, _ string) (float64, bool) { return 0.01, true }
 	s.legVolumeStep = func(_, _ string) (float64, bool) { return mtStep, true }
+	// D-565 S4：批钱面全实时——CEX=活账本 ws / MT=AccountSummary RPC 缝（snaps 值同供）。
+	d490FeedLive(s, snaps, now)
+	// D-565 S2：venue 杠杆实读缝——夹具钉 10x（frac=0.1）。
+	s.venueLeverageFn = func(context.Context, string, string, bool) (float64, error) { return 10, nil }
 	return f, s
 }
 
 func d490Snaps(eqMT, eqCEX float64, ccy string, age time.Duration) []pgstore.VenueAccountLatest {
 	return []pgstore.VenueAccountLatest{
 		{Venue: "1279967", VenueType: "mt5", EquityRaw: &eqMT, Currency: ccy, FetchedAt: time.Now().Add(-age)},
-		{Venue: "gate", VenueType: "perp", EquityRaw: &eqCEX, Currency: ccy, FetchedAt: time.Now().Add(-age)},
-	}
+		{Venue: "gate", VenueType: "perp", EquityRaw: &eqCEX, Currency: ccy, FetchedAt: time.Now().Add(-age)}}
 }
 
 func d490f(v float64) *float64 { return &v }
@@ -125,7 +126,7 @@ func TestD490_UsdHappyAndEcho(t *testing.T) {
 	}
 }
 
-// TestD490_FailClosed 六路 fail-closed：互斥×2 / 池缺 / 过期 / 币种 / minStep 死额度。
+// TestD490_FailClosed fail-closed 矩阵：互斥×2 / 池缺 / 过期 / 币种 / minStep 死额度。
 // 每路断言 resp.Ok=false 且零写库（combo nil / decision 未落 approved）。
 func TestD490_FailClosed(t *testing.T) {
 	type tc struct {
@@ -135,6 +136,8 @@ func TestD490_FailClosed(t *testing.T) {
 		snaps     []pgstore.VenueAccountLatest
 		step      float64
 		want      string
+		noLive    bool // 斩活账本+MT RPC 缝（实证快照兜不住批钱）
+
 	}
 	goodSnaps := d490Snaps(2000, 1000, "USD", time.Minute)
 	staleSnaps := d490Snaps(2000, 1000, "USD", 10*time.Minute)
@@ -143,15 +146,20 @@ func TestD490_FailClosed(t *testing.T) {
 	cases := []tc{
 		{name: "pct与usd同传", structure: longCfd, req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingPct: d490f(0.1), FundingUsd: d490f(50)}, snaps: goodSnaps, step: 0.01, want: "互斥"},
 		{name: "与显式cap混传", structure: longCfd, req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingUsd: d490f(100), MaxGrossUsd: 500}, snaps: goodSnaps, step: 0.01, want: "互斥"},
-		{name: "快照缺失", structure: longCfd, req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingPct: d490f(0.1)}, snaps: nil, step: 0.01, want: "快照"},
-		{name: "快照过期", structure: longCfd, req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingPct: d490f(0.1)}, snaps: staleSnaps, step: 0.01, want: "过期"},
+		// D-565 S4：批钱面禁快照兜底——实况双败+快照在场（含陈旧）仍拒。
+		{name: "实况缺失", structure: longCfd, req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingPct: d490f(0.1)}, snaps: nil, step: 0.01, want: "实况"},
+		{name: "实况缺陈旧快照不救", structure: longCfd, req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingPct: d490f(0.1)}, snaps: staleSnaps, step: 0.01, noLive: true, want: "实况"},
 		{name: "币种非USD系", structure: longCfd, req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingPct: d490f(0.1)}, snaps: jpySnaps, step: 0.01, want: "币种"},
 		{name: "买腿qty低于minStep", structure: longCfd, req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingPct: d490f(0.1)}, snaps: goodSnaps, step: 5.0, want: "买腿"},
-		// short_cfd：MT 腿在卖侧——卖腿 qty 同样必须过 minStep 预检（否则死额度漏网）。
+		// short_cfd：MT 腿在卖侧——卖腿 qty 同须过 minStep 预检（否则死额度漏网）。
 		{name: "short_cfd卖腿qty低于minStep", structure: "short_cfd_long_perp", req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingPct: d490f(0.1)}, snaps: goodSnaps, step: 5.0, want: "卖腿"},
 	}
 	for _, c := range cases {
 		f, s := d490FixtureStruct(c.structure, c.snaps, c.step)
+		if c.noLive {
+			s.mtSummaryFn = nil
+			s.SetBalanceLedger(bus.NewBalanceLedger())
+		}
 		resp, err := s.ApproveCarryGraduation(context.Background(), connect.NewRequest(c.req))
 		if err != nil {
 			t.Fatalf("%s: rpc err %v", c.name, err)

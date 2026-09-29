@@ -48,6 +48,8 @@ func d471Fixture() *fakeGradDB {
 func TestD471_Dossier_CfdLegs(t *testing.T) {
 	f := d471Fixture()
 	s := &Service{gradStore: f}
+	// D-565 S2：venue 杠杆实读缝（夹具钉 5x=原硬编口径）。
+	s.venueLeverageFn = func(context.Context, string, string, bool) (float64, error) { return 5, nil }
 	s.SetCarryRegime(exec.CarryRegimeConfig{Window: 24 * time.Hour, FloorPct: 2.0, MinSamples: 12})
 	rep := s.gradDossier(context.Background(), f.grad, f.paper)
 	if rep == nil || rep.NotionalUsd == nil || *rep.NotionalUsd != 1000 {
@@ -97,6 +99,8 @@ func TestD471_Dossier_Gaps(t *testing.T) {
 	f.ticks["binance|perp|XAUUSDT"] = pgstore.TickRow{Ts: time.Now().Add(-10 * time.Minute), Bid: 2400, Ask: 2401}
 	delete(f.facts, "3001157|") // imr 缺
 	s := &Service{gradStore: f}
+	// D-565 S2：venue 杠杆实读缝（夹具钉 5x=原硬编口径）。
+	s.venueLeverageFn = func(context.Context, string, string, bool) (float64, error) { return 5, nil }
 	s.SetCarryRegime(exec.CarryRegimeConfig{Window: 24 * time.Hour, FloorPct: 2.0, MinSamples: 12})
 	rep := s.gradDossier(context.Background(), f.grad, f.paper)
 	if rep.Legs[1].QtyUsd != nil || rep.Legs[1].QtyNative != nil {
@@ -121,6 +125,8 @@ func TestD471_Approve_NonCfd_DecayedReject(t *testing.T) {
 			EstRoundTripFeeUSD: &fee, EntryBasisBps: &entryB, LastBasisBps: &lastB, LowStreak: 1},
 	}
 	s := &Service{gradStore: f, xassetReloader: &fakeReloader{}}
+	// D-565 S2：venue 杠杆实读缝（夹具钉 5x=原硬编口径）。
+	s.venueLeverageFn = func(context.Context, string, string, bool) (float64, error) { return 5, nil }
 	resp, _ := s.ApproveCarryGraduation(context.Background(), connect.NewRequest(&v1.ApproveCarryGraduationRequest{GraduationId: 8, MaxLongQty: 1, MaxShortQty: 1, MaxGrossUsd: 100}))
 	if resp.Msg.Ok || !strings.Contains(resp.Msg.Error, "证据已衰减") {
 		t.Fatalf("非 cfd 衰减行应拒批，got ok=%v err=%s", resp.Msg.Ok, resp.Msg.Error)
@@ -138,6 +144,8 @@ func TestD471_EntryWindow_SpotCarry(t *testing.T) {
 	grad := &pgstore.CarryGraduation{ID: 9, PaperID: 61, VenueA: "binance", Symbol: "SKLUSDT", Structure: "spot_carry", Status: "pending"}
 	f := &fakeGradDB{}
 	s := &Service{gradStore: f}
+	// D-565 S2：venue 杠杆实读缝（夹具钉 5x=原硬编口径）。
+	s.venueLeverageFn = func(context.Context, string, string, bool) (float64, error) { return 5, nil }
 	s.SetCarryRegime(exec.CarryRegimeConfig{Window: 24 * time.Hour, FloorPct: 2.0, MinSamples: 12})
 	// short_perp=收正 funding（sign=+1）：窗口全正→open
 	f.fundingWin = map[string][]pgstore.FactPoint{"binance|SKLUSDT": {{Value: 10}, {Value: 11}, {Value: 12}, {Value: 10}, {Value: 11}, {Value: 12}, {Value: 10}, {Value: 11}, {Value: 12}, {Value: 10}, {Value: 11}, {Value: 12}}}
@@ -163,6 +171,7 @@ func TestD471_UpsertCombo(t *testing.T) {
 	newSvc := func(f *fakeGradDB) *Service {
 		s := &Service{gradStore: f, xassetReloader: &fakeReloader{}, xassetEnv: "real",
 			pipeline: nil}
+		s.venueLeverageFn = func(context.Context, string, string, bool) (float64, error) { return 5, nil }
 		return s
 	}
 	// reloader nil → 拒写

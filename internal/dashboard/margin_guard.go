@@ -229,8 +229,8 @@ func legTickKey(venueKey, symbol string, canonicalOf func(venue, brokerSymbol st
 }
 
 // marginLegNotionalUSD 单腿名义 USD：qty×usdPerLot（canonical 计价币换算
-// 复用 usdnotional.PerLot）。报价缺→回退 leg.Price（成交价锚）；CS/fx 缺→ok=false
-// （fail-closed 不计入；marginGuard/开户门槛两调用方共享口径）。
+// 复用 usdnotional.PerLot）。D-565 S6：报价缺/Mid≤0→该腿跳过（存价回退删——
+// 陈旧价进分母=隐含率失真，跳腿数由调用方透出）；CS/fx 缺→ok=false（fail-closed）。
 // D-434 分域折叠：filled_qty 成交口径优先——CEX filled=基础币（cs=1，pnl_calc 同口径，
 // 禁 ct_val 二次换算）；MT filled=手数与 perLot 同单位 cs 不变；filled 缺 → qty 请求口径
 // （MT 手数/CEX 张数 × ct_val，回落同样正确）。
@@ -239,16 +239,15 @@ func marginLegNotionalUSD(qbus *bus.QuoteBus, csOf func(string, string) (float64
 	if canonical == "" {
 		return 0, false
 	}
-	price := l.Price
 	// D-481：CEX 腿 qbus 键=原生 symbol 归一采集键（okx XAU-USDT-SWAP→XAUUSDT），
 	// oppID canonical（mt×cex 型=XAUUSD）错位永不命中——LatestLeg 原生键优先+canonical 兜底；
 	// MT 腿 canonical 直查（symbol map 发射即 canonical 本体）。
-	if q, ok := qbus.LatestLeg(canonical, l.Symbol, l.Venue); ok && q.Mid() > 0 {
-		price = q.Mid()
-	}
-	if price <= 0 {
+	// D-565 S6：无腿级实时报价→跳过（不吃开仓存价）。
+	q, okQ := qbus.LatestLeg(canonical, l.Symbol, l.Venue)
+	if !okQ || q.Mid() <= 0 {
 		return 0, false
 	}
+	price := q.Mid()
 	cs, err := csOf(l.Venue, l.Symbol)
 	if err != nil || cs <= 0 {
 		return 0, false

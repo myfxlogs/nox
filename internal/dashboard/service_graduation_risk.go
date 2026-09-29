@@ -40,6 +40,8 @@ func (s *Service) graduationRiskReport(ctx context.Context, legs []riskLegSpec, 
 	}
 	var gaps []string
 	var capital float64
+	var perpLevs []float64 // D-565 S2：perp 腿 venue 实读杠杆收集（recommended 取 min 保守）
+	hasPerpLeg := false
 	capitalOK := true
 	now := time.Now()
 	for i := range legs {
@@ -98,9 +100,18 @@ func (s *Service) graduationRiskReport(ctx context.Context, legs []riskLegSpec, 
 					capitalOK = false
 				}
 			case "perp":
-				m := notional / 5 // recommended_leverage=5（venue 可得档未采集）
-				out.MarginUsd = &m
-				out.Note = "margin 按 5x 杠杆估（venue 可得档未采集）"
+				hasPerpLeg = true
+				// D-565 S2：venue 实读杠杆（gate=get_leverage/binance=v2-account/
+				// okx=leverage-info）；读不到→标「实况不可得」不给数（恒 5x 硬编裁违宪）。
+				if lev, lerr := s.venueLeverage(ctx, vk, leg.symbol, leg.role == "sell"); lerr == nil && lev > 0 {
+					m := notional / lev
+					out.MarginUsd = &m
+					out.Note = fmt.Sprintf("margin 按 venue 实况杠杆 %.0fx", lev)
+					perpLevs = append(perpLevs, lev)
+				} else {
+					gaps = append(gaps, vk+" 杠杆实况不可得（margin 不估）")
+					capitalOK = false
+				}
 			default: // spot
 				m := notional
 				out.MarginUsd = &m
@@ -116,11 +127,25 @@ func (s *Service) graduationRiskReport(ctx context.Context, legs []riskLegSpec, 
 	}
 	eg("notional_usd", v1.EvidenceGrade_EVIDENCE_GRADE_B)
 	eg("legs", v1.EvidenceGrade_EVIDENCE_GRADE_B)
-	rep.RecommendedLeverage = 5
-	rep.LeverageNote = "min(5, venue 可得档)；可得档未采集按 5 给"
-	// 可得档未采集回落 5+note→C；采集实档→B。
+	// D-565 S2：recommended_leverage=perp 腿 venue 实读杠杆取 min（保守）；
+	// 有 perp 腿但全读败 → 0+「实况不可得」注记（不编数）；无 perp 腿→0 注记口径。
+	switch {
+	case len(perpLevs) > 0:
+		rep.RecommendedLeverage = perpLevs[0]
+		for _, lv := range perpLevs[1:] {
+			if lv < rep.RecommendedLeverage {
+				rep.RecommendedLeverage = lv
+			}
+		}
+		rep.LeverageNote = "venue 实读杠杆（perp 腿取 min）"
+	case hasPerpLeg:
+		rep.LeverageNote = "venue 杠杆实况不可得"
+	default:
+		rep.LeverageNote = "无 perp 保证金腿"
+	}
+	// 实读得→B；读不到/无腿→C（注记形态保留）。
 	levG := v1.EvidenceGrade_EVIDENCE_GRADE_B
-	if rep.LeverageNote != "" {
+	if len(perpLevs) == 0 {
 		levG = v1.EvidenceGrade_EVIDENCE_GRADE_C
 	}
 	eg("recommended_leverage", levG)
@@ -140,8 +165,13 @@ func (s *Service) graduationRiskReport(ctx context.Context, legs []riskLegSpec, 
 			}
 		}
 	}
-	liq := (1.0/5 - 0.01) * 100
-	rep.LiqDistancePctEst = &liq
+	// D-565：强平距离锚=venue 实读杠杆（不可得→NULL 不估，禁编 5x 锚）。
+	if rep.RecommendedLeverage > 0 {
+		liq := (1.0/rep.RecommendedLeverage - 0.01) * 100
+		rep.LiqDistancePctEst = &liq
+	} else {
+		gaps = append(gaps, "杠杆实况不可得（强平距离不估）")
+	}
 	eg("liq_distance_pct_est", liqG)
 	if capitalOK && capital > 0 {
 		rep.CapitalUsd = &capital

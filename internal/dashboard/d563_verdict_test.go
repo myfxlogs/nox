@@ -99,7 +99,9 @@ func TestD563_MarginFloorMTRealtime(t *testing.T) {
 		t.Fatalf("seed leg: %v", err)
 	}
 
-	s := &Service{store: st, qbus: bus.New()}
+	qb := bus.New() // D-565 S6：腿级实时报价（OPEN 腿名义价存价回退已删）
+	qb.Publish(bus.Quote{Symbol: "XAUUSD", Venue: "3001157", VenueType: "mt5", Bid: 2000, Ask: 2000.1})
+	s := &Service{store: st, qbus: qb}
 	s.SetLegContractSize(func(string, string) (float64, bool) { return 1, true })
 	// ① RPC 死 + 快照行在档 → 仍 fail-closed（快照退决策面实证）。
 	if _, err := st.Pool().Exec(ctx,
@@ -107,16 +109,16 @@ func TestD563_MarginFloorMTRealtime(t *testing.T) {
 		 VALUES ('3001157','mt5',99999,99999,'USD',now())`); err != nil {
 		t.Fatalf("seed snap: %v", err)
 	}
-	s.mtSummaryFn = func(context.Context, string) (float64, float64, error) {
-		return 0, 0, errors.New("rpc dead")
+	s.mtSummaryFn = func(context.Context, string) (float64, float64, string, error) {
+		return 0, 0, "", errors.New("rpc dead")
 	}
 	if ok, _, d := s.marginFloorEval(ctx, "3001157:mt5", 0); ok || !strings.Contains(d, "MT 实时资金不可得") {
 		t.Fatalf("RPC 死应 fail-closed, got ok=%v %s", ok, d)
 	}
 	// ② RPC 活：eq=1000 fm=500（used=500）、open notional=10×2000=20000 →
 	// implied=500/20000=0.025；add=4000→req 100≤avail 500 放行；add=40000→req 1000>500 拒。
-	s.mtSummaryFn = func(context.Context, string) (float64, float64, error) {
-		return 1000, 500, nil
+	s.mtSummaryFn = func(context.Context, string) (float64, float64, string, error) {
+		return 1000, 500, "USD", nil
 	}
 	if ok, known, d := s.marginFloorEval(ctx, "3001157:mt5", 4000); !ok || !known {
 		t.Fatalf("可用足应放行, got ok=%v known=%v %s", ok, known, d)

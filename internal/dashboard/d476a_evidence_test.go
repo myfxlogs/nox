@@ -22,6 +22,8 @@ func egOf(rep *v1.GraduationRiskReport, field string) v1.EvidenceGrade {
 
 func d476aSvc(f *fakeGradDB) *Service {
 	s := &Service{gradStore: f}
+	// D-565 S2：venue 杠杆实读缝（夹具钉 5x=原口径）。
+	s.venueLeverageFn = func(context.Context, string, string, bool) (float64, error) { return 5, nil }
 	s.SetCarryRegime(exec.CarryRegimeConfig{Window: 24 * time.Hour, FloorPct: 2.0, MinSamples: 12})
 	return s
 }
@@ -35,7 +37,7 @@ func TestD476a_Grades_Baseline(t *testing.T) {
 		"notional_usd":                B,
 		"legs":                        B,
 		"capital_usd":                 B,
-		"recommended_leverage":        C, // venue 档未采集回落 5+note
+		"recommended_leverage":        B, // D-565 S2：venue 实读杠杆（夹具 5x）权威源
 		"liq_distance_pct_est":        C, // 无 buffer_multiple 快照→公式估算
 		"funding_flip_daily_usd":      D, // fixture 无 funding 样本→缺
 		"adverse_basis_p95_usd":       B,

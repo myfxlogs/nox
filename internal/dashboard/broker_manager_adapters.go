@@ -184,19 +184,19 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 		meta:             func(ctx context.Context) ([]fact.Fact, error) { return ad.MetaFacts(ctx) },
 		orderHistoryScan: mt5OrderHistoryScan(ad.MT5Client(), ad.Token()), // D-181 S1
 		// D-563 S4b：判定时刻实时资金（marginFloorEval 用，禁快照消费）。
-		acctSummary: func(ctx context.Context) (float64, float64, error) {
+		acctSummary: func(ctx context.Context) (float64, float64, string, error) {
 			resp, err := ad.MT5Client().AccountSummary(tokenCtx(ctx, ad.Token()), &mt5pb.AccountSummaryRequest{Id: ad.Token()})
 			if err != nil {
-				return 0, 0, err
+				return 0, 0, "", err
 			}
 			if e2 := resp.GetError(); e2 != nil {
-				return 0, 0, fmt.Errorf("mt5 accountSummary: %s", e2.GetMessage())
+				return 0, 0, "", fmt.Errorf("mt5 accountSummary: %s", e2.GetMessage())
 			}
 			res := resp.GetResult()
 			if res == nil {
-				return 0, 0, fmt.Errorf("mt5 accountSummary: result nil")
+				return 0, 0, "", fmt.Errorf("mt5 accountSummary: result nil")
 			}
-			return res.GetEquity(), res.GetFreeMargin(), nil
+			return res.GetEquity(), res.GetFreeMargin(), res.GetCurrency(), nil
 		},
 	}
 	m.attach(a.Venue, r)

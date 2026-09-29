@@ -221,7 +221,9 @@ func TestD405_Evaluate_MT_Tiers(t *testing.T) {
 	d405SeedTicks(t, s, venue, sym)
 	d405SeedMTLeg(t, s, venue+":"+vt, sym, "XASSET_CARRY:XAUUSD:a:b", 10, 2000)
 
-	g := NewMarginGuard(s, bus.New(), d405CSStub, 30*time.Minute, 6*time.Hour)
+	qb := bus.New() // D-565 S6：腿级实时报价（存价回退已删）
+	qb.Publish(bus.Quote{Symbol: "XAUUSD", Venue: venue, VenueType: vt, Bid: 2000, Ask: 2000.1})
+	g := NewMarginGuard(s, qb, d405CSStub, 30*time.Minute, 6*time.Hour)
 	snap := func(free float64) *pgstore.VenueAccountSnapshot {
 		return &pgstore.VenueAccountSnapshot{
 			Venue: venue, VenueType: vt, EquityRaw: 5000, FreeMarginRaw: free,
@@ -269,7 +271,7 @@ func TestD405_Evaluate_MT_Tiers(t *testing.T) {
 	}
 	firstAlert := *r.LastAlertAt
 	// 重启后冷却恢复：新 guard（内存 streak 清零）prev=urgent 同档延续 → streak=1 去抖拦
-	g2 := NewMarginGuard(s, bus.New(), d405CSStub, 30*time.Minute, 6*time.Hour)
+	g2 := NewMarginGuard(s, qb, d405CSStub, 30*time.Minute, 6*time.Hour)
 	if err := g2.evaluate(ctx, snap(1000)); err != nil {
 		t.Fatalf("evaluate restart: %v", err)
 	}
@@ -286,7 +288,9 @@ func TestD405_Evaluate_DataStale(t *testing.T) {
 	venue, vt, sym := "8888002", "mt5", "XPTUSD"
 	// 腿存在但零 ticks → 波动缺 → data_stale
 	d405SeedMTLeg(t, s, venue+":"+vt, sym, "XASSET_CARRY:XPTUSD:a:b", 1, 100)
-	g := NewMarginGuard(s, bus.New(), d405CSStub, time.Minute, time.Minute)
+	qb := bus.New() // D-565 S6：腿级实时报价（存价回退已删）
+	qb.Publish(bus.Quote{Symbol: "XPTUSD", Venue: venue, VenueType: vt, Bid: 100, Ask: 100.1})
+	g := NewMarginGuard(s, qb, d405CSStub, time.Minute, time.Minute)
 	sn := &pgstore.VenueAccountSnapshot{
 		Venue: venue, VenueType: vt, EquityRaw: 5000, FreeMarginRaw: 9999,
 		Currency: "USD", FetchedAt: time.Now(),

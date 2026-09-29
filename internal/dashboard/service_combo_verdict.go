@@ -54,6 +54,12 @@ func (s *Service) comboPoolVerdict(ctx context.Context, c pgstore.XAssetComboAdm
 		if !ok {
 			return "conflict", fmt.Sprintf("腿池数据缺：%s 无可用读数（结构性锁死）", vk)
 		}
+		// D-565 S3：快照池龄闸（与 sizing 同式）——非 live 且 >5min→按池缺处理
+		// （unknown 灰标不谎报锁死；两表面同源自动一致）。
+		if !p.live && time.Since(p.at) > snapshotStaleWindow {
+			unknown = append(unknown, fmt.Sprintf("%s（池快照过期 %s>5min）", vk, p.at.Format("15:04:05")))
+			continue
+		}
 		avail := p.equity
 		if p.free != nil {
 			avail = *p.free

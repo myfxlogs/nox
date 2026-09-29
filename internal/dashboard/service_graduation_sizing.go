@@ -58,24 +58,17 @@ func (s *Service) deriveAllocSizing(ctx context.Context, venueBuy, venueSell, ca
 	if usd != nil && !(*usd > 0) {
 		return res, "funding_usd 必须 >0（NaN/非正同拒）"
 	}
-	// ② 双池求值：CEX 腿→实拉活账本（D-542：干净直读/脏空 REST 校准）；
-	// MT 腿与 REST 双败 → 快照兜底（快照龄闸只作用于非 live 池）。
-	// 缺行/equity≤0/过期/币种——USD 直填也要池数据（安全线+互算回显都要）
-	snaps, err := s.gradDB().LatestVenueAccountSnapshots(ctx)
-	if err != nil {
-		return res, fmt.Sprintf("账户快照读取失败: %v（fail-closed 不批钱）", err)
-	}
+	// ② 双池求值：D-565 S4 批钱面全实时——CEX 腿=活账本/决策时刻 REST 实拉
+	// （LiveFresh 绕 restTTL，快照兜底删）；MT 腿=AccountSummary 实时 RPC（快照
+	// 退批钱面，展示面照旧）。两径双败/equity≤0/币种非 USD 系 → fail-closed 不批。
 	pools := map[string]allocPool{}
 	for _, vk := range []string{venueBuy, venueSell} {
-		p, ok := s.legPool(ctx, snaps, vk)
+		p, ok, failNote := s.legPoolSizing(ctx, vk)
 		if !ok {
-			return res, fmt.Sprintf("腿池 %s 无资金数据（活账本/REST/快照三径全空，fail-closed 不猜）", vk)
+			return res, fmt.Sprintf("腿池 %s %s（fail-closed 不批钱）", vk, failNote)
 		}
 		if p.equity <= 0 {
 			return res, fmt.Sprintf("腿池 %s 净值非正（$%.2f），拒绝折算", p.key, p.equity)
-		}
-		if !p.live && time.Since(p.at) > snapshotStaleWindow {
-			return res, fmt.Sprintf("腿池 %s 快照过期（%s，>5min 未更新不猜）", p.key, p.at.Format("15:04:05"))
 		}
 		if !allocPoolUSDLike(p.currency) {
 			return res, fmt.Sprintf("腿池 %s 币种 %s 不支持（仅 USD/USDT/UST 不猜汇率；逃生=显式上限模式）", p.key, p.currency)
@@ -155,7 +148,7 @@ func (s *Service) deriveAllocSizing(ctx context.Context, venueBuy, venueSell, ca
 			fmt.Sprintf("可用基准 $%.0f（%s）", base, baseNote),
 		},
 	}
-	res.RiskLevel, res.RiskReasons, res.SuggestedAlloc = s.allocRisk(ctx, res, venueBuy, venueSell, poolBuy, poolSell)
+	res.RiskLevel, res.RiskReasons, res.SuggestedAlloc = s.allocRisk(ctx, res, venueBuy, venueSell, canonBuy, canonSell, poolBuy, poolSell)
 	return res, ""
 }
 

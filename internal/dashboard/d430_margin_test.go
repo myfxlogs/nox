@@ -18,7 +18,9 @@ func TestD430_Evaluate_MT_Unmapped(t *testing.T) {
 	venue, vt := "8888010", "mt5"
 	// 腿在、notional 可解（XAUUSD USD 计价），但 FOOm 无映射 → data_stale
 	d405SeedMTLegNoMap(t, s, venue+":"+vt, "FOOm", "XASSET_CARRY:XAUUSD:a:b", 1, 2000)
-	g := NewMarginGuard(s, bus.New(), d405CSStub, time.Minute, time.Minute)
+	qb := bus.New() // D-565 S6：腿级实时报价（存价回退已删）
+	qb.Publish(bus.Quote{Symbol: "XAUUSDT", Venue: "okx", VenueType: "perp", Bid: 2000, Ask: 2000.1})
+	g := NewMarginGuard(s, qb, d405CSStub, time.Minute, time.Minute)
 	sn := &pgstore.VenueAccountSnapshot{
 		Venue: venue, VenueType: vt, EquityRaw: 5000, FreeMarginRaw: 9999,
 		Currency: "USD", FetchedAt: time.Now(),
@@ -85,7 +87,9 @@ func TestD430_Evaluate_CEX_Perpetual(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("create leg: %v", err)
 	}
-	g := NewMarginGuard(s, bus.New(), d405CSStub, time.Minute, time.Minute)
+	qb := bus.New() // D-565 S6：腿级实时报价（存价回退已删）
+	qb.Publish(bus.Quote{Symbol: "XAUUSDT", Venue: "okx", VenueType: "perp", Bid: 2000, Ask: 2000.1})
+	g := NewMarginGuard(s, qb, d405CSStub, time.Minute, time.Minute)
 	sn := &pgstore.VenueAccountSnapshot{
 		Venue: "okx", VenueType: "unified", EquityRaw: 10000, BufferMultiple: f64p(5),
 		Currency: "USD", FetchedAt: time.Now(),

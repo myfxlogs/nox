@@ -69,8 +69,10 @@ func TestD540_RiskInsufficient(t *testing.T) {
 
 // TestD540_RiskLiquidation 保证金估后池缓冲比<1.5→liquidation+suggested=缓冲反推。
 // gate:perp eq200/free50（已占 150）：alloc50→腿名义25×0.2=保证金5→headroom=200/155=1.29<1.5。
+// D-565 S2：venue 杠杆实读——夹具钉 5x（frac=0.2 同原口径）。
 func TestD540_RiskLiquidation(t *testing.T) {
 	f, s := d490Fixture(d540Snaps(2000, 2000, 200, 50, "USD"), 0.01)
+	s.venueLeverageFn = func(context.Context, string, string, bool) (float64, error) { return 5, nil }
 	resp := d540DryRun(t, f, s, &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingUsd: d490f(50)})
 	if resp.RiskLevel != "liquidation" {
 		t.Fatalf("risk=%q want liquidation（headroom1.29<1.5）", resp.RiskLevel)
@@ -102,14 +104,14 @@ func TestD540_ProbeBase(t *testing.T) {
 	}
 }
 
-// TestD540_BaseFallbackEquity 缺 free_margin → 基准回退净值+注记标「净值回退」。
+// TestD540_BaseFallbackEquity 实况可用缺 free → 基准回退净值（实拉语义下 note 标「实拉」）。
 func TestD540_BaseFallbackEquity(t *testing.T) {
 	f, s := d490Fixture(d490Snaps(2000, 1000, "USD", time.Minute), 0.01) // 无 free
 	resp := d540DryRun(t, f, s, &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingUsd: d490f(200)})
 	if math.Abs(resp.AllocBaseUsd-1000) > 1e-9 {
 		t.Fatalf("缺 free 基准应回退净值 1000, got %v", resp.AllocBaseUsd)
 	}
-	if !strings.Contains(resp.AllocBaseNote, "净值回退") {
-		t.Fatalf("注记应标净值回退: %q", resp.AllocBaseNote)
+	if !strings.Contains(resp.AllocBaseNote, "实拉") {
+		t.Fatalf("实况路径注记应标实拉: %q", resp.AllocBaseNote)
 	}
 }

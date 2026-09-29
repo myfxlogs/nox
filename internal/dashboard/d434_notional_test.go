@@ -12,6 +12,15 @@ import (
 func TestD434_NotionalUSD(t *testing.T) {
 	f := func(v float64) *float64 { return &v }
 	price := 4297.0
+	// D-565 S6：报价缺→腿跳过（存价回退删）——夹具补 qbus 腿级实时报价。
+	qb := bus.New()
+	for _, q := range []bus.Quote{
+		{Symbol: "XAUUSDT", Venue: "okx", VenueType: "perp", Bid: price, Ask: price + 0.1},   // CEX 原生归一键
+		{Symbol: "XAUUSD", Venue: "3001157", VenueType: "mt5", Bid: price, Ask: price + 0.1}, // MT canonical 键
+		{Symbol: "TRXUSDT", Venue: "binance", VenueType: "spot", Bid: 0.35, Ask: 0.351},
+	} {
+		qb.Publish(q)
+	}
 	cases := []struct {
 		name string
 		leg  pgstore.MarginOpenLeg
@@ -35,7 +44,7 @@ func TestD434_NotionalUSD(t *testing.T) {
 		}, 2 * 0.35},
 	}
 	for _, c := range cases {
-		got, ok := marginLegNotionalUSD(bus.New(), d434CS, c.leg)
+		got, ok := marginLegNotionalUSD(qb, d434CS, c.leg)
 		if !ok {
 			t.Fatalf("%s: ok=false", c.name)
 		}
@@ -44,7 +53,7 @@ func TestD434_NotionalUSD(t *testing.T) {
 		}
 	}
 	// T1 量级对抗：CEX filled 路径不得低于 qty×ct_val 口径的 100 倍（防 1000x 低估回归）
-	got, _ := marginLegNotionalUSD(bus.New(), d434CS, pgstore.MarginOpenLeg{
+	got, _ := marginLegNotionalUSD(qb, d434CS, pgstore.MarginOpenLeg{
 		OppID: "XASSET_CARRY:XAUUSD:a:b", Venue: "okx:perp", Symbol: "XAU-USDT-SWAP",
 		Qty: 1016, FilledQty: func() *float64 { v := 1.016; return &v }(), Price: price,
 	})

@@ -7,6 +7,7 @@ package dashboard
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -109,4 +110,32 @@ func (s *Service) livePoolQuerier(ctx context.Context, venueKey string) (reconci
 		return q, poolKey, true
 	}
 	return nil, "", false
+}
+
+// legPoolSizing 批钱面腿池读口（D-565 S4：批钱=判定→全实时，快照禁入）：
+// CEX 腿→capitalView.LiveFresh（ws 直读/REST 实拉绕 restTTL——D-563 S4c 先例）；
+// MT 腿→mtAcctSummary 实时 RPC（equity/freeMargin/currency 同帧采，≤10s）；
+// 两径败/其他 venue 族 → (false, failNote) fail-closed 拒批。展示面 legPool 照旧。
+func (s *Service) legPoolSizing(ctx context.Context, venueKey string) (allocPool, bool, string) {
+	if capitalview.IsCEXVenue(venueKey) {
+		f, ok := s.capitalView().LiveFresh(ctx, venueKey)
+		if !ok || !f.Live {
+			return allocPool{}, false, "CEX 池实况不可得（活账本/REST 双败，批钱面禁快照兜底）"
+		}
+		p := allocPool{key: f.VenueKey, equity: f.Equity, currency: f.Currency, at: f.At, live: true, src: f.Src}
+		if f.HasAvailable {
+			avail := f.Available
+			p.free = &avail
+		}
+		return p, true, ""
+	}
+	k := keydomain.Parse(venueKey)
+	if k.Type == "mt4" || k.Type == "mt5" {
+		eq, fm, ccy, err := s.mtAcctSummary(ctx, venueKey)
+		if err != nil {
+			return allocPool{}, false, fmt.Sprintf("MT 池实况不可得（%v）", err)
+		}
+		return allocPool{key: venueKey, equity: eq, free: &fm, currency: ccy, at: time.Now(), live: true, src: "rpc"}, true, ""
+	}
+	return allocPool{}, false, "venue 族无批钱实时读径（快照禁入批钱面）"
 }

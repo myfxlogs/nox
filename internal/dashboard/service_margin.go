@@ -39,17 +39,23 @@ func (s *Service) MarginFloorKnown(ctx context.Context, venueKey string, addNoti
 }
 
 // SetMTSummaryFunc D-563 S4b：测试注入 MT 实时资金缝（nil=回落 bm.MTAccountSummary 真身）。
-func (s *Service) SetMTSummaryFunc(fn func(ctx context.Context, venueKey string) (float64, float64, error)) {
+func (s *Service) SetMTSummaryFunc(fn func(ctx context.Context, venueKey string) (float64, float64, string, error)) {
 	s.mtSummaryFn = fn
 }
 
+// SetVenueLeverageFunc D-565 S2：测试注入 venue 杠杆实读缝（nil=venueLeverageExec 真身）。
+func (s *Service) SetVenueLeverageFunc(fn func(ctx context.Context, venueKey, symbol string, sellLeg bool) (float64, error)) {
+	s.venueLeverageFn = fn
+}
+
 // mtAcctSummary D-563 S4b：MT 实时资金缝（测试注入 mtSummaryFn；nil=回落 bm 真身）。
-func (s *Service) mtAcctSummary(ctx context.Context, venueKey string) (float64, float64, error) {
+// D-565 S4：currency 随 RPC 一起实采（批钱面币种闸用——快照行退出批钱面）。
+func (s *Service) mtAcctSummary(ctx context.Context, venueKey string) (float64, float64, string, error) {
 	if s.mtSummaryFn != nil {
 		return s.mtSummaryFn(ctx, venueKey)
 	}
 	if s.bm == nil {
-		return 0, 0, fmt.Errorf("BrokerManager 未接线")
+		return 0, 0, "", fmt.Errorf("BrokerManager 未接线")
 	}
 	return s.bm.MTAccountSummary(ctx, venueKey)
 }
@@ -79,18 +85,21 @@ func (s *Service) marginFloorEval(ctx context.Context, venueKey string, addNotio
 	// D-563 S4b：MT 腿判定时刻资金=AccountSummary 实时 RPC（快照退决策面）；
 	// RPC 败/超时（≤10s）→ fail-closed「MT 实时资金不可得」。无需快照行在档。
 	if marginVenueClass(vt) == "cfd" {
-		eq, fm, serr := s.mtAcctSummary(ctx, venueKey)
+		eq, fm, _, serr := s.mtAcctSummary(ctx, venueKey)
 		if serr != nil {
 			return false, true, fmt.Sprintf("MT 实时资金不可得（%v）fail-closed 拒开", serr)
 		}
-		sumNotional, hasLegs, err := s.marginOpenNotional(ctx, venue, vt)
+		sumNotional, legCount, skipped, err := s.marginOpenNotional(ctx, venue, vt)
 		if err != nil {
 			return true, false, fmt.Sprintf("open legs err %v（fail-open）", err)
 		}
-		if !hasLegs {
+		if legCount == 0 {
 			return true, false, "no open legs (implied margin rate unknown)"
 		}
-		return marginFloorJudge(fm, eq-fm, sumNotional, addNotionalUSD)
+		if sumNotional <= 0 {
+			return true, false, fmt.Sprintf("all %d open legs skipped（报价缺无分母，隐含率不可判）", skipped)
+		}
+		return marginFloorJudgeSkipped(fm, eq-fm, sumNotional, addNotionalUSD, skipped)
 	}
 	snap, ok, err := s.latestVenueSnapshotSafe(ctx, venue, vt)
 	if err != nil {
@@ -109,12 +118,15 @@ func (s *Service) marginFloorEval(ctx context.Context, venueKey string, addNotio
 	if !ok || snap.EquityRaw == nil {
 		return true, false, "no account snapshot" // 未采 venue 无从判定
 	}
-	sumNotional, hasLegs, err := s.marginOpenNotional(ctx, venue, vt)
+	sumNotional, legCount, skipped, err := s.marginOpenNotional(ctx, venue, vt)
 	if err != nil {
 		return true, false, fmt.Sprintf("open legs err %v（fail-open）", err)
 	}
-	if !hasLegs {
+	if legCount == 0 {
 		return true, false, "no open legs (implied margin rate unknown)"
+	}
+	if sumNotional <= 0 {
+		return true, false, fmt.Sprintf("all %d open legs skipped（报价缺无分母，隐含率不可判）", skipped)
 	}
 	var avail, used float64
 	if snap.BufferMultiple == nil || *snap.BufferMultiple <= 0 {
@@ -123,45 +135,52 @@ func (s *Service) marginFloorEval(ctx context.Context, venueKey string, addNotio
 	mmr := *snap.EquityRaw / *snap.BufferMultiple
 	avail = *snap.EquityRaw - mmr
 	used = mmr // IMR 未知，以 MMR 为隐含率锚（保守：MMR≤IMR → 低估所需=偏放行，监控件口径）
-	return marginFloorJudge(avail, used, sumNotional, addNotionalUSD)
+	return marginFloorJudgeSkipped(avail, used, sumNotional, addNotionalUSD, skipped)
 }
 
 // marginFloorCexEval CEX 执行链判定（D-549）：equity/avail=live 实拉值；
 // 隐含率锚 mmr=liveEquity/buffer_multiple（buffer 仅快照面——隐含率元数据非资金数）。
 // avail=live 实采可用优先；缺→liveEquity−mmr 近似（同原快照口径）。
 func (s *Service) marginFloorCexEval(ctx context.Context, venue, vt string, equity float64, liveAvail *float64, bufferMultiple, addNotionalUSD float64) (bool, bool, string) {
-	sumNotional, hasLegs, err := s.marginOpenNotional(ctx, venue, vt)
+	sumNotional, legCount, skipped, err := s.marginOpenNotional(ctx, venue, vt)
 	if err != nil {
 		return true, false, fmt.Sprintf("open legs err %v（fail-open）", err)
 	}
-	if !hasLegs {
+	if legCount == 0 {
 		return true, false, "no open legs (implied margin rate unknown)"
+	}
+	if sumNotional <= 0 {
+		return true, false, fmt.Sprintf("all %d open legs skipped（报价缺无分母，隐含率不可判）", skipped)
 	}
 	used := equity / bufferMultiple // IMR 未知，以 MMR 为隐含率锚（保守同原口径）
 	avail := equity - used
 	if liveAvail != nil {
 		avail = *liveAvail // live 实采可用优先（venue 权威口径）
 	}
-	return marginFloorJudge(avail, used, sumNotional, addNotionalUSD)
+	return marginFloorJudgeSkipped(avail, used, sumNotional, addNotionalUSD, skipped)
 }
 
-// marginOpenNotional venue OPEN 腿名义 Σ（隐含率分母）。
-func (s *Service) marginOpenNotional(ctx context.Context, venue, vt string) (float64, bool, error) {
+// marginOpenNotional venue OPEN 腿名义 Σ（隐含率分母）。D-565 S6：legCount=匹配腿数
+// （有腿与否），skipped=报价缺被跳腿数——全跳腿时不得混同「无腿」静默（known=false
+// 透出跳腿计数；跳腿→分母偏小→隐含率偏大保守向，但禁静默）。
+func (s *Service) marginOpenNotional(ctx context.Context, venue, vt string) (sum float64, legCount, skipped int, err error) {
 	legs, err := s.store.ListOpenLegsForMargin(ctx)
 	if err != nil {
-		return 0, false, err
+		return 0, 0, 0, err
 	}
-	var sum float64
 	for _, l := range legs {
 		lv, lt := legSnapshotVenue(l.Venue)
 		if lv != venue || lt != vt {
 			continue
 		}
+		legCount++
 		if n, nok := marginLegNotionalUSD(s.qbus, s.legContractSizeOf, l); nok {
 			sum += n
+		} else {
+			skipped++
 		}
 	}
-	return sum, sum > 0, nil
+	return sum, legCount, skipped, nil
 }
 
 // latestVenueSnapshotSafe 快照行查询（nil store 安全——部分构造 Service）。
@@ -170,6 +189,15 @@ func (s *Service) latestVenueSnapshotSafe(ctx context.Context, venue, vt string)
 		return nil, false, nil
 	}
 	return s.store.LatestVenueAccountSnapshot(ctx, venue, vt)
+}
+
+// marginFloorJudgeSkipped D-565 S6：判定明细附跳腿计数（报价缺腿不进分母=隐含率偏大保守向）。
+func marginFloorJudgeSkipped(avail, used, sumNotional, addNotionalUSD float64, skipped int) (bool, bool, string) {
+	ok, known, reason := marginFloorJudge(avail, used, sumNotional, addNotionalUSD)
+	if skipped > 0 {
+		reason += fmt.Sprintf("（报价缺跳过 %d 腿，分母偏小=隐含率偏大保守向）", skipped)
+	}
+	return ok, known, reason
 }
 
 func marginFloorJudge(avail, used, sumNotional, addNotionalUSD float64) (bool, bool, string) {
