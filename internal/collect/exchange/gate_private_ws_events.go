@@ -199,6 +199,7 @@ func (g *GatePrivateWS) onOrders(ctx context.Context, result json.RawMessage) {
 		Size      int64       `json:"size"`
 		Left      int64       `json:"left"`
 		FillPrice string      `json:"fill_price"`
+		Fee       float64     `json:"fee"` // D-570 包B S4③：帧原生 fee（快照 :4376 JSON number 实弹；USDT 本位 fee=USD 口径钉死）
 	}
 	if err := json.Unmarshal(result, &items); err != nil {
 		return
@@ -228,7 +229,7 @@ func (g *GatePrivateWS) onOrders(ctx context.Context, result json.RawMessage) {
 			qty *= q // 合约数→基础币（与 executor Fill.Qty 契约一致）
 		}
 		g.orderCache.PutOrder(g.venueKey, it.ID.String(), it.Text, OrderEvent{
-			State: state, AccFillQty: qty, AvgPx: px, At: g.now(),
+			State: state, AccFillQty: qty, AvgPx: px, FeeUSD: it.Fee, At: g.now(),
 		})
 	}
 	WarnUnconsumed("gate", "futures.orders", result, gateOrdersConsumed)
@@ -237,7 +238,7 @@ func (g *GatePrivateWS) onOrders(ctx context.Context, result json.RawMessage) {
 // D-475b S2 consumed 清单（契约对偶面）。
 var (
 	gatePositionsConsumed = []string{"contract", "size", "entry_price", "margin", "unrealised_pnl", "pnl_fund", "maintenance_margin", "open_time", "update_time"} // D-477 S2：GAP-B2 全量补消费
-	gateOrdersConsumed    = []string{"id", "text", "contract", "status", "finish_as", "size", "left", "fill_price"}
+	gateOrdersConsumed    = []string{"id", "text", "contract", "status", "finish_as", "size", "left", "fill_price", "fee"}
 	gateBalancesConsumed  = []string{"currency", "balance", "available"} // D-542：+available=可用余额
 )
 
