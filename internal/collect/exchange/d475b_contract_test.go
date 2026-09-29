@@ -177,7 +177,7 @@ func TestD475b_Contract_OKXOrders(t *testing.T) {
 	// D-477 S3（GAP-B4）：ctValFor 注入与 REST querier 同 baseURL 源——双源分叉撤除，
 	// qty 对拍由 skip 转正断言（accFillSz=2 张 × ctVal=0.01 = 0.02 base 两侧同值）。
 	o.SetCtValFor(func(ctx context.Context, instID string) (float64, error) {
-		ctVal, _, err := exec.OkxSwapSpec(ctx, httpx.Client(), srv.URL, instID)
+		ctVal, _, _, err := exec.OkxSwapSpec(ctx, httpx.Client(), srv.URL, instID)
 		return ctVal, err
 	})
 	o.onOrders(context.Background(), []map[string]any{{
