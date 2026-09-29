@@ -166,7 +166,7 @@ func RunDaily(ctx context.Context, deps Deps) (*DailyResult, error) {
 				Reason: r.Rationale, Action: r.Direction + " " + r.BestPair})
 		}
 		if err := inboxfmt.Append(deps.InboxPath, res.ScanDate.Format("2006-01-02"), ib); err != nil {
-			deps.alert(ctx, "warn", "explorer inbox append failed: "+err.Error())
+			deps.alert(ctx, "warn", "[探索] 收件箱追加失败："+err.Error())
 		}
 	}
 	return res, nil

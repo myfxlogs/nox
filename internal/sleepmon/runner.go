@@ -93,12 +93,12 @@ func checkDay(ctx context.Context, deps Deps, day string, loc *time.Location) er
 			}
 			if days >= belowFloorAlertDays && !alerted {
 				alerted = true
-				msg := fmt.Sprintf("[sleepmon] 睡钱告警 %s/%s：balance=%.2f %s 连续 %d 天低于地板（buffer=%.2f），income30d=%.2f",
+				msg := fmt.Sprintf("[sleepmon] 睡钱告警 %s/%s：余额 %.2f %s 连续 %d 天低于地板线（缓冲 %.2f），近 30 日收益 %.2f",
 					p.Venue, p.VenueType, p.Balance, p.Currency, days, p.BufferMultiple, p.Income30dUSD)
 				if err := deps.Store.InsertAlert(ctx, nil, "warn", msg); err != nil {
 					log.Printf("[sleepmon] alert %s/%s: %v", p.Venue, p.VenueType, err)
 				}
-				reason := fmt.Sprintf("balance=%.2f 连续%d天低于地板 income30d=%.2f", p.Balance, days, p.Income30dUSD)
+				reason := fmt.Sprintf("余额 %.2f 连续 %d 天低于地板线，近 30 日收益 %.2f", p.Balance, days, p.Income30dUSD)
 				if err := inboxfmt.Append(deps.InboxPath, day, []inboxfmt.Row{{
 					Source: inboxfmt.SrcSleepMoney, Title: p.Venue + "/" + p.VenueType,
 					Reason: reason, Action: "再配置决策走业主通道",

@@ -46,7 +46,7 @@ func Run(ctx context.Context, deps Deps, tickHook func(kind string)) {
 			res, err := RunWeekly(ctx, deps)
 			if err != nil {
 				log.Printf("[explorer] weekly err: %v", err)
-				deps.alert(ctx, "warn", "explorer weekly failed: "+err.Error())
+				deps.alert(ctx, "warn", "[探索] 周报生成失败："+err.Error())
 			} else {
 				log.Printf("[explorer] weekly ok: theme=%s path=%s", res.Theme, res.Path)
 			}
@@ -54,7 +54,7 @@ func Run(ctx context.Context, deps Deps, tickHook func(kind string)) {
 			res, err := RunDaily(ctx, deps)
 			if err != nil {
 				log.Printf("[explorer] daily err: %v", err)
-				deps.alert(ctx, "warn", "explorer daily failed: "+err.Error())
+				deps.alert(ctx, "warn", "[探索] 日报生成失败："+err.Error())
 			} else {
 				log.Printf("[explorer] daily ok: proposals=%d drop=%d", res.Proposals, res.Drop)
 			}
