@@ -4,6 +4,8 @@
 package exec
 
 import (
+	"context"
+	"errors"
 	"net/http"
 
 	"arb/internal/dephealth"
@@ -17,6 +19,11 @@ type depRoundTripper struct {
 
 func (d depRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	resp, err := d.rt.RoundTrip(req)
+	// F-3b：context.Canceled=本侧主动撤（ctx 取消/调用方放弃）非上游劣化事实，不记账；
+	// DeadlineExceeded 保留计数——那是真上游慢。
+	if err != nil && errors.Is(err, context.Canceled) {
+		return resp, err
+	}
 	dephealth.Mark(d.key, err == nil, err)
 	return resp, err
 }

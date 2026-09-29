@@ -1,10 +1,13 @@
 package exec
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"arb/internal/dephealth"
 	"arb/internal/httpx"
@@ -47,5 +50,32 @@ func TestD579_T3_CEXRestMark(t *testing.T) {
 	r, ok = depRowExec(key)
 	if !ok || r.ConsecFails != 1 || r.State != dephealth.StateSuspect {
 		t.Fatalf("失败应记 suspect×1: %+v", r)
+	}
+}
+
+// fakeRT 罐装 err 的 RoundTripper（T7 锚）。
+type fakeRT struct{ err error }
+
+func (f fakeRT) RoundTrip(*http.Request) (*http.Response, error) { return nil, f.err }
+
+// TestD579_T7_CancelNotCounted R3 F-3b：context.Canceled=本侧主动撤不记账；
+// DeadlineExceeded=真上游慢保留计数。
+func TestD579_T7_CancelNotCounted(t *testing.T) {
+	key := fmt.Sprintf("t7-%d:perp:rest", time.Now().UnixNano()) // -count=N 复跑键隔离
+	rt := depRoundTripper{key: key, rt: fakeRT{err: context.Canceled}}
+	req, _ := http.NewRequest(http.MethodGet, "http://x/", nil)
+	if _, err := rt.RoundTrip(req); !errors.Is(err, context.Canceled) {
+		t.Fatalf("err 应原样透传: %v", err)
+	}
+	if _, ok := depRowExec(key); ok {
+		t.Fatalf("canceled 不应记账")
+	}
+	rt.rt = fakeRT{err: context.DeadlineExceeded}
+	if _, err := rt.RoundTrip(req); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err 应原样透传: %v", err)
+	}
+	r, ok := depRowExec(key)
+	if !ok || r.ConsecFails != 1 {
+		t.Fatalf("deadline 应记 fail: %+v", r)
 	}
 }
