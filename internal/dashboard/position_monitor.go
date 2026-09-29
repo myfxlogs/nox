@@ -89,8 +89,23 @@ func (m *PositionMonitor) KickHedge() {
 	m.dirtyLocked()
 }
 
+// KickPersonal 仅 personalPositions 域脏化（D-571C-R2 F-2：personal_monitor
+// loadPositions 集合 diff 非空回推——personal_positions 表不经 posChange）。
+func (m *PositionMonitor) KickPersonal() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.dPers = true
+	m.dirtyLocked()
+}
+
 // OnStreamState 流状态事件（StreamStateSink 第三挂点）→ sourceHealth 域脏化。
 func (m *PositionMonitor) OnStreamState(venueKey string, online bool) {
+	m.OnHealthDirty()
+}
+
+// OnHealthDirty sourceHealth 域脏化（D-571C-R2 F-1：ws reconnectMeter 每次
+// record 扇出——totalCount/lastWarn 行变化须重组装 diff 发射，否则死踢）。
+func (m *PositionMonitor) OnHealthDirty() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.dHealth = true

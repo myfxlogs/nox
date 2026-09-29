@@ -132,8 +132,26 @@ func (s *Service) assembleSourceHealth() []*v1.SourceHealth {
 		}
 		out = append(out, row)
 	}
+	// D-571C-R2 F-1：venue 流在线态行（StreamStateSink 事件→bpMon.streamOnline——
+	// 不编入则状态翻转踢 posMon 无 diff=死踢；键域 venue_online: 与 ws url 行不撞）。
+	if s.streamOnlineFn != nil {
+		for vk, on := range s.streamOnlineFn() {
+			state := "offline"
+			if on {
+				state = "online"
+			}
+			out = append(out, &v1.SourceHealth{
+				Source: "venue_online:" + vk,
+				Venue:  vk,
+				State:  state,
+			})
+		}
+	}
 	return out
 }
+
+// SetStreamOnlineSource D-571C-R2 F-1：流在线态读源注入（main 接 bpMon.StreamOnlineSnapshot；nil=缺该域行）。
+func (s *Service) SetStreamOnlineSource(fn func() map[string]bool) { s.streamOnlineFn = fn }
 
 func (s *Service) ListFacts(ctx context.Context, req *connect.Request[v1.ListFactsRequest]) (*connect.Response[v1.ListFactsResponse], error) {
 	limit := int(req.Msg.GetLimit())

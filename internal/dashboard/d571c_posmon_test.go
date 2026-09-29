@@ -180,3 +180,83 @@ func TestD571C_T3_HedgeKickPayload(t *testing.T) {
 		}
 	}
 }
+
+// T4 R2 F-1：health 域「kick→真发射」——venue_online 读源翻转+OnHealthDirty
+// 脏化→重组装 diff→case5 行事件（不修则 venue_online 翻转死踢零帧）。
+func TestD571C_R2_T4_HealthKickEmits(t *testing.T) {
+	f := d571cSetup(t)
+	ctx := context.Background()
+	online := map[string]bool{"t4venue:mt5": true}
+	f.svc.SetStreamOnlineSource(func() map[string]bool { return online })
+	evCh, _ := f.heal.Subscribe()
+	boot := f.mon.HealthEvents(ctx) // boot 采 latest（含 venue_online:true 行）不广播
+	var bootHit *v1.SourceHealth
+	for _, h := range boot {
+		if h.Source == "venue_online:t4venue:mt5" {
+			bootHit = h
+		}
+	}
+	if bootHit == nil || bootHit.State != "online" {
+		t.Fatalf("boot 回放应含 venue_online 行: %+v", bootHit)
+	}
+	time.Sleep(30 * time.Millisecond)
+	if n := len(evCh); n > 0 {
+		t.Fatalf("boot 不应广播, got %d", n)
+	}
+	online["t4venue:mt5"] = false // 流状态翻转（生产=StreamStateSink 事件）
+	f.mon.OnHealthDirty()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		select {
+		case ev := <-evCh:
+			if ev.Source == "venue_online:t4venue:mt5" {
+				if ev.State != "offline" {
+					t.Fatalf("翻转后应 offline: %+v", ev)
+				}
+				return
+			}
+		case <-time.After(50 * time.Millisecond):
+			if time.Now().After(deadline) {
+				t.Fatal("health kick 后 2s 无 case5 帧")
+			}
+		}
+	}
+}
+
+// T5 R2 F-2：personal 域「kick→真发射」——personal_positions 写行不经
+// posChange，须由 KickPersonal 定向脏化重组装 diff→case18 upsert。
+func TestD571C_R2_T5_PersonalKickEmits(t *testing.T) {
+	f := d571cSetup(t)
+	ctx := context.Background()
+	evCh, _ := f.pers.Subscribe()
+	f.mon.PersonalEvents(ctx) // boot（不广播）
+	time.Sleep(30 * time.Millisecond)
+	for len(evCh) > 0 { // 清残
+		<-evCh
+	}
+	tag := fmt.Sprintf("d571c_t5_%d", time.Now().UnixNano())
+	res, err := f.st.Pool().Exec(ctx,
+		`INSERT INTO personal_positions (asset, kind, price_symbol, note, qty, entry_price, status)
+		 VALUES ('T5COIN', 'staking', $1, 'd571c t5', 1, 1, 'OPEN')`, tag)
+	if err != nil {
+		t.Fatalf("insert personal: %v", err)
+	}
+	defer func() {
+		_, _ = f.st.Pool().Exec(ctx, `DELETE FROM personal_positions WHERE price_symbol=$1`, tag)
+	}()
+	_ = res
+	f.mon.KickPersonal()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		select {
+		case ev := <-evCh:
+			if ev.Upsert != nil && ev.Upsert.PriceSymbol == tag {
+				return // 行级 upsert 到达=发射链通
+			}
+		case <-time.After(50 * time.Millisecond):
+			if time.Now().After(deadline) {
+				t.Fatal("KickPersonal 后 2s 无 case18 帧")
+			}
+		}
+	}
+}

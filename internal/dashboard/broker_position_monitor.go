@@ -189,6 +189,19 @@ func (m *BrokerPositionMonitor) OnStreamState(venueKey string, online bool) {
 	m.mu.Unlock()
 }
 
+// StreamOnlineSnapshot D-571C-R2 F-1：流权威 venue 在线态快照（sourceHealth
+// 组装读口——StreamStateSink 事件先落本表，assembleSourceHealth 须编入否则
+// 状态翻转踢了 posMon 也无 diff=死踢）。只读拷贝。
+func (m *BrokerPositionMonitor) StreamOnlineSnapshot() map[string]bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make(map[string]bool, len(m.streamOnline))
+	for vk, on := range m.streamOnline {
+		out[vk] = on
+	}
+	return out
+}
+
 // onQuote qbus 通配订阅回调：报价到达 → 匹配持仓脏化（flush 时重取 LatestLeg 重算现价）。
 // 匹配镜像 LatestLeg 键序：CEX 原生归一键优先 + canonical 兜底，MT canonical 直查。
 func (m *BrokerPositionMonitor) onQuote(q bus.Quote) {

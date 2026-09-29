@@ -103,6 +103,9 @@ type Service struct {
 	notionalUSD float64
 	// acctMon 账户资产 monitor（D-053）：ListAccounts 拉 + StreamUpdates case 9 推同源。nil = 未接线（测试直接构造 Service）。
 	acctMon *AccountMonitor
+	// streamOnlineFn D-571C-R2 F-1：venue 流在线态读源（SetStreamOnlineSource 注入→
+	// assembleSourceHealth 编 venue_online 行；nil=缺该域）。数据源=bpMon.streamOnline。
+	streamOnlineFn func() map[string]bool
 	// posMon D-571 包C：positions(case4 复活)/personal(case18)/hedge(case17)/health(case5) 四域发射器。
 	// nil = 未接线（测试直接构造 Service——RPC 组装路径不受影响，流订阅/回放零事件）。
 	posMon *PositionMonitor
