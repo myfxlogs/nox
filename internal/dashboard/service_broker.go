@@ -198,6 +198,15 @@ func annotateCEXSwapWithMap(bps []*v1.BrokerPosition, sums map[string]float64) {
 	}
 }
 
+// AnnotateBrokerPositions D-571 包A：monitor 事件载荷标注入口（三件套同序——
+// position_id/order_id → alias → CEX swap；与 case 8 流推送/拉路径同源口径）。
+// main 装配 bpMon.SetAnnotator 用；导出仅因调用方在 cmd 包。
+func AnnotateBrokerPositions(ctx context.Context, store *pgstore.Store, bps []*v1.BrokerPosition) {
+	annotatePositionID(ctx, store, bps)
+	annotateAccountAlias(ctx, store, bps)
+	annotateCEXSwap(ctx, store, bps)
+}
+
 // CloseBrokerPosition 经注册执行器平仓一条 venue 持仓（人工确认后，§1）。
 func (s *Service) CloseBrokerPosition(ctx context.Context, req *connect.Request[v1.CloseBrokerPositionRequest]) (*connect.Response[v1.CloseBrokerPositionResponse], error) {
 	if _, err := s.bm.CloseOrder(ctx, req.Msg.GetVenueKey(), req.Msg.GetTicket()); err != nil {

@@ -27,3 +27,19 @@ func (s *Service) streamInitQuotes(ctx context.Context, stream *connect.ServerSt
 	}
 	return nil
 }
+
+// streamInitBrokerPositions D-571 包A：Broker 实持仓回放——cur 全量每仓一条 case 15 upsert
+// 逐条 Send（同 streamInitQuotes 模式；新连接秒级全量，不依赖事件到达）。
+func (s *Service) streamInitBrokerPositions(stream *connect.ServerStream[v1.StreamUpdatesResponse]) error {
+	if s.bpm == nil {
+		return nil
+	}
+	for _, ev := range s.bpm.Events() {
+		if err := stream.Send(&v1.StreamUpdatesResponse{
+			Update: &v1.StreamUpdatesResponse_BrokerPositionEvent{BrokerPositionEvent: ev},
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}

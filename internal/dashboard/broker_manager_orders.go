@@ -175,6 +175,22 @@ func (m *BrokerManager) venueOrderResults(ctx context.Context) []VenueOrderResul
 	return out
 }
 
+// venueOrders D-571 包A：单 venue 权威查询（逐仓事件化的权威重读点——未知票号/
+// kick/流重连按 venue 回读，不再全量轮询）。querier 缺席 → Err=not found（诚实失败）。
+func (m *BrokerManager) venueOrders(ctx context.Context, venueKey string) VenueOrderResult {
+	for _, q := range m.queriers() {
+		if q == nil || q.VenueKey() != venueKey {
+			continue
+		}
+		orders, err := q.QueryOpenedOrders(ctx)
+		if err != nil {
+			log.Printf("[broker] query venue orders %s: %v", venueKey, err)
+		}
+		return VenueOrderResult{VenueKey: venueKey, Orders: orders, Err: err}
+	}
+	return VenueOrderResult{VenueKey: venueKey, Err: fmt.Errorf("querier not found for %s", venueKey)}
+}
+
 // CloseOrder 经注册执行器平仓一条 venue 持仓。D-051 WP3。
 // MT venue：按 ticket 调 CloseOrder（OrderClose）。
 // CEX venue：CEX 无 CloseOrder 概念 → 从 bpm 快照查匹配 venueKey+ticket 的持仓

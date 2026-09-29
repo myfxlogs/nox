@@ -38,28 +38,28 @@ func (f *fakeVenueQuerier) ServerTimezone(context.Context) (float64, error) {
 }
 
 // newMonTestQ 组装 monitor（querier 泛化入口——fakeVenueQuerier/fakeCEXQuerier 均可）。
-func newMonTestQ(t *testing.T, q reconcile.VenueQuerier) (*BrokerPositionMonitor, *bus.Topic[*v1.BrokerPositionSnapshot], <-chan *v1.BrokerPositionSnapshot) {
+func newMonTestQ(t *testing.T, q reconcile.VenueQuerier) (*BrokerPositionMonitor, *bus.Topic[*v1.BrokerPositionEvent], <-chan *v1.BrokerPositionEvent) {
 	t.Helper()
 	qbus := bus.New()
 	bm := NewBrokerManager(nil, qbus, exec.NewRegistry(), time.Minute)
 	bm.AddStaticQuerier(q.VenueKey(), q)
-	topic := bus.NewTopic[*v1.BrokerPositionSnapshot]()
+	topic := bus.NewTopic[*v1.BrokerPositionEvent]()
 	ch, _ := topic.Subscribe()
-	m := NewBrokerPositionMonitor(bm, qbus, time.Minute, time.Millisecond, time.Second, topic,
+	m := NewBrokerPositionMonitor(bm, qbus, time.Minute, topic,
 		NewServerTZCache(time.Minute, func(context.Context, string) (float64, error) { return 0, errors.New("n/a") }),
 		exchange.NewFundingIntervalCache(), nil)
 	return m, topic, ch
 }
 
 // newMonTest 组装 monitor：nil store（BrokerSymbolMap 空 map → canonical=""，不动 broker_symbol_map 表）。
-func newMonTest(t *testing.T, q *fakeVenueQuerier) (*BrokerPositionMonitor, *bus.Topic[*v1.BrokerPositionSnapshot], <-chan *v1.BrokerPositionSnapshot) {
+func newMonTest(t *testing.T, q *fakeVenueQuerier) (*BrokerPositionMonitor, *bus.Topic[*v1.BrokerPositionEvent], <-chan *v1.BrokerPositionEvent) {
 	t.Helper()
 	qbus := bus.New()
 	bm := NewBrokerManager(nil, qbus, exec.NewRegistry(), time.Minute)
 	bm.AddStaticQuerier("testvenue", q)
-	topic := bus.NewTopic[*v1.BrokerPositionSnapshot]()
+	topic := bus.NewTopic[*v1.BrokerPositionEvent]()
 	ch, _ := topic.Subscribe()
-	m := NewBrokerPositionMonitor(bm, qbus, time.Minute, time.Millisecond, time.Second, topic,
+	m := NewBrokerPositionMonitor(bm, qbus, time.Minute, topic,
 		NewServerTZCache(time.Minute, func(context.Context, string) (float64, error) { return 0, errors.New("n/a") }),
 		exchange.NewFundingIntervalCache(), nil)
 	return m, topic, ch
@@ -155,9 +155,6 @@ func TestBrokerPositionMonitor_KickMerge(t *testing.T) {
 		{Venue: "testvenue", VenueKey: "testvenue:mt5", Ticket: "1", Symbol: "EURUSD", Side: "BUY", Volume: 0.1, OpenPrice: 1.1, Profit: 0, Magic: 0},
 	}}
 	m, _, _ := newMonTest(t, q)
-	// 用长 interval 避免 ticker 干扰（10min 内只有 kick 触发 poll）。
-	m.interval = 10 * time.Minute
-	m.quoteTick = 10 * time.Minute
 
 	go m.Run(ctx)
 	// 等 Run 首采完成（初始 poll）。
@@ -169,9 +166,9 @@ func TestBrokerPositionMonitor_KickMerge(t *testing.T) {
 	q.orders = nil
 
 	// 连续 3 次 kick（chan 容量 1 → 只缓冲 1 个）。
-	m.Kick()
-	m.Kick()
-	m.Kick()
+	m.Kick("testvenue:mt5")
+	m.Kick("testvenue:mt5")
+	m.Kick("testvenue:mt5")
 
 	// 等 kick 触发的 poll 完成（snapshot 变 0 条 = poll 执行了）。
 	if !waitForMon(t, 10*time.Second, func() bool { return len(m.Snapshot()) == 0 }) {
@@ -238,9 +235,6 @@ func TestOrderTopicToKickWiring(t *testing.T) {
 		{Venue: "testvenue", VenueKey: "testvenue:mt5", Ticket: "1", Symbol: "EURUSD", Side: "BUY", Volume: 0.1, OpenPrice: 1.1, Profit: 0, Magic: 0},
 	}}
 	m, _, _ := newMonTest(t, q)
-	m.interval = 10 * time.Minute
-	m.quoteTick = 10 * time.Minute
-
 	// 模拟 main.go 装配：orderTopic 订阅 → bpMon.Kick。
 	// 测试内订阅循环必须 select ctx.Done（D-207：防泄漏 goroutine 持池连接→死锁/EBADF）。
 	orderTopic := bus.NewTopic[bus.OrderEvent]()
@@ -256,7 +250,7 @@ func TestOrderTopicToKickWiring(t *testing.T) {
 				if !ok {
 					return
 				}
-				m.Kick()
+				m.Kick("testvenue:mt5")
 			}
 		}
 	}()
@@ -277,6 +271,15 @@ func TestOrderTopicToKickWiring(t *testing.T) {
 	if !waitForMon(t, 120*time.Second, func() bool { return len(m.Snapshot()) == 0 }) {
 		t.Fatalf("orderTopic→Kick wiring: snapshot still %d after publish", len(m.Snapshot()))
 	}
+}
+
+// ordersByTicket []VenueOrder → ticket 键 map（venueState.orders 形态适配，测试构造用）。
+func ordersByTicket(orders []reconcile.VenueOrder) map[string]reconcile.VenueOrder {
+	out := make(map[string]reconcile.VenueOrder, len(orders))
+	for _, o := range orders {
+		out[o.Ticket] = o
+	}
+	return out
 }
 
 // waitForMon 轮询条件直到超时（dashboard 包内测试 helper）。
@@ -425,8 +428,8 @@ func TestD337_BuildSwapChargeAt(t *testing.T) {
 	qb1 := bus.New()
 	bm1 := NewBrokerManager(nil, qb1, exec.NewRegistry(), time.Minute)
 	bm1.AddStaticQuerier(q.key, q)
-	m := NewBrokerPositionMonitor(bm1, qb1, time.Minute, time.Millisecond, time.Second,
-		bus.NewTopic[*v1.BrokerPositionSnapshot](),
+	m := NewBrokerPositionMonitor(bm1, qb1, time.Minute,
+		bus.NewTopic[*v1.BrokerPositionEvent](),
 		NewServerTZCache(time.Hour, func(_ context.Context, _ string) (float64, error) {
 			return 3, nil // EEST 形态
 		}), exchange.NewFundingIntervalCache(), nil)
@@ -447,8 +450,8 @@ func TestD337_BuildSwapChargeAt(t *testing.T) {
 	qb2 := bus.New()
 	bm2 := NewBrokerManager(nil, qb2, exec.NewRegistry(), time.Minute)
 	bm2.AddStaticQuerier(q2.key, q2)
-	m2 := NewBrokerPositionMonitor(bm2, qb2, time.Minute, time.Millisecond, time.Second,
-		bus.NewTopic[*v1.BrokerPositionSnapshot](),
+	m2 := NewBrokerPositionMonitor(bm2, qb2, time.Minute,
+		bus.NewTopic[*v1.BrokerPositionEvent](),
 		NewServerTZCache(time.Hour, func(_ context.Context, _ string) (float64, error) {
 			return 0, errors.New("rpc down")
 		}), exchange.NewFundingIntervalCache(), nil)

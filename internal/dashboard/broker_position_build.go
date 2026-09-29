@@ -1,4 +1,6 @@
-// broker_position_build.go D-124：build 视图构建 + 保证金分摊（从 broker_position_monitor.go 拆分，≤300 行）。
+// broker_position_build.go D-124：视图构建 + 保证金分摊（从 broker_position_monitor.go 拆分，≤300 行）。
+// D-571 包A：build 改为逐仓 protoFor 复用——全量视图（Snapshot/回放）与逐仓事件（flush）同一构建点，
+// 防两处构建逻辑分叉（fix-must-enumerate-all-writer-paths）。
 package dashboard
 
 import (
@@ -30,113 +32,125 @@ func (m *BrokerPositionMonitor) build(ctx context.Context) []*v1.BrokerPosition 
 	m.mu.RUnlock()
 	sort.Strings(keys)
 
-	// D-124：账户保证金 map（venueKey → margin），acctMon nil 或无快照 → 空 map（margin=0）。
-	accountMargins := map[string]float64{}
-	if m.acctMon != nil {
-		for _, ai := range m.acctMon.Snapshot() {
-			accountMargins[ai.VenueKey] = ai.Margin
-		}
-	}
-
-	out := make([]*v1.BrokerPosition, 0, 16)
-	canonMaps := map[string]map[string]string{} // venue → symbol→canonical（懒加载，一次轮询内复用）
-	csMaps := map[string]map[string]float64{}   // venue → symbol→contractSize（D-124）
 	now := time.Now()
+	out := make([]*v1.BrokerPosition, 0, 16)
 	for _, vk := range keys {
 		vs := venues[vk]
-		venue := ""
-		if len(vs.orders) > 0 {
-			venue = vs.orders[0].Venue
-		}
-		// 懒加载 symMap + csMap（一次查询取 canonical + contractSize）
-		if venue != "" {
-			if _, ok := canonMaps[venue]; !ok {
-				cm, cs := m.bm.BrokerSymbolMapWithCS(ctx, venue)
-				canonMaps[venue] = cm
-				csMaps[venue] = cs
-			}
-		}
-		// D-124：per-venue 保证金分摊（方案 C）；D-146 S5 微件③：CEX perp 有 VenueOrder.InitialMargin 时优先用之。
-		marginByTicket := allocateMargins(vs.orders, accountMargins[vk], csMaps[venue])
 		for _, o := range vs.orders {
-			canonical := ""
-			if cm, ok := canonMaps[o.Venue]; ok {
-				canonical = cm[o.Symbol]
-			}
-			// CEX perp/spot 无 symbol_mappings 记录时，从符号派生 canonical（与采集器同构）：
-			// binance TRXUSDT → TRXUSDT；okx TRX-USDT-SWAP → TRXUSDT（去 -SWAP + 替换 -）；gate CL_USDT → CLUSDT。
-			// 无映射则 qbus.Latest 查不到 → 现价显示「—」；派生后可查到实时报价。
-			if canonical == "" && isCEXVenueKey(o.VenueKey) {
-				canonical = bus.CexSymbolKey(o.Symbol)
-			}
-			var price bus.Quote
-			hasPrice := false
-			// D-481：腿级查找走 LatestLeg——CEX 以原生 symbol 归一键优先（canonical 派生
-			// 已与采集键同形时天然命中；canonical 为空/错位场景原生键兜底），MT canonical 直查。
-			if q, ok := m.qbus.LatestLeg(canonical, o.Symbol, o.VenueKey); ok {
-				price = q
-				hasPrice = true
-			}
-			// D-146 S5 微件③：CEX perp per-position margin 优先（venue 权威，替换 0=未知语义）；
-			// MT4/MT5 走 D-124 账户分摊（VenueOrder.InitialMargin=0）。
-			margin := marginByTicket[o.Ticket]
-			if o.InitialMargin > 0 {
-				margin = o.InitialMargin
-			}
-			// D-337 S2 + D-337R1 S2 + D-466 S3/R1：下次计费/结算时刻——MT5=server 零点（tzCache）；
-			// CEX=腿级 venue 原生真值回退：funding_next_settle fact（stale 闸=龄>周期×2 失效）
-			// → venue 原生 interval 边界 → nil 诚实空态+warn（业主令禁 8h 兜底——猜的值
-			// 会看似合理但错）。FundingIntervalCache 仅 binance 腿合法回退（venue 原生
-			// 数据）；跨 venue 查用即污染（OKX 腿吃 binance 4h 期实证）。
-			var swapChargeAt *timestamppb.Timestamp
-			var periodicPct float64
-			if isCEXVenueKey(o.VenueKey) && canonical != "" {
-				var nextSettle, factTs time.Time
-				var ivl time.Duration
-				if m.cexNextSettle != nil {
-					nextSettle, factTs, ivl = m.cexNextSettle(ctx, venue, canonical)
-				}
-				periods := 0
-				if ivl > 0 {
-					periods = int(math.Round(86400 / ivl.Seconds()))
-				}
-				switch {
-				case !nextSettle.IsZero() && nextSettle.After(now) && (ivl <= 0 || now.Sub(factTs) <= 2*ivl):
-					swapChargeAt = timestamppb.New(nextSettle)
-				case periods > 0:
-					// fact 缺席/stale/过期 → venue 原生 interval 边界
-					swapChargeAt = timestamppb.New(NextFundingSettlementUTC(now.UTC(), periods))
-					log.Printf("[broker] cex settle fact %s|%s unusable (next=%v ts=%v, fallback venue interval %d/day)", venue, canonical, nextSettle, factTs, periods)
-				default:
-					// R1：binance 腿仅自家 FundingIntervalCache 命中可用（venue 原生合法
-					// 回退）；miss 与其余 venue 一律 nil 空态+warn——借它=跨 venue 污染
-					// （本票根因），8h 兜底=猜的值禁产（业主令）。
-					if venue == "binance" && m.cexIntervals != nil {
-						if pp, ok := m.cexIntervals.Lookup(canonical); ok {
-							periods = pp
-							swapChargeAt = timestamppb.New(NextFundingSettlementUTC(now.UTC(), periods))
-						}
-					}
-					if swapChargeAt == nil {
-						log.Printf("[broker] cex settle %s|%s no venue-native fact/interval (nil honest-empty)", venue, canonical)
-					}
-				}
-				// R2：periodicPct 仅 venue 原生 periods（funding_interval fact / binance 自家
-				// 缓存命中）可算；非原生来源（默认/污染路径）→0 诚实空态。
-				if periods > 0 && m.cexFundingRate != nil {
-					if annual, ok2 := m.cexFundingRate(ctx, venue, canonical); ok2 {
-						periodicPct = annual / (365 * float64(periods))
-					}
-				}
-			} else if m.tzCache.fetch != nil && !isCEXVenueKey(o.VenueKey) { // D-337R2：零值缓存=诚实空态（构造必选注入）
-				if tzLoc := m.tzCache.get(ctx, o.VenueKey); tzLoc != nil {
-					swapChargeAt = timestamppb.New(nextSwapChargeAtInLoc(now, tzLoc))
-				}
-			}
-			out = append(out, brokerPositionToProto(o, canonical, price, hasPrice, vs.online, m.freshTTL, now, margin, swapChargeAt, periodicPct))
+			out = append(out, m.protoFor(ctx, vk, vs, o, now))
 		}
 	}
 	return out
+}
+
+// protoFor 单仓显示态构建（D-571 包A：全量 build 与逐仓事件 flush 共用，唯一组装点）。
+// canonical/现价/swapChargeAt/periodicPct 规则与原 build 内联路径逐字一致（逻辑原样搬迁）；
+// canonMap/csMap/marginByTicket 取自 venueState（reconcile 时构建缓存，帧 patch 沿用）。
+func (m *BrokerPositionMonitor) protoFor(ctx context.Context, vk string, vs venueState, o reconcile.VenueOrder, now time.Time) *v1.BrokerPosition {
+	venue := o.Venue
+	canonical := ""
+	if vs.canon != nil {
+		canonical = vs.canon[o.Symbol]
+	}
+	// CEX perp/spot 无 symbol_mappings 记录时，从符号派生 canonical（与采集器同构）：
+	// binance TRXUSDT → TRXUSDT；okx TRX-USDT-SWAP → TRXUSDT（去 -SWAP + 替换 -）；gate CL_USDT → CLUSDT。
+	// 无映射则 qbus.Latest 查不到 → 现价显示「—」；派生后可查到实时报价。
+	if canonical == "" && isCEXVenueKey(o.VenueKey) {
+		canonical = bus.CexSymbolKey(o.Symbol)
+	}
+	var price bus.Quote
+	hasPrice := false
+	// D-481：腿级查找走 LatestLeg——CEX 以原生 symbol 归一键优先（canonical 派生
+	// 已与采集键同形时天然命中；canonical 为空/错位场景原生键兜底），MT canonical 直查。
+	if q, ok := m.qbus.LatestLeg(canonical, o.Symbol, o.VenueKey); ok {
+		price = q
+		hasPrice = true
+	}
+	// D-146 S5 微件③：CEX perp per-position margin 优先（venue 权威，替换 0=未知语义）；
+	// MT4/MT5 走 D-124 账户分摊（VenueOrder.InitialMargin=0）。
+	margin := vs.marginByTicket[o.Ticket]
+	if o.InitialMargin > 0 {
+		margin = o.InitialMargin
+	}
+	// D-337 S2 + D-337R1 S2 + D-466 S3/R1：下次计费/结算时刻——MT5=server 零点（tzCache）；
+	// CEX=腿级 venue 原生真值回退：funding_next_settle fact（stale 闸=龄>周期×2 失效）
+	// → venue 原生 interval 边界 → nil 诚实空态+warn（业主令禁 8h 兜底——猜的值
+	// 会看似合理但错）。FundingIntervalCache 仅 binance 腿合法回退（venue 原生
+	// 数据）；跨 venue 查用即污染（OKX 腿吃 binance 4h 期实证）。
+	var swapChargeAt *timestamppb.Timestamp
+	var periodicPct float64
+	if isCEXVenueKey(o.VenueKey) && canonical != "" {
+		var nextSettle, factTs time.Time
+		var ivl time.Duration
+		if m.cexNextSettle != nil {
+			nextSettle, factTs, ivl = m.cexNextSettle(ctx, venue, canonical)
+		}
+		periods := 0
+		if ivl > 0 {
+			periods = int(math.Round(86400 / ivl.Seconds()))
+		}
+		switch {
+		case !nextSettle.IsZero() && nextSettle.After(now) && (ivl <= 0 || now.Sub(factTs) <= 2*ivl):
+			swapChargeAt = timestamppb.New(nextSettle)
+		case periods > 0:
+			// fact 缺席/stale/过期 → venue 原生 interval 边界
+			swapChargeAt = timestamppb.New(NextFundingSettlementUTC(now.UTC(), periods))
+			log.Printf("[broker] cex settle fact %s|%s unusable (next=%v ts=%v, fallback venue interval %d/day)", venue, canonical, nextSettle, factTs, periods)
+		default:
+			// R1：binance 腿仅自家 FundingIntervalCache 命中可用（venue 原生合法
+			// 回退）；miss 与其余 venue 一律 nil 空态+warn——借它=跨 venue 污染
+			// （本票根因），8h 兜底=猜的值禁产（业主令）。
+			if venue == "binance" && m.cexIntervals != nil {
+				if pp, ok := m.cexIntervals.Lookup(canonical); ok {
+					periods = pp
+					swapChargeAt = timestamppb.New(NextFundingSettlementUTC(now.UTC(), periods))
+				}
+			}
+			if swapChargeAt == nil {
+				log.Printf("[broker] cex settle %s|%s no venue-native fact/interval (nil honest-empty)", venue, canonical)
+			}
+		}
+		// R2：periodicPct 仅 venue 原生 periods（funding_interval fact / binance 自家
+		// 缓存命中）可算；非原生来源（默认/污染路径）→0 诚实空态。
+		if periods > 0 && m.cexFundingRate != nil {
+			if annual, ok2 := m.cexFundingRate(ctx, venue, canonical); ok2 {
+				periodicPct = annual / (365 * float64(periods))
+			}
+		}
+	} else if m.tzCache.fetch != nil && !isCEXVenueKey(o.VenueKey) { // D-337R2：零值缓存=诚实空态（构造必选注入）
+		if tzLoc := m.tzCache.get(ctx, o.VenueKey); tzLoc != nil {
+			swapChargeAt = timestamppb.New(nextSwapChargeAtInLoc(now, tzLoc))
+		}
+	}
+	return brokerPositionToProto(o, canonical, price, hasPrice, vs.online, m.freshTTL, now, margin, swapChargeAt, periodicPct)
+}
+
+// prepareVenueView reconcile 时一次性构建 venue 显示缓存（symMap/csMap/margin 分摊）。
+// 帧 patch 沿用缓存（canonical/保证金低频变化；保证金分摊在 patch 时按缓存重算）。
+func (m *BrokerPositionMonitor) prepareVenueView(ctx context.Context, vk string, orders []reconcile.VenueOrder, online bool) venueState {
+	vs := venueState{online: online, orders: make(map[string]reconcile.VenueOrder, len(orders))}
+	venue := ""
+	for _, o := range orders {
+		vs.orders[o.Ticket] = o
+		if venue == "" {
+			venue = o.Venue
+		}
+	}
+	if venue != "" {
+		vs.canon, vs.cs = m.bm.BrokerSymbolMapWithCS(ctx, venue)
+	}
+	var acctMargin float64
+	if m.acctMon != nil {
+		for _, ai := range m.acctMon.Snapshot() {
+			if ai.VenueKey == vk {
+				acctMargin = ai.Margin
+				break
+			}
+		}
+	}
+	vs.acctMargin = acctMargin
+	vs.marginByTicket = allocateMargins(orders, acctMargin, vs.cs)
+	return vs
 }
 
 // allocateMargins D-124 方案 C：按名义价值比例分摊账户总保证金到各笔持仓。

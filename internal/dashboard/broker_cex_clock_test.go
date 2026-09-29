@@ -58,8 +58,8 @@ func TestD337R1_CEXLegClockAndRate(t *testing.T) {
 	qb := bus.New()
 	bm := NewBrokerManager(nil, qb, exec.NewRegistry(), time.Minute)
 	bm.AddStaticQuerier(q.key, q)
-	mon := NewBrokerPositionMonitor(bm, qb, time.Minute, time.Millisecond, time.Second,
-		bus.NewTopic[*v1.BrokerPositionSnapshot](), NewServerTZCache(time.Minute, func(context.Context, string) (float64, error) {
+	mon := NewBrokerPositionMonitor(bm, qb, time.Minute,
+		bus.NewTopic[*v1.BrokerPositionEvent](), NewServerTZCache(time.Minute, func(context.Context, string) (float64, error) {
 			return 0, errors.New("n/a")
 		}), intervals, nil)
 	mon.SetCEXFundingRate(func(_ context.Context, venue, symbol string) (float64, bool) {
@@ -111,8 +111,8 @@ func TestD337R1_CEXNoFactZero(t *testing.T) {
 	qb := bus.New()
 	bm := NewBrokerManager(nil, qb, exec.NewRegistry(), time.Minute)
 	bm.AddStaticQuerier(q.key, q)
-	mon := NewBrokerPositionMonitor(bm, qb, time.Minute, time.Millisecond, time.Second,
-		bus.NewTopic[*v1.BrokerPositionSnapshot](), NewServerTZCache(time.Minute, func(context.Context, string) (float64, error) {
+	mon := NewBrokerPositionMonitor(bm, qb, time.Minute,
+		bus.NewTopic[*v1.BrokerPositionEvent](), NewServerTZCache(time.Minute, func(context.Context, string) (float64, error) {
 			return 0, errors.New("n/a")
 		}), intervals, nil)
 	mon.SetCEXFundingRate(func(_ context.Context, _, _ string) (float64, bool) { return 0, false }) // 无 facts 行

@@ -104,7 +104,7 @@ func TestBuild_CEXMarginPriority(t *testing.T) {
 	m, _, _ := newMonTest(t, q)
 	// 手动注入 venue 状态（跳过 poll，直接测 build）
 	m.mu.Lock()
-	m.venues["binance:perp"] = venueState{online: true, orders: q.orders}
+	m.venues["binance:perp"] = venueState{online: true, orders: ordersByTicket(q.orders)}
 	m.mu.Unlock()
 
 	pbs := m.build(context.Background())
@@ -124,7 +124,7 @@ func TestBuild_CEXMarginZeroStillDash(t *testing.T) {
 	}}
 	m, _, _ := newMonTest(t, q)
 	m.mu.Lock()
-	m.venues["okx:perp"] = venueState{online: true, orders: q.orders}
+	m.venues["okx:perp"] = venueState{online: true, orders: ordersByTicket(q.orders)}
 	m.mu.Unlock()
 
 	pbs := m.build(context.Background())

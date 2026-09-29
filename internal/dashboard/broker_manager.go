@@ -124,6 +124,14 @@ type BrokerManager struct {
 	// sink = acctMon.ObserveStreamAccount）。startMT5 透传至 adapter（nil 安全）。
 	AccountSink adapter.AcctFrameSink
 
+	// PositionsSink D-571 包A：OnOrderProfit 帧逐仓载荷下沉注入（同 OrderEventSink 模式；
+	// sink = bpMon.OnMT5Frame）。startMT5 透传至 adapter（nil 安全）。
+	PositionsSink func(venueKey string, orders []reconcile.VenueOrder)
+
+	// StreamStateSink D-571 包A：venue 流状态透出注入（sink = bpMon.OnStreamState；
+	// startMT5 透传至 adapter，mt5 双流同报）。nil 安全。
+	StreamStateSink func(venueKey string, online bool)
+
 	// OrderProfitKick D-107 P2：margin 事件触发账户重采（OnOrderProfit → MarginSink closure →
 	// acctMon.Kick）。同 SwapKick 注入模式，main 注入（acctMon 创建后赋值），nil 安全。
 	OrderProfitKick func()
