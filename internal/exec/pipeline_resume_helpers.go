@@ -95,19 +95,40 @@ func (p *Pipeline) placeCloseOrder(ctx context.Context, posID int64, leg pgstore
 
 // backfillCloseFromHistory D-189 P0-4 S4-4：broker 已无腿但 CLOSE leg 缺失 → 从权威历史回填。
 // pnlCalibrator 命中且 ClosePrice > 0 → 回填 CLOSE leg + PnL + cashflows；无法取得 → fail-closed。
-func (p *Pipeline) backfillCloseFromHistory(ctx context.Context, posID int64, leg pgstore.PositionLeg, fx float64) error {
-	if p.pnlCalibrator == nil {
-		msg := fmt.Sprintf("持仓 #%d 第 %d 腿（%s）券商侧已无此腿且无历史查证器——平仓盈亏无法核实，需人工核对", posID, leg.LegNo, leg.Venue)
-		if err := p.store.InsertPositionAlert(ctx, posID, "critical", msg); err != nil {
-			log.Printf("[exec] pos %d alert write: %v", posID, err)
+// D-577：gate:perp 腿开/平不同 order_id——ticket 语义不可平移，
+// 走 contract+ClosingStartedAt 窗回填（WS 落库帧首选→gate REST 兜底），同一尾部复用。
+// okx/binance 同型缺口留后续票（本票只做 gate:perp——设计边界）。
+func (p *Pipeline) backfillCloseFromHistory(ctx context.Context, pos *pgstore.Position, leg pgstore.PositionLeg, fx float64) error {
+	posID := pos.ID
+	var hp *HistoryPnL
+	var err error
+	var missWhy string
+	exe, _ := p.registry.Get(leg.Venue)
+	_, isCexExec := exe.(*CEXExecutor)
+	if keydomain.BareOf(leg.Venue) == "gate" && keydomain.IsType(leg.Venue, "perp") && isCexExec {
+		since := time.Time{}
+		if pos.ClosingStartedAt != nil {
+			since = *pos.ClosingStartedAt
+		} else if pos.OpenedAt != nil {
+			since = *pos.OpenedAt
 		}
-		return fmt.Errorf("no pnl calibrator for backfill")
+		hp, err = p.cexCloseFill(ctx, leg, since)
+		missWhy = "CEX 事件/REST 均无命中"
+	} else {
+		if p.pnlCalibrator == nil {
+			msg := fmt.Sprintf("持仓 #%d 第 %d 腿（%s）券商侧已无此腿且无历史查证器——平仓盈亏无法核实，需人工核对", posID, leg.LegNo, leg.Venue)
+			if aerr := p.store.InsertPositionAlert(ctx, posID, "critical", msg); aerr != nil {
+				log.Printf("[exec] pos %d alert write: %v", posID, aerr)
+			}
+			return fmt.Errorf("no pnl calibrator for backfill")
+		}
+		hp, err = p.pnlCalibrator.QueryHistoryPnL(ctx, leg.Venue, leg.OrderID, 3)
+		missWhy = fmt.Sprintf("历史查证无命中（票号 %s）", leg.OrderID)
 	}
-	hp, err := p.pnlCalibrator.QueryHistoryPnL(ctx, leg.Venue, leg.OrderID, 3)
 	if err != nil || hp == nil || hp.ClosePrice <= 0 {
-		msg := fmt.Sprintf("持仓 #%d 第 %d 腿（%s）券商侧已无此腿且历史查证无命中（票号 %s）——平仓盈亏无法核实，需人工核对", posID, leg.LegNo, leg.Venue, leg.OrderID)
-		if err := p.store.InsertPositionAlert(ctx, posID, "critical", msg); err != nil {
-			log.Printf("[exec] pos %d alert write: %v", posID, err)
+		msg := fmt.Sprintf("持仓 #%d 第 %d 腿（%s）券商侧已无此腿且%s——平仓盈亏无法核实，需人工核对", posID, leg.LegNo, leg.Venue, missWhy)
+		if aerr := p.store.InsertPositionAlert(ctx, posID, "critical", msg); aerr != nil {
+			log.Printf("[exec] pos %d alert write: %v", posID, aerr)
 		}
 		return fmt.Errorf("no authoritative history for backfill")
 	}

@@ -138,7 +138,7 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64, force boo
 		}
 		if !stillOpen {
 			// D-189 P0-4 S4-4：broker 已无腿 → 历史回填（无历史则 fail-closed）。
-			if err := p.backfillCloseFromHistory(ctx, posID, leg, fx); err != nil {
+			if err := p.backfillCloseFromHistory(ctx, pos, leg, fx); err != nil {
 				return fmt.Errorf("pos=%d leg=%d history backfill: %w", posID, leg.LegNo, err)
 			}
 			continue
