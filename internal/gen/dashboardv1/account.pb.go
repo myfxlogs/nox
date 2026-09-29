@@ -2282,51 +2282,6 @@ func (x *Holding) GetUsdtValue() float64 {
 	return 0
 }
 
-// 账户资产全量快照（D-053）：monitor 变更时广播，含离线 venue 的最近快照；前端全量替换。
-type AccountSnapshot struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Accounts      []*AccountInfo         `protobuf:"bytes,1,rep,name=accounts,proto3" json:"accounts,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *AccountSnapshot) Reset() {
-	*x = AccountSnapshot{}
-	mi := &file_dashboardv1_account_proto_msgTypes[35]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AccountSnapshot) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AccountSnapshot) ProtoMessage() {}
-
-func (x *AccountSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[35]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AccountSnapshot.ProtoReflect.Descriptor instead.
-func (*AccountSnapshot) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{35}
-}
-
-func (x *AccountSnapshot) GetAccounts() []*AccountInfo {
-	if x != nil {
-		return x.Accounts
-	}
-	return nil
-}
-
 type ListAccountsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -2335,7 +2290,7 @@ type ListAccountsRequest struct {
 
 func (x *ListAccountsRequest) Reset() {
 	*x = ListAccountsRequest{}
-	mi := &file_dashboardv1_account_proto_msgTypes[36]
+	mi := &file_dashboardv1_account_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2347,7 +2302,7 @@ func (x *ListAccountsRequest) String() string {
 func (*ListAccountsRequest) ProtoMessage() {}
 
 func (x *ListAccountsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[36]
+	mi := &file_dashboardv1_account_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2360,7 +2315,7 @@ func (x *ListAccountsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAccountsRequest.ProtoReflect.Descriptor instead.
 func (*ListAccountsRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{36}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{35}
 }
 
 type ListAccountsResponse struct {
@@ -2372,7 +2327,7 @@ type ListAccountsResponse struct {
 
 func (x *ListAccountsResponse) Reset() {
 	*x = ListAccountsResponse{}
-	mi := &file_dashboardv1_account_proto_msgTypes[37]
+	mi := &file_dashboardv1_account_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2384,7 +2339,7 @@ func (x *ListAccountsResponse) String() string {
 func (*ListAccountsResponse) ProtoMessage() {}
 
 func (x *ListAccountsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[37]
+	mi := &file_dashboardv1_account_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2397,7 +2352,7 @@ func (x *ListAccountsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAccountsResponse.ProtoReflect.Descriptor instead.
 func (*ListAccountsResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{37}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ListAccountsResponse) GetAccounts() []*AccountInfo {
@@ -2416,7 +2371,7 @@ type Keepalive struct {
 
 func (x *Keepalive) Reset() {
 	*x = Keepalive{}
-	mi := &file_dashboardv1_account_proto_msgTypes[38]
+	mi := &file_dashboardv1_account_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2428,7 +2383,7 @@ func (x *Keepalive) String() string {
 func (*Keepalive) ProtoMessage() {}
 
 func (x *Keepalive) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[38]
+	mi := &file_dashboardv1_account_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2441,7 +2396,7 @@ func (x *Keepalive) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Keepalive.ProtoReflect.Descriptor instead.
 func (*Keepalive) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{38}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *Keepalive) GetTs() *timestamppb.Timestamp {
@@ -2459,7 +2414,7 @@ type GetFinanceOverviewRequest struct {
 
 func (x *GetFinanceOverviewRequest) Reset() {
 	*x = GetFinanceOverviewRequest{}
-	mi := &file_dashboardv1_account_proto_msgTypes[39]
+	mi := &file_dashboardv1_account_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2471,7 +2426,7 @@ func (x *GetFinanceOverviewRequest) String() string {
 func (*GetFinanceOverviewRequest) ProtoMessage() {}
 
 func (x *GetFinanceOverviewRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[39]
+	mi := &file_dashboardv1_account_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2484,7 +2439,7 @@ func (x *GetFinanceOverviewRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFinanceOverviewRequest.ProtoReflect.Descriptor instead.
 func (*GetFinanceOverviewRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{39}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{38}
 }
 
 // FinancePnlByEnv 已实现 PnL 按环境分层（real/demo；environment NULL=legacy real 链路）。
@@ -2499,7 +2454,7 @@ type FinancePnlByEnv struct {
 
 func (x *FinancePnlByEnv) Reset() {
 	*x = FinancePnlByEnv{}
-	mi := &file_dashboardv1_account_proto_msgTypes[40]
+	mi := &file_dashboardv1_account_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2511,7 +2466,7 @@ func (x *FinancePnlByEnv) String() string {
 func (*FinancePnlByEnv) ProtoMessage() {}
 
 func (x *FinancePnlByEnv) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[40]
+	mi := &file_dashboardv1_account_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2524,7 +2479,7 @@ func (x *FinancePnlByEnv) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FinancePnlByEnv.ProtoReflect.Descriptor instead.
 func (*FinancePnlByEnv) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{40}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *FinancePnlByEnv) GetEnvironment() string {
@@ -2560,7 +2515,7 @@ type FinanceIncomeRow struct {
 
 func (x *FinanceIncomeRow) Reset() {
 	*x = FinanceIncomeRow{}
-	mi := &file_dashboardv1_account_proto_msgTypes[41]
+	mi := &file_dashboardv1_account_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2572,7 +2527,7 @@ func (x *FinanceIncomeRow) String() string {
 func (*FinanceIncomeRow) ProtoMessage() {}
 
 func (x *FinanceIncomeRow) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[41]
+	mi := &file_dashboardv1_account_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2585,7 +2540,7 @@ func (x *FinanceIncomeRow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FinanceIncomeRow.ProtoReflect.Descriptor instead.
 func (*FinanceIncomeRow) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{41}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *FinanceIncomeRow) GetKind() string {
@@ -2627,7 +2582,7 @@ type FinanceFlowRow struct {
 
 func (x *FinanceFlowRow) Reset() {
 	*x = FinanceFlowRow{}
-	mi := &file_dashboardv1_account_proto_msgTypes[42]
+	mi := &file_dashboardv1_account_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2639,7 +2594,7 @@ func (x *FinanceFlowRow) String() string {
 func (*FinanceFlowRow) ProtoMessage() {}
 
 func (x *FinanceFlowRow) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[42]
+	mi := &file_dashboardv1_account_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2652,7 +2607,7 @@ func (x *FinanceFlowRow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FinanceFlowRow.ProtoReflect.Descriptor instead.
 func (*FinanceFlowRow) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{42}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *FinanceFlowRow) GetTs() *timestamppb.Timestamp {
@@ -2720,7 +2675,7 @@ type GetFinanceOverviewResponse struct {
 
 func (x *GetFinanceOverviewResponse) Reset() {
 	*x = GetFinanceOverviewResponse{}
-	mi := &file_dashboardv1_account_proto_msgTypes[43]
+	mi := &file_dashboardv1_account_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2732,7 +2687,7 @@ func (x *GetFinanceOverviewResponse) String() string {
 func (*GetFinanceOverviewResponse) ProtoMessage() {}
 
 func (x *GetFinanceOverviewResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[43]
+	mi := &file_dashboardv1_account_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2745,7 +2700,7 @@ func (x *GetFinanceOverviewResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFinanceOverviewResponse.ProtoReflect.Descriptor instead.
 func (*GetFinanceOverviewResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{43}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *GetFinanceOverviewResponse) GetDepositedUsd() float64 {
@@ -2980,9 +2935,7 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"\x03ccy\x18\x01 \x01(\tR\x03ccy\x12\x10\n" +
 	"\x03qty\x18\x02 \x01(\x01R\x03qty\x12\x1d\n" +
 	"\n" +
-	"usdt_value\x18\x03 \x01(\x01R\tusdtValue\"L\n" +
-	"\x0fAccountSnapshot\x129\n" +
-	"\baccounts\x18\x01 \x03(\v2\x1d.arb.dashboard.v1.AccountInfoR\baccounts\"\x15\n" +
+	"usdt_value\x18\x03 \x01(\x01R\tusdtValue\"\x15\n" +
 	"\x13ListAccountsRequest\"Q\n" +
 	"\x14ListAccountsResponse\x129\n" +
 	"\baccounts\x18\x01 \x03(\v2\x1d.arb.dashboard.v1.AccountInfoR\baccounts\"7\n" +
@@ -3029,7 +2982,7 @@ func file_dashboardv1_account_proto_rawDescGZIP() []byte {
 	return file_dashboardv1_account_proto_rawDescData
 }
 
-var file_dashboardv1_account_proto_msgTypes = make([]protoimpl.MessageInfo, 44)
+var file_dashboardv1_account_proto_msgTypes = make([]protoimpl.MessageInfo, 43)
 var file_dashboardv1_account_proto_goTypes = []any{
 	(*LedgerEntry)(nil),                     // 0: arb.dashboard.v1.LedgerEntry
 	(*AddLedgerEntryRequest)(nil),           // 1: arb.dashboard.v1.AddLedgerEntryRequest
@@ -3066,47 +3019,45 @@ var file_dashboardv1_account_proto_goTypes = []any{
 	(*AccountMarginStatus)(nil),             // 32: arb.dashboard.v1.AccountMarginStatus
 	(*ListAccountMarginStatusResponse)(nil), // 33: arb.dashboard.v1.ListAccountMarginStatusResponse
 	(*Holding)(nil),                         // 34: arb.dashboard.v1.Holding
-	(*AccountSnapshot)(nil),                 // 35: arb.dashboard.v1.AccountSnapshot
-	(*ListAccountsRequest)(nil),             // 36: arb.dashboard.v1.ListAccountsRequest
-	(*ListAccountsResponse)(nil),            // 37: arb.dashboard.v1.ListAccountsResponse
-	(*Keepalive)(nil),                       // 38: arb.dashboard.v1.Keepalive
-	(*GetFinanceOverviewRequest)(nil),       // 39: arb.dashboard.v1.GetFinanceOverviewRequest
-	(*FinancePnlByEnv)(nil),                 // 40: arb.dashboard.v1.FinancePnlByEnv
-	(*FinanceIncomeRow)(nil),                // 41: arb.dashboard.v1.FinanceIncomeRow
-	(*FinanceFlowRow)(nil),                  // 42: arb.dashboard.v1.FinanceFlowRow
-	(*GetFinanceOverviewResponse)(nil),      // 43: arb.dashboard.v1.GetFinanceOverviewResponse
-	(*timestamppb.Timestamp)(nil),           // 44: google.protobuf.Timestamp
+	(*ListAccountsRequest)(nil),             // 35: arb.dashboard.v1.ListAccountsRequest
+	(*ListAccountsResponse)(nil),            // 36: arb.dashboard.v1.ListAccountsResponse
+	(*Keepalive)(nil),                       // 37: arb.dashboard.v1.Keepalive
+	(*GetFinanceOverviewRequest)(nil),       // 38: arb.dashboard.v1.GetFinanceOverviewRequest
+	(*FinancePnlByEnv)(nil),                 // 39: arb.dashboard.v1.FinancePnlByEnv
+	(*FinanceIncomeRow)(nil),                // 40: arb.dashboard.v1.FinanceIncomeRow
+	(*FinanceFlowRow)(nil),                  // 41: arb.dashboard.v1.FinanceFlowRow
+	(*GetFinanceOverviewResponse)(nil),      // 42: arb.dashboard.v1.GetFinanceOverviewResponse
+	(*timestamppb.Timestamp)(nil),           // 43: google.protobuf.Timestamp
 }
 var file_dashboardv1_account_proto_depIdxs = []int32{
-	44, // 0: arb.dashboard.v1.LedgerEntry.date:type_name -> google.protobuf.Timestamp
-	44, // 1: arb.dashboard.v1.AddLedgerEntryRequest.date:type_name -> google.protobuf.Timestamp
+	43, // 0: arb.dashboard.v1.LedgerEntry.date:type_name -> google.protobuf.Timestamp
+	43, // 1: arb.dashboard.v1.AddLedgerEntryRequest.date:type_name -> google.protobuf.Timestamp
 	0,  // 2: arb.dashboard.v1.ListLedgerEntriesResponse.entries:type_name -> arb.dashboard.v1.LedgerEntry
 	6,  // 3: arb.dashboard.v1.LedgerSummaryResponse.items:type_name -> arb.dashboard.v1.TierSummary
-	44, // 4: arb.dashboard.v1.InvestmentRecord.ts:type_name -> google.protobuf.Timestamp
+	43, // 4: arb.dashboard.v1.InvestmentRecord.ts:type_name -> google.protobuf.Timestamp
 	8,  // 5: arb.dashboard.v1.ListInvestmentRecordsResponse.items:type_name -> arb.dashboard.v1.InvestmentRecord
-	44, // 6: arb.dashboard.v1.KnowledgeEntry.ts:type_name -> google.protobuf.Timestamp
-	44, // 7: arb.dashboard.v1.KnowledgeEntry.validated_at:type_name -> google.protobuf.Timestamp
+	43, // 6: arb.dashboard.v1.KnowledgeEntry.ts:type_name -> google.protobuf.Timestamp
+	43, // 7: arb.dashboard.v1.KnowledgeEntry.validated_at:type_name -> google.protobuf.Timestamp
 	13, // 8: arb.dashboard.v1.ListKnowledgeEntriesResponse.entries:type_name -> arb.dashboard.v1.KnowledgeEntry
-	44, // 9: arb.dashboard.v1.GetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
-	44, // 10: arb.dashboard.v1.ResetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
+	43, // 9: arb.dashboard.v1.GetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
+	43, // 10: arb.dashboard.v1.ResetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
 	23, // 11: arb.dashboard.v1.ListKBEntriesResponse.entries:type_name -> arb.dashboard.v1.KBEntry
 	16, // 12: arb.dashboard.v1.ListDailyIncomeResponse.items:type_name -> arb.dashboard.v1.PositionDailyIncome
-	44, // 13: arb.dashboard.v1.AccountInfo.updated_at:type_name -> google.protobuf.Timestamp
+	43, // 13: arb.dashboard.v1.AccountInfo.updated_at:type_name -> google.protobuf.Timestamp
 	34, // 14: arb.dashboard.v1.AccountInfo.holdings:type_name -> arb.dashboard.v1.Holding
-	44, // 15: arb.dashboard.v1.AccountMarginStatus.updated_at:type_name -> google.protobuf.Timestamp
+	43, // 15: arb.dashboard.v1.AccountMarginStatus.updated_at:type_name -> google.protobuf.Timestamp
 	32, // 16: arb.dashboard.v1.ListAccountMarginStatusResponse.rows:type_name -> arb.dashboard.v1.AccountMarginStatus
-	30, // 17: arb.dashboard.v1.AccountSnapshot.accounts:type_name -> arb.dashboard.v1.AccountInfo
-	30, // 18: arb.dashboard.v1.ListAccountsResponse.accounts:type_name -> arb.dashboard.v1.AccountInfo
-	44, // 19: arb.dashboard.v1.Keepalive.ts:type_name -> google.protobuf.Timestamp
-	44, // 20: arb.dashboard.v1.FinanceFlowRow.ts:type_name -> google.protobuf.Timestamp
-	40, // 21: arb.dashboard.v1.GetFinanceOverviewResponse.pnl_by_env:type_name -> arb.dashboard.v1.FinancePnlByEnv
-	41, // 22: arb.dashboard.v1.GetFinanceOverviewResponse.income_by_kind:type_name -> arb.dashboard.v1.FinanceIncomeRow
-	42, // 23: arb.dashboard.v1.GetFinanceOverviewResponse.flows:type_name -> arb.dashboard.v1.FinanceFlowRow
-	24, // [24:24] is the sub-list for method output_type
-	24, // [24:24] is the sub-list for method input_type
-	24, // [24:24] is the sub-list for extension type_name
-	24, // [24:24] is the sub-list for extension extendee
-	0,  // [0:24] is the sub-list for field type_name
+	30, // 17: arb.dashboard.v1.ListAccountsResponse.accounts:type_name -> arb.dashboard.v1.AccountInfo
+	43, // 18: arb.dashboard.v1.Keepalive.ts:type_name -> google.protobuf.Timestamp
+	43, // 19: arb.dashboard.v1.FinanceFlowRow.ts:type_name -> google.protobuf.Timestamp
+	39, // 20: arb.dashboard.v1.GetFinanceOverviewResponse.pnl_by_env:type_name -> arb.dashboard.v1.FinancePnlByEnv
+	40, // 21: arb.dashboard.v1.GetFinanceOverviewResponse.income_by_kind:type_name -> arb.dashboard.v1.FinanceIncomeRow
+	41, // 22: arb.dashboard.v1.GetFinanceOverviewResponse.flows:type_name -> arb.dashboard.v1.FinanceFlowRow
+	23, // [23:23] is the sub-list for method output_type
+	23, // [23:23] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_dashboardv1_account_proto_init() }
@@ -3120,7 +3071,7 @@ func file_dashboardv1_account_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dashboardv1_account_proto_rawDesc), len(file_dashboardv1_account_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   44,
+			NumMessages:   43,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

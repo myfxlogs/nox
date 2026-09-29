@@ -63,10 +63,9 @@ func newReconnectMeter(url string, alertFn func(level, msg string)) *reconnectMe
 func (m *reconnectMeter) totalReconns() int64 { return m.totalCount }
 
 // record 记一次重连事件；滑窗计数达阈即发 warn（rewarn 间隔内不重复）。
+// D-571C-R2 F-1：尾部 OnReconnectEvent 扇出——快照行变化（totalCount+1）须
+// 驱动 sourceHealth 域重组装发射，否则计数变了事件不发=死踢。
 func (m *reconnectMeter) record() {
-	if m.alertFn == nil {
-		return
-	}
 	now := m.now()
 	m.reconnects = append(m.reconnects, now)
 	cut := now.Add(-reconnectMeterWindow)
@@ -77,14 +76,21 @@ func (m *reconnectMeter) record() {
 		}
 	}
 	m.reconnects = kept
-	if len(m.reconnects) >= reconnectMeterThreshold &&
+	if m.alertFn != nil && len(m.reconnects) >= reconnectMeterThreshold &&
 		(m.lastWarn.IsZero() || now.Sub(m.lastWarn) >= reconnectMeterRewarn) {
 		m.alertFn("warn", fmt.Sprintf("[ws-storm] %s 1 小时内重连 ≥%d 次（读取超时/心跳无回应/链路异常）", m.url, reconnectMeterThreshold))
 		m.lastWarn = now
 	}
 	m.totalCount++
-
+	if fn := OnReconnectEvent; fn != nil {
+		fn()
+	}
 }
+
+// OnReconnectEvent D-571C-R2 F-1：每次重连事件扇出钩子（main 接 posMon.OnHealthDirty——
+// 快照行 totalCount/lastWarn 变化即重组装 diff 发射；nil=不扇出）。包级单点：
+// meter 在各自 runLoop 内构造，main 拿不到实例句柄。
+var OnReconnectEvent func()
 
 // ===== D-512 T4：meter 注册面（自建轻量 registry）=====
 // Claude 会签①：D-507 实况无 registry——meter 为 runLoop 局部实例。本节补构造时

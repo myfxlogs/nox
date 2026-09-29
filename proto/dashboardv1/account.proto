@@ -239,11 +239,6 @@ message Holding {
   double usdt_value = 3;  // USD 估值（OKX eqUsd——2026-09-10 实采实证 eq 为本币权益非 USD；Binance qty×USDT 价，无价=0 保留）
 }
 
-// 账户资产全量快照（D-053）：monitor 变更时广播，含离线 venue 的最近快照；前端全量替换。
-message AccountSnapshot {
-  repeated AccountInfo accounts = 1;
-}
-
 message ListAccountsRequest {}
 
 message ListAccountsResponse {
