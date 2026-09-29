@@ -86,14 +86,9 @@ type Service struct {
 	oppTopic *bus.Topic[pgstore.Opportunity]
 	// fundingNeedTopic 资金注入提醒广播（D-072）：engine 余额不足发布 → StreamUpdates 扇出 case 10。nil = 未接线（测试直接构造 Service）。
 	fundingNeedTopic *bus.Topic[FundingNeedNotice]
-	// orderTopic 持仓变更通知广播（D-107 P3）：OnOrderUpdate 事件 → StreamUpdates 扇出 case 11。nil = 未接线（测试直接构造 Service）。
-	orderTopic *bus.Topic[bus.OrderEvent]
 	// D-114：告警实时推送 topic（InsertAlert → store.alertHook → alertTopic.Publish → StreamUpdates case 3）。
 	// nil = 未接线（测试直接构造 Service）→ 不订阅。
 	alertTopic *bus.Topic[pgstore.Alert]
-	// D-231 S5：对冲结构刷新通知 topic（TRX 投票/质押/余额变化 → hedgeTopic.Publish → StreamUpdates case 12）。
-	// nil = 未接线（测试直接构造 Service）→ 不订阅。
-	hedgeTopic *bus.Topic[struct{}]
 	// D-234：CMC 看盘实时帧 topic（帧钩子→1s 蓄压→computeCMCWatchUpdate→Publish→StreamUpdates case 13）。nil=未接线→不订阅。
 	cmcWatchTopic *bus.Topic[*v1.CMCWatchUpdate]
 	// D-508 S9：域数据刷新通知 topic（写源 Publish(topic) → StreamUpdates case 14）。nil=未接线→不订阅。
@@ -108,6 +103,9 @@ type Service struct {
 	notionalUSD float64
 	// acctMon 账户资产 monitor（D-053）：ListAccounts 拉 + StreamUpdates case 9 推同源。nil = 未接线（测试直接构造 Service）。
 	acctMon *AccountMonitor
+	// posMon D-571 包C：positions(case4 复活)/personal(case18)/hedge(case17)/health(case5) 四域发射器。
+	// nil = 未接线（测试直接构造 Service——RPC 组装路径不受影响，流订阅/回放零事件）。
+	posMon *PositionMonitor
 	// tradeModes 单腿 trade_mode 查询（D-060 F5 执行预检，防裸腿）：canonical+venueKey → mode。
 	// nil = 未接线（测试直接构造 Service，预检放行）。main 注入 factCache.TradeMode（不引入 exec→engine 依赖）。
 	tradeModes func(canonical, venueKey string) (int64, bool)
@@ -294,13 +292,11 @@ type FrontConfig struct {
 // bpm 为 Broker 实持仓 monitor（D-052，传 main 创建的 bpm）；
 // notionalUSD 为 net_usd 换算的单笔名义（D-053，传 config.OpportunityNotionalUSD）；
 // acctMon 为账户资产 monitor（D-053，传 main 创建的 acctMon）。
-// orderTopic 为持仓变更通知广播（D-107 P3，传 main 创建的 orderTopic）。
 // alertTopic 为告警实时推送广播（D-114，传 main 创建的 alertTopic；InsertAlert → store.alertHook → alertTopic.Publish → case 3）。
-// hedgeTopic 为对冲结构刷新通知广播（D-231 S5，传 main 创建的 hedgeTopic；TRX 投票/质押/余额变化 → hedgeTopic.Publish → case 12）。
 // commissionFor 为 per-venue 佣金解析器（D-111 收敛型实时 bps 成本扣除，nil = commissionBps=0）。
 // slippageBps 为滑点成本（D-111，slippageCost = slippageBps * 2）。
-func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64, fundingDropRatio float64, swapArbEquityUseRatio float64, swapArbBareCap float64, swapArbVenueExposureCap float64, priceTopic *bus.Topic[position.PositionPrice], oppTopic *bus.Topic[pgstore.Opportunity], orderTopic *bus.Topic[bus.OrderEvent], alertTopic *bus.Topic[pgstore.Alert], hedgeTopic *bus.Topic[struct{}], bpm *BrokerPositionMonitor, notionalUSD float64, acctMon *AccountMonitor, commissionFor func(string) float64, slippageBps float64, xassetCexFeeBps float64, kickFn func(string)) *Service {
-	return &Service{store: store, gradStore: store, qbus: qbus, pipeline: pipeline, gateChecker: &storeGateChecker{store: store}, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, swapArbEquityUseRatio: swapArbEquityUseRatio, swapArbBareCap: swapArbBareCap, swapArbVenueExposureCap: swapArbVenueExposureCap, priceTopic: priceTopic, oppTopic: oppTopic, orderTopic: orderTopic, alertTopic: alertTopic, hedgeTopic: hedgeTopic, bpm: bpm, notionalUSD: notionalUSD, acctMon: acctMon, commissionFor: commissionFor, slippageBps: slippageBps, xassetCexFeeBps: xassetCexFeeBps, kickFn: kickFn}
+func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64, fundingDropRatio float64, swapArbEquityUseRatio float64, swapArbBareCap float64, swapArbVenueExposureCap float64, priceTopic *bus.Topic[position.PositionPrice], oppTopic *bus.Topic[pgstore.Opportunity], alertTopic *bus.Topic[pgstore.Alert], bpm *BrokerPositionMonitor, notionalUSD float64, acctMon *AccountMonitor, commissionFor func(string) float64, slippageBps float64, xassetCexFeeBps float64, kickFn func(string)) *Service {
+	return &Service{store: store, gradStore: store, qbus: qbus, pipeline: pipeline, gateChecker: &storeGateChecker{store: store}, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, swapArbEquityUseRatio: swapArbEquityUseRatio, swapArbBareCap: swapArbBareCap, swapArbVenueExposureCap: swapArbVenueExposureCap, priceTopic: priceTopic, oppTopic: oppTopic, alertTopic: alertTopic, bpm: bpm, notionalUSD: notionalUSD, acctMon: acctMon, commissionFor: commissionFor, slippageBps: slippageBps, xassetCexFeeBps: xassetCexFeeBps, kickFn: kickFn}
 }
 
 // SetBalanceLedger/Store/AutoClosePosition/ResumeClose/ClaimClose 转发与注入面

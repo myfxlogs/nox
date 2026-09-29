@@ -44,12 +44,83 @@ func (s *Service) streamInitBrokerPositions(stream *connect.ServerStream[v1.Stre
 	return nil
 }
 
-// streamInitPositionsAndAccounts D-571：持仓+账户回放合并入口（包A case15/包B case16）。
-func (s *Service) streamInitPositionsAndAccounts(stream *connect.ServerStream[v1.StreamUpdatesResponse]) error {
+// streamInitPositionsAndAccounts D-571：持仓+账户回放合并入口（包A case15/包B case16/包C 四域）。
+func (s *Service) streamInitPositionsAndAccounts(ctx context.Context, stream *connect.ServerStream[v1.StreamUpdatesResponse]) error {
 	if err := s.streamInitBrokerPositions(stream); err != nil {
 		return err
 	}
-	return s.streamInitAccounts(stream)
+	if err := s.streamInitAccounts(stream); err != nil {
+		return err
+	}
+	if err := s.streamInitPosMonDomains(ctx, stream); err != nil {
+		return err
+	}
+	return s.streamInitOppsAlerts(ctx, stream)
+}
+
+// streamInitOppsAlerts D-571 包C：机会/告警回放——前端 load() 删除后，case2/case3
+// 载荷帧是水合唯一源（同逐条 Send 模式；opp 组装走 oppToProto 与 ListOpportunities 同路径）。
+func (s *Service) streamInitOppsAlerts(ctx context.Context, stream *connect.ServerStream[v1.StreamUpdatesResponse]) error {
+	opps, err := s.store.ListOpportunities(ctx, "", 200, 0)
+	if err != nil {
+		return fmt.Errorf("stream init opportunities: %w", err)
+	}
+	for i := range opps {
+		if err := stream.Send(&v1.StreamUpdatesResponse{
+			Update: &v1.StreamUpdatesResponse_Opportunity{Opportunity: s.oppToProto(ctx, &opps[i])},
+		}); err != nil {
+			return err
+		}
+	}
+	alerts, err := s.store.ListAlerts(ctx, 200, 0)
+	if err != nil {
+		return fmt.Errorf("stream init alerts: %w", err)
+	}
+	for i := range alerts {
+		if err := stream.Send(&v1.StreamUpdatesResponse{
+			Update: &v1.StreamUpdatesResponse_Alert{Alert: alertToProto(&alerts[i])},
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// streamInitPosMonDomains D-571 包C：posMon 四域回放——positions(case4)/personal(case18)/
+// hedge(case17)/health(case5) latest 全量逐条/单帧 Send（首次访问触发 posMon boot 组装）。
+func (s *Service) streamInitPosMonDomains(ctx context.Context, stream *connect.ServerStream[v1.StreamUpdatesResponse]) error {
+	if s.posMon == nil {
+		return nil
+	}
+	for _, p := range s.posMon.PositionEvents(ctx) {
+		if err := stream.Send(&v1.StreamUpdatesResponse{
+			Update: &v1.StreamUpdatesResponse_Position{Position: p},
+		}); err != nil {
+			return err
+		}
+	}
+	for _, ev := range s.posMon.PersonalEvents(ctx) {
+		if err := stream.Send(&v1.StreamUpdatesResponse{
+			Update: &v1.StreamUpdatesResponse_PersonalPositionEvent{PersonalPositionEvent: ev},
+		}); err != nil {
+			return err
+		}
+	}
+	if hd := s.posMon.HedgeEvent(ctx); hd != nil {
+		if err := stream.Send(&v1.StreamUpdatesResponse{
+			Update: &v1.StreamUpdatesResponse_HedgeData{HedgeData: hd},
+		}); err != nil {
+			return err
+		}
+	}
+	for _, h := range s.posMon.HealthEvents(ctx) {
+		if err := stream.Send(&v1.StreamUpdatesResponse{
+			Update: &v1.StreamUpdatesResponse_SourceHealth{SourceHealth: h},
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // streamInitAccounts D-571 包B：账户资产回放——cur 全量每 venue 一条 case 16 upsert

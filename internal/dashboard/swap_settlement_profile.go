@@ -9,6 +9,7 @@ import (
 	"sort"
 	"time"
 
+	"arb/internal/bus"
 	"arb/internal/fact"
 	"arb/internal/store/pgstore"
 )
@@ -40,11 +41,20 @@ type swapJump struct {
 // boot 存量回溯由 BackfillFromHistory 一次性扫全历史。
 type SettlementProfileCollector struct {
 	store SettlementProfileStore
+	// refreshTopic D-571 包C：swap_facts 实写后 Publish 域刷新通知（写前零发布）。
+	refreshTopic *bus.Topic[string]
 }
 
 // NewSettlementProfileCollector 创建采集器。
 func NewSettlementProfileCollector(store SettlementProfileStore) *SettlementProfileCollector {
 	return &SettlementProfileCollector{store: store}
+}
+
+// SetRefreshTopic 注入域刷新通知总线（D-571 包C；nil-safe）。
+func (c *SettlementProfileCollector) SetRefreshTopic(t *bus.Topic[string]) {
+	if c != nil {
+		c.refreshTopic = t
+	}
 }
 
 // RecordJumps D-180 S1：实时链路——收集本轮 poll 检测到的跳变，聚合写 facts。
@@ -211,6 +221,10 @@ func (c *SettlementProfileCollector) writeFactsIdempotent(ctx context.Context, f
 		return
 	}
 	log.Printf("[settlement-profile] wrote %d facts (skipped %d duplicates)", len(toWrite), len(facts)-len(toWrite))
+	// D-571 包C：swap_facts 实写→dataRefresh 通知（写失败/零新行不发布）。
+	if c.refreshTopic != nil {
+		c.refreshTopic.Publish("swap_facts")
+	}
 }
 
 // median 中位数（排序后取中间值，偶数取两值平均）。

@@ -111,7 +111,13 @@ func (s *Service) ListTriggerStates(ctx context.Context, req *connect.Request[v1
 }
 
 func (s *Service) ListSourceHealth(ctx context.Context, req *connect.Request[v1.ListSourceHealthRequest]) (*connect.Response[v1.ListSourceHealthResponse], error) {
-	resp := &v1.ListSourceHealthResponse{}
+	return connect.NewResponse(&v1.ListSourceHealthResponse{Sources: s.assembleSourceHealth()}), nil
+}
+
+// assembleSourceHealth D-571 包C：ListSourceHealth 组装公共口（RPC 与 positionMon
+// case5 发射器同源复用——禁第二套组装）。
+func (s *Service) assembleSourceHealth() []*v1.SourceHealth {
+	var out []*v1.SourceHealth
 	// D-512 T4：WS 重连计量透出（SnapshotReconnects 只读聚合，前端只渲染不算）。
 	for _, snap := range exchange.SnapshotReconnects() {
 		row := &v1.SourceHealth{
@@ -124,9 +130,9 @@ func (s *Service) ListSourceHealth(ctx context.Context, req *connect.Request[v1.
 		if !snap.LastWarn.IsZero() {
 			row.LastEventUnix = snap.LastWarn.Unix()
 		}
-		resp.Sources = append(resp.Sources, row)
+		out = append(out, row)
 	}
-	return connect.NewResponse(resp), nil
+	return out
 }
 
 func (s *Service) ListFacts(ctx context.Context, req *connect.Request[v1.ListFactsRequest]) (*connect.Response[v1.ListFactsResponse], error) {

@@ -150,13 +150,13 @@ func splitPosKey(key string) (venueKey, ticket string) {
 	return key, ""
 }
 
-// sortedKeys map 键序（确定性输出，回放/快照用）。
-func sortedKeys[V any](m map[string]V) []string {
-	out := make([]string, 0, len(m))
+// sortedKeys map 键序（确定性输出，回放/快照用）。键支持 string/int64 序型。
+func sortedKeys[K ~string | ~int64, V any](m map[K]V) []K {
+	out := make([]K, 0, len(m))
 	for k := range m {
 		out = append(out, k)
 	}
-	sort.Strings(out)
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
 	return out
 }
 

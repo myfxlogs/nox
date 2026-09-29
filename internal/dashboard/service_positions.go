@@ -21,14 +21,24 @@ func (s *Service) ListPositions(ctx context.Context, req *connect.Request[v1.Lis
 	if limit <= 0 {
 		limit = 50
 	}
-	positions, err := s.store.ListPositions(ctx, req.Msg.GetStatus(), limit, offset)
+	pbPositions, total, err := s.assemblePositions(ctx, req.Msg.GetStatus(), limit, offset)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	// D-069：total 用于前端分页控件
-	total, err := s.store.CountPositions(ctx, req.Msg.GetStatus())
+	return connect.NewResponse(&v1.ListPositionsResponse{Positions: pbPositions, Total: int32(total)}), nil
+}
+
+// assemblePositions D-571 包C：ListPositions 四段组装公共口（RPC 与 positionMon 发射器
+// 同源复用——禁第二套组装）。返回 (pb 行集, total, err)；legs+settlement+enrich 全含。
+func (s *Service) assemblePositions(ctx context.Context, status string, limit, offset int) ([]*v1.Position, int, error) {
+	positions, err := s.store.ListPositions(ctx, status, limit, offset)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+		return nil, 0, err
+	}
+	// D-069：total 用于前端分页控件
+	total, err := s.store.CountPositions(ctx, status)
+	if err != nil {
+		return nil, 0, err
 	}
 	var pbPositions []*v1.Position
 	legsByPos := make(map[int64][]pgstore.PositionLeg, len(positions))
@@ -38,7 +48,7 @@ func (s *Service) ListPositions(ctx context.Context, req *connect.Request[v1.Lis
 		// D-069：填充 legs（成交历史，OPEN + CLOSE phase）
 		legs, err := s.store.ListPositionLegs(ctx, p.ID)
 		if err != nil {
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list legs for position %d: %w", p.ID, err))
+			return nil, 0, fmt.Errorf("list legs for position %d: %w", p.ID, err)
 		}
 		legsByPos[p.ID] = legs
 		for _, l := range legs {
@@ -49,25 +59,35 @@ func (s *Service) ListPositions(ctx context.Context, req *connect.Request[v1.Lis
 	}
 	// D-106：批量 join 结算行填充 settled_realized_usd/settled_notional_usd/hold_days（单条 SQL IN，防 N+1）。
 	if err := enrichSettlements(ctx, s.store, pbPositions, posIDs); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+		return nil, 0, err
 	}
 	// D-095：活跃行 enrich 7 派生字段（bpm 匹配+notional+应得+达成率+收敛型当前 bps）
 	s.enrichPositions(ctx, pbPositions, legsByPos)
-	return connect.NewResponse(&v1.ListPositionsResponse{Positions: pbPositions, Total: int32(total)}), nil
+	return pbPositions, total, nil
 }
 
 // --- 个人持仓（财务线 TRX 持仓接入，D-046 + 实账化工作项 3） ---
 
 // ListPersonalPositions 返回 OPEN 个人持仓 + 后端计算当前价/告警态/实账（D-043 零信任：前端只渲染）。
 func (s *Service) ListPersonalPositions(ctx context.Context, req *connect.Request[v1.ListPersonalPositionsRequest]) (*connect.Response[v1.ListPersonalPositionsResponse], error) {
-	positions, err := s.store.ListPersonalPositions(ctx, "OPEN", 200, 0)
+	items, err := s.assemblePersonalPositions(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&v1.ListPersonalPositionsResponse{Items: items}), nil
+}
+
+// assemblePersonalPositions D-571 包C：ListPersonalPositions 组装公共口（RPC 与
+// positionMon case18 发射器同源复用——禁第二套组装）。
+func (s *Service) assemblePersonalPositions(ctx context.Context) ([]*v1.PersonalPosition, error) {
+	positions, err := s.store.ListPersonalPositions(ctx, "OPEN", 200, 0)
+	if err != nil {
+		return nil, err
 	}
 	// D-260 S1：累计利息取源切 fin_cmc_history OVERNIGHT_SETTLEMENT 全量（治本 ~$6.62 低估——daily rollup 链 9-7 起跑，9-7 前隔夜息未入 position_daily_income）。SumDailyIncomeInterest 保留历史查询语义。
 	accrued, err := s.store.SumCMCOvernightByRange(ctx, nil, nil)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+		return nil, err
 	}
 	var symbols []string
 	for _, p := range positions {
@@ -79,7 +99,7 @@ func (s *Service) ListPersonalPositions(ctx context.Context, req *connect.Reques
 	for i := range positions {
 		items = append(items, personalPositionToProto(&positions[i], snap[positions[i].PriceSymbol], s.freshTTL, now, accrued, s.liqMMR, s.cmcSource))
 	}
-	return connect.NewResponse(&v1.ListPersonalPositionsResponse{Items: items}), nil
+	return items, nil
 }
 
 // personalPositionToProto 组装单个个人持仓响应：取该 symbol 最新（Time 最新）且未超陈旧 TTL 的一帧 mid 为当前价，
