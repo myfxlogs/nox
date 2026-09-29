@@ -3,7 +3,35 @@
 // （service_allowrules.fillRuleAcct），非无条件流优先。
 package dashboard
 
-import "time"
+import (
+	"context"
+	"time"
+
+	"arb/internal/store/pgstore"
+)
+
+// ExchangeStore 提供 CEX 交易所配置（pgstore.Store 满足）。
+// （D-568 行数腾位：自 account_monitor.go 纯移入，零逻辑改。）
+type ExchangeStore interface {
+	ListExchangeConfigs(ctx context.Context) ([]pgstore.ExchangeConfig, error)
+}
+
+// SetFundsHook D-568：注入资金变更通知口（三源汇一；nil 安全）。
+func (m *AccountMonitor) SetFundsHook(fn func()) {
+	m.mu.Lock()
+	m.fundsHook = fn
+	m.mu.Unlock()
+}
+
+// notifyFunds 锁外触发资金通知（nil-safe）。
+func (m *AccountMonitor) notifyFunds() {
+	m.mu.RLock()
+	fn := m.fundsHook
+	m.mu.RUnlock()
+	if fn != nil {
+		fn()
+	}
+}
 
 // StreamAcct 流帧缓存条目。
 type StreamAcct struct {
@@ -18,6 +46,7 @@ func (m *AccountMonitor) ObserveStreamAccount(venueKey string, bal, eq, mg, fm, 
 		Balance: bal, Equity: eq, Margin: mg, FreeMargin: fm,
 		Profit: prof, MarginLevel: ml, Currency: ccy, FrameTime: ts,
 	})
+	m.notifyFunds() // D-568：MT5 余额帧→funds 通知
 }
 
 // StreamAccount 读某 venueKey 最近流帧（无→false）。

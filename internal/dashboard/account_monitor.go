@@ -50,11 +50,9 @@ type AccountMonitor struct {
 
 	// simWarned D-516：simulated=t 配置行 fail-closed warn-once（queriers 每轮询重跑防刷屏）。
 	simWarned map[int64]bool
-}
 
-// ExchangeStore 提供 CEX 交易所配置（pgstore.Store 满足）。
-type ExchangeStore interface {
-	ListExchangeConfigs(ctx context.Context) ([]pgstore.ExchangeConfig, error)
+	// fundsHook D-568：资金变更通知口（MT5 流帧/poll changed 双源汇入，SetFundsHook 注入）。
+	fundsHook func()
 }
 
 // NewAccountMonitor 创建 monitor。interval 复用 ARB_BROKER_POS_POLL_MS（D-053 不新增 knob）。
@@ -270,6 +268,7 @@ func (m *AccountMonitor) poll(ctx context.Context) {
 		if m.topic != nil {
 			m.topic.Publish(&v1.AccountSnapshot{Accounts: view})
 		}
+		m.notifyFunds() // D-568：轮询资金变更→funds 通知（case 9 广播原样保留）
 		log.Printf("[account-mon] snapshot changed: %d accounts", len(view))
 	}
 }
