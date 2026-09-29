@@ -35,16 +35,17 @@ message StreamUpdatesResponse {
     SourceHealth source_health = 5;
     Keepalive keepalive = 6;     // 30s 心跳（Cloudflare Tunnel 存活，D-027）
     PersonalPositionPrice personal_position_price = 7;  // 实时个人持仓现价（D-049）
-    BrokerPositionSnapshot broker_positions = 8;        // Broker 实持仓实时推送（全量快照）
-    AccountSnapshot accounts = 9;                       // 账户资产实时推送（全量快照，D-053）
     FundingNeedNotice funding_need = 10;                // 资金注入提醒弹窗（D-072，余额不足实时推）
-    PositionChangeNotice position_change = 11;          // 持仓变更通知（D-107 P3，只含通知不含数据）
-    HedgeRefreshNotice hedge_refresh = 12;              // 对冲结构刷新通知（D-231 S5，空消息→前端重取）
     CMCWatchUpdate cmc_update = 13;                     // CMC 看盘实时帧（D-234，后端现算载荷→前端 merge 渲染）
     DataRefreshNotice data_refresh = 14;                // 域数据刷新通知（D-508 S9，空载荷+topic→前端重取）
     BrokerPositionEvent broker_position_event = 15;     // Broker 实持仓逐仓事件（D-571 包A：upsert/remove+聚合随发）
     AccountEvent account_event = 16;                    // 账户资产逐 venue 事件（D-571 包B：upsert 单形态）
+    HedgeData hedge_data = 17;                          // 对冲结构+流水聚合域单槽帧（D-571 包C，替 case 12 通知）
+    PersonalPositionEvent personal_position_event = 18; // 个人持仓行级 upsert（D-571 包C：回放+CRUD 变更源）
   }
+  // D-571 包C：快照/通知型死字段退役——行级事件通道全量替代（回放+keyed merge）。
+  reserved 8, 9, 11, 12;
+  reserved "broker_positions", "accounts", "position_change", "hedge_refresh";
 }
 
 // BrokerPositionEvent D-571：逐仓 delta 事件（替代 case 8 全量快照的实时通道）。
@@ -65,15 +66,25 @@ message AccountEvent {
   AccountInfo account = 1;
 }
 
+// HedgeData D-571 包C：对冲结构+统一流水聚合域单槽帧（替 case 12 空通知→前端重取）。
+// kick=hedgeTopic（TRX 写源）→ 后端同 GetHedgeStructure/ListHedgeFlow 组装路径重算 →
+// proto.Equal diff → case 17 载荷广播；新连接回放=单帧。
+message HedgeData {
+  HedgeStructure structure = 1;
+  repeated HedgeFlowItem flow = 2;
+}
+
+// PersonalPositionEvent D-571 包C：个人持仓行级 upsert（回放+CRUD 变更源）。
+// 行级 upsert 单形态（status=CLOSED 行照常发——前端陈列态换不换由行自身 status 决定）。
+message PersonalPositionEvent {
+  PersonalPosition upsert = 1;
+}
+
 // BrokerPositionRef 逐仓删除事件的键。
 message BrokerPositionRef {
   string venue_key = 1;
   string ticket = 2;
 }
-
-// HedgeRefreshNotice（D-231 S5）：TRX 投票/质押/余额变化 → 对冲结构卡刷新通知。
-// 空消息——前端零信任：收到→调 getHedgeStructure 重取（复用 case 11 通知→重取模式）。
-message HedgeRefreshNotice {}
 
 // DataRefreshNotice（D-508 S9）：域数据刷新通知——topic 标域（allow_rules/carry_graduation/paper_carry/
 // intra_track/perp_funding_admission/finance/trx），前端按订阅 topic 集重取对应 RPC。
@@ -107,13 +118,6 @@ message CMCWatchUpdate {
   double net_exposure_usd = 20;    // D-234 R-V S3：净敞口 USD（netExposureTrx × mid，与 GetHedgeStructure 同源）
 }
 
-// 持仓变更通知（D-107 P3）：OnOrderUpdate 事件经 orderTopic → StreamUpdates case 11 推送。
-// 只含通知不含数据——前端零信任：收到通知→调既有 RPC 重取（useSnapshot/usePositionsPage 等）。
-message PositionChangeNotice {
-  string venue = 1;
-  int64 ticket = 2;
-}
-
 // 资金注入提醒（D-072）：swap 套利余额不足时实时弹窗（不入 alerts 表，断线不回放）。
 // NeedUSD = minNotional − min(equityLong, equityShort)（差额，正数）。
 message FundingNeedNotice {
@@ -125,11 +129,4 @@ message FundingNeedNotice {
   google.protobuf.Timestamp ts = 6;
   string alias_long = 7;       // D-154 返修②：买腿别名（后端 aliasOrKey 填充，空=无别名）
   string alias_short = 8;      // D-154 返修②：卖腿别名（后端 aliasOrKey 填充，空=无别名）
-}
-
-// Broker 实持仓全量快照（D-052）：monitor 变更时广播，含离线 venue 的最近快照；前端全量替换。
-message BrokerPositionSnapshot {
-  repeated BrokerPosition positions = 1;
-  optional double pnl_sum_usd = 2;    // D-508 S8：Σ pnl（与 ListBrokerPositionsResponse 同口径，推送侧同步下发）
-  optional double net_sum_usd = 3;    // D-508 S8：Σ (pnl+swap+commission)
 }
