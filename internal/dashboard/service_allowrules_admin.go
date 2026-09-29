@@ -79,7 +79,7 @@ func (s *Service) AddAutotradeAllowRule(ctx context.Context, req *connect.Reques
 		}
 		resp.Ok, resp.ReenabledExisting = true, true
 		resp.Warning = warning
-		s.auditAllowRule(ctx, fmt.Sprintf("[whitelist] reenable autotrade rule #%d %s %s note=%s", existing.ID, kind, value, note))
+		s.auditAllowRule(ctx, fmt.Sprintf("[白名单] 重新启用自动交易规则 #%d %s %s 备注=%s", existing.ID, kind, value, note))
 		s.PublishDataRefresh(RefreshAllowRules)
 		return connect.NewResponse(resp), nil
 	}
@@ -102,7 +102,7 @@ func (s *Service) AddAutotradeAllowRule(ctx context.Context, req *connect.Reques
 	}
 	resp.Id, resp.Ok, resp.Warning = &inserted.ID, true, warning
 	s.PublishDataRefresh(RefreshAllowRules)
-	s.auditAllowRule(ctx, fmt.Sprintf("[whitelist] add autotrade rule #%d %s %s sim=%v note=%s", inserted.ID, kind, value, simulated, note))
+	s.auditAllowRule(ctx, fmt.Sprintf("[白名单] 新增自动交易规则 #%d %s %s 模拟=%v 备注=%s", inserted.ID, kind, value, simulated, note))
 	return connect.NewResponse(resp), nil
 }
 
@@ -125,7 +125,7 @@ func (s *Service) DeleteAutotradeAllowRule(ctx context.Context, req *connect.Req
 	if err := s.store.DeleteAutotradeAllowRule(ctx, g.Id); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.auditAllowRule(ctx, fmt.Sprintf("[whitelist] delete autotrade rule #%d %s %s note=%s", row.ID, row.Kind, row.Value, strings.TrimSpace(g.Note)))
+	s.auditAllowRule(ctx, fmt.Sprintf("[白名单] 删除自动交易规则 #%d %s %s 备注=%s", row.ID, row.Kind, row.Value, strings.TrimSpace(g.Note)))
 	s.PublishDataRefresh(RefreshAllowRules)
 	resp.Ok = true
 	return connect.NewResponse(resp), nil

@@ -99,16 +99,16 @@ func (m *cmcEquityAlertMachine) emitTransition(ctx context.Context, old, newZone
 	switch newZone {
 	case equityWarning:
 		_ = m.store.InsertAlert(ctx, nil, "critical",
-			fmt.Sprintf("CMC equity %.2f ≤ 预警线 %.2f", equity, warningLevel))
+			fmt.Sprintf("CMC 账户净值 %.2f 已跌破预警线 %.2f", equity, warningLevel))
 	case equityCloseout:
 		_ = m.store.InsertAlert(ctx, nil, "critical",
-			fmt.Sprintf("CMC equity %.2f ≤ 强平线 %.2f", equity, closeoutLevel))
+			fmt.Sprintf("CMC 账户净值 %.2f 已跌破强平线 %.2f", equity, closeoutLevel))
 	case equityNormal:
 		from := "预警线"
 		if old == equityCloseout {
 			from = "强平线"
 		}
 		_ = m.store.InsertAlert(ctx, nil, "info",
-			fmt.Sprintf("CMC equity %.2f recovered (from %s)", equity, from))
+			fmt.Sprintf("CMC 账户净值 %.2f 已恢复（此前 %s）", equity, from))
 	}
 }

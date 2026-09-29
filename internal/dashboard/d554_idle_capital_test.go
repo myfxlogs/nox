@@ -58,7 +58,7 @@ func TestD554_T2_IdleCapitalMonitor(t *testing.T) {
 	mon := NewIdleCapitalMonitor(svc, time.Hour)
 
 	mon.poll(ctx) // 入闲置：transfer=800>500 且>50 → 一条 info
-	if f.alerts != 1 || len(f.alertMsgs) != 1 || !strings.Contains(f.alertMsgs[0], "idle-capital okx") || !strings.Contains(f.alertMsgs[0], "$800.00") {
+	if f.alerts != 1 || len(f.alertMsgs) != 1 || !strings.Contains(f.alertMsgs[0], "闲置资金 okx") || !strings.Contains(f.alertMsgs[0], "$800.00") {
 		t.Fatalf("入闲置告警错: n=%d msgs=%v", f.alerts, f.alertMsgs)
 	}
 	mon.poll(ctx) // 连续闲置：不再写
@@ -71,7 +71,7 @@ func TestD554_T2_IdleCapitalMonitor(t *testing.T) {
 	}}
 	svc.capAvailCache, svc.capAvailAt = nil, nil // 越过 60s 缓存窗口换数据（生产=TTL 到期重拉）
 	mon.poll(ctx)                                // 恢复：写 recovered
-	if f.alerts != 2 || !strings.Contains(f.alertMsgs[1], "recovered") {
+	if f.alerts != 2 || !strings.Contains(f.alertMsgs[1], "已恢复") {
 		t.Fatalf("恢复告警错: n=%d msgs=%v", f.alerts, f.alertMsgs)
 	}
 

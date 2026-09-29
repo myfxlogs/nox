@@ -64,7 +64,7 @@ func TestD492_A1_AddVenueHappy(t *testing.T) {
 	}
 	var alertN int
 	if err := st.Pool().QueryRow(ctx,
-		`SELECT count(*) FROM alerts WHERE message LIKE '%d492cex:spot%' AND message LIKE '%[whitelist]%'`).Scan(&alertN); err != nil {
+		`SELECT count(*) FROM alerts WHERE message LIKE '%d492cex:spot%' AND message LIKE '%[白名单]%'`).Scan(&alertN); err != nil {
 		t.Fatalf("alert check: %v", err)
 	}
 	if alertN == 0 {
@@ -196,7 +196,7 @@ func TestD492_A6_DeleteGuard(t *testing.T) {
 		t.Fatal("删除后行仍在")
 	}
 	var alertN int
-	st.Pool().QueryRow(ctx, `SELECT count(*) FROM alerts WHERE message LIKE '%D492DEL%' AND message LIKE '%delete%'`).Scan(&alertN)
+	st.Pool().QueryRow(ctx, `SELECT count(*) FROM alerts WHERE message LIKE '%D492DEL%' AND message LIKE '%删除%'`).Scan(&alertN)
 	if alertN == 0 {
 		t.Error("缺删除审计告警")
 	}

@@ -149,7 +149,7 @@ func (s *Service) SetVenueExposureCap(ctx context.Context, req *connect.Request[
 	}
 	s.kickConfig() // D-475a S6：Set→kick（nil 安全）
 	if err := s.store.InsertAlert(ctx, nil, "info",
-		fmt.Sprintf("[敞口闸] %s cap=$%.0f enabled=%v %s", key, g.CapUsd, g.Enabled, g.Note)); err != nil {
+		fmt.Sprintf("[敞口闸] %s 上限 $%.0f 启用=%v %s", key, g.CapUsd, g.Enabled, g.Note)); err != nil {
 		resp.Error = fmt.Sprintf("已写入但审计告警失败: %v", err)
 		return connect.NewResponse(resp), nil
 	}

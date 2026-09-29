@@ -118,9 +118,9 @@ func (m *IdleCapitalMonitor) transition(ctx context.Context, venue string, idle 
 	}
 	var msg string
 	if idle {
-		msg = fmt.Sprintf("idle-capital %s 可转可用 $%.2f 闲置（立即可用 $%.2f）——划转可解锁更大头寸", venue, transfer, avail)
+		msg = fmt.Sprintf("闲置资金 %s：可转可用 $%.2f 闲置（立即可用 $%.2f）——划转可解锁更大头寸", venue, transfer, avail)
 	} else {
-		msg = fmt.Sprintf("idle-capital %s recovered（可转可用 $%.2f / 立即可用 $%.2f）", venue, transfer, avail)
+		msg = fmt.Sprintf("闲置资金 %s：已恢复（可转可用 $%.2f / 立即可用 $%.2f）", venue, transfer, avail)
 	}
 	db := m.svc.gradDB()
 	if db == nil {

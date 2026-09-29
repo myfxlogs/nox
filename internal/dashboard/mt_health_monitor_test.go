@@ -184,7 +184,7 @@ func TestMTHealth_StateTransitions(t *testing.T) {
 		t.Fatalf("tick5 (quote crit count=3 transition): want 5 alerts, got %d", got)
 	}
 	alerts = store.snapshot()
-	if alerts[4].level != "critical" || !strings.Contains(alerts[4].msg, "quote") {
+	if alerts[4].level != "critical" || !strings.Contains(alerts[4].msg, "行情报价") {
 		t.Errorf("tick5: want quote critical, got %s: %s", alerts[4].level, alerts[4].msg)
 	}
 
@@ -242,7 +242,7 @@ func TestMTHealth_SwapFactStale(t *testing.T) {
 	if alerts[0].level != "critical" {
 		t.Errorf("tick2: want critical, got %s", alerts[0].level)
 	}
-	if !strings.Contains(alerts[0].msg, "swap") {
+	if !strings.Contains(alerts[0].msg, "隔夜息") {
 		t.Errorf("tick2: want swap metric, got msg=%s", alerts[0].msg)
 	}
 }
@@ -379,7 +379,7 @@ func TestMTHealth_NoDataCrit(t *testing.T) {
 		t.Fatalf("tick2 (swap crit only): want 1 alert (quote+margin suppressed), got %d", got)
 	}
 	alerts := store.snapshot()
-	if alerts[0].level != "critical" || !strings.Contains(alerts[0].msg, "swap") {
+	if alerts[0].level != "critical" || !strings.Contains(alerts[0].msg, "隔夜息") {
 		t.Errorf("tick2: want swap critical, got %s: %s", alerts[0].level, alerts[0].msg)
 	}
 
@@ -440,7 +440,7 @@ func TestMTHealth_CEXVenueNoSwapMarginAlerts(t *testing.T) {
 		t.Fatalf("tick4 (quote crit count=3): want 1 alert, got %d", got)
 	}
 	alerts := store.snapshot()
-	if alerts[0].level != "critical" || !strings.Contains(alerts[0].msg, "quote") {
+	if alerts[0].level != "critical" || !strings.Contains(alerts[0].msg, "行情报价") {
 		t.Errorf("tick4: want quote critical, got %s: %s", alerts[0].level, alerts[0].msg)
 	}
 
@@ -455,7 +455,7 @@ func TestMTHealth_CEXVenueNoSwapMarginAlerts(t *testing.T) {
 	}
 	// 确认无 swap/margin 告警
 	for _, a := range store.snapshot() {
-		if strings.Contains(a.msg, "swap") || strings.Contains(a.msg, "margin") {
+		if strings.Contains(a.msg, "隔夜息") || strings.Contains(a.msg, "保证金") {
 			t.Errorf("CEX venue 不应有 swap/margin 告警，got %s", a.msg)
 		}
 	}
@@ -493,7 +493,7 @@ func TestMTHealth_MTVenueSwapCritRegress(t *testing.T) {
 		t.Fatalf("tick2 (MT swap crit): want 1 alert, got %d", got)
 	}
 	alerts := store.snapshot()
-	if alerts[0].level != "critical" || !strings.Contains(alerts[0].msg, "swap") {
+	if alerts[0].level != "critical" || !strings.Contains(alerts[0].msg, "隔夜息") {
 		t.Errorf("tick2: want MT swap critical, got %s: %s", alerts[0].level, alerts[0].msg)
 	}
 }
@@ -534,10 +534,10 @@ func TestMTHealth_MT4VenueNoMarginAlert(t *testing.T) {
 	// 只应有 1 条 swap critical，不应有 margin critical
 	var swapCrit, marginCrit int
 	for _, a := range alerts {
-		if strings.Contains(a.msg, "margin") && a.level == "critical" {
+		if strings.Contains(a.msg, "保证金") && a.level == "critical" {
 			marginCrit++
 		}
-		if strings.Contains(a.msg, "swap") && a.level == "critical" {
+		if strings.Contains(a.msg, "隔夜息") && a.level == "critical" {
 			swapCrit++
 		}
 	}
@@ -611,7 +611,7 @@ func TestMTHealth_AlertUsesAlias(t *testing.T) {
 
 	var foundAlias bool
 	for _, a := range store.snapshot() {
-		if strings.Contains(a.msg, "margin") && a.level == "critical" {
+		if strings.Contains(a.msg, "保证金") && a.level == "critical" {
 			if strings.Contains(a.msg, "EXR-test") && !strings.Contains(a.msg, "vD ") {
 				foundAlias = true
 			}
@@ -644,7 +644,7 @@ func TestMTHealth_AliasFallback(t *testing.T) {
 
 	var foundVenue bool
 	for _, a := range store.snapshot() {
-		if strings.Contains(a.msg, "margin") && a.level == "critical" && strings.Contains(a.msg, "vE") {
+		if strings.Contains(a.msg, "保证金") && a.level == "critical" && strings.Contains(a.msg, "vE") {
 			foundVenue = true
 		}
 	}
@@ -741,7 +741,7 @@ func TestMTHealth_ConnectedVenueNoDataStillCrit(t *testing.T) {
 	alerts := store.snapshot()
 	var quoteCrit int
 	for _, a := range alerts {
-		if strings.Contains(a.msg, "quote") && a.level == "critical" {
+		if strings.Contains(a.msg, "行情报价") && a.level == "critical" {
 			quoteCrit++
 		}
 	}
@@ -781,7 +781,7 @@ func TestMTHealth_UnknownQbusVenueStillMonitored(t *testing.T) {
 	alerts := store.snapshot()
 	var quoteCrit int
 	for _, a := range alerts {
-		if strings.Contains(a.msg, "quote") && a.level == "critical" {
+		if strings.Contains(a.msg, "行情报价") && a.level == "critical" {
 			quoteCrit++
 		}
 	}
@@ -845,7 +845,7 @@ func TestD251_MarginFlashMissSuppression(t *testing.T) {
 	mon.poll(context.Background())
 	marginRecover := 0
 	for _, a := range store.snapshot() {
-		if strings.Contains(a.msg, "margin") && a.level == "info" {
+		if strings.Contains(a.msg, "保证金") && a.level == "info" {
 			marginRecover++
 		}
 	}
@@ -866,7 +866,7 @@ func TestD251_MarginFlashMissSuppression(t *testing.T) {
 func countMarginCrit(store *fakeHealthStore) int {
 	var n int
 	for _, a := range store.snapshot() {
-		if strings.Contains(a.msg, "margin") && a.level == "critical" {
+		if strings.Contains(a.msg, "保证金") && a.level == "critical" {
 			n++
 		}
 	}
@@ -925,7 +925,7 @@ func TestRH4_QuoteFlashMissSuppression(t *testing.T) {
 	mon.poll(context.Background())
 	quoteRecover := 0
 	for _, a := range store.snapshot() {
-		if strings.Contains(a.msg, "quote") && a.level == "info" {
+		if strings.Contains(a.msg, "行情报价") && a.level == "info" {
 			quoteRecover++
 		}
 	}
@@ -946,7 +946,7 @@ func TestRH4_QuoteFlashMissSuppression(t *testing.T) {
 func countQuoteCrit(store *fakeHealthStore) int {
 	var n int
 	for _, a := range store.snapshot() {
-		if strings.Contains(a.msg, "quote") && a.level == "critical" {
+		if strings.Contains(a.msg, "行情报价") && a.level == "critical" {
 			n++
 		}
 	}
@@ -985,7 +985,7 @@ func TestMTHealth_BootGracePeriod(t *testing.T) {
 		t.Fatalf("tick4 (grace expired): want 1 alert (swap crit), got %d", got)
 	}
 	alerts := store.snapshot()
-	if alerts[0].level != "critical" || !strings.Contains(alerts[0].msg, "swap") {
+	if alerts[0].level != "critical" || !strings.Contains(alerts[0].msg, "隔夜息") {
 		t.Errorf("tick4: want swap critical, got %s: %s", alerts[0].level, alerts[0].msg)
 	}
 }
@@ -1016,13 +1016,13 @@ func TestMTHealth_D400_StaticQuerierStoppedNoAlert(t *testing.T) {
 
 	alerts := store.snapshot()
 	for _, a := range alerts {
-		if strings.Contains(a.msg, "mt-health X ") {
+		if strings.Contains(a.msg, "X ") {
 			t.Errorf("stopped venue X 不应有任何告警，alerts=%v", alerts)
 		}
 	}
 	var yCrit int
 	for _, a := range alerts {
-		if strings.Contains(a.msg, "mt-health Y quote") && a.level == "critical" {
+		if strings.Contains(a.msg, "Y 行情报价") && a.level == "critical" {
 			yCrit++
 		}
 	}

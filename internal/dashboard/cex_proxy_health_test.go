@@ -63,7 +63,7 @@ func TestCexProxyHealth_CritOnceThenRecover(t *testing.T) {
 	if len(alerts) != 1 || alerts[0].level != "critical" {
 		t.Fatalf("P1: want 1 critical at 3rd fail, got %+v", alerts)
 	}
-	if !strings.Contains(alerts[0].msg, srv.URL) || !strings.Contains(alerts[0].msg, "unreachable (3 consecutive)") {
+	if !strings.Contains(alerts[0].msg, srv.URL) || !strings.Contains(alerts[0].msg, "连接失败（连续 3 次）") {
 		t.Errorf("P1: msg want 'cex-proxy <ep> unreachable (3 consecutive)' fingerprint, got %q", alerts[0].msg)
 	}
 	m.poll(context.Background())
@@ -75,7 +75,7 @@ func TestCexProxyHealth_CritOnceThenRecover(t *testing.T) {
 	ok = true
 	m.poll(context.Background()) // 恢复
 	alerts = fake.snapshot()
-	if len(alerts) != 2 || alerts[1].level != "info" || !strings.Contains(alerts[1].msg, "recovered") {
+	if len(alerts) != 2 || alerts[1].level != "info" || !strings.Contains(alerts[1].msg, "已恢复") {
 		t.Fatalf("P2: want info recovered as 2nd alert, got %+v", alerts)
 	}
 	m.poll(context.Background()) // 持续健康
@@ -100,7 +100,7 @@ func TestCexProxyHealth_BackupAliveSwitchSignal(t *testing.T) {
 	if len(alerts) != 1 || alerts[0].level != "critical" {
 		t.Fatalf("P3: want 1 critical (primary only), got %+v", alerts)
 	}
-	if !strings.Contains(alerts[0].msg, "backup="+alive.URL+" alive") {
+	if !strings.Contains(alerts[0].msg, "备通道 "+alive.URL+" 存活") {
 		t.Errorf("P3: primary alert want switch signal 'backup=<ep> alive', got %q", alerts[0].msg)
 	}
 }
@@ -120,10 +120,10 @@ func TestCexProxyHealth_BothDeadDistinguished(t *testing.T) {
 	if len(alerts) != 2 {
 		t.Fatalf("both-dead: want 2 criticals (primary+backup), got %+v", alerts)
 	}
-	if !strings.Contains(alerts[0].msg, "backup="+dead2+" dead") {
+	if !strings.Contains(alerts[0].msg, "备通道 "+dead2+" 同样失败") {
 		t.Errorf("both-dead: primary alert want 'backup=<ep> dead', got %q", alerts[0].msg)
 	}
-	if !strings.Contains(alerts[1].msg, "primary="+dead1+" dead") {
+	if !strings.Contains(alerts[1].msg, "主通道 "+dead1+" 同样失败") {
 		t.Errorf("both-dead: backup alert want 'primary=<ep> dead', got %q", alerts[1].msg)
 	}
 }

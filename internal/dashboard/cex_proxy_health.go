@@ -92,7 +92,7 @@ func (m *CexProxyHealthMonitor) poll(ctx context.Context) {
 			m.deadNoted[ep] = false
 			m.mu.Unlock()
 			if wasDead {
-				m.alert(ctx, "info", fmt.Sprintf("cex-proxy %s recovered", ep))
+				m.alert(ctx, "info", fmt.Sprintf("cex-proxy 通道 %s 已恢复", ep))
 			}
 			continue
 		}
@@ -105,7 +105,7 @@ func (m *CexProxyHealthMonitor) poll(ctx context.Context) {
 		m.mu.Unlock()
 		log.Printf("[cex-proxy-health] %s poll fail consec=%d", ep, n) // 同态不重发，计数逐 tick 可见
 		if first {
-			m.alert(ctx, "critical", fmt.Sprintf("cex-proxy %s unreachable (%d consecutive); %s", ep, n, m.peerLine(ep)))
+			m.alert(ctx, "critical", fmt.Sprintf("cex-proxy 通道 %s 连接失败（连续 %d 次）；%s", ep, n, m.peerLine(ep)))
 		}
 	}
 }
@@ -120,17 +120,17 @@ func (m *CexProxyHealthMonitor) endpoints() []string {
 
 // peerLine 对端状态行：primary 的对端=backup、backup 的对端=primary（空=n/a）。
 func (m *CexProxyHealthMonitor) peerLine(ep string) string {
-	peer, label := m.backup, "backup"
+	peer, label := m.backup, "备通道"
 	if ep != m.primary {
-		peer, label = m.primary, "primary"
+		peer, label = m.primary, "主通道"
 	}
 	if peer == "" {
-		return label + "=n/a"
+		return label + "未配置"
 	}
 	if m.lastOK[peer] {
-		return label + "=" + peer + " alive"
+		return label + " " + peer + " 存活"
 	}
-	return label + "=" + peer + " dead"
+	return label + " " + peer + " 同样失败"
 }
 
 // ping GET {ep}/fapi/v1/ping，5s 超时（client.Timeout）；200=活，err/非 200=死。

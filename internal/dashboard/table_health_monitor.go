@@ -144,16 +144,17 @@ func (m *TableFreshnessMonitor) maybeTableAlert(ctx context.Context, name string
 		}
 	}
 	var level, msg string
+	subject := "表格新鲜度监控：" + name
 	switch cur {
 	case metricHealthy:
 		level = "info"
-		msg = "table-health " + name + " recovered (age=" + durStr(age) + ")"
+		msg = subject + "已恢复（此前滞后 " + durStr(age) + "）"
 	case metricWarn:
 		level = "warn"
-		msg = "table-health " + name + " stale (age=" + durStr(age) + ")"
+		msg = subject + "数据停更（" + durStr(age) + " 未写入）→ 检查对应采集任务"
 	case metricCrit:
 		level = "critical"
-		msg = "table-health " + name + " critical (age=" + durStr(age) + ")"
+		msg = subject + "数据严重滞后（" + durStr(age) + " 未写入）→ 需立即人工介入"
 	}
 	if cur == metricCrit {
 		m.mu.Lock()

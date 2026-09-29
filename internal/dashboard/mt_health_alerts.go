@@ -30,16 +30,17 @@ func (m *MTHealthMonitor) maybeAlert(ctx context.Context, venue, metric string, 
 		}
 	}
 	var level, msg string
+	subject := "MT5 数据监控：" + venue + " " + mtMetricCN(metric)
 	switch cur {
 	case metricHealthy:
 		level = "info"
-		msg = "mt-health " + venue + " " + metric + " recovered (age=" + durStr(age) + ")"
+		msg = subject + "已恢复（此前停更 " + durStr(age) + "）"
 	case metricWarn:
 		level = "warn"
-		msg = "mt-health " + venue + " " + metric + " stale (age=" + durStr(age) + ")"
+		msg = subject + "数据已停更（" + durStr(age) + " 未更新）→ 检查该端连接/行情源"
 	case metricCrit:
 		level = "critical"
-		msg = "mt-health " + venue + " " + metric + " critical (age=" + durStr(age) + ")"
+		msg = subject + "数据严重停更（" + durStr(age) + " 未更新）→ 需立即人工介入"
 	}
 	if cur == metricCrit {
 		key := venue + ":" + metric
@@ -51,4 +52,17 @@ func (m *MTHealthMonitor) maybeAlert(ctx context.Context, venue, metric string, 
 		log.Printf("[mt-health] alert insert: %v", err)
 	}
 	log.Printf("[mt-health] %s: %s", level, msg)
+}
+
+// mtMetricCN 监控项中文化（D-573 词表：quote/swap/margin；未知值原样透出）。
+func mtMetricCN(metric string) string {
+	switch metric {
+	case "quote":
+		return "行情报价"
+	case "swap":
+		return "隔夜息"
+	case "margin":
+		return "保证金"
+	}
+	return metric
 }

@@ -220,7 +220,7 @@ func TestTableHealth_RecoveredOneAlert(t *testing.T) {
 	if alerts[1].level != "info" {
 		t.Errorf("recover want info, got %s", alerts[1].level)
 	}
-	if !strings.Contains(alerts[1].msg, "recovered") {
+	if !strings.Contains(alerts[1].msg, "已恢复") {
 		t.Errorf("recover msg should contain 'recovered', got %s", alerts[1].msg)
 	}
 }

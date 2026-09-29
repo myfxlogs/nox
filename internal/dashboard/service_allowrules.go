@@ -124,7 +124,7 @@ func (s *Service) SetAutotradeAllowRuleEnabled(ctx context.Context, req *connect
 		noteSuffix = " note=" + req.Msg.Note
 	}
 	if aerr := s.store.InsertAlert(ctx, nil, "info",
-		fmt.Sprintf("[whitelist] autotrade rule #%d %s %s → enabled=%v%s", r.ID, r.Kind, r.Value, r.Enabled, noteSuffix)); aerr != nil {
+		fmt.Sprintf("[白名单] 自动交易规则 #%d %s %s → enabled=%v%s", r.ID, r.Kind, r.Value, r.Enabled, noteSuffix)); aerr != nil {
 		slog.Warn("allow rule audit alert fail", "id", r.ID, "err", aerr) // best-effort 不回滚
 	}
 	s.kickConfig() // D-469b S5：allow rules 热载 kick

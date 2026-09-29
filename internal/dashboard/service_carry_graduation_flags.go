@@ -40,7 +40,7 @@ func (s *Service) revokeCombosForFlag(ctx context.Context, venueA, venueB, symbo
 			log.Printf("[graduation] positions on %s: %v", bare, err)
 		} else if cnt > 0 {
 			s.insertGraduationAlertLevel(ctx, "warn",
-				fmt.Sprintf("venue %s 有 %d 个在管仓受旗标影响（posID=%v），业主决策是否平", bare, cnt, ids))
+				fmt.Sprintf("%s 有 %d 个在管仓受旗标影响（持仓 #%v），需业主决策是否平仓", bare, cnt, ids))
 		}
 	}
 	if total == 0 {
@@ -55,7 +55,7 @@ func (s *Service) revokeCombosForFlag(ctx context.Context, venueA, venueB, symbo
 		log.Printf("[graduation] flag revoke snapshot refresh: %v", err)
 	}
 	s.insertGraduationAlertLevel(ctx, "warn",
-		fmt.Sprintf("blocked flag %s×%s 吊销 %d 条白名单组合", func() string {
+		fmt.Sprintf("封杀旗标 %s×%s：吊销 %d 条白名单组合", func() string {
 			if venueB == "" {
 				return venueA
 			}
