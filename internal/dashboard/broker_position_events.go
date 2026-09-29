@@ -256,6 +256,16 @@ func (m *BrokerPositionMonitor) applyVenueResult(ctx context.Context, r VenueOrd
 			m.dirtyLocked(posKeyOf(r.VenueKey, t)) // 权威缺仓 → remove
 		}
 	}
+	// D-571C2 S2：REST 回读不冲帧携现价——同 ticket 新行 PriceAt=0 且旧行有帧价
+	// → 沿用旧帧携价（票级保留至下一帧自然覆盖）。
+	for t, no := range vs.orders {
+		if no.PriceAt.IsZero() {
+			if oo, ok := old.orders[t]; ok && !oo.PriceAt.IsZero() {
+				no.CurrentPrice, no.PriceAt = oo.CurrentPrice, oo.PriceAt
+				vs.orders[t] = no
+			}
+		}
+	}
 	for t := range vs.orders {
 		m.dirtyLocked(posKeyOf(r.VenueKey, t)) // proto.Equal 在 flush 去重无变化仓
 	}

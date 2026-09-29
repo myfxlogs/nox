@@ -11,6 +11,7 @@ import (
 
 	"arb/internal/bus"
 	"arb/internal/collect/exchange"
+	"arb/internal/keydomain"
 	"arb/internal/reconcile"
 
 	v1 "arb/internal/gen/dashboardv1"
@@ -203,16 +204,21 @@ func (m *BrokerPositionMonitor) StreamOnlineSnapshot() map[string]bool {
 }
 
 // onQuote qbus 通配订阅回调：报价到达 → 匹配持仓脏化（flush 时重取 LatestLeg 重算现价）。
-// 匹配镜像 LatestLeg 键序：CEX 原生归一键优先 + canonical 兜底，MT canonical 直查。
+// 匹配镜像 LatestLeg 键序：CEX 原生归一键优先 + canonical 兜底 + 原生 brokerSym 命中
+// （pb.Symbol==q.VenueSymbol，D-571C2 S3：降格原生键发布的变体 tick 仍脏化对应行）；
+// MT5 行 S4 收束——现价帧内携，quote 脏化恒无 diff=纯空踢（MT4 无帧流仍靠拼接，不动）。
 func (m *BrokerPositionMonitor) onQuote(q bus.Quote) {
 	vk := q.VenueKey()
+	if keydomain.IsType(vk, "mt5") {
+		return // S4：mt5 行价只认帧携——quote 死踢收束
+	}
 	cex := bus.IsCexVenueKey(vk)
 	m.mu.Lock()
 	for key, pb := range m.cur {
 		if pb.VenueKey != vk {
 			continue
 		}
-		if pb.Canonical == q.Symbol || (cex && bus.CexSymbolKey(pb.Symbol) == q.Symbol) {
+		if pb.Canonical == q.Symbol || pb.Symbol == q.VenueSymbol || (cex && bus.CexSymbolKey(pb.Symbol) == q.Symbol) {
 			m.dirtyLocked(key)
 		}
 	}

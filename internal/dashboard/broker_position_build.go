@@ -60,9 +60,17 @@ func (m *BrokerPositionMonitor) protoFor(ctx context.Context, vk string, vs venu
 	}
 	var price bus.Quote
 	hasPrice := false
-	// D-481：腿级查找走 LatestLeg——CEX 以原生 symbol 归一键优先（canonical 派生
-	// 已与采集键同形时天然命中；canonical 为空/错位场景原生键兜底），MT canonical 直查。
-	if q, ok := m.qbus.LatestLeg(canonical, o.Symbol, o.VenueKey); ok {
+	// D-571C2 S2：MT5 现价只认帧携（OnOrderProfit 帧同次发布取价，一帧一价一钟——
+	// 与 PnL 同帧，业主法条④「流内字段禁第二源拼接」）；PriceAt=0=无帧源
+	//（REST 回读行/报价流断）→ 诚实空态 Fresh=false，不回落 LatestLeg。
+	if keydomain.IsType(o.VenueKey, "mt5") {
+		if !o.PriceAt.IsZero() && o.CurrentPrice > 0 {
+			price = bus.Quote{Bid: o.CurrentPrice, Ask: o.CurrentPrice, Time: o.PriceAt}
+			hasPrice = true
+		}
+	} else if q, ok := m.qbus.LatestLeg(canonical, o.Symbol, o.VenueKey); ok {
+		// D-481：腿级查找走 LatestLeg——CEX 以原生 symbol 归一键优先（canonical 派生
+		// 已与采集键同形时天然命中；canonical 为空/错位场景原生键兜底），MT4 canonical 直查。
 		price = q
 		hasPrice = true
 	}
