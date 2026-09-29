@@ -45,9 +45,6 @@ func connectErr(err error) error {
 // SetCrossCap D-478 S4：注入 cross 占比档（cfg.CrossNotionalEquityCap；未注入=缺省 0.5）。
 func (s *Service) SetCrossCap(cap float64) { s.crossCap = cap }
 
-// SetGateTargetLeverage D-563 S3：注入 gate 目标杠杆（零值=未知→池判定落待定）。
-func (s *Service) SetGateTargetLeverage(lev float64) { s.gateTargetLev = lev }
-
 // pendingEntries 七闸序推导主逻辑（供 RPC 与测试共用）。
 func (s *Service) pendingEntries(ctx context.Context) ([]*v1.XAssetPendingEntryRow, error) {
 	combos, err := s.store.ListXAssetAllowCombosAll(ctx)

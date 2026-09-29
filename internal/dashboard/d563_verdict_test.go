@@ -43,7 +43,6 @@ func d563VerdictSvc(t *testing.T, gateAvail, gateEq float64) *Service {
 	s.liveQuerierFor = func(context.Context, string) (reconcile.AccountQuerier, string, bool) {
 		return &fakeAcctQ{err: errors.New("REST 不应被调（live 命中）")}, "gate:perp", true
 	}
-	s.gateTargetLev = 10
 	s.gradStore = &fakeGradDB{}
 	return s
 }
@@ -69,32 +68,15 @@ func TestD563_ComboPoolVerdict(t *testing.T) {
 	}
 	snaps := []pgstore.VenueAccountLatest{d563MtSnap(5000, 4000)}
 
-	// 池 1000+notional 4300+lev10 → need=430 ≤ 1000；MT 需 86 ≤ 4000 → ok。
-	if v, d := s.comboPoolVerdict(ctx, c, snaps); v != "ok" {
-		t.Fatalf("池足应 ok, got %s (%s)", v, d)
-	}
-	// 池 100 → 430 > 100 → conflict。
-	l2 := bus.NewBalanceLedger()
-	l2.Put("gate:perp", 100, 100, "USD", "ws", time.Now())
-	s2 := d563VerdictSvc(t, 0, 0)
-	s2.SetBalanceLedger(l2)
-	s2.gateTargetLev = 10
-	s2.liveQuerierFor = s.liveQuerierFor
-	if v, _ := s2.comboPoolVerdict(ctx, c, snaps); v != "conflict" {
-		t.Fatalf("池缺应 conflict, got %s", v)
+	// D-564 U2 退役：gate 腿保证金率判据不再吃配置冒充——组合含 gate:perp 腿
+	// → unknown（fail-closed 如实标缺；venue 实况 get_leverage=执行链专责）。
+	if v, d := s.comboPoolVerdict(ctx, c, snaps); v != "unknown" || !strings.Contains(d, "gate 保证金率") {
+		t.Fatalf("gate 腿保证金率退役后应 unknown, got %s (%s)", v, d)
 	}
 	// MT init_margin_rate 缺 → unknown（待定不谎报锁死）。
 	f.facts = nil
 	if v, d := s.comboPoolVerdict(ctx, c, snaps); v != "unknown" || !strings.Contains(d, "init_margin_rate") {
 		t.Fatalf("MT rate 缺应 unknown, got %s (%s)", v, d)
-	}
-	// gate 目标杠杆未配置 → unknown（不谎报）。
-	s.gateTargetLev = 0
-	f.facts = map[string][]fact.Fact{
-		"3001157|": {{Kind: fact.KindInitMarginRate, Venue: "3001157", Value: 0.02, Ts: time.Now()}},
-	}
-	if v, _ := s.comboPoolVerdict(ctx, c, snaps); v != "unknown" {
-		t.Fatalf("杠杆未配置应 unknown, got %s", v)
 	}
 }
 

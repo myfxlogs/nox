@@ -138,8 +138,7 @@ func TestD547_T5_ComboRowsLiveConflict(t *testing.T) {
 	f.snaps = []pgstore.VenueAccountLatest{
 		{Venue: "gate", VenueType: "perp", EquityRaw: f64p(80), Currency: "USDT", FetchedAt: time.Now()},
 		{Venue: "3001157", VenueType: "mt5", EquityRaw: f64p(9000), Currency: "USD", FetchedAt: time.Now()},
-	}
-	s.SetGateTargetLeverage(10) // D-563 S3：杠杆感知判据（need=名义×1/lev=175 > 池 80 → conflict）
+	} // D-564 U2 退役：gate 保证金率判据不再吃配置杠杆——pool_verdict=unknown（如实标缺）
 	resp, err := s.ListXAssetAllowCombos(context.Background(), connect.NewRequest(&v1.ListXAssetAllowCombosRequest{}))
 	if err != nil {
 		t.Fatalf("list: %v", err)
@@ -151,8 +150,11 @@ func TestD547_T5_ComboRowsLiveConflict(t *testing.T) {
 	if r.ActiveNotionalUsd != 1800 {
 		t.Fatalf("active_notional=%v", r.ActiveNotionalUsd)
 	}
-	if !r.CapConflict {
-		t.Fatalf("cap_conflict 应真（gate 池 80 < 保证金需求 175）: %+v", r)
+	if r.CapConflict {
+		t.Fatalf("cap_conflict 应假（D-564 U2：gate 保证金率判据退役，配置杠杆不再推出 conflict）: %+v", r)
+	}
+	if r.PoolVerdict != "unknown" {
+		t.Fatalf("gate 腿 pool_verdict 应 unknown（判据退役如实标缺）, got %s", r.PoolVerdict)
 	}
 	if r.BuyPoolUsd != 80 || r.PoolSource != "snap" {
 		t.Fatalf("buy_pool=%v src=%q", r.BuyPoolUsd, r.PoolSource)

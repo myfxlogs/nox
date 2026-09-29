@@ -35,12 +35,9 @@ type Service struct {
 	reviewer func()
 	// D-478 S4：安全档位 cross 占比档（cfg.CrossNotionalEquityCap，SetCrossCap 注入）+
 	// 恶化告警 transition 状态（内存态重启重置，per combo|venue ≥6h 去重对齐 D-472）。
-	crossCap float64
-	// D-563 S1/S3：gate 合约目标杠杆（cfg.GateDefaultLeverage；零值=未配置→杠杆感知判据
-	// 落 unknown 待定，不兜底）。S1 开仓 SET 与 S3 池判定同源同值。
-	gateTargetLev float64
-	tierState     map[string]tierState
-	tierMu        sync.Mutex
+	crossCap  float64
+	tierState map[string]tierState
+	tierMu    sync.Mutex
 	// D-542：CEX 账户可用资金活账本（私有流主源+REST 校准回写，SetBalanceLedger 注入；
 	// nil=未装配→腿池直走快照兜底）。liveMu=校准单飞；liveQuerierFor=测试注入点；
 	// liveRestTTLDur 测试可缩短校准缓存。

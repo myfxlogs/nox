@@ -30,13 +30,10 @@ func (s *Service) legMarginNeedFrac(ctx context.Context, venueKey string) (frac 
 		}
 		return 0, "init_margin_rate 未采或超 24h", false
 	case "perp":
-		if k.Venue == "gate" {
-			if s.gateTargetLev > 0 {
-				return 1 / s.gateTargetLev, "", true
-			}
-			return 0, "gate 目标杠杆未配置", false
-		}
-		return 0, "CEX 杠杆设定读不到", false
+		// D-564 S1 U2 退役：gate 保证金率不再吃配置冒充（ARB_GATE_DEFAULT_LEVERAGE 链
+		// 全删）——venue 实况 get_leverage 是执行链专责读，管理判据如实标缺（fail-closed
+		// 待定，不冒充）。真金杠杆判定唯一权威=precheck 实时读。
+		return 0, "gate 保证金率=venue 实况（get_leverage 执行链实读），管理判据不冒充", false
 	case "unified":
 		return 0, "unified 杠杆读不到", false
 	default:

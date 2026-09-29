@@ -26,7 +26,6 @@ type CexExecutorManager struct {
 	// D-472 S2/S4：强平距离闸与 gate 缺省杠杆注入值（cfg 同源，per-executor Set 注入）。
 	minLiqDistPct          float64
 	crossNotionalEquityCap float64
-	gateDefaultLeverage    float64
 	// D-473 S2：spot 现金预检 taker 缓冲注入值（SetSpotTakerBps；零值=不缓冲）。
 	spotTaker     map[string]float64
 	spotTakerDflt float64
@@ -48,7 +47,7 @@ type CexExecutorManager struct {
 
 // NewCexExecutorManager 创建管理器。interval 复用 cfg.BrokerPosPollInterval（D-059 不新增 knob）。
 // alertFn D-108 P2 T1：平仓被拒 critical 告警（main 传 store.InsertAlert；nil=不告警）。
-// minLiqDistPct/crossNotionalEquityCap/gateDefaultLeverage 注入构造（D-472 S2/S4，零值=缺省语义）。
+// minLiqDistPct/crossNotionalEquityCap 注入构造（D-472 S2/S4，零值=缺省语义）。
 func NewCexExecutorManager(s ExchangeStore, reg *exec.Registry, interval time.Duration, alertFn func(posID *int64, level, msg string), marginReservePct float64) *CexExecutorManager {
 	return &CexExecutorManager{
 		store:            s,
@@ -59,7 +58,6 @@ func NewCexExecutorManager(s ExchangeStore, reg *exec.Registry, interval time.Du
 		// D-472 S2/S4：构造缺省（cfg setter 未调用时仍保有语义正确的档位——
 		// cross cap 零值注入会静默关闸，故缺省=包级常量非零值）。
 		crossNotionalEquityCap: exec.DefaultCrossNotionalEquityCap,
-		gateDefaultLeverage:    0, // D-563 S1：零值=未配置→开仓 fail-closed（显式注入，无兜底）
 		keys:                   make(map[string]bool),
 	}
 }
@@ -69,9 +67,6 @@ func (m *CexExecutorManager) SetLiqGuards(minLiqDistPct, crossNotionalEquityCap 
 	m.minLiqDistPct = minLiqDistPct
 	m.crossNotionalEquityCap = crossNotionalEquityCap
 }
-
-// SetGateDefaultLeverage D-472 S2：cfg 注入 gate venue 级缺省杠杆（ARB_GATE_DEFAULT_LEVERAGE）。
-func (m *CexExecutorManager) SetGateDefaultLeverage(lev float64) { m.gateDefaultLeverage = lev }
 
 // SetSpotTakerBps D-473 S2：cfg 注入 spot 腿 taker 费率表（cfg.CommissionTaker 逐所 +
 // CommissionCEXTakerBps 回退），现金预检缓冲用——与 evaluator commissionFor 同一取值源。
@@ -148,7 +143,6 @@ func (m *CexExecutorManager) sync(ctx context.Context) {
 		exe.SetKeyOverride(vk)
 		exe.SetMarginReservePct(m.marginReservePct)
 		exe.SetLiqGuards(m.minLiqDistPct, m.crossNotionalEquityCap) // D-472 S4
-		exe.SetGateDefaultLeverage(m.gateDefaultLeverage)           // D-472 S2
 		exe.SetSpotTakerBps(m.spotTakerFor(c.Venue))                // D-473 S2
 		exe.AlertFn = m.alertFn                                     // D-108 P2 T1：平仓被拒 critical 告警注入
 		m.reg.Register(exe)
