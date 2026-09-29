@@ -168,6 +168,11 @@ func (s *MarginFactSource) consumeStream(ctx context.Context, sink func(fact.Fac
 		if orders := resp.GetResult().GetOrders(); len(orders) > 0 {
 			s.publishPositions(orders)
 		}
+		// D-571 包B：ProfitUpdate 六字段帧下沉（此前过即弃 :171 注释自述）——
+		// OrderUpdateSummary 同字段帧已走 acctSink（mt_order_events.go:107），本帧补 ProfitUpdate 源。
+		if res := resp.GetResult(); res != nil {
+			s.publishAcctFrame(res)
+		}
 		// 事件帧到达 = 账户活跃/会话活着 → 触发 margin 补采（Margin/Balance/Equity/Profit 不消费）。
 		// 防抖：距上次成功采集 <5min 直接 skip（静态数据，防事件洪峰重复查库）。
 		if time.Since(s.lastSuccess) < marginDebounce {
@@ -196,6 +201,20 @@ func (s *MarginFactSource) publishPositions(orders []*mt5pb.Order) {
 		}
 	}()
 	s.a.PositionsSink(keydomain.Join(s.a.venue, "mt5"), reconcile.MT5OrdersToVenueOrders(s.a.venue, orders))
+}
+
+// publishAcctFrame D-571 包B：ProfitUpdate 六字段 → AccountSink（AcctFrameSink 同签名）。
+// Currency 无字段传空串（sink 侧不覆盖已有币种）。recover 守卫同 publish 模式。
+func (s *MarginFactSource) publishAcctFrame(res *mt5pb.ProfitUpdate) {
+	if s.a.AccountSink == nil {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[mt5:%s] margin: account sink panic: %v", s.a.venue, r)
+		}
+	}()
+	s.a.AccountSink(keydomain.Join(s.a.venue, "mt5"), res.Balance, res.Equity, res.Margin, res.FreeMargin, res.Profit, res.MarginLevel, "", time.Now())
 }
 
 // emitStreamState D-571 包A：流状态透出（nil 安全 + recover 守卫，同 publish 模式）。

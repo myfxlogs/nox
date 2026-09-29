@@ -43,6 +43,7 @@ message StreamUpdatesResponse {
     CMCWatchUpdate cmc_update = 13;                     // CMC 看盘实时帧（D-234，后端现算载荷→前端 merge 渲染）
     DataRefreshNotice data_refresh = 14;                // 域数据刷新通知（D-508 S9，空载荷+topic→前端重取）
     BrokerPositionEvent broker_position_event = 15;     // Broker 实持仓逐仓事件（D-571 包A：upsert/remove+聚合随发）
+    AccountEvent account_event = 16;                    // 账户资产逐 venue 事件（D-571 包B：upsert 单形态）
   }
 }
 
@@ -55,6 +56,13 @@ message BrokerPositionEvent {
   }
   double pnl_sum_usd = 3;               // 每次事件顺带最新聚合
   double net_sum_usd = 4;
+}
+
+// AccountEvent D-571 包B：逐 venue 账户事件（替代 case 9 全量快照的实时通道）。
+// 载荷=该 venue 完整 AccountInfo（复用 accountToProto 全字段，后端算好前端零信任）；
+// upsert 单形态（账户身份=查询器集，离线=online:false upsert 诚实标，无 remove）。
+message AccountEvent {
+  AccountInfo account = 1;
 }
 
 // BrokerPositionRef 逐仓删除事件的键。
