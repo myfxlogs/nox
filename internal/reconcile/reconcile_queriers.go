@@ -74,6 +74,11 @@ type VenueOrder struct {
 	// D-155：broker 端止损 SL 值（MT5 Order.StopLoss / MT4 Order.StopLoss；CEX=0 无概念）。
 	// 透出到 BrokerPosition.sl 供 D-146 S1 灾难 SL 生产验证闭环。
 	StopLoss float64
+
+	// D-571C2 S2：帧携现价（OnOrderProfit 帧同次发布取价，一帧一价一钟）。
+	// PriceAt=0 = 无帧源（REST 回读行/报价流断）= 诚实空态；REST 路径恒零不填。
+	CurrentPrice float64
+	PriceAt      time.Time // 帧内报价时戳（quote tick 自身 ts）
 }
 
 // AccountInfo 一个账户的资金视图（D-053）。CFD 来自 MT AccountSummary；CEX 来自签名余额查询。
