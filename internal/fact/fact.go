@@ -91,6 +91,10 @@ var validKinds = map[string]bool{
 	KindCMCPrice:          true,
 	KindCMCAccount:        true,
 	KindCMCHistory:        true,
+	// D-578：三所 spot 深度采样三 kind（src=cex_depth_sampler）。
+	"spot_depth_spread_bps": true,
+	"spot_depth_bid_usd":    true,
+	"spot_depth_ask_usd":    true,
 }
 
 // ValidKind 报告 k 是否为已知 Kind。

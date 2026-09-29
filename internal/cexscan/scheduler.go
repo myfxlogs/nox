@@ -17,13 +17,14 @@ import (
 
 // Scanner CEX 只读扫描器调度器。
 type Scanner struct {
-	cfg      *config.Config
-	store    *pgstore.Store
-	accounts AccountSnapshotter
-	earn     *EarnCollector
-	client   *http.Client
-	bnAPIURL string
-	symbols  []string
+	cfg         *config.Config
+	store       *pgstore.Store
+	accounts    AccountSnapshotter
+	earn        *EarnCollector
+	client      *http.Client
+	bnAPIURL    string
+	okxSpotBase string // D-578：okx spot base_url（cex-proxy 深度通道）
+	symbols     []string
 
 	// D-383 B1：order-event 定向落库收合态（per-venue lastWrite，OnOrderEvent 专用）。
 	orderSnapMu   sync.Mutex
@@ -34,10 +35,13 @@ type Scanner struct {
 func NewScanner(cfg *config.Config, store *pgstore.Store, am AccountSnapshotter, exchs []pgstore.ExchangeConfig) *Scanner {
 	earn := NewEarnCollector(cfg, exchs)
 	bnAPIURL := ""
+	okxSpotBase := ""
 	for _, e := range exchs {
-		if e.Venue == "binance" && e.VenueType == "spot" && !e.Simulated {
+		if e.Venue == "binance" && e.VenueType == "spot" && !e.Simulated && bnAPIURL == "" {
 			bnAPIURL = e.BaseURL
-			break
+		}
+		if e.Venue == "okx" && e.VenueType == "spot" && !e.Simulated && okxSpotBase == "" {
+			okxSpotBase = e.BaseURL // D-578：cex-proxy 基址（token 由 httpx 注入）
 		}
 	}
 	return &Scanner{
@@ -47,6 +51,7 @@ func NewScanner(cfg *config.Config, store *pgstore.Store, am AccountSnapshotter,
 		earn:          earn,
 		client:        httpx.Client(),
 		bnAPIURL:      bnAPIURL,
+		okxSpotBase:   okxSpotBase,
 		symbols:       cfg.CexScanSymbols,
 		orderSnapLast: make(map[string]time.Time),
 	}
@@ -57,6 +62,8 @@ func NewScanner(cfg *config.Config, store *pgstore.Store, am AccountSnapshotter,
 // （venue 无推送），低频拉取合法但不作即时开仓判据（FUNDING_HEDGE 判定链=funding regime
 // facts+实时双腿报价，不经本表）。
 func (s *Scanner) Run(ctx context.Context) {
+	// D-578：三所 spot 深度定时采样（同生命周期 goroutine；env ARB_DEPTH_SAMPLER_OFF=1 停）。
+	go newDepthSampler(s.store, s.okxSpotBase).Run(ctx)
 	// 启动即扫一次
 	if err := s.scanOnce(ctx); err != nil {
 		log.Printf("[cexscan] initial scan: %v", err)
