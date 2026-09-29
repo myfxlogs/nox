@@ -29,14 +29,20 @@ var okxSwapSpecCache sync.Map // instID → okxSwapSpec
 // 规格慢变元数据允许缓存——state 闸非决策时变数据面）。
 var okxSwapSpecState sync.Map
 
+// okxSpecTTL D-566 包B S6-a：规格缓存 24h 惰性判龄（instruments 慢变；变更主通道=
+// instruments WS Invalidate，TTL 为断流兜底——禁 ticker）。
+const okxSpecTTL = 24 * time.Hour
+
 // OkxSwapSpec 查 okx swap 合约面值 ctVal + 最小张数 lotSz + 市价单笔上限 maxMktSz
 // （D-311 R4 从 okxContractVal 提取共用；D-566 S1 扩第三值）。
 // 公开端点 GET /api/v5/public/instruments?instType=SWAP&instId=XXX 无需签名。
 // maxMktSz 空串→0=无闸直通（字段缺席非证据）。
 func OkxSwapSpec(ctx context.Context, client *http.Client, baseURL, instID string) (ctVal, lotSz, maxMktSz float64, err error) {
 	if v, ok := okxSwapSpecCache.Load(instID); ok {
-		s := v.(okxSwapSpec)
-		return s.ctVal, s.lotSz, s.maxMktSz, nil
+		// D-566 包B S6-a：24h TTL 惰性判龄（Load 时检查，禁 ticker）。
+		if s := v.(okxSwapSpec); time.Since(s.at) <= okxSpecTTL {
+			return s.ctVal, s.lotSz, s.maxMktSz, nil
+		}
 	}
 	endpoint := "/api/v5/public/instruments?instType=SWAP&instId=" + instID
 	req, err := http.NewRequestWithContext(ctx, "GET", baseURL+endpoint, nil)
@@ -105,8 +111,9 @@ var okxSpotSpecCache sync.Map
 // 取不到→err fail-closed（不下未地板单——51121/最小金额拒单先例）。
 func (e *CEXExecutor) okxSpotLotSz(ctx context.Context, instID string) (lotSz, minSz, maxMktAmt float64, err error) {
 	if s, ok := okxSpotSpecCache.Load(instID); ok {
-		sp := s.(okxSpotSpec)
-		return sp.lotSz, sp.minSz, sp.maxMktAmt, nil
+		if sp := s.(okxSpotSpec); time.Since(sp.at) <= okxSpecTTL {
+			return sp.lotSz, sp.minSz, sp.maxMktAmt, nil
+		}
 	}
 	body, err := e.get(ctx, e.baseURL+"/api/v5/public/instruments?instType=SPOT&instId="+url.QueryEscape(instID), nil)
 	if err != nil {
@@ -145,10 +152,14 @@ func (e *CEXExecutor) okxSpotLotSz(ctx context.Context, instID string) (lotSz, m
 // fail-closed。spec 缓存共享（okxSwapSpecCache 同包），state 随缓存写（规格慢变元数据）。
 func (e *CEXExecutor) okxStateCheck(ctx context.Context, instID string) error {
 	if v, ok := okxSwapSpecState.Load(instID); ok {
-		if st, _ := v.(string); st != "" && st != "live" {
-			return fmt.Errorf("okx %s 合约非 live 态（state=%s）fail-closed 拒单", instID, st)
+		se := v.(okxSwapSpecStateEntry)
+		if time.Since(se.at) > okxSpecTTL {
+			okxSwapSpecState.Delete(instID) // 超龄落盘重取
+		} else if se.state != "" && se.state != "live" {
+			return fmt.Errorf("okx %s 合约非 live 态（state=%s）fail-closed 拒单", instID, se.state)
+		} else {
+			return nil
 		}
-		return nil
 	}
 	endpoint := "/api/v5/public/instruments?instType=SWAP&instId=" + instID
 	body, err := e.get(ctx, e.baseURL+endpoint, nil)
@@ -175,6 +186,20 @@ func (e *CEXExecutor) okxStateCheck(ctx context.Context, instID string) error {
 		// 非 live 不缓存（preopen→live 转换后下次尝试重查；缓存 live 正常态）。
 		return fmt.Errorf("okx %s 合约非 live 态（state=%s）fail-closed 拒单", instID, st)
 	}
-	okxSwapSpecState.Store(instID, st)
+	okxSwapSpecState.Store(instID, okxSwapSpecStateEntry{state: st, at: time.Now()})
 	return nil
+}
+
+// okxSwapSpecStateEntry D-566 包B S6：state 缓存值型（携 at 供 TTL 判龄）。
+type okxSwapSpecStateEntry struct {
+	state string
+	at    time.Time
+}
+
+// OKXSpecInvalidate D-566 包B S6-b：三表同删单口——供 instruments WS 变更帧、
+// TTL 判龄、拒单驱动三通道复用。
+func OKXSpecInvalidate(instID string) {
+	okxSwapSpecCache.Delete(instID)
+	okxSpotSpecCache.Delete(instID)
+	okxSwapSpecState.Delete(instID)
 }

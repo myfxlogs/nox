@@ -7,6 +7,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"golang.org/x/sync/singleflight"
+
 	"arb/internal/httpx"
 	"arb/internal/keydomain"
 )
@@ -36,6 +38,8 @@ type CEXExecutor struct {
 	binanceOrderLookup func(ordID string) (BinanceOrderSnap, bool)
 	// D-570 包B S4③：gate 订单事件查口（同构；费走帧回填）。
 	gateOrderLookup func(ordID string) (GateOrderSnap, bool)
+	okxOrderLookup  func(ordID string) (OKXOrderSnap, bool) // D-566 包B S4
+	posModeSF       singleflight.Group                      // D-566 包B S5：posMode 在途合并（非时效缓存）
 
 	// D-570 包C S6①：gate 规格/quanto 缓存升包级 gateSpecCache/gateQuantoCache
 	// （contract_info WS 推送+拒单驱动须跨 executor 实例失效——实例表成死端）。

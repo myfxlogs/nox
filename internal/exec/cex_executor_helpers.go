@@ -65,10 +65,14 @@ func (e *CEXExecutor) okxPosModeFetch(ctx context.Context) (string, error) {
 // okxPosModeCheck D-564 S6 U8：posMode 实读+校验（非 long_short_mode 一律拒+报实测值）。
 // placeOKX perp 分支调用；判定时刻实读禁缓存。
 func (e *CEXExecutor) okxPosModeCheck(ctx context.Context) error {
-	posMode, err := e.okxPosModeFetch(ctx)
+	// D-566 包B S5：singleflight 在途合并——并发多单共享同次实读，禁时效缓存（判定时刻实读语义不变）。
+	v, err, _ := e.posModeSF.Do("posmode", func() (any, error) {
+		return e.okxPosModeFetch(ctx)
+	})
 	if err != nil {
 		return fmt.Errorf("okx posMode 实读 fail-closed: %w", err)
 	}
+	posMode := v.(string)
 	if posMode != "long_short_mode" {
 		return fmt.Errorf("okx 账户模式已变更（posMode=%s），拒绝按 long/short 语义下单（fail-closed；net_mode 映射未做）", posMode)
 	}

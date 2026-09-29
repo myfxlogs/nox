@@ -127,6 +127,15 @@ func (e *CEXExecutor) okxConfirmFill(ctx context.Context, o Order, instID, ordID
 			return Fill{}, ctx.Err()
 		case <-time.After(delay):
 		}
+		// D-566 包B S4-c：每拍先查私有 WS 事件 lookup——终态命中零 REST 即返；
+		// miss/非终态落 REST 拍照兜底（镜像 binanceConfirmFill 同构形态）。
+		if e.okxOrderLookup != nil {
+			if sn, ok := e.okxOrderLookup(ordID); ok {
+				if f, done, ferr := e.okxSnapEval(o, ordID, sn); done {
+					return f, ferr
+				}
+			}
+		}
 		st, err := e.okxOrderStatus(ctx, instID, ordID, "")
 		if err == nil {
 			if f, done, ferr := e.evalOKXStatus(o, ordID, st, ctVal); done {

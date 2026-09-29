@@ -178,6 +178,9 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 		if len(resp.Data) > 0 && resp.Data[0].SMsg != "" {
 			detail = fmt.Sprintf("%s (sCode=%s sMsg=%s)", resp.Msg, resp.Data[0].SCode, resp.Data[0].SMsg)
 		}
+		if len(resp.Data) > 0 && okxSpecRejectCode(resp.Data[0].SCode) {
+			OKXSpecInvalidate(instID) // D-566 包B S6-c：拒单驱动失效（本单失败不重试，下链自重取）
+		}
 		e.alertCritical(o, fmt.Sprintf("okx 平仓单被交易所拒绝（持仓#%d 错误码 %s）：%s", o.PosID, resp.Code, detail))
 		return Fill{}, fmt.Errorf("okx order: code=%s msg=%s", resp.Code, detail)
 	}
@@ -186,6 +189,9 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 	}
 	d := resp.Data[0]
 	if d.SCode != "" && d.SCode != "0" {
+		if okxSpecRejectCode(d.SCode) {
+			OKXSpecInvalidate(instID)
+		}
 		return Fill{}, fmt.Errorf("okx order: sCode=%s sMsg=%s", d.SCode, d.SMsg)
 	}
 	qty, err := f64z(d.AccFillSz)
@@ -208,4 +214,15 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 	}
 	feeUSD := e.okxOrderFeeUSD(ctx, instID, d.OrdID) // D-391 S2：补查 fee（fail-open 0→NULL）
 	return Fill{OrderID: d.OrdID, Price: avgPx, Qty: qty, FeeUSD: feeUSD, Ts: time.Now()}, nil
+}
+
+// okxSpecRejectCode D-566 包B S6-c：spec/限额类 sCode 集——拒单驱动 spec 失效
+// （51121 最小量/51101 精度/51005 超上限/51201 数值超范围/51185/51020/51022/51150 等
+// 与 instruments 规格相关的拒码；命中即 OKXSpecInvalidate，本单仍失败不原地重试）。
+func okxSpecRejectCode(sCode string) bool {
+	switch sCode {
+	case "51121", "51101", "51005", "51201", "51185", "51020", "51022", "51150":
+		return true
+	}
+	return false
 }
