@@ -8,13 +8,12 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"time"
 )
 
 func (e *CEXExecutor) gateMarginPrecheck(ctx context.Context, o Order) error {
 	endpoint := "/futures/usdt/accounts"
 	urlPath := "/api/v4" + endpoint
-	ts := time.Now().Unix()
+	ts := gateNow()
 	sign := signutil.GateSign(e.apiSecret, "GET", urlPath, "", "", ts)
 	headers := http.Header{
 		"KEY":       {e.apiKey},
@@ -67,7 +66,7 @@ func (e *CEXExecutor) gateMarginPrecheck(ctx context.Context, o Order) error {
 func (e *CEXExecutor) gateMarkPrice(ctx context.Context, contract string) (float64, error) {
 	endpoint := "/futures/usdt/contracts/" + contract
 	urlPath := "/api/v4" + endpoint
-	ts := time.Now().Unix()
+	ts := gateNow()
 	sign := signutil.GateSign(e.apiSecret, "GET", urlPath, "", "", ts)
 	headers := http.Header{
 		"KEY":       {e.apiKey},

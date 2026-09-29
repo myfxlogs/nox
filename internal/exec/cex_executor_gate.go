@@ -95,7 +95,7 @@ func (e *CEXExecutor) placeGateRaw(ctx context.Context, o Order) ([]byte, Fill, 
 		default:
 			return nil, Fill{}, fmt.Errorf("gate dual close: PositionSide %q 非法（long/short）fail-closed", o.PositionSide)
 		}
-		bodyStr = fmt.Sprintf(`{"contract":%q,"size":0,"price":"0","tif":"ioc","text":"t-arb","close":true,"auto_size":%q}`,
+		bodyStr = fmt.Sprintf(`{"contract":%q,"size":0,"price":"0","tif":"ioc","text":"t-arb","close":true,"auto_size":%q,"reduce_only":true}`,
 			o.Symbol, closeSide)
 	} else {
 		// D-564 S4：size 序列化按 enable_decimal 分支——false=整数张 %d（现形）；
@@ -110,15 +110,8 @@ func (e *CEXExecutor) placeGateRaw(ctx context.Context, o Order) ([]byte, Fill, 
 
 	const endpoint = "/futures/usdt/orders"
 	urlPath := "/api/v4" + endpoint
-	ts := time.Now().Unix()
-	sign := signutil.GateSign(e.apiSecret, "POST", urlPath, "", bodyStr, ts)
-	headers := http.Header{
-		"KEY":          {e.apiKey},
-		"Timestamp":    {strconv.FormatInt(ts, 10)},
-		"SIGN":         {sign},
-		"Content-Type": {"application/json"},
-	}
-	rawBody, err := e.post(ctx, e.baseURL+endpoint, bodyStr, headers)
+	// D-570 包A S2d：签名+发送入 resilience——REQUEST_EXPIRED → 校时后同 bodyStr/urlPath 重签重发一次。
+	rawBody, err := e.gateSignedPost(ctx, endpoint, urlPath, bodyStr, true)
 	if err != nil {
 		return nil, Fill{}, fmt.Errorf("gate order: %w", err)
 	}
@@ -168,28 +161,6 @@ func (e *CEXExecutor) placeGateRaw(ctx context.Context, o Order) ([]byte, Fill, 
 	return rawBody, toBaseQty(fill), nil
 }
 
-// gateOrderStatus 查询 Gate 订单成交（GET /futures/usdt/orders/{order_id}，签名 GET）。
-func (e *CEXExecutor) gateOrderStatus(ctx context.Context, orderID string) (gateOrderResponse, error) {
-	endpoint := "/futures/usdt/orders/" + orderID
-	urlPath := "/api/v4" + endpoint
-	ts := time.Now().Unix()
-	sign := signutil.GateSign(e.apiSecret, "GET", urlPath, "", "", ts)
-	headers := http.Header{
-		"KEY":       {e.apiKey},
-		"Timestamp": {strconv.FormatInt(ts, 10)},
-		"SIGN":      {sign},
-	}
-	body, err := e.get(ctx, e.baseURL+endpoint, headers)
-	if err != nil {
-		return gateOrderResponse{}, err
-	}
-	var ord gateOrderResponse
-	if err := json.Unmarshal(body, &ord); err != nil {
-		return gateOrderResponse{}, fmt.Errorf("gate order status json: %w", err)
-	}
-	return ord, nil
-}
-
 // GatePosition 是一条 Gate USDT 本位合约持仓（D-098 G1，探针 + 平仓核对用）。
 type GatePosition struct {
 	Contract   string
@@ -220,7 +191,7 @@ func (e *CEXExecutor) GateAccountBookFund(ctx context.Context, contract string) 
 	endpoint := "/futures/usdt/account_book"
 	query := "type=fund&contract=" + contract
 	urlPath := "/api/v4" + endpoint
-	ts := time.Now().Unix()
+	ts := gateNow()
 	sign := signutil.GateSign(e.apiSecret, "GET", urlPath, query, "", ts)
 	headers := http.Header{
 		"KEY":       {e.apiKey},
@@ -248,7 +219,10 @@ type gateContractSpec struct {
 	SizeMax       float64 // order_size_max（0=未采集不拦）
 	EnableDecimal bool    // true=size 可小数串；false=整数张
 	InDelisting   bool    // 退市中→fail-closed
-	LeverageMax   float64 // 矛盾校验用（venue 实况 lever>max → warn 不拦）
+	LeverageMax   float64 // 矛盾校验用（venue 实况 lever>max → warn 不拦；实弹=JSON 字符串 D-570 根治）
+	// D-570 包A S1a：市价量上限+交易状态（实弹=JSON 字符串形，api-response-fields-empirical）。
+	MarketOrderSizeMax float64 // market_order_size_max（0=未采集不拦；市价单语义闸）
+	Status             string  // status（"trading" 放行；prelaunch/delisting/delisted/circuit_breaker 全拦）
 }
 
 // gateSpecFetch 查合约规格并写缓存（TTL=进程生命周期——规格慢变元数据）。
@@ -260,7 +234,7 @@ func (e *CEXExecutor) gateSpecFetch(ctx context.Context, contract string) (gateC
 	}
 	endpoint := "/futures/usdt/contracts/" + contract
 	urlPath := "/api/v4" + endpoint
-	ts := time.Now().Unix()
+	ts := gateNow()
 	sign := signutil.GateSign(e.apiSecret, "GET", urlPath, "", "", ts)
 	body, err := e.get(ctx, e.baseURL+endpoint, http.Header{
 		"KEY": {e.apiKey}, "Timestamp": {strconv.FormatInt(ts, 10)}, "SIGN": {sign},
@@ -269,12 +243,14 @@ func (e *CEXExecutor) gateSpecFetch(ctx context.Context, contract string) (gateC
 		return gateContractSpec{}, fmt.Errorf("gate contract spec %s: %w", contract, err)
 	}
 	var spec struct {
-		QuantoMultiplier string  `json:"quanto_multiplier"`
-		OrderSizeMin     float64 `json:"order_size_min"`
-		OrderSizeMax     float64 `json:"order_size_max"`
-		EnableDecimal    bool    `json:"enable_decimal"`
-		InDelisting      bool    `json:"in_delisting"`
-		LeverageMax      float64 `json:"leverage_max"`
+		QuantoMultiplier   string  `json:"quanto_multiplier"`
+		OrderSizeMin       float64 `json:"order_size_min"`
+		OrderSizeMax       float64 `json:"order_size_max"`
+		EnableDecimal      bool    `json:"enable_decimal"`
+		InDelisting        bool    `json:"in_delisting"`
+		LeverageMax        string  `json:"leverage_max"`          // D-570 活病灶根治：实弹=JSON 字符串
+		MarketOrderSizeMax string  `json:"market_order_size_max"` // 同
+		Status             string  `json:"status"`
 	}
 	if err := json.Unmarshal(body, &spec); err != nil {
 		return gateContractSpec{}, fmt.Errorf("gate contract spec json: %w", err)
@@ -283,9 +259,18 @@ func (e *CEXExecutor) gateSpecFetch(ctx context.Context, contract string) (gateC
 	if err != nil || q <= 0 {
 		return gateContractSpec{}, fmt.Errorf("gate contract %s quanto_multiplier=%q invalid", contract, spec.QuantoMultiplier)
 	}
+	lvMax, err := f64z(spec.LeverageMax)
+	if err != nil {
+		return gateContractSpec{}, fmt.Errorf("gate contract %s leverage_max=%q: %w", contract, spec.LeverageMax, err)
+	}
+	mktMax, err := f64z(spec.MarketOrderSizeMax)
+	if err != nil {
+		return gateContractSpec{}, fmt.Errorf("gate contract %s market_order_size_max=%q: %w", contract, spec.MarketOrderSizeMax, err)
+	}
 	s := gateContractSpec{
 		Quanto: q, SizeMin: spec.OrderSizeMin, SizeMax: spec.OrderSizeMax,
-		EnableDecimal: spec.EnableDecimal, InDelisting: spec.InDelisting, LeverageMax: spec.LeverageMax,
+		EnableDecimal: spec.EnableDecimal, InDelisting: spec.InDelisting, LeverageMax: lvMax,
+		MarketOrderSizeMax: mktMax, Status: spec.Status,
 	}
 	if e.gateSpec == nil {
 		e.gateSpec = make(map[string]gateContractSpec)
@@ -306,6 +291,11 @@ func (e *CEXExecutor) gateSpecCheck(ctx context.Context, contract string, qty fl
 	if err != nil {
 		return 0, spec, err
 	}
+	// D-570 包A S1c status 闸：非 trading 全拦（prelaunch/delisting/delisted/circuit_breaker）；
+	// in_delisting 保留双保险。
+	if spec.Status != "" && spec.Status != "trading" {
+		return 0, spec, fmt.Errorf("gate %s 合约非可交易态 status=%q fail-closed 拒单", contract, spec.Status)
+	}
 	if spec.InDelisting {
 		return 0, spec, fmt.Errorf("gate %s 合约退市中（in_delisting）fail-closed 拒单", contract)
 	}
@@ -313,8 +303,15 @@ func (e *CEXExecutor) gateSpecCheck(ctx context.Context, contract string, qty fl
 	if spec.SizeMin > 0 && size < spec.SizeMin {
 		return 0, spec, fmt.Errorf("gate %s 不足最小张数：%.4f < order_size_min %.4f fail-closed", contract, size, spec.SizeMin)
 	}
-	if spec.SizeMax > 0 && size > spec.SizeMax {
-		return 0, spec, fmt.Errorf("gate %s 超最大张数：%.4f > order_size_max %.4f fail-closed", contract, size, spec.SizeMax)
+	// D-570 包A S1c 量上限合并卡：order_size_max 与 market_order_size_max 两正值取小
+	// （市价单语义更严；order_size_max 缺席时 market_order_size_max 独担）。
+	effMax := spec.SizeMax
+	if spec.MarketOrderSizeMax > 0 && (effMax <= 0 || spec.MarketOrderSizeMax < effMax) {
+		effMax = spec.MarketOrderSizeMax
+	}
+	if effMax > 0 && size > effMax {
+		return 0, spec, fmt.Errorf("gate %s 超最大张数：%.4f > effMax %.4f（order_size_max %.4f / market_order_size_max %.4f）fail-closed",
+			contract, size, effMax, spec.SizeMax, spec.MarketOrderSizeMax)
 	}
 	if !spec.EnableDecimal {
 		floored := math.Floor(size)
@@ -340,7 +337,7 @@ func (e *CEXExecutor) gateContractSize(ctx context.Context, contract string, qty
 	// 查合约规格
 	endpoint := "/futures/usdt/contracts/" + contract
 	urlPath := "/api/v4" + endpoint
-	ts := time.Now().Unix()
+	ts := gateNow()
 	sign := signutil.GateSign(e.apiSecret, "GET", urlPath, "", "", ts)
 	headers := http.Header{
 		"KEY":       {e.apiKey},

@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"arb/internal/signutil"
 )
@@ -30,7 +29,7 @@ func (e *CEXExecutor) GatePositionsRaw(ctx context.Context, contract string) ([]
 	}
 	endpoint := "/futures/usdt/positions/" + contract
 	urlPath := "/api/v4" + endpoint
-	ts := time.Now().Unix()
+	ts := gateNow()
 	sign := signutil.GateSign(e.apiSecret, "GET", urlPath, "", "", ts)
 	headers := http.Header{
 		"KEY":       {e.apiKey},
@@ -82,7 +81,7 @@ func (e *CEXExecutor) GatePositionsRaw(ctx context.Context, contract string) ([]
 func (e *CEXExecutor) gateDualCompPositionsRaw(ctx context.Context, contract string) ([]byte, []GatePosition, error) {
 	endpoint := "/futures/usdt/dual_comp/positions/" + contract
 	urlPath := "/api/v4" + endpoint
-	ts := time.Now().Unix()
+	ts := gateNow()
 	sign := signutil.GateSign(e.apiSecret, "GET", urlPath, "", "", ts)
 	body, err := e.get(ctx, e.baseURL+endpoint, http.Header{
 		"KEY": {e.apiKey}, "Timestamp": {strconv.FormatInt(ts, 10)}, "SIGN": {sign},
