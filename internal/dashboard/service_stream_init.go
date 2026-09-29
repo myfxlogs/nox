@@ -43,3 +43,27 @@ func (s *Service) streamInitBrokerPositions(stream *connect.ServerStream[v1.Stre
 	}
 	return nil
 }
+
+// streamInitPositionsAndAccounts D-571：持仓+账户回放合并入口（包A case15/包B case16）。
+func (s *Service) streamInitPositionsAndAccounts(stream *connect.ServerStream[v1.StreamUpdatesResponse]) error {
+	if err := s.streamInitBrokerPositions(stream); err != nil {
+		return err
+	}
+	return s.streamInitAccounts(stream)
+}
+
+// streamInitAccounts D-571 包B：账户资产回放——cur 全量每 venue 一条 case 16 upsert
+// 逐条 Send（同 streamInitBrokerPositions 模式；新连接秒级全量，不依赖事件到达）。
+func (s *Service) streamInitAccounts(stream *connect.ServerStream[v1.StreamUpdatesResponse]) error {
+	if s.acctMon == nil {
+		return nil
+	}
+	for _, ev := range s.acctMon.Events() {
+		if err := stream.Send(&v1.StreamUpdatesResponse{
+			Update: &v1.StreamUpdatesResponse_AccountEvent{AccountEvent: ev},
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}

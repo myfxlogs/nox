@@ -2,8 +2,6 @@
 package dashboard
 
 import (
-	"strconv"
-	"strings"
 	"time"
 
 	"arb/internal/reconcile"
@@ -38,29 +36,4 @@ func accountToProto(a *reconcile.AccountInfo, online bool, now time.Time) *v1.Ac
 		BufferMultiple: a.BufferMultiple,
 	}
 	return pb
-}
-
-// accountFingerprint 视图指纹：任一账户的余额/净值/占用/可用/信用/浮盈/在线状态变化即触发广播。
-// 权益实时跳变 → 值变了就推（5s 节奏，全量快照量小，可接受）。
-func accountFingerprint(view []*v1.AccountInfo) string {
-	var sb strings.Builder
-	for _, a := range view {
-		sb.WriteString(a.VenueKey)
-		sb.WriteString("|")
-		sb.WriteString(strconv.FormatFloat(a.Balance, 'g', -1, 64))
-		sb.WriteString("|")
-		sb.WriteString(strconv.FormatFloat(a.Equity, 'g', -1, 64))
-		sb.WriteString("|")
-		sb.WriteString(strconv.FormatFloat(a.Margin, 'g', -1, 64))
-		sb.WriteString("|")
-		sb.WriteString(strconv.FormatFloat(a.FreeMargin, 'g', -1, 64))
-		sb.WriteString("|")
-		sb.WriteString(strconv.FormatFloat(a.Credit, 'g', -1, 64))
-		sb.WriteString("|")
-		sb.WriteString(strconv.FormatFloat(a.Profit, 'g', -1, 64))
-		sb.WriteString("|")
-		sb.WriteString(strconv.FormatBool(a.Online))
-		sb.WriteString(";")
-	}
-	return sb.String()
 }

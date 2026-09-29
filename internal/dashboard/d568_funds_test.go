@@ -13,7 +13,7 @@ import (
 
 // TestD568_ObserveStreamAccountNotifies T2a：MT5 余额帧 → fundsHook 触发。
 func TestD568_ObserveStreamAccountNotifies(t *testing.T) {
-	m := NewAccountMonitor(NewBrokerManager(nil, bus.New(), exec.NewRegistry(), time.Minute), time.Millisecond, nil)
+	m := NewAccountMonitor(NewBrokerManager(nil, bus.New(), exec.NewRegistry(), time.Minute), nil)
 	var hits atomic.Int32
 	m.SetFundsHook(func() { hits.Add(1) })
 	m.ObserveStreamAccount("3001157:mt5", 1, 1, 0, 0, 0, 0, "USD", time.Now())

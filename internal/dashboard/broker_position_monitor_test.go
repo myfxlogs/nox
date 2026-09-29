@@ -194,7 +194,6 @@ func TestAccountMonitor_KickDebounce(t *testing.T) {
 		Balance: 5000, Equity: 5100, Currency: "USD",
 	}}
 	m, _, _ := newAcctMonTest(t, q)
-	m.interval = 10 * time.Minute // 避免 ticker 干扰
 
 	go m.Run(ctx)
 	// 等 Run 首采完成。
@@ -204,7 +203,7 @@ func TestAccountMonitor_KickDebounce(t *testing.T) {
 
 	// 1. 窗口内 kick → pollIfDue 防抖跳过 → equity 改了也不反映。
 	q.acct.Equity = 5200
-	m.Kick()
+	m.Kick("")
 	time.Sleep(20 * time.Millisecond) // 等 kick 被消费（防抖窗口内 50ms）
 	if e := m.Snapshot()[0].Equity; e != 5100 {
 		t.Fatalf("within debounce window: equity want 5100 (no poll), got %v", e)
@@ -212,7 +211,7 @@ func TestAccountMonitor_KickDebounce(t *testing.T) {
 
 	// 2. 超窗后 kick → pollIfDue 执行 poll → equity 更新。
 	time.Sleep(60 * time.Millisecond) // 超过 50ms 窗口
-	m.Kick()
+	m.Kick("")
 	if !waitForMon(t, 10*time.Second, func() bool {
 		return len(m.Snapshot()) == 1 && m.Snapshot()[0].Equity == 5200
 	}) {

@@ -34,7 +34,7 @@ type CexStreamSinks interface {
 // binance a.m hooks 注入——字段注入先例同 cexExecMgr.OrderCache，装配处零值=不 kick）。
 type CexStreamManager struct {
 	// AcctKick D-469a S3：余额快照落库后回调（目标=acctMon.Kick()，nil 安全）。
-	AcctKick func()
+	AcctKick func(vk string) // D-571 包B：venue 定向 kick
 	// TierKickFn D-478 S4：余额快照落库后安全档位重算回调（目标=Service.TierKick(venue)，
 	// 恶化转移告警；nil 安全）。venue=bare 域（快照表键）。
 	TierKickFn func()
@@ -152,13 +152,11 @@ func (m *CexStreamManager) sync(ctx context.Context) {
 		vk := reconcile.CexVenueKey(c.Venue, c.VenueType, c.ID, winners)
 		sctx, cancel := context.WithCancel(ctx)
 		// D-469a S3：余额快照 sink 包 kicking wrapper（落库成功→acctMon kick；写失败不 kick）。
-		sinkKick := m.AcctKick
-		if m.TierKickFn != nil {
-			// R4：AcctKick nil 守卫（TierKickFn 单独注入时 AcctKick 可能为 nil）。
-			sinkKick = func() {
-				if m.AcctKick != nil {
-					m.AcctKick()
-				}
+		sinkKick := func() {
+			if m.AcctKick != nil {
+				m.AcctKick(vk) // D-571 包B：venue 定向（vk=本行生效键）
+			}
+			if m.TierKickFn != nil {
 				m.TierKickFn()
 			}
 		}

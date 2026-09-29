@@ -7,7 +7,9 @@ import (
 	"context"
 	"time"
 
+	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
+	"strings"
 )
 
 // ExchangeStore 提供 CEX 交易所配置（pgstore.Store 满足）。
@@ -41,12 +43,51 @@ type StreamAcct struct {
 }
 
 // ObserveStreamAccount 余额帧落缓存（AcctFrameSink 签名同构；frameTime=收帧时刻）。
+// D-571 包B：帧六字段同时 patch states[vk] 并脏化发射（补丁语义——venue 分工归属
+// 流域；online 不动，由 OnStreamState 流状态事件承担）。Currency 空串不覆盖
+// 已有币种（MT5 帧无 Currency 字段）。venue 无账户态则建零值态+Kick(vk) REST 补全。
 func (m *AccountMonitor) ObserveStreamAccount(venueKey string, bal, eq, mg, fm, prof, ml float64, ccy string, ts time.Time) {
 	m.streamAccts.Store(venueKey, StreamAcct{
 		Balance: bal, Equity: eq, Margin: mg, FreeMargin: fm,
 		Profit: prof, MarginLevel: ml, Currency: ccy, FrameTime: ts,
 	})
-	m.notifyFunds() // D-568：MT5 余额帧→funds 通知
+	m.mu.Lock()
+	st := m.states[venueKey]
+	if st.acct == nil {
+		// 帧先于任何 REST 到位：建零值账户态（身份锚=venueKey 三段拆分），
+		// 描述字段由定向 REST kick 补全。
+		v, vt := venueKey, ""
+		if i := strings.IndexByte(venueKey, ':'); i >= 0 {
+			v, vt = venueKey[:i], venueKey[i+1:]
+		}
+		st.acct = &reconcile.AccountInfo{VenueKey: venueKey, Venue: v, VenueType: vt, AssetType: "cfd"}
+		st.asOf = ts
+		m.states[venueKey] = st
+		m.dirtyLocked(venueKey)
+		m.mu.Unlock()
+		m.Kick(venueKey)
+		m.notifyFunds()
+		return
+	}
+	changed := st.acct.Balance != bal || st.acct.Equity != eq || st.acct.Margin != mg ||
+		st.acct.FreeMargin != fm || st.acct.Profit != prof || (ccy != "" && st.acct.Currency != ccy)
+	cp := *st.acct // 防共享指针原地改写：复制后 patch
+	st.acct = &cp
+	st.acct.Balance = bal
+	st.acct.Equity = eq
+	st.acct.Margin = mg
+	st.acct.FreeMargin = fm
+	st.acct.Profit = prof
+	if ccy != "" {
+		st.acct.Currency = ccy
+	}
+	st.asOf = ts
+	m.states[venueKey] = st
+	m.dirtyLocked(venueKey)
+	m.mu.Unlock()
+	if changed {
+		m.notifyFunds() // D-568：帧值变→funds 通知
+	}
 }
 
 // StreamAccount 读某 venueKey 最近流帧（无→false）。
