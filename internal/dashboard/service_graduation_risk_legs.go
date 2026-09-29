@@ -34,6 +34,18 @@ func gradRiskLegs(g *pgstore.CarryGraduation, p *pgstore.PaperSpotCarry, mtPair 
 			{keydomain.Join(v, "perp"), g.Symbol, perpRole},
 			{keydomain.Join(v, "spot"), g.Symbol, spotRole},
 		}, nil
+	case "long_spot_short_perp": // D-555 R1a：双CEX——腿键走 cexCexLegKeys 行数据合成（与 approve 同径）
+		if p == nil {
+			return nil, fmt.Errorf("long_spot_short_perp paper 行缺失")
+		}
+		vb, vs, estr := cexCexLegKeys(g, p)
+		if estr != "" {
+			return nil, fmt.Errorf("%s", estr)
+		}
+		return []riskLegSpec{
+			{vb, g.Symbol, "buy"},
+			{vs, g.Symbol, "sell"},
+		}, nil
 	case "perp_perp": // venue=shortV×longV（方向在键，radar 轨）
 		if g.VenueA == "" || g.VenueB == "" {
 			return nil, fmt.Errorf("perp_perp venue 配对臂缺失 %q", g.VenuePair())

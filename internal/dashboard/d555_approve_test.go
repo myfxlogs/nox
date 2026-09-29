@@ -138,3 +138,54 @@ func TestD555S4_ApproveCfdRegression(t *testing.T) {
 		t.Fatalf("cfd 方向/腿键回归失败: %+v", f.combo)
 	}
 }
+
+// TestD555R1_GradRiskLegs R1a 锚：风险档案腿解析走 cexCexLegKeys 行数据合成——
+// buy=gate:spot / sell=binance:perp；腿型非法行 fail-closed error。
+func TestD555R1_GradRiskLegs(t *testing.T) {
+	f, _, _ := d555CexFixture()
+	legs, err := gradRiskLegs(f.grad, f.paper, nil)
+	if err != nil || len(legs) != 2 {
+		t.Fatalf("legs=%v err=%v", legs, err)
+	}
+	if legs[0].venueKey != "gate:spot" || legs[0].role != "buy" || legs[0].symbol != "BTC" {
+		t.Errorf("买腿=%+v, want gate:spot/BTC/buy", legs[0])
+	}
+	if legs[1].venueKey != "binance:perp" || legs[1].role != "sell" || legs[1].symbol != "BTC" {
+		t.Errorf("卖腿=%+v, want binance:perp/BTC/sell", legs[1])
+	}
+	bad := *f.grad
+	bad.VenueTypeA = "perp"
+	if _, err := gradRiskLegs(&bad, f.paper, nil); err == nil {
+		t.Error("腿型非法应 fail-closed")
+	}
+	if _, err := gradRiskLegs(f.grad, nil, nil); err == nil {
+		t.Error("paper 缺应 fail-closed")
+	}
+}
+
+// TestD555R1_EntryWindow R1b 锚：双CEX 入场窗 funding 臂取 VenueB（perp 腿）——
+// VenueB 有窗 VenueA 空窗→open；VenueB 空 VenueA 有窗→closed:insufficient
+// （钉死臂=VenueB 非 VenueA）；VenueB 低幅值→closed:floor。
+func TestD555R1_EntryWindow(t *testing.T) {
+	f, _, _ := d555CexFixture()
+	db := &fakeGradDB{}
+	s := &Service{gradStore: db}
+	s.SetCarryRegime(exec.CarryRegimeConfig{Window: 24 * time.Hour, FloorPct: 2.0, MinSamples: 12})
+	pos12 := []pgstore.FactPoint{{Value: 10}, {Value: 11}, {Value: 12}, {Value: 10}, {Value: 11}, {Value: 12}, {Value: 10}, {Value: 11}, {Value: 12}, {Value: 10}, {Value: 11}, {Value: 12}}
+	// VenueB（binance，perp 臂）正窗口 → open；VenueA（gate）空窗无关
+	db.fundingWin = map[string][]pgstore.FactPoint{"binance|BTC": pos12}
+	if w := s.entryWindowOf(context.Background(), f.grad, f.paper); w != "open" {
+		t.Errorf("VenueB perp 臂正 funding 应 open，got %s", w)
+	}
+	// VenueB 空窗+VenueA 有窗 → closed（臂=VenueB 钉死）
+	db.fundingWin = map[string][]pgstore.FactPoint{"gate|BTC": pos12}
+	if w := s.entryWindowOf(context.Background(), f.grad, f.paper); !strings.HasPrefix(w, "closed:") {
+		t.Errorf("perp 臂（VenueB）无 funding 窗应 closed，got %s", w)
+	}
+	// VenueB 低幅值（<floor）→ closed
+	low12 := []pgstore.FactPoint{{Value: 0.5}, {Value: 0.5}, {Value: 0.5}, {Value: 0.5}, {Value: 0.5}, {Value: 0.5}, {Value: 0.5}, {Value: 0.5}, {Value: 0.5}, {Value: 0.5}, {Value: 0.5}, {Value: 0.5}}
+	db.fundingWin = map[string][]pgstore.FactPoint{"binance|BTC": low12}
+	if w := s.entryWindowOf(context.Background(), f.grad, f.paper); !strings.HasPrefix(w, "closed:") {
+		t.Errorf("perp 臂 funding 低于地板应 closed，got %s", w)
+	}
+}

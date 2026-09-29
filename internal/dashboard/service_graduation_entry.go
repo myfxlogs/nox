@@ -70,12 +70,13 @@ func (s *Service) gradDossier(ctx context.Context, g *pgstore.CarryGraduation, p
 // entryWindowOf S2 入场可行性复检（即时算）：cfd/perp_perp→CarryFundingRegimeCheck
 // 同判据；spot_carry=venue 无 :perp 后缀禁直接复用（B-014 假闸）→perp 腿单跑
 // FundingRegimeOK，requiredSign 按 paper.Side（short_perp=+1 收息/long_perp=−1）；
+// long_spot_short_perp 同径——perp 臂在 VenueB（D-555 R1b）；
 // cfd_cfd 无 funding 收益腿→恒 open（swap 域不在本闸覆盖）。
 func (s *Service) entryWindowOf(ctx context.Context, g *pgstore.CarryGraduation, p *pgstore.PaperSpotCarry) string {
 	cfg := s.carryRegime
 	now := time.Now()
 	switch g.Structure {
-	case "spot_carry":
+	case "spot_carry", "long_spot_short_perp":
 		if p == nil {
 			return "closed:paper 行缺"
 		}
@@ -83,7 +84,11 @@ func (s *Service) entryWindowOf(ctx context.Context, g *pgstore.CarryGraduation,
 		if p.Side == "long_perp" {
 			sign = -1
 		}
+		// D-555 R1b：双CEX 轨 perp 臂在 VenueB（spot_carry 同所双腿=VenueA）。
 		bare := g.VenueA
+		if g.Structure == "long_spot_short_perp" {
+			bare = g.VenueB
+		}
 		rows, err := s.gradDB().FundingPredWindow(ctx, bare, g.Symbol, now.Add(-cfg.Window))
 		if err != nil {
 			return "closed:funding 查询失败 " + err.Error()
