@@ -157,7 +157,7 @@ func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
 func (b *BinanceMarketWS) runLoop(ctx context.Context, cands []WSCandidate, venueType, kind string, publish func(bus.Quote)) {
 	meter := newReconnectMeter(venueType+":"+kind+":"+cands[0].URL, b.cfg.AlertFn) // D-507 S2 扩：同款风暴告警
 	RunWS(ctx, WSSpec{
-		Name: "binance-mkt-ws:" + venueType + ":" + kind, Candidates: cands,
+		Name: "binance-mkt-ws:" + venueType + ":" + kind, Candidates: cands, DepKey: "binance:ws-" + venueType + "-" + kind, // DepKey D-579 dephealth 记账键
 		InitialSubs: func() []any {
 			var params []string
 			if venueType == "perp" && kind == "bookTicker" {
