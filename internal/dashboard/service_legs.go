@@ -33,10 +33,10 @@ func (s *Service) checkTradability(found *pgstore.Opportunity) error {
 			continue
 		}
 		if leg.buy && mode != fact.TradeModeLongOnly && mode != fact.TradeModeFull {
-			return fmt.Errorf("buy leg %s %s not tradable (trade mode %d)", leg.venueKey, found.Canonical, mode)
+			return fmt.Errorf("买腿 %s %s 当前不可交易（trade_mode=%d）", leg.venueKey, found.Canonical, mode)
 		}
 		if !leg.buy && mode != fact.TradeModeShortOnly && mode != fact.TradeModeFull {
-			return fmt.Errorf("sell leg %s %s not tradable (trade mode %d)", leg.venueKey, found.Canonical, mode)
+			return fmt.Errorf("卖腿 %s %s 当前不可交易（trade_mode=%d）", leg.venueKey, found.Canonical, mode)
 		}
 	}
 	return nil
@@ -61,7 +61,7 @@ func (s *Service) resolveLegs(found *pgstore.Opportunity, qty float64) ([]exec.L
 	qbuy, okBuy := s.qbus.Latest(found.Canonical, found.VenueBuy)
 	qsell, okSell := s.qbus.Latest(sellCanonical, found.VenueSell)
 	if !okBuy || !okSell {
-		return nil, errors.New("buy/sell leg quote unavailable")
+		return nil, errors.New("买/卖腿行情不可得（行情停更或未采集）")
 	}
 	// D-383 A2.4：执行解析 primary-only——MT 腿报价槽 VenueSymbol 须为 (venue,canonical)
 	// 合格行（primary/隐式 primary）；多行组零 primary → 歧义态 fail-closed 拒单（宁拒单
@@ -77,10 +77,10 @@ func (s *Service) resolveLegs(found *pgstore.Opportunity, qty float64) ([]exec.L
 			}
 			primary, err := s.primarySymbol(leg.venueKey, leg.canonical)
 			if err != nil {
-				return nil, fmt.Errorf("resolve %s %s: %w", leg.venueKey, leg.canonical, err)
+				return nil, fmt.Errorf("解析 %s %s 主符号失败\n原始明细：%w", leg.venueKey, leg.canonical, err)
 			}
 			if primary != leg.sym {
-				return nil, fmt.Errorf("quote venue symbol %s != primary %s for %s %s (reject: stale/variant quote)", leg.sym, primary, leg.venueKey, leg.canonical)
+				return nil, fmt.Errorf("拒绝开仓：%s %s 行情符号 %s 与主符号 %s 不符（陈旧或变体行情）", leg.venueKey, leg.canonical, leg.sym, primary)
 			}
 		}
 	}
@@ -124,7 +124,7 @@ func (s *Service) checkLegVolume(venueKey, venueSymbol string, qty float64) erro
 	if !ok || min <= 0 || qty >= min {
 		return nil
 	}
-	return fmt.Errorf("qty %v below venue min lot %.2f for %s %s", qty, min, venueKey, venueSymbol)
+	return fmt.Errorf("数量 %v 低于 venue 最小手数 %.2f（%s %s）", qty, min, venueKey, venueSymbol)
 }
 
 // legContractSizeOf 单腿合约规格：CEX :spot 腿 CS=1（qty 即基础币数）；CEX :perp 腿经
@@ -135,12 +135,12 @@ func (s *Service) checkLegVolume(venueKey, venueSymbol string, qty float64) erro
 func (s *Service) legContractSizeOf(venueKey, venueSymbol string) (float64, error) {
 	if keydomain.IsType(venueKey, "perp") {
 		if s.cexContractSize == nil {
-			return 0, errors.New("cex contract size resolver not wired")
+			return 0, errors.New("CEX 合约大小解析器未接线")
 		}
 		venue := keydomain.BareOf(venueKey)
 		cs, ok := s.cexContractSize(venue, venueSymbol)
 		if !ok || cs <= 0 {
-			return 0, fmt.Errorf("contract size unknown for %s %s (reject: notional derivation unavailable)", venueKey, venueSymbol)
+			return 0, fmt.Errorf("合约大小未知 %s %s（拒绝：名义额无法推导）", venueKey, venueSymbol)
 		}
 		return cs, nil
 	}
@@ -148,11 +148,11 @@ func (s *Service) legContractSizeOf(venueKey, venueSymbol string) (float64, erro
 		return 1.0, nil
 	}
 	if s.legContractSize == nil {
-		return 0, errors.New("leg contract size resolver not wired")
+		return 0, errors.New("腿合约大小解析器未接线")
 	}
 	cs, ok := s.legContractSize(venueKey, venueSymbol)
 	if !ok || cs <= 0 {
-		return 0, fmt.Errorf("contract size unknown for %s %s (reject: notional derivation unavailable)", venueKey, venueSymbol)
+		return 0, fmt.Errorf("合约大小未知 %s %s（拒绝：名义额无法推导）", venueKey, venueSymbol)
 	}
 	return cs, nil
 }

@@ -119,7 +119,7 @@ func TestCheckSwapDeviationGate_HighDeviation_Rejected(t *testing.T) {
 	if msg == "" {
 		t.Fatal("high deviation: want non-empty reject reason, got empty")
 	}
-	if !strings.Contains(msg, "swap deviation gate") {
+	if !strings.Contains(msg, "隔夜息偏差检查") {
 		t.Errorf("want reason contains 'swap deviation gate', got %q", msg)
 	}
 }

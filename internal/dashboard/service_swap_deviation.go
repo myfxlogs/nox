@@ -53,22 +53,22 @@ func (s *Service) checkSwapDeviationGate(ctx context.Context, canonical, venueBu
 	// 取 facts 规格值（同 recalcNetSwap 逻辑）
 	longFacts, err := s.store.LatestFacts(ctx, fact.KindSwapLong, "", canonical)
 	if err != nil {
-		return fmt.Sprintf("swap deviation gate: long facts query failed (%v)", err)
+		return fmt.Sprintf("隔夜息偏差检查：多头规格查询失败\n原始明细：%v", err)
 	}
 	shortFacts, err := s.store.LatestFacts(ctx, fact.KindSwapShort, "", canonical)
 	if err != nil {
-		return fmt.Sprintf("swap deviation gate: short facts query failed (%v)", err)
+		return fmt.Sprintf("隔夜息偏差检查：空头规格查询失败\n原始明细：%v", err)
 	}
 
 	// 列 OPEN 持仓
 	positions, err := s.store.ListPositions(ctx, "OPEN", 50, 0)
 	if err != nil {
-		return fmt.Sprintf("swap deviation gate: list open positions failed (%v)", err)
+		return fmt.Sprintf("隔夜息偏差检查：持仓列表查询失败\n原始明细：%v", err)
 	}
 	for _, p := range positions {
 		legs, err := s.store.ListPositionLegs(ctx, p.ID)
 		if err != nil {
-			return fmt.Sprintf("swap deviation gate: list legs pos=%d failed (%v)", p.ID, err)
+			return fmt.Sprintf("隔夜息偏差检查：持仓 #%d 腿查询失败\n原始明细：%v", p.ID, err)
 		}
 		for _, leg := range legs {
 			if leg.Phase != "OPEN" {
@@ -81,7 +81,7 @@ func (s *Service) checkSwapDeviationGate(ctx context.Context, canonical, venueBu
 			// D-189 P0-1：快照查询用完整 venueKey（leg.Venue），legBare 仅用于 intent venue 匹配与 facts 匹配。
 			actualUSD, ok, err := s.store.DailySwapAccrued(ctx, p.ID, leg.Venue, time.Now().UTC())
 			if err != nil {
-				return fmt.Sprintf("swap deviation gate: daily swap accrued pos=%d venue=%s failed (%v)", p.ID, leg.Venue, err)
+				return fmt.Sprintf("隔夜息偏差检查：持仓 #%d venue=%s 当日已计息查询失败\n原始明细：%v", p.ID, leg.Venue, err)
 			}
 			if !ok || actualUSD == 0 {
 				continue
@@ -123,7 +123,7 @@ func (s *Service) checkSwapDeviationGate(ctx context.Context, canonical, venueBu
 			factsUSD := factsBps * notional / 10000
 			deviationPct := swapDeviationBetweenPct(factsUSD, actualUSD)
 			if deviationPct > s.swapDeviationGatePct {
-				return fmt.Sprintf("swap deviation gate: venue=%s deviation=%.1f%% > %.1f%% (broker actual=$%.4f/day vs facts spec=$%.4f/day)",
+				return fmt.Sprintf("隔夜息偏差检查：venue=%s 偏差 %.1f%% 超阈值 %.1f%%（经纪商实扣 $%.4f/日 vs 合约规格 $%.4f/日）",
 					legBare, deviationPct, s.swapDeviationGatePct, actualUSD, factsUSD)
 			}
 		}

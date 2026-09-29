@@ -26,25 +26,25 @@ func (s *Service) ExecuteMeanRevert(ctx context.Context, canonical, venueBuy, ve
 // strategyType: 写入 positions.type（D-072 §4.1，SWAPARB/MEANREVERT）。
 func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venueBuy, venueSell, requestID string, qty float64, openBps float64, maxNotional float64, strategyType string) (status, message string, positionID int64) {
 	if s.pipeline == nil {
-		return "FAILED", "executor not wired", 0
+		return "FAILED", "执行器未接线（请联系维护方）", 0
 	}
 	if qty <= 0 {
-		return "FAILED", "invalid quantity", 0
+		return "FAILED", "下单数量无效", 0
 	}
 	// D-195-A：统一执行模式检查（手动入口同源，首版只用 global scope）
 	if s.gateChecker != nil {
 		mode, allowed, cpReason, cpErr := s.gateChecker.CheckGate(ctx)
 		if cpErr != nil || !allowed {
-			return "FAILED", fmt.Sprintf("execution mode blocked: %s (mode=%s)", cpReason, mode), 0
+			return "FAILED", fmt.Sprintf("当前运行模式禁止开仓（%s，模式=%s）", cpReason, mode), 0
 		}
 	}
 	// D-159 W6a S5：手动 RPC 不绕 CLOSE_ONLY——非 RUNNING 拒绝开仓（fail-closed）。
 	state, err := s.checkAutotradeState(ctx)
 	if err != nil {
-		return "FAILED", fmt.Sprintf("autotrade state: %v (fail-closed)", err), 0
+		return "FAILED", fmt.Sprintf("自动交易状态查询失败，按拒绝处理\n原始明细：%v", err), 0
 	}
 	if state != "RUNNING" {
-		return "FAILED", fmt.Sprintf("autotrade not RUNNING (state=%s), open rejected", state), 0
+		return "FAILED", fmt.Sprintf("自动交易未在运行（状态=%s），拒绝开仓", state), 0
 	}
 	if maxNotional <= 0 {
 		maxNotional = 10000.0
@@ -55,15 +55,15 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 	qbuy, okBuy := s.qbus.Latest(canonical, venueBuy)
 	qsell, okSell := s.qbus.Latest(canonical, venueSell)
 	if !okBuy || !okSell {
-		return "FAILED", "buy/sell leg quote unavailable", 0
+		return "FAILED", "买/卖腿行情不可得（行情停更或未采集），放弃执行", 0
 	}
 	csBuy, err := s.legContractSizeOf(venueBuy, qbuy.VenueSymbol)
 	if err != nil {
-		return "FAILED", fmt.Sprintf("buy CS: %v", err), 0
+		return "FAILED", fmt.Sprintf("买腿合约大小获取失败\n原始明细：%v", err), 0
 	}
 	csSell, err := s.legContractSizeOf(venueSell, qsell.VenueSymbol)
 	if err != nil {
-		return "FAILED", fmt.Sprintf("sell CS: %v", err), 0
+		return "FAILED", fmt.Sprintf("卖腿合约大小获取失败\n原始明细：%v", err), 0
 	}
 	// D-329 S2：腿名义两段式匹配与 resolveLegs 同源（matchLegsNotional：pass-1 原样 +
 	// pass-2 粗腿锚定）——仅 sellQty 计算与失衡检查收敛；下方 maxNotional clamp 是独立
@@ -76,7 +76,7 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 	if isMTVenue(venueBuy) {
 		perLot, ok := usdnotional.PerLot(canonical, qbuy.Ask, csBuy, s.qbus)
 		if !ok {
-			return "FAILED", "buy leg usd per lot unavailable (fail-closed)", 0
+			return "FAILED", "买腿单手美元名义额不可得，按拒绝处理", 0
 		}
 		notional := qty * perLot
 		if notional > maxNotional {
@@ -86,7 +86,7 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 	if isMTVenue(venueSell) {
 		perLot, ok := usdnotional.PerLot(canonical, qsell.Bid, csSell, s.qbus)
 		if !ok {
-			return "FAILED", "sell leg usd per lot unavailable (fail-closed)", 0
+			return "FAILED", "卖腿单手美元名义额不可得，按拒绝处理", 0
 		}
 		notional := sellQty * perLot
 		if notional > maxNotional {
@@ -104,7 +104,7 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 	}
 	imb := math.Abs(notionalSell-notionalBuy) / notionalBuy
 	if notionalBuy <= 0 || imb > maxImb/100 {
-		return "FAILED", fmt.Sprintf("leg notional imbalance: buy $%.2f vs sell $%.2f (%.2f%% > %.1f%%)",
+		return "FAILED", fmt.Sprintf("腿名义额失衡：买 $%.2f vs 卖 $%.2f（偏差 %.2f%% 超阈值 %.1f%%）",
 			notionalBuy, notionalSell, imb*100, maxImb), 0
 	}
 	if err := s.checkLegVolume(venueBuy, qbuy.VenueSymbol, qty); err != nil {
@@ -129,14 +129,14 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 	// D-159 W1a R1：SWAPARB 精确组合门禁（手动入口同源，pipeline.Execute 前拦截）。
 	if strategyType == "SWAPARB" && len(s.swapArbAllowSpecs()) > 0 {
 		if exec.MatchComboAllow(s.swapArbAllowSpecs(), canonical, venueBuy, venueSell) == nil {
-			return "FAILED", fmt.Sprintf("combo not in allowlist: %s %s×%s", canonical, venueBuy, venueSell), 0
+			return "FAILED", fmt.Sprintf("组合不在自动交易白名单：%s %s×%s", canonical, venueBuy, venueSell), 0
 		}
 	}
 	// D-311 S6：XASSET_CARRY 组合门禁（手动入口同源）——零信任：空 allowlist 全拒。
 	// 本路径无 opportunities 行可查 canonical_sell → 双腿同 canonical 兜底（与 pipeline 门禁同源）。
 	if strategyType == "XASSET_CARRY" {
 		if exec.MatchXAssetComboAllow(s.xassetAllowSpecs(), canonical, canonical, venueBuy, venueSell) == nil {
-			return "FAILED", fmt.Sprintf("combo not in xasset allowlist: %s %s×%s", canonical, venueBuy, venueSell), 0
+			return "FAILED", fmt.Sprintf("组合不在跨品种白名单：%s %s×%s", canonical, venueBuy, venueSell), 0
 		}
 	}
 	// D-159 W1a I6：environment/is_real 一致性检查（手动入口同源，pipeline.Execute 前拦截）。
@@ -157,11 +157,15 @@ func (s *Service) ExecuteMeanRevertWithCap(ctx context.Context, canonical, venue
 	}
 	result, err := s.pipeline.Execute(ctx, oppID, requestID, strategyType, legs)
 	if err != nil {
-		if errors.Is(err, exec.ErrMaxOpenPositions) || errors.Is(err, exec.ErrDuplicateExecution) ||
-			errors.Is(err, exec.ErrEmptyPositionType) || errors.Is(err, exec.ErrEmptyLegs) {
-			return "FAILED", err.Error(), 0
+		switch {
+		case errors.Is(err, exec.ErrMaxOpenPositions):
+			return "FAILED", "持仓数已达上限，拒绝开仓", 0
+		case errors.Is(err, exec.ErrDuplicateExecution):
+			return "FAILED", "该机会已有持仓，拒绝重复执行", 0
+		case errors.Is(err, exec.ErrEmptyPositionType), errors.Is(err, exec.ErrEmptyLegs):
+			return "FAILED", "执行参数缺失（持仓类型或腿为空）", 0
 		}
-		return "FAILED", fmt.Sprintf("execute: %v", err), 0
+		return "FAILED", fmt.Sprintf("执行失败\n原始明细：%v", err), 0
 	}
 	if result.PositionID > 0 {
 		_ = s.store.UpdatePositionMeta(ctx, result.PositionID, strategyType, metaForType(strategyType, openBps))

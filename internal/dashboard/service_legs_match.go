@@ -79,7 +79,7 @@ func (s *Service) matchLegsNotional(venueBuy string, qbuy bus.Quote, csBuy float
 	notionalSell = sellQty * csSell * ref
 	imb = math.Abs(notionalSell-notionalBuy) / notionalBuy
 	if notionalBuy <= 0 || notionalSell <= 0 || imb > maxImb/100 {
-		return 0, 0, fmt.Errorf("leg granularity unexecutable: buy $%.2f vs sell $%.2f (coarse step $%.2f > tolerance at this notional)",
+		return 0, 0, fmt.Errorf("腿粒度无法执行：买 $%.2f vs 卖 $%.2f（粗腿步长 $%.2f 超该名义额容差）",
 			notionalBuy, notionalSell, math.Max(buyUnit, sellUnit))
 	}
 	// D-329 R2 返修：matched 日志只在最终 imb 复检成功后打——失败路径误打 matched 误导 digest 分诊。

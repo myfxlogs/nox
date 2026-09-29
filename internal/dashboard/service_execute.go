@@ -38,11 +38,11 @@ func (s *Service) checkFreezeGuard(buyCanonical, sellCanonical string, legs []ex
 		if !ok {
 			// 从未发生过价格变化（首见 / 仅心跳）→ 冻结
 			log.Printf("[exec] freeze guard: leg %s %s price frozen (lastChange=%v)", canonical, l.VenueKey, t)
-			return fmt.Errorf("reject combo: leg %s %s price frozen (no price change observed)", l.VenueKey, l.VenueSymbol)
+			return fmt.Errorf("拒绝开仓：腿 %s %s 行情冻结（未观察到价格变化）", l.VenueKey, l.VenueSymbol)
 		}
 		if age := now.Sub(t); age > s.freezeGuard {
 			log.Printf("[exec] freeze guard: leg %s %s price frozen (lastChange=%v)", canonical, l.VenueKey, t)
-			return fmt.Errorf("reject combo: leg %s %s price frozen (last change %v ago > %v)", l.VenueKey, l.VenueSymbol, age, s.freezeGuard)
+			return fmt.Errorf("拒绝开仓：腿 %s %s 行情冻结（最近价格变化在 %v 前，超窗口 %v）", l.VenueKey, l.VenueSymbol, age, s.freezeGuard)
 		}
 	}
 	return nil
@@ -57,7 +57,7 @@ func (s *Service) validateLegQtys(legs []exec.LegSpec) error {
 		if l.Qty <= 0 {
 			// D-433：拒因显式化——LegSpec 无原始请求量字段，统一提示两态排查方向：
 			// 请求量>0 被 floor 抹零（低于 venue 最小步长）或上游产出即 0（未知品种/上游 bug）。
-			return fmt.Errorf("reject combo: leg %s %s qty invalid (%.6f≤0, 低于venue最小步长或未知品种——检查 notional_usd 是否低于该腿最小合约名义额)", l.VenueKey, l.VenueSymbol, l.Qty)
+			return fmt.Errorf("拒绝开仓：腿 %s %s 数量无效（%.6f≤0，低于 venue 最小步长或未知品种——检查 notional_usd 是否低于该腿最小合约名义额）", l.VenueKey, l.VenueSymbol, l.Qty)
 		}
 	}
 	return nil
@@ -85,7 +85,7 @@ func (s *Service) ExecuteOpportunity(ctx context.Context, req *connect.Request[v
 	if s.pipeline == nil {
 		return connect.NewResponse(&v1.ExecuteOpportunityResponse{
 			Status:  "FAILED",
-			Message: "executor not wired",
+			Message: "执行器未接线（请联系维护方）",
 		}), nil
 	}
 	status, msg, posID := s.ExecuteOpportunityInternal(ctx, req.Msg.GetOpportunityId(), req.Msg.GetRequestId(), req.Msg.GetQty())
@@ -100,7 +100,7 @@ func (s *Service) ClosePosition(ctx context.Context, req *connect.Request[v1.Clo
 	if s.pipeline == nil {
 		return connect.NewResponse(&v1.ClosePositionResponse{
 			Status:  "FAILED",
-			Message: "executor not wired",
+			Message: "执行器未接线（请联系维护方）",
 		}), nil
 	}
 	s.logCloseTrigger(ctx, req.Msg.GetPositionId(), "manual_rpc") // D-245 触发源持久化
@@ -113,7 +113,7 @@ func (s *Service) ClosePosition(ctx context.Context, req *connect.Request[v1.Clo
 		closeErr = s.pipeline.ClosePosition(ctx, req.Msg.GetPositionId())
 	}
 	if closeErr != nil {
-		msg := closeErr.Error()
+		msg := "平仓失败\n原始明细：" + closeErr.Error()
 		var lae *exec.LegNotActionableError
 		if errors.As(closeErr, &lae) {
 			msg = fmt.Sprintf("leg_not_actionable: 品种 %s@%s 当前无可交易行情（休市或断流），强制平仓将导致单腿裸露——如确需平仓请勾选强制",
@@ -161,23 +161,23 @@ func (s *Service) checkEnvironmentIsReal(ctx context.Context, venueBuy, venueSel
 	wantLive := s.environment == "live"
 	isRealMap, err := s.store.ListVenueIsReal(ctx)
 	if err != nil {
-		return fmt.Sprintf("environment check: is_real map query failed (%v)", err)
+		return fmt.Sprintf("环境检查：实盘标记查询失败\n原始明细：%v", err)
 	}
 	for _, venueKey := range []string{venueBuy, venueSell} {
 		// D-371 S2：venueKey 全键直查
 		if venueKey == "" {
-			return "environment check: empty venueKey"
+			return "环境检查：venue 键为空"
 		}
 		isReal, known := isRealMap[venueKey]
 		if !known {
-			return fmt.Sprintf("environment check: venue %s not found", venueKey)
+			return fmt.Sprintf("环境检查：venue %s 不存在", venueKey)
 		}
 		if isReal == nil {
-			return fmt.Sprintf("environment check: venue %s is_real unknown (null)", venueKey)
+			return fmt.Sprintf("环境检查：venue %s 实盘标记未知（null）", venueKey)
 		}
 		isLive := *isReal
 		if isLive != wantLive {
-			return fmt.Sprintf("environment check: venue %s is_real=%v != environment=%s", venueKey, isLive, s.environment)
+			return fmt.Sprintf("环境检查：venue %s 实盘标记=%v 与当前环境=%s 不符", venueKey, isLive, s.environment)
 		}
 	}
 	return ""
@@ -190,22 +190,22 @@ func (s *Service) checkEnvironmentIsReal(ctx context.Context, venueBuy, venueSel
 func (s *Service) checkLiveGate(ctx context.Context, venueBuy, venueSell string) string {
 	isRealMap, err := s.store.ListVenueIsReal(ctx)
 	if err != nil {
-		return fmt.Sprintf("live gate: is_real map query failed (%v)", err)
+		return fmt.Sprintf("实盘开关检查：实盘标记查询失败\n原始明细：%v", err)
 	}
 	for _, venueKey := range []string{venueBuy, venueSell} {
 		// D-371 S2：venueKey 全键直查
 		if venueKey == "" {
-			return "live gate: empty venueKey"
+			return "实盘开关检查：venue 键为空"
 		}
 		isReal, known := isRealMap[venueKey]
 		if !known {
-			return fmt.Sprintf("live gate: venue %s not found", venueKey)
+			return fmt.Sprintf("实盘开关检查：venue %s 不存在", venueKey)
 		}
 		if isReal == nil {
-			return fmt.Sprintf("live gate: venue %s is_real unknown (null)", venueKey)
+			return fmt.Sprintf("实盘开关检查：venue %s 实盘标记未知（null）", venueKey)
 		}
 		if *isReal {
-			return fmt.Sprintf("live trade disabled (ARB_LIVE_TRADE=false, venueKey=%s is_real=true)", venueKey)
+			return fmt.Sprintf("实盘交易开关关闭（ARB_LIVE_TRADE=false，venueKey=%s 为实盘账户）", venueKey)
 		}
 	}
 	return ""
@@ -217,7 +217,7 @@ func (s *Service) checkLiveGate(ctx context.Context, venueBuy, venueSell string)
 func (s *Service) checkAutotradeState(ctx context.Context) (string, error) {
 	st, err := s.store.GetAutotradeState(ctx)
 	if err != nil {
-		return "", fmt.Errorf("get autotrade state: %w", err)
+		return "", fmt.Errorf("自动交易状态查询失败\n原始明细：%w", err)
 	}
 	return st.State, nil
 }

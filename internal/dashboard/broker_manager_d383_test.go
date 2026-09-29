@@ -240,7 +240,7 @@ func TestD383A4_ResolveLegsPrimaryGate(t *testing.T) {
 		}
 		return "EURUSDm", nil
 	})
-	if _, err := s.resolveLegs(found, 0.1); err == nil || !strings.Contains(err.Error(), "stale/variant") {
+	if _, err := s.resolveLegs(found, 0.1); err == nil || !strings.Contains(err.Error(), "陈旧或变体") {
 		t.Fatalf("err = %v, want 变体报价拒绝", err)
 	}
 

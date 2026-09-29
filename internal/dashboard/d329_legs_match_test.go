@@ -137,7 +137,7 @@ func TestD329_ResolveLegs_DualCoarseUnexecutable(t *testing.T) {
 	if err == nil {
 		t.Fatal("双粗腿结构性不可开仓应报错")
 	}
-	if !strings.Contains(err.Error(), "leg granularity unexecutable") {
+	if !strings.Contains(err.Error(), "腿粒度无法执行") {
 		t.Errorf("err=%q, want contain 'leg granularity unexecutable'（红=现码旧文案 leg notional imbalance）", err)
 	}
 }
@@ -179,14 +179,14 @@ func TestD329_MeanRevertWithCap_SameHelper(t *testing.T) {
 	if status != "FAILED" {
 		t.Fatalf("双粗腿应 FAILED, got %s", status)
 	}
-	if !strings.Contains(msg, "leg granularity unexecutable") {
+	if !strings.Contains(msg, "腿粒度无法执行") {
 		t.Errorf("msg=%q, want contain 'leg granularity unexecutable'（红=现码旧文案）", msg)
 	}
 }
 
 // TestD329R1_MeanRevertAsymmetricClampImbalanceRecheck R3 返修锚：非对称 clamp——
 // MT 买腿超帽压回 1 step + CEX 卖腿不 clamp → clamp 后失衡复检拦回（FAILED 含原文案
-// "leg notional imbalance"）。红=现码（R1 前）helper 匹配平衡放行穿透过 clamp、后续门禁
+// "腿名义额失衡"）。红=现码（R1 前）helper 匹配平衡放行穿透过 clamp、后续门禁
 // 以别的原因 FAILED。数值：qty=0.05，helper 匹配平衡（买 0.05×100×4355=$21775=卖
 // 5×1×4355）；clamp 后买=0.01（$4355）vs 卖 5（$21775）→ imb=400%。
 func TestD329R1_MeanRevertAsymmetricClampImbalanceRecheck(t *testing.T) {
@@ -225,7 +225,7 @@ func TestD329R1_MeanRevertAsymmetricClampImbalanceRecheck(t *testing.T) {
 	if status != "FAILED" {
 		t.Fatalf("非对称 clamp 后应 FAILED, got %s", status)
 	}
-	if !strings.Contains(msg, "leg notional imbalance") {
+	if !strings.Contains(msg, "腿名义额失衡") {
 		t.Errorf("msg=%q, want contain 'leg notional imbalance'（红=R1 前放行穿透过，后续门禁以别的原因拒）", msg)
 	}
 }
