@@ -24,15 +24,12 @@ func gateMockContractSpec(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
-// gateMockLeverage D-563 S1：accounts（in_dual_mode）+ SET leverage 端点 mock——
-// PlaceOrder 链现经 ensureGateLeverage fail-closed 闸，测试夹具必须喂两路响应。
+// gateMockLeverage D-564 R4：accounts 模式探测 mock（D-564 S1 杠杆纯读化后
+// SET /leverage 端点已退役——死路由删；accounts 供 placeGateRaw 平仓模式分叉
+// gatePositionModeFetch 消费，position_mode 为权威字段）。
 func gateMockLeverage(w http.ResponseWriter, r *http.Request) bool {
-	switch {
-	case r.URL.Path == "/futures/usdt/accounts":
-		io.WriteString(w, `{"in_dual_mode":false}`)
-		return true
-	case strings.HasPrefix(r.URL.Path, "/futures/usdt/positions/") && strings.HasSuffix(r.URL.Path, "/leverage"):
-		io.WriteString(w, `{"leverage":"10"}`)
+	if r.URL.Path == "/futures/usdt/accounts" {
+		io.WriteString(w, `{"position_mode":"single"}`)
 		return true
 	}
 	return false

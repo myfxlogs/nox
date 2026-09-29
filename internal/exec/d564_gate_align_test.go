@@ -144,21 +144,33 @@ func TestD564_T5_CloseOrderDual(t *testing.T) {
 	rt := &d564GateRT{accounts: `{"position_mode":"dual"}`, lever: `{"Lever":"10"}`}
 	e := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e.client = &http.Client{Transport: rt}
-	// 多腿持仓平仓（SELL 平多）→ close_long（o.Side=SELL→close_short 映射为平空腿，
-	// 本锚 BUY→close_long=多腿平仓——auto_size 侧向随平仓方向）。
+	// R1 反转：auto_size 按持仓侧 PositionSide 驱动——PositionSide=short（平空腿，
+	// BUY 平）→ close_short。旧版按下单侧 o.Side 推导会把「SELL 平多」错写成
+	// close_short，本锚 BUY+short→close_short 钉死正确映射。
 	// placeGateRaw 尾部 finish 核单会因 fake 无查单路由报「未成交」——体断言不受影响。
 	_, _, _ = e.placeGateRaw(context.Background(), Order{Symbol: "XAU_USDT", Side: "BUY", Qty: 0.01, PositionSide: "short"})
 	if len(rt.orderBodies) != 1 {
 		t.Fatalf("应恰一平仓单, got %d", len(rt.orderBodies))
 	}
 	b := rt.orderBodies[0]
-	for _, want := range []string{`"size":0`, `"close":true`, `"auto_size":"close_long"`} {
+	for _, want := range []string{`"size":0`, `"close":true`, `"auto_size":"close_short"`} {
 		if !strings.Contains(b, want) {
 			t.Fatalf("dual 平仓体缺 %s: %s", want, b)
 		}
 	}
 	if strings.Contains(b, "reduce_only") {
 		t.Fatalf("dual 平仓不得带 reduce_only: %s", b)
+	}
+	// R1 非法值锚：PositionSide 非 long/short → fail-closed 不落单。
+	rtBad := &d564GateRT{accounts: `{"position_mode":"dual"}`, lever: `{"Lever":"10"}`}
+	eBad := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
+	eBad.client = &http.Client{Transport: rtBad}
+	_, _, errBad := eBad.placeGateRaw(context.Background(), Order{Symbol: "XAU_USDT", Side: "SELL", Qty: 0.01, PositionSide: "both"})
+	if errBad == nil || !strings.Contains(errBad.Error(), "PositionSide") {
+		t.Fatalf("非法 PositionSide 应 fail-closed: %v", errBad)
+	}
+	if len(rtBad.orderBodies) != 0 {
+		t.Fatalf("非法 PositionSide 不得落单, got %d 单", len(rtBad.orderBodies))
 	}
 	// single 平仓回归。
 	rt2 := &d564GateRT{accounts: `{"position_mode":"single"}`, lever: `{"Lever":"10"}`}

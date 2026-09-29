@@ -46,11 +46,34 @@ func (e *CEXExecutor) placeGateRaw(ctx context.Context, o Order) ([]byte, Fill, 
 	if e.venueType != "perp" {
 		return nil, Fill{}, fmt.Errorf("gate executor: venueType %q unsupported（G1 仅 perp）", e.venueType)
 	}
-	// D-120：gate futures size 单位=合约数，o.Qty 是基础币数量 → 查合约规格换算。
-	// D-564 S4：gateSpecCheck 承接换算+前置闸（in_delisting/size min/max/整数张 floor）。
-	sizeF, spec, err := e.gateSpecCheck(ctx, o.Symbol, o.Qty)
-	if err != nil {
-		return nil, Fill{}, fmt.Errorf("gate order size: %w", err)
+	// D-564 S1：杠杆纯读化——开仓前 SET 段退役（push 端点带切保证金模式副作用永久禁用）；
+	// precheck 经 get_leverage 实读 venue 实况，读不到 fail-closed 拒开。
+	// D-121：平仓（PositionSide!=""）——D-564 S3 U4 dual 模式分叉：dual/dual_plus 官方
+	// 机制=auto_size=close_long|close_short（size=0 全平；reduce_only 在 dual 语义未定义
+	// 文档明示单仓专用）；single 维持 reduce_only=true。模式每次实读 accounts（禁缓存——
+	// app 可切模式）。closeDual 分支 size 恒 0 → 豁免 spec qty 闸（min/max/整数张 floor
+	// 不拦全平），spec 仅取 quanto 供 fill 量纲换算（R2）。
+	var spec gateContractSpec
+	var sizeF float64
+	var err error
+	closeDual := false
+	if o.PositionSide != "" {
+		mode, merr := e.gatePositionModeFetch(ctx)
+		if merr != nil {
+			return nil, Fill{}, fmt.Errorf("gate close order mode: %w", merr)
+		}
+		closeDual = mode.isDual()
+	}
+	if closeDual {
+		if spec, err = e.gateSpecFetch(ctx, o.Symbol); err != nil {
+			return nil, Fill{}, fmt.Errorf("gate contract spec: %w", err)
+		}
+	} else {
+		// D-120：gate futures size 单位=合约数，o.Qty 是基础币数量 → 查合约规格换算。
+		// D-564 S4：gateSpecCheck 承接换算+前置闸（in_delisting/size min/max/整数张 floor）。
+		if sizeF, spec, err = e.gateSpecCheck(ctx, o.Symbol, o.Qty); err != nil {
+			return nil, Fill{}, fmt.Errorf("gate order size: %w", err)
+		}
 	}
 	size := int64(math.Round(sizeF))
 	if o.Side == "SELL" {
@@ -58,24 +81,19 @@ func (e *CEXExecutor) placeGateRaw(ctx context.Context, o Order) ([]byte, Fill, 
 	}
 	// gateFilled 返回的 qty 是合约数 → 末尾乘 quanto 回填为基础币数量（Fill.Qty 契约=基础币）。
 	quanto := spec.Quanto
-	// D-564 S1：杠杆纯读化——开仓前 SET 段退役（push 端点带切保证金模式副作用永久禁用）；
-	// precheck 经 get_leverage 实读 venue 实况，读不到 fail-closed 拒开。
-	// D-121：平仓（PositionSide!=""）——D-564 S3 U4 dual 模式分叉：dual/dual_plus 官方
-	// 机制=auto_size=close_long|close_short（size=0 全平；reduce_only 在 dual 语义未定义
-	// 文档明示单仓专用）；single 维持 reduce_only=true。模式每次实读 accounts（禁缓存）。
 	var bodyStr string
-	closeDual := false
-	if o.PositionSide != "" {
-		mode, merr := e.gatePositionModeFetch(ctx)
-		if merr != nil {
-			return nil, Fill{}, fmt.Errorf("gate close order mode: %w", merr)
-		}
-		closeDual = mode.isDual() // D-564：每次实读（禁缓存——app 可切模式）
-	}
 	if closeDual {
-		closeSide := "close_long"
-		if o.Side == "SELL" {
+		// R1：auto_size 按持仓侧（PositionSide=原持仓方向）驱动——long→close_long、
+		// short→close_short；非法值 fail-closed（按下单侧 o.Side 推导曾把
+		// 「SELL 平多」错写成 close_short）。
+		var closeSide string
+		switch o.PositionSide {
+		case "long":
+			closeSide = "close_long"
+		case "short":
 			closeSide = "close_short"
+		default:
+			return nil, Fill{}, fmt.Errorf("gate dual close: PositionSide %q 非法（long/short）fail-closed", o.PositionSide)
 		}
 		bodyStr = fmt.Sprintf(`{"contract":%q,"size":0,"price":"0","tif":"ioc","text":"t-arb","close":true,"auto_size":%q}`,
 			o.Symbol, closeSide)

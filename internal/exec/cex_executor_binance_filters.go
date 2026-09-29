@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"strconv"
@@ -136,7 +137,9 @@ func (e *CEXExecutor) binanceQtyGuard(ctx context.Context, symbol string, qty, m
 			if mn, err := e.binanceMaxNotional(ctx, symbol); err == nil && mn > 0 {
 				f.MaxNotional = mn
 				binanceFiltersStore(symbol, f)
-			} // 采败=上限面不拦（warn 语义，不阻断主判定）
+			} else if err != nil { // 采败=上限面不拦（warn 语义，不阻断主判定）——但留痕不静默
+				log.Printf("[exec] binance %s symbolConfig 补采失败（maxNotional 上限面本轮不拦）: %v", symbol, err)
+			}
 		}
 		notional := q * mark
 		if f.MinNotional > 0 && notional < f.MinNotional {
