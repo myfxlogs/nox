@@ -194,6 +194,9 @@ type Service struct {
 	rejectBreaker      RejectBreakerReader                                                               // D-560 S3：拒单熔断快照/恢复（nil=无透出）
 	mtSummaryFn        func(ctx context.Context, venueKey string) (float64, float64, string, error)      // D-563 S4b：MT 实时资金缝（equity/freeMargin/currency；nil=bm 真身）
 	venueLeverageFn    func(ctx context.Context, venueKey, symbol string, sellLeg bool) (float64, error) // D-565 S2：venue 杠杆实读缝（nil=venueLeverageExec 真身）
+	// D-572 S1：腿池面板杠杆读穿缓存（键=vk|sym|side，TTL=5min——请求驱动防逐行渲染打爆 REST；无后台轮询）。
+	levCacheMu sync.Mutex
+	levCache   map[string]levCacheEntry
 
 	// D-159 W1a I6：environment/is_real 一致性检查（手动入口同源）。
 	// environment 空 = 未配置（不检查，回退旧行为）。

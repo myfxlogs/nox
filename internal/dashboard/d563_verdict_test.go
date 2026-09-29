@@ -68,10 +68,10 @@ func TestD563_ComboPoolVerdict(t *testing.T) {
 	}
 	snaps := []pgstore.VenueAccountLatest{d563MtSnap(5000, 4000)}
 
-	// D-564 U2 退役：gate 腿保证金率判据不再吃配置冒充——组合含 gate:perp 腿
-	// → unknown（fail-closed 如实标缺；venue 实况 get_leverage=执行链专责）。
-	if v, d := s.comboPoolVerdict(ctx, c, snaps); v != "unknown" || !strings.Contains(d, "gate 保证金率") {
-		t.Fatalf("gate 腿保证金率退役后应 unknown, got %s (%s)", v, d)
+	// D-564 U2 退役→D-572 实读化：gate 腿 venueLeverageFn 未注入→venueLeverageExec
+	// 实盘配置缺读败 → unknown 黄标（fail-closed 如实标缺；实读权威=precheck）。
+	if v, d := s.comboPoolVerdict(ctx, c, snaps); v != "unknown" || !strings.Contains(d, "杠杆实况不可得") {
+		t.Fatalf("gate 腿杠杆读败应 unknown, got %s (%s)", v, d)
 	}
 	// MT init_margin_rate 缺 → unknown（待定不谎报锁死）。
 	f.facts = nil
