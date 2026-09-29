@@ -15,7 +15,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // ReadVenueLeverage venue 杠杆实读（sellLeg=true→腿侧=short/SHORT）。
@@ -92,7 +91,7 @@ func (e *CEXExecutor) okxLeverageInfo(ctx context.Context, symbol string, sellLe
 		instID += "-SWAP"
 	}
 	path := "/api/v5/account/leverage-info?instId=" + url.QueryEscape(instID) + "&mgnMode=cross"
-	ts := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+	ts := e.okxNowISO()
 	headers := http.Header{
 		"OK-ACCESS-KEY":        {e.apiKey},
 		"OK-ACCESS-SIGN":       {okxSign(e.apiSecret, ts+"GET"+path)},

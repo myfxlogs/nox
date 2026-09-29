@@ -135,7 +135,7 @@ func (e *CEXExecutor) spotQuoteAvail(ctx context.Context, quote string) (float64
 	switch e.venue {
 	case "okx":
 		path := "/api/v5/account/balance?ccy=" + url.QueryEscape(quote)
-		ts := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+		ts := e.okxNowISO()
 		headers := http.Header{
 			"OK-ACCESS-KEY":        {e.apiKey},
 			"OK-ACCESS-SIGN":       {okxSign(e.apiSecret, ts+"GET"+path)},

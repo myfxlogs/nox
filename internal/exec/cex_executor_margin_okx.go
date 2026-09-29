@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 )
 
 func (e *CEXExecutor) okxMarginPrecheck(ctx context.Context, o Order) error {
@@ -17,14 +16,14 @@ func (e *CEXExecutor) okxMarginPrecheck(ctx context.Context, o Order) error {
 	if !strings.HasSuffix(instID, "-SWAP") {
 		instID += "-SWAP"
 	}
-	ctVal, _, err := e.okxContractVal(ctx, instID)
+	ctVal, _, _, err := e.okxContractVal(ctx, instID)
 	if err != nil {
 		return fmt.Errorf("okx margin precheck %s: %w", instID, err)
 	}
 	szContracts := o.Qty / ctVal
 
 	path := "/api/v5/account/max-size?instId=" + url.QueryEscape(instID) + "&tdMode=cross"
-	ts := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+	ts := e.okxNowISO()
 	headers := http.Header{
 		"OK-ACCESS-KEY":        {e.apiKey},
 		"OK-ACCESS-SIGN":       {okxSign(e.apiSecret, ts+"GET"+path)},
@@ -86,7 +85,7 @@ func (e *CEXExecutor) okxMarkAndEquity(ctx context.Context, symbol string) (mark
 		return 0, 0, fmt.Errorf("mark-price %s: markPx=%q invalid", instID, mp.Data[0].MarkPx)
 	}
 
-	ts := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+	ts := e.okxNowISO()
 	path := "/api/v5/account/balance"
 	headers := http.Header{
 		"OK-ACCESS-KEY":        {e.apiKey},

@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"time"
 )
 
 // okxOrderStatusResult GET /api/v5/trade/order 单条订单状态。
@@ -35,16 +34,8 @@ func (e *CEXExecutor) okxOrderStatus(ctx context.Context, instID, ordID, clOrdID
 	} else {
 		path += "&clOrdId=" + url.QueryEscape(clOrdID)
 	}
-	ts := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
-	prehash := ts + "GET" + path
-	sign := okxSign(e.apiSecret, prehash)
-	headers := http.Header{
-		"OK-ACCESS-KEY":        {e.apiKey},
-		"OK-ACCESS-SIGN":       {sign},
-		"OK-ACCESS-TIMESTAMP":  {ts},
-		"OK-ACCESS-PASSPHRASE": {e.passphrase},
-	}
-	body, err := e.get(ctx, e.baseURL+path, headers)
+	// D-566 S3：签名 GET 走退避原语（50011 限频 ≤2 次 250/500ms + 50102 校时重发）。
+	body, err := e.okxGetSignedRetry(ctx, path)
 	if err != nil {
 		return out, err
 	}
@@ -66,7 +57,7 @@ func (e *CEXExecutor) okxOrderStatus(ctx context.Context, instID, ordID, clOrdID
 func (e *CEXExecutor) okxCancelOrder(ctx context.Context, instID, ordID string) error {
 	path := "/api/v5/trade/cancel-order"
 	bodyStr := fmt.Sprintf(`{"instId":%q,"ordId":%q}`, instID, ordID)
-	ts := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+	ts := e.okxNowISO() // D-566 S3：校时感知 ts（cancel 无 expTime——S3 明列只给下单 POST）
 	sign := okxSign(e.apiSecret, ts+"POST"+path+bodyStr)
 	headers := http.Header{
 		"OK-ACCESS-KEY":        {e.apiKey},

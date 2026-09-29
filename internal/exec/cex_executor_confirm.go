@@ -29,7 +29,7 @@ func (e *CEXExecutor) QueryOrderStatus(ctx context.Context, orderID, clOrdID, sy
 			return "", 0, 0, 0, fmt.Errorf("okx status %s accFillSz=%q: %w", orderID, st.AccFillSz, perr)
 		}
 		if e.venueType == "perp" && qty > 0 {
-			ctVal, _, cerr := e.okxContractVal(ctx, symbol)
+			ctVal, _, _, cerr := e.okxContractVal(ctx, symbol)
 			if cerr != nil {
 				return "", 0, 0, 0, fmt.Errorf("okx ctval %s: %w", symbol, cerr)
 			}

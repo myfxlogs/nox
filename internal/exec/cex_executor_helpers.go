@@ -12,9 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
-	"sync"
-	"time"
 )
 
 // asString 容错取 string 字段（json.Number / float64 / string 都接受）。
@@ -40,18 +37,10 @@ type OKXPosition struct {
 
 // okxPosModeFetch D-564 S6 U8：GET /api/v5/account/config → posMode 实读
 // （long_short_mode/net_mode…）。禁缓存（业主 app 可改模式，缓存=快照进决策违禁）。
+// D-566 S3：走 okxGetSignedRetry（限频退避 ≤2 次 + 50102 校时重发）。
 func (e *CEXExecutor) okxPosModeFetch(ctx context.Context) (string, error) {
 	path := "/api/v5/account/config"
-	ts := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
-	prehash := ts + "GET" + path
-	sign := okxSign(e.apiSecret, prehash)
-	headers := http.Header{
-		"OK-ACCESS-KEY":        {e.apiKey},
-		"OK-ACCESS-SIGN":       {sign},
-		"OK-ACCESS-TIMESTAMP":  {ts},
-		"OK-ACCESS-PASSPHRASE": {e.passphrase},
-	}
-	body, err := e.get(ctx, e.baseURL+path, headers)
+	body, err := e.okxGetSignedRetry(ctx, path)
 	if err != nil {
 		return "", fmt.Errorf("okx account/config: %w", err)
 	}
@@ -86,49 +75,11 @@ func (e *CEXExecutor) okxPosModeCheck(ctx context.Context) error {
 	return nil
 }
 
-// okxStateCheck D-564 S6 U9：instruments.state 闸——非 live（preopen/suspend/expired）
-// fail-closed。spec 缓存共享（okxSwapSpecCache 同包），state 随缓存写（规格慢变元数据）。
-func (e *CEXExecutor) okxStateCheck(ctx context.Context, instID string) error {
-	if v, ok := okxSwapSpecState.Load(instID); ok {
-		if st, _ := v.(string); st != "" && st != "live" {
-			return fmt.Errorf("okx %s 合约非 live 态（state=%s）fail-closed 拒单", instID, st)
-		}
-		return nil
-	}
-	endpoint := "/api/v5/public/instruments?instType=SWAP&instId=" + instID
-	body, err := e.get(ctx, e.baseURL+endpoint, nil)
-	if err != nil {
-		return fmt.Errorf("okx instruments state %s: %w", instID, err)
-	}
-	var out struct {
-		Code string `json:"code"`
-		Data []struct {
-			State string `json:"state"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(body, &out); err != nil {
-		return fmt.Errorf("okx instruments state json: %w", err)
-	}
-	if out.Code != "0" || len(out.Data) == 0 {
-		return fmt.Errorf("okx instruments state %s: code=%s data_len=%d", instID, out.Code, len(out.Data))
-	}
-	st := out.Data[0].State
-	if st == "" {
-		return nil // 老响应无 state 字段=兼容直通（不猜不拒——字段缺席非证据）
-	}
-	if st != "live" {
-		// 非 live 不缓存（preopen→live 转换后下次尝试重查；缓存 live 正常态）。
-		return fmt.Errorf("okx %s 合约非 live 态（state=%s）fail-closed 拒单", instID, st)
-	}
-	okxSwapSpecState.Store(instID, st)
-	return nil
-}
-
 // OKXPositions 查询 OKX 指定 instId 的当前持仓（long_short_mode 下 long/short 分列）。
 // 供平仓核对 / 残留双向持仓清理，签名四头。
 func (e *CEXExecutor) OKXPositions(ctx context.Context, instID string) ([]OKXPosition, error) {
 	path := "/api/v5/account/positions?instId=" + url.QueryEscape(instID)
-	ts := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+	ts := e.okxNowISO() // D-566 S3：校时感知 ts
 	prehash := ts + "GET" + path
 	sign := okxSign(e.apiSecret, prehash)
 	headers := http.Header{
@@ -199,7 +150,7 @@ func (e *CEXExecutor) get(ctx context.Context, url string, headers http.Header) 
 		return nil, err
 	}
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("http %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
+		return nil, &httpStatusError{status: resp.StatusCode, body: data} // D-566：类型化（消息不变）
 	}
 	return data, nil
 }
@@ -227,7 +178,7 @@ func (e *CEXExecutor) post(ctx context.Context, url, bodyStr string, headers htt
 		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("http %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
+		return nil, &httpStatusError{status: resp.StatusCode, body: data} // D-566：类型化（消息不变）
 	}
 	return data, nil
 }
@@ -238,113 +189,6 @@ func okxSign(secret, prehash string) string {
 	mac.Write([]byte(prehash))
 	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
 }
-
-// okxSwapSpec okx SWAP instruments 规格（ctVal=合约面值/lotSz=最小张数）。
-type okxSwapSpec struct{ ctVal, lotSz float64 }
-
-// okxSwapSpecCache instruments 规格包级缓存（ctVal/lotSz 不变）——
-// D-311 R4：CEXExecutor 下单换算与 dashboard floorToStepQty 共用同源缓存。
-var okxSwapSpecCache sync.Map // instID → okxSwapSpec
-
-// okxSwapSpecState D-564 S6 U9：instruments.state 缓存（live/preopen/suspend/expired；
-// 规格慢变元数据允许缓存——state 闸非决策时变数据面）。
-var okxSwapSpecState sync.Map
-
-// OkxSwapSpec 查 okx swap 合约面值 ctVal + 最小张数 lotSz（D-311 R4 从 okxContractVal 提取共用）。
-// 公开端点 GET /api/v5/public/instruments?instType=SWAP&instId=XXX 无需签名。
-func OkxSwapSpec(ctx context.Context, client *http.Client, baseURL, instID string) (ctVal, lotSz float64, err error) {
-	if v, ok := okxSwapSpecCache.Load(instID); ok {
-		s := v.(okxSwapSpec)
-		return s.ctVal, s.lotSz, nil
-	}
-	endpoint := "/api/v5/public/instruments?instType=SWAP&instId=" + instID
-	req, err := http.NewRequestWithContext(ctx, "GET", baseURL+endpoint, nil)
-	if err != nil {
-		return 0, 0, fmt.Errorf("okx instruments req: %w", err)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return 0, 0, fmt.Errorf("okx instruments %s: %w", instID, err)
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, 0, fmt.Errorf("okx instruments read: %w", err)
-	}
-	if resp.StatusCode != 200 {
-		return 0, 0, fmt.Errorf("okx instruments %s: http %d: %s", instID, resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-	var out struct {
-		Code string `json:"code"`
-		Data []struct {
-			CtVal string `json:"ctVal"`
-			LotSz string `json:"lotSz"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(body, &out); err != nil {
-		return 0, 0, fmt.Errorf("okx instruments json: %w", err)
-	}
-	if out.Code != "0" || len(out.Data) == 0 {
-		return 0, 0, fmt.Errorf("okx instruments %s: code=%s data_len=%d", instID, out.Code, len(out.Data))
-	}
-	ctVal, err = f64z(out.Data[0].CtVal)
-	if err != nil || ctVal <= 0 {
-		return 0, 0, fmt.Errorf("okx instruments %s: ctVal=%q invalid", instID, out.Data[0].CtVal)
-	}
-	lotSz, err = f64z(out.Data[0].LotSz)
-	if err != nil || lotSz <= 0 {
-		return 0, 0, fmt.Errorf("okx instruments %s: lotSz=%q invalid", instID, out.Data[0].LotSz)
-	}
-	okxSwapSpecCache.Store(instID, okxSwapSpec{ctVal: ctVal, lotSz: lotSz})
-	return ctVal, lotSz, nil
-}
-
-// okxContractVal 查 okx swap 合约面值 ctVal + 最小张数 lotSz。
-// 公开端点 GET /api/v5/public/instruments?instType=SWAP&instId=XXX 无需签名。
-// 缓存包级共享（D-311 R4，原 per-executor），避免每单查。D-125。
-func (e *CEXExecutor) okxContractVal(ctx context.Context, instID string) (ctVal, lotSz float64, err error) {
-	return OkxSwapSpec(ctx, e.client, e.baseURL, instID)
-}
-
-// okxSpotLotSz D-473（KB okx-perp-ctval-qty-conversion 同型修）：spot instruments
-// 的 lotSz/minSz（instType=SPOT，sz 单位=基础币）。取不到→err fail-closed
-// （不下未地板单——51121/最小金额拒单先例）。
-func (e *CEXExecutor) okxSpotLotSz(ctx context.Context, instID string) (lotSz, minSz float64, err error) {
-	if s, ok := okxSpotSpecCache.Load(instID); ok {
-		sp := s.(okxSpotSpec)
-		return sp.lotSz, sp.minSz, nil
-	}
-	body, err := e.get(ctx, e.baseURL+"/api/v5/public/instruments?instType=SPOT&instId="+url.QueryEscape(instID), nil)
-	if err != nil {
-		return 0, 0, fmt.Errorf("okx spot instruments %s: %w", instID, err)
-	}
-	var out struct {
-		Code string `json:"code"`
-		Data []struct {
-			LotSz string `json:"lotSz"`
-			MinSz string `json:"minSz"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(body, &out); err != nil {
-		return 0, 0, fmt.Errorf("okx spot instruments json: %w", err)
-	}
-	if out.Code != "0" || len(out.Data) == 0 {
-		return 0, 0, fmt.Errorf("okx spot instruments %s: code=%s data_len=%d", instID, out.Code, len(out.Data))
-	}
-	lotSz, err = f64z(out.Data[0].LotSz)
-	if err != nil || lotSz <= 0 {
-		return 0, 0, fmt.Errorf("okx spot instruments %s: lotSz=%q invalid", instID, out.Data[0].LotSz)
-	}
-	if minSz, err = f64z(out.Data[0].MinSz); err != nil {
-		return 0, 0, fmt.Errorf("okx spot instruments %s: minSz=%q invalid: %w", instID, out.Data[0].MinSz, err)
-	}
-	okxSpotSpecCache.Store(instID, okxSpotSpec{lotSz: lotSz, minSz: minSz})
-	return lotSz, minSz, nil
-}
-
-type okxSpotSpec struct{ lotSz, minSz float64 }
-
-var okxSpotSpecCache sync.Map
 
 // f64z 交易所字符串数值解析（D-508 S2）：""=字段缺席→0（venue 对未成数字段返空串是
 // 正常语义，如 okx 未成交单 accFillSz=""）；非空脏串 error 上抛不静默归零。
