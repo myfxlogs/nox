@@ -119,6 +119,10 @@ func TestD571_MT5FrameSemantics(t *testing.T) {
 	m.OnMT5Frame("v:mt5", []reconcile.VenueOrder{
 		{Venue: "v", VenueKey: "v:mt5", Ticket: "99", Symbol: "USDJPY", Side: "BUY", Volume: 0.1, OpenPrice: 150, Profit: 0},
 	})
+	kicks := m.drainKicks() // D-571 R2 F-3：未知票必须 kick 本 venue（删 Kick 行此断言即红）
+	if len(kicks) != 1 || kicks[0] != "v:mt5" {
+		t.Fatalf("unknown ticket must kick venue v:mt5, got %v", kicks)
+	}
 	m.reconcileVenue(ctx, "v:mt5") // kick 信号消费在 Run 循环；测试直调等价回读
 	if q.callCount() <= before {
 		t.Fatalf("unknown ticket must trigger authoritative reload")
