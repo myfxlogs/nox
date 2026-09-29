@@ -35,11 +35,12 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 		oppCh, oppCancel = s.oppTopic.Subscribe()
 		defer oppCancel()
 	}
-	// Broker 实持仓推送（D-052）：monitor 变更广播全量快照 → case 8。bpm nil=不订阅。
-	var bpCh <-chan *v1.BrokerPositionSnapshot
-	if s.bpm != nil && s.bpm.topic != nil {
+	// Broker 实持仓推送（D-052 → D-571 包A 逐仓事件化）：monitor 变更广播逐仓事件 → case 15。
+	// case 8 快照源已随 monitor 事件化移除（前端 keyed merge 走 case 15）。bpm nil=不订阅。
+	var bpCh <-chan *v1.BrokerPositionEvent
+	if s.bpm != nil && s.bpm.evTopic != nil {
 		var bpCancel func()
-		bpCh, bpCancel = s.bpm.topic.Subscribe()
+		bpCh, bpCancel = s.bpm.evTopic.Subscribe()
 		defer bpCancel()
 	}
 	// 账户资产推送（D-053）：monitor 变更广播全量快照 → case 9。acctMon nil=不订阅。
@@ -96,6 +97,10 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 	if err := s.streamInitQuotes(ctx, stream); err != nil {
 		return err
 	}
+	// D-571 包A：Broker 实持仓回放——cur 全量每仓一条 case 15 upsert（新连接自愈，无需等待事件）。
+	if err := s.streamInitBrokerPositions(stream); err != nil {
+		return err
+	}
 	pending := make(map[string]bus.Quote) // D-090：每连接独立，key=venueKey|symbol，覆盖式=自动最新值
 	for {
 		select {
@@ -147,15 +152,10 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 			if !ok {
 				return nil
 			}
-			// S4：流推送也标注 position_id（与拉路径同源）
-			annotatePositionID(ctx, s.store, v.Positions)
-			// F3：流推送也标注账号别名（与拉路径同源）
-			annotateAccountAlias(ctx, s.store, v.Positions)
-			// D-152 微件①：流推送也标注 CEX swap（与拉路径同源）
-			annotateCEXSwap(ctx, s.store, v.Positions)
+			// D-571 包A：载荷已在 monitor flush 标注（annotateFn 同源三件套），此处直接透传。
 			if err := stream.Send(&v1.StreamUpdatesResponse{
-				Update: &v1.StreamUpdatesResponse_BrokerPositions{
-					BrokerPositions: v,
+				Update: &v1.StreamUpdatesResponse_BrokerPositionEvent{
+					BrokerPositionEvent: v,
 				},
 			}); err != nil {
 				return err

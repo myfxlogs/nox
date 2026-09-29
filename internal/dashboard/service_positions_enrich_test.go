@@ -22,10 +22,12 @@ func newEnrichService(bpm *BrokerPositionMonitor) *Service {
 	return &Service{bpm: bpm}
 }
 
-// fakeBPMWithCache 直接构造 monitor 并设 cache（同包可访问未导出字段）。
+// fakeBPMWithCache 直接构造 monitor 并设 cur（同包可访问未导出字段；D-571 包A：cache→cur 逐仓态）。
 func fakeBPMWithCache(positions []*v1.BrokerPosition) *BrokerPositionMonitor {
-	m := &BrokerPositionMonitor{}
-	m.cache = positions
+	m := &BrokerPositionMonitor{cur: map[string]*v1.BrokerPosition{}}
+	for _, p := range positions {
+		m.cur[posKeyOf(p.VenueKey, p.Ticket)] = p
+	}
 	return m
 }
 
