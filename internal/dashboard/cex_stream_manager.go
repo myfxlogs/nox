@@ -164,7 +164,7 @@ func (m *CexStreamManager) sync(ctx context.Context) {
 			// baseURL 同源（venue config/proxy 链），撤 www.okx.com 硬编码双源分叉。
 			okxBase := resolveExchangeBaseURL(c)
 			ws.SetCtValFor(func(ctx context.Context, instID string) (float64, error) {
-				ctVal, _, err := exec.OkxSwapSpec(ctx, httpx.Client(), okxBase, instID)
+				ctVal, _, _, err := exec.OkxSwapSpec(ctx, httpx.Client(), okxBase, instID)
 				return ctVal, err
 			})
 			ws.SetBalanceLedger(m.BalLedger)
