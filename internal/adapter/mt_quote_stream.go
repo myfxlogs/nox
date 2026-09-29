@@ -100,9 +100,8 @@ func (a *MT5Adapter) runQuoteStream(ctx context.Context, ch chan<- bus.Quote) {
 	}
 }
 
-// publishSymbol D-560 S1：emitBlocked 命中（多行组非 primary 变体/零 primary 歧义组
-// 成员）→ 降格 brokerSym 原生键发布；否则 canonical 原样。blocked=nil→原样。
-// 照 D-383「native 照发」裁定：变体 tick 不丢，只禁占 canonical 槽。
+// publishSymbol D-560 S1：emitBlocked 命中（多行组非 primary/零 primary 歧义组成员）
+// → 降格 brokerSym 原生键发布；否则 canonical（D-383「native 照发」：tick 不丢只禁占槽）。
 func publishSymbol(brokerSym, canon string, blocked map[string]bool) string {
 	if blocked[brokerSym] {
 		return brokerSym
@@ -133,8 +132,7 @@ func (a *MT5Adapter) consumeQuoteFrames(ctx context.Context, stream mt5pb.Stream
 			return true
 		}
 		q := resp.GetResult()
-		// D-432 S1：帧级计数——任何成功 Recv 记 anyFrame；symbol 非空且 bid/ask
-		// 至少一腿非零才算真实报价帧（心跳 q==nil、空 symbol、零价帧均不算）。
+		// D-432 S1：帧级计数——symbol 非空且 bid/ask 一腿非零才算真实报价帧（心跳/空帧不算）。
 		a.zfNoteFrame(q != nil && q.GetSymbol() != "" && (q.GetBid() > 0 || q.GetAsk() > 0))
 		if q == nil {
 			continue
@@ -144,6 +142,11 @@ func (a *MT5Adapter) consumeQuoteFrames(ctx context.Context, stream mt5pb.Stream
 		// time（FxPro UTC+3 等），各经纪商偏移各异无法通用补偿；本机时钟相对
 		// freshness TTL（60s）毫秒级误差可忽略。
 		ts := time.Now()
+		// D-571C2 S1：帧内携价缓存——emitPlan 判定之前按原生键写入（publishPositions
+		// 同帧取价）；存原始 bid/ask（**不乘 price_scale**——帧携价=venue 原生价，
+		// scale 是 D-594 发布面归一，帧内 PnL/现价同钟须原生口径）。
+		a.lastQuote.Store(brokerSym, bus.Quote{Symbol: brokerSym, Venue: a.venue,
+			VenueSymbol: brokerSym, VenueType: "mt5", Bid: q.GetBid(), Ask: q.GetAsk(), Time: ts})
 		// D-594：emitPlan 合一决策——canonical 发射键 + price_scale 乘价 +
 		// 敏感未标定行降 native/丢弃（identity 兜底原生键=canonical 名时）。
 		pubSym, pscale, emit := a.emitPlan(brokerSym)

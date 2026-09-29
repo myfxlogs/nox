@@ -22,8 +22,9 @@ func IsCexVenueKey(venueKey string) bool {
 }
 
 // LatestLeg 腿级报价查找（D-481）：CEX 腿先查原生 symbol 归一键（采集器权威产出，
-// 如 okx XAU-USDT-SWAP→XAUUSDT），miss 回退 canonical；MT/其他 venue canonical 直查
-// （native 不查防反噬——MT qbus 键由 symbol_mappings 发射为 canonical 本体）。
+// 如 okx XAU-USDT-SWAP→XAUUSDT），miss 回退 canonical；MT 腿 D-571C2 S3 原生键优先——
+// emitBlocked 变体（XAUUSD247m）按原生 brokerSym 发布，canonical 查永 miss=现价冻结
+// （2555274799 形态）；非 blocked 按 canonical 发 → 原生 miss → canonical 兜底，双向覆盖。
 // canonical/native 同形去重；任一键为空串走 Latest 正常 miss。
 func (b *QuoteBus) LatestLeg(canonical, nativeSymbol, venueKey string) (Quote, bool) {
 	if IsCexVenueKey(venueKey) {
@@ -31,6 +32,10 @@ func (b *QuoteBus) LatestLeg(canonical, nativeSymbol, venueKey string) (Quote, b
 			if q, ok := b.Latest(nk, venueKey); ok {
 				return q, true
 			}
+		}
+	} else if nativeSymbol != canonical {
+		if q, ok := b.Latest(nativeSymbol, venueKey); ok {
+			return q, true
 		}
 	}
 	return b.Latest(canonical, venueKey)

@@ -84,6 +84,10 @@ type MT5Adapter struct {
 	// D-104 P2 U2：封顶档 episode 告警去重（成功帧重置，连续封顶只告警一次）。
 	quoteAlerted bool
 
+	// D-571C2 S1：lastQuote 帧内携价缓存（key=原生 brokerSym；consumeQuoteFrames 单写、
+	// publishPositions 读——跨 goroutine 故 sync.Map）；帧时戳即价时戳（一帧一价一钟）。
+	lastQuote sync.Map
+
 	// D-432：OnQuote 零帧看门狗状态（zfMu 保护；consumeQuoteFrames 写帧时间，
 	// zeroframeWatchdog 读判定+stage-2 取消当前流）。episode=一次连续无真帧区间，
 	// 真实帧到达即清零（zfAlerted/zfReconnectAt/zfPersistWarned 全复位）。

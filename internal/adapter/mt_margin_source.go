@@ -22,6 +22,7 @@ import (
 	"time"
 
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
+	"arb/internal/bus"
 	"arb/internal/collect"
 	"arb/internal/fact"
 	"arb/internal/keydomain"
@@ -200,7 +201,18 @@ func (s *MarginFactSource) publishPositions(orders []*mt5pb.Order) {
 			log.Printf("[mt5:%s] margin: positions sink panic: %v", s.a.venue, r)
 		}
 	}()
-	s.a.PositionsSink(keydomain.Join(s.a.venue, "mt5"), reconcile.MT5OrdersToVenueOrders(s.a.venue, orders))
+	vos := reconcile.MT5OrdersToVenueOrders(s.a.venue, orders)
+	// D-571C2 S1：帧内携价——Order.Symbol=原生 brokerSym 直查 lastQuote（同次发布
+	// 内取报价，钉帧价时戳；禁另钟拼接）。Bid/Ask 缺一非正=置零诚实，零命中=零值空态。
+	for i := range vos {
+		if q, ok := s.a.lastQuote.Load(vos[i].Symbol); ok {
+			if qq, ok2 := q.(bus.Quote); ok2 && qq.Bid > 0 && qq.Ask > 0 {
+				vos[i].CurrentPrice = (qq.Bid + qq.Ask) / 2
+				vos[i].PriceAt = qq.Time
+			}
+		}
+	}
+	s.a.PositionsSink(keydomain.Join(s.a.venue, "mt5"), vos)
 }
 
 // publishAcctFrame D-571 包B：ProfitUpdate 六字段 → AccountSink（AcctFrameSink 同签名）。
