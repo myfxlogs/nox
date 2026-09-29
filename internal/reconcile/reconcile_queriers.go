@@ -176,8 +176,15 @@ func (q *MT5Querier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error
 	if e := resp.GetError(); e != nil {
 		return nil, fmt.Errorf("mt5 opened orders: %s", e.GetMessage())
 	}
+	return MT5OrdersToVenueOrders(q.venue, resp.GetResult()), nil
+}
+
+// MT5OrdersToVenueOrders D-571 包A：mt5pb.Order 集 → VenueOrder 单一映射点
+// （自 QueryOpenedOrders 原样提取——REST 重读与 OnOrderProfit 帧 patch 两路同源，
+// 防映射分叉；fix-must-enumerate-all-writer-paths）。
+func MT5OrdersToVenueOrders(venue string, orders []*mt5pb.Order) []VenueOrder {
 	var out []VenueOrder
-	for _, ord := range resp.GetResult() {
+	for _, ord := range orders {
 		side := "BUY"
 		if ord.GetOrderType() == mt5pb.OrderType_OrderType_Sell {
 			side = "SELL"
@@ -188,9 +195,9 @@ func (q *MT5Querier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error
 			Side:       side,
 			Volume:     ord.GetLots(),
 			OpenPrice:  ord.GetOpenPrice(),
-			Venue:      q.venue,
+			Venue:      venue,
 			Comment:    ord.GetComment(),
-			VenueKey:   keydomain.Join(q.venue, "mt5"),
+			VenueKey:   keydomain.Join(venue, "mt5"),
 			Profit:     ord.GetProfit(),
 			Swap:       ord.GetSwap(),
 			Commission: ord.GetCommission(),
@@ -199,5 +206,5 @@ func (q *MT5Querier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error
 			StopLoss:   ord.GetStopLoss(), // D-155：MT5 Order.StopLoss 透传
 		})
 	}
-	return out, nil
+	return out
 }
