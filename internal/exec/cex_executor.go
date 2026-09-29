@@ -37,11 +37,8 @@ type CEXExecutor struct {
 	// D-570 包B S4③：gate 订单事件查口（同构；费走帧回填）。
 	gateOrderLookup func(ordID string) (GateOrderSnap, bool)
 
-	// D-120：gate futures 合约规格缓存（contract → quanto_multiplier，避免每单查）。
-	// D-564 S4 U6：扩为全规格缓存（order_size_min/max、enable_decimal、in_delisting、
-	// leverage_max——规格=慢变元数据允许缓存，非决策时变数据）。
-	gateQuanto map[string]float64
-	gateSpec   map[string]gateContractSpec
+	// D-570 包C S6①：gate 规格/quanto 缓存升包级 gateSpecCache/gateQuantoCache
+	// （contract_info WS 推送+拒单驱动须跨 executor 实例失效——实例表成死端）。
 	dualSideMu sync.Mutex // 保护 dualSide/dualSideProbed 探测
 	// D-125：okx perp 合约面值缓存已转包级共享 okxSwapSpecCache（D-311 R4，instId → ctVal/lotSz）。
 	// okx swap sz 单位=张数，o.Qty 是基础币数量 → sz=qty/ctVal。

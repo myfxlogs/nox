@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -42,6 +43,24 @@ func gateErrLabel(err error) (label string, ok bool) {
 // cex_executor_spot_cash.go:188（gate spot 余额签名点）。WS 订阅帧签名 ts 不在 exec 域，
 // 不属本伞盖（domain 外文件不预动）。
 var gateClockOffset atomic.Int64
+
+// D-570 包C S6①：gate 合约规格/quanto 缓存升包级 sync.Map（镜像 okxSwapSpecCache
+// 先例；实例表升包因 contract_info WS 推送与拒单驱动的失效须跨 executor 实例生效）。
+// 24h TTL 地板：gateContractSpec.at 判龄（惰性 time.Since，禁 Ticker）。
+var (
+	gateSpecCache   sync.Map // contract → gateContractSpec（含 at）
+	gateQuantoCache sync.Map // contract → float64 quanto_multiplier
+)
+
+// GateSpecInvalidate D-570 包C S6：spec+quanto 双表同删（contract_info 推送/
+// 24h 判龄/拒单驱动三通道共用单口；漏一=双真相源分叉）。
+func GateSpecInvalidate(contract string) {
+	gateSpecCache.Delete(contract)
+	gateQuantoCache.Delete(contract)
+}
+
+// gateSpecTTL 24h 判龄地板（规格慢变元数据——超龄视 miss 重取）。
+const gateSpecTTL = 24 * time.Hour
 
 // gateNow GateSign 时间戳：本地 Unix 秒 + 校时 delta。
 func gateNow() int64 { return time.Now().Unix() + gateClockOffset.Load() }

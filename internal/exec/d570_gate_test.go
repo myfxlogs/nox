@@ -29,6 +29,8 @@ type d570Fixture struct {
 
 func newD570Fixture(t *testing.T, handlers map[string]func(w http.ResponseWriter, r *http.Request)) *d570Fixture {
 	f := &d570Fixture{}
+	// D-570 包C：spec/quanto 缓存升包级——串行包内跨测试共享，每夹具清 BTC_USDT 键隔离。
+	GateSpecInvalidate("BTC_USDT")
 	seen := []int64{}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -102,14 +104,14 @@ func TestD570_A1_MktSizeMaxGate(t *testing.T) {
 		t.Fatalf("字符串字段解析错: %+v", spec)
 	}
 	// effMax=200（两正取小）→ size=300 拒，错误带三值。
-	f.e.gateSpec = nil
+	GateSpecInvalidate("BTC_USDT") // D-570 包C：包级表清缓存
 	_, _, err = f.e.gateSpecCheck(ctx, "BTC_USDT", 300)
 	if err == nil || !strings.Contains(err.Error(), "200") || !strings.Contains(err.Error(), "1000") || !strings.Contains(err.Error(), "effMax") {
 		t.Fatalf("size=300 超 effMax=200 应拒且含三值: %v", err)
 	}
 	// market 缺省（"0"/缺席）→ order_size_max=1000 独担：size=300 放行。
 	specBody.Store(d570Spec(`"0"`, `"trading"`))
-	f.e.gateSpec = map[string]gateContractSpec{} // 清缓存重取
+	GateSpecInvalidate("BTC_USDT") // 清缓存重取（包级表）
 	if _, _, err = f.e.gateSpecCheck(ctx, "BTC_USDT", 300); err != nil {
 		t.Fatalf("market 缺省时 order_size_max 卡法应不变: %v", err)
 	}
@@ -130,13 +132,13 @@ func TestD570_A2_StatusGate(t *testing.T) {
 		t.Fatalf("status=circuit_breaking 应拒且含 status 值: %v", err)
 	}
 	specBody.Store(d570Spec(`"200"`, `"trading"`))
-	f.e.gateSpec = map[string]gateContractSpec{}
+	GateSpecInvalidate("BTC_USDT")
 	if _, _, err := f.e.gateSpecCheck(ctx, "BTC_USDT", 100); err != nil {
 		t.Fatalf("status=trading 应放行: %v", err)
 	}
 	// 双保险：status=trading + in_delisting=true 仍拒。
 	specBody.Store(strings.Replace(d570Spec(`"200"`, `"trading"`), `"in_delisting":false`, `"in_delisting":true`, 1))
-	f.e.gateSpec = map[string]gateContractSpec{}
+	GateSpecInvalidate("BTC_USDT")
 	if _, _, err := f.e.gateSpecCheck(ctx, "BTC_USDT", 100); err == nil {
 		t.Fatalf("in_delisting 双保险应仍拒")
 	}

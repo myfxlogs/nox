@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 // gateOrderResponse Gate futures 订单响应/状态对象字段（D-098 G1，返修包① M1/M2 对拍 gateapi-go）。
@@ -113,6 +114,11 @@ func (e *CEXExecutor) placeGateRaw(ctx context.Context, o Order) ([]byte, Fill, 
 	// D-570 包A S2d：签名+发送入 resilience——REQUEST_EXPIRED → 校时后同 bodyStr/urlPath 重签重发一次。
 	rawBody, err := e.gateSignedPost(ctx, endpoint, urlPath, bodyStr, true)
 	if err != nil {
+		// D-570 包C S6②：拒单驱动失效——规格类标签清本 contract 缓存（本单不重试按现状上抛）。
+		if lab, ok := gateErrLabel(err); ok &&
+			(lab == "INVALID_PRECISION" || lab == "AMOUNT_TOO_LITTLE" || lab == "AMOUNT_TOO_MUCH") {
+			GateSpecInvalidate(o.Symbol)
+		}
 		return nil, Fill{}, fmt.Errorf("gate order: %w", err)
 	}
 	var ord gateOrderResponse
@@ -200,14 +206,16 @@ type gateContractSpec struct {
 	InDelisting   bool    // 退市中→fail-closed
 	LeverageMax   float64 // 矛盾校验用（venue 实况 lever>max → warn 不拦；实弹=JSON 字符串 D-570 根治）
 	// D-570 包A S1a：市价量上限+交易状态（实弹=JSON 字符串形，api-response-fields-empirical）。
-	MarketOrderSizeMax float64 // market_order_size_max（0=未采集不拦；市价单语义闸）
-	Status             string  // status（"trading" 放行；prelaunch/delisting/delisted/circuit_breaker 全拦）
+	MarketOrderSizeMax float64   // market_order_size_max（0=未采集不拦；市价单语义闸）
+	Status             string    // status（"trading" 放行；prelaunch/delisting/delisted/circuit_breaker 全拦）
+	at                 time.Time // D-570 包C S6①：写入时刻（24h TTL 惰性判龄）
 }
 
-// gateSpecFetch 查合约规格并写缓存（TTL=进程生命周期——规格慢变元数据）。
+// gateSpecFetch 查合约规格并写缓存（D-570 包C S6①：包级 sync.Map+24h TTL 地板；
+// 失效三通道=contract_info WS 推送/判龄/拒单驱动，同走 GateSpecInvalidate）。
 func (e *CEXExecutor) gateSpecFetch(ctx context.Context, contract string) (gateContractSpec, error) {
-	if e.gateSpec != nil {
-		if s, ok := e.gateSpec[contract]; ok {
+	if v, ok := gateSpecCache.Load(contract); ok {
+		if s, ok2 := v.(gateContractSpec); ok2 && time.Since(s.at) <= gateSpecTTL {
 			return s, nil
 		}
 	}
@@ -250,15 +258,10 @@ func (e *CEXExecutor) gateSpecFetch(ctx context.Context, contract string) (gateC
 		Quanto: q, SizeMin: spec.OrderSizeMin, SizeMax: spec.OrderSizeMax,
 		EnableDecimal: spec.EnableDecimal, InDelisting: spec.InDelisting, LeverageMax: lvMax,
 		MarketOrderSizeMax: mktMax, Status: spec.Status,
+		at: time.Now(),
 	}
-	if e.gateSpec == nil {
-		e.gateSpec = make(map[string]gateContractSpec)
-	}
-	e.gateSpec[contract] = s
-	if e.gateQuanto == nil {
-		e.gateQuanto = make(map[string]float64)
-	}
-	e.gateQuanto[contract] = q
+	gateSpecCache.Store(contract, s)
+	gateQuantoCache.Store(contract, q)
 	return s, nil
 }
 
@@ -303,9 +306,9 @@ func (e *CEXExecutor) gateSpecCheck(ctx context.Context, contract string, qty fl
 }
 
 func (e *CEXExecutor) gateContractSize(ctx context.Context, contract string, qty float64) (int64, float64, error) {
-	// 缓存命中
-	if e.gateQuanto != nil {
-		if q, ok := e.gateQuanto[contract]; ok {
+	// 缓存命中（包级 sync.Map，D-570 包C S6①）
+	if v, ok := gateQuantoCache.Load(contract); ok {
+		if q, ok2 := v.(float64); ok2 {
 			s := int64(math.Round(qty / q))
 			if s < 1 {
 				return 0, 0, fmt.Errorf("qty %.6f / quanto %.6f = %.0f < 1 张（gate 最小 1 张）", qty, q, math.Round(qty/q))
@@ -337,11 +340,8 @@ func (e *CEXExecutor) gateContractSize(ctx context.Context, contract string, qty
 	if err != nil || q <= 0 {
 		return 0, 0, fmt.Errorf("gate contract %s quanto_multiplier=%q invalid", contract, spec.QuantoMultiplier)
 	}
-	// 写缓存
-	if e.gateQuanto == nil {
-		e.gateQuanto = make(map[string]float64)
-	}
-	e.gateQuanto[contract] = q
+	// 写缓存（包级 sync.Map）
+	gateQuantoCache.Store(contract, q)
 	s := int64(math.Round(qty / q))
 	if s < 1 {
 		return 0, 0, fmt.Errorf("qty %.6f / quanto %.6f = %.0f < 1 张（gate 最小 1 张）", qty, q, math.Round(qty/q))
