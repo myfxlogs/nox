@@ -91,7 +91,7 @@ func (e *IntraEngine) Step(ctx context.Context) (IntraStepReport, error) {
 			rep.KillClosed++
 		}
 		rep.Notes = append(rep.Notes, "kill: all flat, entries blocked")
-		e.emitEvent(ctx, "kill", "kill: all flat, entries blocked") // D-441 S3
+		e.emitEvent(ctx, "kill", "熔断：已全部平仓，今日禁开新仓") // D-441 S3
 		return rep, nil
 	}
 
@@ -139,7 +139,7 @@ func (e *IntraEngine) Step(ctx context.Context) (IntraStepReport, error) {
 	if realized <= dayBudget {
 		rep.CircuitHit = true
 		rep.Notes = append(rep.Notes, fmt.Sprintf("daily circuit: realized=%.2f ≤ %.2f（当日停新开）", realized, dayBudget))
-		e.emitEvent(ctx, "circuit", fmt.Sprintf("realized=%.2f ≤ %.2f", realized, dayBudget)) // D-441 S3
+		e.emitEvent(ctx, "circuit", fmt.Sprintf("当日已实现亏损 %.2f 跌破日预算 %.2f", realized, dayBudget)) // D-441 S3
 		return rep, nil
 	}
 

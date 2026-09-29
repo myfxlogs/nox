@@ -79,7 +79,7 @@ func llmDig(ctx context.Context, deps Deps, sum *Summary, runTS time.Time) error
 			if malformed {
 				log.Printf("[symdig] proposals fenced 未闭合（EOF 容忍解析）")
 				if deps.Store != nil {
-					_ = deps.Store.InsertAlert(ctx, nil, "warn", "[symdig] proposals fenced 块未闭合（EOF 截断容忍解析）")
+					_ = deps.Store.InsertAlert(ctx, nil, "warn", "[symdig] 提案 AI 输出格式异常（已按截断内容容忍解析，提案集可能不完整）")
 				}
 			}
 			break
@@ -94,7 +94,7 @@ func llmDig(ctx context.Context, deps Deps, sum *Summary, runTS time.Time) error
 		picks = rest
 	}
 	if truncated {
-		msg := fmt.Sprintf("[symdig] proposals 二轮后仍 max_tokens 截断（覆盖 %d/%d 品种，提案集不完整）", len(covered), len(sum.Rows))
+		msg := fmt.Sprintf("[symdig] 提案 AI 输出两轮后仍被长度截断（仅覆盖 %d/%d 品种，提案集不完整）", len(covered), len(sum.Rows))
 		log.Print(msg)
 		if deps.Store != nil {
 			_ = deps.Store.InsertAlert(ctx, nil, "error", msg)

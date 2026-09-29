@@ -79,7 +79,7 @@ func (m *reconnectMeter) record() {
 	m.reconnects = kept
 	if len(m.reconnects) >= reconnectMeterThreshold &&
 		(m.lastWarn.IsZero() || now.Sub(m.lastWarn) >= reconnectMeterRewarn) {
-		m.alertFn("warn", fmt.Sprintf("[ws-storm] %s 1小时内重连≥%d次（读限/pong/链路异常）", m.url, reconnectMeterThreshold))
+		m.alertFn("warn", fmt.Sprintf("[ws-storm] %s 1 小时内重连 ≥%d 次（读取超时/心跳无回应/链路异常）", m.url, reconnectMeterThreshold))
 		m.lastWarn = now
 	}
 	m.totalCount++

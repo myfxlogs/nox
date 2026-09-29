@@ -77,7 +77,7 @@ func (w *WsClient) guardTick(ctx context.Context, unhealthySince, lastAlert *tim
 		*unhealthySince = now
 	}
 	if now.Sub(*unhealthySince) > wsAlertAfterStale && now.Sub(*lastAlert) >= wsAlertCooldown {
-		msg := fmt.Sprintf("[cmc-ws] 断流 %v（last type6 at %s UTC）",
+		msg := fmt.Sprintf("[cmc-ws] 断流 %v（最后心跳 %s UTC）",
 			now.Sub(*unhealthySince).Round(time.Second), last6.UTC().Format("2006-01-02 15:04:05"))
 		if err := w.store.InsertAlert(ctx, nil, "warn", msg); err != nil {
 			log.Printf("[cmc-ws] 断流告警写入失败: %v", err)

@@ -191,7 +191,7 @@ func (c *Collector) fetchBookSummary(ctx context.Context, currency, kind string)
 func (c *Collector) recordFailure(detail string) {
 	c.failCount++
 	if c.failCount >= 3 && c.AlertFn != nil {
-		c.AlertFn("warn", fmt.Sprintf("deribit collect failed %d consecutive: %s", c.failCount, detail))
+		c.AlertFn("warn", fmt.Sprintf("deribit 采集连续 %d 次失败：%s", c.failCount, detail))
 	}
 	log.Printf("[deribit] collect failed (%d): %s", c.failCount, detail)
 }

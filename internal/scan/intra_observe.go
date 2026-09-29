@@ -42,6 +42,6 @@ func (e *IntraEngine) emitEvent(ctx context.Context, kind, detail string) {
 		return
 	}
 	if e.alertFn != nil {
-		e.alertFn(ctx, "critical", fmt.Sprintf("intra %s: %s", kind, detail))
+		e.alertFn(ctx, "critical", fmt.Sprintf("盘中事件 %s：%s", kind, detail))
 	}
 }

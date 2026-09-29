@@ -138,7 +138,7 @@ func (g *GateWebSocket) onADLWarning(data []byte) {
 	if len(payload) > 500 {
 		payload = payload[:500]
 	}
-	g.cfg.AlertFn("critical", "gate adl_warning: "+payload)
+	g.cfg.AlertFn("critical", "gate ADL 风险提示\n原始明细："+payload)
 }
 
 // gateFuturesUpdate futures.tickers 推送：result 为数组，无 bid/ask，用 mark_price 近似。

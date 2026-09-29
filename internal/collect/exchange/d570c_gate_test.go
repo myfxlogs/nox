@@ -158,10 +158,10 @@ func TestD570C_A14_ADLWarning(t *testing.T) {
 	big := strings.Repeat("x", 600)
 	g.handleFuturesDispatch(context.Background(), []byte(
 		`{"channel":"futures.adl_warning","event":"update","result":{"contract":"BTC_USDT","state":"warning","pad":"`+big+`"}}`), func(bus.Quote) {})
-	if level != "critical" || !strings.Contains(msg, "gate adl_warning: ") {
+	if level != "critical" || !strings.Contains(msg, "gate ADL 风险提示") {
 		t.Fatalf("warning 帧应 critical: level=%q msg=%q", level, msg)
 	}
-	if len(msg) > len("gate adl_warning: ")+500 {
+	if len(msg) > len("gate ADL 风险提示\n原始明细：")+500 {
 		t.Fatalf("payload 应截 500: len=%d", len(msg))
 	}
 	// state=normal 不告。
