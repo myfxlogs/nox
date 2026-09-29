@@ -20,14 +20,15 @@ import (
 	"arb/internal/store/pgstore"
 )
 
-// Src 资金来源：ws=私有流 / rest=实拉校准 / snap=快照兜底。
+// Src 资金来源：ws=私有流 / rest=实拉校准 / mt_frame=MT5 流帧 / snap=快照兜底。
 const (
-	SrcWS   = "ws"
-	SrcRest = "rest"
-	SrcSnap = "snap"
+	SrcWS      = "ws"
+	SrcRest    = "rest"
+	SrcMTFrame = "mt_frame"
+	SrcSnap    = "snap"
 )
 
-// Funds 统一资金读口返回值。Live=true 仅当 Src∈{ws,rest}（实拉源）；
+// Funds 统一资金读口返回值。Live=true 仅当 Src∈{ws,rest,mt_frame}（实拉源）；
 // snap 行 Note 必带龄注记（禁静默）。
 type Funds struct {
 	VenueKey     string  // 实际取到的池键（unified 回退时如实反映口径）
@@ -49,6 +50,19 @@ type Deps struct {
 	RestTTL    func() time.Duration // 校准缓存期（动态求值，测试可调）；nil=DefaultRestTTL
 	QuerierFor func(ctx context.Context, venueKey string) (reconcile.AccountQuerier, string, bool)
 	Snapshots  func(ctx context.Context) ([]pgstore.VenueAccountLatest, error)
+	// MTFrames D-572 S2：MT 键先走 AccountMonitor.StreamAccount 帧缓存（装配处包装，
+	// 零新依赖方向）；nil=帧源未接线→快照直通。帧龄窗=MTFrameTTL（快照龄闸同值注入，
+	// 单一常量两处消费）。
+	MTFrames   func(venueKey string) (MTFrame, bool)
+	MTFrameTTL func() time.Duration
+}
+
+// MTFrame MT5 实时账户帧读口返回值（ObserveStreamAccount 落缓存数据面）。
+type MTFrame struct {
+	Equity    float64
+	Available float64 // free margin
+	Currency  string
+	At        time.Time // 收帧时刻
 }
 
 // DefaultRestTTL REST 校准缓存期缺省（同 D-542 口径 30s）。
@@ -183,6 +197,8 @@ func (v *View) live(ctx context.Context, venueKey string, snaps []pgstore.VenueA
 		if f, ok := v.calibrate(ctx, venueKey, force); ok {
 			return f, true
 		}
+	} else if f, ok := v.mtFrame(venueKey); ok {
+		return f, true // D-572 S2：MT 键先走流帧（fresh 即 live，龄闸不触发）；超窗/miss 落快照兜底
 	}
 	if snaps == nil {
 		if v.d.Snapshots == nil {
@@ -241,6 +257,29 @@ func (v *View) calibrate(ctx context.Context, venueKey string, force bool) (Fund
 		VenueKey: poolKey, Available: avail, Equity: acct.Equity,
 		Currency: acct.Currency, At: at, Src: SrcRest,
 	}), true
+}
+
+// mtFrame D-572 S2：MT 键流帧读口——帧命中且龄≤MTFrameTTL（快照龄闸同值注入）→
+// live 读数（Src=mt_frame，At=收帧时刻）；miss/超窗/未装配→false 回落快照直通。
+func (v *View) mtFrame(venueKey string) (Funds, bool) {
+	if v.d.MTFrames == nil {
+		return Funds{}, false
+	}
+	fr, ok := v.d.MTFrames(venueKey)
+	if !ok {
+		return Funds{}, false
+	}
+	if v.d.MTFrameTTL == nil { // 龄窗未注入=装配不完整→帧源禁用（禁另立字面量，不猜窗）
+		return Funds{}, false
+	}
+	if time.Since(fr.At) > v.d.MTFrameTTL() {
+		return Funds{}, false
+	}
+	return Funds{
+		VenueKey: venueKey, Available: fr.Available, HasAvailable: fr.Available > 0,
+		Equity: fr.Equity, Currency: fr.Currency, At: fr.At,
+		Src: SrcMTFrame, Live: true,
+	}, true
 }
 
 func liveFunds(e bus.BalanceEntry) Funds {
