@@ -8,9 +8,12 @@ import (
 	"log"
 )
 
-// okxLiqWarnConsumed liquidation-warning data[] 已消费字段白名单（§2.7 字段集起步，
-// 实采首帧告警即补全）。
-var okxLiqWarnConsumed = []string{"instId", "posSide", "mgnRatio"}
+// okxLiqWarnConsumed liquidation-warning data[] 已核对字段白名单（设计 §2.7 官方
+// 全字段集——D-475b 契约：白名单=已核对清单非仅消费清单，欠列=核对未做）。
+var okxLiqWarnConsumed = []string{
+	"instId", "instType", "instFamily", "posId", "posSide", "pos", "posCcy",
+	"lever", "markPx", "mgnRatio", "ccy", "cTime", "uTime", "pTime",
+}
 
 // onLiqWarning liquidation-warning 帧 → 逐条三键回调（nil hook 安全跳过）。
 func (o *OKXPrivateWS) onLiqWarning(data []map[string]any) {

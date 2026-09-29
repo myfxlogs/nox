@@ -118,3 +118,54 @@ func TestD566B_A8_LiqWarning(t *testing.T) {
 		t.Fatalf("calls=%d got=%s/%s/%s", calls, gotInst, gotPos, gotRatio)
 	}
 }
+
+// R1-A1：instruments 白名单=官方 19 字段全列；真形全字段帧对 critical 键零告警。
+func TestD566B_R1A1_InstrumentsConsumedFull(t *testing.T) {
+	want := []string{
+		"instId", "instType", "state", "tickSz", "lotSz", "minSz", "maxMktSz",
+		"ctVal", "ctValCcy", "ctType", "lever", "listTime", "expTime", "uly",
+		"instFamily", "settleCcy", "alias", "baseCcy", "quoteCcy",
+	}
+	if fmt.Sprint(okxInstrumentsConsumed) != fmt.Sprint(want) {
+		t.Fatalf("instruments consumed=%v want 19 字段全列", okxInstrumentsConsumed)
+	}
+	// 真形帧全字段：凡 criticalFieldKeys 命中键必须在白名单内（首帧零告警契约）。
+	frame := map[string]any{}
+	for _, k := range want {
+		frame[k] = "1"
+	}
+	for k := range frame {
+		if criticalFieldKeys[k] && !containsStr(okxInstrumentsConsumed, k) {
+			t.Fatalf("critical 键 %s 未入 instruments 白名单→首帧告警", k)
+		}
+	}
+}
+
+// R1-A2：liq-warning 白名单=官方 14 字段全列；真形帧零告警。
+func TestD566B_R1A2_LiqWarnConsumedFull(t *testing.T) {
+	want := []string{
+		"instId", "instType", "instFamily", "posId", "posSide", "pos", "posCcy",
+		"lever", "markPx", "mgnRatio", "ccy", "cTime", "uTime", "pTime",
+	}
+	if fmt.Sprint(okxLiqWarnConsumed) != fmt.Sprint(want) {
+		t.Fatalf("liq-warning consumed=%v want 14 字段全列", okxLiqWarnConsumed)
+	}
+	frame := map[string]any{}
+	for _, k := range want {
+		frame[k] = "1"
+	}
+	for k := range frame {
+		if criticalFieldKeys[k] && !containsStr(okxLiqWarnConsumed, k) {
+			t.Fatalf("critical 键 %s 未入 liq-warning 白名单→首帧告警", k)
+		}
+	}
+}
+
+func containsStr(xs []string, s string) bool {
+	for _, x := range xs {
+		if x == s {
+			return true
+		}
+	}
+	return false
+}

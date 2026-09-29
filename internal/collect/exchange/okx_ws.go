@@ -281,6 +281,10 @@ func (o *OKXWebSocket) handleInstruments(msg wsMsg) {
 	}
 }
 
-// okxInstrumentsConsumed instruments data[] 已消费字段白名单（§2.6.1 字段集起步，
-// 实采首帧告警即补全）。
-var okxInstrumentsConsumed = []string{"instId"}
+// okxInstrumentsConsumed instruments data[] 已核对字段白名单（设计 §2.6 官方
+// 全字段集——D-475b 契约：白名单=已核对清单非仅消费清单，欠列=核对未做）。
+var okxInstrumentsConsumed = []string{
+	"instId", "instType", "state", "tickSz", "lotSz", "minSz", "maxMktSz",
+	"ctVal", "ctValCcy", "ctType", "lever", "listTime", "expTime", "uly",
+	"instFamily", "settleCcy", "alias", "baseCcy", "quoteCcy",
+}
