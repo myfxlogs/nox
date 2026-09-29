@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/dephealth"
 	"arb/internal/httpx"
 	"arb/internal/safego"
 
@@ -51,6 +52,9 @@ type BinanceUserWS struct {
 
 // SetBalanceLedger D-542：注入活账本（装配一次；nil 安全）。
 func (b *BinanceUserWS) SetBalanceLedger(l *bus.BalanceLedger) { b.balLedger = l }
+
+// depKey D-579 R2 健康面键（用户流无订阅帧，就绪=listenKey+流连接建立）。
+func (b *BinanceUserWS) depKey() string { return "binance:ws-" + b.venueType + "-user" }
 
 // balPoolKey 活账本键=裸 canonical 池键（venueKey 撞键 #id 不进账本——账户级口径）。
 func (b *BinanceUserWS) balPoolKey() string {
@@ -141,6 +145,7 @@ func (b *BinanceUserWS) backupWSURL(wsURL string) string {
 func (b *BinanceUserWS) Run(ctx context.Context) {
 	for {
 		if err := b.runOnce(ctx); err != nil {
+			dephealth.Mark(b.depKey(), false, err) // D-579 R2：私有流自挂点（spot 支路同经此）
 			log.Printf("[binance-user-ws] reconnect after error: %v", err)
 		}
 		select {
@@ -173,6 +178,7 @@ func (b *BinanceUserWS) runOnce(ctx context.Context) error {
 	}
 	defer conn.Close()
 	log.Printf("[binance-user-ws] connected (venue=%s:%s simulated=%v)", "binance", b.venueType, b.simulated)
+	dephealth.Mark(b.depKey(), true, nil) // D-579 R2：listenKey+流连接就绪（非裸 TCP）
 
 	_ = conn.SetReadDeadline(b.now().Add(binanceUserReadIdle))
 	conn.SetPongHandler(func(string) error {

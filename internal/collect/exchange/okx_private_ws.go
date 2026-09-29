@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/dephealth"
 	"arb/internal/safego"
 	"arb/internal/store/pgstore"
 
@@ -107,6 +108,7 @@ func (o *OKXPrivateWS) SetCtValFor(f func(ctx context.Context, instID string) (f
 func (o *OKXPrivateWS) Run(ctx context.Context) {
 	for {
 		if err := o.runOnce(ctx); err != nil {
+			dephealth.Mark("okx:ws-private", false, err) // D-579 R2：私有流自挂点（不经 RunWS）
 			log.Printf("[okx-private-ws] reconnect after error: %v", err)
 		}
 		select {
@@ -208,7 +210,8 @@ func (o *OKXPrivateWS) runOnce(ctx context.Context) error {
 				return fmt.Errorf("subscribe: %w", err)
 			}
 		case "subscribe":
-			stale.touch(time.Now()) // 订阅成功=断流基准点（OKX account channel 订阅即推首帧）
+			stale.touch(time.Now())                     // 订阅成功=断流基准点（OKX account channel 订阅即推首帧）
+			dephealth.Mark("okx:ws-private", true, nil) // D-579 R2：就绪点=订阅生效非裸 TCP
 			log.Printf("[okx-private-ws] subscribed %s", msg.Arg.Channel)
 		case "":
 			// 数据推送——D-469a S1 按 arg.channel 分派（S0：positions/account eventType

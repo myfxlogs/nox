@@ -20,6 +20,7 @@ import (
 	"net/url"
 	"time"
 
+	"arb/internal/dephealth"
 	"arb/internal/safego"
 
 	"github.com/gorilla/websocket"
@@ -96,6 +97,7 @@ func (b *BinanceUserWS) runOnceSpot(ctx context.Context) error {
 	}
 	defer conn.Close()
 	log.Printf("[binance-user-ws] spot connected via ws-api (venueKey=%s)", b.venueKey)
+	dephealth.Mark(b.depKey(), true, nil) // D-579 R2：ws-api start+流连接就绪
 
 	_ = conn.SetReadDeadline(b.now().Add(binanceUserReadIdle))
 	conn.SetPongHandler(func(string) error {
