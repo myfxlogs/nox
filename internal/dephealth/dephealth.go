@@ -66,6 +66,9 @@ var (
 	mu      sync.Mutex
 	reg     = map[string]*entry{}
 	alertFn AlertFn
+	// OnChange D-579-R3 F-3a：状态变迁扇出钩子（装配期一次性赋值；读点在 mu 内，
+	// 调用在锁外——踢 posMon.OnHealthDirty 重组装 sourceHealth，防「态变了无事件」死踢）。
+	OnChange func()
 	// nowFn 时钟可注入（测试控时——T1 连败/恢复时序锚）。
 	nowFn = time.Now
 )
@@ -91,6 +94,7 @@ func Mark(key string, ok bool, err error) {
 	}
 	now := nowFn()
 	e.lastEventAt = now
+	prev := e.state // F-3a：变迁前态——锁外比对决定是否扇出
 	if ok {
 		wasDegraded := e.state == StateDegraded
 		e.state = StateHealthy
@@ -121,9 +125,14 @@ func Mark(key string, ok bool, err error) {
 		}
 	}
 	fn := alertFn
+	cb := OnChange
+	changed := prev != e.state
 	mu.Unlock()
 	if fn != nil && alertMsg != "" {
 		fn(alertLevel, alertMsg)
+	}
+	if changed && cb != nil {
+		cb() // 锁外调——钩子回读 Snapshot 不死锁；变迁才踢天然去重
 	}
 }
 
@@ -163,4 +172,5 @@ func resetForTest() {
 	defer mu.Unlock()
 	reg = map[string]*entry{}
 	alertFn = nil
+	OnChange = nil
 }
