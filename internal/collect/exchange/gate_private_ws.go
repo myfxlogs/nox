@@ -11,12 +11,9 @@ import (
 	"crypto/hmac"
 	"crypto/sha512"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,7 +21,6 @@ import (
 	"arb/internal/bus"
 	"arb/internal/httpx"
 	"arb/internal/safego"
-	"arb/internal/signutil"
 
 	"github.com/gorilla/websocket"
 )
@@ -32,11 +28,17 @@ import (
 const gatePrivateReadIdle = 60 * time.Second
 
 // gatePrivateChannels D-450 订阅面（payload 形制见 subscribeFrame 按频道分派）。
+// D-570 包C S7：扩 5 风险频道（强平/平仓/ADL 双频道/风控限额降档——全整帧转发 hooks）。
 var gatePrivateChannels = []string{
 	"futures.balances",
 	"futures.positions",
 	"futures.orders",
 	"futures.usertrades",
+	"futures.liquidates",
+	"futures.position_closes",
+	"futures.auto_deleverages",
+	"futures.positions_adl",
+	"futures.reduce_risk_limits",
 }
 
 // GatePrivateWS Gate futures 私有流采集器。
@@ -53,10 +55,15 @@ type GatePrivateWS struct {
 	// balLedger D-542：可用资金活账本（futures.balances 喂入；每轮重连标脏）。nil 安全。
 	balLedger *bus.BalanceLedger
 
-	dial   func(ctx context.Context, wsURL string) (*websocket.Conn, error) // 测试注入
-	rest   *http.Client                                                     // uid/quanto 查询（测试注入）
-	now    func() time.Time
-	quanto map[string]float64 // contract→quanto_multiplier（executor 同款 lazy 缓存）
+	dial func(ctx context.Context, wsURL string) (*websocket.Conn, error) // 测试注入
+	rest *http.Client                                                     // uid/quanto 查询（测试注入）
+	now  func() time.Time
+	// D-570 包C S7：风险事件 hooks（liquidates/position_closes/ADL/reduce_risk_limits 整帧转发；nil 安全）。
+	hooks GatePrivateHooks
+	// D-570 包C S6③：quanto 加锁——contract_info 失效回调跨 goroutine（公共 WS loop）
+	// 与读循环 gateQuanto lazy 写并发。
+	quantoMu sync.Mutex
+	quanto   map[string]float64 // contract→quanto_multiplier（executor 同款 lazy 缓存）
 
 	// writeMu D-477：gorilla conn 单写者契约——ping goroutine（20s WriteMessage）与订阅
 	// 写（runOnce WriteJSON）共用 conn，无互斥=数据竞争（race×3 实证）；conn 写统一走
@@ -83,6 +90,9 @@ func NewGatePrivateWS(apiKey, apiSecret, baseURL, venueKey string, simulated boo
 
 // SetBalanceLedger D-542：注入活账本（装配一次；nil 安全）。
 func (g *GatePrivateWS) SetBalanceLedger(l *bus.BalanceLedger) { g.balLedger = l }
+
+// SetGateHooks D-570 包C S7：注入风险事件 hooks（镜像 SetBalanceLedger 先例；nil 安全）。
+func (g *GatePrivateWS) SetGateHooks(h GatePrivateHooks) { g.hooks = h }
 
 // WSURL base_url → WS 端点派生（SSOT：TrimSuffix "/api/v4" + "/v4/ws/usdt"；https→wss/http→ws）。
 func (g *GatePrivateWS) WSURL() string {
@@ -206,75 +216,6 @@ func gateWSSign(secret, channel string, ts int64) string {
 	mac := hmac.New(sha512.New, []byte(secret))
 	mac.Write([]byte(msg))
 	return hex.EncodeToString(mac.Sum(nil))
-}
-
-// fetchUID 取 futures 账户 user id（签名 GET /futures/usdt/accounts，exec.GateSign 共享）。
-func (g *GatePrivateWS) fetchUID(ctx context.Context) (string, error) {
-	const endpoint = "/futures/usdt/accounts"
-	ts := g.now().Unix()
-	body, err := g.get(ctx, endpoint, ts)
-	if err != nil {
-		return "", err
-	}
-	var acc struct {
-		User json.Number `json:"user"`
-	}
-	if err := json.Unmarshal(body, &acc); err != nil {
-		return "", fmt.Errorf("accounts json: %w", err)
-	}
-	if acc.User.String() == "" {
-		return "", fmt.Errorf("accounts response missing user field")
-	}
-	return acc.User.String(), nil
-}
-
-// gateQuanto contract→quanto_multiplier lazy 缓存（executor 同款；公开端点签名无害）。
-func (g *GatePrivateWS) gateQuanto(ctx context.Context, contract string) (float64, error) {
-	if q, ok := g.quanto[contract]; ok {
-		return q, nil
-	}
-	body, err := g.get(ctx, "/futures/usdt/contracts/"+contract, g.now().Unix())
-	if err != nil {
-		return 0, err
-	}
-	var spec struct {
-		QuantoMultiplier string `json:"quanto_multiplier"`
-	}
-	if err := json.Unmarshal(body, &spec); err != nil {
-		return 0, fmt.Errorf("contract spec json: %w", err)
-	}
-	q, err := strconv.ParseFloat(spec.QuantoMultiplier, 64)
-	if err != nil || q <= 0 {
-		return 0, fmt.Errorf("contract %s quanto_multiplier=%q invalid", contract, spec.QuantoMultiplier)
-	}
-	g.quanto[contract] = q
-	return q, nil
-}
-
-// get 签名 GET（exec.GateSign 与 REST 路径同口径：urlPath=/api/v4+endpoint）。
-func (g *GatePrivateWS) get(ctx context.Context, endpoint string, ts int64) ([]byte, error) {
-	urlPath := "/api/v4" + endpoint
-	sign := signutil.GateSign(g.apiSecret, "GET", urlPath, "", "", ts)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, g.baseURL+endpoint, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("KEY", g.apiKey)
-	req.Header.Set("Timestamp", strconv.FormatInt(ts, 10))
-	req.Header.Set("SIGN", sign)
-	resp, err := g.rest.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("http %d: %s", resp.StatusCode, truncateStr(string(data), 200))
-	}
-	return data, nil
 }
 
 func truncateStr(s string, n int) string {

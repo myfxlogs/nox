@@ -14,6 +14,15 @@ import (
 	"arb/internal/store/pgstore"
 )
 
+// GatePrivateHooks D-570 包C S7：风险事件整帧转发钩（镜像 D-569 S7 MARGIN_CALL 裁定——
+// 快照字段表明确但零实弹帧，不做字段级解析，payload=result 原文；nil 安全）。
+type GatePrivateHooks struct {
+	OnLiquidate     func(payload []byte) // futures.liquidates（自有强平单事件）
+	OnPositionClose func(payload []byte) // futures.position_closes（平仓事件 pnl+side+text）
+	OnADL           func(payload []byte) // futures.auto_deleverages+positions_adl 同槽（皆 ADL 域事件）
+	OnRiskLimit     func(payload []byte) // futures.reduce_risk_limits（风控限额降档预警）
+}
+
 // handleFrame 帧分派：subscribe ACK 打日志；update 事件先落审计表（失败 warn 仍更缓存，R3）
 // 再按频道分发；error fail-loud 返回错误触发重连。
 func (g *GatePrivateWS) handleFrame(ctx context.Context, data []byte) error {
@@ -51,6 +60,23 @@ func (g *GatePrivateWS) handleFrame(ctx context.Context, data []byte) error {
 		g.onPositions(msg.Result)
 	case "futures.orders":
 		g.onOrders(ctx, msg.Result)
+	// D-570 包C S7：风险频道族全整帧转发（审计 InsertCEXPrivateEvent 已在上方先行）。
+	case "futures.liquidates":
+		if g.hooks.OnLiquidate != nil {
+			g.hooks.OnLiquidate(msg.Result)
+		}
+	case "futures.position_closes":
+		if g.hooks.OnPositionClose != nil {
+			g.hooks.OnPositionClose(msg.Result)
+		}
+	case "futures.auto_deleverages", "futures.positions_adl":
+		if g.hooks.OnADL != nil {
+			g.hooks.OnADL(msg.Result)
+		}
+	case "futures.reduce_risk_limits":
+		if g.hooks.OnRiskLimit != nil {
+			g.hooks.OnRiskLimit(msg.Result)
+		}
 	}
 	return nil
 }

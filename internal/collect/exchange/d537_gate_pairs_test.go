@@ -74,7 +74,7 @@ func TestD537_SubPayloadOnlyWhitelisted(t *testing.T) {
 
 	frames := make(chan []byte, 8)
 	wsURL, _ := wsRunnerServer(t, false, frames)
-	go g.runLoop(ctx, []string{wsURL}, "spot.tickers", gateSpotWSURL, g.spotWL, g.handleSpot, func(bus.Quote) {})
+	go g.runLoop(ctx, []string{wsURL}, []string{"spot.tickers"}, gateSpotWSURL, g.spotWL, g.handleSpot, func(bus.Quote) {}, nil)
 
 	select {
 	case data := <-frames:
@@ -98,7 +98,7 @@ func TestD537_RestFailFallbackUnfiltered(t *testing.T) {
 
 	frames := make(chan []byte, 8)
 	wsURL, _ := wsRunnerServer(t, false, frames)
-	go g.runLoop(ctx, []string{wsURL}, "spot.tickers", gateSpotWSURL, g.spotWL, g.handleSpot, func(bus.Quote) {})
+	go g.runLoop(ctx, []string{wsURL}, []string{"spot.tickers"}, gateSpotWSURL, g.spotWL, g.handleSpot, func(bus.Quote) {}, nil)
 
 	select {
 	case data := <-frames:
@@ -139,7 +139,7 @@ func TestD537_DiffResubFiltered(t *testing.T) {
 
 	frames := make(chan []byte, 16)
 	wsURL, _ := wsRunnerServer(t, false, frames)
-	go g.runLoop(ctx, []string{wsURL}, "spot.tickers", gateSpotWSURL, g.spotWL, g.handleSpot, func(bus.Quote) {})
+	go g.runLoop(ctx, []string{wsURL}, []string{"spot.tickers"}, gateSpotWSURL, g.spotWL, g.handleSpot, func(bus.Quote) {}, nil)
 
 	// 首帧=[BTC_USDT]
 	select {

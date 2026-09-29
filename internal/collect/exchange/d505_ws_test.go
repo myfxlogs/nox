@@ -63,7 +63,7 @@ func TestD507_GateQuietFeedStaysAlive(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	g := d507GateWS()
-	go g.runLoop(ctx, []string{url}, "spot.tickers", gateSpotWSURL, g.spotWL, g.handleSpot, func(q bus.Quote) {})
+	go g.runLoop(ctx, []string{url}, []string{"spot.tickers"}, gateSpotWSURL, g.spotWL, g.handleSpot, func(q bus.Quote) {}, nil)
 	time.Sleep(d507Observe)
 	cancel()
 	if got := n.Load(); got != 1 {
@@ -78,7 +78,7 @@ func TestD507_GateDeadPeerStillReconnects(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	g := d507GateWS()
-	go g.runLoop(ctx, []string{url}, "spot.tickers", gateSpotWSURL, g.spotWL, g.handleSpot, func(q bus.Quote) {})
+	go g.runLoop(ctx, []string{url}, []string{"spot.tickers"}, gateSpotWSURL, g.spotWL, g.handleSpot, func(q bus.Quote) {}, nil)
 	time.Sleep(d507Observe)
 	cancel()
 	if got := n.Load(); got < 2 {
@@ -110,7 +110,7 @@ func TestD507_NilAlertFnNoPanic(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	g := d507GateWS() // AlertFn 缺省 nil
-	go g.runLoop(ctx, []string{url}, "spot.tickers", gateSpotWSURL, g.spotWL, g.handleSpot, func(q bus.Quote) {})
+	go g.runLoop(ctx, []string{url}, []string{"spot.tickers"}, gateSpotWSURL, g.spotWL, g.handleSpot, func(q bus.Quote) {}, nil)
 	time.Sleep(d507Observe)
 	cancel()
 }

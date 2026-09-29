@@ -48,6 +48,9 @@ type GateWebSocket struct {
 	reconnectBackoff time.Duration
 	// emitFacts D-509：funding fact 发射口（FactEmitter 去重节流；nil=不 emit）。
 	emitFacts func(ctx context.Context, fs []fact.Fact) error
+	// onContractInfo D-570 包C S6④：futures.contract_info 帧→按 contract 失效回调
+	// （exec spec 缓存+collect quanto 缓存双失效在接线层闭包；nil=仅订阅不联动）。
+	onContractInfo func(contract string)
 }
 
 // NewGateWebSocket 创建 Gate WS 采集器（ARB_CEX_WS_BASE 置位→经 cex-proxy /gatespotws 与 /v4/ws 前缀）。
@@ -84,11 +87,12 @@ func (g *GateWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 	wg.Add(2)
 	safego.Go("gate_ws:spot-loop", func() {
 		defer wg.Done()
-		g.runLoop(ctx, g.spotURLs, "spot.tickers", gateSpotWSURL, g.spotWL, g.handleSpot, publish)
+		g.runLoop(ctx, g.spotURLs, []string{"spot.tickers"}, gateSpotWSURL, g.spotWL, g.handleSpot, publish, nil)
 	})
 	safego.Go("gate_ws:futures-loop", func() {
 		defer wg.Done()
-		g.runLoop(ctx, g.futuresURLs, "futures.tickers", gateFuturesWSURL, g.futuresWL, g.handleFutures, publish)
+		// D-570 包C：futures 连接订阅面=4 频道同连接（清单/固定帧入常量函数=A14/A16 锚）。
+		g.runLoop(ctx, g.futuresURLs, gateFuturesTickerChannels, gateFuturesWSURL, g.futuresWL, g.handleFuturesDispatch, publish, gateFuturesExtraSubs())
 	})
 	wg.Wait()
 }
@@ -122,9 +126,31 @@ func (g *GateWebSocket) subscribeChannel(s Sender, channel string, pairs []strin
 	return s.Send(subscribePayload(channel, pairs))
 }
 
+// gateFuturesTickerChannels D-570 包C：futures 连接 pairs 型频道清单
+// （tickers=报价+funding 帧职责；book_ticker=真实盘口 S8——同 wl.filter 集）。
+var gateFuturesTickerChannels = []string{"futures.tickers", "futures.book_ticker"}
+
+// gateFuturesExtraSubs D-570 包C：futures 连接固定订阅帧（["!all"] 公共无 auth，
+// 不经白名单）——contract_info=规格失效推送 S6④；adl_warning=ADL 预警 S7。
+func gateFuturesExtraSubs() []any {
+	return []any{
+		subscribePayload("futures.contract_info", []string{"!all"}),
+		subscribePayload("futures.adl_warning", []string{"!all"}),
+	}
+}
+
+// gateSubFrames pairs 集各频道一帧 + extra 固定帧（A16 锚：所有 pairs 频道共用同一过滤后集）。
+func gateSubFrames(channels []string, pairs []string, extra []any) []any {
+	frames := make([]any, 0, len(channels)+len(extra))
+	for _, ch := range channels {
+		frames = append(frames, subscribePayload(ch, pairs))
+	}
+	return append(frames, extra...)
+}
+
 // runLoop 单连接重连循环——D-511 S3：骨架收编 RunWS（dial/保活/读循环/退避一处钉死），
 // 本函数只装配协议钩子（候选=urls 代理件+proxied 时 native 直连兜底位——R4/R3）。
-func (g *GateWebSocket) runLoop(ctx context.Context, urls []string, channel, native string, wl *gatePairWhitelist, handle func(context.Context, []byte, func(bus.Quote)), publish func(bus.Quote)) {
+func (g *GateWebSocket) runLoop(ctx context.Context, urls []string, channels []string, native string, wl *gatePairWhitelist, handle func(context.Context, []byte, func(bus.Quote)), publish func(bus.Quote), extraSubs []any) {
 	meter := newReconnectMeter(urls[0], g.cfg.AlertFn)
 	// subscribed 差集表为每连接状态——OnConnect 每拨号重置（重连全量重订阅语义不变）。
 	var subscribed map[string]bool
@@ -142,7 +168,9 @@ func (g *GateWebSocket) runLoop(ctx context.Context, urls []string, channel, nat
 			for _, p := range pairs {
 				subscribed[p] = true
 			}
-			return []any{subscribePayload(channel, pairs)}
+			// D-570 包C：多频道同连接——pairs 集各频道一帧 + extraSubs 固定帧
+			// （contract_info/adl_warning "!all" 不经白名单）。
+			return gateSubFrames(channels, pairs, extraSubs)
 		},
 		// D-369 S2：provider 符号集变化 → ping tick 差集补订（新符号 only；服务端拒则读报错走重连）
 		OnAliveTick: func(s Sender) {
@@ -153,9 +181,17 @@ func (g *GateWebSocket) runLoop(ctx context.Context, urls []string, channel, nat
 					newPairs = append(newPairs, p)
 				}
 			}
-			if len(newPairs) > 0 && g.subscribeChannel(s, channel, newPairs) == nil {
-				for _, p := range newPairs {
-					subscribed[p] = true
+			if len(newPairs) > 0 {
+				sent := true
+				for _, ch := range channels { // D-570 包C S8：新 pairs 对每个 pairs 频道补订
+					if g.subscribeChannel(s, ch, newPairs) != nil {
+						sent = false
+					}
+				}
+				if sent {
+					for _, p := range newPairs {
+						subscribed[p] = true
+					}
 				}
 			}
 		},
@@ -201,75 +237,6 @@ func (g *GateWebSocket) handleSpot(_ context.Context, data []byte, publish func(
 	})
 }
 
-// gateFuturesUpdate futures.tickers 推送：result 为数组，无 bid/ask，用 mark_price 近似。
-// D-509 S3 实测字段（fx-ws 公共帧）：funding_rate/funding_next_apply(unix s)/
-// funding_interval(s) 原生在帧——funding 三件套自帧内取（rate+next_apply），interval
-// fact 归日轮 gate_contract_meta（S5 起唯一职责=元数据；帧内 funding_interval 仍用于年化折算）。
-type gateFuturesUpdate struct {
-	Event  string `json:"event"`
-	Result []struct {
-		Contract         string  `json:"contract"`
-		MarkPrice        string  `json:"mark_price"`
-		T                int64   `json:"t"` // unix ms
-		FundingRate      string  `json:"funding_rate"`
-		FundingNextApply float64 `json:"funding_next_apply"` // unix s
-		FundingInterval  float64 `json:"funding_interval"`   // s
-	} `json:"result"`
-}
-
-// handleFutures 解析 futures.tickers 更新并发布报价。
-func (g *GateWebSocket) handleFutures(ctx context.Context, data []byte, publish func(bus.Quote)) {
-	var msg gateFuturesUpdate
-	if err := json.Unmarshal(data, &msg); err != nil || msg.Event != "update" {
-		return
-	}
-	for _, item := range msg.Result {
-		if item.Contract == "" {
-			continue
-		}
-		var mark float64
-		fmt.Sscanf(item.MarkPrice, "%f", &mark)
-		if mark == 0 {
-			continue
-		}
-		ts := time.Now()
-		if item.T > 0 {
-			ts = time.UnixMilli(item.T)
-		}
-		publish(bus.Quote{
-			Symbol:      canonicalFromGate(item.Contract),
-			Venue:       VenueGate,
-			VenueType:   "perp",
-			VenueSymbol: item.Contract,
-			Bid:         mark,
-			Ask:         mark,
-			Time:        ts,
-		})
-		// D-509 S3：帧内原生 funding 字段→fact（缺字段=缺省不造，venue 禁借用律）。
-		if g.emitFacts != nil && item.FundingRate != "" {
-			var rate float64
-			if _, err := fmt.Sscanf(item.FundingRate, "%f", &rate); err != nil {
-				log.Printf("[gate-ws] funding rate %q dirty: %v", item.FundingRate, err)
-				continue
-			}
-			sym := canonicalFromGate(item.Contract)                      // BTCUSDT 形（与 REST 键 sym+USDT 同形）
-			periods := fundingPeriodsPerDay(item.FundingInterval * 1000) // 帧内原生 interval
-			fs := []fact.Fact{
-				{Kind: fact.KindFunding, Venue: VenueGate, Symbol: sym,
-					Value: annualizeFunding(rate, periods), Unit: fact.UnitPctAnnualized,
-					Ts: ts, Src: "gate_ws_futures"},
-			}
-			if item.FundingNextApply > 0 {
-				fs = append(fs, fact.Fact{Kind: fact.KindFundingNextSettle, Venue: VenueGate,
-					Symbol: sym, Value: item.FundingNextApply, Unit: fact.UnitUnixSec, Ts: ts, Src: "gate_ws_futures"})
-			}
-			if err := g.emitFacts(ctx, fs); err != nil {
-				log.Printf("[gate-ws] funding emit %s: %v", item.Contract, err)
-			}
-		}
-	}
-}
-
 // canonicalFromGate 将 Gate 交易对/合约名（BTC_USDT）映射为 canonical（BTCUSDT）。
 func canonicalFromGate(pair string) string {
 	return strings.ReplaceAll(pair, "_", "")
@@ -291,3 +258,6 @@ func pairsD369(syms []string, suffix string) []string {
 func (g *GateWebSocket) SetFactEmit(fn func(ctx context.Context, fs []fact.Fact) error) {
 	g.emitFacts = fn
 }
+
+// SetOnContractInfo D-570 包C S6④：注入 contract_info 失效回调（wiring 期；先于 Run；nil 安全）。
+func (g *GateWebSocket) SetOnContractInfo(fn func(contract string)) { g.onContractInfo = fn }

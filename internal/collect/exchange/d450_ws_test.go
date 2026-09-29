@@ -211,9 +211,9 @@ func TestGateWSE2E(t *testing.T) {
 	defer cancel()
 	go g.Run(ctx)
 
-	// 等四帧订阅到服务端。
+	// 等订阅帧全量到服务端（D-570 包C：频道面 4→9，按 len(gatePrivateChannels) 等）。
 	seen := map[string]bool{}
-	for i := 0; i < 4; i++ {
+	for i := 0; i < len(gatePrivateChannels); i++ {
 		select {
 		case m := <-wsSrv.got:
 			seen[m["channel"].(string)] = true
