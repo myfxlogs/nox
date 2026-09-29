@@ -1004,8 +1004,12 @@ type XAssetPendingEntryRow struct {
 	BreakerClass    string                 `protobuf:"bytes,12,opt,name=breaker_class,json=breakerClass,proto3" json:"breaker_class,omitempty"`
 	BreakerResumeAt *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=breaker_resume_at,json=breakerResumeAt,proto3" json:"breaker_resume_at,omitempty"`
 	BreakerCount    int32                  `protobuf:"varint,14,opt,name=breaker_count,json=breakerCount,proto3" json:"breaker_count,omitempty"` // 本窗已抑制尝试数（徽标 ×N）
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// D-580：等待条件结构化透出（XASSET_CARRY 且七闸全过时填充；其余形态/数据缺=留空）。
+	WaitCurrentBps   *float64 `protobuf:"fixed64,15,opt,name=wait_current_bps,json=waitCurrentBps,proto3,oneof" json:"wait_current_bps,omitempty"`       // 实况入场价差 bps（双腿 qbus 现算，同 engine_opp 公式）
+	WaitThresholdBps *float64 `protobuf:"fixed64,16,opt,name=wait_threshold_bps,json=waitThresholdBps,proto3,oneof" json:"wait_threshold_bps,omitempty"` // 入场阈值 bps（monitor noise_bps 24h 摆幅）
+	WaitGapBps       *float64 `protobuf:"fixed64,17,opt,name=wait_gap_bps,json=waitGapBps,proto3,oneof" json:"wait_gap_bps,omitempty"`                   // 阈值−当前（正=还差多少）
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *XAssetPendingEntryRow) Reset() {
@@ -1132,6 +1136,27 @@ func (x *XAssetPendingEntryRow) GetBreakerResumeAt() *timestamppb.Timestamp {
 func (x *XAssetPendingEntryRow) GetBreakerCount() int32 {
 	if x != nil {
 		return x.BreakerCount
+	}
+	return 0
+}
+
+func (x *XAssetPendingEntryRow) GetWaitCurrentBps() float64 {
+	if x != nil && x.WaitCurrentBps != nil {
+		return *x.WaitCurrentBps
+	}
+	return 0
+}
+
+func (x *XAssetPendingEntryRow) GetWaitThresholdBps() float64 {
+	if x != nil && x.WaitThresholdBps != nil {
+		return *x.WaitThresholdBps
+	}
+	return 0
+}
+
+func (x *XAssetPendingEntryRow) GetWaitGapBps() float64 {
+	if x != nil && x.WaitGapBps != nil {
+		return *x.WaitGapBps
 	}
 	return 0
 }
@@ -3078,7 +3103,7 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x04rows\x18\x01 \x03(\v2%.arb.dashboard.v1.XAssetAllowComboRowR\x04rows\"!\n" +
 	"\x1fListXAssetPendingEntriesRequest\"_\n" +
 	" ListXAssetPendingEntriesResponse\x12;\n" +
-	"\x04rows\x18\x01 \x03(\v2'.arb.dashboard.v1.XAssetPendingEntryRowR\x04rows\"\x9a\x04\n" +
+	"\x04rows\x18\x01 \x03(\v2'.arb.dashboard.v1.XAssetPendingEntryRowR\x04rows\"\xe0\x05\n" +
 	"\x15XAssetPendingEntryRow\x12\x19\n" +
 	"\bcombo_id\x18\x01 \x01(\x03R\acomboId\x12\x1f\n" +
 	"\vcombo_label\x18\x02 \x01(\tR\n" +
@@ -3098,7 +3123,14 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x0ebreaker_paused\x18\v \x01(\bR\rbreakerPaused\x12#\n" +
 	"\rbreaker_class\x18\f \x01(\tR\fbreakerClass\x12F\n" +
 	"\x11breaker_resume_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\x0fbreakerResumeAt\x12#\n" +
-	"\rbreaker_count\x18\x0e \x01(\x05R\fbreakerCount\"\xd3\x03\n" +
+	"\rbreaker_count\x18\x0e \x01(\x05R\fbreakerCount\x12-\n" +
+	"\x10wait_current_bps\x18\x0f \x01(\x01H\x00R\x0ewaitCurrentBps\x88\x01\x01\x121\n" +
+	"\x12wait_threshold_bps\x18\x10 \x01(\x01H\x01R\x10waitThresholdBps\x88\x01\x01\x12%\n" +
+	"\fwait_gap_bps\x18\x11 \x01(\x01H\x02R\n" +
+	"waitGapBps\x88\x01\x01B\x13\n" +
+	"\x11_wait_current_bpsB\x15\n" +
+	"\x13_wait_threshold_bpsB\x0f\n" +
+	"\r_wait_gap_bps\"\xd3\x03\n" +
 	"\x1dUpsertXAssetAllowComboRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12#\n" +
 	"\rcanonical_buy\x18\x02 \x01(\tR\fcanonicalBuy\x12\x1b\n" +
@@ -3365,6 +3397,7 @@ func file_dashboardv1_graduation_proto_init() {
 	file_dashboardv1_graduation_proto_msgTypes[1].OneofWrappers = []any{}
 	file_dashboardv1_graduation_proto_msgTypes[2].OneofWrappers = []any{}
 	file_dashboardv1_graduation_proto_msgTypes[5].OneofWrappers = []any{}
+	file_dashboardv1_graduation_proto_msgTypes[9].OneofWrappers = []any{}
 	file_dashboardv1_graduation_proto_msgTypes[10].OneofWrappers = []any{}
 	file_dashboardv1_graduation_proto_msgTypes[15].OneofWrappers = []any{}
 	file_dashboardv1_graduation_proto_msgTypes[23].OneofWrappers = []any{}
