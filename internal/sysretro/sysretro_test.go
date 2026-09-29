@@ -167,7 +167,7 @@ KB 有新增。
 	}
 	var hasWarn, hasInfo bool
 	for _, a := range st.alertRows() {
-		if strings.HasPrefix(a, "warn:") && strings.Contains(a, "未闭合") {
+		if strings.HasPrefix(a, "warn:") && strings.Contains(a, "格式异常") {
 			hasWarn = true
 		}
 		if strings.HasPrefix(a, "info:") {

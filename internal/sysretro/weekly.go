@@ -69,7 +69,7 @@ func GenerateWeekly(ctx context.Context, deps Deps) (string, error) {
 	// §5 建议 → 收件箱（AI 提议≠已验证知识，分诊在席位）。
 	suggs, malformed := parseSuggestions(aiText.String())
 	if malformed {
-		deps.alert(ctx, "warn", "sysretro weekly: suggestions fenced 块未闭合（EOF 截断容忍解析）")
+		deps.alert(ctx, "warn", "[系统复盘] 周报 AI 输出格式异常（已按截断内容容忍解析，建议集可能不完整）")
 	}
 	if len(suggs) > 0 {
 		rows := make([]inboxfmt.Row, 0, len(suggs))
@@ -80,7 +80,7 @@ func GenerateWeekly(ctx context.Context, deps Deps) (string, error) {
 			return path, fmt.Errorf("append inbox: %w", err)
 		}
 	}
-	deps.alert(ctx, "info", "sysretro weekly report generated: "+path)
+	deps.alert(ctx, "info", "[系统复盘] 周报已生成："+path)
 	return path, nil
 }
 

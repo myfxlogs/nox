@@ -52,7 +52,7 @@ func GenerateDaily(ctx context.Context, deps Deps) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	deps.alert(ctx, "info", "sysretro daily report generated: "+path)
+	deps.alert(ctx, "info", "[系统复盘] 日报已生成："+path)
 	return path, nil
 }
 

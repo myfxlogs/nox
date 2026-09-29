@@ -189,7 +189,7 @@ func (r *SwapReconciler) reconcileLegWithStore(ctx context.Context, pos pgstore.
 			return false, nil
 		}
 		// D-437 S3：告警带比对日（cmpDay）自解释，防值班误判对的是哪天。
-		msg := fmt.Sprintf("[swap-reconcile] position_id=%d venue=%s day=%s: 公式值=$%.4f 实际收入=$%.4f 偏差率=%.1f%% (阈值=%.1f%%)",
+		msg := fmt.Sprintf("[息差对账] 持仓 #%d（%s %s）：公式值 $%.4f 实际收入 $%.4f，偏差 %.1f%%（阈值 %.1f%%）",
 			pos.ID, venue, day.Format("2006-01-02"), expectUSD, actualUSD, deviationPct, r.deviationPct)
 		if err := r.store.InsertAlert(ctx, nil, level, msg); err != nil {
 			return false, fmt.Errorf("insert alert: %w", err)
@@ -219,7 +219,7 @@ func (r *SwapReconciler) reconcileLegWithStore(ctx context.Context, pos pgstore.
 		return false, nil
 	}
 
-	msg := fmt.Sprintf("[swap-reconcile] position_id=%d venue=%s day=%s: 公式值=$%.4f 实际增量=$%.4f 偏差率=%.1f%% (阈值=%.1f%%)",
+	msg := fmt.Sprintf("[息差对账] 持仓 #%d（%s %s）：公式值 $%.4f 实际增量 $%.4f，偏差 %.1f%%（阈值 %.1f%%）",
 		pos.ID, venue, day.Format("2006-01-02"), formulaUSD, todaySnap.SwapUSD-yesterdaySnap.SwapUSD, deviationPct, r.deviationPct)
 	if err := r.store.InsertAlert(ctx, nil, level, msg); err != nil {
 		return false, fmt.Errorf("insert alert: %w", err)
