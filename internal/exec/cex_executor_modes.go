@@ -30,6 +30,14 @@ func (e *CEXExecutor) binanceDualSide(ctx context.Context) (dual, probed bool) {
 	return dual, true
 }
 
+// resetDualSide D-569 包B S5：下单收到 -4061/-4062（positionSide 与账户模式不符）→
+// 缓存失效，下一单重新探测。锁内清 dualSideProbed。
+func (e *CEXExecutor) resetDualSide() {
+	e.dualSideMu.Lock()
+	e.dualSideProbed = false
+	e.dualSideMu.Unlock()
+}
+
 // binancePosSide 将内部 PositionSide（long/short 或 BUY/SELL）映射为 Binance positionSide 参数值。
 // Binance hedge 模式 positionSide 仅接受 "LONG"/"SHORT"（大写）。
 func binancePosSide(ps string) string {

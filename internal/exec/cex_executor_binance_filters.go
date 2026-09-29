@@ -24,7 +24,13 @@ type binanceFilters struct {
 	MinQty      float64 // LOT_SIZE.minQty
 	MinNotional float64 // MIN_NOTIONAL.notional
 	MaxNotional float64 // symbolConfig.maxNotionalValue（0=未采集不拦）
+	LotMaxQty   float64 // LOT_SIZE.maxQty（D-569 包B S3 量上限）
+	MktMaxQty   float64 // MARKET_LOT_SIZE.maxQty（同上；stepSize 实拍=0 不采）
+	at          time.Time
 }
+
+// binanceFiltersTTL 过滤器缓存有效期（D-569 包B S6：24h 超龄视 miss 重取）。
+const binanceFiltersTTL = 24 * time.Hour
 
 var (
 	binanceFiltersMu    sync.Mutex
@@ -35,7 +41,21 @@ func binanceFiltersLoad(symbol string) (binanceFilters, bool) {
 	binanceFiltersMu.Lock()
 	defer binanceFiltersMu.Unlock()
 	f, ok := binanceFiltersCache[symbol]
-	return f, ok
+	if !ok || time.Since(f.at) > binanceFiltersTTL {
+		return binanceFilters{}, false
+	}
+	return f, true
+}
+
+// binanceFiltersInvalidate D-569 包B S6：交易所拒单指过滤器漂移 → perp+spot 两表同删
+// （同 symbol 两域缓存，下一单各自重取）。
+func binanceFiltersInvalidate(symbol string) {
+	binanceFiltersMu.Lock()
+	delete(binanceFiltersCache, symbol)
+	binanceFiltersMu.Unlock()
+	spotFiltersMu.Lock()
+	delete(spotFiltersCache, symbol)
+	spotFiltersMu.Unlock()
 }
 
 func binanceFiltersStore(symbol string, f binanceFilters) {
@@ -57,6 +77,7 @@ func (e *CEXExecutor) binanceFiltersFetch(ctx context.Context, symbol string) (b
 				FilterType string `json:"filterType"`
 				StepSize   string `json:"stepSize"`
 				MinQty     string `json:"minQty"`
+				MaxQty     string `json:"maxQty"`
 				Notional   string `json:"notional"`
 			} `json:"filters"`
 		} `json:"symbols"`
@@ -68,12 +89,15 @@ func (e *CEXExecutor) binanceFiltersFetch(ctx context.Context, symbol string) (b
 		if s.Symbol != symbol {
 			continue
 		}
-		f := binanceFilters{}
+		f := binanceFilters{at: time.Now()}
 		for _, fl := range s.Filters {
 			switch fl.FilterType {
 			case "LOT_SIZE":
 				f.StepSize, _ = strconv.ParseFloat(fl.StepSize, 64)
 				f.MinQty, _ = strconv.ParseFloat(fl.MinQty, 64)
+				f.LotMaxQty, _ = strconv.ParseFloat(fl.MaxQty, 64)
+			case "MARKET_LOT_SIZE":
+				f.MktMaxQty, _ = strconv.ParseFloat(fl.MaxQty, 64)
 			case "MIN_NOTIONAL":
 				f.MinNotional, _ = strconv.ParseFloat(fl.Notional, 64)
 			}
@@ -179,6 +203,9 @@ func (e *CEXExecutor) binanceSpotQtyGuard(ctx context.Context, symbol string, qt
 	spotFiltersMu.Lock()
 	f, ok := spotFiltersCache[symbol]
 	spotFiltersMu.Unlock()
+	if ok && time.Since(f.at) > binanceFiltersTTL { // D-569 包B S6：超龄视 miss 重取（与 perp 同 TTL）
+		ok = false
+	}
 	if !ok {
 		var err error
 		if f, err = e.binanceSpotFiltersFetch(ctx, symbol); err != nil {
@@ -241,6 +268,13 @@ func (e *CEXExecutor) binanceQtyGuard(ctx context.Context, symbol string, qty, m
 	}
 	if f.MinQty > 0 && q < f.MinQty {
 		return 0, fmt.Errorf("binance %s 不足最小量：%.6f < minQty %.6f fail-closed", symbol, q, f.MinQty)
+	}
+	// D-569 包B S3：量上限双卡（MARKET_LOT_SIZE/LOT_SIZE 任一超即拒；平仓 mark=0 同卡）。
+	if f.MktMaxQty > 0 && q > f.MktMaxQty {
+		return 0, fmt.Errorf("binance %s 超市量上限：%.6f > MARKET_LOT_SIZE %.6f fail-closed", symbol, q, f.MktMaxQty)
+	}
+	if f.LotMaxQty > 0 && q > f.LotMaxQty {
+		return 0, fmt.Errorf("binance %s 超限量上限：%.6f > LOT_SIZE %.6f fail-closed", symbol, q, f.LotMaxQty)
 	}
 	if mark > 0 {
 		if f.MaxNotional == 0 { // symbolConfig 未采（exchangeInfo 无此字段）——补采一次并入库

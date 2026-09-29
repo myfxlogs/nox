@@ -193,8 +193,48 @@ func (e *CEXExecutor) evalBinanceStatus(ctx context.Context, o Order, ordID stri
 	return Fill{}, false, nil
 }
 
+// BinanceOrderSnap D-569 包B S4：私有 WS 订单事件快照（费恒 REST——无 FeeUSD 字段）。
+type BinanceOrderSnap struct {
+	State      string
+	AccFillQty float64
+	AvgPx      float64
+}
+
+// SetBinanceOrderLookup 注入订单事件查口（OrderEventCache.PeekOrder 闭包；nil 安全——
+// 未接线时确认循环纯 REST 兜底不变）。
+func (e *CEXExecutor) SetBinanceOrderLookup(fn func(ordID string) (BinanceOrderSnap, bool)) {
+	e.binanceOrderLookup = fn
+}
+
+// binanceSnapEval D-569 包B S4：事件快照求值——filled+qty>0 → Fill（费=REST 补）；
+// canceled → qty>0 部分 Fill / ==0 诚实错误；其余 → done=false 交 REST 拍照。
+func (e *CEXExecutor) binanceSnapEval(ctx context.Context, o Order, ordID string, sn BinanceOrderSnap) (Fill, bool, error) {
+	fee := func() float64 {
+		f, err := e.binanceUserTradesFeeUSD(ctx, o.Symbol, ordID)
+		if err != nil {
+			return 0 // 费查败诚实缺省不阻断（evalBinanceStatus 同口径）
+		}
+		return f
+	}
+	switch sn.State {
+	case "filled":
+		if sn.AccFillQty > 0 && sn.AvgPx > 0 {
+			return Fill{OrderID: ordID, Price: sn.AvgPx, Qty: sn.AccFillQty, Ts: time.Now(), FeeUSD: fee()}, true, nil
+		}
+	case "canceled":
+		if sn.AccFillQty > 0 && sn.AvgPx > 0 {
+			return Fill{OrderID: ordID, Price: sn.AvgPx, Qty: sn.AccFillQty, Ts: time.Now(), FeeUSD: fee()}, true, nil
+		}
+		msg := fmt.Sprintf("binance order %s: canceled executedQty=0（未成交）", ordID)
+		e.alertCritical(o, msg)
+		return Fill{}, true, fmt.Errorf("%s", msg)
+	}
+	return Fill{}, false, nil
+}
+
 // binanceConfirmFill D-421 §1.3：受理未确认的 Binance perp 单——退避轮询至 FILLED，
 // 窗尽 cancel+终查（executedQty>0=真实部分量；=0=确定未成交）；仍不可判 → ErrFillUnconfirmed。
+// D-569 包B S4：每拍先查私有 WS 事件 lookup——终态命中零 REST 即返；miss/live 回落 REST 拍照。
 func (e *CEXExecutor) binanceConfirmFill(ctx context.Context, o Order, ordID string) (Fill, error) {
 	deadline := time.Now().Add(fillConfirmMaxWait)
 	delay := 100 * time.Millisecond
@@ -203,6 +243,13 @@ func (e *CEXExecutor) binanceConfirmFill(ctx context.Context, o Order, ordID str
 		case <-ctx.Done():
 			return Fill{}, ctx.Err()
 		case <-time.After(delay):
+		}
+		if e.binanceOrderLookup != nil {
+			if sn, ok := e.binanceOrderLookup(ordID); ok {
+				if f, done, ferr := e.binanceSnapEval(ctx, o, ordID, sn); done {
+					return f, ferr
+				}
+			}
 		}
 		st, err := e.binanceOrderStatus(ctx, o.Symbol, ordID, "")
 		if err == nil {

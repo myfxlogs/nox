@@ -32,6 +32,9 @@ type CEXExecutor struct {
 	dualSide       bool // true=hedge mode（双仓），false=one-way（单仓）
 	dualSideProbed bool // 是否已探测（探测失败时 false + 保守按 hedge 处理）
 
+	// D-569 包B S4：binance 订单事件查口（OrderEventCache.PeekOrder 闭包；nil=纯 REST 兜底）。
+	binanceOrderLookup func(ordID string) (BinanceOrderSnap, bool)
+
 	// D-120：gate futures 合约规格缓存（contract → quanto_multiplier，避免每单查）。
 	// D-564 S4 U6：扩为全规格缓存（order_size_min/max、enable_decimal、in_delisting、
 	// leverage_max——规格=慢变元数据允许缓存，非决策时变数据）。

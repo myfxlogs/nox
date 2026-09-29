@@ -97,6 +97,18 @@ func (e *CEXExecutor) placeBinance(ctx context.Context, o Order) (Fill, error) {
 
 	body, err := e.signedBinanceRequest(ctx, "POST", endpoint, params)
 	if err != nil {
+		if code, ok := binanceErrCode(err); ok {
+			// D-569 包B S5：-4061/-4062（positionSide 与账户模式不符）→ dualSide 缓存失效重探。
+			if code == -4061 || code == -4062 {
+				e.resetDualSide()
+				e.alertCritical(o, fmt.Sprintf("binance %s %s side=%s code=%d: dualSide 缓存已失效将重探", o.Symbol, endpoint, side, code))
+			}
+			// D-569 包B S6：过滤器漂移族 → perp+spot 两表失效，本单按现状返回错误。
+			switch code {
+			case -1013, -1111, -4004, -4005, -4023, -4164:
+				binanceFiltersInvalidate(o.Symbol)
+			}
+		}
 		e.alertCritical(o, fmt.Sprintf("binance perp close rejected pos=%d symbol=%s side=%s: %v", o.PosID, o.Symbol, side, err))
 		return Fill{}, fmt.Errorf("cex order: %w", err)
 	}
