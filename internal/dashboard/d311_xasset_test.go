@@ -183,7 +183,7 @@ func TestD311_LegContractSizeOf_Perp(t *testing.T) {
 	// 解析器未接线 → :perp error（不猜 1.0——旧版缺陷根因）
 	s2 := &Service{}
 	if _, err := s2.legContractSizeOf("gate:perp", "CL_USDT"); err == nil ||
-		!strings.Contains(err.Error(), "not wired") {
-		t.Errorf("unwired resolver: want 'not wired' error, got %v", err)
+		!strings.Contains(err.Error(), "解析器未接线") {
+		t.Errorf("unwired resolver: want '解析器未接线', got %v", err)
 	}
 }

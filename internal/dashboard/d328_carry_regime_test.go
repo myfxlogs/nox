@@ -1,7 +1,7 @@
 package dashboard
 
 // D-328 S4 集成锚：carry 入口 funding regime 持久性闸（manual/intent.Execute 兜底路径）。
-// T1 485 回放=FAILED 带 "funding regime 未持续"；T1b 非收入腿豁免 / T2 放行 / T5 SWAPARB
+// T1 485 回放=FAILED 带「资金费率状态未持续」；T1b 非收入腿豁免 / T2 放行 / T5 SWAPARB
 // 不触发=到达后续环节（fake registry Execute 报错但 msg 不含 regime）。
 
 import (
@@ -69,7 +69,7 @@ func d328SeedManualFunding(t *testing.T, st *pgstore.Store, vals ...float64) {
 }
 
 // TestD328_ExecuteInternal_RegimeDead_FAILED T1 485 回放（manual 路径）：
-// 死 regime → FAILED "funding regime 未持续"（对未接线码先红=到达 Execute 的其他报错）。
+// 死 regime → FAILED "资金费率状态未持续"（对未接线码先红=到达 Execute 的其他报错）。
 func TestD328_ExecuteInternal_RegimeDead_FAILED(t *testing.T) {
 	st := serviceTestStoreSingleInit(t)
 	svc, oppID := d328SeedManualFixture(t, st)
@@ -79,7 +79,7 @@ func TestD328_ExecuteInternal_RegimeDead_FAILED(t *testing.T) {
 	if status != "FAILED" || posID != 0 {
 		t.Fatalf("死 regime 应 FAILED posID=0, got %s/%d", status, posID)
 	}
-	if !strings.Contains(msg, "funding regime 未持续") {
+	if !strings.Contains(msg, "资金费率状态未持续") {
 		t.Errorf("msg 应带 regime 拒绝原因, got %q", msg)
 	}
 	// reason 带窗口统计（max=0：窗口含归零样本）供 FAILED message 可诊断
@@ -97,7 +97,7 @@ func TestD328_ExecuteInternal_NonIncomeAndPass(t *testing.T) {
 	svc, oppID := d328SeedManualFixture(t, st)
 	d328SeedManualFunding(t, st, -17, -4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 	status, msg, _ := svc.ExecuteOpportunityInternal(context.Background(), oppID, "d328-t1b", 1.0)
-	if strings.Contains(msg, "funding regime 未持续") {
+	if strings.Contains(msg, "资金费率状态未持续") {
 		t.Errorf("T1b 非收入腿应豁免, msg=%s", msg)
 	}
 	if status == "EXECUTED" {
@@ -109,7 +109,7 @@ func TestD328_ExecuteInternal_NonIncomeAndPass(t *testing.T) {
 	svc2, oppID2 := d328SeedManualFixture(t, st2)
 	d328SeedManualFunding(t, st2, -25, -20, -18, -15, -12, -11, -10, -10, -9, -9, -8.5, -8, -2)
 	status2, msg2, _ := svc2.ExecuteOpportunityInternal(context.Background(), oppID2, "d328-t2", 1.0)
-	if strings.Contains(msg2, "funding regime 未持续") {
+	if strings.Contains(msg2, "资金费率状态未持续") {
 		t.Errorf("T2 全程深负应放行, msg=%s", msg2)
 	}
 	if status2 == "EXECUTED" {
@@ -151,7 +151,7 @@ func TestD328_ExecuteInternal_NoTrigger(t *testing.T) {
 	svc.SetCexContractSize(func(venue, venueSymbol string) (float64, bool) { return 0.001, true })
 
 	status, msg, _ := svc.ExecuteOpportunityInternal(context.Background(), oppID, "d328-t5", 1.0)
-	if strings.Contains(msg, "funding regime 未持续") {
+	if strings.Contains(msg, "资金费率状态未持续") {
 		t.Errorf("PERP_FUNDING 不应被 regime 闸拦截, msg=%s", msg)
 	}
 	if status == "EXECUTED" {

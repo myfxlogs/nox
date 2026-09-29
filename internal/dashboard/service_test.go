@@ -51,7 +51,7 @@ func TestResolveLegs(t *testing.T) {
 
 // TestResolveLegsNotionalScaling D-060 实施修正②：不等 CS（油 1000:100 桶/手）卖腿等名义反算
 // 10×；CS 缺失拒；未接线拒。D-329：取整致失衡改两段式——pass-2 粗腿锚定匹配放行，
-// 匹配仍超才拒（leg granularity unexecutable，锚=d329_legs_match_test.go T3）。
+// 匹配仍超才拒（腿粒度无法执行，锚=d329_legs_match_test.go T3）。
 func TestResolveLegsNotionalScaling(t *testing.T) {
 	b := bus.New()
 	now := time.Now()
@@ -73,14 +73,14 @@ func TestResolveLegsNotionalScaling(t *testing.T) {
 
 	// CS 缺失 → 拒。
 	s.legContractSize = func(_, _ string) (float64, bool) { return 0, false }
-	if _, err := s.resolveLegs(found, 0.1); err == nil || !strings.Contains(err.Error(), "contract size unknown") {
+	if _, err := s.resolveLegs(found, 0.1); err == nil || !strings.Contains(err.Error(), "合约大小未知") {
 		t.Errorf("missing CS want reject, got %v", err)
 	}
 
 	// 未接线 → 拒。
 	s.legContractSize = nil
-	if _, err := s.resolveLegs(found, 0.1); err == nil || !strings.Contains(err.Error(), "not wired") {
-		t.Errorf("not wired want reject, got %v", err)
+	if _, err := s.resolveLegs(found, 0.1); err == nil || !strings.Contains(err.Error(), "解析器未接线") {
+		t.Errorf("解析器未接线 want reject, got %v", err)
 	}
 
 	// 取整致失衡 >2%（CS 1:6，qty 0.1 → sell 0.02，名义差 20%）→ D-329 pass-2：
@@ -212,7 +212,7 @@ func TestResolveLegsVolumePreflight(t *testing.T) {
 		},
 	}
 	// qty 0.05：卖腿 BRENT min=1.0 → 拒。
-	if _, err := s.resolveLegs(found, 0.05); err == nil || !strings.Contains(err.Error(), "below venue min lot") {
+	if _, err := s.resolveLegs(found, 0.05); err == nil || !strings.Contains(err.Error(), "低于 venue 最小手数") {
 		t.Errorf("sell below min want reject, got %v", err)
 	}
 	// qty 1.0：双腿合法 → 过。

@@ -49,7 +49,7 @@ func setupMeanRevertService(t *testing.T, withUSDJPY bool) *Service {
 }
 
 // TestExecuteMeanRevertWithCap_JPYFxMissing_FAILED D-190 §1.5：
-// AUDJPY 报价有但无 USDJPY → PerLot fail-closed → FAILED "usd per lot unavailable"。
+// AUDJPY 报价有但无 USDJPY → PerLot fail-closed → FAILED "名义额不可得"。
 // D-190 R6：注入 fake pipeline 走过 line 122，到达 line 162 PerLot 检查。
 func TestExecuteMeanRevertWithCap_JPYFxMissing_FAILED(t *testing.T) {
 	s := setupMeanRevertService(t, false) // 无 USDJPY
@@ -58,7 +58,7 @@ func TestExecuteMeanRevertWithCap_JPYFxMissing_FAILED(t *testing.T) {
 	if status != "FAILED" {
 		t.Errorf("fx missing: status=%s want FAILED", status)
 	}
-	if !strings.Contains(msg, "usd per lot unavailable") {
+	if !strings.Contains(msg, "名义额不可得") {
 		t.Errorf("fx missing: msg=%s want contain 'usd per lot unavailable'", msg)
 	}
 }
@@ -74,8 +74,8 @@ func TestExecuteMeanRevertWithCap_JPYOverCap_FloorToMinLot(t *testing.T) {
 	// 用更大 qty 验证超 cap：qty=100000 → notional=64700 > 5000 → 压 min lot
 	status, msg, _ := s.ExecuteMeanRevertWithCap(context.Background(),
 		"AUDJPY", "vA:mt5", "vB:mt5", "req-test", 100000, 0.5, 5000, "MEANREVERT")
-	// cap 压缩后继续走 imbalance/legVolume 检查，可能因 pipeline nil FAILED，但不应是 "usd per lot unavailable"
-	if strings.Contains(msg, "usd per lot unavailable") {
+	// cap 压缩后继续走 imbalance/legVolume 检查，可能因 pipeline nil FAILED，但不应是 "名义额不可得"
+	if strings.Contains(msg, "名义额不可得") {
 		t.Errorf("over cap: should not fail-closed on PerLot (USDJPY present), msg=%s", msg)
 	}
 	_ = status // status 可能因后续门禁 FAILED，但不是 PerLot fail-closed

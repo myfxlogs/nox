@@ -46,8 +46,8 @@ func TestCheckFreezeGuard_FrozenLegAborts(t *testing.T) {
 	if !strings.Contains(err.Error(), "p:mt5") {
 		t.Errorf("错误应含冻结腿 venueKey p:mt5, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "frozen") {
-		t.Errorf("错误应含 frozen, got %v", err)
+	if !strings.Contains(err.Error(), "冻结") {
+		t.Errorf("错误应含冻结, got %v", err)
 	}
 }
 
