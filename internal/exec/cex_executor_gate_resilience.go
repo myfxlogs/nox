@@ -127,8 +127,15 @@ func gateRetryable(label string, status int) bool {
 
 // gateOrderStatus 查询 Gate 订单成交（GET /futures/usdt/orders/{order_id}，签名 GET）。
 // D-570 包A S2e：限频白名单退避 ≤2 次（250ms→500ms，ctx.Done 感知）；非 retryable/成功即时出。
-func (e *CEXExecutor) gateOrderStatus(ctx context.Context, orderID string) (gateOrderResponse, error) {
-	ord, err := e.gateStatusOnce(ctx, orderID)
+// D-570 包B S4①：order_id 路径参数收「订单 ID 或下单时 text」（快照 :28387）——orderID 空时退
+// clOrdID（caveat：未成交取消单 60s 后 text 查询失效 ORDER_NOT_FOUND、零成交取消单 10min 内
+// 不可检索——orderID 优先序天然规避主路径）。
+func (e *CEXExecutor) gateOrderStatus(ctx context.Context, orderID, clOrdID string) (gateOrderResponse, error) {
+	key := orderID
+	if key == "" {
+		key = clOrdID
+	}
+	ord, err := e.gateStatusOnce(ctx, key)
 	for _, delay := range []time.Duration{250 * time.Millisecond, 500 * time.Millisecond} {
 		if err == nil {
 			return ord, nil
@@ -147,7 +154,7 @@ func (e *CEXExecutor) gateOrderStatus(ctx context.Context, orderID string) (gate
 			return gateOrderResponse{}, ctx.Err()
 		case <-time.After(delay):
 		}
-		ord, err = e.gateStatusOnce(ctx, orderID)
+		ord, err = e.gateStatusOnce(ctx, key)
 	}
 	return ord, err
 }

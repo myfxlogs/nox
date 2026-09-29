@@ -8,7 +8,6 @@ import (
 	"math"
 	"net/http"
 	"strconv"
-	"time"
 )
 
 // gateOrderResponse Gate futures 订单响应/状态对象字段（D-098 G1，返修包① M1/M2 对拍 gateapi-go）。
@@ -95,8 +94,9 @@ func (e *CEXExecutor) placeGateRaw(ctx context.Context, o Order) ([]byte, Fill, 
 		default:
 			return nil, Fill{}, fmt.Errorf("gate dual close: PositionSide %q 非法（long/short）fail-closed", o.PositionSide)
 		}
-		bodyStr = fmt.Sprintf(`{"contract":%q,"size":0,"price":"0","tif":"ioc","text":"t-arb","close":true,"auto_size":%q,"reduce_only":true}`,
-			o.Symbol, closeSide)
+		// D-570 包B S5：text 单号真实化（t-<clientOrderID> 截28B；空=t-arb 兜底）。
+		bodyStr = fmt.Sprintf(`{"contract":%q,"size":0,"price":"0","tif":"ioc","text":%q,"close":true,"auto_size":%q,"reduce_only":true}`,
+			o.Symbol, gateOrderText(o), closeSide)
 	} else {
 		// D-564 S4：size 序列化按 enable_decimal 分支——false=整数张 %d（现形）；
 		// true=小数字符串（strip 零尾）。开仓带 reduce_only=false，平仓 reduce_only=true。
@@ -104,8 +104,8 @@ func (e *CEXExecutor) placeGateRaw(ctx context.Context, o Order) ([]byte, Fill, 
 		if spec.EnableDecimal {
 			sizeLit = strconv.FormatFloat(sizeF, 'f', -1, 64)
 		}
-		bodyStr = fmt.Sprintf(`{"contract":%q,"size":%s,"price":"0","tif":"ioc","text":"t-arb","reduce_only":%t}`,
-			o.Symbol, sizeLit, o.PositionSide != "")
+		bodyStr = fmt.Sprintf(`{"contract":%q,"size":%s,"price":"0","tif":"ioc","text":%q,"reduce_only":%t}`,
+			o.Symbol, sizeLit, gateOrderText(o), o.PositionSide != "")
 	}
 
 	const endpoint = "/futures/usdt/orders"
@@ -126,32 +126,11 @@ func (e *CEXExecutor) placeGateRaw(ctx context.Context, o Order) ([]byte, Fill, 
 	// D-120：gateFilled 返回的 qty 是合约数 → 乘 quanto 回填为基础币数量（Fill.Qty 契约=基础币）。
 	toBaseQty := func(fill Fill) Fill { fill.Qty = fill.Qty * quanto; return fill }
 	if ord.Status == "open" {
-		var last gateOrderResponse
-		for range 5 {
-			time.Sleep(100 * time.Millisecond)
-			st, perr := e.gateOrderStatus(ctx, strconv.FormatInt(ord.ID, 10))
-			if perr != nil {
-				return rawBody, Fill{}, fmt.Errorf("gate order poll: %w", perr)
-			}
-			if st.Status == "finished" {
-				fill, ferr := gateFinishFill(st)
-				if ferr != nil {
-					return rawBody, fill, ferr
-				}
-				return rawBody, toBaseQty(fill), nil
-			}
-			last = st
-		}
-		// 5 次轮询仍 open → fallthrough 守卫（防 0-qty 假成交，okx 教训，M2）
-		qty, price, ferr := gateFilled(last)
-		if ferr != nil {
-			return rawBody, Fill{}, ferr
-		}
-		if qty <= 0 || price <= 0 {
-			return rawBody, Fill{}, fmt.Errorf("gate order %d: 5 次轮询仍 open 且无成交（qty=%v price=%v left=%d）",
-				ord.ID, qty, price, last.Left)
-		}
-		return rawBody, toBaseQty(Fill{OrderID: strconv.FormatInt(last.ID, 10), Price: price, Qty: qty, Ts: time.Now()}), nil
+		// D-570 包B S4②：内联 5×100ms 轮询重构为 gateConfirmFill 三分量窗
+		//（事件 lookup 先查+REST 兜底+窗尽撤单终查+ErrFillUnconfirmed）。
+		// qty 换算责任钉死 gateConfirmFill 内部（返基础币），本调用点不再乘 quanto。
+		fill, ferr := e.gateConfirmFill(ctx, o, strconv.FormatInt(ord.ID, 10))
+		return rawBody, fill, ferr
 	}
 	// POST 即 finished（IOC 常见：finish_as=ioc/filled/cancelled/stp/...）
 	fill, ferr := gateFinishFill(ord)

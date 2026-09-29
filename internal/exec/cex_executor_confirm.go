@@ -73,6 +73,8 @@ func (e *CEXExecutor) QueryOrderStatus(ctx context.Context, orderID, clOrdID, sy
 			state = "canceled"
 		}
 		return state, qty, px, 0, nil
+	case "gate": // D-570 包B S4①：gate 分支（消解器/缓存包装对 gate 不再哑；实现在 gate_confirm.go）。
+		return e.gateQueryOrderStatus(ctx, orderID, clOrdID, symbol)
 	}
 	return "", 0, 0, 0, fmt.Errorf("order status query unsupported venue %s", e.venue)
 }

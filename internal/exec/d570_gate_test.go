@@ -170,7 +170,7 @@ func TestD570_A3_ExptimeHeader(t *testing.T) {
 		t.Fatalf("exptime=%d 应≈now+15s（diff=%dms）", ms, d)
 	}
 	// GET 路径无此头（gateOrderStatus 走签名 GET，不经过 exptime 逻辑）。
-	if _, err := f.e.gateOrderStatus(context.Background(), "9"); err != nil {
+	if _, err := f.e.gateOrderStatus(context.Background(), "9", ""); err != nil {
 		t.Fatalf("gateOrderStatus: %v", err)
 	}
 	gh := getHdr.Load().(http.Header)
@@ -258,7 +258,7 @@ func TestD570_A5_GetBackoff(t *testing.T) {
 		},
 	}
 	f := newD570Fixture(t, h)
-	ord, err := f.e.gateOrderStatus(context.Background(), "9")
+	ord, err := f.e.gateOrderStatus(context.Background(), "9", "")
 	if err != nil || ord.Status != "finished" {
 		t.Fatalf("退避后应成功: %+v %v", ord, err)
 	}
@@ -275,7 +275,7 @@ func TestD570_A5_GetBackoff(t *testing.T) {
 		}
 		_, _ = io.WriteString(w, `{"id":9,"status":"finished","finish_as":"filled","size":1,"left":0,"fill_price":"100"}`)
 	}
-	if _, err := f.e.gateOrderStatus(context.Background(), "9"); err != nil {
+	if _, err := f.e.gateOrderStatus(context.Background(), "9", ""); err != nil {
 		t.Fatalf("429 退避后应成功: %v", err)
 	}
 	if c2.Load() != 2 {
@@ -288,7 +288,7 @@ func TestD570_A5_GetBackoff(t *testing.T) {
 		w.WriteHeader(400)
 		_, _ = io.WriteString(w, `{"label":"INVALID_PRECISION","message":"bad"}`)
 	}
-	if _, err := f.e.gateOrderStatus(context.Background(), "9"); err == nil {
+	if _, err := f.e.gateOrderStatus(context.Background(), "9", ""); err == nil {
 		t.Fatalf("终态 label 应上抛")
 	}
 	if c3.Load() != 1 {

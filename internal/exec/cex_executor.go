@@ -34,6 +34,8 @@ type CEXExecutor struct {
 
 	// D-569 包B S4：binance 订单事件查口（OrderEventCache.PeekOrder 闭包；nil=纯 REST 兜底）。
 	binanceOrderLookup func(ordID string) (BinanceOrderSnap, bool)
+	// D-570 包B S4③：gate 订单事件查口（同构；费走帧回填）。
+	gateOrderLookup func(ordID string) (GateOrderSnap, bool)
 
 	// D-120：gate futures 合约规格缓存（contract → quanto_multiplier，避免每单查）。
 	// D-564 S4 U6：扩为全规格缓存（order_size_min/max、enable_decimal、in_delisting、
