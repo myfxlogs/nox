@@ -24,7 +24,7 @@ const (
 // d406Engine 轮转测试引擎：service 接真 store（MarginFloorKnown 数据源=D-405 快照表），
 // CS resolver 注入（MT=100/CEX=1）；fundingBreach/disasterBreach 初始化。
 func d406Engine(s *pgstore.Store, qb *bus.QuoteBus, maxPerDay int) *Engine {
-	svc := dashboard.New(s, qb, nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, nil, nil, nil, 0, nil, nil, 0, 0, nil)
+	svc := dashboard.New(s, qb, nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, nil, 0, nil, nil, 0, 0, nil)
 	svc.SetLegContractSize(func(_, _ string) (float64, bool) { return 100, true })
 	svc.SetCexContractSize(func(_, _ string) (float64, bool) { return 1.0, true })
 	// D-549：CEX 执行链资金数=活账本/REST 实拉（快照兜底禁用）——喂 ws 活值
