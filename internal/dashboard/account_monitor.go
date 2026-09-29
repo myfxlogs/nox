@@ -1,49 +1,53 @@
-// AccountMonitor 账户资产视图的单一真相源（D-053）。
-// 轮询逐查询器取账户资金（CFD AccountSummary / CEX 签名余额）→ 跟踪在线状态（离线保留最近成功快照）
-// → 变更时经 Topic 广播全量快照。推（StreamUpdates case 9）与拉（ListAccounts）同源；前端全量替换。
+// AccountMonitor 账户资产视图的单一真相源（D-053；D-571 包B 事件化）。
+// 事件源三源汇入：REST 只挂事件点（boot 首读/kick 定向回读/手动 Refresh）、MT5 流帧
+// 六字段 patch（ObserveStreamAccount）、CEX 私有流余额账本命中 patch（OnLedgerAcct）
+// → dirty 尾沿合批 → 逐 venue case 16 AccountEvent 发射。推（StreamUpdates case 16）
+// 与拉（ListAccounts/Snapshot 读 cur）同源；前端 keyed merge。显示链零定时器。
 package dashboard
 
 import (
 	"context"
 	"log"
-	"maps"
-	"os"
-	"sort"
-	"strings"
 	"sync"
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/keydomain"
 	"arb/internal/reconcile"
-	"arb/internal/store/pgstore"
 
 	v1 "arb/internal/gen/dashboardv1"
 )
 
 // acctVenueState 单个账户查询源的状态（在线 + 最近成功快照）。
 type acctVenueState struct {
-	online bool
-	acct   *reconcile.AccountInfo
+	online     bool // 生效在线态（streamKnown?streamOnline:restOnline）
+	restOnline bool // REST 成败（流状态缺席时兜底，镜像 bpMon）
+	acct       *reconcile.AccountInfo
+	asOf       time.Time // 数据时点：REST=采到时刻 / 流帧=FrameTime / ledger=entry.At
 }
 
-// AccountMonitor 跟踪全部账户（CFD + CEX）资金并广播变更。
+// AccountMonitor 跟踪全部账户（CFD + CEX）资金并发射逐 venue 变更事件。
 type AccountMonitor struct {
-	bm       *BrokerManager             // CFD 账户查询器来源（每轮重取，venue 启停自动跟随）
-	exchs    ExchangeStore              // CEX 交易所配置来源（D-054：每轮重取，后台增删即时生效）
-	statics  []reconcile.AccountQuerier // 附加查询器（测试注入 fake 用；生产为空）
-	interval time.Duration
-	topic    *bus.Topic[*v1.AccountSnapshot]
+	bm      *BrokerManager             // CFD 账户查询器来源（每轮重取，venue 启停自动跟随）
+	exchs   ExchangeStore              // CEX 交易所配置来源（D-054：每轮重取，后台增删即时生效）
+	statics []reconcile.AccountQuerier // 附加查询器（测试注入 fake 用；生产为空）
+	evTopic *bus.Topic[*v1.AccountEvent]
 
 	mu     sync.RWMutex
 	states map[string]acctVenueState // venueKey → 状态
-	cache  []*v1.AccountInfo         // 最近构建的视图（含离线快照）
-	lastFP string                    // 上次广播指纹（变更检测）
+	// D-571 包B：事件发射面（镜像 broker_position_events.go）。
+	cur          map[string]*v1.AccountInfo // 已发射态（回放源+去重基准）
+	dirty        map[string]struct{}        // 待发射 venue 集
+	flushT       *time.Timer                // 尾沿合批
+	streamKnown  map[string]bool            // venue 流状态已知（MT5 域；CEX 永不置位→restOnline 兜底）
+	streamOnline map[string]bool            // 流权威在线态
+	pendingKick  map[string]struct{}
+	kickSig      chan struct{}
+	balLedger    *bus.BalanceLedger // D-571 包B：CEX 余额活账本（SetBalanceLedger 注入）
 	// cooldown 账号 RPC 冷却（D-077 修复⑩ G2：连续超时 ≥2 → 10s 冷却跳过）。
 	cooldown *Cooldown
 
-	// D-107 P2：margin 事件触发重采（OnOrderProfit → MarginSink → OrderProfitKick → Kick）。
-	kickCh   chan struct{}
-	lastPoll time.Time // 防抖基准：最近一次 kick 触发 poll 的时间（仅 kick 路径更新，ticker 不更新）
+	lastPoll time.Time // 防抖基准：最近一次全量 kick 触发 poll 的时间（仅全量 kick 路径更新）
 
 	// D-445 S0：MT5 OnOrderUpdate 余额帧 tap（venueKey → 最近一帧；Refresh 失败兜底+加温）。
 	streamAccts sync.Map // venueKey → StreamAcct
@@ -55,15 +59,19 @@ type AccountMonitor struct {
 	fundsHook func()
 }
 
-// NewAccountMonitor 创建 monitor。interval 复用 ARB_BROKER_POS_POLL_MS（D-053 不新增 knob）。
-func NewAccountMonitor(bm *BrokerManager, interval time.Duration, topic *bus.Topic[*v1.AccountSnapshot]) *AccountMonitor {
+// NewAccountMonitor 创建 monitor（D-571 包B：interval 参死净——ticker 已删，事件驱动）。
+func NewAccountMonitor(bm *BrokerManager, evTopic *bus.Topic[*v1.AccountEvent]) *AccountMonitor {
 	return &AccountMonitor{
-		bm:       bm,
-		interval: interval,
-		topic:    topic,
-		states:   make(map[string]acctVenueState),
-		cooldown: NewCooldown(2, 10*time.Second), // D-077 修复⑩ G2
-		kickCh:   make(chan struct{}, 1),         // D-107 P2：buffered(1) 非阻塞 send = 事件合并
+		bm:           bm,
+		evTopic:      evTopic,
+		states:       make(map[string]acctVenueState),
+		cur:          make(map[string]*v1.AccountInfo),
+		dirty:        make(map[string]struct{}),
+		streamKnown:  make(map[string]bool),
+		streamOnline: make(map[string]bool),
+		pendingKick:  make(map[string]struct{}),
+		cooldown:     NewCooldown(2, 10*time.Second), // D-077 修复⑩ G2
+		kickSig:      make(chan struct{}, 1),         // cap1 非阻塞 send = 事件合并
 	}
 }
 
@@ -81,20 +89,25 @@ func (m *AccountMonitor) AddStatic(q reconcile.AccountQuerier) {
 	m.statics = append(m.statics, q)
 }
 
-// accountKickDebounce D-107 P2：kick 触发 poll 防抖窗口（D-099 margin 防抖 5min 先例——
-// 静态数据防事件洪峰重复查库；ticker 兜底不受此限）。
+// accountKickDebounce D-107 P2：全量 kick（""）防抖窗口——margin 事件洪峰防全场 REST
+// （D-099 先例）；定向 kick（vk≠""）无防抖直读（镜像 bpMon reconcileVenueKeys 即时语义）。
 var accountKickDebounce = 30 * time.Second // D-469a S5：事件化后 5min 防抖失去意义降 30s
 
-// Kick D-107 P2：margin 事件触发重采（非阻塞 send 到 buffered(1) chan——合并语义同 BrokerPositionMonitor）。
-func (m *AccountMonitor) Kick() {
+// Kick 事件触发账户回读（D-107 P2 起，D-571 包B 改 venue 定向）。
+// venueKey 完整键（"acct:mt5"/"binance:perp"）或裸 venue 名（"binance"→全部类型键）；
+// 集合去重 + cap1 信号 = 事件合并。空串 = 全 venue（走防抖）。
+func (m *AccountMonitor) Kick(venueKey string) {
+	m.mu.Lock()
+	m.pendingKick[venueKey] = struct{}{}
+	m.mu.Unlock()
 	select {
-	case m.kickCh <- struct{}{}:
-	default: // 已有待处理 kick，合并丢弃
+	case m.kickSig <- struct{}{}:
+	default: // 已有待处理信号，合并丢弃
 	}
 }
 
-// pollIfDue D-107 P2：kick 触发防抖 poll——距上次 kick-poll <5min 直接返回（D-099 先例）；
-// 否则执行 poll 并更新 lastPoll。ticker 路径不受此限（兜底不变）。
+// pollIfDue 全量 kick 防抖 poll：距上次全量 kick-poll <30s 直接返回；否则 poll 并更新基准。
+// （D-571 包B 收窄：仅全量 kick 路径用；定向 kick 无防抖直读。）
 func (m *AccountMonitor) pollIfDue(ctx context.Context) {
 	m.mu.Lock()
 	if time.Since(m.lastPoll) < accountKickDebounce {
@@ -110,23 +123,25 @@ func (m *AccountMonitor) pollIfDue(ctx context.Context) {
 	m.mu.Unlock()
 }
 
-// Run 轮询直至 ctx 取消。启动即轮询一次（首个快照立即可用）。
-// D-107 P2：kickCh 事件触发 pollIfDue（5min 防抖）；ticker 保留作兜底。
+// Run 事件驱动主循环（D-571 包B：ticker 删净）。启动即 poll 一次=事件源重建（设计 §3.2 豁免），
+// 此后只响应 kickSig：""=全量防抖 poll，vk=定向 pollVenueKeys 直读。
 func (m *AccountMonitor) Run(ctx context.Context) {
 	m.poll(ctx)
 	m.mu.Lock()
-	m.lastPoll = time.Now() // D-107 P2：初始 poll 后设防抖基准（防首 kick 绕过防抖）
+	m.lastPoll = time.Now() // 初始 poll 后设防抖基准（防首 kick 绕过防抖）
 	m.mu.Unlock()
-	ticker := time.NewTicker(m.interval)
-	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-m.kickCh:
-			m.pollIfDue(ctx) // D-107 P2：事件触发重采（5min 防抖）
-		case <-ticker.C:
-			m.poll(ctx)
+		case <-m.kickSig:
+			for _, kick := range m.drainKicks() {
+				if kick == "" {
+					m.pollIfDue(ctx)
+				} else {
+					m.pollVenueKeys(ctx, kick)
+				}
+			}
 		}
 	}
 }
@@ -134,40 +149,19 @@ func (m *AccountMonitor) Run(ctx context.Context) {
 // Refresh 同步执行一次轮询并返回当前视图。
 func (m *AccountMonitor) Refresh(ctx context.Context) []*v1.AccountInfo {
 	m.poll(ctx)
+	m.flush(ctx)
 	return m.Snapshot()
 }
 
-// Snapshot 返回当前缓存视图（ListAccounts 拉路径）。
+// Snapshot 返回当前视图（ListAccounts 拉路径——cur 已发射态排序同源）。
 func (m *AccountMonitor) Snapshot() []*v1.AccountInfo {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.cache
-}
-
-// resolveExchangeBaseURL 推导 CEX 交易所 base（D-059 抽公共，账户查询与执行器共用）。
-// 行为与原 queriers() 内联一致：base_url 显式 → 用之；空 → binance 默认 BINANCE_PROXY_URL
-// （无则 fapi 直连，451 由部署负责）、okx 默认 www.okx.com；binance 代理 base 是 fapi 风格，
-// 无 /api/ 段则 fapi→api 得 spot base（与采集一致）。
-func resolveExchangeBaseURL(c pgstore.ExchangeConfig) string {
-	base := c.BaseURL
-	if base == "" {
-		switch c.Venue {
-		case "binance":
-			base = os.Getenv("BINANCE_PROXY_URL")
-			if base == "" {
-				base = "https://fapi.binance.com" // 无代理直连；451 由部署负责
-			}
-		case "okx":
-			base = "https://www.okx.com" // 实盘域名
-		}
+	out := make([]*v1.AccountInfo, 0, len(m.cur))
+	for _, k := range sortedKeys(m.cur) {
+		out = append(out, m.cur[k])
 	}
-	if c.Venue == "binance" && c.VenueType == "spot" && !strings.Contains(base, "/api/") {
-		// 与采集一致：仅 spot 需从 fapi 风格代理 base 推导 spot base。
-		// naive replace 按首命中换段——仅 spot 走此推导（perp base 含 fapi 段原样保留，
-		// 历史 demo 形前缀同样不被错改；D-516 起 sim 行上游 fail-closed 不入此路径）。
-		base = strings.Replace(base, "fapi", "api", 1)
-	}
-	return base
+	return out
 }
 
 // queriers 汇总查询器：CFD（brokerMgr 每轮重取）+ CEX（DB 每轮重取，D-054）+ statics（测试注入）。
@@ -203,10 +197,25 @@ func (m *AccountMonitor) queriers(ctx context.Context) []reconcile.AccountQuerie
 	return qs
 }
 
-// poll 一次轮询：逐查询器 → 更新状态 → 构建视图 → 变更则广播。
+// poll 全量轮询（boot 首读/全量 kick/Refresh）：逐查询器 → 落态 → dirty 尾沿发射。
 // D-460 S1 两阶段拆分（D-447 遗留 wart 真修）：无锁段跑网络 RPC，锁内只做内存
 // merge——旧实现持写锁跨逐 venue RPC 循环，Snapshot（ListAccounts 拉路径）全程排队。
 func (m *AccountMonitor) poll(ctx context.Context) {
+	m.pollImpl(ctx, nil)
+	m.flush(ctx)
+}
+
+// pollVenueKeys 定向回读（kick 键：完整 venueKey 直查；裸 venue 名=其全部类型键——
+// 镜像 broker_position_events.go reconcileVenueKeys 匹配法）。无防抖直读。
+func (m *AccountMonitor) pollVenueKeys(ctx context.Context, kick string) {
+	m.pollImpl(ctx, func(vk string) bool {
+		return vk == kick || keydomain.BareOf(vk) == kick
+	})
+	m.flush(ctx)
+}
+
+// pollImpl 轮询骨架：match==nil=全量；否则仅命中键回读。RPC 在无锁段，merge 在锁内段。
+func (m *AccountMonitor) pollImpl(ctx context.Context, match func(vk string) bool) {
 	// queriers() 内部取 m.mu.RLock——必须先于写锁获取（RWMutex 非重入，持写锁再读锁会自锁）。
 	qs := m.queriers(ctx)
 
@@ -222,6 +231,9 @@ func (m *AccountMonitor) poll(ctx context.Context) {
 			continue
 		}
 		vk := q.VenueKey()
+		if match != nil && !match(vk) {
+			continue
+		}
 		// D-077 修复⑩ G2：RPC 冷却——连续超时 ≥2 → 10s 冷却跳过（archive #22 事故防御）。
 		// D-362 S4③ 核证：cooldown/offline 状态以生效键（含 #id 后缀）为键——撞键双配置
 		// 各自独立冷却/在线状态=正确语义（demo 超时不遮蔽 real）。
@@ -231,69 +243,48 @@ func (m *AccountMonitor) poll(ctx context.Context) {
 		acct, err := q.Account(ctx)
 		results = append(results, pollRes{vk: vk, acct: acct, err: err})
 	}
-
-	// 锁内段：纯内存 merge（cooldown Record + states 更新），零 RPC。
-	m.mu.Lock()
 	for _, r := range results {
-		m.cooldown.Record(r.vk, r.err)
-		st := m.states[r.vk]
-		if r.err != nil {
-			// 离线：保留最近成功快照（D-052 业主决策），不覆盖 acct。
-			if !st.online {
-				// 从未在线：也记录一次（CEX 首次配置失败曾静默无日志，难排障）
-				log.Printf("[account-mon] %s first-poll error: %v", r.vk, r.err)
-				continue
-			}
-			st.online = false
-			m.states[r.vk] = st
-			log.Printf("[account-mon] %s offline: %v", r.vk, r.err)
-			continue
-		}
-		m.states[r.vk] = acctVenueState{online: true, acct: r.acct}
+		m.applyAcctResult(r.vk, r.acct, r.err)
 	}
-	m.mu.Unlock()
+}
 
-	view := m.build()
-	fp := accountFingerprint(view)
-
+// applyAcctResult REST 结果落态：err→restOnline=false（在线翻转则脏化，离线保留最近
+// 成功快照 D-052）；ok→restOnline=true+acct 落态+dirty。cooldown Record 在锁内。
+func (m *AccountMonitor) applyAcctResult(vk string, acct *reconcile.AccountInfo, err error) {
 	m.mu.Lock()
-	m.cache = view
-	changed := fp != m.lastFP
-	if changed {
-		m.lastFP = fp
+	defer m.mu.Unlock()
+	m.cooldown.Record(vk, err)
+	st := m.states[vk]
+	if err != nil {
+		st.restOnline = false
+		wasOnline := st.online
+		st.online = m.onlineLocked(vk, st)
+		if !wasOnline {
+			// 从未在线：也记录一次（CEX 首次配置失败曾静默无日志，难排障）
+			log.Printf("[account-mon] %s first-poll error: %v", vk, err)
+			return
+		}
+		m.states[vk] = st
+		log.Printf("[account-mon] %s offline: %v", vk, err)
+		if !st.online {
+			m.dirtyLocked(vk)
+		}
+		return
 	}
+	changed := !acctSame(st.acct, acct)
+	st.restOnline = true
+	cp := *acct // 防共享指针原地改写：querier 侧复用/突变对象不回流本态
+	st.acct = &cp
+	st.asOf = time.Now()
+	st.online = m.onlineLocked(vk, st)
+	m.states[vk] = st
+	m.dirtyLocked(vk)
 	m.mu.Unlock()
-
 	if changed {
-		if m.topic != nil {
-			m.topic.Publish(&v1.AccountSnapshot{Accounts: view})
-		}
-		m.notifyFunds() // D-568：轮询资金变更→funds 通知（case 9 广播原样保留）
-		log.Printf("[account-mon] snapshot changed: %d accounts", len(view))
+		m.notifyFunds() // D-568：REST 值变→funds 通知（值不变不触）
 	}
+	m.mu.Lock()
 }
 
-// build 按 venueKey 排序（确定性）构建全量视图。离线账户仍显示（最近快照），online=false 诚实标注。
-func (m *AccountMonitor) build() []*v1.AccountInfo {
-	m.mu.RLock()
-	keys := make([]string, 0, len(m.states))
-	for k := range m.states {
-		keys = append(keys, k)
-	}
-	states := maps.Clone(m.states)
-	m.mu.RUnlock()
-	sort.Strings(keys)
-
-	out := make([]*v1.AccountInfo, 0, len(keys))
-	now := time.Now()
-	for _, vk := range keys {
-		st := states[vk]
-		if st.acct == nil {
-			continue
-		}
-		out = append(out, accountToProto(st.acct, st.online, now))
-	}
-	return out
-}
-
-// accountToProto + accountFingerprint 已移至 account_monitor_proto.go（D-107 P2 拆分，纯移动零逻辑改）。
+// accountToProto 已移至 account_monitor_proto.go（D-107 P2 拆分）；accountFingerprint 随
+// D-571 包B 事件化退役删除（dirty 集即发射集，proto.Equal 在 flush 去重）。

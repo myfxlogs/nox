@@ -179,8 +179,8 @@ func TestSwapArbBareCapValue(t *testing.T) {
 func newSwapArbServiceWithAccts(t *testing.T, qs ...*fakeAccountQuerier) *Service {
 	t.Helper()
 	bm := NewBrokerManager(nil, bus.New(), exec.NewRegistry(), time.Minute)
-	topic := bus.NewTopic[*v1.AccountSnapshot]()
-	m := NewAccountMonitor(bm, time.Millisecond, topic)
+	topic := bus.NewTopic[*v1.AccountEvent]()
+	m := NewAccountMonitor(bm, topic)
 	for _, q := range qs {
 		m.AddStatic(q)
 	}

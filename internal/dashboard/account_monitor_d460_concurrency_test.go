@@ -33,7 +33,7 @@ func (s *slowAcctQuerier) Account(ctx context.Context) (*reconcile.AccountInfo, 
 // 且 RPC 返回后账户正常合并进视图（离线/合并语义不变）。
 func TestAccountMonitor_SnapshotNotBlockedByPollRPC(t *testing.T) {
 	bm := NewBrokerManager(nil, bus.New(), exec.NewRegistry(), time.Minute)
-	m := NewAccountMonitor(bm, time.Hour, nil)
+	m := NewAccountMonitor(bm, nil)
 	slow := &slowAcctQuerier{
 		key:     "slow:mt5",
 		started: make(chan struct{}),

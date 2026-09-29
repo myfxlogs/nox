@@ -135,7 +135,7 @@ func TestD572_A4_MTUntouched(t *testing.T) {
 func TestD572_A5_MTFrameLive(t *testing.T) {
 	ctx := context.Background()
 	s, _ := d572Svc(t, 5000, 10, nil)
-	mon := NewAccountMonitor(NewBrokerManager(nil, bus.New(), exec.NewRegistry(), time.Minute), time.Millisecond, nil)
+	mon := NewAccountMonitor(NewBrokerManager(nil, bus.New(), exec.NewRegistry(), time.Minute), nil)
 	s.acctMon = mon
 
 	// ① 帧新鲜（fm=2000）+ 快照陈旧（free=1 若误用必 conflict）→ ok，帧路径实证。

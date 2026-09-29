@@ -29,12 +29,12 @@ func (f *fakeAccountQuerier) Account(context.Context) (*reconcile.AccountInfo, e
 }
 
 // newAcctMonTest 组装 AccountMonitor：nil store + 静态 fake 查询器。
-func newAcctMonTest(t *testing.T, q *fakeAccountQuerier) (*AccountMonitor, *bus.Topic[*v1.AccountSnapshot], <-chan *v1.AccountSnapshot) {
+func newAcctMonTest(t *testing.T, q *fakeAccountQuerier) (*AccountMonitor, *bus.Topic[*v1.AccountEvent], <-chan *v1.AccountEvent) {
 	t.Helper()
 	bm := NewBrokerManager(nil, bus.New(), exec.NewRegistry(), time.Minute)
-	topic := bus.NewTopic[*v1.AccountSnapshot]()
+	topic := bus.NewTopic[*v1.AccountEvent]()
 	ch, _ := topic.Subscribe()
-	m := NewAccountMonitor(bm, time.Millisecond, topic)
+	m := NewAccountMonitor(bm, topic)
 	m.AddStatic(q)
 	return m, topic, ch
 }
@@ -173,7 +173,7 @@ func TestAccountMonitor_CollisionKeys(t *testing.T) {
 	}))
 	defer srv.Close()
 	t0 := time.Date(2026, 9, 20, 0, 0, 0, 0, time.UTC)
-	m := NewAccountMonitor(NewBrokerManager(nil, bus.New(), exec.NewRegistry(), time.Minute), time.Millisecond, nil)
+	m := NewAccountMonitor(NewBrokerManager(nil, bus.New(), exec.NewRegistry(), time.Minute), nil)
 	m.SetExchangeStore(&fakeExchangeStore{cfgs: []pgstore.ExchangeConfig{
 		{ID: 20, Venue: "binance", VenueType: "perp", APIKey: "k20", APISecret: "s20",
 			BaseURL: srv.URL, Simulated: false, CreatedAt: t0},

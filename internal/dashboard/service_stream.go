@@ -43,11 +43,11 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 		bpCh, bpCancel = s.bpm.evTopic.Subscribe()
 		defer bpCancel()
 	}
-	// 账户资产推送（D-053）：monitor 变更广播全量快照 → case 9。acctMon nil=不订阅。
-	var accCh <-chan *v1.AccountSnapshot
-	if s.acctMon != nil && s.acctMon.topic != nil {
+	// 账户资产推送（D-571 包B 事件化）：逐 venue 变更事件 → case 16。acctMon nil=不订阅。
+	var accCh <-chan *v1.AccountEvent
+	if s.acctMon != nil && s.acctMon.evTopic != nil {
 		var accCancel func()
-		accCh, accCancel = s.acctMon.topic.Subscribe()
+		accCh, accCancel = s.acctMon.evTopic.Subscribe()
 		defer accCancel()
 	}
 	// 资金注入提醒推送（D-072）：engine 余额不足发布 → 逐条推 case 10。fundingNeedTopic nil=不订阅。
@@ -97,8 +97,8 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 	if err := s.streamInitQuotes(ctx, stream); err != nil {
 		return err
 	}
-	// D-571 包A：Broker 实持仓回放——cur 全量每仓一条 case 15 upsert（新连接自愈，无需等待事件）。
-	if err := s.streamInitBrokerPositions(stream); err != nil {
+	// D-571 包A/包B：回放=cur 全量逐条 upsert（case 15 持仓 / case 16 账户；新连接自愈）。
+	if err := s.streamInitPositionsAndAccounts(stream); err != nil {
 		return err
 	}
 	pending := make(map[string]bus.Quote) // D-090：每连接独立，key=venueKey|symbol，覆盖式=自动最新值
@@ -165,8 +165,8 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 				return nil
 			}
 			if err := stream.Send(&v1.StreamUpdatesResponse{
-				Update: &v1.StreamUpdatesResponse_Accounts{
-					Accounts: v,
+				Update: &v1.StreamUpdatesResponse_AccountEvent{
+					AccountEvent: v,
 				},
 			}); err != nil {
 				return err
