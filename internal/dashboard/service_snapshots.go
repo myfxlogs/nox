@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/dephealth"
 	"arb/internal/safego"
 
 	v1 "arb/internal/gen/dashboardv1"
@@ -146,6 +147,16 @@ func (s *Service) assembleSourceHealth() []*v1.SourceHealth {
 				State:  state,
 			})
 		}
+	}
+	// D-579 S5：上游依赖健康面并入透出（被动记账注册表；Source=dep 键与 ws
+	// 重连行键域不撞；ReconnectCount 恒 0——dephealth 管断/通态不管抖动）。
+	// merge 裁决：编入共享组装而非 RPC 体——case5 发射器与 ListSourceHealth 同源。
+	for _, dep := range dephealth.Snapshot() {
+		out = append(out, &v1.SourceHealth{
+			Source:        dep.Key,
+			State:         dep.State,
+			LastEventUnix: dep.LastEventUnix,
+		})
 	}
 	return out
 }
