@@ -158,6 +158,14 @@ func (m *CexExecutorManager) sync(ctx context.Context) {
 					return exec.BinanceOrderSnap{State: ev.State, AccFillQty: ev.AccFillQty, AvgPx: ev.AvgPx}, ok
 				})
 			}
+			// D-570 包B S4③：gate 确认桥接——PeekOrder 闭包（帧原生 fee→FeeUSD 回填）。
+			if c.Venue == "gate" {
+				cache := m.OrderCache
+				exe.SetGateOrderLookup(func(ordID string) (exec.GateOrderSnap, bool) {
+					ev, ok := cache.PeekOrder(vk, ordID)
+					return exec.GateOrderSnap{State: ev.State, AccFillQty: ev.AccFillQty, AvgPx: ev.AvgPx, FeeUSD: ev.FeeUSD}, ok
+				})
+			}
 		}
 		if !m.keys[vk] {
 			log.Printf("[cex-exec] register %s (base=%s simulated=%v)", vk, base, c.Simulated)
