@@ -120,21 +120,15 @@ type BrokerManager struct {
 	// wiring/main 注入（sink = 发布到 orderTopic）；startMT5 透传至 adapter（nil 安全）。
 	OrderEventSink func(bus.OrderEvent)
 
-	// AccountSink D-445 S0：OnOrderUpdate 余额帧下沉注入（同 OrderEventSink 模式；
-	// sink = acctMon.ObserveStreamAccount）。startMT5 透传至 adapter（nil 安全）。
-	AccountSink adapter.AcctFrameSink
-
-	// PositionsSink D-571 包A：OnOrderProfit 帧逐仓载荷下沉注入（同 OrderEventSink 模式；
-	// sink = bpMon.OnMT5Frame）。startMT5 透传至 adapter（nil 安全）。
-	PositionsSink func(venueKey string, orders []reconcile.VenueOrder)
-
-	// StreamStateSink D-571 包A：venue 流状态透出注入（sink = bpMon.OnStreamState；
-	// startMT5 透传至 adapter，mt5 双流同报）。nil 安全。
-	StreamStateSink func(venueKey string, online bool)
-
-	// OrderProfitKick D-107 P2：margin 事件触发账户重采（OnOrderProfit → MarginSink closure →
-	// acctMon.Kick）。同 SwapKick 注入模式，main 注入（acctMon 创建后赋值），nil 安全。
-	OrderProfitKick func()
+	// 晚接 sink 四件（sinkMu 保护；D-581）：目标经 Set* 晚接，startMT5 拷贝的是
+	// dispatch* bound-method——调用时 RLock 取最新目标，接线时序不敏感。
+	// 原导出字段一次性按值拷贝：setupMonitors 赋值晚于 StartAll → adapter 拷到
+	// nil 即永久丢帧（浮盈冻结/流态/余额帧同丢）。
+	sinkMu          sync.RWMutex
+	accountSink     adapter.AcctFrameSink                // D-445 S0：OnOrderUpdate 余额帧（sink=acctMon.ObserveStreamAccount）
+	positionsSink   func(string, []reconcile.VenueOrder) // D-571 包A：OnOrderProfit 逐仓载荷（sink=bpMon.OnMT5Frame）
+	streamStateSink func(string, bool)                   // D-571 包A：venue 流状态透出（sink=bpMon/acctMon/posMon 链）
+	orderProfitKick func()                               // D-107 P2：margin 事件→acctMon.Kick
 
 	// D-104 P2 U1：网关节点启动级 failover（main 从 config 注入，attach 时透传 adapter.SetGateway）。
 	MT5Gateway          string
@@ -165,6 +159,7 @@ func (m *BrokerManager) SetHistQuerierHook(f func([]reconcile.OrderHistoryQuerie
 }
 
 // SetBPM D-121：注入 BrokerPositionMonitor（CEX 平仓需查快照获取 side/volume）。
+// 读点在 CEX 平仓路径（boot 窗口不可达），已审计同型晚写不迁（D-581）。
 func (m *BrokerManager) SetBPM(bpm *BrokerPositionMonitor) { m.bpm = bpm }
 
 // OrderHistoryScan D-181 S1：返回指定 venue 的历史订单扫描闭包（nil=未连接/无扫描器）。
