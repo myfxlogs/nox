@@ -37,6 +37,10 @@ type PersonalMonitor struct {
 
 	// D-208 v2：CMC 数据源（nil = 不支持 CMC 行，走老路径）。
 	cmcSource CMCSource
+	// onSetChanged D-571C-R2 F-2：loadPositions 集合 diff（OPEN 行 id 集新增/剔除）
+	// 非空回调（main 接 posMon.KickPersonal——personal_positions 表不经 posChange，
+	// 表变更只能靠本监控加载比对发现）。nil 安全。
+	onSetChanged func()
 }
 
 // NewPersonalMonitor 创建个人持仓监控器。onPrice 允许 nil（不广播，仅告警）。
@@ -98,20 +102,29 @@ func (m *PersonalMonitor) loadPositions(ctx context.Context) error {
 		return err
 	}
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	seen := make(map[int64]bool, len(positions))
+	setChanged := false // D-571C-R2 F-2：id 集新增/剔除检测
 	for i := range positions {
 		p := &positions[i]
 		seen[p.ID] = true
+		if _, had := m.positions[p.ID]; !had {
+			setChanged = true
+		}
 		m.positions[p.ID] = p
 	}
 	for id := range m.positions {
 		if !seen[id] {
+			setChanged = true
 			delete(m.positions, id)
 			delete(m.level, id)
 			delete(m.lastAlert, id)
 			delete(m.lastPrice, id) // D-049：广播价缓存随仓清理（closed 行不留残；nil map delete 安全）
 		}
+	}
+	hook := m.onSetChanged
+	m.mu.Unlock()
+	if setChanged && hook != nil {
+		hook() // 锁外回推——KickPersonal 只脏标不嵌锁序
 	}
 	log.Printf("[personal-monitor] loaded %d open personal positions", len(m.positions))
 	return nil
@@ -119,6 +132,9 @@ func (m *PersonalMonitor) loadPositions(ctx context.Context) error {
 
 // SetKickTopic D-469b S3：positions 表变更事件订阅源（nil=纯 5min ticker 兜底）。
 func (m *PersonalMonitor) SetKickTopic(t *bus.Topic[struct{}]) { m.kickTopic = t }
+
+// SetOnSetChanged D-571C-R2 F-2：OPEN 集合变更回推钩子（nil 安全）。
+func (m *PersonalMonitor) SetOnSetChanged(fn func()) { m.onSetChanged = fn }
 
 func (m *PersonalMonitor) refreshLoop(ctx context.Context) {
 	// D-469b S3：持仓变更事件主路+5min 自愈兜底。

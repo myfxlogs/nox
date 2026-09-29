@@ -54,7 +54,7 @@ func d335Engine(s *pgstore.Store, entryBps float64) (*Engine, pgstore.Opportunit
 		Bid: 4354, Ask: 4355, Time: time.Now()})
 	qb.Publish(bus.Quote{Symbol: "XAUUSDT", Venue: "binance", VenueType: "perp",
 		Bid: 4355 * (1 + entryBps/1e4), Ask: 4355*(1+entryBps/1e4) + 0.5, Time: time.Now()})
-	svc := dashboard.New(nil, qb, nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, nil, nil, nil, 0, nil, nil, 0, 0, nil)
+	svc := dashboard.New(nil, qb, nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, nil, 0, nil, nil, 0, 0, nil)
 	e := &Engine{
 		store: s, service: svc, quotes: qb, gate: NewGate(s, Config{}, nil),
 		csMissCounts: map[string]int{}, csMissSent: map[string]time.Time{},
