@@ -9,11 +9,11 @@ package exec
 // 后缀集）；解析不出 → error 不猜。
 //
 // 字段名按实测响应取（api-response-fields-empirical 条目）：
-//   - binance GET /api/v3/account（HMAC 签名）→ balances[]{asset,free}
+//   - binance GET base+/v3/account（HMAC 签名）→ balances[]{asset,free}
 //   - okx     GET /api/v5/account/balance?ccy=Q（四头签名）→ details[]{ccy,availBal}
 //   - gate    GET /api/v4/spot/accounts?currency=Q（KEY/SIGN）→ []{available}
 // mark=公开 ticker：okx /api/v5/market/ticker?instId → last；
-// binance /api/v3/ticker/price → price；gate /api/v4/spot/tickers?currency_pair → last。
+// binance base+/v3/ticker/price → price；gate /api/v4/spot/tickers?currency_pair → last。
 
 import (
 	"arb/internal/signutil"
@@ -99,7 +99,7 @@ func (e *CEXExecutor) spotMarkPrice(ctx context.Context, symbol string) (float64
 		}
 		return parsePositive(tk.Data[0].Last, "last")
 	case "binance":
-		body, err := e.get(ctx, e.baseURL+"/api/v3/ticker/price?symbol="+url.QueryEscape(symbol), nil)
+		body, err := e.get(ctx, e.baseURL+"/v3/ticker/price?symbol="+url.QueryEscape(symbol), nil)
 		if err != nil {
 			return 0, fmt.Errorf("ticker: %w", err)
 		}
@@ -168,7 +168,7 @@ func (e *CEXExecutor) spotQuoteAvail(ctx context.Context, quote string) (float64
 		}
 		return 0, fmt.Errorf("balance: %s 行缺（报价币不可判不猜）", quote)
 	case "binance":
-		acc, err := e.signedBinanceRequest(ctx, "GET", "/api/v3/account", url.Values{})
+		acc, err := e.signedBinanceRequest(ctx, "GET", "/v3/account", url.Values{})
 		if err != nil {
 			return 0, fmt.Errorf("account: %w", err)
 		}

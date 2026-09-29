@@ -89,9 +89,9 @@ func TestD473_SpotPrecheck_OKX_BalanceUnreachable(t *testing.T) {
 func TestD473_SpotPrecheck_Binance(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case strings.HasPrefix(r.URL.Path, "/api/v3/ticker/price"):
+		case strings.HasPrefix(r.URL.Path, "/v3/ticker/price"):
 			w.Write([]byte(`{"symbol":"SKLUSDT","price":"0.50"}`))
-		case strings.HasPrefix(r.URL.Path, "/api/v3/account"):
+		case strings.HasPrefix(r.URL.Path, "/v3/account"):
 			w.Write([]byte(`{"balances":[{"asset":"SKL","free":"999"},{"asset":"USDT","free":"100"}]}`))
 		default:
 			t.Errorf("unexpected binance path %s", r.URL.Path)
@@ -108,7 +108,7 @@ func TestD473_SpotPrecheck_Binance(t *testing.T) {
 	}
 	// 报价币行缺 → 不猜
 	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/api/v3/ticker/price") {
+		if strings.HasPrefix(r.URL.Path, "/v3/ticker/price") {
 			w.Write([]byte(`{"price":"0.50"}`))
 			return
 		}

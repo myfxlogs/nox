@@ -21,9 +21,14 @@ func TestCEXExecutor_BinanceOrder(t *testing.T) {
 		secret = "test-secret-xyz"
 	)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// D-569 S2：spot 下单先过本地闸（公开 exchangeInfo，LOT_SIZE 放行名义闸缺席）
+		if r.URL.Path == "/v3/exchangeInfo" {
+			_, _ = io.WriteString(w, `{"symbols":[{"symbol":"BTCUSDT","filters":[{"filterType":"LOT_SIZE","minQty":"0.00001","maxQty":"9000","stepSize":"0.00001"}]}]}`)
+			return
+		}
 		// endpoint
-		if r.URL.Path != "/api/v3/order" {
-			t.Errorf("want path /api/v3/order, got %s", r.URL.Path)
+		if r.URL.Path != "/v3/order" {
+			t.Errorf("want path /v3/order, got %s", r.URL.Path)
 		}
 		// X-MBX-APIKEY 头
 		if got := r.Header.Get("X-MBX-APIKEY"); got != key {

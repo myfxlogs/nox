@@ -11,11 +11,10 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 )
 
-// placeBinance 下单：spot /api/v3/order、perp /fapi/v1/order，HMAC-SHA256 hex 签名 + X-MBX-APIKEY。
+// placeBinance 下单：spot base+/v3/order（base 尾段含 /api）、perp /fapi/v1/order，HMAC-SHA256 hex 签名 + X-MBX-APIKEY。
 // D-108 P2 T1：perp 平仓补 positionSide（hedge 模式）/ reduceOnly（one-way 模式）。
 func (e *CEXExecutor) placeBinance(ctx context.Context, o Order) (Fill, error) {
 	side := "BUY"
@@ -44,6 +43,13 @@ func (e *CEXExecutor) placeBinance(ctx context.Context, o Order) (Fill, error) {
 			}
 			qty = g
 		}
+	} else {
+		// D-569 包A S2：spot 本地闸（spot 无 positionSide/reduceOnly 豁免路径，全查）。
+		g, gerr := e.binanceSpotQtyGuard(ctx, o.Symbol, qty)
+		if gerr != nil {
+			return Fill{}, gerr
+		}
+		qty = g
 	}
 	params := url.Values{}
 	params.Set("symbol", o.Symbol)
@@ -55,7 +61,7 @@ func (e *CEXExecutor) placeBinance(ctx context.Context, o Order) (Fill, error) {
 		params.Set("newClientOrderId", o.ClientOrderID)
 	}
 
-	endpoint := "/api/v3/order"
+	endpoint := "/v3/order" // D-569 S1：base 尾段已含 /api（生产拼合=/api/v3/order）
 	if e.venueType == "perp" {
 		endpoint = "/v1/order"
 		// D-108 P2 T1：perp 平仓补 positionSide/reduceOnly。
@@ -127,41 +133,9 @@ func (e *CEXExecutor) placeBinance(ctx context.Context, o Order) (Fill, error) {
 	}, nil
 }
 
-// binanceOrderStatusResult GET /fapi/v1/order（或 /api/v3/order）单条订单状态。
-type binanceOrderStatusResult struct {
-	Status      string `json:"status"`
-	ExecutedQty string `json:"executedQty"`
-	AvgPrice    string `json:"avgPrice"`
-}
-
-// binanceOrderStatus 查询 Binance 订单成交（perp /fapi/v1/order；spot /api/v3/order，签名 GET）。
-// orderId 优先，空则 origClientOrderId 兜底（D-421 消解器按 clOrdId 查单凭据）。
-func (e *CEXExecutor) binanceOrderStatus(ctx context.Context, symbol, ordID, clOrdID string) (binanceOrderStatusResult, error) {
-	endpoint := "/api/v3/order"
-	if e.venueType == "perp" {
-		endpoint = "/v1/order"
-	}
-	params := url.Values{}
-	params.Set("symbol", symbol)
-	if ordID != "" {
-		params.Set("orderId", ordID)
-	} else {
-		params.Set("origClientOrderId", clOrdID)
-	}
-	body, err := e.signedBinanceRequest(ctx, "GET", endpoint, params)
-	if err != nil {
-		return binanceOrderStatusResult{}, err
-	}
-	return binanceOrderStatusResult{
-		Status:      asString(body["status"]),
-		ExecutedQty: asString(body["executedQty"]),
-		AvgPrice:    asString(body["avgPrice"]),
-	}, nil
-}
-
 // binanceCancelOrder 撤销单笔订单（DELETE /fapi/v1/order，D-421 窗尽双证技巧）。
 func (e *CEXExecutor) binanceCancelOrder(ctx context.Context, symbol, ordID string) error {
-	endpoint := "/api/v3/order"
+	endpoint := "/v3/order"
 	if e.venueType == "perp" {
 		endpoint = "/v1/order"
 	}
@@ -206,10 +180,12 @@ func binanceOrderAvgPrice(body map[string]any, qty float64) (float64, error) {
 	return 0, nil
 }
 
-// signedBinanceRequestRaw 发 Binance 签名请求（HMAC hex + X-MBX-APIKEY）返回原始 body。
+// signedBinanceRequestOnce 发一次 Binance 签名请求（HMAC hex + X-MBX-APIKEY）返回原始 body。
 // 签名/timestamp/Header/状态码检查公共核（D-427 I3：map/list 两解共享，不复制签名）。
-func (e *CEXExecutor) signedBinanceRequestRaw(ctx context.Context, method, endpoint string, params url.Values) ([]byte, error) {
-	params.Set("timestamp", strconv.FormatInt(time.Now().UnixMilli(), 10))
+// D-569：ts 带 binanceClockOffset delta；-1021 校时重发壳与退避在 cex_executor_binance_resilience.go。
+func (e *CEXExecutor) signedBinanceRequestOnce(ctx context.Context, method, endpoint string, params url.Values) ([]byte, error) {
+	params.Del("signature") // 重签安全：校时重发须剔除旧 signature 再入签名字节
+	params.Set("timestamp", strconv.FormatInt(time.Now().UnixMilli()+binanceClockOffset.Load(), 10))
 	params.Set("recvWindow", "5000")
 
 	signature := binanceSign(e.apiSecret, params.Encode())
@@ -232,7 +208,7 @@ func (e *CEXExecutor) signedBinanceRequestRaw(ctx context.Context, method, endpo
 		return nil, err
 	}
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("http %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
+		return nil, &httpStatusError{status: resp.StatusCode, body: data} // D-569 S3：类型化（消息不变）
 	}
 	return data, nil
 }
@@ -264,10 +240,10 @@ func (e *CEXExecutor) signedBinanceRequestList(ctx context.Context, method, endp
 }
 
 // binanceUserTradesFeeUSD 聚合某订单 userTrades 的 USDT 手续费（D-427 I3）：
-// GET /fapi/v1/userTrades?symbol=&orderId=（perp；spot /api/v3/myTrades）。
+// GET /fapi/v1/userTrades?symbol=&orderId=（perp；spot base+/v3/myTrades）。
 // commissionAsset=USDT 行累加，非 USDT 行跳过不计；realizedPnl 字段不计（费≠盈亏）。
 func (e *CEXExecutor) binanceUserTradesFeeUSD(ctx context.Context, symbol, ordID string) (float64, error) {
-	endpoint := "/api/v3/myTrades"
+	endpoint := "/v3/myTrades"
 	if e.venueType == "perp" {
 		endpoint = "/v1/userTrades"
 	}
