@@ -36,11 +36,11 @@ func d406Engine(s *pgstore.Store, qb *bus.QuoteBus, maxPerDay int) *Engine {
 	// D-563 S4b 涟漪：MT 腿判定资金=AccountSummary 实时 RPC（快照退决策面）——
 	// 测试缝注入等价值（3001158=eq2000/fm1000 镜像旧快照；其他 venue=rpc 死
 	// 即 withFunding=false 面）。
-	svc.SetMTSummaryFunc(func(_ context.Context, vk string) (float64, float64, error) {
+	svc.SetMTSummaryFunc(func(_ context.Context, vk string) (float64, float64, string, error) {
 		if vk == "3001158:mt5" {
-			return 2000, 1000, nil
+			return 2000, 1000, "USD", nil
 		}
-		return 0, 0, fmt.Errorf("rpc dead（测试缝：未种 venue=RPC 败）")
+		return 0, 0, "", fmt.Errorf("rpc dead（测试缝：未种 venue=RPC 败）")
 	})
 	return &Engine{
 		store: s, service: svc, quotes: qb,

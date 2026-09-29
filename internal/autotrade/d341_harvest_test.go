@@ -76,9 +76,11 @@ func TestD341_HarvestTrigger(t *testing.T) {
 	d311Truncate(t, s)
 	ctx := context.Background()
 	// entry=5 ≤ floor=9 → harvest
+	// D-565 S1：代理路径判据=实时 basis≤floor（monitor entryBps 不再进决策）——
+	// 种双腿实时报价 basis=-9 ≤ floor=9 触发。
 	p := d341XAssetOPEN(t, s, d341fptr(10))
 	d341SeedMonitorRow(t, s, d341fptr(5), d341fptr(9), d341fptr(9))
-	e := &Engine{store: s, fundingBreach: map[int64]int{}, cfg: Config{SwapFactMaxAge: 2 * time.Hour, PerpFundMinHold: 24 * time.Hour}}
+	e := &Engine{store: s, quotes: d404Quotes(time.Now().UTC(), 3996.4, 4000, 0), fundingBreach: map[int64]int{}, cfg: Config{SwapFactMaxAge: 2 * time.Hour, PerpFundMinHold: 24 * time.Hour, XAssetQuoteMaxAge: 5 * time.Minute}}
 	close, reason := e.checkExitCondition(ctx, p)
 	if !close || !containsSub(reason, "harvest") {
 		t.Errorf("spread≤floor 应 harvest 出口, close=%v reason=%q", close, reason)
@@ -89,7 +91,7 @@ func TestD341_HarvestTrigger(t *testing.T) {
 	d311Truncate(t, s2)
 	p2 := d341XAssetOPEN(t, s2, nil)
 	d341SeedMonitorRow(t, s2, d341fptr(5), d341fptr(9), nil)
-	e2 := &Engine{store: s2, fundingBreach: map[int64]int{}, cfg: Config{SwapFactMaxAge: 2 * time.Hour, PerpFundMinHold: 24 * time.Hour}}
+	e2 := &Engine{store: s2, quotes: d404Quotes(time.Now().UTC(), 3996.4, 4000, 0), fundingBreach: map[int64]int{}, cfg: Config{SwapFactMaxAge: 2 * time.Hour, PerpFundMinHold: 24 * time.Hour, XAssetQuoteMaxAge: 5 * time.Minute}}
 	if close2, reason2 := e2.checkExitCondition(ctx, p2); close2 && containsSub(reason2, "harvest") {
 		t.Errorf("floor NULL 不应 harvest, reason=%q", reason2)
 	}

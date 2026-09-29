@@ -89,7 +89,9 @@ func setupSwapDeviationQuotes() *bus.QuoteBus {
 func TestSwapDeviationGate_HighDeviation_Rejected(t *testing.T) {
 	s := setupSwapDeviationStore(t, 0.0, -2.21)
 	qb := setupSwapDeviationQuotes()
-	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0, SwapArbAllowCombos: nil, Quotes: qb}, nil)
+	// D-565 S5：cs=1 静默回退已删——显式 resolver 钉 CS=1 保持原拒语义。
+	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: true, SwapDeviationGatePct: 50.0, SwapArbAllowCombos: nil, Quotes: qb,
+		LegContractSizeResolver: csResolver(map[string]float64{"vA:mt5": 1, "vB:mt5": 1})}, nil)
 	intent := TradeIntent{
 		Strategy:  "CROSS_VENUE",
 		Canonical: "AUDJPY",

@@ -21,50 +21,12 @@ func (e *CEXExecutor) binanceMarginPrecheck(ctx context.Context, o Order) error 
 	if avail < 0 {
 		return fmt.Errorf("binance margin precheck %s: availableBalance invalid", o.Symbol)
 	}
-	positions, _ := acc["positions"].([]any)
-
 	// B-002：hedge 模式 positions[] 返回 LONG/SHORT 多行（杠杆可不同）→ 按当前腿侧匹配
 	// （BUY→LONG、SELL→SHORT，与 placeBinance 开仓推导同式）；one-way 单行 BOTH 直取；
-	// 同侧无匹配 → error 不猜。
-	dual, probed := e.binanceDualSide(ctx)
-	wantSide := "BOTH"
-	if probed && dual {
-		wantSide = "LONG"
-		if o.Side == "SELL" {
-			wantSide = "SHORT"
-		}
-	}
-	lev := 0.0
-	isolated := false
-	found := false
-	for _, pi := range positions {
-		pm, ok := pi.(map[string]any)
-		if !ok {
-			continue
-		}
-		if pm["symbol"] != o.Symbol {
-			continue
-		}
-		ps, _ := pm["positionSide"].(string)
-		if wantSide != "BOTH" && ps != wantSide {
-			continue
-		}
-		// hedge 精确侧命中；one-way/未探测=BOTH 行
-		lv, lerr := jsonNum(pm["leverage"])
-		if lerr != nil {
-			return fmt.Errorf("binance leverage parse: %w", lerr)
-		}
-		lev = lv
-		iso, _ := pm["isolated"].(bool)
-		isolated = iso
-		found = true
-		if wantSide != "BOTH" || ps == "BOTH" {
-			break
-		}
-	}
-	if !found || lev <= 0 {
-		return fmt.Errorf("binance margin precheck %s: positionSide=%s 无匹配杠杆行（lev=%.0f found=%v，不猜）",
-			o.Symbol, wantSide, lev, found)
+	// 同侧无匹配 → error 不猜。D-565：匹配逻辑提取 binanceAccPositionLeverage 共用。
+	lev, isolated, err := e.binanceAccPositionLeverage(ctx, acc, o.Symbol, o.Side == "SELL")
+	if err != nil {
+		return fmt.Errorf("binance margin precheck %s: %w", o.Symbol, err)
 	}
 
 	mark, err := e.binanceMarkPrice(ctx, o.Symbol)

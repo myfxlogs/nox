@@ -133,7 +133,8 @@ func TestD404_HarvestFallback(t *testing.T) {
 	}
 	// 开仓时点 monitor 行超窗：opened_at=now−10min，最近 ≤opened_at 行 ts=now−26min
 	// （对 opened_at 行龄 16min>15min 窗 → 回退；对 now 26min<30min → latest 命中）。
-	// 回退后 entry=20>floor=9 → 不触发
+	// D-565 S1：代理路径判据=实时 basis≤floor（monitor entryBps 不再进决策）——
+	// 本用例 basis=-9≤floor9 → 触发；entry=20 只供种子不再比较。
 	s2 := testAccumStore(t)
 	d311Truncate(t, s2)
 	p2 := d404XAssetPos(t, s2, d341fptr(-12.39), d341fptr(4.73))
@@ -144,8 +145,13 @@ func TestD404_HarvestFallback(t *testing.T) {
 	p2 = &rows2[0]
 	d404SeedMonitorRowAt(t, s2, time.Now().UTC().Add(-26*time.Minute), 20, 9)
 	e2 := d404Engine(s2, d404Quotes(time.Now().UTC(), 3996.4, 4000, 0))
-	if close, reason := e2.harvestCheck(ctx, p2); close {
-		t.Errorf("entryRow 超窗回退后 entry>floor 不应触发, reason=%q", reason)
+	if close, reason := e2.harvestCheck(ctx, p2); !close || !containsSub(reason, "harvest") {
+		t.Errorf("回退后实时 basis=-9≤floor=9 应触发（entry 不再进判据）, close=%v reason=%q", close, reason)
+	}
+	// 反证：basis 未收敛（buyBid=4003.6→basis=+9>floor 9 不≤）→ 不触发
+	e2b := d404Engine(s2, d404Quotes(time.Now().UTC(), 4004.4, 4000, 0))
+	if close, reason := e2b.harvestCheck(ctx, p2); close {
+		t.Errorf("实时 basis=+11>floor 不应触发, reason=%q", reason)
 	}
 	// 超窗回退 + entry≤floor → 触发（证明回退路径活着）
 	s3 := testAccumStore(t)
@@ -211,5 +217,41 @@ func TestD404_HarvestQuoteGate(t *testing.T) {
 	e2 := d404Engine(s, d404Quotes(time.Now().UTC(), 3996.4, 4000, 10*time.Minute)) // age=10min>5min
 	if close, reason := e2.harvestCheck(ctx, p); close {
 		t.Errorf("报价超龄不应触发, reason=%q", reason)
+	}
+}
+
+// TestD565_HarvestProxyLiveQuote T1：代理路径（开仓时点 monitor 行超窗）报价缺/超龄→
+// hold_no_live_quote（fail-closed 本轮不判）；fresh 报价 ≤floor → 触发收割。
+func TestD565_HarvestProxyLiveQuote(t *testing.T) {
+	ctx := context.Background()
+	newPos := func(t *testing.T) (*pgstore.Store, *pgstore.Position) {
+		s := testAccumStore(t)
+		d311Truncate(t, s)
+		p := d404XAssetPos(t, s, d341fptr(-12.39), d341fptr(4.73))
+		if _, err := s.Pool().Exec(ctx, `UPDATE positions SET opened_at=now()-interval '10 minutes' WHERE id=$1`, p.ID); err != nil {
+			t.Fatalf("update opened_at: %v", err)
+		}
+		rows, _ := s.ListPositions(ctx, "OPEN", 10, 0)
+		// 真腿路径 monitor 行超窗（found=false → 代理路径）；latest 行仍供 floor=9
+		d404SeedMonitorRowAt(t, s, time.Now().UTC().Add(-26*time.Minute), 20, 9)
+		return s, &rows[0]
+	}
+	// ① 缺报价 → hold_no_live_quote
+	s, p := newPos(t)
+	e := d404Engine(s, bus.New())
+	if close, reason := e.harvestCheck(ctx, p); close || reason != "hold_no_live_quote" {
+		t.Errorf("缺报价应 hold_no_live_quote, close=%v reason=%q", close, reason)
+	}
+	// ② 超龄报价（10min>5min） → hold_no_live_quote
+	s, p = newPos(t)
+	e = d404Engine(s, d404Quotes(time.Now().UTC(), 3996.4, 4000, 10*time.Minute))
+	if close, reason := e.harvestCheck(ctx, p); close || reason != "hold_no_live_quote" {
+		t.Errorf("超龄报价应 hold_no_live_quote, close=%v reason=%q", close, reason)
+	}
+	// ③ fresh 报价 basis=-9≤floor=9 → 触发（监控 entryBps=20 不进判据）
+	s, p = newPos(t)
+	e = d404Engine(s, d404Quotes(time.Now().UTC(), 3996.4, 4000, 0))
+	if close, reason := e.harvestCheck(ctx, p); !close || !containsSub(reason, "live basis") {
+		t.Errorf("fresh basis≤floor 应触发, close=%v reason=%q", close, reason)
 	}
 }

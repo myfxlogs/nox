@@ -71,12 +71,19 @@ func (e *Engine) harvestCheck(ctx context.Context, p *pgstore.Position) (bool, s
 		}
 		// found=false（monitor 行缺/超窗）→ 落代理路径（旧仓兼容回退，同按三元组查）
 	}
-	entryBps, _, floor, hasFloor, ok, err := e.store.LatestXAssetEntryGate(ctx, pairKey, cexVenue, mtVenue, xassetEntryGateMaxAge)
+	_, _, floor, hasFloor, ok, err := e.store.LatestXAssetEntryGate(ctx, pairKey, cexVenue, mtVenue, xassetEntryGateMaxAge)
 	if err != nil || !ok || !hasFloor {
 		return false, "hold_no_monitor" // D-423：查不到=诚实缺不借用他所簿（fail-closed）
 	}
-	if entryBps <= floor {
-		return true, fmt.Sprintf("harvest: spread %.2f ≤ floor %.2f (+%.2f bps captured)", entryBps, floor, floor-entryBps)
+	// D-565 S1：代理路径只取 floor（统计阈值=允许用途）；当前基差改双腿实时报价
+	// （同真腿路径 currentBasisBpsAged），禁再吃 monitor 轮询 entryBps。报价缺/超龄→
+	// 本轮不判（hold_no_live_quote，fail-closed）。
+	liveBasis, quoteAge, okB := e.currentBasisBpsAged(p)
+	if !okB || (e.cfg.XAssetQuoteMaxAge > 0 && quoteAge > e.cfg.XAssetQuoteMaxAge) {
+		return false, "hold_no_live_quote"
+	}
+	if liveBasis <= floor {
+		return true, fmt.Sprintf("harvest: live basis %.2f ≤ floor %.2f (+%.2f bps captured)", liveBasis, floor, floor-liveBasis)
 	}
 	return false, ""
 }

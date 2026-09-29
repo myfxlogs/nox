@@ -125,18 +125,21 @@ func (g *Gate) swapDeviationGateCheck(ctx context.Context, intent TradeIntent, a
 			if !ok || actualUSD == 0 {
 				continue // 无快照或零增量→跳过（走 S3）
 			}
-			// 取 facts 规格值（bps）
+			// 取 facts 规格值（bps）——D-565 S5：超龄行不采（SwapFactMaxAge 同 discover/exit 龄闸）。
+			factFresh := func(f fact.Fact) bool {
+				return g.cfg.SwapFactMaxAge <= 0 || time.Since(f.Ts) <= g.cfg.SwapFactMaxAge
+			}
 			var factsBps float64
 			if leg.Side == "BUY" {
 				for _, f := range longFacts {
-					if f.Venue == legBare {
+					if f.Venue == legBare && factFresh(f) {
 						factsBps = f.Value
 						break
 					}
 				}
 			} else {
 				for _, f := range shortFacts {
-					if f.Venue == legBare {
+					if f.Venue == legBare && factFresh(f) {
 						factsBps = f.Value
 						break
 					}
@@ -145,16 +148,19 @@ func (g *Gate) swapDeviationGateCheck(ctx context.Context, intent TradeIntent, a
 			// facts 换算 USD/日 = bps × notional / 10000
 			// D-190：notional 改 usdnotional.PerLot（USD 统一换算，JPY 对 ÷ USDJPY）。
 			// canonical 用函数顶部 intent.Canonical 变量（勿用 position.Canonical）。
-			// cs 仍用 g.cfg.LegContractSizeResolver，nil→CS=1 回退（现状语义）。
+			// D-565 S5：cs=1.0 静默回退删——resolver 缺/返非正→走「无法评估」同径 fail-closed。
 			price := 0.0
 			if leg.PriceActual != nil {
 				price = *leg.PriceActual
 			}
-			cs := 1.0
+			cs := 0.0
 			if g.cfg.LegContractSizeResolver != nil {
 				if resolved, ok := g.cfg.LegContractSizeResolver(leg.Venue, leg.Symbol); ok && resolved > 0 {
 					cs = resolved
 				}
+			}
+			if cs <= 0 {
+				continue // 合约规格不可得→无法评估（fail-closed 同径，不编 cs=1）
 			}
 			perLot, ok := usdnotional.PerLot(canonical, price, cs, g.cfg.Quotes)
 			if !ok || perLot <= 0 {
