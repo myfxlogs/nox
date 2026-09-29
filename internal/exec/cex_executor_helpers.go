@@ -38,6 +38,92 @@ type OKXPosition struct {
 	AvgPx   float64
 }
 
+// okxPosModeFetch D-564 S6 U8：GET /api/v5/account/config → posMode 实读
+// （long_short_mode/net_mode…）。禁缓存（业主 app 可改模式，缓存=快照进决策违禁）。
+func (e *CEXExecutor) okxPosModeFetch(ctx context.Context) (string, error) {
+	path := "/api/v5/account/config"
+	ts := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+	prehash := ts + "GET" + path
+	sign := okxSign(e.apiSecret, prehash)
+	headers := http.Header{
+		"OK-ACCESS-KEY":        {e.apiKey},
+		"OK-ACCESS-SIGN":       {sign},
+		"OK-ACCESS-TIMESTAMP":  {ts},
+		"OK-ACCESS-PASSPHRASE": {e.passphrase},
+	}
+	body, err := e.get(ctx, e.baseURL+path, headers)
+	if err != nil {
+		return "", fmt.Errorf("okx account/config: %w", err)
+	}
+	var resp struct {
+		Code string `json:"code"`
+		Data []struct {
+			PosMode string `json:"posMode"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return "", fmt.Errorf("okx account/config json: %w", err)
+	}
+	if resp.Code != "0" || len(resp.Data) == 0 {
+		return "", fmt.Errorf("okx account/config code=%s data_len=%d", resp.Code, len(resp.Data))
+	}
+	if resp.Data[0].PosMode == "" {
+		return "", fmt.Errorf("okx account/config posMode 空")
+	}
+	return resp.Data[0].PosMode, nil
+}
+
+// okxPosModeCheck D-564 S6 U8：posMode 实读+校验（非 long_short_mode 一律拒+报实测值）。
+// placeOKX perp 分支调用；判定时刻实读禁缓存。
+func (e *CEXExecutor) okxPosModeCheck(ctx context.Context) error {
+	posMode, err := e.okxPosModeFetch(ctx)
+	if err != nil {
+		return fmt.Errorf("okx posMode 实读 fail-closed: %w", err)
+	}
+	if posMode != "long_short_mode" {
+		return fmt.Errorf("okx 账户模式已变更（posMode=%s），拒绝按 long/short 语义下单（fail-closed；net_mode 映射未做）", posMode)
+	}
+	return nil
+}
+
+// okxStateCheck D-564 S6 U9：instruments.state 闸——非 live（preopen/suspend/expired）
+// fail-closed。spec 缓存共享（okxSwapSpecCache 同包），state 随缓存写（规格慢变元数据）。
+func (e *CEXExecutor) okxStateCheck(ctx context.Context, instID string) error {
+	if v, ok := okxSwapSpecState.Load(instID); ok {
+		if st, _ := v.(string); st != "" && st != "live" {
+			return fmt.Errorf("okx %s 合约非 live 态（state=%s）fail-closed 拒单", instID, st)
+		}
+		return nil
+	}
+	endpoint := "/api/v5/public/instruments?instType=SWAP&instId=" + instID
+	body, err := e.get(ctx, e.baseURL+endpoint, nil)
+	if err != nil {
+		return fmt.Errorf("okx instruments state %s: %w", instID, err)
+	}
+	var out struct {
+		Code string `json:"code"`
+		Data []struct {
+			State string `json:"state"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return fmt.Errorf("okx instruments state json: %w", err)
+	}
+	if out.Code != "0" || len(out.Data) == 0 {
+		return fmt.Errorf("okx instruments state %s: code=%s data_len=%d", instID, out.Code, len(out.Data))
+	}
+	st := out.Data[0].State
+	if st == "" {
+		return nil // 老响应无 state 字段=兼容直通（不猜不拒——字段缺席非证据）
+	}
+	if st != "live" {
+		// 非 live 不缓存（preopen→live 转换后下次尝试重查；缓存 live 正常态）。
+		return fmt.Errorf("okx %s 合约非 live 态（state=%s）fail-closed 拒单", instID, st)
+	}
+	okxSwapSpecState.Store(instID, st)
+	return nil
+}
+
 // OKXPositions 查询 OKX 指定 instId 的当前持仓（long_short_mode 下 long/short 分列）。
 // 供平仓核对 / 残留双向持仓清理，签名四头。
 func (e *CEXExecutor) OKXPositions(ctx context.Context, instID string) ([]OKXPosition, error) {
@@ -159,6 +245,10 @@ type okxSwapSpec struct{ ctVal, lotSz float64 }
 // okxSwapSpecCache instruments 规格包级缓存（ctVal/lotSz 不变）——
 // D-311 R4：CEXExecutor 下单换算与 dashboard floorToStepQty 共用同源缓存。
 var okxSwapSpecCache sync.Map // instID → okxSwapSpec
+
+// okxSwapSpecState D-564 S6 U9：instruments.state 缓存（live/preopen/suspend/expired；
+// 规格慢变元数据允许缓存——state 闸非决策时变数据面）。
+var okxSwapSpecState sync.Map
 
 // OkxSwapSpec 查 okx swap 合约面值 ctVal + 最小张数 lotSz（D-311 R4 从 okxContractVal 提取共用）。
 // 公开端点 GET /api/v5/public/instruments?instType=SWAP&instId=XXX 无需签名。

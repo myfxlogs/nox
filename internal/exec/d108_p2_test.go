@@ -52,6 +52,20 @@ func TestD108P2_BinancePerpOneWayReduceOnly(t *testing.T) {
 			_, _ = io.WriteString(w, `{"dualSidePosition":false}`)
 			return
 		}
+		// D-564 S7：qty guard 数据源路由（mark/exchangeInfo/symbolConfig）
+		if r.URL.Path == "/fapi/v1/premiumIndex" {
+			_, _ = io.WriteString(w, `{"markPrice":"50000"}`)
+			return
+		}
+		if r.URL.Path == "/fapi/v1/exchangeInfo" {
+			_, _ = io.WriteString(w, `{"symbols":[{"symbol":"BTCUSDT","filters":[{"filterType":"LOT_SIZE","stepSize":"0.001","minQty":"0.001"}]}]}`)
+			return
+		}
+		if r.URL.Path == "/fapi/v1/symbolConfig" {
+			_, _ = io.WriteString(w, `{"symbol":"BTCUSDT","maxNotionalValue":100000000}`)
+			return
+		}
+
 		if r.URL.Path != "/fapi/v1/order" {
 			return // 非 order 请求（如轮询）不检查
 		}
@@ -78,6 +92,19 @@ func TestD120_BinancePerpOneWayOpenNoReduceOnly(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/fapi/v1/positionSide/dual" {
 			_, _ = io.WriteString(w, `{"dualSidePosition":false}`)
+			return
+		}
+		// D-564 S7：qty guard 数据源路由
+		if r.URL.Path == "/fapi/v1/premiumIndex" {
+			_, _ = io.WriteString(w, `{"markPrice":"50000"}`)
+			return
+		}
+		if r.URL.Path == "/fapi/v1/exchangeInfo" {
+			_, _ = io.WriteString(w, `{"symbols":[{"symbol":"BTCUSDT","filters":[{"filterType":"LOT_SIZE","stepSize":"0.001","minQty":"0.001"}]}]}`)
+			return
+		}
+		if r.URL.Path == "/fapi/v1/symbolConfig" {
+			_, _ = io.WriteString(w, `{"symbol":"BTCUSDT","maxNotionalValue":100000000}`)
 			return
 		}
 		if r.URL.Path != "/fapi/v1/order" {
@@ -131,6 +158,19 @@ func TestD108P2_BinancePerpRejectedCritical(t *testing.T) {
 			_, _ = io.WriteString(w, `{"dualSidePosition":false}`)
 			return
 		}
+		// D-564 S7：qty guard 数据源路由（本锚=venue 拒单 critical 告警——guard 放行使单进 venue）
+		if r.URL.Path == "/fapi/v1/premiumIndex" {
+			_, _ = io.WriteString(w, `{"markPrice":"50000"}`)
+			return
+		}
+		if r.URL.Path == "/fapi/v1/exchangeInfo" {
+			_, _ = io.WriteString(w, `{"symbols":[{"symbol":"BTCUSDT","filters":[{"filterType":"LOT_SIZE","stepSize":"0.001","minQty":"0.001"}]}]}`)
+			return
+		}
+		if r.URL.Path == "/fapi/v1/symbolConfig" {
+			_, _ = io.WriteString(w, `{"symbol":"BTCUSDT","maxNotionalValue":100000000}`)
+			return
+		}
 		http.Error(w, `{"code":-2022,"msg":"ReduceOnly Order Rejected"}`, 400)
 	}))
 	defer srv.Close()
@@ -162,7 +202,9 @@ func TestD108P2_OKXPerpReduceOnly(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/public/instruments":
-			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"0.01","lotSz":"0.01"}]}`)
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"0.01","lotSz":"0.01","state":"live"}]}`)
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/account/config":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"posMode":"long_short_mode"}]}`) // D-564 S6
 		default:
 			body, _ := io.ReadAll(r.Body)
 			if r.Method == http.MethodPost {
@@ -189,7 +231,9 @@ func TestD120_OKXPerpOpenNoReduceOnly(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/public/instruments":
-			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"0.01","lotSz":"0.01"}]}`)
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"0.01","lotSz":"0.01","state":"live"}]}`)
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/account/config":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"posMode":"long_short_mode"}]}`) // D-564 S6
 		default:
 			body, _ := io.ReadAll(r.Body)
 			if r.Method == http.MethodPost {
@@ -215,7 +259,9 @@ func TestD108P2_OKXPerpRejectedCritical(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/public/instruments":
-			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"0.01","lotSz":"0.01"}]}`)
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"0.01","lotSz":"0.01","state":"live"}]}`)
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/account/config":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"posMode":"long_short_mode"}]}`) // D-564 S6
 		default:
 			_, _ = io.WriteString(w, `{"code":"1","msg":"All operations failed","data":[{"sCode":"51000","sMsg":"Parameter error"}]}`)
 		}

@@ -22,11 +22,34 @@ func (e *CEXExecutor) placeBinance(ctx context.Context, o Order) (Fill, error) {
 	if o.Side == "SELL" {
 		side = "SELL"
 	}
+	// D-564 S7 U10：perp 下单前本地闸——LOT_SIZE floor+minQty/MIN_NOTIONAL/maxNotional
+	// fail-closed（脏量靠 venue 拒 -1111 改为本地预拦）。平仓（PositionSide!=""）只 floor
+	// 不做名义闸（reduce 方向不新增敞口，名义闸语义仅开仓）。
+	qty := o.Qty
+	if e.venueType == "perp" {
+		if o.PositionSide == "" {
+			mark, merr := e.binanceMarkPrice(ctx, o.Symbol)
+			if merr != nil {
+				return Fill{}, fmt.Errorf("binance qty guard mark: %w", merr)
+			}
+			g, gerr := e.binanceQtyGuard(ctx, o.Symbol, o.Qty, mark)
+			if gerr != nil {
+				return Fill{}, gerr
+			}
+			qty = g
+		} else {
+			g, gerr := e.binanceQtyGuard(ctx, o.Symbol, o.Qty, 0)
+			if gerr != nil {
+				return Fill{}, gerr
+			}
+			qty = g
+		}
+	}
 	params := url.Values{}
 	params.Set("symbol", o.Symbol)
 	params.Set("side", side)
 	params.Set("type", "MARKET")
-	params.Set("quantity", strconv.FormatFloat(o.Qty, 'f', -1, 64))
+	params.Set("quantity", strconv.FormatFloat(qty, 'f', -1, 64))
 	// D-195-B §4.3：client_order_id 透传（Binance 支持 newClientOrderId）。
 	if o.ClientOrderID != "" {
 		params.Set("newClientOrderId", o.ClientOrderID)

@@ -37,7 +37,10 @@ type CEXExecutor struct {
 	dualSideProbed bool // 是否已探测（探测失败时 false + 保守按 hedge 处理）
 
 	// D-120：gate futures 合约规格缓存（contract → quanto_multiplier，避免每单查）。
+	// D-564 S4 U6：扩为全规格缓存（order_size_min/max、enable_decimal、in_delisting、
+	// leverage_max——规格=慢变元数据允许缓存，非决策时变数据）。
 	gateQuanto map[string]float64
+	gateSpec   map[string]gateContractSpec
 	dualSideMu sync.Mutex // 保护 dualSide/dualSideProbed 探测
 	// D-125：okx perp 合约面值缓存已转包级共享 okxSwapSpecCache（D-311 R4，instId → ctVal/lotSz）。
 	// okx swap sz 单位=张数，o.Qty 是基础币数量 → sz=qty/ctVal。
@@ -48,13 +51,6 @@ type CEXExecutor struct {
 	// D-472 S4：强平距离预检参数（SetLiqGuards 注入；缺省 0=关闸/0.5=cross 占比上限）。
 	minLiqDistPct          float64
 	crossNotionalEquityCap float64
-	// D-563 S1：gate 合约目标杠杆（SetGateDefaultLeverage 注入；零值=未配置→开仓
-	// fail-closed，不兜底）。venue 无杠杆读回端点——开仓前 ensureGateLeverage 显式 SET，
-	// set-mark 防重复（contract|side 键）；gateDualMode=accounts in_dual_mode 探测缓存。
-	gateDefaultLeverage float64
-	gateLevMu           sync.Mutex
-	gateLeverageSet     map[string]bool
-	gateDualMode        *bool
 	// D-472 S4：binance tier-1 MMR 运行时缓存（leverageBracket 取不到=fail-closed）。
 	mmMu    sync.Mutex
 	mmCache map[string]float64
@@ -84,7 +80,6 @@ func NewCEXExecutor(venue, venueType, apiKey, apiSecret, passphrase, baseURL str
 
 		marginReservePct:       defaultMarginReservePct,
 		crossNotionalEquityCap: DefaultCrossNotionalEquityCap,
-		gateLeverageSet:        map[string]bool{},
 	}
 }
 
@@ -147,6 +142,13 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 		tdMode = "cross"
 		if !strings.HasSuffix(instID, "-SWAP") {
 			instID = instID + "-SWAP" // OKX perp instId 形如 BTC-USDT-SWAP
+		}
+		// D-564 S6 U8/U9：posMode 判定时刻实读（非 long_short_mode 拒）+instruments.state 闸。
+		if err := e.okxPosModeCheck(ctx); err != nil {
+			return Fill{}, err
+		}
+		if err := e.okxStateCheck(ctx, instID); err != nil {
+			return Fill{}, err
 		}
 	}
 	var sz string // perp/spot 两分支各自赋值（D-516：初值 dead write 清 staticcheck）

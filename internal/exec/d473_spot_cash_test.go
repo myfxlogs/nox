@@ -26,6 +26,10 @@ func okxSpotServer(t *testing.T, availBal string, hits *int32) *httptest.Server 
 			atomic.AddInt32(hits, 1)
 		}
 		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/account/config":
+			w.Write([]byte(`{"code":"0","data":[{"posMode":"long_short_mode"}]}`))
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v5/public/instruments"):
+			w.Write([]byte(`{"code":"0","data":[{"ctVal":"1000","lotSz":"0.01","state":"live"}]}`))
 		case strings.HasPrefix(r.URL.Path, "/api/v5/market/ticker"):
 			w.Write([]byte(`{"code":"0","data":[{"last":"0.50"}]}`))
 		case strings.HasPrefix(r.URL.Path, "/api/v5/account/balance"):
@@ -260,8 +264,10 @@ func TestD473_OKXPerpCloseReduceOnlyBody(t *testing.T) {
 	var bodies []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/account/config":
+			w.Write([]byte(`{"code":"0","data":[{"posMode":"long_short_mode"}]}`))
 		case strings.HasPrefix(r.URL.Path, "/api/v5/public/instruments"):
-			w.Write([]byte(`{"code":"0","data":[{"ctVal":"1","lotSz":"1"}]}`))
+			w.Write([]byte(`{"code":"0","data":[{"ctVal":"1","lotSz":"1","state":"live"}]}`))
 		case strings.HasPrefix(r.URL.Path, "/api/v5/trade/order"):
 			if r.Method == http.MethodPost {
 				b := make([]byte, r.ContentLength)

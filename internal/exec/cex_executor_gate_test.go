@@ -83,7 +83,6 @@ func TestGateSignEmptyBody(t *testing.T) {
 // newGatePerpExec D-563 S1：测试 executor 预注目标杠杆（配置=推送条款 fail-closed 前置）。
 func newGatePerpExec(key, secret, proxy, baseURL string, live bool) *CEXExecutor {
 	e := NewCEXExecutor("gate", "perp", key, secret, proxy, baseURL, live)
-	e.SetGateDefaultLeverage(10)
 	return e
 }
 
@@ -393,6 +392,10 @@ func TestD121_GateCloseReduceOnly(t *testing.T) {
 // 多仓 + funding 字段；size!=0 → 返回 1 条。
 func TestCEXExecutor_GatePositions(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/futures/usdt/accounts" {
+			io.WriteString(w, `{"position_mode":"single"}`) // D-564 S2：模式实读路由前置
+			return
+		}
 		if r.URL.Path != "/futures/usdt/positions/BTC_USDT" {
 			t.Errorf("want /futures/usdt/positions/BTC_USDT, got %s", r.URL.Path)
 		}
@@ -459,6 +462,10 @@ func parseTs(t *testing.T, s string) int64 {
 // 原始 body 必须含 funding 字段（探针一次运行定案字段是否存在）。
 func TestCEXExecutor_GatePositionsRaw(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/futures/usdt/accounts" {
+			io.WriteString(w, `{"position_mode":"single"}`) // D-564 S2：模式实读路由前置
+			return
+		}
 		if r.URL.Path != "/futures/usdt/positions/BTC_USDT" {
 			t.Errorf("want /futures/usdt/positions/BTC_USDT, got %s", r.URL.Path)
 		}

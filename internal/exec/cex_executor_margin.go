@@ -19,10 +19,6 @@ func (e *CEXExecutor) SetLiqGuards(minLiqDistPct, crossNotionalEquityCap float64
 	e.crossNotionalEquityCap = crossNotionalEquityCap
 }
 
-// SetGateDefaultLeverage D-472 S2：注入 gate venue 级缺省杠杆档
-// （ARB_GATE_DEFAULT_LEVERAGE，缺省 5——账户级杠杆取不到时的第二级，不得 error）。
-func (e *CEXExecutor) SetGateDefaultLeverage(lev float64) { e.gateDefaultLeverage = lev }
-
 // MarginPrecheck D-415 §1.3 + D-472 S1/S2/S4：开仓前逐腿资金预检。
 // 量纲锚（B-001 钉死）：exec.Order.Qty=基础币数量（pipeline orderQtyFor ×cs 换算后），
 // requiredIM=o.Qty×mark/leverage——禁二次乘 ct_val/quanto（binance ct_val≡1、gate quanto

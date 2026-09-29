@@ -32,6 +32,24 @@ func TestD427BinanceFillFeeFromUserTrades(t *testing.T) {
 				{"commission":"0.5","commissionAsset":"BNB","realizedPnl":"0"},
 				{"commission":"0","commissionAsset":"USDT","realizedPnl":"9.9"}
 			]`)
+		case r.URL.Path == "/v1/premiumIndex":
+			_, _ = io.WriteString(w, `{"markPrice":"0.3342"}`)
+			return
+		case r.URL.Path == "/v1/exchangeInfo":
+			_, _ = io.WriteString(w, `{"symbols":[{"symbol":"BTCUSDT","filters":[{"filterType":"LOT_SIZE","stepSize":"0.001","minQty":"0.001"}]}]}`)
+			return
+		case r.URL.Path == "/v1/symbolConfig":
+			_, _ = io.WriteString(w, `{"symbol":"BTCUSDT","maxNotionalValue":100000000}`)
+			return
+		case r.URL.Path == "/v1/premiumIndex":
+			_, _ = io.WriteString(w, `{"markPrice":"0.3342"}`)
+			return
+		case r.URL.Path == "/v1/exchangeInfo":
+			_, _ = io.WriteString(w, `{"symbols":[{"symbol":"BTCUSDT","filters":[{"filterType":"LOT_SIZE","stepSize":"0.001","minQty":"0.001"}]}]}`)
+			return
+		case r.URL.Path == "/v1/symbolConfig":
+			_, _ = io.WriteString(w, `{"symbol":"BTCUSDT","maxNotionalValue":100000000}`)
+			return
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -64,6 +82,15 @@ func TestD427BinanceFeeQueryErrZero(t *testing.T) {
 			_, _ = io.WriteString(w, `{"status":"FILLED","executedQty":"1.0","avgPrice":"100"}`)
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/userTrades":
 			w.WriteHeader(500)
+		case r.URL.Path == "/v1/premiumIndex":
+			_, _ = io.WriteString(w, `{"markPrice":"0.3342"}`)
+			return
+		case r.URL.Path == "/v1/exchangeInfo":
+			_, _ = io.WriteString(w, `{"symbols":[{"symbol":"BTCUSDT","filters":[{"filterType":"LOT_SIZE","stepSize":"0.001","minQty":"0.001"}]}]}`)
+			return
+		case r.URL.Path == "/v1/symbolConfig":
+			_, _ = io.WriteString(w, `{"symbol":"BTCUSDT","maxNotionalValue":100000000}`)
+			return
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}

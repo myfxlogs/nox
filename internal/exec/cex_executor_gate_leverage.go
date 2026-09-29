@@ -1,12 +1,16 @@
-// cex_executor_gate_leverage.go —— D-563 S1：gate 杠杆推送条款（推不设读）。
-// accounts 响应无 leverage 字段（实探）+ 双仓模式无杠杆读回端点 →
-// 开仓前显式 POST SET 合约杠杆，响应回显 leverage==target 作「已确认」证据。
+// cex_executor_gate_leverage.go —— D-564 S1：gate 杠杆纯读化（取代 D-563 推不设读）。
+// 官方读口=GET /futures/usdt/get_leverage/{contract}?pos_margin_mode={isolated|cross}
+// &dual_side={dual_long|dual_short} → FuturesLeverage{Lever}（本账户 dual 实测缺
+// pos_margin_mode 即 400——按必填处理，server-facts-over-docs）。
+// 禁令边界：旧 push 端点（positions|dual_comp + /leverage）带「设杠杆连带切保证金模式」
+// 副作用，永久禁用；配置冒充事实退役——venue 实况读为准，读不到 fail-closed。
 package exec
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -14,94 +18,129 @@ import (
 	"arb/internal/signutil"
 )
 
-// gateDualModeFetch D-563 S1：accounts 响应 in_dual_mode 探测（per-executor 缓存；
-// 探测败 fail-closed 上抛——模式未知无法选端点，不猜）。
-func (e *CEXExecutor) gateDualModeFetch(ctx context.Context) (bool, error) {
-	e.gateLevMu.Lock()
-	if e.gateDualMode != nil {
-		dual := *e.gateDualMode
-		e.gateLevMu.Unlock()
-		return dual, nil
-	}
-	e.gateLevMu.Unlock()
+// gatePositionMode accounts 响应模式探测值（U5：position_mode 权威三值，
+// 旧 in_dual_mode 布尔区分不了 dual_plus——退位）。
+type gatePositionMode string
+
+const (
+	gateModeSingle   gatePositionMode = "single"
+	gateModeDual     gatePositionMode = "dual"
+	gateModeDualPlus gatePositionMode = "dual_plus"
+)
+
+// isDual 双仓族（dual/dual_plus 共用 dual_comp 面）。
+func (m gatePositionMode) isDual() bool {
+	return m == gateModeDual || m == gateModeDualPlus
+}
+
+// gateAccountsGet GET /futures/usdt/accounts（签名面复用；S2/S3 模式感知路由同源）。
+func (e *CEXExecutor) gateAccountsGet(ctx context.Context) ([]byte, error) {
 	endpoint := "/futures/usdt/accounts"
 	urlPath := "/api/v4" + endpoint
 	ts := time.Now().Unix()
 	sign := signutil.GateSign(e.apiSecret, "GET", urlPath, "", "", ts)
-	body, err := e.get(ctx, e.baseURL+endpoint, http.Header{
+	return e.get(ctx, e.baseURL+endpoint, http.Header{
 		"KEY": {e.apiKey}, "Timestamp": {strconv.FormatInt(ts, 10)}, "SIGN": {sign},
 	})
-	if err != nil {
-		return false, fmt.Errorf("gate dual-mode 探测: %w", err)
-	}
-	var acc struct {
-		InDualMode bool `json:"in_dual_mode"`
-	}
-	if err := json.Unmarshal(body, &acc); err != nil {
-		return false, fmt.Errorf("gate dual-mode json: %w", err)
-	}
-	e.gateLevMu.Lock()
-	e.gateDualMode = &acc.InDualMode
-	e.gateLevMu.Unlock()
-	return acc.InDualMode, nil
 }
 
-// ensureGateLeverage D-563 S1：开仓前显式 SET 合约杠杆=推送条款（Gate 双仓模式无
-// 杠杆读回端点——推不设读；POST 响应回显 leverage==target 即「已确认」证据）。
-// set-mark（contract|dual_side 键，gateLevMu 护）防并发重复 SET；SET 失败/回显不符/
-// 目标未配置 → fail-closed 拒开不落单。sellLeg=true→dual_short，false→dual_long。
-func (e *CEXExecutor) ensureGateLeverage(ctx context.Context, contract string, sellLeg bool) error {
-	target := e.gateDefaultLeverage
-	if target <= 0 {
-		return fmt.Errorf("gate 目标杠杆未配置（ARB_GATE_DEFAULT_LEVERAGE）fail-closed 拒开 %s", contract)
-	}
-	side := "dual_long"
-	if sellLeg {
-		side = "dual_short"
-	}
-	key := contract + "|" + side
-	e.gateLevMu.Lock()
-	if e.gateLeverageSet[key] {
-		e.gateLevMu.Unlock()
-		return nil
-	}
-	e.gateLevMu.Unlock()
-
-	dual, err := e.gateDualModeFetch(ctx)
+// gatePositionModeFetch accounts 响应 position_mode 探测（U5：三值权威字段，
+// 旧 in_dual_mode 布尔区分不了 dual_plus——退位）。禁缓存——业主随时可能在 app
+// 切模式，缓存=快照进决策违禁，每次实读。
+func (e *CEXExecutor) gatePositionModeFetch(ctx context.Context) (gatePositionMode, error) {
+	body, err := e.gateAccountsGet(ctx)
 	if err != nil {
-		return err
+		return "", err
 	}
-	var endpoint, query string
-	levStr := strconv.FormatFloat(target, 'f', -1, 64)
-	if dual {
-		endpoint = "/futures/usdt/dual_comp/positions/" + contract + "/leverage"
-		query = "leverage=" + levStr + "&dual_side=" + side
-	} else {
-		endpoint = "/futures/usdt/positions/" + contract + "/leverage"
-		query = "leverage=" + levStr
+	var acc struct {
+		PositionMode string `json:"position_mode"`
+		InDualMode   bool   `json:"in_dual_mode"` // 旧字段兜底（老响应三值缺省时）
 	}
+	if err := json.Unmarshal(body, &acc); err != nil {
+		return "", fmt.Errorf("gate position_mode json: %w", err)
+	}
+	switch gatePositionMode(acc.PositionMode) {
+	case gateModeSingle, gateModeDual, gateModeDualPlus:
+		return gatePositionMode(acc.PositionMode), nil
+	}
+	if acc.InDualMode {
+		return gateModeDual, nil
+	}
+	return gateModeSingle, nil
+}
+
+// gateGetLeverage 单 margin 模式读：GET get_leverage/{contract} → Lever（string 数值）。
+// 缺/空/非数字/HTTP 错 → error（调用方 fail-closed）。
+func (e *CEXExecutor) gateGetLeverage(ctx context.Context, contract, posMarginMode, dualSide string) (float64, error) {
+	query := "pos_margin_mode=" + posMarginMode
+	if dualSide != "" {
+		query += "&dual_side=" + dualSide
+	}
+	endpoint := "/futures/usdt/get_leverage/" + contract
 	urlPath := "/api/v4" + endpoint
 	ts := time.Now().Unix()
-	sign := signutil.GateSign(e.apiSecret, "POST", urlPath, query, "", ts)
-	raw, err := e.post(ctx, e.baseURL+endpoint+"?"+query, "", http.Header{
+	sign := signutil.GateSign(e.apiSecret, "GET", urlPath, query, "", ts)
+	body, err := e.get(ctx, e.baseURL+endpoint+"?"+query, http.Header{
 		"KEY": {e.apiKey}, "Timestamp": {strconv.FormatInt(ts, 10)}, "SIGN": {sign},
 	})
 	if err != nil {
-		return fmt.Errorf("gate leverage SET %s %s: %w（fail-closed 不落单）", contract, side, err)
+		return 0, fmt.Errorf("get_leverage %s (%s/%s): %w", contract, posMarginMode, dualSide, err)
 	}
-	// 响应回显核对=「已确认」证据（不回显/不等=未确认 fail-closed）。
-	var resp struct {
-		Leverage json.Number `json:"leverage"`
+	var lv struct {
+		Lever string `json:"Lever"` // 文档钉死大写字段（gateapi-go FuturesLeverage）
 	}
-	if err := json.Unmarshal(raw, &resp); err != nil {
-		return fmt.Errorf("gate leverage SET %s %s 响应无回显: %w", contract, side, err)
+	if err := json.Unmarshal(body, &lv); err != nil {
+		return 0, fmt.Errorf("get_leverage %s 解析: %w", contract, err)
 	}
-	got, err := resp.Leverage.Float64()
-	if err != nil || got != target {
-		return fmt.Errorf("gate leverage SET %s %s 回显 %q≠目标 %g（未确认 fail-closed）", contract, side, resp.Leverage, target)
+	if lv.Lever == "" {
+		return 0, fmt.Errorf("get_leverage %s (%s/%s) Lever 空", contract, posMarginMode, dualSide)
 	}
-	e.gateLevMu.Lock()
-	e.gateLeverageSet[key] = true
-	e.gateLevMu.Unlock()
-	return nil
+	v, err := strconv.ParseFloat(lv.Lever, 64)
+	if err != nil || v <= 0 {
+		return 0, fmt.Errorf("get_leverage %s (%s/%s) Lever=%q 非正/非数字", contract, posMarginMode, dualSide, lv.Lever)
+	}
+	return v, nil
+}
+
+// gateEffectiveLeverage 杠杆实况（U1 纯读）：dual 族按腿方向 dual_side 双 margin
+// （isolated+cross）各读一次取 min（保证金需求上界=保守，永不虚放行）；single 读
+// isolated 单次（无 dual_side 参数）。任一读败 → error（调用方 fail-closed）。
+func (e *CEXExecutor) gateEffectiveLeverage(ctx context.Context, contract string, mode gatePositionMode, sellLeg bool) (float64, error) {
+	dualSide := ""
+	if mode.isDual() {
+		dualSide = "dual_long"
+		if sellLeg {
+			dualSide = "dual_short"
+		}
+		iso, err := e.gateGetLeverage(ctx, contract, "isolated", dualSide)
+		if err != nil {
+			return 0, err
+		}
+		cross, err := e.gateGetLeverage(ctx, contract, "cross", dualSide)
+		if err != nil {
+			return 0, err
+		}
+		eff := iso
+		if cross < eff {
+			eff = cross
+		}
+		e.warnLeverageMax(ctx, contract, eff)
+		return eff, nil
+	}
+	v, err := e.gateGetLeverage(ctx, contract, "isolated", "")
+	if err != nil {
+		return 0, err
+	}
+	e.warnLeverageMax(ctx, contract, v)
+	return v, nil
+}
+
+// warnLeverageMax D-564 S4 U6：venue 实况 lever>leverage_max（矛盾态，理论不该出现）
+// → warn 不拦（venue 实况为准）+记日志；spec 读败静默（warn 附属不阻断主判定）。
+func (e *CEXExecutor) warnLeverageMax(ctx context.Context, contract string, lever float64) {
+	spec, err := e.gateSpecFetch(ctx, contract)
+	if err != nil || spec.LeverageMax <= 0 || lever <= spec.LeverageMax {
+		return
+	}
+	log.Printf("[gate] 杠杆矛盾态：get_leverage=%.0f > leverage_max=%.0f（venue 实况为准不拦）%s", lever, spec.LeverageMax, contract)
 }

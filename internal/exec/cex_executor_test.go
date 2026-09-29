@@ -80,6 +80,33 @@ func TestCEXExecutor_BinancePerpEndpoint(t *testing.T) {
 			_, _ = io.WriteString(w, `{"dualSidePosition":false}`)
 			return
 		}
+		// D-564 S7：qty guard 数据源路由（mark/exchangeInfo/symbolConfig）
+		if r.URL.Path == "/fapi/v1/premiumIndex" {
+			_, _ = io.WriteString(w, `{"markPrice":"50000"}`)
+			return
+		}
+		if r.URL.Path == "/fapi/v1/exchangeInfo" {
+			_, _ = io.WriteString(w, `{"symbols":[{"symbol":"BTCUSDT","filters":[{"filterType":"LOT_SIZE","stepSize":"0.001","minQty":"0.001"}]},{"symbol":"TRXUSDT","filters":[{"filterType":"LOT_SIZE","stepSize":"1","minQty":"1"}]}]}`)
+			return
+		}
+		if r.URL.Path == "/fapi/v1/symbolConfig" {
+			_, _ = io.WriteString(w, `{"symbol":"TRXUSDT","maxNotionalValue":100000000}`)
+			return
+		}
+
+		// D-564 S7 U10：下单前本地闸数据源（premiumIndex mark+exchangeInfo filters）
+		if r.URL.Path == "/fapi/v1/premiumIndex" {
+			_, _ = io.WriteString(w, `{"markPrice":"0.3342"}`)
+			return
+		}
+		if r.URL.Path == "/fapi/v1/exchangeInfo" {
+			_, _ = io.WriteString(w, `{"symbols":[{"symbol":"TRXUSDT","filters":[{"filterType":"LOT_SIZE","stepSize":"1","minQty":"1"},{"filterType":"MIN_NOTIONAL","notional":"0.1"}]},{"symbol":"BTCUSDT","filters":[{"filterType":"LOT_SIZE","stepSize":"0.001","minQty":"0.001"}]}]}`)
+			return
+		}
+		if r.URL.Path == "/fapi/v1/symbolConfig" {
+			_, _ = io.WriteString(w, `{"symbol":"TRXUSDT","maxNotionalValue":1000000}`)
+			return
+		}
 		if r.URL.Path != "/fapi/v1/order" {
 			t.Errorf("want /fapi/v1/order, got %s", r.URL.Path)
 		}
@@ -88,6 +115,7 @@ func TestCEXExecutor_BinancePerpEndpoint(t *testing.T) {
 	defer srv.Close()
 
 	e := NewCEXExecutor("binance", "perp", "k", "s", "", srv.URL+"/fapi", false)
+	// D-564 S7：floor 后 qty=1（stepSize=1）——body quantity 断言不变。
 	if _, err := e.PlaceOrder(context.Background(), Order{Symbol: "TRXUSDT", Side: "SELL", Qty: 1}); err != nil {
 		t.Fatalf("PlaceOrder: %v", err)
 	}
@@ -105,6 +133,12 @@ func TestCEXExecutor_BinancePerpPollsAsyncFill(t *testing.T) {
 		case r.URL.Path == "/fapi/v1/order" && r.Method == http.MethodGet:
 			polled++
 			_, _ = io.WriteString(w, `{"symbol":"BTCUSDT","orderId":99,"status":"FILLED","executedQty":"0.0010","avgPrice":"71862.8"}`)
+		case r.URL.Path == "/fapi/v1/premiumIndex":
+			_, _ = io.WriteString(w, `{"markPrice":"71862"}`) // D-564 S7：qty guard mark
+		case r.URL.Path == "/fapi/v1/exchangeInfo":
+			_, _ = io.WriteString(w, `{"symbols":[{"symbol":"BTCUSDT","filters":[{"filterType":"LOT_SIZE","stepSize":"0.001","minQty":"0.001"}]}]}`)
+		case r.URL.Path == "/fapi/v1/symbolConfig":
+			_, _ = io.WriteString(w, `{"symbol":"BTCUSDT","maxNotionalValue":100000000}`)
 		default:
 			_, _ = io.WriteString(w, `{"symbol":"BTCUSDT","orderId":99,"status":"NEW","executedQty":"0.0000","avgPrice":"0"}`)
 		}
@@ -130,6 +164,12 @@ func TestCEXExecutor_BinanceOrderTerminalCanceled(t *testing.T) {
 		switch {
 		case r.URL.Path == "/api/v5/public/instruments":
 			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"1","lotSz":"0.0001","minSz":"0.0001"}]}`)
+		case r.URL.Path == "/fapi/v1/premiumIndex":
+			_, _ = io.WriteString(w, `{"markPrice":"50000"}`)
+		case r.URL.Path == "/fapi/v1/exchangeInfo":
+			_, _ = io.WriteString(w, `{"symbols":[{"symbol":"BTCUSDT","filters":[{"filterType":"LOT_SIZE","stepSize":"0.001","minQty":"0.001"}]}]}`)
+		case r.URL.Path == "/fapi/v1/symbolConfig":
+			_, _ = io.WriteString(w, `{"symbol":"BTCUSDT","maxNotionalValue":100000000}`)
 		case r.URL.Path == "/fapi/v1/order" && r.Method == http.MethodGet:
 			_, _ = io.WriteString(w, `{"orderId":100,"status":"EXPIRED","executedQty":"0.0000","avgPrice":"0"}`)
 		default:
@@ -256,7 +296,7 @@ func TestCEXExecutor_OKXPerpTdMode(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/public/instruments":
-			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"1000","lotSz":"0.01"}]}`)
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"1000","lotSz":"0.01","state":"live","instId":"TRX-USDT-SWAP"}]}`)
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v5/trade/order":
 			raw, _ := io.ReadAll(r.Body)
 			var body map[string]string
@@ -274,6 +314,8 @@ func TestCEXExecutor_OKXPerpTdMode(t *testing.T) {
 			_, _ = io.WriteString(w, `{"code":"0","msg":"","data":[{"ordId":"1","sCode":"0","accFillSz":"0.01","avgPx":"0.3342"}]}`)
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/trade/order":
 			_, _ = io.WriteString(w, `{"code":"0","data":[{"ordId":"0","fee":"","feeCcy":""}]}`)
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/account/config":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"posMode":"long_short_mode"}]}`) // D-564 S6
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -297,7 +339,9 @@ func TestCEXExecutor_OKXPerpPosSideOverride(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/public/instruments":
-			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"0.01","lotSz":"0.01"}]}`) // BTC ctVal=0.01 BTC/张
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"0.01","lotSz":"0.01","state":"live"}]}`) // BTC ctVal=0.01 BTC/张
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/account/config":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"posMode":"long_short_mode"}]}`) // D-564 S6
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v5/trade/order":
 			raw, _ := io.ReadAll(r.Body)
 			var body map[string]string
@@ -308,6 +352,8 @@ func TestCEXExecutor_OKXPerpPosSideOverride(t *testing.T) {
 			_, _ = io.WriteString(w, `{"code":"0","msg":"","data":[{"ordId":"88","sCode":"0","accFillSz":"1","avgPx":"71904.8"}]}`)
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/trade/order":
 			_, _ = io.WriteString(w, `{"code":"0","data":[{"ordId":"0","fee":"","feeCcy":""}]}`)
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/account/config":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"posMode":"long_short_mode"}]}`) // D-564 S6
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -334,6 +380,8 @@ func TestCEXExecutor_OKXOrderPollTerminalCanceled(t *testing.T) {
 			_, _ = io.WriteString(w, `{"code":"0","msg":"","data":[{"ordId":"999","accFillSz":"","avgPx":"","state":"canceled"}]}`)
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/trade/order":
 			_, _ = io.WriteString(w, `{"code":"0","data":[{"ordId":"0","fee":"","feeCcy":""}]}`)
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/account/config":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"posMode":"long_short_mode"}]}`) // D-564 S6
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -377,6 +425,8 @@ func TestCEXExecutor_OKXOrderPollsFill(t *testing.T) {
 			_, _ = io.WriteString(w, `{"code":"0","msg":"","data":[{"ordId":"777","accFillSz":"0.001","avgPx":"70811.6","state":"filled"}]}`)
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/trade/order":
 			_, _ = io.WriteString(w, `{"code":"0","data":[{"ordId":"0","fee":"","feeCcy":""}]}`)
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/account/config":
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"posMode":"long_short_mode"}]}`) // D-564 S6
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -431,7 +481,11 @@ func TestOKXSignKnownVector(t *testing.T) {
 func TestCEXExecutor_OKXPerpCtValConversion(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v5/public/instruments" {
-			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"1000","lotSz":"0.01"}]}`)
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"ctVal":"1000","lotSz":"0.01","state":"live"}]}`)
+			return
+		}
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v5/account/config" {
+			_, _ = io.WriteString(w, `{"code":"0","data":[{"posMode":"long_short_mode"}]}`) // D-564 S6
 			return
 		}
 		t.Errorf("unexpected %s %s（qty 过小应拒单，不应下单）", r.Method, r.URL.Path)

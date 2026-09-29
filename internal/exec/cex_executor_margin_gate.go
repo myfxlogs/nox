@@ -40,11 +40,15 @@ func (e *CEXExecutor) gateMarginPrecheck(ctx context.Context, o Order) error {
 	if err != nil {
 		return fmt.Errorf("gate margin precheck %s equity=%q: %w", o.Symbol, acc.Total, err)
 	}
-	// D-563 S1：accounts 响应无 leverage 字段（实探为空）——phantom 杠杆静默兜底已删；
-	// 杠杆=venue 级目标配置（开仓前系统显式 SET，配置=推送条款）。缺失/非正 fail-closed。
-	lev := e.gateDefaultLeverage
-	if lev <= 0 || avail < 0 {
-		return fmt.Errorf("gate margin precheck %s: gate 目标杠杆未配置（ARB_GATE_DEFAULT_LEVERAGE）fail-closed 拒开（lev=%.2g avail=%.2g）", o.Symbol, lev, avail)
+	// D-564 S1：杠杆纯读化——venue 实况 get_leverage 实读（dual 族双 margin 取 min=
+	// 保证金需求上界保守；读不到 fail-closed 拒开，不兜底不配置冒充）。配置链已退役。
+	mode, err := e.gatePositionModeFetch(ctx)
+	if err != nil {
+		return fmt.Errorf("gate margin precheck %s: %w", o.Symbol, err)
+	}
+	lev, err := e.gateEffectiveLeverage(ctx, o.Symbol, mode, o.Side == "SELL")
+	if err != nil {
+		return fmt.Errorf("gate margin precheck %s: gate 杠杆实况不可得（fail-closed 不猜）: %w", o.Symbol, err)
 	}
 
 	mark, err := e.gateMarkPrice(ctx, o.Symbol)

@@ -23,6 +23,24 @@ func TestD421OKXUnconfirmedReturnsSentinel(t *testing.T) {
 			_, _ = io.WriteString(w, `{"code":"0","data":[{"state":"live","accFillSz":"","avgPx":""}]}`)
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v5/trade/cancel-order":
 			_, _ = io.WriteString(w, `{"code":"1","msg":"cancel failed","data":[{"sCode":"1","sMsg":"network"}]}`)
+		case r.URL.Path == "/v1/premiumIndex":
+			_, _ = io.WriteString(w, `{"markPrice":"0.3342"}`)
+			return
+		case r.URL.Path == "/v1/exchangeInfo":
+			_, _ = io.WriteString(w, `{"symbols":[{"symbol":"BTCUSDT","filters":[{"filterType":"LOT_SIZE","stepSize":"0.001","minQty":"0.001"}]}]}`)
+			return
+		case r.URL.Path == "/v1/symbolConfig":
+			_, _ = io.WriteString(w, `{"symbol":"BTCUSDT","maxNotionalValue":100000000}`)
+			return
+		case r.URL.Path == "/v1/premiumIndex":
+			_, _ = io.WriteString(w, `{"markPrice":"0.3342"}`)
+			return
+		case r.URL.Path == "/v1/exchangeInfo":
+			_, _ = io.WriteString(w, `{"symbols":[{"symbol":"BTCUSDT","filters":[{"filterType":"LOT_SIZE","stepSize":"0.001","minQty":"0.001"}]}]}`)
+			return
+		case r.URL.Path == "/v1/symbolConfig":
+			_, _ = io.WriteString(w, `{"symbol":"BTCUSDT","maxNotionalValue":100000000}`)
+			return
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -56,6 +74,15 @@ func TestD421OKXPollRetriesOnNetErr(t *testing.T) {
 				return
 			}
 			_, _ = io.WriteString(w, `{"code":"0","data":[{"state":"filled","accFillSz":"0.5","avgPx":"3000"}]}`)
+		case r.URL.Path == "/v1/premiumIndex":
+			_, _ = io.WriteString(w, `{"markPrice":"0.3342"}`)
+			return
+		case r.URL.Path == "/v1/exchangeInfo":
+			_, _ = io.WriteString(w, `{"symbols":[{"symbol":"BTCUSDT","filters":[{"filterType":"LOT_SIZE","stepSize":"0.001","minQty":"0.001"}]}]}`)
+			return
+		case r.URL.Path == "/v1/symbolConfig":
+			_, _ = io.WriteString(w, `{"symbol":"BTCUSDT","maxNotionalValue":100000000}`)
+			return
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -89,6 +116,15 @@ func TestD421OKXCancelRevealsFilled(t *testing.T) {
 			_, _ = io.WriteString(w, `{"code":"0","data":[{"state":"filled","accFillSz":"0.5","avgPx":"3000","fee":"-0.1","feeCcy":"USDT"}]}`)
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v5/trade/cancel-order":
 			_, _ = io.WriteString(w, `{"code":"1","msg":"Order already filled","data":[{"sCode":"51400","sMsg":"filled"}]}`)
+		case r.URL.Path == "/v1/premiumIndex":
+			_, _ = io.WriteString(w, `{"markPrice":"0.3342"}`)
+			return
+		case r.URL.Path == "/v1/exchangeInfo":
+			_, _ = io.WriteString(w, `{"symbols":[{"symbol":"BTCUSDT","filters":[{"filterType":"LOT_SIZE","stepSize":"0.001","minQty":"0.001"}]}]}`)
+			return
+		case r.URL.Path == "/v1/symbolConfig":
+			_, _ = io.WriteString(w, `{"symbol":"BTCUSDT","maxNotionalValue":100000000}`)
+			return
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -117,6 +153,15 @@ func TestD421OKXCancelConfirmsZero(t *testing.T) {
 			_, _ = io.WriteString(w, `{"code":"0","data":[{"state":"canceled","accFillSz":"0","avgPx":""}]}`)
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v5/trade/cancel-order":
 			_, _ = io.WriteString(w, `{"code":"0","data":[{"ordId":"O424","sCode":"0"}]}`)
+		case r.URL.Path == "/v1/premiumIndex":
+			_, _ = io.WriteString(w, `{"markPrice":"0.3342"}`)
+			return
+		case r.URL.Path == "/v1/exchangeInfo":
+			_, _ = io.WriteString(w, `{"symbols":[{"symbol":"BTCUSDT","filters":[{"filterType":"LOT_SIZE","stepSize":"0.001","minQty":"0.001"}]}]}`)
+			return
+		case r.URL.Path == "/v1/symbolConfig":
+			_, _ = io.WriteString(w, `{"symbol":"BTCUSDT","maxNotionalValue":100000000}`)
+			return
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -153,6 +198,15 @@ func TestD421BinancePartialKeepsPolling(t *testing.T) {
 			_, _ = io.WriteString(w, `{"status":"FILLED","executedQty":"1.0","avgPrice":"100"}`)
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/userTrades":
 			_, _ = io.WriteString(w, `[]`)
+		case r.URL.Path == "/v1/premiumIndex":
+			_, _ = io.WriteString(w, `{"markPrice":"0.3342"}`)
+			return
+		case r.URL.Path == "/v1/exchangeInfo":
+			_, _ = io.WriteString(w, `{"symbols":[{"symbol":"BTCUSDT","filters":[{"filterType":"LOT_SIZE","stepSize":"0.001","minQty":"0.001"}]}]}`)
+			return
+		case r.URL.Path == "/v1/symbolConfig":
+			_, _ = io.WriteString(w, `{"symbol":"BTCUSDT","maxNotionalValue":100000000}`)
+			return
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}

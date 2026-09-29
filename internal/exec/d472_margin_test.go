@@ -158,15 +158,33 @@ func ftoa(f float64) string {
 
 // d472GateRT gate fake（/futures/usdt/accounts + /futures/usdt/contracts/{c}）。
 type d472GateRT struct {
-	accounts string // ""=500
-	mark     string
-	posts    []string // 收到的 POST path 记录（预检零 POST 断言用）
+	accounts     string // ""=500
+	mark         string
+	posts        []string          // 收到的 POST path 记录（预检零 POST 断言用）
+	leverBroken  bool              // D-564：get_leverage 返回 Lever 空（实况不可读 fail-closed 锚）
+	levers       map[string]string // D-564：pos_margin_mode→Lever（dual 双 margin 取 min 锚）
+	leverQueries []string          // D-564：get_leverage query 记录（dual_side 参数断言）
 }
 
 func (rt *d472GateRT) RoundTrip(req *http.Request) (*http.Response, error) {
 	if req.Method == "POST" {
 		rt.posts = append(rt.posts, req.URL.Path)
 		return &http.Response{StatusCode: 201, Body: io.NopCloser(strings.NewReader("{}")), Header: make(http.Header), Request: req}, nil
+	}
+	// D-564 S1：get_leverage 实况路由（leverage=10——原 setter 语义值移到 venue 实况）。
+	if strings.Contains(req.URL.Path, "/get_leverage/") {
+		rt.leverQueries = append(rt.leverQueries, req.URL.RawQuery)
+		lever := `{"Lever":"10"}`
+		if rt.leverBroken {
+			lever = `{"Lever":""}`
+		} else if rt.levers != nil {
+			mode := "isolated"
+			if strings.Contains(req.URL.RawQuery, "pos_margin_mode=cross") {
+				mode = "cross"
+			}
+			lever = `{"Lever":"` + rt.levers[mode] + `"}`
+		}
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(lever)), Header: make(http.Header), Request: req}, nil
 	}
 	var body string
 	switch {
@@ -191,50 +209,33 @@ func TestD472_GateMargin(t *testing.T) {
 	// lev=10 → need=1×1000/10=100 ≤ 500×0.8=400 放行
 	e := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e.client = &http.Client{Transport: &d472GateRT{accounts: `{"available":"500","total":"500"}`, mark: "1000"}}
-	e.SetGateDefaultLeverage(10)
 	if err := e.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"}); err != nil {
 		t.Fatalf("lev=10 need=100 ≤ 400 应放行: %v", err)
 	}
 	// 量纲+拒：available=50 → need=100 > 40 拒，need 断言=100.00（非 0.1）
 	e2 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e2.client = &http.Client{Transport: &d472GateRT{accounts: `{"available":"50","total":"50"}`, mark: "1000"}}
-	e2.SetGateDefaultLeverage(10)
 	err := e2.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"})
 	if err == nil || !strings.Contains(err.Error(), "gate margin insufficient") || !strings.Contains(err.Error(), "need 100.00") {
 		t.Fatalf("量纲锚 need=100.00（quanto 禁二次乘），got %v", err)
 	}
-	// lev=5 → need=1×1000/5=200 ≤ 250×0.8=200 放行
+	// D-564 纯读语义：杠杆=venue 实况（fake 恒 10）；accounts 无 leverage 字段不再有任何
+	// 兜底链——实况可读即判（need=100 ≤ 250×0.8=200 放行）。
 	e3 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e3.client = &http.Client{Transport: &d472GateRT{accounts: `{"available":"250","total":"250"}`, mark: "1000"}}
-	e3.SetGateDefaultLeverage(5)
 	if err := e3.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"}); err != nil {
-		t.Fatalf("lev=5（need=200 ≤ 200）放行: %v", err)
+		t.Fatalf("实况 lev=10（need=100 ≤ 200）放行: %v", err)
 	}
-	e4 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
-	e4.client = &http.Client{Transport: &d472GateRT{accounts: `{"available":"100","total":"100"}`, mark: "1000"}}
-	e4.SetGateDefaultLeverage(5)
-	err = e4.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"})
-	if err == nil || !strings.Contains(err.Error(), "lev 5") {
-		t.Fatalf("lev=5 应生效（need=200 > 80 拒），got %v", err)
-	}
-	// 未配置 → fail-closed（零缺省，不兜底 5）
+	// get_leverage 实况不可读 → fail-closed 拒开（lev 实况上界=保守）。
 	e7 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
-	e7.client = &http.Client{Transport: &d472GateRT{accounts: `{"available":"250","total":"250"}`, mark: "1000"}}
+	e7.client = &http.Client{Transport: &d472GateRT{accounts: `{"available":"250","total":"250"}`, mark: "1000", leverBroken: true}}
 	if err := e7.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"}); err == nil ||
-		!strings.Contains(err.Error(), "未配置") {
-		t.Fatalf("目标杠杆未配置应 fail-closed, got %v", err)
-	}
-	// SetGateDefaultLeverage 覆盖：lev=20 → need=50 ≤ 100×0.8=80 放行
-	e5 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
-	e5.client = &http.Client{Transport: &d472GateRT{accounts: `{"available":"100","total":"100"}`, mark: "1000"}}
-	e5.SetGateDefaultLeverage(20)
-	if err := e5.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"}); err != nil {
-		t.Fatalf("注入档 lev=20（need=50 ≤ 80）应放行: %v", err)
+		!strings.Contains(err.Error(), "fail-closed") {
+		t.Fatalf("杠杆实况不可读应 fail-closed, got %v", err)
 	}
 	// API err → fail-closed
 	e6 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e6.client = &http.Client{Transport: &d472GateRT{accounts: "", mark: "1000"}}
-	e6.SetGateDefaultLeverage(10)
 	if err := e6.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"}); err == nil {
 		t.Fatal("accounts 5xx 应 fail-closed 拒开")
 	}
@@ -244,7 +245,6 @@ func TestD472_GateMargin(t *testing.T) {
 func TestD472_GateCrossLiqGuard(t *testing.T) {
 	e := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e.client = &http.Client{Transport: &d472GateRT{accounts: `{"available":"500","total":"100"}`, mark: "1000"}}
-	e.SetGateDefaultLeverage(10)
 	e.SetLiqGuards(0.05, 0.3)
 	// qty=1 base、mark=1000 → notional=1000；equity=100 → ratio=10 > 0.3 拒
 	err := e.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"})
@@ -253,37 +253,42 @@ func TestD472_GateCrossLiqGuard(t *testing.T) {
 	}
 }
 
-// TestD563_GatePrecheckPushNotRead 三禁令①锚（D-563 取代 D-562「预检内嵌 SET」契约）：
-// 预检=纯读——保证金按配置目标杠杆算，accounts.leverage 字段删读（phantom 死透），
-// 全程零 POST（SET 挪下单路径 ensureGateLeverage）；配置缺失/非正=fail-closed。
-func TestD563_GatePrecheckPushNotRead(t *testing.T) {
-	// ① 配置目标杠杆 5 + 响应无 leverage 字段 → need=200 ≤ 250×0.8=200 放行，预检零 POST。
-	rt := &d472GateRT{accounts: `{"available":"250","total":"250"}`, mark: "1000"}
+// TestD564_GatePrecheckPureRead 三禁令①锚（D-564 取代 D-563 pushNotRead——纯读模型）：
+// precheck=零写请求+get_leverage 实况消费（dual 双 margin 取 min）；
+// 实况不可读=fail-closed 拒开（禁兜底禁配置冒充——配置链已退役）。
+func TestD564_GatePrecheckPureRead(t *testing.T) {
+	// ① dual 模式：双 margin（isolated+cross）各读一次取 min=2 → need=500（保守上界）；
+	// precheck 全程零 POST。
+	rt := &d472GateRT{accounts: `{"available":"800","total":"800","position_mode":"dual"}`, mark: "1000", levers: map[string]string{"isolated": "2", "cross": "10"}}
 	e := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e.client = &http.Client{Transport: rt}
-	e.SetGateDefaultLeverage(5)
-	if err := e.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"}); err != nil {
-		t.Fatalf("配置杠杆档应放行, got %v", err)
+	if err := e.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "SELL", Qty: 1, Venue: "gate:perp"}); err != nil {
+		t.Fatalf("dual min(2,10)=2 → need=500 ≤ 800×0.8=640 放行, got %v", err)
 	}
 	if len(rt.posts) != 0 {
-		t.Fatalf("预检纯读不得 POST（SET 挪下单路径）, got %v", rt.posts)
+		t.Fatalf("precheck 全程零写请求（推式已退役）, got %v", rt.posts)
 	}
-	// ② 未配置（零值）→ fail-closed 拒开，不猜不兜底。
-	rt2 := &d472GateRT{accounts: `{"available":"250","total":"250"}`, mark: "1000"}
+	if len(rt.leverQueries) != 2 {
+		t.Fatalf("dual 应读 isolated+cross 各一次, got %v", rt.leverQueries)
+	}
+	// ② single 模式：不带 dual_side 单读。
+	rt2 := &d472GateRT{accounts: `{"available":"800","total":"800","position_mode":"single"}`, mark: "1000", levers: map[string]string{"isolated": "10"}}
 	e2 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e2.client = &http.Client{Transport: rt2}
-	err := e2.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"})
-	if err == nil || !strings.Contains(err.Error(), "目标杠杆未配置") {
-		t.Fatalf("未配置应 fail-closed 拒开, got %v", err)
+	if err := e2.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "SELL", Qty: 1, Venue: "gate:perp"}); err != nil {
+		t.Fatalf("single 单读放行, got %v", err)
 	}
-	// ③ 响应带 leverage=10 但执行器未配置 → 字段删读仍 fail-closed（phantom 读数死透锚）。
-	rt3 := &d472GateRT{accounts: `{"available":"500","total":"500","leverage":10}`, mark: "1000"}
+	for _, q := range rt2.leverQueries {
+		if strings.Contains(q, "dual_side") {
+			t.Fatalf("single 模式不得带 dual_side, got %q", q)
+		}
+	}
+	// ③ 实况不可读 → fail-closed（禁兜底——配置链退役后无第二来源）。
+	rt3 := &d472GateRT{accounts: `{"available":"800","total":"800","position_mode":"dual"}`, mark: "1000", leverBroken: true}
 	e3 := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
 	e3.client = &http.Client{Transport: rt3}
-	if err := e3.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "BUY", Qty: 1, Venue: "gate:perp"}); err == nil {
-		t.Fatalf("accounts.leverage 字段已被删读——未配置仍应 fail-closed")
-	}
-	if len(rt3.posts) != 0 {
-		t.Fatalf("字段在也不得 POST, got %v", rt3.posts)
+	if err := e3.MarginPrecheck(context.Background(), Order{Symbol: "XPT_USDT", Side: "SELL", Qty: 1, Venue: "gate:perp"}); err == nil ||
+		!strings.Contains(err.Error(), "fail-closed") {
+		t.Fatalf("杠杆实况不可读应 fail-closed 拒开, got %v", err)
 	}
 }

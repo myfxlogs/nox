@@ -47,27 +47,48 @@ func (e *CEXExecutor) placeGateRaw(ctx context.Context, o Order) ([]byte, Fill, 
 		return nil, Fill{}, fmt.Errorf("gate executor: venueType %q unsupported（G1 仅 perp）", e.venueType)
 	}
 	// D-120：gate futures size 单位=合约数，o.Qty 是基础币数量 → 查合约规格换算。
-	// quanto_multiplier=每张合约代表的基础币数量（如 ETH_USDT=0.01 → 1 张=0.01 ETH）。
-	// size = round(o.Qty / quanto_multiplier)，最小 1 张。
-	// gateFilled 返回的 qty 是合约数 → 末尾乘 quanto 回填为基础币数量（Fill.Qty 契约=基础币）。
-	size, quanto, err := e.gateContractSize(ctx, o.Symbol, o.Qty)
+	// D-564 S4：gateSpecCheck 承接换算+前置闸（in_delisting/size min/max/整数张 floor）。
+	sizeF, spec, err := e.gateSpecCheck(ctx, o.Symbol, o.Qty)
 	if err != nil {
 		return nil, Fill{}, fmt.Errorf("gate order size: %w", err)
 	}
+	size := int64(math.Round(sizeF))
 	if o.Side == "SELL" {
-		size = -size
+		size = -size // SELL 腿=负（short；gate 契约语义，D-120 原形）
 	}
-	// D-563 S1：开仓单先显式 SET 合约杠杆（venue 无读回端点=推不设读；SET 败/回显
-	// 不符 → fail-closed 不落单）。平仓（PositionSide!=""）跳过不动既有平仓杠杆。
-	if o.PositionSide == "" {
-		if err := e.ensureGateLeverage(ctx, o.Symbol, o.Side == "SELL"); err != nil {
-			return nil, Fill{}, err
+	// gateFilled 返回的 qty 是合约数 → 末尾乘 quanto 回填为基础币数量（Fill.Qty 契约=基础币）。
+	quanto := spec.Quanto
+	// D-564 S1：杠杆纯读化——开仓前 SET 段退役（push 端点带切保证金模式副作用永久禁用）；
+	// precheck 经 get_leverage 实读 venue 实况，读不到 fail-closed 拒开。
+	// D-121：平仓（PositionSide!=""）——D-564 S3 U4 dual 模式分叉：dual/dual_plus 官方
+	// 机制=auto_size=close_long|close_short（size=0 全平；reduce_only 在 dual 语义未定义
+	// 文档明示单仓专用）；single 维持 reduce_only=true。模式每次实读 accounts（禁缓存）。
+	var bodyStr string
+	closeDual := false
+	if o.PositionSide != "" {
+		mode, merr := e.gatePositionModeFetch(ctx)
+		if merr != nil {
+			return nil, Fill{}, fmt.Errorf("gate close order mode: %w", merr)
 		}
+		closeDual = mode.isDual() // D-564：每次实读（禁缓存——app 可切模式）
 	}
-	// D-121：平仓（PositionSide!=""）带 reduce_only=true → gate 不要求保证金（只减仓不新开）。
-	// 开仓（PositionSide=""）不带 → 正常开仓。与 OKX/Binance reduceOnly 逻辑对齐（D-108/D-120）。
-	bodyStr := fmt.Sprintf(`{"contract":%q,"size":%d,"price":"0","tif":"ioc","text":"t-arb","reduce_only":%t}`,
-		o.Symbol, size, o.PositionSide != "")
+	if closeDual {
+		closeSide := "close_long"
+		if o.Side == "SELL" {
+			closeSide = "close_short"
+		}
+		bodyStr = fmt.Sprintf(`{"contract":%q,"size":0,"price":"0","tif":"ioc","text":"t-arb","close":true,"auto_size":%q}`,
+			o.Symbol, closeSide)
+	} else {
+		// D-564 S4：size 序列化按 enable_decimal 分支——false=整数张 %d（现形）；
+		// true=小数字符串（strip 零尾）。开仓带 reduce_only=false，平仓 reduce_only=true。
+		sizeLit := strconv.FormatInt(size, 10)
+		if spec.EnableDecimal {
+			sizeLit = strconv.FormatFloat(sizeF, 'f', -1, 64)
+		}
+		bodyStr = fmt.Sprintf(`{"contract":%q,"size":%s,"price":"0","tif":"ioc","text":"t-arb","reduce_only":%t}`,
+			o.Symbol, sizeLit, o.PositionSide != "")
+	}
 
 	const endpoint = "/futures/usdt/orders"
 	urlPath := "/api/v4" + endpoint
@@ -167,53 +188,6 @@ func (e *CEXExecutor) GatePositions(ctx context.Context, contract string) ([]Gat
 	return poss, err
 }
 
-// GatePositionsRaw 同 GatePositions，额外返回 GET 原始响应 body（D-098 返修② 探针形状证据：
-// 一次运行定案 funding 字段是否真实存在于 positions 响应 JSON，与 account_book 双保险对拍）。
-func (e *CEXExecutor) GatePositionsRaw(ctx context.Context, contract string) ([]byte, []GatePosition, error) {
-	endpoint := "/futures/usdt/positions/" + contract
-	urlPath := "/api/v4" + endpoint
-	ts := time.Now().Unix()
-	sign := signutil.GateSign(e.apiSecret, "GET", urlPath, "", "", ts)
-	headers := http.Header{
-		"KEY":       {e.apiKey},
-		"Timestamp": {strconv.FormatInt(ts, 10)},
-		"SIGN":      {sign},
-	}
-	body, err := e.get(ctx, e.baseURL+endpoint, headers)
-	if err != nil {
-		return nil, nil, fmt.Errorf("gate positions: %w", err)
-	}
-	var p struct {
-		Contract   string `json:"contract"`
-		Size       int64  `json:"size"`
-		EntryPrice string `json:"entry_price"`
-		MarkPrice  string `json:"mark_price"`
-		Funding    string `json:"funding"`
-	}
-	if err := json.Unmarshal(body, &p); err != nil {
-		return body, nil, fmt.Errorf("gate positions json: %w", err)
-	}
-	if p.Size == 0 {
-		return body, nil, nil // 无仓不误报
-	}
-	ep, err := f64z(p.EntryPrice)
-	if err != nil {
-		return body, nil, fmt.Errorf("gate position %s entry_price=%q: %w", p.Contract, p.EntryPrice, err)
-	}
-	mp, err := f64z(p.MarkPrice)
-	if err != nil {
-		return body, nil, fmt.Errorf("gate position %s mark_price=%q: %w", p.Contract, p.MarkPrice, err)
-	}
-	fd, err := f64z(p.Funding)
-	if err != nil {
-		return body, nil, fmt.Errorf("gate position %s funding=%q: %w", p.Contract, p.Funding, err)
-	}
-	return body, []GatePosition{{
-		Contract: p.Contract, Size: p.Size,
-		EntryPrice: ep, MarkPrice: mp, Funding: fd,
-	}}, nil
-}
-
 // GateAccountBookEntry gate 资金账本行（D-098 探针证据；生产零消费方仅探针用）。
 type GateAccountBookEntry struct {
 	Time    float64 `json:"time"`     // unix 秒（float64 带小数，对拍官方模型 FuturesAccountBook.Time=float64，真实响应样本 1682294400.123456）
@@ -249,6 +223,91 @@ func (e *CEXExecutor) GateAccountBookFund(ctx context.Context, contract string) 
 // gateContractSize 查合约规格换算合约数（D-120）：size=round(qty/quanto_multiplier)。
 // 公开端点 GET /futures/usdt/contracts/{contract}（签名头复用 e.get）；
 // quanto per-executor 缓存；返回 (size, quanto, error)——quanto 回填 Fill.Qty 基础币量。
+// gateContractSpec D-564 S4 U6：合约规格消费面（官方 Contract 模型字段子集）。
+type gateContractSpec struct {
+	Quanto        float64 // quanto_multiplier（每张基础币量）
+	SizeMin       float64 // order_size_min（最小张数）
+	SizeMax       float64 // order_size_max（0=未采集不拦）
+	EnableDecimal bool    // true=size 可小数串；false=整数张
+	InDelisting   bool    // 退市中→fail-closed
+	LeverageMax   float64 // 矛盾校验用（venue 实况 lever>max → warn 不拦）
+}
+
+// gateSpecFetch 查合约规格并写缓存（TTL=进程生命周期——规格慢变元数据）。
+func (e *CEXExecutor) gateSpecFetch(ctx context.Context, contract string) (gateContractSpec, error) {
+	if e.gateSpec != nil {
+		if s, ok := e.gateSpec[contract]; ok {
+			return s, nil
+		}
+	}
+	endpoint := "/futures/usdt/contracts/" + contract
+	urlPath := "/api/v4" + endpoint
+	ts := time.Now().Unix()
+	sign := signutil.GateSign(e.apiSecret, "GET", urlPath, "", "", ts)
+	body, err := e.get(ctx, e.baseURL+endpoint, http.Header{
+		"KEY": {e.apiKey}, "Timestamp": {strconv.FormatInt(ts, 10)}, "SIGN": {sign},
+	})
+	if err != nil {
+		return gateContractSpec{}, fmt.Errorf("gate contract spec %s: %w", contract, err)
+	}
+	var spec struct {
+		QuantoMultiplier string  `json:"quanto_multiplier"`
+		OrderSizeMin     float64 `json:"order_size_min"`
+		OrderSizeMax     float64 `json:"order_size_max"`
+		EnableDecimal    bool    `json:"enable_decimal"`
+		InDelisting      bool    `json:"in_delisting"`
+		LeverageMax      float64 `json:"leverage_max"`
+	}
+	if err := json.Unmarshal(body, &spec); err != nil {
+		return gateContractSpec{}, fmt.Errorf("gate contract spec json: %w", err)
+	}
+	q, err := f64z(spec.QuantoMultiplier)
+	if err != nil || q <= 0 {
+		return gateContractSpec{}, fmt.Errorf("gate contract %s quanto_multiplier=%q invalid", contract, spec.QuantoMultiplier)
+	}
+	s := gateContractSpec{
+		Quanto: q, SizeMin: spec.OrderSizeMin, SizeMax: spec.OrderSizeMax,
+		EnableDecimal: spec.EnableDecimal, InDelisting: spec.InDelisting, LeverageMax: spec.LeverageMax,
+	}
+	if e.gateSpec == nil {
+		e.gateSpec = make(map[string]gateContractSpec)
+	}
+	e.gateSpec[contract] = s
+	if e.gateQuanto == nil {
+		e.gateQuanto = make(map[string]float64)
+	}
+	e.gateQuanto[contract] = q
+	return s, nil
+}
+
+// gateSpecCheck D-564 S4 前置闸：退市/最小张数/最大张数/整数张 floor。
+// size=qty/quanto 张数；enable_decimal=false 时 floor 到整数张（floor 后=0 拒）。
+// 返回（生效张数, spec, error）。
+func (e *CEXExecutor) gateSpecCheck(ctx context.Context, contract string, qty float64) (float64, gateContractSpec, error) {
+	spec, err := e.gateSpecFetch(ctx, contract)
+	if err != nil {
+		return 0, spec, err
+	}
+	if spec.InDelisting {
+		return 0, spec, fmt.Errorf("gate %s 合约退市中（in_delisting）fail-closed 拒单", contract)
+	}
+	size := qty / spec.Quanto
+	if spec.SizeMin > 0 && size < spec.SizeMin {
+		return 0, spec, fmt.Errorf("gate %s 不足最小张数：%.4f < order_size_min %.4f fail-closed", contract, size, spec.SizeMin)
+	}
+	if spec.SizeMax > 0 && size > spec.SizeMax {
+		return 0, spec, fmt.Errorf("gate %s 超最大张数：%.4f > order_size_max %.4f fail-closed", contract, size, spec.SizeMax)
+	}
+	if !spec.EnableDecimal {
+		floored := math.Floor(size)
+		if floored < 1 {
+			return 0, spec, fmt.Errorf("gate %s 整数张合约 qty %.6f（%.2f 张）floor 后=0 拒单", contract, qty, size)
+		}
+		size = floored
+	}
+	return size, spec, nil
+}
+
 func (e *CEXExecutor) gateContractSize(ctx context.Context, contract string, qty float64) (int64, float64, error) {
 	// 缓存命中
 	if e.gateQuanto != nil {
