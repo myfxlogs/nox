@@ -189,7 +189,7 @@ func binanceFree(ctx context.Context, c *pgstore.ExchangeConfig, asset string) f
 	params.Set("timestamp", strconv.FormatInt(time.Now().UnixMilli(), 10))
 	params.Set("recvWindow", "5000")
 	params.Set("signature", binanceHMAC(c.APISecret, params.Encode()))
-	u := c.BaseURL + "/api/v3/account?" + params.Encode()
+	u := c.BaseURL + "/v3/account?" + params.Encode()
 	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
 	if err != nil {
 		return 0

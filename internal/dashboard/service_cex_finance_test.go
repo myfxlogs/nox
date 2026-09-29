@@ -88,7 +88,7 @@ func TestGetCexFinance_DedupWiring(t *testing.T) {
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.URL.Path == "/api/v3/account":
+		case r.URL.Path == "/api/v3/account": // base_url 尾段含 /api + 端点 /v3/account → /api/v3/account（生产形状）
 			fmt.Fprint(w, `{"balances":[{"asset":"USDT","free":"100","locked":"0"}]}`)
 		case r.URL.Path == "/api/v5/account/balance":
 			fmt.Fprint(w, `{"code":"0","data":[{"details":[{"ccy":"USDT","eq":"50","cashBal":"50","eqUsd":"50"}]}]}`)
