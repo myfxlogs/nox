@@ -24,6 +24,8 @@ const (
 type Store interface {
 	RetroDailyStats(ctx context.Context, start, end time.Time) (*pgstore.RetroDaily, error)
 	RetroWeeklyStats(ctx context.Context, since, until time.Time) (*pgstore.RetroWeekly, error)
+	// DepthFacts D-578：cex_depth_sampler 窗内采样行（三所深度章节）。
+	DepthFacts(ctx context.Context, since, until time.Time) ([]pgstore.DepthFact, error)
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
 }
 

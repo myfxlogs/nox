@@ -17,6 +17,7 @@ import (
 type fakeRetroStore struct {
 	daily      *pgstore.RetroDaily
 	weekly     *pgstore.RetroWeekly
+	depth      []pgstore.DepthFact
 	mu         sync.Mutex
 	alerts     []string
 	dailySince time.Time
@@ -29,6 +30,9 @@ func (f *fakeRetroStore) RetroDailyStats(_ context.Context, since, until time.Ti
 }
 func (f *fakeRetroStore) RetroWeeklyStats(context.Context, time.Time, time.Time) (*pgstore.RetroWeekly, error) {
 	return f.weekly, nil
+}
+func (f *fakeRetroStore) DepthFacts(context.Context, time.Time, time.Time) ([]pgstore.DepthFact, error) {
+	return f.depth, nil
 }
 func (f *fakeRetroStore) InsertAlert(_ context.Context, _ *int64, level, msg string) error {
 	f.mu.Lock()

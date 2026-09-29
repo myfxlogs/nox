@@ -36,6 +36,12 @@ func GenerateDaily(ctx context.Context, deps Deps) (string, error) {
 		return "", fmt.Errorf("daily stats: %w", err)
 	}
 	statsBlock := renderDailyStats(st, deps.Now())
+	// D-578 S2：三所深度当日快照行（读败=注记降级不炸日报）。
+	if dr, derr := deps.Store.DepthFacts(ctx, dayStart, dayEnd); derr != nil {
+		statsBlock += "三所深度当日: (读取失败)\n"
+	} else {
+		statsBlock += depthDailyLine(dr) + "\n"
+	}
 
 	prompt := fmt.Sprintf("以下是 %s 昨日（北京时间全天）运行统计（Go 确定性计算）：\n\n```\n%s```\n\n请输出今日小结。",
 		day, statsBlock)
