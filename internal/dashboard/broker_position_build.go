@@ -137,7 +137,10 @@ func (m *BrokerPositionMonitor) prepareVenueView(ctx context.Context, vk string,
 		}
 	}
 	if venue != "" {
-		vs.canon, vs.cs = m.bm.BrokerSymbolMapWithCS(ctx, venue)
+		// D-575 F-2：同类漏闸——flush 链上 DB 调用包 per-call 界。
+		sctx, cancel := monitorCallCtx(ctx)
+		vs.canon, vs.cs = m.bm.BrokerSymbolMapWithCS(sctx, venue)
+		cancel()
 	}
 	var acctMargin float64
 	if m.acctMon != nil {

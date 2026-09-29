@@ -236,7 +236,7 @@ func (m *BrokerPositionMonitor) Run(ctx context.Context) {
 // Refresh 同步执行一次全量权威回读 + flush 并返回当前视图（前端「刷新」/平仓后立即刷新）。
 func (m *BrokerPositionMonitor) Refresh(ctx context.Context) []*v1.BrokerPosition {
 	m.reconcileAll(ctx)
-	m.flush(ctx)
+	m.flushBounded(ctx) // D-575 F-3：直调 flush 同包 20s 界灭最后无界调用方
 	return m.Snapshot()
 }
 
@@ -260,7 +260,13 @@ func (m *BrokerPositionMonitor) snapshotLocked() []*v1.BrokerPosition {
 func (m *BrokerPositionMonitor) dirtyLocked(posKey string) {
 	m.dirty[posKey] = struct{}{}
 	if m.flushT == nil {
-		m.flushT = time.AfterFunc(bpFlushDelay, func() { m.flush(context.Background()) })
+		bound := bpFlushBound // D-575：调度时刻同步取值——闭包不再异步读包级 var（防测试覆写竞态）
+		m.flushT = time.AfterFunc(bpFlushDelay, func() {
+			// D-575：flush 整体 20s 界——超时各内部调用诚实失败，事件照发不误。
+			ctx, cancel := context.WithTimeout(context.Background(), bound)
+			defer cancel()
+			m.flush(ctx)
+		})
 	}
 }
 

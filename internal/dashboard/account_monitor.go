@@ -149,7 +149,7 @@ func (m *AccountMonitor) Run(ctx context.Context) {
 // Refresh 同步执行一次轮询并返回当前视图。
 func (m *AccountMonitor) Refresh(ctx context.Context) []*v1.AccountInfo {
 	m.poll(ctx)
-	m.flush(ctx)
+	m.flushBounded(ctx) // D-575：直调 flush 同包 20s 界
 	return m.Snapshot()
 }
 
@@ -202,7 +202,7 @@ func (m *AccountMonitor) queriers(ctx context.Context) []reconcile.AccountQuerie
 // merge——旧实现持写锁跨逐 venue RPC 循环，Snapshot（ListAccounts 拉路径）全程排队。
 func (m *AccountMonitor) poll(ctx context.Context) {
 	m.pollImpl(ctx, nil)
-	m.flush(ctx)
+	m.flushBounded(ctx)
 }
 
 // pollVenueKeys 定向回读（kick 键：完整 venueKey 直查；裸 venue 名=其全部类型键——
@@ -211,7 +211,7 @@ func (m *AccountMonitor) pollVenueKeys(ctx context.Context, kick string) {
 	m.pollImpl(ctx, func(vk string) bool {
 		return vk == kick || keydomain.BareOf(vk) == kick
 	})
-	m.flush(ctx)
+	m.flushBounded(ctx)
 }
 
 // pollImpl 轮询骨架：match==nil=全量；否则仅命中键回读。RPC 在无锁段，merge 在锁内段。
@@ -240,7 +240,11 @@ func (m *AccountMonitor) pollImpl(ctx context.Context, match func(vk string) boo
 		if m.cooldown.Skip(vk) {
 			continue
 		}
-		acct, err := q.Account(ctx)
+		// D-575：querier 级 per-call 10s 界——venue RPC 挂死不再冻结 acctMon Run
+		// （kick 饥饿）且 cooldown 靠超时返回才生效，永不返回=cooldown 永不触发。
+		qctx, cancel := monitorCallCtx(ctx)
+		acct, err := q.Account(qctx)
+		cancel()
 		results = append(results, pollRes{vk: vk, acct: acct, err: err})
 	}
 	for _, r := range results {
