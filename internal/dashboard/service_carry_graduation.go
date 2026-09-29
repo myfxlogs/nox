@@ -63,7 +63,7 @@ func (s *Service) ListCarryGraduations(ctx context.Context, req *connect.Request
 	for i := range rows {
 		g := &rows[i]
 		row := &v1.CarryGraduationRow{
-			Id: g.ID, PaperId: g.PaperID, Venue: g.VenuePair(), Symbol: g.Symbol,
+			Id: g.ID, PaperId: g.PaperID, Venue: gradVenueDisplay(g), Symbol: g.Symbol,
 			Structure: g.Structure, MtVenue: g.MtVenue,
 			AgeDays: g.AgeDays, AccruedUsd: g.AccruedUSD, LastFundingAnn: g.LastFundingAnn,
 			NetAllInUsd: g.NetAllInUSD, // D-410 S5：全账净额透出（缺账行 NULL 诚实缺）

@@ -204,12 +204,18 @@ func (s *Service) approveNonCfd(ctx context.Context, resp *v1.ApproveCarryGradua
 		return connect.NewResponse(resp), nil
 	}
 	funding := g.FundingPct != nil || g.FundingUsd != nil
-	if grad.Structure == "spot_carry" {
+	if grad.Structure == "spot_carry" || grad.Structure == "long_spot_short_perp" {
 		// D-488：spot_carry 授权=组合进真金白名单（业主语义「授权即放行」；D-473 起
 		// FUNDING_HEDGE 执行链全通——旧版只体检不写白名单=假授权缺陷修复）。
 		// 方向定死=现货买×合约空（正 funding 收息形态）；canonical 双腿同值
 		//（engine FUNDING_HEDGE 闸 sellCanonical 回退 canonical 的匹配口径）。
 		venueSpot, venuePerp := keydomain.Join(grad.VenueA, "spot"), keydomain.Join(grad.VenueA, "perp")
+		if grad.Structure == "long_spot_short_perp" {
+			var estr string // D-555 S4：双CEX 腿键取行数据合成（禁 canonical 反推）
+			if venueSpot, venuePerp, estr = cexCexLegKeys(grad, paper); estr != "" {
+				return fail("%s", estr)
+			}
+		}
 		// D-490：同所双池（现货池现金×永续池保证金）资金分配折算——与 cfd 分支同模型。
 		longQty, shortQty, grossUSD := g.MaxLongQty, g.MaxShortQty, g.MaxGrossUsd
 		notionalUSD := g.NotionalUsd
@@ -263,6 +269,11 @@ func (s *Service) approveNonCfd(ctx context.Context, resp *v1.ApproveCarryGradua
 		s.insertGraduationAlert(ctx, grad, "已授权", fmt.Sprintf("combo#%d %s %s×%s", comboID, grad.Symbol, venueSpot, venuePerp))
 		resp.Ok = true
 		return connect.NewResponse(resp), nil
+	}
+	// D-555 S4：结构白名单闸——非已知非 cfd 结构 fail-closed（PERP_FUNDING 等未开通
+	// 结构不得经体检放行径落 approved）。
+	if grad.Structure != "perp_perp" {
+		return fail("structure=%q 非可批结构（fail-closed 拒授）", grad.Structure)
 	}
 	// perp_perp：无组合白名单闸（PERP_FUNDING 走 venue/canonical 规则域），approve=链路体检不写白名单（不越权）。
 	// D-490：该结构无 sizing 写库面——资金分配输入不适用（显式上限仍按旧校验走）。
