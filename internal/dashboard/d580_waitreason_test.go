@@ -1,0 +1,173 @@
+// d580_waitreason_test.go —— D-580 锚：待入场等待条件透出（等什么+当前多少+还差多少）。
+// A1 条件透出（qbus 双腿+monitor 阈值→人话整串+三字段齐）/A2 同源（展示值与决策面
+// 同公式同 qbus 键，数值逐位断言）/A3 数据缺诚实（报价缺/monitor 无行→留空+后缀不猜）。
+package dashboard
+
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+
+	"arb/internal/bus"
+	v1 "arb/internal/gen/dashboardv1"
+	"arb/internal/store/pgstore"
+	"arb/internal/testutil"
+)
+
+// d580ReadySvc 造「七闸全过」的 XASSET_CARRY 组合 905（MT 买腿×perp 卖腿正向）。
+// 返回 svc（qbus 已接线未发价）与 store；数据面：allow_rules+funding facts+ticks+
+// monitor 行+快照+MT 保证金率 fact+perp 杠杆缝全就位，仅差 qbus 报价由用例自喂。
+func d580ReadySvc(t *testing.T) *Service {
+	t.Helper()
+	st, err := pgstore.New(context.Background(), testutil.TestDSN(t, "ARB_TEST_PG_DSN"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	ctx := context.Background()
+	if _, err := st.Pool().Exec(ctx, `TRUNCATE xasset_allow_combos, autotrade_allow_rules,
+		fin_venue_symbol_flags, fin_venue_account_snapshot, positions, position_legs,
+		facts, ticks, fin_xasset_monitor RESTART IDENTITY CASCADE`); err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{store: st, qbus: bus.New(), tierState: map[string]tierState{}}
+	svc.venueLeverageFn = func(context.Context, string, string, bool) (float64, error) { return 5, nil }
+	t.Cleanup(func() {
+		_, _ = st.Pool().Exec(ctx, `DELETE FROM xasset_allow_combos WHERE id=905;
+			DELETE FROM autotrade_allow_rules WHERE value IN ('3001157:mt5','gate:perp');
+			DELETE FROM facts WHERE src='d580test';
+			DELETE FROM ticks WHERE symbol IN ('XPTUSD','XPTUSDT') AND venue IN ('3001157','gate');
+			DELETE FROM fin_xasset_monitor WHERE pair='XPTUSDT-XPT' AND cex_venue='gate:perp';
+			DELETE FROM fin_venue_account_snapshot WHERE venue IN ('3001157','gate') AND src='d580test'`)
+	})
+
+	// 闸 1：venue 放行。
+	if _, err := st.Pool().Exec(ctx, `INSERT INTO autotrade_allow_rules (kind, value, enabled, simulated)
+		VALUES ('venue','3001157:mt5',true,false),('venue','gate:perp',true,false)`); err != nil {
+		t.Fatal(err)
+	}
+	// 闸 3：funding 收入腿 24h 窗 ≥12 样本且 worst≥floor（gate:perp 卖腿值 5.0 > 2.0）。
+	for i := 0; i < 13; i++ {
+		if _, err := st.Pool().Exec(ctx,
+			`INSERT INTO facts (kind, venue, symbol, value, unit, ts, src)
+			 VALUES ('funding','gate','XPTUSDT',5.0,'pct_annualized',$1,'d580test')`,
+			time.Now().Add(-time.Duration(i)*time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// MT 腿保证金率 fact（≤24h 新鲜；0.04=25× 杠杆）。
+	if _, err := st.Pool().Exec(ctx,
+		`INSERT INTO facts (kind, venue, symbol, value, unit, ts, src)
+		 VALUES ('init_margin_rate','3001157',NULL,0.04,'ratio',now(),'d580test')`); err != nil {
+		t.Fatal(err)
+	}
+	// 闸 4：双腿 tick 新鲜。
+	if _, err := st.Pool().Exec(ctx, `INSERT INTO ticks (ts, venue, symbol, bid, ask, venue_type)
+		VALUES (now(),'3001157','XPTUSD',1999,2000,'mt5'),(now(),'gate','XPTUSDT',2002.06,2003,'perp')`); err != nil {
+		t.Fatal(err)
+	}
+	// 闸 5+阈值：monitor 行 noise=18.8（D-580 阈值源同 LatestXAssetEntryGate）。
+	if _, err := st.Pool().Exec(ctx, `INSERT INTO fin_xasset_monitor
+		(pair, cex_venue, mt_venue, binance_bid, binance_ask, exness_bid, exness_ask,
+		 entry_spread_bps, exit_spread_bps, entry_net_bps, funding_rate_8h,
+		 funding_annual_pct, tracking_error_bps, equiv_annual_pct, noise_bps)
+		VALUES ('XPTUSDT-XPT','gate:perp','3001157:mt5',2002.06,2003,1999,2000,
+		 10.3,5,3,0.001,21.9,1.0,24.9,18.8)`); err != nil {
+		t.Fatal(err)
+	}
+	// 快照（腿池闸用 equity；notional 100 << 5000）。
+	if _, err := st.Pool().Exec(ctx, `INSERT INTO fin_venue_account_snapshot
+		(venue, venue_type, balance_raw, equity_raw, free_margin_raw, currency, fetched_at, src)
+		VALUES ('gate','perp',5000,5000,5000,'USDT',now(),'d580test'),
+		       ('3001157','mt5',5000,5000,5000,'USDT',now(),'d580test')`); err != nil {
+		t.Fatal(err)
+	}
+	// enabled 组合行（notional=100）。
+	n100 := 100.0
+	d478ComboLegs(t, st, 905, true, &n100, 1000, "XPTUSD", "XPTUSDT")
+	return svc
+}
+
+// d580Publish 双腿 qbus 报价（mtAsk=MT 腿卖价、cexBid=CEX 腿买价——同 engine 取用侧）。
+func d580Publish(svc *Service, mtAsk, cexBid float64, age time.Duration) {
+	now := time.Now().Add(-age)
+	svc.qbus.Publish(bus.Quote{Symbol: "XPTUSD", Venue: "3001157", VenueType: "mt5",
+		Bid: mtAsk - 1, Ask: mtAsk, Time: now, VenueSymbol: "XPTUSD"})
+	svc.qbus.Publish(bus.Quote{Symbol: "XPTUSDT", Venue: "gate", VenueType: "perp",
+		Bid: cexBid, Ask: cexBid + 1, Time: now, VenueSymbol: "XPTUSDT"})
+}
+
+func d580Row(t *testing.T, svc *Service) *v1.XAssetPendingEntryRow {
+	t.Helper()
+	rows, err := svc.pendingEntries(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rows {
+		if r.ComboId == 905 {
+			return r
+		}
+	}
+	t.Fatal("905 行缺失")
+	return nil
+}
+
+// A1+A2：双腿报价+monitor 阈值就位 → 人话整串含阈值/当前/还差+三字段齐；
+// 数值逐位断言（cexBid 2002.06−mtAsk 2000)/2000×1e4=10.3bps，noise 18.8 → 还差 8.5。
+func TestD580_WaitConditionExposed(t *testing.T) {
+	svc := d580ReadySvc(t)
+	d580Publish(svc, 2000, 2002.06, 0)
+	row := d580Row(t, svc)
+	if !row.Ready {
+		t.Fatalf("闸未全过: reason=%q", row.WaitReason)
+	}
+	for _, want := range []string{"入场价差 > 18.8bps", "当前 10.3bps", "还差 8.5bps"} {
+		if !strings.Contains(row.WaitReason, want) {
+			t.Fatalf("WaitReason 缺 %q: %q", want, row.WaitReason)
+		}
+	}
+	if row.WaitCurrentBps == nil || *row.WaitCurrentBps < 10.29 || *row.WaitCurrentBps > 10.31 ||
+		row.WaitThresholdBps == nil || *row.WaitThresholdBps != 18.8 ||
+		row.WaitGapBps == nil || *row.WaitGapBps < 8.49 || *row.WaitGapBps > 8.51 {
+		t.Fatalf("三字段: cur=%v thr=%v gap=%v", row.WaitCurrentBps, row.WaitThresholdBps, row.WaitGapBps)
+	}
+}
+
+// A3：数据缺诚实——报价缺/报价超 5min/monitor 无行 → 三字段留空+「（实况价差不可得）」。
+func TestD580_WaitConditionDataMissing(t *testing.T) {
+	t.Run("报价缺", func(t *testing.T) {
+		svc := d580ReadySvc(t)
+		row := d580Row(t, svc)
+		if !row.Ready || !strings.HasSuffix(row.WaitReason, "（实况价差不可得）") {
+			t.Fatalf("reason=%q ready=%v", row.WaitReason, row.Ready)
+		}
+		if row.WaitCurrentBps != nil || row.WaitThresholdBps != nil || row.WaitGapBps != nil {
+			t.Fatal("报价缺三字段应留空")
+		}
+	})
+	t.Run("报价超龄", func(t *testing.T) {
+		svc := d580ReadySvc(t)
+		d580Publish(svc, 2000, 2002.06, 6*time.Minute)
+		row := d580Row(t, svc)
+		if !strings.HasSuffix(row.WaitReason, "（实况价差不可得）") || row.WaitCurrentBps != nil {
+			t.Fatalf("超龄应留空+后缀: %q", row.WaitReason)
+		}
+	})
+	t.Run("monitor无行", func(t *testing.T) {
+		svc := d580ReadySvc(t)
+		if _, err := svc.store.Pool().Exec(context.Background(),
+			`DELETE FROM fin_xasset_monitor WHERE pair='XPTUSDT-XPT'`); err != nil {
+			t.Fatal(err)
+		}
+		d580Publish(svc, 2000, 2002.06, 0)
+		// monitor 无行 → 闸 5 拦截（监控数据过期）——非等待态，诚实透出闸原因不猜。
+		row := d580Row(t, svc)
+		if row.Ready || !strings.Contains(row.WaitReason, "监控数据过期") {
+			t.Fatalf("reason=%q ready=%v", row.WaitReason, row.Ready)
+		}
+		if row.WaitCurrentBps != nil {
+			t.Fatal("非等待态三字段应留空")
+		}
+	})
+}
