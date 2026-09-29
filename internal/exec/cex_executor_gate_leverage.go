@@ -13,7 +13,6 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"time"
 
 	"arb/internal/signutil"
 )
@@ -37,7 +36,7 @@ func (m gatePositionMode) isDual() bool {
 func (e *CEXExecutor) gateAccountsGet(ctx context.Context) ([]byte, error) {
 	endpoint := "/futures/usdt/accounts"
 	urlPath := "/api/v4" + endpoint
-	ts := time.Now().Unix()
+	ts := gateNow()
 	sign := signutil.GateSign(e.apiSecret, "GET", urlPath, "", "", ts)
 	return e.get(ctx, e.baseURL+endpoint, http.Header{
 		"KEY": {e.apiKey}, "Timestamp": {strconv.FormatInt(ts, 10)}, "SIGN": {sign},
@@ -78,7 +77,7 @@ func (e *CEXExecutor) gateGetLeverage(ctx context.Context, contract, posMarginMo
 	}
 	endpoint := "/futures/usdt/get_leverage/" + contract
 	urlPath := "/api/v4" + endpoint
-	ts := time.Now().Unix()
+	ts := gateNow()
 	sign := signutil.GateSign(e.apiSecret, "GET", urlPath, query, "", ts)
 	body, err := e.get(ctx, e.baseURL+endpoint+"?"+query, http.Header{
 		"KEY": {e.apiKey}, "Timestamp": {strconv.FormatInt(ts, 10)}, "SIGN": {sign},

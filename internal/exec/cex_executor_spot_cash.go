@@ -24,7 +24,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // SetSpotTakerBps D-473 S2：注入 spot 腿 taker 费率（bps，cfg.CommissionTaker[venue]
@@ -185,7 +184,7 @@ func (e *CEXExecutor) spotQuoteAvail(ctx context.Context, quote string) (float64
 	case "gate":
 		endpoint := "/spot/accounts?currency=" + url.QueryEscape(quote)
 		urlPath := "/api/v4" + endpoint
-		ts := time.Now().Unix()
+		ts := gateNow()
 		headers := http.Header{
 			"KEY":       {e.apiKey},
 			"Timestamp": {strconv.FormatInt(ts, 10)},

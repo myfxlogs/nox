@@ -47,7 +47,8 @@ func (rt *d564GateRT) RoundTrip(req *http.Request) (*http.Response, error) {
 	case strings.Contains(req.URL.Path, "/futures/usdt/accounts"):
 		return resp200(rt.accounts)
 	case strings.Contains(req.URL.Path, "/contracts/"):
-		return resp200(`{"quanto_multiplier":"0.01","order_size_min":1,"order_size_max":100,"enable_decimal":false,"in_delisting":false,"leverage_max":50,"mark_price":"1000"}`)
+		// D-570 包A S1：leverage_max 翻实弹字符串形（旧数字形与新 string 字段型冲突=活病灶复现形）。
+		return resp200(`{"quanto_multiplier":"0.01","order_size_min":1,"order_size_max":100,"enable_decimal":false,"in_delisting":false,"leverage_max":"50","mark_price":"1000"}`)
 	}
 	return resp200(`{}`)
 }
@@ -158,8 +159,10 @@ func TestD564_T5_CloseOrderDual(t *testing.T) {
 			t.Fatalf("dual 平仓体缺 %s: %s", want, b)
 		}
 	}
-	if strings.Contains(b, "reduce_only") {
-		t.Fatalf("dual 平仓不得带 reduce_only: %s", b)
+	// D-570 包A S3：dual 平仓补 reduce_only=true（官方三设 size=0+auto_size+reduce_only——
+	// 旧断言「不得带」随契约修订翻形）。
+	if !strings.Contains(b, `"reduce_only":true`) {
+		t.Fatalf("dual 平仓须带 reduce_only=true: %s", b)
 	}
 	// R1 非法值锚：PositionSide 非 long/short → fail-closed 不落单。
 	rtBad := &d564GateRT{accounts: `{"position_mode":"dual"}`, lever: `{"Lever":"10"}`}
