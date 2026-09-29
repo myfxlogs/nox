@@ -38,8 +38,8 @@ func (f *mockAcctQuerier) Account(context.Context) (*reconcile.AccountInfo, erro
 func newEngineWithAccts(t *testing.T, accts ...*mockAcctQuerier) *Engine {
 	t.Helper()
 	bm := dashboard.NewBrokerManager(nil, bus.New(), exec.NewRegistry(), time.Minute)
-	topic := bus.NewTopic[*v1.AccountSnapshot]()
-	am := dashboard.NewAccountMonitor(bm, time.Millisecond, topic)
+	topic := bus.NewTopic[*v1.AccountEvent]()
+	am := dashboard.NewAccountMonitor(bm, topic)
 	for _, q := range accts {
 		am.AddStatic(q)
 	}
