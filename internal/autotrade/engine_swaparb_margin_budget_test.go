@@ -74,7 +74,7 @@ func TestObserveMarginBudget_BudgetExceeded(t *testing.T) {
 	defer mu.Unlock()
 	found := false
 	for _, a := range alerts {
-		if strings.HasPrefix(a, "warn:") && strings.Contains(a, "组合保证金预算") {
+		if strings.HasPrefix(a, "warn:") && strings.Contains(a, "保证金占比") {
 			found = true
 		}
 	}
@@ -104,7 +104,7 @@ func TestObserveMarginBudget_BudgetOK(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 	for _, a := range alerts {
-		if strings.Contains(a, "组合保证金预算") {
+		if strings.Contains(a, "保证金占比") {
 			t.Errorf("不应发保证金预算告警（2%% < 80%%），got: %s", a)
 		}
 	}
@@ -162,7 +162,7 @@ func TestObserveMarginBudget_InfiniteLeverage(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 	for _, a := range alerts {
-		if strings.Contains(a, "组合保证金预算") {
+		if strings.Contains(a, "保证金占比") {
 			t.Errorf("无限杠杆不应发保证金预算告警，got: %s", a)
 		}
 	}
@@ -277,7 +277,7 @@ func TestObserveMarginBudget_Dedup_SameKeySuppressed(t *testing.T) {
 	defer mu.Unlock()
 	count := 0
 	for _, a := range alerts {
-		if strings.Contains(a, "组合保证金预算") {
+		if strings.Contains(a, "保证金占比") {
 			count++
 		}
 	}
@@ -311,7 +311,7 @@ func TestObserveMarginBudget_Dedup_DifferentTypeIndependent(t *testing.T) {
 	budgetCount := 0
 	asymCount := 0
 	for _, a := range alerts {
-		if strings.Contains(a, "组合保证金预算") {
+		if strings.Contains(a, "保证金占比") {
 			budgetCount++
 		}
 		if strings.Contains(a, "杠杆不对称") {
@@ -350,7 +350,7 @@ func TestObserveMarginBudget_Dedup_DifferentComboIndependent(t *testing.T) {
 	defer mu.Unlock()
 	count := 0
 	for _, a := range alerts {
-		if strings.Contains(a, "组合保证金预算") {
+		if strings.Contains(a, "保证金占比") {
 			count++
 		}
 	}
@@ -388,7 +388,7 @@ func TestObserveMarginBudget_Dedup_WindowExpiryRealert(t *testing.T) {
 	defer mu.Unlock()
 	count := 0
 	for _, a := range alerts {
-		if strings.Contains(a, "组合保证金预算") {
+		if strings.Contains(a, "保证金占比") {
 			count++
 		}
 	}

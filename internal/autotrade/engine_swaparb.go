@@ -222,11 +222,11 @@ func (e *Engine) trySwapArb(ctx context.Context, strategy, canonical, venueLong,
 		status, msg, posID := e.service.ExecuteMeanRevertWithCap(ctx, canonical, venueLong, venueShort, reqID, intentPtr.Qty, spreadBps, intentPtr.NotionalUSD, strategy)
 		if status != "FAILED" && posID > 0 {
 			// D-080 S1：新持仓直接写组合键（无时间戳），与 opportunities.id 贯通
-			auditWarn(ctx, e.store, fmt.Sprintf("UpdatePositionOppID pos=%d", posID),
+			auditWarn(ctx, e.store, fmt.Sprintf("持仓 #%d 机会ID 回写", posID),
 				e.store.UpdatePositionOppID(ctx, posID, dedupKey))
 			// D-179 S2：落盘 notional_usd=双腿口径（intentPtr.NotionalUSD 是单腿口径，×2=双腿合计）。
 			// gate 折分后 intentPtr.NotionalUSD 已更新为 AdjustedNotional（gate.go:140），此处读折分后值。
-			auditWarn(ctx, e.store, fmt.Sprintf("UpdatePositionNotional pos=%d", posID),
+			auditWarn(ctx, e.store, fmt.Sprintf("持仓 #%d 名义额回写", posID),
 				e.store.UpdatePositionNotional(ctx, posID, intentPtr.NotionalUSD*2))
 			// D-087 §3.4：SWAPARB typed 双字段——ExecuteMeanRevertWithCap 已写 EntrySpreadBps，
 			// 此处补 SwapBpsDaily + AnnualPct 覆盖写全
@@ -244,19 +244,19 @@ func (e *Engine) trySwapArb(ctx context.Context, strategy, canonical, venueLong,
 				netBps := annual
 				meta.NetBps = &netBps
 			}
-			auditWarn(ctx, e.store, fmt.Sprintf("UpdatePositionMeta pos=%d", posID),
+			auditWarn(ctx, e.store, fmt.Sprintf("持仓 #%d 元数据回写", posID),
 				e.store.UpdatePositionMeta(ctx, posID, strategy, meta))
 			// D-180 S3：双腿成交后写 expected_entry_spread_bps（成交价口径基准，止损用）。
 			// = (buyActual − sellActual) / buyActual × 10000（BUY 成交=ask、SELL 成交=bid）。
 			// 口径：entry=成交价(含滑点) / current=报价口径(不含滑点) → PnL 保守(止损偏早=安全)。
 			// D-508：该写失败=止损路径静默失能（P0 性质），warn 告警可见。
 			if entryBps, ok := computeEntrySpreadFromLegs(ctx, e.store, posID); ok {
-				auditWarn(ctx, e.store, fmt.Sprintf("UpdateExpectedEntrySpreadBps pos=%d（止损基准失写=P0）", posID),
+				auditWarn(ctx, e.store, fmt.Sprintf("持仓 #%d 入场价差基准回写（止损基准失写=P0）", posID),
 					e.store.UpdateExpectedEntrySpreadBps(ctx, posID, entryBps))
 			}
 			// D-181 S2：probe 仓标记——任一腿非 settled → note=PROBE。
 			if willBeProbe {
-				auditWarn(ctx, e.store, fmt.Sprintf("SetPositionNote PROBE pos=%d", posID),
+				auditWarn(ctx, e.store, fmt.Sprintf("持仓 #%d 探针标记回写", posID),
 					e.store.SetPositionNote(ctx, posID, "PROBE"))
 				log.Printf("[autotrade] probe pos=%d marked: swap_src=%s (non-settled legs)", posID, swapSrc)
 			}
@@ -272,7 +272,7 @@ func auditWarn(ctx context.Context, store *pgstore.Store, what string, err error
 	if err == nil {
 		return
 	}
-	msg := fmt.Sprintf("[audit-write] %s failed: %v", what, err)
+	msg := fmt.Sprintf("[审计写] %s 落库失败：%v", what, err)
 	log.Printf("[autotrade] %s", msg)
 	if aerr := store.InsertAlert(ctx, nil, "warn", msg); aerr != nil {
 		log.Printf("[autotrade] alert write failed: %v | original: %s", aerr, msg)

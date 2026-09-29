@@ -149,13 +149,13 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 	body, err := send()
 	if okxIs50102(err, body) {
 		if serr := e.okxSyncClock(ctx); serr != nil {
-			e.alertCritical(o, fmt.Sprintf("okx order 50102 校时失败 pos=%d symbol=%s: %v", o.PosID, o.Symbol, serr))
+			e.alertCritical(o, fmt.Sprintf("okx 订单校时失败（错误码 50102）持仓#%d %s：%v", o.PosID, o.Symbol, serr))
 			return Fill{}, fmt.Errorf("okx order 50102 校时失败: %w", serr)
 		}
 		body, err = send() // 一次性重发（再遇 50102 落错误上抛）
 	}
 	if err != nil {
-		e.alertCritical(o, fmt.Sprintf("okx close rejected pos=%d symbol=%s side=%s: %v", o.PosID, o.Symbol, side, err))
+		e.alertCritical(o, fmt.Sprintf("okx 平仓单被交易所拒绝（持仓#%d %s %s）：%v", o.PosID, o.Symbol, side, err))
 		return Fill{}, fmt.Errorf("okx order: %w", err)
 	}
 	var resp struct {
@@ -178,7 +178,7 @@ func (e *CEXExecutor) placeOKX(ctx context.Context, o Order) (Fill, error) {
 		if len(resp.Data) > 0 && resp.Data[0].SMsg != "" {
 			detail = fmt.Sprintf("%s (sCode=%s sMsg=%s)", resp.Msg, resp.Data[0].SCode, resp.Data[0].SMsg)
 		}
-		e.alertCritical(o, fmt.Sprintf("okx close rejected pos=%d code=%s: %s", o.PosID, resp.Code, detail))
+		e.alertCritical(o, fmt.Sprintf("okx 平仓单被交易所拒绝（持仓#%d 错误码 %s）：%s", o.PosID, resp.Code, detail))
 		return Fill{}, fmt.Errorf("okx order: code=%s msg=%s", resp.Code, detail)
 	}
 	if len(resp.Data) == 0 {

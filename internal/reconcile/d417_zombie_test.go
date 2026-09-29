@@ -40,12 +40,12 @@ func TestD417_LeggedZombie_CEXVenueAlive(t *testing.T) {
 	}
 	found := false
 	for _, a := range fs.alerts {
-		if a.level == "warn" && strings.Contains(a.msg, "不归档 FAILED") {
+		if a.level == "warn" && strings.Contains(a.msg, "不归档为失败") {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("expected warn '不归档 FAILED', got %v", fs.alerts)
+		t.Fatalf("expected warn '不归档为失败', got %v", fs.alerts)
 	}
 }
 
@@ -156,12 +156,12 @@ func TestD417R1_LeggedZombie_FailedLegAtVenue(t *testing.T) {
 	}
 	found := false
 	for _, a := range fs.alerts {
-		if a.level == "warn" && strings.Contains(a.msg, "不归档 FAILED") {
+		if a.level == "warn" && strings.Contains(a.msg, "不归档为失败") {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("expected warn '不归档 FAILED', got %v", fs.alerts)
+		t.Fatalf("expected warn '不归档为失败', got %v", fs.alerts)
 	}
 }
 

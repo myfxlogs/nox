@@ -41,13 +41,13 @@ func (e *Engine) flushCSMissAlerts() {
 			continue
 		}
 		e.csMissSent[key] = now
-		lines = append(lines, fmt.Sprintf("%s count=%d", key, n))
+		lines = append(lines, fmt.Sprintf("%s（%d 笔）", key, n))
 	}
 	e.csMissMu.Unlock()
 	if len(lines) == 0 {
 		return
 	}
-	msg := "unmapped-or-no-CS: " + strings.Join(lines, "; ")
+	msg := "合约规格未映射或无值：" + strings.Join(lines, "；")
 	log.Printf("[autotrade] %s", msg)
 	if e.AlertSink != nil {
 		e.AlertSink("info", msg)

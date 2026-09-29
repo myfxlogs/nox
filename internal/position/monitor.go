@@ -171,7 +171,7 @@ func (m *Monitor) alertSuggestClose(ctx context.Context, p *pgstore.Position) {
 }
 
 func formatLeggedAlert(p *pgstore.Position) string {
-	return "持仓 #" + int64ToStr(p.ID) + " LEGGED：单腿暴露，需手动处置"
+	return "持仓 #" + int64ToStr(p.ID) + " 单腿成交裸露风险：单边暴露，需手动处置"
 }
 
 func formatCloseAlert(p *pgstore.Position) string {

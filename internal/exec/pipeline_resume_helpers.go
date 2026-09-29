@@ -97,7 +97,7 @@ func (p *Pipeline) placeCloseOrder(ctx context.Context, posID int64, leg pgstore
 // pnlCalibrator 命中且 ClosePrice > 0 → 回填 CLOSE leg + PnL + cashflows；无法取得 → fail-closed。
 func (p *Pipeline) backfillCloseFromHistory(ctx context.Context, posID int64, leg pgstore.PositionLeg, fx float64) error {
 	if p.pnlCalibrator == nil {
-		msg := fmt.Sprintf("broker 已无腿但无历史查证器 position=%d leg=%d venue=%s (fail-closed)", posID, leg.LegNo, leg.Venue)
+		msg := fmt.Sprintf("持仓 #%d 第 %d 腿（%s）券商侧已无此腿且无历史查证器——平仓盈亏无法核实，需人工核对", posID, leg.LegNo, leg.Venue)
 		if err := p.store.InsertPositionAlert(ctx, posID, "critical", msg); err != nil {
 			log.Printf("[exec] pos %d alert write: %v", posID, err)
 		}
@@ -105,7 +105,7 @@ func (p *Pipeline) backfillCloseFromHistory(ctx context.Context, posID int64, le
 	}
 	hp, err := p.pnlCalibrator.QueryHistoryPnL(ctx, leg.Venue, leg.OrderID, 3)
 	if err != nil || hp == nil || hp.ClosePrice <= 0 {
-		msg := fmt.Sprintf("broker 已无腿且历史查证无命中 position=%d leg=%d venue=%s ticket=%s (fail-closed)", posID, leg.LegNo, leg.Venue, leg.OrderID)
+		msg := fmt.Sprintf("持仓 #%d 第 %d 腿（%s）券商侧已无此腿且历史查证无命中（票号 %s）——平仓盈亏无法核实，需人工核对", posID, leg.LegNo, leg.Venue, leg.OrderID)
 		if err := p.store.InsertPositionAlert(ctx, posID, "critical", msg); err != nil {
 			log.Printf("[exec] pos %d alert write: %v", posID, err)
 		}

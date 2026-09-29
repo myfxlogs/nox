@@ -41,7 +41,7 @@ func (e *CEXExecutor) gateSnapEval(o Order, ordID string, sn GateOrderSnap) (Fil
 		if sn.AccFillQty > 0 && sn.AvgPx > 0 {
 			return Fill{OrderID: ordID, Price: sn.AvgPx, Qty: sn.AccFillQty, Ts: time.Now(), FeeUSD: sn.FeeUSD}, true, nil
 		}
-		msg := fmt.Sprintf("gate order %s: canceled 零成交（未成交）", ordID)
+		msg := fmt.Sprintf("gate 订单 %s 未成交（已被取消，成交量为零）", ordID)
 		e.alertCritical(o, msg)
 		return Fill{}, true, fmt.Errorf("%s", msg)
 	}
@@ -121,7 +121,7 @@ func (e *CEXExecutor) gateConfirmFill(ctx context.Context, o Order, ordID string
 		if qty > 0 && px > 0 {
 			return Fill{OrderID: ordID, Price: px, Qty: qty, Ts: time.Now()}, true, nil // 部分成交如实
 		}
-		msg := fmt.Sprintf("gate order %s: %s/finish_as=%s 零成交（未成交）", ordID, st.Status, st.FinishAs)
+		msg := fmt.Sprintf("gate 订单 %s 未成交（已终结，成交量为零）\n原始明细：status=%s finish_as=%s", ordID, st.Status, st.FinishAs)
 		e.alertCritical(o, msg)
 		return Fill{}, true, fmt.Errorf("%s", msg)
 	}
@@ -152,11 +152,11 @@ func (e *CEXExecutor) gateConfirmFill(ctx context.Context, o Order, ordID string
 	}
 	// 窗尽 → 撤单+终查双证（同 binance 文案口径「订单可能孤儿在簿」）。
 	if cerr := e.gateCancelOrder(ctx, ordID); cerr != nil {
-		e.alertCritical(o, fmt.Sprintf("gate cancel %s post-window failed: %v（订单可能孤儿在簿）", ordID, cerr))
+		e.alertCritical(o, fmt.Sprintf("gate 取消订单 %s 确认超时后处理失败：%v（订单可能仍挂在交易所、状态未知，需人工核对）", ordID, cerr))
 	}
 	st, err := e.gateOrderStatus(ctx, ordID, "")
 	if err != nil {
-		e.alertCritical(o, fmt.Sprintf("gate order status final check %s failed: %v（订单可能孤儿在簿）", ordID, err))
+		e.alertCritical(o, fmt.Sprintf("gate 订单 %s 最终查证失败：%v（订单可能仍挂在交易所、状态未知，需人工核对）", ordID, err))
 		return Fill{}, &ErrFillUnconfirmed{OrderID: ordID}
 	}
 	state, qc, done := gateStatusEval(st)

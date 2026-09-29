@@ -196,7 +196,7 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 			// D-189 P0-3：状态写入失败显式处理——日志 + critical alert（alert 失败也 log）。
 			// 不增加 inMemoryHalt（Gate 每次 Submit 重新读状态/日亏/策略禁用，内存 latch 无恢复协议+重复防线）。
 			if err := g.store.SetAutotradeState(ctx, StateDailyLossHalt, verdict.Reason, &haltedOn); err != nil {
-				msg := fmt.Sprintf("SetAutotradeState DAILY_LOSS_HALT failed (fail-closed, will re-read next tick): %v", err)
+				msg := fmt.Sprintf("自动交易日亏停机状态写入失败（保守按停机处理，下一轮自动重读）：%v", err)
 				log.Printf("[autotrade] %s", msg)
 				if alertErr := g.store.InsertAlert(ctx, nil, "critical", msg); alertErr != nil {
 					log.Printf("[autotrade] DAILY_LOSS_HALT alert insert also failed: %v", alertErr)
@@ -280,7 +280,7 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 	} else {
 		log.Printf("[autotrade] gate EXECUTED %s posID=%d", intent.DedupKey, posID)
 		alertWrite(ctx, g.store, "warn",
-			fmt.Sprintf("[机会执行] %s %s net=%.1fbps posID=%d",
+			fmt.Sprintf("[机会执行] %s %s 净价差 %.1fbps 持仓#%d",
 				intent.Strategy, intent.Canonical, intent.NetBps, posID))
 	}
 	return GateResult{Status: status, Reason: logEntry.Reason, PosID: posID}

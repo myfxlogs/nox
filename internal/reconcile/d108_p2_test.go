@@ -38,7 +38,7 @@ func TestD108P2_LeggedZombie_VenueHit(t *testing.T) {
 	// 应有 warn 告警
 	found := false
 	for _, a := range fs.alerts {
-		if a.level == "warn" && strings.Contains(a.msg, "LEGGED 僵尸") && strings.Contains(a.msg, "不归档") {
+		if a.level == "warn" && strings.Contains(a.msg, "单腿裸露滞留持仓") && strings.Contains(a.msg, "不归档") {
 			found = true
 			break
 		}
@@ -77,7 +77,7 @@ func TestD108P2_LeggedZombie_VenueMiss(t *testing.T) {
 	// 应有 warn 告警
 	warnFound := false
 	for _, a := range fs.alerts {
-		if a.level == "warn" && strings.Contains(a.msg, "LEGGED 僵尸自动归档") {
+		if a.level == "warn" && strings.Contains(a.msg, "自动归档（超 24h 未恢复") {
 			warnFound = true
 			break
 		}

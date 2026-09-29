@@ -126,7 +126,7 @@ func (p *Pipeline) cashflowWriterOrStore() cashflowInserter {
 // alertCashflowFailure 写 critical alert + 日志（D-189 P0-2：现金流失败显式可见性）。
 // alert 写入本身失败也必须 log.Printf（不递归创建告警）。
 func (p *Pipeline) alertCashflowFailure(ctx context.Context, posID int64, legNo int16, kind, venue string, cause error) {
-	msg := fmt.Sprintf("cashflow write failed position=%d leg=%d kind=%s venue=%s: %v", posID, legNo, kind, venue, cause)
+	msg := fmt.Sprintf("持仓 #%d 第 %d 腿资金流水入账失败（%s %s）：%v", posID, legNo, kind, venue, cause)
 	log.Printf("[exec] %s", msg)
 	if err := p.store.InsertPositionAlert(ctx, posID, "critical", msg); err != nil {
 		log.Printf("[exec] cashflow alert insert also failed position=%d: %v", posID, err)

@@ -69,7 +69,7 @@ func (e *Engine) observeMarginBudget(canonical, venueLong, venueShort string, no
 			key := fmt.Sprintf("%s:%s:%s:asymmetry", canonical, venueLong, venueShort)
 			if e.shouldMarginAlert(key) {
 				e.AlertSink("info", fmt.Sprintf(
-					"SWAPARB %s: 杠杆不对称 %s=%.0f vs %s=%.0f (%.1fx 差异，保证金分配不均)",
+					"套息组合 %s：双腿杠杆不对称 %s=%.0f× vs %s=%.0f×（差 %.1f 倍，保证金分配不均）",
 					canonical, e.aliasOrKey(venueLong), levLong, e.aliasOrKey(venueShort), levShort, ratio))
 			}
 		}
@@ -99,7 +99,7 @@ func (e *Engine) observeMarginBudget(canonical, venueLong, venueShort string, no
 		key := fmt.Sprintf("%s:%s:%s:budget", canonical, venueLong, venueShort)
 		if e.shouldMarginAlert(key) {
 			e.AlertSink("warn", fmt.Sprintf(
-				"SWAPARB %s: 组合保证金预算 %.1f%% > 阈值 %.0f%% (保证金 $%.0f = L$%.0f+S$%.0f, minEq $%.0f)",
+				"套息组合 %s：保证金占比 %.1f%% 超阈值 %.0f%%（保证金 $%.0f = 多腿 $%.0f + 空腿 $%.0f，较小净值 $%.0f）",
 				canonical, budgetPct*100, e.cfg.SwapArbMarginBudgetPct*100,
 				totalMargin, marginLong, marginShort, minEq))
 		}

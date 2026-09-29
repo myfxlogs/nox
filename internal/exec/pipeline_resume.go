@@ -167,7 +167,7 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64, force boo
 			fill = newFill
 		}
 		if fill.Qty <= 0 || fill.Price <= 0 {
-			msg := fmt.Sprintf("close leg %d invalid fill: qty=%.4f price=%.4f (skip, not faked)", leg.ID, fill.Qty, fill.Price)
+			msg := fmt.Sprintf("平仓腿 %d 成交回报无效（量 %.4f 价 %.4f），已跳过不虚增", leg.ID, fill.Qty, fill.Price)
 			if err := p.store.InsertPositionAlert(ctx, posID, "critical", msg); err != nil {
 				log.Printf("[exec] pos %d alert write: %v", posID, err)
 			}
@@ -201,7 +201,7 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64, force boo
 				log.Printf("[exec] resume close leg %d already persisted (concurrent), skip", leg.ID)
 				continue
 			}
-			msg := fmt.Sprintf("close leg persist failed position=%d leg=%d venue=%s: %v", posID, leg.LegNo, leg.Venue, err)
+			msg := fmt.Sprintf("持仓 #%d 平仓腿落库失败（第 %d 腿 %s）：%v", posID, leg.LegNo, leg.Venue, err)
 			log.Printf("[exec] %s", msg)
 			if err := p.store.InsertPositionAlert(ctx, posID, "critical", msg); err != nil {
 				log.Printf("[exec] pos %d alert write: %v", posID, err)
@@ -212,7 +212,7 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64, force boo
 		totalPnL += legPnL
 		if fxMissing {
 			if err := p.store.InsertPositionAlert(ctx, posID, "critical",
-				fmt.Sprintf("pnl fx missing venue=%s symbol=%s quoteCcy=%s", leg.Venue, leg.Symbol, quoteCcy)); err != nil {
+				fmt.Sprintf("盈亏汇率缺失（%s %s 计价币种 %s）——盈亏按未折算记", leg.Venue, leg.Symbol, quoteCcy)); err != nil {
 				log.Printf("[exec] pos %d alert write: %v", posID, err)
 			}
 		}
@@ -262,7 +262,7 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64, force boo
 		}
 	}
 	if openFilled > closeFilled {
-		msg := fmt.Sprintf("position %d residual: %d OPEN FILLED legs but only %d CLOSE FILLED legs (not closing)", posID, openFilled, closeFilled)
+		msg := fmt.Sprintf("持仓 #%d 平仓不完整：%d 条开仓腿已成交但仅 %d 条平仓腿成交——需人工核对", posID, openFilled, closeFilled)
 		if err := p.store.InsertPositionAlert(ctx, posID, "critical", msg); err != nil {
 			log.Printf("[exec] pos %d alert write: %v", posID, err)
 		}

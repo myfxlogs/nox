@@ -73,7 +73,7 @@ func (p *Pipeline) sumClosedLegsPnL(ctx context.Context, posID int64, legs, clos
 		for _, cl := range closesByLegNo[leg.LegNo] {
 			if cl.PriceActual == nil || *cl.PriceActual <= 0 {
 				if err := p.store.InsertPositionAlert(ctx, posID, "critical",
-					fmt.Sprintf("position %d leg %d CLOSE 腿缺成交价，PnL 计 0（宁缺勿虚增）", posID, leg.LegNo)); err != nil {
+					fmt.Sprintf("持仓 #%d 第 %d 腿平仓缺成交价，盈亏按 0 计（宁缺勿虚增）", posID, leg.LegNo)); err != nil {
 					log.Printf("[exec] pos %d alert write: %v", posID, err)
 				}
 				continue

@@ -36,7 +36,7 @@ func (r *Reconciler) zombieSweep(
 		}
 		if err := r.autoFailOPENINGZombie(ctx, &p, ordersByVenue); err != nil {
 			failed++
-			msg := fmt.Sprintf("OPENING 僵尸归档失败 position #%d: %v", p.ID, err)
+			msg := fmt.Sprintf("开仓滞留持仓 #%d 归档失败：%v", p.ID, err)
 			r.insertAlertCtx(ctx, "critical", msg)
 			log.Printf("[reconcile] %s", msg)
 		}
@@ -47,7 +47,7 @@ func (r *Reconciler) zombieSweep(
 		}
 		if err := r.autoFailLeggedZombie(ctx, &p, ordersByVenue); err != nil {
 			failed++
-			msg := fmt.Sprintf("LEGGED 僵尸归档失败 position #%d: %v", p.ID, err)
+			msg := fmt.Sprintf("单腿裸露滞留持仓 #%d 归档失败：%v", p.ID, err)
 			r.insertAlertCtx(ctx, "critical", msg)
 			log.Printf("[reconcile] %s", msg)
 		}
@@ -106,9 +106,9 @@ func (r *Reconciler) autoFailOPENINGZombie(
 	}
 	var msg string
 	if target == "FAILED" {
-		msg = fmt.Sprintf("OPENING 僵尸自动归档 position #%d（超 24h 未完成开仓，转 FAILED）", posID)
+		msg = fmt.Sprintf("开仓滞留持仓 #%d 自动归档（超 24h 未完成开仓，转为失败态）", posID)
 	} else {
-		msg = fmt.Sprintf("OPENING 僵尸 position #%d venue 证实 %d/%d 腿在场 → %s", posID, present, total, target)
+		msg = fmt.Sprintf("开仓滞留持仓 #%d 交易所证实 %d/%d 腿在场 → %s", posID, present, total, target)
 	}
 	r.insertAlertCtx(ctx, "warn", msg)
 	log.Printf("[reconcile] %s", msg)
@@ -184,7 +184,7 @@ func (r *Reconciler) autoFailLeggedZombie(
 		if exec.LegAtVenue(leg, orders) {
 			// D-108 P2 T3：腿在 venue 有 → 不置 FAILED（venue 真有持仓，误平风险），
 			// 记录告警交人工/下轮对账处置（P1 A3 同语义）。
-			msg := fmt.Sprintf("LEGGED 僵尸 position #%d 腿 ticket=%s 在 venue 有持仓，不归档 FAILED（交人工/对账）", posID, leg.OrderID)
+			msg := fmt.Sprintf("单腿裸露滞留持仓 #%d 腿 ticket=%s 在交易所仍有持仓，不归档为失败（交人工核对）", posID, leg.OrderID)
 			r.insertAlertCtx(ctx, "warn", msg)
 			log.Printf("[reconcile] %s", msg)
 			return nil
@@ -194,7 +194,7 @@ func (r *Reconciler) autoFailLeggedZombie(
 	if err := r.updateStatusRetry(ctx, posID, "FAILED"); err != nil {
 		return err
 	}
-	msg := fmt.Sprintf("LEGGED 僵尸自动归档 position #%d（超 24h 未恢复，转 FAILED）", posID)
+	msg := fmt.Sprintf("单腿裸露滞留持仓 #%d 自动归档（超 24h 未恢复，转为失败态）", posID)
 	r.insertAlertCtx(ctx, "warn", msg)
 	log.Printf("[reconcile] %s", msg)
 	return nil

@@ -60,7 +60,7 @@ func (p *Pipeline) persistOpenLegs(ctx context.Context, requestID string, posID 
 			UncertainAt:   uncertainAt,
 			FeeUSD:        feeUSD,
 		}); err != nil {
-			msg := fmt.Sprintf("leg persist failed position=%d leg=%d venue=%s: %v", posID, i, legs[i].VenueKey, err)
+			msg := fmt.Sprintf("持仓 #%d 第 %d 腿成交落库失败（%s）：%v", posID, i, legs[i].VenueKey, err)
 			log.Printf("[exec] %s", msg)
 			p.alertCrit(ctx, msg)
 			// D-201：补偿回滚已 FILLED 腿（0~i），best-effort（回滚失败只 log+alert，不阻断返回原 error）。
@@ -77,7 +77,7 @@ func (p *Pipeline) persistOpenLegs(ctx context.Context, requestID string, posID 
 			if err := p.insertCashflowIdempotent(ctx, posID, int16(i), "commission", legs[i].VenueKey, -*feeUSD, "actual", dayStart, ts, "open"); err != nil {
 				log.Printf("[exec] pos=%d leg=%d open fee cashflow: %v", posID, i, err)
 				p.alertCrit(ctx,
-					fmt.Sprintf("position %d leg %d open fee cashflow write failed: %v", posID, i, err))
+					fmt.Sprintf("持仓 #%d 第 %d 腿开仓手续费入账失败：%v", posID, i, err))
 			}
 		}
 	}
@@ -120,7 +120,7 @@ func (p *Pipeline) rollbackFilledLegs(ctx context.Context, posID int64, legs []L
 			}
 		}
 		if closeErr != nil {
-			rmsg := fmt.Sprintf("rollback failed pos=%d leg=%d venue=%s: %v", posID, i, legs[i].VenueKey, closeErr)
+			rmsg := fmt.Sprintf("持仓 #%d 第 %d 腿回滚失败（%s）：%v", posID, i, legs[i].VenueKey, closeErr)
 			log.Printf("[exec] %s", rmsg)
 			p.alertCrit(ctx, rmsg)
 		} else {
@@ -170,7 +170,7 @@ func (p *Pipeline) rollbackUnknownLeg(ctx context.Context, posID int64, i int, l
 		return
 	}
 	fail := func(what string, err error) {
-		msg := fmt.Sprintf("rollback orphan pos=%d leg=%d venue=%s order=%s %s failed: %v（孤儿未证否）", posID, i, leg.VenueKey, r.OrderID, what, err)
+		msg := fmt.Sprintf("持仓 #%d 第 %d 腿回滚单 %s 处理失败（%s 订单 %s）：%v——订单可能仍挂在交易所、状态未知，需人工核对", posID, i, leg.VenueKey, r.OrderID, what, err)
 		log.Printf("[exec] %s", msg)
 		p.alertCrit(ctx, msg)
 	}

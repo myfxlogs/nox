@@ -33,7 +33,7 @@ func TestCSMissAggregationDedup(t *testing.T) {
 	if len(alertMsgs) != 1 {
 		t.Fatalf("first flush: got %d alerts, want 1", len(alertMsgs))
 	}
-	if !strings.Contains(alertMsgs[0], "count=3") {
+	if !strings.Contains(alertMsgs[0], "（3 笔）") {
 		t.Errorf("first flush: msg %q should contain count=3", alertMsgs[0])
 	}
 	// 立即再记 + flush → 1h 内去重，不应发
@@ -64,7 +64,7 @@ func TestCSMissMultiKey(t *testing.T) {
 		t.Errorf("alert %q should contain both keys", alerts[0])
 	}
 	// BRENT count=2
-	if !strings.Contains(alerts[0], "count=2") {
+	if !strings.Contains(alerts[0], "（2 笔）") {
 		t.Errorf("alert %q should contain count=2 for BRENT", alerts[0])
 	}
 }

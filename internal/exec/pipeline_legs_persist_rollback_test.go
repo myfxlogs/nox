@@ -172,7 +172,7 @@ func TestPersistOpenLegs_RollbackBestEffort(t *testing.T) {
 	// 验证第 1 腿回滚失败写 alert
 	var alertCount int
 	if err := s.Pool().QueryRow(ctx,
-		`SELECT count(*) FROM alerts WHERE level='critical' AND message LIKE 'rollback failed%'`).Scan(&alertCount); err != nil {
+		`SELECT count(*) FROM alerts WHERE level='critical' AND message LIKE '%回滚失败%'`).Scan(&alertCount); err != nil {
 		t.Fatalf("count alerts: %v", err)
 	}
 	if alertCount != 1 {

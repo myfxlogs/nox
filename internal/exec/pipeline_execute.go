@@ -200,15 +200,15 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 		var unknownLegs []string
 		for i, r := range results {
 			if r.Status == "UNKNOWN" {
-				unknownLegs = append(unknownLegs, fmt.Sprintf("leg%d(%s)", i, legs[i].VenueKey))
+				unknownLegs = append(unknownLegs, fmt.Sprintf("腿%d（%s）", i, legs[i].VenueKey))
 			}
 		}
-		reason := fmt.Sprintf("MT OrderSend timeout: %s", strings.Join(unknownLegs, ", "))
+		reason := fmt.Sprintf("MT 下单超时：%s", strings.Join(unknownLegs, ", "))
 		if err := p.store.SetPositionUncertainty(ctx, posID, reason); err != nil {
 			log.Printf("[exec] position %d uncertainty write: %v", posID, err)
 		}
 		if err := p.store.InsertPositionAlert(ctx, posID, "critical",
-			fmt.Sprintf("position %d UNKNOWN: %s (manual verify required)", posID, reason)); err != nil {
+			fmt.Sprintf("持仓 #%d 平仓结果未知：%s——需人工到交易所核对", posID, reason)); err != nil {
 			log.Printf("[exec] pos %d alert write: %v", posID, err)
 		}
 	}
@@ -229,26 +229,26 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 				if err := p.ClosePosition(autoFlattenCtx, posID); err != nil {
 					log.Printf("[exec] position %d auto-flatten ClosePosition: %v", posID, err)
 					if err := p.store.InsertPositionAlert(autoFlattenCtx, posID, "critical",
-						fmt.Sprintf("position %d LEGGED auto-flatten close coordinator failed: %v", posID, err)); err != nil {
+						fmt.Sprintf("持仓 #%d 单腿成交裸露风险：自动平仓处置失败（%v）——需人工处理", posID, err)); err != nil {
 						log.Printf("[exec] pos %d alert write: %v", posID, err)
 					}
 				} else {
 					if err := p.store.InsertPositionAlert(autoFlattenCtx, posID, "critical",
-						fmt.Sprintf("position %d LEGGED auto-flattened (open legs closed, root cause: partial fill)", posID)); err != nil {
+						fmt.Sprintf("持仓 #%d 单腿成交裸露：已自动平掉其余腿（根因=部分成交）", posID)); err != nil {
 						log.Printf("[exec] pos %d alert write: %v", posID, err)
 					}
 					status = "CLOSED"
 				}
 			} else {
 				if err := p.store.InsertPositionAlert(autoFlattenCtx, posID, "critical",
-					fmt.Sprintf("position %d LEGGED: %d/%d legs filled, auto-flatten incomplete", posID, filled, len(legs))); err != nil {
+					fmt.Sprintf("持仓 #%d 单腿成交裸露：%d/%d 腿已成交，自动平仓不完整——需人工处理", posID, filled, len(legs))); err != nil {
 					log.Printf("[exec] pos %d alert write: %v", posID, err)
 				}
 			}
 		} else {
 			// critical 告警
 			if err := p.store.InsertAlert(ctx, nil, "critical",
-				fmt.Sprintf("position %d LEGGED: %d/%d legs filled", posID, filled, len(legs))); err != nil {
+				fmt.Sprintf("持仓 #%d 单腿成交裸露：%d/%d 腿已成交", posID, filled, len(legs))); err != nil {
 				log.Printf("[exec] pos %d alert write: %v", posID, err)
 			}
 		}

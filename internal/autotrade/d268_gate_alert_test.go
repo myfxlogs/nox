@@ -89,7 +89,7 @@ func TestD268_S2_ExecutedAlerts(t *testing.T) {
 	if !strings.Contains(msg, "AUDJPY") {
 		t.Errorf("msg: want canonical AUDJPY, got %s", msg)
 	}
-	if !strings.Contains(msg, "posID=42") {
+	if !strings.Contains(msg, "持仓#42") {
 		t.Errorf("msg: want posID=42, got %s", msg)
 	}
 }

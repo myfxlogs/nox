@@ -36,7 +36,7 @@ func (e *Engine) stateMachineTick(ctx context.Context) {
 		// D-189 P0-3：状态写入失败显式处理——日志 + critical alert（alert 失败也 log）。
 		// 不假设迁移成功；下一 tick 重新读取并重试。读取状态/日亏/策略禁用任一失败仍按现有 fail-closed 跳过。
 		if err := e.store.SetAutotradeState(ctx, next, reason, haltedOn); err != nil {
-			msg := fmt.Sprintf("SetAutotradeState %s→%s failed (will re-read next tick): %v", stateRow.State, next, err)
+			msg := fmt.Sprintf("自动交易状态切换 %s→%s 写入失败（下一轮自动重读）：%v", stateRow.State, next, err)
 			log.Printf("[autotrade] %s", msg)
 			if alertErr := e.store.InsertAlert(ctx, nil, "critical", msg); alertErr != nil {
 				log.Printf("[autotrade] state tick alert insert also failed: %v", alertErr)

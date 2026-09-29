@@ -204,7 +204,7 @@ func (r *Reconciler) unknownStuck(ctx context.Context, leg *pgstore.PositionLeg,
 	r.unknownRounds[leg.PositionID]++
 	if r.unknownRounds[leg.PositionID] == unknownMaxRounds {
 		r.insertAlertCtx(ctx, "critical",
-			fmt.Sprintf("resolve unknown leg stuck pos=%d leg=%d venue=%s order=%s (%s) — manual verify required",
+			fmt.Sprintf("持仓 #%d 存在状态未知订单腿（腿=%d %s 订单 %s），连续多轮未能查清（%s）——需人工核实",
 				leg.PositionID, leg.ID, leg.Venue, leg.OrderID, why))
 	}
 }
@@ -239,7 +239,7 @@ func (r *Reconciler) preflightLeggedFailedLegs(ctx context.Context, p *pgstore.P
 			_ = r.store.SetPositionUncertainty(sub, p.ID, reason)
 			cancel()
 			r.insertAlertCtx(ctx, "critical",
-				fmt.Sprintf("legged preflight inconclusive pos=%d %s", p.ID, reason))
+				fmt.Sprintf("持仓 #%d 单腿裸露预检查无法定论——%s，本轮不处置（保守不平）", p.ID, reason))
 			if qerr != nil {
 				log.Printf("[reconcile] legged preflight pos=%d order=%s query: %v", p.ID, l.OrderID, qerr)
 			}

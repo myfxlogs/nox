@@ -203,7 +203,7 @@ func (p *Pipeline) writeAwaitSessionNote(ctx context.Context, posID int64, note 
 // emitResidualAlert D-495 §1.3：broker 残留告警分级——残留全为已知 await_session
 // 腿 → warn 且只在首次转场发（每周期 critical 刷屏禁令）；混入未知残留维持 critical。
 func (p *Pipeline) emitResidualAlert(ctx context.Context, posID int64, residual []string, awaited []pgstore.PositionLeg, newAwait bool) {
-	msg := fmt.Sprintf("broker 残留腿 position=%d: %s", posID, strings.Join(residual, ", "))
+	msg := fmt.Sprintf("持仓 #%d 平仓后仍有残留腿：%s", posID, strings.Join(residual, ", "))
 	log.Printf("[exec] %s", msg)
 	level, emit := "critical", true
 	if len(awaited) > 0 && allResidualAwaited(residual, awaited) {
@@ -221,7 +221,7 @@ func (p *Pipeline) emitResidualAlert(ctx context.Context, posID int64, residual 
 // verifier 未接线/查询失败=fail-closed error；残留>0 → emitResidualAlert 分级后报错。
 func (p *Pipeline) verifyResidualOrErr(ctx context.Context, posID int64, legs, awaited []pgstore.PositionLeg, newAwait bool) error {
 	if p.verifier == nil {
-		msg := fmt.Sprintf("verifier not wired, cannot verify close position=%d", posID)
+		msg := fmt.Sprintf("持仓 #%d 残量校验器未接线，无法核对平仓结果", posID)
 		log.Printf("[exec] %s", msg)
 		if err := p.store.InsertPositionAlert(ctx, posID, "critical", msg); err != nil {
 			log.Printf("[exec] pos %d alert write: %v", posID, err)
@@ -230,7 +230,7 @@ func (p *Pipeline) verifyResidualOrErr(ctx context.Context, posID int64, legs, a
 	}
 	residual, verifyErr := p.checkResidualLegs(ctx, legs)
 	if verifyErr != nil {
-		msg := fmt.Sprintf("verify residual failed position=%d: %v", posID, verifyErr)
+		msg := fmt.Sprintf("持仓 #%d 平仓残量核对失败：%v", posID, verifyErr)
 		log.Printf("[exec] %s", msg)
 		if err := p.store.InsertPositionAlert(ctx, posID, "critical", msg); err != nil {
 			log.Printf("[exec] pos %d alert write: %v", posID, err)

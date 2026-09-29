@@ -33,7 +33,7 @@ func TestD256A_S5_SettledOverThresholdAlerts(t *testing.T) {
 	if !strings.HasPrefix(alerts[0], "critical:") {
 		t.Errorf("level: want critical, got %s", alerts[0])
 	}
-	if !strings.Contains(alerts[0], "revival") {
+	if !strings.Contains(alerts[0], "复活评估") {
 		t.Errorf("msg: want 'revival', got %s", alerts[0])
 	}
 }

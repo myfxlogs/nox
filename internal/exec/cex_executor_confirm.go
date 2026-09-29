@@ -90,8 +90,8 @@ func (e *CEXExecutor) evalOKXStatus(origOrder Order, ordID string, st okxOrderSt
 		if reason != "" {
 			reason = ": " + reason
 		}
-		msg := fmt.Sprintf("okx order %s: state=%s accFillSz=%s avgPx=%s（未成交，订单被取消/拒绝%s）",
-			ordID, st.State, st.AccFillSz, st.AvgPx, reason)
+		msg := fmt.Sprintf("okx 订单 %s 未成交（已被取消/拒绝%s）\n原始明细：state=%s accFillSz=%s avgPx=%s",
+			ordID, reason, st.State, st.AccFillSz, st.AvgPx)
 		e.alertCritical(origOrder, msg)
 		return Fill{}, true, fmt.Errorf("%s", msg)
 	}
@@ -145,11 +145,11 @@ func (e *CEXExecutor) okxConfirmFill(ctx context.Context, o Order, instID, ordID
 	// 错误文案因 venue 而异不依赖串匹配——终查 accFillSz/avgPx 是唯一事实源）。
 	// D-508：cancel/终查失败 → critical（订单可能孤儿在簿）。
 	if cerr := e.okxCancelOrder(ctx, instID, ordID); cerr != nil {
-		e.alertCritical(o, fmt.Sprintf("okx cancel %s post-window failed: %v（订单可能孤儿在簿）", ordID, cerr))
+		e.alertCritical(o, fmt.Sprintf("okx 取消订单 %s 确认超时后处理失败：%v（订单可能仍挂在交易所、状态未知，需人工核对）", ordID, cerr))
 	}
 	st, err := e.okxOrderStatus(ctx, instID, ordID, "")
 	if err != nil {
-		e.alertCritical(o, fmt.Sprintf("okx order status final check %s failed: %v（订单可能孤儿在簿）", ordID, err))
+		e.alertCritical(o, fmt.Sprintf("okx 订单 %s 最终查证失败：%v（订单可能仍挂在交易所、状态未知，需人工核对）", ordID, err))
 		return Fill{}, &ErrFillUnconfirmed{OrderID: ordID}
 	}
 	if f, done, ferr := e.evalOKXStatus(o, ordID, st, ctVal); done {
@@ -183,7 +183,7 @@ func (e *CEXExecutor) evalBinanceStatus(ctx context.Context, o Order, ordID stri
 			// 取消但已有部分成交 → 真实敞口如实入账（audit P2-3：少记=平仓少平=venue 残余）。
 			return Fill{OrderID: ordID, Price: p, Qty: q, Ts: time.Now(), FeeUSD: fee()}, true, nil
 		}
-		msg := fmt.Sprintf("binance order %s: status=%s executedQty=%s（未成交，订单被取消/拒绝）",
+		msg := fmt.Sprintf("binance 订单 %s 未成交（已被取消/拒绝）\n原始明细：status=%s executedQty=%s",
 			ordID, st.Status, st.ExecutedQty)
 		e.alertCritical(o, msg)
 		return Fill{}, true, fmt.Errorf("%s", msg)
@@ -227,7 +227,7 @@ func (e *CEXExecutor) binanceSnapEval(ctx context.Context, o Order, ordID string
 		if sn.AccFillQty > 0 && sn.AvgPx > 0 {
 			return Fill{OrderID: ordID, Price: sn.AvgPx, Qty: sn.AccFillQty, Ts: time.Now(), FeeUSD: fee()}, true, nil
 		}
-		msg := fmt.Sprintf("binance order %s: canceled executedQty=0（未成交）", ordID)
+		msg := fmt.Sprintf("binance 订单 %s 未成交（已被取消，成交量为零）", ordID)
 		e.alertCritical(o, msg)
 		return Fill{}, true, fmt.Errorf("%s", msg)
 	}
@@ -267,11 +267,11 @@ func (e *CEXExecutor) binanceConfirmFill(ctx context.Context, o Order, ordID str
 		}
 	}
 	if cerr := e.binanceCancelOrder(ctx, o.Symbol, ordID); cerr != nil {
-		e.alertCritical(o, fmt.Sprintf("binance cancel %s post-window failed: %v（订单可能孤儿在簿）", ordID, cerr))
+		e.alertCritical(o, fmt.Sprintf("binance 取消订单 %s 确认超时后处理失败：%v（订单可能仍挂在交易所、状态未知，需人工核对）", ordID, cerr))
 	}
 	st, err := e.binanceOrderStatus(ctx, o.Symbol, ordID, "")
 	if err != nil {
-		e.alertCritical(o, fmt.Sprintf("binance order status final check %s failed: %v（订单可能孤儿在簿）", ordID, err))
+		e.alertCritical(o, fmt.Sprintf("binance 订单 %s 最终查证失败：%v（订单可能仍挂在交易所、状态未知，需人工核对）", ordID, err))
 		return Fill{}, &ErrFillUnconfirmed{OrderID: ordID}
 	}
 	if f, done, ferr := e.evalBinanceStatus(ctx, o, ordID, st); done {

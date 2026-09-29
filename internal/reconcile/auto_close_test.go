@@ -413,7 +413,7 @@ func TestRun_OPENINGZombie_ToFailed(t *testing.T) {
 	if fs.positions[400].Status != "FAILED" {
 		t.Errorf("position 应 FAILED，实际 %s", fs.positions[400].Status)
 	}
-	if !hasAlert(fs, "warn", "OPENING 僵尸自动归档 position #400") {
+	if !hasAlert(fs, "warn", "开仓滞留持仓 #400 自动归档") {
 		t.Errorf("缺少 warn 告警，alerts=%v", fs.alerts)
 	}
 }

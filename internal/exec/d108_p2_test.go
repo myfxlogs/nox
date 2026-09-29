@@ -189,7 +189,7 @@ func TestD108P2_BinancePerpRejectedCritical(t *testing.T) {
 	if alertPosID == nil || *alertPosID != 999 {
 		t.Errorf("critical alert posID = %v, want 999", alertPosID)
 	}
-	if !strings.Contains(alertMsg, "rejected") && !strings.Contains(alertMsg, "cex order") {
+	if !strings.Contains(alertMsg, "拒绝") {
 		t.Errorf("critical alert msg = %q, want 'rejected' or 'cex order'", alertMsg)
 	}
 }

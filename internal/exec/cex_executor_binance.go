@@ -101,7 +101,7 @@ func (e *CEXExecutor) placeBinance(ctx context.Context, o Order) (Fill, error) {
 			// D-569 包B S5：-4061/-4062（positionSide 与账户模式不符）→ dualSide 缓存失效重探。
 			if code == -4061 || code == -4062 {
 				e.resetDualSide()
-				e.alertCritical(o, fmt.Sprintf("binance %s %s side=%s code=%d: dualSide 缓存已失效将重探", o.Symbol, endpoint, side, code))
+				e.alertCritical(o, fmt.Sprintf("binance %s 持仓方向设置错误（%s 方向 %s 错误码 %d）→ 已自动失效双侧缓存并重探", o.Symbol, endpoint, side, code))
 			}
 			// D-569 包B S6：过滤器漂移族 → perp+spot 两表失效，本单按现状返回错误。
 			switch code {
@@ -109,7 +109,7 @@ func (e *CEXExecutor) placeBinance(ctx context.Context, o Order) (Fill, error) {
 				binanceFiltersInvalidate(o.Symbol)
 			}
 		}
-		e.alertCritical(o, fmt.Sprintf("binance perp close rejected pos=%d symbol=%s side=%s: %v", o.PosID, o.Symbol, side, err))
+		e.alertCritical(o, fmt.Sprintf("binance 合约平仓单被交易所拒绝（持仓#%d %s %s）：%v", o.PosID, o.Symbol, side, err))
 		return Fill{}, fmt.Errorf("cex order: %w", err)
 	}
 
