@@ -298,7 +298,7 @@ func TestD570_A5_GetBackoff(t *testing.T) {
 	}
 }
 
-// A6：dual close body 含 reduce_only:true+size:0+auto_size（三设齐）；
+// A6：dual close body 含 reduce_only:true+size:0+auto_size+close:false（D-576 四约束齐）；
 // single 分支不变（reduce_only:true 平仓/false 开仓）。
 func TestD570_A6_DualReduceOnly(t *testing.T) {
 	h := map[string]func(http.ResponseWriter, *http.Request){
@@ -315,9 +315,13 @@ func TestD570_A6_DualReduceOnly(t *testing.T) {
 		t.Fatalf("dual close: %v", err)
 	}
 	body := f.lastBody.Load().(string)
-	for _, key := range []string{`"size":0`, `"reduce_only":true`, `"auto_size":"close_long"`} {
+	for _, key := range []string{`"size":0`, `"reduce_only":true`, `"close":false`, `"auto_size":"close_long"`} {
 		if !strings.Contains(body, key) {
 			t.Fatalf("dual close body 缺 %s: %s", key, body)
 		}
+	}
+	// S3 负向断言：close:true 永不得再现（auto_size 契约违约=生产 400）。
+	if strings.Contains(body, `"close":true`) {
+		t.Fatalf("dual close body 禁带 close:true: %s", body)
 	}
 }

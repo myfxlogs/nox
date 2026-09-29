@@ -49,8 +49,10 @@ func (e *CEXExecutor) placeGateRaw(ctx context.Context, o Order) ([]byte, Fill, 
 	// D-564 S1：杠杆纯读化——开仓前 SET 段退役（push 端点带切保证金模式副作用永久禁用）；
 	// precheck 经 get_leverage 实读 venue 实况，读不到 fail-closed 拒开。
 	// D-121：平仓（PositionSide!=""）——D-564 S3 U4 dual 模式分叉：dual/dual_plus 官方
-	// 机制=auto_size=close_long|close_short（size=0 全平；reduce_only 在 dual 语义未定义
-	// 文档明示单仓专用）；single 维持 reduce_only=true。模式每次实读 accounts（禁缓存——
+	// 机制=auto_size=close_long|close_short；D-576 服务端错误原文校正契约：auto_size 出场
+	// 必配四约束 size=0+reduce_only=true+close=false（旧注释「reduce_only 在 dual 语义未定义」
+	// 被生产 400 拒单证伪——它是必备件，close:true 才是单仓残留违约字段）；single 维持
+	// reduce_only=true。模式每次实读 accounts（禁缓存——
 	// app 可切模式）。closeDual 分支 size 恒 0 → 豁免 spec qty 闸（min/max/整数张 floor
 	// 不拦全平），spec 仅取 quanto 供 fill 量纲换算（R2）。
 	var spec gateContractSpec
@@ -96,7 +98,9 @@ func (e *CEXExecutor) placeGateRaw(ctx context.Context, o Order) ([]byte, Fill, 
 			return nil, Fill{}, fmt.Errorf("gate dual close: PositionSide %q 非法（long/short）fail-closed", o.PositionSide)
 		}
 		// D-570 包B S5：text 单号真实化（t-<clientOrderID> 截28B；空=t-arb 兜底）。
-		bodyStr = fmt.Sprintf(`{"contract":%q,"size":0,"price":"0","tif":"ioc","text":%q,"close":true,"auto_size":%q,"reduce_only":true}`,
+		// D-576：close=false 显式写出（服务端契约锚：auto_size 须 size=0&reduce_only=true&
+		// close=false——2026-09-29 生产 400 INVALID_ARGUMENT 实证，省略亦为 false 但显式可读）。
+		bodyStr = fmt.Sprintf(`{"contract":%q,"size":0,"price":"0","tif":"ioc","text":%q,"close":false,"auto_size":%q,"reduce_only":true}`,
 			o.Symbol, gateOrderText(o), closeSide)
 	} else {
 		// D-564 S4：size 序列化按 enable_decimal 分支——false=整数张 %d（现形）；

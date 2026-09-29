@@ -139,8 +139,9 @@ func TestD564_T4_PositionsDualRouting(t *testing.T) {
 	}
 }
 
-// TestD564_T5_CloseOrderDual T5：dual 平仓 body=auto_size+size:0+close:true+无
-// reduce_only；single 平仓仍 reduce_only:true。
+// TestD564_T5_CloseOrderDual T5：dual 平仓 body=auto_size+size:0+reduce_only:true+
+// close:false（D-576 服务端四约束：auto_size 须 size=0&reduce_only=true&close=false——
+// 生产 400 实证 close:true 违约）；single 平仓仍 reduce_only:true。
 func TestD564_T5_CloseOrderDual(t *testing.T) {
 	rt := &d564GateRT{accounts: `{"position_mode":"dual"}`, lever: `{"Lever":"10"}`}
 	e := NewCEXExecutor("gate", "perp", "k", "s", "", "http://x", false)
@@ -154,13 +155,16 @@ func TestD564_T5_CloseOrderDual(t *testing.T) {
 		t.Fatalf("应恰一平仓单, got %d", len(rt.orderBodies))
 	}
 	b := rt.orderBodies[0]
-	for _, want := range []string{`"size":0`, `"close":true`, `"auto_size":"close_short"`} {
+	for _, want := range []string{`"size":0`, `"close":false`, `"auto_size":"close_short"`} {
 		if !strings.Contains(b, want) {
 			t.Fatalf("dual 平仓体缺 %s: %s", want, b)
 		}
 	}
-	// D-570 包A S3：dual 平仓补 reduce_only=true（官方三设 size=0+auto_size+reduce_only——
-	// 旧断言「不得带」随契约修订翻形）。
+	// D-570 包A S3 + D-576：dual 平仓四约束 size=0+auto_size+reduce_only=true+close=false
+	// （服务端错误原文为权威锚）；S3 负向断言——close:true 永不得再现。
+	if strings.Contains(b, `"close":true`) {
+		t.Fatalf("dual 平仓禁带 close:true（auto_size 契约违约，生产 400 实证）: %s", b)
+	}
 	if !strings.Contains(b, `"reduce_only":true`) {
 		t.Fatalf("dual 平仓须带 reduce_only=true: %s", b)
 	}
