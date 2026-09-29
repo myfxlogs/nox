@@ -19,7 +19,7 @@ import (
 type GatePrivateHooks struct {
 	OnLiquidate     func(payload []byte) // futures.liquidates（自有强平单事件）
 	OnPositionClose func(payload []byte) // futures.position_closes（平仓事件 pnl+side+text）
-	OnADL           func(payload []byte) // futures.auto_deleverages+positions_adl 同槽（皆 ADL 域事件）
+	OnADL           func(payload []byte) // futures.auto_deleverages+position_adl_rank 同槽（皆 ADL 域事件）
 	OnRiskLimit     func(payload []byte) // futures.reduce_risk_limits（风控限额降档预警）
 }
 
@@ -69,7 +69,7 @@ func (g *GatePrivateWS) handleFrame(ctx context.Context, data []byte) error {
 		if g.hooks.OnPositionClose != nil {
 			g.hooks.OnPositionClose(msg.Result)
 		}
-	case "futures.auto_deleverages", "futures.positions_adl":
+	case "futures.auto_deleverages", "futures.position_adl_rank":
 		if g.hooks.OnADL != nil {
 			g.hooks.OnADL(msg.Result)
 		}

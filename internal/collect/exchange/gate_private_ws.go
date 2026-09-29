@@ -1,5 +1,6 @@
 // gate_private_ws.go —— D-450 S2：Gate futures 私有 WS 经 cex-proxy。
-// 订阅 futures.balances/positions/orders/usertrades（payload 按频道分派：balances=[uid]、其余=[uid,"!all"]，
+// 订阅 futures.balances/positions/orders/usertrades+风险频道族（payload 按频道分派：
+// balances=[uid]、position_adl_rank=["!all"] 无 uid、其余=[uid,"!all"]，
 // uid 由 REST GET /futures/usdt/accounts 取回 "user" 字段）。签名：
 // sign=hex(HMAC-SHA512(secret,"channel=<ch>&event=subscribe&time=<unix秒>"))。
 // 存活判定=ping 20s+pong 顺延读超时 60s+error 事件 fail-loud（订单/持仓频道无心跳，
@@ -37,7 +38,7 @@ var gatePrivateChannels = []string{
 	"futures.liquidates",
 	"futures.position_closes",
 	"futures.auto_deleverages",
-	"futures.positions_adl",
+	"futures.position_adl_rank",
 	"futures.reduce_risk_limits",
 }
 
@@ -189,11 +190,15 @@ func (g *GatePrivateWS) runOnce(ctx context.Context) error {
 // subscribeFrame 组装带签名的订阅帧（签名串不含 payload）。
 // payload 形制按频道分派（生产实证矩阵 8 发全表：balances 双参报 "need 1 user id"，
 // positions/orders/usertrades 单参报 "need market param"）：
-// balances→[uid]，其余→[uid,"!all"]。
+// balances→[uid]；position_adl_rank→["!all"] 无 uid 前缀（快照 :7007 真形，D-570C-R2）；
+// 其余→[uid,"!all"]。
 func (g *GatePrivateWS) subscribeFrame(channel, uid string) map[string]any {
 	payload := []string{uid, "!all"}
-	if channel == "futures.balances" {
+	switch channel {
+	case "futures.balances":
 		payload = []string{uid}
+	case "futures.position_adl_rank":
+		payload = []string{"!all"}
 	}
 	ts := g.now().Unix()
 	sign := gateWSSign(g.apiSecret, channel, ts)

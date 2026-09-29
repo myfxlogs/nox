@@ -45,7 +45,7 @@ func TestD570C_A13_PrivateChannelsAndHooks(t *testing.T) {
 	}
 	want := map[string]bool{
 		"futures.liquidates": false, "futures.position_closes": false,
-		"futures.auto_deleverages": false, "futures.positions_adl": false,
+		"futures.auto_deleverages": false, "futures.position_adl_rank": false,
 		"futures.reduce_risk_limits": false,
 	}
 	g := &GatePrivateWS{apiKey: "K", apiSecret: "S", now: func() time.Time { return time.Unix(1700000000, 0) }}
@@ -59,12 +59,20 @@ func TestD570C_A13_PrivateChannelsAndHooks(t *testing.T) {
 			t.Fatalf("%s 签名缺/不符（签名串须含 channel 名）", ch)
 		}
 		pl, _ := f["payload"].([]string)
-		if ch == "futures.balances" {
+		switch ch {
+		case "futures.balances":
 			if len(pl) != 1 || pl[0] != "42" {
 				t.Fatalf("balances payload 应 [uid]: %v", pl)
 			}
-		} else if len(pl) != 2 || pl[0] != "42" || pl[1] != "!all" {
-			t.Fatalf("%s payload 应 [uid,!all]: %v", ch, pl)
+		case "futures.position_adl_rank":
+			// D-570C-R2：真形=["!all"] 无 uid 前缀（快照 :7007；带 uid→红钉死回归）。
+			if len(pl) != 1 || pl[0] != "!all" {
+				t.Fatalf("position_adl_rank payload 应 [!all] 无uid: %v", pl)
+			}
+		default:
+			if len(pl) != 2 || pl[0] != "42" || pl[1] != "!all" {
+				t.Fatalf("%s payload 应 [uid,!all]: %v", ch, pl)
+			}
 		}
 		if _, ok := want[ch]; ok {
 			want[ch] = true
@@ -100,7 +108,7 @@ func TestD570C_A13_PrivateChannelsAndHooks(t *testing.T) {
 	cases := map[string]*string{
 		"futures.position_closes":    new(string),
 		"futures.auto_deleverages":   new(string),
-		"futures.positions_adl":      new(string),
+		"futures.position_adl_rank":  new(string),
 		"futures.reduce_risk_limits": new(string),
 	}
 	g2 := &GatePrivateWS{now: func() time.Time { return time.Now() }}
@@ -119,7 +127,7 @@ func TestD570C_A13_PrivateChannelsAndHooks(t *testing.T) {
 		if err := g2.handleFrame(context.Background(), []byte(frame)); err != nil {
 			t.Fatalf("%s handleFrame: %v", ch, err)
 		}
-		if ch == "futures.auto_deleverages" || ch == "futures.positions_adl" {
+		if ch == "futures.auto_deleverages" || ch == "futures.position_adl_rank" {
 			if !strings.Contains(last, `"tag":"`+ch+`"`) {
 				t.Fatalf("%s 应走 OnADL 同槽: %q", ch, last)
 			}
