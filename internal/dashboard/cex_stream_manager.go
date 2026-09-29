@@ -10,6 +10,7 @@ import (
 	"context"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"arb/internal/bus"
@@ -42,6 +43,9 @@ type CexStreamManager struct {
 	// OKXHooks D-469b S1：OKX 四频道事件回调（funding_fee→okx income/account→acctMon/
 	// orders→bpMon，nil 安全）。
 	OKXHooks exchange.OKXPrivateHooks
+	// GateHooks D-570 包C S7：gate 风险频道族整帧转发回调（liquidates/position_closes/
+	// ADL/reduce_risk_limits，nil 安全）。
+	GateHooks exchange.GatePrivateHooks
 	// KickTopic D-469b S2：config 变更 kick（exchange RPC mutation → publish，sync 即到即跑；
 	// nil=纯 ticker）。chan 扇出用 bus.Topic——多 manager/热载器共享同一事件源。
 	KickTopic *bus.Topic[struct{}]
@@ -57,6 +61,17 @@ type CexStreamManager struct {
 
 	mu      sync.Mutex
 	streams map[int64]context.CancelFunc // config row id → cancel
+	// gateWS D-570 包C S6③：gate 私有流实例 ref（venue 单行语义存单 ref；
+	// contract_info 失效回调跨 goroutine 读——atomic.Pointer 防竞态）。
+	gateWS atomic.Pointer[exchange.GatePrivateWS]
+}
+
+// GateInvalidateQuanto D-570 包C S6③：contract_info 推送→gate 私有流 quanto 缓存失效
+// （exec.GateSpecInvalidate 的 collect 侧镜像；nil 安全）。
+func (m *CexStreamManager) GateInvalidateQuanto(contract string) {
+	if ws := m.gateWS.Load(); ws != nil {
+		ws.InvalidateQuanto(contract)
+	}
 }
 
 // NewCexStreamManager 创建管理器。缓存由 main 构造并与 Cached*Querier 共享。
@@ -152,6 +167,8 @@ func (m *CexStreamManager) sync(ctx context.Context) {
 		case "gate":
 			ws := exchange.NewGatePrivateWS(c.APIKey, c.APISecret, c.BaseURL, vk, c.Simulated, snapSink, m.sinks, m.orderCache, m.posCache)
 			ws.SetBalanceLedger(m.BalLedger)
+			ws.SetGateHooks(m.GateHooks) // D-570 包C S7：风险频道族整帧转发钩
+			m.gateWS.Store(ws)           // D-570 包C S6③：contract_info 失效回调寻址
 			safego.Go("cex-stream:gate", func() { ws.Run(sctx) })
 		case "binance":
 			ws := exchange.NewBinanceUserWS(c.APIKey, c.APISecret, c.BaseURL, c.VenueType, vk, c.Simulated, snapSink, m.sinks, m.orderCache, m.posCache, m.BinanceHooks)
