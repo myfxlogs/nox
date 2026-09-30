@@ -104,16 +104,23 @@ func (e *Engine) notionalPerLotForRate(venue, symbol string) (float64, bool) {
 			if mid <= 0 {
 				continue
 			}
+			// D-594：mid 是 canonical 价 → 须配 canonical 单位数/手（CS×qty_scale）；
+			// LegUnitQtyResolver 优先，未接线回退原生 CS resolver（非敏感品种等价）。
 			cs := 1.0
-			if e.cfg.LegContractSizeResolver != nil {
-				if resolved, ok := e.cfg.LegContractSizeResolver(venueKey, q.VenueSymbol); ok && resolved > 0 {
-					cs = resolved
+			resolver := e.cfg.LegUnitQtyResolver
+			if resolver == nil {
+				resolver = e.cfg.LegContractSizeResolver
+			}
+			if resolver == nil && e.service != nil {
+				if r := e.service.LegUnitQty(); r != nil {
+					resolver = r
+				} else {
+					resolver = e.service.LegContractSize()
 				}
-			} else if e.service != nil {
-				if resolver := e.service.LegContractSize(); resolver != nil {
-					if resolved, ok := resolver(venueKey, q.VenueSymbol); ok && resolved > 0 {
-						cs = resolved
-					}
+			}
+			if resolver != nil {
+				if resolved, ok := resolver(venueKey, q.VenueSymbol); ok && resolved > 0 {
+					cs = resolved
 				}
 			}
 			// D-183/D-190：币种换算——CS × mid 是计价币口径，需转 USD。

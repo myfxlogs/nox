@@ -33,5 +33,7 @@ type engineService interface {
 	AutoClosePosition(ctx context.Context, posID int64) error
 	// 解析器/存储透传
 	LegContractSize() func(venueKey, venueSymbol string) (float64, bool)
+	// LegUnitQty D-594：canonical 单位数/手 resolver（CS×qty_scale；配 canonical 报价）。
+	LegUnitQty() func(venueKey, venueSymbol string) (float64, bool)
 	Store() *pgstore.Store
 }
