@@ -69,23 +69,44 @@ func (b *BinanceUserWS) onAudit(ctx context.Context, channel string, payload jso
 	}
 }
 
-// onOrderUpdate ORDER_TRADE_UPDATE → 订单事件缓存。
-// o 字段：i=orderID、c=clOrdID、X=状态、z=累计成交量、ap=均价、n=手续费。
-func (b *BinanceUserWS) onOrderUpdate(o json.RawMessage) {
-	var ord struct {
-		I  json.Number `json:"i"`
-		C  string      `json:"c"`
-		X  string      `json:"X"`
-		Z  string      `json:"z"`
-		AP string      `json:"ap"`
-		L  string      `json:"L"`
-		N  string      `json:"n"`
+// jstr map 精确键 string 提取（D-584：map 键大小写敏感——"n"金额/"N"币种物理分离；
+// 缺失/类型不符返 ""，消费面沿空值路径处理）。
+func jstr(m map[string]json.RawMessage, k string) string {
+	raw, ok := m[k]
+	if !ok {
+		return ""
 	}
-	if err := json.Unmarshal(o, &ord); err != nil {
+	var s string
+	if json.Unmarshal(raw, &s) != nil {
+		return ""
+	}
+	return s
+}
+
+// jnum map 精确键 json.Number 提取（缺失返零值 Number，Int64()/String() 沿空值路径）。
+func jnum(m map[string]json.RawMessage, k string) (n json.Number) {
+	raw, ok := m[k]
+	if !ok {
+		return
+	}
+	if json.Unmarshal(raw, &n) != nil {
+		return ""
+	}
+	return n
+}
+
+// onOrderUpdate ORDER_TRADE_UPDATE → 订单事件缓存。
+// D-584：订单体改 map 精确键提取——struct tag 大小写不敏感使 "n"(金额) 撞 "N"(币种)
+// 后写覆盖 → ParseFloat 崩整帧丢（生产实证 drop field N）；同帧 i/I、x/X、ap/AP(激活价)
+// 同族。官方 schema 键名即语义：i=订单号 c=客户端单号 X=状态 z=累计成交量 ap=均价
+// L=末次成交价 n=佣金金额；N=佣金币种（非数字）不消费不解析。
+func (b *BinanceUserWS) onOrderUpdate(o json.RawMessage) {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(o, &m); err != nil {
 		return
 	}
 	state := "live"
-	switch ord.X {
+	switch jstr(m, "X") {
 	case "FILLED":
 		state = "filled"
 	case "PARTIALLY_FILLED":
@@ -93,30 +114,30 @@ func (b *BinanceUserWS) onOrderUpdate(o json.RawMessage) {
 	case "CANCELED", "REJECTED", "EXPIRED":
 		state = "canceled"
 	}
-	qty, perr := f64z(ord.Z)
+	qty, perr := f64z(jstr(m, "z"))
 	if perr != nil {
-		log.Printf("[binance-ws] drop field Z: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+		log.Printf("[binance-ws] drop field z: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
 		return
 	}
-	px, perr := f64z(ord.AP)
+	px, perr := f64z(jstr(m, "ap"))
 	if perr != nil {
-		log.Printf("[binance-ws] drop field AP: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+		log.Printf("[binance-ws] drop field ap: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
 		return
 	}
 	if px == 0 {
-		if pv, perr := f64z(ord.L); perr != nil {
+		pv, perr := f64z(jstr(m, "L"))
+		if perr != nil {
 			log.Printf("[binance-ws] drop field L: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
 			return
-		} else {
-			px = pv // ap 缺省回落最后成交价
 		}
+		px = pv // ap 缺省回落最后成交价
 	}
-	fee, perr := f64z(ord.N)
+	fee, perr := f64z(jstr(m, "n"))
 	if perr != nil {
-		log.Printf("[binance-ws] drop field N: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+		log.Printf("[binance-ws] drop field n: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
 		return
 	}
-	b.orderCache.PutOrder(b.venueKey, ord.I.String(), ord.C, OrderEvent{
+	b.orderCache.PutOrder(b.venueKey, jnum(m, "i").String(), jstr(m, "c"), OrderEvent{
 		State: state, AccFillQty: qty, AvgPx: px, FeeUSD: fee, At: b.now(),
 	})
 	WarnUnconsumed("binance", "ORDER_TRADE_UPDATE", o, binanceOrderUpdateConsumed)
@@ -185,6 +206,11 @@ func (b *BinanceUserWS) onAccountUpdate(ctx context.Context, a json.RawMessage) 
 			log.Printf("[binance-ws] drop field PA: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
 			return
 		}
+		if pa == 0 {
+			// D-584 S4（b51a8c61 增收）：venue 平仓后推零量行——pa=0=该 symbol 无仓，
+			// 全量替换语义下不建仓即正确（照建=dashboard 幻影仓）；iwSum 不累加该条。
+			continue
+		}
 		ep, perr := f64z(p.EP)
 		if perr != nil {
 			log.Printf("[binance-ws] drop field EP: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
@@ -220,21 +246,21 @@ func (b *BinanceUserWS) onAccountUpdate(ctx context.Context, a json.RawMessage) 
 // balPut/onSpotAccountPosition D-542 活账本写口与 spot 余额帧处理见 binance_user_ws_balance.go。
 
 // onSpotExecutionReport spot executionReport → 订单事件缓存。
-// 字段：i=orderID、c=clOrdID、X=状态、z=累计成交量、L=最后成交价、n=手续费。
+// D-584：同 perp 改 map 精确键提取——spot 帧大小写键对更密（官方 schema）：
+// i(OrderId)/I(ExecutionId)、c(ClientOrderId)/C(原客户端单号)、x(执行类型)/X(状态)、
+// z(累计成交量)/Z(累计报价额)、l(末次量)/L(末价)、n(金额)/N(币种)——tag 全数中招。
+// 字段集按原 struct 平移不增删：i=订单号 c=客户端单号 X=状态 z=累计量 L=末价 n=金额。
 func (b *BinanceUserWS) onSpotExecutionReport(data []byte) {
-	var ord struct {
-		I int64  `json:"i"`
-		C string `json:"c"`
-		X string `json:"X"`
-		Z string `json:"z"`
-		L string `json:"L"`
-		N string `json:"n"`
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(data, &m); err != nil {
+		return
 	}
-	if err := json.Unmarshal(data, &ord); err != nil || ord.I == 0 {
+	ordID, oerr := jnum(m, "i").Int64()
+	if oerr != nil || ordID == 0 {
 		return
 	}
 	state := "live"
-	switch ord.X {
+	switch jstr(m, "X") {
 	case "FILLED":
 		state = "filled"
 	case "PARTIALLY_FILLED":
@@ -242,22 +268,22 @@ func (b *BinanceUserWS) onSpotExecutionReport(data []byte) {
 	case "CANCELED", "REJECTED", "EXPIRED":
 		state = "canceled"
 	}
-	qty, perr := f64z(ord.Z)
+	qty, perr := f64z(jstr(m, "z"))
 	if perr != nil {
-		log.Printf("[binance-ws] drop field Z: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+		log.Printf("[binance-ws] drop field z: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
 		return
 	}
-	px, perr := f64z(ord.L)
+	px, perr := f64z(jstr(m, "L"))
 	if perr != nil {
 		log.Printf("[binance-ws] drop field L: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
 		return
 	}
-	fee, perr := f64z(ord.N)
+	fee, perr := f64z(jstr(m, "n"))
 	if perr != nil {
-		log.Printf("[binance-ws] drop field N: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
+		log.Printf("[binance-ws] drop field n: %v", perr) // D-508 S2b：脏字段=整帧不采 fail-closed
 		return
 	}
-	b.orderCache.PutOrder(b.venueKey, strconv.FormatInt(ord.I, 10), ord.C, OrderEvent{
+	b.orderCache.PutOrder(b.venueKey, strconv.FormatInt(ordID, 10), jstr(m, "c"), OrderEvent{
 		State: state, AccFillQty: qty, AvgPx: px, FeeUSD: fee, At: b.now(),
 	})
 	WarnUnconsumed("binance", "executionReport", data, binanceExecReportConsumed)
