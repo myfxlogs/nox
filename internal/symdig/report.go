@@ -21,7 +21,7 @@ func writeReport(dir string, runTS time.Time, sum *Summary) (string, error) {
 	path := filepath.Join(dir, "symdig-"+runTS.Format("2006-01-02")+".md")
 	var b strings.Builder
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		fmt.Fprintf(&b, "# 配对池深挖 %s\n\n> 数字=Go 确定性分类；klass 值域 paired/unpaired/disabled/unmapped_unknown/mispaired。\n\n",
+		fmt.Fprintf(&b, "# 配对池深挖 %s\n\n> 数字=Go 确定性分类；klass 值域 paired/unpaired/disabled/unmapped_unknown/mispaired/unit_unknown（D-594）。\n\n",
 			runTS.Format("2006-01-02"))
 	}
 	fmt.Fprintf(&b, "## 轮次 %s\n\n", runTS.Format("15:04:05 UTC"))

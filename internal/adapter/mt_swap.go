@@ -150,6 +150,15 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 				point, cs = si.GetPoints(), si.GetContractSize()
 			}
 			price := venuePrice(snap, canon, a.venue, "mt5")
+			// D-594：price 是 canonical 口径（USD/lb）——swap 归一公式配原生 point/CS，
+			// 须按本行 price_scale 换回原生价；敏感 canonical 未标定行无法换算 → 跳过
+			// （canonical emit 已被 emitPlan 抑制，此处连 native swap 也宁缺勿错）。
+			if sc, ok := a.scaleOf(brokerSym); ok && sc.PriceScale > 0 {
+				price /= sc.PriceScale
+			} else if a.unitSensitiveSet()[canon] {
+				slot.skips = append(slot.skips, brokerSym+": unit uncalibrated (D-594)")
+				return
+			}
 			if swapNeedsPrice(mode) && price <= 0 {
 				slot.missingPrice = 1
 				slot.missingSym = brokerSym

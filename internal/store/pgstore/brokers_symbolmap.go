@@ -16,13 +16,18 @@ import (
 // nil = 未知（MT4 / 历史映射），校验跳过。
 // Source 映射来源（D-140 S1）：manual=人工录入 / rule=规则库自动补录 / meta=MT5 元数据采集。
 // IsPrimary D-383 A2.1：一 canonical 一主品种标记（false+组内恰一行=隐式 primary，语义同真）。
+// PriceScale/QtyScale D-594 报价单位归一层：原生价×price_scale=canonical 价（USD/lb 口径），
+// contract_size 原生单位×qty_scale=canonical 单位数/手。nil=未标定：单位敏感 canonical
+// 未标定行抑制 canonical 发射 + 名义额 fail-closed；非敏感品种 nil 按 1.0 计。
 type SymbolMapping struct {
 	Venue        string
 	BrokerSymbol string
 	Canonical    string
 	ContractSize *float64
-	Source       string // D-140 S1：manual/rule/meta，空=manual（DEFAULT 兜底）
-	IsPrimary    bool   // D-383 A2.1
+	Source       string   // D-140 S1：manual/rule/meta，空=manual（DEFAULT 兜底）
+	IsPrimary    bool     // D-383 A2.1
+	PriceScale   *float64 // D-594：native price × scale = canonical price
+	QtyScale     *float64 // D-594：contract_size × qty_scale = canonical units/lot
 }
 
 // UpsertSymbolMapping 写入映射（venue+broker_symbol 冲突时更新 canonical + contract_size + source）。
@@ -54,7 +59,8 @@ func (s *Store) DeleteVenueSymbolMappings(ctx context.Context, venue string) err
 // ListSymbolMappings 映射列表；venue 空 = 全部。
 func (s *Store) ListSymbolMappings(ctx context.Context, venue string) ([]SymbolMapping, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT venue, broker_symbol, canonical, contract_size, source, is_primary FROM broker_symbol_map
+		SELECT venue, broker_symbol, canonical, contract_size, source, is_primary, price_scale, qty_scale
+		FROM broker_symbol_map
 		WHERE ($1 = '' OR venue = $1)
 		ORDER BY venue, broker_symbol
 	`, venue)
@@ -65,7 +71,7 @@ func (s *Store) ListSymbolMappings(ctx context.Context, venue string) ([]SymbolM
 	var out []SymbolMapping
 	for rows.Next() {
 		var m SymbolMapping
-		if err := rows.Scan(&m.Venue, &m.BrokerSymbol, &m.Canonical, &m.ContractSize, &m.Source, &m.IsPrimary); err != nil {
+		if err := rows.Scan(&m.Venue, &m.BrokerSymbol, &m.Canonical, &m.ContractSize, &m.Source, &m.IsPrimary, &m.PriceScale, &m.QtyScale); err != nil {
 			return nil, err
 		}
 		out = append(out, m)

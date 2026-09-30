@@ -154,6 +154,7 @@ var migrationFiles = []struct {
 	{157, migrations.ExposureCapsSeedSQL},              // D-543：fin_venue_exposure_caps 种子五行（幂等）
 	{159, migrations.ExposureCapTruthFixSQL},           // D-547：组合帽对齐 2×notional+okx:unified→okx:perp 重键名
 	{160, migrations.PaperDualCexColumnsSQL},           // D-555 S1：paper/carry_graduations venue_type_a/b+venue_key_a/b 生成列
+	{161, migrations.QuoteUnitScalesSQL},               // D-594：报价单位归一层（price_scale/qty_scale+铜定标+XCU 别名）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
