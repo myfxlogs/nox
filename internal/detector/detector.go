@@ -38,10 +38,12 @@ type Candidate struct {
 }
 
 // FactProvider 提供 Fact 数据给检测器（§5.2/§5.3）。
+// 四个读法返回值均为**只读共享快照**（P1#8b 零拷贝）——实现可跨调用复用同一 map，
+// 消费方禁修改。
 type FactProvider interface {
 	FundingFacts() map[string]map[string]float64 // canonical → venue → 年化
 	SwapFacts() map[string]map[string][2]float64 // canonical → venue → [long, short]
-	TradeModes() map[string]map[string]int64     // canonical → venueKey → mode（TTL 过滤后；D-060 F4）
+	TradeModes() map[string]map[string]int64     // canonical → venueKey → mode
 	IsRealMap() map[string]*bool                 // D-371 S3：venue:type → *bool（nil=未知）
 }
 

@@ -2,53 +2,48 @@ package engine
 
 import (
 	"sync"
-	"time"
+	"sync/atomic"
 
 	"arb/internal/fact"
 )
 
 // FactCache 实现 detector.FactProvider，从内存缓存提供 funding/swap/trade_mode Fact。
+// P1#8b：读侧零拷贝——写入路径持锁改可变态后重建只读快照 Store 到 atomic.Pointer，
+// 读方法直接 Load() 返回共享只读 map（**返回值只读，调用方禁修改**；后续写入不影响
+// 已取走的旧快照）。帧率级 ScanAll 每帧调四读法，原深拷贝占 CPU 33%（pprof 实证）。
 type FactCache struct {
-	mu      sync.RWMutex
+	mu      sync.Mutex                       // 仅写侧
 	funding map[string]map[string]float64    // canonical → venue → 年化
 	swap    map[string]map[string][2]float64 // canonical → venue → [long, short]
 	// tradeMode 键口径与 swap 不同（D-060 F4）：canonical → venueKey（"{venue}:{src}"，
 	// Fact.Venue+":"+Fact.Src 拼，MT 侧 src=mt5/mt4）——消费方是 VenueKey() 语法
 	// （检测器腿/执行腿），swap 消费方是 Quote.Venue 名键，两者各按各自消费方，不得互相对齐。
-	tradeMode    map[string]map[string]tradeModeEntry
-	tradeModeTTL time.Duration
-	isReal       map[string]*bool // D-178：venue:type → *bool（nil=未知）
-}
+	// P1#8b：TTL 读侧过滤退役——trade_mode 权威判定在 exec 即时探针（P1#2），发现层
+	// 只做负向剔除，过滞条目无害（不再为 TTL 每帧遍历过滤）。
+	tradeMode map[string]map[string]int64
+	isReal    map[string]*bool // D-178：venue:type → *bool（nil=未知）
 
-// tradeModeEntry trade_mode 值 + 到达时间（TTL 新鲜度判据）。
-type tradeModeEntry struct {
-	mode int64
-	ts   time.Time
+	snapFunding atomic.Pointer[map[string]map[string]float64]
+	snapSwap    atomic.Pointer[map[string]map[string][2]float64]
+	snapTrade   atomic.Pointer[map[string]map[string]int64]
+	snapReal    atomic.Pointer[map[string]*bool]
 }
 
 func NewFactCache() *FactCache {
-	return &FactCache{
-		funding:      make(map[string]map[string]float64),
-		swap:         make(map[string]map[string][2]float64),
-		tradeMode:    make(map[string]map[string]tradeModeEntry),
-		tradeModeTTL: 24 * time.Hour, // 缺省兜底；main 注入 config.TradeModeTTL（D-060）
-		isReal:       make(map[string]*bool),
+	fc := &FactCache{
+		funding:   make(map[string]map[string]float64),
+		swap:      make(map[string]map[string][2]float64),
+		tradeMode: make(map[string]map[string]int64),
+		isReal:    make(map[string]*bool),
 	}
-}
-
-// SetTradeModeTTL 注入 trade_mode 新鲜度（config.ARB_TRADEMODE_TTL）。boot 期一次性调用。
-func (fc *FactCache) SetTradeModeTTL(d time.Duration) {
-	if d <= 0 {
-		return
-	}
-	fc.mu.Lock()
-	fc.tradeModeTTL = d
-	fc.mu.Unlock()
+	fc.rebuildAll()
+	return fc
 }
 
 func (fc *FactCache) UpdateFacts(facts []fact.Fact) {
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
+	var dirtyF, dirtyS, dirtyT bool
 	for _, f := range facts {
 		switch f.Kind {
 		case fact.KindFunding:
@@ -56,6 +51,7 @@ func (fc *FactCache) UpdateFacts(facts []fact.Fact) {
 				fc.funding[f.Symbol] = make(map[string]float64)
 			}
 			fc.funding[f.Symbol][f.Venue] = f.Value
+			dirtyF = true
 		case fact.KindSwapLong, fact.KindSwapShort:
 			if fc.swap[f.Symbol] == nil {
 				fc.swap[f.Symbol] = make(map[string][2]float64)
@@ -67,76 +63,85 @@ func (fc *FactCache) UpdateFacts(facts []fact.Fact) {
 				entry[1] = f.Value
 			}
 			fc.swap[f.Symbol][f.Venue] = entry
+			dirtyS = true
 		case fact.KindTradeMode:
 			if fc.tradeMode[f.Symbol] == nil {
-				fc.tradeMode[f.Symbol] = make(map[string]tradeModeEntry)
+				fc.tradeMode[f.Symbol] = make(map[string]int64)
 			}
-			fc.tradeMode[f.Symbol][f.Venue+":"+f.Src] = tradeModeEntry{mode: int64(f.Value), ts: f.Ts}
+			fc.tradeMode[f.Symbol][f.Venue+":"+f.Src] = int64(f.Value)
+			dirtyT = true
 		}
+	}
+	// 写时重建只读快照（写频率=WS 批/h 级，远低于帧率读）。
+	if dirtyF {
+		fc.snapFunding.Store(ptrOf(clone2(fc.funding)))
+	}
+	if dirtyS {
+		fc.snapSwap.Store(ptrOf(clone2(fc.swap)))
+	}
+	if dirtyT {
+		fc.snapTrade.Store(ptrOf(clone2(fc.tradeMode)))
 	}
 }
 
+// ptrOf 取局部变量指针（快照 Store 入参）。
+func ptrOf[V any](v V) *V { return &v }
+
+// clone2 二级 map 深拷贝（写侧专用，产物=只读快照）。
+func clone2[V any](src map[string]map[string]V) map[string]map[string]V {
+	cp := make(map[string]map[string]V, len(src))
+	for k, v := range src {
+		inner := make(map[string]V, len(v))
+		for kk, vv := range v {
+			inner[kk] = vv
+		}
+		cp[k] = inner
+	}
+	return cp
+}
+
+// clone1 一级 map 拷贝（is_real 快照用）。
+func clone1[V any](src map[string]V) map[string]V {
+	cp := make(map[string]V, len(src))
+	for k, v := range src {
+		cp[k] = v
+	}
+	return cp
+}
+
+// rebuildAll boot 初始化：四快照指向空只读 map（读侧永不遇 nil pointer）。
+func (fc *FactCache) rebuildAll() {
+	fc.snapFunding.Store(ptrOf(clone2(fc.funding)))
+	fc.snapSwap.Store(ptrOf(clone2(fc.swap)))
+	fc.snapTrade.Store(ptrOf(clone2(fc.tradeMode)))
+	fc.snapReal.Store(ptrOf(clone1(fc.isReal)))
+}
+
+// FundingFacts 只读快照：canonical → venue → 年化（禁修改返回值）。
 func (fc *FactCache) FundingFacts() map[string]map[string]float64 {
-	fc.mu.RLock()
-	defer fc.mu.RUnlock()
-	cp := make(map[string]map[string]float64, len(fc.funding))
-	for k, v := range fc.funding {
-		cp[k] = make(map[string]float64, len(v))
-		for kk, vv := range v {
-			cp[k][kk] = vv
-		}
-	}
-	return cp
+	return *fc.snapFunding.Load()
 }
 
+// SwapFacts 只读快照：canonical → venue → [long, short]（禁修改返回值）。
 func (fc *FactCache) SwapFacts() map[string]map[string][2]float64 {
-	fc.mu.RLock()
-	defer fc.mu.RUnlock()
-	cp := make(map[string]map[string][2]float64, len(fc.swap))
-	for k, v := range fc.swap {
-		cp[k] = make(map[string][2]float64, len(v))
-		for kk, vv := range v {
-			cp[k][kk] = vv
-		}
-	}
-	return cp
+	return *fc.snapSwap.Load()
 }
 
-// TradeModes 返回 TTL 内新鲜的 trade_mode（canonical → venueKey → mode，D-060 F4）。
-// 过期条目不出现 = 未知 → 消费方放行（检测器过滤/执行预检同口径）。
+// TradeModes 只读快照：canonical → venueKey → mode（禁修改返回值）。
+// D-060 F4 原 TTL 读侧过滤已在 P1#8b 退役（见结构体注释）。
 func (fc *FactCache) TradeModes() map[string]map[string]int64 {
-	fc.mu.RLock()
-	defer fc.mu.RUnlock()
-	now := time.Now()
-	cp := make(map[string]map[string]int64, len(fc.tradeMode))
-	for canon, vm := range fc.tradeMode {
-		for vk, e := range vm {
-			if now.Sub(e.ts) > fc.tradeModeTTL {
-				continue
-			}
-			if cp[canon] == nil {
-				cp[canon] = make(map[string]int64, len(vm))
-			}
-			cp[canon][vk] = e.mode
-		}
-	}
-	return cp
+	return *fc.snapTrade.Load()
 }
 
 // UpdateIsRealMap D-178：覆盖写 is_real 映射（boot 加载 + fact sink 周期刷新，幂等无害）。
 func (fc *FactCache) UpdateIsRealMap(m map[string]*bool) {
 	fc.mu.Lock()
 	fc.isReal = m
+	fc.snapReal.Store(ptrOf(clone1(m)))
 	fc.mu.Unlock()
 }
 
-// IsRealMap D-178：返回 is_real 映射深拷贝（venue → *bool，nil=未知）。
+// IsRealMap D-178：只读快照 venue:type → *bool（nil=未知；禁修改返回值）。
 func (fc *FactCache) IsRealMap() map[string]*bool {
-	fc.mu.RLock()
-	defer fc.mu.RUnlock()
-	cp := make(map[string]*bool, len(fc.isReal))
-	for k, v := range fc.isReal {
-		cp[k] = v
-	}
-	return cp
+	return *fc.snapReal.Load()
 }
