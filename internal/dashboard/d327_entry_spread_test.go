@@ -11,6 +11,7 @@ import (
 
 	"arb/internal/bus"
 	"arb/internal/exec"
+	"arb/internal/fact"
 	"arb/internal/store/pgstore"
 )
 
@@ -26,6 +27,12 @@ func (e *d327FakeExecutor) PlaceOrder(_ context.Context, o exec.Order) (exec.Fil
 }
 func (e *d327FakeExecutor) CloseOrder(_ context.Context, _ exec.OrderRef) (exec.Fill, error) {
 	return exec.Fill{OrderID: "d327-close-" + e.venue, Price: e.price, Qty: 1, Ts: time.Now()}, nil
+}
+
+// TradeModeNow D-004 P1#2：MT venueKey 开仓腿 trade_mode 探测 fail-closed——
+// fake 不实现即拒开；恒返 FullAccess 放行开仓路径。
+func (e *d327FakeExecutor) TradeModeNow(context.Context, string) (int64, error) {
+	return fact.TradeModeFull, nil
 }
 
 // d327CSResolver pipeline 级 XASSET 组合门的 CS 查询（D-311 S3 fail-closed 需接线）。
@@ -59,6 +66,12 @@ func TestD327_ExecuteInternal_EntrySpreadBackfilled(t *testing.T) {
 		ExpiresAt: time.Now().Add(time.Hour), QuoteTime: time.Now(),
 	}); err != nil {
 		t.Fatalf("seed opp: %v", err)
+	}
+	// D-006 S3：canonical 聚簇 cap——无行默认 $6000（DefaultCanonicalCapUSD），
+	// 本测试名义额 $50000 超限 → 显式放行行。
+	if _, err := st.Pool().Exec(ctx,
+		`INSERT INTO fin_canonical_exposure_caps (canonical, cap_usd, enabled) VALUES ('CLUSDT', 1000000, true) ON CONFLICT (canonical) DO NOTHING`); err != nil {
+		t.Fatalf("seed canonical cap: %v", err)
 	}
 	// D-328 regime 闸放行样本：卖腿 gate:perp 收正 funding（13 条 ≥+5）
 	base := time.Now().Add(-65 * time.Minute)
@@ -97,16 +110,16 @@ func TestD327_ExecuteInternal_EntrySpreadBackfilled(t *testing.T) {
 	})
 	svc.SetCarryRegime(exec.CarryRegimeConfig{Window: 24 * time.Hour, FloorPct: 2.0, MinSamples: 12})
 
-	// D-495：Execute 预检环腿可平性闸——双腿播亮 ticks（gate CL_USDT→CLUSDT 归一键 /
-	// 3001157 USOILm 原生名）。
+	// D-495：Execute 预检环腿可平性闸——双腿播亮 ticks（写侧键域=canonical：
+	// gate CL_USDT→CLUSDT 归一键 / 3001157 经 broker_symbol_map 反查 CLUSDT，D-536）。
 	if err := st.EnsureMonthPartition(ctx, now.Year(), int(now.Month())); err != nil {
 		t.Fatalf("partition: %v", err)
 	}
 	if err := st.InsertTicks(ctx, []pgstore.TickRow{
 		{Ts: now.Add(-2 * time.Minute), Venue: "gate", Symbol: "CLUSDT", Bid: 60.00, Ask: 60.02, VenueType: "perp"},
 		{Ts: now, Venue: "gate", Symbol: "CLUSDT", Bid: 60.05, Ask: 60.07, VenueType: "perp"},
-		{Ts: now.Add(-2 * time.Minute), Venue: "3001157", Symbol: "USOILm", Bid: 60.00, Ask: 60.02, VenueType: "mt5"},
-		{Ts: now, Venue: "3001157", Symbol: "USOILm", Bid: 60.04, Ask: 60.06, VenueType: "mt5"},
+		{Ts: now.Add(-2 * time.Minute), Venue: "3001157", Symbol: "CLUSDT", Bid: 60.00, Ask: 60.02, VenueType: "mt5"},
+		{Ts: now, Venue: "3001157", Symbol: "CLUSDT", Bid: 60.04, Ask: 60.06, VenueType: "mt5"},
 	}); err != nil {
 		t.Fatalf("seed ticks: %v", err)
 	}
