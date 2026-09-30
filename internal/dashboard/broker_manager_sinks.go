@@ -32,6 +32,13 @@ func (m *BrokerManager) SetOrderProfitKick(f func()) {
 	m.sinkMu.Unlock()
 }
 
+// SetReconKick D-004 P1#6：MT5 会话重连成功 → 对账 kick（venue 断流期事件漏发补救）。
+func (m *BrokerManager) SetReconKick(f func()) {
+	m.sinkMu.Lock()
+	m.reconKick = f
+	m.sinkMu.Unlock()
+}
+
 // *Fn getter（D-581 命名机械护栏——旧 `brokerMgr.X` 写法编译期报错）：
 // RLock 取目标引用返回，调用在锁外（sink 可重入 Kick，锁内调会死锁）。
 func (m *BrokerManager) StreamStateSinkFn() func(string, bool) {
@@ -69,5 +76,13 @@ func (m *BrokerManager) dispatchStreamState(vk string, on bool) {
 	m.sinkMu.RUnlock()
 	if f != nil {
 		f(vk, on)
+	}
+}
+func (m *BrokerManager) dispatchReconKick() {
+	m.sinkMu.RLock()
+	f := m.reconKick
+	m.sinkMu.RUnlock()
+	if f != nil {
+		f()
 	}
 }

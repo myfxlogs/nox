@@ -44,6 +44,8 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 	ad.StreamStateSink = m.dispatchStreamState
 	// D-104 P2 U2：AlertSink 须在 Connect 前注入（quoteReconnectBackoff 封顶档读此字段）。
 	ad.AlertSink = m.AlertSink
+	// D-004 P1#6：dispatch 晚绑定（同 D-581 三 sink）——SetReconKick 晚接自生效。
+	ad.OnReconnect = m.dispatchReconKick
 	if err := ad.Connect(ctx); err != nil {
 		return fmt.Errorf("mt5 connect: %w", err)
 	}

@@ -52,6 +52,9 @@ type CexStreamManager struct {
 	KickTopic *bus.Topic[struct{}]
 	// BalLedger D-542：可用资金活账本（透传各私有流——事件喂入+重连标脏；nil 安全）。
 	BalLedger *bus.BalanceLedger
+	// ReconKick D-004 P1#6：私有流（重）连就绪 → 对账 kick（断流期事件漏发补救）。
+	// 装配于 Run 启动前（sync 起 ws 晚于字段赋值，happens-before 经 goroutine 启动传递）。
+	ReconKick func()
 
 	store      ExchangeStore
 	sinks      CexStreamSinks
@@ -166,12 +169,14 @@ func (m *CexStreamManager) sync(ctx context.Context) {
 		case "gate":
 			ws := exchange.NewGatePrivateWS(c.APIKey, c.APISecret, c.BaseURL, vk, c.Simulated, snapSink, m.sinks, m.orderCache, m.posCache)
 			ws.SetBalanceLedger(m.BalLedger)
-			ws.SetGateHooks(m.GateHooks) // D-570 包C S7：风险频道族整帧转发钩
-			m.gateWS.Store(ws)           // D-570 包C S6③：contract_info 失效回调寻址
+			ws.SetOnReconnect(m.ReconKick) // D-004 P1#6：重连就绪→对账 kick
+			ws.SetGateHooks(m.GateHooks)   // D-570 包C S7：风险频道族整帧转发钩
+			m.gateWS.Store(ws)             // D-570 包C S6③：contract_info 失效回调寻址
 			safego.Go("cex-stream:gate", func() { ws.Run(sctx) })
 		case "binance":
 			ws := exchange.NewBinanceUserWS(c.APIKey, c.APISecret, c.BaseURL, c.VenueType, vk, c.Simulated, snapSink, m.sinks, m.orderCache, m.posCache, m.BinanceHooks)
 			ws.SetBalanceLedger(m.BalLedger)
+			ws.SetOnReconnect(m.ReconKick) // D-004 P1#6：重连就绪→对账 kick
 			safego.Go("cex-stream:binance", func() { ws.Run(sctx) })
 		case "okx":
 			// D-469b S1：OKX 私有流纳入 manager 生命周期（boot 一次性装配已移除）。
@@ -184,6 +189,7 @@ func (m *CexStreamManager) sync(ctx context.Context) {
 				return ctVal, err
 			})
 			ws.SetBalanceLedger(m.BalLedger)
+			ws.SetOnReconnect(m.ReconKick) // D-004 P1#6：重连就绪→对账 kick
 			safego.Go("cex-stream:okx", func() { ws.Run(sctx) })
 		}
 		m.streams[id] = cancel

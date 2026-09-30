@@ -129,6 +129,7 @@ type BrokerManager struct {
 	positionsSink   func(string, []venue.Order) // D-571 包A：OnOrderProfit 逐仓载荷（sink=bpMon.OnMT5Frame）
 	streamStateSink func(string, bool)          // D-571 包A：venue 流状态透出（sink=bpMon/acctMon/posMon 链）
 	orderProfitKick func()                      // D-107 P2：margin 事件→acctMon.Kick
+	reconKick       func()                      // D-004 P1#6：MT5 会话重连成功→recon.Kick
 
 	// D-104 P2 U1：网关节点启动级 failover（main 从 config 注入，attach 时透传 adapter.SetGateway）。
 	MT5Gateway          string
