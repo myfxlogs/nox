@@ -76,10 +76,12 @@ type Engine struct {
 	// D-256-A S2：风险族解析器（CARRY/SWAPARB 合并淘汰），main 装配后调 SetSettleDeps 注入。
 	familyResolver settlement.FamilyResolver
 
-	// D-107 P4：事件触发扫描——kickCh buffered(1) 非阻塞 send（合并语义同 P2 监控）；
-	// lastScan 节流基准（仅 positionLoop goroutine 读写，无锁——quoteReconIdx 单协程先例）。
-	kickCh   chan struct{}
-	lastScan time.Time
+	// D-107 P4→D-004 P1#4：kickCh=订单事件触发权威全扫（合流不丢事件，见
+	// positionLoop kickCoalesce）；quoteCh=positionLoop quote 快路帧（buffered 256
+	// 满则丢帧——下一帧还会来，报价热路径不阻塞）；carryKick=carry facts 写后 kick。
+	kickCh    chan struct{}
+	quoteCh   chan bus.Quote
+	carryKick chan struct{}
 
 	// D-469c S1/S3：评估节拍事件化——mrKick=meanRevert 入场扫描 kick（独立 chan：
 	// 与 positionLoop 退出扫描语义不混）；factsKick=swapArb facts 写后 kick。
@@ -92,6 +94,11 @@ type Engine struct {
 	csMissSent   map[string]time.Time // key → 最近一次告警时间（1h 去重）
 	csMissMu     sync.Mutex
 	AlertSink    func(level, msg string) // nil = 未注入（no-op）
+
+	// 测试缝（D-004 P1#4 分层可观测）：scanHook=权威全扫入口，evalHook=单仓权威评估
+	// 入口（posID）。nil=未注入；生产装配不接。
+	scanHook func()
+	evalHook func(posID int64)
 
 	// D-144 ②：保证金告警 per-key 去重（canonical:vl:vs:type → 最近一次告警时间，1h 窗口）。
 	// 同 mt-health lastCritAlert 模式；内存，重启重置（实时告警语义，不持久化）。
@@ -145,8 +152,8 @@ func (e *Engine) Run(ctx context.Context) {
 		return
 	}
 	e.ValidateStartup()
-	log.Printf("[autotrade] enabled: maxNotional=$%.0f maxPos=%d maxDailyLoss=$%.0f minNetBps=%.1f scanThrottle=%s fallback=%s",
-		e.cfg.MaxNotional, e.cfg.MaxPositions, e.cfg.MaxDailyLoss, e.cfg.MinNetBps, e.cfg.ScanThrottle, positionFallbackInterval)
+	log.Printf("[autotrade] enabled: maxNotional=$%.0f maxPos=%d maxDailyLoss=$%.0f minNetBps=%.1f kickCoalesce=%s watchdog=%s",
+		e.cfg.MaxNotional, e.cfg.MaxPositions, e.cfg.MaxDailyLoss, e.cfg.MinNetBps, kickCoalesce, e.fallbackInterval())
 
 	// 1. 机会订阅循环（detector 产生的 CROSS_VENUE 机会）
 	safego.Go("engine:oppLoop", func() { e.oppLoop(ctx) })
@@ -158,7 +165,7 @@ func (e *Engine) Run(ctx context.Context) {
 	safego.Go("engine:swapArbLoop", func() { e.swapArbLoop(ctx) })
 
 	// D-469c S1/S2：quote 事件分发——单订阅扇出两 kick chan（非阻塞 send 防洪峰；
-	// mr 过滤=MeanRevertThresh canonical 集，position kick 全订走 scanIfDue 节流合流）。
+	// mr 过滤=MeanRevertThresh canonical 集，position 侧全订走 quoteCh 快路）。
 	if e.quotes != nil {
 		safego.Go("engine:quoteKickDispatch", func() { e.quoteKickDispatch(ctx) })
 	}
@@ -200,6 +207,15 @@ func (e *Engine) KickMeanRevert() {
 func (e *Engine) KickSwapArb() {
 	select {
 	case e.factsKick <- struct{}{}:
+	default:
+	}
+}
+
+// KickCarryEval D-004 P1#4：carry 退出判据输入（mt_swap/三所 funding facts）写后
+// → positionLoop 权威全扫（息差型净收入变了）。buffered(1) 非阻塞合并。
+func (e *Engine) KickCarryEval() {
+	select {
+	case e.carryKick <- struct{}{}:
 	default:
 	}
 }

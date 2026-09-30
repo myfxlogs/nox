@@ -2,6 +2,7 @@ package autotrade
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -10,8 +11,8 @@ import (
 )
 
 // newKickTestEngine 构造带 DB store 的 Engine（空表，scanAndClose/stateMachineTick 快速返回）。
-// D-107 P4 单测共用：Kick 合并 / scanIfDue 节流 / fallback 触发。
-func newKickTestEngine(t *testing.T, scanThrottle time.Duration) *Engine {
+// D-107 P4→D-004 P1#4 单测共用：Kick 合并 / kick 合流 / watchdog 看门狗。
+func newKickTestEngine(t *testing.T) *Engine {
 	t.Helper()
 	s := testAccumStore(t)
 	// 清空表防串扰。
@@ -23,13 +24,12 @@ func newKickTestEngine(t *testing.T, scanThrottle time.Duration) *Engine {
 		t.Fatalf("set autotrade state: %v", err)
 	}
 	return &Engine{
-		cfg: Config{
-			Enabled:      true,
-			ScanThrottle: scanThrottle,
-		},
+		cfg:             Config{Enabled: true},
 		store:           s,
 		service:         &dashboard.Service{},
 		kickCh:          make(chan struct{}, 1),
+		quoteCh:         make(chan bus.Quote, 256),
+		carryKick:       make(chan struct{}, 1),
 		fundingNeedSent: make(map[string]string),
 	}
 }
@@ -37,7 +37,7 @@ func newKickTestEngine(t *testing.T, scanThrottle time.Duration) *Engine {
 // TestEngine_KickMerge D-107 P4：连续多 kick 只缓冲 1 个（chan 容量 1 合并语义）。
 // Kick 3 次 → kickCh 只含 1 个待处理 → 接收后为空。
 func TestEngine_KickMerge(t *testing.T) {
-	e := newKickTestEngine(t, 50*time.Millisecond)
+	e := newKickTestEngine(t)
 	e.Kick()
 	e.Kick()
 	e.Kick() // 3 次 kick，chan 容量 1 → 只缓冲 1 个
@@ -57,37 +57,55 @@ func TestEngine_KickMerge(t *testing.T) {
 	}
 }
 
-// TestEngine_ScanIfDue_ThrottleWindow D-107 P4：节流窗口内 kick 不扫、超窗扫。
-// ScanThrottle=50ms：窗口内 scanIfDue 跳过（lastScan 刚设）、超窗后 scanIfDue 执行。
-// 验证：scanIfDue 执行后 lastScan 更新（time.Since(lastScan) 重置）。
-func TestEngine_ScanIfDue_ThrottleWindow(t *testing.T) {
-	ctx := context.Background()
-	e := newKickTestEngine(t, 50*time.Millisecond)
+// TestEngine_KickCoalesce D-004 P1#4：订单 kick 窗口内不丢事件——两次 Kick 间隔
+// <kickCoalesce(1s) → 第二次由合流定时器补跑。scanHook 计数观测（scanAndClose 入口）。
+func TestEngine_KickCoalesce(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	e := newKickTestEngine(t)
+	var scans int32
+	e.scanHook = func() { atomic.AddInt32(&scans, 1) }
 
-	// 模拟 positionLoop 启动即扫（设 lastScan 基准）。
-	e.scanAndClose(ctx)
-	e.stateMachineTick(ctx)
-	e.lastScan = time.Now()
+	done := make(chan struct{})
+	go func() { e.positionLoop(ctx); close(done) }()
+	time.Sleep(50 * time.Millisecond) // boot 扫描完成
+	base := atomic.LoadInt32(&scans)  // =1
 
-	// 1. 窗口内 scanIfDue → 节流跳过（lastScan 不更新）。
-	lastScanBefore := e.lastScan
-	e.scanIfDue(ctx)
-	if e.lastScan != lastScanBefore {
-		t.Fatalf("within throttle window: lastScan should not update, got changed")
+	// kick1：距 boot 扫描 <1s → 置 pendingKick；kick2：合并进 pending（不丢）。
+	e.Kick()
+	time.Sleep(100 * time.Millisecond)
+	e.Kick()
+
+	// 1s 合流到点 → 补跑一次全扫。
+	deadline := time.Now().Add(1500 * time.Millisecond)
+	for time.Now().Before(deadline) && atomic.LoadInt32(&scans) < base+1 {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if atomic.LoadInt32(&scans) < base+1 {
+		t.Fatalf("kick 合流补跑未发生: scans=%d base=%d", atomic.LoadInt32(&scans), base)
 	}
 
-	// 2. 超窗后 scanIfDue → 执行扫描 + 更新 lastScan。
-	time.Sleep(60 * time.Millisecond) // 超过 50ms 窗口
-	e.scanIfDue(ctx)
-	if !e.lastScan.After(lastScanBefore) {
-		t.Fatalf("after throttle window: lastScan should update, got %v <= %v", e.lastScan, lastScanBefore)
+	// 超窗 kick → 立即全扫（不丢也不拖）。
+	time.Sleep(1100 * time.Millisecond)
+	e.Kick()
+	deadline = time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) && atomic.LoadInt32(&scans) < base+2 {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if atomic.LoadInt32(&scans) < base+2 {
+		t.Fatalf("超窗 kick 应立即全扫: scans=%d", atomic.LoadInt32(&scans))
+	}
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("positionLoop did not exit after ctx cancel")
 	}
 }
 
-// TestEngine_FallbackTrigger D-107 P4：positionFallbackInterval 覆写 10ms → fallback ticker 触发直扫。
-// 启动 positionLoop → fallback 10ms 后触发 scanAndClose+stateMachineTick。
-// 验证：positionLoop 不阻塞、fallback ticker 正常触发（间接验证：positionLoop 存活 + ctx 取消后退出）。
-// lastScan 无锁仅 positionLoop goroutine 读写——测试不跨 goroutine 读 lastScan（race-free）。
+// TestEngine_WatchdogTickerAlive D-004 P1#4：watchdog ticker（原 fallback）转为只告警
+// 不评估——空仓下 tick 不触发 scan；positionLoop 仍随 ctx 取消退出（select 正常运转）。
 func TestEngine_FallbackTrigger(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -96,7 +114,7 @@ func TestEngine_FallbackTrigger(t *testing.T) {
 	positionFallbackInterval = 10 * time.Millisecond
 	defer func() { positionFallbackInterval = origFallback }()
 
-	e := newKickTestEngine(t, 30*time.Second) // ScanThrottle 大值防 kick 干扰
+	e := newKickTestEngine(t)
 
 	// positionLoop 启动即扫 + fallback 10ms ticker。
 	done := make(chan struct{})
@@ -121,7 +139,7 @@ func TestEngine_FallbackTrigger(t *testing.T) {
 // TestEngine_OrderTopicToKickWiring D-107 P4：orderTopic Publish → 订阅 goroutine → atEngine.Kick 接线验证。
 // 模拟 setup.go 的订阅 goroutine：orderTopic.Subscribe → for range → atEngine.Kick()。
 func TestEngine_OrderTopicToKickWiring(t *testing.T) {
-	e := newKickTestEngine(t, 50*time.Millisecond)
+	e := newKickTestEngine(t)
 	orderTopic := bus.NewTopic[bus.OrderEvent]()
 
 	// 模拟 setup.go 装配：orderTopic 订阅 → atEngine.Kick。

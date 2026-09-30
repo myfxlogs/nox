@@ -13,67 +13,83 @@ import (
 )
 
 // scanAndClose 扫描 OPEN 持仓，按 type 分派退出条件（D-072 §4.2）。
+// D-004 P1#4：循环体抽为 evaluatePosition——positionLoop quote 快路命中时
+// 单仓升权威评估复用同一实现（禁第二份判定）。
 func (e *Engine) scanAndClose(ctx context.Context) {
+	if e.scanHook != nil {
+		e.scanHook()
+	}
 	positions, err := e.store.ListPositions(ctx, "OPEN", 50, 0)
 	if err != nil {
 		log.Printf("[autotrade] list open positions: %v", err)
 		return
 	}
-	for _, p := range positions {
-		// D-182 S1：零结算检测——10min 兜底周期对活跃仓检测恒零 → settled=0。
-		// 在 checkExitCondition 前执行：先写 settled=0，再判退出（settled=0 不触发误杀平仓）。
-		if e.zeroDetector != nil {
-			e.zeroDetector.RecordZeroForPosition(ctx, p.ID)
-		}
-		// D-181 S2：probe 仓到期评估——在 checkExitCondition 前执行（probe 拒绝优先于止损）。
-		probeRes := e.evaluateProbe(ctx, &p)
-		if probeRes.upgraded {
-			_ = e.store.SetPositionNote(ctx, p.ID, "") // 升级常规仓，清 PROBE note
-			continue                                   // 升级后本轮跳过止损检查（下一轮走常规路径）
-		}
-		// D-495 S3：双腿异时市可平性闸——任一 OPEN/FILLED 腿无可交易行情（休市/断流）
-		// → 本轮整体 suspend：不走 probe/exit 平仓（两路径共用此闸）、不 ClaimClose 翻
-		// CLOSING、不动 fundingBreach 去抖计数（pos502 周六单腿事故根因=时机盲）。
-		if ok, why := e.allLegsActionable(ctx, p.ID); !ok {
-			e.markLegSuspend(ctx, p.ID, why)
-			continue
-		} else {
-			e.clearLegSuspend(p.ID)
-		}
-		if probeRes.shouldClose {
-			log.Printf("[autotrade] auto-close pos=%d type=%s: %s", p.ID, p.Type, probeRes.reason)
-			logCloseTrigger(ctx, e.store, &p, "probe: "+probeRes.reason) // D-245 触发源持久化
-			if err := e.service.AutoClosePosition(ctx, p.ID); err != nil {
-				log.Printf("[autotrade] auto-close pos=%d failed: %v", p.ID, err)
-				continue
-			}
-			if e.settleDeps != nil {
-				if err := settlement.Settle(ctx, e.settleDeps, p.ID, e.eliminator, e.familyResolver); err != nil {
-					log.Printf("[autotrade] settle pos=%d: %v", p.ID, err)
-					_ = e.service.Store().SetPositionNote(ctx, p.ID, "settle_failed: "+err.Error())
-				}
-			}
-			continue
-		}
-		shouldClose, reason := e.checkExitCondition(ctx, &p)
-		if !shouldClose {
-			continue
-		}
-		log.Printf("[autotrade] auto-close pos=%d type=%s: %s", p.ID, p.Type, reason)
-		logCloseTrigger(ctx, e.store, &p, "exit: "+reason) // D-245 触发源持久化
+	for i := range positions {
+		e.evaluatePosition(ctx, &positions[i])
+	}
+}
+
+// evaluatePosition 单仓权威退出评估（D-004 P1#4 抽出，逻辑一字不改）：
+// zeroDetector 测量 → probe 到期评估 → 全腿可平性闸 → probe/exit 平仓 → settle。
+// 返回该仓本轮是否触发平仓（closed=已发 AutoClosePosition 成功）。
+func (e *Engine) evaluatePosition(ctx context.Context, p *pgstore.Position) bool {
+	if e.evalHook != nil {
+		e.evalHook(p.ID)
+	}
+	// D-182 S1：零结算检测——全量路径对活跃仓检测恒零 → settled=0。
+	// 在 checkExitCondition 前执行：先写 settled=0，再判退出（settled=0 不触发误杀平仓）。
+	if e.zeroDetector != nil {
+		e.zeroDetector.RecordZeroForPosition(ctx, p.ID)
+	}
+	// D-181 S2：probe 仓到期评估——在 checkExitCondition 前执行（probe 拒绝优先于止损）。
+	probeRes := e.evaluateProbe(ctx, p)
+	if probeRes.upgraded {
+		_ = e.store.SetPositionNote(ctx, p.ID, "") // 升级常规仓，清 PROBE note
+		return false                               // 升级后本轮跳过止损检查（下一轮走常规路径）
+	}
+	// D-495 S3：双腿异时市可平性闸——任一 OPEN/FILLED 腿无可交易行情（休市/断流）
+	// → 本轮整体 suspend：不走 probe/exit 平仓（两路径共用此闸）、不 ClaimClose 翻
+	// CLOSING、不动 fundingBreach 去抖计数（pos502 周六单腿事故根因=时机盲）。
+	if ok, why := e.allLegsActionable(ctx, p.ID); !ok {
+		e.markLegSuspend(ctx, p.ID, why)
+		return false
+	} else {
+		e.clearLegSuspend(p.ID)
+	}
+	if probeRes.shouldClose {
+		log.Printf("[autotrade] auto-close pos=%d type=%s: %s", p.ID, p.Type, probeRes.reason)
+		logCloseTrigger(ctx, e.store, p, "probe: "+probeRes.reason) // D-245 触发源持久化
 		if err := e.service.AutoClosePosition(ctx, p.ID); err != nil {
 			log.Printf("[autotrade] auto-close pos=%d failed: %v", p.ID, err)
-			continue
+			return false
 		}
-		// D-087 §3.2：settlement.Settle 替换 updateStrategyStat（旧对象 no-op 缺陷根除）
-		// D-159 W2a R3-9：settlement 失败 → 标记 settle_failed 到 position.note（可重试状态）。
 		if e.settleDeps != nil {
 			if err := settlement.Settle(ctx, e.settleDeps, p.ID, e.eliminator, e.familyResolver); err != nil {
 				log.Printf("[autotrade] settle pos=%d: %v", p.ID, err)
 				_ = e.service.Store().SetPositionNote(ctx, p.ID, "settle_failed: "+err.Error())
 			}
 		}
+		return true
 	}
+	shouldClose, reason := e.checkExitCondition(ctx, p)
+	if !shouldClose {
+		return false
+	}
+	log.Printf("[autotrade] auto-close pos=%d type=%s: %s", p.ID, p.Type, reason)
+	logCloseTrigger(ctx, e.store, p, "exit: "+reason) // D-245 触发源持久化
+	if err := e.service.AutoClosePosition(ctx, p.ID); err != nil {
+		log.Printf("[autotrade] auto-close pos=%d failed: %v", p.ID, err)
+		return false
+	}
+	// D-087 §3.2：settlement.Settle 替换 updateStrategyStat（旧对象 no-op 缺陷根除）
+	// D-159 W2a R3-9：settlement 失败 → 标记 settle_failed 到 position.note（可重试状态）。
+	if e.settleDeps != nil {
+		if err := settlement.Settle(ctx, e.settleDeps, p.ID, e.eliminator, e.familyResolver); err != nil {
+			log.Printf("[autotrade] settle pos=%d: %v", p.ID, err)
+			_ = e.service.Store().SetPositionNote(ctx, p.ID, "settle_failed: "+err.Error())
+		}
+	}
+	return true
 }
 
 // allLegsActionable D-495 S3：position 全部 OPEN+FILLED 腿过 LegActionable。

@@ -29,21 +29,24 @@ type probeEvalResult struct {
 //
 // 未到期 → 返回 shouldClose=false, upgraded=false（继续走 checkExitCondition）。
 // ProbeEnabled=false 或 note 非 PROBE → 跳过（返回 shouldClose=false, upgraded=false）。
-func (e *Engine) evaluateProbe(ctx context.Context, p *pgstore.Position) probeEvalResult {
-	if !e.cfg.ProbeEnabled {
-		return probeEvalResult{}
-	}
-	if !strings.HasPrefix(p.Note, "PROBE") {
-		return probeEvalResult{}
-	}
-	if p.OpenedAt == nil {
-		return probeEvalResult{}
+// probeDeadline probe 仓到期时刻（D-004 P1#4：单一算式——evaluateProbe 判定与
+// positionLoop 到点定时器共用）。不适用（未启用/非 PROBE/无 OpenedAt）→ ok=false。
+func (e *Engine) probeDeadline(p *pgstore.Position) (time.Time, bool) {
+	if !e.cfg.ProbeEnabled || !strings.HasPrefix(p.Note, "PROBE") || p.OpenedAt == nil {
+		return time.Time{}, false
 	}
 	evalDays := e.cfg.ProbeEvalDays
 	if evalDays <= 0 {
 		evalDays = 3 // 默认 3 calendar 天
 	}
-	deadline := p.OpenedAt.Add(time.Duration(evalDays) * 24 * time.Hour)
+	return p.OpenedAt.Add(time.Duration(evalDays) * 24 * time.Hour), true
+}
+
+func (e *Engine) evaluateProbe(ctx context.Context, p *pgstore.Position) probeEvalResult {
+	deadline, ok := e.probeDeadline(p)
+	if !ok {
+		return probeEvalResult{}
+	}
 	if time.Now().Before(deadline) {
 		return probeEvalResult{} // 未到期
 	}

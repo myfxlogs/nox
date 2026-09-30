@@ -2,6 +2,7 @@
 package autotrade
 
 import (
+	"context"
 	"fmt"
 
 	"arb/internal/store/pgstore"
@@ -17,17 +18,37 @@ import (
 // 基准列 NULL/报价缺失 → 不决策（fail-closed 惯例）。
 // BasisStopBps<=0 → 回退旧 swapArbBasisExitBps 绝对值门禁（向后兼容）。
 func (e *Engine) basisStopCheck(p *pgstore.Position) (bool, string) {
+	legs, err := e.store.ListPositionLegs(context.Background(), p.ID)
+	if err != nil {
+		return false, ""
+	}
+	return e.basisStopCheckLegs(p, legs)
+}
+
+// basisStopCheckLegs D-004 P1#4：legs 外给变体（quote 快路零 DB 复用缓存腿）。
+// legs 缺失/双腿不齐 → 不决策（fail-closed，同 currentBasisBps 原路径）。
+func (e *Engine) basisStopCheckLegs(p *pgstore.Position, legs []pgstore.PositionLeg) (bool, string) {
+	basisBps, bok := e.currentBasisBpsLegs(p, legs)
+	return e.basisStopDecision(p, basisBps, bok)
+}
+
+// basisStopCheckResolved D-004 P1#4：sellCanonical 已解析变体——quote 快路用
+// openEntry.sellCanonical 缓存，全程零 DB。
+func (e *Engine) basisStopCheckResolved(p *pgstore.Position, legs []pgstore.PositionLeg, sellCanonical string) (bool, string) {
+	basisBps, bok := e.currentBasisBpsLegsResolved(p, legs, sellCanonical)
+	return e.basisStopDecision(p, basisBps, bok)
+}
+
+// basisStopDecision 阈值分支单源（BasisStopBps>0 止损 / <=0 旧绝对值门禁回退）。
+func (e *Engine) basisStopDecision(p *pgstore.Position, basisBps float64, bok bool) (bool, string) {
 	if e.cfg.BasisStopBps > 0 {
-		basisBps, bok := e.currentBasisBps(p)
 		if shouldClose, reason := basisStopLossCheck(basisBps, bok, p.ExpectedEntrySpreadBps, e.cfg.BasisStopBps); shouldClose {
 			return true, reason
 		}
 	} else {
 		// D-108 A5 旧门禁（BasisStopBps<=0 时回退）：basisBps > swapArbBasisExitBps → 平仓。
-		if basisBps, bok := e.currentBasisBps(p); bok {
-			if basisBps > swapArbBasisExitBps {
-				return true, fmt.Sprintf("basis loss limit %.1f bps > %.1f", basisBps, swapArbBasisExitBps)
-			}
+		if bok && basisBps > swapArbBasisExitBps {
+			return true, fmt.Sprintf("basis loss limit %.1f bps > %.1f", basisBps, swapArbBasisExitBps)
 		}
 	}
 	return false, ""

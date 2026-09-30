@@ -20,18 +20,47 @@ func (e *Engine) currentBasisBps(p *pgstore.Position) (float64, bool) {
 	return bps, ok
 }
 
+// currentBasisBpsLegs D-004 P1#4：legs 外给变体（basisStopCheckLegs 用）。
+func (e *Engine) currentBasisBpsLegs(p *pgstore.Position, legs []pgstore.PositionLeg) (float64, bool) {
+	bps, _, ok := e.currentBasisBpsAgedLegs(p, legs)
+	return bps, ok
+}
+
+// currentBasisBpsLegsResolved D-004 P1#4：sellCanonical 已解析零 DB 变体（quote 快路）。
+func (e *Engine) currentBasisBpsLegsResolved(p *pgstore.Position, legs []pgstore.PositionLeg, sellCanonical string) (float64, bool) {
+	bps, _, ok := e.currentBasisBpsAgedResolved(p, legs, sellCanonical)
+	return bps, ok
+}
+
 // currentBasisBpsAged D-378b S1：带报价龄变体——minQuoteAge=双腿 now−Quote.Time 较大者
 // （灾难带新鲜度闸取数；原 currentBasisBps 改一行包装丢 age，既有调用点零签名变更零行为变更）。
 func (e *Engine) currentBasisBpsAged(p *pgstore.Position) (float64, time.Duration, bool) {
 	if e.quotes == nil {
 		return 0, 0, false
 	}
-	canonical := canonicalFromOppID(p.OpportunityID)
-	if canonical == "" {
-		return 0, 0, false
-	}
 	legs, err := e.store.ListPositionLegs(context.Background(), p.ID)
 	if err != nil {
+		return 0, 0, false
+	}
+	return e.currentBasisBpsAgedLegs(p, legs)
+}
+
+// currentBasisBpsAgedLegs D-004 P1#4：legs 外给变体——卖腿 canonical 经
+// xassetSellCanonical 解析（含 DB），调用方=权威路径；quote 快路走
+// currentBasisBpsAgedResolved + openEntry.sellCanonical 缓存（零 DB）。
+func (e *Engine) currentBasisBpsAgedLegs(p *pgstore.Position, legs []pgstore.PositionLeg) (float64, time.Duration, bool) {
+	sellCanonical := e.xassetSellCanonical(context.Background(), p, legs)
+	return e.currentBasisBpsAgedResolved(p, legs, sellCanonical)
+}
+
+// currentBasisBpsAgedResolved D-004 P1#4：sellCanonical 已解析的零 DB 变体
+// （positionLoop openEntry 缓存供给；"" = 解析不出→类型分支兜底/fail-closed 同原语义）。
+func (e *Engine) currentBasisBpsAgedResolved(p *pgstore.Position, legs []pgstore.PositionLeg, sellCanonical string) (float64, time.Duration, bool) {
+	if e.quotes == nil {
+		return 0, 0, false
+	}
+	canonical := canonicalFromOppID(p.OpportunityID)
+	if canonical == "" {
 		return 0, 0, false
 	}
 	var buyLeg, sellLeg *pgstore.PositionLeg
@@ -47,7 +76,6 @@ func (e *Engine) currentBasisBpsAged(p *pgstore.Position) (float64, time.Duratio
 	if buyLeg == nil || sellLeg == nil {
 		return 0, 0, false
 	}
-	sellCanonical := e.xassetSellCanonical(context.Background(), p, legs)
 	if sellCanonical == "" {
 		if p.Type == "XASSET_CARRY" {
 			return 0, 0, false // XASSET 跨 canonical：解析不出不拿买 canonical 错查
@@ -82,13 +110,22 @@ func (e *Engine) currentNetBps(p *pgstore.Position) (float64, bool) {
 	if e.quotes == nil {
 		return p.ExpectedNetBps, true
 	}
-	canonical := canonicalFromOppID(p.OpportunityID)
-	if canonical == "" {
-		return p.ExpectedNetBps, true
-	}
 	legs, err := e.store.ListPositionLegs(context.Background(), p.ID)
 	if err != nil {
 		return 0, false
+	}
+	return e.currentNetBpsLegs(p, legs)
+}
+
+// currentNetBpsLegs D-004 P1#4：legs 外给变体——positionLoop quote 快路复用缓存
+// 腿集零 DB；权威路径（本函数上游）仍逐仓现查。
+func (e *Engine) currentNetBpsLegs(p *pgstore.Position, legs []pgstore.PositionLeg) (float64, bool) {
+	if e.quotes == nil {
+		return p.ExpectedNetBps, true
+	}
+	canonical := canonicalFromOppID(p.OpportunityID)
+	if canonical == "" {
+		return p.ExpectedNetBps, true
 	}
 	var buyLeg, sellLeg *pgstore.PositionLeg
 	for i := range legs {

@@ -8,8 +8,8 @@ import (
 	"arb/internal/bus"
 )
 
-// newD469CEngine 构造事件化测试 Engine：qbus + MeanRevertThresh + 三 kick chan（免 DB——
-// 本票测试面全在 dispatch/chan 语义，loop 扫描路径由 D-107 P4 既有测试覆盖）。
+// newD469CEngine 构造事件化测试 Engine：qbus + MeanRevertThresh + kick chans（免 DB——
+// 本票测试面全在 dispatch/chan 语义；D-004 P1#4 起 quote 帧送 quoteCh 不再 kickCh）。
 func newD469CEngine() *Engine {
 	return &Engine{
 		cfg: Config{
@@ -18,6 +18,8 @@ func newD469CEngine() *Engine {
 		},
 		quotes:    bus.New(),
 		kickCh:    make(chan struct{}, 1),
+		quoteCh:   make(chan bus.Quote, 256),
+		carryKick: make(chan struct{}, 1),
 		mrKick:    make(chan struct{}, 1),
 		factsKick: make(chan struct{}, 1),
 	}
@@ -41,8 +43,18 @@ func assertEmpty(t *testing.T, ch chan struct{}, what string) {
 	}
 }
 
+// recvQuoteWithin quoteCh 版 recvWithin（D-004 P1#4：quote 帧走 quoteCh 通道）。
+func recvQuoteWithin(t *testing.T, ch chan bus.Quote, what string) {
+	t.Helper()
+	select {
+	case <-ch:
+	case <-time.After(time.Second):
+		t.Fatalf("%s: no quote within 1s", what)
+	}
+}
+
 // TestD469C_QuoteDispatchMRFilter S1：MeanRevertThresh 覆盖 canonical → mrKick；
-// 未覆盖 canonical → 不送 mrKick；两帧均送 e.kickCh（S2 position kick 全订）。
+// 未覆盖 canonical → 不送 mrKick；两帧均送 e.quoteCh（P1#4 position quote 快路全订）。
 func TestD469C_QuoteDispatchMRFilter(t *testing.T) {
 	e := newD469CEngine()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -52,12 +64,12 @@ func TestD469C_QuoteDispatchMRFilter(t *testing.T) {
 
 	// 覆盖 canonical → kickCh + mrKick 双送。
 	e.quotes.Publish(bus.Quote{Symbol: "XAU", Venue: "v1", VenueType: "mt5", Bid: 4000, Ask: 4000.1, Time: time.Now()})
-	recvWithin(t, e.kickCh, "kickCh tracked")
+	recvQuoteWithin(t, e.quoteCh, "quoteCh tracked")
 	recvWithin(t, e.mrKick, "mrKick tracked")
 
-	// 未覆盖 canonical → 只送 kickCh，mrKick 空。
+	// 未覆盖 canonical → 只送 quoteCh，mrKick 空。
 	e.quotes.Publish(bus.Quote{Symbol: "EURUSD", Venue: "v1", VenueType: "mt5", Bid: 1.08, Ask: 1.0801, Time: time.Now()})
-	recvWithin(t, e.kickCh, "kickCh untracked")
+	recvQuoteWithin(t, e.quoteCh, "quoteCh untracked")
 	assertEmpty(t, e.mrKick, "mrKick untracked")
 }
 
@@ -91,19 +103,20 @@ done:
 	if got != 1 {
 		t.Fatalf("mrKick merge: got %d pending, want 1", got)
 	}
-	// 同帧 kickCh 同样合并为 1。
+	// quoteCh 收帧：qbus 订阅 chan buffered(1) 非阻塞投递本就丢帧（publish 不被
+	// 消费方阻塞=热路径铁律），dispatch 侧不新增丢弃语义——有帧到达即可。
 	got = 0
 	for {
 		select {
-		case <-e.kickCh:
+		case <-e.quoteCh:
 			got++
 		default:
 			goto done2
 		}
 	}
 done2:
-	if got != 1 {
-		t.Fatalf("kickCh merge: got %d pending, want 1", got)
+	if got < 1 {
+		t.Fatal("quoteCh: no frame delivered")
 	}
 }
 

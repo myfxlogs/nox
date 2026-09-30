@@ -27,6 +27,8 @@ func New(cfg Config, store *pgstore.Store, service engineService, oppTopic *bus.
 		marginAlertSent:  make(map[string]time.Time), // D-144 ②：保证金告警去重
 		revivalAlertSent: make(map[string]time.Time), // D-256-A S5：复活扳机告警去重
 		kickCh:           make(chan struct{}, 1),     // D-107 P4：buffered(1) 非阻塞 send = 事件合并
+		quoteCh:          make(chan bus.Quote, 256),  // D-004 P1#4：positionLoop quote 快路帧（满丢帧不阻塞）
+		carryKick:        make(chan struct{}, 1),     // D-004 P1#4：carry facts 写后 → 权威全扫
 		mrKick:           make(chan struct{}, 1),     // D-469c S1
 		factsKick:        make(chan struct{}, 1),     // D-469c S3
 	}
