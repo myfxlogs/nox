@@ -1302,13 +1302,14 @@ func (x *UpsertXAssetAllowComboRequest) GetConfirm() bool {
 }
 
 type UpsertXAssetAllowComboResponse struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	Ok              bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
-	Error           string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
-	NeedsConfirm    bool                   `protobuf:"varint,3,opt,name=needs_confirm,json=needsConfirm,proto3" json:"needs_confirm,omitempty"`                   // 命中在持仓→前端二次确认（confirm=true 重发）
-	OpenPositionIds []int64                `protobuf:"varint,4,rep,packed,name=open_position_ids,json=openPositionIds,proto3" json:"open_position_ids,omitempty"` // 知情文案锚点
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Ok                 bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	Error              string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	NeedsConfirm       bool                   `protobuf:"varint,3,opt,name=needs_confirm,json=needsConfirm,proto3" json:"needs_confirm,omitempty"`                    // 命中在持仓→前端二次确认（confirm=true 重发）
+	OpenPositionIds    []int64                `protobuf:"varint,4,rep,packed,name=open_position_ids,json=openPositionIds,proto3" json:"open_position_ids,omitempty"`  // 知情文案锚点
+	OverSubscribedWarn string                 `protobuf:"bytes,5,opt,name=over_subscribed_warn,json=overSubscribedWarn,proto3" json:"over_subscribed_warn,omitempty"` // D-009 S4：Σalloc>cap 超订 warn（「超订，先到先得」不硬拒；空=未超/未查）
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *UpsertXAssetAllowComboResponse) Reset() {
@@ -1367,6 +1368,13 @@ func (x *UpsertXAssetAllowComboResponse) GetOpenPositionIds() []int64 {
 		return x.OpenPositionIds
 	}
 	return nil
+}
+
+func (x *UpsertXAssetAllowComboResponse) GetOverSubscribedWarn() string {
+	if x != nil {
+		return x.OverSubscribedWarn
+	}
+	return ""
 }
 
 // D-560 S3：熔断恢复（清 dedupKey 前缀命中的全部熔断条目）。
@@ -3150,12 +3158,13 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\aconfirm\x18\r \x01(\bR\aconfirmB\x0f\n" +
 	"\r_notional_usdB\f\n" +
 	"\n" +
-	"_simulated\"\x97\x01\n" +
+	"_simulated\"\xc9\x01\n" +
 	"\x1eUpsertXAssetAllowComboResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12#\n" +
 	"\rneeds_confirm\x18\x03 \x01(\bR\fneedsConfirm\x12*\n" +
-	"\x11open_position_ids\x18\x04 \x03(\x03R\x0fopenPositionIds\"5\n" +
+	"\x11open_position_ids\x18\x04 \x03(\x03R\x0fopenPositionIds\x120\n" +
+	"\x14over_subscribed_warn\x18\x05 \x01(\tR\x12overSubscribedWarn\"5\n" +
 	"\x18ResumeXAssetComboRequest\x12\x19\n" +
 	"\bcombo_id\x18\x01 \x01(\x03R\acomboId\"[\n" +
 	"\x19ResumeXAssetComboResponse\x12\x0e\n" +

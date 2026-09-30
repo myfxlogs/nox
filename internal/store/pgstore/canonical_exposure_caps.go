@@ -7,6 +7,7 @@ package pgstore
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -129,10 +130,13 @@ func (s *Store) CanonicalCapReject(ctx context.Context, canonical string, propos
 	return ""
 }
 
-// CreatePositionWithCapGuard D-006 S3 TOCTOU：advisory 锁内复查 canonical 聚簇 cap
-// 后原子建 position——两笔同窗口放行时第二笔串行到锁后复查被拦。
-// lockKey=venue_buy|canonical 复合（同 canonical 不同 venue 组合同锁，聚簇口径正确）。
-func (s *Store) CreatePositionWithCapGuard(ctx context.Context, p *Position, canonicals []string, proposedUSD float64) (int64, error) {
+// CreatePositionWithCapGuard D-006 S3 TOCTOU + D-009 S4：advisory 锁内复查 canonical
+// 聚簇 cap + venue 系统实占 cap，复查后原子建 position——两笔同窗口放行时第二笔
+// 串行到锁后复查被拦。lockKey=canonical / venue:typedKey 复合锁面。
+// venues=本仓腿 typed venue_key 集（fin_venue_exposure_caps 键域同形）；
+// venueSum=venue 系统实占 USD 重查回调（锁后执行见同窗已提交兄弟仓；nil=venue 闸未接线跳过——
+// 调用方须接线，main 装 dashboard.Service.VenueSystemExposureUSD）。
+func (s *Store) CreatePositionWithCapGuard(ctx context.Context, p *Position, canonicals []string, venues []string, proposedUSD float64, venueSum func(ctx context.Context, venueBare string) (float64, error)) (int64, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("create position guarded (begin): %w", err)
@@ -179,6 +183,51 @@ func (s *Store) CreatePositionWithCapGuard(ctx context.Context, p *Position, can
 			return 0, fmt.Errorf("canonical 聚簇超限：%s 在途 $%.0f+本次 $%.0f > cap $%.0f", c, sum, proposedUSD, capUSD)
 		}
 	}
+	// D-009 S4：venue 系统实占 cap（执行路径接闸——展示闸6 与执行闸同源同判据，
+	// 外单不入系统敞口域）。venueSum 锁后执行：行集合读的是已提交状态（同窗兄弟
+	// 的 position.notional_usd+腿行在锁序下可见），TOCTOU 收口与 canonical 同构。
+	vseen := map[string]bool{}
+	var vuniq []string
+	for _, v := range venues {
+		if v != "" && !vseen[v] {
+			vseen[v] = true
+			vuniq = append(vuniq, v)
+		}
+	}
+	for _, v := range vuniq {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, "venue:"+v); err != nil {
+			return 0, fmt.Errorf("venue cap lock %s: %w", v, err)
+		}
+	}
+	for _, v := range vuniq {
+		var capUSD float64
+		var enabled bool
+		err := tx.QueryRow(ctx,
+			`SELECT cap_usd, enabled FROM fin_venue_exposure_caps WHERE venue_key=$1`, v).
+			Scan(&capUSD, &enabled)
+		if err == pgx.ErrNoRows {
+			continue // 未设闸 venue 行缺席=放行（与展示闸同判据：行缺席不拦）
+		}
+		if err != nil {
+			return 0, fmt.Errorf("venue cap recheck %s: %w", v, err)
+		}
+		if !enabled {
+			continue // 闸停用
+		}
+		if capUSD == 0 {
+			return 0, fmt.Errorf("venue 敞口冻结：%s cap=0", v)
+		}
+		if venueSum == nil {
+			continue // 实占回调未接线（测试/未装配）——闸行存在但无可算口径，如实跳过
+		}
+		sum, err := venueSum(ctx, bareVenueOf(v))
+		if err != nil {
+			return 0, fmt.Errorf("venue 敞口实占查询失败（fail-closed）: %s %v", v, err)
+		}
+		if sum+proposedUSD > capUSD {
+			return 0, fmt.Errorf("venue 敞口超限：%s 实占 $%.0f+本次 $%.0f > cap $%.0f", v, sum, proposedUSD, capUSD)
+		}
+	}
 	// 同窗兄弟仓可见性：position 携带 proposed 名义 + fin_position_canonicals 归属投影
 	// 同事务落库——第二笔锁后复查即见（腿行在 persistOpenLegs 后落，纯腿归属会漏）。
 	if p.NotionalUSD == nil {
@@ -200,6 +249,15 @@ func (s *Store) CreatePositionWithCapGuard(ctx context.Context, p *Position, can
 	}
 	s.notifyPositionChange()
 	return id, nil
+}
+
+// bareVenueOf typed venue_key 剥类型段（"3001157:mt5"→"3001157"；position_legs.venue_key
+// 的账户段口径与 venue_exposure 行集查询同域）。
+func bareVenueOf(venueKey string) string {
+	if i := strings.IndexByte(venueKey, ':'); i >= 0 {
+		return venueKey[:i]
+	}
+	return venueKey
 }
 
 // SumOpenNotionalUSDByVenue D-006 S2：该 venue 名下在途仓 notional_usd 合计

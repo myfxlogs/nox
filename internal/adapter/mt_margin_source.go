@@ -195,6 +195,8 @@ func (s *MarginFactSource) publishPositions(orders []*mt5pb.Order) {
 			if qq, ok2 := q.(bus.Quote); ok2 && qq.Bid > 0 && qq.Ask > 0 {
 				vos[i].CurrentPrice = (qq.Bid + qq.Ask) / 2
 				vos[i].PriceAt = qq.Time
+				vos[i].PriceBid = qq.Bid // D-009 S2：帧携双价（同 tick 同钟）
+				vos[i].PriceAsk = qq.Ask
 			}
 		}
 	}
