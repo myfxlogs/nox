@@ -76,13 +76,12 @@ func d580ReadySvc(t *testing.T) *Service {
 		 10.3,5,3,0.001,21.9,1.0,24.9,18.8)`); err != nil {
 		t.Fatal(err)
 	}
-	// 快照（腿池闸用 equity；notional 100 << 5000）。
-	if _, err := st.Pool().Exec(ctx, `INSERT INTO fin_venue_account_snapshot
-		(venue, venue_type, balance_raw, equity_raw, free_margin_raw, currency, fetched_at, src)
-		VALUES ('gate','perp',5000,5000,5000,'USDT',now(),'d580test'),
-		       ('3001157','mt5',5000,5000,5000,'USDT',now(),'d580test')`); err != nil {
-		t.Fatal(err)
-	}
+	// 腿池资金（闸用 equity；notional 100 << 5000）——#1c：实时态种子。
+	v5k := 5000.0
+	seedLiveAccounts(t, svc, []pgstore.VenueAccountLatest{
+		{Venue: "gate", VenueType: "perp", BalanceRaw: &v5k, EquityRaw: &v5k, FreeMarginRaw: &v5k, Currency: "USDT", FetchedAt: time.Now()},
+		{Venue: "3001157", VenueType: "mt5", BalanceRaw: &v5k, EquityRaw: &v5k, FreeMarginRaw: &v5k, Currency: "USDT", FetchedAt: time.Now()},
+	})
 	// D-007 S2：闸6 死键修复后 venue cap 真实生效——夹具抬闸防误拦（共享库或带历史种子行）。
 	// 共享库：Cleanup 还原前值（无则删），防 gate:perp=100000 之类残值污染 D543 种子断言。
 	type capRow struct {
@@ -252,12 +251,11 @@ func TestD587_ReadyWaitKindText(t *testing.T) {
 			VALUES (now(),'binance','FHSYM',100,100.1,'spot'),(now(),'gate','FHSYM',100,100.1,'perp')`); err != nil {
 			t.Fatal(err)
 		}
-		// 腿池：binance spot 快照（gate/3001157 夹具已种）。
-		if _, err := st.Pool().Exec(ctx, `INSERT INTO fin_venue_account_snapshot
-			(venue, venue_type, balance_raw, equity_raw, free_margin_raw, currency, fetched_at, src)
-			VALUES ('binance','spot',5000,5000,5000,'USDT',now(),'d587test')`); err != nil {
-			t.Fatal(err)
-		}
+		// 腿池：binance spot 实时态种子（gate/3001157 夹具已种；#1c 实时源=acctMon）。
+		v5k2 := 5000.0
+		seedLiveAccounts(t, svc, []pgstore.VenueAccountLatest{
+			{Venue: "binance", VenueType: "spot", BalanceRaw: &v5k2, EquityRaw: &v5k2, FreeMarginRaw: &v5k2, Currency: "USDT", FetchedAt: time.Now()},
+		})
 		rows, err := svc.pendingEntries(ctx)
 		if err != nil {
 			t.Fatal(err)

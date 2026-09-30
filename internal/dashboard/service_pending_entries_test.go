@@ -4,6 +4,7 @@ package dashboard
 import (
 	"context"
 	"testing"
+	"time"
 
 	"strconv"
 	"strings"
@@ -149,10 +150,11 @@ func TestD478_TierBranches(t *testing.T) {
 	}
 
 	// 快照新鲜+equity=100 → needed 1200 > 100×0.5 → over+warn（crossCap 注入生效）。
-	if _, err := st.Pool().Exec(ctx, `INSERT INTO fin_venue_account_snapshot (venue, venue_type, balance_raw, equity_raw, free_margin_raw, currency, fetched_at, src)
-		VALUES ('gate','perp',100,100,100,'USDT',now(),'test'),('3001157','mt5',5000,5000,5000,'USDT',now(),'test')`); err != nil {
-		t.Fatal(err)
-	}
+	v100, v5000 := 100.0, 5000.0 // #1c：腿池资金=实时态种子（快照表=历史记录不再喂门禁）
+	seedLiveAccounts(t, svc, []pgstore.VenueAccountLatest{
+		{Venue: "gate", VenueType: "perp", BalanceRaw: &v100, EquityRaw: &v100, FreeMarginRaw: &v100, Currency: "USDT", FetchedAt: time.Now()},
+		{Venue: "3001157", VenueType: "mt5", BalanceRaw: &v5000, EquityRaw: &v5000, FreeMarginRaw: &v5000, Currency: "USDT", FetchedAt: time.Now()},
+	})
 	rows, err = svc.pendingEntries(ctx)
 	if err != nil || len(rows) != 2 {
 		t.Fatalf("rows=%d err=%v", len(rows), err)

@@ -70,11 +70,12 @@ func TestD476a_CapitalMissingIMR_GradeC(t *testing.T) {
 func TestD476a_LiqBufferUpgrade_B(t *testing.T) {
 	f := d471Fixture()
 	buf := 2.4
-	f.snaps = []pgstore.VenueAccountLatest{
+	s := d476aSvc(f)
+	seedLiveAccounts(t, s, []pgstore.VenueAccountLatest{
 		{Venue: "binance", VenueType: "perp", BufferMultiple: &buf},
 		{Venue: "gate", VenueType: "perp"}, // 无 buffer 无关行
-	}
-	rep := d476aSvc(f).gradDossier(context.Background(), f.grad, f.paper)
+	})
+	rep := s.gradDossier(context.Background(), f.grad, f.paper)
 	if g := egOf(rep, "liq_distance_pct_est"); g != v1.EvidenceGrade_EVIDENCE_GRADE_B {
 		t.Errorf("liq grade=%v want B（buffer_multiple 已采）", g)
 	}

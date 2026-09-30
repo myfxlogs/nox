@@ -185,7 +185,7 @@ func capitalSnapshotRows(ctx context.Context, s *Service) []*v1.CapitalCoverageR
 // 空表/缺表 → 行省略（D-359 §S2 口径：rows 全空=前端「数据源全缺」；与 digest 段的
 // 未采回退行不同——双实现各按其 SSOT 条款）。
 func venueAccountRows(ctx context.Context, s *Service) []*v1.CapitalCoverageRow {
-	lates, err := s.store.LatestVenueAccountSnapshots(ctx)
+	lates, err := s.liveAccountLatest(ctx) // #1c：实时态（快照表=历史记录）
 	if err != nil || len(lates) == 0 {
 		return nil
 	}

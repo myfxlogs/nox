@@ -198,7 +198,7 @@ func (s *Service) gradDryRunResp(ctx context.Context, resp *v1.ApproveCarryGradu
 	// D-508 S8 + D-542：腿→资金池映射随 dry_run 回传——CEX 腿先走实拉活账本
 	// （裸探针=弹窗开，脏/空触发一发 REST 校准+30s 缓存）；REST 双败快照兜底。
 	// 快照读失败→空列表（前端如实显「未采」降级）。
-	if snaps, err := s.gradDB().LatestVenueAccountSnapshots(ctx); err == nil {
+	if snaps, err := s.liveAccountLatest(ctx); err == nil {
 		var poolB, poolS allocPool
 		var okB, okS bool
 		resp.LegPools, poolB, okB, poolS, okS = s.gradLiveLegPools(ctx, snaps, []string{venueBuy, venueSell})

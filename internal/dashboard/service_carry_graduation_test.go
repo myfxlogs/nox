@@ -47,10 +47,10 @@ type fakeGradDB struct {
 	fundingWin      map[string][]pgstore.FactPoint // venue|symbol → funding 预测流
 	p95             float64
 	p95OK           bool
-	tickP95         map[string]float64 // D-544：buyVK|buySym|sellVK|sellSym → p95
-	tickP95Calls    int                // T3 回归锚：tick 路径调用计数
-	monitorP95Calls int                // T3 回归锚：monitor 路径调用计数
-	snaps           []pgstore.VenueAccountLatest
+	tickP95         map[string]float64       // D-544：buyVK|buySym|sellVK|sellSym → p95
+	tickP95Calls    int                      // T3 回归锚：tick 路径调用计数
+	monitorP95Calls int                      // T3 回归锚：monitor 路径调用计数
+	realKeys        map[string]bool          // 3d-P1#1c：cfd real 键集（liveAccountLatest 过滤面）
 	exchCfgs        []pgstore.ExchangeConfig // D-542：实拉校准配置源测试面
 	adminRows       []pgstore.XAssetComboAdminRow
 	comboOpen       map[string][]int64 // canonicalBuy|venueBuy → 在持仓 posIDs
@@ -161,8 +161,8 @@ func (f *fakeGradDB) TickAdverseBasisP95(_ context.Context, buyVenueKey, buySym,
 	v, ok := f.tickP95[buyVenueKey+"|"+buySym+"|"+sellVenueKey+"|"+sellSym]
 	return v, ok, nil
 }
-func (f *fakeGradDB) LatestVenueAccountSnapshots(context.Context) ([]pgstore.VenueAccountLatest, error) {
-	return f.snaps, nil
+func (f *fakeGradDB) BrokerRealAccountKeys(context.Context) (map[string]bool, error) {
+	return f.realKeys, nil
 }
 func (f *fakeGradDB) ListExchangeConfigs(context.Context) ([]pgstore.ExchangeConfig, error) {
 	return f.exchCfgs, nil

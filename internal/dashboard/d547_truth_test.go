@@ -96,9 +96,9 @@ func TestD547_T3_CapRowsLiveValues(t *testing.T) {
 		CanonicalBuy: "XAUUSDT", CanonicalSell: "XAUUSD", VenueBuy: "gate:perp", VenueSell: "3001157:mt5",
 		MaxGrossUSD: 2000, NotionalUSD: f64p(1750),
 	}}
-	f.snaps = []pgstore.VenueAccountLatest{{
+	seedLiveAccounts(t, s, []pgstore.VenueAccountLatest{{
 		Venue: "gate", VenueType: "perp", EquityRaw: f64p(80), Currency: "USDT", FetchedAt: time.Now(),
-	}}
+	}})
 	resp, err := s.ListVenueExposureCaps(context.Background(), connect.NewRequest(&v1.ListVenueExposureCapsRequest{}))
 	if err != nil {
 		t.Fatalf("list: %v", err)
@@ -135,10 +135,10 @@ func TestD547_T5_ComboRowsLiveConflict(t *testing.T) {
 	}}
 	f.comboOpen = map[string][]int64{"XAUUSDT|gate:perp": {501}}
 	f.comboOpenN = map[string]float64{"XAUUSDT|gate:perp": 1800}
-	f.snaps = []pgstore.VenueAccountLatest{
+	seedLiveAccounts(t, s, []pgstore.VenueAccountLatest{
 		{Venue: "gate", VenueType: "perp", EquityRaw: f64p(80), Currency: "USDT", FetchedAt: time.Now()},
 		{Venue: "3001157", VenueType: "mt5", EquityRaw: f64p(9000), Currency: "USD", FetchedAt: time.Now()},
-	} // D-564 U2 退役：gate 保证金率判据不再吃配置杠杆——pool_verdict=unknown（如实标缺）
+	}) // D-564 U2 退役：gate 保证金率判据不再吃配置杠杆——pool_verdict=unknown（如实标缺）
 	resp, err := s.ListXAssetAllowCombos(context.Background(), connect.NewRequest(&v1.ListXAssetAllowCombosRequest{}))
 	if err != nil {
 		t.Fatalf("list: %v", err)

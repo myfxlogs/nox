@@ -36,8 +36,8 @@ type graduationStore interface {
 	ListCexUniverse(ctx context.Context) (map[string]pgstore.CexUniverseRow, error)
 	FundingPredWindow(ctx context.Context, venue, symbol string, since time.Time) ([]pgstore.FactPoint, error)
 	XAssetMonitorSpreadP95(ctx context.Context, cexVenue, mtVenue string) (float64, bool, error)
-	// D-476a：buffer_multiple 账户快照（liq_distance B 级升级判据）。
-	LatestVenueAccountSnapshots(ctx context.Context) ([]pgstore.VenueAccountLatest, error)
+	// 3d-P1#1c：账户实时态 cfd real 键集（liveAccountLatest 写侧同源过滤面）。
+	BrokerRealAccountKeys(ctx context.Context) (map[string]bool, error)
 	// D-542：实拉校准配置源（livePoolQuerier 经代理链建 CEXAccountQuerier）。
 	ListExchangeConfigs(ctx context.Context) ([]pgstore.ExchangeConfig, error)
 	// D-557 S1：venue 行 join 通道白名单（allow_rule_id/enabled 透出）。

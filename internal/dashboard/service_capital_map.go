@@ -28,6 +28,7 @@ const capitalMapCaliberNote = "口径：binance 六面全景（现货/资金钱�
 
 // GetCapitalMap D-546：三档全景树（后端算，前端零计算）。
 func (s *Service) GetCapitalMap(ctx context.Context, req *connect.Request[v1.GetCapitalMapRequest]) (*connect.Response[v1.GetCapitalMapResponse], error) {
+	s.kickNostreamAccounts() // 3d-P1#1c：无流子账户（无 WS 余额频道）按需回读，10s/键防抖
 	resp := s.buildCapitalMap(ctx)
 	resp.GeneratedAt = time.Now().UTC().Format(time.RFC3339)
 	resp.CaliberNote = capitalMapCaliberNote
@@ -36,7 +37,7 @@ func (s *Service) GetCapitalMap(ctx context.Context, req *connect.Request[v1.Get
 
 // buildCapitalMap 六面节点 → 三档归类（立即可用/可转可用/锁定慢动）。
 func (s *Service) buildCapitalMap(ctx context.Context) *v1.GetCapitalMapResponse {
-	snaps, err := s.store.LatestVenueAccountSnapshots(ctx)
+	snaps, err := s.liveAccountLatest(ctx)
 	if err != nil {
 		log.Printf("[capital-map] snapshots: %v（快照面如实标缺）", err)
 		snaps = nil

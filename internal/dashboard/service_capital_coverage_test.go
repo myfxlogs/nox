@@ -135,12 +135,12 @@ func TestGetCapitalCoverage_SummaryWeights(t *testing.T) {
 		VALUES ($1, 0.6849315068493151, 0, 0.6849315068493151, 1.0)`, day); err != nil {
 		t.Fatalf("seed daily income: %v", err)
 	}
-	if err := s.InsertVenueAccountSnapshots(ctx, []pgstore.VenueAccountSnapshot{
-		{Venue: "binance", VenueType: "perp", EquityRaw: 8000, Currency: "USDT", FetchedAt: now},
-	}); err != nil {
-		t.Fatalf("InsertVenueAccountSnapshots: %v", err)
-	}
-	resp := covResponse(ctx, t, covTestService(s))
+	svc := covTestService(s)
+	eq8k := 8000.0 // #1c：账户面=acctMon 实时态
+	seedLiveAccounts(t, svc, []pgstore.VenueAccountLatest{
+		{Venue: "binance", VenueType: "perp", EquityRaw: &eq8k, Currency: "USDT", FetchedAt: now},
+	})
+	resp := covResponse(ctx, t, svc)
 	// D-360 S4：paper 行不再出现（demo/纸面=噪声不入面板）——行序 TRX→CMC→live→venue
 	if len(resp.Rows) != 4 {
 		t.Fatalf("rows len = %d, want 4:", len(resp.Rows))
@@ -202,14 +202,14 @@ func TestGetCapitalCoverage_VenueUSDDenominator(t *testing.T) {
 	s := covTestStore(t)
 	ctx := context.Background()
 	now := time.Now().UTC()
-	if err := s.InsertVenueAccountSnapshots(ctx, []pgstore.VenueAccountSnapshot{
-		{Venue: "binance", VenueType: "spot", EquityRaw: 100, Currency: "USDT", FetchedAt: now},
-		{Venue: "1279967", VenueType: "mt5", EquityRaw: 500, Currency: "USD", FetchedAt: now},
-		{Venue: "15032313", VenueType: "mt5", EquityRaw: 700, Currency: "UST", FetchedAt: now},
-	}); err != nil {
-		t.Fatalf("seed venue snapshots: %v", err)
-	}
-	resp := covResponse(ctx, t, covTestService(s))
+	svc := covTestService(s)
+	eqA, eqB, eqC := 100.0, 500.0, 700.0 // #1c：账户面=acctMon 实时态
+	seedLiveAccounts(t, svc, []pgstore.VenueAccountLatest{
+		{Venue: "binance", VenueType: "spot", EquityRaw: &eqA, Currency: "USDT", FetchedAt: now},
+		{Venue: "1279967", VenueType: "mt5", EquityRaw: &eqB, Currency: "USD", FetchedAt: now},
+		{Venue: "15032313", VenueType: "mt5", EquityRaw: &eqC, Currency: "UST", FetchedAt: now},
+	})
+	resp := covResponse(ctx, t, svc)
 	var usdRow, ustRow *v1.CapitalCoverageRow
 	for _, r := range resp.Rows {
 		if r.Pool == "venue账户 1279967/mt5" {

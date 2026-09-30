@@ -196,7 +196,7 @@ func (g *MarginGuard) evaluate(ctx context.Context, sn *pgstore.VenueAccountSnap
 }
 
 // legSnapshotVenue 腿 venueKey → snapshot (venue,venue_type) 键：
-// "3001157:mt5"→(3001157,mt5)；"okx:perp"→(okx,unified)（写侧归一同 cexscan.normalizeVenueType）。
+// "3001157:mt5"→(3001157,mt5)；"okx:perp"→(okx,unified)（写侧归一同 venue.NormalizeVenueType）。
 func legSnapshotVenue(venueKey string) (string, string) {
 	k := keydomain.Parse(venueKey)
 	v, t := k.Venue, k.Type
