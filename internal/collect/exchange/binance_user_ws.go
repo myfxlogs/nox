@@ -14,12 +14,10 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math/rand"
 	"net/http"
 	"net/url"
 	"time"
 
-	"arb/internal/alerttext"
 	"arb/internal/bus"
 	"arb/internal/dephealth"
 	"arb/internal/httpx"
@@ -94,9 +92,8 @@ func (b *BinanceUserWS) listenKeyEndpoint() string {
 	return b.baseURL + "/v1/listenKey"
 }
 
-// WSURL listenKey → WS 地址（D-517 S3 fstream 迁移后映射：real perp→/private/ws、spot→/spotws；
-// baseURL 只取 scheme+host，路径段不继承——fapi 的 REST 段不得进 WS URL）。
-// D-516 S2：demo（demofws）支路删除——simulated=t 一律 fail-closed error，绝不拨 demo 端点。
+// WSURL listenKey → WS 地址（D-517 S3 fstream 迁移映射：perp→/private/ws、spot→/spotws；
+// baseURL 只取 scheme+host——fapi REST 段不进 WS URL。simulated=t fail-closed，D-516 S2）。
 func (b *BinanceUserWS) WSURL(listenKey string) (string, error) {
 	if b.simulated {
 		return "", fmt.Errorf("binance user ws: simulated config refused (demo 域已收编 D-516)")
@@ -121,8 +118,8 @@ func (b *BinanceUserWS) WSURL(listenKey string) (string, error) {
 	return fmt.Sprintf("%s://%s%s", scheme, u.Host, path), nil
 }
 
-// dialFailover cex-proxy 双端点回退：主 URL dial 失败 → BINANCE_PROXY_URL_BACKUP 置位时
-// 换 host 重试（路径/key 不变）；每连接尝试自主端起——主端恢复即自动回主（无粘滞）。
+// dialFailover 双端点回退：主 dial 败→BINANCE_PROXY_URL_BACKUP 换 host 重试；
+// 每连接自主端起，主端恢复自动回主（无粘滞）。
 func (b *BinanceUserWS) dialFailover(ctx context.Context, wsURL string) (*websocket.Conn, error) {
 	conn, err := b.dial(ctx, wsURL)
 	if err == nil || ctx.Err() != nil {
@@ -140,38 +137,6 @@ func (b *BinanceUserWS) dialFailover(ctx context.Context, wsURL string) (*websoc
 // D-519：host 换段收敛共享件 swapURLHost（gate 私有同法）。
 func (b *BinanceUserWS) backupWSURL(wsURL string) string {
 	return swapURLHost(wsURL, "BINANCE_PROXY_URL_BACKUP")
-}
-
-// banJitter D-591 S1：封禁到期后重连抖动界 0..N 随机（测试可缩）。
-var banJitter = 30 * time.Second
-
-// Run 重连循环（常规错误 5s 退避）。D-591 S1：listenKey POST 遇 -1003/418 →
-// 退避至封禁到期+抖动，窗内零 REST——盲 5s 锤是封禁诱因放大器且窗内续期封禁
-// （S0 实证 04:10:50→04:14:51）。每次迭代取新 listenKey（官方语义：失效不复用）。
-func (b *BinanceUserWS) Run(ctx context.Context) {
-	var backoffUntil time.Time
-	for {
-		if err := b.runOnce(ctx); err != nil {
-			dephealth.Mark(b.depKey(), false, err) // D-579 R2：私有流自挂点（spot 支路同经此）
-			log.Printf("[binance-user-ws] reconnect after error: %v", err)
-			if until, ok := alerttext.BannedUntil(err.Error()); ok && until.After(b.now()) {
-				backoffUntil = until.Add(time.Duration(rand.Int63n(int64(banJitter) + 1)))
-			}
-		} else {
-			backoffUntil = time.Time{} // 连接成功清退避
-		}
-		wait := 5 * time.Second
-		if !backoffUntil.IsZero() && backoffUntil.After(b.now()) {
-			wait = backoffUntil.Sub(b.now()) // 封禁窗睡到到期（短封禁也按到期节拍）
-		} else {
-			backoffUntil = time.Time{} // 到期（或未置）恢复常规节奏
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(wait):
-		}
-	}
 }
 
 func (b *BinanceUserWS) runOnce(ctx context.Context) error {
