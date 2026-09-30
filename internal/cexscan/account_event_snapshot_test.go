@@ -45,8 +45,8 @@ func (f *fakeAcctStore) count() int {
 	return len(f.rows)
 }
 
-func acctEvent(vk string) *v1.AccountEvent {
-	return &v1.AccountEvent{Account: &v1.AccountInfo{VenueKey: vk}}
+func acctEvent(vk, assetType string) *v1.AccountEvent {
+	return &v1.AccountEvent{Account: &v1.AccountInfo{VenueKey: vk, AssetType: assetType}}
 }
 
 func mtAcctInfos(eq float64) []*v1.AccountInfo {
@@ -77,7 +77,7 @@ func TestAcctFrameSnapshot_WriteAndDedup(t *testing.T) {
 	done := make(chan struct{})
 	go func() { StartAccountEventSnapshots(ctx, topic, store, am); close(done) }()
 	time.Sleep(50 * time.Millisecond) // 等订阅就位（Topic 无回放，publish 先于 Subscribe 会丢帧）
-	topic.Publish(acctEvent("3001157:mt5"))
+	topic.Publish(acctEvent("3001157:mt5", "cfd"))
 	waitRows(t, store, 1, 2*time.Second)
 
 	store.mu.Lock()
@@ -88,7 +88,7 @@ func TestAcctFrameSnapshot_WriteAndDedup(t *testing.T) {
 	}
 	// 同值帧（节流窗外，1.1s 后）→ 不再写。
 	time.Sleep(acctFrameWriteInterval + 100*time.Millisecond)
-	topic.Publish(acctEvent("3001157:mt5"))
+	topic.Publish(acctEvent("3001157:mt5", "cfd"))
 	time.Sleep(200 * time.Millisecond)
 	if n := store.count(); n != 1 {
 		t.Errorf("同值帧 rows=%d, want 1", n)
@@ -107,12 +107,12 @@ func TestAcctFrameSnapshot_Coalesce(t *testing.T) {
 	go StartAccountEventSnapshots(ctx, topic, store, am)
 	time.Sleep(50 * time.Millisecond) // 等订阅就位
 
-	topic.Publish(acctEvent("3001157:mt5"))
+	topic.Publish(acctEvent("3001157:mt5", "cfd"))
 	waitRows(t, store, 1, 2*time.Second)
 	// 300ms 内连发 4 帧、值逐帧变化 → 窗内 pending，终值定时器补写。
 	for i := 1; i <= 4; i++ {
 		am.setInfos(mtAcctInfos(1000 + float64(i)))
-		topic.Publish(acctEvent("3001157:mt5"))
+		topic.Publish(acctEvent("3001157:mt5", "cfd"))
 	}
 	waitRows(t, store, 2, 2*time.Second)
 	if n := store.count(); n != 2 {
@@ -135,8 +135,10 @@ func TestAcctFrameSnapshot_CexSkip(t *testing.T) {
 	defer cancel()
 	go StartAccountEventSnapshots(ctx, topic, store, am)
 	time.Sleep(50 * time.Millisecond) // 等订阅就位
-	topic.Publish(acctEvent("okx:perp"))
-	topic.Publish(acctEvent("binance:spot"))
+	topic.Publish(acctEvent("okx:perp", "cex"))
+	topic.Publish(acctEvent("binance:spot", "cex"))
+	topic.Publish(acctEvent("binance:funding", "cex")) // 部署实证：非 :perp/:spot 后缀键曾被当 MT 误写
+	topic.Publish(acctEvent("okx:unified", "cex"))
 	time.Sleep(150 * time.Millisecond)
 	if n := store.count(); n != 0 {
 		t.Errorf("CEX 键应跳过 rows=%d, want 0", n)
