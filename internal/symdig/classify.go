@@ -19,6 +19,9 @@ const (
 	KlassDisabled        = "disabled"
 	KlassUnmappedUnknown = "unmapped_unknown"
 	KlassMispaired       = "mispaired"
+	// KlassUnitUnknown D-594 S4：单位敏感 canonical（存在非 1 标定行）的未标定行
+	// （price_scale/qty_scale NULL）——canonical 槽禁占的亮灯项，宁缺不混。
+	KlassUnitUnknown = "unit_unknown"
 )
 
 // classify 全量分类：trade_mode facts 逐 venue×symbol 归类 + 映射校验段。
@@ -51,6 +54,13 @@ func classify(ctx context.Context, st Store) (*Summary, error) {
 	}
 	byVenueMap := map[string]map[string]string{} // venue → broker_symbol → canonical
 	primaryCount := map[string]int{}             // venue|canonical → is_primary 行数
+	sensitive := map[string]bool{}               // canonical → 单位敏感（D-594：任一标定行 scale≠1）
+	uncalibrated := map[string]bool{}            // venue|broker_symbol → 敏感 canonical 未标定行
+	for _, m := range maps {
+		if (m.PriceScale != nil && *m.PriceScale != 1.0) || (m.QtyScale != nil && *m.QtyScale != 1.0) {
+			sensitive[m.Canonical] = true
+		}
+	}
 	for _, m := range maps {
 		vm := byVenueMap[m.Venue]
 		if vm == nil {
@@ -60,6 +70,9 @@ func classify(ctx context.Context, st Store) (*Summary, error) {
 		vm[m.BrokerSymbol] = m.Canonical
 		if m.IsPrimary && m.Canonical != "" {
 			primaryCount[m.Venue+"|"+scan.NormalizeJoinKey(m.Canonical)]++
+		}
+		if sensitive[m.Canonical] && (m.PriceScale == nil || m.QtyScale == nil) {
+			uncalibrated[m.Venue+"|"+m.BrokerSymbol] = true
 		}
 	}
 
@@ -92,6 +105,12 @@ func classify(ctx context.Context, st Store) (*Summary, error) {
 			continue
 		}
 		payload["canonical"] = canonical
+		// D-594 S4：映射行未标定且 canonical 单位敏感 → unit_unknown（配对池判定前拦截，
+		// 报价发射侧 emitPlan 已同步抑制其 canonical 槽）。
+		if uncalibrated[venue+"|"+sym] {
+			add(venue, sym, KlassUnitUnknown, "unit uncalibrated (price_scale/qty_scale NULL)", payload)
+			continue
+		}
 		if uniPairs[venue+"|"+canonical] {
 			add(venue, sym, KlassPaired, "", payload)
 			continue

@@ -44,6 +44,10 @@ type MT5Adapter struct {
 	symMap atomic.Pointer[map[string]string] // brokerSymbol → canonical
 	// emitBlocked D-383 A2.3：canonical 标签发射抑制集（多行组非 primary 行；native 照发）。
 	emitBlocked atomic.Pointer[map[string]bool]
+	// symScales D-594：brokerSymbol → 单位标定（仅已标定行，与 symMap 同源注入）。
+	symScales atomic.Pointer[map[string]SymbolScale]
+	// unitSens D-594：单位敏感 canonical 集（存在非 1 标定行的 canonical）。
+	unitSens atomic.Pointer[map[string]bool]
 
 	// MarginSink margin fact 下沉（D-099 事件驱动化）：由 main 经 BrokerManager 注入
 	// （SwapKick 同模式：wiring/main 注入，brokerMgr 只存字段不依赖 engine 包）。

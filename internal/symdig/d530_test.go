@@ -137,3 +137,65 @@ func TestD530MaxTokensDefault(t *testing.T) {
 		t.Fatalf("env 4096, got %d", d2.MaxTokens)
 	}
 }
+
+// D-589 坑2 B1：malformed-非截断（end_turn 未闭合）→ 进第二轮救回（calls==2 无告警）。
+func TestD589MalformedNonTruncatedRetries(t *testing.T) {
+	st := &fakeStore{}
+	var calls atomic.Int32
+	run := func(_ context.Context, _ *analyst.Client, _ analyst.ToolExecutor, _ []analyst.ToolSpec,
+		_ string, msgs []analyst.Message, cb analyst.LoopCallbacks) (analyst.LoopResult, error) {
+		if calls.Add(1) == 1 {
+			cb.OnDelta(propDelta("GOLD", false)) // 未闭合但非截断
+			return analyst.LoopResult{StopReason: "end_turn"}, nil
+		}
+		cb.OnDelta(propDelta("SILVER", true))
+		return analyst.LoopResult{StopReason: "end_turn"}, nil
+	}
+	inbox := filepath.Join(t.TempDir(), "inbox.md")
+	deps := Deps{Store: st, Client: &analyst.Client{}, Run: run, InboxPath: inbox}
+	if err := llmDig(context.Background(), deps, d530Sum("GOLD", "SILVER"), time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("malformed 应进第二轮，calls=%d", calls.Load())
+	}
+	data, _ := os.ReadFile(inbox)
+	if !strings.Contains(string(data), "SILVER→CSILVER") {
+		t.Fatalf("二轮提案应入箱:\n%s", data)
+	}
+	for _, a := range st.alerts {
+		if strings.HasPrefix(a, "error:") || strings.HasPrefix(a, "warn:") {
+			t.Fatalf("二轮救回不应告警: %v", st.alerts)
+		}
+	}
+}
+
+// D-589 坑2 B2：两轮皆 malformed（非截断）→ warn 恰好一条且文案=格式异常原文。
+func TestD589DoubleMalformedWarnsOnce(t *testing.T) {
+	st := &fakeStore{}
+	var calls atomic.Int32
+	run := func(_ context.Context, _ *analyst.Client, _ analyst.ToolExecutor, _ []analyst.ToolSpec,
+		_ string, _ []analyst.Message, cb analyst.LoopCallbacks) (analyst.LoopResult, error) {
+		calls.Add(1)
+		cb.OnDelta(propDelta("GOLD", false))
+		return analyst.LoopResult{StopReason: "end_turn"}, nil
+	}
+	if err := llmDig(context.Background(), d530Deps(t, st, run), d530Sum("GOLD", "SILVER"), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("上限两轮，calls=%d", calls.Load())
+	}
+	var warns int
+	for _, a := range st.alerts {
+		if strings.HasPrefix(a, "warn:") && strings.Contains(a, "提案 AI 输出格式异常（已按截断内容容忍解析，提案集可能不完整）") {
+			warns++
+		}
+		if strings.HasPrefix(a, "error:") {
+			t.Fatalf("非截断 malformed 不应 error: %v", st.alerts)
+		}
+	}
+	if warns != 1 {
+		t.Fatalf("两轮耗尽应 warn 恰好一条, got %d: %v", warns, st.alerts)
+	}
+}
