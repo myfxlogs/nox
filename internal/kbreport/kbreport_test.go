@@ -250,3 +250,11 @@ func TestParseCandidatesUnclosed_D457(t *testing.T) {
 		t.Fatalf("no block wrong: %v %v", c, mal)
 	}
 }
+
+// TestResolveClientEmptyModel D-591 S7：DB+env model 双空 → 报错（nil store 纯 env 路
+// ——apiKey 非空、model 空：禁静默构造空模型 client）。
+func TestResolveClientEmptyModel(t *testing.T) {
+	if _, err := ResolveClient(context.Background(), nil, "https://env.example.com", "env-key", ""); err == nil {
+		t.Fatal("model 双空应报错（fail-closed）")
+	}
+}
