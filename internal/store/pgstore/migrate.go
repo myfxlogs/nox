@@ -158,6 +158,7 @@ var migrationFiles = []struct {
 	{162, migrations.PositionFeesNetPnlSQL},            // D-599：positions fees_usd/fee_quality（realized_pnl 净额化）
 	{163, migrations.StrategyStatsNotifySQL},           // D-004 P1#3：disabled 变更 pg_notify（事件源替代 60s 轮询）
 	{164, migrations.CanonicalExposureCapsSQL},         // D-006 S3：fin_canonical_exposure_caps 聚簇闸表
+	{165, migrations.MT5ExposureCap6000SQL},            // D-007 S2：MT5 两户 venue 敞口闸 $6000（业主批）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
