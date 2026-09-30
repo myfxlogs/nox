@@ -3,7 +3,6 @@ package engine
 
 import (
 	"context"
-	"log"
 	"sync"
 	"time"
 
@@ -38,7 +37,10 @@ type Engine struct {
 	store         opportunityStore
 	facts         *FactCache
 	commissionFor func(venueKey string) float64
-	scanThrottle  time.Duration
+	// pubDeltaBps 发布实质变化阈值（bps，ARB_OPP_PUBLISH_DELTA_BPS）；
+	// pubHeartbeat TTL 续命心跳（=OpportunityTTL/3，语义=过期续命非判定节拍）。
+	pubDeltaBps  float64
+	pubHeartbeat time.Duration
 	// oppTopic 新机会站内推送总线（D-050；修复⑭ S3 退役发布门槛 → 全量事件流）：
 	// upsert 成功即发布（oppTopic 定性为全量事件流，UI 侧 30s 快照+前端默认 ≥5 显示过滤兜底）。
 	// nil = 未接线（测试可不接）。
@@ -67,8 +69,8 @@ type Engine struct {
 	disabledStrategies map[string]bool
 	disabledMu         sync.RWMutex
 
-	mu       sync.Mutex
-	lastScan map[string]time.Time // canonical → 上次扫描时间（节流）
+	mu      sync.Mutex
+	lastPub map[string]pubState // oppID → 上次发布态（engine_publish.go；发布/落库去重）
 }
 
 // New 创建引擎。commissionFor 必填（成本正确性依赖真实佣金，D-036），nil = 装配错误直接 panic。
@@ -76,12 +78,16 @@ type Engine struct {
 // minStoreNetBps 为 CROSS_VENUE 入库门槛（D-078，缺省 0 = 不过滤）。
 // fundingHedgeMinNetStore/perpFundingMinNetStore/carryMinNetStore 为息差家族入库净门槛
 // （D-085，作用在 evaluator 扣成本后的 NetBps=年化百分点，缺省 0 = 不过滤）。
-func New(b *bus.QuoteBus, detectors []detector.Detector, cfg evaluator.Config, store opportunityStore, fc *FactCache, commissionFor func(venueKey string) float64, scanThrottle time.Duration, oppTopic *bus.Topic[pgstore.Opportunity], minStoreNetBps, fundingHedgeMinNetStore, perpFundingMinNetStore, carryMinNetStore, xassetCarryMinNetStore float64) *Engine {
+func New(b *bus.QuoteBus, detectors []detector.Detector, cfg evaluator.Config, store opportunityStore, fc *FactCache, commissionFor func(venueKey string) float64, pubDeltaBps float64, oppTopic *bus.Topic[pgstore.Opportunity], minStoreNetBps, fundingHedgeMinNetStore, perpFundingMinNetStore, carryMinNetStore, xassetCarryMinNetStore float64) *Engine {
 	if commissionFor == nil {
 		panic("engine: commissionFor resolver required (D-036 per-venue 佣金)")
 	}
-	if scanThrottle <= 0 {
-		scanThrottle = 30 * time.Second
+	if pubDeltaBps <= 0 {
+		pubDeltaBps = 0.5
+	}
+	pubHeartbeat := cfg.OpportunityTTL / 3
+	if pubHeartbeat <= 0 {
+		pubHeartbeat = 10 * time.Second
 	}
 	return &Engine{
 		bus:                     b,
@@ -90,14 +96,15 @@ func New(b *bus.QuoteBus, detectors []detector.Detector, cfg evaluator.Config, s
 		store:                   store,
 		facts:                   fc,
 		commissionFor:           commissionFor,
-		scanThrottle:            scanThrottle,
+		pubDeltaBps:             pubDeltaBps,
+		pubHeartbeat:            pubHeartbeat,
 		oppTopic:                oppTopic,
 		minStoreNetBps:          minStoreNetBps,
 		fundingHedgeMinNetStore: fundingHedgeMinNetStore,
 		perpFundingMinNetStore:  perpFundingMinNetStore,
 		carryMinNetStore:        carryMinNetStore,
 		xassetCarryMinNetStore:  xassetCarryMinNetStore,
-		lastScan:                make(map[string]time.Time),
+		lastPub:                 make(map[string]pubState),
 	}
 }
 
@@ -118,17 +125,12 @@ func (e *Engine) Run(ctx context.Context) {
 	}
 }
 
-// onQuote 处理单条报价事件：节流 → 快照 → 检测 → 评估 → 存储。
+// onQuote 处理单条报价事件（D-004 P1#8：每帧内存判定，无节流）：
+// 新鲜度 → 快照 → 检测 → 评估 → 发布去重（maybePublish：实质变化 ≥pubDeltaBps 或
+// TTL 心跳到期才 Upsert+Publish——发布/落库不再每帧，下游 autotrade oppLoop 与前端不被灌）。
 func (e *Engine) onQuote(ctx context.Context, q bus.Quote) {
-	// 节流：每 canonical 一个扫描周期（config ARB_SCAN_THROTTLE，D-036 去硬编码）
-	e.mu.Lock()
-	last := e.lastScan[q.Symbol]
-	if time.Since(last) < e.scanThrottle {
-		e.mu.Unlock()
-		return
-	}
-	e.lastScan[q.Symbol] = time.Now()
-	e.mu.Unlock()
+	// 顺手清理 lastPub 过期条目（at 早于 2×OpportunityTTL——地图只增会泄漏）。
+	e.prunePub()
 
 	// 新鲜度检查（§5.0）
 	if time.Since(q.Time) > e.evalCfg.DetectorFreshnessTTL {
@@ -183,18 +185,11 @@ func (e *Engine) onQuote(ctx context.Context, q bus.Quote) {
 		if !netStoreGate(o, e) {
 			continue
 		}
-		_, err := e.store.UpsertOpportunity(ctx, o)
-		if err != nil {
-			log.Printf("[engine] upsert opportunity %s: %v", result.ID, err)
-			continue
-		}
 		// D-080 实施修正① + 修复⑭ S3：oppTopic 双用途（D-050 站内推送 + autotrade 事件流）。
 		// D-086 实施修正①：撤验证级别发布门——oppTopic 是双用途数据总线（autotrade rollup 喂入 +
 		// 前端实时流），永不论证级别过滤；V0/V1 区分只存在于显示层（徽章，service_verification 填）。
-		// UI 刷新另有 30s 快照兜底（service.go:1208）；前端默认 ≥5bps 显示过滤（常量，语义自立）。
-		if e.oppTopic != nil {
-			e.oppTopic.Publish(*o)
-		}
+		// D-004 P1#8：发布/落库走实质变化+TTL 心跳去重（maybePublish），UI 快照兜底不变。
+		e.maybePublish(ctx, o)
 	}
 }
 
