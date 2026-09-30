@@ -88,9 +88,8 @@ func NewBinanceUserWS(apiKey, apiSecret, baseURL, venueType, venueKey string, si
 	return b
 }
 
-// listenKeyEndpoint REST 端点（perp=base+/v1/listenKey）。
-// D-569 包B S7 顺带清理：spot 死分支删除——runOnce:159 spot 恒走 runOnceSpot（ws-api 控制连接），
-// REST listenKey 路径 spot 不可达（生产 ws-api connected 日志实证）；spot REST userDataStream 已 410。
+// listenKeyEndpoint REST 端点（perp=base+/v1/listenKey；spot 恒走 runOnceSpot ws-api
+// 控制连接不达此——D-569 包B S7 实证清理，spot REST userDataStream 已 410）。
 func (b *BinanceUserWS) listenKeyEndpoint() string {
 	return b.baseURL + "/v1/listenKey"
 }
@@ -143,13 +142,12 @@ func (b *BinanceUserWS) backupWSURL(wsURL string) string {
 	return swapURLHost(wsURL, "BINANCE_PROXY_URL_BACKUP")
 }
 
-// banJitter D-591 S1：封禁到期后重连抖动界（0..banJitter 随机；测试可缩）。
+// banJitter D-591 S1：封禁到期后重连抖动界 0..N 随机（测试可缩）。
 var banJitter = 30 * time.Second
 
-// Run 重连循环（常规错误 5s 退避）。D-591 S1：listenKey POST 遇 -1003/418 封禁 →
-// 退避至封禁到期+抖动，窗内零 REST 发射——盲 5s 锤既诱发放大（flap 期每轮 POST 新
-// listenKey）又在窗内续期封禁（S0 实证 04:10:50→04:14:51 延长）。
-// 每次迭代取新 listenKey——失效不复用（官方语义）。
+// Run 重连循环（常规错误 5s 退避）。D-591 S1：listenKey POST 遇 -1003/418 →
+// 退避至封禁到期+抖动，窗内零 REST——盲 5s 锤是封禁诱因放大器且窗内续期封禁
+// （S0 实证 04:10:50→04:14:51）。每次迭代取新 listenKey（官方语义：失效不复用）。
 func (b *BinanceUserWS) Run(ctx context.Context) {
 	var backoffUntil time.Time
 	for {
@@ -164,7 +162,7 @@ func (b *BinanceUserWS) Run(ctx context.Context) {
 		}
 		wait := 5 * time.Second
 		if !backoffUntil.IsZero() && backoffUntil.After(b.now()) {
-			wait = backoffUntil.Sub(b.now()) // 封禁窗：睡到到期（短封禁短于 5s 也按到期节拍）
+			wait = backoffUntil.Sub(b.now()) // 封禁窗睡到到期（短封禁也按到期节拍）
 		} else {
 			backoffUntil = time.Time{} // 到期（或未置）恢复常规节奏
 		}
