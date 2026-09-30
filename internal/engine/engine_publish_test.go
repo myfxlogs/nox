@@ -117,17 +117,20 @@ func TestPrunePub(t *testing.T) {
 	}
 }
 
-// fhCand 构造 FUNDING_HEDGE 候选（热修：cexPaperHook 发布节拍断言用）。
+// fhCand 构造 FUNDING_HEDGE 候选（热修：cexPaperHook 采样节拍断言用）。
 func fhCand(gross float64) detector.Candidate {
 	c := carryCand(gross)
 	c.Type = detector.TypeFundingHedge
 	return c
 }
 
-// TestCexPaperHook_PublishPaced 热修 hotfix-loops（OOM 19:01 实证）：
-// cexPaperHook 必须随发布去重节拍——同候选同值连续 5 帧 hook 仅 1 次；
-// Δ≥pubDeltaBps 后第 2 次。帧率级调用=纸面开平+DB 写风暴回归。
-func TestCexPaperHook_PublishPaced(t *testing.T) {
+// TestCexPaperHook_SamplingCadence 热修 hotfix-paper（OOM pprof 实证）：
+// cexPaperHook 按 canonical 30s 采样节拍——同 canonical 连续 5 帧 hook 仅 1 次；
+// 越采样窗再 1 次。与真金发布去重（maybePublish）无关，纯纸面研究采样。
+func TestCexPaperHook_SamplingCadence(t *testing.T) {
+	old := cexPaperHookInterval
+	cexPaperHookInterval = 40 * time.Millisecond
+	t.Cleanup(func() { cexPaperHookInterval = old })
 	cand := fhCand(20.0)
 	e, _, _ := newNotifyEngine(t, cand)
 	var calls int
@@ -138,13 +141,11 @@ func TestCexPaperHook_PublishPaced(t *testing.T) {
 		scanCandidate(t, e, cand)
 	}
 	if calls != 1 {
-		t.Fatalf("same-value 5 frames: hook calls=%d, want 1（发布去重节拍）", calls)
+		t.Fatalf("same canonical 5 frames: hook calls=%d, want 1（30s 采样节拍）", calls)
 	}
-	// Δ：gross 20→21 → netBps 变化 ≥pubDeltaBps(0.5) → 再发布 → hook 第 2 次。
-	cand2 := fhCand(21.0)
-	e.detectors[0].(*fakeDetector).candidates = []detector.Candidate{cand2}
-	scanCandidate(t, e, cand2)
+	time.Sleep(50 * time.Millisecond) // 越采样窗
+	scanCandidate(t, e, cand)
 	if calls != 2 {
-		t.Fatalf("delta frame: hook calls=%d, want 2", calls)
+		t.Fatalf("past window frame: hook calls=%d, want 2", calls)
 	}
 }

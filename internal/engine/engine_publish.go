@@ -50,6 +50,21 @@ func (e *Engine) maybePublish(ctx context.Context, o *pgstore.Opportunity) bool 
 	return true
 }
 
+// cexPaperHookInterval 纸面轨 hook 每 canonical 采样节拍（var：测试覆写）。
+var cexPaperHookInterval = 30 * time.Second
+
+// paperHookDue canonical 级 30s 合流判定（持 m.mu；到期/首见即记时放行）。
+func (e *Engine) paperHookDue(canonical string) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	last, ok := e.paperHookAt[canonical]
+	if ok && time.Since(last) < cexPaperHookInterval {
+		return false
+	}
+	e.paperHookAt[canonical] = time.Now()
+	return true
+}
+
 // prunePub 清 lastPub 中 at 早于 2×OpportunityTTL 的条目（onQuote 每帧调用——
 // O(n) 小表可接受；过期=该机会已从 DB TTL 过期，删除等价于「下次再见当首见」）。
 func (e *Engine) prunePub() {
@@ -63,6 +78,11 @@ func (e *Engine) prunePub() {
 	for id, st := range e.lastPub {
 		if st.at.Before(cut) {
 			delete(e.lastPub, id)
+		}
+	}
+	for k, at := range e.paperHookAt {
+		if at.Before(cut) {
+			delete(e.paperHookAt, k)
 		}
 	}
 }
