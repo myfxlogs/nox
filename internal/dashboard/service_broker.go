@@ -38,6 +38,8 @@ func (s *Service) ListBrokerPositions(ctx context.Context, req *connect.Request[
 	annotateAccountAlias(ctx, s.store, out)
 	// D-152 微件①：CEX 腿按 (position_id, venue) 聚合 cashflows 填 swap（MT 不动）
 	annotateCEXSwap(ctx, s.store, out)
+	// D-009 S3：平仓净估（fresh 报价 + cs/fx/费率齐才落值，缺一缺省）
+	s.annotateCloseEstimate(ctx, out)
 	resp := &v1.ListBrokerPositionsResponse{Positions: out}
 	resp.PnlSumUsd, resp.NetSumUsd = brokerSums(out) // D-508 S8：统计条聚合后端下发
 	return connect.NewResponse(resp), nil
@@ -185,13 +187,20 @@ func cexSwapCandidate(bp *v1.BrokerPosition) bool {
 	return isCEXVenueKey(bp.VenueKey) && bp.Swap == 0 && bp.OpenedAt != nil
 }
 
-// AnnotateBrokerPositions D-571 包A：monitor 事件载荷标注入口（三件套同序——
-// position_id/order_id → alias → CEX swap；与 case 8 流推送/拉路径同源口径）。
-// main 装配 bpMon.SetAnnotator 用；导出仅因调用方在 cmd 包。
-func AnnotateBrokerPositions(ctx context.Context, store *pgstore.Store, bps []*v1.BrokerPosition) {
+// AnnotateBrokerPositions D-571 包A：monitor 事件载荷标注入口（四件套同序——
+// position_id/order_id → alias → CEX swap → D-009 平仓净估；与 case 8 流推送/拉路径同源口径）。
+// main 装配 bpMon.SetAnnotator 用；导出仅因调用方在 cmd 包。svc=nil 时仅前三件（净估跳过）。
+func AnnotateBrokerPositions(ctx context.Context, svc *Service, bps []*v1.BrokerPosition) {
+	var store *pgstore.Store
+	if svc != nil {
+		store = svc.store
+	}
 	annotatePositionID(ctx, store, bps)
 	annotateAccountAlias(ctx, store, bps)
 	annotateCEXSwap(ctx, store, bps)
+	if svc != nil {
+		svc.annotateCloseEstimate(ctx, bps)
+	}
 }
 
 // CloseBrokerPosition 经注册执行器平仓一条 venue 持仓（人工确认后，§1）。
@@ -257,7 +266,12 @@ func brokerPositionToProto(o venue.Order, canonical string, price bus.Quote, has
 		Sl:          o.StopLoss, // D-155：broker 端 SL 透传（MT5/MT4 Order.StopLoss；0=未设/CEX）
 	}
 	if hasPrice && now.Sub(price.Time) <= freshTTL {
-		pb.CurrentPrice = (price.Bid + price.Ask) / 2
+		// D-009 S2：现价=平仓方向价（BUY仓平吃 bid / SELL仓平吃 ask）；双值齐填。
+		pb.PriceBid, pb.PriceAsk = price.Bid, price.Ask
+		pb.CurrentPrice = price.Bid
+		if o.Side == "SELL" {
+			pb.CurrentPrice = price.Ask
+		}
 		pb.Fresh = true
 	}
 	if !o.OpenedAt.IsZero() {

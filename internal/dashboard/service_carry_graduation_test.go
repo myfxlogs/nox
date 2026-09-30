@@ -229,6 +229,9 @@ func gradFixture(structure string) (*fakeGradDB, *Service) {
 		pipeline:  exec.NewPipeline(exec.NewRegistry(), nil, nil, exec.RiskLimits{}, "real"),
 	}
 	s.autoMapFn = func(context.Context, string) (string, error) { return "applied=0 skipped=3 conflicts=0", nil }
+	// D-009 S4：实占闸读 positions/position_legs 行集——fixture 默认无在途系统仓（空集）。
+	// 需要实占场景时测试覆盖此 seam（如 D-475a-A3 超限锚）。
+	s.openVenueLegsFn = func(context.Context, string) ([]pgstore.OpenVenueLegRow, error) { return nil, nil }
 	return f, s
 }
 

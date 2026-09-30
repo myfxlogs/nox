@@ -168,11 +168,6 @@ func (s *Service) exposureCapGate(ctx context.Context, legKeys []string, grossUS
 	if err != nil {
 		return nil, fmt.Sprintf("敞口闸表读取失败: %v（fail-closed 不批钱）", err)
 	}
-	existing, err := db.LoadXAssetAllowCombos(ctx, "live")
-	if err != nil {
-		return nil, fmt.Sprintf("白名单敞口汇总失败: %v", err)
-	}
-	sum := exposureSumOf(existing)
 	proposed := grossUSD
 	if notionalUSD != nil {
 		proposed = *notionalUSD
@@ -190,16 +185,23 @@ func (s *Service) exposureCapGate(ctx context.Context, legKeys []string, grossUS
 		if capRow.CapUSD == 0 {
 			return nil, fmt.Sprintf("venue %s 敞口闸冻结新批准（cap=0）", legKey)
 		}
-		if sum[legKey]+proposed > capRow.CapUSD {
-			return nil, fmt.Sprintf("venue %s 敞口超限: 已挂 $%.0f+本次 $%.0f > cap $%.0f",
-				legKey, sum[legKey], proposed, capRow.CapUSD)
+		// D-009 S4：实占=在途系统仓（外单不入），与闸6/执行守卫同谓词——
+		// 原 Σenabled 组合预留额口径已撤（计划额非真占用，数学上永不可开单）。
+		sum, serr := s.VenueSystemExposureUSD(ctx, strings.SplitN(legKey, ":", 2)[0])
+		if serr != nil {
+			return nil, fmt.Sprintf("venue %s 敞口实占查询失败（fail-closed）: %v", legKey, serr)
+		}
+		if sum+proposed > capRow.CapUSD {
+			return nil, fmt.Sprintf("venue %s 敞口超限: 实占 $%.0f+本次 $%.0f > cap $%.0f",
+				legKey, sum, proposed, capRow.CapUSD)
 		}
 	}
 	return warns, ""
 }
 
 // exposureSumOf venue_key→已挂敞口汇总（双腿向 buy/sell 两键同记=保守高估）；
-// NotionalUSD 优先，缺→MaxGrossUSD——与 approve 闸消费口径同公式（D-547 S3① 闸表透出复用）。
+// NotionalUSD 优先，缺→MaxGrossUSD。D-009 S4 起仅用于「预留额」展示/超订 warn
+// （AllocatedUsd 列 + overSubscribedWarn）；执法面已切 VenueSystemExposureUSD 实占口径。
 func exposureSumOf(existing []pgstore.XAssetAllowRow) map[string]float64 {
 	sum := map[string]float64{}
 	for _, r := range existing {

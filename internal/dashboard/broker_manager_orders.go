@@ -86,6 +86,15 @@ func (m *BrokerManager) SetCEXQueriers(qs []venue.Querier) {
 	m.syncHistQueriers()
 }
 
+// KickPositions D-009 S1：passthrough 到 bpMon.Kick（新注册 querier 叫醒回读；
+// pendingKick 去重+cap1 信号，bpMon.Run 未起/在跑都安全）。nil-guard=未接线静默。
+func (m *BrokerManager) KickPositions(venueKey string) {
+	if m.bpm == nil {
+		return
+	}
+	m.bpm.Kick(venueKey)
+}
+
 // syncQueriers 汇总 querier 并触发回调（reconciler 刷新）。
 func (m *BrokerManager) syncQueriers() {
 	qs := m.queriers()

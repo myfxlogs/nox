@@ -77,6 +77,7 @@ func (m *CexPositionManager) sync(ctx context.Context) {
 	winners := cexKeyWinners(live)
 	seen := make(map[string]bool, len(live))
 	var qs []venue.Querier
+	var newKeys []string // D-009 S1：本轮新注册键（boot 竞态叫醒用）
 	for i := range live {
 		c := &live[i]
 		if c.VenueType != "perp" {
@@ -95,6 +96,7 @@ func (m *CexPositionManager) sync(ctx context.Context) {
 		qs = append(qs, vq)
 		if !m.keys[vk] {
 			log.Printf("[cex-pos] register %s (base=%s simulated=%v)", vk, base, c.Simulated)
+			newKeys = append(newKeys, vk)
 		}
 	}
 	for vk := range m.keys {
@@ -104,4 +106,10 @@ func (m *CexPositionManager) sync(ctx context.Context) {
 	}
 	m.keys = seen
 	m.bm.SetCEXQueriers(qs)
+	// D-009 S1：新注册键叫醒 bpMon 回读——boot 竞态实证（bpm.Run 首轮回读早于
+	// CEX querier 注册则该 venue 永不补读，restOnline 未知/持仓缺席直到下一 kick）。
+	// pendingKick 幂等去重，Run 未起时信号驻留 cap1 亦不丢。
+	for _, vk := range newKeys {
+		m.bm.KickPositions(vk)
+	}
 }

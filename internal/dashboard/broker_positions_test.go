@@ -23,8 +23,11 @@ func TestBrokerPositionToProto_FreshFrame(t *testing.T) {
 	price := bus.Quote{Symbol: "EURUSD", Venue: "277842155", VenueType: "mt5", Bid: 1.1010, Ask: 1.1012, Time: now.Add(-time.Second)}
 
 	pb := brokerPositionToProto(o, "EURUSD", price, true, true, ttl, now, 0, nil, 0)
-	if pb.CurrentPrice != 1.1011 {
-		t.Errorf("fresh frame current_price want mid 1.1011, got %v", pb.CurrentPrice)
+	if pb.CurrentPrice != 1.1010 { // D-009 S2：方向价——BUY 仓平仓吃 bid
+		t.Errorf("fresh frame current_price want bid 1.1010, got %v", pb.CurrentPrice)
+	}
+	if pb.PriceBid != 1.1010 || pb.PriceAsk != 1.1012 {
+		t.Errorf("price_bid/ask want 1.1010/1.1012, got %v/%v", pb.PriceBid, pb.PriceAsk)
 	}
 	if !pb.Fresh {
 		t.Errorf("fresh frame fresh want true, got false")

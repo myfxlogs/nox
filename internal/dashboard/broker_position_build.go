@@ -40,7 +40,15 @@ func (m *BrokerPositionMonitor) protoFor(ctx context.Context, vk string, vs venu
 	//（REST 回读行/报价流断）→ 诚实空态 Fresh=false，不回落 LatestLeg。
 	if keydomain.IsType(o.VenueKey, "mt5") {
 		if !o.PriceAt.IsZero() && o.CurrentPrice > 0 {
-			price = bus.Quote{Bid: o.CurrentPrice, Ask: o.CurrentPrice, Time: o.PriceAt}
+			// D-009 S2：帧携双价优先；缺 bid/ask（旧帧/测试）回退中价同值填充。
+			bid, ask := o.PriceBid, o.PriceAsk
+			if bid <= 0 {
+				bid = o.CurrentPrice
+			}
+			if ask <= 0 {
+				ask = o.CurrentPrice
+			}
+			price = bus.Quote{Bid: bid, Ask: ask, Time: o.PriceAt}
 			hasPrice = true
 		}
 	} else if q, ok := m.qbus.LatestLeg(canonical, o.Symbol, o.VenueKey); ok {
