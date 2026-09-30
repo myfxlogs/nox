@@ -73,6 +73,7 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 		hasUncovered bool
 		tripleDay    float64
 		hasTripleDay bool
+		deadline     bool // RPC DeadlineExceeded（补采候选标记）
 	}
 	slots := make([]swapSlot, len(syms))
 	sem := make(chan struct{}, 8)
@@ -80,23 +81,19 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 	// D-104 P1 R1：循环前捕获 token，goroutine 内用同一 token（消除 8 路并发无锁读 a.token，
 	// 与 reconnectSession 持 a.mu 写的竞态面；getToken 持锁，同一轮采集语义不变）。
 	tok := a.getToken()
-	for i, ent := range syms {
-		wg.Add(1)
-		sem <- struct{}{}
-		i, ent := i, ent
-		safego.Go("mt_swap:symbol-params", func() {
-			defer wg.Done()
-			defer func() { <-sem }()
-			slot := &slots[i]
-			brokerSym, canon := ent.brokerSym, ent.canon
-			// S5：派生 per-call 超时，慢符号进 errs 不阻塞整体（parent ctx 不变）。
-			pctx, cancel := context.WithTimeout(a.withSessionMD(ctx), swapPerCallTimeout)
-			resp, err := a.mt5.SymbolParams(pctx, &mt5pb.SymbolParamsRequest{Id: tok, Symbol: brokerSym})
-			cancel()
-			if err != nil {
-				slot.errs = append(slot.errs, brokerSym+": "+err.Error())
-				return
-			}
+	// process 单符号采集主体（抽闭包供首轮与超时补采共用，timeout 由调用方给）。
+	process := func(ent symEntry, slot *swapSlot, timeout time.Duration) {
+		brokerSym, canon := ent.brokerSym, ent.canon
+		// S5：派生 per-call 超时，慢符号进 errs 不阻塞整体（parent ctx 不变）。
+		pctx, cancel := context.WithTimeout(a.withSessionMD(ctx), timeout)
+		resp, err := a.mt5.SymbolParams(pctx, &mt5pb.SymbolParamsRequest{Id: tok, Symbol: brokerSym})
+		cancel()
+		if err != nil {
+			slot.errs = append(slot.errs, brokerSym+": "+err.Error())
+			slot.deadline = errors.Is(err, context.DeadlineExceeded)
+			return
+		}
+		{
 			if e := resp.GetError(); e != nil {
 				slot.errs = append(slot.errs, brokerSym+": "+e.GetMessage())
 				return
@@ -124,7 +121,7 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 			if brokerSym != canon {
 				slot.facts = append(slot.facts, tradeModeFact(a.venue, brokerSym, sg.GetTradeMode(), "mt5"))
 			}
-			mode := mt5SwapModeForVenue(a.venue, sg.GetSwapType(), sg.GetSwapLong(), sg.GetSwapShort())
+			mode := mt5SwapModeForServer(a.server, sg.GetSwapType(), sg.GetSwapLong(), sg.GetSwapShort())
 			// D-325 S1：先捕获 raw 模式——下方 Exness override 只作用于 canonical（D-300 S0 裁定），
 			// native variant fact 恒用 raw 值（XAUUSDm 周末腿判据需分辨 XAUUSDm/XAUUSD247m 真实差异）。
 			rawMode := mode
@@ -204,9 +201,47 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 				swapInPointsGuardRail("mt5", a.venue, canon, sg.GetSwapLong(), point, cs, price)
 				swapInPointsGuardRail("mt5", a.venue, canon, sg.GetSwapShort(), point, cs, price)
 			}
+		}
+	}
+	for i, ent := range syms {
+		wg.Add(1)
+		sem <- struct{}{}
+		i, ent := i, ent
+		safego.Go("mt_swap:symbol-params", func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			process(ent, &slots[i], swapPerCallTimeout)
 		})
 	}
 	wg.Wait()
+
+	// 超时补采（2026-09-30 PXBT 实证：boot 期三账户同起 + 订阅突发致 SymbolParams
+	// 大量 DeadlineExceeded，失败符号整轮丢）：首轮 deadline 失败的符号并发 2、
+	// 2×swapPerCallTimeout 串行补采一次，成功槽整体替换并入 facts，仍失败的 errs 保留；
+	// 不做循环重试（下一小时轮次天然覆盖）。
+	var retryIdx []int
+	for i := range slots {
+		if slots[i].deadline {
+			retryIdx = append(retryIdx, i)
+		}
+	}
+	if len(retryIdx) > 0 {
+		var rwg sync.WaitGroup
+		rsem := make(chan struct{}, 2)
+		for _, i := range retryIdx {
+			rwg.Add(1)
+			rsem <- struct{}{}
+			i := i
+			safego.Go("mt_swap:symbol-params-retry", func() {
+				defer rwg.Done()
+				defer func() { <-rsem }()
+				var slot swapSlot
+				process(syms[i], &slot, 2*swapPerCallTimeout)
+				slots[i] = slot
+			})
+		}
+		rwg.Wait()
+	}
 
 	// D-104 P1 T3：按序合并 per-index 结果槽。
 	var facts []fact.Fact
@@ -244,6 +279,7 @@ func (a *MT5Adapter) SwapFacts(ctx context.Context, q *bus.QuoteBus) ([]fact.Fac
 	}
 	swapPollSummary("mt5", a.venue, emit, emit0, skips)
 	swapUncoveredSummary("mt5", a.venue, uncovered)
+	a.swapZeroOutputAlert(emit, emit0, skips, errs)
 	// D-077 修复⑪A M3：三倍日 per-symbol 全量收集（删「首个符号代表 venue」）。
 	// 同 venue 值一致 → 发 venue 级 Fact（现行为）；不一致 → 发 per-symbol Fact + warn。
 	facts = append(facts, collectTripleSwapDayFacts("mt5", a.venue, tripleDays)...)

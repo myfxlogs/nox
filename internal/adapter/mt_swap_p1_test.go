@@ -14,22 +14,22 @@ import (
 
 // TestPXBT_SwapTypeZero_OverrideToInPoints D-112→W4a S2：PXBT(1314615) SwapType=0+非零值 → override InPoints → SwapFacts emit。
 // D-112 曾验证"删除 override 后 Uncalibrated skip"；W4a S2 恢复 override（D-104 P1 T1 标定），行为反转为 emit InPoints。
-// mt5SwapMode 纯函数仍返回 Uncalibrated（override 在 mt5SwapModeForVenue 层，不改纯函数签名）。
+// mt5SwapMode 纯函数仍返回 Uncalibrated（override 在 mt5SwapModeForServer 层，不改纯函数签名）。
 func TestPXBT_SwapTypeZero_OverrideToInPoints(t *testing.T) {
 	// mt5SwapMode 纯函数：SwapType=0+非零 → Uncalibrated（override 不改纯函数）
 	mode := mt5SwapMode(mt5pb.SwapType_SwapType_SwapNone, 5.5, -51.55)
 	if mode != SwapModeUncalibrated {
 		t.Fatalf("mt5SwapMode SwapType=0+非零: mode=%v, want Uncalibrated（纯函数不改）", mode)
 	}
-	// mt5SwapModeForVenue：venue=1314615 + SwapType=0 + 非零 → InPoints（override）
-	mode = mt5SwapModeForVenue("1314615", mt5pb.SwapType_SwapType_SwapNone, 5.5, -51.55)
+	// mt5SwapModeForServer：server=PXBTTrading-1 + SwapType=0 + 非零 → InPoints（override）
+	mode = mt5SwapModeForServer("PXBTTrading-1", mt5pb.SwapType_SwapType_SwapNone, 5.5, -51.55)
 	if mode != SwapModeInPoints {
-		t.Fatalf("mt5SwapModeForVenue PXBT SwapType=0+非零: mode=%v, want InPoints（override）", mode)
+		t.Fatalf("mt5SwapModeForServer PXBT SwapType=0+非零: mode=%v, want InPoints（override）", mode)
 	}
-	// SwapFacts：venue=1314615 + SwapType=0 + 非零 → emit swap_long/swap_short（InPoints override）+ trade_mode
+	// SwapFacts：server=PXBTTrading-1 + SwapType=0 + 非零 → emit swap_long/swap_short（InPoints override）+ trade_mode
 	q := bus.New()
 	q.Publish(bus.Quote{Symbol: "GBPJPY", Venue: "1314615", VenueType: "mt5", Bid: 190, Ask: 190.01, Time: time.Now()})
-	a := &MT5Adapter{venue: "1314615", mt5: &fakeMT5Client{params: map[string]*mt5pb.SymbolParamsReply{
+	a := &MT5Adapter{venue: "1314615", server: "PXBTTrading-1", mt5: &fakeMT5Client{params: map[string]*mt5pb.SymbolParamsReply{
 		"GBPJPY": {Result: &mt5pb.SymbolParams{SymbolGroup: &mt5pb.SymGroup{
 			SwapType: mt5pb.SwapType_SwapType_SwapNone, SwapLong: 5.5, SwapShort: -6.3508, TradeMode: mt5pb.TradeMode_TradeMode_FullAccess,
 		}, SymbolInfo: &mt5pb.SymbolInfo{Points: 0.001, ContractSize: 100000}}},

@@ -153,28 +153,24 @@ func TestSwapInPointsGuardRail(t *testing.T) {
 	}
 }
 
-// TestPXBT_SwapTypeZero_AsInPoints D-159 W4a S2：venue=1314615(PXBT) SwapType=0 + 非零值 → InPoints override。
-// 证据：EURUSD long=-3.6961 点（PXBT 实证），同量级同向于 Exness/IC/FxPro。
-func TestPXBT_SwapTypeZero_AsInPoints(t *testing.T) {
-	got := mt5SwapModeForVenue("1314615", mt5pb.SwapType_SwapType_SwapNone, -3.6961, 0)
-	if got != SwapModeInPoints {
-		t.Errorf("PXBT SwapType=0+非零值: mode=%v, want SwapModeInPoints", got)
+// TestSwapTypeZero_AsInPoints_ServerKey D-159 W4a S2 → 2026-09-30 server 键修订：
+// server=PXBTTrading-1 SwapType=0 + 非零值 → InPoints override（1279967/1350684 同 server
+// 被原 login 键漏掉的实证，emit=0 skip=81）。
+func TestSwapTypeZero_AsInPoints_ServerKey(t *testing.T) {
+	cases := []struct {
+		name   string
+		server string
+		long   float64
+		want   SwapMode
+	}{
+		{"PXBT server SwapType=0+非零", "PXBTTrading-1", -3.6961, SwapModeInPoints},
+		{"PXBT server SwapType=0+零值不 override", "PXBTTrading-1", 0, SwapModeNone},
+		{"其他 server SwapType=0+非零不 override", "Exness-MT5Real", 1.0, SwapModeUncalibrated},
 	}
-}
-
-// TestPXBT_SwapTypeZero_ZeroValue_NotOverride D-159 W4a S2：venue=1314615 SwapType=0 + 零值 → 不 override（走 mt5SwapMode 原逻辑=SwapModeNone）。
-func TestPXBT_SwapTypeZero_ZeroValue_NotOverride(t *testing.T) {
-	got := mt5SwapModeForVenue("1314615", mt5pb.SwapType_SwapType_SwapNone, 0, 0)
-	if got != SwapModeNone {
-		t.Errorf("PXBT SwapType=0+零值: mode=%v, want SwapModeNone（不 override）", got)
-	}
-}
-
-// TestNonPXBT_SwapTypeZero_NotOverride D-159 W4a S2：venue 非 PXBT SwapType=0 + 非零值 → 不 override（走 mt5SwapMode 原逻辑=Uncalibrated 矛盾数据）。
-func TestNonPXBT_SwapTypeZero_NotOverride(t *testing.T) {
-	got := mt5SwapModeForVenue("other", mt5pb.SwapType_SwapType_SwapNone, 1.0, 0)
-	if got != SwapModeUncalibrated {
-		t.Errorf("非 PXBT SwapType=0+非零值: mode=%v, want SwapModeUncalibrated（不 override）", got)
+	for _, c := range cases {
+		if got := mt5SwapModeForServer(c.server, mt5pb.SwapType_SwapType_SwapNone, c.long, 0); got != c.want {
+			t.Errorf("%s: mode=%v, want %v", c.name, got, c.want)
+		}
 	}
 }
 

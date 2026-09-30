@@ -98,18 +98,21 @@ func mt5SwapMode(t mt5pb.SwapType, long, short float64) SwapMode {
 	}
 }
 
-// swapTypeZeroAsInPoints D-104 P1 T1（W4a S2 施工）：PXBT(venue=1314615) SwapType=0 + 非零值 → InPoints 标定。
+// swapTypeZeroAsInPoints D-104 P1 T1（W4a S2 施工）：PXBT SwapType=0 + 非零值 → InPoints 标定。
 // 证据：44/45 品种 swapType=0 + 非零值，幅度交叉验证同量级同向（EURUSD long=-3.6961 点 vs Exness -0.50/IC -0.71/FxPro -0.76）。
 // mode 标签错误（同 D-092 FxPro mode 9 类标定异常），真值是 InPoints 口径。
+// 原按 login 1314615 键，1279967/1350684 同 server 被漏（2026-09-30 实证 emit=0 skip=81，
+// facts.swap_long 每小时仅 1-7 条）→ 改 server 键（quirk 属 broker server 非 login，同
+// D-342R1 swap-free 白名单口径；键值=broker_accounts.server 原文）。
 var swapTypeZeroAsInPoints = map[string]bool{
-	"1314615": true, // PXBTTrading-1
+	"PXBTTrading-1": true,
 }
 
-// mt5SwapModeForVenue D-159 W4a S2：per-venue override + mt5SwapMode 纯函数。
-// venue 在 swapTypeZeroAsInPoints + SwapType==SwapNone + 非零值 → InPoints（PXBT 标定）；
+// mt5SwapModeForServer：per-server override + mt5SwapMode 纯函数（D-159 W4a S2 venue 版改 server 键）。
+// server 在 swapTypeZeroAsInPoints + SwapType==SwapNone + 非零值 → InPoints（PXBT 标定）；
 // 否则走 mt5SwapMode 原逻辑（不改 mt5SwapMode 签名，MT4 路径不受影响）。
-func mt5SwapModeForVenue(venue string, t mt5pb.SwapType, long, short float64) SwapMode {
-	if swapTypeZeroAsInPoints[venue] && t == mt5pb.SwapType_SwapType_SwapNone && (long != 0 || short != 0) {
+func mt5SwapModeForServer(server string, t mt5pb.SwapType, long, short float64) SwapMode {
+	if swapTypeZeroAsInPoints[server] && t == mt5pb.SwapType_SwapType_SwapNone && (long != 0 || short != 0) {
 		return SwapModeInPoints
 	}
 	return mt5SwapMode(t, long, short)

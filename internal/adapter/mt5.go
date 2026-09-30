@@ -105,6 +105,10 @@ type MT5Adapter struct {
 	zfPersistWarned   bool               // stage-2 后仍死的 warn 去重
 	zfCancelStream    context.CancelFunc // 当前流取消器（stage-2 强制重连用）
 
+	// swap 采集整轮零产出告警节流（mu 保护）：emit+emit0==0 且有 skip/err 时发 critical，
+	// 每 venue 6h 至多一条（2026-09-30 PXBT 双账户静默零 facts 实证）。
+	swapZeroAlertAt time.Time
+
 	stopCtx    context.Context
 	stopCancel context.CancelFunc
 	mu         sync.Mutex

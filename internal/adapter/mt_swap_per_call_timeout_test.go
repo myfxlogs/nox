@@ -70,7 +70,7 @@ func TestSwapFacts_PerCallTimeout(t *testing.T) {
 			}, SymbolInfo: &mt5pb.SymbolInfo{Points: 0.001, ContractSize: 100000}}},
 		},
 		slowSym:  "AUDJPY",
-		delay:    4 * time.Second, // > 3s per-call timeout
+		delay:    7 * time.Second, // > 首轮 3s 与补采 6s 双重超时（2026-09-30 补采机制引入后仍保持超时路径覆盖）
 		gotCalls: map[string]int{},
 	}
 	a := &MT5Adapter{venue: "pxbt", mt5: client}
@@ -84,8 +84,8 @@ func TestSwapFacts_PerCallTimeout(t *testing.T) {
 	})
 	elapsed := time.Since(start)
 
-	// 整体应在 per-call 超时（3s）+ 少量开销内完成，远小于 4s（慢符号不应拖垮整轮）。
-	if elapsed > 3500*time.Millisecond {
+	// 整体应在 per-call 超时（3s）+ 补采超时（6s）+ 少量开销内完成，远小于 14s（不补采两轮串行）。
+	if elapsed > 10*time.Second {
 		t.Errorf("整体耗时 %v 过长，慢符号应被 per-call 3s 超时隔离", elapsed)
 	}
 	// facts>0（EURUSD 正常输出）→ 不返回 err（swapResult 语义：errs 只打日志）。
@@ -96,7 +96,7 @@ func TestSwapFacts_PerCallTimeout(t *testing.T) {
 	if n := countFacts(fs, fact.KindSwapLong); n != 1 {
 		t.Errorf("swap_long facts = %d, want 1（EURUSD 正常）", n)
 	}
-	// AUDJPY 超时进 errs（日志含 AUDJPY + context deadline exceeded）。
+	// AUDJPY 两轮均超时进 errs（日志含 AUDJPY + context deadline exceeded）。
 	if !strings.Contains(logOut, "AUDJPY") || !strings.Contains(logOut, "context deadline exceeded") {
 		t.Errorf("应有 AUDJPY 超时日志，got:\n%s", logOut)
 	}
@@ -119,7 +119,7 @@ func TestSwapFacts_PerCallTimeout_AllSlowFails(t *testing.T) {
 				SwapType: mt5pb.SwapType_SwapType_InPoints, SwapLong: 5, SwapShort: -5, TradeMode: mt5pb.TradeMode_TradeMode_FullAccess,
 			}, SymbolInfo: &mt5pb.SymbolInfo{Points: 0.001, ContractSize: 100000}}},
 		},
-		delay: 4 * time.Second,
+		delay: 7 * time.Second, // > 首轮 3s + 补采 6s（补采后仍失败才返 err）
 	}
 	a := &MT5Adapter{venue: "pxbt", mt5: client}
 	a.SetSymbolMap(map[string]string{"EURUSD": "EURUSD", "AUDJPY": "AUDJPY"})
@@ -165,9 +165,11 @@ func (f *allSlowMT5Client) AccountSummary(_ context.Context, _ *mt5pb.AccountSum
 }
 
 // TestSwapFacts_PerCallTimeout_ParentCtxIntact per-call 超时不影响 parent ctx。
+// SLOW delay=4s：首轮 3s 超时 → 补采 6s 窗口内成功（D-104 P1 R1 补采语义顺带覆盖）。
 func TestSwapFacts_PerCallTimeout_ParentCtxIntact(t *testing.T) {
 	q := bus.New()
 	q.Publish(bus.Quote{Symbol: "EURUSD", Venue: "v", VenueType: "mt5", Bid: 1.1, Ask: 1.1001, Time: time.Now()})
+	q.Publish(bus.Quote{Symbol: "SLOW", Venue: "v", VenueType: "mt5", Bid: 1.0, Ask: 1.0001, Time: time.Now()})
 	client := &slowFakeMT5Client{
 		params: map[string]*mt5pb.SymbolParamsReply{
 			"EURUSD": {Result: &mt5pb.SymbolParams{SymbolGroup: &mt5pb.SymGroup{

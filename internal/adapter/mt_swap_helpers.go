@@ -42,6 +42,31 @@ func swapPollSummary(src, venue string, emit, emit0 int, skips []string) {
 	log.Printf("[%s:%s] swap poll: emit=%d emit0=%d skip=%d [%s]", src, venue, emit, emit0, len(skips), strings.Join(skips, ", "))
 }
 
+// swapZeroAlertInterval 整轮零产出告警节流（每 venue 内存节流 6h）。
+const swapZeroAlertInterval = 6 * time.Hour
+
+// swapZeroOutputAlert 整轮零产出（emit+emit0==0 且 skip/err>0）→ critical 告警
+// （AlertSink 已注入链 main→brokerMgr→ad；nil=no-op）。PXBT 双账户静默零 facts
+// 实证（2026-09-30）：skip=81 但只有日志行无人看——禁静默升级为告警。
+func (a *MT5Adapter) swapZeroOutputAlert(emit, emit0 int, skips, errs []string) {
+	if emit+emit0 > 0 || len(skips)+len(errs) == 0 || a.AlertSink == nil {
+		return
+	}
+	a.mu.Lock()
+	if time.Since(a.swapZeroAlertAt) < swapZeroAlertInterval {
+		a.mu.Unlock()
+		return
+	}
+	a.swapZeroAlertAt = time.Now()
+	a.mu.Unlock()
+	reasons := append(append([]string{}, skips...), errs...)
+	if len(reasons) > 5 {
+		reasons = append(reasons[:5], fmt.Sprintf("…+%d", len(reasons)-5))
+	}
+	a.AlertSink("critical", fmt.Sprintf("[mt5:%s] swap 采集整轮零产出：skip=%d err=%d（%s）",
+		a.venue, len(skips), len(errs), strings.Join(reasons, "; ")))
+}
+
 // swapUncoveredSummary WP1 未覆盖 SwapType 计数汇总（禁静默）：
 // 有未覆盖类型时逐类型打印 `[swap] uncovered SwapType=%d count=%d`（对拍 aggregator-skip 计数纪律）。
 // 无未覆盖类型时零日志（探测面全覆盖=无事可报）。
