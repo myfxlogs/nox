@@ -202,6 +202,7 @@ func (b *BinanceUserWS) runOnce(ctx context.Context) error {
 					return
 				}
 			case <-ping.C:
+				_ = conn.SetWriteDeadline(b.now().Add(wsWriteDeadline)) // D-587
 				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 					return
 				}

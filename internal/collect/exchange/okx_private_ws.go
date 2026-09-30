@@ -145,6 +145,7 @@ func (o *OKXPrivateWS) runOnce(ctx context.Context) error {
 
 	// login（SSOT §5 B.2：sign=base64(HMAC-SHA256(secret, ts+"GET"+"/users/self/verify"))）。
 	ts := okxPrivateLoginTs(time.Now())
+	_ = conn.SetWriteDeadline(time.Now().Add(wsWriteDeadline)) // D-587
 	if err := conn.WriteJSON(o.loginFrame(ts)); err != nil {
 		return fmt.Errorf("login write: %w", err)
 	}
@@ -164,6 +165,7 @@ func (o *OKXPrivateWS) runOnce(ctx context.Context) error {
 		for {
 			select {
 			case <-ticker.C:
+				_ = conn.SetWriteDeadline(time.Now().Add(wsWriteDeadline)) // D-587
 				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 					return
 				}
@@ -203,6 +205,7 @@ func (o *OKXPrivateWS) runOnce(ctx context.Context) error {
 			return fmt.Errorf("okx private event error: code=%s msg=%s", e.Code, e.Msg)
 		case "login":
 			log.Printf("[okx-private-ws] login ok (simulated=%v)", o.simulated)
+			_ = conn.SetWriteDeadline(time.Now().Add(wsWriteDeadline)) // D-587
 			if err := conn.WriteJSON(map[string]any{
 				"op":   "subscribe",
 				"args": okxPrivateSubscribeArgs(),
