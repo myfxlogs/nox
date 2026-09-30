@@ -41,6 +41,8 @@ type CexProxyHealthMonitor struct {
 	consec    map[string]int  // endpoint → 连续失败数
 	deadNoted map[string]bool // endpoint → crit 已发（同态不重发）
 	lastOK    map[string]bool // endpoint → 最近一次探测结果（对端状态行用）
+	// D-589 坑1：败因分级——conn err/超时=0，拿到响应非 200=HTTP code（告警文案分流用）。
+	lastFailHTTP map[string]int // endpoint → 最近一次败因 HTTP code
 }
 
 // NewCexProxyHealthMonitor 从 env 构造：BINANCE_PROXY_URL 空 → nil（不监控，fail-open）；
@@ -54,14 +56,15 @@ func NewCexProxyHealthMonitor(insert alertInserter) *CexProxyHealthMonitor {
 	client := httpx.Client()
 	client.Timeout = cexProxyPollTimeout
 	return &CexProxyHealthMonitor{
-		insert:    insert,
-		client:    client,
-		primary:   primary,
-		backup:    os.Getenv("BINANCE_PROXY_URL_BACKUP"),
-		tick:      cexProxyTick,
-		consec:    make(map[string]int),
-		deadNoted: make(map[string]bool),
-		lastOK:    make(map[string]bool),
+		insert:       insert,
+		client:       client,
+		primary:      primary,
+		backup:       os.Getenv("BINANCE_PROXY_URL_BACKUP"),
+		tick:         cexProxyTick,
+		consec:       make(map[string]int),
+		deadNoted:    make(map[string]bool),
+		lastOK:       make(map[string]bool),
+		lastFailHTTP: make(map[string]int),
 	}
 }
 
@@ -83,13 +86,14 @@ func (m *CexProxyHealthMonitor) Run(ctx context.Context) {
 // poll 一轮探测（primary 及非空 backup）+ 状态机转换 + 告警 + 日志。
 func (m *CexProxyHealthMonitor) poll(ctx context.Context) {
 	for _, ep := range m.endpoints() {
-		ok := m.ping(ctx, ep)
+		ok, httpStatus := m.ping(ctx, ep)
 		m.mu.Lock()
 		m.lastOK[ep] = ok
 		if ok {
 			wasDead := m.deadNoted[ep]
 			m.consec[ep] = 0
 			m.deadNoted[ep] = false
+			m.lastFailHTTP[ep] = 0
 			m.mu.Unlock()
 			if wasDead {
 				m.alert(ctx, "info", fmt.Sprintf("cex-proxy 通道 %s 已恢复", ep))
@@ -97,15 +101,20 @@ func (m *CexProxyHealthMonitor) poll(ctx context.Context) {
 			continue
 		}
 		m.consec[ep]++
+		m.lastFailHTTP[ep] = httpStatus
 		n := m.consec[ep]
 		first := n >= cexProxyDeadAfter && !m.deadNoted[ep]
 		if first {
 			m.deadNoted[ep] = true
 		}
 		m.mu.Unlock()
-		log.Printf("[cex-proxy-health] %s poll fail consec=%d", ep, n) // 同态不重发，计数逐 tick 可见
+		log.Printf("[cex-proxy-health] %s poll fail consec=%d http=%d", ep, n, httpStatus) // 同态不重发，计数逐 tick 可见
 		if first {
-			m.alert(ctx, "critical", fmt.Sprintf("cex-proxy 通道 %s 连接失败（连续 %d 次）；%s", ep, n, m.peerLine(ep)))
+			if httpStatus > 0 {
+				m.alert(ctx, "critical", fmt.Sprintf("cex-proxy 通道 %s 探测被拒（上游 HTTP %d，连续 %d 次——代理活着但上游不通）；%s", ep, httpStatus, n, m.peerLine(ep)))
+			} else {
+				m.alert(ctx, "critical", fmt.Sprintf("cex-proxy 通道 %s 连接失败（连续 %d 次）；%s", ep, n, m.peerLine(ep)))
+			}
 		}
 	}
 }
@@ -133,19 +142,23 @@ func (m *CexProxyHealthMonitor) peerLine(ep string) string {
 	return label + " " + peer + " 同样失败"
 }
 
-// ping GET {ep}/fapi/v1/ping，5s 超时（client.Timeout）；200=活，err/非 200=死。
-func (m *CexProxyHealthMonitor) ping(ctx context.Context, ep string) bool {
+// ping GET {ep}/fapi/v1/ping，5s 超时（client.Timeout）；返回 (活, 败因HTTP码)——
+// conn err/超时 → (false,0)；拿到响应非 200 → (false,code)；200 → (true,0)（D-589 分级）。
+func (m *CexProxyHealthMonitor) ping(ctx context.Context, ep string) (bool, int) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ep+cexProxyPingPath, nil)
 	if err != nil {
-		return false
+		return false, 0
 	}
 	resp, err := m.client.Do(req)
 	if err != nil {
-		return false
+		return false, 0
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, resp.Body) // 排干小响应体，保 keep-alive 复用
-	return resp.StatusCode == http.StatusOK
+	if resp.StatusCode != http.StatusOK {
+		return false, resp.StatusCode
+	}
+	return true, 0
 }
 
 // alert 插告警 + 日志（插入失败只记日志，不打断监控循环）。

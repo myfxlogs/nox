@@ -13,14 +13,15 @@ import (
 func newProxyTestMonitor(t *testing.T, insert alertInserter, primary, backup string) *CexProxyHealthMonitor {
 	t.Helper()
 	return &CexProxyHealthMonitor{
-		insert:    insert,
-		client:    &http.Client{Timeout: cexProxyPollTimeout},
-		primary:   primary,
-		backup:    backup,
-		tick:      cexProxyTick,
-		consec:    make(map[string]int),
-		deadNoted: make(map[string]bool),
-		lastOK:    make(map[string]bool),
+		insert:       insert,
+		client:       &http.Client{Timeout: cexProxyPollTimeout},
+		primary:      primary,
+		backup:       backup,
+		tick:         cexProxyTick,
+		consec:       make(map[string]int),
+		deadNoted:    make(map[string]bool),
+		lastOK:       make(map[string]bool),
+		lastFailHTTP: make(map[string]int),
 	}
 }
 
@@ -63,8 +64,12 @@ func TestCexProxyHealth_CritOnceThenRecover(t *testing.T) {
 	if len(alerts) != 1 || alerts[0].level != "critical" {
 		t.Fatalf("P1: want 1 critical at 3rd fail, got %+v", alerts)
 	}
-	if !strings.Contains(alerts[0].msg, srv.URL) || !strings.Contains(alerts[0].msg, "连接失败（连续 3 次）") {
-		t.Errorf("P1: msg want 'cex-proxy <ep> unreachable (3 consecutive)' fingerprint, got %q", alerts[0].msg)
+	// D-589 坑1：502=代理活着上游拒 → 「探测被拒」分级文案（不再报「连接失败」）。
+	if !strings.Contains(alerts[0].msg, srv.URL) || !strings.Contains(alerts[0].msg, "探测被拒（上游 HTTP 502，连续 3 次") {
+		t.Errorf("P1: msg want '探测被拒 HTTP 502' fingerprint, got %q", alerts[0].msg)
+	}
+	if strings.Contains(alerts[0].msg, "连接失败") {
+		t.Errorf("P1: HTTP 败因不应报连接失败, got %q", alerts[0].msg)
 	}
 	m.poll(context.Background())
 	m.poll(context.Background())
@@ -146,5 +151,22 @@ func TestCexProxyHealth_EmptyEnvFailOpen(t *testing.T) {
 	}
 	if eps := m.endpoints(); len(eps) != 1 || eps[0] != "http://example.invalid" {
 		t.Errorf("P4: endpoints want single primary, got %v", eps)
+	}
+}
+
+// D-589 坑1 补：conn 拒绝（deadServer）→ 「连接失败」原文保留（败因分级另一半）。
+func TestCexProxyHealth_ConnFailKeepsOriginalText(t *testing.T) {
+	dead := deadServer(t)
+	fake := &fakeAlertInserter{}
+	m := newProxyTestMonitor(t, fake, dead, "")
+	for i := 0; i < 3; i++ {
+		m.poll(context.Background())
+	}
+	alerts := fake.snapshot()
+	if len(alerts) != 1 || alerts[0].level != "critical" {
+		t.Fatalf("conn-fail: want 1 critical, got %+v", alerts)
+	}
+	if !strings.Contains(alerts[0].msg, "连接失败（连续 3 次）") || strings.Contains(alerts[0].msg, "探测被拒") {
+		t.Fatalf("conn-fail: msg want 连接失败原文, got %q", alerts[0].msg)
 	}
 }
