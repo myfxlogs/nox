@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"arb/internal/bus"
-	"arb/internal/fact"
 	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 )
@@ -48,41 +47,34 @@ func (e *LegNotActionableError) Is(target error) bool { return target == ErrLegN
 // legActionableStore LegActionable 依赖面（*pgstore.Store 天然实现；测试可 mock）。
 type legActionableStore interface {
 	TicksPriceChanged(ctx context.Context, venue, symbol string, window time.Duration) (changed bool, n int, err error)
-	LatestFacts(ctx context.Context, kind, venue, symbol string) ([]fact.Fact, error)
 	CanonicalByBrokerSymbol(ctx context.Context, venue, brokerSymbol string) (string, bool, error)
 }
 
 // LegActionable 判定 venueKey×nativeSymbol 此刻是否有可交易行情。
 // 返回 (true, "") 可行动；(false, reason) 不可行动（reason 供告警/错误文案）。
 // 缺数据/查询失败一律 fail-closed 返回不可行动（exit-condition-missing-facts-fail-closed 同律）。
-func LegActionable(ctx context.Context, st legActionableStore, venueKey, nativeSymbol string) (bool, string) {
+// trade_mode 由判定时刻即时探针取值（D-004 P1#2），不读 facts 缓存——
+// 见 leg_trademode.go；CEX 腿无此概念跳过。
+func LegActionable(ctx context.Context, st legActionableStore, prober TradeModeProber, venueKey, nativeSymbol, side string, closing bool) (bool, string) {
 	if st == nil {
 		return false, "store not wired"
 	}
 	tickVenue := keydomain.BareOf(venueKey)
 	tickSymbol := nativeSymbol
-	factSymbol := nativeSymbol // facts 键=原生名（双发 brokerSym 键，D-325）——与 tick 键域分离
 	if bus.IsCexVenueKey(venueKey) {
 		tickSymbol = bus.CexSymbolKey(nativeSymbol)
-		factSymbol = tickSymbol
-	} else if canon, ok, err := st.CanonicalByBrokerSymbol(ctx, tickVenue, nativeSymbol); err == nil && ok {
-		tickSymbol = canon // D-536：ticks 键域=canonical（写侧 tick_sampler 用 q.Symbol=canonical）
+	} else {
+		if canon, ok, err := st.CanonicalByBrokerSymbol(ctx, tickVenue, nativeSymbol); err == nil && ok {
+			tickSymbol = canon // D-536：ticks 键域=canonical（写侧 tick_sampler 用 q.Symbol=canonical）
+		}
+		// err!=nil 或 ok=false：保留 nativeSymbol 走原路径——fail-closed 结局不变
+		//（映射查不到→ticks 同键也查不到→照旧判死，行为不放大）。
+		if ok, why := checkTradeMode(ctx, prober, tickVenue, tickSymbol, nativeSymbol, side, closing); !ok {
+			return false, why
+		}
 	}
-	// err!=nil 或 ok=false：保留 nativeSymbol 走原路径——fail-closed 结局不变
-	//（映射查不到→ticks 同键也查不到→照旧判死，行为不放大）。
 	if tickVenue == "" || tickSymbol == "" {
 		return false, fmt.Sprintf("empty tick key venue=%q symbol=%q", tickVenue, tickSymbol)
-	}
-
-	// trade_mode=0(DISABLED) 叠加否决（D-495 §1.1：4=FULL 周末照发不可信，只做否决项）。
-	// facts 键=裸 venue×原生 symbol（MT 采集双发 canonical+brokerSym，D-325）；查询失败放行——
-	// DISABLED 是加强否决不是主判据，facts 缺席不放大阻断面。
-	if tmFacts, err := st.LatestFacts(ctx, fact.KindTradeMode, tickVenue, factSymbol); err == nil {
-		for _, f := range tmFacts {
-			if int64(f.Value) == fact.TradeModeDisabled {
-				return false, fmt.Sprintf("%s@%s trade_mode=disabled", tickSymbol, tickVenue)
-			}
-		}
 	}
 
 	window := legTickWindow()
@@ -108,7 +100,7 @@ func (p *Pipeline) checkLegsActionable(ctx context.Context, posID int64) error {
 		if leg.Phase != "OPEN" || leg.Status != "FILLED" {
 			continue
 		}
-		if ok, why := LegActionable(ctx, p.store, leg.Venue, leg.Symbol); !ok {
+		if ok, why := LegActionable(ctx, p.store, p.tradeModeProber(leg.Venue), leg.Venue, leg.Symbol, leg.Side, true); !ok {
 			return &LegNotActionableError{VenueKey: leg.Venue, Symbol: leg.Symbol, Reason: why}
 		}
 	}
@@ -142,7 +134,7 @@ func (p *Pipeline) legsActionableGate(ctx context.Context, posID int64, legs []p
 		if leg.Phase != "OPEN" || leg.Status != "FILLED" {
 			continue
 		}
-		if ok, why := LegActionable(ctx, p.store, leg.Venue, leg.Symbol); !ok {
+		if ok, why := LegActionable(ctx, p.store, p.tradeModeProber(leg.Venue), leg.Venue, leg.Symbol, leg.Side, true); !ok {
 			blocked = append(blocked, leg)
 			log.Printf("[exec] pos %d leg-actionable gate block %s@%s: %s", posID, leg.Symbol, leg.Venue, why)
 		}
@@ -156,11 +148,25 @@ func (p *Pipeline) legsActionableGate(ctx context.Context, posID int64, legs []p
 }
 
 // legActionableUnlessForce force 逃逸门短路（force=true 不查 ticks 直接可行动）。
-func legActionableUnlessForce(ctx context.Context, st legActionableStore, leg pgstore.PositionLeg, force bool) (bool, string) {
+func legActionableUnlessForce(ctx context.Context, st legActionableStore, prober TradeModeProber, leg pgstore.PositionLeg, force bool) (bool, string) {
 	if force {
 		return true, ""
 	}
-	return LegActionable(ctx, st, leg.Venue, leg.Symbol)
+	return LegActionable(ctx, st, prober, leg.Venue, leg.Symbol, leg.Side, true)
+}
+
+// tradeModeProber 按 venueKey 从执行器注册表取 TradeModeProber（D-004 P1#2）：
+// executor 缺席或未实现该接口 → nil，由 checkTradeMode 按开/平仓分支裁决。
+func (p *Pipeline) tradeModeProber(venueKey string) TradeModeProber {
+	if p.registry == nil {
+		return nil
+	}
+	if exe, ok := p.registry.Get(venueKey); ok {
+		if prober, ok := exe.(TradeModeProber); ok {
+			return prober
+		}
+	}
+	return nil
 }
 
 // allResidualAwaited 残留条目是否全部对应本轮 await_session 跳过腿

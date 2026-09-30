@@ -21,15 +21,11 @@ func TestFactCacheTradeModes(t *testing.T) {
 	if got := modes["EURUSD"]["52993526:mt5"]; got != fact.TradeModeFull {
 		t.Errorf("TradeModes[EURUSD][52993526:mt5] = %d, want Full(4)", got)
 	}
-	if mode, ok := fc.TradeMode("BTCUSDT", "pxbt:mt5"); !ok || mode != fact.TradeModeDisabled {
-		t.Errorf("TradeMode(BTCUSDT, pxbt:mt5) = (%d, %v), want (0, true)", mode, ok)
+	if got := modes["BTCUSDT"]["pxbt:mt5"]; got != fact.TradeModeDisabled {
+		t.Errorf("TradeModes[BTCUSDT][pxbt:mt5] = %d, want Disabled(0)", got)
 	}
 	if sw := fc.SwapFacts(); sw["EURUSD"]["52993526"][0] != 1 {
 		t.Errorf("swap 名键被污染: %+v", sw)
-	}
-	// 未知 canonical / venueKey → ok=false。
-	if _, ok := fc.TradeMode("EURUSD", "nope:mt5"); ok {
-		t.Error("未知 venueKey 应 ok=false")
 	}
 }
 
@@ -42,12 +38,9 @@ func TestFactCacheTradeModeTTLExpiry(t *testing.T) {
 	if m := fc.TradeModes(); len(m) != 0 {
 		t.Errorf("过期 trade_mode 仍可见: %+v", m)
 	}
-	if _, ok := fc.TradeMode("X", "v:mt5"); ok {
-		t.Error("过期 trade_mode 查询应 ok=false")
-	}
 	// TTL 注入生效：放宽到 48h → 可见。
 	fc.SetTradeModeTTL(48 * time.Hour)
-	if mode, ok := fc.TradeMode("X", "v:mt5"); !ok || mode != fact.TradeModeFull {
-		t.Errorf("TTL 48h 下应可见, got (%d, %v)", mode, ok)
+	if got := fc.TradeModes()["X"]["v:mt5"]; got != fact.TradeModeFull {
+		t.Errorf("TTL 48h 下应可见, got %d", got)
 	}
 }

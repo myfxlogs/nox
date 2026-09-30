@@ -47,6 +47,10 @@ type Engine struct {
 	// nil = 未注入（跳过零检测，向后兼容）。
 	zeroDetector ZeroSettlementDetector
 
+	// tradeModeProber D-004 P1#2：按 venueKey 取 MT5 trade_mode 即时探针
+	// （装配面注入，nil=未接线——平仓闸侧 checkTradeMode 放行+日志）。
+	tradeModeProber func(venueKey string) exec.TradeModeProber
+
 	firstTickDone bool // 启动首跑淘汰标记
 
 	// fundingNeedSent 资金注入提醒节流（D-072）：key=SWAPARB:canonical:venueLong:venueShort → YYYY-MM-DD。
@@ -125,6 +129,13 @@ func (e *Engine) SetSettleDeps(deps settlement.Deps, elim settlement.Eliminator,
 // SetZeroSettlementDetector D-182 S1：注入零结算检测器（scanAndClose 周期调用）。
 func (e *Engine) SetZeroSettlementDetector(d ZeroSettlementDetector) {
 	e.zeroDetector = d
+}
+
+// SetTradeModeProberResolver D-004 P1#2：注入按 venueKey 取执行时 trade_mode
+// 即时探针的闭包（装配面接 exec.Registry）；nil/缺席 → MT 腿平仓侧放行+日志
+// （平仓减风险，venue 拒单为最终权威；判据本体在 exec.checkTradeMode）。
+func (e *Engine) SetTradeModeProberResolver(resolve func(venueKey string) exec.TradeModeProber) {
+	e.tradeModeProber = resolve
 }
 
 // Run 启动自动交易引擎（阻塞，ctx 取消时退出）。
