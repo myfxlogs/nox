@@ -123,17 +123,6 @@ func (fc *FactCache) TradeModes() map[string]map[string]int64 {
 	return cp
 }
 
-// TradeMode 查单腿 trade_mode（F5 执行预检用；TTL 过期/未知 → ok=false 放行）。
-func (fc *FactCache) TradeMode(canonical, venueKey string) (int64, bool) {
-	fc.mu.RLock()
-	defer fc.mu.RUnlock()
-	e, ok := fc.tradeMode[canonical][venueKey]
-	if !ok || time.Since(e.ts) > fc.tradeModeTTL {
-		return 0, false
-	}
-	return e.mode, true
-}
-
 // UpdateIsRealMap D-178：覆盖写 is_real 映射（boot 加载 + fact sink 周期刷新，幂等无害）。
 func (fc *FactCache) UpdateIsRealMap(m map[string]*bool) {
 	fc.mu.Lock()

@@ -28,6 +28,9 @@ type fakeMT5MarginClient struct {
 	cs          float64
 	marginCcy   string
 	spErr       error
+	spMode      mt5pb.TradeMode // D-004 P1#2：SymbolGroup.TradeMode（TradeModeNow 探针用）
+	spEnvErrMsg string          // resp.GetError() 在带错误
+	spNilResult bool            // Result=nil 空返回
 }
 
 func (f *fakeMT5MarginClient) RequiredMargin(ctx context.Context, in *mt5pb.RequiredMarginRequest, opts ...grpc.CallOption) (*mt5pb.RequiredMarginReply, error) {
@@ -55,8 +58,15 @@ func (f *fakeMT5MarginClient) SymbolParams(ctx context.Context, in *mt5pb.Symbol
 	if f.spErr != nil {
 		return nil, f.spErr
 	}
+	if f.spEnvErrMsg != "" {
+		return &mt5pb.SymbolParamsReply{Error: &mt5pb.Error{Message: f.spEnvErrMsg}}, nil
+	}
+	if f.spNilResult {
+		return &mt5pb.SymbolParamsReply{}, nil
+	}
 	return &mt5pb.SymbolParamsReply{Result: &mt5pb.SymbolParams{
-		SymbolInfo: &mt5pb.SymbolInfo{ContractSize: f.cs, MarginCurrency: f.marginCcy},
+		SymbolInfo:  &mt5pb.SymbolInfo{ContractSize: f.cs, MarginCurrency: f.marginCcy},
+		SymbolGroup: &mt5pb.SymGroup{TradeMode: f.spMode},
 	}}, nil
 }
 

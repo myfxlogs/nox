@@ -126,7 +126,7 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64, force boo
 		}
 		// D-495 S4：逐腿可平性闸——不可行动腿跳过发单（不写 CLOSE leg、不 error 中断，
 		// ResumeClose 周期重试自愈=pos502 型休市残腿开市自动补平；其余腿善后照常）。
-		if ok, why := legActionableUnlessForce(ctx, p.store, leg, force); !ok {
+		if ok, why := legActionableUnlessForce(ctx, p.store, p.tradeModeProber(leg.Venue), leg, force); !ok {
 			log.Printf("[exec] resume close leg %d await_session %s@%s: %s", leg.ID, leg.Symbol, leg.Venue, why)
 			awaited = append(awaited, leg)
 			continue

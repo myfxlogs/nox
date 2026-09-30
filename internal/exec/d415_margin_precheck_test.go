@@ -38,6 +38,17 @@ func (f *fakeMT5Client) AccountSummary(ctx context.Context, in *mt5pb.AccountSum
 	return &mt5pb.AccountSummaryReply{Result: &mt5pb.AccountSummary{FreeMargin: f.freeMargin}}, nil
 }
 
+// SymbolParams D-004 P1#2：MT5Executor.TradeModeNow 即时探针的 fake 落点——
+// 常返 Full 放行（margin 预检用例不测 trade_mode 分支）。
+func (f *fakeMT5Client) SymbolParams(ctx context.Context, in *mt5pb.SymbolParamsRequest, opts ...grpc.CallOption) (*mt5pb.SymbolParamsReply, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &mt5pb.SymbolParamsReply{Result: &mt5pb.SymbolParams{
+		SymbolGroup: &mt5pb.SymGroup{TradeMode: mt5pb.TradeMode_TradeMode_FullAccess},
+	}}, nil
+}
+
 // d415Pipeline 组装 DSN pipeline。
 func d415Pipeline(t *testing.T, execs ...Executor) *Pipeline {
 	t.Helper()
@@ -102,9 +113,10 @@ func (e *d415CaptureExecutor) CloseOrder(ctx context.Context, ref OrderRef) (Fil
 
 // d415RT OKX http client fake RoundTripper。
 type d415RT struct {
-	maxSell string
-	specErr bool
-	rpcErr  error
+	maxSell    string
+	specErr    bool
+	rpcErr     error
+	availShape bool // D-429 T4-A：fake 返 availBuy/availSell 形态（端点回漂探测）
 }
 
 func (rt *d415RT) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -115,9 +127,13 @@ func (rt *d415RT) RoundTrip(req *http.Request) (*http.Response, error) {
 	switch {
 	case strings.Contains(req.URL.Path, "/api/v5/public/instruments"):
 		body = `{"code":"0","data":[{"ctVal":"0.01","lotSz":"0.01"}]}`
-	case strings.Contains(req.URL.Path, "/api/v5/account/max-avail-size"):
+	case strings.Contains(req.URL.Path, "/api/v5/account/max-size"):
 		if rt.specErr {
 			return &http.Response{StatusCode: 500, Body: io.NopCloser(strings.NewReader("oops")), Header: make(http.Header), Request: req}, nil
+		}
+		if rt.availShape { // D-429 T4-A 反向锚：max-avail-size 形态字段 → maxBuy/maxSell 空串响亮失败
+			body = `{"code":"0","data":[{"instId":"XAUT-USDT-SWAP","availBuy":"1514.12","availSell":"1514.12"}]}`
+			break
 		}
 		body = `{"code":"0","data":[{"instId":"XAUT-USDT-SWAP","maxBuy":"` + rt.maxSell + `","maxSell":"` + rt.maxSell + `"}]}`
 	default:
@@ -137,6 +153,32 @@ func TestD415_OKXMaxAvailSize(t *testing.T) {
 	e.client = &http.Client{Transport: &d415RT{maxSell: "100"}}
 	if err := e.MarginPrecheck(context.Background(), Order{Symbol: "XAUT-USDT-SWAP", Side: "SELL", Qty: 0.5, Venue: "okx:perp"}); err != nil {
 		t.Fatalf("maxSell=100 ≥ 62.5 应放行: %v", err)
+	}
+}
+
+// TestD429_AvailShapeFailsClosed T4-A 反向锚：fake 返 max-avail-size 形态字段
+// → maxBuy/maxSell="" → "avail=\"\" invalid" 响亮失败（防端点回漂静默）。
+func TestD429_AvailShapeFailsClosed(t *testing.T) {
+	e := NewCEXExecutor("okx", "perp", "k", "s", "p", "http://x", false)
+	e.client = &http.Client{Transport: &d415RT{availShape: true}}
+	err := e.MarginPrecheck(context.Background(), Order{Symbol: "XAUT-USDT-SWAP", Side: "SELL", Qty: 0.5, Venue: "okx:perp"})
+	if err == nil || !strings.Contains(err.Error(), `avail="" invalid`) {
+		t.Fatalf("max-avail-size 形态应响亮失败 avail=\"\" invalid，got %v", err)
+	}
+}
+
+// TestD429_UnitAnchorContracts T4-B 单位锚：生产实拍 BTC 形态 maxSell="5.38"（张数）
+// + szContracts=10（qty=0.1 / ctVal=0.01）→ 拒——钉死「张数 vs 张数」判据；
+// v1 修法（availBuy USDT）下 10<1211 会假放行，本锚证明单位错位未上线。
+func TestD429_UnitAnchorContracts(t *testing.T) {
+	e := NewCEXExecutor("okx", "perp", "k", "s", "p", "http://x", false)
+	e.client = &http.Client{Transport: &d415RT{maxSell: "5.38"}}
+	err := e.MarginPrecheck(context.Background(), Order{Symbol: "XAUT-USDT-SWAP", Side: "SELL", Qty: 0.1, Venue: "okx:perp"})
+	if err == nil {
+		t.Fatal("sz=10 张 > maxSell=5.38×0.8=4.30 应拒开")
+	}
+	if !strings.Contains(err.Error(), "insufficient") {
+		t.Fatalf("应走张数比较拒绝，got %v", err)
 	}
 }
 

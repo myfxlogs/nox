@@ -87,7 +87,11 @@ func (e *Engine) allLegsActionable(ctx context.Context, posID int64) (bool, stri
 		if leg.Phase != "OPEN" || leg.Status != "FILLED" {
 			continue
 		}
-		if ok, why := exec.LegActionable(ctx, e.store, leg.Venue, leg.Symbol); !ok {
+		var prober exec.TradeModeProber
+		if e.tradeModeProber != nil {
+			prober = e.tradeModeProber(leg.Venue)
+		}
+		if ok, why := exec.LegActionable(ctx, e.store, prober, leg.Venue, leg.Symbol, leg.Side, true); !ok {
 			return false, why
 		}
 	}

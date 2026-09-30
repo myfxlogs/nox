@@ -61,13 +61,17 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 	for _, leg := range legs {
 		// D-495 S6：开仓对称面——预检环先于 position 落库与任何下单（天然 all-or-nothing），
 		// 腿无可交易行情（休市/断流）→ 拒开不 LEGGED（#464 开仓侧同型前科的对称补面）。
-		if ok, why := LegActionable(ctx, p.store, leg.VenueKey, leg.VenueSymbol); !ok {
-			return nil, fmt.Errorf("品种 %s@%s 当前无可交易行情（休市或断流），拒开: %s",
-				leg.VenueSymbol, leg.VenueKey, why)
-		}
 		exe, ok := p.registry.Get(leg.VenueKey)
 		if !ok {
 			return nil, fmt.Errorf("precheck: no executor for venue %s", leg.VenueKey)
+		}
+		var prober TradeModeProber
+		if tp, ok := exe.(TradeModeProber); ok {
+			prober = tp
+		}
+		if ok, why := LegActionable(ctx, p.store, prober, leg.VenueKey, leg.VenueSymbol, leg.Side, false); !ok {
+			return nil, fmt.Errorf("品种 %s@%s 当前无可交易行情（休市或断流），拒开: %s",
+				leg.VenueSymbol, leg.VenueKey, why)
 		}
 		if pc, ok := exe.(Prechecker); ok {
 			// D-311 R4：Order.Qty 契约=基础币——:perp 腿同 executeLeg 边界换算。

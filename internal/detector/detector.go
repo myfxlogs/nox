@@ -46,7 +46,8 @@ type FactProvider interface {
 }
 
 // legTradable F4 可交易性腿过滤：买腿（开多）要求 LongOnly/FullAccess，卖腿（开空）要求
-// ShortOnly/FullAccess；无 Fact（未知/TTL 过期）放行——venue 服务端拒单是最终权威（F5），
+// ShortOnly/FullAccess；无 Fact（未知/TTL 过期）放行——执行时刻由 exec.TradeModeProber
+// 即时判定并 fail-closed（D-004 P1#2）；本过滤只用 TTL 内 facts 做负向剔除，
 // 冷启动期不空白化矩阵。已知不兼容 → false（不产候选）。
 func legTradable(modes map[string]map[string]int64, canonical, venueKey string, buy bool) bool {
 	vm, ok := modes[canonical]

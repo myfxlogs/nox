@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"arb/internal/bus"
+	"arb/internal/fact"
 	"arb/internal/store/pgstore"
 )
 
@@ -91,4 +92,10 @@ func (e *fakeExecExecutor) PlaceOrder(ctx context.Context, o Order) (Fill, error
 }
 func (e *fakeExecExecutor) CloseOrder(ctx context.Context, ref OrderRef) (Fill, error) {
 	return e.fill, nil
+}
+
+// TradeModeNow D-004 P1#2：MT venueKey 腿开仓探针 fail-closed——fake 常返 Full 放行，
+// 本 fake 仍服务于 CEX/MT 混合 venueKey 用例（CEX 腿分支不调探针）。
+func (e *fakeExecExecutor) TradeModeNow(_ context.Context, _ string) (int64, error) {
+	return fact.TradeModeFull, nil
 }

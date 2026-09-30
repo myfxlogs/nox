@@ -101,6 +101,13 @@ type MarginPrechecker interface {
 	MarginPrecheck(ctx context.Context, o Order) error
 }
 
+// TradeModeProber 判定时刻即时取 venue 符号可交易模式（D-004：不消费采集缓存）。
+// 实现者：MT5Executor（SymbolParams 单符号直查）。开仓侧 fail-closed：
+// prober 缺席或取值失败 → 拒开；平仓减风险除外（venue 服务端拒单为最终权威）。
+type TradeModeProber interface {
+	TradeModeNow(ctx context.Context, brokerSymbol string) (int64, error)
+}
+
 // OpenedOrder venue 侧在仓订单（D-077 修复⑩ G1 平仓后回读用）。
 type OpenedOrder struct {
 	Ticket  string
