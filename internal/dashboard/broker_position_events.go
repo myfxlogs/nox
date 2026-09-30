@@ -12,9 +12,27 @@ import (
 
 	v1 "arb/internal/gen/dashboardv1"
 	"arb/internal/keydomain"
+	"arb/internal/reconcile"
 
 	"google.golang.org/protobuf/proto"
 )
+
+// snapshotVenuesLocked venues 快照（mu 持锁前提）。D-583：orders 发布后可变
+// （OnMT5Frame 锁内原地写 vs.orders[ticket]），锁内逐条复制成私有副本随快照带走；
+// marginByTicket/canon/cs/acctMargin 发布后整体替换即不可变，引用直拷（只拷
+// proven-mutable，防过度防御）。
+func (m *BrokerPositionMonitor) snapshotVenuesLocked() map[string]venueState {
+	venues := make(map[string]venueState, len(m.venues))
+	for vk, vs := range m.venues {
+		orders := make(map[string]reconcile.VenueOrder, len(vs.orders))
+		for t, o := range vs.orders {
+			orders[t] = o
+		}
+		vs.orders = orders
+		venues[vk] = vs
+	}
+	return venues
+}
 
 // flush 尾沿合批发射：取走 dirty 集 → 逐 key 按最新态裁决 → 聚合值随每个事件顺带。
 // 锁纪律：dirty/venues/cur 快照在锁内取，protoFor（查 store/qbus/facts）在锁外，
@@ -31,10 +49,7 @@ func (m *BrokerPositionMonitor) flush(ctx context.Context) {
 		keys = append(keys, k)
 	}
 	m.dirty = make(map[string]struct{})
-	venues := make(map[string]venueState, len(m.venues))
-	for vk, vs := range m.venues {
-		venues[vk] = vs
-	}
+	venues := m.snapshotVenuesLocked() // D-583：orders 发布后可变（OnMT5Frame 锁内原地写），深拷防锁外读竞态
 	m.mu.Unlock()
 	sort.Strings(keys) // 确定性发射序
 
