@@ -26,7 +26,6 @@ import (
 	"arb/internal/collect"
 	"arb/internal/fact"
 	"arb/internal/keydomain"
-	"arb/internal/reconcile"
 )
 
 // marginDebounce 事件触发防抖窗口（静态数据，防事件洪峰重复查库）。
@@ -190,7 +189,7 @@ func (s *MarginFactSource) consumeStream(ctx context.Context, sink func(fact.Fac
 	}
 }
 
-// publishPositions D-571 包A：帧内 Orders → VenueOrder（MT5OrdersToVenueOrders 单一映射点）
+// publishPositions D-571 包A：帧内 Orders → venue.Order（MT5OrdersToOrders 单一映射点）
 // → PositionsSink。recover 守卫同 order-events publish（sink panic 不拉崩流循环）。
 func (s *MarginFactSource) publishPositions(orders []*mt5pb.Order) {
 	if s.a.PositionsSink == nil {
@@ -201,7 +200,7 @@ func (s *MarginFactSource) publishPositions(orders []*mt5pb.Order) {
 			log.Printf("[mt5:%s] margin: positions sink panic: %v", s.a.venue, r)
 		}
 	}()
-	vos := reconcile.MT5OrdersToVenueOrders(s.a.venue, orders)
+	vos := MT5OrdersToOrders(s.a.venue, orders)
 	// D-571C2 S1：帧内携价——Order.Symbol=原生 brokerSym 直查 lastQuote（同次发布
 	// 内取报价，钉帧价时戳；禁另钟拼接）。Bid/Ask 缺一非正=置零诚实，零命中=零值空态。
 	for i := range vos {

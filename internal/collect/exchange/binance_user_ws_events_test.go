@@ -68,7 +68,7 @@ func TestSpotExecutionReportNvsN(t *testing.T) {
 }
 
 // TestAccountUpdateZeroPa a.P pa=0 幻影仓过滤（b51a8c61 增收；bntesttrade 实证：
-// venue 平仓后推零量行，现状照建 Volume=0 VenueOrder → 实持仓表出现已平符号行）。
+// venue 平仓后推零量行，现状照建 Volume=0 venue.Order → 实持仓表出现已平符号行）。
 // 全量替换语义下 pa=0=该 symbol 无仓，不建仓即正确。
 func TestAccountUpdateZeroPa(t *testing.T) {
 	b := newEvtTestWS("perp")

@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
+	"arb/internal/venue"
 
 	"github.com/gorilla/websocket"
 )
@@ -442,7 +442,7 @@ func TestCachedVenueQuerier(t *testing.T) {
 	if err != nil || len(orders) != 1 || calls.Load() != 1 {
 		t.Fatalf("miss→REST, calls=%d", calls.Load())
 	}
-	cache.PutPositions("gate:perp", []reconcile.VenueOrder{{Symbol: "X", Side: "BUY"}}, now)
+	cache.PutPositions("gate:perp", []venue.Order{{Symbol: "X", Side: "BUY"}}, now)
 	orders, _ = q.QueryOpenedOrders(context.Background())
 	if len(orders) != 1 || orders[0].Symbol != "X" || calls.Load() != 1 {
 		t.Fatalf("fresh should bypass REST")
@@ -470,15 +470,15 @@ type fakeVenueQuerier struct {
 }
 
 func (f fakeVenueQuerier) VenueKey() string { return f.vk }
-func (f fakeVenueQuerier) QueryOpenedOrders(context.Context) ([]reconcile.VenueOrder, error) {
+func (f fakeVenueQuerier) QueryOpenedOrders(context.Context) ([]venue.Order, error) {
 	f.calls.Add(1)
-	return []reconcile.VenueOrder{{Symbol: "REST"}}, nil
+	return []venue.Order{{Symbol: "REST"}}, nil
 }
 
 // 编译期断言：包装器实现目标接口。
 var (
-	_ OrderStatusQuerier     = (*CachedOrderStatusQuerier)(nil)
-	_ reconcile.VenueQuerier = (*CachedVenueQuerier)(nil)
+	_ OrderStatusQuerier = (*CachedOrderStatusQuerier)(nil)
+	_ venue.Querier      = (*CachedVenueQuerier)(nil)
 )
 
 // ---------- 返修 R1：demo 流禁写快照 ----------

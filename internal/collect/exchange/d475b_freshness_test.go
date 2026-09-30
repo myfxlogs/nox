@@ -3,14 +3,13 @@
 package exchange
 
 import (
+	"arb/internal/venue"
 	"bytes"
 	"context"
 	"encoding/json"
 	"log"
 	"testing"
 	"time"
-
-	"arb/internal/reconcile"
 )
 
 // T2a：帧含 upl 且 consumed 缺 → warn 日志；同键 1h 内去重不重复。
@@ -70,11 +69,11 @@ func TestD475b_WarnUnconsumed_Quiet(t *testing.T) {
 
 type d475bRestPos struct {
 	calls  int
-	orders []reconcile.VenueOrder
+	orders []venue.Order
 }
 
 func (f *d475bRestPos) VenueKey() string { return "okx:perp" }
-func (f *d475bRestPos) QueryOpenedOrders(context.Context) ([]reconcile.VenueOrder, error) {
+func (f *d475bRestPos) QueryOpenedOrders(context.Context) ([]venue.Order, error) {
 	f.calls++
 	return f.orders, nil
 }
@@ -88,9 +87,9 @@ func (f *d475bRestOrd) QueryOrderStatus(context.Context, string, string, string)
 
 // 持仓缓存：10s 窗内命中 cache；超窗 → REST 回落。
 func TestD475b_PosCache_TTLFallback(t *testing.T) {
-	rest := &d475bRestPos{orders: []reconcile.VenueOrder{{Symbol: "REST"}}}
+	rest := &d475bRestPos{orders: []venue.Order{{Symbol: "REST"}}}
 	cache := NewPositionEventCache()
-	cache.PutPositions("okx:perp", []reconcile.VenueOrder{{Symbol: "WS"}}, time.Unix(1700000000, 0))
+	cache.PutPositions("okx:perp", []venue.Order{{Symbol: "WS"}}, time.Unix(1700000000, 0))
 	q := &CachedVenueQuerier{rest: rest, cache: cache, ttl: PositionFreshTTL, now: func() time.Time { return time.Unix(1700000005, 0) }}
 	got, _ := q.QueryOpenedOrders(context.Background())
 	if rest.calls != 0 || got[0].Symbol != "WS" {

@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"arb/internal/keydomain"
-	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
+	"arb/internal/venue"
 )
 
 // okxVenueType 审计行 venue_type：venueKey "okx:perp"/"okx:perp#3" 后缀段；无 → unified。
@@ -75,7 +75,7 @@ func (o *OKXPrivateWS) onAudit(ctx context.Context, channel string, payload []by
 // 字段映射与 REST accountOKX positions 同口径：pos=张数原值、posSide→side、imr→margin 回落）。
 func (o *OKXPrivateWS) onPositions(data []map[string]any) {
 	now := o.now()
-	orders := make([]reconcile.VenueOrder, 0, len(data))
+	orders := make([]venue.Order, 0, len(data))
 	for _, it := range data {
 		pos, perr := f64z(str(it["pos"]))
 		if perr != nil {
@@ -130,7 +130,7 @@ func (o *OKXPrivateWS) onPositions(data []map[string]any) {
 		if ctimeMs, _ := strconv.ParseInt(str(it["cTime"]), 10, 64); ctimeMs > 0 {
 			openedAt = time.UnixMilli(ctimeMs) // REST querier 同口径：cTime=开仓时刻
 		}
-		orders = append(orders, reconcile.VenueOrder{
+		orders = append(orders, venue.Order{
 			Ticket: str(it["instId"]), Symbol: str(it["instId"]), Side: side,
 			Volume: pos, OpenPrice: avgPx, Profit: upl, Commission: fee,
 			Venue: "okx", VenueKey: o.venueKey, PosSide: str(it["posSide"]),
@@ -226,7 +226,7 @@ func (o *OKXPrivateWS) onBalPos(data []map[string]any) {
 // 与契约测试 skipFields 对偶：两边都应是显式清单而非隐式事实）。
 var (
 	// D-477 S4 B6：pnl（realized+unrealized 合并，已有 upl 覆盖浮盈）/liqPx/lever 在
-	// VenueOrder 无宿主字段 → ack 不建模（生产真帧实证 9-25）；新键仍会告警。
+	// venue.Order 无宿主字段 → ack 不建模（生产真帧实证 9-25）；新键仍会告警。
 	okxPositionsConsumed = []string{"instId", "pos", "posSide", "avgPx", "upl", "fee", "imr", "margin", "mmr", "cTime", "pnl", "liqPx", "lever"}
 	okxOrdersConsumed    = []string{"instId", "ordId", "clOrdId", "state", "accFillSz", "avgPx", "fee", "feeCcy"}
 	okxBalPosConsumed    = []string{"eventType"}
@@ -250,8 +250,8 @@ func okxAccountPushRow(data map[string]any, now time.Time) (pgstore.VenueAccount
 		return pgstore.VenueAccountSnapshot{}, 0, false
 	}
 	var d struct {
-		MgnRatio string                       `json:"mgnRatio"` // D-405 S2：账户保证金率（百分数，越高越安全）
-		Details  []reconcile.OKXBalanceDetail `json:"details"`  // D-434 R1：与 REST 同构 schema
+		MgnRatio string                   `json:"mgnRatio"` // D-405 S2：账户保证金率（百分数，越高越安全）
+		Details  []venue.OKXBalanceDetail `json:"details"`  // D-434 R1：与 REST 同构 schema
 	}
 	if err := json.Unmarshal(raw, &d); err != nil {
 		return pgstore.VenueAccountSnapshot{}, 0, false
@@ -277,7 +277,7 @@ func okxAccountPushRow(data map[string]any, now time.Time) (pgstore.VenueAccount
 	// D-434 R1：buffer_multiple=与 REST accountOKX 同一共享函数三层回落（mmr→detail
 	// mgnRatio→顶层 mgnRatio；本账户口径顶层恒空，WS 推送 details 实供 mmr/mgnRatio）。
 	// <=0=未采 nil 语义保留（guard 诚实 data_stale）。
-	if b := reconcile.OKXBufferMultiple(eq, d.Details, d.MgnRatio); b > 0 {
+	if b := venue.OKXBufferMultiple(eq, d.Details, d.MgnRatio); b > 0 {
 		row.BufferMultiple = &b
 	}
 	return row, avail, true

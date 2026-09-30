@@ -18,6 +18,7 @@ import (
 	"arb/internal/httpx"
 	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
+	"arb/internal/venue"
 )
 
 // d475bSink 捕获 snapshot 写入（balance 通道对拍面）。
@@ -32,8 +33,8 @@ func (s *d475bSink) InsertVenueAccountSnapshots(_ context.Context, r []pgstore.V
 
 var d475bNow = func() time.Time { return time.Unix(1700000000, 0) }
 
-// diffVenueOrder 逐字段对拍 WS vs REST VenueOrder；skip 清单外字段不等即 fail。
-func diffVenueOrder(t *testing.T, tag string, ws, rest reconcile.VenueOrder, skip map[string]string) {
+// diffVenueOrder 逐字段对拍 WS vs REST venue.Order；skip 清单外字段不等即 fail。
+func diffVenueOrder(t *testing.T, tag string, ws, rest venue.Order, skip map[string]string) {
 	t.Helper()
 	cmp := []struct {
 		name string

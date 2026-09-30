@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"arb/internal/bus"
-	"arb/internal/reconcile"
+	"arb/internal/venue"
 
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
 )
@@ -37,10 +37,10 @@ func feedQuotes(t *testing.T, a *MT5Adapter, frames ...*mt5pb.Quote) {
 	<-done
 }
 
-// captureSink 挂 PositionsSink 捕获最近一帧携价 VenueOrder 集。
-func captureSink(a *MT5Adapter) *[][]reconcile.VenueOrder {
-	box := &[][]reconcile.VenueOrder{}
-	a.PositionsSink = func(_ string, orders []reconcile.VenueOrder) { *box = append(*box, orders) }
+// captureSink 挂 PositionsSink 捕获最近一帧携价 venue.Order 集。
+func captureSink(a *MT5Adapter) *[][]venue.Order {
+	box := &[][]venue.Order{}
+	a.PositionsSink = func(_ string, orders []venue.Order) { *box = append(*box, orders) }
 	return box
 }
 

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
+	"arb/internal/venue"
 )
 
 // T1：SetOnPut 写面 kick——PutOrder/PutPositions 各触发一次 onPut，venueKey 透传。
@@ -24,7 +24,7 @@ func TestD469a_CacheSetOnPut(t *testing.T) {
 
 	pc := NewPositionEventCache()
 	pc.SetOnPut(func(vk string) { posKicks = append(posKicks, vk) })
-	pc.PutPositions("okx:perp", []reconcile.VenueOrder{{Ticket: "XAU-USDT-SWAP"}}, time.Now())
+	pc.PutPositions("okx:perp", []venue.Order{{Ticket: "XAU-USDT-SWAP"}}, time.Now())
 	if len(posKicks) != 1 || posKicks[0] != "okx:perp" {
 		t.Fatalf("pos onPut kicks=%v want [okx:perp]", posKicks)
 	}

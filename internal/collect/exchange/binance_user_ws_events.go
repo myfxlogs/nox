@@ -9,8 +9,8 @@ import (
 	"math"
 	"strings"
 
-	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
+	"arb/internal/venue"
 )
 
 // handleFrame 用户流事件分派：先落审计表（失败 warn 仍更缓存，R3）再更新缓存/sink。
@@ -203,7 +203,7 @@ func (b *BinanceUserWS) onAccountUpdate(ctx context.Context, a json.RawMessage) 
 		b.balPut(wbUSDT, 0, now)
 		return
 	}
-	orders := make([]reconcile.VenueOrder, 0, len(acct.P))
+	orders := make([]venue.Order, 0, len(acct.P))
 	iwSum := 0.0
 	for _, p := range acct.P {
 		pa, perr := f64z(p.PA)
@@ -236,7 +236,7 @@ func (b *BinanceUserWS) onAccountUpdate(ctx context.Context, a json.RawMessage) 
 			side, pa = "SELL", -pa
 		}
 		iwSum += iw
-		orders = append(orders, reconcile.VenueOrder{
+		orders = append(orders, venue.Order{
 			Ticket: p.S, Symbol: p.S, Side: side, Volume: pa, OpenPrice: ep,
 			Profit: up, // D-477 S1 GAP-B1：up→Profit（REST 基线 cex_positions.go 以 symbol 作 Ticket）
 			Venue:  "binance", VenueKey: b.venueKey, PosSide: strings.ToLower(p.PS),

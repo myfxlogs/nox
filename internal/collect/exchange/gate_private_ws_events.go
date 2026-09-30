@@ -10,8 +10,8 @@ import (
 	"math"
 	"time"
 
-	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
+	"arb/internal/venue"
 )
 
 // GatePrivateHooks D-570 包C S7：风险事件整帧转发钩（镜像 D-569 S7 MARGIN_CALL 裁定——
@@ -161,7 +161,7 @@ func (g *GatePrivateWS) onPositions(result json.RawMessage) {
 		return
 	}
 	now := g.now()
-	orders := make([]reconcile.VenueOrder, 0, len(items))
+	orders := make([]venue.Order, 0, len(items))
 	for _, it := range items {
 		ep, perr := f64z(it.EntryPrice)
 		if perr != nil {
@@ -203,7 +203,7 @@ func (g *GatePrivateWS) onPositions(result json.RawMessage) {
 		} else if sec := anyToSec(it.UpdateTime); sec > 0 {
 			opened = time.Unix(int64(sec), 0)
 		}
-		orders = append(orders, reconcile.VenueOrder{
+		orders = append(orders, venue.Order{
 			Ticket: it.Contract, Symbol: it.Contract, Side: side, Volume: vol, OpenPrice: ep,
 			Profit: upl, Swap: fund, MaintMargin: mm, // D-477 S2 GAP-B2 全量补消费
 			Venue: "gate", VenueKey: g.venueKey, PosSide: ps,

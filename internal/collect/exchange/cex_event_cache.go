@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
+	"arb/internal/venue"
 )
 
 // EventFreshTTL 订单事件新鲜窗（SSOT：≤5s 内命中直返）。
@@ -125,7 +125,7 @@ type PositionEventCache struct {
 func (c *PositionEventCache) SetOnPut(fn func(venueKey string)) { c.onPut = fn }
 
 type posSnapshot struct {
-	orders []reconcile.VenueOrder
+	orders []venue.Order
 	at     time.Time
 }
 
@@ -136,9 +136,9 @@ func NewPositionEventCache() *PositionEventCache {
 
 // PutPositions 整体替换 venue 持仓快照（a.P/futures.positions 推送帧本身即全量数组，
 // 不做增量合并——上次未出现的持仓按已平处理）。
-func (c *PositionEventCache) PutPositions(venueKey string, orders []reconcile.VenueOrder, at time.Time) {
+func (c *PositionEventCache) PutPositions(venueKey string, orders []venue.Order, at time.Time) {
 	c.mu.Lock()
-	cp := append([]reconcile.VenueOrder(nil), orders...)
+	cp := append([]venue.Order(nil), orders...)
 	c.m[venueKey] = posSnapshot{orders: cp, at: at}
 	c.mu.Unlock()
 	if c.onPut != nil {
@@ -147,34 +147,34 @@ func (c *PositionEventCache) PutPositions(venueKey string, orders []reconcile.Ve
 }
 
 // get 命中且新鲜 → 返回快照副本。
-func (c *PositionEventCache) get(venueKey string, ttl time.Duration, now time.Time) ([]reconcile.VenueOrder, bool) {
+func (c *PositionEventCache) get(venueKey string, ttl time.Duration, now time.Time) ([]venue.Order, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	s, ok := c.m[venueKey]
 	if !ok || now.Sub(s.at) > ttl {
 		return nil, false
 	}
-	return append([]reconcile.VenueOrder(nil), s.orders...), true
+	return append([]venue.Order(nil), s.orders...), true
 }
 
-// CachedVenueQuerier 包装 REST VenueQuerier：全量快照新鲜→直返，否则回落 REST。
+// CachedVenueQuerier 包装 REST venue.Querier：全量快照新鲜→直返，否则回落 REST。
 type CachedVenueQuerier struct {
-	rest  reconcile.VenueQuerier
+	rest  venue.Querier
 	cache *PositionEventCache
 	ttl   time.Duration
 	now   func() time.Time
 }
 
 // NewCachedVenueQuerier 创建包装持仓查询器。
-func NewCachedVenueQuerier(rest reconcile.VenueQuerier, cache *PositionEventCache) *CachedVenueQuerier {
+func NewCachedVenueQuerier(rest venue.Querier, cache *PositionEventCache) *CachedVenueQuerier {
 	return &CachedVenueQuerier{rest: rest, cache: cache, ttl: PositionFreshTTL, now: time.Now}
 }
 
 // VenueKey 透传 REST querier 身份（撞键归一 #id 后缀随 rest）。
 func (q *CachedVenueQuerier) VenueKey() string { return q.rest.VenueKey() }
 
-// QueryOpenedOrders 实现 reconcile.VenueQuerier。
-func (q *CachedVenueQuerier) QueryOpenedOrders(ctx context.Context) ([]reconcile.VenueOrder, error) {
+// QueryOpenedOrders 实现 reconcile.venue.Querier。
+func (q *CachedVenueQuerier) QueryOpenedOrders(ctx context.Context) ([]venue.Order, error) {
 	if orders, ok := q.cache.get(q.rest.VenueKey(), q.ttl, q.now()); ok {
 		return orders, nil
 	}

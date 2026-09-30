@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"arb/internal/bus"
-	"arb/internal/exec"
 	"arb/internal/fact"
 
 	"github.com/gorilla/websocket"
@@ -35,6 +34,8 @@ type OKXWebSocket struct {
 	emitFacts func(ctx context.Context, fs []fact.Fact) error
 	// catalog D-524：instruments 存在性闸（watchlist 方言符号归一化后过目录，不伪造）。
 	catalog *okxInstCatalog
+	// OnInstrumentChange instruments 频道变更帧回调，nil=不通知。
+	OnInstrumentChange func(instID string)
 }
 
 // NewOKXWebSocket 创建 OKX WS 采集器（ARB_CEX_WS_BASE 置位→经 cex-proxy /okxws 前缀）。
@@ -265,13 +266,15 @@ func (o *OKXWebSocket) handleFundingRate(ctx context.Context, msg wsMsg) {
 }
 
 // handleInstruments D-566 包B S6-d：instruments 目录变更帧 → data[].instId 逐个
-// exec.OKXSpecInvalidate（一次 log 收敛）；未知字段 WarnUnconsumed 同既有模式。
+// 回调由装配层接 exec.OKXSpecInvalidate（一次 log 收敛）；未知字段 WarnUnconsumed 同既有模式。
 func (o *OKXWebSocket) handleInstruments(msg wsMsg) {
 	instIDs := make([]string, 0, len(msg.Data))
 	for _, it := range msg.Data {
 		if v, _ := it["instId"].(string); v != "" {
 			instIDs = append(instIDs, v)
-			exec.OKXSpecInvalidate(v)
+			if o.OnInstrumentChange != nil {
+				o.OnInstrumentChange(v)
+			}
 		}
 	}
 	if len(instIDs) > 0 {

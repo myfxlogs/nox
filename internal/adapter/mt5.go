@@ -12,8 +12,8 @@ import (
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
 	"arb/internal/bus"
 	"arb/internal/fact"
-	"arb/internal/reconcile"
 	"arb/internal/safego"
+	"arb/internal/venue"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -64,7 +64,7 @@ type MT5Adapter struct {
 
 	// PositionsSink D-571 包A：OnOrderProfit 帧 Orders 逐仓载荷下沉
 	// （main→brokerMgr→ad 同模式；venueKey=keydomain.Join(venue,"mt5")）。nil = 不消费。
-	PositionsSink func(venueKey string, orders []reconcile.VenueOrder)
+	PositionsSink func(venueKey string, orders []venue.Order)
 
 	// StreamStateSink D-571 包A：venue 流状态事件透出（OnOrderProfit 持仓载流
 	// 首帧→true，recv error→false；venue_online 改由此承担，不再由 poll 成败猜）。
