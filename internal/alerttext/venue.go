@@ -3,6 +3,8 @@
 package alerttext
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -66,4 +68,16 @@ func BannedUntil(msg string) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	return time.UnixMilli(ms), true
+}
+
+// alertDedupNumRe D-592 S1：数字/时戳/时长归一——全部数字段归 <N>
+// （age=9h28m43s、至 2026-09-30 11:05:38、HTTP 418、连续 3 次 等同型消化）。
+var alertDedupNumRe = regexp.MustCompile(`[0-9]+`)
+
+// AlertDedupKey D-592 S1：告警去重键——message 数字段全归 <N> 后与 level 并合
+// sha256（恢复类与故障类文本异形天然异键）。归一化/哈希确定性无错误路径，
+// 查询侧 fail-open 由调用方承担。
+func AlertDedupKey(level, message string) string {
+	h := sha256.Sum256([]byte(level + "|" + alertDedupNumRe.ReplaceAllString(message, "<N>")))
+	return hex.EncodeToString(h[:])
 }

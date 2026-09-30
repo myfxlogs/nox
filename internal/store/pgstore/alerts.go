@@ -6,6 +6,7 @@ package pgstore
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"arb/internal/alerttext"
@@ -46,6 +47,20 @@ func (s *Store) insertAlert(ctx context.Context, ruleID, posID *int64, level, me
 	if s.alertPaused {
 		return nil
 	}
+	// D-592 S1：同键窗口抑制（DB 实查非进程内存——cron 批处理进程态活不过一轮，
+	// KB cron-monitor-state-persistence）；漏斗单点=不插行即同抑 topic/feishu 通道。
+	// fail-open：dedup 查询出错放行原路径（止血票不引新丢告警面）。
+	w := s.alertDedupWindow
+	if w == 0 {
+		w = defaultAlertDedupWindow
+	}
+	key := alerttext.AlertDedupKey(level, message)
+	dup, derr := s.recentAlertDuplicate(ctx, key, level, time.Now().Add(-w))
+	if derr != nil {
+		log.Printf("[pgstore] alert dedup query fail (fail-open): %v", derr)
+	} else if dup {
+		return nil // 同键窗内：不插行、不推 feishu/topic
+	}
 	// D-496：rules/rule_id 已删——ruleID 参数保留签名兼容、恒不落库。
 	q := `INSERT INTO alerts (position_id, level, message) VALUES ($1, $2, $3)
 		RETURNING id, ts, level, message, acked`
@@ -62,6 +77,29 @@ func (s *Store) insertAlert(ctx context.Context, ruleID, posID *int64, level, me
 		s.alertHook(a)
 	}
 	return nil
+}
+
+// defaultAlertDedupWindow 同键去重窗缺省（D-412 F4 形态：常量缺省+env 装配覆盖）。
+const defaultAlertDedupWindow = 30 * time.Minute
+
+// recentAlertDuplicate 窗口内同键实查（候选按 level 收窄；归一键不落库=零 schema
+// 变更，Go 侧对存量行重算键比对）。
+func (s *Store) recentAlertDuplicate(ctx context.Context, key, level string, cutoff time.Time) (bool, error) {
+	rows, err := s.pool.Query(ctx, `SELECT message FROM alerts WHERE ts > $1 AND level=$2`, cutoff, level)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var msg string
+		if err := rows.Scan(&msg); err != nil {
+			return false, err
+		}
+		if alerttext.AlertDedupKey(level, msg) == key {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }
 
 // ListAlerts 分页返回告警（§8.2）。

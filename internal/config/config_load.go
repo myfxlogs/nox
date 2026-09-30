@@ -114,7 +114,8 @@ func Load() *Config {
 		AIAPIKey:                   envStr("ARB_AI_API_KEY", ""),
 		AIModel:                    envStr("ARB_AI_MODEL", ""), // D-591 S7：硬编码型号兜底退役——DB/env 双空=LLM 段 fail-closed 禁用
 		AIPGDSN:                    envStr("ARB_AI_PG_DSN", ""),
-		RetroDisabled:              !envBool("ARB_RETRO_ENABLED", true), // D-457：env=0 关复盘定时器
+		AlertDedupWindow:           envDur("ARB_ALERT_DEDUP_WINDOW", 30*time.Minute), // D-592 S1：告警同键去重窗
+		RetroDisabled:              !envBool("ARB_RETRO_ENABLED", true),              // D-457：env=0 关复盘定时器
 		AnalystRatePerHour:         envInt("ARB_ANALYST_RATE_PER_HOUR", 20),
 		ExplorerEnabled:            envBool("ARB_EXPLORER_ENABLED", false), // D-513：壳上线默认关
 		ExplorerRatePerHour:        envInt("ARB_EXPLORER_RATE_PER_HOUR", 10),
