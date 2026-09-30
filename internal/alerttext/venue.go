@@ -52,3 +52,18 @@ func VenueErrCN(msg string) string {
 	}
 	return msg[:m[0]] + cn + msg[m[1]:]
 }
+
+// BannedUntil D-591 S1：从 venue 限频错误文本解封禁到期时戳（banned until <epoch毫秒>
+// ——binance -1003/418 响应体原生形态）。user WS 重连退避读封禁窗用（窗内零 REST，
+// 防 5s 盲锤续期封禁——S0 实证 04:10:50→04:14:51 延长）。
+func BannedUntil(msg string) (time.Time, bool) {
+	bm := bannedRe.FindStringSubmatch(msg)
+	if bm == nil {
+		return time.Time{}, false
+	}
+	ms, err := strconv.ParseInt(bm[1], 10, 64)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return time.UnixMilli(ms), true
+}
