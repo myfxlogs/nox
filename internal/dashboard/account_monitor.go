@@ -43,7 +43,14 @@ type AccountMonitor struct {
 	streamOnline map[string]bool            // 流权威在线态
 	pendingKick  map[string]struct{}
 	kickSig      chan struct{}
-	balLedger    *bus.BalanceLedger // D-571 包B：CEX 余额活账本（SetBalanceLedger 注入）
+	// 热修 hotfix-loops（OOM 19:01 实证）：kick 防抖——帧 nil-acct 10s/键、账本事件 2s/键；
+	// 无防抖时 REST 失败+acct 持续 nil → 每帧 kick → poll 风暴。
+	frameKickAt  map[string]time.Time
+	ledgerKickAt map[string]time.Time
+	// CEX querier 缓存：exchange_configs 内容哈希未变则复用（原每 poll 全量重建+REST）。
+	qCacheHash uint64
+	qCache     []reconcile.AccountQuerier
+	balLedger  *bus.BalanceLedger // D-571 包B：CEX 余额活账本（SetBalanceLedger 注入）
 	// cooldown 账号 RPC 冷却（D-077 修复⑩ G2：连续超时 ≥2 → 10s 冷却跳过）。
 	cooldown *Cooldown
 
@@ -70,6 +77,8 @@ func NewAccountMonitor(bm *BrokerManager, evTopic *bus.Topic[*v1.AccountEvent]) 
 		streamKnown:  make(map[string]bool),
 		streamOnline: make(map[string]bool),
 		pendingKick:  make(map[string]struct{}),
+		frameKickAt:  make(map[string]time.Time),
+		ledgerKickAt: make(map[string]time.Time),
 		cooldown:     NewCooldown(2, 10*time.Second), // D-077 修复⑩ G2
 		kickSig:      make(chan struct{}, 1),         // cap1 非阻塞 send = 事件合并
 	}
@@ -165,38 +174,6 @@ func (m *AccountMonitor) Snapshot() []*v1.AccountInfo {
 }
 
 // queriers 汇总查询器：CFD（brokerMgr 每轮重取）+ CEX（DB 每轮重取，D-054）+ statics（测试注入）。
-func (m *AccountMonitor) queriers(ctx context.Context) []reconcile.AccountQuerier {
-	qs := m.bm.AccountQueriers()
-	m.mu.RLock()
-	exchs := m.exchs
-	m.mu.RUnlock()
-	if exchs != nil {
-		cfgs, err := exchs.ListExchangeConfigs(ctx)
-		if err != nil {
-			log.Printf("[account-mon] list exchanges: %v", err)
-		} else {
-			// D-362 S2/R1：撞键归一（赢家 canonical/输家 #id，与 executor/持仓同源）。
-			// D-516：sim 行先于归一剔除——不占 canonical、不建查询器。
-			m.mu.Lock()
-			live := realOnlyConfigs(cfgs, &m.simWarned, "account")
-			m.mu.Unlock()
-			winners := cexKeyWinners(live)
-			for i := range live {
-				c := &live[i]
-				base := resolveExchangeBaseURL(*c)
-				q := reconcile.NewCEXAccountQuerier(c.Venue, c.VenueType, c.APIKey, c.APISecret, c.Passphrase, base, c.Website, c.Simulated)
-				q.SetKeyOverride(reconcile.CexVenueKey(c.Venue, c.VenueType, c.ID, winners))
-				qs = append(qs, q)
-				log.Printf("[account] cex querier: %s:%s", c.Venue, c.VenueType)
-			}
-		}
-	}
-	m.mu.RLock()
-	qs = append(qs, m.statics...)
-	m.mu.RUnlock()
-	return qs
-}
-
 // poll 全量轮询（boot 首读/全量 kick/Refresh）：逐查询器 → 落态 → dirty 尾沿发射。
 // D-460 S1 两阶段拆分（D-447 遗留 wart 真修）：无锁段跑网络 RPC，锁内只做内存
 // merge——旧实现持写锁跨逐 venue RPC 循环，Snapshot（ListAccounts 拉路径）全程排队。

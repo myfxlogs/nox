@@ -6,6 +6,7 @@ package dashboard
 
 import (
 	"context"
+	"log"
 	"os"
 	"sort"
 	"strings"
@@ -156,15 +157,23 @@ func (m *AccountMonitor) OnLedgerAcct(vk string) {
 	m.mu.RUnlock()
 	e, ok := l.Get(vk, 5*time.Minute, time.Now())
 	if !ok {
-		m.Kick(vk)
+		m.mu.Lock()
+		kick := m.kickDebounced(vk, acctLedgerKickMinInterval, m.ledgerKickAt)
+		m.mu.Unlock()
+		if kick {
+			m.Kick(vk)
+		}
 		return
 	}
 	m.mu.Lock()
 	st := m.states[vk]
 	if st.acct == nil {
-		// 无账户态不建行（身份=查询器集）——kick REST 补全。
+		// 无账户态不建行（身份=查询器集）——kick REST 补全（2s/键防抖，账本帧自带数据）。
+		kick := m.kickDebounced(vk, acctLedgerKickMinInterval, m.ledgerKickAt)
 		m.mu.Unlock()
-		m.Kick(vk)
+		if kick {
+			m.Kick(vk)
+		}
 		return
 	}
 	cp := *st.acct // 防共享指针原地改写：复制后 patch
@@ -215,4 +224,49 @@ func resolveExchangeBaseURL(c pgstore.ExchangeConfig) string {
 		base = strings.Replace(base, "fapi", "api", 1)
 	}
 	return base
+}
+
+func (m *AccountMonitor) queriers(ctx context.Context) []reconcile.AccountQuerier {
+	qs := m.bm.AccountQueriers()
+	m.mu.RLock()
+	exchs := m.exchs
+	m.mu.RUnlock()
+	if exchs != nil {
+		cfgs, err := exchs.ListExchangeConfigs(ctx)
+		if err != nil {
+			log.Printf("[account-mon] list exchanges: %v", err)
+		} else {
+			// D-362 S2/R1：撞键归一（赢家 canonical/输家 #id，与 executor/持仓同源）。
+			// D-516：sim 行先于归一剔除——不占 canonical、不建查询器。
+			m.mu.Lock()
+			live := realOnlyConfigs(cfgs, &m.simWarned, "account")
+			h := exchConfigsHash(live)
+			if h == m.qCacheHash && m.qCache != nil {
+				qs = append(qs, m.qCache...)
+				m.mu.Unlock()
+			} else {
+				m.mu.Unlock()
+				// D-362 S2/R1：撞键归一（赢家 canonical/输家 #id，与 executor/持仓同源）。
+				winners := cexKeyWinners(live)
+				var built []reconcile.AccountQuerier
+				for i := range live {
+					c := &live[i]
+					base := resolveExchangeBaseURL(*c)
+					q := reconcile.NewCEXAccountQuerier(c.Venue, c.VenueType, c.APIKey, c.APISecret, c.Passphrase, base, c.Website, c.Simulated)
+					q.SetKeyOverride(reconcile.CexVenueKey(c.Venue, c.VenueType, c.ID, winners))
+					built = append(built, q)
+					log.Printf("[account] cex querier: %s:%s", c.Venue, c.VenueType)
+				}
+				cexQuerierBuildTotal.Add(1)
+				m.mu.Lock()
+				m.qCacheHash, m.qCache = h, built
+				m.mu.Unlock()
+				qs = append(qs, built...)
+			}
+		}
+	}
+	m.mu.RLock()
+	qs = append(qs, m.statics...)
+	m.mu.RUnlock()
+	return qs
 }
