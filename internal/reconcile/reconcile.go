@@ -41,6 +41,7 @@ type Reconciler struct {
 	settler       Settler       // D-087 §3.2：替换 statUpdater + verificationUpdater（统一结算入口）
 	runTimeout    time.Duration // 单次外部调用超时（缺陷1修复：默认 10s，防离线 venue 阻塞 loop）
 	initialDelay  time.Duration // 首轮延迟（缺陷2修复：默认 60s，等 adapter 就绪）
+	kickCh        chan struct{} // D-004 P1#6：事件 kick（buffered 1 合并）
 }
 
 // New 创建对账器。
@@ -59,6 +60,7 @@ func New(store Store, queriers ...venue.Querier) *Reconciler {
 		fastRetryStreak:  map[string]int{},
 		fastRetryTimes:   map[string][]time.Time{},
 		unknownRounds:    map[int64]int{},
+		kickCh:           make(chan struct{}, 1),
 	}
 }
 

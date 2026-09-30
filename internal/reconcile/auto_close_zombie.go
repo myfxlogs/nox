@@ -131,6 +131,10 @@ func (r *Reconciler) updateStatusRetry(ctx context.Context, posID int64, status 
 	return fmt.Errorf("update status %s: %w", status, err)
 }
 
+// zombieAge OPENING/LEGGED 僵尸阈值（D-073/D-108 单一算式——判定与
+// reconcile_loop.nextBoundary 到点定时器共用）。
+const zombieAge = 24 * time.Hour
+
 // isOPENINGZombie 判断 position 是否为 OPENING 僵尸。
 // 判定条件（满足任一即僵尸）：
 //  1. 超 24h（opened_at 存在且 now.Sub > 24h）——原条件；
@@ -143,8 +147,8 @@ func isOPENINGZombie(pos *pgstore.Position, legs []pgstore.PositionLeg, now time
 	if pos.Status != "OPENING" {
 		return false
 	}
-	// 条件1：超 24h
-	if pos.OpenedAt != nil && now.Sub(*pos.OpenedAt) > 24*time.Hour {
+	// 条件1：超 zombieAge
+	if pos.OpenedAt != nil && now.Sub(*pos.OpenedAt) > zombieAge {
 		return true
 	}
 	// 条件2：无 opened_at 且无任何 legs（执行中断无进展；有腿=执行中不判）
@@ -206,7 +210,7 @@ func isLeggedZombie(pos *pgstore.Position, now time.Time) bool {
 	if pos.Status != "LEGGED" {
 		return false
 	}
-	if pos.OpenedAt != nil && now.Sub(*pos.OpenedAt) > 24*time.Hour {
+	if pos.OpenedAt != nil && now.Sub(*pos.OpenedAt) > zombieAge {
 		return true
 	}
 	return false
