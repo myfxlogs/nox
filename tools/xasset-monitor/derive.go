@@ -4,10 +4,9 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"strconv"
+	"math"
+	"strings"
 	"time"
 
 	"arb/internal/store/pgstore"
@@ -57,55 +56,110 @@ func loadDerivationInputs(ctx context.Context, st *pgstore.Store) ([]allowComboR
 	return combos, uni, uniRows.Err()
 }
 
-// fetchBinanceGold D-582：binance 腿入参改读库——REST premiumIndex/bookTicker 轮询
-// 退役（VPS1 418 rate-ban 病灶；WS 一份数据 ticks/facts 已在库，REST 纯重复采集）。
-// bid/ask←ticks（venue_type='perp' 过滤——perp/spot 行混存；行龄>30s=陈旧报错不猜）；
-// fundingRate←facts（src='binance_ws_markprice'：kind='funding' 年化% 最新行 +
-// kind='funding_interval' 单期秒数 ivlSec，超龄>15min 报错不猜）。返回单期小数费率
-// （消费端 main.go fundingRate×periodsPerDay×365×100 再年化同语义）：
-// fundingRate = annualPct × ivlSec / (365×100×86400)。
-func fetchBinanceGold(ctx context.Context, pool *pgxpool.Pool, symbol string) (bid, ask, fundingRate float64, err error) {
+// D-591 S2/S3/S5 读库三件套（模板=D-582 fetchBinanceGold；reuse-existing-stream-before-new-path）。
+
+// goldStaleTicks ticks 陈旧守门（S5 定标：6h 实测行间隔 binance p100=118s/gate p99=74s/
+// okx p99=61s——120s 覆盖正常节奏；flap 窗真停顿报错=应有行为，禁为少报错放宽）。
+const goldStaleTicks = 120 * time.Second
+
+// readGoldTicks 读最新 perp tick（venue×symbol 隔离；venue_type='perp' 过滤——perp/spot 行混存）。
+func readGoldTicks(ctx context.Context, pool *pgxpool.Pool, venue, symbol string) (bid, ask float64, err error) {
 	var ts time.Time
 	err = pool.QueryRow(ctx, `
 		SELECT bid, ask, ts FROM ticks
-		WHERE venue='binance' AND venue_type='perp' AND symbol=$1
+		WHERE venue=$1 AND venue_type='perp' AND symbol=$2
 		ORDER BY ts DESC LIMIT 1
-	`, symbol).Scan(&bid, &ask, &ts)
+	`, venue, symbol).Scan(&bid, &ask, &ts)
 	if err != nil {
-		return 0, 0, 0, fmt.Errorf("ticks %s: %w", symbol, err)
+		return 0, 0, fmt.Errorf("ticks %s: %w", symbol, err)
 	}
-	if age := time.Since(ts); age > 30*time.Second {
-		return 0, 0, 0, fmt.Errorf("ticks %s stale age=%v > 30s", symbol, age.Round(time.Second))
+	if age := time.Since(ts); age > goldStaleTicks {
+		return 0, 0, fmt.Errorf("ticks %s stale age=%v > 120s", symbol, age.Round(time.Second))
 	}
+	return bid, ask, nil
+}
+
+// readGoldFunding 读 funding 年化%+interval 秒并换算：单期小数费率=annualPct×ivlSec/
+// (365×100×86400)（消费端 ×periodsPerDay×365×100 还原年化同语义）、periodsPerDay=86400/ivlSec
+// （S4：fundingInfo REST 退役，interval 真值已由 WS/日批落 facts）。funding 按 src 锚定 WS 源；
+// interval 落点 src 异构（okx=okx_ws_v5/gate=gate_v4_contract_meta/binance=binance_ws_markprice）
+// 故不过滤 src——venue×symbol 隔离已足够（KB cross-venue-data-borrowing-pollution 禁跨所借用）。
+// 缺行/超龄 15min=error 不猜（stale-data-propagates-wrong-judgments）。
+func readGoldFunding(ctx context.Context, pool *pgxpool.Pool, venue, src, symbol string) (fundingRate float64, periodsPerDay int, err error) {
 	var annualPct, ivlSec float64
 	var fts, its time.Time
 	err = pool.QueryRow(ctx, `
 		SELECT value, ts FROM facts
-		WHERE kind='funding' AND venue='binance' AND symbol=$1 AND src='binance_ws_markprice'
+		WHERE kind='funding' AND venue=$1 AND src=$2 AND symbol=$3
 		ORDER BY ts DESC LIMIT 1
-	`, symbol).Scan(&annualPct, &fts)
+	`, venue, src, symbol).Scan(&annualPct, &fts)
 	if err != nil {
-		return 0, 0, 0, fmt.Errorf("facts funding %s: %w", symbol, err)
+		return 0, 0, fmt.Errorf("facts funding %s: %w", symbol, err)
 	}
 	if age := time.Since(fts); age > 15*time.Minute {
-		return 0, 0, 0, fmt.Errorf("facts funding %s stale age=%v > 15m", symbol, age.Round(time.Second))
+		return 0, 0, fmt.Errorf("facts funding %s stale age=%v > 15m", symbol, age.Round(time.Second))
 	}
 	err = pool.QueryRow(ctx, `
 		SELECT value, ts FROM facts
-		WHERE kind='funding_interval' AND venue='binance' AND symbol=$1 AND src='binance_ws_markprice'
+		WHERE kind='funding_interval' AND venue=$1 AND symbol=$2
 		ORDER BY ts DESC LIMIT 1
-	`, symbol).Scan(&ivlSec, &its)
+	`, venue, symbol).Scan(&ivlSec, &its)
 	if err != nil {
-		return 0, 0, 0, fmt.Errorf("facts funding_interval %s: %w", symbol, err)
+		return 0, 0, fmt.Errorf("facts funding_interval %s: %w", symbol, err)
 	}
 	if age := time.Since(its); age > 15*time.Minute {
-		return 0, 0, 0, fmt.Errorf("facts funding_interval %s stale age=%v > 15m", symbol, age.Round(time.Second))
+		return 0, 0, fmt.Errorf("facts funding_interval %s stale age=%v > 15m", symbol, age.Round(time.Second))
 	}
 	if ivlSec <= 0 {
-		return 0, 0, 0, fmt.Errorf("facts funding_interval %s: invalid ivlSec=%v", symbol, ivlSec)
+		return 0, 0, fmt.Errorf("facts funding_interval %s: invalid ivlSec=%v", symbol, ivlSec)
 	}
-	fundingRate = annualPct * ivlSec / (365 * 100 * 86400)
-	return bid, ask, fundingRate, nil
+	if periodsPerDay = int(math.Round(86400 / ivlSec)); periodsPerDay <= 0 {
+		return 0, 0, fmt.Errorf("facts funding_interval %s: periodsPerDay=%d", symbol, periodsPerDay)
+	}
+	return annualPct * ivlSec / (365 * 100 * 86400), periodsPerDay, nil
+}
+
+// fetchBinanceGold D-582 建/D-591 S4-S5 校准：symbol=binance 原生（=facts/ticks 键形）。
+func fetchBinanceGold(ctx context.Context, pool *pgxpool.Pool, symbol string) (bid, ask, fundingRate float64, periodsPerDay int, err error) {
+	if bid, ask, err = readGoldTicks(ctx, pool, "binance", symbol); err != nil {
+		return 0, 0, 0, 0, err
+	}
+	if fundingRate, periodsPerDay, err = readGoldFunding(ctx, pool, "binance", "binance_ws_markprice", symbol); err != nil {
+		return 0, 0, 0, 0, err
+	}
+	return bid, ask, fundingRate, periodsPerDay, nil
+}
+
+// okxNativeToDBKey instId（XAUT-USDT-SWAP）→facts/ticks 键形（XAUTUSDT，与 okx_ws 落库同构）。
+func okxNativeToDBKey(instID string) string {
+	return strings.ReplaceAll(strings.TrimSuffix(instID, "-SWAP"), "-", "")
+}
+
+// gateNativeToDBKey contract（XAUT_USDT）→键形（XAUTUSDT，与 canonicalFromGate 同构）。
+func gateNativeToDBKey(contract string) string { return strings.ReplaceAll(contract, "_", "") }
+
+// fetchOkxGold D-591 S2：okx 腿读库（REST ticker+funding-rate 退役）。
+func fetchOkxGold(ctx context.Context, pool *pgxpool.Pool, instID string) (bid, ask, fundingRate float64, periodsPerDay int, err error) {
+	sym := okxNativeToDBKey(instID)
+	if bid, ask, err = readGoldTicks(ctx, pool, "okx", sym); err != nil {
+		return 0, 0, 0, 0, err
+	}
+	if fundingRate, periodsPerDay, err = readGoldFunding(ctx, pool, "okx", "okx_ws_v5", sym); err != nil {
+		return 0, 0, 0, 0, err
+	}
+	return bid, ask, fundingRate, periodsPerDay, nil
+}
+
+// fetchGateGold D-591 S3：gate 腿读库（REST tickers+contracts 退役）。
+func fetchGateGold(ctx context.Context, pool *pgxpool.Pool, contract string) (bid, ask, fundingRate float64, periodsPerDay int, err error) {
+	sym := gateNativeToDBKey(contract)
+	if bid, ask, err = readGoldTicks(ctx, pool, "gate", sym); err != nil {
+		return 0, 0, 0, 0, err
+	}
+	if fundingRate, periodsPerDay, err = readGoldFunding(ctx, pool, "gate", "gate_ws_futures", sym); err != nil {
+		return 0, 0, 0, 0, err
+	}
+	return bid, ask, fundingRate, periodsPerDay, nil
 }
 
 // latestExnessTick D-335R1 S1：读 Exness 指定符号最新 tick（XAUUSD 泛化参数化）。
@@ -122,45 +176,4 @@ func latestExnessTick(ctx context.Context, pool *pgxpool.Pool, venue, symbol str
 		return 0, 0, fmt.Errorf("stale tick age=%v > 10m", time.Since(ts).Round(time.Second))
 	}
 	return bid, ask, nil
-}
-
-// fetchFundingPeriodsPerDay D-301a S2：从 Binance fundingInfo 取 per-symbol 结算周期。
-// 返回 periods/day（4h=6, 8h=3）；失败 → error（调用方回退 3）。
-func fetchFundingPeriodsPerDay(ctx context.Context, hc *http.Client, proxyURL, symbol string) (int, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, proxyURL+"/fapi/v1/fundingInfo", nil)
-	if err != nil {
-		return 0, err
-	}
-	resp, err := hc.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return 0, fmt.Errorf("fundingInfo http %d", resp.StatusCode)
-	}
-	var fi []struct {
-		Symbol               string `json:"symbol"`
-		FundingIntervalHours any    `json:"fundingIntervalHours"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&fi); err != nil {
-		return 0, err
-	}
-	for _, f := range fi {
-		if f.Symbol != symbol {
-			continue
-		}
-		hours := 0
-		switch v := f.FundingIntervalHours.(type) {
-		case float64:
-			hours = int(v)
-		case string:
-			hours, _ = strconv.Atoi(v)
-		}
-		if hours <= 0 {
-			return 0, fmt.Errorf("fundingInfo %s: invalid hours %v", symbol, f.FundingIntervalHours)
-		}
-		return 24 / hours, nil
-	}
-	return 0, fmt.Errorf("fundingInfo: symbol %s not found", symbol)
 }

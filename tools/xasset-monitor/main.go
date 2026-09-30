@@ -12,10 +12,8 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"net/http"
 	"os"
 
-	"arb/internal/httpx" // SSOT：自动注入 CA + X-Proxy-Token
 	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 )
@@ -49,18 +47,10 @@ func run(ctx context.Context) (err error) {
 	// （alerts critical + app_secrets 飞书直推 + 30min 去重；pair skip 不进此通道）。
 	defer func() { reportFatal(ctx, st, err) }()
 
-	// D-558 S1：BINANCE_PROXY_URL 与 core 同源——store→LoadAppConfig→
-	// ApplyAppConfigEnvOverlay（DB>env），与 backfill 入口共用 binanceProxyURL()。
-	proxyURL, err := binanceProxyURL(ctx, st)
-	if err != nil {
-		return err
-	}
 	exnessVenue := os.Getenv("ARB_XASSET_EXNESS_VENUE")
 	if exnessVenue == "" {
 		exnessVenue = "3001157"
 	}
-
-	hc := httpx.Client()
 
 	// D-472 S5：监控簿白名单派生（硬编码清单退役）——enabled combos × universe 现查。
 	combos, uni, err := loadDerivationInputs(ctx, st)
@@ -71,13 +61,13 @@ func run(ctx context.Context) (err error) {
 	for _, u := range uncovered {
 		log.Printf("[monitor-pairs] warn: enabled 组合未被簿覆盖（一次性列名，B-008）: %s", u)
 	}
-	return runPairs(ctx, st, hc, proxyURL, exnessVenue, pairs)
+	return runPairs(ctx, st, exnessVenue, pairs)
 }
 
 // runPairs S2：逐对取各自 exSym 报价（无新鲜 tick → 该对 skip+warn 逐对 fail-open，
 // 9-16 业主并存裁定）——禁止任何腿顶替。返回首个 pair 失败错误（skip 非失败）。
 // D-423：mtVenueKey=exnessVenue+:mt5（已带冒号原样）；按 cexVenue 路由报价源。
-func runPairs(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL, exnessVenue string, pairs []monitorPair) error {
+func runPairs(ctx context.Context, st *pgstore.Store, exnessVenue string, pairs []monitorPair) error {
 	mtVenue := exnessVenue
 	if keydomain.Parse(mtVenue).Type == "" {
 		mtVenue = keydomain.Join(mtVenue, "mt5")
@@ -89,7 +79,7 @@ func runPairs(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL,
 			log.Printf("xasset-monitor: pair=%s skip (Exness 腿 %s 无新鲜 tick: %v)", p.pair, p.exSym, err)
 			continue // S2：逐对 skip，禁止顶替腿
 		}
-		if err := runPair(ctx, st, hc, proxyURL, p, mtVenue, exBid, exAsk); err != nil {
+		if err := runPair(ctx, st, p, mtVenue, exBid, exAsk); err != nil {
 			log.Printf("xasset-monitor: pair=%s 失败: %v", p.pair, err)
 			if firstErr == nil {
 				firstErr = err
@@ -99,33 +89,27 @@ func runPairs(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL,
 	return firstErr
 }
 
-func runPair(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL string, p monitorPair, mtVenue string, exBid, exAsk float64) error {
+func runPair(ctx context.Context, st *pgstore.Store, p monitorPair, mtVenue string, exBid, exAsk float64) error {
 	sym, pair := p.sym, p.pair
 	var bid, ask, fundingRate float64
 	var periodsPerDay int
 	var err error
 	if p.cexVenue == "okx:perp" {
 		// D-423：OKX 公开行情路由（api/v5/market/ticker + public/funding-rate，无鉴权不走 proxy）。
-		bid, ask, fundingRate, periodsPerDay, err = fetchOkxTickerFn(ctx, hc, sym)
+		bid, ask, fundingRate, periodsPerDay, err = fetchOkxGoldFn(ctx, st.Pool(), sym)
 		if err != nil {
 			return fmt.Errorf("fetch okx %s: %w", sym, err)
 		}
 	} else if p.cexVenue == "gate:perp" {
 		// D-462：Gate 公开行情路由（api/v4/futures/usdt tickers+contracts，无鉴权不走 proxy）。
-		bid, ask, fundingRate, periodsPerDay, err = fetchGateTickerFn(ctx, hc, sym)
+		bid, ask, fundingRate, periodsPerDay, err = fetchGateGoldFn(ctx, st.Pool(), sym)
 		if err != nil {
 			return fmt.Errorf("fetch gate %s: %w", sym, err)
 		}
 	} else {
-		bid, ask, fundingRate, err = fetchBinanceGoldFn(ctx, st.Pool(), sym)
+		bid, ask, fundingRate, periodsPerDay, err = fetchBinanceGoldFn(ctx, st.Pool(), sym)
 		if err != nil {
 			return fmt.Errorf("fetch binance %s: %w", sym, err)
-		}
-		// D-301a S2：funding 年化周期按 symbol 取真值（fundingInfo）——PAXG/XAUT 实为 4h→6 期/日，旧版 ×3 低估 2×。
-		periodsPerDay, err = fetchFundingPeriodsPerDayFn(ctx, hc, proxyURL, sym)
-		if err != nil {
-			log.Printf("xasset-monitor: pair=%s fundingInfo fetch failed, fallback 3/day: %v", pair, err)
-			periodsPerDay = 3 // D-079 禁静默回退
 		}
 	}
 
@@ -185,8 +169,7 @@ func runPair(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL s
 // fetchBinanceGoldFn/fetchFundingPeriodsPerDayFn/fetchOkxTickerFn 测试 seam
 // （生产=真实现；测试 stub 隔离 cex-proxy/公网）。
 var (
-	fetchBinanceGoldFn          = fetchBinanceGold
-	fetchFundingPeriodsPerDayFn = fetchFundingPeriodsPerDay
-	fetchOkxTickerFn            = fetchOkxTicker
-	fetchGateTickerFn           = fetchGateTicker
+	fetchBinanceGoldFn = fetchBinanceGold
+	fetchOkxGoldFn     = fetchOkxGold
+	fetchGateGoldFn    = fetchGateGold
 )

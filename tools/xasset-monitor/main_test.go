@@ -4,7 +4,6 @@ package main
 // 无新鲜 tick 逐对 skip（禁止任何腿顶替）；量级卫生断言 |esp|<1000bps。
 import (
 	"context"
-	"net/http"
 	"testing"
 
 	"arb/internal/store/pgstore"
@@ -43,18 +42,13 @@ func d335r1SeedTick(t *testing.T, s *pgstore.Store, venue, symbol string, bid, a
 // （真实现会发外网请求；D-423 okx 路由同 seam 隔离）。
 func d335r1StubFetches(t *testing.T, bid, ask float64) {
 	t.Helper()
-	origGold, origPeriods, origOkx := fetchBinanceGoldFn, fetchFundingPeriodsPerDayFn, fetchOkxTickerFn
-	fetchBinanceGoldFn = func(context.Context, *pgxpool.Pool, string) (float64, float64, float64, error) {
-		return bid, ask, 0.0001, nil
-	}
-	fetchFundingPeriodsPerDayFn = func(context.Context, *http.Client, string, string) (int, error) {
-		return 6, nil
-	}
-	fetchOkxTickerFn = func(context.Context, *http.Client, string) (float64, float64, float64, int, error) {
+	origGold, origOkx, origGate := fetchBinanceGoldFn, fetchOkxGoldFn, fetchGateGoldFn
+	gold := func(context.Context, *pgxpool.Pool, string) (float64, float64, float64, int, error) {
 		return bid, ask, 0.0001, 3, nil
 	}
+	fetchBinanceGoldFn, fetchOkxGoldFn, fetchGateGoldFn = gold, gold, gold
 	t.Cleanup(func() {
-		fetchBinanceGoldFn, fetchFundingPeriodsPerDayFn, fetchOkxTickerFn = origGold, origPeriods, origOkx
+		fetchBinanceGoldFn, fetchOkxGoldFn, fetchGateGoldFn = origGold, origOkx, origGate
 	})
 }
 
@@ -75,7 +69,7 @@ func TestD335R1_NoTickSkipsPair(t *testing.T) {
 	s := d335r1Store(t)
 	d335r1SeedTick(t, s, "3001157", "XAUUSD", 4354, 4355)
 	d335r1StubFetches(t, 4360, 4361) // binance 金价形态
-	if err := runPairs(context.Background(), s, http.DefaultClient, "", "3001157", derivedPairs()); err != nil {
+	if err := runPairs(context.Background(), s, "3001157", derivedPairs()); err != nil {
 		t.Fatalf("runPairs: %v", err)
 	}
 	if n := d335r1Count(t, s, "BTCUSDT-BTC"); n != 0 {
@@ -94,7 +88,7 @@ func TestD335R1_BTCTickParity(t *testing.T) {
 	s := d335r1Store(t)
 	d335r1SeedTick(t, s, "3001157", "BTCUSDT", 100000, 100000)
 	d335r1StubFetches(t, 100049, 100050)
-	if err := runPairs(context.Background(), s, http.DefaultClient, "", "3001157", derivedPairs()); err != nil {
+	if err := runPairs(context.Background(), s, "3001157", derivedPairs()); err != nil {
 		t.Fatalf("runPairs: %v", err)
 	}
 	var esp float64
@@ -125,19 +119,19 @@ func TestD335R1_TickFreshness(t *testing.T) {
 
 // TestD423_OkxVenueRow D-423 S1 锚：okx:perp 路由行落库带 venue 三元组
 // （cex_venue='okx:perp'/mt_venue='3001157:mt5'），与 binance 簿同 pair 隔离；
-// 且 fetchOkxTickerFn 被调（路由按 cexVenue 不走 binance fetch）。
+// 且 fetchOkxGoldFn 被调（路由按 cexVenue 不走 binance fetch，D-591 S2 读库化）。
 func TestD423_OkxVenueRow(t *testing.T) {
 	s := d335r1Store(t)
 	d335r1SeedTick(t, s, "3001157", "XAUUSD", 4354, 4355)
 	d335r1StubFetches(t, 4360, 4361)
 	okxCalled := false
-	orig := fetchOkxTickerFn
-	fetchOkxTickerFn = func(context.Context, *http.Client, string) (float64, float64, float64, int, error) {
+	orig := fetchOkxGoldFn
+	fetchOkxGoldFn = func(context.Context, *pgxpool.Pool, string) (float64, float64, float64, int, error) {
 		okxCalled = true
 		return 4360, 4361, 0.0001, 3, nil
 	}
-	t.Cleanup(func() { fetchOkxTickerFn = orig })
-	if err := runPairs(context.Background(), s, http.DefaultClient, "", "3001157", derivedPairs()); err != nil {
+	t.Cleanup(func() { fetchOkxGoldFn = orig })
+	if err := runPairs(context.Background(), s, "3001157", derivedPairs()); err != nil {
 		t.Fatalf("runPairs: %v", err)
 	}
 	if !okxCalled {
