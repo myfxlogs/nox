@@ -16,17 +16,17 @@ import (
 	"arb/internal/exec"
 	"arb/internal/fact"
 	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/reconcile"
+	"arb/internal/venue"
 )
 
 // fakeCEXQuerier CEX querier stub（仅持仓；CEX 无 ServerTZQuerier 实现=nil 空态语义）。
 type fakeCEXQuerier struct {
 	key    string
-	orders []reconcile.VenueOrder
+	orders []venue.Order
 }
 
 func (f *fakeCEXQuerier) VenueKey() string { return f.key }
-func (f *fakeCEXQuerier) QueryOpenedOrders(context.Context) ([]reconcile.VenueOrder, error) {
+func (f *fakeCEXQuerier) QueryOpenedOrders(context.Context) ([]venue.Order, error) {
 	return f.orders, nil
 }
 
@@ -52,7 +52,7 @@ func TestD337R1_CEXLegClockAndRate(t *testing.T) {
 		t.Fatalf("populate: %v", err)
 	}
 
-	q := &fakeCEXQuerier{key: "binance:perp", orders: []reconcile.VenueOrder{
+	q := &fakeCEXQuerier{key: "binance:perp", orders: []venue.Order{
 		{Venue: "binance", VenueKey: "binance:perp", Ticket: "XAUUSDT", Symbol: "XAUUSDT", Side: "SELL", Volume: 1, OpenPrice: 4355, Profit: 0},
 	}}
 	qb := bus.New()
@@ -105,7 +105,7 @@ func TestD337R1_CEXNoFactZero(t *testing.T) {
 	defer fiSrv.Close()
 	intervals := exchange.NewFundingIntervalCache()
 	_ = intervals.Populate(ctx, exchange.Config{BinanceBaseURL: fiSrv.URL, Client: fiSrv.Client()})
-	q := &fakeCEXQuerier{key: "binance:perp", orders: []reconcile.VenueOrder{
+	q := &fakeCEXQuerier{key: "binance:perp", orders: []venue.Order{
 		{Venue: "binance", VenueKey: "binance:perp", Ticket: "XAUUSDT", Symbol: "XAUUSDT", Side: "SELL", Volume: 1, OpenPrice: 4355, Profit: 0},
 	}}
 	qb := bus.New()

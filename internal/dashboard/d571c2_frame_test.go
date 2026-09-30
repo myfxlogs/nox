@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
-	"arb/internal/reconcile"
+	"arb/internal/venue"
 
 	v1 "arb/internal/gen/dashboardv1"
 )
@@ -18,7 +18,7 @@ import (
 // T3a：onQuote 原生 brokerSym 命中——CEX 行 pb.Symbol==q.VenueSymbol 脏化（变体/原生行）。
 func TestD571C2_OnQuoteNativeKeyHit(t *testing.T) {
 	ctx := context.Background()
-	q := &fakeCEXQuerier{key: "okx:perp", orders: []reconcile.VenueOrder{
+	q := &fakeCEXQuerier{key: "okx:perp", orders: []venue.Order{
 		{Venue: "okx", VenueKey: "okx:perp", Ticket: "P1", Symbol: "XAU-USDT-SWAP", Side: "SELL", Volume: 1, OpenPrice: 2000},
 	}}
 	m, ch, _ := newEvMonTest(t, q)
@@ -50,7 +50,7 @@ func TestD571C2_OnQuoteNativeKeyHit(t *testing.T) {
 // T3b：onQuote mt5 死踢收束——mt5 行价只认帧携，quote 不再脏化（零事件）。
 func TestD571C2_OnQuoteMT5DeadKick(t *testing.T) {
 	ctx := context.Background()
-	q := &fakeVenueQuerier{key: "v:mt5", orders: []reconcile.VenueOrder{
+	q := &fakeVenueQuerier{key: "v:mt5", orders: []venue.Order{
 		{Venue: "v", VenueKey: "v:mt5", Ticket: "1", Symbol: "EURUSDm", Side: "BUY", Volume: 0.1, OpenPrice: 1.1},
 	}}
 	m, ch, _ := newEvMonTest(t, q)
@@ -67,7 +67,7 @@ func TestD571C2_OnQuoteMT5DeadKick(t *testing.T) {
 // 下一帧携新价自然替换。
 func TestD571C2_RestPreservesFramePrice(t *testing.T) {
 	ctx := context.Background()
-	q := &fakeVenueQuerier{key: "v:mt5", orders: []reconcile.VenueOrder{
+	q := &fakeVenueQuerier{key: "v:mt5", orders: []venue.Order{
 		{Venue: "v", VenueKey: "v:mt5", Ticket: "1", Symbol: "EURUSDm", Side: "BUY", Volume: 0.1, OpenPrice: 1.1},
 	}}
 	m, ch, _ := newEvMonTest(t, q)
@@ -75,7 +75,7 @@ func TestD571C2_RestPreservesFramePrice(t *testing.T) {
 	drainEvents(ch)
 	// 帧携价入场（CurrentPrice=1.1010，PriceAt=now）。
 	frameTs := time.Now()
-	m.OnMT5Frame("v:mt5", []reconcile.VenueOrder{
+	m.OnMT5Frame("v:mt5", []venue.Order{
 		{Venue: "v", VenueKey: "v:mt5", Ticket: "1", Symbol: "EURUSDm", Side: "BUY", Volume: 0.1, OpenPrice: 1.1, Profit: 1, CurrentPrice: 1.1010, PriceAt: frameTs},
 	})
 	m.flush(ctx)
@@ -93,7 +93,7 @@ func TestD571C2_RestPreservesFramePrice(t *testing.T) {
 		t.Fatalf("REST 不应冲帧携价, got %+v", pb)
 	}
 	// 下一帧携新价 → 自然替换。
-	m.OnMT5Frame("v:mt5", []reconcile.VenueOrder{
+	m.OnMT5Frame("v:mt5", []venue.Order{
 		{Venue: "v", VenueKey: "v:mt5", Ticket: "1", Symbol: "EURUSDm", Side: "BUY", Volume: 0.1, OpenPrice: 1.1, Profit: 2, CurrentPrice: 1.1050, PriceAt: time.Now()},
 	})
 	m.flush(ctx)
@@ -107,13 +107,13 @@ func TestD571C2_RestPreservesFramePrice(t *testing.T) {
 // T5：帧一致性锚——帧携价行 CurrentPrice 与 Pnl 同帧（隐含方向一致+价差≤点差量级）。
 func TestD571C2_FramePriceConsistency(t *testing.T) {
 	ctx := context.Background()
-	q := &fakeVenueQuerier{key: "v:mt5", orders: []reconcile.VenueOrder{
+	q := &fakeVenueQuerier{key: "v:mt5", orders: []venue.Order{
 		{Venue: "v", VenueKey: "v:mt5", Ticket: "1", Symbol: "XAUUSDm", Side: "BUY", Volume: 0.1, OpenPrice: 1999.0},
 	}}
 	m, _, _ := newEvMonTest(t, q)
 	m.Refresh(ctx)
 	// 帧携价（mid=2000.1，点差 0.2）+同帧 PnL 正值——方向一致。
-	m.OnMT5Frame("v:mt5", []reconcile.VenueOrder{
+	m.OnMT5Frame("v:mt5", []venue.Order{
 		{Venue: "v", VenueKey: "v:mt5", Ticket: "1", Symbol: "XAUUSDm", Side: "BUY", Volume: 0.1, OpenPrice: 1999.0, Profit: 11, CurrentPrice: 2000.1, PriceAt: time.Now()},
 	})
 	m.flush(ctx) // 帧 patch 脏化 → flush 重组装（protoFor 帧携价短接路径）

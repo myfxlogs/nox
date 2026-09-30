@@ -12,7 +12,7 @@ import (
 	"arb/internal/bus"
 	"arb/internal/collect/exchange"
 	"arb/internal/keydomain"
-	"arb/internal/reconcile"
+	"arb/internal/venue"
 
 	v1 "arb/internal/gen/dashboardv1"
 )
@@ -21,13 +21,13 @@ import (
 // orders 以 ticket 为键（D-571 包A 逐仓化）；canon/cs/marginByTicket 在 REST 重读时重建缓存，
 // 帧 patch 沿用（canonical/保证金低频变化）。
 type venueState struct {
-	online         bool                            // 生效在线态（流状态已知则取流，否则取 REST 成败）
-	restOnline     bool                            // REST 查询成败（流状态缺席时的在线判定源）
-	orders         map[string]reconcile.VenueOrder // ticket → order
-	canon          map[string]string               // symbol→canonical（reconcile 重建）
-	cs             map[string]float64              // symbol→contractSize（reconcile 重建）
-	acctMargin     float64                         // 账户总保证金（reconcile 取 acctMon 快照）
-	marginByTicket map[string]float64              // D-124 分摊结果
+	online         bool                   // 生效在线态（流状态已知则取流，否则取 REST 成败）
+	restOnline     bool                   // REST 查询成败（流状态缺席时的在线判定源）
+	orders         map[string]venue.Order // ticket → order
+	canon          map[string]string      // symbol→canonical（reconcile 重建）
+	cs             map[string]float64     // symbol→contractSize（reconcile 重建）
+	acctMargin     float64                // 账户总保证金（reconcile 取 acctMon 快照）
+	marginByTicket map[string]float64     // D-124 分摊结果
 }
 
 // posKey 逐仓键：venueKey + "|" + ticket。
@@ -142,7 +142,7 @@ func (m *BrokerPositionMonitor) Kick(venueKey string) {
 // OnMT5Frame D-571 包A：MT5 OnOrderProfit 帧逐仓 patch（PositionsSink 入口）。
 // 语义：帧内已知票号更新字段；未知票号不建仓、触发该 venue 权威回读；
 // 帧外仓（帧未载）不动不删——缺仓只 REST 权威裁决。
-func (m *BrokerPositionMonitor) OnMT5Frame(venueKey string, orders []reconcile.VenueOrder) {
+func (m *BrokerPositionMonitor) OnMT5Frame(venueKey string, orders []venue.Order) {
 	unknown := false
 	m.mu.Lock()
 	vs := m.venues[venueKey]
@@ -290,8 +290,8 @@ func (m *BrokerPositionMonitor) dirtyLocked(posKey string) {
 }
 
 // ordersMapValues map → slice（margin 分摊签名沿用切片）。
-func ordersMapValues(m map[string]reconcile.VenueOrder) []reconcile.VenueOrder {
-	out := make([]reconcile.VenueOrder, 0, len(m))
+func ordersMapValues(m map[string]venue.Order) []venue.Order {
+	out := make([]venue.Order, 0, len(m))
 	for _, o := range m {
 		out = append(out, o)
 	}

@@ -5,6 +5,7 @@ package dashboard
 
 import (
 	"arb/internal/bus"
+	"arb/internal/venue"
 	"context"
 	"log"
 	"time"
@@ -75,7 +76,7 @@ func (m *CexPositionManager) sync(ctx context.Context) {
 	live := realOnlyConfigs(cfgs, &m.simWarned, "cex-pos")
 	winners := cexKeyWinners(live)
 	seen := make(map[string]bool, len(live))
-	var qs []reconcile.VenueQuerier
+	var qs []venue.Querier
 	for i := range live {
 		c := &live[i]
 		if c.VenueType != "perp" {
@@ -86,7 +87,7 @@ func (m *CexPositionManager) sync(ctx context.Context) {
 		seen[vk] = true
 		q := reconcile.NewCEXPositionQuerier(c.Venue, c.VenueType, c.APIKey, c.APISecret, c.Passphrase, base, c.Simulated)
 		q.SetKeyOverride(vk)
-		var vq reconcile.VenueQuerier = q
+		var vq venue.Querier = q
 		if m.PositionCache != nil {
 			// D-450：包装事件缓存加速层——REST 仍是真相源（miss/stale 回落）。
 			vq = exchange.NewCachedVenueQuerier(q, m.PositionCache)

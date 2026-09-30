@@ -12,11 +12,12 @@ import (
 	"time"
 
 	"arb/internal/bus"
-	"arb/internal/reconcile"
+	"arb/internal/venue"
 
 	v1 "arb/internal/gen/dashboardv1"
 
 	"arb/internal/keydomain"
+
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -46,7 +47,7 @@ func (m *BrokerPositionMonitor) build(ctx context.Context) []*v1.BrokerPosition 
 // protoFor 单仓显示态构建（D-571 包A：全量 build 与逐仓事件 flush 共用，唯一组装点）。
 // canonical/现价/swapChargeAt/periodicPct 规则与原 build 内联路径逐字一致（逻辑原样搬迁）；
 // canonMap/csMap/marginByTicket 取自 venueState（reconcile 时构建缓存，帧 patch 沿用）。
-func (m *BrokerPositionMonitor) protoFor(ctx context.Context, vk string, vs venueState, o reconcile.VenueOrder, now time.Time) *v1.BrokerPosition {
+func (m *BrokerPositionMonitor) protoFor(ctx context.Context, vk string, vs venueState, o venue.Order, now time.Time) *v1.BrokerPosition {
 	venue := o.Venue
 	canonical := ""
 	if vs.canon != nil {
@@ -75,7 +76,7 @@ func (m *BrokerPositionMonitor) protoFor(ctx context.Context, vk string, vs venu
 		hasPrice = true
 	}
 	// D-146 S5 微件③：CEX perp per-position margin 优先（venue 权威，替换 0=未知语义）；
-	// MT4/MT5 走 D-124 账户分摊（VenueOrder.InitialMargin=0）。
+	// MT4/MT5 走 D-124 账户分摊（venue.Order.InitialMargin=0）。
 	margin := vs.marginByTicket[o.Ticket]
 	if o.InitialMargin > 0 {
 		margin = o.InitialMargin
@@ -135,8 +136,8 @@ func (m *BrokerPositionMonitor) protoFor(ctx context.Context, vk string, vs venu
 
 // prepareVenueView reconcile 时一次性构建 venue 显示缓存（symMap/csMap/margin 分摊）。
 // 帧 patch 沿用缓存（canonical/保证金低频变化；保证金分摊在 patch 时按缓存重算）。
-func (m *BrokerPositionMonitor) prepareVenueView(ctx context.Context, vk string, orders []reconcile.VenueOrder, online bool) venueState {
-	vs := venueState{online: online, orders: make(map[string]reconcile.VenueOrder, len(orders))}
+func (m *BrokerPositionMonitor) prepareVenueView(ctx context.Context, vk string, orders []venue.Order, online bool) venueState {
+	vs := venueState{online: online, orders: make(map[string]venue.Order, len(orders))}
 	venue := ""
 	for _, o := range orders {
 		vs.orders[o.Ticket] = o
@@ -168,7 +169,7 @@ func (m *BrokerPositionMonitor) prepareVenueView(ctx context.Context, vk string,
 // notional = volume × contractSize × openPrice。守恒优先：任一笔 contractSize 未知（csMap 无值或 0）
 // → 该 venue 全部笔 margin=0（防部分分摊破坏守恒 Σ margin_i = M）。
 // accountMargin<=0（CEX / 无账户数据）→ 全 0。单笔 → 100%。
-func allocateMargins(orders []reconcile.VenueOrder, accountMargin float64, csMap map[string]float64) map[string]float64 {
+func allocateMargins(orders []venue.Order, accountMargin float64, csMap map[string]float64) map[string]float64 {
 	out := make(map[string]float64, len(orders))
 	if accountMargin <= 0 || len(orders) == 0 {
 		return out

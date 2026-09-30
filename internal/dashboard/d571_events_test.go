@@ -10,7 +10,7 @@ import (
 	"arb/internal/bus"
 	"arb/internal/collect/exchange"
 	"arb/internal/exec"
-	"arb/internal/reconcile"
+	"arb/internal/venue"
 
 	v1 "arb/internal/gen/dashboardv1"
 )
@@ -24,7 +24,7 @@ type countingQuerier struct {
 	calls int
 }
 
-func (c *countingQuerier) QueryOpenedOrders(ctx context.Context) ([]reconcile.VenueOrder, error) {
+func (c *countingQuerier) QueryOpenedOrders(ctx context.Context) ([]venue.Order, error) {
 	c.mu.Lock()
 	c.calls++
 	c.mu.Unlock()
@@ -37,7 +37,7 @@ func (c *countingQuerier) callCount() int {
 }
 
 // newEvMonTest 组装事件化 monitor：返回 monitor + 事件订阅 chan + qbus（报价注入用）。
-func newEvMonTest(t *testing.T, q reconcile.VenueQuerier) (*BrokerPositionMonitor, <-chan *v1.BrokerPositionEvent, *bus.QuoteBus) {
+func newEvMonTest(t *testing.T, q venue.Querier) (*BrokerPositionMonitor, <-chan *v1.BrokerPositionEvent, *bus.QuoteBus) {
 	t.Helper()
 	qbus := bus.New()
 	bm := NewBrokerManager(nil, qbus, exec.NewRegistry(), time.Minute)
@@ -66,7 +66,7 @@ func drainEvents(ch <-chan *v1.BrokerPositionEvent) []*v1.BrokerPositionEvent {
 // T1：REST 权威缺仓 → remove 事件（帧外仓不删，仅 REST 裁决）。
 func TestD571_RestRemoveEmitsRemove(t *testing.T) {
 	ctx := context.Background()
-	q := &fakeVenueQuerier{key: "v:mt5", orders: []reconcile.VenueOrder{
+	q := &fakeVenueQuerier{key: "v:mt5", orders: []venue.Order{
 		{Venue: "v", VenueKey: "v:mt5", Ticket: "1", Symbol: "EURUSD", Side: "BUY", Volume: 0.1, OpenPrice: 1.1},
 	}}
 	m, ch, _ := newEvMonTest(t, q)
@@ -88,7 +88,7 @@ func TestD571_RestRemoveEmitsRemove(t *testing.T) {
 // T2：MT5 帧语义三连——a) 帧外仓不缺省删 b) 未知票号触发该 venue 回读 c) 已知票号字段变更 → upsert。
 func TestD571_MT5FrameSemantics(t *testing.T) {
 	ctx := context.Background()
-	fq := &fakeVenueQuerier{key: "v:mt5", orders: []reconcile.VenueOrder{
+	fq := &fakeVenueQuerier{key: "v:mt5", orders: []venue.Order{
 		{Venue: "v", VenueKey: "v:mt5", Ticket: "1", Symbol: "EURUSD", Side: "BUY", Volume: 0.1, OpenPrice: 1.1, Profit: 1},
 		{Venue: "v", VenueKey: "v:mt5", Ticket: "2", Symbol: "XAUUSD", Side: "SELL", Volume: 0.01, OpenPrice: 4000, Profit: 2},
 	}}
@@ -98,7 +98,7 @@ func TestD571_MT5FrameSemantics(t *testing.T) {
 	drainEvents(ch)
 
 	// a) 帧只载 ticket 1（ticket 2 帧缺席）→ 不得发 remove，ticket 2 仍在视图。
-	m.OnMT5Frame("v:mt5", []reconcile.VenueOrder{
+	m.OnMT5Frame("v:mt5", []venue.Order{
 		{Venue: "v", VenueKey: "v:mt5", Ticket: "1", Symbol: "EURUSD", Side: "BUY", Volume: 0.1, OpenPrice: 1.1, Profit: 1},
 	})
 	m.flush(ctx)
@@ -113,10 +113,10 @@ func TestD571_MT5FrameSemantics(t *testing.T) {
 
 	// b) 未知票号 → kick→REST 回读（querier 被调），且 REST 集含之 → upsert。
 	before := q.callCount()
-	fq.orders = append(fq.orders, reconcile.VenueOrder{
+	fq.orders = append(fq.orders, venue.Order{
 		Venue: "v", VenueKey: "v:mt5", Ticket: "3", Symbol: "GBPUSD", Side: "BUY", Volume: 0.1, OpenPrice: 1.3, Profit: 3,
 	})
-	m.OnMT5Frame("v:mt5", []reconcile.VenueOrder{
+	m.OnMT5Frame("v:mt5", []venue.Order{
 		{Venue: "v", VenueKey: "v:mt5", Ticket: "99", Symbol: "USDJPY", Side: "BUY", Volume: 0.1, OpenPrice: 150, Profit: 0},
 	})
 	kicks := m.drainKicks() // D-571 R2 F-3：未知票必须 kick 本 venue（删 Kick 行此断言即红）
@@ -140,7 +140,7 @@ func TestD571_MT5FrameSemantics(t *testing.T) {
 
 	// c) 已知票号 profit 变更 → upsert（Pnl 变化反映在事件载荷）。
 	drainEvents(ch)
-	m.OnMT5Frame("v:mt5", []reconcile.VenueOrder{
+	m.OnMT5Frame("v:mt5", []venue.Order{
 		{Venue: "v", VenueKey: "v:mt5", Ticket: "1", Symbol: "EURUSD", Side: "BUY", Volume: 0.1, OpenPrice: 1.1, Profit: 9.9},
 	})
 	m.flush(ctx)
@@ -159,7 +159,7 @@ func TestD571_MT5FrameSemantics(t *testing.T) {
 // 无关 symbol 报价不触发。
 func TestD571_QuoteLinkedUpsert(t *testing.T) {
 	ctx := context.Background()
-	q := &fakeCEXQuerier{key: "binance:perp", orders: []reconcile.VenueOrder{
+	q := &fakeCEXQuerier{key: "binance:perp", orders: []venue.Order{
 		{Venue: "binance", VenueKey: "binance:perp", Ticket: "TRXUSDT", Symbol: "TRXUSDT", Side: "BUY", Volume: 100, OpenPrice: 0.3, Profit: 0},
 	}}
 	m, ch, qbus := newEvMonTest(t, q)
@@ -200,7 +200,7 @@ func TestD571_QuoteLinkedUpsert(t *testing.T) {
 // T4：尾沿合批——同 posKey 窗口内多次脏化只发一条（最新态胜）。
 func TestD571_CoalesceTrailingEdge(t *testing.T) {
 	ctx := context.Background()
-	q := &fakeVenueQuerier{key: "v:mt5", orders: []reconcile.VenueOrder{
+	q := &fakeVenueQuerier{key: "v:mt5", orders: []venue.Order{
 		{Venue: "v", VenueKey: "v:mt5", Ticket: "1", Symbol: "EURUSD", Side: "BUY", Volume: 0.1, OpenPrice: 1.1},
 	}}
 	m, ch, _ := newEvMonTest(t, q)
@@ -208,10 +208,10 @@ func TestD571_CoalesceTrailingEdge(t *testing.T) {
 	drainEvents(ch)
 
 	// 一窗口内两帧（profit 1→2）→ 单 flush 只出最新态一条。
-	m.OnMT5Frame("v:mt5", []reconcile.VenueOrder{
+	m.OnMT5Frame("v:mt5", []venue.Order{
 		{Venue: "v", VenueKey: "v:mt5", Ticket: "1", Symbol: "EURUSD", Side: "BUY", Volume: 0.1, OpenPrice: 1.1, Profit: 1},
 	})
-	m.OnMT5Frame("v:mt5", []reconcile.VenueOrder{
+	m.OnMT5Frame("v:mt5", []venue.Order{
 		{Venue: "v", VenueKey: "v:mt5", Ticket: "1", Symbol: "EURUSD", Side: "BUY", Volume: 0.1, OpenPrice: 1.1, Profit: 2},
 	})
 	m.flush(ctx)
@@ -227,7 +227,7 @@ func TestD571_CoalesceTrailingEdge(t *testing.T) {
 // T5：回放——cur 全量每仓一条 upsert，聚合值顺带。
 func TestD571_ReplayEvents(t *testing.T) {
 	ctx := context.Background()
-	q := &fakeVenueQuerier{key: "v:mt5", orders: []reconcile.VenueOrder{
+	q := &fakeVenueQuerier{key: "v:mt5", orders: []venue.Order{
 		{Venue: "v", VenueKey: "v:mt5", Ticket: "1", Symbol: "EURUSD", Side: "BUY", Volume: 0.1, OpenPrice: 1.1, Profit: 3},
 		{Venue: "v", VenueKey: "v:mt5", Ticket: "2", Symbol: "XAUUSD", Side: "SELL", Volume: 0.01, OpenPrice: 4000, Profit: 4, Swap: 1, Commission: -0.5},
 	}}
@@ -258,7 +258,7 @@ func TestD571_ReplayEvents(t *testing.T) {
 // 同值重复不报（幂等）。
 func TestD571_StreamStateDrivesOnline(t *testing.T) {
 	ctx := context.Background()
-	q := &fakeVenueQuerier{key: "v:mt5", orders: []reconcile.VenueOrder{
+	q := &fakeVenueQuerier{key: "v:mt5", orders: []venue.Order{
 		{Venue: "v", VenueKey: "v:mt5", Ticket: "1", Symbol: "EURUSD", Side: "BUY", Volume: 0.1, OpenPrice: 1.1},
 	}}
 	m, ch, _ := newEvMonTest(t, q)

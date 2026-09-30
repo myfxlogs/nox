@@ -1,12 +1,11 @@
 package dashboard
 
 import (
+	"arb/internal/venue"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"arb/internal/reconcile"
 )
 
 // T1①：晚绑定回归——模拟 startMT5 先拷贝 dispatch*（bound-method），Set* 晚接后
@@ -15,12 +14,12 @@ func TestBrokerManager_LateBindPositions(t *testing.T) {
 	m := &BrokerManager{}
 	copied := m.dispatchPositions // startMT5 拷贝点（先于 Set*）
 	var got atomic.Int32
-	m.SetPositionsSink(func(vk string, orders []reconcile.VenueOrder) {
+	m.SetPositionsSink(func(vk string, orders []venue.Order) {
 		if vk == "v:mt5" {
 			got.Add(1)
 		}
 	})
-	copied("v:mt5", []reconcile.VenueOrder{{Ticket: "1", Venue: "v"}})
+	copied("v:mt5", []venue.Order{{Ticket: "1", Venue: "v"}})
 	if got.Load() != 1 {
 		t.Fatalf("late-bound positions sink not reached: %d", got.Load())
 	}
@@ -97,7 +96,7 @@ func TestBrokerManager_SinkRace(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 200; j++ {
-				m.SetPositionsSink(func(string, []reconcile.VenueOrder) { calls.Add(1) })
+				m.SetPositionsSink(func(string, []venue.Order) { calls.Add(1) })
 				m.SetStreamStateSink(func(string, bool) {})
 			}
 		}()

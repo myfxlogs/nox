@@ -1,17 +1,16 @@
 package dashboard
 
 import (
+	"arb/internal/venue"
 	"context"
 	"math"
 	"testing"
-
-	"arb/internal/reconcile"
 )
 
 // TestAllocateMargins_Proportional D-124 方案 C：3 笔同 venue + 已知 CS + account margin=$1000
 // → 各笔按 notional 比例分摊，和=$1000（守恒）。
 func TestAllocateMargins_Proportional(t *testing.T) {
-	orders := []reconcile.VenueOrder{
+	orders := []venue.Order{
 		{Ticket: "1", Symbol: "EURUSD", Volume: 1.0, OpenPrice: 1.10},
 		{Ticket: "2", Symbol: "XAUUSD", Volume: 0.1, OpenPrice: 2000.0},
 		{Ticket: "3", Symbol: "NAS100", Volume: 0.5, OpenPrice: 15000.0},
@@ -48,7 +47,7 @@ func TestAllocateMargins_Proportional(t *testing.T) {
 
 // TestAllocateMargins_CSUnknownAllZero D-124 守恒优先：任一笔 CS 未知 → 该 venue 全部笔 margin=0。
 func TestAllocateMargins_CSUnknownAllZero(t *testing.T) {
-	orders := []reconcile.VenueOrder{
+	orders := []venue.Order{
 		{Ticket: "1", Symbol: "EURUSD", Volume: 1.0, OpenPrice: 1.10},
 		{Ticket: "2", Symbol: "UNKNOWN", Volume: 0.1, OpenPrice: 2000.0},
 	}
@@ -64,7 +63,7 @@ func TestAllocateMargins_CSUnknownAllZero(t *testing.T) {
 
 // TestAllocateMargins_CEXZeroMargin D-124：CEX venue account margin=0 → 全 0。
 func TestAllocateMargins_CEXZeroMargin(t *testing.T) {
-	orders := []reconcile.VenueOrder{
+	orders := []venue.Order{
 		{Ticket: "1", Symbol: "BTCUSDT", Volume: 0.5, OpenPrice: 60000.0},
 	}
 	csMap := map[string]float64{"BTCUSDT": 1}
@@ -76,7 +75,7 @@ func TestAllocateMargins_CEXZeroMargin(t *testing.T) {
 
 // TestAllocateMargins_SinglePosition D-124：单笔 → 100% account margin。
 func TestAllocateMargins_SinglePosition(t *testing.T) {
-	orders := []reconcile.VenueOrder{
+	orders := []venue.Order{
 		{Ticket: "1", Symbol: "EURUSD", Volume: 1.0, OpenPrice: 1.10},
 	}
 	csMap := map[string]float64{"EURUSD": 100000}
@@ -94,11 +93,11 @@ func TestAllocateMargins_EmptyOrders(t *testing.T) {
 	}
 }
 
-// TestBuild_CEXMarginPriority D-146 S5 微件③：CEX perp VenueOrder.InitialMargin>0 → 优先于 D-124 分摊。
+// TestBuild_CEXMarginPriority D-146 S5 微件③：CEX perp venue.Order.InitialMargin>0 → 优先于 D-124 分摊。
 // 构造 binance:perp venue 带 InitialMargin=600 的订单 → build 后 BrokerPosition.Margin=600（非 0=未知）。
 // MT4/MT5 仓 InitialMargin=0 → 走 D-124 分摊（accountMargin=0 时 margin=0，行为不变）。
 func TestBuild_CEXMarginPriority(t *testing.T) {
-	q := &fakeVenueQuerier{key: "binance:perp", orders: []reconcile.VenueOrder{
+	q := &fakeVenueQuerier{key: "binance:perp", orders: []venue.Order{
 		{Ticket: "BTCUSDT", Symbol: "BTCUSDT", Side: "BUY", Volume: 0.1, OpenPrice: 60000, Venue: "binance", VenueKey: "binance:perp", Profit: 1.5, InitialMargin: 600.0, MaintMargin: 48.0},
 	}}
 	m, _, _ := newMonTest(t, q)
@@ -113,13 +112,13 @@ func TestBuild_CEXMarginPriority(t *testing.T) {
 	}
 	// CEX InitialMargin=600 → BrokerPosition.Margin=600（替换 0=未知语义）
 	if math.Abs(pbs[0].Margin-600.0) > 0.01 {
-		t.Errorf("CEX margin = %.4f, want 600.0 (VenueOrder.InitialMargin priority)", pbs[0].Margin)
+		t.Errorf("CEX margin = %.4f, want 600.0 (venue.Order.InitialMargin priority)", pbs[0].Margin)
 	}
 }
 
 // TestBuild_CEXMarginZeroStillDash D-146 S5 微件③：CEX 仓 InitialMargin=0（venue 未返回/0 仓）→ margin=0（诚实「—」）。
 func TestBuild_CEXMarginZeroStillDash(t *testing.T) {
-	q := &fakeVenueQuerier{key: "okx:perp", orders: []reconcile.VenueOrder{
+	q := &fakeVenueQuerier{key: "okx:perp", orders: []venue.Order{
 		{Ticket: "ETH-USDT-SWAP", Symbol: "ETH-USDT-SWAP", Side: "BUY", Volume: 40, OpenPrice: 2488.5, Venue: "okx", VenueKey: "okx:perp", Profit: 1.23, InitialMargin: 0},
 	}}
 	m, _, _ := newMonTest(t, q)

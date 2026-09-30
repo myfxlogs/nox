@@ -9,6 +9,7 @@ import (
 	"arb/internal/collect/exchange"
 	"arb/internal/exec"
 	"arb/internal/reconcile"
+	"arb/internal/venue"
 
 	v1 "arb/internal/gen/dashboardv1"
 )
@@ -29,7 +30,7 @@ func TestD575_T1_FlushBoundedOnTZHang(t *testing.T) {
 
 	qbus := bus.New()
 	bm := NewBrokerManager(nil, qbus, exec.NewRegistry(), time.Minute)
-	q := &fakeVenueQuerier{key: "v:mt5", orders: []reconcile.VenueOrder{
+	q := &fakeVenueQuerier{key: "v:mt5", orders: []venue.Order{
 		{Venue: "v", VenueKey: "v:mt5", Ticket: "1", Symbol: "EURUSD", Side: "BUY", Volume: 0.1, OpenPrice: 1.1},
 	}}
 	bm.AddStaticQuerier(q.VenueKey(), q)
@@ -87,7 +88,7 @@ func TestD575_T2_QuerierBoundedOnHang(t *testing.T) {
 type blockingOrderQuerier struct{ key string }
 
 func (q *blockingOrderQuerier) VenueKey() string { return q.key }
-func (q *blockingOrderQuerier) QueryOpenedOrders(ctx context.Context) ([]reconcile.VenueOrder, error) {
+func (q *blockingOrderQuerier) QueryOpenedOrders(ctx context.Context) ([]venue.Order, error) {
 	<-ctx.Done()
 	return nil, ctx.Err()
 }

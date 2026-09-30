@@ -8,6 +8,7 @@ import (
 	"arb/internal/exec"
 	"arb/internal/fact"
 	"arb/internal/reconcile"
+	"arb/internal/venue"
 
 	v1 "arb/internal/gen/dashboardv1"
 )
@@ -31,10 +32,10 @@ func (m *BrokerManager) kickSwap() {
 }
 
 // queriers 汇总 static + running + cex querier（D-121：CEX perp 持仓查询器并入）。
-func (m *BrokerManager) queriers() []reconcile.VenueQuerier {
+func (m *BrokerManager) queriers() []venue.Querier {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	qs := make([]reconcile.VenueQuerier, 0, len(m.static)+len(m.running)+len(m.cexQs))
+	qs := make([]venue.Querier, 0, len(m.static)+len(m.running)+len(m.cexQs))
 	for _, s := range m.static {
 		if s.q != nil {
 			qs = append(qs, s.q)
@@ -50,7 +51,7 @@ func (m *BrokerManager) queriers() []reconcile.VenueQuerier {
 }
 
 // AddStaticQuerier 登记环境变量适配器的 querier。
-func (m *BrokerManager) AddStaticQuerier(venue string, q reconcile.VenueQuerier) {
+func (m *BrokerManager) AddStaticQuerier(venue string, q venue.Querier) {
 	m.addStatic(venue, q, nil)
 }
 
@@ -59,7 +60,7 @@ func (m *BrokerManager) AddStaticSwapSource(venue string, swap func(ctx context.
 	m.addStatic(venue, nil, swap)
 }
 
-func (m *BrokerManager) addStatic(venue string, q reconcile.VenueQuerier, swap func(ctx context.Context) ([]fact.Fact, error)) {
+func (m *BrokerManager) addStatic(venue string, q venue.Querier, swap func(ctx context.Context) ([]fact.Fact, error)) {
 	m.mu.Lock()
 	m.static = append(m.static, staticQuerier{venue: venue, q: q, swap: swap})
 	m.mu.Unlock()
@@ -77,7 +78,7 @@ func (m *BrokerManager) AddStaticHistoryQuerier(venue string, hq reconcile.Order
 
 // SetCEXQueriers D-121：替换 CEX perp 持仓查询器集合（CexPositionManager 每轮刷新调用）。
 // 触发 syncQueriers → reconcile + BrokerPositionMonitor 刷新。
-func (m *BrokerManager) SetCEXQueriers(qs []reconcile.VenueQuerier) {
+func (m *BrokerManager) SetCEXQueriers(qs []venue.Querier) {
 	m.mu.Lock()
 	m.cexQs = qs
 	m.mu.Unlock()
@@ -141,9 +142,9 @@ func (m *BrokerManager) ServerTZQueriers() map[string]reconcile.ServerTZQuerier 
 // VenueOrderResult 逐 venue 查询结果（D-052）：venue 身份 + 持仓 + 失败详情，
 // 供 BrokerPositionMonitor 跟踪在线状态（0 持仓成功也知 venue 在线）。
 type VenueOrderResult struct {
-	VenueKey string                 // "{venue}:{type}"
-	Orders   []reconcile.VenueOrder // 查询失败时为 nil
-	Err      error                  // nil = 在线
+	VenueKey string        // "{venue}:{type}"
+	Orders   []venue.Order // 查询失败时为 nil
+	Err      error         // nil = 在线
 }
 
 // AccountQueriers 汇总 static + running 中实现了 AccountQuerier 的 querier（D-053）。
@@ -158,7 +159,7 @@ func (m *BrokerManager) AccountQueriers() []reconcile.AccountQuerier {
 	return out
 }
 
-// venueOrderResults 逐 venue 查询实际持仓（含失败详情，替代 VenueOrders 的吞错版）。D-052。
+// venueOrderResults 逐 venue 查询实际持仓（含失败详情，替代 venue.Orders 的吞错版）。D-052。
 func (m *BrokerManager) venueOrderResults(ctx context.Context) []VenueOrderResult {
 	var out []VenueOrderResult
 	for _, q := range m.queriers() {

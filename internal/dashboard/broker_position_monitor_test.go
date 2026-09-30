@@ -11,6 +11,7 @@ import (
 	"arb/internal/exec"
 	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
+	"arb/internal/venue"
 
 	v1 "arb/internal/gen/dashboardv1"
 )
@@ -18,14 +19,14 @@ import (
 // fakeVenueQuerier 受控 querier（D-052 monitor 测试）：orders/err 可随时切换，模拟在线/离线/空仓。
 type fakeVenueQuerier struct {
 	key      string
-	orders   []reconcile.VenueOrder
+	orders   []venue.Order
 	err      error
 	tzOffset float64
 	tzErr    error
 }
 
 func (f *fakeVenueQuerier) VenueKey() string { return f.key }
-func (f *fakeVenueQuerier) QueryOpenedOrders(context.Context) ([]reconcile.VenueOrder, error) {
+func (f *fakeVenueQuerier) QueryOpenedOrders(context.Context) ([]venue.Order, error) {
 	return f.orders, f.err
 }
 
@@ -35,20 +36,6 @@ func (f *fakeVenueQuerier) ServerTimezone(context.Context) (float64, error) {
 		return 0, f.tzErr
 	}
 	return f.tzOffset, nil
-}
-
-// newMonTestQ 组装 monitor（querier 泛化入口——fakeVenueQuerier/fakeCEXQuerier 均可）。
-func newMonTestQ(t *testing.T, q reconcile.VenueQuerier) (*BrokerPositionMonitor, *bus.Topic[*v1.BrokerPositionEvent], <-chan *v1.BrokerPositionEvent) {
-	t.Helper()
-	qbus := bus.New()
-	bm := NewBrokerManager(nil, qbus, exec.NewRegistry(), time.Minute)
-	bm.AddStaticQuerier(q.VenueKey(), q)
-	topic := bus.NewTopic[*v1.BrokerPositionEvent]()
-	ch, _ := topic.Subscribe()
-	m := NewBrokerPositionMonitor(bm, qbus, time.Minute, topic,
-		NewServerTZCache(time.Minute, func(context.Context, string) (float64, error) { return 0, errors.New("n/a") }),
-		exchange.NewFundingIntervalCache(), nil)
-	return m, topic, ch
 }
 
 // newMonTest 组装 monitor：nil store（BrokerSymbolMap 空 map → canonical=""，不动 broker_symbol_map 表）。
@@ -68,7 +55,7 @@ func newMonTest(t *testing.T, q *fakeVenueQuerier) (*BrokerPositionMonitor, *bus
 // TestBrokerPositionMonitor_OfflineKeepsSnapshot：在线有仓 → 离线保留最近快照并标 venue_online=false → 恢复空仓清空（D-052）。
 func TestBrokerPositionMonitor_OfflineKeepsSnapshot(t *testing.T) {
 	ctx := context.Background()
-	q := &fakeVenueQuerier{key: "testvenue:mt5", orders: []reconcile.VenueOrder{
+	q := &fakeVenueQuerier{key: "testvenue:mt5", orders: []venue.Order{
 		{Venue: "testvenue", VenueKey: "testvenue:mt5", Ticket: "1", Symbol: "TRXUSDT", Side: "SELL", Volume: 0.01, OpenPrice: 0.332280, Profit: -0.01, Magic: 42},
 	}}
 	m, _, _ := newMonTest(t, q)
@@ -108,7 +95,7 @@ func TestBrokerPositionMonitor_OfflineKeepsSnapshot(t *testing.T) {
 // TestBrokerPositionMonitor_BroadcastOnChangeOnly：仅变更广播；无变化不重复推（指纹去重）。
 func TestBrokerPositionMonitor_BroadcastOnChangeOnly(t *testing.T) {
 	ctx := context.Background()
-	q := &fakeVenueQuerier{key: "testvenue:mt5", orders: []reconcile.VenueOrder{
+	q := &fakeVenueQuerier{key: "testvenue:mt5", orders: []venue.Order{
 		{Venue: "testvenue", VenueKey: "testvenue:mt5", Ticket: "1", Symbol: "EURUSD", Side: "BUY", Volume: 0.1, OpenPrice: 1.1, Profit: 0, Magic: 0},
 	}}
 	m, _, ch := newMonTest(t, q)
@@ -151,7 +138,7 @@ func TestBrokerPositionMonitor_KickMerge(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	q := &fakeVenueQuerier{key: "testvenue:mt5", orders: []reconcile.VenueOrder{
+	q := &fakeVenueQuerier{key: "testvenue:mt5", orders: []venue.Order{
 		{Venue: "testvenue", VenueKey: "testvenue:mt5", Ticket: "1", Symbol: "EURUSD", Side: "BUY", Volume: 0.1, OpenPrice: 1.1, Profit: 0, Magic: 0},
 	}}
 	m, _, _ := newMonTest(t, q)
@@ -230,7 +217,7 @@ func TestOrderTopicToKickWiring(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	q := &fakeVenueQuerier{key: "testvenue:mt5", orders: []reconcile.VenueOrder{
+	q := &fakeVenueQuerier{key: "testvenue:mt5", orders: []venue.Order{
 		{Venue: "testvenue", VenueKey: "testvenue:mt5", Ticket: "1", Symbol: "EURUSD", Side: "BUY", Volume: 0.1, OpenPrice: 1.1, Profit: 0, Magic: 0},
 	}}
 	m, _, _ := newMonTest(t, q)
@@ -272,9 +259,9 @@ func TestOrderTopicToKickWiring(t *testing.T) {
 	}
 }
 
-// ordersByTicket []VenueOrder → ticket 键 map（venueState.orders 形态适配，测试构造用）。
-func ordersByTicket(orders []reconcile.VenueOrder) map[string]reconcile.VenueOrder {
-	out := make(map[string]reconcile.VenueOrder, len(orders))
+// ordersByTicket []venue.Order → ticket 键 map（venueState.orders 形态适配，测试构造用）。
+func ordersByTicket(orders []venue.Order) map[string]venue.Order {
+	out := make(map[string]venue.Order, len(orders))
 	for _, o := range orders {
 		out[o.Ticket] = o
 	}
@@ -334,7 +321,7 @@ func (f *fakeSwapSnapStore) ListPositionLegs(_ context.Context, posID int64) ([]
 // TestCollectSwapSnapshots_SwapChangeWrites D-110 P2：swap 值变化 → InsertSwapSnapshot 被调用。
 func TestCollectSwapSnapshots_SwapChangeWrites(t *testing.T) {
 	ctx := context.Background()
-	q := &fakeVenueQuerier{key: "venue:mt5", orders: []reconcile.VenueOrder{
+	q := &fakeVenueQuerier{key: "venue:mt5", orders: []venue.Order{
 		{Venue: "venue", VenueKey: "venue:mt5", Ticket: "T1", Symbol: "EURUSD", Side: "BUY", Volume: 0.1, OpenPrice: 1.1, Swap: 5.0},
 	}}
 	m, _, _ := newMonTest(t, q)
@@ -371,7 +358,7 @@ func TestCollectSwapSnapshots_SwapChangeWrites(t *testing.T) {
 // TestCollectSwapSnapshots_SwapZeroFirstWrite D-110 P2 B2：swap=0 + 首次 → 写入。
 func TestCollectSwapSnapshots_SwapZeroFirstWrite(t *testing.T) {
 	ctx := context.Background()
-	q := &fakeVenueQuerier{key: "venue:mt5", orders: []reconcile.VenueOrder{
+	q := &fakeVenueQuerier{key: "venue:mt5", orders: []venue.Order{
 		{Venue: "venue", VenueKey: "venue:mt5", Ticket: "T1", Symbol: "EURUSD", Side: "BUY", Volume: 0.1, OpenPrice: 1.1, Swap: 0},
 	}}
 	m, _, _ := newMonTest(t, q)
@@ -399,7 +386,7 @@ func TestCollectSwapSnapshots_SwapZeroFirstWrite(t *testing.T) {
 // TestCollectSwapSnapshots_PositionIDZeroSkips D-110 P2：position_id=0（孤儿单）→ 不写。
 func TestCollectSwapSnapshots_PositionIDZeroSkips(t *testing.T) {
 	ctx := context.Background()
-	q := &fakeVenueQuerier{key: "venue:mt5", orders: []reconcile.VenueOrder{
+	q := &fakeVenueQuerier{key: "venue:mt5", orders: []venue.Order{
 		{Venue: "venue", VenueKey: "venue:mt5", Ticket: "ORPHAN", Symbol: "EURUSD", Side: "BUY", Volume: 0.1, OpenPrice: 1.1, Swap: 5.0},
 	}}
 	m, _, _ := newMonTest(t, q)
@@ -420,7 +407,7 @@ func TestCollectSwapSnapshots_PositionIDZeroSkips(t *testing.T) {
 // 时区获取失败 venue → nil（诚实空态）。
 func TestD337_BuildSwapChargeAt(t *testing.T) {
 	ctx := context.Background()
-	q := &fakeVenueQuerier{key: "testvenue:mt5", orders: []reconcile.VenueOrder{
+	q := &fakeVenueQuerier{key: "testvenue:mt5", orders: []venue.Order{
 		{Venue: "testvenue", VenueKey: "testvenue:mt5", Ticket: "1", Symbol: "XAUUSD", Side: "SELL", Volume: 0.01, OpenPrice: 4000, Profit: 0},
 		{Venue: "testvenue", VenueKey: "testvenue:mt5", Ticket: "2", Symbol: "XAUUSD", Side: "SELL", Volume: 0.01, OpenPrice: 4001, Profit: 0},
 	}}
@@ -443,7 +430,7 @@ func TestD337_BuildSwapChargeAt(t *testing.T) {
 		t.Errorf("同 venue 两单应同一计费时刻: %v vs %v", got[0].SwapChargeAt, got[1].SwapChargeAt)
 	}
 	// 时区获取失败 venue → nil
-	q2 := &fakeVenueQuerier{key: "v2:mt5", orders: []reconcile.VenueOrder{
+	q2 := &fakeVenueQuerier{key: "v2:mt5", orders: []venue.Order{
 		{Venue: "v2", VenueKey: "v2:mt5", Ticket: "9", Symbol: "XAUUSD", Side: "SELL", Volume: 0.01, OpenPrice: 4000, Profit: 0},
 	}}
 	qb2 := bus.New()

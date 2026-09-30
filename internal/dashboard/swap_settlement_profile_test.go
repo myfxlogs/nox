@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"arb/internal/fact"
-	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
+	"arb/internal/venue"
 )
 
 // absDiff 返回两浮点数差的绝对值（测试比较用）。
@@ -274,7 +274,7 @@ func TestD180_RealtimeJumpDetection(t *testing.T) {
 			100: {{Phase: "OPEN", Venue: "61585565:mt5", Symbol: "GBPJPY", Side: "SELL", Qty: 0.01}},
 		},
 	}
-	o := reconcile.VenueOrder{VenueKey: "61585565:mt5", Swap: -0.14}
+	o := venue.Order{VenueKey: "61585565:mt5", Swap: -0.14}
 	now := time.Date(2026, 9, 1, 21, 0, 0, 0, time.UTC)
 	j, ok := detectRealtimeJump(store, 100, o, 0.0, now)
 	if !ok {
@@ -298,7 +298,7 @@ func TestD180_RealtimeJumpNoPrev(t *testing.T) {
 			100: {{Phase: "OPEN", Venue: "vA:mt5", Symbol: "AUDJPY", Side: "BUY", Qty: 0.01}},
 		},
 	}
-	o := reconcile.VenueOrder{VenueKey: "vA:mt5", Swap: 5.0}
+	o := venue.Order{VenueKey: "vA:mt5", Swap: 5.0}
 	// prev=5.0 same as current → jumpUSD=0 → ok=false
 	_, ok := detectRealtimeJump(store, 100, o, 5.0, time.Now().UTC())
 	if ok {

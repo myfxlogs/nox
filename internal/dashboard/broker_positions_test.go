@@ -5,13 +5,13 @@ import (
 	"time"
 
 	"arb/internal/bus"
-	"arb/internal/reconcile"
+	"arb/internal/venue"
 )
 
 // TestBrokerPositionToProto_FreshFrame：新鲜帧 → current_price=mid、fresh=true、
 // pnl=venue 透传权威值（D-116：移除 F5 重算，MT5 Profit 已换算 USD）、is_arb 判别（D-051 WP3）。
 func TestBrokerPositionToProto_FreshFrame(t *testing.T) {
-	o := reconcile.VenueOrder{
+	o := venue.Order{
 		Venue: "277842155", VenueKey: "277842155:mt5", Ticket: "1001",
 		Symbol: "EURUSDm", Side: "BUY", Volume: 0.1, OpenPrice: 1.1000,
 		Profit: 12.34, Swap: -0.5, Commission: 0.6, Comment: "arb",
@@ -52,7 +52,7 @@ func TestBrokerPositionToProto_FreshFrame(t *testing.T) {
 
 // TestBrokerPositionToProto_OfflineMarked：离线 venue 保留快照 → venue_online=false 诚实标注（D-052）。
 func TestBrokerPositionToProto_OfflineMarked(t *testing.T) {
-	o := reconcile.VenueOrder{Venue: "v", VenueKey: "v:mt5", Ticket: "6", Symbol: "EURUSD", Comment: "arb", Magic: 3}
+	o := venue.Order{Venue: "v", VenueKey: "v:mt5", Ticket: "6", Symbol: "EURUSD", Comment: "arb", Magic: 3}
 	pb := brokerPositionToProto(o, "EURUSD", bus.Quote{}, false, false, time.Minute, time.Now(), 0, nil, 0)
 	if pb.VenueOnline {
 		t.Errorf("offline venue_online want false, got true")
@@ -64,7 +64,7 @@ func TestBrokerPositionToProto_OfflineMarked(t *testing.T) {
 
 // TestBrokerPositionToProto_NotArb：非 ARB 源 comment（manual）→ is_arb=false，其余字段照常。
 func TestBrokerPositionToProto_NotArb(t *testing.T) {
-	o := reconcile.VenueOrder{
+	o := venue.Order{
 		Venue: "v", VenueKey: "v:mt4", Ticket: "42",
 		Symbol: "EURUSD", Side: "SELL", Volume: 1.0, OpenPrice: 1.2000,
 		Profit: -3.0, Comment: "manual",
@@ -80,7 +80,7 @@ func TestBrokerPositionToProto_NotArb(t *testing.T) {
 
 // TestBrokerPositionToProto_StaleFrame（G3）：帧超陈旧 TTL → current_price=0、fresh=false（陈旧帧不冒充现价）。
 func TestBrokerPositionToProto_StaleFrame(t *testing.T) {
-	o := reconcile.VenueOrder{Venue: "v", VenueKey: "v:mt5", Ticket: "7", Symbol: "XAUUSD", Comment: "arb"}
+	o := venue.Order{Venue: "v", VenueKey: "v:mt5", Ticket: "7", Symbol: "XAUUSD", Comment: "arb"}
 	ttl := 60 * time.Second
 	now := time.Unix(2000, 0)
 	stale := bus.Quote{Symbol: "XAUUSD", Bid: 2000.0, Ask: 2000.2, Time: now.Add(-2 * ttl)}
@@ -96,7 +96,7 @@ func TestBrokerPositionToProto_StaleFrame(t *testing.T) {
 
 // TestBrokerPositionToProto_NoCanonical：canonical 空 → current_price=0、fresh=false（无价诚实空态，不冒充）。
 func TestBrokerPositionToProto_NoCanonical(t *testing.T) {
-	o := reconcile.VenueOrder{Venue: "v", VenueKey: "v:mt5", Ticket: "8", Symbol: "SYMBOL_NOT_MAPPED", Comment: "arb"}
+	o := venue.Order{Venue: "v", VenueKey: "v:mt5", Ticket: "8", Symbol: "SYMBOL_NOT_MAPPED", Comment: "arb"}
 	// 即使有报价帧，canonical 空 = 无价源 → 诚实空态。
 	pb := brokerPositionToProto(o, "", bus.Quote{}, true, true, time.Minute, time.Now(), 0, nil, 0)
 	if pb.CurrentPrice != 0 {
@@ -112,7 +112,7 @@ func TestBrokerPositionToProto_NoCanonical(t *testing.T) {
 
 // TestBrokerPositionToProto_OpenedAtZero：开仓时间零值（venue 未返回）→ proto opened_at nil。
 func TestBrokerPositionToProto_OpenedAtZero(t *testing.T) {
-	o := reconcile.VenueOrder{Venue: "v", VenueKey: "v:mt4", Ticket: "9", Symbol: "GBPUSD", Comment: ""}
+	o := venue.Order{Venue: "v", VenueKey: "v:mt4", Ticket: "9", Symbol: "GBPUSD", Comment: ""}
 	pb := brokerPositionToProto(o, "", bus.Quote{}, false, true, time.Minute, time.Now(), 0, nil, 0)
 	if pb.OpenedAt != nil {
 		t.Errorf("zero OpenedAt want nil proto opened_at, got %v", pb.OpenedAt)

@@ -3,17 +3,17 @@ package dashboard
 
 import (
 	"arb/internal/keydomain"
+	"arb/internal/venue"
 	"context"
 	"time"
 
-	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
 )
 
 // detectRealtimeJump D-180 S1：实时链路跳变检测——从 in-memory prev→current 构造 swapJump。
 // 从 store 查 legs 获取 side/symbol/qty，jumpUSD = current.swap - prev.swap，usdPerLot = jumpUSD / qty。
 // 首次写入（hasPrev=false）不算跳变；qty<=0 或 leg 缺失 → ok=false。
-func detectRealtimeJump(store PositionLegLister, posID int64, o reconcile.VenueOrder, prevSwap float64, now time.Time) (swapJump, bool) {
+func detectRealtimeJump(store PositionLegLister, posID int64, o venue.Order, prevSwap float64, now time.Time) (swapJump, bool) {
 	legs, err := store.ListPositionLegs(context.Background(), posID)
 	if err != nil {
 		return swapJump{}, false

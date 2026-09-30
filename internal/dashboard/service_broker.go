@@ -8,8 +8,8 @@ import (
 
 	"arb/internal/bus"
 	"arb/internal/exec"
-	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
+	"arb/internal/venue"
 
 	v1 "arb/internal/gen/dashboardv1"
 
@@ -249,7 +249,7 @@ func (s *Service) ListAccounts(ctx context.Context, req *connect.Request[v1.List
 //	JPY 计价符号差 ~660 倍。venue 每次 poll 拿最新 Profit（已实时），无需重算。
 //
 // venueOnline=false = 离线 venue 的最近快照（非实时，诚实标注，D-052）。
-func brokerPositionToProto(o reconcile.VenueOrder, canonical string, price bus.Quote, hasPrice bool, venueOnline bool, freshTTL time.Duration, now time.Time, margin float64, swapChargeAt *timestamppb.Timestamp, fundingRatePeriodicPct float64) *v1.BrokerPosition {
+func brokerPositionToProto(o venue.Order, canonical string, price bus.Quote, hasPrice bool, venueOnline bool, freshTTL time.Duration, now time.Time, margin float64, swapChargeAt *timestamppb.Timestamp, fundingRatePeriodicPct float64) *v1.BrokerPosition {
 	pb := &v1.BrokerPosition{
 		Venue:       o.Venue,
 		VenueKey:    o.VenueKey,

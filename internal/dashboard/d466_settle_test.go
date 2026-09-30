@@ -14,7 +14,7 @@ import (
 	"arb/internal/collect/exchange"
 	"arb/internal/exec"
 	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/reconcile"
+	"arb/internal/venue"
 )
 
 func d466Intervals(t *testing.T, ctx context.Context) *exchange.FundingIntervalCache {
@@ -48,7 +48,7 @@ func TestD466_OKXLegVenueNativeSettle(t *testing.T) {
 	ctx := context.Background()
 	intervals := d466Intervals(t, ctx)
 	okxNext := time.Now().UTC().Truncate(time.Second).Add(7*time.Hour + 40*time.Minute) // OKX 8h 边界时刻
-	q := &fakeCEXQuerier{key: "okx:perp", orders: []reconcile.VenueOrder{
+	q := &fakeCEXQuerier{key: "okx:perp", orders: []venue.Order{
 		{Venue: "okx", VenueKey: "okx:perp", Ticket: "XAU-USDT-SWAP", Symbol: "XAU-USDT-SWAP", Side: "SELL", Volume: 1016, OpenPrice: 4297, Profit: 0},
 	}}
 	mon := d466Mon(q, intervals, func(_ context.Context, venue, symbol string) (time.Time, time.Time, time.Duration) {
@@ -76,7 +76,7 @@ func TestD466_SettleFallbackChain(t *testing.T) {
 	now := time.Now().UTC()
 
 	// ① okx 腿零 fact → nil 空态+warn（R1 禁 8h 兜底；旧码给 binance 4h 边界=污染）
-	q := &fakeCEXQuerier{key: "okx:perp", orders: []reconcile.VenueOrder{
+	q := &fakeCEXQuerier{key: "okx:perp", orders: []venue.Order{
 		{Venue: "okx", VenueKey: "okx:perp", Ticket: "T", Symbol: "XAU-USDT-SWAP", Side: "SELL", Volume: 1},
 	}}
 	mon := d466Mon(q, intervals, func(context.Context, string, string) (time.Time, time.Time, time.Duration) {
@@ -104,7 +104,7 @@ func TestD466_SettleFallbackChain(t *testing.T) {
 	}
 
 	// ③ binance 腿无 fact → 自家 intervals 4h（venue 原生合法回退）
-	qb := &fakeCEXQuerier{key: "binance:perp", orders: []reconcile.VenueOrder{
+	qb := &fakeCEXQuerier{key: "binance:perp", orders: []venue.Order{
 		{Venue: "binance", VenueKey: "binance:perp", Ticket: "T", Symbol: "XAUUSDT", Side: "SELL", Volume: 1},
 	}}
 	mon3 := d466Mon(qb, intervals, func(context.Context, string, string) (time.Time, time.Time, time.Duration) {
@@ -116,7 +116,7 @@ func TestD466_SettleFallbackChain(t *testing.T) {
 	}
 
 	// ④ binance 腿缓存 miss → nil 空态（自家表亦无=诚实缺，不猜）
-	qc := &fakeCEXQuerier{key: "binance:perp", orders: []reconcile.VenueOrder{
+	qc := &fakeCEXQuerier{key: "binance:perp", orders: []venue.Order{
 		{Venue: "binance", VenueKey: "binance:perp", Ticket: "T", Symbol: "ZZZUSDT", Side: "SELL", Volume: 1},
 	}}
 	mon4 := d466Mon(qc, intervals, func(context.Context, string, string) (time.Time, time.Time, time.Duration) {
@@ -133,7 +133,7 @@ func TestD466_GateLegVenueNative(t *testing.T) {
 	ctx := context.Background()
 	intervals := d466Intervals(t, ctx)
 	gateNext := time.Now().UTC().Truncate(time.Second).Add(2 * time.Hour)
-	q := &fakeCEXQuerier{key: "gate:perp", orders: []reconcile.VenueOrder{
+	q := &fakeCEXQuerier{key: "gate:perp", orders: []venue.Order{
 		{Venue: "gate", VenueKey: "gate:perp", Ticket: "T", Symbol: "XAU_USDT", Side: "SELL", Volume: 10},
 	}}
 	mon := d466Mon(q, intervals, func(_ context.Context, venue, symbol string) (time.Time, time.Time, time.Duration) {

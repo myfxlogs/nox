@@ -4,6 +4,7 @@ package dashboard
 
 import (
 	"arb/internal/keydomain"
+	"arb/internal/venue"
 	"context"
 	"fmt"
 	"sync"
@@ -29,7 +30,7 @@ type SymbolGroup struct {
 // running 一个运行中适配器的可停止资源。
 type running struct {
 	stop         func() // 停止报价订阅 + 适配器连接
-	querier      reconcile.VenueQuerier
+	querier      venue.Querier
 	histQuerier  reconcile.OrderHistoryQuerier                    // D-416：对账历史查证器（attach/detach 镜像注册）
 	symbols      func(ctx context.Context) ([]string, error)      // 拉取服务器符号表
 	symbolGroups func(ctx context.Context) ([]SymbolGroup, error) // 符号表 + 分组（仅服务 BrokerSymbols 展示，按需拉一次）
@@ -75,7 +76,7 @@ func (m *BrokerManager) MTAccountSummary(ctx context.Context, venueKey string) (
 // staticQuerier 环境变量适配器的 querier（不被动态管理，boot 时与 DB venue 去重）。
 type staticQuerier struct {
 	venue string
-	q     reconcile.VenueQuerier
+	q     venue.Querier
 	hq    reconcile.OrderHistoryQuerier                  // D-416：env 静态历史查证器
 	swap  func(ctx context.Context) ([]fact.Fact, error) // nil = 无 swap 源
 }
@@ -89,8 +90,8 @@ type BrokerManager struct {
 	mu      sync.Mutex
 	running map[string]*running // venue → running
 	static  []staticQuerier
-	cexQs   []reconcile.VenueQuerier              // D-121：CEX perp 持仓查询器（动态刷新）
-	onQ     func([]reconcile.VenueQuerier)        // querier 集合变更回调
+	cexQs   []venue.Querier                       // D-121：CEX perp 持仓查询器（动态刷新）
+	onQ     func([]venue.Querier)                 // querier 集合变更回调
 	onHQ    func([]reconcile.OrderHistoryQuerier) // D-416：历史查证器集合变更回调
 	bpm     *BrokerPositionMonitor                // D-121：CEX 平仓需查 bpm 快照获取 side/volume（注入，nil=未接线）
 
@@ -124,10 +125,10 @@ type BrokerManager struct {
 	// 原导出字段一次性按值拷贝：setupMonitors 赋值晚于 StartAll → adapter 拷到
 	// nil 即永久丢帧（浮盈冻结/流态/余额帧同丢）。
 	sinkMu          sync.RWMutex
-	accountSink     adapter.AcctFrameSink                // D-445 S0：OnOrderUpdate 余额帧（sink=acctMon.ObserveStreamAccount）
-	positionsSink   func(string, []reconcile.VenueOrder) // D-571 包A：OnOrderProfit 逐仓载荷（sink=bpMon.OnMT5Frame）
-	streamStateSink func(string, bool)                   // D-571 包A：venue 流状态透出（sink=bpMon/acctMon/posMon 链）
-	orderProfitKick func()                               // D-107 P2：margin 事件→acctMon.Kick
+	accountSink     adapter.AcctFrameSink       // D-445 S0：OnOrderUpdate 余额帧（sink=acctMon.ObserveStreamAccount）
+	positionsSink   func(string, []venue.Order) // D-571 包A：OnOrderProfit 逐仓载荷（sink=bpMon.OnMT5Frame）
+	streamStateSink func(string, bool)          // D-571 包A：venue 流状态透出（sink=bpMon/acctMon/posMon 链）
+	orderProfitKick func()                      // D-107 P2：margin 事件→acctMon.Kick
 
 	// D-104 P2 U1：网关节点启动级 failover（main 从 config 注入，attach 时透传 adapter.SetGateway）。
 	MT5Gateway          string
@@ -148,7 +149,7 @@ type BrokerManager struct {
 }
 
 // SetQuerierHook 注册 querier 集合变更回调（main 接 reconciler.SetQueriers）。
-func (m *BrokerManager) SetQuerierHook(f func([]reconcile.VenueQuerier)) {
+func (m *BrokerManager) SetQuerierHook(f func([]venue.Querier)) {
 	m.onQ = f
 }
 

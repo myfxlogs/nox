@@ -12,7 +12,7 @@ import (
 
 	v1 "arb/internal/gen/dashboardv1"
 	"arb/internal/keydomain"
-	"arb/internal/reconcile"
+	"arb/internal/venue"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -24,7 +24,7 @@ import (
 func (m *BrokerPositionMonitor) snapshotVenuesLocked() map[string]venueState {
 	venues := make(map[string]venueState, len(m.venues))
 	for vk, vs := range m.venues {
-		orders := make(map[string]reconcile.VenueOrder, len(vs.orders))
+		orders := make(map[string]venue.Order, len(vs.orders))
 		for t, o := range vs.orders {
 			orders[t] = o
 		}

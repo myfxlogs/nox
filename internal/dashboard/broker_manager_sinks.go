@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"arb/internal/adapter"
-	"arb/internal/reconcile"
+	"arb/internal/venue"
 )
 
 // Set* 晚接目标（D-581）：接线方调用，Lock 写目标；adapter 持有 dispatch* 免时序。
@@ -16,7 +16,7 @@ func (m *BrokerManager) SetAccountSink(f adapter.AcctFrameSink) {
 	m.accountSink = f
 	m.sinkMu.Unlock()
 }
-func (m *BrokerManager) SetPositionsSink(f func(string, []reconcile.VenueOrder)) {
+func (m *BrokerManager) SetPositionsSink(f func(string, []venue.Order)) {
 	m.sinkMu.Lock()
 	m.positionsSink = f
 	m.sinkMu.Unlock()
@@ -55,7 +55,7 @@ func (m *BrokerManager) dispatchAccount(vk string, bal, eq, mg, fm, prof, ml flo
 		f(vk, bal, eq, mg, fm, prof, ml, ccy, ts)
 	}
 }
-func (m *BrokerManager) dispatchPositions(vk string, orders []reconcile.VenueOrder) {
+func (m *BrokerManager) dispatchPositions(vk string, orders []venue.Order) {
 	m.sinkMu.RLock()
 	f := m.positionsSink
 	m.sinkMu.RUnlock()
