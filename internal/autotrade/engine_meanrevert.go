@@ -31,10 +31,12 @@ func (e *Engine) meanRevertLoop(ctx context.Context) {
 		return
 	}
 	venueA, venueB := venues[0], venues[1]
-	// D-469c S1：quote kick 主路（MeanRevertThresh canonical 帧→mrKick）+ticker 降 60s
-	// 断流兜底；1s 最小间隔节流防事件洪峰每帧全扫。
-	ticker := time.NewTicker(60 * time.Second)
+	// D-469c S1→D-004 P1#5：quote kick 主路（MeanRevertThresh canonical 帧→mrKick，
+	// 1s 最小间隔合流防洪峰）；原 60s 盲扫 ticker 退化为看门狗——有配置、久未扫、
+	// 其 canonical 报价在流（kick 到而扫没跑=事件链断）→ WATCHDOG 告警，不扫。
+	ticker := time.NewTicker(mrWatchdogInterval)
 	defer ticker.Stop()
+	lastMRQuoteSeen := time.Time{} // mrKick 到达时刻（报价在流的证据）
 	// D-080 R7：每 loop 一个长生命周期 accumulator——当日累计、轮末 flush 覆盖写；
 	// 日切由 accumulator 内部 pending 队列处理（零定时器，无共享竞态）。
 	acc := newComboAccumulator()
@@ -50,13 +52,23 @@ func (e *Engine) meanRevertLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-e.mrKick:
+			lastMRQuoteSeen = time.Now()
 			if time.Since(e.lastMRScan) < mrScanMinInterval {
 				continue // 洪峰节流（1s 最小间隔）
 			}
 			e.lastMRScan = time.Now()
 			scan()
 		case <-ticker.C:
-			scan()
+			// 饥荒看门狗（D-004 P1#5）：只告警——kick 在来而扫描久未跑=事件链断。
+			if time.Since(e.lastMRScan) > mrWatchdogInterval &&
+				!lastMRQuoteSeen.IsZero() && time.Since(lastMRQuoteSeen) < mrWatchdogInterval {
+				msg := "meanRevert scan starvation: mrKick 在流但扫描超时未跑"
+				log.Printf("[autotrade] WATCHDOG %s (lastScan=%v ago lastKick=%v ago)",
+					msg, time.Since(e.lastMRScan).Round(time.Second), time.Since(lastMRQuoteSeen).Round(time.Second))
+				if e.AlertSink != nil {
+					e.AlertSink("critical", "meanRevert 饥荒看门狗："+msg)
+				}
+			}
 		}
 	}
 }
@@ -68,6 +80,9 @@ const mrScanMinInterval = time.Second
 // H4.1：满仓短路——CountOpenPositions >= MaxPositions 整轮跳过（省逐组合产 intent 撞 gate 的日志噪音）。
 // D-080 R7：acc 由调用方传入（每 loop 一个长生命周期实例，轮末 flush 覆盖写）。
 func (e *Engine) scanMeanRevert(ctx context.Context, symbols map[string]float64, venueA, venueB string, acc *comboAccumulator) {
+	if e.mrScanHook != nil {
+		e.mrScanHook()
+	}
 	if e.maxPositionsReached(ctx) {
 		return
 	}

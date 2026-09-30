@@ -177,6 +177,13 @@ func (e *Engine) quoteKickDispatch(ctx context.Context) {
 			case e.quoteCh <- q:
 			default: // 快路满 → 丢帧（下一帧还会来）
 			}
+			// D-004 P1#5：武装 canonical → swapArb quote 快路（满丢帧不阻塞）。
+			if e.swapArmedCanonical(q.Symbol) {
+				select {
+				case e.swapQuoteCh <- q:
+				default:
+				}
+			}
 			if _, tracked := e.cfg.MeanRevertThresh[q.Symbol]; tracked {
 				e.KickMeanRevert()
 			}

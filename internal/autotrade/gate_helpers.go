@@ -82,3 +82,24 @@ func grossSplitFloor(qty float64) (float64, bool) {
 	}
 	return floored, false
 }
+
+// auditWarn D-508 写路径审计契约·fail-open+声张：持仓/审计写失败 →
+// log.Printf error + InsertAlert warn；告警写本身失败防递归只落 log（全载荷 stderr）。
+// （自 engine_swaparb.go 纯搬移——D-004 P1#5 行数门禁搬迁；gate/reject_breaker 共用点不变）
+func auditWarn(ctx context.Context, store *pgstore.Store, what string, err error) {
+	if err == nil {
+		return
+	}
+	msg := fmt.Sprintf("[审计写] %s 落库失败：%v", what, err)
+	log.Printf("[autotrade] %s", msg)
+	if aerr := store.InsertAlert(ctx, nil, "warn", msg); aerr != nil {
+		log.Printf("[autotrade] alert write failed: %v | original: %s", aerr, msg)
+	}
+}
+
+// alertWrite 告警写本身失败只落 log（防递归——InsertAlert 不得再告警 InsertAlert）。
+func alertWrite(ctx context.Context, store *pgstore.Store, level, msg string) {
+	if err := store.InsertAlert(ctx, nil, level, msg); err != nil {
+		log.Printf("[autotrade] alert write failed: %v | original: %s", err, msg)
+	}
+}

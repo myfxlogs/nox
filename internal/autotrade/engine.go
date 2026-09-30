@@ -89,16 +89,25 @@ type Engine struct {
 	factsKick  chan struct{}
 	lastMRScan time.Time // mrScanMinInterval 节流基准（仅 meanRevertLoop goroutine 读写）
 
+	// D-004 P1#5：swapQuoteCh=swapArb quote 快路帧（buffered 256 满丢帧）；
+	// swapArmedCanon=armed 候选 canonical 集快照（atomic.Pointer 无锁发布，
+	// swapArbLoop 写 / quoteKickDispatch 读）。
+	swapQuoteCh    chan bus.Quote
+	swapArmedCanon atomic.Pointer[map[string]struct{}]
+
 	// D-140 S2：CS-miss 聚合告警——按 (venue,canonical) 计数，定期 flush info 告警。
 	csMissCounts map[string]int       // key=venue|canonical → 累计 miss 次数
 	csMissSent   map[string]time.Time // key → 最近一次告警时间（1h 去重）
 	csMissMu     sync.Mutex
 	AlertSink    func(level, msg string) // nil = 未注入（no-op）
 
-	// 测试缝（D-004 P1#4 分层可观测）：scanHook=权威全扫入口，evalHook=单仓权威评估
-	// 入口（posID）。nil=未注入；生产装配不接。
-	scanHook func()
-	evalHook func(posID int64)
+	// 测试缝（D-004 P1#4/P1#5 分层可观测）：scanHook=权威全扫入口，evalHook=单仓
+	// 权威评估入口（posID）；swapScanHook=swapArb 全扫入口，mrScanHook=meanRevert
+	// 扫描入口。nil=未注入；生产装配不接。
+	scanHook     func()
+	evalHook     func(posID int64)
+	swapScanHook func()
+	mrScanHook   func()
 
 	// D-144 ②：保证金告警 per-key 去重（canonical:vl:vs:type → 最近一次告警时间，1h 窗口）。
 	// 同 mt-health lastCritAlert 模式；内存，重启重置（实时告警语义，不持久化）。
