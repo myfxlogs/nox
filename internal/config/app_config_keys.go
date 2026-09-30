@@ -112,7 +112,7 @@ var appConfigKeys = map[string]AppCfgMeta{
 	"ARB_REVIEW_CROSS_BIAS_BPS":          f64(func(c *Config) *float64 { return &c.ReviewCrossBiasBps }),
 	"ARB_REVIEW_MIN_SAMPLES":             intv(func(c *Config) *int { return &c.ReviewMinSamples }),
 	"ARB_ROTATE_MAX_PER_DAY":             intv(func(c *Config) *int { return &c.RotateMaxPerDay }),
-	"ARB_SCAN_THROTTLE":                  durv(func(c *Config) *time.Duration { return &c.ScanThrottle }),
+	"ARB_OPP_PUBLISH_DELTA_BPS":          f64(func(c *Config) *float64 { return &c.OppPublishDeltaBps }),
 	"ARB_SLIPPAGE_BPS":                   f64(func(c *Config) *float64 { return &c.SlippageBps }),
 	"ARB_STOP_REENTRY_MINUTES":           intv(func(c *Config) *int { return &c.StopReentryMinutes }),
 	"ARB_STORE_MIN_NET_BPS":              f64(func(c *Config) *float64 { return &c.StoreMinNetBps }),

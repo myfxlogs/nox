@@ -30,8 +30,8 @@ func TestLoadDefaults(t *testing.T) {
 	if c.SwapRefresh != time.Hour {
 		t.Errorf("SwapRefresh = %v, want 1h", c.SwapRefresh)
 	}
-	if c.ScanThrottle != 30*time.Second {
-		t.Errorf("ScanThrottle = %v, want 30s", c.ScanThrottle)
+	if c.OppPublishDeltaBps != 0.5 {
+		t.Errorf("OppPublishDeltaBps = %v, want 0.5", c.OppPublishDeltaBps)
 	}
 	if c.SlippageBps != 0.3 {
 		t.Errorf("SlippageBps = %v, want 0.3 (D-070)", c.SlippageBps)
