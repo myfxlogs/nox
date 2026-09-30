@@ -90,12 +90,20 @@ func (s *Store) ListAccrablePaperSpotCarry(ctx context.Context) ([]PaperSpotCarr
 	return s.scanPaperSpotCarry(ctx, `SELECT `+paperSpotCarryCols+` FROM paper_spot_carry WHERE status IN ('active','demo') ORDER BY id`)
 }
 
+// paperExitRecentLimit  exited 行硬上限（热修 hotfix-paper：OOM pprof 实证——帧率级
+// 开平产生数万垃圾行，本查询 5 万行×protojson+deflate=GB 级分配。active/demo 全量保留）。
+const paperExitRecentLimit = 500
+
 // ListPaperSpotCarryBoard D-352 S1：纸面轨前端卡行源——active+demo 全量+近 window 内
-// exited（exit_ts ≥ now−window；退出原因=「坑还是机会」的实证记录流，窗口防表无限长）。
+// exited 最近 paperExitRecentLimit 条（exit_ts 降序取新；窗口+上限双防表无限长）。
 func (s *Store) ListPaperSpotCarryBoard(ctx context.Context, recentWindow time.Duration) ([]PaperSpotCarry, error) {
-	return s.scanPaperSpotCarry(ctx, `SELECT `+paperSpotCarryCols+` FROM paper_spot_carry
-		WHERE status IN ('active','demo') OR (status = 'exited' AND exit_ts >= now() - ($1::double precision * interval '1 second'))
-		ORDER BY id`, recentWindow.Seconds())
+	return s.scanPaperSpotCarry(ctx, `SELECT `+paperSpotCarryCols+` FROM (
+		SELECT `+paperSpotCarryCols+` FROM paper_spot_carry WHERE status IN ('active','demo')
+		UNION ALL
+		(SELECT `+paperSpotCarryCols+` FROM paper_spot_carry
+		 WHERE status = 'exited' AND exit_ts >= now() - ($1::double precision * interval '1 second')
+		 ORDER BY exit_ts DESC LIMIT `+fmt.Sprint(paperExitRecentLimit)+`)
+	) t ORDER BY id`, recentWindow.Seconds())
 }
 
 // AccruePaperSpotCarry 逐轮累积：accrued += accruedAdd（D-474a S1 起=已结算边界逐期实率
