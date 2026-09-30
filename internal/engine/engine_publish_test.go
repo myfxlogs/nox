@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"arb/internal/detector"
 	"arb/internal/evaluator"
 	"arb/internal/store/pgstore"
 )
@@ -113,5 +114,37 @@ func TestPrunePub(t *testing.T) {
 	}
 	if _, ok := e.lastPub["fresh"]; !ok {
 		t.Error("fresh entry wrongly pruned")
+	}
+}
+
+// fhCand 构造 FUNDING_HEDGE 候选（热修：cexPaperHook 发布节拍断言用）。
+func fhCand(gross float64) detector.Candidate {
+	c := carryCand(gross)
+	c.Type = detector.TypeFundingHedge
+	return c
+}
+
+// TestCexPaperHook_PublishPaced 热修 hotfix-loops（OOM 19:01 实证）：
+// cexPaperHook 必须随发布去重节拍——同候选同值连续 5 帧 hook 仅 1 次；
+// Δ≥pubDeltaBps 后第 2 次。帧率级调用=纸面开平+DB 写风暴回归。
+func TestCexPaperHook_PublishPaced(t *testing.T) {
+	cand := fhCand(20.0)
+	e, _, _ := newNotifyEngine(t, cand)
+	var calls int
+	e.cexPaperHook = func(_ context.Context, cs []detector.Candidate) {
+		calls += len(cs)
+	}
+	for i := 0; i < 5; i++ {
+		scanCandidate(t, e, cand)
+	}
+	if calls != 1 {
+		t.Fatalf("same-value 5 frames: hook calls=%d, want 1（发布去重节拍）", calls)
+	}
+	// Δ：gross 20→21 → netBps 变化 ≥pubDeltaBps(0.5) → 再发布 → hook 第 2 次。
+	cand2 := fhCand(21.0)
+	e.detectors[0].(*fakeDetector).candidates = []detector.Candidate{cand2}
+	scanCandidate(t, e, cand2)
+	if calls != 2 {
+		t.Fatalf("delta frame: hook calls=%d, want 2", calls)
 	}
 }

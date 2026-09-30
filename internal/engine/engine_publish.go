@@ -22,10 +22,11 @@ type pubState struct {
 	at     time.Time
 }
 
-// maybePublish 实质变化+心跳去重后 Upsert + oppTopic.Publish。
+// maybePublish 实质变化+心跳去重后 Upsert + oppTopic.Publish。返回本帧是否发布
+// （caller 据此把纸面轨 hook 绑上发布节拍——热修：hook 不得帧率级跑，OOM 19:01 实证）。
 // lastPub 在 upsert 前先行记录：DB 故障时同一 opp 每帧重试 upsert 会放大写风暴——
 // 心跳窗内的重试由下一心跳驱动，风险收敛到 pubHeartbeat 周期一次。
-func (e *Engine) maybePublish(ctx context.Context, o *pgstore.Opportunity) {
+func (e *Engine) maybePublish(ctx context.Context, o *pgstore.Opportunity) bool {
 	e.mu.Lock()
 	last, seen := e.lastPub[o.ID]
 	now := time.Now()
@@ -37,15 +38,16 @@ func (e *Engine) maybePublish(ctx context.Context, o *pgstore.Opportunity) {
 	}
 	e.mu.Unlock()
 	if !publish {
-		return
+		return false
 	}
 	if _, err := e.store.UpsertOpportunity(ctx, o); err != nil {
 		log.Printf("[engine] upsert opportunity %s: %v", o.ID, err)
-		return
+		return true
 	}
 	if e.oppTopic != nil {
 		e.oppTopic.Publish(*o)
 	}
+	return true
 }
 
 // prunePub 清 lastPub 中 at 早于 2×OpportunityTTL 的条目（onQuote 每帧调用——

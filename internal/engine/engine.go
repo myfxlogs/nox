@@ -146,20 +146,8 @@ func (e *Engine) onQuote(ctx context.Context, q bus.Quote) {
 	}
 	snapshot := e.bus.Snapshot(ctx, symbols)
 	candidates := detector.ScanAll(e.detectors, snapshot, e.facts)
-	// D-555 S1：双CEX 纸面轨发现槽——FUNDING_HEDGE 候选直传消费（P3 单源禁重写枚举）；
-	// hook nil=未接线零开销。
-	if len(candidates) > 0 && e.cexPaperHook != nil {
-		var fhs []detector.Candidate
-		for _, c := range candidates {
-			if c.Type == detector.TypeFundingHedge {
-				fhs = append(fhs, c)
-			}
-		}
-		if len(fhs) > 0 {
-			e.cexPaperHook(ctx, fhs)
-		}
-	}
 
+	var fhs []detector.Candidate // 本帧真正发布的 FUNDING_HEDGE 候选（cexPaperHook 输入）
 	for _, c := range candidates {
 		result := e.evaluate(ctx, c, snapshot)
 		if result == nil {
@@ -189,7 +177,14 @@ func (e *Engine) onQuote(ctx context.Context, q bus.Quote) {
 		// D-086 实施修正①：撤验证级别发布门——oppTopic 是双用途数据总线（autotrade rollup 喂入 +
 		// 前端实时流），永不论证级别过滤；V0/V1 区分只存在于显示层（徽章，service_verification 填）。
 		// D-004 P1#8：发布/落库走实质变化+TTL 心跳去重（maybePublish），UI 快照兜底不变。
-		e.maybePublish(ctx, o)
+		// D-555 S1 双CEX 纸面轨发现槽同拍：hook 只对「本帧真正发布」的 FUNDING_HEDGE 候选
+		// 调用（热修 19:01 OOM——去节流前每帧调 hook 开/平纸面仓+写 DB，帧率级写放大）。
+		if e.maybePublish(ctx, o) && c.Type == detector.TypeFundingHedge {
+			fhs = append(fhs, c)
+		}
+	}
+	if len(fhs) > 0 && e.cexPaperHook != nil {
+		e.cexPaperHook(ctx, fhs)
 	}
 }
 
