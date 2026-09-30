@@ -115,11 +115,14 @@ func (e *CEXExecutor) binanceFiltersFetch(ctx context.Context, symbol string) (b
 // D-569 S4 R1 F-1：归一 signedBinanceRequest（wire 形状逐字等价：GET+query+末位 signature+
 // X-MBX-APIKEY 由 Raw 统一构造）——自动获 httpStatusError 类型化+(-1021) delta 校时伞盖。
 func (e *CEXExecutor) binanceMaxNotional(ctx context.Context, symbol string) (float64, error) {
-	m, err := e.signedBinanceRequest(ctx, "GET", "/v1/symbolConfig", url.Values{"symbol": {symbol}})
+	rows, err := e.signedBinanceRequestList(ctx, "GET", "/v1/symbolConfig", url.Values{"symbol": {symbol}}) // D-587：官方返回数组
 	if err != nil {
 		return 0, fmt.Errorf("symbolConfig %s: %w", symbol, err)
 	}
-	f, _ := strconv.ParseFloat(asString(m["maxNotionalValue"]), 64)
+	if len(rows) == 0 {
+		return 0, nil // 空表=未采不拦（语义不变）
+	}
+	f, _ := strconv.ParseFloat(asString(rows[0]["maxNotionalValue"]), 64)
 	return f, nil
 }
 

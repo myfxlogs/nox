@@ -290,7 +290,7 @@ func (rt *bFilterRT) RoundTrip(req *http.Request) (*http.Response, error) {
 		return resp200(`{"symbols":[{"symbol":"BTCUSDT","filters":[{"filterType":"LOT_SIZE","stepSize":"0.001","minQty":"0.001"},{"filterType":"MIN_NOTIONAL","notional":"0.1"}]}]}`)
 	}
 	if strings.Contains(req.URL.Path, "/symbolConfig") {
-		return resp200(`{"symbol":"BTCUSDT","maxNotionalValue":50000}`)
+		return resp200(`[{"symbol":"BTCUSDT","maxNotionalValue":"50000"}]`) // D-587：官方返回数组
 	}
 	return resp200(`{"markPrice":"96000"}`)
 }
