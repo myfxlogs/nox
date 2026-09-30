@@ -51,6 +51,8 @@ func (s *Service) comboTier(ctx context.Context, c pgstore.XAssetComboAdminRow, 
 }
 
 // venueExposureSum 475a 同判据的 venue 已挂名义 Σ（enabled 组合 notional/MaxGross 回退）。
+// D-007 S2 死键修复：venue=带类型键（3001157:mt5），fin_venue_exposure_caps 键域同为
+// typed；旧实现剥 bare 恒 miss（闸6 自 D-475a 起永不命中=展示语义破口，执行路径不查此表）。
 // err 传播=调用方 fail-closed 转「cap 查询失败」reason（R3：原吞 err 返 0=fail-open 误导）。
 func (s *Service) venueExposureSum(venue string) (float64, error) {
 	combos, err := s.store.ListXAssetAllowCombosAll(context.Background())
@@ -62,7 +64,7 @@ func (s *Service) venueExposureSum(venue string) (float64, error) {
 		if !c.Enabled {
 			continue
 		}
-		if bareVenueKey(c.VenueBuy) != venue && bareVenueKey(c.VenueSell) != venue {
+		if c.VenueBuy != venue && c.VenueSell != venue {
 			continue
 		}
 		if c.NotionalUSD != nil {
@@ -129,7 +131,7 @@ func (s *Service) exposureCapsGate(ctx context.Context, c pgstore.XAssetComboAdm
 	if c.NotionalUSD != nil {
 		proposed = *c.NotionalUSD
 	}
-	for _, v := range []string{bareVenueKey(c.VenueBuy), bareVenueKey(c.VenueSell)} {
+	for _, v := range []string{c.VenueBuy, c.VenueSell} { // D-007 S2：typed 键直查（剥 bare 恒 miss 死键已修）
 		if capRow, ok := caps[v]; ok && capRow.Enabled {
 			if capRow.CapUSD == 0 {
 				return fmt.Sprintf("敞口上限冻结：账户 %s 上限设为0，暂停新入场", v), false
@@ -209,4 +211,50 @@ func (s *Service) waitEntryBps(ctx context.Context, c pgstore.XAssetComboAdminRo
 // bareVenueKey venue 键剥 :后缀（flags/caps/快照 bare 域对齐 engine bareVenue）。
 func bareVenueKey(venueKey string) string {
 	return keydomain.BareOf(venueKey)
+}
+
+// pendingInputs D-007 S1：pending 评估批量输入（RPC 与闸态 diff 器共用单源，P3）。
+type pendingInputs struct {
+	venueAllow, canonAllow map[string]bool
+	flags                  map[string]pgstore.VenueSymbolFlag
+	caps                   map[string]pgstore.VenueExposureCap
+	snaps                  []pgstore.VenueAccountLatest
+	active                 []pgstore.Position
+	rejects                map[string]string
+}
+
+// loadPendingInputs 批量取数（禁 N+1）；失败 fail-closed 整体拒。
+func (s *Service) loadPendingInputs(ctx context.Context) (*pendingInputs, error) {
+	in := &pendingInputs{}
+	var err error
+	if in.active, err = s.store.ListActivePositions(ctx); err != nil {
+		return nil, connectErr(err)
+	}
+	rules, err := s.store.ListAutotradeAllowRulesAll(ctx)
+	if err != nil {
+		return nil, connectErr(err)
+	}
+	in.venueAllow, in.canonAllow = map[string]bool{}, map[string]bool{}
+	for _, r := range rules {
+		if !r.Enabled {
+			continue
+		}
+		if r.Kind == "venue" {
+			in.venueAllow[r.Value] = true
+		}
+		if r.Kind == "canonical" {
+			in.canonAllow[r.Value] = true
+		}
+	}
+	if in.flags, err = s.store.ListActiveFlags(ctx); err != nil {
+		return nil, connectErr(err)
+	}
+	if in.caps, err = s.store.ListVenueExposureCaps(ctx); err != nil {
+		return nil, connectErr(err)
+	}
+	if in.snaps, err = s.store.LatestVenueAccountSnapshots(ctx); err != nil {
+		return nil, connectErr(err)
+	}
+	in.rejects = s.fundingRejectFacts(ctx) // D-560 S2b：近6h资金拒批量透出（禁N+1）
+	return in, nil
 }

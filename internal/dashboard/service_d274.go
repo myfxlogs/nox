@@ -95,6 +95,7 @@ func (s *Service) AcceptJudgment(ctx context.Context, req *connect.Request[v1.Ac
 	}
 
 	log.Printf("[d274] AcceptJudgment: case_id=%d → paper_trade_id=%d", caseID, pt.ID)
+	s.PublishDataRefresh(RefreshEvents) // D-007 S3：paper_trades 写毕→EventsPage 失效触发
 	return connect.NewResponse(&v1.AcceptJudgmentResponse{PaperTradeId: pt.ID}), nil
 }
 
@@ -120,6 +121,7 @@ func (s *Service) SettlePaperTrade(ctx context.Context, req *connect.Request[v1.
 	if result.ActualNetReturnPct != nil {
 		resp.ActualNetReturnPct = result.ActualNetReturnPct
 	}
+	s.PublishDataRefresh(RefreshEvents) // D-007 S3
 	return connect.NewResponse(resp), nil
 }
 
