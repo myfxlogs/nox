@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 )
 
@@ -19,18 +20,22 @@ type ServerTZFetcher func(ctx context.Context, venueKey string) (offsetHours flo
 const serverTZRetryCooldown = 5 * time.Minute
 
 // ServerTZCache D-337R2 S1：venue server 时区缓存——构造注入值类型（nil 字面量编译红=
-// 编译期装配守卫；D-337R1 setter 可忘断链事故根除）。无锁：仅 broker build 单写者协程访问。
+// 编译期装配守卫；D-337R1 setter 可忘断链事故根除）。mu 为指针：值类型按值拷贝后
+// map 共享底层，锁亦必须共享（b952f491 实证：flush 解锁后并发 dirtyLocked 再挂
+// AfterFunc + RPC 快照路径同调 get → 并发 map 写 fatal）。
 // 零值=fetch nil → get 恒 nil（诚实空态，自防御）。
 type ServerTZCache struct {
+	mu        *sync.Mutex
 	ttl       time.Duration
 	fetch     ServerTZFetcher
 	loc       map[string]*time.Location
 	fetchedAt map[string]time.Time // 成功=ttl 内命中；失败=冷却计时（retry after cooldown）
 }
 
-// NewServerTZCache 构造（值返回；map 字段引用语义共享底层；cmd/core 装配点用）。
+// NewServerTZCache 构造（值返回；map/mu 字段引用语义共享底层；cmd/core 装配点用）。
 func NewServerTZCache(ttl time.Duration, fetch ServerTZFetcher) ServerTZCache {
 	return ServerTZCache{
+		mu:        &sync.Mutex{},
 		ttl:       ttl,
 		fetch:     fetch,
 		loc:       map[string]*time.Location{},
@@ -38,23 +43,29 @@ func NewServerTZCache(ttl time.Duration, fetch ServerTZFetcher) ServerTZCache {
 	}
 }
 
-// get 返回 venue 的 server 时区。miss/过期/冷却结束 → 同步抓取一次（每冷却期至多一次
-// 阻塞尝试，组装不被反复阻塞；成功 TTL 24h，失败 5min 冷却后重试——"失败重试下轮"）。
+// get 返回 venue 的 server 时区。miss/过期/冷却结束 → 锁外同步抓取一次（fetch=网络
+// 调用不持锁；重复 fetch 竞争良性=同值覆写），成功 TTL 24h，失败 5min 冷却后重试。
 // 失败 → nil（诚实空态，组装继续）。
 func (c ServerTZCache) get(ctx context.Context, venueKey string) *time.Location {
-	if c.fetch == nil {
+	if c.fetch == nil || c.mu == nil {
 		return nil // 零值缓存（构造必选注入后不可达；自防御诚实空态）
 	}
+	c.mu.Lock()
 	loc, hasLoc := c.loc[venueKey]
 	at, hasAt := c.fetchedAt[venueKey]
 	if hasLoc && hasAt && time.Since(at) < c.ttl {
+		c.mu.Unlock()
 		return loc // 成功缓存 TTL 内
 	}
 	if hasAt && time.Since(at) < serverTZRetryCooldown {
+		c.mu.Unlock()
 		return loc // 失败/过期冷却中：不再重复阻塞
 	}
+	c.mu.Unlock()
 	off, err := c.fetch(ctx, venueKey)
 	now := time.Now()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if err != nil {
 		log.Printf("[broker] server timezone %s: %v (cooldown %v)", venueKey, err, serverTZRetryCooldown)
 		c.loc[venueKey] = nil
@@ -73,12 +84,6 @@ func nextSwapChargeAtInLoc(now time.Time, loc *time.Location) time.Time {
 	local := now.In(loc)
 	mid := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc)
 	return mid.AddDate(0, 0, 1)
-}
-
-// nextSwapChargeAtOffset RPC offset 降级路径（ServerTimezone 仅返 double 偏移的实测形态）。
-func nextSwapChargeAtOffset(now time.Time, offsetHours float64) time.Time {
-	loc := time.FixedZone(fmt.Sprintf("server%+.2f", offsetHours), int(offsetHours*3600))
-	return nextSwapChargeAtInLoc(now, loc)
 }
 
 // NextUTCBoundaryHours D-337R1 S2 下沉：now（UTC）之后的下一个整 k×hours 边界
