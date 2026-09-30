@@ -46,7 +46,7 @@ func TestXAssetSnapshotExpansion(t *testing.T) {
 	qbus := bus.New()
 	equiv := &fakeEquivView{partners: map[string][]string{"XAUUSD": {"PAXGUSDT"}}}
 	cap := &snapCapture{}
-	e := New(qbus, []detector.Detector{cap}, evaluator.Config{DetectorFreshnessTTL: time.Minute}, newFakeOppStore(), NewFactCache(), testCommissionResolver(t, nil, nil), time.Nanosecond, nil, 0, 0, 0, 0, 0)
+	e := New(qbus, []detector.Detector{cap}, evaluator.Config{DetectorFreshnessTTL: time.Minute}, newFakeOppStore(), NewFactCache(), testCommissionResolver(t, nil, nil), 0.5, nil, 0, 0, 0, 0, 0)
 	e.SetAssetEquiv(equiv)
 
 	now := time.Now()
@@ -73,7 +73,7 @@ func TestXAssetEvaluateSellCanonical(t *testing.T) {
 	qbus.Publish(bus.Quote{Symbol: "XAUUSD", Venue: "3001157", VenueType: "mt5", Bid: 3999.8, Ask: 4000.0, Time: now})
 	qbus.Publish(bus.Quote{Symbol: "PAXGUSDT", Venue: "binance", VenueType: "perp", Bid: 4000.0, Ask: 4000.5, Time: now})
 
-	e := New(qbus, nil, evaluator.Config{MarginRateAnnual: 4.5, DetectorFreshnessTTL: time.Minute}, newFakeOppStore(), NewFactCache(), testCommissionResolver(t, nil, nil), time.Nanosecond, nil, 0, 0, 0, 0, 0)
+	e := New(qbus, nil, evaluator.Config{MarginRateAnnual: 4.5, DetectorFreshnessTTL: time.Minute}, newFakeOppStore(), NewFactCache(), testCommissionResolver(t, nil, nil), 0.5, nil, 0, 0, 0, 0, 0)
 	snap := qbus.Snapshot(context.Background(), []string{"XAUUSD", "PAXGUSDT"})
 	cand := detector.Candidate{
 		Type:          detector.TypeXAssetCarry,
@@ -130,7 +130,7 @@ func TestXAssetOnQuoteE2E(t *testing.T) {
 	}
 	equiv := &fakeEquivView{partners: map[string][]string{"PAXGUSDT": {"XAUUSD"}, "XAUUSD": {"PAXGUSDT"}}}
 	store := newFakeOppStore()
-	e := New(qbus, []detector.Detector{d}, evaluator.Config{MarginRateAnnual: 4.5, SlippageBps: 1.0, DetectorFreshnessTTL: time.Minute, OpportunityTTL: time.Minute}, store, fc, testCommissionResolver(t, nil, nil), time.Nanosecond, nil, 0, 0, 0, 0, 0)
+	e := New(qbus, []detector.Detector{d}, evaluator.Config{MarginRateAnnual: 4.5, SlippageBps: 1.0, DetectorFreshnessTTL: time.Minute, OpportunityTTL: time.Minute}, store, fc, testCommissionResolver(t, nil, nil), 0.5, nil, 0, 0, 0, 0, 0)
 	e.SetAssetEquiv(equiv)
 
 	e.onQuote(context.Background(), bus.Quote{Symbol: "XAUUSD", Venue: "3001157", VenueType: "mt5", Bid: 3999.8, Ask: 4000.0, Time: now})
@@ -172,7 +172,7 @@ func TestXAssetOnQuoteStaleLeg(t *testing.T) {
 	}
 	equiv := &fakeEquivView{partners: map[string][]string{"PAXGUSDT": {"XAUUSD"}, "XAUUSD": {"PAXGUSDT"}}}
 	store := newFakeOppStore()
-	e := New(qbus, []detector.Detector{d}, evaluator.Config{MarginRateAnnual: 4.5, DetectorFreshnessTTL: time.Minute}, store, fc, testCommissionResolver(t, nil, nil), time.Nanosecond, nil, 0, 0, 0, 0, 0)
+	e := New(qbus, []detector.Detector{d}, evaluator.Config{MarginRateAnnual: 4.5, DetectorFreshnessTTL: time.Minute}, store, fc, testCommissionResolver(t, nil, nil), 0.5, nil, 0, 0, 0, 0, 0)
 	e.SetAssetEquiv(equiv)
 
 	e.onQuote(context.Background(), bus.Quote{Symbol: "PAXGUSDT", Venue: "binance", VenueType: "perp", Bid: 4000.0, Ask: 4000.5, Time: now})

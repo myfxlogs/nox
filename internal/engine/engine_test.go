@@ -3,7 +3,6 @@ package engine
 import (
 	"strings"
 	"testing"
-	"time"
 
 	"arb/internal/evaluator"
 )
@@ -52,5 +51,5 @@ func TestNewRequiresResolver(t *testing.T) {
 			t.Fatal("expected panic on nil commission resolver")
 		}
 	}()
-	New(nil, nil, evaluator.Config{}, nil, nil, nil, time.Second, nil, 0, 0, 0, 0, 0)
+	New(nil, nil, evaluator.Config{}, nil, nil, nil, 0.5, nil, 0, 0, 0, 0, 0)
 }

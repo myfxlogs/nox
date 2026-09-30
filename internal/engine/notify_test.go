@@ -17,6 +17,7 @@ type fakeOppStore struct {
 	mu      sync.Mutex
 	upserts map[string]bool
 	last    *pgstore.Opportunity // D-300：列断言用
+	calls   int                  // D-004 P1#8：调用次数（去重后应与 publish 次数一致）
 }
 
 func newFakeOppStore() *fakeOppStore {
@@ -27,6 +28,7 @@ func (f *fakeOppStore) UpsertOpportunity(_ context.Context, o *pgstore.Opportuni
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.last = o
+	f.calls++
 	if _, seen := f.upserts[o.ID]; seen {
 		return false, nil
 	}
@@ -38,6 +40,12 @@ func (f *fakeOppStore) count() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return len(f.upserts)
+}
+
+func (f *fakeOppStore) callCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.calls
 }
 
 // fakeDetector 固定返回候选，驱动 evaluate → upsert → 发布链路。
@@ -83,7 +91,7 @@ func newNotifyEngine(t *testing.T, cand detector.Candidate) (*Engine, <-chan pgs
 		OpportunityTTL:       30 * time.Second,
 	}
 	topic := bus.NewTopic[pgstore.Opportunity]()
-	e := New(qbus, []detector.Detector{&fakeDetector{candidates: []detector.Candidate{cand}}}, cfg, store, NewFactCache(), testCommissionResolver(t, nil, nil), time.Nanosecond, topic, 0, 0, 0, 0, 0)
+	e := New(qbus, []detector.Detector{&fakeDetector{candidates: []detector.Candidate{cand}}}, cfg, store, NewFactCache(), testCommissionResolver(t, nil, nil), 0.5, topic, 0, 0, 0, 0, 0)
 	ch, cancel := topic.Subscribe()
 	t.Cleanup(cancel)
 	return e, ch, store
@@ -125,17 +133,18 @@ func TestNotifyNewOpportunity_NewInsertPublishes(t *testing.T) {
 	}
 }
 
-// TestNotifyNewOpportunity_RefreshStillPublishes 同 id 刷新 → 仍发布（实施修正①：事件流常开；30s 快照兜底属 UI 路径）。
-func TestNotifyNewOpportunity_RefreshStillPublishes(t *testing.T) {
+// TestNotifyNewOpportunity_SameNetDeduped D-004 P1#8：同 id 同 netBps 第二帧去重——
+// 内存评估仍每帧，但发布/落库按实质变化+TTL 心跳去重（不再事件流常开）。
+func TestNotifyNewOpportunity_SameNetDeduped(t *testing.T) {
 	cand := carryCand(20.0)
 	e, ch, store := newNotifyEngine(t, cand)
-	scanCandidate(t, e, cand) // 首次：inserted=true → 发布 1
+	scanCandidate(t, e, cand) // 首次：inserted → 发布 1
 	if n := drainTopic(ch); n != 1 {
 		t.Fatalf("first scan publish count want 1, got %d", n)
 	}
-	scanCandidate(t, e, cand) // 同 id 刷新：fake 返回 inserted=false，但实施修正①后仍发布
-	if n := drainTopic(ch); n != 1 {
-		t.Errorf("refresh publish count want 1, got %d", n)
+	scanCandidate(t, e, cand) // 同 netBps 帧：去重不发布
+	if n := drainTopic(ch); n != 0 {
+		t.Errorf("same-net frame publish count want 0, got %d", n)
 	}
 	if c := store.count(); c != 1 {
 		t.Errorf("upsert count want 1（同 id 不新增行）, got %d", c)
