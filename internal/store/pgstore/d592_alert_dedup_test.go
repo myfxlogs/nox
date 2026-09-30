@@ -143,3 +143,23 @@ func TestD592_NormalizationAndLevel(t *testing.T) {
 		t.Fatal("level 应并入键")
 	}
 }
+
+// A7（D-592 R1）：同键 critical 窗内第二条照常落库（资金路径事件审计不丢），
+// 仅跳 alertHook（topic/feishu 推送仍抑）；warn 回归见 A1（0 行 0 推）。
+func TestD592R1_CriticalDupInsertsSkipsPush(t *testing.T) {
+	st := d592Store(t)
+	var hooks int32 = 0
+	st.SetAlertHook(func(a Alert) { hooks++ })
+	if err := st.InsertAlert(context.Background(), nil, "critical", "残腿平仓失败 position=3"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.InsertAlert(context.Background(), nil, "critical", "残腿平仓失败 position=7"); err != nil {
+		t.Fatal(err) // 数字归一同键——critical 须仍落行（审计），只跳推送
+	}
+	if n := d592Count(t, st); n != 2 {
+		t.Fatalf("critical 同键窗内 want 2 行（审计不丢）, got %d", n)
+	}
+	if hooks != 1 {
+		t.Fatalf("hook（topic/feishu 通道）want 1 次调用, got %d", hooks)
+	}
+}

@@ -56,10 +56,16 @@ func (s *Store) insertAlert(ctx context.Context, ruleID, posID *int64, level, me
 	}
 	key := alerttext.AlertDedupKey(level, message)
 	dup, derr := s.recentAlertDuplicate(ctx, key, level, time.Now().Add(-w))
+	suppressPush := false
 	if derr != nil {
 		log.Printf("[pgstore] alert dedup query fail (fail-open): %v", derr)
 	} else if dup {
-		return nil // 同键窗内：不插行、不推 feishu/topic
+		// D-592 R1 分级：warn/info 全抑制（不插行不推）；critical 照常落库保审计
+		// （残腿 position=N 资金路径事件零痕迹=审计丢失实证），仅跳 topic/feishu 推送。
+		if level != "critical" {
+			return nil
+		}
+		suppressPush = true
 	}
 	// D-496：rules/rule_id 已删——ruleID 参数保留签名兼容、恒不落库。
 	q := `INSERT INTO alerts (position_id, level, message) VALUES ($1, $2, $3)
@@ -73,7 +79,7 @@ func (s *Store) insertAlert(ctx context.Context, ruleID, posID *int64, level, me
 	}
 	// D-114：写入后回调（main.go 注入 alertTopic.Publish → StreamUpdates case 3 实时推送）。
 	// fire-and-forget：回调失败不影响写入（同 oppTopic 模式）。nil = 未接线（测试）。
-	if s.alertHook != nil {
+	if s.alertHook != nil && !suppressPush {
 		s.alertHook(a)
 	}
 	return nil
