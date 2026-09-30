@@ -2,7 +2,7 @@
 // 背景：498 事故——harvest 触发后 MT 腿 orderclose REQUEST_ERROR 瞬时故障，30min 看护
 // 阈值对「残腿=单向裸露」过宽（裸多黄金 39min 实损 −$12.36）。本驱动 30s tick 秒级起步
 // 重试至平掉或窗口结束，之后静默交还 30min 看护（不双轨）。
-// MetaApi 探针盲区（Ping/Health/CheckConnect 探不出「能看不能动」降级）——密集重试是
+// MT 侧探针盲区（Ping/Health/CheckConnect 类探测探不出「能看不能动」降级）——密集重试是
 // 唯一正确补救；venue 失败频次计数供「频率太高找备用」判定（备用切换不出票）。
 package reconcile
 
