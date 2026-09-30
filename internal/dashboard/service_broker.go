@@ -2,7 +2,6 @@ package dashboard
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -156,46 +155,34 @@ func annotateAliasWithMap(bps []*v1.BrokerPosition, m map[string]string) {
 	}
 }
 
-// annotateCEXSwap D-152 微件①：CEX 腿 swap 字段兜底。MT 腿不动（Order.Swap 透传链已完整）。
-// 仅在 annotatePositionID 之后调用（需 position_id）。查询失败不阻断（fail-open，保留原 swap）。
-// D-322 S3a：venue 真值优先——bp.Swap≠0（gate pnl_fund 实报）不被兜底覆写；
-// bp.Swap=0（gate 未结算 / binance、okx 无 Swap 字段）才兜底。
-// D-375 S3：兜底源由 cashflows-estimated 换 SumIncomeByPosVenue 实收（同型修：
-// 未证实收入≠显示估算冒充；income 覆盖仅 binance，gate/okx 实报≠0 走真值优先）。
+// annotateCEXSwap D-008 S1：CEX 腿 swap=venue 原生 income_events 窗口合计
+// （venue_key+symbol+ts≥openedAt 机械过滤，非估值非系统归因）。
+// MT 腿不动（Order.Swap 原生透传）；venue 实报≠0（gate pnl_fund）不动——真值优先。
+// 不再绑 position_id：外单（PositionId=0）同享 venue income 源，不再空白（D-008 原则破口实证）。
+// 同 symbol 系统仓+外单并存=income 账户级合计（venue 粒度=symbol，已是最细真值）。
+// OpenedAt 缺席→不标注（窗口无界会错价，诚实空态）；查询失败不阻断（fail-open，保留原 swap）。
 func annotateCEXSwap(ctx context.Context, store *pgstore.Store, bps []*v1.BrokerPosition) {
 	if len(bps) == 0 || store == nil {
 		return
 	}
-	// 收集 CEX 仓的 position_id（去重）
-	seen := make(map[int64]bool)
-	var posIDs []int64
+	now := time.Now()
 	for _, bp := range bps {
-		if bp.PositionId > 0 && isCEXVenueKey(bp.VenueKey) && !seen[bp.PositionId] {
-			seen[bp.PositionId] = true
-			posIDs = append(posIDs, bp.PositionId)
+		if !cexSwapCandidate(bp) {
+			continue
+		}
+		sum, rows, err := store.SumIncomeWindow(ctx, bp.VenueKey, bp.Symbol, bp.OpenedAt.AsTime(), now)
+		if err != nil {
+			continue // fail-open：单腿查询失败不挡整表（保 venue 原值 0=诚实空态）
+		}
+		if rows > 0 {
+			bp.Swap = sum
 		}
 	}
-	if len(posIDs) == 0 {
-		return
-	}
-	sums, err := store.SumIncomeByPosVenue(ctx, posIDs)
-	if err != nil {
-		return // fail-open
-	}
-	annotateCEXSwapWithMap(bps, sums)
 }
 
-// annotateCEXSwapWithMap 纯函数：用预建 (posID\x00venue)→sum map 标注 CEX 仓 swap（可单测）。
-// D-322 S3a：只在 venue 未报（bp.Swap=0）时兜底——venue 实报真值（gate pnl_fund≠0）优先。
-func annotateCEXSwapWithMap(bps []*v1.BrokerPosition, sums map[string]float64) {
-	for _, bp := range bps {
-		if bp.PositionId > 0 && isCEXVenueKey(bp.VenueKey) {
-			key := fmt.Sprintf("%d\x00%s", bp.PositionId, bp.VenueKey)
-			if sum, ok := sums[key]; ok && bp.Swap == 0 {
-				bp.Swap = sum
-			}
-		}
-	}
+// cexSwapCandidate 纯函数：CEX 仓且 venue 未报 swap（实报≠0 不覆写）且有开仓时刻（窗口可界）。
+func cexSwapCandidate(bp *v1.BrokerPosition) bool {
+	return isCEXVenueKey(bp.VenueKey) && bp.Swap == 0 && bp.OpenedAt != nil
 }
 
 // AnnotateBrokerPositions D-571 包A：monitor 事件载荷标注入口（三件套同序——

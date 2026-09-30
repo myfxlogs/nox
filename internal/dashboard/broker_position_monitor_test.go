@@ -259,15 +259,6 @@ func TestOrderTopicToKickWiring(t *testing.T) {
 	}
 }
 
-// ordersByTicket []venue.Order → ticket 键 map（venueState.orders 形态适配，测试构造用）。
-func ordersByTicket(orders []venue.Order) map[string]venue.Order {
-	out := make(map[string]venue.Order, len(orders))
-	for _, o := range orders {
-		out[o.Ticket] = o
-	}
-	return out
-}
-
 // waitForMon 轮询条件直到超时（dashboard 包内测试 helper）。
 func waitForMon(t *testing.T, timeout time.Duration, cond func() bool) bool {
 	t.Helper()

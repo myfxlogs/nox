@@ -18,16 +18,14 @@ import (
 )
 
 // venueState 单个 venue 的持仓视图状态（在线 + 持仓集 + 显示缓存）。
-// orders 以 ticket 为键（D-571 包A 逐仓化）；canon/cs/marginByTicket 在 REST 重读时重建缓存，
-// 帧 patch 沿用（canonical/保证金低频变化）。
+// orders 以 ticket 为键（D-571 包A 逐仓化）；canon/cs 在 REST 重读时重建缓存，
+// 帧 patch 沿用（canonical 低频变化）。
 type venueState struct {
-	online         bool                   // 生效在线态（流状态已知则取流，否则取 REST 成败）
-	restOnline     bool                   // REST 查询成败（流状态缺席时的在线判定源）
-	orders         map[string]venue.Order // ticket → order
-	canon          map[string]string      // symbol→canonical（reconcile 重建）
-	cs             map[string]float64     // symbol→contractSize（reconcile 重建）
-	acctMargin     float64                // 账户总保证金（reconcile 取 acctMon 快照）
-	marginByTicket map[string]float64     // D-124 分摊结果
+	online     bool                   // 生效在线态（流状态已知则取流，否则取 REST 成败）
+	restOnline bool                   // REST 查询成败（流状态缺席时的在线判定源）
+	orders     map[string]venue.Order // ticket → order
+	canon      map[string]string      // symbol→canonical（reconcile 重建）
+	cs         map[string]float64     // symbol→contractSize（reconcile 重建）
 }
 
 // posKey 逐仓键：venueKey + "|" + ticket。
@@ -57,8 +55,8 @@ type BrokerPositionMonitor struct {
 	swapSnapStore    SwapSnapshotStore
 	lastSwapByTicket map[string]float64 // ticket→上次 swap 值（去重，单协程访问无需锁）
 
-	// D-124：账户保证金分摊（方案 C）。acctMon nil = 未注入（测试/首 reconcile），margin=0。
-	acctMon *AccountMonitor
+	// D-124→D-008：账户保证金分摊已撤（venue 无仓位级 margin 字段=诚实空态）。
+	// acctMon 保留字段已删——无其他消费面。
 
 	// D-180 S1：结算画像采集器（跳变检测 → 聚合写 swap_settled facts）。
 	settlementCollector *SettlementProfileCollector
@@ -83,11 +81,6 @@ var bpFlushDelay = 200 * time.Millisecond
 // SetCEXFundingRate D-337R3 S1：注入 CEX 腿年化费率源（构造必选第 8 参之外的同 commit 接线面）。
 func (m *BrokerPositionMonitor) SetCEXFundingRate(fundingRate func(ctx context.Context, venue, symbol string) (float64, bool)) {
 	m.cexFundingRate = fundingRate
-}
-
-// SetAccountMonitor D-124 注入账户 monitor（方案 C 保证金分摊用）。boot 时调用。
-func (m *BrokerPositionMonitor) SetAccountMonitor(am *AccountMonitor) {
-	m.acctMon = am
 }
 
 // SetSettlementProfileCollector D-180 S1：注入结算画像采集器。boot 时调用。
@@ -153,16 +146,6 @@ func (m *BrokerPositionMonitor) OnMT5Frame(venueKey string, orders []venue.Order
 		}
 		vs.orders[o.Ticket] = o
 		m.dirtyLocked(posKeyOf(venueKey, o.Ticket))
-	}
-	// 保证金分摊随量/价变化重算（缓存 cs/acctMargin），分摊变化的票号脏化。
-	if len(vs.orders) > 0 {
-		prev := vs.marginByTicket
-		vs.marginByTicket = allocateMargins(ordersMapValues(vs.orders), vs.acctMargin, vs.cs)
-		for t, mg := range vs.marginByTicket {
-			if prev[t] != mg {
-				m.dirtyLocked(posKeyOf(venueKey, t))
-			}
-		}
 	}
 	m.venues[venueKey] = vs
 	m.mu.Unlock()
@@ -287,13 +270,4 @@ func (m *BrokerPositionMonitor) dirtyLocked(posKey string) {
 			m.flush(ctx)
 		})
 	}
-}
-
-// ordersMapValues map → slice（margin 分摊签名沿用切片）。
-func ordersMapValues(m map[string]venue.Order) []venue.Order {
-	out := make([]venue.Order, 0, len(m))
-	for _, o := range m {
-		out = append(out, o)
-	}
-	return out
 }
