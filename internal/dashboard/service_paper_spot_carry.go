@@ -25,6 +25,7 @@ const paperBoardTTL = 15 * time.Second
 const paperSpotCostPct = 0.15
 
 // paperExitRecentWindow exited 行证据流窗口（提示词 §1：近 14 天）。
+// 热修 hotfix-paper：另有 pgstore.paperExitRecentLimit=500 硬上限（OOM pprof 实证）。
 const paperExitRecentWindow = 14 * 24 * time.Hour
 
 // paperTurnCostPct D-354 全周转成本预估常量：现货 taker 0.1%×2+perp taker 0.05%×2=0.30%
