@@ -150,12 +150,13 @@ func (m *CexExecutorManager) sync(ctx context.Context) {
 		if m.OrderCache != nil {
 			// D-450：包装事件缓存加速层——REST 仍是真相源（miss/stale 回落）。
 			osqs[vk] = exchange.NewCachedOrderStatusQuerier(vk, exe, m.OrderCache)
-			// D-569 包B S4：binance 确认桥接——PeekOrder 闭包注入执行器（费恒 REST，事件不含费）。
+			// D-569 包B S4：binance 确认桥接——PeekOrder 闭包注入执行器。
+			// D-599 S1：事件帧 n（USD 系口径）已入 OrderEvent.FeeUSD → 透传进 snap。
 			if c.Venue == "binance" {
 				cache := m.OrderCache
 				exe.SetBinanceOrderLookup(func(ordID string) (exec.BinanceOrderSnap, bool) {
 					ev, ok := cache.PeekOrder(vk, ordID)
-					return exec.BinanceOrderSnap{State: ev.State, AccFillQty: ev.AccFillQty, AvgPx: ev.AvgPx}, ok
+					return exec.BinanceOrderSnap{State: ev.State, AccFillQty: ev.AccFillQty, AvgPx: ev.AvgPx, FeeUSD: ev.FeeUSD}, ok
 				})
 			}
 			// D-566 包B S4-d：okx 确认桥接——PeekOrder 闭包（事件 FeeUSD 原生，费零 REST）。
