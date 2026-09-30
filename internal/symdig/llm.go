@@ -56,10 +56,11 @@ func llmDig(ctx context.Context, deps Deps, sum *Summary, runTS time.Time) error
 		return nil
 	}
 	// D-530：max_tokens 且未闭合 → 剩余未覆盖子集再调一轮（上限两轮防循环，合并提案）；
-	// 第二轮仍截断 → 告警升级 error；正常闭合输出保持单轮。
+	// D-589 坑2：malformed（截断与否）统一进第二轮，两轮耗尽才结案告警（文案分级不变）。
 	var all []proposal
 	covered := map[string]bool{}
-	truncated := false
+	var lastMalformed bool
+	var lastStop string
 	for round := 0; round < 2 && len(picks) > 0; round++ {
 		payload, _ := json.Marshal(picks)
 		var aiText strings.Builder
@@ -74,14 +75,8 @@ func llmDig(ctx context.Context, deps Deps, sum *Summary, runTS time.Time) error
 		for _, p := range props {
 			covered[p.Symbol] = true
 		}
-		truncated = res.StopReason == "max_tokens" && malformed
-		if !truncated {
-			if malformed {
-				log.Printf("[symdig] proposals fenced 未闭合（EOF 容忍解析）")
-				if deps.Store != nil {
-					_ = deps.Store.InsertAlert(ctx, nil, "warn", "[symdig] 提案 AI 输出格式异常（已按截断内容容忍解析，提案集可能不完整）")
-				}
-			}
+		lastMalformed, lastStop = malformed, res.StopReason
+		if !malformed {
 			break
 		}
 		var rest []pgstore.SymdigFinding
@@ -90,14 +85,24 @@ func llmDig(ctx context.Context, deps Deps, sum *Summary, runTS time.Time) error
 				rest = append(rest, r)
 			}
 		}
-		log.Printf("[symdig] 第 %d 轮 max_tokens 截断，剩余 %d 品种进第 %d 轮", round+1, len(rest), round+2)
+		if round+1 < 2 && len(rest) > 0 {
+			log.Printf("[symdig] 第 %d 轮输出异常（%s），剩余 %d 品种进第 %d 轮", round+1, res.StopReason, len(rest), round+2)
+		}
 		picks = rest
 	}
-	if truncated {
-		msg := fmt.Sprintf("[symdig] 提案 AI 输出两轮后仍被长度截断（仅覆盖 %d/%d 品种，提案集不完整）", len(covered), len(sum.Rows))
-		log.Print(msg)
-		if deps.Store != nil {
-			_ = deps.Store.InsertAlert(ctx, nil, "error", msg)
+	// 结案：最后一轮 max_tokens+malformed → error；其余 malformed → warn（两文案原文不动）。
+	if lastMalformed {
+		if lastStop == "max_tokens" {
+			msg := fmt.Sprintf("[symdig] 提案 AI 输出两轮后仍被长度截断（仅覆盖 %d/%d 品种，提案集不完整）", len(covered), len(sum.Rows))
+			log.Print(msg)
+			if deps.Store != nil {
+				_ = deps.Store.InsertAlert(ctx, nil, "error", msg)
+			}
+		} else {
+			log.Printf("[symdig] proposals fenced 未闭合（EOF 容忍解析）")
+			if deps.Store != nil {
+				_ = deps.Store.InsertAlert(ctx, nil, "warn", "[symdig] 提案 AI 输出格式异常（已按截断内容容忍解析，提案集可能不完整）")
+			}
 		}
 	}
 	if len(all) == 0 {
