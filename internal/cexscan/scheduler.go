@@ -3,6 +3,7 @@ package cexscan
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -13,6 +14,7 @@ import (
 	"arb/internal/httpx"
 	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
+	"arb/internal/venue"
 )
 
 // Scanner CEX 只读扫描器调度器。
@@ -64,7 +66,10 @@ func NewScanner(cfg *config.Config, store *pgstore.Store, am AccountSnapshotter,
 func (s *Scanner) Run(ctx context.Context) {
 	// D-578：三所 spot 深度定时采样（同生命周期 goroutine；env ARB_DEPTH_SAMPLER_OFF=1 停）。
 	go newDepthSampler(s.store, s.okxSpotBase).Run(ctx)
-	// 启动即扫一次
+	// 启动即扫一次：账户快照全量水合 + ②③④
+	if err := s.snapshotAccounts(ctx, true); err != nil {
+		log.Printf("[cexscan] initial snapshot: %v", err)
+	}
 	if err := s.scanOnce(ctx); err != nil {
 		log.Printf("[cexscan] initial scan: %v", err)
 	}
@@ -75,6 +80,9 @@ func (s *Scanner) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			if err := s.snapshotAccounts(ctx, false); err != nil {
+				log.Printf("[cexscan] snapshot: %v", err)
+			}
 			if err := s.scanOnce(ctx); err != nil {
 				log.Printf("[cexscan] scan: %v", err)
 			}
@@ -82,27 +90,56 @@ func (s *Scanner) Run(ctx context.Context) {
 	}
 }
 
-// scanOnce 串行 ①ScanAccounts ②earn.Collect→InsertCexEarnAPR ③CalcSpreads→InsertCexSpread ④earn APR 判断。
+// snapshotAccounts 账户快照落库（读 AccountMonitor 内存缓存→InsertVenueAccountSnapshots）。
+// D-004 收窄：full=true 仅 boot 水合全量；full=false 周期分支排除有私有 WS 事件写口的键
+// （事件写口=私有 WS 直写同表，venue.HasPrivateStream）——保留 cfd/MT（行待 #1b 事件化）、
+// okx funding/earn、binance funding、gate spot 等无流键（子账户无 WS 余额频道=无流源
+// D-006，统计/展示用途）。
+// D-360 S2：写时过滤只收 real（证真才留）——cex=!Simulated / cfd=venue∈is_real 键集
+// （核证点①②见 account.go IsRealAccount）；键集查询失败 → 本轮整批不落（fail-closed）。
+func (s *Scanner) snapshotAccounts(ctx context.Context, full bool) error {
+	snaps := ScanAccounts(s.accounts)
+	if len(snaps) == 0 {
+		return nil
+	}
+	realKeys, err := s.store.BrokerRealAccountKeys(ctx)
+	if err != nil {
+		return fmt.Errorf("broker real keys: %w（本轮快照不落库，证真才留 fail-closed）", err)
+	}
+	rows := snapshotRowsFor(snaps, realKeys, full)
+	if len(rows) == 0 {
+		return nil
+	}
+	if err := s.store.InsertVenueAccountSnapshots(ctx, rows); err != nil {
+		return fmt.Errorf("insert venue account snapshots: %w", err)
+	}
+	return nil
+}
+
+// snapshotRowsFor full=false 时排除有私有 WS 事件写口的键（venue.HasPrivateStream，
+// 判据=原始 venue_type——okx spot/perp 归一 unified 之前判定），再复用
+// buildVenueSnapshotRows 同口径构造（real 过滤+归一+去重）。full=true 全量（boot 水合）。
+func snapshotRowsFor(snaps []AccountSnapshot, realKeys map[string]bool, full bool) []pgstore.VenueAccountSnapshot {
+	if !full {
+		kept := snaps[:0]
+		for _, sn := range snaps {
+			if venue.HasPrivateStream(sn.Venue, sn.VenueType, sn.Simulated) {
+				continue
+			}
+			kept = append(kept, sn)
+		}
+		snaps = kept
+	}
+	return buildVenueSnapshotRows(snaps, realKeys)
+}
+
+// scanOnce 串行 ②earn.Collect→InsertCexEarnAPR ③CalcSpreads→InsertCexSpread ④earn APR 判断。
+// （① 账户快照仅 boot 水合+无流键周期补写，见 snapshotAccounts——D-004：有流键周期快照退役。）
 // D-271 R3：funding 扫描已移除——现有 engine/evaluator 管线已覆盖 funding 机会分析。
 // D-271 R5：理财 APR + 价差告警已移除——理财告警是毛数据噪音（280 条实证），
 // 价差告警现有 CrossVenueDetector 已事件驱动覆盖。保留采集入库供前端展示。
 // D-273 ④：earn APR 判断结果 upsert 入库（fin_cex_earn_judgment），供前端展示，不发告警。
 func (s *Scanner) scanOnce(ctx context.Context) error {
-	// ① 账户扫描（纯读缓存，不报错）→ D-358 S2：快照落库（append 语义，喂覆盖率面板；
-	// 失败只记日志不阻断采集，同②③惯例）。
-	// D-360 S2：写时过滤只收 real（证真才留）——cex=!Simulated / cfd=venue∈is_real 键集
-	// （核证点①②见 account.go IsRealAccount）；键集查询失败 → 本轮整批不落（fail-closed）。
-	snaps := ScanAccounts(s.accounts)
-	if len(snaps) > 0 {
-		realKeys, err := s.store.BrokerRealAccountKeys(ctx)
-		if err != nil {
-			log.Printf("[cexscan] broker real keys: %v（本轮快照不落库，证真才留 fail-closed）", err)
-		} else if rows := buildVenueSnapshotRows(snaps, realKeys); len(rows) > 0 {
-			if err := s.store.InsertVenueAccountSnapshots(ctx, rows); err != nil {
-				log.Printf("[cexscan] insert venue account snapshots: %v", err)
-			}
-		}
-	}
 
 	// ② 理财 APR 采集 → 入库
 	earnAPRs, err := s.earn.Collect(ctx)
