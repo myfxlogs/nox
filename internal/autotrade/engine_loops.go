@@ -48,7 +48,7 @@ func (e *Engine) positionLoop(ctx context.Context) {
 	e.stateMachineTick(ctx)
 	lastEval := time.Now()
 	lastScan := lastEval
-	open := e.reloadOpen(ctx)
+	open := e.reloadOpen(ctx, nil)
 	lastQuoteSeen := time.Time{}
 
 	watchdog := time.NewTicker(e.fallbackInterval())
@@ -89,7 +89,7 @@ func (e *Engine) positionLoop(ctx context.Context) {
 		e.stateMachineTick(ctx)
 		now := time.Now()
 		lastScan, lastEval, pendingKick = now, now, false
-		open = e.reloadOpen(ctx)
+		open = e.reloadOpen(ctx, open)
 		armBoundary()
 	}
 
@@ -118,8 +118,12 @@ func (e *Engine) positionLoop(ctx context.Context) {
 				open[i].lastAuth = time.Now()
 				lastEval = time.Now()
 				if e.evaluatePosition(ctx, &open[i].pos) {
-					open = e.reloadOpen(ctx)
+					open = e.reloadOpen(ctx, open)
 					armBoundary()
+					// range 遍历的是旧切片：reload 后 open 已换——继续用旧索引会
+					// 越界（新切片更短 panic）或评错仓（等长错位）。同帧其余命中
+					// 仓由下一帧再评（帧流连续，无损）。
+					break
 				}
 			}
 		case <-e.kickCh:

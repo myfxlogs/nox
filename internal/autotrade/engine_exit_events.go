@@ -33,11 +33,13 @@ type openEntry struct {
 }
 
 // reloadOpen 重载内存持仓缓存（boot/订单事件后/全量评估后调用）。
-func (e *Engine) reloadOpen(ctx context.Context) []openEntry {
+// ListPositions 出错 → 保留 prev（陈旧缓存优于失明：返回 nil 会让 quote 快路
+// 全盲且看门狗 len(open)>0 不成立=静默）；单仓 legs 失败仅跳过该仓。
+func (e *Engine) reloadOpen(ctx context.Context, prev []openEntry) []openEntry {
 	positions, err := e.store.ListPositions(ctx, "OPEN", 50, 0)
 	if err != nil {
-		log.Printf("[autotrade] reloadOpen list positions: %v", err)
-		return nil
+		log.Printf("[autotrade] reloadOpen list positions: %v (keep stale cache %d)", err, len(prev))
+		return prev
 	}
 	open := make([]openEntry, 0, len(positions))
 	for _, p := range positions {

@@ -5,6 +5,7 @@ package autotrade
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -98,12 +99,15 @@ func TestQuoteFastPath_Coalesce(t *testing.T) {
 	e := &Engine{
 		cfg:             Config{Enabled: true, CloseBpsThr: 0.5},
 		store:           s,
-		service:         &dashboard.Service{},
 		quotes:          bus.New(),
 		kickCh:          make(chan struct{}, 1),
 		quoteCh:         make(chan bus.Quote, 256),
 		carryKick:       make(chan struct{}, 1),
 		fundingNeedSent: make(map[string]string),
+		service: &exitCloseSvc{onClose: func(cctx context.Context, posID int64) error {
+			_, err := s.Pool().Exec(cctx, `UPDATE positions SET status='CLOSED' WHERE id=$1`, posID)
+			return err
+		}}, // 真 dashboard.Service{} 零值 AutoClosePosition 内部 nil → panic
 	}
 	var evals int32
 	e.evalHook = func(int64) { atomic.AddInt32(&evals, 1) }
@@ -114,24 +118,31 @@ func TestQuoteFastPath_Coalesce(t *testing.T) {
 	go func() { e.positionLoop(lctx); close(done) }()
 	time.Sleep(150 * time.Millisecond) // boot 扫+缓存装载
 
-	// 命中帧：sellBid==buyAsk → 收敛命中。5 帧连发（间隔<1s）→ 权威评估仅 1 次。
+	// boot 扫已对 OPEN 仓各调一次 evaluatePosition（evals=1）。命中升评估要求距
+	// 该仓上次权威评估 ≥1s（lastAuth 在 reloadOpen 置 now）——先等出合流窗再发帧。
+	time.Sleep(1100 * time.Millisecond)
+	// 命中帧：sellBid==buyAsk → 收敛命中（Quote.Venue=裸 venue，VenueKey() 拼成腿侧全键 "vA:mt5"）。
+	// 5 帧连发（间隔<1s）→ 权威评估仅 1 次。
 	for i := 0; i < 5; i++ {
+		// Publish=快路判定取数（quotes.Latest）；quoteCh 直写=喂帧（生产态
+		// quoteKickDispatch 转发同帧——本测单起 positionLoop 不起 dispatch）。
 		e.quotes.Publish(bus.Quote{Symbol: "X", Venue: "vA", VenueType: "mt5", Bid: 99.9, Ask: 100.0, Time: time.Now()})
 		e.quotes.Publish(bus.Quote{Symbol: "X", Venue: "vB", VenueType: "mt5", Bid: 100.0, Ask: 100.1, Time: time.Now()})
+		e.quoteCh <- bus.Quote{Symbol: "X", Venue: "vA", VenueType: "mt5", Bid: 99.9, Ask: 100.0, Time: time.Now()}
 		time.Sleep(60 * time.Millisecond) // 5 帧 ≈300ms 内
 	}
 	deadline := time.Now().Add(time.Second)
-	for time.Now().Before(deadline) && atomic.LoadInt32(&evals) == 0 {
+	for time.Now().Before(deadline) && atomic.LoadInt32(&evals) < 2 {
 		time.Sleep(10 * time.Millisecond)
 	}
-	if atomic.LoadInt32(&evals) != 1 {
-		t.Fatalf("命中合流：evals=%d, want 1（1s 内命中态持续只升一次权威评估）", atomic.LoadInt32(&evals))
+	if atomic.LoadInt32(&evals) != 2 {
+		t.Fatalf("命中合流：evals=%d, want 2（boot 1 + 命中升权威 1，1s 内持续命中只升一次）", atomic.LoadInt32(&evals))
 	}
 
 	// 非命中 canonical 帧 → 不触发任何权威评估。
 	e.quotes.Publish(bus.Quote{Symbol: "OTHER", Venue: "vA", VenueType: "mt5", Bid: 1, Ask: 1, Time: time.Now()})
 	time.Sleep(100 * time.Millisecond)
-	if atomic.LoadInt32(&evals) != 1 {
+	if atomic.LoadInt32(&evals) != 2 {
 		t.Fatalf("非本仓 canonical 帧不应升评估: evals=%d", atomic.LoadInt32(&evals))
 	}
 }
@@ -289,5 +300,130 @@ func TestWatchdog_AlertOnly(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&scans); got != 1 {
 		t.Fatalf("看门狗不得触发评估: scans=%d want 1(boot)", got)
+	}
+}
+
+// exitCloseSvc D-004 P1#4 返修用 fake：只覆写 AutoClosePosition（其余方法经
+// 内嵌 nil 接口提升，本测试路径不触达）。
+type exitCloseSvc struct {
+	engineService
+	onClose func(ctx context.Context, posID int64) error
+}
+
+func (f *exitCloseSvc) AutoClosePosition(ctx context.Context, posID int64) error {
+	return f.onClose(ctx, posID)
+}
+
+// TestQuoteFastPath_ReloadBreak D-004 P1#4 返修：同帧两命中仓——第一仓平仓后
+// reload 切片变短，旧 range 索引继续走会 panic/评错仓；修后 break，第二仓本帧
+// 不评估（下一帧帧流再评）。断言不 panic + evals 只 +1 + 第二仓仍 OPEN。
+func TestQuoteFastPath_ReloadBreak(t *testing.T) {
+	s := testAccumStore(t)
+	ctx := context.Background()
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE positions, position_legs, autotrade_state, ticks CASCADE`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	if err := s.SetAutotradeState(ctx, StateRunning, "test", nil); err != nil {
+		t.Fatalf("state: %v", err)
+	}
+	for j := 0; j < 2; j++ {
+		pos := &pgstore.Position{OpportunityID: fmt.Sprintf("CROSS_VENUE:X:vA:vB:%d", j), Type: "CROSS_VENUE", Status: "OPEN"}
+		id, err := s.CreatePosition(ctx, pos)
+		if err != nil {
+			t.Fatalf("pos%d: %v", j, err)
+		}
+		for i, side := range []string{"BUY", "SELL"} {
+			venue := "vA:mt5"
+			if i == 1 {
+				venue = "vB:mt5"
+			}
+			if err := s.CreatePositionLeg(ctx, &pgstore.PositionLeg{
+				PositionID: id, LegNo: int16(i + 1), Phase: "OPEN", Venue: venue, Symbol: "X",
+				Side: side, Qty: 1, Status: "FILLED"}); err != nil {
+				t.Fatalf("leg: %v", err)
+			}
+		}
+	}
+	// allLegsActionable 需要窗口内 bid 变化（D-495 判据）——两腿裸 venue 各插两笔。
+	now := time.Now()
+	if err := s.InsertTicks(ctx, []pgstore.TickRow{
+		{Ts: now.Add(-time.Second), Venue: "vA", Symbol: "X", Bid: 99.9, Ask: 100.0, VenueType: "mt5"},
+		{Ts: now, Venue: "vA", Symbol: "X", Bid: 99.95, Ask: 100.0, VenueType: "mt5"},
+		{Ts: now.Add(-time.Second), Venue: "vB", Symbol: "X", Bid: 100.0, Ask: 100.1, VenueType: "mt5"},
+		{Ts: now, Venue: "vB", Symbol: "X", Bid: 100.05, Ask: 100.1, VenueType: "mt5"},
+	}); err != nil {
+		t.Fatalf("ticks: %v", err)
+	}
+
+	var evals int32
+	e := &Engine{
+		cfg:             Config{Enabled: true, CloseBpsThr: 0.5},
+		store:           s,
+		quotes:          bus.New(),
+		kickCh:          make(chan struct{}, 1),
+		quoteCh:         make(chan bus.Quote, 256),
+		carryKick:       make(chan struct{}, 1),
+		fundingNeedSent: make(map[string]string),
+		service: &exitCloseSvc{onClose: func(cctx context.Context, posID int64) error {
+			_, err := s.Pool().Exec(cctx, `UPDATE positions SET status='CLOSED' WHERE id=$1`, posID)
+			return err
+		}},
+	}
+	e.evalHook = func(int64) { atomic.AddInt32(&evals, 1) }
+
+	lctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	done := make(chan struct{})
+	go func() { e.positionLoop(lctx); close(done) }()
+	time.Sleep(150 * time.Millisecond) // boot 扫：无报价 → 不平仓，evals=2
+
+	// 等出 1s 命中合流窗（lastAuth=reload 时刻），再发收敛报价 + 触发帧。
+	time.Sleep(1100 * time.Millisecond)
+	e.quotes.Publish(bus.Quote{Symbol: "X", Venue: "vA", VenueType: "mt5", Bid: 99.9, Ask: 100.0, Time: time.Now()})
+	e.quotes.Publish(bus.Quote{Symbol: "X", Venue: "vB", VenueType: "mt5", Bid: 100.0, Ask: 100.1, Time: time.Now()})
+	base := atomic.LoadInt32(&evals)
+	e.quoteCh <- bus.Quote{Symbol: "X", Venue: "vA", VenueType: "mt5", Bid: 99.9, Ask: 100.0, Time: time.Now()}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && atomic.LoadInt32(&evals) < base+1 {
+		time.Sleep(20 * time.Millisecond)
+	}
+	time.Sleep(200 * time.Millisecond) // 给潜在的越界/多评窗口——不应再有 eval
+	if got := atomic.LoadInt32(&evals); got != base+1 {
+		t.Fatalf("同帧第二仓不应评估（break 语义）: evals=%d base=%d", got, base)
+	}
+	var openN, closedN int
+	if err := s.Pool().QueryRow(ctx, `SELECT COUNT(*) FILTER (WHERE status='OPEN'), COUNT(*) FILTER (WHERE status='CLOSED') FROM positions`).Scan(&openN, &closedN); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if openN != 1 || closedN != 1 {
+		t.Fatalf("应只平一仓（另一仓待下帧）: open=%d closed=%d", openN, closedN)
+	}
+	cancel()
+	<-done
+}
+
+// TestReloadOpen_StaleCacheOnError D-004 P1#4 返修：ListPositions 出错 → 返回
+// prev（陈旧缓存优于失明——返 nil 会让快路全盲且看门狗 len(open)>0 静默）。
+func TestReloadOpen_StaleCacheOnError(t *testing.T) {
+	s := testAccumStore(t)
+	ctx := context.Background()
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE positions, position_legs CASCADE`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	pos := &pgstore.Position{OpportunityID: "CROSS_VENUE:X:vA:vB:1", Type: "CROSS_VENUE", Status: "OPEN"}
+	if _, err := s.CreatePosition(ctx, pos); err != nil {
+		t.Fatalf("pos: %v", err)
+	}
+	e := &Engine{store: s}
+	first := e.reloadOpen(ctx, nil)
+	if len(first) != 1 {
+		t.Fatalf("首载应有 1 仓, got %d", len(first))
+	}
+	cctx, cancel := context.WithCancel(ctx)
+	cancel() // 已取消 ctx → ListPositions 必错
+	got := e.reloadOpen(cctx, first)
+	if len(got) != 1 || got[0].pos.ID != first[0].pos.ID {
+		t.Fatalf("出错应保留陈旧缓存: %+v", got)
 	}
 }
