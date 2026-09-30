@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -58,61 +57,55 @@ func loadDerivationInputs(ctx context.Context, st *pgstore.Store) ([]allowComboR
 	return combos, uni, uniRows.Err()
 }
 
-// binanceBookTicker fapi/v1/ticker/bookTicker 响应。
-type binanceBookTicker struct {
-	BidPrice string `json:"bidPrice"`
-	AskPrice string `json:"askPrice"`
-}
-
-// binancePremiumIndex fapi/v1/premiumIndex 响应。
-type binancePremiumIndex struct {
-	LastFundingRate string `json:"lastFundingRate"`
-}
-
-func fetchBinanceGold(ctx context.Context, hc *http.Client, proxyURL, symbol string) (bid, ask, fundingRate float64, err error) {
-	bt, err := fetchBinanceJSON(ctx, hc, proxyURL+"/fapi/v1/ticker/bookTicker?symbol="+symbol, func() any { return &binanceBookTicker{} })
+// fetchBinanceGold D-582：binance 腿入参改读库——REST premiumIndex/bookTicker 轮询
+// 退役（VPS1 418 rate-ban 病灶；WS 一份数据 ticks/facts 已在库，REST 纯重复采集）。
+// bid/ask←ticks（venue_type='perp' 过滤——perp/spot 行混存；行龄>30s=陈旧报错不猜）；
+// fundingRate←facts（src='binance_ws_markprice'：kind='funding' 年化% 最新行 +
+// kind='funding_interval' 单期秒数 ivlSec，超龄>15min 报错不猜）。返回单期小数费率
+// （消费端 main.go fundingRate×periodsPerDay×365×100 再年化同语义）：
+// fundingRate = annualPct × ivlSec / (365×100×86400)。
+func fetchBinanceGold(ctx context.Context, pool *pgxpool.Pool, symbol string) (bid, ask, fundingRate float64, err error) {
+	var ts time.Time
+	err = pool.QueryRow(ctx, `
+		SELECT bid, ask, ts FROM ticks
+		WHERE venue='binance' AND venue_type='perp' AND symbol=$1
+		ORDER BY ts DESC LIMIT 1
+	`, symbol).Scan(&bid, &ask, &ts)
 	if err != nil {
-		return 0, 0, 0, fmt.Errorf("bookTicker: %w", err)
+		return 0, 0, 0, fmt.Errorf("ticks %s: %w", symbol, err)
 	}
-	bid, err = strconv.ParseFloat(bt.(*binanceBookTicker).BidPrice, 64)
+	if age := time.Since(ts); age > 30*time.Second {
+		return 0, 0, 0, fmt.Errorf("ticks %s stale age=%v > 30s", symbol, age.Round(time.Second))
+	}
+	var annualPct, ivlSec float64
+	var fts, its time.Time
+	err = pool.QueryRow(ctx, `
+		SELECT value, ts FROM facts
+		WHERE kind='funding' AND venue='binance' AND symbol=$1 AND src='binance_ws_markprice'
+		ORDER BY ts DESC LIMIT 1
+	`, symbol).Scan(&annualPct, &fts)
 	if err != nil {
-		return 0, 0, 0, fmt.Errorf("parse bidPrice: %w", err)
+		return 0, 0, 0, fmt.Errorf("facts funding %s: %w", symbol, err)
 	}
-	ask, err = strconv.ParseFloat(bt.(*binanceBookTicker).AskPrice, 64)
+	if age := time.Since(fts); age > 15*time.Minute {
+		return 0, 0, 0, fmt.Errorf("facts funding %s stale age=%v > 15m", symbol, age.Round(time.Second))
+	}
+	err = pool.QueryRow(ctx, `
+		SELECT value, ts FROM facts
+		WHERE kind='funding_interval' AND venue='binance' AND symbol=$1 AND src='binance_ws_markprice'
+		ORDER BY ts DESC LIMIT 1
+	`, symbol).Scan(&ivlSec, &its)
 	if err != nil {
-		return 0, 0, 0, fmt.Errorf("parse askPrice: %w", err)
+		return 0, 0, 0, fmt.Errorf("facts funding_interval %s: %w", symbol, err)
 	}
-	pi, err := fetchBinanceJSON(ctx, hc, proxyURL+"/fapi/v1/premiumIndex?symbol="+symbol, func() any { return &binancePremiumIndex{} })
-	if err != nil {
-		return 0, 0, 0, fmt.Errorf("premiumIndex: %w", err)
+	if age := time.Since(its); age > 15*time.Minute {
+		return 0, 0, 0, fmt.Errorf("facts funding_interval %s stale age=%v > 15m", symbol, age.Round(time.Second))
 	}
-	fundingRate, err = strconv.ParseFloat(pi.(*binancePremiumIndex).LastFundingRate, 64)
-	if err != nil {
-		return 0, 0, 0, fmt.Errorf("parse lastFundingRate: %w", err)
+	if ivlSec <= 0 {
+		return 0, 0, 0, fmt.Errorf("facts funding_interval %s: invalid ivlSec=%v", symbol, ivlSec)
 	}
+	fundingRate = annualPct * ivlSec / (365 * 100 * 86400)
 	return bid, ask, fundingRate, nil
-}
-
-// fetchBinanceJSON 通用 GET+JSON 解码（合并 fetchJSON/fetchJSONPremium，D-301a 行数治理）。
-func fetchBinanceJSON(ctx context.Context, hc *http.Client, url string, mk func() any) (any, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := hc.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("status %d: %s", resp.StatusCode, string(body))
-	}
-	v := mk()
-	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
-		return nil, err
-	}
-	return v, nil
 }
 
 // latestExnessTick D-335R1 S1：读 Exness 指定符号最新 tick（XAUUSD 泛化参数化）。

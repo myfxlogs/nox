@@ -9,6 +9,8 @@ import (
 
 	"arb/internal/store/pgstore"
 	"arb/internal/testutil"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func d335r1Store(t *testing.T) *pgstore.Store {
@@ -42,7 +44,7 @@ func d335r1SeedTick(t *testing.T, s *pgstore.Store, venue, symbol string, bid, a
 func d335r1StubFetches(t *testing.T, bid, ask float64) {
 	t.Helper()
 	origGold, origPeriods, origOkx := fetchBinanceGoldFn, fetchFundingPeriodsPerDayFn, fetchOkxTickerFn
-	fetchBinanceGoldFn = func(context.Context, *http.Client, string, string) (float64, float64, float64, error) {
+	fetchBinanceGoldFn = func(context.Context, *pgxpool.Pool, string) (float64, float64, float64, error) {
 		return bid, ask, 0.0001, nil
 	}
 	fetchFundingPeriodsPerDayFn = func(context.Context, *http.Client, string, string) (int, error) {

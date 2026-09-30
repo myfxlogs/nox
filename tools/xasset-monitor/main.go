@@ -117,7 +117,7 @@ func runPair(ctx context.Context, st *pgstore.Store, hc *http.Client, proxyURL s
 			return fmt.Errorf("fetch gate %s: %w", sym, err)
 		}
 	} else {
-		bid, ask, fundingRate, err = fetchBinanceGoldFn(ctx, hc, proxyURL, sym)
+		bid, ask, fundingRate, err = fetchBinanceGoldFn(ctx, st.Pool(), sym)
 		if err != nil {
 			return fmt.Errorf("fetch binance %s: %w", sym, err)
 		}
