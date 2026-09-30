@@ -7,16 +7,16 @@ import (
 	"fmt"
 )
 
-// capGuardInputs 返回守卫建库的 canonical 集 + 本次名义（USD）。
+// capGuardInputs 返回守卫建库的 canonical 集 + 本仓腿 typed venue_key 集 + 本次名义（USD）。
 // 非 XASSET_CARRY/FUNDING_HEDGE 型返回 nil（不启用守卫通道）。
 // proposed 口径：白名单 spec NotionalUSD→MaxGrossUSD→双腿 gross 兜底。
-func (p *Pipeline) capGuardInputs(ctx context.Context, posType, opportunityID string, legs []LegSpec) ([]string, float64, error) {
+func (p *Pipeline) capGuardInputs(ctx context.Context, posType, opportunityID string, legs []LegSpec) ([]string, []string, float64, error) {
 	if posType != "XASSET_CARRY" && posType != "FUNDING_HEDGE" {
-		return nil, 0, nil
+		return nil, nil, 0, nil
 	}
 	opp, oerr := p.store.GetOpportunity(ctx, opportunityID)
 	if oerr != nil || opp == nil {
-		return nil, 0, fmt.Errorf("canonical cap: opportunity %q lookup failed (fail-closed, err=%v)", opportunityID, oerr)
+		return nil, nil, 0, fmt.Errorf("canonical cap: opportunity %q lookup failed (fail-closed, err=%v)", opportunityID, oerr)
 	}
 	canonicalSell := opp.Canonical
 	if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
@@ -35,5 +35,14 @@ func (p *Pipeline) capGuardInputs(ctx context.Context, posType, opportunityID st
 			proposed += leg.Qty * leg.PriceExpected
 		}
 	}
-	return canonicals, proposed, nil
+	// D-009 S4：venue 判据键集=本仓腿 venue_key（typed；fin_venue_exposure_caps 同域）。
+	seen := map[string]bool{}
+	var venues []string
+	for _, leg := range legs {
+		if leg.VenueKey != "" && !seen[leg.VenueKey] {
+			seen[leg.VenueKey] = true
+			venues = append(venues, leg.VenueKey)
+		}
+	}
+	return canonicals, venues, proposed, nil
 }
