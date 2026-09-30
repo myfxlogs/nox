@@ -108,9 +108,11 @@ func (s *Service) legUSDAt(ctx context.Context, l pgstore.PositionLeg, canonical
 	if l.Status != "FILLED" || px <= 0 || l.Qty <= 0 {
 		return 0
 	}
+	// D-594：px=原生成交价 → 必须配原生 CS（勿走 oppContractSize——其已升 canonical
+	// 单位数/手口径配机会卡 canonical 价）。
 	cs := 1.0
-	if s.oppContractSize != nil { // main 接线=store.ContractSizeByCanonical 同源；nil 回落 store 直查
-		if c, ok := s.oppContractSize(canonical, l.Venue); ok && c > 0 {
+	if s.legContractSize != nil {
+		if c, ok := s.legContractSize(l.Venue, l.Symbol); ok && c > 0 {
 			cs = c
 		}
 	} else if s.store != nil {

@@ -127,11 +127,13 @@ func (s *Service) checkLegVolume(venueKey, venueSymbol string, qty float64) erro
 	return fmt.Errorf("数量 %v 低于 venue 最小手数 %.2f（%s %s）", qty, min, venueKey, venueSymbol)
 }
 
-// legContractSizeOf 单腿合约规格：CEX :spot 腿 CS=1（qty 即基础币数）；CEX :perp 腿经
-// cexContractSize 注入查 fin_cex_universe.ct_val（D-311 S3，gate=quanto_multiplier/okx=ctVal/
-// binance=1.0——旧版恒返 1.0，gate/okx 腿 qty/名义错 10~1000 倍）；MT 腿经 legContractSize
-// 注入查询（main 接 broker_symbol_map.contract_size，D-042 backfilled）。缺失/未接线 →
-// 报错拒不猜（fail-safe，防 position #2 形态复发）。
+// legContractSizeOf 单腿 canonical 单位数/手（与 canonical 报价配套的名义额链用）：
+// CEX :spot 腿 CS=1（qty 即基础币数）；CEX :perp 腿经 cexContractSize 注入查
+// fin_cex_universe.ct_val（D-311 S3，gate=quanto_multiplier/okx=ctVal/binance=1.0）；
+// MT 腿经 legUnitQty 注入=contract_size×qty_scale（D-594 归一层，未接线回退 legContractSize
+// 原生 CS——仅兼容旧测试接线；生产两路皆接）。缺失/未接线 → 报错拒不猜。
+// 注意：本函数返回 canonical 单位口径，只能配 canonical 报价用；配原生 PriceActual 的
+// 消费方（偏差/结算/费用）必须走原生 legContractSize（qty_scale 不得乘）。
 func (s *Service) legContractSizeOf(venueKey, venueSymbol string) (float64, error) {
 	if keydomain.IsType(venueKey, "perp") {
 		if s.cexContractSize == nil {
@@ -146,6 +148,13 @@ func (s *Service) legContractSizeOf(venueKey, venueSymbol string) (float64, erro
 	}
 	if !keydomain.IsMTKey(venueKey) {
 		return 1.0, nil
+	}
+	if s.legUnitQty != nil {
+		u, ok := s.legUnitQty(venueKey, venueSymbol)
+		if !ok || u <= 0 {
+			return 0, fmt.Errorf("合约大小或单位标定未知 %s %s（拒绝：名义额无法推导）", venueKey, venueSymbol)
+		}
+		return u, nil
 	}
 	if s.legContractSize == nil {
 		return 0, errors.New("腿合约大小解析器未接线")

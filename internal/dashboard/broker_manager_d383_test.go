@@ -90,7 +90,7 @@ func TestD383A6_SymbolPlanSubscriptionNarrowed(t *testing.T) {
 	})
 	m := NewBrokerManager(st, nil, nil, time.Minute)
 	groups := []SymbolGroup{{Symbol: "XAUUSDm"}, {Symbol: "XAUUSD247m"}, {Symbol: "EURUSD"}}
-	sm, keys, blocked, err := m.symbolPlan(context.Background(), "v", func(context.Context) ([]SymbolGroup, error) {
+	sm, keys, blocked, _, _, err := m.symbolPlan(context.Background(), "v", func(context.Context) ([]SymbolGroup, error) {
 		return groups, nil
 	})
 	if err != nil {
@@ -154,7 +154,7 @@ func TestD383A6_AutoMapMultiRowDeadGroup(t *testing.T) {
 	var alerts []string
 	m.AlertSink = func(level, msg string) { alerts = append(alerts, level+"|"+msg) }
 	groups := []SymbolGroup{{Symbol: "XAUUSDm"}, {Symbol: "XAUUSD247m"}, {Symbol: "EURUSD"}}
-	_, syms, blocked, err := m.symbolPlan(context.Background(), "fresh", func(context.Context) ([]SymbolGroup, error) {
+	_, syms, blocked, _, _, err := m.symbolPlan(context.Background(), "fresh", func(context.Context) ([]SymbolGroup, error) {
 		return groups, nil
 	})
 	if err != nil {

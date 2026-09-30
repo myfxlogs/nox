@@ -43,6 +43,7 @@ type running struct {
 	symbolParams     func(ctx context.Context, symbol string) (float64, bool, error)
 	setSymMap        func(map[string]string)                                     // 运行时刷新 brokerSymbol → canonical
 	setEmitBlocked   func(map[string]bool)                                       // D-383 A2.3：运行时刷新 canonical 发射抑制集
+	setUnitScales    func(map[string]adapter.SymbolScale, map[string]bool)       // D-594：运行时刷新单位标定+敏感集
 	resubscribe      func([]string)                                              // 运行时补订阅新符号（保存映射后生效，D-047 缺陷③）
 	swap             func(ctx context.Context) ([]fact.Fact, error)              // 轮询 swap facts（§3.6，D-036）
 	meta             func(ctx context.Context) ([]fact.Fact, error)              // D-140 S2：MT5 符号元数据 facts（CS 采集）

@@ -147,14 +147,16 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 		cs := sp.GetSymbolInfo().GetContractSize()
 		return cs, cs > 0, nil
 	}
-	symMap, symbols, blocked, err := m.symbolPlan(ctx, a.Venue, fetchSymbolGroups)
+	symMap, symbols, blocked, scales, sensitive, err := m.symbolPlan(ctx, a.Venue, fetchSymbolGroups)
 	if err != nil || len(symMap) == 0 {
 		log.Printf("[broker] %s symbol plan: %v", a.Venue, err)
 		symMap, symbols = identityMap(defaultSymbols)
-		blocked = nil
+		blocked, scales, sensitive = nil, nil, nil
 	}
 	ad.SetSymbolMap(symMap)             // 全量（含 blocked 行）——native/variant fact 仍需（D-383 A2.3）
 	ad.SetCanonicalEmitBlocked(blocked) // D-383 A2.3：canonical 标签发射抑制集
+	ad.SetSymbolScales(scales)          // D-594：单位标定随 map 同源注入（scale 供发射口乘价）
+	ad.SetUnitSensitive(sensitive)      // D-594：单位敏感 canonical 集（未标定行 canonical 抑制）
 	// 历史映射（D-042 前）无合约 → 启动时回填，恢复规格画像（零信任校验基线）。
 	if gs, gerr := fetchSymbolGroups(ctx); gerr == nil {
 		m.backfillContracts(ctx, a.Venue, gs)
@@ -172,16 +174,20 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 	q := reconcile.NewMT5Querier(a.Venue, ad.Token(), ad.MT5Client())
 
 	r := &running{
-		stop:             func() { cancel(); ad.Stop() },
-		querier:          q,
-		histQuerier:      reconcile.NewMT5OrderHistoryQuerier(a.Venue, ad.Token(), ad.MT5Client()), // D-416
-		symbols:          fetchSymbols,
-		symbolGroups:     fetchSymbolGroups,
-		symbolParams:     fetchContract,
-		volumeSpec:       fetchMinLots,
-		volumeStep:       fetchVolumeStep,
-		setSymMap:        ad.SetSymbolMap,
-		setEmitBlocked:   ad.SetCanonicalEmitBlocked,
+		stop:           func() { cancel(); ad.Stop() },
+		querier:        q,
+		histQuerier:    reconcile.NewMT5OrderHistoryQuerier(a.Venue, ad.Token(), ad.MT5Client()), // D-416
+		symbols:        fetchSymbols,
+		symbolGroups:   fetchSymbolGroups,
+		symbolParams:   fetchContract,
+		volumeSpec:     fetchMinLots,
+		volumeStep:     fetchVolumeStep,
+		setSymMap:      ad.SetSymbolMap,
+		setEmitBlocked: ad.SetCanonicalEmitBlocked,
+		setUnitScales: func(sc map[string]adapter.SymbolScale, sens map[string]bool) {
+			ad.SetSymbolScales(sc)
+			ad.SetUnitSensitive(sens)
+		},
 		resubscribe:      ad.Resubscribe,
 		swap:             func(ctx context.Context) ([]fact.Fact, error) { return ad.SwapFacts(ctx, m.qbus) },
 		meta:             func(ctx context.Context) ([]fact.Fact, error) { return ad.MetaFacts(ctx) },

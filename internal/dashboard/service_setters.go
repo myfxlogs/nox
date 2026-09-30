@@ -67,6 +67,17 @@ func (s *Service) SetLegContractSize(f func(venueKey, venueSymbol string) (float
 	s.legContractSize = f
 }
 
+// SetLegUnitQty 注入 MT 腿 canonical 单位数/手查询（D-594：contract_size×qty_scale）。
+// nil = 未接线（legContractSizeOf 回退原生 CS——兼容旧测试，生产 main 已接线）。
+func (s *Service) SetLegUnitQty(f func(venueKey, venueSymbol string) (float64, bool)) {
+	s.legUnitQty = f
+}
+
+// LegUnitQty D-594：返回 canonical 单位数/手 resolver（autotrade swaparb rate canonical 中价配对用）。
+func (s *Service) LegUnitQty() func(venueKey, venueSymbol string) (float64, bool) {
+	return s.legUnitQty
+}
+
 // SetPrimarySymbol D-383 A2.4：注入执行解析 primary-only 闸。nil = 未接线（resolveLegs 跳过校验）。
 func (s *Service) SetPrimarySymbol(f func(venueKey, canonical string) (string, error)) {
 	s.primarySymbol = f

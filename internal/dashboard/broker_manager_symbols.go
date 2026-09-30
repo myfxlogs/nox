@@ -23,6 +23,9 @@ func (m *BrokerManager) ReloadSymbolMap(ctx context.Context, venue string) {
 	}
 	_, blocked, dead := primarySplit(mappings)
 	m.alertAmbiguousGroups(dead)
+	// D-594：单位敏感集重建 + 未标定敏感行并入 blocked（与 symbolPlan 同规则）。
+	sensitive := m.unitSensitiveSet(ctx, venue)
+	scales := unitScalePlan(mappings, sensitive, blocked)
 	sm := make(map[string]string, len(mappings))
 	for _, mp := range mappings {
 		sm[mp.BrokerSymbol] = mp.Canonical
@@ -30,6 +33,9 @@ func (m *BrokerManager) ReloadSymbolMap(ctx context.Context, venue string) {
 	r.setSymMap(sm)
 	if r.setEmitBlocked != nil {
 		r.setEmitBlocked(blocked)
+	}
+	if r.setUnitScales != nil {
+		r.setUnitScales(scales, sensitive)
 	}
 	log.Printf("[broker] %s symbol map refreshed (%d)", venue, len(sm))
 	m.kickSwap() // 映射增删后立即补一轮 swap（D-060 F2，新符号缺价自然走冷启动退避自愈）

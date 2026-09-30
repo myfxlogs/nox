@@ -6,6 +6,7 @@ import (
 	"math"
 	"strings"
 
+	"arb/internal/adapter"
 	"arb/internal/store/pgstore"
 )
 
@@ -52,14 +53,17 @@ func primarySplit(mappings []pgstore.SymbolMapping) (ok []pgstore.SymbolMapping,
 // D-383 A2.2：返回 (全量 sm 供适配器 native/variant fact、合格行订阅集、canonical 发射抑制集)。
 // 合格行=is_primary 或组内恰一行（隐式 primary）；多行零 primary 组不订阅并 alerts 表告警
 // （A2.3，fail-dead 宁死勿错配）；primary 禁止默默猜（SSOT A2.6，Upsert 恒默认 false）。
-func (m *BrokerManager) symbolPlan(ctx context.Context, venue string, fetchGroups func(context.Context) ([]SymbolGroup, error)) (map[string]string, []string, map[string]bool, error) {
+// D-594：另返回 scale 注入面（已标定行）与单位敏感 canonical 集；敏感 canonical 的未标定行
+// 并入 blocked（保留订阅——native 帧照发，canonical 槽禁占，发射口 emitPlan 同款抑制）。
+func (m *BrokerManager) symbolPlan(ctx context.Context, venue string, fetchGroups func(context.Context) ([]SymbolGroup, error)) (map[string]string, []string, map[string]bool, map[string]adapter.SymbolScale, map[string]bool, error) {
 	groups, err := fetchGroups(ctx)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
+	sensitive := m.unitSensitiveSet(ctx, venue)
 	mappings, err := m.store.ListSymbolMappings(ctx, venue)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 	if len(mappings) > 0 {
 		// 校验映射有效性：brokerSymbol 必须存在于服务器符号表，否则失效（如旧版 identity 默认表
@@ -87,12 +91,12 @@ func (m *BrokerManager) symbolPlan(ctx context.Context, venue string, fetchGroup
 			keys = append(keys, mp.BrokerSymbol)
 		}
 		if len(sm) > 0 {
-			return sm, keys, blocked, nil
+			return sm, keys, blocked, unitScalePlan(valid, sensitive, blocked), sensitive, nil
 		}
 	}
 	all, err := m.store.ListSymbolMappings(ctx, "")
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 	idx := buildCanonicalIdx(all, defaultSymbols)
 	for _, sug := range classifySymbols(groups, idx) {
@@ -112,7 +116,7 @@ func (m *BrokerManager) symbolPlan(ctx context.Context, venue string, fetchGroup
 	// 单行组=隐式 primary 可订阅；多行零 primary 组（同 canonical 匹配多符号）不订阅+告警待种子。
 	fresh, err := m.store.ListSymbolMappings(ctx, venue)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 	ok, blocked, dead := primarySplit(fresh)
 	m.alertAmbiguousGroups(dead)
@@ -125,10 +129,10 @@ func (m *BrokerManager) symbolPlan(ctx context.Context, venue string, fetchGroup
 		syms = append(syms, mp.BrokerSymbol)
 	}
 	if len(sm) > 0 {
-		return sm, syms, blocked, nil
+		return sm, syms, blocked, unitScalePlan(fresh, sensitive, blocked), sensitive, nil
 	}
 	sm, syms = identityMap(defaultSymbols)
-	return sm, syms, nil, nil
+	return sm, syms, nil, nil, sensitive, nil
 }
 
 // mappingStatus 建议映射分类（D-042 自动映射 + 建议共用判据）。
@@ -235,12 +239,8 @@ func classifySymbols(groups []SymbolGroup, idx canonicalIdx) []Suggestion {
 // trimCentSuffix 去 MT5 cent 账号符号后缀（EURUSDm → EURUSD）+ Pepperstone spot 指数 '#' 前缀（#UK100 → UK100）。
 // 只处理安全后缀/前缀（不改变品种身份）；'365'/'EURO' 等改变品种身份的不处理（合约门禁拦截）。
 func trimCentSuffix(s string) string {
-	if strings.HasSuffix(s, "m") {
-		s = s[:len(s)-1]
-	}
-	if strings.HasPrefix(s, "#") {
-		s = s[1:]
-	}
+	s = strings.TrimSuffix(s, "m")
+	s = strings.TrimPrefix(s, "#")
 	return s
 }
 

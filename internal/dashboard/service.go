@@ -114,7 +114,11 @@ type Service struct {
 	tradeModes func(canonical, venueKey string) (int64, bool)
 	// legContractSize MT 腿合约规格查询（D-060 实施修正② 卖腿等名义反算）：venueKey+venueSymbol → CS。
 	// nil = 未接线 → resolveLegs 报错（fail-safe）。main 接 broker_symbol_map.contract_size。
+	// 原生 CS 口径——配原生 PriceActual 消费方专用（偏差/结算/费用摊销）。
 	legContractSize func(venueKey, venueSymbol string) (float64, bool)
+	// legUnitQty D-594：MT 腿 canonical 单位数/手 = contract_size × qty_scale。
+	// 配 canonical 报价链（legContractSizeOf/名义额/sizing）；敏感 canonical 未标定 → ok=false。
+	legUnitQty func(venueKey, venueSymbol string) (float64, bool)
 	// primarySymbol D-383 A2.4：执行解析 primary-only 闸（venueKey+canonical → 合格 broker_symbol）。
 	// 多行组零 primary → 含 "symbol resolution ambiguous" 的错误（fail-closed 拒单）。
 	primarySymbol func(venueKey, canonical string) (string, error)
