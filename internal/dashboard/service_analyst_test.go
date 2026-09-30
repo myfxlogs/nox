@@ -309,3 +309,14 @@ func TestAppendAnalystNoteTableFormat(t *testing.T) {
 		t.Fatalf("old markdown format leaked: %q", line)
 	}
 }
+
+// TestResolveAiConfigEmptyModel D-591 S7：DB+env model 双空 → failed_precondition
+// （fail-closed 禁用 LLM 段，禁静默跑硬编码兜底型号）。
+func TestResolveAiConfigEmptyModel(t *testing.T) {
+	s := &Service{
+		analyst: &analystDeps{envBaseURL: "https://env.example.com", envAPIKey: "env-key"},
+	}
+	if _, err := s.resolveAiConfig(context.Background()); err == nil {
+		t.Fatal("model 双空应报错禁用（fail-closed）")
+	}
+}
