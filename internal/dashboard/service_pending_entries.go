@@ -243,8 +243,10 @@ func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow,
 	if verdict, detail := s.comboPoolVerdict(ctx, c, snaps); verdict != "ok" {
 		return kind, detail, 8, false
 	}
-	return kind, "条件就绪·等机会", 9, true // 闸过·等 detector 产 opp（价差未到阈）
-
+	if t := map[string]string{"XASSET_CARRY": "条件就绪·等价差达阈", "FUNDING_HEDGE": "条件就绪·等净息差达阈"}[kind]; t != "" { // D-587 坑4：按 kind 说清等什么
+		return kind, t, 9, true
+	}
+	return kind, "条件就绪·等检测器产机会", 9, true // 防御：新 kind 不黑话
 }
 
 // TierKickAll D-478 S4：恶化告警事件入口——CEX 账户 WS 余额事件（快照写成功）与组合行写
