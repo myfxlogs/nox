@@ -52,16 +52,17 @@ func TestD476a_Grades_Baseline(t *testing.T) {
 	}
 }
 
-// TestD476a_CapitalMissingIMR_GradeD：imr 缺→capital NULL+级 D。
-func TestD476a_CapitalMissingIMR_GradeD(t *testing.T) {
+// TestD476a_CapitalMissingIMR_GradeC：D-006 S1b——imr 缺→capital 按悲观档 20x 估
+// （50+200=250 非 NULL），估降级 C（实测才 B）。
+func TestD476a_CapitalMissingIMR_GradeC(t *testing.T) {
 	f := d471Fixture()
 	delete(f.facts, "3001157|")
 	rep := d476aSvc(f).gradDossier(context.Background(), f.grad, f.paper)
-	if rep.CapitalUsd != nil {
-		t.Fatal("imr 缺→capital 应 NULL")
+	if rep.CapitalUsd == nil || *rep.CapitalUsd != 250 {
+		t.Fatalf("imr 缺→capital 应按悲观档估 250, got %v", rep.CapitalUsd)
 	}
-	if g := egOf(rep, "capital_usd"); g != v1.EvidenceGrade_EVIDENCE_GRADE_D {
-		t.Errorf("capital grade=%v want D", g)
+	if g := egOf(rep, "capital_usd"); g != v1.EvidenceGrade_EVIDENCE_GRADE_C {
+		t.Errorf("capital grade=%v want C（估）", g)
 	}
 }
 

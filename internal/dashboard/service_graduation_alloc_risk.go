@@ -69,8 +69,8 @@ func allocPoolUSDLike(ccy string) bool {
 	return false
 }
 
-// legMarginFrac 腿保证金率口径（D-540 → D-565 S2 venue 实读化）：
-// MT=init_margin_rate 实采（≤24h；缺/陈→1/5 估+注记）/perp·unified=venue 实读
+// legMarginFrac 腿保证金率口径（D-540 → D-565 S2 venue 实读化 → D-006 S1b 悲观档）：
+// MT=init_margin_rate 实采（≤24h；缺/陈→悲观档 1/20 估+注记）/perp·unified=venue 实读
 // 杠杆 1/lever（读败→known=false 调用方标「杠杆实况不可得」，不静默给数）/
 // 其他（spot 等非保证金腿）=名义全款。
 func (s *Service) legMarginFrac(ctx context.Context, venueKey, symbol string, sellLeg bool) (frac float64, basis string, known bool) {
@@ -78,10 +78,11 @@ func (s *Service) legMarginFrac(ctx context.Context, venueKey, symbol string, se
 	switch k.Type {
 	case "mt4", "mt5":
 		fs, err := s.gradDB().LatestFacts(ctx, fact.KindInitMarginRate, k.Venue, "")
-		if err == nil && len(fs) > 0 && fs[0].Value > 0 && time.Since(fs[0].Ts) <= 24*time.Hour {
-			return fs[0].Value, "", true
+		if rate, measured := effMTMarginRate(fs, err, time.Now()); measured {
+			return rate, "", true
+		} else {
+			return rate, "init_margin_rate 未采或超 24h（按悲观档 20x 估）", true
 		}
-		return 0.2, "init_margin_rate 未采或超 24h（按 5x 估）", true
 	case "perp", "unified":
 		lev, err := s.venueLeverage(ctx, venueKey, symbol, sellLeg)
 		if err != nil || lev <= 0 {

@@ -73,10 +73,14 @@ func TestD563_ComboPoolVerdict(t *testing.T) {
 	if v, d := s.comboPoolVerdict(ctx, c, snaps); v != "unknown" || !strings.Contains(d, "杠杆实况不可得") {
 		t.Fatalf("gate 腿杠杆读败应 unknown, got %s (%s)", v, d)
 	}
-	// MT init_margin_rate 缺 → unknown（待定不谎报锁死）。
+	// D-006 S1b：MT init_margin_rate 缺 → 悲观档 20x（0.05）估+注记（不再 unknown），
+	// unknown 改由 gate 腿杠杆读败承担。
 	f.facts = nil
-	if v, d := s.comboPoolVerdict(ctx, c, snaps); v != "unknown" || !strings.Contains(d, "init_margin_rate") {
-		t.Fatalf("MT rate 缺应 unknown, got %s (%s)", v, d)
+	if frac, note, known := s.legMarginNeedFrac(ctx, "3001157:mt5", "", false); !known || frac != 0.05 || !strings.Contains(note, "悲观档") {
+		t.Fatalf("MT rate 缺应悲观档 0.05+注记: frac=%v note=%q known=%v", frac, note, known)
+	}
+	if v, d := s.comboPoolVerdict(ctx, c, snaps); v != "unknown" || !strings.Contains(d, "杠杆实况不可得") {
+		t.Fatalf("gate 腿读败仍应 unknown: %s (%s)", v, d)
 	}
 }
 

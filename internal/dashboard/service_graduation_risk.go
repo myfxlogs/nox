@@ -43,6 +43,7 @@ func (s *Service) graduationRiskReport(ctx context.Context, legs []riskLegSpec, 
 	var perpLevs []float64 // D-565 S2：perp 腿 venue 实读杠杆收集（recommended 取 min 保守）
 	hasPerpLeg := false
 	capitalOK := true
+	mtEstimated := false // D-006 S1b：MT 腿走悲观档估算（未实测）→ capital 降 C 级
 	now := time.Now()
 	for i := range legs {
 		leg := &legs[i]
@@ -92,13 +93,13 @@ func (s *Service) graduationRiskReport(ctx context.Context, legs []riskLegSpec, 
 			switch vt {
 			case "mt4", "mt5":
 				imr, err := s.gradDB().LatestFacts(ctx, fact.KindInitMarginRate, bare, "")
-				if err == nil && len(imr) > 0 && imr[0].Value > 0 {
-					m := notional * imr[0].Value
-					out.MarginUsd = &m
-				} else {
-					gaps = append(gaps, vk+" init_margin_rate 缺（保证金未知）")
-					capitalOK = false
+				rate, measured := effMTMarginRate(imr, err, time.Now())
+				if !measured { // D-006 S1b：缺/陈按悲观档 20x（5%）估，注记不谎报实测
+					gaps = append(gaps, vk+" init_margin_rate 未实测（按悲观档 20x 估）")
+					mtEstimated = true
 				}
+				m := notional * rate
+				out.MarginUsd = &m
 			case "perp":
 				hasPerpLeg = true
 				// D-565 S2：venue 实读杠杆（gate=get_leverage/binance=v2-account/
@@ -175,7 +176,11 @@ func (s *Service) graduationRiskReport(ctx context.Context, legs []riskLegSpec, 
 	eg("liq_distance_pct_est", liqG)
 	if capitalOK && capital > 0 {
 		rep.CapitalUsd = &capital
-		eg("capital_usd", v1.EvidenceGrade_EVIDENCE_GRADE_B)
+		if mtEstimated { // D-006 S1b：含悲观档估算腿→C（估），实测才 B
+			eg("capital_usd", v1.EvidenceGrade_EVIDENCE_GRADE_C)
+		} else {
+			eg("capital_usd", v1.EvidenceGrade_EVIDENCE_GRADE_B)
+		}
 	} else {
 		eg("capital_usd", v1.EvidenceGrade_EVIDENCE_GRADE_D)
 	}

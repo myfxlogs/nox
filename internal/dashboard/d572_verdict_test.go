@@ -109,7 +109,8 @@ func TestD572_A4_MTUntouched(t *testing.T) {
 	ctx := context.Background()
 	s, calls := d572Svc(t, 5000, 10, nil)
 	frac, _, known := s.legMarginNeedFrac(ctx, "3001157:mt5", "", false)
-	if !known || frac != 0.02 || calls.Load() != 0 {
+	// D-006 S1b：fact 0.02（lev50）低于悲观档下限 → 抬 0.05（effLev=min(50,20)=20）。
+	if !known || frac != 0.05 || calls.Load() != 0 {
 		t.Fatalf("MT 应走 facts 零 venueLeverage 调用: frac=%v calls=%d", frac, calls.Load())
 	}
 	// qbus 无该 canonical 报价 → sym 空串进实读（venue 侧自然读败=unknown 不猜）。
@@ -149,8 +150,8 @@ func TestD572_A5_MTFrameLive(t *testing.T) {
 	if p, ok := s.legPool(ctx, nil, "3001157:mt5"); !ok || !p.live || p.src != "mt_frame" {
 		t.Fatalf("池源应 mt_frame live: %+v", p)
 	}
-	// facts 零扰动：frac 仍 0.02（facts 路径）。
-	if frac, _, known := s.legMarginNeedFrac(ctx, "3001157:mt5", "", true); !known || frac != 0.02 {
+	// facts 零扰动：frac 仍 0.05（facts 路径+悲观档下限）。
+	if frac, _, known := s.legMarginNeedFrac(ctx, "3001157:mt5", "", true); !known || frac != 0.05 {
 		t.Fatalf("facts 路径扰动: %v %v", frac, known)
 	}
 

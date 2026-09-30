@@ -38,7 +38,7 @@ func d471Fixture() *fakeGradDB {
 			"binance|XAUUSDT": {Venue: "binance", Symbol: "XAUUSDT", HedgeCanonical: "XAU", CtVal: &ctVal},
 		},
 		facts: map[string][]fact.Fact{
-			"3001157|": {{Kind: fact.KindInitMarginRate, Value: 0.2}},
+			"3001157|": {{Kind: fact.KindInitMarginRate, Value: 0.2, Ts: time.Now()}},
 		},
 		p95: 25, p95OK: true,
 	}
@@ -97,7 +97,7 @@ func TestD471_Dossier_CfdLegs(t *testing.T) {
 func TestD471_Dossier_Gaps(t *testing.T) {
 	f := d471Fixture()
 	f.ticks["binance|perp|XAUUSDT"] = pgstore.TickRow{Ts: time.Now().Add(-10 * time.Minute), Bid: 2400, Ask: 2401}
-	delete(f.facts, "3001157|") // imr 缺
+	delete(f.facts, "3001157|") // imr 缺 → D-006 S1b 悲观档 20x 估
 	s := &Service{gradStore: f}
 	// D-565 S2：venue 杠杆实读缝（夹具钉 5x=原硬编口径）。
 	s.venueLeverageFn = func(context.Context, string, string, bool) (float64, error) { return 5, nil }
@@ -106,11 +106,13 @@ func TestD471_Dossier_Gaps(t *testing.T) {
 	if rep.Legs[1].QtyUsd != nil || rep.Legs[1].QtyNative != nil {
 		t.Error("tick 超龄腿字段应 NULL（禁静默 0）")
 	}
-	if rep.CapitalUsd != nil {
-		t.Error("imr 缺→capital 应 NULL")
+	// D-006 S1b：imr 缺→MT 腿按悲观档 20x 估（1000×0.05=50；cex 腿 tick 超龄无 margin），
+	// gaps 注记未实测（不 NULL 不谎报实测）。
+	if rep.CapitalUsd == nil || *rep.CapitalUsd != 50 {
+		t.Errorf("imr 缺→capital 应按悲观档估 50, got %v", rep.CapitalUsd)
 	}
 	joined := strings.Join(rep.Gaps, ";")
-	if !strings.Contains(joined, "价格数据过期") || !strings.Contains(joined, "init_margin_rate 缺") {
+	if !strings.Contains(joined, "价格数据过期") || !strings.Contains(joined, "init_margin_rate 未实测") {
 		t.Errorf("gaps=%s", joined)
 	}
 }
