@@ -235,6 +235,8 @@ func (w *WsClient) startPriceHeartbeat(ctx context.Context, done <-chan struct{}
 func (w *WsClient) writeMsg(conn *websocket.Conn, msg []byte) error {
 	w.connMu.Lock()
 	defer w.connMu.Unlock()
+	// D-587：写路径有界（10s，同 exchange.wsWriteDeadline 量级）——半死 TCP 防写楔死。
+	_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 	return conn.WriteMessage(websocket.TextMessage, msg)
 }
 

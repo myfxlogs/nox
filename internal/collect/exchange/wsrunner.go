@@ -31,6 +31,11 @@ type Sender interface {
 	SendRaw(messageType int, data []byte) error
 }
 
+// wsWriteDeadline D-587：WS 写路径有界——半死 TCP（不返 FIN/RST）下裸写可楔死整条
+// 写链（mu 持锁下 ping/订阅/控制帧全堵）；写超时显著小于读 idle，10s 对齐
+// D-575 monitorCallTimeout 量级。gorilla SetWriteDeadline 只作用下一次写，每写前重设。
+const wsWriteDeadline = 10 * time.Second
+
 // wsSender Sender 实现：mu 内嵌值（非指针），ping 与订阅帧共用同一把锁。
 type wsSender struct {
 	conn *websocket.Conn
@@ -40,12 +45,14 @@ type wsSender struct {
 func (s *wsSender) Send(frame any) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	_ = s.conn.SetWriteDeadline(time.Now().Add(wsWriteDeadline))
 	return s.conn.WriteJSON(frame)
 }
 
 func (s *wsSender) SendRaw(messageType int, data []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	_ = s.conn.SetWriteDeadline(time.Now().Add(wsWriteDeadline))
 	return s.conn.WriteMessage(messageType, data)
 }
 

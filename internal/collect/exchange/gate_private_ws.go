@@ -152,6 +152,7 @@ func (g *GatePrivateWS) runOnce(ctx context.Context) error {
 			select {
 			case <-ticker.C:
 				g.writeMu.Lock()
+				_ = conn.SetWriteDeadline(time.Now().Add(wsWriteDeadline)) // D-587
 				err := conn.WriteMessage(websocket.PingMessage, nil)
 				g.writeMu.Unlock()
 				if err != nil {
@@ -166,6 +167,7 @@ func (g *GatePrivateWS) runOnce(ctx context.Context) error {
 	// 逐频道签名订阅（每频道独立 auth 帧——签名含 channel 名）。
 	for _, ch := range gatePrivateChannels {
 		g.writeMu.Lock()
+		_ = conn.SetWriteDeadline(time.Now().Add(wsWriteDeadline)) // D-587
 		err := conn.WriteJSON(g.subscribeFrame(ch, uid))
 		g.writeMu.Unlock()
 		if err != nil {
