@@ -1,20 +1,21 @@
 package adapter
 
-// MT5 margin 采集事件驱动化（D-099，2026-08-24）。
+// MT5 margin 采集（D-099，2026-08-24；D-006 S1b 帧触发 poll 退役）。
 //
-// 设计（施工提示词④定稿，勿改）：
+// 设计（施工提示词④定稿 + D-006 S1b 增补）：
 //   - 数据源不变：AccountSummary.Leverage → 1/Leverage（无限杠杆 ≥1e6 → 0），S6 返修已实证。
-//   - 事件触发器：每 venue 1 条 OnOrderProfit server-streaming 流（SubscribeOrderProfit 注册 +
-//     OnOrderProfit 消费）。任何事件帧到达 = 账户活跃/会话活着 → 触发一次 margin 补采。
-//     流内 Margin/Balance/Equity/Profit/Orders 字段只当触发器不消费（动态占用保证金 ≠ 杠杆率，
-//     无法直接换算；Orders 留待自动平仓立项）。
-//   - 首采兜底：venue attach 后立即采一次；失败 → 5/15/30min 递增重试（3 次封顶，成功后停），
-//     覆盖空仓账户（无浮盈变化 → 事件稀薄）的首采保证。无常驻定时器（首次成功后事件驱动接管）。
-//   - 防抖：距上次成功采集 <5min 的事件直接 skip（静态数据，防事件洪峰重复查库）。
-//   - 失败语义：事件触发采集失败 → 打日志（WP1 禁静默），下次事件自然重试——事件驱动天然短重试。
-//   - 流重连：RST_STREAM/会话失效（S1 背景）→ 复用 IsSessionLost 判定 + reconnectSession 重连 +
-//     重订阅；重连退避 1s/5s/30s 有界（流断是连接层问题，每 tick 有界）。
-//   - 解耦：SwapFacts 已删 margin 段——margin 完全独立，swap 的 errs 误伤不再波及 margin。
+//   - 杠杆=准静态数据，低频采集：venue attach 首采一次 + 流重连成功后各采一次。
+//     首采失败 → 5/15/30min 递增重试（3 次封顶，成功后停）。无常驻定时器。
+//   - D-006 S1b 帧触发 poll 退役根因：帧防抖 lastSuccess 只在成功时推进，失败路径
+//     下一帧立即重试（无退避）→ 风暴节拍=swapPerCallTimeout 3s；且 poll 同步阻塞
+//     卡死期间 publishPositions/publishAcctFrame 全排队（data_stale 饿源实证）。
+//     运行期保证金真相（Margin/FreeMargin/MarginLevel）流帧已送，poll 唯一独占
+//     产出只是 Leverage——帧驱动采集本身即形态错误。
+//   - 事件流消费回归纯流（publishPositions/publishAcctFrame/emitStreamState），
+//     零同步 RPC。
+//   - 流重连：RST_STREAM/会话失效 → IsSessionLost + reconnectSession + 重订阅；
+//     退避 1s/5s/30s 有界。重连成功补采一次杠杆（低频点的第二落点）。
+//   - 解耦：SwapFacts 无 margin 段——margin 完全独立，swap errs 不波及 margin。
 
 import (
 	"context"
@@ -27,10 +28,6 @@ import (
 	"arb/internal/fact"
 	"arb/internal/keydomain"
 )
-
-// marginDebounce 事件触发防抖窗口（静态数据，防事件洪峰重复查库）。
-// 包级 var 便于测试缩短（默认值即生产值，D-099 设计定稿 5min）。
-var marginDebounce = 5 * time.Minute
 
 // marginFirstRetryBackoff 首采失败递增重试退避序列（3 次封顶，成功后停）。
 // 包级 var 便于测试缩短（默认值即生产值，D-099 设计定稿 5/15/30min）。
@@ -48,7 +45,7 @@ var marginReconnectBackoff = []time.Duration{
 	30 * time.Second,
 }
 
-// marginPollOnce 封装账户级 margin 取值链路（D-099 事件驱动化，供首采与事件触发共用）。
+// marginPollOnce 封装账户级 margin 取值链路（D-099；D-006 S1b 起仅供首采与重连补采调用）。
 // 流程：fetchLeverage（mt_swap_helpers.go，失败在 helpers 内打日志返回 false）→ marginRate=1/lev
 // （lev>=1e6 无限杠杆哨兵→0，SwapModeNone 先例）→ marginFact(KindInitMarginRate, venue, venue, rate, "mt5")。
 // 账户级，Symbol=venue（账户标识非符号）；ok=false 表示本轮取值失败，调用方按场景重试或 skip。
@@ -65,15 +62,14 @@ func (a *MT5Adapter) marginPollOnce(ctx context.Context) (fact.Fact, bool) {
 	return marginFact(fact.KindInitMarginRate, a.venue, "", rate, "mt5"), true // D-496 R4：账号级 symbol=NULL
 }
 
-// MarginFactSource 事件驱动 margin 采集源（实现 collect.FactSource，D-099）。
+// MarginFactSource 低频 margin 采集源（实现 collect.FactSource，D-099；D-006 S1b 帧触发退役）。
 // 每 venue 一个实例，由 MT5Adapter.runMarginSource 启动；MarginSink 由 main 经
 // BrokerManager 注入（SwapKick 同模式）。复用 a.streams / a.subs / a.withSessionMD /
 // swapPerCallTimeout / IsSessionLost / reconnectSession，不新建 gRPC conn。
 type MarginFactSource struct {
 	a *MT5Adapter
 
-	lastSuccess time.Time // 防抖基准：最近一次成功采集时间（首采与事件触发共享）
-	reconIdx    int       // 流重连退避档位（成功消费一帧后重置）
+	reconIdx int // 流重连退避档位（成功消费一帧后重置）
 }
 
 // Name 实现 collect.FactSource。
@@ -93,7 +89,7 @@ func (s *MarginFactSource) Run(ctx context.Context, sink func(fact.Fact)) error 
 }
 
 // firstPoll 首采兜底：1 次初始 + 至多 3 次递增重试（5/15/30min），成功后停。
-// 全部失败 → 打日志，事件驱动接管（不再等 1h，下次事件即重试）。
+// 全部失败 → 打日志，fact 缺省留空（消费侧按 D-006 S1b 悲观档 20x 估，下次重连补采）。
 func (s *MarginFactSource) firstPoll(ctx context.Context, sink func(fact.Fact)) {
 	for attempt := 0; attempt <= len(marginFirstRetryBackoff); attempt++ {
 		if ctx.Err() != nil {
@@ -101,7 +97,6 @@ func (s *MarginFactSource) firstPoll(ctx context.Context, sink func(fact.Fact)) 
 		}
 		if f, ok := s.a.marginPollOnce(ctx); ok {
 			sink(f)
-			s.lastSuccess = time.Now()
 			return
 		}
 		// 最后一次不再等待。
@@ -113,7 +108,7 @@ func (s *MarginFactSource) firstPoll(ctx context.Context, sink func(fact.Fact)) 
 			}
 		}
 	}
-	log.Printf("[mt5:%s] margin first poll: %d attempts failed, event-driven takeover", s.a.venue, len(marginFirstRetryBackoff)+1)
+	log.Printf("[mt5:%s] margin first poll: %d attempts failed, fact absent (consumers use pessimistic 20x)", s.a.venue, len(marginFirstRetryBackoff)+1)
 }
 
 // consumeStream 注册订阅 → 开流 → 消费事件帧循环。流错误 → 会话失效重连 + 退避后返回（外层重开）。
@@ -153,11 +148,15 @@ func (s *MarginFactSource) consumeStream(ctx context.Context, sink func(fact.Fac
 			if IsSessionLost(err) {
 				if rerr := a.reconnectSession(ctx); rerr != nil {
 					log.Printf("[mt5:%s] margin: reconnect: %v", a.venue, rerr)
+				} else if f, ok := a.marginPollOnce(ctx); ok {
+					// D-006 S1b：重连成功补采一次杠杆（准静态低频第二落点）。
+					sink(f)
 				}
 			}
 			s.reconnectBackoff(ctx)
 			return // 外层循环重订阅 + 重开流
 		}
+		s.reconIdx = 0 // 成功消费一帧 → 重置重连退避档位
 		// 首帧证明流真活 → 透出 online（每轮流只报一次；venue_online 由此承担，D-571 包A）。
 		if !onlineReported {
 			s.emitStreamState(true)
@@ -173,19 +172,7 @@ func (s *MarginFactSource) consumeStream(ctx context.Context, sink func(fact.Fac
 		if res := resp.GetResult(); res != nil {
 			s.publishAcctFrame(res)
 		}
-		// 事件帧到达 = 账户活跃/会话活着 → 触发 margin 补采（Margin/Balance/Equity/Profit 不消费）。
-		// 防抖：距上次成功采集 <5min 直接 skip（静态数据，防事件洪峰重复查库）。
-		if time.Since(s.lastSuccess) < marginDebounce {
-			continue
-		}
-		if f, ok := a.marginPollOnce(ctx); ok {
-			sink(f)
-			s.lastSuccess = time.Now()
-			s.reconIdx = 0 // 成功消费一帧 → 重置重连退避档位
-		} else {
-			// 事件触发采集失败 → 打日志（WP1 禁静默），下次事件自然重试。
-			log.Printf("[mt5:%s] margin: event-triggered poll failed", a.venue)
-		}
+		// D-006 S1b：帧路径零同步 RPC——margin poll 已退役（杠杆=首采+重连成功两次低频点）。
 	}
 }
 

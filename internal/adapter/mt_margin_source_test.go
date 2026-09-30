@@ -1,9 +1,8 @@
-// mt_margin_source_test.go —— D-099（2026-08-24）：margin 采集事件驱动化单测。
-// 四用例（先红后绿：删 SwapFacts margin 段后旧用例编译红 → 重写后绿）：
-//   - EventTriggersFetch：注入 1 帧事件 → sink 收到 init_margin_rate fact（Leverage=500 → 0.002）；
-//   - Debounce：5min 内连续 3 帧 → sink 只收 1 次（AccountSummary 调用计数 1）；
+// mt_margin_source_test.go —— D-099（2026-08-24）起；D-006 S1b 帧触发 poll 退役后语义：
+//   - FrameFloodZeroRPC：16 帧洪泛 → AccountSummary 恒=首采 1 次（帧路径零同步 RPC）；
+//   - Debounce（翻案名存）：3 帧无防抖无 poll，sink 仅首采 fact；
 //   - FirstPollRetry：首采 AccountSummary 先 err 后成功 → 重试后 sink 收到 fact；
-//   - StreamReconnect：流先注入错误再重开 → 重订阅后事件帧照常触发。
+//   - StreamReconnect：流断重连成功补采一次杠杆（低频第二落点）。
 //
 // fakeMT5Client（mt_swap_poll_test.go）已内嵌 SubscriptionsClient + StreamsClient，
 // 此处补 SubscribeOrderProfit / OnOrderProfit 覆盖 + fakeOrderProfitStream + fakeConnMgr。
@@ -27,7 +26,9 @@ import (
 
 // SubscribeOrderProfit 覆盖（D-099）：返回 OK（subsOPErr 时返回 err），计数供断言。
 func (f *fakeMT5Client) SubscribeOrderProfit(_ context.Context, _ *mt5pb.SubscribeOrderProfitRequest, _ ...grpc.CallOption) (*mt5pb.SubscribeOrderProfitReply, error) {
+	f.opMu.Lock()
 	f.subsOPCalls++
+	f.opMu.Unlock()
 	if f.subsOPErr != nil {
 		return nil, f.subsOPErr
 	}
@@ -38,6 +39,8 @@ func (f *fakeMT5Client) SubscribeOrderProfit(_ context.Context, _ *mt5pb.Subscri
 // 预设流创建时用 Background（测试 setup 早于 ctx），此处回填调用 ctx 使 Recv 在 ctx
 // 取消时能解锁（否则 cleanup cancel 无法唤醒阻塞的 Recv → 测试挂死）。
 func (f *fakeMT5Client) OnOrderProfit(ctx context.Context, _ *mt5pb.OnOrderProfitRequest, _ ...grpc.CallOption) (grpc.ServerStreamingClient[mt5pb.OnOrderProfitReply], error) {
+	f.opMu.Lock()
+	defer f.opMu.Unlock()
 	f.onOPCalls++
 	if f.onOPErr != nil {
 		err := f.onOPErr
@@ -143,12 +146,13 @@ func waitFor(t *testing.T, timeout time.Duration, cond func() bool) bool {
 }
 
 // withShortBackoff 临时缩短 margin 退避序列，返回恢复函数（测试快跑，默认值即生产值不变）。
-func withShortBackoff(t *testing.T, first []time.Duration, recon []time.Duration, debounce time.Duration) func() {
+// D-006 S1b：marginDebounce 随帧触发 poll 退役删除（无第三参）。
+func withShortBackoff(t *testing.T, first []time.Duration, recon []time.Duration) func() {
 	t.Helper()
-	origFirst, origRecon, origDeb := marginFirstRetryBackoff, marginReconnectBackoff, marginDebounce
-	marginFirstRetryBackoff, marginReconnectBackoff, marginDebounce = first, recon, debounce
+	origFirst, origRecon := marginFirstRetryBackoff, marginReconnectBackoff
+	marginFirstRetryBackoff, marginReconnectBackoff = first, recon
 	return func() {
-		marginFirstRetryBackoff, marginReconnectBackoff, marginDebounce = origFirst, origRecon, origDeb
+		marginFirstRetryBackoff, marginReconnectBackoff = origFirst, origRecon
 	}
 }
 
@@ -179,17 +183,16 @@ func startMarginSource(t *testing.T, src *MarginFactSource) (chan fact.Fact, fun
 	}
 }
 
-// TestMarginSource_EventTriggersFetch 注入 1 帧事件 → sink 收到 init_margin_rate fact
-// （Leverage=500 → 0.002，Symbol==venue）。首采强制失败（summaryFailN=4）使事件为唯一触发源。
-func TestMarginSource_EventTriggersFetch(t *testing.T) {
-	restore := withShortBackoff(t, []time.Duration{1 * time.Millisecond, 1 * time.Millisecond, 1 * time.Millisecond}, marginReconnectBackoff, marginDebounce)
-	defer restore()
-
-	client := &fakeMT5Client{leverage: 500, summaryErr: errors.New("rpc unavailable"), summaryFailN: 4}
+// TestMarginSource_EventTriggersFetch → D-006 S1b 翻案：帧路径零同步 RPC。
+// 桩帧洪泛×16 → AccountSummary 调用计数恒=首采 1 次（零触发），sink 仅首采 fact。
+func TestMarginSource_FrameFloodZeroRPC(t *testing.T) {
+	client := &fakeMT5Client{leverage: 500}
 	a := newMarginTestAdapter(client, nil)
 
-	frameCh := make(chan *mt5pb.OnOrderProfitReply, 4)
-	frameCh <- &mt5pb.OnOrderProfitReply{Result: &mt5pb.ProfitUpdate{Margin: 1}}
+	frameCh := make(chan *mt5pb.OnOrderProfitReply, 16)
+	for i := 0; i < 16; i++ {
+		frameCh <- &mt5pb.OnOrderProfitReply{Result: &mt5pb.ProfitUpdate{Margin: float64(i)}}
+	}
 	client.onOPStreams = []grpc.ServerStreamingClient[mt5pb.OnOrderProfitReply]{
 		newFakeOrderProfitStream(context.Background(), frameCh, nil),
 	}
@@ -198,31 +201,37 @@ func TestMarginSource_EventTriggersFetch(t *testing.T) {
 	sinkCh, cleanup := startMarginSource(t, src)
 	defer cleanup()
 
+	// 首采 fact（Leverage=500 → 0.002，Symbol==""、账号级）。
 	select {
 	case f := <-sinkCh:
-		if f.Kind != fact.KindInitMarginRate {
-			t.Fatalf("kind = %q, want %q", f.Kind, fact.KindInitMarginRate)
+		if f.Kind != fact.KindInitMarginRate || f.Value != 0.002 {
+			t.Fatalf("first-poll fact = %+v, want init_margin_rate 0.002", f)
 		}
-		if f.Value != 0.002 {
-			t.Errorf("value = %v, want 0.002 (1/500)", f.Value)
-		}
-		if f.Symbol != "" || f.Venue != "v6" {
-			t.Errorf("Symbol=%q Venue=%q, want v6/'' (D-496 R4 账号级 symbol=NULL)", f.Symbol, f.Venue)
-		}
-		if f.Unit != fact.UnitRatio || f.Src != "mt5" {
-			t.Errorf("Unit=%q Src=%q, want ratio/mt5", f.Unit, f.Src)
+		if f.Symbol != "" || f.Venue != "v6" || f.Unit != fact.UnitRatio || f.Src != "mt5" {
+			t.Errorf("Symbol=%q Venue=%q Unit=%q Src=%q", f.Symbol, f.Venue, f.Unit, f.Src)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("event-triggered fact not received within 2s")
+		t.Fatal("first poll fact not received within 2s")
 	}
-	// 首采 4 次失败 + 事件触发 1 次成功 = 5 次 AccountSummary。
-	if client.summaryCalls != 5 {
-		t.Errorf("AccountSummary calls = %d, want 5 (4 firstPoll fail + 1 event success)", client.summaryCalls)
+	// 等 16 帧全被消费。
+	if !waitFor(t, 2*time.Second, func() bool { return len(frameCh) == 0 }) {
+		t.Fatal("16 frames not consumed within 2s")
+	}
+	time.Sleep(50 * time.Millisecond) // 消费余量
+	// 断言帧路径零 AccountSummary——总调用=首采 1 次。
+	if n, _, _ := client.opLoads(); n != 1 {
+		t.Errorf("AccountSummary calls = %d, want 1 (frames must not trigger poll)", n)
+	}
+	// sink 无第二份 fact。
+	select {
+	case f := <-sinkCh:
+		t.Errorf("frames must not emit margin fact, got %+v", f)
+	default:
 	}
 }
 
-// TestMarginSource_Debounce 5min 内连续 3 帧 → sink 只收 1 次（AccountSummary 调用计数 1）。
-// 首采成功（lastSuccess 设定）→ 3 帧全在防抖窗内 skip。
+// TestMarginSource_Debounce → D-006 S1b 翻案：帧路径根本无 poll 调用（防抖机制删除），
+// AccountSummary 恒=首采 1 次；帧内 publishAcctFrame 走 AccountSink 通畅（帧通道排空即证）。
 func TestMarginSource_Debounce(t *testing.T) {
 	client := &fakeMT5Client{leverage: 500}
 	a := newMarginTestAdapter(client, nil)
@@ -246,26 +255,26 @@ func TestMarginSource_Debounce(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		frameCh <- &mt5pb.OnOrderProfitReply{Result: &mt5pb.ProfitUpdate{}}
 	}
-	// 等待 3 帧被消费（frames 通道排空）+ debounce-skip 处理完。
+	// 等待 3 帧被消费（frames 通道排空）。
 	if !waitFor(t, 2*time.Second, func() bool { return len(frameCh) == 0 }) {
 		t.Fatal("3 event frames not consumed within 2s")
 	}
-	time.Sleep(50 * time.Millisecond) // debounce-skip 同步处理余量
-	// AccountSummary 仍只被首采调用 1 次（3 帧全 debounce skip）。
-	if client.summaryCalls != 1 {
-		t.Errorf("AccountSummary calls = %d, want 1 (3 frames debounced)", client.summaryCalls)
+	time.Sleep(50 * time.Millisecond) // 消费余量
+	// AccountSummary 仍只被首采调用 1 次（帧路径无 poll）。
+	if n, _, _ := client.opLoads(); n != 1 {
+		t.Errorf("AccountSummary calls = %d, want 1 (frame path has no poll)", n)
 	}
 	// sink 仍只有首采的 1 条（无新 fact 入通道）。
 	select {
 	case f := <-sinkCh:
-		t.Errorf("debounce should skip all 3 frames, got extra fact: %+v", f)
+		t.Errorf("frames must not emit margin fact, got %+v", f)
 	default:
 	}
 }
 
 // TestMarginSource_FirstPollRetry 首采 AccountSummary 先 err 后成功 → 重试后 sink 收到 fact。
 func TestMarginSource_FirstPollRetry(t *testing.T) {
-	restore := withShortBackoff(t, []time.Duration{1 * time.Millisecond, 1 * time.Millisecond, 1 * time.Millisecond}, marginReconnectBackoff, marginDebounce)
+	restore := withShortBackoff(t, []time.Duration{1 * time.Millisecond, 1 * time.Millisecond, 1 * time.Millisecond}, marginReconnectBackoff)
 	defer restore()
 
 	client := &fakeMT5Client{leverage: 500, summaryErr: errors.New("rpc unavailable"), summaryFailN: 1}
@@ -287,19 +296,18 @@ func TestMarginSource_FirstPollRetry(t *testing.T) {
 		t.Fatal("first-poll retry fact not received within 2s")
 	}
 	// 首采：第 1 次失败 + 第 2 次成功 = 2 次 AccountSummary。
-	if client.summaryCalls != 2 {
-		t.Errorf("AccountSummary calls = %d, want 2 (1 fail + 1 retry success)", client.summaryCalls)
+	if n, _, _ := client.opLoads(); n != 2 {
+		t.Errorf("AccountSummary calls = %d, want 2 (1 fail + 1 retry success)", n)
 	}
 }
 
-// TestMarginSource_StreamReconnect 流先注入错误再重开 → 重订阅后事件帧照常触发。
-// 首采强制失败（summaryFailN=4）使事件为唯一触发源；stream1 Recv 返回 Unavailable（IsSessionLost=true）
-// → reconnectSession（fakeConnMgr）→ 退避 → 重订阅 → stream2 帧触发 fetch。
+// TestMarginSource_StreamReconnect 流先注入错误再重开 → 重订阅后事件帧照常消费；
+// D-006 S1b：重连成功补采一次杠杆（第二低频点）——首采 4 败 + 重连 1 成 = 5 次 AccountSummary。
+// stream1 Recv 返回 Unavailable（IsSessionLost=true）→ reconnectSession（fakeConnMgr）→ 退避 → 重订阅。
 func TestMarginSource_StreamReconnect(t *testing.T) {
 	restore := withShortBackoff(t,
 		[]time.Duration{1 * time.Millisecond, 1 * time.Millisecond, 1 * time.Millisecond},
-		[]time.Duration{10 * time.Millisecond, 50 * time.Millisecond, 100 * time.Millisecond},
-		marginDebounce)
+		[]time.Duration{10 * time.Millisecond, 50 * time.Millisecond, 100 * time.Millisecond})
 	defer restore()
 
 	client := &fakeMT5Client{leverage: 500, summaryErr: errors.New("rpc unavailable"), summaryFailN: 4}
@@ -326,21 +334,21 @@ func TestMarginSource_StreamReconnect(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("post-reconnect fact not received within 3s")
 	}
-	// 重订阅 2 次（stream1 断后重开 stream2）。
-	if client.subsOPCalls != 2 {
-		t.Errorf("SubscribeOrderProfit calls = %d, want 2 (initial + reconnect)", client.subsOPCalls)
-	}
-	// OnOrderProfit 开流 2 次。
-	if client.onOPCalls != 2 {
-		t.Errorf("OnOrderProfit calls = %d, want 2 (stream1 err + stream2 ok)", client.onOPCalls)
+	// D-006 S1b：重连补采 fact 先于重订阅到达（poll 在退避前）——等待重订阅落定再断言。
+	if !waitFor(t, 2*time.Second, func() bool {
+		_, subs, onOP := client.opLoads()
+		return subs == 2 && onOP == 2
+	}) {
+		_, subs, onOP := client.opLoads()
+		t.Fatalf("resubscribe+reopen not settled: subsOP=%d onOP=%d", subs, onOP)
 	}
 	// reconnectSession 调用 connMgr.Connect 1 次（D-100：用 Load 避免 race）。
 	if connMgr.connectCallsLoad() != 1 {
 		t.Errorf("connMgr.Connect calls = %d, want 1 (session lost → reconnect)", connMgr.connectCallsLoad())
 	}
-	// 首采 4 次失败 + 事件触发 1 次成功 = 5 次 AccountSummary。
-	if client.summaryCalls != 5 {
-		t.Errorf("AccountSummary calls = %d, want 5 (4 firstPoll fail + 1 post-reconnect success)", client.summaryCalls)
+	// D-006 S1b：首采 4 败 + 重连成功补采 1 成 = 5 次 AccountSummary（帧帧零 RPC）。
+	if n, _, _ := client.opLoads(); n != 5 {
+		t.Errorf("AccountSummary calls = %d, want 5 (4 firstPoll fail + 1 post-reconnect poll)", n)
 	}
 }
 

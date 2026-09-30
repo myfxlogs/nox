@@ -35,6 +35,8 @@ type fakeMT5Client struct {
 	summaryErr error                        // S6 返修：AccountSummary 强制返回 err（nil=正常）
 	summaryNil bool                         // S6 返修：AccountSummary 返回 result=nil
 	// D-099 事件驱动测试控制（mt_margin_source_test.go 用）：
+	// D-006 S1b：opMu 保护 summaryCalls/subsOPCalls/onOP*（consumeStream goroutine 写 vs waitFor 断言读）。
+	opMu         sync.Mutex
 	summaryCalls int                                                    // AccountSummary 调用计数（断言防抖/重试）
 	summaryFailN int                                                    // 前 N 次 AccountSummary 返回 summaryErr（之后正常返回 leverage）
 	subsOPCalls  int                                                    // SubscribeOrderProfit 调用计数
@@ -80,8 +82,11 @@ func (f *fakeMT5Client) SymbolParamsMany(_ context.Context, _ *mt5pb.SymbolParam
 // AccountSummary S6 返修：返回预设 leverage / err / result nil 三态。
 // D-099：summaryCalls 计数 + summaryFailN 前 N 次强制 err（事件驱动首采重试/事件触发测试用）。
 func (f *fakeMT5Client) AccountSummary(_ context.Context, _ *mt5pb.AccountSummaryRequest, _ ...grpc.CallOption) (*mt5pb.AccountSummaryReply, error) {
+	f.opMu.Lock()
 	f.summaryCalls++
-	if f.summaryFailN > 0 && f.summaryCalls <= f.summaryFailN {
+	n := f.summaryCalls
+	f.opMu.Unlock()
+	if f.summaryFailN > 0 && n <= f.summaryFailN {
 		return nil, f.summaryErr
 	}
 	if f.summaryErr != nil && f.summaryFailN == 0 {
@@ -91,6 +96,13 @@ func (f *fakeMT5Client) AccountSummary(_ context.Context, _ *mt5pb.AccountSummar
 		return &mt5pb.AccountSummaryReply{}, nil
 	}
 	return &mt5pb.AccountSummaryReply{Result: &mt5pb.AccountSummary{Leverage: f.leverage}}, nil
+}
+
+// opLoads 原子读 OrderProfit 链三路计数（waitFor 断言用，D-006 S1b race 修复）。
+func (f *fakeMT5Client) opLoads() (summary, subs, onOP int) {
+	f.opMu.Lock()
+	defer f.opMu.Unlock()
+	return f.summaryCalls, f.subsOPCalls, f.onOPCalls
 }
 
 func captureLog(t *testing.T, fn func()) string {
