@@ -146,3 +146,27 @@ func TestMarkPriceEmptyArray(t *testing.T) {
 		t.Fatalf("空数组不应 emit, got %d", len(got))
 	}
 }
+
+// TestD591_Ticker24hLanding D-591 S6：24hrTicker 数组帧→vol24h facts（全市场不过滤）
+// + 每符号 15min 节流（同帧重放零重复发射）。
+func TestD591_Ticker24hLanding(t *testing.T) {
+	b := d582WS()
+	var got [][]fact.Fact
+	b.SetFactEmit(func(ctx context.Context, fs []fact.Fact) error {
+		got = append(got, fs)
+		return nil
+	})
+	frame := `[{"e":"24hrTicker","E":1790400000000,"s":"SKLUSDT","q":"12345.6"},{"e":"24hrTicker","s":"ZZZUSDT","q":"999"}]`
+	b.handleTicker(context.Background(), []byte(frame))
+	if len(got) != 1 || len(got[0]) != 2 {
+		t.Fatalf("want 1 emit × 2 facts, got %d emits", len(got))
+	}
+	f := got[0][0]
+	if f.Kind != "vol24h" || f.Symbol != "SKLUSDT" || f.Value != 12345.6 || f.Unit != "usd" || f.Src != "binance_ws_ticker" {
+		t.Fatalf("fact 字段不对: %+v", f)
+	}
+	b.handleTicker(context.Background(), []byte(frame))
+	if len(got) != 1 {
+		t.Fatalf("15min 节流失效：重放应零发射, got %d", len(got))
+	}
+}

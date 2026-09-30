@@ -49,6 +49,7 @@ type BinanceMarketWS struct {
 	validSpot      map[string]struct{}
 	infoOnce       sync.Once
 	spotInfoFetch  func(ctx context.Context, url string) (map[string]struct{}, error) // 测试注入点；nil=实拉 spotInfoURL
+	tickerEmit     map[string]time.Time                                               // D-591 S6：vol24h 每符号节流（仅 ticker 连接 goroutine 访问）
 }
 
 // NewBinanceMarketWS 创建采集器（host 取 cfg.BinanceBaseURL scheme+host）。
@@ -129,7 +130,7 @@ func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
 		return // baseURL 解析失败静默（REST 兜底在跑）
 	}
 	var wg sync.WaitGroup
-	wg.Add(3)
+	wg.Add(4)
 	// D-535：perp bookTicker 切 !bookTicker 聚合流——D-531 取证=binance 上游
 	// 对逐符号高突发订阅短窗杀（分片/路径/源IP 全排除），E1 实测聚合流
 	// 单订阅存活 ≥10min 零断；D-529 双拆随聚合流天然单连接退役。
@@ -145,6 +146,12 @@ func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
 		defer wg.Done()
 		b.ensureSpotInfo(ctx) // D-551 S2：首连前建立现货有效符号缓存
 		b.runLoop(ctx, b.spotCands, "spot", "bookTicker", publish)
+	})
+	// D-591 S6：perp 24hrTicker 全量聚合流——vol24h facts 落库（radar 全量宇宙
+	// 资格判定源；批处理 24hr REST 轮询退役）。
+	safego.Go("binance_market_ws:perp-ticker", func() {
+		defer wg.Done()
+		b.runLoop(ctx, b.marketCands, "perp", "ticker", publish)
 	})
 	wg.Wait()
 }
@@ -163,6 +170,10 @@ func (b *BinanceMarketWS) runLoop(ctx context.Context, cands []WSCandidate, venu
 			if venueType == "perp" && kind == "bookTicker" {
 				// D-535 E1：binance 上游杀招针对逐符号订阅突发——聚合流单订阅存活。
 				params = []string{"!bookTicker"}
+			} else if venueType == "perp" && kind == "ticker" {
+				// D-591 S6：24hrTicker 全市场聚合流（radar 宇宙枚举全量所需，不过滤——
+				// 资格判定须覆盖未监控新上市符号；灌水由每符号 15min 节流控制）。
+				params = []string{"!ticker@arr@1s"}
 			} else if venueType == "perp" && kind == "markPrice" {
 				// D-582：markPrice 逐符号订阅同中 D-535 杀招（上游按连接 epoch 概率性
 				// 裁断，wscloseprobe 同参数集复现 frames=1 后 1006 被杀）——改全市场

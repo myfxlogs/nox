@@ -49,6 +49,9 @@ const (
 	UnitSeconds       = "seconds"        // 秒数时长（D-466 结算周期）
 )
 
+// D-591 S6：!ticker@arr@1s 24hrTicker 落库 kind（quote volume，radar 全量宇宙资格判定源）。
+const KindVol24h = "vol24h"
+
 // TradeMode 值域（MT5 ENUM_SYMBOL_TRADE_MODE 透传，D-060 F4/F5 消费；
 // MT4 无此字段不发 Fact → 下游未知放行）。
 const (
