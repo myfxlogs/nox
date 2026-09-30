@@ -4,10 +4,13 @@
 package exchange
 
 import (
+	"context"
+	"math"
 	"testing"
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/fact"
 )
 
 func d505WS() *BinanceMarketWS {
@@ -71,4 +74,75 @@ func TestD505_AckAndErrorFrames(t *testing.T) {
 	b.handleBookTicker([]byte(`{"result":null,"id":1,"error":{"code":-1121,"msg":"x"}}`), "perp", func(bus.Quote) {
 		t.Error("ack 帧不得产报价")
 	})
+}
+
+// D-582：!markPrice@arr@1s 全市场聚合流——数组帧与单帧同构双形解析+有效集过滤
+// （全市场 ~400 符号/1s 不过滤=DB 灌水；集过滤即原逐符号订阅集语义保持）。
+func d582WS() *BinanceMarketWS {
+	b := NewBinanceMarketWS(Config{Symbols: []string{"SKLUSDT"}})
+	b.now = func() time.Time { return time.Unix(1790400009, 0) }
+	return b
+}
+
+// TestMarkPriceAggregateArray 数组帧（集外 ZZZUSDT 在前+集内 SKLUSDT 在后）→
+// 只发 SKLUSDT 三 fact（过滤实证）；整帧消费 return true 不泄漏 bookTicker 面。
+func TestMarkPriceAggregateArray(t *testing.T) {
+	b := d582WS()
+	var got [][]fact.Fact
+	b.SetFactEmit(func(ctx context.Context, fs []fact.Fact) error {
+		got = append(got, fs)
+		return nil
+	})
+	frame := `[{"e":"markPriceUpdate","E":1790400000000,"s":"ZZZUSDT","p":"1.00","r":"0.00010000","T":1790403600000},` +
+		`{"e":"markPriceUpdate","E":1790400000000,"s":"SKLUSDT","p":"0.05","r":"0.00005000","T":1790403600000}]`
+	if !b.handleMarkPrice(context.Background(), []byte(frame)) {
+		t.Fatal("数组帧未被消费（聚合帧应 return true 不泄漏行情面）")
+	}
+	if len(got) != 1 {
+		t.Fatalf("emit calls want 1, got %d", len(got))
+	}
+	if len(got[0]) != 3 {
+		t.Fatalf("facts want 3 (funding/next_settle/interval), got %d: %+v", len(got[0]), got[0])
+	}
+	for _, f := range got[0] {
+		if f.Symbol != "SKLUSDT" {
+			t.Fatalf("集外符号泄漏: %+v", f)
+		}
+	}
+	if v := got[0][0].Value; math.Abs(v-5.475) > 1e-9 { // 0.00005000×3/天×365×100
+		t.Fatalf("annualized funding want 5.475, got %v", v)
+	}
+}
+
+// TestMarkPriceSingleFrameCompat 原单对象帧回归（逐符号订阅兼容路径零变）。
+func TestMarkPriceSingleFrameCompat(t *testing.T) {
+	b := d582WS()
+	var got [][]fact.Fact
+	b.SetFactEmit(func(ctx context.Context, fs []fact.Fact) error {
+		got = append(got, fs)
+		return nil
+	})
+	frame := `{"e":"markPriceUpdate","E":1790400000000,"s":"SKLUSDT","p":"0.05","r":"0.00005000","T":1790403600000}`
+	if !b.handleMarkPrice(context.Background(), []byte(frame)) {
+		t.Fatal("单帧未消费")
+	}
+	if len(got) != 1 || len(got[0]) != 3 {
+		t.Fatalf("want 1 emit × 3 facts, got %d emits", len(got))
+	}
+}
+
+// TestMarkPriceEmptyArray 空数组帧消费不炸（零 emit、return true）。
+func TestMarkPriceEmptyArray(t *testing.T) {
+	b := d582WS()
+	var got [][]fact.Fact
+	b.SetFactEmit(func(ctx context.Context, fs []fact.Fact) error {
+		got = append(got, fs)
+		return nil
+	})
+	if !b.handleMarkPrice(context.Background(), []byte(`[]`)) {
+		t.Fatal("空数组帧应消费（return true）")
+	}
+	if len(got) != 0 {
+		t.Fatalf("空数组不应 emit, got %d", len(got))
+	}
 }
