@@ -11,14 +11,17 @@ import (
 )
 
 type fakeIntraStore struct {
-	open    []pgstore.IntraTrade
-	closed  []pgstore.IntraTrade
-	ticks   map[string][]pgstore.TickRow // venue|symbol → 序列
-	dayPnL  float64
-	nextID  int64
-	inserts []pgstore.IntraTrade
-	closes  []string // id:reason
-	events  []string // D-441 T2：kind 序列
+	open      []pgstore.IntraTrade
+	closed    []pgstore.IntraTrade
+	ticks     map[string][]pgstore.TickRow // venue|symbol → 序列
+	dayPnL    float64
+	nextID    int64
+	inserts   []pgstore.IntraTrade
+	closes    []string // id:reason
+	events    []string // D-441 T2：kind 序列
+	mtVenues  []string // venue 动态派生（nil+nil=旧冻结名单兼容默认）
+	cexVenues []string
+	venuesErr error
 }
 
 func (f *fakeIntraStore) InsertIntraTrade(_ context.Context, r *pgstore.IntraTrade) (int64, error) {
@@ -326,4 +329,16 @@ func (f *fakeIntraStore) HasIntraEventToday(_ context.Context, kind string) (boo
 		}
 	}
 	return false, nil
+}
+
+// ListIntraVenues venue 动态派生 fake：两列表均 nil 且无 err → 回旧冻结名单默认
+// （存量用例不逐一设 venue）；显式设置后按新值返回（随增随删用例）。
+func (f *fakeIntraStore) ListIntraVenues(context.Context) ([]string, []string, error) {
+	if f.venuesErr != nil {
+		return nil, nil, f.venuesErr
+	}
+	if f.mtVenues == nil && f.cexVenues == nil {
+		return []string{"1314615", "3001157"}, []string{"binance", "okx"}, nil
+	}
+	return f.mtVenues, f.cexVenues, nil
 }

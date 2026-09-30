@@ -84,3 +84,8 @@ func (p *PGStore) InsertIntraEvent(ctx context.Context, kind, baseline, detail s
 func (p *PGStore) HasIntraEventToday(ctx context.Context, kind string) (bool, error) {
 	return p.S.HasIntraEventToday(ctx, kind)
 }
+
+// ListIntraVenues 日内轨 venue 动态派生透传（2026-10-01 业主裁定）。
+func (p *PGStore) ListIntraVenues(ctx context.Context) (mt []string, cex []string, err error) {
+	return p.S.ListIntraVenues(ctx)
+}

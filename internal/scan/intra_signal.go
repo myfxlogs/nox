@@ -38,16 +38,27 @@ type IntraPair struct {
 	Crypto bool
 }
 
-// IntraPairs v1 白名单（腿与依据见 SSOT §2；XPT/XPD 点差 22-46bps 排除）。
-// D-508 S13 豁免：venue=MT 账号号（1314615/3001157）为设计冻结宇宙——v1 深度优先禁长尾，
-// 扩宇宙=新 D# 票（改名单须同步 SSOT §2 依据）。
-var IntraPairs = []IntraPair{
-	{Venue: "binance", Symbol: "BTCUSDT", Crypto: true},
-	{Venue: "okx", Symbol: "BTCUSDT", Crypto: true},
-	{Venue: "binance", Symbol: "ETHUSDT", Crypto: true},
-	{Venue: "okx", Symbol: "ETHUSDT", Crypto: true},
-	{Venue: "1314615", Symbol: "XAUUSD", Crypto: false},
-	{Venue: "3001157", Symbol: "XAUUSD", Crypto: false},
+// intraSymbolsMT / intraSymbolsCEX v1 冻结品种宇宙（D-508 S13；XPT/XPD 点差 22-46bps 排除）。
+// venue 维度不再冻结——业主裁定 2026-10-01 按 broker_accounts/exchange_configs 实时派生
+// （账户增删随动；1314615 已删账户残留死引用实证），Step 每轮 ListIntraVenues 笛卡尔积生成。
+// 扩品种宇宙=新 D# 票。
+var intraSymbolsMT = []string{"XAUUSD"}
+var intraSymbolsCEX = []string{"BTCUSDT", "ETHUSDT"}
+
+// buildIntraPairs venue 集 → 品种宇宙笛卡尔积（CEX 先行保持原遍历序；Crypto 标志=时段闸口径）。
+func buildIntraPairs(mt, cex []string) []IntraPair {
+	out := make([]IntraPair, 0, len(mt)*len(intraSymbolsMT)+len(cex)*len(intraSymbolsCEX))
+	for _, v := range cex {
+		for _, s := range intraSymbolsCEX {
+			out = append(out, IntraPair{Venue: v, Symbol: s, Crypto: true})
+		}
+	}
+	for _, v := range mt {
+		for _, s := range intraSymbolsMT {
+			out = append(out, IntraPair{Venue: v, Symbol: s, Crypto: false})
+		}
+	}
+	return out
 }
 
 // SessionAllows D-425 时段闸（§1）：MT 品种排除整点前后 2min 与周末；加密 7×24 例外仅 BTC/ETH。

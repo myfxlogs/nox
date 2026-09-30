@@ -45,6 +45,9 @@ type IntraStore interface {
 	TicksWindow(ctx context.Context, venue, symbol string, since time.Time) ([]pgstore.TickRow, error)
 	InsertIntraEvent(ctx context.Context, kind, baseline, detail string) error // D-441 S3
 	HasIntraEventToday(ctx context.Context, kind string) (bool, error)         // D-441 S3 当日去重
+	// ListIntraVenues venue 动态派生（业主裁定 2026-10-01）：mt=connected 账户 venue，
+	// cex=exchange_configs 主网行 venue；查询失败调用方本轮不开新仓（纸面 fail-closed）。
+	ListIntraVenues(ctx context.Context) (mt []string, cex []string, err error)
 }
 
 // IntraEngine 日内轨引擎（无状态步进；仓态全在 DB=重启安全）。
@@ -147,8 +150,15 @@ func (e *IntraEngine) Step(ctx context.Context) (IntraStepReport, error) {
 	if len(open) >= e.cfg.Concurrency {
 		return rep, nil
 	}
-	// 时段闸在白名单对内逐对判定（crypto 7×24 例外仅 BTC/ETH；env 可关=全时段）
-	for _, pair := range IntraPairs {
+	// venue 动态派生（每 Step 实时读配置表；账户/所增删即随动）。查询失败 → 本轮
+	// 不开新仓（纸面 fail-closed），Notes 留痕。
+	mtVenues, cexVenues, err := e.st.ListIntraVenues(ctx)
+	if err != nil {
+		rep.Notes = append(rep.Notes, fmt.Sprintf("intra venues: %v（本轮不开新仓）", err))
+		return rep, nil
+	}
+	// 时段闸在品种对内逐对判定（crypto 7×24 例外仅 BTC/ETH；env 可关=全时段）
+	for _, pair := range buildIntraPairs(mtVenues, cexVenues) {
 		if len(open) >= e.cfg.Concurrency {
 			break
 		}

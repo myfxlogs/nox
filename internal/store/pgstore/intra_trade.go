@@ -218,6 +218,44 @@ func (s *Store) IntraTrackStatsQuery(ctx context.Context) ([]IntraBaselineStatRo
 	return out, rows.Err()
 }
 
+// ListIntraVenues 日内纸面轨 venue 动态派生（业主裁定 2026-10-01，替代 IntraPairs 硬编码）：
+// mt = broker_accounts.status='connected' 的 venue（账户增删即随动，1314615 死引用实证）；
+// cex = exchange_configs 存在 simulated=false 行的 venue 裸名（表无 enabled/status 列——
+// 行存在即已配置，simulated=false=主网行口径，同 ListVenueIsReal CEX 半边）。
+func (s *Store) ListIntraVenues(ctx context.Context) (mt []string, cex []string, err error) {
+	mtRows, err := s.pool.Query(ctx,
+		`SELECT venue FROM broker_accounts WHERE status = 'connected' ORDER BY venue`)
+	if err != nil {
+		return nil, nil, fmt.Errorf("intra venues mt: %w", err)
+	}
+	for mtRows.Next() {
+		var v string
+		if err := mtRows.Scan(&v); err != nil {
+			mtRows.Close()
+			return nil, nil, err
+		}
+		mt = append(mt, v)
+	}
+	mtRows.Close()
+	if err := mtRows.Err(); err != nil {
+		return nil, nil, err
+	}
+	cexRows, err := s.pool.Query(ctx,
+		`SELECT DISTINCT venue FROM exchange_configs WHERE NOT simulated ORDER BY venue`)
+	if err != nil {
+		return nil, nil, fmt.Errorf("intra venues cex: %w", err)
+	}
+	defer cexRows.Close()
+	for cexRows.Next() {
+		var v string
+		if err := cexRows.Scan(&v); err != nil {
+			return nil, nil, err
+		}
+		cex = append(cex, v)
+	}
+	return mt, cex, cexRows.Err()
+}
+
 // IntraDaysElapsed D-441 S5：min(entry_ts)::date 距今天数（空表=0，天数差含首日）。
 func (s *Store) IntraDaysElapsed(ctx context.Context) (int, error) {
 	var d *int
