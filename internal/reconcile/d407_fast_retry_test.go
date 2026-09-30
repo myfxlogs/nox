@@ -30,7 +30,7 @@ func (c *d407Closer) ResumeClose(ctx context.Context, posID int64) error {
 	err := c.err
 	c.mu.Unlock()
 	if err == nil && c.markClosed && c.store != nil {
-		c.store.ClosePosition(ctx, posID, 0)
+		c.store.ClosePosition(ctx, posID, 0, nil, "")
 	}
 	return err
 }

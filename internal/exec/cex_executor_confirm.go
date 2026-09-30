@@ -204,11 +204,14 @@ func (e *CEXExecutor) evalBinanceStatus(ctx context.Context, o Order, ordID stri
 	return Fill{}, false, nil
 }
 
-// BinanceOrderSnap D-569 包B S4：私有 WS 订单事件快照（费恒 REST——无 FeeUSD 字段）。
+// BinanceOrderSnap D-569 包B S4：私有 WS 订单事件快照。
+// D-599 S1：FeeUSD 回填——executionReport/ORDER_TRADE_UPDATE 帧 n 字段
+// （USD 系币种口径，非 USD 系不落）已入 OrderEvent.FeeUSD；为 0 时仍走 REST 兜底。
 type BinanceOrderSnap struct {
 	State      string
 	AccFillQty float64
 	AvgPx      float64
+	FeeUSD     float64
 }
 
 // SetBinanceOrderLookup 注入订单事件查口（OrderEventCache.PeekOrder 闭包；nil 安全——
@@ -217,10 +220,14 @@ func (e *CEXExecutor) SetBinanceOrderLookup(fn func(ordID string) (BinanceOrderS
 	e.binanceOrderLookup = fn
 }
 
-// binanceSnapEval D-569 包B S4：事件快照求值——filled+qty>0 → Fill（费=REST 补）；
+// binanceSnapEval D-569 包B S4：事件快照求值——filled+qty>0 → Fill；
 // canceled → qty>0 部分 Fill / ==0 诚实错误；其余 → done=false 交 REST 拍照。
+// D-599 S1：费首选事件帧 n（私有 WS 零增量 REST）；帧无费/非 USD 币种 → REST 兜底。
 func (e *CEXExecutor) binanceSnapEval(ctx context.Context, o Order, ordID string, sn BinanceOrderSnap) (Fill, bool, error) {
 	fee := func() float64 {
+		if sn.FeeUSD > 0 {
+			return sn.FeeUSD
+		}
 		f, err := e.binanceUserTradesFeeUSD(ctx, o.Symbol, ordID)
 		if err != nil {
 			return 0 // 费查败诚实缺省不阻断（evalBinanceStatus 同口径）

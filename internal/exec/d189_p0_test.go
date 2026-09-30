@@ -47,7 +47,7 @@ func TestResumeClose_ClosedIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create position: %v", err)
 	}
-	if err := s.ClosePosition(ctx, pid, 0); err != nil && !errors.Is(err, pgstore.ErrTerminalState) {
+	if err := s.ClosePosition(ctx, pid, 0, nil, ""); err != nil && !errors.Is(err, pgstore.ErrTerminalState) {
 		t.Fatalf("close position: %v", err)
 	}
 	reg := NewRegistry()

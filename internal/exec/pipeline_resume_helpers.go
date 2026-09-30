@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"sync"
 	"time"
 
@@ -138,11 +139,14 @@ func (p *Pipeline) backfillCloseFromHistory(ctx context.Context, pos *pgstore.Po
 	}
 	closePrice := hp.ClosePrice
 	filledQty := leg.EffectiveQty() // D-346：回填无独立 fill 回执，成交口径=OPEN 腿实际持仓量
+	// D-599 S1：历史回填腿同样落 fee——hp.Commission（计价币）×fx→USD（pos505 实证：
+	// cashflow −2.08 有值而腿 fee_usd NULL，费到了现金流却没到腿行）。
 	if err := p.store.CreatePositionLeg(ctx, &pgstore.PositionLeg{
 		PositionID: posID, LegNo: leg.LegNo, Phase: "CLOSE", AttemptNo: 1, Venue: leg.Venue, Account: leg.Account,
 		Symbol: leg.Symbol, Side: closeSide, Qty: leg.EffectiveQty(), PriceExpected: leg.PriceExpected, // D-311 R6：回填成交量口径
 		PriceActual: &closePrice, OrderID: leg.OrderID, Status: "FILLED",
 		FilledQty: &filledQty, AvgFillPrice: &closePrice, // D-346：488/489/490 验尸=CLOSE 腿恒 NULL
+		FeeUSD: positiveFeePtr(math.Abs(hp.Commission) * fx), // MT5 comm 负值口径→取绝对值（persistOpenLegs 同款）
 	}); err != nil && !errors.Is(err, pgstore.ErrTerminalState) {
 		return fmt.Errorf("backfill CLOSE leg: %w", err)
 	}

@@ -29,7 +29,8 @@ type Store interface {
 	ListPositions(ctx context.Context, status string, limit, offset int) ([]pgstore.Position, error)
 	ListPositionLegs(ctx context.Context, posID int64) ([]pgstore.PositionLeg, error)
 	CreatePositionLeg(ctx context.Context, leg *pgstore.PositionLeg) error
-	ClosePosition(ctx context.Context, id int64, realizedPnl float64) error
+	// D-599 S2：realizedPnl=净额；feesUSD/feeQuality 随写（nil+""=无费信息 NULL）。
+	ClosePosition(ctx context.Context, id int64, realizedPnl float64, feesUSD *float64, feeQuality string) error
 	UpdatePositionStatus(ctx context.Context, id int64, status string) error
 	InsertAlert(ctx context.Context, ruleID *int64, level, msg string) error
 	// D-245：平仓触发源持久化（三入口调用侧；写失败只 log 不阻断）。

@@ -64,7 +64,7 @@ func (f *fakeStore) CreatePositionLeg(ctx context.Context, leg *pgstore.Position
 	return nil
 }
 
-func (f *fakeStore) ClosePosition(ctx context.Context, id int64, realizedPnl float64) error {
+func (f *fakeStore) ClosePosition(ctx context.Context, id int64, realizedPnl float64, feesUSD *float64, feeQuality string) error {
 	f.closeCalls++
 	f.closedIDs = append(f.closedIDs, id)
 	if p, ok := f.positions[id]; ok {

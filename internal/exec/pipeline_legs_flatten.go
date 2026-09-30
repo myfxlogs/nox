@@ -123,9 +123,9 @@ func (p *Pipeline) autoFlattenLEGGED(ctx context.Context, posID int64, legs []Le
 			PriceActual:   &closePrice,
 			OrderID:       dbLeg.OrderID, // F2 修法：原 OPEN ticket（与 ClosePosition closedTickets 检查对齐，范式同 auto_close.go:73 goneLeg.OrderID）；fill.OrderID 是 CEX 平价新单号会导致查不到→重复发单
 			Status:        "FILLED",
-			FilledQty:     &closeQty,                   // D-346：与 OPEN 腿同字段语义，realized 逐腿分解复核
-			AvgFillPrice:  &closePrice,                 // D-346：488/489/490 验尸=CLOSE 腿恒 NULL
-			FeeUSD:        positiveFeePtr(fill.FeeUSD), // D-422：CEX 平仓实采 USD 费落库（0→NULL）
+			FilledQty:     &closeQty,                // D-346：与 OPEN 腿同字段语义，realized 逐腿分解复核
+			AvgFillPrice:  &closePrice,              // D-346：488/489/490 验尸=CLOSE 腿恒 NULL
+			FeeUSD:        closeLegFeeUSD(fill, fx), // D-422+D-599：CEX 实采 USD 费/commission 落库（0→NULL）
 		}); err != nil && !errors.Is(err, pgstore.ErrTerminalState) {
 			log.Printf("[exec] auto-flatten pos=%d leg=%d write CLOSE leg: %v", posID, i, err)
 			allFlattened = false

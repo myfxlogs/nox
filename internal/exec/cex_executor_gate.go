@@ -144,5 +144,12 @@ func (e *CEXExecutor) placeGateRaw(ctx context.Context, o Order) ([]byte, Fill, 
 	if ferr != nil {
 		return rawBody, fill, ferr
 	}
+	// D-599 S1：POST 响应无 fee 字段——best-effort 查订单事件快照补 fee
+	//（WS usertrades 帧可能晚到；未命中=honest 0→NULL 不阻断成交）。
+	if e.gateOrderLookup != nil {
+		if sn, ok := e.gateOrderLookup(strconv.FormatInt(ord.ID, 10)); ok && sn.FeeUSD > 0 {
+			fill.FeeUSD = sn.FeeUSD
+		}
+	}
 	return rawBody, toBaseQty(fill), nil
 }

@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"time"
 
 	"arb/internal/keydomain"
@@ -26,6 +27,21 @@ func positiveFeePtr(v float64) *float64 {
 		return nil
 	}
 	return &v
+}
+
+// closeLegFeeUSD D-599 S1：CLOSE 腿 fee_usd 三源——Fill.FeeUSD（CEX 实采 USD）优先，
+// 缺省回落 fill.Commission（MT5/历史回填计价币口径，×fx→USD 取绝对值，同
+// persistOpenLegs r.Commission<0→-r.Commission 惯例）。无值 → NULL 不写 0。
+func closeLegFeeUSD(fill Fill, fx float64) *float64 {
+	if fill.FeeUSD > 0 {
+		return &fill.FeeUSD
+	}
+	if fill.Commission != 0 {
+		if f := math.Abs(fill.Commission) * fx; f > 0 {
+			return &f
+		}
+	}
+	return nil
 }
 
 func (p *Pipeline) writeCloseCashflows(ctx context.Context, posID int64, legNo int16, venue string, swap, commission, feeUSD, fx float64) error {

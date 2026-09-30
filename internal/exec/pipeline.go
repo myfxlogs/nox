@@ -58,6 +58,8 @@ type Pipeline struct {
 	pnlCalibrator PnLCalibrator
 	// fxResolver 计价币→USD 换算（D-105 T2 平仓 PnL 计价币换算）。nil = 非 USD 计价 fx 不可得。
 	fxResolver FxResolver
+	// feeBps 估算费率链（D-599 S2 净额核算——NULL 费腿按 venue bps×名义额估算）。nil=不估算。
+	feeBps FeeBpsResolver
 	// revalidateAbsBps 复核劣化绝对阈值 bps（D-077 修复⑪B N4，ARB_REVALIDATE_ABS_BPS 默认 2.0）。
 	revalidateAbsBps float64
 	// revalidateRelPct 复核劣化相对阈值 %（D-077 修复⑪B N4，ARB_REVALIDATE_REL_PCT 默认 20）。
