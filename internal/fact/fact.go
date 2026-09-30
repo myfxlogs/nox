@@ -52,6 +52,10 @@ const (
 // D-591 S6：!ticker@arr@1s 24hrTicker 落库 kind（quote volume，radar 全量宇宙资格判定源）。
 const KindVol24h = "vol24h"
 
+// KindIndexPrice D-591 R2：markPrice 帧 i 字段（index price）同帧落库——一帧一钟
+// （stream-field-one-clock-law：basis=mark−index 必须同帧同钟，禁 WS mark×REST index 拼接）。
+const KindIndexPrice = "index_price"
+
 // TradeMode 值域（MT5 ENUM_SYMBOL_TRADE_MODE 透传，D-060 F4/F5 消费；
 // MT4 无此字段不发 Fact → 下游未知放行）。
 const (

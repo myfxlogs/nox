@@ -93,16 +93,17 @@ func TestMarkPriceAggregateArray(t *testing.T) {
 		got = append(got, fs)
 		return nil
 	})
-	frame := `[{"e":"markPriceUpdate","E":1790400000000,"s":"ZZZUSDT","p":"1.00","r":"0.00010000","T":1790403600000},` +
-		`{"e":"markPriceUpdate","E":1790400000000,"s":"SKLUSDT","p":"0.05","r":"0.00005000","T":1790403600000}]`
+	frame := `[{"e":"markPriceUpdate","E":1790400000000,"s":"ZZZUSDT","p":"1.00","r":"0.00010000","T":1790403600000,"i":"1.01"},` +
+		`{"e":"markPriceUpdate","E":1790400000000,"s":"SKLUSDT","p":"0.05","r":"0.00005000","T":1790403600000,"i":"0.049"}]`
 	if !b.handleMarkPrice(context.Background(), []byte(frame)) {
 		t.Fatal("数组帧未被消费（聚合帧应 return true 不泄漏行情面）")
 	}
 	if len(got) != 1 {
 		t.Fatalf("emit calls want 1, got %d", len(got))
 	}
-	if len(got[0]) != 3 {
-		t.Fatalf("facts want 3 (funding/next_settle/interval), got %d: %+v", len(got[0]), got[0])
+	// D-591 R2：含 i 帧 → 第 4 fact=index_price 同帧落库（一帧一钟）。
+	if len(got[0]) != 4 {
+		t.Fatalf("facts want 4 (funding/next_settle/interval/index_price), got %d: %+v", len(got[0]), got[0])
 	}
 	for _, f := range got[0] {
 		if f.Symbol != "SKLUSDT" {
@@ -111,6 +112,26 @@ func TestMarkPriceAggregateArray(t *testing.T) {
 	}
 	if v := got[0][0].Value; math.Abs(v-5.475) > 1e-9 { // 0.00005000×3/天×365×100
 		t.Fatalf("annualized funding want 5.475, got %v", v)
+	}
+	if f := got[0][3]; f.Kind != fact.KindIndexPrice || f.Value != 0.049 || f.Unit != fact.UnitUSD {
+		t.Fatalf("index fact want index_price=0.049, got %+v", f)
+	}
+}
+
+// TestMarkPriceIndexAbsentTolerated R2 反面：帧缺 i → 不发 index fact，funding 三件套不受累。
+func TestMarkPriceIndexAbsentTolerated(t *testing.T) {
+	b := d582WS()
+	var got [][]fact.Fact
+	b.SetFactEmit(func(ctx context.Context, fs []fact.Fact) error {
+		got = append(got, fs)
+		return nil
+	})
+	frame := `[{"e":"markPriceUpdate","s":"SKLUSDT","r":"0.00005000","T":1790403600000}]`
+	if !b.handleMarkPrice(context.Background(), []byte(frame)) {
+		t.Fatal("帧未消费")
+	}
+	if len(got) != 1 || len(got[0]) != 3 {
+		t.Fatalf("缺 i 应 3 facts（无 index_price）, got %+v", got)
 	}
 }
 

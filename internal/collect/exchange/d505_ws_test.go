@@ -126,12 +126,15 @@ func TestD509_BinanceMarkPriceFunding(t *testing.T) {
 	if !ok {
 		t.Fatal("markPriceUpdate 帧未消费")
 	}
-	if len(got) != 3 {
-		t.Fatalf("facts=%d want 3（funding+next_settle+interval）", len(got))
+	if len(got) != 4 { // D-591 R2：帧含 i → +index_price 同帧落库
+		t.Fatalf("facts=%d want 4（funding+next_settle+interval+index_price）", len(got))
 	}
 	if got[0].Kind != fact.KindFunding || got[0].Venue != "binance" || got[0].Symbol != "PAXGUSDT" ||
 		got[0].Src != "binance_ws_markprice" {
 		t.Fatalf("funding fact 键形错: %+v", got[0])
+	}
+	if f := got[3]; f.Kind != fact.KindIndexPrice || f.Value != 4000.2 || f.Unit != fact.UnitUSD {
+		t.Fatalf("index fact want index_price=4000.2: %+v", f)
 	}
 	want := 0.0001 * 3 * 365 * 100 // 回退 3/天（intervals 未注入）
 	if math.Abs(got[0].Value-want) > 1e-9 {

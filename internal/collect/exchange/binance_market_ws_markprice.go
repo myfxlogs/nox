@@ -92,6 +92,15 @@ func (b *BinanceMarketWS) emitMarkPriceFact(ctx context.Context, m map[string]an
 			fact.Fact{Kind: fact.KindFundingInterval, Venue: VenueBinance, Symbol: sym,
 				Value: 86400 / float64(periodsPerDay), Unit: fact.UnitSeconds, Ts: now, Src: "binance_ws_markprice"})
 	}
+	// D-591 R2：帧内 i=index price 同帧落库（写节流=FactEmitter 去重+心跳，与 funding 同款不裸写）；
+	// 缺/脏=缺省不造（venue 禁借用律），不拖垮 funding 三件套。
+	if idxS, _ := m["i"].(string); idxS != "" {
+		var idxv float64
+		if _, err := fmt.Sscanf(idxS, "%f", &idxv); err == nil && idxv > 0 {
+			fs = append(fs, fact.Fact{Kind: fact.KindIndexPrice, Venue: VenueBinance, Symbol: sym,
+				Value: idxv, Unit: fact.UnitUSD, Ts: now, Src: "binance_ws_markprice"})
+		}
+	}
 	if err := b.emitFacts(ctx, fs); err != nil {
 		log.Printf("[binance-mkt-ws] funding emit %s: %v", sym, err)
 	}
