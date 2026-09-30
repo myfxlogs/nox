@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"testing"
 	"time"
 )
@@ -161,5 +162,16 @@ func TestLoadEnvInvalid(t *testing.T) {
 	}
 	if c.OpportunityTTL != 30*time.Second {
 		t.Errorf("OpportunityTTL = %v, want default 30s", c.OpportunityTTL)
+	}
+}
+
+// TestLoadDefaults_AIModelEmpty D-591 S7：AI 模型缺省为空（禁硬编码型号名兜底——
+// DB ai_settings.model 与 env 双空时 LLM 段 fail-closed 禁用，不静默跑 glm-4.6）。
+func TestLoadDefaults_AIModelEmpty(t *testing.T) {
+	os.Unsetenv("ARB_AI_MODEL") // 走真缺省路径（envStr=LookupEnv 语义）
+	t.Cleanup(func() { os.Unsetenv("ARB_AI_MODEL") })
+	c := Load()
+	if c.AIModel != "" {
+		t.Errorf("AIModel = %q, want 空（硬编码兜底已退役）", c.AIModel)
 	}
 }

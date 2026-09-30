@@ -112,7 +112,7 @@ func Load() *Config {
 		SwapArbMaxLegsPerSymbol:    envInt("ARB_SWAPARB_MAX_LEGS_PER_SYMBOL", 2),       // D-180 S4
 		AIBaseURL:                  envStr("ARB_AI_BASE_URL", ""),
 		AIAPIKey:                   envStr("ARB_AI_API_KEY", ""),
-		AIModel:                    envStr("ARB_AI_MODEL", "glm-4.6"),
+		AIModel:                    envStr("ARB_AI_MODEL", ""), // D-591 S7：硬编码型号兜底退役——DB/env 双空=LLM 段 fail-closed 禁用
 		AIPGDSN:                    envStr("ARB_AI_PG_DSN", ""),
 		RetroDisabled:              !envBool("ARB_RETRO_ENABLED", true), // D-457：env=0 关复盘定时器
 		AnalystRatePerHour:         envInt("ARB_ANALYST_RATE_PER_HOUR", 20),
