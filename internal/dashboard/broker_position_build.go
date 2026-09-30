@@ -6,9 +6,7 @@ package dashboard
 import (
 	"context"
 	"log"
-	"maps"
 	"math"
-	"sort"
 	"time"
 
 	"arb/internal/bus"
@@ -21,32 +19,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// build 按 venueKey 排序（确定性）构建全量视图：canonical 解析 + 现价（后端算，D-043）+ 保证金分摊（D-124 方案 C）。
-// 离线 venue 的持仓仍显示（最近快照），venue_online=false 诚实标注。
-func (m *BrokerPositionMonitor) build(ctx context.Context) []*v1.BrokerPosition {
-	m.mu.RLock()
-	keys := make([]string, 0, len(m.venues))
-	for k := range m.venues {
-		keys = append(keys, k)
-	}
-	venues := maps.Clone(m.venues)
-	m.mu.RUnlock()
-	sort.Strings(keys)
-
-	now := time.Now()
-	out := make([]*v1.BrokerPosition, 0, 16)
-	for _, vk := range keys {
-		vs := venues[vk]
-		for _, o := range vs.orders {
-			out = append(out, m.protoFor(ctx, vk, vs, o, now))
-		}
-	}
-	return out
-}
-
-// protoFor 单仓显示态构建（D-571 包A：全量 build 与逐仓事件 flush 共用，唯一组装点）。
-// canonical/现价/swapChargeAt/periodicPct 规则与原 build 内联路径逐字一致（逻辑原样搬迁）；
-// canonMap/csMap/marginByTicket 取自 venueState（reconcile 时构建缓存，帧 patch 沿用）。
+// protoFor 单仓显示态构建（D-571 包A：逐仓事件 flush 唯一组装点）。
+// canonMap/csMap 取自 venueState（reconcile 时构建缓存，帧 patch 沿用）。
 func (m *BrokerPositionMonitor) protoFor(ctx context.Context, vk string, vs venueState, o venue.Order, now time.Time) *v1.BrokerPosition {
 	venue := o.Venue
 	canonical := ""
@@ -75,12 +49,9 @@ func (m *BrokerPositionMonitor) protoFor(ctx context.Context, vk string, vs venu
 		price = q
 		hasPrice = true
 	}
-	// D-146 S5 微件③：CEX perp per-position margin 优先（venue 权威，替换 0=未知语义）；
-	// MT4/MT5 走 D-124 账户分摊（venue.Order.InitialMargin=0）。
-	margin := vs.marginByTicket[o.Ticket]
-	if o.InitialMargin > 0 {
-		margin = o.InitialMargin
-	}
+	// D-008 S1：保证金列=venue 原生 InitialMargin 直显（CEX perp iw；全仓 iw=0→空=venue 语义）。
+	// MT5 无仓位级 margin 字段→诚实空态，D-124 账户分摊已撤（加工值冒充 venue 值属原则破口）。
+	margin := o.InitialMargin
 	// D-337 S2 + D-337R1 S2 + D-466 S3/R1：下次计费/结算时刻——MT5=server 零点（tzCache）；
 	// CEX=腿级 venue 原生真值回退：funding_next_settle fact（stale 闸=龄>周期×2 失效）
 	// → venue 原生 interval 边界 → nil 诚实空态+warn（业主令禁 8h 兜底——猜的值
@@ -134,8 +105,8 @@ func (m *BrokerPositionMonitor) protoFor(ctx context.Context, vk string, vs venu
 	return brokerPositionToProto(o, canonical, price, hasPrice, vs.online, m.freshTTL, now, margin, swapChargeAt, periodicPct)
 }
 
-// prepareVenueView reconcile 时一次性构建 venue 显示缓存（symMap/csMap/margin 分摊）。
-// 帧 patch 沿用缓存（canonical/保证金低频变化；保证金分摊在 patch 时按缓存重算）。
+// prepareVenueView reconcile 时一次性构建 venue 显示缓存（symMap/csMap）。
+// 帧 patch 沿用缓存（canonical 低频变化）。
 func (m *BrokerPositionMonitor) prepareVenueView(ctx context.Context, vk string, orders []venue.Order, online bool) venueState {
 	vs := venueState{online: online, orders: make(map[string]venue.Order, len(orders))}
 	venue := ""
@@ -151,51 +122,7 @@ func (m *BrokerPositionMonitor) prepareVenueView(ctx context.Context, vk string,
 		vs.canon, vs.cs = m.bm.BrokerSymbolMapWithCS(sctx, venue)
 		cancel()
 	}
-	var acctMargin float64
-	if m.acctMon != nil {
-		for _, ai := range m.acctMon.Snapshot() {
-			if ai.VenueKey == vk {
-				acctMargin = ai.Margin
-				break
-			}
-		}
-	}
-	vs.acctMargin = acctMargin
-	vs.marginByTicket = allocateMargins(orders, acctMargin, vs.cs)
 	return vs
-}
-
-// allocateMargins D-124 方案 C：按名义价值比例分摊账户总保证金到各笔持仓。
-// notional = volume × contractSize × openPrice。守恒优先：任一笔 contractSize 未知（csMap 无值或 0）
-// → 该 venue 全部笔 margin=0（防部分分摊破坏守恒 Σ margin_i = M）。
-// accountMargin<=0（CEX / 无账户数据）→ 全 0。单笔 → 100%。
-func allocateMargins(orders []venue.Order, accountMargin float64, csMap map[string]float64) map[string]float64 {
-	out := make(map[string]float64, len(orders))
-	if accountMargin <= 0 || len(orders) == 0 {
-		return out
-	}
-	// 守恒检查：所有笔 contractSize 必须已知
-	notionalByTicket := make(map[string]float64, len(orders))
-	var total float64
-	for _, o := range orders {
-		cs := csMap[o.Symbol]
-		if cs <= 0 {
-			return out // 任一未知 → 全 0（守恒优先）
-		}
-		n := o.Volume * cs * o.OpenPrice
-		if n <= 0 {
-			return out // 量/价异常 → 全 0
-		}
-		notionalByTicket[o.Ticket] = n
-		total += n
-	}
-	if total <= 0 {
-		return out
-	}
-	for ticket, n := range notionalByTicket {
-		out[ticket] = accountMargin * n / total
-	}
-	return out
 }
 
 // isCEXVenueKey 判断 venueKey 是否为 CEX（binance/okx/gate 的 spot/perp）。

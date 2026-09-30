@@ -57,7 +57,7 @@ func TestFlushOrdersRace(t *testing.T) {
 }
 
 // TestFlushSnapshotDeepCopy 深拷内容双证：快照后写侧原地改/新增票号、快照侧改写，
-// 两侧互不串面（orders 私有副本；marginByTicket 整体替换语义引用直拷即可）。
+// 两侧互不串面（orders 私有副本；canon/cs 整体替换语义引用直拷即可）。
 func TestFlushSnapshotDeepCopy(t *testing.T) {
 	vk := "testvenue:mt5"
 	m, _, _ := newMonTest(t, &fakeVenueQuerier{key: vk})

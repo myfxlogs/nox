@@ -189,8 +189,10 @@ func TestD375_AnnotateCEXSwap_IncomeSource(t *testing.T) {
 		}
 	}
 	bps := []*v1.BrokerPosition{
-		{VenueKey: "binance:perp", Symbol: "SOLUSDT", Swap: 0, PositionId: posID}, // 兜底腿
-		{VenueKey: "gate:perp", Symbol: "SOLUSDT", Swap: 2.5, PositionId: posID},  // 实报腿
+		{VenueKey: "binance:perp", Symbol: "SOLUSDT", Swap: 0, PositionId: posID, OpenedAt: tsAgo(time.Hour)}, // 兜底腿
+		{VenueKey: "gate:perp", Symbol: "SOLUSDT", Swap: 2.5, PositionId: posID, OpenedAt: tsAgo(time.Hour)},  // 实报腿
+		// D-008 S2：外单（PositionId=0）同享 venue income 源——同 symbol 显账户级合计（venue 最细粒度）。
+		{VenueKey: "binance:perp", Symbol: "SOLUSDT", Swap: 0, PositionId: 0, OpenedAt: tsAgo(time.Hour)},
 	}
 	annotateCEXSwap(ctx, st, bps)
 	if math.Abs(bps[0].Swap-1.1458) > 1e-9 {
@@ -198,5 +200,8 @@ func TestD375_AnnotateCEXSwap_IncomeSource(t *testing.T) {
 	}
 	if bps[1].Swap != 2.5 {
 		t.Fatalf("锚5: gate 腿实报 swap 被覆写: %v, want 2.5", bps[1].Swap)
+	}
+	if math.Abs(bps[2].Swap-1.1458) > 1e-9 {
+		t.Fatalf("锚5b: 外单腿 swap = %v, want 1.1458（D-008 S2 venue income 源同享）", bps[2].Swap)
 	}
 }

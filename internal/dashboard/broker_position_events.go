@@ -19,7 +19,7 @@ import (
 
 // snapshotVenuesLocked venues 快照（mu 持锁前提）。D-583：orders 发布后可变
 // （OnMT5Frame 锁内原地写 vs.orders[ticket]），锁内逐条复制成私有副本随快照带走；
-// marginByTicket/canon/cs/acctMargin 发布后整体替换即不可变，引用直拷（只拷
+// canon/cs 发布后整体替换即不可变，引用直拷（只拷
 // proven-mutable，防过度防御）。
 func (m *BrokerPositionMonitor) snapshotVenuesLocked() map[string]venueState {
 	venues := make(map[string]venueState, len(m.venues))
