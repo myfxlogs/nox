@@ -348,7 +348,7 @@ func TestBinanceUserWSE2E(t *testing.T) {
 		t.Fatal("no dial")
 	}
 	// 推订单事件 → 缓存 + 审计。
-	wsSrv.pushC <- json.RawMessage(`{"e":"ORDER_TRADE_UPDATE","o":{"i":888,"c":"arb-1","X":"FILLED","z":"0.5","ap":"65000","n":"0.01"}}`)
+	wsSrv.pushC <- json.RawMessage(`{"e":"ORDER_TRADE_UPDATE","o":{"i":888,"c":"arb-1","X":"FILLED","z":"0.5","ap":"65000","n":"0.01","N":"USDT"}}`)
 	wsSrv.pushC <- json.RawMessage(`{"e":"ACCOUNT_UPDATE","a":{"B":[{"a":"USDT","wb":"999"}],"P":[{"s":"BTCUSDT","pa":"0.5","ep":"64000","iw":"300","ps":"LONG"}]}}`)
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) && len(evts.snapshot()) < 2 {

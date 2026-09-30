@@ -118,7 +118,7 @@ func TestBinanceSpotWsapiE2E(t *testing.T) {
 		t.Fatal("no stream dial")
 	}
 	// 3) spot 事件：executionReport→订单缓存+审计；outboundAccountPosition→USDT f+l 快照。
-	stream.pushC <- json.RawMessage(`{"e":"executionReport","i":777,"c":"arb-9","X":"FILLED","z":"1.5","L":"2500","n":"0.02"}`)
+	stream.pushC <- json.RawMessage(`{"e":"executionReport","i":777,"c":"arb-9","X":"FILLED","z":"1.5","L":"2500","n":"0.02","N":"USDT"}`)
 	stream.pushC <- json.RawMessage(`{"e":"outboundAccountPosition","B":[{"a":"USDT","f":"800","l":"50"},{"a":"BTC","f":"1","l":"0"}]}`)
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) && len(evts.snapshot()) < 2 {

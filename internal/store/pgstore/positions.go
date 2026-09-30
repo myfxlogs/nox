@@ -195,10 +195,12 @@ func (s *Store) UpdateExpectedEntrySpreadBps(ctx context.Context, id int64, bps 
 // ClosePosition 平仓回填（D-159 W1a R3-1 原子领取）。
 // WHERE status NOT IN ('CLOSED','FAILED') 守卫：终态不可回退，并发对账+手动平仓重复调用
 // 只第一次生效（RowsAffected=0 返回 ErrTerminalState），防重复 CLOSED + 重复 realized_pnl 覆盖。
-func (s *Store) ClosePosition(ctx context.Context, id int64, realizedPnl float64) error {
+// D-599 S2：realized_pnl 语义=净额（价差−fees_usd）；fees_usd/feeQuality 同原子写入
+// （feesUSD=nil+quality="none"=无费信息，NULL 不填 0）。
+func (s *Store) ClosePosition(ctx context.Context, id int64, realizedPnl float64, feesUSD *float64, feeQuality string) error {
 	// D-070 修复：positions 表无 updated_at 列（D-060 同类 bug），去掉 updated_at = now()
-	q := `UPDATE positions SET status = 'CLOSED', realized_pnl = $1, closed_at = now() WHERE id = $2 AND status NOT IN ('CLOSED','FAILED')`
-	ct, err := s.pool.Exec(ctx, q, realizedPnl, id)
+	q := `UPDATE positions SET status = 'CLOSED', realized_pnl = $1, fees_usd = $2, fee_quality = NULLIF($3,''), closed_at = now() WHERE id = $4 AND status NOT IN ('CLOSED','FAILED')`
+	ct, err := s.pool.Exec(ctx, q, realizedPnl, feesUSD, feeQuality, id)
 	if err != nil {
 		return err
 	}

@@ -10,11 +10,16 @@ import (
 // 投影轨——incomeRows>0 时整体替换不计入；incomeRows=0 时回落旧语义（按行 quality 计入）。
 // hasFundingLeg=仓位有 FILLED OPEN 的 :perp 腿；fundingDue=持仓≥0.5d（跨≥1 funding 窗，
 // 证据缺失才可判 unknown；短持无证据=合理零）。quality 语义同 SumCashflowsNetWithQuality。
+// D-599 S2：position.fees_usd 非 NULL（净额口径已含费）→ commission 现金流行不计入，
+// 防「realized_pnl 净额 − 同费现金流」双扣；legacy 仓（fees_usd NULL）仍计入（费只活在
+// cashflows 里，排除=漏计）。SumCashflowsNet/WithQuality 同规则。
 func (s *Store) SumCashflowsNetForSettle(ctx context.Context, posID int64, hasFundingLeg, fundingDue bool) (sum float64, quality string, err error) {
 	rows, err := s.pool.Query(ctx,
 		`SELECT kind, COALESCE(amount_usd, 0), COALESCE(quality, 'actual')
 		 FROM position_cashflows
-		 WHERE position_id = $1 AND kind IN ('swap','funding','commission')`,
+		 WHERE position_id = $1 AND kind IN ('swap','funding','commission')
+		   AND (kind <> 'commission'
+		        OR (SELECT fees_usd FROM positions WHERE id = position_cashflows.position_id) IS NULL)`,
 		posID)
 	if err != nil {
 		return 0, "", fmt.Errorf("sum cashflows net for settle: %w", err)

@@ -38,14 +38,14 @@ func TestD469b_OnPositionChange(t *testing.T) {
 	if n != 2 {
 		t.Fatalf("after update n=%d want 2", n)
 	}
-	if err := s.ClosePosition(ctx, id, 1.5); err != nil {
+	if err := s.ClosePosition(ctx, id, 1.5, nil, ""); err != nil {
 		t.Fatalf("close: %v", err)
 	}
 	if n != 3 {
 		t.Fatalf("after close n=%d want 3", n)
 	}
 	// 失败路径不触发：重复 ClosePosition → ErrTerminalState，计数不涨。
-	if err := s.ClosePosition(ctx, id, 2.0); err != ErrTerminalState {
+	if err := s.ClosePosition(ctx, id, 2.0, nil, ""); err != ErrTerminalState {
 		t.Fatalf("reclose err=%v want ErrTerminalState", err)
 	}
 	if n != 3 {

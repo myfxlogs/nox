@@ -118,7 +118,9 @@ func (s *Store) SumCashflowsNet(ctx context.Context, posID int64) (float64, erro
 	err := s.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(amount_usd), 0) FROM position_cashflows
 		 WHERE position_id = $1 AND kind IN ('swap','funding','commission')
-		   AND (quality = 'actual' OR quality IS NULL)`,
+		   AND (quality = 'actual' OR quality IS NULL)
+		   AND (kind <> 'commission'
+		        OR (SELECT fees_usd FROM positions WHERE id = position_cashflows.position_id) IS NULL)`,
 		posID).Scan(&sum)
 	if err != nil {
 		return 0, fmt.Errorf("sum cashflows net: %w", err)
@@ -172,7 +174,9 @@ func (s *Store) SumCashflowsNetWithQuality(ctx context.Context, posID int64) (su
 	rows, err := s.pool.Query(ctx,
 		`SELECT COALESCE(amount_usd, 0), COALESCE(quality, 'actual')
 		 FROM position_cashflows
-		 WHERE position_id = $1 AND kind IN ('swap','funding','commission')`,
+		 WHERE position_id = $1 AND kind IN ('swap','funding','commission')
+		   AND (kind <> 'commission'
+		        OR (SELECT fees_usd FROM positions WHERE id = position_cashflows.position_id) IS NULL)`,
 		posID)
 	if err != nil {
 		return 0, "", fmt.Errorf("sum cashflows net with quality: %w", err)
