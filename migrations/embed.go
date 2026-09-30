@@ -296,4 +296,7 @@ var (
 	QuoteUnitScalesSQL string // D-594：broker_symbol_map price_scale/qty_scale + 铜行定标 + XCU 别名
 	//go:embed 0162_position_fees_netpnl.sql
 	PositionFeesNetPnlSQL string // D-599：positions fees_usd/fee_quality 新列（realized_pnl 改净额）
+
+	//go:embed 0163_strategy_stats_notify.sql
+	StrategyStatsNotifySQL string // D-004 P1#3：strategy_stats.disabled 变更 → NOTIFY（替代 60s 轮询）
 )
