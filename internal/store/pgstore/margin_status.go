@@ -113,25 +113,6 @@ func (s *Store) ListOpenLegsForMargin(ctx context.Context) ([]MarginOpenLeg, err
 	return out, rows.Err()
 }
 
-// LatestVenueAccountSnapshot 单 (venue,venue_type) 最新快照行（开户门槛闸取数口）。
-// 无行 → ok=false。
-func (s *Store) LatestVenueAccountSnapshot(ctx context.Context, venue, venueType string) (*VenueAccountLatest, bool, error) {
-	var r VenueAccountLatest
-	err := s.pool.QueryRow(ctx, `
-		SELECT venue, venue_type, balance_raw, equity_raw, free_margin_raw, buffer_multiple, currency, fetched_at
-		FROM fin_venue_account_snapshot WHERE venue=$1 AND venue_type=$2
-		ORDER BY fetched_at DESC LIMIT 1`, venue, venueType).
-		Scan(&r.Venue, &r.VenueType, &r.BalanceRaw, &r.EquityRaw,
-			&r.FreeMarginRaw, &r.BufferMultiple, &r.Currency, &r.FetchedAt)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, false, nil
-		}
-		return nil, false, fmt.Errorf("latest venue snapshot %s/%s: %w", venue, venueType, err)
-	}
-	return &r, true, nil
-}
-
 // TickVolatility24h 腿 symbol 24h 价格半幅波动（D-405 波动源，标的价非价差）：
 // vol = (max(bid)−min(bid))/2/mid，mid=(max+min)/2。
 // ok=false = 无 ticks 或覆盖 <2h（min..max span < 2h）→ 调用方落 data_stale。

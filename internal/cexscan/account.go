@@ -28,20 +28,8 @@ type AccountSnapshot struct {
 	Ts             time.Time
 }
 
-// IsRealAccount D-360 S1：real 判定纯函数（证真才留）。
-// cex → !Simulated（原生键，v2 核证推翻「构造假设」）；cfd → venue∈broker_accounts.is_real
-// 键集（核证点②：snapshot.venue ≡ user_id::text，生产 DB 两列互证留证 9-20）；
-// 未知 AssetType → 丢。realKeys nil 时 cfd 一律丢（fail-closed）。
-func IsRealAccount(assetType string, simulated bool, venue string, realKeys map[string]bool) bool {
-	switch assetType {
-	case "cex":
-		return !simulated
-	case "cfd":
-		return realKeys[venue]
-	default:
-		return false
-	}
-}
+// IsRealAccount 已随 3d-P1#1c 下沉 internal/venue（venue.IsRealAccount；写侧归一
+// venue.NormalizeVenueType 同包）——cexscan 写侧与 dashboard 实时态读侧共用单源。
 
 // ScanAccounts 调 s.Snapshot()，转 *v1.AccountInfo → AccountSnapshot。
 func ScanAccounts(s AccountSnapshotter) []AccountSnapshot {
