@@ -17,6 +17,7 @@ import (
 	"arb/internal/httpx"
 	"arb/internal/keydomain"
 	"arb/internal/signutil"
+	"arb/internal/venue"
 )
 
 // CEXAccountQuerier 查 CEX 账户资金（D-053）。只读余额，不执行。
@@ -100,9 +101,9 @@ func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error
 		Code string `json:"code"`
 		Msg  string `json:"msg"`
 		Data []struct {
-			TotalEq  string             `json:"totalEq"`  // 交易所权威 USD 总权益
-			MgnRatio string             `json:"mgnRatio"` // D-405 S2：保证金率（百分数口径，越高越安全）
-			Details  []OKXBalanceDetail `json:"details"`  // D-434 R1：共享 schema（WS 同型）
+			TotalEq  string                   `json:"totalEq"`  // 交易所权威 USD 总权益
+			MgnRatio string                   `json:"mgnRatio"` // D-405 S2：保证金率（百分数口径，越高越安全）
+			Details  []venue.OKXBalanceDetail `json:"details"`  // D-434 R1：共享 schema（WS 同型）
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
@@ -159,7 +160,7 @@ func (q *CEXAccountQuerier) accountOKX(ctx context.Context) (*AccountInfo, error
 	// ①Σdetails[USDT].mmr>0 → eq/Σmmr（与 binance 自算 marginBalance/maintMargin 同口径，
 	// 首选）②details[USDT].mgnRatio>0 → /100（venue 权威回落）③顶层 mgnRatio>0 → /100
 	// （原行为）④全空 → 0=未采 → guard 判 data_stale（诚实）。
-	buffer := OKXBufferMultiple(eq, resp.Data[0].Details, resp.Data[0].MgnRatio)
+	buffer := venue.OKXBufferMultiple(eq, resp.Data[0].Details, resp.Data[0].MgnRatio)
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
 		Balance: eq, Equity: eq, FreeMargin: avail, Currency: "USDT",

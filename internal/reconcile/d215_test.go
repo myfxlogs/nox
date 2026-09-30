@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"arb/internal/store/pgstore"
+	"arb/internal/venue"
 )
 
 // TestD215_CLOSINGLegInVenue_NoOrphanAlert：CLOSING 持仓（未超 30min 不触发 stuck）+ OPEN-phase
@@ -24,7 +25,7 @@ func TestD215_CLOSINGLegInVenue_NoOrphanAlert(t *testing.T) {
 	}
 	vq := &fakeVenueQuerier{
 		venueKey: "acctA:mt5",
-		orders:   []VenueOrder{{Ticket: "123", VenueKey: "acctA:mt5", Symbol: "EURUSD", Side: "BUY", Volume: 1.0, Comment: "arb"}},
+		orders:   []venue.Order{{Ticket: "123", VenueKey: "acctA:mt5", Symbol: "EURUSD", Side: "BUY", Volume: 1.0, Comment: "arb"}},
 	}
 	r := New(fs, vq)
 	r.runTimeout = 5 * time.Second
@@ -52,7 +53,7 @@ func TestD215_LEGGEDLegInVenue_NoOrphanAlert(t *testing.T) {
 	}
 	vq := &fakeVenueQuerier{
 		venueKey: "acctA:mt5",
-		orders:   []VenueOrder{{Ticket: "456", VenueKey: "acctA:mt5", Symbol: "EURUSD", Side: "BUY", Volume: 1.0, Comment: "arb"}},
+		orders:   []venue.Order{{Ticket: "456", VenueKey: "acctA:mt5", Symbol: "EURUSD", Side: "BUY", Volume: 1.0, Comment: "arb"}},
 	}
 	r := New(fs, vq)
 	r.runTimeout = 5 * time.Second
@@ -78,7 +79,7 @@ func TestD215_TrueOrphan_StillAlerts(t *testing.T) {
 	fs := newFakeStore()
 	vq := &fakeVenueQuerier{
 		venueKey: "acctA:mt5",
-		orders:   []VenueOrder{{Ticket: "999", VenueKey: "acctA:mt5", Symbol: "EURUSD", Side: "BUY", Volume: 1.0, Comment: "arb"}},
+		orders:   []venue.Order{{Ticket: "999", VenueKey: "acctA:mt5", Symbol: "EURUSD", Side: "BUY", Volume: 1.0, Comment: "arb"}},
 	}
 	r := New(fs, vq)
 	r.runTimeout = 5 * time.Second
@@ -108,7 +109,7 @@ func TestD215_SuppressionUsesCompositeKey(t *testing.T) {
 	// venue querier 返回 acctB 的同票订单（与 CLOSING 腿的 acctA 复合 key 不同）
 	vq := &fakeVenueQuerier{
 		venueKey: "acctB:mt5",
-		orders:   []VenueOrder{{Ticket: "123", VenueKey: "acctB:mt5", Symbol: "EURUSD", Side: "BUY", Volume: 1.0, Comment: "arb"}},
+		orders:   []venue.Order{{Ticket: "123", VenueKey: "acctB:mt5", Symbol: "EURUSD", Side: "BUY", Volume: 1.0, Comment: "arb"}},
 	}
 	r := New(fs, vq)
 	r.runTimeout = 5 * time.Second

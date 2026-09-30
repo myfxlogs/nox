@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"arb/internal/store/pgstore"
+	"arb/internal/venue"
 )
 
 // TestReconcileCompositeKey A6：两账户相同 ticket，复合 key 不串仓。
@@ -34,7 +35,7 @@ func TestReconcileCompositeKey(t *testing.T) {
 	// venue querier 只返回 acctA 的订单（ticket=123, VenueKey=acctA:mt5）
 	vq := &fakeVenueQuerier{
 		venueKey: "acctA:mt5",
-		orders:   []VenueOrder{{Ticket: "123", VenueKey: "acctA:mt5", Symbol: "EURUSD", Side: "BUY", Volume: 1.0}},
+		orders:   []venue.Order{{Ticket: "123", VenueKey: "acctA:mt5", Symbol: "EURUSD", Side: "BUY", Volume: 1.0}},
 	}
 	// acctB 无 venue querier，但有 history querier（返回 nil=未命中）
 	hq := &fakeHistoryQuerier{venueKey: "acctB:mt5", results: map[string]*HistoryOrder{}}

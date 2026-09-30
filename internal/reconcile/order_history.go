@@ -26,7 +26,7 @@ type HistoryOrder struct {
 }
 
 // OrderHistoryQuerier 按 ticket 查证 venue 历史单（对账自动收尾用，D-073+）。
-// VenueKey 与 VenueQuerier 同源（"{venue}:{type}"），对账器按 venueKey 匹配查证器。
+// VenueKey 与 venue.Querier 同源（"{venue}:{type}"），对账器按 venueKey 匹配查证器。
 type OrderHistoryQuerier interface {
 	// QueryOrderHistory 查近 fromDays 天历史单，按 ticket 过滤返回；ticket 未找到 = 不在结果中。
 	QueryOrderHistory(ctx context.Context, ticket string, fromDays int) (*HistoryOrder, error)

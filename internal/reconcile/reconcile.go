@@ -3,6 +3,7 @@
 package reconcile
 
 import (
+	"arb/internal/venue"
 	"context"
 	"fmt"
 	"log"
@@ -30,7 +31,7 @@ type Reconciler struct {
 	fastRetryTimes  map[string][]time.Time
 	// D-245：可注入时钟（测试假时钟；nil=time.Now）。
 	nowFn           func() time.Time
-	queriers        []VenueQuerier
+	queriers        []venue.Querier
 	historyQueriers []OrderHistoryQuerier
 	// D-421 §1.5：CEX 订单级查单器（消解器+收编前置守卫；venueKey→querier）。
 	orderStatusQs map[string]OrderStatusQuerier
@@ -43,7 +44,7 @@ type Reconciler struct {
 }
 
 // New 创建对账器。
-func New(store Store, queriers ...VenueQuerier) *Reconciler {
+func New(store Store, queriers ...venue.Querier) *Reconciler {
 	return &Reconciler{
 		store:            store,
 		queriers:         queriers,
@@ -87,7 +88,7 @@ func (r *Reconciler) SetCloser(c Closer) { r.closer = c }
 // SetSettler 注入结算器（D-087 §3.2，替换 SetStatUpdater + SetVerificationUpdater）。
 func (r *Reconciler) SetSettler(s Settler) { r.settler = s }
 
-// SetOrderHistoryQueriers 设置历史单查证器集合（与 VenueQuerier 同 venueKey 身份）。
+// SetOrderHistoryQueriers 设置历史单查证器集合（与 venue.Querier 同 venueKey 身份）。
 func (r *Reconciler) SetOrderHistoryQueriers(qs ...OrderHistoryQuerier) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -95,14 +96,14 @@ func (r *Reconciler) SetOrderHistoryQueriers(qs ...OrderHistoryQuerier) {
 }
 
 // SetQueriers 整体替换 querier 集合（Broker 管理器启停适配器时调用）。
-func (r *Reconciler) SetQueriers(qs ...VenueQuerier) {
+func (r *Reconciler) SetQueriers(qs ...venue.Querier) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.queriers = append([]VenueQuerier(nil), qs...)
+	r.queriers = append([]venue.Querier(nil), qs...)
 }
 
 // snapshot 返回 querier 集合的快照（Run 期间避免对集合的并发读写）。
-func (r *Reconciler) snapshot() []VenueQuerier {
+func (r *Reconciler) snapshot() []venue.Querier {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.queriers
@@ -132,7 +133,7 @@ func (r *Reconciler) HasHistoryQuerier(venueKey string) bool {
 
 // OpenedByVenueKey 按 venueKey 查该 venue 在仓订单（修复⑫：exec G1 回读门面）。
 // 未注册该 venue（含 CEX）→ error（调用方 fail-open 跳过）。锁语义对齐 snapshot()。
-func (r *Reconciler) OpenedByVenueKey(ctx context.Context, venueKey string) ([]VenueOrder, error) {
+func (r *Reconciler) OpenedByVenueKey(ctx context.Context, venueKey string) ([]venue.Order, error) {
 	for _, q := range r.snapshot() {
 		if q.VenueKey() == venueKey {
 			return q.QueryOpenedOrders(ctx)

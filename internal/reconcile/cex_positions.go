@@ -1,5 +1,5 @@
-// cex_positions.go — CEX perp 持仓查询器（D-121）：实现 VenueQuerier 查 OKX/Gate/Binance
-// perp 全部持仓 → []VenueOrder → BrokerPositionMonitor 轮询 → enrichPositions → 前端显示。
+// cex_positions.go — CEX perp 持仓查询器（D-121）：实现 venue.Querier 查 OKX/Gate/Binance
+// perp 全部持仓 → []venue.Order → BrokerPositionMonitor 轮询 → enrichPositions → 前端显示。
 // CEX perp 持仓是聚合仓位（无单一 ticket）→ Ticket=Symbol；positionId 索引按 venueKey+symbol 匹配。
 package reconcile
 
@@ -12,13 +12,14 @@ import (
 	"time"
 
 	"arb/internal/signutil"
+	"arb/internal/venue"
 )
 
 // === OKX ===
 // GET /api/v5/account/positions?instType=SWAP — 全部 SWAP 持仓。long_short_mode：long/short 分列；
 // pos=合约数（张）；upl=浮盈；fee=累计手续费。D-146 S5 微件③：保证金优先 imr→margin 回落、mmr→MaintMargin；
 // sim 环境 imr 实证为恒定假值（$1 名义也占 ~$333），demo 置 0（宁缺毋假）。
-func (q *CEXPositionQuerier) okxPositions(ctx context.Context) ([]VenueOrder, error) {
+func (q *CEXPositionQuerier) okxPositions(ctx context.Context) ([]venue.Order, error) {
 	const path = "/api/v5/account/positions?instType=SWAP"
 	ts := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 	prehash := ts + "GET" + path
@@ -56,7 +57,7 @@ func (q *CEXPositionQuerier) okxPositions(ctx context.Context) ([]VenueOrder, er
 	if resp.Code != "0" {
 		return nil, fmt.Errorf("okx positions: code=%s msg=%s", resp.Code, resp.Msg)
 	}
-	var out []VenueOrder
+	var out []venue.Order
 	for _, p := range resp.Data {
 		pos, perr := f64z(p.Pos)
 		if perr != nil {
@@ -102,7 +103,7 @@ func (q *CEXPositionQuerier) okxPositions(ctx context.Context) ([]VenueOrder, er
 		if perr != nil {
 			return nil, fmt.Errorf("parse %s=%q: %w", "p.Mmr", p.Mmr, perr)
 		}
-		out = append(out, VenueOrder{
+		out = append(out, venue.Order{
 			Ticket:        p.InstID, // CEX 聚合仓位无单一 ticket → 用 symbol
 			Symbol:        p.InstID,
 			Side:          side,
@@ -125,7 +126,7 @@ func (q *CEXPositionQuerier) okxPositions(ctx context.Context) ([]VenueOrder, er
 // GET /futures/usdt/positions — 全部 USDT 本位合约持仓（数组）。size>0 多/<0 空。
 // D-311 R8 字段名实证修正：unrealised_pnl=浮盈（英式拼写）、pnl_fund=仓累计资金费、
 // initial_margin 优先 margin 回落（cross 模式 margin 恒 0，镜像 okx imr→margin）、maintenance_margin→MaintMargin。
-func (q *CEXPositionQuerier) gatePositions(ctx context.Context) ([]VenueOrder, error) {
+func (q *CEXPositionQuerier) gatePositions(ctx context.Context) ([]venue.Order, error) {
 	const endpoint = "/futures/usdt/positions"
 	urlPath := "/api/v4" + endpoint
 	ts := time.Now().Unix()
@@ -152,7 +153,7 @@ func (q *CEXPositionQuerier) gatePositions(ctx context.Context) ([]VenueOrder, e
 	if err := json.Unmarshal(body, &positions); err != nil {
 		return nil, fmt.Errorf("gate positions json: %w", err)
 	}
-	var out []VenueOrder
+	var out []venue.Order
 	// D-121：Gate 持仓 size=合约数，需乘 quanto_multiplier 转基础币（与 OKX/Binance Volume 单位对齐）。
 	quantoCache := make(map[string]float64)
 	for _, p := range positions {
@@ -197,7 +198,7 @@ func (q *CEXPositionQuerier) gatePositions(ctx context.Context) ([]VenueOrder, e
 		if perr != nil {
 			return nil, fmt.Errorf("parse %s=%q: %w", "p.MaintMargin", p.MaintMargin, perr)
 		}
-		out = append(out, VenueOrder{
+		out = append(out, venue.Order{
 			Ticket:        p.Contract, // CEX 聚合仓位 → 用 symbol
 			Symbol:        p.Contract,
 			Side:          side,

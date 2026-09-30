@@ -15,6 +15,7 @@ import (
 	"arb/internal/exec"
 	"arb/internal/store/pgstore"
 	"arb/internal/testutil"
+	"arb/internal/venue"
 )
 
 // pipelineCloser 用真实 Pipeline 实现 Closer 接口（auto_close 端到端测试用）。
@@ -184,6 +185,6 @@ type fakeEmptyVenueQuerier struct {
 }
 
 func (q *fakeEmptyVenueQuerier) VenueKey() string { return q.venueKey }
-func (q *fakeEmptyVenueQuerier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error) {
+func (q *fakeEmptyVenueQuerier) QueryOpenedOrders(ctx context.Context) ([]venue.Order, error) {
 	return nil, nil
 }

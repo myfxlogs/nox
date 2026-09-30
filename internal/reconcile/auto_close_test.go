@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"arb/internal/store/pgstore"
+	"arb/internal/venue"
 )
 
 // —— fakeStore：实现 reconcile.Store 接口 ——
@@ -215,7 +216,6 @@ func (s *fakeSettler) Settle(ctx context.Context, posID int64) error {
 
 // —— 辅助构造 ——
 
-func ptrFloat(v float64) *float64    { return &v }
 func ptrTime(t time.Time) *time.Time { return &t }
 
 func mkPosition(id int64, status, posType string, openedAt time.Time) *pgstore.Position {
@@ -540,7 +540,7 @@ func TestRun_VenueQuerierTimeout_NoBlock(t *testing.T) {
 type blockingQuerier struct{ venueKey string }
 
 func (q *blockingQuerier) VenueKey() string { return q.venueKey }
-func (q *blockingQuerier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error) {
+func (q *blockingQuerier) QueryOpenedOrders(ctx context.Context) ([]venue.Order, error) {
 	<-ctx.Done() // 等 ctx 超时
 	return nil, ctx.Err()
 }

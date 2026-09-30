@@ -1,6 +1,7 @@
 package reconcile
 
 import (
+	"arb/internal/venue"
 	"context"
 	"testing"
 )
@@ -8,20 +9,20 @@ import (
 // fakeVenueQuerier 用于门面单测（修复⑫ S1.3）。
 type fakeVenueQuerier struct {
 	venueKey string
-	orders   []VenueOrder
+	orders   []venue.Order
 	err      error
 }
 
 func (q *fakeVenueQuerier) VenueKey() string { return q.venueKey }
-func (q *fakeVenueQuerier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error) {
+func (q *fakeVenueQuerier) QueryOpenedOrders(ctx context.Context) ([]venue.Order, error) {
 	return q.orders, q.err
 }
 
 // TestOpenedByVenueKey_Hit 注册两 venue → 按 venueKey 命中各自（修复⑫ S1.3）。
 func TestOpenedByVenueKey_Hit(t *testing.T) {
 	r := New(nil,
-		&fakeVenueQuerier{venueKey: "ic:mt5", orders: []VenueOrder{{Ticket: "T1", Symbol: "EURUSD", Side: "BUY", Volume: 0.1}}},
-		&fakeVenueQuerier{venueKey: "ex:mt5", orders: []VenueOrder{{Ticket: "T2", Symbol: "GBPUSD", Side: "SELL", Volume: 0.2}}},
+		&fakeVenueQuerier{venueKey: "ic:mt5", orders: []venue.Order{{Ticket: "T1", Symbol: "EURUSD", Side: "BUY", Volume: 0.1}}},
+		&fakeVenueQuerier{venueKey: "ex:mt5", orders: []venue.Order{{Ticket: "T2", Symbol: "GBPUSD", Side: "SELL", Volume: 0.2}}},
 	)
 	ctx := context.Background()
 

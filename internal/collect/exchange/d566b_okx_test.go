@@ -92,6 +92,7 @@ func TestD566B_A7_InstrumentsInvalidate(t *testing.T) {
 		t.Fatalf("prime: %v", err)
 	}
 	ws := &OKXWebSocket{}
+	ws.OnInstrumentChange = exec.OKXSpecInvalidate
 	ws.handleInstruments(wsMsg{Data: []map[string]any{{"instId": instID}}})
 	if _, _, _, err := exec.OkxSwapSpec(ctx, srv.Client(), srv.URL, instID); err != nil {
 		t.Fatalf("refetch: %v", err)

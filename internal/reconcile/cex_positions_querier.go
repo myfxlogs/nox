@@ -9,9 +9,10 @@ import (
 
 	"arb/internal/httpx"
 	"arb/internal/keydomain"
+	"arb/internal/venue"
 )
 
-// CEXPositionQuerier 查询 CEX perp 持仓（实现 VenueQuerier）；字段同 CEXAccountQuerier（复用签名逻辑），但查持仓而非余额。
+// CEXPositionQuerier 查询 CEX perp 持仓（实现 venue.Querier）；字段同 CEXAccountQuerier（复用签名逻辑），但查持仓而非余额。
 type CEXPositionQuerier struct {
 	venue       string // okx / gate / binance
 	venueType   string // perp（spot 无持仓查询）
@@ -50,9 +51,9 @@ func (q *CEXPositionQuerier) VenueKey() string {
 // SetKeyOverride D-362 S2b：设置撞键归一后的注册键（由 reconcile.CexVenueKey 计算）。
 func (q *CEXPositionQuerier) SetKeyOverride(k string) { q.keyOverride = k }
 
-// QueryOpenedOrders 查询全部 perp 持仓 → []VenueOrder。
+// QueryOpenedOrders 查询全部 perp 持仓 → []venue.Order。
 // spot venue 返回空（无持仓概念）；perp 按 venue 分派。
-func (q *CEXPositionQuerier) QueryOpenedOrders(ctx context.Context) ([]VenueOrder, error) {
+func (q *CEXPositionQuerier) QueryOpenedOrders(ctx context.Context) ([]venue.Order, error) {
 	if q.venueType != "perp" {
 		return nil, nil // spot 无持仓查询
 	}

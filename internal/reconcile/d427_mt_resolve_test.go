@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"arb/internal/store/pgstore"
+	"arb/internal/venue"
 )
 
 // T-I1a 持仓在场：venue 持仓含 ticket → 按持仓权威字段回填（price=OpenPrice, qty=Volume, fee=|Commission|）。
@@ -22,7 +23,7 @@ func TestD427MTResolve_OpenedOrderHit(t *testing.T) {
 	fs.legs[9] = []*pgstore.PositionLeg{leg}
 
 	r := New(fs,
-		&fakeVenueQuerier{venueKey: "3001157:mt5", orders: []VenueOrder{
+		&fakeVenueQuerier{venueKey: "3001157:mt5", orders: []venue.Order{
 			{Ticket: "t88", Symbol: "XAUUSDm", Side: "BUY", Volume: 0.02, OpenPrice: 4316.5, Commission: -2.5},
 		}},
 	)

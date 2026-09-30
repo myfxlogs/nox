@@ -8,6 +8,7 @@ import (
 
 	"arb/internal/exec"
 	"arb/internal/store/pgstore"
+	"arb/internal/venue"
 )
 
 // Run 执行一次对账。返回不一致数量。
@@ -98,9 +99,9 @@ func (r *Reconciler) Run(ctx context.Context) (int, error) {
 
 	// 2. 查 venue 实际持仓（每个 querier 独立超时，单个失败不阻断其余）
 	// D-159 W2a R3-7：venueOrders 也用 venue_key+":"+ticket 复合 key（与 localLegs 对齐）。
-	venueOrders := make(map[string]VenueOrder) // venue_key+":"+ticket → order
-	cexVenue := make(map[string]float64)       // D-385 S1：venueKey:symbol:side → venue 聚合量
-	cexReadOK := make(map[string]bool)         // D-401：本轮成功读取的 CEX venueKey（失败读≠零读）
+	venueOrders := make(map[string]venue.Order) // venue_key+":"+ticket → order
+	cexVenue := make(map[string]float64)        // D-385 S1：venueKey:symbol:side → venue 聚合量
+	cexReadOK := make(map[string]bool)          // D-401：本轮成功读取的 CEX venueKey（失败读≠零读）
 	// D-417：venueKey → 该 venue 全部 opened orders（含 CEX；键存在=查询成功=fail-closed 判据）。
 	ordersByVenue := make(map[string][]exec.OpenedOrder)
 	for _, q := range r.snapshot() {

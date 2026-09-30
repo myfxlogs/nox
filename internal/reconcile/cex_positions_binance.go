@@ -2,6 +2,7 @@
 package reconcile
 
 import (
+	"arb/internal/venue"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -17,7 +18,7 @@ import (
 // GET /fapi/v2/positionRisk — 全部 USDT-M 合约持仓（含 0 仓位）。positionAmt>0 多/<0 空；unRealizedProfit=浮盈。
 // D-146 S5：positionRisk 无 initialMargin/maintMargin（账户级字段）——逐仓→isolatedWallet、
 // 全仓→|notional|/leverage（D-343：空头 notional 负值取绝对值）；MaintMargin=0 走 D-124 账户分摊。
-func (q *CEXPositionQuerier) binancePositions(ctx context.Context) ([]VenueOrder, error) {
+func (q *CEXPositionQuerier) binancePositions(ctx context.Context) ([]venue.Order, error) {
 	params := "timestamp=" + strconv.FormatInt(time.Now().UnixMilli(), 10) + "&recvWindow=5000"
 	sig := binanceSign(q.apiSecret, params)
 	url := q.baseURL + "/v2/positionRisk?" + params + "&signature=" + sig
@@ -52,7 +53,7 @@ func (q *CEXPositionQuerier) binancePositions(ctx context.Context) ([]VenueOrder
 	if err := json.Unmarshal(data, &positions); err != nil {
 		return nil, fmt.Errorf("binance positions json: %w", err)
 	}
-	var out []VenueOrder
+	var out []venue.Order
 	for _, p := range positions {
 		amt, perr := f64z(p.PositionAmt)
 		if perr != nil {
@@ -95,7 +96,7 @@ func (q *CEXPositionQuerier) binancePositions(ctx context.Context) ([]VenueOrder
 				initMargin = math.Abs(notional) / lev // D-343：空头腿 notional 负值→Abs（符号坑，负 margin 被下游 >0 守卫拒）
 			}
 		}
-		out = append(out, VenueOrder{
+		out = append(out, venue.Order{
 			Ticket: p.Symbol, Symbol: p.Symbol, Side: side, Volume: vol,
 			OpenPrice: entryPx, Venue: q.venue, VenueKey: q.VenueKey(), Profit: upl,
 			InitialMargin: initMargin, // MaintMargin=0：positionRisk 无此字段，走 D-124 账户分摊

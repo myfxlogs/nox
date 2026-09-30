@@ -111,7 +111,7 @@ type OpenedOrder struct {
 }
 
 // PositionVerifier 按 ticket 回读 venue 在仓订单（D-077 修复⑩ G1）。
-// 实现者：reconcile.VenueQuerier 适配器（main 注入）。nil = 未接线（测试，跳过回读）。
+// 实现者：reconcile.venue.Querier 适配器（main 注入）。nil = 未接线（测试，跳过回读）。
 type PositionVerifier interface {
 	// QueryOpenedOrders 返回该 venue 的在仓订单列表（按 ticket 匹配残留腿）。
 	QueryOpenedOrders(ctx context.Context, venueKey string) ([]OpenedOrder, error)
