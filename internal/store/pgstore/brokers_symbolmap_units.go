@@ -51,9 +51,12 @@ func (s *Store) unitQty(ctx context.Context, where string, args ...any) (float64
 	var cs float64
 	var qs *float64
 	var sensitive bool
+	// ORDER BY is_primary DESC：canonical 维度多行组（venue×canonical 多 broker_symbol）
+	// 钉确定性取 primary 行（D-594 R2）；broker_symbol 维度行唯一，排序无影响。
 	err := s.pool.QueryRow(ctx, `
 		SELECT m.contract_size, m.qty_scale, `+unitSensitiveSQL+`
-		FROM broker_symbol_map m WHERE m.contract_size IS NOT NULL AND `+where+` LIMIT 1
+		FROM broker_symbol_map m WHERE m.contract_size IS NOT NULL AND `+where+`
+		ORDER BY m.is_primary DESC LIMIT 1
 	`, args...).Scan(&cs, &qs, &sensitive)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

@@ -66,23 +66,3 @@ func (a *MT5Adapter) emitPlan(brokerSym string) (sym string, priceScale float64,
 	}
 	return canon, sc.PriceScale, true
 }
-
-// canonPriceScale 返回 canonical 槽发射行的 price_scale（SwapFacts 把 canonical 报价
-// 换回原生价配对原生 point/contract_size 用）。未标定/无行 → 1.0。
-// 遍历 symMap 快照找该 canonical 的非 blocked 标定行（符号表 ~百级，轮询低频可接受）。
-func (a *MT5Adapter) canonPriceScale(canon string) float64 {
-	m := a.symMap.Load()
-	if m == nil {
-		return 1.0
-	}
-	blocked := a.emitBlockedSet()
-	for bs, c := range *m {
-		if c != canon || blocked[bs] {
-			continue
-		}
-		if sc, ok := a.scaleOf(bs); ok && sc.PriceScale > 0 {
-			return sc.PriceScale
-		}
-	}
-	return 1.0
-}

@@ -94,21 +94,3 @@ func TestD594QuoteStreamScalesCanonical(t *testing.T) {
 		t.Errorf("unrated native frame bid=%v, want raw 700 under native key", got["COPPERu"][0])
 	}
 }
-
-// TestD594CanonPriceScale swap 链换算基：canonical 槽发射行的 price_scale 供
-// SwapFacts 把 canonical 价换回原生价（原生 swap 参数点位/合约规格配对原生价）。
-func TestD594CanonPriceScale(t *testing.T) {
-	a := newQuoteTestAdapter(&fakeMT5Client{}, &fakeConnMgr{})
-	a.SetSymbolMap(map[string]string{"COPPER": "XCUUSD", "COPPERv": "XCUUSD", "EURUSD": "EURUSD"})
-	a.SetSymbolScales(map[string]SymbolScale{
-		"COPPER":  {PriceScale: 1.0 / 2204.62, QtyScale: 2204.62},
-		"COPPERv": {PriceScale: 0.01, QtyScale: 250}, // blocked 变体不供 canonical 尺度
-	})
-	a.SetCanonicalEmitBlocked(map[string]bool{"COPPERv": true})
-	if ps := a.canonPriceScale("XCUUSD"); math.Abs(ps-1.0/2204.62) > 1e-12 {
-		t.Errorf("canonPriceScale=%v, want 1/2204.62", ps)
-	}
-	if ps := a.canonPriceScale("EURUSD"); ps != 1.0 {
-		t.Errorf("non-sensitive canonPriceScale=%v, want 1.0", ps)
-	}
-}
