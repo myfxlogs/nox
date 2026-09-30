@@ -64,8 +64,9 @@ func NewScanner(cfg *config.Config, store *pgstore.Store, am AccountSnapshotter,
 func (s *Scanner) Run(ctx context.Context) {
 	// D-578：三所 spot 深度定时采样（同生命周期 goroutine；env ARB_DEPTH_SAMPLER_OFF=1 停）。
 	go newDepthSampler(s.store, s.okxSpotBase).Run(ctx)
-	// 启动即扫一次：账户快照全量水合 + ②③④
-	if err := s.snapshotAccounts(ctx, true); err != nil {
+	// 启动即水合一次账户快照（#1c：boot 历史水合唯一写口；实时值=AccountMonitor，
+	// MT=余额帧事件写 / CEX=私有流事件写 / 无流子账户=资金页打开按需回读 Kick）。
+	if err := s.hydrateAccountSnapshots(ctx); err != nil {
 		log.Printf("[cexscan] initial snapshot: %v", err)
 	}
 	if err := s.scanOnce(ctx); err != nil {
@@ -78,9 +79,6 @@ func (s *Scanner) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := s.snapshotAccounts(ctx, false); err != nil {
-				log.Printf("[cexscan] snapshot: %v", err)
-			}
 			if err := s.scanOnce(ctx); err != nil {
 				log.Printf("[cexscan] scan: %v", err)
 			}
@@ -91,15 +89,12 @@ func (s *Scanner) Run(ctx context.Context) {
 // SetRefreshTopic D-007 S3：装配注入（cmd/core；nil=不 emit）。
 func (s *Scanner) SetRefreshTopic(t *bus.Topic[string]) { s.refreshTopic = t }
 
-// snapshotAccounts 账户快照落库（读 AccountMonitor 内存缓存→InsertVenueAccountSnapshots）。
-// D-004 收窄：full=true 仅 boot 水合全量；full=false 周期分支排除有私有 WS 事件写口的键
-// （事件写口=私有 WS 直写同表，venue.HasPrivateStream）与 cfd/MT 键（3d-P1#1b：余额帧
-// → acctTopic → account_event_snapshot.go 即写，业主令拒绝快照延时信息）——剩余周期键
-// 只剩 okx funding/earn、binance funding 等无流子账户（无 WS 余额频道=无流源 D-006，
-// 统计/展示用途；按需刷新型去留 #1c 处理）。
+// hydrateAccountSnapshots boot 一次性账户快照水合（3d-P1#1c：周期补写整体退役——
+// fin_venue_account_snapshot 降为历史记录/审计留痕，实时展示与门禁唯一源=AccountMonitor：
+// CEX 私有流事件写 + MT 余额帧写（src=mt_frame）+ 无流子账户按需回读 Kick）。
 // D-360 S2：写时过滤只收 real（证真才留）——cex=!Simulated / cfd=venue∈is_real 键集
-// （核证点①②见 account.go IsRealAccount）；键集查询失败 → 本轮整批不落（fail-closed）。
-func (s *Scanner) snapshotAccounts(ctx context.Context, full bool) error {
+// （venue.IsRealAccount）；键集查询失败 → 本轮整批不落（fail-closed）。
+func (s *Scanner) hydrateAccountSnapshots(ctx context.Context) error {
 	snaps := ScanAccounts(s.accounts)
 	if len(snaps) == 0 {
 		return nil
@@ -108,7 +103,7 @@ func (s *Scanner) snapshotAccounts(ctx context.Context, full bool) error {
 	if err != nil {
 		return fmt.Errorf("broker real keys: %w（本轮快照不落库，证真才留 fail-closed）", err)
 	}
-	rows := snapshotRowsFor(snaps, realKeys, full)
+	rows := buildVenueSnapshotRows(snaps, realKeys)
 	if len(rows) == 0 {
 		return nil
 	}
@@ -118,28 +113,8 @@ func (s *Scanner) snapshotAccounts(ctx context.Context, full bool) error {
 	return nil
 }
 
-// snapshotRowsFor full=false 时排除有私有 WS 事件写口的键（venue.HasPrivateStream，
-// 判据=原始 venue_type——okx spot/perp 归一 unified 之前判定），再复用
-// buildVenueSnapshotRows 同口径构造（real 过滤+归一+去重）。full=true 全量（boot 水合）。
-func snapshotRowsFor(snaps []AccountSnapshot, realKeys map[string]bool, full bool) []pgstore.VenueAccountSnapshot {
-	if !full {
-		kept := snaps[:0]
-		for _, sn := range snaps {
-			if sn.AssetType != "cex" { // cfd/MT 键：#1b 余额帧事件写口（src=mt_frame），周期补写退役
-				continue
-			}
-			if venue.HasPrivateStream(sn.Venue, sn.VenueType, sn.Simulated) {
-				continue
-			}
-			kept = append(kept, sn)
-		}
-		snaps = kept
-	}
-	return buildVenueSnapshotRows(snaps, realKeys)
-}
-
 // scanOnce 串行 ②earn.Collect→InsertCexEarnAPR ③CalcSpreads→InsertCexSpread ④earn APR 判断。
-// （① 账户快照仅 boot 水合+无流键周期补写，见 snapshotAccounts——D-004：有流键周期快照退役。）
+// （① 账户快照=boot 一次性水合 hydrateAccountSnapshots——3d-P1#1c：周期补写退役。）
 // D-271 R3：funding 扫描已移除——现有 engine/evaluator 管线已覆盖 funding 机会分析。
 // D-271 R5：理财 APR + 价差告警已移除——理财告警是毛数据噪音（280 条实证），
 // 价差告警现有 CrossVenueDetector 已事件驱动覆盖。保留采集入库供前端展示。
@@ -226,32 +201,20 @@ func buildHoldingsFromSnapshot(infos []*v1.AccountInfo) map[string]map[string]fl
 	return out
 }
 
-// isUnifiedAccountVenue D-361 S3：统一账户 venue 白名单（仅 okx——统一账户 spot/perp 双
-// config 查同一 /account/balance；binance/gate 现货合约分钱包实证不归一，SSOT §0）。
-func isUnifiedAccountVenue(venue string) bool { return venue == "okx" }
-
-// normalizeVenueType D-361 S3/D-363-R1：统一账户写侧归一——仅 okx **交易账户**
-// （spot/perp，双 config 同钱）归一 "unified"；D-363 子账户（funding/earn）是不同钱
-// （各自独立端点独立余额），原样穿透——归一无条件压全部 type 会把 earn $5,261 塌进
-// unified（生产 23:06 实证顶掉交易账户行）。读侧零改。
-func normalizeVenueType(assetType, venue, venueType string) string {
-	if assetType == "cex" && isUnifiedAccountVenue(venue) && (venueType == "spot" || venueType == "perp") {
-		return "unified"
-	}
-	return venueType
-}
+// isUnifiedAccountVenue/normalizeVenueType 已随 3d-P1#1c 下沉 internal/venue
+// （venue.NormalizeVenueType；写侧归一单源，dashboard 实时态读侧共用）。
 
 // buildVenueSnapshotRows 快照行构造（纯函数，D-361 S3 自 scanOnce 抽出可测）：
-// real 过滤（IsRealAccount 证真才留）→ venue_type 归一 → 同 (venue,venue_type) 去重仅留首行
+// real 过滤（venue.IsRealAccount 证真才留）→ venue_type 归一 → 同 (venue,venue_type) 去重仅留首行
 // （okx spot/perp 双 config 各返回一次统一账户=同钱，去重后落一行 unified）。
 func buildVenueSnapshotRows(snaps []AccountSnapshot, realKeys map[string]bool) []pgstore.VenueAccountSnapshot {
 	rows := make([]pgstore.VenueAccountSnapshot, 0, len(snaps))
 	seen := map[string]bool{}
 	for _, sn := range snaps {
-		if !IsRealAccount(sn.AssetType, sn.Simulated, sn.Venue, realKeys) {
+		if !venue.IsRealAccount(sn.AssetType, sn.Simulated, sn.Venue, realKeys) {
 			continue
 		}
-		vt := normalizeVenueType(sn.AssetType, sn.Venue, sn.VenueType)
+		vt := venue.NormalizeVenueType(sn.AssetType, sn.Venue, sn.VenueType)
 		key := keydomain.Join(sn.Venue, vt)
 		if seen[key] {
 			continue

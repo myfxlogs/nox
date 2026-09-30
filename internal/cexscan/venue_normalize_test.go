@@ -1,31 +1,10 @@
-// venue_normalize_test.go —— D-361 S4 锚：统一账户写侧归一+同键去重（纯函数）。
+// venue_normalize_test.go —— D-361 S4/D-363-R1 锚：写侧归一+同键去重集成（buildVenueSnapshotRows；纯函数 NormalizeVenueType 已下沉 internal/venue 见 account_real_test.go）。
 package cexscan
 
 import (
 	"testing"
 	"time"
 )
-
-// TestNormalizeVenueType 归一锚：okx cex → unified；binance/gate 现货合约分钱包不归一；
-// 非 cex 不归一。
-func TestNormalizeVenueType(t *testing.T) {
-	cases := []struct {
-		name                    string
-		assetType, venue, vType string
-		want                    string
-	}{
-		{"okx 统一账户归一", "cex", "okx", "spot", "unified"},
-		{"okx perp 同归 unified", "cex", "okx", "perp", "unified"},
-		{"binance 分钱包不归一", "cex", "binance", "spot", "spot"},
-		{"gate 分钱包不归一", "cex", "gate", "perp", "perp"},
-		{"非 cex 不归一", "cfd", "okx", "mt5", "mt5"},
-	}
-	for _, c := range cases {
-		if got := normalizeVenueType(c.assetType, c.venue, c.vType); got != c.want {
-			t.Errorf("%s: normalizeVenueType(%q,%q,%q) = %q, want %q", c.name, c.assetType, c.venue, c.vType, got, c.want)
-		}
-	}
-}
 
 // TestBuildVenueSnapshotRows_OKXDedup 集成锚：okx spot+perp 双 snap（双 config 同钱）→
 // 落库仅一行 venue_type=unified；real 过滤（D-360）与 MT 行语义不回归。

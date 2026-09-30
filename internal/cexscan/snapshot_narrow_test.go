@@ -1,4 +1,5 @@
-// snapshot_narrow_test.go —— D-004 P1#1 收窄：有私有流写口的键退出周期快照，无流键保留。
+// snapshot_narrow_test.go —— 3d-P1#1c：账户快照周期补写整体退役（原 D-004 P1#1 收窄用例
+// 随之改形）；本文件锚「boot 水合=全量单写口」（快照表=历史记录，实时源=AccountMonitor）。
 package cexscan
 
 import "testing"
@@ -23,36 +24,19 @@ func keys(rowsLen int, at func(i int) (string, string)) map[string]bool {
 	return m
 }
 
-// TestSnapshotRows_Narrow full=false 只落无流键：okx:funding；
-// 有流键（okx spot/perp→unified、binance:perp、gate:perp）与 cfd/MT 键（3d-P1#1b
-// 余额帧事件写口 src=mt_frame）退出周期写。
-func TestSnapshotRows_Narrow(t *testing.T) {
+// TestHydrateRows_BootOnly #1c：hydrate 唯一写口=全量水合（buildVenueSnapshotRows）——
+// unified（okx spot/perp 归一去重）+ binance:perp + gate:perp + okx:funding + cfd；
+// 无流键不再有周期写口（资金页打开 → AccountMonitor.Kick 按需回读）。
+func TestHydrateRows_BootOnly(t *testing.T) {
 	realKeys := map[string]bool{"3001157": true}
-	rows := snapshotRowsFor(snapSet(), realKeys, false)
-	got := keys(len(rows), func(i int) (string, string) { return rows[i].Venue, rows[i].VenueType })
-	want := map[string]bool{"okx/funding": true}
-	if len(got) != len(want) {
-		t.Fatalf("narrow rows = %v, want %v", got, want)
-	}
-	for k := range want {
-		if !got[k] {
-			t.Errorf("missing %s in %v", k, got)
-		}
-	}
-}
-
-// TestSnapshotRows_Full full=true 全量水合：unified（okx spot/perp 归一去重）+
-// binance:perp + gate:perp + okx:funding + cfd。
-func TestSnapshotRows_Full(t *testing.T) {
-	realKeys := map[string]bool{"3001157": true}
-	rows := snapshotRowsFor(snapSet(), realKeys, true)
+	rows := buildVenueSnapshotRows(snapSet(), realKeys)
 	got := keys(len(rows), func(i int) (string, string) { return rows[i].Venue, rows[i].VenueType })
 	want := map[string]bool{
 		"okx/unified": true, "binance/perp": true, "gate/perp": true,
 		"okx/funding": true, "3001157/mt5": true,
 	}
 	if len(got) != len(want) {
-		t.Fatalf("full rows = %v, want %v", got, want)
+		t.Fatalf("hydrate rows = %v, want %v", got, want)
 	}
 	for k := range want {
 		if !got[k] {
