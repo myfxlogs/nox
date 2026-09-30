@@ -294,4 +294,6 @@ var (
 	PaperDualCexColumnsSQL string // D-555 S1：paper_spot_carry/carry_graduations venue_type+venue_key 列
 	//go:embed 0161_quote_unit_scales.sql
 	QuoteUnitScalesSQL string // D-594：broker_symbol_map price_scale/qty_scale + 铜行定标 + XCU 别名
+	//go:embed 0162_position_fees_netpnl.sql
+	PositionFeesNetPnlSQL string // D-599：positions fees_usd/fee_quality 新列（realized_pnl 改净额）
 )
