@@ -51,61 +51,15 @@ func (s *Service) pendingEntries(ctx context.Context) ([]*v1.XAssetPendingEntryR
 	if err != nil {
 		return nil, connectErr(err)
 	}
-	rules, err := s.store.ListAutotradeAllowRulesAll(ctx)
+	in, err := s.loadPendingInputs(ctx)
 	if err != nil {
-		return nil, connectErr(err)
+		return nil, err
 	}
-	venueAllow, canonAllow := map[string]bool{}, map[string]bool{}
-	for _, r := range rules {
-		if !r.Enabled {
-			continue
-		}
-		if r.Kind == "venue" {
-			venueAllow[r.Value] = true
-		}
-		if r.Kind == "canonical" {
-			canonAllow[r.Value] = true
-		}
-	}
-	flags, err := s.store.ListActiveFlags(ctx)
-	if err != nil {
-		return nil, connectErr(err)
-	}
-	caps, err := s.store.ListVenueExposureCaps(ctx)
-	if err != nil {
-		return nil, connectErr(err)
-	}
-	snaps, err := s.store.LatestVenueAccountSnapshots(ctx)
-	if err != nil {
-		return nil, connectErr(err)
-	}
-	rejects := s.fundingRejectFacts(ctx) // D-560 S2b：近6h资金拒批量透出（禁N+1）
 	var scored []scoredRow
 	for _, c := range combos {
-		if !c.Enabled {
+		row, depth, ok := s.evalPendingRow(ctx, c, in)
+		if !ok {
 			continue
-		}
-		label := fmt.Sprintf("%s(%s)×%s(%s)", c.CanonicalBuy, c.VenueBuy, c.CanonicalSell, c.VenueSell)
-		if s.comboInPosition(ctx, c) {
-			continue // 有 open/legged/closing 在持仓 → 归持仓区
-		}
-		kind, reason, depth, ready := s.probeGates(ctx, c, venueAllow, canonAllow, flags, caps, snaps)
-		tier, detail, warn := s.comboTier(ctx, c, snaps)
-		row := &v1.XAssetPendingEntryRow{
-			ComboId: c.ID, ComboLabel: label, EntryKind: kind,
-			WaitReason: reason, Ready: ready,
-			Tier: tier, TierDetail: detail, TierWarn: warn,
-		}
-		s.fillWaitCondition(ctx, c, row, ready) // D-580：等待条件透出（等什么+当前多少+还差多少）
-		if r, ok := fundingRejectFor(rejects, c.CanonicalBuy, c.CanonicalSell, c.VenueBuy, c.VenueSell); ok {
-			row.RecentFundingReject = true
-			row.RecentRejectReason = rejectReasonText(r)
-		}
-		if be := s.breakerFor(c); be != nil { // D-560 S3：熔断态透出
-			row.BreakerPaused = true
-			row.BreakerClass = be.Class
-			row.BreakerResumeAt = timestamppb.New(be.ResumeAt)
-			row.BreakerCount = int32(be.Count)
 		}
 		scored = append(scored, scoredRow{depth: depth, row: row})
 	}
@@ -130,12 +84,39 @@ type scoredRow struct {
 	row   *v1.XAssetPendingEntryRow
 }
 
-// comboInPosition gate 防重同源：positions.opportunity_id × combo 包匹配（两个 canonical 变体都试）。
-func (s *Service) comboInPosition(ctx context.Context, c pgstore.XAssetComboAdminRow) bool {
-	active, err := s.store.ListActivePositions(ctx)
-	if err != nil {
-		return false // fail-closed：查不到=按在持处理（保守归持仓区）
+// evalPendingRow 单组合待入场行求值（pendingEntries 与闸态 diff 器共用，D-007 S1）。
+// ok=false=不属待入场集（disabled 或在持仓）。
+func (s *Service) evalPendingRow(ctx context.Context, c pgstore.XAssetComboAdminRow, in *pendingInputs) (row *v1.XAssetPendingEntryRow, depth int, ok bool) {
+	if !c.Enabled {
+		return nil, 0, false
 	}
+	if comboInPosition(in.active, c) {
+		return nil, 0, false // 有 open/legged/closing 在持仓 → 归持仓区
+	}
+	kind, reason, depth, ready := s.probeGates(ctx, c, in.venueAllow, in.canonAllow, in.flags, in.caps, in.snaps)
+	tier, detail, warn := s.comboTier(ctx, c, in.snaps)
+	row = &v1.XAssetPendingEntryRow{
+		ComboId: c.ID, ComboLabel: fmt.Sprintf("%s(%s)×%s(%s)", c.CanonicalBuy, c.VenueBuy, c.CanonicalSell, c.VenueSell), EntryKind: kind,
+		WaitReason: reason, Ready: ready,
+		Tier: tier, TierDetail: detail, TierWarn: warn,
+	}
+	s.fillWaitCondition(ctx, c, row, ready) // D-580：等待条件透出（等什么+当前多少+还差多少）
+	if r, ok2 := fundingRejectFor(in.rejects, c.CanonicalBuy, c.CanonicalSell, c.VenueBuy, c.VenueSell); ok2 {
+		row.RecentFundingReject = true
+		row.RecentRejectReason = rejectReasonText(r)
+	}
+	if be := s.breakerFor(c); be != nil { // D-560 S3：熔断态透出
+		row.BreakerPaused = true
+		row.BreakerClass = be.Class
+		row.BreakerResumeAt = timestamppb.New(be.ResumeAt)
+		row.BreakerCount = int32(be.Count)
+	}
+	return row, depth, true
+}
+
+// comboInPosition gate 防重同源：positions.opportunity_id × combo 包匹配（两个 canonical 变体都试）。
+// active 由调用方批量载入（D-007 S1：原逐组合 N+1 查询收进 loadPendingInputs 单源）。
+func comboInPosition(active []pgstore.Position, c pgstore.XAssetComboAdminRow) bool {
 	for _, canon := range []string{c.CanonicalBuy, c.CanonicalSell} {
 		key := combo.Key("XASSET_CARRY", canon, c.VenueBuy, c.VenueSell)
 		for _, p := range active {

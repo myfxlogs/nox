@@ -83,6 +83,36 @@ func d580ReadySvc(t *testing.T) *Service {
 		       ('3001157','mt5',5000,5000,5000,'USDT',now(),'d580test')`); err != nil {
 		t.Fatal(err)
 	}
+	// D-007 S2：闸6 死键修复后 venue cap 真实生效——夹具抬闸防误拦（共享库或带历史种子行）。
+	// 共享库：Cleanup 还原前值（无则删），防 gate:perp=100000 之类残值污染 D543 种子断言。
+	type capRow struct {
+		key     string
+		existed bool
+		capUSD  float64
+		enabled bool
+	}
+	var saved []capRow
+	for _, k := range []string{"3001157:mt5", "gate:perp"} {
+		var r capRow
+		r.key = k
+		err := st.Pool().QueryRow(ctx, `SELECT cap_usd, enabled FROM fin_venue_exposure_caps WHERE venue_key=$1`, k).Scan(&r.capUSD, &r.enabled)
+		r.existed = err == nil
+		saved = append(saved, r)
+	}
+	if _, err := st.Pool().Exec(ctx, `INSERT INTO fin_venue_exposure_caps (venue_key, cap_usd, enabled, note)
+		VALUES ('3001157:mt5',100000,true,'d580test'),('gate:perp',100000,true,'d580test')
+		ON CONFLICT (venue_key) DO UPDATE SET cap_usd=100000, enabled=true`); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		for _, r := range saved {
+			if r.existed {
+				_, _ = st.Pool().Exec(context.Background(), `UPDATE fin_venue_exposure_caps SET cap_usd=$2, enabled=$3 WHERE venue_key=$1`, r.key, r.capUSD, r.enabled)
+			} else {
+				_, _ = st.Pool().Exec(context.Background(), `DELETE FROM fin_venue_exposure_caps WHERE venue_key=$1`, r.key)
+			}
+		}
+	})
 	// enabled 组合行（notional=100）。
 	n100 := 100.0
 	d478ComboLegs(t, st, 905, true, &n100, 1000, "XPTUSD", "XPTUSDT")

@@ -95,6 +95,9 @@ type Service struct {
 	refreshTopic *bus.Topic[string]
 	// funds D-568：funds 通知尾沿合批态（NotifyFunds 三源汇一口）。
 	funds fundsNotifier
+	// D-007 S1：待入场闸态 diff 器（qbus 帧/allow_rules/看门狗三源标脏→元组 diff→pending_entries emit）。
+	pgw     *pendingGateWatcher
+	pgwOnce sync.Once
 	// D-208 v2：CMC 数据源（nil = 不支持 CMC 行，走老路径）。
 	cmcSource position.CMCSource
 	// bpm Broker 实持仓 monitor（D-052）：ListBrokerPositions 拉 + StreamUpdates case 8 推同源。nil = 未接线（测试直接构造 Service）。
