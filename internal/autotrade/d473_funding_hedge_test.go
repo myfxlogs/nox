@@ -85,6 +85,7 @@ var d473Spec = exec.XAssetComboAllowSpec{
 // S1 锚①：spec 命中 + regime 合格 → 产 intent（disabled 预拒落 1 行）。
 func TestD473_ComboGate_AllowlistPass(t *testing.T) {
 	s := d473Setup(t)
+	d006LiftCanonicalCap(t, s, "SKLUSDT")
 	d473SeedFunding(t, s, 5.0)
 	e := d473Engine(s, &d473Spec)
 	opp := d473Opp("okx:spot", "okx:perp")
@@ -128,6 +129,7 @@ func TestD473_ReverseConfigRejected(t *testing.T) {
 // latest≤0 按既有判据放行（文档化断言，非漏洞修复面）。
 func TestD473_RegimeGate_NegativeLatestNonIncomeExempt(t *testing.T) {
 	s := d473Setup(t)
+	d006LiftCanonicalCap(t, s, "SKLUSDT")
 	d473SeedFunding(t, s, -5.0)
 	e := d473Engine(s, &d473Spec)
 	opp := d473Opp("okx:spot", "okx:perp")

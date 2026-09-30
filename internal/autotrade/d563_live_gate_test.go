@@ -26,6 +26,7 @@ func d563Run(t *testing.T, cexBid float64, cexAge time.Duration, publishCex bool
 	s := d330Setup(t) // monitor 行 noise=9、entry_spread=12（实时化后仅 noise 仍消费）
 	d330SeedDisabled(t, s)
 	d330RegimeHealthy(t, s)
+	d006LiftCanonicalCap(t, s, "XAUUSD", "XAUUSDT")
 	ctx := context.Background()
 	svc, qb := d330XAUService(100, 4355) // mt 腿 ask=4355 新鲜
 	if publishCex {

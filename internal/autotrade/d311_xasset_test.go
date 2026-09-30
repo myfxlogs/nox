@@ -52,6 +52,17 @@ func d311Truncate(t *testing.T, s *pgstore.Store) {
 
 func d311strptr(s string) *string { return &s }
 
+// d006LiftCanonicalCap D-006 S3：夹具名义 >默认聚簇 cap $6000 的测试抬闸（默认闸语义本身由 pgstore 测试钉死）。
+func d006LiftCanonicalCap(t *testing.T, s *pgstore.Store, canons ...string) {
+	t.Helper()
+	for _, c := range canons {
+		if err := s.UpsertCanonicalExposureCap(context.Background(),
+			&pgstore.CanonicalExposureCap{Canonical: c, CapUSD: 1e9, Enabled: true, Note: "test-lift"}); err != nil {
+			t.Fatalf("lift canonical cap %s: %v", c, err)
+		}
+	}
+}
+
 // TestD311_RecalcXAssetNetCarry_BuyMT5SellPerp S8锚⑧a：XPTUSD 形态——
 // 买 MT5（swap spec 2.0 bps/日 → +7.3%/yr）+ 卖 OKX perp（funding −10%/yr → 空头收 −10）。
 // netCarry = 7.3 − 10 = −2.7（持有净收入口径：SELL 腿 +rate）。
@@ -369,6 +380,7 @@ func TestD311_VenueIsRealGate_CEXAndMT(t *testing.T) {
 func TestD311_HandleOpportunityXAssetPreIntercept(t *testing.T) {
 	s := testAccumStore(t)
 	d311Truncate(t, s)
+	d006LiftCanonicalCap(t, s, "WTIUSD", "BTCUSDT")
 	ctx := context.Background()
 	// D-328 S3 涟漪适配：case③ 白名单命中后须过 regime 闸才到 sizing——种卖腿（gate:perp×BTCUSDT）
 	// 健康正样本（requiredSign=+1 全程 ≥floor）。

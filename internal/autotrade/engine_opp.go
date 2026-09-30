@@ -101,6 +101,10 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 			log.Printf("[autotrade] skip %s: %s combo not in allowlist (%s/%s %s×%s)", opp.ID, opp.Type, opp.Canonical, sellCanonical, opp.VenueBuy, opp.VenueSell)
 			return
 		}
+		// D-006 S3：canonical 聚簇 cap 前瞻闸（判据体在 engine_opp_capgate.go）。
+		if e.canonicalCapRejectLog(ctx, opp, sellCanonical, xassetSpec) {
+			return
+		}
 	}
 	// 门槛：净收益
 	if opp.NetBps < e.cfg.MinNetBps {

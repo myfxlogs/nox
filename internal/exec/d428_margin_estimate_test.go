@@ -166,25 +166,32 @@ func TestD428_MarginCcyGate(t *testing.T) {
 	}
 }
 
-// T7 lev=2e9 哨兵 → rate=0 → requiredUSD=0 → 放行。
+// T7 lev=2e9 哨兵 → D-006 悲观档 effLev=20（不再 rate=0 退化）：qty=100 cs=100
+// ask=4284 → required=42840/20=2142 > avail=0.8 → 拒（收紧情景兜底实证）。
 func TestD428_InfiniteLeverageSentinel(t *testing.T) {
 	e := NewMT5Executor("v1", "tok", nil, &fakeMT5MarginClient{
 		rmErr: unimplemented(), freeMargin: 1, leverage: 2e9,
 		ask: 4284, cs: 100, marginCcy: "XAU",
 	})
-	if err := e.MarginPrecheck(context.Background(), Order{Symbol: "XAUUSDm", Side: "BUY", Qty: 100}); err != nil {
-		t.Fatalf("无限杠杆哨兵 rate=0 → requiredUSD=0 应放行，got %v", err)
+	err := e.MarginPrecheck(context.Background(), Order{Symbol: "XAUUSDm", Side: "BUY", Qty: 100})
+	if err == nil || !strings.Contains(err.Error(), "estimate") {
+		t.Fatalf("悲观档应拒（required=名义/20 超 avail），got %v", err)
 	}
 }
 
 // T8 RequiredMargin 正常返回 → 原生路径不受影响（required=90 < free×0.8=80 拒；另 required=50 放）。
+// D-006：主路径悲观档取数就位（cs=1/ask=100 → 名义/20=0.005 不咬 broker 断言）。
 func TestD428_NativePathUnaffected(t *testing.T) {
-	rej := NewMT5Executor("v1", "tok", nil, &fakeMT5MarginClient{required: 90, freeMargin: 100, leverage: 2000})
-	if err := rej.MarginPrecheck(context.Background(), Order{Symbol: "XAUUSDm", Side: "BUY", Qty: 0.01}); err == nil {
+	mk := func(req float64) *MT5Executor {
+		return NewMT5Executor("v1", "tok", nil, &fakeMT5MarginClient{
+			required: req, freeMargin: 100, leverage: 2000,
+			ask: 100, cs: 1, marginCcy: "XAU",
+		})
+	}
+	if err := mk(90).MarginPrecheck(context.Background(), Order{Symbol: "XAUUSDm", Side: "BUY", Qty: 0.01}); err == nil {
 		t.Fatal("原生路径 required>avail 应拒")
 	}
-	pass := NewMT5Executor("v1", "tok", nil, &fakeMT5MarginClient{required: 50, freeMargin: 100, leverage: 2000})
-	if err := pass.MarginPrecheck(context.Background(), Order{Symbol: "XAUUSDm", Side: "BUY", Qty: 0.01}); err != nil {
+	if err := mk(50).MarginPrecheck(context.Background(), Order{Symbol: "XAUUSDm", Side: "BUY", Qty: 0.01}); err != nil {
 		t.Fatalf("原生路径 required<avail 应放，got %v", err)
 	}
 }

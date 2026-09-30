@@ -81,6 +81,7 @@ func d335Engine(s *pgstore.Store, entryBps float64) (*Engine, pgstore.Opportunit
 func TestD335_EntryGate(t *testing.T) {
 	s := testAccumStore(t)
 	d311Truncate(t, s)
+	d006LiftCanonicalCap(t, s, "XAUUSD", "XAUUSDT")
 	ctx := context.Background()
 	if _, err := s.Pool().Exec(ctx, `TRUNCATE strategy_stats CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)

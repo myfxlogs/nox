@@ -140,6 +140,7 @@ func d330LastQty(t *testing.T, s *pgstore.Store, oppID string) float64 {
 func TestD330_XassetQtyFloorFromComboSpec(t *testing.T) {
 	s := d330Setup(t)
 	d330SeedDisabled(t, s)
+	d006LiftCanonicalCap(t, s, "XAUUSD", "XAUUSDT")
 	d330RegimeHealthy(t, s)
 	ctx := context.Background()
 	svc, qb := d330XAUService(100, 4355) // CS=100oz/lot → perLot=$435,500
@@ -219,6 +220,7 @@ func TestD330_GateSkipNotionalXAsset(t *testing.T) {
 func TestD330_NormalPathIgnoresSpecMaxLongQty(t *testing.T) {
 	s := d330Setup(t)
 	d330SeedDisabled(t, s)
+	d006LiftCanonicalCap(t, s, "XAUUSD", "XAUUSDT")
 	d330RegimeHealthy(t, s)
 	ctx := context.Background()
 	svc, qb := d330XAUService(1, 96.6) // perLot=$96.6 → qty=1000/96.6≈10.352 ≥ 0.01

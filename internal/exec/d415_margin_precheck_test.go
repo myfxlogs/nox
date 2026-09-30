@@ -17,12 +17,17 @@ import (
 	"google.golang.org/grpc"
 )
 
-// fakeMT5Client mt5pb.MT5Client fake：只覆盖 RequiredMargin/AccountSummary。
+// fakeMT5Client mt5pb.MT5Client fake：覆盖 RequiredMargin/AccountSummary +
+// D-006 S1 主路径名义取数所需 SymbolParams/GetQuote（cs=1/px=100/lev=1000 默认
+// 小额名义 → max(broker,名义/20) 分支不影响旧断言）。
 type fakeMT5Client struct {
 	mt5pb.MT5Client
 	required   float64
 	freeMargin float64
 	err        error
+	// D-006：悲观档取数面（零值→小额默认）。
+	cs, px, lev float64
+	marginCcy   string
 }
 
 func (f *fakeMT5Client) RequiredMargin(ctx context.Context, in *mt5pb.RequiredMarginRequest, opts ...grpc.CallOption) (*mt5pb.RequiredMarginReply, error) {
@@ -35,16 +40,40 @@ func (f *fakeMT5Client) AccountSummary(ctx context.Context, in *mt5pb.AccountSum
 	if f.err != nil {
 		return nil, f.err
 	}
-	return &mt5pb.AccountSummaryReply{Result: &mt5pb.AccountSummary{FreeMargin: f.freeMargin}}, nil
+	lev := f.lev
+	if lev <= 0 {
+		lev = 1000
+	}
+	return &mt5pb.AccountSummaryReply{Result: &mt5pb.AccountSummary{FreeMargin: f.freeMargin, Leverage: lev}}, nil
+}
+
+func (f *fakeMT5Client) GetQuote(ctx context.Context, in *mt5pb.GetQuoteRequest, opts ...grpc.CallOption) (*mt5pb.GetQuoteReply, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	px := f.px
+	if px <= 0 {
+		px = 100
+	}
+	return &mt5pb.GetQuoteReply{Result: &mt5pb.Quote{Bid: px - 0.1, Ask: px}}, nil
 }
 
 // SymbolParams D-004 P1#2：MT5Executor.TradeModeNow 即时探针的 fake 落点——
-// 常返 Full 放行（margin 预检用例不测 trade_mode 分支）。
+// 常返 Full 放行（margin 预检用例不测 trade_mode 分支）。D-006：SymbolInfo
+// 补 cs/marginCcy（默认 1/USD）供主路径名义/20 悲观档取数。
 func (f *fakeMT5Client) SymbolParams(ctx context.Context, in *mt5pb.SymbolParamsRequest, opts ...grpc.CallOption) (*mt5pb.SymbolParamsReply, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
+	cs, mc := f.cs, f.marginCcy
+	if cs <= 0 {
+		cs = 1
+	}
+	if mc == "" {
+		mc = "USD"
+	}
 	return &mt5pb.SymbolParamsReply{Result: &mt5pb.SymbolParams{
+		SymbolInfo:  &mt5pb.SymbolInfo{ContractSize: cs, MarginCurrency: mc},
 		SymbolGroup: &mt5pb.SymGroup{TradeMode: mt5pb.TradeMode_TradeMode_FullAccess},
 	}}, nil
 }

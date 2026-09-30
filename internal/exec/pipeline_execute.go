@@ -125,17 +125,30 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 			return nil, err
 		}
 	}
+	// D-006 S3：canonical 聚簇 cap——建 position 走 advisory 锁事务复查（防同刻双放行）。
+	capGuardCanonicals, capGuardProposed, err := p.capGuardInputs(ctx, posType, opportunityID, legs)
+	if err != nil {
+		return nil, err
+	}
 
 	// 建 position(OPENING)——type 在创建时即写入（修复⑭ S4：原创建空 type 撞 positions_type_check，
 	// 靠调用方事后 UpdatePositionMeta 补 type，空窗期约束已拒）。
-	posID, err := p.store.CreatePosition(ctx, &pgstore.Position{
+	// D-006 S3：XASSET/FUNDING_HEDGE 走 advisory 锁+canonical 复查的守卫建库（TOCTOU）。
+	newPos := &pgstore.Position{
 		OpportunityID: opportunityID,
 		Type:          posType,
 		Status:        "OPENING",
 		RequestID:     requestID,
 		DedupKey:      opportunityID, // 当前 dedup_key 业务逻辑=opportunity_id（combo.Key 格式）
 		Environment:   p.environment, // D-195-B：从 config 注入
-	})
+	}
+	createFn := func() (int64, error) { return p.store.CreatePosition(ctx, newPos) }
+	if len(capGuardCanonicals) > 0 {
+		createFn = func() (int64, error) {
+			return p.store.CreatePositionWithCapGuard(ctx, newPos, capGuardCanonicals, capGuardProposed)
+		}
+	}
+	posID, err := createFn()
 	if err != nil {
 		return nil, fmt.Errorf("create position: %w", err)
 	}
