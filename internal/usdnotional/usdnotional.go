@@ -17,7 +17,7 @@ import (
 // 从 dashboard.usdPerLot + autotrade.notionalPerLotUSD 双源逐字合并（两源内容一致）。
 var usdQuotedCommodities = map[string]bool{
 	"BRENT": true, "WTI": true, "SILVER": true, "COPPER": true, "NATGAS": true,
-	"XAUUSD": true, "XAGUSD": true, "XPDUSD": true, "XPTUSD": true,
+	"XAUUSD": true, "XAGUSD": true, "XPDUSD": true, "XPTUSD": true, "XCUUSD": true, // D-594：铜 canonical
 	"NAS100": true, "SPX500": true, "US30": true, "US2000": true, "GER40": true,
 	"UK100": true, "HK50": true, "JP225": true, "AUS200": true, "ES35": true,
 	"FR40": true, "STOXX50": true,
@@ -32,6 +32,10 @@ var usdQuotedCommodities = map[string]bool{
 //
 // price 为该腿报价（bid/ask 由调用方决定）；qbus 用于查 fx 对（USDJPY 等）。
 // contractSize<=0 或 price<=0 → false；qbus nil → false（JPY 腿）。
+// D-594：contractSize 形参口径=canonical 单位数/手（MT 腿=contract_size×qty_scale，
+// 由 legContractSizeOf/UnitQty 链折叠供入）；price 须同 canonical 口径（发射口已乘
+// price_scale）。配原生成交价（PriceActual）的消费方传原生 CS——同口径配对即正确，
+// qty_scale 不得乘（原生价×原生 CS 已是原生名义额）。
 func PerLot(canonical string, price, contractSize float64, qbus *bus.QuoteBus) (float64, bool) {
 	if contractSize <= 0 || price <= 0 {
 		return 0, false
