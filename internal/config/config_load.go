@@ -37,7 +37,7 @@ func Load() *Config {
 		SlippageBps:           envFloat("ARB_SLIPPAGE_BPS", 0.3),                     // D-070 均值回归：降低滑点假设（CFD 限价单）
 		MarginRateAnnual:      envFloat("ARB_MARGIN_RATE_ANNUAL", 4.5),
 		OpportunityTTL:        envDur("ARB_OPPORTUNITY_TTL", 30*time.Second),
-		ScanThrottle:          envDur("ARB_SCAN_THROTTLE", 30*time.Second),
+		OppPublishDeltaBps:    envFloat("ARB_OPP_PUBLISH_DELTA_BPS", 0.5),          // D-004 P1#8：发布去重实质变化阈值
 		RotateMaxPerDay:       envInt("ARB_ROTATE_MAX_PER_DAY", 1),                 // D-406 轮转日限
 		CloseBpsThr:           envFloat("ARB_CLOSE_BPS_THR", 0.5),                  // D-070 均值回归：价差回归到 0.5bps 内平仓
 		AlertResendInterval:   envDur("ARB_ALERT_RESEND_INTERVAL", 10*time.Minute), // D-072 铃铛治理：同 key 告警冷却

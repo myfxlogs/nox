@@ -113,7 +113,7 @@ var appConfigDescs = map[string]string{
 	"ARB_REVIEW_CROSS_BIAS_BPS":                  "复盘跨所偏差修正（bps）",
 	"ARB_REVIEW_MIN_SAMPLES":                     "复盘最小样本数",
 	"ARB_ROTATE_MAX_PER_DAY":                     "每日换仓次数上限",
-	"ARB_SCAN_THROTTLE":                          "扫描节流间隔（机会扫描最小间隔）",
+	"ARB_OPP_PUBLISH_DELTA_BPS":                  "机会发布去重实质变化阈值（bps；|Δnet|≥此值或 TTL/3 心跳才 upsert+推送）",
 	"ARB_SLIPPAGE_BPS":                           "滑点估计（bps；净收益计算扣减）",
 	"ARB_STOP_REENTRY_MINUTES":                   "止损后重入冷却（分钟）",
 	"ARB_STORE_MIN_NET_BPS":                      "机会入库净收益下限（bps）",

@@ -21,9 +21,10 @@ type Config struct {
 	DetectorFreshnessTTL time.Duration // 报价陈旧排除 TTL
 
 	// === 评估器成本（§6）===
-	SlippageBps                  float64       // 单腿滑点（bps）
-	MarginRateAnnual             float64       // 资金机会成本年化（%）——业主按实际资金状况设，D-036
-	OpportunityTTL, ScanThrottle time.Duration // 机会过期 TTL + 引擎扫描节流（替代硬编码 30s，D-036）
+	SlippageBps        float64       // 单腿滑点（bps）
+	MarginRateAnnual   float64       // 资金机会成本年化（%）——业主按实际资金状况设，D-036
+	OpportunityTTL     time.Duration // 机会过期 TTL
+	OppPublishDeltaBps float64       // ARB_OPP_PUBLISH_DELTA_BPS 机会发布实质变化阈值（bps，D-004 P1#8）
 
 	// === 持仓监控（§13.4）===
 	CloseBpsThr         float64       // 建议平仓：预期净收益 ≤ 该值（bps）
