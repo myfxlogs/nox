@@ -64,8 +64,12 @@ func (m *AccountMonitor) ObserveStreamAccount(venueKey string, bal, eq, mg, fm, 
 		st.asOf = ts
 		m.states[venueKey] = st
 		m.dirtyLocked(venueKey)
+		// 热修：kick 10s/键防抖——REST 失败时帧风暴曾致 kick→poll 恶性循环（OOM 19:01）。
+		kick := m.kickDebounced(venueKey, acctFrameKickMinInterval, m.frameKickAt)
 		m.mu.Unlock()
-		m.Kick(venueKey)
+		if kick {
+			m.Kick(venueKey)
+		}
 		m.notifyFunds()
 		return
 	}
