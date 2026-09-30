@@ -79,6 +79,10 @@ func readGoldTicks(ctx context.Context, pool *pgxpool.Pool, venue, symbol string
 	return bid, ask, nil
 }
 
+// goldStaleInterval funding_interval 守门——日轮/boot 级近静态写源定标 25h（D-591 R1：
+// gate_contract_meta 日轮 Interval=24h，15m 守门部署即间歇 fail-closed 实证）。
+const goldStaleInterval = 25 * time.Hour
+
 // readGoldFunding 读 funding 年化%+interval 秒并换算：单期小数费率=annualPct×ivlSec/
 // (365×100×86400)（消费端 ×periodsPerDay×365×100 还原年化同语义）、periodsPerDay=86400/ivlSec
 // （S4：fundingInfo REST 退役，interval 真值已由 WS/日批落 facts）。funding 按 src 锚定 WS 源；
@@ -107,8 +111,10 @@ func readGoldFunding(ctx context.Context, pool *pgxpool.Pool, venue, src, symbol
 	if err != nil {
 		return 0, 0, fmt.Errorf("facts funding_interval %s: %w", symbol, err)
 	}
-	if age := time.Since(its); age > 15*time.Minute {
-		return 0, 0, fmt.Errorf("facts funding_interval %s stale age=%v > 15m", symbol, age.Round(time.Second))
+	// D-591 R1：interval=近静态元数据（gate 日轮+各所 boot/帧内写），守门按写源节奏定标 25h；
+	// funding rate 动态数据守门 15m 不动（stale-data-propagates-wrong-judgments 两边各安其位）。
+	if age := time.Since(its); age > goldStaleInterval {
+		return 0, 0, fmt.Errorf("facts funding_interval %s stale age=%v > 25h", symbol, age.Round(time.Second))
 	}
 	if ivlSec <= 0 {
 		return 0, 0, fmt.Errorf("facts funding_interval %s: invalid ivlSec=%v", symbol, ivlSec)

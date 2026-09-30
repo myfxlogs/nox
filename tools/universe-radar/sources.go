@@ -45,7 +45,11 @@ type Source interface {
 
 // allSources 注册表：新所=实现接口+注册一行。
 func allSources(hc *http.Client, proxy string, pool *pgxpool.Pool, cacheDir string) []Source {
-	return []Source{binance{hc: hc, base: proxy, pool: pool, cacheDir: cacheDir}, okx{hc, proxy}, gate{hc, proxy}}
+	return []Source{
+		binance{hc: hc, base: proxy, pool: pool, cacheDir: cacheDir},
+		okx{hc: hc, base: proxy, pool: pool, cacheDir: cacheDir}, // D-591 R3：目录 24h 缓存+funding 读库
+		gate{pool: pool}, // D-591 R3：纯读库（WS 全市场落 ticks/facts）
+	}
 }
 
 func getJSON(ctx context.Context, hc *http.Client, url string, dst any) error {

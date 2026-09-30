@@ -2,63 +2,65 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"net/http"
+	"math"
 	"strings"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ---------- Gate（2 调用：contracts 自带 funding + tickers） ----------
-
+// ---------- Gate（D-591 R3：纯读库，REST contracts/tickers 退役） ----------
+// gate futures.tickers WS 已全市场落 ticks/facts（perp 符号面实测在库）——
+// 宇宙枚举=ticks 24h 活跃符号（24h 无报价=视同退场符号），funding/interval/mark 读库，
+// 未覆盖字段（LaunchTS/CtVal/Index/Vol24h 无库源）诚实零值不猜。
 type gate struct {
-	hc   *http.Client
-	base string
+	pool *pgxpool.Pool
 }
 
 func (g gate) Venue() string { return "gate" }
 
 func (g gate) Scan(ctx context.Context) ([]Row, error) {
-	var cs []struct {
-		Name             string    `json:"name"`
-		Status           string    `json:"status"`
-		InDelisting      bool      `json:"in_delisting"`
-		LaunchTime       flexInt   `json:"launch_time"`      // 秒
-		FundingRate      flexFloat `json:"funding_rate"`     // 单次结算费率
-		FundingInterval  flexInt   `json:"funding_interval"` // 秒（14400=4h）
-		IndexPrice       flexFloat `json:"index_price"`
-		MarkPrice        flexFloat `json:"mark_price"`
-		QuantoMultiplier flexFloat `json:"quanto_multiplier"` // D-311 S2：合约面值（CL_USDT=0.01）
+	// 宇宙：近 24h 有 tick 的 gate perp 符号（frame 全市场推送；24h 静默=退场视同除名）。
+	syms, err := g.symbols(ctx)
+	if err != nil {
+		return nil, err
 	}
-	if err := getJSON(ctx, g.hc, g.base+"/api/v4/futures/usdt/contracts", &cs); err != nil {
-		return nil, fmt.Errorf("contracts: %w", err)
-	}
-	rows := make([]Row, 0, len(cs))
-	idx := make(map[string]int)
-	for _, c := range cs {
-		st := c.Status
-		if c.Status == "trading" && !c.InDelisting {
-			st = "TRADING"
-		} // in_delisting=true 视同 status≠trading
-		idx[c.Name] = len(rows)
-		rows = append(rows, Row{
-			Symbol: c.Name, Base: strings.TrimSuffix(c.Name, "_USDT"),
-			Status: st, LaunchTS: secTime(int64(c.LaunchTime)),
-			FundingRate: float64(c.FundingRate),
-			IntervalH:   int(c.FundingInterval) / 3600,
-			Mark:        float64(c.MarkPrice), Index: float64(c.IndexPrice),
-			CtVal: f64ptr(float64(c.QuantoMultiplier)),
-		})
-	}
-	var tk []struct {
-		Contract       string    `json:"contract"`
-		Volume24hQuote flexFloat `json:"volume_24h_quote"`
-	}
-	if err := getJSON(ctx, g.hc, g.base+"/api/v4/futures/usdt/tickers", &tk); err != nil {
-		return nil, fmt.Errorf("tickers: %w", err)
-	}
-	for _, t := range tk {
-		if i, ok := idx[t.Contract]; ok {
-			rows[i].Vol24h = float64(t.Volume24hQuote)
+	fund := latestFacts(ctx, g.pool, "gate", "funding", "gate_ws_futures", "15 minutes")
+	ivl := latestFacts(ctx, g.pool, "gate", "funding_interval", "", "25 hours") // 日轮写源（D-591 R1 同定标）
+	mid := latestTicksMid(ctx, g.pool, "gate")
+	rows := make([]Row, 0, len(syms))
+	for _, sym := range syms { // sym=canonical BTCUSDT 形（canonicalFromGate 键形）
+		r := Row{
+			Symbol: sym, Base: strings.TrimSuffix(sym, "USDT"),
+			Status: "TRADING", // 24h 在报价=在交易中（库内无原生 status 列，不猜）
+			Mark:   mid[sym],
+			CtVal:  f64ptr(0), // quanto_multiplier 无库源 → nil（诚实缺）
 		}
+		if ap, ok := fund[sym]; ok {
+			if sec, ok2 := ivl[sym]; ok2 && sec > 0 {
+				// 年化% → 单期小数（binance 源同式）；interval 秒 → 小时
+				r.FundingRate = ap * sec / (365 * 100 * 86400)
+				r.IntervalH = int(math.Round(sec / 3600))
+			}
+		}
+		rows = append(rows, r)
 	}
 	return rows, nil
+}
+
+// symbols gate perp 宇宙枚举（ticks 24h 活跃符号）。
+func (g gate) symbols(ctx context.Context) ([]string, error) {
+	rows, err := g.pool.Query(ctx, `SELECT DISTINCT symbol FROM ticks
+		WHERE venue='gate' AND venue_type='perp' AND ts > now()-interval '24 hours' ORDER BY symbol`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var s string
+		if rows.Scan(&s) == nil {
+			out = append(out, s)
+		}
+	}
+	return out, rows.Err()
 }

@@ -98,10 +98,11 @@ func (b binance) Scan(ctx context.Context) ([]Row, error) {
 			CtVal: f64ptr(1.0), // D-311 S2：USDT-M qty=基础币数，无合约面值概念
 		})
 	}
-	fund := b.latestFacts(ctx, "funding", "binance_ws_markprice", "15 minutes")
-	ivl := b.latestFacts(ctx, "funding_interval", "", "15 minutes")
-	vol := b.latestFacts(ctx, "vol24h", "binance_ws_ticker", "30 minutes")
-	mid := b.latestTicksMid(ctx)
+	fund := latestFacts(ctx, b.pool, "binance", "funding", "binance_ws_markprice", "15 minutes")
+	ivl := latestFacts(ctx, b.pool, "binance", "funding_interval", "", "15 minutes")
+	vol := latestFacts(ctx, b.pool, "binance", "vol24h", "binance_ws_ticker", "30 minutes")
+	idxP := latestFacts(ctx, b.pool, "binance", "index_price", "binance_ws_markprice", "15 minutes") // D-591 R2
+	mid := latestTicksMid(ctx, b.pool, "binance")
 	for i := range rows {
 		sym := rows[i].Symbol
 		if ap, ok := fund[sym]; ok {
@@ -112,25 +113,27 @@ func (b binance) Scan(ctx context.Context) ([]Row, error) {
 			}
 		}
 		rows[i].Vol24h = vol[sym]
-		rows[i].Mark = mid[sym] // ≈mark（bookTicker mid）；index 无库源→LastBasisBps NULL（既有守卫）
+		rows[i].Mark = mid[sym]   // ≈mark（bookTicker mid）
+		rows[i].Index = idxP[sym] // D-591 R2：index 同帧落库；缺=0→basisBps nil 诚实缺（既有守卫）
 	}
 	return rows, nil
 }
 
-// latestFacts 批查 kind 最新值（src 非空则锚定；funding_interval 落点 src 异构不过滤）。
-func (b binance) latestFacts(ctx context.Context, kind, src, maxAge string) map[string]float64 {
+// latestFacts 批查 venue kind 最新值（src 非空则锚定；funding_interval 落点 src 异构不过滤）。
+// D-591 R3：泛化 venue 参数供 okx/gate 读库化共用。
+func latestFacts(ctx context.Context, pool *pgxpool.Pool, venue, kind, src, maxAge string) map[string]float64 {
 	q := `SELECT DISTINCT ON (symbol) symbol, value FROM facts
-		WHERE kind=$1 AND venue='binance' AND ts > now()-$2::interval`
-	args := []any{kind, maxAge}
+		WHERE kind=$1 AND venue=$2 AND ts > now()-$3::interval`
+	args := []any{kind, venue, maxAge}
 	if src != "" {
-		q += ` AND src=$3`
+		q += ` AND src=$4`
 		args = append(args, src)
 	}
 	q += ` ORDER BY symbol, ts DESC`
 	out := map[string]float64{}
-	rows, err := b.pool.Query(ctx, q, args...)
+	rows, err := pool.Query(ctx, q, args...)
 	if err != nil {
-		log.Printf("[universe-radar] binance facts %s: %v", kind, err)
+		log.Printf("[universe-radar] %s facts %s: %v", venue, kind, err)
 		return out
 	}
 	defer rows.Close()
@@ -144,14 +147,14 @@ func (b binance) latestFacts(ctx context.Context, kind, src, maxAge string) map[
 	return out
 }
 
-// latestTicksMid 批查 perp 最新 tick 中价（≈mark 近似）。
-func (b binance) latestTicksMid(ctx context.Context) map[string]float64 {
+// latestTicksMid 批查 venue perp 最新 tick 中价（≈mark 近似）。
+func latestTicksMid(ctx context.Context, pool *pgxpool.Pool, venue string) map[string]float64 {
 	out := map[string]float64{}
-	rows, err := b.pool.Query(ctx, `SELECT DISTINCT ON (symbol) symbol, (bid+ask)/2 FROM ticks
-		WHERE venue='binance' AND venue_type='perp' AND ts > now()-interval '120 seconds'
-		ORDER BY symbol, ts DESC`)
+	rows, err := pool.Query(ctx, `SELECT DISTINCT ON (symbol) symbol, (bid+ask)/2 FROM ticks
+		WHERE venue=$1 AND venue_type='perp' AND ts > now()-interval '120 seconds'
+		ORDER BY symbol, ts DESC`, venue)
 	if err != nil {
-		log.Printf("[universe-radar] binance ticks: %v", err)
+		log.Printf("[universe-radar] %s ticks: %v", venue, err)
 		return out
 	}
 	defer rows.Close()
