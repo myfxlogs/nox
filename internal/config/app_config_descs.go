@@ -97,7 +97,7 @@ var appConfigDescs = map[string]string{
 	"ARB_PF_ADMIT_MIN_DEPTH_USD":                 "永续资金费策略准入：最小深度（USD）",
 	"ARB_PF_ADMIT_MIN_SAMPLES":                   "永续资金费策略准入：最小样本数",
 	"ARB_PF_ADMIT_PIN_PCT":                       "永续资金费策略准入：钉顶防护线（任一腿资金费均值绝对值≥此转人工复审）",
-	"ARB_POSITION_EVAL_SEC":                      "持仓评估周期（秒）",
+	"ARB_POSITION_EVAL_SEC":                      "退出评估饥荒看门狗周期（秒）",
 	"ARB_PROBE_ENABLED":                          "true=开：探针交易（小额验证通道）",
 	"ARB_PROBE_EVAL_DAYS":                        "探针评估天数（探针结果统计窗）",
 	"ARB_REPO_COLLECT_INTERVAL":                  "逆回购数据采集周期",
