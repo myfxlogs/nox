@@ -82,18 +82,18 @@ func TestD558_FatalDedup30min(t *testing.T) {
 	ctx := context.Background()
 	fatal := errors.New("BINANCE_PROXY_URL 未配置（app_config 无行且 env 未设）")
 
-	// D-592：insertAlert 漏斗同键去重上线——同 fatal 30min 内重发不落行（原 D-558
-	// 语义「各落一行」被去重覆盖，行数 2→1）；飞书推判定走同 key 对齐。
+	// D-592 R1：insertAlert 漏斗同键去重分级——critical 窗内重发仍落行（审计不丢），
+	// 仅跳飞书推送（同 key 对齐判定）；warn/info 维持全抑制。
 	mapped := "xasset-monitor " + fatal.Error()
 	reportFatal(ctx, s, fatal) // 首发生：落行+推（凭据缺席只 log）
 	if !hasRecentSameKeyAlert(ctx, s, "critical", mapped) {
 		t.Fatal("首发生后 30min 内应有同键 critical 在档")
 	}
-	reportFatal(ctx, s, fatal) // 30min 内重发：漏斗去重不落行、飞书同 key 抑制
+	reportFatal(ctx, s, fatal) // 30min 内重发：critical 仍落行（审计）、飞书同 key 抑制
 	var n int
 	if err := s.Pool().QueryRow(ctx,
-		`SELECT count(*) FROM alerts WHERE level='critical' AND message LIKE 'xasset-monitor%'`).Scan(&n); err != nil || n != 1 {
-		t.Fatalf("同键重发应被漏斗抑制（1 行）n=%d err=%v", n, err)
+		`SELECT count(*) FROM alerts WHERE level='critical' AND message LIKE 'xasset-monitor%'`).Scan(&n); err != nil || n != 2 {
+		t.Fatalf("critical 同键重发应仍落行（2 行审计不丢）n=%d err=%v", n, err)
 	}
 	// 超窗：把在档行 ts 拨回 31min 前 → 同键判否，重发落第二行。
 	if _, err := s.Pool().Exec(ctx,
@@ -105,8 +105,8 @@ func TestD558_FatalDedup30min(t *testing.T) {
 	}
 	reportFatal(ctx, s, fatal)
 	if err := s.Pool().QueryRow(ctx,
-		`SELECT count(*) FROM alerts WHERE level='critical' AND message LIKE 'xasset-monitor%'`).Scan(&n); err != nil || n != 2 {
-		t.Fatalf("超窗重发应落第二行 n=%d err=%v", n, err)
+		`SELECT count(*) FROM alerts WHERE level='critical' AND message LIKE 'xasset-monitor%'`).Scan(&n); err != nil || n != 3 {
+		t.Fatalf("超窗重发应落第三行（窗内重发已计第二行）n=%d err=%v", n, err)
 	}
 }
 
