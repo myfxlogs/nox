@@ -134,12 +134,14 @@ func TestD580_WaitConditionExposed(t *testing.T) {
 	}
 }
 
-// A3：数据缺诚实——报价缺/报价超 5min/monitor 无行 → 三字段留空+「（实况价差不可得）」。
+// A3：数据缺诚实——报价缺/报价超 5min/monitor 无行 → 三字段留空+「（实况价差不可得：<因>）」
+// （D-006 S4 带因升级：黑话后缀升级为可排障因串）。
 func TestD580_WaitConditionDataMissing(t *testing.T) {
 	t.Run("报价缺", func(t *testing.T) {
 		svc := d580ReadySvc(t)
 		row := d580Row(t, svc)
-		if !row.Ready || !strings.HasSuffix(row.WaitReason, "（实况价差不可得）") {
+		if !row.Ready || !strings.Contains(row.WaitReason, "实况价差不可得：") ||
+			!strings.Contains(row.WaitReason, "qbus未接") {
 			t.Fatalf("reason=%q ready=%v", row.WaitReason, row.Ready)
 		}
 		if row.WaitCurrentBps != nil || row.WaitThresholdBps != nil || row.WaitGapBps != nil {
@@ -150,8 +152,9 @@ func TestD580_WaitConditionDataMissing(t *testing.T) {
 		svc := d580ReadySvc(t)
 		d580Publish(svc, 2000, 2002.06, 6*time.Minute)
 		row := d580Row(t, svc)
-		if !strings.HasSuffix(row.WaitReason, "（实况价差不可得）") || row.WaitCurrentBps != nil {
-			t.Fatalf("超龄应留空+后缀: %q", row.WaitReason)
+		if !strings.Contains(row.WaitReason, "实况价差不可得：") || !strings.Contains(row.WaitReason, "报价超龄") ||
+			row.WaitCurrentBps != nil {
+			t.Fatalf("超龄应留空+带因后缀: %q", row.WaitReason)
 		}
 	})
 	t.Run("monitor无行", func(t *testing.T) {

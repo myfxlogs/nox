@@ -120,41 +120,90 @@ func legMarket(venueKey, canonical string) (vt, sym string) {
 	return "", ""
 }
 
+// exposureCapsGate D-006 S3：闸 6（venue 敞口 cap 前瞻化）+闸 6.5（canonical 聚簇 cap）。
+// 475a 三态同判据：cap=0 冻结 / Σ在途+本次名义>cap 拒（前瞻——存量式只拦下一笔不拦当前笔已改）。
+// 闸 6.5：同标的多仓同向基差聚簇实证（#11/#12 XAUUSD）；canonical 买卖同名单判。
+// 返回 (拒因, false) 或 ("", true) 放行。
+func (s *Service) exposureCapsGate(ctx context.Context, c pgstore.XAssetComboAdminRow, caps map[string]pgstore.VenueExposureCap) (string, bool) {
+	proposed := c.MaxGrossUSD
+	if c.NotionalUSD != nil {
+		proposed = *c.NotionalUSD
+	}
+	for _, v := range []string{bareVenueKey(c.VenueBuy), bareVenueKey(c.VenueSell)} {
+		if capRow, ok := caps[v]; ok && capRow.Enabled {
+			if capRow.CapUSD == 0 {
+				return fmt.Sprintf("敞口上限冻结：账户 %s 上限设为0，暂停新入场", v), false
+			}
+			sum, err := s.venueExposureSum(v)
+			if err != nil {
+				return fmt.Sprintf("敞口查询失败（保守不放行）: 账户 %s %v", v, err), false
+			}
+			if sum+proposed > capRow.CapUSD {
+				return fmt.Sprintf("敞口超限：账户 %s 现有敞口 $%.0f+本次 $%.0f 超过上限 $%.0f", v, sum, proposed, capRow.CapUSD), false
+			}
+		}
+	}
+	canons := []string{c.CanonicalBuy}
+	if c.CanonicalSell != c.CanonicalBuy {
+		canons = append(canons, c.CanonicalSell)
+	}
+	for _, canon := range canons {
+		if r := s.store.CanonicalCapReject(ctx, canon, proposed); r != "" {
+			return r, false
+		}
+	}
+	return "", true
+}
+
 // fillWaitCondition D-580：XASSET_CARRY 七闸全过时 WaitReason 人话整串+三字段透出。
 func (s *Service) fillWaitCondition(ctx context.Context, c pgstore.XAssetComboAdminRow, row *v1.XAssetPendingEntryRow, ready bool) {
 	if !ready || row.EntryKind != "XASSET_CARRY" {
 		return
 	}
-	if cur, thr, ok := s.waitEntryBps(ctx, c); ok {
+	if cur, thr, ok, reason := s.waitEntryBps(ctx, c); ok {
 		gap := thr - cur
 		row.WaitReason = fmt.Sprintf("入场价差>%.1f｜当前%.1f｜还差%.1fbps", thr, cur, gap) // D-587 坑3：短格式（列头已含「等待」前缀）
 		row.WaitCurrentBps, row.WaitThresholdBps, row.WaitGapBps = &cur, &thr, &gap
-	} else {
-		row.WaitReason += "（实况价差不可得）" // 诚实不猜（报价缺/超龄/monitor 无行）
+	} else if reason != "" {
+		row.WaitReason += "（实况价差不可得：" + reason + "）" // D-006 S4：带因不黑话
 	}
 }
 
 // waitEntryBps D-580：待入场等待条件实况——展示值与决策面（engine_opp 安全边际闸）
 // 同公式同源：entryBps=(cexBid−mtAsk)/mtAsk×1e4 双腿 qbus 实时现算；
-// 阈值=LatestXAssetEntryGate noise_bps（同接口同窗）。反向构型（MT 卖腿）monitor
-// 方向未定义（engine 拒开同判）/qbus 未接线/报价缺或超 5min/monitor 无行或查询败
-// → ok=false，调用方留空+诚实后缀不猜。
-func (s *Service) waitEntryBps(ctx context.Context, c pgstore.XAssetComboAdminRow) (cur, thr float64, ok bool) {
-	if !keydomain.IsMTKey(c.VenueBuy) || s.qbus == nil {
-		return 0, 0, false
+// 阈值=LatestXAssetEntryGate noise_bps（同接口同窗）。
+// D-006 S4：ok=false 时带 reason——MT腿反向构型 / qbus未接{venue}:{symbol} /
+// {venue}:{symbol}报价超龄{min}分钟 / monitor行缺 / 查询失败:{err}，排障信息全透出。
+func (s *Service) waitEntryBps(ctx context.Context, c pgstore.XAssetComboAdminRow) (cur, thr float64, ok bool, reason string) {
+	if !keydomain.IsMTKey(c.VenueBuy) {
+		return 0, 0, false, "MT腿反向构型"
+	}
+	if s.qbus == nil {
+		return 0, 0, false, "qbus未接" + c.CanonicalBuy
 	}
 	cexV, mtV := monitorLegKeys(c)
 	_, noiseBps, _, _, gateOK, err := s.store.LatestXAssetEntryGate(ctx, monitorPairKey(c), cexV, mtV, monitorFreshWindow)
-	if err != nil || !gateOK {
-		return 0, 0, false
+	if err != nil {
+		return 0, 0, false, fmt.Sprintf("查询失败:%v", err)
+	}
+	if !gateOK {
+		return 0, 0, false, "monitor行缺"
 	}
 	mtQ, ok1 := s.qbus.Latest(c.CanonicalBuy, c.VenueBuy)
 	cexQ, ok2 := s.qbus.Latest(c.CanonicalSell, c.VenueSell)
-	if !ok1 || !ok2 || mtQ.Ask <= 0 || cexQ.Bid <= 0 ||
-		time.Since(mtQ.Time) > tickFreshWindow || time.Since(cexQ.Time) > tickFreshWindow {
-		return 0, 0, false
+	if !ok1 || mtQ.Ask <= 0 {
+		return 0, 0, false, "qbus未接" + c.VenueBuy + ":" + c.CanonicalBuy
 	}
-	return (cexQ.Bid - mtQ.Ask) / mtQ.Ask * 1e4, noiseBps, true
+	if !ok2 || cexQ.Bid <= 0 {
+		return 0, 0, false, "qbus未接" + c.VenueSell + ":" + c.CanonicalSell
+	}
+	if age := time.Since(mtQ.Time); age > tickFreshWindow {
+		return 0, 0, false, fmt.Sprintf("%s:%s报价超龄%.0f分钟", c.VenueBuy, c.CanonicalBuy, age.Minutes())
+	}
+	if age := time.Since(cexQ.Time); age > tickFreshWindow {
+		return 0, 0, false, fmt.Sprintf("%s:%s报价超龄%.0f分钟", c.VenueSell, c.CanonicalSell, age.Minutes())
+	}
+	return (cexQ.Bid - mtQ.Ask) / mtQ.Ask * 1e4, noiseBps, true, ""
 }
 
 // bareVenueKey venue 键剥 :后缀（flags/caps/快照 bare 域对齐 engine bareVenue）。

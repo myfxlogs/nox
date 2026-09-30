@@ -224,20 +224,10 @@ func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow,
 			return kind, "监控数据过期（超过30分钟无更新）", 6, false
 		}
 	}
-	// 闸 6：venue 敞口 cap（475a 三态同判据：cap=0 冻结 / Σ超限）。
-	for _, v := range []string{bareVenueKey(c.VenueBuy), bareVenueKey(c.VenueSell)} {
-		if capRow, ok := caps[v]; ok && capRow.Enabled {
-			if capRow.CapUSD == 0 {
-				return kind, fmt.Sprintf("敞口上限冻结：账户 %s 上限设为0，暂停新入场", v), 7, false
-			}
-			sum, err := s.venueExposureSum(v)
-			if err != nil {
-				return kind, fmt.Sprintf("敞口查询失败（保守不放行）: 账户 %s %v", v, err), 7, false
-			}
-			if sum > capRow.CapUSD {
-				return kind, fmt.Sprintf("敞口超限：账户 %s 现有敞口 $%.0f 超过上限 $%.0f", v, sum, capRow.CapUSD), 7, false
-			}
-		}
+	// 闸 6+6.5：venue 敞口 cap（前瞻化）+ canonical 聚簇 cap（D-006 S3）——
+	// 判据体在 exposureCapsGate（service_pending_entries_helpers.go）。
+	if reason, ok := s.exposureCapsGate(ctx, c, caps); !ok {
+		return kind, reason, 7, false
 	}
 	// D-563 S3 腿池闸（杠杆感知保证金需求；同判据 comboPoolVerdict）：conflict=锁死/unknown=待定。
 	if verdict, detail := s.comboPoolVerdict(ctx, c, snaps); verdict != "ok" {
