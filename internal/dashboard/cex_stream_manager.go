@@ -21,6 +21,7 @@ import (
 	"arb/internal/reconcile"
 	"arb/internal/safego"
 	"arb/internal/store/pgstore"
+	"arb/internal/venue"
 )
 
 // CexStreamSinks 流写口集合（*pgstore.Store 全实现）。
@@ -193,15 +194,14 @@ func (m *CexStreamManager) sync(ctx context.Context) {
 // streamable 哪些配置行起流：gate:perp + binance:perp（real/demo）+ binance:spot（仅 real——
 // spot testnet ws-api 端点不在代理路由内，demo 行保持 REST 轮询兜底，D-459 实证结论）
 // + okx:perp（D-469b S1：凭据三件套齐 real/demo 同规则）。
+// 键覆盖面在 venue.HasPrivateStream（覆盖语义）；本函数叠加「该行自己起流」的门：
+// okx 统一账户一条流盖 spot/perp 两键，故 okx 起流行仍收窄 perp-only。
 func streamable(c pgstore.ExchangeConfig) bool {
 	switch c.Venue {
 	case "gate":
-		return c.VenueType == "perp" && c.BaseURL != "" // base 空=warn 跳过不直连（白名单语义）
+		return c.BaseURL != "" && venue.HasPrivateStream(c.Venue, c.VenueType, c.Simulated) // base 空=warn 跳过不直连（白名单语义）
 	case "binance":
-		if c.VenueType == "spot" {
-			return c.BaseURL != "" && !c.Simulated
-		}
-		return c.VenueType == "perp" && c.BaseURL != ""
+		return c.BaseURL != "" && venue.HasPrivateStream(c.Venue, c.VenueType, c.Simulated)
 	case "okx":
 		// D-469b S1：okx:perp 凭据三件套齐即可起（simulated 行同规则可起——与 gate/binance 同）。
 		return c.VenueType == "perp" && c.APIKey != "" && c.APISecret != "" && c.Passphrase != ""
