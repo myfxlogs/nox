@@ -122,7 +122,7 @@ func TestD580_WaitConditionExposed(t *testing.T) {
 	if !row.Ready {
 		t.Fatalf("闸未全过: reason=%q", row.WaitReason)
 	}
-	for _, want := range []string{"入场价差 > 18.8bps", "当前 10.3bps", "还差 8.5bps"} {
+	for _, want := range []string{"入场价差>18.8", "当前10.3", "还差8.5bps"} { // D-587 坑3 短格式断言
 		if !strings.Contains(row.WaitReason, want) {
 			t.Fatalf("WaitReason 缺 %q: %q", want, row.WaitReason)
 		}
@@ -168,6 +168,78 @@ func TestD580_WaitConditionDataMissing(t *testing.T) {
 		}
 		if row.WaitCurrentBps != nil {
 			t.Fatal("非等待态三字段应留空")
+		}
+	})
+}
+
+// D-587 坑4：:246「条件就绪·等机会」黑话按 kind 分流断言——
+// CARRY=等价差达阈（报价缺分支保留此前缀+诚实后缀）/ FUNDING_HEDGE=等净息差达阈。
+func TestD587_ReadyWaitKindText(t *testing.T) {
+	// CARRY：报价缺 → fillWaitCondition 前缀仍是分流后文案。
+	t.Run("XASSET_CARRY", func(t *testing.T) {
+		svc := d580ReadySvc(t)
+		row := d580Row(t, svc)
+		if !row.Ready || !strings.HasPrefix(row.WaitReason, "条件就绪·等价差达阈") {
+			t.Fatalf("reason=%q ready=%v", row.WaitReason, row.Ready)
+		}
+	})
+	// FUNDING_HEDGE：spot 买×perp 卖组合 908 走全闸就绪 → 等净息差达阈。
+	t.Run("FUNDING_HEDGE", func(t *testing.T) {
+		svc := d580ReadySvc(t)
+		st := svc.store
+		ctx := context.Background()
+		if _, err := st.Pool().Exec(ctx, `INSERT INTO xasset_allow_combos
+			(id, canonical_buy, canonical_sell, venue_buy, venue_type_buy, venue_sell, venue_type_sell, max_long_qty, max_short_qty, max_gross_usd, notional_usd, enabled, simulated)
+			VALUES (908,'FHSYM','FHSYM','binance','spot','gate','perp',1,1,1000,100,true,false)`); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			_, _ = st.Pool().Exec(ctx, `DELETE FROM xasset_allow_combos WHERE id=908;
+				DELETE FROM autotrade_allow_rules WHERE value='binance:spot';
+				DELETE FROM facts WHERE src='d587test';
+				DELETE FROM ticks WHERE symbol='FHSYM';
+				DELETE FROM fin_venue_account_snapshot WHERE venue='binance' AND src='d587test'`)
+		})
+		// 闸 1：binance:spot 放行（gate:perp 夹具已种）。
+		if _, err := st.Pool().Exec(ctx, `INSERT INTO autotrade_allow_rules (kind, value, enabled, simulated)
+			VALUES ('venue','binance:spot',true,false)`); err != nil {
+			t.Fatal(err)
+		}
+		// 闸 3：FH regime 闸——FundingPredWindow(gate,FHSYM) ≥12 样本 worst≥2.0。
+		for i := 0; i < 13; i++ {
+			if _, err := st.Pool().Exec(ctx,
+				`INSERT INTO facts (kind, venue, symbol, value, unit, ts, src)
+				 VALUES ('funding','gate','FHSYM',5.0,'pct_annualized',$1,'d587test')`,
+				time.Now().Add(-time.Duration(i)*time.Hour)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		// 闸 4：双腿 tick 新鲜（binance spot + gate perp，symbol=canonical）。
+		if _, err := st.Pool().Exec(ctx, `INSERT INTO ticks (ts, venue, symbol, bid, ask, venue_type)
+			VALUES (now(),'binance','FHSYM',100,100.1,'spot'),(now(),'gate','FHSYM',100,100.1,'perp')`); err != nil {
+			t.Fatal(err)
+		}
+		// 腿池：binance spot 快照（gate/3001157 夹具已种）。
+		if _, err := st.Pool().Exec(ctx, `INSERT INTO fin_venue_account_snapshot
+			(venue, venue_type, balance_raw, equity_raw, free_margin_raw, currency, fetched_at, src)
+			VALUES ('binance','spot',5000,5000,5000,'USDT',now(),'d587test')`); err != nil {
+			t.Fatal(err)
+		}
+		rows, err := svc.pendingEntries(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var row *v1.XAssetPendingEntryRow
+		for _, r := range rows {
+			if r.ComboId == 908 {
+				row = r
+			}
+		}
+		if row == nil {
+			t.Fatal("908 行缺失")
+		}
+		if row.EntryKind != "FUNDING_HEDGE" || !row.Ready || row.WaitReason != "条件就绪·等净息差达阈" {
+			t.Fatalf("kind=%q ready=%v reason=%q", row.EntryKind, row.Ready, row.WaitReason)
 		}
 	})
 }

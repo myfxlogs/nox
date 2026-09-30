@@ -127,7 +127,7 @@ func (s *Service) fillWaitCondition(ctx context.Context, c pgstore.XAssetComboAd
 	}
 	if cur, thr, ok := s.waitEntryBps(ctx, c); ok {
 		gap := thr - cur
-		row.WaitReason = fmt.Sprintf("等待：入场价差 > %.1fbps（24h摆幅）｜当前 %.1fbps｜还差 %.1fbps", thr, cur, gap)
+		row.WaitReason = fmt.Sprintf("入场价差>%.1f｜当前%.1f｜还差%.1fbps", thr, cur, gap) // D-587 坑3：短格式（列头已含「等待」前缀）
 		row.WaitCurrentBps, row.WaitThresholdBps, row.WaitGapBps = &cur, &thr, &gap
 	} else {
 		row.WaitReason += "（实况价差不可得）" // 诚实不猜（报价缺/超龄/monitor 无行）
