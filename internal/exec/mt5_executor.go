@@ -121,12 +121,17 @@ func (e *MT5Executor) PlaceOrder(ctx context.Context, o Order) (Fill, error) {
 		log.Printf("[exec] ERROR overfill: requested %.4f filled %.4f symbol=%s venue=%s",
 			o.Qty, filled, o.Symbol, e.venueKey)
 	}
+	// D-599 S1：订单响应通常无 commission——OrderHistory 回查 deal 级费（fail-open 0）。
+	comm := ord.GetCommission()
+	if hc := e.orderHistoryCommission(ctx, ord.GetTicket(), false); hc != 0 {
+		comm = hc
+	}
 	return Fill{
 		OrderID:    strconv.FormatInt(ord.GetTicket(), 10),
 		Price:      ord.GetOpenPrice(),
 		Qty:        ord.GetLots(),
 		Swap:       0,
-		Commission: ord.GetCommission(),
+		Commission: comm,
 		Ts:         time.Now(),
 	}, nil
 }
@@ -157,12 +162,18 @@ func (e *MT5Executor) CloseOrder(ctx context.Context, ref OrderRef) (Fill, error
 	if qty <= 0 {
 		qty = ord.GetLots()
 	}
+	// D-599 S1：平仓腿佣金走 OrderHistory out-deal 回查（响应字段通常空）；
+	// out 腿只计 out/partial-close deal，不重复入场 in-deal。fail-open 0→NULL。
+	comm := ord.GetCommission()
+	if hc := e.orderHistoryCommission(ctx, ticket, true); hc != 0 {
+		comm = hc
+	}
 	return Fill{
 		OrderID:    ref.OrderID,
 		Price:      ord.GetClosePrice(),
 		Qty:        qty,
 		Swap:       ord.GetSwap(),
-		Commission: ord.GetCommission(),
+		Commission: comm,
 		Ts:         time.Now(),
 	}, nil
 }

@@ -193,9 +193,9 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64, force boo
 			PriceActual:   &closePrice,
 			OrderID:       fill.OrderID,
 			Status:        "FILLED",
-			FilledQty:     &closeQty,                   // D-346：与 OPEN 腿同字段语义，realized 逐腿分解复核
-			AvgFillPrice:  &closePrice,                 // D-346：488/489/490 验尸=CLOSE 腿恒 NULL
-			FeeUSD:        positiveFeePtr(fill.FeeUSD), // D-422：CEX 平仓实采 USD 费落库（0→NULL）
+			FilledQty:     &closeQty,                // D-346：与 OPEN 腿同字段语义，realized 逐腿分解复核
+			AvgFillPrice:  &closePrice,              // D-346：488/489/490 验尸=CLOSE 腿恒 NULL
+			FeeUSD:        closeLegFeeUSD(fill, fx), // D-422+D-599：CEX 实采 USD 费/MT5 commission 落库（0→NULL）
 		}); err != nil {
 			if errors.Is(err, pgstore.ErrTerminalState) {
 				log.Printf("[exec] resume close leg %d already persisted (concurrent), skip", leg.ID)
@@ -270,7 +270,15 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64, force boo
 		return fmt.Errorf("position %d residual legs not closed (%d/%d)", posID, closeFilled, openFilled)
 	}
 
-	if err := p.store.ClosePosition(ctx, posID, totalPnL); err != nil {
+	// D-599 S2：净额核算——totalPnL 为价差毛值；fees_usd=全腿实采+估算费合计，
+	// fee_quality 四分位（actual/estimated/mixed/none）；净额=毛值−fees_usd 原子落库。
+	feesUSD, feeQuality := p.positionFeesUSD(legs, closeLegs, fx)
+	netPnL := totalPnL
+	if feesUSD != nil {
+		netPnL -= *feesUSD
+	}
+
+	if err := p.store.ClosePosition(ctx, posID, netPnL, feesUSD, feeQuality); err != nil {
 		if errors.Is(err, pgstore.ErrTerminalState) {
 			log.Printf("[exec] position %d already CLOSED (concurrent)", posID)
 			return nil
@@ -280,7 +288,7 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64, force boo
 	}
 	// D-249 S1 第3项：CLOSED 翻译点记录（裁定 a385b84）。
 	// 成功（非 ErrTerminalState）才写；禁预查（TOCTOU）；best-effort 不阻断。
-	p.logClosed(ctx, pos, closeLegs, totalPnL)
+	p.logClosed(ctx, pos, closeLegs, netPnL) // D-599：日志同净额口径（realized_pnl=net）
 	// D-193-A 扩包 S5：CLOSED 后触发 settlement.Settle（修复 479 缺 settlement 行根因）。
 	// settler nil=未接线（兼容旧测试）；失败不回滚 CLOSED（settlement 可重试，SettleAt 幂等）。
 	if p.settler != nil {
