@@ -1,37 +1,89 @@
+// ---------- Binance（D-591 S6：四连 REST 退役——exchangeInfo 日缓存 + ticks/facts 读库） ----------
+// 目录枚举 exchangeInfo=唯一保留 REST（24h 日缓存降频，目录数据低频变化非决策消费轮询）；
+// premiumIndex→facts funding/funding_interval、ticker/24hr→facts vol24h（!ticker@arr@1s
+// 落库）、mark→ticks binance perp mid（≈mark 近似）。coverage=core 有效集 facts/ticks，
+// 未覆盖符号诚实零值（annualize nil→资格判定跳过，禁猜值）。
 package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log"
+	"math"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ---------- Binance（4 调用：exchangeInfo + premiumIndex 全量 + ticker/24hr + fundingInfo） ----------
-
 type binance struct {
-	hc   *http.Client
-	base string
+	hc       *http.Client
+	base     string // exchangeInfo 经 proxy（封禁防护同源）
+	pool     *pgxpool.Pool
+	cacheDir string // exchangeInfo 日缓存目录（测试注入 t.TempDir()）
 }
 
 func (b binance) Venue() string { return "binance" }
 
-func (b binance) Scan(ctx context.Context) ([]Row, error) {
-	var ei struct {
-		Symbols []struct {
-			Symbol         string  `json:"symbol"`
-			BaseAsset      string  `json:"baseAsset"`
-			QuoteAsset     string  `json:"quoteAsset"`
-			ContractType   string  `json:"contractType"`
-			UnderlyingType string  `json:"underlyingType"`
-			Status         string  `json:"status"`
-			OnboardDate    flexInt `json:"onboardDate"` // ms
-		} `json:"symbols"`
+// binanceExchangeInfo exchangeInfo 响应+缓存时间戳。
+type binanceExchangeInfo struct {
+	FetchedAt time.Time `json:"fetched_at"`
+	Symbols   []struct {
+		Symbol         string  `json:"symbol"`
+		BaseAsset      string  `json:"baseAsset"`
+		QuoteAsset     string  `json:"quoteAsset"`
+		ContractType   string  `json:"contractType"`
+		UnderlyingType string  `json:"underlyingType"`
+		Status         string  `json:"status"`
+		OnboardDate    flexInt `json:"onboardDate"` // ms
+	} `json:"symbols"`
+}
+
+// exchangeInfoCached 日缓存：新鲜（<24h）直用；过期/缺失拉一次并落盘；拉失败有
+// 过期缓存 → 回落（目录低频变化，宁旧不炸整轮）。
+func (b binance) exchangeInfoCached(ctx context.Context) (binanceExchangeInfo, error) {
+	var out binanceExchangeInfo
+	path := filepath.Join(b.cacheDir, "binance-exchangeinfo.json")
+	if raw, err := os.ReadFile(path); err == nil && json.Unmarshal(raw, &out) == nil {
+		if time.Since(out.FetchedAt) < 24*time.Hour {
+			return out, nil
+		}
 	}
+	fresh, err := b.exchangeInfoFetch(ctx)
+	if err != nil {
+		if out.FetchedAt.IsZero() {
+			return out, fmt.Errorf("exchangeInfo: %w", err)
+		}
+		log.Printf("[universe-radar] binance exchangeInfo 刷新失败，回落过期缓存（%s）: %v",
+			out.FetchedAt.Format(time.RFC3339), err)
+		return out, nil
+	}
+	out = fresh
+	if raw, err := json.Marshal(out); err == nil {
+		_ = os.MkdirAll(b.cacheDir, 0o755)
+		_ = os.WriteFile(path, raw, 0o644)
+	}
+	return out, nil
+}
+
+func (b binance) exchangeInfoFetch(ctx context.Context) (binanceExchangeInfo, error) {
+	var ei binanceExchangeInfo
 	if err := getJSON(ctx, b.hc, b.base+"/fapi/v1/exchangeInfo", &ei); err != nil {
-		return nil, fmt.Errorf("exchangeInfo: %w", err)
+		return ei, err
 	}
-	universe := make(map[string]bool)
+	ei.FetchedAt = time.Now()
+	return ei, nil
+}
+
+func (b binance) Scan(ctx context.Context) ([]Row, error) {
+	ei, err := b.exchangeInfoCached(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows := make([]Row, 0, len(ei.Symbols))
 	idx := make(map[string]int)
 	for _, s := range ei.Symbols {
@@ -40,53 +92,75 @@ func (b binance) Scan(ctx context.Context) ([]Row, error) {
 			continue
 		}
 		idx[s.Symbol] = len(rows)
-		universe[s.Symbol] = true
-		// Class=underlyingType 原样存（COIN/COMMODITY/…，不臆造 TRADIFI 类）；status 原样存
 		rows = append(rows, Row{
 			Symbol: s.Symbol, Base: s.BaseAsset, Class: s.UnderlyingType,
 			Status: s.Status, LaunchTS: msTime(int64(s.OnboardDate)),
 			CtVal: f64ptr(1.0), // D-311 S2：USDT-M qty=基础币数，无合约面值概念
 		})
 	}
-	var pi []struct {
-		Symbol          string    `json:"symbol"`
-		MarkPrice       flexFloat `json:"markPrice"`
-		IndexPrice      flexFloat `json:"indexPrice"`
-		LastFundingRate flexFloat `json:"lastFundingRate"`
-	}
-	if err := getJSON(ctx, b.hc, b.base+"/fapi/v1/premiumIndex", &pi); err != nil {
-		return nil, fmt.Errorf("premiumIndex: %w", err)
-	}
-	for _, p := range pi {
-		if i, ok := idx[p.Symbol]; ok { // 全量比 universe 多，只 join universe 内 symbol
-			rows[i].Mark = float64(p.MarkPrice)
-			rows[i].Index = float64(p.IndexPrice)
-			rows[i].FundingRate = float64(p.LastFundingRate)
+	fund := b.latestFacts(ctx, "funding", "binance_ws_markprice", "15 minutes")
+	ivl := b.latestFacts(ctx, "funding_interval", "", "15 minutes")
+	vol := b.latestFacts(ctx, "vol24h", "binance_ws_ticker", "30 minutes")
+	mid := b.latestTicksMid(ctx)
+	for i := range rows {
+		sym := rows[i].Symbol
+		if ap, ok := fund[sym]; ok {
+			if sec, ok2 := ivl[sym]; ok2 && sec > 0 {
+				// 年化% → 单期小数（D-582 同义换算）；interval 秒 → 小时
+				rows[i].FundingRate = ap * sec / (365 * 100 * 86400)
+				rows[i].IntervalH = int(math.Round(sec / 3600))
+			}
 		}
-	}
-	var tk []struct {
-		Symbol      string    `json:"symbol"`
-		QuoteVolume flexFloat `json:"quoteVolume"`
-	}
-	if err := getJSON(ctx, b.hc, b.base+"/fapi/v1/ticker/24hr", &tk); err != nil {
-		return nil, fmt.Errorf("ticker/24hr: %w", err)
-	}
-	for _, t := range tk {
-		if i, ok := idx[t.Symbol]; ok {
-			rows[i].Vol24h = float64(t.QuoteVolume)
-		}
-	}
-	var fi []struct {
-		Symbol               string  `json:"symbol"`
-		FundingIntervalHours flexInt `json:"fundingIntervalHours"`
-	}
-	if err := getJSON(ctx, b.hc, b.base+"/fapi/v1/fundingInfo", &fi); err != nil {
-		return nil, fmt.Errorf("fundingInfo: %w", err)
-	}
-	for _, f := range fi {
-		if i, ok := idx[f.Symbol]; ok {
-			rows[i].IntervalH = int(f.FundingIntervalHours)
-		}
+		rows[i].Vol24h = vol[sym]
+		rows[i].Mark = mid[sym] // ≈mark（bookTicker mid）；index 无库源→LastBasisBps NULL（既有守卫）
 	}
 	return rows, nil
+}
+
+// latestFacts 批查 kind 最新值（src 非空则锚定；funding_interval 落点 src 异构不过滤）。
+func (b binance) latestFacts(ctx context.Context, kind, src, maxAge string) map[string]float64 {
+	q := `SELECT DISTINCT ON (symbol) symbol, value FROM facts
+		WHERE kind=$1 AND venue='binance' AND ts > now()-$2::interval`
+	args := []any{kind, maxAge}
+	if src != "" {
+		q += ` AND src=$3`
+		args = append(args, src)
+	}
+	q += ` ORDER BY symbol, ts DESC`
+	out := map[string]float64{}
+	rows, err := b.pool.Query(ctx, q, args...)
+	if err != nil {
+		log.Printf("[universe-radar] binance facts %s: %v", kind, err)
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var sym string
+		var v float64
+		if rows.Scan(&sym, &v) == nil {
+			out[sym] = v
+		}
+	}
+	return out
+}
+
+// latestTicksMid 批查 perp 最新 tick 中价（≈mark 近似）。
+func (b binance) latestTicksMid(ctx context.Context) map[string]float64 {
+	out := map[string]float64{}
+	rows, err := b.pool.Query(ctx, `SELECT DISTINCT ON (symbol) symbol, (bid+ask)/2 FROM ticks
+		WHERE venue='binance' AND venue_type='perp' AND ts > now()-interval '120 seconds'
+		ORDER BY symbol, ts DESC`)
+	if err != nil {
+		log.Printf("[universe-radar] binance ticks: %v", err)
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var sym string
+		var v float64
+		if rows.Scan(&sym, &v) == nil {
+			out[sym] = v
+		}
+	}
+	return out
 }

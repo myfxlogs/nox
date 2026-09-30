@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -59,7 +60,11 @@ func run(ctx context.Context) error {
 	// 扫三所：单所失败 fail-open（log+继续，返回 error 让 cron 日志可见）。
 	var rows []normRow
 	var firstErr error
-	for _, src := range allSources(hc, proxy) {
+	cacheDir, cerr := os.UserCacheDir()
+	if cerr != nil {
+		cacheDir = os.TempDir()
+	}
+	for _, src := range allSources(hc, proxy, st.Pool(), filepath.Join(cacheDir, "arb-universe-radar")) {
 		rs, err := src.Scan(ctx)
 		if err != nil {
 			log.Printf("universe-radar: venue=%s 扫描失败: %v", src.Venue(), err)

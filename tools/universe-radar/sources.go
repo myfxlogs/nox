@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Row 归一化的单合约快照行。
@@ -42,8 +44,8 @@ type Source interface {
 }
 
 // allSources 注册表：新所=实现接口+注册一行。
-func allSources(hc *http.Client, proxy string) []Source {
-	return []Source{binance{hc, proxy}, okx{hc, proxy}, gate{hc, proxy}}
+func allSources(hc *http.Client, proxy string, pool *pgxpool.Pool, cacheDir string) []Source {
+	return []Source{binance{hc: hc, base: proxy, pool: pool, cacheDir: cacheDir}, okx{hc, proxy}, gate{hc, proxy}}
 }
 
 func getJSON(ctx context.Context, hc *http.Client, url string, dst any) error {
