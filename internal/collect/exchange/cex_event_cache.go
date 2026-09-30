@@ -173,7 +173,7 @@ func NewCachedVenueQuerier(rest venue.Querier, cache *PositionEventCache) *Cache
 // VenueKey 透传 REST querier 身份（撞键归一 #id 后缀随 rest）。
 func (q *CachedVenueQuerier) VenueKey() string { return q.rest.VenueKey() }
 
-// QueryOpenedOrders 实现 reconcile.venue.Querier。
+// QueryOpenedOrders 实现 venue.Querier。
 func (q *CachedVenueQuerier) QueryOpenedOrders(ctx context.Context) ([]venue.Order, error) {
 	if orders, ok := q.cache.get(q.rest.VenueKey(), q.ttl, q.now()); ok {
 		return orders, nil
