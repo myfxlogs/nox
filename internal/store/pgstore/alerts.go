@@ -7,6 +7,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"arb/internal/alerttext"
 )
 
 // Alert 对应 alerts 表（§2.5）。
@@ -40,6 +42,7 @@ func (s *Store) InsertPositionAlert(ctx context.Context, posID int64, level, mes
 
 // insertAlert 共享插入实现（D-411：列差异参数化，禁第二份插入逻辑）。
 func (s *Store) insertAlert(ctx context.Context, ruleID, posID *int64, level, message string) error {
+	message = alerttext.VenueErrCN(message) // D-588：venue 英文错误壳中文化（漏斗单点=表+topic+feishu 三通道同归一）
 	if s.alertPaused {
 		return nil
 	}
