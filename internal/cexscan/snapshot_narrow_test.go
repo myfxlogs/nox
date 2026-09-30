@@ -23,13 +23,14 @@ func keys(rowsLen int, at func(i int) (string, string)) map[string]bool {
 	return m
 }
 
-// TestSnapshotRows_Narrow full=false 只落无流键：okx:funding + cfd；
-// 有流键（okx spot/perp→unified、binance:perp、gate:perp）退出周期写。
+// TestSnapshotRows_Narrow full=false 只落无流键：okx:funding；
+// 有流键（okx spot/perp→unified、binance:perp、gate:perp）与 cfd/MT 键（3d-P1#1b
+// 余额帧事件写口 src=mt_frame）退出周期写。
 func TestSnapshotRows_Narrow(t *testing.T) {
 	realKeys := map[string]bool{"3001157": true}
 	rows := snapshotRowsFor(snapSet(), realKeys, false)
 	got := keys(len(rows), func(i int) (string, string) { return rows[i].Venue, rows[i].VenueType })
-	want := map[string]bool{"okx/funding": true, "3001157/mt5": true}
+	want := map[string]bool{"okx/funding": true}
 	if len(got) != len(want) {
 		t.Fatalf("narrow rows = %v, want %v", got, want)
 	}

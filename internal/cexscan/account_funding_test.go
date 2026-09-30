@@ -2,18 +2,28 @@
 package cexscan
 
 import (
+	"sync"
 	"testing"
 
 	v1 "arb/internal/gen/dashboardv1"
 )
 
-// fakeSnapshotter mock AccountSnapshotter。
+// fakeSnapshotter mock AccountSnapshotter（mu 保护：#1b 测试运行中换 infos）。
 type fakeSnapshotter struct {
+	mu    sync.Mutex
 	infos []*v1.AccountInfo
 }
 
 func (f *fakeSnapshotter) Snapshot() []*v1.AccountInfo {
-	return f.infos
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]*v1.AccountInfo(nil), f.infos...)
+}
+
+func (f *fakeSnapshotter) setInfos(infos []*v1.AccountInfo) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.infos = infos
 }
 
 // TestScanAccounts 映射 AccountInfo → AccountSnapshot。

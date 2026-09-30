@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"sync"
 	"time"
 
 	"arb/internal/bus"
@@ -31,10 +30,6 @@ type Scanner struct {
 	symbols     []string
 	// refreshTopic D-007 S3：scanOnce 落库毕 emit "cex_scan"（前端失效触发；nil=未接线静默）。
 	refreshTopic *bus.Topic[string]
-
-	// D-383 B1：order-event 定向落库收合态（per-venue lastWrite，OnOrderEvent 专用）。
-	orderSnapMu   sync.Mutex
-	orderSnapLast map[string]time.Time
 }
 
 // NewScanner 创建扫描器。
@@ -51,15 +46,14 @@ func NewScanner(cfg *config.Config, store *pgstore.Store, am AccountSnapshotter,
 		}
 	}
 	return &Scanner{
-		cfg:           cfg,
-		store:         store,
-		accounts:      am,
-		earn:          earn,
-		client:        httpx.Client(),
-		bnAPIURL:      bnAPIURL,
-		okxSpotBase:   okxSpotBase,
-		symbols:       cfg.CexScanSymbols,
-		orderSnapLast: make(map[string]time.Time),
+		cfg:         cfg,
+		store:       store,
+		accounts:    am,
+		earn:        earn,
+		client:      httpx.Client(),
+		bnAPIURL:    bnAPIURL,
+		okxSpotBase: okxSpotBase,
+		symbols:     cfg.CexScanSymbols,
 	}
 }
 
@@ -99,9 +93,10 @@ func (s *Scanner) SetRefreshTopic(t *bus.Topic[string]) { s.refreshTopic = t }
 
 // snapshotAccounts 账户快照落库（读 AccountMonitor 内存缓存→InsertVenueAccountSnapshots）。
 // D-004 收窄：full=true 仅 boot 水合全量；full=false 周期分支排除有私有 WS 事件写口的键
-// （事件写口=私有 WS 直写同表，venue.HasPrivateStream）——保留 cfd/MT（行待 #1b 事件化）、
-// okx funding/earn、binance funding、gate spot 等无流键（子账户无 WS 余额频道=无流源
-// D-006，统计/展示用途）。
+// （事件写口=私有 WS 直写同表，venue.HasPrivateStream）与 cfd/MT 键（3d-P1#1b：余额帧
+// → acctTopic → account_event_snapshot.go 即写，业主令拒绝快照延时信息）——剩余周期键
+// 只剩 okx funding/earn、binance funding 等无流子账户（无 WS 余额频道=无流源 D-006，
+// 统计/展示用途；按需刷新型去留 #1c 处理）。
 // D-360 S2：写时过滤只收 real（证真才留）——cex=!Simulated / cfd=venue∈is_real 键集
 // （核证点①②见 account.go IsRealAccount）；键集查询失败 → 本轮整批不落（fail-closed）。
 func (s *Scanner) snapshotAccounts(ctx context.Context, full bool) error {
@@ -130,6 +125,9 @@ func snapshotRowsFor(snaps []AccountSnapshot, realKeys map[string]bool, full boo
 	if !full {
 		kept := snaps[:0]
 		for _, sn := range snaps {
+			if sn.AssetType != "cex" { // cfd/MT 键：#1b 余额帧事件写口（src=mt_frame），周期补写退役
+				continue
+			}
 			if venue.HasPrivateStream(sn.Venue, sn.VenueType, sn.Simulated) {
 				continue
 			}
