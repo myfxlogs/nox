@@ -72,8 +72,12 @@ func StartAccountEventSnapshots(ctx context.Context, topic *bus.Topic[*v1.Accoun
 			if !ok {
 				return
 			}
-			vk := ev.GetAccount().GetVenueKey()
-			if vk == "" || bus.IsCexVenueKey(vk) { // CEX 键：cex_event_cache 事件写口已覆盖
+			info := ev.GetAccount()
+			vk := info.GetVenueKey()
+			// 跳过判据：AssetType=="cex" 为权威（部署实证 18:08：IsCexVenueKey 只认
+			// :perp/:spot，binance:funding / okx:unified/earn/funding 键被当 MT 写出
+			// src=mt_frame 误行）；IsCexVenueKey 保留作第二道（AssetType 缺省时的键侧兜）。
+			if vk == "" || info.GetAssetType() == "cex" || bus.IsCexVenueKey(vk) {
 				continue
 			}
 			venue := keydomain.BareOf(vk)
@@ -128,6 +132,9 @@ func mtFrameRows(ctx context.Context, store orderEventStore, am AccountSnapshott
 	}
 	var mine []AccountSnapshot
 	for _, sn := range ScanAccounts(am) {
+		if sn.AssetType == "cex" { // 事件侧已拦，行构造双保险（bare venue 撞名防御）
+			continue
+		}
 		if sn.Venue == venue {
 			mine = append(mine, sn)
 		}
