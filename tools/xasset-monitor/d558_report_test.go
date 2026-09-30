@@ -107,3 +107,29 @@ func TestD558_ReportFatalNilSafe(t *testing.T) {
 	reportFatal(context.Background(), nil, errors.New("pg down"))
 	reportFatal(context.Background(), nil, nil)
 }
+
+// D-588：venue 英文错误 fatal → reportFatal → alerts 行 message 已中文化
+// （insertAlert 漏斗单点挂点）且 xasset-monitor 前缀保留（去重 LIKE 不破）。
+func TestD558_VenueErrAlertCN(t *testing.T) {
+	s := d558Store(t)
+	ctx := context.Background()
+	fatal := errors.New(`fetch binance PAXGUSDT: premiumIndex: status 418: {"code":-1003,"msg":"Way too many requests; IP(192.229.85.35) banned until 1790736439136. Please use the websocket for live updates to avoid bans."}`)
+
+	reportFatal(ctx, s, fatal)
+	var msg string
+	if err := s.Pool().QueryRow(ctx,
+		`SELECT message FROM alerts WHERE level='critical'`).Scan(&msg); err != nil {
+		t.Fatalf("critical 行缺失: %v", err)
+	}
+	if !strings.HasPrefix(msg, "xasset-monitor ") {
+		t.Fatalf("前缀保留（去重 LIKE 依赖）: %q", msg)
+	}
+	for _, w := range []string{"请求频率超限，交易所已临时封禁出口IP至", "（错误码 -1003）", "fetch binance PAXGUSDT: premiumIndex:"} {
+		if !strings.Contains(msg, w) {
+			t.Fatalf("缺 %q: %q", w, msg)
+		}
+	}
+	if strings.Contains(msg, "banned until") {
+		t.Fatalf("英文壳未替换: %q", msg)
+	}
+}

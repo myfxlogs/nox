@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 
+	"arb/internal/alerttext"
 	"arb/internal/config"
 	"arb/internal/notify"
 	"arb/internal/store/pgstore"
@@ -86,7 +87,7 @@ func pushFatalFeishu(ctx context.Context, st *pgstore.Store, fatalErr error) {
 		log.Printf("xasset-monitor: fatal 飞书推送跳过（chat_id 未绑定/读取失败: %v）", err)
 		return
 	}
-	if err := fc.SendText(ctx, chatID, "xasset-monitor fatal: "+fatalErr.Error()); err != nil {
+	if err := fc.SendText(ctx, chatID, "xasset-monitor 致命："+alerttext.VenueErrCN(fatalErr.Error())); err != nil { // D-588：直推旁路同款中文化（不走 alerts 漏斗）
 		log.Printf("xasset-monitor: fatal 飞书发送失败: %v", err)
 		return
 	}
