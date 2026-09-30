@@ -71,6 +71,8 @@ type GatePrivateWS struct {
 	// 写（runOnce WriteJSON）共用 conn，无互斥=数据竞争（race×3 实证）；conn 写统一走
 	// g.writeConn 串行化。
 	writeMu sync.Mutex
+	// onReconnect D-004 P1#6：订阅就绪回调（断流后事件漏发补救→对账 kick）。nil 安全。
+	onReconnect func()
 }
 
 // NewGatePrivateWS 创建采集器。baseURL 空→调用方跳过（不落默认直连：key 白名单语义要求显式走代理）。
@@ -95,6 +97,9 @@ func (g *GatePrivateWS) SetBalanceLedger(l *bus.BalanceLedger) { g.balLedger = l
 
 // SetGateHooks D-570 包C S7：注入风险事件 hooks（镜像 SetBalanceLedger 先例；nil 安全）。
 func (g *GatePrivateWS) SetGateHooks(h GatePrivateHooks) { g.hooks = h }
+
+// SetOnReconnect D-004 P1#6：注入就绪回调（每次连接+订阅成功调一次，含首连）。nil 安全。
+func (g *GatePrivateWS) SetOnReconnect(f func()) { g.onReconnect = f }
 
 // WSURL base_url → WS 端点派生（SSOT：TrimSuffix "/api/v4" + "/v4/ws/usdt"；https→wss/http→ws）。
 func (g *GatePrivateWS) WSURL() string {
@@ -175,6 +180,9 @@ func (g *GatePrivateWS) runOnce(ctx context.Context) error {
 		}
 	}
 	dephealth.Mark("gate:ws-private", true, nil) // D-579 R2：逐频道签名订阅帧全部发出=就绪点
+	if g.onReconnect != nil {
+		g.onReconnect() // D-004 P1#6：重连成功→对账补漏 kick
+	}
 
 	for {
 		select {

@@ -74,6 +74,11 @@ type MT5Adapter struct {
 	// AlertSink 断流分级告警下沉（D-104 P2 U2，MarginSink 同模式三点注入链）。nil = 未注入（no-op）。
 	AlertSink func(level, msg string)
 
+	// OnReconnect 会话重连成功回调（D-004 P1#6：对账漏事件补救源——断流期 venue 侧
+	// 变化无事件可达，重连成功后须补一轮对账）。reconnectSession 成功路径调用，nil 安全；
+	// 首连不走此路径（Connect 直连）。回调须非阻塞（在 a.mu 持锁尾段调用）。
+	OnReconnect func()
+
 	// D-100：订阅集镜像（mtapi 会话订阅状态在网关侧，adapter 必须镜像才能 OnQuote 流
 	// 重连后恢复订阅）。subMu 保护并发 Resubscribe 与流重连的 resubscribeAll。
 	subMu  sync.Mutex

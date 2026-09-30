@@ -79,6 +79,8 @@ type OKXPrivateWS struct {
 	// ctValFor D-477 S3（GAP-B4）：okx 合约面值解析器注入——构造点经 resolveExchangeBaseURL
 	// 取与 executor 同一 baseURL 源（离线/代理拓扑下不再双源分叉）。nil=跳过换算保持张数+warn。
 	ctValFor func(ctx context.Context, instID string) (float64, error)
+	// onReconnect D-004 P1#6：订阅就绪（断流后事件漏发补救→对账 kick）。nil 安全。
+	onReconnect func()
 }
 
 // NewOKXPrivateWS 创建采集器（凭据=REST querier 同源 exchange_configs，不新增 secret 配置项）。
@@ -98,6 +100,10 @@ func NewOKXPrivateWS(apiKey, apiSecret, passphrase string, simulated bool, sink 
 
 // SetBalanceLedger D-542：注入活账本（装配一次；nil 安全）。
 func (o *OKXPrivateWS) SetBalanceLedger(l *bus.BalanceLedger) { o.balLedger = l }
+
+// SetOnReconnect D-004 P1#6：注入就绪回调（每次连接+订阅成功调一次，含首连——
+// 新实例首连同样刚历过断流窗口；kick 合流无成本）。nil 安全。
+func (o *OKXPrivateWS) SetOnReconnect(f func()) { o.onReconnect = f }
 
 // SetCtValFor D-477 S3：注入 ctVal 解析器（GAP-B4 单源化；nil=保持张数+warn 降级）。
 func (o *OKXPrivateWS) SetCtValFor(f func(ctx context.Context, instID string) (float64, error)) {
@@ -216,6 +222,9 @@ func (o *OKXPrivateWS) runOnce(ctx context.Context) error {
 			stale.touch(time.Now())                     // 订阅成功=断流基准点（OKX account channel 订阅即推首帧）
 			dephealth.Mark("okx:ws-private", true, nil) // D-579 R2：就绪点=订阅生效非裸 TCP
 			log.Printf("[okx-private-ws] subscribed %s", msg.Arg.Channel)
+			if o.onReconnect != nil {
+				o.onReconnect() // D-004 P1#6：重连成功→对账补漏 kick
+			}
 		case "":
 			// 数据推送——D-469a S1 按 arg.channel 分派（S0：positions/account eventType
 			// 在帧顶层；balance_and_position eventType 在 data[i] 内）。

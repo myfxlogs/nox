@@ -48,10 +48,15 @@ type BinanceUserWS struct {
 	dial       func(ctx context.Context, wsURL string) (*websocket.Conn, error)
 	renewEvery time.Duration // 续租周期（默认 30min；测试注入缩短）
 	now        func() time.Time
+	// onReconnect D-004 P1#6：连接就绪回调（断流后事件漏发补救→对账 kick；首连也触发）。nil 安全。
+	onReconnect func()
 }
 
 // SetBalanceLedger D-542：注入活账本（装配一次；nil 安全）。
 func (b *BinanceUserWS) SetBalanceLedger(l *bus.BalanceLedger) { b.balLedger = l }
+
+// SetOnReconnect D-004 P1#6：注入就绪回调（每次连接就绪调一次，含首连）。nil 安全。
+func (b *BinanceUserWS) SetOnReconnect(f func()) { b.onReconnect = f }
 
 // depKey D-579 R2 健康面键（用户流无订阅帧，就绪=listenKey+流连接建立）。
 func (b *BinanceUserWS) depKey() string { return "binance:ws-" + b.venueType + "-user" }
@@ -162,6 +167,9 @@ func (b *BinanceUserWS) runOnce(ctx context.Context) error {
 	defer conn.Close()
 	log.Printf("[binance-user-ws] connected (venue=%s:%s simulated=%v)", "binance", b.venueType, b.simulated)
 	dephealth.Mark(b.depKey(), true, nil) // D-579 R2：listenKey+流连接就绪（非裸 TCP）
+	if b.onReconnect != nil {
+		b.onReconnect() // D-004 P1#6：重连成功→对账补漏 kick
+	}
 
 	_ = conn.SetReadDeadline(b.now().Add(binanceUserReadIdle))
 	conn.SetPongHandler(func(string) error {

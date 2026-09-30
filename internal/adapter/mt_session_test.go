@@ -427,3 +427,29 @@ func TestReconnectSession_GatewayError(t *testing.T) {
 		t.Fatal("want error for gateway error body, got nil")
 	}
 }
+
+// TestReconnectSession_OnReconnectHook D-004 P1#6：重连成功 → OnReconnect 调 1 次；失败 → 0 次。
+func TestReconnectSession_OnReconnectHook(t *testing.T) {
+	calls := 0
+	a := &MT5Adapter{
+		venue: "test", host: "h", port: 443, user: 1, pass: "p", server: "s",
+		connMgr: &mockConnClient{resp: &mt5pb.ConnectReply{Result: "tok"}},
+		token:   "old",
+		OnReconnect: func() {
+			calls++
+		},
+	}
+	if err := a.reconnectSession(context.Background()); err != nil {
+		t.Fatalf("reconnectSession: %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("OnReconnect calls=%d, want 1", calls)
+	}
+	a.connMgr = &mockConnClient{err: errors.New("down")}
+	if err := a.reconnectSession(context.Background()); err == nil {
+		t.Fatal("want error")
+	}
+	if calls != 1 {
+		t.Fatalf("失败后 OnReconnect calls=%d, want 仍 1", calls)
+	}
+}

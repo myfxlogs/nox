@@ -40,6 +40,9 @@ func (a *MT5Adapter) reconnectSession(ctx context.Context) error {
 	}
 	a.token = token
 	log.Printf("[mt5:%s] session reconnected, token=%s", a.venue, maskToken(token))
+	if a.OnReconnect != nil {
+		a.OnReconnect() // D-004 P1#6：对账 kick（须非阻塞——a.mu 持锁中）
+	}
 	return nil
 }
 
