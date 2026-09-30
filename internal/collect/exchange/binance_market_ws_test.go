@@ -6,6 +6,7 @@ package exchange
 import (
 	"context"
 	"math"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -189,5 +190,49 @@ func TestD591_Ticker24hLanding(t *testing.T) {
 	b.handleTicker(context.Background(), []byte(frame))
 	if len(got) != 1 {
 		t.Fatalf("15min 节流失效：重放应零发射, got %d", len(got))
+	}
+}
+
+// TestD595_IndexPriceThrottle D-595 S1：index_price per-symbol 10min 心跳节流——
+// 10min 内第二帧（值变）不写、过 10min 写（先红后绿；vol24h 15min 节流先例同构）。
+func TestD595_IndexPriceThrottle(t *testing.T) {
+	b := d582WS()
+	var nowMu atomic.Int64 // 毫秒时钟（可推进）
+	b.now = func() time.Time { return time.UnixMilli(nowMu.Load()) }
+	var got [][]fact.Fact
+	b.SetFactEmit(func(ctx context.Context, fs []fact.Fact) error {
+		got = append(got, fs)
+		return nil
+	})
+	frame := func(idx string) []byte {
+		return []byte(`{"e":"markPriceUpdate","E":1,"s":"SKLUSDT","p":"0.05","i":"` + idx + `","r":"0.00005","T":1790403600000}`)
+	}
+	count := func() int {
+		n := 0
+		for _, fs := range got {
+			for _, f := range fs {
+				if f.Kind == "index_price" {
+					n++
+				}
+			}
+		}
+		return n
+	}
+	b.handleMarkPrice(context.Background(), frame("4361.25")) // t=0：首帧落
+	if n := count(); n != 1 {
+		t.Fatalf("首帧 index want 1, got %d", n)
+	}
+	nowMu.Add(5 * time.Minute.Milliseconds())
+	b.handleMarkPrice(context.Background(), frame("4362.00")) // t=5min 值变：窗内不写
+	if n := count(); n != 1 {
+		t.Fatalf("10min 内值变帧不得写 index, got %d", n)
+	}
+	nowMu.Add(6 * time.Minute.Milliseconds()) // t=11min：过 10min 落
+	b.handleMarkPrice(context.Background(), frame("4363.00"))
+	if n := count(); n != 2 {
+		t.Fatalf("过 10min 应写第二笔 index, got %d", n)
+	}
+	if last := got[len(got)-1]; last[len(last)-1].Value != 4363.0 {
+		t.Fatalf("第二笔 index 值 want 4363.0, got %v", last[len(last)-1].Value)
 	}
 }

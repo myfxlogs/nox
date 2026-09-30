@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"arb/internal/fact"
 )
@@ -58,6 +59,10 @@ func (b *BinanceMarketWS) handleMarkPrice(ctx context.Context, data []byte) bool
 	return true
 }
 
+// indexEmitEvery index_price per-symbol 心跳节流（D-595 S1：快变值逐帧跳变使
+// FactEmitter 值变去重零抑制——54.5 行/s≈470 万行/天实测；10min<radar 读窗 15min 配平）。
+const indexEmitEvery = 10 * time.Minute
+
 // emitMarkPriceFact 单元素 markPriceUpdate→funding 三 fact（原单帧逻辑搬迁零改）：
 // 缺关键字段不造（venue 禁借用律）；emitFacts nil=静默消费。
 func (b *BinanceMarketWS) emitMarkPriceFact(ctx context.Context, m map[string]any) {
@@ -92,13 +97,22 @@ func (b *BinanceMarketWS) emitMarkPriceFact(ctx context.Context, m map[string]an
 			fact.Fact{Kind: fact.KindFundingInterval, Venue: VenueBinance, Symbol: sym,
 				Value: 86400 / float64(periodsPerDay), Unit: fact.UnitSeconds, Ts: now, Src: "binance_ws_markprice"})
 	}
-	// D-591 R2：帧内 i=index price 同帧落库（写节流=FactEmitter 去重+心跳，与 funding 同款不裸写）；
-	// 缺/脏=缺省不造（venue 禁借用律），不拖垮 funding 三件套。
+	// D-591 R2：帧内 i=index price 同帧落库；D-595 S1：per-symbol 10min 心跳节流
+	// （快变值逐帧跳变使值变去重零抑制，R2「与 funding 同款」对快变值不绑定——
+	// D-350 定标教训同型；radar 读窗 15min 配平）。缺/脏=缺省不造，不拖垮 funding 三件套。
 	if idxS, _ := m["i"].(string); idxS != "" {
 		var idxv float64
 		if _, err := fmt.Sscanf(idxS, "%f", &idxv); err == nil && idxv > 0 {
-			fs = append(fs, fact.Fact{Kind: fact.KindIndexPrice, Venue: VenueBinance, Symbol: sym,
-				Value: idxv, Unit: fact.UnitUSD, Ts: now, Src: "binance_ws_markprice"})
+			if last, ok := b.indexEmit[sym]; ok && now.Sub(last) < indexEmitEvery {
+				// 10min 窗内跳过（值变也不写）；funding 三件套照常
+			} else {
+				if b.indexEmit == nil {
+					b.indexEmit = make(map[string]time.Time)
+				}
+				b.indexEmit[sym] = now
+				fs = append(fs, fact.Fact{Kind: fact.KindIndexPrice, Venue: VenueBinance, Symbol: sym,
+					Value: idxv, Unit: fact.UnitUSD, Ts: now, Src: "binance_ws_markprice"})
+			}
 		}
 	}
 	if err := b.emitFacts(ctx, fs); err != nil {
