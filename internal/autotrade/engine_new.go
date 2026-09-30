@@ -31,6 +31,7 @@ func New(cfg Config, store *pgstore.Store, service engineService, oppTopic *bus.
 		carryKick:        make(chan struct{}, 1),     // D-004 P1#4：carry facts 写后 → 权威全扫
 		mrKick:           make(chan struct{}, 1),     // D-469c S1
 		factsKick:        make(chan struct{}, 1),     // D-469c S3
+		swapQuoteCh:      make(chan bus.Quote, 256),  // D-004 P1#5：swapArb quote 快路帧（满丢帧不阻塞）
 	}
 	// D-405 S4：开户门槛档——dashboard.MarginFloorCheck 注入（nil service=未接线不检查）。
 	// D-549 R1：同点注入统一资金读口（gate_margin CEX Src 闸；与 dashboard 共享一实例）。
