@@ -62,6 +62,9 @@ type Service struct {
 	capAvailCache map[string]*reconcile.VenueAvailability
 	capAvailAt    map[string]time.Time
 	capAvailFor   func(ctx context.Context, venue string) (venueAvailFetcher, bool)
+	// 3d-P1#1c：无流子账户按需回读 Kick 防抖（10s/键；Kick 本身定向 REST 回读）。
+	acctKickMu sync.Mutex
+	acctKickAt map[string]time.Time
 
 	// settler 结算触发（D-087 §3.2，手动平仓后调）。nil = 未接线（RPC 仍可用，仅不结算）。
 	settler Settler

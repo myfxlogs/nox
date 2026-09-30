@@ -24,7 +24,7 @@ func (s *Service) ListVenueExposureCaps(ctx context.Context, _ *connect.Request[
 	}
 	// D-547 S3①：live 面值——allocated=Σ白名单金额（口径同 exposureCapGate），
 	// 池面=legPool 链（live 账本/REST 校准/快照兜底；缺取 source=空如实透出）。
-	snaps, _ := s.gradDB().LatestVenueAccountSnapshots(ctx)
+	snaps, _ := s.liveAccountLatest(ctx)
 	existing, _ := s.gradDB().LoadXAssetAllowCombos(ctx, "live")
 	allocated := exposureSumOf(existing)
 	// D-557 S1：venue_key→通道白名单规则 join（同 venue 规则 sim/real 双行取 real 优先；

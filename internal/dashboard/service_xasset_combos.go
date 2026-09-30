@@ -33,7 +33,7 @@ func (s *Service) ListXAssetAllowCombos(ctx context.Context, _ *connect.Request[
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	// D-547 S3④：在仓金额聚合 + 双腿池可用 + 闸冲突（缺一腿池/可用<notional×2=结构性锁死红标）。
-	snaps, _ := s.gradDB().LatestVenueAccountSnapshots(ctx)
+	snaps, _ := s.liveAccountLatest(ctx)
 	rejects := s.fundingRejectFacts(ctx) // D-560 S2b：近6h资金拒批量透出（禁N+1）
 	out := make([]*v1.XAssetAllowComboRow, 0, len(rows))
 	for _, r := range rows {

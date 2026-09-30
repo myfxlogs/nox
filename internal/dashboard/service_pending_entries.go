@@ -231,7 +231,7 @@ func (s *Service) TierKickAll(ctx context.Context) {
 	if err != nil {
 		return
 	}
-	snaps, err := s.store.LatestVenueAccountSnapshots(ctx)
+	snaps, err := s.liveAccountLatest(ctx)
 	if err != nil {
 		return
 	}

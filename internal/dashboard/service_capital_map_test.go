@@ -34,15 +34,13 @@ func (f *fakeCapGaps) Fetch(ctx context.Context) (*reconcile.CapitalGaps, error)
 func capMapFixture(t *testing.T) (*Service, *fakeCapGaps) {
 	t.Helper()
 	s := covTestStore(t)
-	ctx := context.Background()
 	now := time.Now().UTC()
 	p5, f5 := 5.0, 5.0
-	if err := s.InsertVenueAccountSnapshots(ctx, []pgstore.VenueAccountSnapshot{
-		{Venue: "binance", VenueType: "funding", BalanceRaw: 5, EquityRaw: f5, FreeMarginRaw: p5, Currency: "USDT", FetchedAt: now, Src: "sched"},
-	}); err != nil {
-		t.Fatalf("insert funding snapshot: %v", err)
-	}
 	svc := covTestService(s)
+	// #1c：账户面=acctMon 实时态（快照表种子退役——funding 池行唯一来源即实时视图）。
+	seedLiveAccounts(t, svc, []pgstore.VenueAccountLatest{
+		{Venue: "binance", VenueType: "funding", BalanceRaw: &p5, EquityRaw: &f5, FreeMarginRaw: &p5, Currency: "USDT", FetchedAt: now},
+	})
 	lg := bus.NewBalanceLedger()
 	lg.Put("binance:spot", 100, 110, "USDT", "ws", now) // locked=110−100=10
 	lg.Put("binance:perp", 50, 60, "USDT", "ws", now)
@@ -246,7 +244,7 @@ func TestD546_CapitalMapNoFetcher(t *testing.T) {
 func TestD546_CapitalMapSizingInvariant(t *testing.T) {
 	snaps := d490Snaps(2000, 1000, "USDT", time.Minute)
 	// 基线（无全景采集器）：
-	f1, s1 := d490Fixture(snaps, 0.01)
+	f1, s1 := d490Fixture(t, snaps, 0.01)
 	r1, err := s1.ApproveCarryGraduation(context.Background(), connect.NewRequest(&v1.ApproveCarryGraduationRequest{
 		GraduationId: 5, FundingUsd: d490f(200),
 	}))
@@ -254,7 +252,7 @@ func TestD546_CapitalMapSizingInvariant(t *testing.T) {
 		t.Fatalf("基线 sizing: err=%v errstr=%s", err, r1.Msg.Error)
 	}
 	// 注入计数 fake 后同输入：
-	f2, s2 := d490Fixture(snaps, 0.01)
+	f2, s2 := d490Fixture(t, snaps, 0.01)
 	fake := &fakeCapGaps{ret: &reconcile.CapitalGaps{EarnFlexibleUSDT: 99999, EarnLockedUSDT: 99999}}
 	s2.SetCapitalGapFetcher(fake)
 	r2, err := s2.ApproveCarryGraduation(context.Background(), connect.NewRequest(&v1.ApproveCarryGraduationRequest{

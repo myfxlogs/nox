@@ -19,13 +19,13 @@ import (
 
 // d490Fixture：gradFixture(structure) + qbus 双腿报价 + CS/step 解析器 + 池快照。
 // perLot：MT 腿=50000×0.001=50；gate perp=50000×0.01=500。池 min 绑定 1279967:mt5×gate:perp。
-func d490Fixture(snaps []pgstore.VenueAccountLatest, mtStep float64) (*fakeGradDB, *Service) {
-	return d490FixtureStruct("long_cfd_short_perp", snaps, mtStep)
+func d490Fixture(t *testing.T, snaps []pgstore.VenueAccountLatest, mtStep float64) (*fakeGradDB, *Service) {
+	return d490FixtureStruct(t, "long_cfd_short_perp", snaps, mtStep)
 }
 
-func d490FixtureStruct(structure string, snaps []pgstore.VenueAccountLatest, mtStep float64) (*fakeGradDB, *Service) {
+func d490FixtureStruct(t *testing.T, structure string, snaps []pgstore.VenueAccountLatest, mtStep float64) (*fakeGradDB, *Service) {
 	f, s := gradFixture(structure)
-	f.snaps = snaps
+	seedLiveAccounts(t, s, snaps) // #1c：池快照种子 → acctMon 实时态
 	b := bus.New()
 	now := time.Now()
 	b.Publish(bus.Quote{Symbol: "BTCUSD", Venue: "1279967", VenueType: "mt5", VenueSymbol: "BTCUSD", Bid: 49990, Ask: 50000, Time: now})
@@ -52,7 +52,7 @@ func d490f(v float64) *float64 { return &v }
 // TestD490_PctHappyPath pct=0.1 × minPool$1000 → alloc$100 → gross100/notional50/
 // qty=50÷50×1.1=1.1 与 50÷500×1.1=0.11 写入；note 含分配审计标记；est_* 回显。
 func TestD490_PctHappyPath(t *testing.T) {
-	f, s := d490Fixture(d490Snaps(2000, 1000, "USD", time.Minute), 0.01)
+	f, s := d490Fixture(t, d490Snaps(2000, 1000, "USD", time.Minute), 0.01)
 	resp, err := s.ApproveCarryGraduation(context.Background(), connect.NewRequest(&v1.ApproveCarryGraduationRequest{
 		GraduationId: 5, FundingPct: d490f(0.1), Note: "首批",
 	}))
@@ -84,7 +84,7 @@ func TestD490_PctHappyPath(t *testing.T) {
 
 // TestD490_UsdHappyAndEcho usd 直填 + 互算回显（est_alloc_pct）+ 双池 min 绑定小池。
 func TestD490_UsdHappyAndEcho(t *testing.T) {
-	f, s := d490Fixture(d490Snaps(2000, 1000, "USDT", time.Minute), 0.01)
+	f, s := d490Fixture(t, d490Snaps(2000, 1000, "USDT", time.Minute), 0.01)
 	resp, err := s.ApproveCarryGraduation(context.Background(), connect.NewRequest(&v1.ApproveCarryGraduationRequest{
 		GraduationId: 5, FundingUsd: d490f(200),
 	}))
@@ -103,7 +103,7 @@ func TestD490_UsdHappyAndEcho(t *testing.T) {
 		t.Errorf("decisionNote 缺直填标记: %q", f.decisionNote)
 	}
 	// usd > minPool → 拒批不写库
-	f2, s2 := d490Fixture(d490Snaps(2000, 1000, "USD", time.Minute), 0.01)
+	f2, s2 := d490Fixture(t, d490Snaps(2000, 1000, "USD", time.Minute), 0.01)
 	resp2, _ := s2.ApproveCarryGraduation(context.Background(), connect.NewRequest(&v1.ApproveCarryGraduationRequest{
 		GraduationId: 5, FundingUsd: d490f(1100),
 	}))
@@ -114,7 +114,7 @@ func TestD490_UsdHappyAndEcho(t *testing.T) {
 		t.Errorf("err=%s", resp2.Msg.Error)
 	}
 	// usd/pool > crossCap(0.5) → 拒批（同安全线判据）
-	f3, s3 := d490Fixture(d490Snaps(2000, 1000, "USD", time.Minute), 0.01)
+	f3, s3 := d490Fixture(t, d490Snaps(2000, 1000, "USD", time.Minute), 0.01)
 	resp3, _ := s3.ApproveCarryGraduation(context.Background(), connect.NewRequest(&v1.ApproveCarryGraduationRequest{
 		GraduationId: 5, FundingUsd: d490f(600),
 	}))
@@ -155,7 +155,7 @@ func TestD490_FailClosed(t *testing.T) {
 		{name: "short_cfd卖腿qty低于minStep", structure: "short_cfd_long_perp", req: &v1.ApproveCarryGraduationRequest{GraduationId: 5, FundingPct: d490f(0.1)}, snaps: goodSnaps, step: 5.0, want: "卖腿"},
 	}
 	for _, c := range cases {
-		f, s := d490FixtureStruct(c.structure, c.snaps, c.step)
+		f, s := d490FixtureStruct(t, c.structure, c.snaps, c.step)
 		if c.noLive {
 			s.mtSummaryFn = nil
 			s.SetBalanceLedger(bus.NewBalanceLedger())
@@ -179,7 +179,7 @@ func TestD490_FailClosed(t *testing.T) {
 // TestD490_DryRunNoSideEffects dry_run：回 est_*+sizing_notes+venue_gaps，
 // 零写库零热重载零状态变更（combo/decision/reload/alert 全零）。
 func TestD490_DryRunNoSideEffects(t *testing.T) {
-	f, s := d490Fixture(d490Snaps(2000, 1000, "USD", time.Minute), 0.01)
+	f, s := d490Fixture(t, d490Snaps(2000, 1000, "USD", time.Minute), 0.01)
 	resp, err := s.ApproveCarryGraduation(context.Background(), connect.NewRequest(&v1.ApproveCarryGraduationRequest{
 		GraduationId: 5, FundingUsd: d490f(200), DryRun: true,
 	}))
@@ -205,7 +205,7 @@ func TestD490_DryRunNoSideEffects(t *testing.T) {
 
 // TestD490_ExplicitModeDryRun 显式模式 + dry_run：回显原值不写库（逃生口试算口径一致）。
 func TestD490_ExplicitModeDryRun(t *testing.T) {
-	f, s := d490Fixture(d490Snaps(2000, 1000, "USD", time.Minute), 0.01)
+	f, s := d490Fixture(t, d490Snaps(2000, 1000, "USD", time.Minute), 0.01)
 	resp, err := s.ApproveCarryGraduation(context.Background(), connect.NewRequest(&v1.ApproveCarryGraduationRequest{
 		GraduationId: 5, MaxLongQty: 0.01, MaxShortQty: 1000, MaxGrossUsd: 5000, DryRun: true,
 	}))
@@ -247,7 +247,7 @@ func TestD490_PerpPerpFundingRejected(t *testing.T) {
 // TestD508_DryRunLegPools S8：dry_run 回 leg_pools 腿→池映射终值（venue_key 后端推导 +
 // allocPoolOf 回退链 + is_min 小池标记；前端镜像链已删）。
 func TestD508_DryRunLegPools(t *testing.T) {
-	f, s := d490Fixture(d490Snaps(2000, 1000, "USD", time.Minute), 0.01)
+	f, s := d490Fixture(t, d490Snaps(2000, 1000, "USD", time.Minute), 0.01)
 	resp, err := s.ApproveCarryGraduation(context.Background(), connect.NewRequest(&v1.ApproveCarryGraduationRequest{
 		GraduationId: 5, FundingUsd: d490f(200), DryRun: true,
 	}))
@@ -284,8 +284,7 @@ func TestD508_DryRunLegPools(t *testing.T) {
 
 // TestD508_DryRunLegPoolsUnfetched 腿池无快照行 → found=false 如实下发（前端显「未采」）。
 func TestD508_DryRunLegPoolsUnfetched(t *testing.T) {
-	f, s := d490Fixture(nil, 0.01)
-	f.snaps = []pgstore.VenueAccountLatest{} // 无任何行
+	_, s := d490Fixture(t, nil, 0.01) // acctMon 空态（fixture nil snaps 即无行）
 	resp, err := s.ApproveCarryGraduation(context.Background(), connect.NewRequest(&v1.ApproveCarryGraduationRequest{
 		GraduationId: 5, MaxLongQty: 0.01, MaxShortQty: 1000, MaxGrossUsd: 5000, DryRun: true,
 	}))

@@ -152,7 +152,7 @@ func (s *Service) graduationRiskReport(ctx context.Context, legs []riskLegSpec, 
 	eg("recommended_leverage", levG)
 	// 强平距离估算：mmr_est 缺取 1% 标估算（SSOT §3：禁伪造精确值）；账户实采 buffer_multiple→B。
 	liqG := v1.EvidenceGrade_EVIDENCE_GRADE_C
-	if snaps, err := s.gradDB().LatestVenueAccountSnapshots(ctx); err == nil {
+	if snaps, err := s.liveAccountLatest(ctx); err == nil {
 		bufSet := make(map[string]bool, len(snaps))
 		for _, sn := range snaps {
 			if sn.BufferMultiple != nil {

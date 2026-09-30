@@ -20,7 +20,7 @@ import (
 // TestD565_AllocRisk_LeverageUnknown T2：venue 杠杆读败 → risk=unknown +
 // 「杠杆实况不可得」理由透出；suggested 不反推该腿。
 func TestD565_AllocRisk_LeverageUnknown(t *testing.T) {
-	f, s := d490Fixture(d490Snaps(2000, 1000, "USD", time.Minute), 0.01)
+	f, s := d490Fixture(t, d490Snaps(2000, 1000, "USD", time.Minute), 0.01)
 	// 读败 → perp 腿 unknown
 	s.venueLeverageFn = func(context.Context, string, string, bool) (float64, error) {
 		return 0, errors.New("venue leverage read failed")

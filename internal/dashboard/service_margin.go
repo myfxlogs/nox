@@ -183,12 +183,10 @@ func (s *Service) marginOpenNotional(ctx context.Context, venue, vt string) (sum
 	return sum, legCount, skipped, nil
 }
 
-// latestVenueSnapshotSafe 快照行查询（nil store 安全——部分构造 Service）。
+// latestVenueSnapshotSafe 单 venue 账户行查询（#1c：实时态=AccountMonitor；
+// nil acctMon/store 安全——部分构造 Service → ok=false 如实「未采」）。
 func (s *Service) latestVenueSnapshotSafe(ctx context.Context, venue, vt string) (*pgstore.VenueAccountLatest, bool, error) {
-	if s.store == nil {
-		return nil, false, nil
-	}
-	return s.store.LatestVenueAccountSnapshot(ctx, venue, vt)
+	return s.liveAccountLatestFor(ctx, venue, vt)
 }
 
 // marginFloorJudgeSkipped D-565 S6：判定明细附跳腿计数（报价缺腿不进分母=隐含率偏大保守向）。

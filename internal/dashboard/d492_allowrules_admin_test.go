@@ -205,7 +205,7 @@ func TestD492_A6_DeleteGuard(t *testing.T) {
 // A7：approve dry_run 响应 venue_gap_keys 纯 key 列表（gap venue 在内、capWarns 不混入）。
 // fixture：1279967:mt5 不在白名单（allow={gate:perp}）→ keys=[1279967:mt5]。
 func TestD492_A7_VenueGapKeys(t *testing.T) {
-	f, s := d490Fixture(d490Snaps(2000, 1000, "USD", time.Minute), 0.01)
+	f, s := d490Fixture(t, d490Snaps(2000, 1000, "USD", time.Minute), 0.01)
 	resp, err := s.ApproveCarryGraduation(context.Background(), connect.NewRequest(&v1.ApproveCarryGraduationRequest{
 		GraduationId: 5, DryRun: true, FundingUsd: d490f(100),
 	}))

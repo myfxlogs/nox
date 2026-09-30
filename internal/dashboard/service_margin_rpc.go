@@ -24,7 +24,7 @@ func (s *Service) ListAccountMarginStatus(ctx context.Context, _ *connect.Reques
 	}
 	// D-549：展示列走统一读口 capitalview.Live（CEX=活账本/REST 实拉；快照兜底带龄注记）；
 	// 批量预取快照面省每行一查；资金列缺=如实空（不毁 RPC）。
-	snaps, err := s.store.LatestVenueAccountSnapshots(ctx)
+	snaps, err := s.liveAccountLatest(ctx)
 	if err != nil {
 		log.Printf("[margin-status] latest snapshots: %v", err)
 	}

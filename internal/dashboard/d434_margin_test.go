@@ -102,18 +102,17 @@ func TestD434_MarginFloorEval_CEX(t *testing.T) {
 		t.Fatalf("create leg: %v", err)
 	}
 	buf := 86.87
-	if err := s.InsertVenueAccountSnapshots(ctx, []pgstore.VenueAccountSnapshot{{
-		Venue: "okx", VenueType: "unified", EquityRaw: 1515.9, BufferMultiple: &buf,
-		Currency: "USD", FetchedAt: time.Now(),
-	}}); err != nil {
-		t.Fatalf("insert snapshot: %v", err)
-	}
+	eqOkx := 1515.9  // #1c：buffer_multiple 锚=实时态种子（快照表=历史记录不再喂判定）
 	qb2 := bus.New() // D-565 S6：腿级实时报价（存价回退已删）
 	qb2.Publish(bus.Quote{Symbol: "XAUUSDT", Venue: "okx", VenueType: "perp", Bid: 4297, Ask: 4297.1})
 	svc := &Service{
 		store: s, qbus: qb2,
 		cexContractSize: func(venue, symbol string) (float64, bool) { return 0.001, true },
 	}
+	seedLiveAccounts(t, svc, []pgstore.VenueAccountLatest{{
+		Venue: "okx", VenueType: "unified", EquityRaw: &eqOkx, BufferMultiple: &buf,
+		Currency: "USD", FetchedAt: time.Now(),
+	}})
 	// D-549：CEX 执行链资金数=活账本/REST 实拉——喂 ws 活值（快照行只留 buffer 锚）。
 	led := bus.NewBalanceLedger()
 	svc.SetBalanceLedger(led)

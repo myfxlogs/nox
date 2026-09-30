@@ -252,7 +252,7 @@ func (s *Service) loadPendingInputs(ctx context.Context) (*pendingInputs, error)
 	if in.caps, err = s.store.ListVenueExposureCaps(ctx); err != nil {
 		return nil, connectErr(err)
 	}
-	if in.snaps, err = s.store.LatestVenueAccountSnapshots(ctx); err != nil {
+	if in.snaps, err = s.liveAccountLatest(ctx); err != nil {
 		return nil, connectErr(err)
 	}
 	in.rejects = s.fundingRejectFacts(ctx) // D-560 S2b：近6h资金拒批量透出（禁N+1）
