@@ -69,8 +69,9 @@ type Engine struct {
 	disabledStrategies map[string]bool
 	disabledMu         sync.RWMutex
 
-	mu      sync.Mutex
-	lastPub map[string]pubState // oppID → 上次发布态（engine_publish.go；发布/落库去重）
+	mu          sync.Mutex
+	lastPub     map[string]pubState  // oppID → 上次发布态（engine_publish.go；发布/落库去重）
+	paperHookAt map[string]time.Time // canonical → 上次 cexPaperHook 调用（30s 采样节拍）
 }
 
 // New 创建引擎。commissionFor 必填（成本正确性依赖真实佣金，D-036），nil = 装配错误直接 panic。
@@ -105,6 +106,7 @@ func New(b *bus.QuoteBus, detectors []detector.Detector, cfg evaluator.Config, s
 		carryMinNetStore:        carryMinNetStore,
 		xassetCarryMinNetStore:  xassetCarryMinNetStore,
 		lastPub:                 make(map[string]pubState),
+		paperHookAt:             make(map[string]time.Time),
 	}
 }
 
@@ -177,9 +179,11 @@ func (e *Engine) onQuote(ctx context.Context, q bus.Quote) {
 		// D-086 实施修正①：撤验证级别发布门——oppTopic 是双用途数据总线（autotrade rollup 喂入 +
 		// 前端实时流），永不论证级别过滤；V0/V1 区分只存在于显示层（徽章，service_verification 填）。
 		// D-004 P1#8：发布/落库走实质变化+TTL 心跳去重（maybePublish），UI 快照兜底不变。
-		// D-555 S1 双CEX 纸面轨发现槽同拍：hook 只对「本帧真正发布」的 FUNDING_HEDGE 候选
-		// 调用（热修 19:01 OOM——去节流前每帧调 hook 开/平纸面仓+写 DB，帧率级写放大）。
-		if e.maybePublish(ctx, o) && c.Type == detector.TypeFundingHedge {
+		e.maybePublish(ctx, o)
+		// D-555 S1 双CEX 纸面轨发现槽：hook 按 canonical 30s 采样节拍合流（纸面研究采样，
+		// 非判定，D-004 P3 举证——去节流前后节拍不变；与真金发布去重无关。OOM 19:01 pprof
+		// 实证：帧率级调用→paper_spot_carry 7k-15k 行/h 垃圾行+ListPaperSpotCarry 风暴）。
+		if c.Type == detector.TypeFundingHedge && e.paperHookDue(c.Canonical) {
 			fhs = append(fhs, c)
 		}
 	}
