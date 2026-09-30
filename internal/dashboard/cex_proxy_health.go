@@ -41,8 +41,6 @@ type CexProxyHealthMonitor struct {
 	consec    map[string]int  // endpoint → 连续失败数
 	deadNoted map[string]bool // endpoint → crit 已发（同态不重发）
 	lastOK    map[string]bool // endpoint → 最近一次探测结果（对端状态行用）
-	// D-589 坑1：败因分级——conn err/超时=0，拿到响应非 200=HTTP code（告警文案分流用）。
-	lastFailHTTP map[string]int // endpoint → 最近一次败因 HTTP code
 }
 
 // NewCexProxyHealthMonitor 从 env 构造：BINANCE_PROXY_URL 空 → nil（不监控，fail-open）；
@@ -56,15 +54,14 @@ func NewCexProxyHealthMonitor(insert alertInserter) *CexProxyHealthMonitor {
 	client := httpx.Client()
 	client.Timeout = cexProxyPollTimeout
 	return &CexProxyHealthMonitor{
-		insert:       insert,
-		client:       client,
-		primary:      primary,
-		backup:       os.Getenv("BINANCE_PROXY_URL_BACKUP"),
-		tick:         cexProxyTick,
-		consec:       make(map[string]int),
-		deadNoted:    make(map[string]bool),
-		lastOK:       make(map[string]bool),
-		lastFailHTTP: make(map[string]int),
+		insert:    insert,
+		client:    client,
+		primary:   primary,
+		backup:    os.Getenv("BINANCE_PROXY_URL_BACKUP"),
+		tick:      cexProxyTick,
+		consec:    make(map[string]int),
+		deadNoted: make(map[string]bool),
+		lastOK:    make(map[string]bool),
 	}
 }
 
@@ -93,7 +90,6 @@ func (m *CexProxyHealthMonitor) poll(ctx context.Context) {
 			wasDead := m.deadNoted[ep]
 			m.consec[ep] = 0
 			m.deadNoted[ep] = false
-			m.lastFailHTTP[ep] = 0
 			m.mu.Unlock()
 			if wasDead {
 				m.alert(ctx, "info", fmt.Sprintf("cex-proxy 通道 %s 已恢复", ep))
@@ -101,7 +97,6 @@ func (m *CexProxyHealthMonitor) poll(ctx context.Context) {
 			continue
 		}
 		m.consec[ep]++
-		m.lastFailHTTP[ep] = httpStatus
 		n := m.consec[ep]
 		first := n >= cexProxyDeadAfter && !m.deadNoted[ep]
 		if first {

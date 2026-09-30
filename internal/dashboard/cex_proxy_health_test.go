@@ -13,15 +13,14 @@ import (
 func newProxyTestMonitor(t *testing.T, insert alertInserter, primary, backup string) *CexProxyHealthMonitor {
 	t.Helper()
 	return &CexProxyHealthMonitor{
-		insert:       insert,
-		client:       &http.Client{Timeout: cexProxyPollTimeout},
-		primary:      primary,
-		backup:       backup,
-		tick:         cexProxyTick,
-		consec:       make(map[string]int),
-		deadNoted:    make(map[string]bool),
-		lastOK:       make(map[string]bool),
-		lastFailHTTP: make(map[string]int),
+		insert:    insert,
+		client:    &http.Client{Timeout: cexProxyPollTimeout},
+		primary:   primary,
+		backup:    backup,
+		tick:      cexProxyTick,
+		consec:    make(map[string]int),
+		deadNoted: make(map[string]bool),
+		lastOK:    make(map[string]bool),
 	}
 }
 
