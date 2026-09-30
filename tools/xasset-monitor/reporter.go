@@ -46,8 +46,11 @@ func reportFatal(ctx context.Context, st *pgstore.Store, err error) {
 		log.Printf("xasset-monitor: fatal 未持久化（无 store）: %v", err)
 		return
 	}
-	dup := hasRecentCriticalAlert(ctx, st)
-	if aerr := st.InsertAlert(ctx, nil, "critical", "xasset-monitor "+err.Error()); aerr != nil {
+	// D-592 S2：直推旁路同 key 对齐——飞书推送判定与 insertAlert 漏斗共用归一键
+	// （原前缀式对异型 fatal 过抑制；仅改查重，文案链不动）。
+	msg := "xasset-monitor " + alerttext.VenueErrCN(err.Error())
+	dup := hasRecentSameKeyAlert(ctx, st, "critical", msg)
+	if aerr := st.InsertAlert(ctx, nil, "critical", msg); aerr != nil {
 		log.Printf("xasset-monitor: fatal alert 落库失败: %v", aerr)
 	}
 	if dup {
@@ -57,16 +60,24 @@ func reportFatal(ctx context.Context, st *pgstore.Store, err error) {
 	pushFatalFeishu(ctx, st, err)
 }
 
-// hasRecentCriticalAlert 30min 内同类 critical（message 前缀 xasset-monitor）在档判定。
-func hasRecentCriticalAlert(ctx context.Context, st *pgstore.Store) bool {
-	var ok bool
-	if err := st.Pool().QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM alerts WHERE level='critical'
-		 AND message LIKE 'xasset-monitor%' AND ts > now()-interval '30 minutes')`).Scan(&ok); err != nil {
+// hasRecentSameKeyAlert D-592 S2：30min 内同键 critical 在档判定（键=alerttext 归一化
+// 与 insertAlert 漏斗同源；候选按前缀收窄）。查询失败=按未推过处理（fail-open 同 D-592）。
+func hasRecentSameKeyAlert(ctx context.Context, st *pgstore.Store, level, message string) bool {
+	key := alerttext.AlertDedupKey(level, message)
+	rows, err := st.Pool().Query(ctx,
+		`SELECT message FROM alerts WHERE level=$1 AND message LIKE 'xasset-monitor%' AND ts > now()-interval '30 minutes'`, level)
+	if err != nil {
 		log.Printf("xasset-monitor: fatal 去重查询失败（按未推过处理）: %v", err)
 		return false
 	}
-	return ok
+	defer rows.Close()
+	for rows.Next() {
+		var m string
+		if rows.Scan(&m) == nil && alerttext.AlertDedupKey(level, m) == key {
+			return true
+		}
+	}
+	return false
 }
 
 // pushFatalFeishu 飞书直推——凭据只认 app_secrets（ARB_FEISHU_* env 已被 run.sh 置空，
