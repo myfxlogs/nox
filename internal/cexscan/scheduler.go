@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"arb/internal/bus"
+
 	"arb/internal/config"
 	v1 "arb/internal/gen/dashboardv1"
 	"arb/internal/httpx"
@@ -27,6 +29,8 @@ type Scanner struct {
 	bnAPIURL    string
 	okxSpotBase string // D-578：okx spot base_url（cex-proxy 深度通道）
 	symbols     []string
+	// refreshTopic D-007 S3：scanOnce 落库毕 emit "cex_scan"（前端失效触发；nil=未接线静默）。
+	refreshTopic *bus.Topic[string]
 
 	// D-383 B1：order-event 定向落库收合态（per-venue lastWrite，OnOrderEvent 专用）。
 	orderSnapMu   sync.Mutex
@@ -89,6 +93,9 @@ func (s *Scanner) Run(ctx context.Context) {
 		}
 	}
 }
+
+// SetRefreshTopic D-007 S3：装配注入（cmd/core；nil=不 emit）。
+func (s *Scanner) SetRefreshTopic(t *bus.Topic[string]) { s.refreshTopic = t }
 
 // snapshotAccounts 账户快照落库（读 AccountMonitor 内存缓存→InsertVenueAccountSnapshots）。
 // D-004 收窄：full=true 仅 boot 水合全量；full=false 周期分支排除有私有 WS 事件写口的键
@@ -194,6 +201,10 @@ func (s *Scanner) scanOnce(ctx context.Context) error {
 				log.Printf("[cexscan] upsert earn judgment %s/%s: %v", judgments[i].Venue, judgments[i].Ccy, err)
 			}
 		}
+	}
+	// D-007 S3：一轮采集写毕→emit（写源 emit；部分失败仍发=快照是尽力面，前端重取读到最新已落）。
+	if s.refreshTopic != nil {
+		s.refreshTopic.Publish("cex_scan")
 	}
 	return nil
 }
