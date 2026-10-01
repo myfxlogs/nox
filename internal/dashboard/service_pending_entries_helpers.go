@@ -5,12 +5,14 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
 	"arb/internal/capitalview"
 	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
+	"arb/internal/usdnotional"
 
 	v1 "arb/internal/gen/dashboardv1"
 )
@@ -50,30 +52,62 @@ func (s *Service) comboTier(ctx context.Context, c pgstore.XAssetComboAdminRow, 
 	return "ok", fmt.Sprintf("在承受力内：计划仓位 $%.0f ≤ 账户净值 × %.1f 倍上限", needed, cap), false
 }
 
-// venueExposureSum 475a 同判据的 venue 已挂名义 Σ（enabled 组合 notional/MaxGross 回退）。
-// D-007 S2 死键修复：venue=带类型键（3001157:mt5），fin_venue_exposure_caps 键域同为
-// typed；旧实现剥 bare 恒 miss（闸6 自 D-475a 起永不命中=展示语义破口，执行路径不查此表）。
-// err 传播=调用方 fail-closed 转「cap 查询失败」reason（R3：原吞 err 返 0=fail-open 误导）。
-func (s *Service) venueExposureSum(venue string) (float64, error) {
-	combos, err := s.store.ListXAssetAllowCombosAll(context.Background())
+// venueExposureSum 已迁至 service_venue_system_exposure.go（D-009 S4 实占口径：
+// 在途系统仓 qty×cs×现价，外单不入；旧版 Σenabled 组合计划名义=数学上永远开不了单的死闸已撤）。
+
+// comboQtyBelowMin D-009 S4 qty 明示：预算两腿均分 < 腿最小开单笔 → 死额度明示金额。
+// 缺失输入（无报价/无 step 元数据）不阻塞——其余闸（tick/monitor 新鲜度）已各自把守。
+// qtyStepForVenue 取自 service_execute_meanrevert.go floorToStepQtyMin/cexStepSize 同源。
+func (s *Service) comboQtyBelowMin(ctx context.Context, c pgstore.XAssetComboAdminRow) (string, bool) {
+	if c.MaxLongQty > 0 || c.MaxShortQty > 0 { // D-330 既有覆盖语义保真：MAX-qty 覆盖不再按名义测
+		return "", false
+	}
+	proposed := c.MaxGrossUSD
+	if c.NotionalUSD != nil {
+		proposed = *c.NotionalUSD
+	}
+	if proposed <= 0 {
+		return "", false
+	}
+	minB, okB := s.minOpenableUSD(c.VenueBuy, c.CanonicalBuy, "BUY")
+	minS, okS := s.minOpenableUSD(c.VenueSell, c.CanonicalSell, "SELL")
+	if !okB || !okS {
+		return "", false
+	}
+	minTotal := 2 * math.Max(minB, minS)
+	if proposed >= minTotal {
+		return "", false
+	}
+	return fmt.Sprintf("该组合最小可开 $%.0f，当前预算 $%.0f，差 $%.0f（场地最小步进）", minTotal, proposed, minTotal-proposed), true
+}
+
+// minOpenableUSD 单腿最小开单名义=minStep(1 步)×perLotUSD（qty 明示的 USD 锚）。
+// 缺报价/cs/step 元数据 → ok=false（不猜）。
+func (s *Service) minOpenableUSD(venueKey, canonical, side string) (float64, bool) {
+	q, ok := s.qbus.Latest(canonical, venueKey)
+	if !ok || q.Bid <= 0 || q.Ask <= 0 {
+		return 0, false
+	}
+	px := q.Ask
+	if side == "SELL" {
+		px = q.Bid
+	}
+	cs, err := s.legContractSizeOf(venueKey, q.VenueSymbol)
 	if err != nil {
-		return 0, err
+		return 0, false
 	}
-	sum := 0.0
-	for _, c := range combos {
-		if !c.Enabled {
-			continue
-		}
-		if c.VenueBuy != venue && c.VenueSell != venue {
-			continue
-		}
-		if c.NotionalUSD != nil {
-			sum += *c.NotionalUSD
-		} else {
-			sum += c.MaxGrossUSD
-		}
+	perLot, ok := usdnotional.PerLot(canonical, px, cs, s.qbus)
+	if !ok {
+		return 0, false
 	}
-	return sum, nil
+	minStep := s.cexStepSize(q.VenueSymbol)
+	if keydomain.IsMTKey(venueKey) {
+		minStep = s.floorToStepQtyMin(venueKey, q.VenueSymbol)
+	}
+	if perLot <= 0 || minStep <= 0 {
+		return 0, false
+	}
+	return minStep * perLot, true
 }
 
 // monitorPairKey / monitorLegKeys paper_all_in.go 同式镜像（pair=cexCanon+"-"+bare(mtCanon)）。

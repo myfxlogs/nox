@@ -38,12 +38,12 @@ func TestD571C2_OnQuoteNativeKeyHit(t *testing.T) {
 	m.flush(ctx)
 	found := false
 	for _, ev := range drainEvents(ch) {
-		if u := ev.GetUpsert(); u != nil && u.Ticket == "P1" && u.CurrentPrice == 2001.5 {
+		if u := ev.GetUpsert(); u != nil && u.Ticket == "P1" && u.CurrentPrice == 2002 {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatal("原生键报价应脏化持仓行并发 upsert（CurrentPrice=2001.5）")
+		t.Fatal("原生键报价应脏化持仓行并发 upsert（SELL 仓方向价=ask 2002，D-009 S2）")
 	}
 }
 

@@ -171,6 +171,8 @@ type Service struct {
 	xassetCexFeeBps float64
 	// D-127 P2 + D-466：binance:perp stepSize 权威元数据（运行时 exchangeInfo 唯一源，硬编码 fallback 已撤）。
 	stepMeta *cexStepMeta
+	// openVenueLegsFn D-009 S4 测试 seam：venue 实占行集注入（nil=store.OpenVenueSystemLegs）。
+	openVenueLegsFn func(ctx context.Context, venueBare string) ([]pgstore.OpenVenueLegRow, error)
 	// D-311 R4：okx:perp 腿最小张数 lotSz 查询（instId→lotSz，instruments 同源缓存）。
 	// nil = 未接线 → okx:perp step=0 fail-closed。
 	okxLotSz func(instID string) (float64, bool)

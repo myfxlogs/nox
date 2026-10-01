@@ -185,8 +185,8 @@ func TestD571_QuoteLinkedUpsert(t *testing.T) {
 	if u == nil {
 		t.Fatal("want upsert after quote arrival")
 	}
-	if u.CurrentPrice != 0.31 || !u.Fresh {
-		t.Fatalf("want current_price=0.31 fresh, got %v fresh=%v", u.CurrentPrice, u.Fresh)
+	if u.CurrentPrice != 0.30 || !u.Fresh { // D-009 S2：BUY 仓方向价=bid 0.30（原中价 0.31）
+		t.Fatalf("want current_price=0.30 fresh, got %v fresh=%v", u.CurrentPrice, u.Fresh)
 	}
 
 	// 同样报价再来（值未变）→ proto.Equal 去重无事件。

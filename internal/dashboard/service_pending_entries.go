@@ -210,6 +210,11 @@ func (s *Service) probeGates(ctx context.Context, c pgstore.XAssetComboAdminRow,
 	if reason, ok := s.exposureCapsGate(ctx, c, caps); !ok {
 		return kind, reason, 7, false
 	}
+	// 闸 7.5 qty 明示（D-009 S4）：notional/2÷perLot < 腿 minStep = 死额度——
+	// waitReason 明写最小可开金额（原静默吞/绕 MaxLongQty 地板黑盒）。
+	if reason, blocked := s.comboQtyBelowMin(ctx, c); blocked {
+		return kind, reason, 8, false
+	}
 	// D-563 S3 腿池闸（杠杆感知保证金需求；同判据 comboPoolVerdict）：conflict=锁死/unknown=待定。
 	if verdict, detail := s.comboPoolVerdict(ctx, c, snaps); verdict != "ok" {
 		return kind, detail, 8, false

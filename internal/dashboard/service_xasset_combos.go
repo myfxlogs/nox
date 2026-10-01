@@ -10,6 +10,7 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	v1 "arb/internal/gen/dashboardv1"
@@ -151,7 +152,32 @@ func (s *Service) UpsertXAssetAllowCombo(ctx context.Context, req *connect.Reque
 		return fail("combo #%d 不存在", m.Id)
 	}
 	resp.Ok = true
+	// D-009 S4：Σalloc>cap 超订 warn（不硬拒——预留超订是合法策略形态，先到先得）。
+	if w := s.overSubscribedWarn(ctx, []string{m.VenueBuy, m.VenueSell}); w != "" {
+		resp.OverSubscribedWarn = w
+	}
 	return s.comboWriteFinish(ctx, resp)
+}
+
+// overSubscribedWarn enable/改额后 Σalloc>cap 预警文案（D-009 S4）。
+// alloc=Σ live 白名单组合 notional/MaxGross（exposureSumOf 同口径）；查败=空不阻断写。
+func (s *Service) overSubscribedWarn(ctx context.Context, venueKeys []string) string {
+	caps, err := s.gradDB().ListVenueExposureCaps(ctx)
+	if err != nil {
+		return ""
+	}
+	existing, err := s.gradDB().LoadXAssetAllowCombos(ctx, "live")
+	if err != nil {
+		return ""
+	}
+	alloc := exposureSumOf(existing)
+	var msgs []string
+	for _, vk := range venueKeys {
+		if c, ok := caps[vk]; ok && c.Enabled && c.CapUSD > 0 && alloc[vk] > c.CapUSD {
+			msgs = append(msgs, fmt.Sprintf("账户 %s 预留合计 $%.0f > 敞口上限 $%.0f（超订，先到先得）", vk, alloc[vk], c.CapUSD))
+		}
+	}
+	return strings.Join(msgs, "；")
 }
 
 // comboWriteFinish 写后热重载三链（同 approve ⑤；任一失败如实报错）。
