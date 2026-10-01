@@ -48,4 +48,8 @@ type Order struct {
 	// PriceAt=0 = 无帧源（REST 回读行/报价流断）= 诚实空态；REST 路径恒零不填。
 	CurrentPrice float64
 	PriceAt      time.Time // 帧内报价时戳（quote tick 自身 ts）
+	// D-009 S2：帧携双价（同 lastQuote tick 的 bid/ask，与 CurrentPrice 同帧同钟）；
+	// 0=该侧价缺（诚实空态，current_price 回退 CurrentPrice 中价）。
+	PriceBid float64
+	PriceAsk float64
 }

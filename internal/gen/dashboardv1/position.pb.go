@@ -929,7 +929,7 @@ type BrokerPosition struct {
 	Side                   string                 `protobuf:"bytes,6,opt,name=side,proto3" json:"side,omitempty"`                         // BUY / SELL
 	Volume                 float64                `protobuf:"fixed64,7,opt,name=volume,proto3" json:"volume,omitempty"`
 	OpenPrice              float64                `protobuf:"fixed64,8,opt,name=open_price,json=openPrice,proto3" json:"open_price,omitempty"`
-	CurrentPrice           float64                `protobuf:"fixed64,9,opt,name=current_price,json=currentPrice,proto3" json:"current_price,omitempty"` // 0 + fresh=false = 无报价（诚实空态）
+	CurrentPrice           float64                `protobuf:"fixed64,9,opt,name=current_price,json=currentPrice,proto3" json:"current_price,omitempty"` // D-009 S2：平仓方向价（BUY仓=bid / SELL仓=ask，真要平吃的那口）；缺双价回退帧中价；0 + fresh=false = 无报价（诚实空态）
 	Fresh                  bool                   `protobuf:"varint,10,opt,name=fresh,proto3" json:"fresh,omitempty"`
 	Pnl                    float64                `protobuf:"fixed64,11,opt,name=pnl,proto3" json:"pnl,omitempty"` // venue 权威浮盈（Order.Profit，后端透传，前端不自算 D-043）
 	Swap                   float64                `protobuf:"fixed64,12,opt,name=swap,proto3" json:"swap,omitempty"`
@@ -946,6 +946,9 @@ type BrokerPosition struct {
 	Sl                     float64                `protobuf:"fixed64,23,opt,name=sl,proto3" json:"sl,omitempty"`                                                                           // D-155：broker 端止损 SL 值透传（MT5 Order.StopLoss / MT4 Order.StopLoss；0=未设/CEX 无概念）；D-146 S1 灾难 SL 生产验证闭环基础设施
 	SwapChargeAt           *timestamppb.Timestamp `protobuf:"bytes,24,opt,name=swap_charge_at,json=swapChargeAt,proto3" json:"swap_charge_at,omitempty"`                                   // D-337R1 语义：下次计费/结算时刻（MT5=server 零点 swap，venue 时区换算 UTC；CEX=下次 funding 结算 UTC）；nil=时区/周期未知（诚实空态）
 	FundingRatePeriodicPct float64                `protobuf:"fixed64,25,opt,name=funding_rate_periodic_pct,json=fundingRatePeriodicPct,proto3" json:"funding_rate_periodic_pct,omitempty"` // D-337R1：CEX 周期费率 %（=年化/(365×periods)，零信任后端换算）；0=未知诚实空态
+	PriceBid               float64                `protobuf:"fixed64,26,opt,name=price_bid,json=priceBid,proto3" json:"price_bid,omitempty"`                                               // D-009 S2：报价 bid（CEX=qbus 盘口；MT5=帧携 bid）；0=无报价/缺双值（诚实空态）
+	PriceAsk               float64                `protobuf:"fixed64,27,opt,name=price_ask,json=priceAsk,proto3" json:"price_ask,omitempty"`                                               // D-009 S2：报价 ask（同上）；0=无报价/缺双值
+	CloseNowEstimateUsd    *float64               `protobuf:"fixed64,28,opt,name=close_now_estimate_usd,json=closeNowEstimateUsd,proto3,oneof" json:"close_now_estimate_usd,omitempty"`    // D-009 S3：平仓净估=（方向价−开价）×qty×cs×fx − 平仓名义×takerBps×1e-4；缺省=报价/换算/费率任一不可得（诚实空态，列标「估」）
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -1151,6 +1154,27 @@ func (x *BrokerPosition) GetSwapChargeAt() *timestamppb.Timestamp {
 func (x *BrokerPosition) GetFundingRatePeriodicPct() float64 {
 	if x != nil {
 		return x.FundingRatePeriodicPct
+	}
+	return 0
+}
+
+func (x *BrokerPosition) GetPriceBid() float64 {
+	if x != nil {
+		return x.PriceBid
+	}
+	return 0
+}
+
+func (x *BrokerPosition) GetPriceAsk() float64 {
+	if x != nil {
+		return x.PriceAsk
+	}
+	return 0
+}
+
+func (x *BrokerPosition) GetCloseNowEstimateUsd() float64 {
+	if x != nil && x.CloseNowEstimateUsd != nil {
+		return *x.CloseNowEstimateUsd
 	}
 	return 0
 }
@@ -2774,7 +2798,7 @@ const file_dashboardv1_position_proto_rawDesc = "" +
 	"\x06offset\x18\x03 \x01(\x05R\x06offset\"g\n" +
 	"\x15ListPositionsResponse\x128\n" +
 	"\tpositions\x18\x01 \x03(\v2\x1a.arb.dashboard.v1.PositionR\tpositions\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x05R\x05total\"\x86\x06\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\"\x95\a\n" +
 	"\x0eBrokerPosition\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x1b\n" +
 	"\tvenue_key\x18\x02 \x01(\tR\bvenueKey\x12\x16\n" +
@@ -2805,7 +2829,11 @@ const file_dashboardv1_position_proto_rawDesc = "" +
 	"\border_id\x18\x16 \x01(\tR\aorderId\x12\x0e\n" +
 	"\x02sl\x18\x17 \x01(\x01R\x02sl\x12@\n" +
 	"\x0eswap_charge_at\x18\x18 \x01(\v2\x1a.google.protobuf.TimestampR\fswapChargeAt\x129\n" +
-	"\x19funding_rate_periodic_pct\x18\x19 \x01(\x01R\x16fundingRatePeriodicPct\"6\n" +
+	"\x19funding_rate_periodic_pct\x18\x19 \x01(\x01R\x16fundingRatePeriodicPct\x12\x1b\n" +
+	"\tprice_bid\x18\x1a \x01(\x01R\bpriceBid\x12\x1b\n" +
+	"\tprice_ask\x18\x1b \x01(\x01R\bpriceAsk\x128\n" +
+	"\x16close_now_estimate_usd\x18\x1c \x01(\x01H\x00R\x13closeNowEstimateUsd\x88\x01\x01B\x19\n" +
+	"\x17_close_now_estimate_usd\"6\n" +
 	"\x1aListBrokerPositionsRequest\x12\x18\n" +
 	"\arefresh\x18\x01 \x01(\bR\arefresh\"\xc7\x01\n" +
 	"\x1bListBrokerPositionsResponse\x12>\n" +
@@ -3026,6 +3054,7 @@ func file_dashboardv1_position_proto_init() {
 	}
 	file_dashboardv1_position_proto_msgTypes[0].OneofWrappers = []any{}
 	file_dashboardv1_position_proto_msgTypes[1].OneofWrappers = []any{}
+	file_dashboardv1_position_proto_msgTypes[10].OneofWrappers = []any{}
 	file_dashboardv1_position_proto_msgTypes[12].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

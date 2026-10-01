@@ -119,7 +119,7 @@ message BrokerPosition {
   string side = 6;             // BUY / SELL
   double volume = 7;
   double open_price = 8;
-  double current_price = 9;    // 0 + fresh=false = 无报价（诚实空态）
+  double current_price = 9;    // D-009 S2：平仓方向价（BUY仓=bid / SELL仓=ask，真要平吃的那口）；缺双价回退帧中价；0 + fresh=false = 无报价（诚实空态）
   bool fresh = 10;
   double pnl = 11;             // venue 权威浮盈（Order.Profit，后端透传，前端不自算 D-043）
   double swap = 12;
@@ -136,6 +136,9 @@ message BrokerPosition {
   double sl = 23;              // D-155：broker 端止损 SL 值透传（MT5 Order.StopLoss / MT4 Order.StopLoss；0=未设/CEX 无概念）；D-146 S1 灾难 SL 生产验证闭环基础设施
   google.protobuf.Timestamp swap_charge_at = 24;  // D-337R1 语义：下次计费/结算时刻（MT5=server 零点 swap，venue 时区换算 UTC；CEX=下次 funding 结算 UTC）；nil=时区/周期未知（诚实空态）
   double funding_rate_periodic_pct = 25;  // D-337R1：CEX 周期费率 %（=年化/(365×periods)，零信任后端换算）；0=未知诚实空态
+  double price_bid = 26;                  // D-009 S2：报价 bid（CEX=qbus 盘口；MT5=帧携 bid）；0=无报价/缺双值（诚实空态）
+  double price_ask = 27;                  // D-009 S2：报价 ask（同上）；0=无报价/缺双值
+  optional double close_now_estimate_usd = 28;  // D-009 S3：平仓净估=（方向价−开价）×qty×cs×fx − 平仓名义×takerBps×1e-4；缺省=报价/换算/费率任一不可得（诚实空态，列标「估」）
 }
 
 message ListBrokerPositionsRequest {

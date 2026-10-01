@@ -65,7 +65,7 @@ func TestD006_CapGuardSequentialReject(t *testing.T) {
 	notional := 4500.0
 	id, err := s.CreatePositionWithCapGuard(ctx,
 		&Position{OpportunityID: "opp-d006-1", Type: "XASSET_CARRY", Status: "OPENING", Environment: "test"},
-		[]string{"XAUUSD"}, notional)
+		[]string{"XAUUSD"}, nil, notional, nil)
 	if err != nil {
 		t.Fatalf("第一笔应放行: %v", err)
 	}
@@ -95,13 +95,13 @@ func TestD006_CapGuardSequentialReject(t *testing.T) {
 	// 锁后复查路径直证：同 canonical proposed=1000 → 4500+1000>5000 拒。
 	if _, err := s.CreatePositionWithCapGuard(ctx,
 		&Position{OpportunityID: "opp-d006-2", Type: "XASSET_CARRY", Status: "OPENING", Environment: "test"},
-		[]string{"XAUUSD"}, 1000); err == nil || !strings.Contains(err.Error(), "聚簇超限") {
+		[]string{"XAUUSD"}, nil, 1000, nil); err == nil || !strings.Contains(err.Error(), "聚簇超限") {
 		t.Fatalf("第二笔应被拦（4500+1000>5000），got %v", err)
 	}
 	// 不同 canonical 不互锁。
 	if _, err := s.CreatePositionWithCapGuard(ctx,
 		&Position{OpportunityID: "opp-d006-3", Type: "XASSET_CARRY", Status: "OPENING", Environment: "test"},
-		[]string{"BTCUSDT"}, 5900); err != nil {
+		[]string{"BTCUSDT"}, nil, 5900, nil); err != nil {
 		t.Fatalf("异 canonical 应放行（默认 cap 6000）: %v", err)
 	}
 }
@@ -120,7 +120,7 @@ func TestD006_CapGuardConcurrentSecondBlocked(t *testing.T) {
 	// 底仓在途 4500（含 canonical 映射腿）。
 	baseNotional := 4500.0
 	pos := &Position{OpportunityID: "opp-d006-base", Type: "XASSET_CARRY", Status: "OPEN", NotionalUSD: &baseNotional, Environment: "test"}
-	base, err := s.CreatePositionWithCapGuard(ctx, pos, []string{"WTIUSD"}, 4500)
+	base, err := s.CreatePositionWithCapGuard(ctx, pos, []string{"WTIUSD"}, nil, 4500, nil)
 	if err != nil {
 		t.Fatalf("底仓应放行: %v", err)
 	}
@@ -148,13 +148,13 @@ func TestD006_CapGuardConcurrentSecondBlocked(t *testing.T) {
 	go func() {
 		_, err := s.CreatePositionWithCapGuard(ctx,
 			&Position{OpportunityID: "opp-d006-c1", Type: "XASSET_CARRY", Status: "OPENING", Environment: "test"},
-			[]string{"WTIUSD"}, 1000)
+			[]string{"WTIUSD"}, nil, 1000, nil)
 		errCh <- err
 	}()
 	go func() {
 		_, err := s.CreatePositionWithCapGuard(ctx,
 			&Position{OpportunityID: "opp-d006-c2", Type: "XASSET_CARRY", Status: "OPENING", Environment: "test"},
-			[]string{"WTIUSD"}, 1000)
+			[]string{"WTIUSD"}, nil, 1000, nil)
 		errCh <- err
 	}()
 	e1, e2 := <-errCh, <-errCh

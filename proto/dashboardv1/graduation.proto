@@ -128,6 +128,7 @@ message UpsertXAssetAllowComboResponse {
   bool ok = 1; string error = 2;
   bool needs_confirm = 3;                  // 命中在持仓→前端二次确认（confirm=true 重发）
   repeated int64 open_position_ids = 4;    // 知情文案锚点
+  string over_subscribed_warn = 5;         // D-009 S4：Σalloc>cap 超订 warn（「超订，先到先得」不硬拒；空=未超/未查）
 }
 // D-560 S3：熔断恢复（清 dedupKey 前缀命中的全部熔断条目）。
 message ResumeXAssetComboRequest { int64 combo_id = 1; }
