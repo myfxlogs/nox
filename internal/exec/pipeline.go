@@ -96,6 +96,16 @@ type Pipeline struct {
 
 	// D-195-B：执行环境 demo/live（从 config 注入，写 positions.environment）。
 	environment string
+
+	// venueExposureSum D-009 S4：venue 系统实占 USD 回调（建库守卫锁内复查用；
+	// main 装 dashboard.Service.VenueSystemExposureUSD）。nil=venue 闸未接线跳过。
+	venueExposureSum func(ctx context.Context, venueBare string) (float64, error)
+}
+
+// SetVenueExposureSum D-009 S4：注入 venue 实占回调（执行路径接闸——
+// 展示闸6 与执行闸同源同判据，dashboard.Service.VenueSystemExposureUSD）。
+func (p *Pipeline) SetVenueExposureSum(f func(ctx context.Context, venueBare string) (float64, error)) {
+	p.venueExposureSum = f
 }
 
 // Settler D-193-A 扩包 S5：结算接口（closePositionCore 关闭后触发，修复 479 缺 settlement 行）。

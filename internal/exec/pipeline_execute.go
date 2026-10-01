@@ -126,7 +126,7 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 		}
 	}
 	// D-006 S3：canonical 聚簇 cap——建 position 走 advisory 锁事务复查（防同刻双放行）。
-	capGuardCanonicals, capGuardProposed, err := p.capGuardInputs(ctx, posType, opportunityID, legs)
+	capGuardCanonicals, capGuardVenues, capGuardProposed, err := p.capGuardInputs(ctx, posType, opportunityID, legs)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +145,7 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 	createFn := func() (int64, error) { return p.store.CreatePosition(ctx, newPos) }
 	if len(capGuardCanonicals) > 0 {
 		createFn = func() (int64, error) {
-			return p.store.CreatePositionWithCapGuard(ctx, newPos, capGuardCanonicals, capGuardProposed)
+			return p.store.CreatePositionWithCapGuard(ctx, newPos, capGuardCanonicals, capGuardVenues, capGuardProposed, p.venueExposureSum)
 		}
 	}
 	posID, err := createFn()
