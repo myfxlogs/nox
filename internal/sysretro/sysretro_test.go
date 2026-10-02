@@ -206,7 +206,7 @@ func TestDelayUntilRetro(t *testing.T) {
 		t.Fatalf("16:30 UTC 恰界应恰 24h 落 BJ 9-26 00:30，got d=%v land=%v", d, landBJ)
 	}
 	// weekly：周四 UTC 12:00（BJ 20:00）→ 下周一 BJ 00:30 = UTC 周日 16:30。
-	if d := NextDelay(thu, "weekly"); time.Until(thu.Add(d).UTC()) <= 0 {
+	if d := NextDelay(thu, "weekly"); d <= 0 {
 		t.Fatalf("weekly delay 非未来: %v", d)
 	} else if land := thu.Add(d).In(bj); land.Weekday() != time.Monday || land.Hour() != 0 || land.Minute() != 30 {
 		t.Fatalf("weekly 应落 BJ 周一 00:30，got %v", land)
