@@ -22,6 +22,7 @@ import (
 type binanceFilters struct {
 	StepSize    float64 // LOT_SIZE.stepSize（0=未采集→floor 不可用 fail-closed）
 	MinQty      float64 // LOT_SIZE.minQty
+	TickSize    float64 // PRICE_FILTER.tickSize（D-018 阶段a post-only 限价取整；0=未采集 maker fail-closed）
 	MinNotional float64 // MIN_NOTIONAL.notional
 	MaxNotional float64 // symbolConfig.maxNotionalValue（0=未采集不拦）
 	LotMaxQty   float64 // LOT_SIZE.maxQty（D-569 包B S3 量上限）
@@ -79,6 +80,7 @@ func (e *CEXExecutor) binanceFiltersFetch(ctx context.Context, symbol string) (b
 				MinQty     string `json:"minQty"`
 				MaxQty     string `json:"maxQty"`
 				Notional   string `json:"notional"`
+				TickSize   string `json:"tickSize"`
 			} `json:"filters"`
 		} `json:"symbols"`
 	}
@@ -96,6 +98,8 @@ func (e *CEXExecutor) binanceFiltersFetch(ctx context.Context, symbol string) (b
 				f.StepSize, _ = strconv.ParseFloat(fl.StepSize, 64)
 				f.MinQty, _ = strconv.ParseFloat(fl.MinQty, 64)
 				f.LotMaxQty, _ = strconv.ParseFloat(fl.MaxQty, 64)
+			case "PRICE_FILTER":
+				f.TickSize, _ = strconv.ParseFloat(fl.TickSize, 64) // D-018 阶段a：0=未采集（maker fail-closed）
 			case "MARKET_LOT_SIZE":
 				f.MktMaxQty, _ = strconv.ParseFloat(fl.MaxQty, 64)
 			case "MIN_NOTIONAL":

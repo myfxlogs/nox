@@ -33,6 +33,11 @@ type Order struct {
 	// ClientOrderID D-195-B：确定性客户端订单号（venue 支持时携带）。
 	// 空字符串 = venue 不支持或无 request_id（不伪造）。
 	ClientOrderID string
+	// PostOnly D-018 阶段a：post-only 限价单（okx ordType=post_only / binance GTX / gate poc）。
+	// true 时 LimitPrice 必填（tick 取整后挂单）；只挂不追——拒单即终态。
+	PostOnly bool
+	// LimitPrice D-018 阶段a：post-only 限价（tick 取整后挂单）；PostOnly=false 时忽略。
+	LimitPrice float64
 }
 
 // disasterSL 计算 MT 灾难止损价（D-146 S1，broker 端 SL，下单即带）。
@@ -58,7 +63,10 @@ type Fill struct {
 	// FeeUSD D-391 S2：入场手续费（正数成本口径，venue 原始负号已取绝对值）。
 	// 0 = venue 未回报/未采集（诚实缺省，调用方写 NULL 不写 0）。
 	FeeUSD float64
-	Ts     time.Time
+	// FillKind D-018 阶段a：成交方式（"maker"|"taker"；""=市价旧径/未采集）。
+	// post-only 只挂不追→成交必为 maker；市价=taker。供 D-014 econ 费率修正。
+	FillKind string
+	Ts       time.Time
 }
 
 // OrderRef 是平仓引用。

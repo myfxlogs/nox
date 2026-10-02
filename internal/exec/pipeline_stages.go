@@ -94,6 +94,8 @@ type LegResult struct {
 	Commission float64
 	// FeeUSD D-391 S2：入场手续费（正数成本口径；0=venue 未回报）。
 	FeeUSD float64
+	// FillKind D-018 阶段a：成交方式（"maker"|"taker"；""=市价旧径）——落 position_legs.fill_kind。
+	FillKind string
 }
 
 // checkSwapArbComboAllow D-159 W1a R1 S2.3：SWAPARB 精确组合门禁——真实名义额检查。

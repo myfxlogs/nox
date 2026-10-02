@@ -153,20 +153,31 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 		return nil, fmt.Errorf("create position: %w", err)
 	}
 
-	// 双腿并发下单
+	// 下单：D-018 阶段a 单腿 maker 序（策略已配置+恰一 CEX perp 腿）启用；否则既有双腿
+	// 并发市价路径（未配置=fail-closed 停用 maker，零行为变更）。
 	results := make([]LegResult, len(legs))
-	var wg sync.WaitGroup
-	for i, leg := range legs {
-		wg.Add(1)
-		idx, l := i, leg
-		safego.Go("pipeline:leg-exec", func() {
-			defer wg.Done()
-			// D-195-B §4.3：client_order_id 确定性编码（attempt_no=1 首次）。
-			coid := generateClientOrderID(requestID, posID, int16(idx), 1)
-			results[idx] = p.executeLeg(ctx, l, coid)
-		})
+	if plan, makerOK := p.makerPlan(legs); makerOK {
+		if !p.makerBudgetAllow(opportunityID) {
+			return nil, fmt.Errorf("opp %s: %w（每小时 ≤%d 次，fail-closed 不回落市价）", opportunityID, ErrMakerBudgetExhausted, p.makerMaxPerHour)
+		}
+		var merr error
+		if results, merr = p.runMakerSequence(ctx, requestID, posID, legs, plan); merr != nil {
+			return nil, merr
+		}
+	} else {
+		var wg sync.WaitGroup
+		for i, leg := range legs {
+			wg.Add(1)
+			idx, l := i, leg
+			safego.Go("pipeline:leg-exec", func() {
+				defer wg.Done()
+				// D-195-B §4.3：client_order_id 确定性编码（attempt_no=1 首次）。
+				coid := generateClientOrderID(requestID, posID, int16(idx), 1)
+				results[idx] = p.executeLeg(ctx, l, coid)
+			})
+		}
+		wg.Wait()
 	}
-	wg.Wait()
 
 	// 判定最终状态
 	filled := 0
