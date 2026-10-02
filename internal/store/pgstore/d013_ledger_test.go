@@ -213,3 +213,38 @@ func TestD013_IncidentExclusion(t *testing.T) {
 		t.Fatalf("daily realized pnl: %v", daily)
 	}
 }
+
+// TestD013_R1_ResolveLegFillCommission ①：UNKNOWN→FILLED 消解也必写腿键 commission 行。
+func TestD013_R1_ResolveLegFillCommission(t *testing.T) {
+	st := sharedTestStore(t)
+	ctx := context.Background()
+	st.Pool().Exec(ctx, `TRUNCATE positions, position_legs, position_cashflows RESTART IDENTITY CASCADE`)
+	t.Cleanup(func() {
+		st.Pool().Exec(ctx, `TRUNCATE positions, position_legs, position_cashflows RESTART IDENTITY CASCADE`)
+	})
+	posID := seedD013Pos(t, st, "XASSET_CARRY:XAUUSD:3001157:mt5:okx:perp:d013r1", "OPEN")
+	cex := d013Leg(t, st, posID, 0, "OPEN", "okx:perp", "SELL", 1, 4300, "UNKNOWN", nil)
+	mt := d013Leg(t, st, posID, 1, "OPEN", "3001157:mt5", "BUY", 0.01, 4300, "UNKNOWN", nil)
+	if _, n := legCommRow(t, st, cex.ID); n != 0 {
+		t.Fatalf("UNKNOWN leg must not have commission row: n=%d", n)
+	}
+	if err := st.ResolveLegFill(ctx, cex.ID, 4300.5, 1, 1.25); err != nil {
+		t.Fatal(err)
+	}
+	if amt, n := legCommRow(t, st, cex.ID); n != 1 || amt != -1.25 {
+		t.Fatalf("resolved CEX leg commission: n=%d amt=%v want -1.25", n, amt)
+	}
+	if err := st.ResolveLegFill(ctx, mt.ID, 4300.5, 0.01, 0); err != nil {
+		t.Fatal(err)
+	}
+	if amt, n := legCommRow(t, st, mt.ID); n != 1 || amt != 0 {
+		t.Fatalf("resolved MT leg commission: n=%d amt=%v want 0", n, amt)
+	}
+	// 幂等：重复消解不增生行
+	if err := st.ResolveLegFill(ctx, cex.ID, 4300.5, 1, 1.25); err != nil {
+		t.Fatal(err)
+	}
+	if _, n := legCommRow(t, st, cex.ID); n != 1 {
+		t.Fatalf("idempotent resolve: n=%d", n)
+	}
+}
