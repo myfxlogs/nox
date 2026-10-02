@@ -39,6 +39,11 @@ func (p *Pipeline) persistOpenLegs(ctx context.Context, requestID string, posID 
 		if fee > 0 {
 			feeUSD = &fee
 		}
+		// D-018 阶段a：fill_kind 落库（maker|taker；空=市价旧径 NULL 诚实缺省）。
+		var fillKind *string
+		if r.FillKind != "" {
+			fillKind = &r.FillKind
+		}
 		if err := p.store.CreatePositionLeg(ctx, &pgstore.PositionLeg{
 			PositionID:    posID,
 			LegNo:         int16(i),
@@ -59,6 +64,7 @@ func (p *Pipeline) persistOpenLegs(ctx context.Context, requestID string, posID 
 			SubmittedAt:   &now,
 			UncertainAt:   uncertainAt,
 			FeeUSD:        feeUSD,
+			FillKind:      fillKind,
 		}); err != nil {
 			msg := fmt.Sprintf("持仓 #%d 第 %d 腿成交落库失败（%s）：%v", posID, i, legs[i].VenueKey, err)
 			log.Printf("[exec] %s", msg)

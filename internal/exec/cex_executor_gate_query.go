@@ -73,6 +73,7 @@ type gateContractSpec struct {
 	// D-570 包A S1a：市价量上限+交易状态（实弹=JSON 字符串形，api-response-fields-empirical）。
 	MarketOrderSizeMax float64   // market_order_size_max（0=未采集不拦；市价单语义闸）
 	Status             string    // status（"trading" 放行；prelaunch/delisting/delisted/circuit_breaker 全拦）
+	OrderPriceRound    float64   // D-018 阶段a：order_price_round 价格步长（post-only 限价取整；0=未采集 maker fail-closed）
 	at                 time.Time // D-570 包C S6①：写入时刻（24h TTL 惰性判龄）
 }
 
@@ -103,6 +104,7 @@ func (e *CEXExecutor) gateSpecFetch(ctx context.Context, contract string) (gateC
 		LeverageMax        string  `json:"leverage_max"`          // D-570 活病灶根治：实弹=JSON 字符串
 		MarketOrderSizeMax string  `json:"market_order_size_max"` // 同
 		Status             string  `json:"status"`
+		OrderPriceRound    string  `json:"order_price_round"` // D-018 阶段a：价格步长（post-only 限价取整）
 	}
 	if err := json.Unmarshal(body, &spec); err != nil {
 		return gateContractSpec{}, fmt.Errorf("gate contract spec json: %w", err)
@@ -119,10 +121,14 @@ func (e *CEXExecutor) gateSpecFetch(ctx context.Context, contract string) (gateC
 	if err != nil {
 		return gateContractSpec{}, fmt.Errorf("gate contract %s market_order_size_max=%q: %w", contract, spec.MarketOrderSizeMax, err)
 	}
+	priceRound, err := f64z(spec.OrderPriceRound) // D-018 阶段a：0=未采集（maker 侧 fail-closed，不猜步长）
+	if err != nil {
+		return gateContractSpec{}, fmt.Errorf("gate contract %s order_price_round=%q: %w", contract, spec.OrderPriceRound, err)
+	}
 	s := gateContractSpec{
 		Quanto: q, SizeMin: spec.OrderSizeMin, SizeMax: spec.OrderSizeMax,
 		EnableDecimal: spec.EnableDecimal, InDelisting: spec.InDelisting, LeverageMax: lvMax,
-		MarketOrderSizeMax: mktMax, Status: spec.Status,
+		MarketOrderSizeMax: mktMax, Status: spec.Status, OrderPriceRound: priceRound,
 		at: time.Now(),
 	}
 	gateSpecCache.Store(contract, s)

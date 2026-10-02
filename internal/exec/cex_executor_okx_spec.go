@@ -14,10 +14,12 @@ import (
 	"time"
 )
 
-// okxSwapSpec okx SWAP instruments 规格（ctVal=合约面值/lotSz=最小张数/maxMktSz=市价单笔上限张数）。
+// okxSwapSpec okx SWAP instruments 规格（ctVal=合约面值/lotSz=最小张数/maxMktSz=市价单笔上限张数/
+// tickSz=价格步长，D-018 阶段a post-only 限价取整用）。
 // at 字段 D-566 S1 预埋（包 B S6 TTL 复用，本包只加不消费）。
 type okxSwapSpec struct {
 	ctVal, lotSz, maxMktSz float64
+	tickSz                 float64
 	at                     time.Time
 }
 
@@ -67,6 +69,7 @@ func OkxSwapSpec(ctx context.Context, client *http.Client, baseURL, instID strin
 			CtVal    string `json:"ctVal"`
 			LotSz    string `json:"lotSz"`
 			MaxMktSz string `json:"maxMktSz"`
+			TickSz   string `json:"tickSz"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &out); err != nil {
@@ -87,8 +90,24 @@ func OkxSwapSpec(ctx context.Context, client *http.Client, baseURL, instID strin
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf("okx instruments %s: maxMktSz=%q invalid: %w", instID, out.Data[0].MaxMktSz, err)
 	}
-	okxSwapSpecCache.Store(instID, okxSwapSpec{ctVal: ctVal, lotSz: lotSz, maxMktSz: maxMktSz, at: time.Now()})
+	tickSz, err := f64z(out.Data[0].TickSz) // D-018 阶段a：post-only 限价 tick 取整（0=未采集，maker 侧 fail-closed）
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("okx instruments %s: tickSz=%q invalid: %w", instID, out.Data[0].TickSz, err)
+	}
+	okxSwapSpecCache.Store(instID, okxSwapSpec{ctVal: ctVal, lotSz: lotSz, maxMktSz: maxMktSz, tickSz: tickSz, at: time.Now()})
 	return ctVal, lotSz, maxMktSz, nil
+}
+
+// OkxSwapTickSize D-018 阶段a：okx SWAP 价格步长（同 OkxSwapSpec 缓存/端点，post-only 限价取整用）。
+// 0 或取败=maker 侧 fail-closed（不挂未取整限价单）。
+func OkxSwapTickSize(ctx context.Context, client *http.Client, baseURL, instID string) (float64, error) {
+	if _, _, _, err := OkxSwapSpec(ctx, client, baseURL, instID); err != nil {
+		return 0, err
+	}
+	if v, ok := okxSwapSpecCache.Load(instID); ok {
+		return v.(okxSwapSpec).tickSz, nil
+	}
+	return 0, nil
 }
 
 // okxContractVal 查 okx swap 合约面值 ctVal + 最小张数 lotSz + maxMktSz。

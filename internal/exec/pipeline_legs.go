@@ -93,6 +93,12 @@ func (p *Pipeline) executeLeg(ctx context.Context, leg LegSpec, clientOrderID st
 		log.Printf("[exec] leg %s %s %s: zero fill (qty=%v price=%v) → FAILED", leg.VenueKey, leg.Side, leg.VenueSymbol, fill.Qty, fill.Price)
 		return LegResult{VenueKey: leg.VenueKey, OrderID: fill.OrderID, Status: "FAILED"}
 	}
+	// D-018 阶段a：市价成交方式显式化（CEX 腿=taker；MT 腿留空=NULL 诚实缺省）。
+	// post-only 路径走 executeMakerLeg 另标 maker，不经过此返回点。
+	fillKind := ""
+	if !isMTVenueKey(leg.VenueKey) {
+		fillKind = "taker"
+	}
 	return LegResult{
 		VenueKey:   leg.VenueKey,
 		OrderID:    fill.OrderID,
@@ -102,6 +108,7 @@ func (p *Pipeline) executeLeg(ctx context.Context, leg LegSpec, clientOrderID st
 		Swap:       fill.Swap,
 		Commission: fill.Commission,
 		FeeUSD:     fill.FeeUSD,
+		FillKind:   fillKind,
 	}
 }
 

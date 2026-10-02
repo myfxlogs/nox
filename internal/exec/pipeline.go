@@ -8,6 +8,7 @@ import (
 	"errors"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"arb/internal/bus"
 	"arb/internal/store/pgstore"
@@ -106,6 +107,13 @@ type Pipeline struct {
 	// dashboard.Service.LegMarginFrac）。nil=未接线→cap 守卫 margin 折算
 	// fail-closed 拒建仓（不猜杠杆）。
 	marginFracFor func(ctx context.Context, venueKey, symbol string, sellLeg bool) (frac float64, known bool)
+
+	// D-018 阶段a：单腿 maker 执行策略（SetMakerPolicy 注入）。timeout/maxPerHour 任一
+	// ≤0 = 未配置 fail-closed → maker 序停用，走既有双腿并发市价路径（零行为变更）。
+	makerTimeout    time.Duration
+	makerMaxPerHour int
+	makerBudgetMu   sync.Mutex
+	makerBudget     map[string][]time.Time // opportunityID → 近 1h attempt 时标（进程内预算；重启复位）
 }
 
 // SetMarginInputs D-010：注入 venue 保证金实占回调（执行路径接闸——展示闸6 与
@@ -125,6 +133,17 @@ type Settler interface {
 
 // SetSettler D-193-A 扩包 S5：注入结算器（main 装配时调）。
 func (p *Pipeline) SetSettler(s Settler) { p.settler = s }
+
+// SetMakerPolicy D-018 阶段a：注入单腿 maker 执行策略——首腿（CEX perp 腿）post-only
+// 挂单超时 T 撤单、每 opp 每小时 ≤N 次 attempt。任一 ≤0 = 未配置 fail-closed：maker 序
+// 停用（设计钉死「配置键缺=fail-closed」），既有双腿并发市价路径零变更。
+func (p *Pipeline) SetMakerPolicy(firstLegTimeout time.Duration, maxAttemptsPerHour int) {
+	p.makerTimeout = firstLegTimeout
+	p.makerMaxPerHour = maxAttemptsPerHour
+	if p.makerBudget == nil {
+		p.makerBudget = make(map[string][]time.Time)
+	}
+}
 
 // NewPipeline 创建执行管线。
 func NewPipeline(reg *Registry, store *pgstore.Store, qbus *bus.QuoteBus, limits RiskLimits, environment string) *Pipeline {
