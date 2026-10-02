@@ -6,6 +6,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -111,5 +112,79 @@ func TestAwaitPostOnlyFill_TimeoutNoREST(t *testing.T) {
 	}
 	if n := atomic.LoadInt32(&httpHits); n != 0 {
 		t.Fatalf("超时等待期 REST 命中=%d, want 0", n)
+	}
+}
+
+// TestPostOnlyCancel_FrameArrivalInstantFail D-018 阶段b 验收锚：秒撤帧到达即返回
+// FAILED 不等 T——撤单请求后 WS canceled 帧（qty=0）写缓存，事件唤醒即刻终判；
+// 查单 REST 零命中（撤单 POST 除外），全程亚秒（旧 200ms REST 循环=3s 窗）。
+func TestPostOnlyCancel_FrameArrivalInstantFail(t *testing.T) {
+	var statusHits int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			w.WriteHeader(http.StatusOK) // 撤单 POST 成功
+			return
+		}
+		atomic.AddInt32(&statusHits, 1) // 任何查单 GET=REST 兜底被打到
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	cache := exchange.NewOrderEventCache()
+	e := &CEXExecutor{venue: "gate", venueType: "perp", baseURL: srv.URL, apiKey: "k", apiSecret: "s", client: &http.Client{Timeout: 5 * time.Second}}
+	e.SetGateOrderLookup(func(ordID string) (GateOrderSnap, bool) {
+		ev, ok := cache.PeekOrder("gate:perp", ordID)
+		return GateOrderSnap{State: ev.State, AccFillQty: ev.AccFillQty, AvgPx: ev.AvgPx, FeeUSD: ev.FeeUSD}, ok
+	})
+	e.SetOrderWake(cache.SubscribeEvents)
+
+	o := Order{Symbol: "BTC_USDT", Side: "SELL", Qty: 1, Venue: "gate:perp"}
+	// 撤单请求后 30ms WS canceled 帧到达（快于任何 REST 节拍）。
+	go func() {
+		time.Sleep(30 * time.Millisecond)
+		cache.PutOrder("gate:perp", "po-sec", "", exchange.OrderEvent{State: "canceled", AccFillQty: 0, At: time.Now()})
+	}()
+	start := time.Now()
+	fill, err := e.PostOnlyCancel(context.Background(), o, "po-sec")
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("PostOnlyCancel: %v", err)
+	}
+	if fill.Qty != 0 || fill.FillKind != "maker" {
+		t.Fatalf("干净撤应 qty=0 maker，got %+v", fill)
+	}
+	if elapsed > 1500*time.Millisecond {
+		t.Fatalf("秒撤帧应即刻终判，实际 %v", elapsed)
+	}
+	if n := atomic.LoadInt32(&statusHits); n != 0 {
+		t.Fatalf("帧到达路径查单 REST 命中=%d, want 0（事件唤醒+单次兜底未触发）", n)
+	}
+}
+
+// TestPostOnlyCancel_NoEventSingleRESTFallback 兜底锚：无事件（orderWake 未接线）→
+// 单次 REST 查单终判（canceled qty=0）返回——不循环。
+func TestPostOnlyCancel_NoEventSingleRESTFallback(t *testing.T) {
+	var statusHits int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete || strings.Contains(r.URL.Path, "cancel-order") {
+			w.WriteHeader(http.StatusOK) // 撤单请求（gate DELETE / okx POST cancel-order）不算查单
+			return
+		}
+		atomic.AddInt32(&statusHits, 1)
+		_, _ = w.Write([]byte(`{"code":"0","data":[{"ordId":"po-x","state":"canceled","accFillSz":"0","avgPx":""}]}`))
+	}))
+	defer srv.Close()
+
+	e := &CEXExecutor{venue: "okx", venueType: "perp", baseURL: srv.URL, apiKey: "k", apiSecret: "s", passphrase: "p", client: &http.Client{Timeout: 5 * time.Second}}
+	// 无 SetOKXOrderLookup/SetOrderWake=未接线 → 直接单次 REST。
+	fill, err := e.PostOnlyCancel(context.Background(), Order{Symbol: "BTC-USDT", Side: "SELL"}, "po-x")
+	if err != nil {
+		t.Fatalf("PostOnlyCancel: %v", err)
+	}
+	if fill.Qty != 0 {
+		t.Fatalf("干净撤 qty=0, got %+v", fill)
+	}
+	if n := atomic.LoadInt32(&statusHits); n != 1 {
+		t.Fatalf("兜底应恰一次查单 REST，got %d", n)
 	}
 }
