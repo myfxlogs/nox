@@ -3,7 +3,6 @@ package notify
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
@@ -291,15 +290,8 @@ func TestIntegration_ReminderStopAfterConfirm(t *testing.T) {
 	}
 }
 
-// 确保未设置 DSN 时有明确提示（D-207）。
-func TestIntegration_DSNRequired(t *testing.T) {
-	if os.Getenv("ARB_TEST_PG_DSN") == "" {
-		if os.Getenv("ARB_TEST_ALLOW_SKIP_DSN") == "1" {
-			t.Skip("ARB_TEST_PG_DSN 未设置（ARB_TEST_ALLOW_SKIP_DSN=1 逃生门）")
-		}
-		t.Fatal("D-207：ARB_TEST_PG_DSN 未设置——集成测试需要真实 DB")
-	}
-}
+// TestIntegration_DSNRequired D-207 元测试随 D-021 退役：TestDSN 对已知 envVar 未设
+// env 时缺省独立测试实例 5434 真跑（testutil 统一锚定），notify 侧不再需要自检门槛。
 
 // TestReply_EventIDMessageIDPersisted 确认 ev.EventID/ev.MessageID 写入 DB（非空字符串）。
 func TestReply_EventIDMessageIDPersisted(t *testing.T) {
