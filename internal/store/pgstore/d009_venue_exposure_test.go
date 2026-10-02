@@ -77,7 +77,7 @@ func TestD009_CapGuardVenueRecheck(t *testing.T) {
 	}
 	// 实占 4500 + proposed 600 > cap 5000 → 拒（执行面锁内复查锚）。
 	if _, err := s.CreatePositionWithCapGuard(ctx, mk("opp-d009-v1"),
-		[]string{"WTIUSD"}, []string{"3001157:mt5"}, 600, sumFn); err == nil || !strings.Contains(err.Error(), "venue 敞口超限") {
+		[]string{"WTIUSD"}, map[string]float64{"3001157:mt5": 600}, 600, sumFn); err == nil || !strings.Contains(err.Error(), "保证金超限") {
 		t.Fatalf("4500+600>5000 应拒, got %v", err)
 	}
 	if gotBare != "3001157" {
@@ -85,17 +85,17 @@ func TestD009_CapGuardVenueRecheck(t *testing.T) {
 	}
 	// proposed 400 → 4900≤5000 放行；cap=0 的 gate:perp 不在本仓腿集不判。
 	if _, err := s.CreatePositionWithCapGuard(ctx, mk("opp-d009-v2"),
-		[]string{"WTIUSD"}, []string{"3001157:mt5"}, 400, sumFn); err != nil {
+		[]string{"WTIUSD"}, map[string]float64{"3001157:mt5": 400}, 400, sumFn); err != nil {
 		t.Fatalf("4500+400≤5000 应放行, got %v", err)
 	}
 	// cap=0 腿含入 → 冻结拒。
 	if _, err := s.CreatePositionWithCapGuard(ctx, mk("opp-d009-v3"),
-		[]string{"WTIUSD"}, []string{"gate:perp"}, 1, sumFn); err == nil || !strings.Contains(err.Error(), "venue 敞口冻结") {
+		[]string{"WTIUSD"}, map[string]float64{"gate:perp": 1}, 1, sumFn); err == nil || !strings.Contains(err.Error(), "保证金冻结") {
 		t.Fatalf("gate:perp cap=0 应冻结, got %v", err)
 	}
 	// 无闸行 venue → 放行（与展示闸同判据：行缺席不拦）。
 	if _, err := s.CreatePositionWithCapGuard(ctx, mk("opp-d009-v4"),
-		[]string{"WTIUSD"}, []string{"okx:perp"}, 50, sumFn); err != nil {
+		[]string{"WTIUSD"}, map[string]float64{"okx:perp": 50}, 50, sumFn); err != nil {
 		t.Fatalf("无闸行 venue 应放行, got %v", err)
 	}
 }

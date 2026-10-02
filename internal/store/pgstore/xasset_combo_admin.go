@@ -22,6 +22,7 @@ type XAssetComboAdminRow struct {
 	MaxShortQty   float64
 	MaxGrossUSD   float64
 	NotionalUSD   *float64
+	MarginUSD     *float64 // D-010：保证金总预算（与 notional_usd 互斥，DB CHECK 钉死）
 	Enabled       bool
 	Simulated     *bool
 	Note          string
@@ -33,7 +34,7 @@ type XAssetComboAdminRow struct {
 func (s *Store) ListXAssetAllowCombosAll(ctx context.Context) ([]XAssetComboAdminRow, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, canonical_buy, canonical_sell, venue_key_buy AS venue_buy, venue_key_sell AS venue_sell,
-		       max_long_qty, max_short_qty, max_gross_usd, notional_usd, enabled, simulated, note
+		       max_long_qty, max_short_qty, max_gross_usd, notional_usd, margin_usd, enabled, simulated, note
 		FROM xasset_allow_combos WHERE simulated IS NULL OR simulated = false ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("list xasset combos all: %w", err)
@@ -43,7 +44,7 @@ func (s *Store) ListXAssetAllowCombosAll(ctx context.Context) ([]XAssetComboAdmi
 	for rows.Next() {
 		var r XAssetComboAdminRow
 		if err := rows.Scan(&r.ID, &r.CanonicalBuy, &r.CanonicalSell, &r.VenueBuy, &r.VenueSell,
-			&r.MaxLongQty, &r.MaxShortQty, &r.MaxGrossUSD, &r.NotionalUSD, &r.Enabled, &r.Simulated, &r.Note); err != nil {
+			&r.MaxLongQty, &r.MaxShortQty, &r.MaxGrossUSD, &r.NotionalUSD, &r.MarginUSD, &r.Enabled, &r.Simulated, &r.Note); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -69,9 +70,9 @@ func (s *Store) UpdateXAssetAllowCombo(ctx context.Context, r *XAssetComboAdminR
 	}
 	if _, err := tx.Exec(ctx, `
 		UPDATE xasset_allow_combos SET max_long_qty=$1, max_short_qty=$2, max_gross_usd=$3,
-		       notional_usd=$4, enabled=$5, note=$6, updated_at=now()
-		WHERE id=$7`,
-		r.MaxLongQty, r.MaxShortQty, r.MaxGrossUSD, r.NotionalUSD, r.Enabled, r.Note, r.ID); err != nil {
+		       notional_usd=$4, margin_usd=$5, enabled=$6, note=$7, updated_at=now()
+		WHERE id=$8`,
+		r.MaxLongQty, r.MaxShortQty, r.MaxGrossUSD, r.NotionalUSD, r.MarginUSD, r.Enabled, r.Note, r.ID); err != nil {
 		return false, fmt.Errorf("update combo: %w", err)
 	}
 	return true, tx.Commit(ctx)

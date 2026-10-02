@@ -88,6 +88,7 @@ message XAssetAllowComboRow {
   google.protobuf.Timestamp breaker_resume_at = 23;
   int32 breaker_count = 24;                // 本窗已抑制尝试数（徽标 ×N）
   string pool_verdict = 25;                // D-563 S3 池判定：ok/conflict/unknown（待定黄标）
+  optional double margin_usd = 26;         // D-010：组合保证金总预算（双腿占用和上限；与 notional_usd 互斥）
 }
 message ListXAssetAllowCombosResponse { repeated XAssetAllowComboRow rows = 1; }
 
@@ -115,6 +116,12 @@ message XAssetPendingEntryRow {
   optional double wait_current_bps = 15;   // 实况入场价差 bps（双腿 qbus 现算，同 engine_opp 公式）
   optional double wait_threshold_bps = 16; // 入场阈值 bps（monitor noise_bps 24h 摆幅）
   optional double wait_gap_bps = 17;       // 阈值−当前（正=还差多少）
+  // D-010 S5：保证金预算内联填写+名义相等反推透显（值皆服务端算，前端只渲染）。
+  optional double margin_budget_usd = 18;   // 组合保证金预算（margin_usd 设定时透出）
+  optional double leg_notional_usd = 19;    // 反推每腿名义 N=margin÷(fracB+fracS)（两链同口径）
+  optional double buy_leg_margin_usd = 20;  // 买腿保证金占用=N×fracB
+  optional double sell_leg_margin_usd = 21; // 卖腿保证金占用=N×fracS
+  optional double min_margin_usd = 22;      // 最少需保证金=max(腿minStep名义)×(fracB+fracS)
 }
 message UpsertXAssetAllowComboRequest {
   int64 id = 1;                            // 0=insert；>0=update caps/enabled/note（行锁）
@@ -123,6 +130,7 @@ message UpsertXAssetAllowComboRequest {
   double max_long_qty = 6; double max_short_qty = 7; double max_gross_usd = 8;
   optional double notional_usd = 9; bool enabled = 10; optional bool simulated = 11; string note = 12;
   bool confirm = 13;                       // 在持仓 toggle/caps 下调锁须知情确认
+  optional double margin_usd = 14;         // D-010：保证金总预算（与 notional_usd 互斥；显式<=0 拒）
 }
 message UpsertXAssetAllowComboResponse {
   bool ok = 1; string error = 2;

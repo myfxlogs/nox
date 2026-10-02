@@ -652,6 +652,7 @@ type XAssetAllowComboRow struct {
 	BreakerResumeAt *timestamppb.Timestamp `protobuf:"bytes,23,opt,name=breaker_resume_at,json=breakerResumeAt,proto3" json:"breaker_resume_at,omitempty"`
 	BreakerCount    int32                  `protobuf:"varint,24,opt,name=breaker_count,json=breakerCount,proto3" json:"breaker_count,omitempty"` // 本窗已抑制尝试数（徽标 ×N）
 	PoolVerdict     string                 `protobuf:"bytes,25,opt,name=pool_verdict,json=poolVerdict,proto3" json:"pool_verdict,omitempty"`     // D-563 S3 池判定：ok/conflict/unknown（待定黄标）
+	MarginUsd       *float64               `protobuf:"fixed64,26,opt,name=margin_usd,json=marginUsd,proto3,oneof" json:"margin_usd,omitempty"`   // D-010：组合保证金总预算（双腿占用和上限；与 notional_usd 互斥）
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -861,6 +862,13 @@ func (x *XAssetAllowComboRow) GetPoolVerdict() string {
 	return ""
 }
 
+func (x *XAssetAllowComboRow) GetMarginUsd() float64 {
+	if x != nil && x.MarginUsd != nil {
+		return *x.MarginUsd
+	}
+	return 0
+}
+
 type ListXAssetAllowCombosResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Rows          []*XAssetAllowComboRow `protobuf:"bytes,1,rep,name=rows,proto3" json:"rows,omitempty"`
@@ -1008,6 +1016,12 @@ type XAssetPendingEntryRow struct {
 	WaitCurrentBps   *float64 `protobuf:"fixed64,15,opt,name=wait_current_bps,json=waitCurrentBps,proto3,oneof" json:"wait_current_bps,omitempty"`       // 实况入场价差 bps（双腿 qbus 现算，同 engine_opp 公式）
 	WaitThresholdBps *float64 `protobuf:"fixed64,16,opt,name=wait_threshold_bps,json=waitThresholdBps,proto3,oneof" json:"wait_threshold_bps,omitempty"` // 入场阈值 bps（monitor noise_bps 24h 摆幅）
 	WaitGapBps       *float64 `protobuf:"fixed64,17,opt,name=wait_gap_bps,json=waitGapBps,proto3,oneof" json:"wait_gap_bps,omitempty"`                   // 阈值−当前（正=还差多少）
+	// D-010 S5：保证金预算内联填写+名义相等反推透显（值皆服务端算，前端只渲染）。
+	MarginBudgetUsd  *float64 `protobuf:"fixed64,18,opt,name=margin_budget_usd,json=marginBudgetUsd,proto3,oneof" json:"margin_budget_usd,omitempty"`      // 组合保证金预算（margin_usd 设定时透出）
+	LegNotionalUsd   *float64 `protobuf:"fixed64,19,opt,name=leg_notional_usd,json=legNotionalUsd,proto3,oneof" json:"leg_notional_usd,omitempty"`         // 反推每腿名义 N=margin÷(fracB+fracS)（两链同口径）
+	BuyLegMarginUsd  *float64 `protobuf:"fixed64,20,opt,name=buy_leg_margin_usd,json=buyLegMarginUsd,proto3,oneof" json:"buy_leg_margin_usd,omitempty"`    // 买腿保证金占用=N×fracB
+	SellLegMarginUsd *float64 `protobuf:"fixed64,21,opt,name=sell_leg_margin_usd,json=sellLegMarginUsd,proto3,oneof" json:"sell_leg_margin_usd,omitempty"` // 卖腿保证金占用=N×fracS
+	MinMarginUsd     *float64 `protobuf:"fixed64,22,opt,name=min_margin_usd,json=minMarginUsd,proto3,oneof" json:"min_margin_usd,omitempty"`               // 最少需保证金=max(腿minStep名义)×(fracB+fracS)
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -1161,6 +1175,41 @@ func (x *XAssetPendingEntryRow) GetWaitGapBps() float64 {
 	return 0
 }
 
+func (x *XAssetPendingEntryRow) GetMarginBudgetUsd() float64 {
+	if x != nil && x.MarginBudgetUsd != nil {
+		return *x.MarginBudgetUsd
+	}
+	return 0
+}
+
+func (x *XAssetPendingEntryRow) GetLegNotionalUsd() float64 {
+	if x != nil && x.LegNotionalUsd != nil {
+		return *x.LegNotionalUsd
+	}
+	return 0
+}
+
+func (x *XAssetPendingEntryRow) GetBuyLegMarginUsd() float64 {
+	if x != nil && x.BuyLegMarginUsd != nil {
+		return *x.BuyLegMarginUsd
+	}
+	return 0
+}
+
+func (x *XAssetPendingEntryRow) GetSellLegMarginUsd() float64 {
+	if x != nil && x.SellLegMarginUsd != nil {
+		return *x.SellLegMarginUsd
+	}
+	return 0
+}
+
+func (x *XAssetPendingEntryRow) GetMinMarginUsd() float64 {
+	if x != nil && x.MinMarginUsd != nil {
+		return *x.MinMarginUsd
+	}
+	return 0
+}
+
 type UpsertXAssetAllowComboRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"` // 0=insert；>0=update caps/enabled/note（行锁）
@@ -1175,7 +1224,8 @@ type UpsertXAssetAllowComboRequest struct {
 	Enabled       bool                   `protobuf:"varint,10,opt,name=enabled,proto3" json:"enabled,omitempty"`
 	Simulated     *bool                  `protobuf:"varint,11,opt,name=simulated,proto3,oneof" json:"simulated,omitempty"`
 	Note          string                 `protobuf:"bytes,12,opt,name=note,proto3" json:"note,omitempty"`
-	Confirm       bool                   `protobuf:"varint,13,opt,name=confirm,proto3" json:"confirm,omitempty"` // 在持仓 toggle/caps 下调锁须知情确认
+	Confirm       bool                   `protobuf:"varint,13,opt,name=confirm,proto3" json:"confirm,omitempty"`                             // 在持仓 toggle/caps 下调锁须知情确认
+	MarginUsd     *float64               `protobuf:"fixed64,14,opt,name=margin_usd,json=marginUsd,proto3,oneof" json:"margin_usd,omitempty"` // D-010：保证金总预算（与 notional_usd 互斥；显式<=0 拒）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1299,6 +1349,13 @@ func (x *UpsertXAssetAllowComboRequest) GetConfirm() bool {
 		return x.Confirm
 	}
 	return false
+}
+
+func (x *UpsertXAssetAllowComboRequest) GetMarginUsd() float64 {
+	if x != nil && x.MarginUsd != nil {
+		return *x.MarginUsd
+	}
+	return 0
 }
 
 type UpsertXAssetAllowComboResponse struct {
@@ -3072,7 +3129,7 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\rFieldEvidence\x12\x14\n" +
 	"\x05field\x18\x01 \x01(\tR\x05field\x125\n" +
 	"\x05grade\x18\x02 \x01(\x0e2\x1f.arb.dashboard.v1.EvidenceGradeR\x05grade\"\x1e\n" +
-	"\x1cListXAssetAllowCombosRequest\"\xef\a\n" +
+	"\x1cListXAssetAllowCombosRequest\"\xa2\b\n" +
 	"\x13XAssetAllowComboRow\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12#\n" +
 	"\rcanonical_buy\x18\x02 \x01(\tR\fcanonicalBuy\x12\x1b\n" +
@@ -3103,15 +3160,18 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\rbreaker_class\x18\x16 \x01(\tR\fbreakerClass\x12F\n" +
 	"\x11breaker_resume_at\x18\x17 \x01(\v2\x1a.google.protobuf.TimestampR\x0fbreakerResumeAt\x12#\n" +
 	"\rbreaker_count\x18\x18 \x01(\x05R\fbreakerCount\x12!\n" +
-	"\fpool_verdict\x18\x19 \x01(\tR\vpoolVerdictB\x0f\n" +
+	"\fpool_verdict\x18\x19 \x01(\tR\vpoolVerdict\x12\"\n" +
+	"\n" +
+	"margin_usd\x18\x1a \x01(\x01H\x02R\tmarginUsd\x88\x01\x01B\x0f\n" +
 	"\r_notional_usdB\f\n" +
 	"\n" +
-	"_simulated\"Z\n" +
+	"_simulatedB\r\n" +
+	"\v_margin_usd\"Z\n" +
 	"\x1dListXAssetAllowCombosResponse\x129\n" +
 	"\x04rows\x18\x01 \x03(\v2%.arb.dashboard.v1.XAssetAllowComboRowR\x04rows\"!\n" +
 	"\x1fListXAssetPendingEntriesRequest\"_\n" +
 	" ListXAssetPendingEntriesResponse\x12;\n" +
-	"\x04rows\x18\x01 \x03(\v2'.arb.dashboard.v1.XAssetPendingEntryRowR\x04rows\"\xe0\x05\n" +
+	"\x04rows\x18\x01 \x03(\v2'.arb.dashboard.v1.XAssetPendingEntryRowR\x04rows\"\xbe\b\n" +
 	"\x15XAssetPendingEntryRow\x12\x19\n" +
 	"\bcombo_id\x18\x01 \x01(\x03R\acomboId\x12\x1f\n" +
 	"\vcombo_label\x18\x02 \x01(\tR\n" +
@@ -3135,10 +3195,20 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x10wait_current_bps\x18\x0f \x01(\x01H\x00R\x0ewaitCurrentBps\x88\x01\x01\x121\n" +
 	"\x12wait_threshold_bps\x18\x10 \x01(\x01H\x01R\x10waitThresholdBps\x88\x01\x01\x12%\n" +
 	"\fwait_gap_bps\x18\x11 \x01(\x01H\x02R\n" +
-	"waitGapBps\x88\x01\x01B\x13\n" +
+	"waitGapBps\x88\x01\x01\x12/\n" +
+	"\x11margin_budget_usd\x18\x12 \x01(\x01H\x03R\x0fmarginBudgetUsd\x88\x01\x01\x12-\n" +
+	"\x10leg_notional_usd\x18\x13 \x01(\x01H\x04R\x0elegNotionalUsd\x88\x01\x01\x120\n" +
+	"\x12buy_leg_margin_usd\x18\x14 \x01(\x01H\x05R\x0fbuyLegMarginUsd\x88\x01\x01\x122\n" +
+	"\x13sell_leg_margin_usd\x18\x15 \x01(\x01H\x06R\x10sellLegMarginUsd\x88\x01\x01\x12)\n" +
+	"\x0emin_margin_usd\x18\x16 \x01(\x01H\aR\fminMarginUsd\x88\x01\x01B\x13\n" +
 	"\x11_wait_current_bpsB\x15\n" +
 	"\x13_wait_threshold_bpsB\x0f\n" +
-	"\r_wait_gap_bps\"\xd3\x03\n" +
+	"\r_wait_gap_bpsB\x14\n" +
+	"\x12_margin_budget_usdB\x13\n" +
+	"\x11_leg_notional_usdB\x15\n" +
+	"\x13_buy_leg_margin_usdB\x16\n" +
+	"\x14_sell_leg_margin_usdB\x11\n" +
+	"\x0f_min_margin_usd\"\x86\x04\n" +
 	"\x1dUpsertXAssetAllowComboRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12#\n" +
 	"\rcanonical_buy\x18\x02 \x01(\tR\fcanonicalBuy\x12\x1b\n" +
@@ -3155,10 +3225,13 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	" \x01(\bR\aenabled\x12!\n" +
 	"\tsimulated\x18\v \x01(\bH\x01R\tsimulated\x88\x01\x01\x12\x12\n" +
 	"\x04note\x18\f \x01(\tR\x04note\x12\x18\n" +
-	"\aconfirm\x18\r \x01(\bR\aconfirmB\x0f\n" +
+	"\aconfirm\x18\r \x01(\bR\aconfirm\x12\"\n" +
+	"\n" +
+	"margin_usd\x18\x0e \x01(\x01H\x02R\tmarginUsd\x88\x01\x01B\x0f\n" +
 	"\r_notional_usdB\f\n" +
 	"\n" +
-	"_simulated\"\xc9\x01\n" +
+	"_simulatedB\r\n" +
+	"\v_margin_usd\"\xc9\x01\n" +
 	"\x1eUpsertXAssetAllowComboResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12#\n" +

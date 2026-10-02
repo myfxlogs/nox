@@ -159,6 +159,7 @@ var migrationFiles = []struct {
 	{163, migrations.StrategyStatsNotifySQL},           // D-004 P1#3：disabled 变更 pg_notify（事件源替代 60s 轮询）
 	{164, migrations.CanonicalExposureCapsSQL},         // D-006 S3：fin_canonical_exposure_caps 聚簇闸表
 	{165, migrations.MT5ExposureCap6000SQL},            // D-007 S2：MT5 两户 venue 敞口闸 $6000（业主批）
+	{166, migrations.MarginSemanticsSQL},               // D-010：margin_usd 列+互斥；venue cap 语义翻保证金
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
