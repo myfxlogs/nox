@@ -11,7 +11,7 @@ import (
 func (s *Store) AggregateStrategyStatsByEnvironment(ctx context.Context, strategy, environment string) (AggregateStat, error) {
 	var st AggregateStat
 	st.Strategy = strategy
-	err := s.pool.QueryRow(ctx, `
+	err := s.pool.QueryRow(ctx, fmt.Sprintf(`
 		SELECT COALESCE(total, 0), COALESCE(wins, 0), COALESCE(avg_pnl, 0), COALESCE(median_pnl, 0)
 		FROM (
 			SELECT count(*) AS total,
@@ -26,8 +26,9 @@ func (s *Store) AggregateStrategyStatsByEnvironment(ctx context.Context, strateg
 				  AND COALESCE(s.stats_status, 'applied') = 'applied'
 				  AND p.environment IS NOT NULL
 				  AND ($2 = '' OR p.environment = $2)
+				  AND NOT %s
 			) t
-		) agg`, strategy, environment).Scan(&st.Total, &st.Wins, &st.AvgPnl, &st.MedianPnl)
+		) agg`, incidentPositionPredicate), strategy, environment).Scan(&st.Total, &st.Wins, &st.AvgPnl, &st.MedianPnl)
 	if err != nil {
 		return AggregateStat{}, fmt.Errorf("aggregate strategy stats by env: %w", err)
 	}
@@ -38,13 +39,14 @@ func (s *Store) AggregateStrategyStatsByEnvironment(ctx context.Context, strateg
 // D-193-A 扩包（决策 9）：与 DailyRealizedPnl 同构——LEFT JOIN + COALESCE 三级 fallback。
 func (s *Store) DailyRealizedPnlByEnvironment(ctx context.Context, environment string) (float64, error) {
 	var sum *float64
-	err := s.pool.QueryRow(ctx, `
+	err := s.pool.QueryRow(ctx, fmt.Sprintf(`
 		SELECT COALESCE(SUM(COALESCE(s.net_realized_usd, s.realized_usd, p.realized_pnl)), 0)
 		FROM positions p
 		LEFT JOIN position_settlements s ON s.position_id = p.id
 		WHERE p.status = 'CLOSED' AND p.closed_at >= date_trunc('day', now())
 		  AND p.environment IS NOT NULL
-		  AND ($1 = '' OR p.environment = $1)`, environment).Scan(&sum)
+		  AND ($1 = '' OR p.environment = $1)
+		  AND NOT %s`, incidentPositionPredicate), environment).Scan(&sum)
 	if err != nil {
 		return 0, fmt.Errorf("daily realized pnl by env: %w", err)
 	}
@@ -65,7 +67,7 @@ func (s *Store) AggregateStrategyStatsByEnvironmentFamily(ctx context.Context, s
 		return st, nil // 空族 → 零值（不查库）
 	}
 	st.Strategy = strategies[0]
-	err := s.pool.QueryRow(ctx, `
+	err := s.pool.QueryRow(ctx, fmt.Sprintf(`
 		SELECT COALESCE(total, 0), COALESCE(wins, 0), COALESCE(avg_pnl, 0), COALESCE(median_pnl, 0)
 		FROM (
 			SELECT count(*) AS total,
@@ -79,8 +81,9 @@ func (s *Store) AggregateStrategyStatsByEnvironmentFamily(ctx context.Context, s
 				WHERE p.type = ANY($1) AND p.closed_at IS NOT NULL AND p.realized_pnl IS NOT NULL
 				  AND COALESCE(s.stats_status, 'applied') = 'applied'
 				  AND ($2 = '' OR p.environment = $2)
+				  AND NOT %s
 			) t
-		) agg`, strategies, environment).Scan(&st.Total, &st.Wins, &st.AvgPnl, &st.MedianPnl)
+		) agg`, incidentPositionPredicate), strategies, environment).Scan(&st.Total, &st.Wins, &st.AvgPnl, &st.MedianPnl)
 	if err != nil {
 		return AggregateStat{}, fmt.Errorf("aggregate strategy stats by env family: %w", err)
 	}

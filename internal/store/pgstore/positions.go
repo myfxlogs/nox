@@ -221,19 +221,23 @@ func (s *Store) CreatePositionLeg(ctx context.Context, leg *PositionLeg) error {
 		parent_attempt_id, client_order_id, requested_qty, filled_qty, avg_fill_price,
 		fee_raw, fee_usd, submitted_at, uncertain_at)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
-		ON CONFLICT (position_id, leg_no, phase, attempt_no) DO NOTHING`
-	ct, err := s.pool.Exec(ctx, q,
+		ON CONFLICT (position_id, leg_no, phase, attempt_no) DO NOTHING
+		RETURNING id`
+	var legID int64
+	err := s.pool.QueryRow(ctx, q,
 		leg.PositionID, leg.LegNo, leg.Phase, leg.AttemptNo, vk.Venue, vk.Type, leg.Symbol, leg.Side,
 		leg.Qty, leg.PriceExpected, leg.PriceActual, leg.OrderID, leg.Status,
 		leg.ParentAttemptID, leg.ClientOrderID, leg.RequestedQty, leg.FilledQty, leg.AvgFillPrice,
-		leg.FeeRaw, leg.FeeUSD, leg.SubmittedAt, leg.UncertainAt)
+		leg.FeeRaw, leg.FeeUSD, leg.SubmittedAt, leg.UncertainAt).Scan(&legID)
 	if err != nil {
+		if err.Error() == "no rows in result set" {
+			return ErrTerminalState
+		}
 		return err
 	}
-	if ct.RowsAffected() == 0 {
-		return ErrTerminalState
-	}
-	return nil
+	leg.ID = legID
+	// D-013 ①：终态腿（FILLED/EXTERNAL）落库即写 leg:<id> commission 行，全写入点同源。
+	return s.EnsureLegCommissionCashflow(ctx, *leg, nil)
 }
 
 // ListPositionLegs 返回指定持仓的全部腿。

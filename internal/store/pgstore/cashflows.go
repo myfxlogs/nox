@@ -118,9 +118,7 @@ func (s *Store) SumCashflowsNet(ctx context.Context, posID int64) (float64, erro
 	err := s.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(amount_usd), 0) FROM position_cashflows
 		 WHERE position_id = $1 AND kind IN ('swap','funding','commission')
-		   AND (quality = 'actual' OR quality IS NULL)
-		   AND (kind <> 'commission'
-		        OR (SELECT fees_usd FROM positions WHERE id = position_cashflows.position_id) IS NULL)`,
+		   AND (quality = 'actual' OR quality IS NULL)`,
 		posID).Scan(&sum)
 	if err != nil {
 		return 0, fmt.Errorf("sum cashflows net: %w", err)
@@ -171,12 +169,12 @@ func (s *Store) SumCashflowsNetWithQuality(ctx context.Context, posID int64) (su
 	// 逐行读 quality 决定聚合质量（actual/estimated/unknown），SUM 只统计 actual+legacy。
 	// legacy 行 quality IS NULL → 视作 actual（兼容旧数据，D-193 §3.6 legacy 标记在 settlement 侧）。
 	var hasUnknown, hasEstimated bool
+	// D-013 ②：commission 无条件计入（同 SumCashflowsNetForSettle 口径——
+	// D-599 的 fees_usd 双扣排除由 PositionNetUSD 单源接管，不再需要）。
 	rows, err := s.pool.Query(ctx,
 		`SELECT COALESCE(amount_usd, 0), COALESCE(quality, 'actual')
 		 FROM position_cashflows
-		 WHERE position_id = $1 AND kind IN ('swap','funding','commission')
-		   AND (kind <> 'commission'
-		        OR (SELECT fees_usd FROM positions WHERE id = position_cashflows.position_id) IS NULL)`,
+		 WHERE position_id = $1 AND kind IN ('swap','funding','commission')`,
 		posID)
 	if err != nil {
 		return 0, "", fmt.Errorf("sum cashflows net with quality: %w", err)

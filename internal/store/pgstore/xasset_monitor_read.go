@@ -115,21 +115,24 @@ func (s *Store) UpdatePositionExitKind(ctx context.Context, posID int64, kind st
 }
 
 // ExitKindFromReason D-341 S3：close reason 前缀 → exit_kind（logCloseTrigger 单映射点）。
+// D-013 ③：返回值全部走权威常量；legged_unwind/incident_close 不经此函数（终态归因覆盖写）。
 func ExitKindFromReason(reason string) string {
 	switch {
 	case strings.HasPrefix(reason, "disaster"): // D-378b：置于 contains 族前——reason 串含 basis/carry/stop 子串会被截胡
-		return "disaster"
+		return ExitKindDisaster
 	case strings.HasPrefix(reason, "harvest"):
-		return "harvest"
+		return ExitKindHarvest
 	case strings.Contains(reason, "basis loss"), strings.Contains(reason, "basis stop"):
-		return "stop"
+		return ExitKindStop
+	case strings.Contains(reason, "rotate"): // D-378a 轮转触发同集（含于 exec 质量族，映射先于 carry）
+		return ExitKindRotate
 	case strings.Contains(reason, "exec_drift"): // D-378a S2：执行质量破产（置于 carry/funding 前，防未来 reason 串扰误判）
-		return "exec_drift"
+		return ExitKindExecDrift
 	case strings.Contains(reason, "carry"), strings.Contains(reason, "funding"):
-		return "carry_death"
+		return ExitKindCarryDeath
 	case strings.Contains(reason, "manual"):
-		return "manual"
+		return ExitKindManual
 	default:
-		return "other"
+		return ExitKindOther
 	}
 }

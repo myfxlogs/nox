@@ -14,12 +14,13 @@ import (
 // 防「realized_pnl 净额 − 同费现金流」双扣；legacy 仓（fees_usd NULL）仍计入（费只活在
 // cashflows 里，排除=漏计）。SumCashflowsNet/WithQuality 同规则。
 func (s *Store) SumCashflowsNetForSettle(ctx context.Context, posID int64, hasFundingLeg, fundingDue bool) (sum float64, quality string, err error) {
+	// D-013 ②：commission 无条件计入——realized_pnl/net_realized_usd 改走
+	// PositionNetUSD 单源（价差+全量现金流），本函数退回「现金流组件」纯口径；
+	// D-599 的 fees_usd 条件排除随之失效（双扣防线的职责已由单源接管）。
 	rows, err := s.pool.Query(ctx,
 		`SELECT kind, COALESCE(amount_usd, 0), COALESCE(quality, 'actual')
 		 FROM position_cashflows
-		 WHERE position_id = $1 AND kind IN ('swap','funding','commission')
-		   AND (kind <> 'commission'
-		        OR (SELECT fees_usd FROM positions WHERE id = position_cashflows.position_id) IS NULL)`,
+		 WHERE position_id = $1 AND kind IN ('swap','funding','commission')`,
 		posID)
 	if err != nil {
 		return 0, "", fmt.Errorf("sum cashflows net for settle: %w", err)

@@ -161,6 +161,7 @@ var migrationFiles = []struct {
 	{165, migrations.MT5ExposureCap6000SQL},            // D-007 S2：MT5 两户 venue 敞口闸 $6000（业主批）
 	{166, migrations.MarginSemanticsSQL},               // D-010：margin_usd 列+互斥；venue cap 语义翻保证金
 	{167, migrations.LegExternalStatusSQL},             // D-015 ②：position_legs.status 增 EXTERNAL
+	{168, migrations.D013LedgerTruthSQL},               // D-013：partial 合法化 + #497–507 账本回填
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

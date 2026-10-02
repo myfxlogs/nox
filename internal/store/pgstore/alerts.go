@@ -41,6 +41,19 @@ func (s *Store) InsertPositionAlert(ctx context.Context, posID int64, level, mes
 	return s.insertAlert(ctx, nil, &posID, level, message)
 }
 
+// HasCriticalAlertInWindow D-013 ③：incident_close 判据——持仓在
+// [start,end] 窗口内是否有 critical 级告警（残腿/不可行动/核对类终态证据）。
+func (s *Store) HasCriticalAlertInWindow(ctx context.Context, posID int64, start, end time.Time) (bool, error) {
+	var exists bool
+	err := s.pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM alerts WHERE position_id=$1 AND level='critical' AND ts BETWEEN $2 AND $3)`,
+		posID, start, end).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("critical alert window pos=%d: %w", posID, err)
+	}
+	return exists, nil
+}
+
 // insertAlert 共享插入实现（D-411：列差异参数化，禁第二份插入逻辑）。
 func (s *Store) insertAlert(ctx context.Context, ruleID, posID *int64, level, message string) error {
 	message = alerttext.VenueErrCN(message) // D-588：venue 英文错误壳中文化（漏斗单点=表+topic+feishu 三通道同归一）

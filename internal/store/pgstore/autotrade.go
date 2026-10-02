@@ -121,7 +121,7 @@ func (s *Store) GetStrategyStat(ctx context.Context, strategy string) (*Strategy
 func (s *Store) AggregateStrategyStats(ctx context.Context, strategy string) (AggregateStat, error) {
 	var st AggregateStat
 	st.Strategy = strategy
-	err := s.pool.QueryRow(ctx, `
+	err := s.pool.QueryRow(ctx, fmt.Sprintf(`
 		SELECT COALESCE(total, 0), COALESCE(wins, 0), COALESCE(avg_pnl, 0), COALESCE(median_pnl, 0)
 		FROM (
 			SELECT count(*) AS total,
@@ -133,9 +133,9 @@ func (s *Store) AggregateStrategyStats(ctx context.Context, strategy string) (Ag
 				FROM position_settlements s
 				JOIN positions p ON p.id = s.position_id
 				WHERE p.type = $1 AND p.closed_at IS NOT NULL AND p.realized_pnl IS NOT NULL
-				  AND COALESCE(s.stats_status, 'applied') = 'applied'
+				  AND COALESCE(s.stats_status, 'applied') = 'applied' AND NOT %s
 			) t
-		) agg`, strategy).Scan(&st.Total, &st.Wins, &st.AvgPnl, &st.MedianPnl)
+		) agg`, incidentPositionPredicate), strategy).Scan(&st.Total, &st.Wins, &st.AvgPnl, &st.MedianPnl)
 	if err != nil {
 		return AggregateStat{}, fmt.Errorf("aggregate strategy stats: %w", err)
 	}
@@ -219,11 +219,12 @@ func (s *Store) ListDisabledStrategies(ctx context.Context) (map[string]bool, er
 // 无 settlement 行/legacy 行经 fallback 覆盖。
 func (s *Store) DailyRealizedPnl(ctx context.Context) (float64, error) {
 	var sum *float64
-	err := s.pool.QueryRow(ctx, `
+	err := s.pool.QueryRow(ctx, fmt.Sprintf(`
 		SELECT COALESCE(SUM(COALESCE(s.net_realized_usd, s.realized_usd, p.realized_pnl)), 0)
 		FROM positions p
 		LEFT JOIN position_settlements s ON s.position_id = p.id
-		WHERE p.status = 'CLOSED' AND p.closed_at >= date_trunc('day', now())`).Scan(&sum)
+		WHERE p.status = 'CLOSED' AND p.closed_at >= date_trunc('day', now()) AND NOT %s`,
+		incidentPositionPredicate)).Scan(&sum)
 	if err != nil {
 		return 0, fmt.Errorf("daily realized pnl: %w", err)
 	}

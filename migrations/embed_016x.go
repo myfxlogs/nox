@@ -13,4 +13,6 @@ var (
 	MarginSemanticsSQL string // D-010：margin_usd 列+互斥约束；venue cap 语义翻保证金
 	//go:embed 0167_leg_external_status.sql
 	LegExternalStatusSQL string // D-015 ②：position_legs.status 增 EXTERNAL（venue 推送平仓事件落「外部已平」标记）
+	//go:embed 0168_d013_ledger_truth.sql
+	D013LedgerTruthSQL string // D-013：partial 合法化 + #497–507 commission/exit_kind/净额回填
 )
