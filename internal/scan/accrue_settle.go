@@ -139,17 +139,20 @@ func swapLegBoundaries(ctx context.Context, st PaperFactSource, leg PaperLegAccr
 	if leg.Symbol == "" || leg.Venue == "" {
 		return nil, time.Time{}, false, nil // 空键会退成通配查询 → fail-closed
 	}
-	// 日界枚举：UTC 午夜
-	first := time.Date(base.Year(), base.Month(), base.Day(), 0, 0, 0, 0, time.UTC)
-	if !first.After(base) {
+	// 日界枚举：UTC 午夜（D-022：日历日取 UTC——原 base/now 的本地时区 Y/M/D 拼 UTC 午夜，
+	// 本地日期跨日后（如 UTC 22:00=+0800 次日）water 落 now 之后被双分支弃取→water=base→
+	// 零边界入窗 accrue 恒 0；06:50 UTC 本地同日则绿=时相 flake 根因）。
+	utcBase, utcNow := base.UTC(), now.UTC()
+	first := time.Date(utcBase.Year(), utcBase.Month(), utcBase.Day(), 0, 0, 0, 0, time.UTC)
+	if !first.After(utcBase) {
 		first = first.AddDate(0, 0, 1)
 	}
 	var bounds []time.Time
-	for d := first; !d.After(now); d = d.AddDate(0, 0, 1) {
+	for d := first; !d.After(utcNow); d = d.AddDate(0, 0, 1) {
 		bounds = append(bounds, d)
 	}
 	water := base
-	if lw := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC); !lw.After(now) && lw.After(base) {
+	if lw := time.Date(utcNow.Year(), utcNow.Month(), utcNow.Day(), 0, 0, 0, 0, time.UTC); !lw.After(now) && lw.After(base) {
 		water = lw
 	} else if !lw.After(now) {
 		water = lw // ≤base 的今日界也是水位（min 前缀基准用）
@@ -188,7 +191,7 @@ func swapLegBoundaries(ctx context.Context, st PaperFactSource, leg PaperLegAccr
 		return 1
 	}
 	// swap_settled 实收优先（usd_lot_day×lots；lots=qty/(cs×price)，换算输入缺→回落率路径）
-	settledPerDay, sok := mtSettledPerDayUSD(ctx, st, leg, qty)
+	settledPerDay, sok := mtSettledPerDayUSD(ctx, st, leg, qty, now)
 	out := make([]legBoundary, 0, len(bounds))
 	for _, b := range bounds {
 		if sok {
@@ -213,8 +216,9 @@ func latestLE(hist []fact.Fact, b time.Time) (float64, bool) {
 }
 
 // mtSettledPerDayUSD swap_settled 实收换算：usd_lot_day × lots（lots=qty/(cs×mid)）。
+// now 注入时钟（D-022：tick 窗下限随调用轮 now，禁隐式墙钟）。
 // 换算输入（settled fact / contract_size / 最新 tick）任一缺 → ok=false 回落率路径。
-func mtSettledPerDayUSD(ctx context.Context, st PaperFactSource, leg PaperLegAccrue, qty float64) (float64, bool) {
+func mtSettledPerDayUSD(ctx context.Context, st PaperFactSource, leg PaperLegAccrue, qty float64, now time.Time) (float64, bool) {
 	settleKind := fact.KindSwapSettledLong
 	if leg.Kind == fact.KindSwapShort {
 		settleKind = fact.KindSwapSettledShort
@@ -228,7 +232,7 @@ func mtSettledPerDayUSD(ctx context.Context, st PaperFactSource, leg PaperLegAcc
 	if err != nil || len(meta) == 0 || meta[0].Value <= 0 {
 		return 0, false
 	}
-	ticks, err := st.TicksWindow(ctx, leg.Venue, raw, time.Now().Add(-paperMtmTickMaxAge))
+	ticks, err := st.TicksWindow(ctx, leg.Venue, raw, now.Add(-paperMtmTickMaxAge))
 	if err != nil || len(ticks) == 0 {
 		return 0, false
 	}

@@ -40,8 +40,26 @@ func TestD550_OkxRawAccrue(t *testing.T) {
 
 func d550AccrueCase(t *testing.T, cexVenue, rawSym, canonical, factSym string) {
 	t.Helper()
+	// D-022：时钟注入——开仓/累积轮挂固定 UTC 时段（06:50 与 22:00 UTC 各跑一次；
+	// 22:00 UTC=+0800 本地次日=旧 swapLegBoundaries 本地日历日拼 UTC 午夜的破相点）。
+	for _, utc := range []string{"06:50", "22:00"} {
+		t.Run("utc_"+utc, func(t *testing.T) {
+			h, _ := time.Parse("15:04", utc)
+			day := time.Date(2026, 10, 2, h.Hour(), h.Minute(), 0, 0, time.UTC)
+			d550AccrueCaseAt(t, cexVenue, rawSym, canonical, factSym, day)
+		})
+	}
+}
+
+func d550AccrueCaseAt(t *testing.T, cexVenue, rawSym, canonical, factSym string, now time.Time) {
+	t.Helper()
 	s := d410Store(t)
-	ctx, now := context.Background(), time.Now()
+	ctx := context.Background()
+	// D-022：facts 隔离——前轮真实时钟残留的 next_settle（Ts 更新）会赢 LatestFacts，
+	// 注入时钟的 seed 被遮蔽 → 累积窗错位。venue 维度清除本例相关键。
+	if _, err := s.Pool().Exec(ctx, `DELETE FROM facts WHERE venue = $1 OR venue = '277842155'`, cexVenue); err != nil {
+		t.Fatalf("clean facts: %v", err)
+	}
 	// universe 行=raw symbol 形态（生产 fin_cex_universe 实形），hedge_canonical=join 键。
 	funding := 11.1
 	if _, err := s.Pool().Exec(ctx, `

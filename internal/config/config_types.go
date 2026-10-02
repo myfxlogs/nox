@@ -91,7 +91,6 @@ type Config struct {
 	XAssetDisasterNoiseMult float64
 	XAssetDisasterDebounce  int
 	XAssetQuoteMaxAge       time.Duration
-	XAssetFeeHoldMaxDays    float64 // D-409 摊销门槛上限天（ARB_XASSET_FEE_HOLD_MAX_DAYS 缺省 2.0=48h）
 	// ComboLossLimit 组合级止损保险丝（C1）：同 ComboKey stop/exec_drift 平仓计数 ≥ 此值 → gate 拒
 	// （ARB_COMBO_LOSS_LIMIT，缺省 3）；0 = 关闭（逃生阀）。
 	ComboLossLimit int

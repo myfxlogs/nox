@@ -170,7 +170,6 @@ var appConfigDescs = map[string]string{
 	"ARB_XASSET_DISASTER_NOISE_MULT":             "跨资产灾备噪音倍数（毛刺过滤系数）",
 	"ARB_XASSET_ENTRY_MIN_BPS":                   "跨资产入场价差下限（bps）",
 	"ARB_XASSET_EXEC_DRIFT_BPS":                  "跨资产执行漂移容忍（bps）",
-	"ARB_XASSET_FEE_HOLD_MAX_DAYS":               "跨资产费用持有天数上限",
 	"ARB_XASSET_MIN_NET_ANNUAL_PCT":              "跨资产净年化入场门槛（%）",
 	"ARB_XASSET_QUOTE_MAX_AGE":                   "跨资产报价最大龄期",
 	"ARB_XASSET_TRACKING_MAX_BPS":                "跨资产跟踪误差上限（bps）",
