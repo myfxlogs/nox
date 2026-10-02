@@ -42,7 +42,7 @@ func (s *Service) ListXAssetAllowCombos(ctx context.Context, _ *connect.Request[
 			Id: r.ID, CanonicalBuy: r.CanonicalBuy, VenueBuy: r.VenueBuy,
 			CanonicalSell: r.CanonicalSell, VenueSell: r.VenueSell,
 			MaxLongQty: r.MaxLongQty, MaxShortQty: r.MaxShortQty, MaxGrossUsd: r.MaxGrossUSD,
-			NotionalUsd: r.NotionalUSD, Enabled: r.Enabled, Simulated: r.Simulated, Note: r.Note,
+			NotionalUsd: r.NotionalUSD, MarginUsd: r.MarginUSD, Enabled: r.Enabled, Simulated: r.Simulated, Note: r.Note,
 		}
 		_, notional, _ := s.gradDB().ListOpenPositionsForCombo(ctx, r.CanonicalBuy, r.CanonicalSell, r.VenueBuy, r.VenueSell)
 		row.ActiveNotionalUsd = notional
@@ -118,6 +118,13 @@ func (s *Service) UpsertXAssetAllowCombo(ctx context.Context, req *connect.Reque
 	if m.NotionalUsd != nil && *m.NotionalUsd <= 0 {
 		return fail("notional_usd 显式传值禁非正（D-367 加载期剔除=假授权）")
 	}
+	// D-010：margin_usd（组合保证金总预算）与 notional_usd 互斥——同预算双口径歧义禁并存。
+	if m.MarginUsd != nil && *m.MarginUsd <= 0 {
+		return fail("margin_usd 显式传值禁非正（保证金预算语义同 D-367 剔除规则）")
+	}
+	if m.NotionalUsd != nil && m.MarginUsd != nil {
+		return fail("margin_usd 与 notional_usd 互斥（同预算双口径歧义禁并存，二选一）")
+	}
 	db := s.gradDB()
 	if m.Id == 0 {
 		// D-500 S2 路B关闭：管理面手工加行拒插——唯一入闸=纸面→毕业→approve 链
@@ -131,7 +138,22 @@ func (s *Service) UpsertXAssetAllowCombo(ctx context.Context, req *connect.Reque
 	}
 	if len(posIDs) > 0 {
 		// B-020：caps 下调至 <在持名义→拒改（不论 confirm——锁死防线）。
-		if m.MaxGrossUsd < openNotional || (m.NotionalUsd != nil && *m.NotionalUsd < openNotional) {
+		capLow := m.MaxGrossUsd < openNotional || (m.NotionalUsd != nil && *m.NotionalUsd < openNotional)
+		// D-010：margin 预算同防——在持保证金占用=在持名义×frac（frac 缺→全款保守）。
+		if m.MarginUsd != nil {
+			fB, kB := s.legMarginFracFor(ctx, m.VenueBuy, m.CanonicalBuy, false)
+			fS, kS := s.legMarginFracFor(ctx, m.VenueSell, m.CanonicalSell, true)
+			if !kB {
+				fB = 1.0
+			}
+			if !kS {
+				fS = 1.0
+			}
+			if *m.MarginUsd < openNotional/2*(fB+fS) {
+				capLow = true
+			}
+		}
+		if capLow {
 			return fail("在持 pos%v 名义 $%.2f 占用，新 caps 低于占用额将永远无法再开仓——需先平仓或设更大 caps", posIDs, openNotional)
 		}
 		if !m.Confirm {
@@ -143,7 +165,7 @@ func (s *Service) UpsertXAssetAllowCombo(ctx context.Context, req *connect.Reque
 	}
 	ok, err := db.UpdateXAssetAllowCombo(ctx, &pgstore.XAssetComboAdminRow{
 		ID: m.Id, MaxLongQty: m.MaxLongQty, MaxShortQty: m.MaxShortQty, MaxGrossUSD: m.MaxGrossUsd,
-		NotionalUSD: m.NotionalUsd, Enabled: m.Enabled, Note: m.Note,
+		NotionalUSD: m.NotionalUsd, MarginUSD: m.MarginUsd, Enabled: m.Enabled, Note: m.Note,
 	})
 	if err != nil {
 		return fail("行锁更新失败: %v", err)
@@ -159,8 +181,8 @@ func (s *Service) UpsertXAssetAllowCombo(ctx context.Context, req *connect.Reque
 	return s.comboWriteFinish(ctx, resp)
 }
 
-// overSubscribedWarn enable/改额后 Σalloc>cap 预警文案（D-009 S4）。
-// alloc=Σ live 白名单组合 notional/MaxGross（exposureSumOf 同口径）；查败=空不阻断写。
+// overSubscribedWarn enable/改额后 Σalloc>cap 预警文案（D-009 S4→D-010 margin 口径）。
+// alloc=Σ live 白名单组合保证金预留（allocMarginSumOf）；查败=空不阻断写。
 func (s *Service) overSubscribedWarn(ctx context.Context, venueKeys []string) string {
 	caps, err := s.gradDB().ListVenueExposureCaps(ctx)
 	if err != nil {
@@ -170,7 +192,7 @@ func (s *Service) overSubscribedWarn(ctx context.Context, venueKeys []string) st
 	if err != nil {
 		return ""
 	}
-	alloc := exposureSumOf(existing)
+	alloc := s.allocMarginSumOf(ctx, existing)
 	var msgs []string
 	for _, vk := range venueKeys {
 		if c, ok := caps[vk]; ok && c.Enabled && c.CapUSD > 0 && alloc[vk] > c.CapUSD {

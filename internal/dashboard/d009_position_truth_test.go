@@ -134,17 +134,18 @@ func TestD009_S4_QtyMinStepReason(t *testing.T) {
 		VenueBuy: "vA:mt5", VenueSell: "vB:mt5",
 		CanonicalBuy: "XAUUSD", CanonicalSell: "XAUUSD", MaxGrossUSD: 3000,
 	}
+	// D-010 S0：判据=单腿名义（gross/2）≥max(minB,minS)——gross 3000→N=1500<2401 拦。
 	reason, blocked := svc.comboQtyBelowMin(context.Background(), c)
 	if !blocked {
-		t.Fatal("预算 3000 < 最小可开 2×0.01×100×2401=4802 应拦截")
+		t.Fatal("单腿名义预算 1500 < 最小可开 0.01×100×2401=2401 应拦截")
 	}
-	if !strings.Contains(reason, "最小可开") || !strings.Contains(reason, "4802") || !strings.Contains(reason, "3000") {
+	if !strings.Contains(reason, "最小可开") || !strings.Contains(reason, "2401") || !strings.Contains(reason, "1500") {
 		t.Fatalf("waitReason 应含最小可开/当前预算金额, got %q", reason)
 	}
-	// 预算够 → 放行。
+	// 预算够 → 放行（gross 6000→N=3000≥2401）。
 	c.MaxGrossUSD = 6000
 	if _, blocked := svc.comboQtyBelowMin(context.Background(), c); blocked {
-		t.Fatal("预算 6000 ≥ 4802 应放行")
+		t.Fatal("单腿名义预算 3000 ≥ 2401 应放行")
 	}
 	// 无报价 → 不阻塞（其余闸各自把守）。
 	c2 := pgstore.XAssetComboAdminRow{VenueBuy: "vX:mt5", VenueSell: "vB:mt5",

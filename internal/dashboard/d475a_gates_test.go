@@ -80,11 +80,11 @@ func TestD475a_A3_ExposureCap(t *testing.T) {
 	if !foundWarn {
 		t.Fatalf("venue_gaps 应含未设闸 warn，got %v", resp3.Msg.VenueGaps)
 	}
-	// 超限 → 拒（D-009 S4 实占口径：在途系统仓腿 qty×cs×price_actual=0.1×1×50000=5000
-	// +proposed 5000>cap 8000；原 Σenabled 组合预留额口径已撤）。
+	// 超限 → 拒（D-010 保证金口径：在途系统仓腿名义 0.1×1×50000=5000 ×MT 悲观档
+	// frac=0.05=占用 $250 >cap $100；原名义口径/Σenabled 预留额口径已撤）。
 	f4, s4 := gradFixture("long_cfd_short_perp")
 	f4.caps = map[string]pgstore.VenueExposureCap{
-		"1279967:mt5": {VenueKey: "1279967:mt5", CapUSD: 8000, Enabled: true},
+		"1279967:mt5": {VenueKey: "1279967:mt5", CapUSD: 100, Enabled: true},
 	}
 	s4.openVenueLegsFn = func(_ context.Context, v string) ([]pgstore.OpenVenueLegRow, error) {
 		if v != "1279967" {
@@ -96,8 +96,8 @@ func TestD475a_A3_ExposureCap(t *testing.T) {
 	}
 	s4.legContractSize = func(string, string) (float64, bool) { return 1, true }
 	resp4, _ := s4.ApproveCarryGraduation(context.Background(), approveReq())
-	if resp4.Msg.Ok || !strings.Contains(resp4.Msg.Error, "敞口超限") {
-		t.Fatalf("超限应拒，ok=%v err=%s", resp4.Msg.Ok, resp4.Msg.Error)
+	if resp4.Msg.Ok || !strings.Contains(resp4.Msg.Error, "保证金占用超限") {
+		t.Fatalf("保证金占用超限应拒，ok=%v err=%s", resp4.Msg.Ok, resp4.Msg.Error)
 	}
 	// cap 内 → 批。
 	f5, s5 := gradFixture("long_cfd_short_perp")

@@ -138,16 +138,17 @@ func TestD007_GateWatch_AllowRulesTrigger(t *testing.T) {
 	}
 }
 
-// S2 锚：闸6 typed 键直查——3001157:mt5 cap=50 < 实占 0+proposed 100 → 拒（D-009 S4
-// 实占口径：在途系统仓；typed 键剥 bare 恒 miss=永不拦的死键回归锚不变）。
+// S2 锚：闸6 typed 键直查——3001157:mt5 cap=1 < 实占保证金+本次腿保证金 → 拒
+// （D-010 保证金口径：判据=N×frac(v) 对 cap；typed 键剥 bare 恒 miss=永不拦的
+// 死键回归锚不变）。
 func TestD007_VenueCapGateTypedKey(t *testing.T) {
 	svc := d580ReadySvc(t)
 	if _, err := svc.store.Pool().Exec(context.Background(),
-		`UPDATE fin_venue_exposure_caps SET cap_usd=50 WHERE venue_key='3001157:mt5'`); err != nil {
+		`UPDATE fin_venue_exposure_caps SET cap_usd=1 WHERE venue_key='3001157:mt5'`); err != nil {
 		t.Fatal(err)
 	}
 	row := d580Row(t, svc)
-	if row.Ready || !strings.Contains(row.WaitReason, "敞口超限") {
-		t.Fatalf("cap=50 应拦（typed 键命中）: ready=%v reason=%q", row.Ready, row.WaitReason)
+	if row.Ready || !strings.Contains(row.WaitReason, "保证金占用超限") {
+		t.Fatalf("cap=1 应拦（typed 键命中）: ready=%v reason=%q", row.Ready, row.WaitReason)
 	}
 }

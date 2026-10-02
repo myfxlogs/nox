@@ -1,6 +1,8 @@
-// service_venue_system_exposure.go D-009 S4：venue 系统实占 USD——Σ 在途系统仓 OPEN 腿
-// （qty×cs×现价×fx），外单不入（不在 positions 表）。同窗兄弟仓在途无腿时按
-// positions.notional_usd×0.5 经 opportunity_id venue 解析归属（TOCTOU 收口）。
+// service_venue_system_exposure.go D-009 S4→D-010：venue 保证金实占 USD——Σ 在途系统仓
+// OPEN 腿 名义（qty×cs×现价×fx）× legMarginNeedFrac（D-563 链：MT=init_margin_rate fact
+// /perp=杠杆实读/spot=1.0；frac 不可得→该腿按名义全款计=保守）。外单不入（不在 positions
+// 表）。同窗兄弟仓在途无腿时按 positions.notional_usd×0.5 经 opportunity_id 解析
+// typed venue_key（还原 venue 类型段取 frac，读不到→1.0）。
 // 展示闸（闸6 exposureCapsGate）与执行闸（CreatePositionWithCapGuard venueSum 回调）
 // 同源同判据共用本函数（P3）。行集查询=store.OpenVenueSystemLegs 单源。
 package dashboard
@@ -12,15 +14,14 @@ import (
 	"time"
 
 	"arb/internal/bus"
-	"arb/internal/keydomain"
 	"arb/internal/notional"
 	"arb/internal/store/pgstore"
 )
 
-// VenueSystemExposureUSD venue 实占 USD（bare venue 名入参，pgstore 行查询同域）。
-// 查询失败/单腿全因子缺 → err（调用方 fail-closed）；现价缺 → 回退成交价×qty×cs
-// （系统建库口径近似，优于漏算）；腿与名义皆缺 → 该行计 0。
-func (s *Service) VenueSystemExposureUSD(ctx context.Context, venueBare string) (float64, error) {
+// VenueSystemMarginUSD venue 保证金实占 USD（bare venue 名入参，pgstore 行查询同域）。
+// 查询失败 → err（调用方 fail-closed）；单腿名义缺（现价/成交价/cs/fx 全断）→ 该腿计 0
+// 并沿 frac=1 同名回退由 venueLegUSD 语义承托；frac 未知 → 名义全款计。
+func (s *Service) VenueSystemMarginUSD(ctx context.Context, venueBare string) (float64, error) {
 	rows, err := s.openVenueLegs(ctx, venueBare)
 	if err != nil {
 		return 0, err
@@ -45,7 +46,7 @@ func (s *Service) VenueSystemExposureUSD(ctx context.Context, venueBare string) 
 				continue
 			}
 			legs++
-			legSum += s.venueLegUSD(ctx, r, canonOf(r.Symbol), now)
+			legSum += s.venueLegUSD(ctx, r, canonOf(r.Symbol), now) * s.legFracOrFull(ctx, r.VenueKey, r.Symbol, r.Side == "SELL")
 		}
 		if legs > 0 {
 			sum += legSum
@@ -53,6 +54,7 @@ func (s *Service) VenueSystemExposureUSD(ctx context.Context, venueBare string) 
 		}
 		// 同窗兄弟仓在途（腿未落库 PosLegsTotal=0）：按 oppID 解析腿 venue，
 		// 每命中一腿归属 notional×0.5（两腿组合惯例；同 venue 双腿可双命中）。
+		// oppID=TYPE:canon:vB:vtB:vS:vtS —— 还原 typed key 取 frac（读不到→1.0 全款）。
 		p := rs[0]
 		if p.PosLegsTotal != 0 || p.PosNotional == nil {
 			continue
@@ -61,14 +63,23 @@ func (s *Service) VenueSystemExposureUSD(ctx context.Context, venueBare string) 
 		parts := strings.Split(p.PosOppID, ":")
 		if len(parts) >= 6 {
 			if parts[2] == venueBare {
-				sum += half
+				sum += half * s.legFracOrFull(ctx, parts[2]+":"+parts[3], "", false)
 			}
 			if parts[4] == venueBare {
-				sum += half
+				sum += half * s.legFracOrFull(ctx, parts[4]+":"+parts[5], "", true)
 			}
 		}
 	}
 	return sum, nil
+}
+
+// legFracOrFull 腿保证金率（占用口径）：legMarginNeedFrac 实读；unknown→1.0 名义全款计
+// （D-010 边界：读败按全款=保守不放行，不猜杠杆）。
+func (s *Service) legFracOrFull(ctx context.Context, venueKey, symbol string, sellLeg bool) float64 {
+	if f, _, known := s.legMarginNeedFrac(ctx, venueKey, symbol, sellLeg); known && f > 0 {
+		return f
+	}
+	return 1.0
 }
 
 // venueCanonicalMapper venue 的 symbol→canonical 解析闭包（MT=broker_symbol_map；
@@ -132,7 +143,4 @@ func (s *Service) openVenueLegs(ctx context.Context, venueBare string) ([]pgstor
 	return s.store.OpenVenueSystemLegs(ctx, venueBare)
 }
 
-// venueExposureSum 闸6 实占口径别名（同判据单源；保留旧名仅因调用点在 helpers）。
-func (s *Service) venueExposureSum(venue string) (float64, error) {
-	return s.VenueSystemExposureUSD(context.Background(), keydomain.BareOf(venue))
-}
+// venueMarginSum 已内联：闸6/approve 闸直调 VenueSystemMarginUSD(ctx, BareOf(vk))（D-010）。

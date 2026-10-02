@@ -22,11 +22,11 @@ func (s *Service) ListVenueExposureCaps(ctx context.Context, _ *connect.Request[
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	// D-547 S3①：live 面值——allocated=Σ白名单金额（口径同 exposureCapGate），
+	// D-547 S3①→D-010：live 面值——allocated=Σ白名单保证金预留（口径同 exposureCapGate），
 	// 池面=legPool 链（live 账本/REST 校准/快照兜底；缺取 source=空如实透出）。
 	snaps, _ := s.liveAccountLatest(ctx)
 	existing, _ := s.gradDB().LoadXAssetAllowCombos(ctx, "live")
-	allocated := exposureSumOf(existing)
+	allocated := s.allocMarginSumOf(ctx, existing)
 	// D-557 S1：venue_key→通道白名单规则 join（同 venue 规则 sim/real 双行取 real 优先；
 	// 读失败降级空 map 不拖垮闸表透出——join 面非执法面）。
 	venueRules := map[string]pgstore.AutotradeAllowRule{}
@@ -158,22 +158,31 @@ func (s *Service) SetVenueExposureCap(ctx context.Context, req *connect.Request[
 	return connect.NewResponse(resp), nil
 }
 
-// exposureCapGate D-475a S3 敞口闸（G5，从 approve 正文提取保行数）：
+// exposureLeg 敞口闸腿参（typed venue_key + canonical 供 qbus 符号解析 + 腿向）。
+type exposureLeg struct {
+	VenueKey  string
+	Canonical string
+	SellLeg   bool
+}
+
+// exposureCapGate D-475a S3→D-010 S2 敞口闸（G5，approve 链路；保证金占用口径）：
 // 两腿 venue_key 各查 caps——行缺席→放行+capWarns 如实透出；enabled=false→跳过；
-// cap=0→冻结新批准（不吊销存量 enabled 组合）；Σ存量+本次>cap→拒。读失败 fail-closed。
-// proposed：NotionalUSD 优先，缺→MaxGrossUSD 保守兜底。返回 (warns, "") 或 (nil, 拒因)。
-func (s *Service) exposureCapGate(ctx context.Context, legKeys []string, grossUSD float64, notionalUSD *float64) ([]string, string) {
+// cap=0→冻结新批准（不吊销存量 enabled 组合）；Σ实占保证金+本次腿保证金>cap→拒。
+// 本次=N×frac(v)（N=单腿名义：NotionalUSD 优先，缺→MaxGrossUSD/2）；frac 读败→
+// 名义全款计（保守）。读失败 fail-closed。返回 (warns, "") 或 (nil, 拒因)。
+func (s *Service) exposureCapGate(ctx context.Context, legs []exposureLeg, grossUSD float64, notionalUSD *float64) ([]string, string) {
 	db := s.gradDB()
 	caps, err := db.ListVenueExposureCaps(ctx)
 	if err != nil {
 		return nil, fmt.Sprintf("敞口闸表读取失败: %v（fail-closed 不批钱）", err)
 	}
-	proposed := grossUSD
+	proposed := grossUSD / 2
 	if notionalUSD != nil {
 		proposed = *notionalUSD
 	}
 	var warns []string
-	for _, legKey := range legKeys {
+	for _, leg := range legs {
+		legKey := leg.VenueKey
 		capRow, ok := caps[legKey]
 		if !ok {
 			warns = append(warns, fmt.Sprintf("venue %s 未设敞口闸（fin_venue_exposure_caps 无行）", legKey))
@@ -183,34 +192,58 @@ func (s *Service) exposureCapGate(ctx context.Context, legKeys []string, grossUS
 			continue // 闸停用（行仍在档）
 		}
 		if capRow.CapUSD == 0 {
-			return nil, fmt.Sprintf("venue %s 敞口闸冻结新批准（cap=0）", legKey)
+			return nil, fmt.Sprintf("venue %s 保证金闸冻结新批准（cap=0）", legKey)
 		}
-		// D-009 S4：实占=在途系统仓（外单不入），与闸6/执行守卫同谓词——
-		// 原 Σenabled 组合预留额口径已撤（计划额非真占用，数学上永不可开单）。
-		sum, serr := s.VenueSystemExposureUSD(ctx, strings.SplitN(legKey, ":", 2)[0])
+		// D-009 S4→D-010：实占=在途系统仓保证金（外单不入），与闸6/执行守卫同谓词。
+		sum, serr := s.VenueSystemMarginUSD(ctx, strings.SplitN(legKey, ":", 2)[0])
 		if serr != nil {
-			return nil, fmt.Sprintf("venue %s 敞口实占查询失败（fail-closed）: %v", legKey, serr)
+			return nil, fmt.Sprintf("venue %s 保证金实占查询失败（fail-closed）: %v", legKey, serr)
 		}
-		if sum+proposed > capRow.CapUSD {
-			return nil, fmt.Sprintf("venue %s 敞口超限: 实占 $%.0f+本次 $%.0f > cap $%.0f",
-				legKey, sum, proposed, capRow.CapUSD)
+		frac, known := s.legMarginFracFor(ctx, legKey, leg.Canonical, leg.SellLeg)
+		if !known {
+			frac = 1.0 // 杠杆实读败→名义全款计（保守不批超）
+		}
+		prop := proposed * frac
+		if sum+prop > capRow.CapUSD {
+			return nil, fmt.Sprintf("venue %s 保证金占用超限: 实占 $%.0f+本次 $%.0f > cap $%.0f",
+				legKey, sum, prop, capRow.CapUSD)
 		}
 	}
 	return warns, ""
 }
 
-// exposureSumOf venue_key→已挂敞口汇总（双腿向 buy/sell 两键同记=保守高估）；
-// NotionalUSD 优先，缺→MaxGrossUSD。D-009 S4 起仅用于「预留额」展示/超订 warn
-// （AllocatedUsd 列 + overSubscribedWarn）；执法面已切 VenueSystemExposureUSD 实占口径。
-func exposureSumOf(existing []pgstore.XAssetAllowRow) map[string]float64 {
+// allocMarginSumOf venue_key→预留保证金汇总（D-010 margin 口径，承 exposureSumOf
+// 旧义=AllocatedUsd 列+overSubscribedWarn，非执法面）：
+// margin 行→N×frac_v（N=margin÷(fracB+fracS)；frac 缺→整额预算两键同记=保守高估）；
+// notional/gross 行→N×frac_v（frac 缺→名义全款计）。
+func (s *Service) allocMarginSumOf(ctx context.Context, existing []pgstore.XAssetAllowRow) map[string]float64 {
 	sum := map[string]float64{}
 	for _, r := range existing {
-		exp := r.MaxGrossUSD
-		if r.NotionalUSD != nil {
-			exp = *r.NotionalUSD
+		fB, kB := s.legMarginFracFor(ctx, r.VenueBuy, r.CanonicalBuy, false)
+		fS, kS := s.legMarginFracFor(ctx, r.VenueSell, r.CanonicalSell, true)
+		if r.MarginUSD != nil {
+			if kB && kS && fB+fS > 0 {
+				n := *r.MarginUSD / (fB + fS)
+				sum[r.VenueBuy] += n * fB
+				sum[r.VenueSell] += n * fS
+			} else {
+				sum[r.VenueBuy] += *r.MarginUSD // frac 缺→整额两键同记=保守高估
+				sum[r.VenueSell] += *r.MarginUSD
+			}
+			continue
 		}
-		sum[r.VenueBuy] += exp
-		sum[r.VenueSell] += exp
+		n := r.MaxGrossUSD / 2
+		if r.NotionalUSD != nil {
+			n = *r.NotionalUSD
+		}
+		if !kB {
+			fB = 1.0
+		}
+		if !kS {
+			fS = 1.0
+		}
+		sum[r.VenueBuy] += n * fB
+		sum[r.VenueSell] += n * fS
 	}
 	return sum
 }

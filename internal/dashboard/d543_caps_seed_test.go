@@ -47,7 +47,10 @@ func TestD543_SeededCapsNoWarn(t *testing.T) {
 	for key, cap := range d543SeedKeys {
 		f.caps[key] = pgstore.VenueExposureCap{VenueKey: key, CapUSD: cap, Enabled: true}
 	}
-	warns, rej := s.exposureCapGate(context.Background(), []string{"binance:spot", "okx:perp"}, 100, nil)
+	warns, rej := s.exposureCapGate(context.Background(), []exposureLeg{
+		{VenueKey: "binance:spot", Canonical: "BTCUSDT"},
+		{VenueKey: "okx:perp", Canonical: "BTCUSDT", SellLeg: true},
+	}, 100, nil)
 	if rej != "" {
 		t.Fatalf("种子行在场不应拒: %s", rej)
 	}

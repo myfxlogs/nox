@@ -76,15 +76,50 @@ type levCacheEntry struct {
 	at  time.Time
 }
 
-// comboPoolVerdict 组合腿池判定：need=腿名义×保证金率 vs 池可用。
-// 腿名义=NotionalUSD（缺省回 MaxGrossUSD/2，与旧判据同基数）。
+// comboPoolVerdict 组合腿池判定：need=腿保证金占用 vs 池可用。
+// 名义模式：need=N×frac_i（N=NotionalUSD，缺省回 MaxGrossUSD/2，与旧判据同基数）。
+// D-010 margin 模式：N=margin÷(fracB+fracS)——名义相等对冲下各腿保证金占用不等
+// （need_i=N×frac_i）；frac 任一实读败→unknown（保证金不可折算不猜）。
 func (s *Service) comboPoolVerdict(ctx context.Context, c pgstore.XAssetComboAdminRow, snaps []pgstore.VenueAccountLatest) (verdict, detail string) {
-	need := c.MaxGrossUSD / 2
+	vks := [2]string{c.VenueBuy, c.VenueSell}
+	canons := [2]string{c.CanonicalBuy, c.CanonicalSell}
+	var fracs [2]float64
+	var knowns [2]bool
+	var fracNotes [2]string
+	for i, vk := range vks {
+		// D-572 S1：venue 原生符号解析（qbus.Latest(canon,vk).VenueSymbol；取不到传空串，
+		// venue 读败自然 unknown 不猜）。
+		sym := ""
+		if s.qbus != nil {
+			if q, ok := s.qbus.Latest(canons[i], vk); ok {
+				sym = q.VenueSymbol
+			}
+		}
+		var note string
+		fracs[i], note, knowns[i] = s.legMarginNeedFrac(ctx, vk, sym, i == 1)
+		fracNotes[i] = note
+	}
+	// 单腿名义 N：margin 模式=margin÷(fracB+fracS)（须双腿 frac 俱到）；
+	// 名义模式=NotionalUSD??MaxGrossUSD/2。
+	legN := c.MaxGrossUSD / 2
 	if c.NotionalUSD != nil {
-		need = *c.NotionalUSD
+		legN = *c.NotionalUSD
+	}
+	marginMode := c.MarginUSD != nil
+	if marginMode {
+		if !knowns[0] || !knowns[1] || fracs[0]+fracs[1] <= 0 {
+			var miss []string
+			for i := range vks {
+				if !knowns[i] {
+					miss = append(miss, fmt.Sprintf("%s（%s）", vks[i], fracNotes[i]))
+				}
+			}
+			return "unknown", "腿池杠杆数据缺，保证金需求待定：" + strings.Join(miss, "；")
+		}
+		legN = *c.MarginUSD / (fracs[0] + fracs[1])
 	}
 	var unknown []string
-	for i, vk := range [2]string{c.VenueBuy, c.VenueSell} {
+	for i, vk := range vks {
 		p, ok := s.legPool(ctx, snaps, vk)
 		if !ok {
 			return "conflict", fmt.Sprintf("腿池数据缺：%s 无可用读数（结构性锁死）", vk)
@@ -99,30 +134,24 @@ func (s *Service) comboPoolVerdict(ctx context.Context, c pgstore.XAssetComboAdm
 		if p.free != nil {
 			avail = *p.free
 		}
-		// D-572 S1：venue 原生符号解析（与 alloc_risk :160-162 同源同法——
-		// qbus.Latest(canon,vk).VenueSymbol；取不到传空串，venue 读败自然 unknown 不猜）。
-		canon := c.CanonicalBuy
-		if i == 1 {
-			canon = c.CanonicalSell
-		}
-		sym := ""
-		if s.qbus != nil {
-			if q, ok := s.qbus.Latest(canon, vk); ok {
-				sym = q.VenueSymbol
-			}
-		}
-		frac, note, known := s.legMarginNeedFrac(ctx, vk, sym, i == 1)
-		if !known {
-			unknown = append(unknown, fmt.Sprintf("%s（%s）", vk, note))
+		if !knowns[i] {
+			unknown = append(unknown, fmt.Sprintf("%s（%s）", vk, fracNotes[i]))
 			continue
 		}
-		if need*frac > avail {
+		if legN*fracs[i] > avail {
 			return "conflict", fmt.Sprintf("腿池保证金不足：%s 需 $%.0f（名义 $%.0f×率 %.3f）> 可用 $%.0f",
-				vk, need*frac, need, frac, avail)
+				vk, legN*fracs[i], legN, fracs[i], avail)
 		}
 	}
 	if len(unknown) > 0 {
 		return "unknown", "腿池杠杆数据缺，保证金需求待定：" + strings.Join(unknown, "；")
 	}
 	return "ok", ""
+}
+
+// LegMarginFrac D-010：腿保证金需求率导出缝（autotrade sizing / exec cap 守卫注入用；
+// 内部=legMarginNeedFrac 同链）。known=false=杠杆实读失败（调用方 fail-closed）。
+func (s *Service) LegMarginFrac(ctx context.Context, venueKey, symbol string, sellLeg bool) (float64, bool) {
+	f, _, known := s.legMarginNeedFrac(ctx, venueKey, symbol, sellLeg)
+	return f, known
 }

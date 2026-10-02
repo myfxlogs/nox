@@ -200,7 +200,10 @@ func (s *Service) ApproveCarryGraduation(ctx context.Context, req *connect.Reque
 	// D-471 S2：复核闸已上移至 isCfdStructure 分叉前（全结构硬前置，B-013）——
 	// cfd 分支不再重复判（同判据源 scan.GraduationQualifiedReason）。
 	// D-475a S3 敞口闸（G5）：三态语义封装 service_venue_exposure.go exposureCapGate。
-	capWarns, capErr := s.exposureCapGate(ctx, []string{venueBuy, venueSell}, grossUSD, notionalUSD)
+	capWarns, capErr := s.exposureCapGate(ctx, []exposureLeg{
+		{VenueKey: venueBuy, Canonical: canonBuy},
+		{VenueKey: venueSell, Canonical: canonSell, SellLeg: true},
+	}, grossUSD, notionalUSD)
 	if capErr != "" {
 		return fail("%s", capErr)
 	}

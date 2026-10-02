@@ -226,7 +226,8 @@ func (s *Service) approveNonCfd(ctx context.Context, resp *v1.ApproveCarryGradua
 				return fail("%s", estr)
 			}
 		}
-		capWarns, capErr := s.exposureCapGate(ctx, []string{venueSpot, venuePerp}, grossUSD, notionalUSD)
+		capLegs := []exposureLeg{{VenueKey: venueSpot, Canonical: grad.Symbol}, {VenueKey: venuePerp, Canonical: grad.Symbol, SellLeg: true}}
+		capWarns, capErr := s.exposureCapGate(ctx, capLegs, grossUSD, notionalUSD)
 		if capErr != "" {
 			return fail("%s", capErr)
 		}

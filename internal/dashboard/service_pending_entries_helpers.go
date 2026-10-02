@@ -5,29 +5,35 @@ package dashboard
 import (
 	"context"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
 	"arb/internal/capitalview"
 	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
-	"arb/internal/usdnotional"
 
 	v1 "arb/internal/gen/dashboardv1"
 )
 
-// comboTier D-478 S4：安全档位（服务端算，前端只渲染）。
-// needed=notional_usd（NULL→MaxGrossUSD 回退，仍缺→unset）；vs 腿 venue 权益×crossCap；
+// comboTier D-478 S4→D-010 S4：安全档位（服务端算，前端只渲染）——裸腿名义顶。
+// needed=单腿名义 N：notional_usd（NULL→MaxGrossUSD/2 回退）；margin_usd 模式
+// N=margin÷(fracB+fracS)（杠杆实读败→missing_data 不猜）；仍缺→unset。
+// vs 腿 venue 权益×crossCap；
 // 权益源=capitalview.Live 统一读口（D-549：活账本→REST 校准→快照兜底带龄注记，
 // 「快照+5min 墙钟窗」判定根除——D-542 漏改点的 missing_data flapping 根修）；任一腿超档即 warn。
 func (s *Service) comboTier(ctx context.Context, c pgstore.XAssetComboAdminRow, snaps []pgstore.VenueAccountLatest) (tier, detail string, warn bool) {
 	needed := 0.0
 	switch {
+	case c.MarginUSD != nil:
+		n, _, _, _, _, ok := s.comboLegNotional(ctx, c)
+		if !ok {
+			return "missing_data", "无法判定：杠杆实读失败保证金不可折算（margin 预算模式需双腿杠杆实读）", false
+		}
+		needed = n
 	case c.NotionalUSD != nil:
 		needed = *c.NotionalUSD
 	case c.MaxGrossUSD > 0:
-		needed = c.MaxGrossUSD
+		needed = c.MaxGrossUSD / 2
 	default:
 		return "unset", "未设仓位上限", false
 	}
@@ -52,63 +58,9 @@ func (s *Service) comboTier(ctx context.Context, c pgstore.XAssetComboAdminRow, 
 	return "ok", fmt.Sprintf("在承受力内：计划仓位 $%.0f ≤ 账户净值 × %.1f 倍上限", needed, cap), false
 }
 
-// venueExposureSum 已迁至 service_venue_system_exposure.go（D-009 S4 实占口径：
-// 在途系统仓 qty×cs×现价，外单不入；旧版 Σenabled 组合计划名义=数学上永远开不了单的死闸已撤）。
-
-// comboQtyBelowMin D-009 S4 qty 明示：预算两腿均分 < 腿最小开单笔 → 死额度明示金额。
-// 缺失输入（无报价/无 step 元数据）不阻塞——其余闸（tick/monitor 新鲜度）已各自把守。
-// qtyStepForVenue 取自 service_execute_meanrevert.go floorToStepQtyMin/cexStepSize 同源。
-func (s *Service) comboQtyBelowMin(ctx context.Context, c pgstore.XAssetComboAdminRow) (string, bool) {
-	if c.MaxLongQty > 0 || c.MaxShortQty > 0 { // D-330 既有覆盖语义保真：MAX-qty 覆盖不再按名义测
-		return "", false
-	}
-	proposed := c.MaxGrossUSD
-	if c.NotionalUSD != nil {
-		proposed = *c.NotionalUSD
-	}
-	if proposed <= 0 {
-		return "", false
-	}
-	minB, okB := s.minOpenableUSD(c.VenueBuy, c.CanonicalBuy, "BUY")
-	minS, okS := s.minOpenableUSD(c.VenueSell, c.CanonicalSell, "SELL")
-	if !okB || !okS {
-		return "", false
-	}
-	minTotal := 2 * math.Max(minB, minS)
-	if proposed >= minTotal {
-		return "", false
-	}
-	return fmt.Sprintf("该组合最小可开 $%.0f，当前预算 $%.0f，差 $%.0f（场地最小步进）", minTotal, proposed, minTotal-proposed), true
-}
-
-// minOpenableUSD 单腿最小开单名义=minStep(1 步)×perLotUSD（qty 明示的 USD 锚）。
-// 缺报价/cs/step 元数据 → ok=false（不猜）。
-func (s *Service) minOpenableUSD(venueKey, canonical, side string) (float64, bool) {
-	q, ok := s.qbus.Latest(canonical, venueKey)
-	if !ok || q.Bid <= 0 || q.Ask <= 0 {
-		return 0, false
-	}
-	px := q.Ask
-	if side == "SELL" {
-		px = q.Bid
-	}
-	cs, err := s.legContractSizeOf(venueKey, q.VenueSymbol)
-	if err != nil {
-		return 0, false
-	}
-	perLot, ok := usdnotional.PerLot(canonical, px, cs, s.qbus)
-	if !ok {
-		return 0, false
-	}
-	minStep := s.cexStepSize(q.VenueSymbol)
-	if keydomain.IsMTKey(venueKey) {
-		minStep = s.floorToStepQtyMin(venueKey, q.VenueSymbol)
-	}
-	if perLot <= 0 || minStep <= 0 {
-		return 0, false
-	}
-	return minStep * perLot, true
-}
+// venueMarginSum/comboQtyBelowMin/minOpenableUSD 已迁/重写（D-010：venue 实占口径翻
+// 保证金 + qty 明示 S0 2×误拦回归修复）——见 service_venue_system_exposure.go /
+// service_pending_margin.go。
 
 // monitorPairKey / monitorLegKeys paper_all_in.go 同式镜像（pair=cexCanon+"-"+bare(mtCanon)）。
 func monitorPairKey(c pgstore.XAssetComboAdminRow) string {
@@ -156,26 +108,47 @@ func legMarket(venueKey, canonical string) (vt, sym string) {
 	return "", ""
 }
 
-// exposureCapsGate D-006 S3：闸 6（venue 敞口 cap 前瞻化）+闸 6.5（canonical 聚簇 cap）。
-// 475a 三态同判据：cap=0 冻结 / Σ在途+本次名义>cap 拒（前瞻——存量式只拦下一笔不拦当前笔已改）。
-// 闸 6.5：同标的多仓同向基差聚簇实证（#11/#12 XAUUSD）；canonical 买卖同名单判。
-// 返回 (拒因, false) 或 ("", true) 放行。
+// exposureCapsGate D-006 S3→D-010 S2：闸 6（venue 保证金占用 cap 前瞻化）+闸 6.5
+// （canonical 聚簇 cap，名义口径不动=裸腿风险域）。
+// venue 判据：实占保证金（venueMarginSum=Σ OPEN 腿 名义×legMarginNeedFrac）+
+// 本次该腿保证金 N×frac(v) > cap 拒；frac 实读败→该腿按名义全款计（frac=1 保守）；
+// margin_usd 模式 frac 缺一→整组合不可折算，fail-closed 拒。
+// 475a 三态同判据：cap=0 冻结 / 前瞻拒。闸 6.5：同标的多仓同向基差聚簇实证（#11/#12
+// XAUUSD）；canonical 买卖同名单判，proposed 口径同前（notional??gross）。返回 (拒因,false)/("",true)。
 func (s *Service) exposureCapsGate(ctx context.Context, c pgstore.XAssetComboAdminRow, caps map[string]pgstore.VenueExposureCap) (string, bool) {
 	proposed := c.MaxGrossUSD
 	if c.NotionalUSD != nil {
 		proposed = *c.NotionalUSD
 	}
-	for _, v := range []string{c.VenueBuy, c.VenueSell} { // D-007 S2：typed 键直查（剥 bare 恒 miss 死键已修）
+	legN, fracB, fracS, knownB, knownS, ok := s.comboLegNotional(ctx, c)
+	if c.MarginUSD != nil {
+		if !ok {
+			return "杠杆实读失败保证金不可折算（margin 预算模式需双腿杠杆实读，fail-closed 不放行）", false
+		}
+		proposed = legN // canonical 聚簇 cap 名义口径：margin 模式本次名义=反推单腿 N
+	}
+	legs := []struct {
+		vk    string
+		frac  float64
+		known bool
+	}{{c.VenueBuy, fracB, knownB}, {c.VenueSell, fracS, knownS}}
+	for _, leg := range legs { // D-007 S2：typed 键直查（剥 bare 恒 miss 死键已修）
+		v := leg.vk
 		if capRow, ok := caps[v]; ok && capRow.Enabled {
 			if capRow.CapUSD == 0 {
-				return fmt.Sprintf("敞口上限冻结：账户 %s 上限设为0，暂停新入场", v), false
+				return fmt.Sprintf("保证金占用冻结：账户 %s 上限设为0，暂停新入场", v), false
 			}
-			sum, err := s.venueExposureSum(v)
+			sum, err := s.VenueSystemMarginUSD(ctx, keydomain.BareOf(v))
 			if err != nil {
-				return fmt.Sprintf("敞口查询失败（保守不放行）: 账户 %s %v", v, err), false
+				return fmt.Sprintf("保证金实占查询失败（保守不放行）: 账户 %s %v", v, err), false
 			}
-			if sum+proposed > capRow.CapUSD {
-				return fmt.Sprintf("敞口超限：账户 %s 现有敞口 $%.0f+本次 $%.0f 超过上限 $%.0f", v, sum, proposed, capRow.CapUSD), false
+			frac := leg.frac
+			if !leg.known {
+				frac = 1.0 // frac 不可得→名义全款计（保守不放行，D-010 边界）
+			}
+			prop := legN * frac
+			if sum+prop > capRow.CapUSD {
+				return fmt.Sprintf("保证金占用超限：账户 %s 实占 $%.0f+本次 $%.0f 超过上限 $%.0f", v, sum, prop, capRow.CapUSD), false
 			}
 		}
 	}

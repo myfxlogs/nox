@@ -101,6 +101,22 @@ func (s *Service) evalPendingRow(ctx context.Context, c pgstore.XAssetComboAdmin
 		Tier: tier, TierDetail: detail, TierWarn: warn,
 	}
 	s.fillWaitCondition(ctx, c, row, ready) // D-580：等待条件透出（等什么+当前多少+还差多少）
+	// D-010 S5：保证金预算透显（服务端算，前端只渲染；frac/min 输入缺→字段留空不猜）。
+	row.MarginBudgetUsd = c.MarginUSD
+	if n, fB, fS, kB, kS, ok := s.comboLegNotional(ctx, c); ok {
+		row.LegNotionalUsd = &n
+		if kB {
+			m := n * fB
+			row.BuyLegMarginUsd = &m
+		}
+		if kS {
+			m := n * fS
+			row.SellLegMarginUsd = &m
+		}
+	}
+	if mm, ok := s.comboMinMarginUSD(ctx, c); ok {
+		row.MinMarginUsd = &mm
+	}
 	if r, ok2 := fundingRejectFor(in.rejects, c.CanonicalBuy, c.CanonicalSell, c.VenueBuy, c.VenueSell); ok2 {
 		row.RecentFundingReject = true
 		row.RecentRejectReason = rejectReasonText(r)
