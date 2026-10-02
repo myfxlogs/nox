@@ -37,6 +37,10 @@ type XAssetCarryDetector struct {
 	FreshnessTTL    time.Duration     // 报价新鲜度
 	AssetEquiv      AssetEquivSource  // 标的等价类映射（单实例注入）
 	CfdHints        CfdPairHintSource // D-403 S4：universe-hint cfd×perp 配对（nil=跳过向后兼容）
+	// Allow D-017 发现域收口：nil=不过滤（既有测试装配）；非 nil=白名单前置滤——
+	// (canonical, venue 对) 不在 xasset_allow_combos.enabled 内则静默不发射
+	// （零候选零日志，评估省略；执行闸=autotrade 即时 specs 仍为权威）。
+	Allow func(canonical, canonicalSell, venueBuy, venueSell string) bool
 }
 
 // CfdPairHint D-403 S4：universe-hint cfd×perp 配对提示——asset_equiv 之外的授权驱动
@@ -168,6 +172,11 @@ func (d *XAssetCarryDetector) tryPair(
 	funding map[string]map[string]float64, swap map[string]map[string][2]float64,
 	modes map[string]map[string]int64, realMap map[string]*bool, now time.Time,
 ) *Candidate {
+	// D-017 发现域收口：白名单外组合在评估前静默剔除（不产候选不刷日志；
+	// 等价类路与 hint 路两径同经此单点）。
+	if d.Allow != nil && !d.Allow(bc, sc, bq.VenueKey(), sq.VenueKey()) {
+		return nil
+	}
 	if stale(bq, now, d.FreshnessTTL) || stale(sq, now, d.FreshnessTTL) {
 		return nil
 	}

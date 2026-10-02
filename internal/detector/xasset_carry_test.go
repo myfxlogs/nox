@@ -282,3 +282,42 @@ func TestXAssetCarryTickRowShape(t *testing.T) {
 		t.Fatalf("TickRow shape: %+v", row)
 	}
 }
+
+// TestXAssetCarryAllowFilter D-017 发现域收口：Allow 前置滤——白名单内 (canonical,
+// venue 对) 正常发射，白名单外静默零候选；nil=不过滤向后兼容。
+func TestXAssetCarryAllowFilter(t *testing.T) {
+	now := time.Now()
+	fp := fakeFP{funding: map[string]map[string]float64{"PAXGUSDT": {"binance": 8.0}}}
+
+	t.Run("allowlist 内对正常发射", func(t *testing.T) {
+		d := newXAssetDetector()
+		d.Allow = func(canonical, canonicalSell, venueBuy, venueSell string) bool {
+			return canonical == "XAUUSD" && canonicalSell == "PAXGUSDT" &&
+				venueBuy == "3001157:mt5" && venueSell == "binance:perp"
+		}
+		if got := len(d.Scan(context.Background(), goldSnap(now), fp)); got != 1 {
+			t.Fatalf("allowlist 内应 1 候选，实际 %d", got)
+		}
+	})
+	t.Run("白名单外对静默零候选", func(t *testing.T) {
+		d := newXAssetDetector()
+		d.Allow = func(canonical, canonicalSell, venueBuy, venueSell string) bool {
+			return canonical == "XAUTUSDT" // 表内只有 GOLD 对 → GOLD 对全拒
+		}
+		if got := len(d.Scan(context.Background(), goldSnap(now), fp)); got != 0 {
+			t.Fatalf("白名单外应零候选，实际 %d", got)
+		}
+	})
+	t.Run("空 allowlist=全拒（fail-closed 零候选）", func(t *testing.T) {
+		d := newXAssetDetector()
+		d.Allow = func(string, string, string, string) bool { return false }
+		if got := len(d.Scan(context.Background(), goldSnap(now), fp)); got != 0 {
+			t.Fatalf("空白名单应零候选，实际 %d", got)
+		}
+	})
+	t.Run("nil=不过滤（既有装配向后兼容）", func(t *testing.T) {
+		if got := len(newXAssetDetector().Scan(context.Background(), goldSnap(now), fp)); got != 1 {
+			t.Fatalf("无 Allow 应 1 候选，实际 %d", got)
+		}
+	})
+}

@@ -98,7 +98,9 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 			sellCanonical = *opp.CanonicalSell
 		}
 		if xassetSpec = exec.MatchXAssetComboAllow(e.xassetSpecs(), opp.Canonical, sellCanonical, opp.VenueBuy, opp.VenueSell); xassetSpec == nil {
-			log.Printf("[autotrade] skip %s: %s combo not in allowlist (%s/%s %s×%s)", opp.ID, opp.Type, opp.Canonical, sellCanonical, opp.VenueBuy, opp.VenueSell)
+			// D-017：静默跳过不落日志——发现层（detector Allow 前置滤）已把白名单外组合
+			// 挡在候选生成前，此处仅兜 TTL 陈旧窗口/手动路径漏网（同 D-311 静默先例；
+			// 9h 2500+ 行同义 skip 刷屏根除点）。
 			return
 		}
 		var gateOK bool // D-010 S3：margin 折算+canonical 聚簇闸（engine_opp_margin.go）

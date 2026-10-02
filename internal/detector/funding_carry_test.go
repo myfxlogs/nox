@@ -109,3 +109,54 @@ func TestFundingHedgeBaseline(t *testing.T) {
 func TestFundingHedgeDetectorImplementsInterface(t *testing.T) {
 	var _ Detector = (*FundingHedgeDetector)(nil)
 }
+
+// TestFundingHedgeAllowFilter D-017 发现域收口：Allow 前置滤——白名单外组合静默
+// 不发射（零候选），白名单内照常；nil=不过滤向后兼容。快照按 venue 对隔离构造
+// （同 canonical 的 venues map 迭代只取一对 spot/perp，混布会引入迭代序随机性）。
+func TestFundingHedgeAllowFilter(t *testing.T) {
+	now := time.Now()
+	funding := map[string]map[string]float64{"BTCUSDT": {"okx": 37.0, "gate": 37.0}}
+	fp := &fakeFactProvider{funding: funding}
+	okxOnly := map[string]map[string]bus.Quote{
+		"BTCUSDT": {
+			"okx:spot": {Symbol: "BTCUSDT", Venue: "okx", VenueType: "spot", Bid: 100000, Ask: 100010, Time: now},
+			"okx:perp": {Symbol: "BTCUSDT", Venue: "okx", VenueType: "perp", Bid: 100000, Ask: 100010, Time: now},
+		},
+	}
+	gateOnly := map[string]map[string]bus.Quote{
+		"BTCUSDT": {
+			"gate:spot": {Symbol: "BTCUSDT", Venue: "gate", VenueType: "spot", Bid: 100000, Ask: 100010, Time: now},
+			"gate:perp": {Symbol: "BTCUSDT", Venue: "gate", VenueType: "perp", Bid: 100000, Ask: 100010, Time: now},
+		},
+	}
+	allowOKX := func(canonical, canonicalSell, venueBuy, venueSell string) bool {
+		return venueBuy == "okx:spot" && venueSell == "okx:perp"
+	}
+
+	t.Run("nil=不过滤（既有装配向后兼容）", func(t *testing.T) {
+		d := &FundingHedgeDetector{MinNetAnnualized: 4.0, FreshnessTTL: 30 * time.Second}
+		if got := len(d.Scan(context.Background(), okxOnly, fp)); got != 1 {
+			t.Fatalf("无 Allow 应 1 候选，实际 %d", got)
+		}
+	})
+	t.Run("allowlist 内对正常发射", func(t *testing.T) {
+		d := &FundingHedgeDetector{MinNetAnnualized: 4.0, FreshnessTTL: 30 * time.Second, Allow: allowOKX}
+		cands := d.Scan(context.Background(), okxOnly, fp)
+		if len(cands) != 1 || cands[0].VenueBuy != "okx:spot" || cands[0].VenueSell != "okx:perp" {
+			t.Fatalf("应仅 okx 对 1 候选，实际 %+v", cands)
+		}
+	})
+	t.Run("白名单外对静默零候选", func(t *testing.T) {
+		d := &FundingHedgeDetector{MinNetAnnualized: 4.0, FreshnessTTL: 30 * time.Second, Allow: allowOKX}
+		if got := len(d.Scan(context.Background(), gateOnly, fp)); got != 0 {
+			t.Fatalf("gate 对不在 allowlist 应零候选，实际 %d", got)
+		}
+	})
+	t.Run("空 allowlist=全拒（fail-closed 零候选）", func(t *testing.T) {
+		d := &FundingHedgeDetector{MinNetAnnualized: 4.0, FreshnessTTL: 30 * time.Second,
+			Allow: func(string, string, string, string) bool { return false }}
+		if got := len(d.Scan(context.Background(), okxOnly, fp)); got != 0 {
+			t.Fatalf("空白名单应零候选，实际 %d", got)
+		}
+	})
+}

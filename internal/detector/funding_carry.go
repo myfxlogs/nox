@@ -13,6 +13,10 @@ type FundingHedgeDetector struct {
 	MinNetAnnualized float64
 	BaselinePct      float64 // 同所基准费率年化（%，D-084：同所组合扣基准后过门槛；≤0 关闭扣除）
 	FreshnessTTL     time.Duration
+	// Allow D-017 发现域收口：nil=不过滤（既有测试装配）；非 nil=白名单前置滤——
+	// (canonical, venue 对) 不在 xasset_allow_combos.enabled 内则静默不发射
+	// （零候选零日志，评估省略；执行闸=autotrade 即时 specs 仍为权威）。
+	Allow func(canonical, canonicalSell, venueBuy, venueSell string) bool
 }
 
 func (d *FundingHedgeDetector) Type() OppType { return TypeFundingHedge }
@@ -32,6 +36,10 @@ func (d *FundingHedgeDetector) Scan(_ context.Context, snapshot map[string]map[s
 		spot, hasSpot := findVenueType(venues, "spot")
 		perp, hasPerp := findVenueType(venues, "perp")
 		if !hasSpot || !hasPerp {
+			continue
+		}
+		// D-017 发现域收口：白名单外组合在候选生成前静默剔除（不产候选不刷日志）。
+		if d.Allow != nil && !d.Allow(canonical, canonical, spot.VenueKey(), perp.VenueKey()) {
 			continue
 		}
 		if stale(spot, now, d.FreshnessTTL) || stale(perp, now, d.FreshnessTTL) {
