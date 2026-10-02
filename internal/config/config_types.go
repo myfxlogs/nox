@@ -195,8 +195,8 @@ type Config struct {
 	AIAPIKey                string        // ARB_AI_API_KEY（仅 .env，不进仓）
 	AIModel                 string        // ARB_AI_MODEL（如 glm-4.6）
 	AlertDedupWindow        time.Duration // D-592 S1：告警同键去重窗（envDuration 缺省 30min）
-	MakerFirstLegTimeout    time.Duration // D-018 阶段a ARB_MAKER_FIRST_LEG_TIMEOUT：首腿 post-only 超时 T（缺=fail-closed maker 停用）
-	MakerMaxAttemptsPerHour int           // D-018 阶段a ARB_MAKER_MAX_ATTEMPTS_PER_HOUR：每 opp 每小时挂单上限 N（缺=fail-closed 停用）
+	MakerFirstLegTimeout    time.Duration // D-018 阶段a ARB_MAKER_TIMEOUT：首腿 post-only 超时 T（缺=fail-closed maker 停用）
+	MakerMaxAttemptsPerHour int           // D-018 阶段a ARB_MAKER_MAX_PER_HOUR：每 opp 每小时挂单上限 N（缺=fail-closed 停用）
 	AIPGDSN                 string        // ARB_AI_PG_DSN（arb_ro 只读角色 DSN）
 	RetroDisabled           bool          // ARB_RETRO_ENABLED=0/false 关复盘定时器（D-457）
 	AnalystRatePerHour      int           // ARB_ANALYST_RATE_PER_HOUR（默认 20）
