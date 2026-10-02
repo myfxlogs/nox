@@ -348,3 +348,18 @@ func TestD465_StepNullAndCap(t *testing.T) {
 		t.Fatalf("floor: opened=%v rows=%d err=%v", o, len(st3.rows), err)
 	}
 }
+
+// D-014 S3：费率源 exchange_configs.taker_fee_bps（fake 回旧钉值等价——okx 10/5 族）。
+func (f *fakeMtmPaperStore) ExchangeTakerFeeBps(_ context.Context, venue, venueType string) (float64, bool, error) {
+	fees := map[string]struct{ spot, perp float64 }{
+		"binance": {10.0, 4.5}, "okx": {10.0, 5.0}, "gate": {10.0, 5.0}, "mexc": {5.0, 2.0},
+	}
+	t, ok := fees[venue]
+	if !ok {
+		return 0, false, nil
+	}
+	if venueType == "spot" {
+		return t.spot, true, nil
+	}
+	return t.perp, true, nil
+}

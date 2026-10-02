@@ -90,7 +90,7 @@ func insertCfdPaper(ctx context.Context, st PaperStore, r UniverseRow, mtVenue, 
 		spread = &eb // D-474a S2：MT 腿费用=monitor 簿实算点差（同一行值）
 	}
 	// D-474a S2：cex 往返 2 笔 + MT 腿簿实算点差往返 + 佣金常数；簿缺→NULL 缺账。
-	p.EstRoundTripFeeUSD = paperCfdFeeUSD(r.CexVenue, PaperQtyUSD, spread)
+	p.EstRoundTripFeeUSD = paperCfdFeeUSD(ctx, st, r.CexVenue, PaperQtyUSD, spread)
 	return st.InsertPaperSpotCarry(ctx, p)
 }
 

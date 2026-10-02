@@ -58,20 +58,3 @@ func (s *Store) LastRotateAtForAlt(ctx context.Context, altFrag string, since ti
 	}
 	return *ts, true, nil
 }
-
-// FirstFeeAmortizeEvalAt D-409 S3：本仓首行 decision='hold_fee_amortize' 的 evaluated_at
-// （延迟收割时钟起点——首行起算不重置，收割线反复穿越不续命；重启后由表重构零内存态）。
-// 无行 → ok=false（scan *time.Time 免 min()=NULL 误判，D-406 同款）。
-func (s *Store) FirstFeeAmortizeEvalAt(ctx context.Context, posID int64) (time.Time, bool, error) {
-	var ts *time.Time
-	err := s.pool.QueryRow(ctx,
-		`SELECT min(evaluated_at) FROM position_evals WHERE position_id = $1 AND decision='hold_fee_amortize'`,
-		posID).Scan(&ts)
-	if err != nil {
-		return time.Time{}, false, fmt.Errorf("first fee amortize eval: %w", err)
-	}
-	if ts == nil {
-		return time.Time{}, false, nil
-	}
-	return *ts, true, nil
-}

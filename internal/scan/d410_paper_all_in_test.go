@@ -29,6 +29,17 @@ func d410Store(t *testing.T) *pgstore.Store {
 	if _, err := s.Pool().Exec(ctx, `DELETE FROM fin_xasset_monitor WHERE pair LIKE 'D410%'`); err != nil {
 		t.Fatalf("clean monitor: %v", err)
 	}
+	// D-014：paper 费率源=exchange_configs.taker_fee_bps——播种 venue 官方费率页钉值
+	//（binance 10/4.5、okx 10/5、gate 10/5、mexc 5/2；kraken 不种=「未覆盖→NULL 拒填」用例）。
+	if _, err := s.Pool().Exec(ctx, `
+		DELETE FROM exchange_configs WHERE venue IN ('binance','okx','gate','mexc');
+		INSERT INTO exchange_configs (venue, venue_type, label, api_key, api_secret, simulated, taker_fee_bps)
+		VALUES ('binance','spot','t','','',false,10.0),('binance','perp','t','','',false,4.5),
+		       ('okx','spot','t','','',false,10.0),('okx','perp','t','','',false,5.0),
+		       ('gate','spot','t','','',false,10.0),('gate','perp','t','','',false,5.0),
+		       ('mexc','spot','t','','',false,5.0),('mexc','perp','t','','',false,2.0)`); err != nil {
+		t.Fatalf("seed taker fees: %v", err)
+	}
 	return s
 }
 

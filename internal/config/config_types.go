@@ -123,6 +123,13 @@ type Config struct {
 	// 0 = 不启用（回本门关闭）。
 	FundingMaxBreakevenDays float64
 
+	// MaxBreakevenDays D-014 ① econ 入场闸回本上限（ARB_MAX_BREAKEVEN_DAYS，缺省 3.0）：
+	// BreakevenDays=(EntryCost+ExitCostEst)/CarryPerDay > 此值 → 拒开 fail-closed。
+	MaxBreakevenDays float64
+	// HarvestHorizonDays D-014 ② 收割比较地平（ARB_HARVEST_HORIZON_DAYS，缺省 7）：
+	// NetIfClosedNow ≥0 ∧ ≥ CarryPerDay×此值 才收割（锁定收敛利润须优于再持一周 carry）。
+	HarvestHorizonDays float64
+
 	// === 机会站内推送（D-050；修复⑭ S3 退役 minNotifyNetBps 发布门槛 → oppTopic 全量事件流）===
 	// 发布门槛已退役，前端显示过滤常量 5 语义自立（useFrontConfig 默认值）。
 

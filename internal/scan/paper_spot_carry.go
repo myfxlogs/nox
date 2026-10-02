@@ -68,6 +68,8 @@ type PaperStore interface {
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
 	// D-465：mt×mt 轨 entry_basis/费用 tick 读面（*pgstore.Store 原生实现）。
 	TicksWindow(ctx context.Context, venue, symbol string, since time.Time) ([]pgstore.TickRow, error)
+	// D-014 S3：费率源 exchange_configs.taker_fee_bps（*pgstore.Store 原生实现；缺→拒填）。
+	ExchangeTakerFeeBps(ctx context.Context, venue, venueType string) (float64, bool, error)
 }
 
 // StepPaperSpotCarry 每轮扫描后调用：①开仓（20≤net≤300 ∧ vol24h≥$10M ∧ 持续≥48h ∧
@@ -159,7 +161,7 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 			VenueA: c.venueA, Symbol: c.u.Symbol, Side: side,
 			EntryFundingAnn: c.funding, QtyUSD: PaperQtyUSD,
 			EntryBasisBps: c.u.LastBasisBps, LastBasisBps: c.u.LastBasisBps, // D-354 S2：开仓基差快照（NULL 传播）
-			EstRoundTripFeeUSD: paperSpotCarryFeeUSD(c.u.Venue, PaperQtyUSD), // D-474a S2：分腿真费四笔（venue 未覆盖→NULL 拒填）
+			EstRoundTripFeeUSD: paperSpotCarryFeeUSD(ctx, st, c.u.Venue, PaperQtyUSD), // D-474a S2：分腿真费四笔（venue 未覆盖→NULL 拒填）
 		}
 		if err := st.InsertPaperSpotCarry(ctx, r); err != nil {
 			if err == pgstore.ErrPaperExists {

@@ -72,6 +72,8 @@ var appConfigDescs = map[string]string{
 	"ARB_MARGIN_RESERVE_PCT":                     "保证金预留比例（%；不可动用缓冲）",
 	"ARB_MARGIN_URGENT_COOLDOWN":                 "保证金紧急告警冷却时长",
 	"ARB_MARGIN_WARN_COOLDOWN":                   "保证金告警冷却时长",
+	"ARB_HARVEST_HORIZON_DAYS":                   "收割视窗天数（平仓净额须≥日息×此值才收割）",
+	"ARB_MAX_BREAKEVEN_DAYS":                     "入场回本天数上限（天；回本期超此拒开）",
 	"ARB_MAX_LEG_IMBALANCE_PCT":                  "双腿失衡容忍上限（%；超出触发调平）",
 	"ARB_MEANREVERT_THRESHOLDS":                  "均值回归阈值表（符号:bps 映射，逗号分隔如 BTC:50,ETH:60）",
 	"ARB_MIN_LIQ_DISTANCE_PCT":                   "最小清算距离（%；距强平价低于此禁开）",

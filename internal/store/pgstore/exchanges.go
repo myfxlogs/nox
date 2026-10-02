@@ -10,6 +10,7 @@ import (
 
 	"arb/internal/cryptoutil"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -187,4 +188,23 @@ func (s *Store) SetExchangeLabel(ctx context.Context, id int64, label string) er
 func (s *Store) SetExchangeWebsite(ctx context.Context, id int64, website string) error {
 	_, err := s.pool.Exec(ctx, `UPDATE exchange_configs SET website = $1 WHERE id = $2`, website, id)
 	return err
+}
+
+// ExchangeTakerFeeBps D-014 S2：CEX 腿 econ 费率源——exchange_configs.taker_fee_bps
+// （venue 实测值，业主可改）。venue+venue_type 严格匹配；无行/NULL → ok=false fail-closed。
+func (s *Store) ExchangeTakerFeeBps(ctx context.Context, venue, venueType string) (float64, bool, error) {
+	var v *float64
+	err := s.pool.QueryRow(ctx,
+		`SELECT taker_fee_bps FROM exchange_configs WHERE venue=$1 AND venue_type=$2
+		 ORDER BY created_at DESC, id DESC LIMIT 1`, venue, venueType).Scan(&v)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, false, nil
+		}
+		return 0, false, err
+	}
+	if v == nil {
+		return 0, false, nil
+	}
+	return *v, true, nil
 }
