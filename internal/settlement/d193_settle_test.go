@@ -114,14 +114,15 @@ func TestSettle_NetRealizedUsd_Written(t *testing.T) {
 	if d.lastSettlementRow == nil || d.lastSettlementRow.NetRealizedUsd == nil {
 		t.Fatal("net_realized_usd 未写入")
 	}
-	if !approx(*d.lastSettlementRow.NetRealizedUsd, 103.0, 0.001) {
-		t.Errorf("net_realized_usd=%.4f, want 103.0", *d.lastSettlementRow.NetRealizedUsd)
+	// D-013 ②：net_realized_usd=realized_pnl（PositionNetUSD 单源净额），cashflows 仅组件列。
+	if !approx(*d.lastSettlementRow.NetRealizedUsd, 100.0, 0.001) {
+		t.Errorf("net_realized_usd=%.4f, want 100.0", *d.lastSettlementRow.NetRealizedUsd)
 	}
 	if d.lastSettlementRow.StatsStatus != "applied" {
 		t.Errorf("stats_status=%q, want applied", d.lastSettlementRow.StatsStatus)
 	}
-	if !approx(d.lastNetPnl, 103.0, 0.001) {
-		t.Errorf("UpdateStrategyStat net=%.4f, want 103.0", d.lastNetPnl)
+	if !approx(d.lastNetPnl, 100.0, 0.001) {
+		t.Errorf("UpdateStrategyStat net=%.4f, want 100.0", d.lastNetPnl)
 	}
 }
 

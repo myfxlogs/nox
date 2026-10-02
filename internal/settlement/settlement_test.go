@@ -595,14 +595,14 @@ func TestD127_SettleNetIncludesSwap(t *testing.T) {
 		fxRate:       150,
 		fxOk:         true,
 		insertWon:    true,
-		cashflowsNet: 3.0, // swap+funding−commission 实收 +$3
+		cashflowsNet: 3.0, // swap+funding−commission 实收 +$3（D-013：组件列用，不再加进 net）
 	}
 	if err := Settle(context.Background(), d, 10, noElim, nil); err != nil {
 		t.Fatalf("Settle: %v", err)
 	}
-	// net = -1 + 3 = +2 → UpdateStrategyStat 收到 +2（win）
-	if !approx(d.lastNetPnl, 2.0, 0.001) {
-		t.Errorf("UpdateStrategyStat net=%.4f，期望 +2.0（realized -1 + swap +3）", d.lastNetPnl)
+	// D-013 ②：realized_pnl 已是单源净额（exec 侧 PositionNetUSD 写入）→ net=-1 原样传播
+	if !approx(d.lastNetPnl, -1.0, 0.001) {
+		t.Errorf("UpdateStrategyStat net=%.4f，期望 -1.0（realized_pnl=净额单源）", d.lastNetPnl)
 	}
 	if d.updateStat != 1 {
 		t.Errorf("updateStat=%d，期望 1", d.updateStat)
@@ -671,14 +671,58 @@ func TestSettle_NoDoubleCount(t *testing.T) {
 		fxRate:       150,
 		fxOk:         true,
 		insertWon:    true,
-		cashflowsNet: 3.0, // swap 5 + commission -2 = 3（cashflows 组件，不再在 realized_pnl 中）
+		cashflowsNet: 3.0, // swap 5 + commission -2 = 3（D-013：组件列/quality 判据用）
 	}
 	if err := Settle(context.Background(), d, 20, noElim, nil); err != nil {
 		t.Fatalf("Settle: %v", err)
 	}
-	// netPnl = 100 + 3 = 103（净值一次合成）。旧双计 = 103 + 3 = 106。
-	if !approx(d.lastNetPnl, 103.0, 0.001) {
-		t.Errorf("netPnl=%.4f, want 103.0 (realized 100 + cashflowsNet 3, no double count)", d.lastNetPnl)
+	// D-013 ②：netPnl=realized_pnl（PositionNetUSD 单源净额已含现金流）原样传播=100。
+	// 旧口径 100+3=103 在单源下即双计——本用例反转即回归锚。
+	if !approx(d.lastNetPnl, 100.0, 0.001) {
+		t.Errorf("netPnl=%.4f, want 100.0 (realized_pnl=净额单源)", d.lastNetPnl)
+	}
+}
+
+// TestD013_ExternalFeeNullPartial D-013 ②：EXTERNAL 平仓腿 fee_usd NULL →
+// completeness=partial、stats_status=retryable（不入正式样本，venue 补报可升级）。
+func TestD013_ExternalFeeNullPartial(t *testing.T) {
+	now := time.Now()
+	rp := 5.0
+	d := &fakeDeps{
+		position: &pgstore.Position{
+			ID:             30,
+			OpportunityID:  "CROSS_VENUE:BTCUSDT:okx:perp:binance:perp",
+			Type:           "CROSS_VENUE",
+			Status:         "CLOSED",
+			ExpectedNetBps: 10.0,
+			RealizedPnl:    &rp,
+			OpenedAt:       &now,
+			ClosedAt:       &now,
+		},
+		legs: []pgstore.PositionLeg{
+			{Phase: "OPEN", Status: "FILLED", Venue: "okx:perp", Qty: 0.1, PriceActual: ptrFloat(100000)},
+			{Phase: "CLOSE", Status: "EXTERNAL", Venue: "okx:perp", Qty: 0.1, PriceActual: ptrFloat(100100)},
+		},
+		cs:        1,
+		csOk:      false,
+		fxRate:    1,
+		fxOk:      true,
+		insertWon: true,
+	}
+	if err := Settle(context.Background(), d, 30, noElim, nil); err != nil {
+		t.Fatalf("Settle: %v", err)
+	}
+	if d.lastSettlementRow == nil {
+		t.Fatal("no settlement row")
+	}
+	if d.lastSettlementRow.CompletenessStatus != "partial" {
+		t.Errorf("completeness=%s, want partial", d.lastSettlementRow.CompletenessStatus)
+	}
+	if d.lastSettlementRow.StatsStatus != "retryable" {
+		t.Errorf("stats_status=%s, want retryable", d.lastSettlementRow.StatsStatus)
+	}
+	if d.upsertVSample != 0 || d.updateStat != 0 {
+		t.Errorf("partial must not enter formal stats: upsert=%d update=%d", d.upsertVSample, d.updateStat)
 	}
 }
 

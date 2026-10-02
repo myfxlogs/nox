@@ -183,17 +183,29 @@ func SettleAt(ctx context.Context, deps Deps, posID int64, elim Eliminator, fami
 			_, _ = deps.InsertSettlement(ctx, errRow) // best-effort 写入，错误已返回
 			return fmt.Errorf("settle: cashflow query pos=%d: %w", posID, err)
 		}
-		// D-193-A：净 PNL = price_pnl + cashflows_net，quality 和 completeness 由现金流质量决定。
-		pricePnl = *p.RealizedPnl
-		netPnl = pricePnl + cashflowsNet
-		pnlQuality = "actual"
-		completeness = "complete"
+		// D-013 ②：net_pnl = positions.realized_pnl——exec 侧经 pgstore.PositionNetUSD
+		// 单源写入（价差+funding/swap+commission），结算只传播同一值，不再二次加现金流。
+		// cashflowsNet 仅作组件列与 quality/completeness 判据；pricePnl 组件=净额−现金流。
+		// EXTERNAL 平仓腿 fee_usd NULL → 证据不全 → completeness='partial'
+		// （不入样；retryable——venue 补报后重结算可升级）。
+		hasPartialFeeLeg := false
+		for _, l := range legs {
+			if l.Phase == "CLOSE" && l.Status == "EXTERNAL" && l.FeeUSD == nil {
+				hasPartialFeeLeg = true
+				break
+			}
+		}
+		netPnl = *p.RealizedPnl
+		pricePnl = netPnl - cashflowsNet
+		pnlQuality, completeness = "actual", "complete"
+		if hasPartialFeeLeg {
+			completeness = "partial"
+		}
 		if cfQuality == "unknown" {
 			pnlQuality = "unknown"
 			completeness = "unknown"
 		} else if cfQuality == "estimated" {
-			pnlQuality = "estimated"
-			completeness = "complete" // estimated 仍 complete，但统计层不消费
+			pnlQuality = "estimated" // estimated 不入正式统计（stats 层不消费）
 		} else if cfQuality == "no_cashflows" && hasCashflowKinds(p.Type) {
 			// D-193 审计 P1-3：传 p.Type 不是 posID
 			// 应有现金流但查不到 → unknown
@@ -204,7 +216,7 @@ func SettleAt(ctx context.Context, deps Deps, posID int64, elim Eliminator, fami
 		// complete+actual → stats_status='applied'；非 complete/actual → 'skipped' 或 'retryable'。
 		rowStatsStatus = "applied"
 		if completeness != "complete" || pnlQuality != "actual" {
-			if completeness == "unknown" {
+			if completeness == "unknown" || completeness == "partial" {
 				rowStatsStatus = "retryable"
 			} else {
 				rowStatsStatus = "skipped"

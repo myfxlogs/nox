@@ -67,7 +67,8 @@ func TestD438_T7_LegDerivation(t *testing.T) {
 	}
 }
 
-// T8：端到端——perp 腿仓 income $1.03 + commission -$2.18 → net = P - 1.15，actual 口径入统计。
+// T8：端到端——perp 腿仓 cashflows 组件（income $1.03 + commission -$2.18）参与 quality 判定；
+// D-013 ②：net=realized_pnl 单源净额（exec 已含现金流），actual 口径入统计。
 func TestD438_T8_EndToEnd(t *testing.T) {
 	opened := time.Now().Add(-48 * time.Hour)
 	closed := time.Now()
@@ -101,9 +102,8 @@ func TestD438_T8_EndToEnd(t *testing.T) {
 	if d.forSettleCalls != 1 {
 		t.Fatalf("SumCashflowsNetForSettle 未被调用（走了旧轨）")
 	}
-	want := 5.0 - 1.15
-	if !approx(d.lastNetPnl, want, 1e-6) {
-		t.Fatalf("netPnl=%v want %v", d.lastNetPnl, want)
+	if !approx(d.lastNetPnl, 5.0, 1e-6) {
+		t.Fatalf("netPnl=%v want 5.0（realized_pnl=净额单源）", d.lastNetPnl)
 	}
 	if d.lastSettlementRow == nil || d.lastSettlementRow.PnlQuality != "actual" {
 		t.Fatalf("pnlQuality=%v want actual", d.lastSettlementRow)
