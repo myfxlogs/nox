@@ -108,7 +108,7 @@ func (p *Pipeline) externalCloseFallback(ctx context.Context, pos *pgstore.Posit
 	if hit.feeUSD != nil {
 		fee = *hit.feeUSD
 	}
-	if err := p.writeCloseCashflows(ctx, pos.ID, leg.LegNo, leg.Venue, 0, 0, fee, fx); err != nil {
+	if err := p.writeCloseCashflows(ctx, pos.ID, *cl, 0, 0, fee, fx); err != nil {
 		return false, fmt.Errorf("external close cashflow pos=%d leg=%d: %w", pos.ID, leg.LegNo, err)
 	}
 	log.Printf("[exec] pos %d leg %d %s %s external close marked from venue frame", pos.ID, leg.LegNo, leg.Venue, leg.Symbol)

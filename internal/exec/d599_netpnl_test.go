@@ -79,7 +79,7 @@ func TestD599_PositionFeesUSD(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			fees, qual := tc.p.positionFeesUSD(tc.open, tc.close, 1.0)
+			fees, qual, _ := tc.p.positionFeesUSD(tc.open, tc.close, 1.0)
 			if qual != tc.wantQual {
 				t.Fatalf("quality=%q want %q", qual, tc.wantQual)
 			}

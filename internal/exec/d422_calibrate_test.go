@@ -128,8 +128,15 @@ func TestD422_CloseCashflowFeeMerge(t *testing.T) {
 		t.Fatalf("seed pos: %v", err)
 	}
 	p := &Pipeline{store: s}
-	// MT commission=1.0（计价币）×fx=2 + CEX fee=0.5（已 USD）→ 单条 commission −2.5
-	if err := p.writeCloseCashflows(ctx, posID, 0, "vA:mt5", 0, 1.0, 0.5, 2.0); err != nil {
+	// D-013：commission=1.0（计价币）×fx=2 + fee=0.5（已 USD）→ 腿键 commission −2.5
+	// （生产路径=腿 fee_usd 落库时 Ensure 自动写行；显式 amt 仅供无 leg: 行的历史补写）。
+	fee25 := 2.5
+	leg := pgstore.PositionLeg{PositionID: posID, LegNo: 0, Phase: "CLOSE", AttemptNo: 1,
+		Venue: "okx:perp", Symbol: "X", Side: "BUY", Qty: 1, Status: "FILLED", FeeUSD: &fee25}
+	if err := s.CreatePositionLeg(ctx, &leg); err != nil {
+		t.Fatalf("create close leg: %v", err)
+	}
+	if err := p.writeCloseCashflows(ctx, posID, leg, 0, 1.0, 0.5, 2.0); err != nil {
 		t.Fatalf("writeCloseCashflows: %v", err)
 	}
 	rows := 0
@@ -198,30 +205,32 @@ func TestD422_R1_OpenCloseFeeCoexist(t *testing.T) {
 		t.Fatalf("persistOpenLegs: %v", err)
 	}
 	// CLOSE 佣金同日落账（R1 前会被腿日幂等键吞掉）
-	if err := p.writeCloseCashflows(ctx, posID, 0, "okx:perp", 0, 0, 0.50, 1.0); err != nil {
+	// D-013：CLOSE 腿行落库→腿键 commission（leg:<id>，与 OPEN 费行分键双落）
+	closeFee := 0.50
+	closeLeg := pgstore.PositionLeg{PositionID: posID, LegNo: 0, Phase: "CLOSE", AttemptNo: 1,
+		Venue: "okx:perp", Symbol: "X", Side: "SELL", Qty: 1, Status: "FILLED", FeeUSD: &closeFee}
+	if err := s.CreatePositionLeg(ctx, &closeLeg); err != nil {
+		t.Fatalf("create close leg: %v", err)
+	}
+	if err := p.writeCloseCashflows(ctx, posID, closeLeg, 0, 0, 0.50, 1.0); err != nil {
 		t.Fatalf("writeCloseCashflows: %v", err)
 	}
-	// 两条都应在：event_key 分键（:open vs 无 tag）
+	// 两条都应在：腿键分键（open 腿 id vs close 腿 id）
 	var cnt int
 	if err := conn.QueryRow(ctx,
 		`SELECT count(*) FROM position_cashflows WHERE position_id=$1 AND kind='commission'`, posID).Scan(&cnt); err != nil {
 		t.Fatalf("count: %v", err)
 	}
 	if cnt != 2 {
-		t.Fatalf("commission rows=%d, want 2（OPEN 费 + CLOSE 佣金分键双落）", cnt)
+		t.Fatalf("commission rows=%d, want 2（OPEN 费 + CLOSE 佣金腿键分键双落）", cnt)
 	}
-	// event_key 分键实证
-	var openKey, closeKey string
+	var keyN int
 	if err := conn.QueryRow(ctx,
-		`SELECT event_key FROM position_cashflows WHERE position_id=$1 AND kind='commission' AND event_key LIKE '%:open'`, posID).Scan(&openKey); err != nil {
-		t.Fatalf("open key: %v", err)
+		`SELECT count(DISTINCT event_key) FROM position_cashflows WHERE position_id=$1 AND kind='commission' AND event_key LIKE 'leg:%'`, posID).Scan(&keyN); err != nil {
+		t.Fatalf("key count: %v", err)
 	}
-	if err := conn.QueryRow(ctx,
-		`SELECT event_key FROM position_cashflows WHERE position_id=$1 AND kind='commission' AND event_key NOT LIKE '%:open'`, posID).Scan(&closeKey); err != nil {
-		t.Fatalf("close key: %v", err)
-	}
-	if openKey == closeKey {
-		t.Fatalf("event_key 未分键：%q", openKey)
+	if keyN != 2 {
+		t.Fatalf("leg: 键分键失败：%d", keyN)
 	}
 	// quality='actual'（D-425 实采值入正式统计）
 	var q string
@@ -233,7 +242,7 @@ func TestD422_R1_OpenCloseFeeCoexist(t *testing.T) {
 		t.Fatalf("quality=%q want 'actual'（实采值，D-425）", q)
 	}
 	// 各自重试幂等：重发 CLOSE 佣金不双计
-	if err := p.writeCloseCashflows(ctx, posID, 0, "okx:perp", 0, 0, 0.50, 1.0); err != nil {
+	if err := p.writeCloseCashflows(ctx, posID, closeLeg, 0, 0, 0.50, 1.0); err != nil {
 		t.Fatalf("retry writeCloseCashflows: %v", err)
 	}
 	if err := conn.QueryRow(ctx,

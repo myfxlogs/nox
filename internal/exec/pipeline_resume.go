@@ -179,7 +179,7 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64, force boo
 		if closeQty <= 0 {
 			closeQty = leg.EffectiveQty() // D-311 R6：兜底用成交口径（CEX=基础币）
 		}
-		if err := p.store.CreatePositionLeg(ctx, &pgstore.PositionLeg{
+		closeLeg := &pgstore.PositionLeg{
 			PositionID:    posID,
 			LegNo:         leg.LegNo,
 			Phase:         "CLOSE",
@@ -196,7 +196,8 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64, force boo
 			FilledQty:     &closeQty,                // D-346：与 OPEN 腿同字段语义，realized 逐腿分解复核
 			AvgFillPrice:  &closePrice,              // D-346：488/489/490 验尸=CLOSE 腿恒 NULL
 			FeeUSD:        closeLegFeeUSD(fill, fx), // D-422+D-599：CEX 实采 USD 费/MT5 commission 落库（0→NULL）
-		}); err != nil {
+		}
+		if err := p.store.CreatePositionLeg(ctx, closeLeg); err != nil {
 			if errors.Is(err, pgstore.ErrTerminalState) {
 				log.Printf("[exec] resume close leg %d already persisted (concurrent), skip", leg.ID)
 				continue
@@ -216,7 +217,7 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64, force boo
 				log.Printf("[exec] pos %d alert write: %v", posID, err)
 			}
 		}
-		if err := p.writeCloseCashflows(ctx, posID, leg.LegNo, leg.Venue, fill.Swap, fill.Commission, fill.FeeUSD, fx); err != nil {
+		if err := p.writeCloseCashflows(ctx, posID, *closeLeg, fill.Swap, fill.Commission, fill.FeeUSD, fx); err != nil {
 			return fmt.Errorf("pos=%d leg=%d close cashflow: %w", posID, leg.LegNo, err)
 		}
 	}
@@ -271,14 +272,12 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64, force boo
 		return fmt.Errorf("position %d residual legs not closed (%d/%d)", posID, closeFilled, openFilled)
 	}
 
-	// D-599 S2：净额核算——totalPnL 为价差毛值；fees_usd=全腿实采+估算费合计，
-	// fee_quality 四分位（actual/estimated/mixed/none）；净额=毛值−fees_usd 原子落库。
-	feesUSD, feeQuality := p.positionFeesUSD(legs, closeLegs, fx)
-	netPnL := totalPnL
-	if feesUSD != nil {
-		netPnL -= *feesUSD
+	// D-599 S2：fees_usd/fee_quality 列口径保留；D-013 ②净额走 closeNetUSD 单源。
+	feesUSD, feeQuality, estUSD := p.positionFeesUSD(legs, closeLegs, fx)
+	netPnL, err := p.closeNetUSD(ctx, posID, totalPnL, estUSD)
+	if err != nil {
+		return err
 	}
-
 	if err := p.store.ClosePosition(ctx, posID, netPnL, feesUSD, feeQuality); err != nil {
 		if errors.Is(err, pgstore.ErrTerminalState) {
 			log.Printf("[exec] position %d already CLOSED (concurrent)", posID)
@@ -287,9 +286,9 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64, force boo
 		log.Printf("[exec] close position %d store update: %v", posID, err)
 		return fmt.Errorf("close position %d store: %w", posID, err)
 	}
-	// D-249 S1 第3项：CLOSED 翻译点记录（裁定 a385b84）。
-	// 成功（非 ErrTerminalState）才写；禁预查（TOCTOU）；best-effort 不阻断。
+	// D-249 S1 第3项：CLOSED 翻译点记录（成功才写；禁预查 TOCTOU；best-effort 不阻断）。
 	p.logClosed(ctx, pos, closeLegs, netPnL) // D-599：日志同净额口径（realized_pnl=net）
+	p.markCloseIncident(ctx, posID)          // D-013 ③：事故族 exit_kind 覆盖写
 	// D-193-A 扩包 S5：CLOSED 后触发 settlement.Settle（修复 479 缺 settlement 行根因）。
 	// settler nil=未接线（兼容旧测试）；失败不回滚 CLOSED（settlement 可重试，SettleAt 幂等）。
 	if p.settler != nil {

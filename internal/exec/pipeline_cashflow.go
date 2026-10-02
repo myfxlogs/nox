@@ -44,19 +44,25 @@ func closeLegFeeUSD(fill Fill, fx float64) *float64 {
 	return nil
 }
 
-func (p *Pipeline) writeCloseCashflows(ctx context.Context, posID int64, legNo int16, venue string, swap, commission, feeUSD, fx float64) error {
+func (p *Pipeline) writeCloseCashflows(ctx context.Context, posID int64, leg pgstore.PositionLeg, swap, commission, feeUSD, fx float64) error {
 	now := time.Now().UTC()
 	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	if swap != 0 {
 		// D-425：fill/hp 实采值 → quality='actual'。
-		if err := p.insertCashflowIdempotent(ctx, posID, legNo, "swap", venue, swap*fx, "actual", dayStart, now, ""); err != nil {
-			return fmt.Errorf("pos=%d leg=%d swap cashflow: %w", posID, legNo, err)
+		if err := p.insertCashflowIdempotent(ctx, posID, leg.LegNo, "swap", leg.Venue, swap*fx, "actual", dayStart, now, ""); err != nil {
+			return fmt.Errorf("pos=%d leg=%d swap cashflow: %w", posID, leg.LegNo, err)
 		}
 	}
-	if commissionUSD := commission*fx + feeUSD; commissionUSD != 0 {
-		// commission 入库为负值（成本）；CEX feeUSD 已是 USD 直接并入。D-425 实采 → 'actual'。
-		if err := p.insertCashflowIdempotent(ctx, posID, legNo, "commission", venue, -commissionUSD, "actual", dayStart, now, ""); err != nil {
-			return fmt.Errorf("pos=%d leg=%d commission cashflow: %w", posID, legNo, err)
+	// D-013 ①：commission 收敛腿键行（event_key=leg:<id>）——腿落库时 CreatePositionLeg
+	// 已自动写入，此处对存量腿/历史值补写（幂等）。金额=commission*fx+feeUSD（与
+	// 腿 fee_usd 同式；显式传值仅供历史回填 hp 值，零值→nil 由腿 fee_usd 派生）。
+	if leg.ID != 0 {
+		var amt *float64
+		if commissionUSD := commission*fx + feeUSD; commissionUSD != 0 {
+			amt = &commissionUSD
+		}
+		if err := p.store.EnsureLegCommissionCashflow(ctx, leg, amt); err != nil {
+			return fmt.Errorf("pos=%d leg=%d commission cashflow: %w", posID, leg.LegNo, err)
 		}
 	}
 	return nil

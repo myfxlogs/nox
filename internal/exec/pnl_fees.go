@@ -7,6 +7,9 @@
 package exec
 
 import (
+	"context"
+	"fmt"
+
 	"arb/internal/store/pgstore"
 )
 
@@ -41,10 +44,12 @@ func (p *Pipeline) legNotionalUSD(leg pgstore.PositionLeg, fx float64) float64 {
 	return qty * px * cs * fx
 }
 
-// positionFeesUSD 聚合全腿费用 → (feesUSD *float64, feeQuality)。
+// positionFeesUSD 聚合全腿费用 → (feesUSD *float64, feeQuality, estUSD float64)。
 // legs=OPEN 腿集 + closeLegs=CLOSE 腿集（ResumeClose 调用点已按 phase 分组传入）。
 // feesUSD=nil 当且仅当 quality=='none'（未拿到任何费信息）。
-func (p *Pipeline) positionFeesUSD(openLegs, closeLegs []pgstore.PositionLeg, fx float64) (*float64, string) {
+// estUSD=仅估算部分合计（无 venue 费证据腿的模型费）——D-013：实采费已入 leg: 键
+// 现金流行由 PositionNetUSD 计，估算部分无事实行须由调用方在净额中单独扣减。
+func (p *Pipeline) positionFeesUSD(openLegs, closeLegs []pgstore.PositionLeg, fx float64) (*float64, string, float64) {
 	var actualSum, estSum float64
 	nActual, nEst, nUnk, nFilled := 0, 0, 0, 0
 	collect := func(l pgstore.PositionLeg) {
@@ -79,12 +84,23 @@ func (p *Pipeline) positionFeesUSD(openLegs, closeLegs []pgstore.PositionLeg, fx
 	total := actualSum + estSum
 	switch {
 	case nFilled == 0 || (nActual == 0 && nEst == 0):
-		return nil, "none" // 全 FAILED 腿或零费用信息
+		return nil, "none", 0 // 全 FAILED 腿或零费用信息
 	case nUnk > 0 || (nActual > 0 && nEst > 0):
-		return &total, "mixed" // 实采+估算+未知任一混合
+		return &total, "mixed", estSum // 实采+估算+未知任一混合
 	case nEst > 0:
-		return &total, "estimated"
+		return &total, "estimated", estSum
 	default:
-		return &total, "actual"
+		return &total, "actual", 0
 	}
+}
+
+// closeNetUSD D-013 ②：平仓净额合成——pgstore.PositionNetUSD 单源
+// （价差组件=调用方已含校准器权威替换的 totalPnL + funding/swap + 腿键 commission 行），
+// 再扣估算费 estUSD（无 venue 证据腿的模型费不落事实现金流行，净额与 fees_usd 列同口径）。
+func (p *Pipeline) closeNetUSD(ctx context.Context, posID int64, pricePnL, estUSD float64) (float64, error) {
+	net, err := p.store.PositionNetUSD(ctx, posID, &pricePnL)
+	if err != nil {
+		return 0, fmt.Errorf("pos=%d net usd: %w", posID, err)
+	}
+	return net - estUSD, nil
 }

@@ -123,8 +123,13 @@ func TestGateStopCooldown_QueryError_FailClosed(t *testing.T) {
 		}
 	}()
 	res := cooldownSubmit(t, g, "CROSS_VENUE", ckStopCooldown())
-	if res.Status != "REJECTED" || !strings.Contains(res.Reason, "cooled exits check failed") {
+	// D-013：exit_kind 同时被 DailyRealizedPnl 事故族谓词消费——同一列断裂由更早的
+	// daily pnl 检查先拦（同为 fail-closed）；cooled exits 查询本身的失败面仍由下方断言覆盖。
+	if res.Status != "REJECTED" || !strings.Contains(res.Reason, "check failed") {
 		t.Fatalf("锚7: want REJECTED(fail-closed), got %s (%s)", res.Status, res.Reason)
+	}
+	if _, err := s.ListCooledExits(ctx, []string{"stop"}, time.Now().Add(-time.Hour)); err == nil {
+		t.Fatal("锚7: ListCooledExits 应报错（exit_kind 列断裂）")
 	}
 }
 

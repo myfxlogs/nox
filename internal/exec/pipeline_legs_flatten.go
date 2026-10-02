@@ -109,7 +109,7 @@ func (p *Pipeline) autoFlattenLEGGED(ctx context.Context, posID int64, legs []Le
 		if closeQty <= 0 {
 			closeQty = dbLeg.EffectiveQty() // D-311 R6：兜底用持久化成交口径（CEX=基础币）
 		}
-		if err := p.store.CreatePositionLeg(ctx, &pgstore.PositionLeg{
+		closeLeg := &pgstore.PositionLeg{
 			PositionID:    posID,
 			LegNo:         dbLeg.LegNo,
 			Phase:         "CLOSE",
@@ -126,14 +126,15 @@ func (p *Pipeline) autoFlattenLEGGED(ctx context.Context, posID int64, legs []Le
 			FilledQty:     &closeQty,                // D-346：与 OPEN 腿同字段语义，realized 逐腿分解复核
 			AvgFillPrice:  &closePrice,              // D-346：488/489/490 验尸=CLOSE 腿恒 NULL
 			FeeUSD:        closeLegFeeUSD(fill, fx), // D-422+D-599：CEX 实采 USD 费/commission 落库（0→NULL）
-		}); err != nil && !errors.Is(err, pgstore.ErrTerminalState) {
+		}
+		if err := p.store.CreatePositionLeg(ctx, closeLeg); err != nil && !errors.Is(err, pgstore.ErrTerminalState) {
 			log.Printf("[exec] auto-flatten pos=%d leg=%d write CLOSE leg: %v", posID, i, err)
 			allFlattened = false
 			continue
 		}
 		// D-189 P0-2：写 CLOSE leg 后调 writeCloseCashflows（与 pipeline_legs_close.go 同口径）。
 		// 失败保持未完成（allFlattened=false），不继续置 CLOSED。
-		if err := p.writeCloseCashflows(ctx, posID, dbLeg.LegNo, dbLeg.Venue, fill.Swap, fill.Commission, fill.FeeUSD, fx); err != nil {
+		if err := p.writeCloseCashflows(ctx, posID, *closeLeg, fill.Swap, fill.Commission, fill.FeeUSD, fx); err != nil {
 			log.Printf("[exec] auto-flatten pos=%d leg=%d write cashflow: %v", posID, i, err)
 			allFlattened = false
 			continue
