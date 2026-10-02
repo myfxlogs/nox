@@ -77,7 +77,6 @@ func Load() *Config {
 		XAssetDisasterNoiseMult:    envFloat("ARB_XASSET_DISASTER_NOISE_MULT", 4.0),    // D-378b 灾难带 noise 倍数
 		XAssetDisasterDebounce:     envInt("ARB_XASSET_DISASTER_DEBOUNCE", 2),          // D-378b 灾难带去抖
 		XAssetQuoteMaxAge:          envDur("ARB_XASSET_QUOTE_MAX_AGE", 5*time.Minute),  // D-378b 报价新鲜度
-		XAssetFeeHoldMaxDays:       envFloat("ARB_XASSET_FEE_HOLD_MAX_DAYS", 2.0),      // D-409 收割费用摊销延迟上限（天）
 		SwapArbVenueExposureCap:    envFloat("ARB_SWAPARB_VENUE_EXPOSURE_CAP", 2.0),    // D-132 T1 venue 级敞口门
 		SwapArbMarginBudgetPct:     envFloat("ARB_SWAPARB_MARGIN_BUDGET_PCT", 0.8),     // D-142 ④ 观察版告警
 		ProbeEnabled:               envBool("ARB_PROBE_ENABLED", false),                // D-181 S2 probe 探测仓总开关

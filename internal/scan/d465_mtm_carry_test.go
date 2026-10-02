@@ -224,11 +224,21 @@ func mtmFixture() *fakeScanStore {
 }
 
 // TestD465_StepOpenAccrueExit T2：开仓（3 轮 streak 后）→ 累积 → 低息两轮退出。
+// D-022：时钟注入——全轮挂固定 UTC 时段（06:50 与 22:00 UTC 各跑一次；22:00 UTC=
+// +0800 本地次日，旧 swapLegBoundaries 本地日历日拼 UTC 午夜的破相点）。
 func TestD465_StepOpenAccrueExit(t *testing.T) {
+	for _, utc := range []string{"06:50", "22:00"} {
+		t.Run("utc_"+utc, func(t *testing.T) {
+			h, _ := time.Parse("15:04", utc)
+			d465StepOpenAccrueExitAt(t, time.Date(2026, 10, 2, h.Hour(), h.Minute(), 0, 0, time.UTC))
+		})
+	}
+}
+
+func d465StepOpenAccrueExitAt(t *testing.T, now time.Time) {
 	ctx := context.Background()
 	sc := NewCarryUniverseScanner(mtmFixture())
 	st := newFakeMtmPaperStore()
-	now := time.Now()
 	st.ticks["mtA|XAUUSD.a"] = []pgstore.TickRow{{Ts: now.Add(-time.Minute), Venue: "mtA", Symbol: "XAUUSD.a", Bid: 100, Ask: 100.05}}
 	st.ticks["mtB|XAUUSD.b"] = []pgstore.TickRow{{Ts: now.Add(-time.Minute), Venue: "mtB", Symbol: "XAUUSD.b", Bid: 99.9, Ask: 99.95}}
 	// D-474a S1：结算对齐累积需双腿 facts 面（bps_daily 日率，UTC 日界）。
@@ -266,7 +276,7 @@ func TestD465_StepOpenAccrueExit(t *testing.T) {
 	}
 	// 累积：下一轮（1 天后）net 仍 7.3 → accrued>0、streak=0。
 	later := now.Add(24 * time.Hour)
-	opened, exited, err := sc.StepPaperMtmCarry(ctx, st, es, later, nil)
+	_, exited, err := sc.StepPaperMtmCarry(ctx, st, es, later, nil)
 	if err != nil || exited != 0 {
 		t.Fatalf("accrue round exited=%d err=%v", exited, err)
 	}
