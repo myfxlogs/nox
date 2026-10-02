@@ -12,20 +12,15 @@ import (
 	"time"
 
 	"arb/internal/store/pgstore"
-	"arb/internal/testutil"
+	"arb/internal/testutil/storetest"
 )
 
 // newTestStore 创建测试 store（DSN-gated，ARB_TEST_PG_DSN）。
+// D-016：改走 SharedStore 包级共享池——28 处 per-test pgstore.New 池全不 Close，
+// go test ./... 并行期合计打爆 max_connections=100（too many clients 假红根因）。
 func newTestStore(t *testing.T) *pgstore.Store {
 	t.Helper()
-	dsn := testutil.TestDSN(t, "ARB_TEST_PG_DSN")
-	st, err := pgstore.New(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("pgstore.New: %v", err)
-	}
-	if err := st.Migrate(context.Background()); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
+	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
 	for _, tbl := range []string{"fin_trx_account", "fin_trx_txs", "fin_trx_witness", "fin_trx_vote_apr"} {
 		if _, err := st.Pool().Exec(context.Background(), "DELETE FROM "+tbl); err != nil {
 			t.Fatalf("cleanup %s: %v", tbl, err)

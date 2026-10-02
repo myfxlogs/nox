@@ -190,3 +190,21 @@ func ensureDB(dsn string) error {
 	ensuredDBs.Store(dbname, true)
 	return nil
 }
+
+// TicksPartitioner ticks 月分区创建能力（pgstore.Store.EnsureMonthPartition 同形；
+// 接口抽取避免 testutil→pgstore 反向依赖——pgstore 包内测试引 testutil 会成环）。
+type TicksPartitioner interface {
+	EnsureMonthPartition(ctx context.Context, year, month int) error
+}
+
+// EnsureTicksPartition InsertTicks 前置：补当前+前+后三月分区（迁移只建历史月，
+// 种子 ts 近月界时单月不够——D-016 机检修绿，23514 no partition 根因修复）。
+func EnsureTicksPartition(t *testing.T, s TicksPartitioner) {
+	t.Helper()
+	now := time.Now().UTC()
+	for _, m := range []time.Time{now.AddDate(0, -1, 0), now, now.AddDate(0, 1, 0)} {
+		if err := s.EnsureMonthPartition(context.Background(), m.Year(), int(m.Month())); err != nil {
+			t.Fatalf("ensure ticks partition %04d-%02d: %v", m.Year(), int(m.Month()), err)
+		}
+	}
+}

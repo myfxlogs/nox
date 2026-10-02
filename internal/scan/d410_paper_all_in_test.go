@@ -286,6 +286,7 @@ func TestD410_GuaranteedDoubleCex(t *testing.T) {
 // 禁 `_ =` 吞错——告警须真落库）。
 func TestD410_GuaranteedMissWarn(t *testing.T) {
 	s := d410Store(t)
+	s.SetAlertDedupWindow(time.Nanosecond) // D-592 同键抑制 30min 窗会吞第二轮同文 warn——本测试锚「每轮一条」需见两轮
 	ctx := context.Background()
 	d410SeedCombo(t, s, "ZZZUSD", "3001157:mt5", "ZZZUSDT", "okx:perp", false)
 	// D-500：venue 零产出=静默不 warn——keepAlive 脏行保 venue 非静默后测「真缺席」warn。
