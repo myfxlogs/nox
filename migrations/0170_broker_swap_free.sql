@@ -4,7 +4,6 @@
 -- taker_fee_bps NULL=未配置→econ/paper 皆 fail-closed（禁默认值）。
 -- 播种值=D-474a 钉稿 venue 官方费率页（binance spot 10/perp 4.5；okx 10/5；gate 10/5；mexc 5/2），
 -- 仅填 NULL 位不覆盖业主热改。
-BEGIN;
 ALTER TABLE broker_accounts ADD COLUMN IF NOT EXISTS swap_free BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE exchange_configs ADD COLUMN IF NOT EXISTS taker_fee_bps DOUBLE PRECISION;
 UPDATE broker_accounts SET swap_free = true WHERE venue = '3001157';
@@ -18,4 +17,3 @@ FROM (VALUES
 WHERE exchange_configs.venue = v.venue
   AND exchange_configs.venue_type = v.venue_type
   AND exchange_configs.taker_fee_bps IS NULL;
-COMMIT;
