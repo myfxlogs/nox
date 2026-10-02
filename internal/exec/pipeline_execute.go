@@ -210,6 +210,7 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 			log.Printf("[exec] position %d status update: %v", posID, err)
 		}
 	}
+	p.markOpenIncident(ctx, posID, status) // D-013 ③：LEGGED/FAILED → legged_unwind
 	// D-159 W1a R2：UNKNOWN 过渡写 uncertainty_reason（status=CLOSING，供前端/对账识别）。
 	// 识别 UNKNOWN position：status='CLOSING' AND uncertainty_reason IS NOT NULL
 	// 前端/对账用此条件区分正常平仓中 vs UNKNOWN 待确认

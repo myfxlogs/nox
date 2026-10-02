@@ -148,22 +148,24 @@ func (p *Pipeline) backfillCloseFromHistory(ctx context.Context, pos *pgstore.Po
 	filledQty := leg.EffectiveQty() // D-346：回填无独立 fill 回执，成交口径=OPEN 腿实际持仓量
 	// D-599 S1：历史回填腿同样落 fee——hp.Commission（计价币）×fx→USD（pos505 实证：
 	// cashflow −2.08 有值而腿 fee_usd NULL，费到了现金流却没到腿行）。
-	if err := p.store.CreatePositionLeg(ctx, &pgstore.PositionLeg{
+	closeLeg := &pgstore.PositionLeg{
 		PositionID: posID, LegNo: leg.LegNo, Phase: "CLOSE", AttemptNo: 1, Venue: leg.Venue, Account: leg.Account,
 		Symbol: leg.Symbol, Side: closeSide, Qty: leg.EffectiveQty(), PriceExpected: leg.PriceExpected, // D-311 R6：回填成交量口径
 		PriceActual: &closePrice, OrderID: leg.OrderID, Status: "FILLED",
 		FilledQty: &filledQty, AvgFillPrice: &closePrice, // D-346：488/489/490 验尸=CLOSE 腿恒 NULL
 		FeeUSD: positiveFeePtr(math.Abs(hp.Commission) * fx), // MT5 comm 负值口径→取绝对值（persistOpenLegs 同款）
-	}); err != nil && !errors.Is(err, pgstore.ErrTerminalState) {
+	}
+	if err := p.store.CreatePositionLeg(ctx, closeLeg); err != nil && !errors.Is(err, pgstore.ErrTerminalState) {
 		return fmt.Errorf("backfill CLOSE leg: %w", err)
 	}
-	if err := p.writeCloseCashflows(ctx, posID, leg.LegNo, leg.Venue, hp.Swap, hp.Commission, 0, fx); err != nil {
+	if err := p.writeCloseCashflows(ctx, posID, *closeLeg, hp.Swap, hp.Commission, 0, fx); err != nil {
 		return fmt.Errorf("backfill cashflow: %w", err)
 	}
 	return nil
 }
 
 // backfillMissingCashflows D-189 P0-4 S4-5：已有 CLOSE leg 但 cashflows 缺失 → 从权威历史补回。
+// D-013：commission 幂等键=leg:<close 腿 id>，须取该腿 CLOSE 行（OPEN 行 ID 不同键）。
 func (p *Pipeline) backfillMissingCashflows(ctx context.Context, posID int64, leg pgstore.PositionLeg, fx float64) error {
 	if p.pnlCalibrator == nil {
 		return nil
@@ -175,7 +177,16 @@ func (p *Pipeline) backfillMissingCashflows(ctx context.Context, posID int64, le
 	if hp.Swap == 0 && hp.Commission == 0 {
 		return nil
 	}
-	return p.writeCloseCashflows(ctx, posID, leg.LegNo, leg.Venue, hp.Swap, hp.Commission, 0, fx)
+	closes, err := p.store.ListPositionLegsByPhase(ctx, posID, "CLOSE")
+	if err != nil {
+		return fmt.Errorf("backfill close legs pos=%d: %w", posID, err)
+	}
+	for i := range closes {
+		if closes[i].LegNo == leg.LegNo {
+			return p.writeCloseCashflows(ctx, posID, closes[i], hp.Swap, hp.Commission, 0, fx)
+		}
+	}
+	return nil // 无 CLOSE 腿行→无从挂腿键，静默（主流程会走 closeBackfill 建新腿）
 }
 
 // ErrCloseInFlight D-407 S1：ResumeClose 单飞哨兵——同 posID 平仓执行中再次调用
