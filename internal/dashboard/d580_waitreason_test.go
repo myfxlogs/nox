@@ -25,6 +25,7 @@ func d580ReadySvc(t *testing.T) *Service {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
+	testutil.EnsureTicksPartition(t, st) // 全新席位库迁移只建历史月分区——闸 4 ticks now() 插入需当月（D-016 R1）
 	ctx := context.Background()
 	if _, err := st.Pool().Exec(ctx, `TRUNCATE xasset_allow_combos, autotrade_allow_rules,
 		fin_venue_symbol_flags, fin_venue_account_snapshot, positions, position_legs,
