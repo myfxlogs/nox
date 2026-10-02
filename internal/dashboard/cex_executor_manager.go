@@ -148,6 +148,10 @@ func (m *CexExecutorManager) sync(ctx context.Context) {
 		m.reg.Register(exe)
 		osqs[vk] = exe // D-421：订单级查单面同生命周期镜像
 		if m.OrderCache != nil {
+			// D-018 R1：maker 等待唤醒源——WS 订单帧写缓存即扇出（AwaitPostOnlyFill
+			// 订阅回读快照零 REST；订阅随等待生命周期，executor 只持闭包）。
+			cache := m.OrderCache
+			exe.SetOrderWake(cache.SubscribeEvents)
 			// D-450：包装事件缓存加速层——REST 仍是真相源（miss/stale 回落）。
 			osqs[vk] = exchange.NewCachedOrderStatusQuerier(vk, exe, m.OrderCache)
 			// D-569 包B S4：binance 确认桥接——PeekOrder 闭包注入执行器。
