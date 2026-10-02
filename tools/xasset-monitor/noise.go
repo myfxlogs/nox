@@ -48,14 +48,12 @@ func computeNoiseBps(vals []float64) *float64 {
 	return &half
 }
 
-// computeHarvestFloor D-341 T1：收割线=min(q25, entry−MIN_CAPTURE)；样本 <48 → NULL。
+// computeHarvestFloor D-341 T1 + D-014 ②：收割线=q25（MinCaptureBps 下限已删——
+// 收割决策迁移 econ.NetIfClosedNow，floor 列停止消费仅留兼容写入；样本 <48 → NULL）。
 // vals=同 pair trailing 全深 entry_spread 序列（含当前行）；q25=25 分位（线性插值）。
 const harvestMinSamples = 48
 
-// MinCaptureBps D-341 S1：收割线下限（≥2×往返成本 1.2-1.5bps，防带压缩期收割线贴入场线 churn）。
-const MinCaptureBps = 3.0
-
-func computeHarvestFloor(vals []float64, entrySpread float64) *float64 {
+func computeHarvestFloor(vals []float64) *float64 {
 	if len(vals) < harvestMinSamples {
 		return nil
 	}
@@ -74,11 +72,7 @@ func computeHarvestFloor(vals []float64, entrySpread float64) *float64 {
 		hi = lo
 	}
 	q25 := sorted[lo] + (pos-float64(lo))*(sorted[hi]-sorted[lo])
-	floor := q25
-	if cap := entrySpread - MinCaptureBps; cap < floor {
-		floor = cap
-	}
-	return &floor
+	return &q25
 }
 
 // trailingAllEntries D-341 S1：同 (pair,cexVenue,mtVenue) 全深 entry_spread 序列

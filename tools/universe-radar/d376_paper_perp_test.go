@@ -42,6 +42,14 @@ func d376PerpStore(t *testing.T) *pgstore.Store {
 		`TRUNCATE paper_spot_carry, carry_graduations RESTART IDENTITY`); err != nil {
 		t.Fatalf("TRUNCATE: %v", err)
 	}
+	// D-014：paper 费率源=exchange_configs.taker_fee_bps（venue 官方费率页钉值）。
+	if _, err := s.Pool().Exec(context.Background(), `
+		DELETE FROM exchange_configs WHERE venue IN ('binance','okx','gate','mexc');
+		INSERT INTO exchange_configs (venue, venue_type, label, api_key, api_secret, simulated, taker_fee_bps)
+		VALUES ('binance','perp','t','','',false,4.5),('okx','perp','t','','',false,5.0),
+		       ('gate','perp','t','','',false,5.0),('mexc','perp','t','','',false,2.0)`); err != nil {
+		t.Fatalf("seed taker fees: %v", err)
+	}
 	testutil.EnsureTicksPartition(t, s)
 	return s
 }

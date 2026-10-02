@@ -131,7 +131,7 @@ func runPair(ctx context.Context, st *pgstore.Store, p monitorPair, mtVenue stri
 	// D-423：样本按 (pair,cex_venue,mt_venue) 三元组隔离——跨 venue 簿统计=借用伪半径。
 	noiseBps := computeNoiseBps(append(trailing24hEntries(ctx, st.Pool(), pair, p.cexVenue, mtVenue), entrySpread))
 	// D-341 S1：harvest_floor=min(q25, entry−MIN_CAPTURE)——trailing 全深序列（含当前行）。
-	harvestFloor := computeHarvestFloor(append(trailingAllEntries(ctx, st.Pool(), pair, p.cexVenue, mtVenue), entrySpread), entrySpread)
+	harvestFloor := computeHarvestFloor(append(trailingAllEntries(ctx, st.Pool(), pair, p.cexVenue, mtVenue), entrySpread))
 
 	rec := &pgstore.XassetMonitor{
 		Pair:             pair,

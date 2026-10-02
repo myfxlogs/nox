@@ -7,12 +7,12 @@ import (
 )
 
 func TestD341_ComputeHarvestFloor(t *testing.T) {
-	// 序列 0..47（48 样本）铺满门槛：q25≈11.75；entry=20 → floor=min(11.75, 17)=11.75
+	// 序列 0..47（48 样本）铺满门槛：D-014 后 floor=q25≈11.75（MinCaptureBps 已删）
 	vals := make([]float64, 48)
 	for i := range vals {
 		vals[i] = float64(i)
 	}
-	got := computeHarvestFloor(vals, 20)
+	got := computeHarvestFloor(vals)
 	if got == nil {
 		t.Fatal("48 样本应出 floor")
 	}
@@ -21,13 +21,8 @@ func TestD341_ComputeHarvestFloor(t *testing.T) {
 	if *got < want-0.5 || *got > want+0.5 {
 		t.Errorf("q25 want ≈%.2f, got %.4f", want, *got)
 	}
-	// MIN_CAPTURE 下限：entry=10 < q25+3 → floor=entry−3=7
-	got2 := computeHarvestFloor(vals, 10)
-	if got2 == nil || *got2 != 7 {
-		t.Errorf("MIN_CAPTURE 下限 want 7, got %v", got2)
-	}
 	// T1 样本 <48 → NULL
-	if got := computeHarvestFloor(vals[:47], 20); got != nil {
+	if got := computeHarvestFloor(vals[:47]); got != nil {
 		t.Errorf("<48 样本 want NULL, got %v", *got)
 	}
 }
