@@ -12,77 +12,83 @@ import (
 	"arb/internal/store/pgstore"
 )
 
-// TestD423_HarvestNoCapture capture≤0 守卫：anchor=−12.39/floor=4.73，开仓时点
-// monitor 行 entry=4.26（498 形态：入场即跌穿 floor）→ capture=−0.47≤0 →
-// 不收割，reason=hold_anchor_nonneg?否——hold_no_capture；且观测行落同 decision。
-func TestD423_HarvestNoCapture(t *testing.T) {
+// TestD423_HarvestNetNegative D-014 R1 重写：NetIfClosedNow<0 永不收割（旧 capture 守卫退役）。
+// 498 形态锚：开仓即负——basis=−10 vs anchor=−12.39 → capture≈$0.99 → net≈−3.7 → 不收割，
+// eval 观测行落非收割 decision（非 hold_fee_amortize——该族已删）。
+func TestD423_HarvestNetNegative(t *testing.T) {
 	ctx := context.Background()
 	s := testAccumStore(t)
 	d311Truncate(t, s)
 	if _, err := s.Pool().Exec(ctx, `DELETE FROM position_evals`); err != nil {
 		t.Fatalf("clean evals: %v", err)
 	}
-	p := d404XAssetPos(t, s, d341fptr(-12.39), d341fptr(4.73))
-	// 498 实证行：开仓前 5min 行 entry=7.73（floor 源）+ 开仓后 14s 行 entry=4.26。
-	// 谓词 ts<=opened_at 选前 → capture=7.73−4.73=3>0 非本例；构造 capture≤0：
-	// 开仓前唯一行 entry=4.26 → capture=4.26−4.73=−0.47≤0。
-	d404SeedMonitorRowAt(t, s, p.OpenedAt.Add(-5*time.Second), 4.26, 4.73)
-	e := d404Engine(s, d404Quotes(time.Now().UTC(), 3996.0, 4000, 0)) // basis=−10 ≤ line 旧口径会误收
-	close, reason := e.harvestCheck(ctx, p)
-	if close || reason != "hold_no_capture" {
-		t.Fatalf("capture≤0 应 hold_no_capture 不收割（旧口径 line=12.86 误杀）, close=%v reason=%q", close, reason)
+	p := d014EconPos(t, s, 20.8)
+	if _, err := s.Pool().Exec(ctx, `UPDATE positions SET expected_entry_spread_bps=-12.39 WHERE id=$1`, p.ID); err != nil {
+		t.Fatalf("set anchor: %v", err)
 	}
-	// 观测链：xassetExitCheck 落 decision=hold_no_capture 行。
-	// 漂移/灾难闸抬阈隔离本票断言对象（fill=0 vs anchor −12.39 恒漂）。
+	rows, _ := s.ListPositions(ctx, "OPEN", 10, 0)
+	p = &rows[0]
+	e := d014EconEngine(s, d404Quotes(time.Now().UTC(), 3996.0, 4000, 0), true) // basis=-10
+	close, reason := e.harvestCheck(ctx, p)
+	if close {
+		t.Fatalf("net<0 永不收割, reason=%q", reason)
+	}
 	e.cfg.XAssetExecDriftBps = 100
 	e.cfg.XAssetDisasterBps = 1000
 	e.fundingBreach = map[int64]int{}
 	if close2, _ := e.xassetExitCheck(ctx, p); close2 {
-		t.Fatal("守卫域不应平仓")
+		t.Fatal("净负仓不应平仓")
 	}
 	var dec string
 	if err := s.Pool().QueryRow(ctx,
 		`SELECT decision FROM position_evals WHERE position_id=$1 ORDER BY evaluated_at DESC LIMIT 1`,
-		p.ID).Scan(&dec); err != nil || dec != "hold_no_capture" {
-		t.Fatalf("观测行 want hold_no_capture, got %q err=%v", dec, err)
+		p.ID).Scan(&dec); err != nil || dec == "harvest" || dec == "hold_fee_amortize" {
+		t.Fatalf("观测行不应 harvest/hold_fee_amortize, got %q err=%v", dec, err)
 	}
 }
 
-// TestD423_HarvestAnchorNonNeg anchor≥0 守卫（与 D-404 正锚改义互补锚）：reason 钉死。
+// TestD423_HarvestAnchorNonNeg anchor≥0：capture=(basis−anchor) 为负 → net<0 → 不收割
+// （旧守卫域 reason 退役，判定收敛到同一 NetIfClosedNow<0 语义）。
 func TestD423_HarvestAnchorNonNeg(t *testing.T) {
 	ctx := context.Background()
 	s := testAccumStore(t)
 	d311Truncate(t, s)
-	p := d404XAssetPos(t, s, d341fptr(12.39), d341fptr(4.73))
-	d404SeedMonitorRowAt(t, s, p.OpenedAt.Add(-5*time.Second), 7.73, 4.73)
-	e := d404Engine(s, d404Quotes(time.Now().UTC(), 4003.6, 4000, 0))
-	if close, reason := e.harvestCheck(ctx, p); close || reason != "hold_anchor_nonneg" {
-		t.Fatalf("anchor≥0 应 hold_anchor_nonneg, close=%v reason=%q", close, reason)
+	p := d014EconPos(t, s, 20.8)
+	if _, err := s.Pool().Exec(ctx, `UPDATE positions SET expected_entry_spread_bps=12.39 WHERE id=$1`, p.ID); err != nil {
+		t.Fatalf("set anchor: %v", err)
+	}
+	rows, _ := s.ListPositions(ctx, "OPEN", 10, 0)
+	p = &rows[0]
+	e := d014EconEngine(s, d404Quotes(time.Now().UTC(), 4003.6, 4000, 0), true)
+	if close, _ := e.harvestCheck(ctx, p); close {
+		t.Fatal("正锚域 capture<0 → net<0 不应收割")
 	}
 }
 
-// TestD423_VenueTripleIsolation 三元组隔离：只有 binance:perp×3001157:mt5 簿行，
-// okx:perp×3001157:mt5 仓不得命中——真腿路径 found=false → 代理路径同键 miss →
-// hold_no_monitor（红=pair-only 查询借用 binance 行算出假 capture）。
-func TestD423_VenueTripleIsolation(t *testing.T) {
+// TestD423_HarvestNoMonitorDependency D-014：收割判定不再消费 monitor 簿——
+// 同 pair 错 venue 行（binance）在场不影响 econ 判定（簿借用口子已随收割线退役关闭）。
+func TestD423_HarvestNoMonitorDependency(t *testing.T) {
 	ctx := context.Background()
 	s := testAccumStore(t)
 	d311Truncate(t, s)
-	p := d404XAssetPos(t, s, d341fptr(-12.39), d341fptr(4.73)) // 仓腿=okx:perp×3001157:mt5
-	// 同 pair 错 venue 行（binance:perp）——若查询不带 venue 即借用成功。
+	p := d014EconPos(t, s, 20.8)
+	if _, err := s.Pool().Exec(ctx, `UPDATE positions SET expected_entry_spread_bps=-12.39 WHERE id=$1`, p.ID); err != nil {
+		t.Fatalf("set anchor: %v", err)
+	}
 	if _, err := s.Pool().Exec(ctx, `
 		INSERT INTO fin_xasset_monitor (ts, pair, binance_bid, binance_ask, exness_bid, exness_ask,
 			entry_spread_bps, exit_spread_bps, entry_net_bps, funding_rate_8h, funding_annual_pct,
-			tracking_error_bps, equiv_annual_pct, noise_bps, harvest_floor_bps, cex_venue, mt_venue)
+			tracking_error_bps, equiv_annual_pct, noise_bps, harvest_floor_bps, cex_venue, mt_venue, src)
 		VALUES ($1, 'XPTUSDT-XPT', 4000, 4001, 3999, 4000, 7.73, 5, 3, 0.001, 21.9, 1.0, 24.9, 9, 4.73,
-			'binance:perp','3001157:mt5')`,
+			'binance:perp','3001157:mt5','live')`,
 		p.OpenedAt.Add(-5*time.Second)); err != nil {
 		t.Fatalf("seed wrong-venue monitor: %v", err)
 	}
-	e := d404Engine(s, d404Quotes(time.Now().UTC(), 3996.0, 4000, 0))
-	close, reason := e.harvestCheck(ctx, p)
-	if close || reason != "hold_no_monitor" {
-		t.Fatalf("okx 仓不得借 binance 簿：want hold_no_monitor, close=%v reason=%q", close, reason)
+	rows, _ := s.ListPositions(ctx, "OPEN", 10, 0)
+	p = &rows[0]
+	e := d014EconEngine(s, d404Quotes(time.Now().UTC(), 4016.0, 4000, 0), true) // basis=+40 → net≥carry×7
+	if close, reason := e.harvestCheck(ctx, p); !close || !containsSub(reason, "harvest") {
+		t.Fatalf("econ 收割不依赖 monitor 簿：want harvest, close=%v reason=%q", close, reason)
 	}
 }
 

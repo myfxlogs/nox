@@ -3,6 +3,7 @@ package autotrade
 // Config 自动交易引擎配置（D-261 S2 从 engine.go 搬出，纯声明搬家）。
 
 import (
+	"context"
 	"time"
 
 	"arb/internal/bus"
@@ -130,6 +131,13 @@ type Config struct {
 	// enrich 同源同值，禁第二费率口径）。
 	XAssetFeeHoldMaxDays float64
 	XAssetCexFeeBps      float64
+
+	// D-014：econ 经济闸。EconFeeBps=费率源解析器（venue 事实/exchange_configs，
+	// 未接线或缺源 → fail-closed 拒开/不收割）；MaxBreakevenDays=入场回本上限
+	// （≤0→缺省 3.0）；HarvestHorizonDays=收割比较地平（≤0→缺省 7）。
+	EconFeeBps         func(ctx context.Context, venueKey string) (float64, bool)
+	MaxBreakevenDays   float64
+	HarvestHorizonDays float64
 
 	// D-181 S2：probe 探测仓——无实测腿的首仓自动成为 probe，到期评估升级/拒绝。
 	// ProbeEnabled=false → 不标记不评估（向后兼容，默认 false）。

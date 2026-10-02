@@ -58,6 +58,7 @@ func d473Engine(s *pgstore.Store, spec *exec.XAssetComboAllowSpec) *Engine {
 		NotionalUSD: 100,
 		AllowVenues: map[string]bool{"okx:spot": true, "okx:perp": true},
 		CarryRegime: exec.CarryRegimeConfig{Window: 24 * time.Hour, FloorPct: 2.0, MinSamples: 12},
+		EconFeeBps:  d014FeeAny, // D-014 入场闸费率源（fake：CEX 5bps）
 	}
 	if spec != nil {
 		cfg.XAssetAllowCombos = []exec.XAssetComboAllowSpec{*spec}
@@ -86,7 +87,7 @@ var d473Spec = exec.XAssetComboAllowSpec{
 func TestD473_ComboGate_AllowlistPass(t *testing.T) {
 	s := d473Setup(t)
 	d006LiftCanonicalCap(t, s, "SKLUSDT")
-	d473SeedFunding(t, s, 5.0)
+	d473SeedFunding(t, s, 50.0) // D-014：回本闸需 carry 覆盖费用（$0.10 成本 → BE≈0.15d）
 	e := d473Engine(s, &d473Spec)
 	opp := d473Opp("okx:spot", "okx:perp")
 	e.handleOpportunity(context.Background(), opp, newComboAccumulator())
@@ -124,9 +125,9 @@ func TestD473_ReverseConfigRejected(t *testing.T) {
 	}
 }
 
-// S3 锚②：funding 全负 → FundingRegimeOK 非收入腿豁免语义（gate=true）——
-// 负 funding 机会在 detector 一线已被 MinNetAnnualized 拦掉，本闸只管「持久性」；
-// latest≤0 按既有判据放行（文档化断言，非漏洞修复面）。
+// S3 锚②（D-014 改写）：funding 全负 → CarryPerDay≤0 → 回本无期（BreakevenDays=+∞>3）
+// econ 入场闸拒开——旧「latest≤0 豁免放行产 intent」语义被 D-014 取代
+// （负 carry 的 FUNDING_HEDGE 本就无收益来源，拒开是设计终态）。
 func TestD473_RegimeGate_NegativeLatestNonIncomeExempt(t *testing.T) {
 	s := d473Setup(t)
 	d006LiftCanonicalCap(t, s, "SKLUSDT")
@@ -134,8 +135,8 @@ func TestD473_RegimeGate_NegativeLatestNonIncomeExempt(t *testing.T) {
 	e := d473Engine(s, &d473Spec)
 	opp := d473Opp("okx:spot", "okx:perp")
 	e.handleOpportunity(context.Background(), opp, newComboAccumulator())
-	if n := d330CountLogs(t, s, opp.ID); n != 1 {
-		t.Fatalf("latest≤0 非收入腿豁免放行（判据原文）应产 intent, got %d 行", n)
+	if n := d330CountLogs(t, s, opp.ID); n != 0 {
+		t.Fatalf("负 carry 应被 econ 回本闸拒开（CarryPerDay≤0→BE=+∞>3）, got %d 行", n)
 	}
 }
 

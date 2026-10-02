@@ -33,6 +33,12 @@ func d330Setup(t *testing.T) *pgstore.Store {
 	if _, err := s.Pool().Exec(ctx, `INSERT INTO autotrade_state (state, reason, halted_on) VALUES ('RUNNING', '', NULL)`); err != nil {
 		t.Fatalf("insert RUNNING: %v", err)
 	}
+	// D-014：MT 腿 carry 源——swap_free 账户（swap=0/account_flag）+佣金 0（venue 事实）。
+	if _, err := s.Pool().Exec(ctx, `
+		INSERT INTO broker_accounts (venue, venue_type, host, port, password, commission_bps, swap_free)
+		VALUES ('277842155','mt5','h',443,'p',0,true) ON CONFLICT (venue) DO UPDATE SET swap_free=true, commission_bps=0`); err != nil {
+		t.Fatalf("seed broker swap_free: %v", err)
+	}
 	if _, err := s.Pool().Exec(ctx, `
 		INSERT INTO fin_xasset_monitor (pair, binance_bid, binance_ask, exness_bid, exness_ask,
 			entry_spread_bps, exit_spread_bps, entry_net_bps, funding_rate_8h, funding_annual_pct,
@@ -110,6 +116,7 @@ func d330Engine(s *pgstore.Store, svc *dashboard.Service, qb *bus.QuoteBus, spec
 			AllowVenues:       map[string]bool{"277842155:mt5": true, "binance:perp": true},
 			XAssetAllowCombos: []exec.XAssetComboAllowSpec{spec},
 			CarryRegime:       exec.CarryRegimeConfig{Window: 24 * time.Hour, FloorPct: 2.0, MinSamples: 12},
+			EconFeeBps:        d014FeeAny, // D-014 入场闸费率源（测试 fake：MT 0/CEX 5bps）
 		},
 	}
 }
@@ -223,6 +230,14 @@ func TestD330_NormalPathIgnoresSpecMaxLongQty(t *testing.T) {
 	d006LiftCanonicalCap(t, s, "XAUUSD", "XAUUSDT")
 	d330RegimeHealthy(t, s)
 	ctx := context.Background()
+	// D-014：小名义（$1000）下 17%/yr 回本≈7.7d>3d 会被 econ 入场闸拦——
+	// 补一条最新 150%/yr funding fact 使回本≤3d（本测试目标是 qty 正常路径非回本闸）。
+	if _, err := s.Pool().Exec(ctx,
+		`INSERT INTO facts (kind, venue, symbol, value, unit, ts, src)
+		 VALUES ('funding','binance','XAUUSDT',150.0,'pct_annualized',$1,'d330test')`,
+		time.Now()); err != nil {
+		t.Fatalf("seed fresh funding: %v", err)
+	}
 	svc, qb := d330XAUService(1, 96.6) // perLot=$96.6 → qty=1000/96.6≈10.352 ≥ 0.01
 	spec := exec.XAssetComboAllowSpec{
 		CanonicalBuy: "XAUUSD", CanonicalSell: "XAUUSDT",

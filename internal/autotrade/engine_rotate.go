@@ -66,28 +66,17 @@ func (e *Engine) rotateCheck(ctx context.Context, p *pgstore.Position) (bool, *r
 	notional := *p.NotionalUSD
 
 	// ②curEV = curNetCarry%/yr + 剩余收敛折算（v1 必含，R0-N3：
-	// (|basis|−line)bps → 30d 摊年化；收割线同源 xassetTrueLegLine）。
+	// |basis|bps → 30d 摊年化）。D-014：收割线退役后剩余收敛=当前基差绝对值
+	// （收敛到平价的全部距离；报价缺/超龄 → fail-closed 不轮转）。
 	curCarry, ok := e.recalcXAssetNetCarry(ctx, p)
 	if !ok {
 		return fail("cur carry 数据缺（fail-closed）")
 	}
-	pairKey, cexVenue, mtVenue, _ := e.xassetPairKey(ctx, p) // D-423 三元组单算点
-	var curEV float64
-	if p.EntryHarvestFloorBps != nil && p.ExpectedEntrySpreadBps != nil &&
-		*p.ExpectedEntrySpreadBps != 0 && p.OpenedAt != nil {
-		basis, line, _, found, usable, _ := e.xassetTrueLegLine(ctx, p, pairKey, cexVenue, mtVenue)
-		if !found || !usable {
-			return fail("收割线/报价缺（剩余收敛不可算，fail-closed）")
-		}
-		remBps := math.Abs(basis) - line
-		if remBps < 0 {
-			remBps = 0 // 已收敛过线（理论不可达——harvest 应先触发）
-		}
-		// 剩余收敛 bps → %/yr：bps/1e4 比例 ×365/30 摊 ×100 → bps×365/3000。
-		curEV = curCarry + remBps*365.0/(rotateHorizonDays*100.0)
-	} else {
-		return fail("收割锚三要素缺（旧仓 floor 未落，fail-closed 不轮转）")
+	basis, quoteAge, okB := e.currentBasisBpsAged(p)
+	if !okB || (e.cfg.XAssetQuoteMaxAge > 0 && quoteAge > e.cfg.XAssetQuoteMaxAge) {
+		return fail("收敛报价缺/超龄（剩余收敛不可算，fail-closed）")
 	}
+	curEV := curCarry + math.Abs(basis)*365.0/(rotateHorizonDays*100.0)
 
 	// ③替代枚举：opportunities 新鲜行 × xasset_allow 白名单（授权键不带 EV——
 	// 数值永远取自 opportunities 行，combo 只做过滤；R0 五轮钉死）。

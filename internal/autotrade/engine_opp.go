@@ -214,6 +214,10 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 	if qty <= 0 {
 		return
 	}
+	// D-014 ①：econ 入场闸（实现在 engine_econ.go）——装配缺账/回本超阈 fail-closed 拒开。
+	if e.econEntryGate(ctx, opp, notionalUSD) {
+		return
+	}
 	// H4.2：qty 低于买腿最小步 → debug 跳过（品种适配事实，不产 intent 不落 REJECTED）
 	// venueSymbol 从 qbus 取（handleOpportunity 无直接 quote，用 opp.VenueBuy 查）
 	intentNotional := notionalUSD // D-367 S4：与 qty 同取有效值（intent 名义=qty 实额基准一致）

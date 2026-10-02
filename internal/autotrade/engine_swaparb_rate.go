@@ -14,11 +14,12 @@ import (
 	"arb/internal/usdnotional"
 )
 
-// swapRateSource 取数来源标识（决策日志带 swap_src=settled|spec|none）。
+// swapRateSource 取数来源标识（决策日志带 swap_src=account_flag|settled|spec|none）。
 const (
-	swapSrcSettled = "settled"
-	swapSrcSpec    = "spec"
-	swapSrcNone    = "none"
+	swapSrcAccountFlag = "account_flag" // D-014 S1：broker_accounts.swap_free 账号事实（swap=0）
+	swapSrcSettled     = "settled"
+	swapSrcSpec        = "spec"
+	swapSrcNone        = "none"
 )
 
 // settledWindow D-180 S2：实测样本回看窗口（7 天，包级 var 便于测试覆写）。
@@ -40,6 +41,12 @@ func (e *Engine) swapRateFor(ctx context.Context, venue, symbol, side string) (f
 	// D-256-A S1：non-settle venue guard——实测不结算=真值 0（非降级）。
 	if e.isNonSettleBareVenue(venue) {
 		return 0, swapSrcSettled
+	}
+	// D-014 S1：swap_free 账号事实优先（3001157 实免 swap，spec −1.28bps/天 多扣 4.7%/yr 实证）；
+	// 查询失败 → 落回正常链（保守：旗错失读比 spec 高估成本危害大，但 DB 故障不应静默放大盈利预估——
+	// 照常走 settled/spec 同既有的可用性语义）。
+	if free, err := e.store.BrokerSwapFree(ctx, venue); err == nil && free {
+		return 0, swapSrcAccountFlag
 	}
 	kind := fact.KindSwapSettledLong
 	if side != "BUY" {

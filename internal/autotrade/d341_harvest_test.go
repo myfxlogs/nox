@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"arb/internal/bus"
-	"arb/internal/fact"
 	"arb/internal/store/pgstore"
 )
 
@@ -15,85 +14,37 @@ func d341strptr(s string) *string { return &s }
 
 func d341fptr(f float64) *float64 { return &f }
 
-// d341XAssetOPEN D-311 fixture 形态 OPEN XASSET 仓（facts 健康防 carry 死亡先行）。
-func d341XAssetOPEN(t *testing.T, s *pgstore.Store, entryNoise *float64) *pgstore.Position {
-	t.Helper()
-	ctx := context.Background()
-	now := time.Now().UTC()
-	oppID := "XASSET_CARRY:XPTUSD:3001157:mt5:okx:perp"
-	if _, err := s.UpsertOpportunity(ctx, &pgstore.Opportunity{
-		ID: oppID, Type: "XASSET_CARRY", Canonical: "XPTUSD", CanonicalSell: d341strptr("XPTUSDT"),
-		VenueBuy: "3001157:mt5", VenueSell: "okx:perp", ExpiresAt: now.Add(time.Hour),
-	}); err != nil {
-		t.Fatalf("seed opp: %v", err)
-	}
-	if err := s.InsertFacts(ctx, []fact.Fact{
-		{Kind: fact.KindSwapLong, Venue: "3001157", Symbol: "XPTUSD", Value: 2.0, Unit: fact.UnitBpsDaily, Ts: now, Src: "t"},
-		{Kind: fact.KindFunding, Venue: "okx", Symbol: "XPTUSDT", Value: -10.0, Unit: fact.UnitPctAnnualized, Ts: now, Src: "t"},
-	}); err != nil {
-		t.Fatalf("seed facts: %v", err)
-	}
-	pos := &pgstore.Position{OpportunityID: oppID, Type: "XASSET_CARRY", Status: "OPEN", EntryNoiseBps: entryNoise, ExpectedEntrySpreadBps: d341fptr(-14.0)}
-	id, err := s.CreatePosition(ctx, pos)
-	if err != nil {
-		t.Fatalf("create pos: %v", err)
-	}
-	for _, l := range []pgstore.PositionLeg{
-		{LegNo: 1, Phase: "OPEN", Venue: "3001157:mt5", Symbol: "XPTUSD", Side: "BUY", Qty: 1, Status: "FILLED"},
-		{LegNo: 2, Phase: "OPEN", Venue: "okx:perp", Symbol: "XPT-USDT-SWAP", Side: "SELL", Qty: 1, Status: "FILLED"},
-	} {
-		l.PositionID = id
-		if err := s.CreatePositionLeg(ctx, &l); err != nil {
-			t.Fatalf("create leg: %v", err)
-		}
-	}
-	out, err := s.GetPosition(ctx, id)
-	if err != nil {
-		t.Fatalf("get pos: %v", err)
-	}
-	return out
-}
-
-// d341SeedMonitorRow monitor 行（entry/noise/floor 三值）。
-// D-423：venue 三元组显式写（fixture 仓腿=okx:perp×3001157:mt5）。
-func d341SeedMonitorRow(t *testing.T, s *pgstore.Store, entry, noise, floor *float64) {
-	t.Helper()
-	if _, err := s.Pool().Exec(context.Background(), `
-		INSERT INTO fin_xasset_monitor (pair, binance_bid, binance_ask, exness_bid, exness_ask,
-			entry_spread_bps, exit_spread_bps, entry_net_bps, funding_rate_8h, funding_annual_pct,
-			tracking_error_bps, equiv_annual_pct, noise_bps, harvest_floor_bps, cex_venue, mt_venue)
-		VALUES ('XPTUSDT-XPT', 4000, 4001, 3999, 4000, $1, 5, 3, 0.001, 21.9, 1.0, 24.9, $2, $3,
-			'okx:perp','3001157:mt5')`,
-		entry, noise, floor); err != nil {
-		t.Fatalf("seed monitor: %v", err)
-	}
-}
-
-// TestD341_HarvestTrigger T2：spread_now ≤ floor → CLOSE_TRIGGER harvest（不受 minHold——
-// opened_at=now 也立即触发）；floor NULL → 不触发。红=现无此出口。
+// TestD341_HarvestTrigger D-014 R1 重写：收割判据=econ.NetIfClosedNow≥0 ∧ ≥CarryPerDay×7
+// （floor 列停消费）。账底全量种子（d014EconPos：funding 20.8%/yr=$2.37/天，费 $2.08+
+// 退出估 ~$2.6）+ basis=+40bps → capture≈$21.8 → net≈$17.1≥16.6 → harvest；
+// 费率源缺 → 不收割（fail-closed）。
 func TestD341_HarvestTrigger(t *testing.T) {
+	ctx := context.Background()
 	s := testAccumStore(t)
 	d311Truncate(t, s)
-	ctx := context.Background()
-	// entry=5 ≤ floor=9 → harvest
-	// D-565 S1：代理路径判据=实时 basis≤floor（monitor entryBps 不再进决策）——
-	// 种双腿实时报价 basis=-9 ≤ floor=9 触发。
-	p := d341XAssetOPEN(t, s, d341fptr(10))
-	d341SeedMonitorRow(t, s, d341fptr(5), d341fptr(9), d341fptr(9))
-	e := &Engine{store: s, quotes: d404Quotes(time.Now().UTC(), 3996.4, 4000, 0), fundingBreach: map[int64]int{}, cfg: Config{SwapFactMaxAge: 2 * time.Hour, PerpFundMinHold: 24 * time.Hour, XAssetQuoteMaxAge: 5 * time.Minute}}
+	p := d014EconPos(t, s, 20.8)
+	if _, err := s.Pool().Exec(ctx, `UPDATE positions SET expected_entry_spread_bps=-12.39 WHERE id=$1`, p.ID); err != nil {
+		t.Fatalf("set anchor: %v", err)
+	}
+	rows, _ := s.ListPositions(ctx, "OPEN", 10, 0)
+	p = &rows[0]
+	e := &Engine{store: s, service: d014StubSvc{}, quotes: d404Quotes(time.Now().UTC(), 4016.0, 4000, 0),
+		fundingBreach: map[int64]int{}, cfg: Config{SwapFactMaxAge: 2 * time.Hour, PerpFundMinHold: 24 * time.Hour,
+			XAssetQuoteMaxAge: 5 * time.Minute, EconFeeBps: d014FeeFn(true), HarvestHorizonDays: 7.0}}
 	close, reason := e.checkExitCondition(ctx, p)
 	if !close || !containsSub(reason, "harvest") {
-		t.Errorf("spread≤floor 应 harvest 出口, close=%v reason=%q", close, reason)
+		t.Errorf("net≥carry×7 应 harvest 出口, close=%v reason=%q", close, reason)
 	}
 
-	// floor NULL → 不触发（回退 carry/stop 链）
+	// 费率源缺 → harvestCheck hold_econ 不收割（其余退出闸同判于链上，本轮断言 harvest 链不触发）
 	s2 := testAccumStore(t)
 	d311Truncate(t, s2)
-	p2 := d341XAssetOPEN(t, s2, nil)
-	d341SeedMonitorRow(t, s2, d341fptr(5), d341fptr(9), nil)
-	e2 := &Engine{store: s2, quotes: d404Quotes(time.Now().UTC(), 3996.4, 4000, 0), fundingBreach: map[int64]int{}, cfg: Config{SwapFactMaxAge: 2 * time.Hour, PerpFundMinHold: 24 * time.Hour, XAssetQuoteMaxAge: 5 * time.Minute}}
-	if close2, reason2 := e2.checkExitCondition(ctx, p2); close2 && containsSub(reason2, "harvest") {
-		t.Errorf("floor NULL 不应 harvest, reason=%q", reason2)
+	p2 := d014EconPos(t, s2, 20.8)
+	e2 := &Engine{store: s2, service: d014StubSvc{}, quotes: d404Quotes(time.Now().UTC(), 4016.0, 4000, 0),
+		fundingBreach: map[int64]int{}, cfg: Config{SwapFactMaxAge: 2 * time.Hour, PerpFundMinHold: 24 * time.Hour,
+			XAssetQuoteMaxAge: 5 * time.Minute, EconFeeBps: d014FeeFn(false), HarvestHorizonDays: 7.0}}
+	if close2, reason2 := e2.harvestCheck(ctx, p2); close2 {
+		t.Errorf("费率源缺不应 harvest, reason=%q", reason2)
 	}
 }
 

@@ -38,18 +38,8 @@ func (e *Engine) xassetExitCheck(ctx context.Context, p *pgstore.Position) (bool
 	if !shouldClose {
 		shouldHarvest, harvestReason = e.harvestCheck(ctx, p)
 	}
-	// D-409 S1：收割线命中后追加费用摊销门槛（仅真腿路径 anchor<0 域；净负+carry活+
-	// 摊平有望 → 延迟收割落 hold_fee_amortize；放行时 detail 标记位并入 reason）。
-	var feeHoldDetail string
-	if shouldHarvest {
-		pairKey, cexVenue, mtVenue, _ := e.xassetPairKey(ctx, p) // opp 缺时三元组空；gate 内 monitor 行查询自然 miss → legacy_path
-		if hold, d := e.feeAmortizeGate(ctx, p, pairKey, cexVenue, mtVenue); hold {
-			shouldHarvest = false
-			feeHoldDetail = d
-		} else if d != "" {
-			harvestReason += "; fee_gate:" + d
-		}
-	}
+	// D-014 ②：feeAmortizeGate 已删——econ.NetIfClosedNow 直接含全账费用，
+	// 净负永不收割由 harvestCheck 内部判定承担（eval 行不再出现 hold_fee_amortize）。
 	shouldDrift, driftReason := false, ""
 	if !shouldClose && !shouldHarvest {
 		shouldDrift, driftReason = e.execDriftCheck(ctx, p)
@@ -60,9 +50,8 @@ func (e *Engine) xassetExitCheck(ctx context.Context, p *pgstore.Position) (bool
 		shouldDisaster, disasterReason, stale, staleAge = e.disasterCheckXAsset(ctx, p)
 	}
 	// D-406 S1：轮转第五闸（链尾——四闸全过且非 stale 才评；先保命再优化）。
-	// D-409：feeHold 延迟中不评轮转——收割意图在场，轮转出局会抵消摊销等待。
 	var rot *rotateOutcome
-	if !shouldClose && !shouldHarvest && !shouldDrift && !shouldDisaster && !stale && feeHoldDetail == "" {
+	if !shouldClose && !shouldHarvest && !shouldDrift && !shouldDisaster && !stale {
 		_, rot = e.rotateCheck(ctx, p) // triggered 在 rotateCheck 内置位
 	}
 
@@ -74,8 +63,7 @@ func (e *Engine) xassetExitCheck(ctx context.Context, p *pgstore.Position) (bool
 		drift: shouldDrift, driftReason: driftReason,
 		disaster: shouldDisaster, disasterReason: disasterReason,
 		stale: stale, staleAge: staleAge,
-		rotate:  rot,
-		feeHold: feeHoldDetail,
+		rotate: rot,
 	})
 
 	if shouldClose {
@@ -111,9 +99,6 @@ type xassetEvalOutcome struct {
 	staleAge         time.Duration
 	// rotate D-406：第五闸结果（nil=本轮未评——前四闸已触发/stale）。
 	rotate *rotateOutcome
-	// feeHold D-409：收割线命中但费用摊销门槛延迟（非空=detail 落行，
-	// decision=hold_fee_amortize；同时 as 延迟时钟首行锚）。
-	feeHold string
 }
 
 // recordXAssetEval D-377 S2：落观测行。basis=currentBasisBps 同函数复用（公式单点；
@@ -140,13 +125,6 @@ func (e *Engine) recordXAssetEval(ctx context.Context, p *pgstore.Position, out 
 			out.staleAge.Round(time.Second), e.cfg.XAssetQuoteMaxAge, fmtDisasterBand(e.cfg.XAssetDisasterBps, e.cfg.XAssetDisasterNoiseMult, p.EntryNoiseBps))
 	case out.disaster:
 		decision, detail = "disaster", out.disasterReason
-	case out.feeHold != "":
-		// D-409：收割线命中但全账净额为负且摊平有望 → 延迟收割观测行
-		// （首行 evaluated_at=延迟时钟起点，FirstFeeAmortizeEvalAt 重构）。
-		decision, detail = "hold_fee_amortize", out.feeHold
-	case strings.HasPrefix(out.harvestReason, "hold_"):
-		// D-423：收割线守卫域观测（hold_no_capture/hold_anchor_nonneg/hold_no_monitor）。
-		decision, detail = out.harvestReason, fmtDisasterBand(e.cfg.XAssetDisasterBps, e.cfg.XAssetDisasterNoiseMult, p.EntryNoiseBps)
 	case !basisOK:
 		decision, detail = "fail_closed:no_basis", fmtDisasterBand(e.cfg.XAssetDisasterBps, e.cfg.XAssetDisasterNoiseMult, p.EntryNoiseBps)
 	case p.ExpectedEntrySpreadBps == nil:
@@ -158,6 +136,10 @@ func (e *Engine) recordXAssetEval(ctx context.Context, p *pgstore.Position, out 
 	case out.rotate != nil:
 		// D-406：轮转评了未触发 → hold_rotate_check（detail 含 alt/cur/cost 三值+拦阻因）。
 		decision, detail = "hold_rotate_check", out.rotate.detail
+	case strings.HasPrefix(out.harvestReason, "hold_"):
+		// D-014：hold_econ 为收割 fail-closed 留痕——仅当其余判定均未出结论时显影
+		// （econ 缺账=「不收割」，不阻断轮转/漂移/灾难等退出判定的观测优先级）。
+		decision, detail = out.harvestReason, fmtDisasterBand(e.cfg.XAssetDisasterBps, e.cfg.XAssetDisasterNoiseMult, p.EntryNoiseBps)
 	default:
 		decision, detail = "hold", fmtDisasterBand(e.cfg.XAssetDisasterBps, e.cfg.XAssetDisasterNoiseMult, p.EntryNoiseBps)
 	}
