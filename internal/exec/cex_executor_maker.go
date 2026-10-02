@@ -1,5 +1,5 @@
-// cex_executor_maker.go —— D-018 阶段a：post-only 限价发单 + 撤单终查（三所）。
-// 等待/唤醒见 cex_executor_maker_wait.go（R1 拆分：本文件=发单与撤单，≤300 行纪律）。
+// cex_executor_maker.go —— D-018 阶段a：post-only 限价发单（三所）。
+// 等待/撤单终查见 cex_executor_maker_wait.go（拆分：本文件=发单，≤300 行契约）。
 // maker 只挂 CEX perp 腿（spot/MT 不适用——MT 无 post-only 语义，spot 腿恒 taker）。
 // 只挂不追：post-only 被拒（会吃单）=终态错误，不重试；撤单终查双证——撤后必须以查单
 // 终态回填成交部分（cancel 响应 executedQty 不足信，D-421 同源教训）。
@@ -224,54 +224,3 @@ func (e *CEXExecutor) gatePlacePostOnly(ctx context.Context, o Order, px float64
 }
 
 // --- 撤单终查 + 等待 ---
-
-// PostOnlyCancel 撤单并回查终态。返回 Fill=撤单时刻的累计成交（Qty=基础币；0=干净撤，
-// 必 maker 口径）。撤单请求本身失败（网络/超时）=错误上抛——订单可能仍在挂/已成交，
-// 上层按 UNKNOWN 语义处理（禁假设未成交）。
-func (e *CEXExecutor) PostOnlyCancel(ctx context.Context, o Order, orderID string) (Fill, error) {
-	switch e.venue {
-	case "okx":
-		instID := o.Symbol
-		if !strings.HasSuffix(instID, "-SWAP") {
-			instID = instID + "-SWAP"
-		}
-		if err := e.okxCancelOrder(ctx, instID, orderID); err != nil {
-			return Fill{}, fmt.Errorf("okx cancel: %w", err)
-		}
-	case "binance":
-		if err := e.binanceCancelOrder(ctx, o.Symbol, orderID); err != nil {
-			// -2011=订单不存在/已终态——不视为撤单失败，落入下方终查判定真实状态。
-			if !strings.Contains(err.Error(), "-2011") {
-				return Fill{}, fmt.Errorf("binance cancel: %w", err)
-			}
-		}
-	case "gate":
-		endpoint := "/futures/usdt/orders/" + orderID
-		if err := e.gateSignedDelete(ctx, endpoint, "/api/v4"+endpoint); err != nil {
-			return Fill{}, fmt.Errorf("gate cancel: %w", err)
-		}
-	default:
-		return Fill{}, fmt.Errorf("cancel: unsupported venue %q", e.venue)
-	}
-	return e.postOnlyCancelResult(ctx, o, orderID)
-}
-
-// postOnlyCancelResult 撤后终查：QueryOrderStatus 统一态 → Fill（canceled/filled 均终态
-// 回填已成交量；live/partial=撤单未生效，短窗重查后仍非终态=错误上抛——禁假设未成交）。
-func (e *CEXExecutor) postOnlyCancelResult(ctx context.Context, o Order, orderID string) (Fill, error) {
-	deadline := time.Now().Add(3 * time.Second)
-	for {
-		state, qty, px, fee, err := e.QueryOrderStatus(ctx, orderID, o.ClientOrderID, o.Symbol)
-		if err != nil {
-			return Fill{}, fmt.Errorf("post-cancel status: %w", err)
-		}
-		switch state {
-		case "canceled", "filled":
-			return Fill{OrderID: orderID, Price: px, Qty: qty, FeeUSD: fee, FillKind: "maker", Ts: time.Now()}, nil
-		}
-		if time.Now().After(deadline) {
-			return Fill{}, fmt.Errorf("post-cancel status=%s 未达终态（撤单未生效？）fail-closed", state)
-		}
-		time.Sleep(200 * time.Millisecond)
-	}
-}

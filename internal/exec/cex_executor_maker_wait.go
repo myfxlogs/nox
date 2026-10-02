@@ -1,4 +1,4 @@
-// cex_executor_maker_wait.go —— D-018 R1：post-only 成交等待（事件驱动，D-004 数据流正道）。
+// cex_executor_maker_wait.go —— D-018：post-only 成交等待与撤单终查（事件驱动，D-004 数据流正道）。
 // 唤醒源=OrderEventCache 订阅扇出（私有 WS 订单帧写缓存即拍 venueKey）；收到拍回读快照
 // （PeekOrder 闭包→三所归一 eval，零 REST）终判。等待期间零 REST 查单；REST 只出现在
 // 超时撤单终查一次（PostOnlyCancel）。未接线 orderWake=退化裸等 ctx（超时 T 撤单终查
@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"arb/internal/signutil"
@@ -26,45 +27,63 @@ func (e *CEXExecutor) SetOrderWake(sub func() (<-chan string, func())) {
 // maker 预期终态（撤单/被撤），与确认链 eval 不同：零成交不告警不报错；live/partial/
 // 快照 miss → (zero, false, nil) 继续等。
 func (e *CEXExecutor) makerSnapFill(o Order, orderID string) (Fill, bool, error) {
-	var fill Fill
+	var state string
+	var qty, px, fee float64
+	var have bool
 	switch e.venue {
 	case "okx":
-		if e.okxOrderLookup == nil {
-			return Fill{}, false, nil
-		}
-		sn, ok := e.okxOrderLookup(orderID)
-		if !ok {
-			return Fill{}, false, nil
-		}
-		fill = Fill{OrderID: orderID, Price: sn.AvgPx, Qty: sn.AccFillQty, FeeUSD: sn.FeeUSD, Ts: time.Now(), FillKind: "maker"}
+		state, qty, px, fee, have = e.okxOrderLookupSafe3(orderID)
 	case "binance":
-		if e.binanceOrderLookup == nil {
-			return Fill{}, false, nil
-		}
-		sn, ok := e.binanceOrderLookup(orderID)
-		if !ok {
-			return Fill{}, false, nil
-		}
-		fill = Fill{OrderID: orderID, Price: sn.AvgPx, Qty: sn.AccFillQty, FeeUSD: sn.FeeUSD, Ts: time.Now(), FillKind: "maker"}
+		state, qty, px, fee, have = e.binanceOrderLookupSafe3(orderID)
 	case "gate":
-		if e.gateOrderLookup == nil {
-			return Fill{}, false, nil
-		}
-		sn, ok := e.gateOrderLookup(orderID)
-		if !ok {
-			return Fill{}, false, nil
-		}
-		fill = Fill{OrderID: orderID, Price: sn.AvgPx, Qty: sn.AccFillQty, FeeUSD: sn.FeeUSD, Ts: time.Now(), FillKind: "maker"}
-	}
-	if fill.Qty <= 0 && fill.Price <= 0 {
-		// 快照残缺（帧早于撮合回填）——视为未终态继续等。
+		state, qty, px, fee, have = e.gateOrderLookupSafe3(orderID)
+	default:
 		return Fill{}, false, nil
 	}
-	if fill.Qty > 0 {
-		return fill, true, nil
+	if !have {
+		return Fill{}, false, nil // 快照 miss=帧未到，继续等
 	}
-	// 键在而 qty=0=canceled 干净终态（快照键只在事件写时存在）。
-	return Fill{OrderID: orderID, FillKind: "maker", Ts: time.Now()}, true, nil
+	snap := OKXOrderSnap{State: state, AccFillQty: qty, AvgPx: px, FeeUSD: fee}
+	switch snap.State {
+	case "canceled":
+		// D-018 阶段b②：State 显式早退——qty=0 干净终态 / qty>0 撤前部分成交，
+		// 均即刻终判（秒撤帧到达不等 T）。
+		fill := Fill{OrderID: orderID, Price: snap.AvgPx, Qty: snap.AccFillQty, FeeUSD: snap.FeeUSD, Ts: time.Now(), FillKind: "maker"}
+		return fill, true, nil
+	case "filled":
+		if snap.AccFillQty > 0 && snap.AvgPx > 0 {
+			return Fill{OrderID: orderID, Price: snap.AvgPx, Qty: snap.AccFillQty, FeeUSD: snap.FeeUSD, Ts: time.Now(), FillKind: "maker"}, true, nil
+		}
+		return Fill{}, false, nil // 字段残缺（帧早于撮合回填）继续等
+	default: // live / partial / 空态——未终态继续等
+		return Fill{}, false, nil
+	}
+}
+
+// okxOrderLookupSafe3 / binanceOrderLookupSafe3 / gateOrderLookupSafe3：lookup 空安全
+// 包装（归一五元组 State/qty/px/fee/have——三所 snap 同构展开，零单位换算：events 层已归一基础币）。
+func (e *CEXExecutor) okxOrderLookupSafe3(orderID string) (string, float64, float64, float64, bool) {
+	if e.okxOrderLookup == nil {
+		return "", 0, 0, 0, false
+	}
+	sn, ok := e.okxOrderLookup(orderID)
+	return sn.State, sn.AccFillQty, sn.AvgPx, sn.FeeUSD, ok
+}
+
+func (e *CEXExecutor) binanceOrderLookupSafe3(orderID string) (string, float64, float64, float64, bool) {
+	if e.binanceOrderLookup == nil {
+		return "", 0, 0, 0, false
+	}
+	sn, ok := e.binanceOrderLookup(orderID)
+	return sn.State, sn.AccFillQty, sn.AvgPx, sn.FeeUSD, ok
+}
+
+func (e *CEXExecutor) gateOrderLookupSafe3(orderID string) (string, float64, float64, float64, bool) {
+	if e.gateOrderLookup == nil {
+		return "", 0, 0, 0, false
+	}
+	sn, ok := e.gateOrderLookup(orderID)
+	return sn.State, sn.AccFillQty, sn.AvgPx, sn.FeeUSD, ok
 }
 
 // AwaitPostOnlyFill 事件驱动等待 post-only 成交至终态或 ctx 到期（=超时 T）。
@@ -100,6 +119,87 @@ func (e *CEXExecutor) AwaitPostOnlyFill(ctx context.Context, o Order, orderID st
 		case _, ok := <-wake:
 			if !ok {
 				wake = nil // 订阅被取消方关闭 → 退化裸等
+			}
+		}
+	}
+}
+
+// PostOnlyCancel 撤单并回查终态。返回 Fill=撤单时刻的累计成交（Qty=基础币；0=干净撤，
+// 必 maker 口径）。撤单请求本身失败（网络/超时）=错误上抛——订单可能仍在挂/已成交，
+// 上层按 UNKNOWN 语义处理（禁假设未成交）。
+func (e *CEXExecutor) PostOnlyCancel(ctx context.Context, o Order, orderID string) (Fill, error) {
+	switch e.venue {
+	case "okx":
+		instID := o.Symbol
+		if !strings.HasSuffix(instID, "-SWAP") {
+			instID = instID + "-SWAP"
+		}
+		if err := e.okxCancelOrder(ctx, instID, orderID); err != nil {
+			return Fill{}, fmt.Errorf("okx cancel: %w", err)
+		}
+	case "binance":
+		if err := e.binanceCancelOrder(ctx, o.Symbol, orderID); err != nil {
+			// -2011=订单不存在/已终态——不视为撤单失败，落入下方终查判定真实状态。
+			if !strings.Contains(err.Error(), "-2011") {
+				return Fill{}, fmt.Errorf("binance cancel: %w", err)
+			}
+		}
+	case "gate":
+		endpoint := "/futures/usdt/orders/" + orderID
+		if err := e.gateSignedDelete(ctx, endpoint, "/api/v4"+endpoint); err != nil {
+			return Fill{}, fmt.Errorf("gate cancel: %w", err)
+		}
+	default:
+		return Fill{}, fmt.Errorf("cancel: unsupported venue %q", e.venue)
+	}
+	return e.postOnlyCancelResult(ctx, o, orderID)
+}
+
+// postOnlyCancelResult D-018 阶段b③：撤后终查=事件唤醒优先（撤单令 WS canceled 帧
+// 写缓存→订阅拍即刻回读快照零 REST 判定）+ 单次 REST 兜底（帧丢失/未接线）——
+// 替代旧 200ms REST 循环（D-004 同源修正）。live/partial 仍非终态=错误上抛
+// （禁假设未成交，fail-closed）。
+func (e *CEXExecutor) postOnlyCancelResult(ctx context.Context, o Order, orderID string) (Fill, error) {
+	// 事件唤醒窗（2s）：撤单帧通常 ms 级到达。
+	wctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	fill, done := e.awaitCancelSnap(wctx, o, orderID)
+	if done {
+		return fill, nil
+	}
+	// 单次 REST 兜底（帧丢失/orderWake 未接线）。
+	state, qty, px, fee, err := e.QueryOrderStatus(ctx, orderID, o.ClientOrderID, o.Symbol)
+	if err != nil {
+		return Fill{}, fmt.Errorf("post-cancel status: %w", err)
+	}
+	switch state {
+	case "canceled", "filled":
+		return Fill{OrderID: orderID, Price: px, Qty: qty, FeeUSD: fee, FillKind: "maker", Ts: time.Now()}, nil
+	}
+	return Fill{}, fmt.Errorf("post-cancel status=%s 未达终态（撤单未生效？）fail-closed", state)
+}
+
+// awaitCancelSnap 撤后事件唤醒等待（纯事件，无节拍）：先查一次快照（撤单响应与帧写入
+// 竞态窗）→ 订阅拍到达即回读终判。未接线/窗尽无终态=done=false 交单次 REST 兜底。
+func (e *CEXExecutor) awaitCancelSnap(ctx context.Context, o Order, orderID string) (Fill, bool) {
+	if e.orderWake == nil {
+		return Fill{}, false
+	}
+	if fill, done, _ := e.makerSnapFill(o, orderID); done {
+		return fill, true
+	}
+	wake, cancelSub := e.orderWake()
+	defer cancelSub()
+	for {
+		select {
+		case <-ctx.Done():
+			return Fill{}, false
+		case _, ok := <-wake:
+			if !ok {
+				return Fill{}, false
+			}
+			if fill, done, _ := e.makerSnapFill(o, orderID); done {
+				return fill, true
 			}
 		}
 	}
