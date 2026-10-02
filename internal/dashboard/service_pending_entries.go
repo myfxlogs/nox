@@ -105,6 +105,12 @@ func (s *Service) evalPendingRow(ctx context.Context, c pgstore.XAssetComboAdmin
 	row.MarginBudgetUsd = c.MarginUSD
 	if n, fB, fS, kB, kS, ok := s.comboLegNotional(ctx, c); ok {
 		row.LegNotionalUsd = &n
+		// D-014 ④：回本估同源——econ 单结构（注入未接线/缺账→留空不猜）。
+		if s.econEntryFn != nil {
+			if be, ok2 := s.econEntryFn(ctx, c.VenueBuy, c.VenueSell, c.CanonicalBuy, c.CanonicalSell, n); ok2 {
+				row.EstBreakevenDays = &be
+			}
+		}
 		if kB {
 			m := n * fB
 			row.BuyLegMarginUsd = &m

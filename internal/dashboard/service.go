@@ -11,6 +11,7 @@ import (
 	"arb/internal/capitalview"
 	"arb/internal/collect/cmc"
 	"arb/internal/config"
+	"arb/internal/econ"
 	"arb/internal/exec"
 	"arb/internal/position"
 	"arb/internal/reconcile"
@@ -252,6 +253,9 @@ type Service struct {
 	carryMu         sync.Mutex
 	carryLive       map[int64]float64
 	carryLiveAt     map[int64]time.Time
+	// D-014 ④：econ 同源注入（autotrade 装配面）。nil=未接线 → 回本列缺省（诚实空态）。
+	econPosFn   func(ctx context.Context, posID int64) (econ.Snapshot, error)
+	econEntryFn func(ctx context.Context, venueBuy, venueSell, canonBuy, canonSell string, legNotionalUSD float64) (float64, bool)
 	// D-249 S3：scheduler kick 注入（on-open 触发采集补轮；nil=未接线→handler no-op）。
 	kickFn func(string)
 	// D-252：CMC 净值阈值告警状态机（nil=未接线→flushCMCWatch 不检查）。

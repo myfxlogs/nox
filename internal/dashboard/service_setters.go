@@ -8,6 +8,7 @@ import (
 
 	"arb/internal/bus"
 	"arb/internal/collect/cmc"
+	"arb/internal/econ"
 	"arb/internal/exec"
 	"arb/internal/keydomain"
 	"arb/internal/position"
@@ -206,4 +207,11 @@ func (s *Service) aliasForVenueKey(venueKey string) string {
 // 与退出判定 recalcXAssetNetCarry 同源；engine 后建故 setter 注入——装配锚见 d340 测试+setup 注入行）。
 func (s *Service) SetXAssetCarryLive(fn func(ctx context.Context, posID int64) (float64, bool)) {
 	s.xassetCarryLive = fn
+}
+
+// SetEconSources D-014 ④：注入 econ 同源——posFn=持仓快照（回本列与 harvestCheck 共一
+// 结构）；entryFn=候选入场回本天数（pending_entries 回本估）。nil=未接线→缺省显示。
+func (s *Service) SetEconSources(posFn func(ctx context.Context, posID int64) (econ.Snapshot, error),
+	entryFn func(ctx context.Context, venueBuy, venueSell, canonBuy, canonSell string, legNotionalUSD float64) (float64, bool)) {
+	s.econPosFn, s.econEntryFn = posFn, entryFn
 }

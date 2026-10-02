@@ -143,20 +143,33 @@ func enrichOne(ctx context.Context, s *Service, pb *v1.Position, legs []pgstore.
 		// 开仓即定不随行情漂；剩余洞=本−息差实收；≤0 → 0（已回本）；>0 → 剩余÷当前日息率。
 		// 净盈亏列口径不动（回答「现在平仓亏多少」，与回本互补）。
 		if carryTypes[pb.Type] {
-			holdDays := holdDaysToNow(pb, openLegs, now)
-			if holdDays > 0 {
-				dailySwap := swapAccrued / holdDays
-				if dailySwap > 0 {
-					entryCost := s.entryFrictionUSD(ctx, pb, openLegs, brokerSnap)
-					remaining := entryCost - swapAccrued
+			if s.econPosFn != nil {
+				// D-014 ④：回本列=econ 同源——剩余洞=(Entry+ExitEst−Accrued)÷CarryPerDay。
+				// 装配缺账 → 缺省显示（fail-closed 诚实空态，不回落旧口径）。
+				if snap, err := s.econPosFn(ctx, pb.Id); err == nil && snap.CarryPerDayUSD > 0 {
+					remaining := snap.EntryCostUSD + snap.ExitCostEstUSD - snap.AccruedUSD
 					var breakEven float64
 					if remaining > 0 {
-						breakEven = remaining / dailySwap
+						breakEven = remaining / snap.CarryPerDayUSD
 					}
-					// remaining ≤ 0 → breakEven=0（已回本）；dailySwap>0 保证除法安全
 					pb.BreakEvenDays = &breakEven
 				}
-				// dailySwap ≤ 0 → 缺省（付息型或不结算，不显示回本周期）
+			} else {
+				holdDays := holdDaysToNow(pb, openLegs, now)
+				if holdDays > 0 {
+					dailySwap := swapAccrued / holdDays
+					if dailySwap > 0 {
+						entryCost := s.entryFrictionUSD(ctx, pb, openLegs, brokerSnap)
+						remaining := entryCost - swapAccrued
+						var breakEven float64
+						if remaining > 0 {
+							breakEven = remaining / dailySwap
+						}
+						// remaining ≤ 0 → breakEven=0（已回本）；dailySwap>0 保证除法安全
+						pb.BreakEvenDays = &breakEven
+					}
+					// dailySwap ≤ 0 → 缺省（付息型或不结算，不显示回本周期）
+				}
 			}
 		}
 	}
