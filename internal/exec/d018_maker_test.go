@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/fact"
 )
 
 // fakeMakerExecutor PostOnlyPlacer 可脚本化 fake。
@@ -240,30 +241,77 @@ func TestD018_MakerBudgetExhausted(t *testing.T) {
 	}
 }
 
-// TestD018_MakerPlanEligibility 适格性判定：未配置 fail-closed / 双 perp 不启用 /
-// 非 perp 组合不启用 / 恰一 perp 适格（MT×perp 与 spot×perp 同形）。
+// TestD018_MakerPlanEligibility 适格性判定：未配置 fail-closed / 双 perp 无 funding fact
+// 回落既有（不启用）/ 非 perp 组合不启用 / 恰一 perp 适格（MT×perp 与 spot×perp 同形）。
 func TestD018_MakerPlanEligibility(t *testing.T) {
+	ctx := context.Background()
 	p := &Pipeline{}
-	if _, ok := p.makerPlan(d018Legs); ok {
+	if _, ok := p.makerPlan(ctx, "PERP:BTCUSDT:okx:spot:gate:perp:x", d018Legs); ok {
 		t.Fatal("策略未配置（timeout/max=0）必须 fail-closed 不启用")
 	}
 	p.SetMakerPolicy(time.Second, 5)
-	if _, ok := p.makerPlan([]LegSpec{
+	if _, ok := p.makerPlan(ctx, "SWAPARB:BTCUSDT:okx:perp:binance:perp:x", []LegSpec{
 		{VenueKey: "okx:perp"}, {VenueKey: "binance:perp"},
 	}); ok {
-		t.Fatal("双 perp（SWAPARB）v1 不启用 maker 序")
+		t.Fatal("双 perp 无 funding fact（无 store）应回落既有市价路径")
 	}
-	if _, ok := p.makerPlan([]LegSpec{
+	if _, ok := p.makerPlan(ctx, "PERP:BTCUSDT:okx:spot:binance:spot:x", []LegSpec{
 		{VenueKey: "okx:spot"}, {VenueKey: "binance:spot"},
 	}); ok {
 		t.Fatal("无 perp 腿不适格")
 	}
-	if plan, ok := p.makerPlan([]LegSpec{
+	if plan, ok := p.makerPlan(ctx, "PERP:BTCUSDT:1279967:mt5:okx:perp:x", []LegSpec{
 		{VenueKey: "1279967:mt5"}, {VenueKey: "okx:perp"},
 	}); !ok || plan.makerIdx != 1 {
 		t.Fatalf("MT×perp 应适格 maker=perp 腿(idx=1)，got ok=%v plan=%+v", ok, plan)
 	}
-	if plan, ok := p.makerPlan(d018Legs); !ok || plan.makerIdx != 0 {
+	if plan, ok := p.makerPlan(ctx, "PERP:BTCUSDT:gate:perp:okx:spot:x", d018Legs); !ok || plan.makerIdx != 0 {
 		t.Fatalf("spot×perp 应适格 maker=perp 腿(idx=0)，got ok=%v plan=%+v", ok, plan)
+	}
+}
+
+// TestD018_SwapArbMakerLegByFunding 后段②：双 perp（SWAPARB）maker 腿=funding 净收
+// 更高一侧。gate funding +10%/yr → SELL 腿 carry +10；okx funding −20%/yr → BUY 腿
+// carry +20（多头收负费率）→ maker=okx 腿(idx1)。gate 改 −5 → SELL 腿 carry −5 <+20 不变；
+// 再验反向：okx +30 → BUY carry −30 <gate +10 → maker=gate 腿(idx0)。
+// funding fact 缺 → 不适格回落既有市价。
+func TestD018_SwapArbMakerLegByFunding(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE positions, position_legs, opportunities, alerts, facts RESTART IDENTITY CASCADE`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	now := time.Now()
+	if err := s.InsertFacts(ctx, []fact.Fact{
+		{Kind: fact.KindFunding, Venue: "gate", Symbol: "BTCUSDT", Value: 10.0, Unit: fact.UnitPctAnnualized, Ts: now, Src: "gate"},
+		{Kind: fact.KindFunding, Venue: "okx", Symbol: "BTCUSDT", Value: -20.0, Unit: fact.UnitPctAnnualized, Ts: now, Src: "okx"},
+	}); err != nil {
+		t.Fatalf("insert facts: %v", err)
+	}
+	legs := []LegSpec{
+		{VenueKey: "gate:perp", VenueSymbol: "BTC_USDT", Side: "SELL", Qty: 1, PriceExpected: 100.0},
+		{VenueKey: "okx:perp", VenueSymbol: "BTC-USDT-SWAP", Side: "BUY", Qty: 1, PriceExpected: 100.2},
+	}
+	p := &Pipeline{store: s}
+	p.SetMakerPolicy(time.Second, 5)
+	opp := "SWAPARB:BTCUSDT:okx:perp:gate:perp:d018-mk"
+	if plan, ok := p.makerPlan(ctx, opp, legs); !ok || plan.makerIdx != 1 {
+		t.Fatalf("okx funding −20 → BUY 腿 carry +20 更优应挂 maker(idx=1)，got ok=%v plan=%+v", ok, plan)
+	}
+	// 反向：okx funding 正且高于 gate → BUY 腿付 funding 劣，SELL 腿挂 maker。
+	if err := s.InsertFacts(ctx, []fact.Fact{
+		{Kind: fact.KindFunding, Venue: "okx", Symbol: "BTCUSDT", Value: 30.0, Unit: fact.UnitPctAnnualized, Ts: now.Add(time.Second), Src: "okx"},
+	}); err != nil {
+		t.Fatalf("insert facts2: %v", err)
+	}
+	if plan, ok := p.makerPlan(ctx, opp, legs); !ok || plan.makerIdx != 0 {
+		t.Fatalf("okx funding +30 → BUY 腿付 30 劣于 gate SELL +10，maker 应 idx=0，got ok=%v plan=%+v", ok, plan)
+	}
+	// funding fact 缺一腿 → 不启用（既有路径）。
+	if _, err := s.Pool().Exec(ctx, `DELETE FROM facts WHERE venue='okx'`); err != nil {
+		t.Fatalf("del fact: %v", err)
+	}
+	if _, ok := p.makerPlan(ctx, opp, legs); ok {
+		t.Fatal("okx funding fact 缺应回落既有市价路径（ok=false）")
 	}
 }

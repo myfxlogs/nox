@@ -2,8 +2,8 @@
 // 设计（盈利闭环审计.md D-018 行）：maker 只挂一条腿（CEX perp 腿），另一腿在首腿成交
 // 回报后立即 taker；首腿超时 T 未成交 → 撤单、零持仓（全腿 FAILED→position FAILED，零敞口）；
 // 不 chase（挂单即拒/撤=attempt 终态，重挂=引擎新 Execute）；每 opp 每小时 ≤N 次 attempt。
-// 适格组合 v1=恰一条 CEX perp 腿（MT×perp=XASSET_CARRY / spot×perp=FUNDING_HEDGE）；
-// 双 perp（SWAPARB）maker 腿选择属设计分叉，v1 不启用走既有市价路径。
+// 适格组合=双腿中含 CEX perp 腿：恰一条（MT×perp=XASSET_CARRY / spot×perp=FUNDING_HEDGE）
+// 即该腿 maker；双 perp（SWAPARB）后段起启用——funding 更优一侧挂 maker（swapArbMakerIdx）。
 // 配置键缺（timeout/maxPerHour 任一 ≤0）=fail-closed maker 停用。既有 LEGGED unwind
 // 链路（autoFlattenLEGGED/UNKNOWN CLOSING）原样复用，零新路径。
 package exec
@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"arb/internal/bus"
+	"arb/internal/fact"
 	"arb/internal/keydomain"
 	"arb/internal/safego"
 )
@@ -35,10 +36,12 @@ type PostOnlyPlacer interface {
 // makerPlan 单腿 maker 序计划（makerIdx=post-only 腿下标）。
 type makerPlan struct{ makerIdx int }
 
-// makerPlan 判定：策略已配置（fail-closed）+ 双腿 + 恰一条 CEX perp 腿（该腿=maker）。
+// makerPlan 判定：策略已配置（fail-closed）+ 双腿 + ≥1 CEX perp 腿。
+// 恰一条 perp 腿 → 该腿 maker；双 perp（SWAPARB 形态）→ funding 更优一侧挂 maker
+// （D-018 后段②；funding fact 缺 → ok=false 走既有市价路径，保守不猜）。
 // 执行器是否实现 PostOnlyPlacer 在 executeMakerLeg 兜底（不适格=腿 FAILED，此处不查
 // registry——预检环已证明 executor 存在）。
-func (p *Pipeline) makerPlan(legs []LegSpec) (makerPlan, bool) {
+func (p *Pipeline) makerPlan(ctx context.Context, opportunityID string, legs []LegSpec) (makerPlan, bool) {
 	if p.makerTimeout <= 0 || p.makerMaxPerHour <= 0 {
 		return makerPlan{}, false // 配置缺=fail-closed（设计钉死）
 	}
@@ -46,18 +49,76 @@ func (p *Pipeline) makerPlan(legs []LegSpec) (makerPlan, bool) {
 		return makerPlan{}, false
 	}
 	mi := -1
+	perpCount := 0
 	for i, l := range legs {
 		if keydomain.IsType(l.VenueKey, "perp") {
-			if mi >= 0 {
-				return makerPlan{}, false // 双 perp（SWAPARB）v1 不启用
-			}
 			mi = i
+			perpCount++
 		}
 	}
 	if mi < 0 {
 		return makerPlan{}, false
 	}
+	if perpCount == 2 {
+		var ok bool
+		if mi, ok = p.swapArbMakerIdx(ctx, opportunityID, legs); !ok {
+			return makerPlan{}, false
+		}
+	}
 	return makerPlan{makerIdx: mi}, true
+}
+
+// swapArbMakerIdx D-018 后段②：双 perp（SWAPARB 形态）maker 腿=持有净 funding 收入
+// 更高的一侧（SELL 腿收 +rate / BUY 腿付 −rate，与 autotrade.xassetLegCarryAnnual 同口径）。
+// 买腿 canonical=机会 canonical，卖腿=canonical_sell（缺→同 canonical，SWAPARB 常形）。
+// 机会查败/任一侧 funding fact 缺 → ok=false（回落既有双腿市价路径，非拒执行）。
+func (p *Pipeline) swapArbMakerIdx(ctx context.Context, opportunityID string, legs []LegSpec) (int, bool) {
+	buyCanonical := canonicalFromOppID(opportunityID)
+	if buyCanonical == "" || p.store == nil {
+		return -1, false
+	}
+	sellCanonical := buyCanonical
+	opp, err := p.store.GetOpportunity(ctx, opportunityID)
+	if err != nil {
+		return -1, false
+	}
+	if opp != nil && opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
+		sellCanonical = *opp.CanonicalSell
+	}
+	best, bestCarry := -1, 0.0
+	for i, l := range legs {
+		canonical := buyCanonical
+		if l.Side != "BUY" {
+			canonical = sellCanonical
+		}
+		rate, ok := p.fundingRate(ctx, keydomain.BareOf(l.VenueKey), canonical)
+		if !ok {
+			return -1, false
+		}
+		carry := rate
+		if l.Side == "BUY" {
+			carry = -rate
+		}
+		if best < 0 || carry > bestCarry {
+			best, bestCarry = i, carry
+		}
+	}
+	return best, best >= 0
+}
+
+// fundingRate 取 (bareVenue, canonical) 最新 funding 年化 %（与 autotrade
+// fundingRateForVenue 同读口径：LatestFacts venue="" 全 venue 后按 bare 匹配）。
+func (p *Pipeline) fundingRate(ctx context.Context, bareVenue, canonical string) (float64, bool) {
+	facts, err := p.store.LatestFacts(ctx, fact.KindFunding, "", canonical)
+	if err != nil {
+		return 0, false
+	}
+	for _, f := range facts {
+		if f.Venue == bareVenue {
+			return f.Value, true
+		}
+	}
+	return 0, false
 }
 
 // makerBudgetAllow 每 opp 每小时 attempt 预算（进程内；重启复位=预算从严重置，可接受）。

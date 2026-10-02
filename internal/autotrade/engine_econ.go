@@ -23,6 +23,22 @@ func (e *Engine) econFeeBps(ctx context.Context, venueKey string) (float64, bool
 	return e.cfg.EconFeeBps(ctx, venueKey)
 }
 
+// econExitFeeBps D-018 后段①：腿退出费率按 fill_kind 选——maker 腿取 maker 费率
+// （exchange_configs.maker_fee_bps），缺源回落 taker 保守；taker/NULL/未知 → taker。
+// taker 本身缺 → ok=false fail-closed（与 D-014 同规）。
+func (e *Engine) econExitFeeBps(ctx context.Context, l pgstore.PositionLeg) (float64, bool) {
+	bps, ok := e.econFeeBps(ctx, l.Venue)
+	if !ok {
+		return 0, false
+	}
+	if l.FillKind != nil && *l.FillKind == "maker" && e.cfg.EconMakerFeeBps != nil {
+		if mbps, mok := e.cfg.EconMakerFeeBps(ctx, l.Venue); mok {
+			bps = mbps
+		}
+	}
+	return bps, true
+}
+
 // legNotionalUSD 腿名义 USD = EffectiveQty × USDPerLotForLeg（报价/规格缺→false fail-closed）。
 func (e *Engine) legNotionalUSD(canonical string, l pgstore.PositionLeg) (float64, bool) {
 	if e.service == nil {
@@ -107,7 +123,7 @@ func (e *Engine) econSnapshot(ctx context.Context, p *pgstore.Position) (econ.Sn
 			}
 			exitEst += hs
 		} else {
-			bps, ok := e.econFeeBps(ctx, l.Venue)
+			bps, ok := e.econExitFeeBps(ctx, l) // D-018 后段①：fill_kind=maker 腿取 maker 费率
 			if !ok {
 				return snap, fmt.Errorf("taker 费率缺 %s（venue 事实/配置均无）", l.Venue)
 			}
