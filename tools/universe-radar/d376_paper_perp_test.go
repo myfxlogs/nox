@@ -10,6 +10,7 @@ import (
 
 	"arb/internal/fact"
 	"arb/internal/store/pgstore"
+	"arb/internal/testutil"
 	"arb/internal/testutil/storetest"
 )
 
@@ -41,6 +42,7 @@ func d376PerpStore(t *testing.T) *pgstore.Store {
 		`TRUNCATE paper_spot_carry, carry_graduations RESTART IDENTITY`); err != nil {
 		t.Fatalf("TRUNCATE: %v", err)
 	}
+	testutil.EnsureTicksPartition(t, s)
 	return s
 }
 

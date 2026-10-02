@@ -52,6 +52,7 @@ func TestD591_RadarBinanceReads(t *testing.T) {
 	if err := s.Migrate(ctx); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
+	testutil.EnsureTicksPartition(t, s)
 	pool := s.Pool()
 	for _, q := range []string{
 		`INSERT INTO ticks (ts, venue, venue_type, symbol, bid, ask) VALUES (now(), 'binance', 'perp', 'D591BTUSDT', 4360, 4362)`,
@@ -127,6 +128,7 @@ func TestD591R3_RadarGateReadsDB(t *testing.T) {
 	if err := s.Migrate(ctx); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
+	testutil.EnsureTicksPartition(t, s)
 	pool := s.Pool()
 	for _, q := range []string{
 		`INSERT INTO ticks (ts, venue, venue_type, symbol, bid, ask) VALUES (now(), 'gate', 'perp', 'D591GTUSDT', 4360, 4360)`,
@@ -178,6 +180,7 @@ func TestD591R3_RadarOkxCacheAndDB(t *testing.T) {
 	if err := s.Migrate(ctx); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
+	testutil.EnsureTicksPartition(t, s)
 	pool := s.Pool()
 	for _, q := range []string{
 		`INSERT INTO facts (kind, venue, symbol, value, unit, ts, src) VALUES ('funding', 'okx', 'D591OCUSDT', 10.95, 'pct_annualized', now(), 'okx_ws_v5')`,

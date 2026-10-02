@@ -26,6 +26,7 @@ func d335r1Store(t *testing.T) *pgstore.Store {
 	if _, err := s.Pool().Exec(ctx, `TRUNCATE fin_xasset_monitor, ticks`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
+	testutil.EnsureTicksPartition(t, s)
 	return s
 }
 
