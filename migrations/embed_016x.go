@@ -11,4 +11,6 @@ var (
 	MT5ExposureCap6000SQL string // D-007 S2：MT5 两户 venue 敞口闸 $6000（业主批）
 	//go:embed 0166_margin_semantics.sql
 	MarginSemanticsSQL string // D-010：margin_usd 列+互斥约束；venue cap 语义翻保证金
+	//go:embed 0167_leg_external_status.sql
+	LegExternalStatusSQL string // D-015 ②：position_legs.status 增 EXTERNAL（venue 推送平仓事件落「外部已平」标记）
 )

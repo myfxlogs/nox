@@ -55,6 +55,9 @@ type OKXPrivateHooks struct {
 	OnOrderPush   func()
 	// OnLiqWarning D-566 包B S7：liquidation-warning 帧 → 三键透传（缺席空串）。
 	OnLiqWarning func(instID, posSide, mgnRatio string)
+	// OnPositionClosed D-015 ②（R1）：positions 帧 pos=0 行=该 instId+posSide 已平
+	// （手动/强平/ADL 同形态）→ 装配层落 CLOSE EXTERNAL 标记 + recon.Kick。
+	OnPositionClosed func(venueKey, instID, posSide string)
 }
 
 // OKXPrivateWS OKX 私有 channel 采集器（D-469a 扩四频道：account/balance_and_position/

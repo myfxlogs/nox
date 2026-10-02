@@ -83,6 +83,10 @@ func (o *OKXPrivateWS) onPositions(data []map[string]any) {
 			return
 		}
 		if pos == 0 {
+			// D-015 ②（R1）：pos=0 行=该腿已平（手动/强平/ADL 同形态）→ recon.Kick 叫醒对账。
+			if o.hooks.OnPositionClosed != nil {
+				o.hooks.OnPositionClosed(o.venueKey, str(it["instId"]), str(it["posSide"]))
+			}
 			continue
 		}
 		avgPx, perr := f64z(str(it["avgPx"]))
