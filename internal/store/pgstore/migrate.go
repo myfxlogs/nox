@@ -163,6 +163,7 @@ var migrationFiles = []struct {
 	{167, migrations.LegExternalStatusSQL},             // D-015 ②：position_legs.status 增 EXTERNAL
 	{168, migrations.D013LedgerTruthSQL},               // D-013：partial 合法化 + #497–507 账本回填
 	{169, migrations.LegFillKindSQL},                   // D-018 阶段a：position_legs.fill_kind（maker|taker；168 已被 D-013 占用）
+	{170, migrations.BrokerSwapFreeSQL},                // D-014 S1：broker_accounts.swap_free 旗标列 + taker_fee_bps（R1：169 撞号改 170）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

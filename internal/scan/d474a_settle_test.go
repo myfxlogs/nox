@@ -146,7 +146,7 @@ func TestD474A_SwapLeg(t *testing.T) {
 // TestD474A_SpotCarryFees S2：spot carry 四腿费（SKLUSDT 审计锚 ~$2.9 量级，
 // 显著高于旧约 $1.0 单腿往返估）。
 func TestD474A_SpotCarryFees(t *testing.T) {
-	f := paperSpotCarryFeeUSD("binance", 1000)
+	f := paperSpotCarryFeeUSD(context.Background(), newFakeMtmPaperStore(), "binance", 1000)
 	if f == nil {
 		t.Fatal("binance 已覆盖不应 nil")
 	}
@@ -157,11 +157,11 @@ func TestD474A_SpotCarryFees(t *testing.T) {
 		t.Fatalf("binance 四笔费=%v 异常高", *f)
 	}
 	// 未覆盖 venue → nil（非 0）
-	if g := paperSpotCarryFeeUSD("kraken", 1000); g != nil {
+	if g := paperSpotCarryFeeUSD(context.Background(), newFakeMtmPaperStore(), "kraken", 1000); g != nil {
 		t.Fatalf("未覆盖 venue 应 nil 得 %v", *g)
 	}
 	// perp×perp 双腿
-	if h := PaperPerpPerpFeeUSD("binance", "okx", 1000); h == nil || *h < 1.0 {
+	if h := PaperPerpPerpFeeUSD(context.Background(), newFakeMtmPaperStore(), "binance", "okx", 1000); h == nil || *h < 1.0 {
 		t.Fatalf("perp×perp 费=%v", h)
 	}
 }

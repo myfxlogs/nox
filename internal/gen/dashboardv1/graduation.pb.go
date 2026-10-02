@@ -1022,6 +1022,8 @@ type XAssetPendingEntryRow struct {
 	BuyLegMarginUsd  *float64 `protobuf:"fixed64,20,opt,name=buy_leg_margin_usd,json=buyLegMarginUsd,proto3,oneof" json:"buy_leg_margin_usd,omitempty"`    // 买腿保证金占用=N×fracB
 	SellLegMarginUsd *float64 `protobuf:"fixed64,21,opt,name=sell_leg_margin_usd,json=sellLegMarginUsd,proto3,oneof" json:"sell_leg_margin_usd,omitempty"` // 卖腿保证金占用=N×fracS
 	MinMarginUsd     *float64 `protobuf:"fixed64,22,opt,name=min_margin_usd,json=minMarginUsd,proto3,oneof" json:"min_margin_usd,omitempty"`               // 最少需保证金=max(腿minStep名义)×(fracB+fracS)
+	// D-014：econ 同源入场回本估（EntryCost+ExitEst)/CarryPerDay；缺账→NULL 诚实缺。
+	EstBreakevenDays *float64 `protobuf:"fixed64,23,opt,name=est_breakeven_days,json=estBreakevenDays,proto3,oneof" json:"est_breakeven_days,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -1206,6 +1208,13 @@ func (x *XAssetPendingEntryRow) GetSellLegMarginUsd() float64 {
 func (x *XAssetPendingEntryRow) GetMinMarginUsd() float64 {
 	if x != nil && x.MinMarginUsd != nil {
 		return *x.MinMarginUsd
+	}
+	return 0
+}
+
+func (x *XAssetPendingEntryRow) GetEstBreakevenDays() float64 {
+	if x != nil && x.EstBreakevenDays != nil {
+		return *x.EstBreakevenDays
 	}
 	return 0
 }
@@ -3171,7 +3180,7 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x04rows\x18\x01 \x03(\v2%.arb.dashboard.v1.XAssetAllowComboRowR\x04rows\"!\n" +
 	"\x1fListXAssetPendingEntriesRequest\"_\n" +
 	" ListXAssetPendingEntriesResponse\x12;\n" +
-	"\x04rows\x18\x01 \x03(\v2'.arb.dashboard.v1.XAssetPendingEntryRowR\x04rows\"\xbe\b\n" +
+	"\x04rows\x18\x01 \x03(\v2'.arb.dashboard.v1.XAssetPendingEntryRowR\x04rows\"\x88\t\n" +
 	"\x15XAssetPendingEntryRow\x12\x19\n" +
 	"\bcombo_id\x18\x01 \x01(\x03R\acomboId\x12\x1f\n" +
 	"\vcombo_label\x18\x02 \x01(\tR\n" +
@@ -3200,7 +3209,8 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x10leg_notional_usd\x18\x13 \x01(\x01H\x04R\x0elegNotionalUsd\x88\x01\x01\x120\n" +
 	"\x12buy_leg_margin_usd\x18\x14 \x01(\x01H\x05R\x0fbuyLegMarginUsd\x88\x01\x01\x122\n" +
 	"\x13sell_leg_margin_usd\x18\x15 \x01(\x01H\x06R\x10sellLegMarginUsd\x88\x01\x01\x12)\n" +
-	"\x0emin_margin_usd\x18\x16 \x01(\x01H\aR\fminMarginUsd\x88\x01\x01B\x13\n" +
+	"\x0emin_margin_usd\x18\x16 \x01(\x01H\aR\fminMarginUsd\x88\x01\x01\x121\n" +
+	"\x12est_breakeven_days\x18\x17 \x01(\x01H\bR\x10estBreakevenDays\x88\x01\x01B\x13\n" +
 	"\x11_wait_current_bpsB\x15\n" +
 	"\x13_wait_threshold_bpsB\x0f\n" +
 	"\r_wait_gap_bpsB\x14\n" +
@@ -3208,7 +3218,8 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"\x11_leg_notional_usdB\x15\n" +
 	"\x13_buy_leg_margin_usdB\x16\n" +
 	"\x14_sell_leg_margin_usdB\x11\n" +
-	"\x0f_min_margin_usd\"\x86\x04\n" +
+	"\x0f_min_margin_usdB\x15\n" +
+	"\x13_est_breakeven_days\"\x86\x04\n" +
 	"\x1dUpsertXAssetAllowComboRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12#\n" +
 	"\rcanonical_buy\x18\x02 \x01(\tR\fcanonicalBuy\x12\x1b\n" +

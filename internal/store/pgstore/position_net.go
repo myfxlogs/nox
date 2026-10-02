@@ -137,6 +137,16 @@ func (s *Store) PositionNetUSD(ctx context.Context, posID int64, pricePnlOverrid
 		 WHERE position_id=$1 AND kind IN ('funding','swap')`, posID).Scan(&nonComm); err != nil {
 		return 0, fmt.Errorf("pos=%d funding/swap cashflows: %w", posID, err)
 	}
+	comm, err := s.commissionCashflowsUSD(ctx, posID)
+	if err != nil {
+		return 0, err
+	}
+	return pricePnl + nonComm + comm, nil
+}
+
+// commissionCashflowsUSD D-014：commission 净额（负值）单源——PositionNetUSD 与
+// econ.EntryCostUSD 共用去重口径（腿键行存在则只计腿键，否则回落 legacy 全行）。
+func (s *Store) commissionCashflowsUSD(ctx context.Context, posID int64) (float64, error) {
 	var hasLegKeyed bool
 	if err := s.pool.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM position_cashflows
@@ -152,7 +162,19 @@ func (s *Store) PositionNetUSD(ctx context.Context, posID int64, pricePnlOverrid
 	if err := s.pool.QueryRow(ctx, commQ, posID).Scan(&comm); err != nil {
 		return 0, fmt.Errorf("pos=%d commission cashflows: %w", posID, err)
 	}
-	return pricePnl + nonComm + comm, nil
+	return comm, nil
+}
+
+// CommissionPaidUSD D-014：本仓已付手续费（正值=|Σcommission cashflows|），econ.EntryCostUSD 数据源。
+// hasRows=本仓存在任一 commission 行（区分「真零已付」与「D-013 前 legacy 无行」）。
+func (s *Store) CommissionPaidUSD(ctx context.Context, posID int64) (float64, bool, error) {
+	var n int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM position_cashflows WHERE position_id=$1 AND kind='commission'`, posID).Scan(&n); err != nil {
+		return 0, false, fmt.Errorf("pos=%d commission count: %w", posID, err)
+	}
+	comm, err := s.commissionCashflowsUSD(ctx, posID)
+	return -comm, n > 0, err
 }
 
 // EnsureLegCommissionCashflow D-013 ①：每条 FILLED/EXTERNAL 腿必有 commission 行。

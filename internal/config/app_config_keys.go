@@ -56,6 +56,8 @@ var appConfigKeys = map[string]AppCfgMeta{
 	"ARB_FUNDING_EXIT_NET_PCT":            f64(func(c *Config) *float64 { return &c.FundingExitNetPct }),
 	"ARB_FUNDING_HEDGE_MIN_NET_STORE":     f64(func(c *Config) *float64 { return &c.FundingHedgeMinNetStore }),
 	"ARB_FUNDING_MAX_BREAKEVEN_DAYS":      f64(func(c *Config) *float64 { return &c.FundingMaxBreakevenDays }),
+	"ARB_MAX_BREAKEVEN_DAYS":              f64(func(c *Config) *float64 { return &c.MaxBreakevenDays }),
+	"ARB_HARVEST_HORIZON_DAYS":            f64(func(c *Config) *float64 { return &c.HarvestHorizonDays }),
 	"ARB_FUNDING_MIN_NET_ANNUALIZED":      f64(func(c *Config) *float64 { return &c.FundingMinNetAnnualized }),
 	"ARB_GRAB_MIN_NET_ANNUALIZED":         f64(func(c *Config) *float64 { return &c.GrabMinNetAnnualized }),
 	"ARB_JUDGE_BALANCE_HKD":               f64(func(c *Config) *float64 { return &c.JudgeBalanceHKD }),

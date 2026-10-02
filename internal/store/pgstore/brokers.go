@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // ErrBrokerAccountNotFound venue 不存在于 broker_accounts（D-388 S0.2：UPDATE 0 行命中
@@ -36,6 +38,7 @@ type BrokerAccount struct {
 	Status        string // connected / failed / stopped
 	CommissionBps *float64
 	IsReal        *bool  // D-144 ① 三态：nil=未知（不配对）
+	SwapFree      bool   // D-014 S1：账号免 swap（true→carry 计算该 venue swap=0/account_flag，不回退 spec）
 	Website       string // D-157 V3：broker 官网（DB 存储，业主自助管理；空 = 未设置）
 	CreatedAt     time.Time
 }
@@ -54,7 +57,8 @@ func (s *Store) InsertBrokerAccount(ctx context.Context, a *BrokerAccount) error
 func (s *Store) ListBrokerAccounts(ctx context.Context) ([]BrokerAccount, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT venue, CASE venue_type WHEN 'mt4' THEN 0 ELSE 1 END AS platform, host, port,
-		       venue::bigint AS user_id, password, server, alias, status, commission_bps, is_real, created_at, website
+		       venue::bigint AS user_id, password, server, alias, status, commission_bps, is_real, created_at, website,
+		       COALESCE(swap_free, false)
 		FROM broker_accounts ORDER BY created_at
 	`)
 	if err != nil {
@@ -65,7 +69,7 @@ func (s *Store) ListBrokerAccounts(ctx context.Context) ([]BrokerAccount, error)
 	for rows.Next() {
 		var a BrokerAccount
 		if err := rows.Scan(&a.Venue, &a.Platform, &a.Host, &a.Port, &a.User, &a.Password,
-			&a.Server, &a.Alias, &a.Status, &a.CommissionBps, &a.IsReal, &a.CreatedAt, &a.Website); err != nil {
+			&a.Server, &a.Alias, &a.Status, &a.CommissionBps, &a.IsReal, &a.CreatedAt, &a.Website, &a.SwapFree); err != nil {
 			return nil, err
 		}
 		out = append(out, a)
@@ -78,10 +82,11 @@ func (s *Store) GetBrokerAccount(ctx context.Context, venue string) (*BrokerAcco
 	var a BrokerAccount
 	err := s.pool.QueryRow(ctx, `
 		SELECT venue, CASE venue_type WHEN 'mt4' THEN 0 ELSE 1 END AS platform, host, port,
-		       venue::bigint AS user_id, password, server, alias, status, commission_bps, is_real, created_at, website
+		       venue::bigint AS user_id, password, server, alias, status, commission_bps, is_real, created_at, website,
+		       COALESCE(swap_free, false)
 		FROM broker_accounts WHERE venue = $1
 	`, venue).Scan(&a.Venue, &a.Platform, &a.Host, &a.Port, &a.User, &a.Password,
-		&a.Server, &a.Alias, &a.Status, &a.CommissionBps, &a.IsReal, &a.CreatedAt, &a.Website)
+		&a.Server, &a.Alias, &a.Status, &a.CommissionBps, &a.IsReal, &a.CreatedAt, &a.Website, &a.SwapFree)
 	if err != nil {
 		return nil, err
 	}
@@ -199,4 +204,34 @@ func (s *Store) ListBrokerAccountStatuses(ctx context.Context) (map[string]strin
 		m[venue] = status
 	}
 	return m, rows.Err()
+}
+
+// BrokerSwapFree D-014 S1：账号免 swap 旗（venue=bare 账号号；无行→false）。
+// 查询失败 fail-closed 返回 error（调用方回退正常 swap 链=保守高估成本）。
+func (s *Store) BrokerSwapFree(ctx context.Context, venue string) (bool, error) {
+	var free bool
+	err := s.pool.QueryRow(ctx,
+		`SELECT COALESCE(swap_free, false) FROM broker_accounts WHERE venue = $1`, venue).Scan(&free)
+	if err == pgx.ErrNoRows {
+		return false, nil
+	}
+	return free, err
+}
+
+// BrokerCommissionBps D-014 S2：账号真实佣金（bps/腿；econ 费率源=venue 事实）。
+// 无行/NULL → ok=false fail-closed（禁回退 config 默认——缺费率即拒开）。
+func (s *Store) BrokerCommissionBps(ctx context.Context, venue string) (float64, bool, error) {
+	var v *float64
+	err := s.pool.QueryRow(ctx,
+		`SELECT commission_bps FROM broker_accounts WHERE venue = $1`, venue).Scan(&v)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, false, nil
+		}
+		return 0, false, err
+	}
+	if v == nil {
+		return 0, false, nil
+	}
+	return *v, true, nil
 }
