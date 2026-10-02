@@ -41,8 +41,6 @@ type Gate struct {
 	breaker   map[string]*rejectEntry
 	breakerMu sync.Mutex
 	swapArb   *atomic.Pointer[swapArbComboSnapshot] // D-515 S5：表热读快照共享指针（nil=回退 cfg）
-	// D-015 ①：reconciler venue 平仓通道降级态读口（nil=未接线只查残腿半闸）。
-	degradedVenueFn func() []string
 }
 
 // NewGate 创建门禁。

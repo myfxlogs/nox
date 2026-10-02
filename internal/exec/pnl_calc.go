@@ -55,13 +55,14 @@ func (p *Pipeline) legPricePnL(leg pgstore.PositionLeg, closePrice, qty, fx floa
 
 // sumClosedLegsPnL D-408 S1：realized_pnl=持久化 CLOSE 腿汇总（单一事实源=落库腿数据，
 // 初平/重试/回填三路径统一——循环内累加会漏前次已平腿与回填腿，498 实证 −1.42→−12.36）。
-// 每个 OPEN+FILLED 腿的全部 CLOSE FILLED 腿按各自 FilledQty 计（跨尝试部分成交天然覆盖，
-// D-311 R6 同单位）；CLOSE 腿缺 PriceActual → 该腿计 0 + critical alert（宁缺勿虚增）；
-// 无 CLOSE 腿的 OPEN 腿不累计（残腿校验随后拦阻，不静默虚增）。
+// 每个 OPEN+FILLED 腿的全部 CLOSE FILLED/EXTERNAL 腿按各自 FilledQty 计（跨尝试部分成交
+// 天然覆盖，D-311 R6 同单位；D-015 R1：EXTERNAL=cex_private_events 平仓帧证据链认定的
+// 「已平」事实，价缺则同 FILLED 缺价处理）；CLOSE 腿缺 PriceActual → 该腿计 0 + critical
+// alert（宁缺勿虚增）；无 CLOSE 腿的 OPEN 腿不累计（残腿校验随后拦阻，不静默虚增）。
 func (p *Pipeline) sumClosedLegsPnL(ctx context.Context, posID int64, legs, closeLegs []pgstore.PositionLeg, fx float64) float64 {
 	closesByLegNo := make(map[int16][]pgstore.PositionLeg)
 	for _, cl := range closeLegs {
-		if cl.Status == "FILLED" {
+		if cl.Status == "FILLED" || cl.Status == "EXTERNAL" {
 			closesByLegNo[cl.LegNo] = append(closesByLegNo[cl.LegNo], cl)
 		}
 	}

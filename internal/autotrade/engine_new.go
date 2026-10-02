@@ -56,9 +56,3 @@ func New(cfg Config, store *pgstore.Store, service engineService, oppTopic *bus.
 func (e *Engine) SetGateVenueAlias(aliasOf func(vk string) string) {
 	e.gate.SetVenueAlias(aliasOf)
 }
-
-// SetGateDegradedVenueFn D-015 ①：透传 reconciler venue 平仓通道降级态读口
-// （装配层 recon.DegradedVenues；nil=未接线只查残腿半闸）。
-func (e *Engine) SetGateDegradedVenueFn(fn func() []string) {
-	e.gate.SetDegradedVenueFn(fn)
-}

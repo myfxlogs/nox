@@ -184,7 +184,7 @@ func (r *Reconciler) fastRetryFail(ctx context.Context, venues []string) {
 					v, r.fastRetryStreak[v], r.fastRetryWindow, len(r.fastRetryTimes[v])))
 			delete(r.fastRetryStreak, v)
 			delete(r.fastRetryTimes, v)
-			r.degradedVenues[v] = true // D-015 ①：升级置位降级态，Gate.Submit 拒新开
+			r.degradedVenues[v] = true // D-015 ①：升级置位降级态（观测/告警；R1 起不入 Gate 开仓判定）
 		}
 	}
 	r.mu.Unlock()
@@ -203,7 +203,20 @@ func (r *Reconciler) fastRetryClear(venues []string) {
 	for _, v := range venues {
 		delete(r.fastRetryStreak, v)
 		delete(r.fastRetryTimes, v)
-		delete(r.degradedVenues, v) // D-015 ①：平仓成功清零降级态
+		delete(r.degradedVenues, v) // D-015 ①：平仓成功清零降级态（观测用）
 	}
 	r.mu.Unlock()
+}
+
+// DegradedVenues 当前处于平仓通道降级态的 venue 集合（fastRetry 升级置位、
+// ResumeClose 成功清零）。D-015 R1：仅观测/告警用途，不入 Gate 开仓判定——
+// 降级标记可能在残腿已平后残存，消费之=永久误拦。
+func (r *Reconciler) DegradedVenues() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]string, 0, len(r.degradedVenues))
+	for v := range r.degradedVenues {
+		out = append(out, v)
+	}
+	return out
 }

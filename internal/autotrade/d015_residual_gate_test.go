@@ -1,6 +1,7 @@
-// d015_residual_gate_test.go —— D-015 ① 残腿闸验收：回放 #505/#506 时间线。
+// d015_residual_gate_test.go —— D-015 ① 残腿闸验收（R1）：回放 #505/#506 时间线。
 // #505 gate 腿 13:36 起裸露（仓 CLOSING）→ 14:58 #506 应被拒而非照常开仓。
-// venue 平仓通道降级态（recon 升级置位）同样拒新开 fail-closed。
+// R1 修订：venue 降级集合撤离开仓判定（集合留 reconciler 观测——残腿清零后
+// 陈旧降级标记若进闸 = 永久误拦）；闸只认 CLOSING∪LEGGED 实存。
 // 需要 test-pg2 DSN（ARB_TEST_PG_DSN）。
 package autotrade
 
@@ -56,20 +57,14 @@ func TestD015_LeggedBlocksNewOpen(t *testing.T) {
 	}
 }
 
-// TestD015_DegradedVenueBlocksOpen venue 平仓通道降级态 → 拒开；清零后放行。
-func TestD015_DegradedVenueBlocksOpen(t *testing.T) {
+// TestD015_NoResidualPasses 无 CLOSING∪LEGGED → 残腿闸放行（#505 已平后正常开市）。
+func TestD015_NoResidualPasses(t *testing.T) {
 	s := setupGateAlertStore(t)
 	ctx := context.Background()
 	g := NewGate(s, Config{MaxDailyLoss: 100, MaxPositions: 5, LiveTrade: false, Environment: ""}, nil)
-	g.SetDegradedVenueFn(func() []string { return []string{"gate:perp"} })
 	intent := d015Intent()
 	res := g.Submit(ctx, &intent)
-	if res.Status != "REJECTED" || !strings.Contains(res.Reason, "degraded") {
-		t.Fatalf("降级态应拒开, got %s reason=%s", res.Status, res.Reason)
-	}
-	g.SetDegradedVenueFn(func() []string { return nil })
-	res = g.Submit(ctx, &intent)
 	if res.Status != "EXECUTED" {
-		t.Fatalf("降级清零后应放行, got %s reason=%s", res.Status, res.Reason)
+		t.Fatalf("无残腿应放行, got %s reason=%s", res.Status, res.Reason)
 	}
 }
