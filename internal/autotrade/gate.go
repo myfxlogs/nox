@@ -41,6 +41,8 @@ type Gate struct {
 	breaker   map[string]*rejectEntry
 	breakerMu sync.Mutex
 	swapArb   *atomic.Pointer[swapArbComboSnapshot] // D-515 S5：表热读快照共享指针（nil=回退 cfg）
+	// D-015 ①：reconciler venue 平仓通道降级态读口（nil=未接线只查残腿半闸）。
+	degradedVenueFn func() []string
 }
 
 // NewGate 创建门禁。
@@ -79,6 +81,12 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 		return GateResult{Status: "REJECTED", Reason: "get autotrade state failed"}
 	}
 	state := stateRow.State
+
+	// D-015 ① 检查 1b: 残腿/降级拒开（CLOSING∪LEGGED 非空 或 venue 平仓通道降级）。
+	// 先于策略禁用/日亏——残腿窗口内任何新仓都在扩大裸露风险。
+	if res, rejected := g.residualLegGate(ctx, intent); rejected {
+		return res
+	}
 
 	// 检查 2: 策略禁用（fail-closed：查询失败 = 拒绝）
 	disabled, err := g.store.IsStrategyDisabled(ctx, intent.Strategy)
