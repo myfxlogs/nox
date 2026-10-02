@@ -18,7 +18,7 @@ import (
 func TestMigrate_EmptyDBFullMigration(t *testing.T) {
 	admin := adminDSN(t)
 	ctx := context.Background()
-	const emptyDB = "arb_migrate_empty_test"
+	emptyDB := "arb_migrate_empty_test_" + testutil.SeatTag() // D-016 席位后缀：多席并发不互踩
 
 	// 清理旧库
 	if out, err := exec.CommandContext(ctx, "psql", admin, "-c",

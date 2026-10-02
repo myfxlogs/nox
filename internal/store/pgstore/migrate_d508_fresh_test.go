@@ -14,7 +14,7 @@ import (
 func TestMigrate_FreshDB_AllVersions(t *testing.T) {
 	admin := adminDSN(t)
 	ctx := context.Background()
-	const db = "arb_migrate_fresh_d508_test"
+	var db = "arb_migrate_fresh_d508_test_" + testutil.SeatTag() // D-016 席位后缀：多席并发不互踩固定名辅助库
 	defer func() {
 		exec.CommandContext(context.Background(), "psql", admin, "-c",
 			fmt.Sprintf("DROP DATABASE IF EXISTS %s;", db)).Run()

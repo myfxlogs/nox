@@ -60,8 +60,9 @@ func stripPgxParams(dsn string) string {
 	return u.String()
 }
 
-// restoreTestDBName 临时恢复库（与 scripts/restore_test.sh 同名，复用清理逻辑）。
-const restoreTestDBName = "arb_restore_test"
+// restoreTestDBName 临时恢复库（基名与 scripts/restore_test.sh TEST_DB 同源；D-016
+// 起带席位后缀——多席并发跑备份测试不互踩固定名临时库；脚本侧 TEST_DB 同步派生）。
+var restoreTestDBName = "arb_restore_test_" + testutil.SeatTag()
 
 // setupRestoreTestDB 建临时库并恢复 ARB_TEST_PG_DSN 的 dump，返回临时库 psql DSN + 清理函数。
 func setupRestoreTestDB(t *testing.T) (testDSN string) {

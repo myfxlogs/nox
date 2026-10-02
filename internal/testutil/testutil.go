@@ -14,6 +14,9 @@
 // 基名时改写 <基名>_<包tag>+幂等建库——多包/多席并行零互踩，-p 1 从纪律降级为非必要；
 // D-373 泛化：判定从 arb_test 精确名放宽为一切 _test 结尾基名，收编 service/exec 共享基名
 // 漏网通道——本机并行跑时全消费方共库互踩；ci.yml 四显式建库行变冗余但无害零改动兼容）。
+// D-016 席位隔离：D560 panic 实证=多席共享 arb_test_<包> 库竞争（非测试顺序依赖）——
+// tag 再追加席位段 <包tag>_<seattag>（SeatTag 派生），两施工位并发跑测试各写各库；
+// pgstore restore/migrate 固定名辅助库同席后缀（SeatTag 导出供其派生名额）。
 package testutil
 
 import (
@@ -73,7 +76,15 @@ func TestDSN(t *testing.T, envVar string) string {
 		t.Fatalf("%s 指向非测试库（db 名不含 _test），测试会 TRUNCATE 生产表，拒绝执行", envVar)
 	}
 	out := normalizeDSN(dsn)
-	if rewritten, changed := perPkgDSN(out, callerPackageTag()); changed {
+	tag := callerPackageTag()
+	if seat := seatTag(); seat != "" {
+		if tag == "" {
+			tag = seat
+		} else {
+			tag = tag + "_" + seat // D-016：席位段追加——多席并发同包测试各写各库
+		}
+	}
+	if rewritten, changed := perPkgDSN(out, tag); changed {
 		if err := ensureDB(rewritten); err != nil {
 			t.Fatalf("D-351 S3 逐包建库失败（fail-closed 不吞）：%v", err)
 		}
@@ -104,11 +115,12 @@ func normalizeDSN(dsn string) string {
 	return dsn
 }
 
-// perPkgDSN D-351 S3 + D-373 泛化：db 名以 _test 结尾的共享基名（arb_test /
-// arb_service_test / arb_exec_test / 任意未来基名）→ 改写 <基名>_<tag>（逐包隔离，
-// 并行多包/多席共用实例零互踩；CI ci.yml 四显式建库行变冗余但无害）。已 tag 名
-// （arb_test_scan，后缀非 _test）幂等不再追加；显式命名的库（不以 _test 结尾，如
-// arb_test_local）=调用方自担隔离责任；空 tag（调用方推导失败）原样不动。
+// perPkgDSN D-351 S3 + D-373 泛化 + D-016 席位段：db 名以 _test 结尾的共享基名
+// （arb_test / arb_service_test / arb_exec_test / 任意未来基名）→ 改写 <基名>_<tag>（逐包隔离）
+// ——tag 可含席位段（<包tag>_<seattag>，TestDSN 组装），多席并发同包测试各写各库。
+// 已 tag 名（arb_test_scan，后缀非 _test）幂等不再追加；显式命名的库（不以 _test 结尾，
+// 如 arb_test_local）=调用方自担隔离责任；空 tag（调用方推导失败）原样不动。
+// Postgres 标识符 63 字节上限：超长时先截 tag 段保基名完整（防服务端静默截断致建库/连库名错位）。
 func perPkgDSN(dsn, tag string) (string, bool) {
 	u, err := url.Parse(dsn)
 	if err != nil || u.Path == "" || tag == "" {
@@ -118,7 +130,15 @@ func perPkgDSN(dsn, tag string) (string, bool) {
 	if !strings.HasSuffix(name, "_test") {
 		return dsn, false
 	}
-	u.Path = "/" + name + "_" + tag
+	full := name + "_" + tag
+	if len(full) > 63 {
+		allowed := 63 - len(name) - 1
+		if allowed <= 0 {
+			return dsn, false // 基名本身过长无隔离空间=原样（显式命名自担责任口径）
+		}
+		full = name + "_" + tag[:allowed]
+	}
+	u.Path = "/" + full
 	return u.String(), true
 }
 
@@ -153,6 +173,47 @@ func sanitizeTag(tag string) string {
 		}
 	}, tag)
 }
+
+// seatTagDerived cwd 仓根目录名缓存（go test 每测试二进制 cwd 恒定，派生一次）。
+var (
+	seatTagOnce    sync.Once
+	seatTagDerived string
+)
+
+// SeatTag D-016 测试库多席隔离的会话标签（导出供固定名辅助库派生名额——pgstore
+// restore/migrate 临时库同席位后缀）。env ARB_TEST_SEAT 显式优先；缺省从测试进程
+// cwd（go test 置为包目录）上溯 go.mod 取仓根目录名：worktree 名即天然席位
+// （/opt/arb-wt/d016-test-green → d016_test_green；/opt/arb 部署树 → arb）。
+// 同席跨 run 同名复用（不按 run 增殖）；推导失败=空串（回落共享名，与既有行为等价）。
+func SeatTag() string {
+	if s := strings.TrimSpace(os.Getenv("ARB_TEST_SEAT")); s != "" {
+		return sanitizeTag(s)
+	}
+	seatTagOnce.Do(func() {
+		dir, err := os.Getwd()
+		if err != nil {
+			return
+		}
+		for i := 0; i < 32; i++ {
+			if dir == "" || dir == "." || dir == "/" {
+				return
+			}
+			if fi, serr := os.Stat(filepath.Join(dir, "go.mod")); serr == nil && !fi.IsDir() {
+				seatTagDerived = sanitizeTag(filepath.Base(dir))
+				return
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				return
+			}
+			dir = parent
+		}
+	})
+	return seatTagDerived
+}
+
+// seatTag 内部别名（TestDSN 组装 tag 用）。
+func seatTag() string { return SeatTag() }
 
 // ensuredDBs 进程级已建库缓存（避免同库重复 CREATE DATABASE 往返）。
 var ensuredDBs sync.Map

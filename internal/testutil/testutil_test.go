@@ -213,3 +213,39 @@ func TestPerPkgDSN(t *testing.T) {
 		t.Errorf("空 tag（推导失败）应原样返回: got=%s", got)
 	}
 }
+
+// TestSeatTag D-016 T1：席位标签派生——env 显式优先（含消毒），缺省从 cwd 上溯
+// go.mod 取仓根目录名（本测试二进制 cwd=testutil 包目录→仓根），推导恒非空。
+func TestSeatTag(t *testing.T) {
+	setEnv(t, "ARB_TEST_SEAT", "")
+	if got := SeatTag(); got == "" {
+		t.Fatal("cwd 仓根推导应非空（测试运行于仓内）")
+	}
+	setEnv(t, "ARB_TEST_SEAT", "Devin-WT.02")
+	if got := SeatTag(); got != "devin_wt_02" {
+		t.Fatalf("SeatTag env 覆写 = %q, want devin_wt_02（大写落小写、非字母数字转下划线）", got)
+	}
+}
+
+// TestPerPkgDSN_SeatSegment D-016 T2：tag 含席位段组合改写 + 63 字节截断保基名完整。
+func TestPerPkgDSN_SeatSegment(t *testing.T) {
+	got, changed := perPkgDSN("postgres://u:p@h:5432/arb_test?sslmode=disable", "scan_d016_test_green")
+	if !changed {
+		t.Fatal("席位段组合 tag 应改写")
+	}
+	if u, _ := url.Parse(got); u.Path != "/arb_test_scan_d016_test_green" {
+		t.Fatalf("Path = %q, want /arb_test_scan_d016_test_green", u.Path)
+	}
+	// 63 字节截断：长席位段截尾，基名+_ 分隔完好，全长 ≤63
+	longTag := strings.Repeat("x", 80)
+	got, changed = perPkgDSN("postgres://u:p@h:5432/arb_test", longTag)
+	if !changed {
+		t.Fatal("超长 tag 应截断改写而非放弃")
+	}
+	if u, _ := url.Parse(got); len(strings.TrimPrefix(u.Path, "/")) > 63 {
+		t.Fatalf("库名 %d 字节超 Postgres 标识符上限", len(strings.TrimPrefix(u.Path, "/")))
+	}
+	if u, _ := url.Parse(got); !strings.HasPrefix(u.Path, "/arb_test_") {
+		t.Fatalf("截断后应保基名前缀: %s", u.Path)
+	}
+}
