@@ -90,8 +90,8 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 	// 环境门挡不住时白名单是 CEX 真单的最后闸）。canonical_sell nil/空→回退 canonical。
 	// D-330 S3：spec 捕获下传 H4.2（MaxLongQty 复用为 spec 核准可行量下限）。
 	var xassetSpec *exec.XAssetComboAllowSpec
-	// D-473 S1：FUNDING_HEDGE 同闸——spot_carry 双腿 canonical 同值，canonical_sell 回退
-	// canonical 与 allow_combos 行对齐；复用全栈（管理 UI/cap 闸/旗标投影）。
+	marginLegN := 0.0
+	// D-473 S1：FUNDING_HEDGE 同闸——canonical_sell 回退 canonical 与行对齐，复用全栈。
 	if opp.Type == "XASSET_CARRY" || opp.Type == "FUNDING_HEDGE" {
 		sellCanonical := opp.Canonical
 		if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
@@ -101,8 +101,8 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 			log.Printf("[autotrade] skip %s: %s combo not in allowlist (%s/%s %s×%s)", opp.ID, opp.Type, opp.Canonical, sellCanonical, opp.VenueBuy, opp.VenueSell)
 			return
 		}
-		// D-006 S3：canonical 聚簇 cap 前瞻闸（判据体在 engine_opp_capgate.go）。
-		if e.canonicalCapRejectLog(ctx, opp, sellCanonical, xassetSpec) {
+		var gateOK bool // D-010 S3：margin 折算+canonical 聚簇闸（engine_opp_margin.go）
+		if marginLegN, gateOK = e.xassetMarginGate(ctx, opp, sellCanonical, xassetSpec); !gateOK {
 			return
 		}
 	}
@@ -200,6 +200,9 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 	}
 
 	notionalUSD := effectiveNotionalUSD(e.cfg.NotionalUSD, xassetSpec) // D-367 S4
+	if marginLegN > 0 {                                                // D-010 S3：margin 反推单腿名义覆盖 sizing 基数
+		notionalUSD = marginLegN
+	}
 	qty, perLot, skip := computeBuyQty(opp, notionalUSD, e.service.USDPerLotForLeg)
 	if skip {
 		// D-140 S2/D-190：CS-miss 按 (venue,canonical) 聚合计数（语义扩为「无法定尺寸」，含 CS-miss/no-quote/fx-miss）

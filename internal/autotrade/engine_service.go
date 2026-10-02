@@ -26,6 +26,9 @@ type engineService interface {
 	VenueCommissionBps(venueKey string) float64
 	AccountLeverage(venueKey string) (leverage float64, ok bool)
 	AccountEquityUSD(venueKey string) (value float64, currency string, ok bool)
+	// LegMarginFrac D-010：腿保证金需求率实读（margin_usd 预算→单腿名义 N 折算用）。
+	// known=false=杠杆实读失败（调用方 fail-closed 不猜）。
+	LegMarginFrac(ctx context.Context, venueKey, symbol string, sellLeg bool) (frac float64, known bool)
 	// 执行/平仓
 	ExecuteOpportunityInternal(ctx context.Context, oppID, requestID string, qty float64) (status, message string, positionID int64)
 	ExecuteMeanRevert(ctx context.Context, canonical, venueBuy, venueSell, requestID string, qty, openBps float64) (status, message string, positionID int64)

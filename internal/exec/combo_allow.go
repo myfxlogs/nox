@@ -100,6 +100,7 @@ type XAssetComboAllowSpec struct {
 	MaxShortQty   float64
 	MaxGrossUSD   float64
 	NotionalUSD   *float64 // D-367 S3：组合级 sizing 名义额；nil=回退全局 env（表来源映射；env 来源恒 nil）
+	MarginUSD     *float64 // D-010：组合保证金总预算（双腿占用和；与 NotionalUSD 互斥）
 }
 
 // ParseXAssetComboAllow 解析 ARB_XASSET_ALLOW_COMBOS（分号分隔记录，每条

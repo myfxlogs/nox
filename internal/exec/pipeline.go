@@ -97,15 +97,24 @@ type Pipeline struct {
 	// D-195-B：执行环境 demo/live（从 config 注入，写 positions.environment）。
 	environment string
 
-	// venueExposureSum D-009 S4：venue 系统实占 USD 回调（建库守卫锁内复查用；
-	// main 装 dashboard.Service.VenueSystemExposureUSD）。nil=venue 闸未接线跳过。
-	venueExposureSum func(ctx context.Context, venueBare string) (float64, error)
+	// venueMarginSum D-010（承 D-009 S4 接线位）：venue 保证金实占 USD 回调
+	// （建库守卫锁内复查用；main 装 dashboard.Service.VenueSystemMarginUSD）。
+	// nil=venue 闸未接线跳过。
+	venueMarginSum func(ctx context.Context, venueBare string) (float64, error)
+
+	// marginFracFor D-010 S2/S3：腿保证金需求率实读缝（main 装
+	// dashboard.Service.LegMarginFrac）。nil=未接线→cap 守卫 margin 折算
+	// fail-closed 拒建仓（不猜杠杆）。
+	marginFracFor func(ctx context.Context, venueKey, symbol string, sellLeg bool) (frac float64, known bool)
 }
 
-// SetVenueExposureSum D-009 S4：注入 venue 实占回调（执行路径接闸——
-// 展示闸6 与执行闸同源同判据，dashboard.Service.VenueSystemExposureUSD）。
-func (p *Pipeline) SetVenueExposureSum(f func(ctx context.Context, venueBare string) (float64, error)) {
-	p.venueExposureSum = f
+// SetMarginInputs D-010：注入 venue 保证金实占回调（执行路径接闸——展示闸6 与
+// 执行闸同源同判据，dashboard.Service.VenueSystemMarginUSD）+腿保证金需求率
+// 实读缝（dashboard.Service.LegMarginFrac；margin 折算 nil=fail-closed 不猜）。
+func (p *Pipeline) SetMarginInputs(sum func(ctx context.Context, venueBare string) (float64, error),
+	frac func(ctx context.Context, venueKey, symbol string, sellLeg bool) (float64, bool)) {
+	p.venueMarginSum = sum
+	p.marginFracFor = frac
 }
 
 // Settler D-193-A 扩包 S5：结算接口（closePositionCore 关闭后触发，修复 479 缺 settlement 行）。
