@@ -186,11 +186,11 @@ func SettleAt(ctx context.Context, deps Deps, posID int64, elim Eliminator, fami
 		// D-013 ②：net_pnl = positions.realized_pnl——exec 侧经 pgstore.PositionNetUSD
 		// 单源写入（价差+funding/swap+commission），结算只传播同一值，不再二次加现金流。
 		// cashflowsNet 仅作组件列与 quality/completeness 判据；pricePnl 组件=净额−现金流。
-		// EXTERNAL 平仓腿 fee_usd NULL → 证据不全 → completeness='partial'
-		// （不入样；retryable——venue 补报后重结算可升级）。
+		// D-013 R1 ②：EXTERNAL/CEX FILLED 平仓腿 fee NULL → partial（MT 恒显式 0 行不算缺；retryable 可升级）。
 		hasPartialFeeLeg := false
 		for _, l := range legs {
-			if l.Phase == "CLOSE" && l.Status == "EXTERNAL" && l.FeeUSD == nil {
+			if l.Phase == "CLOSE" && l.FeeUSD == nil &&
+				(l.Status == "EXTERNAL" || (l.Status == "FILLED" && !keydomain.IsMTKey(l.Venue))) {
 				hasPartialFeeLeg = true
 				break
 			}

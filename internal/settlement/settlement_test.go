@@ -726,6 +726,44 @@ func TestD013_ExternalFeeNullPartial(t *testing.T) {
 	}
 }
 
+// TestD013R1_CexFilledFeeNullPartial D-013 R1 ②：CEX FILLED 平仓腿 fee NULL → partial；
+// MT FILLED 腿 fee NULL 不算缺（恒显式 0 commission 行）→ complete。
+func TestD013R1_CexFilledFeeNullPartial(t *testing.T) {
+	now := time.Now()
+	rp := 5.0
+	mk := func(venue string) *fakeDeps {
+		return &fakeDeps{
+			position: &pgstore.Position{
+				ID: 31, OpportunityID: "CROSS_VENUE:BTCUSDT:okx:perp:binance:perp",
+				Type: "CROSS_VENUE", Status: "CLOSED", ExpectedNetBps: 10.0,
+				RealizedPnl: &rp, OpenedAt: &now, ClosedAt: &now,
+			},
+			legs: []pgstore.PositionLeg{
+				{Phase: "OPEN", Status: "FILLED", Venue: venue, Qty: 0.1, PriceActual: ptrFloat(100000)},
+				{Phase: "CLOSE", Status: "FILLED", Venue: venue, Qty: 0.1, PriceActual: ptrFloat(100100)},
+			},
+			cs: 1, csOk: false, fxRate: 1, fxOk: true, insertWon: true,
+		}
+	}
+	dCEX := mk("okx:perp")
+	if err := Settle(context.Background(), dCEX, 31, noElim, nil); err != nil {
+		t.Fatalf("Settle CEX: %v", err)
+	}
+	if dCEX.lastSettlementRow.CompletenessStatus != "partial" ||
+		dCEX.lastSettlementRow.StatsStatus != "retryable" {
+		t.Fatalf("CEX FILLED fee NULL: completeness=%s stats=%s, want partial/retryable",
+			dCEX.lastSettlementRow.CompletenessStatus, dCEX.lastSettlementRow.StatsStatus)
+	}
+	dMT := mk("3001157:mt5")
+	if err := Settle(context.Background(), dMT, 31, noElim, nil); err != nil {
+		t.Fatalf("Settle MT: %v", err)
+	}
+	if dMT.lastSettlementRow.CompletenessStatus != "complete" {
+		t.Fatalf("MT FILLED fee NULL: completeness=%s, want complete",
+			dMT.lastSettlementRow.CompletenessStatus)
+	}
+}
+
 // TestSettle_EstimatedSkip D-159 W3a R4 A10：note 含 "pnl_estimated" → skippedReason 非空，不入正式统计。
 // 场景：position note="pnl_estimated: partial or no calibration"（calibrator 接线但部分校准失败标记）。
 // expectedUsd>0（多日持仓）确保跳过由 pnl_estimated 触发，非 expected_usd<=0。
