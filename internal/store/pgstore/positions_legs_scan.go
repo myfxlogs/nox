@@ -10,7 +10,7 @@ import (
 const legSelectColumns = `id, position_id, leg_no, phase, venue_key AS venue, ''::text AS account, symbol, side, qty,
 		price_expected, price_actual, order_id, status,
 		attempt_no, parent_attempt_id, client_order_id, requested_qty, filled_qty, avg_fill_price,
-		fee_raw, fee_usd, submitted_at, uncertain_at, ts`
+		fee_raw, fee_usd, submitted_at, uncertain_at, fill_kind, ts`
 
 // scanLegs D-195-B：position_legs 行扫描公共函数（3 处 List 方法共用）。
 func scanLegs(rows pgx.Rows) ([]PositionLeg, error) {
@@ -20,7 +20,7 @@ func scanLegs(rows pgx.Rows) ([]PositionLeg, error) {
 		if err := rows.Scan(&l.ID, &l.PositionID, &l.LegNo, &l.Phase, &l.Venue, &l.Account,
 			&l.Symbol, &l.Side, &l.Qty, &l.PriceExpected, &l.PriceActual, &l.OrderID, &l.Status,
 			&l.AttemptNo, &l.ParentAttemptID, &l.ClientOrderID, &l.RequestedQty, &l.FilledQty, &l.AvgFillPrice,
-			&l.FeeRaw, &l.FeeUSD, &l.SubmittedAt, &l.UncertainAt, &l.Ts); err != nil {
+			&l.FeeRaw, &l.FeeUSD, &l.SubmittedAt, &l.UncertainAt, &l.FillKind, &l.Ts); err != nil {
 			return nil, err
 		}
 		out = append(out, l)

@@ -30,9 +30,11 @@ type OrderEvent struct {
 
 // OrderEventCache venueKey → orderKey → 最近事件。orderID 与 clOrdID 各立一键（双键同值写）。
 type OrderEventCache struct {
-	mu    sync.RWMutex
-	m     map[string]map[string]OrderEvent
-	onPut func(venueKey string) // D-469a S2：写面 kick 回调（setter 注入，nil 安全）
+	mu     sync.RWMutex
+	m      map[string]map[string]OrderEvent
+	onPut  func(venueKey string) // D-469a S2：写面 kick 回调（setter 注入，nil 安全）
+	subs   map[int]chan string   // D-018 R1：写面事件订阅扇出（maker 等待唤醒；payload=venueKey）
+	subSeq int
 }
 
 // SetOnPut D-469a S2：注入写面 kick 回调（先例=SwapSnapshotStore setter 注入，
@@ -41,7 +43,27 @@ func (c *OrderEventCache) SetOnPut(fn func(venueKey string)) { c.onPut = fn }
 
 // NewOrderEventCache 创建共享缓存（进程级单例，由各 venue 流写、CachedOrderStatusQuerier 读）。
 func NewOrderEventCache() *OrderEventCache {
-	return &OrderEventCache{m: map[string]map[string]OrderEvent{}}
+	return &OrderEventCache{m: map[string]map[string]OrderEvent{}, subs: map[int]chan string{}}
+}
+
+// SubscribeEvents D-018 R1：订单事件订阅（maker 等待唤醒用——WS 帧写缓存即扇出
+// venueKey，订阅方据此回读快照，替代 REST 轮询=D-004 数据流正道）。返回数据通道与
+// 取消函数（订阅者侧 defer 取消防 goroutine 泄漏）。无订阅者零开销。
+func (c *OrderEventCache) SubscribeEvents() (<-chan string, func()) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	ch := make(chan string, 16)
+	id := c.subSeq
+	c.subSeq++
+	c.subs[id] = ch
+	return ch, func() {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if _, ok := c.subs[id]; ok {
+			delete(c.subs, id)
+			close(ch)
+		}
+	}
 }
 
 // PutOrder 写事件：orderID/clOrdID 非空各建一键（消费面两键都可能查）。
@@ -61,6 +83,14 @@ func (c *OrderEventCache) PutOrder(venueKey, orderID, clOrdID string, ev OrderEv
 	c.mu.Unlock()
 	if c.onPut != nil {
 		c.onPut(venueKey)
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	for _, ch := range c.subs {
+		select {
+		case ch <- venueKey:
+		default: // 订阅方积压=丢拍无害（快照判定以缓存为准，拍只是唤醒信号）
+		}
 	}
 }
 

@@ -68,7 +68,9 @@ type PositionLeg struct {
 	FeeUSD          *float64
 	SubmittedAt     *time.Time
 	UncertainAt     *time.Time // status=UNKNOWN 时写入
-	Ts              time.Time
+	// FillKind D-018 阶段a：腿成交方式（"maker"|"taker"；NULL=旧数据/未采集，econ 回退 taker 保守口径）。
+	FillKind *string
+	Ts       time.Time
 }
 
 // EffectiveQty 实际持仓量（成交口径，时代稳定）：filled_qty 非空且>0 → 成交量
@@ -219,8 +221,8 @@ func (s *Store) CreatePositionLeg(ctx context.Context, leg *PositionLeg) error {
 	q := `INSERT INTO position_legs (position_id, leg_no, phase, attempt_no, venue, venue_type, symbol, side, qty,
 		price_expected, price_actual, order_id, status,
 		parent_attempt_id, client_order_id, requested_qty, filled_qty, avg_fill_price,
-		fee_raw, fee_usd, submitted_at, uncertain_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+		fee_raw, fee_usd, submitted_at, uncertain_at, fill_kind)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
 		ON CONFLICT (position_id, leg_no, phase, attempt_no) DO NOTHING
 		RETURNING id`
 	var legID int64
@@ -228,7 +230,7 @@ func (s *Store) CreatePositionLeg(ctx context.Context, leg *PositionLeg) error {
 		leg.PositionID, leg.LegNo, leg.Phase, leg.AttemptNo, vk.Venue, vk.Type, leg.Symbol, leg.Side,
 		leg.Qty, leg.PriceExpected, leg.PriceActual, leg.OrderID, leg.Status,
 		leg.ParentAttemptID, leg.ClientOrderID, leg.RequestedQty, leg.FilledQty, leg.AvgFillPrice,
-		leg.FeeRaw, leg.FeeUSD, leg.SubmittedAt, leg.UncertainAt).Scan(&legID)
+		leg.FeeRaw, leg.FeeUSD, leg.SubmittedAt, leg.UncertainAt, leg.FillKind).Scan(&legID)
 	if err != nil {
 		if err.Error() == "no rows in result set" {
 			return ErrTerminalState

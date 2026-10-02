@@ -15,4 +15,6 @@ var (
 	LegExternalStatusSQL string // D-015 ②：position_legs.status 增 EXTERNAL（venue 推送平仓事件落「外部已平」标记）
 	//go:embed 0168_d013_ledger_truth.sql
 	D013LedgerTruthSQL string // D-013：partial 合法化 + #497–507 commission/exit_kind/净额回填
+	//go:embed 0169_leg_fill_kind.sql
+	LegFillKindSQL string // D-018 阶段a：position_legs.fill_kind（maker|taker，econ 成本修正输入；0169=0168 被 D-013 占用顺延）
 )
