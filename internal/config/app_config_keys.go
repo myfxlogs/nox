@@ -45,6 +45,8 @@ var appConfigKeys = map[string]AppCfgMeta{
 	"ARB_CROSS_NOTIONAL_EQUITY_CAP":       f64(func(c *Config) *float64 { return &c.CrossNotionalEquityCap }),
 	"ARB_DETECTOR_FRESHNESS_TTL":          durv(func(c *Config) *time.Duration { return &c.DetectorFreshnessTTL }),
 	"ARB_EXPLORER_ENABLED":                boolv(func(c *Config) *bool { return &c.ExplorerEnabled }),
+	"ARB_MAKER_MAX_PER_HOUR":              intv(func(c *Config) *int { return &c.MakerMaxAttemptsPerHour }),        // D-018：每 opp 每小时 maker 挂单 attempt 上限（缺=停用）
+	"ARB_MAKER_TIMEOUT":                   durv(func(c *Config) *time.Duration { return &c.MakerFirstLegTimeout }), // D-018：首腿 post-only 超时 T（缺=停用）
 	"ARB_MACRO_ENABLED":                   boolv(func(c *Config) *bool { return &c.MacroEnabled }),
 	"ARB_CALIB_ENABLED":                   boolv(func(c *Config) *bool { return &c.CalibEnabled }),
 	"ARB_EXPLORER_RATE_PER_HOUR":          intv(func(c *Config) *int { return &c.ExplorerRatePerHour }),
