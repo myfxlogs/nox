@@ -135,8 +135,11 @@ type Config struct {
 	// D-014：econ 经济闸。EconFeeBps=费率源解析器（venue 事实/exchange_configs，
 	// 未接线或缺源 → fail-closed 拒开/不收割）；MaxBreakevenDays=入场回本上限
 	// （≤0→缺省 3.0）；HarvestHorizonDays=收割比较地平（≤0→缺省 7）。
-	EconFeeBps         func(ctx context.Context, venueKey string) (float64, bool)
-	MaxBreakevenDays   float64
+	EconFeeBps       func(ctx context.Context, venueKey string) (float64, bool)
+	MaxBreakevenDays float64
+	// D-018 后段①：maker 费率源（exchange_configs.maker_fee_bps）；持仓腿 fill_kind=maker
+	// 时 ExitCostEst 取该费率，未接线/缺源 → 回落 taker 保守口径（不 fail-closed）。
+	EconMakerFeeBps    func(ctx context.Context, venueKey string) (float64, bool)
 	HarvestHorizonDays float64
 
 	// D-181 S2：probe 探测仓——无实测腿的首仓自动成为 probe，到期评估升级/拒绝。
