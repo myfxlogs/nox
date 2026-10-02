@@ -257,7 +257,8 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64, force boo
 		}
 	}
 	for _, l := range closeLegs {
-		if l.Status == "FILLED" {
+		// D-015 R1：EXTERNAL=venue 平仓帧证据链认定的已平终态，同 FILLED 计完整性。
+		if l.Status == "FILLED" || l.Status == "EXTERNAL" {
 			closeFilled++
 		}
 	}

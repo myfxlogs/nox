@@ -98,7 +98,8 @@ func (p *Pipeline) placeCloseOrder(ctx context.Context, posID int64, leg pgstore
 // pnlCalibrator 命中且 ClosePrice > 0 → 回填 CLOSE leg + PnL + cashflows；无法取得 → fail-closed。
 // D-577：gate:perp 腿开/平不同 order_id——ticket 语义不可平移，
 // 走 contract+ClosingStartedAt 窗回填（WS 落库帧首选→gate REST 兜底），同一尾部复用。
-// okx/binance 同型缺口留后续票（本票只做 gate:perp——设计边界）。
+// D-015 ②（R1）：双源皆无命中时查 cex_private_events 平仓帧兜底写 EXTERNAL
+// （gate/okx/binance 三所通用，external_close_backfill.go）；MT venue 仍走原 fail-closed。
 func (p *Pipeline) backfillCloseFromHistory(ctx context.Context, pos *pgstore.Position, leg pgstore.PositionLeg, fx float64) error {
 	posID := pos.ID
 	var hp *HistoryPnL
@@ -116,17 +117,23 @@ func (p *Pipeline) backfillCloseFromHistory(ctx context.Context, pos *pgstore.Po
 		hp, err = p.cexCloseFill(ctx, leg, since)
 		missWhy = "CEX 事件/REST 均无命中"
 	} else {
-		if p.pnlCalibrator == nil {
-			msg := fmt.Sprintf("持仓 #%d 第 %d 腿（%s）券商侧已无此腿且无历史查证器——平仓盈亏无法核实，需人工核对", posID, leg.LegNo, leg.Venue)
-			if aerr := p.store.InsertPositionAlert(ctx, posID, "critical", msg); aerr != nil {
-				log.Printf("[exec] pos %d alert write: %v", posID, aerr)
-			}
-			return fmt.Errorf("no pnl calibrator for backfill")
+		if p.pnlCalibrator != nil {
+			hp, err = p.pnlCalibrator.QueryHistoryPnL(ctx, leg.Venue, leg.OrderID, 3)
+			missWhy = fmt.Sprintf("历史查证无命中（票号 %s）", leg.OrderID)
+		} else {
+			missWhy = "无历史查证器"
 		}
-		hp, err = p.pnlCalibrator.QueryHistoryPnL(ctx, leg.Venue, leg.OrderID, 3)
-		missWhy = fmt.Sprintf("历史查证无命中（票号 %s）", leg.OrderID)
 	}
 	if err != nil || hp == nil || hp.ClosePrice <= 0 {
+		// D-015 ②（R1）：历史查证无命中 → cex_private_events 平仓帧兜底（venue 侧
+		// 自证已平）→ 命中写 EXTERNAL 腿+现金流收尾；仍无命中才告警。
+		hit, ferr := p.externalCloseFallback(ctx, pos, leg, fx)
+		if ferr != nil {
+			return fmt.Errorf("external close evidence: %w", ferr)
+		}
+		if hit {
+			return nil
+		}
 		msg := fmt.Sprintf("持仓 #%d 第 %d 腿（%s）券商侧已无此腿且%s——平仓盈亏无法核实，需人工核对", posID, leg.LegNo, leg.Venue, missWhy)
 		if aerr := p.store.InsertPositionAlert(ctx, posID, "critical", msg); aerr != nil {
 			log.Printf("[exec] pos %d alert write: %v", posID, aerr)

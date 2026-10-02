@@ -29,6 +29,9 @@ type Reconciler struct {
 	fastRetryConsec int
 	fastRetryStreak map[string]int
 	fastRetryTimes  map[string][]time.Time
+	// D-015 ①：venue 平仓通道降级态集合——fastRetry 升级置位、ResumeClose 成功清零；
+	// Gate.Submit 据此拒新开 fail-closed（内存态重启清零，CLOSING/LEGGED 扫仍兜底）。
+	degradedVenues map[string]bool
 	// D-245：可注入时钟（测试假时钟；nil=time.Now）。
 	nowFn           func() time.Time
 	queriers        []venue.Querier
@@ -59,6 +62,7 @@ func New(store Store, queriers ...venue.Querier) *Reconciler {
 		fastRetryConsec:  3,
 		fastRetryStreak:  map[string]int{},
 		fastRetryTimes:   map[string][]time.Time{},
+		degradedVenues:   map[string]bool{},
 		unknownRounds:    map[int64]int{},
 		kickCh:           make(chan struct{}, 1),
 	}

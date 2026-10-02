@@ -80,6 +80,12 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 	}
 	state := stateRow.State
 
+	// D-015 ① 检查 1b: 残腿/降级拒开（CLOSING∪LEGGED 非空 或 venue 平仓通道降级）。
+	// 先于策略禁用/日亏——残腿窗口内任何新仓都在扩大裸露风险。
+	if res, rejected := g.residualLegGate(ctx, intent); rejected {
+		return res
+	}
+
 	// 检查 2: 策略禁用（fail-closed：查询失败 = 拒绝）
 	disabled, err := g.store.IsStrategyDisabled(ctx, intent.Strategy)
 	if err != nil {

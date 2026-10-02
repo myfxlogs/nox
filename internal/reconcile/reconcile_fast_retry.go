@@ -139,9 +139,17 @@ func (r *Reconciler) residualLegVenues(ctx context.Context, posID int64) []strin
 		log.Printf("[reconcile] fast retry list legs pos=%d: %v", posID, err)
 		return nil
 	}
+	// D-015 ③：同 leg_no 已存在 CLOSE 终态行（FILLED=系统自发平掉 / EXTERNAL=venue 推送
+	// 外部已平标记）→ 该腿不再算残余，排除出失败归因与重试面。
+	closeDone := make(map[int16]bool)
+	for _, l := range legs {
+		if l.Phase == "CLOSE" && (l.Status == "FILLED" || l.Status == "EXTERNAL") {
+			closeDone[l.LegNo] = true
+		}
+	}
 	set := make(map[string]bool)
 	for _, l := range legs {
-		if l.Phase == "OPEN" && l.Status == "FILLED" {
+		if l.Phase == "OPEN" && l.Status == "FILLED" && !closeDone[l.LegNo] {
 			set[l.Venue] = true
 		}
 	}
@@ -176,6 +184,7 @@ func (r *Reconciler) fastRetryFail(ctx context.Context, venues []string) {
 					v, r.fastRetryStreak[v], r.fastRetryWindow, len(r.fastRetryTimes[v])))
 			delete(r.fastRetryStreak, v)
 			delete(r.fastRetryTimes, v)
+			r.degradedVenues[v] = true // D-015 ①：升级置位降级态（观测/告警；R1 起不入 Gate 开仓判定）
 		}
 	}
 	r.mu.Unlock()
@@ -194,6 +203,20 @@ func (r *Reconciler) fastRetryClear(venues []string) {
 	for _, v := range venues {
 		delete(r.fastRetryStreak, v)
 		delete(r.fastRetryTimes, v)
+		delete(r.degradedVenues, v) // D-015 ①：平仓成功清零降级态（观测用）
 	}
 	r.mu.Unlock()
+}
+
+// DegradedVenues 当前处于平仓通道降级态的 venue 集合（fastRetry 升级置位、
+// ResumeClose 成功清零）。D-015 R1：仅观测/告警用途，不入 Gate 开仓判定——
+// 降级标记可能在残腿已平后残存，消费之=永久误拦。
+func (r *Reconciler) DegradedVenues() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]string, 0, len(r.degradedVenues))
+	for v := range r.degradedVenues {
+		out = append(out, v)
+	}
+	return out
 }
