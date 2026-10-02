@@ -46,9 +46,21 @@ func isTestDB(dsn string) bool {
 	return strings.Contains(cfg.Database, "_test")
 }
 
-// TestDSN 测试用 DSN 门禁：envVar 未设置→Fatalf（D-207 loud-FAIL，假绿之源）；
-// 显式逃生门 ARB_TEST_ALLOW_SKIP_DSN=1 才 Skipf（退出 DB 测试必须是自觉行为）；
-// 指向非测试库→Fatalf 拒绝。envVar 如 "ARB_TEST_PG_DSN" / "ARB_EXEC_TEST_PG_DSN"。
+// defaultTestDSN 四个 TestDSN env 的缺省值（D-021：测试库独立实例 127.0.0.1:5434）——
+// env 未设时回落缺省（基名固定映射），生产实例（5433）不再承载任何测试库。
+// 缺省真跑不弱化 D-207（loud-FAIL 防「没跑像过了」的 SKIP）——测试照跑非跳过；
+// 未知 envVar（无缺省映射）仍走原 Fatalf/Skip 口径。
+var defaultTestDSN = map[string]string{
+	"ARB_TEST_PG_DSN":           "postgres://arb:arb@127.0.0.1:5434/arb_test",
+	"ARB_TEST_PG_SERVICE_DSN":   "postgres://arb:arb@127.0.0.1:5434/arb_service_test",
+	"ARB_EXEC_TEST_PG_DSN":      "postgres://arb:arb@127.0.0.1:5434/arb_exec_test",
+	"ARB_RECONCILE_TEST_PG_DSN": "postgres://arb:arb@127.0.0.1:5434/arb_reconcile_test",
+}
+
+// TestDSN 测试用 DSN 门禁：envVar 未设→缺省独立测试实例 5434（D-021；缺省映射见
+// defaultTestDSN，未知 envVar 无缺省→Fatalf D-207 loud-FAIL / 显式逃生门
+// ARB_TEST_ALLOW_SKIP_DSN=1 才 Skipf）；指向非测试库→Fatalf 拒绝。
+// envVar 如 "ARB_TEST_PG_DSN" / "ARB_EXEC_TEST_PG_DSN"。
 //
 // 返回值经 DSN 规范化（追加而非覆盖，已有则跳过）：
 //   - 无 options= → 追加 options=-c%20lock_timeout=5s（62 个 TRUNCATE 位点一处兜底，
@@ -67,10 +79,14 @@ func TestDSN(t *testing.T, envVar string) string {
 	t.Helper()
 	dsn := os.Getenv(envVar)
 	if dsn == "" {
-		if os.Getenv("ARB_TEST_ALLOW_SKIP_DSN") == "1" {
-			t.Skipf("%s 未设置（ARB_TEST_ALLOW_SKIP_DSN=1 逃生门启用，自觉跳过 DB 测试）", envVar)
+		def, ok := defaultTestDSN[envVar]
+		if !ok {
+			if os.Getenv("ARB_TEST_ALLOW_SKIP_DSN") == "1" {
+				t.Skipf("%s 未设置（ARB_TEST_ALLOW_SKIP_DSN=1 逃生门启用，自觉跳过 DB 测试）", envVar)
+			}
+			t.Fatalf("D-207：%s 未设置且无缺省映射（假绿之源：D-189/D-190 三轮返修实证「没跑」长得像「过了」）。设 %s=<测试库 DSN> 或显式 ARB_TEST_ALLOW_SKIP_DSN=1 自觉跳过", envVar, envVar)
 		}
-		t.Fatalf("D-207：%s 未设置——DSN 缺失不再静默 SKIP（假绿之源：D-189/D-190 三轮返修实证「没跑」长得像「过了」）。设 %s=<测试库 DSN> 或显式 ARB_TEST_ALLOW_SKIP_DSN=1 自觉跳过", envVar, envVar)
+		dsn = def // D-021：缺省独立测试实例 5434（基名固定映射）
 	}
 	if !isTestDB(dsn) {
 		t.Fatalf("%s 指向非测试库（db 名不含 _test），测试会 TRUNCATE 生产表，拒绝执行", envVar)

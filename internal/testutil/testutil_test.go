@@ -40,28 +40,44 @@ func assertTerminated(t *testing.T, fn func(st *testing.T)) (failed, skipped boo
 	return st.Failed(), st.Skipped()
 }
 
-// D-207 v1.1 单测：空 DSN→FAIL / 逃生门→SKIP / 无参 DSN→只追加 options /
+// D-207 v1.1 单测（D-021 改义：已知 envVar 空 DSN→缺省 5434 真跑非 FAIL/SKIP）；
+// FAIL/SKIP 口径锚「无缺省映射的未知 envVar」/ 无参 DSN→只追加 options /
 // 已含 pool 参数 → 不追加 pool，只追加 options / 已含 options= → 不追加 /
 // DSN 指向非 test 库→拒绝 / pool 参数不被追加（防回归）。
-func TestTestDSN_EmptyDSN_Fatalf(t *testing.T) {
+func TestTestDSN_EmptyDSN_DefaultsToStandaloneInstance(t *testing.T) {
 	setEnv(t, "ARB_TEST_PG_DSN", "")
 	setEnv(t, "ARB_TEST_ALLOW_SKIP_DSN", "")
-	failed, _ := assertTerminated(t, func(st *testing.T) {
-		TestDSN(st, "ARB_TEST_PG_DSN")
-	})
-	if !failed {
-		t.Fatal("空 DSN 应 Fatalf（Failed），但未 Failed")
+	got := TestDSN(t, "ARB_TEST_PG_DSN")
+	if !strings.Contains(got, "127.0.0.1:5434/arb_test") {
+		t.Fatalf("空 env 应缺省独立测试实例 5434（D-021），got=%s", got)
+	}
+	if !strings.Contains(got, "_"+callerPkgSelfTag()) {
+		t.Fatalf("缺省 DSN 仍应带逐包+席位改写，got=%s", got)
 	}
 }
 
+// callerPkgSelfTag testutil 包自身测试的包 tag（callerPackageTag 从本测试帧推导=testutil）。
+func callerPkgSelfTag() string { return "testutil" }
+
 func TestTestDSN_AllowSkip_Skipf(t *testing.T) {
-	setEnv(t, "ARB_TEST_PG_DSN", "")
+	setEnv(t, "ARB_NO_SUCH_TEST_DSN_X", "")
 	setEnv(t, "ARB_TEST_ALLOW_SKIP_DSN", "1")
 	_, skipped := assertTerminated(t, func(st *testing.T) {
-		TestDSN(st, "ARB_TEST_PG_DSN")
+		TestDSN(st, "ARB_NO_SUCH_TEST_DSN_X")
 	})
 	if !skipped {
-		t.Fatal("逃生门+空 DSN 应 Skipf（Skipped），但未 Skipped")
+		t.Fatal("逃生门+未知 envVar（无缺省映射）应 Skipf（Skipped），但未 Skipped")
+	}
+}
+
+func TestTestDSN_UnknownEnvVarNoDefault_Fatalf(t *testing.T) {
+	setEnv(t, "ARB_NO_SUCH_TEST_DSN_X", "")
+	setEnv(t, "ARB_TEST_ALLOW_SKIP_DSN", "")
+	failed, _ := assertTerminated(t, func(st *testing.T) {
+		TestDSN(st, "ARB_NO_SUCH_TEST_DSN_X")
+	})
+	if !failed {
+		t.Fatal("未知 envVar（无缺省映射）应 Fatalf（Failed），但未 Failed")
 	}
 }
 
