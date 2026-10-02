@@ -126,11 +126,7 @@ type Config struct {
 	XAssetDisasterNoiseMult float64
 	XAssetDisasterDebounce  int
 	XAssetQuoteMaxAge       time.Duration // ≤0 = 不查新鲜度（回退旧行为）
-	// D-409 收割费用摊销门槛：XAssetFeeHoldMaxDays=estDays 上限+延迟时钟上限（天，
-	// ≤0→缺省 2.0 防呆）；XAssetCexFeeBps=fee_usd NULL 腿与平仓成本估算率（与 dashboard
-	// enrich 同源同值，禁第二费率口径）。
-	XAssetFeeHoldMaxDays float64
-	XAssetCexFeeBps      float64
+	XAssetCexFeeBps         float64
 
 	// D-014：econ 经济闸。EconFeeBps=费率源解析器（venue 事实/exchange_configs，
 	// 未接线或缺源 → fail-closed 拒开/不收割）；MaxBreakevenDays=入场回本上限
