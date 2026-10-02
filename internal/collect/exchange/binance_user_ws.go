@@ -74,7 +74,7 @@ type BinanceUserHooks struct {
 	OnIO         func()
 	// D-569 包B S7：MARGIN_CALL 整帧转发（payload=全帧 data；schema 官方不可得故不解析）。
 	OnMarginCall func(payload []byte)
-	// OnPositionClosed D-015 ②：ACCOUNT_UPDATE a.P pa=0 行=该 symbol+posSide 已平
+	// OnPositionClosed D-015 ②（R1）：ACCOUNT_UPDATE a.P pa=0 行=该 symbol+posSide 已平
 	// （手动/强平/ADL 同形态，a.m 记 ORDER/AUTODELEVERAGE 等原因）→ 落 CLOSE EXTERNAL + recon.Kick。
 	OnPositionClosed func(venueKey, symbol, posSide string)
 }

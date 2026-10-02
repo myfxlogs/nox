@@ -214,7 +214,7 @@ func (b *BinanceUserWS) onAccountUpdate(ctx context.Context, a json.RawMessage) 
 		if pa == 0 {
 			// D-584 S4（b51a8c61 增收）：venue 平仓后推零量行——pa=0=该 symbol 无仓，
 			// 全量替换语义下不建仓即正确（照建=dashboard 幻影仓）；iwSum 不累加该条。
-			// D-015 ②：pa=0 行=该腿已平 → 进对账标记链（posSide 原样透传，装配层归一）。
+			// D-015 ②（R1）：pa=0 行=该腿已平 → recon.Kick 叫醒对账（posSide 原样透传，不落库）。
 			if b.hooks.OnPositionClosed != nil {
 				b.hooks.OnPositionClosed(b.venueKey, p.S, p.PS)
 			}
