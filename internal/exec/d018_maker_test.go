@@ -51,7 +51,7 @@ func (e *fakeMakerExecutor) PlacePostOnly(ctx context.Context, o Order, px float
 	return "po-1", nil
 }
 
-func (e *fakeMakerExecutor) AwaitPostOnlyFill(ctx context.Context, o Order, orderID string, poll time.Duration) (Fill, bool, error) {
+func (e *fakeMakerExecutor) AwaitPostOnlyFill(ctx context.Context, o Order, orderID string) (Fill, bool, error) {
 	n := atomic.AddInt32(&e.awaitCalls, 1)
 	if e.fillAtAwait > 0 && n >= e.fillAtAwait {
 		return Fill{OrderID: orderID, Price: 100.0, Qty: o.Qty, FeeUSD: 0.001}, true, nil

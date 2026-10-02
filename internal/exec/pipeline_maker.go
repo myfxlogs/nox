@@ -28,7 +28,7 @@ var ErrMakerBudgetExhausted = errors.New("maker attempt budget exhausted for opp
 // 执行器不实现此接口 → makerPlan 不适格，走既有市价路径。
 type PostOnlyPlacer interface {
 	PlacePostOnly(ctx context.Context, o Order, limitPrice float64) (string, error)
-	AwaitPostOnlyFill(ctx context.Context, o Order, orderID string, poll time.Duration) (Fill, bool, error)
+	AwaitPostOnlyFill(ctx context.Context, o Order, orderID string) (Fill, bool, error)
 	PostOnlyCancel(ctx context.Context, o Order, orderID string) (Fill, error)
 }
 
@@ -148,8 +148,10 @@ func (p *Pipeline) executeMakerLeg(ctx context.Context, leg LegSpec, clientOrder
 		log.Printf("[exec] maker leg %s %s %s: 挂单即拒（不 chase）→ FAILED: %v", leg.VenueKey, leg.Side, leg.VenueSymbol, err)
 		return fail("FAILED", "")
 	}
+	// D-018 R1：等待=事件驱动（私有 WS 订单帧→cache 订阅扇出唤醒→快照终判零 REST），
+	// 超时 T 撤单终查一次 REST。
 	mctx, cancel := context.WithTimeout(ctx, timeout)
-	fill, filled, err := po.AwaitPostOnlyFill(mctx, ord, ordID, 0)
+	fill, filled, err := po.AwaitPostOnlyFill(mctx, ord, ordID)
 	cancel()
 	if err != nil {
 		// 查单链路错=订单状态未知 → UNKNOWN（禁假 FAILED——假未成交会触发收编平另一腿）。

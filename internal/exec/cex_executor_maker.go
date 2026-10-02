@@ -1,4 +1,5 @@
-// cex_executor_maker.go —— D-018 阶段a：post-only 限价发单 + 撤单终查 + 成交等待（三所）。
+// cex_executor_maker.go —— D-018 阶段a：post-only 限价发单 + 撤单终查（三所）。
+// 等待/唤醒见 cex_executor_maker_wait.go（R1 拆分：本文件=发单与撤单，≤300 行纪律）。
 // maker 只挂 CEX perp 腿（spot/MT 不适用——MT 无 post-only 语义，spot 腿恒 taker）。
 // 只挂不追：post-only 被拒（会吃单）=终态错误，不重试；撤单终查双证——撤后必须以查单
 // 终态回填成交部分（cancel 响应 executedQty 不足信，D-421 同源教训）。
@@ -15,8 +16,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"arb/internal/signutil"
 )
 
 // roundToTick 限价 tick 取整（四舍五入到最近步长；tick<=0 = fail-closed 不猜步长）。
@@ -275,62 +274,4 @@ func (e *CEXExecutor) postOnlyCancelResult(ctx context.Context, o Order, orderID
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
-}
-
-// AwaitPostOnlyFill 轮询等待 post-only 成交（poll 间隔 500ms）至终态或 ctx 到期（=超时 T）。
-// 返回 (fill, filled, err)：filled=true → fill 有效（必 maker）；ctx 到期返回 filled=false
-// （订单可能仍 live/partial——调用方必须走 PostOnlyCancel 终查，禁直接当未成交）。
-func (e *CEXExecutor) AwaitPostOnlyFill(ctx context.Context, o Order, orderID string, poll time.Duration) (Fill, bool, error) {
-	if poll <= 0 {
-		poll = 500 * time.Millisecond
-	}
-	tick := time.NewTicker(poll)
-	defer tick.Stop()
-	for {
-		state, qty, px, fee, err := e.QueryOrderStatus(ctx, orderID, o.ClientOrderID, o.Symbol)
-		if err != nil {
-			return Fill{}, false, fmt.Errorf("await status: %w", err)
-		}
-		switch state {
-		case "filled":
-			return Fill{OrderID: orderID, Price: px, Qty: qty, FeeUSD: fee, FillKind: "maker", Ts: time.Now()}, true, nil
-		case "canceled":
-			return Fill{OrderID: orderID, Price: px, Qty: qty, FeeUSD: fee, FillKind: "maker", Ts: time.Now()}, false, nil
-		}
-		select {
-		case <-ctx.Done():
-			return Fill{}, false, nil // 超时——调用方 PostOnlyCancel 终查
-		case <-tick.C:
-		}
-	}
-}
-
-// gateSignedDelete gate v4 DELETE 签名请求（撤单；GateSign method="DELETE"、query/body=""）。
-func (e *CEXExecutor) gateSignedDelete(ctx context.Context, endpoint, urlPath string) error {
-	ts := gateNow()
-	sign := signutil.GateSign(e.apiSecret, "DELETE", urlPath, "", "", ts)
-	headers := http.Header{
-		"KEY":       {e.apiKey},
-		"Timestamp": {strconv.FormatInt(ts, 10)},
-		"SIGN":      {sign},
-		"Accept":    {"application/json"},
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, e.baseURL+endpoint, nil)
-	if err != nil {
-		return err
-	}
-	for k, vs := range headers {
-		for _, v := range vs {
-			req.Header.Add(k, v)
-		}
-	}
-	resp, err := e.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		return fmt.Errorf("gate delete %s: http %d", endpoint, resp.StatusCode)
-	}
-	return nil
 }

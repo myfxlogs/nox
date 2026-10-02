@@ -39,7 +39,11 @@ type CEXExecutor struct {
 	// D-570 包B S4③：gate 订单事件查口（同构；费走帧回填）。
 	gateOrderLookup func(ordID string) (GateOrderSnap, bool)
 	okxOrderLookup  func(ordID string) (OKXOrderSnap, bool) // D-566 包B S4
-	posModeSF       singleflight.Group                      // D-566 包B S5：posMode 在途合并（非时效缓存）
+	// orderWake D-018 R1：订单事件订阅闭包（OrderEventCache.SubscribeEvents 注入）——
+	// AwaitPostOnlyFill 等待唤醒源（WS 帧写缓存即扇出 venueKey），替代 REST 轮询。
+	// nil=未接线（等待退化裸等超时 T 后撤单终查，语义不变感知延迟变大）。
+	orderWake func() (<-chan string, func())
+	posModeSF singleflight.Group // D-566 包B S5：posMode 在途合并（非时效缓存）
 
 	// D-570 包C S6①：gate 规格/quanto 缓存升包级 gateSpecCache/gateQuantoCache
 	// （contract_info WS 推送+拒单驱动须跨 executor 实例失效——实例表成死端）。
