@@ -208,3 +208,23 @@ func (s *Store) ExchangeTakerFeeBps(ctx context.Context, venue, venueType string
 	}
 	return *v, true, nil
 }
+
+// ExchangeMakerFeeBps D-018 后段：CEX 腿 maker 费率源——exchange_configs.maker_fee_bps
+// （venue 官方费率页事实）。venue+venue_type 严格匹配；无行/NULL → ok=false
+// （调用方回落 taker 保守口径，不 fail-closed）。
+func (s *Store) ExchangeMakerFeeBps(ctx context.Context, venue, venueType string) (float64, bool, error) {
+	var v *float64
+	err := s.pool.QueryRow(ctx,
+		`SELECT maker_fee_bps FROM exchange_configs WHERE venue=$1 AND venue_type=$2
+		 ORDER BY created_at DESC, id DESC LIMIT 1`, venue, venueType).Scan(&v)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, false, nil
+		}
+		return 0, false, err
+	}
+	if v == nil {
+		return 0, false, nil
+	}
+	return *v, true, nil
+}
