@@ -191,17 +191,19 @@ type Config struct {
 
 	// === 前端分析员（D-091）===
 	// AIBaseURL/Key/Model/PGDSN 四 env + RatePerHour 限流；空 Key=未配置（RPC 返回 failed_precondition）。
-	AIBaseURL           string        // ARB_AI_BASE_URL（如 https://open.bigmodel.cn/api/paas/v4）
-	AIAPIKey            string        // ARB_AI_API_KEY（仅 .env，不进仓）
-	AIModel             string        // ARB_AI_MODEL（如 glm-4.6）
-	AlertDedupWindow    time.Duration // D-592 S1：告警同键去重窗（envDuration 缺省 30min）
-	AIPGDSN             string        // ARB_AI_PG_DSN（arb_ro 只读角色 DSN）
-	RetroDisabled       bool          // ARB_RETRO_ENABLED=0/false 关复盘定时器（D-457）
-	AnalystRatePerHour  int           // ARB_ANALYST_RATE_PER_HOUR（默认 20）
-	ExplorerEnabled     bool          // ARB_EXPLORER_ENABLED 缺省 false——探矿员壳总闸（D-513：关=零行为变化）
-	ExplorerRatePerHour int           // ARB_EXPLORER_RATE_PER_HOUR（默认 10，独立令牌桶）
-	MacroEnabled        bool          // ARB_MACRO_ENABLED 缺省 false——宏观采集层总闸（D-528：关=零行为变化）
-	CalibEnabled        bool          // ARB_CALIB_ENABLED 缺省 true——校准计分板总闸（D-533：只读计分+写自表）
+	AIBaseURL               string        // ARB_AI_BASE_URL（如 https://open.bigmodel.cn/api/paas/v4）
+	AIAPIKey                string        // ARB_AI_API_KEY（仅 .env，不进仓）
+	AIModel                 string        // ARB_AI_MODEL（如 glm-4.6）
+	AlertDedupWindow        time.Duration // D-592 S1：告警同键去重窗（envDuration 缺省 30min）
+	MakerFirstLegTimeout    time.Duration // D-018 阶段a ARB_MAKER_FIRST_LEG_TIMEOUT：首腿 post-only 超时 T（缺=fail-closed maker 停用）
+	MakerMaxAttemptsPerHour int           // D-018 阶段a ARB_MAKER_MAX_ATTEMPTS_PER_HOUR：每 opp 每小时挂单上限 N（缺=fail-closed 停用）
+	AIPGDSN                 string        // ARB_AI_PG_DSN（arb_ro 只读角色 DSN）
+	RetroDisabled           bool          // ARB_RETRO_ENABLED=0/false 关复盘定时器（D-457）
+	AnalystRatePerHour      int           // ARB_ANALYST_RATE_PER_HOUR（默认 20）
+	ExplorerEnabled         bool          // ARB_EXPLORER_ENABLED 缺省 false——探矿员壳总闸（D-513：关=零行为变化）
+	ExplorerRatePerHour     int           // ARB_EXPLORER_RATE_PER_HOUR（默认 10，独立令牌桶）
+	MacroEnabled            bool          // ARB_MACRO_ENABLED 缺省 false——宏观采集层总闸（D-528：关=零行为变化）
+	CalibEnabled            bool          // ARB_CALIB_ENABLED 缺省 true——校准计分板总闸（D-533：只读计分+写自表）
 	// MTData MT 数据采集稳定性加固参数（D-104 P0）。
 	MTData MTDataConfig
 
