@@ -13,6 +13,7 @@ import (
 	"arb/internal/dashboard"
 	"arb/internal/exec"
 	"arb/internal/fact"
+	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
 )
 
@@ -21,14 +22,23 @@ const (
 	d406AltOpp = "XASSET_CARRY:XAUUSD:3001158:mt5:binance:perp"
 )
 
-// d406Engine 轮转测试引擎：service 接真 store（MarginFloorKnown 数据源=D-405 快照表），
+// d406Engine 轮转测试引擎：service 接真 store（MarginFloorKnown 数据源=AccountMonitor 实时态），
 // CS resolver 注入（MT=100/CEX=1）；fundingBreach/disasterBreach 初始化。
 func d406Engine(s *pgstore.Store, qb *bus.QuoteBus, maxPerDay int) *Engine {
-	svc := dashboard.New(s, qb, nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, nil, 0, nil, nil, 0, 0, nil)
+	// D-549/3d-P1#1c：CEX 隐含率锚 buffer_multiple 改读 AccountMonitor 实时态（快照表
+	// 退出决策面）——经 AddStatic 假查询器喂 binance:perp（equity 2000/buffer 4）。
+	bm := dashboard.NewBrokerManager(nil, bus.New(), exec.NewRegistry(), time.Minute)
+	acctMon := dashboard.NewAccountMonitor(bm, nil)
+	acctMon.AddStatic(&mockAcctQuerier{key: "binance:perp", acct: &reconcile.AccountInfo{
+		VenueKey: "binance:perp", Venue: "binance", VenueType: "perp", AssetType: "cex",
+		Equity: 2000, Currency: "USD", BufferMultiple: 4.0,
+	}})
+	acctMon.Refresh(context.Background())
+	svc := dashboard.New(s, qb, nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, nil, 0, acctMon, nil, 0, 0, nil)
 	svc.SetLegContractSize(func(_, _ string) (float64, bool) { return 100, true })
 	svc.SetCexContractSize(func(_, _ string) (float64, bool) { return 1.0, true })
 	// D-549：CEX 执行链资金数=活账本/REST 实拉（快照兜底禁用）——喂 ws 活值
-	// （快照行仍留 buffer_multiple 隐含率锚 + MT 腿净值/free_margin）。
+	// （buffer_multiple 隐含率锚走上方 acctMon 假查询器；快照行仅 MT 腿净值/free_margin）。
 	led := bus.NewBalanceLedger()
 	svc.SetBalanceLedger(led)
 	led.Put("binance:perp", 1500, 2000, "USD", "ws", time.Now())

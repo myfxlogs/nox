@@ -15,6 +15,7 @@ import (
 	"arb/internal/bus"
 	"arb/internal/dashboard"
 	"arb/internal/store/pgstore"
+	"arb/internal/testutil"
 )
 
 // mkOpenEntry 构造内存缓存行（legs 手工给，绕 DB——quoteExitHit 零 DB 语义本身被测）。
@@ -346,6 +347,7 @@ func TestQuoteFastPath_ReloadBreak(t *testing.T) {
 	}
 	// allLegsActionable 需要窗口内 bid 变化（D-495 判据）——两腿裸 venue 各插两笔。
 	now := time.Now()
+	testutil.EnsureTicksPartition(t, s)
 	if err := s.InsertTicks(ctx, []pgstore.TickRow{
 		{Ts: now.Add(-time.Second), Venue: "vA", Symbol: "X", Bid: 99.9, Ask: 100.0, VenueType: "mt5"},
 		{Ts: now, Venue: "vA", Symbol: "X", Bid: 99.95, Ask: 100.0, VenueType: "mt5"},

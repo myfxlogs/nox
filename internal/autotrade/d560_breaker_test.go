@@ -71,7 +71,13 @@ func TestD560_BreakerTripAndProbe(t *testing.T) {
 	}
 	// 窗到 → 放行探测，成功=复位
 	g.breakerMu.Lock()
-	g.breaker[dk+"|"+errclass.RejectVariant].ResumeAt = time.Now().Add(-time.Second)
+	be := g.breaker[dk+"|"+errclass.RejectVariant]
+	g.breakerMu.Unlock()
+	if be == nil {
+		t.Fatalf("三连败后应有熔断态（缺则 Submit 未到执行面——查 autotrade_state/broker_accounts 夹具）")
+	}
+	g.breakerMu.Lock()
+	be.ResumeAt = time.Now().Add(-time.Second)
 	g.breakerMu.Unlock()
 	ok := func(context.Context) (string, string, int64) { calls.Add(1); return "EXECUTED", "", 7 }
 	if r := g.Submit(ctx, d560Intent(dk, ok)); r.Status != "EXECUTED" {
@@ -94,7 +100,13 @@ func TestD560_BreakerProbeFailRearms(t *testing.T) {
 	g.Submit(ctx, d560Intent(dk, exec)) // 窗内首跳 → PAUSED#1
 	// 窗到 → 探测败 → 新窗
 	g.breakerMu.Lock()
-	g.breaker[dk+"|"+errclass.RejectVariant].ResumeAt = time.Now().Add(-time.Second)
+	be := g.breaker[dk+"|"+errclass.RejectVariant]
+	g.breakerMu.Unlock()
+	if be == nil {
+		t.Fatalf("三连败+首跳后应有熔断态（缺则 Submit 未到执行面——查 autotrade_state/broker_accounts 夹具）")
+	}
+	g.breakerMu.Lock()
+	be.ResumeAt = time.Now().Add(-time.Second)
 	g.breakerMu.Unlock()
 	if r := g.Submit(ctx, d560Intent(dk, exec)); r.Status != "FAILED" {
 		t.Fatalf("探测应真执行, got %s", r.Status)
