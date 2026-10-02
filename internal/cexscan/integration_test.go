@@ -106,8 +106,8 @@ func TestScanOnce_FullFlow(t *testing.T) {
 		symbols:  []string{"BTC"},
 	}
 	// 覆盖 OKX base URL（用 collectOKXWithBase）
-	// 由于 scanner.scanOnce 调 s.earn.Collect → CollectOKX（硬编码 www.okx.com），
-	// 我们直接测试各组件 + 手动入库验证 scanOnce 逻辑
+	// scanner.scanOnce 调 s.earn.Collect → CollectOKX（直连 www.okx.com → 传输层错误回落
+	// c.okxBase，D-011 S2）；此处直接注入 mock base 测组件 + 手动入库验证 scanOnce 逻辑
 	// 先用 collectOKXWithBase 测试 OKX 采集
 	okxAPRs, err := collectOKXWithBase(ctx, scanner.earn, okxSrv.URL)
 	if err != nil {

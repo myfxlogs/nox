@@ -123,7 +123,12 @@ func TestCalcSpreads_SingleError(t *testing.T) {
 }
 
 // calcSpreadsTestable 可注入 OKX base URL 的 CalcSpreads（测试用）。
+// 注入基址同时覆写包级直连基址 okxDirectBase——D-011 S2 起 fetchOKXTicker 先打直连域，
+// 不覆写会外打生产 www.okx.com（网络可达时拿到真价污染断言，不可达时白耗超时）。
 func calcSpreadsTestable(ctx context.Context, client *http.Client, okxBase, bnBase string, symbols []string) ([]SpreadResult, error) {
+	old := okxDirectBase
+	okxDirectBase = okxBase
+	defer func() { okxDirectBase = old }()
 	var out []SpreadResult
 	for _, ccy := range symbols {
 		okxPrice, err := fetchOKXTicker(ctx, client, okxBase, ccy)
