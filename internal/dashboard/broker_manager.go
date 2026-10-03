@@ -47,6 +47,7 @@ type running struct {
 	setUnitScales    func(map[string]adapter.SymbolScale, map[string]bool)       // D-594：运行时刷新单位标定+敏感集
 	resubscribe      func([]string)                                              // 运行时补订阅新符号（保存映射后生效，D-047 缺陷③）
 	swap             func(ctx context.Context) ([]fact.Fact, error)              // 轮询 swap facts（§3.6，D-036）
+	sessions         func(ctx context.Context) ([]fact.Fact, error)              // D-029 R3：周交易会话表采集（每日刷新面）
 	meta             func(ctx context.Context) ([]fact.Fact, error)              // D-140 S2：MT5 符号元数据 facts（CS 采集）
 	orderHistoryScan orderHistoryScan                                            // D-181 S1：拉历史已平仓订单（BackfillSwapHistory RPC 用），nil=未接线
 	acctSummary      func(ctx context.Context) (float64, float64, string, error) // D-563 S4b：MT 实时 equity/freeMargin/currency（AccountSummary RPC）；nil=非 MT 或未接线
