@@ -6,8 +6,6 @@ package dashboard
 
 import (
 	"context"
-	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -42,16 +40,11 @@ type BrokerPositionMonitor struct {
 
 	mu     sync.RWMutex
 	venues map[string]venueState // venueKey → 状态
-	// D-031 ②：仓位级原生保证金缓存（禁每帧 RPC）。
-	reqMarginFor func(ctx context.Context, venueKey, symbol, side string, lots, price float64) (float64, bool)
-	imrFor       func(ctx context.Context, venue, canonical string) (float64, bool)
-	marginCache  map[string]d031MarginEntry // venueKey|ticket → 值
-	marginImr    map[string]float64         // venueKey → 最近一次 imr fact 值
-	lastPairSig  map[string]string          // venueKey → 持仓集签名
-	marginMu     sync.Mutex
-	cur          map[string]*v1.BrokerPosition // posKey → 已发布显示态（回放源+proto.Equal 去重）
-	dirty        map[string]struct{}           // 待发事件 posKey 集（flush 时按最新态裁决 upsert/remove）
-	flushT       *time.Timer                   // 尾沿合批定时器（AfterFunc，有界非周期）
+	// d031 D-031 ②/R2：MT5 仓位级保证金域（缓存/退避/imr——broker_position_monitor_margin.go）。
+	d031   d031MarginState
+	cur    map[string]*v1.BrokerPosition // posKey → 已发布显示态（回放源+proto.Equal 去重）
+	dirty  map[string]struct{}           // 待发事件 posKey 集（flush 时按最新态裁决 upsert/remove）
+	flushT *time.Timer                   // 尾沿合批定时器（AfterFunc，有界非周期）
 	// D-571 包A：venue_online 由流状态事件承担——流已知则权威，缺席回退 REST 成败。
 	streamKnown  map[string]bool
 	streamOnline map[string]bool
@@ -99,18 +92,6 @@ func (m *BrokerPositionMonitor) SetSettlementProfileCollector(c *SettlementProfi
 
 // SetAnnotator D-571 包A：注入事件载荷标注器（Service 侧 annotatePositionID/
 // annotateAccountAlias/annotateCEXSwap 三件套闭包——与 case 8 流推送同源口径）。
-// SetRequiredMarginFor D-031 ②：注入仓位级原生保证金 RPC 口（BrokerManager.RequiredMarginFor
-// 包装；nil=未注入→MT5 保证金列诚实空态）。
-func (m *BrokerPositionMonitor) SetRequiredMarginFor(fn func(ctx context.Context, venueKey, symbol, side string, lots, price float64) (float64, bool)) {
-	m.reqMarginFor = fn
-}
-
-// SetInitMarginRateFn D-031 ②：注入 init_margin_rate fact 读口（缓存失效信号之二：
-// 值变化→缓存失效重拉；nil=仅持仓集签名失效）。
-func (m *BrokerPositionMonitor) SetInitMarginRateFn(fn func(ctx context.Context, venue, canonical string) (float64, bool)) {
-	m.imrFor = fn
-}
-
 func (m *BrokerPositionMonitor) SetAnnotator(f func(ctx context.Context, bps []*v1.BrokerPosition)) {
 	m.annotateFn = f
 }
@@ -291,71 +272,4 @@ func (m *BrokerPositionMonitor) dirtyLocked(posKey string) {
 			m.flush(ctx)
 		})
 	}
-}
-
-// d031MarginEntry D-031 ②：仓位级原生保证金缓存条目（值+拉取时 init_margin_rate 快照）。
-type d031MarginEntry struct {
-	val float64
-	imr float64
-}
-
-// cachedRequiredMargin D-031 ②：仓位级保证金（带缓存——禁每帧 RPC）。
-// 失效=持仓集签名变化（venueState.orders 键集）∨ init_margin_rate fact 值变化。
-// RPC 失败 → ok=false（诚实空态，不缓存失败值，下次失效重试）。
-func (m *BrokerPositionMonitor) cachedRequiredMargin(ctx context.Context, vk, venueKey, symbol, canonical, side string, lots, openPrice float64) (float64, bool) {
-	if m.reqMarginFor == nil {
-		return 0, false
-	}
-	sig := m.positionSetSig(vk)
-	imr, imrOK := 0.0, false
-	if m.imrFor != nil {
-		imr, imrOK = m.imrFor(ctx, keydomain.BareOf(venueKey), canonical)
-	}
-	m.marginMu.Lock()
-	if m.lastPairSig == nil {
-		m.lastPairSig = map[string]string{}
-		m.marginCache = map[string]d031MarginEntry{}
-		m.marginImr = map[string]float64{}
-	}
-	if m.lastPairSig[vk] != sig {
-		m.marginCache = map[string]d031MarginEntry{}
-		m.lastPairSig[vk] = sig
-	}
-	if imrOK {
-		if old, has := m.marginImr[venueKey]; has && old != imr {
-			m.marginCache = map[string]d031MarginEntry{}
-		}
-		m.marginImr[venueKey] = imr
-	}
-	key := posKeyOf(venueKey, symbol) + "|" + side
-	if ent, has := m.marginCache[key]; has && (!imrOK || ent.imr == imr) {
-		m.marginMu.Unlock()
-		return ent.val, true
-	}
-	m.marginMu.Unlock()
-	val, ok := m.reqMarginFor(ctx, venueKey, symbol, side, lots, openPrice)
-	if !ok {
-		return 0, false
-	}
-	m.marginMu.Lock()
-	if m.marginCache == nil {
-		m.marginCache = map[string]d031MarginEntry{}
-	}
-	m.marginCache[key] = d031MarginEntry{val: val, imr: imr}
-	m.marginMu.Unlock()
-	return val, true
-}
-
-// positionSetSig 持仓集签名（venueState.orders 键集排序串）。
-func (m *BrokerPositionMonitor) positionSetSig(vk string) string {
-	vs, ok := m.venues[vk]
-	if !ok {
-		return ""
-	}
-	keys := make([]string, 0, len(vs.orders))
-	for k := range vs.orders {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return strings.Join(keys, ",")
 }

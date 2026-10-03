@@ -62,7 +62,7 @@ func (m *BrokerPositionMonitor) protoFor(ctx context.Context, vk string, vs venu
 	// 带缓存（持仓集签名/init_margin_rate 变化失效——禁每帧 RPC）；失败=诚实空态。
 	margin := o.InitialMargin
 	if keydomain.IsType(o.VenueKey, "mt5") {
-		if mv, ok := m.cachedRequiredMargin(ctx, vk, o.VenueKey, o.Symbol, canonical, o.Side, o.Volume, o.OpenPrice); ok {
+		if mv, ok := m.cachedRequiredMargin(ctx, vk, o.VenueKey, o.Symbol, canonical, o.Side, o.Ticket, o.Volume, o.OpenPrice); ok {
 			margin = mv
 		}
 	}

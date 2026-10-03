@@ -1,6 +1,9 @@
 // d031_test.go —— D-031 验收锚：MT5 持仓面现价/保证金取 venue 原生值。
 // ① MT5OrdersToOrders：ClosePrice→CurrentPrice + PriceAt 映射（手动仓 lastQuote 空不再「—」）；
-// ② RequiredMargin 缓存：持仓集签名变化失效 / RPC 失败不缓存 / 命中不重复 RPC；
+// ② RequiredMargin 缓存：键 venueKey|ticket|side；持仓集签名变化失效 / RPC 失败 5min 退避 /
+//
+//	imr 读口仅 miss/签名变化路径（R1 退回③）；命中不重复 RPC；
+//
 // ③ 浮盈=同帧 Order.Profit 透传（既有 D-043 语义核对断言）。
 package dashboard
 
@@ -24,16 +27,15 @@ func TestD031_MarginCacheInvalidatesOnPositionSetChange(t *testing.T) {
 		return 420.5, true
 	})
 	// venueState 直写（orders 键集=签名源）。
-	m.venues["3001157:mt5"] = venueState{orders: map[string]venue.Order{}}
 	vk, symbol, side := "3001157:mt5", "XAUUSDm", "BUY"
 
 	m.venues[vk] = venueState{orders: map[string]venue.Order{
 		"t1": {Ticket: "t1", Symbol: symbol, Side: side},
 	}}
-	if v, ok := m.cachedRequiredMargin(context.Background(), vk, vk, symbol, "XAUUSD", side, 0.01, 4000); !ok || v != 420.5 {
+	if v, ok := m.cachedRequiredMargin(context.Background(), vk, vk, symbol, "XAUUSD", side, "t1", 0.01, 4000); !ok || v != 420.5 {
 		t.Fatalf("首次拉取 want 420.5, got %v ok=%v", v, ok)
 	}
-	if v, ok := m.cachedRequiredMargin(context.Background(), vk, vk, symbol, "XAUUSD", side, 0.01, 4000); !ok || v != 420.5 {
+	if v, ok := m.cachedRequiredMargin(context.Background(), vk, vk, symbol, "XAUUSD", side, "t1", 0.01, 4000); !ok || v != 420.5 {
 		t.Fatalf("命中缓存 want 420.5, got %v ok=%v", v, ok)
 	}
 	if calls != 1 {
@@ -44,19 +46,52 @@ func TestD031_MarginCacheInvalidatesOnPositionSetChange(t *testing.T) {
 		"t1": {Ticket: "t1", Symbol: symbol, Side: side},
 		"t2": {Ticket: "t2", Symbol: symbol, Side: side},
 	}}
-	if _, ok := m.cachedRequiredMargin(context.Background(), vk, vk, symbol, "XAUUSD", side, 0.01, 4000); ok {
+	if _, ok := m.cachedRequiredMargin(context.Background(), vk, vk, symbol, "XAUUSD", side, "t2", 0.01, 4000); ok {
 		t.Fatal("RPC 失败应 ok=false（不缓存失败值）")
 	}
-	// 失败未缓存 → 同签名再次调用仍走 RPC（第三次成功）。
-	if v, ok := m.cachedRequiredMargin(context.Background(), vk, vk, symbol, "XAUUSD", side, 0.01, 4000); !ok || v != 420.5 {
-		t.Fatalf("失败后重试 want 420.5, got %v ok=%v", v, ok)
+	// 失败未缓存 → 同键 5min 退避期内重试 = ok=false 不重复 RPC（R1 退回②语义）。
+	if _, ok := m.cachedRequiredMargin(context.Background(), vk, vk, symbol, "XAUUSD", side, "t2", 0.01, 4000); ok {
+		t.Fatal("退避期内同键应 ok=false（不重试）")
 	}
-	if calls != 3 {
-		t.Fatalf("calls=%d, want 3（1 命中+1 失败+1 成功）", calls)
+	if calls != 2 {
+		t.Fatalf("calls=%d, want 2（1 命中+1 失败；第 3 次退避挡下不调 RPC）", calls)
 	}
 }
 
-// TestD031_MarginCacheInvalidatesOnImrChange ②：init_margin_rate fact 值变化 → 缓存失效重拉。
+// TestD031_MarginCacheKeyedByTicket R1 退回①锚：同符号同向两仓不同 lots → 两个不同值
+// （缓存键 venueKey|ticket|side——旧符号键两仓串值）。
+func TestD031_MarginCacheKeyedByTicket(t *testing.T) {
+	m := NewBrokerPositionMonitor(nil, nil, 0, nil, ServerTZCache{}, nil, nil)
+	vals := map[string]float64{"3001157:mt5|BUY": 100.0}
+	m.SetRequiredMarginFor(func(ctx context.Context, venueKey, symbol, side string, lots, price float64) (float64, bool) {
+		return vals[venueKey+"|"+side], true
+	})
+	vk, symbol, side := "3001157:mt5", "XAUUSDm", "BUY"
+	m.venues[vk] = venueState{orders: map[string]venue.Order{
+		"t1": {Ticket: "t1", Symbol: symbol, Side: side, Volume: 0.01},
+		"t2": {Ticket: "t2", Symbol: symbol, Side: side, Volume: 0.03},
+	}}
+	// R1 ②：同符号同向两仓不同 lots → 键含 ticket 不串值（两仓各自缓存独立）。
+	if v, ok := m.cachedRequiredMargin(context.Background(), vk, vk, symbol, "XAUUSD", side, "t1", 0.01, 4000); !ok || v != 100.0 {
+		t.Fatalf("t1 want 100.0, got %v ok=%v", v, ok)
+	}
+	if v, ok := m.cachedRequiredMargin(context.Background(), vk, vk, symbol, "XAUUSD", side, "t2", 0.03, 4000); !ok || v != 100.0 {
+		t.Fatalf("t2 want 100.0（独立键不串 t1 值——键含 ticket 断言经 d031cacheGet 直接核）, got %v ok=%v", v, ok)
+	}
+	// 直核：两键独立存在。
+	m.d031.mu.Lock()
+	_, hasT1 := m.d031.cache[vk+"|t1|"+side]
+	_, hasT2 := m.d031.cache[vk+"|t2|"+side]
+	m.d031.mu.Unlock()
+	if !hasT1 || !hasT2 {
+		t.Fatalf("两仓键应独立在缓存: t1=%v t2=%v", hasT1, hasT2)
+	}
+}
+
+// TestD031_MarginCacheInvalidatesOnImrChange ②：init_margin_rate fact 值变化 → 缓存失效重拉
+// （imr 读口仅 miss/签名变化路径——R1 退回③：命中路径不查库，此测试首拉后 imr 变化 +
+// 持仓集签名变化双触发仍只查一次库？——签名不变 → imr 变化经 miss 判定路径不触发；
+// R1 ③精确语义=imr 只在 needFetch 时读。本锚验证：签名不变+缓存命中 → imr 不读）。
 func TestD031_MarginCacheInvalidatesOnImrChange(t *testing.T) {
 	m := NewBrokerPositionMonitor(nil, nil, 0, nil, ServerTZCache{}, nil, nil)
 	var calls int
@@ -64,23 +99,31 @@ func TestD031_MarginCacheInvalidatesOnImrChange(t *testing.T) {
 		calls++
 		return 420.5 + float64(calls), true
 	})
-	imr := 0.5
+	var imrReads int
 	m.SetInitMarginRateFn(func(ctx context.Context, venue, canonical string) (float64, bool) {
-		return imr, true
+		imrReads++
+		return 0.5, true
 	})
 	vk, symbol, side := "3001157:mt5", "XAUUSDm", "BUY"
 	m.venues[vk] = venueState{orders: map[string]venue.Order{
 		"t1": {Ticket: "t1", Symbol: symbol, Side: side},
 	}}
-	if _, ok := m.cachedRequiredMargin(context.Background(), vk, vk, symbol, "XAUUSD", side, 0.01, 4000); !ok {
+	// 首拉：miss → imr 读一次。
+	if _, ok := m.cachedRequiredMargin(context.Background(), vk, vk, symbol, "XAUUSD", side, "t1", 0.01, 4000); !ok {
 		t.Fatal("首次应拉取成功")
 	}
-	imr = 2.0 // imr fact 变化 → 失效重拉
-	if _, ok := m.cachedRequiredMargin(context.Background(), vk, vk, symbol, "XAUUSD", side, 0.01, 4000); !ok {
-		t.Fatal("imr 变化后应重拉")
+	if imrReads != 1 {
+		t.Fatalf("首拉应读 imr 一次: %d", imrReads)
 	}
-	if calls != 2 {
-		t.Fatalf("imr 变化应失效重拉: calls=%d", calls)
+	// 命中路径（签名不变+缓存命中）→ imr 不再读（R1 退回③：命中路径零查库）。
+	if _, ok := m.cachedRequiredMargin(context.Background(), vk, vk, symbol, "XAUUSD", side, "t1", 0.01, 4000); !ok {
+		t.Fatal("命中应 ok")
+	}
+	if imrReads != 1 {
+		t.Fatalf("命中路径不得读 imr（R1 退回③）: imrReads=%d", imrReads)
+	}
+	if calls != 1 {
+		t.Fatalf("命中路径不得重复 RPC: calls=%d", calls)
 	}
 }
 
