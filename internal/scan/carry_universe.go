@@ -35,6 +35,8 @@ type Store interface {
 	// ListSwapFreeAccounts D-028 ④：venue→swap_free 旗（true→universe join 该 MT 腿 swap=0，
 	// 不等 7d 均值收敛；3001157 实证：spec swap 对 swap-free 账户为错值）。
 	ListSwapFreeAccounts(ctx context.Context) (map[string]bool, error)
+	// ListAssetEquiv D-043：等价类映射（join 主键=asset_class；aliases 退化为无覆盖兜底）。
+	ListAssetEquiv(ctx context.Context) ([]pgstore.AssetEquivEntry, error)
 }
 
 // UniverseRow 单 canonical×最优 venue 组合的净 carry 排名行。
@@ -108,14 +110,14 @@ const spotCarryMinAge = 48 * time.Hour
 // swap facts + venue status 过滤 + tmKnown + 别名表（D-464：双侧同一别名口径）；
 // cex funding 侧由 Run 自载（mt×mt 不用）。
 func (sc *CarryUniverseScanner) loadMtSwapInputs(ctx context.Context) (longF, shortF []fact.Fact,
-	tmKnown func(fact.Fact) (int64, bool), aliases map[string]string, err error) {
+	tmKnown func(fact.Fact) (int64, bool), aliases map[string]string, view *assetClassView, err error) {
 	longF, err = sc.store.LatestFactsByKind(ctx, "swap_long")
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("swap_long facts: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("swap_long facts: %w", err)
 	}
 	shortF, err = sc.store.LatestFactsByKind(ctx, "swap_short")
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("swap_short facts: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("swap_short facts: %w", err)
 	}
 	// D-388 S1.3：broker 托管 venue 非 connected → facts 退出候选（停用即剔除，
 	// 不等 facts 过期；同 autotrade discoverSwapCombos 收口谓词，fail-open 同惯例）。
@@ -148,19 +150,24 @@ func (sc *CarryUniverseScanner) loadMtSwapInputs(ctx context.Context) (longF, sh
 	// D-464 S1：语义别名表载入（一轮一次）；载入失败=报错不静默（同 ListCexUniverse 路径）。
 	rawAliases, err := sc.store.ListSymbolAliases(ctx)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("symbol aliases: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("symbol aliases: %w", err)
 	}
 	aliases, dropped := cleanAliases(rawAliases)
 	if len(dropped) > 0 {
 		log.Printf("[scan] carry universe: %d alias 循环剔除: %v", len(dropped), dropped)
 	}
-	return longF, shortF, tmKnown, aliases, nil
+	// D-043：等价类视图一轮一载（join 主键=asset_class；载入失败=报错不静默同 aliases）。
+	equiv, err := sc.store.ListAssetEquiv(ctx)
+	if err != nil {
+		return nil, nil, nil, nil, nil, fmt.Errorf("asset equiv: %w", err)
+	}
+	return longF, shortF, tmKnown, aliases, newAssetClassView(equiv), nil
 }
 
 // Run 一轮扫描：facts 近 24h 双面→join→结构计算→排序。
 func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanResult, error) {
 	res := ScanResult{}
-	mtSwapLong, mtSwapShort, tmKnown, aliases, err := sc.loadMtSwapInputs(ctx)
+	mtSwapLong, mtSwapShort, tmKnown, aliases, view, err := sc.loadMtSwapInputs(ctx)
 	if err != nil {
 		return res, err
 	}
@@ -173,105 +180,14 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 	filteredCanonicals := map[string]bool{} // D-382 S2：有 swap fact 进入过滤评估的 canonical 集
 	// MT swap facts D-412 F1/F2/F3：单位归一+venue 全保留+7d 窗口均值——收集逻辑
 	// 提取至 carry_universe_collect.go（D-451 S3 纯搬家，注释全文随块搬移见彼）。
-	longByCanon, shortByCanon := sc.collectMtSwaps(ctx, mtSwapLong, mtSwapShort, tmKnown, filteredCanonicals, &res, aliases, sc.swapFreeAccounts(ctx)) // D-028 ④
+	longByCanon, shortByCanon := sc.collectMtSwaps(ctx, mtSwapLong, mtSwapShort, tmKnown, filteredCanonicals, &res, aliases, sc.swapFreeAccounts(ctx), view) // D-028 ④
 	// CEX funding：symbol→canonical（去 USDT）；F2 同款 venue 全保留（每 venue 一行，
 	// 不再 abs 取最优——cex argmax 会使授权组合在 funding 排名易主日假 warn+保底失明）。
 	// funding 符号定结构方向：>0=多 perp 付息→配空 CFD 收息；<0=反向。
 	// D-034：val=decisions 口径 facts 7d 滚动均值（fact.FundingMeanAnnual 共享单实现，
 	// 同 autotrade.fundingRateMeanForVenue）；inst=瞬时最新值仅留展示列。
 	// 窗内零样本/查询败 → stale=读口不可证新鲜（fail-closed 剔除排名，同 F4 语义）。
-	type cexF struct {
-		venue, canonical string
-		val              float64 // 7d 均值年化（net/suspect/open/adverse/zero_accrual 全走此值）
-		inst             float64 // 瞬时最新值（展示列）
-		stale            bool    // F4：均值不可证/最新样本龄期超闸（>UniverseFundingMaxAge）
-	}
-	fundByCanon := map[string]cexF{}
-	for _, f := range cexFunding {
-		canonical := applyAlias(NormalizeJoinKey(cexCanonical(f.Symbol)), aliases) // D-336R1+D-464：归一+别名
-		if canonical == "" {
-			res.Skipped++
-			continue
-		}
-		mean, mts, mok := fact.FundingMeanAnnual(ctx, sc.store, f.Venue, f.Symbol, fact.FundingMeanWindow)
-		fundByCanon[canonical+"|"+f.Venue] = cexF{
-			venue: f.Venue, canonical: canonical, val: mean, inst: f.Value,
-			stale: !mok || (sc.fundingMaxAge > 0 && time.Since(mts) > sc.fundingMaxAge),
-		}
-	}
-	// 结构计算：D-412 F2 全叉积——每 (canonical, mt_venue, cex_venue) 三元组一行
-	//（两种结构取 net 大者），任意授权三元组恒可命中（D-410 保底段三重键回归锚 ②）。
-	for _, cf := range fundByCanon {
-		canonical := cf.canonical
-		mtVenues := map[string]bool{}
-		for _, ml := range longByCanon {
-			if ml.canonical == canonical {
-				mtVenues[ml.venue] = true
-			}
-		}
-		for _, ms := range shortByCanon {
-			if ms.canonical == canonical {
-				mtVenues[ms.venue] = true
-			}
-		}
-		if len(mtVenues) == 0 {
-			// D-382 S2：全禁标记行——三条件全满足才产（v2 钉死）：①canonical∈fundByCanon
-			// （无 funding 本就不产行=正确静默）②有 swap fact 进入过滤评估 ③双向归并零存活。
-			// 行语义=D-345 suspect 先例（脏行可见、net=0 沉底、告警天然不触）+D-350 (spot)
-			// 哨兵 venue 先例；venue 日后解禁 → facts 更新 → 行自动复活为真候选。
-			if filteredCanonicals[canonical] {
-				res.Rows = append(res.Rows, UniverseRow{
-					Canonical: canonical, MtVenue: "(all-disabled)", CexVenue: cf.venue,
-					NetAnnual: 0, FundingAnn: cf.val, FundingInst: cf.inst, SwapFree: false,
-					Note: "mt_trade_disabled",
-				})
-			}
-			continue
-		}
-		for venue := range mtVenues {
-			triple := []UniverseRow{}
-			if ml, ok := longByCanon[canonical+"|"+venue]; ok {
-				// 多 CFD+空 perp：net=funding_ann+swap_long（F1 年化后；swap_long≤0 成本负值
-				// 直加——D1 方向性错误一并闭环，锚① INJ 算术=SSOT 写死 11−236.8=−225.8）
-				row := UniverseRow{
-					Canonical: canonical, MtVenue: ml.venue, CexVenue: cf.venue,
-					NetAnnual: cf.val + ml.val, FundingAnn: cf.val, FundingInst: cf.inst,
-					SwapLongPct: &ml.val,
-					SwapFree:    abs(ml.val) < swapFreeMaxPct, Structure: "long_cfd_short_perp",
-				}
-				if note := suspectNote(ml.val, cf.val); note != "" { // D-345：脏源行 net=0 剔除排名
-					row.NetAnnual, row.SwapFree, row.Note = 0, false, note
-				}
-				if ml.stale || cf.stale { // F4：龄期超闸=读口不诚实，剔除排名（D-345 同族形态）
-					row.NetAnnual, row.SwapFree, row.Note = 0, false, "stale"
-				}
-				triple = append(triple, row)
-			}
-			if ms, ok := shortByCanon[canonical+"|"+venue]; ok {
-				// 空 CFD+多 perp：net=swap_short_recv−funding_ann（funding<0 多头收）
-				row := UniverseRow{
-					Canonical: canonical, MtVenue: ms.venue, CexVenue: cf.venue,
-					NetAnnual: ms.val - cf.val, FundingAnn: cf.val, FundingInst: cf.inst,
-					SwapShortPct: &ms.val,
-					SwapFree:     abs(ms.val) < swapFreeMaxPct, Structure: "short_cfd_long_perp",
-				}
-				if note := suspectNote(ms.val, cf.val); note != "" { // D-345：脏源行 net=0 剔除排名
-					row.NetAnnual, row.SwapFree, row.Note = 0, false, note
-				}
-				if ms.stale || cf.stale { // F4
-					row.NetAnnual, row.SwapFree, row.Note = 0, false, "stale"
-				}
-				triple = append(triple, row)
-			}
-			if len(triple) == 0 {
-				continue
-			}
-			// D-028 ③：long/short 各发一行（原只发赢家——周末 funding=0 赢家翻转 short，
-			// long 行被按 short 的负 net 判 adverse 退出 #64877 → 再 24h 冷却 → 攒不满 7 天）。
-			sort.Slice(triple, func(i, j int) bool { return triple[i].NetAnnual > triple[j].NetAnnual })
-			res.Rows = append(res.Rows, triple...)
-		}
-	}
+	sc.joinCfdLegs(ctx, cexFunding, aliases, view, longByCanon, shortByCanon, filteredCanonicals, &res)
 	// D-350 阶段①：第三结构 spot_carry 段（D-382 S3 拆出 carry_universe_spot.go，纯搬移）。
 	sc.appendSpotCarryRows(ctx, &res)
 	sort.Slice(res.Rows, func(i, j int) bool { return res.Rows[i].NetAnnual > res.Rows[j].NetAnnual })

@@ -31,6 +31,11 @@ func (p *PGStore) ListSymbolAliases(ctx context.Context) (map[string]string, err
 	return p.S.ListSymbolAliases(ctx)
 }
 
+// ListAssetEquiv D-043：等价类映射透传。
+func (p *PGStore) ListAssetEquiv(ctx context.Context) ([]pgstore.AssetEquivEntry, error) {
+	return p.S.ListAssetEquiv(ctx)
+}
+
 // ListCexUniverse D-350：fin_cex_universe 雷达表（spot_carry 第三结构数据源）。
 func (p *PGStore) ListCexUniverse(ctx context.Context) (map[string]pgstore.CexUniverseRow, error) {
 	return p.S.ListCexUniverse(ctx)

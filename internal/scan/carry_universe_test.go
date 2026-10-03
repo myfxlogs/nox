@@ -13,12 +13,14 @@ import (
 // fakeScanStore 受控 store（facts 行+映射表+落库计数+universe 雷达表）。
 type fakeScanStore struct {
 	facts       []fact.Fact
-	windowMeans map[string]float64 // D-412 F3：kind|venue|symbol → 7d 均值（未设回退点值）
+	windowMeans map[string]float64        // D-412 F3：kind|venue|symbol → 7d 均值（未设回退点值）
+	equiv       []pgstore.AssetEquivEntry // D-043：等价类映射（nil=无覆盖兜底）
 	mappings    []pgstore.SymbolMapping
 	replaced    []pgstore.CarryUniverseRow
 	universe    map[string]pgstore.CexUniverseRow
 	statuses    map[string]string // D-388：venue→status（nil=fail-open 全放行）
 	aliases     map[string]string // D-464：alias→canonical
+	swapFree    map[string]bool   // D-043：swap_free 账户覆写（nil=全非）
 }
 
 func (f *fakeScanStore) LatestFactsByKind(ctx context.Context, kind string) ([]fact.Fact, error) {
@@ -113,8 +115,14 @@ func (f *fakeScanStore) ListCexUniverse(_ context.Context) (map[string]pgstore.C
 	return f.universe, nil
 }
 
+func (f *fakeScanStore) ListAssetEquiv(_ context.Context) ([]pgstore.AssetEquivEntry, error) {
+	return f.equiv, nil
+}
 func (f *fakeScanStore) ListSwapFreeAccounts(_ context.Context) (map[string]bool, error) {
-	return map[string]bool{}, nil // D-028 ④：默认全非 swap_free（专项测试覆写字段）
+	if f.swapFree == nil {
+		return map[string]bool{}, nil // D-028 ④：默认全非 swap_free
+	}
+	return f.swapFree, nil
 }
 
 func (f *fakeScanStore) ListBrokerAccountStatuses(_ context.Context) (map[string]string, error) {
