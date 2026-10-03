@@ -24,6 +24,8 @@ func (s *Store) NetRealizedSince(ctx context.Context, since time.Time, excludeIn
 	if excludeIncidents {
 		excl = " AND NOT " + incidentPositionPredicate
 	}
+	// D-047④：PROBE 仓恒排除（dd30 统计口径；现金流入账本但不计业绩/风控聚合）。
+	excl += " AND " + probeExclusionPredicate
 	var sum *float64
 	err := s.pool.QueryRow(ctx, fmt.Sprintf(`
 		SELECT COALESCE(SUM(COALESCE(s.net_realized_usd, s.realized_usd, p.realized_pnl)), 0)

@@ -38,6 +38,9 @@ type Position struct {
 	RequestID              string     // D-195-B：执行意图唯一 ID（migration 0048 列，本包开始写入）
 	DedupKey               string     // D-195-B：业务组合防重（migration 0048 列，本包开始写入）
 	Environment            string     // D-195-B：执行环境 demo/live（migration 0048 列，本包开始写入）
+	DecisionRef            *string    // D-047：决策席批准引用（PROBE 仓；migration 0175 列）
+	AutoCloseAt            *time.Time // D-047：PROBE 到期自动平仓时刻（migration 0175 列）
+	ExitKind               string     // D-047：exit_kind 透传（ListProbes 展示用；其它查询路径不填）
 }
 
 func (s *Store) CreatePosition(ctx context.Context, p *Position) (int64, error) {
@@ -51,12 +54,20 @@ func (s *Store) CreatePosition(ctx context.Context, p *Position) (int64, error) 
 	if p.Environment != "" {
 		env = p.Environment
 	}
+	// D-047：decision_ref/auto_close_at 仅 PROBE 仓填（nil→NULL，非探针路径零漂移）。
+	var decisionRef, autoCloseAt interface{}
+	if p.DecisionRef != nil {
+		decisionRef = *p.DecisionRef
+	}
+	if p.AutoCloseAt != nil {
+		autoCloseAt = *p.AutoCloseAt
+	}
 	q := `INSERT INTO positions (opportunity_id, type, status, expected_net_bps, opened_at, notional_usd,
-			request_id, dedup_key, environment)
-		VALUES ($1, $2, $3, $4, now(), $5, $6, $7, $8) RETURNING id`
+			request_id, dedup_key, environment, decision_ref, auto_close_at)
+		VALUES ($1, $2, $3, $4, now(), $5, $6, $7, $8, $9, $10) RETURNING id`
 	var id int64
 	err := s.pool.QueryRow(ctx, q, p.OpportunityID, p.Type, p.Status, p.ExpectedNetBps, p.NotionalUSD,
-		reqID, dedupKey, env).Scan(&id)
+		reqID, dedupKey, env, decisionRef, autoCloseAt).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("create position: %w", err)
 	}

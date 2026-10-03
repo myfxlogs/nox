@@ -26,9 +26,9 @@ func (s *Store) AggregateStrategyStatsByEnvironment(ctx context.Context, strateg
 				  AND COALESCE(s.stats_status, 'applied') = 'applied'
 				  AND p.environment IS NOT NULL
 				  AND ($2 = '' OR p.environment = $2)
-				  AND NOT %s
+				  AND NOT %s AND %s
 			) t
-		) agg`, incidentPositionPredicate), strategy, environment).Scan(&st.Total, &st.Wins, &st.AvgPnl, &st.MedianPnl)
+		) agg`, incidentPositionPredicate, probeExclusionPredicate), strategy, environment).Scan(&st.Total, &st.Wins, &st.AvgPnl, &st.MedianPnl)
 	if err != nil {
 		return AggregateStat{}, fmt.Errorf("aggregate strategy stats by env: %w", err)
 	}
@@ -46,7 +46,7 @@ func (s *Store) DailyRealizedPnlByEnvironment(ctx context.Context, environment s
 		WHERE p.status = 'CLOSED' AND p.closed_at >= date_trunc('day', now())
 		  AND p.environment IS NOT NULL
 		  AND ($1 = '' OR p.environment = $1)
-		  AND NOT %s`, incidentPositionPredicate), environment).Scan(&sum)
+		  AND NOT %s AND %s`, incidentPositionPredicate, probeExclusionPredicate), environment).Scan(&sum)
 	if err != nil {
 		return 0, fmt.Errorf("daily realized pnl by env: %w", err)
 	}
@@ -81,9 +81,9 @@ func (s *Store) AggregateStrategyStatsByEnvironmentFamily(ctx context.Context, s
 				WHERE p.type = ANY($1) AND p.closed_at IS NOT NULL AND p.realized_pnl IS NOT NULL
 				  AND COALESCE(s.stats_status, 'applied') = 'applied'
 				  AND ($2 = '' OR p.environment = $2)
-				  AND NOT %s
+				  AND NOT %s AND %s
 			) t
-		) agg`, incidentPositionPredicate), strategies, environment).Scan(&st.Total, &st.Wins, &st.AvgPnl, &st.MedianPnl)
+		) agg`, incidentPositionPredicate, probeExclusionPredicate), strategies, environment).Scan(&st.Total, &st.Wins, &st.AvgPnl, &st.MedianPnl)
 	if err != nil {
 		return AggregateStat{}, fmt.Errorf("aggregate strategy stats by env family: %w", err)
 	}

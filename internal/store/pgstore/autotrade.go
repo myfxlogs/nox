@@ -133,9 +133,9 @@ func (s *Store) AggregateStrategyStats(ctx context.Context, strategy string) (Ag
 				FROM position_settlements s
 				JOIN positions p ON p.id = s.position_id
 				WHERE p.type = $1 AND p.closed_at IS NOT NULL AND p.realized_pnl IS NOT NULL
-				  AND COALESCE(s.stats_status, 'applied') = 'applied' AND NOT %s
+				  AND COALESCE(s.stats_status, 'applied') = 'applied' AND NOT %s AND %s
 			) t
-		) agg`, incidentPositionPredicate), strategy).Scan(&st.Total, &st.Wins, &st.AvgPnl, &st.MedianPnl)
+		) agg`, incidentPositionPredicate, probeExclusionPredicate), strategy).Scan(&st.Total, &st.Wins, &st.AvgPnl, &st.MedianPnl)
 	if err != nil {
 		return AggregateStat{}, fmt.Errorf("aggregate strategy stats: %w", err)
 	}
@@ -223,8 +223,8 @@ func (s *Store) DailyRealizedPnl(ctx context.Context) (float64, error) {
 		SELECT COALESCE(SUM(COALESCE(s.net_realized_usd, s.realized_usd, p.realized_pnl)), 0)
 		FROM positions p
 		LEFT JOIN position_settlements s ON s.position_id = p.id
-		WHERE p.status = 'CLOSED' AND p.closed_at >= date_trunc('day', now()) AND NOT %s`,
-		incidentPositionPredicate)).Scan(&sum)
+		WHERE p.status = 'CLOSED' AND p.closed_at >= date_trunc('day', now()) AND NOT %s AND %s`,
+		incidentPositionPredicate, probeExclusionPredicate)).Scan(&sum)
 	if err != nil {
 		return 0, fmt.Errorf("daily realized pnl: %w", err)
 	}
