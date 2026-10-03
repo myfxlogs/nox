@@ -14,4 +14,7 @@ var (
 
 	//go:embed 0173_paper_window_start.sql
 	PaperWindowStartSQL string // D-033①：app_config 播种 ARB_PAPER_WINDOW_START（窗起点单源）
+
+	//go:embed 0174_drop_opportunities_tick.sql
+	DropOpportunitiesTickSQL string // D-040②：opportunities_tick 死表 DROP（stale 8-22 零引用，已备份）
 )
