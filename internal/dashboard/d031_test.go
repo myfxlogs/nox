@@ -10,6 +10,7 @@ package dashboard
 import (
 	"context"
 	"testing"
+	"time"
 
 	"arb/internal/venue"
 )
@@ -88,44 +89,43 @@ func TestD031_MarginCacheKeyedByTicket(t *testing.T) {
 	}
 }
 
-// TestD031_MarginCacheInvalidatesOnImrChange ②：init_margin_rate fact 值变化 → 缓存失效重拉
-// （imr 读口仅 miss/签名变化路径——R1 退回③：命中路径不查库，此测试首拉后 imr 变化 +
-// 持仓集签名变化双触发仍只查一次库？——签名不变 → imr 变化经 miss 判定路径不触发；
-// R1 ③精确语义=imr 只在 needFetch 时读。本锚验证：签名不变+缓存命中 → imr 不读）。
-func TestD031_MarginCacheInvalidatesOnImrChange(t *testing.T) {
+// TestD031_MarginCacheInvalidatesOnTTL R3：条目龄 >24h → 失效重拉（TTL 内命中不重拉）。
+func TestD031_MarginCacheInvalidatesOnTTL(t *testing.T) {
 	m := NewBrokerPositionMonitor(nil, nil, 0, nil, ServerTZCache{}, nil, nil)
 	var calls int
 	m.SetRequiredMarginFor(func(ctx context.Context, venueKey, symbol, side string, lots, price float64) (float64, bool) {
 		calls++
 		return 420.5 + float64(calls), true
 	})
-	var imrReads int
-	m.SetInitMarginRateFn(func(ctx context.Context, venue, canonical string) (float64, bool) {
-		imrReads++
-		return 0.5, true
-	})
 	vk, symbol, side := "3001157:mt5", "XAUUSDm", "BUY"
 	m.venues[vk] = venueState{orders: map[string]venue.Order{
 		"t1": {Ticket: "t1", Symbol: symbol, Side: side},
 	}}
-	// 首拉：miss → imr 读一次。
 	if _, ok := m.cachedRequiredMargin(context.Background(), vk, vk, symbol, "XAUUSD", side, "t1", 0.01, 4000); !ok {
 		t.Fatal("首次应拉取成功")
 	}
-	if imrReads != 1 {
-		t.Fatalf("首拉应读 imr 一次: %d", imrReads)
-	}
-	// 命中路径（签名不变+缓存命中）→ imr 不再读（R1 退回③：命中路径零查库）。
-	if _, ok := m.cachedRequiredMargin(context.Background(), vk, vk, symbol, "XAUUSD", side, "t1", 0.01, 4000); !ok {
-		t.Fatal("命中应 ok")
-	}
-	if imrReads != 1 {
-		t.Fatalf("命中路径不得读 imr（R1 退回③）: imrReads=%d", imrReads)
+	// 条目龄 <24h（刚拉）→ 命中不重拉（首拉值 421.5=calls=1）。
+	if v, ok := m.cachedRequiredMargin(context.Background(), vk, vk, symbol, "XAUUSD", side, "t1", 0.01, 4000); !ok || v != 421.5 {
+		t.Fatalf("TTL 内命中 want 421.5, got %v ok=%v", v, ok)
 	}
 	if calls != 1 {
-		t.Fatalf("命中路径不得重复 RPC: calls=%d", calls)
+		t.Fatalf("TTL 内命中不得重拉: calls=%d", calls)
+	}
+	// 条目龄回拨至 >24h → 失效重拉（第二次值 421.6）。
+	m.d031.mu.Lock()
+	ent := m.d031.cache[venueKeyOf(vk, "t1", side)]
+	ent.at = ent.at.Add(-25 * time.Hour)
+	m.d031.cache[venueKeyOf(vk, "t1", side)] = ent
+	m.d031.mu.Unlock()
+	if v, ok := m.cachedRequiredMargin(context.Background(), vk, vk, symbol, "XAUUSD", side, "t1", 0.01, 4000); !ok || v != 422.5 {
+		t.Fatalf("超龄应失效重拉 want 422.5, got %v ok=%v", v, ok)
+	}
+	if calls != 2 {
+		t.Fatalf("超龄应重拉: calls=%d", calls)
 	}
 }
+
+func venueKeyOf(vk, ticket, side string) string { return vk + "|" + ticket + "|" + side }
 
 // TestD031_ProfitPassthrough ③核对：浮盈列=同帧 Order.Profit 透传（D-043 零信任语义保持）。
 // 映射层断言（Profit 字段直拷）。
