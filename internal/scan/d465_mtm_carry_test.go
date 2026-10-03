@@ -226,11 +226,13 @@ func mtmFixture() *fakeScanStore {
 // TestD465_StepOpenAccrueExit T2：开仓（3 轮 streak 后）→ 累积 → 低息两轮退出。
 // D-022：时钟注入——全轮挂固定 UTC 时段（06:50 与 22:00 UTC 各跑一次；22:00 UTC=
 // +0800 本地次日，旧 swapLegBoundaries 本地日历日拼 UTC 午夜的破相点）。
+// D-026：基日钉周三（2026-10-07）——+24h 累积轮须落在周内（周末 venue 旗标会拦截
+// 累积轮=「断言不依赖星期」的另一半；周五基日 +24h 落周六曾被 battery 抓到）。
 func TestD465_StepOpenAccrueExit(t *testing.T) {
 	for _, utc := range []string{"06:50", "22:00"} {
 		t.Run("utc_"+utc, func(t *testing.T) {
 			h, _ := time.Parse("15:04", utc)
-			d465StepOpenAccrueExitAt(t, time.Date(2026, 10, 2, h.Hour(), h.Minute(), 0, 0, time.UTC))
+			d465StepOpenAccrueExitAt(t, time.Date(2026, 10, 7, h.Hour(), h.Minute(), 0, 0, time.UTC))
 		})
 	}
 }
