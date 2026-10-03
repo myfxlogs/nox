@@ -107,10 +107,6 @@ func (s *Service) maybePurgeAckedAlerts(ctx context.Context) {
 	})
 }
 
-func (s *Service) ListTriggerStates(ctx context.Context, req *connect.Request[v1.ListTriggerStatesRequest]) (*connect.Response[v1.ListTriggerStatesResponse], error) {
-	return connect.NewResponse(&v1.ListTriggerStatesResponse{}), nil
-}
-
 func (s *Service) ListSourceHealth(ctx context.Context, req *connect.Request[v1.ListSourceHealthRequest]) (*connect.Response[v1.ListSourceHealthResponse], error) {
 	return connect.NewResponse(&v1.ListSourceHealthResponse{Sources: s.assembleSourceHealth()}), nil
 }
