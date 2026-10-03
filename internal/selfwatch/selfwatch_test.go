@@ -31,6 +31,8 @@ type fakeStore struct {
 	macroMax   *time.Time
 	makerOpen  int
 	makerInc   int
+	dlRows     int // D-042 R1 ③：24h data_lost 退出行数
+	dlPairs    int // D-042 R1 ③：当前冷却中对数
 	alerts     []string
 	dedupCalls []string
 	upserts    map[string]string
@@ -95,6 +97,9 @@ func (f *fakeStore) MacroEventMaxCreated(context.Context) (time.Time, bool, erro
 }
 func (f *fakeStore) MakerLegStatsSince(context.Context, time.Time) (int, int, error) {
 	return f.makerOpen, f.makerInc, nil
+}
+func (f *fakeStore) PaperDataLostStats(context.Context, time.Time) (int, int, error) {
+	return f.dlRows, f.dlPairs, nil
 }
 func (f *fakeStore) InsertAlert(_ context.Context, _ *int64, level, msg string) error {
 	f.alerts = append(f.alerts, level+"|"+msg)
@@ -295,6 +300,24 @@ func TestD033_AnomalyMacroStale(t *testing.T) {
 	CheckAnomalies(context.Background(), d)
 	if !strings.Contains(strings.Join(st.dedupCalls, "\n"), "财历拉取停滞") {
 		t.Fatalf("missing macro warn: %v", st.dedupCalls)
+	}
+}
+
+// TestD042_AnomalyDataLost paper 双 CEX 轨 data_lost 异常项（D-042 R1 ③）：
+// 24h 行数 >50 → warn（消息带行数+冷却中对数）；阈值内不告警。
+func TestD042_AnomalyDataLost(t *testing.T) {
+	st := greenStore()
+	st.dlRows, st.dlPairs = 51, 1
+	CheckAnomalies(context.Background(), testDeps(st, goodEval(), tNow))
+	joined := strings.Join(st.dedupCalls, "\n")
+	if !strings.Contains(joined, "data_lost 24h 51 行") || !strings.Contains(joined, "冷却中 1 对") {
+		t.Fatalf("missing data_lost warn:\n%s", joined)
+	}
+	st2 := greenStore()
+	st2.dlRows, st2.dlPairs = 10, 0
+	CheckAnomalies(context.Background(), testDeps(st2, goodEval(), tNow))
+	if strings.Contains(strings.Join(st2.dedupCalls, "\n"), "data_lost") {
+		t.Fatal("阈值内不应告警")
 	}
 }
 

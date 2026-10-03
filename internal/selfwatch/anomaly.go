@@ -23,6 +23,7 @@ const (
 	tradeSessionAbsent = 26 * time.Hour
 	macroCalendarStale = 48 * time.Hour
 	fundingStale       = 4 * time.Hour
+	paperDataLost24h   = 50 // D-042 R1 ③：paper 双 CEX 轨 24h data_lost 退出行数 warn 阈
 )
 
 // CheckAnomalies 单轮数据面体检（每小时唤醒调用一次；全部查询在唤醒时刻发生）。
@@ -35,6 +36,7 @@ func CheckAnomalies(ctx context.Context, d Deps) {
 		}
 	}
 	checkPaperHealth(ctx, d, now, warn)
+	checkPaperDataLost(ctx, d, now, warn)
 	checkMacroCalendar(ctx, d, now, warn)
 	checkTradeSession(ctx, d, now, warn)
 	checkFundingFresh(ctx, d, now, warn)
@@ -69,6 +71,20 @@ func checkPaperHealth(ctx context.Context, d Deps, now time.Time, warn func(stri
 	}
 	if err := saveFailClosedPrev(ctx, d, ev.FailClosed); err != nil {
 		log.Printf("[selfwatch] fail-closed prev save: %v", err)
+	}
+}
+
+// checkPaperDataLost ⑥paper 双 CEX 轨 data_lost 退出行数（D-042 R1 ③：常态应近零，
+// ≈4000/天=报价流死亡开平闭环失控；冷却中对数随行——同对 24h 内 ≥2 次 data_lost 停开）。
+func checkPaperDataLost(ctx context.Context, d Deps, now time.Time, warn func(string, ...any)) {
+	rows, pairs, err := d.Store.PaperDataLostStats(ctx, now.Add(-24*time.Hour))
+	if err != nil {
+		log.Printf("[selfwatch] paper data_lost stats: %v", err)
+		return
+	}
+	if rows > paperDataLost24h {
+		warn("[自盯] paper data_lost 24h %d 行（阈值 %d；冷却中 %d 对——24h 内不再开仓）",
+			rows, paperDataLost24h, pairs)
 	}
 }
 

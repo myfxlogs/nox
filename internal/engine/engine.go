@@ -31,7 +31,9 @@ type opportunityStore interface {
 // commissionFor 按 venueKey（"{venue}:{venue_type}"）解析单腿佣金（bps/腿），D-036 per-venue 真实定价，
 // 由 main 注入：CFD → broker_accounts.commission_bps（NULL 回退 config 默认），CEX → 逐所 taker 回退默认。
 type Engine struct {
-	bus           *bus.QuoteBus
+	bus *bus.QuoteBus
+	// QuotesBus D-042 R1 ②：QuoteBus 只读访问（paper 双 CEX 轨报价连续性闸 LastChangeAt 用）。
+	QuotesBus     *bus.QuoteBus
 	detectors     []detector.Detector
 	evalCfg       evaluator.Config
 	store         opportunityStore
@@ -92,6 +94,7 @@ func New(b *bus.QuoteBus, detectors []detector.Detector, cfg evaluator.Config, s
 	}
 	return &Engine{
 		bus:                     b,
+		QuotesBus:               b,
 		detectors:               detectors,
 		evalCfg:                 cfg,
 		store:                   store,
