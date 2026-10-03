@@ -55,7 +55,7 @@ func TestD571C2_FrameCarriedPrice(t *testing.T) {
 	s := &MarginFactSource{a: a}
 	s.publishPositions([]*mt5pb.Order{
 		{Ticket: 1, Symbol: "XAUUSDm", OrderType: mt5pb.OrderType_OrderType_Buy, Lots: 0.1, OpenPrice: 1999.0, Profit: 1.1},
-		{Ticket: 2, Symbol: "EURUSDm", OrderType: mt5pb.OrderType_OrderType_Buy, Lots: 0.1, OpenPrice: 1.08, Profit: 0.5}, // 无报价仓
+		{Ticket: 2, Symbol: "EURUSDm", OrderType: mt5pb.OrderType_OrderType_Buy, Lots: 0.1, OpenPrice: 1.08, ClosePrice: 4001.0, Profit: 0.5}, // 无 lastQuote 仓：venue 原生 ClosePrice 现价（D-031 ①）
 	})
 	if len(*box) != 1 || len((*box)[0]) != 2 {
 		t.Fatalf("sink 应收 1 帧 2 仓, got %+v", box)
@@ -64,8 +64,10 @@ func TestD571C2_FrameCarriedPrice(t *testing.T) {
 	if vo.CurrentPrice != 2000.1 || vo.PriceAt.IsZero() {
 		t.Fatalf("帧携价 want mid=2000.1+PriceAt, got %v@%v", vo.CurrentPrice, vo.PriceAt)
 	}
-	if vo2.CurrentPrice != 0 || !vo2.PriceAt.IsZero() {
-		t.Fatalf("无报价仓应零值诚实空态, got %v@%v", vo2.CurrentPrice, vo2.PriceAt)
+	// D-031 ①：无 lastQuote 仓保留 venue 原生 ClosePrice（手动仓现价不再「—」），
+	// PriceAt=映射调用时刻（非零）；帧携双价优先语义不变（vo 上断言）。
+	if vo2.CurrentPrice != 4001.0 || vo2.PriceAt.IsZero() {
+		t.Fatalf("无报价仓应 venue 原生 ClosePrice=4001（D-031 ①）, got %v@%v", vo2.CurrentPrice, vo2.PriceAt)
 	}
 }
 
