@@ -217,14 +217,8 @@ func evalPaperRow(ctx context.Context, st PaperWindowStore, p *pgstore.PaperSpot
 		return true, false, nil
 	}
 	// 行结算窗=max(双腿)：funding 腿 iv（facts 实读，缺→不判 stall 该项已 aok 覆盖）
-	// 与 MT 腿 UTC 日界 24h。
-	iv := 24 * time.Hour
-	if ivF, ierr := st.LatestFacts(ctx, fact.KindFundingInterval, cexV, rawCex); ierr == nil && len(ivF) > 0 && ivF[0].Value > 0 {
-		if fiv := time.Duration(int64(ivF[0].Value)) * time.Second; fiv > iv {
-			iv = fiv
-		}
-	}
-	return false, now.Sub(base) > 2*iv, nil
+	// 与 MT 腿 UTC 日界 24h（paperRowSettleWindow 单实现，accrue 告警阈同口径）。
+	return false, now.Sub(base) > 2*paperRowSettleWindow(ctx, st, cexV, rawCex), nil
 }
 
 // sortedBuckets 分桶转序列表（日标签字典序=MM-DD 日历序）。
