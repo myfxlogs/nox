@@ -2,6 +2,7 @@ package autotrade
 
 import (
 	"context"
+	"time"
 
 	"arb/internal/bus"
 	"arb/internal/capitalview"
@@ -26,6 +27,9 @@ type engineService interface {
 	VenueCommissionBps(venueKey string) float64
 	AccountLeverage(venueKey string) (leverage float64, ok bool)
 	AccountEquityUSD(venueKey string) (value float64, currency string, ok bool)
+	// AccountEquityUSDAt D-032 ③：权益快照带数据时点（超龄判定用）；
+	// ok=false=快照缺/venue 离线（fail-closed）。
+	AccountEquityUSDAt(venueKey string) (value float64, currency string, asOf time.Time, ok bool)
 	// LegMarginFrac D-010：腿保证金需求率实读（margin_usd 预算→单腿名义 N 折算用）。
 	// known=false=杠杆实读失败（调用方 fail-closed 不猜）。
 	LegMarginFrac(ctx context.Context, venueKey, symbol string, sellLeg bool) (frac float64, known bool)

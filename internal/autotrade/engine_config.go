@@ -141,6 +141,18 @@ type Config struct {
 	EconMakerFeeBps    func(ctx context.Context, venueKey string) (float64, bool)
 	HarvestHorizonDays float64
 
+	// D-032/D-030 风控硬线。
+	// RiskDD30USD：30d 滚动账本净额停机线（每笔 CLOSED 结算后 Σ net_realized_usd
+	// 含事故仓 ≤ 此值 → 自动 KillSwitch；装配自 ARB_RISK_DD30_USD 缺省 -300）。
+	RiskDD30USD float64
+	// RiskIncidentAckID：事故仓停新开 ack 游标 env/boot 兜底（DB 行权威，
+	// gate 直读 app_config 热生效）。
+	RiskIncidentAckID int
+	// RiskCexEquityPct/RiskCfdEquityPct：权益纪律入场闸（venue 权益 ≥ pct%×
+	// 在仓+本次名义；快照缺/超龄 fail-closed）。
+	RiskCexEquityPct float64
+	RiskCfdEquityPct float64
+
 	// D-181 S2：probe 探测仓——无实测腿的首仓自动成为 probe，到期评估升级/拒绝。
 	// ProbeEnabled=false → 不标记不评估（向后兼容，默认 false）。
 	ProbeEnabled bool

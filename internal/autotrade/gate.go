@@ -86,6 +86,12 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 		return res
 	}
 
+	// D-032 ②：事故仓停新开（D-030 硬线）——残腿闸同族前置语义的完整集：
+	// 事故族仓（含已平 incident_close/legged_unwind）未 ack 前任何新仓都扩大裸露风险。
+	if res, rejected := g.incidentGate(ctx, intent); rejected {
+		return res
+	}
+
 	// 检查 2: 策略禁用（fail-closed：查询失败 = 拒绝）
 	disabled, err := g.store.IsStrategyDisabled(ctx, intent.Strategy)
 	if err != nil {

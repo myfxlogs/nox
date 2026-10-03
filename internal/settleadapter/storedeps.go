@@ -20,11 +20,22 @@ func New(store *pgstore.Store) *StoreDeps { return &StoreDeps{store: store} }
 // AggregateStrategyStatsByEnvironment/DisableStrategy/InsertSettlement/HasSettlement/
 // SumCashflowsNet/SumCashflowsNetWithQuality/GetSettlementStatsStatus/MarkSettlementStatsRetryable），本结构仅做接口声明桥接。
 type StoreDeps struct {
-	store *pgstore.Store
+	store      *pgstore.Store
+	postSettle func(context.Context, int64) // D-032 ①：结算后钩子（autotrade 风控线注入）
 }
 
 // 编译期断言：settleStoreDeps 实现 settlement.Deps。
 var _ settlement.Deps = (*StoreDeps)(nil)
+
+// SetPostSettleHook D-032 ①：注入结算后回调（autotrade.SetSettleDeps 装配点调）。
+func (d *StoreDeps) SetPostSettleHook(fn func(context.Context, int64)) { d.postSettle = fn }
+
+// PostSettled 实现 settlement.PostSettler——未注入钩子时空操作。
+func (d *StoreDeps) PostSettled(ctx context.Context, posID int64) {
+	if d.postSettle != nil {
+		d.postSettle(ctx, posID)
+	}
+}
 
 func (d *StoreDeps) GetPosition(ctx context.Context, id int64) (*pgstore.Position, error) {
 	return d.store.GetPosition(ctx, id)

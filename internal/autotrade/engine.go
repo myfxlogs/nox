@@ -146,6 +146,13 @@ func (e *Engine) SetSettleDeps(deps settlement.Deps, elim settlement.Eliminator,
 	e.settleDeps = deps
 	e.eliminator = elim
 	e.familyResolver = family
+	// D-032 ①：结算后 dd30 账本回撤线——Deps 提供 PostSettle 挂点时接线
+	//（共享 StoreDeps 实例覆盖 autotrade/reconcile/dashboard/pipeline 全结算路径）。
+	if h, ok := deps.(interface {
+		SetPostSettleHook(func(context.Context, int64))
+	}); ok {
+		h.SetPostSettleHook(e.postSettleRiskCheck)
+	}
 }
 
 // SetZeroSettlementDetector D-182 S1：注入零结算检测器（scanAndClose 周期调用）。

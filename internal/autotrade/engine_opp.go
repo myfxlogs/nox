@@ -218,6 +218,11 @@ func (e *Engine) handleOpportunity(ctx context.Context, opp pgstore.Opportunity,
 	if e.econEntryGate(ctx, opp, notionalUSD) {
 		return
 	}
+	// D-032 ③：权益纪律闸（D-030 硬线）——venue 权益 ≥ pct%×(在仓名义+本次腿名义)，
+	// 快照缺/超龄 fail-closed 拒开（实现在 risk_lines.go）。
+	if e.equityDisciplineGate(ctx, opp, notionalUSD) {
+		return
+	}
 	// H4.2：qty 低于买腿最小步 → debug 跳过（品种适配事实，不产 intent 不落 REJECTED）
 	// venueSymbol 从 qbus 取（handleOpportunity 无直接 quote，用 opp.VenueBuy 查）
 	intentNotional := notionalUSD // D-367 S4：与 qty 同取有效值（intent 名义=qty 实额基准一致）
