@@ -55,6 +55,11 @@ func (s *Service) ClaimClose(ctx context.Context, posID int64) error {
 // SetSettler 注入结算器（D-087 §3.2，手动平仓后调）。nil = 未接线（RPC 仍可用，仅不结算）。
 func (s *Service) SetSettler(st Settler) { s.settler = st }
 
+// SetProbeReporter 注入探针平仓取证报告触发钩（D-048③；nil=不生成报告）。
+// 钩在 finalizeProbeClose 成功后同步调用——注入方内部自开 goroutine 跑 LLM
+// （平仓路径不被报告延迟阻塞；测试注同步 fake 断言恰好一次）。
+func (s *Service) SetProbeReporter(fn func(ctx context.Context, posID int64)) { s.probeReporter = fn }
+
 // SetCMCSource 注入 CMC 数据源（D-208 v2：nil 安全=走老路径）。
 func (s *Service) SetCMCSource(src position.CMCSource) { s.cmcSource = src }
 

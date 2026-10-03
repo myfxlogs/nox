@@ -160,6 +160,11 @@ type Service struct {
 	quoteFlushInterval time.Duration
 	// D-091 前端分析员依赖（main 经 SetAnalyst 注入；nil = 未配置，RPC 返回 failed_precondition）。
 	analyst *analystDeps
+	// D-048②：ApproveProbe 的 D-047 执行缝（nil=真实 s.OpenProbe；测试 fake 计数）。
+	probeOpener func(ctx context.Context, r *v1.OpenProbeRequest) (*v1.OpenProbeResponse, error)
+	// D-048③：探针到期平仓收尾钩子（nil=未接线；finalizeProbeClose 成功后同步调用，
+	// 重活（LLM 报告）由注入方自开 goroutine——平仓路径不被 LLM 延迟阻塞）。
+	probeReporter func(ctx context.Context, posID int64)
 	// D-140 S3：swap 组合列表注入（main 装配 autotrade 引擎的 discoverSwapCombos 适配）。
 	// nil = 未接线（RPC 返回空列表）。避免 dashboard→autotrade 依赖环。
 	swapComboLister func() []SwapComboEntry

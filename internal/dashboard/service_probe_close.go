@@ -157,6 +157,14 @@ func (s *Service) finalizeProbeClose(ctx context.Context, posID int64) error {
 			log.Printf("[probe] pos=%d settle: %v（skipped 行可重试）", posID, err)
 		}
 	}
+	// D-048②：探针提案 running→closed（手动开的仓无关联提案=静默零行）。
+	if err := s.store.ProbeProposalCloseByPosition(ctx, posID); err != nil {
+		log.Printf("[probe] pos=%d proposal close sync: %v", posID, err)
+	}
+	// D-048③：取证报告触发（注入钩自决同步/异步；LLM 延迟不阻塞平仓面）。
+	if s.probeReporter != nil {
+		s.probeReporter(ctx, posID)
+	}
 	log.Printf("[probe] pos=%d expired-close done net=$%.4f exit=probe_expired", posID, net)
 	return nil
 }
