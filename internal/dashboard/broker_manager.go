@@ -114,6 +114,11 @@ type BrokerManager struct {
 	// func() { scheduler.Kick("mt_swap") }。
 	SwapKick func()
 
+	// SessionsKick D-029 R2：周交易会话表轮询唤醒（同 SwapKick 模式）——适配器 attach /
+	// 映射增删后立即补一轮，消灭「boot 首拍早于 attach → 周表空 24h」盲窗。
+	// nil = 未接线（测试直接构造）。main 注入 func() { scheduler.Kick("mt_sessions") }。
+	SessionsKick func()
+
 	// MarginSink margin fact 下沉注入（D-099 事件驱动化）：同 SwapKick 注入模式，
 	// wiring/main 注入，brokerMgr 不依赖 engine 包；startAdapter 构造 adapter 时透传（nil 安全）。
 	MarginSink func(fact.Fact)
