@@ -33,7 +33,12 @@ func (sc *CarryUniverseScanner) collectMtSwaps(ctx context.Context, long, short 
 	collect := func(facts []fact.Fact, kind string, isLong bool) map[string]mtSwap {
 		out := map[string]mtSwap{}
 		for _, f := range facts {
-			if f.Symbol == "" || (isLong && f.Value > 0) || (!isLong && f.Value < 0) {
+			if f.Symbol == "" {
+				continue
+			}
+			// D-049：swap_free 账户掩码前置——规格符号过滤须在 val=0 归零之后，
+			// 否则免息账户的负 swap_short 油腿被当付息腿剔除（UKOILm/USOILm 实拍）。
+			if !swapFree[f.Venue] && ((isLong && f.Value > 0) || (!isLong && f.Value < 0)) {
 				continue // long：正值=收息（多 CFD 不付息不可能）非候选；short：负值=付息非候选；0=免息腿（swap_free 候选保留）
 			}
 			maps, err := sc.store.ListSymbolMappings(ctx, f.Venue)
