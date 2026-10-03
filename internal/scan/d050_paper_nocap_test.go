@@ -6,6 +6,7 @@ package scan
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -106,5 +107,74 @@ func TestD050_DiscoveryFlapCooldown(t *testing.T) {
 	}
 	if opened, _, err := StepPaperCfdCarry(ctx, s, rows, time.Now(), d410Opts(), nil); err != nil || len(opened) != 1 {
 		t.Fatalf("过窗应重开: opened=%v err=%v", opened, err)
+	}
+}
+
+// TestD050_CexTenCleanAllOpen CEX 轨无槽锚：10 干净候选（distinct canonical）全量开
+// （quoteAlive nil=未接线 fail-open；冷却/保底锚=TestD042_T1/T4、TestD555_A1）。
+func TestD050_CexTenCleanAllOpen(t *testing.T) {
+	s := d555Store(t)
+	ctx := context.Background()
+	if _, err := s.Pool().Exec(ctx, `DELETE FROM paper_spot_carry WHERE symbol LIKE 'D05X%'`); err != nil {
+		t.Fatalf("clean rows: %v", err)
+	}
+	cands := make([]CexPaperCand, 0, 10)
+	for i := 1; i <= 10; i++ {
+		cands = append(cands, d555Cand(fmt.Sprintf("D05X%02d", i), "gate:spot", "gate:perp", 12.5))
+	}
+	opened, _, err := StepPaperCexCarry(ctx, s, cands, time.Now(), d555Opts(), nil, nil)
+	if err != nil {
+		t.Fatalf("step: %v", err)
+	}
+	if len(opened) != 10 {
+		t.Fatalf("CEX 无槽：10 干净候选应全开, got %d", len(opened))
+	}
+}
+
+// TestD050_CexQuoteDeadNotOpen CEX 轨报价死不开（D-042 双闸之 quote 闸）：
+// perp 腿报价超 1h 窗（R2 时间窗语义）/spot 腿从未变更——两形均拒开。
+func TestD050_CexQuoteDeadNotOpen(t *testing.T) {
+	s := d555Store(t)
+	ctx := context.Background()
+	if _, err := s.Pool().Exec(ctx, `DELETE FROM paper_spot_carry WHERE symbol LIKE 'D05Y%'`); err != nil {
+		t.Fatalf("clean rows: %v", err)
+	}
+	now := time.Now()
+	cands := []CexPaperCand{d555Cand("D05YQ", "gate:spot", "gate:perp", 12.5)}
+	// perp 腿报价 2h 前（>1h 窗=死报价）；spot 腿新鲜。
+	perpStale := func(venueKey, _ string) (time.Time, bool) {
+		if venueKey == "gate:perp" {
+			return now.Add(-2 * time.Hour), true
+		}
+		return now, true
+	}
+	opened, _, err := StepPaperCexCarry(ctx, s, cands, now, d555Opts(), nil, perpStale)
+	if err != nil {
+		t.Fatalf("step perp stale: %v", err)
+	}
+	if len(opened) != 0 {
+		t.Fatalf("perp 腿超窗应不开: opened=%v", opened)
+	}
+	// spot 腿从未变更（ok=false）。
+	spotDead := func(venueKey, _ string) (time.Time, bool) {
+		if venueKey == "gate:spot" {
+			return time.Time{}, false
+		}
+		return now, true
+	}
+	opened, _, err = StepPaperCexCarry(ctx, s, cands, now, d555Opts(), nil, spotDead)
+	if err != nil {
+		t.Fatalf("step spot dead: %v", err)
+	}
+	if len(opened) != 0 {
+		t.Fatalf("spot 腿无报价应不开: opened=%v", opened)
+	}
+	var n int
+	if err := s.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM paper_spot_carry WHERE symbol='D05YQ' AND status='active'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("报价死期不应有 active 行: %d", n)
 	}
 }

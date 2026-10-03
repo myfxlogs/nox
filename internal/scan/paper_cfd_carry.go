@@ -9,7 +9,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"sort"
 	"strings"
 	"time"
 
@@ -169,8 +168,8 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 			silentMt[sl.mtVenue] = true
 		}
 	}
-	// D-050 ②：每轮跳过原因计数（cooldown/stale/below_floor/over_band）——开仓数在尾行 log。
-	skipCooldown, skipStale, skipBelowFloor, skipOverBand := 0, 0, 0, 0
+	// D-050 ②：每轮跳过原因计数（保底段 cooldown 就地计；发现段计数在 openCfdDiscovery）。
+	skipCooldown := 0
 	// D-042 data_lost 冷却（D-050 两段同闸）：同对 24h 内 ≥2 次 data_lost 退出 → 不开。
 	//（查 paper_spot_carry 自身；计数失败 fail-open 不拦。局部闭包——包级 helper 名让位
 	// 在审的 D-042 R1，后合者按需归一。）
@@ -236,65 +235,14 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 		}
 	}
 	warnMonitorBookAbsent(ctx, st, slots, view) // D-419 S3：簿覆盖哨兵（不阻断开仓）
-	// ① 开仓（发现段）——D-050：干净行全量开，无数量槽；跳过原因计数。
-	type cfdCand struct {
-		venueCombo string
-		r          UniverseRow
+	// ① 开仓（发现段）——D-050：干净行全量开，无数量槽（实现拆 paper_cfd_open.go）。
+	discOpened, sk, err := openCfdDiscovery(ctx, st, rows, activeStructKeys, flags, view, now, opts, dataLost)
+	if err != nil {
+		return opened, exited, err
 	}
-	cands := []cfdCand{}
-	for _, r := range rows {
-		if !cfdStructures[r.Structure] {
-			continue
-		}
-		if r.Note != "" { // D-345 suspect/stale 行拒（质量闸）
-			skipStale++
-			continue
-		}
-		if r.NetAnnual < PaperCfdOpenNetPct { // 既有 net 下限（质量闸）
-			skipBelowFloor++
-			continue
-		}
-		if r.NetAnnual > PaperCfdMaxNetPct { // band 上限（长尾区）
-			skipOverBand++
-			continue
-		}
-		venueCombo := r.MtVenue + "×" + r.CexVenue
-		if _, ok := activeStructKeys[venueCombo+"|"+r.Canonical+"|"+r.Structure]; ok { // D-028 ③：在仓去重（结构维度）
-			continue
-		}
-		if f := blockedFlagHit(r.MtVenue, r.CexVenue, r.Canonical, &r.MtVenue, flags); f != nil {
-			log.Printf("[cfd paper] blocked flag 拦截: %s|%s（%s@%s|%s）", venueCombo, r.Canonical, f.Reason, f.Venue, f.Symbol)
-			continue
-		}
-		cands = append(cands, cfdCand{venueCombo: venueCombo, r: r})
-	}
-	sort.Slice(cands, func(i, j int) bool { return cands[i].r.NetAnnual > cands[j].r.NetAnnual })
-	for _, c := range cands {
-		// D-050：冷却中跳过——flap ReopenCooldown + D-042 data_lost 冷却同闸（两段同口径）。
-		if opts.ReopenCooldown > 0 {
-			lastExit, err := st.LatestPaperExitTs(ctx, c.r.MtVenue, c.r.CexVenue, c.r.Canonical)
-			if err != nil {
-				return opened, exited, fmt.Errorf("cfd paper step: exit ts %s: %w", c.venueCombo, err)
-			}
-			if lastExit != nil && now.Sub(*lastExit) < opts.ReopenCooldown {
-				skipCooldown++
-				continue
-			}
-		}
-		if dataLost(c.r.MtVenue, c.r.CexVenue, c.r.Canonical) {
-			skipCooldown++
-			continue
-		}
-		if err := insertCfdPaper(ctx, st, c.r, c.r.MtVenue, c.r.CexVenue, view, now); err != nil {
-			if err == pgstore.ErrPaperExists {
-				continue
-			}
-			return opened, exited, fmt.Errorf("cfd paper step: open %s: %w", c.venueCombo, err)
-		}
-		opened = append(opened, c.r.Canonical)
-	}
+	opened = append(opened, discOpened...)
 	log.Printf("[cfd paper] 本轮 opened=%d cooldown=%d stale=%d below_floor=%d over_band=%d",
-		len(opened), skipCooldown, skipStale, skipBelowFloor, skipOverBand)
+		len(opened), sk.cooldown+skipCooldown, sk.stale, sk.belowFloor, sk.overBand)
 	// ② 累积 + ③ 退出（仅 cfd 行；spot 轨行不归本函数）——D-474a 起拆至 paper_cfd_accrue.go。
 	n, err := accrueExitCfdPaper(ctx, st, accrable, rowByKey, dirtyPair, silentMt, view, now) // D-028 ③：dirty=suspend 判定走 venue 对级（结构无关）
 	if err != nil {
