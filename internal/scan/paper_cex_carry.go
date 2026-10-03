@@ -90,13 +90,14 @@ func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand,
 		}
 		// D-042 R1 ②：双腿近 1h 报价缺席=0 才开——双腿各自 bus 最新报价时间 1h 内
 		//（LastChangeAt 价格变更钟；funding facts 不作报价活性源——R1 退回②）。
+		// R2 ①：补时间窗——!ok（从未变更）或 last change 距今 >1h 均拦（陈旧报价非活性）。
 		// quoteAlive nil=未接线（fail-open 跳过闸；生产 wire 必注入 qbus.LastChangeAt）。
 		if quoteAlive != nil {
-			if _, ok := quoteAlive(c.SpotVenueKey, c.Canonical); !ok {
+			if t, ok := quoteAlive(c.SpotVenueKey, c.Canonical); !ok || now.Sub(t) > time.Hour {
 				log.Printf("[cex paper] 报价连续性不足 拦开: %s（spot 腿近 1h 无报价变更）", key)
 				return false
 			}
-			if _, ok := quoteAlive(c.PerpVenueKey, c.Canonical); !ok {
+			if t, ok := quoteAlive(c.PerpVenueKey, c.Canonical); !ok || now.Sub(t) > time.Hour {
 				log.Printf("[cex paper] 报价连续性不足 拦开: %s（perp 腿近 1h 无报价变更）", key)
 				return false
 			}
@@ -221,12 +222,12 @@ func ppVenue(c CexPaperCand) string { return keydomain.Parse(c.PerpVenueKey).Ven
 
 // dataLostCooldown D-042 R1 ①：data_lost 冷却守卫——同 symbol×venue_a×venue_b 对 24h 内
 // ≥2 次 data_lost 退出 → true（24h 内不再 paper 开仓；查 paper_spot_carry 自身不加表）。
-// 计数查询失败=false fail-open 不拦（不因读口故障误杀开仓）。
+// R2 ②：计数查询失败=true fail-closed 拦（读口故障不误放——冷却判定不可用即不开仓）。
 func dataLostCooldown(ctx context.Context, st PaperStore, venueA, venueB, canonical string, now time.Time) bool {
 	n, err := st.CountDataLostExits(ctx, venueA, venueB, canonical, now.Add(-24*time.Hour))
 	if err != nil {
-		log.Printf("[cex paper] data_lost 计数失败 %s×%s|%s: %v（fail-open 不拦）", venueA, venueB, canonical, err)
-		return false
+		log.Printf("[cex paper] data_lost 计数失败 %s×%s|%s: %v（fail-closed 拦）", venueA, venueB, canonical, err)
+		return true
 	}
 	return n >= 2
 }

@@ -1,11 +1,14 @@
 // d042_datalost_cooldown_test.go —— D-042 R1 验收锚：
 // T1 保底段两次 data_lost 后第三轮不开（openCand 冷却守卫本体——flap 径以 ReopenCooldown=0 关闭）；
-// T2 perp 有 funding 但无报价不开（双腿闸：funding facts 不作报价活性源——任一腿缺即拦）；
-// T3 24h 后解冻重开；T4 发现段两次 data_lost 后第三轮不开（含正控：零 data_lost 可开）。
+// T2 perp 有 funding 但无报价不开（双腿闸：funding facts 不作报价活性源——任一腿缺即拦；
+// R2 补例：有历史报价但 last change 2h 前>1h 窗 → 不开）；
+// T3 24h 后解冻重开；T4 发现段两次 data_lost 后第三轮不开（含正控：零 data_lost 可开）；
+// T5 data_lost 计数查询失败 → fail-closed 不开（R2 ②）。
 package scan
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -22,12 +25,23 @@ func d042Opts() PaperCexOpts {
 
 // d042AliveStub 双腿报价活性桩（生产=bus LastChangeAt 接线；测试按腿给 ok 位）。
 func d042AliveStub(spot, perp bool) func(string, string) (time.Time, bool) {
+	at := func(ok bool) time.Time {
+		if ok {
+			return time.Now()
+		}
+		return time.Time{}
+	}
+	return d042AliveStubAt(at(spot), at(perp))
+}
+
+// d042AliveStubAt 报价活性桩时间版（R2：ok=true 但 last change 可置陈旧）。
+func d042AliveStubAt(spotAt, perpAt time.Time) func(string, string) (time.Time, bool) {
 	return func(venueKey, _ string) (time.Time, bool) {
 		switch venueKey {
 		case "gate:spot":
-			return time.Now(), spot
+			return spotAt, !spotAt.IsZero()
 		case "gate:perp":
-			return time.Now(), perp
+			return perpAt, !perpAt.IsZero()
 		}
 		return time.Time{}, false
 	}
@@ -126,6 +140,15 @@ func TestD042_ContinuityInsufficientBlocks(t *testing.T) {
 	if len(opened) != 0 {
 		t.Fatalf("spot 腿无报价应不开: opened=%v", opened)
 	}
+	// R2：有历史报价（ok=true）但 last change 2h 前（>1h 窗）→ 不开（陈旧报价非活性）。
+	opened, _, err = StepPaperCexCarry(ctx, s, []CexPaperCand{d555Cand("XAUUSD", "gate:spot", "gate:perp", 12.5)},
+		now, d042Opts(), nil, d042AliveStubAt(now.Add(-2*time.Hour), now.Add(-2*time.Hour)))
+	if err != nil {
+		t.Fatalf("step stale: %v", err)
+	}
+	if len(opened) != 0 {
+		t.Fatalf("last change >1h 前陈旧报价应不开: opened=%v", opened)
+	}
 	if n := d042ActiveCount(t, s, "XAUUSD"); n != 0 {
 		t.Fatalf("报价缺席期不应有 active 行: %d", n)
 	}
@@ -188,5 +211,36 @@ func TestD042_DiscoverySegmentCooldown(t *testing.T) {
 	}
 	if n := d042ActiveCount(t, s, "D042AG"); n != 0 {
 		t.Fatalf("冷却期不应有 active 行: %d", n)
+	}
+}
+
+// d042ErrStore 包 PaperStore 注入 CountDataLostExits 错误（T5：fail-closed 验收）。
+type d042ErrStore struct {
+	PaperStore
+}
+
+func (d042ErrStore) CountDataLostExits(context.Context, string, string, string, time.Time) (int, error) {
+	return 0, errors.New("injected count err")
+}
+
+// TestD042_CountErrFailClosed T5：data_lost 计数查询失败 → fail-closed 不开
+// （R2 ②：冷却判定不可用不误放开仓）。
+func TestD042_CountErrFailClosed(t *testing.T) {
+	s := d555Store(t)
+	ctx := context.Background()
+	d042CleanRows(t, s, "XAUUSD")
+	d555SeedCombo(t, s, "XAUUSD", "gate:spot", "XAUUSD", "gate:perp")
+
+	opened, _, err := StepPaperCexCarry(ctx, d042ErrStore{s},
+		[]CexPaperCand{d555Cand("XAUUSD", "gate:spot", "gate:perp", 12.5)},
+		time.Now(), d042Opts(), nil, d042AliveStub(true, true))
+	if err != nil {
+		t.Fatalf("step: %v", err)
+	}
+	if len(opened) != 0 {
+		t.Fatalf("计数失败应 fail-closed 不开: opened=%v", opened)
+	}
+	if n := d042ActiveCount(t, s, "XAUUSD"); n != 0 {
+		t.Fatalf("fail-closed 不应有 active 行: %d", n)
 	}
 }
