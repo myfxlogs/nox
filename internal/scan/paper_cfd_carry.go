@@ -174,12 +174,7 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 	//（查 paper_spot_carry 自身；计数失败 fail-open 不拦。局部闭包——包级 helper 名让位
 	// 在审的 D-042 R1，后合者按需归一。）
 	dataLost := func(venueA, venueB, symbol string) bool {
-		n, err := st.CountDataLostExits(ctx, venueA, venueB, symbol, now.Add(-24*time.Hour))
-		if err != nil {
-			log.Printf("[cfd paper] data_lost 计数失败 %s×%s|%s: %v（fail-open 不拦）", venueA, venueB, symbol, err)
-			return false
-		}
-		return n >= 2
+		return dataLostCooldown(ctx, st, venueA, venueB, symbol, now) // D-042 R2 同守卫（err fail-closed）
 	}
 	var missing []string
 	for _, sl := range slots {
