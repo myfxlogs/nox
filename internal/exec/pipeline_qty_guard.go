@@ -16,10 +16,17 @@ func (p *Pipeline) legQtyMismatch(legs []LegSpec, results []LegResult) bool {
 			continue
 		}
 		q := r.Qty
-		if isMTVenueKey(legs[i].VenueKey) && p.csResolver != nil {
-			if cs, ok := p.csResolver.ContractSize(legs[i].VenueKey, legs[i].VenueSymbol); ok && cs > 0 {
-				q = r.Qty * cs
+		if isMTVenueKey(legs[i].VenueKey) {
+			// D-026 R1：MT 腿 CS 取不到 → 跳过该腿（裸 lots 与 CEX base 量纲不可比，
+			// 拿去两两比对会误判不匹配；fail-open=守卫是兜底网非开仓前置闸）。
+			if p.csResolver == nil {
+				continue
 			}
+			cs, ok := p.csResolver.ContractSize(legs[i].VenueKey, legs[i].VenueSymbol)
+			if !ok || cs <= 0 {
+				continue
+			}
+			q = r.Qty * cs
 		}
 		canon = append(canon, q)
 	}

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"strings"
 	"sync"
 
 	"arb/internal/safego"
@@ -229,73 +228,13 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 		}
 	}
 	p.markOpenIncident(ctx, posID, status) // D-013 ③：LEGGED/FAILED → legged_unwind
-	// D-159 W1a R2：UNKNOWN 过渡写 uncertainty_reason（status=CLOSING，供前端/对账识别）。
-	// 识别 UNKNOWN position：status='CLOSING' AND uncertainty_reason IS NOT NULL
-	// 前端/对账用此条件区分正常平仓中 vs UNKNOWN 待确认
-	if isUnknown {
-		var unknownLegs []string
-		for i, r := range results {
-			if r.Status == "UNKNOWN" {
-				unknownLegs = append(unknownLegs, fmt.Sprintf("腿%d（%s）", i, legs[i].VenueKey))
-			}
-		}
-		reason := fmt.Sprintf("MT 下单超时：%s", strings.Join(unknownLegs, ", "))
-		if err := p.store.SetPositionUncertainty(ctx, posID, reason); err != nil {
-			log.Printf("[exec] position %d uncertainty write: %v", posID, err)
-		}
-		if err := p.store.InsertPositionAlert(ctx, posID, "critical",
-			fmt.Sprintf("持仓 #%d 平仓结果未知：%s——需人工到交易所核对", posID, reason)); err != nil {
-			log.Printf("[exec] pos %d alert write: %v", posID, err)
+	// UNKNOWN 过渡/腿量不匹配告警/LEGGED 收平 → finalizeOpenPostLegs（D-026 R1 拆分，纯搬移）。
+	if isUnknown || qtyMismatch || status == "LEGGED" {
+		status, err = p.finalizeOpenPostLegs(ctx, posID, legs, results, status, filled, isUnknown, qtyMismatch)
+		if err != nil {
+			log.Printf("[exec] pos %d finalize: %v", posID, err)
 		}
 	}
-
-	if qtyMismatch {
-		if err := p.store.InsertPositionAlert(ctx, posID, "critical",
-			fmt.Sprintf("持仓 #%d 腿量不匹配：FILLED 腿有效量偏差超容差（%d/%d 腿 FILLED）——不判 OPEN，落 unwind", posID, filled, len(legs))); err != nil {
-			log.Printf("[exec] pos %d alert write: %v", posID, err)
-		}
-	}
-	if status == "LEGGED" {
-		// D-127 P3b：纯 CEX 组合 LEGGED 自动收平——对 FILLED 腿立即反向 MARKET 平仓，
-		// 消除裸敞口（#380/#383 人工 35+ 分钟兜底）。含 MT 腿的组合不动（SWAPARB 有独立平仓链路）。
-		if allCEXLegs(legs) {
-			// D-159 W2a R3-L174：autoFlatten 走 close coordinator（不绕过 ClosePosition）。
-			// autoFlattenLEGGED 只负责反向平仓 I/O，CLOSED 由 ClosePosition 统一处理。
-			autoFlattenCtx := context.WithoutCancel(ctx) // 收平不随 Execute 超时中断
-			flattened, flattenErr := p.autoFlattenLEGGED(autoFlattenCtx, posID, legs, results)
-			if flattenErr != nil {
-				log.Printf("[exec] position %d LEGGED auto-flatten failed: %v (manual fallback)", posID, flattenErr)
-			}
-			if flattened {
-				// 走 close coordinator：ClaimClose + 写 CLOSE leg + 残量校验 + CLOSED
-				if err := p.ClosePosition(autoFlattenCtx, posID); err != nil {
-					log.Printf("[exec] position %d auto-flatten ClosePosition: %v", posID, err)
-					if err := p.store.InsertPositionAlert(autoFlattenCtx, posID, "critical",
-						fmt.Sprintf("持仓 #%d 单腿成交裸露风险：自动平仓处置失败（%v）——需人工处理", posID, err)); err != nil {
-						log.Printf("[exec] pos %d alert write: %v", posID, err)
-					}
-				} else {
-					if err := p.store.InsertPositionAlert(autoFlattenCtx, posID, "critical",
-						fmt.Sprintf("持仓 #%d 单腿成交裸露：已自动平掉其余腿（根因=部分成交）", posID)); err != nil {
-						log.Printf("[exec] pos %d alert write: %v", posID, err)
-					}
-					status = "CLOSED"
-				}
-			} else {
-				if err := p.store.InsertPositionAlert(autoFlattenCtx, posID, "critical",
-					fmt.Sprintf("持仓 #%d 单腿成交裸露：%d/%d 腿已成交，自动平仓不完整——需人工处理", posID, filled, len(legs))); err != nil {
-					log.Printf("[exec] pos %d alert write: %v", posID, err)
-				}
-			}
-		} else {
-			// critical 告警
-			if err := p.store.InsertAlert(ctx, nil, "critical",
-				fmt.Sprintf("持仓 #%d 单腿成交裸露：%d/%d 腿已成交", posID, filled, len(legs))); err != nil {
-				log.Printf("[exec] pos %d alert write: %v", posID, err)
-			}
-		}
-	}
-
 	return &ExecuteResult{
 		PositionID: posID,
 		Status:     status,

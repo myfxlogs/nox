@@ -30,6 +30,11 @@ func (e *d026Executor) Key() string { return e.venue }
 func (e *d026Executor) CloseOrder(ctx context.Context, ref OrderRef) (Fill, error) {
 	return Fill{}, nil
 }
+
+// TradeModeNow D-495 可平性探针 stub（MT 腿预检要求 executor 实现；恒在市）。
+func (e *d026Executor) TradeModeNow(ctx context.Context, brokerSymbol string) (int64, error) {
+	return 1, nil
+}
 func (e *d026Executor) PlaceOrder(ctx context.Context, o Order) (Fill, error) {
 	n := atomic.AddInt32(&e.marketCalls, 1)
 	e.lastMarket = o
@@ -198,4 +203,59 @@ func TestD026_TakerPartialGuardBlocks(t *testing.T) {
 	if perp.marketCalls+0 == 0 && spot.marketCalls == 0 {
 		t.Fatal("unwind 应有反向单出证")
 	}
+}
+
+// TestD026_GuardMtCsMissSkipsLeg R1 验收锚：MT 腿 CS 取不到 → 守卫跳过该腿（不比裸
+// lots），MT×perp 全 FILLED 仍判 OPEN——裸 lots（0.01）对 perp base（1.0）的量纲错配
+// 曾被误判不匹配（复审 R1 退回点）。
+func TestD026_GuardMtCsMissSkipsLeg(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE positions, position_legs, alerts RESTART IDENTITY CASCADE`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	perp := &d026Executor{venue: "okx:perp", fillRatio: 1.0}
+	mt := &d026Executor{venue: "3001157:mt5", fillRatio: 1.0}
+	reg := NewRegistry()
+	reg.Register(perp)
+	reg.Register(mt)
+	q := bus.New()
+	now := time.Now()
+	q.Publish(bus.Quote{Symbol: "XAUUSD", Venue: "okx", VenueType: "perp", VenueSymbol: "XAU-USDT-SWAP", Bid: 4200, Ask: 4200.5, Time: now})
+	p := NewPipeline(reg, s, q, RiskLimits{MaxOpenPositions: 10, MaxNotionalUSD: 1_000_000}, "live")
+	p.SetContractSizeResolver(permissiveCSResolver{})
+	p.SetMakerPolicy(0, 0) // 并行 taker 路径（守卫两路径共用）
+	// CS resolver 对 MT 腿显式 miss（返回 ok=false）——守卫应跳过 MT 腿。
+	p.csResolver = csMissForMT{permissiveCSResolver{}}
+
+	legs := []LegSpec{
+		{VenueKey: "3001157:mt5", VenueSymbol: "XAUUSDm", Side: "BUY", Qty: 0.01, PriceExpected: 4200},
+		{VenueKey: "okx:perp", VenueSymbol: "XAU-USDT-SWAP", Side: "SELL", Qty: 1, PriceExpected: 4200},
+	}
+	// PERP_FUNDING=绕 allowlist/cap 依赖（d127 先例），守卫按腿量判定与 posType 无关。
+	res, err := p.Execute(ctx, "PERP:XAUUSD:3001157:mt5:okx:perp:26d", "req-d026-d", "PERP_FUNDING", legs)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if res.Status != "OPEN" {
+		t.Fatalf("CS miss 跳过 MT 腿后应判 OPEN，got %s", res.Status)
+	}
+	// 双重保险：守卫函数直喂本结果也应判无错配（MT 腿被跳过后只剩 perp 单腿可比=不足两条）。
+	if p.legQtyMismatch(legs, res.Legs) {
+		t.Fatal("CS miss 时守卫应跳过 MT 腿不判错配")
+	}
+}
+
+// csMissForMT perp 命中、MT 全 miss 的 CS resolver（R1 场景专用）。
+type csMissForMT struct{ inner ContractSizeResolver }
+
+func (c csMissForMT) ContractSize(venueKey, symbol string) (float64, bool) {
+	if keyMT(venueKey) {
+		return 0, false
+	}
+	return c.inner.ContractSize(venueKey, symbol)
+}
+
+func keyMT(venueKey string) bool {
+	return len(venueKey) > 4 && venueKey[len(venueKey)-4:] == ":mt5" || strings.Contains(venueKey, ":mt4")
 }
