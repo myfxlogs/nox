@@ -227,7 +227,8 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 			log.Printf("[exec] position %d status update: %v", posID, err)
 		}
 	}
-	p.markOpenIncident(ctx, posID, status) // D-013 ③：LEGGED/FAILED → legged_unwind
+	p.markOpenIncident(ctx, posID, status)                                 // D-013 ③：LEGGED/FAILED → legged_unwind
+	p.writeOpenNotional(ctx, posType, opportunityID, posID, legs, results) // D-032 R1：XASSET/FH 落 notional_usd=Σ腿名义
 	// UNKNOWN 过渡/腿量不匹配告警/LEGGED 收平 → finalizeOpenPostLegs（D-026 R1 拆分，纯搬移）。
 	if isUnknown || qtyMismatch || status == "LEGGED" {
 		status, err = p.finalizeOpenPostLegs(ctx, posID, legs, results, status, filled, isUnknown, qtyMismatch)

@@ -17,10 +17,30 @@ import (
 )
 
 // markOpenIncident 开仓终态归因：Execute 判定 LEGGED/FAILED 时写 legged_unwind。
-// best-effort：失败记日志不阻断（exit_kind 不影响持仓安全，对账/迁移可补）。
+// D-032 R1：FAILED 仅当 ∃ FILLED 腿才打标——全腿零成交的 FAILED 是 maker 超时撤单/
+// 全腿被拒的零敞口干净终态（D-018 设计），打标会误触 D-032 事故闸全拒开（#503/#504 实证）。
+// best-effort：失败记日志不阻断（exit_kind 不影响持仓安全，对账/迁移可补）；
+// 腿查询失败=不可证零成交 → 保守打标（宁拦勿漏）。
 func (p *Pipeline) markOpenIncident(ctx context.Context, posID int64, status string) {
 	if status != "LEGGED" && status != "FAILED" {
 		return
+	}
+	if status == "FAILED" {
+		legs, err := p.store.ListPositionLegs(ctx, posID)
+		if err != nil {
+			log.Printf("[exec] pos %d incident legs query: %v (按事故处理)", posID, err)
+		} else {
+			hasFilled := false
+			for _, l := range legs {
+				if l.Status == "FILLED" {
+					hasFilled = true
+					break
+				}
+			}
+			if !hasFilled {
+				return
+			}
+		}
 	}
 	if err := p.store.SetIncidentExitKind(ctx, posID, pgstore.ExitKindLeggedUnwind); err != nil {
 		log.Printf("[exec] pos %d incident exit_kind: %v", posID, err)
