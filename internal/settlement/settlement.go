@@ -69,6 +69,10 @@ func SettleAt(ctx context.Context, deps Deps, posID int64, elim Eliminator, fami
 	// 5. 跳过规则
 	skippedReason := ""
 	switch {
+	case p.Type == pgstore.PositionTypePROBE:
+		// D-047④：探针仓写 settlement 审计行但永入样本/策略统计/淘汰
+		//（stats_status='skipped'；现金流入账本同其它仓）。
+		skippedReason = "probe position"
 	case p.RealizedPnl == nil:
 		skippedReason = "realized_pnl is NULL"
 	case fxSkipped:
