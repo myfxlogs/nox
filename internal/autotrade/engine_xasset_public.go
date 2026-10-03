@@ -7,10 +7,11 @@ import "context"
 
 // XAssetNetCarryPublic 返回持仓当前净 carry（年化百分点）。
 // 内部经 posID 取仓后直调 recalcXAssetNetCarry（fail-closed：缺 facts/过期/非息差型=ok=false）。
+// window=0 瞬时口径——展示路径按 D-027 裁定保留瞬时值（7d 均值只进 econ 判定）。
 func (e *Engine) XAssetNetCarryPublic(ctx context.Context, posID int64) (float64, bool) {
 	p, err := e.store.GetPosition(ctx, posID)
 	if err != nil || p == nil {
 		return 0, false
 	}
-	return e.recalcXAssetNetCarry(ctx, p)
+	return e.recalcXAssetNetCarry(ctx, p, 0)
 }

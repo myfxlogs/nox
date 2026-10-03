@@ -182,7 +182,7 @@ func TestRecalcNetFunding_A1_SignRegression(t *testing.T) {
 	seedFundingFact(t, s, "vB", 10.0, now)
 	pos := seedFundingPosition(t, s, "vA:perp", "vB:perp")
 	e := &Engine{store: s}
-	got, ok := e.recalcNetFunding(ctx, pos)
+	got, ok := e.recalcNetFunding(ctx, pos, 0)
 	if !ok {
 		t.Fatalf("A1: want ok=true, got false")
 	}
@@ -205,7 +205,7 @@ func TestRecalcNetFunding_A2_Inverse(t *testing.T) {
 	seedFundingFact(t, s, "vB", 4.0, now)
 	pos := seedFundingPosition(t, s, "vA:perp", "vB:perp")
 	e := &Engine{store: s}
-	got, ok := e.recalcNetFunding(ctx, pos)
+	got, ok := e.recalcNetFunding(ctx, pos, 0)
 	if !ok {
 		t.Fatalf("A2: want ok=true, got false")
 	}
@@ -227,7 +227,7 @@ func TestRecalcNetFunding_A3_SameVenueHedge(t *testing.T) {
 	seedFundingFact(t, s, "binance", 8.0, now)
 	pos := seedFundingPosition(t, s, "binance:spot", "binance:perp")
 	e := &Engine{store: s}
-	got, ok := e.recalcNetFunding(ctx, pos)
+	got, ok := e.recalcNetFunding(ctx, pos, 0)
 	if !ok {
 		t.Fatalf("A3: want ok=true, got false")
 	}
@@ -249,7 +249,7 @@ func TestRecalcNetFunding_A4_CrossVenueHedge(t *testing.T) {
 	seedFundingFact(t, s, "binance", 8.0, now)
 	pos := seedFundingPosition(t, s, "okx:spot", "binance:perp")
 	e := &Engine{store: s}
-	got, ok := e.recalcNetFunding(ctx, pos)
+	got, ok := e.recalcNetFunding(ctx, pos, 0)
 	if !ok {
 		t.Fatalf("A4: want ok=true, got false")
 	}
@@ -270,7 +270,7 @@ func TestRecalcNetFunding_A5_MissingFact(t *testing.T) {
 	seedFundingFact(t, s, "vA", 4.0, now) // 只插 vA，SELL vB:perp 缺 fact
 	pos := seedFundingPosition(t, s, "vA:perp", "vB:perp")
 	e := &Engine{store: s}
-	got, ok := e.recalcNetFunding(ctx, pos)
+	got, ok := e.recalcNetFunding(ctx, pos, 0)
 	assertFailClosed(t, got, ok)
 }
 
@@ -287,7 +287,7 @@ func TestRecalcNetFunding_A6_StaleFact(t *testing.T) {
 	seedFundingFact(t, s, "vB", 10.0, stale)
 	pos := seedFundingPosition(t, s, "vA:perp", "vB:perp")
 	e := &Engine{store: s, cfg: Config{SwapFactMaxAge: 2 * time.Hour}} // D-159 W4a R7：TTL 统一用 cfg.SwapFactMaxAge
-	got, ok := e.recalcNetFunding(ctx, pos)
+	got, ok := e.recalcNetFunding(ctx, pos, 0)
 	assertFailClosed(t, got, ok)
 }
 
@@ -304,6 +304,6 @@ func TestRecalcNetFunding_A7_NoPerpLeg(t *testing.T) {
 	seedFundingFact(t, s, "vB", 10.0, now)
 	pos := seedFundingPosition(t, s, "vA:spot", "vB:spot")
 	e := &Engine{store: s}
-	got, ok := e.recalcNetFunding(ctx, pos)
+	got, ok := e.recalcNetFunding(ctx, pos, 0)
 	assertFailClosed(t, got, ok)
 }

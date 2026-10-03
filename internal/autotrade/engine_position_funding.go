@@ -21,7 +21,9 @@ import (
 // fact 复用 fundingRateForVenue（D-311 已有 helper，勿再写 LatestFacts 匹配循环）；
 // 任一 :perp 腿缺 fact / 陈旧 >SwapFactMaxAge（>0 时）/ 无 :perp 腿 → (0,false) fail-closed。
 // 双腿同 canonical（canonicalFromOppID，FUNDING_HEDGE/PERP_FUNDING 沿用现状）。
-func (e *Engine) recalcNetFunding(ctx context.Context, p *pgstore.Position) (float64, bool) {
+// window>0 → 腿 funding 取窗内滚动均值（D-027 carry_death 3d 口径）；≤0 → 瞬时最新值
+// （FUNDING_HEDGE 旧语义/展示）。均值窗内零样本 → fail-closed 同缺 fact。
+func (e *Engine) recalcNetFunding(ctx context.Context, p *pgstore.Position, window time.Duration) (float64, bool) {
 	legs, err := e.store.ListPositionLegs(ctx, p.ID)
 	if err != nil {
 		return 0, false
@@ -39,7 +41,7 @@ func (e *Engine) recalcNetFunding(ctx context.Context, p *pgstore.Position) (flo
 			continue
 		}
 		bare := keydomain.BareOf(leg.Venue)
-		rate, ts, ok := e.fundingRateForVenue(ctx, bare, canonical)
+		rate, ts, ok := e.fundingRateMeanForVenue(ctx, bare, canonical, window)
 		if !ok {
 			log.Printf("[autotrade] exit pos=%d: funding fact missing venue=%s canonical=%s (fail-closed)", p.ID, bare, canonical)
 			return 0, false

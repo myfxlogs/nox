@@ -178,7 +178,7 @@ func TestD014_SwapFreeFlag(t *testing.T) {
 	p := d014EconPos(t, s, 20.8)
 	_ = p
 	e := d014EconEngine(s, bus.New(), true)
-	bps, src := e.swapRateFor(ctx, "3001157", "XPTUSD", "BUY")
+	bps, src := e.swapRateFor(ctx, "3001157", "XPTUSD", "BUY", 0)
 	if bps != 0 || src != swapSrcAccountFlag {
 		t.Fatalf("swap_free 账户 want (0,account_flag), got (%.2f,%s)", bps, src)
 	}
@@ -186,7 +186,7 @@ func TestD014_SwapFreeFlag(t *testing.T) {
 	if _, err := s.Pool().Exec(ctx, `UPDATE broker_accounts SET swap_free=false WHERE venue='3001157'`); err != nil {
 		t.Fatalf("clear flag: %v", err)
 	}
-	bps2, src2 := e.swapRateFor(ctx, "3001157", "XPTUSD", "BUY")
+	bps2, src2 := e.swapRateFor(ctx, "3001157", "XPTUSD", "BUY", 0)
 	if src2 != swapSrcSpec || bps2 != -1.28 {
 		t.Fatalf("无旗账户 want (-1.28,spec), got (%.2f,%s)", bps2, src2)
 	}
