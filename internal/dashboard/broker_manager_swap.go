@@ -129,11 +129,18 @@ func (m *BrokerManager) hasStartableAccounts(ctx context.Context) bool {
 // SessionsFacts D-029 ①：聚合全部静态适配器的周交易会话表 facts（单 venue 部署=直通）。
 // 一个都拿不到 → 空表（session 采集缺席=engine 判定回退动态径/10018 兜底，不制造噪声）。
 func (m *BrokerManager) SessionsFacts(ctx context.Context) ([]fact.Fact, error) {
+	// D-029 R3：聚合 running+static（同 SwapFacts 覆盖面——running=sessions 字段经
+	// broker_manager_adapters.go 注册 ad.SessionsFacts；static=AddStaticSessionsSource）。
 	m.mu.Lock()
-	fns := make([]func(context.Context) ([]fact.Fact, error), 0, len(m.static))
+	fns := make([]func(context.Context) ([]fact.Fact, error), 0, len(m.static)+len(m.running))
 	for _, s := range m.static {
 		if s.sessions != nil {
 			fns = append(fns, s.sessions)
+		}
+	}
+	for _, r := range m.running {
+		if r.sessions != nil {
+			fns = append(fns, r.sessions)
 		}
 	}
 	m.mu.Unlock()
