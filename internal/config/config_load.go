@@ -86,6 +86,11 @@ func Load() *Config {
 		FundingMaxBreakevenDays:    envFloat("ARB_FUNDING_MAX_BREAKEVEN_DAYS", 1.0),    // D-133 T2 回本周期上门
 		MaxBreakevenDays:           envFloat("ARB_MAX_BREAKEVEN_DAYS", 3.0),            // D-014 ① econ 入场回本上限
 		HarvestHorizonDays:         envFloat("ARB_HARVEST_HORIZON_DAYS", 7.0),          // D-014 ② 收割比较地平
+		RiskDD30USD:                envFloat("ARB_RISK_DD30_USD", -300),                // D-032/D-030：30d 账本净额停机线（含事故仓）
+		RiskIncidentAckID:          envInt("ARB_RISK_INCIDENT_ACK_ID", 0),              // D-032：事故仓停新开 ack 游标（DB 行权威，env 兜底）
+		RiskCexEquityPct:           envFloat("ARB_RISK_CEX_EQUITY_PCT", 35),            // D-032：CEX 权益纪律闸（%）
+		RiskCfdEquityPct:           envFloat("ARB_RISK_CFD_EQUITY_PCT", 25),            // D-032：CFD/MT 权益纪律闸（%）
+		CapitalBaseUSD:             envFloat("ARB_CAPITAL_BASE_USD", 10000),            // D-030：经营目标资金基数
 		StoreMinNetBps:             envFloat("ARB_STORE_MIN_NET_BPS", 5.0),             // D-078：CROSS_VENUE 入库门槛，round-trip 后 net≥5bps 才入库
 		FundingHedgeMinNetStore:    envFloat("ARB_FUNDING_HEDGE_MIN_NET_STORE", 14.95), // D-085 息差家族净门槛（含基准 10.95+门槛 4）
 		PerpFundingMinNetStore:     envFloat("ARB_PERP_FUNDING_MIN_NET_STORE", 2.0),    // D-085

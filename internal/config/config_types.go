@@ -129,6 +129,21 @@ type Config struct {
 	// NetIfClosedNow ≥0 ∧ ≥ CarryPerDay×此值 才收割（锁定收敛利润须优于再持一周 carry）。
 	HarvestHorizonDays float64
 
+	// === D-032 / D-030 风控硬线 ===
+	// RiskDD30USD 30 天滚动账本净额停机线（缺省 −300）：每笔 CLOSED 结算后
+	// Σ net_realized_usd（含事故仓）≤ 此值 → 自动 TriggerKillSwitch，解除沿人工 Resolve。
+	RiskDD30USD float64
+	// RiskIncidentAckID 事故仓停新开 ack 游标（缺省 0）：id > 此值的事故仓存在即拒开；
+	// 决策席归档 D# 后经 UpdateAppConfig 推到该仓 id 放行（闸读口=app_config 直读热生效，
+	// env/boot 值仅在 DB 行缺席时兜底）。
+	RiskIncidentAckID int
+	// RiskCexEquityPct / RiskCfdEquityPct 权益纪律入场闸（缺省 35/25）：
+	// venue 权益快照 ≥ pct% ×（该 venue 在仓名义 + 本次名义），快照缺/超龄 fail-closed 拒开。
+	RiskCexEquityPct float64
+	RiskCfdEquityPct float64
+	// CapitalBaseUSD 经营目标资金基数（D-030，缺省 10000）——周报年化分母。
+	CapitalBaseUSD float64
+
 	// === 机会站内推送（D-050；修复⑭ S3 退役 minNotifyNetBps 发布门槛 → oppTopic 全量事件流）===
 	// 发布门槛已退役，前端显示过滤常量 5 语义自立（useFrontConfig 默认值）。
 

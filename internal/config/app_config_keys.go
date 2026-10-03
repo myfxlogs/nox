@@ -117,6 +117,11 @@ var appConfigKeys = map[string]AppCfgMeta{
 	"ARB_REVIEW_CROSS_BIAS_BPS":          f64(func(c *Config) *float64 { return &c.ReviewCrossBiasBps }),
 	"ARB_REVIEW_MIN_SAMPLES":             intv(func(c *Config) *int { return &c.ReviewMinSamples }),
 	"ARB_ROTATE_MAX_PER_DAY":             intv(func(c *Config) *int { return &c.RotateMaxPerDay }),
+	"ARB_RISK_DD30_USD":                  f64(func(c *Config) *float64 { return &c.RiskDD30USD }),      // D-032/D-030：30d 账本净额停机线（含事故仓）
+	"ARB_RISK_INCIDENT_ACK_ID":           intv(func(c *Config) *int { return &c.RiskIncidentAckID }),   // D-032：事故仓停新开 ack 游标
+	"ARB_RISK_CEX_EQUITY_PCT":            f64(func(c *Config) *float64 { return &c.RiskCexEquityPct }), // D-032：CEX 权益纪律闸（%）
+	"ARB_RISK_CFD_EQUITY_PCT":            f64(func(c *Config) *float64 { return &c.RiskCfdEquityPct }), // D-032：CFD/MT 权益纪律闸（%）
+	"ARB_CAPITAL_BASE_USD":               f64(func(c *Config) *float64 { return &c.CapitalBaseUSD }),   // D-030：经营目标资金基数
 	"ARB_OPP_PUBLISH_DELTA_BPS":          f64(func(c *Config) *float64 { return &c.OppPublishDeltaBps }),
 	"ARB_SLIPPAGE_BPS":                   f64(func(c *Config) *float64 { return &c.SlippageBps }),
 	"ARB_STOP_REENTRY_MINUTES":           intv(func(c *Config) *int { return &c.StopReentryMinutes }),

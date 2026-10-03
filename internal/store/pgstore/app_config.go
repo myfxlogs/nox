@@ -5,8 +5,12 @@ package pgstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strconv"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // LoadAppConfig 全表读出 KV（量级小，无需分页）。返回 map[key]value。
@@ -52,6 +56,24 @@ func (s *Store) InsertAppConfigIfAbsent(ctx context.Context, key, value string) 
 	_, err := s.pool.Exec(ctx,
 		`INSERT INTO app_config (key, value) VALUES ($1,$2) ON CONFLICT (key) DO NOTHING`, key, value)
 	return err
+}
+
+// AppConfigInt64 D-032 ②：单键整型直读（事故仓 ack 游标等热生效键——
+// UpdateAppConfig 写库即效，不等重启）。行缺 → ok=false（调用方按缺省语义处理）；值坏 → error。
+func (s *Store) AppConfigInt64(ctx context.Context, key string) (int64, bool, error) {
+	var v string
+	err := s.pool.QueryRow(ctx, `SELECT value FROM app_config WHERE key = $1`, key).Scan(&v)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, false, nil
+		}
+		return 0, false, fmt.Errorf("app config int64 %s: %w", key, err)
+	}
+	n, perr := strconv.ParseInt(v, 10, 64)
+	if perr != nil {
+		return 0, false, fmt.Errorf("app config int64 %s: parse %q: %w", key, v, perr)
+	}
+	return n, true, nil
 }
 
 // AppConfigRow 全列行（D-523 键视图：note/updated_at 透出审计）。
