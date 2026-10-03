@@ -265,6 +265,12 @@ func SettleAt(ctx context.Context, deps Deps, posID int64, elim Eliminator, fami
 		return nil
 	}
 
+	// D-032 ①：结算行已落账——30d 账本回撤线等 post-settle 风控检查（可选钩子，
+	// 行可见于本条查询连接后触发；并发输家路径不触发，赢家侧会带）。
+	if h, ok := deps.(PostSettler); ok {
+		h.PostSettled(ctx, posID)
+	}
+
 	// 8. 非 complete/actual → 不入样本不入统计，直接返回
 	if rowStatsStatus != "applied" {
 		if skippedReason != "" {
