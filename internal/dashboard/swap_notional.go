@@ -3,6 +3,7 @@ package dashboard
 import (
 	"fmt"
 	"math"
+	"time"
 
 	"arb/internal/usdnotional"
 )
@@ -41,6 +42,16 @@ func (s *Service) AccountEquityUSD(venueKey string) (value float64, currency str
 		}
 	}
 	return 0, "", false
+}
+
+// AccountEquityUSDAt D-032 ③：权益 + 数据时点（AccountMonitor.EquityObserved 直通）。
+// ok=false=venue 离线/无账户态；asOf=最后观测时点（非发布侧真变时刻）。
+func (s *Service) AccountEquityUSDAt(venueKey string) (value float64, currency string, asOf time.Time, ok bool) {
+	if s.acctMon == nil {
+		return 0, "", time.Time{}, false
+	}
+	eq, cur, at, online, found := s.acctMon.EquityObserved(venueKey)
+	return eq, cur, at, found && online
 }
 
 // AccountLeverage 从 AccountMonitor 取指定 venue 的杠杆（D-142 ④ 杠杆不对称提示）。
