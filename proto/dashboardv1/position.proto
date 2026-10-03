@@ -61,6 +61,8 @@ message Position {
   optional double remaining_net_bps = 39;  // D-508 S8：收敛型剩余收敛 bps=expected−current（前端不再做减法）
   optional string break_even_tone = 40;    // D-508 S8：回本列色阶（实测0=已回本→"pos"；缺省不填）
   optional bool break_even_suppressed = 41; // D-508 S8：回本抑制终值（实测=0 但 close_now_net<0 → 亮「账面回本·净估<0」非标绿）
+  optional string decision_ref = 42;       // D-047：决策席批准引用（PROBE 仓；其它型缺省）
+  optional google.protobuf.Timestamp auto_close_at = 43; // D-047：PROBE 到期自动平仓时刻（其它型缺省）
 }
 
 message ExecuteOpportunityRequest {
@@ -141,6 +143,8 @@ message BrokerPosition {
   optional double close_now_estimate_usd = 28;  // D-009 S3：平仓净估=（方向价−开价）×qty×cs×fx − 平仓名义×takerBps×1e-4；缺省=报价/换算/费率任一不可得（诚实空态，列标「估」）
   bool margin_is_estimate = 29;  // D-036：margin 为 venue 规格估算（InitialMargin×lots ∨ lots×CS×openPrice×init_margin_rate），非 venue 账户级原生值——前端标「≈」；CEX=iw 原生值 false
   bool close_estimate_excludes_income = 30;  // D-037：平仓净估未含已收息（income 源不可得：CEX 外单 openedAt 缺/查询失败；CEX 系统仓 cashflows 查询失败）——前端标缺息提示；false=已含（MT=Order.Swap / CEX 仓=cashflows actual / CEX 外单=income_events 窗）
+  string probe_decision_ref = 31;                  // D-047：关联仓 type='PROBE' 的决策引用（positions.decision_ref 透传）；空=非探针/未关联
+  google.protobuf.Timestamp probe_auto_close_at = 32;  // D-047：探针到期自动平仓时刻（positions.auto_close_at 透传）；nil=非探针/未关联
 }
 
 message ListBrokerPositionsRequest {
@@ -169,6 +173,45 @@ message CloseBrokerPositionsRequest {
 
 message CloseBrokerPositionsResponse {
   repeated CloseBrokerPositionResponse results = 1;   // 逐条 CLOSED/FAILED（单条失败不阻断后续）
+}
+
+// === D-047：系统探针仓 PROBE 单腿路径 ===
+
+message OpenProbeRequest {
+  string venue_key = 1;        // "{venue}:{venue_type}"——须在 autotrade_allow_rules kind='venue' 启用集
+  string canonical = 2;        // canonical 品种（符号经 qbus.VenueSymbol 解析到 venue 原生名）
+  string side = 3;             // BUY / SELL
+  double qty = 4;              // 单腿数量（MT=手数；CEX=张/币数 venue 口径）
+  string purpose = 5;          // 探针目的（文本，进 note）
+  string decision_ref = 6;     // 决策席批准引用（如 "D-047"），必填
+  google.protobuf.Timestamp auto_close_at = 7;  // 到期自动平仓时刻（必填且须在未来）
+}
+message OpenProbeResponse {
+  int64 position_id = 1;       // 0=拒绝
+  string status = 2;           // OPEN / FAILED
+  string message = 3;          // 拒绝原因（守卫明细）
+}
+
+message ProbePosition {
+  int64 position_id = 1;
+  string venue_key = 2;
+  string canonical = 3;
+  string side = 4;
+  double qty = 5;
+  string note = 6;             // purpose 透传
+  string decision_ref = 7;
+  google.protobuf.Timestamp auto_close_at = 8;
+  string status = 9;
+  google.protobuf.Timestamp opened_at = 10;
+  google.protobuf.Timestamp closed_at = 11;
+  string exit_kind = 12;       // probe_expired / 手动等；空=未平
+  optional double notional_usd = 13;
+}
+message ListProbesRequest {
+  bool open_only = 1;          // true=只在途（OPEN/OPENING/LEGGED/CLOSING）
+}
+message ListProbesResponse {
+  repeated ProbePosition probes = 1;
 }
 
 // === PersonalPosition（财务线 TRX 持仓接入，D-046）===

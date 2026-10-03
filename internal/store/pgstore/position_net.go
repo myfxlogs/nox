@@ -31,6 +31,7 @@ const (
 	ExitKindOther         = "other"
 	ExitKindLeggedUnwind  = "legged_unwind"  // 从未双腿成交，unwind 已成腿（#507 形态）
 	ExitKindIncidentClose = "incident_close" // await_session/不可行动腿或长时残腿告警平仓（#502/#505 形态）
+	ExitKindProbeExpired  = "probe_expired"  // D-047：探针仓到期自动平（事故族谓词不含——不入事故统计）
 )
 
 // incidentPositionPredicate 事故族排除谓词（D-013 ③）：聚合 SQL 拼接点统一出处。

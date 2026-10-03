@@ -168,6 +168,7 @@ var migrationFiles = []struct {
 	{172, migrations.IncidentExitKindCleanupSQL},       // D-032 R1：清零成交 FAILED 误打的 legged_unwind
 	{173, migrations.PaperWindowStartSQL},              // D-033①：app_config 播种 ARB_PAPER_WINDOW_START
 	{174, migrations.DropOpportunitiesTickSQL},         // D-040②：opportunities_tick 死表 DROP（零引用，已备份）
+	{175, migrations.ProbePositionsSQL},                // D-047①：positions +decision_ref/auto_close_at（PROBE 单腿探针）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

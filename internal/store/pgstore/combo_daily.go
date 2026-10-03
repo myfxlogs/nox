@@ -103,6 +103,7 @@ func (s *Store) GetStrategyAgg(ctx context.Context, strategy string) ([]Strategy
 		COALESCE(AVG(EXTRACT(EPOCH FROM (closed_at - opened_at)) / 86400) FILTER (WHERE status = 'CLOSED' AND closed_at IS NOT NULL AND opened_at IS NOT NULL), 0) AS avg_hold_days
 	FROM positions
 	WHERE ($1 = '' OR type = $1)
+	  AND type <> 'PROBE' -- D-047④：探针仓不成策略组（stats/rollup 排除口径）
 	GROUP BY type
 	ORDER BY type`
 	rows, err := s.pool.Query(ctx, q, strategy)

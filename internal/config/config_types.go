@@ -68,6 +68,12 @@ type Config struct {
 	ProbeEnabled bool
 	// ProbeEvalDays probe 评估等待天数（ARB_PROBE_EVAL_DAYS，缺省 3 ≈ 2 结算日）。
 	ProbeEvalDays int
+	// ProbeMaxNotionalUSD D-047：系统探针仓单腿名义上限（ARB_PROBE_MAX_NOTIONAL，缺省 1000 USD）。
+	// type='PROBE' 探针仓守卫：新仓名义超此 → 拒。与 D-181 note 标记机制不同面。
+	ProbeMaxNotionalUSD float64
+	// ProbeRPCEnabled D-047 R1②：OpenProbe RPC 总开关（ARB_PROBE_RPC_ENABLED，缺省 false）。
+	// false → RPC 第一守卫即拒（探针通道默认关，决策席显式开启才可用）。
+	ProbeRPCEnabled bool
 	// PerpFundMinHold PERP_FUNDING 持有下限（ARB_PERPFUNDING_MIN_HOLD，缺省 8h）——D-133 T1。
 	// 退出判定 floor：now − opened_at < MinHold → 不平仓（至少活过一个结算窗，收益源先参与）。
 	// 0 = 不限（近似旧行为但仍有 debounce）。

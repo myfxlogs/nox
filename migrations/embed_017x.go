@@ -17,4 +17,7 @@ var (
 
 	//go:embed 0174_drop_opportunities_tick.sql
 	DropOpportunitiesTickSQL string // D-040②：opportunities_tick 死表 DROP（stale 8-22 零引用，已备份）
+
+	//go:embed 0175_probe_positions.sql
+	ProbePositionsSQL string // D-047①：positions +decision_ref/auto_close_at + 到期索引
 )
