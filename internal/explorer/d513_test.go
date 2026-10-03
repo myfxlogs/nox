@@ -13,6 +13,8 @@ import (
 
 	explorerv1 "arb/internal/gen/arb/explorer/v1"
 	"arb/internal/store/pgstore"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // --- A2 调度锚点 ---
@@ -59,6 +61,15 @@ type fakeStore struct {
 	alerts    []pgstore.Alert
 	state     map[string]json.RawMessage
 	proposals []pgstore.ExplorerProposal
+	// D-048：探针提案/报告断言面。
+	alertRows []string
+	probeKeys map[string]bool
+	probeSeq  int64
+	probeRows []pgstore.ProbeProposal
+	appCfg    map[string]float64
+	probePos  *pgstore.ProbeRow
+	legs      []pgstore.PositionLeg
+	cashflows []pgstore.Cashflow
 }
 
 func (f *fakeStore) ExplorerTermDispersion(context.Context, time.Time) ([]pgstore.ExplorerDispersion, error) {
@@ -103,7 +114,52 @@ func (f *fakeStore) ListPerpFundingAdmission(context.Context) ([]pgstore.PerpFun
 func (f *fakeStore) ListAlerts(context.Context, int, int) ([]pgstore.Alert, error) {
 	return f.alerts, nil
 }
-func (f *fakeStore) InsertAlert(context.Context, *int64, string, string) error { return nil }
+func (f *fakeStore) InsertAlert(_ context.Context, _ *int64, level, msg string) error {
+	f.alertRows = append(f.alertRows, level+" "+msg)
+	return nil
+}
+func (f *fakeStore) ExplorerStatePutIfAbsent(_ context.Context, k string, v json.RawMessage) (bool, error) {
+	if _, ok := f.state[k]; ok {
+		return false, nil
+	}
+	f.state[k] = v
+	return true, nil
+}
+func (f *fakeStore) ExplorerProbeProposalInsert(_ context.Context, c pgstore.ProbeContract, d time.Time) (int64, bool, error) {
+	k := d.Format("2006-01-02") + "probe" + c.Canonical + c.VenueKey
+	if f.probeKeys[k] {
+		return 0, false, nil
+	}
+	f.probeKeys[k] = true
+	f.probeSeq++
+	f.probeRows = append(f.probeRows, pgstore.ProbeProposal{ID: f.probeSeq, ScanDate: d,
+		Canonical: c.Canonical, Status: "proposed", Contract: c})
+	return f.probeSeq, true, nil
+}
+func (f *fakeStore) ExplorerProbeProposalByPosition(_ context.Context, posID int64) (*pgstore.ProbeProposal, error) {
+	for i := range f.probeRows {
+		if f.probeRows[i].PositionID != nil && *f.probeRows[i].PositionID == posID {
+			return &f.probeRows[i], nil
+		}
+	}
+	return nil, pgstore.ErrNoProbeProposal
+}
+func (f *fakeStore) AppConfigFloat(_ context.Context, key string) (float64, bool, error) {
+	v, ok := f.appCfg[key]
+	return v, ok, nil
+}
+func (f *fakeStore) GetProbe(_ context.Context, posID int64) (*pgstore.ProbeRow, error) {
+	if f.probePos == nil || f.probePos.ID != posID {
+		return nil, pgx.ErrNoRows
+	}
+	return f.probePos, nil
+}
+func (f *fakeStore) ListPositionLegs(_ context.Context, posID int64) ([]pgstore.PositionLeg, error) {
+	return f.legs, nil
+}
+func (f *fakeStore) ListCashflows(_ context.Context, posID int64) ([]pgstore.Cashflow, error) {
+	return f.cashflows, nil
+}
 
 // fakeRun 写死 LLM 输出（Run seam 同 sysretro——OnDelta 灌文本）。
 func fakeRun(out string) Runner {
@@ -121,7 +177,9 @@ func newFakeStore() *fakeStore {
 				Range: 0.02, Mean: 0.02, HasPrev: true, PrevMean: 0.008, Delta: 0.012,
 				MinVenue: "binance", MaxVenue: "gate"},
 		},
-		state: map[string]json.RawMessage{},
+		state:     map[string]json.RawMessage{},
+		probeKeys: map[string]bool{},
+		appCfg:    map[string]float64{},
 	}
 }
 

@@ -41,8 +41,8 @@ func parseBatch(aiText string) (*explorerv1.ProposalBatch, bool) {
 		[]byte(m[1]), &b); err != nil {
 		return nil, false
 	}
-	if len(b.Proposals) > maxBatchProposals {
-		return nil, false
+	if len(b.Proposals) > maxBatchProposals || len(b.ProbeProposals) > maxBatchProposals {
+		return nil, false // D-048：探针提案同硬上限——防滥发批触发告警风暴
 	}
 	return &b, true
 }

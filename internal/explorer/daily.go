@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"time"
@@ -21,9 +22,11 @@ import (
 const dailySystemPrompt = `你是 ARB 套利系统的探矿员（只读研究员）。输入=五段确定性数字（Go 计算，禁止改动/重算/自算）。
 输出（严格两段）：
 1. 叙事摘要 ≤300 字；
-2. 一个 fenced 块 ` + "```explorer-proposals" + ` 内含 JSON：{"narrative":"...","proposals":[{"canonical":"...","best_pair":"venue_a×venue_b","direction":"≤16字","rationale":"一行","anchor":"输入段字段名","evidence":{}}]}。
+2. 一个 fenced 块 ` + "```explorer-proposals" + ` 内含 JSON：{"narrative":"...","proposals":[{"canonical":"...","best_pair":"venue_a×venue_b","direction":"≤16字","rationale":"一行","anchor":"输入段字段名","evidence":{}}],"probe_proposals":[{...}]}。
 红线：不预测价格；不给仓位建议；不跨场所借数据；数字只能引用输入段原值。
-提案 ≤10 条；canonical 必须来自输入段出现过的键；anchor 必须等于所据数字所在段名。`
+提案 ≤10 条；canonical 必须来自输入段出现过的键；anchor 必须等于所据数字所在段名。
+probe_proposals 可省略——仅当某假设需小额单腿实测证伪时给出，契约全字段必填：
+{"purpose":"目的","falsify":"可量化证伪标准（须含数字阈值）","venue_key":"venue:type","canonical":"输入段出现过的键","side":"BUY|SELL","qty":数值>0,"notional_usd":数值>0且≤配置键ARB_PROBE_MAX_NOTIONAL,"expected_cost_usd":数值≥0,"auto_close_at":"RFC3339 未来时刻","basis":"数据依据（引用段名/事实键）"}。缺一即废该行。`
 
 // stateKeyWatchlist explorer_state 快照键（②新符号/上市 diff 源）。
 const stateKeyWatchlist = "watchlist_snapshot"
@@ -36,14 +39,17 @@ type watchlistSnapshot struct {
 
 // DailyResult 日扫产出（测试断言面）。
 type DailyResult struct {
-	ScanDate   time.Time
-	Proposals  int      // 实际落库行数
-	Drop       int      // 行级丢弃计数（非法行+批违例）
-	NewSymbols []string // ②diff 新增符号
-	Narrative  string   // LLM 叙事摘要（≤300字，日志/收件箱用）
+	ScanDate      time.Time
+	Proposals     int      // 实际落库行数（scan_kind='daily'）
+	Drop          int      // 行级丢弃计数（非法行+批违例+探针契约拒行）
+	NewSymbols    []string // ②diff 新增符号
+	Narrative     string   // LLM 叙事摘要（≤300字，日志/收件箱用）
+	ProbeInserted int      // D-048①：探针提案落库行数（scan_kind='probe'）
 }
 
 // RunDaily 执行日扫五项。同日重跑幂等（dedupe 索引挡提案重复；state 覆盖幂等）。
+// D-048④：每跑必 log「候选数/LLM 调用结果/解析结果/入库数」（0 提案归因面）；
+// LLM 调用失败/解析失败落 alerts warn 不吞。
 func RunDaily(ctx context.Context, deps Deps) (*DailyResult, error) {
 	deps.fill()
 	if deps.Store == nil {
@@ -54,6 +60,13 @@ func RunDaily(ctx context.Context, deps Deps) (*DailyResult, error) {
 	}
 	now := deps.Now()
 	res := &DailyResult{ScanDate: ScanDate(now)}
+	// D-048④ 观测面：llmRes=skip→ok|err；parseRes=skip→ok|fail；candidates=LLM 产出行数。
+	llmRes, parseRes := "skip", "skip"
+	candidates := 0
+	defer func() {
+		log.Printf("[explorer] daily run: candidates=%d llm=%s parse=%s inserted=%d probe_inserted=%d drop=%d",
+			candidates, llmRes, parseRes, res.Proposals, res.ProbeInserted, res.Drop)
+	}()
 
 	// ① 期限库异常（跨 venue 离散度+7d 差——Go 已算，LLM 只标值得提案的）。
 	disp, err := deps.Store.ExplorerTermDispersion(ctx, now)
@@ -138,15 +151,22 @@ func RunDaily(ctx context.Context, deps Deps) (*DailyResult, error) {
 		[]analyst.Message{analyst.TextContent("user", prompt)},
 		analyst.LoopCallbacks{OnDelta: func(t string) { aiText.WriteString(t) }})
 	if err != nil {
+		llmRes = "err"
+		deps.alert(ctx, "warn", "[探索] LLM 调用失败："+err.Error()) // D-048④：不得吞
 		return res, fmt.Errorf("analyst run: %w", err)
 	}
+	llmRes = "ok"
 
 	batch, ok := parseBatch(aiText.String())
 	if !ok {
 		// 截断/拒收/超限=整批零落库（A6 截断用例锚面）；叙事不受影响仍记日志级。
+		parseRes = "fail"
 		res.Drop = maxBatchProposals + 1
+		deps.alert(ctx, "warn", "[探索] 提案块解析失败（截断/非法 JSON——整批零落库）") // D-048④：不得吞
 		return res, nil
 	}
+	parseRes = "ok"
+	candidates = len(batch.GetProposals()) + len(batch.GetProbeProposals())
 	rows, drop := validateProposals(batch, known)
 	res.Drop = drop
 	res.Narrative = extractNarrative(batch)
@@ -154,6 +174,10 @@ func RunDaily(ctx context.Context, deps Deps) (*DailyResult, error) {
 		rows[i].ScanDate = res.ScanDate
 		rows[i].ScanKind = "daily"
 	}
+	// D-048①：探针提案契约校验→落库→「待审批探针」推送（缺字段拒行+log）。
+	probeInserted, probeDrop := runProbeProposals(ctx, deps, batch, known, now, res.ScanDate)
+	res.ProbeInserted = probeInserted
+	res.Drop += probeDrop
 	n, err := deps.Store.ExplorerProposalInsert(ctx, rows)
 	if err != nil {
 		return res, err
