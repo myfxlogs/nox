@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"regexp"
 	"time"
 
 	"arb/internal/keydomain"
@@ -24,6 +25,9 @@ import (
 
 // probeMaxInFlight 在途 PROBE 上限（D-047② 硬编码业务常量，非配置项）。
 const probeMaxInFlight = 2
+
+// probeDecisionRefRe D-047 R1③：decision_ref 须为决策席 D# 形（D-047/D-048-R1 类）。
+var probeDecisionRefRe = regexp.MustCompile(`^D-\d{3,}$`)
 
 // probeEquitySnapshotMaxAge 权益快照新鲜度——同 autotrade.risk_lines.go
 // riskEquitySnapshotMaxAge（5min tickFresh 口径；dashboard 不引 autotrade 防环依赖，
@@ -89,6 +93,9 @@ func (s *Service) OpenProbe(ctx context.Context, req *connect.Request[v1.OpenPro
 	if r.GetVenueKey() == "" || r.GetCanonical() == "" || r.GetDecisionRef() == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("venue_key/canonical/decision_ref 必填"))
 	}
+	if !probeDecisionRefRe.MatchString(r.GetDecisionRef()) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("decision_ref 须为 D# 形（^D-\\d{3,}$）"))
+	}
 	if r.GetSide() != "BUY" && r.GetSide() != "SELL" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("side 须为 BUY|SELL"))
 	}
@@ -102,6 +109,10 @@ func (s *Service) OpenProbe(ctx context.Context, req *connect.Request[v1.OpenPro
 		return s.probeReject(ctx, r, "config view 未装配（fail-closed）")
 	}
 	cfg := s.acv.running
+	// 守卫⓪（R1② 第一道）：探针 RPC 总开关（acv 热读 running 视图；缺省 false）。
+	if !cfg.ProbeRPCEnabled {
+		return s.probeReject(ctx, r, "探针通道未启用（ARB_PROBE_RPC_ENABLED=false）")
+	}
 
 	// 守卫①：venue 须在 autotrade_allow_rules 启用集（kind='venue'，simulated=env demo）。
 	venues, _, err := s.store.LoadAutotradeAllowRules(ctx, cfg.Environment == "demo")

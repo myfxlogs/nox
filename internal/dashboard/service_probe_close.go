@@ -55,6 +55,19 @@ func (s *Service) ExpireDueProbes(ctx context.Context) {
 			log.Printf("[probe] expire pos=%d: %v", p.ID, err)
 		}
 	}
+	// R1④：到期但卡 OPENING/CLOSING（venue 未确认/平仓在途）——critical 30min 去重，
+	// 不改其状态（venue 侧真相未明，待对账/人工收编；LEGGED 不入——单腿即 OPEN 态）。
+	stuck, err := s.store.ListStuckDueProbes(ctx, time.Now())
+	if err != nil {
+		log.Printf("[probe] stuck scan: %v", err)
+		return
+	}
+	for _, p := range stuck {
+		msg := fmt.Sprintf("[probe] 探针到期仍 %s 待对账 pos=%d", p.Status, p.ID)
+		if err := s.store.InsertAlertDedup(ctx, "critical", msg, probeCloseFailRetryWindow); err != nil {
+			log.Printf("[probe] pos=%d stuck alert: %v", p.ID, err)
+		}
+	}
 }
 
 // closeProbe 单仓到期平仓：claim → bm.CloseOrder → 落 CLOSE 腿（commission 现金流

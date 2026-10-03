@@ -4,6 +4,7 @@ package dashboard
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -90,7 +91,7 @@ func d047Svc(t *testing.T) (*Service, *pgstore.Store, *fakeProbeExec) {
 		store: st, bm: &BrokerManager{store: st, reg: reg}, qbus: qbus,
 		gateChecker: &storeGateChecker{store: st},
 	}
-	svc.SetAppConfigView(&config.Config{Environment: "live", ProbeMaxNotionalUSD: 1000}, nil, nil)
+	svc.SetAppConfigView(&config.Config{Environment: "live", ProbeMaxNotionalUSD: 1000, ProbeRPCEnabled: true}, nil, nil)
 	return svc, st, fx
 }
 
@@ -176,7 +177,7 @@ func TestD047_RejectIncident(t *testing.T) {
 func TestD047_RejectEquity(t *testing.T) {
 	svc, st, fx := d047Svc(t)
 	svc.SetAppConfigView(&config.Config{
-		Environment: "live", ProbeMaxNotionalUSD: 1000,
+		Environment: "live", ProbeMaxNotionalUSD: 1000, ProbeRPCEnabled: true,
 		RiskCexEquityPct: 35, // acctMon=nil → 快照缺 → 拒
 	}, nil, nil)
 	d047ExpectReject(t, svc, st, fx, d047Req(0.005))
@@ -356,5 +357,96 @@ func TestD047_ExpireNotDue(t *testing.T) {
 	st.Pool().QueryRow(ctx, `SELECT status FROM positions WHERE id=$1`, posID).Scan(&status)
 	if status != "OPEN" {
 		t.Errorf("status=%s, want OPEN", status)
+	}
+}
+
+// TestD047_RejectRPCDisabled R1②：ARB_PROBE_RPC_ENABLED=false → 第一道守卫即拒 + warn。
+func TestD047_RejectRPCDisabled(t *testing.T) {
+	svc, st, fx := d047Svc(t)
+	svc.SetAppConfigView(&config.Config{
+		Environment: "live", ProbeMaxNotionalUSD: 1000, ProbeRPCEnabled: false,
+	}, nil, nil)
+	msg := d047ExpectReject(t, svc, st, fx, d047Req(0.005))
+	if !strings.Contains(msg, "未启用") {
+		t.Errorf("msg=%q, want 含「未启用」", msg)
+	}
+}
+
+// TestD047_RejectBadDecisionRef R1③：decision_ref 非 D# 形 → InvalidArgument。
+func TestD047_RejectBadDecisionRef(t *testing.T) {
+	svc, _, fx := d047Svc(t)
+	for _, bad := range []string{"d047", "D-47", "D-x47", "D-047a", "PROBE-1"} {
+		req := d047Req(0.005)
+		req.Msg.DecisionRef = bad
+		_, err := svc.OpenProbe(context.Background(), req)
+		if err == nil {
+			t.Errorf("ref=%q 未拒", bad)
+			continue
+		}
+		if connect.CodeOf(err) != connect.CodeInvalidArgument {
+			t.Errorf("ref=%q code=%v, want InvalidArgument", bad, connect.CodeOf(err))
+		}
+	}
+	if len(fx.places) != 0 {
+		t.Error("非法 ref 后仍下单")
+	}
+}
+
+// TestD047_Unconfirmed R1⑤：下单受理未确认 → Status=UNCONFIRMED + 仓留 OPENING。
+func TestD047_Unconfirmed(t *testing.T) {
+	svc, st, fx := d047Svc(t)
+	fx.placeErr = &exec.ErrFillUnconfirmed{OrderID: "o-x"}
+	resp, err := svc.OpenProbe(context.Background(), d047Req(0.005))
+	if err != nil {
+		t.Fatalf("OpenProbe: %v", err)
+	}
+	if resp.Msg.GetStatus() != "UNCONFIRMED" {
+		t.Fatalf("status=%s, want UNCONFIRMED", resp.Msg.GetStatus())
+	}
+	var status string
+	if err := st.Pool().QueryRow(context.Background(),
+		`SELECT status FROM positions WHERE id=$1`, resp.Msg.GetPositionId()).Scan(&status); err != nil {
+		t.Fatalf("pos: %v", err)
+	}
+	if status != "OPENING" {
+		t.Errorf("pos status=%s, want OPENING（不假写 FAILED）", status)
+	}
+	if d047AlertCount(t, st, "critical") == 0 {
+		t.Error("未确认未落 critical 告警")
+	}
+}
+
+// TestD047_StuckDueAlert R1④：到期 OPENING/CLOSING 探针 → critical 30min 去重告警，状态不动。
+func TestD047_StuckDueAlert(t *testing.T) {
+	svc, st, _ := d047Svc(t)
+	ctx := context.Background()
+	past := time.Now().Add(-time.Minute)
+	ref := "D-047-stuck"
+	posID, err := st.CreatePosition(ctx, &pgstore.Position{
+		OpportunityID: "PROBE:XAUUSD:" + ref, Type: pgstore.PositionTypePROBE,
+		Status: "OPENING", DecisionRef: &ref, AutoCloseAt: &past})
+	if err != nil {
+		t.Fatalf("probe: %v", err)
+	}
+	svc.ExpireDueProbes(ctx)
+	var n int
+	if err := st.Pool().QueryRow(ctx,
+		`SELECT COUNT(*) FROM alerts WHERE level='critical' AND message LIKE '%探针到期仍 OPENING 待对账%'`).Scan(&n); err != nil {
+		t.Fatalf("alerts: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("stuck critical=%d, want 1", n)
+	}
+	var status string
+	st.Pool().QueryRow(ctx, `SELECT status FROM positions WHERE id=$1`, posID).Scan(&status)
+	if status != "OPENING" {
+		t.Errorf("status=%s, want OPENING（不改状态）", status)
+	}
+	// 去重：再扫一轮不新增。
+	svc.ExpireDueProbes(ctx)
+	st.Pool().QueryRow(ctx,
+		`SELECT COUNT(*) FROM alerts WHERE level='critical' AND message LIKE '%探针到期仍 OPENING 待对账%'`).Scan(&n)
+	if n != 1 {
+		t.Errorf("dedup 失效 critical=%d", n)
 	}
 }

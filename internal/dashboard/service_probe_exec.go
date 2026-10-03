@@ -56,7 +56,7 @@ func (s *Service) openProbeExecute(ctx context.Context, r *v1.OpenProbeRequest, 
 		if errors.As(err, &unconfirmed) {
 			s.probeCritical(ctx, posID, fmt.Sprintf("开单受理未确认 order=%s（venue 仓状态待对账）: %v", unconfirmed.OrderID, err))
 			return connect.NewResponse(&v1.OpenProbeResponse{
-				PositionId: posID, Status: "FAILED",
+				PositionId: posID, Status: "UNCONFIRMED", // R1⑤：未确认态明示，不假写 FAILED
 				Message: fmt.Sprintf("受理未确认（仓 #%d 留 OPENING 待对账）: %v", posID, err)}), nil
 		}
 		if uerr := s.store.UpdatePositionStatus(ctx, posID, "FAILED"); uerr != nil {
