@@ -26,6 +26,11 @@ type venueState struct {
 	orders     map[string]venue.Order // ticket → order
 	canon      map[string]string      // symbol→canonical（reconcile 重建）
 	cs         map[string]float64     // symbol→contractSize（reconcile 重建）
+	// D-036：MT5 保证金估算输入（reconcile 时点同批拉取，帧路径零 RPC/零 DB）——
+	// marginSpec=symbol→SymbolParams 规格；imr=账户级 init_margin_rate fact（裸 venue 键）。
+	marginSpec map[string]symMarginSpec
+	imr        float64
+	imrOK      bool
 }
 
 // posKey 逐仓键：venueKey + "|" + ticket。
@@ -40,8 +45,10 @@ type BrokerPositionMonitor struct {
 
 	mu     sync.RWMutex
 	venues map[string]venueState // venueKey → 状态
-	// d031 D-031 ②/R2：MT5 仓位级保证金域（缓存/退避/imr——broker_position_monitor_margin.go）。
-	d031   d031MarginState
+	// D-036：init_margin_rate fact 读口（裸 venue 键，margin 率径估算输入）；
+	// nil=率径不可用（仅定额径可产出）——main 装配注入。
+	initMarginRateFor func(ctx context.Context, venue string) (float64, bool)
+
 	cur    map[string]*v1.BrokerPosition // posKey → 已发布显示态（回放源+proto.Equal 去重）
 	dirty  map[string]struct{}           // 待发事件 posKey 集（flush 时按最新态裁决 upsert/remove）
 	flushT *time.Timer                   // 尾沿合批定时器（AfterFunc，有界非周期）

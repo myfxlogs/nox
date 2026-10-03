@@ -162,6 +162,24 @@ func (m *BrokerManager) BrokerContractSize(ctx context.Context, venue, symbol st
 	return r.symbolParams(ctx, symbol)
 }
 
+// BrokerSymbolMarginSpec D-036：venue 原生符号保证金规格（SymGroup.InitialMargin per-lot
+// 定额 + SymbolInfo.ContractSize）——仓位级 margin 估算输入。MT4/未运行/查询失败 →
+// ok=false（调用方诚实空态）。
+func (m *BrokerManager) BrokerSymbolMarginSpec(ctx context.Context, venue, symbol string) (initialMargin, contractSize float64, ok bool) {
+	m.mu.Lock()
+	r := m.running[venue]
+	m.mu.Unlock()
+	if r == nil || r.marginSpec == nil {
+		return 0, 0, false
+	}
+	im, cs, err := r.marginSpec(ctx, symbol)
+	if err != nil {
+		log.Printf("[broker] margin spec %s %s: %v", venue, symbol, err)
+		return 0, 0, false
+	}
+	return im, cs, true
+}
+
 // backfillContracts 补写 venue 既有映射的 NULL 合约（数据源 = broker 权威分组信息）。
 // D-042 前写入的历史映射 contract_size=NULL → 规格画像为空，合约校验形同虚设；
 // 启动时回填恢复画像基线。未命中符号（如 MT4/停用）保持 NULL = 合约未知，合法跳过校验。

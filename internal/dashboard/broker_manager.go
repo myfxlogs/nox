@@ -42,16 +42,16 @@ type running struct {
 	// symbolParams 单符号权威合约规格（MT5 SymbolParams；MT4/未运行 = nil）。零信任：
 	// 保存映射的合约校验数据只信 broker 自取，不信前端传值（D-042）。
 	symbolParams     func(ctx context.Context, symbol string) (float64, bool, error)
-	setSymMap        func(map[string]string)                                                              // 运行时刷新 brokerSymbol → canonical
-	setEmitBlocked   func(map[string]bool)                                                                // D-383 A2.3：运行时刷新 canonical 发射抑制集
-	setUnitScales    func(map[string]adapter.SymbolScale, map[string]bool)                                // D-594：运行时刷新单位标定+敏感集
-	resubscribe      func([]string)                                                                       // 运行时补订阅新符号（保存映射后生效，D-047 缺陷③）
-	swap             func(ctx context.Context) ([]fact.Fact, error)                                       // 轮询 swap facts（§3.6，D-036）
-	sessions         func(ctx context.Context) ([]fact.Fact, error)                                       // D-029 R3：周交易会话表采集（每日刷新面）
-	requiredMargin   func(ctx context.Context, symbol, side string, lots, price float64) (float64, error) // D-031 ②：仓位级原生保证金 RPC
-	meta             func(ctx context.Context) ([]fact.Fact, error)                                       // D-140 S2：MT5 符号元数据 facts（CS 采集）
-	orderHistoryScan orderHistoryScan                                                                     // D-181 S1：拉历史已平仓订单（BackfillSwapHistory RPC 用），nil=未接线
-	acctSummary      func(ctx context.Context) (float64, float64, string, error)                          // D-563 S4b：MT 实时 equity/freeMargin/currency（AccountSummary RPC）；nil=非 MT 或未接线
+	setSymMap        func(map[string]string)                                                                   // 运行时刷新 brokerSymbol → canonical
+	setEmitBlocked   func(map[string]bool)                                                                     // D-383 A2.3：运行时刷新 canonical 发射抑制集
+	setUnitScales    func(map[string]adapter.SymbolScale, map[string]bool)                                     // D-594：运行时刷新单位标定+敏感集
+	resubscribe      func([]string)                                                                            // 运行时补订阅新符号（保存映射后生效，D-047 缺陷③）
+	swap             func(ctx context.Context) ([]fact.Fact, error)                                            // 轮询 swap facts（§3.6，D-036）
+	sessions         func(ctx context.Context) ([]fact.Fact, error)                                            // D-029 R3：周交易会话表采集（每日刷新面）
+	marginSpec       func(ctx context.Context, symbol string) (initialMargin, contractSize float64, err error) // D-036：仓位级保证金规格估算输入（SymbolParams）；nil=MT4/未接线
+	meta             func(ctx context.Context) ([]fact.Fact, error)                                            // D-140 S2：MT5 符号元数据 facts（CS 采集）
+	orderHistoryScan orderHistoryScan                                                                          // D-181 S1：拉历史已平仓订单（BackfillSwapHistory RPC 用），nil=未接线
+	acctSummary      func(ctx context.Context) (float64, float64, string, error)                               // D-563 S4b：MT 实时 equity/freeMargin/currency（AccountSummary RPC）；nil=非 MT 或未接线
 
 	// per-venue symbolGroups TTL 缓存（D-045 §3.2.1）：避免矩阵页全量拉取时 N 账号 × SymbolList+SymbolParamsMany
 	// 直连 mtapi；缓存失效回退直连，失败不下发脏数据。
