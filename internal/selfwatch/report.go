@@ -123,6 +123,12 @@ func renderDaily(ctx context.Context, d Deps, since time.Time, ok bool, ev *scan
 			b.WriteString("退出：" + joinBuckets(ev.ExitedByDay, true) + "\n")
 		}
 	}
+	// D-050 ②：纸面在仓行数/品种数——全 active 观测项（不分 structure，无阈值）。
+	rows, symbols, err := d.Store.PaperActiveStats(ctx)
+	if err != nil {
+		return "", fmt.Errorf("paper active stats: %w", err)
+	}
+	b.WriteString(fmt.Sprintf("纸面在仓 %d 行·%d 品种\n", rows, symbols))
 	b.WriteString("■ Stage 1 就绪\n")
 	writeTable(&b, rep.Stage1Table)
 	if rep.Stage1OK {

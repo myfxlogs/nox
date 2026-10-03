@@ -17,25 +17,27 @@ import (
 )
 
 type fakeStore struct {
-	cfg        map[string]string
-	incidents  int
-	blockerID  int64
-	net30d     float64
-	mig        int
-	venueCaps  int
-	canonCaps  int
-	allowReal  int
-	allowPairs []pgstore.VenuePair
-	factTs     map[string]time.Time
-	factCnt    map[string]int
-	macroMax   *time.Time
-	makerOpen  int
-	makerInc   int
-	dlRows     int // D-042 R1 ③：24h data_lost 退出行数
-	dlPairs    int // D-042 R1 ③：当前冷却中对数
-	alerts     []string
-	dedupCalls []string
-	upserts    map[string]string
+	cfg          map[string]string
+	incidents    int
+	blockerID    int64
+	net30d       float64
+	mig          int
+	venueCaps    int
+	canonCaps    int
+	allowReal    int
+	allowPairs   []pgstore.VenuePair
+	factTs       map[string]time.Time
+	factCnt      map[string]int
+	macroMax     *time.Time
+	makerOpen    int
+	makerInc     int
+	dlRows       int // D-042 R1 ③：24h data_lost 退出行数
+	dlPairs      int // D-042 R1 ③：当前冷却中对数
+	paperRows    int // D-050 ②：纸面在仓行数
+	paperSymbols int // D-050 ②：纸面在仓品种数
+	alerts       []string
+	dedupCalls   []string
+	upserts      map[string]string
 }
 
 func (f *fakeStore) AppConfigString(_ context.Context, k string) (string, bool, error) {
@@ -101,6 +103,9 @@ func (f *fakeStore) MakerLegStatsSince(context.Context, time.Time) (int, int, er
 func (f *fakeStore) PaperDataLostStats(context.Context, time.Time) (int, int, error) {
 	return f.dlRows, f.dlPairs, nil
 }
+func (f *fakeStore) PaperActiveStats(context.Context) (int, int, error) {
+	return f.paperRows, f.paperSymbols, nil
+}
 func (f *fakeStore) InsertAlert(_ context.Context, _ *int64, level, msg string) error {
 	f.alerts = append(f.alerts, level+"|"+msg)
 	return nil
@@ -153,6 +158,7 @@ func greenStore() *fakeStore {
 		mig:      173, venueCaps: 5, canonCaps: 1, allowReal: 1,
 		allowPairs: []pgstore.VenuePair{stage1Pair},
 		makerOpen:  25, net30d: 100,
+		paperRows: 12, paperSymbols: 8,
 	}
 }
 
@@ -165,7 +171,7 @@ func TestD033_DailyReportAllGreen(t *testing.T) {
 	}
 	for _, want := range []string{
 		"【ARB 自盯日报】", "起点 2026-10-03T01:59Z", "窗内净额 $3.0000", "在仓 3 行", "窗内退出 1 行",
-		"fail-closed 0 行", "accrue 停滞 0 行", "逐日净额",
+		"fail-closed 0 行", "accrue 停滞 0 行", "逐日净额", "纸面在仓 12 行·8 品种",
 		"✅ paper 窗 ≥7 天", "✅ 窗内净额非负", "✅ Stage 1 组合证据", "✅ 期间零事故仓",
 		"✅ D-027", "✅ D-028", "✅ D-032",
 		"✅ cap 已定", "✅ 白名单已定", "待决策：Stage 1 可启",
