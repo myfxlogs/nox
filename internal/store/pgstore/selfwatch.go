@@ -23,6 +23,17 @@ func (s *Store) PaperWindowCohort(ctx context.Context, structure string, since t
 		ORDER BY id`, structure, since)
 }
 
+// PaperActiveStats D-050 ②：纸面在仓行数/品种数（paper_spot_carry 全 active，
+// 不分 structure——日报观测项，无阈值不告警）。
+func (s *Store) PaperActiveStats(ctx context.Context) (rows, symbols int, err error) {
+	err = s.pool.QueryRow(ctx, `
+		SELECT count(*), count(DISTINCT symbol) FROM paper_spot_carry WHERE status = 'active'`).Scan(&rows, &symbols)
+	if err != nil {
+		return 0, 0, fmt.Errorf("paper active stats: %w", err)
+	}
+	return rows, symbols, nil
+}
+
 // AppConfigString 单键字符串直读（行缺 → ok=false；D-033 窗起点/macro 闸等热读键）。
 func (s *Store) AppConfigString(ctx context.Context, key string) (string, bool, error) {
 	var v string

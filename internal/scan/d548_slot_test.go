@@ -1,6 +1,6 @@
-// d548_slot_test.go —— D-548 验收锚：A1 cfd 槽 canonical 去重计数（6 账户×同 canonical
-// 占 1 槽、异 canonical 各占）；A2 零收益僵尸槽三判据清理（全中→exit zero_accrual_stale，
-// 任一不中→保留）。
+// d548_slot_test.go —— A1（D-050 重写）：数量槽退役——同 canonical 多 MT 账户行全开
+// （观察面每账户一份语义不变，键=(canonical,mt,cex,structure)）、异 canonical 无上限全开；
+// A2 零收益僵尸槽三判据清理（全中→exit zero_accrual_stale，任一不中→保留）。
 package scan
 
 import (
@@ -35,20 +35,19 @@ func d548SeedActive(t *testing.T, s *pgstore.Store, mtVenue, cexVenue, symbol, s
 	}
 }
 
-// A1①：6 账户×同 canonical 合占 1 槽——其余 5 槽给异 canonical（第 7 个被挡）；
-// 同 canonical 新账户行不占槽仍开（观察面每账户一份语义不变）。
-func TestD548_A1_CanonicalSlotCount(t *testing.T) {
+// TestD050_AllCleanOpen_NoCap（原 D-548 A1 重写）：数量槽退役——6 账户×同 canonical
+// 全开（键含 mt_venue，账户级观察面保留）+ 6 异 canonical 全开=12；第二轮再开 2 无上限。
+func TestD050_AllCleanOpen_NoCap(t *testing.T) {
 	s := d410Store(t)
 	ctx := context.Background()
-	// 生产病灶形：US30×6 账户全 active（accrued>0 防僵尸规则误伤本锚）。
-	for i := 1; i <= 6; i++ {
-		d548SeedActive(t, s, fmt.Sprintf("acct%d", i), "gate", "US30", "long_cfd_short_perp", 2*time.Hour, 1.0)
+	if _, err := s.Pool().Exec(ctx, `DELETE FROM paper_spot_carry WHERE symbol LIKE 'US30%' OR symbol LIKE 'NC%'`); err != nil {
+		t.Fatalf("clean paper rows: %v", err)
 	}
+	// 6 账户×US30 + 6 异 canonical（net 降序均可开）——无槽额，全开。
 	rows := []UniverseRow{}
 	for i := 1; i <= 6; i++ {
 		rows = append(rows, d374Row("US30", fmt.Sprintf("acct%d", i), "gate", "long_cfd_short_perp", 10, ""))
 	}
-	// 6 个异 canonical 候选（net 降序均可开）——槽额只剩 5。
 	for i := 1; i <= 6; i++ {
 		rows = append(rows, d374Row(fmt.Sprintf("NC%d", i), "acct1", "gate", "long_cfd_short_perp", 10, ""))
 	}
@@ -56,14 +55,14 @@ func TestD548_A1_CanonicalSlotCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("step: %v", err)
 	}
-	if len(opened) != 5 {
-		t.Fatalf("A1①: US30 六行=1 槽→应再开 5 异 canonical, got opened=%v", opened)
+	if len(opened) != 12 {
+		t.Fatalf("D-050 无槽：12 干净行应全开, got opened=%v", opened)
 	}
 	active, _ := s.ListActivePaperSpotCarry(ctx)
-	if len(active) != 11 {
-		t.Fatalf("A1①: active 应=6+5=11, got %d", len(active))
+	if len(active) != 12 {
+		t.Fatalf("active 应=12, got %d", len(active))
 	}
-	// A1②：同 canonical 新账户不占槽——槽满后 US30@acct7 仍开，NC7（新 canonical）被挡。
+	// 第二轮：同 canonical 新账户行 + 新 canonical——无上限继续开。
 	rows2 := []UniverseRow{
 		d374Row("US30", "acct7", "gate", "long_cfd_short_perp", 10, ""),
 		d374Row("NC7", "acct1", "gate", "long_cfd_short_perp", 10, ""),
@@ -72,8 +71,8 @@ func TestD548_A1_CanonicalSlotCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("step2: %v", err)
 	}
-	if len(opened2) != 1 || opened2[0] != "US30" {
-		t.Fatalf("A1②: 同 canonical 复行应不占槽仍开, got opened=%v", opened2)
+	if len(opened2) != 2 {
+		t.Fatalf("D-050 无槽：第二轮 2 行应全开, got opened=%v", opened2)
 	}
 	active, _ = s.ListActivePaperSpotCarry(ctx)
 	us30 := 0
@@ -82,8 +81,8 @@ func TestD548_A1_CanonicalSlotCount(t *testing.T) {
 			us30++
 		}
 	}
-	if us30 != 7 || len(active) != 12 {
-		t.Fatalf("A1②: US30 应 7 行/active 应 12, got us30=%d active=%d", us30, len(active))
+	if us30 != 7 || len(active) != 14 {
+		t.Fatalf("US30 应 7 行/active 应 14, got us30=%d active=%d", us30, len(active))
 	}
 }
 

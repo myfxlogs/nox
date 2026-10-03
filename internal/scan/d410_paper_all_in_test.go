@@ -14,7 +14,7 @@ import (
 
 // d410Opts cfd 轨装配参数（缺省值同 wire：feeBps=5.0 与 cfg.XAssetCexFeeBps 缺省同源）。
 func d410Opts() PaperCfdOpts {
-	return PaperCfdOpts{AuthorizedMaxActive: 8, ReopenCooldown: 24 * time.Hour}
+	return PaperCfdOpts{ReopenCooldown: 24 * time.Hour} // D-050：AuthorizedMaxActive 退役
 }
 
 // d410Store DSN 库+本票涉及表清空（alerts/xasset_allow_combos/fin_xasset_monitor 不在
@@ -225,8 +225,8 @@ func d410SeedCombo(t *testing.T, s *pgstore.Store, canonBuy, venueBuy, canonSell
 	}
 }
 
-// TestD410_GuaranteedSlot 保底段：授权组合非 top-N（net=2<8 地板下）仍开仓；
-// 保底不占 PaperCfdMaxActive 槽（开票顺序钉死①）。
+// TestD410_GuaranteedSlot 保底段：授权组合 net=2<8 地板下仍开仓（保底行不受
+// 数量槽退役影响——D-050 后与发现段同场全量开，本锚兼验两类行并存）。
 func TestD410_GuaranteedSlot(t *testing.T) {
 	s := d410Store(t)
 	ctx := context.Background()
@@ -234,7 +234,7 @@ func TestD410_GuaranteedSlot(t *testing.T) {
 	rows := []UniverseRow{
 		d374Row("D410G", "3001157", "okx", "long_cfd_short_perp", 2.0, ""), // net<8 保底不套下限
 	}
-	// 6 个 top-N 合格行挤满 PaperCfdMaxActive——保底行仍须开出（不占 6 槽）
+	// 6 个 top-N 合格行 + 保底行同轮并存——全量开（D-050 无槽）
 	for i, sym := range []string{"D410A", "D410B", "D410E", "D410F", "D410H", "D410I"} {
 		rows = append(rows, d374Row(sym, "277842155", "binance", "long_cfd_short_perp", 20.0-float64(i), ""))
 	}
