@@ -26,6 +26,11 @@ func d410Store(t *testing.T) *pgstore.Store {
 	if _, err := s.Pool().Exec(ctx, `TRUNCATE alerts, xasset_allow_combos RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate alerts/combos: %v", err)
 	}
+	// D-028：席位测试库跨 run 持久——残留 active 行会遮蔽本轮开仓判定
+	//（activeStructKeys/activePairKeys 命中=静默跳过），本夹具族行清退。
+	if _, err := s.Pool().Exec(ctx, `DELETE FROM paper_spot_carry WHERE symbol LIKE 'D4%'`); err != nil {
+		t.Fatalf("clean paper rows: %v", err)
+	}
 	if _, err := s.Pool().Exec(ctx, `DELETE FROM fin_xasset_monitor WHERE pair LIKE 'D410%'`); err != nil {
 		t.Fatalf("clean monitor: %v", err)
 	}

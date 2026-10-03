@@ -26,7 +26,10 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 	cexRawByCanon := map[string]string{}
 	if uniRows, uerr := st.ListCexUniverse(ctx); uerr == nil {
 		for _, ur := range uniRows {
-			for _, canon := range []string{ur.HedgeCanonical, ur.Symbol} {
+			// D-028 ②：键补 NJK(cexFactSymbol(symbol))——okx TRX-USDT-SWAP / gate TRX_USDT
+			// 经 NJK 不归一（尾段非 USDT/USD），查键 canonical=TRX 永不命中 → fail-closed。
+			// cexFactSymbol 先归 facts 键形（TRXUSDT）再 NJK（→TRX）与查询键对齐。
+			for _, canon := range []string{ur.HedgeCanonical, ur.Symbol, NormalizeJoinKey(cexFactSymbol(ur.Symbol))} {
 				if k := ur.Venue + "|" + NormalizeJoinKey(canon); canon != "" {
 					cexRawByCanon[k] = cexFactSymbol(ur.Symbol)
 				}
@@ -72,7 +75,7 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 		if ok {
 			lastBasis = &entryBps
 		}
-		key := p.VenuePair() + "|" + p.Symbol
+		key := p.VenuePair() + "|" + p.Symbol + "|" + p.Structure // D-028 ③：按行自身 structure 匹配 net（不借赢家）
 		r, ok := rowByKey[key]
 		if !ok {
 			if p.Status != "active" {
@@ -80,7 +83,8 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 			}
 			// D-500 S1 suspend：venue 整轮零产出（休市/断供）或行被质量剔除 → session 关闭
 			// 非机会消失——不计 miss_streak、不写 accrue；仅留 age_7d 墙钟出口防僵尸。
-			if _, dirty := dirtyByKey[key]; silentMt[mtV] || dirty {
+			// D-028 ③：dirty 判定=venue 对级（结构无关；调用方传 dirtyPair）。
+			if _, dirty := dirtyByKey[p.VenuePair()+"|"+p.Symbol]; silentMt[mtV] || dirty {
 				if now.Sub(p.EntryTs).Hours()/24 >= paperMaxAgeDays {
 					if err := st.ExitPaperSpotCarry(ctx, p.ID, "age_7d", paperExitConvergence(p, lastBasis)); err != nil {
 						return exited, fmt.Errorf("cfd paper step: exit age suspend %d: %w", p.ID, err)
@@ -129,6 +133,11 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 		}
 		accrueTo := &settledTo
 		if !aok {
+			noFactWarn++
+		}
+		// D-028 ⑤：ok=true 但零边界入窗（settledTo 未前进）=同静默零 accrue 形态——
+		// 计入 fail-closed 告警（旧口径此形态静默，okx next_settle 领先多窗期不可见）。
+		if aok && !settledTo.After(base) {
 			noFactWarn++
 			settledTo = base
 			accruedAdd = 0

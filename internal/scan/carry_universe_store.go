@@ -89,3 +89,18 @@ func (p *PGStore) HasIntraEventToday(ctx context.Context, kind string) (bool, er
 func (p *PGStore) ListIntraVenues(ctx context.Context) (mt []string, cex []string, err error) {
 	return p.S.ListIntraVenues(ctx)
 }
+
+// ListSwapFreeAccounts D-028 ④：venue→swap_free 旗（broker_accounts 全量）。
+func (p *PGStore) ListSwapFreeAccounts(ctx context.Context) (map[string]bool, error) {
+	accounts, err := p.S.ListBrokerAccounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]bool, len(accounts))
+	for _, a := range accounts {
+		if a.SwapFree {
+			out[a.Venue] = true
+		}
+	}
+	return out, nil
+}

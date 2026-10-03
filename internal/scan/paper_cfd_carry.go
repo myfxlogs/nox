@@ -78,9 +78,16 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 	if err != nil {
 		return nil, 0, fmt.Errorf("cfd paper step: list accrable: %w", err)
 	}
-	activeByKey := make(map[string]struct{}, len(active))
+	// D-028 ③：双行 emit（long/short 各一行）→ 在仓视图拆二：
+	//   activePairKeys=venue 对维度（保底段在仓判定：同一 venue 对任一结构在仓即占用保底）；
+	//   activeStructKeys=结构维度（top-N 段排除：两结构行各自独立开仓互不遮蔽）。
+	activePairKeys := make(map[string]struct{}, len(active))
+	activeStructKeys := make(map[string]struct{}, len(active))
+	rowByPair := make(map[string]UniverseRow, len(rows)) // D-028 ③：venue 对级开仓取行视图
+	dirtyPair := make(map[string]string, len(rows))      // 同级 dirty 归因（任一结构 dirty 即剔）
 	for _, p := range active {
-		activeByKey[p.VenuePair()+"|"+p.Symbol] = struct{}{}
+		activePairKeys[p.VenuePair()+"|"+p.Symbol] = struct{}{}
+		activeStructKeys[p.VenuePair()+"|"+p.Symbol+"|"+p.Structure] = struct{}{}
 	}
 	// clean cfd 行索引（保底段与 top-N 段共用；D-345 suspect 行拒入同 top-N 口径）。
 	// D-419 S2：dirtyByKey 并行索引——行在但 Note!=""（suspect/stale 剔除）记原因，
@@ -91,15 +98,22 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 		if !cfdStructures[r.Structure] {
 			continue
 		}
-		key := r.MtVenue + "×" + r.CexVenue + "|" + r.Canonical
+		key := r.MtVenue + "×" + r.CexVenue + "|" + r.Canonical + "|" + r.Structure // D-028 ③：结构维度
+		pairKey := r.MtVenue + "×" + r.CexVenue + "|" + r.Canonical                 // venue 对级（保底段在/缺席与开仓取行视图）
 		if r.Note == "" {
 			rowByKey[key] = r
+			if _, exists := rowByPair[pairKey]; !exists {
+				rowByPair[pairKey] = r // 双行 emit 后取首个（排序 net 降序=更优结构）
+			}
 		} else {
 			dirtyByKey[key] = r.Note
+			if _, exists := dirtyPair[pairKey]; !exists {
+				dirtyPair[pairKey] = r.Note
+			}
 		}
 	}
 	// D-410 S4 钉死①开票顺序：保底段先行——enabled∧非 simulated 白名单组合不套 net 下限
-	// （衰减授权线的证据同样要记），不占 PaperCfdMaxActive 槽；top-N 段经 activeByKey 自动跳过。
+	// （衰减授权线的证据同样要记），不占 PaperCfdMaxActive 槽；top-N 段经 activeStructKeys 自动跳过。
 	combos, err := st.LoadXAssetAllowCombos(ctx, "real")
 	if err != nil {
 		return nil, 0, fmt.Errorf("cfd paper step: load allow combos: %w", err)
@@ -160,7 +174,7 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 	}
 	var missing []string
 	for _, sl := range slots {
-		if _, ok := activeByKey[sl.key]; ok {
+		if _, ok := activePairKeys[sl.key]; ok {
 			continue
 		}
 		if silentMt[sl.mtVenue] {
@@ -184,10 +198,10 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 				continue
 			}
 		}
-		r, ok := rowByKey[sl.key]
+		r, ok := rowByPair[sl.key] // D-028 ③：保底=venue 对级取行（双结构任一在场即可开）
 		if !ok {
 			// D-419 S2：缺席分级归因——行在但被 Note 剔除 vs universe 未产行。
-			if note, dirty := dirtyByKey[sl.key]; dirty {
+			if note, dirty := dirtyPair[sl.key]; dirty {
 				missing = append(missing, sl.key+"（行被剔除:"+note+"）")
 			} else {
 				missing = append(missing, sl.key+"（universe 未产行）")
@@ -200,7 +214,7 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 			}
 			return opened, exited, fmt.Errorf("cfd paper step: open authorized %s: %w", sl.key, err)
 		}
-		activeByKey[sl.key] = struct{}{}
+		activePairKeys[sl.key] = struct{}{}
 		guaranteedActive++
 		opened = append(opened, r.Canonical)
 	}
@@ -225,7 +239,7 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 			continue
 		}
 		venueCombo := r.MtVenue + "×" + r.CexVenue
-		if _, ok := activeByKey[venueCombo+"|"+r.Canonical]; ok {
+		if _, ok := activeStructKeys[venueCombo+"|"+r.Canonical+"|"+r.Structure]; ok { // D-028 ③：结构维度
 			continue
 		}
 		if f := blockedFlagHit(r.MtVenue, r.CexVenue, r.Canonical, &r.MtVenue, flags); f != nil {
@@ -257,7 +271,7 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 		opened = append(opened, c.r.Canonical)
 	}
 	// ② 累积 + ③ 退出（仅 cfd 行；spot 轨行不归本函数）——D-474a 起拆至 paper_cfd_accrue.go。
-	n, err := accrueExitCfdPaper(ctx, st, accrable, rowByKey, dirtyByKey, silentMt, now)
+	n, err := accrueExitCfdPaper(ctx, st, accrable, rowByKey, dirtyPair, silentMt, now) // D-028 ③：dirty=suspend 判定走 venue 对级（结构无关）
 	if err != nil {
 		return opened, exited, err
 	}

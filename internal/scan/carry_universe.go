@@ -29,6 +29,9 @@ type Store interface {
 	ListCexUniverse(ctx context.Context) (map[string]pgstore.CexUniverseRow, error)
 	// ListSymbolAliases D-464 S1：alias→canonical 语义别名表（Run 开头载一次）。
 	ListSymbolAliases(ctx context.Context) (map[string]string, error)
+	// ListSwapFreeAccounts D-028 ④：venue→swap_free 旗（true→universe join 该 MT 腿 swap=0，
+	// 不等 7d 均值收敛；3001157 实证：spec swap 对 swap-free 账户为错值）。
+	ListSwapFreeAccounts(ctx context.Context) (map[string]bool, error)
 }
 
 // UniverseRow 单 canonical×最优 venue 组合的净 carry 排名行。
@@ -166,15 +169,14 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 	filteredCanonicals := map[string]bool{} // D-382 S2：有 swap fact 进入过滤评估的 canonical 集
 	// MT swap facts D-412 F1/F2/F3：单位归一+venue 全保留+7d 窗口均值——收集逻辑
 	// 提取至 carry_universe_collect.go（D-451 S3 纯搬家，注释全文随块搬移见彼）。
-	longByCanon, shortByCanon := sc.collectMtSwaps(ctx, mtSwapLong, mtSwapShort, tmKnown, filteredCanonicals, &res, aliases)
+	longByCanon, shortByCanon := sc.collectMtSwaps(ctx, mtSwapLong, mtSwapShort, tmKnown, filteredCanonicals, &res, aliases, sc.swapFreeAccounts(ctx)) // D-028 ④
 	// CEX funding：symbol→canonical（去 USDT）；F2 同款 venue 全保留（每 venue 一行，
 	// 不再 abs 取最优——cex argmax 会使授权组合在 funding 排名易主日假 warn+保底失明）。
 	// funding 符号定结构方向：>0=多 perp 付息→配空 CFD 收息；<0=反向。
 	type cexF struct {
 		venue, canonical string
 		val              float64
-		ts               time.Time
-		stale            bool // F4：funding 龄期超闸（>UniverseFundingMaxAge）
+		stale            bool // F4：funding 龄期超闸（>UniverseFundingMaxAge）；采集 ts 仅 stale 判定消费（字段无读者 D-028 清）
 	}
 	fundByCanon := map[string]cexF{}
 	for _, f := range cexFunding {
@@ -253,8 +255,10 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 			if len(triple) == 0 {
 				continue
 			}
+			// D-028 ③：long/short 各发一行（原只发赢家——周末 funding=0 赢家翻转 short，
+			// long 行被按 short 的负 net 判 adverse 退出 #64877 → 再 24h 冷却 → 攒不满 7 天）。
 			sort.Slice(triple, func(i, j int) bool { return triple[i].NetAnnual > triple[j].NetAnnual })
-			res.Rows = append(res.Rows, triple[0])
+			res.Rows = append(res.Rows, triple...)
 		}
 	}
 	// D-350 阶段①：第三结构 spot_carry 段（D-382 S3 拆出 carry_universe_spot.go，纯搬移）。

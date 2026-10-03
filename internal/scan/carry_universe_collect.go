@@ -27,7 +27,7 @@ type mtSwap struct {
 // modeAllowed 方向参。filtered/res.Skipped 为副作用参数（语义随原版保留）。
 func (sc *CarryUniverseScanner) collectMtSwaps(ctx context.Context, long, short []fact.Fact,
 	tmKnown func(fact.Fact) (int64, bool), filtered map[string]bool, res *ScanResult,
-	aliases map[string]string,
+	aliases map[string]string, swapFree map[string]bool,
 ) (map[string]mtSwap, map[string]mtSwap) {
 	collect := func(facts []fact.Fact, kind string, isLong bool) map[string]mtSwap {
 		out := map[string]mtSwap{}
@@ -68,8 +68,12 @@ func (sc *CarryUniverseScanner) collectMtSwaps(ctx context.Context, long, short 
 			if err != nil {
 				continue // F3：窗口零样本/读失败=不产行（既有 fail-closed 语义不变）
 			}
+			val := mean * 365 / 100
+			if swapFree[f.Venue] {
+				val = 0 // D-028 ④：swap_free 旗=true → swap=0（不等 7d 均值收敛；spec 错值源屏蔽）
+			}
 			out[canonical+"|"+f.Venue] = mtSwap{
-				venue: f.Venue, canonical: canonical, symbol: f.Symbol, val: mean * 365 / 100, ts: f.Ts,
+				venue: f.Venue, canonical: canonical, symbol: f.Symbol, val: val, ts: f.Ts,
 				stale: sc.swapMaxAge > 0 && time.Since(f.Ts) > sc.swapMaxAge, // R1：swap 侧用 swap 闸（48h），修复误用 funding 闸
 			}
 		}

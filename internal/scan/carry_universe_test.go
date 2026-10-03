@@ -16,7 +16,6 @@ type fakeScanStore struct {
 	windowMeans map[string]float64 // D-412 F3：kind|venue|symbol → 7d 均值（未设回退点值）
 	mappings    []pgstore.SymbolMapping
 	replaced    []pgstore.CarryUniverseRow
-	alerts      []string
 	universe    map[string]pgstore.CexUniverseRow
 	statuses    map[string]string // D-388：venue→status（nil=fail-open 全放行）
 	aliases     map[string]string // D-464：alias→canonical
@@ -74,6 +73,10 @@ func (f *fakeScanStore) ListCexUniverse(_ context.Context) (map[string]pgstore.C
 	return f.universe, nil
 }
 
+func (f *fakeScanStore) ListSwapFreeAccounts(_ context.Context) (map[string]bool, error) {
+	return map[string]bool{}, nil // D-028 ④：默认全非 swap_free（专项测试覆写字段）
+}
+
 func (f *fakeScanStore) ListBrokerAccountStatuses(_ context.Context) (map[string]string, error) {
 	return f.statuses, nil
 }
@@ -102,11 +105,12 @@ func TestD336_ScanJoinAndRank(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	if len(res.Rows) != 3 {
-		t.Fatalf("rows=%d, want 3（红=现无此机制）: %+v", len(res.Rows), res.Rows)
+	// D-028 ③：long/short 各发一行——BTC 对=4 行（BTC long/short + ETH long + WTI long）
+	if len(res.Rows) != 4 {
+		t.Fatalf("rows=%d, want 4（D-028 ③ 双结构行）: %+v", len(res.Rows), res.Rows)
 	}
-	// 排序（D-412 F1 年化口径）：BTC 6.65 > ETH 0（swap −30bps_daily=−109.5%/yr suspect 置零）> WTI −17.25（1−5×3.65）
-	if res.Rows[0].Canonical != "BTC" || res.Rows[1].Canonical != "ETH" || res.Rows[2].Canonical != "WTI" {
+	// 排序（D-412 F1 年化口径）：BTC long 6.65 > ETH 0（suspect 置零）> BTC short −6.65 > WTI −17.25
+	if res.Rows[0].Canonical != "BTC" || res.Rows[1].Canonical != "ETH" || res.Rows[2].Canonical != "BTC" || res.Rows[3].Canonical != "WTI" {
 		t.Errorf("排序错: %v", res.Rows)
 	}
 	// T1：BTC swap_free（swap 0/0）net≈funding
@@ -116,6 +120,10 @@ func TestD336_ScanJoinAndRank(t *testing.T) {
 	if res.Rows[0].NetAnnual < 6.6 || res.Rows[0].NetAnnual > 6.7 {
 		t.Errorf("BTC net want ≈6.65, got %v", res.Rows[0].NetAnnual)
 	}
+	// D-028 ③：BTC short 行=−6.65（swap_free 双零 → −funding）
+	if res.Rows[2].Structure != "short_cfd_long_perp" || res.Rows[2].NetAnnual > -6.6 || res.Rows[2].NetAnnual < -6.7 {
+		t.Errorf("BTC short 行 want −6.65, got %+v", res.Rows[2])
+	}
 	// D-412 F1：ETH swap −30bps_daily=−109.5%/yr → suspect 置零（年化本义恢复）
 	if res.Rows[1].Note == "" || res.Rows[1].NetAnnual != 0 {
 		t.Errorf("ETH swap 年化 109.5%%>100 应 suspect 置零: %+v", res.Rows[1])
@@ -124,8 +132,8 @@ func TestD336_ScanJoinAndRank(t *testing.T) {
 	if err := st.ReplaceCarryUniverse(context.Background(), toPgRows(res.Rows)); err != nil {
 		t.Fatalf("replace: %v", err)
 	}
-	if len(st.replaced) != 3 {
-		t.Errorf("落库行数=%d, want 3", len(st.replaced))
+	if len(st.replaced) != 4 {
+		t.Errorf("落库行数=%d, want 4（D-028 ③）", len(st.replaced))
 	}
 }
 
@@ -149,7 +157,7 @@ func TestD336_StructurePick(t *testing.T) {
 		t.Fatalf("run: %v", err)
 	}
 	if len(res.Rows) != 2 {
-		t.Fatalf("rows=%d skipped=%d, want 2（F2 全叉积不坍缩）: %+v", len(res.Rows), res.Skipped, res.Rows)
+		t.Fatalf("rows=%d skipped=%d, want 2（F2 全叉积不坍缩；swap_short 零候选=仅 long 行，D-028 ③ 双行只发可构建结构）: %+v", len(res.Rows), res.Skipped, res.Rows)
 	}
 	byVenue := map[string]UniverseRow{}
 	for _, r := range res.Rows {
@@ -259,10 +267,10 @@ func TestD345_SuspectGate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	if len(res.Rows) != 2 {
-		t.Fatalf("rows=%d, want 2: %+v", len(res.Rows), res.Rows)
+	if len(res.Rows) != 3 {
+		t.Fatalf("rows=%d, want 3（D-028 ③ BTC long/short 双行）: %+v", len(res.Rows), res.Rows)
 	}
-	// 剔除排名：健康 BTC 居首，suspect DOT 垫底（红=现 DOT 481.5 窜首）
+	// 剔除排名：健康 BTC long 居首，suspect DOT 中位，BTC short −6.65 垫底
 	if res.Rows[0].Canonical != "BTC" || res.Rows[1].Canonical != "DOT" {
 		t.Fatalf("排序错（suspect 行应垫底）: %+v", res.Rows)
 	}

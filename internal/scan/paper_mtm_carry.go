@@ -144,7 +144,7 @@ func (sc *CarryUniverseScanner) StepPaperMtmCarry(ctx context.Context, st PaperS
 		return nil, 0, fmt.Errorf("mtm paper step: %w", err)
 	}
 	var res ScanResult
-	longBook, shortBook := sc.collectMtSwaps(ctx, longF, shortF, tmKnown, map[string]bool{}, &res, aliases)
+	longBook, shortBook := sc.collectMtSwaps(ctx, longF, shortF, tmKnown, map[string]bool{}, &res, aliases, sc.swapFreeAccounts(ctx))
 	active, err := st.ListActivePaperSpotCarry(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("mtm paper step: list active: %w", err)

@@ -115,7 +115,13 @@ func fundingLegBoundaries(ctx context.Context, st PaperFactSource, leg PaperLegA
 
 // lastBoundaryLE 返回 ≤now 的最后结算边界（无→zero）。
 func lastBoundaryLE(ns time.Time, iv time.Duration, now time.Time) time.Time {
-	if ns.After(now) {
+	// D-028 ①：okx funding_next_settle 领先可达两个结算窗以上（00:00 结算后帧报 16:00）——
+	// 单次回退不够 → water=base → 零边界入窗 accrue 恒 0 且 ok=true 静默。循环回退至 ≤now，
+	// 有界上限=8h 网格×8 年（防异常 iv 爆循环；正常 1h 网格同理覆盖）。
+	if iv <= 0 {
+		return time.Time{}
+	}
+	for i := 0; ns.After(now) && i < 366*8; i++ {
 		ns = ns.Add(-iv)
 	}
 	if ns.After(now) {

@@ -32,3 +32,13 @@ func keepDiscoverableFacts(fs []fact.Fact, statuses map[string]string) []fact.Fa
 	}
 	return out
 }
+
+// swapFreeAccounts D-028 ④：venue→swap_free 旗读口（fail-open nil=不置零，同 statuses 惯例）。
+func (sc *CarryUniverseScanner) swapFreeAccounts(ctx context.Context) map[string]bool {
+	m, err := sc.store.ListSwapFreeAccounts(ctx)
+	if err != nil {
+		log.Printf("[scan] swap_free accounts: %v（fail-open 不置零）", err)
+		return nil
+	}
+	return m
+}
