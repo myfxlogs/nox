@@ -4,6 +4,7 @@ package dashboard
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -421,7 +422,7 @@ func TestD047_StuckDueAlert(t *testing.T) {
 	svc, st, _ := d047Svc(t)
 	ctx := context.Background()
 	past := time.Now().Add(-time.Minute)
-	ref := "D-047-stuck"
+	ref := "D-047" // R2③：合规 D# 形（^D-\d{3,}$）
 	posID, err := st.CreatePosition(ctx, &pgstore.Position{
 		OpportunityID: "PROBE:XAUUSD:" + ref, Type: pgstore.PositionTypePROBE,
 		Status: "OPENING", DecisionRef: &ref, AutoCloseAt: &past})
@@ -448,5 +449,92 @@ func TestD047_StuckDueAlert(t *testing.T) {
 		`SELECT COUNT(*) FROM alerts WHERE level='critical' AND message LIKE '%探针到期仍 OPENING 待对账%'`).Scan(&n)
 	if n != 1 {
 		t.Errorf("dedup 失效 critical=%d", n)
+	}
+}
+
+// TestD047_NextExpiry_OpeningFuture R2(a)：OPENING+未来到期 → 唤醒=auto_close_at。
+func TestD047_NextExpiry_OpeningFuture(t *testing.T) {
+	svc, st, _ := d047Svc(t)
+	ctx := context.Background()
+	future := time.Now().Add(2 * time.Hour)
+	ref := "D-047"
+	if _, err := st.CreatePosition(ctx, &pgstore.Position{
+		OpportunityID: "PROBE:XAUUSD:" + ref, Type: pgstore.PositionTypePROBE,
+		Status: "OPENING", DecisionRef: &ref, AutoCloseAt: &future}); err != nil {
+		t.Fatalf("probe: %v", err)
+	}
+	next, err := svc.NextProbeExpiryAt(ctx)
+	if err != nil || next == nil {
+		t.Fatalf("next=%v err=%v", next, err)
+	}
+	if !next.Equal(future.Truncate(time.Microsecond)) && next.Sub(future).Abs() > time.Second {
+		t.Fatalf("next=%v, want auto_close_at=%v", next, future)
+	}
+}
+
+// TestD047_NextExpiry_OpenExpired R2(b)：OPEN+已过期 → ≥ now+29min（不回过去、禁热循环）。
+func TestD047_NextExpiry_OpenExpired(t *testing.T) {
+	svc, st, _ := d047Svc(t)
+	ctx := context.Background()
+	past := time.Now().Add(-time.Hour)
+	ref := "D-047"
+	if _, err := st.CreatePosition(ctx, &pgstore.Position{
+		OpportunityID: "PROBE:XAUUSD:" + ref, Type: pgstore.PositionTypePROBE,
+		Status: "OPEN", DecisionRef: &ref, AutoCloseAt: &past}); err != nil {
+		t.Fatalf("probe: %v", err)
+	}
+	next, err := svc.NextProbeExpiryAt(ctx)
+	if err != nil || next == nil {
+		t.Fatalf("next=%v err=%v", next, err)
+	}
+	if d := time.Until(*next); d < 29*time.Minute {
+		t.Fatalf("wake in %s, want ≥29min（过期仓按 30min 节奏）", d)
+	}
+}
+
+// TestD047_NextExpiry_CloseFailRetry R2(c)：venue 平失败 → 仓回 OPEN+warn×1 →
+// 下一次唤醒 ≥ now+29min（重试节奏非热循环）。
+func TestD047_NextExpiry_CloseFailRetry(t *testing.T) {
+	svc, st, _ := d047Svc(t)
+	ctx := context.Background()
+	mt := &fakeProbeExec{key: "3001:mt5", closeErr: fmt.Errorf("venue down")}
+	svc.bm.reg.Register(mt)
+	past := time.Now().Add(-time.Minute)
+	ref := "D-047"
+	posID, err := st.CreatePosition(ctx, &pgstore.Position{
+		OpportunityID: "PROBE:XAUUSD:" + ref, Type: pgstore.PositionTypePROBE,
+		Status: "OPEN", DecisionRef: &ref, AutoCloseAt: &past})
+	if err != nil {
+		t.Fatalf("probe: %v", err)
+	}
+	now := time.Now()
+	px := 2000.0
+	q := 0.01
+	if err := st.CreatePositionLeg(ctx, &pgstore.PositionLeg{
+		PositionID: posID, LegNo: 1, Phase: "OPEN",
+		Venue: "3001:mt5", Account: "3001", Symbol: "XAUUSDm", Side: "BUY", Qty: q,
+		PriceActual: &px, OrderID: "t-f", Status: "FILLED",
+		AttemptNo: 1, FilledQty: &q, AvgFillPrice: &px, SubmittedAt: &now, Ts: now,
+	}); err != nil {
+		t.Fatalf("leg: %v", err)
+	}
+	svc.ExpireDueProbes(ctx)
+	if len(mt.closes) != 1 {
+		t.Fatalf("closes=%d", len(mt.closes))
+	}
+	var status string
+	st.Pool().QueryRow(ctx, `SELECT status FROM positions WHERE id=$1`, posID).Scan(&status)
+	if status != "OPEN" {
+		t.Fatalf("status=%s, want OPEN（平失败回退）", status)
+	}
+	if d047AlertCount(t, st, "warn") != 1 {
+		t.Errorf("warn=%d, want 1（重试告警）", d047AlertCount(t, st, "warn"))
+	}
+	next, err := svc.NextProbeExpiryAt(ctx)
+	if err != nil || next == nil {
+		t.Fatalf("next=%v err=%v", next, err)
+	}
+	if d := time.Until(*next); d < 29*time.Minute {
+		t.Fatalf("wake in %s, want ≥29min", d)
 	}
 }

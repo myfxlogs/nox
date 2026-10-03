@@ -19,21 +19,33 @@ import (
 // probeCloseFailRetryWindow 平仓失败重试告警去重窗（探针仓回 OPEN 后逐次重试）。
 const probeCloseFailRetryWindow = 30 * time.Minute
 
-// NextProbeExpiryAt 下一个探针到期时刻（posMon 定时器臂用；nil=无在途探针）。
-// 只看 OPEN（OPENING/CLOSING 不参与到期调度——开仓中不可平、平仓中已在途）。
+// NextProbeExpiryAt 下一次探针唤醒时刻（posMon 定时器臂用；nil=无在途探针）。
+// R2①：读全部在途探针（OPEN/OPENING/CLOSING，auto_close_at 非空）——
+// 未到期 → auto_close_at；已到期/卡态 → now+30min（与重试/重告警 dedup 同节奏，
+// 禁 d=0 热循环；LEGGED 不入——PROBE 单腿无此态）。
 func (s *Service) NextProbeExpiryAt(ctx context.Context) (*time.Time, error) {
-	rows, err := s.store.ListDueProbes(ctx, time.Now().Add(365*24*time.Hour))
+	rows, err := s.store.ListProbes(ctx, true)
 	if err != nil {
 		return nil, err
 	}
+	now := time.Now()
 	var next *time.Time
 	for _, r := range rows {
 		if r.AutoCloseAt == nil {
 			continue
 		}
-		if next == nil || r.AutoCloseAt.Before(*next) {
-			t := *r.AutoCloseAt
-			next = &t
+		switch r.Status {
+		case "OPEN", "OPENING", "CLOSING":
+		default:
+			continue
+		}
+		wake := *r.AutoCloseAt
+		if !wake.After(now) {
+			wake = now.Add(probeCloseFailRetryWindow)
+		}
+		if next == nil || wake.Before(*next) {
+			w := wake
+			next = &w
 		}
 	}
 	return next, nil
