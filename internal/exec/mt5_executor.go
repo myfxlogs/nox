@@ -171,6 +171,13 @@ func (e *MT5Executor) PlaceOrder(ctx context.Context, o Order) (Fill, error) {
 	}
 	if err := resp.GetError(); err != nil {
 		// D-077 修复⑩ G3：错误码写入 message 供 errclass.Classify 解析（[code=XXX] 前缀）。
+		// D-029 ③：TRADE_RETCODE_MARKET_CLOSED(10018)——干净 FAILED（非 UNKNOWN/不进 LEGGED）：
+		// executeLeg 判定链=非 timeout 即 FAILED ✓；此处显式类型化防未来 UNKNOWN 化，message
+		// 禁携带 "deadline/timeout" 字样（isContextTimeoutErr 字符串误判面）。
+		if msg := err.GetMessage(); err.GetCode().String() == "10018" ||
+			strings.Contains(strings.ToLower(msg), "market closed") {
+			return Fill{}, fmt.Errorf("mt5 ordersend: market closed (10018): %s", msg)
+		}
 		return Fill{}, fmt.Errorf("mt5 ordersend: [code=%s] %s", err.GetCode().String(), err.GetMessage())
 	}
 	ord := resp.GetResult()

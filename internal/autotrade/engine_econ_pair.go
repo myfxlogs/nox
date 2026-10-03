@@ -7,6 +7,7 @@ import (
 	"log"
 	"strings"
 
+	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 )
 
@@ -50,6 +51,20 @@ func (e *Engine) econEntryGate(ctx context.Context, opp pgstore.Opportunity, leg
 	sellCanonical := opp.Canonical
 	if opp.CanonicalSell != nil && *opp.CanonicalSell != "" {
 		sellCanonical = *opp.CanonicalSell
+	}
+	// D-029 ③：MT 腿闭市（周表/动态径）→ 拒开——闭市期间 carry 为 0，入场即裸持付往返费。
+	if keydomain.IsMTKey(opp.VenueBuy) {
+		if e.mtMarketClosedFor(ctx, keydomain.BareOf(opp.VenueBuy), opp.Canonical, "") {
+			log.Printf("[autotrade] skip %s: MT 腿 %s 闭市（周表/报价静默）拒开", opp.ID, opp.VenueBuy)
+			return true
+		}
+	}
+	if keydomain.IsMTKey(opp.VenueSell) {
+		sellCanon := sellCanonical
+		if e.mtMarketClosedFor(ctx, keydomain.BareOf(opp.VenueSell), sellCanon, "") {
+			log.Printf("[autotrade] skip %s: MT 腿 %s 闭市（周表/报价静默）拒开", opp.ID, opp.VenueSell)
+			return true
+		}
 	}
 	snap, err := e.econEntrySnapshot(ctx, opp, sellCanonical, legNotionalUSD)
 	maxBE := e.cfg.MaxBreakevenDays

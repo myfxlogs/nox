@@ -148,40 +148,6 @@ func (e *Engine) fundingRateMeanForVenue(ctx context.Context, bareVenue, canonic
 	return sum / float64(len(facts)), latest, true
 }
 
-// mtLegMarketClosed D-027：持仓任一 OPEN+FILLED MT 腿的 trade_mode 事实显示非 Full
-// （休市/禁开）→ true。trade_mode=MT5 ENUM_SYMBOL_TRADE_MODE 透传（fact.KindTradeMode，
-// symbol=腿 canonical）；fact 缺 → false（不拦，判定器另有 fail-closed 链）。
-// 语义=「不累计 breach」闸：休市期间 swap 不结算，瞬时/短窗 carry 下探非死亡证据。
-func (e *Engine) mtLegMarketClosed(ctx context.Context, p *pgstore.Position) bool {
-	legs, err := e.store.ListPositionLegs(ctx, p.ID)
-	if err != nil {
-		return false
-	}
-	buyCanonical := canonicalFromOppID(p.OpportunityID)
-	sellCanonical := e.xassetSellCanonical(ctx, p, legs)
-	for i := range legs {
-		l := legs[i]
-		if l.Phase != "OPEN" || l.Status != "FILLED" || !keydomain.IsMTKey(l.Venue) {
-			continue
-		}
-		canonical := buyCanonical
-		if l.Side != "BUY" {
-			canonical = sellCanonical
-		}
-		if canonical == "" {
-			continue
-		}
-		facts, ferr := e.store.LatestFacts(ctx, fact.KindTradeMode, keydomain.BareOf(l.Venue), canonical)
-		if ferr != nil || len(facts) == 0 {
-			continue
-		}
-		if int64(facts[0].Value) != fact.TradeModeFull {
-			return true
-		}
-	}
-	return false
-}
-
 // xassetSpecFactFresh MT 腿 spec 源 swap fact 新鲜度检查（SwapFactMaxAge）。
 // swapRateFor 返回 spec 源时调用；任一 spec fact 陈旧 → false（fail-closed 不决策）。
 func (e *Engine) xassetSpecFactFresh(ctx context.Context, bare, canonical, side string) bool {

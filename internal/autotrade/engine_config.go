@@ -57,6 +57,9 @@ type Config struct {
 	LiveTrade bool
 	// D-195-C1：LiveGate 检查器（LIVE 模式导出门）。nil=LIVE 直接拒绝（fail-closed）。
 	LiveGateChecker *LiveGateChecker
+	// MtQuoteStaleMin D-029 ②：MT 报价新鲜度阈值（分钟）——周表说开市时动态闭市判定
+	//（龄 >N=闭）。≤0=未配置 fail-closed 判闭（无动态佐证不判开；部署须配 ARB_MT_QUOTE_STALE_MIN）。
+	MtQuoteStaleMin int
 	// D-165 S1：swap 偏差拦截阈值（默认 50.0）。同 venue 已有 OPEN 持仓偏差超阈值→拒绝新开仓。
 	SwapDeviationGatePct float64
 	// D-165 S2：swap 偏差退出阈值（默认 50.0）。recalcNetSwap 对拍偏差超阈值→用 broker 实际值。
