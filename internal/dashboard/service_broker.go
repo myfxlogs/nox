@@ -34,6 +34,8 @@ func (s *Service) ListBrokerPositions(ctx context.Context, req *connect.Request[
 	}
 	// S4：标注 position_id（OPEN legs venue+order_id → position_id 索引）
 	annotatePositionID(ctx, s.store, out)
+	// D-047⑤：探针仓标注（关联仓 type='PROBE' → decision_ref+auto_close_at 透传）
+	annotateProbeMeta(ctx, s.store, out)
 	// F3：标注账号别名（venue→alias map，未命中留空前端回落 venue）
 	annotateAccountAlias(ctx, s.store, out)
 	// D-152 微件①：CEX 腿按 (position_id, venue) 聚合 cashflows 填 swap（MT 不动）
@@ -196,6 +198,7 @@ func AnnotateBrokerPositions(ctx context.Context, svc *Service, bps []*v1.Broker
 		store = svc.store
 	}
 	annotatePositionID(ctx, store, bps)
+	annotateProbeMeta(ctx, store, bps) // D-047⑤：探针标注同源（RPC 与事件路径一致）
 	annotateAccountAlias(ctx, store, bps)
 	annotateCEXSwap(ctx, store, bps)
 	if svc != nil {

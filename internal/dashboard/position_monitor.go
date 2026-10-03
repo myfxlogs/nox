@@ -48,6 +48,7 @@ type PositionMonitor struct {
 	dHedge       bool // hedge 聚合域脏（hedgeTopic）
 	dHealth      bool // sourceHealth 域脏（流状态事件）
 	flushT       *time.Timer
+	probeT       *time.Timer // D-047③：探针到期唤醒（仅叫醒——决策=ExpireDueProbes 查 DB）
 }
 
 // NewPositionMonitor 创建四域发射器（topics 由 main 持有——回放与流订阅共享同实例）。
@@ -136,10 +137,12 @@ func (m *PositionMonitor) flush(ctx context.Context) {
 
 	if !booted {
 		m.boot(ctx)
+		m.refreshProbeWake(ctx) // D-047③：boot 臂存量探针表（锁外）
 		return
 	}
 	if dPos {
 		m.flushPositions(ctx)
+		m.refreshProbeWake(ctx) // D-047③：仓变更后重排探针到期表
 	}
 	if dPers {
 		m.flushPersonal(ctx)

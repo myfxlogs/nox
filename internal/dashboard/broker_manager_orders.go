@@ -221,6 +221,16 @@ func (m *BrokerManager) venueOrders(ctx context.Context, venueKey string) VenueO
 	return VenueOrderResult{VenueKey: venueKey, Err: fmt.Errorf("querier not found for %s", venueKey)}
 }
 
+// PlaceOrder 经注册执行器下单（D-047 探针仓开仓专用薄封装——venue_key→Executor
+// 注册表解引用单点；CEX/MT 各 executor 内部形态差异由其自身吸收）。
+func (m *BrokerManager) PlaceOrder(ctx context.Context, o exec.Order) (exec.Fill, error) {
+	e, ok := m.reg.Get(o.Venue)
+	if !ok {
+		return exec.Fill{}, fmt.Errorf("executor not found for %s", o.Venue)
+	}
+	return e.PlaceOrder(ctx, o)
+}
+
 // CloseOrder 经注册执行器平仓一条 venue 持仓。D-051 WP3。
 // MT venue：按 ticket 调 CloseOrder（OrderClose）。
 // CEX venue：CEX 无 CloseOrder 概念 → 从 bpm 快照查匹配 venueKey+ticket 的持仓

@@ -196,6 +196,13 @@ func (s *Service) positionToProto(ctx context.Context, p *pgstore.Position) *v1.
 	if p.ExpectedSwapBpsDaily != nil {
 		pb.ExpectedSwapBpsDaily = p.ExpectedSwapBpsDaily
 	}
+	// D-047：PROBE 仓 decision_ref/auto_close_at 透传（其它型列 NULL → 缺省）。
+	if p.DecisionRef != nil {
+		pb.DecisionRef = p.DecisionRef
+	}
+	if p.AutoCloseAt != nil {
+		pb.AutoCloseAt = timestamppb.New(*p.AutoCloseAt)
+	}
 	return pb
 }
 
