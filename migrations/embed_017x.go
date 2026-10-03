@@ -20,4 +20,7 @@ var (
 
 	//go:embed 0175_probe_positions.sql
 	ProbePositionsSQL string // D-047①：positions +decision_ref/auto_close_at + 到期索引
+
+	//go:embed 0176_probe_llm_loop.sql
+	ProbeLLMLoopSQL string // D-048①②：explorer_proposals 探针提案契约+审批流转列
 )
