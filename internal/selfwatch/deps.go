@@ -22,6 +22,10 @@ const cfgPaperNetHist = "ARB_SELFWATCH_PAPER_NET"
 // cfgFailClosedPrev fail-closed 行数环比基数（上次观测值+时点，JSON）。
 const cfgFailClosedPrev = "ARB_SELFWATCH_FAILCLOSED_PREV"
 
+// cfgStage1Ready Stage 1 就绪态标记（"1"/"0"——就绪推送只在 ❌→✅ 转换时一次，
+// 态存 app_config 跨进程重启存活；就绪态本身仍每日附在日报条件表）。
+const cfgStage1Ready = "ARB_SELFWATCH_STAGE1_READY"
+
 // Store 自盯存储窄面（*pgstore.Store 原生实现）。
 type Store interface {
 	AppConfigString(ctx context.Context, key string) (string, bool, error)
@@ -33,7 +37,7 @@ type Store interface {
 	NetRealizedSince(ctx context.Context, since time.Time, excludeIncidents bool) (float64, error)
 	SchemaMigrationMax(ctx context.Context) (int, error)
 	ExposureCapCounts(ctx context.Context) (venueCaps, canonicalCaps int, err error)
-	XAssetAllowRealCount(ctx context.Context) (int, error)
+	XAssetAllowRealPairs(ctx context.Context) ([]pgstore.VenuePair, error)
 	LatestFactTs(ctx context.Context, kind string) (time.Time, bool, error)
 	CountFactsSince(ctx context.Context, kind string, since time.Time) (int, error)
 	MacroEventMaxCreated(ctx context.Context) (time.Time, bool, error)

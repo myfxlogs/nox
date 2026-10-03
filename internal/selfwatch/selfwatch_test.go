@@ -1,5 +1,6 @@
 // selfwatch_test.go —— D-033 锚：日报文案快照（全✅/部分❌）、窗起点缺省
 // fail-closed、逐日净额差分、投递三通道、NextDailyBJ 定点。
+// R1 锚：Stage 1 组合证据（全结构 0 active → 不就绪）、就绪推送仅 ❌→✅ 一次。
 package selfwatch
 
 import (
@@ -24,6 +25,7 @@ type fakeStore struct {
 	venueCaps  int
 	canonCaps  int
 	allowReal  int
+	allowPairs []pgstore.VenuePair
 	factTs     map[string]time.Time
 	factCnt    map[string]int
 	macroMax   *time.Time
@@ -74,6 +76,10 @@ func (f *fakeStore) ExposureCapCounts(context.Context) (int, int, error) {
 	return f.venueCaps, f.canonCaps, nil
 }
 func (f *fakeStore) XAssetAllowRealCount(context.Context) (int, error) { return f.allowReal, nil }
+func (f *fakeStore) XAssetAllowRealPairs(context.Context) ([]pgstore.VenuePair, error) {
+	return f.allowPairs, nil
+}
+
 func (f *fakeStore) LatestFactTs(_ context.Context, kind string) (time.Time, bool, error) {
 	ts, ok := f.factTs[kind]
 	return ts, ok, nil
@@ -115,12 +121,17 @@ func testDeps(st *fakeStore, ev *scan.PaperWindowEval, now time.Time) Deps {
 
 var tNow = time.Date(2026, 10, 11, 0, 0, 0, 0, time.UTC) // 08:00 BJ 10-11（窗龄 7.9d ≥7d 阈）
 
+var stage1Pair = pgstore.VenuePair{VenueA: "3001157", VenueB: "okx"}
+
 func goodEval() *scan.PaperWindowEval {
 	return &scan.PaperWindowEval{
 		ActiveN: 3, ExitedN: 1, NetActive: 2.5, NetExited: 0.5,
 		WindowNet: 3.0, NotionalUSD: 3000,
 		ActiveByDay: []scan.PaperDayBucket{{Day: "10-10", Rows: 3, Sum: 2.5}},
 		ExitedByDay: []scan.PaperDayBucket{{Day: "10-09", Rows: 1, Sum: 0.5, Reasons: []string{"normalized"}}},
+		Combos: []scan.PaperComboStat{ // R1：Stage 1 组合行窗内累计 6.5d/accrued>0
+			{VenueA: "3001157", VenueB: "okx", Rows: 3, ActiveDays: 6.5, AccruedUSD: 3.0},
+		},
 	}
 }
 
@@ -135,7 +146,8 @@ func greenStore() *fakeStore {
 		factCnt:  map[string]int{"trade_session": 978},
 		macroMax: ptrT(tNow.Add(-10 * time.Hour)),
 		mig:      173, venueCaps: 5, canonCaps: 1, allowReal: 1,
-		makerOpen: 25, net30d: 100,
+		allowPairs: []pgstore.VenuePair{stage1Pair},
+		makerOpen:  25, net30d: 100,
 	}
 }
 
@@ -149,9 +161,10 @@ func TestD033_DailyReportAllGreen(t *testing.T) {
 	for _, want := range []string{
 		"【ARB 自盯日报】", "起点 2026-10-03T01:59Z", "窗内净额 $3.0000", "在仓 3 行", "窗内退出 1 行",
 		"fail-closed 0 行", "accrue 停滞 0 行", "逐日净额",
-		"✅ paper 窗 ≥7 天", "✅ 期间零事故仓", "✅ D-027", "✅ D-028", "✅ D-032",
+		"✅ paper 窗 ≥7 天", "✅ 窗内净额非负", "✅ Stage 1 组合证据", "✅ 期间零事故仓",
+		"✅ D-027", "✅ D-028", "✅ D-032",
 		"✅ cap 已定", "✅ 白名单已定", "待决策：Stage 1 可启",
-		"Stage 2", "maker 分级",
+		"Stage 2", "maker 分级", "3001157×okx",
 	} {
 		if !strings.Contains(rep.Body, want) {
 			t.Fatalf("body missing %q:\n%s", want, rep.Body)

@@ -7,6 +7,7 @@ package selfwatch
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"arb/internal/fact"
@@ -26,6 +27,10 @@ const makerStageOpens = 20
 // stageTargetPct D-030 净年化目标线。
 const stageTargetPct = 8.0
 
+// stage1ComboDays Stage 1 组合证据：目标组合（白名单实盘启用 venue 对）窗内
+// 累计在仓天数下限——多行时按各行 [entry,exit|now]∩窗 时长求和。
+const stage1ComboDays = 5.0
+
 func stage1Checks(ctx context.Context, d Deps, since time.Time, windowOK bool, ev *scan.PaperWindowEval, now time.Time) []StageCheck {
 	rows := []StageCheck{}
 	if !windowOK || ev == nil {
@@ -38,10 +43,59 @@ func stage1Checks(ctx context.Context, d Deps, since time.Time, windowOK bool, e
 		Label: "paper 窗 ≥7 天", OK: age >= paperStageDays,
 		Data: fmt.Sprintf("窗龄 %.1fd（起点 %s）", age.Hours()/24, since.UTC().Format("01-02 15:04Z")),
 	})
-	rows = append(rows, StageCheck{
-		Label: "窗内净额非负", OK: ev.WindowNet >= 0,
-		Data: fmt.Sprintf("$%.4f（在仓 %.4f + 退出 %.4f）", ev.WindowNet, ev.NetActive, ev.NetExited),
-	})
+	// R1：Stage 1 组合域=白名单实盘启用 venue 对（3001157×okx long_cfd_short_perp
+	// 即行 11）——窗内净额/组合证据皆按该组合行算，全结构值作 Data 附注。
+	pairs, perr := d.Store.XAssetAllowRealPairs(ctx)
+	var matched []scan.PaperComboStat
+	comboNet := 0.0
+	for _, pr := range pairs {
+		for _, c := range ev.Combos {
+			if c.VenueA == pr.VenueA && c.VenueB == pr.VenueB {
+				matched = append(matched, c)
+				comboNet += c.AccruedUSD
+			}
+		}
+	}
+	switch {
+	case perr != nil:
+		rows = append(rows, StageCheck{Label: "窗内净额非负", OK: false, Data: "组合查询失败:" + perr.Error()})
+	case len(pairs) == 0:
+		rows = append(rows, StageCheck{Label: "窗内净额非负", OK: false, Data: "白名单无实盘启用组合"})
+	default:
+		rows = append(rows, StageCheck{
+			Label: "窗内净额非负", OK: comboNet >= 0,
+			Data: fmt.Sprintf("组合 $%.4f（全结构 $%.4f=在仓 %.4f+退出 %.4f）", comboNet, ev.WindowNet, ev.NetActive, ev.NetExited),
+		})
+	}
+	switch {
+	case perr != nil:
+		rows = append(rows, StageCheck{Label: "Stage 1 组合证据", OK: false, Data: "组合查询失败:" + perr.Error()})
+	case len(pairs) == 0:
+		rows = append(rows, StageCheck{Label: "Stage 1 组合证据", OK: false, Data: "白名单无实盘启用组合"})
+	default:
+		ok := false
+		parts := make([]string, 0, len(pairs))
+		for _, pr := range pairs {
+			var c *scan.PaperComboStat
+			for i := range matched {
+				if matched[i].VenueA == pr.VenueA && matched[i].VenueB == pr.VenueB {
+					c = &matched[i]
+					break
+				}
+			}
+			if c == nil {
+				parts = append(parts, fmt.Sprintf("%s×%s: 无窗内行", pr.VenueA, pr.VenueB))
+				continue
+			}
+			if c.ActiveDays >= stage1ComboDays && c.AccruedUSD > 0 {
+				ok = true
+			}
+			parts = append(parts, fmt.Sprintf("%s×%s: %.1fd/$%.4f", pr.VenueA, pr.VenueB, c.ActiveDays, c.AccruedUSD))
+		}
+		rows = append(rows, StageCheck{
+			Label: "Stage 1 组合证据", OK: ok,
+			Data: fmt.Sprintf("%s（需 ≥%gd 且 accrued>0）", strings.Join(parts, " "), stage1ComboDays)})
+	}
 	incidents, err := d.Store.IncidentCountSince(ctx, since)
 	if err != nil {
 		rows = append(rows, StageCheck{Label: "期间零事故仓", OK: false, Data: "查询失败:" + err.Error()})
@@ -59,8 +113,8 @@ func stage1Checks(ctx context.Context, d Deps, since time.Time, windowOK bool, e
 		rows = append(rows, StageCheck{Label: "D-027 在线（carry 均值口径）", OK: lag <= fundingFactMaxAge,
 			Data: fmt.Sprintf("最新 funding fact %s 前", lag.Round(time.Minute))})
 	}
-	rows = append(rows, StageCheck{Label: "D-028 在线（paper accrue）",
-		OK:   ev.ActiveN > 0 && ev.FailClosed == 0 && ev.Stalled == 0,
+	rows = append(rows, StageCheck{Label: "D-028 在线（accrue 不滞后）",
+		OK:   ev.Stalled == 0,
 		Data: fmt.Sprintf("active=%d failClosed=%d stall=%d", ev.ActiveN, ev.FailClosed, ev.Stalled)})
 	mig, merr := d.Store.SchemaMigrationMax(ctx)
 	killOn, kerr := false, error(nil)
@@ -87,11 +141,10 @@ func stage1Checks(ctx context.Context, d Deps, since time.Time, windowOK bool, e
 		rows = append(rows, StageCheck{Label: "cap 已定", OK: vc > 0 && cc > 0,
 			Data: fmt.Sprintf("venue %d 行·canonical %d 行", vc, cc)})
 	}
-	wl, werr := d.Store.XAssetAllowRealCount(ctx)
-	if werr != nil {
-		rows = append(rows, StageCheck{Label: "白名单已定", OK: false, Data: "查询失败:" + werr.Error()})
+	if perr != nil {
+		rows = append(rows, StageCheck{Label: "白名单已定", OK: false, Data: "查询失败:" + perr.Error()})
 	} else {
-		rows = append(rows, StageCheck{Label: "白名单已定", OK: wl > 0, Data: fmt.Sprintf("实盘启用 %d 对", wl)})
+		rows = append(rows, StageCheck{Label: "白名单已定", OK: len(pairs) > 0, Data: fmt.Sprintf("实盘启用 %d 对", len(pairs))})
 	}
 	return rows
 }

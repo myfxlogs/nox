@@ -33,22 +33,7 @@ func dailyLoop(ctx context.Context, d Deps) {
 		} else {
 			log.Printf("[selfwatch] daily report:\n%s", rep.Body)
 			d.deliver(ctx, "daily", "info", rep.Body)
-			if rep.Stage1OK {
-				const readyMsg = "[自盯] 待决策：Stage 1 可启（paper 窗≥7d 净额非负·零事故·子系统在线·cap/白名单已定）"
-				if err := d.Store.InsertAlert(ctx, nil, "info", readyMsg); err != nil {
-					log.Printf("[selfwatch] stage1 ready alert: %v", err)
-				}
-				// info 级不进告警 hook——决策推送走显式 SendText（同周报通道）。
-				if d.Notify != nil && d.Notify.Enabled() && d.ChatID != nil {
-					if chatID, cerr := d.ChatID(ctx); cerr != nil {
-						log.Printf("[selfwatch] stage1 ready chat id: %v", cerr)
-					} else if chatID != "" {
-						if serr := d.Notify.SendText(ctx, chatID, readyMsg); serr != nil {
-							log.Printf("[selfwatch] stage1 ready push: %v", serr)
-						}
-					}
-				}
-			}
+			emitStage1Ready(ctx, d, rep.Stage1OK)
 		}
 		if next.In(bj).Weekday() == time.Monday && d.Weekly != nil {
 			text, err := d.Weekly(ctx, d.now())
@@ -59,6 +44,39 @@ func dailyLoop(ctx context.Context, d Deps) {
 				d.deliver(ctx, "weekly", "info", text)
 			}
 		}
+	}
+}
+
+// emitStage1Ready R1②：就绪推送仅 ❌→✅ 转换时一次——cfgStage1Ready 存上轮就绪态
+// （app_config 跨重启存活）；❌→✅ 时 InsertAlertDedup（消息键含 stage1_ready·窗 7d
+// 兜底抑频）+ 显式飞书直推（info 级不进告警 hook）。上轮态读败→视同未就绪按转换发
+// （7d 去重防重复轰炸）；态更新每轮都写（含 ✅→❌ 回落，下次回绿再发一次）。
+func emitStage1Ready(ctx context.Context, d Deps, ready bool) {
+	cur := "0"
+	if ready {
+		cur = "1"
+	}
+	prev, pok, perr := d.Store.AppConfigString(ctx, cfgStage1Ready)
+	if perr != nil {
+		log.Printf("[selfwatch] stage1 ready state read: %v", perr)
+	}
+	if ready && !(perr == nil && pok && prev == "1") {
+		const readyMsg = "[自盯][stage1_ready] 待决策：Stage 1 可启（paper 窗≥7d·组合净额非负·组合在仓≥5d·零事故·子系统在线·cap/白名单已定）"
+		if err := d.Store.InsertAlertDedup(ctx, "info", readyMsg, 7*24*time.Hour); err != nil {
+			log.Printf("[selfwatch] stage1 ready alert: %v", err)
+		}
+		if d.Notify != nil && d.Notify.Enabled() && d.ChatID != nil {
+			if chatID, cerr := d.ChatID(ctx); cerr != nil {
+				log.Printf("[selfwatch] stage1 ready chat id: %v", cerr)
+			} else if chatID != "" {
+				if serr := d.Notify.SendText(ctx, chatID, readyMsg); serr != nil {
+					log.Printf("[selfwatch] stage1 ready push: %v", serr)
+				}
+			}
+		}
+	}
+	if err := d.Store.UpsertAppConfig(ctx, cfgStage1Ready, cur, "selfwatch stage1 ready state"); err != nil {
+		log.Printf("[selfwatch] stage1 ready state write: %v", err)
 	}
 }
 
