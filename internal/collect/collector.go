@@ -42,3 +42,17 @@ func (c *MTSwapCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
 	}
 	return c.Fetch(ctx)
 }
+
+// MTSessionsCollector D-029 ①：MT5 周交易会话表（每日一拉，静态周表刷新）。
+type MTSessionsCollector struct {
+	Fetch func(ctx context.Context) ([]fact.Fact, error)
+}
+
+func (c *MTSessionsCollector) Kind() string { return "mt_sessions" }
+
+func (c *MTSessionsCollector) Poll(ctx context.Context) ([]fact.Fact, error) {
+	if c.Fetch == nil {
+		return nil, nil
+	}
+	return c.Fetch(ctx)
+}

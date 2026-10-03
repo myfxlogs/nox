@@ -130,9 +130,9 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 		if !aok {
 			noFactWarn++
 		}
-		// D-028 ⑤：ok=true 但零边界入窗（settledTo 未前进）=同静默零 accrue 形态——
-		// 计入 fail-closed 告警（旧口径此形态静默，okx next_settle 领先多窗期不可见）。
-		if aok && !settledTo.After(base) {
+		// D-028 ⑤（D-029 顺手 b 改口径）：ok=true 但零边界入窗且窗距超 2 个日界——
+		// 才计入 fail-closed 告警（新开/同日轮次零边界是正常 Degenerate 形态，禁误告）。
+		if aok && !settledTo.After(base) && now.Sub(base) > 48*time.Hour {
 			noFactWarn++
 			settledTo = base
 			accruedAdd = 0

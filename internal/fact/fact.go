@@ -21,6 +21,7 @@ const (
 	KindSwapSettledLong   = "swap_settled_long"   // D-180 S1：实测结算画像多单（UnitUsdLotDay，swap_snapshots 跳变聚合中位数）
 	KindSwapSettledShort  = "swap_settled_short"  // D-180 S1：实测结算画像空单（UnitUsdLotDay，swap_snapshots 跳变聚合中位数）
 	KindTradeMode         = "trade_mode"          // MT5 符号可交易性（UnitMode，D-060 F3）
+	KindTradeSession      = "trade_session"       // D-029：MT5 周交易会话表（value=day*1e8+startMin*1e4+endMin，服务器本地→UTC 换算后）
 	KindTripleSwapDay     = "triple_swap_day"     // MT 三倍 swap 日（UnitWeekday，D-077 V2）
 	KindInitMarginRate    = "init_margin_rate"    // MT5 初始保证金率（UnitRatio，S6 返修：账户级=1/杠杆，无限杠杆=0）
 	KindOptParityDev      = "opt_parity_dev"      // 期权平价偏离 bps（UnitBps，D-137 Deribit 采集监控）
@@ -89,6 +90,7 @@ var validKinds = map[string]bool{
 	KindSwapSettledLong:   true,
 	KindSwapSettledShort:  true,
 	KindTradeMode:         true,
+	KindTradeSession:      true,
 	KindTripleSwapDay:     true,
 	KindInitMarginRate:    true,
 	KindOptParityDev:      true,

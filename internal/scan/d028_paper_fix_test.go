@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"arb/internal/fact"
 	"arb/internal/store/pgstore"
 )
 
@@ -144,5 +145,35 @@ func TestD028_MtRawIndexPrimaryWins(t *testing.T) {
 	})
 	if _, exists := m["XAU"]; exists {
 		t.Fatalf("多行无 primary 应 ambiguous 不设键，got %q", m["XAU"])
+	}
+}
+
+// TestD028_SwapFreeCollectZeroesVal ④ 验收锚：collectMtSwaps swap_free 旗=true → 该 MT 腿
+// swap val 置 0（不等 7d 均值收敛；spec 错值源屏蔽，3001157 实拍）。
+func TestD028_SwapFreeCollectZeroesVal(t *testing.T) {
+	sc := NewCarryUniverseScanner(&fakeScanStore{
+		facts: []fact.Fact{
+			{Kind: "swap_long", Venue: "3001157", Symbol: "XAUUSDm", Value: -1, Ts: time.Now()},
+			{Kind: "swap_short", Venue: "3001157", Symbol: "XAUUSDm", Value: 0.5, Ts: time.Now()},
+		},
+		mappings: []pgstore.SymbolMapping{
+			{Venue: "3001157", BrokerSymbol: "XAUUSDm", Canonical: "XAU", IsPrimary: true},
+		},
+		windowMeans: map[string]float64{
+			"swap_long|3001157|XAUUSDm":  -1.28, // spec 错值形态
+			"swap_short|3001157|XAUUSDm": 0.5,
+		},
+	})
+	long, short := sc.collectMtSwaps(context.Background(),
+		[]fact.Fact{{Kind: "swap_long", Venue: "3001157", Symbol: "XAUUSDm", Value: -1, Ts: time.Now()}},
+		[]fact.Fact{{Kind: "swap_short", Venue: "3001157", Symbol: "XAUUSDm", Value: 0.5, Ts: time.Now()}},
+		func(fact.Fact) (int64, bool) { return 0, false },
+		map[string]bool{}, &ScanResult{}, map[string]string{},
+		map[string]bool{"3001157": true}) // swap_free 旗=true
+	if v := long["XAU|3001157"].val; v != 0 {
+		t.Fatalf("swap_free long val want 0, got %v", v)
+	}
+	if v := short["XAU|3001157"].val; v != 0 {
+		t.Fatalf("swap_free short val want 0, got %v", v)
 	}
 }

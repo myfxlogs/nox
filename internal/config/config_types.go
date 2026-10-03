@@ -201,6 +201,7 @@ type Config struct {
 	AIAPIKey                string        // ARB_AI_API_KEY（仅 .env，不进仓）
 	AIModel                 string        // ARB_AI_MODEL（如 glm-4.6）
 	AlertDedupWindow        time.Duration // D-592 S1：告警同键去重窗（envDuration 缺省 30min）
+	MtQuoteStaleMin         int           // D-029 ② ARB_MT_QUOTE_STALE_MIN：MT 报价新鲜度阈值分钟（缺=fail-closed 判闭市）
 	MakerFirstLegTimeout    time.Duration // D-018 阶段a ARB_MAKER_TIMEOUT：首腿 post-only 超时 T（缺=fail-closed maker 停用）
 	MakerMaxAttemptsPerHour int           // D-018 阶段a ARB_MAKER_MAX_PER_HOUR：每 opp 每小时挂单上限 N（缺=fail-closed 停用）
 	AIPGDSN                 string        // ARB_AI_PG_DSN（arb_ro 只读角色 DSN）

@@ -70,13 +70,20 @@ func FetchMQL5Calendar(ctx context.Context, client *http.Client, endpoint string
 		if currency == "" {
 			continue
 		}
+		imp := strings.ToLower(e.Importance)
+		// D-029 ④：MQL5 把假日标为 Importance="none"（实拍 21 行：CNY 国庆/EUR 统一日…）——
+		// none ∧ forecast/previous/actual 全空 → 归 holiday（落库归一，raw 不改）；
+		// report.go importanceCN["holiday"] 假期段随之命中。
+		if imp == "none" && e.ForecastValue == "" && e.PreviousValue == "" && e.ActualValue == "" {
+			imp = "holiday"
+		}
 		rawJSON, _ := json.Marshal(e)
 		out = append(out, pgstore.MacroEvent{
 			Source:     "mql5",
 			EventTime:  t.UTC(),
 			Currency:   currency,
 			Name:       e.EventName,
-			Importance: strings.ToLower(e.Importance),
+			Importance: imp,
 			Forecast:   e.ForecastValue,
 			Previous:   e.PreviousValue,
 			Actual:     e.ActualValue,

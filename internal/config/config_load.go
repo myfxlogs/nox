@@ -117,6 +117,7 @@ func Load() *Config {
 		AIPGDSN:                    envStr("ARB_AI_PG_DSN", ""),
 		AlertDedupWindow:           envDur("ARB_ALERT_DEDUP_WINDOW", 30*time.Minute), // D-592 S1：告警同键去重窗
 		MakerFirstLegTimeout:       envDur("ARB_MAKER_TIMEOUT", 0),                   // D-018 阶段a：缺=未配置 fail-closed maker 停用
+		MtQuoteStaleMin:            envInt("ARB_MT_QUOTE_STALE_MIN", 0),              // D-029 ②：缺=未配置 fail-closed 判闭市
 		MakerMaxAttemptsPerHour:    envInt("ARB_MAKER_MAX_PER_HOUR", 0),              // D-018 阶段a：同上
 		RetroDisabled:              !envBool("ARB_RETRO_ENABLED", true),              // D-457：env=0 关复盘定时器
 		AnalystRatePerHour:         envInt("ARB_ANALYST_RATE_PER_HOUR", 20),
