@@ -241,6 +241,18 @@ func (s *Store) ExplorerStatePut(ctx context.Context, key string, val json.RawMe
 	return nil
 }
 
+// ExplorerStatePutIfAbsent 原子认领写（D-048③：探针报告恰好一次去重键——
+// INSERT ON CONFLICT DO NOTHING，true=本次认领成功/已在=跳过）。
+func (s *Store) ExplorerStatePutIfAbsent(ctx context.Context, key string, val json.RawMessage) (bool, error) {
+	tag, err := s.pool.Exec(ctx, `
+		INSERT INTO explorer_state (key, val) VALUES ($1, $2)
+		ON CONFLICT (key) DO NOTHING`, key, val)
+	if err != nil {
+		return false, fmt.Errorf("explorer state claim: %w", err)
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
 // ExplorerProposal 提案落库行（explorer_proposals；scan_date 由调用方按 BJ 历日算好）。
 type ExplorerProposal struct {
 	ScanDate  time.Time

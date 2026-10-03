@@ -76,6 +76,23 @@ func (s *Store) AppConfigInt64(ctx context.Context, key string) (int64, bool, er
 	return n, true, nil
 }
 
+// AppConfigFloat 单键浮点直读（D-048：探针名义上限热读；行缺→ok=false，值坏→error）。
+func (s *Store) AppConfigFloat(ctx context.Context, key string) (float64, bool, error) {
+	var v string
+	err := s.pool.QueryRow(ctx, `SELECT value FROM app_config WHERE key = $1`, key).Scan(&v)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, false, nil
+		}
+		return 0, false, fmt.Errorf("app config float %s: %w", key, err)
+	}
+	f, perr := strconv.ParseFloat(v, 64)
+	if perr != nil {
+		return 0, false, fmt.Errorf("app config float %s: parse %q: %w", key, v, perr)
+	}
+	return f, true, nil
+}
+
 // AppConfigRow 全列行（D-523 键视图：note/updated_at 透出审计）。
 type AppConfigRow struct {
 	Key       string

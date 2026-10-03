@@ -102,6 +102,29 @@ func (s *Store) ListProbes(ctx context.Context, openOnly bool) ([]ProbeRow, erro
 	return scanProbeRows(rows)
 }
 
+// GetProbe 单仓读面（D-048③ 报告事实源：type='PROBE' 限定，无行→pgx.ErrNoRows）。
+func (s *Store) GetProbe(ctx context.Context, posID int64) (*ProbeRow, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT p.id, p.opportunity_id, p.type, p.status, p.note, p.notional_usd,
+		       p.decision_ref, p.auto_close_at, p.opened_at, p.closed_at, COALESCE(p.exit_kind,''),
+		       l.venue || ':' || l.venue_type, l.symbol, l.side, l.qty, l.order_id
+		FROM positions p
+		LEFT JOIN position_legs l ON l.position_id = p.id AND l.leg_no = 1 AND l.phase = 'OPEN'
+		WHERE p.type = 'PROBE' AND p.id = $1`, posID)
+	if err != nil {
+		return nil, fmt.Errorf("get probe: %w", err)
+	}
+	defer rows.Close()
+	list, err := scanProbeRows(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(list) == 0 {
+		return nil, pgx.ErrNoRows
+	}
+	return &list[0], nil
+}
+
 func scanProbeRows(rows pgx.Rows) ([]ProbeRow, error) {
 	var out []ProbeRow
 	for rows.Next() {
