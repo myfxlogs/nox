@@ -38,7 +38,7 @@ func (sc *CarryUniverseScanner) appendSpotCarryRows(ctx context.Context, res *Sc
 		}
 		res.Rows = append(res.Rows, UniverseRow{
 			Canonical: u.Symbol, MtVenue: "(spot)", CexVenue: u.Venue,
-			NetAnnual: net, FundingAnn: *u.FundingAnn,
+			NetAnnual: net, FundingAnn: *u.FundingAnn, FundingInst: *u.FundingAnn,
 			SwapFree: true, Structure: "spot_carry",
 		})
 	}

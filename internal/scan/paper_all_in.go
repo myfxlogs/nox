@@ -76,7 +76,7 @@ func insertCfdPaper(ctx context.Context, st PaperStore, r UniverseRow, mtVenue, 
 	mv := mtVenue
 	p := &pgstore.PaperSpotCarry{
 		VenueA: mtVenue, VenueB: cexVenue, Symbol: r.Canonical, Side: side,
-		EntryFundingAnn: r.FundingAnn, QtyUSD: PaperQtyUSD,
+		EntryFundingAnn: r.FundingInst, QtyUSD: PaperQtyUSD, // D-034：entry 展示列记瞬时值（判定已走均值）
 		Structure: r.Structure, MtVenue: &mv,
 		Note: "MT佣金未计（无常数实值）", // D-474a S2：分腿真费佣金项缺省注记
 	}

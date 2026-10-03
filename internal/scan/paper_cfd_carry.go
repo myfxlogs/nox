@@ -53,7 +53,7 @@ var cfdStructures = map[string]bool{"long_cfd_short_perp": true, "short_cfd_long
 //
 // ②累积：accrued += NetAnnual/100/365×days×qty——NetAnnual 已=funding−swap 净额，
 //
-//	无 sideFactor（与 spot 轨公式差异点）；last_funding_ann 存当轮 FundingAnn（展示用）。
+//	无 sideFactor（与 spot 轨公式差异点）；last_funding_ann 存当轮瞬时 funding（展示列，D-034）。
 //
 // ③退出（仅 active）：行消失或 net<8 → low_streak++，连续 paperExitStreakRounds 轮 →
 //

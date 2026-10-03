@@ -138,8 +138,8 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 			streak = 0
 		}
 		if p.Status != "active" {
-			// demo 行只累积不自动退（同 spot 轨）
-			if err := st.AccruePaperSpotCarry(ctx, p.ID, r.FundingAnn, accruedAdd, p.LowStreak, 0, lastBasis, accrueTo, recalc); err != nil {
+			// demo 行只累积不自动退（同 spot 轨）；last_funding_ann=瞬时展示列（D-034）
+			if err := st.AccruePaperSpotCarry(ctx, p.ID, r.FundingInst, accruedAdd, p.LowStreak, 0, lastBasis, accrueTo, recalc); err != nil {
 				return exited, fmt.Errorf("cfd paper step: accrue demo %d: %w", p.ID, err)
 			}
 			continue
@@ -179,7 +179,7 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 			exited++
 			continue
 		}
-		if err := st.AccruePaperSpotCarry(ctx, p.ID, r.FundingAnn, accruedAdd, streak, 0, lastBasis, accrueTo, recalc); err != nil {
+		if err := st.AccruePaperSpotCarry(ctx, p.ID, r.FundingInst, accruedAdd, streak, 0, lastBasis, accrueTo, recalc); err != nil { // last_funding_ann=瞬时展示列（D-034）
 			return exited, fmt.Errorf("cfd paper step: accrue %d: %w", p.ID, err)
 		}
 	}
