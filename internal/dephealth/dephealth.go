@@ -13,7 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"connectrpc.com/connect"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // 平面枚举：同 venue 多平面独立态。ws=WS 连接存活语义；rest=CEX HTTP；rpc=mtapi unary。
@@ -109,8 +110,10 @@ func isMethodLevelErr(err error) bool {
 	if err == nil {
 		return false
 	}
-	switch connect.CodeOf(err) {
-	case connect.CodeUnimplemented, connect.CodeInvalidArgument, connect.CodeNotFound:
+	// D-038 R1：生产 err 形态=grpc status（depUnaryInterceptor 透传 grpc client err），
+	// 非 connect 协议错——connect.CodeOf 恒 Unknown 恒不命中=方法级豁免永不生效（R1 退回）。
+	switch status.Code(err) {
+	case codes.Unimplemented, codes.InvalidArgument, codes.NotFound:
 		return true
 	}
 	return false

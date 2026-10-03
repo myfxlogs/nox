@@ -7,7 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"connectrpc.com/connect"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // d038FakeAfter 注入伪 afterFunc——回调收集进 cbs 由测试按伪时钟手动触发；
@@ -148,7 +149,8 @@ func TestD038_ConfirmWindowExpiryWarn(t *testing.T) {
 	}
 }
 
-// TestD038_MethodLevelNotCounted ②：Unimplemented×5 不计连败不劣化
+// TestD038_MethodLevelNotCounted ②：Unimplemented×5 + InvalidArgument×5（grpc status，
+// 生产 depUnaryInterceptor 实际形态）不计连败不劣化
 // （方法级错=单次调用问题，非面连通性故障）。
 func TestD038_MethodLevelNotCounted(t *testing.T) {
 	resetForTest()
@@ -164,7 +166,8 @@ func TestD038_MethodLevelNotCounted(t *testing.T) {
 
 	key := "3001157:mt5:rpc"
 	for i := 0; i < 5; i++ {
-		Mark(key, false, connect.NewError(connect.CodeUnimplemented, errors.New("not implemented")))
+		Mark(key, false, status.Error(codes.Unimplemented, "not implemented"))
+		Mark(key, false, status.Error(codes.InvalidArgument, "bad arg"))
 	}
 	r := Snapshot()[0]
 	if r.ConsecFails != 0 || r.State == StateDegraded {
