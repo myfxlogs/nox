@@ -58,12 +58,14 @@ func (m *BrokerPositionMonitor) protoFor(ctx context.Context, vk string, vs venu
 		hasPrice = true
 	}
 	// D-008 S1：保证金列=venue 原生 InitialMargin 直显（CEX perp iw；全仓 iw=0→空=venue 语义）。
-	// D-031 ②：MT5=仓位级原生 RequiredMargin RPC（symbol, lots, DealBuy/DealSell, openPrice）
-	// 带缓存（持仓集签名/init_margin_rate 变化失效——禁每帧 RPC）；失败=诚实空态。
+	// D-036：MT5 仓位级 margin=venue 规格估算（InitialMargin×lots ∨ lots×CS×openPrice×imr；
+	// D-031 ② RequiredMargin RPC 径已拆——生产网关 Unimplemented），margin_is_estimate 标记。
 	margin := o.InitialMargin
+	marginEst := false
 	if keydomain.IsType(o.VenueKey, "mt5") {
-		if mv, ok := m.cachedRequiredMargin(ctx, vk, o.VenueKey, o.Symbol, canonical, o.Side, o.Ticket, o.Volume, o.OpenPrice); ok {
-			margin = mv
+		margin = 0
+		if mv, ok := estimateMargin(vs.marginSpec[o.Symbol], vs.imr, vs.imrOK, o.Volume, o.OpenPrice); ok {
+			margin, marginEst = mv, true
 		}
 	}
 	// D-337 S2 + D-337R1 S2 + D-466 S3/R1：下次计费/结算时刻——MT5=server 零点（tzCache）；
@@ -116,7 +118,9 @@ func (m *BrokerPositionMonitor) protoFor(ctx context.Context, vk string, vs venu
 			swapChargeAt = timestamppb.New(nextSwapChargeAtInLoc(now, tzLoc))
 		}
 	}
-	return brokerPositionToProto(o, canonical, price, hasPrice, vs.online, m.freshTTL, now, margin, swapChargeAt, periodicPct)
+	pb := brokerPositionToProto(o, canonical, price, hasPrice, vs.online, m.freshTTL, now, margin, swapChargeAt, periodicPct)
+	pb.MarginIsEstimate = marginEst // D-036：MT5 估算值标记（CEX iw 原生值=false）
+	return pb
 }
 
 // prepareVenueView reconcile 时一次性构建 venue 显示缓存（symMap/csMap）。
@@ -135,6 +139,29 @@ func (m *BrokerPositionMonitor) prepareVenueView(ctx context.Context, vk string,
 		sctx, cancel := monitorCallCtx(ctx)
 		vs.canon, vs.cs = m.bm.BrokerSymbolMapWithCS(sctx, venue)
 		cancel()
+		// D-036：MT5 保证金估算输入随 vs.cs 同批拉取（reconcile 时点，帧路径零 RPC）——
+		// 在持符号逐个 SymbolParams（InitialMargin+ContractSize）+ 账户级 imr fact。
+		if keydomain.IsType(vk, "mt5") {
+			vs.marginSpec = map[string]symMarginSpec{}
+			seen := map[string]bool{}
+			for _, o := range orders {
+				if seen[o.Symbol] {
+					continue
+				}
+				seen[o.Symbol] = true
+				sctx2, cancel2 := monitorCallCtx(ctx)
+				im, cs, ok := m.bm.BrokerSymbolMarginSpec(sctx2, venue, o.Symbol)
+				cancel2()
+				if ok {
+					vs.marginSpec[o.Symbol] = symMarginSpec{initialMargin: im, contractSize: cs}
+				}
+			}
+			if m.initMarginRateFor != nil {
+				sctx3, cancel3 := monitorCallCtx(ctx)
+				vs.imr, vs.imrOK = m.initMarginRateFor(sctx3, venue)
+				cancel3()
+			}
+		}
 	}
 	return vs
 }

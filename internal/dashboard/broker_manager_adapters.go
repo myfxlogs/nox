@@ -192,9 +192,22 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 		},
 		resubscribe: ad.Resubscribe,
 		swap:        func(ctx context.Context) ([]fact.Fact, error) { return ad.SwapFacts(ctx, m.qbus) },
-		requiredMargin: func(ctx context.Context, symbol, side string, lots, price float64) (float64, error) {
-			return reconcile.NewMT5Querier(a.Venue, ad.Token(), ad.MT5Client()).RequiredMargin(ctx, symbol, lots, side, price)
-		}, // D-031 ②：仓位级原生保证金 RPC
+		marginSpec: func(ctx context.Context, symbol string) (float64, float64, error) {
+			// D-036 仓位级保证金估算输入：SymGroup.InitialMargin（per-lot 定额，
+			// >0 直乘 lots）+ SymbolInfo.ContractSize（率径分母），同次 SymbolParams。
+			resp, err := ad.MT5Client().SymbolParams(tokenCtx(ctx, ad.Token()), &mt5pb.SymbolParamsRequest{Id: ad.Token(), Symbol: symbol})
+			if err != nil {
+				return 0, 0, err
+			}
+			if e := resp.GetError(); e != nil {
+				return 0, 0, fmt.Errorf("mt5 symbolParams %s: %s", symbol, e.GetMessage())
+			}
+			sp := resp.GetResult()
+			if sp == nil {
+				return 0, 0, nil
+			}
+			return sp.GetSymbolGroup().GetInitialMargin(), sp.GetSymbolInfo().GetContractSize(), nil
+		},
 		sessions:         ad.SessionsFacts, // D-029 R3：周表采集源（running 面——SessionsFacts 聚合含 running+static）
 		meta:             func(ctx context.Context) ([]fact.Fact, error) { return ad.MetaFacts(ctx) },
 		orderHistoryScan: mt5OrderHistoryScan(ad.MT5Client(), ad.Token()), // D-181 S1
