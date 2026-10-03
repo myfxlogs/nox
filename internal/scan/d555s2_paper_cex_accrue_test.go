@@ -141,7 +141,7 @@ func TestD555S2_NormalizedAndDataLost(t *testing.T) {
 		t.Fatalf("open: %v", err)
 	}
 	// 2 轮低率（5%<10%）→ normalized（paperExitStreakRounds=2；轮时刻自 DB now 前移防水位倒挂）。
-	// 注：第 3 轮起发现槽会重开新行（退出+候选在=新行，槽语义）——断言钉在第 2 轮退出时点。
+	// 注：退出后候选在场即重开新行（D-050 无槽；flap 冷却按 ReopenCooldown）——断言钉在第 2 轮退出时点。
 	cur := time.Now().UTC()
 	for i := 0; i < 2; i++ {
 		cur = cur.Add(9 * time.Hour)

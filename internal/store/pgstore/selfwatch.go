@@ -23,6 +23,33 @@ func (s *Store) PaperWindowCohort(ctx context.Context, structure string, since t
 		ORDER BY id`, structure, since)
 }
 
+// PaperActiveSplit D-050 ②：纸面在仓两轨分列观测（行数+品种数；无阈值不告警）。
+// CEX 轨=long_spot_short_perp；CFD 轨=cfd×perp 双结构（mt×cex）；other=mtm 等兜底列。
+type PaperActiveSplit struct {
+	CexRows, CexSyms     int
+	CfdRows, CfdSyms     int
+	OtherRows, OtherSyms int
+}
+
+// PaperActiveStats 纸面在仓两轨分列单查询。
+func (s *Store) PaperActiveStats(ctx context.Context) (PaperActiveSplit, error) {
+	var sp PaperActiveSplit
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+		  count(*) FILTER (WHERE structure = 'long_spot_short_perp'),
+		  count(DISTINCT symbol) FILTER (WHERE structure = 'long_spot_short_perp'),
+		  count(*) FILTER (WHERE structure IN ('long_cfd_short_perp','short_cfd_long_perp')),
+		  count(DISTINCT symbol) FILTER (WHERE structure IN ('long_cfd_short_perp','short_cfd_long_perp')),
+		  count(*) FILTER (WHERE structure NOT IN ('long_spot_short_perp','long_cfd_short_perp','short_cfd_long_perp')),
+		  count(DISTINCT symbol) FILTER (WHERE structure NOT IN ('long_spot_short_perp','long_cfd_short_perp','short_cfd_long_perp'))
+		FROM paper_spot_carry WHERE status = 'active'`,
+	).Scan(&sp.CexRows, &sp.CexSyms, &sp.CfdRows, &sp.CfdSyms, &sp.OtherRows, &sp.OtherSyms)
+	if err != nil {
+		return PaperActiveSplit{}, fmt.Errorf("paper active stats: %w", err)
+	}
+	return sp, nil
+}
+
 // AppConfigString 单键字符串直读（行缺 → ok=false；D-033 窗起点/macro 闸等热读键）。
 func (s *Store) AppConfigString(ctx context.Context, key string) (string, bool, error) {
 	var v string

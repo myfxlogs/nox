@@ -115,8 +115,8 @@ func paperExitConvergence(p pgstore.PaperSpotCarry, lastBasis *float64) *float64
 }
 
 // authSlot D-410 S4 保底槽（D-419 S3 加 cexVenue 供 monitor 簿三元组哨兵；
-// D-043 cls=MT canonical 的 asset_class——class 键在仓行授权计数用）。
-type authSlot struct{ key, venueCombo, symbol, mtVenue, cexVenue, cls string }
+// D-050 cls 退役——class 键授权计数随数量槽一起删）。
+type authSlot struct{ key, venueCombo, symbol, mtVenue, cexVenue string }
 
 // warnMonitorBookAbsent D-419 S3：授权组合 monitor 簿覆盖哨兵——簿三元组从未有过行
 // → basis 恒 NULL 不可毕业（与宇宙行缺席同型静默，收口为可归因 warn）。

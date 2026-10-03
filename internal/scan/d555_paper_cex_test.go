@@ -1,6 +1,6 @@
 // d555_paper_cex_test.go —— D-555 S1 验收锚（真库 full-step，仿 d410 形态）：
-// A1 保底槽（enabled 双CEX combo 行→paper 行 structure/type/venue 断言；cfd 轨「跳过双CEX」
-// 日志对本构型消失）+ A2 发现槽（detector 候选驱动 top-N；多样性上限）+ mt×cex 回归锚 +
+// A1 保底段（enabled 双CEX combo 行→paper 行 structure/type/venue 断言；cfd 轨「跳过双CEX」
+// 日志对本构型消失）+ A2 发现段（detector 候选驱动；D-050 无槽全量开）+ mt×cex 回归锚 +
 // 0160 migration 生成列断言。
 package scan
 
@@ -30,7 +30,7 @@ func d555Cand(canonical, spotKey, perpKey string, funding float64) CexPaperCand 
 }
 
 func d555Opts() PaperCexOpts {
-	return PaperCexOpts{AuthorizedMaxActive: 8, ReopenCooldown: 24 * time.Hour}
+	return PaperCexOpts{ReopenCooldown: 24 * time.Hour} // D-050：AuthorizedMaxActive 退役
 }
 
 // TestD555_A1_GuaranteedSlot A1 红→绿锚：enabled 双CEX combo（gate:spot×gate:perp 同
@@ -94,8 +94,8 @@ func TestD555_A1_GuaranteedNeedsCandidate(t *testing.T) {
 	}
 }
 
-// TestD555_A2_DiscoverySlot A2 发现槽：无 combo，纯 detector 候选驱动 top-N；
-// 多样性上限=同 canonical 不同 venue 对只占 1 槽。
+// TestD555_A2_DiscoverySlot A2 发现段：无 combo，纯 detector 候选驱动——
+// D-050 数量槽退役：干净候选全量开（同 canonical 不同 venue 对各行独立开）。
 func TestD555_A2_DiscoverySlot(t *testing.T) {
 	s := d555Store(t)
 	ctx := context.Background()
@@ -109,24 +109,15 @@ func TestD555_A2_DiscoverySlot(t *testing.T) {
 		t.Fatalf("A2: %v", err)
 	}
 	if len(opened) != 3 {
-		t.Fatalf("A2: want opened=3（2 canonical，同 canonical 复行不占槽）, got %v", opened)
+		t.Fatalf("A2: want opened=3（PONS 两 venue 对各行+BTW）, got %v", opened)
 	}
-	// 上限：maxActive=1 → 新 canonical 只 1 个进槽（PONS 首对，BTW 挤出）；
-	// 同 canonical 第二 venue 对不占槽仍可开（D-548 口径 mirror）→ PONS 两对共 2 行。
-	small := PaperCexOpts{AuthorizedMaxActive: 8, MaxActive: 1}
+	// D-050 无槽：truncate 后同候选集重跑——全量重开（无上限挤出；原 cap 锚随槽退役）。
 	if _, err := s.Pool().Exec(ctx, `TRUNCATE paper_spot_carry, carry_graduations RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("A2 truncate: %v", err)
 	}
-	opened2, _, err := StepPaperCexCarry(ctx, s, cands, time.Now(), small, nil, nil)
-	if err != nil || len(opened2) != 2 {
-		t.Fatalf("A2 cap: opened=%v err=%v, want 2（PONS 两 venue 对；BTW 被上限挤出）", opened2, err)
-	}
-	var syms int
-	if err := s.Pool().QueryRow(ctx, `SELECT count(DISTINCT symbol) FROM paper_spot_carry WHERE structure='long_spot_short_perp'`).Scan(&syms); err != nil {
-		t.Fatalf("A2 cap distinct: %v", err)
-	}
-	if syms != 1 {
-		t.Fatalf("A2 cap: distinct symbol want 1（BTW 挤出）, got %d", syms)
+	opened2, _, err := StepPaperCexCarry(ctx, s, cands, time.Now(), d555Opts(), nil, nil)
+	if err != nil || len(opened2) != 3 {
+		t.Fatalf("A2 无槽全量: opened=%v err=%v, want 3", opened2, err)
 	}
 }
 

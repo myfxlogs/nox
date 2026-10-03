@@ -17,15 +17,10 @@ import (
 	"arb/internal/store/pgstore"
 )
 
-// PaperCexMaxActive 发现槽 canonical 多样性上限（mirror PaperCfdMaxActive 同防挤占语义；
-// 保底槽不占此额同 D-410 S4）。
-const PaperCexMaxActive = 6
-
-// PaperCexOpts 装配参数（cmd/core 注入；env 与 cfd 保底槽同源同值——保底语义与 mt×cex 同）。
+// PaperCexOpts 装配参数（cmd/core 注入；D-050 数量槽退役——AuthorizedMaxActive/
+// MaxActive 删，只留质量闸：data_lost 冷却+双腿报价连续性）。
 type PaperCexOpts struct {
-	AuthorizedMaxActive int           // 保底槽独立上限
-	ReopenCooldown      time.Duration // 保底 flap 冷却（退出行 max(exit_ts) 窗）
-	MaxActive           int           // 发现槽上限（<=0 取 PaperCexMaxActive）
+	ReopenCooldown time.Duration // 保底 flap 冷却（退出行 max(exit_ts) 窗）
 }
 
 // CexPaperCand 双CEX 候选（cmd/core 由 detector.Candidate Type==FUNDING_HEDGE 转换直传）。
@@ -43,18 +38,15 @@ type CexPaperCand struct {
 //
 //	自动开纸面（候选缺席=数据缺席不开——同 mt×cex「universe 未产行」语义）；
 //
-// ②发现段：其余候选 funding 阈已由 detector 前置过滤（本步零复判=P3 单源），按
+// ②发现段：其余候选 funding 阈已由 detector 前置过滤（本步零复判=P3 单源），经
 //
-//	canonical 多样性上限开到 cap。
+//	D-042 双闸（data_lost 冷却+双腿近 1h 报价）后全量开——D-050 数量槽退役。
 //
-// blocked 旗标腿级拦截（同 D-463 口径）；flap 冷却按退出行 max(exit_ts)（保底段同 mt×cex）。
+// blocked 旗标腿级拦截（同 D-463 口径）；flap 冷却按退出行 max(exit_ts)（保底段同 mt×cex）；
+// 每轮 log 开仓数+跳过原因计数（cooldown/quote_dead，D-050 ②）。
 func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand, now time.Time, opts PaperCexOpts, flags map[string]pgstore.VenueSymbolFlag, quoteAlive func(venueKey, symbol string) (time.Time, bool)) (opened []string, exited int, err error) {
 	// 零候选不早退：在库行仍需 miss_streak 计数/退出判定（data_lost 语义依赖每轮步进）——
 	// 开仓段零候选自然零产出。
-	maxActive := opts.MaxActive
-	if maxActive <= 0 {
-		maxActive = PaperCexMaxActive
-	}
 	active, err := st.ListActivePaperSpotCarry(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("cex paper step: list active: %w", err)
@@ -65,28 +57,26 @@ func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand,
 		return nil, 0, fmt.Errorf("cex paper step: list accrable: %w", err)
 	}
 	// 活跃行键（键域口径：venue_key_a×venue_key_b|symbol——type 列参与键，与 mt×cex
-	// 裸域键天然不撞）；本轨 diversity 槽仅计本 structure 行（D-548 口径）。
+	// 裸域键天然不撞）。D-050：diversity 槽记账随数量槽退役，只留在仓去重。
 	cexRowKey := func(p pgstore.PaperSpotCarry) string {
 		return keydomain.Join(p.VenueA, p.VenueTypeA) + "×" + keydomain.Join(p.VenueB, p.VenueTypeB) + "|" + p.Symbol
 	}
 	activeByKey := make(map[string]struct{}, len(active))
-	slotKeys := make(map[string]struct{}, len(active))
 	for _, p := range active {
 		if p.Structure != "long_spot_short_perp" {
 			continue
 		}
 		activeByKey[cexRowKey(p)] = struct{}{}
-		slotKeys["long_spot_short_perp|"+p.Symbol] = struct{}{}
 	}
-	cexActive := len(slotKeys)
 	candByKey := make(map[string]CexPaperCand, len(cands))
 	for _, c := range cands {
 		candByKey[c.SpotVenueKey+"×"+c.PerpVenueKey+"|"+c.Canonical] = c
 	}
-	openCand := func(c CexPaperCand, key string) bool {
+	// openCand 返回 ""=已开，否则跳过原因标签（flag/quote/data_lost/exists/insert）——D-050 ②计数。
+	openCand := func(c CexPaperCand, key string) string {
 		if f := blockedFlagHit(keydomain.BareOf(c.SpotVenueKey), keydomain.BareOf(c.PerpVenueKey), c.Canonical, nil, flags); f != nil {
 			log.Printf("[cex paper] blocked flag 拦截: %s（%s@%s|%s）", key, f.Reason, f.Venue, f.Symbol)
-			return false
+			return "flag"
 		}
 		// D-042 R1 ②：双腿近 1h 报价缺席=0 才开——双腿各自 bus 最新报价时间 1h 内
 		//（LastChangeAt 价格变更钟；funding facts 不作报价活性源——R1 退回②）。
@@ -95,18 +85,18 @@ func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand,
 		if quoteAlive != nil {
 			if t, ok := quoteAlive(c.SpotVenueKey, c.Canonical); !ok || now.Sub(t) > time.Hour {
 				log.Printf("[cex paper] 报价连续性不足 拦开: %s（spot 腿近 1h 无报价变更）", key)
-				return false
+				return "quote"
 			}
 			if t, ok := quoteAlive(c.PerpVenueKey, c.Canonical); !ok || now.Sub(t) > time.Hour {
 				log.Printf("[cex paper] 报价连续性不足 拦开: %s（perp 腿近 1h 无报价变更）", key)
-				return false
+				return "quote"
 			}
 		}
 		// D-042 R1 ①：data_lost 冷却守卫——同对 24h 内 ≥2 次 data_lost 退出 → 24h 内不再开仓
 		//（openCand 入口统一生效：保底段+发现段两路同闸）。
 		if dataLostCooldown(ctx, st, spVenue(c), ppVenue(c), c.Canonical, now) {
 			log.Printf("[cex paper] data_lost 冷却 拦开: %s（24h 内 ≥2 次 data_lost）", key)
-			return false
+			return "data_lost"
 		}
 		sp, pp := keydomain.Parse(c.SpotVenueKey), keydomain.Parse(c.PerpVenueKey)
 		p := &pgstore.PaperSpotCarry{
@@ -126,16 +116,15 @@ func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand,
 		}
 		if err := st.InsertPaperSpotCarry(ctx, p); err != nil {
 			if err == pgstore.ErrPaperExists {
-				return false
+				return "exists"
 			}
 			// 单行失败不炸整轮（paper 轨惯例），WP1 禁静默：日志留痕续跑。
 			log.Printf("[cex paper] insert %s: %v", key, err)
-			return false
+			return "insert"
 		}
 		activeByKey[key] = struct{}{}
-		slotKeys["long_spot_short_perp|"+c.Canonical] = struct{}{}
 		opened = append(opened, c.Canonical)
-		return true
+		return ""
 	}
 	// ① 保底段：enabled∧非 simulated 组合先行（不占发现槽额）。
 	combos, err := st.LoadXAssetAllowCombos(ctx, "real")
@@ -143,7 +132,6 @@ func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand,
 		return opened, 0, fmt.Errorf("cex paper step: load allow combos: %w", err)
 	}
 	authorizedKeys := make(map[string]struct{}, len(combos))
-	guaranteedActive := 0
 	for _, c := range combos {
 		sp, pp, canon, spType, ppType, ok := cexSpotPerpComboLegs(c)
 		if !ok {
@@ -152,11 +140,8 @@ func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand,
 		key := keydomain.Join(sp, spType) + "×" + keydomain.Join(pp, ppType) + "|" + canon
 		authorizedKeys[key] = struct{}{}
 	}
-	for k := range activeByKey {
-		if _, ok := authorizedKeys[k]; ok {
-			guaranteedActive++
-		}
-	}
+	// D-050 ②：每轮跳过原因计数（cooldown/quote_dead）——开仓数在尾行 log。
+	skipCooldown, skipQuoteDead := 0, 0
 	for _, c := range combos {
 		sp, pp, canon, spType, ppType, ok := cexSpotPerpComboLegs(c)
 		if !ok {
@@ -164,9 +149,6 @@ func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand,
 		}
 		key := keydomain.Join(sp, spType) + "×" + keydomain.Join(pp, ppType) + "|" + canon
 		if _, isActive := activeByKey[key]; isActive {
-			continue
-		}
-		if guaranteedActive >= opts.AuthorizedMaxActive {
 			continue
 		}
 		// flap 冷却：退出行 max(exit_ts) 窗内不重开（同 D-410 钉死②——防衰减组合反复记费）。
@@ -176,6 +158,7 @@ func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand,
 				return opened, exited, fmt.Errorf("cex paper step: exit ts %s: %w", key, err)
 			}
 			if lastExit != nil && now.Sub(*lastExit) < opts.ReopenCooldown {
+				skipCooldown++
 				continue // D-042 R1：拦截本体在 openCand 双闸；可见性归 selfwatch data_lost 项（R1 ③）
 			}
 		}
@@ -183,30 +166,29 @@ func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand,
 		if !ok {
 			continue // 候选缺席=本轮无 funding/报价面（数据缺席不开，同 universe 未产行）
 		}
-		if openCand(cand, key) {
-			guaranteedActive++
+		if reason := openCand(cand, key); reason == "data_lost" {
+			skipCooldown++
+		} else if reason == "quote" {
+			skipQuoteDead++
 		}
 	}
-	// ② 发现段：其余候选（funding 阈=detector 前置已滤；canonical 多样性上限）。
-	topN := 0
+	// ② 发现段：其余候选（funding 阈=detector 前置已滤）经 D-042 双闸全量开（D-050 无槽）。
 	for _, c := range cands {
 		key := c.SpotVenueKey + "×" + c.PerpVenueKey + "|" + c.Canonical
 		if _, isActive := activeByKey[key]; isActive {
 			continue
 		}
 		if _, authorized := authorizedKeys[key]; authorized {
-			continue // 保底段已裁决（冷却/上限跳过态不重复计入发现段）
+			continue // 保底段已裁决（冷却跳过态不重复计入发现段）
 		}
-		slotKey := "long_spot_short_perp|" + c.Canonical
-		_, occupied := slotKeys[slotKey]
-		if !occupied && cexActive+topN >= maxActive {
-			// 新 canonical 无槽——不 break（同 canonical 复行不占槽仍可开）
-			continue
-		}
-		if openCand(c, key) && !occupied {
-			topN++
+		switch reason := openCand(c, key); reason {
+		case "data_lost":
+			skipCooldown++
+		case "quote":
+			skipQuoteDead++
 		}
 	}
+	log.Printf("[cex paper] 本轮 opened=%d cooldown=%d quote_dead=%d", len(opened), skipCooldown, skipQuoteDead)
 	// ②累积+③退出（S2）。
 	n, aerr := accrueExitCexPaper(ctx, st, accrable, candByKey, now)
 	if aerr != nil {
