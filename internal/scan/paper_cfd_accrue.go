@@ -25,16 +25,7 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 	// →边界 fail-closed→gate/okx 纸面 accrued 恒 0。
 	cexRawByCanon := map[string]string{}
 	if uniRows, uerr := st.ListCexUniverse(ctx); uerr == nil {
-		for _, ur := range uniRows {
-			// D-028 ②：键补 NJK(cexFactSymbol(symbol))——okx TRX-USDT-SWAP / gate TRX_USDT
-			// 经 NJK 不归一（尾段非 USDT/USD），查键 canonical=TRX 永不命中 → fail-closed。
-			// cexFactSymbol 先归 facts 键形（TRXUSDT）再 NJK（→TRX）与查询键对齐。
-			for _, canon := range []string{ur.HedgeCanonical, ur.Symbol, NormalizeJoinKey(cexFactSymbol(ur.Symbol))} {
-				if k := ur.Venue + "|" + NormalizeJoinKey(canon); canon != "" {
-					cexRawByCanon[k] = cexFactSymbol(ur.Symbol)
-				}
-			}
-		}
+		cexRawByCanon = cexRawCanonIndex(uniRows)
 	}
 	// S1 MT 腿 canonical→broker 裸符号（facts 键=raw；venue 维度懒加载一次）。
 	mtRawCache := map[string]map[string]string{}

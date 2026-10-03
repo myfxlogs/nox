@@ -11,4 +11,7 @@ var (
 
 	//go:embed 0172_incident_exit_kind_cleanup.sql
 	IncidentExitKindCleanupSQL string // D-032 R1：清零成交 FAILED 误打的 legged_unwind（#503/#504 形态）
+
+	//go:embed 0173_paper_window_start.sql
+	PaperWindowStartSQL string // D-033①：app_config 播种 ARB_PAPER_WINDOW_START（窗起点单源）
 )

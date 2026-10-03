@@ -96,6 +96,26 @@ func abs(v float64) float64 {
 	return v
 }
 
+// cexRawCanonIndex cex 腿 canonical→facts symbol 索引（D-474a S2：funding 边界事实键=
+// venue+collector canonical 形=cexFactSymbol(Symbol)，gate XAU_USDT→XAUUSDT、
+// okx XAU-USDT-SWAP→XAUUSDT；HedgeCanonical/Symbol 双路归一键）。D-550：原样回 raw 键
+// （US30_USDT）直查 facts 零命中→边界 fail-closed。D-033：自 accrue 内联块提取，
+// 自盯行评估共用同键（禁两处各写归一规则）。
+func cexRawCanonIndex(uniRows map[string]pgstore.CexUniverseRow) map[string]string {
+	idx := map[string]string{}
+	for _, ur := range uniRows {
+		// D-028 ②：键补 NJK(cexFactSymbol(symbol))——okx TRX-USDT-SWAP / gate TRX_USDT
+		// 经 NJK 不归一（尾段非 USDT/USD），查键 canonical=TRX 永不命中 → fail-closed。
+		// cexFactSymbol 先归 facts 键形（TRXUSDT）再 NJK（→TRX）与查询键对齐。
+		for _, canon := range []string{ur.HedgeCanonical, ur.Symbol, NormalizeJoinKey(cexFactSymbol(ur.Symbol))} {
+			if k := ur.Venue + "|" + NormalizeJoinKey(canon); canon != "" {
+				idx[k] = cexFactSymbol(ur.Symbol)
+			}
+		}
+	}
+	return idx
+}
+
 // mtRawIndex D-028 ⑥：MT broker_symbol 选择（is_primary 语义，pgstore.ResolvePrimarySymbol
 // 同裁定内载版——列表一次拉取+双形 NJK 键天然兼容，零逐 canonical 查询开销）：
 // primary 行优先 / 组内唯一行兜底（false+恰一行=隐式 primary，brokers_symbolmap 同注）/
