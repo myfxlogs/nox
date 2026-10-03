@@ -184,6 +184,10 @@ func TestD121_GatePositions(t *testing.T) {
 //   - 逐仓（marginType=isolated）→ isolatedWallet
 func TestD121_BinancePositions(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/fapi/v1/userTrades" { // D-037：openedAt 推导伴生端点，本锚返回空推导不可得
+			_ = json.NewEncoder(w).Encode([]map[string]any{})
+			return
+		}
 		if r.URL.Path != "/fapi/v2/positionRisk" {
 			t.Errorf("want /fapi/v2/positionRisk, got %s", r.URL.Path)
 		}

@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -103,5 +105,139 @@ func (q *CEXPositionQuerier) binancePositions(ctx context.Context) ([]venue.Orde
 			PosSide:       posSide,    // D-195-C2：从 amt 正负推导
 		})
 	}
+	q.fillBinanceOpenedAt(ctx, out) // D-037：positionRisk 无开仓时间→userTrades 推导
 	return out, nil
+}
+
+// === D-037：binance openedAt 推导 ===
+// positionRisk 无开仓时间（OpenedAt 零值 → income 窗无界 → swap/净估缺息）。reconcile 时
+// 经 GET /fapi/v1/userTrades 推导「最近一次 positionAmt 由 0 变非 0 的成交时刻」。
+// 每 symbol 一次 + 持仓集变化失效（querier 级缓存）：在仓期间 openedAt 不变 → 一次拉取；
+// 平仓离集/换向 → 逐出，重开重新推导。ts 零值=不可得负缓存（1000 笔窗内未见 0 过渡），
+// venue 查询失败不缓存→下轮重试。禁每帧：缓存命中零 HTTP。
+
+// openedAtEntry 开仓时刻缓存项；ts 零值=推导不可得（负缓存防每轮重打 venue）。
+type openedAtEntry struct {
+	ts time.Time
+}
+
+// fillBinanceOpenedAt 持仓集签名校验缓存 → miss 逐个 userTrades 推导 → 回填 orders.OpenedAt。
+// 缓存键=symbol|side（对冲模式同 symbol LONG+SHORT 双仓各有开仓点，不共享条目）。
+func (q *CEXPositionQuerier) fillBinanceOpenedAt(ctx context.Context, orders []venue.Order) {
+	live := map[string]venue.Order{}
+	for _, o := range orders {
+		live[o.Symbol+"|"+o.Side] = o
+	}
+	q.openedAtMu.Lock()
+	if q.openedAtCache == nil {
+		q.openedAtCache = map[string]openedAtEntry{}
+	}
+	for k := range q.openedAtCache {
+		if _, ok := live[k]; !ok {
+			delete(q.openedAtCache, k) // 离集/换向 → 失效（重开必重新推导）
+		}
+	}
+	if len(orders) == 0 {
+		q.openedAtMu.Unlock()
+		return
+	}
+	var miss []string
+	for k := range live {
+		if _, ok := q.openedAtCache[k]; !ok {
+			miss = append(miss, k)
+		}
+	}
+	q.openedAtMu.Unlock()
+	for _, k := range miss {
+		o := live[k]
+		ts, err := q.binanceOpenedAt(ctx, o.Symbol, o.Side)
+		if err != nil {
+			log.Printf("[reconcile] binance openedAt %s %s: %v", o.Symbol, o.Side, err)
+			continue // 查询失败不缓存→下轮重试；OpenedAt 缺席=诚实空态
+		}
+		q.openedAtMu.Lock()
+		q.openedAtCache[k] = openedAtEntry{ts: ts}
+		q.openedAtMu.Unlock()
+	}
+	q.openedAtMu.Lock()
+	for i := range orders {
+		orders[i].OpenedAt = q.openedAtCache[orders[i].Symbol+"|"+orders[i].Side].ts
+	}
+	q.openedAtMu.Unlock()
+}
+
+// binanceOpenedAt userTrades 推导开仓时刻：按 positionSide 桶累 signed qty，
+// 记「最近一次 |amt| 0→非0 的成交时刻」=当前持仓开仓点（平后再开取后者）。
+// 单向模式全桶 BOTH（BUY+/SELL−）；对冲模式 SHORT 桶 SELL+/BUY−。
+// limit=1000 窗口内未见 0 过渡（更早开仓/历史超窗）→ 零值诚实缺省。
+func (q *CEXPositionQuerier) binanceOpenedAt(ctx context.Context, symbol, side string) (time.Time, error) {
+	params := "symbol=" + symbol + "&limit=1000&timestamp=" + strconv.FormatInt(time.Now().UnixMilli(), 10) + "&recvWindow=5000"
+	url := q.baseURL + "/v1/userTrades?" + params + "&signature=" + binanceSign(q.apiSecret, params)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return time.Time{}, err
+	}
+	req.Header.Set("X-MBX-APIKEY", q.apiKey)
+	resp, err := q.client.Do(req)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("binance userTrades: %w", err)
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if resp.StatusCode != 200 {
+		return time.Time{}, fmt.Errorf("binance userTrades: http %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
+	}
+	var trades []struct {
+		Side         string `json:"side"`
+		PositionSide string `json:"positionSide"`
+		Qty          string `json:"qty"`
+		Time         int64  `json:"time"`
+	}
+	if err := json.Unmarshal(data, &trades); err != nil {
+		return time.Time{}, fmt.Errorf("binance userTrades json: %w", err)
+	}
+	sort.Slice(trades, func(i, j int) bool { return trades[i].Time < trades[j].Time })
+	type bucket struct {
+		amt      float64
+		lastOpen int64
+	}
+	buckets := map[string]*bucket{}
+	for _, tr := range trades {
+		qty, perr := f64z(tr.Qty)
+		if perr != nil {
+			return time.Time{}, fmt.Errorf("parse qty=%q: %w", tr.Qty, perr)
+		}
+		ps := tr.PositionSide
+		if ps == "" {
+			ps = "BOTH"
+		}
+		b := buckets[ps]
+		if b == nil {
+			b = &bucket{}
+			buckets[ps] = b
+		}
+		delta := qty
+		if (ps == "SHORT") == (tr.Side == "BUY") { // SHORT 桶 BUY=减仓；BOTH/LONG 桶 BUY=加仓
+			delta = -delta
+		}
+		prev, cur := b.amt, b.amt+delta
+		if math.Abs(prev) < 1e-9 && math.Abs(cur) >= 1e-9 {
+			b.lastOpen = tr.Time // 0→非0 过渡=开仓点；最后一次胜出
+		}
+		b.amt = cur
+	}
+	// 选桶：对冲模式按持仓方向取 LONG/SHORT 精确桶；单向/缺桶回退 BOTH。
+	pick := "LONG"
+	if side == "SELL" {
+		pick = "SHORT"
+	}
+	for _, ps := range []string{pick, "BOTH"} {
+		if b := buckets[ps]; b != nil && b.lastOpen > 0 {
+			return time.UnixMilli(b.lastOpen), nil
+		}
+	}
+	return time.Time{}, nil
 }

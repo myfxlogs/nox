@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 
 	"arb/internal/httpx"
 	"arb/internal/keydomain"
@@ -23,6 +24,11 @@ type CEXPositionQuerier struct {
 	simulated   bool
 	keyOverride string // D-362 S2b：撞键非赢家注册键（空=canonical）
 	client      *http.Client
+
+	// D-037：binance openedAt 推导缓存（positionRisk 无开仓时间→userTrades 一次/持仓期）——
+	// "symbol|side"→openedAt；持仓离集/换向失效；ts 零值=不可得负缓存（防每轮重打 venue）。
+	openedAtMu    sync.Mutex
+	openedAtCache map[string]openedAtEntry
 }
 
 // NewCEXPositionQuerier 创建 CEX perp 持仓查询器。
