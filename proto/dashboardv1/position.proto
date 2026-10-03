@@ -139,6 +139,7 @@ message BrokerPosition {
   double price_bid = 26;                  // D-009 S2：报价 bid（CEX=qbus 盘口；MT5=帧携 bid）；0=无报价/缺双值（诚实空态）
   double price_ask = 27;                  // D-009 S2：报价 ask（同上）；0=无报价/缺双值
   optional double close_now_estimate_usd = 28;  // D-009 S3：平仓净估=（方向价−开价）×qty×cs×fx − 平仓名义×takerBps×1e-4；缺省=报价/换算/费率任一不可得（诚实空态，列标「估」）
+  bool margin_is_estimate = 29;  // D-036：margin 为 venue 规格估算（InitialMargin×lots ∨ lots×CS×openPrice×init_margin_rate），非 venue 账户级原生值——前端标「≈」；CEX=iw 原生值 false
 }
 
 message ListBrokerPositionsRequest {
