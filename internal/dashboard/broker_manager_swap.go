@@ -138,9 +138,12 @@ func (m *BrokerManager) SessionsFacts(ctx context.Context) ([]fact.Fact, error) 
 	}
 	m.mu.Unlock()
 	var out []fact.Fact
-	for _, fn := range fns {
+	for i, fn := range fns {
 		fs, err := fn(ctx)
 		if err != nil {
+			// D-029 R2 ②：单源失败 log.Printf 不吞（仍继续其余源）——原静默 continue 使
+			// 「周表空 boot 竞态」不可见（R1 首拍竞态复核发现）。
+			log.Printf("[broker] SessionsFacts source %d: %v", i, err)
 			continue
 		}
 		out = append(out, fs...)

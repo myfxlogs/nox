@@ -22,12 +22,20 @@ func (m *BrokerManager) attach(venue string, r *running) {
 	m.syncQueriers()
 	m.syncHistQueriers()
 	m.kickSwap()
+	m.kickSessions() // D-029 R2：attach 后立即补一轮周表（同 SwapKick 盲窗修复）
 }
 
 // kickSwap 触发 swap 补轮（nil 安全：未接线直接返回）。
 func (m *BrokerManager) kickSwap() {
 	if m.SwapKick != nil {
 		m.SwapKick()
+	}
+}
+
+// kickSessions D-029 R2 触发周表补轮（nil 安全：未接线直接返回）。
+func (m *BrokerManager) kickSessions() {
+	if m.SessionsKick != nil {
+		m.SessionsKick()
 	}
 }
 

@@ -38,7 +38,8 @@ func (m *BrokerManager) ReloadSymbolMap(ctx context.Context, venue string) {
 		r.setUnitScales(scales, sensitive)
 	}
 	log.Printf("[broker] %s symbol map refreshed (%d)", venue, len(sm))
-	m.kickSwap() // 映射增删后立即补一轮 swap（D-060 F2，新符号缺价自然走冷启动退避自愈）
+	m.kickSwap()     // 映射增删后立即补一轮 swap（D-060 F2，新符号缺价自然走冷启动退避自愈）
+	m.kickSessions() // D-029 R2：映射增删后立即补一轮周表
 }
 
 // BrokerSymbols 从运行中适配器拉取服务器符号表（附 broker 分组，辅助补映射搜索）。
