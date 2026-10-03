@@ -157,3 +157,27 @@ func (m *BrokerManager) SessionsFacts(ctx context.Context) ([]fact.Fact, error) 
 	}
 	return out, nil
 }
+
+// RequiredMarginFor D-031 ②：venueKey 对应 running 适配器的仓位级原生保证金 RPC
+// （RequiredMargin(symbol, lots, DealBuy/DealSell, openPrice)）。venue 无 running 适配器
+// /RPC 失败 → ok=false（调用方诚实空态，不缓存失败值）。
+func (m *BrokerManager) RequiredMarginFor(ctx context.Context, venueKey, symbol, side string, lots, price float64) (float64, bool) {
+	m.mu.Lock()
+	var fn func(ctx context.Context, symbol, side string, lots, price float64) (float64, error)
+	for v, r := range m.running {
+		if r.requiredMargin != nil && (venueKey == v || venueKey == v+":mt5" || venueKey == v+":mt4") {
+			fn = r.requiredMargin
+			break
+		}
+	}
+	m.mu.Unlock()
+	if fn == nil {
+		return 0, false
+	}
+	val, err := fn(ctx, symbol, side, lots, price)
+	if err != nil {
+		log.Printf("[broker] required margin %s %s: %v", venueKey, symbol, err)
+		return 0, false
+	}
+	return val, true
+}

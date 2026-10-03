@@ -190,8 +190,11 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 			ad.SetSymbolScales(sc)
 			ad.SetUnitSensitive(sens)
 		},
-		resubscribe:      ad.Resubscribe,
-		swap:             func(ctx context.Context) ([]fact.Fact, error) { return ad.SwapFacts(ctx, m.qbus) },
+		resubscribe: ad.Resubscribe,
+		swap:        func(ctx context.Context) ([]fact.Fact, error) { return ad.SwapFacts(ctx, m.qbus) },
+		requiredMargin: func(ctx context.Context, symbol, side string, lots, price float64) (float64, error) {
+			return reconcile.NewMT5Querier(a.Venue, ad.Token(), ad.MT5Client()).RequiredMargin(ctx, symbol, lots, side, price)
+		}, // D-031 ②：仓位级原生保证金 RPC
 		sessions:         ad.SessionsFacts, // D-029 R3：周表采集源（running 面——SessionsFacts 聚合含 running+static）
 		meta:             func(ctx context.Context) ([]fact.Fact, error) { return ad.MetaFacts(ctx) },
 		orderHistoryScan: mt5OrderHistoryScan(ad.MT5Client(), ad.Token()), // D-181 S1

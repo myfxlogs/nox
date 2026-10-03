@@ -58,8 +58,14 @@ func (m *BrokerPositionMonitor) protoFor(ctx context.Context, vk string, vs venu
 		hasPrice = true
 	}
 	// D-008 S1：保证金列=venue 原生 InitialMargin 直显（CEX perp iw；全仓 iw=0→空=venue 语义）。
-	// MT5 无仓位级 margin 字段→诚实空态，D-124 账户分摊已撤（加工值冒充 venue 值属原则破口）。
+	// D-031 ②：MT5=仓位级原生 RequiredMargin RPC（symbol, lots, DealBuy/DealSell, openPrice）
+	// 带缓存（持仓集签名/init_margin_rate 变化失效——禁每帧 RPC）；失败=诚实空态。
 	margin := o.InitialMargin
+	if keydomain.IsType(o.VenueKey, "mt5") {
+		if mv, ok := m.cachedRequiredMargin(ctx, vk, o.VenueKey, o.Symbol, canonical, o.Side, o.Volume, o.OpenPrice); ok {
+			margin = mv
+		}
+	}
 	// D-337 S2 + D-337R1 S2 + D-466 S3/R1：下次计费/结算时刻——MT5=server 零点（tzCache）；
 	// CEX=腿级 venue 原生真值回退：funding_next_settle fact（stale 闸=龄>周期×2 失效）
 	// → venue 原生 interval 边界 → nil 诚实空态+warn（业主令禁 8h 兜底——猜的值
