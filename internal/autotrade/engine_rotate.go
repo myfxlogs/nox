@@ -68,7 +68,7 @@ func (e *Engine) rotateCheck(ctx context.Context, p *pgstore.Position) (bool, *r
 	// ②curEV = curNetCarry%/yr + 剩余收敛折算（v1 必含，R0-N3：
 	// |basis|bps → 30d 摊年化）。D-014：收割线退役后剩余收敛=当前基差绝对值
 	// （收敛到平价的全部距离；报价缺/超龄 → fail-closed 不轮转）。
-	curCarry, ok := e.recalcXAssetNetCarry(ctx, p)
+	curCarry, ok := e.recalcXAssetNetCarry(ctx, p, carryEconWindow) // D-027：7d 均值口径
 	if !ok {
 		return fail("cur carry 数据缺（fail-closed）")
 	}
@@ -170,11 +170,11 @@ func (e *Engine) rotateCheck(ctx context.Context, p *pgstore.Position) (bool, *r
 // 口径同源不双标）。任一腿缺 → ok=false。
 func (e *Engine) xassetComboNetCarry(ctx context.Context, canonicalBuy, canonicalSell, venueBuy, venueSell string) (float64, bool) {
 	maxAge := e.cfg.SwapFactMaxAge
-	buy, ok := e.xassetLegCarryAnnual(ctx, venueBuy, canonicalBuy, "BUY", maxAge)
+	buy, ok := e.xassetLegCarryAnnual(ctx, venueBuy, canonicalBuy, "BUY", maxAge, carryEconWindow)
 	if !ok {
 		return 0, false
 	}
-	sell, ok := e.xassetLegCarryAnnual(ctx, venueSell, canonicalSell, "SELL", maxAge)
+	sell, ok := e.xassetLegCarryAnnual(ctx, venueSell, canonicalSell, "SELL", maxAge, carryEconWindow)
 	if !ok {
 		return 0, false
 	}

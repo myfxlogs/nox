@@ -29,7 +29,7 @@ func TestD180_SwapRateFor_SettledHit(t *testing.T) {
 	qbus.Publish(bus.Quote{Symbol: "GBPJPY", Venue: "61585565", VenueType: "mt5", Bid: 190.0, Ask: 190.02, VenueSymbol: "GBPJPY", Time: now})
 	qbus.Publish(bus.Quote{Symbol: "USDJPY", Venue: "fx", VenueType: "mt5", Bid: 150.0, Ask: 150.01, VenueSymbol: "USDJPY", Time: now})
 	e := &Engine{store: s, quotes: qbus, cfg: Config{}}
-	bps, src := e.swapRateFor(ctx, "61585565", "GBPJPY", "SELL")
+	bps, src := e.swapRateFor(ctx, "61585565", "GBPJPY", "SELL", 0)
 	if src != swapSrcSettled {
 		t.Fatalf("source: want settled, got %s", src)
 	}
@@ -57,7 +57,7 @@ func TestD180_SwapRateFor_SettledExpiredFallbackSpec(t *testing.T) {
 		t.Fatalf("insert: %v", err)
 	}
 	e := &Engine{store: s, quotes: bus.New(), cfg: Config{}}
-	bps, src := e.swapRateFor(ctx, "vA", "GBPJPY", "SELL")
+	bps, src := e.swapRateFor(ctx, "vA", "GBPJPY", "SELL", 0)
 	if src != swapSrcSpec {
 		t.Fatalf("source: want spec (settled expired), got %s", src)
 	}
@@ -80,7 +80,7 @@ func TestD180_SwapRateFor_NoSettledFallbackSpec(t *testing.T) {
 		t.Fatalf("insert: %v", err)
 	}
 	e := &Engine{store: s, quotes: bus.New(), cfg: Config{}}
-	bps, src := e.swapRateFor(ctx, "vA", "AUDJPY", "BUY")
+	bps, src := e.swapRateFor(ctx, "vA", "AUDJPY", "BUY", 0)
 	if src != swapSrcSpec {
 		t.Fatalf("source: want spec, got %s", src)
 	}
@@ -97,7 +97,7 @@ func TestD180_SwapRateFor_NoneFailClosed(t *testing.T) {
 		t.Fatalf("truncate: %v", err)
 	}
 	e := &Engine{store: s, quotes: bus.New(), cfg: Config{}}
-	bps, src := e.swapRateFor(ctx, "vA", "AUDJPY", "BUY")
+	bps, src := e.swapRateFor(ctx, "vA", "AUDJPY", "BUY", 0)
 	if src != swapSrcNone {
 		t.Fatalf("source: want none, got %s", src)
 	}
@@ -121,7 +121,7 @@ func TestD180_SwapRateFor_SettledNoQuoteFallbackSpec(t *testing.T) {
 		t.Fatalf("insert: %v", err)
 	}
 	e := &Engine{store: s, quotes: bus.New(), cfg: Config{}} // 无报价
-	bps, src := e.swapRateFor(ctx, "vA", "GBPJPY", "SELL")
+	bps, src := e.swapRateFor(ctx, "vA", "GBPJPY", "SELL", 0)
 	if src != swapSrcSpec {
 		t.Fatalf("source: want spec (no quote fallback), got %s", src)
 	}
@@ -149,7 +149,7 @@ func TestD180_SwapRateFor_MedianMultipleSettled(t *testing.T) {
 	qbus.Publish(bus.Quote{Symbol: "GBPJPY", Venue: "vA", VenueType: "mt5", Bid: 190.0, Ask: 190.02, VenueSymbol: "GBPJPY", Time: now})
 	qbus.Publish(bus.Quote{Symbol: "USDJPY", Venue: "fx", VenueType: "mt5", Bid: 150.0, Ask: 150.01, VenueSymbol: "USDJPY", Time: now})
 	e := &Engine{store: s, quotes: qbus, cfg: Config{}}
-	bps, src := e.swapRateFor(ctx, "vA", "GBPJPY", "SELL")
+	bps, src := e.swapRateFor(ctx, "vA", "GBPJPY", "SELL", 0)
 	if src != swapSrcSettled {
 		t.Fatalf("source: want settled, got %s", src)
 	}

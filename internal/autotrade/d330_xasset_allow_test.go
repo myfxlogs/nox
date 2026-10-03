@@ -66,9 +66,10 @@ func d330RegimeHealthy(t *testing.T, s *pgstore.Store) {
 	ctx := context.Background()
 	for i := 0; i < 13; i++ {
 		if _, err := s.Pool().Exec(ctx,
+			// D-027：carry 判定改 7d 滚动均值——基底抬到 17（均值 23%/yr）保持入场闸放行。
 			`INSERT INTO facts (kind, venue, symbol, value, unit, ts, src)
 			 VALUES ('funding', 'binance', 'XAUUSDT', $1, 'pct_annualized', $2, 'd330test')`,
-			5.0+float64(i), time.Now().Add(-time.Duration(13-i)*5*time.Minute)); err != nil {
+			17.0+float64(i), time.Now().Add(-time.Duration(13-i)*5*time.Minute)); err != nil {
 			t.Fatalf("seed funding fact %d: %v", i, err)
 		}
 	}
@@ -231,11 +232,12 @@ func TestD330_NormalPathIgnoresSpecMaxLongQty(t *testing.T) {
 	d330RegimeHealthy(t, s)
 	ctx := context.Background()
 	// D-014：小名义（$1000）下 17%/yr 回本≈7.7d>3d 会被 econ 入场闸拦——
-	// 补一条最新 150%/yr funding fact 使回本≤3d（本测试目标是 qty 正常路径非回本闸）。
+	// 补一批 150%/yr funding fact 使回本≤3d（本测试目标是 qty 正常路径非回本闸）。
+	// D-027：判定改 7d 滚动均值——需一组样本拉高均值而非单条瞬时值。
 	if _, err := s.Pool().Exec(ctx,
 		`INSERT INTO facts (kind, venue, symbol, value, unit, ts, src)
-		 VALUES ('funding','binance','XAUUSDT',150.0,'pct_annualized',$1,'d330test')`,
-		time.Now()); err != nil {
+		 SELECT 'funding','binance','XAUUSDT',150.0,'pct_annualized',
+			now() - (i || ' minutes')::interval,'d330test' FROM generate_series(0,47) i`); err != nil {
 		t.Fatalf("seed fresh funding: %v", err)
 	}
 	svc, qb := d330XAUService(1, 96.6) // perLot=$96.6 → qty=1000/96.6≈10.352 ≥ 0.01

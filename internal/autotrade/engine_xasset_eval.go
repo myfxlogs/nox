@@ -20,7 +20,12 @@ import (
 // D-378a 收编整合（Devin 复审）：本分支基线在 D-378a merge 前，收编时补 execDrift 步
 // 入链（序位 harvest 后 stop 前，与 D-378a SSOT 钉序一致）+ outcome/decision 归并序对齐。
 func (e *Engine) xassetExitCheck(ctx context.Context, p *pgstore.Position) (bool, string) {
-	netCarry, ok := e.recalcXAssetNetCarry(ctx, p)
+	// D-027：breach 量=滚动 3 日均值（瞬时费率周末零误杀实证）；MT 腿休市不累计 breach
+	// （trade_mode fact 非 Full → 本轮按缺数据语义过判定器=计数原样保留）。
+	netCarry, ok := e.recalcXAssetNetCarry(ctx, p, carryDeathMeanWindow)
+	if ok && e.mtLegMarketClosed(ctx, p) {
+		ok = false
+	}
 	var held time.Duration
 	if p.OpenedAt != nil {
 		held = time.Since(*p.OpenedAt)

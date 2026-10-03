@@ -53,7 +53,7 @@ func TestD256A_S1_SwapRateFor_NonSettleVenue(t *testing.T) {
 		t.Fatalf("insert: %v", err)
 	}
 	e := &Engine{store: s, quotes: bus.New(), cfg: Config{SwapNonSettleVenues: []string{"277842155:mt5"}}}
-	bps, src := e.swapRateFor(ctx, "277842155", "GBPJPY", "SELL")
+	bps, src := e.swapRateFor(ctx, "277842155", "GBPJPY", "SELL", 0)
 	if src != swapSrcSettled {
 		t.Fatalf("source: want settled (non-settle=真值0), got %s", src)
 	}

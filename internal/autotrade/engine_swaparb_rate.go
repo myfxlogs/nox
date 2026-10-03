@@ -37,7 +37,9 @@ var settledWindow = 7 * 24 * time.Hour
 // 折扣（SpecDiscount）不在此处应用——helper 返回原值，折扣由 S4 门禁按 source 判定后乘。
 // D-256-A S1：non-settle venue（实测不执行 swap 结算）→ 真值 0，source=settled（已知确定行为，
 // 使净额不被 spec 折扣；IC×Exness 净额 1.21→~1.4 厚度门禁更易过）。
-func (e *Engine) swapRateFor(ctx context.Context, venue, symbol, side string) (float64, string) {
+// specMeanWindow >0 → spec 源取窗内 facts 均值（D-027 carry 滚动口径，含周末零样本）；
+// ≤0 → 最新 spec fact（瞬时，与旧语义一致）。settled 源恒为 7d 窗口中位数不受影响。
+func (e *Engine) swapRateFor(ctx context.Context, venue, symbol, side string, specMeanWindow time.Duration) (float64, string) {
 	// D-256-A S1：non-settle venue guard——实测不结算=真值 0（非降级）。
 	if e.isNonSettleBareVenue(venue) {
 		return 0, swapSrcSettled
@@ -81,9 +83,20 @@ func (e *Engine) swapRateFor(ctx context.Context, venue, symbol, side string) (f
 	if side != "BUY" {
 		specKind = fact.KindSwapShort
 	}
-	specFacts, err := e.store.LatestFacts(ctx, specKind, venue, symbol)
-	if err == nil && len(specFacts) > 0 {
-		return specFacts[0].Value, swapSrcSpec
+	if specMeanWindow > 0 { // D-027：滚动均值口径（spec fact 按采集频度采样，窗内均值含周末零）
+		specFacts, err := e.store.FactsWithin(ctx, specKind, venue, symbol, time.Now().Add(-specMeanWindow))
+		if err == nil && len(specFacts) > 0 {
+			var sum float64
+			for _, f := range specFacts {
+				sum += f.Value
+			}
+			return sum / float64(len(specFacts)), swapSrcSpec
+		}
+	} else {
+		specFacts, err := e.store.LatestFacts(ctx, specKind, venue, symbol)
+		if err == nil && len(specFacts) > 0 {
+			return specFacts[0].Value, swapSrcSpec
+		}
 	}
 	// 3. none fail-closed
 	return 0, swapSrcNone
@@ -160,8 +173,8 @@ func medianFloat64(values []float64) float64 {
 // source 取两腿中较低优先级（settled>spec>none，任一 none → none fail-closed）。
 // 折扣不在此应用（helper 返回原值，S4 门禁按 source 判定）。
 func (e *Engine) swapRateForNet(ctx context.Context, venueLong, venueShort, symbol string) (float64, string) {
-	longBps, longSrc := e.swapRateFor(ctx, venueLong, symbol, "BUY")
-	shortBps, shortSrc := e.swapRateFor(ctx, venueShort, symbol, "SELL")
+	longBps, longSrc := e.swapRateFor(ctx, venueLong, symbol, "BUY", 0)
+	shortBps, shortSrc := e.swapRateFor(ctx, venueShort, symbol, "SELL", 0)
 	// 任一 none → fail-closed
 	if longSrc == swapSrcNone || shortSrc == swapSrcNone {
 		return 0, swapSrcNone

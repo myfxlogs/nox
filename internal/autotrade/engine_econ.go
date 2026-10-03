@@ -94,7 +94,7 @@ func (e *Engine) econSnapshot(ctx context.Context, p *pgstore.Position) (econ.Sn
 		return snap, fmt.Errorf("accrued cashflows: %w", err)
 	}
 	snap.AccruedUSD = accrued
-	netCarryPct, ok := e.recalcXAssetNetCarry(ctx, p)
+	netCarryPct, ok := e.recalcXAssetNetCarry(ctx, p, carryEconWindow) // D-027：7d 滚动均值
 	if !ok {
 		return snap, fmt.Errorf("carry facts 缺（fail-closed）")
 	}
@@ -168,11 +168,11 @@ func (e *Engine) econEntrySnapshot(ctx context.Context, opp pgstore.Opportunity,
 		sellCanonical = opp.Canonical
 	}
 	maxAge := e.cfg.SwapFactMaxAge
-	buyCarry, ok := e.xassetLegCarryAnnual(ctx, opp.VenueBuy, opp.Canonical, "BUY", maxAge)
+	buyCarry, ok := e.xassetLegCarryAnnual(ctx, opp.VenueBuy, opp.Canonical, "BUY", maxAge, carryEconWindow)
 	if !ok {
 		return snap, fmt.Errorf("买腿 carry 缺 %s %s", opp.VenueBuy, opp.Canonical)
 	}
-	sellCarry, ok := e.xassetLegCarryAnnual(ctx, opp.VenueSell, sellCanonical, "SELL", maxAge)
+	sellCarry, ok := e.xassetLegCarryAnnual(ctx, opp.VenueSell, sellCanonical, "SELL", maxAge, carryEconWindow)
 	if !ok {
 		return snap, fmt.Errorf("卖腿 carry 缺 %s %s", opp.VenueSell, sellCanonical)
 	}

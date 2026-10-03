@@ -44,8 +44,9 @@ func (e *Engine) checkExitCondition(ctx context.Context, p *pgstore.Position) (b
 	if p.Type == "FUNDING_HEDGE" || p.Type == "PERP_FUNDING" {
 		// D-133 T1：PERP_FUNDING 走持有下限 + 连续去抖（修复 D-129 瞬时费率判平致命缺陷）；
 		// FUNDING_HEDGE 保持旧语义（单次瞬时读数 ≤ 阈值即平，CFD 无结算窗概念）。
-		netFunding, ok := e.recalcNetFunding(ctx, p)
+		netFunding, ok := e.recalcNetFunding(ctx, p, 0) // FUNDING_HEDGE 旧语义（瞬时）
 		if p.Type == "PERP_FUNDING" {
+			netFunding, ok = e.recalcNetFunding(ctx, p, carryDeathMeanWindow) // D-027：3d 滚动均值
 			// D-133 T1：held = now − opened_at；opened_at nil（旧数据兜底）→ held=0（floor 未满，最安全）。
 			var held time.Duration
 			if p.OpenedAt != nil {
@@ -115,8 +116,8 @@ func (e *Engine) recalcNetSwap(ctx context.Context, p *pgstore.Position) (float6
 	sellBare := keydomain.BareOf(sellVenue)
 	// D-180 S2：swapRateFor 三态（settled 优先 → spec 兜底 → none fail-closed）。
 	// 止损用原值（不应用折扣——防误杀存量仓）。
-	longBps, longSrc := e.swapRateFor(ctx, buyBare, canonical, "BUY")
-	shortBps, shortSrc := e.swapRateFor(ctx, sellBare, canonical, "SELL")
+	longBps, longSrc := e.swapRateFor(ctx, buyBare, canonical, "BUY", 0)
+	shortBps, shortSrc := e.swapRateFor(ctx, sellBare, canonical, "SELL", 0)
 	if longSrc == swapSrcNone || shortSrc == swapSrcNone {
 		log.Printf("[autotrade] exit pos=%d: swapRateFor none (longSrc=%s shortSrc=%s) fail-closed",
 			p.ID, longSrc, shortSrc)
