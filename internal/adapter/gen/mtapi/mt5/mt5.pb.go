@@ -8442,51 +8442,7 @@ func (x *TickValueWithSizeReply) GetError() *Error {
 //	{
 //	 "id": "demo-token-mt5"
 //	}
-type ClusterDetailsRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Token returned by 'Connect' method [Required]
-	Id            string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ClusterDetailsRequest) Reset() {
-	*x = ClusterDetailsRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[86]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ClusterDetailsRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ClusterDetailsRequest) ProtoMessage() {}
-
-func (x *ClusterDetailsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[86]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ClusterDetailsRequest.ProtoReflect.Descriptor instead.
-func (*ClusterDetailsRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{86}
-}
-
-func (x *ClusterDetailsRequest) GetId() string {
-	if x != nil {
-		return x.Id
-	}
-	return ""
-}
-
+//
 // Server details from servers.dat
 type ServerRec struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -8500,7 +8456,7 @@ type ServerRec struct {
 
 func (x *ServerRec) Reset() {
 	*x = ServerRec{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[87]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8512,7 +8468,7 @@ func (x *ServerRec) String() string {
 func (*ServerRec) ProtoMessage() {}
 
 func (x *ServerRec) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[87]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8525,7 +8481,7 @@ func (x *ServerRec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerRec.ProtoReflect.Descriptor instead.
 func (*ServerRec) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{87}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *ServerRec) GetServerName() string {
@@ -8577,7 +8533,7 @@ type ChangePasswordRequest struct {
 
 func (x *ChangePasswordRequest) Reset() {
 	*x = ChangePasswordRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[88]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8589,7 +8545,7 @@ func (x *ChangePasswordRequest) String() string {
 func (*ChangePasswordRequest) ProtoMessage() {}
 
 func (x *ChangePasswordRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[88]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8602,7 +8558,7 @@ func (x *ChangePasswordRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChangePasswordRequest.ProtoReflect.Descriptor instead.
 func (*ChangePasswordRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{88}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *ChangePasswordRequest) GetId() string {
@@ -8636,7 +8592,7 @@ type ChangePasswordReply struct {
 
 func (x *ChangePasswordReply) Reset() {
 	*x = ChangePasswordReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[89]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8648,7 +8604,7 @@ func (x *ChangePasswordReply) String() string {
 func (*ChangePasswordReply) ProtoMessage() {}
 
 func (x *ChangePasswordReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[89]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8661,7 +8617,7 @@ func (x *ChangePasswordReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChangePasswordReply.ProtoReflect.Descriptor instead.
 func (*ChangePasswordReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{89}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *ChangePasswordReply) GetResult() string {
@@ -8693,7 +8649,7 @@ type MailsRequest struct {
 
 func (x *MailsRequest) Reset() {
 	*x = MailsRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[90]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8705,7 +8661,7 @@ func (x *MailsRequest) String() string {
 func (*MailsRequest) ProtoMessage() {}
 
 func (x *MailsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[90]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8718,7 +8674,7 @@ func (x *MailsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MailsRequest.ProtoReflect.Descriptor instead.
 func (*MailsRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{90}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *MailsRequest) GetId() string {
@@ -8742,7 +8698,7 @@ type MailMessage struct {
 
 func (x *MailMessage) Reset() {
 	*x = MailMessage{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[91]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8754,7 +8710,7 @@ func (x *MailMessage) String() string {
 func (*MailMessage) ProtoMessage() {}
 
 func (x *MailMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[91]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8767,7 +8723,7 @@ func (x *MailMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MailMessage.ProtoReflect.Descriptor instead.
 func (*MailMessage) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{91}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *MailMessage) GetId() int64 {
@@ -8822,7 +8778,7 @@ type MailsReply struct {
 
 func (x *MailsReply) Reset() {
 	*x = MailsReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[92]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8834,7 +8790,7 @@ func (x *MailsReply) String() string {
 func (*MailsReply) ProtoMessage() {}
 
 func (x *MailsReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[92]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8847,7 +8803,7 @@ func (x *MailsReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MailsReply.ProtoReflect.Descriptor instead.
 func (*MailsReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{92}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *MailsReply) GetResult() []*MailMessage {
@@ -8891,7 +8847,7 @@ type RequiredMarginRequest struct {
 
 func (x *RequiredMarginRequest) Reset() {
 	*x = RequiredMarginRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[93]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8903,7 +8859,7 @@ func (x *RequiredMarginRequest) String() string {
 func (*RequiredMarginRequest) ProtoMessage() {}
 
 func (x *RequiredMarginRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[93]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8916,7 +8872,7 @@ func (x *RequiredMarginRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequiredMarginRequest.ProtoReflect.Descriptor instead.
 func (*RequiredMarginRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{93}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{92}
 }
 
 func (x *RequiredMarginRequest) GetId() string {
@@ -8964,7 +8920,7 @@ type RequiredMarginReply struct {
 
 func (x *RequiredMarginReply) Reset() {
 	*x = RequiredMarginReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[94]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[93]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8976,7 +8932,7 @@ func (x *RequiredMarginReply) String() string {
 func (*RequiredMarginReply) ProtoMessage() {}
 
 func (x *RequiredMarginReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[94]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[93]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8989,7 +8945,7 @@ func (x *RequiredMarginReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequiredMarginReply.ProtoReflect.Descriptor instead.
 func (*RequiredMarginReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{94}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{93}
 }
 
 func (x *RequiredMarginReply) GetResult() float64 {
@@ -9032,7 +8988,7 @@ type PriceHistoryMonthRequest struct {
 
 func (x *PriceHistoryMonthRequest) Reset() {
 	*x = PriceHistoryMonthRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[95]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9044,7 +9000,7 @@ func (x *PriceHistoryMonthRequest) String() string {
 func (*PriceHistoryMonthRequest) ProtoMessage() {}
 
 func (x *PriceHistoryMonthRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[95]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9057,7 +9013,7 @@ func (x *PriceHistoryMonthRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PriceHistoryMonthRequest.ProtoReflect.Descriptor instead.
 func (*PriceHistoryMonthRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{95}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{94}
 }
 
 func (x *PriceHistoryMonthRequest) GetId() string {
@@ -9119,7 +9075,7 @@ type Bar struct {
 
 func (x *Bar) Reset() {
 	*x = Bar{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[96]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[95]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9131,7 +9087,7 @@ func (x *Bar) String() string {
 func (*Bar) ProtoMessage() {}
 
 func (x *Bar) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[96]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[95]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9144,7 +9100,7 @@ func (x *Bar) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Bar.ProtoReflect.Descriptor instead.
 func (*Bar) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{96}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{95}
 }
 
 func (x *Bar) GetTime() *timestamppb.Timestamp {
@@ -9213,7 +9169,7 @@ type PriceHistoryMonthReply struct {
 
 func (x *PriceHistoryMonthReply) Reset() {
 	*x = PriceHistoryMonthReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[97]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[96]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9225,7 +9181,7 @@ func (x *PriceHistoryMonthReply) String() string {
 func (*PriceHistoryMonthReply) ProtoMessage() {}
 
 func (x *PriceHistoryMonthReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[97]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[96]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9238,7 +9194,7 @@ func (x *PriceHistoryMonthReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PriceHistoryMonthReply.ProtoReflect.Descriptor instead.
 func (*PriceHistoryMonthReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{97}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{96}
 }
 
 func (x *PriceHistoryMonthReply) GetResult() []*Bar {
@@ -9280,7 +9236,7 @@ type PriceHistoryMonthManyRequest struct {
 
 func (x *PriceHistoryMonthManyRequest) Reset() {
 	*x = PriceHistoryMonthManyRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[98]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[97]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9292,7 +9248,7 @@ func (x *PriceHistoryMonthManyRequest) String() string {
 func (*PriceHistoryMonthManyRequest) ProtoMessage() {}
 
 func (x *PriceHistoryMonthManyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[98]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[97]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9305,7 +9261,7 @@ func (x *PriceHistoryMonthManyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PriceHistoryMonthManyRequest.ProtoReflect.Descriptor instead.
 func (*PriceHistoryMonthManyRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{98}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{97}
 }
 
 func (x *PriceHistoryMonthManyRequest) GetId() string {
@@ -9370,7 +9326,7 @@ type PriceHistoryTodayRequest struct {
 
 func (x *PriceHistoryTodayRequest) Reset() {
 	*x = PriceHistoryTodayRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[99]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9382,7 +9338,7 @@ func (x *PriceHistoryTodayRequest) String() string {
 func (*PriceHistoryTodayRequest) ProtoMessage() {}
 
 func (x *PriceHistoryTodayRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[99]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9395,7 +9351,7 @@ func (x *PriceHistoryTodayRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PriceHistoryTodayRequest.ProtoReflect.Descriptor instead.
 func (*PriceHistoryTodayRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{99}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{98}
 }
 
 func (x *PriceHistoryTodayRequest) GetId() string {
@@ -9429,7 +9385,7 @@ type PriceHistoryTodayReply struct {
 
 func (x *PriceHistoryTodayReply) Reset() {
 	*x = PriceHistoryTodayReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[100]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9441,7 +9397,7 @@ func (x *PriceHistoryTodayReply) String() string {
 func (*PriceHistoryTodayReply) ProtoMessage() {}
 
 func (x *PriceHistoryTodayReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[100]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9454,7 +9410,7 @@ func (x *PriceHistoryTodayReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PriceHistoryTodayReply.ProtoReflect.Descriptor instead.
 func (*PriceHistoryTodayReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{100}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{99}
 }
 
 func (x *PriceHistoryTodayReply) GetResult() []*Bar {
@@ -9490,7 +9446,7 @@ type PriceHistoryTodayManyRequest struct {
 
 func (x *PriceHistoryTodayManyRequest) Reset() {
 	*x = PriceHistoryTodayManyRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[101]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9502,7 +9458,7 @@ func (x *PriceHistoryTodayManyRequest) String() string {
 func (*PriceHistoryTodayManyRequest) ProtoMessage() {}
 
 func (x *PriceHistoryTodayManyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[101]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9515,7 +9471,7 @@ func (x *PriceHistoryTodayManyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PriceHistoryTodayManyRequest.ProtoReflect.Descriptor instead.
 func (*PriceHistoryTodayManyRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{101}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *PriceHistoryTodayManyRequest) GetId() string {
@@ -9549,7 +9505,7 @@ type PriceHistoryTodayManyReply struct {
 
 func (x *PriceHistoryTodayManyReply) Reset() {
 	*x = PriceHistoryTodayManyReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[102]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[101]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9561,7 +9517,7 @@ func (x *PriceHistoryTodayManyReply) String() string {
 func (*PriceHistoryTodayManyReply) ProtoMessage() {}
 
 func (x *PriceHistoryTodayManyReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[102]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[101]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9574,7 +9530,7 @@ func (x *PriceHistoryTodayManyReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PriceHistoryTodayManyReply.ProtoReflect.Descriptor instead.
 func (*PriceHistoryTodayManyReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{102}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{101}
 }
 
 func (x *PriceHistoryTodayManyReply) GetResult() []*QuoteHistoryEventArgs {
@@ -9617,7 +9573,7 @@ type PriceHistoryRequest struct {
 
 func (x *PriceHistoryRequest) Reset() {
 	*x = PriceHistoryRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[103]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[102]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9629,7 +9585,7 @@ func (x *PriceHistoryRequest) String() string {
 func (*PriceHistoryRequest) ProtoMessage() {}
 
 func (x *PriceHistoryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[103]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[102]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9642,7 +9598,7 @@ func (x *PriceHistoryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PriceHistoryRequest.ProtoReflect.Descriptor instead.
 func (*PriceHistoryRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{103}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{102}
 }
 
 func (x *PriceHistoryRequest) GetId() string {
@@ -9690,7 +9646,7 @@ type PriceHistoryReply struct {
 
 func (x *PriceHistoryReply) Reset() {
 	*x = PriceHistoryReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[104]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9702,7 +9658,7 @@ func (x *PriceHistoryReply) String() string {
 func (*PriceHistoryReply) ProtoMessage() {}
 
 func (x *PriceHistoryReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[104]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9715,7 +9671,7 @@ func (x *PriceHistoryReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PriceHistoryReply.ProtoReflect.Descriptor instead.
 func (*PriceHistoryReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{104}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{103}
 }
 
 func (x *PriceHistoryReply) GetResult() []*Bar {
@@ -9758,7 +9714,7 @@ type PriceHistoryHighLowRequest struct {
 
 func (x *PriceHistoryHighLowRequest) Reset() {
 	*x = PriceHistoryHighLowRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[105]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[104]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9770,7 +9726,7 @@ func (x *PriceHistoryHighLowRequest) String() string {
 func (*PriceHistoryHighLowRequest) ProtoMessage() {}
 
 func (x *PriceHistoryHighLowRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[105]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[104]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9783,7 +9739,7 @@ func (x *PriceHistoryHighLowRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PriceHistoryHighLowRequest.ProtoReflect.Descriptor instead.
 func (*PriceHistoryHighLowRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{105}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{104}
 }
 
 func (x *PriceHistoryHighLowRequest) GetId() string {
@@ -9831,7 +9787,7 @@ type PriceHistoryHighLowReply struct {
 
 func (x *PriceHistoryHighLowReply) Reset() {
 	*x = PriceHistoryHighLowReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[106]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[105]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9843,7 +9799,7 @@ func (x *PriceHistoryHighLowReply) String() string {
 func (*PriceHistoryHighLowReply) ProtoMessage() {}
 
 func (x *PriceHistoryHighLowReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[106]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[105]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9856,7 +9812,7 @@ func (x *PriceHistoryHighLowReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PriceHistoryHighLowReply.ProtoReflect.Descriptor instead.
 func (*PriceHistoryHighLowReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{106}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{105}
 }
 
 func (x *PriceHistoryHighLowReply) GetResult() *Bar {
@@ -9881,7 +9837,7 @@ type PingRequest struct {
 
 func (x *PingRequest) Reset() {
 	*x = PingRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[107]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[106]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9893,7 +9849,7 @@ func (x *PingRequest) String() string {
 func (*PingRequest) ProtoMessage() {}
 
 func (x *PingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[107]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[106]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9906,7 +9862,7 @@ func (x *PingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingRequest.ProtoReflect.Descriptor instead.
 func (*PingRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{107}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{106}
 }
 
 type PingReply struct {
@@ -9919,7 +9875,7 @@ type PingReply struct {
 
 func (x *PingReply) Reset() {
 	*x = PingReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[108]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[107]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9931,7 +9887,7 @@ func (x *PingReply) String() string {
 func (*PingReply) ProtoMessage() {}
 
 func (x *PingReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[108]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[107]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9944,7 +9900,7 @@ func (x *PingReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingReply.ProtoReflect.Descriptor instead.
 func (*PingReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{108}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{107}
 }
 
 func (x *PingReply) GetResult() string {
@@ -9969,7 +9925,7 @@ type HealthRequest struct {
 
 func (x *HealthRequest) Reset() {
 	*x = HealthRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[109]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[108]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9981,7 +9937,7 @@ func (x *HealthRequest) String() string {
 func (*HealthRequest) ProtoMessage() {}
 
 func (x *HealthRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[109]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[108]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9994,7 +9950,7 @@ func (x *HealthRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthRequest.ProtoReflect.Descriptor instead.
 func (*HealthRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{109}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{108}
 }
 
 type HealthReply struct {
@@ -10007,7 +9963,7 @@ type HealthReply struct {
 
 func (x *HealthReply) Reset() {
 	*x = HealthReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[110]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[109]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10019,7 +9975,7 @@ func (x *HealthReply) String() string {
 func (*HealthReply) ProtoMessage() {}
 
 func (x *HealthReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[110]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[109]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10032,7 +9988,7 @@ func (x *HealthReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthReply.ProtoReflect.Descriptor instead.
 func (*HealthReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{110}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{109}
 }
 
 func (x *HealthReply) GetResult() string {
@@ -10067,7 +10023,7 @@ type PingHostRequest struct {
 
 func (x *PingHostRequest) Reset() {
 	*x = PingHostRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[111]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[110]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10079,7 +10035,7 @@ func (x *PingHostRequest) String() string {
 func (*PingHostRequest) ProtoMessage() {}
 
 func (x *PingHostRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[111]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[110]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10092,7 +10048,7 @@ func (x *PingHostRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingHostRequest.ProtoReflect.Descriptor instead.
 func (*PingHostRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{111}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{110}
 }
 
 func (x *PingHostRequest) GetHost() string {
@@ -10119,7 +10075,7 @@ type PingHostReply struct {
 
 func (x *PingHostReply) Reset() {
 	*x = PingHostReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[112]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[111]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10131,7 +10087,7 @@ func (x *PingHostReply) String() string {
 func (*PingHostReply) ProtoMessage() {}
 
 func (x *PingHostReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[112]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[111]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10144,7 +10100,7 @@ func (x *PingHostReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingHostReply.ProtoReflect.Descriptor instead.
 func (*PingHostReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{112}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{111}
 }
 
 func (x *PingHostReply) GetResult() int32 {
@@ -10179,7 +10135,7 @@ type PingHostManyRequest struct {
 
 func (x *PingHostManyRequest) Reset() {
 	*x = PingHostManyRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[113]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[112]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10191,7 +10147,7 @@ func (x *PingHostManyRequest) String() string {
 func (*PingHostManyRequest) ProtoMessage() {}
 
 func (x *PingHostManyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[113]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[112]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10204,7 +10160,7 @@ func (x *PingHostManyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingHostManyRequest.ProtoReflect.Descriptor instead.
 func (*PingHostManyRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{113}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{112}
 }
 
 func (x *PingHostManyRequest) GetHost() []string {
@@ -10231,7 +10187,7 @@ type PingHostManyReply struct {
 
 func (x *PingHostManyReply) Reset() {
 	*x = PingHostManyReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[114]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[113]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10243,7 +10199,7 @@ func (x *PingHostManyReply) String() string {
 func (*PingHostManyReply) ProtoMessage() {}
 
 func (x *PingHostManyReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[114]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[113]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10256,7 +10212,7 @@ func (x *PingHostManyReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingHostManyReply.ProtoReflect.Descriptor instead.
 func (*PingHostManyReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{114}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{113}
 }
 
 func (x *PingHostManyReply) GetResult() []int32 {
@@ -10281,7 +10237,7 @@ type MemorySnapshotRequest struct {
 
 func (x *MemorySnapshotRequest) Reset() {
 	*x = MemorySnapshotRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[115]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[114]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10293,7 +10249,7 @@ func (x *MemorySnapshotRequest) String() string {
 func (*MemorySnapshotRequest) ProtoMessage() {}
 
 func (x *MemorySnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[115]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[114]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10306,7 +10262,7 @@ func (x *MemorySnapshotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemorySnapshotRequest.ProtoReflect.Descriptor instead.
 func (*MemorySnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{115}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{114}
 }
 
 type MemorySnapshotReply struct {
@@ -10319,7 +10275,7 @@ type MemorySnapshotReply struct {
 
 func (x *MemorySnapshotReply) Reset() {
 	*x = MemorySnapshotReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[116]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[115]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10331,7 +10287,7 @@ func (x *MemorySnapshotReply) String() string {
 func (*MemorySnapshotReply) ProtoMessage() {}
 
 func (x *MemorySnapshotReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[116]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[115]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10344,7 +10300,7 @@ func (x *MemorySnapshotReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemorySnapshotReply.ProtoReflect.Descriptor instead.
 func (*MemorySnapshotReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{116}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{115}
 }
 
 func (x *MemorySnapshotReply) GetResult() string {
@@ -10376,7 +10332,7 @@ type SearchRequest struct {
 
 func (x *SearchRequest) Reset() {
 	*x = SearchRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[117]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[116]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10388,7 +10344,7 @@ func (x *SearchRequest) String() string {
 func (*SearchRequest) ProtoMessage() {}
 
 func (x *SearchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[117]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[116]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10401,7 +10357,7 @@ func (x *SearchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchRequest.ProtoReflect.Descriptor instead.
 func (*SearchRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{117}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{116}
 }
 
 func (x *SearchRequest) GetCompany() string {
@@ -10421,7 +10377,7 @@ type Company struct {
 
 func (x *Company) Reset() {
 	*x = Company{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[118]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[117]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10433,7 +10389,7 @@ func (x *Company) String() string {
 func (*Company) ProtoMessage() {}
 
 func (x *Company) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[118]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[117]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10446,7 +10402,7 @@ func (x *Company) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Company.ProtoReflect.Descriptor instead.
 func (*Company) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{118}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{117}
 }
 
 func (x *Company) GetCompanyName() string {
@@ -10473,7 +10429,7 @@ type Result struct {
 
 func (x *Result) Reset() {
 	*x = Result{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[119]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[118]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10485,7 +10441,7 @@ func (x *Result) String() string {
 func (*Result) ProtoMessage() {}
 
 func (x *Result) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[119]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[118]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10498,7 +10454,7 @@ func (x *Result) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Result.ProtoReflect.Descriptor instead.
 func (*Result) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{119}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{118}
 }
 
 func (x *Result) GetName() string {
@@ -10525,7 +10481,7 @@ type SearchReply struct {
 
 func (x *SearchReply) Reset() {
 	*x = SearchReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[120]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[119]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10537,7 +10493,7 @@ func (x *SearchReply) String() string {
 func (*SearchReply) ProtoMessage() {}
 
 func (x *SearchReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[120]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[119]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10550,7 +10506,7 @@ func (x *SearchReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchReply.ProtoReflect.Descriptor instead.
 func (*SearchReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{120}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{119}
 }
 
 func (x *SearchReply) GetResult() []*Company {
@@ -10575,7 +10531,7 @@ type GetClientsRequest struct {
 
 func (x *GetClientsRequest) Reset() {
 	*x = GetClientsRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[121]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[120]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10587,7 +10543,7 @@ func (x *GetClientsRequest) String() string {
 func (*GetClientsRequest) ProtoMessage() {}
 
 func (x *GetClientsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[121]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[120]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10600,7 +10556,7 @@ func (x *GetClientsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetClientsRequest.ProtoReflect.Descriptor instead.
 func (*GetClientsRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{121}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{120}
 }
 
 // Client ID with connection status
@@ -10624,7 +10580,7 @@ type ClientStatus struct {
 
 func (x *ClientStatus) Reset() {
 	*x = ClientStatus{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[122]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[121]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10636,7 +10592,7 @@ func (x *ClientStatus) String() string {
 func (*ClientStatus) ProtoMessage() {}
 
 func (x *ClientStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[122]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[121]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10649,7 +10605,7 @@ func (x *ClientStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientStatus.ProtoReflect.Descriptor instead.
 func (*ClientStatus) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{122}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{121}
 }
 
 func (x *ClientStatus) GetId() string {
@@ -10704,7 +10660,7 @@ type GetClientsReply struct {
 
 func (x *GetClientsReply) Reset() {
 	*x = GetClientsReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[123]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[122]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10716,7 +10672,7 @@ func (x *GetClientsReply) String() string {
 func (*GetClientsReply) ProtoMessage() {}
 
 func (x *GetClientsReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[123]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[122]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10729,7 +10685,7 @@ func (x *GetClientsReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetClientsReply.ProtoReflect.Descriptor instead.
 func (*GetClientsReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{123}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{122}
 }
 
 func (x *GetClientsReply) GetResult() []*ClientStatus {
@@ -10764,7 +10720,7 @@ type GetDemoRequest struct {
 
 func (x *GetDemoRequest) Reset() {
 	*x = GetDemoRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[124]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[123]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10776,7 +10732,7 @@ func (x *GetDemoRequest) String() string {
 func (*GetDemoRequest) ProtoMessage() {}
 
 func (x *GetDemoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[124]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[123]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10789,7 +10745,7 @@ func (x *GetDemoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDemoRequest.ProtoReflect.Descriptor instead.
 func (*GetDemoRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{124}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{123}
 }
 
 func (x *GetDemoRequest) GetHost() string {
@@ -10817,7 +10773,7 @@ type AccountAnswer struct {
 
 func (x *AccountAnswer) Reset() {
 	*x = AccountAnswer{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[125]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[124]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10829,7 +10785,7 @@ func (x *AccountAnswer) String() string {
 func (*AccountAnswer) ProtoMessage() {}
 
 func (x *AccountAnswer) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[125]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[124]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10842,7 +10798,7 @@ func (x *AccountAnswer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccountAnswer.ProtoReflect.Descriptor instead.
 func (*AccountAnswer) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{125}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{124}
 }
 
 func (x *AccountAnswer) GetLogin() uint64 {
@@ -10876,7 +10832,7 @@ type GetDemoReply struct {
 
 func (x *GetDemoReply) Reset() {
 	*x = GetDemoReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[126]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[125]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10888,7 +10844,7 @@ func (x *GetDemoReply) String() string {
 func (*GetDemoReply) ProtoMessage() {}
 
 func (x *GetDemoReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[126]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[125]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10901,7 +10857,7 @@ func (x *GetDemoReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDemoReply.ProtoReflect.Descriptor instead.
 func (*GetDemoReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{126}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{125}
 }
 
 func (x *GetDemoReply) GetResult() *AccountAnswer {
@@ -10939,7 +10895,7 @@ type SubscribeRequest struct {
 
 func (x *SubscribeRequest) Reset() {
 	*x = SubscribeRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[127]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[126]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10951,7 +10907,7 @@ func (x *SubscribeRequest) String() string {
 func (*SubscribeRequest) ProtoMessage() {}
 
 func (x *SubscribeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[127]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[126]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10964,7 +10920,7 @@ func (x *SubscribeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeRequest.ProtoReflect.Descriptor instead.
 func (*SubscribeRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{127}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{126}
 }
 
 func (x *SubscribeRequest) GetId() string {
@@ -10998,7 +10954,7 @@ type SubscribeReply struct {
 
 func (x *SubscribeReply) Reset() {
 	*x = SubscribeReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[128]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[127]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11010,7 +10966,7 @@ func (x *SubscribeReply) String() string {
 func (*SubscribeReply) ProtoMessage() {}
 
 func (x *SubscribeReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[128]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[127]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11023,7 +10979,7 @@ func (x *SubscribeReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeReply.ProtoReflect.Descriptor instead.
 func (*SubscribeReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{128}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{127}
 }
 
 func (x *SubscribeReply) GetResult() string {
@@ -11060,7 +11016,7 @@ type SubscribeManyRequest struct {
 
 func (x *SubscribeManyRequest) Reset() {
 	*x = SubscribeManyRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[129]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[128]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11072,7 +11028,7 @@ func (x *SubscribeManyRequest) String() string {
 func (*SubscribeManyRequest) ProtoMessage() {}
 
 func (x *SubscribeManyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[129]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[128]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11085,7 +11041,7 @@ func (x *SubscribeManyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeManyRequest.ProtoReflect.Descriptor instead.
 func (*SubscribeManyRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{129}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{128}
 }
 
 func (x *SubscribeManyRequest) GetId() string {
@@ -11119,7 +11075,7 @@ type SubscribeManyReply struct {
 
 func (x *SubscribeManyReply) Reset() {
 	*x = SubscribeManyReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[130]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[129]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11131,7 +11087,7 @@ func (x *SubscribeManyReply) String() string {
 func (*SubscribeManyReply) ProtoMessage() {}
 
 func (x *SubscribeManyReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[130]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[129]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11144,7 +11100,7 @@ func (x *SubscribeManyReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeManyReply.ProtoReflect.Descriptor instead.
 func (*SubscribeManyReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{130}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{129}
 }
 
 func (x *SubscribeManyReply) GetResult() string {
@@ -11179,7 +11135,7 @@ type UnSubscribeRequest struct {
 
 func (x *UnSubscribeRequest) Reset() {
 	*x = UnSubscribeRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[131]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[130]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11191,7 +11147,7 @@ func (x *UnSubscribeRequest) String() string {
 func (*UnSubscribeRequest) ProtoMessage() {}
 
 func (x *UnSubscribeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[131]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[130]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11204,7 +11160,7 @@ func (x *UnSubscribeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnSubscribeRequest.ProtoReflect.Descriptor instead.
 func (*UnSubscribeRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{131}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{130}
 }
 
 func (x *UnSubscribeRequest) GetId() string {
@@ -11231,7 +11187,7 @@ type UnSubscribeReply struct {
 
 func (x *UnSubscribeReply) Reset() {
 	*x = UnSubscribeReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[132]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[131]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11243,7 +11199,7 @@ func (x *UnSubscribeReply) String() string {
 func (*UnSubscribeReply) ProtoMessage() {}
 
 func (x *UnSubscribeReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[132]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[131]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11256,7 +11212,7 @@ func (x *UnSubscribeReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnSubscribeReply.ProtoReflect.Descriptor instead.
 func (*UnSubscribeReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{132}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{131}
 }
 
 func (x *UnSubscribeReply) GetResult() string {
@@ -11290,7 +11246,7 @@ type UnSubscribeManyRequest struct {
 
 func (x *UnSubscribeManyRequest) Reset() {
 	*x = UnSubscribeManyRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[133]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[132]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11302,7 +11258,7 @@ func (x *UnSubscribeManyRequest) String() string {
 func (*UnSubscribeManyRequest) ProtoMessage() {}
 
 func (x *UnSubscribeManyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[133]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[132]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11315,7 +11271,7 @@ func (x *UnSubscribeManyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnSubscribeManyRequest.ProtoReflect.Descriptor instead.
 func (*UnSubscribeManyRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{133}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{132}
 }
 
 func (x *UnSubscribeManyRequest) GetId() string {
@@ -11342,7 +11298,7 @@ type UnSubscribeManyReply struct {
 
 func (x *UnSubscribeManyReply) Reset() {
 	*x = UnSubscribeManyReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[134]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[133]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11354,7 +11310,7 @@ func (x *UnSubscribeManyReply) String() string {
 func (*UnSubscribeManyReply) ProtoMessage() {}
 
 func (x *UnSubscribeManyReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[134]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[133]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11367,7 +11323,7 @@ func (x *UnSubscribeManyReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnSubscribeManyReply.ProtoReflect.Descriptor instead.
 func (*UnSubscribeManyReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{134}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{133}
 }
 
 func (x *UnSubscribeManyReply) GetResult() string {
@@ -11399,7 +11355,7 @@ type SubscribeOrderProfitRequest struct {
 
 func (x *SubscribeOrderProfitRequest) Reset() {
 	*x = SubscribeOrderProfitRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[135]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[134]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11411,7 +11367,7 @@ func (x *SubscribeOrderProfitRequest) String() string {
 func (*SubscribeOrderProfitRequest) ProtoMessage() {}
 
 func (x *SubscribeOrderProfitRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[135]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[134]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11424,7 +11380,7 @@ func (x *SubscribeOrderProfitRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeOrderProfitRequest.ProtoReflect.Descriptor instead.
 func (*SubscribeOrderProfitRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{135}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{134}
 }
 
 func (x *SubscribeOrderProfitRequest) GetId() string {
@@ -11444,7 +11400,7 @@ type SubscribeOrderProfitReply struct {
 
 func (x *SubscribeOrderProfitReply) Reset() {
 	*x = SubscribeOrderProfitReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[136]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[135]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11456,7 +11412,7 @@ func (x *SubscribeOrderProfitReply) String() string {
 func (*SubscribeOrderProfitReply) ProtoMessage() {}
 
 func (x *SubscribeOrderProfitReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[136]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[135]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11469,7 +11425,7 @@ func (x *SubscribeOrderProfitReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeOrderProfitReply.ProtoReflect.Descriptor instead.
 func (*SubscribeOrderProfitReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{136}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{135}
 }
 
 func (x *SubscribeOrderProfitReply) GetResult() []*Order {
@@ -11507,7 +11463,7 @@ type SubscribeTickValueRequest struct {
 
 func (x *SubscribeTickValueRequest) Reset() {
 	*x = SubscribeTickValueRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[137]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[136]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11519,7 +11475,7 @@ func (x *SubscribeTickValueRequest) String() string {
 func (*SubscribeTickValueRequest) ProtoMessage() {}
 
 func (x *SubscribeTickValueRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[137]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[136]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11532,7 +11488,7 @@ func (x *SubscribeTickValueRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeTickValueRequest.ProtoReflect.Descriptor instead.
 func (*SubscribeTickValueRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{137}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{136}
 }
 
 func (x *SubscribeTickValueRequest) GetId() string {
@@ -11566,7 +11522,7 @@ type SubscribeTickValueReply struct {
 
 func (x *SubscribeTickValueReply) Reset() {
 	*x = SubscribeTickValueReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[138]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[137]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11578,7 +11534,7 @@ func (x *SubscribeTickValueReply) String() string {
 func (*SubscribeTickValueReply) ProtoMessage() {}
 
 func (x *SubscribeTickValueReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[138]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[137]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11591,7 +11547,7 @@ func (x *SubscribeTickValueReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeTickValueReply.ProtoReflect.Descriptor instead.
 func (*SubscribeTickValueReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{138}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{137}
 }
 
 func (x *SubscribeTickValueReply) GetResult() string {
@@ -11623,7 +11579,7 @@ type SubscribeOrderUpdateRequest struct {
 
 func (x *SubscribeOrderUpdateRequest) Reset() {
 	*x = SubscribeOrderUpdateRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[139]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[138]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11635,7 +11591,7 @@ func (x *SubscribeOrderUpdateRequest) String() string {
 func (*SubscribeOrderUpdateRequest) ProtoMessage() {}
 
 func (x *SubscribeOrderUpdateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[139]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[138]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11648,7 +11604,7 @@ func (x *SubscribeOrderUpdateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeOrderUpdateRequest.ProtoReflect.Descriptor instead.
 func (*SubscribeOrderUpdateRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{139}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{138}
 }
 
 func (x *SubscribeOrderUpdateRequest) GetId() string {
@@ -11668,7 +11624,7 @@ type SubscribeOrderUpdateReply struct {
 
 func (x *SubscribeOrderUpdateReply) Reset() {
 	*x = SubscribeOrderUpdateReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[140]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[139]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11680,7 +11636,7 @@ func (x *SubscribeOrderUpdateReply) String() string {
 func (*SubscribeOrderUpdateReply) ProtoMessage() {}
 
 func (x *SubscribeOrderUpdateReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[140]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[139]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11693,7 +11649,7 @@ func (x *SubscribeOrderUpdateReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeOrderUpdateReply.ProtoReflect.Descriptor instead.
 func (*SubscribeOrderUpdateReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{140}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{139}
 }
 
 func (x *SubscribeOrderUpdateReply) GetResult() []*Order {
@@ -11725,7 +11681,7 @@ type SubscribeMarketWatchRequest struct {
 
 func (x *SubscribeMarketWatchRequest) Reset() {
 	*x = SubscribeMarketWatchRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[141]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[140]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11737,7 +11693,7 @@ func (x *SubscribeMarketWatchRequest) String() string {
 func (*SubscribeMarketWatchRequest) ProtoMessage() {}
 
 func (x *SubscribeMarketWatchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[141]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[140]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11750,7 +11706,7 @@ func (x *SubscribeMarketWatchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeMarketWatchRequest.ProtoReflect.Descriptor instead.
 func (*SubscribeMarketWatchRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{141}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{140}
 }
 
 func (x *SubscribeMarketWatchRequest) GetId() string {
@@ -11770,7 +11726,7 @@ type SubscribeMarketWatchReply struct {
 
 func (x *SubscribeMarketWatchReply) Reset() {
 	*x = SubscribeMarketWatchReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[142]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[141]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11782,7 +11738,7 @@ func (x *SubscribeMarketWatchReply) String() string {
 func (*SubscribeMarketWatchReply) ProtoMessage() {}
 
 func (x *SubscribeMarketWatchReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[142]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[141]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11795,7 +11751,7 @@ func (x *SubscribeMarketWatchReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeMarketWatchReply.ProtoReflect.Descriptor instead.
 func (*SubscribeMarketWatchReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{142}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{141}
 }
 
 func (x *SubscribeMarketWatchReply) GetResult() string {
@@ -11830,7 +11786,7 @@ type SubscribeOpenedOrdersTicketsRequest struct {
 
 func (x *SubscribeOpenedOrdersTicketsRequest) Reset() {
 	*x = SubscribeOpenedOrdersTicketsRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[143]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[142]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11842,7 +11798,7 @@ func (x *SubscribeOpenedOrdersTicketsRequest) String() string {
 func (*SubscribeOpenedOrdersTicketsRequest) ProtoMessage() {}
 
 func (x *SubscribeOpenedOrdersTicketsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[143]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[142]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11855,7 +11811,7 @@ func (x *SubscribeOpenedOrdersTicketsRequest) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use SubscribeOpenedOrdersTicketsRequest.ProtoReflect.Descriptor instead.
 func (*SubscribeOpenedOrdersTicketsRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{143}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{142}
 }
 
 func (x *SubscribeOpenedOrdersTicketsRequest) GetId() string {
@@ -11882,7 +11838,7 @@ type SubscribeOpenedOrdersTicketsReply struct {
 
 func (x *SubscribeOpenedOrdersTicketsReply) Reset() {
 	*x = SubscribeOpenedOrdersTicketsReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[144]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[143]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11894,7 +11850,7 @@ func (x *SubscribeOpenedOrdersTicketsReply) String() string {
 func (*SubscribeOpenedOrdersTicketsReply) ProtoMessage() {}
 
 func (x *SubscribeOpenedOrdersTicketsReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[144]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[143]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11907,7 +11863,7 @@ func (x *SubscribeOpenedOrdersTicketsReply) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use SubscribeOpenedOrdersTicketsReply.ProtoReflect.Descriptor instead.
 func (*SubscribeOpenedOrdersTicketsReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{144}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{143}
 }
 
 func (x *SubscribeOpenedOrdersTicketsReply) GetResult() string {
@@ -11948,7 +11904,7 @@ type TickHistoryRequestRequest struct {
 
 func (x *TickHistoryRequestRequest) Reset() {
 	*x = TickHistoryRequestRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[145]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[144]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11960,7 +11916,7 @@ func (x *TickHistoryRequestRequest) String() string {
 func (*TickHistoryRequestRequest) ProtoMessage() {}
 
 func (x *TickHistoryRequestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[145]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[144]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11973,7 +11929,7 @@ func (x *TickHistoryRequestRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TickHistoryRequestRequest.ProtoReflect.Descriptor instead.
 func (*TickHistoryRequestRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{145}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{144}
 }
 
 func (x *TickHistoryRequestRequest) GetId() string {
@@ -12021,7 +11977,7 @@ type TickHistoryRequestReply struct {
 
 func (x *TickHistoryRequestReply) Reset() {
 	*x = TickHistoryRequestReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[146]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[145]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12033,7 +11989,7 @@ func (x *TickHistoryRequestReply) String() string {
 func (*TickHistoryRequestReply) ProtoMessage() {}
 
 func (x *TickHistoryRequestReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[146]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[145]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12046,7 +12002,7 @@ func (x *TickHistoryRequestReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TickHistoryRequestReply.ProtoReflect.Descriptor instead.
 func (*TickHistoryRequestReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{146}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{145}
 }
 
 func (x *TickHistoryRequestReply) GetResult() string {
@@ -12081,7 +12037,7 @@ type TickHistoryStopRequest struct {
 
 func (x *TickHistoryStopRequest) Reset() {
 	*x = TickHistoryStopRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[147]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[146]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12093,7 +12049,7 @@ func (x *TickHistoryStopRequest) String() string {
 func (*TickHistoryStopRequest) ProtoMessage() {}
 
 func (x *TickHistoryStopRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[147]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[146]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12106,7 +12062,7 @@ func (x *TickHistoryStopRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TickHistoryStopRequest.ProtoReflect.Descriptor instead.
 func (*TickHistoryStopRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{147}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{146}
 }
 
 func (x *TickHistoryStopRequest) GetId() string {
@@ -12133,7 +12089,7 @@ type TickHistoryStopReply struct {
 
 func (x *TickHistoryStopReply) Reset() {
 	*x = TickHistoryStopReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[148]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[147]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12145,7 +12101,7 @@ func (x *TickHistoryStopReply) String() string {
 func (*TickHistoryStopReply) ProtoMessage() {}
 
 func (x *TickHistoryStopReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[148]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[147]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12158,7 +12114,7 @@ func (x *TickHistoryStopReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TickHistoryStopReply.ProtoReflect.Descriptor instead.
 func (*TickHistoryStopReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{148}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{147}
 }
 
 func (x *TickHistoryStopReply) GetResult() string {
@@ -12227,7 +12183,7 @@ type OrderSendRequest struct {
 
 func (x *OrderSendRequest) Reset() {
 	*x = OrderSendRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[149]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[148]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12239,7 +12195,7 @@ func (x *OrderSendRequest) String() string {
 func (*OrderSendRequest) ProtoMessage() {}
 
 func (x *OrderSendRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[149]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[148]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12252,7 +12208,7 @@ func (x *OrderSendRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderSendRequest.ProtoReflect.Descriptor instead.
 func (*OrderSendRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{149}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{148}
 }
 
 func (x *OrderSendRequest) GetId() string {
@@ -12363,7 +12319,7 @@ type OrderSendReply struct {
 
 func (x *OrderSendReply) Reset() {
 	*x = OrderSendReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[150]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[149]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12375,7 +12331,7 @@ func (x *OrderSendReply) String() string {
 func (*OrderSendReply) ProtoMessage() {}
 
 func (x *OrderSendReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[150]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[149]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12388,7 +12344,7 @@ func (x *OrderSendReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderSendReply.ProtoReflect.Descriptor instead.
 func (*OrderSendReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{150}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{149}
 }
 
 func (x *OrderSendReply) GetResult() *Order {
@@ -12437,7 +12393,7 @@ type OrderModifyRequest struct {
 
 func (x *OrderModifyRequest) Reset() {
 	*x = OrderModifyRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[151]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[150]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12449,7 +12405,7 @@ func (x *OrderModifyRequest) String() string {
 func (*OrderModifyRequest) ProtoMessage() {}
 
 func (x *OrderModifyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[151]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[150]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12462,7 +12418,7 @@ func (x *OrderModifyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderModifyRequest.ProtoReflect.Descriptor instead.
 func (*OrderModifyRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{151}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{150}
 }
 
 func (x *OrderModifyRequest) GetId() string {
@@ -12524,7 +12480,7 @@ type OrderModifyReply struct {
 
 func (x *OrderModifyReply) Reset() {
 	*x = OrderModifyReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[152]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[151]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12536,7 +12492,7 @@ func (x *OrderModifyReply) String() string {
 func (*OrderModifyReply) ProtoMessage() {}
 
 func (x *OrderModifyReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[152]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[151]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12549,7 +12505,7 @@ func (x *OrderModifyReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderModifyReply.ProtoReflect.Descriptor instead.
 func (*OrderModifyReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{152}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{151}
 }
 
 func (x *OrderModifyReply) GetResult() *Order {
@@ -12593,7 +12549,7 @@ type OrderCloseRequest struct {
 
 func (x *OrderCloseRequest) Reset() {
 	*x = OrderCloseRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[153]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[152]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12605,7 +12561,7 @@ func (x *OrderCloseRequest) String() string {
 func (*OrderCloseRequest) ProtoMessage() {}
 
 func (x *OrderCloseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[153]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[152]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12618,7 +12574,7 @@ func (x *OrderCloseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderCloseRequest.ProtoReflect.Descriptor instead.
 func (*OrderCloseRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{153}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{152}
 }
 
 func (x *OrderCloseRequest) GetId() string {
@@ -12666,7 +12622,7 @@ type OrderCloseReply struct {
 
 func (x *OrderCloseReply) Reset() {
 	*x = OrderCloseReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[154]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[153]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12678,7 +12634,7 @@ func (x *OrderCloseReply) String() string {
 func (*OrderCloseReply) ProtoMessage() {}
 
 func (x *OrderCloseReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[154]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[153]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12691,7 +12647,7 @@ func (x *OrderCloseReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderCloseReply.ProtoReflect.Descriptor instead.
 func (*OrderCloseReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{154}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{153}
 }
 
 func (x *OrderCloseReply) GetResult() *Order {
@@ -12723,7 +12679,7 @@ type EventsRequest struct {
 
 func (x *EventsRequest) Reset() {
 	*x = EventsRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[155]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[154]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12735,7 +12691,7 @@ func (x *EventsRequest) String() string {
 func (*EventsRequest) ProtoMessage() {}
 
 func (x *EventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[155]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[154]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12748,7 +12704,7 @@ func (x *EventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EventsRequest.ProtoReflect.Descriptor instead.
 func (*EventsRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{155}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{154}
 }
 
 func (x *EventsRequest) GetId() string {
@@ -12768,7 +12724,7 @@ type EventsReply struct {
 
 func (x *EventsReply) Reset() {
 	*x = EventsReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[156]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[155]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12780,7 +12736,7 @@ func (x *EventsReply) String() string {
 func (*EventsReply) ProtoMessage() {}
 
 func (x *EventsReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[156]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[155]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12793,7 +12749,7 @@ func (x *EventsReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EventsReply.ProtoReflect.Descriptor instead.
 func (*EventsReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{156}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{155}
 }
 
 func (x *EventsReply) GetResult() string {
@@ -12825,7 +12781,7 @@ type OnOrderUpdateRequest struct {
 
 func (x *OnOrderUpdateRequest) Reset() {
 	*x = OnOrderUpdateRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[157]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[156]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12837,7 +12793,7 @@ func (x *OnOrderUpdateRequest) String() string {
 func (*OnOrderUpdateRequest) ProtoMessage() {}
 
 func (x *OnOrderUpdateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[157]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[156]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12850,7 +12806,7 @@ func (x *OnOrderUpdateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnOrderUpdateRequest.ProtoReflect.Descriptor instead.
 func (*OnOrderUpdateRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{157}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{156}
 }
 
 func (x *OnOrderUpdateRequest) GetId() string {
@@ -12887,7 +12843,7 @@ type OrderUpdateSummary struct {
 
 func (x *OrderUpdateSummary) Reset() {
 	*x = OrderUpdateSummary{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[158]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[157]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12899,7 +12855,7 @@ func (x *OrderUpdateSummary) String() string {
 func (*OrderUpdateSummary) ProtoMessage() {}
 
 func (x *OrderUpdateSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[158]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[157]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12912,7 +12868,7 @@ func (x *OrderUpdateSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderUpdateSummary.ProtoReflect.Descriptor instead.
 func (*OrderUpdateSummary) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{158}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{157}
 }
 
 func (x *OrderUpdateSummary) GetUpdate() *OrderUpdate {
@@ -12994,7 +12950,7 @@ type OrderUpdate struct {
 
 func (x *OrderUpdate) Reset() {
 	*x = OrderUpdate{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[159]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[158]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13006,7 +12962,7 @@ func (x *OrderUpdate) String() string {
 func (*OrderUpdate) ProtoMessage() {}
 
 func (x *OrderUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[159]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[158]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13019,7 +12975,7 @@ func (x *OrderUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderUpdate.ProtoReflect.Descriptor instead.
 func (*OrderUpdate) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{159}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{158}
 }
 
 func (x *OrderUpdate) GetTrans() *TransactionInfo {
@@ -13107,7 +13063,7 @@ type TransactionInfo struct {
 
 func (x *TransactionInfo) Reset() {
 	*x = TransactionInfo{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[160]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[159]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13119,7 +13075,7 @@ func (x *TransactionInfo) String() string {
 func (*TransactionInfo) ProtoMessage() {}
 
 func (x *TransactionInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[160]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[159]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13132,7 +13088,7 @@ func (x *TransactionInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransactionInfo.ProtoReflect.Descriptor instead.
 func (*TransactionInfo) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{160}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{159}
 }
 
 func (x *TransactionInfo) GetUpdateId() int32 {
@@ -13243,7 +13199,7 @@ type OnOrderUpdateReply struct {
 
 func (x *OnOrderUpdateReply) Reset() {
 	*x = OnOrderUpdateReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[161]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[160]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13255,7 +13211,7 @@ func (x *OnOrderUpdateReply) String() string {
 func (*OnOrderUpdateReply) ProtoMessage() {}
 
 func (x *OnOrderUpdateReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[161]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[160]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13268,7 +13224,7 @@ func (x *OnOrderUpdateReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnOrderUpdateReply.ProtoReflect.Descriptor instead.
 func (*OnOrderUpdateReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{161}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{160}
 }
 
 func (x *OnOrderUpdateReply) GetResult() *OrderUpdateSummary {
@@ -13300,7 +13256,7 @@ type OnQuoteRequest struct {
 
 func (x *OnQuoteRequest) Reset() {
 	*x = OnQuoteRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[162]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[161]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13312,7 +13268,7 @@ func (x *OnQuoteRequest) String() string {
 func (*OnQuoteRequest) ProtoMessage() {}
 
 func (x *OnQuoteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[162]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[161]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13325,7 +13281,7 @@ func (x *OnQuoteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnQuoteRequest.ProtoReflect.Descriptor instead.
 func (*OnQuoteRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{162}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{161}
 }
 
 func (x *OnQuoteRequest) GetId() string {
@@ -13345,7 +13301,7 @@ type OnQuoteReply struct {
 
 func (x *OnQuoteReply) Reset() {
 	*x = OnQuoteReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[163]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[162]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13357,7 +13313,7 @@ func (x *OnQuoteReply) String() string {
 func (*OnQuoteReply) ProtoMessage() {}
 
 func (x *OnQuoteReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[163]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[162]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13370,7 +13326,7 @@ func (x *OnQuoteReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnQuoteReply.ProtoReflect.Descriptor instead.
 func (*OnQuoteReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{163}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{162}
 }
 
 func (x *OnQuoteReply) GetResult() *Quote {
@@ -13402,7 +13358,7 @@ type OnTickValueRequest struct {
 
 func (x *OnTickValueRequest) Reset() {
 	*x = OnTickValueRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[164]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[163]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13414,7 +13370,7 @@ func (x *OnTickValueRequest) String() string {
 func (*OnTickValueRequest) ProtoMessage() {}
 
 func (x *OnTickValueRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[164]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[163]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13427,7 +13383,7 @@ func (x *OnTickValueRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnTickValueRequest.ProtoReflect.Descriptor instead.
 func (*OnTickValueRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{164}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{163}
 }
 
 func (x *OnTickValueRequest) GetId() string {
@@ -13450,7 +13406,7 @@ type SymbolTickValue struct {
 
 func (x *SymbolTickValue) Reset() {
 	*x = SymbolTickValue{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[165]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[164]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13462,7 +13418,7 @@ func (x *SymbolTickValue) String() string {
 func (*SymbolTickValue) ProtoMessage() {}
 
 func (x *SymbolTickValue) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[165]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[164]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13475,7 +13431,7 @@ func (x *SymbolTickValue) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SymbolTickValue.ProtoReflect.Descriptor instead.
 func (*SymbolTickValue) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{165}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{164}
 }
 
 func (x *SymbolTickValue) GetSymbol() string {
@@ -13502,7 +13458,7 @@ type OnTickValueReply struct {
 
 func (x *OnTickValueReply) Reset() {
 	*x = OnTickValueReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[166]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[165]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13514,7 +13470,7 @@ func (x *OnTickValueReply) String() string {
 func (*OnTickValueReply) ProtoMessage() {}
 
 func (x *OnTickValueReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[166]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[165]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13527,7 +13483,7 @@ func (x *OnTickValueReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnTickValueReply.ProtoReflect.Descriptor instead.
 func (*OnTickValueReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{166}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{165}
 }
 
 func (x *OnTickValueReply) GetResult() *SymbolTickValue {
@@ -13559,7 +13515,7 @@ type OnOrderProfitRequest struct {
 
 func (x *OnOrderProfitRequest) Reset() {
 	*x = OnOrderProfitRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[167]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[166]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13571,7 +13527,7 @@ func (x *OnOrderProfitRequest) String() string {
 func (*OnOrderProfitRequest) ProtoMessage() {}
 
 func (x *OnOrderProfitRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[167]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[166]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13584,7 +13540,7 @@ func (x *OnOrderProfitRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnOrderProfitRequest.ProtoReflect.Descriptor instead.
 func (*OnOrderProfitRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{167}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{166}
 }
 
 func (x *OnOrderProfitRequest) GetId() string {
@@ -13619,7 +13575,7 @@ type ProfitUpdate struct {
 
 func (x *ProfitUpdate) Reset() {
 	*x = ProfitUpdate{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[168]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[167]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13631,7 +13587,7 @@ func (x *ProfitUpdate) String() string {
 func (*ProfitUpdate) ProtoMessage() {}
 
 func (x *ProfitUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[168]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[167]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13644,7 +13600,7 @@ func (x *ProfitUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProfitUpdate.ProtoReflect.Descriptor instead.
 func (*ProfitUpdate) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{168}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{167}
 }
 
 func (x *ProfitUpdate) GetBalance() float64 {
@@ -13713,7 +13669,7 @@ type OnOrderProfitReply struct {
 
 func (x *OnOrderProfitReply) Reset() {
 	*x = OnOrderProfitReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[169]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[168]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13725,7 +13681,7 @@ func (x *OnOrderProfitReply) String() string {
 func (*OnOrderProfitReply) ProtoMessage() {}
 
 func (x *OnOrderProfitReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[169]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[168]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13738,7 +13694,7 @@ func (x *OnOrderProfitReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnOrderProfitReply.ProtoReflect.Descriptor instead.
 func (*OnOrderProfitReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{169}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{168}
 }
 
 func (x *OnOrderProfitReply) GetResult() *ProfitUpdate {
@@ -13770,7 +13726,7 @@ type OnMarketWatchRequest struct {
 
 func (x *OnMarketWatchRequest) Reset() {
 	*x = OnMarketWatchRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[170]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[169]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13782,7 +13738,7 @@ func (x *OnMarketWatchRequest) String() string {
 func (*OnMarketWatchRequest) ProtoMessage() {}
 
 func (x *OnMarketWatchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[170]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[169]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13795,7 +13751,7 @@ func (x *OnMarketWatchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnMarketWatchRequest.ProtoReflect.Descriptor instead.
 func (*OnMarketWatchRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{170}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{169}
 }
 
 func (x *OnMarketWatchRequest) GetId() string {
@@ -13815,7 +13771,7 @@ type OnMarketWatchReply struct {
 
 func (x *OnMarketWatchReply) Reset() {
 	*x = OnMarketWatchReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[171]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[170]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13827,7 +13783,7 @@ func (x *OnMarketWatchReply) String() string {
 func (*OnMarketWatchReply) ProtoMessage() {}
 
 func (x *OnMarketWatchReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[171]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[170]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13840,7 +13796,7 @@ func (x *OnMarketWatchReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnMarketWatchReply.ProtoReflect.Descriptor instead.
 func (*OnMarketWatchReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{171}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{170}
 }
 
 func (x *OnMarketWatchReply) GetResult() *MarketWatch {
@@ -13872,7 +13828,7 @@ type OnTickHistoryRequest struct {
 
 func (x *OnTickHistoryRequest) Reset() {
 	*x = OnTickHistoryRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[172]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[171]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13884,7 +13840,7 @@ func (x *OnTickHistoryRequest) String() string {
 func (*OnTickHistoryRequest) ProtoMessage() {}
 
 func (x *OnTickHistoryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[172]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[171]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13897,7 +13853,7 @@ func (x *OnTickHistoryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnTickHistoryRequest.ProtoReflect.Descriptor instead.
 func (*OnTickHistoryRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{172}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{171}
 }
 
 func (x *OnTickHistoryRequest) GetId() string {
@@ -13917,7 +13873,7 @@ type TickHistoryEventArgs struct {
 
 func (x *TickHistoryEventArgs) Reset() {
 	*x = TickHistoryEventArgs{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[173]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[172]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13929,7 +13885,7 @@ func (x *TickHistoryEventArgs) String() string {
 func (*TickHistoryEventArgs) ProtoMessage() {}
 
 func (x *TickHistoryEventArgs) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[173]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[172]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13942,7 +13898,7 @@ func (x *TickHistoryEventArgs) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TickHistoryEventArgs.ProtoReflect.Descriptor instead.
 func (*TickHistoryEventArgs) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{173}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{172}
 }
 
 func (x *TickHistoryEventArgs) GetSymbol() string {
@@ -13972,7 +13928,7 @@ type TickBar struct {
 
 func (x *TickBar) Reset() {
 	*x = TickBar{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[174]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[173]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13984,7 +13940,7 @@ func (x *TickBar) String() string {
 func (*TickBar) ProtoMessage() {}
 
 func (x *TickBar) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[174]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[173]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13997,7 +13953,7 @@ func (x *TickBar) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TickBar.ProtoReflect.Descriptor instead.
 func (*TickBar) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{174}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{173}
 }
 
 func (x *TickBar) GetTime() *timestamppb.Timestamp {
@@ -14045,7 +14001,7 @@ type OnTickHistoryReply struct {
 
 func (x *OnTickHistoryReply) Reset() {
 	*x = OnTickHistoryReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[175]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[174]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14057,7 +14013,7 @@ func (x *OnTickHistoryReply) String() string {
 func (*OnTickHistoryReply) ProtoMessage() {}
 
 func (x *OnTickHistoryReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[175]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[174]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14070,7 +14026,7 @@ func (x *OnTickHistoryReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnTickHistoryReply.ProtoReflect.Descriptor instead.
 func (*OnTickHistoryReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{175}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{174}
 }
 
 func (x *OnTickHistoryReply) GetResult() *TickHistoryEventArgs {
@@ -14102,7 +14058,7 @@ type OnMailRequest struct {
 
 func (x *OnMailRequest) Reset() {
 	*x = OnMailRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[176]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[175]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14114,7 +14070,7 @@ func (x *OnMailRequest) String() string {
 func (*OnMailRequest) ProtoMessage() {}
 
 func (x *OnMailRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[176]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[175]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14127,7 +14083,7 @@ func (x *OnMailRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnMailRequest.ProtoReflect.Descriptor instead.
 func (*OnMailRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{176}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{175}
 }
 
 func (x *OnMailRequest) GetId() string {
@@ -14147,7 +14103,7 @@ type OnMailReply struct {
 
 func (x *OnMailReply) Reset() {
 	*x = OnMailReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[177]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[176]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14159,7 +14115,7 @@ func (x *OnMailReply) String() string {
 func (*OnMailReply) ProtoMessage() {}
 
 func (x *OnMailReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[177]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[176]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14172,7 +14128,7 @@ func (x *OnMailReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnMailReply.ProtoReflect.Descriptor instead.
 func (*OnMailReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{177}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{176}
 }
 
 func (x *OnMailReply) GetResult() *MailMessage {
@@ -14207,7 +14163,7 @@ type OnOpenedOrdersTicketsRequest struct {
 
 func (x *OnOpenedOrdersTicketsRequest) Reset() {
 	*x = OnOpenedOrdersTicketsRequest{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[178]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[177]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14219,7 +14175,7 @@ func (x *OnOpenedOrdersTicketsRequest) String() string {
 func (*OnOpenedOrdersTicketsRequest) ProtoMessage() {}
 
 func (x *OnOpenedOrdersTicketsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[178]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[177]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14232,7 +14188,7 @@ func (x *OnOpenedOrdersTicketsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnOpenedOrdersTicketsRequest.ProtoReflect.Descriptor instead.
 func (*OnOpenedOrdersTicketsRequest) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{178}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{177}
 }
 
 func (x *OnOpenedOrdersTicketsRequest) GetId() string {
@@ -14259,7 +14215,7 @@ type OnOpenedOrdersTicketsReply struct {
 
 func (x *OnOpenedOrdersTicketsReply) Reset() {
 	*x = OnOpenedOrdersTicketsReply{}
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[179]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[178]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14271,7 +14227,7 @@ func (x *OnOpenedOrdersTicketsReply) String() string {
 func (*OnOpenedOrdersTicketsReply) ProtoMessage() {}
 
 func (x *OnOpenedOrdersTicketsReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mtapi_mt5_mt5_proto_msgTypes[179]
+	mi := &file_mtapi_mt5_mt5_proto_msgTypes[178]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14284,7 +14240,7 @@ func (x *OnOpenedOrdersTicketsReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnOpenedOrdersTicketsReply.ProtoReflect.Descriptor instead.
 func (*OnOpenedOrdersTicketsReply) Descriptor() ([]byte, []int) {
-	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{179}
+	return file_mtapi_mt5_mt5_proto_rawDescGZIP(), []int{178}
 }
 
 func (x *OnOpenedOrdersTicketsReply) GetResult() *MailMessage {
@@ -14897,9 +14853,7 @@ const file_mtapi_mt5_mt5_proto_rawDesc = "" +
 	"\x06Symbol\x18\x03 \x01(\tR\x06Symbol\"r\n" +
 	"\x16TickValueWithSizeReply\x122\n" +
 	"\x06result\x18\x01 \x03(\v2\x1a.mt5grpc.TickValueWithSizeR\x06result\x12$\n" +
-	"\x05error\x18\x02 \x01(\v2\x0e.mt5grpc.ErrorR\x05error\"'\n" +
-	"\x15ClusterDetailsRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"{\n" +
+	"\x05error\x18\x02 \x01(\v2\x0e.mt5grpc.ErrorR\x05error\"{\n" +
 	"\tServerRec\x12\x1e\n" +
 	"\n" +
 	"ServerName\x18\x01 \x01(\tR\n" +
@@ -15754,7 +15708,7 @@ func file_mtapi_mt5_mt5_proto_rawDescGZIP() []byte {
 }
 
 var file_mtapi_mt5_mt5_proto_enumTypes = make([]protoimpl.EnumInfo, 20)
-var file_mtapi_mt5_mt5_proto_msgTypes = make([]protoimpl.MessageInfo, 180)
+var file_mtapi_mt5_mt5_proto_msgTypes = make([]protoimpl.MessageInfo, 179)
 var file_mtapi_mt5_mt5_proto_goTypes = []any{
 	(ProxyTypes)(0),                             // 0: mt5grpc.ProxyTypes
 	(AccMethod)(0),                              // 1: mt5grpc.AccMethod
@@ -15862,115 +15816,114 @@ var file_mtapi_mt5_mt5_proto_goTypes = []any{
 	(*TickValueWithSizeRequest)(nil),            // 103: mt5grpc.TickValueWithSizeRequest
 	(*TickValueWithSize)(nil),                   // 104: mt5grpc.TickValueWithSize
 	(*TickValueWithSizeReply)(nil),              // 105: mt5grpc.TickValueWithSizeReply
-	(*ClusterDetailsRequest)(nil),               // 106: mt5grpc.ClusterDetailsRequest
-	(*ServerRec)(nil),                           // 107: mt5grpc.ServerRec
-	(*ChangePasswordRequest)(nil),               // 108: mt5grpc.ChangePasswordRequest
-	(*ChangePasswordReply)(nil),                 // 109: mt5grpc.ChangePasswordReply
-	(*MailsRequest)(nil),                        // 110: mt5grpc.MailsRequest
-	(*MailMessage)(nil),                         // 111: mt5grpc.MailMessage
-	(*MailsReply)(nil),                          // 112: mt5grpc.MailsReply
-	(*RequiredMarginRequest)(nil),               // 113: mt5grpc.RequiredMarginRequest
-	(*RequiredMarginReply)(nil),                 // 114: mt5grpc.RequiredMarginReply
-	(*PriceHistoryMonthRequest)(nil),            // 115: mt5grpc.PriceHistoryMonthRequest
-	(*Bar)(nil),                                 // 116: mt5grpc.Bar
-	(*PriceHistoryMonthReply)(nil),              // 117: mt5grpc.PriceHistoryMonthReply
-	(*PriceHistoryMonthManyRequest)(nil),        // 118: mt5grpc.PriceHistoryMonthManyRequest
-	(*PriceHistoryTodayRequest)(nil),            // 119: mt5grpc.PriceHistoryTodayRequest
-	(*PriceHistoryTodayReply)(nil),              // 120: mt5grpc.PriceHistoryTodayReply
-	(*PriceHistoryTodayManyRequest)(nil),        // 121: mt5grpc.PriceHistoryTodayManyRequest
-	(*PriceHistoryTodayManyReply)(nil),          // 122: mt5grpc.PriceHistoryTodayManyReply
-	(*PriceHistoryRequest)(nil),                 // 123: mt5grpc.PriceHistoryRequest
-	(*PriceHistoryReply)(nil),                   // 124: mt5grpc.PriceHistoryReply
-	(*PriceHistoryHighLowRequest)(nil),          // 125: mt5grpc.PriceHistoryHighLowRequest
-	(*PriceHistoryHighLowReply)(nil),            // 126: mt5grpc.PriceHistoryHighLowReply
-	(*PingRequest)(nil),                         // 127: mt5grpc.PingRequest
-	(*PingReply)(nil),                           // 128: mt5grpc.PingReply
-	(*HealthRequest)(nil),                       // 129: mt5grpc.HealthRequest
-	(*HealthReply)(nil),                         // 130: mt5grpc.HealthReply
-	(*PingHostRequest)(nil),                     // 131: mt5grpc.PingHostRequest
-	(*PingHostReply)(nil),                       // 132: mt5grpc.PingHostReply
-	(*PingHostManyRequest)(nil),                 // 133: mt5grpc.PingHostManyRequest
-	(*PingHostManyReply)(nil),                   // 134: mt5grpc.PingHostManyReply
-	(*MemorySnapshotRequest)(nil),               // 135: mt5grpc.MemorySnapshotRequest
-	(*MemorySnapshotReply)(nil),                 // 136: mt5grpc.MemorySnapshotReply
-	(*SearchRequest)(nil),                       // 137: mt5grpc.SearchRequest
-	(*Company)(nil),                             // 138: mt5grpc.Company
-	(*Result)(nil),                              // 139: mt5grpc.Result
-	(*SearchReply)(nil),                         // 140: mt5grpc.SearchReply
-	(*GetClientsRequest)(nil),                   // 141: mt5grpc.GetClientsRequest
-	(*ClientStatus)(nil),                        // 142: mt5grpc.ClientStatus
-	(*GetClientsReply)(nil),                     // 143: mt5grpc.GetClientsReply
-	(*GetDemoRequest)(nil),                      // 144: mt5grpc.GetDemoRequest
-	(*AccountAnswer)(nil),                       // 145: mt5grpc.AccountAnswer
-	(*GetDemoReply)(nil),                        // 146: mt5grpc.GetDemoReply
-	(*SubscribeRequest)(nil),                    // 147: mt5grpc.SubscribeRequest
-	(*SubscribeReply)(nil),                      // 148: mt5grpc.SubscribeReply
-	(*SubscribeManyRequest)(nil),                // 149: mt5grpc.SubscribeManyRequest
-	(*SubscribeManyReply)(nil),                  // 150: mt5grpc.SubscribeManyReply
-	(*UnSubscribeRequest)(nil),                  // 151: mt5grpc.UnSubscribeRequest
-	(*UnSubscribeReply)(nil),                    // 152: mt5grpc.UnSubscribeReply
-	(*UnSubscribeManyRequest)(nil),              // 153: mt5grpc.UnSubscribeManyRequest
-	(*UnSubscribeManyReply)(nil),                // 154: mt5grpc.UnSubscribeManyReply
-	(*SubscribeOrderProfitRequest)(nil),         // 155: mt5grpc.SubscribeOrderProfitRequest
-	(*SubscribeOrderProfitReply)(nil),           // 156: mt5grpc.SubscribeOrderProfitReply
-	(*SubscribeTickValueRequest)(nil),           // 157: mt5grpc.SubscribeTickValueRequest
-	(*SubscribeTickValueReply)(nil),             // 158: mt5grpc.SubscribeTickValueReply
-	(*SubscribeOrderUpdateRequest)(nil),         // 159: mt5grpc.SubscribeOrderUpdateRequest
-	(*SubscribeOrderUpdateReply)(nil),           // 160: mt5grpc.SubscribeOrderUpdateReply
-	(*SubscribeMarketWatchRequest)(nil),         // 161: mt5grpc.SubscribeMarketWatchRequest
-	(*SubscribeMarketWatchReply)(nil),           // 162: mt5grpc.SubscribeMarketWatchReply
-	(*SubscribeOpenedOrdersTicketsRequest)(nil), // 163: mt5grpc.SubscribeOpenedOrdersTicketsRequest
-	(*SubscribeOpenedOrdersTicketsReply)(nil),   // 164: mt5grpc.SubscribeOpenedOrdersTicketsReply
-	(*TickHistoryRequestRequest)(nil),           // 165: mt5grpc.TickHistoryRequestRequest
-	(*TickHistoryRequestReply)(nil),             // 166: mt5grpc.TickHistoryRequestReply
-	(*TickHistoryStopRequest)(nil),              // 167: mt5grpc.TickHistoryStopRequest
-	(*TickHistoryStopReply)(nil),                // 168: mt5grpc.TickHistoryStopReply
-	(*OrderSendRequest)(nil),                    // 169: mt5grpc.OrderSendRequest
-	(*OrderSendReply)(nil),                      // 170: mt5grpc.OrderSendReply
-	(*OrderModifyRequest)(nil),                  // 171: mt5grpc.OrderModifyRequest
-	(*OrderModifyReply)(nil),                    // 172: mt5grpc.OrderModifyReply
-	(*OrderCloseRequest)(nil),                   // 173: mt5grpc.OrderCloseRequest
-	(*OrderCloseReply)(nil),                     // 174: mt5grpc.OrderCloseReply
-	(*EventsRequest)(nil),                       // 175: mt5grpc.EventsRequest
-	(*EventsReply)(nil),                         // 176: mt5grpc.EventsReply
-	(*OnOrderUpdateRequest)(nil),                // 177: mt5grpc.OnOrderUpdateRequest
-	(*OrderUpdateSummary)(nil),                  // 178: mt5grpc.OrderUpdateSummary
-	(*OrderUpdate)(nil),                         // 179: mt5grpc.OrderUpdate
-	(*TransactionInfo)(nil),                     // 180: mt5grpc.TransactionInfo
-	(*OnOrderUpdateReply)(nil),                  // 181: mt5grpc.OnOrderUpdateReply
-	(*OnQuoteRequest)(nil),                      // 182: mt5grpc.OnQuoteRequest
-	(*OnQuoteReply)(nil),                        // 183: mt5grpc.OnQuoteReply
-	(*OnTickValueRequest)(nil),                  // 184: mt5grpc.OnTickValueRequest
-	(*SymbolTickValue)(nil),                     // 185: mt5grpc.SymbolTickValue
-	(*OnTickValueReply)(nil),                    // 186: mt5grpc.OnTickValueReply
-	(*OnOrderProfitRequest)(nil),                // 187: mt5grpc.OnOrderProfitRequest
-	(*ProfitUpdate)(nil),                        // 188: mt5grpc.ProfitUpdate
-	(*OnOrderProfitReply)(nil),                  // 189: mt5grpc.OnOrderProfitReply
-	(*OnMarketWatchRequest)(nil),                // 190: mt5grpc.OnMarketWatchRequest
-	(*OnMarketWatchReply)(nil),                  // 191: mt5grpc.OnMarketWatchReply
-	(*OnTickHistoryRequest)(nil),                // 192: mt5grpc.OnTickHistoryRequest
-	(*TickHistoryEventArgs)(nil),                // 193: mt5grpc.TickHistoryEventArgs
-	(*TickBar)(nil),                             // 194: mt5grpc.TickBar
-	(*OnTickHistoryReply)(nil),                  // 195: mt5grpc.OnTickHistoryReply
-	(*OnMailRequest)(nil),                       // 196: mt5grpc.OnMailRequest
-	(*OnMailReply)(nil),                         // 197: mt5grpc.OnMailReply
-	(*OnOpenedOrdersTicketsRequest)(nil),        // 198: mt5grpc.OnOpenedOrdersTicketsRequest
-	(*OnOpenedOrdersTicketsReply)(nil),          // 199: mt5grpc.OnOpenedOrdersTicketsReply
-	(*timestamppb.Timestamp)(nil),               // 200: google.protobuf.Timestamp
+	(*ServerRec)(nil),                           // 106: mt5grpc.ServerRec
+	(*ChangePasswordRequest)(nil),               // 107: mt5grpc.ChangePasswordRequest
+	(*ChangePasswordReply)(nil),                 // 108: mt5grpc.ChangePasswordReply
+	(*MailsRequest)(nil),                        // 109: mt5grpc.MailsRequest
+	(*MailMessage)(nil),                         // 110: mt5grpc.MailMessage
+	(*MailsReply)(nil),                          // 111: mt5grpc.MailsReply
+	(*RequiredMarginRequest)(nil),               // 112: mt5grpc.RequiredMarginRequest
+	(*RequiredMarginReply)(nil),                 // 113: mt5grpc.RequiredMarginReply
+	(*PriceHistoryMonthRequest)(nil),            // 114: mt5grpc.PriceHistoryMonthRequest
+	(*Bar)(nil),                                 // 115: mt5grpc.Bar
+	(*PriceHistoryMonthReply)(nil),              // 116: mt5grpc.PriceHistoryMonthReply
+	(*PriceHistoryMonthManyRequest)(nil),        // 117: mt5grpc.PriceHistoryMonthManyRequest
+	(*PriceHistoryTodayRequest)(nil),            // 118: mt5grpc.PriceHistoryTodayRequest
+	(*PriceHistoryTodayReply)(nil),              // 119: mt5grpc.PriceHistoryTodayReply
+	(*PriceHistoryTodayManyRequest)(nil),        // 120: mt5grpc.PriceHistoryTodayManyRequest
+	(*PriceHistoryTodayManyReply)(nil),          // 121: mt5grpc.PriceHistoryTodayManyReply
+	(*PriceHistoryRequest)(nil),                 // 122: mt5grpc.PriceHistoryRequest
+	(*PriceHistoryReply)(nil),                   // 123: mt5grpc.PriceHistoryReply
+	(*PriceHistoryHighLowRequest)(nil),          // 124: mt5grpc.PriceHistoryHighLowRequest
+	(*PriceHistoryHighLowReply)(nil),            // 125: mt5grpc.PriceHistoryHighLowReply
+	(*PingRequest)(nil),                         // 126: mt5grpc.PingRequest
+	(*PingReply)(nil),                           // 127: mt5grpc.PingReply
+	(*HealthRequest)(nil),                       // 128: mt5grpc.HealthRequest
+	(*HealthReply)(nil),                         // 129: mt5grpc.HealthReply
+	(*PingHostRequest)(nil),                     // 130: mt5grpc.PingHostRequest
+	(*PingHostReply)(nil),                       // 131: mt5grpc.PingHostReply
+	(*PingHostManyRequest)(nil),                 // 132: mt5grpc.PingHostManyRequest
+	(*PingHostManyReply)(nil),                   // 133: mt5grpc.PingHostManyReply
+	(*MemorySnapshotRequest)(nil),               // 134: mt5grpc.MemorySnapshotRequest
+	(*MemorySnapshotReply)(nil),                 // 135: mt5grpc.MemorySnapshotReply
+	(*SearchRequest)(nil),                       // 136: mt5grpc.SearchRequest
+	(*Company)(nil),                             // 137: mt5grpc.Company
+	(*Result)(nil),                              // 138: mt5grpc.Result
+	(*SearchReply)(nil),                         // 139: mt5grpc.SearchReply
+	(*GetClientsRequest)(nil),                   // 140: mt5grpc.GetClientsRequest
+	(*ClientStatus)(nil),                        // 141: mt5grpc.ClientStatus
+	(*GetClientsReply)(nil),                     // 142: mt5grpc.GetClientsReply
+	(*GetDemoRequest)(nil),                      // 143: mt5grpc.GetDemoRequest
+	(*AccountAnswer)(nil),                       // 144: mt5grpc.AccountAnswer
+	(*GetDemoReply)(nil),                        // 145: mt5grpc.GetDemoReply
+	(*SubscribeRequest)(nil),                    // 146: mt5grpc.SubscribeRequest
+	(*SubscribeReply)(nil),                      // 147: mt5grpc.SubscribeReply
+	(*SubscribeManyRequest)(nil),                // 148: mt5grpc.SubscribeManyRequest
+	(*SubscribeManyReply)(nil),                  // 149: mt5grpc.SubscribeManyReply
+	(*UnSubscribeRequest)(nil),                  // 150: mt5grpc.UnSubscribeRequest
+	(*UnSubscribeReply)(nil),                    // 151: mt5grpc.UnSubscribeReply
+	(*UnSubscribeManyRequest)(nil),              // 152: mt5grpc.UnSubscribeManyRequest
+	(*UnSubscribeManyReply)(nil),                // 153: mt5grpc.UnSubscribeManyReply
+	(*SubscribeOrderProfitRequest)(nil),         // 154: mt5grpc.SubscribeOrderProfitRequest
+	(*SubscribeOrderProfitReply)(nil),           // 155: mt5grpc.SubscribeOrderProfitReply
+	(*SubscribeTickValueRequest)(nil),           // 156: mt5grpc.SubscribeTickValueRequest
+	(*SubscribeTickValueReply)(nil),             // 157: mt5grpc.SubscribeTickValueReply
+	(*SubscribeOrderUpdateRequest)(nil),         // 158: mt5grpc.SubscribeOrderUpdateRequest
+	(*SubscribeOrderUpdateReply)(nil),           // 159: mt5grpc.SubscribeOrderUpdateReply
+	(*SubscribeMarketWatchRequest)(nil),         // 160: mt5grpc.SubscribeMarketWatchRequest
+	(*SubscribeMarketWatchReply)(nil),           // 161: mt5grpc.SubscribeMarketWatchReply
+	(*SubscribeOpenedOrdersTicketsRequest)(nil), // 162: mt5grpc.SubscribeOpenedOrdersTicketsRequest
+	(*SubscribeOpenedOrdersTicketsReply)(nil),   // 163: mt5grpc.SubscribeOpenedOrdersTicketsReply
+	(*TickHistoryRequestRequest)(nil),           // 164: mt5grpc.TickHistoryRequestRequest
+	(*TickHistoryRequestReply)(nil),             // 165: mt5grpc.TickHistoryRequestReply
+	(*TickHistoryStopRequest)(nil),              // 166: mt5grpc.TickHistoryStopRequest
+	(*TickHistoryStopReply)(nil),                // 167: mt5grpc.TickHistoryStopReply
+	(*OrderSendRequest)(nil),                    // 168: mt5grpc.OrderSendRequest
+	(*OrderSendReply)(nil),                      // 169: mt5grpc.OrderSendReply
+	(*OrderModifyRequest)(nil),                  // 170: mt5grpc.OrderModifyRequest
+	(*OrderModifyReply)(nil),                    // 171: mt5grpc.OrderModifyReply
+	(*OrderCloseRequest)(nil),                   // 172: mt5grpc.OrderCloseRequest
+	(*OrderCloseReply)(nil),                     // 173: mt5grpc.OrderCloseReply
+	(*EventsRequest)(nil),                       // 174: mt5grpc.EventsRequest
+	(*EventsReply)(nil),                         // 175: mt5grpc.EventsReply
+	(*OnOrderUpdateRequest)(nil),                // 176: mt5grpc.OnOrderUpdateRequest
+	(*OrderUpdateSummary)(nil),                  // 177: mt5grpc.OrderUpdateSummary
+	(*OrderUpdate)(nil),                         // 178: mt5grpc.OrderUpdate
+	(*TransactionInfo)(nil),                     // 179: mt5grpc.TransactionInfo
+	(*OnOrderUpdateReply)(nil),                  // 180: mt5grpc.OnOrderUpdateReply
+	(*OnQuoteRequest)(nil),                      // 181: mt5grpc.OnQuoteRequest
+	(*OnQuoteReply)(nil),                        // 182: mt5grpc.OnQuoteReply
+	(*OnTickValueRequest)(nil),                  // 183: mt5grpc.OnTickValueRequest
+	(*SymbolTickValue)(nil),                     // 184: mt5grpc.SymbolTickValue
+	(*OnTickValueReply)(nil),                    // 185: mt5grpc.OnTickValueReply
+	(*OnOrderProfitRequest)(nil),                // 186: mt5grpc.OnOrderProfitRequest
+	(*ProfitUpdate)(nil),                        // 187: mt5grpc.ProfitUpdate
+	(*OnOrderProfitReply)(nil),                  // 188: mt5grpc.OnOrderProfitReply
+	(*OnMarketWatchRequest)(nil),                // 189: mt5grpc.OnMarketWatchRequest
+	(*OnMarketWatchReply)(nil),                  // 190: mt5grpc.OnMarketWatchReply
+	(*OnTickHistoryRequest)(nil),                // 191: mt5grpc.OnTickHistoryRequest
+	(*TickHistoryEventArgs)(nil),                // 192: mt5grpc.TickHistoryEventArgs
+	(*TickBar)(nil),                             // 193: mt5grpc.TickBar
+	(*OnTickHistoryReply)(nil),                  // 194: mt5grpc.OnTickHistoryReply
+	(*OnMailRequest)(nil),                       // 195: mt5grpc.OnMailRequest
+	(*OnMailReply)(nil),                         // 196: mt5grpc.OnMailReply
+	(*OnOpenedOrdersTicketsRequest)(nil),        // 197: mt5grpc.OnOpenedOrdersTicketsRequest
+	(*OnOpenedOrdersTicketsReply)(nil),          // 198: mt5grpc.OnOpenedOrdersTicketsReply
+	(*timestamppb.Timestamp)(nil),               // 199: google.protobuf.Timestamp
 }
 var file_mtapi_mt5_mt5_proto_depIdxs = []int32{
 	19,  // 0: mt5grpc.Error.code:type_name -> mt5grpc.ErrorCode
 	20,  // 1: mt5grpc.ConnectReply.error:type_name -> mt5grpc.Error
 	20,  // 2: mt5grpc.ConnectExReply.error:type_name -> mt5grpc.Error
 	20,  // 3: mt5grpc.VersionReply.error:type_name -> mt5grpc.Error
-	116, // 4: mt5grpc.PriceHistoryExReply.result:type_name -> mt5grpc.Bar
+	115, // 4: mt5grpc.PriceHistoryExReply.result:type_name -> mt5grpc.Bar
 	20,  // 5: mt5grpc.PriceHistoryExReply.error:type_name -> mt5grpc.Error
 	34,  // 6: mt5grpc.PriceHistoryExManyReply.result:type_name -> mt5grpc.BarsForSymbol
 	20,  // 7: mt5grpc.PriceHistoryExManyReply.error:type_name -> mt5grpc.Error
 	32,  // 8: mt5grpc.PriceHistoryMonthManyReply.result:type_name -> mt5grpc.QuoteHistoryEventArgs
 	20,  // 9: mt5grpc.PriceHistoryMonthManyReply.error:type_name -> mt5grpc.Error
-	116, // 10: mt5grpc.QuoteHistoryEventArgs.Bars:type_name -> mt5grpc.Bar
-	116, // 11: mt5grpc.BarsForSymbol.Bars:type_name -> mt5grpc.Bar
+	115, // 10: mt5grpc.QuoteHistoryEventArgs.Bars:type_name -> mt5grpc.Bar
+	115, // 11: mt5grpc.BarsForSymbol.Bars:type_name -> mt5grpc.Bar
 	34,  // 12: mt5grpc.PriceHistoryManyReply.result:type_name -> mt5grpc.BarsForSymbol
 	20,  // 13: mt5grpc.PriceHistoryManyReply.error:type_name -> mt5grpc.Error
 	20,  // 14: mt5grpc.SymbolListReply.error:type_name -> mt5grpc.Error
@@ -15985,10 +15938,10 @@ var file_mtapi_mt5_mt5_proto_depIdxs = []int32{
 	20,  // 23: mt5grpc.AccountSummaryReply.error:type_name -> mt5grpc.Error
 	2,   // 24: mt5grpc.OpenedOrdersRequest.sort:type_name -> mt5grpc.OrderSort
 	3,   // 25: mt5grpc.Order.ExpirationType:type_name -> mt5grpc.ExpirationType
-	200, // 26: mt5grpc.Order.ExpirationTime:type_name -> google.protobuf.Timestamp
+	199, // 26: mt5grpc.Order.ExpirationTime:type_name -> google.protobuf.Timestamp
 	4,   // 27: mt5grpc.Order.FillPolicy:type_name -> mt5grpc.FillPolicy
-	200, // 28: mt5grpc.Order.CloseTime:type_name -> google.protobuf.Timestamp
-	200, // 29: mt5grpc.Order.OpenTime:type_name -> google.protobuf.Timestamp
+	199, // 28: mt5grpc.Order.CloseTime:type_name -> google.protobuf.Timestamp
+	199, // 29: mt5grpc.Order.OpenTime:type_name -> google.protobuf.Timestamp
 	5,   // 30: mt5grpc.Order.PlacedType:type_name -> mt5grpc.PlacedType
 	6,   // 31: mt5grpc.Order.OrderType:type_name -> mt5grpc.OrderType
 	7,   // 32: mt5grpc.Order.DealType:type_name -> mt5grpc.DealType
@@ -15997,12 +15950,12 @@ var file_mtapi_mt5_mt5_proto_depIdxs = []int32{
 	52,  // 35: mt5grpc.Order.DealInternalOut:type_name -> mt5grpc.DealInternal
 	53,  // 36: mt5grpc.Order.OrderInternal:type_name -> mt5grpc.OrderInternal
 	52,  // 37: mt5grpc.Order.PartialCloseDeals:type_name -> mt5grpc.DealInternal
-	200, // 38: mt5grpc.DealInternal.OpenTimeAsDateTime:type_name -> google.protobuf.Timestamp
+	199, // 38: mt5grpc.DealInternal.OpenTimeAsDateTime:type_name -> google.protobuf.Timestamp
 	7,   // 39: mt5grpc.DealInternal.Type:type_name -> mt5grpc.DealType
 	9,   // 40: mt5grpc.DealInternal.Direction:type_name -> mt5grpc.Direction
 	5,   // 41: mt5grpc.DealInternal.PlacedType:type_name -> mt5grpc.PlacedType
-	200, // 42: mt5grpc.OrderInternal.ExecutionTimeAsDateTime:type_name -> google.protobuf.Timestamp
-	200, // 43: mt5grpc.OrderInternal.OpenTimeMsAsDateTime:type_name -> google.protobuf.Timestamp
+	199, // 42: mt5grpc.OrderInternal.ExecutionTimeAsDateTime:type_name -> google.protobuf.Timestamp
+	199, // 43: mt5grpc.OrderInternal.OpenTimeMsAsDateTime:type_name -> google.protobuf.Timestamp
 	6,   // 44: mt5grpc.OrderInternal.Type:type_name -> mt5grpc.OrderType
 	4,   // 45: mt5grpc.OrderInternal.FillPolicy:type_name -> mt5grpc.FillPolicy
 	3,   // 46: mt5grpc.OrderInternal.ExpirationType:type_name -> mt5grpc.ExpirationType
@@ -16026,7 +15979,7 @@ var file_mtapi_mt5_mt5_proto_depIdxs = []int32{
 	11,  // 64: mt5grpc.SymbolInfo.CalcMode:type_name -> mt5grpc.CalculationMode
 	67,  // 65: mt5grpc.SymbolsReply.result:type_name -> mt5grpc.SymbolInfo
 	20,  // 66: mt5grpc.SymbolsReply.error:type_name -> mt5grpc.Error
-	200, // 67: mt5grpc.Quote.Time:type_name -> google.protobuf.Timestamp
+	199, // 67: mt5grpc.Quote.Time:type_name -> google.protobuf.Timestamp
 	70,  // 68: mt5grpc.GetQuoteReply.result:type_name -> mt5grpc.Quote
 	20,  // 69: mt5grpc.GetQuoteReply.error:type_name -> mt5grpc.Error
 	70,  // 70: mt5grpc.GetQuoteManyReply.result:type_name -> mt5grpc.Quote
@@ -16063,34 +16016,34 @@ var file_mtapi_mt5_mt5_proto_depIdxs = []int32{
 	104, // 101: mt5grpc.TickValueWithSizeReply.result:type_name -> mt5grpc.TickValueWithSize
 	20,  // 102: mt5grpc.TickValueWithSizeReply.error:type_name -> mt5grpc.Error
 	20,  // 103: mt5grpc.ChangePasswordReply.error:type_name -> mt5grpc.Error
-	200, // 104: mt5grpc.MailMessage.Time:type_name -> google.protobuf.Timestamp
-	111, // 105: mt5grpc.MailsReply.result:type_name -> mt5grpc.MailMessage
+	199, // 104: mt5grpc.MailMessage.Time:type_name -> google.protobuf.Timestamp
+	110, // 105: mt5grpc.MailsReply.result:type_name -> mt5grpc.MailMessage
 	20,  // 106: mt5grpc.MailsReply.error:type_name -> mt5grpc.Error
 	7,   // 107: mt5grpc.RequiredMarginRequest.type:type_name -> mt5grpc.DealType
 	20,  // 108: mt5grpc.RequiredMarginReply.error:type_name -> mt5grpc.Error
-	200, // 109: mt5grpc.Bar.Time:type_name -> google.protobuf.Timestamp
-	116, // 110: mt5grpc.PriceHistoryMonthReply.result:type_name -> mt5grpc.Bar
+	199, // 109: mt5grpc.Bar.Time:type_name -> google.protobuf.Timestamp
+	115, // 110: mt5grpc.PriceHistoryMonthReply.result:type_name -> mt5grpc.Bar
 	20,  // 111: mt5grpc.PriceHistoryMonthReply.error:type_name -> mt5grpc.Error
-	116, // 112: mt5grpc.PriceHistoryTodayReply.result:type_name -> mt5grpc.Bar
+	115, // 112: mt5grpc.PriceHistoryTodayReply.result:type_name -> mt5grpc.Bar
 	20,  // 113: mt5grpc.PriceHistoryTodayReply.error:type_name -> mt5grpc.Error
 	32,  // 114: mt5grpc.PriceHistoryTodayManyReply.result:type_name -> mt5grpc.QuoteHistoryEventArgs
 	20,  // 115: mt5grpc.PriceHistoryTodayManyReply.error:type_name -> mt5grpc.Error
-	116, // 116: mt5grpc.PriceHistoryReply.result:type_name -> mt5grpc.Bar
+	115, // 116: mt5grpc.PriceHistoryReply.result:type_name -> mt5grpc.Bar
 	20,  // 117: mt5grpc.PriceHistoryReply.error:type_name -> mt5grpc.Error
-	116, // 118: mt5grpc.PriceHistoryHighLowReply.result:type_name -> mt5grpc.Bar
+	115, // 118: mt5grpc.PriceHistoryHighLowReply.result:type_name -> mt5grpc.Bar
 	20,  // 119: mt5grpc.PriceHistoryHighLowReply.error:type_name -> mt5grpc.Error
 	20,  // 120: mt5grpc.PingReply.error:type_name -> mt5grpc.Error
 	20,  // 121: mt5grpc.HealthReply.error:type_name -> mt5grpc.Error
 	20,  // 122: mt5grpc.PingHostReply.error:type_name -> mt5grpc.Error
 	20,  // 123: mt5grpc.PingHostManyReply.error:type_name -> mt5grpc.Error
 	20,  // 124: mt5grpc.MemorySnapshotReply.error:type_name -> mt5grpc.Error
-	139, // 125: mt5grpc.Company.Results:type_name -> mt5grpc.Result
-	138, // 126: mt5grpc.SearchReply.result:type_name -> mt5grpc.Company
+	138, // 125: mt5grpc.Company.Results:type_name -> mt5grpc.Result
+	137, // 126: mt5grpc.SearchReply.result:type_name -> mt5grpc.Company
 	20,  // 127: mt5grpc.SearchReply.error:type_name -> mt5grpc.Error
-	200, // 128: mt5grpc.ClientStatus.ConnectTime:type_name -> google.protobuf.Timestamp
-	142, // 129: mt5grpc.GetClientsReply.result:type_name -> mt5grpc.ClientStatus
+	199, // 128: mt5grpc.ClientStatus.ConnectTime:type_name -> google.protobuf.Timestamp
+	141, // 129: mt5grpc.GetClientsReply.result:type_name -> mt5grpc.ClientStatus
 	20,  // 130: mt5grpc.GetClientsReply.error:type_name -> mt5grpc.Error
-	145, // 131: mt5grpc.GetDemoReply.result:type_name -> mt5grpc.AccountAnswer
+	144, // 131: mt5grpc.GetDemoReply.result:type_name -> mt5grpc.AccountAnswer
 	20,  // 132: mt5grpc.GetDemoReply.error:type_name -> mt5grpc.Error
 	20,  // 133: mt5grpc.SubscribeReply.error:type_name -> mt5grpc.Error
 	20,  // 134: mt5grpc.SubscribeManyReply.error:type_name -> mt5grpc.Error
@@ -16106,21 +16059,21 @@ var file_mtapi_mt5_mt5_proto_depIdxs = []int32{
 	20,  // 144: mt5grpc.TickHistoryRequestReply.error:type_name -> mt5grpc.Error
 	20,  // 145: mt5grpc.TickHistoryStopReply.error:type_name -> mt5grpc.Error
 	6,   // 146: mt5grpc.OrderSendRequest.operation:type_name -> mt5grpc.OrderType
-	200, // 147: mt5grpc.OrderSendRequest.expiration:type_name -> google.protobuf.Timestamp
+	199, // 147: mt5grpc.OrderSendRequest.expiration:type_name -> google.protobuf.Timestamp
 	3,   // 148: mt5grpc.OrderSendRequest.expirationType:type_name -> mt5grpc.ExpirationType
 	5,   // 149: mt5grpc.OrderSendRequest.placedType:type_name -> mt5grpc.PlacedType
 	51,  // 150: mt5grpc.OrderSendReply.result:type_name -> mt5grpc.Order
 	20,  // 151: mt5grpc.OrderSendReply.error:type_name -> mt5grpc.Error
-	200, // 152: mt5grpc.OrderModifyRequest.expiration:type_name -> google.protobuf.Timestamp
+	199, // 152: mt5grpc.OrderModifyRequest.expiration:type_name -> google.protobuf.Timestamp
 	3,   // 153: mt5grpc.OrderModifyRequest.expirationType:type_name -> mt5grpc.ExpirationType
 	51,  // 154: mt5grpc.OrderModifyReply.result:type_name -> mt5grpc.Order
 	20,  // 155: mt5grpc.OrderModifyReply.error:type_name -> mt5grpc.Error
 	51,  // 156: mt5grpc.OrderCloseReply.result:type_name -> mt5grpc.Order
 	20,  // 157: mt5grpc.OrderCloseReply.error:type_name -> mt5grpc.Error
 	20,  // 158: mt5grpc.EventsReply.error:type_name -> mt5grpc.Error
-	179, // 159: mt5grpc.OrderUpdateSummary.Update:type_name -> mt5grpc.OrderUpdate
+	178, // 159: mt5grpc.OrderUpdateSummary.Update:type_name -> mt5grpc.OrderUpdate
 	51,  // 160: mt5grpc.OrderUpdateSummary.OpenedOrders:type_name -> mt5grpc.Order
-	180, // 161: mt5grpc.OrderUpdate.Trans:type_name -> mt5grpc.TransactionInfo
+	179, // 161: mt5grpc.OrderUpdate.Trans:type_name -> mt5grpc.TransactionInfo
 	53,  // 162: mt5grpc.OrderUpdate.OrderInternal:type_name -> mt5grpc.OrderInternal
 	52,  // 163: mt5grpc.OrderUpdate.Deal:type_name -> mt5grpc.DealInternal
 	52,  // 164: mt5grpc.OrderUpdate.OppositeDeal:type_name -> mt5grpc.DealInternal
@@ -16129,24 +16082,24 @@ var file_mtapi_mt5_mt5_proto_depIdxs = []int32{
 	6,   // 167: mt5grpc.TransactionInfo.s58:type_name -> mt5grpc.OrderType
 	8,   // 168: mt5grpc.TransactionInfo.OrderState:type_name -> mt5grpc.OrderState
 	3,   // 169: mt5grpc.TransactionInfo.ExpirationType:type_name -> mt5grpc.ExpirationType
-	178, // 170: mt5grpc.OnOrderUpdateReply.result:type_name -> mt5grpc.OrderUpdateSummary
+	177, // 170: mt5grpc.OnOrderUpdateReply.result:type_name -> mt5grpc.OrderUpdateSummary
 	20,  // 171: mt5grpc.OnOrderUpdateReply.error:type_name -> mt5grpc.Error
 	70,  // 172: mt5grpc.OnQuoteReply.result:type_name -> mt5grpc.Quote
 	20,  // 173: mt5grpc.OnQuoteReply.error:type_name -> mt5grpc.Error
-	185, // 174: mt5grpc.OnTickValueReply.result:type_name -> mt5grpc.SymbolTickValue
+	184, // 174: mt5grpc.OnTickValueReply.result:type_name -> mt5grpc.SymbolTickValue
 	20,  // 175: mt5grpc.OnTickValueReply.error:type_name -> mt5grpc.Error
 	51,  // 176: mt5grpc.ProfitUpdate.Orders:type_name -> mt5grpc.Order
-	188, // 177: mt5grpc.OnOrderProfitReply.result:type_name -> mt5grpc.ProfitUpdate
+	187, // 177: mt5grpc.OnOrderProfitReply.result:type_name -> mt5grpc.ProfitUpdate
 	20,  // 178: mt5grpc.OnOrderProfitReply.error:type_name -> mt5grpc.Error
 	75,  // 179: mt5grpc.OnMarketWatchReply.result:type_name -> mt5grpc.MarketWatch
 	20,  // 180: mt5grpc.OnMarketWatchReply.error:type_name -> mt5grpc.Error
-	194, // 181: mt5grpc.TickHistoryEventArgs.Bars:type_name -> mt5grpc.TickBar
-	200, // 182: mt5grpc.TickBar.Time:type_name -> google.protobuf.Timestamp
-	193, // 183: mt5grpc.OnTickHistoryReply.result:type_name -> mt5grpc.TickHistoryEventArgs
+	193, // 181: mt5grpc.TickHistoryEventArgs.Bars:type_name -> mt5grpc.TickBar
+	199, // 182: mt5grpc.TickBar.Time:type_name -> google.protobuf.Timestamp
+	192, // 183: mt5grpc.OnTickHistoryReply.result:type_name -> mt5grpc.TickHistoryEventArgs
 	20,  // 184: mt5grpc.OnTickHistoryReply.error:type_name -> mt5grpc.Error
-	111, // 185: mt5grpc.OnMailReply.result:type_name -> mt5grpc.MailMessage
+	110, // 185: mt5grpc.OnMailReply.result:type_name -> mt5grpc.MailMessage
 	20,  // 186: mt5grpc.OnMailReply.error:type_name -> mt5grpc.Error
-	111, // 187: mt5grpc.OnOpenedOrdersTicketsReply.result:type_name -> mt5grpc.MailMessage
+	110, // 187: mt5grpc.OnOpenedOrdersTicketsReply.result:type_name -> mt5grpc.MailMessage
 	20,  // 188: mt5grpc.OnOpenedOrdersTicketsReply.error:type_name -> mt5grpc.Error
 	21,  // 189: mt5grpc.Connection.Connect:input_type -> mt5grpc.ConnectRequest
 	23,  // 190: mt5grpc.Connection.ConnectEx:input_type -> mt5grpc.ConnectExRequest
@@ -16177,51 +16130,51 @@ var file_mtapi_mt5_mt5_proto_depIdxs = []int32{
 	99,  // 215: mt5grpc.MT5.IsQuoteSessionMany:input_type -> mt5grpc.IsQuoteSessionManyRequest
 	101, // 216: mt5grpc.MT5.GetTickValueMany:input_type -> mt5grpc.GetTickValueManyRequest
 	103, // 217: mt5grpc.MT5.TickValueWithSize:input_type -> mt5grpc.TickValueWithSizeRequest
-	108, // 218: mt5grpc.MT5.ChangePassword:input_type -> mt5grpc.ChangePasswordRequest
-	110, // 219: mt5grpc.MT5.Mails:input_type -> mt5grpc.MailsRequest
-	113, // 220: mt5grpc.MT5.RequiredMargin:input_type -> mt5grpc.RequiredMarginRequest
-	115, // 221: mt5grpc.QuoteHistory.PriceHistoryMonth:input_type -> mt5grpc.PriceHistoryMonthRequest
-	118, // 222: mt5grpc.QuoteHistory.PriceHistoryMonthMany:input_type -> mt5grpc.PriceHistoryMonthManyRequest
-	119, // 223: mt5grpc.QuoteHistory.PriceHistoryToday:input_type -> mt5grpc.PriceHistoryTodayRequest
-	121, // 224: mt5grpc.QuoteHistory.PriceHistoryTodayMany:input_type -> mt5grpc.PriceHistoryTodayManyRequest
-	123, // 225: mt5grpc.QuoteHistory.PriceHistory:input_type -> mt5grpc.PriceHistoryRequest
+	107, // 218: mt5grpc.MT5.ChangePassword:input_type -> mt5grpc.ChangePasswordRequest
+	109, // 219: mt5grpc.MT5.Mails:input_type -> mt5grpc.MailsRequest
+	112, // 220: mt5grpc.MT5.RequiredMargin:input_type -> mt5grpc.RequiredMarginRequest
+	114, // 221: mt5grpc.QuoteHistory.PriceHistoryMonth:input_type -> mt5grpc.PriceHistoryMonthRequest
+	117, // 222: mt5grpc.QuoteHistory.PriceHistoryMonthMany:input_type -> mt5grpc.PriceHistoryMonthManyRequest
+	118, // 223: mt5grpc.QuoteHistory.PriceHistoryToday:input_type -> mt5grpc.PriceHistoryTodayRequest
+	120, // 224: mt5grpc.QuoteHistory.PriceHistoryTodayMany:input_type -> mt5grpc.PriceHistoryTodayManyRequest
+	122, // 225: mt5grpc.QuoteHistory.PriceHistory:input_type -> mt5grpc.PriceHistoryRequest
 	33,  // 226: mt5grpc.QuoteHistory.PriceHistoryMany:input_type -> mt5grpc.PriceHistoryManyRequest
-	125, // 227: mt5grpc.QuoteHistory.PriceHistoryHighLow:input_type -> mt5grpc.PriceHistoryHighLowRequest
+	124, // 227: mt5grpc.QuoteHistory.PriceHistoryHighLow:input_type -> mt5grpc.PriceHistoryHighLowRequest
 	27,  // 228: mt5grpc.QuoteHistory.PriceHistoryEx:input_type -> mt5grpc.PriceHistoryExRequest
 	29,  // 229: mt5grpc.QuoteHistory.PriceHistoryExMany:input_type -> mt5grpc.PriceHistoryExManyRequest
-	127, // 230: mt5grpc.Service.Ping:input_type -> mt5grpc.PingRequest
-	129, // 231: mt5grpc.Service.Health:input_type -> mt5grpc.HealthRequest
-	131, // 232: mt5grpc.Service.PingHost:input_type -> mt5grpc.PingHostRequest
-	133, // 233: mt5grpc.Service.PingHostMany:input_type -> mt5grpc.PingHostManyRequest
-	135, // 234: mt5grpc.Service.MemorySnapshot:input_type -> mt5grpc.MemorySnapshotRequest
-	137, // 235: mt5grpc.Service.Search:input_type -> mt5grpc.SearchRequest
-	141, // 236: mt5grpc.Service.GetClients:input_type -> mt5grpc.GetClientsRequest
-	144, // 237: mt5grpc.Service.GetDemo:input_type -> mt5grpc.GetDemoRequest
+	126, // 230: mt5grpc.Service.Ping:input_type -> mt5grpc.PingRequest
+	128, // 231: mt5grpc.Service.Health:input_type -> mt5grpc.HealthRequest
+	130, // 232: mt5grpc.Service.PingHost:input_type -> mt5grpc.PingHostRequest
+	132, // 233: mt5grpc.Service.PingHostMany:input_type -> mt5grpc.PingHostManyRequest
+	134, // 234: mt5grpc.Service.MemorySnapshot:input_type -> mt5grpc.MemorySnapshotRequest
+	136, // 235: mt5grpc.Service.Search:input_type -> mt5grpc.SearchRequest
+	140, // 236: mt5grpc.Service.GetClients:input_type -> mt5grpc.GetClientsRequest
+	143, // 237: mt5grpc.Service.GetDemo:input_type -> mt5grpc.GetDemoRequest
 	25,  // 238: mt5grpc.Service.Version:input_type -> mt5grpc.VersionRequest
-	147, // 239: mt5grpc.Subscriptions.Subscribe:input_type -> mt5grpc.SubscribeRequest
-	149, // 240: mt5grpc.Subscriptions.SubscribeMany:input_type -> mt5grpc.SubscribeManyRequest
-	151, // 241: mt5grpc.Subscriptions.UnSubscribe:input_type -> mt5grpc.UnSubscribeRequest
-	153, // 242: mt5grpc.Subscriptions.UnSubscribeMany:input_type -> mt5grpc.UnSubscribeManyRequest
-	155, // 243: mt5grpc.Subscriptions.SubscribeOrderProfit:input_type -> mt5grpc.SubscribeOrderProfitRequest
-	157, // 244: mt5grpc.Subscriptions.SubscribeTickValue:input_type -> mt5grpc.SubscribeTickValueRequest
-	159, // 245: mt5grpc.Subscriptions.SubscribeOrderUpdate:input_type -> mt5grpc.SubscribeOrderUpdateRequest
-	161, // 246: mt5grpc.Subscriptions.SubscribeMarketWatch:input_type -> mt5grpc.SubscribeMarketWatchRequest
-	163, // 247: mt5grpc.Subscriptions.SubscribeOpenedOrdersTickets:input_type -> mt5grpc.SubscribeOpenedOrdersTicketsRequest
-	165, // 248: mt5grpc.TickHistory.TickHistoryRequest:input_type -> mt5grpc.TickHistoryRequestRequest
-	167, // 249: mt5grpc.TickHistory.TickHistoryStop:input_type -> mt5grpc.TickHistoryStopRequest
-	192, // 250: mt5grpc.TickHistory.OnTickHistory:input_type -> mt5grpc.OnTickHistoryRequest
-	169, // 251: mt5grpc.Trading.OrderSend:input_type -> mt5grpc.OrderSendRequest
-	171, // 252: mt5grpc.Trading.OrderModify:input_type -> mt5grpc.OrderModifyRequest
-	173, // 253: mt5grpc.Trading.OrderClose:input_type -> mt5grpc.OrderCloseRequest
-	175, // 254: mt5grpc.Streams.Events:input_type -> mt5grpc.EventsRequest
-	177, // 255: mt5grpc.Streams.OnOrderUpdate:input_type -> mt5grpc.OnOrderUpdateRequest
-	182, // 256: mt5grpc.Streams.OnQuote:input_type -> mt5grpc.OnQuoteRequest
-	184, // 257: mt5grpc.Streams.OnTickValue:input_type -> mt5grpc.OnTickValueRequest
-	187, // 258: mt5grpc.Streams.OnOrderProfit:input_type -> mt5grpc.OnOrderProfitRequest
-	190, // 259: mt5grpc.Streams.OnMarketWatch:input_type -> mt5grpc.OnMarketWatchRequest
-	192, // 260: mt5grpc.Streams.OnTickHistory:input_type -> mt5grpc.OnTickHistoryRequest
-	196, // 261: mt5grpc.Streams.OnMail:input_type -> mt5grpc.OnMailRequest
-	198, // 262: mt5grpc.Streams.OnOpenedOrdersTickets:input_type -> mt5grpc.OnOpenedOrdersTicketsRequest
+	146, // 239: mt5grpc.Subscriptions.Subscribe:input_type -> mt5grpc.SubscribeRequest
+	148, // 240: mt5grpc.Subscriptions.SubscribeMany:input_type -> mt5grpc.SubscribeManyRequest
+	150, // 241: mt5grpc.Subscriptions.UnSubscribe:input_type -> mt5grpc.UnSubscribeRequest
+	152, // 242: mt5grpc.Subscriptions.UnSubscribeMany:input_type -> mt5grpc.UnSubscribeManyRequest
+	154, // 243: mt5grpc.Subscriptions.SubscribeOrderProfit:input_type -> mt5grpc.SubscribeOrderProfitRequest
+	156, // 244: mt5grpc.Subscriptions.SubscribeTickValue:input_type -> mt5grpc.SubscribeTickValueRequest
+	158, // 245: mt5grpc.Subscriptions.SubscribeOrderUpdate:input_type -> mt5grpc.SubscribeOrderUpdateRequest
+	160, // 246: mt5grpc.Subscriptions.SubscribeMarketWatch:input_type -> mt5grpc.SubscribeMarketWatchRequest
+	162, // 247: mt5grpc.Subscriptions.SubscribeOpenedOrdersTickets:input_type -> mt5grpc.SubscribeOpenedOrdersTicketsRequest
+	164, // 248: mt5grpc.TickHistory.TickHistoryRequest:input_type -> mt5grpc.TickHistoryRequestRequest
+	166, // 249: mt5grpc.TickHistory.TickHistoryStop:input_type -> mt5grpc.TickHistoryStopRequest
+	191, // 250: mt5grpc.TickHistory.OnTickHistory:input_type -> mt5grpc.OnTickHistoryRequest
+	168, // 251: mt5grpc.Trading.OrderSend:input_type -> mt5grpc.OrderSendRequest
+	170, // 252: mt5grpc.Trading.OrderModify:input_type -> mt5grpc.OrderModifyRequest
+	172, // 253: mt5grpc.Trading.OrderClose:input_type -> mt5grpc.OrderCloseRequest
+	174, // 254: mt5grpc.Streams.Events:input_type -> mt5grpc.EventsRequest
+	176, // 255: mt5grpc.Streams.OnOrderUpdate:input_type -> mt5grpc.OnOrderUpdateRequest
+	181, // 256: mt5grpc.Streams.OnQuote:input_type -> mt5grpc.OnQuoteRequest
+	183, // 257: mt5grpc.Streams.OnTickValue:input_type -> mt5grpc.OnTickValueRequest
+	186, // 258: mt5grpc.Streams.OnOrderProfit:input_type -> mt5grpc.OnOrderProfitRequest
+	189, // 259: mt5grpc.Streams.OnMarketWatch:input_type -> mt5grpc.OnMarketWatchRequest
+	191, // 260: mt5grpc.Streams.OnTickHistory:input_type -> mt5grpc.OnTickHistoryRequest
+	195, // 261: mt5grpc.Streams.OnMail:input_type -> mt5grpc.OnMailRequest
+	197, // 262: mt5grpc.Streams.OnOpenedOrdersTickets:input_type -> mt5grpc.OnOpenedOrdersTicketsRequest
 	22,  // 263: mt5grpc.Connection.Connect:output_type -> mt5grpc.ConnectReply
 	24,  // 264: mt5grpc.Connection.ConnectEx:output_type -> mt5grpc.ConnectExReply
 	39,  // 265: mt5grpc.Connection.ConnectProxy:output_type -> mt5grpc.ConnectProxyReply
@@ -16251,51 +16204,51 @@ var file_mtapi_mt5_mt5_proto_depIdxs = []int32{
 	100, // 289: mt5grpc.MT5.IsQuoteSessionMany:output_type -> mt5grpc.IsQuoteSessionManyReply
 	102, // 290: mt5grpc.MT5.GetTickValueMany:output_type -> mt5grpc.GetTickValueManyReply
 	105, // 291: mt5grpc.MT5.TickValueWithSize:output_type -> mt5grpc.TickValueWithSizeReply
-	109, // 292: mt5grpc.MT5.ChangePassword:output_type -> mt5grpc.ChangePasswordReply
-	112, // 293: mt5grpc.MT5.Mails:output_type -> mt5grpc.MailsReply
-	114, // 294: mt5grpc.MT5.RequiredMargin:output_type -> mt5grpc.RequiredMarginReply
-	117, // 295: mt5grpc.QuoteHistory.PriceHistoryMonth:output_type -> mt5grpc.PriceHistoryMonthReply
+	108, // 292: mt5grpc.MT5.ChangePassword:output_type -> mt5grpc.ChangePasswordReply
+	111, // 293: mt5grpc.MT5.Mails:output_type -> mt5grpc.MailsReply
+	113, // 294: mt5grpc.MT5.RequiredMargin:output_type -> mt5grpc.RequiredMarginReply
+	116, // 295: mt5grpc.QuoteHistory.PriceHistoryMonth:output_type -> mt5grpc.PriceHistoryMonthReply
 	31,  // 296: mt5grpc.QuoteHistory.PriceHistoryMonthMany:output_type -> mt5grpc.PriceHistoryMonthManyReply
-	120, // 297: mt5grpc.QuoteHistory.PriceHistoryToday:output_type -> mt5grpc.PriceHistoryTodayReply
-	122, // 298: mt5grpc.QuoteHistory.PriceHistoryTodayMany:output_type -> mt5grpc.PriceHistoryTodayManyReply
-	124, // 299: mt5grpc.QuoteHistory.PriceHistory:output_type -> mt5grpc.PriceHistoryReply
+	119, // 297: mt5grpc.QuoteHistory.PriceHistoryToday:output_type -> mt5grpc.PriceHistoryTodayReply
+	121, // 298: mt5grpc.QuoteHistory.PriceHistoryTodayMany:output_type -> mt5grpc.PriceHistoryTodayManyReply
+	123, // 299: mt5grpc.QuoteHistory.PriceHistory:output_type -> mt5grpc.PriceHistoryReply
 	35,  // 300: mt5grpc.QuoteHistory.PriceHistoryMany:output_type -> mt5grpc.PriceHistoryManyReply
-	126, // 301: mt5grpc.QuoteHistory.PriceHistoryHighLow:output_type -> mt5grpc.PriceHistoryHighLowReply
+	125, // 301: mt5grpc.QuoteHistory.PriceHistoryHighLow:output_type -> mt5grpc.PriceHistoryHighLowReply
 	28,  // 302: mt5grpc.QuoteHistory.PriceHistoryEx:output_type -> mt5grpc.PriceHistoryExReply
 	30,  // 303: mt5grpc.QuoteHistory.PriceHistoryExMany:output_type -> mt5grpc.PriceHistoryExManyReply
-	128, // 304: mt5grpc.Service.Ping:output_type -> mt5grpc.PingReply
-	130, // 305: mt5grpc.Service.Health:output_type -> mt5grpc.HealthReply
-	132, // 306: mt5grpc.Service.PingHost:output_type -> mt5grpc.PingHostReply
-	134, // 307: mt5grpc.Service.PingHostMany:output_type -> mt5grpc.PingHostManyReply
-	136, // 308: mt5grpc.Service.MemorySnapshot:output_type -> mt5grpc.MemorySnapshotReply
-	140, // 309: mt5grpc.Service.Search:output_type -> mt5grpc.SearchReply
-	143, // 310: mt5grpc.Service.GetClients:output_type -> mt5grpc.GetClientsReply
-	146, // 311: mt5grpc.Service.GetDemo:output_type -> mt5grpc.GetDemoReply
+	127, // 304: mt5grpc.Service.Ping:output_type -> mt5grpc.PingReply
+	129, // 305: mt5grpc.Service.Health:output_type -> mt5grpc.HealthReply
+	131, // 306: mt5grpc.Service.PingHost:output_type -> mt5grpc.PingHostReply
+	133, // 307: mt5grpc.Service.PingHostMany:output_type -> mt5grpc.PingHostManyReply
+	135, // 308: mt5grpc.Service.MemorySnapshot:output_type -> mt5grpc.MemorySnapshotReply
+	139, // 309: mt5grpc.Service.Search:output_type -> mt5grpc.SearchReply
+	142, // 310: mt5grpc.Service.GetClients:output_type -> mt5grpc.GetClientsReply
+	145, // 311: mt5grpc.Service.GetDemo:output_type -> mt5grpc.GetDemoReply
 	26,  // 312: mt5grpc.Service.Version:output_type -> mt5grpc.VersionReply
-	148, // 313: mt5grpc.Subscriptions.Subscribe:output_type -> mt5grpc.SubscribeReply
-	150, // 314: mt5grpc.Subscriptions.SubscribeMany:output_type -> mt5grpc.SubscribeManyReply
-	152, // 315: mt5grpc.Subscriptions.UnSubscribe:output_type -> mt5grpc.UnSubscribeReply
-	154, // 316: mt5grpc.Subscriptions.UnSubscribeMany:output_type -> mt5grpc.UnSubscribeManyReply
-	156, // 317: mt5grpc.Subscriptions.SubscribeOrderProfit:output_type -> mt5grpc.SubscribeOrderProfitReply
-	158, // 318: mt5grpc.Subscriptions.SubscribeTickValue:output_type -> mt5grpc.SubscribeTickValueReply
-	160, // 319: mt5grpc.Subscriptions.SubscribeOrderUpdate:output_type -> mt5grpc.SubscribeOrderUpdateReply
-	162, // 320: mt5grpc.Subscriptions.SubscribeMarketWatch:output_type -> mt5grpc.SubscribeMarketWatchReply
-	164, // 321: mt5grpc.Subscriptions.SubscribeOpenedOrdersTickets:output_type -> mt5grpc.SubscribeOpenedOrdersTicketsReply
-	166, // 322: mt5grpc.TickHistory.TickHistoryRequest:output_type -> mt5grpc.TickHistoryRequestReply
-	168, // 323: mt5grpc.TickHistory.TickHistoryStop:output_type -> mt5grpc.TickHistoryStopReply
-	195, // 324: mt5grpc.TickHistory.OnTickHistory:output_type -> mt5grpc.OnTickHistoryReply
-	170, // 325: mt5grpc.Trading.OrderSend:output_type -> mt5grpc.OrderSendReply
-	172, // 326: mt5grpc.Trading.OrderModify:output_type -> mt5grpc.OrderModifyReply
-	174, // 327: mt5grpc.Trading.OrderClose:output_type -> mt5grpc.OrderCloseReply
-	176, // 328: mt5grpc.Streams.Events:output_type -> mt5grpc.EventsReply
-	181, // 329: mt5grpc.Streams.OnOrderUpdate:output_type -> mt5grpc.OnOrderUpdateReply
-	183, // 330: mt5grpc.Streams.OnQuote:output_type -> mt5grpc.OnQuoteReply
-	186, // 331: mt5grpc.Streams.OnTickValue:output_type -> mt5grpc.OnTickValueReply
-	189, // 332: mt5grpc.Streams.OnOrderProfit:output_type -> mt5grpc.OnOrderProfitReply
-	191, // 333: mt5grpc.Streams.OnMarketWatch:output_type -> mt5grpc.OnMarketWatchReply
-	195, // 334: mt5grpc.Streams.OnTickHistory:output_type -> mt5grpc.OnTickHistoryReply
-	197, // 335: mt5grpc.Streams.OnMail:output_type -> mt5grpc.OnMailReply
-	199, // 336: mt5grpc.Streams.OnOpenedOrdersTickets:output_type -> mt5grpc.OnOpenedOrdersTicketsReply
+	147, // 313: mt5grpc.Subscriptions.Subscribe:output_type -> mt5grpc.SubscribeReply
+	149, // 314: mt5grpc.Subscriptions.SubscribeMany:output_type -> mt5grpc.SubscribeManyReply
+	151, // 315: mt5grpc.Subscriptions.UnSubscribe:output_type -> mt5grpc.UnSubscribeReply
+	153, // 316: mt5grpc.Subscriptions.UnSubscribeMany:output_type -> mt5grpc.UnSubscribeManyReply
+	155, // 317: mt5grpc.Subscriptions.SubscribeOrderProfit:output_type -> mt5grpc.SubscribeOrderProfitReply
+	157, // 318: mt5grpc.Subscriptions.SubscribeTickValue:output_type -> mt5grpc.SubscribeTickValueReply
+	159, // 319: mt5grpc.Subscriptions.SubscribeOrderUpdate:output_type -> mt5grpc.SubscribeOrderUpdateReply
+	161, // 320: mt5grpc.Subscriptions.SubscribeMarketWatch:output_type -> mt5grpc.SubscribeMarketWatchReply
+	163, // 321: mt5grpc.Subscriptions.SubscribeOpenedOrdersTickets:output_type -> mt5grpc.SubscribeOpenedOrdersTicketsReply
+	165, // 322: mt5grpc.TickHistory.TickHistoryRequest:output_type -> mt5grpc.TickHistoryRequestReply
+	167, // 323: mt5grpc.TickHistory.TickHistoryStop:output_type -> mt5grpc.TickHistoryStopReply
+	194, // 324: mt5grpc.TickHistory.OnTickHistory:output_type -> mt5grpc.OnTickHistoryReply
+	169, // 325: mt5grpc.Trading.OrderSend:output_type -> mt5grpc.OrderSendReply
+	171, // 326: mt5grpc.Trading.OrderModify:output_type -> mt5grpc.OrderModifyReply
+	173, // 327: mt5grpc.Trading.OrderClose:output_type -> mt5grpc.OrderCloseReply
+	175, // 328: mt5grpc.Streams.Events:output_type -> mt5grpc.EventsReply
+	180, // 329: mt5grpc.Streams.OnOrderUpdate:output_type -> mt5grpc.OnOrderUpdateReply
+	182, // 330: mt5grpc.Streams.OnQuote:output_type -> mt5grpc.OnQuoteReply
+	185, // 331: mt5grpc.Streams.OnTickValue:output_type -> mt5grpc.OnTickValueReply
+	188, // 332: mt5grpc.Streams.OnOrderProfit:output_type -> mt5grpc.OnOrderProfitReply
+	190, // 333: mt5grpc.Streams.OnMarketWatch:output_type -> mt5grpc.OnMarketWatchReply
+	194, // 334: mt5grpc.Streams.OnTickHistory:output_type -> mt5grpc.OnTickHistoryReply
+	196, // 335: mt5grpc.Streams.OnMail:output_type -> mt5grpc.OnMailReply
+	198, // 336: mt5grpc.Streams.OnOpenedOrdersTickets:output_type -> mt5grpc.OnOpenedOrdersTicketsReply
 	263, // [263:337] is the sub-list for method output_type
 	189, // [189:263] is the sub-list for method input_type
 	189, // [189:189] is the sub-list for extension type_name
@@ -16319,24 +16272,24 @@ func file_mtapi_mt5_mt5_proto_init() {
 	file_mtapi_mt5_mt5_proto_msgTypes[49].OneofWrappers = []any{}
 	file_mtapi_mt5_mt5_proto_msgTypes[52].OneofWrappers = []any{}
 	file_mtapi_mt5_mt5_proto_msgTypes[61].OneofWrappers = []any{}
-	file_mtapi_mt5_mt5_proto_msgTypes[88].OneofWrappers = []any{}
-	file_mtapi_mt5_mt5_proto_msgTypes[93].OneofWrappers = []any{}
-	file_mtapi_mt5_mt5_proto_msgTypes[111].OneofWrappers = []any{}
-	file_mtapi_mt5_mt5_proto_msgTypes[127].OneofWrappers = []any{}
-	file_mtapi_mt5_mt5_proto_msgTypes[129].OneofWrappers = []any{}
-	file_mtapi_mt5_mt5_proto_msgTypes[137].OneofWrappers = []any{}
-	file_mtapi_mt5_mt5_proto_msgTypes[143].OneofWrappers = []any{}
-	file_mtapi_mt5_mt5_proto_msgTypes[149].OneofWrappers = []any{}
-	file_mtapi_mt5_mt5_proto_msgTypes[151].OneofWrappers = []any{}
-	file_mtapi_mt5_mt5_proto_msgTypes[153].OneofWrappers = []any{}
-	file_mtapi_mt5_mt5_proto_msgTypes[178].OneofWrappers = []any{}
+	file_mtapi_mt5_mt5_proto_msgTypes[87].OneofWrappers = []any{}
+	file_mtapi_mt5_mt5_proto_msgTypes[92].OneofWrappers = []any{}
+	file_mtapi_mt5_mt5_proto_msgTypes[110].OneofWrappers = []any{}
+	file_mtapi_mt5_mt5_proto_msgTypes[126].OneofWrappers = []any{}
+	file_mtapi_mt5_mt5_proto_msgTypes[128].OneofWrappers = []any{}
+	file_mtapi_mt5_mt5_proto_msgTypes[136].OneofWrappers = []any{}
+	file_mtapi_mt5_mt5_proto_msgTypes[142].OneofWrappers = []any{}
+	file_mtapi_mt5_mt5_proto_msgTypes[148].OneofWrappers = []any{}
+	file_mtapi_mt5_mt5_proto_msgTypes[150].OneofWrappers = []any{}
+	file_mtapi_mt5_mt5_proto_msgTypes[152].OneofWrappers = []any{}
+	file_mtapi_mt5_mt5_proto_msgTypes[177].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mtapi_mt5_mt5_proto_rawDesc), len(file_mtapi_mt5_mt5_proto_rawDesc)),
 			NumEnums:      20,
-			NumMessages:   180,
+			NumMessages:   179,
 			NumExtensions: 0,
 			NumServices:   8,
 		},

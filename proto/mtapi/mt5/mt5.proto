@@ -221,13 +221,6 @@ rpc SymbolSessionsExMany (SymbolSessionsExManyRequest) returns (SymbolSessionsEx
 // }
 rpc TickValueWithSize (TickValueWithSizeRequest) returns (TickValueWithSizeReply);
 
-// Cluster servers details
-// [Example] 
-// { 
-//  "id": "demo-token-mt5" 
-// }
-//  rpc ClusterDetails (ClusterDetailsRequest) returns (ClusterDetailsReply);
-
   rpc ChangePassword (ChangePasswordRequest) returns (ChangePasswordReply);
 // Mail inbox
 // [Example] 
@@ -1859,16 +1852,6 @@ message TickValueWithSizeReply {
 // {
 //  "id": "demo-token-mt5"
 // }
-message ClusterDetailsRequest {
-  // Token returned by 'Connect' method [Required]
-   string id = 1;
-}
-
-//message ClusterDetails {
-//  ServerRec General = 1;
-//  map<string, repeated AddressRec> Servers = 2;
-//}
-
 // Server details from servers.dat
 message ServerRec {
   string ServerName = 1;
@@ -1876,12 +1859,6 @@ message ServerRec {
   int32 DST = 3;
   int32 TimeZone = 4;
 }
-
-//message ClusterDetailsReply {
-//  ClusterDetails result = 1;
-//  Error error = 2;
-//}
-
 
 // [Example]
 // {
