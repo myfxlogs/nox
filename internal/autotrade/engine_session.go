@@ -55,6 +55,15 @@ func (w sessionWindow) inSession(now time.Time) bool {
 
 // loadSessionTable 全量拉 trade_session facts 组表（行数=符号×7×session，百级内）。
 func (e *Engine) loadSessionTable(ctx context.Context) sessionTable {
+	// D-029 R1 ④：Engine 内缓存 1 分钟 TTL（周表静态每日刷新，判定调用高频——防全量
+	// facts 重拉/重组反复发生）；ttl 过期即重拉（采集班次 24h 内至多重拉 1440 次=无害）。
+	e.sessionTblMu.Lock()
+	if e.sessionTbl != nil && time.Since(e.sessionTblAt) < time.Minute {
+		t := e.sessionTbl
+		e.sessionTblMu.Unlock()
+		return t
+	}
+	e.sessionTblMu.Unlock()
 	facts, err := e.store.LatestFactsByKind(ctx, fact.KindTradeSession)
 	if err != nil || len(facts) == 0 {
 		return nil
@@ -70,12 +79,15 @@ func (e *Engine) loadSessionTable(ctx context.Context) sessionTable {
 			wday: int(v / 1e8), startMin: int(v / 1e4 % 1e4), endMin: int(v % 1e4),
 		})
 	}
+	e.sessionTblMu.Lock()
+	e.sessionTbl, e.sessionTblAt = t, time.Now()
+	e.sessionTblMu.Unlock()
 	return t
 }
 
-// mtMarketClosedFor 单 MT 腿休市判定（venue=bare、canonical=腿 canonical；brokerSym 可空
-// ——报价新鲜度径需要 broker 裸符号，空则跳过动态径返回周表判定）。
-func (e *Engine) mtMarketClosedFor(ctx context.Context, bare, canonical, brokerSym string) bool {
+// mtMarketClosedFor 单 MT 腿休市判定（venue=bare、canonical=腿 canonical——R1 ②：动态径
+// ticks 按 canonical 键查（与 MT ticks 落库键一致），入场径/持仓径同口径）。
+func (e *Engine) mtMarketClosedFor(ctx context.Context, bare, canonical string) bool {
 	// 径 1：trade_mode 静态权限（CloseOnly/Disabled 拦截；Full/缺=过）。
 	tm, terr := e.store.LatestFacts(ctx, fact.KindTradeMode, bare, canonical)
 	if terr == nil && len(tm) > 0 {
@@ -87,9 +99,6 @@ func (e *Engine) mtMarketClosedFor(ctx context.Context, bare, canonical, brokerS
 	// 径 2：周表主信号。
 	table := e.loadSessionTable(ctx)
 	win, hasTable := table[bare+"|"+canonical]
-	if !hasTable && brokerSym != "" {
-		win, hasTable = table[bare+"|"+brokerSym] // native variant 双发行兜底
-	}
 	now := e.sessionNow()
 	if hasTable {
 		open := false
@@ -102,16 +111,14 @@ func (e *Engine) mtMarketClosedFor(ctx context.Context, bare, canonical, brokerS
 		if !open {
 			return true // 周表判闭
 		}
-		// 周表说开 → 径 3：动态新鲜度佐证（N 缺=fail-closed 判闭）。
+		// 周表说开 → 径 3：动态新鲜度佐证（N 缺=fail-closed 判闭；ticks 按 canonical 键 R1 ②）。
 		n := e.cfg.MtQuoteStaleMin
 		if n <= 0 {
 			return true
 		}
-		if brokerSym != "" {
-			ticks, terr := e.store.TicksWindow(ctx, bare, brokerSym, now.Add(-time.Duration(n)*time.Minute))
-			if terr != nil || len(ticks) == 0 {
-				return true // 窗内零 tick=报价静默超阈
-			}
+		ticks, terr := e.store.TicksWindow(ctx, bare, canonical, now.Add(-time.Duration(n)*time.Minute))
+		if terr != nil || len(ticks) == 0 {
+			return true // 窗内零 tick=报价静默超阈
 		}
 		return false
 	}
@@ -140,7 +147,7 @@ func (e *Engine) mtLegMarketClosed(ctx context.Context, p *pgstore.Position) boo
 		if canonical == "" {
 			continue
 		}
-		if e.mtMarketClosedFor(ctx, keydomain.BareOf(l.Venue), canonical, l.Symbol) {
+		if e.mtMarketClosedFor(ctx, keydomain.BareOf(l.Venue), canonical) {
 			return true
 		}
 	}

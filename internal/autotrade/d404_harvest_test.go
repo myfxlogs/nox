@@ -343,3 +343,12 @@ func d014FeeAny(_ context.Context, venueKey string) (float64, bool) {
 	}
 	return 5.0, true
 }
+
+// d014EconEngineCfg D-029 R1 ①：cfg 经装配钩子定制（不直赋字段——config 路径纪律）。
+func d014EconEngineCfg(s *pgstore.Store, qb *bus.QuoteBus, feeOK bool, tune func(*Config)) *Engine {
+	e := d014EconEngine(s, qb, feeOK)
+	if tune != nil {
+		tune(&e.cfg)
+	}
+	return e
+}

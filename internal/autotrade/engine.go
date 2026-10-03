@@ -33,6 +33,10 @@ type Engine struct {
 	xassetAllow atomic.Pointer[[]exec.XAssetComboAllowSpec]
 	// sessionNowFn D-029：休市判定时刻 hook（nil=真钟 UTC；测试控时相注入）。
 	sessionNowFn func() time.Time
+	// sessionTbl/At/sessionTblMu D-029 R1 ④：周表缓存（1min TTL；store 拉取+组表高频摊薄）。
+	sessionTbl   sessionTable
+	sessionTblAt time.Time
+	sessionTblMu sync.Mutex
 	// D-515 S5：swaparb_allow_combos 表热读快照（allow/deny 双轨整体替换；nil→cfg 启动值回退）。
 	swapArb atomic.Pointer[swapArbComboSnapshot]
 	// D-443 S2：venue/canonical 执行白名单热读 holder（60s 周期重载免重启，同 xassetAllow 模式）。

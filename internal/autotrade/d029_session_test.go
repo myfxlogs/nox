@@ -88,12 +88,12 @@ func TestD029_SessionOpenQuoteStaleVsFresh(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("seed trade_mode full: %v", err)
 	}
-	d029SeedSessions(t, s, now, float64(5*1e8+480*1e4+1200)) // 周五 08:00-20:00（value=day*1e7+start*1e4+end）
-	e := d014EconEngine(s, d404Quotes(now, 4000, 4000, 0), true)
+	d029SeedSessions(t, s, now, float64(5*1e8+480*1e4+1200)) // 周五 08:00-20:00（value=day*1e8+start*1e4+end）
+	// D-029 R1 ①：MtQuoteStaleMin 经 config 装配钩子传入（不直赋字段）。
+	e := d014EconEngineCfg(s, d404Quotes(now, 4000, 4000, 0), true, func(c *Config) { c.MtQuoteStaleMin = 10 })
 	e.SetSessionNowFn(func() time.Time { return now }) // D-029：判定时刻注入（假周五，真钟周六会串相）
 
 	d029Ticks(t, s, now, 30*time.Minute) // 报价 30min 前=超阈
-	e.cfg.MtQuoteStaleMin = 10
 	if !e.mtLegMarketClosed(ctx029(), p) {
 		t.Fatal("周表开市但报价静默超阈应判闭（动态径）")
 	}
@@ -103,9 +103,11 @@ func TestD029_SessionOpenQuoteStaleVsFresh(t *testing.T) {
 		t.Fatal("周表开市且报价新鲜应判开")
 	}
 
+	// R1 ①：N 缺省（Config 构造不设）→ fail-closed 判闭。
+	e0 := d014EconEngineCfg(s, d404Quotes(now, 4000, 4000, 0), true, func(c *Config) {})
+	e0.SetSessionNowFn(func() time.Time { return now })
 	d029Ticks(t, s, now, 30*time.Minute)
-	e.cfg.MtQuoteStaleMin = 0 // N 缺 → fail-closed 判闭
-	if !e.mtLegMarketClosed(ctx029(), p) {
+	if !e0.mtLegMarketClosed(ctx029(), p) {
 		t.Fatal("N 缺应 fail-closed 判闭（无动态佐证不判开）")
 	}
 }
@@ -138,5 +140,24 @@ func TestD029_EconEntryGateRejectsClosed(t *testing.T) {
 	}
 	if !e.econEntryGate(ctx029(), opp, 1000) {
 		t.Fatal("MT 腿闭市应拒开（econEntryGate true）")
+	}
+}
+
+// TestD029_SessionOpenNoTickClosed R1 ②新增锚：周表开市+canonical 键窗内**无 tick** → 闭。
+func TestD029_SessionOpenNoTickClosed(t *testing.T) {
+	s := testAccumStore(t)
+	now := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
+	p := d029SessionPos(t, s)
+	if err := s.InsertFacts(ctx029(), []fact.Fact{
+		{Kind: fact.KindTradeMode, Venue: "3001157", Symbol: "XPTUSD", Value: float64(fact.TradeModeFull), Unit: fact.UnitMode, Ts: time.Now().UTC(), Src: "mt5"},
+	}); err != nil {
+		t.Fatalf("seed trade_mode: %v", err)
+	}
+	d029SeedSessions(t, s, now, float64(5*1e8+480*1e4+1200))
+	// 不插任何 tick——canonical 键窗内零行=报价静默。
+	e := d014EconEngineCfg(s, d404Quotes(now, 4000, 4000, 0), true, func(c *Config) { c.MtQuoteStaleMin = 10 })
+	e.SetSessionNowFn(func() time.Time { return now })
+	if !e.mtLegMarketClosed(ctx029(), p) {
+		t.Fatal("周表开市+窗内无 tick 应判闭")
 	}
 }
