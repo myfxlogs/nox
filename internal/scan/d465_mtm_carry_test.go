@@ -61,9 +61,11 @@ func TestD465_BestPair(t *testing.T) {
 type fakeMtmPaperStore struct {
 	rows     map[int64]*pgstore.PaperSpotCarry
 	nextID   int64
-	ticks    map[string][]pgstore.TickRow      // venue|symbol → ticks
-	universe map[string]pgstore.CexUniverseRow // D-463：spot 步进候选源
-	facts    map[string][]fact.Fact            // D-474a：kind|venue|symbol → 升序 facts
+	ticks    map[string][]pgstore.TickRow       // venue|symbol → ticks
+	universe map[string]pgstore.CexUniverseRow  // D-463：spot 步进候选源
+	facts    map[string][]fact.Fact             // D-474a：kind|venue|symbol → 升序 facts
+	equiv    []pgstore.AssetEquivEntry          // D-043：class 键行腿解析测试面
+	mappings map[string][]pgstore.SymbolMapping // venue→映射（D-043 class 行 raw 解析）
 	accrues  []struct {
 		id        int64
 		last, add float64
@@ -164,8 +166,11 @@ func (f *fakeMtmPaperStore) FactsSince(_ context.Context, kind, venue, symbol st
 	}
 	return out, nil
 }
-func (f *fakeMtmPaperStore) ListSymbolMappings(context.Context, string) ([]pgstore.SymbolMapping, error) {
-	return nil, nil
+func (f *fakeMtmPaperStore) ListSymbolMappings(_ context.Context, venue string) ([]pgstore.SymbolMapping, error) {
+	return f.mappings[venue], nil
+}
+func (f *fakeMtmPaperStore) ListAssetEquiv(_ context.Context) ([]pgstore.AssetEquivEntry, error) {
+	return f.equiv, nil
 }
 func (f *fakeMtmPaperStore) ExitPaperSpotCarry(_ context.Context, id int64, reason string, _ *float64) error {
 	f.exits = append(f.exits, struct {

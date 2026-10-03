@@ -68,7 +68,8 @@ func netAllInUSD(accrued float64, estFee, convergence *float64) float64 {
 // insertCfdPaper cfd 纸面开仓（保底段与 top-N 段共用）：venue=mt×cex 组合串、
 // est_round_trip_fee 开仓记账（venue 未覆盖→NULL 拒填）、entry/last_basis 接 monitor 面
 // （XAssetMonitorRowNear ts<=entry_ts 谓词复用 D-404 R1 冻结锚同源；缺席→NULL 诚实缺）。
-func insertCfdPaper(ctx context.Context, st PaperStore, r UniverseRow, mtVenue, cexVenue string, now time.Time) error {
+func insertCfdPaper(ctx context.Context, st PaperStore, r UniverseRow, mtVenue, cexVenue string,
+	view *assetClassView, now time.Time) error {
 	side := "short_perp"
 	if r.Structure == "short_cfd_long_perp" {
 		side = "long_perp"
@@ -83,11 +84,15 @@ func insertCfdPaper(ctx context.Context, st PaperStore, r UniverseRow, mtVenue, 
 	// D-423：monitor 三元组——universe venue 裸名映射 venue 键（cex→+:perp，mt→+:mt5）。
 	var spread *float64
 	cexVenue, mtVenueKey := monitorVenueKeys(r.CexVenue, mtVenue)
-	if eb, ok, err := st.XAssetMonitorRowNear(ctx, paperCfdPairKey(r.Canonical), cexVenue, mtVenueKey, now, paperCfdMonitorMaxAge); err != nil {
-		return fmt.Errorf("monitor entry basis: %w", err)
-	} else if ok {
-		p.EntryBasisBps, p.LastBasisBps = &eb, &eb
-		spread = &eb // D-474a S2：MT 腿费用=monitor 簿实算点差（同一行值）
+	// D-043 ②：pair 键候选（class 行经 asset_equiv 实解析），按序 first-hit。
+	for _, pair := range view.cfdPairCandidates(r.Canonical, cexVenue, mtVenueKey) {
+		if eb, ok, err := st.XAssetMonitorRowNear(ctx, pair, cexVenue, mtVenueKey, now, paperCfdMonitorMaxAge); err != nil {
+			return fmt.Errorf("monitor entry basis: %w", err)
+		} else if ok {
+			p.EntryBasisBps, p.LastBasisBps = &eb, &eb
+			spread = &eb // D-474a S2：MT 腿费用=monitor 簿实算点差（同一行值）
+			break
+		}
 	}
 	// D-474a S2：cex 往返 2 笔 + MT 腿簿实算点差往返 + 佣金常数；簿缺→NULL 缺账。
 	p.EstRoundTripFeeUSD = paperCfdFeeUSD(ctx, st, r.CexVenue, PaperQtyUSD, spread)
@@ -109,22 +114,30 @@ func paperExitConvergence(p pgstore.PaperSpotCarry, lastBasis *float64) *float64
 	return paperConvergenceUSD(paperBasisDir(p.Side, p.Structure), p.EntryBasisBps, lb, p.QtyUSD)
 }
 
-// authSlot D-410 S4 保底槽（D-419 S3 加 cexVenue 供 monitor 簿三元组哨兵）。
-type authSlot struct{ key, venueCombo, symbol, mtVenue, cexVenue string }
+// authSlot D-410 S4 保底槽（D-419 S3 加 cexVenue 供 monitor 簿三元组哨兵；
+// D-043 cls=MT canonical 的 asset_class——class 键在仓行授权计数用）。
+type authSlot struct{ key, venueCombo, symbol, mtVenue, cexVenue, cls string }
 
 // warnMonitorBookAbsent D-419 S3：授权组合 monitor 簿覆盖哨兵——簿三元组从未有过行
 // → basis 恒 NULL 不可毕业（与宇宙行缺席同型静默，收口为可归因 warn）。
 // 不阻断开仓（basis NULL 诚实缺语义保留）；查询失败 fail-open 跳过不误报；
 // 聚合节流每轮至多一条。
-func warnMonitorBookAbsent(ctx context.Context, st PaperStore, slots []authSlot) {
+func warnMonitorBookAbsent(ctx context.Context, st PaperStore, slots []authSlot, view *assetClassView) {
 	var noMonitor []string
 	for _, sl := range slots {
-		pair := paperCfdPairKey(sl.symbol)
 		cexV, mtV := monitorVenueKeys(sl.cexVenue, sl.mtVenue)
-		has, err := st.HasXAssetMonitorRow(ctx, pair, cexV, mtV)
-		if err != nil {
-			log.Printf("[cfd paper] monitor 簿查询 %s|%s|%s: %v（fail-open 跳过）", pair, cexV, mtV, err)
-			continue
+		has, pair := false, ""
+		for _, pair = range view.cfdPairCandidates(sl.symbol, cexV, mtV) { // D-043 ②：候选任中即覆盖
+			hit, err := st.HasXAssetMonitorRow(ctx, pair, cexV, mtV)
+			if err != nil {
+				log.Printf("[cfd paper] monitor 簿查询 %s|%s|%s: %v（fail-open 跳过）", pair, cexV, mtV, err)
+				has = true // 查询失败 fail-open 不误报
+				break
+			}
+			if hit {
+				has = true
+				break
+			}
 		}
 		if !has {
 			noMonitor = append(noMonitor, sl.key+"（簿:"+pair+"|"+cexV+"|"+mtV+"）")

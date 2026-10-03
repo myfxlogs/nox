@@ -70,6 +70,8 @@ type PaperStore interface {
 	TicksWindow(ctx context.Context, venue, symbol string, since time.Time) ([]pgstore.TickRow, error)
 	// D-014 S3：费率源 exchange_configs.taker_fee_bps（*pgstore.Store 原生实现；缺→拒填）。
 	ExchangeTakerFeeBps(ctx context.Context, venue, venueType string) (float64, bool, error)
+	// ListAssetEquiv D-043：等价类映射（class 键行 legs/pair 解析单源；*pgstore.Store 原生实现）。
+	ListAssetEquiv(ctx context.Context) ([]pgstore.AssetEquivEntry, error)
 }
 
 // StepPaperSpotCarry 每轮扫描后调用：①开仓（20≤net≤300 ∧ vol24h≥$10M ∧ 持续≥48h ∧

@@ -94,6 +94,13 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 	// 缺席 warn 分级归因（无行 vs 被剔）。
 	rowByKey := make(map[string]UniverseRow, len(rows))
 	dirtyByKey := make(map[string]string, len(rows))
+	// D-043 ②：等价类视图（class 键行→venue 实解析；读失败 fail-open 退化 legacy 键）。
+	var view *assetClassView
+	if equiv, eerr := st.ListAssetEquiv(ctx); eerr == nil {
+		view = newAssetClassView(equiv)
+	} else {
+		log.Printf("[cfd paper] asset_equiv: %v（退化 legacy 键）", eerr)
+	}
 	for _, r := range rows {
 		if !cfdStructures[r.Structure] {
 			continue
@@ -104,6 +111,14 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 			rowByKey[key] = r
 			if _, exists := rowByPair[pairKey]; !exists {
 				rowByPair[pairKey] = r // 双行 emit 后取首个（排序 net 降序=更优结构）
+			}
+			// D-043 ②：class 键行补 MT canonical NJK 键——保底槽键=NJK(mtCanon)（XAU 形）
+			// 恒可命中 GOLD/WTI 形 class 行（排序后先写者胜=net 更优行占位）。
+			if alt := NormalizeJoinKey(view.mtCanon(r.Canonical, r.MtVenue)); alt != "" && alt != r.Canonical {
+				altKey := r.MtVenue + "×" + r.CexVenue + "|" + alt
+				if _, exists := rowByPair[altKey]; !exists {
+					rowByPair[altKey] = r
+				}
 			}
 		} else {
 			dirtyByKey[key] = r.Note
@@ -135,11 +150,16 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 		if symbol == "" {
 			continue
 		}
-		slots = append(slots, authSlot{key: mtV + "×" + cexV + "|" + symbol, venueCombo: mtV + "×" + cexV, symbol: symbol, mtVenue: mtV, cexVenue: cexV})
+		slots = append(slots, authSlot{key: mtV + "×" + cexV + "|" + symbol, venueCombo: mtV + "×" + cexV,
+			symbol: symbol, mtVenue: mtV, cexVenue: cexV, cls: view.mtClassOf(mtV, mtCanon)})
 	}
-	authorized := make(map[string]struct{}, len(slots))
+	authorized := make(map[string]struct{}, len(slots)*2)
 	for _, sl := range slots {
 		authorized[sl.key] = struct{}{}
+		// D-043 ②：class 键在仓行（Symbol=GOLD 等）同样计授权——guaranteedActive 不漏算。
+		if sl.cls != "" {
+			authorized[sl.venueCombo+"|"+sl.cls] = struct{}{}
+		}
 	}
 	guaranteedActive := 0
 	// D-548 S1：槽额=canonical 去重计数（structure|symbol）——同 canonical 多账户行
@@ -208,7 +228,7 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 			}
 			continue
 		}
-		if err := insertCfdPaper(ctx, st, r, sl.mtVenue, sl.cexVenue, now); err != nil {
+		if err := insertCfdPaper(ctx, st, r, sl.mtVenue, sl.cexVenue, view, now); err != nil {
 			if err == pgstore.ErrPaperExists {
 				continue
 			}
@@ -224,7 +244,7 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 			log.Printf("[cfd paper] authorized-miss alert: %v", err)
 		}
 	}
-	warnMonitorBookAbsent(ctx, st, slots) // D-419 S3：簿覆盖哨兵（不阻断开仓）
+	warnMonitorBookAbsent(ctx, st, slots, view) // D-419 S3：簿覆盖哨兵（不阻断开仓）
 	// ① 开仓（top-N 段）
 	type cfdCand struct {
 		venueCombo string
@@ -258,7 +278,7 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 			// 观察面每账户一份语义不变）。
 			continue
 		}
-		if err := insertCfdPaper(ctx, st, c.r, c.r.MtVenue, c.r.CexVenue, now); err != nil {
+		if err := insertCfdPaper(ctx, st, c.r, c.r.MtVenue, c.r.CexVenue, view, now); err != nil {
 			if err == pgstore.ErrPaperExists {
 				continue
 			}
@@ -271,7 +291,7 @@ func StepPaperCfdCarry(ctx context.Context, st PaperStore, rows []UniverseRow, n
 		opened = append(opened, c.r.Canonical)
 	}
 	// ② 累积 + ③ 退出（仅 cfd 行；spot 轨行不归本函数）——D-474a 起拆至 paper_cfd_accrue.go。
-	n, err := accrueExitCfdPaper(ctx, st, accrable, rowByKey, dirtyPair, silentMt, now) // D-028 ③：dirty=suspend 判定走 venue 对级（结构无关）
+	n, err := accrueExitCfdPaper(ctx, st, accrable, rowByKey, dirtyPair, silentMt, view, now) // D-028 ③：dirty=suspend 判定走 venue 对级（结构无关）
 	if err != nil {
 		return opened, exited, err
 	}

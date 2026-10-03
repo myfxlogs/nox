@@ -17,15 +17,16 @@ import (
 // accrueExitCfdPaper cfd 行累积与退出（返回本轮退出数）。rowByKey=本轮 universe
 // clean cfd 行索引（key=mtV×cexV|canonical）；accrable=active+demo 行全集。
 func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.PaperSpotCarry,
-	rowByKey map[string]UniverseRow, dirtyByKey map[string]string, silentMt map[string]bool, now time.Time) (int, error) {
+	rowByKey map[string]UniverseRow, dirtyByKey map[string]string, silentMt map[string]bool,
+	view *assetClassView, now time.Time) (int, error) {
 	exited := 0
 	// D-474a S2：cex 腿 canonical→facts symbol 索引（funding 边界事实键=venue+collector
 	// canonical 形=cexFactSymbol(Symbol)，gate XAU_USDT→XAUUSDT、okx XAU-USDT-SWAP→XAUUSDT；
 	// HedgeCanonical/Symbol 双路归一键）。D-550：原样回 raw 键（US30_USDT）直查 facts 零命中
-	// →边界 fail-closed→gate/okx 纸面 accrued 恒 0。
+	// →边界 fail-closed→gate/okx 纸面 accrued 恒 0。D-043：键补 venue|asset_class。
 	cexRawByCanon := map[string]string{}
 	if uniRows, uerr := st.ListCexUniverse(ctx); uerr == nil {
-		cexRawByCanon = cexRawCanonIndex(uniRows)
+		cexRawByCanon = cexRawCanonIndex(uniRows, view)
 	}
 	// S1 MT 腿 canonical→broker 裸符号（facts 键=raw；venue 维度懒加载一次）。
 	mtRawCache := map[string]map[string]string{}
@@ -50,13 +51,21 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 		}
 		// D-410 S4：last_basis 每轮更 monitor 最新行（陈旧闸行龄超限→nil 诚实缺写 NULL）。
 		var lastBasis *float64
-		pair := paperCfdPairKey(p.Symbol)
 		// D-423：三元组 venue 键——D-498 直读配对双列（venue_a=MT 臂、venue_b=CEX 臂）。
 		mtV, cexV := p.VenueA, p.VenueB
 		cexVenue, mtVenue := monitorVenueKeys(cexV, mtV)
-		entryBps, _, _, _, ok, err := st.LatestXAssetEntryGate(ctx, pair, cexVenue, mtVenue, paperCfdMonitorMaxAge)
-		if err != nil {
-			return exited, fmt.Errorf("cfd paper step: monitor gate %s: %w", pair, err)
+		// D-043 ②：pair 键候选（class 行经 asset_equiv 实解析 venue 双腿），按序 first-hit。
+		var entryBps float64
+		var ok bool
+		for _, pair := range view.cfdPairCandidates(p.Symbol, cexVenue, mtVenue) {
+			eb, _, _, _, hit, err := st.LatestXAssetEntryGate(ctx, pair, cexVenue, mtVenue, paperCfdMonitorMaxAge)
+			if err != nil {
+				return exited, fmt.Errorf("cfd paper step: monitor gate %s: %w", pair, err)
+			}
+			if hit {
+				entryBps, ok = eb, true
+				break
+			}
 		}
 		if ok {
 			lastBasis = &entryBps
@@ -105,6 +114,10 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 		}
 		rawCex := cexRawByCanon[cexV+"|"+NormalizeJoinKey(p.Symbol)]
 		rawMt := mtRaw(mtV, p.Symbol)
+		if rawMt == "" {
+			// D-043 ②：class 键行（p.Symbol=asset_class）→ asset_equiv 解析 MT canonical 再查映射。
+			rawMt = mtRaw(mtV, view.mtCanon(p.Symbol, mtV))
+		}
 		legs := []PaperLegAccrue{
 			{Kind: fact.KindFunding, Venue: cexV, Symbol: rawCex, SideFactor: sideFactor, CurRate: r.FundingAnn, CurOK: rawCex != ""},
 			{Kind: swapKind, Venue: mtV, Symbol: rawMt, SideFactor: 1},

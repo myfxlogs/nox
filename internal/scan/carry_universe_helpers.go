@@ -101,8 +101,10 @@ func abs(v float64) float64 {
 // okx XAU-USDT-SWAP→XAUUSDT；HedgeCanonical/Symbol 双路归一键）。D-550：原样回 raw 键
 // （US30_USDT）直查 facts 零命中→边界 fail-closed。D-033：自 accrue 内联块提取，
 // 自盯行评估共用同键（禁两处各写归一规则）。
-func cexRawCanonIndex(uniRows map[string]pgstore.CexUniverseRow) map[string]string {
+func cexRawCanonIndex(uniRows map[string]pgstore.CexUniverseRow, view *assetClassView) map[string]string {
 	idx := map[string]string{}
+	clsIdx := map[string]string{}
+	clsBad := map[string]bool{}
 	for _, ur := range uniRows {
 		// D-028 ②：键补 NJK(cexFactSymbol(symbol))——okx TRX-USDT-SWAP / gate TRX_USDT
 		// 经 NJK 不归一（尾段非 USDT/USD），查键 canonical=TRX 永不命中 → fail-closed。
@@ -112,6 +114,27 @@ func cexRawCanonIndex(uniRows map[string]pgstore.CexUniverseRow) map[string]stri
 				idx[k] = cexFactSymbol(ur.Symbol)
 			}
 		}
+		// D-043 ②：键补 venue|asset_class——universe 行 Canonical=class（SILVER×XAGUSDT 等）
+		// 时 p.Symbol=class，NJK(class) 无映射线索 → class 键命中本行 facts 键。
+		for _, cls := range []string{view.cexClassOf(ur.Venue, cexFactSymbol(ur.Symbol)), view.classOfCanon(ur.HedgeCanonical)} {
+			if cls == "" {
+				continue
+			}
+			k, v := ur.Venue+"|"+cls, cexFactSymbol(ur.Symbol)
+			if old, ok := clsIdx[k]; ok && old != v {
+				// 同类同 venue 多 perp canonical（GOLD=PAXG/XAUT/XAU）→ 键不可唯一
+				// 绑定 facts 腿 → 删键诚实 miss（fail-closed 不错绑异腿 funding）。
+				delete(clsIdx, k)
+				clsBad[k] = true
+				continue
+			}
+			if !clsBad[k] {
+				clsIdx[k] = v
+			}
+		}
+	}
+	for k, v := range clsIdx {
+		idx[k] = v
 	}
 	return idx
 }

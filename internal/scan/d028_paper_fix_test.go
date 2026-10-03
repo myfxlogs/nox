@@ -100,7 +100,7 @@ func TestD028_LongRowWeekendNoAdverse(t *testing.T) {
 			rowByKey[r.MtVenue+"×"+r.CexVenue+"|"+r.Canonical+"|"+r.Structure] = r
 		}
 		silentMt := map[string]bool{}
-		return accrueExitCfdPaper(ctx, s, accrable, rowByKey, dirtyPair, silentMt, now)
+		return accrueExitCfdPaper(ctx, s, accrable, rowByKey, dirtyPair, silentMt, nil, now)
 	}()
 	if err != nil {
 		t.Fatalf("accrue round: %v", err)
@@ -169,7 +169,7 @@ func TestD028_SwapFreeCollectZeroesVal(t *testing.T) {
 		[]fact.Fact{{Kind: "swap_short", Venue: "3001157", Symbol: "XAUUSDm", Value: 0.5, Ts: time.Now()}},
 		func(fact.Fact) (int64, bool) { return 0, false },
 		map[string]bool{}, &ScanResult{}, map[string]string{},
-		map[string]bool{"3001157": true}) // swap_free 旗=true
+		map[string]bool{"3001157": true}, nil) // swap_free 旗=true（nil view=无等价类覆盖）
 	if v := long["XAU|3001157"].val; v != 0 {
 		t.Fatalf("swap_free long val want 0, got %v", v)
 	}

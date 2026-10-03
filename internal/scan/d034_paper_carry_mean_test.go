@@ -80,7 +80,7 @@ func TestD034_FundingMeanSaturdayOpen(t *testing.T) {
 	// ④ 不 adverse：同轮行再判（net>0 → 不退、不 zero_accrual）
 	accrable, _ := s.ListAccrablePaperSpotCarry(ctx)
 	rowByKey := map[string]UniverseRow{row.MtVenue + "×" + row.CexVenue + "|" + row.Canonical + "|" + row.Structure: *row}
-	exited, err := accrueExitCfdPaper(ctx, s, accrable, rowByKey, map[string]string{}, map[string]bool{}, now)
+	exited, err := accrueExitCfdPaper(ctx, s, accrable, rowByKey, map[string]string{}, map[string]bool{}, nil, now)
 	if err != nil {
 		t.Fatalf("accrue: %v", err)
 	}

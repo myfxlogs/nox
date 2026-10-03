@@ -15,6 +15,7 @@ type fakeEvalStore struct {
 	factsHist map[string][]fact.Fact
 	mappings  map[string][]pgstore.SymbolMapping
 	uni       map[string]pgstore.CexUniverseRow
+	equiv     []pgstore.AssetEquivEntry
 }
 
 func evalKey(kind, venue, symbol string) string { return kind + "|" + venue + "|" + symbol }
@@ -33,6 +34,9 @@ func (f *fakeEvalStore) TicksWindow(context.Context, string, string, time.Time) 
 }
 func (f *fakeEvalStore) ListCexUniverse(context.Context) (map[string]pgstore.CexUniverseRow, error) {
 	return f.uni, nil
+}
+func (f *fakeEvalStore) ListAssetEquiv(context.Context) ([]pgstore.AssetEquivEntry, error) {
+	return f.equiv, nil
 }
 
 var evalNow = time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC)

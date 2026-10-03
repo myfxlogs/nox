@@ -25,7 +25,7 @@ func TestD500_CfdSuspend_Silent(t *testing.T) {
 	st.rows[1] = d500CfdRow(1, now.Add(-time.Hour))
 	accrable, _ := st.ListAccrablePaperSpotCarry(ctx)
 	exited, err := accrueExitCfdPaper(ctx, st, accrable,
-		map[string]UniverseRow{}, map[string]string{}, map[string]bool{"silentA": true}, now)
+		map[string]UniverseRow{}, map[string]string{}, map[string]bool{"silentA": true}, nil, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestD500_CfdSuspend_Silent(t *testing.T) {
 	}
 	// 对照：venue 有产出（非静默）但该配对缺席 → 真 miss 计 streak。
 	exited, err = accrueExitCfdPaper(ctx, st, accrable,
-		map[string]UniverseRow{}, map[string]string{}, map[string]bool{}, now)
+		map[string]UniverseRow{}, map[string]string{}, map[string]bool{}, nil, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestD500_CfdSuspend_Dirty(t *testing.T) {
 	accrable, _ := st.ListAccrablePaperSpotCarry(ctx)
 	key := "silentA×okx|XAU"
 	exited, err := accrueExitCfdPaper(ctx, st, accrable,
-		map[string]UniverseRow{}, map[string]string{key: "suspect"}, map[string]bool{}, now)
+		map[string]UniverseRow{}, map[string]string{key: "suspect"}, map[string]bool{}, nil, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestD500_CfdSuspend_Age7d(t *testing.T) {
 	st.rows[1] = d500CfdRow(1, now.Add(-8*24*time.Hour))
 	accrable, _ := st.ListAccrablePaperSpotCarry(ctx)
 	exited, err := accrueExitCfdPaper(ctx, st, accrable,
-		map[string]UniverseRow{}, map[string]string{}, map[string]bool{"silentA": true}, now)
+		map[string]UniverseRow{}, map[string]string{}, map[string]bool{"silentA": true}, nil, now)
 	if err != nil {
 		t.Fatal(err)
 	}

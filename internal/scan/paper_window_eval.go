@@ -17,6 +17,8 @@ import (
 type PaperWindowStore interface {
 	PaperFactSource
 	ListCexUniverse(ctx context.Context) (map[string]pgstore.CexUniverseRow, error)
+	// ListAssetEquiv D-043：等价类映射（class 键行 legs 解析单源）。
+	ListAssetEquiv(ctx context.Context) ([]pgstore.AssetEquivEntry, error)
 }
 
 // PaperDayBucket 日分桶行（日标签 BJ 口径，报告渲染用）。
@@ -63,7 +65,12 @@ func EvalPaperCohort(ctx context.Context, st PaperWindowStore, rows []pgstore.Pa
 	if err != nil {
 		return nil, fmt.Errorf("paper eval: list cex universe: %w", err)
 	}
-	cexRaw := cexRawCanonIndex(uniRows)
+	// D-043 ②：等价类视图（读失败 fail-open 退化 legacy 键——eval 为观察面非判定面）。
+	var view *assetClassView
+	if equiv, eerr := st.ListAssetEquiv(ctx); eerr == nil {
+		view = newAssetClassView(equiv)
+	}
+	cexRaw := cexRawCanonIndex(uniRows, view)
 	mtCache := map[string]map[string]string{}
 	mtRaw := func(venue, canonical string) string {
 		m, ok := mtCache[venue]
@@ -156,7 +163,7 @@ func EvalPaperCohort(ctx context.Context, st PaperWindowStore, rows []pgstore.Pa
 		if p.Status != "active" && p.Status != "demo" {
 			continue
 		}
-		fc, stall, perr := evalPaperRow(ctx, st, &p, cexRaw, mtRaw, now)
+		fc, stall, perr := evalPaperRow(ctx, st, &p, cexRaw, mtRaw, view, now)
 		if perr != nil && ev.FirstProbeErr == "" {
 			ev.FirstProbeErr = perr.Error()
 		}
@@ -182,10 +189,14 @@ func EvalPaperCohort(ctx context.Context, st PaperWindowStore, rows []pgstore.Pa
 // evalPaperRow 单行健康判定：fc=accrue 探针 fail-closed（含腿映射缺）；
 // stall=水位落后 >2×行结算窗（行窗=max（双腿间隔），MT 腿恒 24h 日界）。
 func evalPaperRow(ctx context.Context, st PaperWindowStore, p *pgstore.PaperSpotCarry,
-	cexRaw map[string]string, mtRaw func(string, string) string, now time.Time) (fc, stall bool, err error) {
+	cexRaw map[string]string, mtRaw func(string, string) string, view *assetClassView,
+	now time.Time) (fc, stall bool, err error) {
 	cexV, mtV := p.VenueB, p.VenueA // D-498：cfd 行 venue_a=MT 臂、venue_b=CEX 臂
 	rawCex := cexRaw[cexV+"|"+NormalizeJoinKey(p.Symbol)]
 	rawMt := mtRaw(mtV, p.Symbol)
+	if rawMt == "" {
+		rawMt = mtRaw(mtV, view.mtCanon(p.Symbol, mtV)) // D-043 ②：class 键行→asset_equiv 解析
+	}
 	if rawCex == "" || rawMt == "" {
 		return true, false, nil // canonical→raw 映射缺 → 边界事实键无着落，fail-closed
 	}
