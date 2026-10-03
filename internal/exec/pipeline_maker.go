@@ -158,14 +158,31 @@ func (p *Pipeline) runMakerSequence(ctx context.Context, requestID string, posID
 		// FAILED 全腿→position FAILED 零敞口（设计「超时零持仓」）；UNKNOWN→既有 CLOSING 链。
 		return results, nil
 	}
+	// D-026 ①：次腿 LegSpec.Qty 按首腿实际成交量等比缩放
+	//（ratio=首腿实际成交 base 量/请求 base 量；全额成交 ratio=1=原量；
+	// 对 LegSpec 单位无感——同仓两腿同比例）。缩放后经 executeLeg→orderQtyFor/
+	// venue 步长与最小量取整：venue 拒（低于最小量）→ 腿 FAILED→共享判定落
+	// LEGGED→既有 unwind 收口（不发市价单的等价终态）。
+	ratio := 1.0
+	if reqBase, err := p.orderQtyFor(legs[mi]); err == nil && reqBase > 0 && results[mi].Qty < reqBase {
+		ratio = results[mi].Qty / reqBase
+		log.Printf("[exec] maker leg %s: 部分成交 %.6f/%.6f → 次腿等比缩放 x%.4f (D-026)", legs[mi].VenueKey, results[mi].Qty, reqBase, ratio)
+	}
 	// 首腿成交回报 → 次腿 taker（立即，裸腿窗口=今日并行发单同量级）。
 	var wg sync.WaitGroup
 	for i, leg := range legs {
 		if i == mi {
 			continue
 		}
+		scaled := leg
+		scaled.Qty = leg.Qty * ratio
+		if scaled.Qty <= 0 {
+			// 缩放为零（理论不可达：fill.Qty>0 且请求>0）——防御性不发，留 PENDING 审计。
+			log.Printf("[exec] maker 次腿 %s 缩放为零 → 不发（PENDING 审计）", leg.VenueKey)
+			continue
+		}
 		wg.Add(1)
-		idx, l := i, leg
+		idx, l := i, scaled
 		safego.Go("pipeline:maker-taker-leg", func() {
 			defer wg.Done()
 			coid2 := generateClientOrderID(requestID, posID, int16(idx), 1)

@@ -190,6 +190,13 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 			unknown++
 		}
 	}
+	// D-026 ②：腿量匹配守卫——判 OPEN 前全 FILLED 腿有效量（canonical 口径）两两偏差
+	// 超容差 → 不判 OPEN，status=LEGGED + critical 告警，落既有 autoFlatten/unwind
+	//（腿量不匹配是比 LEGGED 更坏的失败：不匹配的 OPEN 看起来一切正常、裸露差量无告警）。
+	qtyMismatch := false
+	if filled == len(legs) && unknown == 0 {
+		qtyMismatch = p.legQtyMismatch(legs, results)
+	}
 
 	var status string
 	var isUnknown bool
@@ -199,7 +206,7 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 		// 不平仓不假 FAILED——可能已成交，假 FAILED 会触发平仓=反向开新仓。
 		status = "CLOSING"
 		isUnknown = true
-	case filled == len(legs):
+	case filled == len(legs) && !qtyMismatch:
 		status = "OPEN"
 	case filled == 0:
 		status = "FAILED"
@@ -242,6 +249,12 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 		}
 	}
 
+	if qtyMismatch {
+		if err := p.store.InsertPositionAlert(ctx, posID, "critical",
+			fmt.Sprintf("持仓 #%d 腿量不匹配：FILLED 腿有效量偏差超容差（%d/%d 腿 FILLED）——不判 OPEN，落 unwind", posID, filled, len(legs))); err != nil {
+			log.Printf("[exec] pos %d alert write: %v", posID, err)
+		}
+	}
 	if status == "LEGGED" {
 		// D-127 P3b：纯 CEX 组合 LEGGED 自动收平——对 FILLED 腿立即反向 MARKET 平仓，
 		// 消除裸敞口（#380/#383 人工 35+ 分钟兜底）。含 MT 腿的组合不动（SWAPARB 有独立平仓链路）。
