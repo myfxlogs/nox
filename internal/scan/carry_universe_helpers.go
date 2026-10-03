@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"arb/internal/fact"
+	"arb/internal/store/pgstore"
 )
 
 // modeAllowed D-382 S1：方向感知可交易性（detector.legTradable 语义对齐、独立实现防包耦合）。
@@ -93,4 +94,34 @@ func abs(v float64) float64 {
 		return -v
 	}
 	return v
+}
+
+// mtRawIndex D-028 ⑥：MT broker_symbol 选择（is_primary 语义，pgstore.ResolvePrimarySymbol
+// 同裁定内载版——列表一次拉取+双形 NJK 键天然兼容，零逐 canonical 查询开销）：
+// primary 行优先 / 组内唯一行兜底（false+恰一行=隐式 primary，brokers_symbolmap 同注）/
+// 多行无 primary=ambiguous 不设键（fail-closed，禁 last-write-wins——3001157 XAU 双行
+// XAUUSDm/XAUUSD247m 旧径随机取，swap/tick facts 键漂移）。
+func mtRawIndex(maps []pgstore.SymbolMapping) map[string]string {
+	m := map[string]string{}
+	seen := map[string]int{}
+	for _, mm := range maps {
+		if mm.Canonical == "" {
+			continue
+		}
+		k := NormalizeJoinKey(mm.Canonical)
+		seen[k]++
+		if mm.IsPrimary {
+			m[k] = mm.BrokerSymbol
+		}
+	}
+	for _, mm := range maps {
+		if mm.Canonical == "" {
+			continue
+		}
+		k := NormalizeJoinKey(mm.Canonical)
+		if _, done := m[k]; !done && seen[k] == 1 {
+			m[k] = mm.BrokerSymbol
+		}
+	}
+	return m
 }

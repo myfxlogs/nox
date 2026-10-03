@@ -118,3 +118,31 @@ func TestD028_LongRowWeekendNoAdverse(t *testing.T) {
 		t.Fatal("long 行应仍 active")
 	}
 }
+
+// TestD028_MtRawIndexPrimaryWins ⑥ 验收锚：3001157 XAU 双行（XAUUSDm primary / XAUUSD247m）
+// → 选 is_primary 行（旧径 last-write-wins 随机）；唯一行兜底；多行无 primary=ambiguous 不设键。
+func TestD028_MtRawIndexPrimaryWins(t *testing.T) {
+	maps := []pgstore.SymbolMapping{
+		{Venue: "3001157", BrokerSymbol: "XAUUSD247m", Canonical: "XAUUSD", IsPrimary: false},
+		{Venue: "3001157", BrokerSymbol: "XAUUSDm", Canonical: "XAUUSD", IsPrimary: true},
+	}
+	m := mtRawIndex(maps)
+	if m["XAU"] != "XAUUSDm" { // NJK("XAUUSD")="XAU"（查询键同形）
+		t.Fatalf("3001157 XAU 应选 is_primary=XAUUSDm（旧径 last-write-wins 随机），got %q", m["XAU"])
+	}
+	// 唯一行兜底（无 primary=隐式 primary，brokers_symbolmap 同注）
+	m = mtRawIndex([]pgstore.SymbolMapping{
+		{Venue: "3001157", BrokerSymbol: "XAUUSDm", Canonical: "XAUUSD", IsPrimary: false},
+	})
+	if m["XAU"] != "XAUUSDm" { // NJK("XAUUSD")="XAU"（查询键同形）
+		t.Fatalf("唯一行应兜底，got %q", m["xauusd"])
+	}
+	// 多行无 primary=ambiguous → 键不设（fail-closed，禁 last-write-wins）
+	m = mtRawIndex([]pgstore.SymbolMapping{
+		{Venue: "3001157", BrokerSymbol: "XAUUSD247m", Canonical: "XAUUSD"},
+		{Venue: "3001157", BrokerSymbol: "XAUUSDm", Canonical: "XAUUSD"},
+	})
+	if _, exists := m["XAU"]; exists {
+		t.Fatalf("多行无 primary 应 ambiguous 不设键，got %q", m["XAU"])
+	}
+}

@@ -41,13 +41,8 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 	mtRaw := func(venue, canonical string) string {
 		m, ok := mtRawCache[venue]
 		if !ok {
-			m = map[string]string{}
 			if maps, err := st.ListSymbolMappings(ctx, venue); err == nil {
-				for _, mm := range maps {
-					if mm.Canonical != "" {
-						m[NormalizeJoinKey(mm.Canonical)] = mm.BrokerSymbol
-					}
-				}
+				m = mtRawIndex(maps)
 			}
 			mtRawCache[venue] = m
 		}
