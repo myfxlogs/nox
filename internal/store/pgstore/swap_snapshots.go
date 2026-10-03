@@ -192,6 +192,26 @@ func (s *Store) FactsWithin(ctx context.Context, kind, venue, symbol string, sin
 	return out, rows.Err()
 }
 
+// FundingWindowAvg D-035：funding facts 窗内聚合单条读（AVG/MAX/COUNT——Go 侧零行搬运）；
+// fact.FundingMeanAnnual 的数据源。n=0（窗内零样本）→ avg/maxTs 零值，调用方按 n 判 fail-closed。
+func (s *Store) FundingWindowAvg(ctx context.Context, venue, symbol string, since time.Time) (float64, time.Time, int, error) {
+	var avg float64
+	var maxTs *time.Time
+	var n int
+	err := s.pool.QueryRow(ctx,
+		`SELECT COALESCE(AVG(value),0), MAX(ts), COUNT(*)
+		 FROM facts WHERE kind='funding' AND venue=$1 AND symbol=$2 AND ts>$3`,
+		venue, symbol, since).Scan(&avg, &maxTs, &n)
+	if err != nil {
+		return 0, time.Time{}, 0, fmt.Errorf("funding window avg: %w", err)
+	}
+	var ts time.Time
+	if maxTs != nil {
+		ts = *maxTs
+	}
+	return avg, ts, n, nil
+}
+
 // SumCashflowsForDay SUM(amount_usd) WHERE kind+posID+venue+day 范围（D-110 P2 对账用）。
 // day 范围同 HasCashflowForLegDay（D-159 W3a R5 更名）：start=time.Date(year,month,day,0,0,0,0,UTC) / end=start.AddDate(0,0,1)。
 func (s *Store) SumCashflowsForDay(ctx context.Context, posID int64, kind, venue string, day time.Time) (float64, error) {

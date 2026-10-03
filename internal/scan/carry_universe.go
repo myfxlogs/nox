@@ -19,8 +19,9 @@ import (
 type Store interface {
 	LatestFacts(ctx context.Context, kind, venue, symbol string) ([]fact.Fact, error)
 	LatestFactsByKind(ctx context.Context, kind string) ([]fact.Fact, error) // D-508 S3：kind-only 无 OR 专用查询
-	// FactsWithin D-034：窗口样本读口（funding 7d 滚动均值——fact.FundingMeanAnnual 单实现）。
-	FactsWithin(ctx context.Context, kind, venue, symbol string, since time.Time) ([]fact.Fact, error)
+	// FundingWindowAvg D-035：funding 窗聚合单条读口（SQL AVG/MAX/COUNT——
+	// fact.FundingMeanAnnual 单实现的数据源；n=0=窗内零样本）。
+	FundingWindowAvg(ctx context.Context, venue, symbol string, since time.Time) (avg float64, maxTs time.Time, n int, err error)
 	// FactsWindowStats D-412 F3：窗口均值读口（swap 慢变量抗 flap；无样本=ErrNoFactsInWindow）。
 	FactsWindowStats(ctx context.Context, kind, venue, symbol string, window time.Duration) (float64, error)
 	ListSymbolMappings(ctx context.Context, venue string) ([]pgstore.SymbolMapping, error)
