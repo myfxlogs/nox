@@ -185,21 +185,6 @@ message ClearAckedAlertsResponse {
   int32 deleted = 1;
 }
 
-// === TriggerState（§2.4）===
-
-message TriggerState {
-  string rule_name = 1;
-  string state = 2;                     // armed / active / resolved
-  google.protobuf.Timestamp since = 3;
-  optional double last_value = 4;
-}
-
-message ListTriggerStatesRequest {}
-
-message ListTriggerStatesResponse {
-  repeated TriggerState states = 1;
-}
-
 // === SourceHealth（§1.2 源健康）===
 
 message SourceHealth {

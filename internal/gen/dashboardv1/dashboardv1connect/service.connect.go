@@ -45,9 +45,6 @@ const (
 	// DashboardServiceListAlertsProcedure is the fully-qualified name of the DashboardService's
 	// ListAlerts RPC.
 	DashboardServiceListAlertsProcedure = "/arb.dashboard.v1.DashboardService/ListAlerts"
-	// DashboardServiceListTriggerStatesProcedure is the fully-qualified name of the DashboardService's
-	// ListTriggerStates RPC.
-	DashboardServiceListTriggerStatesProcedure = "/arb.dashboard.v1.DashboardService/ListTriggerStates"
 	// DashboardServiceListSourceHealthProcedure is the fully-qualified name of the DashboardService's
 	// ListSourceHealth RPC.
 	DashboardServiceListSourceHealthProcedure = "/arb.dashboard.v1.DashboardService/ListSourceHealth"
@@ -442,7 +439,6 @@ type DashboardServiceClient interface {
 	ListLatestFacts(context.Context, *connect.Request[dashboardv1.ListLatestFactsRequest]) (*connect.Response[dashboardv1.ListLatestFactsResponse], error)
 	ListOpportunities(context.Context, *connect.Request[dashboardv1.ListOpportunitiesRequest]) (*connect.Response[dashboardv1.ListOpportunitiesResponse], error)
 	ListAlerts(context.Context, *connect.Request[dashboardv1.ListAlertsRequest]) (*connect.Response[dashboardv1.ListAlertsResponse], error)
-	ListTriggerStates(context.Context, *connect.Request[dashboardv1.ListTriggerStatesRequest]) (*connect.Response[dashboardv1.ListTriggerStatesResponse], error)
 	ListSourceHealth(context.Context, *connect.Request[dashboardv1.ListSourceHealthRequest]) (*connect.Response[dashboardv1.ListSourceHealthResponse], error)
 	ListCalibScoreboard(context.Context, *connect.Request[dashboardv1.ListCalibScoreboardRequest]) (*connect.Response[dashboardv1.ListCalibScoreboardResponse], error)
 	ListFacts(context.Context, *connect.Request[dashboardv1.ListFactsRequest]) (*connect.Response[dashboardv1.ListFactsResponse], error)
@@ -661,12 +657,6 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			httpClient,
 			baseURL+DashboardServiceListAlertsProcedure,
 			connect.WithSchema(dashboardServiceMethods.ByName("ListAlerts")),
-			connect.WithClientOptions(opts...),
-		),
-		listTriggerStates: connect.NewClient[dashboardv1.ListTriggerStatesRequest, dashboardv1.ListTriggerStatesResponse](
-			httpClient,
-			baseURL+DashboardServiceListTriggerStatesProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("ListTriggerStates")),
 			connect.WithClientOptions(opts...),
 		),
 		listSourceHealth: connect.NewClient[dashboardv1.ListSourceHealthRequest, dashboardv1.ListSourceHealthResponse](
@@ -1452,7 +1442,6 @@ type dashboardServiceClient struct {
 	listLatestFacts                 *connect.Client[dashboardv1.ListLatestFactsRequest, dashboardv1.ListLatestFactsResponse]
 	listOpportunities               *connect.Client[dashboardv1.ListOpportunitiesRequest, dashboardv1.ListOpportunitiesResponse]
 	listAlerts                      *connect.Client[dashboardv1.ListAlertsRequest, dashboardv1.ListAlertsResponse]
-	listTriggerStates               *connect.Client[dashboardv1.ListTriggerStatesRequest, dashboardv1.ListTriggerStatesResponse]
 	listSourceHealth                *connect.Client[dashboardv1.ListSourceHealthRequest, dashboardv1.ListSourceHealthResponse]
 	listCalibScoreboard             *connect.Client[dashboardv1.ListCalibScoreboardRequest, dashboardv1.ListCalibScoreboardResponse]
 	listFacts                       *connect.Client[dashboardv1.ListFactsRequest, dashboardv1.ListFactsResponse]
@@ -1602,11 +1591,6 @@ func (c *dashboardServiceClient) ListOpportunities(ctx context.Context, req *con
 // ListAlerts calls arb.dashboard.v1.DashboardService.ListAlerts.
 func (c *dashboardServiceClient) ListAlerts(ctx context.Context, req *connect.Request[dashboardv1.ListAlertsRequest]) (*connect.Response[dashboardv1.ListAlertsResponse], error) {
 	return c.listAlerts.CallUnary(ctx, req)
-}
-
-// ListTriggerStates calls arb.dashboard.v1.DashboardService.ListTriggerStates.
-func (c *dashboardServiceClient) ListTriggerStates(ctx context.Context, req *connect.Request[dashboardv1.ListTriggerStatesRequest]) (*connect.Response[dashboardv1.ListTriggerStatesResponse], error) {
-	return c.listTriggerStates.CallUnary(ctx, req)
 }
 
 // ListSourceHealth calls arb.dashboard.v1.DashboardService.ListSourceHealth.
@@ -2264,7 +2248,6 @@ type DashboardServiceHandler interface {
 	ListLatestFacts(context.Context, *connect.Request[dashboardv1.ListLatestFactsRequest]) (*connect.Response[dashboardv1.ListLatestFactsResponse], error)
 	ListOpportunities(context.Context, *connect.Request[dashboardv1.ListOpportunitiesRequest]) (*connect.Response[dashboardv1.ListOpportunitiesResponse], error)
 	ListAlerts(context.Context, *connect.Request[dashboardv1.ListAlertsRequest]) (*connect.Response[dashboardv1.ListAlertsResponse], error)
-	ListTriggerStates(context.Context, *connect.Request[dashboardv1.ListTriggerStatesRequest]) (*connect.Response[dashboardv1.ListTriggerStatesResponse], error)
 	ListSourceHealth(context.Context, *connect.Request[dashboardv1.ListSourceHealthRequest]) (*connect.Response[dashboardv1.ListSourceHealthResponse], error)
 	ListCalibScoreboard(context.Context, *connect.Request[dashboardv1.ListCalibScoreboardRequest]) (*connect.Response[dashboardv1.ListCalibScoreboardResponse], error)
 	ListFacts(context.Context, *connect.Request[dashboardv1.ListFactsRequest]) (*connect.Response[dashboardv1.ListFactsResponse], error)
@@ -2479,12 +2462,6 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		DashboardServiceListAlertsProcedure,
 		svc.ListAlerts,
 		connect.WithSchema(dashboardServiceMethods.ByName("ListAlerts")),
-		connect.WithHandlerOptions(opts...),
-	)
-	dashboardServiceListTriggerStatesHandler := connect.NewUnaryHandler(
-		DashboardServiceListTriggerStatesProcedure,
-		svc.ListTriggerStates,
-		connect.WithSchema(dashboardServiceMethods.ByName("ListTriggerStates")),
 		connect.WithHandlerOptions(opts...),
 	)
 	dashboardServiceListSourceHealthHandler := connect.NewUnaryHandler(
@@ -3271,8 +3248,6 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceListOpportunitiesHandler.ServeHTTP(w, r)
 		case DashboardServiceListAlertsProcedure:
 			dashboardServiceListAlertsHandler.ServeHTTP(w, r)
-		case DashboardServiceListTriggerStatesProcedure:
-			dashboardServiceListTriggerStatesHandler.ServeHTTP(w, r)
 		case DashboardServiceListSourceHealthProcedure:
 			dashboardServiceListSourceHealthHandler.ServeHTTP(w, r)
 		case DashboardServiceListCalibScoreboardProcedure:
@@ -3554,10 +3529,6 @@ func (UnimplementedDashboardServiceHandler) ListOpportunities(context.Context, *
 
 func (UnimplementedDashboardServiceHandler) ListAlerts(context.Context, *connect.Request[dashboardv1.ListAlertsRequest]) (*connect.Response[dashboardv1.ListAlertsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListAlerts is not implemented"))
-}
-
-func (UnimplementedDashboardServiceHandler) ListTriggerStates(context.Context, *connect.Request[dashboardv1.ListTriggerStatesRequest]) (*connect.Response[dashboardv1.ListTriggerStatesResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListTriggerStates is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListSourceHealth(context.Context, *connect.Request[dashboardv1.ListSourceHealthRequest]) (*connect.Response[dashboardv1.ListSourceHealthResponse], error) {

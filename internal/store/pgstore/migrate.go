@@ -167,6 +167,7 @@ var migrationFiles = []struct {
 	{171, migrations.MakerFeeEnableSQL},                // D-018 后段：exchange_configs.maker_fee_bps + app_config maker 启用键
 	{172, migrations.IncidentExitKindCleanupSQL},       // D-032 R1：清零成交 FAILED 误打的 legged_unwind
 	{173, migrations.PaperWindowStartSQL},              // D-033①：app_config 播种 ARB_PAPER_WINDOW_START
+	{174, migrations.DropOpportunitiesTickSQL},         // D-040②：opportunities_tick 死表 DROP（零引用，已备份）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
