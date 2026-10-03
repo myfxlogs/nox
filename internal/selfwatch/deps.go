@@ -43,6 +43,7 @@ type Store interface {
 	MacroEventMaxCreated(ctx context.Context) (time.Time, bool, error)
 	MakerLegStatsSince(ctx context.Context, since time.Time) (opens, incidents int, err error)
 	PaperDataLostStats(ctx context.Context, since time.Time) (rows, cooldownPairs int, err error)
+	PaperActiveStats(ctx context.Context) (pgstore.PaperActiveSplit, error)
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
 	InsertAlertDedup(ctx context.Context, level, message string, window time.Duration) error
 }
