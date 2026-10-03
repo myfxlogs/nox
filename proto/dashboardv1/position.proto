@@ -140,6 +140,7 @@ message BrokerPosition {
   double price_ask = 27;                  // D-009 S2：报价 ask（同上）；0=无报价/缺双值
   optional double close_now_estimate_usd = 28;  // D-009 S3：平仓净估=（方向价−开价）×qty×cs×fx − 平仓名义×takerBps×1e-4；缺省=报价/换算/费率任一不可得（诚实空态，列标「估」）
   bool margin_is_estimate = 29;  // D-036：margin 为 venue 规格估算（InitialMargin×lots ∨ lots×CS×openPrice×init_margin_rate），非 venue 账户级原生值——前端标「≈」；CEX=iw 原生值 false
+  bool close_estimate_excludes_income = 30;  // D-037：平仓净估未含已收息（income 源不可得：CEX 外单 openedAt 缺/查询失败；CEX 系统仓 cashflows 查询失败）——前端标缺息提示；false=已含（MT=Order.Swap / CEX 仓=cashflows actual / CEX 外单=income_events 窗）
 }
 
 message ListBrokerPositionsRequest {

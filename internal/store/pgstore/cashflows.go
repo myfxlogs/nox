@@ -126,6 +126,23 @@ func (s *Store) SumCashflowsNet(ctx context.Context, posID int64) (float64, erro
 	return sum, nil
 }
 
+// SumPositionCarryActual D-037：指定持仓已收息差合计（position_cashflows
+// kind IN ('funding','swap')，quality='actual'∨NULL legacy 同 SumCashflowsNet 口径；
+// commission 不计——平仓净估的费项已含退出费，息差=纯已收 funding/swap）。
+// 无匹配行 → 0。
+func (s *Store) SumPositionCarryActual(ctx context.Context, posID int64) (float64, error) {
+	var sum float64
+	err := s.pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(amount_usd), 0) FROM position_cashflows
+		 WHERE position_id = $1 AND kind IN ('funding','swap')
+		   AND (quality = 'actual' OR quality IS NULL)`,
+		posID).Scan(&sum)
+	if err != nil {
+		return 0, fmt.Errorf("sum position carry actual: %w", err)
+	}
+	return sum, nil
+}
+
 // InsertCashflowFull D-193-A：完整字段写入（事实幂等键 event_key + 调用方按证据等级传 quality）。
 // D-193-A 扩包（决策 3）：quality 由调用方按证据等级传入——公式路径传 'estimated'，
 // 对拍金额匹配后升 'actual'，不匹配置 'unknown'。本函数不强制 quality=actual。
