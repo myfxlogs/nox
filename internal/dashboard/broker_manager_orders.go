@@ -52,17 +52,23 @@ func (m *BrokerManager) queriers() []venue.Querier {
 
 // AddStaticQuerier 登记环境变量适配器的 querier。
 func (m *BrokerManager) AddStaticQuerier(venue string, q venue.Querier) {
-	m.addStatic(venue, q, nil)
+	m.addStatic(venue, q, nil, nil)
 }
 
 // AddStaticSwapSource 为环境变量适配器登记 swap 采集（§3.6，不留静默缺口）。
 func (m *BrokerManager) AddStaticSwapSource(venue string, swap func(ctx context.Context) ([]fact.Fact, error)) {
-	m.addStatic(venue, nil, swap)
+	m.addStatic(venue, nil, swap, nil)
 }
 
-func (m *BrokerManager) addStatic(venue string, q venue.Querier, swap func(ctx context.Context) ([]fact.Fact, error)) {
+// AddStaticSessionsSource D-029 ①：登记 MT5 周交易会话表采集（每日刷新面）。
+func (m *BrokerManager) AddStaticSessionsSource(venue string, sessions func(ctx context.Context) ([]fact.Fact, error)) {
+	m.addStatic(venue, nil, nil, sessions)
+}
+
+func (m *BrokerManager) addStatic(venue string, q venue.Querier, swap func(ctx context.Context) ([]fact.Fact, error),
+	sessions func(ctx context.Context) ([]fact.Fact, error)) {
 	m.mu.Lock()
-	m.static = append(m.static, staticQuerier{venue: venue, q: q, swap: swap})
+	m.static = append(m.static, staticQuerier{venue: venue, q: q, swap: swap, sessions: sessions})
 	m.mu.Unlock()
 	m.syncQueriers()
 	m.syncHistQueriers()

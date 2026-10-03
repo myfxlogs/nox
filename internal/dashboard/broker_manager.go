@@ -79,6 +79,8 @@ type staticQuerier struct {
 	q     venue.Querier
 	hq    reconcile.OrderHistoryQuerier                  // D-416：env 静态历史查证器
 	swap  func(ctx context.Context) ([]fact.Fact, error) // nil = 无 swap 源
+	// sessions D-029 ①：MT5 周交易会话表采集源（nil=无会话源）。
+	sessions func(ctx context.Context) ([]fact.Fact, error)
 }
 
 // BrokerManager 管理 DB 中 broker_accounts 的动态适配器。
