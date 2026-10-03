@@ -173,6 +173,20 @@ func (m *AccountMonitor) Snapshot() []*v1.AccountInfo {
 	return out
 }
 
+// EquityObserved D-032 ③：venue 权益 + 数据时点直读（供风控闸做超龄判定）。
+// asOf=最后观测时点（流帧 FrameTime / REST 采到时刻 / 账本 entry.At），
+// 区别于 Snapshot().UpdatedAt（发布口径=最后真变时刻，不能度量数据新鲜度）。
+// ok=false=该 venue 无账户态（从未采到）；online 单独返回由调用方判。
+func (m *AccountMonitor) EquityObserved(venueKey string) (equity float64, currency string, asOf time.Time, online bool, ok bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	st, exists := m.states[venueKey]
+	if !exists || st.acct == nil {
+		return 0, "", time.Time{}, false, false
+	}
+	return st.acct.Equity, st.acct.Currency, st.asOf, st.online, true
+}
+
 // queriers 汇总查询器：CFD（brokerMgr 每轮重取）+ CEX（DB 每轮重取，D-054）+ statics（测试注入）。
 // poll 全量轮询（boot 首读/全量 kick/Refresh）：逐查询器 → 落态 → dirty 尾沿发射。
 // D-460 S1 两阶段拆分（D-447 遗留 wart 真修）：无锁段跑网络 RPC，锁内只做内存
