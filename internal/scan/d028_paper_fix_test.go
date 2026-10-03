@@ -177,3 +177,50 @@ func TestD028_SwapFreeCollectZeroesVal(t *testing.T) {
 		t.Fatalf("swap_free short val want 0, got %v", v)
 	}
 }
+
+// TestD028_SwapFreeZeroFactRetained ④ 尾巴 a：val=0 免息腿过 skip 滤保留为候选
+// （long 正值=收息异常才剔除；零值=swap_free 形态保留，均值再按 facts 实值取）。
+func TestD028_SwapFreeZeroFactRetained(t *testing.T) {
+	sc := NewCarryUniverseScanner(&fakeScanStore{
+		facts: []fact.Fact{
+			{Kind: "swap_long", Venue: "3001157", Symbol: "XAUUSDm", Value: 0, Ts: time.Now()},
+			{Kind: "swap_long", Venue: "3001157", Symbol: "XAUUSDm", Value: 1, Ts: time.Now()},
+		},
+		mappings: []pgstore.SymbolMapping{
+			{Venue: "3001157", BrokerSymbol: "XAUUSDm", Canonical: "XAU", IsPrimary: true},
+		},
+	})
+	tmUnknown := func(fact.Fact) (int64, bool) { return 0, false }
+	long, _ := sc.collectMtSwaps(context.Background(),
+		[]fact.Fact{{Kind: "swap_long", Venue: "3001157", Symbol: "XAUUSDm", Value: 0, Ts: time.Now()}},
+		nil, tmUnknown, map[string]bool{}, &ScanResult{}, map[string]string{}, map[string]bool{})
+	if v, ok := long["XAU|3001157"]; !ok {
+		t.Fatal("val=0 免息腿应保留为候选")
+	} else if v.val != 0 {
+		t.Fatalf("免息腿 val want 0, got %v", v.val)
+	}
+	// 正值对照：收息异常剔除。
+	long2, _ := sc.collectMtSwaps(context.Background(),
+		[]fact.Fact{{Kind: "swap_long", Venue: "3001157", Symbol: "XAUUSDm", Value: 1, Ts: time.Now()}},
+		nil, tmUnknown, map[string]bool{}, &ScanResult{}, map[string]string{}, map[string]bool{})
+	if _, ok := long2["XAU|3001157"]; ok {
+		t.Fatal("long 正值=收息异常应剔除")
+	}
+}
+
+// TestD028_RowSettleWindow 尾巴 b：行结算窗=max(funding iv facts 实读, MT 24h 日界)——
+// iv 缺/小 →24h；iv>24h →随事实放宽（accrue 告警阈与 eval stalled 同口径单实现）。
+func TestD028_RowSettleWindow(t *testing.T) {
+	noIv := &fakeScanStore{}
+	if iv := paperRowSettleWindow(context.Background(), noIv, "okx", "XAUUSDT"); iv != 24*time.Hour {
+		t.Fatalf("iv 缺 want 24h, got %v", iv)
+	}
+	small := &fakeScanStore{facts: []fact.Fact{{Kind: "funding_interval", Value: 8 * 3600}}}
+	if iv := paperRowSettleWindow(context.Background(), small, "okx", "XAUUSDT"); iv != 24*time.Hour {
+		t.Fatalf("iv=8h <24h want 24h, got %v", iv)
+	}
+	large := &fakeScanStore{facts: []fact.Fact{{Kind: "funding_interval", Value: 72 * 3600}}}
+	if iv := paperRowSettleWindow(context.Background(), large, "okx", "XAUUSDT"); iv != 72*time.Hour {
+		t.Fatalf("iv=72h want 72h, got %v", iv)
+	}
+}
