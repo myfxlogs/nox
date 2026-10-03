@@ -55,15 +55,24 @@ func (f *fakeScanStore) LatestFacts(_ context.Context, kind, _, _ string) ([]fac
 	return out, nil
 }
 
-// FactsWithin D-034：窗内样本（真实谓词 kind+venue+symbol+ts≥since）。
-func (f *fakeScanStore) FactsWithin(_ context.Context, kind, venue, symbol string, since time.Time) ([]fact.Fact, error) {
-	var out []fact.Fact
+// FundingWindowAvg D-035：窗内聚合（真实谓词 kind='funding'∧venue∧symbol∧ts>since）。
+func (f *fakeScanStore) FundingWindowAvg(_ context.Context, venue, symbol string, since time.Time) (float64, time.Time, int, error) {
+	var sum float64
+	var maxTs time.Time
+	var n int
 	for _, x := range f.facts {
-		if x.Kind == kind && x.Venue == venue && x.Symbol == symbol && !x.Ts.Before(since) {
-			out = append(out, x)
+		if x.Kind == fact.KindFunding && x.Venue == venue && x.Symbol == symbol && x.Ts.After(since) {
+			sum += x.Value
+			n++
+			if x.Ts.After(maxTs) {
+				maxTs = x.Ts
+			}
 		}
 	}
-	return out, nil
+	if n == 0 {
+		return 0, time.Time{}, 0, nil
+	}
+	return sum / float64(n), maxTs, n, nil
 }
 
 // FactsWindowStats D-412 F3：窗口均值——windowMeans 显式覆盖优先；缺省回退点值
