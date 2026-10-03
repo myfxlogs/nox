@@ -7,7 +7,13 @@ import (
 )
 
 // risk_lines.go —— D-032（decisions D-030 风控硬线）：账本回撤/事故仓/venue 名义读口。
-// 事故族谓词复用 incidentPositionPredicate（position_net.go 单源，别名约定 p/s 同此文件）。
+// 事故闸用专用谓词 incidentGatePredicate（D-032 R1）；D-013 统计/账本排除口径仍用
+// 共享 incidentPositionPredicate（position_net.go 单源，别名约定 p/s 同此文件）。
+
+// incidentGatePredicate 事故闸专用谓词（D-032 R1）：与共享 incidentPositionPredicate 分家——
+// 全腿零成交的 FAILED 是 maker 撤单/全腿被拒的零敞口干净终态（D-018 首腿撤单设计），非事故；
+// FAILED 仅当 ∃ FILLED 腿（真成交过=裸露过）才计。exit_kind/incident_attributed/LEGGED 不变。
+const incidentGatePredicate = `(COALESCE(p.exit_kind,'') IN ('legged_unwind','incident_close') OR COALESCE(s.incident_attributed,false) OR p.status='LEGGED' OR (p.status='FAILED' AND EXISTS (SELECT 1 FROM position_legs gl WHERE gl.position_id=p.id AND gl.status='FILLED')))`
 
 // NetRealizedSince 滚动窗账本净额=Σ position_settlements（closed_at ≥ since，含事故仓——
 // 风控线不剔样本；excludeIncidents=true 时剔事故族供周报「非事故样本」列）。
@@ -33,15 +39,16 @@ func (s *Store) NetRealizedSince(ctx context.Context, since time.Time, excludeIn
 	return *sum, nil
 }
 
-// IncidentBlockerID 未 ack 事故仓最小 id（0=无）。ack 游标=ARB_RISK_INCIDENT_ACK_ID
-// 之外的仓恒计数（LEGGED/FAILED 终态 + 事故族 CLOSED 一并覆盖，决策席归档 D# 后推 id 放行）。
+// IncidentBlockerID 未 ack 事故仓最小 id（0=无）。谓词=incidentGatePredicate（D-032 R1）：
+// LEGGED + 有成交腿的 FAILED + 事故族 CLOSED 覆盖；ack 游标=ARB_RISK_INCIDENT_ACK_ID，
+// 决策席归档 D# 后推 id 放行。
 func (s *Store) IncidentBlockerID(ctx context.Context, ackID int64) (int64, error) {
 	var id *int64
 	err := s.pool.QueryRow(ctx, fmt.Sprintf(`
 		SELECT MIN(p.id)
 		FROM positions p
 		LEFT JOIN position_settlements s ON s.position_id = p.id
-		WHERE p.id > $1 AND %s`, incidentPositionPredicate), ackID).Scan(&id)
+		WHERE p.id > $1 AND %s`, incidentGatePredicate), ackID).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("incident blocker id: %w", err)
 	}
@@ -51,15 +58,15 @@ func (s *Store) IncidentBlockerID(ctx context.Context, ackID int64) (int64, erro
 	return *id, nil
 }
 
-// IncidentCountSince 事故仓计数（周报「事故数」列）。未平仓事故（LEGGED/FAILED，closed_at 空）
-// 按 opened_at 落窗；COALESCE 取两时点中有效者。
+// IncidentCountSince 事故仓计数（周报「事故数」列，同 incidentGatePredicate 口径）。
+// 未平仓事故（LEGGED/FAILED，closed_at 空）按 opened_at 落窗；COALESCE 取两时点中有效者。
 func (s *Store) IncidentCountSince(ctx context.Context, since time.Time) (int, error) {
 	var n int
 	err := s.pool.QueryRow(ctx, fmt.Sprintf(`
 		SELECT COUNT(DISTINCT p.id)
 		FROM positions p
 		LEFT JOIN position_settlements s ON s.position_id = p.id
-		WHERE %s AND COALESCE(p.closed_at, p.opened_at) >= $1`, incidentPositionPredicate), since).Scan(&n)
+		WHERE %s AND COALESCE(p.closed_at, p.opened_at) >= $1`, incidentGatePredicate), since).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("incident count since %s: %w", since, err)
 	}

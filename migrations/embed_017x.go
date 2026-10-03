@@ -8,4 +8,7 @@ var (
 
 	//go:embed 0171_maker_fee_enable.sql
 	MakerFeeEnableSQL string // D-018 后段：exchange_configs.maker_fee_bps + app_config maker 启用键
+
+	//go:embed 0172_incident_exit_kind_cleanup.sql
+	IncidentExitKindCleanupSQL string // D-032 R1：清零成交 FAILED 误打的 legged_unwind（#503/#504 形态）
 )
