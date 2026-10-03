@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 )
 
@@ -180,60 +179,6 @@ func graduationAgeDays(p pgstore.PaperSpotCarry, now time.Time) float64 {
 		return p.ExitTs.Sub(p.EntryTs).Hours() / 24
 	}
 	return now.Sub(p.EntryTs).Hours() / 24
-}
-
-// SymbolMapEntry broker_symbol_map 行的解析投影（调用方自 store.ListSymbolMappings 转换，
-// scan 不反向依赖 dashboard 装配层类型）。
-type SymbolMapEntry struct {
-	Canonical string
-	IsPrimary bool
-}
-
-// ResolvedCfdPair canonical 双解析产物（S3 approve 写组合/S4 detector hint 构造共用）。
-type ResolvedCfdPair struct {
-	MtCanonical  string // broker_symbol_map canonical（detector 形，如 XAUUSD）
-	MtVenueKey   string // "{mt_venue}:{mt4|mt5}"
-	CexCanonical string // symbol+"USDT"（XAU→XAUUSDT/BTC→BTCUSDT/US30→US30USDT 实证规则）
-}
-
-// ResolveGraduationCanonicals D-403 S3/S4：canonical 双解析**单一 resolver**（KB
-// cex-canonical-fallback-from-symbol：canonical 三套命名空间并存是全案最脆缝，禁两处各写）。
-// mt 侧 broker_symbol_map 查 NormalizeJoinKey(canonical)==symbol（is_primary 优先否则任一行）；
-// 映射缺失=error fail-closed 不臆造。cex venue key 由调用方注入（approve 取 paper venue 组合串、
-// hint 取 universe 行 cex_venue——resolver 不经手 venue 归属，只钉 canonical 命名与 join 规范化单源）。
-func ResolveGraduationCanonicals(symbol, mtVenue string, platform int, mappings []SymbolMapEntry) (ResolvedCfdPair, error) {
-	if symbol == "" || mtVenue == "" {
-		return ResolvedCfdPair{}, fmt.Errorf("graduation canonical: empty symbol/mtVenue")
-	}
-	mtCanon := ""
-	primaryCanon := ""
-	for _, m := range mappings {
-		if NormalizeJoinKey(m.Canonical) == symbol {
-			if primaryCanon == "" {
-				primaryCanon = m.Canonical
-			}
-			if m.IsPrimary {
-				mtCanon = m.Canonical
-				break
-			}
-		}
-	}
-	if mtCanon == "" {
-		if primaryCanon != "" {
-			mtCanon = primaryCanon
-		} else {
-			return ResolvedCfdPair{}, fmt.Errorf("graduation canonical: no broker_symbol_map row venue=%s symbol=%s（fail-closed 不臆造）", mtVenue, symbol)
-		}
-	}
-	pt := "mt4"
-	if platform == 1 {
-		pt = "mt5"
-	}
-	return ResolvedCfdPair{
-		MtCanonical:  mtCanon,
-		MtVenueKey:   keydomain.Join(mtVenue, pt),
-		CexCanonical: symbol + "USDT",
-	}, nil
 }
 
 // FlagVenueSet D-463返修：venue 字段腿级展开（配对串+A/B 臂+mtVenue）——

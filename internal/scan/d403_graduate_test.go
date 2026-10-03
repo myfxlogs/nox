@@ -165,7 +165,7 @@ func TestD403_ResolveGraduationCanonicals(t *testing.T) {
 		{Canonical: "BTCUSD", IsPrimary: true},
 		{Canonical: "XAUUSD", IsPrimary: true},
 	}
-	pair, err := ResolveGraduationCanonicals("BTC", "1279967", 1, entries)
+	pair, err := ResolveGraduationCanonicals("BTC", "1279967", "okx", 1, entries, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,12 +173,12 @@ func TestD403_ResolveGraduationCanonicals(t *testing.T) {
 		t.Errorf("resolve: %+v", pair)
 	}
 	// 规范化命中：map 侧 XAUUSD 形 vs universe 侧 XAU
-	pair, err = ResolveGraduationCanonicals("XAU", "1314615", 0, entries)
+	pair, err = ResolveGraduationCanonicals("XAU", "1314615", "okx", 0, entries, nil)
 	if err != nil || pair.MtCanonical != "XAUUSD" || pair.MtVenueKey != "1314615:mt4" {
 		t.Errorf("normalize resolve: %+v err=%v", pair, err)
 	}
 	// 映射缺失 fail-closed
-	if _, err := ResolveGraduationCanonicals("SOL", "1279967", 1, entries); err == nil {
+	if _, err := ResolveGraduationCanonicals("SOL", "1279967", "okx", 1, entries, nil); err == nil {
 		t.Error("缺失映射应报错（fail-closed 不臆造）")
 	}
 }
