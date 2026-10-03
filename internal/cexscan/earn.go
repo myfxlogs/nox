@@ -24,6 +24,7 @@ type EarnCollector struct {
 	okxKey    string
 	okxSecret string
 	okxPass   string
+	okxBase   string // D-011 S2：okx spot base_url（cex-proxy），直连传输层错误时的回落通道
 	bnKey     string
 	bnSecret  string
 	bnSapiURL string // Binance sapi base（从 base_url /api 或 /fapi 替换为 /sapi）
@@ -43,6 +44,7 @@ func NewEarnCollector(cfg *config.Config, exchs []pgstore.ExchangeConfig) *EarnC
 				ec.okxKey = e.APIKey
 				ec.okxSecret = e.APISecret
 				ec.okxPass = e.Passphrase
+				ec.okxBase = e.BaseURL // D-011 S2：与 Scanner.okxSpotBase 同源同值
 			}
 		case "binance":
 			if e.VenueType == "spot" { // Binance 只需一组凭据，取 spot 行
@@ -56,42 +58,46 @@ func NewEarnCollector(cfg *config.Config, exchs []pgstore.ExchangeConfig) *EarnC
 	return ec
 }
 
+// okxEarnPath OKX Savings lending-rate-summary 端点路径（签名 prehash 同源）。
+const okxEarnPath = "/api/v5/finance/savings/lending-rate-summary"
+
 // CollectOKX 采集 OKX Savings lending-rate-summary。
-// 端点：GET https://www.okx.com/api/v5/finance/savings/lending-rate-summary
 // 解析：data[].ccy + data[].estRate（小数年化，0.035=3.5%）
+// 直连 www.okx.com 优先，传输层错误回落 c.okxBase=cex-proxy（D-011 S2，okx_fetch.go）。
 func (c *EarnCollector) CollectOKX(ctx context.Context) ([]pgstore.CexEarnAPR, error) {
-	return collectOKXWithBase(ctx, c, "https://www.okx.com")
+	if c.okxKey == "" {
+		return nil, fmt.Errorf("okx key not configured")
+	}
+	body, err := okxFetch(ctx, c.client, c.okxBase, okxEarnPath, c.okxSignHeaders)
+	if err != nil {
+		return nil, fmt.Errorf("okx earn: %w", err)
+	}
+	return parseOKXEarn(body)
 }
 
-// collectOKXWithBase 可注入 base URL 的 CollectOKX（测试用）。
+// okxSignHeaders OK-ACCESS-* 签名头（ts 每次尝试现取——直连/回落各自新鲜签名）。
+func (c *EarnCollector) okxSignHeaders(req *http.Request) {
+	ts := time.Now().UTC().Format("2006-01-02T15:04:05Z")
+	req.Header.Set("OK-ACCESS-KEY", c.okxKey)
+	req.Header.Set("OK-ACCESS-SIGN", okxSign(c.okxSecret, ts+"GET"+okxEarnPath))
+	req.Header.Set("OK-ACCESS-TIMESTAMP", ts)
+	req.Header.Set("OK-ACCESS-PASSPHRASE", c.okxPass)
+}
+
+// collectOKXWithBase 可注入 base URL 的 CollectOKX（测试用；单基址，无回落）。
 func collectOKXWithBase(ctx context.Context, c *EarnCollector, base string) ([]pgstore.CexEarnAPR, error) {
 	if c.okxKey == "" {
 		return nil, fmt.Errorf("okx key not configured")
 	}
-	const path = "/api/v5/finance/savings/lending-rate-summary"
-	ts := time.Now().UTC().Format("2006-01-02T15:04:05Z")
-	prehash := ts + "GET" + path
-	sign := okxSign(c.okxSecret, prehash)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", base+path, nil)
+	body, _, err := okxGet(ctx, c.client, base, okxEarnPath, c.okxSignHeaders)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("okx earn: %w", err)
 	}
-	req.Header.Set("OK-ACCESS-KEY", c.okxKey)
-	req.Header.Set("OK-ACCESS-SIGN", sign)
-	req.Header.Set("OK-ACCESS-TIMESTAMP", ts)
-	req.Header.Set("OK-ACCESS-PASSPHRASE", c.okxPass)
+	return parseOKXEarn(body)
+}
 
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("okx earn request: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("okx earn HTTP %d: %s", resp.StatusCode, string(body))
-	}
-
+// parseOKXEarn lending-rate-summary 响应解析（CollectOKX/collectOKXWithBase 共用）。
+func parseOKXEarn(body []byte) ([]pgstore.CexEarnAPR, error) {
 	var raw struct {
 		Code string `json:"code"`
 		Msg  string `json:"msg"`
@@ -100,7 +106,7 @@ func collectOKXWithBase(ctx context.Context, c *EarnCollector, base string) ([]p
 			EstRate json.Number `json:"estRate"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, fmt.Errorf("okx earn decode: %w", err)
 	}
 	if raw.Code != "0" {

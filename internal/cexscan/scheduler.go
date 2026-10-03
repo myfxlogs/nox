@@ -133,8 +133,8 @@ func (s *Scanner) scanOnce(ctx context.Context) error {
 		}
 	}
 
-	// ③ 跨所价差 → 入库
-	spreads, err := CalcSpreads(ctx, s.client, s.bnAPIURL, s.symbols)
+	// ③ 跨所价差 → 入库（okxSpotBase=D-011 S2 OKX 腿直连传输层错误的 cex-proxy 回落通道）
+	spreads, err := CalcSpreads(ctx, s.client, s.bnAPIURL, s.okxSpotBase, s.symbols)
 	if err != nil {
 		log.Printf("[cexscan] calc spreads: %v", err)
 	} else {
