@@ -13,6 +13,7 @@ import (
 	"log"
 	"time"
 
+	"arb/internal/fact"
 	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 )
@@ -88,8 +89,13 @@ func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand,
 			log.Printf("[cex paper] blocked flag 拦截: %s（%s@%s|%s）", key, f.Reason, f.Venue, f.Symbol)
 			return false
 		}
-		sp := keydomain.Parse(c.SpotVenueKey)
-		pp := keydomain.Parse(c.PerpVenueKey)
+		// D-042 ②：双腿近 1h 报价缺席轮=0 才开——perp 腿 funding facts 1h 内有行=报价面
+		// 活跃证据（spot 腿活性由本轮 cands 在册保证：detector 双腿报价齐才产候选）。
+		if !cexQuoteAlive(ctx, st, c, now) {
+			log.Printf("[cex paper] 报价连续性不足 拦开: %s（双腿近 1h 报价缺席）", key)
+			return false
+		}
+		sp, pp := keydomain.Parse(c.SpotVenueKey), keydomain.Parse(c.PerpVenueKey)
 		p := &pgstore.PaperSpotCarry{
 			VenueA: sp.Venue, VenueTypeA: sp.Type,
 			VenueB: pp.Venue, VenueTypeB: pp.Type,
@@ -157,6 +163,14 @@ func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand,
 				return opened, exited, fmt.Errorf("cex paper step: exit ts %s: %w", key, err)
 			}
 			if lastExit != nil && now.Sub(*lastExit) < opts.ReopenCooldown {
+				// D-042 ①：冷却窗内 data_lost ≥2 次 → warn 计入 selfwatch 日报异常项
+				//（拦截本体=本 continue 的 24h 窗；data_lost 是 flap 冷却的主导成因）。
+				if dl, derr := st.CountDataLostExits(ctx, sp, pp, canon, now.Add(-24*time.Hour)); derr == nil && dl >= 2 {
+					if aerr := st.InsertAlert(ctx, nil, "warn",
+						fmt.Sprintf("[cex paper] data_lost 冷却 %s：24h 内 %d 次 data_lost，24h 内不再开仓", key, dl)); aerr != nil {
+						log.Printf("[cex paper] 冷却 alert insert: %v", aerr)
+					}
+				}
 				continue
 			}
 		}
@@ -195,4 +209,20 @@ func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand,
 	}
 	exited += n
 	return opened, exited, nil
+}
+
+// cexQuoteAlive D-042 ②：双腿报价连续性——perp 腿 funding facts 近 1h 有行=报价面活跃
+// （spot 腿活性由本轮 cands 在册保证：detector 双腿报价齐才产候选）。查缺=false 拦开。
+func cexQuoteAlive(ctx context.Context, st PaperStore, c CexPaperCand, now time.Time) bool {
+	pp := keydomain.Parse(c.PerpVenueKey)
+	fs, err := st.LatestFacts(ctx, fact.KindFunding, pp.Venue, cexFactSymbol(c.Canonical))
+	if err != nil {
+		return false
+	}
+	for _, f := range fs {
+		if now.Sub(f.Ts) <= time.Hour {
+			return true
+		}
+	}
+	return false
 }

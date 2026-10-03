@@ -201,6 +201,21 @@ func (s *Store) LatestPaperExitTs(ctx context.Context, venueA, venueB, symbol st
 	return ts, nil
 }
 
+// CountDataLostExits D-042：24h 窗内 data_lost 退出行计数（venue_a×venue_b×symbol 对）——
+// ≥2 → 24h 冷却不再 paper 开仓（paper_spot_carry 自身查，不加表）。
+func (s *Store) CountDataLostExits(ctx context.Context, venueA, venueB, symbol string, since time.Time) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx, `
+		SELECT count(*) FROM paper_spot_carry
+		WHERE venue_a = $1 AND venue_b = $2 AND symbol = $3
+		  AND status = 'exited' AND exit_reason = 'data_lost' AND exit_ts >= $4`,
+		venueA, venueB, symbol, since).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("count data_lost exits %s×%s|%s: %w", venueA, venueB, symbol, err)
+	}
+	return n, nil
+}
+
 // ExitPaperSpotCarry 退出（reason='normalized'/'age_7d'）。
 // D-410 S2：convergenceUSD 退出时冻结收敛捕获（nil→列保持 NULL=缺账诚实缺）。
 func (s *Store) ExitPaperSpotCarry(ctx context.Context, id int64, reason string, convergenceUSD *float64) error {

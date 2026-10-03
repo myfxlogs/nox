@@ -64,6 +64,8 @@ type PaperStore interface {
 	HasXAssetMonitorRow(ctx context.Context, pair, cexVenue, mtVenue string) (bool, error)
 	LoadXAssetAllowCombos(ctx context.Context, environment string) ([]pgstore.XAssetAllowRow, error)
 	LatestPaperExitTs(ctx context.Context, venueA, venueB, symbol string) (*time.Time, error)
+	// D-042：data_lost 冷却计数（24h 窗内 ≥2 次 → 冷却不开）。
+	CountDataLostExits(ctx context.Context, venueA, venueB, symbol string, since time.Time) (int, error)
 	// D-410 S4：保底槽宇宙行缺席 warn 节流（禁 `_ =` 吞错，cashflow-write-error 同族条款）。
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
 	// D-465：mt×mt 轨 entry_basis/费用 tick 读面（*pgstore.Store 原生实现）。

@@ -127,6 +127,15 @@ func TestD555S2_NormalizedAndDataLost(t *testing.T) {
 	ctx := context.Background()
 	t0 := time.Now().UTC()
 	seedSettleFacts(t, s, "gate", "PONUSDT", t0)
+	// D-042 ②：报价连续性闸需 perp 腿 funding facts 近 1h——每轮步进前 seed 轮时刻 funding。
+	seedFunding := func(venue, symbol string, at time.Time, val float64) {
+		if err := s.InsertFacts(ctx, []fact.Fact{
+			{Kind: fact.KindFunding, Venue: venue, Symbol: symbol, Value: val, Unit: "pct_annualized", Ts: at, Src: venue + "_ws"},
+		}); err != nil {
+			t.Fatalf("seed funding: %v", err)
+		}
+	}
+	seedFunding("gate", "PONUSDT", t0, 60)
 	cands := []CexPaperCand{d555s2Cand("PONUSDT", "gate:spot", "gate:perp", 60, 100, 100)}
 	if _, _, err := StepPaperCexCarry(ctx, s, cands, t0, d555Opts(), nil); err != nil {
 		t.Fatalf("open: %v", err)
@@ -137,6 +146,7 @@ func TestD555S2_NormalizedAndDataLost(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		cur = cur.Add(9 * time.Hour)
 		seedSettleFacts(t, s, "gate", "PONUSDT", cur)
+		seedFunding("gate", "PONUSDT", cur, 5)
 		low := []CexPaperCand{d555s2Cand("PONUSDT", "gate:spot", "gate:perp", 5, 100, 100)}
 		_, exited, err := StepPaperCexCarry(ctx, s, low, cur, d555Opts(), nil)
 		if err != nil {
@@ -155,6 +165,7 @@ func TestD555S2_NormalizedAndDataLost(t *testing.T) {
 	// data_lost：重开后候选连续缺席 3 轮。
 	t1 := time.Now().UTC()
 	seedSettleFacts(t, s, "okx", "LOSTUSDT", t1)
+	seedFunding("okx", "LOSTUSDT", t1, 30) // D-042 ②：重开轮报价连续性闸放行
 	if _, _, err := StepPaperCexCarry(ctx, s, []CexPaperCand{d555s2Cand("LOSTUSDT", "okx:spot", "okx:perp", 30, 100, 100)}, t1, d555Opts(), nil); err != nil {
 		t.Fatalf("reopen: %v", err)
 	}

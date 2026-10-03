@@ -380,3 +380,8 @@ func (f *fakeMtmPaperStore) ExchangeTakerFeeBps(_ context.Context, venue, venueT
 	}
 	return t.perp, true, nil
 }
+
+// CountDataLostExits D-042：fake 实现（冷却测试注入计数用；默认零）。
+func (f *fakeMtmPaperStore) CountDataLostExits(ctx context.Context, venueA, venueB, symbol string, since time.Time) (int, error) {
+	return 0, nil
+}

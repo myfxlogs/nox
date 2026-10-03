@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"arb/internal/fact"
 	"arb/internal/store/pgstore"
 )
 
@@ -39,6 +40,12 @@ func TestD555_A1_GuaranteedSlot(t *testing.T) {
 	s := d555Store(t)
 	ctx := context.Background()
 	d555SeedCombo(t, s, "XAUUSD", "gate:spot", "XAUUSD", "gate:perp")
+	// D-042 ②：报价连续性闸需 perp 腿 funding facts 近 1h 有行——seed 新鲜 funding。
+	if err := s.InsertFacts(context.Background(), []fact.Fact{
+		{Kind: fact.KindFunding, Venue: "gate", Symbol: "XAUUSD", Value: 12.5, Unit: "pct_annualized", Ts: time.Now(), Src: "gate_ws"},
+	}); err != nil {
+		t.Fatalf("seed funding: %v", err)
+	}
 	cands := []CexPaperCand{d555Cand("XAUUSD", "gate:spot", "gate:perp", 12.5)}
 	opened, _, err := StepPaperCexCarry(ctx, s, cands, time.Now(), d555Opts(), nil)
 	if err != nil {
@@ -99,6 +106,16 @@ func TestD555_A1_GuaranteedNeedsCandidate(t *testing.T) {
 func TestD555_A2_DiscoverySlot(t *testing.T) {
 	s := d555Store(t)
 	ctx := context.Background()
+	// D-042 ②：三对 perp 腿 seed 新鲜 funding facts（报价连续性闸放行）。
+	fs := []fact.Fact{}
+	for _, v := range []string{"binance", "gate", "okx"} {
+		for _, sym := range []string{"PONS", "BTW"} { // cexFactSymbol(canonical) 键形
+			fs = append(fs, fact.Fact{Kind: fact.KindFunding, Venue: v, Symbol: sym, Value: 10, Unit: "pct_annualized", Ts: time.Now(), Src: v + "_ws"})
+		}
+	}
+	if err := s.InsertFacts(ctx, fs); err != nil {
+		t.Fatalf("seed funding: %v", err)
+	}
 	cands := []CexPaperCand{
 		d555Cand("PONS", "gate:spot", "binance:perp", 70),
 		d555Cand("PONS", "okx:spot", "gate:perp", 65), // 同 canonical 第二 venue 对
