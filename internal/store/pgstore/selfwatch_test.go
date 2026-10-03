@@ -143,10 +143,20 @@ func TestD033_StageReadPorts(t *testing.T) {
 		VALUES ('XAUUSD','XAUUSDT','3001157','okx',1,1,6000,true)`); err != nil {
 		t.Fatalf("seed caps: %v", err)
 	}
+	if _, err := s.Pool().Exec(ctx, `
+		INSERT INTO xasset_allow_combos (canonical_buy, canonical_sell, venue_buy, venue_sell, max_long_qty, max_short_qty, max_gross_usd, enabled, simulated)
+		VALUES ('XAGUSD','XAGUSDT','3001157','okx',1,1,6000,true,true)`); err != nil {
+		t.Fatalf("seed sim combo: %v", err)
+	}
 	vc, cc, _ = s.ExposureCapCounts(ctx)
 	ar, _ := s.XAssetAllowRealCount(ctx)
 	if vc != 1 || cc != 1 || ar != 1 {
 		t.Fatalf("counts: %d %d %d", vc, cc, ar)
+	}
+	// R1：实盘启用 venue 对（venue_key 生成列剥类型段 → 裸口径；simulated 行不计）
+	pairs, perr := s.XAssetAllowRealPairs(ctx)
+	if perr != nil || len(pairs) != 1 || pairs[0].VenueA != "3001157" || pairs[0].VenueB != "okx" {
+		t.Fatalf("pairs: %+v %v", pairs, perr)
 	}
 	if mig, err := s.SchemaMigrationMax(ctx); err != nil || mig < 173 {
 		t.Fatalf("migrations: %d %v", mig, err)

@@ -57,6 +57,34 @@ func (s *Store) ExposureCapCounts(ctx context.Context) (venueCaps, canonicalCaps
 	return venueCaps, canonicalCaps, nil
 }
 
+// VenuePair 裸 venue 配对（与 paper_spot_carry.venue_a/venue_b 同口径）。
+type VenuePair struct {
+	VenueA string
+	VenueB string
+}
+
+// XAssetAllowRealPairs 实盘启用组合 venue 对（venue_key 生成列剥类型段 → 裸 venue，
+// 与 paper_spot_carry.venue_a/venue_b 同口径；Stage 1 组合证据的组合域）。
+func (s *Store) XAssetAllowRealPairs(ctx context.Context) ([]VenuePair, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT venue_key_buy, venue_key_sell FROM xasset_allow_combos
+		WHERE enabled AND COALESCE(simulated, false) = false
+		ORDER BY venue_key_buy, venue_key_sell`)
+	if err != nil {
+		return nil, fmt.Errorf("xasset allow real pairs: %w", err)
+	}
+	defer rows.Close()
+	var out []VenuePair
+	for rows.Next() {
+		var a, b string
+		if err := rows.Scan(&a, &b); err != nil {
+			return nil, fmt.Errorf("xasset allow real pairs scan: %w", err)
+		}
+		out = append(out, VenuePair{VenueA: bareVenueOf(a), VenueB: bareVenueOf(b)})
+	}
+	return out, rows.Err()
+}
+
 // XAssetAllowRealCount xasset_allow_combos 实盘域启用行数（Stage 闸「白名单已定」；
 // simulated=true=仅 demo 域行不计——D-030 Stage 1 范围是真实组合）。
 func (s *Store) XAssetAllowRealCount(ctx context.Context) (int, error) {

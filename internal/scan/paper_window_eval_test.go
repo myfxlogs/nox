@@ -133,3 +133,39 @@ func TestD033_EvalExitBuckets(t *testing.T) {
 		t.Fatalf("window net: %v", ev.WindowNet)
 	}
 }
+
+// R1① 锚：组合统计——窗内多行按 [entry,exit|now]∩窗 时长求和；窗前入场 active
+// 行计满窗长；异组合分行统计。
+func TestD033_EvalComboStats(t *testing.T) {
+	recent := evalNow.Add(-time.Hour)
+	pre := mkPaperRow(1, "active", &recent) // 窗前入场 → 计满窗（since→now ≈6.92d）
+	pre.EntryTs = evalSince.Add(-10 * 24 * time.Hour)
+	ex := mkPaperRow(2, "exited", nil) // 窗内 3d 退出（entry=since+1h, exit=since+3d）
+	ex.ExitTs = ptr(evalSince.Add(3 * 24 * time.Hour))
+	other := mkPaperRow(3, "active", &recent) // 异组合 → 独立 stat
+	other.VenueB = "binance"
+	rows := []pgstore.PaperSpotCarry{pre, ex, other}
+	ev, err := EvalPaperCohort(context.Background(), evalFixtures(), rows, evalSince, evalNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ev.Combos) != 2 {
+		t.Fatalf("combos: %+v", ev.Combos)
+	}
+	var c PaperComboStat
+	for _, cs := range ev.Combos {
+		if cs.VenueA == "3001157" && cs.VenueB == "okx" {
+			c = cs
+		}
+	}
+	wantDays := evalNow.Sub(evalSince).Hours()/24 + // pre：满窗
+		(evalSince.Add(3*24*time.Hour).Sub(evalSince.Add(time.Hour))).Hours()/24 // ex：3d-1h
+	if c.Rows != 2 || c.ActiveDays < wantDays-0.01 || c.ActiveDays > wantDays+0.01 {
+		t.Fatalf("combo days: got %.3f want %.3f (%+v)", c.ActiveDays, wantDays, c)
+	}
+	if c.AccruedUSD != 1.5+1.5 {
+		t.Fatalf("combo accrued: %v", c.AccruedUSD)
+	}
+}
+
+func ptr(t time.Time) *time.Time { return &t }

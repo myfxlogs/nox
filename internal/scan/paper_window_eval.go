@@ -27,6 +27,17 @@ type PaperDayBucket struct {
 	Reasons []string // 仅退出桶：当日 exit_reason 去重清单
 }
 
+// PaperComboStat 组合维度统计（venue_a×venue_b 配对——Stage 1 组合证据口径：
+// 窗内累计在仓天数=各行 [entry,exit|now]∩窗 时长和；AccruedUSD=行累计值合计
+// （在仓+窗内退出 realized，与窗净额同口径））。
+type PaperComboStat struct {
+	VenueA     string
+	VenueB     string
+	Rows       int
+	ActiveDays float64
+	AccruedUSD float64
+}
+
 // PaperWindowEval paper 观测窗单轮评估结果。
 type PaperWindowEval struct {
 	ActiveN       int // cohort 中 status='active' 行数
@@ -40,8 +51,9 @@ type PaperWindowEval struct {
 	Stalled       int     // accrue 水位落后 >2×行结算窗（行窗=max(双腿)）
 	ActiveByDay   []PaperDayBucket
 	ExitedByDay   []PaperDayBucket
-	LatestAccrue  *time.Time // active 行水位最迟者（D-028 在线佐证）
-	FirstProbeErr string     // 首个探针错误摘要（fail-closed 行明细告警用）
+	Combos        []PaperComboStat // 配对维度在仓天数/accrued（Stage 1 组合证据）
+	LatestAccrue  *time.Time       // active 行水位最迟者（D-028 在线佐证）
+	FirstProbeErr string           // 首个探针错误摘要（fail-closed 行明细告警用）
 }
 
 // EvalPaperCohort 评估 cohort 行（rows=PaperWindowCohort 结果，结构过滤由调用方完成）。
@@ -68,6 +80,30 @@ func EvalPaperCohort(ctx context.Context, st PaperWindowStore, rows []pgstore.Pa
 	}
 	ev := &PaperWindowEval{}
 	actDay, exitDay := map[string]*PaperDayBucket{}, map[string]*PaperDayBucket{}
+	combos := map[string]*PaperComboStat{}
+	combo := func(p *pgstore.PaperSpotCarry) *PaperComboStat {
+		k := p.VenueA + "|" + p.VenueB
+		c := combos[k]
+		if c == nil {
+			c = &PaperComboStat{VenueA: p.VenueA, VenueB: p.VenueB}
+			combos[k] = c
+		}
+		return c
+	}
+	comboDays := func(p *pgstore.PaperSpotCarry) float64 {
+		start := p.EntryTs
+		if start.Before(since) {
+			start = since
+		}
+		end := now
+		if p.ExitTs != nil && p.ExitTs.Before(now) {
+			end = *p.ExitTs
+		}
+		if d := end.Sub(start); d > 0 {
+			return d.Hours() / 24
+		}
+		return 0
+	}
 	for _, p := range rows {
 		if p.Status == "exited" {
 			if p.ExitTs == nil || p.ExitTs.Before(since) { // 窗内退出口径同脚本 §3
@@ -86,6 +122,10 @@ func EvalPaperCohort(ctx context.Context, st PaperWindowStore, rows []pgstore.Pa
 			if p.ExitReason != "" && !strIn(b.Reasons, p.ExitReason) {
 				b.Reasons = append(b.Reasons, p.ExitReason)
 			}
+			c := combo(&p)
+			c.Rows++
+			c.ActiveDays += comboDays(&p)
+			c.AccruedUSD += p.AccruedUSD
 			continue
 		}
 		if p.Status == "active" {
@@ -106,6 +146,10 @@ func EvalPaperCohort(ctx context.Context, st PaperWindowStore, rows []pgstore.Pa
 			}
 			b.Rows++
 			b.Sum += p.AccruedUSD
+			c := combo(&p)
+			c.Rows++
+			c.ActiveDays += comboDays(&p)
+			c.AccruedUSD += p.AccruedUSD
 		} else if p.Status == "demo" {
 			ev.DemoN++
 		}
@@ -126,6 +170,12 @@ func EvalPaperCohort(ctx context.Context, st PaperWindowStore, rows []pgstore.Pa
 	ev.WindowNet = ev.NetActive + ev.NetExited
 	ev.ActiveByDay = sortedBuckets(actDay)
 	ev.ExitedByDay = sortedBuckets(exitDay)
+	for _, c := range combos {
+		ev.Combos = append(ev.Combos, *c)
+	}
+	sort.Slice(ev.Combos, func(i, j int) bool {
+		return ev.Combos[i].VenueA+ev.Combos[i].VenueB < ev.Combos[j].VenueA+ev.Combos[j].VenueB
+	})
 	return ev, nil
 }
 
