@@ -86,6 +86,7 @@ func Load() *Config {
 		ProbeEnabled:               envBool("ARB_PROBE_ENABLED", false),                // D-181 S2 probe 探测仓总开关
 		ProbeEvalDays:              envInt("ARB_PROBE_EVAL_DAYS", 3),                   // D-181 S2 probe 评估等待天数
 		ProbeMaxNotionalUSD:        envFloat("ARB_PROBE_MAX_NOTIONAL", 1000),           // D-047：探针仓单腿名义上限
+		ProbeRPCEnabled:            envBool("ARB_PROBE_RPC_ENABLED", false),            // D-047 R1：OpenProbe RPC 总开关（缺省关）
 		PerpFundMinHold:            envDur("ARB_PERPFUNDING_MIN_HOLD", 8*time.Hour),    // D-133 T1 持有下限
 		PerpFundExitDebounce:       envInt("ARB_PERPFUNDING_EXIT_DEBOUNCE", 3),         // D-133 T1 连续去抖
 		FundingMaxBreakevenDays:    envFloat("ARB_FUNDING_MAX_BREAKEVEN_DAYS", 1.0),    // D-133 T2 回本周期上门

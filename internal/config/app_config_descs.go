@@ -107,6 +107,7 @@ var appConfigDescs = map[string]string{
 	"ARB_PROBE_ENABLED":                          "true=开：探针交易（小额验证通道）",
 	"ARB_PROBE_EVAL_DAYS":                        "探针评估天数（探针结果统计窗）",
 	"ARB_PROBE_MAX_NOTIONAL":                     "系统探针仓单腿名义上限（USD，D-047；type='PROBE' 守卫）",
+	"ARB_PROBE_RPC_ENABLED":                      "true=开：OpenProbe RPC 探针通道（D-047 R1，缺省关）",
 	"ARB_REPO_COLLECT_INTERVAL":                  "逆回购数据采集周期",
 	"ARB_REPO_IDLE_CNY":                          "逆回购闲置资金门槛（CNY；高于此触发提醒）",
 	"ARB_REPO_MIN_RETURN_CNY":                    "逆回购最小收益门槛（CNY）",

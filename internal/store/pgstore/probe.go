@@ -61,6 +61,25 @@ func (s *Store) ListDueProbes(ctx context.Context, now time.Time) ([]ProbeRow, e
 	return scanProbeRows(rows)
 }
 
+// ListStuckDueProbes D-047 R1④：到期但卡在非可平态的探针（OPENING/CLOSING）——
+// venue 侧未确认/平仓在途，系统只告警不擅动状态（待对账/人工收编）。
+func (s *Store) ListStuckDueProbes(ctx context.Context, now time.Time) ([]ProbeRow, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT p.id, p.opportunity_id, p.type, p.status, p.note, p.notional_usd,
+		       p.decision_ref, p.auto_close_at, p.opened_at, p.closed_at, COALESCE(p.exit_kind,''),
+		       l.venue || ':' || l.venue_type, l.symbol, l.side, l.qty, l.order_id
+		FROM positions p
+		LEFT JOIN position_legs l ON l.position_id = p.id AND l.leg_no = 1 AND l.phase = 'OPEN'
+		WHERE p.type = 'PROBE' AND p.status IN ('OPENING','CLOSING')
+		  AND p.auto_close_at IS NOT NULL AND p.auto_close_at <= $1
+		ORDER BY p.id`, now)
+	if err != nil {
+		return nil, fmt.Errorf("list stuck due probes: %w", err)
+	}
+	defer rows.Close()
+	return scanProbeRows(rows)
+}
+
 // ListProbes 全量探针仓（openOnly=true 只在途）。前端/巡检读面。
 func (s *Store) ListProbes(ctx context.Context, openOnly bool) ([]ProbeRow, error) {
 	q := `
