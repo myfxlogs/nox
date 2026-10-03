@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"arb/internal/fact"
 	"arb/internal/store/pgstore"
 )
 
@@ -40,14 +39,8 @@ func TestD555_A1_GuaranteedSlot(t *testing.T) {
 	s := d555Store(t)
 	ctx := context.Background()
 	d555SeedCombo(t, s, "XAUUSD", "gate:spot", "XAUUSD", "gate:perp")
-	// D-042 ②：报价连续性闸需 perp 腿 funding facts 近 1h 有行——seed 新鲜 funding。
-	if err := s.InsertFacts(context.Background(), []fact.Fact{
-		{Kind: fact.KindFunding, Venue: "gate", Symbol: "XAUUSD", Value: 12.5, Unit: "pct_annualized", Ts: time.Now(), Src: "gate_ws"},
-	}); err != nil {
-		t.Fatalf("seed funding: %v", err)
-	}
 	cands := []CexPaperCand{d555Cand("XAUUSD", "gate:spot", "gate:perp", 12.5)}
-	opened, _, err := StepPaperCexCarry(ctx, s, cands, time.Now(), d555Opts(), nil)
+	opened, _, err := StepPaperCexCarry(ctx, s, cands, time.Now(), d555Opts(), nil, nil)
 	if err != nil {
 		t.Fatalf("step: %v", err)
 	}
@@ -80,7 +73,7 @@ func TestD555_A1_GuaranteedSlot(t *testing.T) {
 		t.Fatalf("A1: venue_key = %s×%s, want gate:spot×gate:perp", ka, kb)
 	}
 	// 二轮幂等：active 唯一索引兜底不重复开。
-	if _, _, err := StepPaperCexCarry(ctx, s, cands, time.Now(), d555Opts(), nil); err != nil {
+	if _, _, err := StepPaperCexCarry(ctx, s, cands, time.Now(), d555Opts(), nil, nil); err != nil {
 		t.Fatalf("A1 rerun: %v", err)
 	}
 	active2, _ := s.ListActivePaperSpotCarry(ctx)
@@ -95,7 +88,7 @@ func TestD555_A1_GuaranteedNeedsCandidate(t *testing.T) {
 	s := d555Store(t)
 	ctx := context.Background()
 	d555SeedCombo(t, s, "XAUUSD", "gate:spot", "XAUUSD", "gate:perp")
-	opened, _, err := StepPaperCexCarry(ctx, s, nil, time.Now(), d555Opts(), nil)
+	opened, _, err := StepPaperCexCarry(ctx, s, nil, time.Now(), d555Opts(), nil, nil)
 	if err != nil || len(opened) != 0 {
 		t.Fatalf("A1 缺候选: opened=%v err=%v", opened, err)
 	}
@@ -106,22 +99,12 @@ func TestD555_A1_GuaranteedNeedsCandidate(t *testing.T) {
 func TestD555_A2_DiscoverySlot(t *testing.T) {
 	s := d555Store(t)
 	ctx := context.Background()
-	// D-042 ②：三对 perp 腿 seed 新鲜 funding facts（报价连续性闸放行）。
-	fs := []fact.Fact{}
-	for _, v := range []string{"binance", "gate", "okx"} {
-		for _, sym := range []string{"PONS", "BTW"} { // cexFactSymbol(canonical) 键形
-			fs = append(fs, fact.Fact{Kind: fact.KindFunding, Venue: v, Symbol: sym, Value: 10, Unit: "pct_annualized", Ts: time.Now(), Src: v + "_ws"})
-		}
-	}
-	if err := s.InsertFacts(ctx, fs); err != nil {
-		t.Fatalf("seed funding: %v", err)
-	}
 	cands := []CexPaperCand{
 		d555Cand("PONS", "gate:spot", "binance:perp", 70),
 		d555Cand("PONS", "okx:spot", "gate:perp", 65), // 同 canonical 第二 venue 对
 		d555Cand("BTW", "gate:spot", "okx:perp", 43),
 	}
-	opened, _, err := StepPaperCexCarry(ctx, s, cands, time.Now(), d555Opts(), nil)
+	opened, _, err := StepPaperCexCarry(ctx, s, cands, time.Now(), d555Opts(), nil, nil)
 	if err != nil {
 		t.Fatalf("A2: %v", err)
 	}
@@ -134,7 +117,7 @@ func TestD555_A2_DiscoverySlot(t *testing.T) {
 	if _, err := s.Pool().Exec(ctx, `TRUNCATE paper_spot_carry, carry_graduations RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("A2 truncate: %v", err)
 	}
-	opened2, _, err := StepPaperCexCarry(ctx, s, cands, time.Now(), small, nil)
+	opened2, _, err := StepPaperCexCarry(ctx, s, cands, time.Now(), small, nil, nil)
 	if err != nil || len(opened2) != 2 {
 		t.Fatalf("A2 cap: opened=%v err=%v, want 2（PONS 两 venue 对；BTW 被上限挤出）", opened2, err)
 	}

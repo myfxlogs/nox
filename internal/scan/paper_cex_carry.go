@@ -13,7 +13,6 @@ import (
 	"log"
 	"time"
 
-	"arb/internal/fact"
 	"arb/internal/keydomain"
 	"arb/internal/store/pgstore"
 )
@@ -49,7 +48,7 @@ type CexPaperCand struct {
 //	canonical 多样性上限开到 cap。
 //
 // blocked 旗标腿级拦截（同 D-463 口径）；flap 冷却按退出行 max(exit_ts)（保底段同 mt×cex）。
-func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand, now time.Time, opts PaperCexOpts, flags map[string]pgstore.VenueSymbolFlag) (opened []string, exited int, err error) {
+func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand, now time.Time, opts PaperCexOpts, flags map[string]pgstore.VenueSymbolFlag, quoteAlive func(venueKey, symbol string) (time.Time, bool)) (opened []string, exited int, err error) {
 	// 零候选不早退：在库行仍需 miss_streak 计数/退出判定（data_lost 语义依赖每轮步进）——
 	// 开仓段零候选自然零产出。
 	maxActive := opts.MaxActive
@@ -89,10 +88,23 @@ func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand,
 			log.Printf("[cex paper] blocked flag 拦截: %s（%s@%s|%s）", key, f.Reason, f.Venue, f.Symbol)
 			return false
 		}
-		// D-042 ②：双腿近 1h 报价缺席轮=0 才开——perp 腿 funding facts 1h 内有行=报价面
-		// 活跃证据（spot 腿活性由本轮 cands 在册保证：detector 双腿报价齐才产候选）。
-		if !cexQuoteAlive(ctx, st, c, now) {
-			log.Printf("[cex paper] 报价连续性不足 拦开: %s（双腿近 1h 报价缺席）", key)
+		// D-042 R1 ②：双腿近 1h 报价缺席=0 才开——双腿各自 bus 最新报价时间 1h 内
+		//（LastChangeAt 价格变更钟；funding facts 不作报价活性源——R1 退回②）。
+		// quoteAlive nil=未接线（fail-open 跳过闸；生产 wire 必注入 qbus.LastChangeAt）。
+		if quoteAlive != nil {
+			if _, ok := quoteAlive(c.SpotVenueKey, c.Canonical); !ok {
+				log.Printf("[cex paper] 报价连续性不足 拦开: %s（spot 腿近 1h 无报价变更）", key)
+				return false
+			}
+			if _, ok := quoteAlive(c.PerpVenueKey, c.Canonical); !ok {
+				log.Printf("[cex paper] 报价连续性不足 拦开: %s（perp 腿近 1h 无报价变更）", key)
+				return false
+			}
+		}
+		// D-042 R1 ①：data_lost 冷却守卫——同对 24h 内 ≥2 次 data_lost 退出 → 24h 内不再开仓
+		//（openCand 入口统一生效：保底段+发现段两路同闸）。
+		if dataLostCooldown(ctx, st, spVenue(c), ppVenue(c), c.Canonical, now) {
+			log.Printf("[cex paper] data_lost 冷却 拦开: %s（24h 内 ≥2 次 data_lost）", key)
 			return false
 		}
 		sp, pp := keydomain.Parse(c.SpotVenueKey), keydomain.Parse(c.PerpVenueKey)
@@ -163,15 +175,7 @@ func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand,
 				return opened, exited, fmt.Errorf("cex paper step: exit ts %s: %w", key, err)
 			}
 			if lastExit != nil && now.Sub(*lastExit) < opts.ReopenCooldown {
-				// D-042 ①：冷却窗内 data_lost ≥2 次 → warn 计入 selfwatch 日报异常项
-				//（拦截本体=本 continue 的 24h 窗；data_lost 是 flap 冷却的主导成因）。
-				if dl, derr := st.CountDataLostExits(ctx, sp, pp, canon, now.Add(-24*time.Hour)); derr == nil && dl >= 2 {
-					if aerr := st.InsertAlert(ctx, nil, "warn",
-						fmt.Sprintf("[cex paper] data_lost 冷却 %s：24h 内 %d 次 data_lost，24h 内不再开仓", key, dl)); aerr != nil {
-						log.Printf("[cex paper] 冷却 alert insert: %v", aerr)
-					}
-				}
-				continue
+				continue // D-042 R1：拦截本体在 openCand 双闸；可见性归 selfwatch data_lost 项（R1 ③）
 			}
 		}
 		cand, ok := candByKey[key]
@@ -211,18 +215,18 @@ func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand,
 	return opened, exited, nil
 }
 
-// cexQuoteAlive D-042 ②：双腿报价连续性——perp 腿 funding facts 近 1h 有行=报价面活跃
-// （spot 腿活性由本轮 cands 在册保证：detector 双腿报价齐才产候选）。查缺=false 拦开。
-func cexQuoteAlive(ctx context.Context, st PaperStore, c CexPaperCand, now time.Time) bool {
-	pp := keydomain.Parse(c.PerpVenueKey)
-	fs, err := st.LatestFacts(ctx, fact.KindFunding, pp.Venue, cexFactSymbol(c.Canonical))
+// spVenue/ppVenue CexPaperCand 双腿裸 venue。
+func spVenue(c CexPaperCand) string { return keydomain.Parse(c.SpotVenueKey).Venue }
+func ppVenue(c CexPaperCand) string { return keydomain.Parse(c.PerpVenueKey).Venue }
+
+// dataLostCooldown D-042 R1 ①：data_lost 冷却守卫——同 symbol×venue_a×venue_b 对 24h 内
+// ≥2 次 data_lost 退出 → true（24h 内不再 paper 开仓；查 paper_spot_carry 自身不加表）。
+// 计数查询失败=false fail-open 不拦（不因读口故障误杀开仓）。
+func dataLostCooldown(ctx context.Context, st PaperStore, venueA, venueB, canonical string, now time.Time) bool {
+	n, err := st.CountDataLostExits(ctx, venueA, venueB, canonical, now.Add(-24*time.Hour))
 	if err != nil {
+		log.Printf("[cex paper] data_lost 计数失败 %s×%s|%s: %v（fail-open 不拦）", venueA, venueB, canonical, err)
 		return false
 	}
-	for _, f := range fs {
-		if now.Sub(f.Ts) <= time.Hour {
-			return true
-		}
-	}
-	return false
+	return n >= 2
 }

@@ -26,7 +26,7 @@ func TestD555S2_OpenFeeBasis(t *testing.T) {
 	s := d555Store(t)
 	ctx := context.Background()
 	cands := []CexPaperCand{d555s2Cand("XAUUSD", "gate:spot", "gate:perp", 12.5, 50000, 50100)}
-	opened, _, err := StepPaperCexCarry(ctx, s, cands, time.Now(), d555Opts(), nil)
+	opened, _, err := StepPaperCexCarry(ctx, s, cands, time.Now(), d555Opts(), nil, nil)
 	if err != nil || len(opened) != 1 {
 		t.Fatalf("S2-A: opened=%v err=%v", opened, err)
 	}
@@ -43,7 +43,7 @@ func TestD555S2_OpenFeeBasis(t *testing.T) {
 	}
 	// venue 未覆盖（kraken）→ est_fee NULL 诚实缺；价缺（0）→ basis NULL 不臆造。
 	cands2 := []CexPaperCand{d555s2Cand("D555K", "kraken:spot", "kraken:perp", 10, 0, 0)}
-	if _, _, err := StepPaperCexCarry(ctx, s, cands2, time.Now(), d555Opts(), nil); err != nil {
+	if _, _, err := StepPaperCexCarry(ctx, s, cands2, time.Now(), d555Opts(), nil, nil); err != nil {
 		t.Fatalf("S2-A kraken: %v", err)
 	}
 	active, _ = s.ListActivePaperSpotCarry(ctx)
@@ -79,7 +79,7 @@ func TestD555S2_AccrueAndAdverse(t *testing.T) {
 		t.Fatalf("seed funding: %v", err)
 	}
 	cands := []CexPaperCand{d555s2Cand("XAUUSDT", "gate:spot", "gate:perp", 12.5, 100, 100)}
-	opened, _, err := StepPaperCexCarry(ctx, s, cands, open, d555Opts(), nil)
+	opened, _, err := StepPaperCexCarry(ctx, s, cands, open, d555Opts(), nil, nil)
 	if err != nil || len(opened) != 1 {
 		t.Fatalf("S2-B open: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestD555S2_AccrueAndAdverse(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("reseed: %v", err)
 	}
-	if _, exited, err := StepPaperCexCarry(ctx, s, cands, now, d555Opts(), nil); err != nil || exited != 0 {
+	if _, exited, err := StepPaperCexCarry(ctx, s, cands, now, d555Opts(), nil, nil); err != nil || exited != 0 {
 		t.Fatalf("S2-B accrue: exited=%d err=%v", exited, err)
 	}
 	active, _ := s.ListActivePaperSpotCarry(ctx)
@@ -111,7 +111,7 @@ func TestD555S2_AccrueAndAdverse(t *testing.T) {
 	_ = one
 	// funding 翻负轮 → adverse 当轮退。
 	cands[0].FundingAnn = -3
-	if _, exited, err := StepPaperCexCarry(ctx, s, cands, now.Add(time.Hour), d555Opts(), nil); err != nil || exited != 1 {
+	if _, exited, err := StepPaperCexCarry(ctx, s, cands, now.Add(time.Hour), d555Opts(), nil, nil); err != nil || exited != 1 {
 		t.Fatalf("S2-C adverse: exited=%d err=%v", exited, err)
 	}
 	active, _ = s.ListActivePaperSpotCarry(ctx)
@@ -127,7 +127,7 @@ func TestD555S2_NormalizedAndDataLost(t *testing.T) {
 	ctx := context.Background()
 	t0 := time.Now().UTC()
 	seedSettleFacts(t, s, "gate", "PONUSDT", t0)
-	// D-042 ②：报价连续性闸需 perp 腿 funding facts 近 1h——每轮步进前 seed 轮时刻 funding。
+	// 结息源：AccruePaperLegs 逐期实率取 funding facts——每轮步进前 seed 轮时刻 funding。
 	seedFunding := func(venue, symbol string, at time.Time, val float64) {
 		if err := s.InsertFacts(ctx, []fact.Fact{
 			{Kind: fact.KindFunding, Venue: venue, Symbol: symbol, Value: val, Unit: "pct_annualized", Ts: at, Src: venue + "_ws"},
@@ -137,7 +137,7 @@ func TestD555S2_NormalizedAndDataLost(t *testing.T) {
 	}
 	seedFunding("gate", "PONUSDT", t0, 60)
 	cands := []CexPaperCand{d555s2Cand("PONUSDT", "gate:spot", "gate:perp", 60, 100, 100)}
-	if _, _, err := StepPaperCexCarry(ctx, s, cands, t0, d555Opts(), nil); err != nil {
+	if _, _, err := StepPaperCexCarry(ctx, s, cands, t0, d555Opts(), nil, nil); err != nil {
 		t.Fatalf("open: %v", err)
 	}
 	// 2 轮低率（5%<10%）→ normalized（paperExitStreakRounds=2；轮时刻自 DB now 前移防水位倒挂）。
@@ -148,7 +148,7 @@ func TestD555S2_NormalizedAndDataLost(t *testing.T) {
 		seedSettleFacts(t, s, "gate", "PONUSDT", cur)
 		seedFunding("gate", "PONUSDT", cur, 5)
 		low := []CexPaperCand{d555s2Cand("PONUSDT", "gate:spot", "gate:perp", 5, 100, 100)}
-		_, exited, err := StepPaperCexCarry(ctx, s, low, cur, d555Opts(), nil)
+		_, exited, err := StepPaperCexCarry(ctx, s, low, cur, d555Opts(), nil, nil)
 		if err != nil {
 			t.Fatalf("low round %d: %v", i, err)
 		}
@@ -165,13 +165,13 @@ func TestD555S2_NormalizedAndDataLost(t *testing.T) {
 	// data_lost：重开后候选连续缺席 3 轮。
 	t1 := time.Now().UTC()
 	seedSettleFacts(t, s, "okx", "LOSTUSDT", t1)
-	seedFunding("okx", "LOSTUSDT", t1, 30) // D-042 ②：重开轮报价连续性闸放行
-	if _, _, err := StepPaperCexCarry(ctx, s, []CexPaperCand{d555s2Cand("LOSTUSDT", "okx:spot", "okx:perp", 30, 100, 100)}, t1, d555Opts(), nil); err != nil {
+	seedFunding("okx", "LOSTUSDT", t1, 30) // 重开轮结息源新鲜度（报价闸 R1=bus 接线，测试 nil 跳过）
+	if _, _, err := StepPaperCexCarry(ctx, s, []CexPaperCand{d555s2Cand("LOSTUSDT", "okx:spot", "okx:perp", 30, 100, 100)}, t1, d555Opts(), nil, nil); err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
 	for i := 0; i < 3; i++ {
 		t2 := t1.Add(time.Duration(i+1) * 9 * time.Hour)
-		if _, _, err := StepPaperCexCarry(ctx, s, nil, t2, d555Opts(), nil); err != nil {
+		if _, _, err := StepPaperCexCarry(ctx, s, nil, t2, d555Opts(), nil, nil); err != nil {
 			t.Fatalf("absent round %d: %v", i, err)
 		}
 	}
@@ -195,7 +195,7 @@ func TestD555S2_MtCexUntouched(t *testing.T) {
 		t.Fatalf("cfd open: %v", err)
 	}
 	cands := []CexPaperCand{d555s2Cand("XAUUSD", "gate:spot", "gate:perp", -5, 100, 100)}
-	if _, _, err := StepPaperCexCarry(ctx, s, cands, time.Now(), d555Opts(), nil); err != nil {
+	if _, _, err := StepPaperCexCarry(ctx, s, cands, time.Now(), d555Opts(), nil, nil); err != nil {
 		t.Fatalf("cex step: %v", err)
 	}
 	// cfd 行（venue_a=3001157 裸域）不在 cex 轨候选键域——adverse 候选不得误杀 cfd 行。
