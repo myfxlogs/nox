@@ -38,6 +38,12 @@ func MT5OrdersToOrders(v string, orders []*mt5pb.Order) []venue.Order {
 			OpenedAt:   openedAt,
 			Magic:      ord.GetExpertId(),
 			StopLoss:   ord.GetStopLoss(), // D-155：MT5 Order.StopLoss 透传
+			// D-031 ①：venue 原生现价——MT5 Order.ClosePrice 对持仓即当前市价（平仓价字段
+			// 在持仓单=现价，venue 权威）。PriceAt=映射调用时刻（帧路径=收帧时、REST
+			// OpenedOrders=回读时）；帧路径 publishPositions 随后 lastQuote 有价则覆盖双价，
+			// 手动仓 lastQuote 空=保留此单价——面板不再「—」。
+			CurrentPrice: ord.GetClosePrice(),
+			PriceAt:      time.Now(),
 		})
 	}
 	return out
