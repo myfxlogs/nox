@@ -17,7 +17,7 @@ import (
 // carry 期望口径常量（D-027 裁定）：econ 入场闸/收割地平/轮转 EV=滚动 7 日均值年化；
 // carry_death breach 量=滚动 3 日均值；展示路径 window≤0=瞬时（同 fundingRateForVenue）。
 var (
-	carryEconWindow      = 7 * 24 * time.Hour
+	carryEconWindow      = fact.FundingMeanWindow // D-034：窗口常量单源（7d）
 	carryDeathMeanWindow = 3 * 24 * time.Hour
 )
 
@@ -133,19 +133,7 @@ func (e *Engine) fundingRateMeanForVenue(ctx context.Context, bareVenue, canonic
 	if window <= 0 {
 		return e.fundingRateForVenue(ctx, bareVenue, canonical)
 	}
-	facts, err := e.store.FactsWithin(ctx, fact.KindFunding, bareVenue, canonical, time.Now().Add(-window))
-	if err != nil || len(facts) == 0 {
-		return 0, time.Time{}, false
-	}
-	var sum float64
-	var latest time.Time
-	for _, f := range facts {
-		sum += f.Value
-		if f.Ts.After(latest) {
-			latest = f.Ts
-		}
-	}
-	return sum / float64(len(facts)), latest, true
+	return fact.FundingMeanAnnual(ctx, e.store, bareVenue, canonical, window) // D-034：共享单实现
 }
 
 // xassetSpecFactFresh MT 腿 spec 源 swap fact 新鲜度检查（SwapFactMaxAge）。
