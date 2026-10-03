@@ -168,14 +168,18 @@ func (s *Service) ApproveCarryGraduation(ctx context.Context, req *connect.Reque
 	if err != nil {
 		return fail("broker_symbol_map 读取失败: %v", err)
 	}
-	pair, err := scan.ResolveGraduationCanonicals(grad.Symbol, mtVenue, platform, symbolMapEntries(mappings))
-	if err != nil {
-		return fail("%v（需先在 Symbol 映射页补映射或点「自动映射全部账号」）", err)
-	}
 	// cex 腿 venue=配对 B 臂（D-498 直读 venue_b，不再拆组合串）
 	cexVenue := paper.VenueB
 	if cexVenue == "" {
 		return fail("paper venue 配对 B 臂缺失: %q", paper.VenuePair())
+	}
+	equiv, eqErr := db.ListAssetEquiv(ctx)
+	if eqErr != nil { // D-043：equiv 读失败降级 legacy 解析（class 键行 resolver 自会 fail-closed）
+		log.Printf("[graduation] asset_equiv read: %v（降级 legacy 解析）", eqErr)
+	}
+	pair, err := scan.ResolveGraduationCanonicals(grad.Symbol, mtVenue, cexVenue, platform, symbolMapEntries(mappings), equiv)
+	if err != nil {
+		return fail("%v（需先在 Symbol 映射页补映射或点「自动映射全部账号」）", err)
 	}
 	cexVenueKey := keydomain.Join(cexVenue, "perp")
 	// ③ 按 structure 方向定买卖腿（canonical_buy/venue_buy 永远=买腿，cap 跟腿走；D-490 折算先定方向）。

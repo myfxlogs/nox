@@ -15,6 +15,8 @@ type graduationStore interface {
 	GetCarryGraduation(ctx context.Context, id int64) (*pgstore.CarryGraduation, error)
 	GetPaperSpotCarryByID(ctx context.Context, id int64) (*pgstore.PaperSpotCarry, error)
 	ListSymbolMappings(ctx context.Context, venue string) ([]pgstore.SymbolMapping, error)
+	// D-043：class 键行（SILVER×XAGUSDT 等）approve/hint 腿解析源。
+	ListAssetEquiv(ctx context.Context) ([]pgstore.AssetEquivEntry, error)
 	ListBrokerAccounts(ctx context.Context) ([]pgstore.BrokerAccount, error)
 	InsertXAssetAllowCombo(ctx context.Context, r *pgstore.XAssetComboInsert) (int64, error)
 	UpdateCarryGraduationDecision(ctx context.Context, id int64, status string, comboID *int64, note string) error

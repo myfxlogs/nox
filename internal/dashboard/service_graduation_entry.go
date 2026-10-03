@@ -5,6 +5,7 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"arb/internal/exec"
@@ -28,7 +29,11 @@ func (s *Service) gradDossier(ctx context.Context, g *pgstore.CarryGraduation, p
 			if err != nil {
 				preErr = err
 			} else {
-				pair, err := scan.ResolveGraduationCanonicals(g.Symbol, *g.MtVenue, platform, symbolMapEntries(mappings))
+				equiv, eqErr := s.gradDB().ListAssetEquiv(ctx)
+				if eqErr != nil { // D-043：降级 nil=legacy 解析（class 行 resolver 自会 fail-closed）
+					log.Printf("[graduation] asset_equiv read: %v", eqErr)
+				}
+				pair, err := scan.ResolveGraduationCanonicals(g.Symbol, *g.MtVenue, g.VenueB, platform, symbolMapEntries(mappings), equiv)
 				if err != nil {
 					preErr = err
 				} else {
@@ -120,7 +125,11 @@ func (s *Service) entryWindowOf(ctx context.Context, g *pgstore.CarryGraduation,
 		if err != nil {
 			return "closed:broker_symbol_map 读取失败"
 		}
-		pair, err := scan.ResolveGraduationCanonicals(g.Symbol, *g.MtVenue, platform, symbolMapEntries(mappings))
+		equiv, eqErr := s.gradDB().ListAssetEquiv(ctx)
+		if eqErr != nil { // D-043：降级 nil=legacy 解析（class 行 resolver 自会 fail-closed）
+			log.Printf("[graduation] asset_equiv read: %v", eqErr)
+		}
+		pair, err := scan.ResolveGraduationCanonicals(g.Symbol, *g.MtVenue, g.VenueB, platform, symbolMapEntries(mappings), equiv)
 		if err != nil {
 			return "closed:" + err.Error()
 		}

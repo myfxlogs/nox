@@ -88,7 +88,11 @@ func (s *Service) graduationVenueGaps(ctx context.Context, g *pgstore.CarryGradu
 	if err != nil {
 		return []string{"broker_symbol_map 读取失败: " + err.Error()}
 	}
-	pair, err := scan.ResolveGraduationCanonicals(g.Symbol, mtVenue, platform, symbolMapEntries(mappings))
+	equiv, eqErr := s.gradDB().ListAssetEquiv(ctx)
+	if eqErr != nil { // D-043：降级 nil=legacy 解析（class 行 resolver 自会 fail-closed）
+		log.Printf("[graduation] asset_equiv read: %v", eqErr)
+	}
+	pair, err := scan.ResolveGraduationCanonicals(g.Symbol, mtVenue, g.VenueB, platform, symbolMapEntries(mappings), equiv)
 	if err != nil {
 		return []string{"symbol 映射缺失: " + err.Error()}
 	}

@@ -59,6 +59,7 @@ type fakeGradDB struct {
 	updateErr       error
 	allowRules      []pgstore.AutotradeAllowRule // D-557：venue 规则 join 测试面
 	failedLogs      []pgstore.AutotradeLog       // D-560：近窗 FAILED autotrade_logs 测试面
+	equiv           []pgstore.AssetEquivEntry    // D-043：class 键行腿解析测试面
 }
 
 func (f *fakeGradDB) GetCarryGraduation(context.Context, int64) (*pgstore.CarryGraduation, error) {
@@ -69,6 +70,9 @@ func (f *fakeGradDB) GetPaperSpotCarryByID(context.Context, int64) (*pgstore.Pap
 }
 func (f *fakeGradDB) ListSymbolMappings(context.Context, string) ([]pgstore.SymbolMapping, error) {
 	return f.maps, nil
+}
+func (f *fakeGradDB) ListAssetEquiv(context.Context) ([]pgstore.AssetEquivEntry, error) {
+	return f.equiv, nil
 }
 func (f *fakeGradDB) ListBrokerAccounts(context.Context) ([]pgstore.BrokerAccount, error) {
 	return f.accts, nil
