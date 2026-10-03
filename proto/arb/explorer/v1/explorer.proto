@@ -9,6 +9,7 @@ package arb.explorer.v1;
 option go_package = "arb/internal/gen/explorerv1;explorerv1";
 
 import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
 
 // ProposalBatch LLM 一次主调用输出：叙事摘要 + 提案数组（单次 ≤10 条，校验层截断丢弃）。
 message ProposalBatch {
@@ -16,6 +17,34 @@ message ProposalBatch {
   string narrative = 1;
   // proposals 提案数组。
   repeated Proposal proposals = 2;
+  // probe_proposals D-048①：探针提案数组（全字段必填契约；缺任一字段该行拒入库）。
+  repeated ProbeProposal probe_proposals = 3;
+}
+
+// ProbeProposal D-048①：scan_kind='probe' 提案契约——
+// 目的 / 可量化证伪标准 / 预算（venue_key, canonical, side, qty, 名义 USD, 预期成本）/
+// 退出条件（auto_close_at）/ 数据依据。缺一即废（校验层拒入库+log）。
+message ProbeProposal {
+  // purpose 目的（为什么要探）。
+  string purpose = 1;
+  // falsify 可量化证伪标准（含数字阈值；如 "swap_short 实收绝对值 > 0.01 USD"）。
+  string falsify = 2;
+  // venue_key venue 复合键（"{venue}:{venue_type}"）。
+  string venue_key = 3;
+  // canonical 规范符号键（须命中已知 canonical 集）。
+  string canonical = 4;
+  // side 单腿方向（BUY / SELL）。
+  string side = 5;
+  // qty 单腿数量（必填且 >0；MT=手数，CEX=张/币数 venue 口径。optional=缺字段检测）。
+  optional double qty = 6;
+  // notional_usd 名义预算 USD（必填 >0 且 ≤ ARB_PROBE_MAX_NOTIONAL；optional=缺字段检测）。
+  optional double notional_usd = 7;
+  // expected_cost_usd 预期成本 USD（必填 ≥0；手续费/价差/滑点合计预估；optional=缺字段检测）。
+  optional double expected_cost_usd = 8;
+  // auto_close_at 退出条件（到期自动平仓时刻；须在触发时未来）。
+  google.protobuf.Timestamp auto_close_at = 9;
+  // basis 数据依据（引用输入段字段名/事实键）。
+  string basis = 10;
 }
 
 // Proposal 单条提案（与 explorer_proposals 表列对齐；D-513 设计稿 §4）。

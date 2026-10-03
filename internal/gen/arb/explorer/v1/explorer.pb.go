@@ -15,6 +15,7 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	structpb "google.golang.org/protobuf/types/known/structpb"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -33,9 +34,11 @@ type ProposalBatch struct {
 	// narrative 叙事摘要（≤300 字，入收件箱行/日志）。
 	Narrative string `protobuf:"bytes,1,opt,name=narrative,proto3" json:"narrative,omitempty"`
 	// proposals 提案数组。
-	Proposals     []*Proposal `protobuf:"bytes,2,rep,name=proposals,proto3" json:"proposals,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Proposals []*Proposal `protobuf:"bytes,2,rep,name=proposals,proto3" json:"proposals,omitempty"`
+	// probe_proposals D-048①：探针提案数组（全字段必填契约；缺任一字段该行拒入库）。
+	ProbeProposals []*ProbeProposal `protobuf:"bytes,3,rep,name=probe_proposals,json=probeProposals,proto3" json:"probe_proposals,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ProposalBatch) Reset() {
@@ -82,6 +85,142 @@ func (x *ProposalBatch) GetProposals() []*Proposal {
 	return nil
 }
 
+func (x *ProposalBatch) GetProbeProposals() []*ProbeProposal {
+	if x != nil {
+		return x.ProbeProposals
+	}
+	return nil
+}
+
+// ProbeProposal D-048①：scan_kind='probe' 提案契约——
+// 目的 / 可量化证伪标准 / 预算（venue_key, canonical, side, qty, 名义 USD, 预期成本）/
+// 退出条件（auto_close_at）/ 数据依据。缺一即废（校验层拒入库+log）。
+type ProbeProposal struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// purpose 目的（为什么要探）。
+	Purpose string `protobuf:"bytes,1,opt,name=purpose,proto3" json:"purpose,omitempty"`
+	// falsify 可量化证伪标准（含数字阈值；如 "swap_short 实收绝对值 > 0.01 USD"）。
+	Falsify string `protobuf:"bytes,2,opt,name=falsify,proto3" json:"falsify,omitempty"`
+	// venue_key venue 复合键（"{venue}:{venue_type}"）。
+	VenueKey string `protobuf:"bytes,3,opt,name=venue_key,json=venueKey,proto3" json:"venue_key,omitempty"`
+	// canonical 规范符号键（须命中已知 canonical 集）。
+	Canonical string `protobuf:"bytes,4,opt,name=canonical,proto3" json:"canonical,omitempty"`
+	// side 单腿方向（BUY / SELL）。
+	Side string `protobuf:"bytes,5,opt,name=side,proto3" json:"side,omitempty"`
+	// qty 单腿数量（必填且 >0；MT=手数，CEX=张/币数 venue 口径。optional=缺字段检测）。
+	Qty *float64 `protobuf:"fixed64,6,opt,name=qty,proto3,oneof" json:"qty,omitempty"`
+	// notional_usd 名义预算 USD（必填 >0 且 ≤ ARB_PROBE_MAX_NOTIONAL；optional=缺字段检测）。
+	NotionalUsd *float64 `protobuf:"fixed64,7,opt,name=notional_usd,json=notionalUsd,proto3,oneof" json:"notional_usd,omitempty"`
+	// expected_cost_usd 预期成本 USD（必填 ≥0；手续费/价差/滑点合计预估；optional=缺字段检测）。
+	ExpectedCostUsd *float64 `protobuf:"fixed64,8,opt,name=expected_cost_usd,json=expectedCostUsd,proto3,oneof" json:"expected_cost_usd,omitempty"`
+	// auto_close_at 退出条件（到期自动平仓时刻；须在触发时未来）。
+	AutoCloseAt *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=auto_close_at,json=autoCloseAt,proto3" json:"auto_close_at,omitempty"`
+	// basis 数据依据（引用输入段字段名/事实键）。
+	Basis         string `protobuf:"bytes,10,opt,name=basis,proto3" json:"basis,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProbeProposal) Reset() {
+	*x = ProbeProposal{}
+	mi := &file_arb_explorer_v1_explorer_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProbeProposal) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProbeProposal) ProtoMessage() {}
+
+func (x *ProbeProposal) ProtoReflect() protoreflect.Message {
+	mi := &file_arb_explorer_v1_explorer_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProbeProposal.ProtoReflect.Descriptor instead.
+func (*ProbeProposal) Descriptor() ([]byte, []int) {
+	return file_arb_explorer_v1_explorer_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ProbeProposal) GetPurpose() string {
+	if x != nil {
+		return x.Purpose
+	}
+	return ""
+}
+
+func (x *ProbeProposal) GetFalsify() string {
+	if x != nil {
+		return x.Falsify
+	}
+	return ""
+}
+
+func (x *ProbeProposal) GetVenueKey() string {
+	if x != nil {
+		return x.VenueKey
+	}
+	return ""
+}
+
+func (x *ProbeProposal) GetCanonical() string {
+	if x != nil {
+		return x.Canonical
+	}
+	return ""
+}
+
+func (x *ProbeProposal) GetSide() string {
+	if x != nil {
+		return x.Side
+	}
+	return ""
+}
+
+func (x *ProbeProposal) GetQty() float64 {
+	if x != nil && x.Qty != nil {
+		return *x.Qty
+	}
+	return 0
+}
+
+func (x *ProbeProposal) GetNotionalUsd() float64 {
+	if x != nil && x.NotionalUsd != nil {
+		return *x.NotionalUsd
+	}
+	return 0
+}
+
+func (x *ProbeProposal) GetExpectedCostUsd() float64 {
+	if x != nil && x.ExpectedCostUsd != nil {
+		return *x.ExpectedCostUsd
+	}
+	return 0
+}
+
+func (x *ProbeProposal) GetAutoCloseAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.AutoCloseAt
+	}
+	return nil
+}
+
+func (x *ProbeProposal) GetBasis() string {
+	if x != nil {
+		return x.Basis
+	}
+	return ""
+}
+
 // Proposal 单条提案（与 explorer_proposals 表列对齐；D-513 设计稿 §4）。
 type Proposal struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -103,7 +242,7 @@ type Proposal struct {
 
 func (x *Proposal) Reset() {
 	*x = Proposal{}
-	mi := &file_arb_explorer_v1_explorer_proto_msgTypes[1]
+	mi := &file_arb_explorer_v1_explorer_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -115,7 +254,7 @@ func (x *Proposal) String() string {
 func (*Proposal) ProtoMessage() {}
 
 func (x *Proposal) ProtoReflect() protoreflect.Message {
-	mi := &file_arb_explorer_v1_explorer_proto_msgTypes[1]
+	mi := &file_arb_explorer_v1_explorer_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -128,7 +267,7 @@ func (x *Proposal) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Proposal.ProtoReflect.Descriptor instead.
 func (*Proposal) Descriptor() ([]byte, []int) {
-	return file_arb_explorer_v1_explorer_proto_rawDescGZIP(), []int{1}
+	return file_arb_explorer_v1_explorer_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *Proposal) GetCanonical() string {
@@ -177,10 +316,26 @@ var File_arb_explorer_v1_explorer_proto protoreflect.FileDescriptor
 
 const file_arb_explorer_v1_explorer_proto_rawDesc = "" +
 	"\n" +
-	"\x1earb/explorer/v1/explorer.proto\x12\x0farb.explorer.v1\x1a\x1cgoogle/protobuf/struct.proto\"f\n" +
+	"\x1earb/explorer/v1/explorer.proto\x12\x0farb.explorer.v1\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xaf\x01\n" +
 	"\rProposalBatch\x12\x1c\n" +
 	"\tnarrative\x18\x01 \x01(\tR\tnarrative\x127\n" +
-	"\tproposals\x18\x02 \x03(\v2\x19.arb.explorer.v1.ProposalR\tproposals\"\xce\x01\n" +
+	"\tproposals\x18\x02 \x03(\v2\x19.arb.explorer.v1.ProposalR\tproposals\x12G\n" +
+	"\x0fprobe_proposals\x18\x03 \x03(\v2\x1e.arb.explorer.v1.ProbeProposalR\x0eprobeProposals\"\x87\x03\n" +
+	"\rProbeProposal\x12\x18\n" +
+	"\apurpose\x18\x01 \x01(\tR\apurpose\x12\x18\n" +
+	"\afalsify\x18\x02 \x01(\tR\afalsify\x12\x1b\n" +
+	"\tvenue_key\x18\x03 \x01(\tR\bvenueKey\x12\x1c\n" +
+	"\tcanonical\x18\x04 \x01(\tR\tcanonical\x12\x12\n" +
+	"\x04side\x18\x05 \x01(\tR\x04side\x12\x15\n" +
+	"\x03qty\x18\x06 \x01(\x01H\x00R\x03qty\x88\x01\x01\x12&\n" +
+	"\fnotional_usd\x18\a \x01(\x01H\x01R\vnotionalUsd\x88\x01\x01\x12/\n" +
+	"\x11expected_cost_usd\x18\b \x01(\x01H\x02R\x0fexpectedCostUsd\x88\x01\x01\x12>\n" +
+	"\rauto_close_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\vautoCloseAt\x12\x14\n" +
+	"\x05basis\x18\n" +
+	" \x01(\tR\x05basisB\x06\n" +
+	"\x04_qtyB\x0f\n" +
+	"\r_notional_usdB\x14\n" +
+	"\x12_expected_cost_usd\"\xce\x01\n" +
 	"\bProposal\x12\x1c\n" +
 	"\tcanonical\x18\x01 \x01(\tR\tcanonical\x12\x1b\n" +
 	"\tbest_pair\x18\x02 \x01(\tR\bbestPair\x12\x1c\n" +
@@ -201,20 +356,24 @@ func file_arb_explorer_v1_explorer_proto_rawDescGZIP() []byte {
 	return file_arb_explorer_v1_explorer_proto_rawDescData
 }
 
-var file_arb_explorer_v1_explorer_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_arb_explorer_v1_explorer_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_arb_explorer_v1_explorer_proto_goTypes = []any{
-	(*ProposalBatch)(nil),   // 0: arb.explorer.v1.ProposalBatch
-	(*Proposal)(nil),        // 1: arb.explorer.v1.Proposal
-	(*structpb.Struct)(nil), // 2: google.protobuf.Struct
+	(*ProposalBatch)(nil),         // 0: arb.explorer.v1.ProposalBatch
+	(*ProbeProposal)(nil),         // 1: arb.explorer.v1.ProbeProposal
+	(*Proposal)(nil),              // 2: arb.explorer.v1.Proposal
+	(*timestamppb.Timestamp)(nil), // 3: google.protobuf.Timestamp
+	(*structpb.Struct)(nil),       // 4: google.protobuf.Struct
 }
 var file_arb_explorer_v1_explorer_proto_depIdxs = []int32{
-	1, // 0: arb.explorer.v1.ProposalBatch.proposals:type_name -> arb.explorer.v1.Proposal
-	2, // 1: arb.explorer.v1.Proposal.evidence:type_name -> google.protobuf.Struct
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	2, // 0: arb.explorer.v1.ProposalBatch.proposals:type_name -> arb.explorer.v1.Proposal
+	1, // 1: arb.explorer.v1.ProposalBatch.probe_proposals:type_name -> arb.explorer.v1.ProbeProposal
+	3, // 2: arb.explorer.v1.ProbeProposal.auto_close_at:type_name -> google.protobuf.Timestamp
+	4, // 3: arb.explorer.v1.Proposal.evidence:type_name -> google.protobuf.Struct
+	4, // [4:4] is the sub-list for method output_type
+	4, // [4:4] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_arb_explorer_v1_explorer_proto_init() }
@@ -222,13 +381,14 @@ func file_arb_explorer_v1_explorer_proto_init() {
 	if File_arb_explorer_v1_explorer_proto != nil {
 		return
 	}
+	file_arb_explorer_v1_explorer_proto_msgTypes[1].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arb_explorer_v1_explorer_proto_rawDesc), len(file_arb_explorer_v1_explorer_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

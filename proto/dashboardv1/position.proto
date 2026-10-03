@@ -214,6 +214,26 @@ message ListProbesResponse {
   repeated ProbePosition probes = 1;
 }
 
+// === D-048②：LLM 探针提案审批 ===
+
+message ApproveProbeRequest {
+  int64 proposal_id = 1;       // explorer_proposals.id（scan_kind='probe' 且 status='proposed'）
+  string decision_ref = 2;     // 决策席批准引用（^D-\d{3,}$，如 "D-048"）
+}
+message ApproveProbeResponse {
+  string status = 1;           // RUNNING / PROPOSED（OpenProbe 拒回退）/ 原状态（幂等重放）
+  string message = 2;          // 拒绝/流转原因
+  int64 position_id = 3;       // OpenProbe 开成后的 PROBE 仓 id（0=未开）
+}
+message RejectProbeRequest {
+  int64 proposal_id = 1;
+  string reason = 2;           // 拒绝理由（落 gate_note 审计）
+}
+message RejectProbeResponse {
+  string status = 1;           // REJECTED / 原状态（幂等重放）
+  string message = 2;
+}
+
 // === PersonalPosition（财务线 TRX 持仓接入，D-046）===
 
 message PersonalPosition {
