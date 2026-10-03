@@ -110,25 +110,6 @@ func (q *MT5Querier) Account(ctx context.Context) (*AccountInfo, error) {
 	return accountSummaryToInfoMT5(q.venue, "mt5", resp.GetResult()), nil
 }
 
-// RequiredMargin D-031 ②：仓位级原生保证金 RPC（symbol, lots, DealBuy/DealSell, openPrice）。
-func (q *MT5Querier) RequiredMargin(ctx context.Context, symbol string, lots float64, side string, openPrice float64) (float64, error) {
-	dealType := mt5pb.DealType_DealType_DealBuy
-	if side == "SELL" {
-		dealType = mt5pb.DealType_DealType_DealSell
-	}
-	ctx = metadata.AppendToOutgoingContext(ctx, "id", q.token)
-	resp, err := q.mt5.RequiredMargin(ctx, &mt5pb.RequiredMarginRequest{
-		Id: q.token, Symbol: symbol, Lots: lots, Type: &dealType, Price: &openPrice,
-	})
-	if err != nil {
-		return 0, fmt.Errorf("mt5 required margin: %w", err)
-	}
-	if e := resp.GetError(); e != nil {
-		return 0, fmt.Errorf("mt5 required margin: [code=%s] %s", e.GetCode().String(), e.GetMessage())
-	}
-	return resp.GetResult(), nil
-}
-
 // ServerTimezone D-337 S2：server 时区偏移（小时，含 DST 在效偏移）。镜像 QueryOpenedOrders 的会话透传。
 func (q *MT5Querier) ServerTimezone(ctx context.Context) (float64, error) {
 	ctx = metadata.AppendToOutgoingContext(ctx, "id", q.token)
