@@ -19,6 +19,8 @@ import (
 type Store interface {
 	LatestFacts(ctx context.Context, kind, venue, symbol string) ([]fact.Fact, error)
 	LatestFactsByKind(ctx context.Context, kind string) ([]fact.Fact, error) // D-508 S3：kind-only 无 OR 专用查询
+	// FactsWithin D-034：窗口样本读口（funding 7d 滚动均值——fact.FundingMeanAnnual 单实现）。
+	FactsWithin(ctx context.Context, kind, venue, symbol string, since time.Time) ([]fact.Fact, error)
 	// FactsWindowStats D-412 F3：窗口均值读口（swap 慢变量抗 flap；无样本=ErrNoFactsInWindow）。
 	FactsWindowStats(ctx context.Context, kind, venue, symbol string, window time.Duration) (float64, error)
 	ListSymbolMappings(ctx context.Context, venue string) ([]pgstore.SymbolMapping, error)
@@ -40,7 +42,8 @@ type UniverseRow struct {
 	MtVenue      string
 	CexVenue     string
 	NetAnnual    float64
-	FundingAnn   float64
+	FundingAnn   float64 // D-034：决策+落表口径=facts funding 7d 滚动均值年化
+	FundingInst  float64 // 瞬时最新值——仅展示列（entry/last_funding_ann；判定不消费）
 	SwapLongPct  *float64
 	SwapShortPct *float64
 	SwapFree     bool
@@ -173,10 +176,14 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 	// CEX funding：symbol→canonical（去 USDT）；F2 同款 venue 全保留（每 venue 一行，
 	// 不再 abs 取最优——cex argmax 会使授权组合在 funding 排名易主日假 warn+保底失明）。
 	// funding 符号定结构方向：>0=多 perp 付息→配空 CFD 收息；<0=反向。
+	// D-034：val=decisions 口径 facts 7d 滚动均值（fact.FundingMeanAnnual 共享单实现，
+	// 同 autotrade.fundingRateMeanForVenue）；inst=瞬时最新值仅留展示列。
+	// 窗内零样本/查询败 → stale=读口不可证新鲜（fail-closed 剔除排名，同 F4 语义）。
 	type cexF struct {
 		venue, canonical string
-		val              float64
-		stale            bool // F4：funding 龄期超闸（>UniverseFundingMaxAge）；采集 ts 仅 stale 判定消费（字段无读者 D-028 清）
+		val              float64 // 7d 均值年化（net/suspect/open/adverse/zero_accrual 全走此值）
+		inst             float64 // 瞬时最新值（展示列）
+		stale            bool    // F4：均值不可证/最新样本龄期超闸（>UniverseFundingMaxAge）
 	}
 	fundByCanon := map[string]cexF{}
 	for _, f := range cexFunding {
@@ -185,9 +192,10 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 			res.Skipped++
 			continue
 		}
+		mean, mts, mok := fact.FundingMeanAnnual(ctx, sc.store, f.Venue, f.Symbol, fact.FundingMeanWindow)
 		fundByCanon[canonical+"|"+f.Venue] = cexF{
-			venue: f.Venue, canonical: canonical, val: f.Value,
-			stale: sc.fundingMaxAge > 0 && time.Since(f.Ts) > sc.fundingMaxAge,
+			venue: f.Venue, canonical: canonical, val: mean, inst: f.Value,
+			stale: !mok || (sc.fundingMaxAge > 0 && time.Since(mts) > sc.fundingMaxAge),
 		}
 	}
 	// 结构计算：D-412 F2 全叉积——每 (canonical, mt_venue, cex_venue) 三元组一行
@@ -213,7 +221,7 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 			if filteredCanonicals[canonical] {
 				res.Rows = append(res.Rows, UniverseRow{
 					Canonical: canonical, MtVenue: "(all-disabled)", CexVenue: cf.venue,
-					NetAnnual: 0, FundingAnn: cf.val, SwapFree: false,
+					NetAnnual: 0, FundingAnn: cf.val, FundingInst: cf.inst, SwapFree: false,
 					Note: "mt_trade_disabled",
 				})
 			}
@@ -226,8 +234,9 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 				// 直加——D1 方向性错误一并闭环，锚① INJ 算术=SSOT 写死 11−236.8=−225.8）
 				row := UniverseRow{
 					Canonical: canonical, MtVenue: ml.venue, CexVenue: cf.venue,
-					NetAnnual: cf.val + ml.val, FundingAnn: cf.val, SwapLongPct: &ml.val,
-					SwapFree: abs(ml.val) < swapFreeMaxPct, Structure: "long_cfd_short_perp",
+					NetAnnual: cf.val + ml.val, FundingAnn: cf.val, FundingInst: cf.inst,
+					SwapLongPct: &ml.val,
+					SwapFree:    abs(ml.val) < swapFreeMaxPct, Structure: "long_cfd_short_perp",
 				}
 				if note := suspectNote(ml.val, cf.val); note != "" { // D-345：脏源行 net=0 剔除排名
 					row.NetAnnual, row.SwapFree, row.Note = 0, false, note
@@ -241,8 +250,9 @@ func (sc *CarryUniverseScanner) Run(ctx context.Context, since time.Time) (ScanR
 				// 空 CFD+多 perp：net=swap_short_recv−funding_ann（funding<0 多头收）
 				row := UniverseRow{
 					Canonical: canonical, MtVenue: ms.venue, CexVenue: cf.venue,
-					NetAnnual: ms.val - cf.val, FundingAnn: cf.val, SwapShortPct: &ms.val,
-					SwapFree: abs(ms.val) < swapFreeMaxPct, Structure: "short_cfd_long_perp",
+					NetAnnual: ms.val - cf.val, FundingAnn: cf.val, FundingInst: cf.inst,
+					SwapShortPct: &ms.val,
+					SwapFree:     abs(ms.val) < swapFreeMaxPct, Structure: "short_cfd_long_perp",
 				}
 				if note := suspectNote(ms.val, cf.val); note != "" { // D-345：脏源行 net=0 剔除排名
 					row.NetAnnual, row.SwapFree, row.Note = 0, false, note

@@ -22,7 +22,27 @@ type fakeScanStore struct {
 }
 
 func (f *fakeScanStore) LatestFactsByKind(ctx context.Context, kind string) ([]fact.Fact, error) {
-	return f.LatestFacts(ctx, kind, "", "")
+	// 对齐真实实现 DISTINCT ON (kind,venue,symbol) ts DESC——latest-per-key
+	// （D-034：funding 历史样本与最新瞬时同键共存时，瞬时列须取最新行）。
+	latest := map[string]fact.Fact{}
+	order := []string{}
+	for _, x := range f.facts {
+		if x.Kind != kind {
+			continue
+		}
+		k := x.Venue + "|" + x.Symbol
+		if cur, ok := latest[k]; !ok || x.Ts.After(cur.Ts) {
+			if !ok {
+				order = append(order, k)
+			}
+			latest[k] = x
+		}
+	}
+	var out []fact.Fact
+	for _, k := range order {
+		out = append(out, latest[k])
+	}
+	return out, nil
 }
 
 func (f *fakeScanStore) LatestFacts(_ context.Context, kind, _, _ string) ([]fact.Fact, error) {
@@ -30,6 +50,17 @@ func (f *fakeScanStore) LatestFacts(_ context.Context, kind, _, _ string) ([]fac
 	for _, f := range f.facts {
 		if f.Kind == kind {
 			out = append(out, f)
+		}
+	}
+	return out, nil
+}
+
+// FactsWithin D-034：窗内样本（真实谓词 kind+venue+symbol+ts≥since）。
+func (f *fakeScanStore) FactsWithin(_ context.Context, kind, venue, symbol string, since time.Time) ([]fact.Fact, error) {
+	var out []fact.Fact
+	for _, x := range f.facts {
+		if x.Kind == kind && x.Venue == venue && x.Symbol == symbol && !x.Ts.Before(since) {
+			out = append(out, x)
 		}
 	}
 	return out, nil

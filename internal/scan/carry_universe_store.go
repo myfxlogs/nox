@@ -45,6 +45,11 @@ func (p *PGStore) ReplaceCarryUniverse(ctx context.Context, rows []pgstore.Carry
 	return p.S.ReplaceCarryUniverse(ctx, rows)
 }
 
+// FactsWithin D-034：窗口样本读口透传（funding 7d 滚动均值共享实现的数据源）。
+func (p *PGStore) FactsWithin(ctx context.Context, kind, venue, symbol string, since time.Time) ([]fact.Fact, error) {
+	return p.S.FactsWithin(ctx, kind, venue, symbol, since)
+}
+
 // FactsWindowStats D-412 F3：窗口均值读口透传（swap 慢变量抗 flap）。
 func (p *PGStore) FactsWindowStats(ctx context.Context, kind, venue, symbol string, window time.Duration) (float64, error) {
 	return p.S.FactsWindowStats(ctx, kind, venue, symbol, window)
