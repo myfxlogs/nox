@@ -949,6 +949,7 @@ type BrokerPosition struct {
 	PriceBid               float64                `protobuf:"fixed64,26,opt,name=price_bid,json=priceBid,proto3" json:"price_bid,omitempty"`                                               // D-009 S2：报价 bid（CEX=qbus 盘口；MT5=帧携 bid）；0=无报价/缺双值（诚实空态）
 	PriceAsk               float64                `protobuf:"fixed64,27,opt,name=price_ask,json=priceAsk,proto3" json:"price_ask,omitempty"`                                               // D-009 S2：报价 ask（同上）；0=无报价/缺双值
 	CloseNowEstimateUsd    *float64               `protobuf:"fixed64,28,opt,name=close_now_estimate_usd,json=closeNowEstimateUsd,proto3,oneof" json:"close_now_estimate_usd,omitempty"`    // D-009 S3：平仓净估=（方向价−开价）×qty×cs×fx − 平仓名义×takerBps×1e-4；缺省=报价/换算/费率任一不可得（诚实空态，列标「估」）
+	MarginIsEstimate       bool                   `protobuf:"varint,29,opt,name=margin_is_estimate,json=marginIsEstimate,proto3" json:"margin_is_estimate,omitempty"`                      // D-036：margin 为 venue 规格估算（InitialMargin×lots ∨ lots×CS×openPrice×init_margin_rate），非 venue 账户级原生值——前端标「≈」；CEX=iw 原生值 false
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -1177,6 +1178,13 @@ func (x *BrokerPosition) GetCloseNowEstimateUsd() float64 {
 		return *x.CloseNowEstimateUsd
 	}
 	return 0
+}
+
+func (x *BrokerPosition) GetMarginIsEstimate() bool {
+	if x != nil {
+		return x.MarginIsEstimate
+	}
+	return false
 }
 
 type ListBrokerPositionsRequest struct {
@@ -2798,7 +2806,7 @@ const file_dashboardv1_position_proto_rawDesc = "" +
 	"\x06offset\x18\x03 \x01(\x05R\x06offset\"g\n" +
 	"\x15ListPositionsResponse\x128\n" +
 	"\tpositions\x18\x01 \x03(\v2\x1a.arb.dashboard.v1.PositionR\tpositions\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x05R\x05total\"\x95\a\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\"\xc3\a\n" +
 	"\x0eBrokerPosition\x12\x14\n" +
 	"\x05venue\x18\x01 \x01(\tR\x05venue\x12\x1b\n" +
 	"\tvenue_key\x18\x02 \x01(\tR\bvenueKey\x12\x16\n" +
@@ -2832,7 +2840,8 @@ const file_dashboardv1_position_proto_rawDesc = "" +
 	"\x19funding_rate_periodic_pct\x18\x19 \x01(\x01R\x16fundingRatePeriodicPct\x12\x1b\n" +
 	"\tprice_bid\x18\x1a \x01(\x01R\bpriceBid\x12\x1b\n" +
 	"\tprice_ask\x18\x1b \x01(\x01R\bpriceAsk\x128\n" +
-	"\x16close_now_estimate_usd\x18\x1c \x01(\x01H\x00R\x13closeNowEstimateUsd\x88\x01\x01B\x19\n" +
+	"\x16close_now_estimate_usd\x18\x1c \x01(\x01H\x00R\x13closeNowEstimateUsd\x88\x01\x01\x12,\n" +
+	"\x12margin_is_estimate\x18\x1d \x01(\bR\x10marginIsEstimateB\x19\n" +
 	"\x17_close_now_estimate_usd\"6\n" +
 	"\x1aListBrokerPositionsRequest\x12\x18\n" +
 	"\arefresh\x18\x01 \x01(\bR\arefresh\"\xc7\x01\n" +
