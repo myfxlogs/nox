@@ -39,6 +39,11 @@ func BuildRiskReport(ctx context.Context, st *pgstore.Store, cp *ControlPlane, c
 	if err != nil {
 		return "", fmt.Errorf("report incidents: %w", err)
 	}
+	// D-047④：探针成本单列（Σ type='PROBE' 现金流 30d——入账本但不入上述净额行）。
+	probeCost, err := st.ProbeCashflowSumSince(ctx, since)
+	if err != nil {
+		return "", fmt.Errorf("report probe cost: %w", err)
+	}
 	killOn, err := cp.IsKillSwitchActive(ctx)
 	if err != nil {
 		return "", fmt.Errorf("report kill state: %w", err)
@@ -72,6 +77,7 @@ func BuildRiskReport(ctx context.Context, st *pgstore.Store, cp *ControlPlane, c
 	fmt.Fprintf(&b, "30d 账本净额（剔事故） $%.2f → 年化 %.2f%%（%s）\n", netClean, ann(netClean), mark(ann(netClean)))
 	fmt.Fprintf(&b, "在仓 %d 仓｜名义 $%.0f\n", len(actives), notional)
 	fmt.Fprintf(&b, "事故（30d） %d｜KillSwitch %s\n", incidents, kill)
+	fmt.Fprintf(&b, "探针成本（30d Σ PROBE 现金流） $%.2f\n", probeCost)
 	return b.String(), nil
 }
 
