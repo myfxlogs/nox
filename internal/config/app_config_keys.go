@@ -46,6 +46,7 @@ var appConfigKeys = map[string]AppCfgMeta{
 	"ARB_DETECTOR_FRESHNESS_TTL":          durv(func(c *Config) *time.Duration { return &c.DetectorFreshnessTTL }),
 	"ARB_EXPLORER_ENABLED":                boolv(func(c *Config) *bool { return &c.ExplorerEnabled }),
 	"ARB_MAKER_MAX_PER_HOUR":              intv(func(c *Config) *int { return &c.MakerMaxAttemptsPerHour }),        // D-018：每 opp 每小时 maker 挂单 attempt 上限（缺=停用）
+	"ARB_MT_QUOTE_STALE_MIN":              intv(func(c *Config) *int { return &c.MtQuoteStaleMin }),                // D-029：MT 报价新鲜度阈值分钟（缺=fail-closed 判闭市）
 	"ARB_MAKER_TIMEOUT":                   durv(func(c *Config) *time.Duration { return &c.MakerFirstLegTimeout }), // D-018：首腿 post-only 超时 T（缺=停用）
 	"ARB_MACRO_ENABLED":                   boolv(func(c *Config) *bool { return &c.MacroEnabled }),
 	"ARB_CALIB_ENABLED":                   boolv(func(c *Config) *bool { return &c.CalibEnabled }),
