@@ -46,6 +46,13 @@ func (g *Gate) macroBlackoutCurrencies(ctx context.Context, canonical string) []
 	} else if ok && strings.TrimSpace(v) != "" {
 		base = v
 	}
+	return blackoutCurrencySet(base, canonical)
+}
+
+// blackoutCurrencySet 禁区币种集纯函数（D-053 R1④ Gate/Engine 共用件）：配置基集
+// （逗号分隔，空=USD 缺省）∪ canonical 6 字母两半 ISO 推导（两半皆 ISO 才并入——
+// EURUSD/XAUUSD 命中；BTCUSDT 7 字母、SOLUSDT 非 ISO 半不推导）。ANY 匹配序不敏感。
+func blackoutCurrencySet(base, canonical string) []string {
 	if strings.TrimSpace(base) == "" {
 		base = "USD"
 	}
@@ -121,15 +128,11 @@ func (e *Engine) positionCanonical(ctx context.Context, p *pgstore.Position) str
 	return ""
 }
 
-// macroBlackoutSuspend 平仓侧判定（Engine 域）：禁区内=true（调用方 markLegSuspend 跳过
-// 本轮常规退出）。fail-open：查询/配置失败=false 照常评估（平仓侧不推迟）。
-// XASSET_CARRY 恒 false：disasterCheckXAsset（保命止损）位于其退出链内（xassetExitCheck
-// 先决闸序），提前 suspend 会连带推迟 disaster——保命不推迟=宁早平不晚平，常规退出
-// 推迟语义对该型让位（票面「disaster/止损路径不经此闸」风控正则）。
-func (e *Engine) macroBlackoutSuspend(ctx context.Context, p *pgstore.Position) (bool, string) {
-	if p.Type == "XASSET_CARRY" {
-		return false, ""
-	}
+// macroBlackoutActive 禁区判定共用件（D-053 R1②：suspend/xassetExitCheck 两路共用）。
+// 命中 → (true, why)；未启用/未命中/查询失败 → (false, "")。
+// fail-open：查询/配置失败=照常评估（平仓侧推迟不救命——真实灾难走 disaster 独立链；
+// 查询失败推迟只会冻结常规退出）。
+func (e *Engine) macroBlackoutActive(ctx context.Context, canonical string) (bool, string) {
 	minutes := e.cfg.MacroBlackoutMin
 	if v, ok, err := e.store.AppConfigInt64(ctx, "ARB_MACRO_BLACKOUT_MIN"); err != nil {
 		return false, "" // fail-open
@@ -145,23 +148,7 @@ func (e *Engine) macroBlackoutSuspend(ctx context.Context, p *pgstore.Position) 
 	} else if ok && strings.TrimSpace(v) != "" {
 		base = v
 	}
-	set := map[string]bool{}
-	for _, c := range strings.Split(base, ",") {
-		if c = strings.ToUpper(strings.TrimSpace(c)); c != "" {
-			set[c] = true
-		}
-	}
-	canonical := e.positionCanonical(ctx, p)
-	if len(canonical) == 6 {
-		a, b := strings.ToUpper(canonical[:3]), strings.ToUpper(canonical[3:])
-		if isoCurrencies[a] && isoCurrencies[b] {
-			set[a], set[b] = true, true
-		}
-	}
-	curs := make([]string, 0, len(set))
-	for c := range set {
-		curs = append(curs, c)
-	}
+	curs := blackoutCurrencySet(base, canonical)
 	now := time.Now()
 	events, err := e.store.MacroHighEventsIn(ctx,
 		now.Add(-time.Duration(minutes)*time.Minute), now.Add(time.Duration(minutes)*time.Minute), curs)
@@ -174,4 +161,17 @@ func (e *Engine) macroBlackoutSuspend(ctx context.Context, p *pgstore.Position) 
 	e2 := events[0]
 	return true, fmt.Sprintf("macro_blackout: %s %s（BJ %s ±%dmin）",
 		e2.Currency, e2.Name, e2.EventTime.In(macroBJLoc).Format("01-02 15:04"), minutes)
+}
+
+// macroBlackoutSuspend 平仓侧判定（Engine 域）：禁区内=true（调用方 markLegSuspend 跳过
+// 本轮常规退出）。fail-open：查询/配置失败=false 照常评估（平仓侧不推迟）。
+// D-053 R1②：XASSET_CARRY 恒 false——其禁区判定下沉 xassetExitCheck 链内（suspend
+// 提前拦会连带推迟 disasterCheckXAsset 保命止损；链内判=carry_death 同闭市径冻结、
+// harvest/execDrift/rotate 逐点跳过、disaster 仍跑，eval 落 macro_blackout）。
+// 非 XASSET 类型退出链无 disaster，整段 suspend 推迟等价且留痕（markLegSuspend）。
+func (e *Engine) macroBlackoutSuspend(ctx context.Context, p *pgstore.Position) (bool, string) {
+	if p.Type == "XASSET_CARRY" {
+		return false, ""
+	}
+	return e.macroBlackoutActive(ctx, e.positionCanonical(ctx, p))
 }

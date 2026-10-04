@@ -1,6 +1,7 @@
 // d053_blackout_test.go —— D-053 ③⑤验收锚：禁区内开仓拒/窗外放行、EURUSD 命中 EUR 事件
 // （canonical 两半 ISO 币种推导）、MacroHighEventsIn 错 → 开仓拒（fail-closed）、
-// 平仓侧禁区内 funding 常规退出被推迟而 XASSET_CARRY（disaster 链）不受影响。
+// 平仓侧禁区内非 XASSET 常规退出推迟；XASSET_CARRY 禁区判定下沉链内——
+// carry_death 冻结（macro_blackout eval）而 disaster 保命链恒可达。
 package autotrade
 
 import (
@@ -28,6 +29,9 @@ func d053Store(t *testing.T) *pgstore.Store {
 	if _, err := s.Pool().Exec(ctx, `DELETE FROM macro_event; DELETE FROM autotrade_logs WHERE reason LIKE 'macro blackout%'`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
+	t.Cleanup(func() { // 种子事件清场——包内后续测试共享库不消费残留事件
+		_, _ = s.Pool().Exec(context.Background(), `DELETE FROM macro_event`)
+	})
 	return s
 }
 
@@ -121,22 +125,66 @@ func TestD053_QueryFailureFailsClosed(t *testing.T) {
 	}
 }
 
-// T4：平仓侧——禁区内 FUNDING_HEDGE 推迟（suspend true）而 XASSET_CARRY 不推迟
-// （disaster 保命链恒放行，票面「disaster/止损路径不经此闸」）。
+// T4 R1②：非 XASSET 禁区内 suspend 推迟不变；XASSET_CARRY 禁区内——
+// (a) 仅 carry_death 条件 → hold + breach 计数原样保留 + eval decision=macro_blackout；
+// (b) disaster 条件 → shouldClose=true（保命链不被闸推迟）。
 func TestD053_ExitSuspendFundingDeferredDisasterUntouched(t *testing.T) {
 	s := d053Store(t)
 	ctx := context.Background()
 	e := &Engine{store: s, cfg: Config{MacroBlackoutMin: 15, MacroBlackoutCurrencies: "USD"}}
-	d053SeedHigh(t, s, "USD", "非农就业", time.Now().Add(10*time.Minute))
+	now := time.Now()
+	d053SeedHigh(t, s, "USD", "非农就业", now.Add(10*time.Minute))
 
 	funding := &pgstore.Position{ID: 1, Type: "FUNDING_HEDGE", DedupKey: "FUNDING_HEDGE:BTCUSDT:a:b"}
 	hit, why := e.macroBlackoutSuspend(ctx, funding)
 	if !hit || why == "" {
 		t.Fatalf("禁区内 funding 仓应推迟: hit=%v why=%q", hit, why)
 	}
+	// XASSET_CARRY 不走 suspend（禁区判定下沉 xassetExitCheck——suspend 恒 false）。
 	xasset := &pgstore.Position{ID: 2, Type: "XASSET_CARRY", DedupKey: "XASSET_CARRY:EURUSD:a:b"}
 	if hit, _ = e.macroBlackoutSuspend(ctx, xasset); hit {
-		t.Fatal("XASSET_CARRY（disaster 链内）不应被 suspend 推迟")
+		t.Fatal("XASSET_CARRY 禁区判定在链内，suspend 应恒 false")
+	}
+
+	// (a) 禁区内 + 仅 carry_death 条件（funding −50%/yr 足额负 carry）：
+	// hold + fundingBreach 计数冻结 + eval 行 decision=macro_blackout。
+	d311Truncate(t, s)
+	if _, err := s.Pool().Exec(ctx, `DELETE FROM position_evals`); err != nil {
+		t.Fatalf("clean evals: %v", err)
+	}
+	p := d014EconPos(t, s, -50.0)
+	ea := d014EconEngine(s, d404Quotes(now, 3996.0, 4000, 0), true)
+	ea.cfg.MacroBlackoutMin, ea.cfg.MacroBlackoutCurrencies = 15, "USD"
+	ea.fundingBreach[p.ID] = 1 // 预置 breach 序列——禁区内应冻结不累计不清零
+	if close, _ := ea.xassetExitCheck(ctx, p); close {
+		t.Fatal("禁区内 carry_death 应冻结（同闭市径 ok=false）")
+	}
+	if got := ea.fundingBreach[p.ID]; got != 1 {
+		t.Fatalf("breach 计数应原样保留=1: got %d", got)
+	}
+	var dec string
+	if err := s.Pool().QueryRow(ctx,
+		`SELECT decision FROM position_evals WHERE position_id=$1 ORDER BY evaluated_at DESC LIMIT 1`,
+		p.ID).Scan(&dec); err != nil || dec != "macro_blackout" {
+		t.Fatalf("eval 应落 decision=macro_blackout: got %q err=%v", dec, err)
+	}
+
+	// (b) 禁区内 + disaster 条件（anchor −12.39 vs basis +400bps：dev≈412>band 40）
+	// → shouldClose=true——保命退出不被闸推迟。
+	d311Truncate(t, s) // 仓/腿/账户/facts 清场（macro_event 不在清单——禁区事件保留）
+	p2 := d014EconPos(t, s, 20.8)
+	if _, err := s.Pool().Exec(ctx, `UPDATE positions SET expected_entry_spread_bps=-12.39 WHERE id=$1`, p2.ID); err != nil {
+		t.Fatalf("set anchor: %v", err)
+	}
+	rows, err := s.ListPositions(ctx, "OPEN", 10, 0) // anchor 复读口径同生产 scan
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("list pos: rows=%d err=%v", len(rows), err)
+	}
+	p2 = &rows[0]
+	eb := d014EconEngine(s, d404Quotes(now, 4160.0, 4000, 0), true) // basis=+400bps
+	eb.cfg.MacroBlackoutMin, eb.cfg.MacroBlackoutCurrencies = 15, "USD"
+	if close, reason := eb.xassetExitCheck(ctx, p2); !close || !containsSub(reason, "disaster") {
+		t.Fatalf("禁区内 disaster 保命链应触发: close=%v reason=%q", close, reason)
 	}
 }
 

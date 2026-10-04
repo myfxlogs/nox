@@ -71,8 +71,9 @@ func (e *Engine) evaluatePosition(ctx context.Context, p *pgstore.Position) bool
 		}
 		return true
 	}
-	// D-053 ③：高影响财历事件禁区——禁区内推迟本轮常规退出（markLegSuspend 同转场，
-	// 窗过后下一轮自恢复）；fail-open（查询失败不推迟）；disaster/止损路径不经此闸。
+	// D-053 ③ R1②：高影响财历事件禁区——非 XASSET 类型禁区内推迟本轮常规退出
+	// （markLegSuspend 同转场，窗过后自恢复）；fail-open（查询失败不推迟）。
+	// XASSET_CARRY 不进此分支——禁区判定下沉 xassetExitCheck（disaster 保命链恒可达）。
 	if hit, why := e.macroBlackoutSuspend(ctx, p); hit {
 		e.markLegSuspend(ctx, p.ID, why)
 		return false
