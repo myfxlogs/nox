@@ -5,6 +5,7 @@ package pgstore
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -37,6 +38,30 @@ func (s *Store) InsertCexDepth(ctx context.Context, rows []CexDepthRow) error {
 		}
 	}
 	return nil
+}
+
+// depthBase canonical→深度采集基名（XAUUSDT/XAU-USDT-SWAP/XAU_USDT→XAU；
+// 与 cmd/core carryDepthBase 同规则——剥 -USDT-SWAP 再剥 USDT，末清悬空分隔符）。
+func depthBase(canonical string) string {
+	b := strings.TrimSuffix(canonical, "-USDT-SWAP")
+	b = strings.TrimSuffix(b, "USDT")
+	return strings.TrimRight(b, "_-")
+}
+
+// CexDepthAvgUSD D-051②a：venue×canonical 窗内 mid_depth_usd 均值+样本数
+// （纸面入口深度闸）。symbol 匹配三所原生形态全集（baseUSDT/base_USDT/
+// base-USDT-SWAP）——每所只写一种形态，IN 集匹配不跨所串行；无样本 n=0
+// （消费方 fail-closed 自判）。
+func (s *Store) CexDepthAvgUSD(ctx context.Context, venue, canonical string, since time.Time) (avg float64, n int, err error) {
+	base := depthBase(canonical)
+	err = s.pool.QueryRow(ctx,
+		`SELECT avg(mid_depth_usd), count(*) FROM fin_cex_depth
+		 WHERE venue=$1 AND ts>=$2 AND symbol IN ($3,$4,$5)`,
+		venue, since, base+"USDT", base+"_USDT", base+"-USDT-SWAP").Scan(&avg, &n)
+	if err != nil {
+		return 0, 0, fmt.Errorf("cex depth avg %s %s: %w", venue, canonical, err)
+	}
+	return avg, n, nil
 }
 
 // DeleteCexDepthBefore 保留期滚动清理（radar 90 天自净同族）。
