@@ -95,6 +95,8 @@ var appConfigDescs = map[string]string{
 	"ARB_PAPER_AUTHORIZED_MAX_ACTIVE":            "纸面授权盘最大在仓数（env-passthrough 键）",
 	"ARB_PAPER_AUTHORIZED_REOPEN_COOLDOWN_HOURS": "纸面授权盘重开冷却（小时；env-passthrough 键）",
 	"ARB_PAPER_WINDOW_START":                     "D-033 paper 观测窗起点 RFC3339（迁移 0173 播种=D-028 部署时刻；env-passthrough 键）",
+	"ARB_PAPER_CEX_MIN_DEPTH_USD":                "CEX 纸面开仓双腿 24h 均深度下限（USD；缺省 5000，env-passthrough 键）",
+	"ARB_PAPER_CEX_MIN_FUNDING_PCT":              "CEX 纸面开仓 perp 腿 7d 资金费均值下限（%/yr；缺省 10，env-passthrough 键）",
 	"ARB_SYMDIG_MAX_TOKENS":                      "品种深挖 LLM 单轮 max_tokens 上限（缺省 8192；env-passthrough 键）",
 	"ARB_PERPFUNDING_EXIT_DEBOUNCE":              "永续资金费退出防抖次数（连续命中才退出）",
 	"ARB_PERPFUNDING_MIN_HOLD":                   "永续资金费最短持仓时长",
