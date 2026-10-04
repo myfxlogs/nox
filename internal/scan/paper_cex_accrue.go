@@ -8,7 +8,6 @@ package scan
 import (
 	"context"
 	"fmt"
-	"log"
 	"math"
 	"time"
 
@@ -17,11 +16,13 @@ import (
 	"arb/internal/store/pgstore"
 )
 
-// accrueExitCexPaper 双CEX 行累积与退出（返回本轮退出数）。
+// accrueExitCexPaper 双CEX 行累积与退出（返回本轮退出数+率源缺跳过数）。
 // candByKey=本轮 FUNDING_HEDGE 候选索引（key=spotKey×perpKey|canonical）；
 // accrable=active+demo 行全集（本轨行 structure=long_spot_short_perp）。
+// R1③：率源缺计数随返回值归轮聚合日志（不再逐轮独立 warn——「opened=N skips={…}」
+// 单行口径下 accrue_skip 并入同键，防缺 facts 恒真时双倍行频冲 ≤2行/分 验收）。
 func accrueExitCexPaper(ctx context.Context, st PaperStore, accrable []pgstore.PaperSpotCarry,
-	candByKey map[string]CexPaperCand, now time.Time) (int, error) {
+	candByKey map[string]CexPaperCand, now time.Time) (int, int, error) {
 	exited := 0
 	noFactWarn := 0
 	for _, p := range accrable {
@@ -50,7 +51,7 @@ func accrueExitCexPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 			miss := p.MissStreak + 1
 			if miss >= paperMissExitRounds {
 				if err := st.ExitPaperSpotCarry(ctx, p.ID, "data_lost", paperExitConvergence(p, lastBasis)); err != nil {
-					return exited, fmt.Errorf("cex paper step: exit miss %d: %w", p.ID, err)
+					return exited, noFactWarn, fmt.Errorf("cex paper step: exit miss %d: %w", p.ID, err)
 				}
 				paperExitNote(ctx, st, p.ID, "data_lost", 0, lastFundingAnnOf(p), 0, miss)
 				exited++
@@ -61,7 +62,7 @@ func accrueExitCexPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 				prev = *p.LastFundingAnn
 			}
 			if err := st.AccruePaperSpotCarry(ctx, p.ID, prev, 0, p.LowStreak, miss, lastBasis, nil, false); err != nil {
-				return exited, fmt.Errorf("cex paper step: miss %d: %w", p.ID, err)
+				return exited, noFactWarn, fmt.Errorf("cex paper step: miss %d: %w", p.ID, err)
 			}
 			continue
 		}
@@ -74,7 +75,7 @@ func accrueExitCexPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 		recalc := p.LastAccrueTs == nil
 		accruedAdd, settledTo, aok, aerr := AccruePaperLegs(ctx, st, legs, base, now, p.QtyUSD)
 		if aerr != nil {
-			return exited, fmt.Errorf("cex paper step: accrue legs %d: %w", p.ID, aerr)
+			return exited, noFactWarn, fmt.Errorf("cex paper step: accrue legs %d: %w", p.ID, aerr)
 		}
 		accrueTo := &settledTo
 		if !aok {
@@ -95,14 +96,14 @@ func accrueExitCexPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 		if p.Status != "active" {
 			// demo 行只累积不自动退（同 spot/cfd 轨）。
 			if err := st.AccruePaperSpotCarry(ctx, p.ID, c.FundingAnn, accruedAdd, p.LowStreak, 0, lastBasis, accrueTo, recalc); err != nil {
-				return exited, fmt.Errorf("cex paper step: accrue demo %d: %w", p.ID, err)
+				return exited, noFactWarn, fmt.Errorf("cex paper step: accrue demo %d: %w", p.ID, err)
 			}
 			continue
 		}
 		// funding 翻负（方向收入转负）→ 当轮退 adverse（同 spot 轨 D-474a S3）。
 		if c.FundingAnn < 0 {
 			if err := st.ExitPaperSpotCarry(ctx, p.ID, "adverse", paperExitConvergence(p, lastBasis)); err != nil {
-				return exited, fmt.Errorf("cex paper step: exit adverse %d: %w", p.ID, err)
+				return exited, noFactWarn, fmt.Errorf("cex paper step: exit adverse %d: %w", p.ID, err)
 			}
 			paperExitNote(ctx, st, p.ID, "adverse", c.FundingAnn, c.FundingAnn, 0, streak)
 			exited++
@@ -115,20 +116,17 @@ func accrueExitCexPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 				reason = "age_7d"
 			}
 			if err := st.ExitPaperSpotCarry(ctx, p.ID, reason, paperExitConvergence(p, lastBasis)); err != nil {
-				return exited, fmt.Errorf("cex paper step: exit %d: %w", p.ID, err)
+				return exited, noFactWarn, fmt.Errorf("cex paper step: exit %d: %w", p.ID, err)
 			}
 			paperExitNote(ctx, st, p.ID, reason, c.FundingAnn, c.FundingAnn, 0, streak)
 			exited++
 			continue
 		}
 		if err := st.AccruePaperSpotCarry(ctx, p.ID, c.FundingAnn, accruedAdd, streak, 0, lastBasis, accrueTo, recalc); err != nil {
-			return exited, fmt.Errorf("cex paper step: accrue %d: %w", p.ID, err)
+			return exited, noFactWarn, fmt.Errorf("cex paper step: accrue %d: %w", p.ID, err)
 		}
 	}
-	if noFactWarn > 0 {
-		log.Printf("[cex paper] 边界/率源缺 fail-closed 跳过 accrue: %d 行", noFactWarn)
-	}
-	return exited, nil
+	return exited, noFactWarn, nil
 }
 
 // candKeyOf 行→候选键（typed keys，与 StepPaperCexCarry activeByKey 同构）。
