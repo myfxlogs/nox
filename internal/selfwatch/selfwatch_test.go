@@ -17,27 +17,31 @@ import (
 )
 
 type fakeStore struct {
-	cfg        map[string]string
-	incidents  int
-	blockerID  int64
-	net30d     float64
-	mig        int
-	venueCaps  int
-	canonCaps  int
-	allowReal  int
-	allowPairs []pgstore.XAssetRealCombo
-	factTs     map[string]time.Time
-	factCnt    map[string]int
-	macroMax   *time.Time
-	makerOpen  int
-	makerInc   int
-	dlRows     int                      // D-042 R1 ③：24h data_lost 退出行数
-	dlPairs    int                      // D-042 R1 ③：当前冷却中对数
-	paperSplit pgstore.PaperActiveSplit // D-050 ②：纸面在仓两轨分列
-	bbRejects  int                      // D-053 ④：24h 禁区拒开次数
-	alerts     []string
-	dedupCalls []string
-	upserts    map[string]string
+	cfg             map[string]string
+	incidents       int
+	blockerID       int64
+	net30d          float64
+	mig             int
+	venueCaps       int
+	canonCaps       int
+	allowReal       int
+	allowPairs      []pgstore.XAssetRealCombo
+	factTs          map[string]time.Time
+	factCnt         map[string]int
+	macroMax        *time.Time
+	makerOpen       int
+	makerInc        int
+	dlRows          int                      // D-042 R1 ③：24h data_lost 退出行数
+	dlPairs         int                      // D-042 R1 ③：当前冷却中对数
+	paperSplit      pgstore.PaperActiveSplit // D-050 ②：纸面在仓两轨分列
+	bbRejects       int                      // D-053 ④：24h 禁区拒开次数
+	activeRows      []pgstore.PaperSpotCarry // D-061 ①：active 纸面行注入
+	sessionStartMin int                      // D-061 ②：周一开盘分钟注入
+	sessionMissing  bool                     // D-061 ②：会话表缺形态
+	macroEvents     []pgstore.MacroEvent     // D-061 ②：禁区事件注入
+	alerts          []string
+	dedupCalls      []string
+	upserts         map[string]string
 }
 
 func (f *fakeStore) AppConfigString(_ context.Context, k string) (string, bool, error) {
@@ -109,6 +113,18 @@ func (f *fakeStore) PaperActiveStats(context.Context) (pgstore.PaperActiveSplit,
 func (f *fakeStore) CountMacroBlackoutRejects(context.Context, time.Time) (int, error) {
 	return f.bbRejects, nil
 }
+func (f *fakeStore) ListActivePaperSpotCarry(context.Context) ([]pgstore.PaperSpotCarry, error) {
+	return f.activeRows, nil
+}
+func (f *fakeStore) MacroHighEventsIn(context.Context, time.Time, time.Time, []string) ([]pgstore.MacroEvent, error) {
+	return f.macroEvents, nil
+}
+func (f *fakeStore) MinWeekdaySessionStartMin(context.Context, string, int) (int, bool, error) {
+	if f.sessionMissing {
+		return 0, false, nil
+	}
+	return f.sessionStartMin, true, nil
+}
 func (f *fakeStore) InsertAlert(_ context.Context, _ *int64, level, msg string) error {
 	f.alerts = append(f.alerts, level+"|"+msg)
 	return nil
@@ -165,7 +181,14 @@ func greenStore() *fakeStore {
 		mig:      173, venueCaps: 5, canonCaps: 1, allowReal: 1,
 		allowPairs: []pgstore.XAssetRealCombo{stage1Pair},
 		makerOpen:  25, net30d: 100,
-		paperSplit: pgstore.PaperActiveSplit{CexRows: 8, CexSyms: 5, CfdRows: 12, CfdSyms: 7},
+		// D-061：条件制判据注入——白名单组合 active 行（存活 49h 且计息）+周一 00:00
+		// 开盘（tNow 周日回退上周一，elapsed 144h≥2h）+零禁区事件。
+		activeRows: []pgstore.PaperSpotCarry{{
+			VenueA: "3001157", VenueB: "okx", Symbol: "XAU", Structure: "long_cfd_short_perp",
+			Status: "active", EntryTs: tNow.Add(-49 * time.Hour), AccruedUSD: 3.2,
+		}},
+		sessionStartMin: 0,
+		paperSplit:      pgstore.PaperActiveSplit{CexRows: 8, CexSyms: 5, CfdRows: 12, CfdSyms: 7},
 	}
 }
 
@@ -180,10 +203,10 @@ func TestD033_DailyReportAllGreen(t *testing.T) {
 		"【ARB 自盯日报】", "起点 2026-10-03T01:59Z", "窗内净额 $3.0000",
 		"本窗结构（多 CFD 空 perp）在仓 3 行", "窗内退出 1 行",
 		"计息缺数据 0 行", "计息停滞 0 行", "逐日净额", "全部纸面在仓：CFD 12 行·7 品种｜CEX 8 行·5 品种",
-		"✅ 纸面观测窗 ≥7 天", "✅ 窗内净额非负", "✅ Stage 1 组合证据", "✅ 期间零事故仓",
+		"✅ 目标组合纸面行存活", "✅ 开仓时点", "✅ 窗内净额非负", "✅ 期间零事故仓",
 		"✅ 息差数据在线", "✅ 纸面计息正常", "✅ 数据库版本 ≥172", "✅ 风控总闸在位",
 		"✅ 仓位上限已定", "✅ 白名单已定", "待决策：Stage 1 可启",
-		"Stage 2", "挂单模式", "XAU 3001157×okx：6.5d / $3.00",
+		"Stage 2", "挂单模式", "XAU 3001157×okx：49h / $3.20",
 	} {
 		if !strings.Contains(rep.Body, want) {
 			t.Fatalf("body missing %q:\n%s", want, rep.Body)

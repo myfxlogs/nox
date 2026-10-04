@@ -1,4 +1,4 @@
-// selfwatch_r1_test.go —— D-033 R1 锚：Stage 1 组合证据（全结构 0 active → 不就绪）、
+// selfwatch_r1_test.go —— D-033 R1 锚：组合域无行不就绪（D-061 后=目标组合纸面行存活行）、
 // 就绪推送仅 ❌→✅ 转换一次（app_config 态 + InsertAlertDedup 7d 兜底）。
 package selfwatch
 
@@ -21,12 +21,14 @@ func (n *fakeNotify) SendText(_ context.Context, chatID, text string) error {
 // R1①：全结构 0 active 行 → 组合证据「无窗内行」❌ → Stage 1 不就绪
 // （即便 D-028 判据已放至仅 stall=0、窗内净额组合口径 0≥0 仍不误报就绪）。
 func TestD033_Stage1NoActive(t *testing.T) {
-	rep, err := BuildDaily(context.Background(), testDeps(greenStore(),
+	st := greenStore()
+	st.activeRows = nil // D-061：组合域无 active 行 → 存活行 ❌ → 不就绪
+	rep, err := BuildDaily(context.Background(), testDeps(st,
 		&scan.PaperWindowEval{WindowNet: 0, ActiveN: 0, ExitedN: 0}, tNow))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rep.Stage1OK || !strings.Contains(rep.Body, "❌ Stage 1 组合证据") {
+	if rep.Stage1OK || !strings.Contains(rep.Body, "❌ 目标组合纸面行存活") {
 		t.Fatalf("0-active should not be ready:\n%s", rep.Body)
 	}
 	// 组合域无行 → 组合净额 0≥0 仍 ✅（闸点在组合证据行，非净额行）

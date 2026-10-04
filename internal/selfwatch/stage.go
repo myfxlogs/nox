@@ -13,12 +13,10 @@ import (
 	"time"
 
 	"arb/internal/fact"
+	"arb/internal/macro"
 	"arb/internal/scan"
 	"arb/internal/store/pgstore"
 )
-
-// paperStageDays Stage 1 paper 窗最短期龄（D-023 口径 ≥7 天）。
-const paperStageDays = 7 * 24 * time.Hour
 
 // fundingFactMaxAge D-027 在线判据——funding facts 流供体最大龄（mark-price WS
 // 持续推送，超龄=流死=滚动均值无源）。
@@ -27,12 +25,29 @@ const fundingFactMaxAge = 4 * time.Hour
 // makerStageOpens D-026 真金分级门槛：≥20 笔 maker 开仓零事故 → Stage 2 可带 maker。
 const makerStageOpens = 20
 
-// stageTargetPct D-030 净年化目标线。
-const stageTargetPct = 8.0
+// D-061 ①②缺省值（config 全链热读缺省回落）：
+// stage1MinRowHoursDefault 目标组合纸面行存活下限（小时）；
+// stage1OpenWarmupDefault MT 周开盘后开仓暖场（小时）。
+const (
+	stage1MinRowHoursDefault = 48
+	stage1OpenWarmupDefault  = 2
+)
 
-// stage1ComboDays Stage 1 组合证据：目标组合（白名单实盘启用 venue 对）窗内
-// 累计在仓天数下限——多行时按各行 [entry,exit|now]∩窗 时长求和。
-const stage1ComboDays = 5.0
+// cfgIntDef app_config 热读 int（缺行/读败→def；显示面 fail-open 用缺省值续判）。
+func cfgIntDef(ctx context.Context, d Deps, key string, def int) int {
+	if v, ok, err := d.Store.AppConfigInt64(ctx, key); err == nil && ok && v > 0 {
+		return int(v)
+	}
+	return def
+}
+
+// cfgStrDef app_config 热读 string（缺行/读败→def）。
+func cfgStrDef(ctx context.Context, d Deps, key, def string) string {
+	if v, ok, err := d.Store.AppConfigString(ctx, key); err == nil && ok && strings.TrimSpace(v) != "" {
+		return v
+	}
+	return def
+}
 
 func stage1Checks(ctx context.Context, d Deps, since time.Time, windowOK bool, ev *scan.PaperWindowEval, now time.Time) []StageCheck {
 	rows := []StageCheck{}
@@ -41,11 +56,9 @@ func stage1Checks(ctx context.Context, d Deps, since time.Time, windowOK bool, e
 			{Label: "纸面观测窗已配置", OK: false, Data: "窗起点未配置（ARB_PAPER_WINDOW_START）"},
 		}
 	}
-	age := now.Sub(since)
-	rows = append(rows, StageCheck{
-		Label: "纸面观测窗 ≥7 天", OK: age >= paperStageDays,
-		Data: fmt.Sprintf("已观测 %.1f 天（起点 %s）", age.Hours()/24, since.UTC().Format("01-02 15:04Z")),
-	})
+	// D-061 ①：日期制判据（窗 ≥7 天/组合在仓 ≥5d）撤销——Stage 1 改条件制，
+	// 见「目标组合纸面行存活」行（since 仍承载窗内净额/事故计数域）。
+	_ = since
 	// D-056①：组合域=白名单实盘启用行的精确配对键（venue_a×venue_b×canonical×
 	// structure）——canonical 按 NormalizeJoinKey 同口径对齐行 symbol（白名单
 	// XAUUSD ↔ 纸面行 XAU）；canonical/structure 缺 → 该行按「无品种」fail-closed
@@ -90,35 +103,53 @@ func stage1Checks(ctx context.Context, d Deps, since time.Time, windowOK bool, e
 		rows = append(rows, StageCheck{
 			Label: "窗内净额非负", OK: comboNet >= 0 && len(malformed) == 0, Data: netData})
 	}
+	// D-061 ①：条件制——白名单实盘组合（D-056 四元组）当前 active 行连续存活
+	// ≥ARB_STAGE1_MIN_ROW_HOURS（热读缺省 48）且 accrued>0；退出过的行不计
+	//（只查 active）。每个白名单组合都命中才 ✅（fail-closed 覆盖全组合域）。
+	minRowHours := cfgIntDef(ctx, d, "ARB_STAGE1_MIN_ROW_HOURS", stage1MinRowHoursDefault)
+	active, aerr := d.Store.ListActivePaperSpotCarry(ctx)
 	switch {
 	case perr != nil:
-		rows = append(rows, StageCheck{Label: "Stage 1 组合证据", OK: false, Data: "组合查询失败:" + perr.Error()})
+		rows = append(rows, StageCheck{Label: "目标组合纸面行存活", OK: false, Data: "组合查询失败:" + perr.Error()})
+	case aerr != nil:
+		rows = append(rows, StageCheck{Label: "目标组合纸面行存活", OK: false, Data: "纸面行查询失败:" + aerr.Error()})
 	case len(pairs) == 0:
-		rows = append(rows, StageCheck{Label: "Stage 1 组合证据", OK: false, Data: "白名单无实盘启用组合"})
+		rows = append(rows, StageCheck{Label: "目标组合纸面行存活", OK: false, Data: "白名单无实盘启用组合"})
 	default:
-		ok := false
+		allOK := true
 		parts := make([]string, 0, len(pairs))
 		for _, pr := range pairs {
 			if pr.Canonical == "" || pr.Structure == "" {
+				allOK = false
 				parts = append(parts, pr.VenueA+"×"+pr.VenueB+"：白名单行无品种")
 				continue
 			}
-			c := comboOf(pr)
-			if c == nil {
-				parts = append(parts, fmt.Sprintf("%s %s×%s：无窗内行",
-					scan.NormalizeJoinKey(pr.Canonical), pr.VenueA, pr.VenueB))
-				continue
+			want := scan.NormalizeJoinKey(pr.Canonical)
+			bestAge, bestAccrued := time.Duration(0), 0.0
+			for _, r := range active {
+				if r.Status != "active" || r.VenueA != pr.VenueA || r.VenueB != pr.VenueB ||
+					r.Symbol != want || r.Structure != pr.Structure {
+					continue
+				}
+				age := now.Sub(r.EntryTs)
+				if r.AccruedUSD > 0 && age > bestAge {
+					bestAge, bestAccrued = age, r.AccruedUSD // 取龄最长且计息行（组合内多账户任一达标）
+				}
 			}
-			if c.ActiveDays >= stage1ComboDays && c.AccruedUSD > 0 {
-				ok = true
-			}
-			parts = append(parts, fmt.Sprintf("%s %s×%s：%.1fd / $%.2f",
-				c.Canonical, c.VenueA, c.VenueB, c.ActiveDays, c.AccruedUSD))
+			hit := bestAge >= time.Duration(minRowHours)*time.Hour && bestAccrued > 0
+			allOK = allOK && hit
+			parts = append(parts, fmt.Sprintf("%s %s×%s：%.0fh / $%.2f",
+				want, pr.VenueA, pr.VenueB, bestAge.Hours(), bestAccrued))
 		}
 		rows = append(rows, StageCheck{
-			Label: "Stage 1 组合证据", OK: ok && len(malformed) == 0,
-			Data: fmt.Sprintf("%s（需 ≥%gd 且净额>0）", strings.Join(parts, " "), stage1ComboDays)})
+			Label: "目标组合纸面行存活", OK: allOK && len(malformed) == 0,
+			Data: fmt.Sprintf("%s（需存活 ≥%dh 且计息>0）", strings.Join(parts, " "), minRowHours)})
 	}
+	// D-061 ②：开仓时点——now 距最近一次 MT 周开盘 ≥ ARB_STAGE1_OPEN_WARMUP_H
+	// （热读缺省 2）且当前不在财历禁区（D-053 复用：BlackoutCurrencySet+
+	// MacroHighEventsIn，窗=ARB_MACRO_BLACKOUT_MIN 热读缺省 15）。仅就绪表显示项，
+	// 不进引擎。会话表缺/查询失败/禁区查询失败 → fail-closed 不 ✅。
+	rows = append(rows, stage1OpenTimingCheck(ctx, d, pairs, now))
 	incidents, err := d.Store.IncidentCountSince(ctx, since)
 	if err != nil {
 		rows = append(rows, StageCheck{Label: "期间零事故仓", OK: false, Data: "查询失败:" + err.Error()})
@@ -170,47 +201,56 @@ func stage1Checks(ctx context.Context, d Deps, since time.Time, windowOK bool, e
 	return rows
 }
 
-func stage2Checks(ctx context.Context, d Deps, since time.Time, now time.Time) []StageCheck {
-	since30 := now.Add(-30 * 24 * time.Hour)
-	net, err := d.Store.NetRealizedSince(ctx, since30, false)
-	ann := 0.0
-	if d.CapitalBase > 0 {
-		ann = net / 30 * 365 / d.CapitalBase * 100
-	}
-	row1 := StageCheck{Label: "近 30 天真金账本", OK: ann >= stageTargetPct,
-		Data: fmt.Sprintf("净 $%.2f → 年化 %.2f%%（目标 ≥8%%；基数 $%.0f）", net, ann, d.CapitalBase)}
+// stage1OpenTimingCheck D-061 ②「开仓时点」行（周开盘暖场+财历禁区，显示项）。
+func stage1OpenTimingCheck(ctx context.Context, d Deps, pairs []pgstore.XAssetRealCombo, now time.Time) StageCheck {
+	warmup := cfgIntDef(ctx, d, "ARB_STAGE1_OPEN_WARMUP_H", stage1OpenWarmupDefault)
+	row := StageCheck{Label: "开仓时点", OK: false}
+	startMin, ok, err := d.Store.MinWeekdaySessionStartMin(ctx, fact.KindTradeSession, 1) // 周一
 	if err != nil {
-		row1 = StageCheck{Label: "近 30 天真金账本", OK: false, Data: "查询失败:" + err.Error()}
+		row.Data = "会话查询失败:" + err.Error()
+		return row
 	}
-	ack, _, aerr := d.Store.AppConfigInt64(ctx, "ARB_RISK_INCIDENT_ACK_ID")
-	blocked, berr := int64(0), error(nil)
-	if aerr == nil {
-		blocked, berr = d.Store.IncidentBlockerID(ctx, ack)
+	if !ok {
+		row.Data = "会话表缺周一开盘（trade_session 事实缺席）"
+		return row
 	}
-	row2 := StageCheck{Label: "事故仓已清零", OK: berr == nil && blocked == 0}
-	switch {
-	case aerr != nil:
-		row2.Data = "事故确认查询失败:" + aerr.Error()
-	case berr != nil:
-		row2.Data = "查询失败:" + berr.Error()
-	default:
-		row2.Data = fmt.Sprintf("已确认到 #%d｜待确认 %d 仓", ack, blocked)
+	// 最近一次周开盘 = 本周（ISO）周一 00:00 UTC + startMin 分钟；未到则回退上周。
+	monday := now.UTC().Truncate(24*time.Hour).AddDate(0, 0, -int((int(now.UTC().Weekday())+6)%7))
+	openAt := monday.Add(time.Duration(startMin) * time.Minute)
+	if openAt.After(now) {
+		openAt = openAt.AddDate(0, 0, -7)
 	}
-	makerOn := false
-	if v, ok, merr := d.Store.AppConfigString(ctx, "ARB_MAKER_TIMEOUT"); merr == nil && ok {
-		if dv, derr := time.ParseDuration(v); derr == nil {
-			makerOn = dv > 0
+	elapsed := now.Sub(openAt)
+	row.Data = fmt.Sprintf("距周开盘 %.1fh（需 ≥%dh）", elapsed.Hours(), warmup)
+	if elapsed < time.Duration(warmup)*time.Hour {
+		return row
+	}
+	// 财历禁区：币种集=ARB_MACRO_BLACKOUT_CURRENCIES（热读缺省 USD）∪ 白名单各 canonical 两半。
+	base := cfgStrDef(ctx, d, "ARB_MACRO_BLACKOUT_CURRENCIES", "USD")
+	curs := map[string]bool{}
+	for _, c := range macro.BlackoutCurrencySet(base, "") {
+		curs[c] = true
+	}
+	for _, pr := range pairs {
+		for _, c := range macro.BlackoutCurrencySet("", pr.Canonical) {
+			curs[c] = true
 		}
 	}
-	opens, minc, merr := d.Store.MakerLegStatsSince(ctx, since)
-	row3 := StageCheck{Label: "挂单模式",
-		OK: makerOn && opens >= makerStageOpens && minc == 0}
-	if merr != nil {
-		row3.Data = "查询失败:" + merr.Error()
-	} else if makerOn {
-		row3.Data = fmt.Sprintf("已启用（开仓 %d 次·事故 %d）", opens, minc)
-	} else {
-		row3.Data = fmt.Sprintf("未启用（需 ≥%d 次零事故开仓后放行；当前 %d 次·事故 %d）", makerStageOpens, opens, minc)
+	list := make([]string, 0, len(curs))
+	for c := range curs {
+		list = append(list, c)
 	}
-	return []StageCheck{row1, row2, row3}
+	win := cfgIntDef(ctx, d, "ARB_MACRO_BLACKOUT_MIN", 15)
+	evs, err := d.Store.MacroHighEventsIn(ctx, now.Add(-time.Duration(win)*time.Minute), now.Add(time.Duration(win)*time.Minute), list)
+	if err != nil {
+		row.Data += "；禁区查询失败:" + err.Error()
+		return row
+	}
+	if len(evs) > 0 {
+		row.Data += fmt.Sprintf("；财历禁区=有（%s %s）", evs[0].Currency, evs[0].Name)
+		return row
+	}
+	row.Data += "；财历禁区=无"
+	row.OK = true
+	return row
 }

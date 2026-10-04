@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"arb/internal/macro"
 	"arb/internal/store/pgstore"
 )
 
@@ -28,15 +29,6 @@ var macroBJLoc = func() *time.Location {
 	return l
 }()
 
-// isoCurrencies ISO 4217 币种/贵金属码集（canonical 拆半判定用；XAU/XAG=ISO 4217 贵金属段）。
-// 与财历币种域（fetch_mql5 countryIDToCurrency）对齐 + 贵金属。
-var isoCurrencies = map[string]bool{
-	"USD": true, "EUR": true, "JPY": true, "GBP": true, "AUD": true,
-	"CAD": true, "CHF": true, "NZD": true, "CNY": true, "HKD": true,
-	"SGD": true, "KRW": true, "SEK": true, "NOK": true, "MXN": true,
-	"XAU": true, "XAG": true,
-}
-
 // macroBlackoutCurrencies 禁区币种集推导：热读配置基集 ∪ canonical 两半（6 字母且均为 ISO）。
 // 读取失败回落 cfg（boot env 值）；基集空串=缺省 USD。
 func (g *Gate) macroBlackoutCurrencies(ctx context.Context, canonical string) []string {
@@ -46,35 +38,12 @@ func (g *Gate) macroBlackoutCurrencies(ctx context.Context, canonical string) []
 	} else if ok && strings.TrimSpace(v) != "" {
 		base = v
 	}
-	return blackoutCurrencySet(base, canonical)
+	return macro.BlackoutCurrencySet(base, canonical)
 }
 
 // blackoutCurrencySet 禁区币种集纯函数（D-053 R1④ Gate/Engine 共用件）：配置基集
 // （逗号分隔，空=USD 缺省）∪ canonical 6 字母两半 ISO 推导（两半皆 ISO 才并入——
 // EURUSD/XAUUSD 命中；BTCUSDT 7 字母、SOLUSDT 非 ISO 半不推导）。ANY 匹配序不敏感。
-func blackoutCurrencySet(base, canonical string) []string {
-	if strings.TrimSpace(base) == "" {
-		base = "USD"
-	}
-	set := map[string]bool{}
-	for _, c := range strings.Split(base, ",") {
-		if c = strings.ToUpper(strings.TrimSpace(c)); c != "" {
-			set[c] = true
-		}
-	}
-	if len(canonical) == 6 {
-		a, b := strings.ToUpper(canonical[:3]), strings.ToUpper(canonical[3:])
-		if isoCurrencies[a] && isoCurrencies[b] {
-			set[a], set[b] = true, true
-		}
-	}
-	out := make([]string, 0, len(set))
-	for c := range set {
-		out = append(out, c)
-	}
-	return out
-}
-
 // macroBlackoutWindow 禁区窗分钟数（热读；缺省回落 cfg；<=0=禁用返回 false）。
 func (g *Gate) macroBlackoutWindow(ctx context.Context) (int, bool) {
 	minutes := g.cfg.MacroBlackoutMin
@@ -148,7 +117,7 @@ func (e *Engine) macroBlackoutActive(ctx context.Context, canonical string) (boo
 	} else if ok && strings.TrimSpace(v) != "" {
 		base = v
 	}
-	curs := blackoutCurrencySet(base, canonical)
+	curs := macro.BlackoutCurrencySet(base, canonical)
 	now := time.Now()
 	events, err := e.store.MacroHighEventsIn(ctx,
 		now.Add(-time.Duration(minutes)*time.Minute), now.Add(time.Duration(minutes)*time.Minute), curs)
