@@ -84,14 +84,6 @@ func newFakeMtmPaperStore() *fakeMtmPaperStore {
 func (f *fakeMtmPaperStore) ListCexUniverse(context.Context) (map[string]pgstore.CexUniverseRow, error) {
 	return f.universe, nil
 }
-
-// D-051② 质量闸读面桩（mt×mt 轨测试不触闸——阈零值闸不激活）。
-func (f *fakeMtmPaperStore) CexDepthAvgUSD(context.Context, string, string, time.Time) (float64, int, error) {
-	return 0, 0, nil
-}
-func (f *fakeMtmPaperStore) FundingSettleAvgs(context.Context, time.Time) (map[string]map[string]pgstore.SettleAvg, error) {
-	return nil, nil
-}
 func (f *fakeMtmPaperStore) ListActivePaperSpotCarry(context.Context) ([]pgstore.PaperSpotCarry, error) {
 	var out []pgstore.PaperSpotCarry
 	for _, r := range f.rows {
