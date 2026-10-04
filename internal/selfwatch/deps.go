@@ -26,6 +26,10 @@ const cfgFailClosedPrev = "ARB_SELFWATCH_FAILCLOSED_PREV"
 // 态存 app_config 跨进程重启存活；就绪态本身仍每日附在日报条件表）。
 const cfgStage1Ready = "ARB_SELFWATCH_STAGE1_READY"
 
+// cfgCexSkipsPrev CEX 纸面入口拦截计数环比基线（JSON map——进程内计数器重启
+// 清零，差分为负时按重启语义取当前值，同 dailyNetLine 快照差分先例）。
+const cfgCexSkipsPrev = "ARB_SELFWATCH_CEX_SKIPS"
+
 // Store 自盯存储窄面（*pgstore.Store 原生实现）。
 type Store interface {
 	AppConfigString(ctx context.Context, key string) (string, bool, error)
@@ -69,6 +73,9 @@ type Deps struct {
 	ChatID      func(ctx context.Context) (string, error)
 	ReportDir   string
 	Now         func() time.Time
+	// D-051③：CEX 纸面入口拦截累计计数（进程内 sink 快照；nil=无此数据面，
+	// 日报该段省略而非零报）。
+	CexSkipStats func() map[string]int
 }
 
 func (d Deps) now() time.Time {
