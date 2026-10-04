@@ -16,15 +16,6 @@ import "dashboardv1/position.proto";
 
 message StreamUpdatesRequest {}
 
-// 实时现价推送（D-049）：后端按最新未陈旧报价算价格派生字段，前端仅按 id 合并渲染。
-message PersonalPositionPrice {
-  int64 position_id = 1;
-  double price = 2;            // 当前 mid（0 = 无报价）
-  string level = 3;            // 'ok'|'warn'|'crit'（空 = 无报价）
-  double pnl_usd = 4;
-  double liq_price = 5;
-  double dist_to_liq_pct = 6;
-}
 
 message StreamUpdatesResponse {
   oneof update {
@@ -34,18 +25,18 @@ message StreamUpdatesResponse {
     Position position = 4;
     SourceHealth source_health = 5;
     Keepalive keepalive = 6;     // 30s 心跳（Cloudflare Tunnel 存活，D-027）
-    PersonalPositionPrice personal_position_price = 7;  // 实时个人持仓现价（D-049）
     FundingNeedNotice funding_need = 10;                // 资金注入提醒弹窗（D-072，余额不足实时推）
     CMCWatchUpdate cmc_update = 13;                     // CMC 看盘实时帧（D-234，后端现算载荷→前端 merge 渲染）
     DataRefreshNotice data_refresh = 14;                // 域数据刷新通知（D-508 S9，空载荷+topic→前端重取）
     BrokerPositionEvent broker_position_event = 15;     // Broker 实持仓逐仓事件（D-571 包A：upsert/remove+聚合随发）
     AccountEvent account_event = 16;                    // 账户资产逐 venue 事件（D-571 包B：upsert 单形态）
     HedgeData hedge_data = 17;                          // 对冲结构+流水聚合域单槽帧（D-571 包C，替 case 12 通知）
-    PersonalPositionEvent personal_position_event = 18; // 个人持仓行级 upsert（D-571 包C：回放+CRUD 变更源）
   }
   // D-571 包C：快照/通知型死字段退役——行级事件通道全量替代（回放+keyed merge）。
-  reserved 8, 9, 11, 12;
-  reserved "broker_positions", "accounts", "position_change", "hedge_refresh";
+  // D-063：case 7（personal_position_price）/18（personal_position_event）随 personal
+  // 渲染面退役拆除（D-212 已零读者）——编号留档不重排不复用。
+  reserved 7, 8, 9, 11, 12, 18;
+  reserved "personal_position_price", "personal_position_event", "broker_positions", "accounts", "position_change", "hedge_refresh";
 }
 
 // BrokerPositionEvent D-571：逐仓 delta 事件（替代 case 8 全量快照的实时通道）。
@@ -72,12 +63,6 @@ message AccountEvent {
 message HedgeData {
   HedgeStructure structure = 1;
   repeated HedgeFlowItem flow = 2;
-}
-
-// PersonalPositionEvent D-571 包C：个人持仓行级 upsert（回放+CRUD 变更源）。
-// 行级 upsert 单形态（status=CLOSED 行照常发——前端陈列态换不换由行自身 status 决定）。
-message PersonalPositionEvent {
-  PersonalPosition upsert = 1;
 }
 
 // BrokerPositionRef 逐仓删除事件的键。

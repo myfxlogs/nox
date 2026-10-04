@@ -140,9 +140,6 @@ const (
 	// DashboardServiceListAccountsProcedure is the fully-qualified name of the DashboardService's
 	// ListAccounts RPC.
 	DashboardServiceListAccountsProcedure = "/arb.dashboard.v1.DashboardService/ListAccounts"
-	// DashboardServiceListPersonalPositionsProcedure is the fully-qualified name of the
-	// DashboardService's ListPersonalPositions RPC.
-	DashboardServiceListPersonalPositionsProcedure = "/arb.dashboard.v1.DashboardService/ListPersonalPositions"
 	// DashboardServiceGetHedgeStructureProcedure is the fully-qualified name of the DashboardService's
 	// GetHedgeStructure RPC.
 	DashboardServiceGetHedgeStructureProcedure = "/arb.dashboard.v1.DashboardService/GetHedgeStructure"
@@ -487,7 +484,7 @@ type DashboardServiceClient interface {
 	RejectProbe(context.Context, *connect.Request[dashboardv1.RejectProbeRequest]) (*connect.Response[dashboardv1.RejectProbeResponse], error)
 	ListAccounts(context.Context, *connect.Request[dashboardv1.ListAccountsRequest]) (*connect.Response[dashboardv1.ListAccountsResponse], error)
 	// 个人持仓（财务线 TRX 持仓接入，D-046）+ 实账化（财务线工作项 3）
-	ListPersonalPositions(context.Context, *connect.Request[dashboardv1.ListPersonalPositionsRequest]) (*connect.Response[dashboardv1.ListPersonalPositionsResponse], error)
+	// D-063：ListPersonalPositions RPC 随 personal 渲染面退役拆除（D-212 后零读者；表保留 TRX 域自用）。
 	GetHedgeStructure(context.Context, *connect.Request[dashboardv1.GetHedgeStructureRequest]) (*connect.Response[dashboardv1.GetHedgeStructureResponse], error)
 	ListHedgeFlow(context.Context, *connect.Request[dashboardv1.ListHedgeFlowRequest]) (*connect.Response[dashboardv1.ListHedgeFlowResponse], error)
 	TrxAccountRefresh(context.Context, *connect.Request[dashboardv1.TrxAccountRefreshRequest]) (*connect.Response[dashboardv1.TrxAccountRefreshResponse], error)
@@ -852,12 +849,6 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			httpClient,
 			baseURL+DashboardServiceListAccountsProcedure,
 			connect.WithSchema(dashboardServiceMethods.ByName("ListAccounts")),
-			connect.WithClientOptions(opts...),
-		),
-		listPersonalPositions: connect.NewClient[dashboardv1.ListPersonalPositionsRequest, dashboardv1.ListPersonalPositionsResponse](
-			httpClient,
-			baseURL+DashboardServiceListPersonalPositionsProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("ListPersonalPositions")),
 			connect.WithClientOptions(opts...),
 		),
 		getHedgeStructure: connect.NewClient[dashboardv1.GetHedgeStructureRequest, dashboardv1.GetHedgeStructureResponse](
@@ -1483,7 +1474,6 @@ type dashboardServiceClient struct {
 	approveProbe                 *connect.Client[dashboardv1.ApproveProbeRequest, dashboardv1.ApproveProbeResponse]
 	rejectProbe                  *connect.Client[dashboardv1.RejectProbeRequest, dashboardv1.RejectProbeResponse]
 	listAccounts                 *connect.Client[dashboardv1.ListAccountsRequest, dashboardv1.ListAccountsResponse]
-	listPersonalPositions        *connect.Client[dashboardv1.ListPersonalPositionsRequest, dashboardv1.ListPersonalPositionsResponse]
 	getHedgeStructure            *connect.Client[dashboardv1.GetHedgeStructureRequest, dashboardv1.GetHedgeStructureResponse]
 	listHedgeFlow                *connect.Client[dashboardv1.ListHedgeFlowRequest, dashboardv1.ListHedgeFlowResponse]
 	trxAccountRefresh            *connect.Client[dashboardv1.TrxAccountRefreshRequest, dashboardv1.TrxAccountRefreshResponse]
@@ -1761,11 +1751,6 @@ func (c *dashboardServiceClient) RejectProbe(ctx context.Context, req *connect.R
 // ListAccounts calls arb.dashboard.v1.DashboardService.ListAccounts.
 func (c *dashboardServiceClient) ListAccounts(ctx context.Context, req *connect.Request[dashboardv1.ListAccountsRequest]) (*connect.Response[dashboardv1.ListAccountsResponse], error) {
 	return c.listAccounts.CallUnary(ctx, req)
-}
-
-// ListPersonalPositions calls arb.dashboard.v1.DashboardService.ListPersonalPositions.
-func (c *dashboardServiceClient) ListPersonalPositions(ctx context.Context, req *connect.Request[dashboardv1.ListPersonalPositionsRequest]) (*connect.Response[dashboardv1.ListPersonalPositionsResponse], error) {
-	return c.listPersonalPositions.CallUnary(ctx, req)
 }
 
 // GetHedgeStructure calls arb.dashboard.v1.DashboardService.GetHedgeStructure.
@@ -2306,7 +2291,7 @@ type DashboardServiceHandler interface {
 	RejectProbe(context.Context, *connect.Request[dashboardv1.RejectProbeRequest]) (*connect.Response[dashboardv1.RejectProbeResponse], error)
 	ListAccounts(context.Context, *connect.Request[dashboardv1.ListAccountsRequest]) (*connect.Response[dashboardv1.ListAccountsResponse], error)
 	// 个人持仓（财务线 TRX 持仓接入，D-046）+ 实账化（财务线工作项 3）
-	ListPersonalPositions(context.Context, *connect.Request[dashboardv1.ListPersonalPositionsRequest]) (*connect.Response[dashboardv1.ListPersonalPositionsResponse], error)
+	// D-063：ListPersonalPositions RPC 随 personal 渲染面退役拆除（D-212 后零读者；表保留 TRX 域自用）。
 	GetHedgeStructure(context.Context, *connect.Request[dashboardv1.GetHedgeStructureRequest]) (*connect.Response[dashboardv1.GetHedgeStructureResponse], error)
 	ListHedgeFlow(context.Context, *connect.Request[dashboardv1.ListHedgeFlowRequest]) (*connect.Response[dashboardv1.ListHedgeFlowResponse], error)
 	TrxAccountRefresh(context.Context, *connect.Request[dashboardv1.TrxAccountRefreshRequest]) (*connect.Response[dashboardv1.TrxAccountRefreshResponse], error)
@@ -2667,12 +2652,6 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		DashboardServiceListAccountsProcedure,
 		svc.ListAccounts,
 		connect.WithSchema(dashboardServiceMethods.ByName("ListAccounts")),
-		connect.WithHandlerOptions(opts...),
-	)
-	dashboardServiceListPersonalPositionsHandler := connect.NewUnaryHandler(
-		DashboardServiceListPersonalPositionsProcedure,
-		svc.ListPersonalPositions,
-		connect.WithSchema(dashboardServiceMethods.ByName("ListPersonalPositions")),
 		connect.WithHandlerOptions(opts...),
 	)
 	dashboardServiceGetHedgeStructureHandler := connect.NewUnaryHandler(
@@ -3331,8 +3310,6 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceRejectProbeHandler.ServeHTTP(w, r)
 		case DashboardServiceListAccountsProcedure:
 			dashboardServiceListAccountsHandler.ServeHTTP(w, r)
-		case DashboardServiceListPersonalPositionsProcedure:
-			dashboardServiceListPersonalPositionsHandler.ServeHTTP(w, r)
 		case DashboardServiceGetHedgeStructureProcedure:
 			dashboardServiceGetHedgeStructureHandler.ServeHTTP(w, r)
 		case DashboardServiceListHedgeFlowProcedure:
@@ -3678,10 +3655,6 @@ func (UnimplementedDashboardServiceHandler) RejectProbe(context.Context, *connec
 
 func (UnimplementedDashboardServiceHandler) ListAccounts(context.Context, *connect.Request[dashboardv1.ListAccountsRequest]) (*connect.Response[dashboardv1.ListAccountsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListAccounts is not implemented"))
-}
-
-func (UnimplementedDashboardServiceHandler) ListPersonalPositions(context.Context, *connect.Request[dashboardv1.ListPersonalPositionsRequest]) (*connect.Response[dashboardv1.ListPersonalPositionsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListPersonalPositions is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) GetHedgeStructure(context.Context, *connect.Request[dashboardv1.GetHedgeStructureRequest]) (*connect.Response[dashboardv1.GetHedgeStructureResponse], error) {

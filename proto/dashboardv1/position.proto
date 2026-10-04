@@ -234,34 +234,8 @@ message RejectProbeResponse {
   string message = 2;
 }
 
-// === PersonalPosition（财务线 TRX 持仓接入，D-046）===
-
-message PersonalPosition {
-  int64 id = 1;
-  string asset = 2;
-  string kind = 3;             // staking / short_hedge / other
-  string price_symbol = 4;     // 监控价格源 canonical（'TRXUSDT'）
-  double price = 5;            // 当前 mid（后端算；0 = 无报价）
-  double warn_high = 6;        // 0 = 未设
-  double crit_high = 7;        // 0 = 未设（semantic = 强平价，权威值待业主回填）
-  string level = 8;            // 'ok'|'warn'|'crit'（后端算；空 = 无报价）
-  string note = 9;
-  string status = 10;          // OPEN / CLOSED
-  double qty = 11;             // 持仓数量；0 = 未填
-  double entry_price = 12;     // 开仓价；0 = 未填
-  int32 leverage = 13;         // 杠杆倍数；0 = 未填
-  google.protobuf.Timestamp opened_at = 14;  // 开仓时间；null = 未填
-  double pnl_usd = 15;         // 浮动盈亏（空单腿，后端算）；0 = 非空单腿/无报价
-  double liq_price = 16;       // 强平价：crit_high 优先，否则理论值；0 = 算不出
-  double dist_to_liq_pct = 17; // 距强平 % = (liq−现价)/现价；负数 = 已破线；算不出 = 0
-  double accrued_interest_usd = 18;  // 累计利息 = SUM(position_daily_income.interest_usd)，后端算
-}
-
-message ListPersonalPositionsRequest {}
-
-message ListPersonalPositionsResponse {
-  repeated PersonalPosition items = 1;
-}
+// === PersonalPosition 三 message（D-046 渲染面）D-063 退役拆除——D-212 退役渲染面后
+// 全链零读者；TRX 现役数据面走 pgstore.personal_positions 表（service_trx 保留）。名号留档不复用。
 
 // === D-212 对冲工作台：结构卡 + 统一流水卡（替换旧 ListCMCAccount/ListTRXAccount）===
 
