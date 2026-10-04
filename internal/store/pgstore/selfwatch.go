@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"arb/internal/alerttext"
+	"arb/internal/keydomain"
 )
 
 // PaperWindowCohort paper_window_report.sh cohort 口径进程内化：
@@ -84,32 +85,57 @@ func (s *Store) ExposureCapCounts(ctx context.Context) (venueCaps, canonicalCaps
 	return venueCaps, canonicalCaps, nil
 }
 
-// VenuePair 裸 venue 配对（与 paper_spot_carry.venue_a/venue_b 同口径）。
-type VenuePair struct {
-	VenueA string
-	VenueB string
+// XAssetRealCombo 实盘启用组合的精确配对键（D-056①：venue 对→四元组）——
+// VenueA/VenueB 与 paper_spot_carry.venue_a/venue_b 同口径（cfd 行 A=MT 臂 B=CEX 臂；
+// 双 CEX 行 A=spot B=perp）；Canonical=配对品种原值（MT 腿/同 canonical 腿直出，
+// 规范化由消费方 NormalizeJoinKey 同口径）；Structure 由 venue_key 类型段推导；
+// 构型不可判定（双腿 MT / 无 spot-perp 对）→ Structure 空=Stage 检查按无品种 fail-closed。
+type XAssetRealCombo struct {
+	VenueA    string
+	VenueB    string
+	Canonical string
+	Structure string
 }
 
-// XAssetAllowRealPairs 实盘启用组合 venue 对（venue_key 生成列剥类型段 → 裸 venue，
-// 与 paper_spot_carry.venue_a/venue_b 同口径；Stage 1 组合证据的组合域）。
-func (s *Store) XAssetAllowRealPairs(ctx context.Context) ([]VenuePair, error) {
+// XAssetAllowRealPairs 实盘启用组合精确键（Stage 1 组合证据的组合域）。
+func (s *Store) XAssetAllowRealPairs(ctx context.Context) ([]XAssetRealCombo, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT venue_key_buy, venue_key_sell FROM xasset_allow_combos
+		SELECT venue_key_buy, venue_key_sell, canonical_buy, canonical_sell FROM xasset_allow_combos
 		WHERE enabled AND COALESCE(simulated, false) = false
 		ORDER BY venue_key_buy, venue_key_sell`)
 	if err != nil {
 		return nil, fmt.Errorf("xasset allow real pairs: %w", err)
 	}
 	defer rows.Close()
-	var out []VenuePair
+	var out []XAssetRealCombo
 	for rows.Next() {
-		var a, b string
-		if err := rows.Scan(&a, &b); err != nil {
+		var bk, sk, cb, cs string
+		if err := rows.Scan(&bk, &sk, &cb, &cs); err != nil {
 			return nil, fmt.Errorf("xasset allow real pairs scan: %w", err)
 		}
-		out = append(out, VenuePair{VenueA: bareVenueOf(a), VenueB: bareVenueOf(b)})
+		out = append(out, xassetRealCombo(bk, sk, cb, cs))
 	}
 	return out, rows.Err()
+}
+
+// xassetRealCombo 白名单行→paper 配对键推导（与 paper_all_in.cfdComboLegs 同规则）：
+// 恰一 MT 腿 → cfd 双结构（MT 买腿=多 CFD 空 perp，MT 卖腿=空 CFD 多 perp）；
+// 双 CEX 恰一 spot+恰一 perp → long_spot_short_perp（spot 买腿）；其余构型不可判
+// → Structure 空串（Stage 检查 fail-closed 标缺）。
+func xassetRealCombo(bk, sk, cb, cs string) XAssetRealCombo {
+	buyMT, sellMT := keydomain.IsMTKey(bk), keydomain.IsMTKey(sk)
+	buyT, sellT := keydomain.Parse(bk).Type, keydomain.Parse(sk).Type
+	switch {
+	case buyMT && !sellMT:
+		return XAssetRealCombo{VenueA: bareVenueOf(bk), VenueB: bareVenueOf(sk), Canonical: cb, Structure: "long_cfd_short_perp"}
+	case sellMT && !buyMT:
+		return XAssetRealCombo{VenueA: bareVenueOf(sk), VenueB: bareVenueOf(bk), Canonical: cs, Structure: "short_cfd_long_perp"}
+	case buyT == "spot" && sellT == "perp":
+		return XAssetRealCombo{VenueA: bareVenueOf(bk), VenueB: bareVenueOf(sk), Canonical: cb, Structure: "long_spot_short_perp"}
+	case sellT == "spot" && buyT == "perp":
+		return XAssetRealCombo{VenueA: bareVenueOf(sk), VenueB: bareVenueOf(bk), Canonical: cs, Structure: "short_spot_long_perp"}
+	}
+	return XAssetRealCombo{VenueA: bareVenueOf(bk), VenueB: bareVenueOf(sk)}
 }
 
 // XAssetAllowRealCount xasset_allow_combos 实盘域启用行数（Stage 闸「白名单已定」；

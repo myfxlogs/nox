@@ -29,12 +29,15 @@ type PaperDayBucket struct {
 	Reasons []string // 仅退出桶：当日 exit_reason 去重清单
 }
 
-// PaperComboStat 组合维度统计（venue_a×venue_b 配对——Stage 1 组合证据口径：
+// PaperComboStat 组合维度统计（D-056①：venue_a×venue_b×canonical×structure 精确
+// 配对——同 venue 对的多品种/多结构行互不串账；Stage 1 组合证据口径：
 // 窗内累计在仓天数=各行 [entry,exit|now]∩窗 时长和；AccruedUSD=行累计值合计
 // （在仓+窗内退出 realized，与窗净额同口径））。
 type PaperComboStat struct {
 	VenueA     string
 	VenueB     string
+	Canonical  string // 行 symbol=universe 规范化 canonical
+	Structure  string // 行 structure 原值
 	Rows       int
 	ActiveDays float64
 	AccruedUSD float64
@@ -89,10 +92,10 @@ func EvalPaperCohort(ctx context.Context, st PaperWindowStore, rows []pgstore.Pa
 	actDay, exitDay := map[string]*PaperDayBucket{}, map[string]*PaperDayBucket{}
 	combos := map[string]*PaperComboStat{}
 	combo := func(p *pgstore.PaperSpotCarry) *PaperComboStat {
-		k := p.VenueA + "|" + p.VenueB
+		k := p.VenueA + "|" + p.VenueB + "|" + p.Symbol + "|" + p.Structure
 		c := combos[k]
 		if c == nil {
-			c = &PaperComboStat{VenueA: p.VenueA, VenueB: p.VenueB}
+			c = &PaperComboStat{VenueA: p.VenueA, VenueB: p.VenueB, Canonical: p.Symbol, Structure: p.Structure}
 			combos[k] = c
 		}
 		return c
@@ -181,7 +184,8 @@ func EvalPaperCohort(ctx context.Context, st PaperWindowStore, rows []pgstore.Pa
 		ev.Combos = append(ev.Combos, *c)
 	}
 	sort.Slice(ev.Combos, func(i, j int) bool {
-		return ev.Combos[i].VenueA+ev.Combos[i].VenueB < ev.Combos[j].VenueA+ev.Combos[j].VenueB
+		a, b := ev.Combos[i], ev.Combos[j]
+		return a.VenueA+a.VenueB+a.Canonical+a.Structure < b.VenueA+b.VenueB+b.Canonical+b.Structure
 	})
 	return ev, nil
 }
@@ -222,7 +226,7 @@ func evalPaperRow(ctx context.Context, st PaperWindowStore, p *pgstore.PaperSpot
 	}
 	_, _, aok, aerr := AccruePaperLegs(ctx, st, legs, base, now, p.QtyUSD)
 	if aerr != nil {
-		return false, false, fmt.Errorf("accrue probe %d: %w", p.ID, aerr)
+		return false, false, fmt.Errorf("计息探针 行%d: %w", p.ID, aerr) // D-056②：串入日报正文——禁内部词
 	}
 	if !aok {
 		return true, false, nil
