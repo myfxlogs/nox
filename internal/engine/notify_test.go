@@ -64,6 +64,11 @@ func (d *fakeDetector) Scan(_ context.Context, _ map[string]map[string]bus.Quote
 	return d.candidates
 }
 
+// ScanUnfiltered D-051 ①：fake 也实现 Allow 前流口（cexPaperHook 采样锚走此径）。
+func (d *fakeDetector) ScanUnfiltered(_ context.Context, _ map[string]map[string]bus.Quote, _ detector.FactProvider) []detector.Candidate {
+	return d.candidates
+}
+
 // carryCand 构造 CARRY 候选（评估净收益 = gross − margin，测试 margin=4.0）。
 func carryCand(gross float64) detector.Candidate {
 	return detector.Candidate{
