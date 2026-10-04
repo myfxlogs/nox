@@ -103,3 +103,42 @@ func alertWrite(ctx context.Context, store *pgstore.Store, level, msg string) {
 		log.Printf("[autotrade] alert write failed: %v | original: %s", err, msg)
 	}
 }
+
+// finalizeSubmit Submit 执行结果收尾（D-053 自 gate.go 纯搬移零逻辑变更）：
+// D-077 修复⑩ G3 执行失败 errclass 分类落库（Halt→DisableStrategy+critical；Abort 计数），
+// D-472 资金拒单业主 warn（≥6h 节流）、D-560 签名熔断记账、D-508 审计 fail-open+声张、
+// 终态 log+EXECUTED warn 告警。
+func (g *Gate) finalizeSubmit(ctx context.Context, intent *TradeIntent, logEntry *pgstore.AutotradeLog,
+	status, msg string, posID int64) GateResult {
+	logEntry.PositionID = nil
+	if posID > 0 {
+		logEntry.PositionID = &posID
+	}
+	logEntry.Status = status
+	logEntry.Reason = msg
+	if status == "FAILED" {
+		action := g.classifyFailure(*intent, msg)
+		logEntry.Reason = action.String() + ": " + errclass.TruncateNote(msg, 120)
+		if action == errclass.Halt {
+			g.haltStrategy(ctx, *intent, logEntry.Reason)
+		} else if action == errclass.Abort {
+			log.Printf("[autotrade] gate Abort %s: %s", intent.DedupKey, msg)
+		}
+		g.marginWarnThrottled(ctx, *intent, msg) // D-472 S3：资金拒单→业主 warn（≥6h 节流）
+		g.breakerNote(intent.DedupKey, msg)      // D-560 S3：签名熔断记账
+	} else if status == "EXECUTED" {
+		g.breakerPass(intent.DedupKey) // D-560 S3：探测成功=复位清态
+	}
+	// D-508 写路径审计契约：审计落库失败 fail-open+声张（log+warn 告警）。
+	auditWarn(ctx, g.store, "InsertAutotradeLog gate result", g.store.InsertAutotradeLog(ctx, logEntry))
+
+	if status == "FAILED" {
+		log.Printf("[autotrade] gate FAILED %s: %s", intent.DedupKey, logEntry.Reason)
+	} else {
+		log.Printf("[autotrade] gate EXECUTED %s posID=%d", intent.DedupKey, posID)
+		alertWrite(ctx, g.store, "warn",
+			fmt.Sprintf("[机会执行] %s %s 净价差 %.1fbps 持仓#%d",
+				intent.Strategy, intent.Canonical, intent.NetBps, posID))
+	}
+	return GateResult{Status: status, Reason: logEntry.Reason, PosID: posID}
+}
