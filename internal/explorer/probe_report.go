@@ -25,7 +25,10 @@ const probeReportSystemPrompt = `你是 ARB 套利系统的取证分析员（只
 输出（严格）：一个 fenced 块 ` + "```probe-report" + ` 内含 JSON：
 {"conclusion":"A|B|C","analysis":"≤300字证据分析（只引用输入数字）","recommendation":"≤150字建议"}
 结论口径：A=假设获证据支持；B=假设被证伪；C=证据不足/数据缺失无法判定。
-红线：不预测价格；不给仓位建议；不跨场所借数据；数字只能引用输入段原值。`
+红线：不预测价格；不给仓位建议；不跨场所借数据；数字只能引用输入段原值。
+工作契约：analysis 每条证据判断与 falsify 证伪标准逐条对照（「若 <观测值> 则此判断不成立」式收口）；
+recommendation 含「需观察」必须写明触发点（何时/何阈值/触发什么动作），无触发点的等待句删除；
+引用数字附口径说明（输入段名/字段名），先自证语义再引用。`
 
 // probeReportStateKey explorer_state 认领键（恰好一次语义载体）。
 func probeReportStateKey(posID int64) string {
