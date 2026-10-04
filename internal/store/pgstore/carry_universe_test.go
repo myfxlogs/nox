@@ -60,30 +60,42 @@ func TestReplaceCarryUniverse_NoteRoundTrip(t *testing.T) {
 	}
 }
 
-// TestListCarryUniverseCanonicals D-057④：canonical 去重序列表（深度采集动态
-// 基名源——DISTINCT+ORDER BY canonical 保序）。
-func TestListCarryUniverseCanonicals(t *testing.T) {
+// TestListCfdUniverseDepthBases D-057 R1：CFD 域 universe 基名解析——
+// equiv perp 行解析（SILVER@okx→XAGUSDT、BRENT@gate→BZUSDT）、无 equiv 用原值
+// （XAU）、enabled=false 不解析（FOO）、CEX×CEX 行（mt_venue 哨兵 '(spot)'）不入。
+func TestListCfdUniverseDepthBases(t *testing.T) {
 	s := carryUniverseTestStore(t)
 	ctx := context.Background()
+	if _, err := s.pool.Exec(ctx, `TRUNCATE asset_equiv RESTART IDENTITY`); err != nil {
+		t.Fatalf("TRUNCATE asset_equiv: %v", err)
+	}
+	if _, err := s.pool.Exec(ctx, `INSERT INTO asset_equiv (asset_class, canonical, venue_type, venue, enabled) VALUES
+		('SILVER','XAGUSDT','perp','okx',true),
+		('BRENT','BZUSDT','perp','gate',true),
+		('FOO','FOOXUSDT','perp','okx',false)`); err != nil {
+		t.Fatalf("seed asset_equiv: %v", err)
+	}
+	t.Cleanup(func() { _, _ = s.pool.Exec(ctx, `TRUNCATE asset_equiv RESTART IDENTITY`) })
 	if err := s.ReplaceCarryUniverse(ctx, []CarryUniverseRow{
+		{Canonical: "SILVER", MtVenue: "3001157", CexVenue: "okx", Structure: "long_cfd_short_perp"},
+		{Canonical: "BRENT", MtVenue: "3001157", CexVenue: "gate", Structure: "long_cfd_short_perp"},
 		{Canonical: "XAU", MtVenue: "3001157", CexVenue: "okx", Structure: "long_cfd_short_perp"},
-		{Canonical: "XAU", MtVenue: "3001157", CexVenue: "binance", Structure: "long_cfd_short_perp"},
-		{Canonical: "DOT", MtVenue: "1314615", CexVenue: "binance", Structure: "long_cfd_short_perp"},
-		{Canonical: "PAXG", MtVenue: "3001157", CexVenue: "gate", Structure: "long_cfd_short_perp"},
+		{Canonical: "FOO", MtVenue: "3001157", CexVenue: "okx", Structure: "long_cfd_short_perp"},
+		{Canonical: "MEME", MtVenue: "(spot)", CexVenue: "okx", Structure: "spot_carry"}, // CEX×CEX 哨兵行不入
 	}); err != nil {
 		t.Fatalf("ReplaceCarryUniverse: %v", err)
 	}
-	got, err := s.ListCarryUniverseCanonicals(ctx)
+	got, err := s.ListCfdUniverseDepthBases(ctx)
 	if err != nil {
-		t.Fatalf("ListCarryUniverseCanonicals: %v", err)
+		t.Fatalf("ListCfdUniverseDepthBases: %v", err)
 	}
-	want := []string{"DOT", "PAXG", "XAU"} // DISTINCT+ORDER BY：XAU 双行合一
+	want := []string{"BZUSDT", "FOO", "XAGUSDT", "XAU"} // ORDER BY 1：BZ<F<X<X
 	if len(got) != len(want) {
-		t.Fatalf("canonicals = %v, want %v", got, want)
+		t.Fatalf("bases = %v, want %v", got, want)
 	}
 	for i := range want {
 		if got[i] != want[i] {
-			t.Fatalf("canonicals[%d] = %q, want %q", i, got[i], want[i])
+			t.Fatalf("bases[%d] = %q, want %q", i, got[i], want[i])
 		}
 	}
 }
