@@ -27,6 +27,12 @@ func (e *Engine) SetCexPaperHook(h func(context.Context, []detector.Candidate)) 
 	e.cexPaperHook = h
 }
 
+// SetCexPaperSnap D-051 R1②：注入 unfiltered 全量快照 sink（cmd/core 装配：轮 pass
+// 计息/退出候选源——与 hook 同一 ScanUnfiltered 流，开/退/计息同源）。nil=未接线。
+func (e *Engine) SetCexPaperSnap(fn func([]detector.Candidate)) {
+	e.cexPaperSnap = fn
+}
+
 // SetDisabledStrategies 注入自动淘汰策略集合（§1 自动淘汰闭环）。
 // strategy_stats.disabled=true 的策略产出的机会不入库——系统已自证亏损，展示假机会误导。
 // main 定期刷新（淘汰判定在运行时触发）；nil/空 = 不排除。

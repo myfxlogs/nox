@@ -65,6 +65,7 @@ type Engine struct {
 	excludeCanonicals map[string]bool
 	// D-555 S1：双CEX 纸面轨候选钩子（FUNDING_HEDGE 候选直传；nil=未接线零开销）。
 	cexPaperHook func(context.Context, []detector.Candidate)
+	cexPaperSnap func([]detector.Candidate) // R1②：unfiltered 全量快照 sink（轮 pass 同源）
 	// disabledStrategies 自动淘汰策略集合（§1 自动淘汰闭环）：strategy_stats.disabled=true 的策略名。
 	// disabled 策略产出的机会不入库——系统已自证亏损，展示假机会误导。定期刷新（main goroutine），
 	// 与 onQuote 并发 → disabledMu 保护。nil/空 = 不排除（测试默认）。

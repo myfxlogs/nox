@@ -18,11 +18,13 @@ type unfilteredScanner interface {
 // 白名单+净阈，保 stale/isReal/funding 存在性）。D-555 S1：hook 按 canonical
 // 30s 采样节拍合流（纸面研究采样非判定，D-004 P3 举证；OOM pprof 实证帧率级
 // 调用→paper_spot_carry 行风暴，节拍保留）。
+// R1②：同扫产全量快照给 cexPaperSnap（开/退/计息同源=同一 unfiltered 流）——
+// hook 到期子集开闸，轮 pass 吃全量集（不因采样节拍残缺误判候选缺席）。
 func (e *Engine) paperCexUnfiltered(ctx context.Context, snapshot map[string]map[string]bus.Quote) {
-	if e.cexPaperHook == nil {
+	if e.cexPaperHook == nil && e.cexPaperSnap == nil {
 		return
 	}
-	var fhs []detector.Candidate
+	var all, fhs []detector.Candidate
 	seenCanon := map[string]bool{}
 	for _, d := range e.detectors {
 		u, ok := d.(unfilteredScanner)
@@ -34,12 +36,16 @@ func (e *Engine) paperCexUnfiltered(ctx context.Context, snapshot map[string]map
 				continue
 			}
 			seenCanon[c.Canonical] = true
+			all = append(all, c)
 			if e.paperHookDue(c.Canonical) {
 				fhs = append(fhs, c)
 			}
 		}
 	}
-	if len(fhs) > 0 {
+	if e.cexPaperSnap != nil {
+		e.cexPaperSnap(all) // 每扫一覆（slice 交换非累积；nil 集同样写=缺席语义透传）
+	}
+	if len(fhs) > 0 && e.cexPaperHook != nil {
 		e.cexPaperHook(ctx, fhs)
 	}
 }
