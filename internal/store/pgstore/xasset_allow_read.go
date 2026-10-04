@@ -126,3 +126,27 @@ func (s *Store) ListCfdUniverseDepthBases(ctx context.Context) ([]string, error)
 	}
 	return out, rows.Err()
 }
+
+// ListCfdCarryNetNow D-060①：纸面卡 CFD 行「当前」净 carry 数据源——
+// fin_carry_universe 现快照按 mt_venue|cex_venue|canonical|structure 键投影
+// net_annual_pct（已含 swap 修正；suspect 行不剔——展示面忠实透库值）。
+func (s *Store) ListCfdCarryNetNow(ctx context.Context) (map[string]float64, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT mt_venue, cex_venue, canonical, structure, net_annual_pct
+		FROM fin_carry_universe
+		WHERE structure IN ('long_cfd_short_perp','short_cfd_long_perp')`)
+	if err != nil {
+		return nil, fmt.Errorf("list cfd carry net now: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]float64{}
+	for rows.Next() {
+		var mt, cex, canon, structure string
+		var net float64
+		if err := rows.Scan(&mt, &cex, &canon, &structure, &net); err != nil {
+			return nil, err
+		}
+		out[mt+"|"+cex+"|"+canon+"|"+structure] = net
+	}
+	return out, rows.Err()
+}

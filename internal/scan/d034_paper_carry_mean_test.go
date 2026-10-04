@@ -73,9 +73,10 @@ func TestD034_FundingMeanSaturdayOpen(t *testing.T) {
 	if got == nil || len(opened) == 0 {
 		t.Fatalf("均值 net>8 应开 long 纸面仓，active=%v opened=%v", active, opened)
 	}
-	// ③ 展示列语义：entry_funding_ann=瞬时值 0（判定口径已走均值）
-	if got.EntryFundingAnn != 0 {
-		t.Fatalf("entry_funding_ann=%v want 0（瞬时值只留展示列）", got.EntryFundingAnn)
+	// ③ 展示列语义：entry_funding_ann=入场闸判定值 NetAnnual（D-060② 承诺口径——
+	// 瞬时值周末落 0 致面板承诺列恒「—」，D-034 展示列口径被 D-060 裁定覆盖）。
+	if got.EntryFundingAnn != row.NetAnnual {
+		t.Fatalf("entry_funding_ann=%v want %.3f（入场闸判定值=净 carry 7d 均值）", got.EntryFundingAnn, row.NetAnnual)
 	}
 	// ④ 不 adverse：同轮行再判（net>0 → 不退、不 zero_accrual）
 	accrable, _ := s.ListAccrablePaperSpotCarry(ctx)

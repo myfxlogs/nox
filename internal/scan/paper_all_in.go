@@ -77,7 +77,9 @@ func insertCfdPaper(ctx context.Context, st PaperStore, r UniverseRow, mtVenue, 
 	mv := mtVenue
 	p := &pgstore.PaperSpotCarry{
 		VenueA: mtVenue, VenueB: cexVenue, Symbol: r.Canonical, Side: side,
-		EntryFundingAnn: r.FundingInst, QtyUSD: PaperQtyUSD, // D-034：entry 展示列记瞬时值（判定已走均值）
+		// D-060②：entry 列记入场闸判定值（7d 均值净 carry=NetAnnual）——原记瞬时值
+		// FundingInst 周末开仓落 0 → 面板承诺列恒「—」读不出承诺（D-034 展示列口径让位承诺口径）。
+		EntryFundingAnn: r.NetAnnual, QtyUSD: PaperQtyUSD,
 		Structure: r.Structure, MtVenue: &mv,
 		Note: "MT佣金未计（无常数实值）", // D-474a S2：分腿真费佣金项缺省注记
 	}
