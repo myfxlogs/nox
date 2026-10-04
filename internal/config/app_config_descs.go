@@ -49,6 +49,8 @@ var appConfigDescs = map[string]string{
 	"ARB_MT_QUOTE_STALE_MIN":                     "D-029 休市判定：MT 报价新鲜度阈值（分钟；周表说开市时报价静默超阈=闭市；缺=fail-closed 判闭）",
 	"ARB_MAKER_TIMEOUT":                          "D-018 maker：首腿 post-only 挂单超时 T，到点撤单（缺/0=maker 停用）",
 	"ARB_MACRO_ENABLED":                          "true=开：宏观采集层（COT 周六 05:00/财历每日 07:20/FRED 每日 08:00，北京时间）",
+	"ARB_MACRO_BLACKOUT_MIN":                     "D-053 执行禁区：high 财历事件前后 ±N 分钟内禁开仓/推迟常规平仓（缺省 15；0=禁用）",
+	"ARB_MACRO_BLACKOUT_CURRENCIES":              "D-053 执行禁区币种集（逗号分隔，缺省 USD；canonical 两半为 ISO 币种码时自动并入两币）",
 	"ARB_CALIB_ENABLED":                          "true=开：校准计分板月度 job（BJ 每月 1 日 08:00 跑上月 MAE/bias，提案入收件箱）",
 	"ARB_FREEZE_GUARD":                           "冻结保护时长（风控冻结后冷却窗）",
 	"ARB_FUNDING_BASELINE_PCT":                   "资金费基线百分比（偏离度计算基准）",

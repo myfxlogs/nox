@@ -33,6 +33,15 @@ func (s *d545Store) MacroEventsBetween(context.Context, time.Time, time.Time) ([
 func (s *d545Store) MaxCotReportDate(context.Context) (time.Time, error) {
 	return time.Time{}, nil
 }
+func (s *d545Store) InsertAlertDedup(context.Context, string, string, time.Duration) error {
+	return nil
+}
+func (s *d545Store) NextHighEventAt(context.Context, time.Time) (time.Time, bool, error) {
+	return time.Time{}, false, nil
+}
+func (s *d545Store) MacroHighEventsIn(context.Context, time.Time, time.Time, []string) ([]pgstore.MacroEvent, error) {
+	return nil, nil
+}
 
 func TestD545_T4_EnabledGateAndHotFredKey(t *testing.T) {
 	var hits atomic.Int32

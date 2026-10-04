@@ -189,6 +189,8 @@ type Config struct {
 	ExplorerEnabled         bool          // ARB_EXPLORER_ENABLED 缺省 false——探矿员壳总闸（D-513：关=零行为变化）
 	ExplorerRatePerHour     int           // ARB_EXPLORER_RATE_PER_HOUR（默认 10，独立令牌桶）
 	MacroEnabled            bool          // ARB_MACRO_ENABLED 缺省 false——宏观采集层总闸（D-528：关=零行为变化）
+	MacroBlackoutMin        int           // D-053 ③ ARB_MACRO_BLACKOUT_MIN：high 事件禁区窗 ±分钟（缺省 15）
+	MacroBlackoutCurrencies string        // D-053 ③ ARB_MACRO_BLACKOUT_CURRENCIES：禁区币种集（逗号分隔，缺省 USD）
 	CalibEnabled            bool          // ARB_CALIB_ENABLED 缺省 true——校准计分板总闸（D-533：只读计分+写自表）
 	// MTData MT 数据采集稳定性加固参数（D-104 P0）。
 	MTData MTDataConfig

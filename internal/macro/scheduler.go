@@ -26,6 +26,9 @@ type Store interface {
 	UpsertFredObs(ctx context.Context, rows []pgstore.FredObs) (int, error)
 	MacroEventsBetween(ctx context.Context, from, to time.Time) ([]pgstore.MacroEvent, error)
 	MaxCotReportDate(ctx context.Context) (time.Time, error)
+	NextHighEventAt(ctx context.Context, now time.Time) (time.Time, bool, error)                                  // D-053 ②
+	MacroHighEventsIn(ctx context.Context, from, to time.Time, currencies []string) ([]pgstore.MacroEvent, error) // D-053 ②③
+	InsertAlertDedup(ctx context.Context, level, message string, window time.Duration) error                      // D-053 ②
 }
 
 // Notifier 推送面（*notify.FeishuClient 原生满足）。
@@ -60,10 +63,12 @@ func Run(ctx context.Context, d Deps) {
 		d.Now = time.Now
 	}
 	client := &http.Client{Timeout: httpTimeout}
+	rearm := make(chan struct{}, 1) // D-053 ②：calendar upsert 成功 → actualsLoop 重臂信号（仅唤醒不携数据）
 	safego.Go("macro:cot", func() { cotLoop(ctx, d, client) })
-	safego.Go("macro:calendar", func() { calendarLoop(ctx, d, client) })
+	safego.Go("macro:calendar", func() { calendarLoop(ctx, d, client, rearm) })
+	safego.Go("macro:actuals", func() { runActualsLoop(ctx, d, client, rearm) })
 	safego.Go("macro:fred", func() { fredLoop(ctx, d, client) })
-	log.Printf("[macro] scheduler started (cot sat 05:00BJ/2h · calendar 07:20BJ+4h · fred 08:00BJ)")
+	log.Printf("[macro] scheduler started (cot sat 05:00BJ/2h · calendar 07:20BJ+4h · actuals event-driven · fred 08:00BJ)")
 	<-ctx.Done()
 }
 
@@ -107,9 +112,10 @@ func cotLoop(ctx context.Context, d Deps, client *http.Client) {
 	}
 }
 
-// calendarLoop 财历路：4h ticker 刷 actuals（自启动即跑）+ 每日 07:20 正式拉取 + 07:30 中文日报
-// （单 goroutine select 双源，刷新 tick 不因日报窗口丢失节奏）。
-func calendarLoop(ctx context.Context, d Deps, client *http.Client) {
+// calendarLoop 财历路：4h ticker 刷 actuals（自启动即跑；D-053 ②降为兜底——actualsLoop
+// 事件驱动为主）+ 每日 07:20 正式拉取 + 07:30 中文日报（单 goroutine select 双源，刷新 tick
+// 不因日报窗口丢失节奏）。每轮 upsert 成功后 non-blocking 通知 rearm（actualsLoop 重臂）。
+func calendarLoop(ctx context.Context, d Deps, client *http.Client, rearm chan<- struct{}) {
 	refresh := time.NewTicker(4 * time.Hour)
 	defer refresh.Stop()
 	fetchAndLog := func(why string) {
@@ -118,6 +124,11 @@ func calendarLoop(ctx context.Context, d Deps, client *http.Client) {
 		}
 		if err := fetchCalendarWeeks(ctx, d, client); err != nil {
 			log.Printf("[macro:calendar] %s: %v", why, err)
+			return
+		}
+		select { // D-053 ②：upsert 成功 → actualsLoop 重臂（满则丢——loop 下轮自会重扫）
+		case rearm <- struct{}{}:
+		default:
 		}
 	}
 	fetchAndLog("boot-refresh")

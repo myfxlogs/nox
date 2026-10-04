@@ -5,8 +5,17 @@
 // Referer+X-Requested-With 必设：XHR 面缺失时端点回 200+[]（设计稿自测空数组正因三头全无；
 // 修正以 A2「非空」验收锚为准，实测仅补这两头即吐真实事件集）。Origin 仍不设。
 //
-// 时区：from/to 为 UTC 的 "2006-01-02T15:04:05"；FullDate 字段实测=UTC（ark 经 ReleaseDate
-// Unix ms 交叉验证）。失败重试一次（3s 退避，ctx 感知）——禁吞错空跑（KB pagination-freeze 教训）。
+// 时区（D-053 ①2026-10-04 zh/en 并排对拍钉死）：
+//   - FullDate 字段恒为 UTC（ReleaseDate Unix ms 交叉验证，en/zh 两端点一致）；
+//   - from/to POST 裸串被站点按服务器本地时区（EET，夏令时 UTC+3）的「日」粒度选择，
+//     实际返回窗 = [from 日 −1 天, to 日 +1 天]（UTC 事件坐标）。对拍实证（date_mode=1）：
+//     en from=10-02T12:00 to=10-02T13:00 → 返回 min=10-01T12:00 max=10-03T00:00（UTC）
+//     en from=10-05T00:00 to=10-05T02:00 → 返回 min=10-04T00:00 max=10-06T00:30（UTC）
+//     zh from=10-02T00:00 to=10-03T00:00 → 回 10-01 事件（业主实测复现，两域行为同构）
+//     即端点侧无精确时间窗——本函数传值仍用 UTC 格式（语义=大致范围），精确窗过滤一律
+//     落库后按 event_time_utc 查询（MacroEventsBetween）；多回的 ±1~2 天事件 upsert 幂等无害。
+//
+// 失败重试一次（3s 退避，ctx 感知）——禁吞错空跑（KB pagination-freeze 教训）。
 package macro
 
 import (
@@ -24,7 +33,8 @@ import (
 )
 
 // mql5URL 隐藏 POST 端点（参数化仅为可测；生产传 mql5URL 常量）。
-const mql5URL = "https://www.mql5.com/en/economic-calendar/content"
+// D-053 ①：en→zh——事件名落中文（用户域语言；en 行经迁移 0176 清除防日报双语重复）。
+const mql5URL = "https://www.mql5.com/zh/economic-calendar/content"
 
 // mql5UserAgent WAF 白名单 UA（铁律：禁改完整浏览器模板）。
 const mql5UserAgent = "Mozilla/5.0"
@@ -125,7 +135,7 @@ func doFetchMQL5(ctx context.Context, client *http.Client, endpoint string, from
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
 	req.Header.Set("User-Agent", mql5UserAgent)
-	req.Header.Set("Referer", "https://www.mql5.com/en/economic-calendar")
+	req.Header.Set("Referer", "https://www.mql5.com/zh/economic-calendar") // 与端点语言域同步（XHR 面）
 	req.Header.Set("X-Requested-With", "XMLHttpRequest")
 
 	resp, err := client.Do(req)

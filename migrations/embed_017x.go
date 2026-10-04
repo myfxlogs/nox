@@ -23,4 +23,7 @@ var (
 
 	//go:embed 0176_probe_llm_loop.sql
 	ProbeLLMLoopSQL string // D-048①②：explorer_proposals 探针提案契约+审批流转列
+
+	//go:embed 0177_macro_zh_reset.sql
+	MacroZhResetSQL string // D-053①：en 旧行清除（zh 端点切换防日报双语重复）
 )
