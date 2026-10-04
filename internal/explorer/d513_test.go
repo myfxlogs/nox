@@ -57,7 +57,6 @@ type fakeStore struct {
 	idles     []pgstore.ExplorerIdlePool
 	watchlist []pgstore.RadarWatchlistRow
 	maps      []pgstore.SymbolMapping
-	adm       []pgstore.PerpFundingAdmissionRow
 	alerts    []pgstore.Alert
 	state     map[string]json.RawMessage
 	proposals []pgstore.ExplorerProposal
@@ -107,9 +106,6 @@ func (f *fakeStore) LoadRadarWatchlist(context.Context) ([]pgstore.RadarWatchlis
 }
 func (f *fakeStore) ListSymbolMappings(context.Context, string) ([]pgstore.SymbolMapping, error) {
 	return f.maps, nil
-}
-func (f *fakeStore) ListPerpFundingAdmission(context.Context) ([]pgstore.PerpFundingAdmissionRow, error) {
-	return f.adm, nil
 }
 func (f *fakeStore) ListAlerts(context.Context, int, int) ([]pgstore.Alert, error) {
 	return f.alerts, nil
