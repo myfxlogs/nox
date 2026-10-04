@@ -58,91 +58,6 @@ func (*StreamUpdatesRequest) Descriptor() ([]byte, []int) {
 	return file_dashboardv1_stream_proto_rawDescGZIP(), []int{0}
 }
 
-// 实时现价推送（D-049）：后端按最新未陈旧报价算价格派生字段，前端仅按 id 合并渲染。
-type PersonalPositionPrice struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PositionId    int64                  `protobuf:"varint,1,opt,name=position_id,json=positionId,proto3" json:"position_id,omitempty"`
-	Price         float64                `protobuf:"fixed64,2,opt,name=price,proto3" json:"price,omitempty"` // 当前 mid（0 = 无报价）
-	Level         string                 `protobuf:"bytes,3,opt,name=level,proto3" json:"level,omitempty"`   // 'ok'|'warn'|'crit'（空 = 无报价）
-	PnlUsd        float64                `protobuf:"fixed64,4,opt,name=pnl_usd,json=pnlUsd,proto3" json:"pnl_usd,omitempty"`
-	LiqPrice      float64                `protobuf:"fixed64,5,opt,name=liq_price,json=liqPrice,proto3" json:"liq_price,omitempty"`
-	DistToLiqPct  float64                `protobuf:"fixed64,6,opt,name=dist_to_liq_pct,json=distToLiqPct,proto3" json:"dist_to_liq_pct,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *PersonalPositionPrice) Reset() {
-	*x = PersonalPositionPrice{}
-	mi := &file_dashboardv1_stream_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PersonalPositionPrice) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PersonalPositionPrice) ProtoMessage() {}
-
-func (x *PersonalPositionPrice) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_stream_proto_msgTypes[1]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PersonalPositionPrice.ProtoReflect.Descriptor instead.
-func (*PersonalPositionPrice) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_stream_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *PersonalPositionPrice) GetPositionId() int64 {
-	if x != nil {
-		return x.PositionId
-	}
-	return 0
-}
-
-func (x *PersonalPositionPrice) GetPrice() float64 {
-	if x != nil {
-		return x.Price
-	}
-	return 0
-}
-
-func (x *PersonalPositionPrice) GetLevel() string {
-	if x != nil {
-		return x.Level
-	}
-	return ""
-}
-
-func (x *PersonalPositionPrice) GetPnlUsd() float64 {
-	if x != nil {
-		return x.PnlUsd
-	}
-	return 0
-}
-
-func (x *PersonalPositionPrice) GetLiqPrice() float64 {
-	if x != nil {
-		return x.LiqPrice
-	}
-	return 0
-}
-
-func (x *PersonalPositionPrice) GetDistToLiqPct() float64 {
-	if x != nil {
-		return x.DistToLiqPct
-	}
-	return 0
-}
-
 type StreamUpdatesResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Update:
@@ -153,14 +68,12 @@ type StreamUpdatesResponse struct {
 	//	*StreamUpdatesResponse_Position
 	//	*StreamUpdatesResponse_SourceHealth
 	//	*StreamUpdatesResponse_Keepalive
-	//	*StreamUpdatesResponse_PersonalPositionPrice
 	//	*StreamUpdatesResponse_FundingNeed
 	//	*StreamUpdatesResponse_CmcUpdate
 	//	*StreamUpdatesResponse_DataRefresh
 	//	*StreamUpdatesResponse_BrokerPositionEvent
 	//	*StreamUpdatesResponse_AccountEvent
 	//	*StreamUpdatesResponse_HedgeData
-	//	*StreamUpdatesResponse_PersonalPositionEvent
 	Update        isStreamUpdatesResponse_Update `protobuf_oneof:"update"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -168,7 +81,7 @@ type StreamUpdatesResponse struct {
 
 func (x *StreamUpdatesResponse) Reset() {
 	*x = StreamUpdatesResponse{}
-	mi := &file_dashboardv1_stream_proto_msgTypes[2]
+	mi := &file_dashboardv1_stream_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -180,7 +93,7 @@ func (x *StreamUpdatesResponse) String() string {
 func (*StreamUpdatesResponse) ProtoMessage() {}
 
 func (x *StreamUpdatesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_stream_proto_msgTypes[2]
+	mi := &file_dashboardv1_stream_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -193,7 +106,7 @@ func (x *StreamUpdatesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamUpdatesResponse.ProtoReflect.Descriptor instead.
 func (*StreamUpdatesResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_stream_proto_rawDescGZIP(), []int{2}
+	return file_dashboardv1_stream_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *StreamUpdatesResponse) GetUpdate() isStreamUpdatesResponse_Update {
@@ -257,15 +170,6 @@ func (x *StreamUpdatesResponse) GetKeepalive() *Keepalive {
 	return nil
 }
 
-func (x *StreamUpdatesResponse) GetPersonalPositionPrice() *PersonalPositionPrice {
-	if x != nil {
-		if x, ok := x.Update.(*StreamUpdatesResponse_PersonalPositionPrice); ok {
-			return x.PersonalPositionPrice
-		}
-	}
-	return nil
-}
-
 func (x *StreamUpdatesResponse) GetFundingNeed() *FundingNeedNotice {
 	if x != nil {
 		if x, ok := x.Update.(*StreamUpdatesResponse_FundingNeed); ok {
@@ -320,15 +224,6 @@ func (x *StreamUpdatesResponse) GetHedgeData() *HedgeData {
 	return nil
 }
 
-func (x *StreamUpdatesResponse) GetPersonalPositionEvent() *PersonalPositionEvent {
-	if x != nil {
-		if x, ok := x.Update.(*StreamUpdatesResponse_PersonalPositionEvent); ok {
-			return x.PersonalPositionEvent
-		}
-	}
-	return nil
-}
-
 type isStreamUpdatesResponse_Update interface {
 	isStreamUpdatesResponse_Update()
 }
@@ -357,10 +252,6 @@ type StreamUpdatesResponse_Keepalive struct {
 	Keepalive *Keepalive `protobuf:"bytes,6,opt,name=keepalive,proto3,oneof"` // 30s 心跳（Cloudflare Tunnel 存活，D-027）
 }
 
-type StreamUpdatesResponse_PersonalPositionPrice struct {
-	PersonalPositionPrice *PersonalPositionPrice `protobuf:"bytes,7,opt,name=personal_position_price,json=personalPositionPrice,proto3,oneof"` // 实时个人持仓现价（D-049）
-}
-
 type StreamUpdatesResponse_FundingNeed struct {
 	FundingNeed *FundingNeedNotice `protobuf:"bytes,10,opt,name=funding_need,json=fundingNeed,proto3,oneof"` // 资金注入提醒弹窗（D-072，余额不足实时推）
 }
@@ -385,10 +276,6 @@ type StreamUpdatesResponse_HedgeData struct {
 	HedgeData *HedgeData `protobuf:"bytes,17,opt,name=hedge_data,json=hedgeData,proto3,oneof"` // 对冲结构+流水聚合域单槽帧（D-571 包C，替 case 12 通知）
 }
 
-type StreamUpdatesResponse_PersonalPositionEvent struct {
-	PersonalPositionEvent *PersonalPositionEvent `protobuf:"bytes,18,opt,name=personal_position_event,json=personalPositionEvent,proto3,oneof"` // 个人持仓行级 upsert（D-571 包C：回放+CRUD 变更源）
-}
-
 func (*StreamUpdatesResponse_Quote) isStreamUpdatesResponse_Update() {}
 
 func (*StreamUpdatesResponse_Opportunity) isStreamUpdatesResponse_Update() {}
@@ -401,8 +288,6 @@ func (*StreamUpdatesResponse_SourceHealth) isStreamUpdatesResponse_Update() {}
 
 func (*StreamUpdatesResponse_Keepalive) isStreamUpdatesResponse_Update() {}
 
-func (*StreamUpdatesResponse_PersonalPositionPrice) isStreamUpdatesResponse_Update() {}
-
 func (*StreamUpdatesResponse_FundingNeed) isStreamUpdatesResponse_Update() {}
 
 func (*StreamUpdatesResponse_CmcUpdate) isStreamUpdatesResponse_Update() {}
@@ -414,8 +299,6 @@ func (*StreamUpdatesResponse_BrokerPositionEvent) isStreamUpdatesResponse_Update
 func (*StreamUpdatesResponse_AccountEvent) isStreamUpdatesResponse_Update() {}
 
 func (*StreamUpdatesResponse_HedgeData) isStreamUpdatesResponse_Update() {}
-
-func (*StreamUpdatesResponse_PersonalPositionEvent) isStreamUpdatesResponse_Update() {}
 
 // BrokerPositionEvent D-571：逐仓 delta 事件（替代 case 8 全量快照的实时通道）。
 // 载荷=该仓完整显示态（复用 BrokerPosition 全字段，后端算好前端零信任）。
@@ -434,7 +317,7 @@ type BrokerPositionEvent struct {
 
 func (x *BrokerPositionEvent) Reset() {
 	*x = BrokerPositionEvent{}
-	mi := &file_dashboardv1_stream_proto_msgTypes[3]
+	mi := &file_dashboardv1_stream_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -446,7 +329,7 @@ func (x *BrokerPositionEvent) String() string {
 func (*BrokerPositionEvent) ProtoMessage() {}
 
 func (x *BrokerPositionEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_stream_proto_msgTypes[3]
+	mi := &file_dashboardv1_stream_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -459,7 +342,7 @@ func (x *BrokerPositionEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BrokerPositionEvent.ProtoReflect.Descriptor instead.
 func (*BrokerPositionEvent) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_stream_proto_rawDescGZIP(), []int{3}
+	return file_dashboardv1_stream_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *BrokerPositionEvent) GetKind() isBrokerPositionEvent_Kind {
@@ -529,7 +412,7 @@ type AccountEvent struct {
 
 func (x *AccountEvent) Reset() {
 	*x = AccountEvent{}
-	mi := &file_dashboardv1_stream_proto_msgTypes[4]
+	mi := &file_dashboardv1_stream_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -541,7 +424,7 @@ func (x *AccountEvent) String() string {
 func (*AccountEvent) ProtoMessage() {}
 
 func (x *AccountEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_stream_proto_msgTypes[4]
+	mi := &file_dashboardv1_stream_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -554,7 +437,7 @@ func (x *AccountEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccountEvent.ProtoReflect.Descriptor instead.
 func (*AccountEvent) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_stream_proto_rawDescGZIP(), []int{4}
+	return file_dashboardv1_stream_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *AccountEvent) GetAccount() *AccountInfo {
@@ -577,7 +460,7 @@ type HedgeData struct {
 
 func (x *HedgeData) Reset() {
 	*x = HedgeData{}
-	mi := &file_dashboardv1_stream_proto_msgTypes[5]
+	mi := &file_dashboardv1_stream_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -589,7 +472,7 @@ func (x *HedgeData) String() string {
 func (*HedgeData) ProtoMessage() {}
 
 func (x *HedgeData) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_stream_proto_msgTypes[5]
+	mi := &file_dashboardv1_stream_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -602,7 +485,7 @@ func (x *HedgeData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HedgeData.ProtoReflect.Descriptor instead.
 func (*HedgeData) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_stream_proto_rawDescGZIP(), []int{5}
+	return file_dashboardv1_stream_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *HedgeData) GetStructure() *HedgeStructure {
@@ -619,52 +502,6 @@ func (x *HedgeData) GetFlow() []*HedgeFlowItem {
 	return nil
 }
 
-// PersonalPositionEvent D-571 包C：个人持仓行级 upsert（回放+CRUD 变更源）。
-// 行级 upsert 单形态（status=CLOSED 行照常发——前端陈列态换不换由行自身 status 决定）。
-type PersonalPositionEvent struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Upsert        *PersonalPosition      `protobuf:"bytes,1,opt,name=upsert,proto3" json:"upsert,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *PersonalPositionEvent) Reset() {
-	*x = PersonalPositionEvent{}
-	mi := &file_dashboardv1_stream_proto_msgTypes[6]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PersonalPositionEvent) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PersonalPositionEvent) ProtoMessage() {}
-
-func (x *PersonalPositionEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_stream_proto_msgTypes[6]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PersonalPositionEvent.ProtoReflect.Descriptor instead.
-func (*PersonalPositionEvent) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_stream_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *PersonalPositionEvent) GetUpsert() *PersonalPosition {
-	if x != nil {
-		return x.Upsert
-	}
-	return nil
-}
-
 // BrokerPositionRef 逐仓删除事件的键。
 type BrokerPositionRef struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -676,7 +513,7 @@ type BrokerPositionRef struct {
 
 func (x *BrokerPositionRef) Reset() {
 	*x = BrokerPositionRef{}
-	mi := &file_dashboardv1_stream_proto_msgTypes[7]
+	mi := &file_dashboardv1_stream_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -688,7 +525,7 @@ func (x *BrokerPositionRef) String() string {
 func (*BrokerPositionRef) ProtoMessage() {}
 
 func (x *BrokerPositionRef) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_stream_proto_msgTypes[7]
+	mi := &file_dashboardv1_stream_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -701,7 +538,7 @@ func (x *BrokerPositionRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BrokerPositionRef.ProtoReflect.Descriptor instead.
 func (*BrokerPositionRef) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_stream_proto_rawDescGZIP(), []int{7}
+	return file_dashboardv1_stream_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *BrokerPositionRef) GetVenueKey() string {
@@ -729,7 +566,7 @@ type DataRefreshNotice struct {
 
 func (x *DataRefreshNotice) Reset() {
 	*x = DataRefreshNotice{}
-	mi := &file_dashboardv1_stream_proto_msgTypes[8]
+	mi := &file_dashboardv1_stream_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -741,7 +578,7 @@ func (x *DataRefreshNotice) String() string {
 func (*DataRefreshNotice) ProtoMessage() {}
 
 func (x *DataRefreshNotice) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_stream_proto_msgTypes[8]
+	mi := &file_dashboardv1_stream_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -754,7 +591,7 @@ func (x *DataRefreshNotice) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DataRefreshNotice.ProtoReflect.Descriptor instead.
 func (*DataRefreshNotice) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_stream_proto_rawDescGZIP(), []int{8}
+	return file_dashboardv1_stream_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *DataRefreshNotice) GetTopic() string {
@@ -795,7 +632,7 @@ type CMCWatchUpdate struct {
 
 func (x *CMCWatchUpdate) Reset() {
 	*x = CMCWatchUpdate{}
-	mi := &file_dashboardv1_stream_proto_msgTypes[9]
+	mi := &file_dashboardv1_stream_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -807,7 +644,7 @@ func (x *CMCWatchUpdate) String() string {
 func (*CMCWatchUpdate) ProtoMessage() {}
 
 func (x *CMCWatchUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_stream_proto_msgTypes[9]
+	mi := &file_dashboardv1_stream_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -820,7 +657,7 @@ func (x *CMCWatchUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CMCWatchUpdate.ProtoReflect.Descriptor instead.
 func (*CMCWatchUpdate) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_stream_proto_rawDescGZIP(), []int{9}
+	return file_dashboardv1_stream_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *CMCWatchUpdate) GetMid() float64 {
@@ -981,7 +818,7 @@ type FundingNeedNotice struct {
 
 func (x *FundingNeedNotice) Reset() {
 	*x = FundingNeedNotice{}
-	mi := &file_dashboardv1_stream_proto_msgTypes[10]
+	mi := &file_dashboardv1_stream_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -993,7 +830,7 @@ func (x *FundingNeedNotice) String() string {
 func (*FundingNeedNotice) ProtoMessage() {}
 
 func (x *FundingNeedNotice) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_stream_proto_msgTypes[10]
+	mi := &file_dashboardv1_stream_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1006,7 +843,7 @@ func (x *FundingNeedNotice) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FundingNeedNotice.ProtoReflect.Descriptor instead.
 func (*FundingNeedNotice) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_stream_proto_rawDescGZIP(), []int{10}
+	return file_dashboardv1_stream_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *FundingNeedNotice) GetCanonical() string {
@@ -1070,23 +907,14 @@ var File_dashboardv1_stream_proto protoreflect.FileDescriptor
 const file_dashboardv1_stream_proto_rawDesc = "" +
 	"\n" +
 	"\x18dashboardv1/stream.proto\x12\x10arb.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x19dashboardv1/account.proto\x1a\x18dashboardv1/market.proto\x1a\x1adashboardv1/position.proto\"\x16\n" +
-	"\x14StreamUpdatesRequest\"\xc1\x01\n" +
-	"\x15PersonalPositionPrice\x12\x1f\n" +
-	"\vposition_id\x18\x01 \x01(\x03R\n" +
-	"positionId\x12\x14\n" +
-	"\x05price\x18\x02 \x01(\x01R\x05price\x12\x14\n" +
-	"\x05level\x18\x03 \x01(\tR\x05level\x12\x17\n" +
-	"\apnl_usd\x18\x04 \x01(\x01R\x06pnlUsd\x12\x1b\n" +
-	"\tliq_price\x18\x05 \x01(\x01R\bliqPrice\x12%\n" +
-	"\x0fdist_to_liq_pct\x18\x06 \x01(\x01R\fdistToLiqPct\"\xd7\b\n" +
+	"\x14StreamUpdatesRequest\"\xcf\a\n" +
 	"\x15StreamUpdatesResponse\x12/\n" +
 	"\x05quote\x18\x01 \x01(\v2\x17.arb.dashboard.v1.QuoteH\x00R\x05quote\x12A\n" +
 	"\vopportunity\x18\x02 \x01(\v2\x1d.arb.dashboard.v1.OpportunityH\x00R\vopportunity\x12/\n" +
 	"\x05alert\x18\x03 \x01(\v2\x17.arb.dashboard.v1.AlertH\x00R\x05alert\x128\n" +
 	"\bposition\x18\x04 \x01(\v2\x1a.arb.dashboard.v1.PositionH\x00R\bposition\x12E\n" +
 	"\rsource_health\x18\x05 \x01(\v2\x1e.arb.dashboard.v1.SourceHealthH\x00R\fsourceHealth\x12;\n" +
-	"\tkeepalive\x18\x06 \x01(\v2\x1b.arb.dashboard.v1.KeepaliveH\x00R\tkeepalive\x12a\n" +
-	"\x17personal_position_price\x18\a \x01(\v2'.arb.dashboard.v1.PersonalPositionPriceH\x00R\x15personalPositionPrice\x12H\n" +
+	"\tkeepalive\x18\x06 \x01(\v2\x1b.arb.dashboard.v1.KeepaliveH\x00R\tkeepalive\x12H\n" +
 	"\ffunding_need\x18\n" +
 	" \x01(\v2#.arb.dashboard.v1.FundingNeedNoticeH\x00R\vfundingNeed\x12A\n" +
 	"\n" +
@@ -1095,10 +923,9 @@ const file_dashboardv1_stream_proto_rawDesc = "" +
 	"\x15broker_position_event\x18\x0f \x01(\v2%.arb.dashboard.v1.BrokerPositionEventH\x00R\x13brokerPositionEvent\x12E\n" +
 	"\raccount_event\x18\x10 \x01(\v2\x1e.arb.dashboard.v1.AccountEventH\x00R\faccountEvent\x12<\n" +
 	"\n" +
-	"hedge_data\x18\x11 \x01(\v2\x1b.arb.dashboard.v1.HedgeDataH\x00R\thedgeData\x12a\n" +
-	"\x17personal_position_event\x18\x12 \x01(\v2'.arb.dashboard.v1.PersonalPositionEventH\x00R\x15personalPositionEventB\b\n" +
-	"\x06updateJ\x04\b\b\x10\tJ\x04\b\t\x10\n" +
-	"J\x04\b\v\x10\fJ\x04\b\f\x10\rR\x10broker_positionsR\baccountsR\x0fposition_changeR\rhedge_refresh\"\xd8\x01\n" +
+	"hedge_data\x18\x11 \x01(\v2\x1b.arb.dashboard.v1.HedgeDataH\x00R\thedgeDataB\b\n" +
+	"\x06updateJ\x04\b\a\x10\bJ\x04\b\b\x10\tJ\x04\b\t\x10\n" +
+	"J\x04\b\v\x10\fJ\x04\b\f\x10\rJ\x04\b\x12\x10\x13R\x17personal_position_priceR\x17personal_position_eventR\x10broker_positionsR\baccountsR\x0fposition_changeR\rhedge_refresh\"\xd8\x01\n" +
 	"\x13BrokerPositionEvent\x12:\n" +
 	"\x06upsert\x18\x01 \x01(\v2 .arb.dashboard.v1.BrokerPositionH\x00R\x06upsert\x12=\n" +
 	"\x06remove\x18\x02 \x01(\v2#.arb.dashboard.v1.BrokerPositionRefH\x00R\x06remove\x12\x1e\n" +
@@ -1109,9 +936,7 @@ const file_dashboardv1_stream_proto_rawDesc = "" +
 	"\aaccount\x18\x01 \x01(\v2\x1d.arb.dashboard.v1.AccountInfoR\aaccount\"\x80\x01\n" +
 	"\tHedgeData\x12>\n" +
 	"\tstructure\x18\x01 \x01(\v2 .arb.dashboard.v1.HedgeStructureR\tstructure\x123\n" +
-	"\x04flow\x18\x02 \x03(\v2\x1f.arb.dashboard.v1.HedgeFlowItemR\x04flow\"S\n" +
-	"\x15PersonalPositionEvent\x12:\n" +
-	"\x06upsert\x18\x01 \x01(\v2\".arb.dashboard.v1.PersonalPositionR\x06upsert\"H\n" +
+	"\x04flow\x18\x02 \x03(\v2\x1f.arb.dashboard.v1.HedgeFlowItemR\x04flow\"H\n" +
 	"\x11BrokerPositionRef\x12\x1b\n" +
 	"\tvenue_key\x18\x01 \x01(\tR\bvenueKey\x12\x16\n" +
 	"\x06ticket\x18\x02 \x01(\tR\x06ticket\")\n" +
@@ -1169,60 +994,54 @@ func file_dashboardv1_stream_proto_rawDescGZIP() []byte {
 	return file_dashboardv1_stream_proto_rawDescData
 }
 
-var file_dashboardv1_stream_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_dashboardv1_stream_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_dashboardv1_stream_proto_goTypes = []any{
 	(*StreamUpdatesRequest)(nil),  // 0: arb.dashboard.v1.StreamUpdatesRequest
-	(*PersonalPositionPrice)(nil), // 1: arb.dashboard.v1.PersonalPositionPrice
-	(*StreamUpdatesResponse)(nil), // 2: arb.dashboard.v1.StreamUpdatesResponse
-	(*BrokerPositionEvent)(nil),   // 3: arb.dashboard.v1.BrokerPositionEvent
-	(*AccountEvent)(nil),          // 4: arb.dashboard.v1.AccountEvent
-	(*HedgeData)(nil),             // 5: arb.dashboard.v1.HedgeData
-	(*PersonalPositionEvent)(nil), // 6: arb.dashboard.v1.PersonalPositionEvent
-	(*BrokerPositionRef)(nil),     // 7: arb.dashboard.v1.BrokerPositionRef
-	(*DataRefreshNotice)(nil),     // 8: arb.dashboard.v1.DataRefreshNotice
-	(*CMCWatchUpdate)(nil),        // 9: arb.dashboard.v1.CMCWatchUpdate
-	(*FundingNeedNotice)(nil),     // 10: arb.dashboard.v1.FundingNeedNotice
-	(*Quote)(nil),                 // 11: arb.dashboard.v1.Quote
-	(*Opportunity)(nil),           // 12: arb.dashboard.v1.Opportunity
-	(*Alert)(nil),                 // 13: arb.dashboard.v1.Alert
-	(*Position)(nil),              // 14: arb.dashboard.v1.Position
-	(*SourceHealth)(nil),          // 15: arb.dashboard.v1.SourceHealth
-	(*Keepalive)(nil),             // 16: arb.dashboard.v1.Keepalive
-	(*BrokerPosition)(nil),        // 17: arb.dashboard.v1.BrokerPosition
-	(*AccountInfo)(nil),           // 18: arb.dashboard.v1.AccountInfo
-	(*HedgeStructure)(nil),        // 19: arb.dashboard.v1.HedgeStructure
-	(*HedgeFlowItem)(nil),         // 20: arb.dashboard.v1.HedgeFlowItem
-	(*PersonalPosition)(nil),      // 21: arb.dashboard.v1.PersonalPosition
-	(*timestamppb.Timestamp)(nil), // 22: google.protobuf.Timestamp
+	(*StreamUpdatesResponse)(nil), // 1: arb.dashboard.v1.StreamUpdatesResponse
+	(*BrokerPositionEvent)(nil),   // 2: arb.dashboard.v1.BrokerPositionEvent
+	(*AccountEvent)(nil),          // 3: arb.dashboard.v1.AccountEvent
+	(*HedgeData)(nil),             // 4: arb.dashboard.v1.HedgeData
+	(*BrokerPositionRef)(nil),     // 5: arb.dashboard.v1.BrokerPositionRef
+	(*DataRefreshNotice)(nil),     // 6: arb.dashboard.v1.DataRefreshNotice
+	(*CMCWatchUpdate)(nil),        // 7: arb.dashboard.v1.CMCWatchUpdate
+	(*FundingNeedNotice)(nil),     // 8: arb.dashboard.v1.FundingNeedNotice
+	(*Quote)(nil),                 // 9: arb.dashboard.v1.Quote
+	(*Opportunity)(nil),           // 10: arb.dashboard.v1.Opportunity
+	(*Alert)(nil),                 // 11: arb.dashboard.v1.Alert
+	(*Position)(nil),              // 12: arb.dashboard.v1.Position
+	(*SourceHealth)(nil),          // 13: arb.dashboard.v1.SourceHealth
+	(*Keepalive)(nil),             // 14: arb.dashboard.v1.Keepalive
+	(*BrokerPosition)(nil),        // 15: arb.dashboard.v1.BrokerPosition
+	(*AccountInfo)(nil),           // 16: arb.dashboard.v1.AccountInfo
+	(*HedgeStructure)(nil),        // 17: arb.dashboard.v1.HedgeStructure
+	(*HedgeFlowItem)(nil),         // 18: arb.dashboard.v1.HedgeFlowItem
+	(*timestamppb.Timestamp)(nil), // 19: google.protobuf.Timestamp
 }
 var file_dashboardv1_stream_proto_depIdxs = []int32{
-	11, // 0: arb.dashboard.v1.StreamUpdatesResponse.quote:type_name -> arb.dashboard.v1.Quote
-	12, // 1: arb.dashboard.v1.StreamUpdatesResponse.opportunity:type_name -> arb.dashboard.v1.Opportunity
-	13, // 2: arb.dashboard.v1.StreamUpdatesResponse.alert:type_name -> arb.dashboard.v1.Alert
-	14, // 3: arb.dashboard.v1.StreamUpdatesResponse.position:type_name -> arb.dashboard.v1.Position
-	15, // 4: arb.dashboard.v1.StreamUpdatesResponse.source_health:type_name -> arb.dashboard.v1.SourceHealth
-	16, // 5: arb.dashboard.v1.StreamUpdatesResponse.keepalive:type_name -> arb.dashboard.v1.Keepalive
-	1,  // 6: arb.dashboard.v1.StreamUpdatesResponse.personal_position_price:type_name -> arb.dashboard.v1.PersonalPositionPrice
-	10, // 7: arb.dashboard.v1.StreamUpdatesResponse.funding_need:type_name -> arb.dashboard.v1.FundingNeedNotice
-	9,  // 8: arb.dashboard.v1.StreamUpdatesResponse.cmc_update:type_name -> arb.dashboard.v1.CMCWatchUpdate
-	8,  // 9: arb.dashboard.v1.StreamUpdatesResponse.data_refresh:type_name -> arb.dashboard.v1.DataRefreshNotice
-	3,  // 10: arb.dashboard.v1.StreamUpdatesResponse.broker_position_event:type_name -> arb.dashboard.v1.BrokerPositionEvent
-	4,  // 11: arb.dashboard.v1.StreamUpdatesResponse.account_event:type_name -> arb.dashboard.v1.AccountEvent
-	5,  // 12: arb.dashboard.v1.StreamUpdatesResponse.hedge_data:type_name -> arb.dashboard.v1.HedgeData
-	6,  // 13: arb.dashboard.v1.StreamUpdatesResponse.personal_position_event:type_name -> arb.dashboard.v1.PersonalPositionEvent
-	17, // 14: arb.dashboard.v1.BrokerPositionEvent.upsert:type_name -> arb.dashboard.v1.BrokerPosition
-	7,  // 15: arb.dashboard.v1.BrokerPositionEvent.remove:type_name -> arb.dashboard.v1.BrokerPositionRef
-	18, // 16: arb.dashboard.v1.AccountEvent.account:type_name -> arb.dashboard.v1.AccountInfo
-	19, // 17: arb.dashboard.v1.HedgeData.structure:type_name -> arb.dashboard.v1.HedgeStructure
-	20, // 18: arb.dashboard.v1.HedgeData.flow:type_name -> arb.dashboard.v1.HedgeFlowItem
-	21, // 19: arb.dashboard.v1.PersonalPositionEvent.upsert:type_name -> arb.dashboard.v1.PersonalPosition
-	22, // 20: arb.dashboard.v1.CMCWatchUpdate.quote_time:type_name -> google.protobuf.Timestamp
-	22, // 21: arb.dashboard.v1.FundingNeedNotice.ts:type_name -> google.protobuf.Timestamp
-	22, // [22:22] is the sub-list for method output_type
-	22, // [22:22] is the sub-list for method input_type
-	22, // [22:22] is the sub-list for extension type_name
-	22, // [22:22] is the sub-list for extension extendee
-	0,  // [0:22] is the sub-list for field type_name
+	9,  // 0: arb.dashboard.v1.StreamUpdatesResponse.quote:type_name -> arb.dashboard.v1.Quote
+	10, // 1: arb.dashboard.v1.StreamUpdatesResponse.opportunity:type_name -> arb.dashboard.v1.Opportunity
+	11, // 2: arb.dashboard.v1.StreamUpdatesResponse.alert:type_name -> arb.dashboard.v1.Alert
+	12, // 3: arb.dashboard.v1.StreamUpdatesResponse.position:type_name -> arb.dashboard.v1.Position
+	13, // 4: arb.dashboard.v1.StreamUpdatesResponse.source_health:type_name -> arb.dashboard.v1.SourceHealth
+	14, // 5: arb.dashboard.v1.StreamUpdatesResponse.keepalive:type_name -> arb.dashboard.v1.Keepalive
+	8,  // 6: arb.dashboard.v1.StreamUpdatesResponse.funding_need:type_name -> arb.dashboard.v1.FundingNeedNotice
+	7,  // 7: arb.dashboard.v1.StreamUpdatesResponse.cmc_update:type_name -> arb.dashboard.v1.CMCWatchUpdate
+	6,  // 8: arb.dashboard.v1.StreamUpdatesResponse.data_refresh:type_name -> arb.dashboard.v1.DataRefreshNotice
+	2,  // 9: arb.dashboard.v1.StreamUpdatesResponse.broker_position_event:type_name -> arb.dashboard.v1.BrokerPositionEvent
+	3,  // 10: arb.dashboard.v1.StreamUpdatesResponse.account_event:type_name -> arb.dashboard.v1.AccountEvent
+	4,  // 11: arb.dashboard.v1.StreamUpdatesResponse.hedge_data:type_name -> arb.dashboard.v1.HedgeData
+	15, // 12: arb.dashboard.v1.BrokerPositionEvent.upsert:type_name -> arb.dashboard.v1.BrokerPosition
+	5,  // 13: arb.dashboard.v1.BrokerPositionEvent.remove:type_name -> arb.dashboard.v1.BrokerPositionRef
+	16, // 14: arb.dashboard.v1.AccountEvent.account:type_name -> arb.dashboard.v1.AccountInfo
+	17, // 15: arb.dashboard.v1.HedgeData.structure:type_name -> arb.dashboard.v1.HedgeStructure
+	18, // 16: arb.dashboard.v1.HedgeData.flow:type_name -> arb.dashboard.v1.HedgeFlowItem
+	19, // 17: arb.dashboard.v1.CMCWatchUpdate.quote_time:type_name -> google.protobuf.Timestamp
+	19, // 18: arb.dashboard.v1.FundingNeedNotice.ts:type_name -> google.protobuf.Timestamp
+	19, // [19:19] is the sub-list for method output_type
+	19, // [19:19] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_dashboardv1_stream_proto_init() }
@@ -1233,23 +1052,21 @@ func file_dashboardv1_stream_proto_init() {
 	file_dashboardv1_account_proto_init()
 	file_dashboardv1_market_proto_init()
 	file_dashboardv1_position_proto_init()
-	file_dashboardv1_stream_proto_msgTypes[2].OneofWrappers = []any{
+	file_dashboardv1_stream_proto_msgTypes[1].OneofWrappers = []any{
 		(*StreamUpdatesResponse_Quote)(nil),
 		(*StreamUpdatesResponse_Opportunity)(nil),
 		(*StreamUpdatesResponse_Alert)(nil),
 		(*StreamUpdatesResponse_Position)(nil),
 		(*StreamUpdatesResponse_SourceHealth)(nil),
 		(*StreamUpdatesResponse_Keepalive)(nil),
-		(*StreamUpdatesResponse_PersonalPositionPrice)(nil),
 		(*StreamUpdatesResponse_FundingNeed)(nil),
 		(*StreamUpdatesResponse_CmcUpdate)(nil),
 		(*StreamUpdatesResponse_DataRefresh)(nil),
 		(*StreamUpdatesResponse_BrokerPositionEvent)(nil),
 		(*StreamUpdatesResponse_AccountEvent)(nil),
 		(*StreamUpdatesResponse_HedgeData)(nil),
-		(*StreamUpdatesResponse_PersonalPositionEvent)(nil),
 	}
-	file_dashboardv1_stream_proto_msgTypes[3].OneofWrappers = []any{
+	file_dashboardv1_stream_proto_msgTypes[2].OneofWrappers = []any{
 		(*BrokerPositionEvent_Upsert)(nil),
 		(*BrokerPositionEvent_Remove)(nil),
 	}
@@ -1259,7 +1076,7 @@ func file_dashboardv1_stream_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dashboardv1_stream_proto_rawDesc), len(file_dashboardv1_stream_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
