@@ -56,6 +56,7 @@ func accrueExitMtmPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 					if err := st.ExitPaperSpotCarry(ctx, p.ID, "age_7d", paperExitConvergence(p, p.LastBasisBps)); err != nil {
 						return exited, fmt.Errorf("mtm paper step: exit age suspend %d: %w", p.ID, err)
 					}
+					paperExitNote(ctx, st, p.ID, "age_7d", 0, 0, 0, p.MissStreak)
 					exited++
 				}
 				continue
@@ -65,6 +66,7 @@ func accrueExitMtmPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 				if err := st.ExitPaperSpotCarry(ctx, p.ID, "data_lost", paperExitConvergence(p, p.LastBasisBps)); err != nil {
 					return exited, fmt.Errorf("mtm paper step: exit miss %d: %w", p.ID, err)
 				}
+				paperExitNote(ctx, st, p.ID, "data_lost", 0, 0, 0, miss)
 				exited++
 				continue
 			}
@@ -114,6 +116,7 @@ func accrueExitMtmPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 			if err := st.ExitPaperSpotCarry(ctx, p.ID, "adverse", paperExitConvergence(p, basis)); err != nil {
 				return exited, fmt.Errorf("mtm paper step: exit adverse %d: %w", p.ID, err)
 			}
+			paperExitNote(ctx, st, p.ID, "adverse", net, lLeg.val, sLeg.val, streak)
 			exited++
 			continue
 		}
@@ -125,6 +128,7 @@ func accrueExitMtmPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 			if err := st.ExitPaperSpotCarry(ctx, p.ID, reason, paperExitConvergence(p, basis)); err != nil {
 				return exited, fmt.Errorf("mtm paper step: exit %d: %w", p.ID, err)
 			}
+			paperExitNote(ctx, st, p.ID, reason, net, lLeg.val, sLeg.val, streak)
 			exited++
 			continue
 		}

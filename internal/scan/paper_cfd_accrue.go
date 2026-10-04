@@ -84,6 +84,7 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 					if err := st.ExitPaperSpotCarry(ctx, p.ID, "age_7d", paperExitConvergence(p, lastBasis)); err != nil {
 						return exited, fmt.Errorf("cfd paper step: exit age suspend %d: %w", p.ID, err)
 					}
+					paperExitNote(ctx, st, p.ID, "age_7d", 0, lastFundingAnnOf(p), 0, p.MissStreak)
 					exited++
 				}
 				continue
@@ -94,6 +95,7 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 				if err := st.ExitPaperSpotCarry(ctx, p.ID, "data_lost", paperExitConvergence(p, lastBasis)); err != nil {
 					return exited, fmt.Errorf("cfd paper step: exit miss %d: %w", p.ID, err)
 				}
+				paperExitNote(ctx, st, p.ID, "data_lost", 0, lastFundingAnnOf(p), 0, miss)
 				exited++
 				continue
 			}
@@ -162,6 +164,7 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 			if err := st.ExitPaperSpotCarry(ctx, p.ID, "adverse", paperExitConvergence(p, lastBasis)); err != nil {
 				return exited, fmt.Errorf("cfd paper step: exit adverse %d: %w", p.ID, err)
 			}
+			paperExitNote(ctx, st, p.ID, "adverse", r.NetAnnual, r.FundingAnn, cfdSwapLegPct(r), streak)
 			exited++
 			continue
 		}
@@ -178,6 +181,7 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 			if err := st.AnnotatePaperNote(ctx, p.ID, marker); err != nil {
 				log.Printf("[cfd paper] zero_accrual note %d: %v", p.ID, err)
 			}
+			paperExitNote(ctx, st, p.ID, "zero_accrual_stale", r.NetAnnual, r.FundingAnn, cfdSwapLegPct(r), streak)
 			exited++
 			continue
 		}
@@ -189,6 +193,7 @@ func accrueExitCfdPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 			if err := st.ExitPaperSpotCarry(ctx, p.ID, reason, paperExitConvergence(p, lastBasis)); err != nil {
 				return exited, fmt.Errorf("cfd paper step: exit %d: %w", p.ID, err)
 			}
+			paperExitNote(ctx, st, p.ID, reason, r.NetAnnual, r.FundingAnn, cfdSwapLegPct(r), streak)
 			exited++
 			continue
 		}

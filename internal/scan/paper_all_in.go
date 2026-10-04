@@ -114,6 +114,39 @@ func paperExitConvergence(p pgstore.PaperSpotCarry, lastBasis *float64) *float64
 	return paperConvergenceUSD(paperBasisDir(p.Side, p.Structure), p.EntryBasisBps, lb, p.QtyUSD)
 }
 
+// paperExitNote D-056④：退出判定值留痕——统一「exit=<reason> net=%.2f
+// funding7d=%.2f swap=%.2f streak=%d」幂等追加行 note（net=当轮净判定值年化%；
+// funding7d=funding 腿 7d 滚动均值年化；swap=swap 腿年化；streak=触发计数器；
+// 缺位轮各值取行内最后观测/0 诚实缺）。注记失败仅 log——退出已提交，审计增强
+// 不反噬退出本身。
+func paperExitNote(ctx context.Context, st PaperStore, id int64, reason string, net, funding7d, swap float64, streak int) {
+	if err := st.AnnotatePaperNote(ctx, id, fmt.Sprintf(
+		"exit=%s net=%.2f funding7d=%.2f swap=%.2f streak=%d", reason, net, funding7d, swap, streak)); err != nil {
+		log.Printf("[paper] exit note %d: %v", id, err)
+	}
+}
+
+// lastFundingAnnOf 行内最后观测 funding 年化（缺位轮判定值缺省源；NULL→0）。
+func lastFundingAnnOf(p pgstore.PaperSpotCarry) float64 {
+	if p.LastFundingAnn != nil {
+		return *p.LastFundingAnn
+	}
+	return 0
+}
+
+// cfdSwapLegPct cfd 行 MT 腿侧 swap 年化（结构定腿：long_cfd_short_perp=MT 腿多
+// →swap_long；short_cfd_long_perp→swap_short；NULL→0 诚实缺）。
+func cfdSwapLegPct(r UniverseRow) float64 {
+	v := r.SwapLongPct
+	if r.Structure == "short_cfd_long_perp" {
+		v = r.SwapShortPct
+	}
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
 // authSlot D-410 S4 保底槽（D-419 S3 加 cexVenue 供 monitor 簿三元组哨兵；
 // D-050 cls 退役——class 键授权计数随数量槽一起删）。
 type authSlot struct{ key, venueCombo, symbol, mtVenue, cexVenue string }

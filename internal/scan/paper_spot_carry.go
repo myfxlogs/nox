@@ -223,6 +223,7 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 				if err := st.ExitPaperSpotCarry(ctx, p.ID, "data_lost", paperExitConvergence(p, p.LastBasisBps)); err != nil {
 					return opened, exited, fmt.Errorf("paper step: exit miss %d: %w", p.ID, err)
 				}
+				paperExitNote(ctx, st, p.ID, "data_lost", 0, lastFundingAnnOf(p), 0, miss)
 				exited++
 				continue
 			}
@@ -271,6 +272,7 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 			if err := st.ExitPaperSpotCarry(ctx, p.ID, "adverse", paperExitConvergence(p, lastBasis)); err != nil {
 				return opened, exited, fmt.Errorf("paper step: exit adverse %d: %w", p.ID, err)
 			}
+			paperExitNote(ctx, st, p.ID, "adverse", sideFactor*f, f, 0, streak)
 			exited++
 			continue
 		}
@@ -283,6 +285,7 @@ func StepPaperSpotCarry(ctx context.Context, st PaperStore, entryStreak *EntrySt
 			if err := st.ExitPaperSpotCarry(ctx, p.ID, reason, paperExitConvergence(p, lastBasis)); err != nil {
 				return opened, exited, fmt.Errorf("paper step: exit %d: %w", p.ID, err)
 			}
+			paperExitNote(ctx, st, p.ID, reason, sideFactor*f, f, 0, streak)
 			exited++
 			continue
 		}

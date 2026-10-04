@@ -52,6 +52,7 @@ func accrueExitCexPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 				if err := st.ExitPaperSpotCarry(ctx, p.ID, "data_lost", paperExitConvergence(p, lastBasis)); err != nil {
 					return exited, fmt.Errorf("cex paper step: exit miss %d: %w", p.ID, err)
 				}
+				paperExitNote(ctx, st, p.ID, "data_lost", 0, lastFundingAnnOf(p), 0, miss)
 				exited++
 				continue
 			}
@@ -103,6 +104,7 @@ func accrueExitCexPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 			if err := st.ExitPaperSpotCarry(ctx, p.ID, "adverse", paperExitConvergence(p, lastBasis)); err != nil {
 				return exited, fmt.Errorf("cex paper step: exit adverse %d: %w", p.ID, err)
 			}
+			paperExitNote(ctx, st, p.ID, "adverse", c.FundingAnn, c.FundingAnn, 0, streak)
 			exited++
 			continue
 		}
@@ -115,6 +117,7 @@ func accrueExitCexPaper(ctx context.Context, st PaperStore, accrable []pgstore.P
 			if err := st.ExitPaperSpotCarry(ctx, p.ID, reason, paperExitConvergence(p, lastBasis)); err != nil {
 				return exited, fmt.Errorf("cex paper step: exit %d: %w", p.ID, err)
 			}
+			paperExitNote(ctx, st, p.ID, reason, c.FundingAnn, c.FundingAnn, 0, streak)
 			exited++
 			continue
 		}
