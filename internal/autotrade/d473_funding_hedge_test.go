@@ -46,7 +46,7 @@ func d473Engine(s *pgstore.Store, spec *exec.XAssetComboAllowSpec) *Engine {
 	qb := bus.New()
 	qb.Publish(bus.Quote{Symbol: "SKLUSDT", Venue: "okx", VenueType: "spot", Bid: 0.49, Ask: 0.50, Time: time.Now(), VenueSymbol: "SKL-USDT"})
 	qb.Publish(bus.Quote{Symbol: "SKLUSDT", Venue: "okx", VenueType: "perp", Bid: 0.50, Ask: 0.51, Time: time.Now(), VenueSymbol: "SKL-USDT-SWAP"})
-	svc := dashboard.New(nil, qb, nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, nil, 0, nil, nil, 0, 0, nil)
+	svc := dashboard.New(nil, qb, nil, nil, nil, 0, 0, 0, 0, 0, 0, nil, nil, nil, 0, nil, nil, 0, 0, nil)
 	svc.SetLegContractSize(func(venueKey, venueSymbol string) (float64, bool) {
 		return 1.0, true // :spot cs=1.0
 	})

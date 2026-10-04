@@ -28,28 +28,14 @@ type PersonalMonitor struct {
 	alertFn func(ctx context.Context, level, message string) error
 	// now 可注入时钟（测试节流 + 报价陈旧判定）。
 	now func() time.Time
-
-	// D-049 实时现价广播：与告警正交（不走 5s 节流）。
-	freshTTL  time.Duration       // 报价陈旧 TTL（复用 config.DetectorFreshnessTTL，G3）
-	liqMMR    float64             // 理论强平维持保证金率（config.ARB_LIQ_MMR）
-	onPrice   func(PositionPrice) // 现价视图回调（nil 安全；main 接 priceTopic.Publish）
-	lastPrice map[int64]float64   // id → 上次广播价（同价去重，防同值连发）
-
-	// D-208 v2：CMC 数据源（nil = 不支持 CMC 行，走老路径）。
-	cmcSource CMCSource
-	// onSetChanged D-571C-R2 F-2：loadPositions 集合 diff（OPEN 行 id 集新增/剔除）
-	// 非空回调（main 接 posMon.KickPersonal——personal_positions 表不经 posChange，
-	// 表变更只能靠本监控加载比对发现）。nil 安全。
-	onSetChanged func()
 }
 
-// NewPersonalMonitor 创建个人持仓监控器。onPrice 允许 nil（不广播，仅告警）。
-func NewPersonalMonitor(b *bus.QuoteBus, store *pgstore.Store, freshTTL time.Duration, liqMMR float64, onPrice func(PositionPrice)) *PersonalMonitor {
-	m := &PersonalMonitor{
+// NewPersonalMonitor 创建个人持仓监控器（D-063：现价广播/CMC 视图面随渲染退役拆除，
+// 仅保留价格阈值告警语义）。
+func NewPersonalMonitor(b *bus.QuoteBus, store *pgstore.Store) *PersonalMonitor {
+	return &PersonalMonitor{
 		bus:       b,
 		store:     store,
-		freshTTL:  freshTTL,
-		liqMMR:    liqMMR,
 		positions: make(map[int64]*pgstore.PersonalPosition),
 		level:     make(map[int64]string),
 		lastAlert: make(map[int64]time.Time),
@@ -59,18 +45,6 @@ func NewPersonalMonitor(b *bus.QuoteBus, store *pgstore.Store, freshTTL time.Dur
 		},
 		now: time.Now,
 	}
-	if onPrice != nil {
-		m.onPrice = onPrice
-		m.lastPrice = make(map[int64]float64)
-	}
-	return m
-}
-
-// SetCMCSource 注入 CMC 数据源（D-208 v2：nil 安全=走老路径）。
-func (m *PersonalMonitor) SetCMCSource(src CMCSource) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.cmcSource = src
 }
 
 // Run 启动监控。阻塞至 ctx 取消。
@@ -118,23 +92,16 @@ func (m *PersonalMonitor) loadPositions(ctx context.Context) error {
 			delete(m.positions, id)
 			delete(m.level, id)
 			delete(m.lastAlert, id)
-			delete(m.lastPrice, id) // D-049：广播价缓存随仓清理（closed 行不留残；nil map delete 安全）
 		}
 	}
-	hook := m.onSetChanged
+	_ = setChanged // D-063：渲染回推钩子（onSetChanged）随渲染面退役拆除；告警态照常清理
 	m.mu.Unlock()
-	if setChanged && hook != nil {
-		hook() // 锁外回推——KickPersonal 只脏标不嵌锁序
-	}
 	log.Printf("[personal-monitor] loaded %d open personal positions", len(m.positions))
 	return nil
 }
 
 // SetKickTopic D-469b S3：positions 表变更事件订阅源（nil=纯 5min ticker 兜底）。
 func (m *PersonalMonitor) SetKickTopic(t *bus.Topic[struct{}]) { m.kickTopic = t }
-
-// SetOnSetChanged D-571C-R2 F-2：OPEN 集合变更回推钩子（nil 安全）。
-func (m *PersonalMonitor) SetOnSetChanged(fn func()) { m.onSetChanged = fn }
 
 func (m *PersonalMonitor) refreshLoop(ctx context.Context) {
 	// D-469b S3：持仓变更事件主路+5min 自愈兜底。
@@ -184,36 +151,7 @@ func (m *PersonalMonitor) onQuote(ctx context.Context, q bus.Quote) {
 		m.level[p.ID] = newLevel
 	}
 
-	// 实时现价广播（D-049）：与告警正交、不走 5s 节流。用 bus.Snapshot + LatestQuote 同选帧
-	// （多 venue 同符号与快照路径取同一最新未陈旧帧，实时价 = 快照价，30s 对账边界不跳变）。
-	// D-208 v2：CMC 行（cmc_instrument_id 非空 + cmcSource 注入）走 ComputeCMCPositionPrice。
-	if m.onPrice != nil && m.bus != nil {
-		syms := make([]string, 0, 1)
-		for _, p := range m.positions {
-			if p.PriceSymbol == q.Symbol {
-				syms = append(syms, p.PriceSymbol)
-				break
-			}
-		}
-		if len(syms) > 0 {
-			venues := m.bus.Snapshot(ctx, syms)
-			for _, p := range m.positions {
-				if p.PriceSymbol != q.Symbol {
-					continue
-				}
-				var view PositionPrice
-				if p.CMCInstrumentID != nil && *p.CMCInstrumentID != "" && m.cmcSource != nil {
-					view = ComputeCMCPositionPrice(p, m.cmcSource, m.freshTTL, m.now())
-				} else {
-					view = ComputePositionPrice(p, venues[p.PriceSymbol], m.freshTTL, m.now(), m.liqMMR)
-				}
-				if view.Price != m.lastPrice[p.ID] {
-					m.lastPrice[p.ID] = view.Price
-					m.onPrice(view)
-				}
-			}
-		}
-	}
+	// D-063：实时现价广播块随渲染面退役拆除（price.go/CMC 视图同撤）。
 }
 
 func (m *PersonalMonitor) alert(ctx context.Context, p *pgstore.PersonalPosition, level string, mid float64) {
