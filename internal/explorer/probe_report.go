@@ -8,6 +8,7 @@ package explorer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -89,6 +90,9 @@ func generateProbeReport(ctx context.Context, deps Deps, posID int64, now time.T
 	}
 	prop, perr := deps.Store.ExplorerProbeProposalByPosition(ctx, posID)
 	if perr != nil {
+		if !errors.Is(perr, pgstore.ErrNoProbeProposal) {
+			return "", fmt.Errorf("proposal lookup: %w", perr)
+		}
 		prop = nil // 手动 OpenProbe（无提案源）——假设段退化为仓 note+decision_ref
 	}
 
