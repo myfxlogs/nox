@@ -221,3 +221,29 @@ func (s *Store) InsertAlertDedup(ctx context.Context, level, message string, win
 	}
 	return s.insertAlert(ctx, nil, nil, level, message)
 }
+
+// MinWeekdaySessionStartMin D-061 ②：facts trade_session 周表某 weekday 的最早开盘分钟
+// （value=day*1e8+startMin*1e4+endMin，UTC 坐标；day: 0=周日…1=周一…）。全表多 venue/
+// symbol 投影取 min——MT 周开盘=该 weekday 最早会话起点。表缺/无该日行 → ok=false。
+func (s *Store) MinWeekdaySessionStartMin(ctx context.Context, kind string, weekday int) (int, bool, error) {
+	rows, err := s.pool.Query(ctx, `SELECT DISTINCT ON (venue, symbol) value, ts
+		FROM facts WHERE kind = $1 ORDER BY venue, symbol, ts DESC`, kind)
+	if err != nil {
+		return 0, false, fmt.Errorf("weekday session start: %w", err)
+	}
+	defer rows.Close()
+	minStart, ok := 0, false
+	for rows.Next() {
+		var v float64
+		var ts time.Time
+		if err := rows.Scan(&v, &ts); err != nil {
+			return 0, false, fmt.Errorf("scan session fact: %w", err)
+		}
+		iv := int64(v)
+		day, startMin := int(iv/1e8), int(iv/1e4)%1e4
+		if day == weekday && (!ok || startMin < minStart) {
+			minStart, ok = startMin, true
+		}
+	}
+	return minStart, ok, rows.Err()
+}

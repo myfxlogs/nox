@@ -129,6 +129,8 @@ func Load() *Config {
 		MacroEnabled:               envBool("ARB_MACRO_ENABLED", false),            // D-528：宏观采集默认关
 		MacroBlackoutMin:           envInt("ARB_MACRO_BLACKOUT_MIN", 15),           // D-053 ③：缺省 ±15min
 		MacroBlackoutCurrencies:    envStr("ARB_MACRO_BLACKOUT_CURRENCIES", "USD"), // D-053 ③：缺省 USD
+		Stage1MinRowHours:          envInt("ARB_STAGE1_MIN_ROW_HOURS", 48),         // D-061 ①：缺省 48h
+		Stage1OpenWarmupH:          envInt("ARB_STAGE1_OPEN_WARMUP_H", 2),          // D-061 ②：缺省 2h
 		CalibEnabled:               envBool("ARB_CALIB_ENABLED", true),             // D-533：校准计分板默认开（只读计分+写自表）
 		MTData:                     loadMTData(),
 		SwapReconcileDeviationPct:  envFloat("ARB_SWAP_RECONCILE_DEVIATION_PCT", 10.0), // D-110 P2
