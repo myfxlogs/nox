@@ -59,3 +59,31 @@ func TestReplaceCarryUniverse_NoteRoundTrip(t *testing.T) {
 		t.Errorf("DOT 行 = %+v, want note='suspect: swap 469.5%%' net=0", got[1])
 	}
 }
+
+// TestListCarryUniverseCanonicals D-057④：canonical 去重序列表（深度采集动态
+// 基名源——DISTINCT+ORDER BY canonical 保序）。
+func TestListCarryUniverseCanonicals(t *testing.T) {
+	s := carryUniverseTestStore(t)
+	ctx := context.Background()
+	if err := s.ReplaceCarryUniverse(ctx, []CarryUniverseRow{
+		{Canonical: "XAU", MtVenue: "3001157", CexVenue: "okx", Structure: "long_cfd_short_perp"},
+		{Canonical: "XAU", MtVenue: "3001157", CexVenue: "binance", Structure: "long_cfd_short_perp"},
+		{Canonical: "DOT", MtVenue: "1314615", CexVenue: "binance", Structure: "long_cfd_short_perp"},
+		{Canonical: "PAXG", MtVenue: "3001157", CexVenue: "gate", Structure: "long_cfd_short_perp"},
+	}); err != nil {
+		t.Fatalf("ReplaceCarryUniverse: %v", err)
+	}
+	got, err := s.ListCarryUniverseCanonicals(ctx)
+	if err != nil {
+		t.Fatalf("ListCarryUniverseCanonicals: %v", err)
+	}
+	want := []string{"DOT", "PAXG", "XAU"} // DISTINCT+ORDER BY：XAU 双行合一
+	if len(got) != len(want) {
+		t.Fatalf("canonicals = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("canonicals[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}

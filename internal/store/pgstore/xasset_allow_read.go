@@ -93,3 +93,22 @@ func (s *Store) ReplaceCarryUniverse(ctx context.Context, rows []CarryUniverseRo
 	}
 	return nil
 }
+
+// ListCarryUniverseCanonicals D-057④：当前 universe 快照 canonical 去重序列表
+// （深度采集动态基名源；ORDER BY canonical 保序确定性）。
+func (s *Store) ListCarryUniverseCanonicals(ctx context.Context) ([]string, error) {
+	rows, err := s.pool.Query(ctx, `SELECT DISTINCT canonical FROM fin_carry_universe ORDER BY canonical`)
+	if err != nil {
+		return nil, fmt.Errorf("list carry universe canonicals: %w", err)
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var c string
+		if err := rows.Scan(&c); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
