@@ -62,7 +62,7 @@ type StageCheck struct {
 // DailyReport 日报产物。
 type DailyReport struct {
 	Body        string
-	Stage1OK    bool // 全项 ✅ → 附「待决策：Stage 1 可启」+ 单独 info alert
+	Stage1OK    bool // 全项 ✅（D-061 条件制判据）→ 附「待决策：Stage 1 可启」+ 单独 info alert
 	Stage1Table []StageCheck
 	Stage2Table []StageCheck
 	WindowNet   float64

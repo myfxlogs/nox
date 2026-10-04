@@ -62,7 +62,8 @@ func emitStage1Ready(ctx context.Context, d Deps, ready bool) {
 		log.Printf("[selfwatch] stage1 ready state read: %v", perr)
 	}
 	if ready && !(perr == nil && pok && prev == "1") {
-		const readyMsg = "[自盯][stage1_ready] 待决策：Stage 1 可启（观测窗满7天·组合净额非负·组合在仓满5天·零事故·子系统在线·仓位上限/白名单已定）"
+		// D-061 ③：就绪推送条件=stage1Checks 全 ✅（条件制判据），文案同步条件制口径。
+		const readyMsg = "[自盯][stage1_ready] 待决策：Stage 1 可启（目标组合纸面行存活且计息·开仓时点合格·组合净额非负·零事故·子系统在线·仓位上限/白名单已定）"
 		if err := d.Store.InsertAlertDedup(ctx, "info", readyMsg, 7*24*time.Hour); err != nil {
 			log.Printf("[selfwatch] stage1 ready alert: %v", err)
 		}

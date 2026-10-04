@@ -36,7 +36,7 @@ func TestD056_ComboExactMatch(t *testing.T) {
 	if !strings.Contains(body, "目标组合 $3.0000") {
 		t.Fatalf("净额应按精确组合口径只计 XAU $3.00（不含 PAXG $99/异结构 $50）:\n%s", body)
 	}
-	if !strings.Contains(body, "XAU 3001157×okx：6.5d / $3.00") {
+	if !strings.Contains(body, "XAU 3001157×okx：49h / $3.20") {
 		t.Fatalf("证据行应书 canonical+venue 对:\n%s", body)
 	}
 	if strings.Contains(body, "PAXG") || strings.Contains(body, "$99") || strings.Contains(body, "9.0d") {
@@ -48,7 +48,7 @@ func TestD056_ComboExactMatch(t *testing.T) {
 }
 
 // TestD056_WhitelistMissingCanonical 白名单行缺 canonical → fail-closed：
-// 证据与净额两查皆 ❌ 并标「白名单行无品种」。
+// 存活与净额两查皆 ❌ 并标「白名单行无品种」（D-061：证据行更名存活行）。
 func TestD056_WhitelistMissingCanonical(t *testing.T) {
 	st := greenStore()
 	st.allowPairs = []pgstore.XAssetRealCombo{
@@ -62,7 +62,7 @@ func TestD056_WhitelistMissingCanonical(t *testing.T) {
 	if !strings.Contains(rep.Body, "3001157×gate：白名单行无品种") {
 		t.Fatalf("缺 canonical 行应标无品种:\n%s", rep.Body)
 	}
-	if !strings.Contains(rep.Body, "❌ 窗内净额非负") || !strings.Contains(rep.Body, "❌ Stage 1 组合证据") {
+	if !strings.Contains(rep.Body, "❌ 窗内净额非负") || !strings.Contains(rep.Body, "❌ 目标组合纸面行存活") {
 		t.Fatalf("缺品种行应使两查 fail-closed:\n%s", rep.Body)
 	}
 	if rep.Stage1OK {

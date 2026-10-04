@@ -48,7 +48,10 @@ type Store interface {
 	MakerLegStatsSince(ctx context.Context, since time.Time) (opens, incidents int, err error)
 	PaperDataLostStats(ctx context.Context, since time.Time) (rows, cooldownPairs int, err error)
 	PaperActiveStats(ctx context.Context) (pgstore.PaperActiveSplit, error)
-	CountMacroBlackoutRejects(ctx context.Context, since time.Time) (int, error) // D-053 ④
+	CountMacroBlackoutRejects(ctx context.Context, since time.Time) (int, error)                                  // D-053 ④
+	ListActivePaperSpotCarry(ctx context.Context) ([]pgstore.PaperSpotCarry, error)                               // D-061 ①
+	MacroHighEventsIn(ctx context.Context, from, to time.Time, currencies []string) ([]pgstore.MacroEvent, error) // D-061 ②
+	MinWeekdaySessionStartMin(ctx context.Context, kind string, weekday int) (int, bool, error)                   // D-061 ②
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
 	InsertAlertDedup(ctx context.Context, level, message string, window time.Duration) error
 }
