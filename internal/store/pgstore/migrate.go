@@ -171,6 +171,7 @@ var migrationFiles = []struct {
 	{175, migrations.ProbePositionsSQL},                // D-047①：positions +decision_ref/auto_close_at（PROBE 单腿探针）
 	{176, migrations.ProbeLLMLoopSQL},                  // D-048①②：explorer_proposals 探针提案契约+审批流转列
 	{177, migrations.MacroZhResetSQL},                  // D-053①：mql5 源 en 旧行清除（zh 端点切换）
+	{178, migrations.DropPerpFundingAdmissionSQL},      // D-057⑤：PERP_FUNDING 证据准入表退役（已备份）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。

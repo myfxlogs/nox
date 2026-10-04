@@ -719,7 +719,7 @@ func (x *BrokerPositionRef) GetTicket() string {
 }
 
 // DataRefreshNotice（D-508 S9）：域数据刷新通知——topic 标域（allow_rules/carry_graduation/paper_carry/
-// intra_track/perp_funding_admission/finance/trx），前端按订阅 topic 集重取对应 RPC。
+// intra_track/finance/trx），前端按订阅 topic 集重取对应 RPC。
 type DataRefreshNotice struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Topic         string                 `protobuf:"bytes,1,opt,name=topic,proto3" json:"topic,omitempty"`

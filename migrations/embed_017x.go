@@ -26,4 +26,7 @@ var (
 
 	//go:embed 0177_macro_zh_reset.sql
 	MacroZhResetSQL string // D-053①：en 旧行清除（zh 端点切换防日报双语重复）
+
+	//go:embed 0178_drop_perp_funding_admission.sql
+	DropPerpFundingAdmissionSQL string // D-057⑤：PERP_FUNDING 证据准入表退役（族停用，87 行已备份）
 )

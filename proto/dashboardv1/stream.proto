@@ -87,7 +87,7 @@ message BrokerPositionRef {
 }
 
 // DataRefreshNotice（D-508 S9）：域数据刷新通知——topic 标域（allow_rules/carry_graduation/paper_carry/
-// intra_track/perp_funding_admission/finance/trx），前端按订阅 topic 集重取对应 RPC。
+// intra_track/finance/trx），前端按订阅 topic 集重取对应 RPC。
 message DataRefreshNotice {
   string topic = 1;
 }
