@@ -24,14 +24,6 @@ func Load() *Config {
 			XassetTrackingMaxBps:   envFloat("ARB_XASSET_TRACKING_MAX_BPS", 50.0),  // D-300 §5.3
 			XassetCarryMinNetStore: envFloat("ARB_XASSET_CARRY_MIN_NET_STORE", 0.0),
 		},
-		// D-491 S5：PERP_FUNDING 准入判据阈值（判据口径=docs/D-491 §2.2）。
-		PfAdmitConfig: PfAdmitConfig{
-			PfAdmitDirPct:      envFloat("ARB_PF_ADMIT_DIR_PCT", 0.80),
-			PfAdmitMaxSd:       envFloat("ARB_PF_ADMIT_MAX_SD", 15.0),
-			PfAdmitMinSamples:  envInt("ARB_PF_ADMIT_MIN_SAMPLES", 500),
-			PfAdmitPinPct:      envFloat("ARB_PF_ADMIT_PIN_PCT", 50.0),
-			PfAdmitMinDepthUsd: envFloat("ARB_PF_ADMIT_MIN_DEPTH_USD", 5000),
-		},
 		GrabMinNetAnnualized:  envFloat("ARB_GRAB_MIN_NET_ANNUALIZED", 4.5),
 		DetectorFreshnessTTL:  envDur("ARB_DETECTOR_FRESHNESS_TTL", 120*time.Second), // D-070 均值回归：放宽 freshness 让低频报价 venue 配对
 		SlippageBps:           envFloat("ARB_SLIPPAGE_BPS", 0.3),                     // D-070 均值回归：降低滑点假设（CFD 限价单）
