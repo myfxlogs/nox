@@ -12,7 +12,7 @@ import (
 
 // weeklyThemes 静态主题表（设计稿 §3 五项；周序号取模轮转）。
 var weeklyThemes = []string{
-	"期限离散", "新符号链", "admission拒因", "公告规则面", "资金池搬运",
+	"期限离散", "新符号链", "毕业链裁决", "公告规则面", "资金池搬运", // D-057：准入主题随面板退役→毕业链裁决
 }
 
 // weeklySystemPrompt 周深挖约束（同日报红线 + 允许 query_ro 补查≤5 次）。

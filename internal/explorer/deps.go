@@ -38,7 +38,6 @@ type Store interface {
 	ListCashflows(ctx context.Context, posID int64) ([]pgstore.Cashflow, error)
 	LoadRadarWatchlist(ctx context.Context) ([]pgstore.RadarWatchlistRow, error)
 	ListSymbolMappings(ctx context.Context, venue string) ([]pgstore.SymbolMapping, error)
-	ListPerpFundingAdmission(ctx context.Context) ([]pgstore.PerpFundingAdmissionRow, error)
 	ListAlerts(ctx context.Context, limit, offset int) ([]pgstore.Alert, error)
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
 }

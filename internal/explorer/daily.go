@@ -1,4 +1,4 @@
-// daily.go 日扫五项装配（D-513 设计稿 §2）：五段确定性数字拼一次主调用 prompt；
+// daily.go 日扫五项装配（D-513 设计稿 §2）：四段确定性数字拼一次主调用 prompt；
 // LLM 输出 strict protojson 提案块 → 行级校验 → explorer_proposals + 收件箱行。
 // 输出行：[explorer] daily ok: proposals=N drop=M。
 package explorer
@@ -19,7 +19,7 @@ import (
 
 // dailySystemPrompt 探矿员系统约束（壳内固定，配置随码；红线进 prompt——
 // 不预测价格/不给仓位建议/不跨场所借数据/数字只引用输入段不得自算）。
-const dailySystemPrompt = `你是 ARB 套利系统的探矿员（只读研究员）。输入=五段确定性数字（Go 计算，禁止改动/重算/自算）。
+const dailySystemPrompt = `你是 ARB 套利系统的探矿员（只读研究员）。输入=四段确定性数字（Go 计算，禁止改动/重算/自算）。
 输出（严格两段）：
 1. 叙事摘要 ≤300 字；
 2. 一个 fenced 块 ` + "```explorer-proposals" + ` 内含 JSON：{"narrative":"...","proposals":[{"canonical":"...","best_pair":"venue_a×venue_b","direction":"≤16字","rationale":"一行","anchor":"输入段字段名","evidence":{}}],"probe_proposals":[{...}]}。
@@ -85,20 +85,6 @@ func RunDaily(ctx context.Context, deps Deps) (*DailyResult, error) {
 	}
 	res.NewSymbols = newSyms
 
-	// ③ 新增被拒候选（昨日起 status=denied 行清单——仅清单非重放，重放=CP3 重件）。
-	bjNow := now.In(BJTime)
-	dayStart := time.Date(bjNow.Year(), bjNow.Month(), bjNow.Day(), 0, 0, 0, 0, BJTime).AddDate(0, 0, -1)
-	var denied []pgstore.PerpFundingAdmissionRow
-	adm, err := deps.Store.ListPerpFundingAdmission(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("list admission: %w", err)
-	}
-	for _, r := range adm {
-		if r.Status == "denied" && !r.UpdatedAt.Before(dayStart) {
-			denied = append(denied, r)
-		}
-	}
-
 	// ④ 公告流要点（近 24h [事件] 前缀 alerts 原文）。
 	var events []string
 	alerts, err := deps.Store.ListAlerts(ctx, 200, 0)
@@ -126,7 +112,7 @@ func RunDaily(ctx context.Context, deps Deps) (*DailyResult, error) {
 		}
 	}
 
-	// 已知 canonical 集=①canonical ∪ ②watchlist ∪ ③admission canonical（校验锚）。
+	// 已知 canonical 集=①canonical ∪ ②watchlist（校验锚）。
 	known := map[string]bool{}
 	for _, d := range disp {
 		known[d.Canonical] = true
@@ -138,11 +124,8 @@ func RunDaily(ctx context.Context, deps Deps) (*DailyResult, error) {
 	for _, w := range wl {
 		known[w.Symbol] = true
 	}
-	for _, r := range adm {
-		known[r.Canonical] = true
-	}
 
-	prompt := buildDailyPrompt(res.ScanDate, disp, newSyms, denied, events, flagged)
+	prompt := buildDailyPrompt(res.ScanDate, disp, newSyms, events, flagged)
 	if !deps.Rate.Allow() {
 		return res, fmt.Errorf("explorer: rate limited")
 	}
@@ -240,12 +223,12 @@ func d513DiffSymbols(ctx context.Context, deps Deps, now time.Time) ([]string, e
 	return added, nil
 }
 
-// buildDailyPrompt 五段数字拼装（字段名=anchor 合法集）。
+// buildDailyPrompt 四段数字拼装（字段名=anchor 合法集；D-057 去 denied 段）。
 func buildDailyPrompt(day time.Time, disp []pgstore.ExplorerDispersion,
-	newSyms []string, denied []pgstore.PerpFundingAdmissionRow,
+	newSyms []string,
 	events []string, flagged []pgstore.ExplorerIdlePool) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "scan_date=%s（北京历日）。五段确定性输入如下：\n\n", day.Format("2006-01-02"))
+	fmt.Fprintf(&b, "scan_date=%s（北京历日）。四段确定性输入如下：\n\n", day.Format("2006-01-02"))
 	b.WriteString("## term_dispersion（kind/canonical/venues/min/max/range/mean/stddev/prev_mean/delta/min_venue/max_venue）\n")
 	for _, d := range disp {
 		fmt.Fprintf(&b, "%s %s venues=%d min=%.6g max=%.6g range=%.6g mean=%.6g stddev=%.6g",
@@ -258,10 +241,6 @@ func buildDailyPrompt(day time.Time, disp []pgstore.ExplorerDispersion,
 	b.WriteString("\n## new_symbols\n")
 	for _, s2 := range newSyms {
 		b.WriteString(s2 + "\n")
-	}
-	b.WriteString("\n## denied_admissions（canonical/best_pair/note）\n")
-	for _, r := range denied {
-		fmt.Fprintf(&b, "%s %s note=%s\n", r.Canonical, r.BestPair, inboxfmt.CleanCell(r.Note))
 	}
 	b.WriteString("\n## announcements_24h\n")
 	for _, e := range events {
