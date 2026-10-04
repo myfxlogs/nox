@@ -3,6 +3,10 @@
 // 到点 +3min 拉当日窗口 upsert（actual 出值通常在发布后数分钟内）；actual 空→非空的
 // high 行推飞书「<BJ时刻> <币种> <事件>：实际 X（预期 Y / 前值 Z）」+ alerts dedup 防重推。
 // 4h ticker 兜底（calendarLoop refresh）保留——actual 迟到行经 rearm 触发本 loop 重扫补推。
+// R1③：两处 rearm 信号先 sweep 再 continue（迟到 actual 不等下个事件唤醒）；到点
+// fetch+sweep 后 t0±1min 内 high 行仍空 → 补臂一次 t0+10min（retried 标记每事件
+// 至多一次防循环）；首迭代无条件 seed——!ok 分支 rearm 扫须先有基线（否则 seedSeen
+// 会把循环启动后迟到的 actual 当历史静默吞掉）。
 package macro
 
 import (
@@ -26,10 +30,16 @@ const actualPushDedup = 4 * time.Hour
 // actualsWakeDelay 事件时点后延迟拉取（actual 出值非瞬时）。
 const actualsWakeDelay = 3 * time.Minute
 
+// actualsRetryDelay 到点 actual 未出补臂窗（R1③：发布迟到常见——+3min 拉取仍空
+// 则补一次 t0+10min；retried 标记每事件至多一次防循环）。
+const actualsRetryDelay = 10 * time.Minute
+
 // runActualsLoop 阻塞至 ctx 取消。rearm：calendarLoop 每轮 upsert 成功后发一次
-// （non-blocking）——新事件落库/actual 刷新 → 重臂+重扫。d.Now 注入（测试速过）。
+// （non-blocking）——新事件落库/actual 刷新 → 重臂前先 sweep（R1③：信号即扫，
+// 迟到 actual 立推不等下轮）。d.Now 注入（测试速过）。
 func runActualsLoop(ctx context.Context, d Deps, client *http.Client, rearm <-chan struct{}) {
-	seen := map[int64]string{} // event id → 上次见到的 actual 值（""=未见出值）
+	seen := map[int64]string{}  // event id → 上次见到的 actual 值（""=未见出值）
+	retried := map[int64]bool{} // t0 unix → +10min 补臂已发（每事件至多一次）
 	seeded := false
 	for {
 		now := d.Now()
@@ -41,7 +51,8 @@ func runActualsLoop(ctx context.Context, d Deps, client *http.Client, rearm <-ch
 			}
 			continue
 		}
-		if ok && !seeded {
+		if !seeded {
+			// R1③：首迭代无条件播种（原仅 ok 分支）——!ok 分支 rearm 扫须先有基线。
 			seedSeen(ctx, d, seen, now)
 			seeded = true
 		}
@@ -51,6 +62,7 @@ func runActualsLoop(ctx context.Context, d Deps, client *http.Client, rearm <-ch
 			case <-ctx.Done():
 				return
 			case <-rearm:
+				sweepActuals(ctx, d, seen, d.Now()) // R1③：信号即扫
 			}
 			continue
 		}
@@ -63,6 +75,7 @@ func runActualsLoop(ctx context.Context, d Deps, client *http.Client, rearm <-ch
 			return
 		case <-rearm: // upsert 后重臂（可能出现了更早事件/actual 已刷新）
 			timer.Stop()
+			sweepActuals(ctx, d, seen, d.Now()) // R1③：重臂前先扫——迟到 actual 立推
 			continue
 		case <-timer.C:
 		}
@@ -74,7 +87,49 @@ func runActualsLoop(ctx context.Context, d Deps, client *http.Client, rearm <-ch
 			log.Printf("[macro:actuals] day fetch: %v", err)
 		}
 		sweepActuals(ctx, d, seen, d.Now())
+		// R1③：t0±1min 内 high 行 actual 仍空 → 补臂一次 t0+10min（发布迟到常见；
+		// retried 标记每事件至多一次——actual 永久缺失不无限循环）。
+		if retried[t0.Unix()] || !highActualPendingAt(ctx, d, t0) {
+			continue
+		}
+		retried[t0.Unix()] = true
+		retry := t0.Add(actualsRetryDelay)
+		log.Printf("[macro:actuals] actual still empty, re-armed once at %s", retry.Format("01-02 15:04Z"))
+		rt := time.NewTimer(time.Until(retry))
+		select {
+		case <-ctx.Done():
+			rt.Stop()
+			return
+		case <-rearm: // upsert 信号先到：扫后回主循环（补臂等效已达成）
+			rt.Stop()
+			sweepActuals(ctx, d, seen, d.Now())
+			continue
+		case <-rt.C:
+		}
+		if !d.enabled("actuals") {
+			continue
+		}
+		if err := fetchCalendarDay(ctx, d, client, d.Now()); err != nil {
+			log.Printf("[macro:actuals] retry day fetch: %v", err)
+		}
+		sweepActuals(ctx, d, seen, d.Now())
 	}
+}
+
+// highActualPendingAt t0±1min 窗内仍有 actual=="" 的 high 行 → true（补臂判据；
+// 查询失败=false 不补臂——下轮正常节奏自愈）。
+func highActualPendingAt(ctx context.Context, d Deps, t0 time.Time) bool {
+	rows, err := d.Store.MacroHighEventsIn(ctx, t0.Add(-time.Minute), t0.Add(time.Minute), nil)
+	if err != nil {
+		log.Printf("[macro:actuals] pending check: %v", err)
+		return false
+	}
+	for _, e := range rows {
+		if e.Actual == "" {
+			return true
+		}
+	}
+	return false
 }
 
 // seedSeen 首扫播种：actual 已非空的事件记值不推（防重启/上线重推历史）；
