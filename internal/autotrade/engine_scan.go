@@ -71,6 +71,14 @@ func (e *Engine) evaluatePosition(ctx context.Context, p *pgstore.Position) bool
 		}
 		return true
 	}
+	// D-053 ③：高影响财历事件禁区——禁区内推迟本轮常规退出（markLegSuspend 同转场，
+	// 窗过后下一轮自恢复）；fail-open（查询失败不推迟）；disaster/止损路径不经此闸。
+	if hit, why := e.macroBlackoutSuspend(ctx, p); hit {
+		e.markLegSuspend(ctx, p.ID, why)
+		return false
+	} else {
+		e.clearLegSuspend(p.ID)
+	}
 	shouldClose, reason := e.checkExitCondition(ctx, p)
 	if !shouldClose {
 		return false

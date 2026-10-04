@@ -60,6 +60,12 @@ type Config struct {
 	// MtQuoteStaleMin D-029 ②：MT 报价新鲜度阈值（分钟）——周表说开市时动态闭市判定
 	//（龄 >N=闭）。≤0=未配置 fail-closed 判闭（无动态佐证不判开；部署须配 ARB_MT_QUOTE_STALE_MIN）。
 	MtQuoteStaleMin int
+
+	// MacroBlackoutMin/MacroBlackoutCurrencies D-053 ③：高影响财历事件执行禁区——
+	// 窗 ±分钟（缺省 15；<=0=禁用）与禁区币种集（缺省 USD；canonical 两半 ISO 自动并入）。
+	// 开仓侧 Gate.fail-closed 拒单；平仓侧 fail-open 推迟常规退出。热读 app_config 回落此值。
+	MacroBlackoutMin        int
+	MacroBlackoutCurrencies string
 	// D-165 S1：swap 偏差拦截阈值（默认 50.0）。同 venue 已有 OPEN 持仓偏差超阈值→拒绝新开仓。
 	SwapDeviationGatePct float64
 	// D-165 S2：swap 偏差退出阈值（默认 50.0）。recalcNetSwap 对拍偏差超阈值→用 broker 实际值。

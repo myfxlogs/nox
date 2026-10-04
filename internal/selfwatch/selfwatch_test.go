@@ -34,6 +34,7 @@ type fakeStore struct {
 	dlRows     int                      // D-042 R1 ③：24h data_lost 退出行数
 	dlPairs    int                      // D-042 R1 ③：当前冷却中对数
 	paperSplit pgstore.PaperActiveSplit // D-050 ②：纸面在仓两轨分列
+	bbRejects  int                      // D-053 ④：24h 禁区拒开次数
 	alerts     []string
 	dedupCalls []string
 	upserts    map[string]string
@@ -104,6 +105,9 @@ func (f *fakeStore) PaperDataLostStats(context.Context, time.Time) (int, int, er
 }
 func (f *fakeStore) PaperActiveStats(context.Context) (pgstore.PaperActiveSplit, error) {
 	return f.paperSplit, nil
+}
+func (f *fakeStore) CountMacroBlackoutRejects(context.Context, time.Time) (int, error) {
+	return f.bbRejects, nil
 }
 func (f *fakeStore) InsertAlert(_ context.Context, _ *int64, level, msg string) error {
 	f.alerts = append(f.alerts, level+"|"+msg)

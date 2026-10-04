@@ -37,6 +37,7 @@ func CheckAnomalies(ctx context.Context, d Deps) {
 	}
 	checkPaperHealth(ctx, d, now, warn)
 	checkPaperDataLost(ctx, d, now, warn)
+	checkMacroBlackout(ctx, d, now, warn)
 	checkMacroCalendar(ctx, d, now, warn)
 	checkTradeSession(ctx, d, now, warn)
 	checkFundingFresh(ctx, d, now, warn)
@@ -85,6 +86,19 @@ func checkPaperDataLost(ctx context.Context, d Deps, now time.Time, warn func(st
 	if rows > paperDataLost24h {
 		warn("[自盯] paper data_lost 24h %d 行（阈值 %d；冷却中 %d 对——24h 内不再开仓）",
 			rows, paperDataLost24h, pairs)
+	}
+}
+
+// checkMacroBlackout ⑦执行禁区拒开次数/24h（D-053 ④：>0 warn——禁区命中本身即业主
+// 应知事件；1h dedup 节流，1h 内多单合并为一条累计文案由下轮刷新）。
+func checkMacroBlackout(ctx context.Context, d Deps, now time.Time, warn func(string, ...any)) {
+	n, err := d.Store.CountMacroBlackoutRejects(ctx, now.Add(-24*time.Hour))
+	if err != nil {
+		log.Printf("[selfwatch] macro blackout rejects: %v", err)
+		return
+	}
+	if n > 0 {
+		warn("[自盯] macro 执行禁区拒开 %d 次/24h（high 财历事件窗内禁开仓）", n)
 	}
 }
 

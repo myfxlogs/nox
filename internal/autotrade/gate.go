@@ -92,6 +92,12 @@ func (g *Gate) Submit(ctx context.Context, intent *TradeIntent) GateResult {
 		return res
 	}
 
+	// D-053 ③：高影响财历事件执行禁区——窗内 high 事件 ∧ currency∈禁区集 → REJECTED。
+	// fail-closed（查询失败=拒）。reason 固定前缀 "macro blackout"（selfwatch 计数依赖）。
+	if res, rejected := g.macroBlackoutGate(ctx, intent); rejected {
+		return res
+	}
+
 	// 检查 2: 策略禁用（fail-closed：查询失败 = 拒绝）
 	disabled, err := g.store.IsStrategyDisabled(ctx, intent.Strategy)
 	if err != nil {
