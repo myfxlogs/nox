@@ -48,18 +48,14 @@ type CexPaperCand struct {
 //	（data_lost 冷却+双腿近 1h 报价）后全量开——D-050 数量槽退役。
 //
 // blocked 旗标腿级拦截（同 D-463 口径）；flap 冷却按退出行 max(exit_ts)（保底段同 mt×cex）；
-// 每轮 log 开仓数+跳过原因计数（全原因 opts.Skips 累计→selfwatch 日报分布，D-051③）。
-func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand, now time.Time, opts PaperCexOpts, flags map[string]pgstore.VenueSymbolFlag, quoteAlive func(venueKey, symbol string) (time.Time, bool)) (opened []string, exited int, err error) {
-	// 零候选不早退：在库行仍需 miss_streak 计数/退出判定（data_lost 语义依赖每轮步进）——
-	// 开仓段零候选自然零产出。
+// 跳过原因计数→opts.Skips 累计（selfwatch 日报分布，D-051③）+ skipN 逐调返回（轮聚合日志源）。
+// R1①：退出/计息与开仓解耦——本函数只做开仓闸（hook 候选到点即调）；
+// accrueExitCexPaper 归 StepPaperCexCarryAccrueExit 每轮一次（部署实证：hook 子集候选
+// 驱动整段 pass → 新开行 miss_streak 秒满 data_lost，TRUMPUSDT #66978/#66979 同秒开退）。
+func StepPaperCexCarryOpen(ctx context.Context, st PaperStore, cands []CexPaperCand, now time.Time, opts PaperCexOpts, flags map[string]pgstore.VenueSymbolFlag, quoteAlive func(venueKey, symbol string) (time.Time, bool)) (opened []string, skipN map[string]int, err error) {
 	active, err := st.ListActivePaperSpotCarry(ctx)
 	if err != nil {
-		return nil, 0, fmt.Errorf("cex paper step: list active: %w", err)
-	}
-	// ②累积+③退出先行（本轮新开行次轮起算——同 spot/cfd 轨 R1 教训）。
-	accrable, err := st.ListAccrablePaperSpotCarry(ctx)
-	if err != nil {
-		return nil, 0, fmt.Errorf("cex paper step: list accrable: %w", err)
+		return nil, nil, fmt.Errorf("cex paper step: list active: %w", err)
 	}
 	// 活跃行键（键域口径：venue_key_a×venue_key_b|symbol——type 列参与键，与 mt×cex
 	// 裸域键天然不撞）。D-050：diversity 槽记账随数量槽退役，只留在仓去重。
@@ -194,7 +190,7 @@ func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand,
 	// ① 保底段：enabled∧非 simulated 组合先行（不占发现槽额）。
 	combos, err := st.LoadXAssetAllowCombos(ctx, "real")
 	if err != nil {
-		return opened, 0, fmt.Errorf("cex paper step: load allow combos: %w", err)
+		return opened, nil, fmt.Errorf("cex paper step: load allow combos: %w", err)
 	}
 	authorizedKeys := make(map[string]struct{}, len(combos))
 	for _, c := range combos {
@@ -205,8 +201,8 @@ func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand,
 		key := keydomain.Join(sp, spType) + "×" + keydomain.Join(pp, ppType) + "|" + canon
 		authorizedKeys[key] = struct{}{}
 	}
-	// D-050 ②/D-051③：每轮跳过原因计数（全原因→opts.Skips，日报分布源）。
-	skipN := map[string]int{}
+	// D-050 ②/D-051③：跳过原因计数（opts.Skips 累计→日报分布；skipN 逐调返回→轮聚合日志）。
+	skipN = map[string]int{}
 	count := func(reason string) {
 		if reason == "" {
 			return
@@ -227,7 +223,7 @@ func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand,
 		if opts.ReopenCooldown > 0 {
 			lastExit, err := st.LatestPaperExitTs(ctx, sp, pp, canon)
 			if err != nil {
-				return opened, exited, fmt.Errorf("cex paper step: exit ts %s: %w", key, err)
+				return opened, skipN, fmt.Errorf("cex paper step: exit ts %s: %w", key, err)
 			}
 			if lastExit != nil && now.Sub(*lastExit) < opts.ReopenCooldown {
 				count("cooldown")
@@ -251,14 +247,24 @@ func StepPaperCexCarry(ctx context.Context, st PaperStore, cands []CexPaperCand,
 		}
 		count(openCand(c, key))
 	}
-	log.Printf("[cex paper] 本轮 opened=%d skips=%v", len(opened), skipN)
-	// ②累积+③退出（S2）。
-	n, aerr := accrueExitCexPaper(ctx, st, accrable, candByKey, now)
-	if aerr != nil {
-		return opened, exited, aerr
+	return opened, skipN, nil
+}
+
+// StepPaperCexCarryAccrueExit R1①：计息+退出轮 pass——每轮一次（装配侧 30s
+// 轮驱动，票定「独立 30s 轮」二选一写明：miss_streak 3 轮≈90s 保原缺席语义，
+// CFD 4h 对齐轮会把 data_lost 拖到 12h+）。cands=本轮 unfiltered 全量快照
+// （R1② 同源：与开仓同一 ScanUnfiltered 流；零候选=缺席照常跑退出行）。
+// 返回退出数+率源缺跳过数（accrueSkip 归轮聚合日志键）。
+func StepPaperCexCarryAccrueExit(ctx context.Context, st PaperStore, cands []CexPaperCand, now time.Time) (exited, accrueSkip int, err error) {
+	accrable, err := st.ListAccrablePaperSpotCarry(ctx)
+	if err != nil {
+		return 0, 0, fmt.Errorf("cex paper step: list accrable: %w", err)
 	}
-	exited += n
-	return opened, exited, nil
+	candByKey := make(map[string]CexPaperCand, len(cands))
+	for _, c := range cands {
+		candByKey[c.SpotVenueKey+"×"+c.PerpVenueKey+"|"+c.Canonical] = c
+	}
+	return accrueExitCexPaper(ctx, st, accrable, candByKey, now)
 }
 
 // spVenue/ppVenue CexPaperCand 双腿裸 venue。
