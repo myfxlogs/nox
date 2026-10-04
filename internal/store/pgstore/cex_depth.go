@@ -55,7 +55,7 @@ func depthBase(canonical string) string {
 func (s *Store) CexDepthAvgUSD(ctx context.Context, venue, canonical string, since time.Time) (avg float64, n int, err error) {
 	base := depthBase(canonical)
 	err = s.pool.QueryRow(ctx,
-		`SELECT avg(mid_depth_usd), count(*) FROM fin_cex_depth
+		`SELECT COALESCE(avg(mid_depth_usd),0), count(*) FROM fin_cex_depth
 		 WHERE venue=$1 AND ts>=$2 AND symbol IN ($3,$4,$5)`,
 		venue, since, base+"USDT", base+"_USDT", base+"-USDT-SWAP").Scan(&avg, &n)
 	if err != nil {
