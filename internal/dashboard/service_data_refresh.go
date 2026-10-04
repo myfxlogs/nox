@@ -11,18 +11,17 @@ import (
 
 // D-508 S9 域 topic 常量——写源与前端订阅同名。
 const (
-	RefreshAllowRules     = "allow_rules"            // 白名单/敞口 CAP 写路径
-	RefreshGraduation     = "carry_graduation"       // 毕业链建议/审批
-	RefreshPaperCarry     = "paper_carry"            // 纸面轨开平
-	RefreshIntraTrack     = "intra_track"            // 日内轨步进活动
-	RefreshPFAdmission    = "perp_funding_admission" // 永续资金费准入评估/覆盖
-	RefreshFinance        = "finance"                // 台账/投资记录写路径
-	RefreshTrx            = "trx"                    // TRX 质押/余额/收益率变化（D-231 同源扩展）
-	RefreshFunds          = "funds"                  // D-568：账户资金变更（CEX 活账本/MT5 流帧/monitor 轮询三源）
-	RefreshPendingEntries = "pending_entries"        // D-007 S1：待入场闸态翻转（diff 器翻转驱动 emit）
-	RefreshEvents         = "events"                 // D-007 S3：event_cases/paper_trades 写（judge 管线+手动处置）
-	RefreshCexScan        = "cex_scan"               // D-007 S3：cexscan 每轮快照落库毕（earn APR+spreads+judgment）
-	RefreshCnfi           = "cnfi"                   // D-007 S3：cnfi_* 采集器写毕（factsDone 桥 cnfi_market/cnfi_nav）
+	RefreshAllowRules     = "allow_rules"      // 白名单/敞口 CAP 写路径
+	RefreshGraduation     = "carry_graduation" // 毕业链建议/审批
+	RefreshPaperCarry     = "paper_carry"      // 纸面轨开平
+	RefreshIntraTrack     = "intra_track"      // 日内轨步进活动
+	RefreshFinance        = "finance"          // 台账/投资记录写路径
+	RefreshTrx            = "trx"              // TRX 质押/余额/收益率变化（D-231 同源扩展）
+	RefreshFunds          = "funds"            // D-568：账户资金变更（CEX 活账本/MT5 流帧/monitor 轮询三源）
+	RefreshPendingEntries = "pending_entries"  // D-007 S1：待入场闸态翻转（diff 器翻转驱动 emit）
+	RefreshEvents         = "events"           // D-007 S3：event_cases/paper_trades 写（judge 管线+手动处置）
+	RefreshCexScan        = "cex_scan"         // D-007 S3：cexscan 每轮快照落库毕（earn APR+spreads+judgment）
+	RefreshCnfi           = "cnfi"             // D-007 S3：cnfi_* 采集器写毕（factsDone 桥 cnfi_market/cnfi_nav）
 )
 
 // fundsNotifyInterval D-568：funds 通知尾沿合批窗口。
