@@ -48,8 +48,7 @@ func TestPerpFunding_SimPairBypass(t *testing.T) {
 		t.Errorf("缺 key 应零候选（fail-closed）, got %d", len(cands))
 	}
 
-	// 已准入 canonical（D-491 快照在册）行为等价旧白名单路：sim 键集缺席照产
-	// （isRealPair fail-open）。BTC 无特权——准入在册与否是唯一差异。
+	// D-057 族停用：无准入放行通道——real/未知腿对恒拒（BTC 亦无特权）。
 	btcSnapshot := map[string]map[string]bus.Quote{
 		"BTCUSDT": {
 			"okx:perp":  {Symbol: "BTCUSDT", Venue: "okx", VenueType: "perp", Bid: 100000, Ask: 100010, Time: now},
@@ -59,9 +58,8 @@ func TestPerpFunding_SimPairBypass(t *testing.T) {
 	btcFunding := map[string]map[string]float64{"BTCUSDT": {"okx": 6.1, "gate": -1.31}}
 	fp4 := &fakeFactProvider{funding: btcFunding, isReal: map[string]*bool{}, simKeys: map[string]bool{}}
 	d4 := &PerpFundingDetector{MinNetAnnualized: 2.0, FreshnessTTL: 30 * time.Second}
-	d4.SetAdmissionSnapshot(map[string]bool{"BTCUSDT": true})
-	if cands := d4.Scan(context.Background(), btcSnapshot, fp4); len(cands) == 0 {
-		t.Error("已准入 canonical（BTC）行为应与原白名单一致（照产候选）")
+	if cands := d4.Scan(context.Background(), btcSnapshot, fp4); len(cands) != 0 {
+		t.Errorf("族停用应零候选（real/未知腿对恒拒），got %d", len(cands))
 	}
 }
 

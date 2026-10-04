@@ -40,15 +40,12 @@ func TestPerpFundingDetector(t *testing.T) {
 			"binance": 5.62,
 		},
 	}
-	fp := &fakeFactProvider{funding: funding}
-
-	// D-491：BTC/ETH/TRX 无特权——admitted() 快照谓词下一切 canonical 同判据；
-	// 正向用例注入准入快照等价旧白名单语义（deny-all=fail-closed 默认）。
-	admitBTC := map[string]bool{"BTCUSDT": true}
+	// D-057 族停用=恒 sim-only 通道——正向用例双腿标已知 sim（realMap 显式 false）。
+	isReal := map[string]*bool{"okx:perp": boolPtrR2(false), "gate:perp": boolPtrR2(false), "binance:spot": boolPtrR2(false)}
+	fp := &fakeFactProvider{funding: funding, isReal: isReal}
 
 	t.Run("funding差超门槛→产候选", func(t *testing.T) {
 		d := &PerpFundingDetector{MinNetAnnualized: 2.0, FreshnessTTL: ttl}
-		d.SetAdmissionSnapshot(admitBTC)
 		cands := d.Scan(context.Background(), snapshot, fp)
 		if len(cands) == 0 {
 			t.Fatalf("应产候选，实际 0")
@@ -70,7 +67,6 @@ func TestPerpFundingDetector(t *testing.T) {
 
 	t.Run("funding差低于门槛→不产", func(t *testing.T) {
 		d := &PerpFundingDetector{MinNetAnnualized: 10.0, FreshnessTTL: ttl}
-		d.SetAdmissionSnapshot(admitBTC)
 		cands := d.Scan(context.Background(), snapshot, fp)
 		if len(cands) != 0 {
 			t.Fatalf("门槛 10%% 应无候选，实际 %d", len(cands))
@@ -85,7 +81,6 @@ func TestPerpFundingDetector(t *testing.T) {
 			},
 		}
 		d := &PerpFundingDetector{MinNetAnnualized: 2.0, FreshnessTTL: ttl}
-		d.SetAdmissionSnapshot(admitBTC)
 		cands := d.Scan(context.Background(), single, fp)
 		if len(cands) != 0 {
 			t.Fatalf("单 perp 应无候选，实际 %d", len(cands))
@@ -95,7 +90,6 @@ func TestPerpFundingDetector(t *testing.T) {
 	t.Run("funding缺失跳过", func(t *testing.T) {
 		fpNoFunding := &fakeFactProvider{funding: map[string]map[string]float64{}}
 		d := &PerpFundingDetector{MinNetAnnualized: 2.0, FreshnessTTL: ttl}
-		d.SetAdmissionSnapshot(admitBTC)
 		cands := d.Scan(context.Background(), snapshot, fpNoFunding)
 		if len(cands) != 0 {
 			t.Fatalf("无 funding facts 应无候选，实际 %d", len(cands))
@@ -110,7 +104,6 @@ func TestPerpFundingDetector(t *testing.T) {
 			},
 		}
 		d := &PerpFundingDetector{MinNetAnnualized: 2.0, FreshnessTTL: ttl}
-		d.SetAdmissionSnapshot(admitBTC)
 		cands := d.Scan(context.Background(), staleSnapshot, fp)
 		if len(cands) != 0 {
 			t.Fatalf("陈旧报价应无候选，实际 %d", len(cands))
@@ -120,7 +113,6 @@ func TestPerpFundingDetector(t *testing.T) {
 	t.Run("spot不参与", func(t *testing.T) {
 		// snapshot 有 spot 但 detector 只看 perp
 		d := &PerpFundingDetector{MinNetAnnualized: 0.01, FreshnessTTL: ttl}
-		d.SetAdmissionSnapshot(admitBTC)
 		cands := d.Scan(context.Background(), snapshot, fp)
 		for _, c := range cands {
 			if c.VenueBuy == "binance:spot" || c.VenueSell == "binance:spot" {
@@ -135,14 +127,12 @@ func TestPerpFundingDetectorImplementsInterface(t *testing.T) {
 	var _ Detector = (*PerpFundingDetector)(nil)
 }
 
-// TestPerpFundingAdmissionGate D-491：证据准入快照谓词（白名单硬编码退役）。
-// 未准入 canonical（如 NEARUSDT/SOLUSDT）即使 funding 差超门槛也不产候选；
-// admitted/owner_pinned 快照在册者放行——BTC/ETH/TRX 无特权同判据。
-func TestPerpFundingAdmissionGate(t *testing.T) {
+// TestPerpFundingSealedFamily D-057：族停用=恒 sim-only——real/未知腿对即使
+// funding 差超门槛也恒拒（无准入放行通道，BTC/NEAR 同判据）。
+func TestPerpFundingSealedFamily(t *testing.T) {
 	now := time.Now()
 	ttl := 30 * time.Second
 
-	// NEARUSDT 未准入（空快照），funding 差超门槛 → 应拒
 	snapshot := map[string]map[string]bus.Quote{
 		"NEARUSDT": {
 			"okx:perp":  {Symbol: "NEARUSDT", Venue: "okx", VenueType: "perp", Bid: 5.0, Ask: 5.01, Time: now},
@@ -157,23 +147,16 @@ func TestPerpFundingAdmissionGate(t *testing.T) {
 	}
 	fp := &fakeFactProvider{funding: funding}
 	d := &PerpFundingDetector{MinNetAnnualized: 2.0, FreshnessTTL: ttl}
-	d.SetAdmissionSnapshot(map[string]bool{})
 	cands := d.Scan(context.Background(), snapshot, fp)
 	if len(cands) != 0 {
-		t.Fatalf("D-491 未准入应拒绝 NEARUSDT，实际产 %d 候选", len(cands))
-	}
-
-	// NEARUSDT 评估准入（快照在册）→ funding 差超门槛产候选
-	d.SetAdmissionSnapshot(map[string]bool{"NEARUSDT": true})
-	if cands := d.Scan(context.Background(), snapshot, fp); len(cands) == 0 {
-		t.Fatal("admitted 快照在册应放行 NEARUSDT（原白名单外品种准入实例）")
+		t.Fatalf("族停用 real/未知腿对应恒拒 NEARUSDT，实际产 %d 候选", len(cands))
 	}
 }
 
-// TestPerpFundingAdmissionRejectFirstReportOnly D-154 S3：准入拒绝每 canonical 仅首报一次。
-// 同一未准入 canonical 连续 Scan 两次：seenReject 第二次 LoadOrStore 命中 → 不再首报。
+// TestPerpFundingFirstReportOnly D-154 S3：拒绝每 canonical 仅首报一次。
+// 同一 canonical 连续 Scan 两次：seenReject 第二次 LoadOrStore 命中 → 不再首报。
 // 断言：第二次调用后 seenReject 已存该 canonical（LoadOrStore 返回 loaded=true）。
-func TestPerpFundingAdmissionRejectFirstReportOnly(t *testing.T) {
+func TestPerpFundingFirstReportOnly(t *testing.T) {
 	now := time.Now()
 	ttl := 30 * time.Second
 	snapshot := map[string]map[string]bus.Quote{
@@ -188,18 +171,18 @@ func TestPerpFundingAdmissionRejectFirstReportOnly(t *testing.T) {
 	fp := &fakeFactProvider{funding: funding}
 	d := &PerpFundingDetector{MinNetAnnualized: 2.0, FreshnessTTL: ttl}
 
-	// 第一次 Scan：SOLUSDT 未准入 → 首报 + seenReject 标记
+	// 第一次 Scan：SOLUSDT real/未知腿对恒拒 → 首报 + seenReject 标记
 	_ = d.Scan(context.Background(), snapshot, fp)
 	_, loaded := d.seenReject.Load("SOLUSDT")
 	if !loaded {
 		t.Fatal("第一次 Scan 后 seenReject 应含 SOLUSDT")
 	}
 
-	// 第二次 Scan：SOLUSDT 仍未准入 → seenReject 命中不首报（无候选，行为不变）
+	// 第二次 Scan：seenReject 命中不首报（无候选，行为不变）
 	// 关键断言：seenReject 仍只标记一次（LoadOrStore 幂等），计数无增长
 	cands := d.Scan(context.Background(), snapshot, fp)
 	if len(cands) != 0 {
-		t.Fatalf("未准入 SOLUSDT 应无候选，实际 %d", len(cands))
+		t.Fatalf("族停用 SOLUSDT 应无候选，实际 %d", len(cands))
 	}
 	// seenReject 仍存在（进程生命周期，不清除）
 	_, loaded = d.seenReject.Load("SOLUSDT")

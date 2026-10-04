@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"arb/internal/bus"
@@ -13,25 +12,12 @@ import (
 // PerpFundingDetector 检测跨所 perp funding rate 价差（D-064）。
 // 同一 canonical 在两个 CEX 的 perp funding rate 不同 → 高 funding 端持空（收）、
 // 低 funding 端持多（付），净收 funding 差（年化百分点）。
+// D-057：族停用——证据准入面退役后无 real 放行通道，仅双腿已知 sim 产候选。
 type PerpFundingDetector struct {
 	MinNetAnnualized float64 // 年化净 funding 差门槛（百分点，2.0=2%）
 	FreshnessTTL     time.Duration
-	// D-154 S3：白名单拒绝首报去重——每 canonical 仅首报一次（进程生命周期；重启重报一次可接受）。
+	// D-154 S3：拒绝首报去重——每 canonical 仅首报一次（进程生命周期；重启重报一次可接受）。
 	seenReject sync.Map
-	// D-491 S4：证据准入原子快照（评估器热更新；map[canonical]bool）。
-	// nil/未装载→admitted()=false 全拒——fail-closed 等价白名单外旧行为。
-	admission atomic.Value
-}
-
-// SetAdmissionSnapshot 评估器热更新入口（有效准入集，owner_override 已折算）。
-func (d *PerpFundingDetector) SetAdmissionSnapshot(m map[string]bool) {
-	d.admission.Store(m)
-}
-
-// admitted 证据准入谓词（D-491：白名单硬编码退役——admitted/owner_pinned 才 true）。
-func (d *PerpFundingDetector) admitted(canonical string) bool {
-	m, _ := d.admission.Load().(map[string]bool)
-	return m[canonical]
 }
 
 func (d *PerpFundingDetector) Type() OppType { return TypePerpFunding }
@@ -48,15 +34,11 @@ func (d *PerpFundingDetector) Scan(_ context.Context, snapshot map[string]map[st
 		realMap = fp.IsRealMap()
 	}
 	for canonical, venues := range snapshot {
-		// D-491 证据准入 + D-369 S3 sim 试单通道：未准入 canonical 不立即跳过——
-		// 收集 legs 后，若存在双腿均【已知 sim】（realMap 显式 false）的 venue 对 → 仅该
-		// sim 对产候选（demo 轨验证；real/混合对维持原拒）。无全 sim 对 → 维持原跳过
-		// +首报日志。已准入 canonical（admitted/owner_pinned）走 isRealPair 原路。
-		simOnlyPair := !d.admitted(canonical)
-		if simOnlyPair {
-			if _, loaded := d.seenReject.LoadOrStore(canonical, true); !loaded {
-				log.Printf("[perp_funding] D-491 未准入 canonical=%s（证据评估 denied/pending）：仅双腿已知 sim 产候选（D-369 S3），首报", canonical)
-			}
+		// D-057 族停用（准入面退役）+ D-369 S3 sim 试单通道：canonical 不立即跳过——
+		// 收集 legs 后，仅双腿均【已知 sim】（realMap 显式 false）的 venue 对产候选
+		//（demo 轨验证；real/混合对恒拒）。canonical 首报一次。
+		if _, loaded := d.seenReject.LoadOrStore(canonical, true); !loaded {
+			log.Printf("[perp_funding] 族停用 canonical=%s（D-057 证据准入退役）：仅双腿已知 sim 产候选（D-369 S3），首报", canonical)
 		}
 		// 收集所有 perp venue 的报价 + funding
 		type perpLeg struct {
@@ -85,17 +67,11 @@ func (d *PerpFundingDetector) Scan(_ context.Context, snapshot map[string]map[st
 				if a.q.Venue == b.q.Venue {
 					continue // 同所不算跨所
 				}
-				// D-178：is_real 配对检查（fail-open，gate 层兜底）。
-				// D-369 S3/D-371 S3：未准入 canonical → 仅放行双腿均【已知 sim】的 venue 对
-				// （realMap venueKey 粒度=赢家 config simulated 位；nil=未知不放行 fail-closed）；
-				// 已准入 canonical 走 isRealPair（real 域维持 D-491/D-178 语义）。
-				if simOnlyPair {
-					vkA := a.q.VenueKey()
-					vkB := b.q.VenueKey()
-					if realMap[vkA] == nil || *realMap[vkA] || realMap[vkB] == nil || *realMap[vkB] {
-						continue
-					}
-				} else if !isRealPair(realMap, a.q.VenueKey(), b.q.VenueKey()) {
+				// D-369 S3/D-371 S3/D-057：族停用 → 仅放行双腿均【已知 sim】的 venue 对
+				// （realMap venueKey 粒度=赢家 config simulated 位；nil=未知不放行 fail-closed）。
+				vkA := a.q.VenueKey()
+				vkB := b.q.VenueKey()
+				if realMap[vkA] == nil || *realMap[vkA] || realMap[vkB] == nil || *realMap[vkB] {
 					continue
 				}
 				// 净年化 = |fundingA - fundingB|（高 funding 端持空收、低 funding 端持多付）
