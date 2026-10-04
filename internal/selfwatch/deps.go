@@ -37,7 +37,7 @@ type Store interface {
 	NetRealizedSince(ctx context.Context, since time.Time, excludeIncidents bool) (float64, error)
 	SchemaMigrationMax(ctx context.Context) (int, error)
 	ExposureCapCounts(ctx context.Context) (venueCaps, canonicalCaps int, err error)
-	XAssetAllowRealPairs(ctx context.Context) ([]pgstore.VenuePair, error)
+	XAssetAllowRealPairs(ctx context.Context) ([]pgstore.XAssetRealCombo, error)
 	LatestFactTs(ctx context.Context, kind string) (time.Time, bool, error)
 	CountFactsSince(ctx context.Context, kind string, since time.Time) (int, error)
 	MacroEventMaxCreated(ctx context.Context) (time.Time, bool, error)

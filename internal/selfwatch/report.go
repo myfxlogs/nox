@@ -1,7 +1,8 @@
-// report.go —— D-033①②：每日 08:00 BJ paper 窗日报 + Stage 闸就绪表。
+// report.go —— D-033①②：每日 08:30 BJ paper 窗日报 + Stage 闸就绪表。
 // 口径=scripts/paper_window_report.sh 进程内化：cohort=窗内新开 ∪ 窗始 active ∪
 // 窗内退出；窗净额=在仓累计+退出 realized；逐日净额=app_config 快照差分
 // （accrued_usd 为累计值，库内无逐日流水——同源口径注记保留）。
+// D-056②：报告面向运营——零票号/内部实现词（结构/退出原因统一映射人话）。
 package selfwatch
 
 import (
@@ -18,6 +19,38 @@ import (
 
 // paperWindowStructure 观测窗结构（=paper_window_report.sh 固定结构）。
 const paperWindowStructure = "long_cfd_short_perp"
+
+// structureHuman 结构内部键→运营话术（报告渲染单点；未知键原样透出防臆造）。
+func structureHuman(s string) string {
+	switch s {
+	case "long_cfd_short_perp":
+		return "多 CFD 空 perp"
+	case "short_cfd_long_perp":
+		return "空 CFD 多 perp"
+	case "long_spot_short_perp":
+		return "多现货空 perp"
+	case "cfd_cfd":
+		return "双 CFD 息差"
+	}
+	return s
+}
+
+// exitReasonHuman 退出原因内部键→运营话术（日报退出分桶用）。
+func exitReasonHuman(r string) string {
+	switch r {
+	case "normalized":
+		return "收益衰减"
+	case "adverse":
+		return "息差翻负"
+	case "data_lost":
+		return "数据断供"
+	case "age_7d":
+		return "满 7 天到期"
+	case "zero_accrual_stale":
+		return "零计息停滞"
+	}
+	return r
+}
 
 // StageCheck 闸条件单项（✅/❌+数据）。
 type StageCheck struct {
@@ -95,13 +128,13 @@ func paperWindowStart(ctx context.Context, d Deps) (time.Time, bool, error) {
 // renderDaily 文案渲染（快照测试锚——数字行+条件表全在单函数拼装）。
 func renderDaily(ctx context.Context, d Deps, since time.Time, ok bool, ev *scan.PaperWindowEval, rep *DailyReport, now time.Time) (string, error) {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("【ARB 自盯日报】%s BJ\n", now.In(bj).Format("01-02 08:00")))
+	b.WriteString(fmt.Sprintf("【ARB 自盯日报】%s BJ\n", now.In(bj).Format("01-02 15:04")))
 	if !ok {
-		b.WriteString("⚠️ ARB_PAPER_WINDOW_START 未配置——paper 窗日报不可生成（fail-closed）\n")
+		b.WriteString("⚠️ 纸面观测窗起点未配置（ARB_PAPER_WINDOW_START）——日报无法生成\n")
 	} else {
 		age := now.Sub(since).Hours() / 24
-		b.WriteString(fmt.Sprintf("■ paper 窗 %s｜起点 %s｜窗龄 %.1fd\n",
-			paperWindowStructure, since.UTC().Format("2006-01-02T15:04Z"), age))
+		b.WriteString(fmt.Sprintf("■ 纸面观测窗（%s）｜起点 %s｜已观测 %.1f 天\n",
+			structureHuman(paperWindowStructure), since.UTC().Format("2006-01-02T15:04Z"), age))
 		b.WriteString(fmt.Sprintf("窗内净额 $%.4f（在仓 $%.4f + 退出 $%.4f）\n",
 			ev.WindowNet, ev.NetActive, ev.NetExited))
 		dailyLine, err := d.dailyNetLine(ctx, ev.WindowNet, now)
@@ -109,9 +142,10 @@ func renderDaily(ctx context.Context, d Deps, since time.Time, ok bool, ev *scan
 			return "", err
 		}
 		b.WriteString(dailyLine)
-		b.WriteString(fmt.Sprintf("在仓 %d 行·名义 $%.0f｜demo %d｜窗内退出 %d 行\n",
-			ev.ActiveN, ev.NotionalUSD, ev.DemoN, ev.ExitedN))
-		b.WriteString(fmt.Sprintf("fail-closed %d 行｜accrue 停滞 %d 行（水位落后>2 结算窗）\n",
+		// D-056②：行数口径标清——本窗结构行数与全纸面分列行数分开表述，不混。
+		b.WriteString(fmt.Sprintf("本窗结构（%s）在仓 %d 行·名义 $%.0f｜演示仓 %d 行｜窗内退出 %d 行\n",
+			structureHuman(paperWindowStructure), ev.ActiveN, ev.NotionalUSD, ev.DemoN, ev.ExitedN))
+		b.WriteString(fmt.Sprintf("计息缺数据 %d 行｜计息停滞 %d 行（结算水位落后>2 期）\n",
 			ev.FailClosed, ev.Stalled))
 		if ev.FirstProbeErr != "" {
 			b.WriteString("探针错误：" + ev.FirstProbeErr + "\n")
@@ -124,12 +158,13 @@ func renderDaily(ctx context.Context, d Deps, since time.Time, ok bool, ev *scan
 		}
 	}
 	// D-050 ②：纸面在仓行数/品种数——两轨分列观测项（other=mtm 等兜底列，非零才显）。
+	// D-056②：明示「全部」域——与上行本窗结构行数区分（多品种/多结构合计）。
 	split, err := d.Store.PaperActiveStats(ctx)
 	if err != nil {
 		return "", fmt.Errorf("paper active stats: %w", err)
 	}
-	line := fmt.Sprintf("纸面在仓 CEX %d 行·%d 品种｜CFD %d 行·%d 品种",
-		split.CexRows, split.CexSyms, split.CfdRows, split.CfdSyms)
+	line := fmt.Sprintf("全部纸面在仓：CFD %d 行·%d 品种｜CEX %d 行·%d 品种",
+		split.CfdRows, split.CfdSyms, split.CexRows, split.CexSyms)
 	if split.OtherRows > 0 {
 		line += fmt.Sprintf("｜其他 %d 行·%d 品种", split.OtherRows, split.OtherSyms)
 	}
@@ -193,13 +228,17 @@ func (d Deps) dailyNetLine(ctx context.Context, windowNet float64, now time.Time
 	return "逐日净额：" + strings.Join(parts, "｜") + "\n", nil
 }
 
-// joinBuckets 日分桶行渲染（"MM-DD ×N($sum)"）。
+// joinBuckets 日分桶行渲染（"MM-DD ×N($sum)"；退出原因经 exitReasonHuman 中文化）。
 func joinBuckets(bs []scan.PaperDayBucket, withReasons bool) string {
 	parts := make([]string, 0, len(bs))
 	for _, b := range bs {
 		s := fmt.Sprintf("%s ×%d($%.4f)", b.Day, b.Rows, b.Sum)
 		if withReasons && len(b.Reasons) > 0 {
-			s += "[" + strings.Join(b.Reasons, ",") + "]"
+			rs := make([]string, 0, len(b.Reasons))
+			for _, r := range b.Reasons {
+				rs = append(rs, exitReasonHuman(r))
+			}
+			s += "[" + strings.Join(rs, ",") + "]"
 		}
 		parts = append(parts, s)
 	}

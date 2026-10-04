@@ -25,7 +25,7 @@ type fakeStore struct {
 	venueCaps  int
 	canonCaps  int
 	allowReal  int
-	allowPairs []pgstore.VenuePair
+	allowPairs []pgstore.XAssetRealCombo
 	factTs     map[string]time.Time
 	factCnt    map[string]int
 	macroMax   *time.Time
@@ -80,7 +80,7 @@ func (f *fakeStore) ExposureCapCounts(context.Context) (int, int, error) {
 	return f.venueCaps, f.canonCaps, nil
 }
 func (f *fakeStore) XAssetAllowRealCount(context.Context) (int, error) { return f.allowReal, nil }
-func (f *fakeStore) XAssetAllowRealPairs(context.Context) ([]pgstore.VenuePair, error) {
+func (f *fakeStore) XAssetAllowRealPairs(context.Context) ([]pgstore.XAssetRealCombo, error) {
 	return f.allowPairs, nil
 }
 
@@ -134,7 +134,10 @@ func testDeps(st *fakeStore, ev *scan.PaperWindowEval, now time.Time) Deps {
 
 var tNow = time.Date(2026, 10, 11, 0, 0, 0, 0, time.UTC) // 08:00 BJ 10-11（窗龄 7.9d ≥7d 阈）
 
-var stage1Pair = pgstore.VenuePair{VenueA: "3001157", VenueB: "okx"}
+// stage1Pair 白名单实盘行（XAUUSD→规范化 XAU；MT 买腿→多 CFD 空 perp）。
+var stage1Pair = pgstore.XAssetRealCombo{
+	VenueA: "3001157", VenueB: "okx", Canonical: "XAUUSD", Structure: "long_cfd_short_perp",
+}
 
 func goodEval() *scan.PaperWindowEval {
 	return &scan.PaperWindowEval{
@@ -143,7 +146,8 @@ func goodEval() *scan.PaperWindowEval {
 		ActiveByDay: []scan.PaperDayBucket{{Day: "10-10", Rows: 3, Sum: 2.5}},
 		ExitedByDay: []scan.PaperDayBucket{{Day: "10-09", Rows: 1, Sum: 0.5, Reasons: []string{"normalized"}}},
 		Combos: []scan.PaperComboStat{ // R1：Stage 1 组合行窗内累计 6.5d/accrued>0
-			{VenueA: "3001157", VenueB: "okx", Rows: 3, ActiveDays: 6.5, AccruedUSD: 3.0},
+			{VenueA: "3001157", VenueB: "okx", Canonical: "XAU", Structure: "long_cfd_short_perp",
+				Rows: 3, ActiveDays: 6.5, AccruedUSD: 3.0},
 		},
 	}
 }
@@ -159,7 +163,7 @@ func greenStore() *fakeStore {
 		factCnt:  map[string]int{"trade_session": 978},
 		macroMax: ptrT(tNow.Add(-10 * time.Hour)),
 		mig:      173, venueCaps: 5, canonCaps: 1, allowReal: 1,
-		allowPairs: []pgstore.VenuePair{stage1Pair},
+		allowPairs: []pgstore.XAssetRealCombo{stage1Pair},
 		makerOpen:  25, net30d: 100,
 		paperSplit: pgstore.PaperActiveSplit{CexRows: 8, CexSyms: 5, CfdRows: 12, CfdSyms: 7},
 	}
@@ -173,12 +177,13 @@ func TestD033_DailyReportAllGreen(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"【ARB 自盯日报】", "起点 2026-10-03T01:59Z", "窗内净额 $3.0000", "在仓 3 行", "窗内退出 1 行",
-		"fail-closed 0 行", "accrue 停滞 0 行", "逐日净额", "纸面在仓 CEX 8 行·5 品种｜CFD 12 行·7 品种",
-		"✅ paper 窗 ≥7 天", "✅ 窗内净额非负", "✅ Stage 1 组合证据", "✅ 期间零事故仓",
-		"✅ D-027", "✅ D-028", "✅ D-032",
-		"✅ cap 已定", "✅ 白名单已定", "待决策：Stage 1 可启",
-		"Stage 2", "maker 分级", "3001157×okx",
+		"【ARB 自盯日报】", "起点 2026-10-03T01:59Z", "窗内净额 $3.0000",
+		"本窗结构（多 CFD 空 perp）在仓 3 行", "窗内退出 1 行",
+		"计息缺数据 0 行", "计息停滞 0 行", "逐日净额", "全部纸面在仓：CFD 12 行·7 品种｜CEX 8 行·5 品种",
+		"✅ 纸面观测窗 ≥7 天", "✅ 窗内净额非负", "✅ Stage 1 组合证据", "✅ 期间零事故仓",
+		"✅ 息差数据在线", "✅ 纸面计息正常", "✅ 数据库版本 ≥172", "✅ 风控总闸在位",
+		"✅ 仓位上限已定", "✅ 白名单已定", "待决策：Stage 1 可启",
+		"Stage 2", "挂单模式", "XAU 3001157×okx：6.5d / $3.00",
 	} {
 		if !strings.Contains(rep.Body, want) {
 			t.Fatalf("body missing %q:\n%s", want, rep.Body)
@@ -205,8 +210,8 @@ func TestD033_DailyReportPartialFail(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"❌ 期间零事故仓（2 仓）", "❌ cap 已定", "❌ D-028",
-		"accrue 停滞 1 行", "fail-closed 1 行",
+		"❌ 期间零事故仓（2 仓）", "❌ 仓位上限已定", "❌ 纸面计息正常",
+		"计息停滞 1 行", "计息缺数据 1 行",
 	} {
 		if !strings.Contains(rep.Body, want) {
 			t.Fatalf("body missing %q:\n%s", want, rep.Body)
@@ -281,7 +286,7 @@ func TestD033_AnomalyWarns(t *testing.T) {
 	d := testDeps(st, ev, tNow)
 	CheckAnomalies(context.Background(), d)
 	joined := strings.Join(st.dedupCalls, "\n")
-	for _, want := range []string{"warn|", "停滞 2 行", "突增 0→3", "trade_session", "funding facts 超龄"} {
+	for _, want := range []string{"warn|", "停滞 2 行", "突增 0→3", "休市周表", "息差数据超龄"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("missing warn %q in:\n%s", want, joined)
 		}
@@ -319,29 +324,34 @@ func TestD042_AnomalyDataLost(t *testing.T) {
 	st.dlRows, st.dlPairs = 51, 1
 	CheckAnomalies(context.Background(), testDeps(st, goodEval(), tNow))
 	joined := strings.Join(st.dedupCalls, "\n")
-	if !strings.Contains(joined, "data_lost 24h 51 行") || !strings.Contains(joined, "冷却中 1 对") {
+	if !strings.Contains(joined, "数据断供退出 24h 51 行") || !strings.Contains(joined, "冷却中 1 对") {
 		t.Fatalf("missing data_lost warn:\n%s", joined)
 	}
 	st2 := greenStore()
 	st2.dlRows, st2.dlPairs = 10, 0
 	CheckAnomalies(context.Background(), testDeps(st2, goodEval(), tNow))
-	if strings.Contains(strings.Join(st2.dedupCalls, "\n"), "data_lost") {
+	if strings.Contains(strings.Join(st2.dedupCalls, "\n"), "数据断供") {
 		t.Fatal("阈值内不应告警")
 	}
 }
 
 func TestD033_NextDailyBJ(t *testing.T) {
-	// 07:59 BJ → 同日 08:00；08:01 BJ → 次日 08:00
-	cases := []struct{ in, want string }{
-		{"2026-10-10T07:59:00+08:00", "2026-10-10T08:00:00+08:00"},
-		{"2026-10-10T08:00:00+08:00", "2026-10-11T08:00:00+08:00"},
-		{"2026-10-10T23:59:00Z", "2026-10-11T08:00:00+08:00"},
+	// 07:59 BJ → 同日 08:00；08:01 BJ → 次日 08:00；D-056③：日报定点 08:30。
+	cases := []struct {
+		in, want string
+		h, m     int
+	}{
+		{"2026-10-10T07:59:00+08:00", "2026-10-10T08:00:00+08:00", 8, 0},
+		{"2026-10-10T08:00:00+08:00", "2026-10-11T08:00:00+08:00", 8, 0},
+		{"2026-10-10T23:59:00Z", "2026-10-11T08:00:00+08:00", 8, 0},
+		{"2026-10-10T08:00:00+08:00", "2026-10-10T08:30:00+08:00", 8, 30},
+		{"2026-10-10T08:30:00+08:00", "2026-10-11T08:30:00+08:00", 8, 30},
 	}
 	for _, c := range cases {
 		in, _ := time.Parse(time.RFC3339, c.in)
 		want, _ := time.Parse(time.RFC3339, c.want)
-		if got := NextDailyBJ(in, 8, 0); !got.Equal(want) {
-			t.Fatalf("NextDailyBJ(%s) = %s, want %s", c.in, got, c.want)
+		if got := NextDailyBJ(in, c.h, c.m); !got.Equal(want) {
+			t.Fatalf("NextDailyBJ(%s,%d,%d) = %s, want %s", c.in, c.h, c.m, got, c.want)
 		}
 	}
 }

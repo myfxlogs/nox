@@ -64,11 +64,11 @@ func checkPaperHealth(ctx context.Context, d Deps, now time.Time, warn func(stri
 		return
 	}
 	if ev.Stalled > 0 {
-		warn("[自盯] paper accrue 停滞 %d 行（last_accrue_ts 落后 >2 结算窗）", ev.Stalled)
+		warn("[自盯] 纸面计息停滞 %d 行（结算水位落后 >2 期）", ev.Stalled)
 	}
 	prev, _ := failClosedPrev(ctx, d)
 	if ev.FailClosed > prev {
-		warn("[自盯] paper fail-closed 行数环比突增 %d→%d（边界/率源/映射缺）", prev, ev.FailClosed)
+		warn("[自盯] 纸面计息缺数据行数环比突增 %d→%d（边界/率源/映射缺）", prev, ev.FailClosed)
 	}
 	if err := saveFailClosedPrev(ctx, d, ev.FailClosed); err != nil {
 		log.Printf("[selfwatch] fail-closed prev save: %v", err)
@@ -84,7 +84,7 @@ func checkPaperDataLost(ctx context.Context, d Deps, now time.Time, warn func(st
 		return
 	}
 	if rows > paperDataLost24h {
-		warn("[自盯] paper data_lost 24h %d 行（阈值 %d；冷却中 %d 对——24h 内不再开仓）",
+		warn("[自盯] 纸面数据断供退出 24h %d 行（阈值 %d；冷却中 %d 对——24h 内不再开仓）",
 			rows, paperDataLost24h, pairs)
 	}
 }
@@ -98,7 +98,7 @@ func checkMacroBlackout(ctx context.Context, d Deps, now time.Time, warn func(st
 		return
 	}
 	if n > 0 {
-		warn("[自盯] macro 执行禁区拒开 %d 次/24h（high 财历事件窗内禁开仓）", n)
+		warn("[自盯] 财历禁区拒开 %d 次/24h（高影响事件窗内禁开仓）", n)
 	}
 }
 
@@ -122,11 +122,11 @@ func checkMacroCalendar(ctx context.Context, d Deps, now time.Time, warn func(st
 		return
 	}
 	if !has {
-		warn("[自盯] macro 财历表空（ARB_MACRO_ENABLED=true 但 macro_event 零行）")
+		warn("[自盯] 财历表空（ARB_MACRO_ENABLED=true 但零行）")
 		return
 	}
 	if lag := now.Sub(ts); lag > macroCalendarStale {
-		warn("[自盯] macro 财历拉取停滞 %.1fh（macro_event 最新落库 %s）",
+		warn("[自盯] 财历拉取停滞 %.1fh（最新落库 %s）",
 			lag.Hours(), ts.UTC().Format("01-02 15:04Z"))
 	}
 }
@@ -140,7 +140,7 @@ func checkTradeSession(ctx context.Context, d Deps, now time.Time, warn func(str
 		return
 	}
 	if n == 0 {
-		warn("[自盯] trade_session facts 缺席 >%v（MT 休市闸无源——休市判定空转）", tradeSessionAbsent)
+		warn("[自盯] 休市周表数据缺席 >%v（MT 休市闸无源——休市判定空转）", tradeSessionAbsent)
 	}
 }
 
@@ -152,11 +152,11 @@ func checkFundingFresh(ctx context.Context, d Deps, now time.Time, warn func(str
 		return
 	}
 	if !ok {
-		warn("[自盯] funding facts 零行（carry 均值/经济闸无源）")
+		warn("[自盯] 息差数据零行（滚动均值/经济闸无源）")
 		return
 	}
 	if lag := now.Sub(ts); lag > fundingStale {
-		warn("[自盯] funding facts 超龄 %.1fh（最新 %s）", lag.Hours(), ts.UTC().Format("01-02 15:04Z"))
+		warn("[自盯] 息差数据超龄 %.1fh（最新 %s）", lag.Hours(), ts.UTC().Format("01-02 15:04Z"))
 	}
 }
 
