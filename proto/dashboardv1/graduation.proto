@@ -228,29 +228,3 @@ message RejectCarryGraduationRequest {
   string flag_level = 4;                 // warn（默认）/ blocked（业主显式二级）
 }
 message RejectCarryGraduationResponse { bool ok = 1; string error = 2; }
-
-// === D-491 S6：PERP_FUNDING 证据准入（白名单退役） ===
-
-message PerpFundingAdmissionRow {
-  string canonical = 1;                  // 例 XAUUSDT（原文符号不译）
-  string status = 2;                     // admitted/pending_depth/review/denied（评估器裁决）
-  string best_pair = 3;                  // 'binance↔okx' 最优 real-real 对
-  double mean_spread = 4;                // 7d 均值差（年化百分点）
-  double spread_sd = 5;                  // pair 差 σ
-  double dir_consistency = 6;            // 0..1 同向占比
-  optional double depth_min_usd = 7;     // 两腿顶档深度较小者；null=未验
-  int32 samples = 8;                     // 最优对两腿样本数较小值
-  string owner_override = 9;             // ''/pinned/denied——业主钉死优先于评估
-  string note = 10;                      // 判据原因（中文）
-  google.protobuf.Timestamp evaluated_at = 11;
-  google.protobuf.Timestamp updated_at = 12;
-}
-message ListPerpFundingAdmissionRequest {}
-message ListPerpFundingAdmissionResponse { repeated PerpFundingAdmissionRow rows = 1; }
-message SetPerpFundingAdmissionOverrideRequest {
-  string canonical = 1;
-  string override = 2;                   // ''=清除 / pinned=钉死准入 / denied=钉死拒绝
-}
-message SetPerpFundingAdmissionOverrideResponse { bool ok = 1; string error = 2; }
-message ReevaluatePerpFundingAdmissionRequest {}
-message ReevaluatePerpFundingAdmissionResponse { bool ok = 1; string error = 2; }

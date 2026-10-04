@@ -2650,410 +2650,6 @@ func (x *RejectCarryGraduationResponse) GetError() string {
 	return ""
 }
 
-type PerpFundingAdmissionRow struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Canonical      string                 `protobuf:"bytes,1,opt,name=canonical,proto3" json:"canonical,omitempty"`                                   // 例 XAUUSDT（原文符号不译）
-	Status         string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`                                         // admitted/pending_depth/review/denied（评估器裁决）
-	BestPair       string                 `protobuf:"bytes,3,opt,name=best_pair,json=bestPair,proto3" json:"best_pair,omitempty"`                     // 'binance↔okx' 最优 real-real 对
-	MeanSpread     float64                `protobuf:"fixed64,4,opt,name=mean_spread,json=meanSpread,proto3" json:"mean_spread,omitempty"`             // 7d 均值差（年化百分点）
-	SpreadSd       float64                `protobuf:"fixed64,5,opt,name=spread_sd,json=spreadSd,proto3" json:"spread_sd,omitempty"`                   // pair 差 σ
-	DirConsistency float64                `protobuf:"fixed64,6,opt,name=dir_consistency,json=dirConsistency,proto3" json:"dir_consistency,omitempty"` // 0..1 同向占比
-	DepthMinUsd    *float64               `protobuf:"fixed64,7,opt,name=depth_min_usd,json=depthMinUsd,proto3,oneof" json:"depth_min_usd,omitempty"`  // 两腿顶档深度较小者；null=未验
-	Samples        int32                  `protobuf:"varint,8,opt,name=samples,proto3" json:"samples,omitempty"`                                      // 最优对两腿样本数较小值
-	OwnerOverride  string                 `protobuf:"bytes,9,opt,name=owner_override,json=ownerOverride,proto3" json:"owner_override,omitempty"`      // ''/pinned/denied——业主钉死优先于评估
-	Note           string                 `protobuf:"bytes,10,opt,name=note,proto3" json:"note,omitempty"`                                            // 判据原因（中文）
-	EvaluatedAt    *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=evaluated_at,json=evaluatedAt,proto3" json:"evaluated_at,omitempty"`
-	UpdatedAt      *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *PerpFundingAdmissionRow) Reset() {
-	*x = PerpFundingAdmissionRow{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[28]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PerpFundingAdmissionRow) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PerpFundingAdmissionRow) ProtoMessage() {}
-
-func (x *PerpFundingAdmissionRow) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[28]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PerpFundingAdmissionRow.ProtoReflect.Descriptor instead.
-func (*PerpFundingAdmissionRow) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{28}
-}
-
-func (x *PerpFundingAdmissionRow) GetCanonical() string {
-	if x != nil {
-		return x.Canonical
-	}
-	return ""
-}
-
-func (x *PerpFundingAdmissionRow) GetStatus() string {
-	if x != nil {
-		return x.Status
-	}
-	return ""
-}
-
-func (x *PerpFundingAdmissionRow) GetBestPair() string {
-	if x != nil {
-		return x.BestPair
-	}
-	return ""
-}
-
-func (x *PerpFundingAdmissionRow) GetMeanSpread() float64 {
-	if x != nil {
-		return x.MeanSpread
-	}
-	return 0
-}
-
-func (x *PerpFundingAdmissionRow) GetSpreadSd() float64 {
-	if x != nil {
-		return x.SpreadSd
-	}
-	return 0
-}
-
-func (x *PerpFundingAdmissionRow) GetDirConsistency() float64 {
-	if x != nil {
-		return x.DirConsistency
-	}
-	return 0
-}
-
-func (x *PerpFundingAdmissionRow) GetDepthMinUsd() float64 {
-	if x != nil && x.DepthMinUsd != nil {
-		return *x.DepthMinUsd
-	}
-	return 0
-}
-
-func (x *PerpFundingAdmissionRow) GetSamples() int32 {
-	if x != nil {
-		return x.Samples
-	}
-	return 0
-}
-
-func (x *PerpFundingAdmissionRow) GetOwnerOverride() string {
-	if x != nil {
-		return x.OwnerOverride
-	}
-	return ""
-}
-
-func (x *PerpFundingAdmissionRow) GetNote() string {
-	if x != nil {
-		return x.Note
-	}
-	return ""
-}
-
-func (x *PerpFundingAdmissionRow) GetEvaluatedAt() *timestamppb.Timestamp {
-	if x != nil {
-		return x.EvaluatedAt
-	}
-	return nil
-}
-
-func (x *PerpFundingAdmissionRow) GetUpdatedAt() *timestamppb.Timestamp {
-	if x != nil {
-		return x.UpdatedAt
-	}
-	return nil
-}
-
-type ListPerpFundingAdmissionRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListPerpFundingAdmissionRequest) Reset() {
-	*x = ListPerpFundingAdmissionRequest{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[29]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListPerpFundingAdmissionRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListPerpFundingAdmissionRequest) ProtoMessage() {}
-
-func (x *ListPerpFundingAdmissionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[29]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListPerpFundingAdmissionRequest.ProtoReflect.Descriptor instead.
-func (*ListPerpFundingAdmissionRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{29}
-}
-
-type ListPerpFundingAdmissionResponse struct {
-	state         protoimpl.MessageState     `protogen:"open.v1"`
-	Rows          []*PerpFundingAdmissionRow `protobuf:"bytes,1,rep,name=rows,proto3" json:"rows,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListPerpFundingAdmissionResponse) Reset() {
-	*x = ListPerpFundingAdmissionResponse{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[30]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListPerpFundingAdmissionResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListPerpFundingAdmissionResponse) ProtoMessage() {}
-
-func (x *ListPerpFundingAdmissionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[30]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListPerpFundingAdmissionResponse.ProtoReflect.Descriptor instead.
-func (*ListPerpFundingAdmissionResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{30}
-}
-
-func (x *ListPerpFundingAdmissionResponse) GetRows() []*PerpFundingAdmissionRow {
-	if x != nil {
-		return x.Rows
-	}
-	return nil
-}
-
-type SetPerpFundingAdmissionOverrideRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Canonical     string                 `protobuf:"bytes,1,opt,name=canonical,proto3" json:"canonical,omitempty"`
-	Override      string                 `protobuf:"bytes,2,opt,name=override,proto3" json:"override,omitempty"` // ''=清除 / pinned=钉死准入 / denied=钉死拒绝
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SetPerpFundingAdmissionOverrideRequest) Reset() {
-	*x = SetPerpFundingAdmissionOverrideRequest{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[31]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SetPerpFundingAdmissionOverrideRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SetPerpFundingAdmissionOverrideRequest) ProtoMessage() {}
-
-func (x *SetPerpFundingAdmissionOverrideRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[31]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SetPerpFundingAdmissionOverrideRequest.ProtoReflect.Descriptor instead.
-func (*SetPerpFundingAdmissionOverrideRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{31}
-}
-
-func (x *SetPerpFundingAdmissionOverrideRequest) GetCanonical() string {
-	if x != nil {
-		return x.Canonical
-	}
-	return ""
-}
-
-func (x *SetPerpFundingAdmissionOverrideRequest) GetOverride() string {
-	if x != nil {
-		return x.Override
-	}
-	return ""
-}
-
-type SetPerpFundingAdmissionOverrideResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
-	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SetPerpFundingAdmissionOverrideResponse) Reset() {
-	*x = SetPerpFundingAdmissionOverrideResponse{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[32]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SetPerpFundingAdmissionOverrideResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SetPerpFundingAdmissionOverrideResponse) ProtoMessage() {}
-
-func (x *SetPerpFundingAdmissionOverrideResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[32]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SetPerpFundingAdmissionOverrideResponse.ProtoReflect.Descriptor instead.
-func (*SetPerpFundingAdmissionOverrideResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{32}
-}
-
-func (x *SetPerpFundingAdmissionOverrideResponse) GetOk() bool {
-	if x != nil {
-		return x.Ok
-	}
-	return false
-}
-
-func (x *SetPerpFundingAdmissionOverrideResponse) GetError() string {
-	if x != nil {
-		return x.Error
-	}
-	return ""
-}
-
-type ReevaluatePerpFundingAdmissionRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ReevaluatePerpFundingAdmissionRequest) Reset() {
-	*x = ReevaluatePerpFundingAdmissionRequest{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[33]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ReevaluatePerpFundingAdmissionRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ReevaluatePerpFundingAdmissionRequest) ProtoMessage() {}
-
-func (x *ReevaluatePerpFundingAdmissionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[33]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ReevaluatePerpFundingAdmissionRequest.ProtoReflect.Descriptor instead.
-func (*ReevaluatePerpFundingAdmissionRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{33}
-}
-
-type ReevaluatePerpFundingAdmissionResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
-	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ReevaluatePerpFundingAdmissionResponse) Reset() {
-	*x = ReevaluatePerpFundingAdmissionResponse{}
-	mi := &file_dashboardv1_graduation_proto_msgTypes[34]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ReevaluatePerpFundingAdmissionResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ReevaluatePerpFundingAdmissionResponse) ProtoMessage() {}
-
-func (x *ReevaluatePerpFundingAdmissionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_graduation_proto_msgTypes[34]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ReevaluatePerpFundingAdmissionResponse.ProtoReflect.Descriptor instead.
-func (*ReevaluatePerpFundingAdmissionResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_graduation_proto_rawDescGZIP(), []int{34}
-}
-
-func (x *ReevaluatePerpFundingAdmissionResponse) GetOk() bool {
-	if x != nil {
-		return x.Ok
-	}
-	return false
-}
-
-func (x *ReevaluatePerpFundingAdmissionResponse) GetError() string {
-	if x != nil {
-		return x.Error
-	}
-	return ""
-}
-
 var File_dashboardv1_graduation_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_graduation_proto_rawDesc = "" +
@@ -3363,36 +2959,6 @@ const file_dashboardv1_graduation_proto_rawDesc = "" +
 	"flag_level\x18\x04 \x01(\tR\tflagLevel\"E\n" +
 	"\x1dRejectCarryGraduationResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
-	"\x05error\x18\x02 \x01(\tR\x05error\"\xdd\x03\n" +
-	"\x17PerpFundingAdmissionRow\x12\x1c\n" +
-	"\tcanonical\x18\x01 \x01(\tR\tcanonical\x12\x16\n" +
-	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1b\n" +
-	"\tbest_pair\x18\x03 \x01(\tR\bbestPair\x12\x1f\n" +
-	"\vmean_spread\x18\x04 \x01(\x01R\n" +
-	"meanSpread\x12\x1b\n" +
-	"\tspread_sd\x18\x05 \x01(\x01R\bspreadSd\x12'\n" +
-	"\x0fdir_consistency\x18\x06 \x01(\x01R\x0edirConsistency\x12'\n" +
-	"\rdepth_min_usd\x18\a \x01(\x01H\x00R\vdepthMinUsd\x88\x01\x01\x12\x18\n" +
-	"\asamples\x18\b \x01(\x05R\asamples\x12%\n" +
-	"\x0eowner_override\x18\t \x01(\tR\rownerOverride\x12\x12\n" +
-	"\x04note\x18\n" +
-	" \x01(\tR\x04note\x12=\n" +
-	"\fevaluated_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\vevaluatedAt\x129\n" +
-	"\n" +
-	"updated_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAtB\x10\n" +
-	"\x0e_depth_min_usd\"!\n" +
-	"\x1fListPerpFundingAdmissionRequest\"a\n" +
-	" ListPerpFundingAdmissionResponse\x12=\n" +
-	"\x04rows\x18\x01 \x03(\v2).arb.dashboard.v1.PerpFundingAdmissionRowR\x04rows\"b\n" +
-	"&SetPerpFundingAdmissionOverrideRequest\x12\x1c\n" +
-	"\tcanonical\x18\x01 \x01(\tR\tcanonical\x12\x1a\n" +
-	"\boverride\x18\x02 \x01(\tR\boverride\"O\n" +
-	"'SetPerpFundingAdmissionOverrideResponse\x12\x0e\n" +
-	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
-	"\x05error\x18\x02 \x01(\tR\x05error\"'\n" +
-	"%ReevaluatePerpFundingAdmissionRequest\"N\n" +
-	"&ReevaluatePerpFundingAdmissionResponse\x12\x0e\n" +
-	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error*\x87\x01\n" +
 	"\rEvidenceGrade\x12\x1e\n" +
 	"\x1aEVIDENCE_GRADE_UNSPECIFIED\x10\x00\x12\x14\n" +
@@ -3414,71 +2980,61 @@ func file_dashboardv1_graduation_proto_rawDescGZIP() []byte {
 }
 
 var file_dashboardv1_graduation_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_dashboardv1_graduation_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
+var file_dashboardv1_graduation_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_dashboardv1_graduation_proto_goTypes = []any{
-	(EvidenceGrade)(0),                              // 0: arb.dashboard.v1.EvidenceGrade
-	(*CarryGraduationRow)(nil),                      // 1: arb.dashboard.v1.CarryGraduationRow
-	(*GraduationRiskLeg)(nil),                       // 2: arb.dashboard.v1.GraduationRiskLeg
-	(*GraduationRiskReport)(nil),                    // 3: arb.dashboard.v1.GraduationRiskReport
-	(*FieldEvidence)(nil),                           // 4: arb.dashboard.v1.FieldEvidence
-	(*ListXAssetAllowCombosRequest)(nil),            // 5: arb.dashboard.v1.ListXAssetAllowCombosRequest
-	(*XAssetAllowComboRow)(nil),                     // 6: arb.dashboard.v1.XAssetAllowComboRow
-	(*ListXAssetAllowCombosResponse)(nil),           // 7: arb.dashboard.v1.ListXAssetAllowCombosResponse
-	(*ListXAssetPendingEntriesRequest)(nil),         // 8: arb.dashboard.v1.ListXAssetPendingEntriesRequest
-	(*ListXAssetPendingEntriesResponse)(nil),        // 9: arb.dashboard.v1.ListXAssetPendingEntriesResponse
-	(*XAssetPendingEntryRow)(nil),                   // 10: arb.dashboard.v1.XAssetPendingEntryRow
-	(*UpsertXAssetAllowComboRequest)(nil),           // 11: arb.dashboard.v1.UpsertXAssetAllowComboRequest
-	(*UpsertXAssetAllowComboResponse)(nil),          // 12: arb.dashboard.v1.UpsertXAssetAllowComboResponse
-	(*ResumeXAssetComboRequest)(nil),                // 13: arb.dashboard.v1.ResumeXAssetComboRequest
-	(*ResumeXAssetComboResponse)(nil),               // 14: arb.dashboard.v1.ResumeXAssetComboResponse
-	(*PreviewXAssetComboRiskRequest)(nil),           // 15: arb.dashboard.v1.PreviewXAssetComboRiskRequest
-	(*PreviewXAssetComboRiskResponse)(nil),          // 16: arb.dashboard.v1.PreviewXAssetComboRiskResponse
-	(*VenueExposureCapRow)(nil),                     // 17: arb.dashboard.v1.VenueExposureCapRow
-	(*ListVenueExposureCapsRequest)(nil),            // 18: arb.dashboard.v1.ListVenueExposureCapsRequest
-	(*ListVenueExposureCapsResponse)(nil),           // 19: arb.dashboard.v1.ListVenueExposureCapsResponse
-	(*SetVenueExposureCapRequest)(nil),              // 20: arb.dashboard.v1.SetVenueExposureCapRequest
-	(*SetVenueExposureCapResponse)(nil),             // 21: arb.dashboard.v1.SetVenueExposureCapResponse
-	(*ListCarryGraduationsRequest)(nil),             // 22: arb.dashboard.v1.ListCarryGraduationsRequest
-	(*ListCarryGraduationsResponse)(nil),            // 23: arb.dashboard.v1.ListCarryGraduationsResponse
-	(*ApproveCarryGraduationRequest)(nil),           // 24: arb.dashboard.v1.ApproveCarryGraduationRequest
-	(*ApproveCarryGraduationResponse)(nil),          // 25: arb.dashboard.v1.ApproveCarryGraduationResponse
-	(*GradLegPoolRow)(nil),                          // 26: arb.dashboard.v1.GradLegPoolRow
-	(*RejectCarryGraduationRequest)(nil),            // 27: arb.dashboard.v1.RejectCarryGraduationRequest
-	(*RejectCarryGraduationResponse)(nil),           // 28: arb.dashboard.v1.RejectCarryGraduationResponse
-	(*PerpFundingAdmissionRow)(nil),                 // 29: arb.dashboard.v1.PerpFundingAdmissionRow
-	(*ListPerpFundingAdmissionRequest)(nil),         // 30: arb.dashboard.v1.ListPerpFundingAdmissionRequest
-	(*ListPerpFundingAdmissionResponse)(nil),        // 31: arb.dashboard.v1.ListPerpFundingAdmissionResponse
-	(*SetPerpFundingAdmissionOverrideRequest)(nil),  // 32: arb.dashboard.v1.SetPerpFundingAdmissionOverrideRequest
-	(*SetPerpFundingAdmissionOverrideResponse)(nil), // 33: arb.dashboard.v1.SetPerpFundingAdmissionOverrideResponse
-	(*ReevaluatePerpFundingAdmissionRequest)(nil),   // 34: arb.dashboard.v1.ReevaluatePerpFundingAdmissionRequest
-	(*ReevaluatePerpFundingAdmissionResponse)(nil),  // 35: arb.dashboard.v1.ReevaluatePerpFundingAdmissionResponse
-	(*timestamppb.Timestamp)(nil),                   // 36: google.protobuf.Timestamp
+	(EvidenceGrade)(0),                       // 0: arb.dashboard.v1.EvidenceGrade
+	(*CarryGraduationRow)(nil),               // 1: arb.dashboard.v1.CarryGraduationRow
+	(*GraduationRiskLeg)(nil),                // 2: arb.dashboard.v1.GraduationRiskLeg
+	(*GraduationRiskReport)(nil),             // 3: arb.dashboard.v1.GraduationRiskReport
+	(*FieldEvidence)(nil),                    // 4: arb.dashboard.v1.FieldEvidence
+	(*ListXAssetAllowCombosRequest)(nil),     // 5: arb.dashboard.v1.ListXAssetAllowCombosRequest
+	(*XAssetAllowComboRow)(nil),              // 6: arb.dashboard.v1.XAssetAllowComboRow
+	(*ListXAssetAllowCombosResponse)(nil),    // 7: arb.dashboard.v1.ListXAssetAllowCombosResponse
+	(*ListXAssetPendingEntriesRequest)(nil),  // 8: arb.dashboard.v1.ListXAssetPendingEntriesRequest
+	(*ListXAssetPendingEntriesResponse)(nil), // 9: arb.dashboard.v1.ListXAssetPendingEntriesResponse
+	(*XAssetPendingEntryRow)(nil),            // 10: arb.dashboard.v1.XAssetPendingEntryRow
+	(*UpsertXAssetAllowComboRequest)(nil),    // 11: arb.dashboard.v1.UpsertXAssetAllowComboRequest
+	(*UpsertXAssetAllowComboResponse)(nil),   // 12: arb.dashboard.v1.UpsertXAssetAllowComboResponse
+	(*ResumeXAssetComboRequest)(nil),         // 13: arb.dashboard.v1.ResumeXAssetComboRequest
+	(*ResumeXAssetComboResponse)(nil),        // 14: arb.dashboard.v1.ResumeXAssetComboResponse
+	(*PreviewXAssetComboRiskRequest)(nil),    // 15: arb.dashboard.v1.PreviewXAssetComboRiskRequest
+	(*PreviewXAssetComboRiskResponse)(nil),   // 16: arb.dashboard.v1.PreviewXAssetComboRiskResponse
+	(*VenueExposureCapRow)(nil),              // 17: arb.dashboard.v1.VenueExposureCapRow
+	(*ListVenueExposureCapsRequest)(nil),     // 18: arb.dashboard.v1.ListVenueExposureCapsRequest
+	(*ListVenueExposureCapsResponse)(nil),    // 19: arb.dashboard.v1.ListVenueExposureCapsResponse
+	(*SetVenueExposureCapRequest)(nil),       // 20: arb.dashboard.v1.SetVenueExposureCapRequest
+	(*SetVenueExposureCapResponse)(nil),      // 21: arb.dashboard.v1.SetVenueExposureCapResponse
+	(*ListCarryGraduationsRequest)(nil),      // 22: arb.dashboard.v1.ListCarryGraduationsRequest
+	(*ListCarryGraduationsResponse)(nil),     // 23: arb.dashboard.v1.ListCarryGraduationsResponse
+	(*ApproveCarryGraduationRequest)(nil),    // 24: arb.dashboard.v1.ApproveCarryGraduationRequest
+	(*ApproveCarryGraduationResponse)(nil),   // 25: arb.dashboard.v1.ApproveCarryGraduationResponse
+	(*GradLegPoolRow)(nil),                   // 26: arb.dashboard.v1.GradLegPoolRow
+	(*RejectCarryGraduationRequest)(nil),     // 27: arb.dashboard.v1.RejectCarryGraduationRequest
+	(*RejectCarryGraduationResponse)(nil),    // 28: arb.dashboard.v1.RejectCarryGraduationResponse
+	(*timestamppb.Timestamp)(nil),            // 29: google.protobuf.Timestamp
 }
 var file_dashboardv1_graduation_proto_depIdxs = []int32{
 	3,  // 0: arb.dashboard.v1.CarryGraduationRow.risk:type_name -> arb.dashboard.v1.GraduationRiskReport
 	2,  // 1: arb.dashboard.v1.GraduationRiskReport.legs:type_name -> arb.dashboard.v1.GraduationRiskLeg
 	4,  // 2: arb.dashboard.v1.GraduationRiskReport.field_grades:type_name -> arb.dashboard.v1.FieldEvidence
 	0,  // 3: arb.dashboard.v1.FieldEvidence.grade:type_name -> arb.dashboard.v1.EvidenceGrade
-	36, // 4: arb.dashboard.v1.XAssetAllowComboRow.pool_updated_at:type_name -> google.protobuf.Timestamp
-	36, // 5: arb.dashboard.v1.XAssetAllowComboRow.breaker_resume_at:type_name -> google.protobuf.Timestamp
+	29, // 4: arb.dashboard.v1.XAssetAllowComboRow.pool_updated_at:type_name -> google.protobuf.Timestamp
+	29, // 5: arb.dashboard.v1.XAssetAllowComboRow.breaker_resume_at:type_name -> google.protobuf.Timestamp
 	6,  // 6: arb.dashboard.v1.ListXAssetAllowCombosResponse.rows:type_name -> arb.dashboard.v1.XAssetAllowComboRow
 	10, // 7: arb.dashboard.v1.ListXAssetPendingEntriesResponse.rows:type_name -> arb.dashboard.v1.XAssetPendingEntryRow
-	36, // 8: arb.dashboard.v1.XAssetPendingEntryRow.breaker_resume_at:type_name -> google.protobuf.Timestamp
+	29, // 8: arb.dashboard.v1.XAssetPendingEntryRow.breaker_resume_at:type_name -> google.protobuf.Timestamp
 	3,  // 9: arb.dashboard.v1.PreviewXAssetComboRiskResponse.risk:type_name -> arb.dashboard.v1.GraduationRiskReport
-	36, // 10: arb.dashboard.v1.VenueExposureCapRow.updated_at:type_name -> google.protobuf.Timestamp
-	36, // 11: arb.dashboard.v1.VenueExposureCapRow.live_updated_at:type_name -> google.protobuf.Timestamp
+	29, // 10: arb.dashboard.v1.VenueExposureCapRow.updated_at:type_name -> google.protobuf.Timestamp
+	29, // 11: arb.dashboard.v1.VenueExposureCapRow.live_updated_at:type_name -> google.protobuf.Timestamp
 	17, // 12: arb.dashboard.v1.ListVenueExposureCapsResponse.rows:type_name -> arb.dashboard.v1.VenueExposureCapRow
 	1,  // 13: arb.dashboard.v1.ListCarryGraduationsResponse.rows:type_name -> arb.dashboard.v1.CarryGraduationRow
 	26, // 14: arb.dashboard.v1.ApproveCarryGraduationResponse.leg_pools:type_name -> arb.dashboard.v1.GradLegPoolRow
-	36, // 15: arb.dashboard.v1.GradLegPoolRow.updated_at:type_name -> google.protobuf.Timestamp
-	36, // 16: arb.dashboard.v1.PerpFundingAdmissionRow.evaluated_at:type_name -> google.protobuf.Timestamp
-	36, // 17: arb.dashboard.v1.PerpFundingAdmissionRow.updated_at:type_name -> google.protobuf.Timestamp
-	29, // 18: arb.dashboard.v1.ListPerpFundingAdmissionResponse.rows:type_name -> arb.dashboard.v1.PerpFundingAdmissionRow
-	19, // [19:19] is the sub-list for method output_type
-	19, // [19:19] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	29, // 15: arb.dashboard.v1.GradLegPoolRow.updated_at:type_name -> google.protobuf.Timestamp
+	16, // [16:16] is the sub-list for method output_type
+	16, // [16:16] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_dashboardv1_graduation_proto_init() }
@@ -3495,14 +3051,13 @@ func file_dashboardv1_graduation_proto_init() {
 	file_dashboardv1_graduation_proto_msgTypes[15].OneofWrappers = []any{}
 	file_dashboardv1_graduation_proto_msgTypes[23].OneofWrappers = []any{}
 	file_dashboardv1_graduation_proto_msgTypes[24].OneofWrappers = []any{}
-	file_dashboardv1_graduation_proto_msgTypes[28].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dashboardv1_graduation_proto_rawDesc), len(file_dashboardv1_graduation_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   35,
+			NumMessages:   28,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

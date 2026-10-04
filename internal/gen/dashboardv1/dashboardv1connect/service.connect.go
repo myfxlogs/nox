@@ -418,15 +418,6 @@ const (
 	// DashboardServiceListAccountMarginStatusProcedure is the fully-qualified name of the
 	// DashboardService's ListAccountMarginStatus RPC.
 	DashboardServiceListAccountMarginStatusProcedure = "/arb.dashboard.v1.DashboardService/ListAccountMarginStatus"
-	// DashboardServiceListPerpFundingAdmissionProcedure is the fully-qualified name of the
-	// DashboardService's ListPerpFundingAdmission RPC.
-	DashboardServiceListPerpFundingAdmissionProcedure = "/arb.dashboard.v1.DashboardService/ListPerpFundingAdmission"
-	// DashboardServiceSetPerpFundingAdmissionOverrideProcedure is the fully-qualified name of the
-	// DashboardService's SetPerpFundingAdmissionOverride RPC.
-	DashboardServiceSetPerpFundingAdmissionOverrideProcedure = "/arb.dashboard.v1.DashboardService/SetPerpFundingAdmissionOverride"
-	// DashboardServiceReevaluatePerpFundingAdmissionProcedure is the fully-qualified name of the
-	// DashboardService's ReevaluatePerpFundingAdmission RPC.
-	DashboardServiceReevaluatePerpFundingAdmissionProcedure = "/arb.dashboard.v1.DashboardService/ReevaluatePerpFundingAdmission"
 	// DashboardServiceListAppConfigProcedure is the fully-qualified name of the DashboardService's
 	// ListAppConfig RPC.
 	DashboardServiceListAppConfigProcedure = "/arb.dashboard.v1.DashboardService/ListAppConfig"
@@ -627,10 +618,6 @@ type DashboardServiceClient interface {
 	// D-405 S6：账户资金与保证金卡（财务页下钻）——数据源 fin_venue_margin_status
 	// + snapshot 最新行 join；覆盖天数/建议补资金/档位全后端给，前端零计算。
 	ListAccountMarginStatus(context.Context, *connect.Request[dashboardv1.ListAccountMarginStatusRequest]) (*connect.Response[dashboardv1.ListAccountMarginStatusResponse], error)
-	// D-491 S6：PERP_FUNDING 证据准入——全行透出/业主钉死三态/手动复估。
-	ListPerpFundingAdmission(context.Context, *connect.Request[dashboardv1.ListPerpFundingAdmissionRequest]) (*connect.Response[dashboardv1.ListPerpFundingAdmissionResponse], error)
-	SetPerpFundingAdmissionOverride(context.Context, *connect.Request[dashboardv1.SetPerpFundingAdmissionOverrideRequest]) (*connect.Response[dashboardv1.SetPerpFundingAdmissionOverrideResponse], error)
-	ReevaluatePerpFundingAdmission(context.Context, *connect.Request[dashboardv1.ReevaluatePerpFundingAdmissionRequest]) (*connect.Response[dashboardv1.ReevaluatePerpFundingAdmissionResponse], error)
 	// D-523：app_config 键管理面（SettingsPage）+自杀重启生效通道。
 	ListAppConfig(context.Context, *connect.Request[dashboardv1.ListAppConfigRequest]) (*connect.Response[dashboardv1.ListAppConfigResponse], error)
 	UpdateAppConfig(context.Context, *connect.Request[dashboardv1.UpdateAppConfigRequest]) (*connect.Response[dashboardv1.UpdateAppConfigResponse], error)
@@ -1425,24 +1412,6 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(dashboardServiceMethods.ByName("ListAccountMarginStatus")),
 			connect.WithClientOptions(opts...),
 		),
-		listPerpFundingAdmission: connect.NewClient[dashboardv1.ListPerpFundingAdmissionRequest, dashboardv1.ListPerpFundingAdmissionResponse](
-			httpClient,
-			baseURL+DashboardServiceListPerpFundingAdmissionProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("ListPerpFundingAdmission")),
-			connect.WithClientOptions(opts...),
-		),
-		setPerpFundingAdmissionOverride: connect.NewClient[dashboardv1.SetPerpFundingAdmissionOverrideRequest, dashboardv1.SetPerpFundingAdmissionOverrideResponse](
-			httpClient,
-			baseURL+DashboardServiceSetPerpFundingAdmissionOverrideProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("SetPerpFundingAdmissionOverride")),
-			connect.WithClientOptions(opts...),
-		),
-		reevaluatePerpFundingAdmission: connect.NewClient[dashboardv1.ReevaluatePerpFundingAdmissionRequest, dashboardv1.ReevaluatePerpFundingAdmissionResponse](
-			httpClient,
-			baseURL+DashboardServiceReevaluatePerpFundingAdmissionProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("ReevaluatePerpFundingAdmission")),
-			connect.WithClientOptions(opts...),
-		),
 		listAppConfig: connect.NewClient[dashboardv1.ListAppConfigRequest, dashboardv1.ListAppConfigResponse](
 			httpClient,
 			baseURL+DashboardServiceListAppConfigProcedure,
@@ -1478,143 +1447,140 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 
 // dashboardServiceClient implements DashboardServiceClient.
 type dashboardServiceClient struct {
-	listLatestQuotes                *connect.Client[dashboardv1.ListQuotesRequest, dashboardv1.ListQuotesResponse]
-	listLatestFacts                 *connect.Client[dashboardv1.ListLatestFactsRequest, dashboardv1.ListLatestFactsResponse]
-	listOpportunities               *connect.Client[dashboardv1.ListOpportunitiesRequest, dashboardv1.ListOpportunitiesResponse]
-	listAlerts                      *connect.Client[dashboardv1.ListAlertsRequest, dashboardv1.ListAlertsResponse]
-	listSourceHealth                *connect.Client[dashboardv1.ListSourceHealthRequest, dashboardv1.ListSourceHealthResponse]
-	listCalibScoreboard             *connect.Client[dashboardv1.ListCalibScoreboardRequest, dashboardv1.ListCalibScoreboardResponse]
-	listFacts                       *connect.Client[dashboardv1.ListFactsRequest, dashboardv1.ListFactsResponse]
-	ackAlert                        *connect.Client[dashboardv1.AckAlertRequest, dashboardv1.AckAlertResponse]
-	ackAll                          *connect.Client[dashboardv1.AckAllRequest, dashboardv1.AckAllResponse]
-	listUnacked                     *connect.Client[dashboardv1.ListUnackedRequest, dashboardv1.ListUnackedResponse]
-	deleteAlerts                    *connect.Client[dashboardv1.DeleteAlertsRequest, dashboardv1.DeleteAlertsResponse]
-	clearAckedAlerts                *connect.Client[dashboardv1.ClearAckedAlertsRequest, dashboardv1.ClearAckedAlertsResponse]
-	addLedgerEntry                  *connect.Client[dashboardv1.AddLedgerEntryRequest, dashboardv1.AddLedgerEntryResponse]
-	listLedgerEntries               *connect.Client[dashboardv1.ListLedgerEntriesRequest, dashboardv1.ListLedgerEntriesResponse]
-	ledgerSummary                   *connect.Client[dashboardv1.LedgerSummaryRequest, dashboardv1.LedgerSummaryResponse]
-	addInvestmentRecord             *connect.Client[dashboardv1.AddInvestmentRecordRequest, dashboardv1.AddInvestmentRecordResponse]
-	listInvestmentRecords           *connect.Client[dashboardv1.ListInvestmentRecordsRequest, dashboardv1.ListInvestmentRecordsResponse]
-	listKnowledgeEntries            *connect.Client[dashboardv1.ListKnowledgeEntriesRequest, dashboardv1.ListKnowledgeEntriesResponse]
-	executeOpportunity              *connect.Client[dashboardv1.ExecuteOpportunityRequest, dashboardv1.ExecuteOpportunityResponse]
-	closePosition                   *connect.Client[dashboardv1.ClosePositionRequest, dashboardv1.ClosePositionResponse]
-	backfillSwapHistory             *connect.Client[dashboardv1.BackfillSwapHistoryRequest, dashboardv1.BackfillSwapHistoryReply]
-	getCNFIRadarSnapshot            *connect.Client[dashboardv1.GetCNFIRadarSnapshotRequest, dashboardv1.GetCNFIRadarSnapshotResponse]
-	getCNFIProgress                 *connect.Client[dashboardv1.GetCNFIProgressRequest, dashboardv1.GetCNFIProgressResponse]
-	addCNFIHolding                  *connect.Client[dashboardv1.AddCNFIHoldingRequest, dashboardv1.AddCNFIHoldingResponse]
-	addCNFIAction                   *connect.Client[dashboardv1.AddCNFIActionRequest, dashboardv1.AddCNFIActionResponse]
-	listCNFIActions                 *connect.Client[dashboardv1.ListCNFIActionsRequest, dashboardv1.ListCNFIActionsResponse]
-	listRepoOps                     *connect.Client[dashboardv1.ListRepoOpsRequest, dashboardv1.ListRepoOpsResponse]
-	listPositions                   *connect.Client[dashboardv1.ListPositionsRequest, dashboardv1.ListPositionsResponse]
-	listBrokerPositions             *connect.Client[dashboardv1.ListBrokerPositionsRequest, dashboardv1.ListBrokerPositionsResponse]
-	closeBrokerPosition             *connect.Client[dashboardv1.CloseBrokerPositionRequest, dashboardv1.CloseBrokerPositionResponse]
-	closeBrokerPositions            *connect.Client[dashboardv1.CloseBrokerPositionsRequest, dashboardv1.CloseBrokerPositionsResponse]
-	openProbe                       *connect.Client[dashboardv1.OpenProbeRequest, dashboardv1.OpenProbeResponse]
-	listProbes                      *connect.Client[dashboardv1.ListProbesRequest, dashboardv1.ListProbesResponse]
-	approveProbe                    *connect.Client[dashboardv1.ApproveProbeRequest, dashboardv1.ApproveProbeResponse]
-	rejectProbe                     *connect.Client[dashboardv1.RejectProbeRequest, dashboardv1.RejectProbeResponse]
-	listAccounts                    *connect.Client[dashboardv1.ListAccountsRequest, dashboardv1.ListAccountsResponse]
-	listPersonalPositions           *connect.Client[dashboardv1.ListPersonalPositionsRequest, dashboardv1.ListPersonalPositionsResponse]
-	getHedgeStructure               *connect.Client[dashboardv1.GetHedgeStructureRequest, dashboardv1.GetHedgeStructureResponse]
-	listHedgeFlow                   *connect.Client[dashboardv1.ListHedgeFlowRequest, dashboardv1.ListHedgeFlowResponse]
-	trxAccountRefresh               *connect.Client[dashboardv1.TrxAccountRefreshRequest, dashboardv1.TrxAccountRefreshResponse]
-	getTrxYieldRadar                *connect.Client[dashboardv1.GetTrxYieldRadarRequest, dashboardv1.GetTrxYieldRadarResponse]
-	getTrxYieldCurve                *connect.Client[dashboardv1.GetTrxYieldCurveRequest, dashboardv1.GetTrxYieldCurveResponse]
-	getRepoRateRadar                *connect.Client[dashboardv1.GetRepoRateRadarRequest, dashboardv1.GetRepoRateRadarResponse]
-	addDailyIncome                  *connect.Client[dashboardv1.AddDailyIncomeRequest, dashboardv1.AddDailyIncomeResponse]
-	listDailyIncome                 *connect.Client[dashboardv1.ListDailyIncomeRequest, dashboardv1.ListDailyIncomeResponse]
-	getPnlAnchor                    *connect.Client[dashboardv1.GetPnlAnchorRequest, dashboardv1.GetPnlAnchorResponse]
-	resetPnlAnchor                  *connect.Client[dashboardv1.ResetPnlAnchorRequest, dashboardv1.ResetPnlAnchorResponse]
-	listKBEntries                   *connect.Client[dashboardv1.ListKBEntriesRequest, dashboardv1.ListKBEntriesResponse]
-	getKBEntry                      *connect.Client[dashboardv1.GetKBEntryRequest, dashboardv1.GetKBEntryResponse]
-	listVerificationStats           *connect.Client[dashboardv1.ListVerificationStatsRequest, dashboardv1.ListVerificationStatsResponse]
-	searchBroker                    *connect.Client[dashboardv1.SearchBrokerRequest, dashboardv1.SearchBrokerResponse]
-	addBroker                       *connect.Client[dashboardv1.AddBrokerRequest, dashboardv1.AddBrokerResponse]
-	removeBroker                    *connect.Client[dashboardv1.RemoveBrokerRequest, dashboardv1.RemoveBrokerResponse]
-	updateBrokerCredentials         *connect.Client[dashboardv1.UpdateBrokerCredentialsRequest, dashboardv1.UpdateBrokerCredentialsResponse]
-	listBrokerAccounts              *connect.Client[dashboardv1.ListBrokerAccountsRequest, dashboardv1.ListBrokerAccountsResponse]
-	verifyAccount                   *connect.Client[dashboardv1.VerifyAccountRequest, dashboardv1.VerifyAccountResponse]
-	listExchanges                   *connect.Client[dashboardv1.ListExchangesRequest, dashboardv1.ListExchangesResponse]
-	addExchange                     *connect.Client[dashboardv1.AddExchangeRequest, dashboardv1.AddExchangeResponse]
-	removeExchange                  *connect.Client[dashboardv1.RemoveExchangeRequest, dashboardv1.RemoveExchangeResponse]
-	setExchangeLabel                *connect.Client[dashboardv1.SetExchangeLabelRequest, dashboardv1.SetExchangeLabelResponse]
-	setExchangeWebsite              *connect.Client[dashboardv1.SetExchangeWebsiteRequest, dashboardv1.SetExchangeWebsiteResponse]
-	brokerSymbols                   *connect.Client[dashboardv1.BrokerSymbolsRequest, dashboardv1.BrokerSymbolsResponse]
-	setBrokerAccountAlias           *connect.Client[dashboardv1.SetBrokerAccountAliasRequest, dashboardv1.SetBrokerAccountAliasResponse]
-	setBrokerAccountIsReal          *connect.Client[dashboardv1.SetBrokerAccountIsRealRequest, dashboardv1.SetBrokerAccountIsRealResponse]
-	setBrokerDisabled               *connect.Client[dashboardv1.SetBrokerDisabledRequest, dashboardv1.SetBrokerDisabledResponse]
-	setBrokerCommission             *connect.Client[dashboardv1.SetBrokerCommissionRequest, dashboardv1.SetBrokerCommissionResponse]
-	setBrokerWebsite                *connect.Client[dashboardv1.SetBrokerWebsiteRequest, dashboardv1.SetBrokerWebsiteResponse]
-	listSymbolMappings              *connect.Client[dashboardv1.ListSymbolMappingsRequest, dashboardv1.ListSymbolMappingsResponse]
-	saveSymbolMapping               *connect.Client[dashboardv1.SaveSymbolMappingRequest, dashboardv1.SaveSymbolMappingResponse]
-	deleteSymbolMapping             *connect.Client[dashboardv1.DeleteSymbolMappingRequest, dashboardv1.DeleteSymbolMappingResponse]
-	listMappingSuggestions          *connect.Client[dashboardv1.ListMappingSuggestionsRequest, dashboardv1.ListMappingSuggestionsResponse]
-	listCanonicals                  *connect.Client[dashboardv1.ListCanonicalsRequest, dashboardv1.ListCanonicalsResponse]
-	autoMapBroker                   *connect.Client[dashboardv1.AutoMapBrokerRequest, dashboardv1.AutoMapBrokerResponse]
-	listSwapCombos                  *connect.Client[dashboardv1.ListSwapCombosRequest, dashboardv1.ListSwapCombosResponse]
-	listMatrixUniverse              *connect.Client[dashboardv1.ListMatrixUniverseRequest, dashboardv1.ListMatrixUniverseResponse]
-	streamUpdates                   *connect.Client[dashboardv1.StreamUpdatesRequest, dashboardv1.StreamUpdatesResponse]
-	health                          *connect.Client[dashboardv1.HealthRequest, dashboardv1.HealthResponse]
-	getFrontConfig                  *connect.Client[dashboardv1.GetFrontConfigRequest, dashboardv1.GetFrontConfigResponse]
-	getStrategyLedger               *connect.Client[dashboardv1.GetStrategyLedgerRequest, dashboardv1.GetStrategyLedgerResponse]
-	getWatchlist                    *connect.Client[dashboardv1.GetWatchlistRequest, dashboardv1.GetWatchlistResponse]
-	setWatchlist                    *connect.Client[dashboardv1.SetWatchlistRequest, dashboardv1.SetWatchlistResponse]
-	askAnalyst                      *connect.Client[dashboardv1.AskAnalystRequest, dashboardv1.AskAnalystResponse]
-	appendAnalystNote               *connect.Client[dashboardv1.AppendAnalystNoteRequest, dashboardv1.AppendAnalystNoteResponse]
-	generateKbReport                *connect.Client[dashboardv1.GenerateKbReportRequest, dashboardv1.GenerateKbReportResponse]
-	generateRetroReport             *connect.Client[dashboardv1.GenerateRetroReportRequest, dashboardv1.GenerateRetroReportResponse]
-	listReports                     *connect.Client[dashboardv1.ListReportsRequest, dashboardv1.ListReportsResponse]
-	getReport                       *connect.Client[dashboardv1.GetReportRequest, dashboardv1.GetReportResponse]
-	getAiSettings                   *connect.Client[dashboardv1.GetAiSettingsRequest, dashboardv1.GetAiSettingsResponse]
-	setAiSettings                   *connect.Client[dashboardv1.SetAiSettingsRequest, dashboardv1.SetAiSettingsResponse]
-	getRepoConfig                   *connect.Client[dashboardv1.GetRepoConfigRequest, dashboardv1.GetRepoConfigResponse]
-	setRepoConfig                   *connect.Client[dashboardv1.SetRepoConfigRequest, dashboardv1.SetRepoConfigResponse]
-	getCexScanSnapshot              *connect.Client[dashboardv1.GetCexScanSnapshotRequest, dashboardv1.GetCexScanSnapshotResponse]
-	recordRepoTrade                 *connect.Client[dashboardv1.RecordRepoTradeRequest, dashboardv1.RecordRepoTradeResponse]
-	listRepoTrades                  *connect.Client[dashboardv1.ListRepoTradesRequest, dashboardv1.ListRepoTradesResponse]
-	settleRepoTrade                 *connect.Client[dashboardv1.SettleRepoTradeRequest, dashboardv1.SettleRepoTradeResponse]
-	deleteRepoTrade                 *connect.Client[dashboardv1.DeleteRepoTradeRequest, dashboardv1.DeleteRepoTradeResponse]
-	getRepoStrategyValidation       *connect.Client[dashboardv1.GetRepoStrategyValidationRequest, dashboardv1.GetRepoStrategyValidationResponse]
-	listPriceAlertRules             *connect.Client[dashboardv1.ListPriceAlertRulesRequest, dashboardv1.ListPriceAlertRulesResponse]
-	createPriceAlertRule            *connect.Client[dashboardv1.CreatePriceAlertRuleRequest, dashboardv1.CreatePriceAlertRuleResponse]
-	updatePriceAlertRule            *connect.Client[dashboardv1.UpdatePriceAlertRuleRequest, dashboardv1.UpdatePriceAlertRuleResponse]
-	deletePriceAlertRule            *connect.Client[dashboardv1.DeletePriceAlertRuleRequest, dashboardv1.DeletePriceAlertRuleResponse]
-	listEventJudgments              *connect.Client[dashboardv1.ListEventJudgmentsRequest, dashboardv1.ListEventJudgmentsResponse]
-	listPaperTrades                 *connect.Client[dashboardv1.ListPaperTradesRequest, dashboardv1.ListPaperTradesResponse]
-	acceptJudgment                  *connect.Client[dashboardv1.AcceptJudgmentRequest, dashboardv1.AcceptJudgmentResponse]
-	settlePaperTrade                *connect.Client[dashboardv1.SettlePaperTradeRequest, dashboardv1.SettlePaperTradeResponse]
-	getFinanceOverview              *connect.Client[dashboardv1.GetFinanceOverviewRequest, dashboardv1.GetFinanceOverviewResponse]
-	executeSpotCarryDemo            *connect.Client[dashboardv1.ExecuteSpotCarryDemoRequest, dashboardv1.ExecuteSpotCarryDemoResponse]
-	listSpotCarryDemo               *connect.Client[dashboardv1.ListSpotCarryDemoRequest, dashboardv1.ListSpotCarryDemoResponse]
-	listPaperSpotCarry              *connect.Client[dashboardv1.ListPaperSpotCarryRequest, dashboardv1.ListPaperSpotCarryResponse]
-	listAutotradeAllowRules         *connect.Client[dashboardv1.ListAutotradeAllowRulesRequest, dashboardv1.ListAutotradeAllowRulesResponse]
-	setAutotradeAllowRuleEnabled    *connect.Client[dashboardv1.SetAutotradeAllowRuleEnabledRequest, dashboardv1.SetAutotradeAllowRuleEnabledResponse]
-	addAutotradeAllowRule           *connect.Client[dashboardv1.AddAutotradeAllowRuleRequest, dashboardv1.AddAutotradeAllowRuleResponse]
-	deleteAutotradeAllowRule        *connect.Client[dashboardv1.DeleteAutotradeAllowRuleRequest, dashboardv1.DeleteAutotradeAllowRuleResponse]
-	listIntraTrades                 *connect.Client[dashboardv1.ListIntraTradesRequest, dashboardv1.ListIntraTradesResponse]
-	intraTrackStats                 *connect.Client[dashboardv1.IntraTrackStatsRequest, dashboardv1.IntraTrackStatsResponse]
-	getCapitalCoverage              *connect.Client[dashboardv1.GetCapitalCoverageRequest, dashboardv1.GetCapitalCoverageResponse]
-	getCapitalMap                   *connect.Client[dashboardv1.GetCapitalMapRequest, dashboardv1.GetCapitalMapResponse]
-	getCexFinance                   *connect.Client[dashboardv1.GetCexFinanceRequest, dashboardv1.GetCexFinanceResponse]
-	listCarryGraduations            *connect.Client[dashboardv1.ListCarryGraduationsRequest, dashboardv1.ListCarryGraduationsResponse]
-	approveCarryGraduation          *connect.Client[dashboardv1.ApproveCarryGraduationRequest, dashboardv1.ApproveCarryGraduationResponse]
-	rejectCarryGraduation           *connect.Client[dashboardv1.RejectCarryGraduationRequest, dashboardv1.RejectCarryGraduationResponse]
-	listVenueExposureCaps           *connect.Client[dashboardv1.ListVenueExposureCapsRequest, dashboardv1.ListVenueExposureCapsResponse]
-	setVenueExposureCap             *connect.Client[dashboardv1.SetVenueExposureCapRequest, dashboardv1.SetVenueExposureCapResponse]
-	listXAssetAllowCombos           *connect.Client[dashboardv1.ListXAssetAllowCombosRequest, dashboardv1.ListXAssetAllowCombosResponse]
-	listXAssetPendingEntries        *connect.Client[dashboardv1.ListXAssetPendingEntriesRequest, dashboardv1.ListXAssetPendingEntriesResponse]
-	upsertXAssetAllowCombo          *connect.Client[dashboardv1.UpsertXAssetAllowComboRequest, dashboardv1.UpsertXAssetAllowComboResponse]
-	resumeXAssetCombo               *connect.Client[dashboardv1.ResumeXAssetComboRequest, dashboardv1.ResumeXAssetComboResponse]
-	previewXAssetComboRisk          *connect.Client[dashboardv1.PreviewXAssetComboRiskRequest, dashboardv1.PreviewXAssetComboRiskResponse]
-	listAccountMarginStatus         *connect.Client[dashboardv1.ListAccountMarginStatusRequest, dashboardv1.ListAccountMarginStatusResponse]
-	listPerpFundingAdmission        *connect.Client[dashboardv1.ListPerpFundingAdmissionRequest, dashboardv1.ListPerpFundingAdmissionResponse]
-	setPerpFundingAdmissionOverride *connect.Client[dashboardv1.SetPerpFundingAdmissionOverrideRequest, dashboardv1.SetPerpFundingAdmissionOverrideResponse]
-	reevaluatePerpFundingAdmission  *connect.Client[dashboardv1.ReevaluatePerpFundingAdmissionRequest, dashboardv1.ReevaluatePerpFundingAdmissionResponse]
-	listAppConfig                   *connect.Client[dashboardv1.ListAppConfigRequest, dashboardv1.ListAppConfigResponse]
-	updateAppConfig                 *connect.Client[dashboardv1.UpdateAppConfigRequest, dashboardv1.UpdateAppConfigResponse]
-	selfRestart                     *connect.Client[dashboardv1.SelfRestartRequest, dashboardv1.SelfRestartResponse]
-	listAppSecrets                  *connect.Client[dashboardv1.ListAppSecretsRequest, dashboardv1.ListAppSecretsResponse]
-	updateAppSecret                 *connect.Client[dashboardv1.UpdateAppSecretRequest, dashboardv1.UpdateAppSecretResponse]
+	listLatestQuotes             *connect.Client[dashboardv1.ListQuotesRequest, dashboardv1.ListQuotesResponse]
+	listLatestFacts              *connect.Client[dashboardv1.ListLatestFactsRequest, dashboardv1.ListLatestFactsResponse]
+	listOpportunities            *connect.Client[dashboardv1.ListOpportunitiesRequest, dashboardv1.ListOpportunitiesResponse]
+	listAlerts                   *connect.Client[dashboardv1.ListAlertsRequest, dashboardv1.ListAlertsResponse]
+	listSourceHealth             *connect.Client[dashboardv1.ListSourceHealthRequest, dashboardv1.ListSourceHealthResponse]
+	listCalibScoreboard          *connect.Client[dashboardv1.ListCalibScoreboardRequest, dashboardv1.ListCalibScoreboardResponse]
+	listFacts                    *connect.Client[dashboardv1.ListFactsRequest, dashboardv1.ListFactsResponse]
+	ackAlert                     *connect.Client[dashboardv1.AckAlertRequest, dashboardv1.AckAlertResponse]
+	ackAll                       *connect.Client[dashboardv1.AckAllRequest, dashboardv1.AckAllResponse]
+	listUnacked                  *connect.Client[dashboardv1.ListUnackedRequest, dashboardv1.ListUnackedResponse]
+	deleteAlerts                 *connect.Client[dashboardv1.DeleteAlertsRequest, dashboardv1.DeleteAlertsResponse]
+	clearAckedAlerts             *connect.Client[dashboardv1.ClearAckedAlertsRequest, dashboardv1.ClearAckedAlertsResponse]
+	addLedgerEntry               *connect.Client[dashboardv1.AddLedgerEntryRequest, dashboardv1.AddLedgerEntryResponse]
+	listLedgerEntries            *connect.Client[dashboardv1.ListLedgerEntriesRequest, dashboardv1.ListLedgerEntriesResponse]
+	ledgerSummary                *connect.Client[dashboardv1.LedgerSummaryRequest, dashboardv1.LedgerSummaryResponse]
+	addInvestmentRecord          *connect.Client[dashboardv1.AddInvestmentRecordRequest, dashboardv1.AddInvestmentRecordResponse]
+	listInvestmentRecords        *connect.Client[dashboardv1.ListInvestmentRecordsRequest, dashboardv1.ListInvestmentRecordsResponse]
+	listKnowledgeEntries         *connect.Client[dashboardv1.ListKnowledgeEntriesRequest, dashboardv1.ListKnowledgeEntriesResponse]
+	executeOpportunity           *connect.Client[dashboardv1.ExecuteOpportunityRequest, dashboardv1.ExecuteOpportunityResponse]
+	closePosition                *connect.Client[dashboardv1.ClosePositionRequest, dashboardv1.ClosePositionResponse]
+	backfillSwapHistory          *connect.Client[dashboardv1.BackfillSwapHistoryRequest, dashboardv1.BackfillSwapHistoryReply]
+	getCNFIRadarSnapshot         *connect.Client[dashboardv1.GetCNFIRadarSnapshotRequest, dashboardv1.GetCNFIRadarSnapshotResponse]
+	getCNFIProgress              *connect.Client[dashboardv1.GetCNFIProgressRequest, dashboardv1.GetCNFIProgressResponse]
+	addCNFIHolding               *connect.Client[dashboardv1.AddCNFIHoldingRequest, dashboardv1.AddCNFIHoldingResponse]
+	addCNFIAction                *connect.Client[dashboardv1.AddCNFIActionRequest, dashboardv1.AddCNFIActionResponse]
+	listCNFIActions              *connect.Client[dashboardv1.ListCNFIActionsRequest, dashboardv1.ListCNFIActionsResponse]
+	listRepoOps                  *connect.Client[dashboardv1.ListRepoOpsRequest, dashboardv1.ListRepoOpsResponse]
+	listPositions                *connect.Client[dashboardv1.ListPositionsRequest, dashboardv1.ListPositionsResponse]
+	listBrokerPositions          *connect.Client[dashboardv1.ListBrokerPositionsRequest, dashboardv1.ListBrokerPositionsResponse]
+	closeBrokerPosition          *connect.Client[dashboardv1.CloseBrokerPositionRequest, dashboardv1.CloseBrokerPositionResponse]
+	closeBrokerPositions         *connect.Client[dashboardv1.CloseBrokerPositionsRequest, dashboardv1.CloseBrokerPositionsResponse]
+	openProbe                    *connect.Client[dashboardv1.OpenProbeRequest, dashboardv1.OpenProbeResponse]
+	listProbes                   *connect.Client[dashboardv1.ListProbesRequest, dashboardv1.ListProbesResponse]
+	approveProbe                 *connect.Client[dashboardv1.ApproveProbeRequest, dashboardv1.ApproveProbeResponse]
+	rejectProbe                  *connect.Client[dashboardv1.RejectProbeRequest, dashboardv1.RejectProbeResponse]
+	listAccounts                 *connect.Client[dashboardv1.ListAccountsRequest, dashboardv1.ListAccountsResponse]
+	listPersonalPositions        *connect.Client[dashboardv1.ListPersonalPositionsRequest, dashboardv1.ListPersonalPositionsResponse]
+	getHedgeStructure            *connect.Client[dashboardv1.GetHedgeStructureRequest, dashboardv1.GetHedgeStructureResponse]
+	listHedgeFlow                *connect.Client[dashboardv1.ListHedgeFlowRequest, dashboardv1.ListHedgeFlowResponse]
+	trxAccountRefresh            *connect.Client[dashboardv1.TrxAccountRefreshRequest, dashboardv1.TrxAccountRefreshResponse]
+	getTrxYieldRadar             *connect.Client[dashboardv1.GetTrxYieldRadarRequest, dashboardv1.GetTrxYieldRadarResponse]
+	getTrxYieldCurve             *connect.Client[dashboardv1.GetTrxYieldCurveRequest, dashboardv1.GetTrxYieldCurveResponse]
+	getRepoRateRadar             *connect.Client[dashboardv1.GetRepoRateRadarRequest, dashboardv1.GetRepoRateRadarResponse]
+	addDailyIncome               *connect.Client[dashboardv1.AddDailyIncomeRequest, dashboardv1.AddDailyIncomeResponse]
+	listDailyIncome              *connect.Client[dashboardv1.ListDailyIncomeRequest, dashboardv1.ListDailyIncomeResponse]
+	getPnlAnchor                 *connect.Client[dashboardv1.GetPnlAnchorRequest, dashboardv1.GetPnlAnchorResponse]
+	resetPnlAnchor               *connect.Client[dashboardv1.ResetPnlAnchorRequest, dashboardv1.ResetPnlAnchorResponse]
+	listKBEntries                *connect.Client[dashboardv1.ListKBEntriesRequest, dashboardv1.ListKBEntriesResponse]
+	getKBEntry                   *connect.Client[dashboardv1.GetKBEntryRequest, dashboardv1.GetKBEntryResponse]
+	listVerificationStats        *connect.Client[dashboardv1.ListVerificationStatsRequest, dashboardv1.ListVerificationStatsResponse]
+	searchBroker                 *connect.Client[dashboardv1.SearchBrokerRequest, dashboardv1.SearchBrokerResponse]
+	addBroker                    *connect.Client[dashboardv1.AddBrokerRequest, dashboardv1.AddBrokerResponse]
+	removeBroker                 *connect.Client[dashboardv1.RemoveBrokerRequest, dashboardv1.RemoveBrokerResponse]
+	updateBrokerCredentials      *connect.Client[dashboardv1.UpdateBrokerCredentialsRequest, dashboardv1.UpdateBrokerCredentialsResponse]
+	listBrokerAccounts           *connect.Client[dashboardv1.ListBrokerAccountsRequest, dashboardv1.ListBrokerAccountsResponse]
+	verifyAccount                *connect.Client[dashboardv1.VerifyAccountRequest, dashboardv1.VerifyAccountResponse]
+	listExchanges                *connect.Client[dashboardv1.ListExchangesRequest, dashboardv1.ListExchangesResponse]
+	addExchange                  *connect.Client[dashboardv1.AddExchangeRequest, dashboardv1.AddExchangeResponse]
+	removeExchange               *connect.Client[dashboardv1.RemoveExchangeRequest, dashboardv1.RemoveExchangeResponse]
+	setExchangeLabel             *connect.Client[dashboardv1.SetExchangeLabelRequest, dashboardv1.SetExchangeLabelResponse]
+	setExchangeWebsite           *connect.Client[dashboardv1.SetExchangeWebsiteRequest, dashboardv1.SetExchangeWebsiteResponse]
+	brokerSymbols                *connect.Client[dashboardv1.BrokerSymbolsRequest, dashboardv1.BrokerSymbolsResponse]
+	setBrokerAccountAlias        *connect.Client[dashboardv1.SetBrokerAccountAliasRequest, dashboardv1.SetBrokerAccountAliasResponse]
+	setBrokerAccountIsReal       *connect.Client[dashboardv1.SetBrokerAccountIsRealRequest, dashboardv1.SetBrokerAccountIsRealResponse]
+	setBrokerDisabled            *connect.Client[dashboardv1.SetBrokerDisabledRequest, dashboardv1.SetBrokerDisabledResponse]
+	setBrokerCommission          *connect.Client[dashboardv1.SetBrokerCommissionRequest, dashboardv1.SetBrokerCommissionResponse]
+	setBrokerWebsite             *connect.Client[dashboardv1.SetBrokerWebsiteRequest, dashboardv1.SetBrokerWebsiteResponse]
+	listSymbolMappings           *connect.Client[dashboardv1.ListSymbolMappingsRequest, dashboardv1.ListSymbolMappingsResponse]
+	saveSymbolMapping            *connect.Client[dashboardv1.SaveSymbolMappingRequest, dashboardv1.SaveSymbolMappingResponse]
+	deleteSymbolMapping          *connect.Client[dashboardv1.DeleteSymbolMappingRequest, dashboardv1.DeleteSymbolMappingResponse]
+	listMappingSuggestions       *connect.Client[dashboardv1.ListMappingSuggestionsRequest, dashboardv1.ListMappingSuggestionsResponse]
+	listCanonicals               *connect.Client[dashboardv1.ListCanonicalsRequest, dashboardv1.ListCanonicalsResponse]
+	autoMapBroker                *connect.Client[dashboardv1.AutoMapBrokerRequest, dashboardv1.AutoMapBrokerResponse]
+	listSwapCombos               *connect.Client[dashboardv1.ListSwapCombosRequest, dashboardv1.ListSwapCombosResponse]
+	listMatrixUniverse           *connect.Client[dashboardv1.ListMatrixUniverseRequest, dashboardv1.ListMatrixUniverseResponse]
+	streamUpdates                *connect.Client[dashboardv1.StreamUpdatesRequest, dashboardv1.StreamUpdatesResponse]
+	health                       *connect.Client[dashboardv1.HealthRequest, dashboardv1.HealthResponse]
+	getFrontConfig               *connect.Client[dashboardv1.GetFrontConfigRequest, dashboardv1.GetFrontConfigResponse]
+	getStrategyLedger            *connect.Client[dashboardv1.GetStrategyLedgerRequest, dashboardv1.GetStrategyLedgerResponse]
+	getWatchlist                 *connect.Client[dashboardv1.GetWatchlistRequest, dashboardv1.GetWatchlistResponse]
+	setWatchlist                 *connect.Client[dashboardv1.SetWatchlistRequest, dashboardv1.SetWatchlistResponse]
+	askAnalyst                   *connect.Client[dashboardv1.AskAnalystRequest, dashboardv1.AskAnalystResponse]
+	appendAnalystNote            *connect.Client[dashboardv1.AppendAnalystNoteRequest, dashboardv1.AppendAnalystNoteResponse]
+	generateKbReport             *connect.Client[dashboardv1.GenerateKbReportRequest, dashboardv1.GenerateKbReportResponse]
+	generateRetroReport          *connect.Client[dashboardv1.GenerateRetroReportRequest, dashboardv1.GenerateRetroReportResponse]
+	listReports                  *connect.Client[dashboardv1.ListReportsRequest, dashboardv1.ListReportsResponse]
+	getReport                    *connect.Client[dashboardv1.GetReportRequest, dashboardv1.GetReportResponse]
+	getAiSettings                *connect.Client[dashboardv1.GetAiSettingsRequest, dashboardv1.GetAiSettingsResponse]
+	setAiSettings                *connect.Client[dashboardv1.SetAiSettingsRequest, dashboardv1.SetAiSettingsResponse]
+	getRepoConfig                *connect.Client[dashboardv1.GetRepoConfigRequest, dashboardv1.GetRepoConfigResponse]
+	setRepoConfig                *connect.Client[dashboardv1.SetRepoConfigRequest, dashboardv1.SetRepoConfigResponse]
+	getCexScanSnapshot           *connect.Client[dashboardv1.GetCexScanSnapshotRequest, dashboardv1.GetCexScanSnapshotResponse]
+	recordRepoTrade              *connect.Client[dashboardv1.RecordRepoTradeRequest, dashboardv1.RecordRepoTradeResponse]
+	listRepoTrades               *connect.Client[dashboardv1.ListRepoTradesRequest, dashboardv1.ListRepoTradesResponse]
+	settleRepoTrade              *connect.Client[dashboardv1.SettleRepoTradeRequest, dashboardv1.SettleRepoTradeResponse]
+	deleteRepoTrade              *connect.Client[dashboardv1.DeleteRepoTradeRequest, dashboardv1.DeleteRepoTradeResponse]
+	getRepoStrategyValidation    *connect.Client[dashboardv1.GetRepoStrategyValidationRequest, dashboardv1.GetRepoStrategyValidationResponse]
+	listPriceAlertRules          *connect.Client[dashboardv1.ListPriceAlertRulesRequest, dashboardv1.ListPriceAlertRulesResponse]
+	createPriceAlertRule         *connect.Client[dashboardv1.CreatePriceAlertRuleRequest, dashboardv1.CreatePriceAlertRuleResponse]
+	updatePriceAlertRule         *connect.Client[dashboardv1.UpdatePriceAlertRuleRequest, dashboardv1.UpdatePriceAlertRuleResponse]
+	deletePriceAlertRule         *connect.Client[dashboardv1.DeletePriceAlertRuleRequest, dashboardv1.DeletePriceAlertRuleResponse]
+	listEventJudgments           *connect.Client[dashboardv1.ListEventJudgmentsRequest, dashboardv1.ListEventJudgmentsResponse]
+	listPaperTrades              *connect.Client[dashboardv1.ListPaperTradesRequest, dashboardv1.ListPaperTradesResponse]
+	acceptJudgment               *connect.Client[dashboardv1.AcceptJudgmentRequest, dashboardv1.AcceptJudgmentResponse]
+	settlePaperTrade             *connect.Client[dashboardv1.SettlePaperTradeRequest, dashboardv1.SettlePaperTradeResponse]
+	getFinanceOverview           *connect.Client[dashboardv1.GetFinanceOverviewRequest, dashboardv1.GetFinanceOverviewResponse]
+	executeSpotCarryDemo         *connect.Client[dashboardv1.ExecuteSpotCarryDemoRequest, dashboardv1.ExecuteSpotCarryDemoResponse]
+	listSpotCarryDemo            *connect.Client[dashboardv1.ListSpotCarryDemoRequest, dashboardv1.ListSpotCarryDemoResponse]
+	listPaperSpotCarry           *connect.Client[dashboardv1.ListPaperSpotCarryRequest, dashboardv1.ListPaperSpotCarryResponse]
+	listAutotradeAllowRules      *connect.Client[dashboardv1.ListAutotradeAllowRulesRequest, dashboardv1.ListAutotradeAllowRulesResponse]
+	setAutotradeAllowRuleEnabled *connect.Client[dashboardv1.SetAutotradeAllowRuleEnabledRequest, dashboardv1.SetAutotradeAllowRuleEnabledResponse]
+	addAutotradeAllowRule        *connect.Client[dashboardv1.AddAutotradeAllowRuleRequest, dashboardv1.AddAutotradeAllowRuleResponse]
+	deleteAutotradeAllowRule     *connect.Client[dashboardv1.DeleteAutotradeAllowRuleRequest, dashboardv1.DeleteAutotradeAllowRuleResponse]
+	listIntraTrades              *connect.Client[dashboardv1.ListIntraTradesRequest, dashboardv1.ListIntraTradesResponse]
+	intraTrackStats              *connect.Client[dashboardv1.IntraTrackStatsRequest, dashboardv1.IntraTrackStatsResponse]
+	getCapitalCoverage           *connect.Client[dashboardv1.GetCapitalCoverageRequest, dashboardv1.GetCapitalCoverageResponse]
+	getCapitalMap                *connect.Client[dashboardv1.GetCapitalMapRequest, dashboardv1.GetCapitalMapResponse]
+	getCexFinance                *connect.Client[dashboardv1.GetCexFinanceRequest, dashboardv1.GetCexFinanceResponse]
+	listCarryGraduations         *connect.Client[dashboardv1.ListCarryGraduationsRequest, dashboardv1.ListCarryGraduationsResponse]
+	approveCarryGraduation       *connect.Client[dashboardv1.ApproveCarryGraduationRequest, dashboardv1.ApproveCarryGraduationResponse]
+	rejectCarryGraduation        *connect.Client[dashboardv1.RejectCarryGraduationRequest, dashboardv1.RejectCarryGraduationResponse]
+	listVenueExposureCaps        *connect.Client[dashboardv1.ListVenueExposureCapsRequest, dashboardv1.ListVenueExposureCapsResponse]
+	setVenueExposureCap          *connect.Client[dashboardv1.SetVenueExposureCapRequest, dashboardv1.SetVenueExposureCapResponse]
+	listXAssetAllowCombos        *connect.Client[dashboardv1.ListXAssetAllowCombosRequest, dashboardv1.ListXAssetAllowCombosResponse]
+	listXAssetPendingEntries     *connect.Client[dashboardv1.ListXAssetPendingEntriesRequest, dashboardv1.ListXAssetPendingEntriesResponse]
+	upsertXAssetAllowCombo       *connect.Client[dashboardv1.UpsertXAssetAllowComboRequest, dashboardv1.UpsertXAssetAllowComboResponse]
+	resumeXAssetCombo            *connect.Client[dashboardv1.ResumeXAssetComboRequest, dashboardv1.ResumeXAssetComboResponse]
+	previewXAssetComboRisk       *connect.Client[dashboardv1.PreviewXAssetComboRiskRequest, dashboardv1.PreviewXAssetComboRiskResponse]
+	listAccountMarginStatus      *connect.Client[dashboardv1.ListAccountMarginStatusRequest, dashboardv1.ListAccountMarginStatusResponse]
+	listAppConfig                *connect.Client[dashboardv1.ListAppConfigRequest, dashboardv1.ListAppConfigResponse]
+	updateAppConfig              *connect.Client[dashboardv1.UpdateAppConfigRequest, dashboardv1.UpdateAppConfigResponse]
+	selfRestart                  *connect.Client[dashboardv1.SelfRestartRequest, dashboardv1.SelfRestartResponse]
+	listAppSecrets               *connect.Client[dashboardv1.ListAppSecretsRequest, dashboardv1.ListAppSecretsResponse]
+	updateAppSecret              *connect.Client[dashboardv1.UpdateAppSecretRequest, dashboardv1.UpdateAppSecretResponse]
 }
 
 // ListLatestQuotes calls arb.dashboard.v1.DashboardService.ListLatestQuotes.
@@ -2263,23 +2229,6 @@ func (c *dashboardServiceClient) ListAccountMarginStatus(ctx context.Context, re
 	return c.listAccountMarginStatus.CallUnary(ctx, req)
 }
 
-// ListPerpFundingAdmission calls arb.dashboard.v1.DashboardService.ListPerpFundingAdmission.
-func (c *dashboardServiceClient) ListPerpFundingAdmission(ctx context.Context, req *connect.Request[dashboardv1.ListPerpFundingAdmissionRequest]) (*connect.Response[dashboardv1.ListPerpFundingAdmissionResponse], error) {
-	return c.listPerpFundingAdmission.CallUnary(ctx, req)
-}
-
-// SetPerpFundingAdmissionOverride calls
-// arb.dashboard.v1.DashboardService.SetPerpFundingAdmissionOverride.
-func (c *dashboardServiceClient) SetPerpFundingAdmissionOverride(ctx context.Context, req *connect.Request[dashboardv1.SetPerpFundingAdmissionOverrideRequest]) (*connect.Response[dashboardv1.SetPerpFundingAdmissionOverrideResponse], error) {
-	return c.setPerpFundingAdmissionOverride.CallUnary(ctx, req)
-}
-
-// ReevaluatePerpFundingAdmission calls
-// arb.dashboard.v1.DashboardService.ReevaluatePerpFundingAdmission.
-func (c *dashboardServiceClient) ReevaluatePerpFundingAdmission(ctx context.Context, req *connect.Request[dashboardv1.ReevaluatePerpFundingAdmissionRequest]) (*connect.Response[dashboardv1.ReevaluatePerpFundingAdmissionResponse], error) {
-	return c.reevaluatePerpFundingAdmission.CallUnary(ctx, req)
-}
-
 // ListAppConfig calls arb.dashboard.v1.DashboardService.ListAppConfig.
 func (c *dashboardServiceClient) ListAppConfig(ctx context.Context, req *connect.Request[dashboardv1.ListAppConfigRequest]) (*connect.Response[dashboardv1.ListAppConfigResponse], error) {
 	return c.listAppConfig.CallUnary(ctx, req)
@@ -2488,10 +2437,6 @@ type DashboardServiceHandler interface {
 	// D-405 S6：账户资金与保证金卡（财务页下钻）——数据源 fin_venue_margin_status
 	// + snapshot 最新行 join；覆盖天数/建议补资金/档位全后端给，前端零计算。
 	ListAccountMarginStatus(context.Context, *connect.Request[dashboardv1.ListAccountMarginStatusRequest]) (*connect.Response[dashboardv1.ListAccountMarginStatusResponse], error)
-	// D-491 S6：PERP_FUNDING 证据准入——全行透出/业主钉死三态/手动复估。
-	ListPerpFundingAdmission(context.Context, *connect.Request[dashboardv1.ListPerpFundingAdmissionRequest]) (*connect.Response[dashboardv1.ListPerpFundingAdmissionResponse], error)
-	SetPerpFundingAdmissionOverride(context.Context, *connect.Request[dashboardv1.SetPerpFundingAdmissionOverrideRequest]) (*connect.Response[dashboardv1.SetPerpFundingAdmissionOverrideResponse], error)
-	ReevaluatePerpFundingAdmission(context.Context, *connect.Request[dashboardv1.ReevaluatePerpFundingAdmissionRequest]) (*connect.Response[dashboardv1.ReevaluatePerpFundingAdmissionResponse], error)
 	// D-523：app_config 键管理面（SettingsPage）+自杀重启生效通道。
 	ListAppConfig(context.Context, *connect.Request[dashboardv1.ListAppConfigRequest]) (*connect.Response[dashboardv1.ListAppConfigResponse], error)
 	UpdateAppConfig(context.Context, *connect.Request[dashboardv1.UpdateAppConfigRequest]) (*connect.Response[dashboardv1.UpdateAppConfigResponse], error)
@@ -3282,24 +3227,6 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		connect.WithSchema(dashboardServiceMethods.ByName("ListAccountMarginStatus")),
 		connect.WithHandlerOptions(opts...),
 	)
-	dashboardServiceListPerpFundingAdmissionHandler := connect.NewUnaryHandler(
-		DashboardServiceListPerpFundingAdmissionProcedure,
-		svc.ListPerpFundingAdmission,
-		connect.WithSchema(dashboardServiceMethods.ByName("ListPerpFundingAdmission")),
-		connect.WithHandlerOptions(opts...),
-	)
-	dashboardServiceSetPerpFundingAdmissionOverrideHandler := connect.NewUnaryHandler(
-		DashboardServiceSetPerpFundingAdmissionOverrideProcedure,
-		svc.SetPerpFundingAdmissionOverride,
-		connect.WithSchema(dashboardServiceMethods.ByName("SetPerpFundingAdmissionOverride")),
-		connect.WithHandlerOptions(opts...),
-	)
-	dashboardServiceReevaluatePerpFundingAdmissionHandler := connect.NewUnaryHandler(
-		DashboardServiceReevaluatePerpFundingAdmissionProcedure,
-		svc.ReevaluatePerpFundingAdmission,
-		connect.WithSchema(dashboardServiceMethods.ByName("ReevaluatePerpFundingAdmission")),
-		connect.WithHandlerOptions(opts...),
-	)
 	dashboardServiceListAppConfigHandler := connect.NewUnaryHandler(
 		DashboardServiceListAppConfigProcedure,
 		svc.ListAppConfig,
@@ -3590,12 +3517,6 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServicePreviewXAssetComboRiskHandler.ServeHTTP(w, r)
 		case DashboardServiceListAccountMarginStatusProcedure:
 			dashboardServiceListAccountMarginStatusHandler.ServeHTTP(w, r)
-		case DashboardServiceListPerpFundingAdmissionProcedure:
-			dashboardServiceListPerpFundingAdmissionHandler.ServeHTTP(w, r)
-		case DashboardServiceSetPerpFundingAdmissionOverrideProcedure:
-			dashboardServiceSetPerpFundingAdmissionOverrideHandler.ServeHTTP(w, r)
-		case DashboardServiceReevaluatePerpFundingAdmissionProcedure:
-			dashboardServiceReevaluatePerpFundingAdmissionHandler.ServeHTTP(w, r)
 		case DashboardServiceListAppConfigProcedure:
 			dashboardServiceListAppConfigHandler.ServeHTTP(w, r)
 		case DashboardServiceUpdateAppConfigProcedure:
@@ -4129,18 +4050,6 @@ func (UnimplementedDashboardServiceHandler) PreviewXAssetComboRisk(context.Conte
 
 func (UnimplementedDashboardServiceHandler) ListAccountMarginStatus(context.Context, *connect.Request[dashboardv1.ListAccountMarginStatusRequest]) (*connect.Response[dashboardv1.ListAccountMarginStatusResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListAccountMarginStatus is not implemented"))
-}
-
-func (UnimplementedDashboardServiceHandler) ListPerpFundingAdmission(context.Context, *connect.Request[dashboardv1.ListPerpFundingAdmissionRequest]) (*connect.Response[dashboardv1.ListPerpFundingAdmissionResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListPerpFundingAdmission is not implemented"))
-}
-
-func (UnimplementedDashboardServiceHandler) SetPerpFundingAdmissionOverride(context.Context, *connect.Request[dashboardv1.SetPerpFundingAdmissionOverrideRequest]) (*connect.Response[dashboardv1.SetPerpFundingAdmissionOverrideResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.SetPerpFundingAdmissionOverride is not implemented"))
-}
-
-func (UnimplementedDashboardServiceHandler) ReevaluatePerpFundingAdmission(context.Context, *connect.Request[dashboardv1.ReevaluatePerpFundingAdmissionRequest]) (*connect.Response[dashboardv1.ReevaluatePerpFundingAdmissionResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ReevaluatePerpFundingAdmission is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListAppConfig(context.Context, *connect.Request[dashboardv1.ListAppConfigRequest]) (*connect.Response[dashboardv1.ListAppConfigResponse], error) {

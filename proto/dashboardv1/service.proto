@@ -233,10 +233,6 @@ service DashboardService {
   // + snapshot 最新行 join；覆盖天数/建议补资金/档位全后端给，前端零计算。
   rpc ListAccountMarginStatus(ListAccountMarginStatusRequest) returns (ListAccountMarginStatusResponse);
 
-  // D-491 S6：PERP_FUNDING 证据准入——全行透出/业主钉死三态/手动复估。
-  rpc ListPerpFundingAdmission(ListPerpFundingAdmissionRequest) returns (ListPerpFundingAdmissionResponse);
-  rpc SetPerpFundingAdmissionOverride(SetPerpFundingAdmissionOverrideRequest) returns (SetPerpFundingAdmissionOverrideResponse);
-  rpc ReevaluatePerpFundingAdmission(ReevaluatePerpFundingAdmissionRequest) returns (ReevaluatePerpFundingAdmissionResponse);
 
   // D-523：app_config 键管理面（SettingsPage）+自杀重启生效通道。
   rpc ListAppConfig(ListAppConfigRequest) returns (ListAppConfigResponse);
