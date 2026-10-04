@@ -198,6 +198,30 @@ func TestTableHealth_EmptyTableCrit(t *testing.T) {
 	}
 }
 
+// TestTableHealth_FutureTsHealthy D-055：ts>now（串行查询间隙新行已提交）→
+// healthy 不告警——修前 age<0 走 classifyAge「无数据」语义误报 crit。
+func TestTableHealth_FutureTsHealthy(t *testing.T) {
+	store := newFakeTableHealthStore()
+	watches := []TableWatch{{Name: "trx_account", WarnAfter: 15 * time.Minute, CritAfter: 1 * time.Hour}}
+	mon := NewTableFreshnessMonitor(store, watches, time.Hour)
+	base := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
+	mon.now = func() time.Time { return base }
+	mon.bootGraceTicks = 0
+
+	store.setTs("trx_account", base.Add(300*time.Millisecond)) // 未来 ts=刚提交鲜行
+	mon.poll(context.Background())
+	if got := store.alertCount(); got != 0 {
+		t.Fatalf("future ts want 0 alerts, got %v", store.snapshot())
+	}
+	// 同刻 ts（age=0）同样 healthy。
+	mon.poll(context.Background())
+	store.setTs("trx_account", base)
+	mon.poll(context.Background())
+	if got := store.alertCount(); got != 0 {
+		t.Fatalf("same-instant ts want 0 alerts, got %v", store.snapshot())
+	}
+}
+
 // TestTableHealth_RecoveredOneAlert recovered 恰一次告警。
 func TestTableHealth_RecoveredOneAlert(t *testing.T) {
 	store := newFakeTableHealthStore()

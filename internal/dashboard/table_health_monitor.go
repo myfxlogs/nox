@@ -108,8 +108,11 @@ func (m *TableFreshnessMonitor) poll(ctx context.Context) {
 			log.Printf("[table-health] %s TableMaxTs: %v", w.Name, err)
 		} else if ts.IsZero() {
 			// 空表 → crit（从未采集=异常）
+		} else if age = now.Sub(ts); age <= 0 {
+			// D-055：未来/同刻 ts=串行查询间隙新行刚提交——按刚写鲜行判 healthy。
+			// （classifyAge 的 age<=0→crit 是 mt_health「无数据」语义，此处 ts 有效不适用）
+			raw = metricHealthy
 		} else {
-			age = now.Sub(ts)
 			raw = classifyAge(age, w.WarnAfter, w.CritAfter)
 		}
 		newStates[w.Name] = raw
