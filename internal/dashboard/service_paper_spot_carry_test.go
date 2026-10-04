@@ -187,9 +187,10 @@ func TestD352_ListPaperSpotCarry_TTL(t *testing.T) {
 
 // fakePaperBoardSource paperBoardSource fake（调用计数驱动 TTL 锚）。
 type fakePaperBoardSource struct {
-	rows  []pgstore.PaperSpotCarry
-	uni   map[string]pgstore.CexUniverseRow
-	calls int
+	rows    []pgstore.PaperSpotCarry
+	uni     map[string]pgstore.CexUniverseRow
+	cfdNets map[string]float64 // D-060①：CFD 结构行 net_now 读口
+	calls   int
 }
 
 func (f *fakePaperBoardSource) ListPaperSpotCarryBoard(_ context.Context, _ time.Duration) ([]pgstore.PaperSpotCarry, error) {
@@ -202,6 +203,14 @@ func (f *fakePaperBoardSource) ListCexUniverse(_ context.Context) (map[string]pg
 		return map[string]pgstore.CexUniverseRow{}, nil
 	}
 	return f.uni, nil
+}
+
+// D-060①：CFD 结构行 net_now 读口（nil→空 map，与生产读口零行语义一致）。
+func (f *fakePaperBoardSource) ListCfdCarryNetNow(_ context.Context) (map[string]float64, error) {
+	if f.cfdNets == nil {
+		return map[string]float64{}, nil
+	}
+	return f.cfdNets, nil
 }
 
 // TestD354_PnlNumbers D-354 T3：收益率三数+净浮盈——short 基差回落=正/long 反号、

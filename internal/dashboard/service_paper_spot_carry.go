@@ -37,6 +37,9 @@ const paperTurnCostPct = 0.003
 type paperBoardSource interface {
 	ListPaperSpotCarryBoard(ctx context.Context, recentWindow time.Duration) ([]pgstore.PaperSpotCarry, error)
 	ListCexUniverse(ctx context.Context) (map[string]pgstore.CexUniverseRow, error)
+	// D-060①：CFD 结构行「当前」净 carry 读口（fin_carry_universe 四元组键；
+	// fin_cex_universe 单 CEX 键对 mt×cex 配对行永不命中=死 join 根因）。
+	ListCfdCarryNetNow(ctx context.Context) (map[string]float64, error)
 }
 
 // ListPaperSpotCarry 纸面轨三态清单（15s TTL 缓存，语义同 GetFinanceOverview）。
@@ -81,6 +84,11 @@ func buildPaperSpotCarryBoard(ctx context.Context, src paperBoardSource, now tim
 	if err != nil {
 		return nil, err
 	}
+	// D-060①：CFD 结构行净 carry 读口（fin_carry_universe 现快照；读失败同 uni 径整报）。
+	cfdNets, err := src.ListCfdCarryNetNow(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	rows := make([]*v1.PaperSpotCarryRow, 0, len(papers))
 	tracks := map[string]*v1.PaperTrackSummary{}
@@ -121,8 +129,15 @@ func buildPaperSpotCarryBoard(ctx context.Context, src paperBoardSource, now tim
 			row.ExitTs = p.ExitTs.Format(time.RFC3339)
 		}
 		row.ExitReason = p.ExitReason
-		// join fin_cex_universe（venue|symbol 键，与纸面步进同款）；缺行→null（fail-closed 传播）
-		if u, ok := uni[p.VenuePair()+"|"+p.Symbol]; ok && u.FundingAnn != nil {
+		// 「当前」列 join：CFD 结构行走 fin_carry_universe（mt×cex×canonical×structure
+		// 四元组键——fin_cex_universe 是单 CEX 键对配对行永不命中，D-060① 死 join 根修）；
+		// netNow=net_annual_pct 直出（已含 swap 修正，不再减 0.15 成本常数）。
+		// 其余轨 join fin_cex_universe（venue|symbol 键，与纸面步进同款）；缺行→null（fail-closed 传播）。
+		if isCfdPaperStructure(structure) {
+			if net, ok := cfdNets[p.VenueA+"|"+p.VenueB+"|"+p.Symbol+"|"+structure]; ok {
+				row.NetNow = &net
+			}
+		} else if u, ok := uni[p.VenuePair()+"|"+p.Symbol]; ok && u.FundingAnn != nil {
 			last := *u.FundingAnn
 			row.LastFundingAnn = &last
 			net := math.Abs(last) - paperSpotCostPct
@@ -219,6 +234,11 @@ func buildPaperSpotCarryBoard(ctx context.Context, src paperBoardSource, now tim
 		return trackList[i].Structure < trackList[j].Structure
 	})
 	return &v1.ListPaperSpotCarryResponse{Rows: rows, Tracks: trackList}, nil
+}
+
+// isCfdPaperStructure CFD 纸面轨结构判（mt×cex 双腿；mt×mt 轨不在本卡 join 域）。
+func isCfdPaperStructure(structure string) bool {
+	return structure == "long_cfd_short_perp" || structure == "short_cfd_long_perp"
 }
 
 // segRank 三段序：active=0 / demo=1 / exited=2。
