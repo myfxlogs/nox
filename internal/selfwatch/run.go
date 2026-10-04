@@ -1,6 +1,7 @@
 // run.go —— D-033：自盯调度（看门狗形态——timer 定点唤醒，数据全在触发时刻
 // 单查 DB；任何周期 ticker 不携带/刷新业务状态）。
-// 节奏：日报 08:00 BJ（周一兼发周报=原 D-032 ④ 并入本面）；异常体检每小时正点唤醒。
+// 节奏：日报 08:30 BJ（D-056③——晚于 00:05Z 纸面轮，含当日 00:00Z 结算后计息；
+// 周一兼发周报=原 D-032 ④ 并入本面）；异常体检每小时正点唤醒。
 package selfwatch
 
 import (
@@ -15,15 +16,15 @@ import (
 func Run(ctx context.Context, d Deps) {
 	safego.Go("selfwatch:daily", func() { dailyLoop(ctx, d) })
 	safego.Go("selfwatch:anomaly", func() { anomalyLoop(ctx, d) })
-	log.Printf("[selfwatch] scheduler started (daily 08:00BJ paper+stage · mon 08:00BJ weekly · hourly anomaly)")
+	log.Printf("[selfwatch] scheduler started (daily 08:30BJ paper+stage · mon 08:30BJ weekly · hourly anomaly)")
 	<-ctx.Done()
 }
 
-// dailyLoop 每日 08:00 BJ：paper 窗日报+Stage 表 → 落档/告警/飞书；
+// dailyLoop 每日 08:30 BJ：paper 窗日报+Stage 表 → 落档/告警/飞书；
 // 全项 ✅ 时附「待决策：Stage 1 可启」独立 info 告警；周一同点加发周报（D-032 ④ 移入）。
 func dailyLoop(ctx context.Context, d Deps) {
 	for {
-		next := NextDailyBJ(d.now(), 8, 0)
+		next := NextDailyBJ(d.now(), 8, 30)
 		if !sleepUntil(ctx, next) {
 			return
 		}
@@ -61,7 +62,7 @@ func emitStage1Ready(ctx context.Context, d Deps, ready bool) {
 		log.Printf("[selfwatch] stage1 ready state read: %v", perr)
 	}
 	if ready && !(perr == nil && pok && prev == "1") {
-		const readyMsg = "[自盯][stage1_ready] 待决策：Stage 1 可启（paper 窗≥7d·组合净额非负·组合在仓≥5d·零事故·子系统在线·cap/白名单已定）"
+		const readyMsg = "[自盯][stage1_ready] 待决策：Stage 1 可启（观测窗满7天·组合净额非负·组合在仓满5天·零事故·子系统在线·仓位上限/白名单已定）"
 		if err := d.Store.InsertAlertDedup(ctx, "info", readyMsg, 7*24*time.Hour); err != nil {
 			log.Printf("[selfwatch] stage1 ready alert: %v", err)
 		}
