@@ -169,15 +169,6 @@ func renderDaily(ctx context.Context, d Deps, since time.Time, ok bool, ev *scan
 		line += fmt.Sprintf("｜其他 %d 行·%d 品种", split.OtherRows, split.OtherSyms)
 	}
 	b.WriteString(line + "\n")
-	// D-051③：CEX 纸面入口拦截分布（环比=累计计数与 app_config 基线差分；
-	// sink 未接线则整段省略）。五闸因人话化，余项归「其他」。
-	if d.CexSkipStats != nil {
-		skipLine, err := d.cexSkipLine(ctx)
-		if err != nil {
-			return "", err
-		}
-		b.WriteString(skipLine)
-	}
 	b.WriteString("■ Stage 1 就绪\n")
 	writeTable(&b, rep.Stage1Table)
 	if rep.Stage1OK {
