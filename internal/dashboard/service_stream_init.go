@@ -86,7 +86,7 @@ func (s *Service) streamInitOppsAlerts(ctx context.Context, stream *connect.Serv
 	return nil
 }
 
-// streamInitPosMonDomains D-571 包C：posMon 四域回放——positions(case4)/personal(case18)/
+// streamInitPosMonDomains D-571 包C：posMon 域回放——positions(case4)/（D-063：personal case18 拆）/
 // hedge(case17)/health(case5) latest 全量逐条/单帧 Send（首次访问触发 posMon boot 组装）。
 func (s *Service) streamInitPosMonDomains(ctx context.Context, stream *connect.ServerStream[v1.StreamUpdatesResponse]) error {
 	if s.posMon == nil {
@@ -95,13 +95,6 @@ func (s *Service) streamInitPosMonDomains(ctx context.Context, stream *connect.S
 	for _, p := range s.posMon.PositionEvents(ctx) {
 		if err := stream.Send(&v1.StreamUpdatesResponse{
 			Update: &v1.StreamUpdatesResponse_Position{Position: p},
-		}); err != nil {
-			return err
-		}
-	}
-	for _, ev := range s.posMon.PersonalEvents(ctx) {
-		if err := stream.Send(&v1.StreamUpdatesResponse{
-			Update: &v1.StreamUpdatesResponse_PersonalPositionEvent{PersonalPositionEvent: ev},
 		}); err != nil {
 			return err
 		}

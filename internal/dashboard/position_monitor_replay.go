@@ -30,18 +30,6 @@ func (m *PositionMonitor) PositionEvents(ctx context.Context) []*v1.Position {
 	return out
 }
 
-// PersonalEvents case18 回放源。
-func (m *PositionMonitor) PersonalEvents(ctx context.Context) []*v1.PersonalPositionEvent {
-	m.ensureBoot(ctx)
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	out := make([]*v1.PersonalPositionEvent, 0, len(m.latestPers))
-	for _, k := range sortedKeys(m.latestPers) {
-		out = append(out, &v1.PersonalPositionEvent{Upsert: m.latestPers[k]})
-	}
-	return out
-}
-
 // HedgeEvent case17 回放源（单槽）。
 func (m *PositionMonitor) HedgeEvent(ctx context.Context) *v1.HedgeData {
 	m.ensureBoot(ctx)
@@ -78,15 +66,6 @@ func (m *PositionMonitor) SubscribePositions() <-chan *v1.Position {
 		return nil
 	}
 	ch, _ := m.evPos.Subscribe()
-	return ch
-}
-
-// SubscribePersonal case18 订阅口。
-func (m *PositionMonitor) SubscribePersonal() <-chan *v1.PersonalPositionEvent {
-	if m == nil || m.evPers == nil {
-		return nil
-	}
-	ch, _ := m.evPers.Subscribe()
 	return ch
 }
 

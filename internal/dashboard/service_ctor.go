@@ -6,7 +6,6 @@ import (
 
 	"arb/internal/bus"
 	"arb/internal/exec"
-	"arb/internal/position"
 	"arb/internal/store/pgstore"
 )
 
@@ -41,7 +40,6 @@ type FrontConfig struct {
 // swapArbEquityUseRatio 为 swap 套利名义额资金使用率系数（S6，传 config.SwapArbEquityUseRatio）；
 // swapArbBareCap 为 swap 套利单腿裸露上限系数（D-097 R2，传 config.SwapArbBareCap）；
 // swapArbVenueExposureCap 为单 venue SWAPARB 合计裸露上限系数（D-132 T1，传 config.SwapArbVenueExposureCap）；
-// priceTopic 为实时现价广播 topic（D-049，传 main 创建的 priceTopic）；
 // oppTopic 为新机会站内推送 topic（D-050，传 main 创建的 oppTopic）；
 // bpm 为 Broker 实持仓 monitor（D-052，传 main 创建的 bpm）；
 // notionalUSD 为 net_usd 换算的单笔名义（D-053，传 config.OpportunityNotionalUSD）；
@@ -49,8 +47,8 @@ type FrontConfig struct {
 // alertTopic 为告警实时推送广播（D-114，传 main 创建的 alertTopic；InsertAlert → store.alertHook → alertTopic.Publish → case 3）。
 // commissionFor 为 per-venue 佣金解析器（D-111 收敛型实时 bps 成本扣除，nil = commissionBps=0）。
 // slippageBps 为滑点成本（D-111，slippageCost = slippageBps * 2）。
-func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64, fundingDropRatio float64, swapArbEquityUseRatio float64, swapArbBareCap float64, swapArbVenueExposureCap float64, priceTopic *bus.Topic[position.PositionPrice], oppTopic *bus.Topic[pgstore.Opportunity], alertTopic *bus.Topic[pgstore.Alert], bpm *BrokerPositionMonitor, notionalUSD float64, acctMon *AccountMonitor, commissionFor func(string) float64, slippageBps float64, xassetCexFeeBps float64, kickFn func(string)) *Service {
-	return &Service{store: store, gradStore: store, qbus: qbus, pipeline: pipeline, gateChecker: &storeGateChecker{store: store}, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, swapArbEquityUseRatio: swapArbEquityUseRatio, swapArbBareCap: swapArbBareCap, swapArbVenueExposureCap: swapArbVenueExposureCap, priceTopic: priceTopic, oppTopic: oppTopic, alertTopic: alertTopic, bpm: bpm, notionalUSD: notionalUSD, acctMon: acctMon, commissionFor: commissionFor, slippageBps: slippageBps, xassetCexFeeBps: xassetCexFeeBps, kickFn: kickFn}
+func New(store *pgstore.Store, qbus *bus.QuoteBus, pipeline *exec.Pipeline, bm *BrokerManager, reviewer func(), freshTTL time.Duration, liqMMR float64, fundingDropRatio float64, swapArbEquityUseRatio float64, swapArbBareCap float64, swapArbVenueExposureCap float64, oppTopic *bus.Topic[pgstore.Opportunity], alertTopic *bus.Topic[pgstore.Alert], bpm *BrokerPositionMonitor, notionalUSD float64, acctMon *AccountMonitor, commissionFor func(string) float64, slippageBps float64, xassetCexFeeBps float64, kickFn func(string)) *Service {
+	return &Service{store: store, gradStore: store, qbus: qbus, pipeline: pipeline, gateChecker: &storeGateChecker{store: store}, bm: bm, reviewer: reviewer, freshTTL: freshTTL, liqMMR: liqMMR, fundingDropRatio: fundingDropRatio, swapArbEquityUseRatio: swapArbEquityUseRatio, swapArbBareCap: swapArbBareCap, swapArbVenueExposureCap: swapArbVenueExposureCap, oppTopic: oppTopic, alertTopic: alertTopic, bpm: bpm, notionalUSD: notionalUSD, acctMon: acctMon, commissionFor: commissionFor, slippageBps: slippageBps, xassetCexFeeBps: xassetCexFeeBps, kickFn: kickFn}
 }
 
 // SetBalanceLedger/Store/AutoClosePosition/ResumeClose/ClaimClose 转发与注入面

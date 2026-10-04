@@ -6,13 +6,11 @@ import (
 	"time"
 
 	"arb/internal/bus"
-	"arb/internal/position"
 	"arb/internal/store/pgstore"
 
 	v1 "arb/internal/gen/dashboardv1"
 
 	"connectrpc.com/connect"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func (s *Service) ListPositions(ctx context.Context, req *connect.Request[v1.ListPositionsRequest]) (*connect.Response[v1.ListPositionsResponse], error) {
@@ -68,103 +66,13 @@ func (s *Service) assemblePositions(ctx context.Context, status string, limit, o
 
 // --- 个人持仓（财务线 TRX 持仓接入，D-046 + 实账化工作项 3） ---
 
-// ListPersonalPositions 返回 OPEN 个人持仓 + 后端计算当前价/告警态/实账（D-043 零信任：前端只渲染）。
-func (s *Service) ListPersonalPositions(ctx context.Context, req *connect.Request[v1.ListPersonalPositionsRequest]) (*connect.Response[v1.ListPersonalPositionsResponse], error) {
-	items, err := s.assemblePersonalPositions(ctx)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	return connect.NewResponse(&v1.ListPersonalPositionsResponse{Items: items}), nil
-}
-
-// assemblePersonalPositions D-571 包C：ListPersonalPositions 组装公共口（RPC 与
-// positionMon case18 发射器同源复用——禁第二套组装）。
-func (s *Service) assemblePersonalPositions(ctx context.Context) ([]*v1.PersonalPosition, error) {
-	positions, err := s.store.ListPersonalPositions(ctx, "OPEN", 200, 0)
-	if err != nil {
-		return nil, err
-	}
-	// D-260 S1：累计利息取源切 fin_cmc_history OVERNIGHT_SETTLEMENT 全量（治本 ~$6.62 低估——daily rollup 链 9-7 起跑，9-7 前隔夜息未入 position_daily_income）。SumDailyIncomeInterest 保留历史查询语义。
-	accrued, err := s.store.SumCMCOvernightByRange(ctx, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	var symbols []string
-	for _, p := range positions {
-		symbols = append(symbols, p.PriceSymbol)
-	}
-	snap := s.qbus.Snapshot(ctx, symbols)
-	now := time.Now()
-	items := make([]*v1.PersonalPosition, 0, len(positions))
-	for i := range positions {
-		items = append(items, personalPositionToProto(&positions[i], snap[positions[i].PriceSymbol], s.freshTTL, now, accrued, s.liqMMR, s.cmcSource))
-	}
-	return items, nil
-}
-
 // personalPositionToProto 组装单个个人持仓响应：取该 symbol 最新（Time 最新）且未超陈旧 TTL 的一帧 mid 为当前价，
 // 复用 position.PersonalLevel 算告警态。无报价或全陈旧 → price 保持 0、level 空（诚实空态，G3）。
 // 实账计算（D-043，全后端）：pnl/liq_price/距强平%/累计利息。
 // D-208 v2：CMC 行（cmc_instrument_id 非空 + cmcSource 注入）走 ComputeCMCPositionPrice +
 //
 //	从 fin_cmc_positions 填 EntryPrice/Leverage/OpenedAt/Qty 真值（视图全自动）。
-func personalPositionToProto(p *pgstore.PersonalPosition, venues map[string]bus.Quote, freshTTL time.Duration, now time.Time, accruedInterest float64, liqMMR float64, cmcSrc position.CMCSource) *v1.PersonalPosition {
-	pb := &v1.PersonalPosition{
-		Id:                 p.ID,
-		Asset:              p.Asset,
-		Kind:               p.Kind,
-		PriceSymbol:        p.PriceSymbol,
-		Note:               p.Note,
-		Status:             p.Status,
-		AccruedInterestUsd: accruedInterest,
-	}
-	if p.WarnHigh != nil {
-		pb.WarnHigh = *p.WarnHigh
-	}
-	if p.CritHigh != nil {
-		pb.CritHigh = *p.CritHigh
-	}
-	if p.Qty != nil {
-		pb.Qty = *p.Qty
-	}
-	if p.EntryPrice != nil {
-		pb.EntryPrice = *p.EntryPrice
-	}
-	if p.Leverage != nil {
-		pb.Leverage = int32(*p.Leverage)
-	}
-	if p.OpenedAt != nil {
-		pb.OpenedAt = timestamppb.New(*p.OpenedAt)
-	}
-
-	// D-208 v2：CMC 行视图全自动——从 fin_cmc_positions 填真值 + ComputeCMCPositionPrice。
-	if p.CMCInstrumentID != nil && *p.CMCInstrumentID != "" && cmcSrc != nil {
-		applyCMCPositionFields(pb, p, cmcSrc, freshTTL, now)
-		return pb
-	}
-
-	// 价格派生字段：单点计算（D-049，P3：快照路径与实时推送共用同一 ComputePositionPrice）。
-	v := position.ComputePositionPrice(p, venues, freshTTL, now, liqMMR)
-	pb.Price = v.Price
-	pb.Level = v.Level
-	pb.PnlUsd = v.PnlUsd
-	pb.LiqPrice = v.LiqPrice
-	pb.DistToLiqPct = v.DistToLiqPct
-	return pb
-}
-
 // positionPriceToProto 实时现价推送消息（D-049）：前端仅按 id 合并渲染，不计算。
-func positionPriceToProto(v position.PositionPrice) *v1.PersonalPositionPrice {
-	return &v1.PersonalPositionPrice{
-		PositionId:   v.ID,
-		Price:        v.Price,
-		Level:        v.Level,
-		PnlUsd:       v.PnlUsd,
-		LiqPrice:     v.LiqPrice,
-		DistToLiqPct: v.DistToLiqPct,
-	}
-}
-
 // --- 每日收益（财务线工作项 3：个人持仓实账化） ---
 
 // AddDailyIncome 录入一条每日收益记录。前端只传 day/energy/voting/interest/note；

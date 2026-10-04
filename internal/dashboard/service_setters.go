@@ -11,7 +11,6 @@ import (
 	"arb/internal/econ"
 	"arb/internal/exec"
 	"arb/internal/keydomain"
-	"arb/internal/position"
 	"arb/internal/store/pgstore"
 )
 
@@ -59,9 +58,6 @@ func (s *Service) SetSettler(st Settler) { s.settler = st }
 // 钩在 finalizeProbeClose 成功后同步调用——注入方内部自开 goroutine 跑 LLM
 // （平仓路径不被报告延迟阻塞；测试注同步 fake 断言恰好一次）。
 func (s *Service) SetProbeReporter(fn func(ctx context.Context, posID int64)) { s.probeReporter = fn }
-
-// SetCMCSource 注入 CMC 数据源（D-208 v2：nil 安全=走老路径）。
-func (s *Service) SetCMCSource(src position.CMCSource) { s.cmcSource = src }
 
 // SetTradeModes 注入单腿 trade_mode 查询（D-060 F5）。main 在 factCache 处装配；nil = 预检放行。
 func (s *Service) SetTradeModes(f func(canonical, venueKey string) (int64, bool)) {

@@ -78,3 +78,7 @@ func TestFundingWarning(t *testing.T) {
 		t.Errorf("R1 hit should not also report 急降, got %q", got)
 	}
 }
+
+// f64 float 指针字面量（原 personal_ledger_test.go 内共享 helper——该文件 D-063 随
+// personalPositionToProto 测试拆除，本文件独立持有）。
+func f64(f float64) *float64 { return &f }

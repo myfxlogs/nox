@@ -13,7 +13,6 @@ import (
 	"arb/internal/config"
 	"arb/internal/econ"
 	"arb/internal/exec"
-	"arb/internal/position"
 	"arb/internal/reconcile"
 	"arb/internal/store/pgstore"
 
@@ -84,8 +83,6 @@ type Service struct {
 	// swapArbVenueExposureCap 单 venue SWAPARB 合计裸露上限系数（config.ARB_SWAPARB_VENUE_EXPOSURE_CAP，缺省 2.0）——D-132 T1。
 	// 新开仓时若任一腿 venue 现有 SWAPARB 活仓合计名义 + 新仓名义 > venue equity × cap → skip。0 = 不启用。
 	swapArbVenueExposureCap float64
-	// priceTopic 实时现价广播（D-049）：PersonalMonitor 经 onPrice 发布 → StreamUpdates 扇出 case 7。nil = 未接线（测试直接构造 Service）。
-	priceTopic *bus.Topic[position.PositionPrice]
 	// oppTopic 新机会推送广播（D-050）：engine 新插入发布 → StreamUpdates 扇出 case 2。nil = 未接线（测试直接构造 Service）。
 	oppTopic *bus.Topic[pgstore.Opportunity]
 	// fundingNeedTopic 资金注入提醒广播（D-072）：engine 余额不足发布 → StreamUpdates 扇出 case 10。nil = 未接线（测试直接构造 Service）。
@@ -102,8 +99,6 @@ type Service struct {
 	// D-007 S1：待入场闸态 diff 器（qbus 帧/allow_rules/看门狗三源标脏→元组 diff→pending_entries emit）。
 	pgw     *pendingGateWatcher
 	pgwOnce sync.Once
-	// D-208 v2：CMC 数据源（nil = 不支持 CMC 行，走老路径）。
-	cmcSource position.CMCSource
 	// bpm Broker 实持仓 monitor（D-052）：ListBrokerPositions 拉 + StreamUpdates case 8 推同源。nil = 未接线（测试直接构造 Service）。
 	bpm *BrokerPositionMonitor
 	// notionalUSD net_usd 换算的单笔名义（config.OpportunityNotionalUSD，D-053）。0 = 未接线（测试），net_usd=0。

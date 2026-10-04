@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"arb/internal/bus"
-	"arb/internal/position"
 	"arb/internal/store/pgstore"
 
 	v1 "arb/internal/gen/dashboardv1"
@@ -20,12 +19,6 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 	// 实时推送报价：订阅 QuoteBus 全量（wildcard ""），亚秒级行情走推流。
 	ch, cancel := s.qbus.Subscribe("")
 	defer cancel()
-	var ppCh <-chan position.PositionPrice // 实时个人持仓现价（D-049）→ case 7。nil=不订阅。
-	if s.priceTopic != nil {
-		var ppCancel func()
-		ppCh, ppCancel = s.priceTopic.Subscribe()
-		defer ppCancel()
-	}
 	// 实时新机会推送（D-050）：engine 新插入发布 → 逐条推 case 2。oppTopic nil=不订阅。
 	var oppCh <-chan pgstore.Opportunity
 	if s.oppTopic != nil {
@@ -62,10 +55,10 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 		alertCh, alertCancel = s.alertTopic.Subscribe()
 		defer alertCancel()
 	}
-	// D-571 包C：posMon 四域订阅——positions 行级 case4 复活 / personal 行级 case18 /
-	// hedge 聚合单槽 case17 / sourceHealth 行级 case5 复活（case 11/12 通知型已退役，
-	// 通知→重取模式全部收口为行级/聚合载荷帧）。posMon nil=不订阅（getter nil-safe）。
-	posCh, persCh := s.posMon.SubscribePositions(), s.posMon.SubscribePersonal()
+	// D-571 包C：posMon 三域订阅——positions 行级 case4 复活 / hedge 聚合单槽 case17 /
+	// sourceHealth 行级 case5 复活（case 11/12 通知型已退役，通知→重取模式全部收口为
+	// 行级/聚合载荷帧；D-063：personal case18 随渲染面退役拆除）。posMon nil=不订阅。
+	posCh := s.posMon.SubscribePositions()
 	hedgeCh, healthCh := s.posMon.SubscribeHedge(), s.posMon.SubscribeHealth()
 	cmcWatchCh, cmcWatchCancel := s.subscribeCMCWatchTopic() // D-234：CMC 看盘帧 → case 13
 
@@ -113,17 +106,6 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 					return err
 				}
 				delete(pending, k)
-			}
-		case v, ok := <-ppCh:
-			if !ok {
-				return nil
-			}
-			if err := stream.Send(&v1.StreamUpdatesResponse{
-				Update: &v1.StreamUpdatesResponse_PersonalPositionPrice{
-					PersonalPositionPrice: positionPriceToProto(v),
-				},
-			}); err != nil {
-				return err
 			}
 		case v, ok := <-oppCh:
 			if !ok {
@@ -176,15 +158,6 @@ func (s *Service) StreamUpdates(ctx context.Context, req *connect.Request[v1.Str
 			}
 			if err := stream.Send(&v1.StreamUpdatesResponse{
 				Update: &v1.StreamUpdatesResponse_Position{Position: v},
-			}); err != nil {
-				return err
-			}
-		case v, ok := <-persCh: // case 18：personal 行级 upsert
-			if !ok {
-				return nil
-			}
-			if err := stream.Send(&v1.StreamUpdatesResponse{
-				Update: &v1.StreamUpdatesResponse_PersonalPositionEvent{PersonalPositionEvent: v},
 			}); err != nil {
 				return err
 			}

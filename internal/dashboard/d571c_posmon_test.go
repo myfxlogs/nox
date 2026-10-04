@@ -21,7 +21,6 @@ type d571cFixture struct {
 	svc  *Service
 	mon  *PositionMonitor
 	pos  *bus.Topic[*v1.Position]
-	pers *bus.Topic[*v1.PersonalPositionEvent]
 	hedg *bus.Topic[*v1.HedgeData]
 	heal *bus.Topic[*v1.SourceHealth]
 }
@@ -34,11 +33,10 @@ func d571cSetup(t *testing.T) *d571cFixture {
 		st:   st,
 		svc:  svc,
 		pos:  bus.NewTopic[*v1.Position](),
-		pers: bus.NewTopic[*v1.PersonalPositionEvent](),
 		hedg: bus.NewTopic[*v1.HedgeData](),
 		heal: bus.NewTopic[*v1.SourceHealth](),
 	}
-	f.mon = NewPositionMonitor(svc, f.pos, f.pers, f.hedg, f.heal)
+	f.mon = NewPositionMonitor(svc, f.pos, f.hedg, f.heal)
 	// 防抖窗收缩（测试节奏）；defer 由测试持有还原。
 	old := posFlushDelay
 	posFlushDelay = 10 * time.Millisecond
@@ -218,44 +216,6 @@ func TestD571C_R2_T4_HealthKickEmits(t *testing.T) {
 		case <-time.After(50 * time.Millisecond):
 			if time.Now().After(deadline) {
 				t.Fatal("health kick 后 2s 无 case5 帧")
-			}
-		}
-	}
-}
-
-// T5 R2 F-2：personal 域「kick→真发射」——personal_positions 写行不经
-// posChange，须由 KickPersonal 定向脏化重组装 diff→case18 upsert。
-func TestD571C_R2_T5_PersonalKickEmits(t *testing.T) {
-	f := d571cSetup(t)
-	ctx := context.Background()
-	evCh, _ := f.pers.Subscribe()
-	f.mon.PersonalEvents(ctx) // boot（不广播）
-	time.Sleep(30 * time.Millisecond)
-	for len(evCh) > 0 { // 清残
-		<-evCh
-	}
-	tag := fmt.Sprintf("d571c_t5_%d", time.Now().UnixNano())
-	res, err := f.st.Pool().Exec(ctx,
-		`INSERT INTO personal_positions (asset, kind, price_symbol, note, qty, entry_price, status)
-		 VALUES ('T5COIN', 'staking', $1, 'd571c t5', 1, 1, 'OPEN')`, tag)
-	if err != nil {
-		t.Fatalf("insert personal: %v", err)
-	}
-	defer func() {
-		_, _ = f.st.Pool().Exec(ctx, `DELETE FROM personal_positions WHERE price_symbol=$1`, tag)
-	}()
-	_ = res
-	f.mon.KickPersonal()
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		select {
-		case ev := <-evCh:
-			if ev.Upsert != nil && ev.Upsert.PriceSymbol == tag {
-				return // 行级 upsert 到达=发射链通
-			}
-		case <-time.After(50 * time.Millisecond):
-			if time.Now().After(deadline) {
-				t.Fatal("KickPersonal 后 2s 无 case18 帧")
 			}
 		}
 	}
