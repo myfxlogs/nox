@@ -152,7 +152,6 @@ func (e *Engine) onQuote(ctx context.Context, q bus.Quote) {
 	snapshot := e.bus.Snapshot(ctx, symbols)
 	candidates := detector.ScanAll(e.detectors, snapshot, e.facts)
 
-	var fhs []detector.Candidate // 本帧真正发布的 FUNDING_HEDGE 候选（cexPaperHook 输入）
 	for _, c := range candidates {
 		result := e.evaluate(ctx, c, snapshot)
 		if result == nil {
@@ -183,16 +182,10 @@ func (e *Engine) onQuote(ctx context.Context, q bus.Quote) {
 		// 前端实时流），永不论证级别过滤；V0/V1 区分只存在于显示层（徽章，service_verification 填）。
 		// D-004 P1#8：发布/落库走实质变化+TTL 心跳去重（maybePublish），UI 快照兜底不变。
 		e.maybePublish(ctx, o)
-		// D-555 S1 双CEX 纸面轨发现槽：hook 按 canonical 30s 采样节拍合流（纸面研究采样，
-		// 非判定，D-004 P3 举证——去节流前后节拍不变；与真金发布去重无关。OOM 19:01 pprof
-		// 实证：帧率级调用→paper_spot_carry 7k-15k 行/h 垃圾行+ListPaperSpotCarry 风暴）。
-		if c.Type == detector.TypeFundingHedge && e.paperHookDue(c.Canonical) {
-			fhs = append(fhs, c)
-		}
 	}
-	if len(fhs) > 0 && e.cexPaperHook != nil {
-		e.cexPaperHook(ctx, fhs)
-	}
+	// D-051 ①：CEX 纸面证据面消费 detector Allow 前候选流（执行链仍走上方
+	// ScanAll 后闸门，零改动；合流/采样节拍见 paperCexUnfiltered）。
+	e.paperCexUnfiltered(ctx, snapshot)
 }
 
 func (e *Engine) evaluate(ctx context.Context, c detector.Candidate, snapshot map[string]map[string]bus.Quote) *evaluator.Result {

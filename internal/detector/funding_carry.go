@@ -23,7 +23,20 @@ func (d *FundingHedgeDetector) Type() OppType { return TypeFundingHedge }
 
 // Scan 需要 funding Fact（通过 FactMap 注入）+ QuoteBus snapshot。
 // FactMap: canonical → venue → funding Fact（已年化）。
-func (d *FundingHedgeDetector) Scan(_ context.Context, snapshot map[string]map[string]bus.Quote, fp FactProvider) []Candidate {
+func (d *FundingHedgeDetector) Scan(ctx context.Context, snapshot map[string]map[string]bus.Quote, fp FactProvider) []Candidate {
+	return d.scan(ctx, snapshot, fp, false)
+}
+
+// ScanUnfiltered D-051①：Allow 前候选流（纸面证据面专用；执行链仍走 Scan）。
+// 绕过的只是白名单（Allow）与经济性前置（MinNetAnnualized/BaselinePct）——两者
+// 恰是纸面闸要观测的对象：detector 净阈缺省 14.95（4+10.95 基准）会吃掉纸面
+// funding 闸 ≥10% 的 10~14.95 证据带。陈旧报价/sim 腿/funding 事实缺席仍剔除
+// =证据有效性前提，非白名单。
+func (d *FundingHedgeDetector) ScanUnfiltered(ctx context.Context, snapshot map[string]map[string]bus.Quote, fp FactProvider) []Candidate {
+	return d.scan(ctx, snapshot, fp, true)
+}
+
+func (d *FundingHedgeDetector) scan(_ context.Context, snapshot map[string]map[string]bus.Quote, fp FactProvider, unfiltered bool) []Candidate {
 	var out []Candidate
 	now := time.Now()
 	var fundingFacts map[string]map[string]float64
@@ -39,7 +52,7 @@ func (d *FundingHedgeDetector) Scan(_ context.Context, snapshot map[string]map[s
 			continue
 		}
 		// D-017 发现域收口：白名单外组合在候选生成前静默剔除（不产候选不刷日志）。
-		if d.Allow != nil && !d.Allow(canonical, canonical, spot.VenueKey(), perp.VenueKey()) {
+		if !unfiltered && d.Allow != nil && !d.Allow(canonical, canonical, spot.VenueKey(), perp.VenueKey()) {
 			continue
 		}
 		if stale(spot, now, d.FreshnessTTL) || stale(perp, now, d.FreshnessTTL) {
@@ -57,12 +70,13 @@ func (d *FundingHedgeDetector) Scan(_ context.Context, snapshot map[string]map[s
 		// D-084 修正：spot+perp 结构无差分（收益恒=perp 腿 venue 的 funding），跨所同所统一扣基准；
 		// 跨所版保留发射（库存币顺手套保场景：币在 A 所、B 所尖峰时跨所对冲），但过同一超额尺子。
 		// 入库行 GrossBps 保持原值（显示完整毛收益），扣基准只用于门槛判定（最简，显示层零改动）。
-		// BaselinePct≤0 关闭扣除（兼容开关）。
-		if d.BaselinePct > 0 {
+		// BaselinePct≤0 关闭扣除（兼容开关）。D-051：unfiltered 不套净阈——纸面闸
+		// （D-058 深度+funding7d）才是证据面准入，detector 净阈只管执行链产出。
+		if !unfiltered && d.BaselinePct > 0 {
 			if netAnnualized-d.BaselinePct < d.MinNetAnnualized {
 				continue
 			}
-		} else if netAnnualized < d.MinNetAnnualized {
+		} else if !unfiltered && netAnnualized < d.MinNetAnnualized {
 			continue
 		}
 		qt := spot.Time
