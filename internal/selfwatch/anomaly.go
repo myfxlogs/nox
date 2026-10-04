@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
+	"strings"
 	"time"
 
 	"arb/internal/fact"
@@ -37,6 +39,7 @@ func CheckAnomalies(ctx context.Context, d Deps) {
 	}
 	checkPaperHealth(ctx, d, now, warn)
 	checkPaperDataLost(ctx, d, now, warn)
+	checkAnalystRO(ctx, d, warn)
 	checkMacroBlackout(ctx, d, now, warn)
 	checkMacroCalendar(ctx, d, now, warn)
 	checkTradeSession(ctx, d, now, warn)
@@ -158,6 +161,46 @@ func checkFundingFresh(ctx context.Context, d Deps, now time.Time, warn func(str
 	if lag := now.Sub(ts); lag > fundingStale {
 		warn("[自盯] 息差数据超龄 %.1fh（最新 %s）", lag.Hours(), ts.UTC().Format("01-02 15:04Z"))
 	}
+}
+
+// checkAnalystRO analyst 只读链路探针（D-059 ②）：经热读 ARB_AI_PG_DSN SELECT 1，
+// 失败→warn（本次断链靠 LLM 自觉写进报告才被发现——降级不得无声）。
+// err 文本过 redactPassword：keyword= 与 URL scheme://user:pass@ 两形态均打码
+// （R2 ②：pgx parse 错误透 DSN 原文，仅 keyword 打码不命中 URL 形态）。
+func checkAnalystRO(ctx context.Context, d Deps, warn func(string, ...any)) {
+	if d.ProbeAnalystRO == nil {
+		return // 未接线（测试替身/装配缺省）跳过
+	}
+	if err := d.ProbeAnalystRO(ctx); err != nil {
+		warn("[自盯] analyst 只读链路断（query_ro 不可用）：%s", redactPassword(err.Error()))
+	}
+}
+
+// redactPassword 错误文本中凭据段打码：keyword 形态 password=<值> 与 URL 形态
+// scheme://user:<pass>@（R2 ②补）均替换为 ***；两形态可并存重复应用。
+func redactPassword(s string) string {
+	s = redactKeywordPassword(s)
+	return redactURLPassword(s)
+}
+
+func redactKeywordPassword(s string) string {
+	i := strings.Index(s, "password=")
+	if i < 0 {
+		return s
+	}
+	j := i + len("password=")
+	for j < len(s) && s[j] != ' ' && s[j] != '\'' {
+		j++
+	}
+	return s[:i] + "password=***" + s[j:]
+}
+
+// redactURLPassword URL 形态：scheme://user:secret@ → scheme://user:***@
+// （正则锚定 scheme:// 与 @ 之间的 user:secret 凭据段）。
+var reURLCred = regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.-]*://)([^/@\s:]+):([^@\s]+)@`)
+
+func redactURLPassword(s string) string {
+	return reURLCred.ReplaceAllString(s, "$1$2:***@")
 }
 
 // failClosedPrev 上次观测的 fail-closed 行数（app_config 持久基数）。

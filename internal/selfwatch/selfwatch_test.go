@@ -355,3 +355,45 @@ func TestD033_NextDailyBJ(t *testing.T) {
 		}
 	}
 }
+
+// TestD059_AnalystROProbe analyst 只读链路探针（D-059 ②/R2 ③）：
+// keyword= 形态与 URL 形态（scheme://user:pass@，pgx parse 错误透 DSN 原文）错误均
+// 打码进告警（告警文本零密码）；未接线→零告警。
+func TestD059_AnalystROProbe(t *testing.T) {
+	st := greenStore()
+	d := testDeps(st, goodEval(), tNow)
+	d.ProbeAnalystRO = func(context.Context) error {
+		return fmt.Errorf("failed to connect to host=127.0.0.1 user=arb_ro database=arb password=secret123")
+	}
+	CheckAnomalies(context.Background(), d)
+	joined := strings.Join(st.dedupCalls, "\n")
+	if !strings.Contains(joined, "analyst 只读链路断") {
+		t.Fatalf("missing probe warn:\n%s", joined)
+	}
+	if strings.Contains(joined, "secret123") || !strings.Contains(joined, "password=***") {
+		t.Fatalf("keyword 形态应打码:\n%s", joined)
+	}
+	// R2 ③：URL 形态含密码错误（库内 DSN 烂→pgx parse 回显完整 DSN 原文）→ 零密码。
+	st2 := greenStore()
+	d2 := testDeps(st2, goodEval(), tNow)
+	d2.ProbeAnalystRO = func(context.Context) error {
+		return fmt.Errorf(`failed to parse config for URL "postgresql://arb_ro:sup3rs3cret@127.0.0.1:5433/arb": invalid`)
+	}
+	CheckAnomalies(context.Background(), d2)
+	joined2 := strings.Join(st2.dedupCalls, "\n")
+	if !strings.Contains(joined2, "analyst 只读链路断") {
+		t.Fatalf("URL 形态应告警:\n%s", joined2)
+	}
+	if strings.Contains(joined2, "sup3rs3cret") {
+		t.Fatalf("URL 形态密码泄漏进告警:\n%s", joined2)
+	}
+	if !strings.Contains(joined2, "arb_ro:***@") {
+		t.Fatalf("URL 凭据段应打码:\n%s", joined2)
+	}
+	// 未接线 → 无告警。
+	st3 := greenStore()
+	CheckAnomalies(context.Background(), testDeps(st3, goodEval(), tNow))
+	if strings.Contains(strings.Join(st3.dedupCalls, "\n"), "只读链路") {
+		t.Fatal("未接线不应告警")
+	}
+}

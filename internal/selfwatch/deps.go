@@ -64,15 +64,18 @@ type Notifier interface {
 // 绑店（D-032 ④ 周报文案单点）；KillActive=ControlPlane.IsKillSwitchActive；
 // ChatID=st.FeishuChatID。ReportDir 空=sysretro.DefaultReportDir。
 type Deps struct {
-	Store       Store
-	EvalPaper   func(ctx context.Context, rows []pgstore.PaperSpotCarry, since, now time.Time) (*scan.PaperWindowEval, error)
-	Weekly      func(ctx context.Context, now time.Time) (string, error)
-	KillActive  func(ctx context.Context) (bool, error)
-	CapitalBase float64
-	Notify      Notifier
-	ChatID      func(ctx context.Context) (string, error)
-	ReportDir   string
-	Now         func() time.Time
+	Store      Store
+	EvalPaper  func(ctx context.Context, rows []pgstore.PaperSpotCarry, since, now time.Time) (*scan.PaperWindowEval, error)
+	Weekly     func(ctx context.Context, now time.Time) (string, error)
+	KillActive func(ctx context.Context) (bool, error)
+	// ProbeAnalystRO D-059 ②：analyst 只读链路探针（热读 app_secrets ARB_AI_PG_DSN→SELECT 1；
+	// nil=未接线跳过；DSN 缺=静默 ok 功能未启用）。失败→warn（降级不得无声）。
+	ProbeAnalystRO func(ctx context.Context) error
+	CapitalBase    float64
+	Notify         Notifier
+	ChatID         func(ctx context.Context) (string, error)
+	ReportDir      string
+	Now            func() time.Time
 	// D-051③：CEX 纸面入口拦截累计计数（进程内 sink 快照；nil=无此数据面，
 	// 日报该段省略而非零报）。
 	CexSkipStats func() map[string]int
