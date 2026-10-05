@@ -160,8 +160,9 @@ func TestD572_A5_MTFrameLive(t *testing.T) {
 	if p, ok := s.legPool(ctx, []pgstore.VenueAccountLatest{d563MtSnap(5000, 4000)}, "3001157:mt5"); !ok || p.live {
 		t.Fatalf("超窗帧应回落快照（live=false）: %+v", p)
 	}
-	// 超窗帧+超龄快照 → unknown 黄标保留（龄闸不被帧残留骗过）。
-	if v, d := s.comboPoolVerdict(ctx, c, []pgstore.VenueAccountLatest{stale}); v != "unknown" || !strings.Contains(d, "池快照过期") {
-		t.Fatalf("帧超窗+快照超龄应 unknown: %s %s", v, d)
+	// 超窗帧+超龄快照 → D-076：MT 腿改判定时刻实读（RPC 缝未注/bm 缺→
+	// fail-closed unknown，不吃陈旧快照——龄闸语义由实读承接）。
+	if v, d := s.comboPoolVerdict(ctx, c, []pgstore.VenueAccountLatest{stale}); v != "unknown" || !strings.Contains(d, "MT 实时资金不可得") {
+		t.Fatalf("帧超窗+快照超龄应 unknown（实读败）: %s %s", v, d)
 	}
 }

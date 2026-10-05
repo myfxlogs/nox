@@ -210,6 +210,9 @@ type Service struct {
 	// D-572 S1：腿池面板杠杆读穿缓存（键=vk|sym|side，TTL=5min——请求驱动防逐行渲染打爆 REST；无后台轮询）。
 	levCacheMu sync.Mutex
 	levCache   map[string]levCacheEntry
+	// D-076：MT 腿池快照过期时的 acctMon 定向 kick 节流（per-vk ≥30s，防 1s 合批轮次连踢）。
+	mtPoolKickMu sync.Mutex
+	mtPoolKick   map[string]time.Time
 
 	// D-159 W1a I6：environment/is_real 一致性检查（手动入口同源）。
 	// environment 空 = 未配置（不检查，回退旧行为）。

@@ -126,9 +126,18 @@ func (s *Service) comboPoolVerdict(ctx context.Context, c pgstore.XAssetComboAdm
 		}
 		// D-565 S3：快照池龄闸（与 sizing 同式）——非 live 且 >5min→按池缺处理
 		// （unknown 灰标不谎报锁死；两表面同源自动一致）。
+		// D-076：MT 腿过期改判定时刻实读（mtAcctSummary RPC+定向 kick），CEX 照旧。
 		if !p.live && time.Since(p.at) > snapshotStaleWindow {
-			unknown = append(unknown, fmt.Sprintf("%s（池快照过期 %s>5min）", vk, p.at.Format("15:04:05")))
-			continue
+			var note string
+			var handled bool
+			if p, note, handled = s.mtPoolLive(ctx, vk, p); !handled {
+				unknown = append(unknown, fmt.Sprintf("%s（池快照过期 %s>5min）", vk, p.at.Format("15:04:05")))
+				continue
+			}
+			if note != "" {
+				unknown = append(unknown, note)
+				continue
+			}
 		}
 		avail := p.equity
 		if p.free != nil {

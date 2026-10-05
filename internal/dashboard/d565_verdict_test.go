@@ -56,17 +56,24 @@ func TestD565_ComboPoolVerdict_StaleSnap(t *testing.T) {
 		"3001157|": {{Kind: fact.KindInitMarginRate, Venue: "3001157", Value: 0.02, Ts: time.Now()}},
 	}
 	notional := 100.0
+	// D-076 起 MT 腿过期快照改判定时刻 RPC 实读——龄闸保留面=CEX 腿，
+	// 过期腿换 binance:perp（账本 miss+REST 败→快照兜底）锚同一闸。
 	c := pgstore.XAssetComboAdminRow{
-		VenueBuy: "gate:perp", VenueSell: "3001157:mt5", NotionalUSD: &notional,
+		VenueBuy: "binance:perp", VenueSell: "3001157:mt5", NotionalUSD: &notional,
 	}
-	// MT 池=快照行超龄 10min → unknown（池快照过期）
-	stale := d563MtSnap(5000, 4000)
-	stale.FetchedAt = time.Now().Add(-10 * time.Minute)
-	if v, d := s.comboPoolVerdict(ctx, c, []pgstore.VenueAccountLatest{stale}); v != "unknown" || !strings.Contains(d, "快照过期") {
+	eq, fm := 5000.0, 4000.0
+	stale := pgstore.VenueAccountLatest{
+		Venue: "binance", VenueType: "perp", EquityRaw: &eq, FreeMarginRaw: &fm,
+		Currency: "USD", FetchedAt: time.Now().Add(-10 * time.Minute),
+	}
+	fresh := stale
+	fresh.FetchedAt = time.Now()
+	// CEX 池=快照行超龄 10min → unknown（池快照过期）
+	if v, d := s.comboPoolVerdict(ctx, c, []pgstore.VenueAccountLatest{stale, d563MtSnap(5000, 4000)}); v != "unknown" || !strings.Contains(d, "快照过期") {
 		t.Fatalf("超龄快照应 unknown, got %s (%s)", v, d)
 	}
-	// fresh 快照 → 不再被龄闸拦（gate 腿保证金率判据 unknown=既有 D-564 语义）
-	if v, d := s.comboPoolVerdict(ctx, c, []pgstore.VenueAccountLatest{d563MtSnap(5000, 4000)}); v != "unknown" || strings.Contains(d, "快照过期") {
+	// fresh 快照 → 不再被龄闸拦（binance 腿杠杆实读败=既有 unknown 语义）
+	if v, d := s.comboPoolVerdict(ctx, c, []pgstore.VenueAccountLatest{fresh, d563MtSnap(5000, 4000)}); v != "unknown" || strings.Contains(d, "快照过期") {
 		t.Fatalf("fresh 快照不应触发龄闸, got %s (%s)", v, d)
 	}
 }
