@@ -37,8 +37,11 @@ func Run(ctx context.Context, c *Client, tools ToolExecutor, msgs []Message, cb 
 
 // RunWithSpecs 执行 agent 循环（toolSpecs/systemPrompt 由调用方注入）。
 // D-284：飞书查询用专用工具+提示词，不复用前端分析员的 ToolSpecs/SystemPrompt。
+// RunWithSpecs max_tokens 缺省 8192（D-064 后 glm-5.3 思考模型：thinking 块与 text 共享预算，
+// 2048 下重任务（explorer 日扫四段+10 提案）thinking 吃满致 JSON 截断整批零落库——10-04 22:47
+// 首秀实拍；8192 = D-530 symdig 先例值。max_tokens 是上限非预付，轻任务实际消耗不变）。
 func RunWithSpecs(ctx context.Context, c *Client, tools ToolExecutor, toolSpecs []ToolSpec, systemPrompt string, msgs []Message, cb LoopCallbacks) (LoopResult, error) {
-	return RunWithSpecsMaxTokens(ctx, c, tools, toolSpecs, systemPrompt, msgs, cb, 2048)
+	return RunWithSpecsMaxTokens(ctx, c, tools, toolSpecs, systemPrompt, msgs, cb, 8192)
 }
 
 // RunWithSpecsMaxTokens 同 RunWithSpecs，maxTokens 显式可调（D-530 symdig 8192 缺省）。
