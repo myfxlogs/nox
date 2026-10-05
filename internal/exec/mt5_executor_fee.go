@@ -12,8 +12,6 @@ import (
 	"time"
 
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
-
-	"google.golang.org/grpc/metadata"
 )
 
 // orderHistoryCommission 按 ticket 回查 MT5 历史单的 commission。
@@ -22,8 +20,9 @@ import (
 // S0 探针实证（3001157/XAUUSDm）：OrderHistory 订单带 DealInternalIn/Out 行，
 // deal 级 Commission/Fee 字段可读（该户实值 0=零佣账户）；deal 行缺席时
 // 开仓腿回落订单级 ord.Commission，平仓腿无独立数据源 → 诚实 0。
+// D-069：ctx 由调用方 PlaceOrder/CloseOrder 已携 id metadata，此处不得再
+// Append（重复值→网关 InvalidArgument，10-05 实拍）。
 func (e *MT5Executor) orderHistoryCommission(ctx context.Context, ticket int64, outLeg bool) float64 {
-	ctx = metadata.AppendToOutgoingContext(ctx, "id", e.token)
 	resp, err := e.mt5.OrderHistory(ctx, &mt5pb.OrderHistoryRequest{
 		Id:   e.token,
 		From: time.Now().Add(-24 * time.Hour).Format("2006-01-02T15:04:05"),
