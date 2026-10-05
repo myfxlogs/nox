@@ -30,6 +30,11 @@ type engineService interface {
 	// AccountEquityUSDAt D-032 ③：权益快照带数据时点（超龄判定用）；
 	// ok=false=快照缺/venue 离线（fail-closed）。
 	AccountEquityUSDAt(venueKey string) (value float64, currency string, asOf time.Time, ok bool)
+	// RefreshAccountEquity D-071 B：该 venue 账户态定向直读一次（无防抖）——
+	// MT 腿权益缺/超龄时判定点同步回读（零持仓 MT5 无 OnOrderProfit 帧=唯一流源
+	// 缺席，见 risk_lines.go equityDisciplineGate）。无返回：读败由下一次
+	// AccountEquityUSDAt 的 ok/龄判 fail-closed。
+	RefreshAccountEquity(ctx context.Context, venueKey string)
 	// LegMarginFrac D-010：腿保证金需求率实读（margin_usd 预算→单腿名义 N 折算用）。
 	// known=false=杠杆实读失败（调用方 fail-closed 不猜）。
 	LegMarginFrac(ctx context.Context, venueKey, symbol string, sellLeg bool) (frac float64, known bool)
