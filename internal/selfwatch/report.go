@@ -70,27 +70,38 @@ type DailyReport struct {
 	Stalled     int
 }
 
+// evalStage1 只算 Stage 1 就绪表（纯读面，零副作用：不落档/不写 app_config/不
+// deliver）——BuildDaily（渲染全表）与 anomalyLoop（D-071：小时级就绪评估只用
+// allOK 位）共用单点判定，不复制逻辑。
+func evalStage1(ctx context.Context, d Deps, now time.Time) (rows []StageCheck, since time.Time, windowOK bool, ev *scan.PaperWindowEval, err error) {
+	since, windowOK, err = paperWindowStart(ctx, d)
+	if err != nil {
+		return nil, since, false, nil, err
+	}
+	if windowOK {
+		cohort, cerr := d.Store.PaperWindowCohort(ctx, paperWindowStructure, since)
+		if cerr != nil {
+			return nil, since, true, nil, fmt.Errorf("stage1 cohort: %w", cerr)
+		}
+		ev, cerr = d.EvalPaper(ctx, cohort, since, now)
+		if cerr != nil {
+			return nil, since, true, nil, fmt.Errorf("stage1 eval: %w", cerr)
+		}
+	}
+	return stage1Checks(ctx, d, since, windowOK, ev, now), since, windowOK, ev, nil
+}
+
 // BuildDaily 生成日报（窗起点缺/解析败 → Body 显式报缺，Stage 表全 ❌）。
 func BuildDaily(ctx context.Context, d Deps) (*DailyReport, error) {
 	now := d.now()
-	since, ok, err := paperWindowStart(ctx, d)
+	rows, since, ok, ev, err := evalStage1(ctx, d, now)
 	if err != nil {
 		return nil, err
 	}
-	rep := &DailyReport{}
-	var ev *scan.PaperWindowEval
+	rep := &DailyReport{Stage1Table: rows}
 	if ok {
-		rows, cerr := d.Store.PaperWindowCohort(ctx, paperWindowStructure, since)
-		if cerr != nil {
-			return nil, fmt.Errorf("daily report cohort: %w", cerr)
-		}
-		ev, cerr = d.EvalPaper(ctx, rows, since, now)
-		if cerr != nil {
-			return nil, fmt.Errorf("daily report eval: %w", cerr)
-		}
 		rep.FailClosed, rep.Stalled, rep.WindowNet = ev.FailClosed, ev.Stalled, ev.WindowNet
 	}
-	rep.Stage1Table = stage1Checks(ctx, d, since, ok, ev, now)
 	rep.Stage2Table = stage2Checks(ctx, d, since, now)
 	rep.Stage1OK = allOK(rep.Stage1Table)
 	body, err := renderDaily(ctx, d, since, ok, ev, rep, now)
