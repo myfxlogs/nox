@@ -17,7 +17,7 @@ import (
 )
 
 // legMarginNeedFrac 腿保证金需求率（判定口径=实数不猜估）：
-// MT=init_margin_rate fact（D-099 事件采集；≤24h 新鲜；D-006 S1b：缺/陈→悲观档 1/20 估+注记）；
+// MT=init_margin_rate fact（D-099 事件采集；≤72h 新鲜；D-006 S1b：缺/陈→悲观档 1/20 估+注记）；
 // perp=venue 杠杆实读 1/lev（D-572 S1：读穿缓存 5min——面板渲染不打爆 REST；
 // 读败=unknown 黄标不谎报）；unified=杠杆读不到→unknown；
 // 非保证金腿（spot 等）=名义全款 1.0。
@@ -29,7 +29,7 @@ func (s *Service) legMarginNeedFrac(ctx context.Context, venueKey, sym string, s
 		if rate, measured := effMTMarginRate(fs, err, time.Now()); measured {
 			return rate, "", true
 		} else {
-			return rate, "init_margin_rate 未采或超 24h（按悲观档 20x 估）", true
+			return rate, "init_margin_rate 未采或超 72h（按悲观档 20x 估）", true
 		}
 	case "perp":
 		return s.legMarginNeedPerp(ctx, venueKey, sym, sellLeg)
