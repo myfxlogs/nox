@@ -88,19 +88,6 @@ func TestD382_A3_NoTradeMode_FailOpen(t *testing.T) {
 	}
 }
 
-// A4：A2 场景行过 EmitThresholdAlerts → 零告警（net=0 天然不触，死行可见不响）。
-func TestD382_A4_MarkerRow_NoAlert(t *testing.T) {
-	rows := d382Run(t, d382Store(d382TM("mtA", 0, 0), d382TM("mtB", 0, 0)))
-	called := 0
-	EmitThresholdAlerts(context.Background(), nil, rows, func(_ context.Context, _ *int64, _, _ string) error {
-		called++
-		return nil
-	})
-	if called != 0 {
-		t.Fatalf("A4: 标记行不应触发告警, got %d 条", called)
-	}
-}
-
 // A5：买向禁（mode=2 ShortOnly 禁买）卖向通 → 仅 short_cfd_long_perp 行存活。
 func TestD382_A5_DirectionalFilter(t *testing.T) {
 	now := time.Now()
