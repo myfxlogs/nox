@@ -39,12 +39,13 @@ func TestBrokerManager_LateBindOthers(t *testing.T) {
 		t.Fatalf("late-bound sinks not reached: acct=%d state=%d", acct.Load(), state.Load())
 	}
 	var kicks atomic.Int32
-	m.SetOrderProfitKick(func() { kicks.Add(1) })
+	var kickVK atomic.Value
+	m.SetOrderProfitKick(func(vk string) { kickVK.Store(vk); kicks.Add(1) })
 	if k := m.OrderProfitKickFn(); k != nil {
-		k()
+		k("v:mt5")
 	}
-	if kicks.Load() != 1 {
-		t.Fatalf("orderProfitKick not reached: %d", kicks.Load())
+	if kicks.Load() != 1 || kickVK.Load() != "v:mt5" {
+		t.Fatalf("orderProfitKick not reached: %d vk=%v", kicks.Load(), kickVK.Load())
 	}
 }
 
@@ -106,7 +107,7 @@ func TestBrokerManager_SinkRace(t *testing.T) {
 				m.dispatchPositions("v:mt5", nil)
 				m.dispatchStreamState("v:mt5", true)
 				if k := m.OrderProfitKickFn(); k != nil {
-					k()
+					k("v:mt5")
 				}
 			}
 		}()
