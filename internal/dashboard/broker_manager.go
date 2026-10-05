@@ -137,7 +137,7 @@ type BrokerManager struct {
 	accountSink     adapter.AcctFrameSink       // D-445 S0：OnOrderUpdate 余额帧（sink=acctMon.ObserveStreamAccount）
 	positionsSink   func(string, []venue.Order) // D-571 包A：OnOrderProfit 逐仓载荷（sink=bpMon.OnMT5Frame）
 	streamStateSink func(string, bool)          // D-571 包A：venue 流状态透出（sink=bpMon/acctMon/posMon 链）
-	orderProfitKick func()                      // D-107 P2：margin 事件→acctMon.Kick
+	orderProfitKick func(venueKey string)       // D-107 P2：margin 事件→acctMon.Kick（D-071：携 venue 走定向无防抖）
 	reconKick       func()                      // D-004 P1#6：MT5 会话重连成功→recon.Kick
 
 	// D-104 P2 U1：网关节点启动级 failover（main 从 config 注入，attach 时透传 adapter.SetGateway）。

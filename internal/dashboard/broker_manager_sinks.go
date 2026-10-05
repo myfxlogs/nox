@@ -26,7 +26,11 @@ func (m *BrokerManager) SetStreamStateSink(f func(string, bool)) {
 	m.streamStateSink = f
 	m.sinkMu.Unlock()
 }
-func (m *BrokerManager) SetOrderProfitKick(f func()) {
+
+// SetOrderProfitKick D-071：kick 回调携 venueKey（margin fact.Venue 的完整键）——
+// 定向 kick 无防抖直读（boot 竞态修复：boot poll 早于 MT5 attach 时 margin 首采
+// 是空仓账户唯一入态事件，走全量防抖会被丢）。
+func (m *BrokerManager) SetOrderProfitKick(f func(venueKey string)) {
 	m.sinkMu.Lock()
 	m.orderProfitKick = f
 	m.sinkMu.Unlock()
@@ -46,7 +50,7 @@ func (m *BrokerManager) StreamStateSinkFn() func(string, bool) {
 	defer m.sinkMu.RUnlock()
 	return m.streamStateSink
 }
-func (m *BrokerManager) OrderProfitKickFn() func() {
+func (m *BrokerManager) OrderProfitKickFn() func(venueKey string) {
 	m.sinkMu.RLock()
 	defer m.sinkMu.RUnlock()
 	return m.orderProfitKick
