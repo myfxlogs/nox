@@ -59,6 +59,7 @@ func (o *OKXWebSocket) Run(ctx context.Context, publish func(bus.Quote)) {
 	RunWS(ctx, WSSpec{
 		Name: "okx-ws", URLs: o.wsURLs, Dialer: o.dialer, Header: o.header,
 		DepKey:   "okx:ws-market", // D-579：dephealth 记账键
+		AlertFn:  o.cfg.AlertFn,   // D-074 ①：冷却循环升级「通道死」告警同管道
 		ReadIdle: o.readIdle, PingEvery: o.pingEvery, ReconnectBackoff: o.reconnectBackoff,
 		OnConnect: func() { subscribed = map[string]bool{} },
 		InitialSubs: func() []any {

@@ -112,7 +112,7 @@ func TestD511_ReconnectTriggersOnReconnect(t *testing.T) {
 	defer cancel()
 	var reconns atomic.Int64
 	spec := wsRunnerSpec(url, frames)
-	spec.OnReconnect = func() { reconns.Add(1) }
+	spec.OnReconnect = func(bool) { reconns.Add(1) } // D-074：签名携冷却循环标记
 	go RunWS(ctx, spec)
 	time.Sleep(1500 * time.Millisecond)
 	cancel()

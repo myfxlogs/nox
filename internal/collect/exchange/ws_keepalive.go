@@ -63,23 +63,28 @@ func newReconnectMeter(url string, alertFn func(level, msg string)) *reconnectMe
 func (m *reconnectMeter) totalReconns() int64 { return m.totalCount }
 
 // record 记一次重连事件；滑窗计数达阈即发 warn（rewarn 间隔内不重复）。
+// D-074 ②：inCooldownLoop=true（候选冷却循环中）的重连=数据看门狗确定性杀，
+// 非链路抖动——不入滑窗不计风暴阈（零帧死通道的降噪归 ws-dead 升级告警域）；
+// 累计计数与事件扇出照常（sourceHealth 显示真值不受影响）。
 // D-571C-R2 F-1：尾部 OnReconnectEvent 扇出——快照行变化（totalCount+1）须
 // 驱动 sourceHealth 域重组装发射，否则计数变了事件不发=死踢。
-func (m *reconnectMeter) record() {
-	now := m.now()
-	m.reconnects = append(m.reconnects, now)
-	cut := now.Add(-reconnectMeterWindow)
-	kept := m.reconnects[:0]
-	for _, ts := range m.reconnects {
-		if ts.After(cut) {
-			kept = append(kept, ts)
+func (m *reconnectMeter) record(inCooldownLoop bool) {
+	if !inCooldownLoop {
+		now := m.now()
+		m.reconnects = append(m.reconnects, now)
+		cut := now.Add(-reconnectMeterWindow)
+		kept := m.reconnects[:0]
+		for _, ts := range m.reconnects {
+			if ts.After(cut) {
+				kept = append(kept, ts)
+			}
 		}
-	}
-	m.reconnects = kept
-	if m.alertFn != nil && len(m.reconnects) >= reconnectMeterThreshold &&
-		(m.lastWarn.IsZero() || now.Sub(m.lastWarn) >= reconnectMeterRewarn) {
-		m.alertFn("warn", fmt.Sprintf("[ws-storm] %s 1 小时内重连 ≥%d 次（读取超时/心跳无回应/链路异常）", m.url, reconnectMeterThreshold))
-		m.lastWarn = now
+		m.reconnects = kept
+		if m.alertFn != nil && len(m.reconnects) >= reconnectMeterThreshold &&
+			(m.lastWarn.IsZero() || now.Sub(m.lastWarn) >= reconnectMeterRewarn) {
+			m.alertFn("warn", fmt.Sprintf("[ws-storm] %s 1 小时内重连 ≥%d 次（读取超时/心跳无回应/链路异常）", m.url, reconnectMeterThreshold))
+			m.lastWarn = now
+		}
 	}
 	m.totalCount++
 	if fn := OnReconnectEvent; fn != nil {
