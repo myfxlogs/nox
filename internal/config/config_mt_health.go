@@ -13,9 +13,14 @@ type MTDataConfig struct {
 	// HealthQuoteWarn/Crit 报价新鲜度 warn/crit 阈值（流断间接探测）。
 	HealthQuoteWarn time.Duration // ARB_MT_HEALTH_QUOTE_WARN（缺省 5m）
 	HealthQuoteCrit time.Duration // ARB_MT_HEALTH_QUOTE_CRIT（缺省 30m）
-	// HealthFactWarn/Crit swap/margin facts 年龄 warn/crit 阈值（漏轮探测）。
+	// HealthFactWarn/Crit swap facts 年龄 warn/crit 阈值（漏轮探测；swap=小时级采集）。
 	HealthFactWarn time.Duration // ARB_MT_HEALTH_FACT_WARN（缺省 2h=容忍 1 轮漏采）
 	HealthFactCrit time.Duration // ARB_MT_HEALTH_FACT_CRIT（缺省 6h=2 轮以上漏采）
+	// HealthMarginWarn/Crit margin facts（init_margin_rate=1/Leverage 准静态）年龄阈值——
+	// 采集形态=attach 首采+流重连补采（D-006 S1b，无常驻定时器）：流稳定零重连时
+	// 数日不写为设计内（10-05 误报实拍：流稳 7h→crit 告警噪音），故独立于 swap 放长。
+	HealthMarginWarn time.Duration // ARB_MT_HEALTH_MARGIN_WARN（缺省 24h）
+	HealthMarginCrit time.Duration // ARB_MT_HEALTH_MARGIN_CRIT（缺省 72h）
 	// SwapFactMaxAge swap facts 新鲜度门禁（discoverSwapCombos fail-closed，ARB_SWAP_FACT_MAX_AGE，缺省 2h）。
 	SwapFactMaxAge time.Duration
 	// MarginFactMaxAge margin facts 新鲜度门禁（sizing 链 fail-closed，ARB_MARGIN_FACT_MAX_AGE，缺省 2h）。
@@ -34,6 +39,8 @@ func loadMTData() MTDataConfig {
 		HealthQuoteCrit:     envDur("ARB_MT_HEALTH_QUOTE_CRIT", 30*time.Minute),
 		HealthFactWarn:      envDur("ARB_MT_HEALTH_FACT_WARN", 2*time.Hour), // 容忍 1 轮漏采
 		HealthFactCrit:      envDur("ARB_MT_HEALTH_FACT_CRIT", 6*time.Hour),
+		HealthMarginWarn:    envDur("ARB_MT_HEALTH_MARGIN_WARN", 24*time.Hour), // 准静态杠杆（重连驱动写入）
+		HealthMarginCrit:    envDur("ARB_MT_HEALTH_MARGIN_CRIT", 72*time.Hour),
 		SwapFactMaxAge:      envDur("ARB_SWAP_FACT_MAX_AGE", 2*time.Hour),   // fail-closed 门禁
 		MarginFactMaxAge:    envDur("ARB_MARGIN_FACT_MAX_AGE", 2*time.Hour), // 预置（无挂点）
 		MT5Gateway:          envStr("ARB_MT5_GATEWAY", "mt5grpc3.mtapi.io:443"),

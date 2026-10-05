@@ -87,6 +87,8 @@ var appConfigDescs = map[string]string{
 	"ARB_MT5_GATEWAY_FALLBACKS":                  "MT5 网关备址表（逗号分隔，主址失败轮询）",
 	"ARB_MT_DISASTER_SL_PCT":                     "MT 灾备止损比例（%；灾难性下跌强制平仓线）",
 	"ARB_MT_HEALTH_FACT_CRIT":                    "MT 事实数据严重告警龄期",
+	"ARB_MT_HEALTH_MARGIN_WARN":                  "D-067 margin facts（init_margin_rate 准静态杠杆，重连驱动写入）新鲜度 warn 阈值（缺省 24h）",
+	"ARB_MT_HEALTH_MARGIN_CRIT":                  "D-067 margin facts 新鲜度 crit 阈值（缺省 72h；流稳定零重连时不写为设计内）",
 	"ARB_MT_HEALTH_FACT_WARN":                    "MT 事实数据告警龄期",
 	"ARB_MT_HEALTH_QUOTE_CRIT":                   "MT 报价严重告警龄期",
 	"ARB_MT_HEALTH_QUOTE_WARN":                   "MT 报价告警龄期",

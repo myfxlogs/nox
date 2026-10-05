@@ -81,6 +81,8 @@ var appConfigKeys = map[string]AppCfgMeta{
 	"ARB_MT5_GATEWAY_FALLBACKS":           listv(func(c *Config) *[]string { return &c.MTData.MT5GatewayFallbacks }),
 	"ARB_MT_DISASTER_SL_PCT":              f64(func(c *Config) *float64 { return &c.MTDisasterSlPct }),
 	"ARB_MT_HEALTH_FACT_CRIT":             durv(func(c *Config) *time.Duration { return &c.MTData.HealthFactCrit }),
+	"ARB_MT_HEALTH_MARGIN_WARN":           durv(func(c *Config) *time.Duration { return &c.MTData.HealthMarginWarn }), // D-067：margin 准静态独立阈
+	"ARB_MT_HEALTH_MARGIN_CRIT":           durv(func(c *Config) *time.Duration { return &c.MTData.HealthMarginCrit }), // D-067
 	"ARB_MT_HEALTH_FACT_WARN":             durv(func(c *Config) *time.Duration { return &c.MTData.HealthFactWarn }),
 	"ARB_MT_HEALTH_QUOTE_CRIT":            durv(func(c *Config) *time.Duration { return &c.MTData.HealthQuoteCrit }),
 	"ARB_MT_HEALTH_QUOTE_WARN":            durv(func(c *Config) *time.Duration { return &c.MTData.HealthQuoteWarn }),
