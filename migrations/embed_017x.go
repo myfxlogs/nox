@@ -29,4 +29,7 @@ var (
 
 	//go:embed 0178_drop_perp_funding_admission.sql
 	DropPerpFundingAdmissionSQL string // D-057⑤：PERP_FUNDING 证据准入表退役（族停用，87 行已备份）
+
+	//go:embed 0179_retire_universe_alerts.sql
+	RetireUniverseAlertsSQL string // D-072：「真候选浮现」发现告警退役——清历史 info 行（7 天 1143 条噪音）
 )
