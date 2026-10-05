@@ -57,7 +57,7 @@ func d580ReadySvc(t *testing.T) *Service {
 			t.Fatal(err)
 		}
 	}
-	// MT 腿保证金率 fact（≤24h 新鲜；0.04=25× 杠杆）。
+	// MT 腿保证金率 fact（≤72h 新鲜；0.04=25× 杠杆）。
 	if _, err := st.Pool().Exec(ctx,
 		`INSERT INTO facts (kind, venue, symbol, value, unit, ts, src)
 		 VALUES ('init_margin_rate','3001157',NULL,0.04,'ratio',now(),'d580test')`); err != nil {
