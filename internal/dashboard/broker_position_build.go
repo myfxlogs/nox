@@ -7,6 +7,7 @@ import (
 	"context"
 	"log"
 	"math"
+	"strconv"
 	"time"
 
 	"arb/internal/bus"
@@ -58,13 +59,16 @@ func (m *BrokerPositionMonitor) protoFor(ctx context.Context, vk string, vs venu
 		hasPrice = true
 	}
 	// D-008 S1：保证金列=venue 原生 InitialMargin 直显（CEX perp iw；全仓 iw=0→空=venue 语义）。
-	// D-036：MT5 仓位级 margin=venue 规格估算（InitialMargin×lots ∨ lots×CS×openPrice×imr；
-	// D-031 ② RequiredMargin RPC 径已拆——生产网关 Unimplemented），margin_is_estimate 标记。
+	// D-068：MT5 仓位级 margin 主径=RequiredMargin RPC 原生值（vs.reqMargin，reconcile
+	// 同批缓存，帧路径零 RPC）；缺键 → D-036 规格估算降级（margin_is_estimate=true 标
+	// 「估算」）——G5（SymbolParams margin 字段）实测未实装，估算径是唯一兜底，保留不删。
 	margin := o.InitialMargin
 	marginEst := false
 	if keydomain.IsType(o.VenueKey, "mt5") {
 		margin = 0
-		if mv, ok := estimateMargin(vs.marginSpec[o.Symbol], vs.imr, vs.imrOK, o.Volume, o.OpenPrice); ok {
+		if mv, ok := vs.reqMargin[o.Ticket]; ok {
+			margin = mv
+		} else if mv, ok := estimateMargin(vs.marginSpec[o.Symbol], vs.imr, vs.imrOK, o.Volume, o.OpenPrice); ok {
 			margin, marginEst = mv, true
 		}
 	}
@@ -160,6 +164,30 @@ func (m *BrokerPositionMonitor) prepareVenueView(ctx context.Context, vk string,
 				sctx3, cancel3 := monitorCallCtx(ctx)
 				vs.imr, vs.imrOK = m.initMarginRateFor(sctx3, venue)
 				cancel3()
+			}
+			// D-068：仓位级保证金原生值同批拉取——RequiredMargin RPC（price=0=网关侧
+			// 现价、type=仓向，D-415 同形态）。批内 (symbol,side,lots) 恰调一次（成败均
+			// 不重试，rmTried 去重）；失败不落键 → protoFor 走 D-036 估算降级（fail-closed）。
+			vs.reqMargin = make(map[string]float64, len(orders))
+			rmCache := map[string]float64{}
+			rmTried := map[string]bool{}
+			for _, o := range orders {
+				rmSide := "BUY"
+				if o.Side == "SELL" {
+					rmSide = "SELL"
+				}
+				rmKey := o.Symbol + "|" + rmSide + "|" + strconv.FormatFloat(o.Volume, 'g', -1, 64)
+				if !rmTried[rmKey] {
+					rmTried[rmKey] = true
+					sctx4, cancel4 := monitorCallCtx(ctx)
+					if v, ok := m.bm.BrokerRequiredMargin(sctx4, venue, o.Symbol, o.Volume, rmSide); ok {
+						rmCache[rmKey] = v
+					}
+					cancel4()
+				}
+				if v, ok := rmCache[rmKey]; ok {
+					vs.reqMargin[o.Ticket] = v
+				}
 			}
 		}
 	}

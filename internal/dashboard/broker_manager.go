@@ -49,6 +49,7 @@ type running struct {
 	swap             func(ctx context.Context) ([]fact.Fact, error)                                            // 轮询 swap facts（§3.6，D-036）
 	sessions         func(ctx context.Context) ([]fact.Fact, error)                                            // D-029 R3：周交易会话表采集（每日刷新面）
 	marginSpec       func(ctx context.Context, symbol string) (initialMargin, contractSize float64, err error) // D-036：仓位级保证金规格估算输入（SymbolParams）；nil=MT4/未接线
+	requiredMargin   func(ctx context.Context, symbol string, lots float64, side string) (float64, error)      // D-068：仓位级保证金原生值（RequiredMargin RPC，price=0=网关侧现价）；nil=未接线
 	meta             func(ctx context.Context) ([]fact.Fact, error)                                            // D-140 S2：MT5 符号元数据 facts（CS 采集）
 	orderHistoryScan orderHistoryScan                                                                          // D-181 S1：拉历史已平仓订单（BackfillSwapHistory RPC 用），nil=未接线
 	acctSummary      func(ctx context.Context) (float64, float64, string, error)                               // D-563 S4b：MT 实时 equity/freeMargin/currency（AccountSummary RPC）；nil=非 MT 或未接线

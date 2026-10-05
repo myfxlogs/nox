@@ -31,6 +31,9 @@ type venueState struct {
 	marginSpec map[string]symMarginSpec
 	imr        float64
 	imrOK      bool
+	// D-068：MT5 仓位级保证金原生值（ticket→RequiredMargin RPC，reconcile 同批拉取，
+	// 帧路径零 RPC）。缺键=RPC 失败/未接线 → protoFor 走 D-036 规格估算降级。
+	reqMargin map[string]float64
 }
 
 // posKey 逐仓键：venueKey + "|" + ticket。
