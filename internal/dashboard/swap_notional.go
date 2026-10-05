@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"time"
@@ -52,6 +53,14 @@ func (s *Service) AccountEquityUSDAt(venueKey string) (value float64, currency s
 	}
 	eq, cur, at, online, found := s.acctMon.EquityObserved(venueKey)
 	return eq, cur, at, found && online
+}
+
+// RefreshAccountEquity D-071 B：venue 账户态定向直读（pollVenueKeys 无防抖路径——
+// D-032 权益闸 MT 腿缺/超龄时的判定点一次回读；nil 安全）。
+func (s *Service) RefreshAccountEquity(ctx context.Context, venueKey string) {
+	if s.acctMon != nil {
+		s.acctMon.pollVenueKeys(ctx, venueKey)
+	}
 }
 
 // AccountLeverage 从 AccountMonitor 取指定 venue 的杠杆（D-142 ④ 杠杆不对称提示）。
