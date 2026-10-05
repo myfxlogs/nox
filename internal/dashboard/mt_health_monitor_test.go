@@ -106,7 +106,7 @@ func TestMTHealth_FirstTickSilent(t *testing.T) {
 	qbus := bus.New()
 	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vA:mt5"}}}
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
-		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour, 24*time.Hour, 72*time.Hour) // D-067 margin 阈值
 	mon.now = func() time.Time { return wedUTC.Add(time.Second) } // D-136 修复②：注入非周末时钟防日期依赖
 	mon.bootGraceTicks = 1                                        // 测试用 1 tick 宽限（生产默认 3）
 	mon.poll(context.Background())
@@ -127,7 +127,7 @@ func TestMTHealth_StateTransitions(t *testing.T) {
 	qbus := bus.New()
 	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vA:mt5"}}}
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
-		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour, 24*time.Hour, 72*time.Hour) // D-067 margin 阈值
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) } // D-136 修复②：注入非周末时钟
@@ -215,7 +215,7 @@ func TestMTHealth_SwapFactStale(t *testing.T) {
 	qbus := bus.New()
 	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vA:mt5"}}}
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
-		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour, 24*time.Hour, 72*time.Hour) // D-067 margin 阈值
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) } // D-136 修复②：注入非周末时钟
@@ -257,7 +257,7 @@ func TestMTHealth_CritRealert(t *testing.T) {
 	qbus := bus.New()
 	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vA:mt5"}}}
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
-		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour, 24*time.Hour, 72*time.Hour) // D-067 margin 阈值
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) } // D-136 修复②：注入非周末时钟
@@ -316,7 +316,7 @@ func TestMTHealth_WarnSustainedNoRealert(t *testing.T) {
 	qbus := bus.New()
 	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vA:mt5"}}}
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
-		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour, 24*time.Hour, 72*time.Hour) // D-067 margin 阈值
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) } // D-136 修复②：注入非周末时钟
@@ -353,7 +353,7 @@ func TestMTHealth_NoDataCrit(t *testing.T) {
 	qbus := bus.New()
 	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vA:mt5"}}}
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
-		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour, 24*time.Hour, 72*time.Hour) // D-067 margin 阈值
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) } // D-136 修复②：注入非周末时钟
@@ -414,7 +414,7 @@ func TestMTHealth_CEXVenueNoSwapMarginAlerts(t *testing.T) {
 	// CEX venue "binance" 有报价但无 AccountQuerier（不在 mtSet）
 	vs := &fakeVenueSource{queriers: nil}
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
-		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour, 24*time.Hour, 72*time.Hour) // D-067 margin 阈值
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) } // D-136 修复②：注入非周末时钟
@@ -470,7 +470,7 @@ func TestMTHealth_MTVenueSwapCritRegress(t *testing.T) {
 	qbus := bus.New()
 	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vA:mt5"}}}
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
-		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour, 24*time.Hour, 72*time.Hour) // D-067 margin 阈值
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) } // D-136 修复②：注入非周末时钟
@@ -510,7 +510,7 @@ func TestMTHealth_MT4VenueNoMarginAlert(t *testing.T) {
 	qbus := bus.New()
 	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vB:mt4"}}}
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
-		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour, 24*time.Hour, 72*time.Hour) // D-067 margin 阈值
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) }
@@ -558,7 +558,7 @@ func TestMTHealth_MT5VenueMarginCritStillWorks(t *testing.T) {
 	qbus := bus.New()
 	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vC:mt5"}}}
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
-		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour, 24*time.Hour, 72*time.Hour) // D-067 margin 阈值
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) }
@@ -595,7 +595,7 @@ func TestMTHealth_AlertUsesAlias(t *testing.T) {
 	qbus := bus.New()
 	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vD:mt5"}}}
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
-		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour, 24*time.Hour, 72*time.Hour) // D-067 margin 阈值
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) }
@@ -631,7 +631,7 @@ func TestMTHealth_AliasFallback(t *testing.T) {
 	qbus := bus.New()
 	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vE:mt5"}}}
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
-		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour, 24*time.Hour, 72*time.Hour) // D-067 margin 阈值
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) }
@@ -665,7 +665,7 @@ func TestMTHealth_StoppedVenueFactsResidueNoAlert(t *testing.T) {
 	qbus := bus.New()
 	vs := &fakeVenueSource{queriers: nil} // 无 querier
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
-		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour, 24*time.Hour, 72*time.Hour) // D-067 margin 阈值
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) }
@@ -693,7 +693,7 @@ func TestMTHealth_StoppedVenueQbusResidueNoAlert(t *testing.T) {
 	qbus := bus.New()
 	vs := &fakeVenueSource{queriers: nil}
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
-		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour, 24*time.Hour, 72*time.Hour) // D-067 margin 阈值
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) }
@@ -720,7 +720,7 @@ func TestMTHealth_ConnectedVenueNoDataStillCrit(t *testing.T) {
 	qbus := bus.New()
 	vs := &fakeVenueSource{queriers: nil}
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
-		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour, 24*time.Hour, 72*time.Hour) // D-067 margin 阈值
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) }
@@ -762,7 +762,7 @@ func TestMTHealth_UnknownQbusVenueStillMonitored(t *testing.T) {
 	qbus := bus.New()
 	vs := &fakeVenueSource{queriers: nil}
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
-		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour, 24*time.Hour, 72*time.Hour) // D-067 margin 阈值
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) }
@@ -802,7 +802,7 @@ func TestD251_MarginFlashMissSuppression(t *testing.T) {
 	qbus := bus.New()
 	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vA:mt5"}}}
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
-		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour, 24*time.Hour, 72*time.Hour) // D-067 margin 阈值
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) }
@@ -885,7 +885,7 @@ func TestRH4_QuoteFlashMissSuppression(t *testing.T) {
 	qbus := bus.New()
 	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vA:mt5"}}}
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
-		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour, 24*time.Hour, 72*time.Hour) // D-067 margin 阈值
 
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) }
@@ -963,7 +963,7 @@ func TestMTHealth_BootGracePeriod(t *testing.T) {
 	qbus := bus.New()
 	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vA:mt5"}}}
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
-		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour, 24*time.Hour, 72*time.Hour) // D-067 margin 阈值
 	// 生产默认 bootGraceTicks=3，不覆盖
 
 	now := wedUTC
@@ -1004,7 +1004,7 @@ func TestMTHealth_D400_StaticQuerierStoppedNoAlert(t *testing.T) {
 	qbus := bus.New()
 	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "X:mt5"}}}
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
-		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour, 24*time.Hour, 72*time.Hour) // D-067 margin 阈值
 	now := wedUTC
 	mon.now = func() time.Time { return now.Add(time.Second) }
 	mon.bootGraceTicks = 1 // 测试用 1 tick 宽限（生产默认 3）

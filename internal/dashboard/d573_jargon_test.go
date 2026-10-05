@@ -16,7 +16,7 @@ import (
 func TestD573_A1_MTHealthCN(t *testing.T) {
 	store := newFakeHealthStore()
 	mon := NewMTHealthMonitor(&fakeVenueSource{}, bus.New(), store, time.Hour,
-		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour)
+		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour, 24*time.Hour, 72*time.Hour) // D-067 margin 阈值
 	mon.now = func() time.Time { return wedUTC } // 非周末防静默窗
 	ctx := context.Background()
 

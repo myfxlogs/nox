@@ -53,8 +53,9 @@ type MTHealthMonitor struct {
 	store  HealthFactStore
 	tick   time.Duration
 
-	quoteWarn, quoteCrit time.Duration
-	factWarn, factCrit   time.Duration
+	quoteWarn, quoteCrit   time.Duration
+	factWarn, factCrit     time.Duration
+	marginWarn, marginCrit time.Duration // D-067：margin（init_margin_rate 准静态、重连驱动写入）独立阈值
 
 	mu              sync.Mutex
 	states          map[string]mtHealthState // venue → 状态
@@ -67,7 +68,7 @@ type MTHealthMonitor struct {
 
 // NewMTHealthMonitor 创建监控（D-104 P0）。
 func NewMTHealthMonitor(venues HealthVenueSource, qbus *bus.QuoteBus, store HealthFactStore, tick time.Duration,
-	quoteWarn, quoteCrit, factWarn, factCrit time.Duration) *MTHealthMonitor {
+	quoteWarn, quoteCrit, factWarn, factCrit, marginWarn, marginCrit time.Duration) *MTHealthMonitor {
 	return &MTHealthMonitor{
 		venues:          venues,
 		qbus:            qbus,
@@ -77,6 +78,8 @@ func NewMTHealthMonitor(venues HealthVenueSource, qbus *bus.QuoteBus, store Heal
 		quoteCrit:       quoteCrit,
 		factWarn:        factWarn,
 		factCrit:        factCrit,
+		marginWarn:      marginWarn,
+		marginCrit:      marginCrit,
 		states:          make(map[string]mtHealthState),
 		bootGraceTicks:  3, // boot 宽限 3 tick（≈3min）给采集器启动，防重启 critical 噪音
 		lastCritAlert:   make(map[string]time.Time),
@@ -186,7 +189,8 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 		}
 		if isMT5 {
 			ma := marginAges[v]
-			adjusted, _, suppressed := m.classifyWithFlashMiss(v, classifyAge(ma, m.factWarn, m.factCrit), m.marginMissCount)
+			// D-067：margin 用独立阈值（init_margin_rate 重连驱动写入，流稳时不写为设计内）。
+			adjusted, _, suppressed := m.classifyWithFlashMiss(v, classifyAge(ma, m.marginWarn, m.marginCrit), m.marginMissCount)
 			newState.margin = adjusted
 			mLog = durStr(ma)
 			if suppressed {
