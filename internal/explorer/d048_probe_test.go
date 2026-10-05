@@ -33,7 +33,7 @@ var goodProbeBatch = "摘要。\n```explorer-proposals\n" +
 func TestD048_ProbeContractFields(t *testing.T) {
 	known := map[string]bool{"ETHUSDT": true}
 	now := time.Now()
-	b, ok := parseBatch(goodProbeBatch)
+	b, _, ok := parseBatch(goodProbeBatch) // D-078：签名携截断计数（此处批未超限恒 0）
 	if !ok || len(b.GetProbeProposals()) != 2 {
 		t.Fatalf("batch: ok=%v probes=%d", ok, len(b.GetProbeProposals()))
 	}

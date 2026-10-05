@@ -188,7 +188,7 @@ const goodBatch = "摘要：ETH 离散扩大。\n```explorer-proposals\n" +
 
 func TestD513_ProposalParse(t *testing.T) {
 	known := map[string]bool{"ETHUSDT": true}
-	b, ok := parseBatch(goodBatch)
+	b, _, ok := parseBatch(goodBatch)
 	if !ok || len(b.Proposals) != 1 {
 		t.Fatalf("good batch parse: ok=%v", ok)
 	}
@@ -197,18 +197,18 @@ func TestD513_ProposalParse(t *testing.T) {
 		t.Fatalf("valid rows: %d drop=%d", len(rows), drop)
 	}
 	// 红测：大小写碰撞 bestpair≠bestPair → protojson 严格拒收整批。
-	if _, ok := parseBatch(strings.Replace(goodBatch, `"best_pair"`, `"bestpair"`, 1)); ok {
+	if _, _, ok := parseBatch(strings.Replace(goodBatch, `"best_pair"`, `"bestpair"`, 1)); ok {
 		t.Fatal("lowercase bestpair should be rejected by strict protojson")
 	}
-	if _, ok := parseBatch(strings.Replace(goodBatch, `"best_pair"`, `"bestPair"`, 1)); !ok {
+	if _, _, ok := parseBatch(strings.Replace(goodBatch, `"best_pair"`, `"bestPair"`, 1)); !ok {
 		t.Fatal("lowerCamel bestPair should parse (protojson name)")
 	}
 	// 未知字段拒收。
-	if _, ok := parseBatch(strings.Replace(goodBatch, `"narrative"`, `"narrativ"`, 1)); ok {
+	if _, _, ok := parseBatch(strings.Replace(goodBatch, `"narrative"`, `"narrativ"`, 1)); ok {
 		t.Fatal("unknown field should be rejected")
 	}
 	// 截断 JSON（流中断——未闭合 fence）→ 批解析失败。
-	if _, ok := parseBatch("摘要\n```explorer-proposals\n{\"narrative\":\"x\",\"proposals\":[{\"canonical\":\"ETH"); ok {
+	if _, _, ok := parseBatch("摘要\n```explorer-proposals\n{\"narrative\":\"x\",\"proposals\":[{\"canonical\":\"ETH"); ok {
 		t.Fatal("truncated batch should fail")
 	}
 	// 非法 canonical（不在已知集）→ 行丢弃+drop。
@@ -217,7 +217,7 @@ func TestD513_ProposalParse(t *testing.T) {
 		t.Fatalf("unknown canonical: rows=%d drop=%d", len(rows), drop)
 	}
 	mustParse := func(out string) *explorerv1.ProposalBatch {
-		bb, ok := parseBatch(out)
+		bb, _, ok := parseBatch(out)
 		if !ok {
 			t.Fatalf("fixture parse failed")
 		}
@@ -233,18 +233,15 @@ func TestD513_ProposalParse(t *testing.T) {
 	if rows, drop = validateProposals(bad2, known); len(rows) != 0 || drop != 1 {
 		t.Fatalf("long direction: rows=%d drop=%d", len(rows), drop)
 	}
-	// >10 条 → 整批拒收。
-	var many strings.Builder
-	many.WriteString("```explorer-proposals\n{\"proposals\":[")
-	for i := 0; i < 11; i++ {
-		if i > 0 {
-			many.WriteString(",")
-		}
-		many.WriteString(`{"canonical":"ETHUSDT","direction":"w","rationale":"r","anchor":"term_dispersion"}`)
+	// >10 条 → D-078 起截断留前 10（原整批拒收对良性超限过脆，双模型实锤）。
+	bb, trunc, ok := parseBatch(nProposalBatch(11))
+	if !ok || len(bb.GetProposals()) != maxBatchProposals || trunc != 1 {
+		t.Fatalf(">10 proposals should truncate to 10: ok=%v n=%d trunc=%d", ok, len(bb.GetProposals()), trunc)
 	}
-	many.WriteString("]}\n```\n")
-	if _, ok := parseBatch(many.String()); ok {
-		t.Fatal(">10 proposals should be rejected")
+	// 10 条边界不变（不截断、零截断计数）。
+	bb, trunc, ok = parseBatch(nProposalBatch(maxBatchProposals))
+	if !ok || len(bb.GetProposals()) != maxBatchProposals || trunc != 0 {
+		t.Fatalf("10 proposals boundary: ok=%v n=%d trunc=%d", ok, len(bb.GetProposals()), trunc)
 	}
 }
 

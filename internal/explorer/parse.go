@@ -1,11 +1,14 @@
 // parse.go LLM 提案块解析+校验（D-513 设计稿 §2）：
 // protojson 严格模式（DiscardUnknown=false——大小写敏感+未知字段拒收，D-505 族事故
 // 构造性消除）；非法行整行丢弃计 drop（fail-closed，非拒收整批）；
-// 单次>10 条=批级违例整批丢弃；截断/未闭合 fenced 块=批解析失败零落库（A6 红测面）。
+// 单次>10 条=D-078 起截断留前 10 条+log 警示（原「整批丢弃」对良性超限过脆——
+// 2026-10-06 双模型同形态实锤 11 条全废；截断条数由调用方并入 drop 保真记账）；
+// 截断/未闭合 fenced 块=批解析失败零落库（A6 红测面，真截断仍 fail-closed）。
 package explorer
 
 import (
 	"encoding/json"
+	"log"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -23,28 +26,39 @@ var proposalsFenceRe = regexp.MustCompile("(?s)```explorer-proposals\\s*\n(.*?)`
 // pairRe best_pair 键形：venue_a×venue_b（非空段×非空段，×=U+00D7）。
 var pairRe = regexp.MustCompile(`^[^×\s]+×[^×\s]+$`)
 
-// maxBatchProposals 单次提案硬上限（设计稿 §2：>10 条=非法）。
+// maxBatchProposals 单次提案硬上限（设计稿 §2：>10 条=批违例）。
 const maxBatchProposals = 10
 
 // maxDirectionRunes direction ≤16 字。
 const maxDirectionRunes = 16
 
 // parseBatch 严格解析 LLM 输出中的提案块。
-// 返回 (batch, ok)：ok=false=无块/截断/protojson 拒收/超上限——整批不落库。
-func parseBatch(aiText string) (*explorerv1.ProposalBatch, bool) {
+// 返回 (batch, truncDrop, ok)：ok=false=无块/截断/protojson 拒收——整批不落库；
+// ok=true 时 truncDrop=超限截断条数（proposals+探针提案合计，调用方并入 drop 记账）。
+// D-078：超上限由「整批拒收」（D-513/D-048 防滥发闸）改截断留前 10 条+log 警示——
+// 防滥发本义=防告警风暴，截断已足；良性超限（周一开盘 universe 候选增多）不应整批废。
+func parseBatch(aiText string) (*explorerv1.ProposalBatch, int, bool) {
 	m := proposalsFenceRe.FindStringSubmatch(aiText)
 	if m == nil {
-		return nil, false
+		return nil, 0, false
 	}
 	var b explorerv1.ProposalBatch
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(
 		[]byte(m[1]), &b); err != nil {
-		return nil, false
+		return nil, 0, false
 	}
-	if len(b.Proposals) > maxBatchProposals || len(b.ProbeProposals) > maxBatchProposals {
-		return nil, false // D-048：探针提案同硬上限——防滥发批触发告警风暴
+	trunc := 0
+	if n := len(b.Proposals); n > maxBatchProposals {
+		trunc += n - maxBatchProposals
+		log.Printf("[explorer] 提案批 %d 条超上限 %d——截断留前 %d 条（drop 记 %d）", n, maxBatchProposals, maxBatchProposals, n-maxBatchProposals)
+		b.Proposals = b.Proposals[:maxBatchProposals]
 	}
-	return &b, true
+	if n := len(b.ProbeProposals); n > maxBatchProposals {
+		trunc += n - maxBatchProposals
+		log.Printf("[explorer] 探针提案批 %d 条超上限 %d——截断留前 %d 条（drop 记 %d）", n, maxBatchProposals, maxBatchProposals, n-maxBatchProposals)
+		b.ProbeProposals = b.ProbeProposals[:maxBatchProposals]
+	}
+	return &b, trunc, true
 }
 
 // validateProposals 行级 fail-closed 校验：返回合法行集 + drop 计数。

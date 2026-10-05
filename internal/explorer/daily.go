@@ -143,9 +143,10 @@ func RunDaily(ctx context.Context, deps Deps) (*DailyResult, error) {
 	}
 	llmRes = "ok"
 
-	batch, ok := parseBatch(aiText.String())
+	batch, truncDrop, ok := parseBatch(aiText.String())
 	if !ok {
-		// 截断/拒收/超限=整批零落库（A6 截断用例锚面）；叙事不受影响仍记日志级。
+		// 真截断（未闭合 fenced）/protojson 拒收=整批零落库（A6 截断用例锚面）；
+		// 批超限良性违例已改截断留前 10（D-078），不再走此整批拒分支。叙事不受影响仍记日志级。
 		parseRes = "fail"
 		res.Drop = maxBatchProposals + 1
 		deps.alert(ctx, "warn", "[探索] 提案块解析失败（截断/非法 JSON——整批零落库）") // D-048④：不得吞
@@ -154,7 +155,7 @@ func RunDaily(ctx context.Context, deps Deps) (*DailyResult, error) {
 	parseRes = "ok"
 	candidates = len(batch.GetProposals()) + len(batch.GetProbeProposals())
 	rows, drop := validateProposals(batch, known)
-	res.Drop = drop
+	res.Drop = drop + truncDrop // D-078：批超限截断条数并入 drop（计数保真）
 	res.Narrative = extractNarrative(batch)
 	for i := range rows {
 		rows[i].ScanDate = res.ScanDate
