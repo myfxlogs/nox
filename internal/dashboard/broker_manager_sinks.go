@@ -56,6 +56,15 @@ func (m *BrokerManager) OrderProfitKickFn() func(venueKey string) {
 	return m.orderProfitKick
 }
 
+// kickAccountReady D-071 R1：adapter ready 点补一次账户定向 kick——margin 首采 kick
+// 可早于 ready（15032313 实拍早 11.4s，8514 符号 backfill）→ 直读打空且此后零事件；
+// ready=querier 可读权威时点，再 kick 一次（定向无防抖，幂等）。nil 安全。
+func (m *BrokerManager) kickAccountReady(venueKey string) {
+	if k := m.OrderProfitKickFn(); k != nil {
+		k(venueKey)
+	}
+}
+
 // dispatch* bound-method（D-581）：startMT5 拷贝到 adapter；调用时取最新目标，
 // 目标未接=no-op=原 nil 语义。锁内只取引用不放行调用。
 func (m *BrokerManager) dispatchAccount(vk string, bal, eq, mg, fm, prof, ml float64, ccy string, ts time.Time) {

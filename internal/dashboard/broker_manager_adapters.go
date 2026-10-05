@@ -8,6 +8,7 @@ import (
 	"arb/internal/adapter"
 	"arb/internal/exec"
 	"arb/internal/fact"
+	"arb/internal/keydomain"
 	"arb/internal/reconcile"
 	"arb/internal/safego"
 	"arb/internal/store/pgstore"
@@ -229,6 +230,7 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 	}
 	m.attach(a.Venue, r)
 	log.Printf("[broker] %s (MT5) ready", a.Venue)
+	m.kickAccountReady(keydomain.Join(a.Venue, "mt5")) // D-071 R1：margin 首采 kick 可早于 ready（见 sinks.go）
 	return nil
 }
 
