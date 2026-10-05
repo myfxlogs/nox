@@ -209,6 +209,26 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 			}
 			return sp.GetSymbolGroup().GetInitialMargin(), sp.GetSymbolInfo().GetContractSize(), nil
 		},
+		requiredMargin: func(ctx context.Context, symbol string, lots float64, side string) (float64, error) {
+			// D-068 仓位级保证金原生值：RequiredMargin RPC——D-415 同形态（price 缺省
+			// 0=网关侧现价），type=仓向。G4 供应商 2026-10-05 实装（0.01 lot XAU=$2.0811
+			// 实拍线性）；结果≤0 视为失败（fail-closed，调用方降级估算）。
+			dealType := mt5pb.DealType_DealType_DealBuy
+			if side == "SELL" {
+				dealType = mt5pb.DealType_DealType_DealSell
+			}
+			resp, err := ad.MT5Client().RequiredMargin(tokenCtx(ctx, ad.Token()), &mt5pb.RequiredMarginRequest{Id: ad.Token(), Symbol: symbol, Lots: lots, Type: &dealType})
+			if err != nil {
+				return 0, err
+			}
+			if e := resp.GetError(); e != nil {
+				return 0, fmt.Errorf("mt5 requiredMargin %s: %s", symbol, e.GetMessage())
+			}
+			if v := resp.GetResult(); v > 0 {
+				return v, nil
+			}
+			return 0, fmt.Errorf("mt5 requiredMargin %s: result %v", symbol, resp.GetResult())
+		},
 		sessions:         ad.SessionsFacts, // D-029 R3：周表采集源（running 面——SessionsFacts 聚合含 running+static）
 		meta:             func(ctx context.Context) ([]fact.Fact, error) { return ad.MetaFacts(ctx) },
 		orderHistoryScan: mt5OrderHistoryScan(ad.MT5Client(), ad.Token()), // D-181 S1

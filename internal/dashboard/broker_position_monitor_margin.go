@@ -1,5 +1,6 @@
-// broker_position_monitor_margin.go —— D-036：MT5 仓位级保证金=venue 规格估算
-// （D-031 ② 的 RequiredMargin RPC 路径拆除——生产网关 Unimplemented 无原生字段）。
+// broker_position_monitor_margin.go —— D-036：MT5 仓位级保证金规格估算（D-068 起为
+// RequiredMargin RPC 失败/未接线时的 fail-closed 降级径，margin_is_estimate 标「估算」；
+// G5（SymbolParams margin 字段）实测未实装，估径是唯一兜底，不删）。
 // 估算式：SymGroup.InitialMargin>0 → InitialMargin×lots；否则 lots×ContractSize
 // ×openPrice×init_margin_rate（fact 按裸 venue 键读）。规格/率任一不可得=空态不猜。
 // 规格与 imr 在 prepareVenueView（reconcile 时点）随 vs.cs 同批拉取——帧路径零 RPC。
