@@ -1,7 +1,7 @@
 // carry_universe_suspect.go D-345：suspect 判定（输入腿年化疑源线，自 carry_universe.go
 // 整组移出）。排名卫生与告警排除同族。
-// D-072：原 D-336 S3 真候选阈值告警（EmitThresholdAlerts/AlertThresholdPct/AlertSink）
-// 已退役——发现层产物经 D-050 自动进纸面无需人动作，决策面读毕业器/Stage 表。
+// D-072：原 D-336 S3 真候选阈值告警已退役——发现层产物经 D-050 自动进纸面，
+// 决策面读毕业器/Stage 表。
 package scan
 
 import (
