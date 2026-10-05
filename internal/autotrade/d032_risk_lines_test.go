@@ -118,9 +118,12 @@ type d032Svc struct {
 	eq   map[string]float64
 	at   map[string]time.Time
 	down map[string]bool // ok=false 的 venue
+	// D-071：MT 腿判定点直读——计次 + 回调（可在直读时把状态翻成有值/新鲜）。
+	refreshCalls int
+	onRefresh    func(d *d032Svc, vk string)
 }
 
-func (d d032Svc) AccountEquityUSDAt(vk string) (float64, string, time.Time, bool) {
+func (d *d032Svc) AccountEquityUSDAt(vk string) (float64, string, time.Time, bool) {
 	if d.down[vk] {
 		return 0, "", time.Time{}, false
 	}
@@ -129,6 +132,13 @@ func (d d032Svc) AccountEquityUSDAt(vk string) (float64, string, time.Time, bool
 		at = time.Now()
 	}
 	return d.eq[vk], "USD", at, true
+}
+
+func (d *d032Svc) RefreshAccountEquity(_ context.Context, vk string) {
+	d.refreshCalls++
+	if d.onRefresh != nil {
+		d.onRefresh(d, vk)
+	}
 }
 
 func d032Opp() pgstore.Opportunity {
@@ -147,12 +157,12 @@ func TestD032_EquityDisciplineGate(t *testing.T) {
 		return &Engine{cfg: cfg, store: s, service: svc}
 	}
 	// (a) 快照缺 → 拒开
-	e := newEng(d032Svc{down: map[string]bool{"okx:perp": true}, eq: map[string]float64{"3001157:mt5": 1e5}})
+	e := newEng(&d032Svc{down: map[string]bool{"okx:perp": true}, eq: map[string]float64{"3001157:mt5": 1e5}})
 	if !e.equityDisciplineGate(context.Background(), d032Opp(), 1000) {
 		t.Fatal("锚4a: 快照缺应拒开")
 	}
 	// (b) 快照超龄（10min > 5min）→ 拒开
-	e = newEng(d032Svc{
+	e = newEng(&d032Svc{
 		eq: map[string]float64{"okx:perp": 1e5, "3001157:mt5": 1e5},
 		at: map[string]time.Time{"okx:perp": time.Now().Add(-10 * time.Minute)},
 	})
@@ -160,12 +170,12 @@ func TestD032_EquityDisciplineGate(t *testing.T) {
 		t.Fatal("锚4b: 快照超龄应拒开")
 	}
 	// (c) CEX 权益不足（100 < 35%×1000=350）→ 拒开
-	e = newEng(d032Svc{eq: map[string]float64{"okx:perp": 100, "3001157:mt5": 1e5}})
+	e = newEng(&d032Svc{eq: map[string]float64{"okx:perp": 100, "3001157:mt5": 1e5}})
 	if !e.equityDisciplineGate(context.Background(), d032Opp(), 1000) {
 		t.Fatal("锚4c: 权益不足应拒开")
 	}
 	// (d) 权益充足 → 放行
-	e = newEng(d032Svc{eq: map[string]float64{"okx:perp": 500, "3001157:mt5": 500}})
+	e = newEng(&d032Svc{eq: map[string]float64{"okx:perp": 500, "3001157:mt5": 500}})
 	if e.equityDisciplineGate(context.Background(), d032Opp(), 1000) {
 		t.Fatal("锚4d: 权益足应放行")
 	}
@@ -182,16 +192,16 @@ func TestD032_EquityDisciplineGate(t *testing.T) {
 		 VALUES ($1,0,'OPEN',1,'okx','perp','XAU-USDT-SWAP','SELL',1,2500,'FILLED')`, posID); err != nil {
 		t.Fatalf("seed leg: %v", err)
 	}
-	e = newEng(d032Svc{eq: map[string]float64{"okx:perp": 1049, "3001157:mt5": 1e5}})
+	e = newEng(&d032Svc{eq: map[string]float64{"okx:perp": 1049, "3001157:mt5": 1e5}})
 	if !e.equityDisciplineGate(ctx, d032Opp(), 1000) {
 		t.Fatal("锚4e: 在仓名义计入后权益不足应拒开")
 	}
-	e = newEng(d032Svc{eq: map[string]float64{"okx:perp": 1100, "3001157:mt5": 1e5}})
+	e = newEng(&d032Svc{eq: map[string]float64{"okx:perp": 1100, "3001157:mt5": 1e5}})
 	if e.equityDisciplineGate(ctx, d032Opp(), 1000) {
 		t.Fatal("锚4e: 1050 线下 1100 应放行")
 	}
 	// (f) 非适用类型不拦（PERP_FUNDING 不在 D-030 硬线域）。
-	e = newEng(d032Svc{down: map[string]bool{"okx:perp": true}})
+	e = newEng(&d032Svc{down: map[string]bool{"okx:perp": true}})
 	opp := d032Opp()
 	opp.Type = "PERP_FUNDING"
 	if e.equityDisciplineGate(ctx, opp, 1000) {

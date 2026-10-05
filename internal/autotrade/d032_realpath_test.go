@@ -161,11 +161,11 @@ func TestD032_EquityGate_RealPathNotional(t *testing.T) {
 	}
 	// 闸：okx 需 35%×(2000+1000)=$1050；mt 需 25%×3000=$750（mt 给 1e5 恒过）。
 	cfg := Config{RiskCexEquityPct: 35, RiskCfdEquityPct: 25}
-	e := &Engine{cfg: cfg, store: s, service: d032Svc{eq: map[string]float64{"okx:perp": 1049, "3001157:mt5": 1e5}}}
+	e := &Engine{cfg: cfg, store: s, service: &d032Svc{eq: map[string]float64{"okx:perp": 1049, "3001157:mt5": 1e5}}}
 	if !e.equityDisciplineGate(ctx, d032Opp(), 1000) {
 		t.Fatal("锚R1c: okx $1049 < $1050 阈应拒开")
 	}
-	e = &Engine{cfg: cfg, store: s, service: d032Svc{eq: map[string]float64{"okx:perp": 1100, "3001157:mt5": 1e5}}}
+	e = &Engine{cfg: cfg, store: s, service: &d032Svc{eq: map[string]float64{"okx:perp": 1100, "3001157:mt5": 1e5}}}
 	if e.equityDisciplineGate(ctx, d032Opp(), 1000) {
 		t.Fatal("锚R1c: okx $1100 ≥ $1050 阈应放行")
 	}

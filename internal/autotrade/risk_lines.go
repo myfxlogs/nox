@@ -99,12 +99,31 @@ func (e *Engine) equityDisciplineGate(ctx context.Context, opp pgstore.Opportuni
 			continue
 		}
 		eq, _, asOf, ok := e.service.AccountEquityUSDAt(v)
+		// D-071：MT5 账户权益唯一流源=OnOrderProfit 帧，零持仓时 venue 不推帧
+		// （10-05 实拍：平掉最后一仓后 mt_frame 零行）——空账户第一笔开仓前在判定点
+		// 同步 REST 直读 venue 当前值一次（非快照、非缓存，与 MarginPrecheck 同类；
+		// D-004 无流例外：零持仓无帧为 venue 行为），读败仍 fail-closed。
+		// CEX 腿有私有流账本，不走直读。
+		refreshed := false
+		if isMTVenue(v) && (!ok || time.Since(asOf) > riskEquitySnapshotMaxAge) {
+			e.service.RefreshAccountEquity(ctx, v)
+			refreshed = true
+			eq, _, asOf, ok = e.service.AccountEquityUSDAt(v)
+		}
 		switch {
 		case !ok:
-			log.Printf("[autotrade] skip %s: equity snapshot missing @%s (权益纪律 fail-closed 拒开)", opp.ID, v)
+			if refreshed {
+				log.Printf("[autotrade] skip %s: equity snapshot missing @%s (直读后仍缺·权益纪律 fail-closed 拒开)", opp.ID, v)
+			} else {
+				log.Printf("[autotrade] skip %s: equity snapshot missing @%s (权益纪律 fail-closed 拒开)", opp.ID, v)
+			}
 			return true
 		case time.Since(asOf) > riskEquitySnapshotMaxAge:
-			log.Printf("[autotrade] skip %s: equity snapshot stale %s @%s (权益纪律 fail-closed 拒开)", opp.ID, time.Since(asOf).Round(time.Second), v)
+			if refreshed {
+				log.Printf("[autotrade] skip %s: equity snapshot stale %s @%s (直读后仍超龄·权益纪律 fail-closed 拒开)", opp.ID, time.Since(asOf).Round(time.Second), v)
+			} else {
+				log.Printf("[autotrade] skip %s: equity snapshot stale %s @%s (权益纪律 fail-closed 拒开)", opp.ID, time.Since(asOf).Round(time.Second), v)
+			}
 			return true
 		}
 		need := (expo[v] + legNotionalUSD) * pct / 100
