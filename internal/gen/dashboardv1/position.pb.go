@@ -186,7 +186,8 @@ type Position struct {
 	ExpectedSwapBpsDaily  *float64               `protobuf:"fixed64,12,opt,name=expected_swap_bps_daily,json=expectedSwapBpsDaily,proto3,oneof" json:"expected_swap_bps_daily,omitempty"`      // D-095：SWAPARB 日 swap bps（typed 列透传，D-087 已建库未上 proto）
 	FloatingPnlUsd        *float64               `protobuf:"fixed64,13,opt,name=floating_pnl_usd,json=floatingPnlUsd,proto3,oneof" json:"floating_pnl_usd,omitempty"`                          // D-095：浮动（broker profit 匹配和；未匹配=缺省）
 	SwapAccruedUsd        *float64               `protobuf:"fixed64,14,opt,name=swap_accrued_usd,json=swapAccruedUsd,proto3,oneof" json:"swap_accrued_usd,omitempty"`                          // D-095：已收息差（broker swap 匹配和）
-	NetPnlUsd             *float64               `protobuf:"fixed64,15,opt,name=net_pnl_usd,json=netPnlUsd,proto3,oneof" json:"net_pnl_usd,omitempty"`                                         // D-095：净盈亏=13+14
+	NetPnlUsd             *float64               `protobuf:"fixed64,15,opt,name=net_pnl_usd,json=netPnlUsd,proto3,oneof" json:"net_pnl_usd,omitempty"`                                         // D-093（语义改，业主授权净到手口径）：净盈亏=13+14+已付佣金−出场费估(44)；15 及以前=仅已付成本旧口径
+	ExitFeeEstUsd         *float64               `protobuf:"fixed64,44,opt,name=exit_fee_est_usd,json=exitFeeEstUsd,proto3,oneof" json:"exit_fee_est_usd,omitempty"`                           // D-093：平仓出场费估（Σ CEX 腿名义×takerBps，费率=app_config ARB_EXIT_FEE_BPS_<venue> 热键；MT 腿 0 点差内嵌；未配置 venue 该腿按 0+warn）
 	ExpectedSwapUsdToDate *float64               `protobuf:"fixed64,16,opt,name=expected_swap_usd_to_date,json=expectedSwapUsdToDate,proto3,oneof" json:"expected_swap_usd_to_date,omitempty"` // D-095：预期应得（SWAPARB/CARRY）
 	AttainmentPct         *float64               `protobuf:"fixed64,17,opt,name=attainment_pct,json=attainmentPct,proto3,oneof" json:"attainment_pct,omitempty"`                               // D-095：达成率 16 vs 14（息差型）
 	CurrentNetBps         *float64               `protobuf:"fixed64,18,opt,name=current_net_bps,json=currentNetBps,proto3,oneof" json:"current_net_bps,omitempty"`                             // D-095：收敛型当前 bps（rollup 最新）
@@ -341,6 +342,13 @@ func (x *Position) GetSwapAccruedUsd() float64 {
 func (x *Position) GetNetPnlUsd() float64 {
 	if x != nil && x.NetPnlUsd != nil {
 		return *x.NetPnlUsd
+	}
+	return 0
+}
+
+func (x *Position) GetExitFeeEstUsd() float64 {
+	if x != nil && x.ExitFeeEstUsd != nil {
+		return *x.ExitFeeEstUsd
 	}
 	return 0
 }
@@ -3107,7 +3115,7 @@ const file_dashboardv1_position_proto_rawDesc = "" +
 	"\border_id\x18\f \x01(\tR\aorderId\x12\x16\n" +
 	"\x06status\x18\r \x01(\tR\x06status\x12*\n" +
 	"\x02ts\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\x02tsB\x0f\n" +
-	"\r_price_actual\"\xd4\x10\n" +
+	"\r_price_actual\"\x97\x11\n" +
 	"\bPosition\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12%\n" +
 	"\x0eopportunity_id\x18\x02 \x01(\tR\ropportunityId\x12\x12\n" +
@@ -3124,33 +3132,35 @@ const file_dashboardv1_position_proto_rawDesc = "" +
 	"\x17expected_swap_bps_daily\x18\f \x01(\x01H\x02R\x14expectedSwapBpsDaily\x88\x01\x01\x12-\n" +
 	"\x10floating_pnl_usd\x18\r \x01(\x01H\x03R\x0efloatingPnlUsd\x88\x01\x01\x12-\n" +
 	"\x10swap_accrued_usd\x18\x0e \x01(\x01H\x04R\x0eswapAccruedUsd\x88\x01\x01\x12#\n" +
-	"\vnet_pnl_usd\x18\x0f \x01(\x01H\x05R\tnetPnlUsd\x88\x01\x01\x12=\n" +
-	"\x19expected_swap_usd_to_date\x18\x10 \x01(\x01H\x06R\x15expectedSwapUsdToDate\x88\x01\x01\x12*\n" +
-	"\x0eattainment_pct\x18\x11 \x01(\x01H\aR\rattainmentPct\x88\x01\x01\x12+\n" +
-	"\x0fcurrent_net_bps\x18\x12 \x01(\x01H\bR\rcurrentNetBps\x88\x01\x01\x125\n" +
-	"\x14settled_realized_usd\x18\x13 \x01(\x01H\tR\x12settledRealizedUsd\x88\x01\x01\x125\n" +
-	"\x14settled_notional_usd\x18\x14 \x01(\x01H\n" +
-	"R\x12settledNotionalUsd\x88\x01\x01\x12 \n" +
-	"\thold_days\x18\x15 \x01(\x01H\vR\bholdDays\x88\x01\x01\x12+\n" +
-	"\x0fbreak_even_days\x18\x16 \x01(\x01H\fR\rbreakEvenDays\x88\x01\x01\x12;\n" +
-	"\x17expected_breakeven_days\x18\x17 \x01(\x01H\rR\x15expectedBreakevenDays\x88\x01\x01\x120\n" +
-	"\x12live_net_carry_pct\x18\x18 \x01(\x01H\x0eR\x0fliveNetCarryPct\x88\x01\x01\x123\n" +
-	"\x13realized_annual_pct\x18\x19 \x01(\x01H\x0fR\x11realizedAnnualPct\x88\x01\x01\x121\n" +
-	"\x12swap_estimated_usd\x18# \x01(\x01H\x10R\x10swapEstimatedUsd\x88\x01\x01\x12.\n" +
-	"\x11close_now_net_usd\x18$ \x01(\x01H\x11R\x0ecloseNowNetUsd\x88\x01\x01\x124\n" +
-	"\x14close_exit_costs_usd\x18% \x01(\x01H\x12R\x11closeExitCostsUsd\x88\x01\x01\x12,\n" +
-	"\x0fattainment_tone\x18& \x01(\tH\x13R\x0eattainmentTone\x88\x01\x01\x12/\n" +
-	"\x11remaining_net_bps\x18' \x01(\x01H\x14R\x0fremainingNetBps\x88\x01\x01\x12+\n" +
-	"\x0fbreak_even_tone\x18( \x01(\tH\x15R\rbreakEvenTone\x88\x01\x01\x127\n" +
-	"\x15break_even_suppressed\x18) \x01(\bH\x16R\x13breakEvenSuppressed\x88\x01\x01\x12&\n" +
-	"\fdecision_ref\x18* \x01(\tH\x17R\vdecisionRef\x88\x01\x01\x12C\n" +
-	"\rauto_close_at\x18+ \x01(\v2\x1a.google.protobuf.TimestampH\x18R\vautoCloseAt\x88\x01\x01B\x0f\n" +
+	"\vnet_pnl_usd\x18\x0f \x01(\x01H\x05R\tnetPnlUsd\x88\x01\x01\x12,\n" +
+	"\x10exit_fee_est_usd\x18, \x01(\x01H\x06R\rexitFeeEstUsd\x88\x01\x01\x12=\n" +
+	"\x19expected_swap_usd_to_date\x18\x10 \x01(\x01H\aR\x15expectedSwapUsdToDate\x88\x01\x01\x12*\n" +
+	"\x0eattainment_pct\x18\x11 \x01(\x01H\bR\rattainmentPct\x88\x01\x01\x12+\n" +
+	"\x0fcurrent_net_bps\x18\x12 \x01(\x01H\tR\rcurrentNetBps\x88\x01\x01\x125\n" +
+	"\x14settled_realized_usd\x18\x13 \x01(\x01H\n" +
+	"R\x12settledRealizedUsd\x88\x01\x01\x125\n" +
+	"\x14settled_notional_usd\x18\x14 \x01(\x01H\vR\x12settledNotionalUsd\x88\x01\x01\x12 \n" +
+	"\thold_days\x18\x15 \x01(\x01H\fR\bholdDays\x88\x01\x01\x12+\n" +
+	"\x0fbreak_even_days\x18\x16 \x01(\x01H\rR\rbreakEvenDays\x88\x01\x01\x12;\n" +
+	"\x17expected_breakeven_days\x18\x17 \x01(\x01H\x0eR\x15expectedBreakevenDays\x88\x01\x01\x120\n" +
+	"\x12live_net_carry_pct\x18\x18 \x01(\x01H\x0fR\x0fliveNetCarryPct\x88\x01\x01\x123\n" +
+	"\x13realized_annual_pct\x18\x19 \x01(\x01H\x10R\x11realizedAnnualPct\x88\x01\x01\x121\n" +
+	"\x12swap_estimated_usd\x18# \x01(\x01H\x11R\x10swapEstimatedUsd\x88\x01\x01\x12.\n" +
+	"\x11close_now_net_usd\x18$ \x01(\x01H\x12R\x0ecloseNowNetUsd\x88\x01\x01\x124\n" +
+	"\x14close_exit_costs_usd\x18% \x01(\x01H\x13R\x11closeExitCostsUsd\x88\x01\x01\x12,\n" +
+	"\x0fattainment_tone\x18& \x01(\tH\x14R\x0eattainmentTone\x88\x01\x01\x12/\n" +
+	"\x11remaining_net_bps\x18' \x01(\x01H\x15R\x0fremainingNetBps\x88\x01\x01\x12+\n" +
+	"\x0fbreak_even_tone\x18( \x01(\tH\x16R\rbreakEvenTone\x88\x01\x01\x127\n" +
+	"\x15break_even_suppressed\x18) \x01(\bH\x17R\x13breakEvenSuppressed\x88\x01\x01\x12&\n" +
+	"\fdecision_ref\x18* \x01(\tH\x18R\vdecisionRef\x88\x01\x01\x12C\n" +
+	"\rauto_close_at\x18+ \x01(\v2\x1a.google.protobuf.TimestampH\x19R\vautoCloseAt\x88\x01\x01B\x0f\n" +
 	"\r_realized_pnlB\x16\n" +
 	"\x14_expected_annual_pctB\x1a\n" +
 	"\x18_expected_swap_bps_dailyB\x13\n" +
 	"\x11_floating_pnl_usdB\x13\n" +
 	"\x11_swap_accrued_usdB\x0e\n" +
-	"\f_net_pnl_usdB\x1c\n" +
+	"\f_net_pnl_usdB\x13\n" +
+	"\x11_exit_fee_est_usdB\x1c\n" +
 	"\x1a_expected_swap_usd_to_dateB\x11\n" +
 	"\x0f_attainment_pctB\x12\n" +
 	"\x10_current_net_bpsB\x17\n" +

@@ -5,12 +5,16 @@
 // 双轨注释：env 直读点未改造完前 ApplyAppSecretsOverlay 仍保留（构造期绑死键=重启生效）。
 package config
 
-import "sync"
+import (
+	"strings"
+	"sync"
+)
 
 // secretResolverAllowed resolver 可读键集=密钥白名单 ∪ 借轨标量（ARB_MACRO_ENABLED
-// 热闸借同一缓存轨，非密钥但同「写后同步 Set 即生效」语义——D-545 §2）。
+// 热闸、ARB_EXIT_FEE_BPS_* 净估出场费率借同一缓存轨，非密钥但同「写后同步 Set 即
+// 生效」语义——D-545 §2/D-093）。
 func secretResolverAllowed(k string) bool {
-	return IsAppSecretKey(k) || k == "ARB_MACRO_ENABLED"
+	return IsAppSecretKey(k) || k == "ARB_MACRO_ENABLED" || strings.HasPrefix(k, "ARB_EXIT_FEE_BPS_")
 }
 
 // SecretResolver 密钥热读缓存：Get 为消费点唯一读口；Set/Unset 为写面（RPC 同步）。

@@ -43,7 +43,8 @@ message Position {
   optional double expected_swap_bps_daily = 12;  // D-095：SWAPARB 日 swap bps（typed 列透传，D-087 已建库未上 proto）
   optional double floating_pnl_usd        = 13;  // D-095：浮动（broker profit 匹配和；未匹配=缺省）
   optional double swap_accrued_usd        = 14;  // D-095：已收息差（broker swap 匹配和）
-  optional double net_pnl_usd             = 15;  // D-095：净盈亏=13+14
+  optional double net_pnl_usd             = 15;  // D-093（语义改，业主授权净到手口径）：净盈亏=13+14+已付佣金−出场费估(44)；15 及以前=仅已付成本旧口径
+  optional double exit_fee_est_usd = 44;     // D-093：平仓出场费估（Σ CEX 腿名义×takerBps，费率=app_config ARB_EXIT_FEE_BPS_<venue> 热键；MT 腿 0 点差内嵌；未配置 venue 该腿按 0+warn）
   optional double expected_swap_usd_to_date = 16; // D-095：预期应得（SWAPARB/CARRY）
   optional double attainment_pct          = 17;  // D-095：达成率 16 vs 14（息差型）
   optional double current_net_bps         = 18;  // D-095：收敛型当前 bps（rollup 最新）
