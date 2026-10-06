@@ -8,6 +8,7 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -44,6 +45,8 @@ func (s *Service) legMarginNeedFrac(ctx context.Context, venueKey, sym string, s
 // 通道复用不重建；执行链 precheck 实读权威语义不变——面板=展示面）。
 // 读穿缓存 5min（键=vk|sym|side，对齐 snapshotStaleWindow 哲学；命中 note 时刻
 // =缓存 at 展示真读时刻）；读败→unknown 黄标诚实不猜。
+// D-079：venue 现值≠策略目标（|lev−target|≥0.5）→ 开仓前置会 ensure 到 target，
+// frac 按策略值折算（展示面=引擎开仓时真实状态），note 透出「→开仓前置设为」。
 func (s *Service) legMarginNeedPerp(ctx context.Context, vk, sym string, sellLeg bool) (float64, string, bool) {
 	side := "buy"
 	if sellLeg {
@@ -54,21 +57,30 @@ func (s *Service) legMarginNeedPerp(ctx context.Context, vk, sym string, sellLeg
 	if s.levCache == nil {
 		s.levCache = map[string]levCacheEntry{}
 	}
+	var lev float64
+	var at time.Time
 	if e, ok := s.levCache[key]; ok && time.Since(e.at) <= 5*time.Minute {
+		lev, at = e.lev, e.at
 		s.levCacheMu.Unlock()
-		return 1 / e.lev, fmt.Sprintf("%s 杠杆 %.0f×（实读 %s）", vk, e.lev, e.at.Format("15:04:05")), true
+	} else {
+		s.levCacheMu.Unlock()
+		l, err := s.venueLeverage(ctx, vk, sym, sellLeg)
+		if err != nil || l <= 0 {
+			return 0, "杠杆实况不可得（venue 读败）", false
+		}
+		lev, at = l, time.Now()
+		s.levCacheMu.Lock()
+		s.levCache[key] = levCacheEntry{lev: lev, at: at}
+		s.levCacheMu.Unlock()
 	}
-	s.levCacheMu.Unlock()
-	lev, err := s.venueLeverage(ctx, vk, sym, sellLeg)
-	if err != nil || lev <= 0 {
-		return 0, "杠杆实况不可得（venue 读败）", false
+	if s.perpLeverageTarget > 0 && math.Abs(lev-s.perpLeverageTarget) >= 0.5 {
+		return 1 / s.perpLeverageTarget, fmt.Sprintf("%s 杠杆 %.0f×→开仓前置设为 %.0f×（策略值）", vk, lev, s.perpLeverageTarget), true
 	}
-	at := time.Now()
-	s.levCacheMu.Lock()
-	s.levCache[key] = levCacheEntry{lev: lev, at: at}
-	s.levCacheMu.Unlock()
 	return 1 / lev, fmt.Sprintf("%s 杠杆 %.0f×（实读 %s）", vk, lev, at.Format("15:04:05")), true
 }
+
+// SetPerpLeverageTarget D-079：注入 perp 腿目标杠杆（≤0=展示面不换算，原样透出实读值）。
+func (s *Service) SetPerpLeverageTarget(target float64) { s.perpLeverageTarget = target }
 
 // levCacheEntry D-572 S1：杠杆读穿缓存条目（frac 由 1/lev 当场算不冗余存）。
 type levCacheEntry struct {

@@ -214,6 +214,10 @@ type Service struct {
 	mtPoolKickMu sync.Mutex
 	mtPoolKick   map[string]time.Time
 
+	// perpLeverageTarget D-079：perp 腿目标杠杆（main 同源传 cfg.PerpLeverageTarget；
+	// >0 且 venue 现值≠目标 → 保证金口径按策略值算=开仓前置 ensure 的真实状态）。
+	perpLeverageTarget float64
+
 	// D-159 W1a I6：environment/is_real 一致性检查（手动入口同源）。
 	// environment 空 = 未配置（不检查，回退旧行为）。
 	environment string
