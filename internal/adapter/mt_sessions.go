@@ -22,11 +22,16 @@ const sessionsPerCallTimeout = 3 * time.Second
 
 // SessionsFacts 拉全部已映射符号的周会话表，归一为 trade_session facts。
 // 单符号失败只记日志；全失败才返回错误（Scheduler 退避重试）。
+// D-083：canonical 标签发射闸同 mt_swap.go D-383 A2.3——blocked[brokerSym]
+// 只发 native 不发 canonical（修 XAUUSDm/XAUUSD247m 同 canonical 同轮并写、
+// LatestFacts 后写赢者随机翻转 XAUUSD 周表的撞车）；并每符号发 `#n` 窗计数行
+// 供读侧丢弃幽灵窗（被 blocked 符号残留的旧 canonical 行 idx 可能超出真实窗数）。
 func (a *MT5Adapter) SessionsFacts(ctx context.Context) ([]fact.Fact, error) {
 	sm := a.SymbolMap()
 	if len(sm) == 0 {
 		return nil, nil
 	}
+	blocked := a.emitBlockedSet() // D-083：单次快照（同 SwapFacts 并发风格）
 	// 服务器时区偏移实取（fail-closed：取不到偏移无法换算 UTC=本采集轮放弃，下轮重试）。
 	tctx, tcancel := context.WithTimeout(a.withSessionMD(ctx), 5*time.Second)
 	defer tcancel()
@@ -76,7 +81,7 @@ func (a *MT5Adapter) SessionsFacts(ctx context.Context) ([]fact.Fact, error) {
 				errs[idx] = brokerSym + ": result nil"
 				return
 			}
-			slots[idx] = sessionFactsFor(a.venue, syms[idx].canon, brokerSym, r.GetTrades(), srvLoc, srvNow)
+			slots[idx] = sessionFactsFor(a.venue, syms[idx].canon, brokerSym, r.GetTrades(), srvLoc, srvNow, blocked)
 		}(i, ent.brokerSym)
 	}
 	wg.Wait()
@@ -101,7 +106,10 @@ func (a *MT5Adapter) SessionsFacts(ctx context.Context) ([]fact.Fact, error) {
 // sessionFactsFor 单符号周表 → trade_session facts（canonical+native 双发）。
 // day=Trades 数组下标（服务器本地 0=Sun..6=Sat）；换算：以 srvNow 为锚找该 weekday
 // 最近一次出现日 → session 起止（服务器本地）→ 绝对 UTC → 编码（判定侧纯 UTC）。
-func sessionFactsFor(venue, canon, brokerSym string, days []*mt5pb.SessionsForDay, srvLoc *time.Location, srvNow time.Time) []fact.Fact {
+// D-083：blocked[brokerSym] 时只发 native 不发 canonical（D-383 A2.3 同语义——
+// 多行组非 primary 行仅停 canonical 标签）；每符号附 `symbol#n` 计数行（Value=窗数，
+// 读侧据此丢弃被压行的旧符号残留幽灵窗）。blocked 空集=全发（旧行为）。
+func sessionFactsFor(venue, canon, brokerSym string, days []*mt5pb.SessionsForDay, srvLoc *time.Location, srvNow time.Time, blocked map[string]bool) []fact.Fact {
 	// D-029：symbol 唯一化 canon#idx——LatestFactsByKind 按 (venue,symbol) 折叠取最新，
 	// 同 symbol 多窗行会互吞；idx 全局递增保每窗一行。读侧解析取 "#" 前缀。
 	emit := func(symbol string) []fact.Fact {
@@ -125,9 +133,22 @@ func sessionFactsFor(venue, canon, brokerSym string, days []*mt5pb.SessionsForDa
 				idx++
 			}
 		}
+		// D-083：窗计数行——同 canonical 另一符号的旧窗行不会被本符号覆盖删除，
+		// 读侧以 n 截断丢弃 idx≥n 的残留（无 #n 行=旧数据不过滤，兼容）。
+		out = append(out, fact.Fact{
+			Kind:   fact.KindTradeSession,
+			Venue:  venue,
+			Symbol: symbol + "#n",
+			Value:  float64(idx),
+			Unit:   "utc_session_count",
+			Ts:     time.Now(),
+		})
 		return out
 	}
-	out := emit(canon)
+	var out []fact.Fact
+	if !blocked[brokerSym] { // D-383 A2.3 同闸：canonical 标签停发，native 照发
+		out = emit(canon)
+	}
 	if brokerSym != canon {
 		out = append(out, emit(brokerSym)...)
 	}
