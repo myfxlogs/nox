@@ -1,6 +1,6 @@
 // ---------- Binance（D-591 S6：四连 REST 退役——exchangeInfo 日缓存 + ticks/facts 读库） ----------
 // 目录枚举 exchangeInfo=唯一保留 REST（24h 日缓存降频，目录数据低频变化非决策消费轮询）；
-// premiumIndex→facts funding/funding_interval、ticker/24hr→facts vol24h（!ticker@arr@1s
+// premiumIndex→facts funding/funding_interval、ticker/24hr→facts vol24h（!ticker@arr
 // 落库）、mark→ticks binance perp mid（≈mark 近似）。coverage=core 有效集 facts/ticks，
 // 未覆盖符号诚实零值（annualize nil→资格判定跳过，禁猜值）。
 package main
