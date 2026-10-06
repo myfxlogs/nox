@@ -41,6 +41,7 @@ func Load() *Config {
 		MinLiqDistancePct:      envFloat("ARB_MIN_LIQ_DISTANCE_PCT", 0),        // D-472 S4：缺省 0=关闸（定标前置）
 		CrossNotionalEquityCap: envFloat("ARB_CROSS_NOTIONAL_EQUITY_CAP", 0.5), // D-472 S4：cross 占比上限
 		PerpLeverageTarget:     envFloat("ARB_PERP_LEVERAGE_TARGET", 10),       // D-079：perp 腿目标杠杆（开仓前置 set-leverage）
+		XAssetMTFirst:          envBool("ARB_XASSET_MT_FIRST", true),           // D-084：MT 腿先行顺序 taker（MT 拒单零成本）
 		CommissionTaker: map[string]float64{
 			"binance": envFloat("ARB_COMMISSION_TAKER_BINANCE", 5.0),
 			"okx":     envFloat("ARB_COMMISSION_TAKER_OKX", 5.0),

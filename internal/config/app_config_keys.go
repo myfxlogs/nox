@@ -180,6 +180,7 @@ var appConfigKeys = map[string]AppCfgMeta{
 	"ARB_XASSET_ENTRY_MIN_BPS":           f64(func(c *Config) *float64 { return &c.XassetEntryMinBps }),
 	"ARB_XASSET_EXEC_DRIFT_BPS":          f64(func(c *Config) *float64 { return &c.XAssetExecDriftBps }),
 	"ARB_XASSET_MIN_NET_ANNUAL_PCT":      f64(func(c *Config) *float64 { return &c.XassetMinNetAnnualPct }),
+	"ARB_XASSET_MT_FIRST":                boolv(func(c *Config) *bool { return &c.XAssetMTFirst }), // D-084
 	"ARB_XASSET_QUOTE_MAX_AGE":           durv(func(c *Config) *time.Duration { return &c.XAssetQuoteMaxAge }),
 	"ARB_XASSET_TRACKING_MAX_BPS":        f64(func(c *Config) *float64 { return &c.XassetTrackingMaxBps }),
 }
