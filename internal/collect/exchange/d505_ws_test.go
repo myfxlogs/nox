@@ -5,8 +5,10 @@
 package exchange
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/http/httptest"
 
@@ -217,7 +219,9 @@ func TestD509_OkxFundingRate(t *testing.T) {
 	if math.Abs(got[0].Value-0.0001*3*365*100) > 1e-9 { // 8h 窗→3/天
 		t.Fatalf("annualized=%v", got[0].Value)
 	}
-	if got[1].Value != 1790496000 || got[2].Value != 28800 {
+	// D-092：NextSettle=fundingTime（1790467200=真·下次结算）；nextFundingTime
+	// （1790496000）是再下一期——旧断言存了后者=倒计时恒多一期。
+	if got[1].Value != 1790467200 || got[2].Value != 28800 {
 		t.Fatalf("settle/interval: %+v %+v", got[1], got[2])
 	}
 	// 缺 fundingRate → 缺省不造
@@ -230,4 +234,53 @@ func TestD509_OkxFundingRate(t *testing.T) {
 	// tickers 帧不被 funding 分流误吞：handleMessage 正常路
 	got = nil
 	o.emitFacts = func(_ context.Context, fs []fact.Fact) error { got = append(got, fs...); return nil }
+}
+
+// TestD092_OkxNextSettleFundingTime D-092 锚（先红后绿）：NextSettle fact 值=
+// fundingTime（1791302400=真·下次结算），修复前发射 nextFundingTime=1791331200 必红；
+// interval=nft−ft（28800s）回归不变。
+func TestD092_OkxNextSettleFundingTime(t *testing.T) {
+	var got []fact.Fact
+	o := &OKXWebSocket{}
+	o.emitFacts = func(_ context.Context, fs []fact.Fact) error { got = append(got, fs...); return nil }
+	var msg wsMsg
+	if err := json.Unmarshal([]byte(`{"arg":{"channel":"funding-rate","instId":"XAU-USDT-SWAP"},
+		"data":[{"fundingRate":"0.0001","fundingTime":"1791302400000","nextFundingTime":"1791331200000"}]}`), &msg); err != nil {
+		t.Fatal(err)
+	}
+	o.handleFundingRate(context.Background(), msg)
+	if len(got) != 3 {
+		t.Fatalf("facts=%d want 3", len(got))
+	}
+	if got[1].Kind != fact.KindFundingNextSettle || got[1].Value != 1791302400 {
+		t.Fatalf("nextSettle 应=fundingTime 1791302400（修复前=nextFundingTime 1791331200 必红）: %+v", got[1])
+	}
+	if got[2].Kind != fact.KindFundingInterval || got[2].Value != 28800 {
+		t.Fatalf("interval 回归: %+v", got[2])
+	}
+}
+
+// TestD092_OkxFundingTimeStaleWarn D-033 自盯：fundingTime ≤ now（陈旧/越界）→
+// 采样 warn 一行，venue 值照发不篡改。
+func TestD092_OkxFundingTimeStaleWarn(t *testing.T) {
+	var got []fact.Fact
+	o := &OKXWebSocket{}
+	o.emitFacts = func(_ context.Context, fs []fact.Fact) error { got = append(got, fs...); return nil }
+	var msg wsMsg
+	// ft=1790467200000（10-05 16:00Z，相对运行时恒为过去）→ ahead<0 → warn。
+	if err := json.Unmarshal([]byte(`{"arg":{"channel":"funding-rate","instId":"XAU-USDT-SWAP"},
+		"data":[{"fundingRate":"0.0001","fundingTime":"1790467200000","nextFundingTime":"1790496000000"}]}`), &msg); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	old := log.Writer()
+	log.SetOutput(&buf)
+	defer log.SetOutput(old)
+	o.handleFundingRate(context.Background(), msg)
+	if !strings.Contains(buf.String(), "fundingTime 越界") {
+		t.Fatalf("陈旧 fundingTime 应触发自盯 warn, log=%q", buf.String())
+	}
+	if len(got) != 3 {
+		t.Fatalf("warn 路径 venue 值照发不篡改: facts=%d want 3", len(got))
+	}
 }

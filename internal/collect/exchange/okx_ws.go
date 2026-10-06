@@ -253,9 +253,21 @@ func (o *OKXWebSocket) handleFundingRate(ctx context.Context, msg wsMsg) {
 			Value: annualizeFunding(rate, fundingPeriodsPerDay(intervalMs)),
 			Unit:  fact.UnitPctAnnualized, Ts: now, Src: "okx_ws_v5"},
 	}
-	if nftMs > 0 {
+	if ftMs > 0 {
+		// D-092：NextSettle 发射 fundingTime（当前期结算时刻=真·下次结算），非
+		// nextFundingTime（再下一期）——旧值致前端倒计时恒多一期（业主实见 13:52:38，
+		// 真值 ~05:52）。两 venue 字段语义对照表（10-06 okx 官方端点实拍 ft=16:00Z、
+		// nft=次日 00:00Z，防后人按字段名「统一」回去）：binance markprice 流
+		// nextFundingTime=下次结算；okx funding-rate 流 fundingTime=下次结算、
+		// nextFundingTime=再下一期。
+		// D-033 自盯：venue 值不篡改，异常陈旧（ft≤now）或越界（ft−now>interval）
+		// 只采样 warn——未来 venue 字段再变语义时可见。
+		ahead := time.Duration(int64(ftMs)-time.Now().UnixMilli()) * time.Millisecond
+		if ahead <= 0 || (intervalMs > 0 && ahead > time.Duration(int64(intervalMs))*time.Millisecond) {
+			log.Printf("[okx-ws] %s fundingTime 越界（ahead=%s interval=%s）——venue 字段语义或时钟异常，观察", sym, ahead, time.Duration(intervalMs)*time.Millisecond)
+		}
 		fs = append(fs, fact.Fact{Kind: fact.KindFundingNextSettle, Venue: VenueOKX,
-			Symbol: sym, Value: nftMs / 1000, Unit: fact.UnitUnixSec, Ts: now, Src: "okx_ws_v5"})
+			Symbol: sym, Value: ftMs / 1000, Unit: fact.UnitUnixSec, Ts: now, Src: "okx_ws_v5"})
 	}
 	if intervalMs > 0 {
 		fs = append(fs, fact.Fact{Kind: fact.KindFundingInterval, Venue: VenueOKX,
