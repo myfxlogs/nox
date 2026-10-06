@@ -12,6 +12,7 @@ package autotrade
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,9 +42,15 @@ type sessionWindow struct {
 }
 
 // inSession now 是否落在该会话内（跨午夜：起点日尾段 ∨ 次日头段）。
+// D-083：start=end=0 是全天窗——MT5 end=1440 经 toUTCSession 的
+// endAbs.Hour()*60+Minute() 折成 0（247m 类符号每交易日一行 00:00-24:00）。
+// 不能走 end>=start 普通分支（会把全天窗判成仅 00:00 那一分钟开市）。
 func (w sessionWindow) inSession(now time.Time) bool {
 	nm := now.UTC().Hour()*60 + now.UTC().Minute()
 	nd := int(now.UTC().Weekday())
+	if w.startMin == 0 && w.endMin == 0 {
+		return nd == w.wday // 全天窗：当天任意分钟都在市
+	}
 	if w.endMin >= w.startMin {
 		return nd == w.wday && nm >= w.startMin && nm <= w.endMin
 	}
@@ -68,16 +75,44 @@ func (e *Engine) loadSessionTable(ctx context.Context) sessionTable {
 	if err != nil || len(facts) == 0 {
 		return nil
 	}
-	t := sessionTable{}
+	// D-083：两阶段装表——先收 `sym#n` 计数行（adapter 每符号 emitted 窗数），
+	// 再收窗行并丢弃 idx≥count 的残留幽灵窗（同 canonical 多 brokerSym 的历史并写
+	// 不会被覆盖删除，只有计数行能界清有效窗数）。无 #n 行=旧数据 → 不过滤（兼容）。
+	type widx struct {
+		idx int // 窗序号（-1=无 # 后缀/不可解析，不参与截断）
+		w   sessionWindow
+	}
+	counts := map[string]int{}
+	raw := map[string][]widx{}
 	for _, f := range facts {
 		sym := f.Symbol
+		idx := -1
 		if i := strings.Index(sym, "#"); i >= 0 {
+			suffix := sym[i+1:]
 			sym = sym[:i] // D-029：adapter 唯一化后缀（canon#idx）剥离
+			if suffix == "n" {
+				counts[f.Venue+"|"+sym] = int(f.Value)
+				continue // 计数行不入窗
+			}
+			if n, aerr := strconv.Atoi(suffix); aerr == nil {
+				idx = n
+			}
 		}
 		v := int64(f.Value)
-		t[f.Venue+"|"+sym] = append(t[f.Venue+"|"+sym], sessionWindow{
+		key := f.Venue + "|" + sym
+		raw[key] = append(raw[key], widx{idx: idx, w: sessionWindow{
 			wday: int(v / 1e8), startMin: int(v / 1e4 % 1e4), endMin: int(v % 1e4),
-		})
+		}})
+	}
+	t := sessionTable{}
+	for k, ws := range raw {
+		cnt, declared := counts[k]
+		for _, e := range ws {
+			if declared && e.idx >= cnt {
+				continue // 幽灵窗（残留旧符号行的越界序号）
+			}
+			t[k] = append(t[k], e.w)
+		}
 	}
 	e.sessionTblMu.Lock()
 	e.sessionTbl, e.sessionTblAt = t, time.Now()
