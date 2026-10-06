@@ -99,9 +99,9 @@ func TestD388_SetBrokerDisabled_WireE2E(t *testing.T) {
 	}
 
 	// 真实存在 venue：disable → 200 + DB 翻 stopped
-	resp, _ := post(`{"venue":"vE2E","disabled":true}`)
+	resp, body := post(`{"venue":"vE2E","disabled":true}`)
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("disable vE2E: status=%d", resp.StatusCode)
+		t.Fatalf("disable vE2E: status=%d body=%s", resp.StatusCode, body)
 	}
 	var st string
 	if err := svc.store.Pool().QueryRow(ctx,
@@ -113,7 +113,7 @@ func TestD388_SetBrokerDisabled_WireE2E(t *testing.T) {
 	}
 
 	// ghost venue：HTTP 404（CodeNotFound 映射）——硬化前这里是 200 假成功
-	resp, body := post(`{"venue":"ghost-404","disabled":true}`)
+	resp, body = post(`{"venue":"ghost-404","disabled":true}`)
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("ghost venue: status=%d body=%s, want 404", resp.StatusCode, body)
 	}
