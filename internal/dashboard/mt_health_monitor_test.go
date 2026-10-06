@@ -708,9 +708,11 @@ func TestMTHealth_StoppedVenueQbusResidueNoAlert(t *testing.T) {
 	}
 }
 
-// TestMTHealth_ConnectedVenueNoDataStillCrit D-216 反向防回归：connected venue 无数据仍 crit。
-// 场景：{"vA":"connected"}，无 querier、无 qbus、无 facts → tick1 静默 + tick2-4 quote critical（R-H4 flash-miss 3 tick）。
+// TestMTHealth_ConnectedVenueNoDataStillCrit D-216 反向防回归：connected+attached venue 无数据仍 crit。
+// 场景：{"vA":"connected"}+querier 已 attach、无 qbus、无 facts → tick1 静默 + tick2-4 quote critical（R-H4 flash-miss 3 tick）。
 // 不许把 D-205 型真告警修没了。旧代码：venue 不进 venueSet（无任何来源）→ 零告警 → 红。
+// D-085：「connected 未 attach」另径=attaching 门（d085_attach_gate_test.go 覆盖）——
+// 本锚钉的是 attach 后真停更仍 crit，夹具补 querier 表 attached。
 func TestMTHealth_ConnectedVenueNoDataStillCrit(t *testing.T) {
 	log.SetOutput(os.NewFile(0, os.DevNull))
 	defer log.SetOutput(os.Stderr)
@@ -718,7 +720,11 @@ func TestMTHealth_ConnectedVenueNoDataStillCrit(t *testing.T) {
 	store := newFakeHealthStore()
 	store.accountStatuses = map[string]string{"vA": "connected"}
 	qbus := bus.New()
-	vs := &fakeVenueSource{queriers: nil}
+	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "vA:mt5"}}}
+	// D-085：querier 已 attach → vA 入 mtSet/mt5Set，swap/margin 无 facts 会另径 crit
+	// 干扰「quote 单源被测面」——补新鲜 facts 隔离（本锚只钉 quote 路径）。
+	store.setFacts(fact.KindSwapLong, []fact.Fact{{Venue: "vA", Ts: wedUTC}})
+	store.setFacts(fact.KindInitMarginRate, []fact.Fact{{Venue: "vA", Ts: wedUTC}})
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
 		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour, 24*time.Hour, 72*time.Hour) // D-067 margin 阈值
 
@@ -1002,7 +1008,7 @@ func TestMTHealth_D400_StaticQuerierStoppedNoAlert(t *testing.T) {
 	store := newFakeHealthStore()
 	store.accountStatuses = map[string]string{"X": "stopped", "Y": "connected"}
 	qbus := bus.New()
-	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "X:mt5"}}}
+	vs := &fakeVenueSource{queriers: []reconcile.AccountQuerier{&fakeAccountQuerier{key: "X:mt5"}, &fakeAccountQuerier{key: "Y:mt5"}}} // D-085：Y 补 querier=attached（connected 未 attach 现走 attaching 门，非本锚语义）
 	mon := NewMTHealthMonitor(vs, qbus, store, time.Hour,
 		5*time.Minute, 30*time.Minute, 2*time.Hour, 6*time.Hour, 24*time.Hour, 72*time.Hour) // D-067 margin 阈值
 	now := wedUTC
