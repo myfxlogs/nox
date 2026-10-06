@@ -199,7 +199,9 @@ func safePath(root, rel string, allowedSubs []string) (string, bool) {
 
 // --- grep_kb ---
 
-// execGrepKB grep -rn 限定 /kn 根。
+// execGrepKB 递归 grep 限定 /kn 根。旗标用 BusyBox 子集（D-089：alpine 基座无 GNU grep，
+// --include 直接 exit 2）——-I 跳二进制、-e 防 pattern 首字符为 -、-l 只列文件；
+// .md/.go 限定移到 Go 侧后缀过滤，语义保真（全滤空=无匹配）。
 func (t *Tools) execGrepKB(ctx context.Context, call ToolCall) (ToolResult, []Citation, error) {
 	var args struct {
 		Pattern string `json:"pattern"`
@@ -225,7 +227,7 @@ func (t *Tools) execGrepKB(ctx context.Context, call ToolCall) (ToolResult, []Ci
 	}
 	gctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(gctx, "grep", "-rn", "--include=*.md", "--include=*.go", "-l", args.Pattern, searchRoot)
+	cmd := exec.CommandContext(gctx, "grep", "-rn", "-I", "-l", "-e", args.Pattern, searchRoot)
 	out, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
@@ -233,7 +235,22 @@ func (t *Tools) execGrepKB(ctx context.Context, call ToolCall) (ToolResult, []Ci
 		}
 		return ToolResult{ToolUseID: call.ID, Content: "grep 失败: " + err.Error(), IsError: true}, nil, nil
 	}
-	files := strings.TrimSpace(string(out))
+	// --include 的 .md/.go 限定（D-089）：对输出行按后缀过滤，大小写不敏感。
+	var kept []string
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		low := strings.ToLower(line)
+		if strings.HasSuffix(low, ".md") || strings.HasSuffix(low, ".go") {
+			kept = append(kept, line)
+		}
+	}
+	files := strings.Join(kept, "\n")
+	if files == "" {
+		return ToolResult{ToolUseID: call.ID, Content: "无匹配"}, nil, nil
+	}
 	cite := Citation{Kind: "kb", Ref: truncate(args.Pattern, 100), Excerpt: truncate(files, 500)}
 	return ToolResult{ToolUseID: call.ID, Content: files}, []Citation{cite}, nil
 }
