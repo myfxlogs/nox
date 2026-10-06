@@ -145,10 +145,12 @@ message BrokerPosition {
   bool close_estimate_excludes_income = 30;  // D-037：平仓净估未含已收息（income 源不可得：CEX 外单 openedAt 缺/查询失败；CEX 系统仓 cashflows 查询失败）——前端标缺息提示；false=已含（MT=Order.Swap / CEX 仓=cashflows actual / CEX 外单=income_events 窗）
   string probe_decision_ref = 31;                  // D-047：关联仓 type='PROBE' 的决策引用（positions.decision_ref 透传）；空=非探针/未关联
   google.protobuf.Timestamp probe_auto_close_at = 32;  // D-047：探针到期自动平仓时刻（positions.auto_close_at 透传）；nil=非探针/未关联
+  google.protobuf.Timestamp as_of = 33;            // D-094：本行数据的事件时戳（MT=OnOrderProfit 帧到达时刻；CEX=权威回读时刻）透传——前端展示数据新鲜度，断流陈旧可观测；nil=未知
+  bool is_sample = 34;                             // D-094：孤儿/收息样本行（position_id=0 未关联系统仓，如手动收息 0.002 XAUUSDT）——Σ 统计条排除，行本身仍显示
 }
 
 message ListBrokerPositionsRequest {
-  bool refresh = 1;   // true = 强制触发一次 venue 轮询后返回（前端「刷新」/平仓后立即刷新）
+  bool refresh = 1;   // D-094：人工调试后门（前端「刷新」按钮=force 重拉一次；非数据主源——主源=StreamUpdates 事件流）
 }
 
 message ListBrokerPositionsResponse {
