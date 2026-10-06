@@ -8,6 +8,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -82,6 +83,30 @@ func TestReadDocAllowsWhitelist(t *testing.T) {
 	res, _, err := tools.execReadFile(context.Background(), ToolCall{ID: "c1", Input: `{"path":"docs/经验库/a.md"}`}, "docs")
 	if err != nil || res.IsError {
 		t.Fatalf("expected success, got err=%v res=%s", err, res.Content)
+	}
+}
+
+// TestGrepKB_SuffixFilter D-089：--include 限定移 Go 侧——同 pattern 三文件命中，
+// 结果只含 a.md/c.go（后缀过滤证），b.txt 被滤。
+func TestGrepKB_SuffixFilter(t *testing.T) {
+	dir := t.TempDir()
+	pattern := "NEEDLE_XAU"
+	files := map[string]string{"a.md": "hit " + pattern, "b.txt": "hit " + pattern, "c.go": "hit " + pattern}
+	for name, body := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	tools := &Tools{KnRoot: dir}
+	res, _, err := tools.execGrepKB(context.Background(), ToolCall{ID: "c1", Input: `{"pattern":"` + pattern + `"}`})
+	if err != nil || res.IsError {
+		t.Fatalf("grep_kb failed: err=%v res=%s", err, res.Content)
+	}
+	got := strings.Split(res.Content, "\n")
+	sort.Strings(got)
+	want := []string{filepath.Join(dir, "a.md"), filepath.Join(dir, "c.go")}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("后缀过滤结果 = %v, want %v（b.txt 应被滤）", got, want)
 	}
 }
 
