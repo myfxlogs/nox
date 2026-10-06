@@ -151,3 +151,42 @@ func TestD090_CloseOrderMTFirst(t *testing.T) {
 		t.Fatalf("双腿全成仓应 CLOSED, got %s", pos.Status)
 	}
 }
+
+// (c) force 逃逸门豁免中断（D-090 R1）：MT 拒单后 CEX 腿仍下单——D-495 语义
+// 「明知单腿裸露也要平」，中断只在非 force 路径生效；否则 MT 10018/10011
+// 会把 CEX 逃逸腿永远堵死（pos502 形态）。
+func TestD090_ForceBypassesMTRejectInterrupt(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE positions, position_legs, alerts, position_cashflows RESTART IDENTITY CASCADE`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	mu, seq := &sync.Mutex{}, &[]string{}
+	p, posID := d090Pipeline(t, s,
+		&d090SeqExec{venue: "3001157:mt5", failClose: true, mu: mu, seq: seq},
+		&d090SeqExec{venue: "okx:perp", mu: mu, seq: seq})
+	p.verifier = &fakeVerifier{orders: map[string][]OpenedOrder{
+		"3001157:mt5": {{Ticket: "mt-open-1"}},
+		"okx:perp":    {{Symbol: "XAU-USDT-SWAP", Side: "SELL"}},
+	}}
+
+	// force=true 直调核心（不走 ClosePositionForce 避 claim 状态耦合）；
+	// MT 腿残留时尾部残留校验可能返 error——既有语义不断言，本锚只钉执行序与 CLOSE leg。
+	_ = p.closePositionCore(ctx, posID, true)
+	mu.Lock()
+	got := append([]string(nil), *seq...)
+	mu.Unlock()
+	if len(got) != 2 || got[0] != "close:3001157:mt5" || got[1] != "place:okx:perp" {
+		t.Fatalf("force 路径 MT 拒单后 CEX 仍应下单, seq=%v", got)
+	}
+	closeLegs, lerr := s.ListPositionLegsByPhase(ctx, posID, "CLOSE")
+	if lerr != nil {
+		t.Fatalf("list close legs: %v", lerr)
+	}
+	for _, l := range closeLegs {
+		if l.Venue == "okx:perp" {
+			return
+		}
+	}
+	t.Fatalf("force 逃逸应落 okx:perp CLOSE leg, got %+v", closeLegs)
+}

@@ -139,12 +139,13 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64, force boo
 			newFill, closeErr := p.placeCloseOrder(ctx, posID, leg, closeSide, closeQty)
 			if closeErr != nil {
 				log.Printf("[exec] resume close leg %d (ticket=%s venue=%s): %v", leg.ID, leg.OrderID, leg.Venue, closeErr)
-				if isMTVenueKey(leg.Venue) {
+				if isMTVenueKey(leg.Venue) && !force {
 					// D-090 ②：MT 腿拒单 → 本轮到此为止，CEX 腿零下单保持 OPEN（对称
 					// D-084 开仓侧零成本语义），仓保持 CLOSING 由 ResumeClose/D-407
 					// fast-retry 周期重试——防 #498 型真 LEGGED（MT 被拒而 CEX 已平=
 					// 裸多 39min −$12.36）。fail-closed：超时/未知错误同判不区分
 					// （拒单与超时都无成交回报，CEX 单侧动作同样制造裸露）。
+					// force 逃逸门豁免（D-495：明知裸露也要平，中断只在非 force 路径生效）。
 					return fmt.Errorf("pos=%d MT leg close rejected: %w", posID, closeErr)
 				}
 				continue
