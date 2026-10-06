@@ -114,6 +114,10 @@ type Pipeline struct {
 	makerMaxPerHour int
 	makerBudgetMu   sync.Mutex
 	makerBudget     map[string][]time.Time // opportunityID → 近 1h attempt 时标（进程内预算；重启复位）
+
+	// perpLeverageTarget D-079：perp 腿开仓前置 set-leverage 目标（ARB_PERP_LEVERAGE_TARGET）。
+	// ≤0 = 停用（旧行为：只读不设）。
+	perpLeverageTarget float64
 }
 
 // SetMarginInputs D-010：注入 venue 保证金实占回调（执行路径接闸——展示闸6 与
@@ -144,6 +148,10 @@ func (p *Pipeline) SetMakerPolicy(firstLegTimeout time.Duration, maxAttemptsPerH
 		p.makerBudget = make(map[string][]time.Time)
 	}
 }
+
+// SetPerpLeverageTarget D-079：注入 perp 腿目标杠杆（main 装配传 cfg.PerpLeverageTarget；
+// ≤0=开仓前置 ensure 停用保旧行为）。
+func (p *Pipeline) SetPerpLeverageTarget(target float64) { p.perpLeverageTarget = target }
 
 // NewPipeline 创建执行管线。
 func NewPipeline(reg *Registry, store *pgstore.Store, qbus *bus.QuoteBus, limits RiskLimits, environment string) *Pipeline {

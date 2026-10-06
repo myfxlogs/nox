@@ -8,9 +8,17 @@ import (
 	"log"
 	"sync"
 
+	"arb/internal/keydomain"
 	"arb/internal/safego"
 	"arb/internal/store/pgstore"
 )
+
+// leverageSetter D-079：perp 腿开仓前置 set-leverage 可选缝（CEXExecutor 实现；
+// MT5Executor 不实现=跳过）。target>0 时 pipeline 在 MarginPrecheck 前调用——
+// 设败 fail-closed 拒开（发生在建 position 之前=零半腿风险）。
+type leverageSetter interface {
+	EnsureVenueLeverage(ctx context.Context, symbol string, sellLeg bool, target float64) error
+}
 
 // Execute 执行机会（§13.1）。
 // opportunityID + requestID 幂等：重复提交返回已有 position。
@@ -85,6 +93,15 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 				Venue:  leg.VenueKey,
 			}); err != nil {
 				return nil, fmt.Errorf("precheck leg %s: %w", leg.VenueKey, err)
+			}
+		}
+		// D-079：perp 腿开仓前置杠杆策略化——posType ∈ {XASSET_CARRY, FUNDING_HEDGE}
+		// 且 target>0 时先 ensure 到配置值（卖腿 sellLeg=true；MT5 不实现缝=跳过）。
+		if p.perpLeverageTarget > 0 && (posType == "XASSET_CARRY" || posType == "FUNDING_HEDGE") && keydomain.Parse(leg.VenueKey).Type == "perp" {
+			if ls, ok := exe.(leverageSetter); ok {
+				if err := ls.EnsureVenueLeverage(ctx, leg.VenueSymbol, leg.Side == "SELL", p.perpLeverageTarget); err != nil {
+					return nil, fmt.Errorf("leverage ensure leg %s: %w", leg.VenueKey, err)
+				}
 			}
 		}
 		// D-415：venue 原生资金预检（MarginPrechecker，fail-closed）——与 Precheck
