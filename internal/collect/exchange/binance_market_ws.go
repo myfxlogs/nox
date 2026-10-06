@@ -214,6 +214,13 @@ func (b *BinanceMarketWS) runLoop(ctx context.Context, cands []WSCandidate, venu
 			if isSubscribeAck(data) {
 				return // {result:null,id:1} ack；{result:…,error} 已在 isSubscribeAck 记日志
 			}
+			if kind == "ticker" {
+				// D-080：24hrTicker 数组帧→vol24h facts（D-591 S6 handler 自创建日起
+				// 零调用者，OnFrame 缺 ticker 分流=帧落 handleBookTicker 被静默丢弃；
+				// ticker 连接不订 bookTicker，全帧归 handleTicker，解析失败静默）。
+				b.handleTicker(ctx, data)
+				return
+			}
 			if kind == "markPrice" && b.handleMarkPrice(ctx, data) {
 				return // markPriceUpdate 帧已消费（market 连接先 markPrice 后 bookTicker 兜底）
 			}
