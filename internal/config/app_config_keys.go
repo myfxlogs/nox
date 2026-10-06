@@ -91,6 +91,7 @@ var appConfigKeys = map[string]AppCfgMeta{
 	"ARB_OPP_NOTIONAL_USD":                f64(func(c *Config) *float64 { return &c.OpportunityNotionalUSD }),
 	"ARB_PERPFUNDING_EXIT_DEBOUNCE":       intv(func(c *Config) *int { return &c.PerpFundExitDebounce }),
 	"ARB_PERPFUNDING_MIN_HOLD":            durv(func(c *Config) *time.Duration { return &c.PerpFundMinHold }),
+	"ARB_PERP_LEVERAGE_TARGET":            f64(func(c *Config) *float64 { return &c.PerpLeverageTarget }), // D-079：perp 腿目标杠杆
 	"ARB_PERP_FUNDING_MIN_NET_ANNUALIZED": f64(func(c *Config) *float64 { return &c.PerpFundingMinNetAnnualized }),
 	"ARB_PERP_FUNDING_MIN_NET_STORE":      f64(func(c *Config) *float64 { return &c.PerpFundingMinNetStore }),
 	"ARB_POSITION_EVAL_SEC":               intv(func(c *Config) *int { return &c.PositionEvalSec }),

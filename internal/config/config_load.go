@@ -40,6 +40,7 @@ func Load() *Config {
 		MarginReservePct:       envFloat("ARB_MARGIN_RESERVE_PCT", 0.20),       // D-415：开仓资金预检安全垫
 		MinLiqDistancePct:      envFloat("ARB_MIN_LIQ_DISTANCE_PCT", 0),        // D-472 S4：缺省 0=关闸（定标前置）
 		CrossNotionalEquityCap: envFloat("ARB_CROSS_NOTIONAL_EQUITY_CAP", 0.5), // D-472 S4：cross 占比上限
+		PerpLeverageTarget:     envFloat("ARB_PERP_LEVERAGE_TARGET", 10),       // D-079：perp 腿目标杠杆（开仓前置 set-leverage）
 		CommissionTaker: map[string]float64{
 			"binance": envFloat("ARB_COMMISSION_TAKER_BINANCE", 5.0),
 			"okx":     envFloat("ARB_COMMISSION_TAKER_OKX", 5.0),

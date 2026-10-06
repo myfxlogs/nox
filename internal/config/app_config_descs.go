@@ -104,6 +104,7 @@ var appConfigDescs = map[string]string{
 	"ARB_SYMDIG_MAX_TOKENS":                      "品种深挖 LLM 单轮 max_tokens 上限（缺省 8192；env-passthrough 键）",
 	"ARB_PERPFUNDING_EXIT_DEBOUNCE":              "永续资金费退出防抖次数（连续命中才退出）",
 	"ARB_PERPFUNDING_MIN_HOLD":                   "永续资金费最短持仓时长",
+	"ARB_PERP_LEVERAGE_TARGET":                   "perp 腿目标杠杆（开仓前置 set-leverage；cross 下仅定 IMR）",
 	"ARB_PERP_FUNDING_MIN_NET_ANNUALIZED":        "永续资金费净年化入场门槛（%）",
 	"ARB_PERP_FUNDING_MIN_NET_STORE":             "永续资金费净收益入库门槛（%）",
 	"ARB_POSITION_EVAL_SEC":                      "退出评估饥荒看门狗周期（秒）",
