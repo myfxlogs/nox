@@ -157,6 +157,7 @@ func (g *GateWebSocket) runLoop(ctx context.Context, urls []string, channels []s
 	RunWS(ctx, WSSpec{
 		Name: "gate-ws:" + urls[0], Candidates: g.candidates(urls, native),
 		DepKey:   "gate:ws-market", // D-579：dephealth 记账键（同连接多频道一族一键）
+		AlertFn:  g.cfg.AlertFn,    // D-074 ①：冷却循环升级「通道死」告警同管道
 		ReadIdle: g.readIdle, PingEvery: g.pingEvery, ReconnectBackoff: g.reconnectBackoff,
 		OnConnect: func() { subscribed = map[string]bool{} },
 		InitialSubs: func() []any {

@@ -3,7 +3,8 @@
 // dial→subscribe→读循环→重连→ping，venue 差异只在钩子（URL/订阅帧/帧分发/增量补订）。
 // 骨架行为一处钉死：读续期（任意帧或 pong 即续期，走 wsKeepalive 同件）、
 // ping 经 Sender 单写者锁、退避重连重订阅、OnReconnect 计 reconnectMeter 风暴
-// fail-loud（D-507 语义）、ctx 取消即刻退出。
+// fail-loud（D-507 语义；D-074 ② 冷却循环中的看门狗确定性重连不入 storm 滑窗）、
+// 冷却循环升级「通道死」告警（D-074 ①）、ctx 取消即刻退出。
 // 安全契（D-450/R3）：骨架不自行取 httpx.WSDialer 默认 header——spec.Header==nil
 // =显式无鉴权头直连，token 永不泄给原生 venue 域；dialer/header 由适配层全权供给。
 package exchange
@@ -78,9 +79,17 @@ type WSSpec struct {
 	OnFrame     func(data []byte) // 数据帧分发（ack/无关帧由实现方自滤）
 	OnConnect   func()            // 可选：每连接拨号成功后回调（差集表等每连接状态重置走此）
 	OnAliveTick func(s Sender)    // 可选：每 ping tick 回调（okx/gate 差集补订走此）
-	OnReconnect func()            // 可选：重连错误事件（reconnectMeter.record 走此）
+	// OnReconnect 可选：重连错误事件（reconnectMeter.record 走此）。入参=候选冷却
+	// 循环中（D-074 ②：true=看门狗确定性杀，storm 判定排除）。
+	OnReconnect func(inCooldownLoop bool)
 	// DepKey D-579 S2：dephealth 记账键（"venue:ws-频道族"）；空=不记（向后兼容）。
 	DepKey string
+	// D-074 ①：通道死升级告警——同流连续 DeadRounds 轮冷却（各候选均零数据帧）
+	// 发单条 warn「通道死（候选全零帧）」，DeadRewarn 内去重（零值=3 轮/6h）。
+	// AlertFn=适配层告警管道（与 reconnectMeter 同件，nil=不告警仅冷却）。
+	AlertFn    func(level, msg string)
+	DeadRounds int
+	DeadRewarn time.Duration
 
 	// 时距（零值=ws_keepalive.go 常量族；测试覆写缩小观察窗，对齐 D-507 字段化先例）。
 	ReadIdle         time.Duration
@@ -106,7 +115,9 @@ func RunWS(ctx context.Context, spec WSSpec) {
 		if err := runWSOnceSt(ctx, spec, st); err != nil {
 			dephealth.Mark(spec.DepKey, false, err) // D-579：应用层成败事实记账
 			if spec.OnReconnect != nil {
-				spec.OnReconnect() // D-507 meter fail-loud（每连接一 meter，单 goroutine 持有）
+				// D-507 meter fail-loud（每连接一 meter，单 goroutine 持有）；
+				// D-074 ②：冷却循环中=true——看门狗确定性重连不入 storm 滑窗。
+				spec.OnReconnect(st.cooldownLoopActive())
 			}
 			select {
 			case <-ctx.Done():
@@ -134,6 +145,7 @@ func runWSOnceSt(ctx context.Context, spec WSSpec, st *wsCandState) error {
 	var lastURL string
 	st.cur.Store(-1)
 	st.dataKil.Store(false)
+	st.sawData.Store(false) // D-074 ①：每连接重置数据帧见证（通道活过证据）
 	defer st.noteExit(spec) // 归因只在主流程这一处写
 	for _, i := range st.dialOrder(len(cands)) {
 		c := cands[i]
@@ -245,6 +257,7 @@ func runWSOnceSt(ctx context.Context, spec WSSpec, st *wsCandState) error {
 		}
 		_ = conn.SetReadDeadline(time.Now().Add(readIdle))
 		lastDataAt.Store(time.Now().UnixNano())
+		st.sawData.Store(true) // D-074 ①：到帧即证通道活过（冷却循环断链证据）
 		if spec.OnFrame != nil {
 			spec.OnFrame(data)
 		}

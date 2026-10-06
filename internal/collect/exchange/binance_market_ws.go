@@ -166,6 +166,7 @@ func (b *BinanceMarketWS) runLoop(ctx context.Context, cands []WSCandidate, venu
 	meter := newReconnectMeter(venueType+":"+kind+":"+cands[0].URL, b.cfg.AlertFn) // D-507 S2 扩：同款风暴告警
 	RunWS(ctx, WSSpec{
 		Name: "binance-mkt-ws:" + venueType + ":" + kind, Candidates: cands, DepKey: "binance:ws-" + venueType + "-" + kind, // DepKey D-579 dephealth 记账键
+		AlertFn: b.cfg.AlertFn, // D-074 ①：冷却循环升级「通道死」告警同管道
 		InitialSubs: func() []any {
 			var params []string
 			if venueType == "perp" && kind == "bookTicker" {
