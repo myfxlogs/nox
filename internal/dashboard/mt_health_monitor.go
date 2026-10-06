@@ -64,6 +64,7 @@ type MTHealthMonitor struct {
 	marginMissCount map[string]int           // D-251：venue → margin 连续缺失计数（≥3 才 crit）
 	quoteMissCount  map[string]int           // R-H4：venue → quote 连续缺失计数（≥3 才 crit，与 margin 共用 helper）
 	now             func() time.Time         // 可注入时钟（测试用，D-136 修复②），nil→time.Now
+	attachingSince  map[string]time.Time     // D-085：venue → 首次观察为 attaching 的时刻（attach 超时兜底用）
 }
 
 // NewMTHealthMonitor 创建监控（D-104 P0）。
@@ -85,6 +86,7 @@ func NewMTHealthMonitor(venues HealthVenueSource, qbus *bus.QuoteBus, store Heal
 		lastCritAlert:   make(map[string]time.Time),
 		marginMissCount: make(map[string]int),
 		quoteMissCount:  make(map[string]int),
+		attachingSince:  make(map[string]time.Time), // D-085
 	}
 }
 
@@ -125,13 +127,15 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 		}
 	}
 	venueSet := make(map[string]bool)
-	mtSet := make(map[string]bool)  // swap 仅 MT venue（D-104 R-d1）
-	mt5Set := make(map[string]bool) // margin 仅 MT5 venue（D-203）
+	mtSet := make(map[string]bool)    // swap 仅 MT venue（D-104 R-d1）
+	mt5Set := make(map[string]bool)   // margin 仅 MT5 venue（D-203）
+	attached := make(map[string]bool) // D-085：querier 已 attach（进程内 ready）集合
 	for _, q := range m.venues.AccountQueriers() {
 		vk := q.VenueKey()
 		v := venueFromKey(vk)
 		if v != "" {
 			venueSet[v] = true
+			attached[v] = true
 			mtSet[v] = true
 			if keydomain.IsType(vk, "mt5") {
 				mt5Set[v] = true
@@ -155,6 +159,12 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 			delete(venueSet, v)
 		}
 	}
+	// D-085：attaching 面——connectedSet（DB status=connected，broker_accounts 全 MT）
+	// 收录但进程内尚未 attach 的 venue。attach 期间 quote/swap/margin 必然无数据
+	// （broker attach 晚于 connected——ICM 8514 符号 backfill 今晚实拍 4min>bootGrace≈3min，
+	// 误报「行情停更」critical+恢复 info 双噪音）；超 mtHealthAttachTimeout 仍未 attach →
+	// quote warn 兜底（attach 卡死不静默）。qbus 残留路不收（non-broker=CEX 无 attach 概念）。
+	attachAges := m.attachAges(venueSet, connectedSet, attached, now)
 
 	m.mu.Lock()
 	inGrace := m.bootGraceTicks > 0
@@ -171,39 +181,50 @@ func (m *MTHealthMonitor) poll(ctx context.Context) {
 		isMT := mtSet[v]
 		isMT5 := mt5Set[v]
 		display := aliasOrVenue(v, aliases) // D-203：告警/日志用别名（回退裸账号）
-		// quote 全 venue（R-H4：flash-miss 治理同 margin）；swap 仅 MT；margin 仅 MT5（D-203：MT4 无 margin facts）。
-		qAdjusted, _, qSuppressed := m.classifyWithFlashMiss(v, classifyAge(qa, m.quoteWarn, m.quoteCrit), m.quoteMissCount)
-		newState := mtHealthState{
-			quote:  qAdjusted,
-			swap:   metricHealthy,
-			margin: metricHealthy,
-		}
-		sLog, mLog := "-", "-"
-		if qSuppressed {
-			log.Printf("[mt-health] %s quote flash-miss suppressed (age=%s)", display, durStr(qa))
-		}
-		if isMT {
-			sa := swapAges[v]
-			newState.swap = classifyAge(sa, m.factWarn, m.factCrit)
-			sLog = durStr(sa)
-		}
-		if isMT5 {
-			ma := marginAges[v]
-			// D-067：margin 用独立阈值（init_margin_rate 重连驱动写入，流稳时不写为设计内）。
-			adjusted, _, suppressed := m.classifyWithFlashMiss(v, classifyAge(ma, m.marginWarn, m.marginCrit), m.marginMissCount)
-			newState.margin = adjusted
-			mLog = durStr(ma)
-			if suppressed {
-				log.Printf("[mt-health] %s margin flash-miss suppressed (age=%s)", display, mLog)
+		newState := mtHealthState{quote: metricHealthy, swap: metricHealthy, margin: metricHealthy}
+		sLog, mLog, qLog := "-", "-", "-"
+		if age, isAttaching := attachAges[v]; isAttaching {
+			// D-085：attach 未就绪——三指标不判（attach 前无数据是必然非异常），
+			// 零告警；attachAges 超阈 → quote 单条 warn 兜底（attach 卡死不透静默）。
+			qLog = "attaching"
+			if age > mtHealthAttachTimeout {
+				newState.quote = metricWarn
+			}
+		} else {
+			// quote 全 venue（R-H4：flash-miss 治理同 margin）；swap 仅 MT；margin 仅 MT5（D-203：MT4 无 margin facts）。
+			qAdjusted, _, qSuppressed := m.classifyWithFlashMiss(v, classifyAge(qa, m.quoteWarn, m.quoteCrit), m.quoteMissCount)
+			newState.quote = qAdjusted
+			qLog = durStr(qa)
+			if qSuppressed {
+				log.Printf("[mt-health] %s quote flash-miss suppressed (age=%s)", display, qLog)
+			}
+			if isMT {
+				sa := swapAges[v]
+				newState.swap = classifyAge(sa, m.factWarn, m.factCrit)
+				sLog = durStr(sa)
+			}
+			if isMT5 {
+				ma := marginAges[v]
+				// D-067：margin 用独立阈值（init_margin_rate 重连驱动写入，流稳时不写为设计内）。
+				adjusted, _, suppressed := m.classifyWithFlashMiss(v, classifyAge(ma, m.marginWarn, m.marginCrit), m.marginMissCount)
+				newState.margin = adjusted
+				mLog = durStr(ma)
+				if suppressed {
+					log.Printf("[mt-health] %s margin flash-miss suppressed (age=%s)", display, mLog)
+				}
 			}
 		}
 		newStates[v] = newState
-		logParts = append(logParts, display+"=q:"+durStr(qa)+"/s:"+sLog+"/m:"+mLog)
+		logParts = append(logParts, display+"=q:"+qLog+"/s:"+sLog+"/m:"+mLog)
 
 		if inGrace {
 			continue // boot 宽限内只记状态不告警
 		}
 		prev := prevStates[v]
+		if _, isAttaching := attachAges[v]; isAttaching {
+			m.maybeAttachWarn(ctx, display, prev.quote, newState.quote) // D-085：仅 →warn 转换一条
+			continue
+		}
 		m.maybeAlert(ctx, display, "quote", prev.quote, newState.quote, qa)
 		if isMT {
 			m.maybeAlert(ctx, display, "swap", prev.swap, newState.swap, swapAges[v])
