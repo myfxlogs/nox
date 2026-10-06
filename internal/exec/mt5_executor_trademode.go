@@ -7,6 +7,8 @@ import (
 	"time"
 
 	mt5pb "arb/internal/adapter/gen/mtapi/mt5"
+
+	"google.golang.org/grpc/metadata"
 )
 
 // tradeModeProbeTimeout 执行前 trade_mode 即时探针超时（D-004 P1#2）：
@@ -19,6 +21,9 @@ const tradeModeProbeTimeout = 3 * time.Second
 func (e *MT5Executor) TradeModeNow(ctx context.Context, brokerSymbol string) (int64, error) {
 	pctx, cancel := context.WithTimeout(ctx, tradeModeProbeTimeout)
 	defer cancel()
+	// D-082：网关按 id header 路由会话（同 MarginPrecheck/PlaceOrder/CloseOrder 形态）；
+	// 缺头时 SymbolParams 回空 result 无 error → 首仓被「trade_mode unknown」拒（10-06 00:19Z 实拍）。
+	pctx = metadata.AppendToOutgoingContext(pctx, "id", e.token)
 	resp, err := e.mt5.SymbolParams(pctx, &mt5pb.SymbolParamsRequest{Id: e.token, Symbol: brokerSymbol})
 	if err != nil {
 		return 0, fmt.Errorf("mt5 symbol params: %w", err)

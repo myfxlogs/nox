@@ -27,6 +27,11 @@ type fakeMT5 struct {
 	md metadata.MD
 }
 
+func (f *fakeMT5) SymbolParams(ctx context.Context, in *mt5pb.SymbolParamsRequest, opts ...grpc.CallOption) (*mt5pb.SymbolParamsReply, error) {
+	f.md, _ = metadata.FromOutgoingContext(ctx)
+	return &mt5pb.SymbolParamsReply{Result: &mt5pb.SymbolParams{SymbolGroup: &mt5pb.SymGroup{TradeMode: mt5pb.TradeMode_TradeMode_FullAccess}}}, nil
+}
+
 func (f *fakeMT5) OrderHistory(ctx context.Context, in *mt5pb.OrderHistoryRequest, opts ...grpc.CallOption) (*mt5pb.OrderHistoryReply, error) {
 	f.md, _ = metadata.FromOutgoingContext(ctx)
 	return &mt5pb.OrderHistoryReply{}, nil
@@ -49,5 +54,18 @@ func TestD069_CloseOrderFeeSingleID(t *testing.T) {
 	ids := fm.md.Get("id")
 	if len(ids) != 1 || ids[0] != "tok" {
 		t.Errorf("outgoing metadata id = %v, want 恰 1 个值 [tok]", ids)
+	}
+}
+
+// TestD082_TradeModeNowCarriesID TradeModeNow → SymbolParams 的 outgoing metadata 须恰携
+// 一个 id="tok"（修复前零头：网关回空 result，首仓 10-06 00:19Z 被 trade_mode unknown 拒）。
+func TestD082_TradeModeNowCarriesID(t *testing.T) {
+	fm := &fakeMT5{}
+	e := NewMT5Executor("vA", "tok", &fakeTrading{}, fm)
+	if _, err := e.TradeModeNow(context.Background(), "XAUUSDm"); err != nil {
+		t.Fatalf("TradeModeNow: %v", err)
+	}
+	if ids := fm.md.Get("id"); len(ids) != 1 || ids[0] != "tok" {
+		t.Fatalf("outgoing id = %v, want exactly [tok]", ids)
 	}
 }
