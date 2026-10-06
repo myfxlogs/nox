@@ -144,6 +144,45 @@ func TestTestDSN_NonTestDB_Rejected(t *testing.T) {
 	}
 }
 
+// TestTestDSN_ProductionInstanceRejected D-091 ②：DSN 指向生产实例端口（5433）→
+// Fatalf——库名含 _test 也绕不过实例级端口闸（5433 复燃 22 库实证）。
+func TestTestDSN_ProductionInstanceRejected(t *testing.T) {
+	setEnv(t, "DB_DSN", "")
+	setEnv(t, "ARB_TEST_PG_DSN", "postgres://arb:arb@127.0.0.1:5433/arb_test_seat")
+	setEnv(t, "ARB_TEST_ALLOW_SKIP_DSN", "")
+	failed, _ := assertTerminated(t, func(st *testing.T) {
+		TestDSN(st, "ARB_TEST_PG_DSN")
+	})
+	if !failed {
+		t.Fatal("指向生产实例端口应 Fatalf（Failed），但未 Failed")
+	}
+}
+
+// TestIsProdInstance D-091 ② 判定锚：端口命中即拦（host 不参与）；DB_DSN env
+// 覆盖判定源（compose 注入形态）；5434 缺省测试实例/无显式端口（pgx 缺省 5432）不命中。
+func TestIsProdInstance(t *testing.T) {
+	setEnv(t, "DB_DSN", "")
+	if !isProdInstance("postgres://arb:arb@127.0.0.1:5433/arb_test_x") {
+		t.Fatal("5433 库名含 _test 也应命中生产实例")
+	}
+	if !isProdInstance("postgres://arb:arb@otherhost:5433/arb_test_x") {
+		t.Fatal("任意 host 的 5433 应命中")
+	}
+	if isProdInstance("postgres://arb:arb@127.0.0.1:5434/arb_test") {
+		t.Fatal("5434 缺省测试实例不应命中")
+	}
+	if isProdInstance("postgres://arb:arb@127.0.0.1/arb_test") {
+		t.Fatal("无显式端口（pgx 缺省 5432）不应命中")
+	}
+	setEnv(t, "DB_DSN", "postgres://arb:arb@10.0.0.5:6543/arb")
+	if !isProdInstance("postgres://arb:arb@10.0.0.5:6543/arb_test_x") {
+		t.Fatal("DB_DSN 声明的端口应作为生产实例端口")
+	}
+	if isProdInstance("postgres://arb:arb@127.0.0.1:5434/arb_test") {
+		t.Fatal("DB_DSN 覆盖后 5434 仍不应命中")
+	}
+}
+
 // TestNormalizeDSN_ConnectTimeoutAppended D-351 T1（S2）：normalizeDSN 输出必须含
 // connect_timeout=5——连接类故障 120s 挂死变 5s 快败（pgx/libpq 原生参数）。
 func TestNormalizeDSN_ConnectTimeoutAppended(t *testing.T) {

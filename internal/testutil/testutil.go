@@ -36,16 +36,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// isTestDB dsn 的 db 名必须含 "_test"（arb_test/arb_exec_test/arb_service_test）；
-// 生产 db=arb 不含 → false（fail-closed，防测试 TRUNCATE 生产表）。
-func isTestDB(dsn string) bool {
-	cfg, err := pgx.ParseConfig(dsn)
-	if err != nil {
-		return false
-	}
-	return strings.Contains(cfg.Database, "_test")
-}
-
 // defaultTestDSN 四个 TestDSN env 的缺省值（D-021：测试库独立实例 127.0.0.1:5434）——
 // env 未设时回落缺省（基名固定映射），生产实例（5433）不再承载任何测试库。
 // 缺省真跑不弱化 D-207（loud-FAIL 防「没跑像过了」的 SKIP）——测试照跑非跳过；
@@ -90,6 +80,9 @@ func TestDSN(t *testing.T, envVar string) string {
 	}
 	if !isTestDB(dsn) {
 		t.Fatalf("%s 指向非测试库（db 名不含 _test），测试会 TRUNCATE 生产表，拒绝执行", envVar)
+	}
+	if isProdInstance(dsn) {
+		t.Fatalf("D-091：%s 指向生产实例端口 %d（D-021 生产实例零测试库；5433 复燃 22 库实证——库名含 _test 不足以放行，实例级端口为硬闸），拒绝执行", envVar, prodInstancePort())
 	}
 	out := normalizeDSN(dsn)
 	tag := callerPackageTag()
