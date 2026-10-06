@@ -34,6 +34,7 @@ type Config struct {
 	CommissionCEXTakerBps  float64            // CEX taker 单腿回退默认
 	CommissionTaker        map[string]float64 // CEX 逐交易所 taker（binance/okx/gate）
 	XAssetCexFeeBps        float64            // D-391：回本「本」CEX fee 估算率（缺省 5.0），fee_usd NULL 回退
+	ExitFeeBpsOKX          float64            // D-093 R1：okx 出场 taker 费率（ARB_EXIT_FEE_BPS_OKX，净估「平仓费(估)」计提；0=未配置→该腿费 0+warn）
 	MarginReservePct       float64            // D-415：开仓资金预检可用额安全垫（缺省 0.20），venue 原生校验乘 (1−pct)
 	MinLiqDistancePct      float64            // D-472 S4：isolated 强平距离下限（ARB_MIN_LIQ_DISTANCE_PCT，缺省 0=关闸；非零前置=回放定标）
 	CrossNotionalEquityCap float64            // D-472 S4：cross 名义/权益占比上限（ARB_CROSS_NOTIONAL_EQUITY_CAP，缺省 0.5；≤0=cross 支路关）

@@ -45,6 +45,7 @@ var appConfigKeys = map[string]AppCfgMeta{
 	"ARB_CROSS_NOTIONAL_EQUITY_CAP":       f64(func(c *Config) *float64 { return &c.CrossNotionalEquityCap }),
 	"ARB_DETECTOR_FRESHNESS_TTL":          durv(func(c *Config) *time.Duration { return &c.DetectorFreshnessTTL }),
 	"ARB_EXPLORER_ENABLED":                boolv(func(c *Config) *bool { return &c.ExplorerEnabled }),
+	"ARB_EXIT_FEE_BPS_OKX":                f64(func(c *Config) *float64 { return &c.ExitFeeBpsOKX }),               // D-093 R1：okx 出场 taker 费率（净估计提；0=未配置）
 	"ARB_MAKER_MAX_PER_HOUR":              intv(func(c *Config) *int { return &c.MakerMaxAttemptsPerHour }),        // D-018：每 opp 每小时 maker 挂单 attempt 上限（缺=停用）
 	"ARB_MT_QUOTE_STALE_MIN":              intv(func(c *Config) *int { return &c.MtQuoteStaleMin }),                // D-029：MT 报价新鲜度阈值分钟（缺=fail-closed 判闭市）
 	"ARB_MAKER_TIMEOUT":                   durv(func(c *Config) *time.Duration { return &c.MakerFirstLegTimeout }), // D-018：首腿 post-only 超时 T（缺=停用）
@@ -190,7 +191,6 @@ var appConfigKeys = map[string]AppCfgMeta{
 var appConfigEnvKeys = []string{
 	"ARB_CEX_SCAN_EARN_APR_MIN", "ARB_CEX_SCAN_FUNDING_APR_MIN", "ARB_CEX_SCAN_SPREAD_BPS",
 	"ARB_CEX_SYMBOLS", "ARB_CEX_WS_BASE", "ARB_CEX_WS_BASE_BACKUP",
-	"ARB_EXIT_FEE_BPS_OKX", // D-093：okx 出场 taker 费率 bps（净估计提；实证 5.0，gate/binance 待实证勿预播）
 	"ARB_INTRA_BUDGET_USD", "ARB_INTRA_CONCURRENCY", "ARB_INTRA_DAILY_LOSS_PCT",
 	"ARB_INTRA_KILL", "ARB_INTRA_MAX_NOTIONAL_USD", "ARB_INTRA_SESSION_GATE",
 	"ARB_MT4_GATEWAY", "ARB_OKX_PROXY_URL",
