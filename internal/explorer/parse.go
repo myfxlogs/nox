@@ -45,7 +45,18 @@ func parseBatch(aiText string) (*explorerv1.ProposalBatch, int, bool) {
 	var b explorerv1.ProposalBatch
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(
 		[]byte(m[1]), &b); err != nil {
-		return nil, 0, false
+		// D-081 ①：模型 JSON 尾部偶发机械瑕疵（sensenova 实拍 "probe_proposals":[]}}
+		// 多一右括号）→ sanitize 修一次重试；无可修/修后仍坏照拒（fail-closed 保真，
+		// 一次机械修正为限——不做多轮/模糊解析）。
+		fixed := sanitizeJSONTail(m[1])
+		if fixed == m[1] {
+			return nil, 0, false
+		}
+		if err2 := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(
+			[]byte(fixed), &b); err2 != nil {
+			return nil, 0, false
+		}
+		log.Printf("[explorer] parse sanitize 重试成功（尾部花括号修正）")
 	}
 	trunc := 0
 	if n := len(b.Proposals); n > maxBatchProposals {
@@ -59,6 +70,23 @@ func parseBatch(aiText string) (*explorerv1.ProposalBatch, int, bool) {
 		b.ProbeProposals = b.ProbeProposals[:maxBatchProposals]
 	}
 	return &b, trunc, true
+}
+
+// sanitizeJSONTail D-081 ①：模型 JSON 尾部机械瑕疵单次修正——只做两种机械动作：
+// 右括号过剩（串尾剥差额个 }）与缺失（补差额个）；其余情形原样返回（含尾随杂字符
+// 但括号平衡、结构真坏如键缺冒号——过度启发=伪装解析器，不做）。字符串内花括号会
+// 扰动计数：接受——本函数只在「已解析失败」的载荷上尝试，修坏=重试再拒，零风险外溢。
+func sanitizeJSONTail(s string) string {
+	trimmed := strings.TrimRight(s, " \t\r\n")
+	drop := strings.Count(trimmed, "}") - strings.Count(trimmed, "{")
+	add := strings.Count(trimmed, "{") - strings.Count(trimmed, "}")
+	switch {
+	case drop > 0 && strings.HasSuffix(trimmed, strings.Repeat("}", drop)):
+		return trimmed[:len(trimmed)-drop]
+	case add > 0:
+		return trimmed + strings.Repeat("}", add)
+	}
+	return s
 }
 
 // validateProposals 行级 fail-closed 校验：返回合法行集 + drop 计数。
