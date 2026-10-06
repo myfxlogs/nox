@@ -1,5 +1,6 @@
-// pipeline_resume.go —— D-189 P0-4：ResumeClose 公共执行核心 + per-position close 锁。
-// 从 pipeline_legs_close.go 拆出（pipeline.go >300 行软警告）。
+// pipeline_resume.go —— D-189 P0-4：closePositionCore 平仓核心。
+// 从 pipeline_legs_close.go 拆出（pipeline.go >300 行软警告）；ResumeClose 入口
+// 与锁面在 pipeline_resume_helpers.go（D-090 R0 再拆回纪律线）。
 package exec
 
 import (
@@ -7,43 +8,12 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 	"time"
 
 	"arb/internal/notional"
 	"arb/internal/store/pgstore"
 )
-
-// ResumeClose D-189 P0-4：重触发 CLOSING 持仓的平仓流程（reconcile 超时自动重试入口）。
-// 幂等：CLOSED/FAILED 直接返回 nil；只有 CLOSING 进入核心；其他状态返回 error。
-// 不调 ClaimClose（position 已是 CLOSING）；走与 ClosePosition 相同的 leg 处理 + 残量校验 + PnL 汇总 + CLOSED。
-// D-407 S1：per-position try-lock（锁挂本入口=三调用方统一收敛）；持锁中 → ErrCloseInFlight。
-func (p *Pipeline) ResumeClose(ctx context.Context, posID int64) error {
-	if p.store == nil {
-		return fmt.Errorf("pipeline store not wired")
-	}
-	unlock, ok := p.tryLockClose(posID)
-	if !ok {
-		return fmt.Errorf("%w pos=%d", ErrCloseInFlight, posID)
-	}
-	defer unlock()
-
-	pos, err := p.store.GetPosition(ctx, posID)
-	if err != nil {
-		return fmt.Errorf("get position %d: %w", posID, err)
-	}
-	if pos == nil {
-		return fmt.Errorf("position %d not found", posID)
-	}
-	switch pos.Status {
-	case "CLOSED", "FAILED":
-		return nil // 幂等
-	case "CLOSING":
-		// 进入核心
-	default:
-		return fmt.Errorf("position %d status=%s not CLOSING (ResumeClose only for CLOSING)", posID, pos.Status)
-	}
-	return p.closePositionCore(ctx, posID, false)
-}
 
 // closePositionCore D-189 P0-4：共享平仓核心（ClosePosition 与 ResumeClose 共用）。
 // D-495：force=true（ClosePositionForce 唯一来源）跳过 per-leg 可平性检查——
@@ -95,6 +65,13 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64, force boo
 			return err
 		}
 	}
+
+	// D-090 ②：MT 腿先行平仓（对称 D-084 开仓侧「MT 先行顺序 taker」）——leg_no 序
+	// 不保证 MT 在前（结构模板反向仓 CEX=leg0），待平腿稳定排序 MT 在前；
+	// MT 拒单中断见循环内 placeCloseOrder 错误分支。
+	sort.SliceStable(legs, func(i, j int) bool {
+		return isMTVenueKey(legs[i].Venue) && !isMTVenueKey(legs[j].Venue)
+	})
 
 	var totalPnL float64
 	// D-495 S4：await_session 跟踪——不可行动腿跳过发单（不写 CLOSE leg、不 error 中断），
@@ -162,6 +139,14 @@ func (p *Pipeline) closePositionCore(ctx context.Context, posID int64, force boo
 			newFill, closeErr := p.placeCloseOrder(ctx, posID, leg, closeSide, closeQty)
 			if closeErr != nil {
 				log.Printf("[exec] resume close leg %d (ticket=%s venue=%s): %v", leg.ID, leg.OrderID, leg.Venue, closeErr)
+				if isMTVenueKey(leg.Venue) {
+					// D-090 ②：MT 腿拒单 → 本轮到此为止，CEX 腿零下单保持 OPEN（对称
+					// D-084 开仓侧零成本语义），仓保持 CLOSING 由 ResumeClose/D-407
+					// fast-retry 周期重试——防 #498 型真 LEGGED（MT 被拒而 CEX 已平=
+					// 裸多 39min −$12.36）。fail-closed：超时/未知错误同判不区分
+					// （拒单与超时都无成交回报，CEX 单侧动作同样制造裸露）。
+					return fmt.Errorf("pos=%d MT leg close rejected: %w", posID, closeErr)
+				}
 				continue
 			}
 			fill = newFill

@@ -15,6 +15,38 @@ import (
 	"arb/internal/store/pgstore"
 )
 
+// ResumeClose D-189 P0-4：重触发 CLOSING 持仓的平仓流程（reconcile 超时自动重试入口）。
+// 幂等：CLOSED/FAILED 直接返回 nil；只有 CLOSING 进入核心；其他状态返回 error。
+// 不调 ClaimClose（position 已是 CLOSING）；走与 ClosePosition 相同的 leg 处理 + 残量校验 + PnL 汇总 + CLOSED。
+// D-407 S1：per-position try-lock（锁挂本入口=三调用方统一收敛）；持锁中 → ErrCloseInFlight。
+func (p *Pipeline) ResumeClose(ctx context.Context, posID int64) error {
+	if p.store == nil {
+		return fmt.Errorf("pipeline store not wired")
+	}
+	unlock, ok := p.tryLockClose(posID)
+	if !ok {
+		return fmt.Errorf("%w pos=%d", ErrCloseInFlight, posID)
+	}
+	defer unlock()
+
+	pos, err := p.store.GetPosition(ctx, posID)
+	if err != nil {
+		return fmt.Errorf("get position %d: %w", posID, err)
+	}
+	if pos == nil {
+		return fmt.Errorf("position %d not found", posID)
+	}
+	switch pos.Status {
+	case "CLOSED", "FAILED":
+		return nil // 幂等
+	case "CLOSING":
+		// 进入核心
+	default:
+		return fmt.Errorf("position %d status=%s not CLOSING (ResumeClose only for CLOSING)", posID, pos.Status)
+	}
+	return p.closePositionCore(ctx, posID, false)
+}
+
 // brokerPreflight D-189 P0-4 S4-2：查 verifier 确认腿是否仍在仓。
 // 返回 stillOpen=true 表示 broker 仍有该腿（需发平仓单）；stillOpen=false 表示 broker 已无腿（需历史回填）。
 // fill 非零表示已有成交回执（CEX CLOSE/FILLED 权威例外，D-120）；verifier 未接线或查询失败 → fail-closed。
