@@ -6,12 +6,57 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"log"
+	"strconv"
+	"strings"
+	"sync"
 
+	"arb/internal/keydomain"
 	"arb/internal/notional"
 	"arb/internal/store/pgstore"
 
 	v1 "arb/internal/gen/dashboardv1"
 )
+
+// exitFeeWarnOnce D-093：venue 费率键缺失 warn 只打一次（进程级；enrich 周期性重算防刷屏）。
+var exitFeeWarnOnce sync.Map
+
+// exitFeeEstUSD D-093 S1：平仓出场费估算 Σ——每条 OPEN 且 FILLED 的 CEX 腿
+// legNotional(入口实价) × takerBps[venue]/1e4。费率源=app_config 热键
+// ARB_EXIT_FEE_BPS_<BARE_VENUE>（secRes 借轨热读，面板改后即效）；无配置键 → 该腿
+// 费 0 + log-once warn（fail-closed 显式，不静默当免费）。MT 腿不加费项：Exness 实证
+// 佣金 0、点差成本已在 broker floating（按对手价计浮盈）内。legNotional=qty×price_actual
+// （legNotionalUSD 同源 cs/fx 折算；actual 缺→0 不猜——v1 口径价漂移误差几 % 内可接受）。
+func (s *Service) exitFeeEstUSD(ctx context.Context, pb *v1.Position, openLegs []pgstore.PositionLeg) float64 {
+	canonical := canonicalFromOppID(pb.OpportunityId)
+	quoteCcy := notional.QuoteCcy(canonical)
+	total := 0.0
+	for _, l := range openLegs {
+		if l.Status != "FILLED" || !isCEXVenueKey(l.Venue) {
+			continue
+		}
+		key := "ARB_EXIT_FEE_BPS_" + strings.ToUpper(keydomain.BareOf(l.Venue))
+		bpsStr := ""
+		if s.secRes != nil {
+			bpsStr = s.secRes.Get(key)
+		}
+		if bpsStr == "" {
+			if _, done := exitFeeWarnOnce.LoadOrStore(l.Venue, struct{}{}); !done {
+				log.Printf("[enrich] exit fee 未配置 venue=%s（%s 缺）→ 该腿平仓费按 0 估", l.Venue, key)
+			}
+			continue
+		}
+		bps, err := strconv.ParseFloat(bpsStr, 64)
+		if err != nil || bps < 0 {
+			log.Printf("[enrich] exit fee %s=%q 坏值 → 该腿平仓费按 0 估", key, bpsStr)
+			continue
+		}
+		if n := s.legNotionalUSD(ctx, l, canonical, quoteCcy); n > 0 {
+			total += n * bps / 10000
+		}
+	}
+	return total
+}
 
 // filterOpenLegs 取 OPEN phase 腿（匹配 broker position 用）。
 func filterOpenLegs(legs []pgstore.PositionLeg) []pgstore.PositionLeg {

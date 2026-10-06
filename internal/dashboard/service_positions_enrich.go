@@ -130,7 +130,13 @@ func enrichOne(ctx context.Context, s *Service, pb *v1.Position, legs []pgstore.
 	if matched || funding != 0 {
 		pb.FloatingPnlUsd = &floating
 		pb.SwapAccruedUsd = &swapAccrued
-		net := floating + swapAccrued + commission
+		// D-093（业主授权净到手口径）：net 含出场费估——CEX 腿 taker 费按 app_config
+		// 热键计提（透明单列 exit_fee_est_usd，读者可对账 net 差额来源）；MT 腿 0 点差内嵌。
+		exitFee := s.exitFeeEstUSD(ctx, pb, openLegs)
+		if exitFee != 0 {
+			pb.ExitFeeEstUsd = &exitFee
+		}
+		net := floating + swapAccrued + commission - exitFee
 		pb.NetPnlUsd = &net
 
 		// D-480：平仓净估——出口价浮动+实收+已付佣金−退出成本（缺报价→NULL 不猜）。
