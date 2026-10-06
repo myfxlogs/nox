@@ -18,8 +18,10 @@ func TestD545_T1_Resolver(t *testing.T) {
 	if got := r.Get("ARB_MASTER_KEY"); got != "" {
 		t.Fatalf("whitelist-out key got %q", got)
 	}
+	// D-095 迁移：ARB_AUTH_TOKEN 已白名单内化（旧「白名单外」断言随决策推翻删除，
+	// 专锚见 TestD095_AuthTokenResolverChannel）；本 resolver 种子未含该键 → ""。
 	if got := r.Get("ARB_AUTH_TOKEN"); got != "" {
-		t.Fatalf("whitelist-out key got %q", got)
+		t.Fatalf("无种子值应返空: got %q", got)
 	}
 	// Set 即时生效（UpdateAppSecret 写后同进程新值）。
 	r.Set("ARB_FRED_API_KEY", "new-fred")

@@ -12,7 +12,8 @@ import (
 )
 
 // IsAppSecretKey 密钥类键判定（app_secrets 通道白名单；标量旋钮走 app_config 永远明文）。
-// ARB_AUTH_TOKEN/ARB_BINANCE_PROXY_TOKEN 刻意不在——§4 留 env（基建/认证域）。
+// ARB_AUTH_TOKEN 自 D-095 起入表（迁 PG 热读，面板热轮换）——显式推翻旧注释
+// 「认证域刻意留 env」；ARB_BINANCE_PROXY_TOKEN 维持 env 不动（代理链路域，本票边界）。
 func IsAppSecretKey(k string) bool {
 	if strings.HasPrefix(k, "ARB_FEISHU_") || strings.HasPrefix(k, "ARB_AI_") ||
 		strings.HasPrefix(k, "LONGBRIDGE_") || strings.HasPrefix(k, "CMC_") ||
@@ -20,7 +21,7 @@ func IsAppSecretKey(k string) bool {
 		return true
 	}
 	switch k {
-	case "TRX_VOTE_PRIVATE_KEY", "TRONGRID_API_KEY":
+	case "TRX_VOTE_PRIVATE_KEY", "TRONGRID_API_KEY", "ARB_AUTH_TOKEN":
 		return true
 	}
 	return false
@@ -34,6 +35,7 @@ var appSecretSeedKeys = []string{
 	"CMC_EMAIL", "CMC_PASSWORD", "ARB_CMC_CREATE_TPL",
 	"ARB_FRED_API_KEY",
 	"TRX_VOTE_PRIVATE_KEY", "TRONGRID_API_KEY",
+	"ARB_AUTH_TOKEN", // D-095：auth 令牌迁 PG（首启空表播种写回；PG 无值时 resolver env 回落仍可用）
 }
 
 // AppSecretSeedKeys 返回播种密钥键表。
