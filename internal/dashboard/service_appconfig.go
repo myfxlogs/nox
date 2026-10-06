@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
@@ -139,9 +138,16 @@ func (s *Service) UpdateAppConfig(ctx context.Context, req *connect.Request[dash
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	// D-545：ARB_MACRO_ENABLED 借密钥轨热推——写库成功即同步 resolver，当班闸即效免重启。
-	// D-093：净估出场费率（ARB_EXIT_FEE_BPS_*）同轨——改后即效，净估下一轮 enrich 即按新费率。
-	if (key == "ARB_MACRO_ENABLED" || strings.HasPrefix(key, "ARB_EXIT_FEE_BPS_")) && s.secRes != nil {
+	if key == "ARB_MACRO_ENABLED" && s.secRes != nil {
 		s.secRes.Set(key, val)
+	}
+	// D-093 R1：出场费率=app_config 明文热轨——写库成功即热换 running 视图（scoped 本键，
+	// 不动其他键 pendingRestart 语义），enrich 下一轮按新费率，免重启。
+	if key == "ARB_EXIT_FEE_BPS_OKX" && s.acv.running != nil {
+		c2 := *s.acv.running
+		if err := meta.Set(&c2, val); err == nil {
+			s.acv.running = &c2
+		}
 	}
 	rows, err := s.store.ListAppConfigRows(ctx)
 	if err != nil {

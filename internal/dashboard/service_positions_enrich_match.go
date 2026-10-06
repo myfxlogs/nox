@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -21,9 +20,26 @@ import (
 // exitFeeWarnOnce D-093：venue 费率键缺失 warn 只打一次（进程级；enrich 周期性重算防刷屏）。
 var exitFeeWarnOnce sync.Map
 
+// exitFeeBpsFor D-093 R1：venue 出场 taker 费率（app_config 明文热轨）——读 acv.running
+// 视图 typed 字段（面板改后热换 running 即效，service_appconfig 写同步）；未配置/视图
+// 未装配 → (0,false)，调用方费 0+warn-once。v1 单键 ARB_EXIT_FEE_BPS_OKX（gate/binance
+// 待实证再扩字段）。
+func (s *Service) exitFeeBpsFor(venueKey string) (float64, bool) {
+	if s.acv.running == nil {
+		return 0, false
+	}
+	switch keydomain.BareOf(venueKey) {
+	case "okx":
+		bps := s.acv.running.ExitFeeBpsOKX
+		return bps, bps > 0
+	default:
+		return 0, false
+	}
+}
+
 // exitFeeEstUSD D-093 S1：平仓出场费估算 Σ——每条 OPEN 且 FILLED 的 CEX 腿
 // legNotional(入口实价) × takerBps[venue]/1e4。费率源=app_config 热键
-// ARB_EXIT_FEE_BPS_<BARE_VENUE>（secRes 借轨热读，面板改后即效）；无配置键 → 该腿
+// ARB_EXIT_FEE_BPS_OKX（明文热轨，面板改后即效）；无配置键 → 该腿
 // 费 0 + log-once warn（fail-closed 显式，不静默当免费）。MT 腿不加费项：Exness 实证
 // 佣金 0、点差成本已在 broker floating（按对手价计浮盈）内。legNotional=qty×price_actual
 // （legNotionalUSD 同源 cs/fx 折算；actual 缺→0 不猜——v1 口径价漂移误差几 % 内可接受）。
@@ -35,20 +51,12 @@ func (s *Service) exitFeeEstUSD(ctx context.Context, pb *v1.Position, openLegs [
 		if l.Status != "FILLED" || !isCEXVenueKey(l.Venue) {
 			continue
 		}
-		key := "ARB_EXIT_FEE_BPS_" + strings.ToUpper(keydomain.BareOf(l.Venue))
-		bpsStr := ""
-		if s.secRes != nil {
-			bpsStr = s.secRes.Get(key)
-		}
-		if bpsStr == "" {
+		bps, ok := s.exitFeeBpsFor(l.Venue)
+		if !ok {
 			if _, done := exitFeeWarnOnce.LoadOrStore(l.Venue, struct{}{}); !done {
-				log.Printf("[enrich] exit fee 未配置 venue=%s（%s 缺）→ 该腿平仓费按 0 估", l.Venue, key)
+				log.Printf("[enrich] exit fee 未配置 venue=%s（ARB_EXIT_FEE_BPS_%s 缺或 0）→ 该腿平仓费按 0 估",
+					l.Venue, strings.ToUpper(keydomain.BareOf(l.Venue)))
 			}
-			continue
-		}
-		bps, err := strconv.ParseFloat(bpsStr, 64)
-		if err != nil || bps < 0 {
-			log.Printf("[enrich] exit fee %s=%q 坏值 → 该腿平仓费按 0 估", key, bpsStr)
 			continue
 		}
 		if n := s.legNotionalUSD(ctx, l, canonical, quoteCcy); n > 0 {
