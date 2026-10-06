@@ -3,6 +3,7 @@ package dashboard
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -23,10 +24,12 @@ type fakeVenueQuerier struct {
 	err      error
 	tzOffset float64
 	tzErr    error
+	calls    atomic.Int64 // D-094：回读调用计数（boot 单次拉取锚）
 }
 
 func (f *fakeVenueQuerier) VenueKey() string { return f.key }
 func (f *fakeVenueQuerier) QueryOpenedOrders(context.Context) ([]venue.Order, error) {
+	f.calls.Add(1)
 	return f.orders, f.err
 }
 

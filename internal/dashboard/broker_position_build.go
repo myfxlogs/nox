@@ -124,6 +124,9 @@ func (m *BrokerPositionMonitor) protoFor(ctx context.Context, vk string, vs venu
 	}
 	pb := brokerPositionToProto(o, canonical, price, hasPrice, vs.online, m.freshTTL, now, margin, swapChargeAt, periodicPct)
 	pb.MarginIsEstimate = marginEst // D-036：MT5 估算值标记（CEX iw 原生值=false）
+	if !vs.asOf.IsZero() {
+		pb.AsOf = timestamppb.New(vs.asOf) // D-094：事件时戳透传（帧到达/权威回读时刻）
+	}
 	return pb
 }
 

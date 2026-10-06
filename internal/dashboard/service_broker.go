@@ -19,7 +19,8 @@ import (
 // --- Broker 实持仓（D-051 WP3：MT5/MT4 实际持仓统一视图，实时查不落库） ---
 
 // ListBrokerPositions 返回 Broker 实持仓视图（D-052 monitor 单一真相源）。
-// refresh=true 强制触发一次 venue 轮询后返回（前端「刷新」/平仓后立即刷新）；否则返回最近缓存（≤ 轮询周期）。
+// 主源=StreamUpdates 逐仓事件流（D-571 包A 事件归约态）；refresh=true 仅人工调试后门
+// （force 重拉一次，D-094：非数据主源，禁当周期刷新用）。
 // canonical 解析 + 现价计算均在后端（D-043 零信任：前端只渲染）；离线 venue 保留最近快照并 venue_online=false。
 // S4（D-073+）：返回前用 OPEN legs 的 (venueKey, order_id)→position_id 索引标注 position_id（0=未关联孤儿订单）。
 func (s *Service) ListBrokerPositions(ctx context.Context, req *connect.Request[v1.ListBrokerPositionsRequest]) (*connect.Response[v1.ListBrokerPositionsResponse], error) {
@@ -49,10 +50,15 @@ func (s *Service) ListBrokerPositions(ctx context.Context, req *connect.Request[
 
 // brokerSums D-508 S8：统计条 Σ pnl / Σ(pnl+swap+commission)（RPC 与流推送同口径；
 // 全零/无持仓=nil 缺省 → 前端「—」诚实降级不冒充 0）。
+// D-094：样本行（IsSample=position_id 0 未关联系统仓，如手动收息单）不入 Σ——
+// #509 卡与面板 Σ 对不上病灶之一；行本身仍显示（前端标「样本」）。
 func brokerSums(out []*v1.BrokerPosition) (pnlSum, netSum *float64) {
 	var ps, ns float64
 	var hasData bool
 	for _, p := range out {
+		if p.IsSample {
+			continue
+		}
 		ps += p.Pnl
 		ns += p.Pnl + p.Swap + p.Commission
 		if p.Pnl != 0 || p.Swap != 0 || p.Commission != 0 {
@@ -136,6 +142,7 @@ func annotateWithIndex(bps []*v1.BrokerPosition, posIdx map[string]int64, orderI
 		if bp.PositionId != 0 {
 			bp.IsArb = true
 		}
+		bp.IsSample = bp.PositionId == 0 // D-094：孤儿/收息样本行标注（Σ 排除，行仍显示）
 	}
 }
 

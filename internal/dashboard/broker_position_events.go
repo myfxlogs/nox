@@ -97,7 +97,7 @@ func (m *BrokerPositionMonitor) flush(ctx context.Context) {
 	for _, u := range upserts {
 		m.mu.Lock()
 		old := m.cur[u.key]
-		changed := !proto.Equal(old, u.pb)
+		changed := !equalIgnoringAsOf(old, u.pb)
 		if changed {
 			m.cur[u.key] = u.pb
 		}
@@ -126,10 +126,14 @@ func (m *BrokerPositionMonitor) flush(ctx context.Context) {
 
 // sums 当前视图聚合（Σ pnl / Σ(pnl+swap+commission)；brokerSums 同口径，
 // 全零/空仓 → 0——事件字段为标量 double 无 nil 缺省态，空态语义由前端条显区分）。
+// D-094：样本行（IsSample）不入 Σ——与拉路径 brokerSums 同口径。
 func (m *BrokerPositionMonitor) sums() (pnlSum, netSum float64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, p := range m.cur {
+		if p.IsSample {
+			continue
+		}
 		pnlSum += p.Pnl
 		netSum += p.Pnl + p.Swap + p.Commission
 	}
@@ -153,6 +157,18 @@ func (m *BrokerPositionMonitor) Events() []*v1.BrokerPositionEvent {
 		ev.NetSumUsd = netSum
 	}
 	return out
+}
+
+// equalIgnoringAsOf D-094：行数据 diff 忽略 as_of。asOf 语义=「本行显示值最近一次
+// 变更的事件时戳」——值不变不重发（指纹去重语义保持，广播零噪音），asOf 随值变更
+// 一起更新；断流后值冻结 → asOf 冻结 + venue_online=false = 陈旧可观测。
+func equalIgnoringAsOf(a, b *v1.BrokerPosition) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	ac, bc := proto.Clone(a).(*v1.BrokerPosition), proto.Clone(b).(*v1.BrokerPosition)
+	ac.AsOf, bc.AsOf = nil, nil
+	return proto.Equal(ac, bc)
 }
 
 // splitPosKey posKey → (venueKey, ticket)。venueKey 含 ":" 无 "|"，ticket 同理——split 安全。
@@ -250,6 +266,7 @@ func (m *BrokerPositionMonitor) applyVenueResult(ctx context.Context, r VenueOrd
 	m.mu.Lock()
 	vs.restOnline = true
 	vs.online = m.onlineLocked(r.VenueKey)
+	vs.asOf = time.Now() // D-094：权威回读时刻=本 venue 行 asOf（CEX 无帧 patch，回读即事件）
 	old = m.venues[r.VenueKey]
 	for t := range old.orders {
 		if _, ok := vs.orders[t]; !ok {

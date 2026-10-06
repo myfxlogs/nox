@@ -34,6 +34,9 @@ type venueState struct {
 	// D-068：MT5 仓位级保证金原生值（ticket→RequiredMargin RPC，reconcile 同批拉取，
 	// 帧路径零 RPC）。缺键=RPC 失败/未接线 → protoFor 走 D-036 规格估算降级。
 	reqMargin map[string]float64
+	// D-094：本 venue 行数据的事件时戳（MT=OnOrderProfit 帧到达时刻；CEX=权威回读
+	// 时刻）——proto as_of 透传，展示新鲜度/断流陈旧可观测。
+	asOf time.Time
 }
 
 // posKey 逐仓键：venueKey + "|" + ticket。
@@ -151,6 +154,7 @@ func (m *BrokerPositionMonitor) OnMT5Frame(venueKey string, orders []venue.Order
 	unknown := false
 	m.mu.Lock()
 	vs := m.venues[venueKey]
+	vs.asOf = time.Now() // D-094：帧到达时刻=本 venue 行 asOf（事件时戳透传 proto）
 	for _, o := range orders {
 		if _, ok := vs.orders[o.Ticket]; !ok {
 			unknown = true // 未知票号 → 帧外权威裁决（REST 回读），不就地建仓
@@ -247,7 +251,9 @@ func (m *BrokerPositionMonitor) Run(ctx context.Context) {
 	}
 }
 
-// Refresh 同步执行一次全量权威回读 + flush 并返回当前视图（前端「刷新」/平仓后立即刷新）。
+// Refresh 同步执行一次全量权威回读 + flush 并返回当前视图。
+// D-094：人工调试后门（前端「刷新」按钮=force 重拉一次）——**非数据主源**，
+// 主源=Run 事件循环（MT 帧 patch/kick 回读/qbus 报价联动）；禁把它当周期刷新用。
 func (m *BrokerPositionMonitor) Refresh(ctx context.Context) []*v1.BrokerPosition {
 	m.reconcileAll(ctx)
 	m.flushBounded(ctx) // D-575 F-3：直调 flush 同包 20s 界灭最后无界调用方
