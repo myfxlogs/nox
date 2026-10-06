@@ -12,7 +12,7 @@ import (
 // TestInterceptor_EmptyTokenFailClosed D-159 W6a S1：token == "" 时 fail-closed（移除逃生门后）。
 // 任意 Authorization 头（含缺失/错误）都应返回 error——生产 token 必须非空（ValidateStartupToken 保证启动时非空）。
 func TestInterceptor_EmptyTokenFailClosed(t *testing.T) {
-	i := NewInterceptor("")
+	i := NewInterceptor(func() string { return "" })
 	cases := []struct {
 		name string
 		auth string
@@ -37,7 +37,7 @@ func TestInterceptor_EmptyTokenFailClosed(t *testing.T) {
 
 // TestInterceptor_NonEmptyTokenStillValidates D-048 回归：token 非空时行为不变（恢复=设 env 即可）。
 func TestInterceptor_NonEmptyTokenStillValidates(t *testing.T) {
-	i := NewInterceptor("secret-token")
+	i := NewInterceptor(func() string { return "secret-token" })
 	// 正确 token 放行
 	h := http.Header{}
 	h.Set("Authorization", "Bearer secret-token")
@@ -64,7 +64,7 @@ func TestInterceptor_NonEmptyTokenStillValidates(t *testing.T) {
 
 // TestInterceptor_WrapUnaryEmptyToken D-159 W6a S1：空 token 时 WrapUnary fail-closed（返回 Unauthenticated）。
 func TestInterceptor_WrapUnaryEmptyToken(t *testing.T) {
-	i := NewInterceptor("")
+	i := NewInterceptor(func() string { return "" })
 	called := false
 	fn := i.WrapUnary(func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
 		called = true
@@ -110,7 +110,7 @@ func TestValidateStartupToken(t *testing.T) {
 // TestInterceptor_StreamingHandler D-159 W0：streaming handler 拦截测试矩阵。
 func TestInterceptor_StreamingHandler(t *testing.T) {
 	t.Run("非空 token 缺 header → 401", func(t *testing.T) {
-		i := NewInterceptor("secret-token")
+		i := NewInterceptor(func() string { return "secret-token" })
 		fn := i.WrapStreamingHandler(func(ctx context.Context, w connect.StreamingHandlerConn) error {
 			t.Error("next handler called, want blocked")
 			return nil
@@ -119,7 +119,7 @@ func TestInterceptor_StreamingHandler(t *testing.T) {
 	})
 
 	t.Run("非空 token 正确 token → 放行", func(t *testing.T) {
-		i := NewInterceptor("secret-token")
+		i := NewInterceptor(func() string { return "secret-token" })
 		called := false
 		fn := i.WrapStreamingHandler(func(ctx context.Context, w connect.StreamingHandlerConn) error {
 			called = true
@@ -134,7 +134,7 @@ func TestInterceptor_StreamingHandler(t *testing.T) {
 	})
 
 	t.Run("空 token → fail-closed（W6a S1）", func(t *testing.T) {
-		i := NewInterceptor("")
+		i := NewInterceptor(func() string { return "" })
 		called := false
 		fn := i.WrapStreamingHandler(func(ctx context.Context, w connect.StreamingHandlerConn) error {
 			called = true
@@ -153,7 +153,7 @@ func TestInterceptor_StreamingHandler(t *testing.T) {
 // TestInterceptor_CheckNoTokenLeak D-159 W0：错误路径不泄露 token 值。
 func TestInterceptor_CheckNoTokenLeak(t *testing.T) {
 	secret := "super-secret-token-do-not-leak"
-	i := NewInterceptor(secret)
+	i := NewInterceptor(func() string { return secret })
 	// 缺失 header
 	err := i.check(http.Header{})
 	if err != nil && strings.Contains(err.Error(), secret) {
@@ -187,3 +187,44 @@ func (f *fakeStreamingConn) ResponseHeader() http.Header  { return http.Header{}
 func (f *fakeStreamingConn) ResponseTrailer() http.Header { return http.Header{} }
 func (f *fakeStreamingConn) Spec() connect.Spec           { return connect.Spec{} }
 func (f *fakeStreamingConn) Peer() connect.Peer           { return connect.Peer{} }
+
+// TestD095_HotRotation 热轮换锚：令牌读口换值后新令牌过、旧令牌拒（写时同步语义，
+// 无 TTL 等待——D-545 SecretResolver Set 即效，main 闭包同构）。
+func TestD095_HotRotation(t *testing.T) {
+	cur := "token-v1"
+	i := NewInterceptor(func() string { return cur })
+	hOld := http.Header{}
+	hOld.Set("Authorization", "Bearer token-v1")
+	if err := i.check(hOld); err != nil {
+		t.Fatalf("轮换前旧令牌应放行: %v", err)
+	}
+	cur = "token-v2" // 面板轮换=resolver.Set（读口换值）
+	hNew := http.Header{}
+	hNew.Set("Authorization", "Bearer token-v2")
+	if err := i.check(hNew); err != nil {
+		t.Fatalf("轮换后新令牌应放行: %v", err)
+	}
+	if err := i.check(hOld); err == nil {
+		t.Fatal("轮换后旧令牌应拒（即失效）")
+	}
+}
+
+// TestD095_BothEmptyFailClosed 双空 fail-closed 锚：读口返回空（PG+env 皆无）→ 全拒
+// （含此前合法的旧令牌——空=未配置认证，禁放行）；nil 读口同判。
+func TestD095_BothEmptyFailClosed(t *testing.T) {
+	cur := "token-v1"
+	i := NewInterceptor(func() string { return cur })
+	h := http.Header{}
+	h.Set("Authorization", "Bearer token-v1")
+	if err := i.check(h); err != nil {
+		t.Fatalf("前置：合法令牌应放行: %v", err)
+	}
+	cur = "" // PG 行删+env 无（UpdateAppSecret 空值=删行→Unset 同型）
+	if err := i.check(h); err == nil {
+		t.Fatal("双空应全拒（fail-closed 禁放行）")
+	}
+	in := NewInterceptor(nil)
+	if err := in.check(h); err == nil {
+		t.Fatal("nil 读口应全拒（fail-closed）")
+	}
+}

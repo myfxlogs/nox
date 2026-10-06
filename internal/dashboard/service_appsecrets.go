@@ -21,9 +21,11 @@ import (
 
 // hotSecretKeys 热更白名单 v1（D-545 §3）：Get 热读消费点已改造=即改即效；
 // 其余密钥可管但 hot=false「重启生效」（构造期绑死键，不伪造热更）。
+// D-095：ARB_AUTH_TOKEN 消费点（auth.Interceptor）已改 resolver 热读 → 入列。
 var hotSecretKeys = map[string]bool{
 	"ARB_FRED_API_KEY": true,
 	"TRONGRID_API_KEY": true,
+	"ARB_AUTH_TOKEN":   true,
 }
 
 // SetSecretResolver 注入热读缓存（nil=未装配：List 仍可用，Update 仅写库不 panic）。
