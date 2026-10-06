@@ -38,6 +38,7 @@ type Config struct {
 	MinLiqDistancePct      float64            // D-472 S4：isolated 强平距离下限（ARB_MIN_LIQ_DISTANCE_PCT，缺省 0=关闸；非零前置=回放定标）
 	CrossNotionalEquityCap float64            // D-472 S4：cross 名义/权益占比上限（ARB_CROSS_NOTIONAL_EQUITY_CAP，缺省 0.5；≤0=cross 支路关）
 	PerpLeverageTarget     float64            // D-079：perp 腿目标杠杆（ARB_PERP_LEVERAGE_TARGET，缺省 10；≤0=开仓前置 set-leverage 停用）
+	XAssetMTFirst          bool               // D-084：XASSET_CARRY/FUNDING_HEDGE 双腿顺序下单——MT 腿先成交再发 CEX（ARB_XASSET_MT_FIRST，缺省 true；MT 拒单零 CEX 往返成本）
 
 	// === MT swap 采集（§3.6）===
 	SwapRefresh time.Duration // swap 轮询间隔（默认 1h，swap 变化慢）

@@ -177,6 +177,7 @@ var appConfigDescs = map[string]string{
 	"ARB_VERIFY_MIN_SAMPLES":                     "验证最小样本数",
 	"ARB_VERIFY_WINDOW_DAYS":                     "验证窗口（天）",
 	"ARB_XASSET_CARRY_MIN_NET_STORE":             "跨资产套息净收益入库门槛（%）",
+	"ARB_XASSET_MT_FIRST":                        "XASSET 双腿顺序下单：MT 腿先成交再发 CEX 腿（MT 拒单零成本）",
 	"ARB_XASSET_CEX_FEE_BPS":                     "跨资产 CEX 侧费率（bps）",
 	"ARB_XASSET_DISASTER_BPS":                    "跨资产灾备偏离阈值（bps；贵金属/股指腿极端价差）",
 	"ARB_XASSET_DISASTER_DEBOUNCE":               "跨资产灾备防抖次数（连续命中才触发）",
