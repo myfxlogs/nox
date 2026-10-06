@@ -102,6 +102,7 @@ func (c *Client) StreamMessages(ctx context.Context, req *MessageRequest, cb Str
 	if c.APIKey == "" {
 		return "", fmt.Errorf("analyst: ARB_AI_API_KEY 未配置")
 	}
+	NeutralizeRequest(req) // D-087：发送前载荷中性化（幂等；词表与 walk 规则见 neutralize.go）
 	body, err := json.Marshal(req)
 	if err != nil {
 		return "", fmt.Errorf("marshal request: %w", err)
