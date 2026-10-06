@@ -108,6 +108,11 @@ type MT5Adapter struct {
 	// swap 采集整轮零产出告警节流（mu 保护）：emit+emit0==0 且有 skip/err 时发 critical，
 	// 每 venue 6h 至多一条（2026-09-30 PXBT 双账户静默零 facts 实证）。
 	swapZeroAlertAt time.Time
+	// D-086：本 venue attach ready 时点（mu 保护，Connect/reconnectSession 成功即戳）。
+	// 零值=未 attach → time.Since 巨大 → 窗外（零产出判定按窗外走，测试夹具零改动兼容）。
+	readyAt time.Time
+	// D-086：连续整轮零产出轮数（mu 保护）。有产出轮清零；attach 暖窗轮不计数不重置。
+	swapZeroRounds int
 
 	stopCtx    context.Context
 	stopCancel context.CancelFunc
@@ -212,6 +217,7 @@ func (a *MT5Adapter) Connect(ctx context.Context) error {
 		return fmt.Errorf("mt5 connect: empty token")
 	}
 	a.token = token
+	a.readyAt = time.Now() // D-086：attach ready 戳记（零产出告警暖窗起点）
 	// S1：包装 mt5 client 加会话失效自动重连（reconcile.MT5Querier 共享同一 client，自动受益）。
 	a.mt5 = &sessionClient{MT5Client: a.mt5, reconnect: a.reconnectSession}
 	log.Printf("[mt5:%s] connected, token=%s", a.venue, maskToken(token))

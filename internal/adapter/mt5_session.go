@@ -13,7 +13,8 @@ import (
 
 // reconnectSession 复用现有 conn 重调 connMgr.Connect 重建 account 会话（S1）。
 // 禁止调用 a.Connect()——它每次 grpc.DialContext 新建 conn（泄漏）且替换 a.mt5（破坏包装器挂接）。
-// 成功仅更新 a.token；sid 由 sessionID(a.user) 确定性生成（网关同 id → 同 token，重连后旧 ctx 仍有效）。
+// 成功更新 a.token 并重戳 a.readyAt（D-086：重连后网关同样有暖窗）；sid 由
+// sessionID(a.user) 确定性生成（网关同 id → 同 token，重连后旧 ctx 仍有效）。
 func (a *MT5Adapter) reconnectSession(ctx context.Context) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -39,6 +40,7 @@ func (a *MT5Adapter) reconnectSession(ctx context.Context) error {
 		return fmt.Errorf("mt5 reconnect: empty token")
 	}
 	a.token = token
+	a.readyAt = time.Now() // D-086：重连成功重戳暖窗起点
 	log.Printf("[mt5:%s] session reconnected, token=%s", a.venue, maskToken(token))
 	if a.OnReconnect != nil {
 		a.OnReconnect() // D-004 P1#6：对账 kick（须非阻塞——a.mu 持锁中）
