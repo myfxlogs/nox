@@ -50,7 +50,7 @@ const (
 	UnitSeconds       = "seconds"        // 秒数时长（D-466 结算周期）
 )
 
-// D-591 S6：!ticker@arr@1s 24hrTicker 落库 kind（quote volume，radar 全量宇宙资格判定源）。
+// D-591 S6：!ticker@arr 24hrTicker 落库 kind（quote volume，radar 全量宇宙资格判定源）。
 const KindVol24h = "vol24h"
 
 // KindIndexPrice D-591 R2：markPrice 帧 i 字段（index price）同帧落库——一帧一钟

@@ -1,4 +1,4 @@
-// binance_market_ws_ticker.go D-591 S6：!ticker@arr@1s 24hrTicker 域自 binance_market_ws.go
+// binance_market_ws_ticker.go D-591 S6：!ticker@arr 24hrTicker 域自 binance_market_ws.go
 // 拆出（check-lines ≤300 同 markprice/spotinfo 拆分模式）——vol24h facts 落库+节流。
 package exchange
 

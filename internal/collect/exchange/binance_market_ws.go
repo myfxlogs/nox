@@ -175,7 +175,9 @@ func (b *BinanceMarketWS) runLoop(ctx context.Context, cands []WSCandidate, venu
 			} else if venueType == "perp" && kind == "ticker" {
 				// D-591 S6：24hrTicker 全市场聚合流（radar 宇宙枚举全量所需，不过滤——
 				// 资格判定须覆盖未监控新上市符号；灌水由每符号 15min 节流控制）。
-				params = []string{"!ticker@arr@1s"}
+				// D-080 复审实拍：futures 无 "!ticker@arr@1s" 变体（ack 后零帧，@1s 仅 markPrice
+				// 有），流名=文档 All Market Tickers "!ticker@arr"（1000ms）。
+				params = []string{"!ticker@arr"}
 			} else if venueType == "perp" && kind == "markPrice" {
 				// D-582：markPrice 逐符号订阅同中 D-535 杀招（上游按连接 epoch 概率性
 				// 裁断，wscloseprobe 同参数集复现 frames=1 后 1006 被杀）——改全市场
