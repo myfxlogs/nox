@@ -118,6 +118,11 @@ type Pipeline struct {
 	// perpLeverageTarget D-079：perp 腿开仓前置 set-leverage 目标（ARB_PERP_LEVERAGE_TARGET）。
 	// ≤0 = 停用（旧行为：只读不设）。
 	perpLeverageTarget float64
+
+	// mtFirst D-084：XASSET_CARRY/FUNDING_HEDGE 双腿「MT 先行顺序 taker」——
+	// MT 腿先成交再发 CEX 腿（MT 间歇性 REQUEST_ERROR 拒单零成本；并发双发时
+	// MT 拒单已付 CEX 往返费，pos #508 净损 $4.25 实证）。false=并发旧路径。
+	mtFirst bool
 }
 
 // SetMarginInputs D-010：注入 venue 保证金实占回调（执行路径接闸——展示闸6 与
@@ -152,6 +157,9 @@ func (p *Pipeline) SetMakerPolicy(firstLegTimeout time.Duration, maxAttemptsPerH
 // SetPerpLeverageTarget D-079：注入 perp 腿目标杠杆（main 装配传 cfg.PerpLeverageTarget；
 // ≤0=开仓前置 ensure 停用保旧行为）。
 func (p *Pipeline) SetPerpLeverageTarget(target float64) { p.perpLeverageTarget = target }
+
+// SetMTFirst D-084：注入 MT 先行开关（main 装配传 cfg.XAssetMTFirst）。
+func (p *Pipeline) SetMTFirst(on bool) { p.mtFirst = on }
 
 // NewPipeline 创建执行管线。
 func NewPipeline(reg *Registry, store *pgstore.Store, qbus *bus.QuoteBus, limits RiskLimits, environment string) *Pipeline {

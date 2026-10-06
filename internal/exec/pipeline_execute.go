@@ -169,8 +169,8 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 		return nil, fmt.Errorf("create position: %w", err)
 	}
 
-	// 下单：D-018 阶段a 单腿 maker 序（策略已配置+恰一 CEX perp 腿）启用；否则既有双腿
-	// 并发市价路径（未配置=fail-closed 停用 maker，零行为变更）。
+	// 下单：D-018 阶段a 单腿 maker 序（策略已配置+恰一 CEX perp 腿）启用；
+	// D-084 mt-first（XASSET/FH 恰一 MT 腿）次之；否则既有双腿并发市价路径。
 	results := make([]LegResult, len(legs))
 	if plan, makerOK := p.makerPlan(ctx, opportunityID, legs); makerOK {
 		if !p.makerBudgetAllow(opportunityID) {
@@ -180,6 +180,9 @@ func (p *Pipeline) Execute(ctx context.Context, opportunityID, requestID, posTyp
 		if results, merr = p.runMakerSequence(ctx, requestID, posID, legs, plan); merr != nil {
 			return nil, merr
 		}
+	} else if p.mtFirstEligible(posType, legs) {
+		// D-084：MT 腿先行——MT 拒单零 CEX 往返成本（mtapi REQUEST_ERROR 间歇性实证）。
+		results = p.runMTFirstSequence(ctx, requestID, posID, legs)
 	} else {
 		var wg sync.WaitGroup
 		for i, leg := range legs {
