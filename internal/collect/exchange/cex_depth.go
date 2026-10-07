@@ -13,6 +13,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"sync"
 )
 
 // DepthWhitelistBases D-420 S2：深度采样白名单基名（SSOT §1 S2：SPX500/XPT/XPD/XAU/CLU；
@@ -67,13 +68,17 @@ func fetchDepth(ctx context.Context, cfg Config, venue, base string) (DepthQuote
 	case VenueGate:
 		sym := base + "_USDT"
 		var body struct {
-			Bids [][]string `json:"bids"`
-			Asks [][]string `json:"asks"`
+			Bids []gateOBEntry `json:"bids"`
+			Asks []gateOBEntry `json:"asks"`
 		}
 		if err := getJSONInto(ctx, cfg.Client, cfg.GateBaseURL+"/api/v4/futures/usdt/order_book?contract="+sym+"&limit=5", &body); err != nil {
 			return DepthQuote{}, err
 		}
-		return depthRow(VenueGate, sym, body.Bids, body.Asks)
+		mult, err := gateContractMult(ctx, cfg, sym)
+		if err != nil {
+			return DepthQuote{}, err
+		}
+		return depthRow(VenueGate, sym, gatePairs(body.Bids, mult), gatePairs(body.Asks, mult))
 	case VenueOKX:
 		sym := base + "-USDT-SWAP"
 		var body struct {
@@ -91,6 +96,45 @@ func fetchDepth(ctx context.Context, cfg Config, venue, base string) (DepthQuote
 		return depthRow(VenueOKX, sym, body.Data[0].Bids, body.Data[0].Asks)
 	}
 	return DepthQuote{}, fmt.Errorf("unknown venue %q", venue)
+}
+
+// gateOBEntry gate 期货盘口条目——对象组 {p:价,s:张数}（与 binance/okx 的
+// [价,量] 字符串数组异形；D-112 实拍：旧 [][]string 解析使 gate 深度自 D-420 起全灭）。
+type gateOBEntry struct {
+	P string  `json:"p"`
+	S float64 `json:"s"` // 张数（非 base 量；负值=平仓向单）
+}
+
+// gatePairs gate 对象条目→depthRow 通用 [价, base量] 对：张数×quanto_multiplier 折 base。
+func gatePairs(rows []gateOBEntry, mult float64) [][]string {
+	out := make([][]string, len(rows))
+	for i, r := range rows {
+		out[i] = []string{r.P, strconv.FormatFloat(math.Abs(r.S)*mult, 'g', -1, 64)}
+	}
+	return out
+}
+
+// gateQuantoCache 合约乘数进程级缓存（quasi-static；错误不入缓存、下一轮重试）。
+var gateQuantoCache sync.Map // contract → float64
+
+// gateContractMult 取 gate 合约 quanto_multiplier（张→base 折算率；读失败 fail-closed
+// 该 symbol 本轮无深度——与「脏值上抛」同律）。
+func gateContractMult(ctx context.Context, cfg Config, sym string) (float64, error) {
+	if v, ok := gateQuantoCache.Load(sym); ok {
+		return v.(float64), nil
+	}
+	var body struct {
+		QuantoMultiplier string `json:"quanto_multiplier"`
+	}
+	if err := getJSONInto(ctx, cfg.Client, cfg.GateBaseURL+"/api/v4/futures/usdt/contracts/"+sym, &body); err != nil {
+		return 0, fmt.Errorf("gate %s contract spec: %w", sym, err)
+	}
+	m, err := strconv.ParseFloat(body.QuantoMultiplier, 64)
+	if err != nil || m <= 0 {
+		return 0, fmt.Errorf("gate %s quanto_multiplier 无效 %q", sym, body.QuantoMultiplier)
+	}
+	gateQuantoCache.Store(sym, m)
+	return m, nil
 }
 
 // parseNum 数字字符串解析（三所盘口条目均为 [price,size,...] 字符串数组；

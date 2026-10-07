@@ -7,6 +7,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
 	"testing"
 )
 
@@ -25,9 +27,14 @@ func TestD420_FetchDepth_AllVenues(t *testing.T) {
 		w.Write([]byte(`{"bids":[["100.0","2"],["99.5","1"]],"asks":[["100.2","3"],["100.5","1"]]}`))
 	}))
 	defer bin.Close()
-	gate := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		// gate 形状：asks 在前、条目 [price,size] 字符串
-		w.Write([]byte(`{"asks":[["200.4","1"],["200.6","2"]],"bids":[["200.0","4"],["199.8","2"]]}`))
+	gateQuantoCache = sync.Map{} // 测试间隔离（进程级缓存）
+	gate := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// gate 真实形状（D-112 实拍）：条目 {p:价,s:张数} 对象；张数×乘数折 base
+		if strings.Contains(r.URL.Path, "/contracts/") {
+			w.Write([]byte(`{"quanto_multiplier":"0.5"}`))
+			return
+		}
+		w.Write([]byte(`{"asks":[{"p":"200.4","s":2},{"p":"200.6","s":4}],"bids":[{"p":"200.0","s":8},{"p":"199.8","s":4}]}`))
 	}))
 	defer gate.Close()
 	okx := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -72,6 +79,32 @@ func TestD420_FetchDepth_MissingSymbol_Skipped(t *testing.T) {
 	got := FetchCexDepths(context.Background(), cfg, []string{"SPX500"})
 	if len(got) != 1 || got[0].Venue != "binance" {
 		t.Errorf("venue 无符号应跳过（fail-open），got %v", got)
+	}
+}
+
+func TestD420_FetchDepth_GateContractSpecFail_Skipped(t *testing.T) {
+	// D-112：contracts 端点失败=乘数不可得 → gate 该 symbol 本轮无深度（fail-closed），
+	// 不连累 binance/okx（per-symbol 隔离）。
+	bin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(`{"bids":[["100.0","2"]],"asks":[["100.2","3"]]}`))
+	}))
+	defer bin.Close()
+	gateQuantoCache = sync.Map{}
+	gate := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/contracts/") {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Write([]byte(`{"asks":[{"p":"200.4","s":2}],"bids":[{"p":"200.0","s":8}]}`))
+	}))
+	defer gate.Close()
+	cfg := d420Cfg(bin.URL, gate.URL, "http://127.0.0.1:1")
+	got := map[string]DepthQuote{}
+	for _, d := range FetchCexDepths(context.Background(), cfg, []string{"XAU"}) {
+		got[d.Venue] = d
+	}
+	if len(got) != 1 || got["binance"].Venue != "binance" {
+		t.Fatalf("gate 乘数失败应只跳过 gate，got %v", got)
 	}
 }
 
