@@ -82,7 +82,7 @@ func (s *PriceAlertService) Run(ctx context.Context) {
 	if err := s.loadRules(ctx); err != nil {
 		log.Printf("[price_alert] load: %v", err)
 	}
-	safego.Go("price_alert:refreshLoop", func() { s.refreshLoop(ctx) })
+	safego.GoLoop("price_alert:refreshLoop", func() { s.refreshLoop(ctx) })
 	ch, cancel := s.bus.Subscribe("")
 	defer cancel()
 	for {
