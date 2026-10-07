@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"arb/internal/store/pgstore"
@@ -29,6 +30,12 @@ type Tools struct {
 	// R2 返修②：position 派生字段回调（dashboard.Service 注入，复用 enrichOne 同源派生）。
 	// nil = 未注入（测试/未接线），get_entity position 返回基础字段不含派生。
 	EnrichPosition func(ctx context.Context, p *pgstore.Position, legs []pgstore.PositionLeg) map[string]any
+	// ProbeCaller D-100 llm_probe 装配口（dashboard 注入）；nil=未接线→工具回 IsError。
+	ProbeCaller ProbeCaller
+	// llm_probe 限频计数器（进程级滑动窗：每会话每小时 ≤10，D-100 票面）。
+	probeMu     sync.Mutex
+	probeWinAt  time.Time
+	probeWinCnt int
 }
 
 // 工具名常量。
@@ -38,11 +45,12 @@ const (
 	toolGrepKB    = "grep_kb"
 	toolReadDoc   = "read_doc"
 	toolReadCode  = "read_code"
+	toolLLMProbe  = "llm_probe"
 )
 
 // Names 返回工具名集。
 func (t *Tools) Names() []string {
-	return []string{toolQueryRO, toolGetEntity, toolGrepKB, toolReadDoc, toolReadCode}
+	return []string{toolQueryRO, toolGetEntity, toolGrepKB, toolReadDoc, toolReadCode, toolLLMProbe}
 }
 
 // Execute 分派工具调用。
@@ -58,6 +66,8 @@ func (t *Tools) Execute(ctx context.Context, call ToolCall) (ToolResult, []Citat
 		return t.execReadFile(ctx, call, "docs")
 	case toolReadCode:
 		return t.execReadFile(ctx, call, "internal", "proto", "cmd")
+	case toolLLMProbe:
+		return t.execLLMProbe(ctx, call)
 	default:
 		return ToolResult{ToolUseID: call.ID, Content: "未知工具: " + call.Name, IsError: true}, nil, nil
 	}
@@ -71,6 +81,7 @@ func ToolSpecs() []ToolSpec {
 		{Name: toolGrepKB, Description: "经验库/decisions/docs 关键词检索（grep -rn）", InputSchema: rawJSON(`{"type":"object","properties":{"pattern":{"type":"string"},"path":{"type":"string","description":"子路径如 docs/经验库"}},"required":["pattern"]}`)},
 		{Name: toolReadDoc, Description: "读 docs/**/*.md（≤2000 行）", InputSchema: rawJSON(`{"type":"object","properties":{"path":{"type":"string","description":"相对 /kn/docs 的路径"}},"required":["path"]}`)},
 		{Name: toolReadCode, Description: "读仓内源码 internal/proto/cmd（≤2000 行）", InputSchema: rawJSON(`{"type":"object","properties":{"path":{"type":"string","description":"相对 /kn 的路径如 internal/analyst/tools.go"}},"required":["path"]}`)},
+		{Name: toolLLMProbe, Description: "对当前 LLM 配置做受控判别实验（改一个参数观察输出形态）；用于 13/14 契约的矛盾调查与假设判别", InputSchema: rawJSON(`{"type":"object","properties":{"prompt":{"type":"string","description":"探针输入 ≤500 字符"},"max_tokens":{"type":"integer","description":"256-8192"},"thinking_disabled":{"type":"boolean"}},"required":["prompt"]}`)},
 	}
 }
 

@@ -153,3 +153,67 @@ func TestQueryRORealConnect(t *testing.T) {
 		t.Fatalf("result missing 'one' column: %s", res.Content)
 	}
 }
+
+// --- D-100 llm_probe 锚 ---
+
+func fakeProbe(ms, chars int, stop string) ProbeCaller {
+	return func(_ context.Context, _ string, _ int, _ bool) (int, int, string, string, error) {
+		return ms, chars, stop, "none", nil
+	}
+}
+
+func TestLLMProbeReturnsStructured(t *testing.T) {
+	tools := &Tools{ProbeCaller: fakeProbe(1234, 56, "max_tokens")}
+	res, cites, err := tools.execLLMProbe(context.Background(), ToolCall{ID: "c1", Input: `{"prompt":"ping","max_tokens":512}`})
+	if err != nil || res.IsError {
+		t.Fatalf("probe: err=%v res=%s", err, res.Content)
+	}
+	for _, kw := range []string{"elapsed=", "chars=56", "stop=max_tokens", "err=none"} {
+		if !strings.Contains(res.Content, kw) {
+			t.Fatalf("结构化文本缺 %q: %s", kw, res.Content)
+		}
+	}
+	if len(cites) == 0 {
+		t.Fatal("expected citation")
+	}
+}
+
+func TestLLMProbeRejectsBadParams(t *testing.T) {
+	tools := &Tools{ProbeCaller: fakeProbe(1, 1, "end_turn")}
+	long := strings.Repeat("超", 501)
+	for _, in := range []string{
+		`{"prompt":"` + long + `","max_tokens":512}`, // prompt 超 500
+		`{"prompt":"p","max_tokens":128}`,            // 低于 256
+		`{"prompt":"p","max_tokens":16384}`,          // 高于 8192
+		`{"prompt":"","max_tokens":512}`,             // 空 prompt
+	} {
+		res, _, _ := tools.execLLMProbe(context.Background(), ToolCall{ID: "c1", Input: in})
+		if !res.IsError {
+			t.Fatalf("expected rejection for %s, got: %s", in[:40], res.Content)
+		}
+	}
+}
+
+func TestLLMProbeRateLimit(t *testing.T) {
+	tools := &Tools{ProbeCaller: fakeProbe(1, 1, "end_turn")}
+	call := ToolCall{ID: "c1", Input: `{"prompt":"p","max_tokens":512}`}
+	for i := 0; i < 10; i++ {
+		res, _, _ := tools.execLLMProbe(context.Background(), call)
+		if res.IsError {
+			t.Fatalf("call %d unexpectedly rejected: %s", i+1, res.Content)
+		}
+	}
+	res, _, _ := tools.execLLMProbe(context.Background(), call)
+	if !res.IsError || !strings.Contains(res.Content, "限额") {
+		t.Fatalf("11th call should hit 限额, got: %s", res.Content)
+	}
+}
+
+func TestLLMProbeInSpecs(t *testing.T) {
+	for _, s := range ToolSpecs() {
+		if s.Name == "llm_probe" {
+			return
+		}
+	}
+	t.Fatal("ToolSpecs 缺 llm_probe")
+}
