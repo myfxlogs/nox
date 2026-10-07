@@ -90,6 +90,25 @@ func TestD113_StandingSpreadAbsorbed(t *testing.T) {
 	}
 }
 
+// A4：生产装配形态回归——disasterBreach 已建但 cexBasisAnchor/mtDivergeFlag 为 nil
+// （New() 曾只预建 disasterBreach：lazy-init 三表并初始化被跳过 → cexBasisAnchor
+// 写即 panic「assignment to entry in nil map」，生产 posLoop 死实证）。各表独立
+// 判 nil 后该构型不得再 panic。
+func TestD113_PartialInitEngine_NoPanic(t *testing.T) {
+	st, posID, e := d378bSeedXAsset(t, -9.0, 6.9)
+	ctx := context.Background()
+	// 复刻 New() 装配形态：disasterBreach 已建、D-113 两表未建（nil）。
+	e.disasterBreach = make(map[int64]int)
+	e.cexBasisAnchor = nil
+	e.mtDivergeFlag = nil
+	d113PublishConsensus(t, e, 100.0)
+	d378bPublishQuotes(t, e, -9.0, 0)
+	p := d377OpenPos(t, st, posID)
+	for i := 0; i < 3; i++ { // 首观测锚定写 cexBasisAnchor——nil map 构型下不得 panic
+		e.checkExitCondition(ctx, p)
+	}
+}
+
 // d113PublishConsensusOnlyOne 单共识源（共识不足注入）。
 func d113PublishConsensusOnlyOne(t *testing.T, e *Engine, mid float64) {
 	t.Helper()
