@@ -29,6 +29,9 @@ func (s *Store) mtVenueTypes(ctx context.Context) (map[string]string, error) {
 
 // factsVenueType D-496 R2：裸 venue → venue_type 推导（与迁移 0142 回填规则同表）。
 func factsVenueType(vk keydomain.VenueKey, mtTypes map[string]string) string {
+	if vk.Venue == "local" {
+		return "" // 本机观测源（D-104 egress_canary 等 local:* 复合键）非交易通道，先于后缀分支
+	}
 	if vk.Type != "" {
 		return vk.Type // 生产方传复合键（如 deribit:option）→ 后缀即类型
 	}
