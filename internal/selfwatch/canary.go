@@ -2,8 +2,10 @@
 // 出口健康是网络路径自身属性，无任何 WS/推送源可订阅，主动拨测为唯一观测形态
 // （D-004 例外已留痕 decisions.md D-104：用途限制=自盯告警聚合+复盘，不进交易链）。
 // 三锚点 TLS 拨测（cex 代理域/MT 桥外网面/公共互联网；env ARB_EGRESS_CANARY_ANCHORS
-// 可覆盖）；全锚失败=出口红窗：绿→红单条 critical（30min 去重），红窗态经 EgressRed
-// 供装配层聚合 ws-storm/面判定劣化告警；每拍结果落 facts（kind=egress_canary）供复盘。
+// 可覆盖）；连续 2 拍全锚失败=红窗确认（首拍只更新内态——单拍瞬时抖动零告警）：
+// 单条 critical「本机出口故障，所有 venue 面按 fail-closed 对待」（30min 去重）+
+// 恢复单条 info，红窗态经 EgressRed 供装配层聚合 ws-storm/面判定劣化告警；
+// 每拍结果落 facts（kind=egress_canary）供复盘。
 package selfwatch
 
 import (
@@ -24,6 +26,9 @@ const cfgEgressAnchors = "ARB_EGRESS_CANARY_ANCHORS"
 
 // canaryCriticalMsg D-104 红窗单条聚合 critical（聚合闸=EgressRed，见 cmd/core）。
 const canaryCriticalMsg = "[canary] 本机出口故障，所有 venue 面按 fail-closed 对待"
+
+// canaryRecoverMsg D-104 复审返修②：红窗恢复单条 info（业主收到 critical 后有恢复信号）。
+const canaryRecoverMsg = "[canary] 本机出口恢复"
 
 // canaryInterval 看门狗拍间隔；canaryDialTimeout 单锚拨测超时（三锚串行最坏 15s<60s）。
 const (
@@ -93,9 +98,9 @@ func canaryLoop(ctx context.Context, d Deps) {
 		log.Printf("[canary] %s 空——锚点集缺，出口 canary 停用（显式报缺）", cfgEgressAnchors)
 		return
 	}
-	red := false
+	red, confirmed := false, false
 	for {
-		red = d.canaryRound(ctx, anchors, red)
+		red, confirmed = d.canaryRound(ctx, anchors, red, confirmed)
 		t := time.NewTimer(canaryInterval)
 		select {
 		case <-ctx.Done():
@@ -106,22 +111,30 @@ func canaryLoop(ctx context.Context, d Deps) {
 	}
 }
 
-// canaryRound 一拍：拨测→fact 落库（值=通过锚数）→红窗变迁告警（绿→红单条 critical，
-// InsertAlertDedup 30min 去重抑制抖动重发）→刷新进程内红窗态。
-func (d Deps) canaryRound(ctx context.Context, anchors []string, prevRed bool) bool {
+// canaryRound 一拍：拨测→fact 落库（值=通过锚数）→红窗状态机告警→刷新进程内红窗态。
+// 状态机（D-104 复审返修①②）：绿→疑似（首拍全红只更新内态，零告警）；疑似+再拍全红
+// =红窗确认→单条 critical（每次红窗恰一条，30min 去重窗兼抑抖动重确认）→聚合闸随确认
+// 同步；确认红窗持续零重发（恢复 info 收口）；确认红窗后翻绿→单条恢复 info；疑似单拍
+// 红后翻绿=静默收场（无 critical 无 info——15s 级瞬时抖动全程零声，降噪目标本义）。
+func (d Deps) canaryRound(ctx context.Context, anchors []string, prevRed, prevConfirmed bool) (red, confirmed bool) {
 	okN := probeEgress(anchors)
-	red := okN == 0
+	red = okN == 0
+	confirmed = red && (prevRed || prevConfirmed)
 	if err := d.Store.InsertFacts(ctx, []fact.Fact{{
 		Kind: fact.KindEgressCanary, Venue: "local:egress",
 		Value: float64(okN), Unit: fact.UnitCount, Ts: d.now(), Src: "egress_canary",
 	}}); err != nil {
 		log.Printf("[canary] fact 落库失败: %v", err)
 	}
-	if red && !prevRed {
+	if confirmed && !prevConfirmed {
 		if err := d.Store.InsertAlertDedup(ctx, "critical", canaryCriticalMsg, 30*time.Minute); err != nil {
 			log.Printf("[canary] alert: %v", err)
 		}
+	} else if prevConfirmed && !red {
+		if err := d.Store.InsertAlertDedup(ctx, "info", canaryRecoverMsg, 30*time.Minute); err != nil {
+			log.Printf("[canary] alert: %v", err)
+		}
 	}
-	egressRed.Store(red)
-	return red
+	egressRed.Store(confirmed)
+	return red, confirmed
 }

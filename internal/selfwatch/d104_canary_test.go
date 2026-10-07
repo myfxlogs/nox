@@ -1,6 +1,7 @@
-// d104_canary_test.go —— D-104 锚：出口 canary 拍逻辑——全锚失败=红窗（绿→红单条
-// critical、30min 去重形态）、持续红不重发、恢复翻绿零告警、每拍 fact 落库（值=通过
-// 锚数）、红窗态进程内原子刷新；锚点 env 覆盖解析。
+// d104_canary_test.go —— D-104 锚（复审返修版）：出口 canary 拍逻辑——首拍全红零告警
+// （只更新内态）、连续 2 拍全红才单条 critical（30min 去重形态）+聚合闸置位、确认红窗
+// 恢复→单条 info、疑似单拍红后恢复=静默收场、每拍 fact 落库（值=通过锚数）、
+// 锚点 env 覆盖解析。
 package selfwatch
 
 import (
@@ -27,20 +28,22 @@ func setDial(f func(addr string) error) func() {
 
 var d104Anchors = []string{"a:443", "b:443", "c:443"}
 
-// TestD104_CanaryRedTransition 红窗变迁锚：全锚失败→fact 值 0+绿→红单条 critical
-// （30min 去重形态）+红窗态置位；持续红→零新告警；恢复→fact 值 3+翻绿零告警。
-func TestD104_CanaryRedTransition(t *testing.T) {
+// TestD104_CanaryTwoRoundConfirm 复审返修①②主锚：首拍全红零告警（fact 照落+内态不置
+// 闸）；第二拍仍全红→单条 critical（30min 窗）+闸置位；持续红零重发；恢复→fact 值 3+
+// 单条 info+翻绿清闸。
+func TestD104_CanaryTwoRoundConfirm(t *testing.T) {
 	defer setDial(func(string) error { return errors.New("dial tcp: timeout") })()
 
 	st := &fakeStore{}
 	d := d104Deps(st)
 
-	// 首拍全败：fact 值 0 + 单条 critical + 红窗置位。
-	if red := d.canaryRound(context.Background(), d104Anchors, false); !red {
-		t.Fatal("全锚失败应进红窗")
+	// 首拍全红：零告警、零闸位，fact 值 0 照落（内态留给下拍）。
+	red, confirmed := d.canaryRound(context.Background(), d104Anchors, false, false)
+	if !red || confirmed || EgressRed() {
+		t.Fatalf("首拍全红应只更新内态: red=%v confirmed=%v gate=%v", red, confirmed, EgressRed())
 	}
-	if !EgressRed() {
-		t.Fatal("红窗态应置位")
+	if len(st.dedupCalls) != 0 {
+		t.Fatalf("单拍全红零告警: %v", st.dedupCalls)
 	}
 	if len(st.facts) != 1 || st.facts[0].Value != 0 || st.facts[0].Kind != fact.KindEgressCanary {
 		t.Fatalf("首拍 fact 应 egress_canary 值 0: %+v", st.facts)
@@ -48,38 +51,82 @@ func TestD104_CanaryRedTransition(t *testing.T) {
 	if st.facts[0].Venue != "local:egress" || st.facts[0].Unit != fact.UnitCount || st.facts[0].Src != "egress_canary" {
 		t.Fatalf("fact 键域/口径不符: %+v", st.facts[0])
 	}
+
+	// 第二拍仍全红：红窗确认→单条 critical（30min 去重形态）+闸置位。
+	red, confirmed = d.canaryRound(context.Background(), d104Anchors, true, false)
+	if !red || !confirmed || !EgressRed() {
+		t.Fatalf("连续 2 拍全红应确认红窗: red=%v confirmed=%v gate=%v", red, confirmed, EgressRed())
+	}
 	if len(st.dedupCalls) != 1 || !strings.HasPrefix(st.dedupCalls[0], "critical|[canary] 本机出口故障") {
-		t.Fatalf("绿→红应单条 critical: %v", st.dedupCalls)
+		t.Fatalf("确认拍应单条 critical: %v", st.dedupCalls)
 	}
 	if !strings.Contains(st.dedupCalls[0], "30m0s") {
 		t.Fatalf("critical 应带 30min 去重窗: %v", st.dedupCalls[0])
 	}
 
 	// 持续红：零新告警，fact 照落。
-	if red := d.canaryRound(context.Background(), d104Anchors, true); !red {
+	if _, confirmed = d.canaryRound(context.Background(), d104Anchors, true, true); !confirmed {
 		t.Fatal("持续失败应保持红窗")
 	}
 	if len(st.dedupCalls) != 1 {
-		t.Fatalf("持续红不应重发: %v", st.dedupCalls)
+		t.Fatalf("持续红 30min 窗内不应重发: %v", st.dedupCalls)
 	}
-	if len(st.facts) != 2 {
+	if len(st.facts) != 3 {
 		t.Fatalf("每拍都应落 fact: %d", len(st.facts))
 	}
 
-	// 恢复：fact 值 3 + 翻绿 + 零告警。
+	// 恢复：fact 值 3 + 单条 info + 翻绿清闸。
 	restore := setDial(func(string) error { return nil })
 	defer restore()
-	if red := d.canaryRound(context.Background(), d104Anchors, true); red {
-		t.Fatal("恢复后应翻绿")
+	red, confirmed = d.canaryRound(context.Background(), d104Anchors, true, true)
+	if red || confirmed || EgressRed() {
+		t.Fatalf("恢复后应翻绿清闸: red=%v confirmed=%v gate=%v", red, confirmed, EgressRed())
 	}
-	if EgressRed() {
-		t.Fatal("恢复后红窗态应清除")
-	}
-	if len(st.facts) != 3 || st.facts[2].Value != 3 {
+	if len(st.facts) != 4 || st.facts[3].Value != 3 {
 		t.Fatalf("恢复拍 fact 应值 3: %+v", st.facts)
 	}
-	if len(st.dedupCalls) != 1 {
-		t.Fatalf("恢复不应告警: %v", st.dedupCalls)
+	if len(st.dedupCalls) != 2 || !strings.HasPrefix(st.dedupCalls[1], "info|[canary] 本机出口恢复") {
+		t.Fatalf("恢复应单条 info: %v", st.dedupCalls)
+	}
+	if !strings.Contains(st.dedupCalls[1], "30m0s") {
+		t.Fatalf("info 应带 30min 去重窗: %v", st.dedupCalls[1])
+	}
+}
+
+// TestD104_CanarySuspectSilentClose 疑似单拍红后恢复=静默收场——critical 未发过，恢复
+// 也不发 info（15s 级瞬时抖动全程零声，降噪本义）；随后再连续 2 拍全红才重新确认。
+func TestD104_CanarySuspectSilentClose(t *testing.T) {
+	defer setDial(func(string) error { return errors.New("refused") })()
+	st := &fakeStore{}
+	d := d104Deps(st)
+
+	// 首拍红（疑似）→次拍恢复：零告警零 info。
+	if red, confirmed := d.canaryRound(context.Background(), d104Anchors, false, false); !red || confirmed {
+		t.Fatalf("首拍应疑似红: red=%v confirmed=%v", red, confirmed)
+	}
+	restore := setDial(func(string) error { return nil })
+	defer restore()
+	if red, confirmed := d.canaryRound(context.Background(), d104Anchors, true, false); red || confirmed {
+		t.Fatalf("疑似后恢复应翻绿: red=%v confirmed=%v", red, confirmed)
+	}
+	if len(st.dedupCalls) != 0 || EgressRed() {
+		t.Fatalf("疑似窗收场应全程静默: %v gate=%v", st.dedupCalls, EgressRed())
+	}
+
+	// 重新连续 2 拍全红：第二拍才 critical（计数不被前窗污染）。
+	restore2 := setDial(func(string) error { return errors.New("timeout") })
+	defer restore2()
+	if red, confirmed := d.canaryRound(context.Background(), d104Anchors, false, false); !red || confirmed {
+		t.Fatalf("再疑似应零告警: red=%v confirmed=%v", red, confirmed)
+	}
+	if len(st.dedupCalls) != 0 {
+		t.Fatalf("再疑似首拍零告警: %v", st.dedupCalls)
+	}
+	if _, confirmed := d.canaryRound(context.Background(), d104Anchors, true, false); !confirmed {
+		t.Fatal("再连续 2 拍全红应确认")
+	}
+	if len(st.dedupCalls) != 1 || !strings.HasPrefix(st.dedupCalls[0], "critical|") {
+		t.Fatalf("再确认应单条 critical: %v", st.dedupCalls)
 	}
 }
 
@@ -92,8 +139,8 @@ func TestD104_CanaryPartialOK(t *testing.T) {
 		return nil
 	})()
 	st := &fakeStore{}
-	if red := d104Deps(st).canaryRound(context.Background(), d104Anchors, false); red {
-		t.Fatal("单锚失败不应进红窗")
+	if red, confirmed := d104Deps(st).canaryRound(context.Background(), d104Anchors, false, false); red || confirmed {
+		t.Fatalf("单锚失败不应进红窗: red=%v confirmed=%v", red, confirmed)
 	}
 	if len(st.facts) != 1 || st.facts[0].Value != 2 {
 		t.Fatalf("fact 应值 2（两锚通过）: %+v", st.facts)
