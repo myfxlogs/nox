@@ -100,3 +100,35 @@ func TestD108_PruneGroupIsolation(t *testing.T) {
 		t.Fatalf("B 组应存新行 1 行, got %d", got)
 	}
 }
+
+// TestD108_LatestFactsByKindSince ts 下界变体锚：界内最新行取到、界外行不进结果、
+// since 零值回退无界（终值快照态组仍返回其末行——语义=「界内 latest」而非「全史 latest」，
+// 调用方按 factTTL 语义使用）。
+func TestD108_LatestFactsByKindSince(t *testing.T) {
+	s := sharedTestStore(t)
+	prepareTestSchema(t, s)
+	ctx := context.Background()
+	if _, err := s.pool.Exec(ctx, `TRUNCATE facts`); err != nil {
+		t.Fatal(err)
+	}
+	h := time.Hour
+	d108Seed(t, s, "funding", "binance", "XAUUSDT", 1*h, 11) // 界内
+	d108Seed(t, s, "funding", "binance", "XAUUSDT", 3*h, 99) // 同组界外老行
+	d108Seed(t, s, "funding", "okx", "XAUUSDT", 3*h, 7)      // 整组界外（无界内行）
+
+	got, err := s.LatestFactsByKindSince(ctx, "funding", time.Now().Add(-2*h))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Value != 11 {
+		t.Fatalf("界内应仅 binance/XAUUSDT 最新行 value=11, got %+v", got)
+	}
+	// 零值=无界回退：同原 LatestFactsByKind（okx 组界外终值照回）。
+	all, err := s.LatestFactsByKindSince(ctx, "funding", time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("无界应回 2 组终值, got %d", len(all))
+	}
+}
