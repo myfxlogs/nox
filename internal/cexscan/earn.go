@@ -49,7 +49,7 @@ func NewEarnCollector(cfg *config.Config, exchs []pgstore.ExchangeConfig) *EarnC
 			if e.VenueType == "spot" { // Binance 只需一组凭据，取 spot 行
 				ec.bnKey = e.APIKey
 				ec.bnSecret = e.APISecret
-				ec.bnSapiURL = httpx.BinanceSapiBase(e.BaseURL) + "/sapi" // D-106：helper 统一（原生域/api 域名内串 Replace 假域修复）
+				ec.bnSapiURL = httpx.BinanceApiSegBase(e.BaseURL, "sapi") // D-106：helper 统一（原生域/api 域名内串 Replace 假域修复）
 			}
 		}
 	}

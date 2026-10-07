@@ -182,3 +182,18 @@ func BinanceSapiBase(baseURL string) string {
 	}
 	return strings.TrimSuffix(strings.TrimSuffix(baseURL, "/api"), "/fapi")
 }
+
+// BinanceApiSegBase D-106：base_url → <seg> 段基址（返回含 /<seg> 后缀——earn 拼 /v1/...、
+// capital_gaps 拼 /v1/... 同形）。原生域恒归 <scheme>://<segHost>.binance.com/<seg>
+// （sapi→api 域、dapi→dapi 域、eapi→eapi 域——官方文档三 host 分立）；代理域=裸
+// host+/seg（代理按前缀路由）。
+func BinanceApiSegBase(baseURL, seg string) string {
+	if u, err := url.Parse(baseURL); err == nil && strings.HasSuffix(u.Host, "binance.com") {
+		host := seg
+		if seg == "sapi" {
+			host = "api"
+		}
+		return u.Scheme + "://" + host + ".binance.com/" + seg
+	}
+	return strings.TrimSuffix(strings.TrimSuffix(baseURL, "/api"), "/fapi") + "/" + seg
+}
