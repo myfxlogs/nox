@@ -31,6 +31,7 @@ const (
 	KindCMCPrice          = "cmc_price"           // CMC 实时报价（UnitPrice，D-205）
 	KindCMCAccount        = "cmc_account"         // CMC 账户摘要（UnitUSD，D-205）
 	KindCMCHistory        = "cmc_history"         // CMC 历史记录/swap（UnitUSD，D-205）
+	KindEgressCanary      = "egress_canary"       // D-104 本机出口 canary（UnitCount，值=三锚通过数 0..3）
 )
 
 // Unit 常量表（§1.2）。
@@ -48,6 +49,7 @@ const (
 	UnitUSD           = "usd"            // USD 金额（D-205 CMC 账户/历史）
 	UnitUnixSec       = "unix_sec"       // unix 秒时间戳（D-466 结算时刻）
 	UnitSeconds       = "seconds"        // 秒数时长（D-466 结算周期）
+	UnitCount         = "count"          // 计数（D-104 egress_canary 锚通过数）
 )
 
 // D-591 S6：!ticker@arr 24hrTicker 落库 kind（quote volume，radar 全量宇宙资格判定源）。
@@ -104,6 +106,7 @@ var validKinds = map[string]bool{
 	"spot_depth_spread_bps": true,
 	"spot_depth_bid_usd":    true,
 	"spot_depth_ask_usd":    true,
+	KindEgressCanary:        true, // D-104 本机出口 canary
 }
 
 // ValidKind 报告 k 是否为已知 Kind。
