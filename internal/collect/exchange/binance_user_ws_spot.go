@@ -7,9 +7,10 @@
 //   - 事件仍推 stream.binance.com/ws/<key>（既有 /spotws 代理路由），形制=经典
 //     spot 用户流（executionReport/outboundAccountPosition/balanceUpdate）
 //
-// 拓扑：ws-api 控制连接（/wsapi → ws-api.binance.com/ws-api/v3）管生命周期，
-// 流连接（/spotws/ws/<key>）收事件；60min 不用 ping 续租则 listenKey 失效——
+// 拓扑：ws-api 控制连接管生命周期，流连接收事件；60min 不用 ping 续租则 listenKey 失效——
 // 续租失败/读断 → 关流重连重取 key（同 perp listenKey 语义，无 session 层）。
+// D-106：端点双分支——base 指币安原生域走官方端点（ws-api.binance.com/ws-api/v3 +
+// stream.binance.com:9443/ws/<key>）；否则 cex-proxy 路由形制（/wsapi、/spotws 前缀）。
 package exchange
 
 import (
@@ -26,7 +27,8 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// wsapiURL ws-api 控制端点（经代理 /wsapi 前缀 strip → ws-api.binance.com/ws-api/v3）。
+// wsapiURL ws-api 控制端点。D-106 双分支：base 指币安原生域 → 官方端点
+// ws-api.binance.com/ws-api/v3；否则 cex-proxy 路由形制（/wsapi 前缀 strip → 同官方路径）。
 func (b *BinanceUserWS) wsapiURL() (string, error) {
 	u, err := url.Parse(b.baseURL)
 	if err != nil {
@@ -35,6 +37,9 @@ func (b *BinanceUserWS) wsapiURL() (string, error) {
 	scheme := "wss"
 	if u.Scheme == "http" {
 		scheme = "ws"
+	}
+	if isNativeBinance(u.Host) {
+		return fmt.Sprintf("%s://ws-api.binance.com/ws-api/v3", scheme), nil
 	}
 	return fmt.Sprintf("%s://%s/wsapi/ws-api/v3", scheme, u.Host), nil
 }

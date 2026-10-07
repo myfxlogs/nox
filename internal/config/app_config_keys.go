@@ -189,6 +189,9 @@ var appConfigKeys = map[string]AppCfgMeta{
 // appConfigEnvKeys 无 Config 字段的标量键（wire/httpx 等直读 os.Getenv）——
 // app_config 行 → os.Setenv 注入（须在 Load/消费点前调用）。值非密可进审计行。
 var appConfigEnvKeys = []string{
+	// D-106：binance WS 原生端点三键（D-551 引入 env 覆盖，collect/exchange 直读
+	// os.Getenv——收口 PG 唯一源=业主令 10-07 禁 .env，值经 ApplyAppConfigEnvOverlay 注入）。
+	"ARB_BINANCE_PERP_MARKET_WS_URL", "ARB_BINANCE_PERP_PUBLIC_WS_URL", "ARB_BINANCE_SPOT_WS_URL",
 	"ARB_CEX_SCAN_EARN_APR_MIN", "ARB_CEX_SCAN_FUNDING_APR_MIN", "ARB_CEX_SCAN_SPREAD_BPS",
 	"ARB_CEX_SYMBOLS", "ARB_CEX_WS_BASE", "ARB_CEX_WS_BASE_BACKUP",
 	"ARB_INTRA_BUDGET_USD", "ARB_INTRA_CONCURRENCY", "ARB_INTRA_DAILY_LOSS_PCT",

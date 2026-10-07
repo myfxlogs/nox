@@ -16,6 +16,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"arb/internal/bus"
@@ -27,6 +28,21 @@ import (
 )
 
 const binanceUserReadIdle = 60 * time.Second
+
+// isNativeBinance D-106：host 指币安原生域（*.binance.com）→ WS/REST 端点走原生形制；
+// 否则=cex-proxy 路由形制（/private /spotws /wsapi 前缀+X-Proxy-Token 握口头）。
+func isNativeBinance(host string) bool {
+	return strings.HasSuffix(host, "binance.com")
+}
+
+// binanceWSDialHeader D-551 token 收敛（D-106 复用）：X-Proxy-Token 仅 cex-proxy host
+// 发出——binance 原生域空头（token 头漏给第三方=凭据面事故）。
+func binanceWSDialHeader(wsURL string, proxyHeader http.Header) http.Header {
+	if u, err := url.Parse(wsURL); err == nil && isNativeBinance(u.Host) {
+		return nil
+	}
+	return proxyHeader
+}
 
 // BinanceUserWS Binance 用户数据流采集器（perp real/demo/spot 三路由穷举写死，不模式匹配猜）。
 type BinanceUserWS struct {
@@ -44,7 +60,8 @@ type BinanceUserWS struct {
 	// balLedger D-542：可用资金活账本（ACCOUNT_UPDATE/outboundAccountPosition 喂入；
 	// 每轮重连标脏，dashboard 弹窗脏/空走 REST 校准）。nil 安全。
 	balLedger  *bus.BalanceLedger
-	rest       *http.Client
+	rest       *http.Client // cex-proxy 域 client（token+自签 CA）
+	restNative *http.Client // D-106：binance 原生域 client（裸——token/代理 CA 勿出域）
 	dial       func(ctx context.Context, wsURL string) (*websocket.Conn, error)
 	renewEvery time.Duration // 续租周期（默认 30min；测试注入缩短）
 	now        func() time.Time
@@ -84,11 +101,13 @@ func NewBinanceUserWS(apiKey, apiSecret, baseURL, venueType, venueKey string, si
 		apiKey: apiKey, baseURL: baseURL, venueType: venueType, venueKey: venueKey,
 		simulated: simulated, sink: sink, events: events, hooks: hooks,
 		orderCache: oc, posCache: pc,
-		rest: httpx.Client(), renewEvery: 30 * time.Minute, now: time.Now,
+		rest: httpx.Client(), restNative: &http.Client{Timeout: 15 * time.Second},
+		renewEvery: 30 * time.Minute, now: time.Now,
 	}
 	dialer, header := httpx.WSDialer()
 	b.dial = func(ctx context.Context, wsURL string) (*websocket.Conn, error) {
-		conn, _, err := dialer.DialContext(ctx, wsURL, header)
+		// D-106：按目标 host 收敛握手头——原生域空头（token 勿出域，D-551 同裁定）。
+		conn, _, err := dialer.DialContext(ctx, wsURL, binanceWSDialHeader(wsURL, header))
 		return conn, err
 	}
 	return b
@@ -100,8 +119,19 @@ func (b *BinanceUserWS) listenKeyEndpoint() string {
 	return b.baseURL + "/v1/listenKey"
 }
 
+// restFor 按目标 host 选 REST client（D-551 token 收敛同裁定：binance 原生域裸客户端
+// ——tokenRT 会把 X-Proxy-Token 注入所有请求，漏给原生域=凭据出域）。
+func (b *BinanceUserWS) restFor(endpoint string) *http.Client {
+	if u, err := url.Parse(endpoint); err == nil && isNativeBinance(u.Host) {
+		return b.restNative
+	}
+	return b.rest
+}
+
 // WSURL listenKey → WS 地址（D-517 S3 fstream 迁移映射：perp→/private/ws、spot→/spotws；
 // baseURL 只取 scheme+host——fapi REST 段不进 WS URL。simulated=t fail-closed，D-516 S2）。
+// D-106：原生分支——base 指币安原生域时走官方端点形制（perp 用户流=fstream /ws/<key>，
+// spot 用户流=stream :9443 /ws/<key>，均非 REST host 域名）；代理分支原样保留。
 func (b *BinanceUserWS) WSURL(listenKey string) (string, error) {
 	if b.simulated {
 		return "", fmt.Errorf("binance user ws: simulated config refused (demo 域已收编 D-516)")
@@ -113,6 +143,16 @@ func (b *BinanceUserWS) WSURL(listenKey string) (string, error) {
 	scheme := "wss"
 	if u.Scheme == "http" {
 		scheme = "ws"
+	}
+	if isNativeBinance(u.Host) {
+		switch b.venueType {
+		case "perp":
+			return fmt.Sprintf("%s://fstream.binance.com/ws/%s", scheme, listenKey), nil
+		case "spot":
+			return fmt.Sprintf("%s://stream.binance.com:9443/ws/%s", scheme, listenKey), nil
+		default:
+			return "", fmt.Errorf("binance user ws: unsupported venueType=%q", b.venueType)
+		}
 	}
 	var path string
 	switch b.venueType {
@@ -222,14 +262,14 @@ func (b *BinanceUserWS) runOnce(ctx context.Context) error {
 	}
 }
 
-// keyReq listenKey REST 调用（X-MBX-APIKEY 头；httpx client 自带代理 token+CA）。
+// keyReq listenKey REST 调用（X-MBX-APIKEY 头；client 按域收敛——D-106 原生域裸客户端）。
 func (b *BinanceUserWS) keyReq(ctx context.Context, method, endpoint string) error {
 	req, err := http.NewRequestWithContext(ctx, method, endpoint, nil)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("X-MBX-APIKEY", b.apiKey)
-	resp, err := b.rest.Do(req)
+	resp, err := b.restFor(endpoint).Do(req)
 	if err != nil {
 		return err
 	}
@@ -248,7 +288,7 @@ func (b *BinanceUserWS) obtainListenKey(ctx context.Context) (string, error) {
 		return "", err
 	}
 	req.Header.Set("X-MBX-APIKEY", b.apiKey)
-	resp, err := b.rest.Do(req)
+	resp, err := b.restFor(ep).Do(req)
 	if err != nil {
 		return "", err
 	}
