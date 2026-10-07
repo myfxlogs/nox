@@ -52,7 +52,7 @@ func (m *PersonalMonitor) Run(ctx context.Context) {
 	if err := m.loadPositions(ctx); err != nil {
 		log.Printf("[personal-monitor] load: %v", err)
 	}
-	safego.Go("personal_monitor:refreshLoop", func() { m.refreshLoop(ctx) })
+	safego.GoLoop("personal_monitor:refreshLoop", func() { m.refreshLoop(ctx) })
 
 	ch, cancel := m.bus.Subscribe("")
 	defer cancel()

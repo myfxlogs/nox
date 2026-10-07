@@ -48,7 +48,7 @@ func (m *Monitor) Run(ctx context.Context) {
 		log.Printf("[position-monitor] load: %v", err)
 	}
 	// 定期刷新持仓列表（新开仓的持仓需要被发现）
-	safego.Go("monitor:refreshLoop", func() { m.refreshLoop(ctx) })
+	safego.GoLoop("monitor:refreshLoop", func() { m.refreshLoop(ctx) })
 
 	ch, cancel := m.bus.Subscribe("")
 	defer cancel()

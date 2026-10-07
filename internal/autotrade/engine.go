@@ -186,23 +186,27 @@ func (e *Engine) Run(ctx context.Context) {
 	log.Printf("[autotrade] enabled: maxNotional=$%.0f maxPos=%d maxDailyLoss=$%.0f minNetBps=%.1f kickCoalesce=%s watchdog=%s",
 		e.cfg.MaxNotional, e.cfg.MaxPositions, e.cfg.MaxDailyLoss, e.cfg.MinNetBps, kickCoalesce, e.fallbackInterval())
 
+	// D-115：五循环各自独立 GoLoop 失败域（panic→告警+退避重启）——positionLoop
+	// 原为 Run 同步尾调用，panic 曾拖死整个 eng.Run 协程致退出评估全瘫 37min。
 	// 1. 机会订阅循环（detector 产生的 CROSS_VENUE 机会）
-	safego.Go("engine:oppLoop", func() { e.oppLoop(ctx) })
+	safego.GoLoop("engine:oppLoop", func() { e.oppLoop(ctx) })
 
 	// 2. 均值回归扫描循环（D-070：绕过 detector，直接监控价差）
-	safego.Go("engine:meanRevertLoop", func() { e.meanRevertLoop(ctx) })
+	safego.GoLoop("engine:meanRevertLoop", func() { e.meanRevertLoop(ctx) })
 
 	// 3. swap 套利循环（D-070：持有赚 swap）
-	safego.Go("engine:swapArbLoop", func() { e.swapArbLoop(ctx) })
+	safego.GoLoop("engine:swapArbLoop", func() { e.swapArbLoop(ctx) })
 
 	// D-469c S1/S2：quote 事件分发——单订阅扇出两 kick chan（非阻塞 send 防洪峰；
 	// mr 过滤=MeanRevertThresh canonical 集，position 侧全订走 quoteCh 快路）。
 	if e.quotes != nil {
-		safego.Go("engine:quoteKickDispatch", func() { e.quoteKickDispatch(ctx) })
+		safego.GoLoop("engine:quoteKickDispatch", func() { e.quoteKickDispatch(ctx) })
 	}
 
 	// 4. 持仓扫描循环（自动平仓 + 状态机 tick）
-	e.positionLoop(ctx)
+	safego.GoLoop("engine:positionLoop", func() { e.positionLoop(ctx) })
+
+	<-ctx.Done()
 }
 
 // maxPositionsReached H4.1 满仓短路：CountOpenPositions >= MaxPositions → true（整轮跳过扫描）。
