@@ -171,3 +171,14 @@ func (f failoverRT) RoundTrip(r *http.Request) (*http.Response, error) {
 	r2.Host = ""
 	return f.base.RoundTrip(r2)
 }
+
+// BinanceSapiBase D-106：base_url → sapi 裸 host 基址（调用方自拼 /sapi/... 段）。
+// 原生币安域（*.binance.com）恒归 <scheme>://api.binance.com——sapi 只驻该 host，
+// fapi 域无 /sapi（404）；且 strings.Replace("/api"→"/sapi") 会命中域名内 "/api"
+// 产 sapi.binance.com 假域（SG 实拍 404 HTML）。代理域保留旧派生：裸 host。
+func BinanceSapiBase(baseURL string) string {
+	if u, err := url.Parse(baseURL); err == nil && strings.HasSuffix(u.Host, "binance.com") {
+		return u.Scheme + "://api.binance.com"
+	}
+	return strings.TrimSuffix(strings.TrimSuffix(baseURL, "/api"), "/fapi")
+}

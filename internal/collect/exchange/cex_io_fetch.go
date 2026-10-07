@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
 	"arb/internal/httpx"
@@ -37,7 +36,7 @@ func (c *CexIOCollector) fetchDirection(ctx context.Context, acc CexIOAccount, d
 
 // fetchBinance binance 两向（GET 签名；startTime 水位）。
 func (c *CexIOCollector) fetchBinance(ctx context.Context, acc CexIOAccount, direction string, startMS int64) ([]pgstore.VenueIO, error) {
-	sapiBase := strings.TrimSuffix(acc.BaseURL, "/api") // 核证点④：/api 前缀 404，sapi 走代理根路径（path 自带 /sapi 段）
+	sapiBase := httpx.BinanceSapiBase(acc.BaseURL) // 核证点④：/api 前缀 404，sapi 走代理根路径（path 自带 /sapi 段）
 	extra := url.Values{}
 	extra.Set("limit", "100")
 	extra.Set("startTime", strconv.FormatInt(startMS, 10))

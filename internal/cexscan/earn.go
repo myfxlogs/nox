@@ -10,7 +10,6 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"arb/internal/config"
@@ -50,8 +49,7 @@ func NewEarnCollector(cfg *config.Config, exchs []pgstore.ExchangeConfig) *EarnC
 			if e.VenueType == "spot" { // Binance 只需一组凭据，取 spot 行
 				ec.bnKey = e.APIKey
 				ec.bnSecret = e.APISecret
-				ec.bnSapiURL = strings.Replace(e.BaseURL, "/api", "/sapi", 1)
-				ec.bnSapiURL = strings.Replace(ec.bnSapiURL, "/fapi", "/sapi", 1)
+				ec.bnSapiURL = httpx.BinanceSapiBase(e.BaseURL) + "/sapi" // D-106：helper 统一（原生域/api 域名内串 Replace 假域修复）
 			}
 		}
 	}
