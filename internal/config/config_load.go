@@ -64,18 +64,20 @@ func Load() *Config {
 			SwapArbEquityUseRatio:      envFloat("ARB_SWAPARB_EQUITY_USE_RATIO", 0.5),
 			SwapArbBareCap:             envFloat("ARB_SWAPARB_BARE_CAP", 1.0),
 			SwapArbReentryCooldownDays: envInt("ARB_SWAPARB_REENTRY_COOLDOWN_DAYS", 7),
-			StopReentryMinutes:         envInt("ARB_STOP_REENTRY_MINUTES", 60),            // D-372 gate 止损重进冷却
-			RotateMaxPerDay:            envInt("ARB_ROTATE_MAX_PER_DAY", 1),               // D-406 轮转日限
-			XAssetExecDriftBps:         envFloat("ARB_XASSET_EXEC_DRIFT_BPS", 8.0),        // D-378a S2 执行质量闸
-			PositionEvalSec:            envInt("ARB_POSITION_EVAL_SEC", 60),               // D-378a S3 评估节拍
-			ComboLossLimit:             envInt("ARB_COMBO_LOSS_LIMIT", 3),                 // D-378a S4 组合保险丝
-			ComboLossWindowH:           envInt("ARB_COMBO_LOSS_WINDOW_H", 24),             // D-378a S4 保险丝窗口
-			XAssetDisasterBps:          envFloat("ARB_XASSET_DISASTER_BPS", 40.0),         // D-378b 灾难带绝对下限
-			XAssetDisasterNoiseMult:    envFloat("ARB_XASSET_DISASTER_NOISE_MULT", 4.0),   // D-378b 灾难带 noise 倍数
-			XAssetDisasterDebounce:     envInt("ARB_XASSET_DISASTER_DEBOUNCE", 2),         // D-378b 灾难带去抖
-			XAssetQuoteMaxAge:          envDur("ARB_XASSET_QUOTE_MAX_AGE", 5*time.Minute), // D-378b 报价新鲜度
-			SwapArbVenueExposureCap:    envFloat("ARB_SWAPARB_VENUE_EXPOSURE_CAP", 2.0),   // D-132 T1 venue 级敞口门
-			SwapArbMarginBudgetPct:     envFloat("ARB_SWAPARB_MARGIN_BUDGET_PCT", 0.8),    // D-142 ④ 观察版告警
+			StopReentryMinutes:         envInt("ARB_STOP_REENTRY_MINUTES", 60),               // D-372 gate 止损重进冷却
+			RotateMaxPerDay:            envInt("ARB_ROTATE_MAX_PER_DAY", 1),                  // D-406 轮转日限
+			XAssetExecDriftBps:         envFloat("ARB_XASSET_EXEC_DRIFT_BPS", 8.0),           // D-378a S2 执行质量闸
+			PositionEvalSec:            envInt("ARB_POSITION_EVAL_SEC", 60),                  // D-378a S3 评估节拍
+			ComboLossLimit:             envInt("ARB_COMBO_LOSS_LIMIT", 3),                    // D-378a S4 组合保险丝
+			ComboLossWindowH:           envInt("ARB_COMBO_LOSS_WINDOW_H", 24),                // D-378a S4 保险丝窗口
+			XAssetDisasterBps:          envFloat("ARB_XASSET_DISASTER_BPS", 40.0),            // D-378b 灾难带绝对下限
+			XAssetDisasterNoiseMult:    envFloat("ARB_XASSET_DISASTER_NOISE_MULT", 4.0),      // D-378b 灾难带 noise 倍数
+			XAssetDisasterDebounce:     envInt("ARB_XASSET_DISASTER_DEBOUNCE", 2),            // D-378b 灾难带去抖
+			XAssetQuoteMaxAge:          envDur("ARB_XASSET_QUOTE_MAX_AGE", 5*time.Minute),    // D-378b 报价新鲜度
+			XAssetFastMoveBps:          envFloat("ARB_XASSET_FASTMOVE_BPS", 25.0),            // D-111 快行情位移阈
+			XAssetFastMoveWindow:       envDur("ARB_XASSET_FASTMOVE_WINDOW", 90*time.Second), // D-111 位移窗
+			SwapArbVenueExposureCap:    envFloat("ARB_SWAPARB_VENUE_EXPOSURE_CAP", 2.0),      // D-132 T1 venue 级敞口门
+			SwapArbMarginBudgetPct:     envFloat("ARB_SWAPARB_MARGIN_BUDGET_PCT", 0.8),       // D-142 ④ 观察版告警
 		},
 		ProbeEnabled:               envBool("ARB_PROBE_ENABLED", false),                // D-181 S2 probe 探测仓总开关
 		ProbeEvalDays:              envInt("ARB_PROBE_EVAL_DAYS", 3),                   // D-181 S2 probe 评估等待天数

@@ -179,6 +179,8 @@ var appConfigKeys = map[string]AppCfgMeta{
 	"ARB_XASSET_DISASTER_DEBOUNCE":       intv(func(c *Config) *int { return &c.XAssetDisasterDebounce }),
 	"ARB_XASSET_DISASTER_NOISE_MULT":     f64(func(c *Config) *float64 { return &c.XAssetDisasterNoiseMult }),
 	"ARB_XASSET_ENTRY_MIN_BPS":           f64(func(c *Config) *float64 { return &c.XassetEntryMinBps }),
+	"ARB_XASSET_FASTMOVE_BPS":            f64(func(c *Config) *float64 { return &c.XAssetFastMoveBps }),
+	"ARB_XASSET_FASTMOVE_WINDOW":         durv(func(c *Config) *time.Duration { return &c.XAssetFastMoveWindow }),
 	"ARB_XASSET_EXEC_DRIFT_BPS":          f64(func(c *Config) *float64 { return &c.XAssetExecDriftBps }),
 	"ARB_XASSET_MIN_NET_ANNUAL_PCT":      f64(func(c *Config) *float64 { return &c.XassetMinNetAnnualPct }),
 	"ARB_XASSET_MT_FIRST":                boolv(func(c *Config) *bool { return &c.XAssetMTFirst }), // D-084
