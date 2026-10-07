@@ -13,14 +13,15 @@ import (
 	"time"
 
 	v1 "arb/internal/gen/dashboardv1"
+	"arb/internal/httpx"
 )
 
 // fullInventoryBinanceFunding binance 资金钱包盘点：POST /sapi/v1/asset/get-funding-asset
 // 全量资产（DOGE 52,883 在此——核证点④）+ ticker 逐币计价（LD 剥前缀兜底同链）；
 // USDT 行计 usdt_equity，其余仅进 holdings/inventory。
 func (q *CEXAccountQuerier) fullInventoryBinanceFunding(ctx context.Context) (*FullInventory, error) {
-	sapiBase := strings.TrimSuffix(q.baseURL, "/api") // 核证点④：SAPI 走代理根路径
-	tickerBase := sapiBase + "/api"                   // D-365-R2 S1：ticker 是 spot 域端点，走 /api 前缀（根路径 /v3/ticker 404 实探）
+	sapiBase := httpx.BinanceSapiBase(q.baseURL) // 核证点④：SAPI 走代理根路径
+	tickerBase := sapiBase + "/api"              // D-365-R2 S1：ticker 是 spot 域端点，走 /api 前缀（根路径 /v3/ticker 404 实探）
 	params := url.Values{}
 	params.Set("timestamp", strconv.FormatInt(time.Now().UnixMilli(), 10))
 	params.Set("recvWindow", "5000")

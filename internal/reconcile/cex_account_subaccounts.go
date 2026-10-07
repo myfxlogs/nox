@@ -18,6 +18,7 @@ import (
 	"time"
 
 	v1 "arb/internal/gen/dashboardv1"
+	"arb/internal/httpx"
 )
 
 // post 发起 POST 并读回 body（非 200 → 错误带响应体；binance sapi 类 POST+query 签名端点用）。
@@ -71,7 +72,7 @@ func (q *CEXAccountQuerier) accountSubaccount(ctx context.Context) (*AccountInfo
 // accountBinanceFunding 资金钱包：POST /sapi/v1/asset/get-funding-asset（HMAC 走代理根路径）
 // → 只取 asset=="USDT" 行 free+locked（USDT-only，其余 asset 不读取）。
 func (q *CEXAccountQuerier) accountBinanceFunding(ctx context.Context) (*AccountInfo, error) {
-	sapiBase := strings.TrimSuffix(q.baseURL, "/api") // 核证点④：sapi 走代理根路径
+	sapiBase := httpx.BinanceSapiBase(q.baseURL) // 核证点④：sapi 走代理根路径
 	params := url.Values{}
 	params.Set("timestamp", strconv.FormatInt(time.Now().UnixMilli(), 10))
 	params.Set("recvWindow", "5000")
