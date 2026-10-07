@@ -54,9 +54,9 @@ func (s *Scheduler) Run(ctx context.Context) error {
 	for _, src := range s.Sources {
 		wg.Add(1)
 		src := src
-		safego.Go("sched:runSource", func() {
-			defer wg.Done()
+		safego.GoLoop("sched:runSource", func() {
 			s.runSource(ctx, src)
+			wg.Done() // D-115：尾部非 defer——panic 重启不预支 Done
 		})
 	}
 	<-ctx.Done()

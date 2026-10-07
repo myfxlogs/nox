@@ -64,10 +64,10 @@ func Run(ctx context.Context, d Deps) {
 	}
 	client := &http.Client{Timeout: httpTimeout}
 	rearm := make(chan struct{}, 1) // D-053 ②：calendar upsert 成功 → actualsLoop 重臂信号（仅唤醒不携数据）
-	safego.Go("macro:cot", func() { cotLoop(ctx, d, client) })
-	safego.Go("macro:calendar", func() { calendarLoop(ctx, d, client, rearm) })
-	safego.Go("macro:actuals", func() { runActualsLoop(ctx, d, client, rearm) })
-	safego.Go("macro:fred", func() { fredLoop(ctx, d, client) })
+	safego.GoLoop("macro:cot", func() { cotLoop(ctx, d, client) })
+	safego.GoLoop("macro:calendar", func() { calendarLoop(ctx, d, client, rearm) })
+	safego.GoLoop("macro:actuals", func() { runActualsLoop(ctx, d, client, rearm) })
+	safego.GoLoop("macro:fred", func() { fredLoop(ctx, d, client) })
 	log.Printf("[macro] scheduler started (cot sat 05:00BJ/2h · calendar 07:20BJ+4h · actuals event-driven · fred 08:00BJ)")
 	<-ctx.Done()
 }

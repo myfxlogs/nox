@@ -174,7 +174,7 @@ func (w *WsClient) LatestSnapshot() Snapshot {
 }
 
 func (w *WsClient) Run(ctx context.Context) {
-	safego.Go("cmc-ws:guard", func() { w.startGuard(ctx) })
+	safego.GoLoop("cmc-ws:guard", func() { w.startGuard(ctx) })
 	for attempt := 0; ; attempt++ {
 		if err := w.runOnce(ctx); err != nil {
 			if ctx.Err() != nil {

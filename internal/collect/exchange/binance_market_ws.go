@@ -164,31 +164,31 @@ func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
 	// D-535：perp bookTicker 切 !bookTicker 聚合流——D-531 取证=binance 上游
 	// 对逐符号高突发订阅短窗杀（分片/路径/源IP 全排除），E1 实测聚合流
 	// 单订阅存活 ≥10min 零断；D-529 双拆随聚合流天然单连接退役。
-	safego.Go("binance_market_ws:perp-public", func() {
-		defer wg.Done()
+	safego.GoLoop("binance_market_ws:perp-public", func() {
 		b.runLoop(ctx, b.publicCands, "perp", "bookTicker", publish)
+		wg.Done() // D-115：尾部非 defer——panic 重启不预支 Done（计数器只随逻辑循环终结 -1）
 	})
-	safego.Go("binance_market_ws:perp-market", func() {
-		defer wg.Done()
+	safego.GoLoop("binance_market_ws:perp-market", func() {
 		b.runLoop(ctx, b.marketCands, "perp", "markPrice", publish)
+		wg.Done()
 	})
-	safego.Go("binance_market_ws:spot", func() {
-		defer wg.Done()
+	safego.GoLoop("binance_market_ws:spot", func() {
 		b.ensureSpotInfo(ctx) // D-551 S2：首连前建立现货有效符号缓存
 		b.runLoop(ctx, b.spotCands, "spot", "bookTicker", publish)
+		wg.Done()
 	})
 	// D-591 S6：perp 24hrTicker 全量聚合流——vol24h facts 落库（radar 全量宇宙
 	// 资格判定源；批处理 24hr REST 轮询退役）。
-	safego.Go("binance_market_ws:perp-ticker", func() {
-		defer wg.Done()
+	safego.GoLoop("binance_market_ws:perp-ticker", func() {
 		b.runLoop(ctx, b.marketCands, "perp", "ticker", publish)
+		wg.Done()
 	})
 	// D-109：死流 REST 看门狗兜底——dephealth 判 markPrice/ticker 流红才低频拉
 	// REST 补观测 facts，复绿即停零轮询（D-004 例外留痕 decisions.md D-109）。
 	wg.Add(1)
-	safego.Go("binance_market_ws:rest-fallback", func() {
-		defer wg.Done()
+	safego.GoLoop("binance_market_ws:rest-fallback", func() {
 		b.runRestFallback(ctx)
+		wg.Done()
 	})
 	wg.Wait()
 }
