@@ -36,33 +36,77 @@ func (s *Store) LatestFactsByKind(ctx context.Context, kind string) ([]fact.Fact
 	return out, rows.Err()
 }
 
-// factKindTTLDays D-508 S3 facts TTL 表（kind→保留天数）：accrue_settle 30d 回看+缓冲=35d；
-// trade_mode/mt_symbol_meta=14d；opt_parity_dev 不入表（既有 7d 通道 PurgeOptParityFacts）。
+// factKindTTLDays facts TTL 表（kind→保留天数）。D-508 S3 立档：accrue_settle 30d 回看
+// +缓冲=35d（funding/swap 族历史行承重，勿降）；trade_mode/mt_symbol_meta=14d；
+// opt_parity_dev 不入表（既有 7d 通道 PurgeOptParityFacts）。
+// D-108② 扩档（票内举证=SG 实拍 664.5 万行/2249MB，行龄逐 kind 对齐现窗证明 prune 在跑，
+// 根因=只消费最新值的超高频 kind 挂 30d 缺省窗）：funding_next_settle 130 万行/13 天
+// （消费=倒计时/funding_due，8h 结算网格 2d 足矣）、funding_interval 85 万行/13 天
+// （periods/day，2d）、index_price 21.8 万行/7 天（10min 节流，radar 读窗 15min→2d）、
+// vol24h 7 万行/1 天（15min 节流，radar 小时读→2d）、trade_session 17.5 万行/4 天
+// （消费=当周会话表→7d）。
 var factKindTTLDays = map[string]int{
 	"swap_long": 35, "swap_short": 35, "funding": 35, "funding_history": 35,
 	"init_margin_rate": 35, "trade_mode": 14, "mt_symbol_meta": 14,
+	"funding_next_settle": 2, "funding_interval": 2, "index_price": 2, "vol24h": 2,
+	"trade_session": 7,
 }
 
 // factDefaultTTLDays 未列名 kind 默认保留窗。
 const factDefaultTTLDays = 30
 
+// factPruneBatch D-108②：单条 DELETE 批量上限（十万级批——一次性回填 funding_next_settle
+// ~129 万行时分批落锁，防 4C/7G 共享实例长事务/WAL 尖峰）。
+const factPruneBatch = 100000
+
+// pruneFactsKind 单 kind 分批删：ts 窗外且非该组终值快照（组=kind+venue_type+venue+symbol，
+// D-108② 终值快照永存——EXISTS 更新兄弟行=非组内最新才删；索引 facts_kind_venue_symbol_ts_desc_idx
+// 服 probe）。批量循环至清零。
+func (s *Store) pruneFactsKind(ctx context.Context, kind string, cutoff time.Time) (int64, error) {
+	var total int64
+	for {
+		tag, err := s.pool.Exec(ctx, `
+			DELETE FROM facts WHERE ctid IN (
+				SELECT f.ctid FROM facts f
+				WHERE f.kind = $1 AND f.ts < $2
+				  AND EXISTS (SELECT 1 FROM facts g
+				      WHERE g.kind = f.kind AND g.venue_type = f.venue_type
+				        AND g.venue = f.venue AND g.symbol IS NOT DISTINCT FROM f.symbol
+				        AND g.ts > f.ts)
+				LIMIT $3
+			)`, kind, cutoff, factPruneBatch)
+		if err != nil {
+			return total, err
+		}
+		total += tag.RowsAffected()
+		if tag.RowsAffected() < factPruneBatch {
+			return total, nil
+		}
+	}
+}
+
 // PruneFacts D-508 S3：按 kind 窗删除超期 facts（挂既有 retention janitor 日轮）。
-// 返回删除总行数（首轮行数记 LOG）。opt_parity_dev 不动（PruneOptParityFacts 专属通道）。
+// D-108②：每 (kind,venue_type,venue,symbol) 组终值快照永存（pruneFactsKind EXISTS 卫兵
+// ——停发符号的末读数不随窗消失）+ 分批删除（factPruneBatch）；部署后首个 janitor 轮
+// 自动回填存量超窗行，免人工清库。返回删除总行数。opt_parity_dev 不动（专属 7d 通道）。
 func (s *Store) PruneFacts(ctx context.Context) (int64, error) {
 	var total int64
 	named := make([]string, 0, len(factKindTTLDays))
 	for kind, days := range factKindTTLDays {
 		named = append(named, kind)
-		tag, err := s.pool.Exec(ctx,
-			`DELETE FROM facts WHERE kind = $1 AND ts < $2`,
-			kind, time.Now().Add(-time.Duration(days)*24*time.Hour))
+		n, err := s.pruneFactsKind(ctx, kind, time.Now().Add(-time.Duration(days)*24*time.Hour))
 		if err != nil {
 			return total, fmt.Errorf("prune facts kind=%s: %w", kind, err)
 		}
-		total += tag.RowsAffected()
+		total += n
 	}
+	// 未列名 kind 缺省窗（终值卫兵同规则；低频 kind 行龄长=组终值被卫兵留住）。
 	tag, err := s.pool.Exec(ctx,
-		`DELETE FROM facts WHERE kind <> ALL($1) AND kind <> 'opt_parity_dev' AND ts < $2`,
+		`DELETE FROM facts f WHERE kind <> ALL($1) AND kind <> 'opt_parity_dev' AND ts < $2
+		 AND EXISTS (SELECT 1 FROM facts g
+		     WHERE g.kind = f.kind AND g.venue_type = f.venue_type
+		       AND g.venue = f.venue AND g.symbol IS NOT DISTINCT FROM f.symbol
+		     AND g.ts > f.ts)`,
 		named, time.Now().Add(-factDefaultTTLDays*24*time.Hour))
 	if err != nil {
 		return total, fmt.Errorf("prune facts default window: %w", err)
