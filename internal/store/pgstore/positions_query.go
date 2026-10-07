@@ -111,6 +111,17 @@ func (s *Store) CountOpenPositions(ctx context.Context) (int, error) {
 	return n, err
 }
 
+// CountLiveOpenPositions 返回真金（environment='live'，0148：demo/legacy_demo 不算）
+// 在仓持仓数（OPEN/OPENING/LEGGED/CLOSING——平仓闭合前仍属在仓，D-106 在仓域）。
+// D-102：selfwatch Stage 1 段「已启动」判定用。
+func (s *Store) CountLiveOpenPositions(ctx context.Context) (int, error) {
+	q := `SELECT count(*) FROM positions
+		WHERE environment = 'live' AND status IN ('OPEN','OPENING','LEGGED','CLOSING')`
+	var n int
+	err := s.pool.QueryRow(ctx, q).Scan(&n)
+	return n, err
+}
+
 // HasOpenPositionByOpportunity 返回该机会是否已有未平仓持仓（D-058 幂等防重复执行）。
 // CLOSED/FAILED 不在列 → 已闭合/已失败的机会可重入（再执行是新的执行意图，非重复提交）。
 // D-159 W1a R2：UNKNOWN position（CLOSING+uncertainty_reason）计入防重——人工确认前禁止重入防双开仓；
