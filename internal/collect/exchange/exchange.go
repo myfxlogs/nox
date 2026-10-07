@@ -56,6 +56,12 @@ type Config struct {
 	Client             *http.Client
 	// AlertFn 可选告警通道（D-507 重连风暴 fail-loud）；nil=静默跳过（测试默认）。
 	AlertFn func(level, msg string)
+	// ADLPositionHit D-101：ADL 风险帧持仓关联探针——入参=帧内 venue 原生合约号，
+	// 返回=该 venue 我们的活跃仓（四态）OPEN 腿是否持有该合约（gate
+	// futures.adl_warning 帧用：合约级市场广播→持仓关联过滤）。false 仅在确证
+	// 非持有时返回；探针未接线/帧缺合约=关联不明，处理侧 fail-safe 视同命中
+	// （宁多告不漏告——禁把真风险静默降档）。
+	ADLPositionHit func(venueSymbol string) bool
 }
 
 // DefaultConfig 返回默认配置。

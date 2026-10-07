@@ -137,7 +137,9 @@ func TestD570C_A13_PrivateChannelsAndHooks(t *testing.T) {
 	}
 }
 
-// A14：公共订阅帧含 futures.adl_warning ["!all"]；state=warning→AlertFn critical 截 500。
+// A14：公共订阅帧含 futures.adl_warning ["!all"]；告警行为矩阵 D-101 改造——
+// warning 属预告非事实恒 info（探针未接线 fail-safe 视同命中也不升 critical），
+// payload 截 500，normal 恢复帧不告（行为锚详 d101_gate_adl_test.go）。
 func TestD570C_A14_ADLWarning(t *testing.T) {
 	found := false
 	for _, f := range gateFuturesExtraSubs() {
@@ -158,10 +160,10 @@ func TestD570C_A14_ADLWarning(t *testing.T) {
 	big := strings.Repeat("x", 600)
 	g.handleFuturesDispatch(context.Background(), []byte(
 		`{"channel":"futures.adl_warning","event":"update","result":{"contract":"BTC_USDT","state":"warning","pad":"`+big+`"}}`), func(bus.Quote) {})
-	if level != "critical" || !strings.Contains(msg, "gate ADL 风险提示") {
-		t.Fatalf("warning 帧应 critical: level=%q msg=%q", level, msg)
+	if level != "info" || !strings.Contains(msg, "gate ADL 风险提示") {
+		t.Fatalf("warning 帧应 info（预告非事实）: level=%q msg=%q", level, msg)
 	}
-	if len(msg) > len("gate ADL 风险提示\n原始明细：")+500 {
+	if len(msg) > len("gate ADL 风险提示（state=warning·持仓关联=是）\n原始明细：")+500 {
 		t.Fatalf("payload 应截 500: len=%d", len(msg))
 	}
 	// state=normal 不告。

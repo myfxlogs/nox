@@ -116,8 +116,12 @@ func (g *GateWebSocket) onContractInfoFrame(data []byte) {
 	}
 }
 
-// onADLWarning D-570 包C S7：futures.adl_warning 帧——state=warning → critical 告警
-// （payload=result 原文截 500 防巨帧；state=normal 恢复帧不告）。
+// onADLWarning D-570 包C S7 / D-101：futures.adl_warning 帧（合约级市场广播）持仓
+// 关联过滤——state=queued/deleveraged（事实态）且命中本 venue 活跃仓 OPEN 腿才
+// critical；state=warning 属预告非事实、非持仓合约的广播一律降 info 记档（告警
+// 面板可查）；state=normal 恢复帧不告（原样）。payload=result 原文截 500 防巨帧。
+// 探针未接线/帧缺合约=关联不明 fail-safe 视同命中（宁多告不漏告——禁把真风险
+// 静默降档；此时 warning 仍 info：预告非事实与关联无关）。
 func (g *GateWebSocket) onADLWarning(data []byte) {
 	var msg struct {
 		Result json.RawMessage `json:"result"`
@@ -125,20 +129,33 @@ func (g *GateWebSocket) onADLWarning(data []byte) {
 	if err := json.Unmarshal(data, &msg); err != nil || len(msg.Result) == 0 {
 		return
 	}
-	var st struct {
-		State string `json:"state"`
+	var fr struct {
+		Contract string `json:"contract"`
+		State    string `json:"state"`
 	}
-	if err := json.Unmarshal(msg.Result, &st); err != nil || st.State != "warning" {
+	if err := json.Unmarshal(msg.Result, &fr); err != nil || fr.State == "" || fr.State == "normal" {
 		return
 	}
 	if g.cfg.AlertFn == nil {
 		return
 	}
+	associated := true
+	if g.cfg.ADLPositionHit != nil && fr.Contract != "" {
+		associated = g.cfg.ADLPositionHit(fr.Contract)
+	}
+	level := "info"
+	if associated && (fr.State == "queued" || fr.State == "deleveraged") {
+		level = "critical"
+	}
 	payload := string(msg.Result)
 	if len(payload) > 500 {
 		payload = payload[:500]
 	}
-	g.cfg.AlertFn("critical", "gate ADL 风险提示\n原始明细："+payload)
+	rel := "否"
+	if associated {
+		rel = "是"
+	}
+	g.cfg.AlertFn(level, fmt.Sprintf("gate ADL 风险提示（state=%s·持仓关联=%s）\n原始明细：%s", fr.State, rel, payload))
 }
 
 // gateFuturesUpdate futures.tickers 推送：result 为数组，无 bid/ask，用 mark_price 近似。
