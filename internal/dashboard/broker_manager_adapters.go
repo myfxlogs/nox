@@ -166,7 +166,7 @@ func (m *BrokerManager) startMT5(ctx context.Context, a *pgstore.BrokerAccount) 
 	}
 
 	ch, cancel := ad.Subscribe(symbols)
-	safego.Go("broker_manager_adapters:mt5-quote-pump", func() {
+	safego.GoLoop("broker_manager_adapters:mt5-quote-pump", func() {
 		for q := range ch {
 			m.qbus.Publish(q)
 		}

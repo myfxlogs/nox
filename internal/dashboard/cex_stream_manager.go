@@ -172,12 +172,12 @@ func (m *CexStreamManager) sync(ctx context.Context) {
 			ws.SetOnReconnect(m.ReconKick) // D-004 P1#6：重连就绪→对账 kick
 			ws.SetGateHooks(m.GateHooks)   // D-570 包C S7：风险频道族整帧转发钩
 			m.gateWS.Store(ws)             // D-570 包C S6③：contract_info 失效回调寻址
-			safego.Go("cex-stream:gate", func() { ws.Run(sctx) })
+			safego.GoLoop("cex-stream:gate", func() { ws.Run(sctx) })
 		case "binance":
 			ws := exchange.NewBinanceUserWS(c.APIKey, c.APISecret, c.BaseURL, c.VenueType, vk, c.Simulated, snapSink, m.sinks, m.orderCache, m.posCache, m.BinanceHooks)
 			ws.SetBalanceLedger(m.BalLedger)
 			ws.SetOnReconnect(m.ReconKick) // D-004 P1#6：重连就绪→对账 kick
-			safego.Go("cex-stream:binance", func() { ws.Run(sctx) })
+			safego.GoLoop("cex-stream:binance", func() { ws.Run(sctx) })
 		case "okx":
 			// D-469b S1：OKX 私有流纳入 manager 生命周期（boot 一次性装配已移除）。
 			ws := exchange.NewOKXPrivateWS(c.APIKey, c.APISecret, c.Passphrase, c.Simulated, snapSink, vk, m.sinks, m.orderCache, m.posCache, m.OKXHooks)
@@ -190,7 +190,7 @@ func (m *CexStreamManager) sync(ctx context.Context) {
 			})
 			ws.SetBalanceLedger(m.BalLedger)
 			ws.SetOnReconnect(m.ReconKick) // D-004 P1#6：重连就绪→对账 kick
-			safego.Go("cex-stream:okx", func() { ws.Run(sctx) })
+			safego.GoLoop("cex-stream:okx", func() { ws.Run(sctx) })
 		}
 		m.streams[id] = cancel
 		log.Printf("[cex-stream] start cfg#%d %s:%s vk=%s simulated=%v", id, c.Venue, c.VenueType, vk, c.Simulated)

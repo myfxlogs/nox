@@ -95,7 +95,7 @@ func (s *Service) maybePurgeAckedAlerts(ctx context.Context) {
 		return
 	}
 	s.lastAlertPurge = time.Now()
-	safego.Go("service_snapshots:purge-acked", func() {
+	safego.GoLoop("service_snapshots:purge-acked", func() {
 		n, err := s.store.PurgeAckedAlerts(context.Background(), 7*24*time.Hour)
 		if err != nil {
 			log.Printf("[alerts] purge acked failed: %v", err)
