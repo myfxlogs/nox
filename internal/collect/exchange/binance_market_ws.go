@@ -78,20 +78,31 @@ func NewBinanceMarketWS(cfg Config) *BinanceMarketWS {
 		scheme = "ws"
 	}
 	d, h := httpx.WSDialer()
-	publicURLs := []string{scheme + "://" + u.Host + "/public/ws"}
-	marketURLs := []string{scheme + "://" + u.Host + "/market/ws"}
-	spotURLs := []string{scheme + "://" + u.Host + "/spotws/ws"}
-	// cex-proxy 双端点 failover：BINANCE_PROXY_URL_BACKUP 置位→备用基址追加为第二候选
-	//（同路径后缀映射；主端恢复后每连接尝试自主端起=自动回主）。
-	// D-519 D6：备端 scheme 与 normWSBase 同语义归一（https→wss/http→ws/ws·wss 原样——
-	// 内网明文备端 ws:// 不得被升 wss）。
-	proxyHosts := map[string]bool{u.Host: true}
-	if b := normWSBase(os.Getenv("BINANCE_PROXY_URL_BACKUP")); b != "" {
-		publicURLs = append(publicURLs, b+"/public/ws")
-		marketURLs = append(marketURLs, b+"/market/ws")
-		spotURLs = append(spotURLs, b+"/spotws/ws")
-		if bu, err := url.Parse(b); err == nil {
-			proxyHosts[bu.Host] = true
+	var publicURLs, marketURLs, spotURLs []string
+	proxyHosts := map[string]bool{}
+	if isNativeBinance(u.Host) {
+		// D-106 修补：原生域派生 live-subscribe 端点（SUBSCRIBE 方言）——/public|market|spotws
+		// 是 cex-proxy 路由形制，币安原生域不存在该路径（拨号 bad handshake 风暴源）；
+		// 且 proxyHosts 不得含原生 host（否则 X-Proxy-Token 随握手漏给币安）。
+		publicURLs = []string{"wss://fstream.binance.com/ws"}
+		marketURLs = []string{"wss://fstream.binance.com/ws"}
+		spotURLs = []string{"wss://stream.binance.com:9443/ws"}
+	} else {
+		publicURLs = []string{scheme + "://" + u.Host + "/public/ws"}
+		marketURLs = []string{scheme + "://" + u.Host + "/market/ws"}
+		spotURLs = []string{scheme + "://" + u.Host + "/spotws/ws"}
+		// cex-proxy 双端点 failover：BINANCE_PROXY_URL_BACKUP 置位→备用基址追加为第二候选
+		//（同路径后缀映射；主端恢复后每连接尝试自主端起=自动回主）。
+		// D-519 D6：备端 scheme 与 normWSBase 同语义归一（https→wss/http→ws/ws·wss 原样——
+		// 内网明文备端 ws:// 不得被升 wss）。
+		proxyHosts[u.Host] = true
+		if b := normWSBase(os.Getenv("BINANCE_PROXY_URL_BACKUP")); b != "" {
+			publicURLs = append(publicURLs, b+"/public/ws")
+			marketURLs = append(marketURLs, b+"/market/ws")
+			spotURLs = append(spotURLs, b+"/spotws/ws")
+			if bu, err := url.Parse(b); err == nil {
+				proxyHosts[bu.Host] = true
+			}
 		}
 	}
 	// D-551 S1 逐流 env 覆盖：置位=env URL 前插首选候选，派生代理降候选#2；
