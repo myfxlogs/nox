@@ -412,6 +412,9 @@ func (s *nonSettleStubStore) InsertCashflowFull(_ context.Context, c *pgstore.Ca
 func (s *nonSettleStubStore) LatestFactsByKind(ctx context.Context, kind string) ([]fact.Fact, error) {
 	return s.LatestFacts(ctx, kind, "", "")
 }
+func (s *nonSettleStubStore) LatestFactsByKindSince(ctx context.Context, kind string, since time.Time) ([]fact.Fact, error) {
+	return s.LatestFacts(ctx, kind, "", "")
+}
 
 func (s *nonSettleStubStore) LatestFacts(_ context.Context, _, _, _ string) ([]fact.Fact, error) {
 	return nil, nil
