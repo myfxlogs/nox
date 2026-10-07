@@ -70,7 +70,7 @@ func fetchDepth(ctx context.Context, cfg Config, venue, base string) (DepthQuote
 			Bids [][]string `json:"bids"`
 			Asks [][]string `json:"asks"`
 		}
-		if err := getJSONInto(ctx, cfg.Client, cfg.GateBaseURL+"/futures/usdt/order_book?contract="+sym+"&limit=5", &body); err != nil {
+		if err := getJSONInto(ctx, cfg.Client, cfg.GateBaseURL+"/api/v4/futures/usdt/order_book?contract="+sym+"&limit=5", &body); err != nil {
 			return DepthQuote{}, err
 		}
 		return depthRow(VenueGate, sym, body.Bids, body.Asks)
