@@ -96,7 +96,7 @@ func (h *FeishuQueryHandler) HandleReply(ctx context.Context, ev ReplyEvent) (st
 		return "已达每小时查询上限，请稍后重试", nil
 	}
 	chatID := ev.ChatID
-	safego.Go("feishu_query:handle", func() {
+	safego.GoLoop("feishu_query:handle", func() {
 		queryCtx, cancel := context.WithTimeout(context.Background(), h.queryTimeout)
 		defer cancel()
 		client, err := h.resolveClient(queryCtx)
