@@ -131,6 +131,29 @@ func TestD515Overlay_EnvPassthrough(t *testing.T) {
 	}
 }
 
+// TestD106Overlay_BinanceWSKeys D-106①：binance WS 原生端点三键入 env-passthrough
+// 白名单——app_config 行经 ApplyAppConfigEnvOverlay 注入 env（collect 侧 os.Getenv
+// 消费点不变，值权威=PG 唯一源，.env 退役）。
+func TestD106Overlay_BinanceWSKeys(t *testing.T) {
+	t.Setenv("ARB_BINANCE_PERP_PUBLIC_WS_URL", "")
+	t.Setenv("ARB_BINANCE_PERP_MARKET_WS_URL", "")
+	t.Setenv("ARB_BINANCE_SPOT_WS_URL", "")
+	ApplyAppConfigEnvOverlay(map[string]string{
+		"ARB_BINANCE_PERP_PUBLIC_WS_URL": "wss://fstream.binance.com/ws",
+		"ARB_BINANCE_PERP_MARKET_WS_URL": "wss://fstream.binance.com/ws",
+		"ARB_BINANCE_SPOT_WS_URL":        "wss://stream.binance.com:9443/ws",
+	})
+	for k, want := range map[string]string{
+		"ARB_BINANCE_PERP_PUBLIC_WS_URL": "wss://fstream.binance.com/ws",
+		"ARB_BINANCE_PERP_MARKET_WS_URL": "wss://fstream.binance.com/ws",
+		"ARB_BINANCE_SPOT_WS_URL":        "wss://stream.binance.com:9443/ws",
+	} {
+		if os.Getenv(k) != want {
+			t.Fatalf("%s overlay inject failed: %q", k, os.Getenv(k))
+		}
+	}
+}
+
 // env-passthrough 键走 ApplyAppConfigEnvOverlay，ApplyAppConfigOverlay 不应误报 not-whitelisted。
 // （回归：9-27 生产日志实证 ARB_CEX_SYMBOLS 等 passthrough 键每 boot 打 warn 噪音）。
 func TestOverlay_EnvKeyNoFalseWarn(t *testing.T) {
