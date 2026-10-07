@@ -25,12 +25,16 @@ type Client struct {
 }
 
 // NewClient 创建客户端。baseURL 不含尾 /；model 如 "glm-4.6"。
+// D-098 S1：Timeout=600s 运输层上限（流式调用的整流硬顶不该卡在交互默认值——
+// explorer 日报大 prompt+思考开销冲破 120s → "sse scan: context deadline exceeded"
+// round 0 死亡实拍 10-06）。真正的时长控制=调用点 ctx 预算（120s 会话 / 300s 探索，
+// explorer deps 缺省 Runner 包 WithTimeout；ctx 到点自然截止，非轮询定时器）。
 func NewClient(baseURL, apiKey, model string) *Client {
 	return &Client{
 		BaseURL: strings.TrimRight(baseURL, "/"),
 		APIKey:  apiKey,
 		Model:   model,
-		HTTP:    &http.Client{Timeout: 120 * time.Second},
+		HTTP:    &http.Client{Timeout: 600 * time.Second},
 	}
 }
 
@@ -42,6 +46,10 @@ type MessageRequest struct {
 	Messages  []Message  `json:"messages"`
 	Stream    bool       `json:"stream"`
 	Tools     []ToolSpec `json:"tools,omitempty"`
+	// D-098 S2：anthropic thinking 控制——{"type":"disabled"} 关思考（explorer 结构化
+	// JSON 输出面思考纯耗时限；探针实证 512 预算全耗隐形推理 chars=0、4096 38s 出稿）。
+	// analyst 会话不设（保留质量，业主前端实证可用）。omitempty=未设时请求体字节级零变化。
+	Thinking json.RawMessage `json:"thinking,omitempty"`
 }
 
 // Message 对话消息（user/assistant 角色交替）。

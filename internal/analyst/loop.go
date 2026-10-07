@@ -46,6 +46,13 @@ func RunWithSpecs(ctx context.Context, c *Client, tools ToolExecutor, toolSpecs 
 
 // RunWithSpecsMaxTokens 同 RunWithSpecs，maxTokens 显式可调（D-530 symdig 8192 缺省）。
 func RunWithSpecsMaxTokens(ctx context.Context, c *Client, tools ToolExecutor, toolSpecs []ToolSpec, systemPrompt string, msgs []Message, cb LoopCallbacks, maxTokens int) (LoopResult, error) {
+	return RunWithSpecsMaxTokensThinking(ctx, c, tools, toolSpecs, systemPrompt, msgs, cb, maxTokens, nil)
+}
+
+// RunWithSpecsMaxTokensThinking 同 RunWithSpecsMaxTokens，thinking 显式可控（D-098）——
+// thinking 非 nil 原样透传请求体（explorer 三面传 `{"type":"disabled"}`：结构化 JSON 输出
+// 面思考纯耗时限）；nil=不设字段（analyst 会话保留思考，请求体字节级与旧一致）。
+func RunWithSpecsMaxTokensThinking(ctx context.Context, c *Client, tools ToolExecutor, toolSpecs []ToolSpec, systemPrompt string, msgs []Message, cb LoopCallbacks, maxTokens int, thinking json.RawMessage) (LoopResult, error) {
 	grounded := false
 	lastStop := ""
 	for round := 0; round < MaxToolRounds; round++ {
@@ -56,6 +63,7 @@ func RunWithSpecsMaxTokens(ctx context.Context, c *Client, tools ToolExecutor, t
 			Messages:  msgs,
 			Stream:    true,
 			Tools:     toolSpecs,
+			Thinking:  thinking,
 		}
 		var toolCalls []ToolCall
 		var assistantBlocks []ContentBlock
