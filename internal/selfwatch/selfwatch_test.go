@@ -39,6 +39,8 @@ type fakeStore struct {
 	sessionStartMin int                      // D-061 ②：周一开盘分钟注入
 	sessionMissing  bool                     // D-061 ②：会话表缺形态
 	macroEvents     []pgstore.MacroEvent     // D-061 ②：禁区事件注入
+	liveOpen        int                      // D-102：真金在仓数注入
+	liveOpenErr     error                    // D-102：在仓计数读败形态
 	alerts          []string
 	dedupCalls      []string
 	upserts         map[string]string
@@ -124,6 +126,9 @@ func (f *fakeStore) MinWeekdaySessionStartMin(context.Context, string, int) (int
 		return 0, false, nil
 	}
 	return f.sessionStartMin, true, nil
+}
+func (f *fakeStore) CountLiveOpenPositions(context.Context) (int, error) {
+	return f.liveOpen, f.liveOpenErr
 }
 func (f *fakeStore) InsertAlert(_ context.Context, _ *int64, level, msg string) error {
 	f.alerts = append(f.alerts, level+"|"+msg)

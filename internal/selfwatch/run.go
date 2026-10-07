@@ -94,7 +94,7 @@ func anomalyLoop(ctx context.Context, d Deps) {
 		// D-071 C：Stage 1 就绪改小时级评估——条件制判据（D-061）小时级变化，
 		// 日报 08:30 BJ 一天一次会错过整窗。evalStage1 纯读面零副作用（不落档/
 		// 不写 app_config/不发日报），emitStage1Ready 自带 ❌→✅ 单次+7d dedup。
-		if rows, _, _, _, err := evalStage1(ctx, d, d.now()); err != nil {
+		if rows, _, _, _, _, err := evalStage1(ctx, d, d.now()); err != nil {
 			log.Printf("[selfwatch] hourly stage1 eval: %v", err)
 		} else {
 			emitStage1Ready(ctx, d, allOK(rows))
