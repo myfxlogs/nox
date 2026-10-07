@@ -5,8 +5,10 @@ package exchange
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -140,5 +142,98 @@ func TestD109_Ticker24hFacts(t *testing.T) {
 	}
 	if got[0].Src != restFallbackSrcTicker {
 		t.Fatalf("src 应 REST 轨: %+v", got[0])
+	}
+}
+
+// rtFunc 测试用 RoundTripper 适配器。
+type rtFunc func(*http.Request) (*http.Response, error)
+
+func (f rtFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// TestD109_FrameAgeGate R1①：帧年龄闸——dephealth 绿但 markPrice/ticker 末帧超龄
+// → 仍点火（「dial 成功→ack→静默」形态覆盖，dephealth 连败计数打不中此形态）；
+// 帧新到=流活 → 零拉取（复绿即停）。两轨闸独立。
+func TestD109_FrameAgeGate(t *testing.T) {
+	var mktHits, tkrHits atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/fapi/v1/premiumIndex", func(w http.ResponseWriter, _ *http.Request) {
+		mktHits.Add(1)
+		_, _ = w.Write([]byte(`[]`))
+	})
+	mux.HandleFunc("/fapi/v1/ticker/24hr", func(w http.ResponseWriter, _ *http.Request) {
+		tkrHits.Add(1)
+		_, _ = w.Write([]byte(`[]`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	var got []fact.Fact
+	b := d109WS(srv.URL, srv.Client(), func(string) bool { return false }, &got) // dephealth 全绿
+
+	// 从未交付帧但已超启动基线 5min（生产基线=Run 启动刻，此处直接钉超龄刻）。
+	b.lastFrameMarkPrice.Store(time.Now().Add(-restFallbackStaleAfter - time.Minute).UnixNano())
+	b.lastFrameTicker.Store(time.Now().UnixNano()) // ticker 帧新鲜
+	b.restFallbackRound(context.Background())
+	if mktHits.Load() != 1 || tkrHits.Load() != 0 {
+		t.Fatalf("markPrice 超龄应点火、ticker 新鲜应停: mkt=%d tkr=%d", mktHits.Load(), tkrHits.Load())
+	}
+
+	// markPrice 帧复到 → 闸自落；ticker 转超龄 → 换轨点火。
+	b.lastFrameMarkPrice.Store(time.Now().UnixNano())
+	b.lastFrameTicker.Store(time.Now().Add(-restFallbackStaleAfter - time.Minute).UnixNano())
+	b.restFallbackRound(context.Background())
+	if mktHits.Load() != 1 || tkrHits.Load() != 1 {
+		t.Fatalf("流复绿应停、转死轨应点: mkt=%d tkr=%d", mktHits.Load(), tkrHits.Load())
+	}
+
+	// 两轨帧新鲜 → 全停。
+	b.lastFrameTicker.Store(time.Now().UnixNano())
+	b.restFallbackRound(context.Background())
+	if mktHits.Load() != 1 || tkrHits.Load() != 1 {
+		t.Fatalf("全活应零拉取: mkt=%d tkr=%d", mktHits.Load(), tkrHits.Load())
+	}
+}
+
+// TestD109_NativeNoProxyToken R1②：fallback 拉币安原生域走 restNative 裸 client——
+// cfg.Client 模拟 tokenRT（每请求注 X-Proxy-Token）全程零触达；原生域请求面
+// 不出现该头。非原生（cex-proxy 路由）仍用 cfg.Client。
+func TestD109_NativeNoProxyToken(t *testing.T) {
+	var tokenSeen atomic.Bool
+	proxyClient := &http.Client{Transport: rtFunc(func(r *http.Request) (*http.Response, error) {
+		if r.Header.Get("X-Proxy-Token") != "" {
+			tokenSeen.Store(true)
+		}
+		return &http.Response{
+			StatusCode: 200, Header: make(http.Header),
+			Body:    io.NopCloser(strings.NewReader(`[]`)),
+			Request: r,
+		}, nil
+	})}
+
+	var got []fact.Fact
+	b := d109WS("https://fapi.binance.com", proxyClient, func(string) bool { return true }, &got)
+	var nativeHits atomic.Int32
+	b.restNative = &http.Client{Transport: rtFunc(func(r *http.Request) (*http.Response, error) {
+		nativeHits.Add(1)
+		if r.Header.Get("X-Proxy-Token") != "" {
+			tokenSeen.Store(true)
+		}
+		return &http.Response{
+			StatusCode: 200, Header: make(http.Header),
+			Body:    io.NopCloser(strings.NewReader(`[]`)),
+			Request: r,
+		}, nil
+	})}
+
+	b.fetchPremiumIndex(context.Background())
+	b.fetchTicker24h(context.Background())
+	if nativeHits.Load() != 2 {
+		t.Fatalf("原生域应走 restNative 裸 client 两次: %d", nativeHits.Load())
+	}
+	if tokenSeen.Load() {
+		t.Fatal("X-Proxy-Token 泄漏至币安原生域请求面")
+	}
+	if got := b.restClientFor("https://cex-proxy.example.com/fapi/v1/premiumIndex"); got != proxyClient {
+		t.Fatal("非原生 host 应仍用 cfg.Client")
 	}
 }

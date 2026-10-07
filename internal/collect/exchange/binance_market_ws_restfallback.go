@@ -10,15 +10,32 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
+	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"arb/internal/dephealth"
 	"arb/internal/fact"
 )
 
+// restClientFor D-109 R1②：按目标 host 收敛 REST client（binance_user_ws restFor
+// /spotInfoClient 同款裁定）——币安原生域裸 client（token/代理 CA 勿出域）；
+// 非原生（cex-proxy 路由）仍用 cfg.Client（token+自签 CA 同源）。
+func (b *BinanceMarketWS) restClientFor(rawURL string) *http.Client {
+	if u, err := url.Parse(rawURL); err == nil && isNativeBinance(u.Host) {
+		return b.restNative
+	}
+	return b.cfg.Client
+}
+
 // restFallbackEvery 死流窗 REST 拉取周期（验收=断流期 facts 陈旧≤本周期）。
 const restFallbackEvery = 60 * time.Second
+
+// restFallbackStaleAfter D-109 R1①：帧年龄闸阈值——now-lastFrame 超龄=死流。
+// markPrice@arr@1s/!ticker@arr 理论 1s 一帧，5min 无帧=venue 侧断供实锤。
+const restFallbackStaleAfter = 5 * time.Minute
 
 // 死流依赖键（与 runLoop DepKey 构造 "binance:ws-"+venueType+"-"+kind 同源字面量）。
 const (
@@ -54,16 +71,26 @@ func (b *BinanceMarketWS) degraded(key string) bool {
 	return dephealth.Degraded(key)
 }
 
-// restFallbackRound 一拍：markPrice 流红 → premiumIndex 补 funding/index facts；
-// ticker 流红 → 24hr 补 vol24h facts。绿=零拉取。emitFacts/client 未装配=静默跳过。
+// frameStale D-109 R1①：帧年龄闸——该流末帧距今超 staleAfter=死流。
+// dephealth.Degraded 连败 3 次才红，「dial 成功→ack→静默」形态逐次 Mark(true)
+// 归零永不到 3；帧年龄同覆 dial 死（无帧）与连上但静默（无帧）两形态。
+// last=0=采集器未运行（测试直构造）→ 不视死流，闸由 dephealth 单载。
+func (b *BinanceMarketWS) frameStale(last *atomic.Int64) bool {
+	t := last.Load()
+	return t > 0 && b.now().Sub(time.Unix(0, t)) > restFallbackStaleAfter
+}
+
+// restFallbackRound 一拍：markPrice 流死 → premiumIndex 补 funding/index facts；
+// ticker 流死 → 24hr 补 vol24h facts。流活=零拉取。emitFacts/匹配 client 未装配=静默跳过。
+// 死流=帧超龄 OR dephealth degraded（dial 连败极端窗多一层）。
 func (b *BinanceMarketWS) restFallbackRound(ctx context.Context) {
-	if b.emitFacts == nil || b.cfg.Client == nil {
+	if b.emitFacts == nil {
 		return
 	}
-	if b.degraded(binanceDepKeyPerpMarkPrice) {
+	if b.frameStale(&b.lastFrameMarkPrice) || b.degraded(binanceDepKeyPerpMarkPrice) {
 		b.fetchPremiumIndex(ctx)
 	}
-	if b.degraded(binanceDepKeyPerpTicker) {
+	if b.frameStale(&b.lastFrameTicker) || b.degraded(binanceDepKeyPerpTicker) {
 		b.fetchTicker24h(ctx)
 	}
 }
@@ -79,7 +106,11 @@ func (b *BinanceMarketWS) fetchPremiumIndex(ctx context.Context) {
 		NextFundingTime int64  `json:"nextFundingTime"`
 	}
 	url := strings.TrimRight(b.cfg.BinanceBaseURL, "/") + "/fapi/v1/premiumIndex"
-	if err := getJSONInto(ctx, b.cfg.Client, url, &rows); err != nil {
+	client := b.restClientFor(url) // D-109 R1②：原生域裸 client——X-Proxy-Token 勿出域
+	if client == nil {
+		return
+	}
+	if err := getJSONInto(ctx, client, url, &rows); err != nil {
 		log.Printf("[binance-mkt-ws] rest fallback premiumIndex: %v", err)
 		return
 	}
@@ -139,7 +170,11 @@ func (b *BinanceMarketWS) fetchTicker24h(ctx context.Context) {
 		QuoteVolume string `json:"quoteVolume"`
 	}
 	url := strings.TrimRight(b.cfg.BinanceBaseURL, "/") + "/fapi/v1/ticker/24hr"
-	if err := getJSONInto(ctx, b.cfg.Client, url, &rows); err != nil {
+	client := b.restClientFor(url)
+	if client == nil {
+		return
+	}
+	if err := getJSONInto(ctx, client, url, &rows); err != nil {
 		log.Printf("[binance-mkt-ws] rest fallback ticker24h: %v", err)
 		return
 	}
