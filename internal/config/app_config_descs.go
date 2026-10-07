@@ -46,6 +46,7 @@ var appConfigDescs = map[string]string{
 	"ARB_CROSS_MIN_GROSS_BPS_CFD":                "跨所 CFD 侧毛价差下限（bps）",
 	"ARB_CROSS_NOTIONAL_EQUITY_CAP":              "跨所名义额/净值占比上限（0-1 比例）",
 	"ARB_DETECTOR_FRESHNESS_TTL":                 "检测器数据新鲜度上限（报价过期剔除）",
+	"ARB_EGRESS_CANARY_ANCHORS":                  "出口拨测锚点集（逗号分隔 host:port；D-104 canary 探针目标）",
 	"ARB_EXPLORER_ENABLED":                       "true=开：探矿员每日 06:47+周日 07:13（北京时间）扫描机会",
 	"ARB_EXPLORER_RATE_PER_HOUR":                 "探矿员 LLM 调用速率上限（次/小时）",
 	"ARB_MAKER_MAX_PER_HOUR":                     "D-018 maker：每 opp 每小时首腿挂单 attempt 上限 N（缺/0=maker 停用）",
