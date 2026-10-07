@@ -26,22 +26,10 @@ func (b *BinanceMarketWS) handleMarkPrice(ctx context.Context, data []byte) bool
 		if err := json.Unmarshal(data, &arr); err != nil {
 			return false
 		}
-		// 有效集过滤：聚合流全市场 ~400 符号/1s 不过滤=DB 灌水。s 恒 *USDT 形制，
-		// 集内 canonical 与剥 USDT 基名双键命中（与原逐符号订阅集语义等价）。
-		allowed := make(map[string]struct{})
-		for _, s := range b.cfg.effectiveSymbols("binance") {
-			u := strings.ToUpper(s)
-			allowed[u] = struct{}{}
-			allowed[strings.TrimSuffix(u, "USDT")] = struct{}{}
-		}
+		allowed := b.allowedSymbolSet()
 		for _, m := range arr {
 			sym, _ := m["s"].(string)
-			u := strings.ToUpper(sym)
-			_, hit := allowed[u]
-			if !hit {
-				_, hit = allowed[strings.TrimSuffix(u, "USDT")]
-			}
-			if !hit {
+			if !binanceAllowedHit(allowed, sym) {
 				continue
 			}
 			b.emitMarkPriceFact(ctx, m)
@@ -57,6 +45,29 @@ func (b *BinanceMarketWS) handleMarkPrice(ctx context.Context, data []byte) bool
 	}
 	b.emitMarkPriceFact(ctx, m)
 	return true
+}
+
+// allowedSymbolSet 有效集（D-109 自 handleMarkPrice 抽出共用）：聚合流全市场
+// ~400 符号不过滤=DB 灌水——集内 canonical 与剥 USDT 基名双键命中
+// （与原逐符号订阅集语义等价）。
+func (b *BinanceMarketWS) allowedSymbolSet() map[string]struct{} {
+	allowed := make(map[string]struct{})
+	for _, s := range b.cfg.effectiveSymbols("binance") {
+		u := strings.ToUpper(s)
+		allowed[u] = struct{}{}
+		allowed[strings.TrimSuffix(u, "USDT")] = struct{}{}
+	}
+	return allowed
+}
+
+// binanceAllowedHit 符号有效集命中判定（原样键，未命中再试剥 USDT 基名）。
+func binanceAllowedHit(allowed map[string]struct{}, sym string) bool {
+	u := strings.ToUpper(sym)
+	if _, hit := allowed[u]; hit {
+		return true
+	}
+	_, hit := allowed[strings.TrimSuffix(u, "USDT")]
+	return hit
 }
 
 // indexEmitEvery index_price per-symbol 心跳节流（D-595 S1：快变值逐帧跳变使

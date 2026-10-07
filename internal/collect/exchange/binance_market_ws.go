@@ -11,14 +11,13 @@ package exchange
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"arb/internal/bus"
@@ -51,6 +50,20 @@ type BinanceMarketWS struct {
 	spotInfoFetch  func(ctx context.Context, url string) (map[string]struct{}, error) // 测试注入点；nil=实拉 spotInfoURL
 	tickerEmit     map[string]time.Time                                               // D-591 S6：vol24h 每符号节流（仅 ticker 连接 goroutine 访问）
 	indexEmit      map[string]time.Time                                               // D-595 S1：index_price 每符号节流（仅 market 连接 goroutine 访问）
+	// degradedFn D-109：死流判定注入点（REST 兜底看门狗用；nil=dephealth.Degraded 生产读口）。
+	degradedFn func(key string) bool
+	// D-109 R1①：帧年龄闸——dephealth.Degraded 需连败 3 次才红，但「dial 成功→ack→
+	// 静默/60s-EOF」形态 dial 每次都 Mark(true) 连败归零=兜底永不点火；改看帧年龄
+	// （now-lastFrame>staleAfter=死流），dial 死与静默两形态同覆，流复绿帧到闸自落。
+	// unixnano；markPrice/ticker 连接 goroutine 写、rest-fallback goroutine 读。
+	lastFrameMarkPrice atomic.Int64
+	lastFrameTicker    atomic.Int64
+	// restNative D-109 R1②：币安原生域 REST 裸 client——cfg.Client（httpx tokenRT）
+	// 会把 X-Proxy-Token 注入每请求，带向 fapi.binance.com=凭据出域（D-106 红线）。
+	restNative *http.Client
+	// D-109 REST 兜底轨节流 map（仅 rest-fallback goroutine 访问；与 WS 轨 map 分离防跨程竞争）。
+	indexEmitREST  map[string]time.Time
+	tickerEmitREST map[string]time.Time
 }
 
 // NewBinanceMarketWS 创建采集器（host 取 cfg.BinanceBaseURL scheme+host）。
@@ -121,12 +134,17 @@ func NewBinanceMarketWS(cfg Config) *BinanceMarketWS {
 		cfg:         cfg,
 		publicCands: toCands(publicURLs), marketCands: toCands(marketURLs), spotCands: toCands(spotURLs),
 		dialer: d, header: h, now: time.Now, spotInfoURL: spotInfoURL, spotInfoClient: spotInfoClient,
+		restNative: &http.Client{Timeout: 15 * time.Second},
 	}
 }
 
 // Run 三连接并行（D-517：perp bookTicker→public、perp markPrice→market、spot→spotws），
 // 阻塞至 ctx 取消（mirror gate_ws.Run）。
 func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
+	// D-109 R1①：帧年龄闸基线=采集器启动刻——若订阅从未交付帧（含开集即静默形态），
+	// 启动刻起算超龄即判定死流；首帧到达后改写为真实帧刻。
+	b.lastFrameMarkPrice.Store(b.now().UnixNano())
+	b.lastFrameTicker.Store(b.now().UnixNano())
 	if b == nil {
 		return // baseURL 解析失败静默（REST 兜底在跑）
 	}
@@ -153,6 +171,13 @@ func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
 	safego.Go("binance_market_ws:perp-ticker", func() {
 		defer wg.Done()
 		b.runLoop(ctx, b.marketCands, "perp", "ticker", publish)
+	})
+	// D-109：死流 REST 看门狗兜底——dephealth 判 markPrice/ticker 流红才低频拉
+	// REST 补观测 facts，复绿即停零轮询（D-004 例外留痕 decisions.md D-109）。
+	wg.Add(1)
+	safego.Go("binance_market_ws:rest-fallback", func() {
+		defer wg.Done()
+		b.runRestFallback(ctx)
 	})
 	wg.Wait()
 }
@@ -217,11 +242,15 @@ func (b *BinanceMarketWS) runLoop(ctx context.Context, cands []WSCandidate, venu
 				return // {result:null,id:1} ack；{result:…,error} 已在 isSubscribeAck 记日志
 			}
 			if kind == "ticker" {
+				b.lastFrameTicker.Store(b.now().UnixNano()) // D-109 R1①：帧到=流活（含解析失败帧——有流量即非死流）
 				// D-080：24hrTicker 数组帧→vol24h facts（D-591 S6 handler 自创建日起
 				// 零调用者，OnFrame 缺 ticker 分流=帧落 handleBookTicker 被静默丢弃；
 				// ticker 连接不订 bookTicker，全帧归 handleTicker，解析失败静默）。
 				b.handleTicker(ctx, data)
 				return
+			}
+			if kind == "markPrice" {
+				b.lastFrameMarkPrice.Store(b.now().UnixNano()) // D-109 R1①
 			}
 			if kind == "markPrice" && b.handleMarkPrice(ctx, data) {
 				return // markPriceUpdate 帧已消费（market 连接先 markPrice 后 bookTicker 兜底）
@@ -230,41 +259,6 @@ func (b *BinanceMarketWS) runLoop(ctx context.Context, cands []WSCandidate, venu
 		},
 		OnReconnect: meter.record,
 	})
-}
-
-func (b *BinanceMarketWS) handleBookTicker(data []byte, venueType string, publish func(bus.Quote)) {
-	f, ok := parseBookTicker(data)
-	if !ok {
-		return // 订阅 ack/错误帧/无关帧静默（ack 已在 isSubscribeAck 分流）
-	}
-	var bidF, askF float64
-	fmt.Sscanf(f.B, "%f", &bidF)
-	fmt.Sscanf(f.A, "%f", &askF)
-	ts := b.now()
-	if f.T > 0 {
-		ts = time.UnixMilli(f.T)
-	}
-	publish(bus.Quote{
-		Symbol: f.S, Venue: VenueBinance, VenueType: venueType, VenueSymbol: f.S,
-		Bid: bidF, Ask: askF, Time: ts,
-	})
-}
-
-// isSubscribeAck 订阅 ack/错误帧判定：{result:…,id} 形（数据帧无 result 字段）。
-func isSubscribeAck(data []byte) bool {
-	var probe struct {
-		Result any   `json:"result"`
-		Error  any   `json:"error"`
-		ID     int64 `json:"id"`
-	}
-	if err := json.Unmarshal(data, &probe); err != nil {
-		return false
-	}
-	if probe.Error != nil {
-		log.Printf("[binance-mkt-ws] subscribe error frame: %s", string(data))
-		return true
-	}
-	return probe.ID != 0
 }
 
 // binanceMktSubChunk SUBSCRIBE 单帧参数上限（服务端单帧解析上限约 4KB，实拍 column 4096 截断）。
