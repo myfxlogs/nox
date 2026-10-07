@@ -15,12 +15,23 @@ import (
 // LatestFactsByKind D-508 S3：kind 单谓词无 OR 专用查询（热路径 kind-only 调用方专用，
 // planner 命中 facts_kind_venue_symbol_ts_desc_idx；通用版保留给带参调用方）。
 func (s *Store) LatestFactsByKind(ctx context.Context, kind string) ([]fact.Fact, error) {
+	return s.LatestFactsByKindSince(ctx, kind, time.Time{})
+}
+
+// LatestFactsByKindSince D-108 修补：ts 下界变体——调用方只要界内样本（如 swapledger
+// factTTL 界，超龄 fact 下游 fail-closed 跳过，加载层等价）时免整 kind 全扫
+// （funding kind 220 万行 DISTINCT ON 实测 33s 超 runTimeout；since 零值=无界回退原形态）。
+func (s *Store) LatestFactsByKindSince(ctx context.Context, kind string, since time.Time) ([]fact.Fact, error) {
+	var sinceArg *time.Time
+	if !since.IsZero() {
+		sinceArg = &since
+	}
 	rows, err := s.pool.Query(ctx, `
 		SELECT DISTINCT ON (venue, symbol)
 			kind, venue, COALESCE(symbol,'') AS symbol, value, unit, ts, src
 		FROM facts
-		WHERE kind = $1
-		ORDER BY venue, symbol, ts DESC`, kind)
+		WHERE kind = $1 AND ($2::timestamptz IS NULL OR ts >= $2)
+		ORDER BY venue, symbol, ts DESC`, kind, sinceArg)
 	if err != nil {
 		return nil, fmt.Errorf("latest facts by kind: %w", err)
 	}
