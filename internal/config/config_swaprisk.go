@@ -36,6 +36,10 @@ type SwapArbRiskConfig struct {
 	XAssetDisasterNoiseMult float64
 	XAssetDisasterDebounce  int
 	XAssetQuoteMaxAge       time.Duration
+	// D-111：快行情挂起闸——腿 mid 窗口位移超阈 → 灾难判定本轮挂起（broker 大行情作弊窗内
+	// CFD 价不可信；…_BPS 缺省 25、…_WINDOW 缺省 90s；任一 ≤0=闸关逃生阀）。
+	XAssetFastMoveBps    float64
+	XAssetFastMoveWindow time.Duration
 	// ComboLossLimit 组合级止损保险丝（C1）：同 ComboKey stop/exec_drift 平仓计数 ≥ 此值 → gate 拒
 	// （ARB_COMBO_LOSS_LIMIT，缺省 3）；0 = 关闭（逃生阀）。
 	ComboLossLimit int
