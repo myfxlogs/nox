@@ -44,9 +44,16 @@ func (e *Engine) disasterBand(noise *float64) float64 {
 func (e *Engine) disasterCheckXAsset(ctx context.Context, p *pgstore.Position) (shouldClose bool, reason string, stale bool, staleAge time.Duration) {
 	e.disasterMu.Lock()
 	defer e.disasterMu.Unlock()
-	if e.disasterBreach == nil { // 惰性初始化（测试字面量 Engine 无 New 装配路径）
+	// 惰性初始化三张表各自判 nil（测试字面量 Engine 无 New 装配路径；New() 只预建
+	// disasterBreach——三表并初始化曾让生产装配形态撞上 nil map panic：posLoop 死、
+	// 退出评估全瘫 ~25min 才被发现。各表独立判 nil 防同类部分装配形态再穿透）。
+	if e.disasterBreach == nil {
 		e.disasterBreach = make(map[int64]int)
+	}
+	if e.cexBasisAnchor == nil {
 		e.cexBasisAnchor = make(map[int64]float64)
+	}
+	if e.mtDivergeFlag == nil {
 		e.mtDivergeFlag = make(map[int64]bool)
 	}
 	basisBps, quoteAge, buyQ, sellQ, ok := e.currentBasisBpsAgedQuotes(p)

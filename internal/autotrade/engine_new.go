@@ -19,10 +19,12 @@ func New(cfg Config, store *pgstore.Store, service engineService, oppTopic *bus.
 		quotes:           quotes,
 		gate:             NewGate(store, cfg, cp),
 		fundingNeedSent:  make(map[string]string),
-		fundingBreach:    make(map[int64]int),  // D-133 T1：PERP_FUNDING 去抖计数
-		legSuspend:       make(map[int64]bool), // D-495 S3：腿可平性 suspend 转场去重
-		disasterBreach:   make(map[int64]int),  // D-378b S1：灾难带去抖计数
-		csMissCounts:     make(map[string]int), // D-140 S2：CS-miss 聚合
+		fundingBreach:    make(map[int64]int),     // D-133 T1：PERP_FUNDING 去抖计数
+		legSuspend:       make(map[int64]bool),    // D-495 S3：腿可平性 suspend 转场去重
+		disasterBreach:   make(map[int64]int),     // D-378b S1：灾难带去抖计数
+		cexBasisAnchor:   make(map[int64]float64), // D-113：CEX 腿-共识锚（disasterMu 域，lazy-init 防呆仍在）
+		mtDivergeFlag:    make(map[int64]bool),    // D-113：MT 偏离告警 episode 去重（同上）
+		csMissCounts:     make(map[string]int),    // D-140 S2：CS-miss 聚合
 		csMissSent:       make(map[string]time.Time),
 		marginAlertSent:  make(map[string]time.Time), // D-144 ②：保证金告警去重
 		revivalAlertSent: make(map[string]time.Time), // D-256-A S5：复活扳机告警去重
