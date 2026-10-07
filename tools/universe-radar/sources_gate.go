@@ -24,8 +24,8 @@ func (g gate) Scan(ctx context.Context) ([]Row, error) {
 	if err != nil {
 		return nil, err
 	}
-	fund := latestFacts(ctx, g.pool, "gate", "funding", "gate_ws_futures", "15 minutes")
-	ivl := latestFacts(ctx, g.pool, "gate", "funding_interval", "", "25 hours") // 日轮写源（D-591 R1 同定标）
+	fund := latestFacts(ctx, g.pool, "gate", "funding", []string{"gate_ws_futures"}, "15 minutes")
+	ivl := latestFacts(ctx, g.pool, "gate", "funding_interval", nil, "25 hours") // 日轮写源（D-591 R1 同定标）
 	mid := latestTicksMid(ctx, g.pool, "gate")
 	rows := make([]Row, 0, len(syms))
 	for _, sym := range syms { // sym=canonical BTCUSDT 形（canonicalFromGate 键形）

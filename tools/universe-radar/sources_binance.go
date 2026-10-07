@@ -98,10 +98,11 @@ func (b binance) Scan(ctx context.Context) ([]Row, error) {
 			CtVal: f64ptr(1.0), // D-311 S2：USDT-M qty=基础币数，无合约面值概念
 		})
 	}
-	fund := latestFacts(ctx, b.pool, "binance", "funding", "binance_ws_markprice", "15 minutes")
-	ivl := latestFacts(ctx, b.pool, "binance", "funding_interval", "", "15 minutes")
-	vol := latestFacts(ctx, b.pool, "binance", "vol24h", "binance_ws_ticker", "30 minutes")
-	idxP := latestFacts(ctx, b.pool, "binance", "index_price", "binance_ws_markprice", "15 minutes") // D-591 R2
+	// D-109 修补：binance src 白名单含 REST 看门狗落点（死流窗兜底 fact 同义消费）。
+	fund := latestFacts(ctx, b.pool, "binance", "funding", []string{"binance_ws_markprice", "binance_rest_markprice"}, "15 minutes")
+	ivl := latestFacts(ctx, b.pool, "binance", "funding_interval", nil, "15 minutes")
+	vol := latestFacts(ctx, b.pool, "binance", "vol24h", []string{"binance_ws_ticker", "binance_rest_ticker"}, "30 minutes")
+	idxP := latestFacts(ctx, b.pool, "binance", "index_price", []string{"binance_ws_markprice", "binance_rest_markprice"}, "15 minutes") // D-591 R2
 	mid := latestTicksMid(ctx, b.pool, "binance")
 	for i := range rows {
 		sym := rows[i].Symbol
@@ -121,13 +122,13 @@ func (b binance) Scan(ctx context.Context) ([]Row, error) {
 
 // latestFacts 批查 venue kind 最新值（src 非空则锚定；funding_interval 落点 src 异构不过滤）。
 // D-591 R3：泛化 venue 参数供 okx/gate 读库化共用。
-func latestFacts(ctx context.Context, pool *pgxpool.Pool, venue, kind, src, maxAge string) map[string]float64 {
+func latestFacts(ctx context.Context, pool *pgxpool.Pool, venue, kind string, srcs []string, maxAge string) map[string]float64 {
 	q := `SELECT DISTINCT ON (symbol) symbol, value FROM facts
 		WHERE kind=$1 AND venue=$2 AND ts > now()-$3::interval`
 	args := []any{kind, venue, maxAge}
-	if src != "" {
-		q += ` AND src=$4`
-		args = append(args, src)
+	if len(srcs) > 0 {
+		q += ` AND src=ANY($4)`
+		args = append(args, srcs)
 	}
 	q += ` ORDER BY symbol, ts DESC`
 	out := map[string]float64{}

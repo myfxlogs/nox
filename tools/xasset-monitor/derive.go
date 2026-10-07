@@ -85,18 +85,19 @@ const goldStaleInterval = 25 * time.Hour
 
 // readGoldFunding 读 funding 年化%+interval 秒并换算：单期小数费率=annualPct×ivlSec/
 // (365×100×86400)（消费端 ×periodsPerDay×365×100 还原年化同语义）、periodsPerDay=86400/ivlSec
-// （S4：fundingInfo REST 退役，interval 真值已由 WS/日批落 facts）。funding 按 src 锚定 WS 源；
+// （S4：fundingInfo REST 退役，interval 真值已由 WS/日批落 facts）。funding 按 src 白名单锚定
+// （WS 原生源+D-109 死流窗 REST 看门狗源）；
 // interval 落点 src 异构（okx=okx_ws_v5/gate=gate_v4_contract_meta/binance=binance_ws_markprice）
 // 故不过滤 src——venue×symbol 隔离已足够（KB cross-venue-data-borrowing-pollution 禁跨所借用）。
 // 缺行/超龄 15min=error 不猜（stale-data-propagates-wrong-judgments）。
-func readGoldFunding(ctx context.Context, pool *pgxpool.Pool, venue, src, symbol string) (fundingRate float64, periodsPerDay int, err error) {
+func readGoldFunding(ctx context.Context, pool *pgxpool.Pool, venue string, srcs []string, symbol string) (fundingRate float64, periodsPerDay int, err error) {
 	var annualPct, ivlSec float64
 	var fts, its time.Time
 	err = pool.QueryRow(ctx, `
 		SELECT value, ts FROM facts
-		WHERE kind='funding' AND venue=$1 AND src=$2 AND symbol=$3
+		WHERE kind='funding' AND venue=$1 AND src=ANY($2) AND symbol=$3
 		ORDER BY ts DESC LIMIT 1
-	`, venue, src, symbol).Scan(&annualPct, &fts)
+	`, venue, srcs, symbol).Scan(&annualPct, &fts)
 	if err != nil {
 		return 0, 0, fmt.Errorf("facts funding %s: %w", symbol, err)
 	}
@@ -130,7 +131,9 @@ func fetchBinanceGold(ctx context.Context, pool *pgxpool.Pool, symbol string) (b
 	if bid, ask, err = readGoldTicks(ctx, pool, "binance", symbol); err != nil {
 		return 0, 0, 0, 0, err
 	}
-	if fundingRate, periodsPerDay, err = readGoldFunding(ctx, pool, "binance", "binance_ws_markprice", symbol); err != nil {
+	// D-109 修补：binance funding src 白名单——WS 原生+binance_rest_markprice（死流窗
+	// REST 看门狗落点）。只认这两源：backfill/他 src 仍不借用（cross-source 纪律不变）。
+	if fundingRate, periodsPerDay, err = readGoldFunding(ctx, pool, "binance", []string{"binance_ws_markprice", "binance_rest_markprice"}, symbol); err != nil {
 		return 0, 0, 0, 0, err
 	}
 	return bid, ask, fundingRate, periodsPerDay, nil
@@ -150,7 +153,7 @@ func fetchOkxGold(ctx context.Context, pool *pgxpool.Pool, instID string) (bid, 
 	if bid, ask, err = readGoldTicks(ctx, pool, "okx", sym); err != nil {
 		return 0, 0, 0, 0, err
 	}
-	if fundingRate, periodsPerDay, err = readGoldFunding(ctx, pool, "okx", "okx_ws_v5", sym); err != nil {
+	if fundingRate, periodsPerDay, err = readGoldFunding(ctx, pool, "okx", []string{"okx_ws_v5"}, sym); err != nil {
 		return 0, 0, 0, 0, err
 	}
 	return bid, ask, fundingRate, periodsPerDay, nil
@@ -162,7 +165,7 @@ func fetchGateGold(ctx context.Context, pool *pgxpool.Pool, contract string) (bi
 	if bid, ask, err = readGoldTicks(ctx, pool, "gate", sym); err != nil {
 		return 0, 0, 0, 0, err
 	}
-	if fundingRate, periodsPerDay, err = readGoldFunding(ctx, pool, "gate", "gate_ws_futures", sym); err != nil {
+	if fundingRate, periodsPerDay, err = readGoldFunding(ctx, pool, "gate", []string{"gate_ws_futures"}, sym); err != nil {
 		return 0, 0, 0, 0, err
 	}
 	return bid, ask, fundingRate, periodsPerDay, nil

@@ -112,8 +112,8 @@ func (o okx) Scan(ctx context.Context) ([]Row, error) {
 		})
 	}
 	// funding → facts 读库（okx_ws_v5 覆盖集；instId→facts 键形剥 - 与 -SWAP）。
-	fund := latestFacts(ctx, o.pool, "okx", "funding", "okx_ws_v5", "15 minutes")
-	ivl := latestFacts(ctx, o.pool, "okx", "funding_interval", "okx_ws_v5", "15 minutes")
+	fund := latestFacts(ctx, o.pool, "okx", "funding", []string{"okx_ws_v5"}, "15 minutes")
+	ivl := latestFacts(ctx, o.pool, "okx", "funding_interval", []string{"okx_ws_v5"}, "15 minutes")
 	instBySym := make(map[string]string, len(idx)) // facts 键形 BTCUSDT → instId BTC-USDT-SWAP
 	for instID := range idx {
 		instBySym[strings.ReplaceAll(strings.TrimSuffix(instID, "-SWAP"), "-", "")] = instID
