@@ -129,6 +129,10 @@ func (s *Service) AskAnalyst(ctx context.Context, req *connect.Request[v1.AskAna
 	}
 	// 构造初始 messages：历史轮次 + 本轮问题（含上下文摘要注入）。
 	msgs := buildAnalystMessages(req.Msg)
+	// D-098 R1：会话侧 120s 预算——运输上限放宽 600s 后交互面须自带截止（原行为
+	// 语义=HTTP 120s 顶；现在 ctx 到点自然截止），防挂死窗口变 600s。
+	ctx, cancel := context.WithTimeout(ctx, 120*time.Second)
+	defer cancel()
 	// 循环回调 → proto 流。
 	cb := analyst.LoopCallbacks{
 		OnDelta: func(text string) {
