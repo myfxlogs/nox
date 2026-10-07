@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"arb/internal/bus"
 	"arb/internal/spread"
 	"arb/internal/store/pgstore"
 )
@@ -22,25 +23,32 @@ func (e *Engine) currentBasisBps(p *pgstore.Position) (float64, bool) {
 
 // currentBasisBpsLegs D-004 P1#4：legs 外给变体（basisStopCheckLegs 用）。
 func (e *Engine) currentBasisBpsLegs(p *pgstore.Position, legs []pgstore.PositionLeg) (float64, bool) {
-	bps, _, ok := e.currentBasisBpsAgedLegs(p, legs)
+	bps, _, _, _, ok := e.currentBasisBpsAgedLegs(p, legs)
 	return bps, ok
 }
 
 // currentBasisBpsLegsResolved D-004 P1#4：sellCanonical 已解析零 DB 变体（quote 快路）。
 func (e *Engine) currentBasisBpsLegsResolved(p *pgstore.Position, legs []pgstore.PositionLeg, sellCanonical string) (float64, bool) {
-	bps, _, ok := e.currentBasisBpsAgedResolved(p, legs, sellCanonical)
+	bps, _, _, _, ok := e.currentBasisBpsAgedResolved(p, legs, sellCanonical)
 	return bps, ok
 }
 
 // currentBasisBpsAged D-378b S1：带报价龄变体——minQuoteAge=双腿 now−Quote.Time 较大者
 // （灾难带新鲜度闸取数；原 currentBasisBps 改一行包装丢 age，既有调用点零签名变更零行为变更）。
 func (e *Engine) currentBasisBpsAged(p *pgstore.Position) (float64, time.Duration, bool) {
+	bps, age, _, _, ok := e.currentBasisBpsAgedQuotes(p)
+	return bps, age, ok
+}
+
+// currentBasisBpsAgedQuotes D-111：灾难带专用变体——basis+报价龄+双腿原 Quote 一趟返回
+// （快行情位移采样要吃双腿 Quote.Time/Mid；不新增 DB 往返，内部 legs 解析单趟）。
+func (e *Engine) currentBasisBpsAgedQuotes(p *pgstore.Position) (float64, time.Duration, bus.Quote, bus.Quote, bool) {
 	if e.quotes == nil {
-		return 0, 0, false
+		return 0, 0, bus.Quote{}, bus.Quote{}, false
 	}
 	legs, err := e.store.ListPositionLegs(context.Background(), p.ID)
 	if err != nil {
-		return 0, 0, false
+		return 0, 0, bus.Quote{}, bus.Quote{}, false
 	}
 	return e.currentBasisBpsAgedLegs(p, legs)
 }
@@ -48,20 +56,20 @@ func (e *Engine) currentBasisBpsAged(p *pgstore.Position) (float64, time.Duratio
 // currentBasisBpsAgedLegs D-004 P1#4：legs 外给变体——卖腿 canonical 经
 // xassetSellCanonical 解析（含 DB），调用方=权威路径；quote 快路走
 // currentBasisBpsAgedResolved + openEntry.sellCanonical 缓存（零 DB）。
-func (e *Engine) currentBasisBpsAgedLegs(p *pgstore.Position, legs []pgstore.PositionLeg) (float64, time.Duration, bool) {
+func (e *Engine) currentBasisBpsAgedLegs(p *pgstore.Position, legs []pgstore.PositionLeg) (float64, time.Duration, bus.Quote, bus.Quote, bool) {
 	sellCanonical := e.xassetSellCanonical(context.Background(), p, legs)
 	return e.currentBasisBpsAgedResolved(p, legs, sellCanonical)
 }
 
 // currentBasisBpsAgedResolved D-004 P1#4：sellCanonical 已解析的零 DB 变体
 // （positionLoop openEntry 缓存供给；"" = 解析不出→类型分支兜底/fail-closed 同原语义）。
-func (e *Engine) currentBasisBpsAgedResolved(p *pgstore.Position, legs []pgstore.PositionLeg, sellCanonical string) (float64, time.Duration, bool) {
+func (e *Engine) currentBasisBpsAgedResolved(p *pgstore.Position, legs []pgstore.PositionLeg, sellCanonical string) (float64, time.Duration, bus.Quote, bus.Quote, bool) {
 	if e.quotes == nil {
-		return 0, 0, false
+		return 0, 0, bus.Quote{}, bus.Quote{}, false
 	}
 	canonical := canonicalFromOppID(p.OpportunityID)
 	if canonical == "" {
-		return 0, 0, false
+		return 0, 0, bus.Quote{}, bus.Quote{}, false
 	}
 	var buyLeg, sellLeg *pgstore.PositionLeg
 	for i := range legs {
@@ -74,18 +82,18 @@ func (e *Engine) currentBasisBpsAgedResolved(p *pgstore.Position, legs []pgstore
 		}
 	}
 	if buyLeg == nil || sellLeg == nil {
-		return 0, 0, false
+		return 0, 0, bus.Quote{}, bus.Quote{}, false
 	}
 	if sellCanonical == "" {
 		if p.Type == "XASSET_CARRY" {
-			return 0, 0, false // XASSET 跨 canonical：解析不出不拿买 canonical 错查
+			return 0, 0, bus.Quote{}, bus.Quote{}, false // XASSET 跨 canonical：解析不出不拿买 canonical 错查
 		}
 		sellCanonical = canonical // 旧行为回退（SWAPARB/CARRY 同 canonical 组合）
 	}
 	buyQuote, ok1 := e.quotes.Latest(canonical, buyLeg.Venue)
 	sellQuote, ok2 := e.quotes.Latest(sellCanonical, sellLeg.Venue)
 	if !ok1 || !ok2 {
-		return 0, 0, false
+		return 0, 0, bus.Quote{}, bus.Quote{}, false
 	}
 	// D-378b S1：报价龄=双腿 now−Quote.Time 较大者（周末/收盘假偏移防误杀）
 	minQuoteAge := time.Since(buyQuote.Time)
@@ -99,9 +107,9 @@ func (e *Engine) currentBasisBpsAgedResolved(p *pgstore.Position, legs []pgstore
 		refPrice = *buyLeg.PriceActual
 	}
 	if refPrice <= 0 {
-		return 0, 0, false
+		return 0, 0, bus.Quote{}, bus.Quote{}, false
 	}
-	return spread / refPrice * 10000, minQuoteAge, true
+	return spread / refPrice * 10000, minQuoteAge, buyQuote, sellQuote, true
 }
 
 // currentNetBps 实时计算持仓的当前净 bps（收敛型平仓用）。

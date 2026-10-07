@@ -69,7 +69,12 @@ type Engine struct {
 	fundingBreach  map[int64]int
 	disasterBreach map[int64]int // D-378b S1：灾难带去抖计数
 	disasterMu     sync.Mutex    // D-378b：disasterBreach 锁（独立于 fundingMu——异判定域不互斥）
-	fundingMu      sync.Mutex
+	// D-111：快行情位移采样（disasterMu 域）——key=venueKey|canonical → venue 时序 mid 点列；
+	// fastMoveFlag=快行情 suspend episode 首报去重（出窗复位）。持仓平仓后残留点列无害
+	// （同 key 下个持仓复用窗口——位移语义跨仓等价）。
+	quoteHist    map[string][]histPoint
+	fastMoveFlag map[int64]bool
+	fundingMu    sync.Mutex
 
 	// D-495 S3：腿可平性 suspend 转场去重——key=posID，值=当前是否处于 suspend。
 	// 只在 suspend 进/出转场各记一条 warn（关市是常态非异常，恢复后同型免再报）。
