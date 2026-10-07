@@ -60,10 +60,11 @@ type BinanceCapitalGaps struct {
 // NewBinanceCapitalGaps 从 spot 风格 base 派生三 base（/api 段替换，earn 采集器同款约定；
 // 代理形 https://cex.xxx/api 与直连形 https://api.binance.com 均覆盖）。
 func NewBinanceCapitalGaps(spotBase, apiKey, apiSecret string) *BinanceCapitalGaps {
-	rep := func(seg string) string { return strings.Replace(spotBase, "/api", "/"+seg, 1) }
 	return &BinanceCapitalGaps{
 		client: httpx.Client(), key: apiKey, secret: apiSecret,
-		sapiURL: rep("sapi"), dapiURL: rep("dapi"), eapiURL: rep("eapi"),
+		sapiURL: httpx.BinanceApiSegBase(spotBase, "sapi"), // D-106：原生域/api 域名内串 Replace 假域修复
+		dapiURL: httpx.BinanceApiSegBase(spotBase, "dapi"),
+		eapiURL: httpx.BinanceApiSegBase(spotBase, "eapi"),
 	}
 }
 
