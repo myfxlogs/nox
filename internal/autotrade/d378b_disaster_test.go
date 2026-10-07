@@ -92,24 +92,50 @@ func TestD378b_A1_494Replay_Hold(t *testing.T) {
 	}
 }
 
-// A2：持续偏离 >40bps 连续 2 评估 → 第 2 次平仓 + decision=disaster 行 + exit_kind=disaster。
+// d113PublishConsensus D-113：发布 ≥2 个金代理现货共识源（binance/gate/okx :spot
+// XAUT/PAXG），mid±0.05 造 bid/ask——CEX 腿断裂判定的共识面。
+func d113PublishConsensus(t *testing.T, e *Engine, mid float64) {
+	t.Helper()
+	now := time.Now()
+	for _, s := range []struct{ venue, sym string }{
+		{"binance", "PAXGUSDT"}, {"gate", "XAUTUSDT"}, {"okx", "PAXGUSDT"},
+	} {
+		e.quotes.Publish(bus.Quote{Symbol: s.sym, Venue: s.venue, VenueType: "spot",
+			Bid: mid - 0.05, Ask: mid + 0.05, Time: now})
+	}
+}
+
+// d113MoveCexLeg 移动 CEX 腿（binance:perp PAXGUSDT）mid 到指定值（结构断裂注入）。
+func d113MoveCexLeg(t *testing.T, e *Engine, mid float64) {
+	t.Helper()
+	e.quotes.Publish(bus.Quote{Symbol: "PAXGUSDT", Venue: "binance", VenueType: "perp",
+		Bid: mid - 0.05, Ask: mid + 0.05, Time: time.Now()})
+}
+
+// A2：CEX 腿锚后偏移 >40bps 连续 2 评估 → 平仓 + decision=disaster 行 + exit_kind=disaster。
+// D-113：kill 判据=CEX 腿 vs crypto 金代理共识（MT 侧偏离只告警不杀，见 d113 锚测）。
 func TestD378b_A2_SustainedBreach_Disaster(t *testing.T) {
 	st, posID, e := d378bSeedXAsset(t, -9.0, 6.9)
-	d378bPublishQuotes(t, e, -59.0, 0) // dev=50 > band 40
 	ctx := context.Background()
+	d378bPublishQuotes(t, e, -9.0, 0) // basis 贴锚（MT 侧零偏离）
+	d113PublishConsensus(t, e, 100.0) // 共识 mid≈100；perp mid≈100.075
 	p := d377OpenPos(t, st, posID)
+	if should, _ := e.checkExitCondition(ctx, p); should { // 首轮锚定偏移（不判）
+		t.Fatal("A2: 锚定轮不应平仓")
+	}
+	d113MoveCexLeg(t, e, 100.55) // perp mid 100.075→100.55：偏移≈48bps>40
 	should1, _ := e.checkExitCondition(ctx, p)
 	got1 := d378bEvalCount(t, e, posID)
 	if should1 || got1 != 1 {
-		t.Fatalf("A2: 第 1 次应 hold 且计数 1, got close=%v count=%d", should1, got1)
+		t.Fatalf("A2: 第 1 次破带应 hold 且计数 1, got close=%v count=%d", should1, got1)
 	}
 	should2, reason2 := e.checkExitCondition(ctx, p)
-	if !should2 || !strings.HasPrefix(reason2, "disaster: dev") {
-		t.Fatalf("A2: 第 2 次应平仓 reason=disaster:…, got %v/%q", should2, reason2)
+	if !should2 || !strings.HasPrefix(reason2, "disaster: cex-leg dev") {
+		t.Fatalf("A2: 第 2 次应平仓 reason=disaster: cex-leg…, got %v/%q", should2, reason2)
 	}
 	rows := d377Evals(t, st, posID)
-	if len(rows) != 2 || rows[1].Decision != "disaster" {
-		t.Fatalf("A2: want 第 2 行 decision=disaster, got %+v", rows)
+	if len(rows) != 3 || rows[2].Decision != "disaster" {
+		t.Fatalf("A2: want 第 3 行 decision=disaster, got %+v", rows)
 	}
 	if got := d378bEvalCount(t, e, posID); got != 0 {
 		t.Fatalf("A2: 平仓后计数器应清零, got %d", got)
@@ -127,20 +153,23 @@ func TestD378b_A2_SustainedBreach_Disaster(t *testing.T) {
 	}
 }
 
-// A3：单次尖刺 >40bps 即回落 → 不平仓且计数器清零（连续性断言：尖刺-常态-尖刺 第三次仍 hold）。
+// A3：CEX 腿单次尖刺 >40bps 即回落 → 不平仓且计数器清零（连续性断言：尖刺-常态-尖刺）。
 func TestD378b_A3_SpikeResets(t *testing.T) {
 	st, posID, e := d378bSeedXAsset(t, -9.0, 6.9)
 	ctx := context.Background()
 	p := d377OpenPos(t, st, posID)
-	d378bPublishQuotes(t, e, -59.0, 0) // 尖刺 dev=50 → count=1
+	d378bPublishQuotes(t, e, -9.0, 0)
+	d113PublishConsensus(t, e, 100.0)
+	e.checkExitCondition(ctx, p) // 锚定轮
+	d113MoveCexLeg(t, e, 100.55) // 尖刺 dev≈48 → count=1
 	if should, _ := e.checkExitCondition(ctx, p); should {
 		t.Fatal("A3: 首次尖刺不应平仓")
 	}
-	d378bPublishQuotes(t, e, -14.0, 0) // 回常态 dev=5 → 计数清零
+	d113MoveCexLeg(t, e, 100.075) // 回常态 → 计数清零
 	if should, _ := e.checkExitCondition(ctx, p); should {
 		t.Fatal("A3: 常态不应平仓")
 	}
-	d378bPublishQuotes(t, e, -59.0, 0) // 再尖刺：若未清零 count=2 会平（错）；清零后 count=1 → hold
+	d113MoveCexLeg(t, e, 100.55) // 再尖刺：若未清零 count=2 会平（错）；清零后 count=1 → hold
 	if should, _ := e.checkExitCondition(ctx, p); should {
 		t.Fatal("A3: 尖刺-常态-尖刺 应仍 hold（计数器已清零，仅 count=1）")
 	}
@@ -164,14 +193,18 @@ func TestD378b_A4_Stale_FailClosed(t *testing.T) {
 	}
 }
 
-// A5：entry_noise=15 → 判距=max(40,4×15)=60——dev 50 不触（noise 外化生效）。
+// A5：entry_noise=15 → 判距=max(40,4×15)=60——CEX 腿偏移 48bps 不触（noise 外化生效）。
 func TestD378b_A5_NoiseExternalized(t *testing.T) {
 	st, posID, e := d378bSeedXAsset(t, -9.0, 15.0)
-	d378bPublishQuotes(t, e, -59.0, 0) // dev=50 < band 60
+	ctx := context.Background()
 	p := d377OpenPos(t, st, posID)
-	should, _ := e.checkExitCondition(context.Background(), p)
+	d378bPublishQuotes(t, e, -9.0, 0)
+	d113PublishConsensus(t, e, 100.0)
+	e.checkExitCondition(ctx, p) // 锚定轮
+	d113MoveCexLeg(t, e, 100.55) // dev≈48 < band 60
+	should, _ := e.checkExitCondition(ctx, p)
 	if should {
-		t.Fatal("A5: dev 50 < band 60（noise 外化）不应平仓")
+		t.Fatal("A5: dev 48 < band 60（noise 外化）不应平仓")
 	}
 	if got := d378bEvalCount(t, e, posID); got != 0 {
 		t.Fatalf("A5: 未触带不应计数, got %d", got)

@@ -74,7 +74,11 @@ type Engine struct {
 	// （同 key 下个持仓复用窗口——位移语义跨仓等价）。
 	quoteHist    map[string][]histPoint
 	fastMoveFlag map[int64]bool
-	fundingMu    sync.Mutex
+	// D-113：cexBasisAnchor=posID→(CEX腿mid−crypto共识中位) 首观测锚（吸收常驻价差，
+	// 判的是锚后偏移=结构断裂）；mtDivergeFlag=MT 腿偏离告警 episode 去重（只告警不杀）。
+	cexBasisAnchor map[int64]float64
+	mtDivergeFlag  map[int64]bool
+	fundingMu      sync.Mutex
 
 	// D-495 S3：腿可平性 suspend 转场去重——key=posID，值=当前是否处于 suspend。
 	// 只在 suspend 进/出转场各记一条 warn（关市是常态非异常，恢复后同型免再报）。

@@ -147,18 +147,24 @@ func TestD377_EvalExecDrift_RowLanded(t *testing.T) {
 	}
 }
 
-// TestD377_EvalStop_RowBeforeClose 锚2（D-378b 改义）：持续偏离触灾难带 → decision=disaster
-// 且行在返回前已写（窄阈 stop 撤除；本 cfg Debounce=0 防呆钳 1=单次即杀，平仓立即发生）。
+// TestD377_EvalStop_RowBeforeClose 锚2（D-378b 改义 + D-113 再改义）：CEX 腿 vs 共识
+// 结构断裂 → decision=disaster 且行在返回前已写（本 cfg Debounce=0 防呆钳 1=单次即杀；
+// MT 侧偏离从此不再杀——只告警）。
 func TestD377_EvalStop_RowBeforeClose(t *testing.T) {
 	st, posID, e := d377SeedXAsset(t)
-	d377PublishQuotes(e.quotes, 90.00, 90.02) // basis≈−1122 → dev 1113 ≫ band 40（drift=0 过闸）
-	should, reason := e.checkExitCondition(context.Background(), d377OpenPos(t, st, posID))
+	ctx := context.Background()
+	d377PublishQuotes(e.quotes, 100.15, 100.17) // basis 贴锚
+	d113PublishConsensus(t, e, 100.0)           // 共识 mid≈100 贴 perp mid 100.075
+	p := d377OpenPos(t, st, posID)
+	e.checkExitCondition(ctx, p) // 锚定轮（吸收常驻价差）
+	d113MoveCexLeg(t, e, 90.0)   // perp mid 100.075→90：锚后偏移 ~100bps ≫ band 40
+	should, reason := e.checkExitCondition(ctx, p)
 	if !should || !strings.HasPrefix(reason, "disaster") {
-		t.Fatalf("锚2: 持续偏离应触发 disaster, got %v/%q", should, reason)
+		t.Fatalf("锚2: CEX 腿断裂应触发 disaster, got %v/%q", should, reason)
 	}
 	rows := d377Evals(t, st, posID)
-	if len(rows) != 1 || rows[0].Decision != "disaster" {
-		t.Fatalf("锚2: want 1 row decision=disaster, got %+v", rows)
+	if len(rows) != 2 || rows[1].Decision != "disaster" {
+		t.Fatalf("锚2: want 末行 decision=disaster, got %+v", rows)
 	}
 }
 

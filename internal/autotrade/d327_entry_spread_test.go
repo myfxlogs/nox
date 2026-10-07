@@ -88,6 +88,10 @@ func TestD327_BasisStopCheck_Armed(t *testing.T) {
 	now := time.Now()
 	qb.Publish(bus.Quote{Symbol: "XPTUSD", Venue: "3001157", VenueType: "mt5", Bid: 3982, Ask: 4000.2, Time: now, VenueSymbol: "XPTUSD"})
 	qb.Publish(bus.Quote{Symbol: "XPTUSDT", Venue: "okx", VenueType: "perp", Bid: 4002, Ask: 4002.02, Time: now, VenueSymbol: "XPT-USDT-SWAP"})
+	// D-113：kill 判据=CEX 腿 vs 跨所共识——共识源贴腿 mid 4002.01，首轮锚定；
+	// 其后腿移至 mid 3946（偏移 ~140bps）→ debounce=1 单次即杀。
+	qb.Publish(bus.Quote{Symbol: "XPTUSDT", Venue: "gate", VenueType: "perp", Bid: 4001.9, Ask: 4002.1, Time: now, VenueSymbol: "XPT_USDT"})
+	qb.Publish(bus.Quote{Symbol: "XPTUSDT", Venue: "binance", VenueType: "perp", Bid: 4001.9, Ask: 4002.1, Time: now, VenueSymbol: "XPTUSDT"})
 
 	e := &Engine{
 		store:         s,
@@ -101,9 +105,13 @@ func TestD327_BasisStopCheck_Armed(t *testing.T) {
 			XAssetDisasterBps:    40, XAssetDisasterNoiseMult: 4, XAssetDisasterDebounce: 1, XAssetQuoteMaxAge: 5 * time.Minute,
 		},
 	}
+	if close, _ := e.checkExitCondition(context.Background(), pos); close {
+		t.Fatal("锚定轮不应平仓")
+	}
+	qb.Publish(bus.Quote{Symbol: "XPTUSDT", Venue: "okx", VenueType: "perp", Bid: 3945, Ask: 3946, Time: now, VenueSymbol: "XPT-USDT-SWAP"})
 	close, reason := e.checkExitCondition(context.Background(), pos)
 	if !close {
-		t.Fatalf("基差偏离穿灾难带应平仓（退出链路武装）, reason=%s", reason)
+		t.Fatalf("CEX 腿断裂应平仓（退出链路武装）, reason=%s", reason)
 	}
 	if !strings.HasPrefix(reason, "disaster") {
 		t.Errorf("reason 应为 disaster 判定, got %q", reason)
