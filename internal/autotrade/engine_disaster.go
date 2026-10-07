@@ -7,9 +7,11 @@ package autotrade
 import (
 	"context"
 	"fmt"
+	"log"
 	"math"
 	"time"
 
+	"arb/internal/bus"
 	"arb/internal/store/pgstore"
 )
 
@@ -42,7 +44,7 @@ func (e *Engine) disasterCheckXAsset(ctx context.Context, p *pgstore.Position) (
 	if e.disasterBreach == nil { // 惰性初始化（测试字面量 Engine 无 New 装配路径）
 		e.disasterBreach = make(map[int64]int)
 	}
-	basisBps, quoteAge, ok := e.currentBasisBpsAged(p)
+	basisBps, quoteAge, buyQ, sellQ, ok := e.currentBasisBpsAgedQuotes(p)
 	if !ok || p.ExpectedEntrySpreadBps == nil {
 		delete(e.disasterBreach, p.ID) // 连续性断（无法评估）
 		return false, "", false, 0
@@ -51,6 +53,14 @@ func (e *Engine) disasterCheckXAsset(ctx context.Context, p *pgstore.Position) (
 	if e.cfg.XAssetQuoteMaxAge > 0 && quoteAge > e.cfg.XAssetQuoteMaxAge {
 		delete(e.disasterBreach, p.ID) // stale 不计数（连续性断；周末闭市=无法评估非灾难）
 		return false, "", true, quoteAge
+	}
+	// D-111：快行情挂起闸——任一腿窗口位移超阈 → 本轮不判+清计数（同 stale 连续性断）。
+	// 业主领域裁定：Exness 类 CFD broker 大行情冻结/滞后报价 30min~1h 是常态作弊行为非结构
+	// 断裂；此窗内跨所 basis 算不准（#509 误杀=MT 滞后价撕开 dev 42>40，2s 后 dev≈3.5）。
+	// 新鲜度闸只能挡「时间戳旧」，挡不住「时间戳新但价格滞后」——位移闸正是为此。
+	if e.fastMarketSuspend(ctx, p.ID, buyQ, sellQ) {
+		delete(e.disasterBreach, p.ID)
+		return false, "", false, 0
 	}
 	dev := math.Abs(basisBps - *p.ExpectedEntrySpreadBps)
 	if dev <= band {
@@ -67,6 +77,62 @@ func (e *Engine) disasterCheckXAsset(ctx context.Context, p *pgstore.Position) (
 		return true, fmt.Sprintf("disaster: dev %.1f > band %.1f", dev, band), false, 0
 	}
 	return false, "", false, 0
+}
+
+// histPoint D-111：快行情位移采样点（venue 时序 mid）。quoteHist 挂 disasterMu 域（单写者=
+// disasterCheckXAsset 调用路径，与 disasterBreach 同锁生命周期）。
+type histPoint struct {
+	ts  time.Time // Quote.Time（venue 时间戳，冻结即停采——同价重帧去重靠它）
+	mid float64
+}
+
+// fastMarketSuspend D-111：快行情判定挂起。双腿各自 mid 位移采样进环形窗（key=venueKey|
+// canonical 跨持仓共享），任一腿窗口位移 |最新−窗内最早|/最新 >XAssetFastMoveBps → suspend。
+// suspend 语义=连续性断（清 breach、episode 首报 warn 一次、出窗复位可再报）。
+// cfg 任一 ≤0 → 闸关（fail-open 回旧行为，逃生阀）。
+func (e *Engine) fastMarketSuspend(ctx context.Context, posID int64, quotes ...bus.Quote) bool {
+	if e.cfg.XAssetFastMoveBps <= 0 || e.cfg.XAssetFastMoveWindow <= 0 {
+		return false
+	}
+	if e.quoteHist == nil {
+		e.quoteHist = make(map[string][]histPoint)
+		e.fastMoveFlag = make(map[int64]bool)
+	}
+	for _, q := range quotes {
+		if q.Mid() <= 0 {
+			continue
+		}
+		key := q.Venue + ":" + q.VenueType + "|" + q.Symbol
+		h := e.quoteHist[key]
+		if n := len(h); n == 0 || q.Time.After(h[n-1].ts) { // 同刻/回退帧不采（冻结期零增长）
+			h = append(h, histPoint{ts: q.Time, mid: q.Mid()})
+		}
+		cut := q.Time.Add(-e.cfg.XAssetFastMoveWindow)
+		for len(h) > 1 && h[0].ts.Before(cut) {
+			h = h[1:]
+		}
+		e.quoteHist[key] = h
+		if len(h) < 2 {
+			continue
+		}
+		last := h[len(h)-1]
+		disp := math.Abs(last.mid-h[0].mid) / last.mid * 10000
+		if disp <= e.cfg.XAssetFastMoveBps {
+			continue
+		}
+		if !e.fastMoveFlag[posID] {
+			e.fastMoveFlag[posID] = true
+			msg := fmt.Sprintf("品种 %s 快行情中（%ds 窗 %s 位移 %.1fbps>%.1f），灾难判定挂起——CFD 腿报价此窗不可信（broker 大行情冻结/滞后），回稳自动恢复",
+				q.Symbol, int(e.cfg.XAssetFastMoveWindow.Seconds()), key, disp, e.cfg.XAssetFastMoveBps)
+			if err := e.store.InsertPositionAlert(ctx, posID, "warn", msg); err != nil {
+				log.Printf("[autotrade] pos %d fastmove alert write: %v", posID, err)
+			}
+		}
+		log.Printf("[autotrade] pos=%d fast-move suspend: %s disp=%.1fbps>%.1f", posID, key, disp, e.cfg.XAssetFastMoveBps)
+		return true
+	}
+	delete(e.fastMoveFlag, posID) // 双腿均在窗内 → episode 出，复位首报去重
+	return false
 }
 
 // fmtDisasterBand D-378b：判距来源外化（观测行 detail 必须含 max(cfg,noise×mult) 格式）。

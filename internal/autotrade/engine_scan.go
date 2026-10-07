@@ -69,6 +69,7 @@ func (e *Engine) evaluatePosition(ctx context.Context, p *pgstore.Position) bool
 				_ = e.service.Store().SetPositionNote(ctx, p.ID, "settle_failed: "+err.Error())
 			}
 		}
+		e.notifyPositionClosed(ctx, p, "probe: "+probeRes.reason) // D-111②
 		return true
 	}
 	// D-053 ③ R1②：高影响财历事件禁区——非 XASSET 类型禁区内推迟本轮常规退出
@@ -98,7 +99,23 @@ func (e *Engine) evaluatePosition(ctx context.Context, p *pgstore.Position) bool
 			_ = e.service.Store().SetPositionNote(ctx, p.ID, "settle_failed: "+err.Error())
 		}
 	}
+	e.notifyPositionClosed(ctx, p, "exit: "+reason) // D-111②
 	return true
+}
+
+// notifyPositionClosed D-111②：平仓成功落 warn alert（→alerts→feishu 扇出 D-508）。
+// 此前正常平仓只写 autotrade_logs+stdout——开仓有 [机会执行] 推送、平仓静默的不对称修平；
+// realized 取 settle 后库值（settle 失败/延迟→省略该段不阻塞通知本体）。#509 disaster 平掉
+// 业主无感即本缺口实证。
+func (e *Engine) notifyPositionClosed(ctx context.Context, p *pgstore.Position, reason string) {
+	realized := ""
+	if np, err := e.store.GetPosition(ctx, p.ID); err == nil && np.RealizedPnl != nil {
+		realized = fmt.Sprintf("，realized=%.2f USD", *np.RealizedPnl)
+	}
+	msg := fmt.Sprintf("[自动平仓] 持仓#%d %s：%s%s", p.ID, p.Type, reason, realized)
+	if err := e.store.InsertPositionAlert(ctx, p.ID, "warn", msg); err != nil {
+		log.Printf("[autotrade] pos %d close notify write: %v", p.ID, err)
+	}
 }
 
 // allLegsActionable D-495 S3：position 全部 OPEN+FILLED 腿过 LegActionable。

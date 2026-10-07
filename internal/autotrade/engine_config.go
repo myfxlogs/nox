@@ -135,7 +135,10 @@ type Config struct {
 	XAssetDisasterNoiseMult float64
 	XAssetDisasterDebounce  int
 	XAssetQuoteMaxAge       time.Duration // ≤0 = 不查新鲜度（回退旧行为）
-	XAssetCexFeeBps         float64
+	// D-111：快行情挂起闸（任一 ≤0=闸关回旧行为）。
+	XAssetFastMoveBps    float64
+	XAssetFastMoveWindow time.Duration
+	XAssetCexFeeBps      float64
 
 	// D-014：econ 经济闸。EconFeeBps=费率源解析器（venue 事实/exchange_configs，
 	// 未接线或缺源 → fail-closed 拒开/不收割）；MaxBreakevenDays=入场回本上限
