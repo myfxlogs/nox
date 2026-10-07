@@ -50,7 +50,7 @@ func (ts *TickSampler) Run(ctx context.Context, symbols []string) {
 
 	for _, sym := range symbols {
 		ch, cancel := ts.bus.Subscribe(sym)
-		safego.Go("tick_sampler:sample", func() {
+		safego.GoLoop("tick_sampler:sample", func() {
 			defer cancel()
 			for {
 				select {

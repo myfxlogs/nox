@@ -164,7 +164,7 @@ func (o *OKXPrivateWS) runOnce(ctx context.Context) error {
 	stale := newStaleGuard()
 	done := make(chan struct{})
 	defer close(done)
-	safego.Go("okx_private_ws:ping", func() {
+	safego.GoLoop("okx_private_ws:ping", func() {
 		ticker := time.NewTicker(20 * time.Second)
 		defer ticker.Stop()
 		for {

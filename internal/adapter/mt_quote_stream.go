@@ -69,7 +69,7 @@ func (a *MT5Adapter) runQuoteStream(ctx context.Context, ch chan<- bus.Quote) {
 	// zfDone 先于 close(ch) 收口（T6 不泄漏语义由此保证）。
 	a.zfReset()
 	zfDone := make(chan struct{})
-	safego.Go("mt5:zeroframeWatchdog", func() { defer close(zfDone); a.zeroframeWatchdog(ctx) })
+	safego.GoLoop("mt5:zeroframeWatchdog", func() { a.zeroframeWatchdog(ctx); close(zfDone) }) // D-115：尾部非 defer——panic 重启不预关 zfDone（二次 close=panic）
 	defer func() { <-zfDone; close(ch) }()
 	for {
 		if ctx.Err() != nil {

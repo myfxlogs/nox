@@ -116,7 +116,7 @@ func (b *BinanceUserWS) runOnceSpot(ctx context.Context) error {
 	// 续租 goroutine：renewEvery 一次 ws-api ping；失败 → 关流连接触发 runOnce 返回重取。
 	done := make(chan struct{})
 	defer close(done)
-	safego.Go("binance_user_ws:spot_keepalive", func() {
+	safego.GoLoop("binance_user_ws:spot_keepalive", func() {
 		ticker := time.NewTicker(b.renewEvery)
 		defer ticker.Stop()
 		ping := time.NewTicker(20 * time.Second)

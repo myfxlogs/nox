@@ -156,7 +156,7 @@ func (g *GatePrivateWS) runOnce(ctx context.Context) error {
 	})
 	done := make(chan struct{})
 	defer close(done)
-	safego.Go("gate_private_ws:ping", func() {
+	safego.GoLoop("gate_private_ws:ping", func() {
 		ticker := time.NewTicker(20 * time.Second)
 		defer ticker.Stop()
 		for {

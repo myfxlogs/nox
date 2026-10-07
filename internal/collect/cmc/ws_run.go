@@ -59,7 +59,7 @@ func (w *WsClient) runOnce(ctx context.Context) error {
 	// 4. heartbeat goroutine
 	done := make(chan struct{})
 	defer close(done)
-	safego.Go("cmc-ws:heartbeat", func() {
+	safego.GoLoop("cmc-ws:heartbeat", func() {
 		ticker := time.NewTicker(wsHeartbeatInterval)
 		defer ticker.Stop()
 		for {

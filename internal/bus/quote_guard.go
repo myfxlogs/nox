@@ -41,7 +41,7 @@ func NewQuoteGuard(bus *QuoteBus, store SymbolMappingStore, reload func(ctx cont
 // 阻塞至 ctx 取消。
 func (g *QuoteGuard) Run(ctx context.Context) {
 	ch, cancel := g.bus.Subscribe("")
-	safego.Go("quote_guard:consume", func() {
+	safego.GoLoop("quote_guard:consume", func() {
 		defer cancel()
 		for {
 			select {

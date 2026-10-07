@@ -224,9 +224,9 @@ func (a *MT5Adapter) Connect(ctx context.Context) error {
 	// D-099：attach 完成 → 启动 margin 事件驱动采集（MarginSink==nil 时 no-op）。
 	// stopCtx 取消时 Run 自然退出（Stop 调 stopCancel）。a.mu 仍持有：goroutine 异步启动，
 	// 其 a.mu 操作阻塞至 Connect 返回释放锁，无死锁。
-	safego.Go("mt5:marginSource", func() { a.runMarginSource(a.stopCtx) })
+	safego.GoLoop("mt5:marginSource", func() { a.runMarginSource(a.stopCtx) })
 	// D-107 P1：attach 完成 → 启动订单事件流消费（OrderEventSink==nil 时 no-op）。
-	safego.Go("mt5:orderEventSource", func() { a.runOrderEventSource(a.stopCtx) })
+	safego.GoLoop("mt5:orderEventSource", func() { a.runOrderEventSource(a.stopCtx) })
 	return nil
 }
 
