@@ -70,7 +70,16 @@ func (d *Deps) fill() {
 		d.ResearchDir = DefaultResearchDir
 	}
 	if d.Run == nil {
-		d.Run = analyst.RunWithSpecs
+		// D-098 S1/S2 缺省 Runner：explorer 三面（daily/weekly/probe）调用预算 300s
+		//（大 prompt+8192 预算的合法调用截止，ctx 到点自然截止）+ thinking disabled
+		//（结构化 JSON 输出面，思考纯耗限时——探针实证 512 预算全耗隐形推理 chars=0）。
+		d.Run = func(ctx context.Context, c *analyst.Client, tools analyst.ToolExecutor,
+			specs []analyst.ToolSpec, systemPrompt string, msgs []analyst.Message,
+			cb analyst.LoopCallbacks) (analyst.LoopResult, error) {
+			ctx, cancel := context.WithTimeout(ctx, 300*time.Second)
+			defer cancel()
+			return analyst.RunWithSpecsMaxTokensThinking(ctx, c, tools, specs, systemPrompt, msgs, cb, 8192, json.RawMessage(`{"type":"disabled"}`))
+		}
 	}
 	if d.Now == nil {
 		d.Now = time.Now
