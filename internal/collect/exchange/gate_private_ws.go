@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -102,8 +103,13 @@ func (g *GatePrivateWS) SetGateHooks(h GatePrivateHooks) { g.hooks = h }
 func (g *GatePrivateWS) SetOnReconnect(f func()) { g.onReconnect = f }
 
 // WSURL base_url → WS 端点派生（SSOT：TrimSuffix "/api/v4" + "/v4/ws/usdt"；https→wss/http→ws）。
+// D-106：base 指 gate 原生 REST 域（api.gateio.ws）时 WS 须改打官方期货 WS 域
+// fx-ws.gateio.ws——原生 REST/WS 双 host 分立，api 域上 /v4/ws/* 404（SG 实拍）。
 func (g *GatePrivateWS) WSURL() string {
 	u := strings.TrimSuffix(g.baseURL, "/api/v4") + "/v4/ws/usdt"
+	if pu, err := url.Parse(g.baseURL); err == nil && pu.Host == "api.gateio.ws" {
+		u = pu.Scheme + "://fx-ws.gateio.ws/v4/ws/usdt"
+	}
 	u = strings.Replace(u, "https://", "wss://", 1)
 	u = strings.Replace(u, "http://", "ws://", 1)
 	return u
