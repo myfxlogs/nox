@@ -26,7 +26,7 @@ type Scanner struct {
 	earn        *EarnCollector
 	client      *http.Client
 	bnAPIURL    string
-	okxSpotBase string // D-578：okx spot base_url（cex-proxy 深度通道）
+	okxSpotBase string // okx spot base_url（cex-proxy；spread 轨 D-011 回落通道）
 	symbols     []string
 	// refreshTopic D-007 S3：scanOnce 落库毕 emit "cex_scan"（前端失效触发；nil=未接线静默）。
 	refreshTopic *bus.Topic[string]
@@ -42,7 +42,7 @@ func NewScanner(cfg *config.Config, store *pgstore.Store, am AccountSnapshotter,
 			bnAPIURL = e.BaseURL
 		}
 		if e.Venue == "okx" && e.VenueType == "spot" && !e.Simulated && okxSpotBase == "" {
-			okxSpotBase = e.BaseURL // D-578：cex-proxy 基址（token 由 httpx 注入）
+			okxSpotBase = e.BaseURL // cex-proxy 基址（token 由 httpx 注入）
 		}
 	}
 	return &Scanner{
@@ -62,8 +62,6 @@ func NewScanner(cfg *config.Config, store *pgstore.Store, am AccountSnapshotter,
 // （venue 无推送），低频拉取合法但不作即时开仓判据（FUNDING_HEDGE 判定链=funding regime
 // facts+实时双腿报价，不经本表）。
 func (s *Scanner) Run(ctx context.Context) {
-	// D-578：三所 spot 深度定时采样（同生命周期 goroutine；env ARB_DEPTH_SAMPLER_OFF=1 停）。
-	go newDepthSampler(s.store, s.okxSpotBase).Run(ctx)
 	// 启动即水合一次账户快照（#1c：boot 历史水合唯一写口；实时值=AccountMonitor，
 	// MT=余额帧事件写 / CEX=私有流事件写 / 无流子账户=资金页打开按需回读 Kick）。
 	if err := s.hydrateAccountSnapshots(ctx); err != nil {
