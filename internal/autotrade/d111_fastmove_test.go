@@ -57,25 +57,37 @@ func TestD111_FastMove_SuspendNoKill(t *testing.T) {
 }
 
 // A2：闸开但静市（双腿零位移）——灾难带语义不变，连 2 轮破带照杀。
+// A2：闸开 + 静市 + CEX 腿结构断裂——瞬时跳价窗内挂起（位移>阈），断裂持续超出
+// 90s 窗后照杀（结构断裂 outlive 快行情窗，这正是 D-113 语义：真断裂杀、瞬时撕价不杀）。
 func TestD111_FastMove_CalmStillKills(t *testing.T) {
 	st, posID, e := d378bSeedXAsset(t, -9.0, 6.9)
 	e.cfg = d111Cfg()
 	qb := e.quotes
 	now := time.Now()
-	// 两轮发布：价变拉开 basis 破带，但同腿 mid 位移≈0（buyBid 变不等于 mid 位移——
-	// 让 mid 也变但位移 <阈：bid/ask 同向平移 5bps）
-	qb.Publish(bus.Quote{Symbol: "XAUUSD", Venue: "277842155", VenueType: "mt5", Bid: 99.40, Ask: 99.45, Time: now.Add(-30 * time.Second)})
-	qb.Publish(bus.Quote{Symbol: "PAXGUSDT", Venue: "binance", VenueType: "perp", Bid: 100.05, Ask: 100.10, Time: now.Add(-30 * time.Second)})
-	qb.Publish(bus.Quote{Symbol: "XAUUSD", Venue: "277842155", VenueType: "mt5", Bid: 99.40, Ask: 99.45, Time: now})
+	// 静市帧：basis 贴锚，共识源就位
+	qb.Publish(bus.Quote{Symbol: "XAUUSD", Venue: "277842155", VenueType: "mt5", Bid: 100.01, Ask: 100.06, Time: now})
 	qb.Publish(bus.Quote{Symbol: "PAXGUSDT", Venue: "binance", VenueType: "perp", Bid: 100.05, Ask: 100.10, Time: now})
+	d113PublishConsensus(t, e, 100.0)
 	ctx := context.Background()
 	p := d377OpenPos(t, st, posID)
+	if should, _ := e.checkExitCondition(ctx, p); should { // 锚定轮
+		t.Fatal("锚定轮不应平仓")
+	}
+	// CEX 腿断裂：mid 100.075→100.55（位移 48bps>25 → 窗内挂起）
+	qb.Publish(bus.Quote{Symbol: "PAXGUSDT", Venue: "binance", VenueType: "perp", Bid: 100.50, Ask: 100.60, Time: now.Add(10 * time.Second)})
 	if should, _ := e.checkExitCondition(ctx, p); should {
-		t.Fatal("第 1 轮应仅计数（debounce=2）")
+		t.Fatal("断裂瞬时仍在位移窗内 → 挂起不杀")
+	}
+	// 窗滑过（>90s）：断裂持续——恢复判定，debounce 2 轮后杀
+	post := now.Add(95 * time.Second)
+	qb.Publish(bus.Quote{Symbol: "XAUUSD", Venue: "277842155", VenueType: "mt5", Bid: 100.01, Ask: 100.06, Time: post})
+	qb.Publish(bus.Quote{Symbol: "PAXGUSDT", Venue: "binance", VenueType: "perp", Bid: 100.50, Ask: 100.60, Time: post})
+	if should, _ := e.checkExitCondition(ctx, p); should {
+		t.Fatal("窗后第 1 轮应仅计数（debounce=2）")
 	}
 	should, reason := e.checkExitCondition(ctx, p)
-	if !should || !strings.HasPrefix(reason, "disaster: dev") {
-		t.Fatalf("静市破带第 2 轮应 disaster 平仓, got %v %q", should, reason)
+	if !should || !strings.HasPrefix(reason, "disaster: cex-leg dev") {
+		t.Fatalf("断裂持续超窗应 disaster 平仓, got %v %q", should, reason)
 	}
 }
 

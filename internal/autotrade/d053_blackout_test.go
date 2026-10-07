@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"arb/internal/bus"
 	"arb/internal/store/pgstore"
 	"arb/internal/testutil"
 )
@@ -169,8 +170,8 @@ func TestD053_ExitSuspendFundingDeferredDisasterUntouched(t *testing.T) {
 		t.Fatalf("eval 应落 decision=macro_blackout: got %q err=%v", dec, err)
 	}
 
-	// (b) 禁区内 + disaster 条件（anchor −12.39 vs basis +400bps：dev≈412>band 40）
-	// → shouldClose=true——保命退出不被闸推迟。
+	// (b) 禁区内 + CEX 腿结构断裂（D-113：MT 侧偏离只告警不杀；kill=CEX 腿 vs 跨所
+	// 共识锚后偏移）→ shouldClose=true——保命退出不被闸推迟。
 	d311Truncate(t, s) // 仓/腿/账户/facts 清场（macro_event 不在清单——禁区事件保留）
 	p2 := d014EconPos(t, s, 20.8)
 	if _, err := s.Pool().Exec(ctx, `UPDATE positions SET expected_entry_spread_bps=-12.39 WHERE id=$1`, p2.ID); err != nil {
@@ -181,8 +182,16 @@ func TestD053_ExitSuspendFundingDeferredDisasterUntouched(t *testing.T) {
 		t.Fatalf("list pos: rows=%d err=%v", len(rows), err)
 	}
 	p2 = &rows[0]
-	eb := d014EconEngine(s, d404Quotes(now, 4160.0, 4000, 0), true) // basis=+400bps
+	qb := d404Quotes(now, 4160.0, 4000, 0) // basis=+400bps（MT 侧 dev≈412：告警不杀）
+	// 共识源贴腿 mid 3999.5（XPTUSDT 同品种跨所）
+	qb.Publish(bus.Quote{Symbol: "XPTUSDT", Venue: "gate", VenueType: "perp", Bid: 3999, Ask: 4000, Time: now, VenueSymbol: "XPT_USDT"})
+	qb.Publish(bus.Quote{Symbol: "XPTUSDT", Venue: "binance", VenueType: "perp", Bid: 3999, Ask: 4000, Time: now, VenueSymbol: "XPTUSDT"})
+	eb := d014EconEngine(s, qb, true)
 	eb.cfg.MacroBlackoutMin, eb.cfg.MacroBlackoutCurrencies = 15, "USD"
+	if close, _ := eb.xassetExitCheck(ctx, p2); close {
+		t.Fatal("锚定轮不应平仓")
+	}
+	qb.Publish(bus.Quote{Symbol: "XPTUSDT", Venue: "okx", VenueType: "perp", Bid: 3929, Ask: 3930, Time: now, VenueSymbol: "XPT-USDT-SWAP"}) // 腿断裂 mid→3929.5
 	if close, reason := eb.xassetExitCheck(ctx, p2); !close || !containsSub(reason, "disaster") {
 		t.Fatalf("禁区内 disaster 保命链应触发: close=%v reason=%q", close, reason)
 	}
