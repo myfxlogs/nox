@@ -212,6 +212,14 @@ func Mark(key string, ok bool, err error) {
 	}
 }
 
+// Degraded D-109：单键是否处于 degraded（连败达阈）态——死流 REST 兜底看门狗闸读。
+func Degraded(key string) bool {
+	mu.Lock()
+	defer mu.Unlock()
+	e := reg[key]
+	return e != nil && e.state == StateDegraded
+}
+
 // Snapshot 全量行快照（排序稳定；>IdleWindow 无事件的非 degraded 项透出 idle）。
 func Snapshot() []Row {
 	mu.Lock()

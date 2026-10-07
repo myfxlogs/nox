@@ -51,6 +51,11 @@ type BinanceMarketWS struct {
 	spotInfoFetch  func(ctx context.Context, url string) (map[string]struct{}, error) // 测试注入点；nil=实拉 spotInfoURL
 	tickerEmit     map[string]time.Time                                               // D-591 S6：vol24h 每符号节流（仅 ticker 连接 goroutine 访问）
 	indexEmit      map[string]time.Time                                               // D-595 S1：index_price 每符号节流（仅 market 连接 goroutine 访问）
+	// degradedFn D-109：死流判定注入点（REST 兜底看门狗用；nil=dephealth.Degraded 生产读口）。
+	degradedFn func(key string) bool
+	// D-109 REST 兜底轨节流 map（仅 rest-fallback goroutine 访问；与 WS 轨 map 分离防跨程竞争）。
+	indexEmitREST  map[string]time.Time
+	tickerEmitREST map[string]time.Time
 }
 
 // NewBinanceMarketWS 创建采集器（host 取 cfg.BinanceBaseURL scheme+host）。
@@ -153,6 +158,13 @@ func (b *BinanceMarketWS) Run(ctx context.Context, publish func(bus.Quote)) {
 	safego.Go("binance_market_ws:perp-ticker", func() {
 		defer wg.Done()
 		b.runLoop(ctx, b.marketCands, "perp", "ticker", publish)
+	})
+	// D-109：死流 REST 看门狗兜底——dephealth 判 markPrice/ticker 流红才低频拉
+	// REST 补观测 facts，复绿即停零轮询（D-004 例外留痕 decisions.md D-109）。
+	wg.Add(1)
+	safego.Go("binance_market_ws:rest-fallback", func() {
+		defer wg.Done()
+		b.runRestFallback(ctx)
 	})
 	wg.Wait()
 }
