@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"arb/internal/fact"
 	"arb/internal/scan"
 	"arb/internal/store/pgstore"
 )
@@ -41,6 +42,7 @@ type fakeStore struct {
 	macroEvents     []pgstore.MacroEvent     // D-061 ②：禁区事件注入
 	liveOpen        int                      // D-102：真金在仓数注入
 	liveOpenErr     error                    // D-102：在仓计数读败形态
+	facts           []fact.Fact              // D-104：InsertFacts 收集
 	alerts          []string
 	dedupCalls      []string
 	upserts         map[string]string
@@ -129,6 +131,10 @@ func (f *fakeStore) MinWeekdaySessionStartMin(context.Context, string, int) (int
 }
 func (f *fakeStore) CountLiveOpenPositions(context.Context) (int, error) {
 	return f.liveOpen, f.liveOpenErr
+}
+func (f *fakeStore) InsertFacts(_ context.Context, fs []fact.Fact) error {
+	f.facts = append(f.facts, fs...)
+	return nil
 }
 func (f *fakeStore) InsertAlert(_ context.Context, _ *int64, level, msg string) error {
 	f.alerts = append(f.alerts, level+"|"+msg)

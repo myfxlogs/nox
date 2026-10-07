@@ -12,11 +12,12 @@ import (
 	"arb/internal/safego"
 )
 
-// Run 阻塞至 ctx 取消（两路子 goroutine 经 safego 托管）。
+// Run 阻塞至 ctx 取消（三路子 goroutine 经 safego 托管）。
 func Run(ctx context.Context, d Deps) {
 	safego.Go("selfwatch:daily", func() { dailyLoop(ctx, d) })
 	safego.Go("selfwatch:anomaly", func() { anomalyLoop(ctx, d) })
-	log.Printf("[selfwatch] scheduler started (daily 08:30BJ paper+stage · mon 08:30BJ weekly · hourly anomaly)")
+	safego.Go("selfwatch:canary", func() { canaryLoop(ctx, d) }) // D-104 出口 canary
+	log.Printf("[selfwatch] scheduler started (daily 08:30BJ paper+stage · mon 08:30BJ weekly · hourly anomaly · canary 60s)")
 	<-ctx.Done()
 }
 
