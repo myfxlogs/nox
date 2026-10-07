@@ -16,15 +16,22 @@ import (
 // D-159 W3a R5：loadFacts 返回 map[factKey]fact.Fact（保留完整 Fact，含 Ts 供 TTL 检查；
 // 原实现只存 float64 丢 Ts → 过期 Fact 无法识别）。
 func (l *Ledger) loadFacts(ctx context.Context) (map[factKey]fact.Fact, map[factKey]fact.Fact, map[factKey]fact.Fact, error) {
-	longFacts, err := l.store.LatestFactsByKind(ctx, fact.KindSwapLong)
+	// D-108 修补：ts 下界= factTTL——界外 fact 下游本就被 TTL 闸 fail-closed 跳过
+	// （fact_expired 与 fact_not_found 同出口「不写入」），加载层等价但免整 kind
+	// 全扫（funding kind 220 万行 DISTINCT ON 生产实测 33s 超 runTimeout=30s）。
+	since := time.Time{}
+	if l.factTTL > 0 {
+		since = time.Now().Add(-l.factTTL)
+	}
+	longFacts, err := l.store.LatestFactsByKindSince(ctx, fact.KindSwapLong, since)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	shortFacts, err := l.store.LatestFactsByKind(ctx, fact.KindSwapShort)
+	shortFacts, err := l.store.LatestFactsByKindSince(ctx, fact.KindSwapShort, since)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	fundingFacts, err := l.store.LatestFactsByKind(ctx, fact.KindFunding)
+	fundingFacts, err := l.store.LatestFactsByKindSince(ctx, fact.KindFunding, since)
 	if err != nil {
 		return nil, nil, nil, err
 	}

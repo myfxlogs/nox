@@ -47,7 +47,8 @@ type Store interface {
 	// D-193-A 扩包：生产写入迁 InsertCashflowFull（带事实身份字段）；旧 InsertCashflow 保留供测试基建。
 	InsertCashflowFull(ctx context.Context, c *pgstore.Cashflow) (won bool, err error)
 	LatestFacts(ctx context.Context, kind, venue, symbol string) ([]fact.Fact, error)
-	LatestFactsByKind(ctx context.Context, kind string) ([]fact.Fact, error) // D-508 S3：kind-only 无 OR 专用查询
+	LatestFactsByKind(ctx context.Context, kind string) ([]fact.Fact, error)                       // D-508 S3：kind-only 无 OR 专用查询
+	LatestFactsByKindSince(ctx context.Context, kind string, since time.Time) ([]fact.Fact, error) // D-108：ts 下界变体（since 零值=无界）
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
 	// D-330 断层④：sellCanonical 三段链查询（pgstore 既有实现，接口补齐）——
 	// SELL 腿 funding/swap fact 按侧向 canonical 查，跨 canonical 对不再必然 miss。
