@@ -115,9 +115,10 @@ func (s *Store) legContractSize(ctx context.Context, leg PositionLeg) (float64, 
 }
 
 // PositionNetUSD 仓净额唯一合成式（D-013 ②）。
-// = 价差组件 + Σ(kind='funding'|'swap') + Σcommission。
+// = 价差组件 + funding/swap 分量 + Σcommission。
 // 价差组件：pricePnlOverride 非 nil 用之（exec 侧已含校准器权威值替换的腿价差）；
 // nil → PositionLegPricePnlUSD 从落库腿重算（settlement/迁移口径）。
+// funding/swap 分量：D-107 真值化（见 fundingSwapNetUSD——与 D-438 结算轨规则统一）。
 // commission 去重：腿键行（event_key='leg:%'）存在则只计之（新单一事实源）；
 // 否则回落全部 commission 行（leg: 行未铺到的 legacy 仓——旧 exec:* 键是唯一记录）。
 // 幂等：纯查询，调用方在终态写点使用。
@@ -132,17 +133,49 @@ func (s *Store) PositionNetUSD(ctx context.Context, posID int64, pricePnlOverrid
 			return 0, err
 		}
 	}
-	var nonComm float64
-	if err := s.pool.QueryRow(ctx,
-		`SELECT COALESCE(SUM(amount_usd),0) FROM position_cashflows
-		 WHERE position_id=$1 AND kind IN ('funding','swap')`, posID).Scan(&nonComm); err != nil {
-		return 0, fmt.Errorf("pos=%d funding/swap cashflows: %w", posID, err)
+	nonComm, err := s.fundingSwapNetUSD(ctx, posID)
+	if err != nil {
+		return 0, err
 	}
 	comm, err := s.commissionCashflowsUSD(ctx, posID)
 	if err != nil {
 		return 0, err
 	}
 	return pricePnl + nonComm + comm, nil
+}
+
+// fundingSwapNetUSD D-107：PositionNetUSD 的 funding/swap 现金流分量（真值化）。
+// funding：income_events 行存在 → Σincome_events 实结替换估计行（D-438
+// SumCashflowsNetForSettle 同规则——实结=venue 权威，quality=actual 语义；平仓时点后
+// 的结算窗不产生实收，实结和即平仓真值，估计行的平仓日未结算段随之出局）；无 income
+// → 估计行 SUM 原样回落（验收：回退估计不变——不含 D-438 的 unknown 行排除语义，
+// 存量 SUM 形态保持）。swap：估计行 SUM 不变（MT 息差无实结源；rollover 时点无 venue
+// 权威值，平仓日折算禁猜——存量形态保留）。cashflow 行 quality 标记不回写，仅取值口径变。
+func (s *Store) fundingSwapNetUSD(ctx context.Context, posID int64) (float64, error) {
+	var incomeSum float64
+	var incomeRows int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(amount_usd),0), COUNT(*) FROM income_events WHERE position_id=$1`,
+		posID).Scan(&incomeSum, &incomeRows); err != nil {
+		return 0, fmt.Errorf("pos=%d income events: %w", posID, err)
+	}
+	if incomeRows > 0 {
+		// funding=Σincome 实结替换；swap 行（MT 息差）不涉替换，保持计入。
+		var swapSum float64
+		if err := s.pool.QueryRow(ctx,
+			`SELECT COALESCE(SUM(amount_usd),0) FROM position_cashflows
+			 WHERE position_id=$1 AND kind='swap'`, posID).Scan(&swapSum); err != nil {
+			return 0, fmt.Errorf("pos=%d swap cashflows: %w", posID, err)
+		}
+		return incomeSum + swapSum, nil
+	}
+	var nonComm float64
+	if err := s.pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(amount_usd),0) FROM position_cashflows
+		 WHERE position_id=$1 AND kind IN ('funding','swap')`, posID).Scan(&nonComm); err != nil {
+		return 0, fmt.Errorf("pos=%d funding/swap cashflows: %w", posID, err)
+	}
+	return nonComm, nil
 }
 
 // commissionCashflowsUSD D-014：commission 净额（负值）单源——PositionNetUSD 与
