@@ -75,7 +75,10 @@ type Ledger struct {
 	nonSettleVenues map[string]bool // D-112：已知不结算 swap 的 venue 集合（key=PositionLeg.Venue 完整 key）
 	runTimeout      time.Duration   // 单次外部调用超时（loop-initial-block 铁律：默认 30s）
 	initialDelay    time.Duration   // 首轮延迟（等 adapter 就绪，默认 90s）
-	factTTL         time.Duration   // D-159 W4a R7：swap/funding Fact TTL（env 单源 cfg.SwapFactMaxAge，与 discoverSwapCombos/recalcNetSwap 同源）
+	// D-108①：首轮同日有界重试（缺省 10min×6；零值回落缺省，测试注入缩小）。
+	initialRetryBackoff time.Duration
+	initialRetryMax     int
+	factTTL             time.Duration // D-159 W4a R7：swap/funding Fact TTL（env 单源 cfg.SwapFactMaxAge，与 discoverSwapCombos/recalcNetSwap 同源）
 }
 
 // New 创建 swap 记账器。nonSettleVenues 为已知不结算 swap 的 venue 列表（D-112）。
@@ -102,20 +105,59 @@ func NewForDiagnosis(store Store, notional NotionalResolver, tripleDay TripleDay
 	return New(store, notional, tripleDay, nonSettleVenues, factTTL)
 }
 
+// D-108① 首轮同日有界重试缺省：10min 间隔 ×6 次（≈1h 覆盖——生产实拍两次重启首轮
+// load facts 超时均为 facts 冷缓存态，温热后即成功；重试用尽仍败=等次日 ticker）。
+const (
+	initialRetryBackoffDefault = 10 * time.Minute
+	initialRetryMaxDefault     = 6
+)
+
+// runInitial 首轮 Run 同日有界重试：失败按 initialRetryBackoff 间隔重试至
+// initialRetryMax 次成功即止；全败返回末错（当日缺口由次日 ticker 兜）。ctx 取消即停。
+// 字段零值=缺省（New 未设时回落，测试注入缩小间隔）。
+func (l *Ledger) runInitial(ctx context.Context) (int, error) {
+	backoff, maxN := l.initialRetryBackoff, l.initialRetryMax
+	if backoff <= 0 {
+		backoff = initialRetryBackoffDefault
+	}
+	if maxN <= 0 {
+		maxN = initialRetryMaxDefault
+	}
+	var lastErr error
+	for attempt := 1; attempt <= maxN; attempt++ {
+		n, err := l.Run(ctx)
+		if err == nil {
+			return n, nil
+		}
+		lastErr = err
+		log.Printf("[swapledger] initial attempt %d/%d failed: %v", attempt, maxN, err)
+		if attempt == maxN {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		case <-time.After(backoff):
+		}
+	}
+	return 0, fmt.Errorf("initial after %d attempts: %w", maxN, lastErr)
+}
+
 // StartLoop 日频 ticker（对账 StartLoop 同模式，loop-initial-block 铁律）。
 // 阻塞至 ctx 取消。首轮延迟 initialDelay（等 adapter 就绪），独立 goroutine 跑（不阻塞 ticker）。
 func (l *Ledger) StartLoop(ctx context.Context) {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
-	// 首轮延迟（等 adapter 就绪），独立 goroutine 跑（不阻塞 ticker loop）
+	// 首轮延迟（等 adapter 就绪），独立 goroutine 跑（不阻塞 ticker loop）。
+	// D-108①：首轮失败同日有界重试（runInitial）——24h ticker 兜不了当日缺口。
 	safego.Go("ledger:initial", func() {
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.After(l.initialDelay):
 		}
-		if n, err := l.Run(ctx); err != nil {
+		if n, err := l.runInitial(ctx); err != nil {
 			log.Printf("[swapledger] initial: %v", err)
 		} else if n > 0 {
 			log.Printf("[swapledger] initial: %d cashflows written", n)
