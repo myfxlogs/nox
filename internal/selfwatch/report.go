@@ -7,10 +7,8 @@ package selfwatch
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 	"time"
 
@@ -65,6 +63,7 @@ type DailyReport struct {
 	Stage1OK    bool // 全项 ✅（D-061 条件制判据）→ 附「待决策：Stage 1 可启」+ 单独 info alert
 	Stage1Table []StageCheck
 	Stage2Table []StageCheck
+	LiveOpenN   int // D-102：真金在仓数（>0=组合已启动，Stage 1 段转「在仓」停显就绪表）
 	WindowNet   float64
 	FailClosed  int
 	Stalled     int
@@ -73,32 +72,41 @@ type DailyReport struct {
 // evalStage1 只算 Stage 1 就绪表（纯读面，零副作用：不落档/不写 app_config/不
 // deliver）——BuildDaily（渲染全表）与 anomalyLoop（D-071：小时级就绪评估只用
 // allOK 位）共用单点判定，不复制逻辑。
-func evalStage1(ctx context.Context, d Deps, now time.Time) (rows []StageCheck, since time.Time, windowOK bool, ev *scan.PaperWindowEval, err error) {
+// D-102：真金在仓（environment='live' 在仓态）→ 组合已启动，「就绪」九项停显
+// （返回空表）；计数读败 fail-closed 整报不出——不能证明「无在仓」就不得显就绪面。
+func evalStage1(ctx context.Context, d Deps, now time.Time) (rows []StageCheck, since time.Time, windowOK bool, ev *scan.PaperWindowEval, liveOpen int, err error) {
 	since, windowOK, err = paperWindowStart(ctx, d)
 	if err != nil {
-		return nil, since, false, nil, err
+		return nil, since, false, nil, 0, err
+	}
+	liveOpen, err = d.Store.CountLiveOpenPositions(ctx)
+	if err != nil {
+		return nil, since, false, nil, 0, fmt.Errorf("stage1 live positions: %w", err)
 	}
 	if windowOK {
 		cohort, cerr := d.Store.PaperWindowCohort(ctx, paperWindowStructure, since)
 		if cerr != nil {
-			return nil, since, true, nil, fmt.Errorf("stage1 cohort: %w", cerr)
+			return nil, since, true, nil, liveOpen, fmt.Errorf("stage1 cohort: %w", cerr)
 		}
 		ev, cerr = d.EvalPaper(ctx, cohort, since, now)
 		if cerr != nil {
-			return nil, since, true, nil, fmt.Errorf("stage1 eval: %w", cerr)
+			return nil, since, true, nil, liveOpen, fmt.Errorf("stage1 eval: %w", cerr)
 		}
 	}
-	return stage1Checks(ctx, d, since, windowOK, ev, now), since, windowOK, ev, nil
+	if liveOpen > 0 {
+		return []StageCheck{}, since, windowOK, ev, liveOpen, nil
+	}
+	return stage1Checks(ctx, d, since, windowOK, ev, now), since, windowOK, ev, liveOpen, nil
 }
 
 // BuildDaily 生成日报（窗起点缺/解析败 → Body 显式报缺，Stage 表全 ❌）。
 func BuildDaily(ctx context.Context, d Deps) (*DailyReport, error) {
 	now := d.now()
-	rows, since, ok, ev, err := evalStage1(ctx, d, now)
+	rows, since, ok, ev, liveOpen, err := evalStage1(ctx, d, now)
 	if err != nil {
 		return nil, err
 	}
-	rep := &DailyReport{Stage1Table: rows}
+	rep := &DailyReport{Stage1Table: rows, LiveOpenN: liveOpen}
 	if ok {
 		rep.FailClosed, rep.Stalled, rep.WindowNet = ev.FailClosed, ev.Stalled, ev.WindowNet
 	}
@@ -189,80 +197,22 @@ func renderDaily(ctx context.Context, d Deps, since time.Time, ok bool, ev *scan
 		}
 		b.WriteString(skipLine)
 	}
-	b.WriteString("■ Stage 1 就绪\n")
-	writeTable(&b, rep.Stage1Table)
-	if rep.Stage1OK {
-		b.WriteString("→ 待决策：Stage 1 可启\n")
+	// D-102：真金在仓 → 段转「在仓（已启动）」，就绪红绿九项停显（组合已启动后
+	// 「就绪」语义错位，事故仓历史行永远翻不了绿）；平仓闭合后恢复就绪面。
+	// Stage 2 段不动。
+	if rep.LiveOpenN > 0 {
+		b.WriteString("■ Stage 1 在仓（已启动）\n")
+		b.WriteString(fmt.Sprintf("真金在仓 %d 仓——就绪判据停显，平仓后恢复\n", rep.LiveOpenN))
+	} else {
+		b.WriteString("■ Stage 1 就绪\n")
+		writeTable(&b, rep.Stage1Table)
+		if rep.Stage1OK {
+			b.WriteString("→ 待决策：Stage 1 可启\n")
+		}
 	}
 	b.WriteString("■ Stage 2 条件\n")
 	writeTable(&b, rep.Stage2Table)
 	return b.String(), nil
-}
-
-// dailyNetLine 逐日净额行：app_config 快照差分（prev 缺=首日基线记 0 增量并播种）。
-func (d Deps) dailyNetLine(ctx context.Context, windowNet float64, now time.Time) (string, error) {
-	day := now.In(bj).Format("2006-01-02")
-	hist := map[string]float64{}
-	if v, ok, err := d.Store.AppConfigString(ctx, cfgPaperNetHist); err != nil {
-		return "", fmt.Errorf("net hist load: %w", err)
-	} else if ok {
-		if jerr := json.Unmarshal([]byte(v), &hist); jerr != nil {
-			return "", fmt.Errorf("net hist parse: %w", jerr)
-		}
-	}
-	hist[day] = windowNet
-	// 滚动保留近 60 天（表行不无限长）。
-	if len(hist) > 60 {
-		keys := make([]string, 0, len(hist))
-		for k := range hist {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys[:len(keys)-60] {
-			delete(hist, k)
-		}
-	}
-	buf, err := json.Marshal(hist)
-	if err != nil {
-		return "", fmt.Errorf("net hist marshal: %w", err)
-	}
-	if err := d.Store.UpsertAppConfig(ctx, cfgPaperNetHist, string(buf), "D-033 逐日净额快照（内部状态键）"); err != nil {
-		return "", fmt.Errorf("net hist save: %w", err)
-	}
-	keys := make([]string, 0, len(hist))
-	for k := range hist {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	var parts []string
-	var prev float64
-	for i, k := range keys {
-		dv := hist[k]
-		if i == 0 {
-			parts = append(parts, fmt.Sprintf("%s $%.4f", k[5:], dv))
-		} else {
-			parts = append(parts, fmt.Sprintf("%s %+.4f", k[5:], dv-prev))
-		}
-		prev = dv
-	}
-	return "逐日净额：" + strings.Join(parts, "｜") + "\n", nil
-}
-
-// joinBuckets 日分桶行渲染（"MM-DD ×N($sum)"；退出原因经 exitReasonHuman 中文化）。
-func joinBuckets(bs []scan.PaperDayBucket, withReasons bool) string {
-	parts := make([]string, 0, len(bs))
-	for _, b := range bs {
-		s := fmt.Sprintf("%s ×%d($%.4f)", b.Day, b.Rows, b.Sum)
-		if withReasons && len(b.Reasons) > 0 {
-			rs := make([]string, 0, len(b.Reasons))
-			for _, r := range b.Reasons {
-				rs = append(rs, exitReasonHuman(r))
-			}
-			s += "[" + strings.Join(rs, ",") + "]"
-		}
-		parts = append(parts, s)
-	}
-	return strings.Join(parts, "｜")
 }
 
 func writeTable(b *strings.Builder, rows []StageCheck) {

@@ -14,7 +14,7 @@ func TestD071_HourlyStage1ReadyOnce(t *testing.T) {
 	st := greenStore()
 	d := testDeps(st, goodEval(), tNow)
 	hourly := func() { // 镜像 anomalyLoop 唤醒体内的小时级评估段
-		rows, _, _, _, err := evalStage1(context.Background(), d, d.now())
+		rows, _, _, _, _, err := evalStage1(context.Background(), d, d.now())
 		if err != nil {
 			t.Fatalf("evalStage1: %v", err)
 		}

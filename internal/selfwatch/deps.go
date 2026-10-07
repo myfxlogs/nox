@@ -52,6 +52,7 @@ type Store interface {
 	ListActivePaperSpotCarry(ctx context.Context) ([]pgstore.PaperSpotCarry, error)                               // D-061 ①
 	MacroHighEventsIn(ctx context.Context, from, to time.Time, currencies []string) ([]pgstore.MacroEvent, error) // D-061 ②
 	MinWeekdaySessionStartMin(ctx context.Context, kind string, weekday int) (int, bool, error)                   // D-061 ②
+	CountLiveOpenPositions(ctx context.Context) (int, error)                                                      // D-102 真金在仓数（已启动判定）
 	InsertAlert(ctx context.Context, ruleID *int64, level, message string) error
 	InsertAlertDedup(ctx context.Context, level, message string, window time.Duration) error
 }
