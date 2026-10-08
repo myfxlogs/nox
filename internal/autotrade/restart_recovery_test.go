@@ -3,7 +3,6 @@ package autotrade
 import (
 	"context"
 	"testing"
-	"time"
 )
 
 // D-195-C3 S1：重启恢复 + 数据库恢复测试（§10.1 场景 13/14）。
@@ -21,7 +20,7 @@ func TestRestart_LiveGateClosed(t *testing.T) {
 	}
 
 	// 「重启」= 重新构造 LiveGateChecker（模拟新进程）
-	lg := NewLiveGateChecker(s, 5*time.Minute, nil)
+	lg := NewLiveGateChecker(s, nil)
 	result := lg.Check(ctx, "", "", "")
 	if result.Passed {
 		t.Fatal("重启后 LiveGate 应关闭（Passed=false，无 live_gates 行），但 Passed=true")
