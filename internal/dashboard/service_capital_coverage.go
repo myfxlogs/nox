@@ -145,18 +145,21 @@ func trxUSDPrice(ctx context.Context, s *Service) (float64, bool) {
 }
 
 // cmcPoolRow ②CMC：余额=LastCMCAccountSummary.TotalAccountValue；
-// 最新持仓快照有行→「手动持仓中（浮盈 $X）」/无行→「现金闲置」；手动域无 carry 不入加权。
+// 最新持仓快照有行→状态=浮盈直数（负号如实）+hint「手动持仓中」/无行→「现金闲置」（无 hint）；
+// 池名说明性括注收 pool_hint（D-128 悬停层级化）。手动域无 carry 不入加权。
 func cmcPoolRow(ctx context.Context, s *Service) *v1.CapitalCoverageRow {
 	sum, err := s.store.LastCMCAccountSummary(ctx)
 	if err != nil {
 		return nil
 	}
-	r := covRow("CMC 账户（手动持仓监控域）")
+	r := covRow("CMC 账户")
+	r.PoolHint = "手动持仓监控域"
 	r.BalanceUsd = sum.TotalAccountValue
 	r.HasBalance = true
 	r.RealMoney = true
 	if pnl, n, err := s.store.LastCMCPositionSnapshotSummary(ctx); err == nil && n > 0 && pnl != nil {
-		r.Status = fmt.Sprintf("手动持仓中（浮盈 $%.2f）", *pnl)
+		r.Status = fmt.Sprintf("$%.2f", *pnl)
+		r.StatusHint = "手动持仓中"
 		r.Productive = true
 	} else {
 		r.Status = "现金闲置"
@@ -179,7 +182,6 @@ func venueAccountRows(ctx context.Context, s *Service) ([]*v1.CapitalCoverageRow
 	for _, l := range lates {
 		// D-125：池标签去「venue账户」前缀——venue 名+类型中文化已足（`okx·统一账户` 式）。
 		r := covRow(l.Venue + "·" + venueTypeCn(l.VenueType))
-		r.Status = "有数"
 		// D-549：资金值走统一读口（CEX 活账本/REST 实拉）；快照行仅作枚举面+兜底值。
 		f, ok := cv.LiveSnaps(ctx, keydomain.Join(l.Venue, l.VenueType), lates)
 		eq, ccy, note := l.EquityRaw, l.Currency, ""
@@ -209,17 +211,27 @@ func venueAccountRows(ctx context.Context, s *Service) ([]*v1.CapitalCoverageRow
 			r.HasBalance = true
 			r.RealMoney = true
 			// D-127：占用聚合+可用注记（⑤「可用 X」小字；未采 fail-closed 如实标）。
+			// D-128：状态=业务词（闲置/部分占用/占用未知），「有数」黑话清除。
 			if o, known := accountOccupied(f, ok); known {
 				occ.sum += o
 				occ.known++
 				r.Note = note + fmt.Sprintf("，可用 %.2f", f.Available)
+				if o > 0 {
+					r.Status = "部分占用"
+					occ.items = append(occ.items, fmt.Sprintf("%s $%.2f", r.Pool, o))
+				} else {
+					r.Status = "闲置"
+				}
 			} else {
 				occ.missing++
 				r.Note = note + "，可用未采"
+				r.Status = "占用未知"
 			}
 		} else if eq != nil {
+			r.Status = "未折算"
 			r.Note = fmt.Sprintf("%s，净值 %.2f %s（非 USDT/USD 不折算）", note, *eq, ccy)
 		} else {
+			r.Status = "未采"
 			r.Note = note + "，净值空"
 		}
 		out = append(out, r)

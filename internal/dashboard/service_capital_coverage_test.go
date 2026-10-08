@@ -146,7 +146,7 @@ func TestGetCapitalCoverage_SummaryWeights(t *testing.T) {
 	if len(resp.Rows) != 4 {
 		t.Fatalf("rows len = %d, want 4: %+v", len(resp.Rows), resp.Rows)
 	}
-	for i, want := range []string{"TRX 质押+投票+能量", "CMC 账户（手动持仓监控域）", "保证金占用", "binance·永续"} {
+	for i, want := range []string{"TRX 质押+投票+能量", "CMC 账户", "保证金占用", "binance·永续"} {
 		if resp.Rows[i].Pool != want {
 			t.Errorf("rows[%d] = %q, want %q", i, resp.Rows[i].Pool, want)
 		}
@@ -156,9 +156,12 @@ func TestGetCapitalCoverage_SummaryWeights(t *testing.T) {
 			t.Error("paper 行应不出现（D-360 S4：demo/纸面=噪声不入）")
 		}
 	}
-	// CMC 状态语义
-	if got := resp.Rows[1].Status; got != "手动持仓中（浮盈 $-123.45）" {
-		t.Errorf("CMC status = %q, want 手动持仓中（浮盈 $-123.45）", got)
+	// CMC：状态=浮盈直数（D-128），说明收 hint；池名括注收 pool_hint
+	if got := resp.Rows[1].Status; got != "$-123.45" {
+		t.Errorf("CMC status = %q, want $-123.45（直数负号如实）", got)
+	}
+	if resp.Rows[1].StatusHint != "手动持仓中" || resp.Rows[1].PoolHint != "手动持仓监控域" {
+		t.Errorf("CMC hints = %q/%q, want 手动持仓中/手动持仓监控域", resp.Rows[1].StatusHint, resp.Rows[1].PoolHint)
 	}
 	// D-127 占用行：值=eq−fm=500；RealMoney=false（净值子集视图不入分母）∧Productive=true（入分子）
 	occRow := resp.Rows[2]
@@ -172,13 +175,20 @@ func TestGetCapitalCoverage_SummaryWeights(t *testing.T) {
 	if !occRow.HasApr || occRow.AprPct < 4.9999 || occRow.AprPct > 5.0001 {
 		t.Errorf("占用行年化应 5.0（按名义额折算）, got %f has=%v", occRow.AprPct, occRow.HasApr)
 	}
-	// venue 行：入分母不入分子，note 带「可用」
+	// D-128：占用行悬停层=各账户占用明细
+	if occRow.Status != "占用中" || occRow.StatusHint != "binance·永续 $500.00" {
+		t.Errorf("占用行 status/hint = %q/%q, want 占用中/binance·永续 $500.00", occRow.Status, occRow.StatusHint)
+	}
+	// venue 行：入分母不入分子，note 带「可用」；状态=业务词（occ>0→部分占用）
 	venRow := resp.Rows[3]
 	if !venRow.RealMoney || venRow.Productive {
 		t.Error("venue USDT 行应 RealMoney=true∧Productive=false（入分母的睡钱）")
 	}
 	if !strings.Contains(venRow.Note, "可用 7500.00") {
 		t.Errorf("venue 行 note 应含可用额: %q", venRow.Note)
+	}
+	if venRow.Status != "部分占用" {
+		t.Errorf("venue 行 status = %q, want 部分占用（occ=500>0）", venRow.Status)
 	}
 	// 汇总两数：总=Σ净值+TRX+CMC=48000（占用行 RealMoney=false 不入分母）；在产=30000+10000+占用500=40500
 	if !resp.HasSummary || resp.TotalUsd != 48000 || resp.ProductiveUsd != 40500 {

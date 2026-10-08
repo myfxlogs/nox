@@ -7,6 +7,7 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"arb/internal/capitalview"
 	v1 "arb/internal/gen/dashboardv1"
@@ -14,9 +15,10 @@ import (
 
 // venueOcc D-127：账户占用聚合（占用=venue 净值中真被保证金占用的子集，USDT/USD 同视账户口径）。
 type venueOcc struct {
-	sum     float64 // Σ已知占用
-	known   int     // 占用已知账户数
-	missing int     // 可用额未采账户数（fail-closed 不入分子）
+	sum     float64  // Σ已知占用
+	known   int      // 占用已知账户数
+	missing int      // 可用额未采账户数（fail-closed 不入分子）
+	items   []string // D-128：占用>0 账户明细（池名+额），悬停层 status_hint
 }
 
 // accountOccupied D-127 新口径①：单账户占用=equity−free_margin；MT 帧直带 Margin>0 优先
@@ -61,6 +63,7 @@ func marginOccupancyRow(ctx context.Context, s *Service, occ venueOcc) *v1.Capit
 		r.BalanceUsd = occ.sum
 		r.HasBalance = true
 		r.Status = "占用中"
+		r.StatusHint = strings.Join(occ.items, " · ") // D-128：各账户占用明细（悬停层）
 	} else if notional > 0 {
 		r.Status = "占用未知" // 有仓但可用额全未采——fail-closed 不入分子（防虚胖）
 	} else {
