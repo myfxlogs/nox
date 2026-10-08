@@ -26,12 +26,44 @@ func (s *Store) LatestFactsByKindSince(ctx context.Context, kind string, since t
 	if !since.IsZero() {
 		sinceArg = &since
 	}
+	// D-121：DISTINCT ON 全索引序扫改为 loose index scan（递归 CTE 跳组）。
+	// 生产实证：funding kind 238 万行 DISTINCT ON=32s；跳扫描=组数×index seek=69ms。
+	// 非空组走 (kind,venue,symbol,ts) 索引 ROW>ROW 寻址；NULL-symbol 组（行排序在 venue 尾、
+	// ROW>ROW 不可达）走 0180 部分索引枚举 venue。语义与 DISTINCT ON(venue,symbol) ORDER BY ts DESC 等价。
 	rows, err := s.pool.Query(ctx, `
-		SELECT DISTINCT ON (venue, symbol)
-			kind, venue, COALESCE(symbol,'') AS symbol, value, unit, ts, src
-		FROM facts
-		WHERE kind = $1 AND ($2::timestamptz IS NULL OR ts >= $2)
-		ORDER BY venue, symbol, ts DESC`, kind, sinceArg)
+		WITH RECURSIVE t AS (
+			(SELECT venue, symbol FROM facts
+				WHERE kind = $1 AND symbol IS NOT NULL AND ($2::timestamptz IS NULL OR ts >= $2)
+				ORDER BY venue, symbol LIMIT 1)
+			UNION ALL
+			SELECT f.venue, f.symbol FROM t CROSS JOIN LATERAL (
+				SELECT venue, symbol FROM facts
+				WHERE kind = $1 AND symbol IS NOT NULL AND ($2::timestamptz IS NULL OR ts >= $2)
+					AND (venue, symbol) > (t.venue, t.symbol)
+				ORDER BY venue, symbol LIMIT 1
+			) f
+		), nv AS (
+			SELECT DISTINCT venue FROM facts
+			WHERE kind = $1 AND symbol IS NULL AND ($2::timestamptz IS NULL OR ts >= $2)
+		)
+		SELECT kind, venue, COALESCE(symbol,'') AS symbol, value, unit, ts, src FROM (
+			SELECT f.kind, f.venue, f.symbol, f.value, f.unit, f.ts, f.src
+			FROM t CROSS JOIN LATERAL (
+				SELECT kind, venue, symbol, value, unit, ts, src FROM facts f
+				WHERE f.kind = $1 AND f.venue = t.venue AND f.symbol = t.symbol
+					AND ($2::timestamptz IS NULL OR f.ts >= $2)
+				ORDER BY f.ts DESC LIMIT 1
+			) f
+			UNION ALL
+			SELECT f.kind, f.venue, f.symbol, f.value, f.unit, f.ts, f.src
+			FROM nv CROSS JOIN LATERAL (
+				SELECT kind, venue, symbol, value, unit, ts, src FROM facts f
+				WHERE f.kind = $1 AND f.venue = nv.venue AND f.symbol IS NULL
+					AND ($2::timestamptz IS NULL OR f.ts >= $2)
+				ORDER BY f.ts DESC LIMIT 1
+			) f
+		) u
+		ORDER BY u.venue, u.symbol`, kind, sinceArg)
 	if err != nil {
 		return nil, fmt.Errorf("latest facts by kind: %w", err)
 	}
