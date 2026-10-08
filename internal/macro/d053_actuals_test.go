@@ -118,17 +118,8 @@ func (s *d053FakeStore) alertMsgs() []string {
 func (s *d053FakeStore) UpsertMacroEvents(context.Context, []pgstore.MacroEvent) (int, error) {
 	return 0, nil
 }
-func (s *d053FakeStore) UpsertCotPositions(context.Context, []pgstore.CotPosition) (int, error) {
-	return 0, nil
-}
-func (s *d053FakeStore) UpsertFredObs(context.Context, []pgstore.FredObs) (int, error) {
-	return 0, nil
-}
 func (s *d053FakeStore) MacroEventsBetween(context.Context, time.Time, time.Time) ([]pgstore.MacroEvent, error) {
 	return nil, nil
-}
-func (s *d053FakeStore) MaxCotReportDate(context.Context) (time.Time, error) {
-	return time.Time{}, nil
 }
 
 // TestD053_ActualPushOnce ②：actual 空→非空推送一次；再 sweep 不重推；seed 播种

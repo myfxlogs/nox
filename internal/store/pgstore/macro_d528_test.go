@@ -1,4 +1,4 @@
-// macro_d528_test.go —— D-528 S9 A1：三表 upsert 幂等锚（同批两写行数不变）。
+// macro_d528_test.go —— D-528 S9 A1：macro_event upsert 幂等锚（D-120 清退 cot/fred 段）（同批两写行数不变）。
 // 需 ARB_TEST_PG_DSN（_test 库，逐包隔离）。
 package pgstore
 
@@ -41,34 +41,4 @@ func TestD528_MacroUpsertIdempotent(t *testing.T) {
 		t.Fatalf("conflict 更新失败: actual=%q", got[0].Actual)
 	}
 
-	rdate := time.Date(2026, 9, 22, 0, 0, 0, 0, time.UTC)
-	cot := []CotPosition{{
-		ReportDate: rdate, Instrument: "6JTEST", Category: "lev_fund",
-		Direction: "LONG", NetPosition: 4000, NetChange: 3000, Raw: []byte(`{}`),
-	}}
-	for round := 1; round <= 2; round++ {
-		n, err := s.UpsertCotPositions(ctx, cot)
-		if err != nil || n != 1 {
-			t.Fatalf("cot round%d: n=%d err=%v", round, n, err)
-		}
-	}
-	rows, err := s.LatestCot(ctx, "6JTEST", 10)
-	if err != nil || len(rows) != 1 {
-		t.Fatalf("latest: n=%d err=%v", len(rows), err)
-	}
-	if rows[0].NetPosition != 4000 {
-		t.Fatalf("cot 回读错: %+v", rows[0])
-	}
-	base, err := s.MaxCotReportDate(ctx)
-	if err != nil || base.Before(rdate) {
-		t.Fatalf("max report_date: %v err=%v", base, err)
-	}
-
-	obs := []FredObs{{SeriesID: "DGS2TEST", ObsDate: rdate, Value: 4.12}}
-	for round := 1; round <= 2; round++ {
-		n, err := s.UpsertFredObs(ctx, obs)
-		if err != nil || n != 1 {
-			t.Fatalf("fred round%d: n=%d err=%v", round, n, err)
-		}
-	}
 }
