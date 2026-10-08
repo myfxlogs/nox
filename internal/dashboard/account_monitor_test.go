@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -213,5 +214,62 @@ func TestAccountMonitor_CollisionKeys(t *testing.T) {
 		if a.VenueKey != "binance:perp" && a.VenueKey != "binance:perp#20" {
 			t.Errorf("VenueKey = %q, want canonical 或 #20 后缀键", a.VenueKey)
 		}
+	}
+}
+
+// TestD132_RestSnapshotWrites D-132 验收锚：REST-only CEX 键（okx:earn 无 WS
+// 面）poll 成功+值变 → fin 快照写口落行（src=rest_poll）；同值重 poll → 零写；
+// WS 覆盖键（binance:perp）值变也不写（私有流径已有，禁双写）。
+func TestD132_RestSnapshotWrites(t *testing.T) {
+	ctx := context.Background()
+	var mu sync.Mutex
+	var rows []pgstore.VenueAccountSnapshot
+	write := func(_ context.Context, snaps []pgstore.VenueAccountSnapshot) error {
+		mu.Lock()
+		rows = append(rows, snaps...)
+		mu.Unlock()
+		return nil
+	}
+	count := func() int { mu.Lock(); defer mu.Unlock(); return len(rows) }
+
+	q := &fakeAccountQuerier{key: "okx:earn", acct: &reconcile.AccountInfo{
+		VenueKey: "okx:earn", Venue: "okx", VenueType: "earn", AssetType: "cex",
+		Balance: 100, Equity: 120, FreeMargin: 100, Currency: "USDT",
+	}}
+	m, _, _ := newAcctMonTest(t, q)
+	m.SetSnapshotWriter(write)
+	m.Refresh(ctx)
+	if count() != 1 {
+		t.Fatalf("REST-only 键值变应落 1 行, got %d", count())
+	}
+	mu.Lock()
+	r := rows[0]
+	mu.Unlock()
+	if r.Venue != "okx" || r.VenueType != "earn" || r.EquityRaw != 120 || r.Src != "rest_poll" || r.Currency != "USDT" {
+		t.Fatalf("row=%+v", r)
+	}
+	// 同值重 poll → 零写（acctSame 去重）。
+	m.Refresh(ctx)
+	if count() != 1 {
+		t.Fatalf("值相同不得写, got %d", count())
+	}
+	// 值变 → 再落一行。
+	q.acct = &reconcile.AccountInfo{
+		VenueKey: "okx:earn", Venue: "okx", VenueType: "earn", AssetType: "cex",
+		Balance: 101, Equity: 121, FreeMargin: 101, Currency: "USDT",
+	}
+	m.Refresh(ctx)
+	if count() != 2 {
+		t.Fatalf("值变应再写, got %d", count())
+	}
+	// WS 覆盖键（binance:perp 有私有流）值变也不写。
+	q2 := &fakeAccountQuerier{key: "binance:perp", acct: &reconcile.AccountInfo{
+		VenueKey: "binance:perp", Venue: "binance", VenueType: "perp", AssetType: "cex",
+		Balance: 1, Equity: 2, FreeMargin: 1, Currency: "USDT",
+	}}
+	m.AddStatic(q2)
+	m.Refresh(ctx)
+	if count() != 2 {
+		t.Fatalf("WS 覆盖键不得双写, got %d", count())
 	}
 }
