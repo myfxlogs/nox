@@ -22,7 +22,7 @@ func d545Svc(t *testing.T) (*Service, *config.SecretResolver) {
 	t.Helper()
 	t.Setenv("ARB_MASTER_KEY", "d545-test-master-key")
 	st := storetest.SharedStore(t, "ARB_TEST_PG_DSN")
-	if err := st.DeleteAppSecret(context.Background(), "ARB_FRED_API_KEY"); err != nil {
+	if err := st.DeleteAppSecret(context.Background(), "TRONGRID_API_KEY"); err != nil {
 		t.Fatalf("cleanup key: %v", err)
 	}
 	res := config.NewSecretResolver(nil)
@@ -41,7 +41,7 @@ func TestD545_T2_UpdateSecretCipherAndHotResolve(t *testing.T) {
 
 	// note 必填拒。
 	if _, err := svc.UpdateAppSecret(ctx, connect.NewRequest(&dashv1.UpdateAppSecretRequest{
-		Key: "ARB_FRED_API_KEY", Value: "v", Note: ""})); err == nil {
+		Key: "TRONGRID_API_KEY", Value: "v", Note: ""})); err == nil {
 		t.Fatal("空 note 应被拒")
 	}
 	// 非白名单拒。
@@ -51,9 +51,9 @@ func TestD545_T2_UpdateSecretCipherAndHotResolve(t *testing.T) {
 	}
 
 	// 写入。
-	const plain = "plain-fred-value-xyz"
+	const plain = "plain-trongrid-value-xyz"
 	resp, err := svc.UpdateAppSecret(ctx, connect.NewRequest(&dashv1.UpdateAppSecretRequest{
-		Key: "ARB_FRED_API_KEY", Value: plain, Note: "t2 锚"}))
+		Key: "TRONGRID_API_KEY", Value: plain, Note: "t2 锚"}))
 	if err != nil {
 		t.Fatalf("UpdateAppSecret: %v", err)
 	}
@@ -62,14 +62,14 @@ func TestD545_T2_UpdateSecretCipherAndHotResolve(t *testing.T) {
 	}
 
 	// T2① resolver 立即新值（无重启无延迟）。
-	if got := res.Get("ARB_FRED_API_KEY"); got != plain {
+	if got := res.Get("TRONGRID_API_KEY"); got != plain {
 		t.Fatalf("resolver 未即效: got %q", got)
 	}
 
 	// T2② DB 行=密文非明文（防明文落库回归）。
 	var enc []byte
 	if err := svc.store.Pool().QueryRow(ctx,
-		`SELECT value_enc FROM app_secrets WHERE key='ARB_FRED_API_KEY'`).Scan(&enc); err != nil {
+		`SELECT value_enc FROM app_secrets WHERE key='TRONGRID_API_KEY'`).Scan(&enc); err != nil {
 		t.Fatalf("read raw row: %v", err)
 	}
 	if bytes.Contains(enc, []byte(plain)) {
@@ -82,7 +82,7 @@ func TestD545_T2_UpdateSecretCipherAndHotResolve(t *testing.T) {
 
 	// T2③ 审计行只含 key 不含值。
 	out := logs.String()
-	if !strings.Contains(out, "ARB_FRED_API_KEY") {
+	if !strings.Contains(out, "TRONGRID_API_KEY") {
 		t.Fatalf("审计行缺 key: %q", out)
 	}
 	if strings.Contains(out, plain) {
@@ -93,14 +93,14 @@ func TestD545_T2_UpdateSecretCipherAndHotResolve(t *testing.T) {
 func TestD545_T3_EmptyClearsRow(t *testing.T) {
 	svc, res := d545Svc(t)
 	ctx := context.Background()
-	t.Setenv("ARB_FRED_API_KEY", "") // env 源隔离——清行后 source 必为 none
+	t.Setenv("TRONGRID_API_KEY", "") // env 源隔离——清行后 source 必为 none
 
 	if _, err := svc.UpdateAppSecret(ctx, connect.NewRequest(&dashv1.UpdateAppSecretRequest{
-		Key: "ARB_FRED_API_KEY", Value: "v1", Note: "set"})); err != nil {
+		Key: "TRONGRID_API_KEY", Value: "v1", Note: "set"})); err != nil {
 		t.Fatalf("set: %v", err)
 	}
 	resp, err := svc.UpdateAppSecret(ctx, connect.NewRequest(&dashv1.UpdateAppSecretRequest{
-		Key: "ARB_FRED_API_KEY", Value: "", Note: "clear"}))
+		Key: "TRONGRID_API_KEY", Value: "", Note: "clear"}))
 	if err != nil {
 		t.Fatalf("clear: %v", err)
 	}
@@ -109,10 +109,10 @@ func TestD545_T3_EmptyClearsRow(t *testing.T) {
 	}
 	var n int
 	if err := svc.store.Pool().QueryRow(ctx,
-		`SELECT count(*) FROM app_secrets WHERE key='ARB_FRED_API_KEY'`).Scan(&n); err != nil || n != 0 {
+		`SELECT count(*) FROM app_secrets WHERE key='TRONGRID_API_KEY'`).Scan(&n); err != nil || n != 0 {
 		t.Fatalf("行应删: n=%d err=%v", n, err)
 	}
-	if res.Has("ARB_FRED_API_KEY") {
+	if res.Has("TRONGRID_API_KEY") {
 		t.Fatal("resolver 未 Unset")
 	}
 	// List 面 has_value 翻 false。
@@ -122,13 +122,13 @@ func TestD545_T3_EmptyClearsRow(t *testing.T) {
 	}
 	found := false
 	for _, k := range lst.Msg.Keys {
-		if k.Key == "ARB_FRED_API_KEY" {
+		if k.Key == "TRONGRID_API_KEY" {
 			found = true
 			if k.HasValue {
 				t.Fatalf("List has_value 未翻 false: %+v", k)
 			}
 			if !k.Hot {
-				t.Fatalf("FRED 键应标 hot: %+v", k)
+				t.Fatalf("TRONGRID 键应标 hot: %+v", k)
 			}
 		}
 		// 值永不回传——视图 struct 上无 value 字段由 proto 保证，仅钉 desc 非空。

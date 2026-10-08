@@ -23,7 +23,6 @@ import (
 // 其余密钥可管但 hot=false「重启生效」（构造期绑死键，不伪造热更）。
 // D-095：ARB_AUTH_TOKEN 消费点（auth.Interceptor）已改 resolver 热读 → 入列。
 var hotSecretKeys = map[string]bool{
-	"ARB_FRED_API_KEY": true,
 	"TRONGRID_API_KEY": true,
 	"ARB_AUTH_TOKEN":   true,
 }
