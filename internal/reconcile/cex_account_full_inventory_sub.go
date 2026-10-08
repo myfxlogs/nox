@@ -6,72 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/url"
 	"strconv"
-	"strings"
-	"time"
 
 	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/httpx"
 )
-
-// fullInventoryBinanceFunding binance 资金钱包盘点：POST /sapi/v1/asset/get-funding-asset
-// 全量资产（DOGE 52,883 在此——核证点④）+ ticker 逐币计价（LD 剥前缀兜底同链）；
-// USDT 行计 usdt_equity，其余仅进 holdings/inventory。
-func (q *CEXAccountQuerier) fullInventoryBinanceFunding(ctx context.Context) (*FullInventory, error) {
-	sapiBase := httpx.BinanceSapiBase(q.baseURL) // 核证点④：SAPI 走代理根路径
-	tickerBase := sapiBase + "/api"              // D-365-R2 S1：ticker 是 spot 域端点，走 /api 前缀（根路径 /v3/ticker 404 实探）
-	params := url.Values{}
-	params.Set("timestamp", strconv.FormatInt(time.Now().UnixMilli(), 10))
-	params.Set("recvWindow", "5000")
-	sig := binanceSign(q.apiSecret, params.Encode())
-	params.Set("signature", sig)
-	h := http.Header{}
-	h.Set("X-MBX-APIKEY", q.apiKey)
-	body, err := q.post(ctx, sapiBase+"/sapi/v1/asset/get-funding-asset?"+params.Encode(), h)
-	if err != nil {
-		return nil, fmt.Errorf("binance funding full inventory: %w", err)
-	}
-	var rows []struct {
-		Asset  string `json:"asset"`
-		Free   string `json:"free"`
-		Locked string `json:"locked"`
-	}
-	if err := json.Unmarshal(body, &rows); err != nil {
-		return nil, fmt.Errorf("binance funding full inventory json: %w", err)
-	}
-	inv := &FullInventory{}
-	for _, r := range rows {
-		free, perr := f64z(r.Free)
-		if perr != nil {
-			return nil, fmt.Errorf("parse %s=%q: %w", "r.Free", r.Free, perr)
-		}
-		locked, perr := f64z(r.Locked)
-		if perr != nil {
-			return nil, fmt.Errorf("parse %s=%q: %w", "r.Locked", r.Locked, perr)
-		}
-		qty := free + locked
-		if qty <= 0 {
-			continue
-		}
-		if r.Asset == "USDT" {
-			inv.UsdtEquity += qty
-			inv.InventoryUSD += qty
-			inv.Holdings = append(inv.Holdings, &v1.Holding{Ccy: r.Asset, Qty: qty, UsdtValue: qty})
-			continue
-		}
-		asset := strings.TrimPrefix(r.Asset, "LD") // LD 封装兜底同链（资金钱包现无 LD，防御一致）
-		price, perr := q.binanceUsdtPrice(ctx, tickerBase, asset)
-		if perr != nil {
-			inv.Holdings = append(inv.Holdings, &v1.Holding{Ccy: r.Asset, Qty: qty})
-			continue
-		}
-		inv.InventoryUSD += qty * price
-		inv.Holdings = append(inv.Holdings, &v1.Holding{Ccy: r.Asset, Qty: qty, UsdtValue: qty * price})
-	}
-	return inv, nil
-}
 
 // fullInventoryOkxBySource okx 子账户盘点（funding=/asset/balances 全 ccy；
 // earn=/finance/savings/balance 全 ccy——R1 去 ?ccy=USDT 限制）。非 USDT 计 qty +

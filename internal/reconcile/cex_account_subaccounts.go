@@ -10,54 +10,24 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
 	v1 "arb/internal/gen/dashboardv1"
-	"arb/internal/httpx"
 )
-
-// post 发起 POST 并读回 body（非 200 → 错误带响应体；binance sapi 类 POST+query 签名端点用）。
-func (q *CEXAccountQuerier) post(ctx context.Context, u string, headers http.Header) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, nil)
-	if err != nil {
-		return nil, err
-	}
-	for k, vs := range headers {
-		for _, v := range vs {
-			req.Header.Add(k, v)
-		}
-	}
-	resp, err := q.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("http %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
-	}
-	return data, nil
-}
 
 // Account 子账户分派（D-363 S2）：venue_type=funding/earn 先于交易账户 venue 分派。
 // gate 无 funding/earn 配置（仅 sim，种子不种）→ default 报错同 gate spot 先例。
 func (q *CEXAccountQuerier) accountSubaccount(ctx context.Context) (*AccountInfo, error) {
 	switch {
 	case q.venueType == "funding":
-		switch q.venue {
-		case "binance":
-			return q.accountBinanceFunding(ctx)
-		case "okx":
+		// D-133 R1：binance 资金钱包官方废除并入现货+0182 配置行已删——binance 分支永久
+		// 不可达同死码清退（funding venue_type 机制保留=okx:funding 在域）。
+		if q.venue == "okx" {
 			return q.accountOkxFunding(ctx)
 		}
+		return nil, fmt.Errorf("funding account: unsupported venue %q", q.venue)
 	case q.venueType == "earn":
 		// D-133：binance 理财面整体摘除（理财账户实有杂币，「只统计 USDT」不可达——业主令
 		// 不纳入系统），earn venue_type 机制保留（okx:earn 在域）。
@@ -67,53 +37,6 @@ func (q *CEXAccountQuerier) accountSubaccount(ctx context.Context) (*AccountInfo
 		return nil, fmt.Errorf("earn account: unsupported venue %q", q.venue)
 	}
 	return nil, fmt.Errorf("subaccount: unsupported %s:%s", q.venue, q.venueType)
-}
-
-// accountBinanceFunding 资金钱包：POST /sapi/v1/asset/get-funding-asset（HMAC 走代理根路径）
-// → 只取 asset=="USDT" 行 free+locked（USDT-only，其余 asset 不读取）。
-func (q *CEXAccountQuerier) accountBinanceFunding(ctx context.Context) (*AccountInfo, error) {
-	sapiBase := httpx.BinanceSapiBase(q.baseURL) // 核证点④：sapi 走代理根路径
-	params := url.Values{}
-	params.Set("timestamp", strconv.FormatInt(time.Now().UnixMilli(), 10))
-	params.Set("recvWindow", "5000")
-	sig := binanceSign(q.apiSecret, params.Encode())
-	params.Set("signature", sig)
-	h := http.Header{}
-	h.Set("X-MBX-APIKEY", q.apiKey)
-	body, err := q.post(ctx, sapiBase+"/sapi/v1/asset/get-funding-asset?"+params.Encode(), h)
-	if err != nil {
-		return nil, fmt.Errorf("binance funding: %w", err)
-	}
-	var rows []struct {
-		Asset  string `json:"asset"`
-		Free   string `json:"free"`
-		Locked string `json:"locked"`
-	}
-	if err := json.Unmarshal(body, &rows); err != nil {
-		return nil, fmt.Errorf("binance funding json: %w", err)
-	}
-	eq := 0.0
-	var holdings []*v1.Holding
-	for _, r := range rows {
-		if r.Asset != "USDT" {
-			continue // USDT-only：DOGE/USDC 等不读取不统计
-		}
-		free, perr := f64z(r.Free)
-		if perr != nil {
-			return nil, fmt.Errorf("parse %s=%q: %w", "r.Free", r.Free, perr)
-		}
-		locked, perr := f64z(r.Locked)
-		if perr != nil {
-			return nil, fmt.Errorf("parse %s=%q: %w", "r.Locked", r.Locked, perr)
-		}
-		eq = free + locked
-		holdings = append(holdings, &v1.Holding{Ccy: "USDT", Qty: eq, UsdtValue: eq})
-	}
-	return &AccountInfo{
-		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
-		Balance: eq, Equity: eq, Currency: "USDT",
-		Simulated: q.simulated, Website: q.website, Holdings: holdings,
-	}, nil
 }
 
 // okxSubaccountBase okx 资金/理财端点兜底基址：config base_url 为空才直连 www.okx.com。

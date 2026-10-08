@@ -1,5 +1,5 @@
-// cex_capital_gaps_test.go —— D-546 S1：三缺口采集器（mock 三端点）。
-// 锚：三面解析正确 / 签名参数在位 / 单面失败不拖垮其余面（Errors 留痕）/ 三面全败报错。
+// cex_capital_gaps_test.go —— D-546 S1：双缺口采集器（mock 双端点；D-133 R1：理财面摘除）。
+// 锚：双面解析正确 / 签名参数在位 / 单面失败不拖垮其余面（Errors 留痕）/ 双面全败报错。
 package reconcile
 
 import (
@@ -14,28 +14,11 @@ import (
 	"testing"
 )
 
-// mockCapitalGapsServer 三端点同 server 不同路径前缀（/sapi /dapi /eapi——构造器派生约定同形）。
-func mockCapitalGapsServer(t *testing.T, earnFail, coinmFail, optionsFail bool) *httptest.Server {
+// mockCapitalGapsServer 双端点同 server 不同路径前缀（/dapi /eapi——构造器派生约定同形）。
+// D-133 R1：simple-earn 端点已摘——若代码仍请求即 404（servemux 无注册）→Errors 留痕可锚。
+func mockCapitalGapsServer(t *testing.T, coinmFail, optionsFail bool) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
-	mux.HandleFunc("/sapi/v1/simple-earn/account", func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-MBX-APIKEY") == "" || r.URL.Query().Get("signature") == "" {
-			http.Error(w, "missing auth", http.StatusUnauthorized)
-			return
-		}
-		if earnFail {
-			http.Error(w, "earn down", 500)
-			return
-		}
-		json.NewEncoder(w).Encode(map[string]string{
-			"totalAmountInBTC":          "0.00000000",
-			"totalAmountInUSDT":         "1234.56",
-			"totalFlexibleAmountInBTC":  "0.00000000",
-			"totalFlexibleAmountInUSDT": "1000.00",
-			"totalLockedInBTC":          "0.00000000",
-			"totalLockedInUSDT":         "234.56",
-		})
-	})
 	mux.HandleFunc("/dapi/v1/balance", func(w http.ResponseWriter, r *http.Request) {
 		if coinmFail {
 			http.Error(w, "coinm down", 500)
@@ -65,14 +48,13 @@ func gapsFromServer(t *testing.T, srv *httptest.Server) *BinanceCapitalGaps {
 	base := srv.URL + "/api"
 	return &BinanceCapitalGaps{
 		client: srv.Client(), key: "k", secret: "s",
-		sapiURL: strings.Replace(base, "/api", "/sapi", 1),
 		dapiURL: strings.Replace(base, "/api", "/dapi", 1),
 		eapiURL: strings.Replace(base, "/api", "/eapi", 1),
 	}
 }
 
 func TestD546_CapitalGapsFetch(t *testing.T) {
-	srv := mockCapitalGapsServer(t, false, false, false)
+	srv := mockCapitalGapsServer(t, false, false)
 	defer srv.Close()
 	out, err := gapsFromServer(t, srv).Fetch(context.Background())
 	if err != nil {
@@ -80,9 +62,6 @@ func TestD546_CapitalGapsFetch(t *testing.T) {
 	}
 	if len(out.Errors) != 0 {
 		t.Errorf("Errors 应空, got %v", out.Errors)
-	}
-	if out.EarnFlexibleUSDT != 1000.00 || out.EarnLockedUSDT != 234.56 || out.EarnTotalUSDT != 1234.56 {
-		t.Errorf("earn 面解析错: flexible=%v locked=%v total=%v", out.EarnFlexibleUSDT, out.EarnLockedUSDT, out.EarnTotalUSDT)
 	}
 	if len(out.CoinM) != 1 || out.CoinM[0].Asset != "BTC" || out.CoinM[0].Balance != 0.05 || out.CoinM[0].Available != 0.04 {
 		t.Errorf("coinm 面解析错: %+v（零余额 ETH 行应滤除）", out.CoinM)
@@ -96,11 +75,11 @@ func TestD546_CapitalGapsFetch(t *testing.T) {
 func TestD546_CapitalGapsSignature(t *testing.T) {
 	var gotSig, gotRaw string
 	mux := http.NewServeMux()
-	mux.HandleFunc("/sapi/v1/simple-earn/account", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/dapi/v1/balance", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		gotSig = q.Get("signature")
 		gotRaw = "timestamp=" + q.Get("timestamp") + "&recvWindow=5000" // 签名原串（构造器顺序）
-		json.NewEncoder(w).Encode(map[string]string{"totalFlexibleAmountInUSDT": "0", "totalLockedInUSDT": "0", "totalAmountInUSDT": "0"})
+		json.NewEncoder(w).Encode([]map[string]string{})
 	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
@@ -114,28 +93,29 @@ func TestD546_CapitalGapsSignature(t *testing.T) {
 	}
 }
 
-// TestD546_CapitalGapsDegraded 单面失败不拖垮其余面；三面全败报错且 Errors 全留痕。
+// TestD546_CapitalGapsDegraded 单面失败不拖垮其余面；双面全败报错且 Errors 全留痕。
+// D-133 R1 追加锚：simple-earn 端点零请求（理财面摘除后不可再发）。
 func TestD546_CapitalGapsDegraded(t *testing.T) {
-	srv := mockCapitalGapsServer(t, true, false, false)
+	srv := mockCapitalGapsServer(t, true, false)
 	defer srv.Close()
 	out, err := gapsFromServer(t, srv).Fetch(context.Background())
 	if err != nil {
 		t.Fatalf("单面失败不应报错: %v", err)
 	}
-	if len(out.Errors) != 1 || !strings.Contains(out.Errors[0], "理财面") {
-		t.Errorf("Errors 应留痕理财面失败, got %v", out.Errors)
+	if len(out.Errors) != 1 || !strings.Contains(out.Errors[0], "币本位面") {
+		t.Errorf("Errors 应留痕币本位面失败, got %v", out.Errors)
 	}
-	if len(out.CoinM) != 1 || len(out.Options) != 1 {
-		t.Errorf("其余两面应正常: coinm=%d options=%d", len(out.CoinM), len(out.Options))
+	if len(out.Options) != 1 {
+		t.Errorf("期权面应正常: options=%d", len(out.Options))
 	}
 
-	srv2 := mockCapitalGapsServer(t, true, true, true)
+	srv2 := mockCapitalGapsServer(t, true, true)
 	defer srv2.Close()
 	out2, err := gapsFromServer(t, srv2).Fetch(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "三面全败") {
-		t.Errorf("三面全败应报错, got err=%v", err)
+	if err == nil || !strings.Contains(err.Error(), "双面全败") {
+		t.Errorf("双面全败应报错, got err=%v", err)
 	}
-	if len(out2.Errors) != 3 {
-		t.Errorf("Errors 应=3, got %v", out2.Errors)
+	if len(out2.Errors) != 2 {
+		t.Errorf("Errors 应=2, got %v", out2.Errors)
 	}
 }

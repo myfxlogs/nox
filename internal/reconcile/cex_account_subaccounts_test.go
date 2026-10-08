@@ -9,37 +9,24 @@ import (
 	"testing"
 )
 
-// TestCEXAccount_BinanceFunding D-363 S2：binance funding 走根路径 /sapi/v1/asset/
-// get-funding-asset（POST），多资产响应只取 USDT 行（DOGE/USDC 不读取）。
-func TestCEXAccount_BinanceFunding(t *testing.T) {
-	var gotPath string
+// TestD133_BinanceFundingRemoved D-133 R1 ①：binance 资金钱包官方废除+0182 配置行
+// 已删=永久不可达——binance:funding 查询径同死码清退，dispatch fail-closed 零出网；
+// okx:funding 在域不受影响（TestCEXAccount_OkxFunding 锚）。
+func TestD133_BinanceFundingRemoved(t *testing.T) {
+	var called bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotPath = r.URL.Path
-		fmt.Fprint(w, `[
-			{"asset":"DOGE","free":"52883.26","locked":"0"},
-			{"asset":"USDC","free":"445","locked":"0"},
-			{"asset":"USDT","free":"12.5","locked":"0.5"}
-		]`)
+		called = true
+		fmt.Fprint(w, `[]`)
 	}))
 	defer srv.Close()
 
-	// base 带 /api 后缀 → 应剥后走根路径（核证点④：/api 前缀 sapi 404）
 	q := NewCEXAccountQuerier("binance", "funding", "key", "secret", "", srv.URL+"/api", "", false)
 	acct, err := q.Account(context.Background())
-	if err != nil {
-		t.Fatalf("binance funding: %v", err)
+	if err == nil || acct != nil {
+		t.Fatalf("binance funding want unsupported error, got acct=%+v err=%v", acct, err)
 	}
-	if gotPath != "/sapi/v1/asset/get-funding-asset" {
-		t.Errorf("request path = %q, want /sapi/v1/asset/get-funding-asset（根路径）", gotPath)
-	}
-	if acct.Equity != 13.0 {
-		t.Errorf("equity want 13.0（USDT free+locked）, got %v", acct.Equity)
-	}
-	if len(acct.Holdings) != 1 || acct.Holdings[0].Ccy != "USDT" {
-		t.Errorf("holdings want 仅 USDT 行, got %+v", acct.Holdings)
-	}
-	if acct.VenueKey != "binance:funding" || acct.AssetType != "cex" || acct.Currency != "USDT" {
-		t.Errorf("meta mismatch: %+v", acct)
+	if called {
+		t.Error("binance funding 摘除后仍发出 HTTP 请求（应 fail-closed 于 dispatch）")
 	}
 }
 

@@ -26,15 +26,14 @@ type FullInventory struct {
 }
 
 // FullInventory 按 venue+venue_type 分派全币种盘点（R1：子账户/合约钱包各有独立余额域，
-// 同 venue 不同 type 是不同盘点目标——binance spot/perp/funding 三钱包、okx 交易统一
+// 同 venue 不同 type 是不同盘点目标——binance spot/perp 两钱包、okx 交易统一
 // 账户（spot/perp 合并语义由 service 层去重）/funding/earn）。
+// D-133 R1：binance funding 分支摘除（官方废面+0182 删行=永久不可达死码）。
 func (q *CEXAccountQuerier) FullInventory(ctx context.Context) (*FullInventory, error) {
 	switch {
 	case q.venue == "binance" && q.venueType == "perp":
 		return q.fullInventoryBinancePerp(ctx)
-	case q.venue == "binance" && q.venueType == "funding":
-		return q.fullInventoryBinanceFunding(ctx)
-	case q.venue == "binance":
+	case q.venue == "binance" && q.venueType == "spot":
 		return q.fullInventoryBinanceSpot(ctx)
 	case q.venue == "okx" && q.venueType == "funding":
 		return q.fullInventoryOkxBySource(ctx, "funding")
