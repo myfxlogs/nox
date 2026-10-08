@@ -14,6 +14,7 @@ import (
 	"arb/internal/bus"
 	"arb/internal/keydomain"
 	"arb/internal/reconcile"
+	"arb/internal/store/pgstore"
 
 	v1 "arb/internal/gen/dashboardv1"
 )
@@ -64,6 +65,9 @@ type AccountMonitor struct {
 
 	// fundsHook D-568：资金变更通知口（MT5 流帧/poll changed 双源汇入，SetFundsHook 注入）。
 	fundsHook func()
+	// snapWriter D-132：REST-only CEX 面审计留痕搭车写口（SetSnapshotWriter 注入；
+	// nil=未接线跳过）。WS 覆盖键不写（事件径已有），值不变不写（acctSame 去重）。
+	snapWriter func(ctx context.Context, snaps []pgstore.VenueAccountSnapshot) error
 }
 
 // NewAccountMonitor 创建 monitor（D-571 包B：interval 参死净——ticker 已删，事件驱动）。
@@ -239,13 +243,13 @@ func (m *AccountMonitor) pollImpl(ctx context.Context, match func(vk string) boo
 		results = append(results, pollRes{vk: vk, acct: acct, err: err})
 	}
 	for _, r := range results {
-		m.applyAcctResult(r.vk, r.acct, r.err)
+		m.applyAcctResult(ctx, r.vk, r.acct, r.err)
 	}
 }
 
 // applyAcctResult REST 结果落态：err→restOnline=false（在线翻转则脏化，离线保留最近
 // 成功快照 D-052）；ok→restOnline=true+acct 落态+dirty。cooldown Record 在锁内。
-func (m *AccountMonitor) applyAcctResult(vk string, acct *reconcile.AccountInfo, err error) {
+func (m *AccountMonitor) applyAcctResult(ctx context.Context, vk string, acct *reconcile.AccountInfo, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.cooldown.Record(vk, err)
@@ -275,6 +279,7 @@ func (m *AccountMonitor) applyAcctResult(vk string, acct *reconcile.AccountInfo,
 	m.states[vk] = st
 	m.dirtyLocked(vk)
 	m.mu.Unlock()
+	m.writeRestSnapshot(ctx, vk, acct, changed) // D-132：REST-only 面值变→审计留痕
 	if changed {
 		m.notifyFunds() // D-568：REST 值变→funds 通知（值不变不触）
 	}
