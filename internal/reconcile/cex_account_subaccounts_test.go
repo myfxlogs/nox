@@ -136,33 +136,23 @@ func TestCEXAccount_OkxEarn(t *testing.T) {
 	}
 }
 
-// TestCEXAccount_BinanceEarn D-130 域2③：binance 理财=GET /sapi/v1/simple-earn/account
-// （Simple Earn OpenAPI 全 REST 面·无 WS 余额频道，REST 实拉合法例外）——
-// equity=totalAmountInUSDT（活+定合计，业主令只取 USDT 值）、FreeMargin=活期可赎额。
-func TestCEXAccount_BinanceEarn(t *testing.T) {
-	var gotPath string
+// TestD133_BinanceEarnRemoved D-133 域1：binance 理财面整体摘除（理财账户实有杂币，
+// 「只统计 USDT」不可达——业主令不纳入系统）——binance:earn 查询径拒发请求
+// （unsupported venue，零 HTTP 出网）；okx:earn 在域不受影响（TestCEXAccount_OkxEarn 锚）。
+func TestD133_BinanceEarnRemoved(t *testing.T) {
+	var called bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotPath = r.URL.Path
-		fmt.Fprint(w, `{"totalAmountInUSDT":"888.88","totalFlexibleAmountInUSDT":"600.00","totalLockedInUSDT":"288.88"}`)
+		called = true
+		fmt.Fprint(w, `{"totalAmountInUSDT":"888.88"}`)
 	}))
 	defer srv.Close()
 
-	// base 带 /fapi 后缀 → BinanceSapiBase 剥段走根路径（核证点④同款）
 	q := NewCEXAccountQuerier("binance", "earn", "key", "secret", "", srv.URL+"/fapi", "", false)
 	acct, err := q.Account(context.Background())
-	if err != nil {
-		t.Fatalf("binance earn: %v", err)
+	if err == nil || acct != nil {
+		t.Fatalf("binance earn want unsupported error, got acct=%+v err=%v", acct, err)
 	}
-	if gotPath != "/sapi/v1/simple-earn/account" {
-		t.Errorf("request path = %q, want /sapi/v1/simple-earn/account（根路径）", gotPath)
-	}
-	if acct.Equity != 888.88 {
-		t.Errorf("equity want 888.88（totalAmountInUSDT）, got %v", acct.Equity)
-	}
-	if acct.FreeMargin != 600.0 {
-		t.Errorf("free margin want 600（活期可赎）, got %v", acct.FreeMargin)
-	}
-	if acct.VenueKey != "binance:earn" || acct.AssetType != "cex" || acct.Currency != "USDT" {
-		t.Errorf("meta mismatch: %+v", acct)
+	if called {
+		t.Error("binance earn 摘除后仍发出 HTTP 请求（应 fail-closed 于 dispatch）")
 	}
 }

@@ -59,11 +59,10 @@ func (q *CEXAccountQuerier) accountSubaccount(ctx context.Context) (*AccountInfo
 			return q.accountOkxFunding(ctx)
 		}
 	case q.venueType == "earn":
-		switch q.venue {
-		case "okx":
+		// D-133：binance 理财面整体摘除（理财账户实有杂币，「只统计 USDT」不可达——业主令
+		// 不纳入系统），earn venue_type 机制保留（okx:earn 在域）。
+		if q.venue == "okx" {
 			return q.accountOkxEarn(ctx)
-		case "binance":
-			return q.accountBinanceEarn(ctx)
 		}
 		return nil, fmt.Errorf("earn account: unsupported venue %q", q.venue)
 	}
@@ -113,51 +112,6 @@ func (q *CEXAccountQuerier) accountBinanceFunding(ctx context.Context) (*Account
 	return &AccountInfo{
 		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
 		Balance: eq, Equity: eq, Currency: "USDT",
-		Simulated: q.simulated, Website: q.website, Holdings: holdings,
-	}, nil
-}
-
-// accountBinanceEarn D-130 域2③：binance 理财（Simple Earn）——GET /sapi/v1/simple-earn/account
-// （HMAC 同 funding 径；sapi 走代理根路径）→ 只取 totalAmountInUSDT（活+定合计 USDT 口径，
-// 业主令「只需要USDT就好」——分项 totalFlexibleAmountInUSDT/totalLockedInUSDT 不读）。
-// equity=totalAmountInUSDT；FreeMargin=活期可赎额（可转可用语义，锁定=定期不可即赎）。
-// D-004 例外举证：Simple Earn OpenAPI 全 REST 面、无 WS 余额频道（业主贴官方文档实证）——
-// REST 实拉合法（资金页打开按需回读，无周期轮询）。
-func (q *CEXAccountQuerier) accountBinanceEarn(ctx context.Context) (*AccountInfo, error) {
-	sapiBase := httpx.BinanceSapiBase(q.baseURL) // 核证点④同款：sapi 走代理根路径
-	params := url.Values{}
-	params.Set("timestamp", strconv.FormatInt(time.Now().UnixMilli(), 10))
-	params.Set("recvWindow", "5000")
-	sig := binanceSign(q.apiSecret, params.Encode())
-	params.Set("signature", sig)
-	h := http.Header{}
-	h.Set("X-MBX-APIKEY", q.apiKey)
-	body, err := q.get(ctx, sapiBase+"/sapi/v1/simple-earn/account?"+params.Encode(), h)
-	if err != nil {
-		return nil, fmt.Errorf("binance earn: %w", err)
-	}
-	var resp struct {
-		TotalAmountInUSDT         string `json:"totalAmountInUSDT"`
-		TotalFlexibleAmountInUSDT string `json:"totalFlexibleAmountInUSDT"`
-	}
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, fmt.Errorf("binance earn json: %w", err)
-	}
-	eq, perr := f64z(resp.TotalAmountInUSDT)
-	if perr != nil {
-		return nil, fmt.Errorf("parse totalAmountInUSDT=%q: %w", resp.TotalAmountInUSDT, perr)
-	}
-	flex, perr := f64z(resp.TotalFlexibleAmountInUSDT)
-	if perr != nil {
-		return nil, fmt.Errorf("parse totalFlexibleAmountInUSDT=%q: %w", resp.TotalFlexibleAmountInUSDT, perr)
-	}
-	holdings := []*v1.Holding(nil)
-	if eq > 0 {
-		holdings = append(holdings, &v1.Holding{Ccy: "USDT", Qty: eq, UsdtValue: eq})
-	}
-	return &AccountInfo{
-		VenueKey: q.VenueKey(), Venue: q.venue, VenueType: q.venueType, AssetType: "cex",
-		Balance: eq, Equity: eq, FreeMargin: flex, Currency: "USDT",
 		Simulated: q.simulated, Website: q.website, Holdings: holdings,
 	}, nil
 }
