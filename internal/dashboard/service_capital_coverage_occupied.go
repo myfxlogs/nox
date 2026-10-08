@@ -47,6 +47,7 @@ func accountOccupied(f capitalview.Funds, ok bool) (float64, bool) {
 // 年化仍按名义额折算（息差随名义产生），加权按占用额。
 func marginOccupancyRow(ctx context.Context, s *Service, occ venueOcc) *v1.CapitalCoverageRow {
 	r := covRow("保证金占用")
+	r.BalanceCcy = "USD" // D-130 域3：占用=USDT/USD 同视口径
 	r.Productive = true
 	r.RealMoney = false
 	var notional float64

@@ -146,7 +146,7 @@ func TestGetCapitalCoverage_SummaryWeights(t *testing.T) {
 	if len(resp.Rows) != 4 {
 		t.Fatalf("rows len = %d, want 4: %+v", len(resp.Rows), resp.Rows)
 	}
-	for i, want := range []string{"TRX 质押+投票+能量", "CMC 账户", "保证金占用", "binance·永续"} {
+	for i, want := range []string{"TRX 质押+投票+能量", "CMC 账户", "保证金占用", "binance·合约"} {
 		if resp.Rows[i].Pool != want {
 			t.Errorf("rows[%d] = %q, want %q", i, resp.Rows[i].Pool, want)
 		}
@@ -177,8 +177,8 @@ func TestGetCapitalCoverage_SummaryWeights(t *testing.T) {
 		t.Errorf("占用行年化应 5.0（按名义额折算）, got %f has=%v", occRow.AprPct, occRow.HasApr)
 	}
 	// D-129：占用明细收说明列
-	if occRow.Status != "占用中" || !strings.Contains(occRow.Note, "；占用明细 binance·永续 $500.00") {
-		t.Errorf("占用行 status/note = %q/%q, want 占用中+占用明细 binance·永续 $500.00", occRow.Status, occRow.Note)
+	if occRow.Status != "占用中" || !strings.Contains(occRow.Note, "；占用明细 binance·合约 $500.00") {
+		t.Errorf("占用行 status/note = %q/%q, want 占用中+占用明细 binance·合约 $500.00", occRow.Status, occRow.Note)
 	}
 	// venue 行：入分母不入分子，note 带「可用」；状态=业务词（occ>0→部分占用）
 	venRow := resp.Rows[3]
@@ -251,8 +251,9 @@ func TestGetCapitalCoverage_VenueUSDDenominator(t *testing.T) {
 	if usdRow == nil || !usdRow.HasBalance || usdRow.BalanceUsd != 500 {
 		t.Fatalf("USD 行应入分母（HasBalance=500）, got %+v", usdRow)
 	}
-	if ustRow == nil || ustRow.HasBalance {
-		t.Fatalf("UST 行应无 USD 价（HasBalance=false）, got %+v", ustRow)
+	// D-130 域3：UST 行原币直显（HasBalance=true 供展示）但不入合计（币种门拒纳）
+	if ustRow == nil || !ustRow.HasBalance || ustRow.BalanceCcy != "UST" || ustRow.Status != "未折算" {
+		t.Fatalf("UST 行应原币直显未折算, got %+v", ustRow)
 	}
 	// 总资金含 USD 行：total ≥ 500（=100 USDT+500 USD），UST 700 不入
 	if !resp.HasSummary || resp.TotalUsd != 600 {

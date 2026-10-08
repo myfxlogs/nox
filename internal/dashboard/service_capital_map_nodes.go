@@ -12,7 +12,6 @@ import (
 	"arb/internal/bus"
 	v1 "arb/internal/gen/dashboardv1"
 	"arb/internal/reconcile"
-	"arb/internal/store/pgstore"
 )
 
 // capitalGaps 三缺口缓存读口：60s 窗口内复用上次实拉（A4：连开页面第二次零 REST）；
@@ -68,20 +67,6 @@ func (s *Service) newBinanceCapitalGaps(ctx context.Context) CapitalGapFetcher {
 	}
 	log.Printf("[capital-map] 无 binance real spot 配置行——三缺口面如实标缺")
 	return nil
-}
-
-// fundingNode 资金钱包节点（快照池行；无行=未配置如实标缺）。
-func (s *Service) fundingNode(snaps []pgstore.VenueAccountLatest) *v1.CapitalMapNode {
-	for _, l := range snaps {
-		if l.Venue != "binance" || l.VenueType != "funding" {
-			continue
-		}
-		if l.EquityRaw != nil {
-			return capNode("binance·资金钱包 余额", *l.EquityRaw, l.Currency, "快照池（调度 5min，无私有流）", l.FetchedAt)
-		}
-		return capMissing("binance·资金钱包 余额", "快照行净值空")
-	}
-	return capMissing("binance·资金钱包 余额", "快照无行（未配置 funding 池）")
 }
 
 // ledgerSpot 现货账本读口（nil 安全；D-542 同 TTL 语义）。

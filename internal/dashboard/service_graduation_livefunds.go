@@ -110,6 +110,22 @@ func (s *Service) livePoolQuerier(ctx context.Context, venueKey string) (reconci
 	}
 	live := realOnlyConfigs(cfgs, &s.liveSimWarned, "live-funds")
 	winners := cexKeyWinners(live)
+	// D-130 域1：funding/earn 子账户族——账户行资金径必须精确键（回退链=腿池语义，错账根因）。
+	// 查询径复用本 venue 任一 real 行凭据（binance:earn 无独立配置行，sapi 同签；
+	// okx 资金/理财经子账户端点 D-363 S2），querier 按请求 type 构造（Account() 分派子账户端点），
+	// poolKey=精确键——禁 pin unified、禁用配置行 type 建 querier（Account 会查成交易账户）。
+	if typ == "funding" || typ == "earn" {
+		for i := range live {
+			c := &live[i]
+			if c.Venue != bare {
+				continue
+			}
+			q := reconcile.NewCEXAccountQuerier(c.Venue, typ, c.APIKey, c.APISecret, c.Passphrase,
+				resolveExchangeBaseURL(*c), c.Website, c.Simulated)
+			return q, keydomain.Join(bare, typ), true
+		}
+		return nil, "", false
+	}
 	for i := range live {
 		c := &live[i]
 		if c.Venue != bare {

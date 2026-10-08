@@ -57,10 +57,10 @@ func TestD546R1_VenueTree(t *testing.T) {
 	avail, transfer, locked := capTier(resp, "立即可用"), capTier(resp, "可转可用"), capTier(resp, "锁定/慢动")
 
 	// 立即可用：okx=活账本 2080（非 REST trading.availEq 路径注记透出来源）。
-	if n := capNodeByLabel(avail, "okx·统一账户 可用"); n == nil || n.AmountUsd != 2080 || !n.HasUsd {
+	if n := capNodeByLabel(avail, "okx·交易账户 可用"); n == nil || n.AmountUsd != 2080 || !n.HasUsd {
 		t.Fatalf("okx avail node=%+v", n)
 	}
-	if n := capNodeByLabel(avail, "gate·永续 可用"); n == nil {
+	if n := capNodeByLabel(avail, "gate·合约 可用"); n == nil {
 		t.Fatal("gate:perp 节点缺")
 	}
 	// gate:spot 无私有流/快照→REST 面 500 兜底出节点。
@@ -68,14 +68,14 @@ func TestD546R1_VenueTree(t *testing.T) {
 		t.Fatalf("gate spot avail=%+v", n)
 	}
 	// 可转可用：okx funding+earn。
-	if n := capNodeByLabel(transfer, "okx 资金钱包"); n == nil || n.AmountUsd != 12.5 {
+	if n := capNodeByLabel(transfer, "okx 资金账户"); n == nil || n.AmountUsd != 12.5 {
 		t.Fatalf("okx funding=%+v", n)
 	}
-	if n := capNodeByLabel(transfer, "okx 活期理财"); n == nil || n.AmountUsd != 1235.16 {
+	if n := capNodeByLabel(transfer, "okx 赚币"); n == nil || n.AmountUsd != 1235.16 {
 		t.Fatalf("okx earn=%+v", n)
 	}
 	// 锁定慢动：okx 占用/冻结 40、gate spot locked 30、gate earn 面败标缺。
-	if n := capNodeByLabel(locked, "okx·统一账户 占用/冻结"); n == nil || n.AmountUsd != 40 {
+	if n := capNodeByLabel(locked, "okx·交易账户 占用/冻结"); n == nil || n.AmountUsd != 40 {
 		t.Fatalf("okx locked=%+v", n)
 	}
 	if n := capNodeByLabel(locked, "gate·现货 锁定"); n == nil || n.AmountUsd != 30 {
@@ -109,11 +109,11 @@ func TestD546R1_MissingVenue(t *testing.T) {
 	resp := capMapResponse(context.Background(), t, svc)
 	avail := capTier(resp, "立即可用")
 	// 活账本在→okx/gate avail 仍出（legPool 不依赖 availability 面）。
-	if capNodeByLabel(avail, "okx·统一账户 可用") == nil {
+	if capNodeByLabel(avail, "okx·交易账户 可用") == nil {
 		t.Fatal("活账本 okx 节点应仍出")
 	}
 	locked := capTier(resp, "锁定/慢动")
-	for _, label := range []string{"okx·统一账户 占用/冻结", "gate·现货 锁定"} {
+	for _, label := range []string{"okx·交易账户 占用/冻结", "gate·现货 锁定"} {
 		if n := capNodeByLabel(locked, label); n == nil || n.HasUsd {
 			t.Fatalf("%s 应标缺: %+v", label, n)
 		}

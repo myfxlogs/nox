@@ -18,23 +18,54 @@ import (
 // capitalCoverageCaliberNote 口径注记（与 digest renderCapitalCoverageSection 注记同文本）。
 const capitalCoverageCaliberNote = "口径：快照时点在产=TRX 在赚+保证金占用+CMC 持仓中（非时序加权，日级趋势看历史行）；保证金占用=Σ(equity−free_margin) 账户级（MT5 优先帧直带 Margin），含同账户手动仓、腿级切分不可得（诚实上限）；账户可用额未采→该账户占用不计（禁 eq−0 假满占，覆盖率如实低估）；总资金=Σ账户净值+TRX+CMC（D-127 业主令：杠杆名义额退出合计，仅作占用行 note 参考值）；加权年化分母=有年化行余额（占用行按占用额加权；CMC 手动仓/未采/纸面/venue 现金不进）；仅实盘账户/持仓入表（demo/sim/纸面=噪声不入）；venue 账户现金=闲置不计在产（睡钱暴露；CEX=USDT 标余额，USDT/LDUSDT 计、杂币不折算；MT=USD 同视）；CFD 周末闭市持仓中≠空转；占用行年化=position_daily_income 近7日日均息差（TRX 收益×快照价+利息，浮动盈亏不计）按名义额折算；能量租赁年化=D-258 30d 口径。"
 
-// venueTypeCn D-125：venue 类型域词中文化（循前端 VenueTag 惯例：spot=现货/perp=永续/
-// futures=交割；funding=资金钱包/unified=统一账户/earn=理财；MT 账户=MT4/MT5；
-// 未知类型原样透出不猜）。
-func venueTypeCn(vt string) string {
+// venueTypeCn D-125 建、D-130 域2②改按 venue 原生中文词（业主令：面名随所）：
+// binance=现货/合约/理财（perp→合约）、okx=资金账户/交易账户/赚币（funding/unified/earn）、
+// gate=现货/合约/交割/理财；MT 账户=MT4/MT5；未知组合回退通用映射，终兜底原样透出不猜。
+func venueTypeCn(venue, vt string) string {
+	switch venue {
+	case "binance":
+		switch vt {
+		case "perp":
+			return "合约"
+		case "earn":
+			return "理财"
+		case "spot":
+			return "现货"
+		}
+	case "okx":
+		switch vt {
+		case "funding":
+			return "资金账户"
+		case "unified":
+			return "交易账户"
+		case "earn":
+			return "赚币"
+		}
+	case "gate":
+		switch vt {
+		case "perp":
+			return "合约"
+		case "earn":
+			return "理财"
+		case "futures":
+			return "交割"
+		case "spot":
+			return "现货"
+		}
+	}
 	switch vt {
 	case "spot":
 		return "现货"
 	case "perp":
-		return "永续"
+		return "合约"
 	case "futures":
 		return "交割"
 	case "funding":
-		return "资金钱包"
+		return "资金账户"
 	case "unified":
-		return "统一账户"
+		return "交易账户"
 	case "earn":
-		return "理财"
+		return "赚币"
 	case "mt4":
 		return "MT4"
 	case "mt5":
@@ -42,6 +73,11 @@ func venueTypeCn(vt string) string {
 	default:
 		return vt
 	}
+}
+
+// balanceCcyFoldable D-130 域3：余额币种可折入合计（USDT≈USD 1:1 业主令；空=历史行 USD 口径）。
+func balanceCcyFoldable(ccy string) bool {
+	return ccy == "" || ccy == "USD" || ccy == "USDT"
 }
 
 // srcCn D-125：资金读口来源域词中文化（值域=capitalview 常量 ws/rest/mt_frame/snap）。
@@ -98,6 +134,7 @@ func trxPoolRow(ctx context.Context, s *Service) *v1.CapitalCoverageRow {
 		return nil
 	}
 	r := covRow("TRX 质押+投票+能量")
+	r.BalanceCcy = "USD" // D-130 域3：TRX 行=折算 USD 值
 	r.Status = "在赚"
 	r.Productive = true
 	r.RealMoney = true
@@ -157,6 +194,7 @@ func cmcPoolRow(ctx context.Context, s *Service) *v1.CapitalCoverageRow {
 	r.BalanceUsd = sum.TotalAccountValue
 	r.HasBalance = true
 	r.RealMoney = true
+	r.BalanceCcy = "USD"
 	if pnl, n, err := s.store.LastCMCPositionSnapshotSummary(ctx); err == nil && n > 0 && pnl != nil {
 		r.Status = fmt.Sprintf("$%.2f", *pnl) // D-128：浮盈直数（负号如实）
 		r.Note += "；手动持仓中"                    // D-129：说明收说明列（hint 字段摘除）
@@ -180,10 +218,16 @@ func venueAccountRows(ctx context.Context, s *Service) ([]*v1.CapitalCoverageRow
 	out := make([]*v1.CapitalCoverageRow, 0, len(lates))
 	var occ venueOcc
 	for _, l := range lates {
-		// D-125：池标签去「venue账户」前缀——venue 名+类型中文化已足（`okx·统一账户` 式）。
-		r := covRow(l.Venue + "·" + venueTypeCn(l.VenueType))
+		// D-130 域2①：binance 资金钱包面官方已废除并入现货——覆盖率行不再枚举
+		//（配置行停用/删随部署；代码侧双保险，digest 同规）。
+		if l.Venue == "binance" && l.VenueType == "funding" {
+			continue
+		}
+		// D-125：池标签去「venue账户」前缀；D-130 域2②面名随 venue 原生词（`okx·交易账户` 式）。
+		r := covRow(l.Venue + "·" + venueTypeCn(l.Venue, l.VenueType))
 		// D-549：资金值走统一读口（CEX 活账本/REST 实拉）；快照行仅作枚举面+兜底值。
-		f, ok := cv.LiveSnaps(ctx, keydomain.Join(l.Venue, l.VenueType), lates)
+		// D-130 域1：账户行只认精确 venue+type 键（LiveSnapsExact），回退链=腿池语义禁入。
+		f, ok := cv.LiveSnapsExact(ctx, keydomain.Join(l.Venue, l.VenueType), lates)
 		eq, ccy, note := l.EquityRaw, l.Currency, ""
 		if ok {
 			eq = &f.Equity
@@ -194,14 +238,14 @@ func venueAccountRows(ctx context.Context, s *Service) ([]*v1.CapitalCoverageRow
 				ccy = f.Currency
 			}
 			if f.Live {
-				note = fmt.Sprintf("%s 活账本·%s", venueTypeCn(l.VenueType), srcCn(f.Src))
+				note = fmt.Sprintf("%s 活账本·%s", venueTypeCn(l.Venue, l.VenueType), srcCn(f.Src))
 			} else {
 				note = f.Note // 快照兜底龄注记（禁静默）
 			}
 		}
 		if note == "" { // 三径全空：快照龄如实标
 			age := time.Since(l.FetchedAt)
-			note = fmt.Sprintf("%s 快照 %dh 前", venueTypeCn(l.VenueType), int(age.Hours()))
+			note = fmt.Sprintf("%s 快照 %dh 前", venueTypeCn(l.Venue, l.VenueType), int(age.Hours()))
 			if age > 24*time.Hour {
 				note += "（陈旧）"
 			}
@@ -210,6 +254,7 @@ func venueAccountRows(ctx context.Context, s *Service) ([]*v1.CapitalCoverageRow
 			r.BalanceUsd = *eq
 			r.HasBalance = true
 			r.RealMoney = true
+			r.BalanceCcy = ccy
 			// D-127：占用聚合+可用注记（⑤「可用 X」小字；未采 fail-closed 如实标）。
 			// D-128：状态=业务词（闲置/部分占用/占用未知），「有数」黑话清除。
 			if o, known := accountOccupied(f, ok); known {
@@ -227,7 +272,12 @@ func venueAccountRows(ctx context.Context, s *Service) ([]*v1.CapitalCoverageRow
 				r.Note = note + "，可用未采"
 				r.Status = "占用未知"
 			}
-		} else if eq != nil {
+		} else if eq != nil && ccy != "" {
+			// D-130 域3：原币直显「流中啥显啥」（HasBalance=true 供展示；合计门 balanceCcyFoldable 拒纳）；
+			// 币种未知（空）→ 无从原币显示，落未采 fail-closed。
+			r.BalanceUsd = *eq
+			r.HasBalance = true
+			r.BalanceCcy = ccy
 			r.Status = "未折算"
 			r.Note = fmt.Sprintf("%s，净值 %.2f %s（非 USDT/USD 不折算）", note, *eq, ccy)
 		} else {
@@ -239,8 +289,8 @@ func venueAccountRows(ctx context.Context, s *Service) ([]*v1.CapitalCoverageRow
 	return out, occ
 }
 
-// summarizeCapitalCoverage 汇总行（与 digest 渲染层同语义；D-127 拆门）：
-// 总资金=RealMoney∧有余额（占用行=净值子集视图 RealMoney=false 不入，防双重计入）；
+// summarizeCapitalCoverage 汇总行（与 digest 渲染层同语义；D-127 拆门；D-130 域3 加币种门）：
+// 总资金=RealMoney∧有余额∧币种可折（USDT≈USD 1:1；原币展示行不入合计防混币相加）；
 // 在产=Productive∧有余额（占用行入分子）；覆盖率=在产/总资金；
 // 加权年化=Σbal×apr/Σ有年化有余额 bal（占用行按占用额加权）；total=0→has_summary=false，
 // 无年化→has_weighted=false。
@@ -251,7 +301,7 @@ func summarizeCapitalCoverage(rows []*v1.CapitalCoverageRow) *v1.GetCapitalCover
 		if !r.HasBalance {
 			continue
 		}
-		if r.RealMoney {
+		if r.RealMoney && balanceCcyFoldable(r.BalanceCcy) {
 			resp.TotalUsd += r.BalanceUsd
 		}
 		if r.Productive {

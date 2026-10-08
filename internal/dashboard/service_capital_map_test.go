@@ -109,6 +109,11 @@ func TestD546_CapitalMapTree(t *testing.T) {
 	s := covTestStore(t)
 	ctx := context.Background()
 	// BTCUSDT tick 折算价锚：mid=(50000+50002)/2=50001 → 0.05 BTC = 2500.05 USD。
+	// 独立席测试库分区随真实钟滚动（D-122 夹具漂移同型）：直插前惰性建当月分区。
+	nowT := time.Now().UTC()
+	if err := s.EnsureMonthPartition(ctx, nowT.Year(), int(nowT.Month())); err != nil {
+		t.Fatalf("ensure ticks partition: %v", err)
+	}
 	if _, err := s.Pool().Exec(ctx, `INSERT INTO ticks (ts, venue, symbol, bid, ask, venue_type)
 		VALUES (now(), 'binance', 'BTCUSDT', 50000, 50002, 'spot')`); err != nil {
 		t.Fatalf("insert tick: %v", err)
@@ -126,18 +131,19 @@ func TestD546_CapitalMapTree(t *testing.T) {
 		t.Fatalf("三档名缺: %+v", resp.Tiers)
 	}
 
-	// 立即可用三面：spot free=100 / perp available=50 / funding=5；合计=155；sizing 注记。
+	// 立即可用两面：现货可用=100 / 合约可用=50（D-130 域2①：binance 资金钱包面官方已废摘除，
+	// 夹具 funding 行不再出节点）；合计=265。
 	if n := capNodeByLabel(avail, "binance·现货 可用"); n == nil || !n.HasUsd || n.AmountUsd != 100 {
 		t.Errorf("spot free 节点错: %+v", capNodeByLabel(avail, "binance·现货 可用"))
 	}
-	if n := capNodeByLabel(avail, "binance·永续 可用"); n == nil || n.AmountUsd != 50 {
-		t.Errorf("perp available 节点错: %+v", capNodeByLabel(avail, "binance·永续 可用"))
+	if n := capNodeByLabel(avail, "binance·合约 可用"); n == nil || n.AmountUsd != 50 {
+		t.Errorf("perp available 节点错: %+v", capNodeByLabel(avail, "binance·合约 可用"))
 	}
-	if n := capNodeByLabel(avail, "binance·资金钱包 余额"); n == nil || n.AmountUsd != 5 {
-		t.Errorf("funding 节点错: %+v", capNodeByLabel(avail, "binance·资金钱包 余额"))
+	if n := capNodeByLabel(avail, "binance·资金钱包 余额"); n != nil {
+		t.Errorf("funding 面应已摘除（官方废面·D-130）, got %+v", n)
 	}
-	if !avail.HasUsd || avail.TotalUsd != 270 {
-		t.Errorf("立即可用合计=%v (has=%v), want 270（binance 155+okx 100+gate 15）", avail.TotalUsd, avail.HasUsd)
+	if !avail.HasUsd || avail.TotalUsd != 265 {
+		t.Errorf("立即可用合计=%v (has=%v), want 265（binance 150+okx 100+gate 15）", avail.TotalUsd, avail.HasUsd)
 	}
 	if !strings.Contains(avail.Note, "sizing 基准口径") {
 		t.Errorf("立即可用档注记缺 sizing 标注: %q", avail.Note)
