@@ -21,7 +21,7 @@ func financeTestStore(t *testing.T) *pgstore.Store {
 	t.Helper()
 	s := serviceTestStoreSingleInit(t)
 	ctx := context.Background()
-	if _, err := s.Pool().Exec(ctx, `TRUNCATE ledger, positions, position_cashflows, income_events, broker_accounts RESTART IDENTITY CASCADE`); err != nil {
+	if _, err := s.Pool().Exec(ctx, `TRUNCATE positions, position_cashflows, income_events, broker_accounts RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("TRUNCATE finance tables: %v", err)
 	}
 	return s
@@ -38,14 +38,6 @@ func mustExec(t *testing.T, s *pgstore.Store, q string, args ...any) {
 // seedFinanceFixtures T1 标准夹具：三数/分层/收入构成/流水数值锚。
 func seedFinanceFixtures(t *testing.T, s *pgstore.Store) {
 	t.Helper()
-	// 台账：+2662.8 −500 +2000 → deposited=4162.8（正=入金）
-	for _, e := range []float64{2662.8, -500, 2000} {
-		if _, err := s.AddLedgerEntry(context.Background(), &pgstore.LedgerEntry{
-			Date: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), Channel: "bank", Currency: "USD", Amount: e,
-		}); err != nil {
-			t.Fatalf("seed ledger: %v", err)
-		}
-	}
 	// positions CLOSED：demo −100 / NULL(legacy real) −300 / real +50 → real 桶 −250×2、demo 桶 −100×1
 	mustExec(t, s, `INSERT INTO positions (opportunity_id, type, status, opened_at, environment, realized_pnl)
 		VALUES ('PERP:X:okx:perp::t1', 'PERP_FUNDING', 'CLOSED', NOW(), 'demo', -100),
@@ -85,15 +77,9 @@ func TestD348_FinanceOverview_Aggregate(t *testing.T) {
 		t.Fatalf("GetFinanceOverview: %v", err)
 	}
 	r := resp.Msg
-	// 三数
-	if r.DepositedUsd != 4162.8 {
-		t.Errorf("deposited = %v, want 4162.8", r.DepositedUsd)
-	}
+	// 总权益（D-120：deposited/net_pnl 随 ledger 清退退役）
 	if r.TotalEquityUsd != 100 {
 		t.Errorf("total_equity = %v, want 100（实盘 CFD 唯一）", r.TotalEquityUsd)
-	}
-	if r.NetPnlUsd != 100-4162.8 {
-		t.Errorf("net_pnl = %v, want %v", r.NetPnlUsd, 100-4162.8)
 	}
 	// 分层：demo −100×1 / real −250×2（NULL→legacy real）
 	if len(r.PnlByEnv) != 2 {
@@ -133,9 +119,9 @@ func TestD348_FinanceOverview_Aggregate(t *testing.T) {
 			}
 		}
 	}
-	// 流水：3 ledger + 3 NULL cashflows + 1 income_event = 7（estimated 不入）；首行=income_event
-	if len(r.Flows) != 7 {
-		t.Fatalf("flows rows = %d, want 7（estimated 排除）: %+v", len(r.Flows), r.Flows)
+	// 流水：3 NULL cashflows + 1 income_event = 4（estimated 不入；D-120 ledger 源清退）；首行=income_event
+	if len(r.Flows) != 4 {
+		t.Fatalf("flows rows = %d, want 4（estimated 排除）: %+v", len(r.Flows), r.Flows)
 	}
 	first := r.Flows[0]
 	if first.Source != "binance" || first.Kind != "funding_fee" || first.Symbol != "BTCUSDT" || first.AmountUsd != 0.5 {

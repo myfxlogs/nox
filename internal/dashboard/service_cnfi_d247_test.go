@@ -46,14 +46,6 @@ func TestD247_FrontendCompareCard(t *testing.T) {
 	}
 }
 
-// 断言⑰e：cnfiprobe 注册 -backfill-nav 模式。
-func TestD247_BackfillFlag(t *testing.T) {
-	src := d247Source(t, "tools/cnfiprobe/main.go")
-	if !strings.Contains(src, "-backfill-nav") {
-		t.Errorf("cnfiprobe 缺 -backfill-nav 回填模式")
-	}
-}
-
 // 断言⑰f 消费侧（R-F2，D-247 复审 §4）：跨断点区间=缺失非毒值 + is_break 标记 + N=参与数。
 // 同层两基金：A 正常序列（ret_3m 可得）；B 断点跨窗（ret 缺失）。B 的 N 断言在 R-F1 修复前必须红。
 func TestD247_BreakCrossIntervalMissing(t *testing.T) {

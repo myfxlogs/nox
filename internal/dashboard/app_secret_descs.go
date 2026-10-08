@@ -16,7 +16,6 @@ var appSecretDescs = map[string]string{
 	"CMC_EMAIL":               "CoinMarketCal 账号邮箱（财历事件采集登录）",
 	"CMC_PASSWORD":            "CoinMarketCal 账号密码（财历事件采集登录）",
 	"ARB_CMC_CREATE_TPL":      "CoinMarketCal 建事件模板（财历事件提交格式）",
-	"ARB_FRED_API_KEY":        "FRED 宏观数据 API Key（缺则该路采集跳过）",
 	"TRX_VOTE_PRIVATE_KEY":    "TRX 质押/投票签名私钥（链上投票执行）",
 	"TRONGRID_API_KEY":        "TronGrid API Key（TRX 链上采集限速提额）",
 	"ARB_AUTH_TOKEN":          "面板/API 认证令牌（Bearer；改后 ≤5s 生效，旧令牌即失效，无需重启）",
@@ -25,7 +24,7 @@ var appSecretDescs = map[string]string{
 // appSecretGroup 密钥键分组（密钥卡列展示；按消费域归类）。
 func appSecretGroup(k string) string {
 	switch {
-	case k == "ARB_FRED_API_KEY" || k == "CMC_EMAIL" || k == "CMC_PASSWORD" || k == "ARB_CMC_CREATE_TPL":
+	case k == "CMC_EMAIL" || k == "CMC_PASSWORD" || k == "ARB_CMC_CREATE_TPL":
 		return "宏观采集"
 	case k == "TRONGRID_API_KEY" || k == "TRX_VOTE_PRIVATE_KEY":
 		return "TRX 链上"
