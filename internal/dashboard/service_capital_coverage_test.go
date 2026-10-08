@@ -23,7 +23,7 @@ func covTestStore(t *testing.T) *pgstore.Store {
 	for _, tbl := range []string{
 		"fin_trx_account", "fin_trx_txs", "fin_trx_vote_apr", "position_daily_income",
 		"fin_cmc_prices", "fin_cmc_account_summary", "fin_cmc_positions", "positions",
-		"fin_venue_account_snapshot", "capital_snapshots",
+		"fin_venue_account_snapshot",
 	} {
 		if _, err := s.Pool().Exec(ctx, "TRUNCATE TABLE "+tbl+" RESTART IDENTITY CASCADE"); err != nil {
 			t.Fatalf("TRUNCATE %s: %v", tbl, err)

@@ -36,7 +36,7 @@ func buildCapitalCoverageRows(ctx context.Context, s *Service) []*v1.CapitalCove
 		rows = append(rows, r)
 	}
 	rows = append(rows, positionPoolRows(ctx, s)...)
-	rows = append(rows, capitalSnapshotRows(ctx, s)...)
+	// ④capital_snapshots 腿随 D-120 退役（表 DROP，清算净值链整链废）。
 	rows = append(rows, venueAccountRows(ctx, s)...)
 	return rows
 }
@@ -153,27 +153,6 @@ func positionPoolRows(ctx context.Context, s *Service) []*v1.CapitalCoverageRow 
 			r.HasApr = true
 		} else if e.NotionalUSD > 0 {
 			r.AprText = "新开仓"
-		}
-		out = append(out, r)
-	}
-	return out
-}
-
-// capitalSnapshotRows ④capital_snapshots：每 scope 最新一行（清算净值链），表空自动不列。
-func capitalSnapshotRows(ctx context.Context, s *Service) []*v1.CapitalCoverageRow {
-	lites, err := s.store.LatestCapitalSnapshotRows(ctx)
-	if err != nil {
-		return nil
-	}
-	out := make([]*v1.CapitalCoverageRow, 0, len(lites))
-	for _, l := range lites {
-		r := covRow(fmt.Sprintf("资金快照 %s/%s", l.ScopeType, l.ScopeKey))
-		r.Status = "有数"
-		r.Note = "quality=" + l.Quality
-		r.RealMoney = true
-		if l.USD != nil {
-			r.BalanceUsd = *l.USD
-			r.HasBalance = true
 		}
 		out = append(out, r)
 	}
