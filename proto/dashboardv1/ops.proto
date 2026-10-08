@@ -226,6 +226,7 @@ message CapitalCoverageRow {
   string note        = 8;
   bool   productive  = 9;
   bool   real_money  = 10;
+  string balance_ccy = 11;  // D-130 域3：余额原币币种（USDT/USD/…；空=USD 口径）
 }
 
 message GetCapitalCoverageResponse {

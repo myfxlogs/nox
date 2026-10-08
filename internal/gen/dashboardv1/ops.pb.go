@@ -1992,6 +1992,7 @@ type CapitalCoverageRow struct {
 	Note          string                 `protobuf:"bytes,8,opt,name=note,proto3" json:"note,omitempty"`
 	Productive    bool                   `protobuf:"varint,9,opt,name=productive,proto3" json:"productive,omitempty"`
 	RealMoney     bool                   `protobuf:"varint,10,opt,name=real_money,json=realMoney,proto3" json:"real_money,omitempty"`
+	BalanceCcy    string                 `protobuf:"bytes,11,opt,name=balance_ccy,json=balanceCcy,proto3" json:"balance_ccy,omitempty"` // D-130 域3：余额原币币种（USDT/USD/…；空=USD 口径）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2094,6 +2095,13 @@ func (x *CapitalCoverageRow) GetRealMoney() bool {
 		return x.RealMoney
 	}
 	return false
+}
+
+func (x *CapitalCoverageRow) GetBalanceCcy() string {
+	if x != nil {
+		return x.BalanceCcy
+	}
+	return ""
 }
 
 type GetCapitalCoverageResponse struct {
@@ -3000,7 +3008,7 @@ const file_dashboardv1_ops_proto_rawDesc = "" +
 	"\fdays_elapsed\x18\x03 \x01(\x05R\vdaysElapsed\x12 \n" +
 	"\fdays_to_gate\x18\x04 \x01(\x05R\n" +
 	"daysToGate\"\x1b\n" +
-	"\x19GetCapitalCoverageRequest\"\xa2\x02\n" +
+	"\x19GetCapitalCoverageRequest\"\xc3\x02\n" +
 	"\x12CapitalCoverageRow\x12\x12\n" +
 	"\x04pool\x18\x01 \x01(\tR\x04pool\x12\x1f\n" +
 	"\vbalance_usd\x18\x02 \x01(\x01R\n" +
@@ -3017,7 +3025,9 @@ const file_dashboardv1_ops_proto_rawDesc = "" +
 	"productive\x12\x1d\n" +
 	"\n" +
 	"real_money\x18\n" +
-	" \x01(\bR\trealMoney\"\xc7\x02\n" +
+	" \x01(\bR\trealMoney\x12\x1f\n" +
+	"\vbalance_ccy\x18\v \x01(\tR\n" +
+	"balanceCcy\"\xc7\x02\n" +
 	"\x1aGetCapitalCoverageResponse\x128\n" +
 	"\x04rows\x18\x01 \x03(\v2$.arb.dashboard.v1.CapitalCoverageRowR\x04rows\x12\x1b\n" +
 	"\ttotal_usd\x18\x02 \x01(\x01R\btotalUsd\x12%\n" +
