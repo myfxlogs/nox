@@ -63,3 +63,41 @@ func TestCexSubaccountSeeds_Idempotent(t *testing.T) {
 		t.Errorf("okx funding api_key = %q (err=%v), want 复用 spot 行 k-okx", key, err)
 	}
 }
+
+// TestD130_BinanceEarnSeed D-130 返修回归锚：0182 重放 → binance:earn 行出
+// （凭据复制 spot real 行）且 binance:funding 行摘除；幂等重放行数不变。
+func TestD130_BinanceEarnSeed(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.pool.Exec(ctx, `TRUNCATE exchange_configs RESTART IDENTITY CASCADE`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	if _, err := s.pool.Exec(ctx, `
+		INSERT INTO exchange_configs (venue, venue_type, label, api_key, api_secret, simulated)
+		VALUES ('binance', 'spot', 'real', 'k-bn', 's-bn', false),
+		       ('binance', 'funding', 'funding', 'k-bnf', 's-bnf', false),
+		       ('binance', 'spot', 'sim', 'k-sim', 's-sim', true)`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if _, err := s.pool.Exec(ctx, migrations.BinanceEarnSeedSQL); err != nil {
+		t.Fatalf("apply 0182: %v", err)
+	}
+	var key string
+	if err := s.pool.QueryRow(ctx,
+		`SELECT api_key FROM exchange_configs WHERE venue='binance' AND venue_type='earn'`).Scan(&key); err != nil || key != "k-bn" {
+		t.Fatalf("binance earn api_key=%q err=%v, want 复用 spot 行 k-bn", key, err)
+	}
+	var n int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM exchange_configs WHERE venue='binance' AND venue_type='funding'`).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("binance funding 行=%d err=%v, want 0（官方废面摘除）", n, err)
+	}
+	// sim spot 不种 earn（NOT simulated 同 0114 规）；幂等重放 earn 仍 1 行。
+	if _, err := s.pool.Exec(ctx, migrations.BinanceEarnSeedSQL); err != nil {
+		t.Fatalf("re-run 0182: %v", err)
+	}
+	if err := s.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM exchange_configs WHERE venue='binance' AND venue_type='earn'`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("重放后 earn 行=%d err=%v, want 1（幂等）", n, err)
+	}
+}

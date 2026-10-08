@@ -175,6 +175,7 @@ var migrationFiles = []struct {
 	{179, migrations.RetireUniverseAlertsSQL},          // D-072：universe 发现告警退役——清历史 info 噪音行
 	{180, migrations.D120RetireResearchSQL},            // D-120：研究面 A 批 13 表幂等 DROP（已备份）
 	{181, migrations.FactsNullSymbolIdxSQL},            // D-121：facts NULL-symbol 组枚举部分索引（0180 撞号顺延）
+	{182, migrations.BinanceEarnSeedSQL},               // D-130 R1：binance:earn 凭据复制补种 + binance:funding 行摘除（A 案）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
