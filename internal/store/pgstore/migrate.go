@@ -173,6 +173,7 @@ var migrationFiles = []struct {
 	{177, migrations.MacroZhResetSQL},                  // D-053①：mql5 源 en 旧行清除（zh 端点切换）
 	{178, migrations.DropPerpFundingAdmissionSQL},      // D-057⑤：PERP_FUNDING 证据准入表退役（已备份）
 	{179, migrations.RetireUniverseAlertsSQL},          // D-072：universe 发现告警退役——清历史 info 噪音行
+	{180, migrations.D120RetireResearchSQL},            // D-120：研究面 A 批 13 表幂等 DROP（已备份）
 }
 
 // Migrate 执行未应用的 migrations（§11.2，core 启动时自跑）。
