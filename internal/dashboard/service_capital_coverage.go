@@ -221,7 +221,12 @@ func venueAccountRows(ctx context.Context, s *Service) []*v1.CapitalCoverageRow 
 		eq, ccy, note := l.EquityRaw, l.Currency, ""
 		if ok {
 			eq = &f.Equity
-			ccy = f.Currency
+			// D-126：MT 流帧币种恒空（MT5 帧无 Currency 字段→Funds.Currency 如实空串），
+			// 空则保留快照行币种（快照=MT 币种唯一权威源）——否则 MT 真金漏出分母、
+			// 覆盖率被抬高；快照亦空→ccy 空→余额列「—」fail-closed 不变。
+			if f.Currency != "" {
+				ccy = f.Currency
+			}
 			if f.Live {
 				note = fmt.Sprintf("%s 活账本·%s", venueTypeCn(l.VenueType), srcCn(f.Src))
 			} else {

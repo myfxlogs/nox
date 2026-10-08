@@ -233,3 +233,54 @@ func TestGetCapitalCoverage_VenueUSDDenominator(t *testing.T) {
 		t.Errorf("口径注记应含 USDT/USD 同文: %s", resp.CaliberNote)
 	}
 }
+
+// TestGetCapitalCoverage_MTFrameCurrencyFallback D-126 锚：MT 流帧币种恒空（MT5 帧无
+// Currency 字段→Funds.Currency 如实空串）——live 命中不得覆盖快照行币种：
+// ①快照 USD → MT 行落余额进 TotalUsd 分母，note 不误标「非 USDT/USD 不折算」；
+// ②快照币种亦空 → 余额列仍「—」（fail-closed 不破，不猜）。
+func TestGetCapitalCoverage_MTFrameCurrencyFallback(t *testing.T) {
+	s := covTestStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	svc := covTestService(s)
+	eqUSD, eqNoCcy := 4156.52, 700.0
+	seedLiveAccounts(t, svc, []pgstore.VenueAccountLatest{
+		{Venue: "3001157", VenueType: "mt5", EquityRaw: &eqUSD, Currency: "USD", FetchedAt: now},
+		{Venue: "15032313", VenueType: "mt5", EquityRaw: &eqNoCcy, Currency: "", FetchedAt: now},
+	})
+	// 流帧直存帧缓存（绕 ObserveStreamAccount 的 Kick 副作用）；帧币种恒空=生产实况形态。
+	svc.acctMon.streamAccts.Store("3001157:mt5", StreamAcct{Equity: eqUSD, FreeMargin: eqUSD, Currency: "", FrameTime: now})
+	svc.acctMon.streamAccts.Store("15032313:mt5", StreamAcct{Equity: eqNoCcy, FreeMargin: eqNoCcy, Currency: "", FrameTime: now})
+	resp := covResponse(ctx, t, svc)
+	var usdRow, noCcyRow *v1.CapitalCoverageRow
+	for _, r := range resp.Rows {
+		if r.Pool == "3001157·MT5" {
+			usdRow = r
+		}
+		if r.Pool == "15032313·MT5" {
+			noCcyRow = r
+		}
+	}
+	if usdRow == nil {
+		t.Fatalf("3001157·MT5 行应出现: %+v", resp.Rows)
+	}
+	// ① live 帧净值 + 快照 USD 币种 → 入分母
+	if !usdRow.HasBalance || usdRow.BalanceUsd != 4156.52 || !usdRow.RealMoney {
+		t.Errorf("MT USD 行应 HasBalance=4156.52, got has=%v bal=%f real=%v",
+			usdRow.HasBalance, usdRow.BalanceUsd, usdRow.RealMoney)
+	}
+	if strings.Contains(usdRow.Note, "非 USDT/USD 不折算") {
+		t.Errorf("USD 行 note 不应误标不折算: %q", usdRow.Note)
+	}
+	if !strings.Contains(usdRow.Note, "活账本") {
+		t.Errorf("USD 行 note 应为活账本命中注记: %q", usdRow.Note)
+	}
+	// ② 快照币种亦空 → 「—」（HasBalance=false 不入分母）
+	if noCcyRow == nil || noCcyRow.HasBalance {
+		t.Errorf("快照币种空行应 HasBalance=false（诚实「—」）, got %+v", noCcyRow)
+	}
+	// 汇总分母：仅 USD MT 行（零持仓行非真金不入）
+	if !resp.HasSummary || resp.TotalUsd != 4156.52 {
+		t.Errorf("TotalUsd = %f (has=%v), want 4156.52（MT 真金入分母）", resp.TotalUsd, resp.HasSummary)
+	}
+}
