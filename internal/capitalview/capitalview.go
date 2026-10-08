@@ -37,6 +37,7 @@ type Funds struct {
 	Balance      float64 // 余额（仅快照行有值；live 源 HasBalance=false）
 	HasBalance   bool
 	Equity       float64
+	Margin       float64 // D-127：占用保证金（仅 MT 帧直带>0；CEX/快照=0，调用方 eq−Available 推）
 	Currency     string
 	At           time.Time
 	Src          string // "ws" | "rest" | "snap"
@@ -61,6 +62,7 @@ type Deps struct {
 type MTFrame struct {
 	Equity    float64
 	Available float64 // free margin
+	Margin    float64 // D-127：占用保证金（帧直带>0 优先于 eq−fm 推导）
 	Currency  string
 	At        time.Time // 收帧时刻
 }
@@ -277,7 +279,7 @@ func (v *View) mtFrame(venueKey string) (Funds, bool) {
 	}
 	return Funds{
 		VenueKey: venueKey, Available: fr.Available, HasAvailable: fr.Available > 0,
-		Equity: fr.Equity, Currency: fr.Currency, At: fr.At,
+		Equity: fr.Equity, Margin: fr.Margin, Currency: fr.Currency, At: fr.At,
 		Src: SrcMTFrame, Live: true,
 	}, true
 }
