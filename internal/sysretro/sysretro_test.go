@@ -132,9 +132,8 @@ func TestGenerateWeekly(t *testing.T) {
 			{Strategy: "PERP_FUNDING", Trades: 10, WinRate: 0.8, TotalPnl: 3.3},
 			{Strategy: "DEAD", Disabled: true, Reason: "losers"},
 		},
-		PaperSpot:   map[string]int{"low_funding": 3},
-		PaperIntra:  map[string]int{},
-		PaperTrades: 0,
+		PaperSpot:  map[string]int{"low_funding": 3},
+		PaperIntra: map[string]int{},
 	}}
 	// AI 输出：五节 + 未闭合 suggestions 块（EOF 截断）。
 	ai := `## 交易成败归因
@@ -159,7 +158,7 @@ KB 有新增。
 			t.Fatalf("missing %q", h)
 		}
 	}
-	for _, want := range []string{"XASSET_CARRY n=2", "pos500", "DISABLED(losers)", "壳表 0 行=观测面缺口自曝", "补 paper_trades 采集"} {
+	for _, want := range []string{"XASSET_CARRY n=2", "pos500", "DISABLED(losers)", "补 paper_trades 采集"} {
 		if !strings.Contains(txt, want) {
 			t.Fatalf("report missing %q", want)
 		}

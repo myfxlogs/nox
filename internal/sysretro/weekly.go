@@ -173,8 +173,6 @@ func renderWeeklyStats(w *pgstore.RetroWeekly, kb string) string {
 	b.WriteString("== 纸面交易 ==\n")
 	fmt.Fprintf(&b, "paper_spot_carry exits_7d=%d reasons: %s\n", w.PaperSpotN, joinDist(w.PaperSpot))
 	fmt.Fprintf(&b, "paper_intra_trades closed_7d=%d reasons: %s\n", w.PaperIntraN, joinDist(w.PaperIntra))
-	fmt.Fprintf(&b, "paper_trades total_rows=%d%s\n", w.PaperTrades,
-		map[bool]string{true: "（壳表 0 行=观测面缺口自曝）", false: ""}[w.PaperTrades == 0])
 	b.WriteString("== 策略生死 ==\n")
 	for _, s := range w.Strategies {
 		dis := ""
@@ -261,9 +259,8 @@ func weeklyTradeTable(w *pgstore.RetroWeekly) string {
 }
 
 func weeklyPaperTable(w *pgstore.RetroWeekly) string {
-	return fmt.Sprintf("paper_spot_carry exits_7d=%d reasons: %s\npaper_intra_trades closed_7d=%d reasons: %s\npaper_trades total_rows=%d%s",
-		w.PaperSpotN, joinDist(w.PaperSpot), w.PaperIntraN, joinDist(w.PaperIntra), w.PaperTrades,
-		map[bool]string{true: "（壳表 0 行=观测面缺口自曝）", false: ""}[w.PaperTrades == 0])
+	return fmt.Sprintf("paper_spot_carry exits_7d=%d reasons: %s\npaper_intra_trades closed_7d=%d reasons: %s",
+		w.PaperSpotN, joinDist(w.PaperSpot), w.PaperIntraN, joinDist(w.PaperIntra))
 }
 
 func weeklyStrategyTable(w *pgstore.RetroWeekly) string {
