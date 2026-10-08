@@ -68,9 +68,6 @@ func TestMigrate_EmptyDBFullMigration(t *testing.T) {
 		"position_legs",
 		"position_cashflows",
 		"position_settlements",
-		"capital_accounts",
-		"capital_snapshots",
-		"hypotheses",
 	}
 	for _, tbl := range keyTables {
 		var exists bool

@@ -13,7 +13,7 @@ func TestFinanceFlows_IncomeSimMarker(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	if _, err := s.pool.Exec(ctx,
-		`TRUNCATE income_events, position_cashflows, ledger, exchange_configs RESTART IDENTITY CASCADE`); err != nil {
+		`TRUNCATE income_events, position_cashflows, exchange_configs RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	// exchange_configs：sim/real 分通道两配置（D-496：account_id 域已删，

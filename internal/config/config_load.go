@@ -135,7 +135,6 @@ func Load() *Config {
 		MacroBlackoutCurrencies:    envStr("ARB_MACRO_BLACKOUT_CURRENCIES", "USD"), // D-053 ③：缺省 USD
 		Stage1MinRowHours:          envInt("ARB_STAGE1_MIN_ROW_HOURS", 48),         // D-061 ①：缺省 48h
 		Stage1OpenWarmupH:          envInt("ARB_STAGE1_OPEN_WARMUP_H", 2),          // D-061 ②：缺省 2h
-		CalibEnabled:               envBool("ARB_CALIB_ENABLED", true),             // D-533：校准计分板默认开（只读计分+写自表）
 		MTData:                     loadMTData(),
 		SwapReconcileDeviationPct:  envFloat("ARB_SWAP_RECONCILE_DEVIATION_PCT", 10.0), // D-110 P2
 		MTDisasterSlPct:            envFloat("ARB_MT_DISASTER_SL_PCT", 2.0),            // D-146 S1 broker 端灾难 SL
@@ -158,7 +157,6 @@ func Load() *Config {
 		SwapDeviationGatePct:       envFloat("ARB_SWAP_DEVIATION_GATE_PCT", 50.0),      // D-165 S1：swap 偏差拦截默认 50%
 		SwapDeviationExitPct:       envFloat("ARB_SWAP_DEVIATION_EXIT_PCT", 50.0),      // D-165 S2：swap 偏差退出默认 50%
 		SwapFactsZeroCheckEnabled:  envBool("ARB_SWAP_FACTS_ZERO_CHECK", true),         // D-165 S3：swap facts 零值校验默认开
-		CapitalSnapshotTTL:         envDur("ARB_CAPITAL_SNAPSHOT_TTL", 5*time.Minute),  // D-195-C1：capital snapshot TTL 默认 5m
 		// === D-269 TRX 投票收益优化器 ===
 		TrxVoteMinSRs:          envInt("ARB_TRX_VOTE_MIN_SRS", 3),                // 最少分散 SR 数
 		TrxVoteMaxSRs:          envInt("ARB_TRX_VOTE_MAX_SRS", 3),                // 最多分散 SR 数（D-355）

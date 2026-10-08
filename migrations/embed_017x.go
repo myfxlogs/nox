@@ -32,4 +32,7 @@ var (
 
 	//go:embed 0179_retire_universe_alerts.sql
 	RetireUniverseAlertsSQL string // D-072：universe 发现告警退役——清历史 info 行
+
+	//go:embed 0180_d120_retire_research.sql
+	D120RetireResearchSQL string // D-120：研究面 A 批 13 表幂等 DROP（已备份）
 )

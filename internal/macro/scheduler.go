@@ -1,9 +1,7 @@
-// scheduler.go —— D-528 S4：宏观采集调度（独立 goroutine，不接 collect.Scheduler；
-// repo_reminder 先例）。三路独立（COT/财历/FRED），错一处不阻塞另两路。
+// scheduler.go —— D-528 S4：宏观财历调度（独立 goroutine，不接 collect.Scheduler；
+// repo_reminder 先例）。D-120 清退 COT/FRED 两采集路，仅留财历+实况链。
 // 节奏（BJ=Asia/Shanghai）：
-//   - COT：周六 05:00 起 2h 间隔轮询，拿到新 report_date 或 12h 超时停；新报告落地即发中文周报
 //   - 财历：每日 07:20 拉当周+下周窗口 upsert；每 4h 增量刷 actuals；每日 07:30 发中文日报
-//   - FRED：每日 08:00 拉白名单序列
 package macro
 
 import (
@@ -22,10 +20,7 @@ const httpTimeout = 30 * time.Second
 // Store 宏观调度存储面（*pgstore.Store 原生满足）。
 type Store interface {
 	UpsertMacroEvents(ctx context.Context, events []pgstore.MacroEvent) (int, error)
-	UpsertCotPositions(ctx context.Context, rows []pgstore.CotPosition) (int, error)
-	UpsertFredObs(ctx context.Context, rows []pgstore.FredObs) (int, error)
 	MacroEventsBetween(ctx context.Context, from, to time.Time) ([]pgstore.MacroEvent, error)
-	MaxCotReportDate(ctx context.Context) (time.Time, error)
 	NextHighEventAt(ctx context.Context, now time.Time) (time.Time, bool, error)                                  // D-053 ②
 	MacroHighEventsIn(ctx context.Context, from, to time.Time, currencies []string) ([]pgstore.MacroEvent, error) // D-053 ②③
 	InsertAlertDedup(ctx context.Context, level, message string, window time.Duration) error                      // D-053 ②
@@ -37,13 +32,12 @@ type Notifier interface {
 }
 
 // Deps 调度依赖（Now 测试注入；ChatID=feishu_target 绑定推送目标）。
-// D-545 热读化：FredKey/Enabled 改 getter——FredKey 每班现取（密钥热更即效）；
-// Enabled 每班唤醒首判（ARB_MACRO_ENABLED 热闸：false=当班跳过不杀 goroutine；nil=恒开）。
+// D-545 热读化：Enabled 改 getter——每班唤醒首判（ARB_MACRO_ENABLED 热闸：
+// false=当班跳过不杀 goroutine；nil=恒开）。D-120 删 FredKey（FRED 面清退）。
 type Deps struct {
 	Store   Store
 	Notify  Notifier
 	ChatID  string
-	FredKey func() string
 	Enabled func() bool
 	Now     func() time.Time
 }
@@ -64,52 +58,10 @@ func Run(ctx context.Context, d Deps) {
 	}
 	client := &http.Client{Timeout: httpTimeout}
 	rearm := make(chan struct{}, 1) // D-053 ②：calendar upsert 成功 → actualsLoop 重臂信号（仅唤醒不携数据）
-	safego.GoLoop("macro:cot", func() { cotLoop(ctx, d, client) })
 	safego.GoLoop("macro:calendar", func() { calendarLoop(ctx, d, client, rearm) })
 	safego.GoLoop("macro:actuals", func() { runActualsLoop(ctx, d, client, rearm) })
-	safego.GoLoop("macro:fred", func() { fredLoop(ctx, d, client) })
-	log.Printf("[macro] scheduler started (cot sat 05:00BJ/2h · calendar 07:20BJ+4h · actuals event-driven · fred 08:00BJ)")
+	log.Printf("[macro] scheduler started (calendar 07:20BJ+4h · actuals event-driven)")
 	<-ctx.Done()
-}
-
-// cotLoop 周六窗口轮询：05:00 BJ 起 2h 间隔，新 report_date 落地即发周报，12h 超时收窗。
-func cotLoop(ctx context.Context, d Deps, client *http.Client) {
-	for {
-		next := nextWeeklyBJ(d.Now(), time.Saturday, 5, 0)
-		if !sleepUntil(ctx, next) {
-			return
-		}
-		if !d.enabled("cot") {
-			continue
-		}
-		baseline, err := d.Store.MaxCotReportDate(ctx)
-		if err != nil {
-			log.Printf("[macro:cot] baseline query: %v", err)
-		}
-		deadline := next.Add(12 * time.Hour)
-		for {
-			rows, err := FetchCot(ctx, client)
-			if err != nil {
-				log.Printf("[macro:cot] fetch: %v", err)
-			} else if n, err := d.Store.UpsertCotPositions(ctx, rows); err != nil {
-				log.Printf("[macro:cot] upsert: %v", err)
-			} else {
-				latest := maxReportDate(rows)
-				log.Printf("[macro:cot] upserted %d rows, latest=%s", n, latest.Format("2006-01-02"))
-				if latest.After(baseline) {
-					announce(ctx, d, RenderCotCN(rows))
-					break
-				}
-			}
-			if !d.Now().Before(deadline) {
-				log.Printf("[macro:cot] 12h window closed without new report_date")
-				break
-			}
-			if !sleepUntil(ctx, d.Now().Add(2*time.Hour)) {
-				return
-			}
-		}
-	}
 }
 
 // calendarLoop 财历路：4h ticker 刷 actuals（自启动即跑；D-053 ②降为兜底——actualsLoop
@@ -187,33 +139,6 @@ func sendDailyReport(ctx context.Context, d Deps) {
 	announce(ctx, d, RenderCalendarCN(events, d.Now()))
 }
 
-// fredLoop 每日 08:00 BJ 拉白名单序列。
-func fredLoop(ctx context.Context, d Deps, client *http.Client) {
-	for {
-		if !sleepUntil(ctx, nextDailyBJ(d.Now(), 8, 0)) {
-			return
-		}
-		if !d.enabled("fred") {
-			continue
-		}
-		key := ""
-		if d.FredKey != nil {
-			key = d.FredKey()
-		}
-		rows, err := FetchFred(ctx, client, key, 10)
-		if err != nil {
-			log.Printf("[macro:fred] fetch: %v", err)
-			continue
-		}
-		n, err := d.Store.UpsertFredObs(ctx, rows)
-		if err != nil {
-			log.Printf("[macro:fred] upsert: %v", err)
-			continue
-		}
-		log.Printf("[macro:fred] upserted %d observations", n)
-	}
-}
-
 // announce 周报/日报推送（失败 log 不重试——下一节奏自愈）。
 func announce(ctx context.Context, d Deps, text string) {
 	if d.Notify == nil || d.ChatID == "" {
@@ -232,17 +157,6 @@ func firstLine(s string) string {
 		}
 	}
 	return s
-}
-
-// maxReportDate 本批最新 report_date。
-func maxReportDate(rows []pgstore.CotPosition) time.Time {
-	var max time.Time
-	for _, r := range rows {
-		if r.ReportDate.After(max) {
-			max = r.ReportDate
-		}
-	}
-	return max
 }
 
 // sleepUntil ctx 感知睡眠（到点=true；取消=false）。var=测试注入点（同 fredURL 先例：
@@ -268,18 +182,6 @@ func nextDailyBJ(now time.Time, hour, min int) time.Time {
 	t := time.Date(bj.Year(), bj.Month(), bj.Day(), hour, min, 0, 0, bjLoc)
 	if !t.After(bj) {
 		t = t.AddDate(0, 0, 1)
-	}
-	return t
-}
-
-// nextWeeklyBJ 下一个 BJ 星期几 HH:MM。
-func nextWeeklyBJ(now time.Time, weekday time.Weekday, hour, min int) time.Time {
-	bj := now.In(bjLoc)
-	t := time.Date(bj.Year(), bj.Month(), bj.Day(), hour, min, 0, 0, bjLoc)
-	diff := (int(weekday) - int(bj.Weekday()) + 7) % 7
-	t = t.AddDate(0, 0, diff)
-	if !t.After(bj) {
-		t = t.AddDate(0, 0, 7)
 	}
 	return t
 }

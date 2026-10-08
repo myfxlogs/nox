@@ -195,7 +195,7 @@ type Config struct {
 	MacroBlackoutCurrencies string        // D-053 ③ ARB_MACRO_BLACKOUT_CURRENCIES：禁区币种集（逗号分隔，缺省 USD）
 	Stage1MinRowHours       int           // D-061 ① ARB_STAGE1_MIN_ROW_HOURS：Stage 1 就绪=目标组合纸面行存活下限小时（缺省 48）
 	Stage1OpenWarmupH       int           // D-061 ② ARB_STAGE1_OPEN_WARMUP_H：MT 周开盘后开仓暖场小时（缺省 2）
-	CalibEnabled            bool          // ARB_CALIB_ENABLED 缺省 true——校准计分板总闸（D-533：只读计分+写自表）
+
 	// MTData MT 数据采集稳定性加固参数（D-104 P0）。
 	MTData MTDataConfig
 
@@ -272,8 +272,6 @@ type Config struct {
 	// 任一腿 swap facts=0 但 broker 该 venue 有非零 swap 历史→fail-closed 拒绝。
 	SwapFactsZeroCheckEnabled bool
 	// D-195-C1：capital snapshot 新鲜度 TTL（ARB_CAPITAL_SNAPSHOT_TTL，默认 5m）。
-	// LiveGate 第 5 条 + readiness capital_snapshot_ready 层用。capital_accounts 表无 TTL 列，从 config 读取。
-	CapitalSnapshotTTL time.Duration
 	// === D-269 TRX 投票收益优化器 ===
 	TrxVoteMinSRs          int     // 最少分散 SR 数（ARB_TRX_VOTE_MIN_SRS，默认 3）
 	TrxVoteMaxSRs          int     // 最多分散 SR 数（ARB_TRX_VOTE_MAX_SRS，默认 3，D-355）
