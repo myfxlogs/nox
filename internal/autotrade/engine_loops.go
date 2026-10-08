@@ -29,7 +29,8 @@ func (e *Engine) Kick() {
 	e.lastKickSent.Store(time.Now().UnixNano()) // D-131：事件源侧记账（orderTopic 订阅 goroutine）
 	select {
 	case e.kickCh <- struct{}{}:
-	default: // 已有待处理 kick，合并
+		e.kickPendingAt.Store(time.Now().UnixNano()) // D-135：仅 send 成功记驻留起点
+	default: // 已有待处理 kick，合并（驻留由在队 kick 的 pendingAt 代表，不另记）
 	}
 }
 
@@ -40,7 +41,7 @@ func (e *Engine) Kick() {
 //     合流定时器补跑——事件不丢（废除旧 30s 丢弃语义）；
 //   - carryKick：carry facts 写后全扫（息差型输入变了）；
 //   - 到点定时器：probe 到期/PERP_FUNDING 持有下限的最早未来边界 +1s；
-//   - （D-131：饥荒看门狗改独立 goroutine 外部观测，见 exitEvalWatchdog）；
+//   - （D-131→D-135：饥荒看门狗改独立 goroutine 队列驻留直测，见 exitEvalWatchdog）；
 //   - csMissTick：D-140 S2 CS-miss 聚合告警（不动）。
 //
 // open/lastScan/pendingKick/边界定时器均 positionLoop 单协程读写（lastScan 先例）。
@@ -129,6 +130,7 @@ func (e *Engine) positionLoop(ctx context.Context) {
 				}
 			}
 		case <-e.kickCh:
+			e.kickPendingAt.Store(0) // D-135：取件即清驻留
 			if time.Since(lastScan) >= kickCoalesce {
 				runFull()
 			} else {
@@ -141,6 +143,7 @@ func (e *Engine) positionLoop(ctx context.Context) {
 				runFull()
 			}
 		case <-e.carryKick:
+			e.carryPendingAt.Store(0) // D-135：取件即清驻留
 			runFull()
 		case <-boundaryC:
 			boundaryT, boundaryC = nil, nil
@@ -183,15 +186,22 @@ func (e *Engine) quoteKickDispatch(ctx context.Context) {
 	}
 }
 
-// exitEvalWatchdog D-131：饥荒看门狗外部观测版（独立 goroutine——lastKickSent/lastEvalAt
-// 由 select 原子服务两侧的 goroutine 分别写，同协程内 kick→eval 永同步=哑弹根因根除）。
-// 判据=有持仓 ∧「kick 送达而 loop 超时未消化」（lastKickSent > lastEval+interval）=
-// 真链断（loop 卡死/chan 堵）；安静窗无新事件不告警——旧判据「久未评估+报价在流」把
-// 驱动节奏（fundingEmitThrottle=60s）与阈值同阶的正常空窗误报为链断。
+// exitEvalQueueDwell D-135：kick 在 kickCh/carryKick 内驻留的饥荒界（30s）。
+// 正常驻留 ms 级（消费窗 ~200ms）——余量 ~150×，与 fundingEmitThrottle/eval 时长零耦合；
+// 真卡死侦测延迟由旧判据的 interval 级降到 30s。包级 var 测试可覆写
+// （positionFallbackInterval 先例）。
+var exitEvalQueueDwell = 30 * time.Second
+
+// exitEvalWatchdog D-131→D-135：饥荒看门狗外部观测版（独立 goroutine）。判据=有持仓 ∧
+// kick 在 chan 内驻留 >30s 未取件=真链断（loop 卡死/阻塞 runFull）；安静窗与
+// 「kick 已入队正被 runFull 消化」的消费窗都不告警——D-135 根因：旧判据量的是
+// lastKick−lastEval 时戳差，tick 撞进 ~200ms 消费窗即踩界误报（65121 实证）。
+// 边沿触发：starved false→true 才告警，恢复即复位——真卡死期不再每 tick 重报刷屏。
 // 只告警不评估（看门狗不产数据原则不动）；评估触发分层零改动。
 func (e *Engine) exitEvalWatchdog(ctx context.Context) {
 	t := time.NewTicker(e.fallbackInterval())
 	defer t.Stop()
+	wasStarved := false
 	for {
 		select {
 		case <-ctx.Done():
@@ -200,23 +210,43 @@ func (e *Engine) exitEvalWatchdog(ctx context.Context) {
 		}
 		open, lastEval, lastKick, starved := e.exitEvalStarved()
 		if !starved {
-			continue // 无仓 / 尚无事件 / 事件已被消化 = 不告警
+			wasStarved = false // 恢复/安静窗：复位边沿
+			continue
 		}
-		msg := "exit-eval starvation: positionLoop 有持仓且 kick 送达但权威评估超时未消化"
-		log.Printf("[autotrade] WATCHDOG %s (open=%d lastEval=%v ago lastKick=%v ago)",
-			msg, open, time.Since(lastEval).Round(time.Second), time.Since(lastKick).Round(time.Second))
+		if wasStarved {
+			continue // 持续饥荒不重复刷告警
+		}
+		wasStarved = true
+		msg := "exit-eval starvation: positionLoop 有持仓且 kick 在队驻留超时未消化"
+		log.Printf("[autotrade] WATCHDOG %s (open=%d kickPending=%v carryPending=%v lastEval=%v ago lastKick=%v ago)",
+			msg, open, pendingAge(e.kickPendingAt.Load()).Round(time.Second), pendingAge(e.carryPendingAt.Load()).Round(time.Second),
+			time.Since(lastEval).Round(time.Second), time.Since(lastKick).Round(time.Second))
 		if e.AlertSink != nil {
 			e.AlertSink("critical", "退出评估饥荒看门狗："+msg)
 		}
 	}
 }
 
-// exitEvalStarved D-131 判据提取（纯读 atomics 可测）：open/lastEval/lastKick 快照 + 是否饥荒。
-// 饥荒=有持仓 ∧ lastKickSent > lastEval+interval（事件送达 loop 超时未消化）。
+// pendingAge D-135 诊断字段：pendingAt unixnano → 驻留时长（0=无驻留）。
+func pendingAge(at int64) time.Duration {
+	if at == 0 {
+		return 0
+	}
+	return time.Since(time.Unix(0, at))
+}
+
+// exitEvalStarved D-135 判据提取（纯读 atomics 可测）：open/lastEval/lastKick 快照 + 是否饥荒。
+// 饥荒=有持仓 ∧ (kickCh 或 carryKick 内有 kick 驻留 > exitEvalQueueDwell)。
+// len(chan)>0 复核在队：缓冲 chan rendezvous 交接时 sender 的 pendingAt 记账可能晚于
+// receiver 清零（同帧竞态留陈旧非零值），无该复核会把已消费的 kick 误报为驻留。
 func (e *Engine) exitEvalStarved() (open int64, lastEval, lastKick time.Time, starved bool) {
 	open = e.openCount.Load()
 	le := time.Unix(0, e.lastEvalAt.Load())
 	lk := time.Unix(0, e.lastKickSent.Load())
-	starved = open > 0 && !lk.IsZero() && lk.After(le.Add(e.fallbackInterval()))
+	queued := func(n int, at int64) bool {
+		return n > 0 && at > 0 && pendingAge(at) >= exitEvalQueueDwell
+	}
+	starved = open > 0 && (queued(len(e.kickCh), e.kickPendingAt.Load()) ||
+		queued(len(e.carryKick), e.carryPendingAt.Load()))
 	return open, le, lk, starved
 }
