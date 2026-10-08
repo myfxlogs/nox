@@ -272,14 +272,15 @@ func (m *AccountMonitor) applyAcctResult(ctx context.Context, vk string, acct *r
 	}
 	changed := !acctSame(st.acct, acct)
 	st.restOnline = true
-	cp := *acct // 防共享指针原地改写：querier 侧复用/突变对象不回流本态
+	prev := st.acct // D-136：快照去重比较基准（入库列口径，先于覆写捕获）
+	cp := *acct     // 防共享指针原地改写：querier 侧复用/突变对象不回流本态
 	st.acct = &cp
 	st.asOf = time.Now()
 	st.online = m.onlineLocked(vk, st)
 	m.states[vk] = st
 	m.dirtyLocked(vk)
 	m.mu.Unlock()
-	m.writeRestSnapshot(ctx, vk, acct, changed) // D-132：REST-only 面值变→审计留痕
+	m.writeRestSnapshot(ctx, vk, prev, acct) // D-132/D-136：REST-only 面入库列值变→审计留痕
 	if changed {
 		m.notifyFunds() // D-568：REST 值变→funds 通知（值不变不触）
 	}
