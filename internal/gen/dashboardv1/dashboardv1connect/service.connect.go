@@ -65,21 +65,6 @@ const (
 	// DashboardServiceClearAckedAlertsProcedure is the fully-qualified name of the DashboardService's
 	// ClearAckedAlerts RPC.
 	DashboardServiceClearAckedAlertsProcedure = "/arb.dashboard.v1.DashboardService/ClearAckedAlerts"
-	// DashboardServiceAddLedgerEntryProcedure is the fully-qualified name of the DashboardService's
-	// AddLedgerEntry RPC.
-	DashboardServiceAddLedgerEntryProcedure = "/arb.dashboard.v1.DashboardService/AddLedgerEntry"
-	// DashboardServiceListLedgerEntriesProcedure is the fully-qualified name of the DashboardService's
-	// ListLedgerEntries RPC.
-	DashboardServiceListLedgerEntriesProcedure = "/arb.dashboard.v1.DashboardService/ListLedgerEntries"
-	// DashboardServiceLedgerSummaryProcedure is the fully-qualified name of the DashboardService's
-	// LedgerSummary RPC.
-	DashboardServiceLedgerSummaryProcedure = "/arb.dashboard.v1.DashboardService/LedgerSummary"
-	// DashboardServiceAddInvestmentRecordProcedure is the fully-qualified name of the
-	// DashboardService's AddInvestmentRecord RPC.
-	DashboardServiceAddInvestmentRecordProcedure = "/arb.dashboard.v1.DashboardService/AddInvestmentRecord"
-	// DashboardServiceListInvestmentRecordsProcedure is the fully-qualified name of the
-	// DashboardService's ListInvestmentRecords RPC.
-	DashboardServiceListInvestmentRecordsProcedure = "/arb.dashboard.v1.DashboardService/ListInvestmentRecords"
 	// DashboardServiceListKnowledgeEntriesProcedure is the fully-qualified name of the
 	// DashboardService's ListKnowledgeEntries RPC.
 	DashboardServiceListKnowledgeEntriesProcedure = "/arb.dashboard.v1.DashboardService/ListKnowledgeEntries"
@@ -433,13 +418,6 @@ type DashboardServiceClient interface {
 	// 告警删除
 	DeleteAlerts(context.Context, *connect.Request[dashboardv1.DeleteAlertsRequest]) (*connect.Response[dashboardv1.DeleteAlertsResponse], error)
 	ClearAckedAlerts(context.Context, *connect.Request[dashboardv1.ClearAckedAlertsRequest]) (*connect.Response[dashboardv1.ClearAckedAlertsResponse], error)
-	// 台账
-	AddLedgerEntry(context.Context, *connect.Request[dashboardv1.AddLedgerEntryRequest]) (*connect.Response[dashboardv1.AddLedgerEntryResponse], error)
-	ListLedgerEntries(context.Context, *connect.Request[dashboardv1.ListLedgerEntriesRequest]) (*connect.Response[dashboardv1.ListLedgerEntriesResponse], error)
-	LedgerSummary(context.Context, *connect.Request[dashboardv1.LedgerSummaryRequest]) (*connect.Response[dashboardv1.LedgerSummaryResponse], error)
-	// 记账（财务线工作项 2：结构化投资记录，决定/教训/观察）
-	AddInvestmentRecord(context.Context, *connect.Request[dashboardv1.AddInvestmentRecordRequest]) (*connect.Response[dashboardv1.AddInvestmentRecordResponse], error)
-	ListInvestmentRecords(context.Context, *connect.Request[dashboardv1.ListInvestmentRecordsRequest]) (*connect.Response[dashboardv1.ListInvestmentRecordsResponse], error)
 	// 经验库
 	ListKnowledgeEntries(context.Context, *connect.Request[dashboardv1.ListKnowledgeEntriesRequest]) (*connect.Response[dashboardv1.ListKnowledgeEntriesResponse], error)
 	// 执行（认证后，§13）
@@ -678,36 +656,6 @@ func NewDashboardServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			httpClient,
 			baseURL+DashboardServiceClearAckedAlertsProcedure,
 			connect.WithSchema(dashboardServiceMethods.ByName("ClearAckedAlerts")),
-			connect.WithClientOptions(opts...),
-		),
-		addLedgerEntry: connect.NewClient[dashboardv1.AddLedgerEntryRequest, dashboardv1.AddLedgerEntryResponse](
-			httpClient,
-			baseURL+DashboardServiceAddLedgerEntryProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("AddLedgerEntry")),
-			connect.WithClientOptions(opts...),
-		),
-		listLedgerEntries: connect.NewClient[dashboardv1.ListLedgerEntriesRequest, dashboardv1.ListLedgerEntriesResponse](
-			httpClient,
-			baseURL+DashboardServiceListLedgerEntriesProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("ListLedgerEntries")),
-			connect.WithClientOptions(opts...),
-		),
-		ledgerSummary: connect.NewClient[dashboardv1.LedgerSummaryRequest, dashboardv1.LedgerSummaryResponse](
-			httpClient,
-			baseURL+DashboardServiceLedgerSummaryProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("LedgerSummary")),
-			connect.WithClientOptions(opts...),
-		),
-		addInvestmentRecord: connect.NewClient[dashboardv1.AddInvestmentRecordRequest, dashboardv1.AddInvestmentRecordResponse](
-			httpClient,
-			baseURL+DashboardServiceAddInvestmentRecordProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("AddInvestmentRecord")),
-			connect.WithClientOptions(opts...),
-		),
-		listInvestmentRecords: connect.NewClient[dashboardv1.ListInvestmentRecordsRequest, dashboardv1.ListInvestmentRecordsResponse](
-			httpClient,
-			baseURL+DashboardServiceListInvestmentRecordsProcedure,
-			connect.WithSchema(dashboardServiceMethods.ByName("ListInvestmentRecords")),
 			connect.WithClientOptions(opts...),
 		),
 		listKnowledgeEntries: connect.NewClient[dashboardv1.ListKnowledgeEntriesRequest, dashboardv1.ListKnowledgeEntriesResponse](
@@ -1398,11 +1346,6 @@ type dashboardServiceClient struct {
 	listUnacked                  *connect.Client[dashboardv1.ListUnackedRequest, dashboardv1.ListUnackedResponse]
 	deleteAlerts                 *connect.Client[dashboardv1.DeleteAlertsRequest, dashboardv1.DeleteAlertsResponse]
 	clearAckedAlerts             *connect.Client[dashboardv1.ClearAckedAlertsRequest, dashboardv1.ClearAckedAlertsResponse]
-	addLedgerEntry               *connect.Client[dashboardv1.AddLedgerEntryRequest, dashboardv1.AddLedgerEntryResponse]
-	listLedgerEntries            *connect.Client[dashboardv1.ListLedgerEntriesRequest, dashboardv1.ListLedgerEntriesResponse]
-	ledgerSummary                *connect.Client[dashboardv1.LedgerSummaryRequest, dashboardv1.LedgerSummaryResponse]
-	addInvestmentRecord          *connect.Client[dashboardv1.AddInvestmentRecordRequest, dashboardv1.AddInvestmentRecordResponse]
-	listInvestmentRecords        *connect.Client[dashboardv1.ListInvestmentRecordsRequest, dashboardv1.ListInvestmentRecordsResponse]
 	listKnowledgeEntries         *connect.Client[dashboardv1.ListKnowledgeEntriesRequest, dashboardv1.ListKnowledgeEntriesResponse]
 	executeOpportunity           *connect.Client[dashboardv1.ExecuteOpportunityRequest, dashboardv1.ExecuteOpportunityResponse]
 	closePosition                *connect.Client[dashboardv1.ClosePositionRequest, dashboardv1.ClosePositionResponse]
@@ -1570,31 +1513,6 @@ func (c *dashboardServiceClient) DeleteAlerts(ctx context.Context, req *connect.
 // ClearAckedAlerts calls arb.dashboard.v1.DashboardService.ClearAckedAlerts.
 func (c *dashboardServiceClient) ClearAckedAlerts(ctx context.Context, req *connect.Request[dashboardv1.ClearAckedAlertsRequest]) (*connect.Response[dashboardv1.ClearAckedAlertsResponse], error) {
 	return c.clearAckedAlerts.CallUnary(ctx, req)
-}
-
-// AddLedgerEntry calls arb.dashboard.v1.DashboardService.AddLedgerEntry.
-func (c *dashboardServiceClient) AddLedgerEntry(ctx context.Context, req *connect.Request[dashboardv1.AddLedgerEntryRequest]) (*connect.Response[dashboardv1.AddLedgerEntryResponse], error) {
-	return c.addLedgerEntry.CallUnary(ctx, req)
-}
-
-// ListLedgerEntries calls arb.dashboard.v1.DashboardService.ListLedgerEntries.
-func (c *dashboardServiceClient) ListLedgerEntries(ctx context.Context, req *connect.Request[dashboardv1.ListLedgerEntriesRequest]) (*connect.Response[dashboardv1.ListLedgerEntriesResponse], error) {
-	return c.listLedgerEntries.CallUnary(ctx, req)
-}
-
-// LedgerSummary calls arb.dashboard.v1.DashboardService.LedgerSummary.
-func (c *dashboardServiceClient) LedgerSummary(ctx context.Context, req *connect.Request[dashboardv1.LedgerSummaryRequest]) (*connect.Response[dashboardv1.LedgerSummaryResponse], error) {
-	return c.ledgerSummary.CallUnary(ctx, req)
-}
-
-// AddInvestmentRecord calls arb.dashboard.v1.DashboardService.AddInvestmentRecord.
-func (c *dashboardServiceClient) AddInvestmentRecord(ctx context.Context, req *connect.Request[dashboardv1.AddInvestmentRecordRequest]) (*connect.Response[dashboardv1.AddInvestmentRecordResponse], error) {
-	return c.addInvestmentRecord.CallUnary(ctx, req)
-}
-
-// ListInvestmentRecords calls arb.dashboard.v1.DashboardService.ListInvestmentRecords.
-func (c *dashboardServiceClient) ListInvestmentRecords(ctx context.Context, req *connect.Request[dashboardv1.ListInvestmentRecordsRequest]) (*connect.Response[dashboardv1.ListInvestmentRecordsResponse], error) {
-	return c.listInvestmentRecords.CallUnary(ctx, req)
 }
 
 // ListKnowledgeEntries calls arb.dashboard.v1.DashboardService.ListKnowledgeEntries.
@@ -2174,13 +2092,6 @@ type DashboardServiceHandler interface {
 	// 告警删除
 	DeleteAlerts(context.Context, *connect.Request[dashboardv1.DeleteAlertsRequest]) (*connect.Response[dashboardv1.DeleteAlertsResponse], error)
 	ClearAckedAlerts(context.Context, *connect.Request[dashboardv1.ClearAckedAlertsRequest]) (*connect.Response[dashboardv1.ClearAckedAlertsResponse], error)
-	// 台账
-	AddLedgerEntry(context.Context, *connect.Request[dashboardv1.AddLedgerEntryRequest]) (*connect.Response[dashboardv1.AddLedgerEntryResponse], error)
-	ListLedgerEntries(context.Context, *connect.Request[dashboardv1.ListLedgerEntriesRequest]) (*connect.Response[dashboardv1.ListLedgerEntriesResponse], error)
-	LedgerSummary(context.Context, *connect.Request[dashboardv1.LedgerSummaryRequest]) (*connect.Response[dashboardv1.LedgerSummaryResponse], error)
-	// 记账（财务线工作项 2：结构化投资记录，决定/教训/观察）
-	AddInvestmentRecord(context.Context, *connect.Request[dashboardv1.AddInvestmentRecordRequest]) (*connect.Response[dashboardv1.AddInvestmentRecordResponse], error)
-	ListInvestmentRecords(context.Context, *connect.Request[dashboardv1.ListInvestmentRecordsRequest]) (*connect.Response[dashboardv1.ListInvestmentRecordsResponse], error)
 	// 经验库
 	ListKnowledgeEntries(context.Context, *connect.Request[dashboardv1.ListKnowledgeEntriesRequest]) (*connect.Response[dashboardv1.ListKnowledgeEntriesResponse], error)
 	// 执行（认证后，§13）
@@ -2415,36 +2326,6 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 		DashboardServiceClearAckedAlertsProcedure,
 		svc.ClearAckedAlerts,
 		connect.WithSchema(dashboardServiceMethods.ByName("ClearAckedAlerts")),
-		connect.WithHandlerOptions(opts...),
-	)
-	dashboardServiceAddLedgerEntryHandler := connect.NewUnaryHandler(
-		DashboardServiceAddLedgerEntryProcedure,
-		svc.AddLedgerEntry,
-		connect.WithSchema(dashboardServiceMethods.ByName("AddLedgerEntry")),
-		connect.WithHandlerOptions(opts...),
-	)
-	dashboardServiceListLedgerEntriesHandler := connect.NewUnaryHandler(
-		DashboardServiceListLedgerEntriesProcedure,
-		svc.ListLedgerEntries,
-		connect.WithSchema(dashboardServiceMethods.ByName("ListLedgerEntries")),
-		connect.WithHandlerOptions(opts...),
-	)
-	dashboardServiceLedgerSummaryHandler := connect.NewUnaryHandler(
-		DashboardServiceLedgerSummaryProcedure,
-		svc.LedgerSummary,
-		connect.WithSchema(dashboardServiceMethods.ByName("LedgerSummary")),
-		connect.WithHandlerOptions(opts...),
-	)
-	dashboardServiceAddInvestmentRecordHandler := connect.NewUnaryHandler(
-		DashboardServiceAddInvestmentRecordProcedure,
-		svc.AddInvestmentRecord,
-		connect.WithSchema(dashboardServiceMethods.ByName("AddInvestmentRecord")),
-		connect.WithHandlerOptions(opts...),
-	)
-	dashboardServiceListInvestmentRecordsHandler := connect.NewUnaryHandler(
-		DashboardServiceListInvestmentRecordsProcedure,
-		svc.ListInvestmentRecords,
-		connect.WithSchema(dashboardServiceMethods.ByName("ListInvestmentRecords")),
 		connect.WithHandlerOptions(opts...),
 	)
 	dashboardServiceListKnowledgeEntriesHandler := connect.NewUnaryHandler(
@@ -3143,16 +3024,6 @@ func NewDashboardServiceHandler(svc DashboardServiceHandler, opts ...connect.Han
 			dashboardServiceDeleteAlertsHandler.ServeHTTP(w, r)
 		case DashboardServiceClearAckedAlertsProcedure:
 			dashboardServiceClearAckedAlertsHandler.ServeHTTP(w, r)
-		case DashboardServiceAddLedgerEntryProcedure:
-			dashboardServiceAddLedgerEntryHandler.ServeHTTP(w, r)
-		case DashboardServiceListLedgerEntriesProcedure:
-			dashboardServiceListLedgerEntriesHandler.ServeHTTP(w, r)
-		case DashboardServiceLedgerSummaryProcedure:
-			dashboardServiceLedgerSummaryHandler.ServeHTTP(w, r)
-		case DashboardServiceAddInvestmentRecordProcedure:
-			dashboardServiceAddInvestmentRecordHandler.ServeHTTP(w, r)
-		case DashboardServiceListInvestmentRecordsProcedure:
-			dashboardServiceListInvestmentRecordsHandler.ServeHTTP(w, r)
 		case DashboardServiceListKnowledgeEntriesProcedure:
 			dashboardServiceListKnowledgeEntriesHandler.ServeHTTP(w, r)
 		case DashboardServiceExecuteOpportunityProcedure:
@@ -3428,26 +3299,6 @@ func (UnimplementedDashboardServiceHandler) DeleteAlerts(context.Context, *conne
 
 func (UnimplementedDashboardServiceHandler) ClearAckedAlerts(context.Context, *connect.Request[dashboardv1.ClearAckedAlertsRequest]) (*connect.Response[dashboardv1.ClearAckedAlertsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ClearAckedAlerts is not implemented"))
-}
-
-func (UnimplementedDashboardServiceHandler) AddLedgerEntry(context.Context, *connect.Request[dashboardv1.AddLedgerEntryRequest]) (*connect.Response[dashboardv1.AddLedgerEntryResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AddLedgerEntry is not implemented"))
-}
-
-func (UnimplementedDashboardServiceHandler) ListLedgerEntries(context.Context, *connect.Request[dashboardv1.ListLedgerEntriesRequest]) (*connect.Response[dashboardv1.ListLedgerEntriesResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListLedgerEntries is not implemented"))
-}
-
-func (UnimplementedDashboardServiceHandler) LedgerSummary(context.Context, *connect.Request[dashboardv1.LedgerSummaryRequest]) (*connect.Response[dashboardv1.LedgerSummaryResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.LedgerSummary is not implemented"))
-}
-
-func (UnimplementedDashboardServiceHandler) AddInvestmentRecord(context.Context, *connect.Request[dashboardv1.AddInvestmentRecordRequest]) (*connect.Response[dashboardv1.AddInvestmentRecordResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.AddInvestmentRecord is not implemented"))
-}
-
-func (UnimplementedDashboardServiceHandler) ListInvestmentRecords(context.Context, *connect.Request[dashboardv1.ListInvestmentRecordsRequest]) (*connect.Response[dashboardv1.ListInvestmentRecordsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("arb.dashboard.v1.DashboardService.ListInvestmentRecords is not implemented"))
 }
 
 func (UnimplementedDashboardServiceHandler) ListKnowledgeEntries(context.Context, *connect.Request[dashboardv1.ListKnowledgeEntriesRequest]) (*connect.Response[dashboardv1.ListKnowledgeEntriesResponse], error) {

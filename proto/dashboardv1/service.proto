@@ -38,13 +38,8 @@ service DashboardService {
   rpc ClearAckedAlerts(ClearAckedAlertsRequest) returns (ClearAckedAlertsResponse);
 
   // 台账
-  rpc AddLedgerEntry(AddLedgerEntryRequest) returns (AddLedgerEntryResponse);
-  rpc ListLedgerEntries(ListLedgerEntriesRequest) returns (ListLedgerEntriesResponse);
-  rpc LedgerSummary(LedgerSummaryRequest) returns (LedgerSummaryResponse);
 
   // 记账（财务线工作项 2：结构化投资记录，决定/教训/观察）
-  rpc AddInvestmentRecord(AddInvestmentRecordRequest) returns (AddInvestmentRecordResponse);
-  rpc ListInvestmentRecords(ListInvestmentRecordsRequest) returns (ListInvestmentRecordsResponse);
 
   // 经验库
   rpc ListKnowledgeEntries(ListKnowledgeEntriesRequest) returns (ListKnowledgeEntriesResponse);

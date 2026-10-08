@@ -22,794 +22,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type LedgerEntry struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Date          *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=date,proto3" json:"date,omitempty"`
-	Channel       string                 `protobuf:"bytes,3,opt,name=channel,proto3" json:"channel,omitempty"`
-	Currency      string                 `protobuf:"bytes,4,opt,name=currency,proto3" json:"currency,omitempty"`
-	Amount        float64                `protobuf:"fixed64,5,opt,name=amount,proto3" json:"amount,omitempty"` // 正 = 入金，负 = 出金
-	FeeRate       float64                `protobuf:"fixed64,6,opt,name=fee_rate,json=feeRate,proto3" json:"fee_rate,omitempty"`
-	Tier          string                 `protobuf:"bytes,7,opt,name=tier,proto3" json:"tier,omitempty"`
-	Note          string                 `protobuf:"bytes,8,opt,name=note,proto3" json:"note,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *LedgerEntry) Reset() {
-	*x = LedgerEntry{}
-	mi := &file_dashboardv1_account_proto_msgTypes[0]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *LedgerEntry) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*LedgerEntry) ProtoMessage() {}
-
-func (x *LedgerEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[0]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use LedgerEntry.ProtoReflect.Descriptor instead.
-func (*LedgerEntry) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *LedgerEntry) GetId() int64 {
-	if x != nil {
-		return x.Id
-	}
-	return 0
-}
-
-func (x *LedgerEntry) GetDate() *timestamppb.Timestamp {
-	if x != nil {
-		return x.Date
-	}
-	return nil
-}
-
-func (x *LedgerEntry) GetChannel() string {
-	if x != nil {
-		return x.Channel
-	}
-	return ""
-}
-
-func (x *LedgerEntry) GetCurrency() string {
-	if x != nil {
-		return x.Currency
-	}
-	return ""
-}
-
-func (x *LedgerEntry) GetAmount() float64 {
-	if x != nil {
-		return x.Amount
-	}
-	return 0
-}
-
-func (x *LedgerEntry) GetFeeRate() float64 {
-	if x != nil {
-		return x.FeeRate
-	}
-	return 0
-}
-
-func (x *LedgerEntry) GetTier() string {
-	if x != nil {
-		return x.Tier
-	}
-	return ""
-}
-
-func (x *LedgerEntry) GetNote() string {
-	if x != nil {
-		return x.Note
-	}
-	return ""
-}
-
-type AddLedgerEntryRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Date          *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=date,proto3" json:"date,omitempty"`
-	Channel       string                 `protobuf:"bytes,2,opt,name=channel,proto3" json:"channel,omitempty"`
-	Currency      string                 `protobuf:"bytes,3,opt,name=currency,proto3" json:"currency,omitempty"`
-	Amount        float64                `protobuf:"fixed64,4,opt,name=amount,proto3" json:"amount,omitempty"`
-	FeeRate       float64                `protobuf:"fixed64,5,opt,name=fee_rate,json=feeRate,proto3" json:"fee_rate,omitempty"`
-	Tier          string                 `protobuf:"bytes,6,opt,name=tier,proto3" json:"tier,omitempty"`
-	Note          string                 `protobuf:"bytes,7,opt,name=note,proto3" json:"note,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *AddLedgerEntryRequest) Reset() {
-	*x = AddLedgerEntryRequest{}
-	mi := &file_dashboardv1_account_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AddLedgerEntryRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AddLedgerEntryRequest) ProtoMessage() {}
-
-func (x *AddLedgerEntryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[1]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AddLedgerEntryRequest.ProtoReflect.Descriptor instead.
-func (*AddLedgerEntryRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *AddLedgerEntryRequest) GetDate() *timestamppb.Timestamp {
-	if x != nil {
-		return x.Date
-	}
-	return nil
-}
-
-func (x *AddLedgerEntryRequest) GetChannel() string {
-	if x != nil {
-		return x.Channel
-	}
-	return ""
-}
-
-func (x *AddLedgerEntryRequest) GetCurrency() string {
-	if x != nil {
-		return x.Currency
-	}
-	return ""
-}
-
-func (x *AddLedgerEntryRequest) GetAmount() float64 {
-	if x != nil {
-		return x.Amount
-	}
-	return 0
-}
-
-func (x *AddLedgerEntryRequest) GetFeeRate() float64 {
-	if x != nil {
-		return x.FeeRate
-	}
-	return 0
-}
-
-func (x *AddLedgerEntryRequest) GetTier() string {
-	if x != nil {
-		return x.Tier
-	}
-	return ""
-}
-
-func (x *AddLedgerEntryRequest) GetNote() string {
-	if x != nil {
-		return x.Note
-	}
-	return ""
-}
-
-type AddLedgerEntryResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *AddLedgerEntryResponse) Reset() {
-	*x = AddLedgerEntryResponse{}
-	mi := &file_dashboardv1_account_proto_msgTypes[2]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AddLedgerEntryResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AddLedgerEntryResponse) ProtoMessage() {}
-
-func (x *AddLedgerEntryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[2]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AddLedgerEntryResponse.ProtoReflect.Descriptor instead.
-func (*AddLedgerEntryResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *AddLedgerEntryResponse) GetId() int64 {
-	if x != nil {
-		return x.Id
-	}
-	return 0
-}
-
-type ListLedgerEntriesRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Limit         int32                  `protobuf:"varint,1,opt,name=limit,proto3" json:"limit,omitempty"` // ≤0 = 默认 100
-	Offset        int32                  `protobuf:"varint,2,opt,name=offset,proto3" json:"offset,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListLedgerEntriesRequest) Reset() {
-	*x = ListLedgerEntriesRequest{}
-	mi := &file_dashboardv1_account_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListLedgerEntriesRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListLedgerEntriesRequest) ProtoMessage() {}
-
-func (x *ListLedgerEntriesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListLedgerEntriesRequest.ProtoReflect.Descriptor instead.
-func (*ListLedgerEntriesRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *ListLedgerEntriesRequest) GetLimit() int32 {
-	if x != nil {
-		return x.Limit
-	}
-	return 0
-}
-
-func (x *ListLedgerEntriesRequest) GetOffset() int32 {
-	if x != nil {
-		return x.Offset
-	}
-	return 0
-}
-
-type ListLedgerEntriesResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Entries       []*LedgerEntry         `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListLedgerEntriesResponse) Reset() {
-	*x = ListLedgerEntriesResponse{}
-	mi := &file_dashboardv1_account_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListLedgerEntriesResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListLedgerEntriesResponse) ProtoMessage() {}
-
-func (x *ListLedgerEntriesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[4]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListLedgerEntriesResponse.ProtoReflect.Descriptor instead.
-func (*ListLedgerEntriesResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *ListLedgerEntriesResponse) GetEntries() []*LedgerEntry {
-	if x != nil {
-		return x.Entries
-	}
-	return nil
-}
-
-type LedgerSummaryRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *LedgerSummaryRequest) Reset() {
-	*x = LedgerSummaryRequest{}
-	mi := &file_dashboardv1_account_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *LedgerSummaryRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*LedgerSummaryRequest) ProtoMessage() {}
-
-func (x *LedgerSummaryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use LedgerSummaryRequest.ProtoReflect.Descriptor instead.
-func (*LedgerSummaryRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{5}
-}
-
-type TierSummary struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Tier          string                 `protobuf:"bytes,1,opt,name=tier,proto3" json:"tier,omitempty"`
-	Inflow        float64                `protobuf:"fixed64,2,opt,name=inflow,proto3" json:"inflow,omitempty"`
-	Outflow       float64                `protobuf:"fixed64,3,opt,name=outflow,proto3" json:"outflow,omitempty"`
-	Net           float64                `protobuf:"fixed64,4,opt,name=net,proto3" json:"net,omitempty"`
-	EntryCount    int32                  `protobuf:"varint,5,opt,name=entry_count,json=entryCount,proto3" json:"entry_count,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *TierSummary) Reset() {
-	*x = TierSummary{}
-	mi := &file_dashboardv1_account_proto_msgTypes[6]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *TierSummary) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*TierSummary) ProtoMessage() {}
-
-func (x *TierSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[6]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use TierSummary.ProtoReflect.Descriptor instead.
-func (*TierSummary) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *TierSummary) GetTier() string {
-	if x != nil {
-		return x.Tier
-	}
-	return ""
-}
-
-func (x *TierSummary) GetInflow() float64 {
-	if x != nil {
-		return x.Inflow
-	}
-	return 0
-}
-
-func (x *TierSummary) GetOutflow() float64 {
-	if x != nil {
-		return x.Outflow
-	}
-	return 0
-}
-
-func (x *TierSummary) GetNet() float64 {
-	if x != nil {
-		return x.Net
-	}
-	return 0
-}
-
-func (x *TierSummary) GetEntryCount() int32 {
-	if x != nil {
-		return x.EntryCount
-	}
-	return 0
-}
-
-type LedgerSummaryResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Items         []*TierSummary         `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *LedgerSummaryResponse) Reset() {
-	*x = LedgerSummaryResponse{}
-	mi := &file_dashboardv1_account_proto_msgTypes[7]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *LedgerSummaryResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*LedgerSummaryResponse) ProtoMessage() {}
-
-func (x *LedgerSummaryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[7]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use LedgerSummaryResponse.ProtoReflect.Descriptor instead.
-func (*LedgerSummaryResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{7}
-}
-
-func (x *LedgerSummaryResponse) GetItems() []*TierSummary {
-	if x != nil {
-		return x.Items
-	}
-	return nil
-}
-
-type InvestmentRecord struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"` // decision | lesson | observation
-	Asset         string                 `protobuf:"bytes,3,opt,name=asset,proto3" json:"asset,omitempty"`
-	Content       string                 `protobuf:"bytes,4,opt,name=content,proto3" json:"content,omitempty"`
-	Ts            *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=ts,proto3" json:"ts,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *InvestmentRecord) Reset() {
-	*x = InvestmentRecord{}
-	mi := &file_dashboardv1_account_proto_msgTypes[8]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *InvestmentRecord) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*InvestmentRecord) ProtoMessage() {}
-
-func (x *InvestmentRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[8]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use InvestmentRecord.ProtoReflect.Descriptor instead.
-func (*InvestmentRecord) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *InvestmentRecord) GetId() int64 {
-	if x != nil {
-		return x.Id
-	}
-	return 0
-}
-
-func (x *InvestmentRecord) GetKind() string {
-	if x != nil {
-		return x.Kind
-	}
-	return ""
-}
-
-func (x *InvestmentRecord) GetAsset() string {
-	if x != nil {
-		return x.Asset
-	}
-	return ""
-}
-
-func (x *InvestmentRecord) GetContent() string {
-	if x != nil {
-		return x.Content
-	}
-	return ""
-}
-
-func (x *InvestmentRecord) GetTs() *timestamppb.Timestamp {
-	if x != nil {
-		return x.Ts
-	}
-	return nil
-}
-
-type AddInvestmentRecordRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Kind          string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
-	Asset         string                 `protobuf:"bytes,2,opt,name=asset,proto3" json:"asset,omitempty"`
-	Content       string                 `protobuf:"bytes,3,opt,name=content,proto3" json:"content,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *AddInvestmentRecordRequest) Reset() {
-	*x = AddInvestmentRecordRequest{}
-	mi := &file_dashboardv1_account_proto_msgTypes[9]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AddInvestmentRecordRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AddInvestmentRecordRequest) ProtoMessage() {}
-
-func (x *AddInvestmentRecordRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[9]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AddInvestmentRecordRequest.ProtoReflect.Descriptor instead.
-func (*AddInvestmentRecordRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{9}
-}
-
-func (x *AddInvestmentRecordRequest) GetKind() string {
-	if x != nil {
-		return x.Kind
-	}
-	return ""
-}
-
-func (x *AddInvestmentRecordRequest) GetAsset() string {
-	if x != nil {
-		return x.Asset
-	}
-	return ""
-}
-
-func (x *AddInvestmentRecordRequest) GetContent() string {
-	if x != nil {
-		return x.Content
-	}
-	return ""
-}
-
-type AddInvestmentRecordResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *AddInvestmentRecordResponse) Reset() {
-	*x = AddInvestmentRecordResponse{}
-	mi := &file_dashboardv1_account_proto_msgTypes[10]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AddInvestmentRecordResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AddInvestmentRecordResponse) ProtoMessage() {}
-
-func (x *AddInvestmentRecordResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[10]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AddInvestmentRecordResponse.ProtoReflect.Descriptor instead.
-func (*AddInvestmentRecordResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{10}
-}
-
-func (x *AddInvestmentRecordResponse) GetId() int64 {
-	if x != nil {
-		return x.Id
-	}
-	return 0
-}
-
-type ListInvestmentRecordsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Kind          string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`    // 空 = 全部
-	Asset         string                 `protobuf:"bytes,2,opt,name=asset,proto3" json:"asset,omitempty"`  // 子串匹配（ILIKE）
-	Q             string                 `protobuf:"bytes,3,opt,name=q,proto3" json:"q,omitempty"`          // 内容搜索（ILIKE），空 = 不筛
-	Limit         int32                  `protobuf:"varint,4,opt,name=limit,proto3" json:"limit,omitempty"` // ≤0 默认 200
-	Offset        int32                  `protobuf:"varint,5,opt,name=offset,proto3" json:"offset,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListInvestmentRecordsRequest) Reset() {
-	*x = ListInvestmentRecordsRequest{}
-	mi := &file_dashboardv1_account_proto_msgTypes[11]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListInvestmentRecordsRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListInvestmentRecordsRequest) ProtoMessage() {}
-
-func (x *ListInvestmentRecordsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[11]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListInvestmentRecordsRequest.ProtoReflect.Descriptor instead.
-func (*ListInvestmentRecordsRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{11}
-}
-
-func (x *ListInvestmentRecordsRequest) GetKind() string {
-	if x != nil {
-		return x.Kind
-	}
-	return ""
-}
-
-func (x *ListInvestmentRecordsRequest) GetAsset() string {
-	if x != nil {
-		return x.Asset
-	}
-	return ""
-}
-
-func (x *ListInvestmentRecordsRequest) GetQ() string {
-	if x != nil {
-		return x.Q
-	}
-	return ""
-}
-
-func (x *ListInvestmentRecordsRequest) GetLimit() int32 {
-	if x != nil {
-		return x.Limit
-	}
-	return 0
-}
-
-func (x *ListInvestmentRecordsRequest) GetOffset() int32 {
-	if x != nil {
-		return x.Offset
-	}
-	return 0
-}
-
-type ListInvestmentRecordsResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Items         []*InvestmentRecord    `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListInvestmentRecordsResponse) Reset() {
-	*x = ListInvestmentRecordsResponse{}
-	mi := &file_dashboardv1_account_proto_msgTypes[12]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListInvestmentRecordsResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListInvestmentRecordsResponse) ProtoMessage() {}
-
-func (x *ListInvestmentRecordsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[12]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListInvestmentRecordsResponse.ProtoReflect.Descriptor instead.
-func (*ListInvestmentRecordsResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{12}
-}
-
-func (x *ListInvestmentRecordsResponse) GetItems() []*InvestmentRecord {
-	if x != nil {
-		return x.Items
-	}
-	return nil
-}
-
 type KnowledgeEntry struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Id             int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -829,7 +41,7 @@ type KnowledgeEntry struct {
 
 func (x *KnowledgeEntry) Reset() {
 	*x = KnowledgeEntry{}
-	mi := &file_dashboardv1_account_proto_msgTypes[13]
+	mi := &file_dashboardv1_account_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -841,7 +53,7 @@ func (x *KnowledgeEntry) String() string {
 func (*KnowledgeEntry) ProtoMessage() {}
 
 func (x *KnowledgeEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[13]
+	mi := &file_dashboardv1_account_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -854,7 +66,7 @@ func (x *KnowledgeEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KnowledgeEntry.ProtoReflect.Descriptor instead.
 func (*KnowledgeEntry) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{13}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *KnowledgeEntry) GetId() int64 {
@@ -942,7 +154,7 @@ type ListKnowledgeEntriesRequest struct {
 
 func (x *ListKnowledgeEntriesRequest) Reset() {
 	*x = ListKnowledgeEntriesRequest{}
-	mi := &file_dashboardv1_account_proto_msgTypes[14]
+	mi := &file_dashboardv1_account_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -954,7 +166,7 @@ func (x *ListKnowledgeEntriesRequest) String() string {
 func (*ListKnowledgeEntriesRequest) ProtoMessage() {}
 
 func (x *ListKnowledgeEntriesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[14]
+	mi := &file_dashboardv1_account_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -967,7 +179,7 @@ func (x *ListKnowledgeEntriesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListKnowledgeEntriesRequest.ProtoReflect.Descriptor instead.
 func (*ListKnowledgeEntriesRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{14}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{1}
 }
 
 type ListKnowledgeEntriesResponse struct {
@@ -979,7 +191,7 @@ type ListKnowledgeEntriesResponse struct {
 
 func (x *ListKnowledgeEntriesResponse) Reset() {
 	*x = ListKnowledgeEntriesResponse{}
-	mi := &file_dashboardv1_account_proto_msgTypes[15]
+	mi := &file_dashboardv1_account_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -991,7 +203,7 @@ func (x *ListKnowledgeEntriesResponse) String() string {
 func (*ListKnowledgeEntriesResponse) ProtoMessage() {}
 
 func (x *ListKnowledgeEntriesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[15]
+	mi := &file_dashboardv1_account_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1004,7 +216,7 @@ func (x *ListKnowledgeEntriesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListKnowledgeEntriesResponse.ProtoReflect.Descriptor instead.
 func (*ListKnowledgeEntriesResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{15}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ListKnowledgeEntriesResponse) GetEntries() []*KnowledgeEntry {
@@ -1032,7 +244,7 @@ type PositionDailyIncome struct {
 
 func (x *PositionDailyIncome) Reset() {
 	*x = PositionDailyIncome{}
-	mi := &file_dashboardv1_account_proto_msgTypes[16]
+	mi := &file_dashboardv1_account_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1044,7 +256,7 @@ func (x *PositionDailyIncome) String() string {
 func (*PositionDailyIncome) ProtoMessage() {}
 
 func (x *PositionDailyIncome) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[16]
+	mi := &file_dashboardv1_account_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1057,7 +269,7 @@ func (x *PositionDailyIncome) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PositionDailyIncome.ProtoReflect.Descriptor instead.
 func (*PositionDailyIncome) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{16}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *PositionDailyIncome) GetId() int64 {
@@ -1143,7 +355,7 @@ type AddDailyIncomeRequest struct {
 
 func (x *AddDailyIncomeRequest) Reset() {
 	*x = AddDailyIncomeRequest{}
-	mi := &file_dashboardv1_account_proto_msgTypes[17]
+	mi := &file_dashboardv1_account_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1155,7 +367,7 @@ func (x *AddDailyIncomeRequest) String() string {
 func (*AddDailyIncomeRequest) ProtoMessage() {}
 
 func (x *AddDailyIncomeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[17]
+	mi := &file_dashboardv1_account_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1168,7 +380,7 @@ func (x *AddDailyIncomeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddDailyIncomeRequest.ProtoReflect.Descriptor instead.
 func (*AddDailyIncomeRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{17}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *AddDailyIncomeRequest) GetDay() string {
@@ -1216,7 +428,7 @@ type AddDailyIncomeResponse struct {
 
 func (x *AddDailyIncomeResponse) Reset() {
 	*x = AddDailyIncomeResponse{}
-	mi := &file_dashboardv1_account_proto_msgTypes[18]
+	mi := &file_dashboardv1_account_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1228,7 +440,7 @@ func (x *AddDailyIncomeResponse) String() string {
 func (*AddDailyIncomeResponse) ProtoMessage() {}
 
 func (x *AddDailyIncomeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[18]
+	mi := &file_dashboardv1_account_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1241,7 +453,7 @@ func (x *AddDailyIncomeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddDailyIncomeResponse.ProtoReflect.Descriptor instead.
 func (*AddDailyIncomeResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{18}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *AddDailyIncomeResponse) GetId() int64 {
@@ -1267,7 +479,7 @@ type GetPnlAnchorRequest struct {
 
 func (x *GetPnlAnchorRequest) Reset() {
 	*x = GetPnlAnchorRequest{}
-	mi := &file_dashboardv1_account_proto_msgTypes[19]
+	mi := &file_dashboardv1_account_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1279,7 +491,7 @@ func (x *GetPnlAnchorRequest) String() string {
 func (*GetPnlAnchorRequest) ProtoMessage() {}
 
 func (x *GetPnlAnchorRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[19]
+	mi := &file_dashboardv1_account_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1292,7 +504,7 @@ func (x *GetPnlAnchorRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPnlAnchorRequest.ProtoReflect.Descriptor instead.
 func (*GetPnlAnchorRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{19}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{6}
 }
 
 type GetPnlAnchorResponse struct {
@@ -1308,7 +520,7 @@ type GetPnlAnchorResponse struct {
 
 func (x *GetPnlAnchorResponse) Reset() {
 	*x = GetPnlAnchorResponse{}
-	mi := &file_dashboardv1_account_proto_msgTypes[20]
+	mi := &file_dashboardv1_account_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1320,7 +532,7 @@ func (x *GetPnlAnchorResponse) String() string {
 func (*GetPnlAnchorResponse) ProtoMessage() {}
 
 func (x *GetPnlAnchorResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[20]
+	mi := &file_dashboardv1_account_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1333,7 +545,7 @@ func (x *GetPnlAnchorResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPnlAnchorResponse.ProtoReflect.Descriptor instead.
 func (*GetPnlAnchorResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{20}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *GetPnlAnchorResponse) GetAnchor() *timestamppb.Timestamp {
@@ -1379,7 +591,7 @@ type ResetPnlAnchorRequest struct {
 
 func (x *ResetPnlAnchorRequest) Reset() {
 	*x = ResetPnlAnchorRequest{}
-	mi := &file_dashboardv1_account_proto_msgTypes[21]
+	mi := &file_dashboardv1_account_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1391,7 +603,7 @@ func (x *ResetPnlAnchorRequest) String() string {
 func (*ResetPnlAnchorRequest) ProtoMessage() {}
 
 func (x *ResetPnlAnchorRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[21]
+	mi := &file_dashboardv1_account_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1404,7 +616,7 @@ func (x *ResetPnlAnchorRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetPnlAnchorRequest.ProtoReflect.Descriptor instead.
 func (*ResetPnlAnchorRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{21}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{8}
 }
 
 type ResetPnlAnchorResponse struct {
@@ -1416,7 +628,7 @@ type ResetPnlAnchorResponse struct {
 
 func (x *ResetPnlAnchorResponse) Reset() {
 	*x = ResetPnlAnchorResponse{}
-	mi := &file_dashboardv1_account_proto_msgTypes[22]
+	mi := &file_dashboardv1_account_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1428,7 +640,7 @@ func (x *ResetPnlAnchorResponse) String() string {
 func (*ResetPnlAnchorResponse) ProtoMessage() {}
 
 func (x *ResetPnlAnchorResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[22]
+	mi := &file_dashboardv1_account_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1441,7 +653,7 @@ func (x *ResetPnlAnchorResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetPnlAnchorResponse.ProtoReflect.Descriptor instead.
 func (*ResetPnlAnchorResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{22}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ResetPnlAnchorResponse) GetAnchor() *timestamppb.Timestamp {
@@ -1466,7 +678,7 @@ type KBEntry struct {
 
 func (x *KBEntry) Reset() {
 	*x = KBEntry{}
-	mi := &file_dashboardv1_account_proto_msgTypes[23]
+	mi := &file_dashboardv1_account_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1478,7 +690,7 @@ func (x *KBEntry) String() string {
 func (*KBEntry) ProtoMessage() {}
 
 func (x *KBEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[23]
+	mi := &file_dashboardv1_account_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1491,7 +703,7 @@ func (x *KBEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KBEntry.ProtoReflect.Descriptor instead.
 func (*KBEntry) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{23}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *KBEntry) GetId() string {
@@ -1544,7 +756,7 @@ type ListKBEntriesRequest struct {
 
 func (x *ListKBEntriesRequest) Reset() {
 	*x = ListKBEntriesRequest{}
-	mi := &file_dashboardv1_account_proto_msgTypes[24]
+	mi := &file_dashboardv1_account_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1556,7 +768,7 @@ func (x *ListKBEntriesRequest) String() string {
 func (*ListKBEntriesRequest) ProtoMessage() {}
 
 func (x *ListKBEntriesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[24]
+	mi := &file_dashboardv1_account_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1569,7 +781,7 @@ func (x *ListKBEntriesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListKBEntriesRequest.ProtoReflect.Descriptor instead.
 func (*ListKBEntriesRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{24}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{11}
 }
 
 type ListKBEntriesResponse struct {
@@ -1581,7 +793,7 @@ type ListKBEntriesResponse struct {
 
 func (x *ListKBEntriesResponse) Reset() {
 	*x = ListKBEntriesResponse{}
-	mi := &file_dashboardv1_account_proto_msgTypes[25]
+	mi := &file_dashboardv1_account_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1593,7 +805,7 @@ func (x *ListKBEntriesResponse) String() string {
 func (*ListKBEntriesResponse) ProtoMessage() {}
 
 func (x *ListKBEntriesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[25]
+	mi := &file_dashboardv1_account_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1606,7 +818,7 @@ func (x *ListKBEntriesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListKBEntriesResponse.ProtoReflect.Descriptor instead.
 func (*ListKBEntriesResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{25}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ListKBEntriesResponse) GetEntries() []*KBEntry {
@@ -1625,7 +837,7 @@ type GetKBEntryRequest struct {
 
 func (x *GetKBEntryRequest) Reset() {
 	*x = GetKBEntryRequest{}
-	mi := &file_dashboardv1_account_proto_msgTypes[26]
+	mi := &file_dashboardv1_account_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1637,7 +849,7 @@ func (x *GetKBEntryRequest) String() string {
 func (*GetKBEntryRequest) ProtoMessage() {}
 
 func (x *GetKBEntryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[26]
+	mi := &file_dashboardv1_account_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1650,7 +862,7 @@ func (x *GetKBEntryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetKBEntryRequest.ProtoReflect.Descriptor instead.
 func (*GetKBEntryRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{26}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *GetKBEntryRequest) GetId() string {
@@ -1670,7 +882,7 @@ type GetKBEntryResponse struct {
 
 func (x *GetKBEntryResponse) Reset() {
 	*x = GetKBEntryResponse{}
-	mi := &file_dashboardv1_account_proto_msgTypes[27]
+	mi := &file_dashboardv1_account_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1682,7 +894,7 @@ func (x *GetKBEntryResponse) String() string {
 func (*GetKBEntryResponse) ProtoMessage() {}
 
 func (x *GetKBEntryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[27]
+	mi := &file_dashboardv1_account_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1695,7 +907,7 @@ func (x *GetKBEntryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetKBEntryResponse.ProtoReflect.Descriptor instead.
 func (*GetKBEntryResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{27}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *GetKBEntryResponse) GetId() string {
@@ -1724,7 +936,7 @@ type ListDailyIncomeRequest struct {
 
 func (x *ListDailyIncomeRequest) Reset() {
 	*x = ListDailyIncomeRequest{}
-	mi := &file_dashboardv1_account_proto_msgTypes[28]
+	mi := &file_dashboardv1_account_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1736,7 +948,7 @@ func (x *ListDailyIncomeRequest) String() string {
 func (*ListDailyIncomeRequest) ProtoMessage() {}
 
 func (x *ListDailyIncomeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[28]
+	mi := &file_dashboardv1_account_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1749,7 +961,7 @@ func (x *ListDailyIncomeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDailyIncomeRequest.ProtoReflect.Descriptor instead.
 func (*ListDailyIncomeRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{28}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ListDailyIncomeRequest) GetFrom() string {
@@ -1789,7 +1001,7 @@ type ListDailyIncomeResponse struct {
 
 func (x *ListDailyIncomeResponse) Reset() {
 	*x = ListDailyIncomeResponse{}
-	mi := &file_dashboardv1_account_proto_msgTypes[29]
+	mi := &file_dashboardv1_account_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1801,7 +1013,7 @@ func (x *ListDailyIncomeResponse) String() string {
 func (*ListDailyIncomeResponse) ProtoMessage() {}
 
 func (x *ListDailyIncomeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[29]
+	mi := &file_dashboardv1_account_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1814,7 +1026,7 @@ func (x *ListDailyIncomeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDailyIncomeResponse.ProtoReflect.Descriptor instead.
 func (*ListDailyIncomeResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{29}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ListDailyIncomeResponse) GetItems() []*PositionDailyIncome {
@@ -1852,7 +1064,7 @@ type AccountInfo struct {
 
 func (x *AccountInfo) Reset() {
 	*x = AccountInfo{}
-	mi := &file_dashboardv1_account_proto_msgTypes[30]
+	mi := &file_dashboardv1_account_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1864,7 +1076,7 @@ func (x *AccountInfo) String() string {
 func (*AccountInfo) ProtoMessage() {}
 
 func (x *AccountInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[30]
+	mi := &file_dashboardv1_account_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1877,7 +1089,7 @@ func (x *AccountInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccountInfo.ProtoReflect.Descriptor instead.
 func (*AccountInfo) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{30}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *AccountInfo) GetVenueKey() string {
@@ -2014,7 +1226,7 @@ type ListAccountMarginStatusRequest struct {
 
 func (x *ListAccountMarginStatusRequest) Reset() {
 	*x = ListAccountMarginStatusRequest{}
-	mi := &file_dashboardv1_account_proto_msgTypes[31]
+	mi := &file_dashboardv1_account_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2026,7 +1238,7 @@ func (x *ListAccountMarginStatusRequest) String() string {
 func (*ListAccountMarginStatusRequest) ProtoMessage() {}
 
 func (x *ListAccountMarginStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[31]
+	mi := &file_dashboardv1_account_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2039,7 +1251,7 @@ func (x *ListAccountMarginStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAccountMarginStatusRequest.ProtoReflect.Descriptor instead.
 func (*ListAccountMarginStatusRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{31}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{18}
 }
 
 // AccountMarginStatus 单账户保证金档位行（marginGuard 每轮评估 upsert 的 fin_venue_margin_status
@@ -2065,7 +1277,7 @@ type AccountMarginStatus struct {
 
 func (x *AccountMarginStatus) Reset() {
 	*x = AccountMarginStatus{}
-	mi := &file_dashboardv1_account_proto_msgTypes[32]
+	mi := &file_dashboardv1_account_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2077,7 +1289,7 @@ func (x *AccountMarginStatus) String() string {
 func (*AccountMarginStatus) ProtoMessage() {}
 
 func (x *AccountMarginStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[32]
+	mi := &file_dashboardv1_account_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2090,7 +1302,7 @@ func (x *AccountMarginStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccountMarginStatus.ProtoReflect.Descriptor instead.
 func (*AccountMarginStatus) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{32}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *AccountMarginStatus) GetVenue() string {
@@ -2186,7 +1398,7 @@ type ListAccountMarginStatusResponse struct {
 
 func (x *ListAccountMarginStatusResponse) Reset() {
 	*x = ListAccountMarginStatusResponse{}
-	mi := &file_dashboardv1_account_proto_msgTypes[33]
+	mi := &file_dashboardv1_account_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2198,7 +1410,7 @@ func (x *ListAccountMarginStatusResponse) String() string {
 func (*ListAccountMarginStatusResponse) ProtoMessage() {}
 
 func (x *ListAccountMarginStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[33]
+	mi := &file_dashboardv1_account_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2211,7 +1423,7 @@ func (x *ListAccountMarginStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAccountMarginStatusResponse.ProtoReflect.Descriptor instead.
 func (*ListAccountMarginStatusResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{33}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ListAccountMarginStatusResponse) GetRows() []*AccountMarginStatus {
@@ -2233,7 +1445,7 @@ type Holding struct {
 
 func (x *Holding) Reset() {
 	*x = Holding{}
-	mi := &file_dashboardv1_account_proto_msgTypes[34]
+	mi := &file_dashboardv1_account_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2245,7 +1457,7 @@ func (x *Holding) String() string {
 func (*Holding) ProtoMessage() {}
 
 func (x *Holding) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[34]
+	mi := &file_dashboardv1_account_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2258,7 +1470,7 @@ func (x *Holding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Holding.ProtoReflect.Descriptor instead.
 func (*Holding) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{34}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *Holding) GetCcy() string {
@@ -2290,7 +1502,7 @@ type ListAccountsRequest struct {
 
 func (x *ListAccountsRequest) Reset() {
 	*x = ListAccountsRequest{}
-	mi := &file_dashboardv1_account_proto_msgTypes[35]
+	mi := &file_dashboardv1_account_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2302,7 +1514,7 @@ func (x *ListAccountsRequest) String() string {
 func (*ListAccountsRequest) ProtoMessage() {}
 
 func (x *ListAccountsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[35]
+	mi := &file_dashboardv1_account_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2315,7 +1527,7 @@ func (x *ListAccountsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAccountsRequest.ProtoReflect.Descriptor instead.
 func (*ListAccountsRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{35}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{22}
 }
 
 type ListAccountsResponse struct {
@@ -2327,7 +1539,7 @@ type ListAccountsResponse struct {
 
 func (x *ListAccountsResponse) Reset() {
 	*x = ListAccountsResponse{}
-	mi := &file_dashboardv1_account_proto_msgTypes[36]
+	mi := &file_dashboardv1_account_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2339,7 +1551,7 @@ func (x *ListAccountsResponse) String() string {
 func (*ListAccountsResponse) ProtoMessage() {}
 
 func (x *ListAccountsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[36]
+	mi := &file_dashboardv1_account_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2352,7 +1564,7 @@ func (x *ListAccountsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAccountsResponse.ProtoReflect.Descriptor instead.
 func (*ListAccountsResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{36}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ListAccountsResponse) GetAccounts() []*AccountInfo {
@@ -2371,7 +1583,7 @@ type Keepalive struct {
 
 func (x *Keepalive) Reset() {
 	*x = Keepalive{}
-	mi := &file_dashboardv1_account_proto_msgTypes[37]
+	mi := &file_dashboardv1_account_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2383,7 +1595,7 @@ func (x *Keepalive) String() string {
 func (*Keepalive) ProtoMessage() {}
 
 func (x *Keepalive) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[37]
+	mi := &file_dashboardv1_account_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2396,7 +1608,7 @@ func (x *Keepalive) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Keepalive.ProtoReflect.Descriptor instead.
 func (*Keepalive) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{37}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *Keepalive) GetTs() *timestamppb.Timestamp {
@@ -2414,7 +1626,7 @@ type GetFinanceOverviewRequest struct {
 
 func (x *GetFinanceOverviewRequest) Reset() {
 	*x = GetFinanceOverviewRequest{}
-	mi := &file_dashboardv1_account_proto_msgTypes[38]
+	mi := &file_dashboardv1_account_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2426,7 +1638,7 @@ func (x *GetFinanceOverviewRequest) String() string {
 func (*GetFinanceOverviewRequest) ProtoMessage() {}
 
 func (x *GetFinanceOverviewRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[38]
+	mi := &file_dashboardv1_account_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2439,7 +1651,7 @@ func (x *GetFinanceOverviewRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFinanceOverviewRequest.ProtoReflect.Descriptor instead.
 func (*GetFinanceOverviewRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{38}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{25}
 }
 
 // FinancePnlByEnv 已实现 PnL 按环境分层（real/demo；environment NULL=legacy real 链路）。
@@ -2454,7 +1666,7 @@ type FinancePnlByEnv struct {
 
 func (x *FinancePnlByEnv) Reset() {
 	*x = FinancePnlByEnv{}
-	mi := &file_dashboardv1_account_proto_msgTypes[39]
+	mi := &file_dashboardv1_account_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2466,7 +1678,7 @@ func (x *FinancePnlByEnv) String() string {
 func (*FinancePnlByEnv) ProtoMessage() {}
 
 func (x *FinancePnlByEnv) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[39]
+	mi := &file_dashboardv1_account_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2479,7 +1691,7 @@ func (x *FinancePnlByEnv) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FinancePnlByEnv.ProtoReflect.Descriptor instead.
 func (*FinancePnlByEnv) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{39}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *FinancePnlByEnv) GetEnvironment() string {
@@ -2515,7 +1727,7 @@ type FinanceIncomeRow struct {
 
 func (x *FinanceIncomeRow) Reset() {
 	*x = FinanceIncomeRow{}
-	mi := &file_dashboardv1_account_proto_msgTypes[40]
+	mi := &file_dashboardv1_account_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2527,7 +1739,7 @@ func (x *FinanceIncomeRow) String() string {
 func (*FinanceIncomeRow) ProtoMessage() {}
 
 func (x *FinanceIncomeRow) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[40]
+	mi := &file_dashboardv1_account_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2540,7 +1752,7 @@ func (x *FinanceIncomeRow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FinanceIncomeRow.ProtoReflect.Descriptor instead.
 func (*FinanceIncomeRow) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{40}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *FinanceIncomeRow) GetKind() string {
@@ -2564,17 +1776,17 @@ func (x *FinanceIncomeRow) GetRows() int32 {
 	return 0
 }
 
-// FinanceFlowRow 统一流水行（三源合并：income_events 结算 / position_cashflows 实数轨
-// quality<>'estimated' / ledger 台账；防双计=estimated 排除+同 venue+kind 时间轴无重叠；
-// 防漏计=NULL 轨必入——okx/MT 结算实数 income_events 不覆盖）。
+// FinanceFlowRow 统一流水行（双源合并：income_events 结算 / position_cashflows 实数轨
+// quality<>'estimated'；防双计=estimated 排除+同 venue+kind 时间轴无重叠；
+// 防漏计=NULL 轨必入——okx/MT 结算实数 income_events 不覆盖）。D-120 清退 ledger 台账源。
 type FinanceFlowRow struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Ts            *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=ts,proto3" json:"ts,omitempty"`
-	Source        string                 `protobuf:"bytes,2,opt,name=source,proto3" json:"source,omitempty"`                            // venue（binance / 277842155…）或 ledger
-	Kind          string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`                                // funding/swap/commission（ledger 源=channel）
-	Symbol        string                 `protobuf:"bytes,4,opt,name=symbol,proto3" json:"symbol,omitempty"`                            // income_events 有；cashflows 组合级无（诚实空）；ledger 无
-	AmountUsd     float64                `protobuf:"fixed64,5,opt,name=amount_usd,json=amountUsd,proto3" json:"amount_usd,omitempty"`   // ledger 源=台账原币 amount（台账口径，D-348 施工注）
-	PositionId    int64                  `protobuf:"varint,6,opt,name=position_id,json=positionId,proto3" json:"position_id,omitempty"` // 0=非持仓级（ledger）
+	Source        string                 `protobuf:"bytes,2,opt,name=source,proto3" json:"source,omitempty"` // venue（binance / 277842155…）
+	Kind          string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`     // funding/swap/commission
+	Symbol        string                 `protobuf:"bytes,4,opt,name=symbol,proto3" json:"symbol,omitempty"` // income_events 有；cashflows 组合级无（诚实空）
+	AmountUsd     float64                `protobuf:"fixed64,5,opt,name=amount_usd,json=amountUsd,proto3" json:"amount_usd,omitempty"`
+	PositionId    int64                  `protobuf:"varint,6,opt,name=position_id,json=positionId,proto3" json:"position_id,omitempty"` // 0=非持仓级
 	Note          string                 `protobuf:"bytes,7,opt,name=note,proto3" json:"note,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2582,7 +1794,7 @@ type FinanceFlowRow struct {
 
 func (x *FinanceFlowRow) Reset() {
 	*x = FinanceFlowRow{}
-	mi := &file_dashboardv1_account_proto_msgTypes[41]
+	mi := &file_dashboardv1_account_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2594,7 +1806,7 @@ func (x *FinanceFlowRow) String() string {
 func (*FinanceFlowRow) ProtoMessage() {}
 
 func (x *FinanceFlowRow) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[41]
+	mi := &file_dashboardv1_account_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2607,7 +1819,7 @@ func (x *FinanceFlowRow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FinanceFlowRow.ProtoReflect.Descriptor instead.
 func (*FinanceFlowRow) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{41}
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *FinanceFlowRow) GetTs() *timestamppb.Timestamp {
@@ -2661,10 +1873,8 @@ func (x *FinanceFlowRow) GetNote() string {
 
 type GetFinanceOverviewResponse struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	DepositedUsd   float64                `protobuf:"fixed64,1,opt,name=deposited_usd,json=depositedUsd,proto3" json:"deposited_usd,omitempty"`         // ledger 手工台账 sum（正=入金；台账原币语义=既有 LedgerSummary 同款）
 	TotalEquityUsd float64                `protobuf:"fixed64,2,opt,name=total_equity_usd,json=totalEquityUsd,proto3" json:"total_equity_usd,omitempty"` // Σ AccountInfo.equity（在线或快照；只计实盘：CFD broker_accounts
 	// is_real=true 且非 stopped / CEX simulated=false；非 USD 计价跳过+warn）
-	NetPnlUsd        float64             `protobuf:"fixed64,3,opt,name=net_pnl_usd,json=netPnlUsd,proto3" json:"net_pnl_usd,omitempty"` // total_equity − deposited（单口径可对账）
 	PnlByEnv         []*FinancePnlByEnv  `protobuf:"bytes,4,rep,name=pnl_by_env,json=pnlByEnv,proto3" json:"pnl_by_env,omitempty"`
 	IncomeByKind     []*FinanceIncomeRow `protobuf:"bytes,5,rep,name=income_by_kind,json=incomeByKind,proto3" json:"income_by_kind,omitempty"`
 	Flows            []*FinanceFlowRow   `protobuf:"bytes,6,rep,name=flows,proto3" json:"flows,omitempty"`                                                   // ts 倒序 LIMIT 200
@@ -2675,7 +1885,7 @@ type GetFinanceOverviewResponse struct {
 
 func (x *GetFinanceOverviewResponse) Reset() {
 	*x = GetFinanceOverviewResponse{}
-	mi := &file_dashboardv1_account_proto_msgTypes[42]
+	mi := &file_dashboardv1_account_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2687,7 +1897,7 @@ func (x *GetFinanceOverviewResponse) String() string {
 func (*GetFinanceOverviewResponse) ProtoMessage() {}
 
 func (x *GetFinanceOverviewResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_account_proto_msgTypes[42]
+	mi := &file_dashboardv1_account_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2700,26 +1910,12 @@ func (x *GetFinanceOverviewResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFinanceOverviewResponse.ProtoReflect.Descriptor instead.
 func (*GetFinanceOverviewResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_account_proto_rawDescGZIP(), []int{42}
-}
-
-func (x *GetFinanceOverviewResponse) GetDepositedUsd() float64 {
-	if x != nil {
-		return x.DepositedUsd
-	}
-	return 0
+	return file_dashboardv1_account_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *GetFinanceOverviewResponse) GetTotalEquityUsd() float64 {
 	if x != nil {
 		return x.TotalEquityUsd
-	}
-	return 0
-}
-
-func (x *GetFinanceOverviewResponse) GetNetPnlUsd() float64 {
-	if x != nil {
-		return x.NetPnlUsd
 	}
 	return 0
 }
@@ -2756,61 +1952,7 @@ var File_dashboardv1_account_proto protoreflect.FileDescriptor
 
 const file_dashboardv1_account_proto_rawDesc = "" +
 	"\n" +
-	"\x19dashboardv1/account.proto\x12\x10arb.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xde\x01\n" +
-	"\vLedgerEntry\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x03R\x02id\x12.\n" +
-	"\x04date\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x04date\x12\x18\n" +
-	"\achannel\x18\x03 \x01(\tR\achannel\x12\x1a\n" +
-	"\bcurrency\x18\x04 \x01(\tR\bcurrency\x12\x16\n" +
-	"\x06amount\x18\x05 \x01(\x01R\x06amount\x12\x19\n" +
-	"\bfee_rate\x18\x06 \x01(\x01R\afeeRate\x12\x12\n" +
-	"\x04tier\x18\a \x01(\tR\x04tier\x12\x12\n" +
-	"\x04note\x18\b \x01(\tR\x04note\"\xd8\x01\n" +
-	"\x15AddLedgerEntryRequest\x12.\n" +
-	"\x04date\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x04date\x12\x18\n" +
-	"\achannel\x18\x02 \x01(\tR\achannel\x12\x1a\n" +
-	"\bcurrency\x18\x03 \x01(\tR\bcurrency\x12\x16\n" +
-	"\x06amount\x18\x04 \x01(\x01R\x06amount\x12\x19\n" +
-	"\bfee_rate\x18\x05 \x01(\x01R\afeeRate\x12\x12\n" +
-	"\x04tier\x18\x06 \x01(\tR\x04tier\x12\x12\n" +
-	"\x04note\x18\a \x01(\tR\x04note\"(\n" +
-	"\x16AddLedgerEntryResponse\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x03R\x02id\"H\n" +
-	"\x18ListLedgerEntriesRequest\x12\x14\n" +
-	"\x05limit\x18\x01 \x01(\x05R\x05limit\x12\x16\n" +
-	"\x06offset\x18\x02 \x01(\x05R\x06offset\"T\n" +
-	"\x19ListLedgerEntriesResponse\x127\n" +
-	"\aentries\x18\x01 \x03(\v2\x1d.arb.dashboard.v1.LedgerEntryR\aentries\"\x16\n" +
-	"\x14LedgerSummaryRequest\"\x86\x01\n" +
-	"\vTierSummary\x12\x12\n" +
-	"\x04tier\x18\x01 \x01(\tR\x04tier\x12\x16\n" +
-	"\x06inflow\x18\x02 \x01(\x01R\x06inflow\x12\x18\n" +
-	"\aoutflow\x18\x03 \x01(\x01R\aoutflow\x12\x10\n" +
-	"\x03net\x18\x04 \x01(\x01R\x03net\x12\x1f\n" +
-	"\ventry_count\x18\x05 \x01(\x05R\n" +
-	"entryCount\"L\n" +
-	"\x15LedgerSummaryResponse\x123\n" +
-	"\x05items\x18\x01 \x03(\v2\x1d.arb.dashboard.v1.TierSummaryR\x05items\"\x92\x01\n" +
-	"\x10InvestmentRecord\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
-	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x14\n" +
-	"\x05asset\x18\x03 \x01(\tR\x05asset\x12\x18\n" +
-	"\acontent\x18\x04 \x01(\tR\acontent\x12*\n" +
-	"\x02ts\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\"`\n" +
-	"\x1aAddInvestmentRecordRequest\x12\x12\n" +
-	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x14\n" +
-	"\x05asset\x18\x02 \x01(\tR\x05asset\x12\x18\n" +
-	"\acontent\x18\x03 \x01(\tR\acontent\"-\n" +
-	"\x1bAddInvestmentRecordResponse\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x03R\x02id\"\x84\x01\n" +
-	"\x1cListInvestmentRecordsRequest\x12\x12\n" +
-	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x14\n" +
-	"\x05asset\x18\x02 \x01(\tR\x05asset\x12\f\n" +
-	"\x01q\x18\x03 \x01(\tR\x01q\x12\x14\n" +
-	"\x05limit\x18\x04 \x01(\x05R\x05limit\x12\x16\n" +
-	"\x06offset\x18\x05 \x01(\x05R\x06offset\"Y\n" +
-	"\x1dListInvestmentRecordsResponse\x128\n" +
-	"\x05items\x18\x01 \x03(\v2\".arb.dashboard.v1.InvestmentRecordR\x05items\"\xe8\x02\n" +
+	"\x19dashboardv1/account.proto\x12\x10arb.dashboard.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xe8\x02\n" +
 	"\x0eKnowledgeEntry\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12*\n" +
 	"\x02ts\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12\x1c\n" +
@@ -2959,16 +2101,14 @@ const file_dashboardv1_account_proto_rawDesc = "" +
 	"amount_usd\x18\x05 \x01(\x01R\tamountUsd\x12\x1f\n" +
 	"\vposition_id\x18\x06 \x01(\x03R\n" +
 	"positionId\x12\x12\n" +
-	"\x04note\x18\a \x01(\tR\x04note\"\xfc\x02\n" +
-	"\x1aGetFinanceOverviewResponse\x12#\n" +
-	"\rdeposited_usd\x18\x01 \x01(\x01R\fdepositedUsd\x12(\n" +
-	"\x10total_equity_usd\x18\x02 \x01(\x01R\x0etotalEquityUsd\x12\x1e\n" +
-	"\vnet_pnl_usd\x18\x03 \x01(\x01R\tnetPnlUsd\x12?\n" +
+	"\x04note\x18\a \x01(\tR\x04note\"\xdf\x02\n" +
+	"\x1aGetFinanceOverviewResponse\x12(\n" +
+	"\x10total_equity_usd\x18\x02 \x01(\x01R\x0etotalEquityUsd\x12?\n" +
 	"\n" +
 	"pnl_by_env\x18\x04 \x03(\v2!.arb.dashboard.v1.FinancePnlByEnvR\bpnlByEnv\x12H\n" +
 	"\x0eincome_by_kind\x18\x05 \x03(\v2\".arb.dashboard.v1.FinanceIncomeRowR\fincomeByKind\x126\n" +
 	"\x05flows\x18\x06 \x03(\v2 .arb.dashboard.v1.FinanceFlowRowR\x05flows\x12,\n" +
-	"\x12total_realized_usd\x18\a \x01(\x01R\x10totalRealizedUsdB*Z(arb/internal/gen/dashboardv1;dashboardv1b\x06proto3"
+	"\x12total_realized_usd\x18\a \x01(\x01R\x10totalRealizedUsdJ\x04\b\x01\x10\x02J\x04\b\x03\x10\x04R\rdeposited_usdR\vnet_pnl_usdB*Z(arb/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
 var (
 	file_dashboardv1_account_proto_rawDescOnce sync.Once
@@ -2982,82 +2122,63 @@ func file_dashboardv1_account_proto_rawDescGZIP() []byte {
 	return file_dashboardv1_account_proto_rawDescData
 }
 
-var file_dashboardv1_account_proto_msgTypes = make([]protoimpl.MessageInfo, 43)
+var file_dashboardv1_account_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_dashboardv1_account_proto_goTypes = []any{
-	(*LedgerEntry)(nil),                     // 0: arb.dashboard.v1.LedgerEntry
-	(*AddLedgerEntryRequest)(nil),           // 1: arb.dashboard.v1.AddLedgerEntryRequest
-	(*AddLedgerEntryResponse)(nil),          // 2: arb.dashboard.v1.AddLedgerEntryResponse
-	(*ListLedgerEntriesRequest)(nil),        // 3: arb.dashboard.v1.ListLedgerEntriesRequest
-	(*ListLedgerEntriesResponse)(nil),       // 4: arb.dashboard.v1.ListLedgerEntriesResponse
-	(*LedgerSummaryRequest)(nil),            // 5: arb.dashboard.v1.LedgerSummaryRequest
-	(*TierSummary)(nil),                     // 6: arb.dashboard.v1.TierSummary
-	(*LedgerSummaryResponse)(nil),           // 7: arb.dashboard.v1.LedgerSummaryResponse
-	(*InvestmentRecord)(nil),                // 8: arb.dashboard.v1.InvestmentRecord
-	(*AddInvestmentRecordRequest)(nil),      // 9: arb.dashboard.v1.AddInvestmentRecordRequest
-	(*AddInvestmentRecordResponse)(nil),     // 10: arb.dashboard.v1.AddInvestmentRecordResponse
-	(*ListInvestmentRecordsRequest)(nil),    // 11: arb.dashboard.v1.ListInvestmentRecordsRequest
-	(*ListInvestmentRecordsResponse)(nil),   // 12: arb.dashboard.v1.ListInvestmentRecordsResponse
-	(*KnowledgeEntry)(nil),                  // 13: arb.dashboard.v1.KnowledgeEntry
-	(*ListKnowledgeEntriesRequest)(nil),     // 14: arb.dashboard.v1.ListKnowledgeEntriesRequest
-	(*ListKnowledgeEntriesResponse)(nil),    // 15: arb.dashboard.v1.ListKnowledgeEntriesResponse
-	(*PositionDailyIncome)(nil),             // 16: arb.dashboard.v1.PositionDailyIncome
-	(*AddDailyIncomeRequest)(nil),           // 17: arb.dashboard.v1.AddDailyIncomeRequest
-	(*AddDailyIncomeResponse)(nil),          // 18: arb.dashboard.v1.AddDailyIncomeResponse
-	(*GetPnlAnchorRequest)(nil),             // 19: arb.dashboard.v1.GetPnlAnchorRequest
-	(*GetPnlAnchorResponse)(nil),            // 20: arb.dashboard.v1.GetPnlAnchorResponse
-	(*ResetPnlAnchorRequest)(nil),           // 21: arb.dashboard.v1.ResetPnlAnchorRequest
-	(*ResetPnlAnchorResponse)(nil),          // 22: arb.dashboard.v1.ResetPnlAnchorResponse
-	(*KBEntry)(nil),                         // 23: arb.dashboard.v1.KBEntry
-	(*ListKBEntriesRequest)(nil),            // 24: arb.dashboard.v1.ListKBEntriesRequest
-	(*ListKBEntriesResponse)(nil),           // 25: arb.dashboard.v1.ListKBEntriesResponse
-	(*GetKBEntryRequest)(nil),               // 26: arb.dashboard.v1.GetKBEntryRequest
-	(*GetKBEntryResponse)(nil),              // 27: arb.dashboard.v1.GetKBEntryResponse
-	(*ListDailyIncomeRequest)(nil),          // 28: arb.dashboard.v1.ListDailyIncomeRequest
-	(*ListDailyIncomeResponse)(nil),         // 29: arb.dashboard.v1.ListDailyIncomeResponse
-	(*AccountInfo)(nil),                     // 30: arb.dashboard.v1.AccountInfo
-	(*ListAccountMarginStatusRequest)(nil),  // 31: arb.dashboard.v1.ListAccountMarginStatusRequest
-	(*AccountMarginStatus)(nil),             // 32: arb.dashboard.v1.AccountMarginStatus
-	(*ListAccountMarginStatusResponse)(nil), // 33: arb.dashboard.v1.ListAccountMarginStatusResponse
-	(*Holding)(nil),                         // 34: arb.dashboard.v1.Holding
-	(*ListAccountsRequest)(nil),             // 35: arb.dashboard.v1.ListAccountsRequest
-	(*ListAccountsResponse)(nil),            // 36: arb.dashboard.v1.ListAccountsResponse
-	(*Keepalive)(nil),                       // 37: arb.dashboard.v1.Keepalive
-	(*GetFinanceOverviewRequest)(nil),       // 38: arb.dashboard.v1.GetFinanceOverviewRequest
-	(*FinancePnlByEnv)(nil),                 // 39: arb.dashboard.v1.FinancePnlByEnv
-	(*FinanceIncomeRow)(nil),                // 40: arb.dashboard.v1.FinanceIncomeRow
-	(*FinanceFlowRow)(nil),                  // 41: arb.dashboard.v1.FinanceFlowRow
-	(*GetFinanceOverviewResponse)(nil),      // 42: arb.dashboard.v1.GetFinanceOverviewResponse
-	(*timestamppb.Timestamp)(nil),           // 43: google.protobuf.Timestamp
+	(*KnowledgeEntry)(nil),                  // 0: arb.dashboard.v1.KnowledgeEntry
+	(*ListKnowledgeEntriesRequest)(nil),     // 1: arb.dashboard.v1.ListKnowledgeEntriesRequest
+	(*ListKnowledgeEntriesResponse)(nil),    // 2: arb.dashboard.v1.ListKnowledgeEntriesResponse
+	(*PositionDailyIncome)(nil),             // 3: arb.dashboard.v1.PositionDailyIncome
+	(*AddDailyIncomeRequest)(nil),           // 4: arb.dashboard.v1.AddDailyIncomeRequest
+	(*AddDailyIncomeResponse)(nil),          // 5: arb.dashboard.v1.AddDailyIncomeResponse
+	(*GetPnlAnchorRequest)(nil),             // 6: arb.dashboard.v1.GetPnlAnchorRequest
+	(*GetPnlAnchorResponse)(nil),            // 7: arb.dashboard.v1.GetPnlAnchorResponse
+	(*ResetPnlAnchorRequest)(nil),           // 8: arb.dashboard.v1.ResetPnlAnchorRequest
+	(*ResetPnlAnchorResponse)(nil),          // 9: arb.dashboard.v1.ResetPnlAnchorResponse
+	(*KBEntry)(nil),                         // 10: arb.dashboard.v1.KBEntry
+	(*ListKBEntriesRequest)(nil),            // 11: arb.dashboard.v1.ListKBEntriesRequest
+	(*ListKBEntriesResponse)(nil),           // 12: arb.dashboard.v1.ListKBEntriesResponse
+	(*GetKBEntryRequest)(nil),               // 13: arb.dashboard.v1.GetKBEntryRequest
+	(*GetKBEntryResponse)(nil),              // 14: arb.dashboard.v1.GetKBEntryResponse
+	(*ListDailyIncomeRequest)(nil),          // 15: arb.dashboard.v1.ListDailyIncomeRequest
+	(*ListDailyIncomeResponse)(nil),         // 16: arb.dashboard.v1.ListDailyIncomeResponse
+	(*AccountInfo)(nil),                     // 17: arb.dashboard.v1.AccountInfo
+	(*ListAccountMarginStatusRequest)(nil),  // 18: arb.dashboard.v1.ListAccountMarginStatusRequest
+	(*AccountMarginStatus)(nil),             // 19: arb.dashboard.v1.AccountMarginStatus
+	(*ListAccountMarginStatusResponse)(nil), // 20: arb.dashboard.v1.ListAccountMarginStatusResponse
+	(*Holding)(nil),                         // 21: arb.dashboard.v1.Holding
+	(*ListAccountsRequest)(nil),             // 22: arb.dashboard.v1.ListAccountsRequest
+	(*ListAccountsResponse)(nil),            // 23: arb.dashboard.v1.ListAccountsResponse
+	(*Keepalive)(nil),                       // 24: arb.dashboard.v1.Keepalive
+	(*GetFinanceOverviewRequest)(nil),       // 25: arb.dashboard.v1.GetFinanceOverviewRequest
+	(*FinancePnlByEnv)(nil),                 // 26: arb.dashboard.v1.FinancePnlByEnv
+	(*FinanceIncomeRow)(nil),                // 27: arb.dashboard.v1.FinanceIncomeRow
+	(*FinanceFlowRow)(nil),                  // 28: arb.dashboard.v1.FinanceFlowRow
+	(*GetFinanceOverviewResponse)(nil),      // 29: arb.dashboard.v1.GetFinanceOverviewResponse
+	(*timestamppb.Timestamp)(nil),           // 30: google.protobuf.Timestamp
 }
 var file_dashboardv1_account_proto_depIdxs = []int32{
-	43, // 0: arb.dashboard.v1.LedgerEntry.date:type_name -> google.protobuf.Timestamp
-	43, // 1: arb.dashboard.v1.AddLedgerEntryRequest.date:type_name -> google.protobuf.Timestamp
-	0,  // 2: arb.dashboard.v1.ListLedgerEntriesResponse.entries:type_name -> arb.dashboard.v1.LedgerEntry
-	6,  // 3: arb.dashboard.v1.LedgerSummaryResponse.items:type_name -> arb.dashboard.v1.TierSummary
-	43, // 4: arb.dashboard.v1.InvestmentRecord.ts:type_name -> google.protobuf.Timestamp
-	8,  // 5: arb.dashboard.v1.ListInvestmentRecordsResponse.items:type_name -> arb.dashboard.v1.InvestmentRecord
-	43, // 6: arb.dashboard.v1.KnowledgeEntry.ts:type_name -> google.protobuf.Timestamp
-	43, // 7: arb.dashboard.v1.KnowledgeEntry.validated_at:type_name -> google.protobuf.Timestamp
-	13, // 8: arb.dashboard.v1.ListKnowledgeEntriesResponse.entries:type_name -> arb.dashboard.v1.KnowledgeEntry
-	43, // 9: arb.dashboard.v1.GetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
-	43, // 10: arb.dashboard.v1.ResetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
-	23, // 11: arb.dashboard.v1.ListKBEntriesResponse.entries:type_name -> arb.dashboard.v1.KBEntry
-	16, // 12: arb.dashboard.v1.ListDailyIncomeResponse.items:type_name -> arb.dashboard.v1.PositionDailyIncome
-	43, // 13: arb.dashboard.v1.AccountInfo.updated_at:type_name -> google.protobuf.Timestamp
-	34, // 14: arb.dashboard.v1.AccountInfo.holdings:type_name -> arb.dashboard.v1.Holding
-	43, // 15: arb.dashboard.v1.AccountMarginStatus.updated_at:type_name -> google.protobuf.Timestamp
-	32, // 16: arb.dashboard.v1.ListAccountMarginStatusResponse.rows:type_name -> arb.dashboard.v1.AccountMarginStatus
-	30, // 17: arb.dashboard.v1.ListAccountsResponse.accounts:type_name -> arb.dashboard.v1.AccountInfo
-	43, // 18: arb.dashboard.v1.Keepalive.ts:type_name -> google.protobuf.Timestamp
-	43, // 19: arb.dashboard.v1.FinanceFlowRow.ts:type_name -> google.protobuf.Timestamp
-	39, // 20: arb.dashboard.v1.GetFinanceOverviewResponse.pnl_by_env:type_name -> arb.dashboard.v1.FinancePnlByEnv
-	40, // 21: arb.dashboard.v1.GetFinanceOverviewResponse.income_by_kind:type_name -> arb.dashboard.v1.FinanceIncomeRow
-	41, // 22: arb.dashboard.v1.GetFinanceOverviewResponse.flows:type_name -> arb.dashboard.v1.FinanceFlowRow
-	23, // [23:23] is the sub-list for method output_type
-	23, // [23:23] is the sub-list for method input_type
-	23, // [23:23] is the sub-list for extension type_name
-	23, // [23:23] is the sub-list for extension extendee
-	0,  // [0:23] is the sub-list for field type_name
+	30, // 0: arb.dashboard.v1.KnowledgeEntry.ts:type_name -> google.protobuf.Timestamp
+	30, // 1: arb.dashboard.v1.KnowledgeEntry.validated_at:type_name -> google.protobuf.Timestamp
+	0,  // 2: arb.dashboard.v1.ListKnowledgeEntriesResponse.entries:type_name -> arb.dashboard.v1.KnowledgeEntry
+	30, // 3: arb.dashboard.v1.GetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
+	30, // 4: arb.dashboard.v1.ResetPnlAnchorResponse.anchor:type_name -> google.protobuf.Timestamp
+	10, // 5: arb.dashboard.v1.ListKBEntriesResponse.entries:type_name -> arb.dashboard.v1.KBEntry
+	3,  // 6: arb.dashboard.v1.ListDailyIncomeResponse.items:type_name -> arb.dashboard.v1.PositionDailyIncome
+	30, // 7: arb.dashboard.v1.AccountInfo.updated_at:type_name -> google.protobuf.Timestamp
+	21, // 8: arb.dashboard.v1.AccountInfo.holdings:type_name -> arb.dashboard.v1.Holding
+	30, // 9: arb.dashboard.v1.AccountMarginStatus.updated_at:type_name -> google.protobuf.Timestamp
+	19, // 10: arb.dashboard.v1.ListAccountMarginStatusResponse.rows:type_name -> arb.dashboard.v1.AccountMarginStatus
+	17, // 11: arb.dashboard.v1.ListAccountsResponse.accounts:type_name -> arb.dashboard.v1.AccountInfo
+	30, // 12: arb.dashboard.v1.Keepalive.ts:type_name -> google.protobuf.Timestamp
+	30, // 13: arb.dashboard.v1.FinanceFlowRow.ts:type_name -> google.protobuf.Timestamp
+	26, // 14: arb.dashboard.v1.GetFinanceOverviewResponse.pnl_by_env:type_name -> arb.dashboard.v1.FinancePnlByEnv
+	27, // 15: arb.dashboard.v1.GetFinanceOverviewResponse.income_by_kind:type_name -> arb.dashboard.v1.FinanceIncomeRow
+	28, // 16: arb.dashboard.v1.GetFinanceOverviewResponse.flows:type_name -> arb.dashboard.v1.FinanceFlowRow
+	17, // [17:17] is the sub-list for method output_type
+	17, // [17:17] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_dashboardv1_account_proto_init() }
@@ -3071,7 +2192,7 @@ func file_dashboardv1_account_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dashboardv1_account_proto_rawDesc), len(file_dashboardv1_account_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   43,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
