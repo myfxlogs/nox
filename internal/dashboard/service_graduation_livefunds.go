@@ -84,7 +84,7 @@ func (s *Service) mtFrameAt(venueKey string) (capitalview.MTFrame, bool) {
 		return capitalview.MTFrame{}, false
 	}
 	return capitalview.MTFrame{
-		Equity: sa.Equity, Available: sa.FreeMargin,
+		Equity: sa.Equity, Available: sa.FreeMargin, Margin: sa.Margin,
 		Currency: sa.Currency, At: sa.FrameTime,
 	}, true
 }

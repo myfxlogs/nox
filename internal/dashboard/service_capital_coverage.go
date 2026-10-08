@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	"arb/internal/capitalview"
 	v1 "arb/internal/gen/dashboardv1"
 	"arb/internal/keydomain"
 
@@ -16,7 +17,7 @@ import (
 )
 
 // capitalCoverageCaliberNote 口径注记（与 digest renderCapitalCoverageSection 注记同文本）。
-const capitalCoverageCaliberNote = "口径：快照时点在产=TRX 在赚+系统实盘持仓+CMC 持仓中（非时序加权，日级趋势看历史行）；加权年化分母=有年化真金行余额（CMC 手动仓/未采/纸面/venue 现金不进分子分母）；仅实盘账户/持仓入表（demo/sim/纸面=噪声不入）；venue 账户现金=闲置不计在产（睡钱暴露；CEX=USDT 标余额，USDT/LDUSDT 计、杂币不折算；MT=USD 同视）；CFD 周末闭市持仓中≠空转；系统持仓年化=position_daily_income 近7日日均息差（TRX 收益×快照价+利息，浮动盈亏不计）折算年化；能量租赁年化=D-258 30d 口径。"
+const capitalCoverageCaliberNote = "口径：快照时点在产=TRX 在赚+保证金占用+CMC 持仓中（非时序加权，日级趋势看历史行）；保证金占用=Σ(equity−free_margin) 账户级（MT5 优先帧直带 Margin），含同账户手动仓、腿级切分不可得（诚实上限）；账户可用额未采→该账户占用不计（禁 eq−0 假满占，覆盖率如实低估）；总资金=Σ账户净值+TRX+CMC（D-127 业主令：杠杆名义额退出合计，仅作占用行 note 参考值）；加权年化分母=有年化行余额（占用行按占用额加权；CMC 手动仓/未采/纸面/venue 现金不进）；仅实盘账户/持仓入表（demo/sim/纸面=噪声不入）；venue 账户现金=闲置不计在产（睡钱暴露；CEX=USDT 标余额，USDT/LDUSDT 计、杂币不折算；MT=USD 同视）；CFD 周末闭市持仓中≠空转；占用行年化=position_daily_income 近7日日均息差（TRX 收益×快照价+利息，浮动盈亏不计）按名义额折算；能量租赁年化=D-258 30d 口径。"
 
 // venueTypeCn D-125：venue 类型域词中文化（循前端 VenueTag 惯例：spot=现货/perp=永续/
 // futures=交割；funding=资金钱包/unified=统一账户/earn=理财；MT 账户=MT4/MT5；
@@ -69,6 +70,7 @@ func (s *Service) GetCapitalCoverage(ctx context.Context, req *connect.Request[v
 }
 
 // buildCapitalCoverageRows 五源逐池（任一源失败/空 → 该行省略；全缺 → 空切片=前端「数据源全缺」）。
+// D-127 行序：TRX→CMC→保证金占用→venue 账户（占用行恒在 venue 行前，读感=钱用在哪在前）。
 func buildCapitalCoverageRows(ctx context.Context, s *Service) []*v1.CapitalCoverageRow {
 	var rows []*v1.CapitalCoverageRow
 	if r := trxPoolRow(ctx, s); r != nil {
@@ -77,9 +79,9 @@ func buildCapitalCoverageRows(ctx context.Context, s *Service) []*v1.CapitalCove
 	if r := cmcPoolRow(ctx, s); r != nil {
 		rows = append(rows, r)
 	}
-	rows = append(rows, positionPoolRows(ctx, s)...)
-	// ④capital_snapshots 腿随 D-120 退役（表 DROP，清算净值链整链废）。
-	rows = append(rows, venueAccountRows(ctx, s)...)
+	venueRows, occ := venueAccountRows(ctx, s)
+	rows = append(rows, marginOccupancyRow(ctx, s, occ))
+	rows = append(rows, venueRows...)
 	return rows
 }
 
@@ -163,55 +165,91 @@ func cmcPoolRow(ctx context.Context, s *Service) *v1.CapitalCoverageRow {
 	return r
 }
 
-// positionPoolRows ③系统持仓：活跃仓 Σnotional_usd 仅 live（D-360 S4——demo/sim/纸面=
-// 噪声不入面板；pgstore ActiveNotionalByEnv 已滤）；无 live 仓→$0「零持仓」行；
-// 年化=AvgDailyIncomeCarry7d×365/Σnotional×100，无样本→「新开仓」。
-func positionPoolRows(ctx context.Context, s *Service) []*v1.CapitalCoverageRow {
-	ens, err := s.store.ActiveNotionalByEnv(ctx)
-	if err != nil {
-		return nil
+// venueOcc D-127：账户占用聚合（占用=venue 净值中真被保证金占用的子集，USDT/USD 同视账户口径）。
+type venueOcc struct {
+	sum     float64 // Σ已知占用
+	known   int     // 占用已知账户数
+	missing int     // 可用额未采账户数（fail-closed 不入分子）
+}
+
+// accountOccupied D-127 新口径①：单账户占用=equity−free_margin；MT 帧直带 Margin>0 优先
+// （帧值即 venue 原生占用）；fm≤0 视为未采（live 视图零值与快照 NULL 同型——禁 eq−0 假满占）；
+// eq<fm 数据异常同样 fail-closed 不猜。资金面未出（ok=false）→ 未采。
+func accountOccupied(f capitalview.Funds, ok bool) (float64, bool) {
+	if !ok {
+		return 0, false
+	}
+	if f.Margin > 0 {
+		return f.Margin, true
+	}
+	if f.Available > 0 {
+		occ := f.Equity - f.Available
+		if occ < 0 {
+			return 0, false
+		}
+		return occ, true
+	}
+	return 0, false
+}
+
+// marginOccupancyRow ③保证金占用（D-127 新口径，替代原「系统持仓」名义额行）：
+// 值=Σ账户占用；名义额退出合计、降格 note 参考值；RealMoney=false=venue 净值子集视图
+// （净值行已入分母，占用行不重复计）∧Productive=true 入在产分子；
+// 年化仍按名义额折算（息差随名义产生），加权按占用额。
+func marginOccupancyRow(ctx context.Context, s *Service, occ venueOcc) *v1.CapitalCoverageRow {
+	r := covRow("保证金占用")
+	r.Productive = true
+	r.RealMoney = false
+	var notional float64
+	if ens, err := s.store.ActiveNotionalByEnv(ctx); err == nil {
+		for _, e := range ens {
+			notional += e.NotionalUSD // D-360 S4：查询已滤仅 live
+		}
 	}
 	avg, hasAvg, err := s.store.AvgDailyIncomeCarry7d(ctx)
 	if err != nil {
 		hasAvg = false
 	}
-	if len(ens) == 0 {
-		r := covRow("系统持仓（实盘）")
-		r.Status = "零持仓"
-		r.Note = "无活跃仓"
-		return []*v1.CapitalCoverageRow{r}
-	}
-	out := make([]*v1.CapitalCoverageRow, 0, len(ens))
-	for _, e := range ens {
-		r := covRow("系统持仓（实盘）")
-		r.BalanceUsd = e.NotionalUSD
+	if occ.known > 0 {
+		r.BalanceUsd = occ.sum
 		r.HasBalance = true
-		r.Status = "在跑"
-		r.Productive = true
-		r.RealMoney = true
-		r.Note = "近7日日均息差折算"
-		if e.NotionalUSD > 0 && hasAvg {
-			r.AprPct = avg * 365 / e.NotionalUSD * 100
+		r.Status = "占用中"
+	} else if notional > 0 {
+		r.Status = "占用未知" // 有仓但可用额全未采——fail-closed 不入分子（防虚胖）
+	} else {
+		r.Status = "零占用"
+	}
+	note := "账户级占用（含同账户手动仓，腿级切分不可得）"
+	if occ.missing > 0 {
+		note += fmt.Sprintf("；%d 账户可用额未采不计", occ.missing)
+	}
+	if notional > 0 {
+		note += fmt.Sprintf("；名义额参考 $%.2f（不入合计）", notional)
+		if hasAvg {
+			r.AprPct = avg * 365 / notional * 100
 			r.HasApr = true
-		} else if e.NotionalUSD > 0 {
+		} else {
 			r.AprText = "新开仓"
 		}
-		out = append(out, r)
+	} else if occ.known == 0 {
+		note = "无活跃仓·无账户占用"
 	}
-	return out
+	r.Note = note
+	return r
 }
 
 // venueAccountRows ⑤CEX/MT：每 venue 最新快照（D-358 落库）；USDT/USD 行同视 USD 入总资金分母，
-// 非 USDT 不折算标原币（D-358 §4）；现金=闲置 Productive=false。
-// 空表/缺表 → 行省略（D-359 §S2 口径：rows 全空=前端「数据源全缺」；与 digest 段的
-// 未采回退行不同——双实现各按其 SSOT 条款）。
-func venueAccountRows(ctx context.Context, s *Service) []*v1.CapitalCoverageRow {
+// 非 USDT 不折算标原币（D-358 §4）；现金=闲置 Productive=false。D-127：行内附占用/可用注记
+// 并聚合占用（USDT/USD 同视账户口径）。空表/缺表 → 行省略（D-359 §S2 口径：rows 全空=
+// 前端「数据源全缺」；与 digest 段的未采回退行不同——双实现各按其 SSOT 条款）。
+func venueAccountRows(ctx context.Context, s *Service) ([]*v1.CapitalCoverageRow, venueOcc) {
 	lates, err := s.liveAccountLatest(ctx) // #1c：实时态（快照表=历史记录）
 	if err != nil || len(lates) == 0 {
-		return nil
+		return nil, venueOcc{}
 	}
 	cv := s.capitalView()
 	out := make([]*v1.CapitalCoverageRow, 0, len(lates))
+	var occ venueOcc
 	for _, l := range lates {
 		// D-125：池标签去「venue账户」前缀——venue 名+类型中文化已足（`okx·统一账户` 式）。
 		r := covRow(l.Venue + "·" + venueTypeCn(l.VenueType))
@@ -244,7 +282,15 @@ func venueAccountRows(ctx context.Context, s *Service) []*v1.CapitalCoverageRow 
 			r.BalanceUsd = *eq
 			r.HasBalance = true
 			r.RealMoney = true
-			r.Note = note
+			// D-127：占用聚合+可用注记（⑤「可用 X」小字；未采 fail-closed 如实标）。
+			if o, known := accountOccupied(f, ok); known {
+				occ.sum += o
+				occ.known++
+				r.Note = note + fmt.Sprintf("，可用 %.2f", f.Available)
+			} else {
+				occ.missing++
+				r.Note = note + "，可用未采"
+			}
 		} else if eq != nil {
 			r.Note = fmt.Sprintf("%s，净值 %.2f %s（非 USDT/USD 不折算）", note, *eq, ccy)
 		} else {
@@ -252,20 +298,24 @@ func venueAccountRows(ctx context.Context, s *Service) []*v1.CapitalCoverageRow 
 		}
 		out = append(out, r)
 	}
-	return out
+	return out, occ
 }
 
-// summarizeCapitalCoverage 汇总行（与 digest 渲染层同语义）：
-// 总资金=RealMoney 行余额和；在产=Productive∧RealMoney∧有余额；覆盖率=在产/总资金；
-// 加权年化=Σbal×apr/Σ有年化真金 bal；total=0→has_summary=false，无年化→has_weighted=false。
+// summarizeCapitalCoverage 汇总行（与 digest 渲染层同语义；D-127 拆门）：
+// 总资金=RealMoney∧有余额（占用行=净值子集视图 RealMoney=false 不入，防双重计入）；
+// 在产=Productive∧有余额（占用行入分子）；覆盖率=在产/总资金；
+// 加权年化=Σbal×apr/Σ有年化有余额 bal（占用行按占用额加权）；total=0→has_summary=false，
+// 无年化→has_weighted=false。
 func summarizeCapitalCoverage(rows []*v1.CapitalCoverageRow) *v1.GetCapitalCoverageResponse {
 	resp := &v1.GetCapitalCoverageResponse{Rows: rows}
 	var wSum, wBal float64
 	for _, r := range rows {
-		if !r.HasBalance || !r.RealMoney {
+		if !r.HasBalance {
 			continue
 		}
-		resp.TotalUsd += r.BalanceUsd
+		if r.RealMoney {
+			resp.TotalUsd += r.BalanceUsd
+		}
 		if r.Productive {
 			resp.ProductiveUsd += r.BalanceUsd
 		}

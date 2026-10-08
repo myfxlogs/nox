@@ -86,10 +86,11 @@ func TestGetCapitalCoverage_TrxBalanceAnchor(t *testing.T) {
 	}
 }
 
-// TestGetCapitalCoverage_SummaryWeights 汇总两数锚（与 digest T1 同源数值）：
-// TRX 30000@4.0 在产 + CMC 10000 持仓中在产 + live 10000@5.0 在产 + paper 50000 非真金 +
-// venue USDT 8000 闲置（入分母不入分子）→ 总 $58000 在产 $50000 覆盖率 86.2%；
-// 加权=(30000×4+10000×5)/40000=4.25（CMC/venue 无年化不进）。
+// TestGetCapitalCoverage_SummaryWeights 汇总两数锚（D-127 新口径，与 digest T1 同源数值）：
+// TRX 30000@4.0 在产 + CMC 10000 持仓中在产 + venue binance·永续 8000（fm=7500→占用 500）
+// + live 仓名义 10000（降 note 参考，不入合计）+ demo 50000 不入面板。
+// 总资金=Σ净值+TRX+CMC=48000（名义额退出分母）；在产=30000+10000+占用500=40500 → 覆盖率 84.4%；
+// 加权=(30000×4+占用500×5)/(30000+500)=4.0164（占用行按占用额加权，CMC/venue 无年化不进）。
 func TestGetCapitalCoverage_SummaryWeights(t *testing.T) {
 	s := covTestStore(t)
 	ctx := context.Background()
@@ -118,7 +119,7 @@ func TestGetCapitalCoverage_SummaryWeights(t *testing.T) {
 	}}); err != nil {
 		t.Fatalf("InsertCMCPositions: %v", err)
 	}
-	// live 10000@carry 折算 5.0%：日均 carry=10000×5/36500≈1.3699
+	// live 仓名义 10000@carry 折算 5.0%：日均 carry=10000×5/36500≈1.3699（名义额仅入 APR 折算+note 参考）
 	if _, err := s.Pool().Exec(ctx, `
 		INSERT INTO positions (opportunity_id, type, status, environment, notional_usd)
 		VALUES ('opp1','XASSET_CARRY','OPEN','live',10000)`); err != nil {
@@ -136,16 +137,16 @@ func TestGetCapitalCoverage_SummaryWeights(t *testing.T) {
 		t.Fatalf("seed daily income: %v", err)
 	}
 	svc := covTestService(s)
-	eq8k := 8000.0 // #1c：账户面=acctMon 实时态
+	eq8k, fm7500 := 8000.0, 7500.0 // #1c：账户面=acctMon 实时态（fm 已采→占用=eq−fm=500）
 	seedLiveAccounts(t, svc, []pgstore.VenueAccountLatest{
-		{Venue: "binance", VenueType: "perp", EquityRaw: &eq8k, Currency: "USDT", FetchedAt: now},
+		{Venue: "binance", VenueType: "perp", EquityRaw: &eq8k, FreeMarginRaw: &fm7500, Currency: "USDT", FetchedAt: now},
 	})
 	resp := covResponse(ctx, t, svc)
-	// D-360 S4：paper 行不再出现（demo/纸面=噪声不入面板）——行序 TRX→CMC→live→venue
+	// D-360 S4：paper 行不再出现（demo/纸面=噪声不入面板）——D-127 行序 TRX→CMC→占用→venue
 	if len(resp.Rows) != 4 {
-		t.Fatalf("rows len = %d, want 4:", len(resp.Rows))
+		t.Fatalf("rows len = %d, want 4: %+v", len(resp.Rows), resp.Rows)
 	}
-	for i, want := range []string{"TRX 质押+投票+能量", "CMC 账户（手动持仓监控域）", "系统持仓（实盘）", "binance·永续"} {
+	for i, want := range []string{"TRX 质押+投票+能量", "CMC 账户（手动持仓监控域）", "保证金占用", "binance·永续"} {
 		if resp.Rows[i].Pool != want {
 			t.Errorf("rows[%d] = %q, want %q", i, resp.Rows[i].Pool, want)
 		}
@@ -155,35 +156,52 @@ func TestGetCapitalCoverage_SummaryWeights(t *testing.T) {
 			t.Error("paper 行应不出现（D-360 S4：demo/纸面=噪声不入）")
 		}
 	}
-	// 状态与权重语义
+	// CMC 状态语义
 	if got := resp.Rows[1].Status; got != "手动持仓中（浮盈 $-123.45）" {
 		t.Errorf("CMC status = %q, want 手动持仓中（浮盈 $-123.45）", got)
 	}
-	if !resp.Rows[3].RealMoney || resp.Rows[3].Productive {
+	// D-127 占用行：值=eq−fm=500；RealMoney=false（净值子集视图不入分母）∧Productive=true（入分子）
+	occRow := resp.Rows[2]
+	if !occRow.HasBalance || occRow.BalanceUsd != 500 || occRow.RealMoney || !occRow.Productive {
+		t.Errorf("占用行应 HasBalance=500 RealMoney=false Productive=true, got has=%v bal=%f real=%v prod=%v",
+			occRow.HasBalance, occRow.BalanceUsd, occRow.RealMoney, occRow.Productive)
+	}
+	if !strings.Contains(occRow.Note, "账户级占用") || !strings.Contains(occRow.Note, "名义额参考 $10000.00") {
+		t.Errorf("占用行 note 应含账户级边界+名义额参考: %q", occRow.Note)
+	}
+	if !occRow.HasApr || occRow.AprPct < 4.9999 || occRow.AprPct > 5.0001 {
+		t.Errorf("占用行年化应 5.0（按名义额折算）, got %f has=%v", occRow.AprPct, occRow.HasApr)
+	}
+	// venue 行：入分母不入分子，note 带「可用」
+	venRow := resp.Rows[3]
+	if !venRow.RealMoney || venRow.Productive {
 		t.Error("venue USDT 行应 RealMoney=true∧Productive=false（入分母的睡钱）")
 	}
-	// 汇总两数：总 30000+10000+10000+8000=58000；在产=TRX30000+CMC10000+live10000=50000
-	if !resp.HasSummary || resp.TotalUsd != 58000 || resp.ProductiveUsd != 50000 {
-		t.Errorf("total=%f productive=%f (has=%v), want 58000/50000",
+	if !strings.Contains(venRow.Note, "可用 7500.00") {
+		t.Errorf("venue 行 note 应含可用额: %q", venRow.Note)
+	}
+	// 汇总两数：总=Σ净值+TRX+CMC=48000（占用行 RealMoney=false 不入分母）；在产=30000+10000+占用500=40500
+	if !resp.HasSummary || resp.TotalUsd != 48000 || resp.ProductiveUsd != 40500 {
+		t.Errorf("total=%f productive=%f (has=%v), want 48000/40500",
 			resp.TotalUsd, resp.ProductiveUsd, resp.HasSummary)
 	}
-	if cov := resp.ProductiveUsd / resp.TotalUsd * 100; cov < 86.1 || cov > 86.3 {
-		t.Errorf("coverage = %f, want ~86.2", cov)
+	if cov := resp.ProductiveUsd / resp.TotalUsd * 100; cov < 84.3 || cov > 84.5 {
+		t.Errorf("coverage = %f, want ~84.4", cov)
 	}
-	// 加权年化=(30000×4+10000×5)/40000=4.25；venue/CMC/paper 无年化不进
-	if !resp.HasWeighted || resp.WeightedApr < 4.2499 || resp.WeightedApr > 4.2501 {
-		t.Errorf("weighted_apr = %f (has=%v), want 4.25", resp.WeightedApr, resp.HasWeighted)
+	// 加权年化=(30000×4+占用500×5)/30500=4.0164（占用行按占用额加权；venue/CMC 无年化不进）
+	if !resp.HasWeighted || resp.WeightedApr < 4.0163 || resp.WeightedApr > 4.0165 {
+		t.Errorf("weighted_apr = %f (has=%v), want ~4.0164", resp.WeightedApr, resp.HasWeighted)
 	}
 }
 
-// TestGetCapitalCoverage_Empty 全源空 → 仅 live「零持仓」行（D-356 A8 明文预期行，
-// 非真金不入汇总）+has_summary/has_weighted=false+口径注记随行。
+// TestGetCapitalCoverage_Empty 全源空 → 仅「保证金占用·零占用」行（D-356 A8 预期行的
+// D-127 形态：HasBalance=false 非真金不入汇总）+has_summary/has_weighted=false+口径注记随行。
 func TestGetCapitalCoverage_Empty(t *testing.T) {
 	s := covTestStore(t)
 	ctx := context.Background()
 	resp := covResponse(ctx, t, covTestService(s))
-	if len(resp.Rows) != 1 || resp.Rows[0].Pool != "系统持仓（实盘）" || resp.Rows[0].Status != "零持仓" {
-		t.Fatalf("全源空应仅零持仓行, got %d 行: %+v", len(resp.Rows), resp.Rows)
+	if len(resp.Rows) != 1 || resp.Rows[0].Pool != "保证金占用" || resp.Rows[0].Status != "零占用" {
+		t.Fatalf("全源空应仅零占位行, got %d 行: %+v", len(resp.Rows), resp.Rows)
 	}
 	if resp.Rows[0].HasBalance || resp.Rows[0].RealMoney {
 		t.Errorf("零持仓行应无余额非真金, got has_balance=%v real_money=%v", resp.Rows[0].HasBalance, resp.Rows[0].RealMoney)
