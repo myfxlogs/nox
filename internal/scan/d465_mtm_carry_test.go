@@ -75,6 +75,10 @@ type fakeMtmPaperStore struct {
 		id     int64
 		reason string
 	}
+	// D-122：注入钟面——EntryTs/LastAccrueTs 与步进轮 now 同钟；零值回落墙钟
+	// （真实钟测试不变）。混双钟曾使 base=真实 now 越过注入轮，UTC 日界空窗
+	// accrue 恒 0（D-465 T2 腐化根因）。
+	now time.Time
 }
 
 func newFakeMtmPaperStore() *fakeMtmPaperStore {
@@ -120,7 +124,10 @@ func (f *fakeMtmPaperStore) InsertPaperSpotCarry(_ context.Context, r *pgstore.P
 	cp := *r
 	cp.ID = f.nextID
 	cp.Status = "active"
-	cp.EntryTs = time.Now()
+	cp.EntryTs = f.now
+	if cp.EntryTs.IsZero() {
+		cp.EntryTs = time.Now()
+	}
 	ts := cp.EntryTs
 	cp.LastAccrueTs = &ts // 与真库 insert last_accrue_ts=now() 同义（非回迁哨兵）
 	f.rows[cp.ID] = &cp
@@ -254,6 +261,7 @@ func d465StepOpenAccrueExitAt(t *testing.T, now time.Time) {
 	ctx := context.Background()
 	sc := NewCarryUniverseScanner(mtmFixture())
 	st := newFakeMtmPaperStore()
+	st.now = now
 	st.ticks["mtA|XAUUSD.a"] = []pgstore.TickRow{{Ts: now.Add(-time.Minute), Venue: "mtA", Symbol: "XAUUSD.a", Bid: 100, Ask: 100.05}}
 	st.ticks["mtB|XAUUSD.b"] = []pgstore.TickRow{{Ts: now.Add(-time.Minute), Venue: "mtB", Symbol: "XAUUSD.b", Bid: 99.9, Ask: 99.95}}
 	// D-474a S1：结算对齐累积需双腿 facts 面（bps_daily 日率，UTC 日界）。
