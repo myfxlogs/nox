@@ -232,33 +232,16 @@ func TestExitBoundaryTimer(t *testing.T) {
 	<-done2
 }
 
-// TestWatchdog_AlertOnly 饥荒看门狗：有仓 + 评估久未跑 + 报价在流 → critical 告警；
-// scan 计数不增（看门狗不评估）。
+// TestWatchdog_AlertOnly 饥荒看门狗（D-131 语义修正）：判据=有仓 ∧「kick 送达而
+// loop 超时未消化」（lastKickSent > lastEval+interval）——模拟 loop 卡死/chan 堵。
+// 旧语义「久未评估+报价在流」是哑弹+误报（驱动节奏与阈值同阶），随票退役。
 func TestWatchdog_AlertOnly(t *testing.T) {
-	s := testAccumStore(t)
 	ctx := context.Background()
-	if _, err := s.Pool().Exec(ctx, `TRUNCATE positions, position_legs, autotrade_state CASCADE`); err != nil {
-		t.Fatalf("truncate: %v", err)
-	}
-	if err := s.SetAutotradeState(ctx, StateRunning, "test", nil); err != nil {
-		t.Fatalf("state: %v", err)
-	}
-	pos := &pgstore.Position{OpportunityID: "CROSS_VENUE:X:vA:vB:1", Type: "CROSS_VENUE", Status: "OPEN"}
-	if _, err := s.CreatePosition(ctx, pos); err != nil {
-		t.Fatalf("pos: %v", err)
-	}
 	var alerts int32
 	var msgsMu sync.Mutex
 	var msgs []string
 	e := &Engine{
-		cfg:             Config{Enabled: true, PositionFallbackInterval: 60 * time.Millisecond},
-		store:           s,
-		service:         &dashboard.Service{},
-		quotes:          bus.New(),
-		kickCh:          make(chan struct{}, 1),
-		quoteCh:         make(chan bus.Quote, 256),
-		carryKick:       make(chan struct{}, 1),
-		fundingNeedSent: make(map[string]string),
+		cfg: Config{Enabled: true, PositionFallbackInterval: 60 * time.Millisecond},
 		AlertSink: func(level, msg string) {
 			atomic.AddInt32(&alerts, 1)
 			msgsMu.Lock()
@@ -266,27 +249,27 @@ func TestWatchdog_AlertOnly(t *testing.T) {
 			msgsMu.Unlock()
 		},
 	}
-	var scans int32
-	e.scanHook = func() { atomic.AddInt32(&scans, 1) }
-
 	lctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	done := make(chan struct{})
-	go func() { e.positionLoop(lctx); close(done) }()
-	time.Sleep(100 * time.Millisecond) // boot 扫描+缓存装载
+	go func() { e.exitEvalWatchdog(lctx); close(done) }()
 
-	// lastEval 已在 boot 设；watchdog 周期 60ms → 有仓+报价在流+评估>60ms → 告警。
-	// 持续喂 quote 帧（lastQuoteSeen 新鲜），但报价不命中（收敛 bid 大 → quoteExitHit false）。
-	for i := 0; i < 5; i++ {
-		e.quoteCh <- bus.Quote{Symbol: "X", Venue: "vA", VenueType: "mt5", Bid: 200, Ask: 200.1, Time: time.Now()}
-		time.Sleep(30 * time.Millisecond)
+	// 安静窗（无仓/无 kick）→ 不告警。
+	time.Sleep(150 * time.Millisecond)
+	if got := atomic.LoadInt32(&alerts); got != 0 {
+		t.Fatalf("安静窗不得告警: alerts=%d", got)
 	}
+
+	// kick 送达 + 评估超窗未消化（loop 阻塞等价态）→ critical 告警。
+	e.openCount.Store(1)
+	e.lastEvalAt.Store(time.Now().Add(-5 * e.fallbackInterval()).UnixNano())
+	e.lastKickSent.Store(time.Now().UnixNano())
 	deadline := time.Now().Add(500 * time.Millisecond)
 	for time.Now().Before(deadline) && atomic.LoadInt32(&alerts) == 0 {
 		time.Sleep(20 * time.Millisecond)
 	}
 	if atomic.LoadInt32(&alerts) == 0 {
-		t.Fatal("看门狗应发 critical 告警")
+		t.Fatal("kick 送达未消化应发 critical 告警")
 	}
 	msgsMu.Lock()
 	found := false
@@ -299,9 +282,8 @@ func TestWatchdog_AlertOnly(t *testing.T) {
 	if !found {
 		t.Fatalf("告警应含 critical+看门狗文案: %v", msgs)
 	}
-	if got := atomic.LoadInt32(&scans); got != 1 {
-		t.Fatalf("看门狗不得触发评估: scans=%d want 1(boot)", got)
-	}
+	cancel()
+	<-done
 }
 
 // exitCloseSvc D-004 P1#4 返修用 fake：只覆写 AutoClosePosition（其余方法经

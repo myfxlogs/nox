@@ -26,7 +26,9 @@ var (
 // venue 后缀 :perp → funding fact（window>0=7d/3d 滚动均值，否则瞬时最新值）；
 // :mt4/:mt5 → swapRateFor（settled/spec/none；window>0 时 spec 源同窗均值）。
 // 不假设买=perp——生产反例 XASSET_CARRY:XPTUSD:3001157:mt5:okx:perp=买 MT5 卖 OKX perp。
-func (e *Engine) recalcXAssetNetCarry(ctx context.Context, p *pgstore.Position, window time.Duration) (float64, bool) {
+// src=调用源日志前缀（D-131：评估径 "exit pos=" vs 展示径 "carry show pos=" 分标——
+// 同文日志曾使展示径每秒刷屏被误读为权威评估在跑）。
+func (e *Engine) recalcXAssetNetCarry(ctx context.Context, p *pgstore.Position, window time.Duration, src string) (float64, bool) {
 	legs, err := e.store.ListPositionLegs(ctx, p.ID)
 	if err != nil {
 		return 0, false
@@ -54,7 +56,7 @@ func (e *Engine) recalcXAssetNetCarry(ctx context.Context, p *pgstore.Position, 
 		// D-406 S2：腿级 carry 提取共享 helper（替代组合假想腿同函数族算，不双标）。
 		legCarry, ok := e.xassetLegCarryAnnual(ctx, leg.Venue, canonical, leg.Side, maxAge, window)
 		if !ok {
-			log.Printf("[autotrade] exit pos=%d: leg carry fail-closed venue=%s canonical=%s side=%s", p.ID, leg.Venue, canonical, leg.Side)
+			log.Printf("[autotrade] %s pos=%d: leg carry fail-closed venue=%s canonical=%s side=%s", src, p.ID, leg.Venue, canonical, leg.Side)
 			return 0, false
 		}
 		netCarry += legCarry
@@ -63,7 +65,7 @@ func (e *Engine) recalcXAssetNetCarry(ctx context.Context, p *pgstore.Position, 
 	if !foundAny {
 		return 0, false
 	}
-	log.Printf("[autotrade] exit pos=%d: xasset netCarry=%.4f%% ann", p.ID, netCarry)
+	log.Printf("[autotrade] %s pos=%d: xasset netCarry=%.4f%% ann", src, p.ID, netCarry)
 	return netCarry, true
 }
 

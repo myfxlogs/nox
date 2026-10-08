@@ -26,6 +26,7 @@ func (e *Engine) fallbackInterval() time.Duration {
 
 // Kick 订单事件触发重扫（非阻塞 send 到 buffered(1) chan；positionLoop 侧 1s 合流不丢事件）。
 func (e *Engine) Kick() {
+	e.lastKickSent.Store(time.Now().UnixNano()) // D-131：事件源侧记账（orderTopic 订阅 goroutine）
 	select {
 	case e.kickCh <- struct{}{}:
 	default: // 已有待处理 kick，合并
@@ -39,7 +40,7 @@ func (e *Engine) Kick() {
 //     合流定时器补跑——事件不丢（废除旧 30s 丢弃语义）；
 //   - carryKick：carry facts 写后全扫（息差型输入变了）；
 //   - 到点定时器：probe 到期/PERP_FUNDING 持有下限的最早未来边界 +1s；
-//   - watchdog：饥荒看门狗——有仓、久未评估且报价在流 → 告警，不评估；
+//   - （D-131：饥荒看门狗改独立 goroutine 外部观测，见 exitEvalWatchdog）；
 //   - csMissTick：D-140 S2 CS-miss 聚合告警（不动）。
 //
 // open/lastScan/pendingKick/边界定时器均 positionLoop 单协程读写（lastScan 先例）。
@@ -47,12 +48,11 @@ func (e *Engine) positionLoop(ctx context.Context) {
 	e.scanAndClose(ctx)
 	e.stateMachineTick(ctx)
 	lastEval := time.Now()
+	e.lastEvalAt.Store(lastEval.UnixNano())
 	lastScan := lastEval
 	open := e.reloadOpen(ctx, nil)
-	lastQuoteSeen := time.Time{}
+	e.openCount.Store(int64(len(open)))
 
-	watchdog := time.NewTicker(e.fallbackInterval())
-	defer watchdog.Stop()
 	csMissTick := time.NewTicker(csMissAlertInterval)
 	defer csMissTick.Stop()
 
@@ -89,7 +89,9 @@ func (e *Engine) positionLoop(ctx context.Context) {
 		e.stateMachineTick(ctx)
 		now := time.Now()
 		lastScan, lastEval, pendingKick = now, now, false
+		e.lastEvalAt.Store(now.UnixNano())
 		open = e.reloadOpen(ctx, open)
+		e.openCount.Store(int64(len(open)))
 		armBoundary()
 	}
 
@@ -104,7 +106,6 @@ func (e *Engine) positionLoop(ctx context.Context) {
 			}
 			return
 		case q := <-e.quoteCh:
-			lastQuoteSeen = time.Now()
 			for i := range open {
 				if open[i].canonical == "" || open[i].canonical != q.Symbol {
 					continue
@@ -116,9 +117,10 @@ func (e *Engine) positionLoop(ctx context.Context) {
 					continue // 命中态持续合流（非轮询）
 				}
 				open[i].lastAuth = time.Now()
-				lastEval = time.Now()
+				e.lastEvalAt.Store(time.Now().UnixNano())
 				if e.evaluatePosition(ctx, &open[i].pos) {
 					open = e.reloadOpen(ctx, open)
+					e.openCount.Store(int64(len(open)))
 					armBoundary()
 					// range 遍历的是旧切片：reload 后 open 已换——继续用旧索引会
 					// 越界（新切片更短 panic）或评错仓（等长错位）。同帧其余命中
@@ -143,16 +145,6 @@ func (e *Engine) positionLoop(ctx context.Context) {
 		case <-boundaryC:
 			boundaryT, boundaryC = nil, nil
 			runFull()
-		case <-watchdog.C:
-			// 饥荒看门狗（D-004 P1#4）：只告警——有仓、评估久未跑、报价仍在流 = 事件链断了。
-			if len(open) > 0 && time.Since(lastEval) > e.fallbackInterval() && !lastQuoteSeen.IsZero() && time.Since(lastQuoteSeen) < e.fallbackInterval() {
-				msg := "exit-eval starvation: positionLoop 有持仓且报价在流但权威评估超时未跑"
-				log.Printf("[autotrade] WATCHDOG %s (open=%d lastEval=%v ago lastQuote=%v ago)",
-					msg, len(open), time.Since(lastEval).Round(time.Second), time.Since(lastQuoteSeen).Round(time.Second))
-				if e.AlertSink != nil {
-					e.AlertSink("critical", "退出评估饥荒看门狗："+msg)
-				}
-			}
 		case <-csMissTick.C:
 			e.flushCSMissAlerts() // D-140 S2
 		}
@@ -189,4 +181,42 @@ func (e *Engine) quoteKickDispatch(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// exitEvalWatchdog D-131：饥荒看门狗外部观测版（独立 goroutine——lastKickSent/lastEvalAt
+// 由 select 原子服务两侧的 goroutine 分别写，同协程内 kick→eval 永同步=哑弹根因根除）。
+// 判据=有持仓 ∧「kick 送达而 loop 超时未消化」（lastKickSent > lastEval+interval）=
+// 真链断（loop 卡死/chan 堵）；安静窗无新事件不告警——旧判据「久未评估+报价在流」把
+// 驱动节奏（fundingEmitThrottle=60s）与阈值同阶的正常空窗误报为链断。
+// 只告警不评估（看门狗不产数据原则不动）；评估触发分层零改动。
+func (e *Engine) exitEvalWatchdog(ctx context.Context) {
+	t := time.NewTicker(e.fallbackInterval())
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		open, lastEval, lastKick, starved := e.exitEvalStarved()
+		if !starved {
+			continue // 无仓 / 尚无事件 / 事件已被消化 = 不告警
+		}
+		msg := "exit-eval starvation: positionLoop 有持仓且 kick 送达但权威评估超时未消化"
+		log.Printf("[autotrade] WATCHDOG %s (open=%d lastEval=%v ago lastKick=%v ago)",
+			msg, open, time.Since(lastEval).Round(time.Second), time.Since(lastKick).Round(time.Second))
+		if e.AlertSink != nil {
+			e.AlertSink("critical", "退出评估饥荒看门狗："+msg)
+		}
+	}
+}
+
+// exitEvalStarved D-131 判据提取（纯读 atomics 可测）：open/lastEval/lastKick 快照 + 是否饥荒。
+// 饥荒=有持仓 ∧ lastKickSent > lastEval+interval（事件送达 loop 超时未消化）。
+func (e *Engine) exitEvalStarved() (open int64, lastEval, lastKick time.Time, starved bool) {
+	open = e.openCount.Load()
+	le := time.Unix(0, e.lastEvalAt.Load())
+	lk := time.Unix(0, e.lastKickSent.Load())
+	starved = open > 0 && !lk.IsZero() && lk.After(le.Add(e.fallbackInterval()))
+	return open, le, lk, starved
 }

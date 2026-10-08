@@ -26,7 +26,7 @@ func (e *Engine) xassetExitCheck(ctx context.Context, p *pgstore.Position) (bool
 	blackoutHit, blackoutWhy := e.macroBlackoutActive(ctx, e.positionCanonical(ctx, p))
 	// D-027：breach 量=滚动 3 日均值（瞬时费率周末零误杀实证）；MT 腿休市不累计 breach
 	// （trade_mode fact 非 Full → 本轮按缺数据语义过判定器=计数原样保留）。
-	netCarry, ok := e.recalcXAssetNetCarry(ctx, p, carryDeathMeanWindow)
+	netCarry, ok := e.recalcXAssetNetCarry(ctx, p, carryDeathMeanWindow, "exit")
 	if ok && (e.mtLegMarketClosed(ctx, p) || blackoutHit) {
 		ok = false // 闭市/禁区同径：本轮 carry_death 判据不可用=计数冻结（factOK=false）
 	}

@@ -104,6 +104,13 @@ type Engine struct {
 	factsKick  chan struct{}
 	lastMRScan time.Time // mrScanMinInterval 节流基准（仅 meanRevertLoop goroutine 读写）
 
+	// D-131：退出评估看门狗外部观测面（atomics——kick→eval 同协程内不可观测，
+	// 判据须跨协程读）：lastKickSent=事件源侧（wireSwapArbFactsKick/orderTopic
+	// goroutine 经 Kick/KickCarryEval 进）；lastEvalAt/openCount=positionLoop 写。
+	lastKickSent atomic.Int64 // unixnano；发送侧记账（chan 满合并也算送达——缓冲 kick 会被消费）
+	lastEvalAt   atomic.Int64 // unixnano；runFull/quote 升权威后写
+	openCount    atomic.Int64 // reloadOpen 后写
+
 	// D-004 P1#5：swapQuoteCh=swapArb quote 快路帧（buffered 256 满丢帧）；
 	// swapArmedCanon=armed 候选 canonical 集快照（atomic.Pointer 无锁发布，
 	// swapArbLoop 写 / quoteKickDispatch 读）。
@@ -206,6 +213,10 @@ func (e *Engine) Run(ctx context.Context) {
 	// 4. 持仓扫描循环（自动平仓 + 状态机 tick）
 	safego.GoLoop("engine:positionLoop", func() { e.positionLoop(ctx) })
 
+	// D-131：退出评估饥荒看门狗——独立 goroutine 外部观测 lastKickSent/lastEvalAt
+	// （loop 内 ticker 观测 kick>eval 恒不成立=哑弹；loop 卡死自证不能）。
+	safego.GoLoop("engine:exitEvalWatchdog", func() { e.exitEvalWatchdog(ctx) })
+
 	<-ctx.Done()
 }
 
@@ -249,6 +260,7 @@ func (e *Engine) KickSwapArb() {
 // KickCarryEval D-004 P1#4：carry 退出判据输入（mt_swap/三所 funding facts）写后
 // → positionLoop 权威全扫（息差型净收入变了）。buffered(1) 非阻塞合并。
 func (e *Engine) KickCarryEval() {
+	e.lastKickSent.Store(time.Now().UnixNano()) // D-131：事件源侧记账（loop 外 goroutine）
 	select {
 	case e.carryKick <- struct{}{}:
 	default:

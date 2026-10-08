@@ -68,7 +68,7 @@ func (e *Engine) rotateCheck(ctx context.Context, p *pgstore.Position) (bool, *r
 	// ②curEV = curNetCarry%/yr + 剩余收敛折算（v1 必含，R0-N3：
 	// |basis|bps → 30d 摊年化）。D-014：收割线退役后剩余收敛=当前基差绝对值
 	// （收敛到平价的全部距离；报价缺/超龄 → fail-closed 不轮转）。
-	curCarry, ok := e.recalcXAssetNetCarry(ctx, p, carryEconWindow) // D-027：7d 均值口径
+	curCarry, ok := e.recalcXAssetNetCarry(ctx, p, carryEconWindow, "exit") // D-027：7d 均值口径
 	if !ok {
 		return fail("cur carry 数据缺（fail-closed）")
 	}

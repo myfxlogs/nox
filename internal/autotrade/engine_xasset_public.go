@@ -13,5 +13,5 @@ func (e *Engine) XAssetNetCarryPublic(ctx context.Context, posID int64) (float64
 	if err != nil || p == nil {
 		return 0, false
 	}
-	return e.recalcXAssetNetCarry(ctx, p, 0)
+	return e.recalcXAssetNetCarry(ctx, p, 0, "carry show")
 }

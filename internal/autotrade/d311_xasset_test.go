@@ -86,7 +86,7 @@ func TestD311_RecalcXAssetNetCarry_BuyMT5SellPerp(t *testing.T) {
 	}
 	pos := d311SeedXAssetPosition(t, s, oppID, "3001157:mt5", "XPTUSD", "okx:perp", "XPT-USDT-SWAP")
 	e := &Engine{store: s, cfg: Config{SwapFactMaxAge: 2 * time.Hour}}
-	got, ok := e.recalcXAssetNetCarry(ctx, pos, 0)
+	got, ok := e.recalcXAssetNetCarry(ctx, pos, 0, "exit")
 	if !ok {
 		t.Fatal("want ok=true, got false")
 	}
@@ -119,7 +119,7 @@ func TestD311_RecalcXAssetNetCarry_BuyPerpSellMT5(t *testing.T) {
 	}
 	pos := d311SeedXAssetPosition(t, s, oppID, "binance:perp", "BTCUSDT", "3001157:mt5", "BTCUSD")
 	e := &Engine{store: s, cfg: Config{SwapFactMaxAge: 2 * time.Hour}}
-	got, ok := e.recalcXAssetNetCarry(ctx, pos, 0)
+	got, ok := e.recalcXAssetNetCarry(ctx, pos, 0, "exit")
 	if !ok {
 		t.Fatal("want ok=true, got false")
 	}
@@ -224,7 +224,7 @@ func TestD311_XAssetExit_MissingFactNoDecision(t *testing.T) {
 		fundingBreach: map[int64]int{pos.ID: 3},
 		cfg:           Config{SwapFactMaxAge: 2 * time.Hour, FundingExitPct: 0, PerpFundExitDebounce: 1},
 	}
-	if _, ok := e.recalcXAssetNetCarry(ctx, pos, 0); ok {
+	if _, ok := e.recalcXAssetNetCarry(ctx, pos, 0, "exit"); ok {
 		t.Fatal("缺 funding fact 应 ok=false")
 	}
 	if close, _ := e.checkExitCondition(ctx, pos); close {
@@ -253,7 +253,7 @@ func TestD311_XAssetExit_MissingMapNoDecision(t *testing.T) {
 		"XASSET_CARRY:XPTUSD:3001157:mt5:okx:perp",
 		"3001157:mt5", "XPTUSD", "okx:perp", "XPT-USDT-SWAP")
 	e := &Engine{store: s, fundingBreach: map[int64]int{}, cfg: Config{SwapFactMaxAge: 2 * time.Hour, PerpFundExitDebounce: 1}}
-	if _, ok := e.recalcXAssetNetCarry(ctx, pos, 0); ok {
+	if _, ok := e.recalcXAssetNetCarry(ctx, pos, 0, "exit"); ok {
 		t.Fatal("canonical_sell 不可解析应 ok=false")
 	}
 	if close, _ := e.checkExitCondition(ctx, pos); close {

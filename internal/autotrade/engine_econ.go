@@ -94,7 +94,7 @@ func (e *Engine) econSnapshot(ctx context.Context, p *pgstore.Position) (econ.Sn
 		return snap, fmt.Errorf("accrued cashflows: %w", err)
 	}
 	snap.AccruedUSD = accrued
-	netCarryPct, ok := e.recalcXAssetNetCarry(ctx, p, carryEconWindow) // D-027：7d 滚动均值
+	netCarryPct, ok := e.recalcXAssetNetCarry(ctx, p, carryEconWindow, "exit") // D-027：7d 滚动均值
 	if !ok {
 		return snap, fmt.Errorf("carry facts 缺（fail-closed）")
 	}
