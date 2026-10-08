@@ -24,7 +24,6 @@ var appConfigKeys = map[string]AppCfgMeta{
 	"ARB_BINANCE_FUTURES_INFO_URL":        strv(func(c *Config) *string { return &c.BinanceFuturesInfoURL }),
 	"ARB_BINANCE_SPOT_INFO_URL":           strv(func(c *Config) *string { return &c.BinanceSpotInfoURL }),
 	"ARB_BROKER_POS_POLL_MS":              durv(func(c *Config) *time.Duration { return &c.BrokerPosPollInterval }),
-	"ARB_CAPITAL_SNAPSHOT_TTL":            durv(func(c *Config) *time.Duration { return &c.CapitalSnapshotTTL }),
 	"ARB_CARRY_MIN_NET_ANNUALIZED":        f64(func(c *Config) *float64 { return &c.CarryMinNetAnnualized }),
 	"ARB_CARRY_MIN_NET_STORE":             f64(func(c *Config) *float64 { return &c.CarryMinNetStore }),
 	"ARB_CARRY_REGIME_FLOOR_PCT":          f64(func(c *Config) *float64 { return &c.CarryRegimeFloorPct }),
