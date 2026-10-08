@@ -127,14 +127,14 @@ func TestD546_CapitalMapTree(t *testing.T) {
 	}
 
 	// 立即可用三面：spot free=100 / perp available=50 / funding=5；合计=155；sizing 注记。
-	if n := capNodeByLabel(avail, "binance:spot free"); n == nil || !n.HasUsd || n.AmountUsd != 100 {
-		t.Errorf("spot free 节点错: %+v", capNodeByLabel(avail, "binance:spot free"))
+	if n := capNodeByLabel(avail, "binance·现货 可用"); n == nil || !n.HasUsd || n.AmountUsd != 100 {
+		t.Errorf("spot free 节点错: %+v", capNodeByLabel(avail, "binance·现货 可用"))
 	}
-	if n := capNodeByLabel(avail, "binance:perp available"); n == nil || n.AmountUsd != 50 {
-		t.Errorf("perp available 节点错: %+v", capNodeByLabel(avail, "binance:perp available"))
+	if n := capNodeByLabel(avail, "binance·永续 可用"); n == nil || n.AmountUsd != 50 {
+		t.Errorf("perp available 节点错: %+v", capNodeByLabel(avail, "binance·永续 可用"))
 	}
-	if n := capNodeByLabel(avail, "binance:funding 余额"); n == nil || n.AmountUsd != 5 {
-		t.Errorf("funding 节点错: %+v", capNodeByLabel(avail, "binance:funding 余额"))
+	if n := capNodeByLabel(avail, "binance·资金钱包 余额"); n == nil || n.AmountUsd != 5 {
+		t.Errorf("funding 节点错: %+v", capNodeByLabel(avail, "binance·资金钱包 余额"))
 	}
 	if !avail.HasUsd || avail.TotalUsd != 270 {
 		t.Errorf("立即可用合计=%v (has=%v), want 270（binance 155+okx 100+gate 15）", avail.TotalUsd, avail.HasUsd)
@@ -147,7 +147,7 @@ func TestD546_CapitalMapTree(t *testing.T) {
 	if capNodeByLabel(avail, "binance 理财活期") != nil {
 		t.Error("理财活期不得归入立即可用（T+0 赎回≠立即可用）")
 	}
-	lk := capNodeByLabel(transfer, "binance:spot locked")
+	lk := capNodeByLabel(transfer, "binance·现货 锁定")
 	if lk == nil || lk.AmountUsd != 10 {
 		t.Errorf("spot locked 推导错: %+v", lk)
 	}
@@ -166,7 +166,7 @@ func TestD546_CapitalMapTree(t *testing.T) {
 	if btc == nil || !btc.HasUsd || math.Abs(btc.AmountUsd-2500.05) > 1e-6 {
 		t.Errorf("币本位 BTC 折算错: %+v", btc)
 	}
-	if btc != nil && !strings.Contains(btc.Note, "BTCUSDT mid") {
+	if btc != nil && !strings.Contains(btc.Note, "BTCUSDT 中间价") {
 		t.Errorf("币本位折算注记缺 tick 价来源: %q", btc.Note)
 	}
 	if n := capNodeByLabel(locked, "binance 期权权益 USDT"); n == nil || n.AmountUsd != 617.77 {

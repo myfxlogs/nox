@@ -23,8 +23,8 @@ type CapitalGapFetcher interface {
 	Fetch(ctx context.Context) (*reconcile.CapitalGaps, error)
 }
 
-// capitalMapCaliberNote 口径注记（面板尾注）。
-const capitalMapCaliberNote = "口径：binance 六面全景（现货/资金钱包/U 本位/币本位/期权/理财）+okx 统一账户三面（trading/funding/earn）+gate 两面并读（spot/futures/earn）×三档可用性——立即可用=活账本/快照既有流（与 sizing 基准同源，sizing 实取各池最小值，全景不改基准）；可转可用=理财活期（T+0 赎回）+现货 locked（Equity−Available 推得）+okx 资金钱包/活期理财；锁定慢动=理财定期+币本位+期权权益+okx 占用冻结+gate spot locked/futures 保证金/earn 出借。USDT/LDUSDT 1:1 同视 USD；杂币经 venue 指数价/tick mid 折算，缺价如实标「未折算」不猜。gap/availability 面=页面开实拉+60s 进程缓存；采集失败/未配置/权限缺席=节点如实标缺不猜零。"
+// capitalMapCaliberNote 口径注记（面板尾注）。D-125：钱包/状态域词循 VenueTag 惯例中文化。
+const capitalMapCaliberNote = "口径：binance 六面全景（现货/资金钱包/U 本位/币本位/期权/理财）+okx 统一账户三面（交易/资金钱包/理财）+gate 两面并读（现货/交割/理财）×三档可用性——立即可用=活账本/快照既有流（与 sizing 基准同源，sizing 实取各池最小值，全景不改基准）；可转可用=理财活期（T+0 赎回）+现货锁定（净值−可用 推得）+okx 资金钱包/活期理财；锁定慢动=理财定期+币本位+期权权益+okx 占用冻结+gate 现货锁定/交割保证金/理财出借。USDT/LDUSDT 1:1 同视 USD；杂币经 venue 指数价/tick 中间价折算，缺价如实标「未折算」不猜。缺口/可用性面=页面开实拉+60s 进程缓存；采集失败/未配置/权限缺席=节点如实标缺不猜零。"
 
 // GetCapitalMap D-546：三档全景树（后端算，前端零计算）。
 func (s *Service) GetCapitalMap(ctx context.Context, req *connect.Request[v1.GetCapitalMapRequest]) (*connect.Response[v1.GetCapitalMapResponse], error) {
@@ -49,30 +49,31 @@ func (s *Service) buildCapitalMap(ctx context.Context) *v1.GetCapitalMapResponse
 	transfer := &v1.CapitalMapTier{Tier: "可转可用"}
 	locked := &v1.CapitalMapTier{Tier: "锁定/慢动"}
 
-	// ① 现货 free（活账本流：ws→REST 校准→快照，D-542 同径）。
+	// ① 现货可用（活账本流：ws→REST 校准→快照，D-542 同径）。D-125：节点标签域词中文化
+	// （venue·类型 状态，循池标签 `okx·统一账户` 式；标签为纯展示值，键面 venue:type 不动）。
 	spot, spotOK := s.legPool(ctx, snaps, "binance:spot")
 	if spotOK && spot.free != nil {
-		avail.Nodes = append(avail.Nodes, capNode("binance:spot free", *spot.free, spot.currency, capSrcNote(spot), spot.at))
+		avail.Nodes = append(avail.Nodes, capNode("binance·现货 可用", *spot.free, spot.currency, capSrcNote(spot), spot.at))
 	} else {
-		avail.Nodes = append(avail.Nodes, capMissing("binance:spot free", "活账本/校准/快照三径全空"))
+		avail.Nodes = append(avail.Nodes, capMissing("binance·现货 可用", "活账本/校准/快照三径全空"))
 	}
-	// ② U 本位 available（同径）。
+	// ② U 本位可用（同径）。
 	perp, perpOK := s.legPool(ctx, snaps, "binance:perp")
 	if perpOK && perp.free != nil {
-		avail.Nodes = append(avail.Nodes, capNode("binance:perp available", *perp.free, perp.currency, capSrcNote(perp), perp.at))
+		avail.Nodes = append(avail.Nodes, capNode("binance·永续 可用", *perp.free, perp.currency, capSrcNote(perp), perp.at))
 	} else {
-		avail.Nodes = append(avail.Nodes, capMissing("binance:perp available", "活账本/校准/快照三径全空"))
+		avail.Nodes = append(avail.Nodes, capMissing("binance·永续 可用", "活账本/校准/快照三径全空"))
 	}
 	// ③ 资金钱包（已有池=调度快照；funding 无私有流，恒快照口径）。
 	avail.Nodes = append(avail.Nodes, s.fundingNode(snaps))
 
-	// ④ 现货 locked（可转档）：账本 Equity−Available 推得（WS eq=free+locked / REST 同约）。
+	// ④ 现货锁定（可转档）：账本 Equity−Available 推得（WS eq=free+locked / REST 同约）。
 	if e, ok := s.ledgerSpot(); ok {
 		lockedAmt := e.Equity - e.Available
-		n := capNode("binance:spot locked", lockedAmt, e.Currency, "账本 Equity−Available 推得（src="+e.Src+"）", e.At)
+		n := capNode("binance·现货 锁定", lockedAmt, e.Currency, "账本净值−可用 推得（源="+srcCn(e.Src)+"）", e.At)
 		transfer.Nodes = append(transfer.Nodes, n)
 	} else {
-		transfer.Nodes = append(transfer.Nodes, capMissing("binance:spot locked", "活账本空——快照口径无 free/locked 分列"))
+		transfer.Nodes = append(transfer.Nodes, capMissing("binance·现货 锁定", "活账本空——快照口径无可用/锁定分列"))
 	}
 	// ⑤ 理财活期（可转档，T+0）。
 	if gaps == nil || faceFailed(gaps, "理财面") {
@@ -110,20 +111,20 @@ func (s *Service) buildCapitalMap(ctx context.Context) *v1.GetCapitalMapResponse
 	okxVA := s.venueAvailability(ctx, "okx")
 	gateVA := s.venueAvailability(ctx, "gate")
 
-	// ⑨ okx 立即可用=统一账户 trading available（活账本 okx:unified 优先，REST 回退）。
-	avail.Nodes = append(avail.Nodes, s.availLiveNode(ctx, snaps, "okx:unified", "okx:unified available", availWallet(okxVA, "trading"), "/api/v5/account/balance"))
+	// ⑨ okx 立即可用=统一账户交易可用（活账本 okx:unified 优先，REST 回退）。
+	avail.Nodes = append(avail.Nodes, s.availLiveNode(ctx, snaps, "okx:unified", "okx·统一账户 可用", availWallet(okxVA, "trading"), "/api/v5/account/balance"))
 	// ⑩ okx 锁定慢动=trading 占用/冻结（availBal−availEq+frozenBal）。
-	locked.Nodes = append(locked.Nodes, walletLocked(okxVA, "trading", "okx:unified 占用/冻结", "/api/v5/account/balance"))
+	locked.Nodes = append(locked.Nodes, walletLocked(okxVA, "trading", "okx·统一账户 占用/冻结", "/api/v5/account/balance"))
 	// ⑪ okx 可转可用=资金钱包+活期理财（资产↔交易划转 T+0）。
 	transfer.Nodes = append(transfer.Nodes, walletTransfer(okxVA, "funding", "okx 资金钱包", "/api/v5/asset/balances"))
 	transfer.Nodes = append(transfer.Nodes, walletTransfer(okxVA, "earn", "okx 活期理财", "/api/v5/finance/savings/balance"))
 
-	// ⑫ gate 立即可用=futures available（活账本 gate:perp 优先）+spot available（REST）。
-	avail.Nodes = append(avail.Nodes, s.availLiveNode(ctx, snaps, "gate:perp", "gate:perp available", availWallet(gateVA, "futures"), "/api/v4/futures/usdt/accounts"))
-	avail.Nodes = append(avail.Nodes, s.availLiveNode(ctx, snaps, "", "gate:spot available", availWallet(gateVA, "spot"), "/api/v4/spot/accounts"))
-	// ⑬ gate 锁定慢动=spot locked+futures 保证金占用+earn 出借中。
-	locked.Nodes = append(locked.Nodes, walletLocked(gateVA, "spot", "gate:spot locked", "/api/v4/spot/accounts"))
-	locked.Nodes = append(locked.Nodes, walletLocked(gateVA, "futures", "gate:futures 保证金占用", "/api/v4/futures/usdt/accounts"))
+	// ⑫ gate 立即可用=交割可用（活账本 gate:perp 优先）+现货可用（REST）。
+	avail.Nodes = append(avail.Nodes, s.availLiveNode(ctx, snaps, "gate:perp", "gate·永续 可用", availWallet(gateVA, "futures"), "/api/v4/futures/usdt/accounts"))
+	avail.Nodes = append(avail.Nodes, s.availLiveNode(ctx, snaps, "", "gate·现货 可用", availWallet(gateVA, "spot"), "/api/v4/spot/accounts"))
+	// ⑬ gate 锁定慢动=现货锁定+交割保证金占用+理财出借中。
+	locked.Nodes = append(locked.Nodes, walletLocked(gateVA, "spot", "gate·现货 锁定", "/api/v4/spot/accounts"))
+	locked.Nodes = append(locked.Nodes, walletLocked(gateVA, "futures", "gate·交割 保证金占用", "/api/v4/futures/usdt/accounts"))
 	locked.Nodes = append(locked.Nodes, walletLocked(gateVA, "earn", "gate 理财出借中", "/api/v4/earn/uni/lends"))
 
 	capTierSum(avail)

@@ -16,7 +16,49 @@ import (
 )
 
 // capitalCoverageCaliberNote 口径注记（与 digest renderCapitalCoverageSection 注记同文本）。
-const capitalCoverageCaliberNote = "口径：快照时点在产=TRX 在赚+系统 live 持仓+CMC 持仓中（非时序加权，日级趋势看历史行）；加权年化分母=有年化真金行余额（CMC 手动仓/未采/纸面/venue 现金不进分子分母）；仅 real 账户/持仓入表（demo/sim/纸面=噪声不入）；venue 账户现金=闲置不计在产（睡钱暴露；CEX=USDT 标余额，USDT/LDUSDT 计、杂币不折算；MT=USD 同视）；CFD 周末闭市持仓中≠空转；系统持仓年化=position_daily_income 近7日日均 carry（TRX 收益×快照价+利息，浮动盈亏不计）折算年化；能量 APR=D-258 30d 口径。"
+const capitalCoverageCaliberNote = "口径：快照时点在产=TRX 在赚+系统实盘持仓+CMC 持仓中（非时序加权，日级趋势看历史行）；加权年化分母=有年化真金行余额（CMC 手动仓/未采/纸面/venue 现金不进分子分母）；仅实盘账户/持仓入表（demo/sim/纸面=噪声不入）；venue 账户现金=闲置不计在产（睡钱暴露；CEX=USDT 标余额，USDT/LDUSDT 计、杂币不折算；MT=USD 同视）；CFD 周末闭市持仓中≠空转；系统持仓年化=position_daily_income 近7日日均息差（TRX 收益×快照价+利息，浮动盈亏不计）折算年化；能量租赁年化=D-258 30d 口径。"
+
+// venueTypeCn D-125：venue 类型域词中文化（循前端 VenueTag 惯例：spot=现货/perp=永续/
+// futures=交割；funding=资金钱包/unified=统一账户/earn=理财；MT 账户=MT4/MT5；
+// 未知类型原样透出不猜）。
+func venueTypeCn(vt string) string {
+	switch vt {
+	case "spot":
+		return "现货"
+	case "perp":
+		return "永续"
+	case "futures":
+		return "交割"
+	case "funding":
+		return "资金钱包"
+	case "unified":
+		return "统一账户"
+	case "earn":
+		return "理财"
+	case "mt4":
+		return "MT4"
+	case "mt5":
+		return "MT5"
+	default:
+		return vt
+	}
+}
+
+// srcCn D-125：资金读口来源域词中文化（值域=capitalview 常量 ws/rest/mt_frame/snap）。
+func srcCn(src string) string {
+	switch src {
+	case "ws":
+		return "私有流"
+	case "rest":
+		return "实拉校准"
+	case "mt_frame":
+		return "MT5 流帧"
+	case "snap":
+		return "快照"
+	default:
+		return src
+	}
+}
 
 // GetCapitalCoverage D-359：五源逐池行+汇总（后端算，前端零计算）。
 func (s *Service) GetCapitalCoverage(ctx context.Context, req *connect.Request[v1.GetCapitalCoverageRequest]) (*connect.Response[v1.GetCapitalCoverageResponse], error) {
@@ -69,10 +111,10 @@ func trxPoolRow(ctx context.Context, s *Service) *v1.CapitalCoverageRow {
 	energyOK := err == nil && sampleDays >= 30
 	note := ""
 	if hasVote {
-		note = fmt.Sprintf("vote %.2f%%", voteAPR)
+		note = fmt.Sprintf("投票 %.2f%%", voteAPR)
 	}
 	if energyOK {
-		note += fmt.Sprintf("+energy %.2f%%", energyAPR)
+		note += fmt.Sprintf("+能量租赁 %.2f%%", energyAPR)
 		if hasVote {
 			r.AprPct += energyAPR
 		} else {
@@ -84,10 +126,10 @@ func trxPoolRow(ctx context.Context, s *Service) *v1.CapitalCoverageRow {
 	if price, ok := trxUSDPrice(ctx, s); ok {
 		r.BalanceUsd = balTRX * price
 		r.HasBalance = true
-		r.Note = fmt.Sprintf("%s；余额=balance %.0f+投票权 %.0f TRX", note,
+		r.Note = fmt.Sprintf("%s；余额=可用 %.0f+投票权 %.0f TRX", note,
 			float64(acct.BalanceSun)/1e6, float64(acct.TronPower)/1e6)
 	} else {
-		r.Note = fmt.Sprintf("%s；TRX 数量 %.0f（balance %.0f+投票权 %.0f，无 USD 价，不猜）", note,
+		r.Note = fmt.Sprintf("%s；TRX 数量 %.0f（可用 %.0f+投票权 %.0f，无 USD 价，不猜）", note,
 			balTRX, float64(acct.BalanceSun)/1e6, float64(acct.TronPower)/1e6)
 	}
 	return r
@@ -134,20 +176,20 @@ func positionPoolRows(ctx context.Context, s *Service) []*v1.CapitalCoverageRow 
 		hasAvg = false
 	}
 	if len(ens) == 0 {
-		r := covRow("系统持仓（live）")
+		r := covRow("系统持仓（实盘）")
 		r.Status = "零持仓"
 		r.Note = "无活跃仓"
 		return []*v1.CapitalCoverageRow{r}
 	}
 	out := make([]*v1.CapitalCoverageRow, 0, len(ens))
 	for _, e := range ens {
-		r := covRow("系统持仓（live）")
+		r := covRow("系统持仓（实盘）")
 		r.BalanceUsd = e.NotionalUSD
 		r.HasBalance = true
 		r.Status = "在跑"
 		r.Productive = true
 		r.RealMoney = true
-		r.Note = "近7日日均 carry 折算"
+		r.Note = "近7日日均息差折算"
 		if e.NotionalUSD > 0 && hasAvg {
 			r.AprPct = avg * 365 / e.NotionalUSD * 100
 			r.HasApr = true
@@ -171,7 +213,8 @@ func venueAccountRows(ctx context.Context, s *Service) []*v1.CapitalCoverageRow 
 	cv := s.capitalView()
 	out := make([]*v1.CapitalCoverageRow, 0, len(lates))
 	for _, l := range lates {
-		r := covRow("venue账户 " + l.Venue + "/" + l.VenueType)
+		// D-125：池标签去「venue账户」前缀——venue 名+类型中文化已足（`okx·统一账户` 式）。
+		r := covRow(l.Venue + "·" + venueTypeCn(l.VenueType))
 		r.Status = "有数"
 		// D-549：资金值走统一读口（CEX 活账本/REST 实拉）；快照行仅作枚举面+兜底值。
 		f, ok := cv.LiveSnaps(ctx, keydomain.Join(l.Venue, l.VenueType), lates)
@@ -180,14 +223,14 @@ func venueAccountRows(ctx context.Context, s *Service) []*v1.CapitalCoverageRow 
 			eq = &f.Equity
 			ccy = f.Currency
 			if f.Live {
-				note = fmt.Sprintf("%s 活账本·%s", l.VenueType, f.Src)
+				note = fmt.Sprintf("%s 活账本·%s", venueTypeCn(l.VenueType), srcCn(f.Src))
 			} else {
 				note = f.Note // 快照兜底龄注记（禁静默）
 			}
 		}
 		if note == "" { // 三径全空：快照龄如实标
 			age := time.Since(l.FetchedAt)
-			note = fmt.Sprintf("%s 快照 %dh 前", l.VenueType, int(age.Hours()))
+			note = fmt.Sprintf("%s 快照 %dh 前", venueTypeCn(l.VenueType), int(age.Hours()))
 			if age > 24*time.Hour {
 				note += "（陈旧）"
 			}
@@ -198,9 +241,9 @@ func venueAccountRows(ctx context.Context, s *Service) []*v1.CapitalCoverageRow 
 			r.RealMoney = true
 			r.Note = note
 		} else if eq != nil {
-			r.Note = fmt.Sprintf("%s，equity %.2f %s（非 USDT/USD 不折算）", note, *eq, ccy)
+			r.Note = fmt.Sprintf("%s，净值 %.2f %s（非 USDT/USD 不折算）", note, *eq, ccy)
 		} else {
-			r.Note = note + "，equity 空"
+			r.Note = note + "，净值空"
 		}
 		out = append(out, r)
 	}

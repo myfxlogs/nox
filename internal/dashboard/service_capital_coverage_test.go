@@ -145,13 +145,13 @@ func TestGetCapitalCoverage_SummaryWeights(t *testing.T) {
 	if len(resp.Rows) != 4 {
 		t.Fatalf("rows len = %d, want 4:", len(resp.Rows))
 	}
-	for i, want := range []string{"TRX 质押+投票+能量", "CMC 账户（手动持仓监控域）", "系统持仓（live）", "venue账户 binance/perp"} {
+	for i, want := range []string{"TRX 质押+投票+能量", "CMC 账户（手动持仓监控域）", "系统持仓（实盘）", "binance·永续"} {
 		if resp.Rows[i].Pool != want {
 			t.Errorf("rows[%d] = %q, want %q", i, resp.Rows[i].Pool, want)
 		}
 	}
 	for _, r := range resp.Rows {
-		if r.Pool == "系统持仓（paper）" {
+		if r.Pool == "系统持仓（纸面）" {
 			t.Error("paper 行应不出现（D-360 S4：demo/纸面=噪声不入）")
 		}
 	}
@@ -182,7 +182,7 @@ func TestGetCapitalCoverage_Empty(t *testing.T) {
 	s := covTestStore(t)
 	ctx := context.Background()
 	resp := covResponse(ctx, t, covTestService(s))
-	if len(resp.Rows) != 1 || resp.Rows[0].Pool != "系统持仓（live）" || resp.Rows[0].Status != "零持仓" {
+	if len(resp.Rows) != 1 || resp.Rows[0].Pool != "系统持仓（实盘）" || resp.Rows[0].Status != "零持仓" {
 		t.Fatalf("全源空应仅零持仓行, got %d 行: %+v", len(resp.Rows), resp.Rows)
 	}
 	if resp.Rows[0].HasBalance || resp.Rows[0].RealMoney {
@@ -212,10 +212,10 @@ func TestGetCapitalCoverage_VenueUSDDenominator(t *testing.T) {
 	resp := covResponse(ctx, t, svc)
 	var usdRow, ustRow *v1.CapitalCoverageRow
 	for _, r := range resp.Rows {
-		if r.Pool == "venue账户 1279967/mt5" {
+		if r.Pool == "1279967·MT5" {
 			usdRow = r
 		}
-		if r.Pool == "venue账户 15032313/mt5" {
+		if r.Pool == "15032313·MT5" {
 			ustRow = r
 		}
 	}

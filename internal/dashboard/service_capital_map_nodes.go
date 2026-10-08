@@ -77,11 +77,11 @@ func (s *Service) fundingNode(snaps []pgstore.VenueAccountLatest) *v1.CapitalMap
 			continue
 		}
 		if l.EquityRaw != nil {
-			return capNode("binance:funding 余额", *l.EquityRaw, l.Currency, "快照池（调度 5min，无私有流）", l.FetchedAt)
+			return capNode("binance·资金钱包 余额", *l.EquityRaw, l.Currency, "快照池（调度 5min，无私有流）", l.FetchedAt)
 		}
-		return capMissing("binance:funding 余额", "快照行 equity 空")
+		return capMissing("binance·资金钱包 余额", "快照行净值空")
 	}
-	return capMissing("binance:funding 余额", "快照无行（未配置 funding 池）")
+	return capMissing("binance·资金钱包 余额", "快照无行（未配置 funding 池）")
 }
 
 // ledgerSpot 现货账本读口（nil 安全；D-542 同 TTL 语义）。
@@ -122,7 +122,7 @@ func capConvertTick(ctx context.Context, s *Service, n *v1.CapitalMapNode) {
 	}
 	n.HasUsd = true
 	n.AmountUsd = n.Amount * price
-	n.Note += "；折算价=binance " + n.Currency + "USDT mid"
+	n.Note += "；折算价=binance " + n.Currency + "USDT 中间价"
 }
 
 // capMissing 未采节点（六面全出：占位如实标缺，不猜零）。

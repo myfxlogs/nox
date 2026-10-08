@@ -57,14 +57,14 @@ func TestD546R1_VenueTree(t *testing.T) {
 	avail, transfer, locked := capTier(resp, "立即可用"), capTier(resp, "可转可用"), capTier(resp, "锁定/慢动")
 
 	// 立即可用：okx=活账本 2080（非 REST trading.availEq 路径注记透出来源）。
-	if n := capNodeByLabel(avail, "okx:unified available"); n == nil || n.AmountUsd != 2080 || !n.HasUsd {
+	if n := capNodeByLabel(avail, "okx·统一账户 可用"); n == nil || n.AmountUsd != 2080 || !n.HasUsd {
 		t.Fatalf("okx avail node=%+v", n)
 	}
-	if n := capNodeByLabel(avail, "gate:perp available"); n == nil {
+	if n := capNodeByLabel(avail, "gate·永续 可用"); n == nil {
 		t.Fatal("gate:perp 节点缺")
 	}
 	// gate:spot 无私有流/快照→REST 面 500 兜底出节点。
-	if n := capNodeByLabel(avail, "gate:spot available"); n == nil || n.AmountUsd != 500 {
+	if n := capNodeByLabel(avail, "gate·现货 可用"); n == nil || n.AmountUsd != 500 {
 		t.Fatalf("gate spot avail=%+v", n)
 	}
 	// 可转可用：okx funding+earn。
@@ -75,10 +75,10 @@ func TestD546R1_VenueTree(t *testing.T) {
 		t.Fatalf("okx earn=%+v", n)
 	}
 	// 锁定慢动：okx 占用/冻结 40、gate spot locked 30、gate earn 面败标缺。
-	if n := capNodeByLabel(locked, "okx:unified 占用/冻结"); n == nil || n.AmountUsd != 40 {
+	if n := capNodeByLabel(locked, "okx·统一账户 占用/冻结"); n == nil || n.AmountUsd != 40 {
 		t.Fatalf("okx locked=%+v", n)
 	}
-	if n := capNodeByLabel(locked, "gate:spot locked"); n == nil || n.AmountUsd != 30 {
+	if n := capNodeByLabel(locked, "gate·现货 锁定"); n == nil || n.AmountUsd != 30 {
 		t.Fatalf("gate spot locked=%+v", n)
 	}
 	if n := capNodeByLabel(locked, "gate 理财出借中"); n == nil || n.HasUsd {
@@ -109,11 +109,11 @@ func TestD546R1_MissingVenue(t *testing.T) {
 	resp := capMapResponse(context.Background(), t, svc)
 	avail := capTier(resp, "立即可用")
 	// 活账本在→okx/gate avail 仍出（legPool 不依赖 availability 面）。
-	if capNodeByLabel(avail, "okx:unified available") == nil {
+	if capNodeByLabel(avail, "okx·统一账户 可用") == nil {
 		t.Fatal("活账本 okx 节点应仍出")
 	}
 	locked := capTier(resp, "锁定/慢动")
-	for _, label := range []string{"okx:unified 占用/冻结", "gate:spot locked"} {
+	for _, label := range []string{"okx·统一账户 占用/冻结", "gate·现货 锁定"} {
 		if n := capNodeByLabel(locked, label); n == nil || n.HasUsd {
 			t.Fatalf("%s 应标缺: %+v", label, n)
 		}
@@ -133,12 +133,12 @@ func TestD546R1_RestPresentZero(t *testing.T) {
 		}}}, true
 	})
 	resp := capMapResponse(context.Background(), t, svc)
-	n := capNodeByLabel(capTier(resp, "立即可用"), "gate:spot available")
+	n := capNodeByLabel(capTier(resp, "立即可用"), "gate·现货 可用")
 	if n == nil || !n.HasUsd || n.AmountUsd != 0 {
 		t.Fatalf("REST 真$0 应出诚实零节点: %+v", n)
 	}
 	// 面败 Detail+全零 仍须标缺（对照锚）。
-	if n := capNodeByLabel(capTier(resp, "锁定/慢动"), "gate:futures 保证金占用"); n == nil || n.HasUsd {
+	if n := capNodeByLabel(capTier(resp, "锁定/慢动"), "gate·交割 保证金占用"); n == nil || n.HasUsd {
 		t.Fatalf("面未出应标缺: %+v", n)
 	}
 }
