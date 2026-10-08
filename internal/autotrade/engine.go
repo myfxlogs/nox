@@ -104,12 +104,15 @@ type Engine struct {
 	factsKick  chan struct{}
 	lastMRScan time.Time // mrScanMinInterval 节流基准（仅 meanRevertLoop goroutine 读写）
 
-	// D-131：退出评估看门狗外部观测面（atomics——kick→eval 同协程内不可观测，
-	// 判据须跨协程读）：lastKickSent=事件源侧（wireSwapArbFactsKick/orderTopic
-	// goroutine 经 Kick/KickCarryEval 进）；lastEvalAt/openCount=positionLoop 写。
-	lastKickSent atomic.Int64 // unixnano；发送侧记账（chan 满合并也算送达——缓冲 kick 会被消费）
-	lastEvalAt   atomic.Int64 // unixnano；runFull/quote 升权威后写
-	openCount    atomic.Int64 // reloadOpen 后写
+	// D-131→D-135：退出评估看门狗外部观测面（atomics——kick→eval 同协程内不可观测，
+	// 判据须跨协程读）：kickPendingAt/carryPendingAt=kick 在 chan 内驻留起点（判据
+	// 本体）；lastKickSent=事件源侧记账、lastEvalAt/openCount=positionLoop 写
+	// （退居告警日志双龄诊断字段）。
+	kickPendingAt  atomic.Int64 // unixnano；Kick send 成功才记，positionLoop 取件清零
+	carryPendingAt atomic.Int64 // unixnano；KickCarryEval send 成功才记，取件清零
+	lastKickSent   atomic.Int64 // unixnano；发送侧记账（chan 满合并也算送达——缓冲 kick 会被消费）
+	lastEvalAt     atomic.Int64 // unixnano；runFull/quote 升权威后写
+	openCount      atomic.Int64 // reloadOpen 后写
 
 	// D-004 P1#5：swapQuoteCh=swapArb quote 快路帧（buffered 256 满丢帧）；
 	// swapArmedCanon=armed 候选 canonical 集快照（atomic.Pointer 无锁发布，
@@ -263,6 +266,7 @@ func (e *Engine) KickCarryEval() {
 	e.lastKickSent.Store(time.Now().UnixNano()) // D-131：事件源侧记账（loop 外 goroutine）
 	select {
 	case e.carryKick <- struct{}{}:
+		e.carryPendingAt.Store(time.Now().UnixNano()) // D-135：仅 send 成功记驻留起点
 	default:
 	}
 }

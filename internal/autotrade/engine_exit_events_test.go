@@ -232,16 +232,18 @@ func TestExitBoundaryTimer(t *testing.T) {
 	<-done2
 }
 
-// TestWatchdog_AlertOnly 饥荒看门狗（D-131 语义修正）：判据=有仓 ∧「kick 送达而
-// loop 超时未消化」（lastKickSent > lastEval+interval）——模拟 loop 卡死/chan 堵。
-// 旧语义「久未评估+报价在流」是哑弹+误报（驱动节奏与阈值同阶），随票退役。
+// TestWatchdog_AlertOnly 饥荒看门狗（D-131→D-135 队列驻留直测）：判据=有仓 ∧
+// kick 在 chan 内驻留 >30s 未取件——模拟 loop 卡死/chan 堵。
+// 旧语义「lastKick−lastEval 时戳差」撞进消费窗即误报（65121 实证），随票退役。
 func TestWatchdog_AlertOnly(t *testing.T) {
 	ctx := context.Background()
 	var alerts int32
 	var msgsMu sync.Mutex
 	var msgs []string
 	e := &Engine{
-		cfg: Config{Enabled: true, PositionFallbackInterval: 60 * time.Millisecond},
+		cfg:       Config{Enabled: true, PositionFallbackInterval: 60 * time.Millisecond},
+		kickCh:    make(chan struct{}, 1),
+		carryKick: make(chan struct{}, 1),
 		AlertSink: func(level, msg string) {
 			atomic.AddInt32(&alerts, 1)
 			msgsMu.Lock()
@@ -260,10 +262,10 @@ func TestWatchdog_AlertOnly(t *testing.T) {
 		t.Fatalf("安静窗不得告警: alerts=%d", got)
 	}
 
-	// kick 送达 + 评估超窗未消化（loop 阻塞等价态）→ critical 告警。
+	// kick 在队驻留超界（loop 阻塞等价态）→ critical 告警。
 	e.openCount.Store(1)
-	e.lastEvalAt.Store(time.Now().Add(-5 * e.fallbackInterval()).UnixNano())
-	e.lastKickSent.Store(time.Now().UnixNano())
+	e.Kick()
+	e.kickPendingAt.Store(time.Now().Add(-exitEvalQueueDwell - time.Second).UnixNano())
 	deadline := time.Now().Add(500 * time.Millisecond)
 	for time.Now().Before(deadline) && atomic.LoadInt32(&alerts) == 0 {
 		time.Sleep(20 * time.Millisecond)
