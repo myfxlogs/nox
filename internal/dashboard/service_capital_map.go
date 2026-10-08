@@ -24,8 +24,9 @@ type CapitalGapFetcher interface {
 }
 
 // capitalMapCaliberNote 口径注记（面板尾注）。D-125：域词中文化；D-130 域2：binance 资金钱包面
-// 官方已废并入现货（六面→五面）、面名随 venue 原生词。
-const capitalMapCaliberNote = "口径：binance 五面全景（现货/合约/U 本位/币本位/期权/理财；资金钱包面官方已废并入现货·D-130）+okx 三面（资金账户/交易账户/赚币）+gate 并读（现货/合约/理财）×三档可用性——立即可用=活账本/快照既有流（与 sizing 基准同源，sizing 实取各池最小值，全景不改基准）；可转可用=理财活期（T+0 赎回）+现货锁定（净值−可用 推得）+okx 资金账户/赚币；锁定慢动=理财定期+币本位+期权权益+okx 占用冻结+gate 现货锁定/交割保证金/理财出借。USDT/LDUSDT 1:1 同视 USD；杂币经 venue 指数价/tick 中间价折算，缺价如实标「未折算」不猜。缺口/可用性面=页面开实拉+60s 进程缓存；采集失败/未配置/权限缺席=节点如实标缺不猜零。"
+// 官方已废并入现货（六面→五面）、面名随 venue 原生词；D-133 R1：binance 理财面整体摘除
+// （业主令：理财账户实有杂币不纳入）→binance 余 现货/合约（U本位）/币本位/期权 四面。
+const capitalMapCaliberNote = "口径：binance 四面全景（现货/合约/U 本位/币本位/期权；资金钱包面官方已废并入现货·D-130、理财面摘除·D-133）+okx 三面（资金账户/交易账户/赚币）+gate 并读（现货/合约/理财）×三档可用性——立即可用=活账本/快照既有流（与 sizing 基准同源，sizing 实取各池最小值，全景不改基准）；可转可用=现货锁定（净值−可用 推得）+okx 资金账户/赚币；锁定慢动=币本位+期权权益+okx 占用冻结+gate 现货锁定/交割保证金/理财出借。USDT/LDUSDT 1:1 同视 USD；杂币经 venue 指数价/tick 中间价折算，缺价如实标「未折算」不猜。缺口/可用性面=页面开实拉+60s 进程缓存；采集失败/未配置/权限缺席=节点如实标缺不猜零。"
 
 // GetCapitalMap D-546：三档全景树（后端算，前端零计算）。
 func (s *Service) GetCapitalMap(ctx context.Context, req *connect.Request[v1.GetCapitalMapRequest]) (*connect.Response[v1.GetCapitalMapResponse], error) {
@@ -73,20 +74,7 @@ func (s *Service) buildCapitalMap(ctx context.Context) *v1.GetCapitalMapResponse
 	} else {
 		transfer.Nodes = append(transfer.Nodes, capMissing("binance·现货 锁定", "活账本空——快照口径无可用/锁定分列"))
 	}
-	// ⑤ 理财活期（可转档，T+0）。
-	if gaps == nil || faceFailed(gaps, "理财面") {
-		transfer.Nodes = append(transfer.Nodes, capEarnMissing(gaps, "binance 理财活期"))
-	} else {
-		transfer.Nodes = append(transfer.Nodes, capEarnNode(gaps, "flexible"))
-	}
-
-	// ⑥ 理财定期（锁定档，到期赎回）。
-	if gaps == nil || faceFailed(gaps, "理财面") {
-		locked.Nodes = append(locked.Nodes, capEarnMissing(gaps, "binance 理财定期"))
-	} else {
-		locked.Nodes = append(locked.Nodes, capEarnNode(gaps, "locked"))
-	}
-	// ⑦ 币本位（锁定档，dapi 逐币行；面败=标缺，面正常零行=诚实零节点）。
+	// ⑤ 币本位（锁定档，dapi 逐币行；面败=标缺，面正常零行=诚实零节点）。
 	switch {
 	case gaps == nil:
 		locked.Nodes = append(locked.Nodes, capMissing("binance 币本位", "未配置 binance 实盘凭据"))
@@ -95,7 +83,7 @@ func (s *Service) buildCapitalMap(ctx context.Context) *v1.GetCapitalMapResponse
 	default:
 		locked.Nodes = append(locked.Nodes, capCoinOptNodes(ctx, s, "binance 币本位 ", "dapi/v1/balance", gaps.FetchedAt, coinmRows(gaps))...)
 	}
-	// ⑧ 期权权益（锁定档，eapi 逐币行；只取权益额不收 greeks）。
+	// ⑥ 期权权益（锁定档，eapi 逐币行；只取权益额不收 greeks）。
 	switch {
 	case gaps == nil:
 		locked.Nodes = append(locked.Nodes, capMissing("binance 期权权益", "未配置 binance 实盘凭据"))

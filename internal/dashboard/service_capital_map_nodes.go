@@ -110,20 +110,12 @@ func capConvertTick(ctx context.Context, s *Service, n *v1.CapitalMapNode) {
 	n.Note += "；折算价=binance " + n.Currency + "USDT 中间价"
 }
 
-// capMissing 未采节点（六面全出：占位如实标缺，不猜零）。
+// capMissing 未采节点（占位如实标缺，不猜零）。
 func capMissing(label, reason string) *v1.CapitalMapNode {
 	return &v1.CapitalMapNode{Label: label, Note: "未采：" + reason}
 }
 
-// capEarnNode 理财节点（USDT 口径=币安权威折算，has_usd 直真）；调用方守卫 nil/面败。
-func capEarnNode(gaps *reconcile.CapitalGaps, product string) *v1.CapitalMapNode {
-	if product == "flexible" {
-		return capNode("binance 理财活期", gaps.EarnFlexibleUSDT, "USDT", "simple-earn/account", gaps.FetchedAt)
-	}
-	return capNode("binance 理财定期", gaps.EarnLockedUSDT, "USDT", "simple-earn/account", gaps.FetchedAt)
-}
-
-// faceErr 取指定面前缀的失败原因（前缀=采集器 Errors 约定：理财面/币本位面/期权面）。
+// faceErr 取指定面前缀的失败原因（前缀=采集器 Errors 约定：币本位面/期权面）。
 func faceErr(gaps *reconcile.CapitalGaps, prefix string) (string, bool) {
 	for _, e := range gaps.Errors {
 		if strings.HasPrefix(e, prefix) {
@@ -131,17 +123,6 @@ func faceErr(gaps *reconcile.CapitalGaps, prefix string) (string, bool) {
 		}
 	}
 	return "", false
-}
-
-// capEarnMissing 理财面缺因注记（区分未配置/实拉失败）。
-func capEarnMissing(gaps *reconcile.CapitalGaps, label string) *v1.CapitalMapNode {
-	if gaps == nil {
-		return capMissing(label, "未配置 binance 实盘凭据")
-	}
-	if msg, ok := faceErr(gaps, "理财面"); ok {
-		return capMissing(label, "实拉失败（"+msg+"）")
-	}
-	return capMissing(label, "实拉失败")
 }
 
 // capCoinOptNodes 币本位/期权逐币节点（可用注记在前，折算注记在后；零行=诚实零节点）。

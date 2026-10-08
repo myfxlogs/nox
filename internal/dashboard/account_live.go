@@ -74,7 +74,7 @@ func (s *Service) liveAccountLatestFor(ctx context.Context, venue_, vt string) (
 const acctNostreamKickTTL = 10 * time.Second
 
 // kickNostreamAccounts 资金页打开 → 对快照视图中无私有流覆盖的 CEX 键
-// （venue.HasPrivateStream=false：okx funding/earn、binance funding 等无 WS 余额频道
+// （venue.HasPrivateStream=false：okx funding/earn 等无 WS 余额频道
 // 子账户，D-006 已举证）定向 Kick 回读；10s/键防抖。RPC 立即返回当前态，回读完成后
 // acctTopic 事件→StreamUpdates 推前端刷新（推路径既有）。
 func (s *Service) kickNostreamAccounts() {

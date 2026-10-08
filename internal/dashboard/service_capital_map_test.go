@@ -1,5 +1,5 @@
 // service_capital_map_test.go —— D-546 S2/S3 验收锚：
-// A2 树完整性（六面全出+理财活期在「可转」不在「立即可用」+折 USD 注记）/
+// A2 树完整性（四面全出+三档归类+折 USD 注记；D-133 R1：binance 理财双节点摘除锚）/
 // A3 sizing 基准不变（全景采集器零进 sizing 路径）/ A4 二开零 REST（60s 缓存计数）/
 // 降级语义（实拉失败/缺价未折算=degraded 如实标缺不猜）。
 package dashboard
@@ -46,7 +46,6 @@ func capMapFixture(t *testing.T) (*Service, *fakeCapGaps) {
 	lg.Put("binance:perp", 50, 60, "USDT", "ws", now)
 	svc.SetBalanceLedger(lg)
 	fake := &fakeCapGaps{ret: &reconcile.CapitalGaps{
-		EarnFlexibleUSDT: 30, EarnLockedUSDT: 7, EarnTotalUSDT: 37,
 		CoinM:     []reconcile.CoinMBalance{{Asset: "BTC", Balance: 0.05, Available: 0.04}},
 		Options:   []reconcile.OptionsBalance{{Asset: "USDT", Equity: 617.77, Available: 300}},
 		FetchedAt: now,
@@ -149,25 +148,16 @@ func TestD546_CapitalMapTree(t *testing.T) {
 		t.Errorf("立即可用档注记缺 sizing 标注: %q", avail.Note)
 	}
 
-	// 可转两面：现货 locked=110−100=10 + 理财活期=30（A2 锚：理财活期不在立即可用）。
-	if capNodeByLabel(avail, "binance 理财活期") != nil {
-		t.Error("理财活期不得归入立即可用（T+0 赎回≠立即可用）")
-	}
+	// 可转面：现货 locked=110−100=10（D-133 R1：binance 理财面摘除——双节点绝迹锚）。
 	lk := capNodeByLabel(transfer, "binance·现货 锁定")
 	if lk == nil || lk.AmountUsd != 10 {
 		t.Errorf("spot locked 推导错: %+v", lk)
 	}
-	if n := capNodeByLabel(transfer, "binance 理财活期"); n == nil || n.AmountUsd != 30 || !n.HasUsd {
-		t.Errorf("理财活期节点错: %+v", n)
-	}
-	if transfer.TotalUsd != 43 {
-		t.Errorf("可转合计=%v, want 43（binance 40+okx 3）", transfer.TotalUsd)
+	if transfer.TotalUsd != 13 {
+		t.Errorf("可转合计=%v, want 13（binance 10+okx 3）", transfer.TotalUsd)
 	}
 
-	// 锁定档：理财定期=7 + 币本位 BTC 0.05×50001=2500.05 + 期权 617.77（USDT 1:1）。
-	if n := capNodeByLabel(locked, "binance 理财定期"); n == nil || n.AmountUsd != 7 {
-		t.Errorf("理财定期节点错: %+v", n)
-	}
+	// 锁定档：币本位 BTC 0.05×50001=2500.05 + 期权 617.77（USDT 1:1）。
 	btc := capNodeByLabel(locked, "binance 币本位 BTC")
 	if btc == nil || !btc.HasUsd || math.Abs(btc.AmountUsd-2500.05) > 1e-6 {
 		t.Errorf("币本位 BTC 折算错: %+v", btc)
@@ -238,10 +228,21 @@ func TestD546_CapitalMapNoFetcher(t *testing.T) {
 	svc.capGaps = nil
 	svc.capGapsCache = nil
 	// gradStore fake 无 exchange_configs → 装配不出（gradDB 报错路径）→ gaps=nil。
+	// D-133 R1：理财双节点已摘——改锚币本位/期权「未配置」标缺语义。
 	resp := capMapResponse(context.Background(), t, svc)
-	transfer := capTier(resp, "可转可用")
-	if n := capNodeByLabel(transfer, "binance 理财活期"); n == nil || n.HasUsd || !strings.Contains(n.Note, "未采") {
-		t.Errorf("无采集器理财活期应标缺: %+v", n)
+	locked := capTier(resp, "锁定/慢动")
+	if n := capNodeByLabel(locked, "binance 币本位"); n == nil || n.HasUsd || !strings.Contains(n.Note, "未采") {
+		t.Errorf("无采集器币本位应标缺: %+v", n)
+	}
+	if n := capNodeByLabel(locked, "binance 期权权益"); n == nil || n.HasUsd || !strings.Contains(n.Note, "未采") {
+		t.Errorf("无采集器期权权益应标缺: %+v", n)
+	}
+	for _, tier := range resp.Tiers {
+		for _, n := range tier.Nodes {
+			if strings.Contains(n.Label, "理财") && strings.Contains(n.Label, "binance") {
+				t.Errorf("binance 理财节点应绝迹（D-133 R1）: %+v", n)
+			}
+		}
 	}
 }
 
@@ -259,7 +260,7 @@ func TestD546_CapitalMapSizingInvariant(t *testing.T) {
 	}
 	// 注入计数 fake 后同输入：
 	f2, s2 := d490Fixture(t, snaps, 0.01)
-	fake := &fakeCapGaps{ret: &reconcile.CapitalGaps{EarnFlexibleUSDT: 99999, EarnLockedUSDT: 99999}}
+	fake := &fakeCapGaps{ret: &reconcile.CapitalGaps{CoinM: []reconcile.CoinMBalance{{Asset: "USDT", Balance: 99999, Available: 99999}}}}
 	s2.SetCapitalGapFetcher(fake)
 	r2, err := s2.ApproveCarryGraduation(context.Background(), connect.NewRequest(&v1.ApproveCarryGraduationRequest{
 		GraduationId: 5, FundingUsd: d490f(200),
