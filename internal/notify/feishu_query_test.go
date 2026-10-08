@@ -29,7 +29,6 @@ type fakeQueryStore struct {
 	cmcPos         CMCPositionSummary
 	today          [3]float64
 	macroEvents    []pgstore.MacroEvent // D-528
-	cotRows        []pgstore.CotPosition
 }
 
 func (s *fakeQueryStore) FeishuTarget(context.Context) (string, string, error) {

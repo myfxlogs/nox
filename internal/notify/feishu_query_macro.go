@@ -1,4 +1,4 @@
-// feishu_query_macro.go —— D-528 S6：宏观两工具位（query_macro_events/query_cot_latest）。
+// feishu_query_macro.go —— D-528 S6：宏观工具位（query_macro_events；D-120 清退 query_cot_latest）。
 // 独立文件收编防 feishu_query.go 超 300 行；数据面=FeishuQueryStore 新增两方法（pgstore 适配）。
 package notify
 
@@ -65,35 +65,6 @@ func (t *feishuQueryTools) execMacroEvents(ctx context.Context, call analyst.Too
 		if detail != "" {
 			b.WriteString("（" + detail + "）")
 		}
-	}
-	return analyst.ToolResult{ToolUseID: call.ID, Content: b.String()}, nil, nil
-}
-
-// execCotLatest 某品种最新 COT 净持仓（instrument 缺省/无法解析→返回品种指南）。
-func (t *feishuQueryTools) execCotLatest(ctx context.Context, call analyst.ToolCall) (analyst.ToolResult, []analyst.Citation, error) {
-	var args struct {
-		Instrument string `json:"instrument"`
-	}
-	if call.Input != "" {
-		_ = json.Unmarshal([]byte(call.Input), &args) // 宽容解析：坏参=空串走指南路径
-	}
-	symbol := macro.ResolveInstrument(args.Instrument)
-	if symbol == "" {
-		return analyst.ToolResult{ToolUseID: call.ID, Content: "请指定品种，支持：" + macro.InstrumentGuide()}, nil, nil
-	}
-	rows, err := t.store.LatestCot(ctx, symbol, 12)
-	if err != nil {
-		return analyst.ToolResult{ToolUseID: call.ID, Content: "查 COT 失败: " + err.Error(), IsError: true}, nil, nil
-	}
-	if len(rows) == 0 {
-		return analyst.ToolResult{ToolUseID: call.ID, Content: fmt.Sprintf("%s 暂无 COT 数据（周六 05:00 BJ 后随周报落地）", macro.CnSymbol(symbol))}, nil, nil
-	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s（%s）COT 最新持仓（截至 %s）：",
-		macro.CnSymbol(symbol), symbol, rows[0].ReportDate.Format("2006-01-02"))
-	for _, r := range rows {
-		fmt.Fprintf(&b, "\n%s：净 %s（周变动 %s）",
-			macro.CategoryCN(r.Category), macro.CommaInt(r.NetPosition), macro.SignedInt(r.NetChange))
 	}
 	return analyst.ToolResult{ToolUseID: call.ID, Content: b.String()}, nil, nil
 }
