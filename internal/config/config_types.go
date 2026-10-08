@@ -195,7 +195,7 @@ type Config struct {
 	MacroBlackoutCurrencies string        // D-053 ③ ARB_MACRO_BLACKOUT_CURRENCIES：禁区币种集（逗号分隔，缺省 USD）
 	Stage1MinRowHours       int           // D-061 ① ARB_STAGE1_MIN_ROW_HOURS：Stage 1 就绪=目标组合纸面行存活下限小时（缺省 48）
 	Stage1OpenWarmupH       int           // D-061 ② ARB_STAGE1_OPEN_WARMUP_H：MT 周开盘后开仓暖场小时（缺省 2）
-	CalibEnabled            bool          // ARB_CALIB_ENABLED 缺省 true——校准计分板总闸（D-533：只读计分+写自表）
+
 	// MTData MT 数据采集稳定性加固参数（D-104 P0）。
 	MTData MTDataConfig
 

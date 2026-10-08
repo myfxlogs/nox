@@ -54,7 +54,6 @@ var appConfigKeys = map[string]AppCfgMeta{
 	"ARB_MACRO_BLACKOUT_CURRENCIES":       strv(func(c *Config) *string { return &c.MacroBlackoutCurrencies }), // D-053 ③：禁区币种集
 	"ARB_STAGE1_MIN_ROW_HOURS":            intv(func(c *Config) *int { return &c.Stage1MinRowHours }),          // D-061 ①：行存活下限小时
 	"ARB_STAGE1_OPEN_WARMUP_H":            intv(func(c *Config) *int { return &c.Stage1OpenWarmupH }),          // D-061 ②：周开盘暖场小时
-	"ARB_CALIB_ENABLED":                   boolv(func(c *Config) *bool { return &c.CalibEnabled }),
 	"ARB_EXPLORER_RATE_PER_HOUR":          intv(func(c *Config) *int { return &c.ExplorerRatePerHour }),
 	"ARB_FREEZE_GUARD":                    durv(func(c *Config) *time.Duration { return &c.FreezeGuard }),
 	"ARB_FUNDING_BASELINE_PCT":            f64(func(c *Config) *float64 { return &c.FundingBaselinePct }),

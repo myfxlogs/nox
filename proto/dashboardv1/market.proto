@@ -199,27 +199,6 @@ message SourceHealth {
 
 message ListSourceHealthRequest {}
 
-// D-533 S6：校准计分板只读透出（前端面板后续票）。
-message ListCalibScoreboardRequest {
-  string month_ym = 1; // 'YYYY-MM'；空=当前北京历月
-}
-
-message CalibScoreRow {
-  string month_ym = 1;
-  string dim = 2;
-  string venue = 3;
-  string symbol = 4;
-  int32 sample_n = 5;
-  double mae = 6;
-  double bias = 7;
-  double p90_abs = 8;
-  string status = 9;
-}
-
-message ListCalibScoreboardResponse {
-  repeated CalibScoreRow rows = 1;
-}
-
 message ListSourceHealthResponse {
   repeated SourceHealth sources = 1;
 }

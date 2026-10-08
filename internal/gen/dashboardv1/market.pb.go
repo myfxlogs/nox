@@ -1829,203 +1829,6 @@ func (*ListSourceHealthRequest) Descriptor() ([]byte, []int) {
 	return file_dashboardv1_market_proto_rawDescGZIP(), []int{28}
 }
 
-// D-533 S6：校准计分板只读透出（前端面板后续票）。
-type ListCalibScoreboardRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	MonthYm       string                 `protobuf:"bytes,1,opt,name=month_ym,json=monthYm,proto3" json:"month_ym,omitempty"` // 'YYYY-MM'；空=当前北京历月
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListCalibScoreboardRequest) Reset() {
-	*x = ListCalibScoreboardRequest{}
-	mi := &file_dashboardv1_market_proto_msgTypes[29]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListCalibScoreboardRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListCalibScoreboardRequest) ProtoMessage() {}
-
-func (x *ListCalibScoreboardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_market_proto_msgTypes[29]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListCalibScoreboardRequest.ProtoReflect.Descriptor instead.
-func (*ListCalibScoreboardRequest) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_market_proto_rawDescGZIP(), []int{29}
-}
-
-func (x *ListCalibScoreboardRequest) GetMonthYm() string {
-	if x != nil {
-		return x.MonthYm
-	}
-	return ""
-}
-
-type CalibScoreRow struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	MonthYm       string                 `protobuf:"bytes,1,opt,name=month_ym,json=monthYm,proto3" json:"month_ym,omitempty"`
-	Dim           string                 `protobuf:"bytes,2,opt,name=dim,proto3" json:"dim,omitempty"`
-	Venue         string                 `protobuf:"bytes,3,opt,name=venue,proto3" json:"venue,omitempty"`
-	Symbol        string                 `protobuf:"bytes,4,opt,name=symbol,proto3" json:"symbol,omitempty"`
-	SampleN       int32                  `protobuf:"varint,5,opt,name=sample_n,json=sampleN,proto3" json:"sample_n,omitempty"`
-	Mae           float64                `protobuf:"fixed64,6,opt,name=mae,proto3" json:"mae,omitempty"`
-	Bias          float64                `protobuf:"fixed64,7,opt,name=bias,proto3" json:"bias,omitempty"`
-	P90Abs        float64                `protobuf:"fixed64,8,opt,name=p90_abs,json=p90Abs,proto3" json:"p90_abs,omitempty"`
-	Status        string                 `protobuf:"bytes,9,opt,name=status,proto3" json:"status,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CalibScoreRow) Reset() {
-	*x = CalibScoreRow{}
-	mi := &file_dashboardv1_market_proto_msgTypes[30]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CalibScoreRow) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CalibScoreRow) ProtoMessage() {}
-
-func (x *CalibScoreRow) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_market_proto_msgTypes[30]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CalibScoreRow.ProtoReflect.Descriptor instead.
-func (*CalibScoreRow) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_market_proto_rawDescGZIP(), []int{30}
-}
-
-func (x *CalibScoreRow) GetMonthYm() string {
-	if x != nil {
-		return x.MonthYm
-	}
-	return ""
-}
-
-func (x *CalibScoreRow) GetDim() string {
-	if x != nil {
-		return x.Dim
-	}
-	return ""
-}
-
-func (x *CalibScoreRow) GetVenue() string {
-	if x != nil {
-		return x.Venue
-	}
-	return ""
-}
-
-func (x *CalibScoreRow) GetSymbol() string {
-	if x != nil {
-		return x.Symbol
-	}
-	return ""
-}
-
-func (x *CalibScoreRow) GetSampleN() int32 {
-	if x != nil {
-		return x.SampleN
-	}
-	return 0
-}
-
-func (x *CalibScoreRow) GetMae() float64 {
-	if x != nil {
-		return x.Mae
-	}
-	return 0
-}
-
-func (x *CalibScoreRow) GetBias() float64 {
-	if x != nil {
-		return x.Bias
-	}
-	return 0
-}
-
-func (x *CalibScoreRow) GetP90Abs() float64 {
-	if x != nil {
-		return x.P90Abs
-	}
-	return 0
-}
-
-func (x *CalibScoreRow) GetStatus() string {
-	if x != nil {
-		return x.Status
-	}
-	return ""
-}
-
-type ListCalibScoreboardResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Rows          []*CalibScoreRow       `protobuf:"bytes,1,rep,name=rows,proto3" json:"rows,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListCalibScoreboardResponse) Reset() {
-	*x = ListCalibScoreboardResponse{}
-	mi := &file_dashboardv1_market_proto_msgTypes[31]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListCalibScoreboardResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListCalibScoreboardResponse) ProtoMessage() {}
-
-func (x *ListCalibScoreboardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_market_proto_msgTypes[31]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListCalibScoreboardResponse.ProtoReflect.Descriptor instead.
-func (*ListCalibScoreboardResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_market_proto_rawDescGZIP(), []int{31}
-}
-
-func (x *ListCalibScoreboardResponse) GetRows() []*CalibScoreRow {
-	if x != nil {
-		return x.Rows
-	}
-	return nil
-}
-
 type ListSourceHealthResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Sources       []*SourceHealth        `protobuf:"bytes,1,rep,name=sources,proto3" json:"sources,omitempty"`
@@ -2035,7 +1838,7 @@ type ListSourceHealthResponse struct {
 
 func (x *ListSourceHealthResponse) Reset() {
 	*x = ListSourceHealthResponse{}
-	mi := &file_dashboardv1_market_proto_msgTypes[32]
+	mi := &file_dashboardv1_market_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2047,7 +1850,7 @@ func (x *ListSourceHealthResponse) String() string {
 func (*ListSourceHealthResponse) ProtoMessage() {}
 
 func (x *ListSourceHealthResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dashboardv1_market_proto_msgTypes[32]
+	mi := &file_dashboardv1_market_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2060,7 +1863,7 @@ func (x *ListSourceHealthResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSourceHealthResponse.ProtoReflect.Descriptor instead.
 func (*ListSourceHealthResponse) Descriptor() ([]byte, []int) {
-	return file_dashboardv1_market_proto_rawDescGZIP(), []int{32}
+	return file_dashboardv1_market_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ListSourceHealthResponse) GetSources() []*SourceHealth {
@@ -2218,21 +2021,7 @@ const file_dashboardv1_market_proto_rawDesc = "" +
 	"\x06source\x18\x04 \x01(\tR\x06source\x12'\n" +
 	"\x0freconnect_count\x18\x05 \x01(\x03R\x0ereconnectCount\x12&\n" +
 	"\x0flast_event_unix\x18\x06 \x01(\x03R\rlastEventUnix\"\x19\n" +
-	"\x17ListSourceHealthRequest\"7\n" +
-	"\x1aListCalibScoreboardRequest\x12\x19\n" +
-	"\bmonth_ym\x18\x01 \x01(\tR\amonthYm\"\xdc\x01\n" +
-	"\rCalibScoreRow\x12\x19\n" +
-	"\bmonth_ym\x18\x01 \x01(\tR\amonthYm\x12\x10\n" +
-	"\x03dim\x18\x02 \x01(\tR\x03dim\x12\x14\n" +
-	"\x05venue\x18\x03 \x01(\tR\x05venue\x12\x16\n" +
-	"\x06symbol\x18\x04 \x01(\tR\x06symbol\x12\x19\n" +
-	"\bsample_n\x18\x05 \x01(\x05R\asampleN\x12\x10\n" +
-	"\x03mae\x18\x06 \x01(\x01R\x03mae\x12\x12\n" +
-	"\x04bias\x18\a \x01(\x01R\x04bias\x12\x17\n" +
-	"\ap90_abs\x18\b \x01(\x01R\x06p90Abs\x12\x16\n" +
-	"\x06status\x18\t \x01(\tR\x06status\"R\n" +
-	"\x1bListCalibScoreboardResponse\x123\n" +
-	"\x04rows\x18\x01 \x03(\v2\x1f.arb.dashboard.v1.CalibScoreRowR\x04rows\"T\n" +
+	"\x17ListSourceHealthRequest\"T\n" +
 	"\x18ListSourceHealthResponse\x128\n" +
 	"\asources\x18\x01 \x03(\v2\x1e.arb.dashboard.v1.SourceHealthR\asourcesB*Z(arb/internal/gen/dashboardv1;dashboardv1b\x06proto3"
 
@@ -2248,7 +2037,7 @@ func file_dashboardv1_market_proto_rawDescGZIP() []byte {
 	return file_dashboardv1_market_proto_rawDescData
 }
 
-var file_dashboardv1_market_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
+var file_dashboardv1_market_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_dashboardv1_market_proto_goTypes = []any{
 	(*Quote)(nil),                         // 0: arb.dashboard.v1.Quote
 	(*ListQuotesRequest)(nil),             // 1: arb.dashboard.v1.ListQuotesRequest
@@ -2279,36 +2068,32 @@ var file_dashboardv1_market_proto_goTypes = []any{
 	(*ClearAckedAlertsResponse)(nil),      // 26: arb.dashboard.v1.ClearAckedAlertsResponse
 	(*SourceHealth)(nil),                  // 27: arb.dashboard.v1.SourceHealth
 	(*ListSourceHealthRequest)(nil),       // 28: arb.dashboard.v1.ListSourceHealthRequest
-	(*ListCalibScoreboardRequest)(nil),    // 29: arb.dashboard.v1.ListCalibScoreboardRequest
-	(*CalibScoreRow)(nil),                 // 30: arb.dashboard.v1.CalibScoreRow
-	(*ListCalibScoreboardResponse)(nil),   // 31: arb.dashboard.v1.ListCalibScoreboardResponse
-	(*ListSourceHealthResponse)(nil),      // 32: arb.dashboard.v1.ListSourceHealthResponse
-	(*timestamppb.Timestamp)(nil),         // 33: google.protobuf.Timestamp
+	(*ListSourceHealthResponse)(nil),      // 29: arb.dashboard.v1.ListSourceHealthResponse
+	(*timestamppb.Timestamp)(nil),         // 30: google.protobuf.Timestamp
 }
 var file_dashboardv1_market_proto_depIdxs = []int32{
-	33, // 0: arb.dashboard.v1.Quote.time:type_name -> google.protobuf.Timestamp
+	30, // 0: arb.dashboard.v1.Quote.time:type_name -> google.protobuf.Timestamp
 	0,  // 1: arb.dashboard.v1.ListQuotesResponse.quotes:type_name -> arb.dashboard.v1.Quote
-	33, // 2: arb.dashboard.v1.Fact.ts:type_name -> google.protobuf.Timestamp
+	30, // 2: arb.dashboard.v1.Fact.ts:type_name -> google.protobuf.Timestamp
 	3,  // 3: arb.dashboard.v1.ListLatestFactsResponse.facts:type_name -> arb.dashboard.v1.Fact
 	3,  // 4: arb.dashboard.v1.ListFactsResponse.facts:type_name -> arb.dashboard.v1.Fact
-	33, // 5: arb.dashboard.v1.Opportunity.quote_time:type_name -> google.protobuf.Timestamp
-	33, // 6: arb.dashboard.v1.Opportunity.expires_at:type_name -> google.protobuf.Timestamp
-	33, // 7: arb.dashboard.v1.Opportunity.created_at:type_name -> google.protobuf.Timestamp
-	33, // 8: arb.dashboard.v1.Opportunity.updated_at:type_name -> google.protobuf.Timestamp
+	30, // 5: arb.dashboard.v1.Opportunity.quote_time:type_name -> google.protobuf.Timestamp
+	30, // 6: arb.dashboard.v1.Opportunity.expires_at:type_name -> google.protobuf.Timestamp
+	30, // 7: arb.dashboard.v1.Opportunity.created_at:type_name -> google.protobuf.Timestamp
+	30, // 8: arb.dashboard.v1.Opportunity.updated_at:type_name -> google.protobuf.Timestamp
 	8,  // 9: arb.dashboard.v1.ListOpportunitiesResponse.opportunities:type_name -> arb.dashboard.v1.Opportunity
-	33, // 10: arb.dashboard.v1.VerificationStat.last_sample_at:type_name -> google.protobuf.Timestamp
+	30, // 10: arb.dashboard.v1.VerificationStat.last_sample_at:type_name -> google.protobuf.Timestamp
 	11, // 11: arb.dashboard.v1.ListVerificationStatsResponse.stats:type_name -> arb.dashboard.v1.VerificationStat
-	33, // 12: arb.dashboard.v1.Alert.ts:type_name -> google.protobuf.Timestamp
+	30, // 12: arb.dashboard.v1.Alert.ts:type_name -> google.protobuf.Timestamp
 	14, // 13: arb.dashboard.v1.ListAlertsResponse.alerts:type_name -> arb.dashboard.v1.Alert
 	14, // 14: arb.dashboard.v1.ListUnackedResponse.alerts:type_name -> arb.dashboard.v1.Alert
-	33, // 15: arb.dashboard.v1.SourceHealth.last_event_at:type_name -> google.protobuf.Timestamp
-	30, // 16: arb.dashboard.v1.ListCalibScoreboardResponse.rows:type_name -> arb.dashboard.v1.CalibScoreRow
-	27, // 17: arb.dashboard.v1.ListSourceHealthResponse.sources:type_name -> arb.dashboard.v1.SourceHealth
-	18, // [18:18] is the sub-list for method output_type
-	18, // [18:18] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	30, // 15: arb.dashboard.v1.SourceHealth.last_event_at:type_name -> google.protobuf.Timestamp
+	27, // 16: arb.dashboard.v1.ListSourceHealthResponse.sources:type_name -> arb.dashboard.v1.SourceHealth
+	17, // [17:17] is the sub-list for method output_type
+	17, // [17:17] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_dashboardv1_market_proto_init() }
@@ -2324,7 +2109,7 @@ func file_dashboardv1_market_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dashboardv1_market_proto_rawDesc), len(file_dashboardv1_market_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   33,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
