@@ -156,7 +156,7 @@ func TestGetCapitalCoverage_SummaryWeights(t *testing.T) {
 			t.Error("paper 行应不出现（D-360 S4：demo/纸面=噪声不入）")
 		}
 	}
-	// CMC：状态=浮盈直数（D-128），说明收 hint；池名括注收 pool_hint
+	// CMC：状态=浮盈直数（D-128），说明收说明列（D-129）
 	if got := resp.Rows[1].Status; got != "$-123.45" {
 		t.Errorf("CMC status = %q, want $-123.45（直数负号如实）", got)
 	}

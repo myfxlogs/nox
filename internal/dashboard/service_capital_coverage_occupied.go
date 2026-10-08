@@ -18,7 +18,7 @@ type venueOcc struct {
 	sum     float64  // Σ已知占用
 	known   int      // 占用已知账户数
 	missing int      // 可用额未采账户数（fail-closed 不入分子）
-	items   []string // D-128：占用>0 账户明细（池名+额），悬停层 status_hint
+	items   []string // D-129：占用>0 账户明细（池名+额），收说明列
 }
 
 // accountOccupied D-127 新口径①：单账户占用=equity−free_margin；MT 帧直带 Margin>0 优先

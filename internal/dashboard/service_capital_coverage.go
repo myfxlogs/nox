@@ -146,7 +146,7 @@ func trxUSDPrice(ctx context.Context, s *Service) (float64, bool) {
 
 // cmcPoolRow ②CMC：余额=LastCMCAccountSummary.TotalAccountValue；
 // 最新持仓快照有行→状态=浮盈直数（负号如实）+hint「手动持仓中」/无行→「现金闲置」（无 hint）；
-// 池名说明性括注收 pool_hint（D-128 悬停层级化）。手动域无 carry 不入加权。
+// 说明性括注收说明列 note（D-129）。手动域无 carry 不入加权。
 func cmcPoolRow(ctx context.Context, s *Service) *v1.CapitalCoverageRow {
 	sum, err := s.store.LastCMCAccountSummary(ctx)
 	if err != nil {
