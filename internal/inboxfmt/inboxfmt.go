@@ -2,7 +2,7 @@
 // 消 sysretro/explorer/symdig 三份 appendInbox+cleanCell 拷贝为一处。
 // 行格式 v2：| date | source | title | reason | action | status | resolution |；
 // 新行一律 status=pending + 空 resolution；无 status 列旧行按 pending 计（向后兼容）。
-// 红线：收件箱行永不触发代码/配置写路径；calib_params 激活必须经业主显式动作。
+// 红线：收件箱行永不触发代码/配置写路径。
 package inboxfmt
 
 import (
@@ -12,13 +12,12 @@ import (
 	"sync"
 )
 
-// source 枚举定死（D-534 S4；calib_scoreboard 未落地先定义契约，D-533 已按此写）。
+// source 枚举定死（D-534 S4；calib_scoreboard 随 D-120 清退移除）。
 const (
-	SrcSymdigAlias     = "symdig_alias"
-	SrcSysretroWeekly  = "sysretro-weekly"
-	SrcCalibScoreboard = "calib_scoreboard"
-	SrcSleepMoney      = "sleep_money"
-	SrcExplorer        = "explorer" // D-513 既有写侧源
+	SrcSymdigAlias    = "symdig_alias"
+	SrcSysretroWeekly = "sysretro-weekly"
+	SrcSleepMoney     = "sleep_money"
+	SrcExplorer       = "explorer" // D-513 既有写侧源
 )
 
 // Row 收件箱一行（status/resolution 由写侧固定 pending/空）。
