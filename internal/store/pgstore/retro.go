@@ -77,7 +77,6 @@ type RetroWeekly struct {
 	TopDeviation *RetroClosedCase // |est-real| 最大
 	PaperSpot    map[string]int   // exit_reason 分布（窗口内 exit_ts 落窗）
 	PaperIntra   map[string]int   // exit_reason 分布
-	PaperTrades  int              // 壳表总行数（0 行自曝）
 	PaperIntraN  int              // 窗口内平仓计数
 	PaperSpotN   int
 	Strategies   []RetroStrategyRow
@@ -234,10 +233,9 @@ func (s *Store) RetroWeeklyStats(ctx context.Context, since, until time.Time) (*
 		return nil, err
 	}
 	if err := s.pool.QueryRow(ctx, `
-		SELECT (SELECT count(*) FROM paper_trades),
-		       (SELECT count(*) FROM paper_intra_trades WHERE status='closed' AND exit_ts >= $1 AND exit_ts < $2),
+		SELECT (SELECT count(*) FROM paper_intra_trades WHERE status='closed' AND exit_ts >= $1 AND exit_ts < $2),
 		       (SELECT count(*) FROM paper_spot_carry WHERE exit_ts >= $1 AND exit_ts < $2)`,
-		since, until).Scan(&w.PaperTrades, &w.PaperIntraN, &w.PaperSpotN); err != nil {
+		since, until).Scan(&w.PaperIntraN, &w.PaperSpotN); err != nil {
 		return nil, err
 	}
 	srows, err := s.pool.Query(ctx, `
