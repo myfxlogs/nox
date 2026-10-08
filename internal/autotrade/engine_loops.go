@@ -34,6 +34,34 @@ func (e *Engine) Kick() {
 	}
 }
 
+// KickMeanRevert D-469c S1：quote 帧（MeanRevertThresh 覆盖 canonical）→ mrKick 非阻塞合并。
+// （D-136 自 engine.go 迁入——kick 发送族合文件，纯搬移零语义变更）
+func (e *Engine) KickMeanRevert() {
+	select {
+	case e.mrKick <- struct{}{}:
+	default:
+	}
+}
+
+// KickSwapArb D-469c S3：facts 写后（mt_swap/funding 三源）→ factsKick 非阻塞合并。
+func (e *Engine) KickSwapArb() {
+	select {
+	case e.factsKick <- struct{}{}:
+	default:
+	}
+}
+
+// KickCarryEval D-004 P1#4：carry 退出判据输入（mt_swap/三所 funding facts）写后
+// → positionLoop 权威全扫（息差型净收入变了）。buffered(1) 非阻塞合并。
+func (e *Engine) KickCarryEval() {
+	e.lastKickSent.Store(time.Now().UnixNano()) // D-131：事件源侧记账（loop 外 goroutine）
+	select {
+	case e.carryKick <- struct{}{}:
+		e.carryPendingAt.Store(time.Now().UnixNano()) // D-135：仅 send 成功记驻留起点
+	default:
+	}
+}
+
 // positionLoop D-004 P1#4：启动即扫+装缓存 → select 事件集：
 //   - quoteCh：纯内存 quoteExitHit（零 DB）；命中且距该仓上次权威评估 ≥1s →
 //     evaluatePosition 单仓升权威（1s 是命中态持续的合流，不是轮询）；
