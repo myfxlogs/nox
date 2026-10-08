@@ -53,13 +53,27 @@ func (s *Store) InsertCexEarnAPR(ctx context.Context, r *CexEarnAPR) error {
 	return nil
 }
 
-// LatestCexEarnAPRs 每所每币种最新一行（DISTINCT ON venue, ccy）。
+// LatestCexEarnAPRs 每所每币种最新一行（语义=DISTINCT ON venue, ccy ORDER BY ts DESC；D-121 跳扫描实现）。
 func (s *Store) LatestCexEarnAPRs(ctx context.Context) ([]CexEarnAPR, error) {
+	// D-121：同 facts 跳扫描——127 万行全索引序扫 9.97s（生产 EXPLAIN ANALYZE 实证）
+	// 改递归 CTE 组键跳扫 + LATERAL 每组取最新=114ms。venue/ccy 均 NOT NULL 无需 NULL 补面。
 	rows, err := s.pool.Query(ctx, `
-		SELECT DISTINCT ON (venue, ccy)
-			id, venue, ccy, product_type, apr, tier_apr, ts
-		FROM fin_cex_earn_apr
-		ORDER BY venue, ccy, ts DESC
+		WITH RECURSIVE t AS (
+			(SELECT venue, ccy FROM fin_cex_earn_apr ORDER BY venue, ccy LIMIT 1)
+			UNION ALL
+			SELECT e.venue, e.ccy FROM t CROSS JOIN LATERAL (
+				SELECT venue, ccy FROM fin_cex_earn_apr
+				WHERE (venue, ccy) > (t.venue, t.ccy)
+				ORDER BY venue, ccy LIMIT 1
+			) e
+		)
+		SELECT e.id, e.venue, e.ccy, e.product_type, e.apr, e.tier_apr, e.ts
+		FROM t CROSS JOIN LATERAL (
+			SELECT id, venue, ccy, product_type, apr, tier_apr, ts FROM fin_cex_earn_apr e
+			WHERE e.venue = t.venue AND e.ccy = t.ccy
+			ORDER BY e.ts DESC LIMIT 1
+		) e
+		ORDER BY e.venue, e.ccy
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("latest cex earn aprs: %w", err)

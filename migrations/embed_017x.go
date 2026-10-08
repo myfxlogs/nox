@@ -35,4 +35,7 @@ var (
 
 	//go:embed 0180_d120_retire_research.sql
 	D120RetireResearchSQL string // D-120：研究面 A 批 13 表幂等 DROP（已备份）
+
+	//go:embed 0181_facts_null_symbol_idx.sql
+	FactsNullSymbolIdxSQL string // D-121：facts NULL-symbol 组枚举部分索引（0180 撞号 D-120，复审顺延 0181）
 )
