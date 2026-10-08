@@ -4,6 +4,7 @@ package dashboard
 
 import (
 	"context"
+	"time"
 
 	"connectrpc.com/connect"
 
@@ -42,6 +43,14 @@ func (s *Service) GetPnlAnchor(ctx context.Context, req *connect.Request[v1.GetP
 		}
 		resp.FloatingNetUsd = fsum
 		resp.FloatingAvailable = len(bpos) > 0 || s.anyAccountOnline()
+	}
+	// D-123：真北行 30d 净年化——selfwatch/stage2 同式（net/30*365/CapitalBase）。
+	// CapitalBase 缺或查询败 → available=false（前端「—」，不冒充 0）。
+	if s.capitalBaseUSD > 0 {
+		if net, err := s.store.NetRealizedSince(ctx, time.Now().Add(-30*24*time.Hour), false); err == nil {
+			resp.NetAnn_30DPct = net / 30 * 365 / s.capitalBaseUSD * 100
+			resp.NetAnn_30DAvailable = true
+		}
 	}
 	return connect.NewResponse(resp), nil
 }

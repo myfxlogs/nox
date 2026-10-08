@@ -57,6 +57,8 @@ type Service struct {
 	capGapsCache  *reconcile.CapitalGaps
 	capGapsAt     time.Time
 	capGapsTTLDur time.Duration
+	// D-123：真北行年化分母（cfg.CapitalBaseUSD；≤0 → net_ann_30d 不可用 fail-closed）。
+	capitalBaseUSD float64
 	// D-546 R1：okx/gate 钱包树可用性（venueAvailability 60s 缓存+测试缝 capAvailFor）。
 	capAvailMu    sync.Mutex
 	capAvailCache map[string]*reconcile.VenueAvailability
